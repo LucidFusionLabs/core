@@ -283,7 +283,7 @@ struct Widget {
         void DelHitBox() { for (vector<int>::const_iterator i = hitbox.begin(); i != hitbox.end(); ++i) gui->mouse.hit.Erase(*i); hitbox.clear(); }
         MouseController::HitBox &GetHitBox(int i=0) const { return gui->mouse.hit[hitbox[i]]; }
         Box GetHitBoxBox(int i=0) const { return Box::Add(GetHitBox(i).box, gui->box.TopLeft()); }
-        Drawable::Box *GetDrawBox() const { return drawbox_ind >= 0 ? &gui->child_box.data[drawbox_ind] : 0; }
+        Drawable::Box *GetDrawBox() const { return drawbox_ind >= 0 ? VectorGet(gui->child_box.data, drawbox_ind) : 0; }
     };
     struct Vector : public vector<Interface*> {
         virtual ~Vector() {}

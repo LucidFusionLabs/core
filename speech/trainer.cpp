@@ -89,9 +89,6 @@ DEFINE_int   (UsePrior,              0,           "Use prior probabilities in tr
 DEFINE_int   (UseTransition,         1,           "Use transition probabilities in training");
 DEFINE_string(UttPathsInFile,        "",          "Viterbi paths input file");
 DEFINE_string(UttPathsOutFile,       "",          "Viterbi paths output file");
-}; // namespace LFL
-
-using namespace LFL;
 
 BindMap binds;
 Asset::Map asset;
@@ -106,7 +103,7 @@ struct Wav2Features {
 
     Wav2Features(const char *Dir, int Targ) : dir(Dir), targ(Targ) {
         if (targ != Target::ARCHIVE) return;
-        string outfile = dir + StringPrintf("%lx.featlist", rand());
+        string outfile = dir + StringPrintf("%lx.featlist", ::rand());
         INFO("selected output file: ", outfile);
         out.open(outfile.c_str());
     }
@@ -909,8 +906,10 @@ struct Wav2Segments {
     }
 };
 
-extern "C" {
-int main(int argc, const char *argv[]) {
+}; // namespace LFL
+using namespace LFL;
+
+extern "C" int main(int argc, const char *argv[]) {
 
     app->logfilename = StrCat(dldir(), "trainer.txt");
     screen->caption = "trainer";
@@ -1112,5 +1111,3 @@ int main(int argc, const char *argv[]) {
 
     return app->Free();
 }
-};
-

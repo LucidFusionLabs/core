@@ -1,5 +1,5 @@
-http://lucidfusionlabs.com/svn/lfl/README
-=========================================
+http://lucidfusionlabs.com/svn/lfl/README.txt
+=============================================
 
 OVERVIEW
 --------

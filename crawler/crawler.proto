@@ -1,3 +1,5 @@
+package LFL;
+
 message QueueFileEntry {
   enum Status { QUEUED=0; CRAWLED=1; SCRAPED=2; }
   optional fixed64 created = 1;

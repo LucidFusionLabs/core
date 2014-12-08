@@ -1,3 +1,5 @@
+package LFL;
+
 message Range {
   optional float low = 1;
   optional float high = 2;
