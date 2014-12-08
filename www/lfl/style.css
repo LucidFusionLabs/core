@@ -1,0 +1,163 @@
+/*
+Design by Free CSS Templates
+http://www.freecsstemplates.org
+Released for free under a Creative Commons Attribution 2.5 License
+*/
+
+body {
+	margin: 11px 0 0 0;
+	padding: 0;
+	background: #000000 url(images/img1.gif) repeat-x;
+	font: normal small Arial, Helvetica, sans-serif;
+	color: #999999;
+}
+
+h1, h2, h3, h4, h5, h6 {
+	margin: 0;
+	padding: 0;
+	text-transform: uppercase;
+	letter-spacing: .2em;
+	color: #000000;
+}
+
+p, ul, ol, blockquote {
+	margin-top: 0;
+	line-height: 160%;
+}
+
+a {
+	text-decoration: none;
+	color: #9ED738;
+}
+
+a:hover {
+	text-decoration: underline;
+}
+
+/* Header */
+
+#header {
+	width: 720px;
+	height: 161px;
+	margin: 0 auto;
+	background: url(images/img2.jpg) no-repeat;
+}
+
+#header * {
+	text-decoration: none;
+	text-align: center;
+	color: #000000;
+}
+
+#header h1 {
+	padding-top: 55px;
+	font-size: 3em;
+}
+
+#header h2 {
+	font-size: 1.2em;
+}
+
+/* Menu */
+
+#menu {
+	width: 720px;
+	height: 55px;
+	margin: 0 auto;
+}
+
+#menu ul {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+	line-height: normal;
+}
+
+#menu li {
+	display: inline;
+}
+
+#menu a {
+	display: block;
+	float: left;
+	width: 142px;
+	height: 21px;
+	padding: 7px 1px 0 1px;
+	background: url(images/img3.gif) no-repeat center center;
+	text-align: center;
+	text-decoration: none;
+	text-transform: uppercase;
+	letter-spacing: .2em;
+	font-size: x-small;
+	font-weight: bold;
+	color: #CCCCCC;
+}
+
+#menu a:hover, #menu .active a {
+	background-image: url(images/img4.gif);
+	color: #FFFFFF;
+}
+
+/* Content */
+
+#content {
+	width: 720px;
+	margin: 0 auto;
+}
+
+#colOne {
+	float: left;
+	width: 160px;
+}
+
+#colTwo {
+	float: left;
+	width: 360px;
+	padding: 0 20px;
+}
+
+#colThree {
+	float: left;
+	width: 160px;
+}
+
+/* Content Elements */
+
+#content h2 {
+	height: 21px;
+	margin-bottom: 20px;
+	padding: 9px 0 0 10px;
+	background: url(images/img6.gif);
+	letter-spacing: normal;
+	font-size: .9em;
+}
+
+#content h3 {
+	text-transform: uppercase;
+	letter-spacing: normal;
+	font-size: x-small;
+	color: #FFFFFF;
+}
+
+#content ul {
+	margin-left: 0;
+	padding-left: 0;
+	list-style: square inside;
+}
+
+/* Footer */
+
+#footer {
+	height: 70px;
+	padding: 7px 0 0 0;
+	background: url(images/img5.gif) repeat-x;
+}
+
+#footer * {
+	color: #000000;
+}
+
+#footer p {
+	text-align: center;
+	font-size: smaller;
+}

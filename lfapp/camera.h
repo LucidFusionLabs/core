@@ -1,0 +1,49 @@
+/*
+ * $Id: camera.h 1306 2014-09-04 07:13:16Z justin $
+ * Copyright (C) 2009 Lucid Fusion Labs
+
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+#ifndef __LFL_LFAPP_CAMERA_H__
+#define __LFL_LFAPP_CAMERA_H__
+namespace LFL {
+
+DECLARE_int(camera_fps);
+DECLARE_int(camera_image_width);
+DECLARE_int(camera_image_height);
+
+struct CameraInterface {
+    virtual ~CameraInterface() {}
+    virtual int init() = 0;
+    virtual int frame() = 0;
+    virtual int free() = 0;
+
+    unsigned char *image;
+    int image_format, image_linesize;
+    unsigned long long image_timestamp, frames_read, last_frames_read;
+    CameraInterface() : image(0), image_format(0), image_linesize(0), image_timestamp(0), frames_read(0), last_frames_read(0) {}
+};
+
+struct Camera : public Module {
+    RollingAvg fps;
+    CameraInterface *camera;
+    Camera() : fps(64), camera(0) {}
+    int Init ();
+    int Free ();
+    int Frame(unsigned time);
+};
+
+}; // namespace LFL
+#endif // __LFL_LFAPP_CAMERA_H__

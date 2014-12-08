@@ -1,0 +1,159 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="12.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{0C758FDB-BE1D-47E9-8E18-9168AB34A308}</ProjectGuid>
+    <RootNamespace>libarchive</RootNamespace>
+    <Keyword>Win32Proj</Keyword>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+    <PlatformToolset>v120</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+    <PlatformToolset>v120</PlatformToolset>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="$(VCTargetsPath)Microsoft.CPP.UpgradeFromVC71.props" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="$(VCTargetsPath)Microsoft.CPP.UpgradeFromVC71.props" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup>
+    <_ProjectFileVersion>10.0.30319.1</_ProjectFileVersion>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(SolutionDir)$(Configuration)\</OutDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Debug\</IntDir>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Release\</OutDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Release\</IntDir>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <Optimization>Disabled</Optimization>
+      <AdditionalIncludeDirectories>..\..\..\..\OpenCV\3rdparty\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_LIB;PLATFORM_CONFIG_H="config_windows.h";HAVE_ZLIB_H;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <MinimalRebuild>true</MinimalRebuild>
+      <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <DebugInformationFormat>EditAndContinue</DebugInformationFormat>
+      <DisableSpecificWarnings>4996;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+    </ClCompile>
+    <Lib>
+      <OutputFile>$(OutDir)$(ProjectName).lib</OutputFile>
+    </Lib>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <InlineFunctionExpansion>OnlyExplicitInline</InlineFunctionExpansion>
+      <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_LIB;PLATFORM_CONFIG_H="config_windows.h";%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <DisableSpecificWarnings>4996;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+    </ClCompile>
+    <Lib>
+      <OutputFile>../../lib/$(ProjectName)-vc90-mt.lib</OutputFile>
+    </Lib>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="..\..\..\libarchive\archive_check_magic.c" />
+    <ClCompile Include="..\..\..\libarchive\archive_entry.c" />
+    <ClCompile Include="..\..\..\libarchive\archive_entry_copy_stat.c" />
+    <ClCompile Include="..\..\..\libarchive\archive_entry_link_resolver.c" />
+    <ClCompile Include="..\..\..\libarchive\archive_entry_stat.c" />
+    <ClCompile Include="..\..\..\libarchive\archive_entry_strmode.c" />
+    <ClCompile Include="..\..\..\libarchive\archive_read.c" />
+    <ClCompile Include="..\..\..\libarchive\archive_read_data_into_fd.c" />
+    <ClCompile Include="..\..\..\libarchive\archive_read_disk.c" />
+    <ClCompile Include="..\..\..\libarchive\archive_read_disk_set_standard_lookup.c" />
+    <ClCompile Include="..\..\..\libarchive\archive_read_extract.c" />
+    <ClCompile Include="..\..\..\libarchive\archive_read_open_fd.c" />
+    <ClCompile Include="..\..\..\libarchive\archive_read_open_file.c" />
+    <ClCompile Include="..\..\..\libarchive\archive_read_open_filename.c" />
+    <ClCompile Include="..\..\..\libarchive\archive_read_open_memory.c" />
+    <ClCompile Include="..\..\..\libarchive\archive_read_support_compression_all.c" />
+    <ClCompile Include="..\..\..\libarchive\archive_read_support_compression_bzip2.c" />
+    <ClCompile Include="..\..\..\libarchive\archive_read_support_compression_compress.c" />
+    <ClCompile Include="..\..\..\libarchive\archive_read_support_compression_gzip.c" />
+    <ClCompile Include="..\..\..\libarchive\archive_read_support_compression_none.c" />
+    <ClCompile Include="..\..\..\libarchive\archive_read_support_compression_program.c" />
+    <ClCompile Include="..\..\..\libarchive\archive_read_support_format_all.c" />
+    <ClCompile Include="..\..\..\libarchive\archive_read_support_format_ar.c" />
+    <ClCompile Include="..\..\..\libarchive\archive_read_support_format_cpio.c" />
+    <ClCompile Include="..\..\..\libarchive\archive_read_support_format_empty.c" />
+    <ClCompile Include="..\..\..\libarchive\archive_read_support_format_iso9660.c" />
+    <ClCompile Include="..\..\..\libarchive\archive_read_support_format_mtree.c" />
+    <ClCompile Include="..\..\..\libarchive\archive_read_support_format_tar.c" />
+    <ClCompile Include="..\..\..\libarchive\archive_read_support_format_zip.c" />
+    <ClCompile Include="..\..\..\libarchive\archive_string.c" />
+    <ClCompile Include="..\..\..\libarchive\archive_string_sprintf.c" />
+    <ClCompile Include="..\..\..\libarchive\archive_util.c" />
+    <ClCompile Include="..\..\..\libarchive\archive_virtual.c" />
+    <ClCompile Include="..\..\..\libarchive\archive_windows.c" />
+    <ClCompile Include="..\..\..\libarchive\archive_write.c" />
+    <ClCompile Include="..\..\..\libarchive\archive_write_disk.c" />
+    <ClCompile Include="..\..\..\libarchive\archive_write_disk_set_standard_lookup.c" />
+    <ClCompile Include="..\..\..\libarchive\archive_write_open_fd.c" />
+    <ClCompile Include="..\..\..\libarchive\archive_write_open_file.c" />
+    <ClCompile Include="..\..\..\libarchive\archive_write_open_filename.c" />
+    <ClCompile Include="..\..\..\libarchive\archive_write_open_memory.c" />
+    <ClCompile Include="..\..\..\libarchive\archive_write_set_compression_bzip2.c" />
+    <ClCompile Include="..\..\..\libarchive\archive_write_set_compression_compress.c" />
+    <ClCompile Include="..\..\..\libarchive\archive_write_set_compression_gzip.c" />
+    <ClCompile Include="..\..\..\libarchive\archive_write_set_compression_none.c" />
+    <ClCompile Include="..\..\..\libarchive\archive_write_set_compression_program.c" />
+    <ClCompile Include="..\..\..\libarchive\archive_write_set_format.c" />
+    <ClCompile Include="..\..\..\libarchive\archive_write_set_format_ar.c" />
+    <ClCompile Include="..\..\..\libarchive\archive_write_set_format_by_name.c" />
+    <ClCompile Include="..\..\..\libarchive\archive_write_set_format_cpio.c" />
+    <ClCompile Include="..\..\..\libarchive\archive_write_set_format_cpio_newc.c" />
+    <ClCompile Include="..\..\..\libarchive\archive_write_set_format_mtree.c" />
+    <ClCompile Include="..\..\..\libarchive\archive_write_set_format_pax.c" />
+    <ClCompile Include="..\..\..\libarchive\archive_write_set_format_shar.c" />
+    <ClCompile Include="..\..\..\libarchive\archive_write_set_format_ustar.c" />
+    <ClCompile Include="..\..\..\libarchive\filter_fork.c" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\..\..\libarchive\archive.h" />
+    <ClInclude Include="..\..\..\libarchive\archive_endian.h" />
+    <ClInclude Include="..\..\..\libarchive\archive_entry.h" />
+    <ClInclude Include="..\..\..\libarchive\archive_entry_private.h" />
+    <ClInclude Include="..\..\..\libarchive\archive_platform.h" />
+    <ClInclude Include="..\..\..\libarchive\archive_private.h" />
+    <ClInclude Include="..\..\..\libarchive\archive_read_disk_private.h" />
+    <ClInclude Include="..\..\..\libarchive\archive_read_private.h" />
+    <ClInclude Include="..\..\..\libarchive\archive_string.h" />
+    <ClInclude Include="..\..\..\libarchive\archive_windows.h" />
+    <ClInclude Include="..\..\..\libarchive\archive_write_disk_private.h" />
+    <ClInclude Include="..\..\..\libarchive\archive_write_private.h" />
+    <ClInclude Include="..\..\..\libarchive\config_windows.h" />
+    <ClInclude Include="..\..\..\libarchive\filter_fork.h" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

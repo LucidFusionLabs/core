@@ -1,0 +1,15 @@
+message QueueFileEntry {
+  enum Status { QUEUED=0; CRAWLED=1; SCRAPED=2; }
+  optional fixed64 created = 1;
+  optional fixed32 flag = 2;
+  optional fixed32 mimetype = 3;
+  optional fixed32 offset = 4;
+  optional string url = 5;
+}
+
+message CrawlFileEntry {
+  optional QueueFileEntry request = 1;
+  optional string headers = 2;
+  optional bytes content = 3;
+}
+

@@ -1,0 +1,42 @@
+message Range {
+  optional float low = 1;
+  optional float high = 2;
+}
+
+message QuoteInfo {
+  optional string symbol = 1;
+  optional string name = 2;
+  optional int64 avg_daily_volume = 3;
+  optional float fifty_day_avg = 4;
+  optional float two_hund_day_avg = 5;
+  optional float earnings_per_share = 6;
+  optional float dividends_per_share = 7;
+}
+
+message QuoteValue {
+  optional int64 time = 1;
+  optional float price = 2;
+  optional int32 size = 3;
+
+  optional float ask = 4;
+  optional int32 ask_size = 5;
+
+  optional float bid = 6;
+  optional int32 bid_size = 7;
+
+  optional int64 volume = 8;
+  optional float capitalization = 9;
+  optional float price_earnings_ratio = 11;
+
+  optional Range day_range = 12;
+  optional Range year_range = 13;
+
+  optional string response_text = 14;
+  optional int64 response_time = 15;
+}
+
+message Quote {
+  optional int64 timestamp = 1; 
+  optional QuoteInfo info = 2;
+  optional QuoteValue value = 3;
+}
