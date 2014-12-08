@@ -44,9 +44,6 @@ DEFINE_int   (UseTransition,         1,                "Use transition probabili
 DEFINE_double(BeamWidth,             256,              "Beam search width");
 DEFINE_double(LanguageModelWeight,   2,                "Language model weight");
 DEFINE_double(WordInsertionPenalty,  0,                "Word insertion penalty");
-}; // namespace LFL
-
-using namespace LFL;
 
 struct SpeechDecodeSession : public HTTPServer::Resource {
     static const int DeltaWindow=7, NBest=1, MaxResponseWords=128, MaxResponseTranscript=1024;
@@ -294,7 +291,7 @@ struct SpeechDecodeServer : public HTTPServer::SessionResource {
     void close(HTTPServer::Resource *resource) { delete resource; }
 };
 
-int fusion_server(int argc, const char **argv) {
+int FusionServer(int argc, const char **argv) {
     RecognitionModel recognize;
     if (recognize.read("RecognitionNetwork", FLAGS_modeldir.c_str(), FLAGS_WantIter)) FATAL("open RecognitionNetwork ", FLAGS_modeldir);
     AcousticModel::toCUDA(&recognize.acousticModel);
@@ -344,6 +341,9 @@ int fusion_server(int argc, const char **argv) {
     return app->Main();
 }
 
+}; // namespace LFL
+using namespace LFL;
+
 extern "C" {
 int main(int argc, const char **argv) {
     app->logfilename = StrCat(dldir(), "fs.txt");
@@ -362,13 +362,13 @@ int main(int argc, const char **argv) {
     if (install) { service_install(service_name, argv[0]); exit=1; }
     if (uninstall) { service_uninstall(service_name); exit=1; }
 #endif
-    if (FLAGS_fg) { return fusion_server(argc, argv); }
+    if (FLAGS_fg) { return FusionServer(argc, argv); }
     if (exit) return app->Free();
 
 #ifdef _WIN32
     string exedir(argv[0], dirnamelen(argv[0]));
     chdir(exedir.c_str());
 #endif
-    return NTService::MainWrapper(service_name, fusion_server, argc, argv);
+    return NTService::MainWrapper(service_name, FusionServer, argc, argv);
 }
 }

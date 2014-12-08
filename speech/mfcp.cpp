@@ -22,9 +22,11 @@
 #include "ml/corpus.h"
 #include "corpus.h"
 
-using namespace LFL;
-
+namespace LFL {
 DEFINE_bool(verify,       false,       "Verify copied matrix file");
+
+}; // namespace LFL
+using namespace LFL;
 
 extern "C" {
 int main(int argc, const char *argv[]) {

@@ -91,6 +91,7 @@ template <typename X> typename X::value_type &PushBack (X &v, const typename X::
 template <typename X> typename X::value_type  PopFront (X &v) { typename X::value_type ret = v.front(); v.pop_front(); return ret; }
 template <typename X> typename X::value_type  PopBack  (X &v) { typename X::value_type ret = v.back (); v.pop_back (); return ret; }
 
+template <class X>       X *VectorGet(      vector<X> &x, int n) { return n < x.size() ? &x[n] : 0; }
 template <class X> const X *VectorGet(const vector<X> &x, int n) { return n < x.size() ? &x[n] : 0; }
 template <class X> X *VectorEnsureElement(vector<X> &x, int n) { EnsureSize(x, n+1); return &x[n]; }
 template <class X> X *VectorCheckElement(vector<X> &x, int n) { CHECK_LT(n, x.size()); return &x[n]; }

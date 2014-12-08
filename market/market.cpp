@@ -29,8 +29,7 @@
 #include "crawler/crawler.h"
 #include "crawler/yahoo_finance.h"
 
-using namespace LFL;
-
+namespace LFL {
 DEFINE_string(MarketDir, "/Users/p/lfl/market/", "Market data directory");
 DEFINE_bool(yahoo_snp500, false, "Monitor S&P 500 via Yahoo Finance");
 DEFINE_int(yahoo_delay_mins, 15, "Market feeds delayed by N mins");
@@ -142,6 +141,9 @@ int frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample
 
     return 0;
 }
+
+}; // namespace LFL
+using namespace LFL;
 
 extern "C" int main(int argc, const char *argv[]) {
 
