@@ -1,0 +1,18 @@
+From: Christian Mingle <cmingle[random1]@[domain]>
+Reply-To: Christian Mingle <cmingle[random2]@[domain]>
+To: <[*to]>
+Date: [*date]
+Subject: Find God’s match for You!
+Mime-Version: 1.0
+Message-Id: <[message-ID]@[domain]>
+Content-Type: text/html; charset=UTF-8
+Content-Transfer-Encoding: 7bit
+
+<html>
+<body>
+<center>
+<A href="http://www.[domain]/[user_id]/[campaign_id]">Click Here to see photos of your Soulmate!</a><br><br><br>
+<A href="http://www.[domain]/[user_id]/[campaign_id]"><IMG src="http://www.[domain]/cmingle1.jpg" border=0></A><br>
+<A href="http://www.[domain]/[user_id]/cgoo"><IMG src="http://www.[domain]/images/osb.jpg" border=0></A><br>
+</body>
+</html>

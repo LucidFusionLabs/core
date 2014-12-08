@@ -1,0 +1,21 @@
+<Configuration name=OneIP>
+ip-address: 192.168.1.1
+max-mx-connections-per-ip: 3
+log-location: .
+max-messages-per-connection: 20
+max-connections: 100000
+</Configuration>
+
+<Configuration name=MultipleIPS default=1>
+ip-address: 172.16.50.1
+ip-address: 172.16.50.2
+ip-address: 172.16.50.3
+ip-address: 192.168.175.1
+ip-address: 10.10.100.5
+ip-address: 10.10.100.6
+max-mx-connections-per-ip: 3
+max-mx-connections: 6
+log-location: .
+max-messages-per-connection: 20
+max-connections: 300000
+</Configuration>

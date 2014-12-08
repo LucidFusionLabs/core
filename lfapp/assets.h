@@ -1,0 +1,878 @@
+/*
+ * $Id: assets.h 1336 2014-12-08 09:29:59Z justin $
+ * Copyright (C) 2009 Lucid Fusion Labs
+
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+#ifndef __LFL_LFAPP_ASSETS_H__
+#define __LFL_LFAPP_ASSETS_H__
+namespace LFL {
+
+DECLARE_int(soundasset_seconds);
+
+struct Geometry {
+    int vd, td, cd, primtype, count, material, color;
+    Material mat;
+    Color col;
+    vector<float> vert, last_position;
+    int width, vert_ind, norm_offset, tex_offset, color_offset;
+    Geometry(int N=0, int V=0, int PT=0, int VD=0, int TD=0, int CD=0) : vd(VD), td(TD), cd(CD), primtype(PT), count(N),
+    material(0), color(0), vert(V), last_position(VD), width(VD), vert_ind(-1), norm_offset(-1), tex_offset(-1), color_offset(-1) {}
+
+    static const int TD=2, CD=4;
+    template <class X> Geometry(int VD, int primtype, int num, X *v, v3 *norm, v2 *tex, const Color *vcol) :
+        Geometry(num, num*VD*(1+(norm!=0)) + num*TD*(tex!=0) + num*CD*(vcol!=0) + 256, primtype, VD, TD, CD)
+    {
+        if (norm) { norm_offset  = width*sizeof(float); width += VD; }
+        if (tex)  { tex_offset   = width*sizeof(float); width += TD; }
+        if (vcol) { color_offset = width*sizeof(float); width += CD; }
+        for (int i = 0; i<count; i++) {
+            int k = 0;
+            for (int j = 0; j<VD && v;    j++, k++) vert[i*width + k] = v[i][j];
+            for (int j = 0; j<VD && norm; j++, k++) vert[i*width + k] = norm[i][j];
+            for (int j = 0; j<TD && tex;  j++, k++) vert[i*width + k] = tex[i][j];
+            for (int j = 0; j<CD && vcol; j++, k++) vert[i*width + k] = vcol[i].x[j];
+        }
+    }
+    template <class X> Geometry(int VD, int primtype, int num, X *v, v3 *norm, v2 *tex, const Color &vcol) :
+        Geometry(VD, primtype, num, v, norm, tex, (const Color*)0) { color=1; col=vcol; }
+
+    Geometry (int pt, int n, v2 *v, v3 *norm, v2 *tex            ) : Geometry(2, pt, n, v, norm, tex, 0  ) {}
+    Geometry (int pt, int n, v3 *v, v3 *norm, v2 *tex            ) : Geometry(3, pt, n, v, norm, tex, 0  ) {}
+    Geometry (int pt, int n, v2 *v, v3 *norm, v2 *tex, Color  col) : Geometry(2, pt, n, v, norm, tex, col) {}
+    Geometry (int pt, int n, v3 *v, v3 *norm, v2 *tex, Color  col) : Geometry(3, pt, n, v, norm, tex, col) {}
+    Geometry (int pt, int n, v2 *v, v3 *norm, v2 *tex, Color *col) : Geometry(2, pt, n, v, norm, tex, col) {}
+    Geometry (int pt, int n, v3 *v, v3 *norm, v2 *tex, Color *col) : Geometry(3, pt, n, v, norm, tex, col) {}
+
+    void SetPosition(const float *v);
+    void SetPosition(const point &p) { v2 v=p; SetPosition(&v[0]); }
+    void ScrollTexCoord(float dx, float dx_extra, int *subtract_max_int);
+
+    static Geometry *LoadOBJ(const string &filename, const float *map_tex_coord=0);
+    static string ExportOBJ(const Geometry *geometry, const set<int> *prim_filter=0, bool prim_filter_invert=0);
+};
+
+template <class X> struct AssetMap {
+    bool loaded;
+    vector<X> vec;
+    map<string, X*> amap;
+    AssetMap() : loaded(0) {}
+    void Add(const X &a) { CHECK(!loaded); vec.push_back(a); }
+    void Unloaded(X *a) { if (!a->name.empty()) amap.erase(a->name); }
+    void Load(X *a) { a->parent = this; if (!a->name.empty()) amap[a->name] = a; a->Load(); }
+    void Load() { CHECK(!loaded); for (int i=0; i<vec.size(); i++) Load(&vec[i]); loaded=1; }
+    X *operator()(const string &an) { return FindOrNull(amap, an); }
+};
+
+struct Asset {
+    typedef function<void(Asset*, Entity*)> DrawCB;
+    typedef AssetMap<Asset> Map;
+
+    Map *parent;
+    string name, texture, geom_fn;
+    DrawCB cb;
+    float scale; int translate, rotate;
+    Geometry *geometry, *hull;
+    Texture tex;
+    unsigned texgen, typeID, particleTexID, blends, blendt;
+    Color col;
+    bool color, zsort;
+
+    Asset() : parent(0), scale(0), translate(0), rotate(0), geometry(0), hull(0), texgen(0), typeID(0), particleTexID(0),
+    blends(GraphicsDevice::SrcAlpha), blendt(GraphicsDevice::OneMinusSrcAlpha), color(0), zsort(0) {}
+
+    Asset(const string &N, const string &Tex, float S, int T, int R, const char *G, Geometry *H, unsigned CM, DrawCB CB=DrawCB())
+        : parent(0), name(N), texture(Tex), geom_fn(BlankNull(G)), cb(CB), scale(S), translate(T), rotate(R), geometry(0), hull(H), texgen(0),
+        typeID(0), particleTexID(0), blends(GraphicsDevice::SrcAlpha), blendt(GraphicsDevice::OneMinusSrcAlpha), color(0), zsort(0) { tex.cubemap=CM; }
+
+    Asset(const string &N, const string &Tex, float S, int T, int R, Geometry *G, Geometry *H, unsigned CM, unsigned TG, DrawCB CB=DrawCB())
+        : parent(0), name(N), texture(Tex), cb(CB), scale(S), translate(T), rotate(R), geometry(G), hull(H), texgen(TG),
+        typeID(0), particleTexID(0), blends(GraphicsDevice::SrcAlpha), blendt(GraphicsDevice::OneMinusSrcAlpha), color(0), zsort(0) { tex.cubemap=CM; }
+
+    static void Copy(const Asset *in, Asset *out) {
+        string name = out->name;
+        unsigned typeID = out->typeID;
+        *out = *in;
+        out->name = name;
+        out->typeID = typeID;
+    }
+
+    static void Load(vector<Asset> *assets) { for (int i=0; i<assets->size(); ++i) (*assets)[i].Load(); }
+    void Load(void *handle=0, VideoAssetLoader *l=0);
+    void Load(const void *FromBuf, const char *filename, int size);
+    void Unload();
+};
+
+struct SoundAsset {
+#   define SoundAssetSize(sa) ((sa)->seconds * FLAGS_sample_rate * FLAGS_chans_out)
+    static const int FlagNoRefill, FromBufPad;
+    typedef function<int(SoundAsset*, int)> RefillCB;
+    typedef AssetMap<SoundAsset> Map;
+
+    Map *parent;
+    string name, filename;
+    RingBuf *wav;
+    int channels, sample_rate, seconds;
+    RefillCB refill;
+    void *handle;
+    int handle_arg1;
+    AudioResampler resampler;
+
+    SoundAsset() : parent(0), wav(0), channels(0), sample_rate(0), seconds(0), handle(0), handle_arg1(-1) {}
+    SoundAsset(const string &N, const string &FN, RingBuf *W, int C, int SR, int S) : name(N), filename(FN), wav(W), channels(C), sample_rate(SR), seconds(S), handle(0), handle_arg1(-1) {}
+
+    static void Load(vector<SoundAsset> *assets) { for (int i=0; i<assets->size(); ++i) (*assets)[i].Load(); }
+    void Load(void *handle, const char *FN, int Secs, int flag=0);
+    void Load(const void *FromBuf, int size, const char *FileName, int Seconds=10);
+    void Load(int seconds=10, bool unload=true);
+    void Unload();
+    int Refill(int reset);
+};
+
+struct MovieAsset {
+    typedef AssetMap<MovieAsset> Map;
+
+    Map *parent;
+    string name, filename;
+    SoundAsset audio;
+    Asset video;
+    void *handle;
+
+    MovieAsset() : parent(0), handle(0) {}
+    void Load(const char *fn=0);
+    int Play(int seek);
+};
+
+struct MapAsset {
+    virtual void Draw(const Entity &camera) = 0;
+};
+
+struct AudioAssetLoader {
+    virtual void *load_audio_file(const string &fn) = 0;
+    virtual void unload_audio_file(void *h) = 0;
+
+    virtual void *load_audio_buf(const char *buf, int len, const char *mimetype) = 0;
+    virtual void unload_audio_buf(void *h) = 0;
+
+    virtual void load(SoundAsset *a, void *h, int seconds, int flag) = 0;
+    virtual int refill(SoundAsset *a, int reset) = 0;
+};
+
+struct VideoAssetLoader {
+    virtual void *load_video_file(const string &fn) = 0;
+    virtual void unload_video_file(void *h) = 0;
+
+    virtual void *load_video_buf(const char *buf, int len, const char *mimetype) = 0;
+    virtual void unload_video_buf(void *h) = 0;
+
+    virtual void load(Asset *a, void *h, Texture *out) = 0;
+};
+
+struct MovieAssetLoader {
+    virtual void *load_movie_file(const string &fn) = 0;
+    virtual void unload_movie_file(void *h) = 0;
+
+    virtual void *load_movie_buf(const char *buf, int len, const char *mimetype) = 0;
+    virtual void unload_movie_buf(void *h) = 0;
+
+    virtual void load(MovieAsset *a, void *h) = 0;
+    virtual int play(MovieAsset *a, int seek) = 0;
+};
+
+struct JpegReader {
+    static int Read(File *f,            Texture *out);
+    static int Read(const string &data, Texture *out);
+};
+
+struct GIFReader {
+    static int Read(File *f,            Texture *out);
+    static int Read(const string &data, Texture *out);
+};
+
+struct PngReader {
+    static int Read(File *f, Texture *out);
+};
+
+struct PngWriter {
+    static int Write(File *f,          const Texture &tex);
+    static int Write(const string &fn, const Texture &tex);
+};
+
+struct WavReader {
+    File *f; int last;
+    ~WavReader() { Close(); }
+    WavReader(File *F=0) { Open(F); }
+    void Open(File *F);
+    void Close() { if (f) f->close(); }
+    int Read(RingBuf::Handle *, int offset, int size);
+};
+
+struct WavWriter {
+    File *f; int wrote;
+    ~WavWriter() { Flush(); }
+    WavWriter(File *F=0) { Open(F); }
+    void Open(File *F);
+    int Write(const RingBuf::Handle *, bool flush=true);
+    int Flush();
+};
+
+struct Assets : public Module {
+    AudioAssetLoader *default_audio_loader;
+    VideoAssetLoader *default_video_loader;
+    MovieAssetLoader *default_movie_loader;
+    MovieAsset       *movie_playing;
+    Assets() : default_audio_loader(0), default_video_loader(0), default_movie_loader(0), movie_playing(0) {}
+    int Init();
+};
+
+void glLine(float x1, float y1, float x2, float y2, const Color *color);
+void glAxis(Asset*, Entity*);
+void glRoom(Asset*, Entity*);
+void glIntersect(int x, int y, Color *c);
+void glTimeResolutionShaderWindows(Shader *shader, const Color &backup_color, const Box          &win, const Texture *tex=0);
+void glTimeResolutionShaderWindows(Shader *shader, const Color &backup_color, const vector<Box*> &win, const Texture *tex=0);
+void glSpectogram(Matrix *m, unsigned char *data, int width, int height, int hjump, float max, float clip, bool interpolate, int pd=PowerDomain::dB);
+void glSpectogram(Matrix *m, Asset *a, float *max=0, float clip=-INFINITY, int pd=PowerDomain::dB);
+void glSpectogram(SoundAsset *sa, Asset *a, Matrix *transform=0, float *max=0, float clip=-INFINITY);
+
+struct BoxFilled : public Drawable { void Draw(const LFL::Box &b) const { b.Draw(); } };
+struct BoxOutline : public Drawable {
+    int line_width;
+    BoxOutline(int LW=1) : line_width(LW) {}
+    void Draw(const LFL::Box &b) const;
+};
+
+struct Waveform : public Drawable {
+    Geometry *geom; int width, height;
+    virtual ~Waveform() { delete geom; }
+    Waveform() : width(0), height(0), geom(0) {}
+    Waveform(point dim, const Color *c, const Vec<float> *);
+    static Waveform Decimated(point dim, const Color *c, const RingBuf::Handle *, int decimateBy);
+    void Draw(const LFL::Box &w) const {
+        if (!geom) return;
+        geom->SetPosition(w.Position());
+        screen->gd->DisableTexture();
+        Scene::Select(geom);
+        Scene::Draw(geom, 0);
+    }
+};
+
+struct Cube {
+    static Geometry *Create(v3 v);
+    static Geometry *Create(float rx, float ry, float rz, bool normals=false);
+    static Geometry *CreateFrontFace(float r);
+    static Geometry *CreateBackFace(float r);
+    static Geometry *CreateLeftFace(float r);
+    static Geometry *CreateRightFace(float r);
+    static Geometry *CreateTopFace(float r);
+    static Geometry *CreateBottomFace(float r);
+};
+
+struct Grid {
+    static Geometry *Grid3D();
+    static Geometry *Grid2D(float x, float y, float range, float step);
+};
+
+struct TexSeq {
+    Asset *a; int num, ind;
+    TexSeq() : a(0), num(0), ind(0) {}
+    ~TexSeq() { if (a) { for (int i=0; i<num; ++i) a[i].Unload(); delete [] a; } }
+    static void load(Asset *out, const char *name, const char *filename);
+    void load(const char *fmt, const char *prefix, const char *suffix, int N);
+    void draw(Asset *out, Entity *e);
+};
+
+struct Skybox {
+    Asset               a_left, a_right, a_top, a_bottom, a_front, a_back;
+    Entity              e_left, e_right, e_top, e_bottom, e_front, e_back;
+    Scene::EntityVector v_left, v_right, v_top, v_bottom, v_front, v_back;
+    Skybox() : a_left  ("", "", 1, 0, 0, Cube::Create(500, 500, 500), 0, CubeMap::PX, TexGen::LINEAR),
+               a_right ("", "", 1, 0, 0, 0,                           0, CubeMap::NX, 0),
+               a_top   ("", "", 1, 0, 0, 0,                           0, CubeMap::PY, 0),
+               a_bottom("", "", 1, 0, 0, 0,                           0, CubeMap::NY, 0),
+               a_front ("", "", 1, 0, 0, 0,                           0, CubeMap::PZ, 0),
+               a_back  ("", "", 1, 0, 0, 0,                           0, CubeMap::NZ, 0),
+               e_left ("sb_left",  &a_left),  e_right ("sb_right",  &a_right),
+               e_top  ("sb_top",   &a_top),   e_bottom("sb_bottom", &a_bottom),
+               e_front("sb_front", &a_front), e_back  ("sb_back",   &a_back)
+    { 
+        v_left .push_back(&e_left); v_right .push_back(&e_right);
+        v_top  .push_back(&e_left); v_bottom.push_back(&e_right);
+        v_front.push_back(&e_left); v_back  .push_back(&e_right);
+    }
+    void Load(const string &filename_prefix) {
+        a_left  .texture = StrCat(filename_prefix,   "_left.png"); a_left  .Load();
+        a_right .texture = StrCat(filename_prefix,  "_right.png"); a_right .Load();
+        a_top   .texture = StrCat(filename_prefix,    "_top.png"); a_top   .Load();
+        a_bottom.texture = StrCat(filename_prefix, "_bottom.png"); a_bottom.Load();
+        a_front .texture = StrCat(filename_prefix,  "_front.png"); a_front .Load();
+        a_back  .texture = StrCat(filename_prefix,   "_back.png"); a_back  .Load();
+    }
+    void Draw() {
+        screen->gd->DisableNormals();
+        screen->gd->DisableVertexColor();
+        screen->gd->DisableDepthTest();
+        Scene::Draw(&a_left,  0, v_left ); Scene::Draw(&a_right,  0, v_right);
+        Scene::Draw(&a_top,   0, v_top  ); Scene::Draw(&a_bottom, 0, v_bottom);
+        Scene::Draw(&a_front, 0, v_front); Scene::Draw(&a_back,   0, v_back);
+        screen->gd->EnableDepthTest();
+    }
+    Asset *asset() { return &a_left; }
+};
+
+struct ParticleSystem {
+    string name;
+    Color color;
+    v3 pos, vel, ort, updir;
+    vector<v3> *pos_transform;
+    int pos_transform_index;
+    ParticleSystem(const string &n) : name(n), ort(0,0,1), updir(0,1,0), pos_transform(0), pos_transform_index(0) {}
+    virtual void Update(unsigned dt, int mx, int my, int mdown) = 0;
+    virtual void Draw() = 0;
+};
+
+template <int MP, int MH, bool PerParticleColor> struct Particles : public ParticleSystem {
+    typedef Particles<MP, MH, PerParticleColor> ParticlesType;
+    static const int MaxParticles=MP, MaxHistory=MH, VertFloats=(PerParticleColor ? 9 : 5), VertSize=VertFloats*sizeof(float);
+    static const int ParticleVerts=6, ParticleSize=ParticleVerts*VertSize, NumFloats=MaxParticles*ParticleVerts*VertFloats;
+    static const int Trails=MaxHistory>2, TrailVertFloats=(PerParticleColor ? 7 : 3), TrailVertSize=TrailVertFloats*sizeof(float);
+    static const int MaxTrailVerts=6*(MaxHistory-2), NumTrailFloats=(Trails ? MaxParticles*MaxTrailVerts*TrailVertFloats : 1);
+    int num_particles, nops, texture, verts_id, trailverts_id, num_trailverts, emitter_type, blend_mode_s, blend_mode_t, burst;
+    float floorval, gravity, radius_min, radius_max, age_min, age_max, rand_initpos, rand_initvel, emitter_angle, color_fade;
+    long long ticks_seen, ticks_processed, ticks_step;
+    float verts[NumFloats], trailverts[NumTrailFloats];
+    bool trails, floor, always_on, per_particle_color, radius_decay, billboard, move_with_pos, blend, rand_color, draw_each;
+    Color rand_color_min, rand_color_max;
+
+    struct Emitter { enum { None=0, Mouse=1, Sprinkler=2, RainbowFade=4, GlowFade=8, FadeFromWhite=16 }; };
+
+    struct Particle {
+        ParticlesType *config;
+        v3 history[MH], vel;
+        int history_len, bounceage;
+        float radius, age, maxage, remaining;
+        Color color, start_color;
+        bool dead;
+
+        void InitColor() {
+            if (config->rand_color) {
+                color = Color(rand(config->rand_color_min.r(), config->rand_color_max.r()),
+                              rand(config->rand_color_min.g(), config->rand_color_max.g()),
+                              rand(config->rand_color_min.b(), config->rand_color_max.b()),
+                              rand(config->rand_color_min.a(), config->rand_color_max.a()));
+            }
+            else if (config->emitter_type & Emitter::RainbowFade) {
+                color = Color::fade(config->color_fade);
+            } else {
+                color = config->color;
+            }
+            start_color = color;
+        }
+        void Init() {
+            InitColor();
+            radius = rand(config->radius_min, config->radius_max);
+            history_len = Trails ? (int)rand(max(3.0f, config->radius_min), MaxHistory) : 1;
+
+            v3 start;
+            if (!config->move_with_pos) start = config->pos;
+            if (config->pos_transform) {
+                const v3 &tf = (*config->pos_transform)[config->pos_transform_index++];
+                v3 right = v3::cross(config->ort, config->updir);
+                start.add(right * tf.x + config->updir * tf.y + config->ort * tf.z);
+                if (config->pos_transform_index >= config->pos_transform->size()) config->pos_transform_index = 0;
+            }
+            start.add(v3::rand() * rand(0, config->rand_initpos));
+
+            for (int i=0; i<history_len; i++) history[i] = start;
+
+            if (config->emitter_type & Emitter::Sprinkler) {
+                if (1) vel  = v3(2.0*cos(config->emitter_angle), 2.0,               2.0*sin(config->emitter_angle));
+                if (0) vel += v3(0.5*rand(1,2)-.25,              0.5*rand(1,2)-.25, 0.5*rand(1,2)-.25);
+            } else { 
+                vel = config->vel*25.0 + v3::rand()*rand(0, config->rand_initvel);
+            }
+
+            remaining = 1;
+            bounceage = 2;
+            maxage = rand(config->age_min, config->age_max);
+            dead = false;
+            age = 0; 
+        }
+        void Update(float secs) {
+            float bounced = false;
+            if (config->gravity) vel += v3(0, config->gravity * secs, 0);
+            if (config->floor && history[0].y + vel.y < config->floorval) {
+                bounced = true;
+                vel.scale(0.75);
+                vel.y *= -0.5f;
+            }
+
+            if (config->trails) for (int i=history_len-1; i>0; i--) history[i] = history[i-1];
+            history[0] += vel * secs;
+
+            age += secs * (!config->floor ? 1 : (bounced ? bounceage++ : 0.25));
+            if (age < maxage) remaining = 1 - age / maxage;
+            else dead = true;
+        }
+    };
+    Particle particles[MP], *free_list[MP];
+
+    float       *particle_verts(int n)       { return &verts[n * ParticleVerts * VertFloats]; }
+    const float *particle_verts(int n) const { return &verts[n * ParticleVerts * VertFloats]; }
+
+    static void AssignTex(float *out, float tx, float ty) { out[3]=tx; out[4]=ty; }
+    static void AssignPosColor(float *out, const v3 &v, const Color *c, int tex_size) {
+        if (1) { out[0]=v.x; out[1]=v.y; out[2]=v.z; }
+        if (c) { int oi=3+tex_size; out[oi++]=c->r(); out[oi++]=c->g(); out[oi++]=c->b(); out[oi++]=c->a(); }
+    }
+
+    Particles(const string &n, bool AlwaysOn=false, float RadiusMin=10, float RadiusMax=40, float RandInitPos=5, float RandInitVel=500) : ParticleSystem(n), num_particles(AlwaysOn ? MaxParticles : 0),
+        nops(0), texture(0), verts_id(-1), trailverts_id(-1), emitter_type(0), blend_mode_s(GraphicsDevice::SrcAlpha), blend_mode_t(GraphicsDevice::One), burst(0), floorval(0), gravity(0),
+        age_min(.05), age_max(1), radius_min(RadiusMin), radius_max(RadiusMax), rand_initpos(RandInitPos), rand_initvel(RandInitVel), emitter_angle(0), color_fade(0),
+        ticks_seen(0), ticks_processed(0), ticks_step(0), trails(Trails), floor(0), always_on(AlwaysOn), per_particle_color(PerParticleColor), radius_decay(true), billboard(0), move_with_pos(0), blend(true), rand_color(0), draw_each(0)
+    {
+        for (int i=0; i<MP; i++) {
+            Particle *particle = &particles[i];
+            particle->dead = true;
+            particle->config = this;
+            free_list[i] = particle;
+            if (always_on) particle->Init();
+
+            float *v = particle_verts(i);
+            AssignTex(v, 0, 0); v += VertFloats;
+            AssignTex(v, 0, 1); v += VertFloats;
+            AssignTex(v, 1, 0); v += VertFloats;
+
+            AssignTex(v, 0, 1); v += VertFloats;
+            AssignTex(v, 1, 0); v += VertFloats;
+            AssignTex(v, 1, 1); v += VertFloats;
+        }
+    }
+    Particle *AddParticle() {
+        if (num_particles == MP) { nops++; return 0; }
+        CHECK(num_particles < MP);
+        Particle *particle = free_list[num_particles++];
+        particle->Init();
+        return particle;
+    }
+    void DelParticle(Particle *particle) {
+        CHECK(num_particles > 0);
+        free_list[--num_particles] = particle;
+    }
+    void Update(unsigned dt, int mx, int my, int mdown) {
+        if (!dt) return;
+        ticks_seen += dt;
+        float secs = dt / 1000.0;
+
+        if (emitter_type & Emitter::Mouse) {
+            if (mdown) for(int i=0; i<100; i++) AddParticle();
+            v3 mouse_delta = v3(mx - pos.x, my - pos.y, 0);
+            vel += (mouse_delta - vel) * 0.25;
+        }
+        if (emitter_type & Emitter::Sprinkler) {
+            emitter_angle += 0.5 * secs;
+            while (emitter_angle > M_TAU) emitter_angle -= M_TAU;
+        }
+        if (emitter_type & Emitter::RainbowFade) {
+            color_fade += secs / 10;
+            while (color_fade >= 1) color_fade -= 1;
+        }
+        if (burst) {
+            for (int i=0; i<burst; i++) AddParticle();
+        }
+
+        pos += vel;
+        if (floor && pos.y < floorval) { pos.y = floorval; vel.y = 0; }
+
+        unsigned steps = 0, step = ticks_step ? ticks_step : (ticks_seen - ticks_processed);
+        for (/**/; ticks_seen >= ticks_processed + step; ticks_processed += step) steps++;
+        if (!steps) return;
+
+        num_trailverts = 0;
+        int out_particles = 0;
+        float stepsecs = step / 1000.0;
+        for (int i=0; i<MP; i++) {
+            if (particles[i].dead) continue;
+            UpdateParticle(&particles[i], stepsecs, steps, particle_verts(out_particles++), &trailverts[num_trailverts * TrailVertFloats]);
+        }
+    }
+    void UpdateParticle(Particle *particle, float stepsecs, int steps, float *v, float *tv) {
+        for (int i=0; i<steps; i++) {
+            particle->Update(stepsecs);
+            if (particle->dead) {
+                if (always_on) particle->Init();
+                else { DelParticle(particle); return; }
+            }
+        }
+        if (!draw_each) UpdateVertices(particle, v, tv);
+    }
+    void UpdateVertices(Particle *particle, float *v, float *tv) {
+        float *vin = v, remaining = particle->remaining, size = particle->radius * (radius_decay ? remaining : 1);
+        if (emitter_type & Emitter::GlowFade) particle->color = Color(remaining, remaining * 0.75, 1-remaining, 1.0);
+        if (emitter_type & Emitter::FadeFromWhite) particle->color = Color::Interpolate(Color::white, particle->start_color, remaining);
+
+        v3 p = particle->history[0];
+        if (move_with_pos) p.add(pos);
+
+        v3 o1=p, o2=p, o3=p, o4=p, right, up;
+
+        if (billboard) { right = v3::cross(screen->camMain->ort, screen->camMain->up) * size; up = screen->camMain->up * size; }
+        else           { right = v3(size, 0, 0);                                              up = v3(0, size, 0); }
+
+        o1.add(-right + -up);
+        o2.add(-right +  up);
+        o3.add( right + -up);
+        o4.add( right +  up);
+
+        AssignPosColor(v, o1, PerParticleColor ? &particle->color : 0, 2); v += VertFloats;
+        AssignPosColor(v, o2, PerParticleColor ? &particle->color : 0, 2); v += VertFloats;
+        AssignPosColor(v, o3, PerParticleColor ? &particle->color : 0, 2); v += VertFloats;
+
+        if (!draw_each) {
+            AssignPosColor(v, o2, PerParticleColor ? &particle->color : 0, 2); v += VertFloats;
+            AssignPosColor(v, o3, PerParticleColor ? &particle->color : 0, 2); v += VertFloats;
+            AssignPosColor(v, o4, PerParticleColor ? &particle->color : 0, 2); v += VertFloats;
+        } else {
+            AssignPosColor(v, o4, PerParticleColor ? &particle->color : 0, 2); v += VertFloats;
+            DrawParticles(GraphicsDevice::TriangleStrip, 4, vin, 4*VertSize);
+        }
+
+        if (trails) {
+            v3 last_v1, last_v2, *history = particle->history;
+            int history_len = particle->history_len;
+            for (int i = 0; i < history_len - 1; i++) {
+                float step = 1.0f - i / (float)(history_len-1);
+                v3 dp = history[i] - history[i+1];
+                v3 perp1 = v3::cross(dp, updir);
+                v3 perp2 = v3::cross(dp, perp1);
+                perp1 = v3::cross(dp, perp2);
+                perp1.norm();
+
+                Color trail_color(step, step * 0.25f, 1.0 - step, step * 0.5);
+                v3 off = perp1 * (particle->radius * particle->remaining * step * 0.1);
+                v3 v1 = history[i] - off, v2 = history[i] + off;
+                if (i > 0) {
+                    AssignPosColor(tv, last_v1, PerParticleColor ? &trail_color : 0, 0); tv += TrailVertFloats;
+                    AssignPosColor(tv, last_v2, PerParticleColor ? &trail_color : 0, 0); tv += TrailVertFloats;
+                    AssignPosColor(tv,      v1, PerParticleColor ? &trail_color : 0, 0); tv += TrailVertFloats;
+                    num_trailverts += 3;
+#if 0
+                    AssignPosColor(tv, last_v2, PerParticleColor ? &trail_color : 0, 0); tv += TrailVertFloats;
+                    AssignPosColor(tv,      v1, PerParticleColor ? &trail_color : 0, 0); tv += TrailVertFloats;
+                    AssignPosColor(tv,      v2.x,      v2.y,      v2.z, PerParticleColor ? &trail_color : 0, 0); tv += TrailVertFloats;
+                    num_trailverts += 3;
+#endif
+                }
+                last_v1 = v1;
+                last_v2 = v2;
+            }
+        }
+    }
+    void Draw() {
+        screen->gd->DisableDepthTest();
+        screen->gd->DisableLighting();
+        screen->gd->DisableNormals();
+
+        if (blend) {
+            screen->gd->EnableBlend();
+            screen->gd->BlendMode(blend_mode_s, blend_mode_t);
+        }
+        if (PerParticleColor) {
+            screen->gd->EnableVertexColor();
+        }
+        if (texture) {
+            screen->gd->EnableTexture();
+            screen->gd->BindTexture(GraphicsDevice::Texture2D, texture);
+        }
+
+        if (draw_each) {
+            for (int i=0; i<MP; i++) {
+                if (particles[i].dead) continue;
+                UpdateVertices(&particles[i], particle_verts(i), &trailverts[i * TrailVertFloats]);
+            }
+        } else {
+            int update_size = verts_id < 0 ? sizeof(verts) : num_particles * ParticleSize;
+            DrawParticles(GraphicsDevice::Triangles, num_particles*ParticleVerts, verts, update_size);
+
+            if (trails) {
+                int trail_update_size = trailverts_id < 0 ? sizeof(trailverts) : num_trailverts * TrailVertSize;
+                DrawTrails(trailverts, trail_update_size);
+            }
+        }
+
+        if (PerParticleColor) screen->gd->DisableVertexColor();
+    } 
+    void DrawParticles(int prim_type, int num_verts, float *v, int l) {
+        if (1)                screen->gd->VertexPointer(3, GraphicsDevice::Float, VertSize, 0,               v, l, &verts_id, true);
+        if (1)                screen->gd->TexPointer   (2, GraphicsDevice::Float, VertSize, 3*sizeof(float), v, l, &verts_id, false);
+        if (PerParticleColor) screen->gd->ColorPointer (4, GraphicsDevice::Float, VertSize, 5*sizeof(float), v, l, &verts_id, true);
+
+        screen->gd->DrawArrays(prim_type, 0, num_verts);
+    }
+    void DrawTrails(float *v, int l) {
+        screen->gd->DisableTexture();
+
+        if (1)                screen->gd->VertexPointer(3, GraphicsDevice::Float, TrailVertSize, 0,               v, l, &trailverts_id, true);
+        if (PerParticleColor) screen->gd->ColorPointer (4, GraphicsDevice::Float, TrailVertSize, 3*sizeof(float), v, l, &trailverts_id, true);
+
+        screen->gd->DrawArrays(GraphicsDevice::Triangles, 0, num_trailverts);
+    }
+    void AssetDrawCB(Asset *out, Entity *e) { pos = e->pos; Draw(); }
+};
+
+struct RingFrameBuffer {
+    FrameBuffer fb; v2 scroll; point p; bool wrap=0;
+    int w=0, h=0, font_size=0, font_height=0;
+
+    virtual int Height() const { return h; }
+    virtual void SizeChangedDone() { fb.Release(); scroll=v2(); p=point(); }
+    virtual bool SizeChanged(int W, int H, Font *font) {
+        if (W == w && H == h && font->size == font_size) return false;
+        w = W; h = H; font_size = font->size; font_height = font->height; 
+        fb.Resize(w, Height(), FrameBuffer::Flag::CreateGL | FrameBuffer::Flag::CreateTexture);
+        screen->gd->Clear();
+        screen->gd->DrawMode(DrawMode::_2D);
+        return true;
+    }
+    virtual void Draw(point pos, point adjust) {
+        Box box(pos.x, pos.y, w, Height());
+        Scissor scissor(box);
+        screen->gd->EnableLayering();
+        fb.tex.Bind();
+        (box + adjust).DrawCrimped(fb.tex.coord, 0, 0, scroll.y);
+    }
+    template <class X> void Update(X *l, const Box &b, const function<point(X*, point, const Box&)> &paint, bool vwrap=true) {
+        Box box(0, b.h);
+        point lp = paint(l, l->p, box);
+        if (lp.y < 0 && vwrap) paint(l, point(0, lp.y + Height() + b.h), box);
+    }
+    template <class X> int PushFrontAndUpdate(X *l, const Box &b, const function<point(X*, point, const Box&)> &paint, bool vwrap=true) {
+        int ht = Height();
+        if (b.h >= ht)     p = paint(l,      point(0, ht),         b);
+        else                   paint(l, (p = point(0, p.y + b.h)), b);
+        if (p.y > ht && vwrap) paint(l, (p = point(0, p.y - ht)),  b);
+        scroll.y = fmod(scroll.y - (float)b.h / ht, 1.0);
+        return b.h;
+    }
+    template <class X> int PushBackAndUpdate(X *l, const Box &b, const function<point(X*, point, const Box&)> &paint, bool vwrap=true) {
+        int ht = Height();
+        if (p.y == 0)         p =          point(0, ht);
+        if (b.h >= ht)        p = paint(l, point(0, b.h),            b);
+        else                  p = paint(l, point(0, p.y),            b);
+        if (p.y < 0 && vwrap) p = paint(l, point(0, p.y + b.h + ht), b);
+        scroll.y = fmod(scroll.y + (float)b.h / ht, 1.0);
+        return b.h;
+    }
+    /*
+       point ip = p;
+       printf("PushFront %s -> %s %d %s\n", ip.DebugString().c_str(), p.DebugString().c_str(),
+       l->Lines(), l->Text().c_str());
+       point ip = p;
+       printf("PushBack %s -> %s %d %s\n", ip.DebugString().c_str(), p.DebugString().c_str(),
+       l->Lines(), l->Text().c_str());
+     */
+};
+
+struct Tile {
+    CallbackList cb;
+    unsigned id, prepend_depth; bool dirty;
+    Tile() : id(0), prepend_depth(0), dirty(0) {}
+};
+
+struct Tiles {
+    int W, H, zero_row=0, zero_col=0, context_depth=-1;
+    bool clear=1, clear_empty=1;
+    vector<Tile*> prepend, append;
+    matrix<Tile*> mat;
+#define TilesMatrixIter(m) MatrixIter(m) if (Tile *tile = (Tile*)(m)->row(i)[j])
+    FrameBuffer fb;
+    Box current_tile;
+    Tiles(int w=256, int h=256) : W(w), H(h), mat(1,1) { CHECK(is_power_of_two(W)); CHECK(is_power_of_two(H)); }
+
+    void Run();
+    void Draw(const Box &viewport, int scrolled_x, int scrolled_y);
+    void PushScissor(const Box &w) { screen->gd->PushScissor(Box(w.x - current_tile.x, w.y - current_tile.y, w.w, w.h)); }
+    void AddBoxArray(const BoxArray &box, point p);
+
+    void ContextOpen() {
+        TilesMatrixIter(&mat) { if (tile->cb.dirty) tile->dirty = 1; tile->cb.dirty = 0; }
+        if (++context_depth < prepend.size()) { prepend[context_depth]->cb.Clear(); append[context_depth]->cb.Clear(); }
+        else { prepend.push_back(new Tile()); append.push_back(new Tile()); CHECK_LT(context_depth, prepend.size()); }
+    }
+    void ContextClose() {
+        CHECK_GE(context_depth, 0);
+        TilesMatrixIter(&mat) {
+            if (tile->cb.dirty) tile->dirty = 1;
+            if (tile->dirty && tile->prepend_depth > context_depth) {
+                tile->cb.Add(append[context_depth]->cb);
+                tile->prepend_depth = context_depth;
+            }
+            if (!context_depth) tile->dirty = 0;
+        }
+        context_depth--;
+    }
+
+    void GetTileCoords(int xi, int yi, int *xo, int *yo) const {
+        *xo = xi / W;
+        *yo = yi / H - (yi < 0 && (yi % W) != 0);
+    }
+    void GetTileCoords(const Box *box, int *x1, int *y1, int *x2, int *y2) const {
+        GetTileCoords(box->x,          box->y,          x1, y1);
+        GetTileCoords(box->x + box->w, box->y + box->h, x2, y2);
+    }
+    void GetScreenCoords(int i, int j, int *xo, int *yo) const {
+        *xo = j * W;
+        *yo = (i - zero_row) * H;
+    }
+
+    void AddCallback(const Box *box, const Callback &cb) {
+        int x1, x2, y1, y2, ind = 0; bool added = 0;
+        GetTileCoords(box, &x1, &y1, &x2, &y2);
+
+        if ((x1 < 0 && x2 < 0) || box->w < 0 || box->h < 0) { InvalidBox(box); return; }
+        x1 = max(x1, 0);
+
+        for (int y = y1; y <= y2; y++)
+            for (int x = x1; x <= x2; x++) {
+                GetTile(x, y)->cb.Add(cb);
+                added = true;
+            }
+
+        if (!added) FATAL("AddCallback ", box->DebugString(), " = ", x1, " ", y1, " ", x2, " ", y2);
+    }
+    void InvalidBox(const Box *box) { /* ERROR("InvalidBox ", box->DebugString()); */ } 
+
+    Tile *GetTile(int x, int y) {
+        int add; unsigned texid;
+        CHECK_GE(x, 0);
+        if (1)      { if ((add =  x + zero_col - mat.N + 1) > 0) { mat.addcols(add); } }
+        if (y >= 0) { if ((add =  y + zero_row - mat.M + 1) > 0) { mat.addrows(add); } }
+        else        { if ((add = -y - zero_row            ) > 0) { mat.addrows(add, true); zero_row += add; } }
+
+        y = zero_row + y;
+        CHECK_RANGE(y, 0, mat.M);
+
+        Tile **ret = (Tile**)&mat.row(y)[x];
+        if (!*ret) *ret = new Tile();
+        if (!(*ret)->cb.dirty) {
+            for (int i = (*ret)->prepend_depth; i <= context_depth; i++) (*ret)->cb.Add(prepend[i]->cb);
+            (*ret)->prepend_depth = context_depth + 1;
+        }
+        return *ret;
+    }
+};
+#define TilesPreAdd(tiles, ...) CallbackListAdd(&(tiles)->prepend[(tiles)->context_depth]->cb, __VA_ARGS__)
+#define TilesPostAdd(tiles, ...) CallbackListAdd(&(tiles)->append[(tiles)->context_depth]->cb, __VA_ARGS__)
+#define TilesAdd(tiles, w, ...) (tiles)->AddCallback((w), bind(__VA_ARGS__));
+
+struct Layers : public vector<Tiles*> {
+    void Init(int N=1) { CHECK_EQ(size(), 0); for (int i=0; i<N; i++) push_back(new Tiles()); }
+    void Draw(const Box &b, int vs, int hs) { for (auto i : *this) i->Draw(b, vs, hs); }
+    void Update() { for (auto i : *this) i->Run(); }
+};
+
+struct Shell {
+    typedef function<void(const vector<string>&)> CB;
+    struct Command { 
+        string name; CB cb;
+        Command(const string &N, const CB &Cb) : name(N), cb(Cb) {}
+    };
+    vector<Command>  command;
+    Asset::Map      *assets;
+    SoundAsset::Map *soundassets;
+    MovieAsset::Map *movieassets;
+
+    Shell(Asset::Map *AM=0, SoundAsset::Map *SAM=0, MovieAsset::Map *MAM=0) : assets(AM), soundassets(SAM), movieassets(MAM) {
+        command.push_back(Command("quit",       bind(&Shell::quit,         this, _1)));
+        command.push_back(Command("cmds",       bind(&Shell::cmds,         this, _1)));
+        command.push_back(Command("binds",      bind(&Shell::binds,        this, _1)));
+        command.push_back(Command("flags",      bind(&Shell::flags,        this, _1)));
+        command.push_back(Command("browser",    bind(&Shell::browser,      this, _1)));
+        command.push_back(Command("conscolor",  bind(&Shell::consolecolor, this, _1)));
+        command.push_back(Command("clipboard",  bind(&Shell::clipboard,    this, _1)));
+        command.push_back(Command("startcmd",   bind(&Shell::startcmd,     this, _1)));
+        command.push_back(Command("dldir",      bind(&Shell::dldir,        this, _1)));
+        command.push_back(Command("screenshot", bind(&Shell::screenshot,   this, _1)));
+        command.push_back(Command("fillmode",   bind(&Shell::fillmode,     this, _1)));
+        command.push_back(Command("texmode",    bind(&Shell::texmode,      this, _1)));
+        command.push_back(Command("swapaxis",   bind(&Shell::swapaxis,     this, _1)));
+        command.push_back(Command("campos",     bind(&Shell::campos,       this, _1)));
+        command.push_back(Command("filter",     bind(&Shell::filter,       this, _1)));
+        command.push_back(Command("fftfilter",  bind(&Shell::filter,       this, _1)));
+        command.push_back(Command("f0",         bind(&Shell::f0,           this, _1)));
+        command.push_back(Command("sinth",      bind(&Shell::sinth,        this, _1)));
+        command.push_back(Command("play",       bind(&Shell::play,         this, _1)));
+        command.push_back(Command("playmovie",  bind(&Shell::playmovie,    this, _1)));
+        command.push_back(Command("loadsound",  bind(&Shell::loadsound,    this, _1)));
+        command.push_back(Command("loadmovie",  bind(&Shell::loadmovie,    this, _1)));
+        command.push_back(Command("copy",       bind(&Shell::copy,         this, _1)));
+        command.push_back(Command("snap",       bind(&Shell::snap,         this, _1)));
+        command.push_back(Command("writesnap",  bind(&Shell::writesnap,    this, _1)));
+        command.push_back(Command("fps",        bind(&Shell::fps,          this, _1)));
+        command.push_back(Command("wget",       bind(&Shell::wget,         this, _1)));
+        command.push_back(Command("messagebox", bind(&Shell::MessageBox,   this, _1)));
+        command.push_back(Command("texturebox", bind(&Shell::TextureBox,   this, _1)));
+        command.push_back(Command("slider",     bind(&Shell::Slider,       this, _1)));
+    }
+
+    Asset      *asset     (const string &n) { return assets      ? (*     assets)(n) : 0; }
+    SoundAsset *soundasset(const string &n) { return soundassets ? (*soundassets)(n) : 0; }
+    MovieAsset *movieasset(const string &n) { return movieassets ? (*movieassets)(n) : 0; }
+
+    bool FGets();
+    void RunCB(string *text) { Run(*text); delete text; }
+    void Run(const string &text);
+
+    void quit(const vector<string>&);
+    void mousein(const vector<string>&);
+    void mouseout(const vector<string>&);
+    void browser(const vector<string>&);
+    void console(const vector<string>&);
+    void consolecolor(const vector<string>&);
+    void showkeyboard(const vector<string>&);
+    void clipboard(const vector<string>&);
+    void startcmd(const vector<string>&);
+    void dldir(const vector<string>&);
+    void screenshot(const vector<string>&);
+
+    void fillmode(const vector<string>&);
+    void grabmode(const vector<string>&);
+    void texmode (const vector<string>&);
+    void swapaxis(const vector<string>&);
+    void campos(const vector<string>&);
+    void play     (const vector<string>&);
+    void playmovie(const vector<string>&);
+    void loadsound(const vector<string>&);
+    void loadmovie(const vector<string>&);
+    void copy(const vector<string>&);
+    void snap(const vector<string>&);
+    void filter   (const vector<string>&);
+    void fftfilter(const vector<string>&);
+    void f0(const vector<string>&);
+    void sinth(const vector<string>&);
+    void writesnap(const vector<string>&);
+    void fps(const vector<string>&);
+    void wget(const vector<string>&);
+    void MessageBox(const vector<string>&);
+    void TextureBox(const vector<string>&);
+    void Slider    (const vector<string>&);
+
+    void cmds (const vector<string>&);
+    void flags(const vector<string>&);
+    void binds(const vector<string>&);
+};
+
+}; // namespace LFL
+#endif // __LFL_LFAPP_ASSETS_H__

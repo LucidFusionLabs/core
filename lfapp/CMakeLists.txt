@@ -1,0 +1,120 @@
+# $Id: CMakeLists.txt 1327 2014-11-03 23:26:43Z justin $
+
+macro(lfapp_def _def)
+if(${_def})
+set(LFAPP_DEF ${LFAPP_DEF} -D${_def})
+endif(${_def})
+endmacro(lfapp_def)
+
+macro(lfapp_lib _def _inc _lib)
+if(${_def})
+set(LFAPP_DEF ${LFAPP_DEF} -D${_def})
+set(LFAPP_LIB ${LFAPP_LIB} ${_lib})
+set(LFAPP_INCLUDE ${LFAPP_INCLUDE} ${_inc})
+endif(${_def})
+endmacro(lfapp_lib)
+
+# init
+set(LFAPP_INCLUDE ${LFAPP_INCLUDE} .. ${PLATFORM_INCLUDE} ${OPENGL_INCLUDE})
+set(LFAPP_LIB ${LFL_PROJECT}_lfapp ${OPENGL_LIB})
+set(LFAPP_DEF -DLFL_BUILD ${PLATFORM_DEF})
+
+lfapp_def(LFL_ANDROID)
+lfapp_def(LFL_CAMERA)
+lfapp_def(LFL_GLES2)
+lfapp_def(LFL_GLFWVIDEO)
+lfapp_def(LFL_HEADLESS)
+lfapp_def(LFL_IPHONE)
+lfapp_def(LFL_IPHONESIM)
+lfapp_def(LFL_OPENSL)
+lfapp_def(LFL_SDLAUDIO)
+lfapp_def(LFL_SDLVIDEO)
+lfapp_def(LFL_EPOLL)
+
+if(LFL_QT)
+set(LFAPP_DEF ${LFAPP_DEF} ${QT_DEF})
+endif(LFL_QT)
+
+lfapp_lib(LFL_BOOST "${BOOST_INCLUDE}" "${BOOST_LIB}")
+lfapp_lib(LFL_QT "${QT_INCLUDE}" "${QT_LIB}")
+lfapp_lib(LFL_GLEW "${GLEW_INCLUDE}" "${GLEW_LIB}")
+lfapp_lib(LFL_GLFWINPUT "${GLFW_INCLUDE}" "${GLFW_LIB}")
+lfapp_lib(LFL_SDLINPUT "${SDL_INCLUDE}" "${SDL_LIB}")
+lfapp_lib(LFL_LIBARCHIVE "${ARCHIVE_INCLUDE}" "${ARCHIVE_LIB}")
+lfapp_lib(LFL_FREETYPE "${FREETYPE_INCLUDE}" "${FREETYPE_LIB}")
+lfapp_lib(LFL_LIBCSS "${LIBCSS_INCLUDE}" "${LIBCSS_LIB}")
+lfapp_lib(LFL_FFMPEG "${FFMPEG_INCLUDE}" "${FFMPEG_LIB}")
+lfapp_lib(LFL_PORTAUDIO "${PORTAUDIO_INCLUDE}" "${PORTAUDIO_LIB}")
+lfapp_lib(LFL_AUDIOQUEUE "" "-framework AudioToolbox")
+lfapp_lib(LFL_AUDIOUNIT "" "-framework AudioToolbox")
+lfapp_lib(LFL_X264 "" "${X264_LIB}")
+lfapp_lib(LFL_LAME "" "${LAME_LIB}")
+lfapp_lib(LFL_OPENCV "${OPENCV_INCLUDE}" "${OPENCV_LIB}")
+lfapp_lib(LFL_RE2 "${RE2_INCLUDE}" "${RE2_LIB}")
+lfapp_lib(LFL_JUDY "${JUDY_INCLUDE}" "${JUDY_LIB}")
+lfapp_lib(LFL_BULLET "${BULLET_INCLUDE}" "${BULLET_LIB}")
+lfapp_lib(LFL_BOX2D "${BOX2D_INCLUDE}" "${BOX2D_LIB}")
+lfapp_lib(LFL_ODE "${ODE_INCLUDE}" "${ODE_LIB}")
+lfapp_lib(LFL_BERKELIUM "${BERKELIUM_INCLUDE}" "${BERKELIUM_LIB}")
+lfapp_lib(LFL_OPENSSL "" "-lssl -lcrypto")
+lfapp_lib(LFL_CUDA "${CUDA_INCLUDE}" "${CUDA_LIB} lfcuda")
+lfapp_lib(LFL_PNG "${PNG_INCLUDE}" "${PNG_LIB}")
+lfapp_lib(LFL_JPEG "${JPEG_INCLUDE}" "${JPEG_LIB}")
+lfapp_lib(LFL_GIF "${GIF_INCLUDE}" "${GIF_LIB}")
+lfapp_lib(LFL_ICONV "${ICONV_INCLUDE}" "${ICONV_LIB}")
+lfapp_lib(LFL_PROTOBUF "${PROTOBUF_INCLUDE_DIR}" "${PROTOBUF_LIBRARY}")
+lfapp_lib(LFL_GLOG "${GLOG_INCLUDE}" "${GLOG_LIB}")
+lfapp_lib(LFL_TCMALLOC "${TCMALLOC_INCLUDE}" "${TCMALLOC_LIB}")
+lfapp_lib(LFL_PCAP "${PCAP_INCLUDE}" "${PCAP_LIB}")
+lfapp_lib(LFL_GEOIP "${GEOIP_INCLUDE}" "${GEOIP_LIB}")
+lfapp_lib(LFL_TINYJS "${TINYJS_INCLUDE}" "${TINYJS_LIB}")
+lfapp_lib(LFL_V8JS "${V8JS_INCLUDE}" "${V8JS_LIB}")
+lfapp_lib(LFL_LUA "${LUA_INCLUDE}" "${LUA_LIB}")
+lfapp_lib(LFL_CLING "${CLING_INCLUDE}" "${CLING_LIB}")
+
+set(LFAPP_LIB ${LFAPP_LIB} ${PLATFORM_LIB})
+
+foreach(_current ${LFAPP_INCLUDE})
+set(LFAPP_INC ${LFAPP_INC} "-I${_current}")
+endforeach()
+
+# mac
+if(CMAKE_SYSTEM_NAME MATCHES "Darwin")
+if(NOT LFL_ANDROID)
+add_subdirectory(lfobjc)
+set(LFAPP_LIB ${LFAPP_LIB} ${LFL_PROJECT}_lfobjc)
+endif(NOT LFL_ANDROID)
+if(LFL_CAMERA AND CMAKE_SIZEOF_VOID_P EQUAL 8)
+set(LFAPP_LIB ${LFAPP_LIB} ${LFL_PROJECT}_lfobjc "-framework QTKit -framework CoreVideo")
+endif(LFL_CAMERA AND CMAKE_SIZEOF_VOID_P EQUAL 8)
+endif(CMAKE_SYSTEM_NAME MATCHES "Darwin")
+
+# proto
+# PROTOBUF_GENERATE_CPP(PROTO_SRC PROTO_HDR game.proto)
+
+# lfapp
+add_library(${LFL_PROJECT}_lfapp ${LFAPP_LIB_TYPE} lfapp.cpp lftypes.cpp assets.cpp audio.cpp video.cpp input.cpp math.cpp network.cpp gui.cpp camera.cpp scene.cpp ${PROTO_SRC})
+target_include_directories(${LFL_PROJECT}_lfapp PUBLIC ${LFAPP_INCLUDE} ../${LFL_PROJECT}/lfapp_obj)
+target_compile_definitions(${LFL_PROJECT}_lfapp PUBLIC ${LFAPP_DEF})
+if(LFAPP_LIB_TYPE MATCHES "^SHARED$")
+target_link_libraries(${LFL_PROJECT}_lfapp ${LFAPP_LIB})
+set(LFAPP_LIB ${LFL_PROJECT}_lfapp)
+endif(LFAPP_LIB_TYPE MATCHES "^SHARED$")
+
+# post build step
+if(CMAKE_SYSTEM_NAME MATCHES "Darwin")
+macro(lfapp_post_build target filename)
+add_custom_command(TARGET ${target} POST_BUILD
+COMMAND install_name_tool -change /usr/local/lib/libSDL-1.3.0.dylib ./libSDL-1.3.0.dylib ${filename}
+COMMAND install_name_tool -change /usr/local/lib/libmp3lame.0.dylib ./libmp3lame.0.dylib ${filename}
+COMMAND install_name_tool -change /usr/local/lib/libportaudio.2.dylib ./libportaudio.2.dylib ${filename})
+endmacro(lfapp_post_build)
+else(CMAKE_SYSTEM_NAME MATCHES "Darwin")
+macro(lfapp_post_build target)
+endmacro(lfapp_post_build)
+endif(CMAKE_SYSTEM_NAME MATCHES "Darwin")
+
+# export
+set(LFAPP_INCLUDE ${LFAPP_INCLUDE} PARENT_SCOPE)
+set(LFAPP_LIB ${LFAPP_LIB} PARENT_SCOPE)
+set(LFAPP_DEF ${LFAPP_DEF} PARENT_SCOPE)

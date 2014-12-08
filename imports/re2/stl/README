@@ -1,0 +1,12 @@
+This directory contains an STL-compatible wrapper for Henry
+Spencer's (modified) regular expression library.  See
+../README for more details on the library.
+
+The directory also contains a small test (retest.cpp) which
+illustrates how to use the library.  Note that the test is
+slightly obfuscated because it has to compile in
+REGEXP_UNICODE mode as well as in normal mode.  The provided
+Makefile will compile the library and the test in a single
+executable, provided you have GNU C++ somewhere in your
+path.
+

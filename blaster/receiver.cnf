@@ -1,0 +1,22 @@
+Catch-all catch-all # All mail there isn’t a rule for goes here
+rcpt-to /postmaster/ postmaster
+rcpt-to /abuse/ abuse
+header Subject /spamcop/ abuse
+header Content-type /delivery-status/ undeliverable
+header Subject /mail delivery failed/ undeliverable
+header Subject /message delayed/ undeliverable
+header Subject /delayed message/ undeliverable
+header Subject /could not send message for past/ undeliverable
+header Subject /delayed/ undeliverable
+header Subject /nondeliverable/ undeliverable
+header Subject /action required to deliver your email/ undeliverable
+header Subject /out of office autoreply/ undeliverable
+header Subject /mail system error/ undeliverable
+header Subject /Mail Delivery \(failure/ undeliverable
+mail-from /mail delivery system/ undeliverable
+mail-from /mail delivery subsystem/ undeliverable
+mail-from /whatever.com/ whatever
+header Subject /unsubscribe/ unsubscribe
+header Subject /take me off/ unsubscribe
+header Subject /remove/ unsubscribe
+content /.*;$[]*(file)?name=\"?.*\.(scr|com|pif|bat|exe|vbs|bas|cmd|cpl|lnk|reg|vb|vbe|wsh|zip|bhx|mim|hqx|gz|bz2|tgz|lha|rar|arc|pf|uu|uue|cab|yen|z|b64|jpg|gif|hta)\"?$/ /dev/null

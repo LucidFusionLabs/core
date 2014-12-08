@@ -1,0 +1,34 @@
+# $Id: CMakeLists.txt 1320 2014-10-26 08:12:52Z justin $
+
+set(LFL_PNG 1)
+set(LFL_JPEG 1)
+set(LFL_GLES2 1)
+set(LFL_ICONV 1)
+set(LFL_LIBCSS 1)
+set(LFL_OPENSSL 1)
+set(LFL_FREETYPE 1)
+
+if(LFL_ANDROID)
+elseif(LFL_IPHONE)
+else(LFL_ANDROID)
+ # set(LFL_QT 1)
+ set(LFL_GLEW 1)
+ set(LFL_GLFWINPUT 1)
+ set(LFL_GLFWVIDEO 1)
+ # set(LFL_SDLVIDEO 1)
+ # set(LFL_SDLINPUT 1)
+ set(LFL_GLOG 1)
+endif(LFL_ANDROID)
+
+lfl_project(lterm)
+add_subdirectory(../lfapp ${CMAKE_CURRENT_BINARY_DIR}/lfapp_obj)
+add_definitions(${LFAPP_DEF})
+include_directories(${LFAPP_INCLUDE})
+
+if(LFL_ANDROID)
+add_library(lterm term.cpp)
+else(LFL_ANDROID)
+add_executable(lterm term.cpp)
+target_link_libraries(lterm ${LFAPP_LIB})
+endif(LFL_ANDROID)
+
