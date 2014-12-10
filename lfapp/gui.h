@@ -118,6 +118,7 @@ struct TextGUI : public KeyboardGUI {
         void AssignText  (       const String16 &s, int a=-1) { glyphs.Clear(); AppendText(s, a); }
         vector<Drawable::Box> EncodeText(const string   &s, int a=-1) { BoxArray b; parent->font->Encode(s, Box(), &b, 0, a); return b.data; }
         vector<Drawable::Box> EncodeText(const String16 &s, int a=-1) { BoxArray b; parent->font->Encode(s, Box(), &b, 0, a); return b.data; }
+        void UpdateAttr(int ind, int len, int a) {}
         void Layout(Box win) {}
 #else
         String16 text_attr;
@@ -126,14 +127,23 @@ struct TextGUI : public KeyboardGUI {
         string Text() const { return String::ToUTF8(text); }
         void Clear() { text.clear(); text_attr.clear(); glyphs.Clear(); }
         void Erase(int o, unsigned long long l=String16::npos) { if (text.size() > o) { text.erase(o, l); text_attr.erase(o, l); } }
-        void InsertTextAt(int o, const string   &s, int a=0) { String16 v=String::ToUTF16(s); text.insert(o, v); text_attr.insert(o, AttrString(v, a)); }
-        void InsertTextAt(int o, const String16 &s, int a=0) {                                text.insert(o, s); text_attr.insert(o, AttrString(s, a)); }
-        void AppendText  (       const string   &s, int a=0) { String16 v=String::ToUTF16(s); text.append(v);    text_attr.append(   AttrString(v, a)); }
-        void AppendText  (       const String16 &s, int a=0) {                                text.append(s);    text_attr.append(   AttrString(s, a)); }
-        void AssignText  (       const string   &s, int a=0) { text = String::ToUTF16(s); text_attr = AttrString(text, a); }
-        void AssignText  (       const String16 &s, int a=0) { text = s;                  text_attr = AttrString(text, a); }
+        void InsertTextAt(int o, const string   &s, int a=0) { String16 v=String::ToUTF16(s); text.insert(o, v); text_attr.insert(o, String16(v.size(), a)); }
+        void InsertTextAt(int o, const String16 &s, int a=0) {                                text.insert(o, s); text_attr.insert(o, String16(s.size(), a)); }
+        void AppendText  (       const string   &s, int a=0) { String16 v=String::ToUTF16(s); text.append(v);    text_attr.append(   String16(v.size(), a)); }
+        void AppendText  (       const String16 &s, int a=0) {                                text.append(s);    text_attr.append(   String16(s.size(), a)); }
+        void AssignText  (       const string   &s, int a=0) { text = String::ToUTF16(s); text_attr = String16(text.size(), a); }
+        void AssignText  (       const String16 &s, int a=0) { text = s;                  text_attr = String16(text.size(), a); }
         void UpdateAttr(int ind, int len, int a) { Vec<short>::assign((short*)text_attr.data() + ind, a, len); }
-        String16 AttrString(const String16 &s, int a=0) { return String16(s.size(), a); }
+        void Layout(Box win) {
+            glyphs.Clear();
+            Flow flow(&win, parent->font, &glyphs, &parent->layout);
+            for (ArraySegmentIter<short> iter(text_attr); !iter.Done(); iter.Increment()) {
+                if (parent->clickable_links) {}
+                flow.AppendText(String16Piece(&text[iter.cur_start], iter.Length()), iter.cur_attr);
+            }
+            flow.Complete();
+            CHECK_EQ(text.size(), glyphs.Size());
+        }
 #endif
         void UpdateText(int x, const String16 &v, int attr, int max_width=0) {
             if (Size() < x) AppendText(string(x - Size(), ' '), attr);
@@ -166,15 +176,6 @@ struct TextGUI : public KeyboardGUI {
                 // if (parent->new_link_cb) parent->new_link_cb(link);
             }
 #endif
-        }
-        void Layout(Box win) {
-            glyphs.Clear();
-            Flow flow(&win, parent->font, &glyphs, &parent->layout);
-            for (ArraySegmentIter<short> iter(text_attr); !iter.Done(); iter.Increment()) {
-                if (parent->clickable_links) {}
-                flow.AppendText(String16Piece(&text[iter.cur_start], iter.Length()), iter.cur_attr);
-            }
-            flow.Complete();
         }
         void Layout(int width=0) { return Layout(Box(0,0,width,0)); }
         point Draw(point pos, bool relayout, int relayout_width) {
@@ -231,7 +232,7 @@ struct TextGUI : public KeyboardGUI {
         enum { Underline=1, Block=2 };
         int type=Underline, blink_time=333, attr=0;
         Time blink_begin=0;
-        point p;
+        point i, p;
     };
 
     Font *font;
@@ -247,18 +248,24 @@ struct TextGUI : public KeyboardGUI {
 
     virtual ~TextGUI() {}
     virtual int CommandLines() const { return 0; }
-    virtual void Input(char key) { cmd_line.UpdateText(cursor.p.x++, String16(1, key), cursor.attr); UpdateCommandFB(); }
-    virtual void Erase()         { cmd_line.Erase(cursor.p.x, 1); }
-    virtual void CursorLeft()    { cursor.p.x = max(cursor.p.x-1, 0); }
-    virtual void CursorRight()   { cursor.p.x = min(cursor.p.x+1, cmd_line.Size()); }
-    virtual void Home()          { cursor.p.x = 0; }
-    virtual void End()           { cursor.p.x = cmd_line.Size(); }
-    virtual void HistUp()        { if (int c=lastcmd.ring.count) { AssignInput(lastcmd[lastcmd_ind]); lastcmd_ind=max(lastcmd_ind-1, -c); cursor.p.x = cmd_line.Size(); } }
-    virtual void HistDown()      { if (int c=lastcmd.ring.count) { AssignInput(lastcmd[lastcmd_ind]); lastcmd_ind=min(lastcmd_ind+1, -1); cursor.p.x = cmd_line.Size(); } }
+    virtual void Input(char k) { cmd_line.UpdateText(cursor.i.x++, String16(1, k), cursor.attr); UpdateCommandFB(); UpdateCursor(); }
+    virtual void Erase()       { if (!cursor.i.x) return;       cmd_line.Erase(--cursor.i.x, 1); UpdateCommandFB(); UpdateCursor(); }
+    virtual void CursorRight() { cursor.i.x = min(cursor.i.x+1, cmd_line.Size()); UpdateCursor(); }
+    virtual void CursorLeft()  { cursor.i.x = max(cursor.i.x-1, 0);               UpdateCursor(); }
+    virtual void Home()        { cursor.i.x = 0;                                  UpdateCursor(); }
+    virtual void End()         { cursor.i.x = cmd_line.Size();                    UpdateCursor(); }
+    virtual void HistUp()      { if (int c=lastcmd.ring.count) { AssignInput(lastcmd[lastcmd_ind]); lastcmd_ind=max(lastcmd_ind-1, -c); cursor.i.x = cmd_line.Size(); } }
+    virtual void HistDown()    { if (int c=lastcmd.ring.count) { AssignInput(lastcmd[lastcmd_ind]); lastcmd_ind=min(lastcmd_ind+1, -1); cursor.i.x = cmd_line.Size(); } }
     virtual void Enter();
 
     string Text() const { return cmd_line.Text(); }
-    void AssignInput(const string &text) { cmd_line.AssignText(text); UpdateCommandFB(); }
+    void AssignInput(const string &text) { cmd_line.AssignText(text); UpdateCommandFB(); UpdateCursor(); }
+    void UpdateCursor() {
+        bool right = cursor.i.x >= cmd_line.glyphs.Size();
+        const Box &b = !cmd_line.glyphs.data.size() ? Box() :
+            cmd_line.glyphs.data[right ? cmd_line.glyphs.data.size()-1 : cursor.i.x].box;
+        cursor.p = right ? b.TopRight() : b.TopLeft();
+    }
     void UpdateCommandFB() { 
         cmd_fb.fb.Attach();
         ScopedDrawMode drawmode(DrawMode::_2D);
@@ -427,10 +434,10 @@ struct TextArea : public TextGUI {
     TextArea(Window *W, Font *F, int TK=0, int TM=ToggleBool::Default) : TextGUI(W, F, TK, TM), line(this), mouse_gui(W) {}
     virtual ~TextArea() {}
     virtual void PageUp() {
-        cursor.p.y += scroll_inc;
+        cursor.i.y += scroll_inc;
     }
     virtual void PageDown() {
-        cursor.p.y = max(cmd_fb.scroll.y - scroll_inc, 0);
+        cursor.i.y = max(cmd_fb.scroll.y - scroll_inc, 0);
     }
 
     /// Write() is thread-safe.
@@ -505,6 +512,7 @@ struct Terminal : public TextArea, public Drawable::AttrSource {
         cmd_prefix = "";
     }
     virtual ~Terminal() {}
+    virtual void Resized(int w, int h);
     virtual void Input(char k) {                       write(fd, &k, 1); }
     virtual void Erase      () { char k = 0x7f;        write(fd, &k, 1); }
     virtual void Enter      () { char k = '\r';        write(fd, &k, 1); }
@@ -518,40 +526,33 @@ struct Terminal : public TextArea, public Drawable::AttrSource {
     virtual void PageDown   () { char k[] = "\x1b[6~"; write(fd,  k, 4); }
     virtual void Home       () { char k = 'A' - 0x40;  write(fd, &k, 1); }
     virtual void End        () { char k = 'E' - 0x40;  write(fd, &k, 1);  }
-    virtual void Resized(int w, int h);
     virtual Drawable::Attr GetAttr(int attr) const {
         Color *fg = colors ? &colors->c[Attr::GetFGColorIndex(attr)] : 0;
         Color *bg = colors ? &colors->c[Attr::GetBGColorIndex(attr)] : 0;
         if (attr & Attr::Reverse) Typed::Swap(fg, bg);
-        Drawable::Attr ret;
-        ret.font = font;
-        ret.fg = fg;
-        ret.bg = bg; 
-        ret.underline = attr & Attr::Underline;
-        return ret;
+        return Drawable::Attr(font, fg, bg, attr & Attr::Underline);
     }
-    void WriteBytes(const string &s);
-    void WriteBytesCB(string *x) { WriteBytes(*x); delete x; }
     int GetTermLineIndex(int y) const { return -term_height + y-1; }
     Line *GetTermLine(int y) { return &line[GetTermLineIndex(y)]; }
     Line *GetCursorLine() { return GetTermLine(term_cursor.y); } 
-    void FlushParseText();
-    void Newline(bool carriage_return=false);
+    void SetColors(Colors *C) {
+        colors = C;
+        Attr::SetFGColorIndex(&default_cursor_attr, colors->normal_index);
+        Attr::SetBGColorIndex(&default_cursor_attr, colors->bg_index);
+    }
+    void UpdateCursorCoordinates() {
+        cursor.p.x = (term_cursor.x - 1            ) * font->fixed_width;
+        cursor.p.y = (term_height   - term_cursor.y) * font->height;
+    }
     void Scroll(int sy, int ey, int dy) {
         CHECK_LT(sy, ey);
         int line_ind = GetTermLineIndex(sy), scroll_lines = ey - sy + 1, ady = abs(dy), sdy = (dy > 0 ? 1 : -1);
         Move(line, line_ind + (dy>0 ? dy : 0), line_ind + (dy<0 ? -dy : 0), scroll_lines - ady);
         for (int i = 0, cy = (dy>0 ? sy : ey); i < ady; i++) GetTermLine(cy + i*sdy)->Clear();
     }
-    void UpdateCursorCoordinates() {
-        cursor.p.x = (term_cursor.x - 1            ) * font->fixed_width;
-        cursor.p.y = (term_height   - term_cursor.y) * font->height;
-    }
-    void SetColors(Colors *C) {
-        colors = C;
-        Attr::SetFGColorIndex(&default_cursor_attr, colors->normal_index);
-        Attr::SetBGColorIndex(&default_cursor_attr, colors->bg_index);
-    }
+    void WriteBytes(const string &s);
+    void FlushParseText();
+    void Newline(bool carriage_return=false);
 };
 
 struct Console : public TextArea {

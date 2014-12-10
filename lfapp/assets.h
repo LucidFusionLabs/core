@@ -675,14 +675,6 @@ struct RingFrameBuffer {
         scroll.y = fmod(scroll.y + (float)b.h / ht, 1.0);
         return b.h;
     }
-    /*
-       point ip = p;
-       printf("PushFront %s -> %s %d %s\n", ip.DebugString().c_str(), p.DebugString().c_str(),
-       l->Lines(), l->Text().c_str());
-       point ip = p;
-       printf("PushBack %s -> %s %d %s\n", ip.DebugString().c_str(), p.DebugString().c_str(),
-       l->Lines(), l->Text().c_str());
-     */
 };
 
 struct Tile {

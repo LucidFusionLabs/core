@@ -21,18 +21,21 @@ MANIFEST
 - assets/icon.ico:                        Windows icon file
 - assets/icon.icns:                       Mac icon file
 - assets/icon.bmp:                        32x32 Bitmap icon file
+
         Icon converter: http://iconverticons.com/
 
 - *-android/res/drawable-hdpi/icon.png:   72x72 Android icon
 - *-android/res/drawable-mdpi/icon.png:   48x48 Android icon
 - *-android/res/drawable-ldpi/icon.png:   36x36 Android icon
 - *-iphone/Images/Icon.png:               57x57 iPhone icon
+
         Png resizer http://images.my-addr.com/resize_png_online_tool-free_png_resizer_for_web.php
 
 - *-iphone/Images/Default.png:            320x480 iPhone splash screen
 - *-iphone/Images/Default@2x.png:         640x960 iPad splash screen
 
 - Android splash screens:
+
         cp ../skorp-iphone/Images/Default\@2x.png res/drawable-hdpi/splash.png
         cp ../skorp-iphone/Images/Default\@2x.png res/drawable-xhdpi/splash.png
         cp ../skorp-iphone/Images/Default.png res/drawable-ldpi/splash.png
