@@ -144,7 +144,6 @@ int KeyboardGUI::ReadHistory(const char *dir, const char *name) {
 
 void TextGUI::Enter() {
     string cmd = Text();
-    cursor.p = point();
     AssignInput("");
     if (!cmd.empty()) {
         AddHistory(cmd);
@@ -386,7 +385,7 @@ void Terminal::Resized(int w, int h) {
 }
 
 void Terminal::WriteBytes(const string &s) {
-    if (!MainThread()) return RunMainThreadCallback(new Callback(bind(&Terminal::WriteBytesCB, this, new string(s))));
+    if (!MainThread()) return RunMainThreadCallback(new Callback(bind(&Terminal::WriteBytes, this, s)));
     for (int i=0; i<s.size(); i++) {
         unsigned char c = s[i];
         if (c == 0x18 || c == 0x1a) { /* CAN or SUB */ parse_state = State::TEXT; continue; }

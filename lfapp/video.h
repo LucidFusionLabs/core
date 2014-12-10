@@ -302,7 +302,8 @@ struct Box {
     Box Intersect(const Box &w) const { Box ret(max(x, w.x), max(y, w.y), min(right(), w.right()), min(top(), w.top())); ret.w -= ret.x; ret.h -= ret.y; return (ret.w >= 0 && ret.h >= 0) ? ret : Box(); }
     Box BottomLeft(const Box &sub) const { return Box(x+sub.x, y+sub.y,           sub.w, sub.h); }
     Box    TopLeft(const Box &sub) const { return Box(x+sub.x, top()-sub.y-sub.h, sub.w, sub.h); }
-    point  TopLeft() const { return point(x, top()); }
+    point  TopLeft () const { return point(x,       top()); }
+    point  TopRight() const { return point(right(), top()); }
     void Draw(const float *texcoord=0) const;
     void DrawCrimped(const float *texcoord, int orientation, float scrollX=0, float scrollY=0) const;
 
@@ -366,9 +367,9 @@ struct Drawable {
         Box(const LFL::Box &B, const Drawable *D=0, int A=0, int L=-1) : box(B), drawable(D), attr_id(A), line_id(L) {}
     };
     struct Attr { 
-        Font *font; const Color *fg, *bg; const Texture *tex; const LFL::Box *scissor;
-        bool underline, overline, midline, blink;
-        Attr() : font(0), fg(0), bg(0), tex(0), scissor(0), underline(0), overline(0), midline(0), blink(0) {}
+        Font *font=0; const Color *fg=0, *bg=0; const Texture *tex=0; const LFL::Box *scissor=0;
+        bool underline=0, overline=0, midline=0, blink=0;
+        Attr(Font *F=0, const Color *FG=0, const Color *BG=0, bool UL=0) : font(F), fg(FG), bg(BG), underline(UL) {}
         bool operator==(const Attr &y) const { return font==y.font && fg==y.fg && bg==y.bg && tex==y.tex && scissor==y.scissor && underline==y.underline && overline==y.overline && midline==y.midline && blink==y.blink; }
         bool operator!=(const Attr &y) const { return !(*this == y); }
         void Clear() { font=0; fg=bg=0; tex=0; scissor=0; underline=overline=midline=blink=0; }
@@ -376,8 +377,7 @@ struct Drawable {
     struct AttrSource { virtual Attr GetAttr(int attr_id) const = 0; };
     struct AttrVec : public AttrSource, public vector<Attr> {
         Attr current;
-        AttrSource *source;
-        AttrVec() : source(0) {}
+        AttrSource *source=0;
         Attr GetAttr(int attr_id) const { return source ? source->GetAttr(attr_id) : (*this)[attr_id-1]; }
         int GetAttrId(const Attr &v)
         { CHECK(!source); if (empty() || this->back() != v) push_back(v); return size(); }
@@ -698,6 +698,7 @@ struct BoxArray {
     
     int Size() const { return data.size(); }
     string Text() const { return data.size() ? BoxRun(&data[0], data.size()).Text() : ""; }
+    point Position(int o) const { return data[o].box.Position(); }
     void Clear() { data.clear(); attr.clear(); line.clear(); height=0; }
     BoxArray *Reset() { Clear(); return this; }
     void Erase(int o, size_t l=UINT_MAX) { 

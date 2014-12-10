@@ -60,12 +60,12 @@ void MyHoverLinkCB(TextArea::Link *link) {
 
 struct MyTerminalWindow {
     Process process;
-    Terminal *terminal;
+    Terminal *terminal=0;
     Shader *activeshader;
     int font_size;
     AnyBoolElement effects_mode;
 
-    MyTerminalWindow() : terminal(0), activeshader(&app->video.shader_default), font_size(FLAGS_default_font_size), effects_mode(&::effects_mode) {}
+    MyTerminalWindow() : activeshader(&app->video.shader_default), font_size(FLAGS_default_font_size), effects_mode(&::effects_mode) {}
     ~MyTerminalWindow() { if (process.in) select_socket_thread.DelSocket(fileno(process.in)); }
 
     void Open() {
