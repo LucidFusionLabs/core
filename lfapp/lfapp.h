@@ -251,6 +251,7 @@ struct Color;
 struct Entity;
 struct Asset;
 struct SoundAsset;
+struct MovieAsset;
 struct Shader;
 struct Texture;
 struct Geometry;
@@ -1305,6 +1306,7 @@ struct NTService {
     static int Uninstall(const char *name);
     static int MainWrapper(const char *name, MainCB mainCB, int argc, const char **argv);
 };
+
 }; // namespace LFL
 
 extern "C" int main(int argc, const char **argv);

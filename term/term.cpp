@@ -105,7 +105,7 @@ int Frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample
         tw->terminal->mouse_gui.mouse.Deactivate();
         tw->terminal->Draw(root, custom_shader);
         terminal_updated = true;
-    }
+    } else return -1;
 
     tw->effects_mode.Set(custom_shader || W->console->animating);
     UpdateTargetFPS();

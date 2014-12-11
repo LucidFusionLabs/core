@@ -64,23 +64,10 @@ struct Geometry {
     static string ExportOBJ(const Geometry *geometry, const set<int> *prim_filter=0, bool prim_filter_invert=0);
 };
 
-template <class X> struct AssetMap {
-    bool loaded;
-    vector<X> vec;
-    map<string, X*> amap;
-    AssetMap() : loaded(0) {}
-    void Add(const X &a) { CHECK(!loaded); vec.push_back(a); }
-    void Unloaded(X *a) { if (!a->name.empty()) amap.erase(a->name); }
-    void Load(X *a) { a->parent = this; if (!a->name.empty()) amap[a->name] = a; a->Load(); }
-    void Load() { CHECK(!loaded); for (int i=0; i<vec.size(); i++) Load(&vec[i]); loaded=1; }
-    X *operator()(const string &an) { return FindOrNull(amap, an); }
-};
-
 struct Asset {
     typedef function<void(Asset*, Entity*)> DrawCB;
-    typedef AssetMap<Asset> Map;
 
-    Map *parent;
+    AssetMap *parent;
     string name, texture, geom_fn;
     DrawCB cb;
     float scale; int translate, rotate;
@@ -119,9 +106,8 @@ struct SoundAsset {
 #   define SoundAssetSize(sa) ((sa)->seconds * FLAGS_sample_rate * FLAGS_chans_out)
     static const int FlagNoRefill, FromBufPad;
     typedef function<int(SoundAsset*, int)> RefillCB;
-    typedef AssetMap<SoundAsset> Map;
 
-    Map *parent;
+    SoundAssetMap *parent;
     string name, filename;
     RingBuf *wav;
     int channels, sample_rate, seconds;
@@ -142,9 +128,7 @@ struct SoundAsset {
 };
 
 struct MovieAsset {
-    typedef AssetMap<MovieAsset> Map;
-
-    Map *parent;
+    MovieAssetMap *parent;
     string name, filename;
     SoundAsset audio;
     Asset video;
@@ -668,6 +652,7 @@ struct RingFrameBuffer {
     }
     template <class X> int PushBackAndUpdate(X *l, const Box &b, const function<point(X*, point, const Box&)> &paint, bool vwrap=true) {
         int ht = Height();
+        point ip = p;
         if (p.y == 0)         p =          point(0, ht);
         if (b.h >= ht)        p = paint(l, point(0, b.h),            b);
         else                  p = paint(l, point(0, p.y),            b);
@@ -773,97 +758,6 @@ struct Layers : public vector<Tiles*> {
     void Init(int N=1) { CHECK_EQ(size(), 0); for (int i=0; i<N; i++) push_back(new Tiles()); }
     void Draw(const Box &b, int vs, int hs) { for (auto i : *this) i->Draw(b, vs, hs); }
     void Update() { for (auto i : *this) i->Run(); }
-};
-
-struct Shell {
-    typedef function<void(const vector<string>&)> CB;
-    struct Command { 
-        string name; CB cb;
-        Command(const string &N, const CB &Cb) : name(N), cb(Cb) {}
-    };
-    vector<Command>  command;
-    Asset::Map      *assets;
-    SoundAsset::Map *soundassets;
-    MovieAsset::Map *movieassets;
-
-    Shell(Asset::Map *AM=0, SoundAsset::Map *SAM=0, MovieAsset::Map *MAM=0) : assets(AM), soundassets(SAM), movieassets(MAM) {
-        command.push_back(Command("quit",       bind(&Shell::quit,         this, _1)));
-        command.push_back(Command("cmds",       bind(&Shell::cmds,         this, _1)));
-        command.push_back(Command("binds",      bind(&Shell::binds,        this, _1)));
-        command.push_back(Command("flags",      bind(&Shell::flags,        this, _1)));
-        command.push_back(Command("browser",    bind(&Shell::browser,      this, _1)));
-        command.push_back(Command("conscolor",  bind(&Shell::consolecolor, this, _1)));
-        command.push_back(Command("clipboard",  bind(&Shell::clipboard,    this, _1)));
-        command.push_back(Command("startcmd",   bind(&Shell::startcmd,     this, _1)));
-        command.push_back(Command("dldir",      bind(&Shell::dldir,        this, _1)));
-        command.push_back(Command("screenshot", bind(&Shell::screenshot,   this, _1)));
-        command.push_back(Command("fillmode",   bind(&Shell::fillmode,     this, _1)));
-        command.push_back(Command("texmode",    bind(&Shell::texmode,      this, _1)));
-        command.push_back(Command("swapaxis",   bind(&Shell::swapaxis,     this, _1)));
-        command.push_back(Command("campos",     bind(&Shell::campos,       this, _1)));
-        command.push_back(Command("filter",     bind(&Shell::filter,       this, _1)));
-        command.push_back(Command("fftfilter",  bind(&Shell::filter,       this, _1)));
-        command.push_back(Command("f0",         bind(&Shell::f0,           this, _1)));
-        command.push_back(Command("sinth",      bind(&Shell::sinth,        this, _1)));
-        command.push_back(Command("play",       bind(&Shell::play,         this, _1)));
-        command.push_back(Command("playmovie",  bind(&Shell::playmovie,    this, _1)));
-        command.push_back(Command("loadsound",  bind(&Shell::loadsound,    this, _1)));
-        command.push_back(Command("loadmovie",  bind(&Shell::loadmovie,    this, _1)));
-        command.push_back(Command("copy",       bind(&Shell::copy,         this, _1)));
-        command.push_back(Command("snap",       bind(&Shell::snap,         this, _1)));
-        command.push_back(Command("writesnap",  bind(&Shell::writesnap,    this, _1)));
-        command.push_back(Command("fps",        bind(&Shell::fps,          this, _1)));
-        command.push_back(Command("wget",       bind(&Shell::wget,         this, _1)));
-        command.push_back(Command("messagebox", bind(&Shell::MessageBox,   this, _1)));
-        command.push_back(Command("texturebox", bind(&Shell::TextureBox,   this, _1)));
-        command.push_back(Command("slider",     bind(&Shell::Slider,       this, _1)));
-    }
-
-    Asset      *asset     (const string &n) { return assets      ? (*     assets)(n) : 0; }
-    SoundAsset *soundasset(const string &n) { return soundassets ? (*soundassets)(n) : 0; }
-    MovieAsset *movieasset(const string &n) { return movieassets ? (*movieassets)(n) : 0; }
-
-    bool FGets();
-    void RunCB(string *text) { Run(*text); delete text; }
-    void Run(const string &text);
-
-    void quit(const vector<string>&);
-    void mousein(const vector<string>&);
-    void mouseout(const vector<string>&);
-    void browser(const vector<string>&);
-    void console(const vector<string>&);
-    void consolecolor(const vector<string>&);
-    void showkeyboard(const vector<string>&);
-    void clipboard(const vector<string>&);
-    void startcmd(const vector<string>&);
-    void dldir(const vector<string>&);
-    void screenshot(const vector<string>&);
-
-    void fillmode(const vector<string>&);
-    void grabmode(const vector<string>&);
-    void texmode (const vector<string>&);
-    void swapaxis(const vector<string>&);
-    void campos(const vector<string>&);
-    void play     (const vector<string>&);
-    void playmovie(const vector<string>&);
-    void loadsound(const vector<string>&);
-    void loadmovie(const vector<string>&);
-    void copy(const vector<string>&);
-    void snap(const vector<string>&);
-    void filter   (const vector<string>&);
-    void fftfilter(const vector<string>&);
-    void f0(const vector<string>&);
-    void sinth(const vector<string>&);
-    void writesnap(const vector<string>&);
-    void fps(const vector<string>&);
-    void wget(const vector<string>&);
-    void MessageBox(const vector<string>&);
-    void TextureBox(const vector<string>&);
-    void Slider    (const vector<string>&);
-
-    void cmds (const vector<string>&);
-    void flags(const vector<string>&);
-    void binds(const vector<string>&);
 };
 
 }; // namespace LFL

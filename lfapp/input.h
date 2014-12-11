@@ -244,5 +244,63 @@ struct Input : public Module {
     int  MouseEventDispatch(int button, int x, int y, int down);
 };
 
+struct Shell {
+    typedef function<void(const vector<string>&)> CB;
+    struct Command { 
+        string name; CB cb;
+        Command(const string &N, const CB &Cb) : name(N), cb(Cb) {}
+    };
+    vector<Command> command;
+    AssetMap       *assets;
+    SoundAssetMap  *soundassets;
+    MovieAssetMap  *movieassets;
+    Shell(AssetMap *AM=0, SoundAssetMap *SAM=0, MovieAssetMap *MAM=0);
+
+    Asset      *asset     (const string &n);
+    SoundAsset *soundasset(const string &n);
+    MovieAsset *movieasset(const string &n);
+
+    bool FGets();
+    void Run(const string &text);
+
+    void quit(const vector<string>&);
+    void mousein(const vector<string>&);
+    void mouseout(const vector<string>&);
+    void browser(const vector<string>&);
+    void console(const vector<string>&);
+    void consolecolor(const vector<string>&);
+    void showkeyboard(const vector<string>&);
+    void clipboard(const vector<string>&);
+    void startcmd(const vector<string>&);
+    void dldir(const vector<string>&);
+    void screenshot(const vector<string>&);
+
+    void fillmode(const vector<string>&);
+    void grabmode(const vector<string>&);
+    void texmode (const vector<string>&);
+    void swapaxis(const vector<string>&);
+    void campos(const vector<string>&);
+    void play     (const vector<string>&);
+    void playmovie(const vector<string>&);
+    void loadsound(const vector<string>&);
+    void loadmovie(const vector<string>&);
+    void copy(const vector<string>&);
+    void snap(const vector<string>&);
+    void filter   (const vector<string>&);
+    void fftfilter(const vector<string>&);
+    void f0(const vector<string>&);
+    void sinth(const vector<string>&);
+    void writesnap(const vector<string>&);
+    void fps(const vector<string>&);
+    void wget(const vector<string>&);
+    void MessageBox(const vector<string>&);
+    void TextureBox(const vector<string>&);
+    void Slider    (const vector<string>&);
+
+    void cmds (const vector<string>&);
+    void flags(const vector<string>&);
+    void binds(const vector<string>&);
+};
+
 }; // namespace LFL
 #endif // __LFL_LFAPP_INPUT_H__

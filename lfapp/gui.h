@@ -150,15 +150,6 @@ struct TextGUI : public KeyboardGUI {
             if (!parent->insert_mode) Erase       (x, v.size());
             if (1)                    InsertTextAt(x, v, attr);
             if (parent->insert_mode && max_width) Erase(max_width);
-#if 0
-            if (line_fb.p.y > 0) {
-                line_fb.fb.Attach();
-                screen->gd->DrawMode(DrawMode::_2D);
-                line_fb.p = l->Draw(line_fb.p, line_fb.w);
-                line_fb.fb.Release();
-            }
-            else l->Layout();
-#endif
         }
         void UpdateAttr(int ind, int len) {
             if (!parent || !parent->clickable_links) return;
@@ -181,7 +172,7 @@ struct TextGUI : public KeyboardGUI {
         point Draw(point pos, bool relayout, int relayout_width) {
             if (relayout) Layout(relayout_width);
             glyphs.Draw((p = pos));
-            return p - point(0, glyphs.height);
+            return p - point(0, max(parent->font->height, glyphs.height));
         }
     };
     struct Lines : public RingVector<Line> {
@@ -225,7 +216,8 @@ struct TextGUI : public KeyboardGUI {
         point Paint(Line *l, point lp, const Box &b) {
             Scissor scissor(0, lp.y - b.h, w, b.h);
             screen->gd->Clear();
-            return l->Draw(lp + b.Position(), 0, 0);
+            point ret = l->Draw(lp + b.Position(), 0, 0);
+            return ret;
         }
     };
     struct Cursor {
@@ -258,22 +250,22 @@ struct TextGUI : public KeyboardGUI {
     virtual void HistDown()    { if (int c=lastcmd.ring.count) { AssignInput(lastcmd[lastcmd_ind]); lastcmd_ind=min(lastcmd_ind+1, -1); cursor.i.x = cmd_line.Size(); } }
     virtual void Enter();
 
-    string Text() const { return cmd_line.Text(); }
-    void AssignInput(const string &text) { cmd_line.AssignText(text); UpdateCommandFB(); UpdateCursor(); }
-    void UpdateCursor() {
+    virtual string Text() const { return cmd_line.Text(); }
+    virtual void AssignInput(const string &text) { cmd_line.AssignText(text); UpdateCommandFB(); UpdateCursor(); }
+    virtual void UpdateCursor() {
         bool right = cursor.i.x >= cmd_line.glyphs.Size();
         const Box &b = !cmd_line.glyphs.data.size() ? Box() :
             cmd_line.glyphs.data[right ? cmd_line.glyphs.data.size()-1 : cursor.i.x].box;
         cursor.p = right ? b.TopRight() : b.TopLeft();
     }
-    void UpdateCommandFB() { 
+    virtual void UpdateCommandFB() { 
         cmd_fb.fb.Attach();
         ScopedDrawMode drawmode(DrawMode::_2D);
         cmd_fb.PushBackAndUpdate(&cmd_line); // cmd_fb.OverwriteUpdate(&cmd_line, cursor.x)
         cmd_fb.fb.Release();
     }
-    void Draw(const Box &b);
-    void DrawCursor(point p);
+    virtual void Draw(const Box &b);
+    virtual void DrawCursor(point p);
 };
 
 struct Widget {
@@ -507,6 +499,7 @@ struct Terminal : public TextArea, public Drawable::AttrSource {
         wrap_lines = write_newline = 0;
         for (int i=0; i<line.ring.size; i++) line[i].glyphs.attr.source = this;
         SetColors(Singleton<StandardVGAColors>::Get());
+        cursor.attr = default_cursor_attr;
         cursor.type = Cursor::Block;
         clickable_links = 1;
         cmd_prefix = "";
@@ -526,6 +519,7 @@ struct Terminal : public TextArea, public Drawable::AttrSource {
     virtual void PageDown   () { char k[] = "\x1b[6~"; write(fd,  k, 4); }
     virtual void Home       () { char k = 'A' - 0x40;  write(fd, &k, 1); }
     virtual void End        () { char k = 'E' - 0x40;  write(fd, &k, 1);  }
+    virtual void UpdateCursor() { cursor.p = point((term_cursor.x-1)*font->fixed_width, (term_height-term_cursor.y+1)*font->height); }
     virtual Drawable::Attr GetAttr(int attr) const {
         Color *fg = colors ? &colors->c[Attr::GetFGColorIndex(attr)] : 0;
         Color *bg = colors ? &colors->c[Attr::GetBGColorIndex(attr)] : 0;
@@ -539,10 +533,6 @@ struct Terminal : public TextArea, public Drawable::AttrSource {
         colors = C;
         Attr::SetFGColorIndex(&default_cursor_attr, colors->normal_index);
         Attr::SetBGColorIndex(&default_cursor_attr, colors->bg_index);
-    }
-    void UpdateCursorCoordinates() {
-        cursor.p.x = (term_cursor.x - 1            ) * font->fixed_width;
-        cursor.p.y = (term_height   - term_cursor.y) * font->height;
     }
     void Scroll(int sy, int ey, int dy) {
         CHECK_LT(sy, ey);

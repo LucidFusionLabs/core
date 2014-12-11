@@ -73,7 +73,7 @@ DEFINE_int(camera_image_height, 0, "Camera capture image height");
 #ifdef LFL_OPENCV_CAMERA
 LFL_IMPORT extern int OPENCV_FPS;
 
-struct OpenCvCamera : public CameraInterface {
+struct OpenCvCamera : public CameraImpl {
     Thread thread;
     Mutex lock;
 
@@ -179,7 +179,7 @@ struct OpenCvCamera : public CameraInterface {
 #endif /* LFL_OPENCV_CAMERA */
 
 #ifdef LFL_FFMPEG_CAMERA
-struct FFmpegCamera : public CameraInterface {
+struct FFmpegCamera : public CameraImpl {
     Thread thread;
     Mutex lock;
 
@@ -291,7 +291,7 @@ struct FFmpegCamera : public CameraInterface {
 #endif /* LFL_FFMPEG_CAMERA */
 
 #ifdef LFL_DSVL_CAMERA
-struct DsvlCamera : public CameraInterface {
+struct DsvlCamera : public CameraImpl {
     Thread thread;
     Mutex lock;
 
@@ -461,7 +461,7 @@ template <class T> struct SampleGrabberThunker : public ISampleGrabberCB {
     }
 };
 
-struct DirectShowCamera : public CameraInterface {
+struct DirectShowCamera : public CameraImpl {
     CComPtr<IGraphBuilder> pGraph;
     CComPtr<IMediaControl> pMC;
     CComPtr<IMediaEventEx> pME;
@@ -734,7 +734,7 @@ struct DirectShowCamera : public CameraInterface {
 #endif /* LFL_DIRECTSHOW_CAMERA */
 
 #ifdef LFL_QUICKTIME_CAMERA
-struct QuickTimeCamera : public CameraInterface {
+struct QuickTimeCamera : public CameraImpl {
     Thread thread;
     VideoResampler conv;
     Mutex lock;
@@ -885,7 +885,7 @@ struct QuickTimeCamera : public CameraInterface {
 #endif /* LFL_QUICKTIME_CAMERA */
 
 #ifdef LFL_AVCAPTURE_CAMERA
-struct AVCaptureCamera : public CameraInterface {
+struct AVCaptureCamera : public CameraImpl {
     Mutex lock; 
 
     struct Camera {
@@ -960,7 +960,7 @@ extern "C" {
 #endif /* LFL_AVCAPTURE_CAMERA */
 
 #ifdef LFL_QTKIT_CAMERA
-struct QTKitCamera : public CameraInterface {
+struct QTKitCamera : public CameraImpl {
     Mutex lock; 
 
     struct Camera {
