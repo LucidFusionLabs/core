@@ -464,6 +464,21 @@ struct CallbackList {
 #define CallbackListAdd(cblist, ...) (cblist)->Add(bind(__VA_ARGS__))
 #define CallbackListsAdd(cblists, ...) for(CallbackList **cbl=(cblists); *cbl; cbl++) CallbackListAdd(*cbl, __VA_ARGS__)
 
+template <class X> struct AssetMapT {
+    bool loaded;
+    vector<X> vec;
+    map<string, X*> amap;
+    AssetMapT() : loaded(0) {}
+    void Add(const X &a) { CHECK(!loaded); vec.push_back(a); }
+    void Unloaded(X *a) { if (!a->name.empty()) amap.erase(a->name); }
+    void Load(X *a) { a->parent = this; if (!a->name.empty()) amap[a->name] = a; a->Load(); }
+    void Load() { CHECK(!loaded); for (int i=0; i<vec.size(); i++) Load(&vec[i]); loaded=1; }
+    X *operator()(const string &an) { return FindOrNull(amap, an); }
+};
+typedef AssetMapT<     Asset>      AssetMap;
+typedef AssetMapT<SoundAsset> SoundAssetMap;
+typedef AssetMapT<MovieAsset> MovieAssetMap;
+
 struct Serializable {
     struct Stream;
 

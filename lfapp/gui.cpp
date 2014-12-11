@@ -199,7 +199,7 @@ void TextArea::Write(const string &s) {
         if (!append) l->Clear();
         if (write_timestamp) l->AppendText(StrCat(logtime(Now()), " "), cursor.attr);
         l->AppendText(add_line, cursor.attr);
-        if (!line_fb.lines) continue; // or offscreen cuz scrolled
+        if (!line_fb.lines) { l->Layout(); continue; }
         if (append) line_fb.           Update(l);
         else        line_fb.PushBackAndUpdate(l);
     }
@@ -381,7 +381,7 @@ void Terminal::Resized(int w, int h) {
     ws.ws_col = term_width;
     ioctl(fd, TIOCSWINSZ, &ws);
 #endif
-    UpdateCursorCoordinates();
+    UpdateCursor();
 }
 
 void Terminal::WriteBytes(const string &s) {
@@ -554,23 +554,28 @@ void Terminal::WriteBytes(const string &s) {
         }
     }
     FlushParseText();
-    UpdateCursorCoordinates();
+    UpdateCursor();
 }
 
 void Terminal::FlushParseText() {
     if (parse_text.empty()) return;
     CHECK_GE(term_cursor.x, 1);
     Line *l = GetCursorLine();
-    int consumed = 0, final_advance = 0;
+    int consumed = 0, write_size = 0;
     String16 input_text = LFL::String::ToUTF16(parse_text, &consumed);
-    for (int wrote = 0, write_size; wrote < input_text.size(); wrote += write_size) {
+
+    line_fb.fb.Attach();
+    screen->gd->DrawMode(DrawMode::_2D);
+    for (int wrote = 0; wrote < input_text.size(); wrote += write_size) {
         int remaining = input_text.size() - wrote;
         write_size = min(remaining, term_width - term_cursor.x + 1);
         l->UpdateText(term_cursor.x-1, input_text.substr(wrote, write_size), cursor.attr, term_width);
+        line_fb.Update(l);
         if (remaining - write_size) { Newline(true); l = GetCursorLine(); }
-        final_advance = write_size;
     }
-    term_cursor.x += final_advance;
+    line_fb.fb.Release();
+
+    term_cursor.x += write_size;
     parse_text = parse_text.substr(consumed);
 }
 

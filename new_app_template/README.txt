@@ -4,12 +4,12 @@ http://lucidfusionlabs.com/svn/lfl/new_app_template/README.txt
 OVERVIEW
 --------
 
-Run: lflpub/new_app_template/clone.sh <organization name> <package name> <binary name>
+Run: lfl/new_app_template/clone.sh <organization name> <package name> <binary name>
 
 Eg: ./new_app_template/clone.sh com.lucidfusionlabs SkorpionSpaceball skorp
     Creates ./skorp/skorp.cpp, ./skorp/skorp.vcproj, ./skorp/skorp-android, ./skorp/skorp-iphone, etc
 
-Append "add_subdiretory(skorp)" to lflpub/CMakeLists.txt and type "make" to build
+Append "add_subdiretory(skorp)" to lfl/CMakeLists.txt.
 
 
 MANIFEST
@@ -41,13 +41,9 @@ MANIFEST
         cp ../skorp-iphone/Images/Default.png res/drawable-ldpi/splash.png
         cp ../skorp-iphone/Images/Default.png res/drawable-mdpi/splash.png
 
-- CMakeLists.txt:                         Build rules for all platforms but Windows
+- CMakeLists.txt:                         Build rules
 
-- new_app_template.vcproj:                Windows build rules
-- new_app_template.sln:                   
-- new_app_template.rc:                    
 - resource.h:                             
-
 - new_app_template.nsi:                   Windows Nullsoft Installer config
 
 - pkg/lin.sh:                             Linux package directory prepare
