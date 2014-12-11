@@ -6,10 +6,10 @@ OVERVIEW
 
 Run: lfl/new_app_template/clone.sh <organization name> <package name> <binary name>
 
-Eg: ./new_app_template/clone.sh com.lucidfusionlabs SkorpionSpaceball skorp
-    Creates ./skorp/skorp.cpp, ./skorp/skorp.vcproj, ./skorp/skorp-android, ./skorp/skorp-iphone, etc
+Eg: ./new_app_template/clone.sh com.lucidfusionlabs SpaceballFuture spaceball
+    Creates ./spaceball/spaceball.cpp, ./spaceball/spaceball-android, ./spaceball/spaceball-iphone, etc
 
-Append "add_subdiretory(skorp)" to lfl/CMakeLists.txt.
+Append "add_subdiretory(spaceball)" to lfl/CMakeLists.txt.
 
 
 MANIFEST
@@ -36,10 +36,10 @@ MANIFEST
 
 - Android splash screens:
 
-        cp ../skorp-iphone/Images/Default\@2x.png res/drawable-hdpi/splash.png
-        cp ../skorp-iphone/Images/Default\@2x.png res/drawable-xhdpi/splash.png
-        cp ../skorp-iphone/Images/Default.png res/drawable-ldpi/splash.png
-        cp ../skorp-iphone/Images/Default.png res/drawable-mdpi/splash.png
+        cp ../spaceball-iphone/Images/Default\@2x.png res/drawable-hdpi/splash.png
+        cp ../spaceball-iphone/Images/Default\@2x.png res/drawable-xhdpi/splash.png
+        cp ../spaceball-iphone/Images/Default.png res/drawable-ldpi/splash.png
+        cp ../spaceball-iphone/Images/Default.png res/drawable-mdpi/splash.png
 
 - CMakeLists.txt:                         Build rules
 
