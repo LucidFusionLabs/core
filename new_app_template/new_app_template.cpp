@@ -18,67 +18,74 @@
 
 #include "lfapp/lfapp.h"
 #include "lfapp/dom.h"
+#include "lfapp/css.h"
 #include "lfapp/gui.h"
 
-vector<Bind> binds;
-vector<Asset> assets;
-vector<SoundAsset> soundassets;
+namespace LFL {
+BindMap binds;
+AssetMap asset;
+SoundAssetMap soundasset;
 Scene scene;
 
-// engine callback
-// driven by lfapp_frame()
-int frame(unsigned clicks, unsigned mic_samples, bool cam_sample, unsigned events, int flag) {
-    scene.get("arrow")->yawright((double)clicks/500);
-    scene.draw(&assets);
+// engine callback driven by LFL::Application
+int Frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample, int flag) {
+    screen->camMain->look();
+    scene.Get("arrow")->yawright((double)clicks/500);
+    scene.Draw(&asset.vec);
 
     // Press tick for console
-    drawmode(DrawMode::_2D);
-    gui_draw();
+    screen->gd->DrawMode(DrawMode::_2D);
+    screen->DrawDialogs();
     return 0;
 }
 
+}; // namespace LFL
+using namespace LFL;
+
 extern "C" int main(int argc, const char *argv[]) {
 
-    logfilename = StrCat(dldir(), "$BINNAME.txt");
-    lfapp_frame_cb = frame;
+    app->logfilename = StrCat(dldir(), "$BINNAME.txt");
+    app->frame_cb = Frame;
     screen->width = 420;
     screen->height = 380;
     screen->caption = "$PKGNAME";
 
-    if (lfapp_init(argc, argv)) { lfapp_close(); return -1; }
-    if (lfapp_open()) { lfapp_close(); return -1; }
+    if (app->Create(argc, argv, __FILE__)) { app->Free(); return -1; }
+    if (app->Init()) { app->Free(); return -1; }
 
-    // assets.push_back(Asset(name,    callback, texture,     scale, translate, rotate, geometry              0, 0, 0, 0));
-    assets.push_back(Asset("axis",     glAxis,   "",          0,     0,         0,      0,                    0, 0, 0, 0));
-    assets.push_back(Asset("grid",     0,        "",          0,     0,         0,      glGrid(),             0, 0, 0, 0));
-    assets.push_back(Asset("room",     glRoom,   "",          0,     0,         0,      0,                    0, 0, 0, 0));
-    assets.push_back(Asset("arrow",    0,        "",         .005,   1,        -90,     OBJFILE("arrow.obj"), 0, 0, 0, 0));
-    load(&assets);
+    // asset.Add(Asset(name, texture,  scale, translate, rotate, geometry              0, 0, 0, callback));
+    asset.Add(Asset("axis",  "",       0,     0,         0,      0,                    0, 0, 0, glAxis  ));
+    asset.Add(Asset("grid",  "",       0,     0,         0,      Grid::Grid3D(),       0, 0, 0          ));
+    asset.Add(Asset("room",  "",       0,     0,         0,      0,                    0, 0, 0, glRoom  ));
+    asset.Add(Asset("arrow", "",      .005,   1,        -90,     "arrow.obj",          0, 0             ));
+    asset.Load();
+    app->shell.assets = &asset;
 
-    // soundassets.push_back(SoundAsset(name, filename,   ringbuf, channels, sample_rate, seconds ));
-    soundassets.push_back(SoundAsset("draw",  "Draw.wav", 0,       0,        0,           0       ));
-    load(&soundassets);
+    // soundasset.Add(SoundAsset(name, filename,   ringbuf, channels, sample_rate, seconds ));
+    soundasset.Add(SoundAsset("draw",  "Draw.wav", 0,       0,        0,           0       ));
+    soundasset.Load();
+    app->shell.soundassets = &soundasset;
 
-    // binds.push_back(Bind(key,         callback,         arg,    iscmd));
-    binds.push_back(Bind(Key::Backquote, Shell::console,   0,      1    ));
-    binds.push_back(Bind(Key::Quote,     Shell::console,   0,      1    ));
-    binds.push_back(Bind(Key::Escape,    Shell::quit,      0,      1    ));
-    binds.push_back(Bind(Key::Return,    Shell::grabmode,  0,      1    ));
-    binds.push_back(Bind(Key::LeftShift, Shell::rollleft,  0,      0    ));
-    binds.push_back(Bind(Key::Space,     Shell::rollright, 0,      0    ));
-    binds.push_back(Bind('w',            Shell::movefwd,   0,      0    ));
-    binds.push_back(Bind('s',            Shell::moverev,   0,      0    ));
-    binds.push_back(Bind('a',            Shell::moveleft,  0,      0    ));
-    binds.push_back(Bind('d',            Shell::moveright, 0,      0    ));
-    binds.push_back(Bind('q',            Shell::movedown,  0,      0    ));
-    binds.push_back(Bind('e',            Shell::moveup,    0,      0    ));
+    // binds.push_back(Bind(key,         callback));
+    binds.push_back(Bind(Key::Backquote, Bind::CB(bind([&]() { screen->console->Toggle(); }))));
+    binds.push_back(Bind(Key::Quote,     Bind::CB(bind([&]() { screen->console->Toggle(); }))));
+    binds.push_back(Bind(Key::Escape,    Bind::CB(bind(&Shell::quit, &app->shell, vector<string>()))));
+    binds.push_back(Bind(Key::Return,    Bind::CB(bind(&Shell::grabmode, &app->shell, vector<string>()))));
+    binds.push_back(Bind(Key::LeftShift, Bind::TimeCB(bind(&Entity::RollLeft,   screen->camMain, _1))));
+    binds.push_back(Bind(Key::Space,     Bind::TimeCB(bind(&Entity::RollRight,  screen->camMain, _1))));
+    binds.push_back(Bind('w',            Bind::TimeCB(bind(&Entity::MoveFwd,    screen->camMain, _1))));
+    binds.push_back(Bind('s',            Bind::TimeCB(bind(&Entity::MoveRev,    screen->camMain, _1))));
+    binds.push_back(Bind('a',            Bind::TimeCB(bind(&Entity::MoveLeft,   screen->camMain, _1))));
+    binds.push_back(Bind('d',            Bind::TimeCB(bind(&Entity::MoveRight,  screen->camMain, _1))));
+    binds.push_back(Bind('q',            Bind::TimeCB(bind(&Entity::MoveDown,   screen->camMain, _1))));
+    binds.push_back(Bind('e',            Bind::TimeCB(bind(&Entity::MoveUp,     screen->camMain, _1))));
     screen->binds = &binds;
 
-    scene.add(new Entity("axis",  asset("axis")));
-    scene.add(new Entity("grid",  asset("grid")));
-    scene.add(new Entity("room",  asset("room")));
-    scene.add(new Entity("arrow", asset("arrow"), v3(1, .24, 1)));
+    scene.Add(new Entity("axis",  asset("axis")));
+    scene.Add(new Entity("grid",  asset("grid")));
+    scene.Add(new Entity("room",  asset("room")));
+    scene.Add(new Entity("arrow", asset("arrow"), v3(1, .24, 1)));
 
     // start our engine
-    return lfapp_main();
+    return app->Main();
 }

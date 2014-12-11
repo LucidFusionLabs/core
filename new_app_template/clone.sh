@@ -13,7 +13,7 @@ if [ "$TEMPLATEDIR" = "" -o "$TEMPLATEDIR" = "." ]; then echo "Can't run from ne
 TEMPLATEFILES=`find $TEMPLATEDIR/* | grep -v "/\." | grep -v "/clone.sh" | grep -v "/pkg/" | grep -v "/assets/" | grep -v "README.txt"`
 
 echo "lflpub/new_app_template/clone.sh: Cloning new app"
-echo "Domain: $DOMNAME"
+echo "Domain: $ORGNAME"
 echo "Package: $PKGNAME"
 echo "Directory/Binary: $BINNAME"
 
@@ -35,7 +35,7 @@ for f in $TEMPLATEFILES; do
 
     if [ -d $f ]; then
         mkdir $t
-    elif [ "$suffix" = ".png" ]; then
+    elif [ "$suffix" = ".png" ] || [ "$suffix" = ".dll" ]; then
         cp $f $t
     else
         cat $f | $BINNAME/pkg/pkgsedpipe.sh $BINNAME/pkg > $t

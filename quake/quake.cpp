@@ -22,11 +22,10 @@
 #include "lfapp/gui.h"
 #include "q3map.h"
 
-using namespace LFL;
-
+namespace LFL {
 BindMap binds;
-Asset::Map asset;
-SoundAsset::Map soundasset;
+AssetMap asset;
+SoundAssetMap soundasset;
 
 Scene scene;
 MapAsset *quake_map;
@@ -43,6 +42,9 @@ int Frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample
     screen->DrawDialogs();
     return 0;
 }
+
+}; // namespace LFL
+using namespace LFL;
 
 extern "C" int main(int argc, const char *argv[]) {
 
