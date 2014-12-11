@@ -24,10 +24,9 @@
 #include "lfapp/gui.h"
 #include "lfapp/game.h"
 
-using namespace LFL;
-
 #include "spaceballserv.h"
 
+namespace LFL {
 struct Editor : public TextArea {
     struct LineOffset { 
         int offset, size, font_size, wrapped_line_number; float width; 
@@ -144,8 +143,8 @@ struct EditorDialog : public Dialog {
 };
 
 BindMap binds;
-Asset::Map asset;
-SoundAsset::Map soundasset;
+AssetMap asset;
+SoundAssetMap soundasset;
 SpaceballSettings sbsettings;
 SpaceballMap *sbmap;
 Scene scene;
@@ -392,10 +391,10 @@ struct SpaceballClient : public GameClient {
             Split(arg, isspace, &args);
             if (args.size() != 3) { ERROR("map ", arg); return; }
             framebuffer.Attach(fb_tex1);
-            framebuffer.Render(::Frame);
+            framebuffer.Render(Frame);
             sbmap->Load(args[0], args[1]);
             framebuffer.Attach(fb_tex2);
-            framebuffer.Render(::Frame);
+            framebuffer.Render(Frame);
             map_started = Now() - ::atoi(args[2].c_str());
             map_transition = Seconds(3);
         } else {
@@ -723,10 +722,13 @@ void MyEditorCmd(const vector<string> &) {
     new EditorDialog(screen, Fonts::Get(FLAGS_default_font, 8, Color::white), new BufferFile(s.c_str(), s.size()));
 }
 
+}; // namespace LFL
+using namespace LFL;
+
 extern "C" int main(int argc, const char *argv[]) {
 
     app->logfilename = StrCat(dldir(), "spaceball.txt");
-    app->frame_cb = ::Frame;
+    app->frame_cb = Frame;
     screen->binds = &binds;
 #if defined(LFL_ANDROID) || defined(LFL_IPHONE)
     FLAGS_target_fps = 30;

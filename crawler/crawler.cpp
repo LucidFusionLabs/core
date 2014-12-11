@@ -41,7 +41,7 @@ DEFINE_bool(google_crawl, false, "Crawl google");
 #include "forvo.h"
 #include "google.h"
 
-using namespace LFL;
+namespace LFL {
 Crawler *crawler = 0;
 
 DEFINE_bool(crawl, true, "Crawl");
@@ -50,7 +50,7 @@ DEFINE_bool(scrape, true, "Scrape");
 DEFINE_string(queue_dump, "", "Dump queue dump");
 DEFINE_string(crawl_dump, "", "Dump crawl dump");
 
-int frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample, int flag) {
+int Frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample, int flag) {
 
     bool crawl_done = crawler->crawl_done();
     bool scrape_done = crawler->scrape_done();
@@ -69,10 +69,13 @@ int frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample
     return 0;
 }
 
+}; // namespace LFL
+using namespace LFL;
+
 extern "C" int main(int argc, const char *argv[]) {
 
     app->logfilename = StrCat(dldir(), "crawler.txt");
-    app->frame_cb = frame;
+    app->frame_cb = Frame;
     screen->caption = "crawler";
     FLAGS_lfapp_audio = FLAGS_lfapp_video = FLAGS_lfapp_input = FLAGS_lfapp_camera = 0;
     FLAGS_lfapp_network = 1;

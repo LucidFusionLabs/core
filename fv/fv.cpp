@@ -40,13 +40,10 @@ DEFINE_string(plot, "sg", "Audio GUI Plot [sg, zcr, pe]");
 DEFINE_bool(camera_effects, true, "Render camera effects");
 DEFINE_int(camera_orientation, 3, "Camera orientation");
 DEFINE_string(speech_client, "auto", "Speech client send [manual, auto, flood]");
-}; // namespace LFL
-
-using namespace LFL;
 
 BindMap binds;
-Asset::Map asset;
-SoundAsset::Map soundasset;
+AssetMap asset;
+SoundAssetMap soundasset;
 
 Scene scene;
 int myTab = 1;
@@ -585,6 +582,9 @@ int Frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample
 
     return fv_gui->Frame(W, clicks, mic_samples, cam_sample, flag);
 }
+
+}; // namespace LFL
+using namespace LFL;
 
 extern "C" int main(int argc, const char *argv[]) {
 

@@ -27,16 +27,15 @@
 #include "lfapp/gui.h"
 #include "ml/lp.h"
 
-using namespace LFL;
-
+namespace LFL {
 DEFINE_bool(visualize, false, "Display");
 DEFINE_string(linear_program, "", "Linear program input");
 
 Scene scene;
 BindMap binds;
-Asset::Map asset;
+AssetMap asset;
 
-int frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample, int flag) {
+int Frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample, int flag) {
 #ifdef LFL_CLING
     char buf[8192]={0}, result[512]={0}, *space;
     if (!input_fgets(buf, sizeof(buf))) return false;
@@ -51,10 +50,13 @@ int frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample
     return 0;
 }
 
+}; // namespace LFL
+using namespace LFL;
+
 extern "C" int main(int argc, const char *argv[]) {
 
     app->logfilename = StrCat(dldir(), "calculator.txt");
-    app->frame_cb = frame;
+    app->frame_cb = Frame;
     screen->width = 420;
     screen->height = 380;
     screen->caption = "Calculator";

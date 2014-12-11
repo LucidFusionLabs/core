@@ -21,8 +21,7 @@
 #include "lfapp/css.h"
 #include "lfapp/gui.h"
 
-using namespace LFL;
-
+namespace LFL {
 bool input_3D = false;
 DEFINE_string(output, "", "Output");
 DEFINE_string(input, "", "Input");
@@ -37,8 +36,8 @@ DEFINE_string(split_png_atlas, "", "Split PNG atlas back into individual files")
 DEFINE_string(filter_png_atlas, "", "Filter PNG atlas");
 
 BindMap binds;
-Asset::Map asset;
-SoundAsset::Map soundasset;
+AssetMap asset;
+SoundAssetMap soundasset;
 
 Scene scene;
 Shader MyShader;
@@ -123,6 +122,9 @@ int Frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample
 
     return 0;
 }
+
+}; // namespace LFL
+using namespace LFL;
 
 extern "C" int main(int argc, const char *argv[]) {
 
