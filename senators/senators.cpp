@@ -42,9 +42,6 @@ DEFINE_bool  (print_parse,  false,                    "Print parse");
 DEFINE_int   (linelen,      110,                      "Read blocksize for SayFile");
 DEFINE_string(nlp_modeldir, "../nlp/model/",          "NLP model directory");
 DEFINE_string(nomcorpuspath, "../nlp/corpus/nombank/frames/", "Nombank path");
-}; // namespace LFL
-
-using namespace LFL;
 
 File *SayFile = 0;
 vector<string> vprefix;
@@ -86,14 +83,16 @@ struct IRCBotServer : public BotServer {
     }
 };
 
+}; // namespace LFL
 #include "nlpbot.h"
+namespace LFL {
 
 struct Senator : public Query {
     string nick; bool ready; Bot *bot;
 
     Senator() : ready(0), bot(new NLPBot(FLAGS_print_parse)) {
         if (senatornames.size()) { nick = senatornames[senatornames_index]; senatornames_index = (senatornames_index+1) % senatornames.size(); }
-        else { for (int i=0; i<9; i++) nick.append(1, 'a' + rand() % 26); }
+        else { for (int i=0; i<9; i++) nick.append(1, 'a' + ::rand() % 26); }
     }
     int heartbeat(Connection *c) { if (bot) bot->Heartbeat(Singleton<IRCBotServer>::Get(), c); return 0; }
 
@@ -158,7 +157,7 @@ void DoSendRandom(int times, const string &data, int len) {
             majority.push_back((*i).second);
 
     for (int i=0; i<times; i++)
-        majority[rand() % majority.size()]->write(data.c_str(), len);
+        majority[::rand() % majority.size()]->write(data.c_str(), len);
 
     INFO("sent * 1 * ", times, " '", data, "'");
 }
@@ -199,7 +198,7 @@ void MySay(const vector<string> &args) {
 
 void MyColorSay(const vector<string> &args) {
     string in = args.size() ? Join(args, " ") : FLAGS_message, send = MyPrefix();
-    for (int i=0, len=in.size(); i<len; i++) StringAppendf(&send, "%02d%c", 1+rand()%14, in[i]);
+    for (int i=0, len=in.size(); i<len; i++) StringAppendf(&send, "%02d%c", 1+::rand()%14, in[i]);
     send += "\r\n";
     DoSendRandom(1, send, send.size());
 }
@@ -225,7 +224,7 @@ void MyVPrefixSize(const vector<string> &args) {
     INFO("vp size = ", atoi(args[0]));
 }
 
-int frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample, int flag) {
+int Frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample, int flag) {
     for (Senators::iterator i = senators.begin(); i != senators.end(); i++) i->first->heartbeat(i->second);
     static RollingAvg fps(128);
     fps.add(clicks);
@@ -263,10 +262,13 @@ int frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample
     return 0;
 }
 
+}; // namespace LFL
+using namespace LFL;
+
 extern "C" int main(int argc, const char *argv[]) {
 
     screen->caption = "senators";
-    app->frame_cb = frame;
+    app->frame_cb = Frame;
     app->logfilename = StrCat(dldir(), "senators.txt");
     FLAGS_lfapp_audio = FLAGS_lfapp_video = FLAGS_lfapp_input = FLAGS_lfapp_camera = 0;
     FLAGS_lfapp_network = 1;

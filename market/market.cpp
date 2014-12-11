@@ -122,7 +122,7 @@ struct TradingPlatformGUI : public GUI {
     void Draw() { scrollbar.Update(); GUI::Draw(); }
 } *tradingPlatformGUI = NULL;
 
-int frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample, int flag) {
+int Frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample, int flag) {
     Time now = Now();
     if (FLAGS_lfapp_video) {
         screen->gd->DrawMode(DrawMode::_2D);
@@ -147,7 +147,7 @@ using namespace LFL;
 
 extern "C" int main(int argc, const char *argv[]) {
 
-    app->frame_cb = frame;
+    app->frame_cb = Frame;
     app->logfilename = StrCat(dldir(), "market.txt");
     screen->caption = "Market";
     screen->width = 640;

@@ -22,11 +22,10 @@
 #include "lfapp/gui.h"
 #include "chess.h"
 
-using namespace LFL;
-
+namespace LFL {
 BindMap binds;
-Asset::Map asset;
-SoundAsset::Map soundasset;
+AssetMap asset;
+SoundAssetMap soundasset;
 Chess::Position position;
 Box SquareCoords(int p) {
     static const int border = 5;
@@ -34,9 +33,8 @@ Box SquareCoords(int p) {
     return Box(border+Chess::SquareX(p)/8.0*w, border+Chess::SquareY(p)/8.0*h, 1/8.0*w, 1/8.0*h);
 }
 
-// engine callback
-// driven by lfapp_frame()
-int frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample, int flag) {
+// engine callback driven by LFL::Application
+int Frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample, int flag) {
     Box win = Box::FromScreen();
     screen->gd->DrawMode(DrawMode::_2D);
     screen->gd->EnableLayering();
@@ -55,10 +53,13 @@ int frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample
     return 0;
 }
 
+}; // namespace LFL
+using namespace LFL;
+
 extern "C" int main(int argc, const char *argv[]) {
 
     app->logfilename = StrCat(dldir(), "chess.txt");
-    app->frame_cb = frame;
+    app->frame_cb = Frame;
     screen->width = 630;
     screen->height = 570;
     screen->caption = "Chess";

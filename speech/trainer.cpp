@@ -91,8 +91,8 @@ DEFINE_string(UttPathsInFile,        "",          "Viterbi paths input file");
 DEFINE_string(UttPathsOutFile,       "",          "Viterbi paths output file");
 
 BindMap binds;
-Asset::Map asset;
-SoundAsset::Map soundasset;
+AssetMap asset;
+SoundAssetMap soundasset;
 
 void MyResynth(const vector<string> &args) { SoundAsset *sa=soundasset(args.size()?args[0]:"snap"); if (sa) { resynthesize(&app->audio, sa); } }
 

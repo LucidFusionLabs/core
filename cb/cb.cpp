@@ -22,21 +22,19 @@
 #include "lfapp/gui.h"
 #include "lfapp/network.h"
 
-using namespace LFL;
-
+namespace LFL {
 DEFINE_FLAG(sniff_device, int, 0, "Network interface index");
 
 BindMap binds;
-Asset::Map asset;
-SoundAsset::Map soundasset;
+AssetMap asset;
+SoundAssetMap soundasset;
 
 Scene scene;
 Sniffer *sniffer;
 GeoResolution *geo;
 
-// engine callback
-// driven by lfapp_frame()
-int frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample, int flag) {
+// engine callback driven by LFL::Application
+int Frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample, int flag) {
     scene.Get("arrow")->yawright((double)clicks/500);
     scene.Draw(&asset.vec);
 
@@ -67,9 +65,12 @@ void sniff(const char *packet, int avail, int size) {
     else INFO("ip ver=", ip->version(), " prot=", ip->prot, " ", src_ip, " -> ", dst_ip);
 }
 
+}; // namespace LFL
+using namespace LFL;
+
 extern "C" int main(int argc, const char *argv[]) {
 
-    app->frame_cb = frame;
+    app->frame_cb = Frame;
     app->logfilename = StrCat(dldir(), "cb.txt");
     screen->width = 420;
     screen->height = 380;

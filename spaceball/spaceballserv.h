@@ -18,6 +18,7 @@
 
 #ifndef __LFL_SPACEBALL_SPACEBALLSERV_H__
 #define __LFL_SPACEBALL_SPACEBALLSERV_H__
+namespace LFL {
 
 struct SpaceballSettings : public GameSettings {
     static const int GAME_TYPE=0, GAME_LIMIT=1, GAME_CONTROL=2;
@@ -789,4 +790,5 @@ struct SpaceballServer : public GameServer {
     }
 };
 
+}; // namespace LFL
 #endif // __LFL_SPACEBALL_SPACEBALLSERV_H__

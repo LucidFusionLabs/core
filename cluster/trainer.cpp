@@ -20,8 +20,7 @@
 #include "lfapp/network.h"
 #include "ml/hmm.h"
 
-using namespace LFL;
-
+namespace LFL {
 DEFINE_string(input,         "",    "Input matrix");
 DEFINE_string(inputlabel,    "",    "Input label matrix");
 DEFINE_string(Transform,     "",    "Input transform matrix");
@@ -36,6 +35,7 @@ struct FeatCorpus {
     typedef void (*FeatCB)(const char *, Matrix *, Matrix *, const char *, void *);
     static int feat_iter(const char *featdir, FeatCB cb, void *arg) { cb("", 0, in, "", arg); return 0; }
 };
+}; // namespace LFL
 
 #include "ml/kmeans.h"
 #include "ml/gmmem.h"
@@ -47,7 +47,6 @@ DEFINE_int   (Initialize,     0,     "Initialize models");
 DEFINE_int   (MaxIterations,  50,    "Initialize models");
 DEFINE_double(CovarFloor,     1e-6,  "Model covariance floor");
 DEFINE_double(PriorFloor,     -16,   "Model prior and mixture weight floor");
-}; // namespace LFL
 
 DEFINE_int   (choosen,        0,     "Choose every N from input");
 DEFINE_bool  (normalize,      false, "Normalize values during Choose Every N");
@@ -63,8 +62,6 @@ void print(Matrix *m, int cols=0, StringFile *l=0, int *indexmap=0) {
         INFO(v, " (", (l && l->lines) ? l->line[ind] : "", ")");
     }
 }
-
-string tostrPloticus1D(const Matrix *in, StringFile *l, int *indexmap);
 
 int writePloticus(string tofile, const Matrix *in, StringFile *l, int *indmap, string (*plot)(const Matrix *, StringFile *, int *)) {
     LocalFile f(tofile.c_str(), "w");
@@ -86,6 +83,46 @@ int *indexmap1D(const Matrix *in) {
     delete [] vals;
     return ret;
 }
+
+string tostrPloticus1D(const Matrix *in, StringFile *l, int *indexmap) {
+    double min = INFINITY, max = -INFINITY;
+    MatrixRowIter(in) {
+        if (in->row(i)[0] < min) min = in->row(i)[0];
+        if (in->row(i)[0] > max) max = in->row(i)[0];
+    }
+
+    string v = StringPrintf(
+            "#proc areadef\n"
+            "title: Members, by date enrolled\n"
+            "rectangle: 1 3 6 3.7\n"
+            "autowidth: 0.3  3.0  8.0\n"
+            "xscaletype: linear\n"
+            "xrange: %f %f\n"
+            "yrange: 0 80\n"
+            "#proc getdata\n"
+            "data:\n", min, max);
+
+    MatrixRowIter(in) {
+        int ind = indexmap ? indexmap[i] : i;
+        v += StringPrintf("%s %f\n", l->line[ind], in->row(ind)[0]);
+    }
+
+    v += StringPrintf(
+            "\n"
+            "#proc scatterplot\n"
+            "xfield: 2\n"
+            "labelfield: 1\n"
+            "textdetails: size=5 color=blue\n"
+            "ylocation: @AREABOTTOM+0.3\n"
+            "cluster: yes\n"
+            "verticaltext: yes\n"
+            );
+
+    return v;
+}
+
+}; // namespace LFL
+using namespace LFL;
 
 extern "C" {
 int main(int argc, const char *argv[]) {
@@ -183,41 +220,4 @@ int main(int argc, const char *argv[]) {
     return 0;
 }
 };
-
-string tostrPloticus1D(const Matrix *in, StringFile *l, int *indexmap) {
-    double min = INFINITY, max = -INFINITY;
-    MatrixRowIter(in) {
-        if (in->row(i)[0] < min) min = in->row(i)[0];
-        if (in->row(i)[0] > max) max = in->row(i)[0];
-    }
-
-    string v = StringPrintf(
-            "#proc areadef\n"
-            "title: Members, by date enrolled\n"
-            "rectangle: 1 3 6 3.7\n"
-            "autowidth: 0.3  3.0  8.0\n"
-            "xscaletype: linear\n"
-            "xrange: %f %f\n"
-            "yrange: 0 80\n"
-            "#proc getdata\n"
-            "data:\n", min, max);
-
-    MatrixRowIter(in) {
-        int ind = indexmap ? indexmap[i] : i;
-        v += StringPrintf("%s %f\n", l->line[ind], in->row(ind)[0]);
-    }
-
-    v += StringPrintf(
-            "\n"
-            "#proc scatterplot\n"
-            "xfield: 2\n"
-            "labelfield: 1\n"
-            "textdetails: size=5 color=blue\n"
-            "ylocation: @AREABOTTOM+0.3\n"
-            "cluster: yes\n"
-            "verticaltext: yes\n"
-            );
-
-    return v;
-}
 

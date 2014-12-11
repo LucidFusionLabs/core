@@ -19,8 +19,7 @@
 #include "lfapp/lfapp.h"
 #include "lfapp/network.h"
 
-using namespace LFL;
-
+namespace LFL {
 #ifdef _WIN32
 DEFINE_bool(install,    false,                          "Win32 Register Server");
 DEFINE_bool(uninstall,  false,                          "Win32 Unregister Server");
@@ -65,8 +64,10 @@ int master_server(int argc, const char **argv) {
     return app->Main();
 }
 
-extern "C" {
-int main(int argc, const char **argv) {
+}; // namespace LFL
+using namespace LFL;
+
+extern "C" int main(int argc, const char **argv) {
     app->logfilename = StrCat(dldir(), "masterserv.txt");
     static const char *service_name = "LFL Master Server";
 
@@ -88,5 +89,4 @@ int main(int argc, const char **argv) {
     if (exit) return app->Free();
 
     return NTService::MainWrapper(service_name, master_server, argc, argv);
-}
 }
