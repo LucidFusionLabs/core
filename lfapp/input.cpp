@@ -700,6 +700,7 @@ Shell::Shell(AssetMap *AM, SoundAssetMap *SAM, MovieAssetMap *MAM) : assets(AM),
     command.push_back(Command("wget",       bind(&Shell::wget,         this, _1)));
     command.push_back(Command("messagebox", bind(&Shell::MessageBox,   this, _1)));
     command.push_back(Command("texturebox", bind(&Shell::TextureBox,   this, _1)));
+    command.push_back(Command("edit",       bind(&Shell::Edit,         this, _1)));
     command.push_back(Command("slider",     bind(&Shell::Slider,       this, _1)));
 }
 
@@ -956,12 +957,18 @@ void Shell::wget(const vector<string> &a) {
 
 void Shell::MessageBox(const vector<string> &a) { Dialog::MessageBox(Join(a, " ")); }
 void Shell::TextureBox(const vector<string> &a) { Dialog::TextureBox(a.size() ? a[0] : ""); }
+
 void Shell::Slider(const vector<string> &a) {
     if (a.empty()) { INFO("slider <flag_name> [total] [inc]"); return; }
     string flag_name = a[0];
     float total = a.size() >= 1 ? atof(a[1].c_str()) : 0;
     float inc   = a.size() >= 2 ? atof(a[2].c_str()) : 0;
     new SliderTweakDialog(flag_name, total ? total : 100, inc ? inc : 1);
+}
+
+void Shell::Edit(const vector<string> &a) {
+    string s = LocalFile::filecontents(StrCat(ASSETS_DIR, "lfapp_vertex.glsl"));
+    new EditorDialog(screen, Fonts::Default(), new BufferFile(s.c_str(), s.size()));
 }
 
 void Shell::cmds(const vector<string>&) {

@@ -206,6 +206,12 @@ void TextArea::Write(const string &s) {
     if (line_fb.lines) line_fb.fb.Release();
 }
 
+void TextArea::PageUp() {
+}
+
+void TextArea::PageDown() {
+}
+
 void TextArea::Draw(const Box &b, bool draw_cursor) {
     if (line_fb.SizeChanged(b.w, b.h, font)) {
         // mouse_gui.mouse.AddClickBox(box, MouseController::CoordCB(bind(&TextArea::ClickCB, this, _1, _2, _3, _4)));
@@ -358,6 +364,55 @@ void TextArea::DrawOrCopySelection() {
     if (!copy_text.empty()) Clipboard::set(copy_text.c_str());
 }
 #endif
+
+/* Editor */
+
+void Editor::UpdateLines(float v_scrolled, float h_scrolled) {
+    bool resized = last_fb_lines != line_fb.lines;
+    if (resized) { line.Clear(); if (Wrap()) UpdateWrappedLines(TextArea::font->size, line_fb.w); }
+    else if (Equal(last_v_scrolled, v_scrolled)) return;
+
+    LineOffsetSegment read_lines;
+    WrappedLineOffset new_first_line, new_last_line;
+    GetWrappedLineOffset(v_scrolled, &new_first_line);
+    bool reverse = new_first_line < first_line && !resized;
+    int dist = Distance(new_first_line, reverse);
+    if (dist < line_fb.lines && !resized) {
+        if (reverse) read_lines = LineOffsetSegment(new_first_line.first, dist);
+        else         read_lines = LineOffsetSegment(new_first_line.first + line_fb.lines - dist, dist);
+    } else           read_lines = LineOffsetSegment(new_first_line.first, line_fb.lines);
+    // can reduce read_lines here
+
+    int add_blank_lines = Typed::Max<int>(0, Typed::Min<int>(dist, read_lines.first + read_lines.second - file_line.size())), read_len=0;
+    read_lines.second = Typed::Max<int>(0, read_lines.second - add_blank_lines);
+    for (int i=read_lines.first, n=i+read_lines.second; i<n; i++) read_len += file_line[i].size + (i<(n-1));
+
+    string buf(read_len, 0);
+    file->seek(file_line[read_lines.first].offset, File::Whence::SET);
+    CHECK_EQ(read_len, file->read((char*)buf.data(), read_len));
+    Line *L = 0;
+    line_fb.fb.Attach();
+
+    for (int i=0, wl=0, tl=read_lines.second, bo=0, l; i<tl && wl<tl; i++, bo += l+(!reverse || i)) {
+        l = file_line[read_lines.first + (reverse ? (read_lines.second-1-i) : i)].size;
+        if (reverse) (L = line.PushFront())->AssignText(buf.substr(read_len - bo - l, l));
+        else         (L = line.PushBack ())->AssignText(buf.substr(bo,                l));
+        if (reverse && !resized) line.PopBack (1);
+        else if (      !resized) line.PopFront(1);
+        if (reverse) wl += line_fb.PushFrontAndUpdate(L);
+        else         wl += line_fb. PushBackAndUpdate(L);
+    }
+    for (int i=0; !reverse && i<add_blank_lines; i++) { 
+        (L = line.PushBack())->AssignText(" ");
+        if (!resized) line.PopFront(1);
+        line_fb.PushBackAndUpdate(L);
+    }
+    line_fb.fb.Release();
+    first_line = new_first_line;
+    last_line = new_last_line;
+    last_fb_lines = line_fb.lines;
+    last_v_scrolled = v_scrolled;
+}
 
 /* Terminal */
 
@@ -582,8 +637,9 @@ void Terminal::FlushParseText() {
 void Terminal::Newline(bool carriage_return) {
     bool scroll_region = scroll_region_beg && scroll_region_end && !(scroll_region_beg == 1 && scroll_region_end == term_height);
     if      (term_cursor.y == term_height       && !scroll_region) TextArea::Write(string(1, '\n'));
-    else if (term_cursor.y == scroll_region_end &&  scroll_region) Scroll(scroll_region_beg, scroll_region_end, -1);
-    else term_cursor.y = min(term_height, term_cursor.y+1);
+    else if (term_cursor.y == scroll_region_end &&  scroll_region) {
+        Scroll(scroll_region_beg, scroll_region_end, -1);
+    } else term_cursor.y = min(term_height, term_cursor.y+1);
     if (carriage_return) term_cursor.x = 1;
 }
 

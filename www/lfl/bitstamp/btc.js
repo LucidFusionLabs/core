@@ -16,8 +16,8 @@ Array.prototype.binarySearch = function(needle, cmp, field) {
     return low;
 };
 
-function FormatPrice (price,  digits) { return (price  / 1e5).toFixed(digits || 3); }
-function FormatVolume(volume, digits) { return (volume / 1e8).toFixed(digits || 4); }
+function FormatPrice (price,  digits) { return parseFloat(price ).toFixed(digits || 3); }
+function FormatVolume(volume, digits) { return parseFloat(volume).toFixed(digits || 4); }
 
 var TYPE_CANDLE=1, TYPE_LINE=2, TYPE_DEPTH=3;
 var ChartType = TYPE_DEPTH;
@@ -104,7 +104,7 @@ function DrawChart() {
     var ticks = GetTicks();
     if (!ticks) return;
 
-    if (ticks.length) window.document.title = "MtGox Live " + FormatPrice(ticks.last()[CLOSE], 2);
+    if (ticks.length) window.document.title = "Bitstamp Live " + FormatPrice(ticks.last()[CLOSE], 2);
 
     if (ChartType == TYPE_CANDLE && ticks.length) {
         FindPriceVolumeRange(ticks);
@@ -443,7 +443,7 @@ $("#chart_z1").on({
             crosshair_x = price_chart_right - (ticks.length - tick_ind - .5) * (bar_width + bar_padding*2);
 
             var tick = ticks[tick_ind];
-            var text = new Date(tick[TIME] / 1000).toLocaleString() + ", ";
+            var text = new Date(tick[TIME]).toLocaleString() + ", ";
             if (crosshair_chart == "price") {
                 text += "O: " + FormatPrice(tick[OPEN], 2) + ", H: " + FormatPrice(tick[HIGH],  2) +
                       ", L: " + FormatPrice(tick[LOW],  2) + ", C: " + FormatPrice(tick[CLOSE], 2);
@@ -500,18 +500,10 @@ function ClearPreviousCrosshairs() {
     canvas_z1.clearRect(price_chart_left, crosshair_y-1.5, price_chart_width, 3);
 }
 
-var mtgox_channel = {
-    "trade":  "dbf1dee9-4f2e-4a08-8cb7-748919a71b21",
-    "depth":  "24e67e0d-1cad-4cc0-9e7a-f8523ef460fe",
-    "ticker": "d5f06780-30a8-4a48-a2f8-7ed181b4a13f",
-    "lag":    "85174711-be64-4de1-b783-0628995d7914"
-};
-
-var pubnub = null;
 var HandleMessages = true;
 var CompressEmptyTicks = true;
 
-var ServerDomain = "lucidfusionlabs.com";
+var ServerDomain = "127.0.0.1";
 var ServerPort = 8090;
 
 var TradeChannel = { name: "trade", init: false, first_time: 0, last_time: 0, buffer: [], handler: HandleTrade };
@@ -520,30 +512,25 @@ var DepthChannel = { name: "depth", init: false, first_time: 0, last_time: 0, bu
 var Ticks = [], AskTicks = [], BidTicks = [];
 var TIME=0, OPEN=1, HIGH=2, LOW=3, CLOSE=4, VOLUME=5;
 
-var MinVolume = 10000, DisplayRows = 10;
+var MinVolume = 0, DisplayRows = 10;
 var Bids = [], Asks = [];
 
-function PubNubSubscribe(channel_name, connect_cb) {
-    pubnub.subscribe({
-        restore    : true,
-        channel    : mtgox_channel[channel_name],
-        message    : function(m) { HandleMessage(m); },
-        error      : function() { console.log("PubNub: Network error " + channel_name); },
-        reconnect  : function() { console.log("PubNub: Reconnected "   + channel_name); },
-        disconnect : function() { console.log("PubNub: Disconnected "  + channel_name); },
-        connect    : function() { console.log("PubNub: Connected "     + channel_name); 
-                                  if (connect_cb) connect_cb(); },
-    });
+var pusher = null;
+
+function PusherSubscribe(channel_name, bind_name, connect_cb, data_cb) {
+    var channel = pusher.subscribe(channel_name);
+    channel.bind(bind_name, data_cb);
+    connect_cb();
 }
 
-function OpenPubNub() {
-    pubnub = PUBNUB.init({ subscribe_key: 'sub-c-50d56e1e-2fd9-11e3-a041-02ee2ddab7fe' });
-    PubNubSubscribe("trade"); //, FetchArchivedTicks());
-    PubNubSubscribe("depth", FetchOrderbookState);
+function OpenBitstamp() {
+    pusher = new Pusher('de504dc5763aeef9ff52');
+    PusherSubscribe('live_trades', 'trade', FetchArchivedTicks, HandleTrade);
+    PusherSubscribe('diff_order_book', 'data', FetchOrderbookState, HandleDepth);
 }
 
 function FetchArchivedTicks() {
-    $.ajax({ url: "http://" + ServerDomain + ":8090/mtgox_archive/tick/M1",
+    $.ajax({ url: "http://" + ServerDomain + ":8090/bitstamp_archive/tick/M1",
              type: "GET",
              dataType: "json",
              success: function(msg) { HandleArchivedTicks(msg); },
@@ -552,7 +539,7 @@ function FetchArchivedTicks() {
 }
 
 function FetchOrderbookState() {
-    $.ajax({ url: "http://" + ServerDomain + ":8090/mtgox_archive/orderbook",
+    $.ajax({ url: "http://" + ServerDomain + ":8090/bitstamp_archive/orderbook",
              type: "GET",
              dataType: "json",
              success: function(msg) { HandleOrderbookState(msg); },
@@ -579,9 +566,9 @@ function HandleOrderbookState(msg) {
     if (!msg) console.log("HandleOrderbookState: Connection error");
     else {
         for (var i = 0; i < msg.asks.length; i++)
-            if (msg.asks[i].volume >= MinVolume) Asks.push(msg.asks[i]);
+            if (msg.asks[i].volume > MinVolume) Asks.push(msg.asks[i]);
         for (var i = 0; i < msg.bids.length; i++)
-            if (msg.bids[i].volume >= MinVolume) Bids.push(msg.bids[i]);
+            if (msg.bids[i].volume > MinVolume) Bids.push(msg.bids[i]);
 
         for (var i = 0; i < Asks.length && i < DisplayRows; i++)
             $("#order_ask tr:nth-child(" + (i+1) + ")").replaceWith(GetOrderbookRowHTML(Asks[i]));
@@ -598,62 +585,11 @@ function HandleOrderbookState(msg) {
     DepthChannel.init = true;
 }
 
-function HandleMessage(msg) {
-    if (!HandleMessages) return;
-
-    if (msg.op != "private") {
-        console.log("MtGox: Got Op: " + msg.op);
-        return;
-    }
-    switch(msg["private"]) {
-        case "trade":
-        HandleChannelMessage(TradeChannel, msg);
-        break;
-
-        case "depth":
-        HandleChannelMessage(DepthChannel, msg);
-        break;
-
-        default:
-        console.log("MtGox: Private Op: " + msg["private"]);
-        break;
-    }
-}
-
-function HandleChannelMessage(chan, msg) {
-    var timestamp = parseInt(msg.stamp);
-
-    if (!chan.first_time)            chan.first_time = timestamp;
-    if (chan.last_time <= timestamp) chan.last_time  = timestamp;
-    else console.log("HandleChannelMessage: " + chan.name + " " + chan.last_time + " > " + timestamp);
-
-    if (chan.init) chan.handler(msg[chan.name]);
-    else       chan.buffer.push(msg[chan.name]);
-}
-
-function HandleTrade(trade) {
-    if (trade.price_currency != "USD") return;
-
-    var now = (new Date).getTime();
-    var trade_time = parseInt(trade.tid);
-    var trade_price = parseInt(trade.price_int);
-    var trade_amount = parseInt(trade.amount_int);
-    var lag = now - trade_time / 1000;
-
-    var type = trade.trade_type == "bid" ? "ask" : "bid";
-    var orders  = type == "bid" ? Bids     : Asks;
-    var cmptext = type == "bid" ? " < "    : " > "; 
-    var cmp     = type == "bid" ? LessThan : GreaterThan; 
-
-    while (TradeChannel.init && DepthChannel.init && orders.length && cmp(trade_price, orders[0].price)) {
-        console.log(type + " trade inconsistency: " + trade_price + cmptext + orders[0].price);
-        ShiftOrderbookRow(orders, type);
-    }
-
-    if (1)             AddTrade(Ticks,    trade_time, trade_price, trade_amount);
-    if (type == "ask") AddTrade(AskTicks, trade_time, trade_price, trade_amount);
-    if (type == "bid") AddTrade(BidTicks, trade_time, trade_price, trade_amount);
-
+function HandleTrade(msg) {
+    var trade_time = (new Date).getTime();
+    var trade_price = parseFloat(msg.price);
+    var trade_amount = parseFloat(msg.amount);
+    AddTrade(Ticks, trade_time, trade_price, trade_amount);
     DrawChart();
 }
 
@@ -661,14 +597,14 @@ function AddTrade(ticks, trade_time, trade_price, trade_amount) {
     if (ticks.length == 0) ticks.push([ trade_time, 0, 0, 0, 0, 0 ]);
 
     var last_tick = ticks.last();
-    var last_tick_min = Math.floor(last_tick[TIME] / 60000000);
-    var cur_tick_min = Math.floor(trade_time / 60000000);
+    var last_tick_min = Math.floor(last_tick[TIME] / 60000);
+    var cur_tick_min = Math.floor(trade_time / 60000);
     var mins_since_last_tick = cur_tick_min - last_tick_min;
     var start_i = mins_since_last_tick && CompressEmptyTicks ? mins_since_last_tick-1 : 0;
     for (var i = start_i; i < mins_since_last_tick; i++) {
         var min = last_tick_min + i + 1;
         var v = i != mins_since_last_tick-1 ? last_tick[CLOSE] : 0;
-        ticks.push([ min * 60000000, v, v, v, v, 0 ]);
+        ticks.push([ min * 60000, v, v, v, v, 0 ]);
     }
     while (ticks.length > 180) ticks.shift();
 
@@ -685,15 +621,20 @@ function AddTrade(ticks, trade_time, trade_price, trade_amount) {
     cur_tick[VOLUME] += trade_amount;
 }
 
-function HandleDepth(depth) {
-    if (depth.currency != "USD") return;
+function HandleDepth(msg) {
+    for (var i = 0; i < msg.asks.length; i++) {
+        var ask = msg.asks[i];
+        HandleDepthUpdate({ type: "ask", price: parseFloat(ask[0]), volume: parseFloat(ask[1]),
+                          timeout_price: undefined, timeout_volume: undefined });
+    }
+    for (var i = 0; i < msg.bids.length; i++) {
+        var bid = msg.bids[i];
+        HandleDepthUpdate({ type: "bid", price: parseFloat(bid[0]), volume: parseFloat(bid[1]),
+                          timeout_price: undefined, timeout_volume: undefined });
+    }
+}
 
-    var order = { type:           depth.type_str,
-                  price:          parseInt(depth.price_int), 
-                  volume:         parseInt(depth.total_volume_int),
-                  timeout_price:  undefined,
-                  timeout_volume: undefined }; 
-
+function HandleDepthUpdate(order) {
     var orders  = order.type == "bid" ? Bids        : Asks;
     var cmp     = order.type == "bid" ? GreaterThan : LessThan;
 
@@ -701,7 +642,7 @@ function HandleDepth(depth) {
     var out = "#order_" + order.type + " tr:nth-child(" + (orders_ind + 1) + ")";
 
     if (orders[orders_ind] == undefined || orders[orders_ind].price != order.price) {
-        if (order.volume >= MinVolume) {
+        if (order.volume > MinVolume) {
             orders.splice(orders_ind, 0, order);
 
             if (orders_ind < DisplayRows) {
@@ -726,7 +667,7 @@ function HandleDepth(depth) {
             var volume_ind = order.type == "bid" ? 1 : 2;
             FadeOrderbookCell(order, "volume", $(out + " td:nth-child(" + volume_ind + ")"));
         }
-        else if (order.volume < MinVolume) {
+        else if (order.volume <= MinVolume) {
             clearTimeout(order.timeout_price);
             orders.splice(orders_ind, 1);
         }
@@ -739,7 +680,7 @@ function FadeOrderbookCell(order, timeout_field, out) {
     order["timeout_" + timeout_field] = setTimeout(function() {
         out.removeClass("order_changed");
         order["timeout_" + timeout_field] = undefined;
-        if (timeout_field == "volume" && order.volume < MinVolume) DelOrderbookRow(order.type, order.price);
+        if (timeout_field == "volume" && order.volume <= MinVolume) DelOrderbookRow(order.type, order.price);
     }, 1000);
 }
 
@@ -785,7 +726,7 @@ function PopOrderbookRowHTML(orders, type) {
     if (orders.length > DisplayRows) {
         clearTimeout(orders[DisplayRows].timeout_price);
         clearTimeout(orders[DisplayRows].timeout_volume);
-        if (orders[DisplayRows].volume < MinVolume) orders.splice(DisplayRows, 1);
+        if (orders[DisplayRows].volume <= MinVolume) orders.splice(DisplayRows, 1);
     }
 
     AlternateOrderbookRowClass(type);
@@ -822,5 +763,4 @@ function AlternateOrderbookRowClass(type) {
 
 AddBlankOrderbookRowHTML("bid");
 AddBlankOrderbookRowHTML("ask");
-FetchArchivedTicks();
-OpenPubNub();
+OpenBitstamp();

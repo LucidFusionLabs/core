@@ -27,121 +27,6 @@
 #include "spaceballserv.h"
 
 namespace LFL {
-struct Editor : public TextArea {
-    struct LineOffset { 
-        int offset, size, font_size, wrapped_line_number; float width; 
-        LineOffset(int O=0, int S=0, int FS=0, int WLN=0, float W=0) :
-            offset(O), size(S), font_size(FS), wrapped_line_number(WLN), width(W) {}
-        bool operator<(const LineOffset &l) const { return wrapped_line_number < l.wrapped_line_number; }
-    };
-    typedef pair<int, int> LineOffsetSegment, WrappedLineOffset;
-    WrappedLineOffset first_line, last_line;
-    int last_fb_lines=0, wrapped_lines=0;
-    float last_v_scrolled=0;
-    shared_ptr<File> file;
-    vector<LineOffset> file_line;
-    Editor(Window *W, Font *F, File *I) : TextArea(W, F), file(I) { /*line_fb.wrap=1;*/ BuildLineMap(); }
-
-    bool Wrap() const { return line_fb.wrap; }
-    void BuildLineMap() {
-        int ind=0, offset=0;
-        for (const char *l = file->nextlineraw(&offset); l; l = file->nextlineraw(&offset))
-            file_line.push_back(LineOffset(offset, file->nr.record_len, TextArea::font->size,
-                                           ind++, TextArea::font->Width(l)));
-    }
-    void UpdateWrappedLines(int cur_font_size, int box_width) {
-        wrapped_lines = 0;
-        for (auto &l : file_line) {
-            wrapped_lines += 1 + l.width * cur_font_size / l.font_size / box_width;
-            l.wrapped_line_number = wrapped_lines;
-        }
-    }
-    void GetWrappedLineOffset(float percent, WrappedLineOffset *out) const {
-        if (!Wrap()) { *out = WrappedLineOffset(percent * file_line.size(), 0); return; }
-        int wrapped_line = percent * wrapped_lines;
-        auto it = lower_bound(file_line.begin(), file_line.end(), LineOffset(0,0,0,wrapped_line));
-        if (it == file_line.end()) { *out = WrappedLineOffset(file_line.size(), 0); return; }
-        int wrapped_line_index = it - file_line.begin();
-        *out = WrappedLineOffset(wrapped_line_index, wrapped_line - wrapped_line_index - 1);
-    }
-    int Distance(const WrappedLineOffset &o, bool reverse) {
-        int dist = 0;
-  //      for (int i=a_first_line; i<=b_first_line; i++) {
-//            dist += 
-        return abs(o.first - first_line.first);
-    }
-    void UpdateLines(float v_scrolled, float h_scrolled) {
-        bool resized = last_fb_lines != line_fb.lines;
-        if (resized) { line.Clear(); if (Wrap()) UpdateWrappedLines(TextArea::font->size, line_fb.w); }
-        else if (Equal(last_v_scrolled, v_scrolled)) return;
-
-        LineOffsetSegment read_lines;
-        WrappedLineOffset new_first_line, new_last_line;
-        GetWrappedLineOffset(v_scrolled, &new_first_line);
-        bool reverse = new_first_line < first_line && !resized;
-        int dist = Distance(new_first_line, reverse);
-        if (dist < line_fb.lines && !resized) {
-            if (reverse) read_lines = LineOffsetSegment(new_first_line.first, dist);
-            else         read_lines = LineOffsetSegment(new_first_line.first + line_fb.lines - dist, dist);
-        } else           read_lines = LineOffsetSegment(new_first_line.first, line_fb.lines);
-        // can reduce read_lines here
-
-        int add_blank_lines = Typed::Max<int>(0, Typed::Min<int>(dist, read_lines.first + read_lines.second - file_line.size())), read_len=0;
-        read_lines.second = Typed::Max<int>(0, read_lines.second - add_blank_lines);
-        for (int i=read_lines.first, n=i+read_lines.second; i<n; i++) read_len += file_line[i].size + (i<(n-1));
-
-        string buf(read_len, 0);
-        file->seek(file_line[read_lines.first].offset, File::Whence::SET);
-        CHECK_EQ(read_len, file->read((char*)buf.data(), read_len));
-        Line *L = 0;
-        line_fb.fb.Attach();
-
-        for (int i=0, wl=0, tl=read_lines.second, bo=0, l; i<tl && wl<tl; i++, bo += l+(!reverse || i)) {
-            l = file_line[read_lines.first + (reverse ? (read_lines.second-1-i) : i)].size;
-            if (reverse) (L = line.PushFront())->AssignText(buf.substr(read_len - bo - l, l));
-            else         (L = line.PushBack ())->AssignText(buf.substr(bo,                l));
-            if (reverse && !resized) line.PopBack (1);
-            else if (      !resized) line.PopFront(1);
-            if (reverse) wl += line_fb.PushFrontAndUpdate(L);
-            else         wl += line_fb. PushBackAndUpdate(L);
-        }
-        for (int i=0; !reverse && i<add_blank_lines; i++) { 
-            (L = line.PushBack())->AssignText(" ");
-            if (!resized) line.PopFront(1);
-            line_fb.PushBackAndUpdate(L);
-        }
-        line_fb.fb.Release();
-        first_line = new_first_line;
-        last_line = new_last_line;
-        last_fb_lines = line_fb.lines;
-        last_v_scrolled = v_scrolled;
-    }
-    void Draw(const Box &box, float v_scrolled, float h_scrolled) {
-        TextArea::Draw(box, true);
-        UpdateLines(v_scrolled, h_scrolled);
-    }
-};
-
-struct EditorDialog : public Dialog {
-    Editor editor;
-    Widget::Scrollbar v_scrollbar, h_scrollbar;
-    EditorDialog(Window *W, Font *F, File *I) : Dialog(.5, .5), editor(W, F, I),
-    v_scrollbar(this), h_scrollbar(this, Box(), Widget::Scrollbar::Flag::AttachedHorizontal) {}
-
-    void Layout() {
-        Dialog::Layout();
-        if (1)              v_scrollbar.LayoutAttached(box.Dimension());
-        if (!editor.Wrap()) h_scrollbar.LayoutAttached(box.Dimension());
-    }
-    void Draw() {
-        Dialog::Draw();
-        editor.Draw(box, v_scrollbar.scrolled, h_scrollbar.scrolled);
-        GUI::Draw();
-        if (1)              v_scrollbar.Update();
-        if (!editor.Wrap()) h_scrollbar.Update();
-    }
-};
-
 BindMap binds;
 AssetMap asset;
 SoundAssetMap soundasset;
@@ -717,11 +602,6 @@ int Frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample
     return 0;
 }
 
-void MyEditorCmd(const vector<string> &) {
-    string s = LocalFile::filecontents(StrCat(ASSETS_DIR, "lfapp_vertex.glsl"));
-    new EditorDialog(screen, Fonts::Get(FLAGS_default_font, 8, Color::white), new BufferFile(s.c_str(), s.size()));
-}
-
 }; // namespace LFL
 using namespace LFL;
 
@@ -930,7 +810,6 @@ extern "C" int main(int argc, const char *argv[]) {
     app->shell.command.push_back(Shell::Command("local_server", bind(&MyLocalServerCmd, _1)));
     app->shell.command.push_back(Shell::Command("gplus_client", bind(&MyGPlusClientCmd, _1)));
     app->shell.command.push_back(Shell::Command("gplus_server", bind(&MyGPlusServerCmd, _1)));
-    app->shell.command.push_back(Shell::Command("edit",         bind(&MyEditorCmd, _1)));
     app->shell.command.push_back(Shell::Command("rcon",         bind(&GameClient::rcon_cmd,     server, _1)));
     app->shell.command.push_back(Shell::Command("name",         bind(&GameClient::setname,      server, _1)));
     app->shell.command.push_back(Shell::Command("team",         bind(&GameClient::setteam,      server, _1)));
