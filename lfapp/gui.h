@@ -425,15 +425,11 @@ struct TextArea : public TextGUI {
 
     TextArea(Window *W, Font *F, int TK=0, int TM=ToggleBool::Default) : TextGUI(W, F, TK, TM), line(this), mouse_gui(W) {}
     virtual ~TextArea() {}
-    virtual void PageUp() {
-        cursor.i.y += scroll_inc;
-    }
-    virtual void PageDown() {
-        cursor.i.y = max(cmd_fb.scroll.y - scroll_inc, 0);
-    }
 
     /// Write() is thread-safe.
     virtual void Write(const string &s);
+    virtual void PageUp();
+    virtual void PageDown();
     virtual void Resized(int w, int h) {}
 
     void Draw(const Box &w, bool cursor);
@@ -445,6 +441,56 @@ struct TextArea : public TextGUI {
         if (1)    selection_changing = down;
         if (down) selection_beg = point(x, y);
         else      selection_end = point(x, y);
+    }
+};
+
+struct Editor : public TextArea {
+    struct LineOffset { 
+        int offset, size, font_size, wrapped_line_number; float width; 
+        LineOffset(int O=0, int S=0, int FS=0, int WLN=0, float W=0) :
+            offset(O), size(S), font_size(FS), wrapped_line_number(WLN), width(W) {}
+        bool operator<(const LineOffset &l) const { return wrapped_line_number < l.wrapped_line_number; }
+    };
+    typedef pair<int, int> LineOffsetSegment, WrappedLineOffset;
+    WrappedLineOffset first_line, last_line;
+    int last_fb_lines=0, wrapped_lines=0;
+    float last_v_scrolled=0;
+    shared_ptr<File> file;
+    vector<LineOffset> file_line;
+    Editor(Window *W, Font *F, File *I) : TextArea(W, F), file(I) { /*line_fb.wrap=1;*/ BuildLineMap(); }
+
+    bool Wrap() const { return line_fb.wrap; }
+    void BuildLineMap() {
+        int ind=0, offset=0;
+        for (const char *l = file->nextlineraw(&offset); l; l = file->nextlineraw(&offset))
+            file_line.push_back(LineOffset(offset, file->nr.record_len, TextArea::font->size,
+                                           ind++, TextArea::font->Width(l)));
+    }
+    void UpdateWrappedLines(int cur_font_size, int box_width) {
+        wrapped_lines = 0;
+        for (auto &l : file_line) {
+            wrapped_lines += 1 + l.width * cur_font_size / l.font_size / box_width;
+            l.wrapped_line_number = wrapped_lines;
+        }
+    }
+    void GetWrappedLineOffset(float percent, WrappedLineOffset *out) const {
+        if (!Wrap()) { *out = WrappedLineOffset(percent * file_line.size(), 0); return; }
+        int wrapped_line = percent * wrapped_lines;
+        auto it = lower_bound(file_line.begin(), file_line.end(), LineOffset(0,0,0,wrapped_line));
+        if (it == file_line.end()) { *out = WrappedLineOffset(file_line.size(), 0); return; }
+        int wrapped_line_index = it - file_line.begin();
+        *out = WrappedLineOffset(wrapped_line_index, wrapped_line - wrapped_line_index - 1);
+    }
+    int Distance(const WrappedLineOffset &o, bool reverse) {
+        int dist = 0;
+  //      for (int i=a_first_line; i<=b_first_line; i++) {
+//            dist += 
+        return abs(o.first - first_line.first);
+    }
+    void UpdateLines(float v_scrolled, float h_scrolled);
+    void Draw(const Box &box, float v_scrolled, float h_scrolled) {
+        TextArea::Draw(box, true);
+        UpdateLines(v_scrolled, h_scrolled);
     }
 };
 
@@ -661,6 +707,26 @@ struct SliderTweakDialog : public Dialog {
             flag_map->Set(flag_name, StrCat(slider.scrolled * slider.doc_height));
         }
         font->Draw(flag_name, point(title.centerX(flag_name_size.w), title.centerY(flag_name_size.h)));
+    }
+};
+
+struct EditorDialog : public Dialog {
+    Editor editor;
+    Widget::Scrollbar v_scrollbar, h_scrollbar;
+    EditorDialog(Window *W, Font *F, File *I) : Dialog(.5, .5), editor(W, F, I),
+    v_scrollbar(this), h_scrollbar(this, Box(), Widget::Scrollbar::Flag::AttachedHorizontal) {}
+
+    void Layout() {
+        Dialog::Layout();
+        if (1)              v_scrollbar.LayoutAttached(box.Dimension());
+        if (!editor.Wrap()) h_scrollbar.LayoutAttached(box.Dimension());
+    }
+    void Draw() {
+        Dialog::Draw();
+        editor.Draw(box, v_scrollbar.scrolled, h_scrollbar.scrolled);
+        GUI::Draw();
+        if (1)              v_scrollbar.Update();
+        if (!editor.Wrap()) h_scrollbar.Update();
     }
 };
 
