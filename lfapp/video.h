@@ -36,46 +36,7 @@ DECLARE_string(atlas_font_sizes);
 DECLARE_int(scale_font_height);
 DECLARE_int(add_font_size);
 
-struct Window : public NativeWindow {
-    GraphicsDevice *gd;
-    point mouse;
-    string caption;
-    BindMap *binds;
-    Console *console;
-    Browser *browser_window;
-    GUI *gui_root;
-    RollingAvg fps;
-    Dialog *top_dialog;
-    vector<Dialog*> dialogs;
-    Entity *camMain;
-    set<GUI*> mouse_gui;
-    set<KeyboardGUI*> keyboard_gui;
-
-    Window();
-    virtual ~Window();
-    void OpenConsole();
-    void ClearEvents();
-    void ClearGesture();
-    void Reshape(int w, int h);
-    void Reshaped(int w, int h);
-    void SwapAxis();
-
-    void DeactivateMouseGUIs();
-    void ClearMouseGUIEvents();
-    void DeactivateKeyboardGUIs();
-    void ClearKeyboardGUIEvents();
-    void DrawDialogs();
-
-    typedef unordered_map<void*, Window*> WindowMap;
-    static WindowMap active;
-    static Window *Get(void *id);
-    static bool Create(Window *W);
-    static void Close(Window *W);
-    static void MakeCurrent(Window *W);
-};
-extern Window *screen;
-
-struct DrawMode { enum { _3D=0, _2D=1 }; int m; };
+struct DrawMode { enum { _3D=0, _2D=1, NullOp=2 }; int m; };
 struct TexGen { enum { LINEAR=1, REFLECTION=2 }; };
 
 struct Depth {
@@ -311,22 +272,14 @@ struct Box {
     static bool   VerticalIntersect(const Box &w1, const Box &w2) { return w1.y < (w2.y + w2.h) && w2.y < (w1.y + w1.h); }
     static bool HorizontalIntersect(const Box &w1, const Box &w2) { return w1.x < (w2.x + w2.w) && w2.x < (w1.x + w1.w); }
     static Box Add(const Box &w, const point &p) { return Box(w.x+p.x, w.y+p.y, w.w, w.h); }
-    static Box AddBorder(const Box &w, const Border &b) { return AddBorder(w, b.top, b.right, b.bottom, b.left); }
-    static Box DelBorder(const Box &w, const Border &b) { return DelBorder(w, b.top, b.right, b.bottom, b.left); }
     static Box AddBorder(const Box &w, int xb, int yb) { return Box(w.x-round_f(xb/2.0, 1), w.y-round_f(yb/2.0, 1), max(0,w.w+xb), max(0,w.h+yb)); }
     static Box DelBorder(const Box &w, int xb, int yb) { return Box(w.x+round_f(xb/2.0, 1), w.y-round_f(yb/2.0, 1), max(0,w.w-xb), max(0,w.h-yb)); }
     static Box AddBorder(const Box &w, int tb, int rb, int bb, int lb) { return Box(w.x-lb, w.y-bb, max(0,w.w+lb+rb), max(0,w.h+tb+bb)); }
     static Box DelBorder(const Box &w, int tb, int rb, int bb, int lb) { return Box(w.x+lb, w.y+bb, max(0,w.w-lb-rb), max(0,w.h-tb-bb)); }
-    static Box FromScreen() { return Box(0, 0, screen->width, screen->height); }
-    static Box FromScreen(float xs, float ys) { return Box(0, 0, screen->width*xs, screen->width*ys); }
-    static Box FromScreen(float xp, float yp, float xs, float ys, float xbl=0, float ybt=0, float xbr=-INFINITY, float ybb=-INFINITY) {
-        if (isinf(xbr)) xbr = xbl;
-        if (isinf(ybb)) ybb = ybt;
-        return Box(screen->width  * (xp + xbl),
-                   screen->height * (yp + ybb),
-                   screen->width  * xs - screen->width  * (xbl + xbr),
-                   screen->height * ys - screen->height * (ybt + ybb), false);
-    }
+    static Box AddBorder(const Box &w, const Border &b) { return AddBorder(w, b.top, b.right, b.bottom, b.left); }
+    static Box DelBorder(const Box &w, const Border &b) { return DelBorder(w, b.top, b.right, b.bottom, b.left); }
+    static Box TopBorder(const Box &w, const Border &b) { return Box(w.x, w.top()-b.top, w.w, b.top); }
+    static Box BotBorder(const Box &w, const Border &b) { return Box(w.x, w.y,           w.w, b.bottom); }
 };
 
 struct Box3 {
@@ -503,6 +456,56 @@ struct Video : public Module {
     void CreateGraphicsDevice();
 };
 
+extern Window *screen;
+struct Window : public NativeWindow {
+    GraphicsDevice *gd;
+    point mouse;
+    string caption;
+    BindMap *binds;
+    Console *console;
+    Browser *browser_window;
+    GUI *gui_root;
+    RollingAvg fps;
+    Dialog *top_dialog;
+    vector<Dialog*> dialogs;
+    Entity *camMain;
+    set<GUI*> mouse_gui;
+    set<KeyboardGUI*> keyboard_gui;
+
+    Window();
+    virtual ~Window();
+    void OpenConsole();
+    void ClearEvents();
+    void ClearGesture();
+    void Reshape(int w, int h);
+    void Reshaped(int w, int h);
+    void SwapAxis();
+
+    void DeactivateMouseGUIs();
+    void ClearMouseGUIEvents();
+    void DeactivateKeyboardGUIs();
+    void ClearKeyboardGUIEvents();
+    void DrawDialogs();
+
+    LFL::Box Box() const { return LFL::Box(0, 0, width, height); }
+    LFL::Box Box(float xs, float ys) const { return LFL::Box(0, 0, width*xs, width*ys); }
+    LFL::Box Box(float xp, float yp, float xs, float ys, float xbl=0, float ybt=0, float xbr=-INFINITY, float ybb=-INFINITY) const {
+        if (isinf(xbr)) xbr = xbl;
+        if (isinf(ybb)) ybb = ybt;
+        return LFL::Box(width  * (xp + xbl),
+                        height * (yp + ybb),
+                        width  * xs - width  * (xbl + xbr),
+                        height * ys - height * (ybt + ybb), false);
+    }
+
+    typedef unordered_map<void*, Window*> WindowMap;
+    static WindowMap active;
+    static Window *Get(void *id);
+    static bool Create(Window *W);
+    static void Close(Window *W);
+    static void MakeCurrent(Window *W);
+};
+
 struct GraphicsDevice {
     static const int Float, Points, Lines, LineLoop, Triangles, TriangleStrip, Texture2D, UnsignedInt;
     static const int Ambient, Diffuse, Specular, Emission, Position;
@@ -607,9 +610,9 @@ struct Scissor {
 };
 
 struct ScopedDrawMode {
-    int prev_mode;
-    ScopedDrawMode(int dm) : prev_mode(screen->gd->draw_mode) { screen->gd->DrawMode(dm,        0); }
-    ~ScopedDrawMode()                                         { screen->gd->DrawMode(prev_mode, 0); }
+    int prev_mode; bool nop;
+    ScopedDrawMode(int dm) : prev_mode(screen->gd->draw_mode), nop(dm == DrawMode::NullOp) { if (!nop) screen->gd->DrawMode(dm,        0); }
+    ~ScopedDrawMode()                                                                      { if (!nop) screen->gd->DrawMode(prev_mode, 0); }
 };
 
 struct VideoResamplerInterface {
@@ -743,6 +746,7 @@ struct FontInterface {
     mono(F & FontDesc::Mono) {}
 
     int MaxBottom() const { return max_top ? height - max_top : 0; }
+    int FixedWidth() const { return X_or_Y(fixed_width, mono ? max_width : 0); }
 };
 
 struct Font : public FontInterface {

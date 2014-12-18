@@ -651,6 +651,7 @@ bool StringEmptyOrEquals(const String16 &in, const String16 &ref1, const String1
 bool StringEmptyOrEquals(const String16 &in, const string   &ref1, const string   &ref2, int case_sensitive=false);
 bool StringReplace(string *text, const string &needle, const string &replace);
 
+template <class X> void AccumulateAsciiDigit(X *v, unsigned char c) { *v = *v * 10 + (c - '0'); }
 template <class X> bool ArrayEquals(const X *x, const X *y, int l) { for (int i=0; i<l; i++) if (x[i] != y[i]) return false; return true; }
 template <class X> int isnl(const X *str);
 template <class X> int chompnl(X *str, int len);

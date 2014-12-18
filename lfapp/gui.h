@@ -188,8 +188,10 @@ struct TextGUI : public KeyboardGUI {
         }
     };
     struct LinesFrameBuffer : public RingFrameBuffer {
+        typedef function<point(Line*, point, const Box&)> PaintCB;
+        typedef function<LinesFrameBuffer*(const Line*)> FromLineCB;
         int lines=0;
-        function<point(Line*, point, const Box&)> paint_cb;
+        PaintCB paint_cb;
         LinesFrameBuffer() : paint_cb(bind(&LinesFrameBuffer::Paint, this, _1, _2, _3)) {}
 
         int Height() const { return lines * font_height; }
@@ -197,6 +199,10 @@ struct TextGUI : public KeyboardGUI {
             lines = H / font->height;
             return RingFrameBuffer::SizeChanged(W, H, font);
         }
+        void Clear(Line *l, bool vwrap=true) {
+            RingFrameBuffer::Clear(l, Box(0, l->Lines() * font_height), vwrap);
+        }
+        void Update(Line *l, const point &p, bool vwrap=true) { l->p=p; Update(l, vwrap); }
         void Update(Line *l, bool vwrap=true) {
             l->Layout(wrap ? w : 0);
             RingFrameBuffer::Update(l, Box(0, l->Lines() * font_height), paint_cb, vwrap);
@@ -220,6 +226,19 @@ struct TextGUI : public KeyboardGUI {
             return ret;
         }
     };
+    struct LineUpdate {
+        enum { PushBack=1, PushFront=2, DontUpdate=4 }; 
+        Line *v; LinesFrameBuffer *fb; int flag;
+        LineUpdate(Line *V=0, LinesFrameBuffer *FB=0, int F=0) : v(V), fb(FB), flag(F) {}
+        LineUpdate(Line *V, const LinesFrameBuffer::FromLineCB &cb, int F=0) : v(V), fb(cb(V)), flag(F) {}
+        ~LineUpdate() {
+            if (!fb->lines || (flag & DontUpdate)) v->Layout();
+            else if           (flag & PushBack)    fb->PushBackAndUpdate(v);
+            else if           (flag & PushFront)   fb->PushFrontAndUpdate(v);
+            else                                   fb->Update(v);
+        }
+        Line *operator->() const { return v; }
+    };
     struct Cursor {
         enum { Underline=1, Block=2 };
         int type=Underline, blink_time=333, attr=0;
@@ -235,7 +254,7 @@ struct TextGUI : public KeyboardGUI {
     string cmd_prefix="> ";
     Color cmd_color=Color::white;
     bool deactivate_on_enter=0, clickable_links=0, insert_mode=0;
-    int scroll_inc=100, scrolled_lines=0, adjust_lines=0;
+    int scroll_inc=100, scrolled_lines=0, adjust_lines=0, skip_last_lines=0, start_line=0;
     TextGUI(Window *W, Font *F, int TK=0, int TM=ToggleBool::Default) : KeyboardGUI(W, F, TK, TM), font(F), cmd_line(this) {}
 
     virtual ~TextGUI() {}
@@ -418,6 +437,7 @@ struct TextArea : public TextGUI {
     LinesFrameBuffer line_fb;
     GUI mouse_gui;
     Time write_last;
+    const Border *clip=0;
     bool wrap_lines=1, write_timestamp=0, write_newline=1;
     bool selection_changing=0, selection_changing_previously=0;
     point selection_beg, selection_end;
@@ -427,13 +447,13 @@ struct TextArea : public TextGUI {
     virtual ~TextArea() {}
 
     /// Write() is thread-safe.
-    virtual void Write(const string &s);
+    virtual void Write(const string &s, bool update_fb=true);
     virtual void PageUp();
     virtual void PageDown();
-    virtual void Resized(int w, int h) {}
+    virtual void Resized(int w, int h);
 
-    void Draw(const Box &w, bool cursor);
-    void UpdateLineOffsets(bool size_changed, bool cursor);
+    virtual void Draw(const Box &w, bool cursor);
+    // void UpdateLineOffsets(bool size_changed, bool cursor);
     // void UpdateWrapping(int width, bool new_lines_only);
     // void DrawOrCopySelection();
 
@@ -538,9 +558,12 @@ struct Terminal : public TextArea, public Drawable::AttrSource {
     unsigned char parse_charset=0;
     bool parse_osc_escape=0, cursor_enabled=1;
     point term_cursor=point(1,1), saved_term_cursor=point(1,1);
+    LinesFrameBuffer::FromLineCB fb_cb;
+    Border clip_border;
     Colors *colors=0;
 
-    Terminal(int FD, Window *W, Font *F, int TK=0, int TM=ToggleBool::Default) : TextArea(W, F, TK, TM), fd(FD) {
+    Terminal(int FD, Window *W, Font *F, int TK=0, int TM=ToggleBool::Default) :
+        TextArea(W, F, TK, TM), fd(FD), fb_cb(bind(&Terminal::GetFrameBuffer, this, _1)) {
         CHECK(F->fixed_width || (F->flag & FontDesc::Mono));
         wrap_lines = write_newline = 0;
         for (int i=0; i<line.ring.size; i++) line[i].glyphs.attr.source = this;
@@ -552,6 +575,10 @@ struct Terminal : public TextArea, public Drawable::AttrSource {
     }
     virtual ~Terminal() {}
     virtual void Resized(int w, int h);
+    virtual void ResizedLeftoverRegion(int w, bool update_fb=true);
+    virtual void SetScrollRegion(int b, int e);
+    virtual void Draw(const Box &b, bool draw_cursor);
+    virtual void Write(const string &s, bool update_fb=true);
     virtual void Input(char k) {                       write(fd, &k, 1); }
     virtual void Erase      () { char k = 0x7f;        write(fd, &k, 1); }
     virtual void Enter      () { char k = '\r';        write(fd, &k, 1); }
@@ -565,16 +592,28 @@ struct Terminal : public TextArea, public Drawable::AttrSource {
     virtual void PageDown   () { char k[] = "\x1b[6~"; write(fd,  k, 4); }
     virtual void Home       () { char k = 'A' - 0x40;  write(fd, &k, 1); }
     virtual void End        () { char k = 'E' - 0x40;  write(fd, &k, 1);  }
-    virtual void UpdateCursor() { cursor.p = point((term_cursor.x-1)*font->fixed_width, (term_height-term_cursor.y+1)*font->height); }
+    virtual void UpdateCursor() { cursor.p = point(GetCursorX(term_cursor.x), GetCursorY(term_cursor.y)); }
     virtual Drawable::Attr GetAttr(int attr) const {
         Color *fg = colors ? &colors->c[Attr::GetFGColorIndex(attr)] : 0;
         Color *bg = colors ? &colors->c[Attr::GetBGColorIndex(attr)] : 0;
         if (attr & Attr::Reverse) Typed::Swap(fg, bg);
         return Drawable::Attr(font, fg, bg, attr & Attr::Underline);
     }
+    int GetLeftoverRegionY(int y) const {
+        CHECK_GE(y, 1); CHECK(scroll_region_beg); CHECK(scroll_region_beg);
+        if      (y < scroll_region_beg) return (start_line + scroll_region_beg - y + 1) * font->height;
+        else if (y > scroll_region_end) return GetCursorY(y);
+        else FATAL(y, " in scroll region ", scroll_region_beg, " - ", scroll_region_end);
+    }
+    int GetCursorX(int x) const { return (x - 1) * font->FixedWidth(); }
+    int GetCursorY(int y) const { return (term_height - y + 1) * font->height; }
     int GetTermLineIndex(int y) const { return -term_height + y-1; }
     Line *GetTermLine(int y) { return &line[GetTermLineIndex(y)]; }
-    Line *GetCursorLine() { return GetTermLine(term_cursor.y); } 
+    Line *GetCursorLine() { return GetTermLine(term_cursor.y); }
+    LinesFrameBuffer *GetFrameBuffer(const Line *l) {
+        int i = line.IndexOf(l);
+        return (-i-1 < start_line || term_height-i < skip_last_lines) ? &cmd_fb : &line_fb;
+    }
     void SetColors(Colors *C) {
         colors = C;
         Attr::SetFGColorIndex(&default_cursor_attr, colors->normal_index);
@@ -586,7 +625,6 @@ struct Terminal : public TextArea, public Drawable::AttrSource {
         Move(line, line_ind + (dy>0 ? dy : 0), line_ind + (dy<0 ? -dy : 0), scroll_lines - ady);
         for (int i = 0, cy = (dy>0 ? sy : ey); i < ady; i++) GetTermLine(cy + i*sdy)->Clear();
     }
-    void WriteBytes(const string &s);
     void FlushParseText();
     void Newline(bool carriage_return=false);
 };
@@ -637,7 +675,7 @@ struct Dialog : public GUI {
     int zsort=0;
     Dialog(float w, float h) : GUI(screen), font(Fonts::Get(FLAGS_default_font, 14, Color::white)) {
         screen->dialogs.push_back(this);
-        box = Box::FromScreen().center(Box::FromScreen(w, h));
+        box = screen->Box().center(screen->Box(w, h));
         Layout();
     }
     virtual ~Dialog() {}

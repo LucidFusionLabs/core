@@ -48,6 +48,7 @@ function FetchBitstampHistoricalTrades() {}
 function FetchBitstampOrderbook() {
     http.get("http://www.bitstamp.net/api/order_book/", function(res) {
         var body = '';
+        res.setEncoding('binary');
         res.on('data', function(chunk) { body += chunk; });
         res.on('end',  function() { HandleBitstampOrderbook(JSON.parse(body)); });
     }).on('error',     function() { HandleBitstampOrderbook(null); } );
@@ -60,12 +61,12 @@ function HandleBitstampOrderbook(msg) {
     } else {
         for (var i = 0; i < msg.asks.length; i++) {
             var ask = msg.asks[i];
-            Asks.push({ type: "ask", price: parseFloat(ask[0]), volume: parseFloat(ask[1]),
+            Asks.push({ type: "ask", key: ask[0], price: parseFloat(ask[0]), volume: parseFloat(ask[1]),
                         timeout_price: undefined, timeout_volume: undefined });
         }
         for (var i = 0; i < msg.bids.length; i++) {
             var bid = msg.bids[i];
-            Bids.push({ type: "bid", price: parseFloat(bid[0]), volume: parseFloat(bid[1]),
+            Bids.push({ type: "bid", key: bid[0], price: parseFloat(bid[0]), volume: parseFloat(bid[1]),
                         timeout_price: undefined, timeout_volume: undefined });
         }
     }
@@ -109,12 +110,12 @@ function AddTrade(ticks, trade_time, trade_price, trade_amount) {
 function HandleDepth(msg) {
     for (var i = 0; i < msg.asks.length; i++) {
         var ask = msg.asks[i];
-        HandleDepthUpdate({ type: "ask", price: parseFloat(ask[0]), volume: parseFloat(ask[1]),
+        HandleDepthUpdate({ type: "ask", key: ask[0], price: parseFloat(ask[0]), volume: parseFloat(ask[1]),
                           timeout_price: undefined, timeout_volume: undefined });
     }
     for (var i = 0; i < msg.bids.length; i++) {
         var bid = msg.bids[i];
-        HandleDepthUpdate({ type: "bid", price: parseFloat(bid[0]), volume: parseFloat(bid[1]),
+        HandleDepthUpdate({ type: "bid", key: bid[0], price: parseFloat(bid[0]), volume: parseFloat(bid[1]),
                           timeout_price: undefined, timeout_volume: undefined });
     }
 }
@@ -123,7 +124,7 @@ function HandleDepthUpdate(order) {
     var orders  = order.type == "bid" ? Bids        : Asks;
     var cmp     = order.type == "bid" ? GreaterThan : LessThan;
 
-    var orders_ind = orders.binarySearch(order.price, cmp, 'price');
+    var orders_ind = orders.binarySearch(order.price, cmp, 'key');
 
     if (orders[orders_ind] == undefined || orders[orders_ind].price != order.price) {
         if (order.volume > MinVolume) orders.splice(orders_ind, 0, order);

@@ -78,9 +78,7 @@ int RingBuf::dist(int indexB, int indexE) const { return since(bucket(indexB), b
 
 int RingBuf::since(int index, int Next) const {
     Next = Next>=0 ? Next : ring.back;
-    if (index == Next) return ring.size;
-    else if (index < Next) return Next - index;
-    else return ring.size - index + Next;
+    return (Next < index ? ring.size : 0) + Next - index;
 }
 
 void *RingBuf::read(int index, int Next) const { 

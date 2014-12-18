@@ -50,10 +50,10 @@ TEST(GUITest, TextArea) {
     lines.InsertAt(-1)->AssignText("b");
     lines.InsertAt(-1)->AssignText("c");
     lines.InsertAt(-1)->AssignText("d");
-    EXPECT_EQ("a", lines[-4].Text());
-    EXPECT_EQ("b", lines[-3].Text());
-    EXPECT_EQ("c", lines[-2].Text());
-    EXPECT_EQ("d", lines[-1].Text());
+    EXPECT_EQ("a", lines[-4].Text()); EXPECT_EQ(-4, lines.IndexOf(&lines[-4]));
+    EXPECT_EQ("b", lines[-3].Text()); EXPECT_EQ(-3, lines.IndexOf(&lines[-3]));
+    EXPECT_EQ("c", lines[-2].Text()); EXPECT_EQ(-2, lines.IndexOf(&lines[-2]));
+    EXPECT_EQ("d", lines[-1].Text()); EXPECT_EQ(-1, lines.IndexOf(&lines[-1]));
     lines.InsertAt(-4)->AssignText("z");
     EXPECT_EQ("z", lines[-4].Text());
     EXPECT_EQ("a", lines[-3].Text());
@@ -79,17 +79,17 @@ TEST(GUITest, TextArea) {
     lines.PushFront()->AssignText("4");
     lines.PushFront()->AssignText("5");
     lines.PushFront()->AssignText("6");
-    lines.PushFront()->AssignText("7");
-    EXPECT_EQ("7", lines[-10].Text());
-    EXPECT_EQ("6", lines[-9].Text());
-    EXPECT_EQ("5", lines[-8].Text());
-    EXPECT_EQ("4", lines[-7].Text());
-    EXPECT_EQ("3", lines[-6].Text());
-    EXPECT_EQ("2", lines[-5].Text());
-    EXPECT_EQ("1", lines[-4].Text());
-    EXPECT_EQ("u", lines[-3].Text());
-    EXPECT_EQ("w", lines[-2].Text());
-    EXPECT_EQ("z", lines[-1].Text());
+    lines.PushFront()->AssignText("6");
+    EXPECT_EQ("7", lines[-10].Text()); EXPECT_EQ(-10, lines.IndexOf(&lines[-10]));
+    EXPECT_EQ("6", lines[-9] .Text()); EXPECT_EQ(-9,  lines.IndexOf(&lines[-9]));
+    EXPECT_EQ("5", lines[-8] .Text()); EXPECT_EQ(-8,  lines.IndexOf(&lines[-8]));
+    EXPECT_EQ("4", lines[-7] .Text()); EXPECT_EQ(-7,  lines.IndexOf(&lines[-7]));
+    EXPECT_EQ("3", lines[-6] .Text()); EXPECT_EQ(-6,  lines.IndexOf(&lines[-6]));
+    EXPECT_EQ("2", lines[-5] .Text()); EXPECT_EQ(-5,  lines.IndexOf(&lines[-5]));
+    EXPECT_EQ("1", lines[-4] .Text()); EXPECT_EQ(-4,  lines.IndexOf(&lines[-4]));
+    EXPECT_EQ("u", lines[-3] .Text()); EXPECT_EQ(-3,  lines.IndexOf(&lines[-3]));
+    EXPECT_EQ("w", lines[-2] .Text()); EXPECT_EQ(-2,  lines.IndexOf(&lines[-2]));
+    EXPECT_EQ("z", lines[-1] .Text()); EXPECT_EQ(-1,  lines.IndexOf(&lines[-1]));
 }
 
 TEST(BrowserTest, DOMTest) {

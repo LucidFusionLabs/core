@@ -312,6 +312,7 @@ struct RingIndex {
     int Back() const { return Index(-1); }
     int Front() const { return Index(-count); }
     int Index(int i) const { return AbsoluteIndex(back + i); }
+    int IndexOf(int i) const { return i - back - (back <= i ? size : 0); }
     int AbsoluteIndex(int i) const { if ((i = i % size) < 0) i += size; return i; }
     void IncrementSize(int n) { count = min(size, count + n); total += n; } 
     void DecrementSize(int n) { total = max(0, total - n); if (total < size) count = total; }
@@ -328,6 +329,7 @@ template <class X> struct RingVector {
     RingVector(int S=0) : ring(S), data(S) {}
     X&       operator[](int i)       { return data[ring.Index(i)]; }
     const X& operator[](int i) const { return data[ring.Index(i)]; }
+    virtual int IndexOf(const X *v) const { return ring.IndexOf(v - &data[0]); }
     virtual X   *PushBack ()     { ring.PushBack (1); return &data[ring.Back()]; }
     virtual X   *PushFront()     { ring.PushFront(1); return &data[ring.Front()]; }
     virtual void PopFront(int n) { ring.PopFront(n); }

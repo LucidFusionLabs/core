@@ -177,8 +177,8 @@ void TextGUI::DrawCursor(point p) {
     } else {
         bool blinking = false;
         Time now = Now(), elapsed; 
-        if (active && (elapsed=now-cursor.blink_begin) > cursor.blink_time) {
-            if (elapsed > cursor.blink_time*2) cursor.blink_begin = now;
+        if (active && (elapsed = now - cursor.blink_begin) > cursor.blink_time) {
+            if (elapsed > cursor.blink_time * 2) cursor.blink_begin = now;
             else blinking = true;
         }
         if (blinking) font->Draw("_", p);
@@ -187,23 +187,21 @@ void TextGUI::DrawCursor(point p) {
 
 /* TextArea */
 
-void TextArea::Write(const string &s) {
-    if (!MainThread()) return RunMainThreadCallback(new Callback(bind(&TextArea::Write, this, s)));
+void TextArea::Write(const string &s, bool update_fb) {
+    if (!MainThread()) return RunMainThreadCallback(new Callback(bind(&TextArea::Write, this, s, update_fb)));
     write_last = Now();
-    if (line_fb.lines) line_fb.fb.Attach();
-    ScopedDrawMode drawmode(DrawMode::_2D);
+    if (update_fb && line_fb.lines) line_fb.fb.Attach();
+    ScopedDrawMode drawmode(update_fb ? DrawMode::_2D : DrawMode::NullOp);
     StringLineIter add_lines(s, StringLineIter::Flag::BlankLines);
     for (const char *add_line = add_lines.next(); add_line; add_line = add_lines.next()) {
         bool append = !write_newline && add_lines.first && *add_line && line.ring.count;
-        Line *l = append ? &line[-1] : line.InsertAt(-1);
+        LineUpdate l(append ? &line[-1] : line.InsertAt(-1), &line_fb,
+                     (!append ? LineUpdate::PushBack : 0) | (update_fb ? 0 : LineUpdate::DontUpdate));
         if (!append) l->Clear();
         if (write_timestamp) l->AppendText(StrCat(logtime(Now()), " "), cursor.attr);
         l->AppendText(add_line, cursor.attr);
-        if (!line_fb.lines) { l->Layout(); continue; }
-        if (append) line_fb.           Update(l);
-        else        line_fb.PushBackAndUpdate(l);
     }
-    if (line_fb.lines) line_fb.fb.Release();
+    if (update_fb && line_fb.lines) line_fb.fb.Release();
 }
 
 void TextArea::PageUp() {
@@ -212,18 +210,20 @@ void TextArea::PageUp() {
 void TextArea::PageDown() {
 }
 
+void TextArea::Resized(int w, int h) {
+    // mouse_gui.mouse.AddClickBox(box, MouseController::CoordCB(bind(&TextArea::ClickCB, this, _1, _2, _3, _4)));
+    // if (tw->terminal->colors) W->gd->ClearColor(tw->terminal->colors->c[tw->terminal->colors->bg_index]);
+    int lines = adjust_lines + skip_last_lines;
+    line_fb.p = point(0, adjust_lines * font->height);
+    for (int i=start_line; i<line.ring.count && lines < line_fb.lines; i++)
+        lines += line_fb.PushFrontAndUpdate(&line[-i-1], 0, false);
+}
+
 void TextArea::Draw(const Box &b, bool draw_cursor) {
-    if (line_fb.SizeChanged(b.w, b.h, font)) {
-        // mouse_gui.mouse.AddClickBox(box, MouseController::CoordCB(bind(&TextArea::ClickCB, this, _1, _2, _3, _4)));
-        // if (tw->terminal->colors) W->gd->ClearColor(tw->terminal->colors->c[tw->terminal->colors->bg_index]);
-        Resized(b.w, b.h);
-        int lines = adjust_lines;
-        line_fb.p = point(0, adjust_lines * font->height);
-        for (int i=0; i<line.ring.count && lines < line_fb.lines; i++)
-            lines += line_fb.PushFrontAndUpdate(&line[-i-1], 0, false);
-        line_fb.SizeChangedDone();
-    }
+    if (line_fb.SizeChanged(b.w, b.h, font)) { Resized(b.w, b.h); line_fb.SizeChangedDone(); }
+    if (clip) screen->gd->PushScissor(Box::DelBorder(b, *clip));
     line_fb.Draw(b.Position(), point(0, CommandLines() * font->height));
+    if (clip) screen->gd->PopScissor();
     if (draw_cursor) TextGUI::Draw(Box(b.x, b.y, b.w, font->height));
 #if 0
         vector<Link*> hover_link;
@@ -419,12 +419,12 @@ void Editor::UpdateLines(float v_scrolled, float h_scrolled) {
 void Terminal::Resized(int w, int h) {
     bool init = !term_width && !term_height;
     int old_term_height = term_height;
-    term_width  = w / font->fixed_width;
+    term_width  = w / font->FixedWidth();
     term_height = h / font->height;
-    if (init) TextArea::Write(string(term_height, '\n'));
+    if (init) TextArea::Write(string(term_height, '\n'), 0);
     else {
         int height_dy = term_height - old_term_height;
-        if      (height_dy > 0) TextArea::Write(string(height_dy, '\n'));
+        if      (height_dy > 0) TextArea::Write(string(height_dy, '\n'), 0);
         else if (height_dy < 0 && term_cursor.y < old_term_height) line.PopBack(-height_dy);
     }
     term_cursor.x = min(term_cursor.x, term_width);
@@ -437,10 +437,60 @@ void Terminal::Resized(int w, int h) {
     ioctl(fd, TIOCSWINSZ, &ws);
 #endif
     UpdateCursor();
+    TextArea::Resized(w, h);
+    ResizedLeftoverRegion(w);
 }
 
-void Terminal::WriteBytes(const string &s) {
-    if (!MainThread()) return RunMainThreadCallback(new Callback(bind(&Terminal::WriteBytes, this, s)));
+void Terminal::ResizedLeftoverRegion(int w, bool update_fb) {
+    int h = (start_line + skip_last_lines) * font->height;
+    if (!h || !cmd_fb.SizeChanged(w, h, font)) return;
+    if (update_fb) {
+        cmd_fb.p = point();
+        for (int i=0; i<start_line;      i++) cmd_fb.PushFrontAndUpdate(&line[-i-1],             0, false);
+        for (int i=0; i<skip_last_lines; i++) cmd_fb.PushFrontAndUpdate(&line[-line_fb.lines+i], 0, false);
+    }
+    cmd_fb.SizeChangedDone();
+}
+
+void Terminal::SetScrollRegion(int b, int e) {
+    int prev_region_beg = scroll_region_beg, prev_region_end = scroll_region_end;
+    scroll_region_beg = b;
+    scroll_region_end = e;
+    bool no_region = !scroll_region_beg || !scroll_region_end;
+    skip_last_lines = no_region ? 0 : scroll_region_beg - 1;
+    adjust_lines = start_line = no_region ? 0 : term_height - scroll_region_end;
+    clip_border.top    = font->height * adjust_lines;
+    clip_border.bottom = font->height * skip_last_lines;
+    clip = no_region ? 0 : &clip_border;
+    ResizedLeftoverRegion(line_fb.w, false);
+
+    printf("XXX-scroll-change %d, %d -> %d %d\n",
+           prev_region_beg, prev_region_end,
+           scroll_region_beg, scroll_region_end);
+
+    int   prev_beg_or_1=X_or_1(prev_region_beg),     prev_end_or_ht=X_or_Y(  prev_region_end, term_height);
+    int scroll_beg_or_1=X_or_1(scroll_region_beg), scroll_end_or_ht=X_or_Y(scroll_region_end, term_height);
+    for (int i =  scroll_beg_or_1; i <    prev_beg_or_1; i++) line_fb.Update(GetTermLine(i));
+    for (int i =   prev_end_or_ht; i < scroll_end_or_ht; i++) line_fb.Update(GetTermLine(i+1));
+    for (int i =    prev_beg_or_1; i <  scroll_beg_or_1; i++) cmd_fb .Update(GetTermLine(i), point(0, GetLeftoverRegionY(i)));
+    for (int i =    prev_beg_or_1; i <  scroll_beg_or_1; i++) line_fb.Clear (GetTermLine(i));
+    for (int i = scroll_end_or_ht; i <   prev_end_or_ht; i++) cmd_fb .Update(GetTermLine(i+1), point(0, GetLeftoverRegionY(i+1)));
+    for (int i = scroll_end_or_ht; i <   prev_end_or_ht; i++) line_fb.Clear (GetTermLine(i+1));
+}
+
+void Terminal::Draw(const Box &b, bool draw_cursor) {
+    TextArea::Draw(b, false);
+    if (clip) {
+        { Scissor s(Box::TopBorder(b, *clip)); cmd_fb.Draw(b.Position(), point(0, (line_fb.lines - start_line - skip_last_lines)*font->height)); }
+        { Scissor s(Box::BotBorder(b, *clip)); cmd_fb.Draw(b.Position(), point()); }
+    }
+    if (draw_cursor) TextGUI::DrawCursor(b.Position() + cursor.p);
+}
+
+void Terminal::Write(const string &s, bool update_fb) {
+    if (!MainThread()) return RunMainThreadCallback(new Callback(bind(&Terminal::Write, this, s, update_fb)));
+    line_fb.fb.Attach();
+    screen->gd->DrawMode(DrawMode::_2D, 0);
     for (int i=0; i<s.size(); i++) {
         unsigned char c = s[i];
         if (c == 0x18 || c == 0x1a) { /* CAN or SUB */ parse_state = State::TEXT; continue; }
@@ -458,11 +508,6 @@ void Terminal::WriteBytes(const string &s) {
             } else if (c >= '(' && c <= '/') {
                 parse_state = State::CHARSET;
                 parse_charset = c;
-            }
-            else if (c == 'D') Newline();
-            else if (c == 'M') {
-                if (term_cursor.y != 1) term_cursor.y--;
-                else line.InsertAt(-term_height, 1, scroll_region_end ? (term_height - scroll_region_end) : 0);
             }
             else if (c == '7') saved_term_cursor = term_cursor;
             else if (c == '8') term_cursor = saved_term_cursor;
@@ -500,7 +545,7 @@ void Terminal::WriteBytes(const string &s) {
             // http://www.inwap.com/pdp10/ansicode.txt 
             for (/**/; Typed::Within<int>(parse_csi[parsed_csi], 0x30, 0x3f); parsed_csi++) {
                 if (parse_csi[parsed_csi] <= '9') { // 0x30 == '0'
-                    parse_csi_argv[parse_csi_argc] = parse_csi_argv[parse_csi_argc]*10 + parse_csi[parsed_csi] - '0';
+                    AccumulateAsciiDigit(&parse_csi_argv[parse_csi_argc], parse_csi[parsed_csi]);
                     parse_csi_arg_done = 0;
                 } else if (parse_csi[parsed_csi] <= ';') {
                     parse_csi_arg_done = 1;
@@ -510,7 +555,7 @@ void Terminal::WriteBytes(const string &s) {
             if (!parse_csi_arg_done) parse_csi_argc++;
 
             if (c == '@') {
-                Line *l = GetCursorLine();
+                LineUpdate l(GetCursorLine(), fb_cb);
                 l->InsertTextAt(term_cursor.x-1, string(X_or_1(parse_csi_argv[0]), ' '), cursor.attr);
                 l->Erase(term_width);
             }
@@ -522,21 +567,21 @@ void Terminal::WriteBytes(const string &s) {
                 term_cursor.y = clamp(parse_csi_argv[0], 1, term_height);
                 term_cursor.x = clamp(parse_csi_argv[1], 1, term_width);
             } else if (c =='J') {
-                Line *l = GetCursorLine();
+                LineUpdate l(GetCursorLine(), fb_cb);
                 int clear_beg_y = 1, clear_end_y = term_height;
                 if      (parse_csi_argv[0] == 0) { l->Erase(term_cursor.x-1);  clear_beg_y = term_cursor.y; }
                 else if (parse_csi_argv[0] == 1) { l->Erase(0, term_cursor.x); clear_end_y = term_cursor.y; }
                 else if (parse_csi_argv[0] == 2) { l->Clear(); term_cursor.x = term_cursor.y = 1; }
-                for (int i = clear_beg_y; i <= clear_end_y; i++) GetTermLine(i)->Clear();
+                for (int i = clear_beg_y; i <= clear_end_y; i++) LineUpdate(GetTermLine(i), fb_cb)->Clear();
             } else if (c =='K') {
-                Line *l = GetCursorLine();
+                LineUpdate l(GetCursorLine(), fb_cb);
                 if      (parse_csi_argv[0] == 0) { l->Erase(term_cursor.x-1);  }
                 else if (parse_csi_argv[0] == 1) { l->Erase(0, term_cursor.x); }
                 else if (parse_csi_argv[0] == 2) { l->Clear();                 }
-            } else if (c == 'L') { Scroll(term_cursor.y, X_or_Y(scroll_region_end, term_height),  X_or_1(parse_csi_argv[0]));
-            } else if (c == 'M') { Scroll(term_cursor.y, X_or_Y(scroll_region_end, term_height), -X_or_1(parse_csi_argv[0]));
+            } else if (c == 'L') { /* XXX */ printf("XXX-L1 %d %d (%d-%d)\n", term_cursor.y,  X_or_1(parse_csi_argv[0]), scroll_region_beg, scroll_region_end); Scroll(term_cursor.y, X_or_Y(scroll_region_end, term_height),  X_or_1(parse_csi_argv[0]));
+            } else if (c == 'M') { /* XXX */ printf("XXX-M1 %d %d (%d-%d)\n", term_cursor.y, -X_or_1(parse_csi_argv[0]), scroll_region_beg, scroll_region_end); Scroll(term_cursor.y, X_or_Y(scroll_region_end, term_height), -X_or_1(parse_csi_argv[0]));
             } else if (c == 'P') {
-                Line *l = GetCursorLine();
+                LineUpdate l(GetCursorLine(), fb_cb);
                 int erase = max(1, parse_csi_argv[0]);
                 l->Erase(term_cursor.x-1, erase);
             } else if (c == 'h') { // set mode
@@ -577,8 +622,7 @@ void Terminal::WriteBytes(const string &s) {
                     else ERROR("unhandled SGR ", sgr);
                 }
             } else if (c == 'r' && parse_csi_argc == 2) {
-                scroll_region_beg = parse_csi_argv[0];
-                scroll_region_end = parse_csi_argv[1];
+                SetScrollRegion(parse_csi_argv[0], parse_csi_argv[1]);
             } else {
                 ERRORf("unhandled CSI %s%c", parse_csi.c_str(), c);
             }
@@ -588,18 +632,14 @@ void Terminal::WriteBytes(const string &s) {
             bool C1_control = (c >= 0x80 && c <= 0x9f);
             if (C0_control || C1_control) FlushParseText();
             if (C0_control) {
-                if      (c == '\a') { INFO("bell"); /* bell */ }
-                else if (c == '\b') { term_cursor.x = max(term_cursor.x-1, 1); /* backspace */ }
-                else if (c == '\t') { term_cursor.x = term_cursor.x+8; /* tab */ }
-                else if (c == '\r') { term_cursor.x = 1; /* carriage return */ }
-                else if (c == '\x14' || c == '\x15' || c == '\x7f') { /* shift charset in, out, delete */ }
-                else if (c == '\n'   || c == '\v'   || c == '\f'  ) { /* line feed, vertical tab, or form feed */
-                    Newline();
-                } else if (c == '\x1b') {
-                    parse_state = State::ESC;
-                } else {
-                    ERRORf("unhandled C0 control %02x", c);
-                }
+                if      (c == '\a') INFO("bell");                              /* bell */
+                else if (c == '\b') term_cursor.x = max(term_cursor.x-1, 1);   /* backspace */
+                else if (c == '\t') term_cursor.x = term_cursor.x+8;           /* tab */ 
+                else if (c == '\r') term_cursor.x = 1;                         /* carriage return */
+                else if (c == '\x14' || c == '\x15' || c == '\x7f') {}         /* shift charset in, out, delete */
+                else if (c == '\n'   || c == '\v'   || c == '\f'  ) Newline(); /* line feed, vertical tab, form feed */
+                else if (c == '\x1b') parse_state = State::ESC;
+                else ERRORf("unhandled C0 control %02x", c);
             } else if (0 && C1_control) {
                 if (0) {}
                 else ERRORf("unhandled C1 control %02x", c);
@@ -610,6 +650,7 @@ void Terminal::WriteBytes(const string &s) {
     }
     FlushParseText();
     UpdateCursor();
+    line_fb.fb.Release();
 }
 
 void Terminal::FlushParseText() {
@@ -617,10 +658,7 @@ void Terminal::FlushParseText() {
     CHECK_GE(term_cursor.x, 1);
     Line *l = GetCursorLine();
     int consumed = 0, write_size = 0;
-    String16 input_text = LFL::String::ToUTF16(parse_text, &consumed);
-
-    line_fb.fb.Attach();
-    screen->gd->DrawMode(DrawMode::_2D);
+    String16 input_text = String::ToUTF16(parse_text, &consumed);
     for (int wrote = 0; wrote < input_text.size(); wrote += write_size) {
         int remaining = input_text.size() - wrote;
         write_size = min(remaining, term_width - term_cursor.x + 1);
@@ -628,8 +666,6 @@ void Terminal::FlushParseText() {
         line_fb.Update(l);
         if (remaining - write_size) { Newline(true); l = GetCursorLine(); }
     }
-    line_fb.fb.Release();
-
     term_cursor.x += write_size;
     parse_text = parse_text.substr(consumed);
 }
@@ -639,6 +675,9 @@ void Terminal::Newline(bool carriage_return) {
     if      (term_cursor.y == term_height       && !scroll_region) TextArea::Write(string(1, '\n'));
     else if (term_cursor.y == scroll_region_end &&  scroll_region) {
         Scroll(scroll_region_beg, scroll_region_end, -1);
+        LineUpdate(GetTermLine(scroll_region_end), &line_fb, LineUpdate::PushBack);
+        // XXX
+        printf("XXX-nl\n");
     } else term_cursor.y = min(term_height, term_cursor.y+1);
     if (carriage_return) term_cursor.x = 1;
 }
@@ -1659,7 +1698,7 @@ void SimpleBrowser::UpdateTableStyle(Flow *flow, DOM::Node *n) {
     n->render->style_dirty = 0;
 }
 
-void SimpleBrowser::UpdateRenderLog(LFL::DOM::Node *n) {
+void SimpleBrowser::UpdateRenderLog(DOM::Node *n) {
     DOM::Renderer *render = n->render;
     if (render_log->data.empty()) {
         CHECK(render->style.is_root);

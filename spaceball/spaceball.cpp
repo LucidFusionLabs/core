@@ -316,7 +316,7 @@ struct TeamSelectGUI : public GUI {
     }
 
     void Layout() {
-        box = Box::FromScreen(.1, .1, .8, .8);
+        box = screen->Box(.1, .1, .8, .8);
         int bw=50, bh=50, sx=25, px=(box.w - (bw*4 + sx*3))/2;
         Flow flow(&box, font, Reset());
         flow.AppendNewlines(1);
@@ -331,7 +331,7 @@ struct TeamSelectGUI : public GUI {
             if (i+1 < team_buttons.size()) flow.p.x += px;
         }
         flow.layout.align_center = 1;
-        start_button.box = Box::FromScreen(.4, .05);
+        start_button.box = screen->Box(.4, .05);
         start_button.Layout(&flow);
         flow.Complete();
     }
@@ -470,7 +470,7 @@ int Frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample
     if (map_transition > 0) {
         map_transition -= clicks;
         screen->gd->DrawMode(DrawMode::_2D);
-        glTimeResolutionShaderWindows(&warpershader, Color::black, Box::FromScreen(), &framebuffer.tex);
+        glTimeResolutionShaderWindows(&warpershader, Color::black, screen->Box(), &framebuffer.tex);
 
     } else {
         screen->camMain->look();

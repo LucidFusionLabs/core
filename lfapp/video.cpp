@@ -362,7 +362,7 @@ class OpenGLES2 : public QWindow, protected QOpenGLFunctions, public GraphicsDev
             LFL::screen->gl = new QOpenGLContext(this);
             ((QOpenGLContext*)LFL::screen->gl)->setFormat(requestedFormat());
             ((QOpenGLContext*)LFL::screen->gl)->create();
-            LFL::Window::MakeCurrent(LFL::screen);
+            Window::MakeCurrent(LFL::screen);
             initializeOpenGLFunctions();
 
             vector<const char *> av;
@@ -748,7 +748,7 @@ void GraphicsDevice::DisableDepthTest() { GDDebug("DepthTest=0"); glDisable(GL_D
 void GraphicsDevice::DisableBlend() { GDDebug("Blend=0"); glDisable(GL_BLEND); }
 void GraphicsDevice::EnableBlend()  { GDDebug("Blend=1");  glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); }
 void GraphicsDevice::BlendMode(int sm, int dm) { GDDebug("BlendMode=", sm, ",", dm); glBlendFunc(sm, dm); }
-void GraphicsDevice::RestoreViewport(int dm) { ViewPort(Box::FromScreen()); DrawMode(dm); }
+void GraphicsDevice::RestoreViewport(int dm) { ViewPort(screen->Box()); DrawMode(dm); }
 void GraphicsDevice::DrawMode(int _2D, bool flush) { return DrawMode(_2D, screen->width, screen->height, flush); }
 void GraphicsDevice::DrawMode(int _2D, int W, int H, bool flush) {
     if (draw_mode == _2D && !flush) return;
@@ -921,9 +921,9 @@ void GraphicsDevice::PushScissor(Box w) {}
 void GraphicsDevice::PopScissor() {}
 int GraphicsDevice::VertsPerPrimitive(int primtype) { return 0; }
 
-bool LFL::Window::Create(LFL::Window *W) { screen->gd = new FakeGraphicsDevice(); LFL::Window::active[W->id] = W; return true; }
-void LFL::Window::Close(LFL::Window *W) {}
-void LFL::Window::MakeCurrent(LFL::Window *W) {}
+bool Window::Create(Window *W) { screen->gd = new FakeGraphicsDevice(); Window::active[W->id] = W; return true; }
+void Window::Close(Window *W) {}
+void Window::MakeCurrent(Window *W) {}
 #endif // LFL_HEADLESS
 
 #ifdef LFL_ANDROID
@@ -955,7 +955,7 @@ struct QTVideoModule : public Module {
         return 0;
     }
 };
-bool LFL::Window::Create(LFL::Window *W) {
+bool Window::Create(Window *W) {
     CHECK(!W->id && !W->gd);
     OpenGLES2 *gd = new OpenGLES2();
     QWindow *qwin = (QWindow*)gd;
@@ -971,15 +971,15 @@ bool LFL::Window::Create(LFL::Window *W) {
     gd->show();
     gd->render_request();
 
-    LFL::Window::active[W->id] = W;
+    Window::active[W->id] = W;
     return true;
 }
-void LFL::Window::Close(LFL::Window *W) {
-    LFL::Window::active.erase(W->id);
-    if (LFL::Window::active.empty()) app->run = false;
+void Window::Close(Window *W) {
+    Window::active.erase(W->id);
+    if (Window::active.empty()) app->run = false;
     screen = 0;
 }
-void LFL::Window::MakeCurrent(LFL::Window *W) {
+void Window::MakeCurrent(Window *W) {
     screen = W; 
     ((QOpenGLContext*)screen->gl)->makeCurrent((QWindow*)screen->id);
 }
@@ -993,8 +993,8 @@ struct GLFWVideoModule : public Module {
     int Init() {
         INFO("GLFWVideoModule::Init");
         NativeWindowInit();
-        CHECK(LFL::Window::Create(screen));
-        LFL::Window::MakeCurrent(screen);
+        CHECK(Window::Create(screen));
+        Window::MakeCurrent(screen);
         glfwSwapInterval(1);
         return 0;
     }
@@ -1028,10 +1028,10 @@ void Window::Close(Window *W) {
 struct SDLVideoModule : public Module {
     int Init() {
         INFO("SFLVideoModule::Init");
-        CHECK(LFL::Window::Create(screen));
+        CHECK(Window::Create(screen));
         NativeWindowInit();
         NativeWindowSize(&screen->width, &screen->height);
-        LFL::Window::MakeCurrent(screen);
+        Window::MakeCurrent(screen);
         SDL_GL_SetSwapInterval(1);
         return 0;
     }
@@ -1040,7 +1040,7 @@ struct SDLVideoModule : public Module {
         return 0;
     }
 };
-bool LFL::Window::Create(LFL::Window *W) {
+bool Window::Create(Window *W) {
     int createFlag = SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN;
 #if defined(LFL_IPHONE) || defined(LFL_ANDROID)
     createFlag |= SDL_WINDOW_BORDERLESS;
@@ -1057,24 +1057,24 @@ bool LFL::Window::Create(LFL::Window *W) {
     if (!(W->id = SDL_CreateWindow(W->caption.c_str(), SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, W->width, W->height, createFlag)))
     { ERROR("SDL_CreateWindow: ",     SDL_GetError()); return false; }
 
-    if (!LFL::Window::active.empty()) W->gl = LFL::Window::active.begin()->second->gl;
+    if (!Window::active.empty()) W->gl = Window::active.begin()->second->gl;
     else if (!(W->gl = SDL_GL_CreateContext((SDL_Window*)W->id)))
     { ERROR("SDL_GL_CreateContext: ", SDL_GetError()); return false; } 
 
     SDL_Surface* icon = SDL_LoadBMP(StrCat(ASSETS_DIR, "icon.bmp").c_str());
     SDL_SetWindowIcon((SDL_Window*)W->id, icon);
 
-    LFL::Window::active[(void*)(long)SDL_GetWindowID((SDL_Window*)W->id)] = W;
+    Window::active[(void*)(long)SDL_GetWindowID((SDL_Window*)W->id)] = W;
     return true;
 }
-void LFL::Window::MakeCurrent(LFL::Window *W) {
+void Window::MakeCurrent(Window *W) {
     if (SDL_GL_MakeCurrent((SDL_Window*)W->id, W->gl) < 0) ERROR("SDL_GL_MakeCurrent: ", SDL_GetError());
     screen = W; 
 }
-void LFL::Window::Close(LFL::Window *W) {
+void Window::Close(Window *W) {
     SDL_GL_MakeCurrent(NULL, NULL);
-    LFL::Window::active.erase((void*)(long)SDL_GetWindowID((SDL_Window*)W->id));
-    if (LFL::Window::active.empty()) {
+    Window::active.erase((void*)(long)SDL_GetWindowID((SDL_Window*)W->id));
+    if (Window::active.empty()) {
         app->run = false;
         SDL_GL_DeleteContext(W->gl);
     }
@@ -1152,7 +1152,7 @@ void Video::CreateGraphicsDevice() {
 #endif /* LFL_HEADLESS */
 
     screen->gd->Init();
-    screen->gd->ViewPort(Box::FromScreen());
+    screen->gd->ViewPort(screen->Box());
     screen->gd->DrawMode(DrawMode::_3D);
 
     float pos[]={-.5,1,-.3f,0}, grey20[]={.2f,.2f,.2f,1}, white[]={1,1,1,1}, black[]={0,0,0,1};
@@ -1209,26 +1209,26 @@ int Video::Free() {
     return 0;
 }
 
-void LFL::Window::Reshape(int w, int h) {
+void Window::Reshape(int w, int h) {
 #if defined(LFL_QT)
     ((QWindow*)id)->resize(w, h);
-    LFL::Window::MakeCurrent(screen);
+    Window::MakeCurrent(screen);
 #elif defined(LFL_GLFWVIDEO)
     glfwSetWindowSize((GLFWwindow*)id, w, h);
 #endif
 }
 
-void LFL::Window::Reshaped(int w, int h) {
+void Window::Reshaped(int w, int h) {
     float wr = (float)w/width, hr = (float)h/height;
     width = w;
     height = h;
-    gd->ViewPort(Box(width, height));
+    gd->ViewPort(LFL::Box(width, height));
     gd->DrawMode(DrawMode::_3D);
     for (set<GUI*>::iterator g = screen->mouse_gui.begin(); g != screen->mouse_gui.end(); ++g) (*g)->Layout();
     if (app->reshaped_cb) app->reshaped_cb();
 }
 
-void LFL::Window::SwapAxis() {
+void Window::SwapAxis() {
     FLAGS_rotate_view = FLAGS_rotate_view ? 0 : -90;
     FLAGS_swap_axis = FLAGS_rotate_view != 0;
     Reshaped(height, width);

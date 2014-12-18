@@ -55,7 +55,7 @@ void MyHoverLinkCB(TextArea::Link *link) {
     if (!a) return;
     a->tex.Bind();
     screen->gd->SetColor(Color::white - Color::Alpha(0.2));
-    Box::DelBorder(Box::FromScreen(), screen->width*.2, screen->height*.2).Draw();
+    Box::DelBorder(screen->Box(), screen->width*.2, screen->height*.2).Draw();
 }
 
 struct MyTerminalWindow {
@@ -80,7 +80,7 @@ struct MyTerminalWindow {
         terminal->new_link_cb = MyNewLinkCB;
         terminal->hover_link_cb = MyHoverLinkCB;
         terminal->mouse_gui.mouse.dont_deactivate = true;
-        terminal->Draw(Box::FromScreen(), false);
+        terminal->Draw(screen->Box(), false);
         terminal->active = true;
     }
 };
@@ -92,14 +92,14 @@ void UpdateTargetFPS() {
 
 int Frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample, int flag) {
     MyTerminalWindow *tw = (MyTerminalWindow*)W->user1;
-    Box root = Box::FromScreen();
+    Box root = screen->Box();
 
     bool font_changed = tw->terminal->font->size != tw->terminal->line_fb.font_size, terminal_updated = false;
     bool resized = tw->terminal->line_fb.w != root.w || tw->terminal->line_fb.h != root.h;
     bool custom_shader = tw->activeshader != &app->video.shader_default, dont_skip = flag & FrameFlag::DontSkip;
 
     string terminal_output = nb_read(fileno(tw->process.in), 4096);
-    if (!terminal_output.empty()) tw->terminal->WriteBytes(terminal_output);
+    if (!terminal_output.empty()) tw->terminal->Write(terminal_output);
     if (!terminal_output.empty() || resized || font_changed || (custom_shader && dont_skip) ||
         tw->terminal->mouse_gui.mouse.events.hover) {
         tw->terminal->mouse_gui.mouse.Deactivate();
