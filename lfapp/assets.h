@@ -627,15 +627,20 @@ struct RingFrameBuffer {
         w = W; h = H; font_size = font->size; font_height = font->height; 
         fb.Resize(w, Height(), FrameBuffer::Flag::CreateGL | FrameBuffer::Flag::CreateTexture);
         screen->gd->Clear();
-        screen->gd->DrawMode(DrawMode::_2D);
+        screen->gd->DrawMode(DrawMode::_2D, false);
         return true;
     }
-    virtual void Draw(point pos, point adjust) {
+    virtual void Draw(point pos, point adjust, bool scissor=true) {
         Box box(pos.x, pos.y, w, Height());
-        Scissor scissor(box);
+        if (scissor) screen->gd->PushScissor(box);
         screen->gd->EnableLayering();
         fb.tex.Bind();
         (box + adjust).DrawCrimped(fb.tex.coord, 0, 0, scroll.y);
+        if (scissor) screen->gd->PopScissor();
+    }
+    template <class X> void Clear(X *l, const Box &b, bool vwrap=true) {
+        if (1)                         { Scissor s(0, l->p.y - b.h,      w, b.h); screen->gd->Clear(); }
+        if (l->p.y - b.h < 0 && vwrap) { Scissor s(0, l->p.y + Height(), w, b.h); screen->gd->Clear(); }
     }
     template <class X> void Update(X *l, const Box &b, const function<point(X*, point, const Box&)> &paint, bool vwrap=true) {
         Box box(0, b.h);

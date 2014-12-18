@@ -2028,7 +2028,7 @@ int Application::Create(int argc, const char **argv, const char *source_filename
 #endif
 
 #ifdef LFL_HEADLESS
-    LFL::Window::Create(screen);
+    Window::Create(screen);
 #endif
 
     if (FLAGS_daemonize) {
@@ -2083,7 +2083,7 @@ int Application::Init() {
         INFO("lfapp_open: video_init()");
         if (video.Init()) { INFO("video init failed"); return -1; }
     } else {
-        LFL::Window::active[screen->id] = screen;
+        Window::active[screen->id] = screen;
     }
 
     if (FLAGS_lfapp_audio) {
@@ -2236,10 +2236,10 @@ int Application::Frame() {
     bool cam_sample; unsigned mic_samples; int flag=0;
     PreFrame(clicks, &mic_samples, &cam_sample);
 
-    LFL::Window *previous_screen = screen;
-    for (LFL::Window::WindowMap::iterator i = LFL::Window::active.begin(); run && i != LFL::Window::active.end(); ++i) {
+    Window *previous_screen = screen;
+    for (auto i = Window::active.begin(); run && i != Window::active.end(); ++i) {
         if (i->second->minimized) continue;
-        LFL::Window::MakeCurrent(i->second);
+        Window::MakeCurrent(i->second);
 
         if (FLAGS_lfapp_input) {
             if (screen->gesture_swipe_up)   { if (screen->console && screen->console->active) screen->console->PageUp();   }
@@ -2284,7 +2284,7 @@ int Application::Frame() {
             screen->ClearGesture();
         }
     }
-    if (previous_screen) LFL::Window::MakeCurrent(previous_screen);
+    if (previous_screen) Window::MakeCurrent(previous_screen);
 
     /* post */
     PostFrame();
@@ -2312,7 +2312,7 @@ int Application::Main() {
 }
 
 int Application::Free() {
-    while (!LFL::Window::active.empty()) LFL::Window::Close(LFL::Window::active.begin()->second);
+    while (!Window::active.empty()) Window::Close(Window::active.begin()->second);
 
     if (FLAGS_lfapp_video)  video .Free();
     if (FLAGS_lfapp_audio)  audio .Free();
@@ -2443,23 +2443,23 @@ template <typename X, int (X::*Y)() /***/> void MemberIntGetter(v8::Local<v8::St
 template <typename X, int (X::*Y)() const> void MemberIntGetter(v8::Local<v8::String> property, const v8::PropertyCallbackInfo<v8::Value>& args) {
     V8_SimpleMemberReturn(X, v8::Integer::New, (inst->*Y)());
 }
-template <typename X, LFL::DOM::DOMString (X::*Y)() const> void MemberStringFunc(const v8::FunctionCallbackInfo<v8::Value> &args) {
+template <typename X, DOM::DOMString (X::*Y)() const> void MemberStringFunc(const v8::FunctionCallbackInfo<v8::Value> &args) {
     V8_SimpleMemberReturn(X, NewV8String, (inst->*Y)().c_str());
 }
-template <typename X, LFL::DOM::DOMString (X::*Y)() const> void MemberStringFuncGetter(v8::Local<v8::String> property, const v8::PropertyCallbackInfo<v8::Value>& args) {
+template <typename X, DOM::DOMString (X::*Y)() const> void MemberStringFuncGetter(v8::Local<v8::String> property, const v8::PropertyCallbackInfo<v8::Value>& args) {
     V8_SimpleMemberReturn(X, NewV8String, (inst->*Y)().c_str());
 }
-template <typename X, LFL::DOM::DOMString (X::*Y)(int)> void MemberStringFuncInt(const v8::FunctionCallbackInfo<v8::Value> &args) {
+template <typename X, DOM::DOMString (X::*Y)(int)> void MemberStringFuncInt(const v8::FunctionCallbackInfo<v8::Value> &args) {
     if (!args.Length()) { args.GetReturnValue().Set(v8::Null(args.GetIsolate())); return; }
     V8_SimpleMemberReturn(X, NewV8String, (inst->*Y)(args[0]->Int32Value()).c_str());
 }
-template <typename X, LFL::DOM::DOMString (X::*Y)(int)> void IndexedMemberStringProperty(uint32_t index, const v8::PropertyCallbackInfo<v8::Value>& args) {
+template <typename X, DOM::DOMString (X::*Y)(int)> void IndexedMemberStringProperty(uint32_t index, const v8::PropertyCallbackInfo<v8::Value>& args) {
     V8_SimpleMemberReturn(X, NewV8String, (inst->*Y)(index).c_str());
 }
-template <typename X, LFL::DOM::DOMString (X::*Y)(const LFL::DOM::DOMString &)> void NamedMemberStringProperty(v8::Local<v8::String> name, const v8::PropertyCallbackInfo<v8::Value>& args) {
+template <typename X, DOM::DOMString (X::*Y)(const DOM::DOMString &)> void NamedMemberStringProperty(v8::Local<v8::String> name, const v8::PropertyCallbackInfo<v8::Value>& args) {
     string v = BlankNull(*v8::String::Utf8Value(name));
     if (v == "toString" || v == "valueOf" || v == "length" || v == "item") return;
-    V8_SimpleMemberReturn(X, NewV8String, (inst->*Y)(LFL::DOM::DOMString(v)).c_str());
+    V8_SimpleMemberReturn(X, NewV8String, (inst->*Y)(DOM::DOMString(v)).c_str());
 }
 
 struct MyV8JSInit { MyV8JSInit() { v8::V8::Initialize(); } };
@@ -2474,7 +2474,7 @@ struct MyV8JSContext : public JSContext {
     Console*                       js_console;
 
     virtual ~MyV8JSContext() {}
-    MyV8JSContext(Console *C, LFL::DOM::Node *D) : isolate(v8::Isolate::New()), isolate_scope(isolate),
+    MyV8JSContext(Console *C, DOM::Node *D) : isolate(v8::Isolate::New()), isolate_scope(isolate),
     handle_scope(isolate), context(v8::Context::New(isolate)), context_scope(context), global(v8::ObjectTemplate::New()),
     console(v8::ObjectTemplate::New()), window(v8::ObjectTemplate::New()), node(v8::ObjectTemplate::New()),
     node_list(v8::ObjectTemplate::New()), named_node_map(v8::ObjectTemplate::New()), css_style_declaration(v8::ObjectTemplate::New()),
@@ -2494,43 +2494,43 @@ struct MyV8JSContext : public JSContext {
  
         node->SetInternalFieldCount(3);
         node->SetAccessor(v8::String::NewFromUtf8(isolate, "nodeName"),
-                          MemberStringFuncGetter<LFL::DOM::Node, &LFL::DOM::Node::nodeName>, donothingSetter);
+                          MemberStringFuncGetter<DOM::Node, &DOM::Node::nodeName>, donothingSetter);
         node->SetAccessor(v8::String::NewFromUtf8(isolate, "nodeValue"),
-                          MemberStringFuncGetter<LFL::DOM::Node, &LFL::DOM::Node::nodeValue>, donothingSetter);
+                          MemberStringFuncGetter<DOM::Node, &DOM::Node::nodeValue>, donothingSetter);
         node->SetAccessor(v8::String::NewFromUtf8(isolate, "childNodes"), 
-                          MemberObjectGetter<LFL::DOM::Node, LFL::DOM::NodeList,
-                                            &LFL::DOM::Node::childNodes, &MyV8JSContext::node_list>, donothingSetter);
+                          MemberObjectGetter<DOM::Node, DOM::NodeList,
+                                            &DOM::Node::childNodes, &MyV8JSContext::node_list>, donothingSetter);
         node->SetAccessor(v8::String::NewFromUtf8(isolate, "attributes"), 
-                          ElementObjectGetter<LFL::DOM::Node, LFL::DOM::NamedNodeMap,
-                                             &LFL::DOM::Element::attributes, &MyV8JSContext::named_node_map>, donothingSetter);
+                          ElementObjectGetter<DOM::Node, DOM::NamedNodeMap,
+                                             &DOM::Element::attributes, &MyV8JSContext::named_node_map>, donothingSetter);
 
         node_list->SetInternalFieldCount(3);
         node_list->SetAccessor(v8::String::NewFromUtf8(isolate, "length"),
-                               MemberIntGetter<LFL::DOM::NodeList, &LFL::DOM::NodeList::length>, donothingSetter);
+                               MemberIntGetter<DOM::NodeList, &DOM::NodeList::length>, donothingSetter);
         node_list->Set(v8::String::NewFromUtf8(isolate, "item"),
-                       v8::FunctionTemplate::New(isolate, MemberObjectFuncInt<LFL::DOM::NodeList, LFL::DOM::Node, 
-                                                                             &LFL::DOM::NodeList::item, &MyV8JSContext::node>));
-        node_list->SetIndexedPropertyHandler(IndexedMemberObjectProperty<LFL::DOM::NodeList, LFL::DOM::Node,
-                                             &LFL::DOM::NodeList::item, &MyV8JSContext::node>);
+                       v8::FunctionTemplate::New(isolate, MemberObjectFuncInt<DOM::NodeList, DOM::Node, 
+                                                                             &DOM::NodeList::item, &MyV8JSContext::node>));
+        node_list->SetIndexedPropertyHandler(IndexedMemberObjectProperty<DOM::NodeList, DOM::Node,
+                                             &DOM::NodeList::item, &MyV8JSContext::node>);
 
         named_node_map->SetInternalFieldCount(3);
         named_node_map->SetAccessor(v8::String::NewFromUtf8(isolate, "length"),
-                                    MemberIntGetter<LFL::DOM::NamedNodeMap, &LFL::DOM::NamedNodeMap::length>, donothingSetter);
+                                    MemberIntGetter<DOM::NamedNodeMap, &DOM::NamedNodeMap::length>, donothingSetter);
         named_node_map->Set(v8::String::NewFromUtf8(isolate, "item"),
-                            v8::FunctionTemplate::New(isolate, MemberObjectFuncInt<LFL::DOM::NamedNodeMap, LFL::DOM::Node, 
-                                                      &LFL::DOM::NamedNodeMap::item, &MyV8JSContext::node>));
-        named_node_map->SetIndexedPropertyHandler(IndexedMemberObjectProperty<LFL::DOM::NamedNodeMap, LFL::DOM::Node,
-                                                  &LFL::DOM::NamedNodeMap::item, &MyV8JSContext::node>);
-        named_node_map->SetNamedPropertyHandler(NamedMemberObjectProperty<LFL::DOM::NamedNodeMap, LFL::DOM::Node,
-                                                &LFL::DOM::NamedNodeMap::getNamedItem, &MyV8JSContext::node>);
+                            v8::FunctionTemplate::New(isolate, MemberObjectFuncInt<DOM::NamedNodeMap, DOM::Node, 
+                                                      &DOM::NamedNodeMap::item, &MyV8JSContext::node>));
+        named_node_map->SetIndexedPropertyHandler(IndexedMemberObjectProperty<DOM::NamedNodeMap, DOM::Node,
+                                                  &DOM::NamedNodeMap::item, &MyV8JSContext::node>);
+        named_node_map->SetNamedPropertyHandler(NamedMemberObjectProperty<DOM::NamedNodeMap, DOM::Node,
+                                                &DOM::NamedNodeMap::getNamedItem, &MyV8JSContext::node>);
 
         css_style_declaration->SetInternalFieldCount(3);
         css_style_declaration->SetAccessor(v8::String::NewFromUtf8(isolate, "length"),
-                                           MemberIntGetter<LFL::DOM::CSSStyleDeclaration, &LFL::DOM::CSSStyleDeclaration::length>, donothingSetter);
+                                           MemberIntGetter<DOM::CSSStyleDeclaration, &DOM::CSSStyleDeclaration::length>, donothingSetter);
         css_style_declaration->Set(v8::String::NewFromUtf8(isolate, "item"),
-                                   v8::FunctionTemplate::New(isolate, MemberStringFuncInt<LFL::DOM::CSSStyleDeclaration, &LFL::DOM::CSSStyleDeclaration::item>));
-        css_style_declaration->SetIndexedPropertyHandler(IndexedMemberStringProperty<LFL::DOM::CSSStyleDeclaration, &LFL::DOM::CSSStyleDeclaration::item>);
-        css_style_declaration->SetNamedPropertyHandler(NamedMemberStringProperty<LFL::DOM::CSSStyleDeclaration, &LFL::DOM::CSSStyleDeclaration::getPropertyValue>);
+                                   v8::FunctionTemplate::New(isolate, MemberStringFuncInt<DOM::CSSStyleDeclaration, &DOM::CSSStyleDeclaration::item>));
+        css_style_declaration->SetIndexedPropertyHandler(IndexedMemberStringProperty<DOM::CSSStyleDeclaration, &DOM::CSSStyleDeclaration::item>);
+        css_style_declaration->SetNamedPropertyHandler(NamedMemberStringProperty<DOM::CSSStyleDeclaration, &DOM::CSSStyleDeclaration::getPropertyValue>);
 
         if (D) {
             v8::Local<v8::Object> node_obj = node->NewInstance();
@@ -2549,8 +2549,8 @@ struct MyV8JSContext : public JSContext {
                 if (result->IsObject() && js_console) {
                     v8::Local<v8::Object> obj = result->ToObject();
                     if (obj->InternalFieldCount() >= 3) {
-                        if (obj->GetInternalField(2)->Int32Value() == Typed::Id<LFL::DOM::Node>()) {
-                            js_console->Write(CastV8InternalFieldTo<LFL::DOM::Node*>(obj, 1)->DebugString());
+                        if (obj->GetInternalField(2)->Int32Value() == Typed::Id<DOM::Node>()) {
+                            js_console->Write(CastV8InternalFieldTo<DOM::Node*>(obj, 1)->DebugString());
                         }
                     }
                 }
@@ -2574,8 +2574,8 @@ struct MyV8JSContext : public JSContext {
         v8::Local<v8::Object> self = args.Holder();
         if (args.Length() < 1 || !args[0]->IsObject()) { args.GetReturnValue().Set(v8::Null(args.GetIsolate())); return; }
         v8::Local<v8::Object> arg_obj = args[0]->ToObject();
-        LFL::DOM::Node *impl = CastV8InternalFieldTo<LFL::DOM::Node*>(arg_obj, 1);
-        LFL::DOM::CSSStyleDeclaration *val = impl->render ? &impl->render->style : 0;
+        DOM::Node *impl = CastV8InternalFieldTo<DOM::Node*>(arg_obj, 1);
+        DOM::CSSStyleDeclaration *val = impl->render ? &impl->render->style : 0;
         if (!val) { args.GetReturnValue().Set(v8::Null(args.GetIsolate())); return; }
         MyV8JSContext *js_context = CastV8InternalFieldTo<MyV8JSContext*>(self, 0);
         v8::Local<v8::Object> impl_obj = js_context->css_style_declaration->NewInstance();
@@ -2588,7 +2588,7 @@ struct MyV8JSContext : public JSContext {
     static void MemberObjectGetter(v8::Local<v8::String> property, const v8::PropertyCallbackInfo<v8::Value>& args) {
         V8_ObjectMemberReturn(X, Y, OT, &(impl->*Z));
     }
-    template <typename X, typename Y, Y (LFL::DOM::Element::*Z), v8::Handle<v8::ObjectTemplate> (MyV8JSContext::*OT)>
+    template <typename X, typename Y, Y (DOM::Element::*Z), v8::Handle<v8::ObjectTemplate> (MyV8JSContext::*OT)>
     static void ElementObjectGetter(v8::Local<v8::String> property, const v8::PropertyCallbackInfo<v8::Value>& args) {
         V8_ObjectMemberReturn(X, Y, OT, impl->AsElement() ? &(impl->AsElement()->*Z) : 0);
     }
@@ -2601,16 +2601,16 @@ struct MyV8JSContext : public JSContext {
     static void IndexedMemberObjectProperty(uint32_t index, const v8::PropertyCallbackInfo<v8::Value>& args) {
         V8_ObjectMemberReturn(X, Y, OT, (impl->*Z)(index));
     }
-    template <typename X, typename Y, Y *(X::*Z)(const LFL::DOM::DOMString &), v8::Handle<v8::ObjectTemplate> (MyV8JSContext::*OT)>
+    template <typename X, typename Y, Y *(X::*Z)(const DOM::DOMString &), v8::Handle<v8::ObjectTemplate> (MyV8JSContext::*OT)>
     static void NamedMemberObjectProperty(v8::Local<v8::String> name, const v8::PropertyCallbackInfo<v8::Value>& args) {
         string v = BlankNull(*v8::String::Utf8Value(name));
         if (v == "toString" || v == "valueOf" || v == "length" || v == "item") return;
-        V8_ObjectMemberReturn(X, Y, OT, (impl->*Z)(LFL::DOM::DOMString(v)));
+        V8_ObjectMemberReturn(X, Y, OT, (impl->*Z)(DOM::DOMString(v)));
     }
 };
-JSContext *CreateV8JSContext(Console *js_console, LFL::DOM::Node *doc) { Singleton<MyV8JSInit>::Get(); return new MyV8JSContext(js_console, doc); }
+JSContext *CreateV8JSContext(Console *js_console, DOM::Node *doc) { Singleton<MyV8JSInit>::Get(); return new MyV8JSContext(js_console, doc); }
 #else /* LFL_V8JS */
-JSContext *CreateV8JSContext(Console *js_console, LFL::DOM::Node *doc) { return 0; }
+JSContext *CreateV8JSContext(Console *js_console, DOM::Node *doc) { return 0; }
 #endif /* LFL_V8JS */
 
 }; // namespace LFL

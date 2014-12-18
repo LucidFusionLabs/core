@@ -1204,9 +1204,9 @@ struct GameMenuGUI : public GUI, public Query {
     }
 
     void Layout() {
-        topbar.box = Box::FromScreen(0, .95, 1, .05);
-        titlewin   = Box::FromScreen(.15, .9, .7, .05); 
-        box        = Box::FromScreen(.15, .4, .7, .5);
+        topbar.box = screen->Box(0, .95, 1, .05);
+        titlewin   = screen->Box(.15, .9, .7, .05); 
+        box        = screen->Box(.15, .4, .7, .5);
         menuhdr    = Box (box.x, box.y+box.h-font->height, box.w, font->height);
         menuftr1   = Box (box.x, box.y+font->height*4, box.w, box.h-font->height*5);
         menuftr2   = Box (box.x, box.y+font->height*4, box.w, box.h-font->height*6); 
@@ -1426,7 +1426,7 @@ struct GamePlayerListGUI : public GUI {
         if (!toggled) display = false;
 
         screen->gd->EnableBlend();
-        Box win = Box::FromScreen(.1, .1, .8, .8, false);
+        Box win = screen->Box(.1, .1, .8, .8, false);
         glTimeResolutionShaderWindows(MyShader, Color(255, 255, 255, 120), win);
 
         int fh = win.h/2-font->height*2;
@@ -1480,8 +1480,8 @@ struct GameMultiTouchControls {
 
     GameMultiTouchControls(GameClient *C) : client(C),
         dpad_font(Fonts::Get("dpad_atlas", 0, Color::black)),
-        lpad_win(Box::FromScreen(.03, .05, .2, .2)),
-        rpad_win(Box::FromScreen(.78, .05, .2, .2)),
+        lpad_win(screen->Box(.03, .05, .2, .2)),
+        rpad_win(screen->Box(.78, .05, .2, .2)),
         lpad_tbx(round_f(lpad_win.w * .6)), lpad_tby(round_f(lpad_win.h *.6)),
         rpad_tbx(round_f(rpad_win.w * .6)), rpad_tby(round_f(rpad_win.h *.6)) {}
 
