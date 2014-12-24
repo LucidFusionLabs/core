@@ -1311,7 +1311,7 @@ void Service::EndpointReadCB(string *endpoint_name, string *packet) {
 
 void Service::EndpointRead(const string &endpoint_name, const char *buf, int len) {
     if (len) CHECK(buf);
-    if (!MainThread()) return RunMainThreadCallback(new Callback(bind(&Service::EndpointReadCB, this, new string(endpoint_name), new string(buf, len))));
+    if (!MainThread()) return RunInMainThread(new Callback(bind(&Service::EndpointReadCB, this, new string(endpoint_name), new string(buf, len))));
 
     Service::EndpointMap::iterator ep = endpoint.find(endpoint_name);
     if (ep == endpoint.end()) { 
@@ -1545,7 +1545,7 @@ bool RecursiveResolver::Resolve(Request *req) {
     if (cached) {
         IPV4::Addr addr = cached->A.size() ? cached->A[::rand() % cached->A.size()].addr : -1;
         INFO("RecursiveResolver found ", req->query, " = ", IPV4Endpoint::name(addr), " in cache=", node->authority_domain);
-        RunMainThreadCallback(new Callback(bind(&Request::Complete, req, addr, cached)));
+        RunInMainThread(new Callback(bind(&Request::Complete, req, addr, cached)));
         return true;
     }
 

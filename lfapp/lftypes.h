@@ -108,6 +108,11 @@ template <class X> void VectorErase(X* v, int ind) {
     CHECK_RANGE(ind, 0, v->size());
     v->erase(v->begin()+ind, v->begin()+ind+1);
 }
+template <class X> int VectorEraseByValue(vector<X> *v, const X& x) {
+    int orig_size = v->size();
+    v->erase(LFL_STL_NAMESPACE::remove(v->begin(), v->end(), x), v->end());
+    return orig_size - v->size();
+}
 
 template <class X> X IndexOrDefault(const vector<X> &a, int n)             { return n < a.size() ? a[n] : X(); }
 template <class X> X IndexOrDefault(const vector<X> &a, int n, const X& b) { return n < a.size() ? a[n] : b; }
@@ -127,8 +132,14 @@ template <class X> void Move(X *to, const X *from, int size) {
 
 template <class X> void Move(X &buf, int to_ind, int from_ind, int size) {
     if      (from_ind == to_ind) return;
-    else if (from_ind <  to_ind) { for (int i=size-1; i >= 0; i--) buf[to_ind + i] = buf[from_ind + i]; }
-    else                         { for (int i=0; i <= size-1; i++) buf[to_ind + i] = buf[from_ind + i]; }
+    else if (from_ind <  to_ind) { for (int i=size-1; i >= 0; i--) buf[to_ind+i] = buf[from_ind+i]; }
+    else                         { for (int i=0; i <= size-1; i++) buf[to_ind+i] = buf[from_ind+i]; }
+} 
+
+template <class X, class Y> void Move(X &buf, int to_ind, int from_ind, int size, const function<void(Y&,Y&)> &move_cb) {
+    if      (from_ind == to_ind) return;
+    else if (from_ind <  to_ind) { for (int i=size-1; i >= 0; i--) move_cb(buf[to_ind+i], buf[from_ind+i]); }
+    else                         { for (int i=0; i <= size-1; i++) move_cb(buf[to_ind+i], buf[from_ind+i]); }
 } 
 
 template <class T1, class T2, class T3> struct Triple {
@@ -309,11 +320,13 @@ struct BloomFilter {
 struct RingIndex {
     int size, back, count, total;
     RingIndex(int S=0) : size(S), back(0), count(0), total(0) {}
+    static int Wrap(int i, int s) { if ((i = i % s) < 0) i += s; return i; }
+    static int WrapOver(int i, int s) { return i == s ? i : Wrap(i, s); }
     int Back() const { return Index(-1); }
     int Front() const { return Index(-count); }
     int Index(int i) const { return AbsoluteIndex(back + i); }
-    int IndexOf(int i) const { return i - back - (back <= i ? size : 0); }
-    int AbsoluteIndex(int i) const { if ((i = i % size) < 0) i += size; return i; }
+    int IndexOf(int i) const { return i - back - (i >= back ? size : 0); }
+    int AbsoluteIndex(int i) const { return Wrap(i, size); }
     void IncrementSize(int n) { count = min(size, count + n); total += n; } 
     void DecrementSize(int n) { total = max(0, total - n); if (total < size) count = total; }
     void PopBack  (int n) { back = Index(-n); DecrementSize(n); }

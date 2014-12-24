@@ -78,18 +78,17 @@ Window::~Window() {
 }
 
 void Window::DeactivateMouseGUIs() {
-    for (set<GUI*>::iterator i = mouse_gui.begin(); i != mouse_gui.end(); ++i)
+    for (auto i = mouse_gui.begin(); i != mouse_gui.end(); ++i)
         if (!(*i)->mouse.dont_deactivate) (*i)->mouse.Deactivate();
 }
 void Window::DeactivateKeyboardGUIs() {
-    for (set<KeyboardGUI*>::iterator i = keyboard_gui.begin(); i != keyboard_gui.end(); ++i)
-        (*i)->Deactivate();
+    for (auto i = keyboard_gui.begin(); i != keyboard_gui.end(); ++i) (*i)->Deactivate();
 }
 void Window::ClearMouseGUIEvents() {
-    for (set<GUI*>::iterator i = mouse_gui.begin(); i != mouse_gui.end(); ++i) (*i)->mouse.ClearEvents();
+    for (auto i = mouse_gui.begin(); i != mouse_gui.end(); ++i) (*i)->mouse.ClearEvents();
 }
 void Window::ClearKeyboardGUIEvents() {
-    for (set<KeyboardGUI*>::iterator i = keyboard_gui.begin(); i != keyboard_gui.end(); ++i) (*i)->ClearEvents();
+    for (auto i = keyboard_gui.begin(); i != keyboard_gui.end(); ++i) (*i)->ClearEvents();
 }
 
 void Window::OpenConsole() {
@@ -119,7 +118,7 @@ void Window::DrawDialogs() {
         Fonts::Default()->Draw(StrCat("draw_grid ", screen->mouse.x, " , ", screen->mouse.y), point(0,0));
     }
 
-    for (vector<Dialog*>::reverse_iterator i = screen->dialogs.rbegin(); i != screen->dialogs.rend(); ++i) (*i)->Draw();
+    for (auto i = screen->dialogs.rbegin(); i != screen->dialogs.rend(); ++i) (*i)->Draw();
 }
 
 void KeyboardGUI::AddHistory(string cmd) {
@@ -187,8 +186,8 @@ void TextGUI::DrawCursor(point p) {
 
 /* TextArea */
 
-void TextArea::Write(const string &s, bool update_fb) {
-    if (!MainThread()) return RunMainThreadCallback(new Callback(bind(&TextArea::Write, this, s, update_fb)));
+void TextArea::Write(const string &s, bool update_fb, bool release_fb) {
+    if (!MainThread()) return RunInMainThread(new Callback(bind(&TextArea::Write, this, s, update_fb, release_fb)));
     write_last = Now();
     if (update_fb && line_fb.lines) line_fb.fb.Attach();
     ScopedDrawMode drawmode(update_fb ? DrawMode::_2D : DrawMode::NullOp);
@@ -201,7 +200,7 @@ void TextArea::Write(const string &s, bool update_fb) {
         if (write_timestamp) l->AppendText(StrCat(logtime(Now()), " "), cursor.attr);
         l->AppendText(add_line, cursor.attr);
     }
-    if (update_fb && line_fb.lines) line_fb.fb.Release();
+    if (update_fb && release_fb && line_fb.lines) line_fb.fb.Release();
 }
 
 void TextArea::PageUp() {
@@ -438,60 +437,61 @@ void Terminal::Resized(int w, int h) {
 #endif
     UpdateCursor();
     TextArea::Resized(w, h);
-    ResizedLeftoverRegion(w);
+    ResizedLeftoverRegion(w, h);
 }
 
-void Terminal::ResizedLeftoverRegion(int w, bool update_fb) {
-    int h = (start_line + skip_last_lines) * font->height;
-    if (!h || !cmd_fb.SizeChanged(w, h, font)) return;
+void Terminal::ResizedLeftoverRegion(int w, int h, bool update_fb) {
+    if (!cmd_fb.SizeChanged(w, h, font)) return;
     if (update_fb) {
-        cmd_fb.p = point();
-        for (int i=0; i<start_line;      i++) cmd_fb.PushFrontAndUpdate(&line[-i-1],             0, false);
-        for (int i=0; i<skip_last_lines; i++) cmd_fb.PushFrontAndUpdate(&line[-line_fb.lines+i], 0, false);
+        for (int i=0; i<start_line;      i++) cmd_fb.Update(&line[-i-1],             GetCursorY(term_height-i));
+        for (int i=0; i<skip_last_lines; i++) cmd_fb.Update(&line[-line_fb.lines+i], GetCursorY(i+1));
     }
     cmd_fb.SizeChangedDone();
+    last_fb = 0;
 }
 
-void Terminal::SetScrollRegion(int b, int e) {
+void Terminal::SetScrollRegion(int b, int e, bool release_fb) {
+    if (b<0 || e<0 || e>term_height || b>e) { ERROR(b, "-", e, " outside 1-", term_height); return; }
     int prev_region_beg = scroll_region_beg, prev_region_end = scroll_region_end;
     scroll_region_beg = b;
     scroll_region_end = e;
-    bool no_region = !scroll_region_beg || !scroll_region_end;
+    bool no_region = !scroll_region_beg || !scroll_region_end ||
+        (scroll_region_beg == 1 && scroll_region_end == term_height);
     skip_last_lines = no_region ? 0 : scroll_region_beg - 1;
     adjust_lines = start_line = no_region ? 0 : term_height - scroll_region_end;
-    clip_border.top    = font->height * adjust_lines;
-    clip_border.bottom = font->height * skip_last_lines;
+    clip_border.top    = font->height * skip_last_lines;
+    clip_border.bottom = font->height * adjust_lines;
     clip = no_region ? 0 : &clip_border;
-    ResizedLeftoverRegion(line_fb.w, false);
+    ResizedLeftoverRegion(line_fb.w, line_fb.h, false);
 
-    printf("XXX-scroll-change %d, %d -> %d %d\n",
-           prev_region_beg, prev_region_end,
-           scroll_region_beg, scroll_region_end);
-
+    if (release_fb) { last_fb=0; screen->gd->DrawMode(DrawMode::_2D, 0); }
     int   prev_beg_or_1=X_or_1(prev_region_beg),     prev_end_or_ht=X_or_Y(  prev_region_end, term_height);
     int scroll_beg_or_1=X_or_1(scroll_region_beg), scroll_end_or_ht=X_or_Y(scroll_region_end, term_height);
-    for (int i =  scroll_beg_or_1; i <    prev_beg_or_1; i++) line_fb.Update(GetTermLine(i));
-    for (int i =   prev_end_or_ht; i < scroll_end_or_ht; i++) line_fb.Update(GetTermLine(i+1));
-    for (int i =    prev_beg_or_1; i <  scroll_beg_or_1; i++) cmd_fb .Update(GetTermLine(i), point(0, GetLeftoverRegionY(i)));
-    for (int i =    prev_beg_or_1; i <  scroll_beg_or_1; i++) line_fb.Clear (GetTermLine(i));
-    for (int i = scroll_end_or_ht; i <   prev_end_or_ht; i++) cmd_fb .Update(GetTermLine(i+1), point(0, GetLeftoverRegionY(i+1)));
-    for (int i = scroll_end_or_ht; i <   prev_end_or_ht; i++) line_fb.Clear (GetTermLine(i+1));
+
+    if (scroll_beg_or_1 != prev_beg_or_1 || prev_end_or_ht != scroll_end_or_ht) GetPrimaryFrameBuffer();
+    for (int i =  scroll_beg_or_1; i <    prev_beg_or_1; i++) line_fb.Update(GetTermLine(i),   line_fb.BackPlus(point(0, (term_height-i+1)*font->height)), 0);
+    for (int i =   prev_end_or_ht; i < scroll_end_or_ht; i++) line_fb.Update(GetTermLine(i+1), line_fb.BackPlus(point(0, (term_height-i)  *font->height)), 0);
+
+    if (prev_beg_or_1 < scroll_beg_or_1 || scroll_end_or_ht < prev_end_or_ht) GetSecondaryFrameBuffer();
+    for (int i =    prev_beg_or_1; i < scroll_beg_or_1; i++) cmd_fb.Update(GetTermLine(i),   point(0, GetCursorY(i)),   0);
+    for (int i = scroll_end_or_ht; i <  prev_end_or_ht; i++) cmd_fb.Update(GetTermLine(i+1), point(0, GetCursorY(i+1)), 0);
+    if (release_fb) cmd_fb.fb.Release();
 }
 
 void Terminal::Draw(const Box &b, bool draw_cursor) {
     TextArea::Draw(b, false);
     if (clip) {
-        { Scissor s(Box::TopBorder(b, *clip)); cmd_fb.Draw(b.Position(), point(0, (line_fb.lines - start_line - skip_last_lines)*font->height)); }
-        { Scissor s(Box::BotBorder(b, *clip)); cmd_fb.Draw(b.Position(), point()); }
+        { Scissor s(Box::TopBorder(b, *clip)); cmd_fb.Draw(b.Position(), point(), false); }
+        { Scissor s(Box::BotBorder(b, *clip)); cmd_fb.Draw(b.Position(), point(), false); }
     }
     if (draw_cursor) TextGUI::DrawCursor(b.Position() + cursor.p);
 }
 
-void Terminal::Write(const string &s, bool update_fb) {
-    if (!MainThread()) return RunMainThreadCallback(new Callback(bind(&Terminal::Write, this, s, update_fb)));
-    line_fb.fb.Attach();
+void Terminal::Write(const string &s, bool update_fb, bool release_fb) {
+    if (!MainThread()) return RunInMainThread(new Callback(bind(&Terminal::Write, this, s, update_fb, release_fb)));
     screen->gd->DrawMode(DrawMode::_2D, 0);
-    for (int i=0; i<s.size(); i++) {
+    last_fb = 0;
+    for (int i = 0; i < s.size(); i++) {
         unsigned char c = s[i];
         if (c == 0x18 || c == 0x1a) { /* CAN or SUB */ parse_state = State::TEXT; continue; }
         if (parse_state == State::ESC) {
@@ -508,6 +508,12 @@ void Terminal::Write(const string &s, bool update_fb) {
             } else if (c >= '(' && c <= '/') {
                 parse_state = State::CHARSET;
                 parse_charset = c;
+            }
+            else if (c == 'D') Newline();
+            else if (c == 'M') {
+                if (term_cursor.y != 1) term_cursor.y--;
+                else ERROR("XXX-ESC-M @ y=1");
+                // else line.InsertAt(-term_height, 1, scroll_region_end ? (term_height - scroll_region_end) : 0);
             }
             else if (c == '7') saved_term_cursor = term_cursor;
             else if (c == '8') term_cursor = saved_term_cursor;
@@ -578,8 +584,20 @@ void Terminal::Write(const string &s, bool update_fb) {
                 if      (parse_csi_argv[0] == 0) { l->Erase(term_cursor.x-1);  }
                 else if (parse_csi_argv[0] == 1) { l->Erase(0, term_cursor.x); }
                 else if (parse_csi_argv[0] == 2) { l->Clear();                 }
-            } else if (c == 'L') { /* XXX */ printf("XXX-L1 %d %d (%d-%d)\n", term_cursor.y,  X_or_1(parse_csi_argv[0]), scroll_region_beg, scroll_region_end); Scroll(term_cursor.y, X_or_Y(scroll_region_end, term_height),  X_or_1(parse_csi_argv[0]));
-            } else if (c == 'M') { /* XXX */ printf("XXX-M1 %d %d (%d-%d)\n", term_cursor.y, -X_or_1(parse_csi_argv[0]), scroll_region_beg, scroll_region_end); Scroll(term_cursor.y, X_or_Y(scroll_region_end, term_height), -X_or_1(parse_csi_argv[0]));
+            } else if (c == 'L' || c == 'M')  {
+                int sl = (c == 'L' ? 1 : -1) * X_or_1(parse_csi_argv[0]);
+                if (clip && term_cursor.y < scroll_region_beg) {
+                    ERROR(term_cursor.DebugString(), " outside scroll region ", scroll_region_beg, "-", scroll_region_end);
+                } else {
+                    int end_line = X_or_Y(scroll_region_end, term_height);
+                    int flag = sl < 0 ? LineUpdate::PushBack : LineUpdate::PushFront;
+                    int offset = sl < 0 ? start_line : -skip_last_lines;
+                    Scroll(term_cursor.y, end_line, sl, clip);
+                    GetPrimaryFrameBuffer();
+                    for (int i=0, l=abs(sl); i<l; i++)
+                        LineUpdate(GetTermLine(sl<0 ? (end_line-l+i+1) : (term_cursor.y+l-i-1)),
+                                   &line_fb, flag, offset);
+                }
             } else if (c == 'P') {
                 LineUpdate l(GetCursorLine(), fb_cb);
                 int erase = max(1, parse_csi_argv[0]);
@@ -651,33 +669,31 @@ void Terminal::Write(const string &s, bool update_fb) {
     FlushParseText();
     UpdateCursor();
     line_fb.fb.Release();
+    last_fb = 0;
 }
 
 void Terminal::FlushParseText() {
     if (parse_text.empty()) return;
     CHECK_GE(term_cursor.x, 1);
-    Line *l = GetCursorLine();
     int consumed = 0, write_size = 0;
     String16 input_text = String::ToUTF16(parse_text, &consumed);
     for (int wrote = 0; wrote < input_text.size(); wrote += write_size) {
+        if (wrote) Newline(true);
+        LineUpdate l(GetCursorLine(), fb_cb);
         int remaining = input_text.size() - wrote;
         write_size = min(remaining, term_width - term_cursor.x + 1);
         l->UpdateText(term_cursor.x-1, input_text.substr(wrote, write_size), cursor.attr, term_width);
-        line_fb.Update(l);
-        if (remaining - write_size) { Newline(true); l = GetCursorLine(); }
     }
     term_cursor.x += write_size;
     parse_text = parse_text.substr(consumed);
 }
 
 void Terminal::Newline(bool carriage_return) {
-    bool scroll_region = scroll_region_beg && scroll_region_end && !(scroll_region_beg == 1 && scroll_region_end == term_height);
-    if      (term_cursor.y == term_height       && !scroll_region) TextArea::Write(string(1, '\n'));
-    else if (term_cursor.y == scroll_region_end &&  scroll_region) {
-        Scroll(scroll_region_beg, scroll_region_end, -1);
-        LineUpdate(GetTermLine(scroll_region_end), &line_fb, LineUpdate::PushBack);
-        // XXX
-        printf("XXX-nl\n");
+    if (clip && term_cursor.y == scroll_region_end) {
+        Scroll(scroll_region_beg, scroll_region_end, -1, clip);
+        LineUpdate(GetTermLine(scroll_region_end), GetPrimaryFrameBuffer(), LineUpdate::PushBack, start_line);
+    } else if (term_cursor.y == term_height) {
+        if (!clip) { TextArea::Write(string(1, '\n'), true, false); last_fb=&line_fb; }
     } else term_cursor.y = min(term_height, term_cursor.y+1);
     if (carriage_return) term_cursor.x = 1;
 }
@@ -2044,7 +2060,7 @@ void HelperGUI::ForceDirectedLayout() {
 }
 
 void HelperGUI::Draw() {
-    for (vector<Label>::const_iterator i = label.begin(); i != label.end(); ++i) {
+    for (auto i = label.begin(); i != label.end(); ++i) {
         glLine(i->label_center.x, i->label_center.y, i->target_center.x, i->target_center.y, &font->fg);
         screen->gd->FillColor(Color::black);
         Box::AddBorder(i->label, 4, 0).Draw();

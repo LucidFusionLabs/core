@@ -152,7 +152,7 @@ void default_lfapp_window_closed_cb() { delete screen; }
 
 bool Running() { return app->run; }
 bool MainThread() { return Thread::Id() == app->main_thread_id; }
-void RunMainThreadCallback(Callback *cb) { app->messageQueue.write(ThreadPool::messageQueueCallback, cb); }
+void RunInMainThread(Callback *cb) { app->messageQueue.write(ThreadPool::messageQueueCallback, cb); }
 double FPS() { return screen->fps.fps(); }
 double CamFPS() { return app->camera.fps.fps(); }
 void break_hook() { INFO("break hook"); }
