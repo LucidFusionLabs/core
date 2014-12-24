@@ -402,7 +402,7 @@ void Editor::UpdateLines(float v_scrolled, float h_scrolled) {
         else         wl += line_fb. PushBackAndUpdate(L);
     }
     for (int i=0; !reverse && i<add_blank_lines; i++) { 
-        (L = line.PushBack())->AssignText(" ");
+        (L = line.PushBack())->Clear();
         if (!resized) line.PopFront(1);
         line_fb.PushBackAndUpdate(L);
     }
@@ -679,10 +679,12 @@ void Terminal::FlushParseText() {
     String16 input_text = String::ToUTF16(parse_text, &consumed);
     for (int wrote = 0; wrote < input_text.size(); wrote += write_size) {
         if (wrote) Newline(true);
-        LineUpdate l(GetCursorLine(), fb_cb);
-        int remaining = input_text.size() - wrote;
-        write_size = min(remaining, term_width - term_cursor.x + 1);
-        l->UpdateText(term_cursor.x-1, input_text.substr(wrote, write_size), cursor.attr, term_width);
+        {
+            LineUpdate l(GetCursorLine(), fb_cb);
+            int remaining = input_text.size() - wrote;
+            write_size = min(remaining, term_width - term_cursor.x + 1);
+            l->UpdateText(term_cursor.x-1, input_text.substr(wrote, write_size), cursor.attr, term_width);
+        }
     }
     term_cursor.x += write_size;
     parse_text = parse_text.substr(consumed);

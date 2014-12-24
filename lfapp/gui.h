@@ -107,8 +107,8 @@ struct TextGUI : public KeyboardGUI {
         shared_ptr<LineData> data;
         Line(TextGUI *P=0) : parent(P), data(new LineData()) {}
         Line &operator=(const Line &s) { data=s.data; return *this; }
-        static void Move (Line &t, Line &s) { t.data=s.data; }
-        static void MoveP(Line &t, Line &s) { t.data=s.data; t.p=s.p; }
+        static void Move (Line &t, Line &s) { swap(t.data, s.data); }
+        static void MoveP(Line &t, Line &s) { swap(t.data, s.data); t.p=s.p; }
 #if 0
         int Size () const { return glyphs.Size(); }
         int Lines() const { return max(1, glyphs.line.size()); }
@@ -180,13 +180,17 @@ struct TextGUI : public KeyboardGUI {
         }
     };
     struct Lines : public RingVector<Line> {
-        Lines(TextGUI *P, int ML=200) : RingVector<Line>(ML) { for (auto &i : data) i.parent = P; }
+        function<void(Line&, Line&)> move_cb, movep_cb;
+        Lines(TextGUI *P, int ML=200) : RingVector<Line>(ML),
+        move_cb (bind(&Line::Move,  _1, _2)), 
+        movep_cb(bind(&Line::MoveP, _1, _2)) { for (auto &i : data) i.parent = P; }
+
         Line *PushFront() { Line *l = RingVector<Line>::PushFront(); l->Clear(); return l; }
         Line *InsertAt(int dest_line, int lines=1, int dont_move_last=0) {
             CHECK(lines); CHECK_LT(dest_line, 0);
             int clear_dir = 1;
             if (dest_line == -1) { ring.PushBack(lines); clear_dir = -1; }
-            else Move(*this, dest_line+lines, dest_line, -dest_line-lines-dont_move_last);
+            else Move(*this, dest_line+lines, dest_line, -dest_line-lines-dont_move_last, move_cb);
             for (int i=0; i<lines; i++) (*this)[dest_line + i*clear_dir].Clear();
             return &(*this)[dest_line];
         }
@@ -452,7 +456,7 @@ struct TextArea : public TextGUI {
     Lines line;
     LinesFrameBuffer line_fb;
     GUI mouse_gui;
-    Time write_last;
+    Time write_last=0;
     const Border *clip=0;
     bool wrap_lines=1, write_timestamp=0, write_newline=1;
     bool selection_changing=0, selection_changing_previously=0;
@@ -572,15 +576,13 @@ struct Terminal : public TextArea, public Drawable::AttrSource {
     unsigned char parse_charset=0;
     bool parse_osc_escape=0, cursor_enabled=1;
     point term_cursor=point(1,1), saved_term_cursor=point(1,1);
-    function<void(Line&, Line&)> move_cb, movep_cb;
     LinesFrameBuffer::FromLineCB fb_cb;
     LinesFrameBuffer *last_fb=0;
     Border clip_border;
     Colors *colors=0;
 
     Terminal(int FD, Window *W, Font *F, int TK=0, int TM=ToggleBool::Default) :
-        TextArea(W, F, TK, TM), fd(FD), fb_cb(bind(&Terminal::GetFrameBuffer, this, _1)),
-        move_cb(bind(&Line::Move, _1, _2)), movep_cb(bind(&Line::MoveP, _1, _2)) {
+        TextArea(W, F, TK, TM), fd(FD), fb_cb(bind(&Terminal::GetFrameBuffer, this, _1)) {
         CHECK(F->fixed_width || (F->flag & FontDesc::Mono));
         wrap_lines = write_newline = 0;
         for (int i=0; i<line.ring.size; i++) line[i].data->glyphs.attr.source = this;
@@ -635,7 +637,7 @@ struct Terminal : public TextArea, public Drawable::AttrSource {
     void Scroll(int sy, int ey, int dy, bool move_fb_p) {
         CHECK_LT(sy, ey);
         int line_ind = GetTermLineIndex(sy), scroll_lines = ey - sy + 1, ady = abs(dy), sdy = (dy > 0 ? 1 : -1);
-        Move(line, line_ind + (dy>0 ? dy : 0), line_ind + (dy<0 ? -dy : 0), scroll_lines - ady, move_fb_p ? movep_cb : move_cb);
+        Move(line, line_ind + (dy>0 ? dy : 0), line_ind + (dy<0 ? -dy : 0), scroll_lines - ady, move_fb_p ? line.movep_cb : line.move_cb);
         for (int i = 0, cy = (dy>0 ? sy : ey); i < ady; i++) GetTermLine(cy + i*sdy)->Clear();
     }
     void FlushParseText();
