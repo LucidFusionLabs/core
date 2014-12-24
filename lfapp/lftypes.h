@@ -347,7 +347,7 @@ template <class X> struct RingVector {
     virtual X   *PushFront()     { ring.PushFront(1); return &data[ring.Front()]; }
     virtual void PopFront(int n) { ring.PopFront(n); }
     virtual void PopBack (int n) { ring.PopBack (n); }
-    virtual void Clear() { ring.Clear(); data.clear(); }
+    virtual void Clear() { ring.Clear(); }
 };
 
 struct RingBuf {

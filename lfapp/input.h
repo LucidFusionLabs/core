@@ -102,6 +102,7 @@ struct KeyboardController {
     struct Events { int total; };
     Events events;
     bool active=0;
+    KeyboardController() { ClearEvents(); }
 
     void ClearEvents() { memzero(events); }
     virtual void Activate() { active = 1; }
@@ -191,9 +192,9 @@ struct Input : public Module {
     bool left_shift_down=0, right_shift_down=0, left_ctrl_down=0, right_ctrl_down=0, left_cmd_down=0, right_cmd_down=0;
     bool mouse_but1_down=0, mouse_but2_down=0;
     Module *impl=0;
-
     vector<Callback> queued_input;
     Mutex queued_input_mutex;
+    Input() { memzero(key_down); memzero(key_delay); memzero(key_down_repeat); }
 
     void QueueKey(int keycode, int down) {
         ScopedMutex sm(queued_input_mutex);
