@@ -30,9 +30,9 @@ struct GUI {
     MouseController mouse;
     bool display=0; ToggleBool toggleDisplay;
     GUI()                        :         parent(0), toggleDisplay(&display) {}
-    GUI(Window *W)               :         parent(W), toggleDisplay(&display) { parent->mouse_gui.insert(this); }
-    GUI(Window *W, const Box &B) : box(B), parent(W), toggleDisplay(&display) { parent->mouse_gui.insert(this); }
-    virtual ~GUI() { if (parent) parent->mouse_gui.erase(this); }
+    GUI(Window *W)               :         parent(W), toggleDisplay(&display) { parent->mouse_gui.push_back(this); }
+    GUI(Window *W, const Box &B) : box(B), parent(W), toggleDisplay(&display) { parent->mouse_gui.push_back(this); }
+    virtual ~GUI() { if (parent) VectorEraseByValue(&parent->mouse_gui, this); }
 
     point MousePosition() const { return screen->mouse - box.TopLeft(); }
     BoxArray *Reset() { Clear(); return &child_box; }
@@ -79,11 +79,11 @@ struct KeyboardGUI : public KeyboardController {
     int lastcmd_ind=-1;
     Bind toggle_bind;
     ToggleBool toggle_active;
+    Window *parent;
     KeyboardGUI(Window *W, Font *F, int TK=0, int TM=ToggleBool::Default, int LastCommands=50)
-        : toggle_active(&active, TM), lastcmd(LastCommands)
-    { W->keyboard_gui.insert(this); toggle_bind.key=TK; }
-
-    virtual ~KeyboardGUI() {}
+        : toggle_active(&active, TM), lastcmd(LastCommands), parent(W)
+    { parent->keyboard_gui.push_back(this); toggle_bind.key=TK; }
+    virtual ~KeyboardGUI() { if (parent) VectorEraseByValue(&parent->keyboard_gui, this); }
     virtual void Enable() { active = true; }
     virtual bool Toggle() { return toggle_active.Toggle(); }
     virtual void Run(string cmd) { if (runcb) runcb(cmd); }
@@ -96,14 +96,19 @@ struct KeyboardGUI : public KeyboardController {
 struct TextGUI : public KeyboardGUI {
     struct Link;
     struct Lines;
+    struct LineData {
+        BoxArray glyphs;
+        String16 text, text_attr;
+        vector<shared_ptr<Link> > links;
+    };
     struct Line {
         point p;
-        TextGUI *parent; 
-        BoxArray glyphs;
-        String16 text;
-        vector<shared_ptr<Link> > links;
-        Line(TextGUI *P=0) : parent(P) {}
-        Line& operator=(const Line &l) { glyphs=l.glyphs; text=l.text; text_attr=l.text_attr; links=l.links; return *this; }
+        TextGUI *parent;
+        shared_ptr<LineData> data;
+        Line(TextGUI *P=0) : parent(P), data(new LineData()) {}
+        Line &operator=(const Line &s) { data=s.data; return *this; }
+        static void Move (Line &t, Line &s) { t.data=s.data; }
+        static void MoveP(Line &t, Line &s) { t.data=s.data; t.p=s.p; }
 #if 0
         int Size () const { return glyphs.Size(); }
         int Lines() const { return max(1, glyphs.line.size()); }
@@ -121,28 +126,27 @@ struct TextGUI : public KeyboardGUI {
         void UpdateAttr(int ind, int len, int a) {}
         void Layout(Box win) {}
 #else
-        String16 text_attr;
-        int Size () const { return glyphs.Size(); }
-        int Lines() const { return max(1, glyphs.line.size()); }
-        string Text() const { return String::ToUTF8(text); }
-        void Clear() { text.clear(); text_attr.clear(); glyphs.Clear(); }
-        void Erase(int o, unsigned long long l=String16::npos) { if (text.size() > o) { text.erase(o, l); text_attr.erase(o, l); } }
-        void InsertTextAt(int o, const string   &s, int a=0) { String16 v=String::ToUTF16(s); text.insert(o, v); text_attr.insert(o, String16(v.size(), a)); }
-        void InsertTextAt(int o, const String16 &s, int a=0) {                                text.insert(o, s); text_attr.insert(o, String16(s.size(), a)); }
-        void AppendText  (       const string   &s, int a=0) { String16 v=String::ToUTF16(s); text.append(v);    text_attr.append(   String16(v.size(), a)); }
-        void AppendText  (       const String16 &s, int a=0) {                                text.append(s);    text_attr.append(   String16(s.size(), a)); }
-        void AssignText  (       const string   &s, int a=0) { text = String::ToUTF16(s); text_attr = String16(text.size(), a); }
-        void AssignText  (       const String16 &s, int a=0) { text = s;                  text_attr = String16(text.size(), a); }
-        void UpdateAttr(int ind, int len, int a) { Vec<short>::assign((short*)text_attr.data() + ind, a, len); }
+        int Size () const { return data->glyphs.Size(); }
+        int Lines() const { return max(1, data->glyphs.line.size()); }
+        string Text() const { return String::ToUTF8(data->text); }
+        void Clear() { data->text.clear(); data->text_attr.clear(); data->glyphs.Clear(); }
+        void Erase(int o, unsigned long long l=String16::npos) { if (data->text.size() > o) { data->text.erase(o, l);  data->text_attr.erase(o, l); } }
+        void InsertTextAt(int o, const string   &s, int a=0) { String16 v=String::ToUTF16(s); data->text.insert(o, v); data->text_attr.insert(o, String16(v.size(), a)); }
+        void InsertTextAt(int o, const String16 &s, int a=0) {                                data->text.insert(o, s); data->text_attr.insert(o, String16(s.size(), a)); }
+        void AppendText  (       const string   &s, int a=0) { String16 v=String::ToUTF16(s); data->text.append(v);    data->text_attr.append(   String16(v.size(), a)); }
+        void AppendText  (       const String16 &s, int a=0) {                                data->text.append(s);    data->text_attr.append(   String16(s.size(), a)); }
+        void AssignText  (       const string   &s, int a=0) { data->text = String::ToUTF16(s); data->text_attr = String16(data->text.size(), a); }
+        void AssignText  (       const String16 &s, int a=0) { data->text = s;                  data->text_attr = String16(data->text.size(), a); }
+        void UpdateAttr(int ind, int len, int a) { Vec<short>::assign((short*)data->text_attr.data() + ind, a, len); }
         void Layout(Box win) {
-            glyphs.Clear();
-            Flow flow(&win, parent->font, &glyphs, &parent->layout);
-            for (ArraySegmentIter<short> iter(text_attr); !iter.Done(); iter.Increment()) {
+            data->glyphs.Clear();
+            Flow flow(&win, parent->font, &data->glyphs, &parent->layout);
+            for (ArraySegmentIter<short> iter(data->text_attr); !iter.Done(); iter.Increment()) {
                 if (parent->clickable_links) {}
-                flow.AppendText(String16Piece(&text[iter.cur_start], iter.Length()), iter.cur_attr);
+                flow.AppendText(String16Piece(&data->text[iter.cur_start], iter.Length()), iter.cur_attr);
             }
             flow.Complete();
-            CHECK_EQ(text.size(), glyphs.Size());
+            CHECK_EQ(data->text.size(), data->glyphs.Size());
         }
 #endif
         void UpdateText(int x, const String16 &v, int attr, int max_width=0) {
@@ -171,8 +175,8 @@ struct TextGUI : public KeyboardGUI {
         void Layout(int width=0) { return Layout(Box(0,0,width,0)); }
         point Draw(point pos, bool relayout, int relayout_width) {
             if (relayout) Layout(relayout_width);
-            glyphs.Draw((p = pos));
-            return p - point(0, max(parent->font->height, glyphs.height));
+            data->glyphs.Draw((p = pos));
+            return p - point(0, max(parent->font->height, data->glyphs.height));
         }
     };
     struct Lines : public RingVector<Line> {
@@ -199,12 +203,16 @@ struct TextGUI : public KeyboardGUI {
             lines = H / font->height;
             return RingFrameBuffer::SizeChanged(W, H, font);
         }
+        LinesFrameBuffer *Attach(LinesFrameBuffer **last_fb) {
+            if (*last_fb != this) fb.Attach();
+            return *last_fb = this;
+        }
         void Clear(Line *l, bool vwrap=true) {
             RingFrameBuffer::Clear(l, Box(0, l->Lines() * font_height), vwrap);
         }
-        void Update(Line *l, const point &p, bool vwrap=true) { l->p=p; Update(l, vwrap); }
-        void Update(Line *l, bool vwrap=true) {
-            l->Layout(wrap ? w : 0);
+        void Update(Line *l, const point &p, bool lo=true, bool vw=true) { l->p=p; Update(l, lo, vw); }
+        void Update(Line *l, bool layout=true, bool vwrap=true) {
+            if (layout) l->Layout(wrap ? w : 0);
             RingFrameBuffer::Update(l, Box(0, l->Lines() * font_height), paint_cb, vwrap);
         }
         int PushFrontAndUpdate(Line *l, int max_lines=0, bool vwrap=true, bool reverse=false) {
@@ -219,6 +227,14 @@ struct TextGUI : public KeyboardGUI {
             Box b(0, reverse ? (l->Lines() * font_height - lh) : 0, 0, lh);
             return RingFrameBuffer::PushBackAndUpdate(l, b, paint_cb, vwrap) / font_height;
         }
+        void PushFrontAndUpdateOffset(Line *l, int lo, bool vwrap=true) {
+            Update(l, RingFrameBuffer::BackPlus(point(0, (1 + lo) * font_height)));
+            RingFrameBuffer::AdvancePixels(-l->Lines() * font_height);
+        }
+        void PushBackAndUpdateOffset(Line *l, int lo, bool vwrap=true) {
+            Update(l, RingFrameBuffer::BackPlus(point(0, lo * font_height)));
+            RingFrameBuffer::AdvancePixels(l->Lines() * font_height);
+        }
         point Paint(Line *l, point lp, const Box &b) {
             Scissor scissor(0, lp.y - b.h, w, b.h);
             screen->gd->Clear();
@@ -228,14 +244,14 @@ struct TextGUI : public KeyboardGUI {
     };
     struct LineUpdate {
         enum { PushBack=1, PushFront=2, DontUpdate=4 }; 
-        Line *v; LinesFrameBuffer *fb; int flag;
-        LineUpdate(Line *V=0, LinesFrameBuffer *FB=0, int F=0) : v(V), fb(FB), flag(F) {}
-        LineUpdate(Line *V, const LinesFrameBuffer::FromLineCB &cb, int F=0) : v(V), fb(cb(V)), flag(F) {}
+        Line *v; LinesFrameBuffer *fb; int flag, o;
+        LineUpdate(Line *V=0, LinesFrameBuffer *FB=0, int F=0, int O=0) : v(V), fb(FB), flag(F), o(O) {}
+        LineUpdate(Line *V, const LinesFrameBuffer::FromLineCB &cb, int F=0, int O=0) : v(V), fb(cb(V)), flag(F), o(O) {}
         ~LineUpdate() {
             if (!fb->lines || (flag & DontUpdate)) v->Layout();
-            else if           (flag & PushBack)    fb->PushBackAndUpdate(v);
-            else if           (flag & PushFront)   fb->PushFrontAndUpdate(v);
-            else                                   fb->Update(v);
+            else if (flag & PushFront) { if (o) fb->PushFrontAndUpdateOffset(v,o); else fb->PushFrontAndUpdate(v); }
+            else if (flag & PushBack)  { if (o) fb->PushBackAndUpdateOffset (v,o); else fb->PushBackAndUpdate (v); }
+            else fb->Update(v);
         }
         Line *operator->() const { return v; }
     };
@@ -272,9 +288,9 @@ struct TextGUI : public KeyboardGUI {
     virtual string Text() const { return cmd_line.Text(); }
     virtual void AssignInput(const string &text) { cmd_line.AssignText(text); UpdateCommandFB(); UpdateCursor(); }
     virtual void UpdateCursor() {
-        bool right = cursor.i.x >= cmd_line.glyphs.Size();
-        const Box &b = !cmd_line.glyphs.data.size() ? Box() :
-            cmd_line.glyphs.data[right ? cmd_line.glyphs.data.size()-1 : cursor.i.x].box;
+        bool right = cursor.i.x >= cmd_line.data->glyphs.Size();
+        const Box &b = !cmd_line.data->glyphs.data.size() ? Box() :
+            cmd_line.data->glyphs.data[right ? cmd_line.data->glyphs.data.size()-1 : cursor.i.x].box;
         cursor.p = right ? b.TopRight() : b.TopLeft();
     }
     virtual void UpdateCommandFB() { 
@@ -447,7 +463,7 @@ struct TextArea : public TextGUI {
     virtual ~TextArea() {}
 
     /// Write() is thread-safe.
-    virtual void Write(const string &s, bool update_fb=true);
+    virtual void Write(const string &s, bool update_fb=true, bool release_fb=true);
     virtual void PageUp();
     virtual void PageDown();
     virtual void Resized(int w, int h);
@@ -502,9 +518,7 @@ struct Editor : public TextArea {
         *out = WrappedLineOffset(wrapped_line_index, wrapped_line - wrapped_line_index - 1);
     }
     int Distance(const WrappedLineOffset &o, bool reverse) {
-        int dist = 0;
-  //      for (int i=a_first_line; i<=b_first_line; i++) {
-//            dist += 
+        int dist = 0; // for (int i=a_first_line; i<=b_first_line; i++) dist += 
         return abs(o.first - first_line.first);
     }
     void UpdateLines(float v_scrolled, float h_scrolled);
@@ -558,15 +572,18 @@ struct Terminal : public TextArea, public Drawable::AttrSource {
     unsigned char parse_charset=0;
     bool parse_osc_escape=0, cursor_enabled=1;
     point term_cursor=point(1,1), saved_term_cursor=point(1,1);
+    function<void(Line&, Line&)> move_cb, movep_cb;
     LinesFrameBuffer::FromLineCB fb_cb;
+    LinesFrameBuffer *last_fb=0;
     Border clip_border;
     Colors *colors=0;
 
     Terminal(int FD, Window *W, Font *F, int TK=0, int TM=ToggleBool::Default) :
-        TextArea(W, F, TK, TM), fd(FD), fb_cb(bind(&Terminal::GetFrameBuffer, this, _1)) {
+        TextArea(W, F, TK, TM), fd(FD), fb_cb(bind(&Terminal::GetFrameBuffer, this, _1)),
+        move_cb(bind(&Line::Move, _1, _2)), movep_cb(bind(&Line::MoveP, _1, _2)) {
         CHECK(F->fixed_width || (F->flag & FontDesc::Mono));
         wrap_lines = write_newline = 0;
-        for (int i=0; i<line.ring.size; i++) line[i].glyphs.attr.source = this;
+        for (int i=0; i<line.ring.size; i++) line[i].data->glyphs.attr.source = this;
         SetColors(Singleton<StandardVGAColors>::Get());
         cursor.attr = default_cursor_attr;
         cursor.type = Cursor::Block;
@@ -575,10 +592,10 @@ struct Terminal : public TextArea, public Drawable::AttrSource {
     }
     virtual ~Terminal() {}
     virtual void Resized(int w, int h);
-    virtual void ResizedLeftoverRegion(int w, bool update_fb=true);
-    virtual void SetScrollRegion(int b, int e);
+    virtual void ResizedLeftoverRegion(int w, int h, bool update_fb=true);
+    virtual void SetScrollRegion(int b, int e, bool release_fb=false);
     virtual void Draw(const Box &b, bool draw_cursor);
-    virtual void Write(const string &s, bool update_fb=true);
+    virtual void Write(const string &s, bool update_fb=true, bool release_fb=true);
     virtual void Input(char k) {                       write(fd, &k, 1); }
     virtual void Erase      () { char k = 0x7f;        write(fd, &k, 1); }
     virtual void Enter      () { char k = '\r';        write(fd, &k, 1); }
@@ -599,30 +616,26 @@ struct Terminal : public TextArea, public Drawable::AttrSource {
         if (attr & Attr::Reverse) Typed::Swap(fg, bg);
         return Drawable::Attr(font, fg, bg, attr & Attr::Underline);
     }
-    int GetLeftoverRegionY(int y) const {
-        CHECK_GE(y, 1); CHECK(scroll_region_beg); CHECK(scroll_region_beg);
-        if      (y < scroll_region_beg) return (start_line + scroll_region_beg - y + 1) * font->height;
-        else if (y > scroll_region_end) return GetCursorY(y);
-        else FATAL(y, " in scroll region ", scroll_region_beg, " - ", scroll_region_end);
-    }
     int GetCursorX(int x) const { return (x - 1) * font->FixedWidth(); }
     int GetCursorY(int y) const { return (term_height - y + 1) * font->height; }
     int GetTermLineIndex(int y) const { return -term_height + y-1; }
     Line *GetTermLine(int y) { return &line[GetTermLineIndex(y)]; }
     Line *GetCursorLine() { return GetTermLine(term_cursor.y); }
+    LinesFrameBuffer *GetPrimaryFrameBuffer()   { return line_fb.Attach(&last_fb); }
+    LinesFrameBuffer *GetSecondaryFrameBuffer() { return cmd_fb .Attach(&last_fb); }
     LinesFrameBuffer *GetFrameBuffer(const Line *l) {
         int i = line.IndexOf(l);
-        return (-i-1 < start_line || term_height-i < skip_last_lines) ? &cmd_fb : &line_fb;
+        return ((-i-1 < start_line || term_height-i < skip_last_lines) ? cmd_fb : line_fb).Attach(&last_fb);
     }
     void SetColors(Colors *C) {
         colors = C;
         Attr::SetFGColorIndex(&default_cursor_attr, colors->normal_index);
         Attr::SetBGColorIndex(&default_cursor_attr, colors->bg_index);
     }
-    void Scroll(int sy, int ey, int dy) {
+    void Scroll(int sy, int ey, int dy, bool move_fb_p) {
         CHECK_LT(sy, ey);
         int line_ind = GetTermLineIndex(sy), scroll_lines = ey - sy + 1, ady = abs(dy), sdy = (dy > 0 ? 1 : -1);
-        Move(line, line_ind + (dy>0 ? dy : 0), line_ind + (dy<0 ? -dy : 0), scroll_lines - ady);
+        Move(line, line_ind + (dy>0 ? dy : 0), line_ind + (dy<0 ? -dy : 0), scroll_lines - ady, move_fb_p ? movep_cb : move_cb);
         for (int i = 0, cy = (dy>0 ? sy : ey); i < ady; i++) GetTermLine(cy + i*sdy)->Clear();
     }
     void FlushParseText();

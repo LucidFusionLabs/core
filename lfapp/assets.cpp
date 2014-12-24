@@ -1082,7 +1082,7 @@ void glRoom(Asset*, Entity*) {
 }
 
 void glIntersect(int x, int y, Color *c) {
-    auto_ptr<Geometry> geom(new Geometry(GraphicsDevice::Lines, 4, (v2*)0, 0, 0, *c));
+    unique_ptr<Geometry> geom(new Geometry(GraphicsDevice::Lines, 4, (v2*)0, 0, 0, *c));
     v2 *vert = (v2*)&geom->vert[0];
 
     vert[0] = v2(0, y);
@@ -1123,10 +1123,10 @@ void BoxOutline::Draw(const LFL::Box &w) const {
 }
 
 Waveform Waveform::Decimated(point dim, const Color *c, const RingBuf::Handle *sbh, int decimateBy) {
-    auto_ptr<RingBuf> dsb;
+    unique_ptr<RingBuf> dsb;
     RingBuf::Handle dsbh;
     if (decimateBy) {
-        dsb = auto_ptr<RingBuf>(decimate(sbh, decimateBy));
+        dsb = unique_ptr<RingBuf>(decimate(sbh, decimateBy));
         dsbh = RingBuf::Handle(dsb.get());
         sbh = &dsbh;
     }

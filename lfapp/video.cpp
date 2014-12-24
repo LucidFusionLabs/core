@@ -207,19 +207,20 @@ DEFINE_float(near_plane, 1, "Near clipping plane");
 DEFINE_float(far_plane, 100, "Far clipping plane");
 DEFINE_int(dots_per_inch, 75, "Screen DPI");
 DEFINE_bool(swap_axis, false," Swap x,y axis");
-DEFINE_bool(atlas_dump, false, "Dump .png files for every font");
-DEFINE_float(atlas_pad_top, 0, "Pad top of each glyph with size*atlas_pad_top pixels");
 DEFINE_string(font_engine, "atlas", "[atlas,freetype,coretext]");
 DEFINE_string(default_font, "Nobile.ttf", "Default font");
 DEFINE_string(default_font_family, "sans-serif", "Default font family");
 DEFINE_int(default_font_size, 16, "Default font size");
 DEFINE_int(default_font_flag, 0, "Default font flag");
-DEFINE_int(add_font_size, 0, "Increase all font sizes by add_font_size");
-DEFINE_int(scale_font_height, 0, "Scale font when height != scale_font_height");
+DEFINE_int(default_missing_glyph, 127, "Default glyph returned for missing requested glyph");
+DEFINE_bool(atlas_dump, false, "Dump .png files for every font");
 DEFINE_string(atlas_font_sizes, "8,16,32,64", "Load font atlas CSV sizes");
+DEFINE_float(atlas_pad_top, 0, "Pad top of each glyph with size*atlas_pad_top pixels");
 DEFINE_int(glyph_table_size, 128, "Load lowest glyph_table_size unicode code points");
 DEFINE_bool(subpixel_fonts, false, "Treat RGB components as subpixels, tripling width");
 DEFINE_bool(font_dont_reopen, false, "Scale atlas to font size instead of re-raster");
+DEFINE_int(scale_font_height, 0, "Scale font when height != scale_font_height");
+DEFINE_int(add_font_size, 0, "Increase all font sizes by add_font_size");
 
 #ifndef LFL_HEADLESS
 #define GDDebug(...) if (FLAGS_gd_debug) INFO(__VA_ARGS__)
@@ -1224,7 +1225,7 @@ void Window::Reshaped(int w, int h) {
     height = h;
     gd->ViewPort(LFL::Box(width, height));
     gd->DrawMode(DrawMode::_3D);
-    for (set<GUI*>::iterator g = screen->mouse_gui.begin(); g != screen->mouse_gui.end(); ++g) (*g)->Layout();
+    for (auto g = screen->mouse_gui.begin(); g != screen->mouse_gui.end(); ++g) (*g)->Layout();
     if (app->reshaped_cb) app->reshaped_cb();
 }
 
@@ -2007,7 +2008,7 @@ void BoxRun::DrawBackground(point p, DrawBackgroundCB cb) {
          iter(data.data(), data.size(), bind(&HorizontalExtentTracker::AddDrawableBox, &width, _1));
          !iter.Done(); iter.Increment()) if (const Box *lb = VectorGet(*line, iter.cur_attr))
         cb(width.Get(lb->y, lb->h) + p);
-    else ERROR("line_id ", line->size(), " ", iter.cur_attr);
+    // XXX else ERROR("line_id ", line->size(), " ", iter.cur_attr);
 }
 
 /* Font */

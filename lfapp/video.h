@@ -22,7 +22,6 @@
 namespace LFL {
 DECLARE_bool(gd_debug);
 DECLARE_bool(swap_axis);
-DECLARE_bool(atlas_dump);
 DECLARE_int(dots_per_inch);
 DECLARE_float(field_of_view);
 DECLARE_float(near_plane);
@@ -32,6 +31,8 @@ DECLARE_string(default_font);
 DECLARE_string(default_font_family);
 DECLARE_int(default_font_size);
 DECLARE_int(default_font_flag);
+DECLARE_int(default_missing_glyph);
+DECLARE_bool(atlas_dump);
 DECLARE_string(atlas_font_sizes);
 DECLARE_int(scale_font_height);
 DECLARE_int(add_font_size);
@@ -469,8 +470,8 @@ struct Window : public NativeWindow {
     Dialog *top_dialog;
     vector<Dialog*> dialogs;
     Entity *camMain;
-    set<GUI*> mouse_gui;
-    set<KeyboardGUI*> keyboard_gui;
+    vector<GUI*> mouse_gui;
+    vector<KeyboardGUI*> keyboard_gui;
 
     Window();
     virtual ~Window();
@@ -741,10 +742,8 @@ struct FontDesc {
 };
 
 struct FontInterface {
-    int size, height, max_top, max_width, fixed_width, flag; bool mono;
-    FontInterface(int S=0, int F=0) : size(S), height(0), max_top(0), max_width(0), fixed_width(0), flag(F),
-    mono(F & FontDesc::Mono) {}
-
+    int size=0, height=0, max_top=0, max_width=0, fixed_width=0, flag=0, missing_glyph=0; bool mono=0;
+    FontInterface(int S=0, int F=0) : size(S), flag(F), missing_glyph(FLAGS_default_missing_glyph), mono(F & FontDesc::Mono) {}
     int MaxBottom() const { return max_top ? height - max_top : 0; }
     int FixedWidth() const { return X_or_Y(fixed_width, mono ? max_width : 0); }
 };

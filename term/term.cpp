@@ -105,7 +105,8 @@ int Frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample
         tw->terminal->mouse_gui.mouse.Deactivate();
         tw->terminal->Draw(root, custom_shader);
         terminal_updated = true;
-    } else return -1;
+    }
+    // else return -1;
 
     tw->effects_mode.Set(custom_shader || W->console->animating);
     UpdateTargetFPS();
@@ -151,6 +152,21 @@ void MyShaderCmd(const vector<string> &arg) {
     if (shader_name == "warper") tw->activeshader = &warpershader;
     else                         tw->activeshader = &app->video.shader_default;
 }
+void MyScrollRegionCmd(const vector<string> &arg) {
+    if (arg.size() < 2) { ERROR("scroll_region b e"); return; }
+    INFO("set scroll region ", arg[0], " ", arg[1]);
+    MyTerminalWindow *tw = (MyTerminalWindow*)screen->user1;
+    tw->terminal->SetScrollRegion(atoi(arg[0]), atoi(arg[1]), true);
+}
+void MyTermDebugCmd(const vector<string> &arg) {
+    string out;
+    MyTerminalWindow *tw = (MyTerminalWindow*)screen->user1;
+    for (int i=0; i<tw->terminal->term_height; i++) {
+        TextGUI::Line *l = &tw->terminal->line[-1-i];
+        StrAppend(&out, -1-i, " ", l->p.DebugString(), " ", l->Text(), "\n");
+    }
+    printf("y0y0yfuzz %s\n%s\n", tw->terminal->line_fb.p.DebugString().c_str(), out.c_str());
+}
 
 void MyWindowDefaults(LFL::Window *W) {
     W->width = 80*10;
@@ -182,10 +198,11 @@ extern "C" int main(int argc, const char *argv[]) {
     FLAGS_lfapp_wait_forever = true;
     FLAGS_target_fps = FLAGS_normal_fps;
     FLAGS_lfapp_audio = 0;
-    FLAGS_font_engine = "coretext";
-    FLAGS_default_font = "Monaco"; // "DejaVuSansMono-Bold.ttf"; // "Monaco"; // "VeraMono.ttf";
+    // FLAGS_font_engine = "coretext";
+    // FLAGS_default_font = "Monaco"; // "DejaVuSansMono-Bold.ttf"; // "Monaco";
+    FLAGS_default_font = "VeraMono.ttf";
     FLAGS_default_font_size = 16;
-    FLAGS_default_font_flag = FontDesc::Mono;
+    // FLAGS_default_font_flag = FontDesc::Mono;
     FLAGS_atlas_font_sizes = "32";
 
     Singleton<HTTPClient>::Get()->select_socket_thread = &select_socket_thread;
@@ -195,8 +212,10 @@ extern "C" int main(int argc, const char *argv[]) {
     if (app->Init()) { app->Free(); return -1; }
 
     app->window_closed_cb = MyWindowClosedCB;
-    app->shell.command.push_back(Shell::Command("colors", bind(&MyColorsCmd,     _1)));
-    app->shell.command.push_back(Shell::Command("shader", bind(&MyShaderCmd,     _1)));
+    app->shell.command.push_back(Shell::Command("colors", bind(&MyColorsCmd, _1)));
+    app->shell.command.push_back(Shell::Command("shader", bind(&MyShaderCmd, _1)));
+    app->shell.command.push_back(Shell::Command("scroll_region", bind(&MyScrollRegionCmd, _1)));
+    app->shell.command.push_back(Shell::Command("term_debug", bind(&MyTermDebugCmd, _1)));
 
     binds.push_back(Bind('=', Key::Modifier::Cmd, Bind::CB(bind(&MyIncreaseFontCmd, vector<string>()))));
     binds.push_back(Bind('-', Key::Modifier::Cmd, Bind::CB(bind(&MyDecreaseFontCmd, vector<string>()))));

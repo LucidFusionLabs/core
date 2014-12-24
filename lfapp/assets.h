@@ -620,6 +620,7 @@ struct RingFrameBuffer {
     FrameBuffer fb; v2 scroll; point p; bool wrap=0;
     int w=0, h=0, font_size=0, font_height=0;
 
+    virtual int Width()  const { return w; }
     virtual int Height() const { return h; }
     virtual void SizeChangedDone() { fb.Release(); scroll=v2(); p=point(); }
     virtual bool SizeChanged(int W, int H, Font *font) {
@@ -652,19 +653,23 @@ struct RingFrameBuffer {
         if (b.h >= ht)     p = paint(l,      point(0, ht),         b);
         else                   paint(l, (p = point(0, p.y + b.h)), b);
         if (p.y > ht && vwrap) paint(l, (p = point(0, p.y - ht)),  b);
-        scroll.y = fmod(scroll.y - (float)b.h / ht, 1.0);
+        ScrollPercent((float)-b.h / ht);
         return b.h;
     }
     template <class X> int PushBackAndUpdate(X *l, const Box &b, const function<point(X*, point, const Box&)> &paint, bool vwrap=true) {
         int ht = Height();
-        point ip = p;
         if (p.y == 0)         p =          point(0, ht);
         if (b.h >= ht)        p = paint(l, point(0, b.h),            b);
         else                  p = paint(l, point(0, p.y),            b);
         if (p.y < 0 && vwrap) p = paint(l, point(0, p.y + b.h + ht), b);
-        scroll.y = fmod(scroll.y + (float)b.h / ht, 1.0);
+        ScrollPercent((float)b.h / ht);
         return b.h;
     }
+    void ScrollPercent(float y) { scroll.y = fmod(scroll.y + y, 1.0); }
+    void ScrollPixels(int y) { ScrollPercent((float)y / Height()); }
+    void AdvancePixels(int y) { ScrollPixels(y); p.y = RingIndex::Wrap(p.y - y, Height());  }
+    point BackPlus(const point &o) { return point(RingIndex::WrapOver(p.x + o.x, Width()),
+                                                  RingIndex::WrapOver(p.y + o.y, Height())); }
 };
 
 struct Tile {

@@ -459,7 +459,7 @@ int Input::DispatchQueuedInput() {
         queued_input.clear();
     }
     int ret = icb.size();
-    for (vector<Callback>::iterator i = icb.begin(); i != icb.end(); ++i) {
+    for (auto i = icb.begin(); i != icb.end(); ++i) {
         (*i)();
         if (screen) screen->events.input++;
     }
@@ -492,7 +492,7 @@ void Input::KeyPress(int key, int down, int, int) {
 
 void Input::KeyPressRepeat(unsigned clicks) {
     Time now = Now();
-    for (unordered_set<int>::const_iterator i = keys_down.begin(); i != keys_down.end(); ++i) {
+    for (auto i = keys_down.begin(); i != keys_down.end(); ++i) {
         int elapsed = now - key_down_repeat[*i], delay = key_delay[*i];
         if ((!delay && elapsed < FLAGS_keyboard_delay) ||
             ( delay && elapsed < FLAGS_keyboard_repeat)) continue;
@@ -545,7 +545,7 @@ int Input::KeyEventDispatch(int key, int keymod, bool down) {
         if (key >= 'A' && key <= '_') key -= 0x40;
     }
 
-    for (set<KeyboardGUI*>::iterator it = screen->keyboard_gui.begin(); it != screen->keyboard_gui.end(); ++it) {
+    for (auto it = screen->keyboard_gui.begin(); it != screen->keyboard_gui.end(); ++it) {
         KeyboardGUI *g = *it;
         if (!g->active) continue;
 
@@ -619,12 +619,12 @@ int Input::MouseEventDispatch(int button, int X, int Y, int down) {
     }
 
     int fired = 0;
-    for (set<GUI*>::iterator g = screen->mouse_gui.begin(); g != screen->mouse_gui.end(); ++g)
+    for (auto g = screen->mouse_gui.begin(); g != screen->mouse_gui.end(); ++g)
         if ((*g)->mouse.active) fired += (*g)->mouse.Input(button, (*g)->MousePosition(), down, 0);
 
     vector<Dialog*> removed;
     Dialog *bring_to_front = 0;
-    for (vector<Dialog*>::iterator i = screen->dialogs.begin(); i != screen->dialogs.end(); /**/) {
+    for (auto i = screen->dialogs.begin(); i != screen->dialogs.end(); /**/) {
         Dialog *gui = (*i);
         if (!gui->mouse.active) { i++; continue; }
         fired += gui->mouse.Input(button, screen->mouse, down, 0);
@@ -640,7 +640,7 @@ int Input::MouseEventDispatch(int button, int X, int Y, int down) {
 
 int MouseController::Input(int button, const point &p, int down, int flag) {
     int fired = 0;
-    for (vector<HitBox>::iterator e = hit.begin(); e != hit.end(); ++e) {
+    for (auto e = hit.begin(); e != hit.end(); ++e) {
         if (e->deleted || !e->active ||
             (!down && e->evtype == Event::Click && e->CB.type != Callback::CB_COORD)) continue;
 
@@ -717,7 +717,7 @@ bool Shell::FGets() {
 }
 
 void Shell::Run(const string &text) {
-    if (!MainThread()) return RunMainThreadCallback(new Callback(bind(&Shell::Run, this, text)));
+    if (!MainThread()) return RunInMainThread(new Callback(bind(&Shell::Run, this, text)));
 
     string cmd;
     vector<string> arg;
@@ -725,7 +725,7 @@ void Shell::Run(const string &text) {
     if (arg.size()) { cmd = arg[0]; arg.erase(arg.begin()); }
     if (cmd.empty()) return;
 
-    for (vector<Command>::iterator i = command.begin(); i != command.end(); ++i) {
+    for (auto i = command.begin(); i != command.end(); ++i) {
         if (StringEquals(i->name, cmd)) {
             i->cb(arg);
             return;
@@ -733,7 +733,7 @@ void Shell::Run(const string &text) {
     }
 
     FlagMap *flags = Singleton<FlagMap>::Get();
-    for (FlagMap::AllFlags::iterator i = flags->flagmap.begin(); i != flags->flagmap.end(); ++i) {
+    for (auto i = flags->flagmap.begin(); i != flags->flagmap.end(); ++i) {
         Flag *flag = (*i).second;
         if (StringEquals(flag->name, cmd)) {
             flag->Update(arg.size() ? arg[0].c_str() : "");
@@ -972,7 +972,7 @@ void Shell::Edit(const vector<string> &a) {
 }
 
 void Shell::cmds(const vector<string>&) {
-    for (vector<Command>::const_iterator i = command.begin(); i != command.end(); ++i) INFO(i->name);
+    for (auto i = command.begin(); i != command.end(); ++i) INFO(i->name);
 }
 
 void Shell::flags(const vector<string>&) { Singleton<FlagMap>::Get()->Print(); }
