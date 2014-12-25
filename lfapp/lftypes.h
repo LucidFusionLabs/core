@@ -497,11 +497,11 @@ typedef AssetMapT<MovieAsset> MovieAssetMap;
 struct Serializable {
     struct Stream;
 
-    virtual int type() const = 0;
-    virtual int size() const = 0;
-    virtual int hdrsize() const = 0;
-    virtual int in(const Stream *i) = 0;
-    virtual void out(Stream *o) const = 0;
+    virtual int Type() const = 0;
+    virtual int Size() const = 0;
+    virtual int HeaderSize() const = 0;
+    virtual int In(const Stream *i) = 0;
+    virtual void Out(Stream *o) const = 0;
 
     string ToString(unsigned short seq=0);
     void ToString(string *out, unsigned short seq=0);
@@ -511,147 +511,163 @@ struct Serializable {
         static const int size = 4;
         unsigned short id, seq;
 
-        void out(Stream *o) const;
-        void in(const Stream *i);
+        void Out(Stream *o) const;
+        void In(const Stream *i);
     };
 
-    bool HdrCheck(int content_len) { return content_len >= Header::size + hdrsize(); }
-    bool    Check(int content_len) { return content_len >= Header::size +    size(); }
-    bool HdrCheck(const Stream *is) { return HdrCheck(is->len()); }
-    bool    Check(const Stream *is) { return    Check(is->len()); }
-    int      Read(const Stream *is) { if (!HdrCheck(is)) return -1; return in(is); }
+    bool HdrCheck(int content_len) { return content_len >= Header::size + HeaderSize(); }
+    bool    Check(int content_len) { return content_len >= Header::size +       Size(); }
+    bool HdrCheck(const Stream *is) { return HdrCheck(is->Len()); }
+    bool    Check(const Stream *is) { return    Check(is->Len()); }
+    int      Read(const Stream *is) { if (!HdrCheck(is)) return -1; return In(is); }
 
     struct Stream {
-        virtual unsigned char  *n8()            = 0;
-        virtual unsigned short *n16()           = 0;
-        virtual unsigned       *n32()           = 0;
-        virtual char           *get(int size=0) = 0;
-        virtual char           *end()           = 0;
+        virtual unsigned char  *N8()            = 0;
+        virtual unsigned short *N16()           = 0;
+        virtual unsigned       *N32()           = 0;
+        virtual char           *Get(int size=0) = 0;
+        virtual char           *End()           = 0;
 
         char *buf; int size; mutable int offset; mutable bool error;
         Stream(char *B, int S) : buf(B), size(S), offset(0), error(0) {}
 
-        int len() const { return size; }
-        int pos() const { return offset; };
-        int remaining() const { return size - offset; }
-        const char *start() const { return buf; }
-        const char *advance(int n=0) const { return get(n); }
-        const char           *end() const { return buf + size; }
-        const unsigned char  *n8()  const { unsigned char  *ret = (unsigned char *)(buf+offset); offset += 1;   if (offset > size) { error=1; return 0; } return ret; }
-        const unsigned short *n16() const { unsigned short *ret = (unsigned short*)(buf+offset); offset += 2;   if (offset > size) { error=1; return 0; } return ret; }
-        const unsigned       *n32() const { unsigned       *ret = (unsigned      *)(buf+offset); offset += 4;   if (offset > size) { error=1; return 0; } return ret; }
-        const char           *get(int len=0) const { char  *ret = (char          *)(buf+offset); offset += len; if (offset > size) { error=1; return 0; } return ret; }
+        int Len() const { return size; }
+        int Pos() const { return offset; };
+        int Remaining() const { return size - offset; }
+        const char *Start() const { return buf; }
+        const char *Advance(int n=0) const { return Get(n); }
+        const char           *End() const { return buf + size; }
+        const unsigned char  *N8()  const { unsigned char  *ret = (unsigned char *)(buf+offset); offset += 1;   if (offset > size) { error=1; return 0; } return ret; }
+        const unsigned short *N16() const { unsigned short *ret = (unsigned short*)(buf+offset); offset += 2;   if (offset > size) { error=1; return 0; } return ret; }
+        const unsigned       *N32() const { unsigned       *ret = (unsigned      *)(buf+offset); offset += 4;   if (offset > size) { error=1; return 0; } return ret; }
+        const char           *Get(int len=0) const { char  *ret = (char          *)(buf+offset); offset += len; if (offset > size) { error=1; return 0; } return ret; }
 
-        void String(const char *buf, int len) { char *v = (char*)get(len); if (v) memcpy(v, buf, len); }
-        void String(const string &in) { char *v = (char*)get(in.size()); if (v) memcpy(v, in.c_str(), in.size()); }
+        void String(const char *buf, int len) { char *v = (char*)Get(len); if (v) memcpy(v, buf, len); }
+        void String(const string &in) { char *v = (char*)Get(in.size()); if (v) memcpy(v, in.c_str(), in.size()); }
 
-        void N8 (const unsigned char  &in) { unsigned char  *v =                 n8();  if (v) *v = in; }
-        void N8 (const          char  &in) {          char  *v = (char*)         n8();  if (v) *v = in; }
-        void N16(const unsigned short &in) { unsigned short *v =                 n16(); if (v) *v = in; }
-        void N16(const          short &in) {          short *v = (short*)        n16(); if (v) *v = in; }
-        void N32(const unsigned int   &in) { unsigned int   *v =                 n32(); if (v) *v = in; }
-        void N32(const          int   &in) {          int   *v = (int*)          n32(); if (v) *v = in; }
-        void N32(const unsigned long  &in) { unsigned long  *v = (unsigned long*)n32(); if (v) *v = in; }
-        void N32(const          long  &in) {          long  *v = (long*)         n32(); if (v) *v = in; }
+        void Write8 (const unsigned char  &in) { unsigned char  *v =                 N8();  if (v) *v = in; }
+        void Write8 (const          char  &in) {          char  *v = (char*)         N8();  if (v) *v = in; }
+        void Write16(const unsigned short &in) { unsigned short *v =                 N16(); if (v) *v = in; }
+        void Write16(const          short &in) {          short *v = (short*)        N16(); if (v) *v = in; }
+        void Write32(const unsigned int   &in) { unsigned int   *v =                 N32(); if (v) *v = in; }
+        void Write32(const          int   &in) {          int   *v = (int*)          N32(); if (v) *v = in; }
+        void Write32(const unsigned long  &in) { unsigned long  *v = (unsigned long*)N32(); if (v) *v = in; }
+        void Write32(const          long  &in) {          long  *v = (long*)         N32(); if (v) *v = in; }
 
-        void Ntohs(const unsigned short &in) { unsigned short *v =         n16(); if (v) *v = ntohs(in); }
-        void Htons(const unsigned short &in) { unsigned short *v =         n16(); if (v) *v = htons(in); }
-        void Ntohs(const          short &in) {          short *v = (short*)n16(); if (v) *v = ntohs(in); }
-        void Htons(const          short &in) {          short *v = (short*)n16(); if (v) *v = htons(in); }
-        void Ntohl(const unsigned int   &in) { unsigned int   *v =         n32(); if (v) *v = ntohl(in); }
-        void Htonl(const unsigned int   &in) { unsigned int   *v =         n32(); if (v) *v = htonl(in); }
-        void Ntohl(const          int   &in) {          int   *v = (int*)  n32(); if (v) *v = ntohl(in); }
-        void Htonl(const          int   &in) {          int   *v = (int*)  n32(); if (v) *v = htonl(in); }
+        void Ntohs(const unsigned short &in) { unsigned short *v =         N16(); if (v) *v = ntohs(in); }
+        void Htons(const unsigned short &in) { unsigned short *v =         N16(); if (v) *v = htons(in); }
+        void Ntohs(const          short &in) {          short *v = (short*)N16(); if (v) *v = ntohs(in); }
+        void Htons(const          short &in) {          short *v = (short*)N16(); if (v) *v = htons(in); }
+        void Ntohl(const unsigned int   &in) { unsigned int   *v =         N32(); if (v) *v = ntohl(in); }
+        void Htonl(const unsigned int   &in) { unsigned int   *v =         N32(); if (v) *v = htonl(in); }
+        void Ntohl(const          int   &in) {          int   *v = (int*)  N32(); if (v) *v = ntohl(in); }
+        void Htonl(const          int   &in) {          int   *v = (int*)  N32(); if (v) *v = htonl(in); }
 
-        void Htons(unsigned short *out) const { const unsigned short *v =         n16(); *out = v ? htons(*v) : 0; }
-        void Ntohs(unsigned short *out) const { const unsigned short *v =         n16(); *out = v ? ntohs(*v) : 0; }
-        void Htons(         short *out) const { const          short *v = (short*)n16(); *out = v ? htons(*v) : 0; }
-        void Ntohs(         short *out) const { const          short *v = (short*)n16(); *out = v ? ntohs(*v) : 0; }
-        void Htonl(unsigned int   *out) const { const unsigned int   *v =         n32(); *out = v ? htonl(*v) : 0; }
-        void Ntohl(unsigned int   *out) const { const unsigned int   *v =         n32(); *out = v ? ntohl(*v) : 0; }
-        void Htonl(         int   *out) const { const          int   *v = (int*)  n32(); *out = v ? htonl(*v) : 0; }
-        void Ntohl(         int   *out) const { const          int   *v = (int*)  n32(); *out = v ? ntohl(*v) : 0; }
+        void Htons(unsigned short *out) const { const unsigned short *v =         N16(); *out = v ? htons(*v) : 0; }
+        void Ntohs(unsigned short *out) const { const unsigned short *v =         N16(); *out = v ? ntohs(*v) : 0; }
+        void Htons(         short *out) const { const          short *v = (short*)N16(); *out = v ? htons(*v) : 0; }
+        void Ntohs(         short *out) const { const          short *v = (short*)N16(); *out = v ? ntohs(*v) : 0; }
+        void Htonl(unsigned int   *out) const { const unsigned int   *v =         N32(); *out = v ? htonl(*v) : 0; }
+        void Ntohl(unsigned int   *out) const { const unsigned int   *v =         N32(); *out = v ? ntohl(*v) : 0; }
+        void Htonl(         int   *out) const { const          int   *v = (int*)  N32(); *out = v ? htonl(*v) : 0; }
+        void Ntohl(         int   *out) const { const          int   *v = (int*)  N32(); *out = v ? ntohl(*v) : 0; }
 
-        void N8 (unsigned char  *out) const { const unsigned char  *v =                 n8();  *out = v ? *v : 0; }
-        void N8 (         char  *out) const { const          char  *v = (char*)         n8();  *out = v ? *v : 0; }
-        void N16(unsigned short *out) const { const unsigned short *v =                 n16(); *out = v ? *v : 0; }
-        void N16(         short *out) const { const          short *v = (short*)        n16(); *out = v ? *v : 0; }
-        void N32(unsigned int   *out) const { const unsigned int   *v =                 n32(); *out = v ? *v : 0; }
-        void N32(         int   *out) const { const          int   *v = (int*)          n32(); *out = v ? *v : 0; }
-        void N32(unsigned long  *out) const { const unsigned long  *v = (unsigned long*)n32(); *out = v ? *v : 0; }
-        void N32(         long  *out) const { const          long  *v = (long*)         n32(); *out = v ? *v : 0; }
+        void Read8 (unsigned char  *out) const { const unsigned char  *v =                 N8();  *out = v ? *v : 0; }
+        void Read8 (         char  *out) const { const          char  *v = (char*)         N8();  *out = v ? *v : 0; }
+        void Read16(unsigned short *out) const { const unsigned short *v =                 N16(); *out = v ? *v : 0; }
+        void Read16(         short *out) const { const          short *v = (short*)        N16(); *out = v ? *v : 0; }
+        void Read32(unsigned int   *out) const { const unsigned int   *v =                 N32(); *out = v ? *v : 0; }
+        void Read32(         int   *out) const { const          int   *v = (int*)          N32(); *out = v ? *v : 0; }
+        void Read32(unsigned long  *out) const { const unsigned long  *v = (unsigned long*)N32(); *out = v ? *v : 0; }
+        void Read32(         long  *out) const { const          long  *v = (long*)         N32(); *out = v ? *v : 0; }
     };
 
     struct ConstStream : public Stream {
         ConstStream(const char *B, int S) : Stream((char*)B, S) {}
-        char           *end()          { FATAL(this, ": ConstStream write"); return 0; }
-        unsigned char  *n8()           { FATAL(this, ": ConstStream write"); return 0; }
-        unsigned short *n16()          { FATAL(this, ": ConstStream write"); return 0; }
-        unsigned       *n32()          { FATAL(this, ": ConstStream write"); return 0; }
-        char           *get(int len=0) { FATAL(this, ": ConstStream write"); return 0; }
+        char           *End()          { FATAL(this, ": ConstStream write"); return 0; }
+        unsigned char  *N8()           { FATAL(this, ": ConstStream write"); return 0; }
+        unsigned short *N16()          { FATAL(this, ": ConstStream write"); return 0; }
+        unsigned       *N32()          { FATAL(this, ": ConstStream write"); return 0; }
+        char           *Get(int len=0) { FATAL(this, ": ConstStream write"); return 0; }
     };
 
     struct MutableStream : public Stream {
         MutableStream(char *B, int S) : Stream(B, S) {}
-        char           *end() { return buf + size; }
-        unsigned char  *n8()  { unsigned char  *ret = (unsigned char *)(buf+offset); offset += 1;   if (offset > size) { error=1; return 0; } return ret; }
-        unsigned short *n16() { unsigned short *ret = (unsigned short*)(buf+offset); offset += 2;   if (offset > size) { error=1; return 0; } return ret; }
-        unsigned       *n32() { unsigned       *ret = (unsigned      *)(buf+offset); offset += 4;   if (offset > size) { error=1; return 0; } return ret; }
-        char           *get(int len=0) { char  *ret = (char          *)(buf+offset); offset += len; if (offset > size) { error=1; return 0; } return ret; }
+        char           *End() { return buf + size; }
+        unsigned char  *N8()  { unsigned char  *ret = (unsigned char *)(buf+offset); offset += 1;   if (offset > size) { error=1; return 0; } return ret; }
+        unsigned short *N16() { unsigned short *ret = (unsigned short*)(buf+offset); offset += 2;   if (offset > size) { error=1; return 0; } return ret; }
+        unsigned       *N32() { unsigned       *ret = (unsigned      *)(buf+offset); offset += 4;   if (offset > size) { error=1; return 0; } return ret; }
+        char           *Get(int len=0) { char  *ret = (char          *)(buf+offset); offset += len; if (offset > size) { error=1; return 0; } return ret; }
     };
 };
 
 struct ProtoHeader {
     int flag, len; 
-    ProtoHeader() : len(0) { set_flag(0); }
-    ProtoHeader(int f) : len(0) { set_flag(f); }
+    ProtoHeader() : len(0) { SetFlag(0); }
+    ProtoHeader(int f) : len(0) { SetFlag(f); }
     ProtoHeader(const char *text) {
         memcpy(&flag, text, sizeof(int));
         memcpy(&len, text+sizeof(int), sizeof(int));
-        validate();
+        Validate();
     }
-    void validate() const { if (((flag>>16)&0xffff) != magic) FATAL("magic check"); }
-    void set_len(int v) { validate(); len = v; }
-    void set_flag(unsigned short v) { flag = (magic<<16) | v; }
-    unsigned short get_flag() const { return flag & 0xffff; }
+    void Validate() const { if (((flag>>16)&0xffff) != magic) FATAL("magic check"); }
+    void SetLength(int v) { Validate(); len = v; }
+    void SetFlag(unsigned short v) { flag = (magic<<16) | v; }
+    unsigned short GetFlag() const { return flag & 0xffff; }
     static const int size = sizeof(int)*2, magic = 0xfefe;
 };
 
 /* file types */
 
+struct VersionedFileName {
+    const char *dir, *_class, *var;
+    VersionedFileName(const char *D=0, const char *C=0, const char *V=0) : dir(D), _class(C), var(V) {}
+};
+
 struct ProtoFile {
     File *file; int read_offset, write_offset; bool done;
-
+    ProtoFile(const char *fn=0) : file(0) { Open(fn); }
     ~ProtoFile() { delete file; }
-    ProtoFile(const char *fn=0) : file(0) { open(fn); }
-
-    bool opened() { return file && file->opened(); }
-    void open(const char *fn);
-    int add(const Proto *msg, int status);
-    bool update(int offset, const ProtoHeader *ph, const Proto *msg);
-    bool update(int offset, int status);
-    bool get(Proto *out, int offset, int status=-1);
-    bool next(Proto *out, int *offsetOut=0, int status=-1);
-    bool next(ProtoHeader *hdr, Proto *out, int *offsetOut=0, int status=-1);
+    bool Opened() { return file && file->opened(); }
+    void Open(const char *fn);
+    int Add(const Proto *msg, int status);
+    bool Update(int offset, const ProtoHeader *ph, const Proto *msg);
+    bool Update(int offset, int status);
+    bool Get(Proto *out, int offset, int status=-1);
+    bool Next(Proto *out, int *offsetOut=0, int status=-1);
+    bool Next(ProtoHeader *hdr, Proto *out, int *offsetOut=0, int status=-1);
 };
 
 struct StringFile {
-    ReallocHeap b; char **line; int lines;
+    vector<string> *F; string H;
+    StringFile() { Clear(); }
+    StringFile(vector<string> *f, const string &h=string()) : F(f), H(h) {}
+    ~StringFile() { delete F; }
 
-    StringFile() { clear(); }
-    ~StringFile() { clear(); }
-    void clear() { b.reset(); line=0; lines=0; }
-    void print(const char *name, bool nl=1);
+    void Clear() { F=0; H.clear(); }
+    void Print(const string &name, bool nl=1);
+    int Lines() const { return F ? F->size() : 0; }
+    string Line(int i) const { return (F && i < F->size()) ? (*F)[i] : ""; }
+    void AssignTo(vector<string> **Fo, string *Ho) { if (Fo) *Fo=F; if (Ho) *Ho=H; Clear(); }
 
-    static int read(string &hdrout, StringFile *out, const char *path, int header=1);
-    static int read(string &hdrout, StringFile *out, IterWordIter *word, int header);
+    int ReadVersioned (const VersionedFileName &fn, int iter=-1);
+    int WriteVersioned(const VersionedFileName &fn, int iter, const string &hdr=string());
+    int WriteVersioned(const char *D, const char *C, const char *V, int iter, const string &hdr=string())
+    { return WriteVersioned(VersionedFileName(D, C, V), iter, hdr); }
 
-    static int writeRow(File *file, const char *rowval);
-    static int write(const string &hdr, const vector<string> &out, File *file, const char *name);
-    static int write(const string &hdr, const vector<string> &out, const char *path, const char *name);
+    int Read(const string &path, int header=1);
+    int Read(IterWordIter *word, int header);
 
-    static int ReadFile(const char *Dir, const char *Class, const char *Var, StringFile *out, string *flagOut, int iteration=-1);
-    static int WriteFile(const char *Dir, const char *Class, const char *Var, const vector<string> &model, int iteration, const char *transcript=0);
+    int Write(File         *file, const string &name);
+    int Write(const string &path, const string &name);
+    static int WriteRow(File *file, const string &rowval);
+
+    static int Read(const string &fn, vector<string> **F, string *H)
+    { StringFile f; int ret=f.Read(fn); f.AssignTo(F, H); return ret; }
+    static int ReadVersioned(const VersionedFileName &fn, vector<string> **F, string *H, int iter=-1)
+    { StringFile f; int ret=f.ReadVersioned(fn); f.AssignTo(F, H); return ret; }
+    static int ReadVersioned(const char *D, const char *C, const char *V, vector<string> **F, string *H, int iter=-1)
+    { return ReadVersioned(VersionedFileName(D, C, V), F, H, iter); }
 };
 
 struct SettingsFile {
@@ -659,79 +675,82 @@ struct SettingsFile {
     static const char *VarName() { return "settings"; }
     static const char *Separator() { return " = "; }
 
-    static int read(const char *dir, const char *name);
-    static int write(const vector<string> &fields, const char *dir, const char *name);
+    static int read(const string &dir, const string &name);
+    static int write(const vector<string> &fields, const string &dir, const string &name);
 };
 
 struct MatrixFile {
-    Matrix *F; string T;
-
-    ~MatrixFile() { delete F; }
-    MatrixFile() { clear(); }
-    MatrixFile(Matrix *features, const char *transcript) : F(features), T(transcript) {}
-
-    void clear() { F=0; T.clear(); }
-    const char *text() { return T.c_str(); }
-
     struct Header { enum { NONE=0, DIM_PLUS=1, DIM=2 }; };
-    int read(const char *path, int header=1) { return read(T, &F, path, header); }
-    int read(IterWordIter *word, int header) { return read(T, &F, word, header); }
-    int read_binary(const char *path) { return read_binary(T, &F, path); }
-
-    int write(const char *path, const char *name) { return write(T, F, path, name); }
-    int write(File *file, const char *name) { return write(T, F, file, name); }
-
     struct BinaryHeader{ int magic, M, N, name, transcript, data, unused1, unused2; };
-    int write_binary(const char *path, const char *name) { return write_binary(T, F, path, name); }
-    int write_binary(File *file, const char *name) { return write_binary(T, F, file, name); }
 
-    static string filename(const char *Class, const char *Var, const char *Suffix, int iteration);
-    static int findHighestIteration(const char *Dir, const char *Class, const char *Var, const char *Suffix);
-    static int findHighestIteration(const char *Dir, const char *Class, const char *Var, const char *Suffix1, const char *Suffix2);
+    Matrix *F; string H;
+    MatrixFile() { Clear(); }
+    MatrixFile(Matrix *f, const string &h=string()) : F(f), H(h) {}
+    ~MatrixFile() { delete F; }
 
-    static int readHeader(string &hdrout, IterWordIter *word);
-    static int readDimensions(IterWordIter *word, int *M, int *N);
-    static int read(string &hdrout, Matrix **out, const char *path, int header=1, int (*IsSpace)(int)=0);
-    static int read(string &hdrout, Matrix **out, IterWordIter *word, int header);
-    static int read_binary(string &hdrout, Matrix **out, const char *path);
+    void Clear() { F=0; H.clear(); }
+    const char *Text() { return H.c_str(); }
+    void AssignTo(Matrix **Fo, string *Ho) { if (Fo) *Fo=F; if (Ho) *Ho=H; Clear(); }
 
-    static int writeHeader(File *file, const char *name, const char *hdr, int M, int N);
-    static int writeBinaryHeader(File *file, const char *name, const char *hdr, int M, int N);
-    static int writeRow(File *file, const double *row, int N, bool lastrow=0);
-    static int write(const string &hdr, Matrix *out, File *file, const char *name);
-    static int write(const string &hdr, Matrix *out, const char *path, const char *name);
-    static int write_binary(const string &hdr, Matrix *out, File *file, const char *name);
-    static int write_binary(const string &hdr, Matrix *out, const char *path, const char *name);
+    int ReadVersioned       (const VersionedFileName &fn, int iteration=-1);
+    int WriteVersioned      (const VersionedFileName &fn, int iteration);
+    int WriteVersionedBinary(const VersionedFileName &fn, int iteration);
+    int WriteVersioned(const char *D, const char *C, const char *V, int iter)
+    { return WriteVersioned(VersionedFileName(D, C, V), iter); }
+    int WriteVersionedBinary(const char *D, const char *C, const char *V, int iter)
+    { return WriteVersionedBinary(VersionedFileName(D, C, V), iter); }
 
-    static int ReadFile(const char *Dir, const char *Class, const char *Var, Matrix **modelOut, string *flagOut, int iteration=-1);
-    static int WriteFile(const char *Dir, const char *Class, const char *Var, Matrix *model, int iteration, const char *transcript=0);
-    static int WriteFileBinary(const char *Dir, const char *Class, const char *Var, Matrix *model, int iteration, const char *transcript=0);
+    int Read(IterWordIter *word, int header=1);
+    int Read(const string &path, int header=1, int (*IsSpace)(int)=0);
+    int ReadBinary(const string &path);
+
+    int Write      (File         *file, const string &name);
+    int Write      (const string &path, const string &name);
+    int WriteBinary(File         *file, const string &name);
+    int WriteBinary(const string &path, const string &name);
+
+    static string Filename(const VersionedFileName &fn, const string &suf, int iter) { return Filename(fn._class, fn.var, suf, iter); }
+    static string Filename(const string &_class, const string &var, const string &suffix, int iteration);
+    static int FindHighestIteration(const VersionedFileName &fn, const string &suffix);
+    static int FindHighestIteration(const VersionedFileName &fn, const string &suffix1, const string &suffix2);
+    static int ReadHeader    (IterWordIter *word, string *hdrout);
+    static int ReadDimensions(IterWordIter *word, int *M, int *N);
+    static int WriteHeader      (File *file, const string &name, const string &hdr, int M, int N);
+    static int WriteBinaryHeader(File *file, const string &name, const string &hdr, int M, int N);
+    static int WriteRow         (File *file, const double *row, int N, bool lastrow=0);
+
+    static int Read(IterWordIter *fd, Matrix **F, string *H)
+    { MatrixFile f; int ret=f.Read(fd); f.AssignTo(F, H); return ret; }
+    static int Read(const string &fn, Matrix **F, string *H)
+    { MatrixFile f; int ret=f.Read(fn); f.AssignTo(F, H); return ret; }
+    static int ReadVersioned(const VersionedFileName &fn, Matrix **F, string *H, int iter=-1)
+    { MatrixFile f; int ret=f.ReadVersioned(fn); f.AssignTo(F, H); return ret; }
+    static int ReadVersioned(const char *D, const char *C, const char *V, Matrix **F, string *H=0, int iter=-1)
+    { return ReadVersioned(VersionedFileName(D, C, V), F, H, iter); }
 };
 
 struct MatrixArchiveOut {
     File *file;
-
-    ~MatrixArchiveOut();
     MatrixArchiveOut(const char *name=0);
+    ~MatrixArchiveOut();
 
     void close();
     int open(const char *name);
     int open(string name) { return open(name.c_str()); }
     int write(const string &hdr, Matrix*, const char *name);
-    int write(const MatrixFile *f, const char *name) { return write(f->T, f->F, name); }
+    int write(const MatrixFile *f, const char *name) { return write(f->H, f->F, name); }
 };
 
 struct MatrixArchiveIn {
     IterWordIter *file; int index;
-
-    ~MatrixArchiveIn();
     MatrixArchiveIn(const char *name=0);
+    ~MatrixArchiveIn();
 
     void close();
     int open(const char *name);
     int open(string name) { return open(name.c_str()); }
-    int read(string &hdrout, Matrix **out);
-    int read(MatrixFile *f) { return read(f->T, &f->F); }
+    int read(string *hdrout, Matrix **out);
+    int read(MatrixFile *f) { return read(&f->H, &f->F); }
     int skip();
     const char *filename();
     static int count(const char *name);

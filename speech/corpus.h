@@ -108,7 +108,7 @@ struct FeatCorpus {
 
     static int feat_iter_matrix(const char *fn, bool hdr, FeatCB cb, void *arg) {
         MatrixFile feat;
-        if (feat.read(fn, hdr)) return 0;
+        if (feat.Read(fn, hdr)) return 0;
         add_feature(&feat, fn, cb, arg);
         return 1;
     }
@@ -122,7 +122,7 @@ struct FeatCorpus {
             MatrixFile feat;
             featlist.read(&feat);
             if (!feat.F) break;
-            if (feat.F->M < 12) { ERROR("feature '", feat.T, "' too short ", feat.F->M, ", skipping"); count++; continue; }
+            if (feat.F->M < 12) { ERROR("feature '", feat.H, "' too short ", feat.F->M, ", skipping"); count++; continue; }
             string afn = archive_filename(fn, count);
             add_feature(&feat, afn.c_str(), cb, arg);
             count++;
@@ -133,8 +133,8 @@ struct FeatCorpus {
     static void add_feature(MatrixFile *feat, const char *pn, FeatCB cb, void *arg) {
         Matrix *orig = feat->F->clone();
         feat->F = Features::fromFeat(feat->F, Features::Flag::Full);
-        DEBUG("processing %s : %s", pn,  feat->text());
-        cb(pn, orig, feat->F, feat->text(), arg);
+        DEBUG("processing %s : %s", pn,  feat->Text());
+        cb(pn, orig, feat->F, feat->Text(), arg);
         delete orig;
     }
     
@@ -153,7 +153,7 @@ struct PathCorpus {
     static void add_path(MatrixArchiveOut *out, Matrix *viterbi, const char *uttfilename) {
         MatrixFile f(viterbi, basename(uttfilename,0,0));
         out->write(&f, "viterbi");
-        f.clear();
+        f.Clear();
     }
 
     static int path_iter(const char *featdir, MatrixArchiveIn *paths, PathCB cb, void *arg) {
@@ -166,11 +166,11 @@ struct PathCorpus {
             /* read utterance viterbi path */
             if (paths->read(&path)) { ERROR("read utterance path: ", paths->index); break; }
 
-            string uttfilename = string(featdir) + path.text();
+            string uttfilename = string(featdir) + path.Text();
             int uttindex = FeatCorpus::archive_filename_index(uttfilename.c_str(), &uttfilename);
             if (uttindex < 0) {
                 /* not archive, read from file */
-                utt.read(uttfilename.c_str());
+                utt.Read(uttfilename.c_str());
             }
             else {
                 /* archive url */
@@ -185,12 +185,12 @@ struct PathCorpus {
                 utts.read(&utt);
             }
             if (!utt.F) { ERROR("skipping ", uttfilename); continue; }
-            if (path.F->M != utt.F->M) { ERROR("path/utt mismatch offset ", uttindex, " len ", path.F->M, " != ", utt.F->M, " transcript='", utt.text(), "' file=", uttfilename); continue; }
+            if (path.F->M != utt.F->M) { ERROR("path/utt mismatch offset ", uttindex, " len ", path.F->M, " != ", utt.F->M, " transcript='", utt.Text(), "' file=", uttfilename); continue; }
 
             DEBUG("processing %s", uttfilename.c_str());
             Matrix *orig = utt.F->clone();
             utt.F = Features::fromFeat(utt.F, Features::Flag::Full);
-            cb(0, path.F, 0, vtime.time(), orig, utt.F, utt.text(), arg);
+            cb(0, path.F, 0, vtime.time(), orig, utt.F, utt.Text(), arg);
             delete orig;
             count++;
         }

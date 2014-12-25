@@ -295,7 +295,7 @@ String16 String16Printf(const char *fmt, ...) {
 }
 
 #define StrCatInit(s) string out; out.resize(s); Serializable::MutableStream o((char*)out.data(), out.size());
-#define StrCatAdd(x) memcpy(o.get(x.size()), x.data(), x.size())
+#define StrCatAdd(x) memcpy(o.Get(x.size()), x.data(), x.size())
 #define StrCatReturn() CHECK_EQ(o.error, 0); return out;
 string StrCat(const Printable &x1, const Printable &x2) { StrCatInit(x1.size()+x2.size()); StrCatAdd(x1); StrCatAdd(x2); StrCatReturn(); }
 string StrCat(const Printable &x1, const Printable &x2, const Printable &x3) { StrCatInit(x1.size()+x2.size()+x3.size()); StrCatAdd(x1); StrCatAdd(x2); StrCatAdd(x3); StrCatReturn(); }
@@ -1297,7 +1297,7 @@ int File::writeproto(const ProtoHeader *hdr, const Proto *msg, bool doflush) {
 int File::writeproto(ProtoHeader *hdr, const Proto *msg, bool doflush) {
 #ifdef LFL_PROTOBUF
     std::string v = msg->SerializeAsString();
-    hdr->set_len(v.size());
+    hdr->SetLength(v.size());
     v.insert(0, (const char *)hdr, ProtoHeader::size);
     int ret = (write(v.c_str(), v.size()) == v.size()) ? v.size() : -1;
     if (doflush) flush();

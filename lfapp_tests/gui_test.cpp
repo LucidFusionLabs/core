@@ -79,7 +79,7 @@ TEST(GUITest, TextArea) {
     lines.PushFront()->AssignText("4");
     lines.PushFront()->AssignText("5");
     lines.PushFront()->AssignText("6");
-    lines.PushFront()->AssignText("6");
+    lines.PushFront()->AssignText("7");
     EXPECT_EQ("7", lines[-10].Text()); EXPECT_EQ(-10, lines.IndexOf(&lines[-10]));
     EXPECT_EQ("6", lines[-9] .Text()); EXPECT_EQ(-9,  lines.IndexOf(&lines[-9]));
     EXPECT_EQ("5", lines[-8] .Text()); EXPECT_EQ(-8,  lines.IndexOf(&lines[-8]));
@@ -147,7 +147,7 @@ TEST(BrowserTest, DOMTest) {
 }
 
 TEST(BrowserTest, HTMLTest) {
-    SimpleBrowser sb(screen, Fonts::Fake(), Box::FromScreen());
+    SimpleBrowser sb(screen, Fonts::Fake(), screen->Box());
     sb.OpenHTML("<html>\n"
                 "<head><style> h1 { background-color: #111111; } </style></head>\n"
                 "<body style=\"background-color: #00ff00\">\n"
@@ -155,7 +155,7 @@ TEST(BrowserTest, HTMLTest) {
                 "<P id=cat>In  the  begining  was  fun.</p>\n"
                 "</body>\n"
                );
-    Box viewport = Box::FromScreen();
+    Box viewport = screen->Box();
     sb.v_scrollbar.menuicon2 = sb.font;
     sb.h_scrollbar.menuicon2 = sb.font;
     sb.Draw(&viewport);

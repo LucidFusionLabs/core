@@ -83,7 +83,7 @@ int main(int argc, const char **argv) {
         if (app->network.Enable(&httpd)) return -1;
     }
 
-    if (!FLAGS_wget.empty()) Singleton<HTTPClient>::Get()->wget(FLAGS_wget);
+    if (!FLAGS_wget.empty()) Singleton<HTTPClient>::Get()->WGet(FLAGS_wget);
     if (!FLAGS_nslookup .empty()) { FLAGS_dns_dump=1; Singleton<Resolver>         ::Get()->Resolve(             Resolver::Request(FLAGS_nslookup,  FLAGS_nslookup_mx ? DNS::Type::MX : DNS::Type::A)); }
     if (!FLAGS_rnslookup.empty()) { FLAGS_dns_dump=1; Singleton<RecursiveResolver>::Get()->Resolve(new RecursiveResolver::Request(FLAGS_rnslookup, FLAGS_nslookup_mx ? DNS::Type::MX : DNS::Type::A)); }
     if (FLAGS_print_iface_ips) {

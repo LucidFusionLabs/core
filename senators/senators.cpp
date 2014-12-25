@@ -94,16 +94,16 @@ struct Senator : public Query {
         if (senatornames.size()) { nick = senatornames[senatornames_index]; senatornames_index = (senatornames_index+1) % senatornames.size(); }
         else { for (int i=0; i<9; i++) nick.append(1, 'a' + ::rand() % 26); }
     }
-    int heartbeat(Connection *c) { if (bot) bot->Heartbeat(Singleton<IRCBotServer>::Get(), c); return 0; }
+    int Heartbeat(Connection *c) { if (bot) bot->Heartbeat(Singleton<IRCBotServer>::Get(), c); return 0; }
 
-    int connected(Connection *c) {
+    int Connected(Connection *c) {
         c->write(StrCat("USER ", nick, " ", nick, " ", nick, " :Senator ", nick, "\r\nNICK ", nick, "\r\n"));
         INFO("Senator ", nick, " connected");
         ready = true;
         if (bot) bot->Connected(Singleton<IRCBotServer>::Get(), c, nick);
         return 0;
     }
-    int read(Connection *c) {
+    int Read(Connection *c) {
         StringLineIter iter(c->rb, c->rl);
         for (const char *line = iter.next(); line; line = iter.next()) {
             if (FLAGS_print) INFO("Senator ", nick, " read '", line, "'");
@@ -126,7 +126,7 @@ struct Senator : public Query {
         c->readflush(c->rl);
         return 0;
     }
-    int closed(Connection *c) {
+    int Closed(Connection *c) {
         INFO("Senator ", nick, " closed");
         Senators::iterator i = senators.find(this);
         if (i != senators.end()) senators.erase(i);
@@ -225,7 +225,7 @@ void MyVPrefixSize(const vector<string> &args) {
 }
 
 int Frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample, int flag) {
-    for (Senators::iterator i = senators.begin(); i != senators.end(); i++) i->first->heartbeat(i->second);
+    for (Senators::iterator i = senators.begin(); i != senators.end(); i++) i->first->Heartbeat(i->second);
     static RollingAvg fps(128);
     fps.add(clicks);
 

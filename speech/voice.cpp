@@ -38,7 +38,7 @@ int VoiceModel::read(const char *dir) {
 
         MatrixArchiveIn index(pn.c_str());
         Matrix *m=0; string hdr; int err, count=0;
-        for (err = index.read(hdr, &m); err != -1; err = index.read(hdr, &m)) {
+        for (err = index.read(&hdr, &m); err != -1; err = index.read(&hdr, &m)) {
             int beg = m->row(0)[0], end = m->row(0)[1];
             unit[phoneme].sample[count].offset = beg;
             unit[phoneme].sample[count].len = end - beg;

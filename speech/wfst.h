@@ -76,47 +76,46 @@ struct WFST {
     };
 
     struct StringFileAlphabet : public IOAlphabet {
-        StringFile *file;
+        vector<string> *str;
         Matrix *map;
         IOAlphabet *aux;
 
         static const int HashBuckets = 5, HashValues = 2;
-        StringFileAlphabet(StringFile *F=0, Matrix *M=0, IOAlphabet *Aux=0) : file(F), map(M), aux(Aux) {}
+        StringFileAlphabet(vector<string> *S=0, Matrix *M=0, IOAlphabet *Aux=0) : str(S), map(M), aux(Aux) {}
         virtual ~StringFileAlphabet() { reset(); }
-        void reset() { delete file; delete map; file=0; map=0; }
+        void reset() { delete str; delete map; str=0; map=0; }
 
         int id(string s) const { return id(fnv32(s.c_str(), s.size())); }
         int id(unsigned hash) const { double *row = HashMatrix::get(map, hash, HashValues); return row ? row[1] : -1; }
         string name(int id) const {
             if (aux && IOAlphabet::auxiliary_symbol(id)) return aux->name(IOAlphabet::auxiliary_symbol_offset(id));
-            if (id < 0 || id >= file->lines) { ERROR("bad id: ", id); return ""; }
-            return file->line[id];
+            if (id < 0 || id >= str->size()) { ERROR("bad id: ", id); return ""; }
+            return (*str)[id];
         }
-        int size() const { return file->lines; }
+        int size() const { return str->size(); }
         void begin(Iterator *iter) const { iter->impl = 0; iter->done = 0; next(iter); }
-        void next(Iterator *iter) const { if ((iter->id = iter->impl++) >= file->lines) iter->done = 1; else iter->name = file->line[iter->id]; }
+        void next(Iterator *iter) const { if ((iter->id = iter->impl++) >= str->size()) iter->done = 1; else iter->name = (*str)[iter->id].c_str(); }
 
         int read(const char *dir, const char *name1, const char *name2, int iteration) {
-            file = new StringFile();
-            if (StringFile::ReadFile(dir, name1, name2, file, 0, iteration)<0) { ERROR(name2, ".", iteration, ".in.string"); return -1; }
-            if (MatrixFile::ReadFile(dir, name1, name2, &map, 0, iteration)<0) { ERROR(name2, ".", iteration, ".in.matrix"); return -1; }
+            if (StringFile::ReadVersioned(dir, name1, name2, &str, 0, iteration)<0) { ERROR(name2, ".", iteration, ".in.string"); return -1; }
+            if (MatrixFile::ReadVersioned(dir, name1, name2, &map, 0, iteration)<0) { ERROR(name2, ".", iteration, ".in.matrix"); return -1; }
             return 0;
         }
 
         static int write(IOAlphabet *A, const char *dir, const char *name1, const char *name2, int iteration) {
-            LocalFile out(string(dir) + MatrixFile::filename(name1, name2, "string", iteration), "w");
-            MatrixFile::writeHeader(&out, basename(out.filename(),0,0), A->FactoryName() ? A->FactoryName() : "", A->size(), 1);
+            LocalFile out(string(dir) + MatrixFile::Filename(name1, name2, "string", iteration), "w");
+            MatrixFile::WriteHeader(&out, basename(out.filename(),0,0), A->FactoryName() ? A->FactoryName() : "", A->size(), 1);
             if (A->FactoryName()) return 0;
 
             Matrix map(next_prime(A->size()*4), HashBuckets * HashValues);
             for (int i=0, l=A->size(); i<l; i++) {
                 string name = A->name(i);
-                StringFile::writeRow(&out, name.c_str());
+                StringFile::WriteRow(&out, name.c_str());
                 double *he = HashMatrix::set(&map, fnv32(name.c_str()), HashValues);
                 if (!he) FATAL("Matrix hash collision: ", name);
                 he[1] = i;
             }
-            if (MatrixFile::WriteFile(dir, name1, name2, &map, iteration, "") < 0) { ERROR(name1, " write map"); return -1; }
+            if (MatrixFile(&map).WriteVersioned(dir, name1, name2, iteration) < 0) { ERROR(name1, " write map"); return -1; }
             return 0;
         }
     };
@@ -214,11 +213,11 @@ struct WFST {
         void join(vector<int> &merged) { FATAL(this, " function not implemented"); }
 
         static int write(StateSet *S, const char *dir, const char *name1, const char *name2, int iteration) {
-            LocalFile out(string(dir) + MatrixFile::filename(name1, name2, "matrix", iteration), "w");
-            MatrixFile::writeHeader(&out, basename(out.filename(),0,0), "", S->states(), 1);
+            LocalFile out(string(dir) + MatrixFile::Filename(name1, name2, "matrix", iteration), "w");
+            MatrixFile::WriteHeader(&out, basename(out.filename(),0,0), "", S->states(), 1);
             for (int i=0, l=S->states(); i<l; i++) {
                 double row[] = { (double)S->state(i) };
-                MatrixFile::writeRow(&out, row, 1);
+                MatrixFile::WriteRow(&out, row, 1);
             }
             return 0;
         }
@@ -417,11 +416,11 @@ struct WFST {
         void join   (vector<int> &merged, Semiring *K, StateSet *I=0, StateSet *F=0) { FATAL(this, " function not implemented"); }
         
         static int write(TransitMap *M, const char *dir, const char *name, int iteration) {
-            LocalFile state  (string(dir) + MatrixFile::filename(name, "state",      "matrix", iteration), "w");
-            LocalFile transit(string(dir) + MatrixFile::filename(name, "transition", "matrix", iteration), "w");
+            LocalFile state  (string(dir) + MatrixFile::Filename(name, "state",      "matrix", iteration), "w");
+            LocalFile transit(string(dir) + MatrixFile::Filename(name, "transition", "matrix", iteration), "w");
 
-            MatrixFile::writeHeader(&state,   basename(state.filename(),0,0),   "", M->states(),      StateValues);
-            MatrixFile::writeHeader(&transit, basename(transit.filename(),0,0), "", M->transitions(), Edge::Cols);
+            MatrixFile::WriteHeader(&state,   basename(state.filename(),0,0),   "", M->states(),      StateValues);
+            MatrixFile::WriteHeader(&transit, basename(transit.filename(),0,0), "", M->transitions(), Edge::Cols);
 
             int transits = 0;
             Matrix map(next_prime(M->transitions()*4), HashBuckets * HashValues);
@@ -431,13 +430,13 @@ struct WFST {
                 Iterator iter; int count=0;
                 for (M->begin(&iter, i); !iter.done; M->next(&iter)) {
                     double row[] = { (double)iter.prevState, (double)iter.nextState, (double)iter.in, (double)iter.out, (double)iter.weight };
-                    MatrixFile::writeRow(&transit, row, Edge::Cols);
+                    MatrixFile::WriteRow(&transit, row, Edge::Cols);
                     transits++;
                     count++;
                 }
 
                 if (!count) row[1] = -1;
-                MatrixFile::writeRow(&state, row, StateValues);
+                MatrixFile::WriteRow(&state, row, StateValues);
             }
             return 0;
         }
@@ -758,14 +757,14 @@ struct WFST {
         reset();
 
         Matrix *state=0, *transit=0;
-        lastiter = MatrixFile::ReadFile(dir, name, "state", &state, 0, lastiter);
+        lastiter = MatrixFile::ReadVersioned(dir, name, "state", &state, 0, lastiter);
         if (!state) { ERROR("no WFST: ", name); return -1; }
-        if (MatrixFile::ReadFile(dir, name, "transition", &transit, 0, lastiter)<0) { ERROR(name, ".", lastiter, ".transition.matrix"); return -1; }
+        if (MatrixFile::ReadVersioned(dir, name, "transition", &transit, 0, lastiter)<0) { ERROR(name, ".", lastiter, ".transition.matrix"); return -1; }
         E = new TransitMapMatrix(state, transit);
 
         Matrix *initial=0, *final=0;
-        if (MatrixFile::ReadFile(dir, name, "initial", &initial, 0, lastiter)<0) { ERROR(name, ".", lastiter, ".initial.matrix"); return -1; }
-        if (MatrixFile::ReadFile(dir, name, "final",   &final,   0, lastiter)<0) { ERROR(name, ".", lastiter, ".final.matrix"  ); return -1; }
+        if (MatrixFile::ReadVersioned(dir, name, "initial", &initial, 0, lastiter)<0) { ERROR(name, ".", lastiter, ".initial.matrix"); return -1; }
+        if (MatrixFile::ReadVersioned(dir, name, "final",   &final,   0, lastiter)<0) { ERROR(name, ".", lastiter, ".final.matrix"  ); return -1; }
         I = new StateSetMatrix(initial);
         F = new StateSetMatrix(final);
         return lastiter;

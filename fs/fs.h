@@ -39,7 +39,7 @@ struct SpeechDecodeClient : public FeatureSink {
 
     int connect(const char *url) {
         reset();
-        conn = Singleton<HTTPClient>::Get()->persistentConnection(url, &host, &path, bind(&SpeechDecodeClient::HTTPClientResponseCB, this, _1, _2, _3, _4, _5));
+        conn = Singleton<HTTPClient>::Get()->PersistentConnection(url, &host, &path, bind(&SpeechDecodeClient::HTTPClientResponseCB, this, _1, _2, _3, _4, _5));
         return 0;
     }
 

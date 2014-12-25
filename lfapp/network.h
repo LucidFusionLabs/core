@@ -23,11 +23,20 @@ namespace LFL {
 DECLARE_bool(dns_dump);
 DECLARE_bool(network_debug);
 
+struct Query {  
+    virtual ~Query() {}
+    virtual int Heartbeat(Connection *c) { return 0; }
+    virtual int Connected(Connection *c) { return 0; }
+    virtual int Read(Connection *c) { return 0; }    
+    virtual int Flushed(Connection *c) { return 0; }
+    virtual void Close(Connection *c) {}
+};
+
 struct IOVec { char *buf; int len; };
 
 struct Protocol { 
     enum { TCP, UDP, GPLUS }; int p;
-    static const char *name(int p);
+    static const char *Name(int p);
 };
 
 struct Ethernet {
@@ -326,15 +335,6 @@ struct SMTP {
     }
 };
 
-struct Query {  
-    virtual ~Query() {}
-    virtual int heartbeat(Connection *c) { return 0; }
-    virtual int connected(Connection *c) { return 0; }
-    virtual int read(Connection *c) { return 0; }    
-    virtual int flushed(Connection *c) { return 0; }
-    virtual void close(Connection *c) {}
-};
-
 struct Listener {
     BIO *ssl;
     Socket socket;
@@ -425,9 +425,9 @@ struct Service {
 
     Service(int prot=Protocol::TCP) : protocol(prot), fake(this, Connection::Connected, 0) {}
     virtual void Close(Connection *c);
-    virtual int udp_filter(Connection *e, const char *buf, int len) { return 0; }
-    virtual int connected(Connection *c) { return 0; }
-    virtual int frame() { return 0; }
+    virtual int UDPFilter(Connection *e, const char *buf, int len) { return 0; }
+    virtual int Connected(Connection *c) { return 0; }
+    virtual int Frame() { return 0; }
 };
 
 struct UDPClient : public Service {
@@ -436,17 +436,17 @@ struct UDPClient : public Service {
     UDPClient() : Service(Protocol::UDP) { heartbeats=true; }
 
     typedef function<void(Connection*, const char*, int)> ResponseCB;
-    Connection *persistentConnection(const string &url, ResponseCB cb, int default_port) { return persistentConnection(url, cb, HeartbeatCB(), default_port); }
+    Connection *PersistentConnection(const string &url, ResponseCB cb, int default_port) { return PersistentConnection(url, cb, HeartbeatCB(), default_port); }
 
     typedef function<void(Connection*)> HeartbeatCB; 
-    Connection *persistentConnection(const string &url, ResponseCB, HeartbeatCB, int default_port);
+    Connection *PersistentConnection(const string &url, ResponseCB, HeartbeatCB, int default_port);
 };
 
 struct UDPServer : public Service {
     virtual ~UDPServer() {}
     Query *query=0;
     UDPServer(int port) { protocol=Protocol::UDP; QueueListen(0, port); }
-    virtual int connected(Connection *c) { c->query = query; return 0; }
+    virtual int Connected(Connection *c) { c->query = query; return 0; }
 };
 
 struct Resolver {
@@ -471,7 +471,7 @@ struct Resolver {
         ~Nameserver() { if (c) c->_error(); }
         Nameserver() {}
         Nameserver(Resolver *P, IPV4::Addr addr) : parent(P),
-        c(Singleton<UDPClient>::Get()->persistentConnection
+        c(Singleton<UDPClient>::Get()->PersistentConnection
           (IPV4Endpoint::name(addr, 53),
            [&](Connection *c, const char *cb, int cl) { Response(c, (DNS::Header*)cb, cl); },
            [&](Connection *c)                         { Heartbeat(); }, 53)), timedout(0) {}
@@ -531,16 +531,16 @@ struct HTTPClient : public Service {
     typedef function<void(Connection*, const char*, const string&, const char*, int)> ResponseCB;
     static int request(Connection *c, int method, const char *host, const char *path, const char *postmime, const char *postdata, int postlen, bool persist);
 
-    bool wget(const string &url, File *out=0, ResponseCB responseCB=ResponseCB());
-    bool wpost(const string &url, const string &mimetype, const char *postdata, int postlen, ResponseCB=ResponseCB());
-    Connection *persistentConnection(const string &url, string *hostOut, string *pathOut, ResponseCB responseCB);
+    bool WGet(const string &url, File *out=0, ResponseCB responseCB=ResponseCB());
+    bool WPost(const string &url, const string &mimetype, const char *postdata, int postlen, ResponseCB=ResponseCB());
+    Connection *PersistentConnection(const string &url, string *hostOut, string *pathOut, ResponseCB responseCB);
 };
 
 struct HTTPServer : public Service {
     virtual ~HTTPServer() { ClearURL(); }
     HTTPServer(IPV4::Addr addr, int port, bool SSL) { protocol=Protocol::TCP; QueueListen(addr, port, SSL); }
     HTTPServer(                 int port, bool SSL) { protocol=Protocol::TCP; QueueListen(0,    port, SSL); }
-    int connected(Connection *c);
+    int Connected(Connection *c);
 
     typedef function<void(Connection*)> ConnectionClosedCB;
     static void connectionClosedCB(Connection *httpServerConnection, ConnectionClosedCB cb);
@@ -683,7 +683,7 @@ struct SMTPClient : public Service {
     map<IPV4::Addr, string> domains; string domain;
     string HeloDomain(IPV4::Addr addr) const { return domain.empty() ? FindOrDie(domains, addr) : domain; }
 
-    virtual int connected(Connection *c) { total_connected++; return 0; }
+    virtual int Connected(Connection *c) { total_connected++; return 0; }
 
     static void DeliverDeferred(Connection *c);
     typedef function<bool(Connection*, const string&, SMTP::Message*)> DeliverableCB;
@@ -697,7 +697,7 @@ struct SMTPServer : public Service {
     string HeloDomain(IPV4::Addr addr) const { return domain.empty() ? FindOrDie(domains, addr) : domain; }
 
     SMTPServer(const string &n) : domain(n) {}
-    virtual int connected(Connection *c);
+    virtual int Connected(Connection *c);
     virtual void ReceiveMail(Connection *c, const SMTP::Message &message);
 };
 
@@ -705,14 +705,14 @@ struct GPlusClient : public Service {
     static const int MTU = 1500;
     enum { Write=1, Sendto=2 };
     GPlusClient() : Service(Protocol::GPLUS) { heartbeats=true; }
-    Connection *persistentConnection(const string &name, UDPClient::ResponseCB cb, UDPClient::HeartbeatCB HCB, void *arg);
+    Connection *PersistentConnection(const string &name, UDPClient::ResponseCB cb, UDPClient::HeartbeatCB HCB, void *arg);
 };
 
 struct GPlusServer : public Service {
     virtual ~GPlusServer() {}
     Query *query=0;
     GPlusServer() : Service(Protocol::GPLUS) { endpoint_read_autoconnect=1; }
-    virtual int connected(Connection *c) { c->query = query; return 0; }
+    virtual int Connected(Connection *c) { c->query = query; return 0; }
 };
 
 struct Sniffer {
