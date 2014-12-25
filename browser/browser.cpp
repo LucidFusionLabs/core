@@ -62,7 +62,7 @@ struct MyBrowserWindow : public GUI {
     }
 
     void Layout() {
-        win = topbar = Box::FromScreen();
+        win = topbar = screen->Box();
         topbar.h = 16;
         topbar.y = max(0, win.y + win.h - topbar.h);
         win.h    = max(0,         win.h - topbar.h);
@@ -97,7 +97,7 @@ struct MyBrowserWindow : public GUI {
     }
     bool Dirty() { return simple_browser ? simple_browser->Dirty(&win) : true; }
     void Draw() {
-        box = Box::FromScreen();
+        box = screen->Box();
         GUI::Draw();
         screen->gd->SetColor(Color::white);
         if (!address_box.active) {

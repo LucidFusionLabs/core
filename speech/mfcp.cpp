@@ -54,11 +54,11 @@ int main(int argc, const char *argv[]) {
         /* read input */
         INFO("input = ", in);
         MatrixFile mf;
-        if (mf.read(in)) { ERROR("read: ", in); return -1; }
+        if (mf.Read(in)) { ERROR("read: ", in); return -1; }
 
         /* write output */
         INFO("output = ", out);
-        if (mf.write_binary(out, basename(out,0,0))) { ERROR("write ", out); return -1; }
+        if (mf.WriteBinary(out, basename(out,0,0))) { ERROR("write ", out); return -1; }
     }
     else {
         /* open input */
@@ -68,14 +68,14 @@ int main(int argc, const char *argv[]) {
         IterWordIter word(&lfi);
 
         string hdr;
-        if (MatrixFile::readHeader(hdr, &word) < 0) { ERROR("readHeader: ", -1); return -1; }
+        if (MatrixFile::ReadHeader(&word, &hdr) < 0) { ERROR("readHeader: ", -1); return -1; }
         int M=atof(word.next()), N=atof(word.next()), ret;
 
         /* open output */
         INFO("output = ", out);
         LocalFile file(out, "w");
         if (!file.opened()) { ERROR("LocalFile: ", strerror(errno)); return -1;  }
-        if (MatrixFile::writeBinaryHeader(&file, basename(out,0,0), hdr.c_str(), M, N) < 0) { ERROR("writeBinaryHeader: ", -1); return -1; }
+        if (MatrixFile::WriteBinaryHeader(&file, basename(out,0,0), hdr.c_str(), M, N) < 0) { ERROR("writeBinaryHeader: ", -1); return -1; }
 
         /* read & write */
         double *row = (double *)alloca(N*sizeof(double));
@@ -87,12 +87,12 @@ int main(int argc, const char *argv[]) {
 
     if (FLAGS_verify) {
         MatrixFile mf;
-        if (mf.read(in)) { ERROR("read: ", in); return -1; }
+        if (mf.Read(in)) { ERROR("read: ", in); return -1; }
 
         MatrixFile nf;
-        if (nf.read_binary(out)) { ERROR("read_binary: ", out); return -1; }
+        if (nf.ReadBinary(out)) { ERROR("read_binary: ", out); return -1; }
 
-        if (mf.T != nf.T) ERROR("mismatching text '", mf.T, "' != '", nf.T, "'");
+        if (mf.H != nf.H) ERROR("mismatching text '", mf.H, "' != '", nf.H, "'");
 
         Matrix *A=mf.F, *B=nf.F;
         if (A->M != B->M || A->N != B->N) { ERROR("dim mismatch ", A->M, " != ", B->M, " || ", A->N, " != ", B->N); return -1; }

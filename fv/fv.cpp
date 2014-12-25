@@ -399,8 +399,8 @@ struct AudioGUI : public GUI {
     int DrawFrame() {
         /* live spectogram */
         float yp=0.6, ys=0.4, xbdr=0.05, ybdr=0.07;
-        Box sb = Box::FromScreen(0, yp, 1, ys, xbdr, ybdr);
-        Box si = Box::FromScreen(0, yp, 1, ys, xbdr+0.04, ybdr+0.035);
+        Box sb = screen->Box(0, yp, 1, ys, xbdr, ybdr);
+        Box si = screen->Box(0, yp, 1, ys, xbdr+0.04, ybdr+0.035);
 
         screen->gd->DrawMode(DrawMode::_2D);
         asset("sbg")->tex.Draw(sb);
@@ -433,16 +433,16 @@ struct AudioGUI : public GUI {
         /* SNR */
         if (AED) text->Draw(StringPrintf("SNR = %.2f", AED->SNR()), point(screen->width*.75, screen->height*.05));
 
-        GUI::Draw(Box::FromScreen());
+        GUI::Draw(screen->Box());
         return 0;
     }
 
     void Layout() {
         Flow flow(&box, 0, &child_box);
 
-        play_button  .LayoutBox(&flow, Box::FromScreen(0,  -.85, .5, .15, .16, .0001));
-        decode_button.LayoutBox(&flow, Box::FromScreen(.5, -.85, .5, .15, .16, .0001));
-        record_button.LayoutBox(&flow, Box::FromScreen(0,  -.65,  1, .2,  .38, .0001));
+        play_button  .LayoutBox(&flow, screen->Box(0,  -.85, .5, .15, .16, .0001));
+        decode_button.LayoutBox(&flow, screen->Box(.5, -.85, .5, .15, .16, .0001));
+        record_button.LayoutBox(&flow, screen->Box(0,  -.65,  1, .2,  .38, .0001));
 
         play_button.AddHoverBox(record_button.box, MouseController::CB([&](){ monitor_hover = !monitor_hover; }));
         play_button.AddHoverBox(record_button.box, MouseController::CB([&](){ if ( myMonitor) MyMonitor(vector<string>(1,"snap")); }));
@@ -458,8 +458,8 @@ int VideoFrame(LFL::Window *W, unsigned clocks, unsigned samples, bool cam_sampl
         if (cam_sample || app->assets.movie_playing) liveCam->Update();
 
         float yp=0.5, ys=0.5, xbdr=0.05, ybdr=0.07;
-        Box st = Box::FromScreen(0, .5, 1, ys, xbdr+0.04, ybdr+0.035, xbdr+0.04, .01);
-        Box sb = Box::FromScreen(0, 0,  1, ys, xbdr+0.04, .01, xbdr+0.04, ybdr+0.035);
+        Box st = screen->Box(0, .5, 1, ys, xbdr+0.04, ybdr+0.035, xbdr+0.04, .01);
+        Box sb = screen->Box(0, 0,  1, ys, xbdr+0.04, .01, xbdr+0.04, ybdr+0.035);
         liveCam->Draw(st, sb);
     }
 
@@ -504,22 +504,22 @@ struct FullscreenGUI : public GUI {
         lastdecode = decode;
 
         screen->gd->DrawMode(DrawMode::_2D);
-        liveSG->Draw(Box::FromScreen(), myMonitor, true);
+        liveSG->Draw(screen->Box(), myMonitor, true);
 
         if (myMonitor) {
-            if (AED && (AED->words.size() || speech_client_flood())) AcousticEventGUI::Draw(AED, Box::FromScreen(), true);
+            if (AED && (AED->words.size() || speech_client_flood())) AcousticEventGUI::Draw(AED, screen->Box(), true);
         } else if (segments) {
-            segments->Frame(Box::FromScreen(), norm, true);
+            segments->Frame(screen->Box(), norm, true);
 
             int total = AED->feature_rate * FLAGS_sample_secs;
             for (auto it = segments->segments.begin(); it != segments->segments.end(); it++)
                 text->Draw((*it).name, point(box.centerX(), box.percentY((float)(*it).beg/total)), 0, Font::Flag::Orientation(3));
         }
 
-        Draw(Box::FromScreen().TopLeft());
+        Draw(screen->Box().TopLeft());
 
         if (decode || decoding)
-            decode_icon.drawable->Draw(Box::FromScreen(.9, -.07, .09, .07));
+            decode_icon.drawable->Draw(screen->Box(.9, -.07, .09, .07));
 
         if (close) { SetMyTab(1); close = 0; }
         return 0;
@@ -527,9 +527,9 @@ struct FullscreenGUI : public GUI {
 
     void Layout() {
         Flow flow(&box, 0, &child_box);
-        play_button      .LayoutBox(&flow, Box::FromScreen(0,    -1, .09, .07));
-        close_button     .LayoutBox(&flow, Box::FromScreen(0,  -.07, .09, .07));
-        fullscreen_button.LayoutBox(&flow, Box::FromScreen());
+        play_button      .LayoutBox(&flow, screen->Box(0,    -1, .09, .07));
+        close_button     .LayoutBox(&flow, screen->Box(0,  -.07, .09, .07));
+        fullscreen_button.LayoutBox(&flow, screen->Box());
         fullscreen_button.GetHitBox().run_only_if_first = true;
         play_button.AddClickBox(play_button.box, MouseController::CB([&](){ if (!myMonitor) MyMonitor(vector<string>(1,"snap")); }));
     }
@@ -559,7 +559,7 @@ struct FVGUI : public GUI {
         if (ret < 0) return ret;
 
         screen->gd->DrawMode(DrawMode::_2D);
-        Draw(Box::FromScreen().TopLeft());
+        Draw(screen->Box().TopLeft());
         screen->DrawDialogs();
         return 0;
     }

@@ -23,12 +23,12 @@ namespace LFL {
 /* LanguageModel */
 struct LanguageModel {
     Matrix *prior, *transit, *map;
-    StringFile names;
+    vector<string> *names;
     double total;
 
     ~LanguageModel() { reset(); }
     LanguageModel() : prior(0), transit(0), map(0), total(0) {}
-    void reset() { delete prior; prior=0; delete transit; transit=0; delete map; map=0; names.clear(); total=0; }
+    void reset() { delete prior; prior=0; delete transit; transit=0; delete map; map=0; delete names; names=0; total=0; }
 
     static const int map_buckets=5, map_values=3, col_prior=1, col_transit=2;
     double *getHashEntry(unsigned hash) { return HashMatrix::get(map, hash, map_values); }
@@ -46,13 +46,13 @@ struct LanguageModel {
         reset();
 
         string flags;
-        int lastiter = MatrixFile::ReadFile(dir, name, "transition", &transit, &flags);
+        int lastiter = MatrixFile::ReadVersioned(dir, name, "transition", &transit, &flags);
         if (!transit) { ERROR("no language model: ", name); return -1; }
         if (flags.size()) DEBUG("loading ", name, " ", lastiter, " : ", flags);
 
-        if (MatrixFile::ReadFile(dir, name, "prior", &prior, 0, lastiter) < 0) { ERROR(name, ".", lastiter, ".prior"); return -1; }
-        if (MatrixFile::ReadFile(dir, name, "map",   &map,   0, lastiter) < 0) { ERROR(name, ".", lastiter, ".map"  ); return -1; }
-        if (StringFile::ReadFile(dir, name, "name",  &names, 0, lastiter) < 0) { ERROR(name, ".", lastiter, ".name" ); return -1; }
+        if (MatrixFile::ReadVersioned(dir, name, "prior", &prior, 0, lastiter) < 0) { ERROR(name, ".", lastiter, ".prior"); return -1; }
+        if (MatrixFile::ReadVersioned(dir, name, "map",   &map,   0, lastiter) < 0) { ERROR(name, ".", lastiter, ".map"  ); return -1; }
+        if (StringFile::ReadVersioned(dir, name, "name",  &names, 0, lastiter) < 0) { ERROR(name, ".", lastiter, ".name" ); return -1; }
 
         MatrixRowIter(prior) total += prior->row(i)[0];
         return lastiter;
@@ -65,7 +65,7 @@ struct LanguageModel {
     }
 
     int occurences(int priorInd) { return prior->row(priorInd)[0]; }
-    const char *name(int priorInd) { return names.line[priorInd]; }
+    const char *name(int priorInd) { return (*names)[priorInd].c_str(); }
 };
 
 }; // namespace LFL

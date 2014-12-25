@@ -46,7 +46,7 @@ struct RSSMonitor {
             if (updating) return;
             updated = Now();
             updating = true;
-            if (!Singleton<HTTPClient>::Get()->wget
+            if (!Singleton<HTTPClient>::Get()->WGet
                 (url.c_str(), 0, HTTPClient::ResponseCB(bind(&HTMLParser::WGetCB, this, _1, _2, _3, _4, _5))))
                  { ERROR("wget ", 0); return; }
         }

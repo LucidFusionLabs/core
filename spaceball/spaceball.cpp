@@ -212,7 +212,7 @@ struct SpaceballClient : public GameClient {
         thrusters_transform.push_back(v3(-.025,  .525, -.1));
     }
 
-    void moveboost(unsigned) { SpaceballGame::Ship::set_boost(&control); }
+    void MoveBoost(unsigned) { SpaceballGame::Ship::set_boost(&control); }
     void NewEntityCB(Entity *e) {
         Asset *a = e->asset;
         if (!a) return;
@@ -276,10 +276,10 @@ struct SpaceballClient : public GameClient {
             Split(arg, isspace, &args);
             if (args.size() != 3) { ERROR("map ", arg); return; }
             framebuffer.Attach(fb_tex1);
-            framebuffer.Render(Frame);
+            framebuffer.Render(LFL::Frame);
             sbmap->Load(args[0], args[1]);
             framebuffer.Attach(fb_tex2);
-            framebuffer.Render(Frame);
+            framebuffer.Render(LFL::Frame);
             map_started = Now() - ::atoi(args[2].c_str());
             map_transition = Seconds(3);
         } else {
@@ -351,7 +351,7 @@ void MyGameFinished(SpaceballGame *world) {
     if (world->game_players == SpaceballSettings::PLAYERS_MULTIPLE) return world->StartNextGame(builtin_server);
 
     MyLocalServerDisable();
-    server->reset();
+    server->Reset();
 
     if (world->game_type == SpaceballSettings::TYPE_TOURNAMENT) team_select->display = true;
     else { menubar->ToggleDisplay(); menubar->selected = 1; }
@@ -405,13 +405,13 @@ void MyLocalServerCmd(const vector<string>&) {
         team_select->display = false;
     }
     MyLocalServerEnable(game_type);
-    server->connect("127.0.0.1", FLAGS_default_port);
+    server->Connect("127.0.0.1", FLAGS_default_port);
 }
 
 void MyServerCmd(const vector<string> &arg) {
     MyLocalServerDisable();
     if (arg.empty()) { INFO("eg: server 192.168.1.144:", FLAGS_default_port); return; }
-    server->connect(arg[0], FLAGS_default_port);
+    server->Connect(arg[0], FLAGS_default_port);
 }
 
 void MyGPlusClientCmd(const vector<string> &arg) {
@@ -437,7 +437,7 @@ void MyGPlusServerCmd(const vector<string> &arg) {
 }
 
 void MySwitchPlayerCmd(const vector<string> &) {
-    if (server) server->rcon("player_switch");
+    if (server) server->Rcon("player_switch");
 }
 
 void MyFieldColorCmd(const vector<string> &arg) {
@@ -460,11 +460,11 @@ int Frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample
         last_rpad_down = touchcontrols->rpad_down;
         if (changed && touchcontrols->rpad_down == GameMultiTouchControls::DOWN) { MySwitchPlayerCmd(vector<string>()); }
         if (changed && touchcontrols->rpad_down == GameMultiTouchControls::UP)   { /* release = fire! */ }
-        else                                                                     { server->moveboost(0); }
+        else                                                                     { server->MoveBoost(0); }
     }
 
 #ifdef LFL_BUILTIN_SERVER
-    if (builtin_server_enabled) builtin_server->frame();
+    if (builtin_server_enabled) builtin_server->Frame();
 #endif
 
     if (map_transition > 0) {
@@ -579,7 +579,7 @@ int Frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample
 
     // Press tab for playerlist
     else if (playerlist->display || server->gameover.enabled()) {
-        server->control.set_playerlist();
+        server->control.SetPlayerList();
         playerlist->Draw(fadershader.ID > 0 ? &fadershader : 0);
     }
 
@@ -810,10 +810,10 @@ extern "C" int main(int argc, const char *argv[]) {
     app->shell.command.push_back(Shell::Command("local_server", bind(&MyLocalServerCmd, _1)));
     app->shell.command.push_back(Shell::Command("gplus_client", bind(&MyGPlusClientCmd, _1)));
     app->shell.command.push_back(Shell::Command("gplus_server", bind(&MyGPlusServerCmd, _1)));
-    app->shell.command.push_back(Shell::Command("rcon",         bind(&GameClient::rcon_cmd,     server, _1)));
-    app->shell.command.push_back(Shell::Command("name",         bind(&GameClient::setname,      server, _1)));
-    app->shell.command.push_back(Shell::Command("team",         bind(&GameClient::setteam,      server, _1)));
-    app->shell.command.push_back(Shell::Command("me",           bind(&GameClient::myentityname, server, _1)));
+    app->shell.command.push_back(Shell::Command("rcon",         bind(&GameClient::RconCmd,     server, _1)));
+    app->shell.command.push_back(Shell::Command("name",         bind(&GameClient::SetName,      server, _1)));
+    app->shell.command.push_back(Shell::Command("team",         bind(&GameClient::SetTeam,      server, _1)));
+    app->shell.command.push_back(Shell::Command("me",           bind(&GameClient::MyEntityName, server, _1)));
 
 #if 0                                   
     binds.push_back(Bind('w',             Bind::TimeCB(bind(&Entity::MoveFwd,       screen->camMain, _1))));
@@ -823,23 +823,23 @@ extern "C" int main(int argc, const char *argv[]) {
     binds.push_back(Bind('q',             Bind::TimeCB(bind(&Entity::MoveDown,      screen->camMain, _1))));
     binds.push_back(Bind('e',             Bind::TimeCB(bind(&Entity::MoveUp,        screen->camMain, _1))));
 #else
-    binds.push_back(Bind('w',             Bind::TimeCB(bind(&GameClient::movefwd,   server, _1))));
-    binds.push_back(Bind('s',             Bind::TimeCB(bind(&GameClient::moverev,   server, _1))));
-    binds.push_back(Bind('a',             Bind::TimeCB(bind(&GameClient::moveleft,  server, _1))));
-    binds.push_back(Bind('d',             Bind::TimeCB(bind(&GameClient::moveright, server, _1))));
-    binds.push_back(Bind('q',             Bind::TimeCB(bind(&GameClient::movedown,  server, _1))));
-    binds.push_back(Bind('e',             Bind::TimeCB(bind(&GameClient::moveup,    server, _1))));
+    binds.push_back(Bind('w',             Bind::TimeCB(bind(&GameClient::MoveFwd,   server, _1))));
+    binds.push_back(Bind('s',             Bind::TimeCB(bind(&GameClient::MoveRev,   server, _1))));
+    binds.push_back(Bind('a',             Bind::TimeCB(bind(&GameClient::MoveLeft,  server, _1))));
+    binds.push_back(Bind('d',             Bind::TimeCB(bind(&GameClient::MoveRight, server, _1))));
+    binds.push_back(Bind('q',             Bind::TimeCB(bind(&GameClient::MoveDown,  server, _1))));
+    binds.push_back(Bind('e',             Bind::TimeCB(bind(&GameClient::MoveUp,    server, _1))));
 #endif
 #if !defined(LFL_IPHONE) && !defined(LFL_ANDROID)
-    binds.push_back(Bind(Bind::MOUSE1,    Bind::TimeCB(bind(&SpaceballClient::moveboost, server, _1))));
+    binds.push_back(Bind(Bind::MOUSE1,    Bind::TimeCB(bind(&SpaceballClient::MoveBoost, server, _1))));
 #endif
     binds.push_back(Bind(Key::LeftShift,  Bind::TimeCB(bind(&Entity::RollLeft,   screen->camMain, _1))));
     binds.push_back(Bind(Key::Space,      Bind::TimeCB(bind(&Entity::RollRight,  screen->camMain, _1))));
     binds.push_back(Bind(Key::Tab,        Bind::TimeCB(bind(&GUI::EnableDisplay, playerlist))));
-    binds.push_back(Bind(Key::F1,         Bind::CB(bind(&GameClient::setcamera,  server,          vector<string>(1, string("1"))))));
-    binds.push_back(Bind(Key::F2,         Bind::CB(bind(&GameClient::setcamera,  server,          vector<string>(1, string("2"))))));
-    binds.push_back(Bind(Key::F3,         Bind::CB(bind(&GameClient::setcamera,  server,          vector<string>(1, string("3"))))));
-    binds.push_back(Bind(Key::F4,         Bind::CB(bind(&GameClient::setcamera,  server,          vector<string>(1, string("4"))))));
+    binds.push_back(Bind(Key::F1,         Bind::CB(bind(&GameClient::SetCamera,  server,          vector<string>(1, string("1"))))));
+    binds.push_back(Bind(Key::F2,         Bind::CB(bind(&GameClient::SetCamera,  server,          vector<string>(1, string("2"))))));
+    binds.push_back(Bind(Key::F3,         Bind::CB(bind(&GameClient::SetCamera,  server,          vector<string>(1, string("3"))))));
+    binds.push_back(Bind(Key::F4,         Bind::CB(bind(&GameClient::SetCamera,  server,          vector<string>(1, string("4"))))));
     binds.push_back(Bind(Key::Return,     Bind::CB(bind(&Shell::grabmode,        &app->shell,     vector<string>()))));
     binds.push_back(Bind('r',             Bind::CB(bind(&MySwitchPlayerCmd,                       vector<string>())))); 
 	binds.push_back(Bind('t',             Bind::CB(bind([&](){ chat->Toggle(); }))));

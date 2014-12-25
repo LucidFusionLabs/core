@@ -128,16 +128,17 @@ void KeyboardGUI::AddHistory(string cmd) {
 
 int KeyboardGUI::WriteHistory(const char *dir, const char *name) {
     if (!lastcmd.ring.count) return 0;
-    LocalFile history(string(dir) + MatrixFile::filename(name, "history", "string", 0), "w");
-    MatrixFile::writeHeader(&history, basename(history.fn.c_str(),0,0), startcmd.c_str(), lastcmd.ring.count, 1);
-    for (int i=0, ind; i<lastcmd.ring.count; i++) StringFile::writeRow(&history, lastcmd[-1-i].c_str());
+    LocalFile history(string(dir) + MatrixFile::Filename(name, "history", "string", 0), "w");
+    MatrixFile::WriteHeader(&history, basename(history.fn.c_str(),0,0), startcmd.c_str(), lastcmd.ring.count, 1);
+    for (int i=0, ind; i<lastcmd.ring.count; i++) StringFile::WriteRow(&history, lastcmd[-1-i].c_str());
     return 0;
 }
 
 int KeyboardGUI::ReadHistory(const char *dir, const char *name) {
     StringFile history; int lastiter=0;
-    if (StringFile::ReadFile(dir, name, "history", &history, &startcmd, lastiter) < 0) { ERROR(name, ".", lastiter, ".name"); return -1; }
-    for (int i=0; i<history.lines; i++) AddHistory(history.line[history.lines-1-i]);
+    VersionedFileName vfn(dir, name, "history");
+    if (history.ReadVersioned(vfn, lastiter) < 0) { ERROR(name, ".", lastiter, ".name"); return -1; }
+    for (int i=0, l=history.Lines(); i<l; i++) AddHistory((*history.F)[l-1-i]);
     return 0;
 }
 
@@ -1295,7 +1296,7 @@ void SimpleBrowser::Open(const string &input_url, DOM::Node *target) {
         INFO("Browser open '", url, "'");
         requested++;
         outstanding.insert(handler);
-        Singleton<HTTPClient>::Get()->wget(url, 0, callback);
+        Singleton<HTTPClient>::Get()->WGet(url, 0, callback);
     } else {
         ERROR("unknown mimetype for url ", url);
     }

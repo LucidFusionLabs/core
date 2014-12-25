@@ -189,12 +189,10 @@ struct AcousticModel {
 };
 
 struct AcousticModelFile : public AcousticModel::Compiled {
-    Matrix *initial, *mean, *covar, *prior, *transit, *map, *tied;
-    StringFile names;
-
+    Matrix *initial=0, *mean=0, *covar=0, *prior=0, *transit=0, *map=0, *tied=0;
+    vector<string> *names=0;
     ~AcousticModelFile() { reset(); }
-    AcousticModelFile() : initial(0), mean(0), covar(0), prior(0), transit(0), map(0), tied(0) {}
-    void reset() { delete initial; initial=0; delete mean; mean=0; delete covar; covar=0; delete prior; prior=0; delete transit; transit=0; delete map; map=0; delete tied; tied=0; names.clear(); }
+    void reset() { delete initial; initial=0; delete mean; mean=0; delete covar; covar=0; delete prior; prior=0; delete transit; transit=0; delete map; map=0; delete tied; tied=0; delete names; names=0; }
     AcousticModel::State *getState(unsigned hash) { double *he = getHashEntry(hash); return he ? &state[(int)he[1]] : 0; }
     double *getHashEntry(unsigned hash) { return HashMatrix::get(map, hash, 4); }
     Matrix *tiedStates() { return tied; }
@@ -384,7 +382,7 @@ struct PhoneticSegmentationGUI : public GUI {
         Segment(const string &n, int b, int e) : name(n), beg(b), end(e), hover(0) {}
     };
     vector<Segment> segments;
-    auto_ptr<Geometry> geometry;
+    unique_ptr<Geometry> geometry;
     string sound_asset_name;
     int sound_asset_len;
 
@@ -417,7 +415,7 @@ struct PhoneticSegmentationGUI : public GUI {
             mouse.AddClickBox(segments[i].win, Callback([&,beg,len](){ Play(beg, len); }));
         }
 
-        if (verts.size()) geometry = auto_ptr<Geometry>
+        if (verts.size()) geometry = unique_ptr<Geometry>
             (new Geometry(GraphicsDevice::Lines, verts.size(), &verts[0], 0, 0, Color(1.0,1.0,1.0)));
     }
 

@@ -1923,7 +1923,7 @@ void Atlas::WriteGlyphFile(const string &name, Font *f) {
     Matrix gm(glyph_count, 10);
     GlyphTableIter(f) if (i->       tex.width) i->       ToArray(gm.row(glyph_out++), gm.N);
     GlyphIndexIter(f) if (i->second.tex.width) i->second.ToArray(gm.row(glyph_out++), gm.N);
-    MatrixFile::WriteFile(ASSETS_DIR, name.c_str(), "glyphs", &gm, 0, "");
+    MatrixFile(&gm, "").WriteVersioned(VersionedFileName(ASSETS_DIR, name.c_str(), "glyphs"), 0);
 }
 
 void Atlas::MakeFromPNGFiles(const string &name, const vector<string> &png, int atlas_dim, Font **glyphs_out) {
@@ -2039,9 +2039,9 @@ Font *Font::OpenAtlas(const string &name, int size, Color c, int flag) {
     tex.load("%s%02d.%s", name.c_str(), "png", 1);
     if (!tex.a || !tex.a->tex.ID) { ERROR("load ", name, "00.png failed"); return 0; }
 
-    Matrix *gm = 0;
-    MatrixFile::ReadFile(ASSETS_DIR, name.c_str(), "glyphs", &gm, 0, 0);
-    if (!gm) { ERROR("load ", name, ".0000.glyphs.matrix failed"); return 0; }
+    MatrixFile gm;
+    gm.ReadVersioned(VersionedFileName(ASSETS_DIR, name.c_str(), "glyphs"), 0);
+    if (!gm.F) { ERROR("load ", name, ".0000.glyphs.matrix failed"); return 0; }
 
     Font *ret = new Font();
     ret->fg = c;
@@ -2051,10 +2051,10 @@ Font *Font::OpenAtlas(const string &name, int size, Color c, int flag) {
     Atlas *atlas = ret->glyph->atlas.back().get();
     float max_t = 0, max_u = 0;
 
-    MatrixRowIter(gm) {
-        int glyph_ind = (int)gm->row(i)[0];
+    MatrixRowIter(gm.F) {
+        int glyph_ind = (int)gm.F->row(i)[0];
         Glyph *g = ret->FindOrInsertGlyph(glyph_ind);
-        g->FromArray(gm->row(i), gm->N);
+        g->FromArray(gm.F->row(i), gm.F->N);
         g->tex.ID = tex.a->tex.ID;
         if (g->tex.height > ret->height)    ret->height    = g->tex.height;
         if (g->tex.width  > ret->max_width) ret->max_width = g->tex.width;
@@ -2073,7 +2073,6 @@ Font *Font::OpenAtlas(const string &name, int size, Color c, int flag) {
 
     INFO("OpenAtlas ", name, ", texID=", tex.a->tex.ID);
     tex.a->tex.ID = 0;
-    delete gm;
     return ret;
 }
 

@@ -137,8 +137,8 @@ struct SpaceballGame : public Game {
         Time boost; float Ysnapped;
         static float mass() { return 32.0; }
         static v3 radius() { return v3(.6, .6, Ball::radius()); }
-        static bool get_boost(Game::Controller *c) { return c->get(19); }
-        static void set_boost(Game::Controller *c) { return c->set(19); }
+        static bool get_boost(Game::Controller *c) { return c->Get(19); }
+        static void set_boost(Game::Controller *c) { return c->Set(19); }
         float val_boost(Game::Controller *c) {
             if (!boost) { if (get_boost(c)) boost = Now(); return 0; }
             if (!get_boost(c)) { float ret = (Now() - boost); boost = 0; return ret; }
@@ -354,7 +354,7 @@ struct SpaceballGame : public Game {
 
                     float boost = min(1000.0f, ship->val_boost(&but));
                     if (!boost) {
-                        e->vel = but.acceleration(e->ort, e->up);
+                        e->vel = but.Acceleration(e->ort, e->up);
                         e->vel.scale(5);
                     } else {
                         e->vel = e->ort;
@@ -709,7 +709,7 @@ struct SpaceballBots : public GameBots {
         dir.y = 0;
         dir.norm();
         b->entity->ort = dir;
-        buttons->set_forward();
+        buttons->SetForward();
     }
     bool Pass(Bot *b, Entity *ball, Game::Controller *buttons) {
         return false;

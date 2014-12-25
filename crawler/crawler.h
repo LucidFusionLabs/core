@@ -39,7 +39,7 @@ struct Crawler {
             entry.set_mimetype(0);
             entry.set_offset(0);
             entry.set_created(Now());
-            return in->add(&entry, QueueFileEntry::QUEUED);
+            return in->Add(&entry, QueueFileEntry::QUEUED);
         }
     }; 
     vector<Queue> queue;
@@ -99,22 +99,22 @@ struct Crawler {
 
     bool scrape(int ind) {
         CrawlFileEntry entry; int offset, ret;
-        if (!queue[ind].out->next(&entry, &offset, QueueFileEntry::CRAWLED)) return false;
+        if (!queue[ind].out->Next(&entry, &offset, QueueFileEntry::CRAWLED)) return false;
         ret = scrape(ind, &entry);
         INFO("scrape(", ind, ") url='", entry.request().url().c_str(), "' ", ret);
         if (!ret) return false;
 
-        if (!queue[ind].out->update(offset, QueueFileEntry::SCRAPED)) return false;
+        if (!queue[ind].out->Update(offset, QueueFileEntry::SCRAPED)) return false;
         queue[ind].scraped++;
         return true;
     }
 
     bool crawl(int ind) {
         FetchBuffer *next = new FetchBuffer(this, ind);
-        if (!queue[ind].in->next(&next->hdr, &next->request, &next->qf_offset, QueueFileEntry::QUEUED)) { delete next; return false; }
+        if (!queue[ind].in->Next(&next->hdr, &next->request, &next->qf_offset, QueueFileEntry::QUEUED)) { delete next; return false; }
         INFO("crawl(", ind, ") oustanding=", queue[ind].outstanding+1, " url='", next->request.url().c_str(), "'");
 
-        if (!Singleton<HTTPClient>::Get()->wget
+        if (!Singleton<HTTPClient>::Get()->WGet
             (next->request.url(), 0,
              HTTPClient::ResponseCB(bind(&Crawler::WGetResponseCB, this, _1, _2, _3, _4, _5, next))))
         { delete next; return false; }
@@ -130,11 +130,11 @@ struct Crawler {
         entry.set_content(buf->content.data(), buf->content.size());
 
         int new_status = QueueFileEntry::CRAWLED;
-        if (!queue[buf->queue].out->add(&entry, new_status)) return;
+        if (!queue[buf->queue].out->Add(&entry, new_status)) return;
 
-        buf->hdr.set_flag(new_status);
+        buf->hdr.SetFlag(new_status);
         buf->request.set_offset(queue[buf->queue].out->write_offset);
-        queue[buf->queue].in->update(buf->qf_offset, &buf->hdr, &buf->request);
+        queue[buf->queue].in->Update(buf->qf_offset, &buf->hdr, &buf->request);
     }
 
     void close(FetchBuffer *buf) {

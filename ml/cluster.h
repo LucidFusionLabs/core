@@ -39,10 +39,10 @@ int features2cluster(const char *featdir, const char *modeldir, int algo) {
         FeatCorpus::feat_iter(featdir, KMeansInit::add_features, &kmeansinit);
         INFO("means initialized ", InitMeans, " means (", kmeansinit.count, "/", mean.count, ")");
         model=kmeans.means; kmeans.means=0;
-        MatrixFile::WriteFile(modeldir,"Cluster","means",model,lastiter);
+        MatrixFile(model,"").WriteVersioned(modeldir, "Cluster", "means", lastiter);
     }
     else { /* must load means from file */
-        if ((lastiter = MatrixFile::ReadFile(modeldir, "Cluster", "means", &model, 0)) < 0)
+        if ((lastiter = MatrixFile::ReadVersioned(modeldir, "Cluster", "means", &model, 0)) < 0)
         { ERROR("no such model KMeans.means"); return 0; }
 
         INFO("means loaded ", model->M, " means from disk, iteration ", lastiter);
@@ -56,7 +56,7 @@ int features2cluster(const char *featdir, const char *modeldir, int algo) {
             FeatCorpus::feat_iter(featdir, KMeans::add_features, &kmeans);
             double totaldist = kmeans.totaldist;
             if (Running()) kmeans.complete(); else return 0;
-            MatrixFile::WriteFile(modeldir, "Cluster", "means", kmeans.means, ++lastiter);
+            MatrixFile(kmeans.means).WriteVersioned(modeldir, "Cluster", "means", ++lastiter);
             INFO("k-means iteration ", lastiter, " completed, totaldist = ", totaldist);
         }
 
@@ -64,12 +64,12 @@ int features2cluster(const char *featdir, const char *modeldir, int algo) {
     }
 
     if (1) { /* if no covariance matrix, take sample covariance */
-        if (lastiter > MatrixFile::ReadFile(modeldir, "Cluster", "diagcovar", &mcov, 0)) {
+        if (lastiter > MatrixFile::ReadVersioned(modeldir, "Cluster", "diagcovar", &mcov, 0)) {
             SampleCovariance SV(model);
             FeatCorpus::feat_iter(featdir, SampleCovariance::add_features, &SV);
             if (Running()) SV.complete(); else return 0;
             INFO("computed sample covariance ", lastiter);
-            MatrixFile::WriteFile(modeldir, "Cluster", "diagcovar", SV.diagnol, lastiter);
+            MatrixFile(SV.diagnol).WriteVersioned(modeldir, "Cluster", "diagcovar", lastiter);
             mcov=SV.diagnol; SV.diagnol=0;
         }
     }
@@ -79,7 +79,7 @@ int features2cluster(const char *featdir, const char *modeldir, int algo) {
         if (1) {
             prior = new Matrix(model->M, 1);
             for (int i=0; i<prior->M; i++) prior->row(i)[0] = log((double)1/prior->M);
-            MatrixFile::WriteFile(modeldir, "Cluster", "prior", prior, lastiter);
+            MatrixFile(prior).WriteVersioned(modeldir, "Cluster", "prior", lastiter);
         }
 
         GMM gmm;
@@ -96,9 +96,9 @@ int features2cluster(const char *featdir, const char *modeldir, int algo) {
             double totalprob = EM.totalprob; int totalcount = EM.count;
             if (Running()) EM.complete(); else return 0;
 
-            MatrixFile::WriteFile(modeldir, "Cluster", "means",     &EM.mixture->mean,  ++lastiter);
-            MatrixFile::WriteFile(modeldir, "Cluster", "diagcovar", &EM.mixture->diagcov, lastiter);
-            if (prior) MatrixFile::WriteFile(modeldir, "Cluster", "prior", &EM.mixture->prior, lastiter);
+            MatrixFile(&EM.mixture->mean)   .WriteVersioned(modeldir, "Cluster", "means",   ++lastiter);
+            MatrixFile(&EM.mixture->diagcov).WriteVersioned(modeldir, "Cluster", "diagcovar", lastiter);
+            if (prior) MatrixFile(&EM.mixture->prior).WriteVersioned(modeldir, "Cluster", "prior", lastiter);
             INFO("GMM-EM iteration ", lastiter, " completed, totalprob=", totalprob, " PP=", totalprob/-totalcount);
         }
     }

@@ -58,7 +58,7 @@ struct LayoutTests {
 
 int Frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample, int flag) {
     screen->gd->DrawMode(DrawMode::_2D);
-    Box rootwin = Box::FromScreen();
+    Box rootwin = screen->Box();
     bool load_done = browser->requested == browser->completed;
     if (!load_done) return -1;
     else {
@@ -94,7 +94,7 @@ extern "C" int main(int argc, const char *argv[]) {
     if (app->Init()) { app->Free(); return -1; }
 
     screen->gd->ClearColor(Color::white);
-    browser = new SimpleBrowser(screen, 0, Box::FromScreen());
+    browser = new SimpleBrowser(screen, 0, screen->Box());
     browser->InitLayers();
     browser->render_log = &render_log;
     if (!FLAGS_layout_tests.empty()) layout_tests = new LayoutTests(FLAGS_layout_tests);

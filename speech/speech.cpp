@@ -458,20 +458,20 @@ int AcousticModel::write(StateCollection *model, const char *name, const char *d
     Matrix map(next_prime(states*4), buckets*values);
 
     /* open data */
-    LocalFile names  (string(dir) + MatrixFile::filename(name, "name",       "string", iteration), "w");
-    LocalFile initial(string(dir) + MatrixFile::filename(name, "prior",      "matrix", iteration), "w");
-    LocalFile transit(string(dir) + MatrixFile::filename(name, "transition", "matrix", iteration), "w");
-    LocalFile prior  (string(dir) + MatrixFile::filename(name, "emPrior",    "matrix", iteration), "w");
-    LocalFile mean   (string(dir) + MatrixFile::filename(name, "emMeans",    "matrix", iteration), "w");
-    LocalFile covar  (string(dir) + MatrixFile::filename(name, "emCov",      "matrix", iteration), "w");
+    LocalFile names  (string(dir) + MatrixFile::Filename(name, "name",       "string", iteration), "w");
+    LocalFile initial(string(dir) + MatrixFile::Filename(name, "prior",      "matrix", iteration), "w");
+    LocalFile transit(string(dir) + MatrixFile::Filename(name, "transition", "matrix", iteration), "w");
+    LocalFile prior  (string(dir) + MatrixFile::Filename(name, "emPrior",    "matrix", iteration), "w");
+    LocalFile mean   (string(dir) + MatrixFile::Filename(name, "emMeans",    "matrix", iteration), "w");
+    LocalFile covar  (string(dir) + MatrixFile::Filename(name, "emCov",      "matrix", iteration), "w");
 
     /* write data headers */
-    MatrixFile::writeHeader(&names,   basename(names.filename(),0,0),   flagtext.c_str(), states,   1);
-    MatrixFile::writeHeader(&initial, basename(initial.filename(),0,0), flagtext.c_str(), states,   1);
-    MatrixFile::writeHeader(&transit, basename(transit.filename(),0,0), flagtext.c_str(), transits, TransitCols);
-    MatrixFile::writeHeader(&prior,   basename(prior.filename(),0,0),   flagtext.c_str(), states,   K);
-    MatrixFile::writeHeader(&mean,    basename(mean.filename(),0,0),    flagtext.c_str(), means,    D);
-    MatrixFile::writeHeader(&covar,   basename(covar.filename(),0,0),   flagtext.c_str(), means,    D);
+    MatrixFile::WriteHeader(&names,   basename(names.filename(),0,0),   flagtext, states,   1);
+    MatrixFile::WriteHeader(&initial, basename(initial.filename(),0,0), flagtext, states,   1);
+    MatrixFile::WriteHeader(&transit, basename(transit.filename(),0,0), flagtext, transits, TransitCols);
+    MatrixFile::WriteHeader(&prior,   basename(prior.filename(),0,0),   flagtext, states,   K);
+    MatrixFile::WriteHeader(&mean,    basename(mean.filename(),0,0),    flagtext, means,    D);
+    MatrixFile::WriteHeader(&covar,   basename(covar.filename(),0,0),   flagtext, means,    D);
 
     /* write data */
     states=means=transits=0;
@@ -479,19 +479,19 @@ int AcousticModel::write(StateCollection *model, const char *name, const char *d
         AcousticModel::State *s = (AcousticModel::State*)iter.v;
         if (minSamples && s->val.samples < minSamples) continue;
 
-        StringFile::writeRow(&names, s->name.c_str());
-        MatrixFile::writeRow(&initial, &s->prior, 1);
+        StringFile::WriteRow(&names, s->name);
+        MatrixFile::WriteRow(&initial, &s->prior, 1);
 
-        MatrixFile::writeRow(&prior, s->emission.prior.m, s->emission.prior.M);
+        MatrixFile::WriteRow(&prior, s->emission.prior.m, s->emission.prior.M);
 
-        MatrixRowIter(&s->emission.mean)    { MatrixFile::writeRow(&mean,  s->emission.mean.row(i),    s->emission.mean.N);  }
-        MatrixRowIter(&s->emission.diagcov) { MatrixFile::writeRow(&covar, s->emission.diagcov.row(i), s->emission.diagcov.N); }
+        MatrixRowIter(&s->emission.mean)    { MatrixFile::WriteRow(&mean,  s->emission.mean.row(i),    s->emission.mean.N);  }
+        MatrixRowIter(&s->emission.diagcov) { MatrixFile::WriteRow(&covar, s->emission.diagcov.row(i), s->emission.diagcov.N); }
 
         Matrix tx(s->transition);
         State::sortTransitionMap(tx.m, tx.M);
         MatrixRowIter(&tx) {
             tx.row(i)[TC_Self] = s->id();
-            MatrixFile::writeRow(&transit, tx.row(i), tx.N);
+            MatrixFile::WriteRow(&transit, tx.row(i), tx.N);
         }
 
         /* build map */
@@ -508,9 +508,9 @@ int AcousticModel::write(StateCollection *model, const char *name, const char *d
     }
 
     /* write map & tied */
-    if (MatrixFile::WriteFile(dir, name, "map", &map, iteration, flagtext.c_str())<0) { ERROR(name, " write map"); ret=-1; }
-    if (model->tiedStates() && MatrixFile::WriteFile(dir, name, "tiedstates", model->tiedStates(), iteration, flagtext.c_str()) < 0) { ERROR(name, " write tied"); ret=-1; }
-    if (model->phoneTx() && MatrixFile::WriteFile(dir, name, "phonetx", model->phoneTx(), iteration, flagtext.c_str()) < 0) { ERROR(name, " write phonetx"); ret=-1; }
+    if (1                   && MatrixFile(&map,                flagtext).WriteVersioned(VersionedFileName(dir, name, "map"),        iteration) < 0) { ERROR(name, " write map");     ret=-1; }
+    if (model->tiedStates() && MatrixFile(model->tiedStates(), flagtext).WriteVersioned(VersionedFileName(dir, name, "tiedstates"), iteration) < 0) { ERROR(name, " write tied");    ret=-1; }
+    if (model->phoneTx()    && MatrixFile(model->phoneTx(),    flagtext).WriteVersioned(VersionedFileName(dir, name, "phonetx"),    iteration) < 0) { ERROR(name, " write phonetx"); ret=-1; }
 
     return ret;
 }
@@ -806,20 +806,20 @@ int AcousticModelFile::read(const char *name, const char *dir, int lastiter, boo
     reset();
 
     string flags;
-    lastiter = MatrixFile::ReadFile(dir, name, "transition", &transit, &flags, lastiter);
+    lastiter = MatrixFile::ReadVersioned(dir, name, "transition", &transit, &flags, lastiter);
     if (!transit) { ERROR("no acoustic model: ", name); return -1; }
 
     if (flags.size()) AcousticModel::loadflags(flags.c_str());
 
-    if (MatrixFile::ReadFile(dir, name, "prior",      &initial, 0, lastiter)<0) { ERROR(name, ".", lastiter, ".prior"  ); return -1; }
-    if (MatrixFile::ReadFile(dir, name, "emMeans",    &mean,    0, lastiter)<0) { ERROR(name, ".", lastiter, ".emMean" ); return -1; }
-    if (MatrixFile::ReadFile(dir, name, "emCov",      &covar,   0, lastiter)<0) { ERROR(name, ".", lastiter, ".emCov"  ); return -1; }
-    if (MatrixFile::ReadFile(dir, name, "emPrior",    &prior,   0, lastiter)<0) { ERROR(name, ".", lastiter, ".emPrior"); return -1; }
-    if (MatrixFile::ReadFile(dir, name, "map",        &map,     0, lastiter)<0) { ERROR(name, ".", lastiter, ".map"    ); return -1; }
-    if (StringFile::ReadFile(dir, name, "name",       &names,   0, lastiter)<0) { ERROR(name, ".", lastiter, ".name"   ); return -1; }
-    if (MatrixFile::ReadFile(dir, name, "tiedstates", &tied,    0, lastiter)<0) { ERROR(name, ".", lastiter, ".tied"   );       /**/ }
+    if (MatrixFile::ReadVersioned(dir, name, "prior",      &initial, 0, lastiter)<0) { ERROR(name, ".", lastiter, ".prior"  ); return -1; }
+    if (MatrixFile::ReadVersioned(dir, name, "emMeans",    &mean,    0, lastiter)<0) { ERROR(name, ".", lastiter, ".emMean" ); return -1; }
+    if (MatrixFile::ReadVersioned(dir, name, "emCov",      &covar,   0, lastiter)<0) { ERROR(name, ".", lastiter, ".emCov"  ); return -1; }
+    if (MatrixFile::ReadVersioned(dir, name, "emPrior",    &prior,   0, lastiter)<0) { ERROR(name, ".", lastiter, ".emPrior"); return -1; }
+    if (MatrixFile::ReadVersioned(dir, name, "map",        &map,     0, lastiter)<0) { ERROR(name, ".", lastiter, ".map"    ); return -1; }
+    if (StringFile::ReadVersioned(dir, name, "name",       &names,   0, lastiter)<0) { ERROR(name, ".", lastiter, ".name"   ); return -1; }
+    if (MatrixFile::ReadVersioned(dir, name, "tiedstates", &tied,    0, lastiter)<0) { ERROR(name, ".", lastiter, ".tied"   );       /**/ }
 
-    if (prior->M != names.lines) { ERROR("mismatch ", prior->M, " != ", names.lines); return -1; }
+    if (prior->M != names->size()) { ERROR("mismatch ", prior->M, " != ", names->size()); return -1; }
     int M=prior->M, K=prior->N, N=mean->N, transind=0;
 
     LFL_STL_NAMESPACE::map<unsigned, pair<int, int> > txmap;
@@ -840,7 +840,7 @@ int AcousticModelFile::read(const char *name, const char *dir, int lastiter, boo
 
     AcousticModel::Compiled::open(M);
     for (int i=0; i<states; i++) {
-        state[i].name = names.line[i];
+        state[i].name = (*names)[i];
         state[i].prior = initial->row(i)[0];
         state[i].emission.assignDataPtr(K, N, mean->row(i*K), covar->row(i*K), prior->row(i));
         state[i].val.emission_index = i;
@@ -870,11 +870,11 @@ int AcousticModelFile::read(const char *name, const char *dir, int lastiter, boo
         if (!isfinite(state[i].txself)) ERROR("state ", state[i].name, " no self transition prob ", state[i].txself);
 
         if (0) {
-            INFO(names.line[i], " ", fnv32(names.line[i]));
-            Matrix::print(&state[i].transition, names.line[i]);
-            Matrix::print(&state[i].emission.prior, names.line[i]);
-            Matrix::print(&state[i].emission.mean, names.line[i]);
-            Matrix::print(&state[i].emission.diagcov, names.line[i]);
+            INFO((*names)[i], " ", fnv32((*names)[i].c_str()));
+            Matrix::print(&state[i].transition, (*names)[i]);
+            Matrix::print(&state[i].emission.prior, (*names)[i]);
+            Matrix::print(&state[i].emission.mean, (*names)[i]);
+            Matrix::print(&state[i].emission.diagcov, (*names)[i]);
         }
     }
     return lastiter;

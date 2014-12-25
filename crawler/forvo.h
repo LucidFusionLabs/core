@@ -94,11 +94,11 @@ struct ForvoApi : public Crawler, public HTMLParser {
         typedef map<string, long long> mp3map;
         mp3map mp3;
         QueueFileEntry hdr;
-        while (queue[1].in->next(&hdr, 0, QueueFileEntry::CRAWLED)) 
+        while (queue[1].in->Next(&hdr, 0, QueueFileEntry::CRAWLED)) 
             mp3[hdr.url().c_str()] = hdr.offset();
 
         CrawlFileEntry entry; int offset;
-        while (queue[0].out->next(&entry, &offset, QueueFileEntry::SCRAPED)) {
+        while (queue[0].out->Next(&entry, &offset, QueueFileEntry::SCRAPED)) {
             HTMLParser::Parse(entry.content().data(), entry.content().size());
             if (!scraped.size()) continue;
 
@@ -109,7 +109,7 @@ struct ForvoApi : public Crawler, public HTMLParser {
                 mp3map::iterator iter = mp3.find(scraped[i]);
                 if (iter == mp3.end()) continue;
                 long long q1_offset = (*iter).second;
-                if (!queue[1].out->get(&entry, q1_offset)) continue;
+                if (!queue[1].out->Get(&entry, q1_offset)) continue;
 
                 SoundAsset sa;
                 int len = entry.content().size(), max_seconds = 60;

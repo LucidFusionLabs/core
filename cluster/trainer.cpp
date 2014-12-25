@@ -28,7 +28,7 @@ DEFINE_int   (Project,       0,     "Project input to N dimensions");
 DEFINE_bool  (MeanNormalize, false, "Mean normalize input");
 
 Matrix *in=0, *intx=0;
-StringFile inlabel;
+vector<string> *inlabel=0;
 string inhdr, intxhdr, inlabelhdr;
 
 struct FeatCorpus {
@@ -54,16 +54,16 @@ DEFINE_bool  (pca,            false, "Perform principal components analysis on i
 DEFINE_bool  (cluster,        false, "Cluster input");
 DEFINE_bool  (classifynn,     false, "Classify nearest neighbor");
 
-void print(Matrix *m, int cols=0, StringFile *l=0, int *indexmap=0) {
+void Print(Matrix *m, int cols=0, vector<string> *l=0, int *indexmap=0) {
     if (!cols) cols = m->N;
     MatrixRowIter(m) {
         string v; int ind = indexmap ? indexmap[i] : i;
         for (int j=0; j<cols; j++) v += StringPrintf("%f, ", m->row(ind)[j]);
-        INFO(v, " (", (l && l->lines) ? l->line[ind] : "", ")");
+        INFO(v, " (", l ? (*l)[ind] : "", ")");
     }
 }
 
-int writePloticus(string tofile, const Matrix *in, StringFile *l, int *indmap, string (*plot)(const Matrix *, StringFile *, int *)) {
+int WritePloticus(string tofile, const Matrix *in, vector<string> *l, int *indmap, string (*plot)(const Matrix *, vector<string> *, int *)) {
     LocalFile f(tofile.c_str(), "w");
     string v = plot(in, l, indmap);
     return f.write(v.data(), v.size()) == v.size();
@@ -84,7 +84,7 @@ int *indexmap1D(const Matrix *in) {
     return ret;
 }
 
-string tostrPloticus1D(const Matrix *in, StringFile *l, int *indexmap) {
+string tostrPloticus1D(const Matrix *in, vector<string> *l, int *indexmap) {
     double min = INFINITY, max = -INFINITY;
     MatrixRowIter(in) {
         if (in->row(i)[0] < min) min = in->row(i)[0];
@@ -104,7 +104,7 @@ string tostrPloticus1D(const Matrix *in, StringFile *l, int *indexmap) {
 
     MatrixRowIter(in) {
         int ind = indexmap ? indexmap[i] : i;
-        v += StringPrintf("%s %f\n", l->line[ind], in->row(ind)[0]);
+        v += StringPrintf("%s %f\n", (*l)[ind].c_str(), in->row(ind)[0]);
     }
 
     v += StringPrintf(
@@ -130,12 +130,12 @@ int main(int argc, const char *argv[]) {
     if (app->Create(argc, argv, __FILE__)) { app->Free(); return -1; }
 
     if (!FLAGS_input.size()) FATAL("nothing to do");
-    if (MatrixFile::read(inhdr, &in, FLAGS_input.c_str())) FATAL("MatrixFile::read ", strerror(errno));
-    if (FLAGS_Transform.size() && MatrixFile::read(intxhdr, &intx, FLAGS_Transform.c_str())) FATAL("MatrixFile::read ", strerror(errno));
+    if (MatrixFile::Read(FLAGS_input, &in, &inhdr)) FATAL("MatrixFile::read ", strerror(errno));
+    if (FLAGS_Transform.size() && MatrixFile::Read(FLAGS_Transform, &intx, &intxhdr)) FATAL("MatrixFile::read ", strerror(errno));
 
     if (FLAGS_inputlabel.size()) {
-        if (StringFile::read(inlabelhdr, &inlabel, FLAGS_inputlabel.c_str())) FATAL("StringFile::read ", strerror(errno));
-        if (in->M != inlabel.lines) FATAL("data/label mismatch ", in->M, " != ", inlabel.lines);
+        if (StringFile::Read(FLAGS_inputlabel, &inlabel, &inlabelhdr)) FATAL("StringFile::read ", strerror(errno));
+        if (in->M != inlabel->size()) FATAL("data/label mismatch ", in->M, " != ", inlabel->size());
     }
 
     INFO("input:");
@@ -153,7 +153,7 @@ int main(int argc, const char *argv[]) {
 
     if (FLAGS_Project) in->N = FLAGS_Project;
 
-    print(in, -1, &inlabel);
+    Print(in, -1, inlabel);
 
     if (FLAGS_choosen) {
         Matrix chosen(in->M / FLAGS_choosen, in->N);
@@ -166,13 +166,13 @@ int main(int argc, const char *argv[]) {
            double sum = Vec<double>::sum(in->row(i), in->N);
            MatrixColIter(in) chosen.row(ind)[j] = in->row(i)[j] / (FLAGS_normalize ? sum : 1);
 
-           label.push_back(inlabel.lines ? inlabel.line[i] : "");
+           label.push_back(inlabel ? (*inlabel)[i] : "");
         }
         chosen.M -= (chosen.M - label.size());
 
         string hdr="choosen output", matfile="choosen.matrix", labfile="choosenlabel.matrix";
-        if (MatrixFile::write(hdr, &chosen, matfile.c_str(), matfile.c_str())) FATAL("error writing ", matfile);
-        if (StringFile::write(hdr, label, labfile.c_str(), labfile.c_str())) FATAL("error writing ", labfile);
+        if (MatrixFile(&chosen, hdr).Write(matfile, matfile)) FATAL("error writing ", matfile);
+        if (StringFile(&label,  hdr).Write(labfile, labfile)) FATAL("error writing ", labfile);
 
         INFO("wrote ", matfile, " and ", labfile);
         return 0;
@@ -185,8 +185,8 @@ int main(int argc, const char *argv[]) {
         int *indexmap = indexmap1D(&projected);
 
         string hdr1="PCA", fn1="PCA.matrix", hdr2="projected", fn2="projected.matrix";
-        if (MatrixFile::write(hdr1, pca, fn1.c_str(), fn1.c_str())) FATAL("error writing ", fn1);
-        if (MatrixFile::write(hdr2, &projected, fn2.c_str(), fn2.c_str())) FATAL("error writing ", fn2);
+        if (MatrixFile(pca,        hdr1).Write(fn1, fn1)) FATAL("error writing ", fn1);
+        if (MatrixFile(&projected, hdr2).Write(fn2, fn2)) FATAL("error writing ", fn2);
 
 #if 0
         Matrix::print(pca, "PCA");
@@ -196,9 +196,9 @@ int main(int argc, const char *argv[]) {
 #endif
 
         INFO("output:");
-        print(&projected, 1, &inlabel, indexmap);
+        Print(&projected, 1, inlabel, indexmap);
 
-        writePloticus(string(dldir()) + "plot.htm", &projected, &inlabel, indexmap, tostrPloticus1D);
+        WritePloticus(string(dldir()) + "plot.htm", &projected, inlabel, indexmap, tostrPloticus1D);
     }
 
     string modeldir = dldir();
@@ -207,13 +207,13 @@ int main(int argc, const char *argv[]) {
 
     if (FLAGS_classifynn) {
         int lastiter; Matrix *model=0, *mcov=0;
-        if ((lastiter = MatrixFile::ReadFile(modeldir.c_str(), "Cluster", "means", &model, 0)) < 0) FATAL("cluster means");
-        if (lastiter > MatrixFile::ReadFile(modeldir.c_str(), "Cluster", "diagcovar", &mcov, 0)) FATAL("cluster diagcov");
+        if ((lastiter = MatrixFile::ReadVersioned(modeldir.c_str(), "Cluster", "means",    &model)) < 0) FATAL("cluster means");
+        if (lastiter  > MatrixFile::ReadVersioned(modeldir.c_str(), "Cluster", "diagcovar", &mcov))      FATAL("cluster diagcov");
 
         MatrixRowIter(in) {
             int minindex; double mindist;
             KMeans::nearest_neighbor(model, in->row(i), &minindex, &mindist);
-            INFO("CLUSTER=", minindex, " LABEL=", inlabel.line[i]);
+            INFO("CLUSTER=", minindex, " LABEL=", (*inlabel)[i]);
         }
     }
 

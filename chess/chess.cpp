@@ -35,7 +35,7 @@ Box SquareCoords(int p) {
 
 // engine callback driven by LFL::Application
 int Frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample, int flag) {
-    Box win = Box::FromScreen();
+    Box win = screen->Box();
     screen->gd->DrawMode(DrawMode::_2D);
     screen->gd->EnableLayering();
 

@@ -54,9 +54,9 @@ struct QuoteLogger {
     bool Update(const Quote &next) {
         if (next.info().symbol().empty()) return false;
         Quote *last = &quotes[next.info().symbol().c_str()];
-        if (!out.opened() || next.value().time() <= last->value().time()) return false;
+        if (!out.Opened() || next.value().time() <= last->value().time()) return false;
         if (next.value().response_time() - next.value().time() >= Minutes(60)) return false;
-        out.add(&next, 0);
+        out.Add(&next, 0);
         *last = next;
         return true;
     }
@@ -88,7 +88,7 @@ struct Watcher {
         trading_period = TradingPeriod::Now(now, &trading_period_remaining, Minutes(delay_mins));
         if (!app->frames_ran || trading_period != last_trading_period) {
             INFO(name, ": ", TradingPeriod::ToString(trading_period, trading_period_remaining));
-            quote_logger.out.open((trading_period == TradingPeriod::MARKET) ? MarketData::filename(name, now).c_str() : 0);
+            quote_logger.out.Open((trading_period == TradingPeriod::MARKET) ? MarketData::filename(name, now).c_str() : 0);
         }
         last_trading_period = trading_period;
 
@@ -166,16 +166,16 @@ extern "C" int main(int argc, const char *argv[]) {
 
     if (!FLAGS_quote_dump.empty()) {
         ProtoFile pf(FLAGS_quote_dump.c_str()); Quote entry;
-        while (pf.next(&entry)) printf("%s %s %s", localhttptime(entry.value().response_time()).c_str(),
+        while (pf.Next(&entry)) printf("%s %s %s", localhttptime(entry.value().response_time()).c_str(),
                                                    localhttptime(entry.value().time()).c_str(), entry.DebugString().c_str());
     }
 
     if (!FLAGS_quote_clear_response_text.empty()) {
         ProtoFile pf(FLAGS_quote_clear_response_text.c_str()), out; Quote entry;
-        out.open(string(FLAGS_quote_clear_response_text + ".cleared").c_str());
-        while (pf.next(&entry)) {
+        out.Open(string(FLAGS_quote_clear_response_text + ".cleared").c_str());
+        while (pf.Next(&entry)) {
             entry.mutable_value()->mutable_response_text()->clear();
-            out.add(&entry, 0);
+            out.Add(&entry, 0);
         }
     }
 
@@ -218,7 +218,7 @@ extern "C" int main(int argc, const char *argv[]) {
     if (!watchers.size() && !FLAGS_visualize) return 0;
 
     if (FLAGS_visualize) {
-        tradingPlatformGUI = new TradingPlatformGUI(screen, Box::FromScreen());
+        tradingPlatformGUI = new TradingPlatformGUI(screen, screen->Box());
         marketData = new MarketData(FLAGS_MarketDir.c_str(), "SNP500");
     }
 

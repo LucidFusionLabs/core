@@ -44,7 +44,7 @@ struct CART {
     struct Tree {
         QuestionList *inventory;
         Matrix questions, namemap, leafnamemap;
-        StringFile name; 
+        vector<string> name; 
         static const int map_buckets=5, map_values=2;
     };
 
@@ -65,10 +65,11 @@ struct CART {
     static int read(const char *dir, const char *name, int lastiter, QuestionList *inventory, Tree *out) {
         out->inventory = inventory;
         Matrix *outp[] = { &out->questions, &out->namemap, &out->leafnamemap };
-        if (MatrixFile::ReadFile(dir, name, "questions",   &outp[0],   0, lastiter)<0) { ERROR(name, ".", lastiter, ".questions"  ); return -1; }
-        if (MatrixFile::ReadFile(dir, name, "namemap",     &outp[1],   0, lastiter)<0) { ERROR(name, ".", lastiter, ".namemap"    ); return -1; }
-        if (MatrixFile::ReadFile(dir, name, "leafnamemap", &outp[2],   0, lastiter)<0) { ERROR(name, ".", lastiter, ".leafnamemap"); return -1; }
-        if (StringFile::ReadFile(dir, name, "name",        &out->name, 0, lastiter)<0) { ERROR(name, ".", lastiter, ".name"       ); return -1; }
+        vector<string> *outs[] = { &out->name };
+        if (MatrixFile::ReadVersioned(dir, name, "questions",   &outp[0], 0, lastiter)<0) { ERROR(name, ".", lastiter, ".questions"  ); return -1; }
+        if (MatrixFile::ReadVersioned(dir, name, "namemap",     &outp[1], 0, lastiter)<0) { ERROR(name, ".", lastiter, ".namemap"    ); return -1; }
+        if (MatrixFile::ReadVersioned(dir, name, "leafnamemap", &outp[2], 0, lastiter)<0) { ERROR(name, ".", lastiter, ".leafnamemap"); return -1; }
+        if (StringFile::ReadVersioned(dir, name, "name",        &outs[0], 0, lastiter)<0) { ERROR(name, ".", lastiter, ".name"       ); return -1; }
         return 0;
     }
 
@@ -157,18 +158,18 @@ struct CART {
         int buckets=Tree::map_buckets, values=Tree::map_values;
         Matrix namemap(next_prime(tree.name.size()*4), buckets*values), leafnamemap(next_prime(tree.leafname.size()*4), buckets*values);
 
-        LocalFile names    (string(dir) + MatrixFile::filename(name, "name",      "string", iteration), "w");
-        LocalFile questions(string(dir) + MatrixFile::filename(name, "questions", "matrix", iteration), "w");
+        LocalFile names    (string(dir) + MatrixFile::Filename(name, "name",      "string", iteration), "w");
+        LocalFile questions(string(dir) + MatrixFile::Filename(name, "questions", "matrix", iteration), "w");
 
-        MatrixFile::writeHeader(&names,     basename(names.filename(),0,0),     flagtext, tree.name.size(),     1);
-        MatrixFile::writeHeader(&questions, basename(questions.filename(),0,0), flagtext, tree.question.size(), 1);
+        MatrixFile::WriteHeader(&names,     basename(names.filename(),0,0),     flagtext, tree.name.size(),     1);
+        MatrixFile::WriteHeader(&questions, basename(questions.filename(),0,0), flagtext, tree.question.size(), 1);
 
         for (int i=0; i<tree.question.size(); i++) {
             const char *n = tree.name[i].c_str();
-            StringFile::writeRow(&names, n);
+            StringFile::WriteRow(&names, n);
 
             double qrow[1] = { (double)tree.question[i] };
-            MatrixFile::writeRow(&questions, qrow, 1);
+            MatrixFile::WriteRow(&questions, qrow, 1);
 
             double *he = HashMatrix::set(&namemap, fnv32(n), values);
             if (!he) FATAL("Matrix hash collision: ", n);
@@ -183,8 +184,8 @@ struct CART {
             he[1] = v;
         }
 
-        if (MatrixFile::WriteFile(dir, name,     "namemap", &namemap,     iteration, flagtext)<0) { ERROR(name, " write namemap"    ); return -1; }
-        if (MatrixFile::WriteFile(dir, name, "leafnamemap", &leafnamemap, iteration, flagtext)<0) { ERROR(name, " write leafnamemap"); return -1; }
+        if (MatrixFile(&namemap,     flagtext).WriteVersioned(dir, name,     "namemap", iteration)<0) { ERROR(name, " write namemap"    ); return -1; }
+        if (MatrixFile(&leafnamemap, flagtext).WriteVersioned(dir, name, "leafnamemap", iteration)<0) { ERROR(name, " write leafnamemap"); return -1; }
 
         return 0;
     }

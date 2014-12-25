@@ -67,7 +67,7 @@ DEFINE_string(ssl_keyfile, "", "SSL server key file");
 SSL_CTX *lfapp_ssl = 0;
 #endif
 
-const char *Protocol::name(int p) {
+const char *Protocol::Name(int p) {
     if      (p == TCP)   return "TCP";
     else if (p == UDP)   return "UDP";
     else if (p == GPLUS) return "GPLUS";
@@ -222,7 +222,7 @@ int Network::Disable(Service *s) {
 }
 
 void Network::ConnClose(Service *svc, Connection *c, vector<Socket> *removelist) {
-    if (c->query) c->query->close(c);
+    if (c->query) c->query->Close(c);
     svc->Close(c);
     if (removelist) removelist->push_back(c->socket);
     delete c;
@@ -235,7 +235,7 @@ void Network::ConnCloseAll(Service *svc) {
 
 void Network::EndpointRead(Service *svc, const char *name, const char *buf, int len) { return svc->EndpointRead(name, buf, len); }
 void Network::EndpointClose(Service *svc, Connection *c, vector<string> *removelist, const string &epk) {
-    if (c->query) c->query->close(c);
+    if (c->query) c->query->Close(c);
     if (svc->listen.empty()) svc->Close(c);
     if (removelist) removelist->push_back(epk);
     delete c;
@@ -297,13 +297,13 @@ int Network::Frame() {
         if (svc->heartbeats) { /* connection heartbeats */
             for (Service::ConnMap::iterator i = svc->conn.begin(); i != svc->conn.end(); i++) {
                 Connection *c = (*i).second; int ret = 0;
-                if (c->query) ret = c->query->heartbeat(c);
+                if (c->query) ret = c->query->Heartbeat(c);
                 if (c->state == Connection::Error || ret < 0) ConnClose(svc, c, &removelist);
             }
 
             for (Service::EndpointMap::iterator i = svc->endpoint.begin(); i != svc->endpoint.end(); i++) {
                 Connection *c = (*i).second; int ret = 0;
-                if (c->query) ret = c->query->heartbeat(c);
+                if (c->query) ret = c->query->Heartbeat(c);
                 if (c->state == Connection::Error || ret < 0) EndpointClose(svc, c, &removelist2, c->endpoint_name);
             }
 
@@ -312,7 +312,7 @@ int Network::Frame() {
         }
 
         /* svc specific frame */
-        svc->frame();
+        svc->Frame();
     }
     return 0;
 }
@@ -355,7 +355,7 @@ void Network::AcceptFrame(Service *svc, Listener *listener) {
                 svc->fake.addr = epk.addr;
                 svc->fake.port = epk.port;
                 svc->fake.socket = listener->socket;
-                if (svc->udp_filter(&svc->fake, buf, len)) continue;
+                if (svc->UDPFilter(&svc->fake, buf, len)) continue;
                 c = new Connection(svc, Connection::Connected, listener->socket, epk.addr, epk.port);
                 svc->endpoint[epkstr] = c;
                 inserted = true;
@@ -379,8 +379,8 @@ void Network::AcceptFrame(Service *svc, Listener *listener) {
         /* connected 1 */
         c->set_source_address();
         INFO(c->name(), ": incoming connection (socket=", c->socket, ")");
-        if (svc->connected(c) < 0) c->_error();
-        if (c->query) { if (c->query->connected(c) < 0) { ERROR(c->name(), ": query connected"); c->_error(); } }
+        if (svc->Connected(c) < 0) c->_error();
+        if (c->query) { if (c->query->Connected(c) < 0) { ERROR(c->name(), ": query connected"); c->_error(); } }
     }
 }
 
@@ -394,9 +394,9 @@ void Network::TCPConnectionFrame(Service *svc, Connection *c, vector<Socket> *re
             c->connected();
             c->set_source_address();
             INFO(c->name(), ": connected");
-            if (svc->connected(c) < 0) c->_error();
+            if (svc->Connected(c) < 0) c->_error();
             Service::UpdateActive(c);
-            if (c->query) { if (c->query->connected(c) < 0) { ERROR(c->name(), ": query connected"); c->_error(); } }
+            if (c->query) { if (c->query->Connected(c) < 0) { ERROR(c->name(), ": query connected"); c->_error(); } }
             return;
         }
 
@@ -412,7 +412,7 @@ void Network::TCPConnectionFrame(Service *svc, Connection *c, vector<Socket> *re
                 if (c->readpackets()<0) { c->_error(); break; }
             }
             if (c->packets.size()) {
-                if (c->query) { if (c->query->read(c) < 0) { ERROR(c->name(), ": query UDP read"); c->_error(); } }
+                if (c->query) { if (c->query->Read(c) < 0) { ERROR(c->name(), ": query UDP read"); c->_error(); } }
                 c->packets.clear();
                 c->readflush(c->rl);
             }
@@ -420,7 +420,7 @@ void Network::TCPConnectionFrame(Service *svc, Connection *c, vector<Socket> *re
         else if (c->ssl || svc->active.GetReadable(c->socket)) { /* TCP Read */
             if (c->read()<0) { c->_error(); break; }
             if (c->rl) {
-                if (c->query) { if (c->query->read(c) < 0) { ERROR(c->name(), ": query read"); c->_error(); } }
+                if (c->query) { if (c->query->Read(c) < 0) { ERROR(c->name(), ": query read"); c->_error(); } }
             }
         }
 
@@ -428,7 +428,7 @@ void Network::TCPConnectionFrame(Service *svc, Connection *c, vector<Socket> *re
             if (c->writeflush()<0) { c->_error(); break; }
             if (!c->wl) {
                 c->writable = 0;
-                if (c->query) { if (c->query->flushed(c) < 0) { ERROR(c->name(), ": query flushed"); c->_error(); } }
+                if (c->query) { if (c->query->Flushed(c) < 0) { ERROR(c->name(), ": query flushed"); c->_error(); } }
                 Service::UpdateActive(c);
             }
         }
@@ -440,7 +440,7 @@ void Network::TCPConnectionFrame(Service *svc, Connection *c, vector<Socket> *re
 
 void Network::UDPConnectionFrame(Service *svc, Connection *c, vector<string> *removelist, const string &epk) {
     if (c->state == Connection::Connected && c->packets.size()) {
-        if (c->query) { if (c->query->read(c) < 0) { ERROR(c->name(), ": query UDP read"); c->_error(); } }
+        if (c->query) { if (c->query->Read(c) < 0) { ERROR(c->name(), ": query UDP read"); c->_error(); } }
         c->packets.clear();
         c->readflush(c->rl);
     }
@@ -622,7 +622,7 @@ int SelectSocketSet::Select(int wait_time) {
 
 int DNS::WriteRequest(unsigned short id, const string &querytext, unsigned short type, char *out, int len) {
     Serializable::MutableStream os(out, len);
-    Header *hdr = (Header*)os.get(Header::size);
+    Header *hdr = (Header*)os.Get(Header::size);
     memset(hdr, 0, Header::size);
     hdr->rd = 1;
     hdr->id = id;
@@ -631,10 +631,10 @@ int DNS::WriteRequest(unsigned short id, const string &querytext, unsigned short
     StringWordIter words(querytext.c_str(), 0, isdot);
     for (string word = BlankNull(words.next()); !word.empty(); word = BlankNull(words.next())) {
         CHECK_LT(word.size(), 64);
-        os.N8((unsigned char)word.size());
+        os.Write8((unsigned char)word.size());
         os.String(word);
     }
-    os.N8((char)0);
+    os.Write8((char)0);
 
     os.Htons(type);                      // QueryTypeClass.Type
     os.Htons((unsigned short)Class::IN); // QueryTypeClass.QClass
@@ -644,7 +644,7 @@ int DNS::WriteRequest(unsigned short id, const string &querytext, unsigned short
 int DNS::ReadResponse(const char *buf, int bufsize, Response *res) {
     Serializable::ConstStream is(buf, bufsize);
     const Serializable::Stream *in = &is;
-    const Header *hdr = (Header*)in->get(Header::size);
+    const Header *hdr = (Header*)in->Get(Header::size);
 
     int qdcount = ntohs(hdr->qdcount);
     int ancount = ntohs(hdr->ancount);
@@ -653,7 +653,7 @@ int DNS::ReadResponse(const char *buf, int bufsize, Response *res) {
 
     for (int i = 0; i < qdcount; i++) {
         Record out; int len;
-        if ((len = DNS::ReadString(in->start(), in->get(), in->end(), &out.question)) < 0 || !in->advance(len + 4)) return -1;
+        if ((len = DNS::ReadString(in->Start(), in->Get(), in->End(), &out.question)) < 0 || !in->Advance(len + 4)) return -1;
         res->Q.push_back(out);
     }
 
@@ -666,7 +666,7 @@ int DNS::ReadResponse(const char *buf, int bufsize, Response *res) {
 int DNS::ReadResourceRecord(const Serializable::Stream *in, int num, vector<Record> *out) {
     for (int i = 0; i < num; i++) {
         Record rec; int len; unsigned short rrlen;
-        if ((len = ReadString(in->start(), in->get(), in->end(), &rec.question)) < 0 || !in->advance(len)) return -1;
+        if ((len = ReadString(in->Start(), in->Get(), in->End(), &rec.question)) < 0 || !in->Advance(len)) return -1;
 
         in->Ntohs(&rec.type);
         in->Ntohs(&rec._class);
@@ -676,15 +676,15 @@ int DNS::ReadResourceRecord(const Serializable::Stream *in, int num, vector<Reco
 
         if (rec._class == Class::IN && rec.type == Type::A) {
             if (rrlen != 4) return -1;
-            in->N32(&rec.addr);
+            in->Read32(&rec.addr);
         } else if (rec._class == Class::IN && (rec.type == Type::NS || rec.type == Type::CNAME)) {
-            if ((len = ReadString(in->start(), in->get(), in->end(), &rec.answer)) != rrlen   || !in->advance(len)) return -1;
+            if ((len = ReadString(in->Start(), in->Get(), in->End(), &rec.answer)) != rrlen   || !in->Advance(len)) return -1;
         } else if (rec._class == Class::IN && rec.type == Type::MX) {
             in->Ntohs(&rec.pref);
-            if ((len = ReadString(in->start(), in->get(), in->end(), &rec.answer)) != rrlen-2 || !in->advance(len)) return -1;
+            if ((len = ReadString(in->Start(), in->Get(), in->End(), &rec.answer)) != rrlen-2 || !in->Advance(len)) return -1;
         } else {
             ERROR("unhandled type=", rec.type, ", class=", rec._class);
-            in->advance(rrlen);
+            in->Advance(rrlen);
             continue;
         }
         out->push_back(rec);
@@ -1211,8 +1211,8 @@ Connection *Service::Connect(IPV4::Addr addr, int port, IPV4EndpointSource *src_
         c->connected();
         c->set_source_address();
         INFO(c->name(), ": connected");
-        if (this->connected(c) < 0) c->_error();
-        if (c->query) { if (c->query->connected(c) < 0) { ERROR(c->name(), ": query connected"); c->_error(); } }
+        if (this->Connected(c) < 0) c->_error();
+        if (c->query) { if (c->query->Connected(c) < 0) { ERROR(c->name(), ": query connected"); c->_error(); } }
         active.Add(c->socket, (c->readable ? SocketSet::READABLE : 0), &c->self_reference);
         if (select_socket_thread) select_socket_thread->AddSocket(c->socket, (c->readable ? SocketSet::READABLE : 0));
     } else {
@@ -1297,9 +1297,9 @@ Connection *Service::EndpointConnect(const string &endpoint_name) {
     endpoint[endpoint_name] = c;
 
     /* connected 4 */
-    if (this->connected(c) < 0) c->_error();
-    INFO(Protocol::name(protocol), "(", (void*)this, ") endpoint connect: ", endpoint_name);
-    if (c->query) { if (c->query->connected(c) < 0) { ERROR(c->name(), ": query connected"); c->_error(); } }
+    if (this->Connected(c) < 0) c->_error();
+    INFO(Protocol::Name(protocol), "(", (void*)this, ") endpoint connect: ", endpoint_name);
+    if (c->query) { if (c->query->Connected(c) < 0) { ERROR(c->name(), ": query connected"); c->_error(); } }
     return c;
 }
 
@@ -1327,7 +1327,7 @@ void Service::EndpointRead(const string &endpoint_name, const char *buf, int len
 }
 
 void Service::EndpointClose(const string &endpoint_name) {
-    INFO(Protocol::name(protocol), "(", (void*)this, ") endpoint close: ", endpoint_name);
+    INFO(Protocol::Name(protocol), "(", (void*)this, ") endpoint close: ", endpoint_name);
     Service::EndpointMap::iterator ep = endpoint.find(endpoint_name);
     if (ep != endpoint.end()) ep->second->_error();
 }
@@ -1346,9 +1346,9 @@ struct UDPClientQuery {
         UDPClient::ResponseCB responseCB; UDPClient::HeartbeatCB heartbeatCB;
         PersistentConnection(UDPClient::ResponseCB RCB, UDPClient::HeartbeatCB HCB) : responseCB(RCB), heartbeatCB(HCB) {}
 
-        int heartbeat(Connection *c) { if (heartbeatCB) heartbeatCB(c); return 0; }
-        void close(Connection *c) { if (responseCB) responseCB(c, 0, 0); }
-        int read(Connection *c) {
+        int Heartbeat(Connection *c) { if (heartbeatCB) heartbeatCB(c); return 0; }
+        void Close(Connection *c) { if (responseCB) responseCB(c, 0, 0); }
+        int Read(Connection *c) {
             for (int i=0; i<c->packets.size() && responseCB; i++) {
                 if (c->state != Connection::Connected) break;
                 responseCB(c, c->packets[i].buf, c->packets[i].len);
@@ -1358,7 +1358,7 @@ struct UDPClientQuery {
     };
 };
 
-Connection *UDPClient::persistentConnection(const string &url, ResponseCB responseCB, HeartbeatCB heartbeatCB, int default_port) {
+Connection *UDPClient::PersistentConnection(const string &url, ResponseCB responseCB, HeartbeatCB heartbeatCB, int default_port) {
     IPV4::Addr ipv4_addr; int udp_port;
     if (!HTTP::URL(url.c_str(), (bool*)0, &ipv4_addr, &udp_port, (string*)0, (string*)0, default_port))
     { INFO(url, ": connect failed"); return 0; }
@@ -1683,7 +1683,7 @@ struct HTTPClientQuery {
         Protocol(bool fullChunks) : fullChunkCBs(fullChunks) { reset(); }
         void reset() { readHeaderLength=0; readContentLength=0; currentChunkLength=0; currentChunkRead=0; chunkedEncoding=0; content_type.clear();  }
 
-        int read(Connection *c) {
+        int Read(Connection *c) {
             char *cur = c->rb;
             if (!readHeaderLength) {
                 StringPiece ct, cl, te;
@@ -1740,8 +1740,8 @@ struct HTTPClientQuery {
         WGet(Service *Svc, bool SSL, const string &Host, int Port, const string &Path, File *Out, HTTPClient::ResponseCB CB=HTTPClient::ResponseCB()) :
             Protocol(false), svc(Svc), ssl(SSL), host(Host), path(Path), port(Port), out(Out), cb(CB) {}
 
-        int connected(Connection *c) { return HTTPClient::request(c, HTTPServer::Method::GET, host.c_str(), path.c_str(), 0, 0, 0, false); }
-        void close(Connection *c) { if (cb) cb(c, 0, content_type, 0, 0); }
+        int Connected(Connection *c) { return HTTPClient::request(c, HTTPServer::Method::GET, host.c_str(), path.c_str(), 0, 0, 0, false); }
+        void Close(Connection *c) { if (cb) cb(c, 0, content_type, 0, 0); }
 
         void Headers(Connection *c, const char *headers, int len) {
             if (cb) cb(c, headers, content_type, 0, readContentLength);
@@ -1771,14 +1771,14 @@ struct HTTPClientQuery {
         WPost(Service *Svc, bool SSL, const string &Host, int Port, const string &Path, const string &Mimetype, const char *Postdata, int Postlen,
               HTTPClient::ResponseCB CB=HTTPClient::ResponseCB()) : WGet(Svc, SSL, Host, Port, Path, 0, CB), mimetype(Mimetype), postdata(Postdata,Postlen) {}
 
-        int connected(Connection *c) { return HTTPClient::request(c, HTTPServer::Method::POST, host.c_str(), path.c_str(), mimetype.data(), postdata.data(), postdata.size(), false); }
+        int Connected(Connection *c) { return HTTPClient::request(c, HTTPServer::Method::POST, host.c_str(), path.c_str(), mimetype.data(), postdata.data(), postdata.size(), false); }
     };
 
     struct PersistentConnection : public Protocol {
         HTTPClient::ResponseCB responseCB;
         PersistentConnection(HTTPClient::ResponseCB RCB) : Protocol(true), responseCB(RCB) {}
 
-        void close(Connection *c) { if (responseCB) responseCB(c, 0, content_type, 0, 0); }
+        void Close(Connection *c) { if (responseCB) responseCB(c, 0, content_type, 0, 0); }
         void Content(Connection *c, const char *content, int len) {
             if (!readContentLength) FATAL("chunked transfer encoding not supported");
             if (responseCB) responseCB(c, 0, content_type, content, len);
@@ -1802,7 +1802,7 @@ int HTTPClient::request(Connection *c, int method, const char *host, const char 
     return c->write(postdata, postlen);
 }
 
-bool HTTPClient::wget(const string &url, File *out, ResponseCB cb) {
+bool HTTPClient::WGet(const string &url, File *out, ResponseCB cb) {
     bool ssl; int tcp_port; string host, path, prot;
     if (!HTTP::URL(url.c_str(), &ssl, 0, &tcp_port, &host, &path, 0, &prot)) {
         if (prot != "file") return 0;
@@ -1827,7 +1827,7 @@ bool HTTPClient::wget(const string &url, File *out, ResponseCB cb) {
     return true;
 }
 
-bool HTTPClient::wpost(const string &url, const string &mimetype, const char *postdata, int postlen, ResponseCB cb) {
+bool HTTPClient::WPost(const string &url, const string &mimetype, const char *postdata, int postlen, ResponseCB cb) {
     bool ssl; int tcp_port; string host, path;
     if (!HTTP::URL(url.c_str(), &ssl, 0, &tcp_port, &host, &path)) return 0;
 
@@ -1838,7 +1838,7 @@ bool HTTPClient::wpost(const string &url, const string &mimetype, const char *po
     return true;
 }
 
-Connection *HTTPClient::persistentConnection(const string &url, string *host, string *path, ResponseCB responseCB) {
+Connection *HTTPClient::PersistentConnection(const string &url, string *host, string *path, ResponseCB responseCB) {
     bool ssl; IPV4::Addr ipv4_addr; int tcp_port;
     if (!HTTP::URL(url.c_str(), &ssl, &ipv4_addr, &tcp_port, host, path)) return 0;
 
@@ -1869,15 +1869,15 @@ struct HTTPServerConnection : public Query {
     typedef vector<ClosedCallback> ClosedCB;
     ClosedCB closedCB;
 
-    struct Dispatch {
+    struct Dispatcher {
         int type; const char *url, *args, *headers, *postdata; int reqlen, postlen;
         void clear() { type=0; url=args=headers=postdata=0; reqlen=postlen=0; }
         bool empty() { return !type; }
-        Dispatch() { clear() ; }
-        Dispatch(int T, const char *U, const char *A, const char *H, int L) : type(T), url(U), args(A), headers(H), postdata(0), reqlen(L), postlen(0) {}
+        Dispatcher() { clear() ; }
+        Dispatcher(int T, const char *U, const char *A, const char *H, int L) : type(T), url(U), args(A), headers(H), postdata(0), reqlen(L), postlen(0) {}
         int Thunk(HTTPServerConnection *httpserv, Connection *c) {
             if (c->rl < reqlen) return 0;
-            int ret = httpserv->dispatch(c, type, url, args, headers, postdata, postlen);
+            int ret = httpserv->Dispatch(c, type, url, args, headers, postdata, postlen);
             c->readflush(reqlen);
             clear();
             return ret;
@@ -1886,9 +1886,9 @@ struct HTTPServerConnection : public Query {
     
     ~HTTPServerConnection() { delete refill; }
     HTTPServerConnection(HTTPServer *s) : server(s), persistent(true), refill(0) {}
-    void closed(Connection *c) { for (ClosedCB::iterator i = closedCB.begin(); i != closedCB.end(); i++) (*i).thunk(c); }
+    void Closed(Connection *c) { for (ClosedCB::iterator i = closedCB.begin(); i != closedCB.end(); i++) (*i).thunk(c); }
 
-    int read(Connection *c) {
+    int Read(Connection *c) {
         for (;;) {
             if (!dispatcher.empty()) return dispatcher.Thunk(this, c);
 
@@ -1910,7 +1910,7 @@ struct HTTPServerConnection : public Query {
             else if (!strcasecmp(method, "POST")) type = HTTPServer::Method::POST;
             else return -1;
 
-            dispatcher = Dispatch(type, url, args, headers, cmdLen+headersLen);
+            dispatcher = Dispatcher(type, url, args, headers, cmdLen+headersLen);
 
             StringPiece cnhv;
             if (type == HTTPServer::Method::POST) {
@@ -1930,7 +1930,7 @@ struct HTTPServerConnection : public Query {
         }
     }
 
-    int dispatch(Connection *c, int type, const char *url, const char *args, const char *headers, const char *postdata, int postlen) {
+    int Dispatch(Connection *c, int type, const char *url, const char *args, const char *headers, const char *postdata, int postlen) {
         /* process request */
         Timer timer;
         HTTPServer::Response response = server->Request(c, type, url, args, headers, postdata, postlen);
@@ -1955,10 +1955,10 @@ struct HTTPServerConnection : public Query {
         return 0;
     }
 
-    int flushed(Connection *c) { 
+    int Flushed(Connection *c) { 
         if (refill) {
             int ret;
-            if ((ret = refill->flushed(c))) return ret;
+            if ((ret = refill->Flushed(c))) return ret;
             Typed::Replace<Query>(&refill, 0);
             c->readable = 1;
             return 0;
@@ -1987,7 +1987,7 @@ struct HTTPServerConnection : public Query {
     }
 };
 
-int HTTPServer::connected(Connection *c) { c->query = new HTTPServerConnection(this); return 0; }
+int HTTPServer::Connected(Connection *c) { c->query = new HTTPServerConnection(this); return 0; }
 
 void HTTPServer::connectionClosedCB(Connection *c, ConnectionClosedCB cb) {
     ((HTTPServerConnection*)c->query)->closedCB.push_back(HTTPServerConnection::ClosedCallback(cb));
@@ -2009,7 +2009,7 @@ HTTPServer::Response HTTPServer::Response::_400(400, "text/html; charset=iso-885
 struct FileResourceQuery : public Query {
     LocalFile f;
     FileResourceQuery(const string &fn) : f(fn, "r") {}
-    int flushed(Connection *c) {
+    int Flushed(Connection *c) {
         if (!f.opened()) return 0;
         c->writable = 1;
         c->wl = f.read(c->wb, sizeof(c->wb));
@@ -2044,59 +2044,44 @@ struct StreamResourceClient : public Query {
 
     StreamResourceClient(Connection *c, HTTPServer::StreamResource *r) : conn(c), resource(r), start(0) {
         resource->subscribers[this] = conn;
-
         fctx = avformat_alloc_context();
         fctx_copy_streams(fctx, resource->fctx);
         fctx->max_delay = (int)(0.7*AV_TIME_BASE);
     }
-
     virtual ~StreamResourceClient() {
         resource->subscribers.erase(this);
         fctx_free(fctx);
     }
 
-    int flushed(Connection *c) { return 1; }
+    int Flushed(Connection *c) { return 1; }
+    void Open() { if (avio_open_dyn_buf(&fctx->pb)) ERROR("avio_open_dyn_buf"); }
 
-    void write_header() {
-        open();
-
-        if (avformat_write_header(fctx, 0)) ERROR("av_write_header");
-        avio_flush(fctx->pb);
-
-        flush();
-    }
-
-    void write(AVPacket *pkt, unsigned long long timestamp) {        
-        open();
-
+    void Write(AVPacket *pkt, unsigned long long timestamp) {        
+        Open();
         if (!start) start = timestamp;
-
         if (timestamp) {
             AVStream *st = fctx->streams[pkt->stream_index];
             AVRational r = {1, 1000000};
             unsigned t = timestamp - start;
             pkt->pts = av_rescale_q(t, r, st->time_base);
         }
-
         int ret;
         if ((ret = av_interleaved_write_frame(fctx, pkt))) ERROR("av_interleaved_write_frame: ", ret);
+        Flush();
+    }
 
-        flush();
+    void WriteHeader() {
+        Open();
+        if (avformat_write_header(fctx, 0)) ERROR("av_write_header");
+        avio_flush(fctx->pb);
+        Flush();
     }
     
-    void open() {
-        if (avio_open_dyn_buf(&fctx->pb)) ERROR("avio_open_dyn_buf");
-    }
-
-    void flush() {
-        char *buf; int len;
-        len = avio_close_dyn_buf(fctx->pb, (uint8_t**)&buf);
-        if (len < 0) ERROR("avio_close_dyn_buf");
-        if (!len) return;
-
-        if (conn->write(buf, len) < 0)
-            conn->_error();
-
+    void Flush() {
+        char *buf=0; int len=0;
+        if (!(len = avio_close_dyn_buf(fctx->pb, (uint8_t**)&buf))) return;
+        if (len < 0) { ERROR("avio_close_dyn_buf"); return; }
+        if (conn->write(buf, len) < 0) conn->_error();
         av_free(buf);
     }
 
@@ -2176,7 +2161,7 @@ HTTPServer::Response HTTPServer::StreamResource::Request(Connection *c, int meth
     if (!open) return HTTPServer::Response::_400;
     Response response(fctx->oformat->mime_type, -1, new StreamResourceClient(c, this), false);
     if (HTTPServerConnection::WriteHeaders(c, &response) < 0) { c->_error(); return response; }
-    ((StreamResourceClient*)response.refill)->write_header();
+    ((StreamResourceClient*)response.refill)->WriteHeader();
     return response;
 }
 
@@ -2329,7 +2314,7 @@ void HTTPServer::StreamResource::sendVideo() {
 void HTTPServer::StreamResource::broadcast(AVPacket *pkt, unsigned long long timestamp) {
     for (SubscriberMap::iterator i = subscribers.begin(); i != subscribers.end(); i++) {
         StreamResourceClient *client = (StreamResourceClient*)(*i).first;
-        client->write(pkt, timestamp);
+        client->Write(pkt, timestamp);
     }
 }
 #endif /* LFL_FFMPEG */
@@ -2349,15 +2334,15 @@ struct SMTPClientConnection : public Query {
     SMTPClientConnection(SMTPClient *S, SMTPClient::DeliverableCB CB1, SMTPClient::DeliveredCB CB2)
         : server(S), deliverable_cb(CB1), delivered_cb(CB2), state(0) {}
 
-    int connected(Connection *c) { helo_domain = server->HeloDomain(c->src_addr); return 0; }
+    int Connected(Connection *c) { helo_domain = server->HeloDomain(c->src_addr); return 0; }
 
-    void close(Connection *c) {
+    void Close(Connection *c) {
         server->total_disconnected++;
         if (DeliveringState(state)) delivered_cb(0, mail, 0, "");
         deliverable_cb(c, helo_domain, 0);
     }
 
-    int read(Connection *c) {
+    int Read(Connection *c) {
         int processed = 0;
         StringLineIter lines(c->rb, c->rl, StringLineIter::Flag::BlankLines);
         for (const char *line = lines.next(); line; line = lines.next()) {
@@ -2434,12 +2419,12 @@ struct SMTPServerConnection : public Query {
     SMTPServerConnection(SMTPServer *s) : server(s), in_data(0) {}
     void ClearStateTable() { message.mail_from.clear(); message.rcpt_to.clear(); message.content.clear(); in_data=0; }
 
-    int connected(Connection *c) {
+    int Connected(Connection *c) {
         my_domain = server->HeloDomain(c->src_addr);
         string greeting = StrCat("220 ", my_domain, " Simple Mail Transfer Service Ready\r\n");
         return (c->write(greeting) == greeting.size()) ? 0 : -1;
     }
-    int read(Connection *c) {
+    int Read(Connection *c) {
         int offset = 0, processed;
         while (c->state == Connection::Connected) {
             bool last_in_data = in_data;
@@ -2502,7 +2487,7 @@ struct SMTPServerConnection : public Query {
     }
 };
 
-int SMTPServer::connected(Connection *c) { total_connected++; c->query = new SMTPServerConnection(this); return 0; }
+int SMTPServer::Connected(Connection *c) { total_connected++; c->query = new SMTPServerConnection(this); return 0; }
 
 void SMTPServer::ReceiveMail(Connection *c, const SMTP::Message &mail) {
     INFO("SMTPServer::ReceiveMail FROM=", mail.mail_from, ", TO=", mail.rcpt_to, ", content=", mail.content);
@@ -2515,9 +2500,9 @@ struct GPlusClientQuery {
         UDPClient::ResponseCB responseCB; UDPClient::HeartbeatCB heartbeatCB; void *arg;
         PersistentConnection(UDPClient::ResponseCB RCB, UDPClient::HeartbeatCB HCB, void *Arg) : responseCB(RCB), heartbeatCB(HCB), arg(Arg) {}
 
-        int heartbeat(Connection *c) { if (heartbeatCB) heartbeatCB(c); return 0; }
-        void close(Connection *c) { if (responseCB) responseCB(c, 0, 0); }
-        int read(Connection *c) {
+        int Heartbeat(Connection *c) { if (heartbeatCB) heartbeatCB(c); return 0; }
+        void Close(Connection *c) { if (responseCB) responseCB(c, 0, 0); }
+        int Read(Connection *c) {
             for (int i=0; i<c->packets.size() && responseCB; i++) {
                 if (c->state != Connection::Connected) break;
                 responseCB(c, c->packets[i].buf, c->packets[i].len);
@@ -2527,7 +2512,7 @@ struct GPlusClientQuery {
     };
 };
 
-Connection *GPlusClient::persistentConnection(const string &name, UDPClient::ResponseCB responseCB, UDPClient::HeartbeatCB HCB, void *arg) {
+Connection *GPlusClient::PersistentConnection(const string &name, UDPClient::ResponseCB responseCB, UDPClient::HeartbeatCB HCB, void *arg) {
     Connection *c = EndpointConnect(name);
     c->query = new GPlusClientQuery::PersistentConnection(responseCB, HCB, arg);
     return c;

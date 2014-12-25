@@ -118,7 +118,7 @@ struct Wav2Features {
 
         if (targ == Target::FILE) {
             string outfile = dir + name;
-            feat.write(outfile.c_str(), wav->filename.c_str());
+            feat.Write(outfile, wav->filename);
         }
         else if (targ == Target::ARCHIVE) {
             out.write(&feat, wav->filename.c_str());
@@ -466,7 +466,7 @@ int growDecisionTrees(const char *modeldir, AcousticModel::Compiled *model3, int
 int tieModelStates(const char *modeldir, AcousticModel::StateCollection *model3, int lastiter, const char *DTdir) {
 
     int iteration;
-    if ((iteration = MatrixFile::findHighestIteration(DTdir, "DecisionTree_AH_0", "questions", "matrix")) == -1) FATAL("can open DT ", -1);
+    if ((iteration = MatrixFile::FindHighestIteration(VersionedFileName(DTdir, "DecisionTree_AH_0", "questions"), "matrix")) == -1) FATAL("can open DT ", -1);
 
     const int trees = LFL_PHONES * AcousticModel::StatesPerPhone;
     CART::Tree tree[trees];
@@ -513,14 +513,14 @@ int tieModelStates(const char *modeldir, AcousticModel::StateCollection *model3,
     AcousticModelFile modelWrote; int wroteiter;
     if ((wroteiter = modelWrote.read("AcousticModel", modeldir))<0 || wroteiter != lastiter+1) { ERROR("read ", modeldir, " ", lastiter+1); return -1; }
 
-    LocalFile tiedstates(string(modeldir) + MatrixFile::filename("AcousticModel", "tiedstates", "matrix", lastiter+1), "w");
-    MatrixFile::writeHeader(&tiedstates, basename(tiedstates.filename(),0,0), "", powf(LFL_PHONES, 3)*AcousticModel::StatesPerPhone, 1);
+    LocalFile tiedstates(string(modeldir) + MatrixFile::Filename("AcousticModel", "tiedstates", "matrix", lastiter+1), "w");
+    MatrixFile::WriteHeader(&tiedstates, basename(tiedstates.filename(),0,0), "", powf(LFL_PHONES, 3)*AcousticModel::StatesPerPhone, 1);
 
     for (int i=0; i<LFL_PHONES; i++) {
         for (int j=0; j<LFL_PHONES; j++) {
             for (int k=0; k<LFL_PHONES; k++) {
                 for (int l=0; l<AcousticModel::StatesPerPhone; l++) {
-                    if (!j && (i || l)) { double row[] = { (double)fnv32("Model_SIL_State_00") }; MatrixFile::writeRow(&tiedstates, row, 1); continue; }
+                    if (!j && (i || l)) { double row[] = { (double)fnv32("Model_SIL_State_00") }; MatrixFile::WriteRow(&tiedstates, row, 1); continue; }
 
                     string name = AcousticModel::name(i, j, k, l);
                     PhoneticDecisionTree::Feature f;
@@ -533,7 +533,7 @@ int tieModelStates(const char *modeldir, AcousticModel::StateCollection *model3,
                     if (!s) FATAL("cant tie ", name, " to ", tieto);
 
                     double row[] = { (double)tieto } ;
-                    MatrixFile::writeRow(&tiedstates, row, 1); 
+                    MatrixFile::WriteRow(&tiedstates, row, 1); 
 
                     DEBUG("tie ", name, " to ", s->name);
                 }
@@ -544,14 +544,14 @@ int tieModelStates(const char *modeldir, AcousticModel::StateCollection *model3,
 }
 
 int tieIndependentStates(const char *modeldir, AcousticModel::StateCollection *model1, int lastiter) {
-    LocalFile tiedstates(string(modeldir) + MatrixFile::filename("AcousticModel", "tiedstates", "matrix", lastiter), "w");
-    MatrixFile::writeHeader(&tiedstates, basename(tiedstates.filename(),0,0), "", powf(LFL_PHONES, 3)*AcousticModel::StatesPerPhone, 1);
+    LocalFile tiedstates(string(modeldir) + MatrixFile::Filename("AcousticModel", "tiedstates", "matrix", lastiter), "w");
+    MatrixFile::WriteHeader(&tiedstates, basename(tiedstates.filename(),0,0), "", powf(LFL_PHONES, 3)*AcousticModel::StatesPerPhone, 1);
 
     for (int i=0; i<LFL_PHONES; i++) {
         for (int j=0; j<LFL_PHONES; j++) {
             for (int k=0; k<LFL_PHONES; k++) {
                 for (int l=0; l<AcousticModel::StatesPerPhone; l++) {
-                    if (!j && (i || l)) { double row[] = { (double)fnv32("Model_SIL_State_00") }; MatrixFile::writeRow(&tiedstates, row, 1); continue; }
+                    if (!j && (i || l)) { double row[] = { (double)fnv32("Model_SIL_State_00") }; MatrixFile::WriteRow(&tiedstates, row, 1); continue; }
 
                     string name = AcousticModel::name(i, j, k, l);
                     unsigned tieto = fnv32(AcousticModel::name(j, l).c_str());
@@ -559,7 +559,7 @@ int tieIndependentStates(const char *modeldir, AcousticModel::StateCollection *m
                     if (!s) FATAL("cant tie ", name, " to ", tieto);
 
                     double row[] = { (double)tieto } ;
-                    MatrixFile::writeRow(&tiedstates, row, 1); 
+                    MatrixFile::WriteRow(&tiedstates, row, 1); 
 
                     DEBUG("tie ", name, " to ", s->name);
                 }
@@ -894,7 +894,7 @@ struct Wav2Segments {
                 hmm->state[(int)viterbi.row(iter.beg)[0]].name.c_str());
 
             out->index.write(&f, fn.c_str());
-            f.clear();
+            f.Clear();
 
             transitions++;  
         }
@@ -993,7 +993,7 @@ extern "C" int main(int argc, const char *argv[]) {
     if (FLAGS_clonetied.size()) {
         LOAD_ACOUSTIC_MODEL(model1, lastiter);
         MatrixFile tied;
-        tied.read(FLAGS_clonetied.c_str());
+        tied.Read(FLAGS_clonetied.c_str());
         if (!tied.F || !tied.F->m) FATAL("read ", FLAGS_clonetied, " failed");
         INFO("model3init begin (vocab='", FLAGS_vocab, "')");
         model3tiedinit(modeldir.c_str(), tied.F, &model1, lastiter);

@@ -90,7 +90,7 @@ extern "C" int main(int argc, const char *argv[]) {
         ProtoFile pf(FLAGS_crawl_dump.size() ? FLAGS_crawl_dump.c_str() : FLAGS_queue_dump.c_str());
         QueueFileEntry queue_entry; CrawlFileEntry crawl_entry; Proto *entry = &queue_entry; int offset;
         if (FLAGS_crawl_dump.size()) entry = &crawl_entry;
-        while (pf.next(entry, &offset)) printf("@%d %s\n", offset, entry->DebugString().c_str());
+        while (pf.Next(entry, &offset)) printf("@%d %s\n", offset, entry->DebugString().c_str());
     }
 
     /* forvo */

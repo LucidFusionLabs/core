@@ -425,7 +425,7 @@ template <class T=double> struct matrix {
         MatrixIter(A) ret = max(ret, A->row(i)[j]);
         return ret;
     }
-    static void print(const matrix *A, const char *name) {
+    static void print(const matrix *A, const string &name) {
         INFO(name, " Matrix(", A->M, ",", A->N, ") = ");
         MatrixRowIter(A) Vec<T>::print(A->row(i), A->N);
     }

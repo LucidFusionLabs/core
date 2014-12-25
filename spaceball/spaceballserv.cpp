@@ -52,13 +52,11 @@ struct SpaceballStatusServer : public HTTPServer::Resource {
     }
 };
 
-// engine callback
-// driven by lfapp_frame()
-int frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample, int flag) { return server->frame(); }
+int Frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample, int flag) { return server->Frame(); }
 
 int spaceball_server(int argc, const char **argv) {
     FLAGS_target_fps = FLAGS_framerate;
-    app->frame_cb = frame;
+    app->frame_cb = Frame;
 
     // assets.push_back(Asset(name,      texture, scale, trans, rotate, geometry  hull, cubemap, texgen));
     assets.push_back(Asset("ship",       "",      0,     0,     0,      0,        0,    0,       0     ));

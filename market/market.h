@@ -132,10 +132,10 @@ struct MarketData {
         for (const char *fn = d.next(); Running() && fn; fn = d.next()) {
             INFO("MarketData Open ", fn);
             ProtoFile trading_day((market_dir + string(fn)).c_str());
-            if (!trading_day.opened()) { ERROR("open ", fn, " failed"); continue; }
+            if (!trading_day.Opened()) { ERROR("open ", fn, " failed"); continue; }
 
             Quote quote;
-            while (trading_day.next(&quote)) symbol[quote.info().symbol().c_str()].AddQuote(quote);
+            while (trading_day.Next(&quote)) symbol[quote.info().symbol().c_str()].AddQuote(quote);
         }
     }
 
