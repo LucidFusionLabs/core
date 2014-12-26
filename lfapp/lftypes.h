@@ -222,14 +222,14 @@ template <typename X, typename Y, Y (X::*Z)> struct ArrayMemberSegmentIter {
 
 template <class X> struct ValueSet {
     int i, c; X *d;
-    int match(X x) { for (int j=0; j<c; j++) if (x == d[j]) return j; return -1; }
+    int Match(X x) { for (int j=0; j<c; j++) if (x == d[j]) return j; return -1; }
     ValueSet(int n, ...) : i(0), c(n), d(new X[c]) { va_list ap; va_start(ap, n); for (int j=0; j<c; j++) d[j] = va_arg(ap, X); va_end(ap); }
     ~ValueSet() { delete[] d; }
-    X cur() { return d[i]; }
-    X next() { i=(i+1)%c; return d[i]; }
-    bool enabled() { return i!=0; }
-    void on() { i=1; }
-    void off(){ i=0; }
+    X Cur() { return d[i]; }
+    X Next() { i=(i+1)%c; return d[i]; }
+    bool Enabled() { return i!=0; }
+    void On() { i=1; }
+    void Off(){ i=0; }
 };
 
 struct AnyBoolSet {
@@ -262,8 +262,8 @@ struct ReallocHeap {
     char *heap; int size, len;
     ~ReallocHeap(); 
     ReallocHeap(int startSize=65536);
-    void reset() { len=0; }
-    int alloc(int len);
+    void Reset() { len=0; }
+    int Alloc(int len);
 };
 
 struct Bit {
@@ -356,99 +356,98 @@ struct RingBuf {
     Allocator *alloc; char *buf; Time *stamp;
     ~RingBuf() { alloc->free((void*)buf); alloc->free((void*)stamp); }
     RingBuf(int SPS=0, int SPB=0, int Width=0, Allocator *Alloc=0) : samplesPerSec(0), width(0), bytes(0), alloc(Alloc?Alloc:Singleton<MallocAlloc>::Get()), buf(0), stamp(0)
-    { if (SPS) resize(SPS, X_or_Y(SPB, SPS), Width); }
+    { if (SPS) Resize(SPS, X_or_Y(SPB, SPS), Width); }
 
-    int bucket(int n) const { return ring.AbsoluteIndex(n); }
-    virtual void *ind(int index) const { return (void *)(buf + index*width); }
+    int Bucket(int n) const { return ring.AbsoluteIndex(n); }
+    virtual void *Ind(int index) const { return (void *)(buf + index*width); }
 
-    void resize(int SPS, int SPB, int Width=0);
+    void Resize(int SPS, int SPB, int Width=0);
     enum WriteFlag { Peek=1, Stamp=2 };
-    virtual void *write(int writeFlag=0, Time timestamp=-1);
+    virtual void *Write(int writeFlag=0, Time timestamp=-1);
 
-    int dist(int indexB, int indexE) const;
-    int since(int index, int Next=-1) const;
-    virtual void *read(int index, int Next=-1) const;
-    virtual Time readtimestamp(int index, int Next=-1) const;
+    int Dist(int indexB, int indexE) const;
+    int Since(int index, int Next=-1) const;
+    virtual void *Read(int index, int Next=-1) const;
+    virtual Time ReadTimestamp(int index, int Next=-1) const;
 
     struct Handle : public Vec<float> {
         RingBuf *sb; int next, nlen;
         Handle() : sb(0), next(-1), nlen(-1) {}
-        Handle(RingBuf *SB, int Next=-1, int Len=-1) : sb(SB), next((sb && Next != -1)?sb->bucket(Next):-1), nlen(Len) {}
-        virtual int rate() const { return sb->samplesPerSec; }
-        virtual int len() const { return nlen >= 0 ? nlen : sb->ring.size; }
-        virtual float *index(int index) { return (float *)sb->ind(index); }
-        virtual float ind(int index) const { return *(float *)sb->ind(index); }
-        virtual void write(float v, int flag=0, Time ts=-1) { *(float *)(sb->write(flag, ts)) = v; }
-        virtual void write(float *v, int flag=0, Time ts=-1) { *(float *)(sb->write(flag, ts)) = *v; }
-        virtual float read(int index) const { return *(float *)sb->read(index, next); }
-        virtual float *readaddr(int index) const { return (float *)sb->read(index, next); } 
-        virtual Time readtimestamp(int index) const { return sb->readtimestamp(index, next); }
+        Handle(RingBuf *SB, int Next=-1, int Len=-1) : sb(SB), next((sb && Next != -1)?sb->Bucket(Next):-1), nlen(Len) {}
+        virtual int Rate() const { return sb->samplesPerSec; }
+        virtual int Len() const { return nlen >= 0 ? nlen : sb->ring.size; }
+        virtual float *Index(int index) { return (float *)sb->Ind(index); }
+        virtual float Ind(int index) const { return *(float *)sb->Ind(index); }
+        virtual void Write(float v, int flag=0, Time ts=-1) { *(float *)(sb->Write(flag, ts)) = v; }
+        virtual void Write(float *v, int flag=0, Time ts=-1) { *(float *)(sb->Write(flag, ts)) = *v; }
+        virtual float Read(int index) const { return *(float *)sb->Read(index, next); }
+        virtual float *ReadAddr(int index) const { return (float *)sb->Read(index, next); } 
+        virtual Time ReadTimestamp(int index) const { return sb->ReadTimestamp(index, next); }
         void CopyFrom(const RingBuf::Handle *src);
     };
 
-    template <typename X> struct handle : public Handle {
-        handle() {}
-        handle(RingBuf *SB, int Next=-1, int Len=-1) : Handle(SB, Next, Len) {}
-        virtual float ind(int index) const { return *(X *)sb->ind(index); }
-        virtual float read(int index) const { return *(X *)sb->read(index, next); }
-        virtual void write(float v, int flag=0, Time ts=-1) { *(X *)(sb->write(flag, ts)) = v; }
-        virtual void write(float *v, int flag=0, Time ts=-1) { *(X *)(sb->write(flag, ts)) = *v; }
+    template <typename X> struct HandleT : public Handle {
+        HandleT() {}
+        HandleT(RingBuf *SB, int Next=-1, int Len=-1) : Handle(SB, Next, Len) {}
+        virtual float Ind(int index) const { return *(X *)sb->Ind(index); }
+        virtual float Read(int index) const { return *(X *)sb->Read(index, next); }
+        virtual void Write(float  v, int flag=0, Time ts=-1) { *(X *)(sb->Write(flag, ts)) =  v; }
+        virtual void Write(float *v, int flag=0, Time ts=-1) { *(X *)(sb->Write(flag, ts)) = *v; }
     };
 
     struct DelayHandle : public Handle {
         int delay;
         DelayHandle(RingBuf *SB, int next, int Delay) : Handle(SB, next+Delay), delay(Delay) {}
-        virtual float read(int index) const {
-            if ((index < 0 && index >= -delay) || (index > 0 && index >= len() - delay)) return 0;
-            return Handle::read(index);
+        virtual float Read(int index) const {
+            if ((index < 0 && index >= -delay) || (index > 0 && index >= Len() - delay)) return 0;
+            return Handle::Read(index);
         }
     };
 
     struct WriteAheadHandle : public Handle {
         WriteAheadHandle(RingBuf *SB) : Handle(SB, SB->ring.back) {}
-        virtual void write(float v, int flag=0, Time ts=-1) { *(float*)write(flag, ts) = v; }
-        virtual void *write(int flag=0, Time ts=-1) {
-            void *ret = sb->ind(next);
+        virtual void Write(float v, int flag=0, Time ts=-1) { *(float*)Write(flag, ts) = v; }
+        virtual void *Write(int flag=0, Time ts=-1) {
+            void *ret = sb->Ind(next);
             if (flag & Stamp) sb->stamp[next] = ts ? ts : Now() * 1000;
             if (!(flag & Peek)) next = (next+1) % sb->ring.size;
             return ret;
         }
-        void commit() { sb->ring.back = sb->bucket(next); }
+        void Commit() { sb->ring.back = sb->Bucket(next); }
     };
 
-    template <class T=double> struct matrixHandle : public matrix<T> {
+    template <class T=double> struct MatrixHandleT : public matrix<T> {
         RingBuf *sb; int next;
-
-        matrixHandle(RingBuf *SB, int Next, int Rows) : sb(SB), next((sb && Next != -1)?sb->bucket(Next):-1) { 
+        MatrixHandleT(RingBuf *SB, int Next, int Rows) : sb(SB), next((sb && Next != -1)?sb->Bucket(Next):-1) { 
             matrix<T>::bytes = sb->width;
             matrix<T>::M = Rows?Rows:sb->ring.size;
             matrix<T>::N = matrix<T>::bytes/sizeof(T);
         }
 
-        T             * row(int i)       { return (T*)sb->read(i, next); }
-        const T       * row(int i) const { return (T*)sb->read(i, next); }
-        Complex       *crow(int i)       { return (Complex*)sb->read(i, next); }
-        const Complex *crow(int i) const { return (Complex*)sb->read(i, next); }
+        T             * row(int i)       { return (T*)sb->Read(i, next); }
+        const T       * row(int i) const { return (T*)sb->Read(i, next); }
+        Complex       *crow(int i)       { return (Complex*)sb->Read(i, next); }
+        const Complex *crow(int i) const { return (Complex*)sb->Read(i, next); }
     };
-    typedef matrixHandle<double> MatrixHandle;
+    typedef MatrixHandleT<double> MatrixHandle;
 
-    template <class T=double> struct rowMatHandle {
+    template <class T=double> struct RowMatHandleT {
         RingBuf *sb; int next;
         matrix<T> wrap;
-        void init() { wrap.M=1; wrap.bytes=sb->width; wrap.N=wrap.bytes/sizeof(T); }
+        void Init() { wrap.M=1; wrap.bytes=sb->width; wrap.N=wrap.bytes/sizeof(T); }
 
-        ~rowMatHandle() { wrap.m=0; }
-        rowMatHandle() : sb(0), next(0) {}
-        rowMatHandle(RingBuf *SB) : sb(SB), next(-1) { init(); }
-        rowMatHandle(RingBuf *SB, int Next) : sb(SB), next((sb && Next != -1)?sb->bucket(Next):-1) { init(); }
+        ~RowMatHandleT() { wrap.m=0; }
+        RowMatHandleT() : sb(0), next(0) {}
+        RowMatHandleT(RingBuf *SB) : sb(SB), next(-1) { Init(); }
+        RowMatHandleT(RingBuf *SB, int Next) : sb(SB), next((sb && Next != -1)?sb->Bucket(Next):-1) { Init(); }
 
-        matrix<T> *ind(int index) { wrap.m = (double *)sb->ind(index); return &wrap; }
-        matrix<T> *read(int index) { wrap.m = (double *)sb->read(index, next); return &wrap; }
-        double *readrow(int index) { wrap.m = (double *)sb->read(index, next); return wrap.row(0); }
-        matrix<T> *write(int flag=0, Time ts=-1) { wrap.m = (double *)sb->write(flag, ts); return &wrap; }
-        Time readtimestamp(int index) const { return sb->readtimestamp(index, next); }
+        matrix<T> *Ind(int index) { wrap.m = (double *)sb->Ind(index); return &wrap; }
+        matrix<T> *Read(int index) { wrap.m = (double *)sb->Read(index, next); return &wrap; }
+        double *ReadRow(int index) { wrap.m = (double *)sb->Read(index, next); return wrap.row(0); }
+        matrix<T> *Write(int flag=0, Time ts=-1) { wrap.m = (double *)sb->Write(flag, ts); return &wrap; }
+        Time ReadTimestamp(int index) const { return sb->ReadTimestamp(index, next); }
     };
-    typedef rowMatHandle<double> RowMatHandle;
+    typedef RowMatHandleT<double> RowMatHandle;
 };
 
 struct ColMatPtrRingBuf : public RingBuf {
@@ -460,10 +459,10 @@ struct ColMatPtrRingBuf : public RingBuf {
         bytes = width * ring.size;
         ring.back = 0;
     }
-    virtual void *ind(int index) const { return &wrap->row(index)[col]; }
-    virtual void *read(int index, int Next=-1) const { return &wrap->row(index)[col]; }
-    virtual void *write(int writeFlag=0, Time timestamp=-1) { return &wrap->row(ring.back++)[col]; } 
-    virtual Time readtimestamp(int index, int Next=-1) const { return index; }
+    virtual void *Ind(int index) const { return &wrap->row(index)[col]; }
+    virtual void *Read(int index, int Next=-1) const { return &wrap->row(index)[col]; }
+    virtual void *Write(int writeFlag=0, Time timestamp=-1) { return &wrap->row(ring.back++)[col]; } 
+    virtual Time ReadTimestamp(int index, int Next=-1) const { return index; }
 };
 
 struct CallbackList {
@@ -675,8 +674,8 @@ struct SettingsFile {
     static const char *VarName() { return "settings"; }
     static const char *Separator() { return " = "; }
 
-    static int read(const string &dir, const string &name);
-    static int write(const vector<string> &fields, const string &dir, const string &name);
+    static int Read(const string &dir, const string &name);
+    static int Write(const vector<string> &fields, const string &dir, const string &name);
 };
 
 struct MatrixFile {
@@ -731,119 +730,56 @@ struct MatrixFile {
 
 struct MatrixArchiveOut {
     File *file;
-    MatrixArchiveOut(const char *name=0);
+    MatrixArchiveOut(const string &name=string());
     ~MatrixArchiveOut();
 
-    void close();
-    int open(const char *name);
-    int open(string name) { return open(name.c_str()); }
-    int write(const string &hdr, Matrix*, const char *name);
-    int write(const MatrixFile *f, const char *name) { return write(f->H, f->F, name); }
+    void Close();
+    int Open(const string &name);
+    int Write(Matrix*, const string &hdr, const string &name);
+    int Write(const MatrixFile *f, const string &name) { return Write(f->F, f->H, name); }
 };
 
 struct MatrixArchiveIn {
     IterWordIter *file; int index;
-    MatrixArchiveIn(const char *name=0);
+    MatrixArchiveIn(const string &name=string());
     ~MatrixArchiveIn();
 
-    void close();
-    int open(const char *name);
-    int open(string name) { return open(name.c_str()); }
-    int read(string *hdrout, Matrix **out);
-    int read(MatrixFile *f) { return read(&f->H, &f->F); }
-    int skip();
-    const char *filename();
-    static int count(const char *name);
+    void Close();
+    int Open(const string &name);
+    int Read(Matrix **out, string *hdrout);
+    int Read(MatrixFile *f) { return Read(&f->F, &f->H); }
+    int Skip();
+    string Filename();
+    static int Count(const string &name);
 };
 
-struct HashMatrix {
-#define get_impl(T) \
-        unsigned ind = hash % map->M; \
-        T *hashrow = map->row(ind); \
-        for (int k=0; k<map->N/VPE; k++) { \
-            if (hashrow[k*VPE] != hash) continue; \
-            return &hashrow[k*VPE]; \
-        } \
-    return 0;
-    static       double *get(/**/  Matrix *map, unsigned hash, int VPE) { get_impl(      double); }
-    static const double *get(const Matrix *map, unsigned hash, int VPE) { get_impl(const double); }
-
-    static double *set(Matrix *map, unsigned hash, int VPE) {
-        unsigned ind = hash % map->M;
-        double *hashrow = map->row(ind);
-        for (int k=0; k<map->N/VPE; k++) {
-            if (hashrow[k*VPE]) {
-                if (hashrow[k*VPE] == hash) { ERROR("hash collision or duplicate insert ", hash); break; }
-                continue;
-            }
-            hashrow[k*VPE] = hash;
-            return &hashrow[k*VPE];
-        }
+template <class X, void (*Assign)(double *, X), bool (*Equals)(const double*, X)>
+struct HashMatrixT {
+    static double *Get(Matrix *map, X hash, int VPE) {
+        double *hashrow = map->row(hash % map->M);
+        for (int k=0, l=map->N/VPE; k<l; k++) if (Equals(&hashrow[k*VPE], hash)) return &hashrow[k*VPE];
         return 0;
     }
-    static double *set_binary(File *lf, int M, int N, int hdr_size, unsigned hash, int VPE, double *hashrow) {
-        unsigned ind = hash % M, row_size = N * sizeof(double), offset = hdr_size + ind * row_size;
-        if (lf->seek(offset, File::Whence::SET) != offset) { ERROR("seek: ", offset);   return 0; } 
-        if (lf->read(hashrow, row_size)       != row_size) { ERROR("read: ", row_size); return 0; }
-
-        for (int k=0; k<N/VPE; k++) {
-            if (hashrow[k*VPE]) {
-                if (hashrow[k*VPE] == hash) { ERROR("hash collision or duplicate insert ", hash); break; }
-                continue;
-            }
-            int hri_offset = offset + k*VPE * sizeof(double);
-            if (lf->seek(hri_offset, File::Whence::SET) != hri_offset) { ERROR("seek: ", hri_offset); return 0; } 
-            hashrow[k*VPE] = hash;
-            return &hashrow[k*VPE];
-        }
+    static const double *Get(const Matrix *map, X hash, int VPE) {
+        const double *hashrow = map->row(hash % map->M);
+        for (int k=0, l=map->N/VPE; k<l; k++) if (Equals(&hashrow[k*VPE], hash)) return &hashrow[k*VPE];
         return 0;
     }
-    static void set_binary_flush(File *lf, int VPE, const double *hashrow) {
-        int write_size = VPE * sizeof(double);
-        if (lf->write(hashrow, write_size) != write_size) ERROR("read: ", write_size);
-    }
-};
-
-struct HashMatrix64 {
-#define hash_split(hash, hhash, lhash) unsigned hhash = hash>>32, lhash = hash&0xffffffff;
-#undef  get_impl
-#define get_impl(T) \
-        unsigned ind = hash % map->M; \
-        T *hashrow = map->row(ind); \
-        for (int k=0; k<map->N/VPE; k++) { \
-            int hri = k*VPE; \
-            if (hashrow[hri] != hhash || hashrow[hri+1] != lhash) continue; \
-            return &hashrow[hri]; \
-        } \
-    return 0;
-    static double *get(Matrix *map, unsigned long long hash, int VPE) {
-        hash_split(hash, hhash, lhash);
-        get_impl(double);
-    }
-    static const double *get(const Matrix *map, unsigned long long hash, int VPE) {
-        hash_split(hash, hhash, lhash);
-        get_impl(const double);
-    }
-
-    static double *set(Matrix *map, unsigned long long hash, int VPE) {
-        hash_split(hash, hhash, lhash);
+    static double *Set(Matrix *map, X hash, int VPE) {
         long long ind = hash % map->M;
         double *hashrow = map->row(ind);
         for (int k=0; k<map->N/VPE; k++) {
             int hri = k*VPE;
             if (hashrow[hri]) {
-                if (hashrow[hri] == hhash && hashrow[hri+1] == lhash) { ERROR("hash collision or duplicate insert ", hhash, " ", lhash); break; }
+                if (Equals(&hashrow[hri], hash)) { ERROR("hash collision or duplicate insert ", hash); break; }
                 continue;
             }
-            hashrow[hri] = hhash;
-            hashrow[hri+1] = lhash;
+            Assign(&hashrow[hri], hash);
             return &hashrow[hri];
         }
         return 0;
     }
-
-    static double *set_binary(File *lf, int M, int N, int hdr_size, unsigned long long hash, int VPE, double *hashrow) {
-        hash_split(hash, hhash, lhash);
+    static double *SetBinary(File *lf, int M, int N, int hdr_size, X hash, int VPE, double *hashrow) {
         long long ind = hash % M, row_size = N * sizeof(double), offset = hdr_size + ind * row_size, ret;
         if ((ret = lf->seek(offset, File::Whence::SET)) != offset) { ERROR("seek: ", offset,   " != ", ret); return 0; } 
         if ((ret = lf->read(hashrow, row_size))       != row_size) { ERROR("read: ", row_size, " != ", ret); return 0; }
@@ -851,24 +787,39 @@ struct HashMatrix64 {
         for (int k=0; k<N/VPE; k++) {
             int hri = k*VPE;
             if (hashrow[hri]) {
-                if (hashrow[hri] == hhash && hashrow[hri+1] == lhash) { ERROR("hash collision or duplicate insert ", hhash, " ", lhash); break; }
+                if (Equals(&hashrow[hri], hash)) { ERROR("hash collision or duplicate insert ", hash); break; }
                 continue;
             }
             int hri_offset = offset + hri * sizeof(double);
             if ((ret = lf->seek(hri_offset, File::Whence::SET)) != hri_offset) { ERROR("seek: ", hri_offset, " != ", ret); return 0; } 
-            hashrow[hri] = hhash;
-            hashrow[hri+1] = lhash;
+            Assign(&hashrow[hri], hash);
             return &hashrow[hri];
         }
         return 0;
     }
-
-    static void set_binary_flush(LocalFile *lf, int VPE, const double *hashrow) {
+    static void SetBinaryFlush(LocalFile *lf, int VPE, const double *hashrow) {
         int write_size = VPE * sizeof(double);
         if (lf->write(hashrow, write_size) != write_size) ERROR("read: ", write_size);
     }
 };
-#undef get_impl
+
+struct HashMatrixF {
+    static void Assign(/**/  double *hashrow, unsigned hash) { if (1) hashrow[0] =  hash; }
+    static bool Equals(const double *hashrow, unsigned hash) { return hashrow[0] == hash; }
+};
+struct HashMatrix : public HashMatrixT<unsigned, &HashMatrixF::Assign, &HashMatrixF::Equals> {};
+
+struct HashMatrix64F {
+    static void Assign(double *hashrow, unsigned long long hash) {
+        hashrow[0] = static_cast<unsigned>(hash>>32);
+        hashrow[1] = static_cast<unsigned>(hash&0xffffffff);
+    }
+    static bool Equals(const double *hashrow, unsigned long long hash) {
+        return hashrow[0] == static_cast<unsigned>(hash>>32) &&
+               hashrow[1] == static_cast<unsigned>(hash&0xffffffff);
+    }
+};
+struct HashMatrix64 : public HashMatrixT<unsigned long long, &HashMatrix64F::Assign, &HashMatrix64F::Equals> {};
 
 }; // namespace LFL
 #endif // __LFL_LFAPP_LFTYPES_H__

@@ -77,7 +77,7 @@ int PronunciationDict::readDictionary(Iter *in, PronunciationDict *out) {
         phone[phones]=0;
 
         /* insert(word, valbufOffset) */
-        int offset = out->val.alloc(phones*2+1);
+        int offset = out->val.Alloc(phones*2+1);
         out->word_pronunciation[word] = offset;
 
         memcpy(&out->val.heap[offset], phone, phones+1);
@@ -144,8 +144,8 @@ Matrix *Features::filterZeroth(Matrix *features) {
 }
 
 void Features::meanAndVarianceNormalization(int D, double *feat, const double *mean, const double *var) {
-    Vector::sub(feat, mean, D);
-    if (var) Vector::mult(feat, var, D);
+    Vector::Sub(feat, mean, D);
+    if (var) Vector::Mult(feat, var, D);
 }
 
 void Features::deltaCoefficients(int D, const double *n2, double *f, const double *p2) {
@@ -162,20 +162,20 @@ void Features::deltaDeltaCoefficients(int D, const double *n3, const double *n1,
 }
 
 void Features::patchDeltaCoefficients(int D, const double *in, double *out1, double *out2) {
-    Vector::assign(out1, in, D);
-    Vector::assign(out2, in, D);
+    Vector::Assign(out1, in, D);
+    Vector::Assign(out2, in, D);
 }
 
 void Features::patchDeltaDeltaCoefficients(int D, const double *in, double *out1, double *out2, double *out3) {
-    Vector::assign(out1, in, D);
-    Vector::assign(out2, in, D);
-    Vector::assign(out3, in, D);
+    Vector::Assign(out1, in, D);
+    Vector::Assign(out2, in, D);
+    Vector::Assign(out3, in, D);
 }
 
 Matrix *Features::deltaCoefficients(Matrix *in, bool dd) {
     int M=in->M, D=in->N;
     Matrix *features = new Matrix(M, D*(2+dd));
-    features->assignR(in);
+    features->AssignR(in);
     delete in;
 
     /* copy sphinx */
@@ -208,12 +208,12 @@ Matrix *Features::fromFeat(Matrix *features, int flag, bool filterzeroth, bool d
             double *mean = (double *)alloca(features->N * sizeof(double));
             double *var = (double *)alloca(features->N * sizeof(double));
 
-            Vector::assign(mean, 0.0, features->N);
-            MatrixRowIter(features) Vector::add(mean, features->row(i), features->N);
-            Vector::div(mean, features->M, features->N);
+            Vector::Assign(mean, 0.0, features->N);
+            MatrixRowIter(features) Vector::Add(mean, features->row(i), features->N);
+            Vector::Div(mean, features->M, features->N);
 
             if (varnorm) {                
-                Vector::assign(var, 0.0, features->N);
+                Vector::Assign(var, 0.0, features->N);
                 MatrixIter(features) {
                     double diff = features->row(i)[j] - mean[j];
                     var[j] += diff*diff;
@@ -342,7 +342,7 @@ void AcousticModel::State::assign(State *out, int *outind, int outsize, StateCol
         int ind = *outind;
         out[ind].assignPtr(s);
         out[ind].val.samples = val;
-        out[ind].transition.absorb(out[ind].transition.clone());
+        out[ind].transition.Absorb(out[ind].transition.Clone());
 
         if (tied) {
             static unsigned silhash = fnv32("Model_SIL_State_00");
@@ -495,7 +495,7 @@ int AcousticModel::write(StateCollection *model, const char *name, const char *d
         }
 
         /* build map */
-        double *he = HashMatrix::set(&map, s->id(), values);
+        double *he = HashMatrix::Set(&map, s->id(), values);
         if (!he) FATAL("Matrix hash collision: ", s->name);
         he[1] = states;
         he[2] = means;
@@ -605,7 +605,7 @@ AcousticModel::Compiled *AcousticModel::fromUtterance1(AcousticModel::Compiled *
             trans->row(2)[TC_Cost] = trnext ? trnext[TC_Cost] : mintx;
         }
 
-        s->transition.absorb(trans);
+        s->transition.Absorb(trans);
     }
     return hmm;
 }
@@ -713,7 +713,7 @@ AcousticModel::Compiled *AcousticModel::fromUtterance3(AcousticModel::Compiled *
         else strcost = str[TC_Cost];
 
         double prob=log(1.0/tx.size()+1);
-        s->transition.open(tx.size()+1, TransitCols, s->id());
+        s->transition.Open(tx.size()+1, TransitCols, s->id());
         s->transition.row(tx.size())[TC_Edge] = i;
         s->transition.row(tx.size())[TC_Cost] = strcost;
         s->transition.M--;
@@ -731,7 +731,7 @@ AcousticModel::Compiled *AcousticModel::fromUtterance3(AcousticModel::Compiled *
     if (!fstr) ERROR("no transition from final to self ", final->name, " ", final->id(), ", patched w min ", fstrcost);
     else fstrcost = fstr[TC_Cost];
 
-    final->transition.open(1, TransitCols, final->id());
+    final->transition.Open(1, TransitCols, final->id());
     final->transition.row(0)[TC_Edge] = len-1;
     final->transition.row(0)[TC_Cost] = fstrcost;
 
@@ -777,7 +777,7 @@ AcousticModel::Compiled *AcousticModel::fromModel1(StateCollection *model, bool 
 
     for (int i=0; i<hmm->states; i++) {
         State *s = &hmm->state[i];
-        s->transition.absorb(s->transition.clone());
+        s->transition.Absorb(s->transition.Clone());
         if (State::localizeTransitionMap(&s->transition, &s->transition, hmm, 0)) { ERROR("localize transition ", i, " ", s->name); return 0; }
     }
 
@@ -793,7 +793,7 @@ AcousticModel::Compiled *AcousticModel::fromModel1(StateCollection *model, bool 
             string n = s->name;
             if (!isSilence(s->name) && n.substr(n.size()-8) != "State_02") continue;
 
-            s->transition.absorb(trans->clone()); 
+            s->transition.Absorb(trans->Clone()); 
             MatrixRowIter(&s->transition) s->transition.row(i)[TC_Self] = s->id();
         }
         delete trans;
@@ -849,7 +849,7 @@ int AcousticModelFile::read(const char *name, const char *dir, int lastiter, boo
         if (rebuildTransit) {
             LFL_STL_NAMESPACE::map<unsigned, pair<int, int> >::iterator it = txmap.find(hash);
             if (it == txmap.end()) { ERROR("find state ", state[i].name, " in transition failed ", hash); return -1; }
-            state[i].transition.assignDataPtr((*it).second.second, transit->N, transit->row((*it).second.first));
+            state[i].transition.AssignDataPtr((*it).second.second, transit->N, transit->row((*it).second.first));
         }
         else {
             double *he = getHashEntry(hash);
@@ -859,7 +859,7 @@ int AcousticModelFile::read(const char *name, const char *dir, int lastiter, boo
             while (transbegin+transits < transit->M && transit->row(transbegin+transits)[TC_Self] == hash) transits++;
             if (!transits) { ERROR(transits, " transits for ", state[i].name); return -1; }
 
-            state[i].transition.assignDataPtr(transits, transit->N, transit->row(transbegin));
+            state[i].transition.AssignDataPtr(transits, transit->N, transit->row(transbegin));
         }
 
         state[i].txself = -INFINITY;
@@ -871,10 +871,10 @@ int AcousticModelFile::read(const char *name, const char *dir, int lastiter, boo
 
         if (0) {
             INFO((*names)[i], " ", fnv32((*names)[i].c_str()));
-            Matrix::print(&state[i].transition, (*names)[i]);
-            Matrix::print(&state[i].emission.prior, (*names)[i]);
-            Matrix::print(&state[i].emission.mean, (*names)[i]);
-            Matrix::print(&state[i].emission.diagcov, (*names)[i]);
+            Matrix::Print(&state[i].transition, (*names)[i]);
+            Matrix::Print(&state[i].emission.prior, (*names)[i]);
+            Matrix::Print(&state[i].emission.mean, (*names)[i]);
+            Matrix::Print(&state[i].emission.diagcov, (*names)[i]);
         }
     }
     return lastiter;
@@ -1104,7 +1104,7 @@ int resynthesize(Audio *s, const SoundAsset *sa) {
     Matrix *f0 = f0stream(&B, 0, FLAGS_feat_window, FLAGS_feat_hop);
 
     int ret = -1;
-    RingBuf *resynth = Features::reverse(m, B.rate(), f0);
+    RingBuf *resynth = Features::reverse(m, B.Rate(), f0);
     if (resynth) {
         B = RingBuf::Handle(resynth);
         s->QueueMixBuf(&B);	

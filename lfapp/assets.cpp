@@ -285,16 +285,16 @@ int WavReader::Read(RingBuf::Handle *B, int off, int num) {
 
     short *data = (short *)alloca(bytes);
     if (f->read(data, bytes) != bytes) return -1;
-    for (int i=0; i<num; i++) B->write(data[i] / 32768.0);
+    for (int i=0; i<num; i++) B->Write(data[i] / 32768.0);
     last = offset + bytes;
     return 0;
 }
 
 int WavWriter::Write(const RingBuf::Handle *B, bool flush) {
     if (!f->opened()) return -1;
-    int bytes = B->len() * sizeof(short);
+    int bytes = B->Len() * sizeof(short);
     short *data = (short *)alloca(bytes);
-    for (int i=0; B && i<B->len(); i++) data[i] = (short)(B->read(i) * 32768.0);
+    for (int i=0; B && i<B->Len(); i++) data[i] = (short)(B->Read(i) * 32768.0);
 
     if (f->write(data, bytes) != bytes) return -1;
     wrote += bytes;
@@ -1135,18 +1135,18 @@ Waveform Waveform::Decimated(point dim, const Color *c, const RingBuf::Handle *s
 }
 
 Waveform::Waveform(point dim, const Color *c, const Vec<float> *sbh) : width(dim.x), height(dim.y), geom(0) {
-    float xmax=sbh->len(), ymin=INFINITY, ymax=-INFINITY;
+    float xmax=sbh->Len(), ymin=INFINITY, ymax=-INFINITY;
     for (int i=0; i<xmax; i++) {
-        ymin = min(ymin,sbh->read(i));
-        ymax = max(ymax,sbh->read(i));
+        ymin = min(ymin,sbh->Read(i));
+        ymax = max(ymax,sbh->Read(i));
     }
 
     geom = new Geometry(GraphicsDevice::Lines, (int)(xmax-1)*2, (v2*)0, 0, 0, *c);
     v2 *vert = (v2*)&geom->vert[0];
 
     for (int i=0; i<geom->count/2; i++) {
-        float x1=(i)  *1.0/xmax, y1=(sbh->read(i)   - ymin)/(ymax - ymin); 
-        float x2=(i+1)*1.0/xmax, y2=(sbh->read(i+1) - ymin)/(ymax - ymin);
+        float x1=(i)  *1.0/xmax, y1=(sbh->Read(i)   - ymin)/(ymax - ymin); 
+        float x2=(i+1)*1.0/xmax, y2=(sbh->Read(i+1) - ymin)/(ymax - ymin);
 
         vert[i*2+0] = v2(x1 * dim.x, -dim.y + y1 * dim.y);
         vert[i*2+1] = v2(x2 * dim.x, -dim.y + y2 * dim.y);
@@ -1201,7 +1201,7 @@ void glSpectogram(SoundAsset *sa, Asset *a, Matrix *transform, float *max, float
 
     /* 20*log10(abs(specgram(y,2048,sr,hamming(512),256))) */
     Matrix *m = spectogram(&B, 0, FLAGS_feat_window, FLAGS_feat_hop, FLAGS_feat_window, 0, PowerDomain::abs);
-    if (transform) m = Matrix::mult(m, transform, mDelA);
+    if (transform) m = Matrix::Mult(m, transform, mDelA);
 
     glSpectogram(m, a, max, clip, PowerDomain::abs);
     delete m;

@@ -35,7 +35,7 @@ namespace LFL {
 ReallocHeap::ReallocHeap(int startSize) : heap(0), size(startSize), len(0) {}
 ReallocHeap::~ReallocHeap() { free(heap); }
 
-int ReallocHeap::alloc(int bytes) {
+int ReallocHeap::Alloc(int bytes) {
     int ret=len, reallocB=!heap, newSize=len+bytes;
     if (!size) {
         if (!heap) size=65536;
@@ -51,7 +51,7 @@ int ReallocHeap::alloc(int bytes) {
     return ret;
 }
 
-void RingBuf::resize(int SPS, int SPB, int Width) {
+void RingBuf::Resize(int SPS, int SPB, int Width) {
     if (SPS != samplesPerSec || SPB != ring.size || Width != width) { 
         ring.size = SPB;
         samplesPerSec = SPS;
@@ -67,37 +67,37 @@ void RingBuf::resize(int SPS, int SPB, int Width) {
     ring.back = 0;
 }
 
-void *RingBuf::write(int writeFlag, Time timestamp) {
+void *RingBuf::Write(int writeFlag, Time timestamp) {
     void *ret = (void*)(buf + ring.back*width);
     if (writeFlag & Stamp) stamp[ring.back] = timestamp != -1 ? timestamp : Now() * 1000;
     if (!(writeFlag & Peek)) ring.back = ring.Index(1);
     return ret;
 }
 
-int RingBuf::dist(int indexB, int indexE) const { return since(bucket(indexB), bucket(indexE)); }
+int RingBuf::Dist(int indexB, int indexE) const { return Since(Bucket(indexB), Bucket(indexE)); }
 
-int RingBuf::since(int index, int Next) const {
+int RingBuf::Since(int index, int Next) const {
     Next = Next>=0 ? Next : ring.back;
     return (Next < index ? ring.size : 0) + Next - index;
 }
 
-void *RingBuf::read(int index, int Next) const { 
+void *RingBuf::Read(int index, int Next) const { 
     Next = Next>=0 ? Next : ring.back;
-    int ind = bucket(Next+index);
+    int ind = Bucket(Next+index);
     return (void *)(buf + ind * width);
 }
 
-Time RingBuf::readtimestamp(int index, int Next) const { 
+Time RingBuf::ReadTimestamp(int index, int Next) const { 
     Next = Next>=0 ? Next : ring.back;
-    int ind = bucket(Next+index);
+    int ind = Bucket(Next+index);
     return stamp[ind];
 }
 
 void RingBuf::Handle::CopyFrom(const RingBuf::Handle *src) {
-    next=0; int N=len(), B=0;
-    if (N > src->len()) { B=N-src->len(); N=src->len(); }
-    for (int i=0; i<N; i++) write(src->read(-N+i));
-    for (int i=0; i<B; i++) write(0.0);
+    next=0; int N=Len(), B=0;
+    if (N > src->Len()) { B=N-src->Len(); N=src->Len(); }
+    for (int i=0; i<N; i++) Write(src->Read(-N+i));
+    for (int i=0; i<B; i++) Write(0.0);
 }
 
 /* Serializable */
@@ -296,7 +296,7 @@ int MatrixFile::Read(IterWordIter *word, int header) {
     }
     
     if (!F) F = new Matrix(M,N);
-    else if (F->M != M || F->N != N) (F->open(M, N));
+    else if (F->M != M || F->N != N) (F->Open(M, N));
 
     MatrixIter(F) {
         double *ov = &F->row(i)[j];
@@ -325,7 +325,7 @@ int MatrixFile::ReadBinary(const string &path) {
 
     if (F) FATAL("unexpected arg %p", this);
     F = new Matrix();
-    F->assignDataPtr(hdr->M, hdr->N, (double*)(buf + hdr->data), mmap);
+    F->AssignDataPtr(hdr->M, hdr->N, (double*)(buf + hdr->data), mmap);
     return 0;
 }
 
@@ -452,7 +452,7 @@ int MatrixFile::WriteRow(File *file, const double *row, int N, bool lastrow) {
 
 /* SettingsFile */
 
-int SettingsFile::read(const string &dir, const string &name) {
+int SettingsFile::Read(const string &dir, const string &name) {
     StringFile settings; int lastiter=0;
     VersionedFileName vfn(dir.c_str(), name.c_str(), VarName());
     if (settings.ReadVersioned(vfn, lastiter) < 0) { ERROR(name, ".", lastiter, ".name"); return -1; }
@@ -463,7 +463,7 @@ int SettingsFile::read(const string &dir, const string &name) {
     return 0;
 }
 
-int SettingsFile::write(const vector<string> &fields, const string &dir, const string &name) {
+int SettingsFile::Write(const vector<string> &fields, const string &dir, const string &name) {
     LocalFile settings(string(dir) + MatrixFile::Filename(name, VarName(), VarType(), 0), "w");
     MatrixFile::WriteHeader(&settings, basename(settings.fn.c_str(),0,0), Join(fields, ",").c_str(), fields.size(), 1);
     for (vector<string>::const_iterator i = fields.begin(); i != fields.end(); i++) {
@@ -474,19 +474,19 @@ int SettingsFile::write(const vector<string> &fields, const string &dir, const s
 
 /* Matrix Archive */ 
 
-MatrixArchiveOut::~MatrixArchiveOut() { close(); }
-MatrixArchiveOut::MatrixArchiveOut(const char *name) : file(0) { if (name) open(name); }
-void MatrixArchiveOut::close() { if (file) { delete file; file=0; } }
-int MatrixArchiveOut::open(const char *name) { file = new LocalFile(name, "w"); if (file->opened()) return 0; close(); return -1; }
-int MatrixArchiveOut::write(const string &hdr, Matrix *m, const char *name) { return MatrixFile(m, hdr).Write(file, name); } 
+MatrixArchiveOut::~MatrixArchiveOut() { Close(); }
+MatrixArchiveOut::MatrixArchiveOut(const string &name) : file(0) { if (name.size()) Open(name); }
+void MatrixArchiveOut::Close() { if (file) { delete file; file=0; } }
+int MatrixArchiveOut::Open(const string &name) { file = new LocalFile(name, "w"); if (file->opened()) return 0; Close(); return -1; }
+int MatrixArchiveOut::Write(Matrix *m, const string &hdr, const string &name) { return MatrixFile(m, hdr).Write(file, name); } 
 
-MatrixArchiveIn::~MatrixArchiveIn() { close(); }
-MatrixArchiveIn::MatrixArchiveIn(const char *name) : file(0), index(0) { if (name) open(name); }
-void MatrixArchiveIn::close() {if (file) { delete file; file=0; } index=0; }
-int MatrixArchiveIn::open(const char *name) { LocalFileLineIter *lfi=new LocalFileLineIter(name); file=new IterWordIter(lfi, true); return !lfi->f.opened(); }
-int MatrixArchiveIn::read(string *hdrout, Matrix **out) { index++; return MatrixFile::Read(file, out, hdrout); }
-int MatrixArchiveIn::skip() { index++; MatrixFile f; return f.Read(file, 1); }
-const char *MatrixArchiveIn::filename() { if (!file) return ""; return ""; } // file->file->f.filename(); }
-int MatrixArchiveIn::count(const char *name) { MatrixArchiveIn a(name); int ret=0; while(a.skip() != -1) ret++; return ret; }
+MatrixArchiveIn::~MatrixArchiveIn() { Close(); }
+MatrixArchiveIn::MatrixArchiveIn(const string &name) : file(0), index(0) { if (name.size()) Open(name); }
+void MatrixArchiveIn::Close() {if (file) { delete file; file=0; } index=0; }
+int MatrixArchiveIn::Open(const string &name) { LocalFileLineIter *lfi=new LocalFileLineIter(name); file=new IterWordIter(lfi, true); return !lfi->f.opened(); }
+int MatrixArchiveIn::Read(Matrix **out, string *hdrout) { index++; return MatrixFile::Read(file, out, hdrout); }
+int MatrixArchiveIn::Skip() { index++; return MatrixFile().Read(file, 1); }
+string MatrixArchiveIn::Filename() { if (!file) return ""; return ""; } // file->file->f.filename(); }
+int MatrixArchiveIn::Count(const string &name) { MatrixArchiveIn a(name); int ret=0; while (a.Skip() != -1) ret++; return ret; }
 
 }; // namespace LFL

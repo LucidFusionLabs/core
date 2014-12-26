@@ -43,7 +43,7 @@ struct KMeans {
         double mindist; int minindex;
         nearest_neighbor(means, feature, &minindex, &mindist);
 
-        Vector::add(accums->row(minindex), feature, D);
+        Vector::Add(accums->row(minindex), feature, D);
         count[minindex]++;
         totaldist += mindist;
     }
@@ -52,7 +52,7 @@ struct KMeans {
     static void nearest_neighbor(Matrix *model, double *vectorIn, int *minindexOut, double *mindistOut, double *distOut=0) {
         double mindist; int minindex=-1;
         for (int k=0; k<model->M; k++) {
-            double distance = Vector::dist2(model->row(k), vectorIn, model->N);
+            double distance = Vector::Dist2(model->row(k), vectorIn, model->N);
             if (minindex<0 || distance < mindist) { mindist=distance; minindex=k; }
             if (distOut) distOut[k] = distance;
         }
@@ -66,7 +66,7 @@ struct KMeans {
 
         for (int k=0; k<K; k++) {
             if (!count[k]) ERROR("kmeans div0");
-            else Vector::div(accums->row(k), count[k], means->row(k), D);
+            else Vector::Div(accums->row(k), count[k], means->row(k), D);
 
             prior->row(k)[0] = totalcount ? log((double)count[k] / totalcount) : FLAGS_PriorFloor;
         }
@@ -83,7 +83,7 @@ struct KMeansInit {
     KMeansInit(KMeans *out, int feats) : kmeans(out), features(feats), count(0), pick(new int[kmeans->K]) {
         if (!features) {
             ERROR("KMeans::Init called with ", features, " features");
-            for (int k=0; k<kmeans->K; k++) Vector::assign(kmeans->means->row(k), 0.0, kmeans->D);
+            for (int k=0; k<kmeans->K; k++) Vector::Assign(kmeans->means->row(k), 0.0, kmeans->D);
             return; 
         }
 
@@ -101,7 +101,7 @@ struct KMeansInit {
             if (count != pick[k]) continue;
 
             double *mean = kmeans->means->row(k);
-            Vector::assign(mean, feature, kmeans->D);
+            Vector::Assign(mean, feature, kmeans->D);
 
             string s;
             for (int l=0; l<kmeans->D; l++) StrAppend(&s, mean[l], ", ");

@@ -51,7 +51,7 @@ struct CART {
     static const double *query(const Tree *model, const Feature *f) {
         string node="t";
         for (;;) {
-            const double *he = HashMatrix::get(&model->namemap, fnv32(node.c_str()), Tree::map_values);
+            const double *he = HashMatrix::Get(&model->namemap, fnv32(node.c_str()), Tree::map_values);
             if (!he) break;
 
             int ind = he[1], qind = model->questions.row(ind)[0];
@@ -59,7 +59,7 @@ struct CART {
             node += q->answer(f) ? "l" : "r";
         }
 
-        return HashMatrix::get(&model->leafnamemap, fnv32(node.c_str()), Tree::map_values);
+        return HashMatrix::Get(&model->leafnamemap, fnv32(node.c_str()), Tree::map_values);
     }
 
     static int read(const char *dir, const char *name, int lastiter, QuestionList *inventory, Tree *out) {
@@ -75,9 +75,9 @@ struct CART {
 
     static void blank(QuestionList *inventory, Tree *out, double val) {
         out->inventory = inventory;
-        out->namemap.open(4, Tree::map_buckets*Tree::map_values);
-        out->leafnamemap.open(4, Tree::map_buckets*Tree::map_values);
-        double *he = HashMatrix::set(&out->leafnamemap, fnv32("t"), Tree::map_values);
+        out->namemap.Open(4, Tree::map_buckets*Tree::map_values);
+        out->leafnamemap.Open(4, Tree::map_buckets*Tree::map_values);
+        double *he = HashMatrix::Set(&out->leafnamemap, fnv32("t"), Tree::map_values);
         he[1] = val;
     }
 
@@ -171,7 +171,7 @@ struct CART {
             double qrow[1] = { (double)tree.question[i] };
             MatrixFile::WriteRow(&questions, qrow, 1);
 
-            double *he = HashMatrix::set(&namemap, fnv32(n), values);
+            double *he = HashMatrix::Set(&namemap, fnv32(n), values);
             if (!he) FATAL("Matrix hash collision: ", n);
             he[1] = i;
         }
@@ -179,7 +179,7 @@ struct CART {
         for (map<string, unsigned>::const_iterator i = tree.leafname.begin(); i != tree.leafname.end(); i++) {
             const char *n = (*i).first.c_str();
             unsigned v = (*i).second;
-            double *he = HashMatrix::set(&leafnamemap, fnv32(n), values);
+            double *he = HashMatrix::Set(&leafnamemap, fnv32(n), values);
             if (!he) FATAL("Matrix hash collision: ", n);
             he[1] = v;
         }
@@ -274,13 +274,13 @@ struct PhoneticDecisionTree {
             for (int i=0; i<node.size(); i++) {
                 Feature *f = (Feature *)pool->get(node[i]);
 
-                Vector::assign(x, f->mean, D);
-                Vector::mult(x, f->count, D);
-                Vector::add(mean, x, D);
+                Vector::Assign(x, f->mean, D);
+                Vector::Mult(x, f->count, D);
+                Vector::Add(mean, x, D);
 
                 denom += f->count;
             }
-            Vector::div(mean, denom, D);
+            Vector::Div(mean, denom, D);
 
             /* determine node covariance */
             denom = 0;
@@ -288,20 +288,20 @@ struct PhoneticDecisionTree {
             for (int i=0; i<node.size(); i++) {
                 Feature *f = (Feature *)pool->get(node[i]);
 
-                Vector::assign(x, f->mean, D);
-                Vector::mult(x, x, D);
-                Vector::add(x, f->covar, D);
-                Vector::mult(x, f->count, D);
-                Vector::add(covar, x, D);
+                Vector::Assign(x, f->mean, D);
+                Vector::Mult(x, x, D);
+                Vector::Add(x, f->covar, D);
+                Vector::Mult(x, f->count, D);
+                Vector::Add(covar, x, D);
 
                 denom += f->count;
             }
-            Vector::div(covar, denom, D);
+            Vector::Div(covar, denom, D);
 
-            Vector::assign(x, mean, D);
-            Vector::mult(x, x, D);
+            Vector::Assign(x, mean, D);
+            Vector::Mult(x, x, D);
 
-            Vector::sub(covar, x, D);
+            Vector::Sub(covar, x, D);
 
             /* determine node likelihood */ 
             return -0.5 * ((1 + log(2*M_PI))*D + diagdet(covar, D)) * denom;

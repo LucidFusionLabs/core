@@ -1057,7 +1057,7 @@ struct GameSettings {
     Vector vec;
     void SetIndex(int n, int v)  { CHECK(n < vec.size()); vec[n].value->i = v; };
     int GetIndex(int n)    const { CHECK(n < vec.size()); return vec[n].value->i; }
-    const char *Get(int n) const { CHECK(n < vec.size()); return vec[n].value->cur(); }
+    const char *Get(int n) const { CHECK(n < vec.size()); return vec[n].value->Cur(); }
 };
 
 struct GameMenuGUI : public GUI, public Query {
@@ -1286,9 +1286,9 @@ struct GameMenuGUI : public GUI, public Query {
             if (settings) {
                 Scissor s(*menuflow.container);
                 for (GameSettings::Vector::iterator i = settings->vec.begin(); i != settings->vec.end(); ++i) {
-                    if (DecayBoxIfMatch(line_clicked, menuflow.out->line.size())) i->value->next();
+                    if (DecayBoxIfMatch(line_clicked, menuflow.out->line.size())) i->value->Next();
                     menuflow.AppendText(0,  i->key + ":");
-                    menuflow.AppendText(.6, i->value->cur());
+                    menuflow.AppendText(.6, i->value->Cur());
                     menuflow.AppendNewlines(1);
                 }
             }

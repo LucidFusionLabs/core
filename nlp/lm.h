@@ -31,7 +31,7 @@ struct LanguageModel {
     void reset() { delete prior; prior=0; delete transit; transit=0; delete map; map=0; delete names; names=0; total=0; }
 
     static const int map_buckets=5, map_values=3, col_prior=1, col_transit=2;
-    double *getHashEntry(unsigned hash) { return HashMatrix::get(map, hash, map_values); }
+    double *getHashEntry(unsigned hash) { return HashMatrix::Get(map, hash, map_values); }
 
     bool get(unsigned hash, int *priorInd, int *transitInd=0) {
         double *he = getHashEntry(hash);

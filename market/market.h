@@ -119,8 +119,8 @@ struct MarketData {
         Waveform chart;
         vector<Quote> quote;
         void AddQuote(const Quote &q) { quote.push_back(q); }
-        virtual int len() const { return quote.size(); }
-        virtual float read(int n) const { return quote[n].value().price(); }
+        virtual int Len() const { return quote.size(); }
+        virtual float Read(int n) const { return quote[n].value().price(); }
     };
 
     typedef map<string, Symbol> SymbolMap;

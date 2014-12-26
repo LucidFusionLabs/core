@@ -148,24 +148,24 @@ struct ViterbiTrain {
         INFO("enter ViterbiTrain iteration ", iterO, "-", iterI, " (mode=", mode, ")");
         string name = string(modeldir) + StringPrintf("vp.%04d.matlist", iterO);
 
-        if (uttPathsInFile.size()) UttPathsIn.open(modeldir + uttPathsInFile);
-        if (uttPathsOutFile.size()) UttPathsOut.open(modeldir + uttPathsOutFile);
+        if (uttPathsInFile.size()) UttPathsIn.Open(modeldir + uttPathsInFile);
+        if (uttPathsOutFile.size()) UttPathsOut.Open(modeldir + uttPathsOutFile);
 
         /* default output */
-        if (write && !UttPathsOut.file && UttPathsIn.filename() != name) {
-            if (UttPathsOut.open(name.c_str())) ERROR("open: ", name, ": ", strerror(errno));
+        if (write && !UttPathsOut.file && UttPathsIn.Filename() != name) {
+            if (UttPathsOut.Open(name)) ERROR("open: ", name, ": ", strerror(errno));
         }
 
         /* default input */
         if (!write && !UttPathsIn.file) {
-            if (UttPathsIn.open(name.c_str())) FATAL("open ", name, " failed");
+            if (UttPathsIn.Open(name)) FATAL("open ", name, " failed");
         }
     }
 
     void run_finish(int iterO, int iterI, int count) {
         /* close */
-        UttPathsIn.close();
-        UttPathsOut.close();
+        UttPathsIn.Close();
+        UttPathsOut.Close();
 
         INFO("exit ViterbiTrain iteration ", iterO, "-", iterI, ", utterances = ", count);
     }
@@ -246,10 +246,10 @@ struct ViterbiTrain {
             else if (mode == Mode::UpdateModel) {
                 AcousticModel::State *s = &model->state[i];
 
-                s->emission.mean.assignL(accum[i]->mean());
+                s->emission.mean.AssignL(accum[i]->mean());
 
-                s->emission.diagcov.assignL(accum[i]->cov());
-                if (accum[i]->prior()) s->emission.prior.assignL(accum[i]->prior());
+                s->emission.diagcov.AssignL(accum[i]->cov());
+                if (accum[i]->prior()) s->emission.prior.AssignL(accum[i]->prior());
                 s->emission.computeNorms();
 
                 s->val.samples = accum[i]->count();

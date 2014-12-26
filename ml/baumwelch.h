@@ -119,13 +119,13 @@ struct BaumWelch : public HMM::BaumWelchAccum {
             double *featscaled = (double*)alloca(D*sizeof(double));
             for (int i=0; i<K; i++) {
                 if (emissionPosterior[i] < minposterior) continue;
-                Vector::mult(feature, exp(posterior[i]), featscaled, D);
-                Vector::add(a->mixture.mean.row(i), featscaled, D);
+                Vector::Mult(feature, exp(posterior[i]), featscaled, D);
+                Vector::Add(a->mixture.mean.row(i), featscaled, D);
                 logadd(&a->mixture.prior.row(i)[0], posterior[i]);
 
                 if (!FullVariance) {
-                    Vector::mult(featscaled, feature, D);
-                    Vector::add(a->mixture.diagcov.row(i), featscaled, D);
+                    Vector::Mult(featscaled, feature, D);
+                    Vector::Add(a->mixture.diagcov.row(i), featscaled, D);
                 }
             }
             a->count++;
@@ -136,10 +136,10 @@ struct BaumWelch : public HMM::BaumWelchAccum {
             double *diff = (double*)alloca(D*sizeof(double));
             for (int i=0; i<K; i++) {
                 if (emissionPosterior[i] < minposterior) continue;
-                Vector::sub(a->mixture.mean.row(i), feature, diff, D);
-                Vector::mult(diff, diff, D);
-                Vector::mult(diff, exp(posterior[i]), D);
-                Vector::add(a->mixture.diagcov.row(i), diff, D);
+                Vector::Sub(a->mixture.mean.row(i), feature, diff, D);
+                Vector::Mult(diff, diff, D);
+                Vector::Mult(diff, exp(posterior[i]), D);
+                Vector::Add(a->mixture.diagcov.row(i), diff, D);
             }
             if (!FullVariance) FATAL("incompatible modes ", -1);
         }
@@ -177,7 +177,7 @@ struct BaumWelch : public HMM::BaumWelchAccum {
                     double sum = a->mixture.prior.row(i)[0];
                     double dn = exp(sum);
                     if (dn < FLAGS_CovarFloor) dn = FLAGS_CovarFloor;
-                    Vector::div(a->mixture.mean.row(i), dn, D);
+                    Vector::Div(a->mixture.mean.row(i), dn, D);
                 }
             }
         }
@@ -202,14 +202,14 @@ struct BaumWelch : public HMM::BaumWelchAccum {
                     double sum = a->mixture.prior.row(i)[0];
                     double dn = exp(sum);
                     if (dn < FLAGS_CovarFloor) dn = FLAGS_CovarFloor;
-                    Vector::div(a->mixture.diagcov.row(i), dn, D);
+                    Vector::Div(a->mixture.diagcov.row(i), dn, D);
 
-                    Vector::assign(s->emission.mean.row(i), a->mixture.mean.row(i), D);
-                    Vector::assign(s->emission.diagcov.row(i), a->mixture.diagcov.row(i), D);
+                    Vector::Assign(s->emission.mean.row(i), a->mixture.mean.row(i), D);
+                    Vector::Assign(s->emission.diagcov.row(i), a->mixture.diagcov.row(i), D);
 
                     if (!FullVariance) {
-                        Vector::mult(s->emission.mean.row(i), s->emission.mean.row(i), x, D);
-                        Vector::sub(s->emission.diagcov.row(i), x, D);
+                        Vector::Mult(s->emission.mean.row(i), s->emission.mean.row(i), x, D);
+                        Vector::Sub(s->emission.diagcov.row(i), x, D);
                     }
 
                     MatrixColIter(&s->emission.diagcov)
@@ -224,7 +224,7 @@ struct BaumWelch : public HMM::BaumWelchAccum {
                 }
 
                 int txind = 0;
-                if (s->transition.M != a->transit.size() || s->transition.N != TransitCols) s->transition.open(a->transit.size(), TransitCols);
+                if (s->transition.M != a->transit.size() || s->transition.N != TransitCols) s->transition.Open(a->transit.size(), TransitCols);
                 for (Accum::XiMap::iterator i = a->transit.begin(); i != a->transit.end(); i++) {
                     AcousticModel::State *s2 = &model->state[(*i).first];
                     double *tr = s->transition.row(txind++);

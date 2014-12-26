@@ -136,19 +136,19 @@ struct AcousticEventDetector {
         /* compute features */
         if (featureBuf) {
             RingBuf::RowMatHandle featBH(featureBuf);
-            Matrix *feat = featBH.write();
+            Matrix *feat = featBH.Write();
             Features::fromBuf(in, feat, &featureFilters, &alloc);
         }
 
         /* compute ZCR & PE */
-        float ZCR = *(float*)zcr.write() = zeroCrossings(/*&filtered_input*/ in, FLAGS_feat_window, 0);
-        float PE = *(float*)pe.write() = pseudoEnergy(/*&filtered_input*/ in, FLAGS_feat_window, 0);
+        float ZCR = *(float*)zcr.Write() = zeroCrossings(/*&filtered_input*/ in, FLAGS_feat_window, 0);
+        float PE = *(float*)pe.Write() = pseudoEnergy(/*&filtered_input*/ in, FLAGS_feat_window, 0);
         total++;
 
         /* smoothed zero crossing rate */
         float SZCR = 0; int zcr_extend = pe.ring.size/2;
-        for (int i=0; i<szcr_shift; i++) SZCR += *(float*)zcr.read(-i-1);
-        SZCR = *(float*)szcr.write() = SZCR / szcr_shift;
+        for (int i=0; i<szcr_shift; i++) SZCR += *(float*)zcr.Read(-i-1);
+        SZCR = *(float*)szcr.Write() = SZCR / szcr_shift;
 
         /* track average zcr and standard deviation */
         float zcrdist = pow(zcravg - ZCR, 2);
@@ -264,12 +264,12 @@ struct AcousticEventDetector {
             bool jumponly = top().PE != total-1;
 
             if (top().ZE == 0 || jumponly) {
-                float mean=szcravg, var=sqrt(szcrdev), v=RingBuf::Handle(&szcr, szcr.ring.back - shift).read(0);
+                float mean=szcravg, var=sqrt(szcrdev), v=RingBuf::Handle(&szcr, szcr.ring.back - shift).Read(0);
                 if (v < mean - var || v > mean + var) { top().incrementEnd(total - top().PE); top().ZE = 0; }
                 else if (!jumponly) top().ZE = 1;
             }
             else if (top().ZE == 1) {
-                float mean=zcravg, var=sqrt(zcrdev), v=RingBuf::Handle(&zcr, zcr.ring.back - shift).read(0);
+                float mean=zcravg, var=sqrt(zcrdev), v=RingBuf::Handle(&zcr, zcr.ring.back - shift).Read(0);
                 if (v < mean - var || v > mean + var) top().incrementEnd();
                 else top().ZE = 2;
             }
@@ -290,12 +290,12 @@ struct AcousticEventDetector {
         int extend=0, extendmax=(lpe && tps-lpe < max ? tps-lpe : max);
 
         if (jump) for (extend=d2jump_left; extend>0; extend++) {
-            float v = in->read(-1-extend);
+            float v = in->Read(-1-extend);
             if (!(v < mean - var || v > mean + var)) break;
         }
 
         for (/**/; extend<extendmax; extend++) {
-            float v = in->read(-1-extend);
+            float v = in->Read(-1-extend);
             if (!(v < mean - var || v > mean + var)) break;
         }
 

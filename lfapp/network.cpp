@@ -2257,7 +2257,7 @@ void HTTPServer::StreamResource::update(int audio_samples, bool video_sample) {
         if (!asa) { sendVideo(); video_sample=0; continue; }
 
         int audio_behind = resampler.output_available - resamples_processed;
-        unsigned long long audio_timestamp = resampler.out->readtimestamp(0, resampler.out->ring.back - audio_behind);
+        unsigned long long audio_timestamp = resampler.out->ReadTimestamp(0, resampler.out->ring.back - audio_behind);
 
         if (audio_timestamp < app->camera.camera->image_timestamp) sendAudio();
         else { sendVideo(); video_sample=0; }
@@ -2274,7 +2274,7 @@ void HTTPServer::StreamResource::sendAudio() {
     /* linearize */
     for (int i=0; i<frame; i++) 
         for (int c=0; c<channels; c++)
-            sample_data[i*channels + c] = H.read(i*channels + c) * 32768.0;
+            sample_data[i*channels + c] = H.Read(i*channels + c) * 32768.0;
 
     /* broadcast */
     AVPacket pkt; int got=0;
@@ -2283,7 +2283,7 @@ void HTTPServer::StreamResource::sendAudio() {
     pkt.size = 0;
 
     avcodec_encode_audio2(ac, &pkt, samples, &got);
-    if (got) broadcast(&pkt, H.readtimestamp(0));
+    if (got) broadcast(&pkt, H.ReadTimestamp(0));
 
     av_free_packet(&pkt);
 }

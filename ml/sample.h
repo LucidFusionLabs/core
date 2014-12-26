@@ -32,7 +32,7 @@ struct SampleExtent {
         if (!vec_min) {
             D = features->N;
             vec_min = new double[D]; vec_max = new double[D];
-            Vector::assign(vec_min, INFINITY, D); Vector::assign(vec_max, -INFINITY, D);
+            Vector::Assign(vec_min, INFINITY, D); Vector::Assign(vec_max, -INFINITY, D);
         }
         if (!dim_check("SampleExtents", features->N, D)) return;
 
@@ -53,7 +53,7 @@ struct SampleMean {
     SampleMean() : D(0), count(0), vec(0) {}
     ~SampleMean() { delete vec; }
 
-    void complete() { Vector::div(vec, count, D); }
+    void complete() { Vector::Div(vec, count, D); }
 
     void add_features(Matrix *features) {
         if (!vec) { D = features->N; vec = new double[D](); }
@@ -85,9 +85,9 @@ struct SampleCovariance {
         int minindex; double mindist, *diff=(double*)alloca(D*sizeof(double));
         KMeans::nearest_neighbor(model, feature, &minindex, &mindist);
 
-        Vector::sub(model->row(minindex), feature, diff, D);
-        Vector::mult(diff, diff, D);
-        Vector::add(accums->row(minindex), diff, D);
+        Vector::Sub(model->row(minindex), feature, diff, D);
+        Vector::Mult(diff, diff, D);
+        Vector::Add(accums->row(minindex), diff, D);
         count[minindex]++;
     }
 #else
@@ -108,9 +108,9 @@ struct SampleCovariance {
         diagnol = new Matrix(model->M, model->N);
 
         for (int k=0; k<K; k++) {
-            if (!count[k]) { Vector::assign(accums->row(k), FLAGS_CovarFloor, D); continue; }
+            if (!count[k]) { Vector::Assign(accums->row(k), FLAGS_CovarFloor, D); continue; }
 
-            Vector::div(accums->row(k), count[k], diagnol->row(k), D);
+            Vector::Div(accums->row(k), count[k], diagnol->row(k), D);
         }
         reset();
     }
