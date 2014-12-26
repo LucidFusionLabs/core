@@ -1135,7 +1135,7 @@ int Video::Init() {
     Fonts::InsertAtlas("MenuAtlas1", "", 0, Color::black, 0); 
     Fonts::InsertAtlas("MenuAtlas2", "", 0, Color::black, 0); 
 
-    if (!screen->console) screen->OpenConsole();
+    if (!screen->console) screen->InitConsole();
     return 0;
 }
 

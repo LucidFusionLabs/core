@@ -91,7 +91,7 @@ void Window::ClearKeyboardGUIEvents() {
     for (auto i = keyboard_gui.begin(); i != keyboard_gui.end(); ++i) (*i)->ClearEvents();
 }
 
-void Window::OpenConsole() {
+void Window::InitConsole() {
     console = new Console(screen, Fonts::Get(FLAGS_default_font, 9, Color::white));
     console->ReadHistory(dldir(), "console");
     console->Write(StrCat(screen->caption, " started"));
@@ -208,6 +208,16 @@ void TextArea::PageUp() {
 }
 
 void TextArea::PageDown() {
+    int pagedown_lines=10, lines=0, i=start_line;
+    for (; i<line.ring.count && lines<pagedown_lines; i++) lines += line[-i-1].Lines();
+    adjust_lines += (pagedown_lines - lines);
+    start_line = i;
+
+    cmd_fb.fb.Attach();
+    ScopedDrawMode drawmode(DrawMode::_2D);
+    screen->gd->Clear();
+    Resized(line_fb.w, line_fb.h);
+    cmd_fb.fb.Release();
 }
 
 void TextArea::Resized(int w, int h) {
@@ -367,7 +377,7 @@ void TextArea::DrawOrCopySelection() {
 
 /* Editor */
 
-void Editor::UpdateLines(float v_scrolled, float h_scrolled) {
+void Editor::UpdateLines() {
     bool resized = last_fb_lines != line_fb.lines;
     if (resized) { line.Clear(); if (Wrap()) UpdateWrappedLines(TextArea::font->size, line_fb.w); }
     else if (Equal(last_v_scrolled, v_scrolled)) return;
@@ -376,22 +386,27 @@ void Editor::UpdateLines(float v_scrolled, float h_scrolled) {
     WrappedLineOffset new_first_line, new_last_line;
     GetWrappedLineOffset(v_scrolled, &new_first_line);
     bool reverse = new_first_line < first_line && !resized;
-    int dist = Distance(new_first_line, reverse);
+    int dist = abs(new_first_line.first - first_line.first);
     if (dist < line_fb.lines && !resized) {
         if (reverse) read_lines = LineOffsetSegment(new_first_line.first, dist);
         else         read_lines = LineOffsetSegment(new_first_line.first + line_fb.lines - dist, dist);
     } else           read_lines = LineOffsetSegment(new_first_line.first, line_fb.lines);
-    // can reduce read_lines here
 
     int add_blank_lines = Typed::Max<int>(0, Typed::Min<int>(dist, read_lines.first + read_lines.second - file_line.size())), read_len=0;
     read_lines.second = Typed::Max<int>(0, read_lines.second - add_blank_lines);
     for (int i=read_lines.first, n=i+read_lines.second; i<n; i++) read_len += file_line[i].size + (i<(n-1));
-
     string buf(read_len, 0);
     file->seek(file_line[read_lines.first].offset, File::Whence::SET);
     CHECK_EQ(read_len, file->read((char*)buf.data(), read_len));
+
     Line *L = 0;
     line_fb.fb.Attach();
+    if (!resized && reverse && first_line.second) {
+        start_line = adjust_lines = 0;
+    }
+    if (!resized && !reverse && last_line.second) {
+        start_line = adjust_lines = 0;
+    }
 
     for (int i=0, wl=0, tl=read_lines.second, bo=0, l; i<tl && wl<tl; i++, bo += l+(!reverse || i)) {
         l = file_line[read_lines.first + (reverse ? (read_lines.second-1-i) : i)].size;
@@ -511,11 +526,7 @@ void Terminal::Write(const string &s, bool update_fb, bool release_fb) {
                 parse_charset = c;
             }
             else if (c == 'D') Newline();
-            else if (c == 'M') {
-                if (term_cursor.y != 1) term_cursor.y--;
-                else ERROR("XXX-ESC-M @ y=1");
-                // else line.InsertAt(-term_height, 1, scroll_region_end ? (term_height - scroll_region_end) : 0);
-            }
+            else if (c == 'M') TopNewline();
             else if (c == '7') saved_term_cursor = term_cursor;
             else if (c == '8') term_cursor = saved_term_cursor;
             else if (c == '=' || c == '>') { /* application or normal keypad */ }
@@ -699,6 +710,16 @@ void Terminal::Newline(bool carriage_return) {
         if (!clip) { TextArea::Write(string(1, '\n'), true, false); last_fb=&line_fb; }
     } else term_cursor.y = min(term_height, term_cursor.y+1);
     if (carriage_return) term_cursor.x = 1;
+}
+
+void Terminal::TopNewline() {
+    if (clip && term_cursor.y == scroll_region_beg) {
+        LineUpdate(line.InsertAt(GetTermLineIndex(term_cursor.y), 1, adjust_lines),
+                   GetPrimaryFrameBuffer(), LineUpdate::PushFront, skip_last_lines);
+    } else if (term_cursor.y == 1) {
+        if (!clip) LineUpdate(line.InsertAt(-term_height, 1, adjust_lines),
+                              GetPrimaryFrameBuffer(), LineUpdate::PushFront);
+    } else term_cursor.y = max(1, term_cursor.y-1);
 }
 
 /* Dialog */

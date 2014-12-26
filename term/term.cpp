@@ -181,7 +181,7 @@ void MyNewWindow(const vector<string>&) {
     CHECK(LFL::Window::Create(new_window));
     LFL::Window::MakeCurrent(new_window);
     app->video.CreateGraphicsDevice();
-    screen->OpenConsole();
+    screen->InitConsole();
     MyTerminalWindow *tw = (MyTerminalWindow*)screen->user1;
     tw->Open();
 }

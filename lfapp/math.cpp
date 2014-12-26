@@ -27,7 +27,6 @@ double squared(double n) { return n*n; }
 float decimals(float n) { return n - (int)n; }
 float rand(float a, float b) { return ((b-a)*((float)::rand()/RAND_MAX))+a; }
 unsigned long long rand64() { return (unsigned long long)::rand()<<32 | ::rand(); }
-bool Equal(float a, float b, float eps) { return fabs(a-b) < eps; }
 
 bool v4::operator<(const v4 &c) const {
     return Quadruple<float,float,float,float>(x, y, z, w) < Quadruple<float,float,float,float>(c.x, c.y, c.z, c.w);
