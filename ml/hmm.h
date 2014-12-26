@@ -567,8 +567,8 @@ struct HMM {
     }
 
     static void printForwardBackward(Matrix *alpha, Matrix *beta, Matrix *gamma, Matrix *xi) {
-        Matrix::print(alpha, "alpha");
-        Matrix::print(beta, "beta");
+        Matrix::Print(alpha, "alpha");
+        Matrix::Print(beta, "beta");
 
         INFO("gamma (", gamma->M, ",", gamma->N, ")");
         MatrixRowIter(gamma) {
@@ -580,9 +580,9 @@ struct HMM {
             }
             INFO("row(", i, ") sum=", sum, " { ", s, " }");
         }
-        Matrix::print(gamma, "gamma");
+        Matrix::Print(gamma, "gamma");
 
-        Matrix::print(xi, "xi");
+        Matrix::Print(xi, "xi");
     }
 };
 

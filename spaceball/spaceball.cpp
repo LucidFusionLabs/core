@@ -451,7 +451,7 @@ void MyFieldColorCmd(const vector<string> &arg) {
 int Frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample, int flag) {
     if (Singleton<FlagMap>::Get()->dirty) {
         Singleton<FlagMap>::Get()->dirty = false;
-        SettingsFile::write(save_settings, dldir(), "settings");
+        SettingsFile::Write(save_settings, dldir(), "settings");
     }
 
     if (FLAGS_multitouch) {
@@ -639,7 +639,7 @@ extern "C" int main(int argc, const char *argv[]) {
     save_settings.push_back("player_name");
     save_settings.push_back("first_run");
     save_settings.push_back("msens");
-    SettingsFile::read(dldir(), "settings");
+    SettingsFile::Read(dldir(), "settings");
     Singleton<FlagMap>::Get()->dirty = false;
 
     if (FLAGS_player_name.empty()) {

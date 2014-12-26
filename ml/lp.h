@@ -54,9 +54,9 @@ struct LinearProgram {
             non_basic = lp.non_basic;
             objective = lp.objective;
             InitVars();
-            A.assignL(&lp.A);
-            B.assignL(&lp.B);
-            C.assignL(&lp.C);
+            A.AssignL(&lp.A);
+            B.AssignL(&lp.B);
+            C.AssignL(&lp.C);
         } else {
             M         =  lp.N;
             N         =  lp.M;
@@ -65,45 +65,45 @@ struct LinearProgram {
             non_basic =  lp.basic;
             objective = -lp.objective;
             InitVars();
-            A.assignL(lp.A.transpose(), mDelA|mNeg);
-            B.assignL(&lp.C, mNeg);
-            C.assignL(&lp.B, mNeg);
+            A.AssignL(lp.A.Transpose(), mDelA|mNeg);
+            B.AssignL(&lp.C, mNeg);
+            C.AssignL(&lp.B, mNeg);
         }
         epsilon = lp.epsilon;
     }
     void InitVars() {
-        A.open(M, N);
-        B.open(M, 1);
-        C.open(N, 1);
+        A.Open(M, N);
+        B.Open(M, 1);
+        C.Open(N, 1);
         int ind = 0;
         for (auto i : non_basic) var[i] = ind++;
         for (auto i : basic)     var[i] = ind++;
     }
     void InitPivotVars() {
-        Ab   .open(M, M);
-        Abinv.open(M, M);
-        Ai   .open(M, N);
-        Aj   .open(M, 1);
-        Cb   .open(M, 1);
-        Ci   .open(N, 1);
-        pi   .open(1, M);
-        piAi .open(1, N);
-        chat .open(1, N);
-        bhat .open(M, 1);
-        ahat .open(M, 1);
+        Ab   .Open(M, M);
+        Abinv.Open(M, M);
+        Ai   .Open(M, N);
+        Aj   .Open(M, 1);
+        Cb   .Open(M, 1);
+        Ci   .Open(N, 1);
+        pi   .Open(1, M);
+        piAi .Open(1, N);
+        chat .Open(1, N);
+        bhat .Open(M, 1);
+        ahat .Open(M, 1);
     }
     void ClearPivotVars() {
-        Ab   .clear();
-        Abinv.clear();
-        Ai   .clear();
-        Aj   .clear();
-        Cb   .clear();
-        Ci   .clear();
-        pi   .clear();
-        piAi .clear();
-        chat .clear();
-        bhat .clear();
-        ahat .clear();
+        Ab   .Clear();
+        Abinv.Clear();
+        Ai   .Clear();
+        Aj   .Clear();
+        Cb   .Clear();
+        Ci   .Clear();
+        pi   .Clear();
+        piAi .Clear();
+        chat .Clear();
+        bhat .Clear();
+        ahat .Clear();
     }
     void PushConstraints(int n) {
         int var_max = 0;
@@ -111,42 +111,42 @@ struct LinearProgram {
         for (auto i : non_basic) Typed::Max(&var_max, i);
         for (int i=0; i<n; i++) basic.push_back(var_max+1+i);
         M += n;
-        A.addrows(n);
-        B.addrows(n);
+        A.AddRows(n);
+        B.AddRows(n);
         ClearPivotVars();
     }
     void PopConstraints(int n) {
         for (int i=0; i<n; i++) basic.pop_back();
         M -= n;
-        A.addrows(-n);
-        B.addrows(-n);
+        A.AddRows(-n);
+        B.AddRows(-n);
         ClearPivotVars();
     }
     void Print() const {
         INFO("M=", M, ", N=", N, ", Z0=", Z0, " objective=", objective);
-        INFO("(non_basic X: ", Vec<int>::str(&non_basic[0], non_basic.size()), ")");
-        MatrixRowIter(&A) INFO("X", basic[i], " | ", B.row(i)[0], ", ", Vec<double>::str(A.row(i), A.N));
+        INFO("(non_basic X: ", Vec<int>::Str(&non_basic[0], non_basic.size()), ")");
+        MatrixRowIter(&A) INFO("X", basic[i], " | ", B.row(i)[0], ", ", Vec<double>::Str(A.row(i), A.N));
         INFO("----------------------------------");
-        INFO("Z  | ", objective, ", ", Vec<double>::str(C.m, C.M));
+        INFO("Z  | ", objective, ", ", Vec<double>::Str(C.m, C.M));
     }
     void PrintRevised() const {
         INFO("M=", M, ", N=", N, ", Z0=", Z0, " objective=", objective);
-        INFO("basic: ",     Vec<int>::str(&    basic[0],     basic.size()));
-        INFO("non_basic: ", Vec<int>::str(&non_basic[0], non_basic.size()));
-        Matrix::print(&A, "A");
-        INFO("B = [", Vec<double>::str(B.m, B.M), "]");
-        INFO("C = [", Vec<double>::str(C.m, C.M), "]");
+        INFO("basic: ",     Vec<int>::Str(&    basic[0],     basic.size()));
+        INFO("non_basic: ", Vec<int>::Str(&non_basic[0], non_basic.size()));
+        Matrix::Print(&A, "A");
+        INFO("B = [", Vec<double>::Str(B.m, B.M), "]");
+        INFO("C = [", Vec<double>::Str(C.m, C.M), "]");
     }
     void PrintRevisedPivot() const {
-        Matrix::print(&Ab,   "Ab");
-        Matrix::print(&Ai,   "Ai");
-        Matrix::print(&Cb,   "Cb");
-        Matrix::print(&Ci,   "Ci");
-        Matrix::print(&pi,   "pi");
-        Matrix::print(&piAi, "piAi");
-        Matrix::print(&chat, "chat");
-        Matrix::print(&bhat, "bhat");
-        Matrix::print(&ahat, "ahat");
+        Matrix::Print(&Ab,   "Ab");
+        Matrix::Print(&Ai,   "Ai");
+        Matrix::Print(&Cb,   "Cb");
+        Matrix::Print(&Ci,   "Ci");
+        Matrix::Print(&pi,   "pi");
+        Matrix::Print(&piAi, "piAi");
+        Matrix::Print(&chat, "chat");
+        Matrix::Print(&bhat, "bhat");
+        Matrix::Print(&ahat, "ahat");
     }
     bool Feasible() const { MatrixRowIter(&B) if (B.row(i)[0] < 0) return 0; return 1; }
     int ComplementaryVariableID(int v) const { return v <= N ? M + v : v - N; }
@@ -165,7 +165,7 @@ struct LinearProgram {
         MatrixRowIter(&C) C.row(i)[0] = chat.row(0)[i];
         MatrixRowIter(&B) B.row(i)[0] = bhat.row(i)[0];
         Matrix CopyA(A);
-        Matrix::mult(&Abinv, &Ai, &A, mNeg);
+        Matrix::Mult(&Abinv, &Ai, &A, mNeg);
         Z0 = objective;
     }
     void Pivot(int *entering_id, int *leaving_id) {
@@ -175,17 +175,17 @@ struct LinearProgram {
         for (auto v : non_basic) LoadProblemColumn(v, &Ai, Aij++, &Ci);
 
         Invert(&Ab, &Abinv);
-        Matrix::mult(&Cb, &Abinv, &pi, mTrnpA);
-        Matrix::mult(&pi, &Ai, &piAi);
-        Matrix::sub(Ci.transpose(), &piAi, &chat, mDelA);
-        Matrix::mult(&Abinv, &B, &bhat);
+        Matrix::Mult(&Cb, &Abinv, &pi, mTrnpA);
+        Matrix::Mult(&pi, &Ai, &piAi);
+        Matrix::Sub(Ci.Transpose(), &piAi, &chat, mDelA);
+        Matrix::Mult(&Abinv, &B, &bhat);
 
         int entering_ind = EnteringVariableIndex(chat.row(0), chat.N), leaving_ind = -1;
         if (entering_ind < 0) { *entering_id = *leaving_id = -1; return; }
         *entering_id = non_basic[entering_ind];
 
         MatrixIter(&Aj) Aj.row(i)[j] = Ai.row(i)[entering_ind];
-        Matrix::mult(&Abinv, &Aj, &ahat, mNeg);
+        Matrix::Mult(&Abinv, &Aj, &ahat, mNeg);
 
         double min_inc = DBL_MAX, Ahati;
         MatrixIter(&ahat) {
@@ -198,7 +198,7 @@ struct LinearProgram {
         }
         if (leaving_ind < 0) { *leaving_id = -1; return; }
 
-        objective = Z0 + Vector::dot(pi.m, B.m, pi.N) + chat.row(0)[entering_ind] * min_inc;
+        objective = Z0 + Vector::Dot(pi.m, B.m, pi.N) + chat.row(0)[entering_ind] * min_inc;
         Typed::Swap(non_basic[entering_ind], basic[leaving_ind]);
     }
     static int Optimize(LinearProgram *LP) {

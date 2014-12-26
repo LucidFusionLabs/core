@@ -79,36 +79,36 @@ struct SpeechDecodeSession : public HTTPServer::Resource {
 
     void FeatureRollingMeanAndVariance(double *rmean, double *rvariance) {
         int samples = FeatureRollingMeanSamples();
-        Vector::assign(rmean, rollingMean, feats_dim);
-        Vector::assign(rvariance, rollingVariance, feats_dim);
-        Vector::div(rmean, samples, feats_dim);
-        Vector::div(rvariance, samples, feats_dim);
+        Vector::Assign(rmean, rollingMean, feats_dim);
+        Vector::Assign(rvariance, rollingVariance, feats_dim);
+        Vector::Div(rmean, samples, feats_dim);
+        Vector::Div(rvariance, samples, feats_dim);
         for (int i=0; i<feats_dim; i++) rvariance[i] = sqrt(rvariance[i]);
     }
 
     void DeltaCoefficients(int D, int frame_n2, int frame, int frame_p2) {
-        Features::deltaCoefficients(D, (double*)featB.read(frame_n2), (double*)featB.read(frame), (double*)featB.read(frame_p2));
+        Features::deltaCoefficients(D, (double*)featB.Read(frame_n2), (double*)featB.Read(frame), (double*)featB.Read(frame_p2));
     }
 
     void DeltaDeltaCoefficients(int D, int frame_n3, int frame_n1, int frame, int frame_p1, int frame_p3) {
-        Features::deltaDeltaCoefficients(D, (double*)featB.read(frame_n3), (double*)featB.read(frame_n1), (double*)featB.read(frame),
-                                         (double*)featB.read(frame_p1), (double*)featB.read(frame_p3));
+        Features::deltaDeltaCoefficients(D, (double*)featB.Read(frame_n3), (double*)featB.Read(frame_n1), (double*)featB.Read(frame),
+                                         (double*)featB.Read(frame_p1), (double*)featB.Read(frame_p3));
     }
 
     void PatchDeltaCoefficients(int D, int frame_in, int frame_out1, int frame_out2) {
-        Features::patchDeltaCoefficients(D, &((double*)featB.read(frame_in))[D], &((double*)featB.read(frame_out1))[D], &((double*)featB.read(frame_out2))[D]);
+        Features::patchDeltaCoefficients(D, &((double*)featB.Read(frame_in))[D], &((double*)featB.Read(frame_out1))[D], &((double*)featB.Read(frame_out2))[D]);
     }
     
     void PatchDeltaDeltaCoefficients(int D, int frame_in, int frame_out1, int frame_out2, int frame_out3) {
-        Features::patchDeltaDeltaCoefficients(D, &((double*)featB.read(frame_in))[D*2], &((double*)featB.read(frame_out1))[D*2],
-                                              &((double*)featB.read(frame_out2))[D*2], &((double*)featB.read(frame_out3))[D*2]);
+        Features::patchDeltaDeltaCoefficients(D, &((double*)featB.Read(frame_in))[D*2], &((double*)featB.Read(frame_out1))[D*2],
+                                              &((double*)featB.Read(frame_out2))[D*2], &((double*)featB.Read(frame_out3))[D*2]);
     }
 
     int DecodeFrame(int frame, bool init=false) {
         if (init) time_index = 0;
         int t = time_index++;
-        obptr.v = (double*)featB.read(frame); 
-        btptr.v = (HMM::Token*)backtraceB.read(frame);
+        obptr.v = (double*)featB.Read(frame); 
+        btptr.v = (HMM::Token*)backtraceB.Read(frame);
         return HMM::forward(&beam, &transit, &emit, &beam, &beam, 0, init, t);
     }
     
@@ -131,9 +131,9 @@ struct SpeechDecodeSession : public HTTPServer::Resource {
         alloc.reset();
 
         for (int i=0; i<M; i++) {
-            double *feat = (double*)featB.write(RingBuf::Stamp, timestamp+i);
-            double *in = (double*)inB.write();
-            double *var = (double*)varB.write();
+            double *feat = (double*)featB.Write(RingBuf::Stamp, timestamp+i);
+            double *in = (double*)inB.Write();
+            double *var = (double*)varB.Write();
             int rollingMeanSamples = FeatureRollingMeanSamples();
 
             for (int j=0; j<N; j++) {
@@ -152,8 +152,8 @@ struct SpeechDecodeSession : public HTTPServer::Resource {
                 rollingVariance[j] += nd - od;
             }
 
-            backtraceB.write();
-            *(HMM::Token*)viterbiB.write() = HMM::Token();
+            backtraceB.Write();
+            *(HMM::Token*)viterbiB.Write() = HMM::Token();
             feats_available++;
         }
 
@@ -163,7 +163,7 @@ struct SpeechDecodeSession : public HTTPServer::Resource {
             FeatureRollingMeanAndVariance(rmean, rvariance);
 
             for (/**/; feats_available > feats_normalized; feats_normalized++) {
-                double *feat = (double*)featB.read(-feats_available+feats_normalized);
+                double *feat = (double*)featB.Read(-feats_available+feats_normalized);
                 Features::meanAndVarianceNormalization(feats_dim, feat, rmean, rvariance);
             }
         }
@@ -179,8 +179,8 @@ struct SpeechDecodeSession : public HTTPServer::Resource {
             if (feats_available + flush < feats_processed + DeltaWindow - ls) break;
 
             int behind = feats_available - feats_processed, frame=-behind + DeltaWindow/2 - ls, D=feats_dim, lc=0, rc=0;
-            for (int i=0; i<DeltaWindow/2+1 && featB.readtimestamp(frame-i) == featB.readtimestamp(frame-i-1) + 1; i++) lc++;
-            for (int i=0; i<DeltaWindow/2   && featB.readtimestamp(frame+i) == featB.readtimestamp(frame+i+1) - 1; i++) rc++;
+            for (int i=0; i<DeltaWindow/2+1 && featB.ReadTimestamp(frame-i) == featB.ReadTimestamp(frame-i-1) + 1; i++) lc++;
+            for (int i=0; i<DeltaWindow/2   && featB.ReadTimestamp(frame+i) == featB.ReadTimestamp(frame+i+1) - 1; i++) rc++;
 
             if (lc < ls) { feats_seqL = lc; continue; }
 
@@ -224,7 +224,7 @@ struct SpeechDecodeSession : public HTTPServer::Resource {
             }
 
             if (feats_processed == ll_feats_processed) {
-                ERROR("feat ", featB.readtimestamp(frame), " lacks context (lc=", lc, ", rc=", rc, "), skipping");
+                ERROR("feat ", featB.ReadTimestamp(frame), " lacks context (lc=", lc, ", rc=", rc, "), skipping");
                 feats_processed++; prior_feats_processed++;
             }
         }
@@ -232,9 +232,9 @@ struct SpeechDecodeSession : public HTTPServer::Resource {
         string transcript;
         if (feats_processed > prior_feats_processed) {
             int seql = min(feats_seqL, featB.ring.size+decode_end+1);
-            response->timestamp = featB.readtimestamp(decode_end-seql+1);
-            RingBuf::matrixHandle<HMM::Token> backtraceM(&backtraceB, backtraceB.ring.back+decode_end-seql+1, seql);
-            RingBuf::matrixHandle<HMM::Token> viterbiM  (&  viterbiB,   viterbiB.ring.back+decode_end-seql+1, seql);
+            response->timestamp = featB.ReadTimestamp(decode_end-seql+1);
+            RingBuf::MatrixHandleT<HMM::Token> backtraceM(&backtraceB, backtraceB.ring.back+decode_end-seql+1, seql);
+            RingBuf::MatrixHandleT<HMM::Token> viterbiM  (&  viterbiB,   viterbiB.ring.back+decode_end-seql+1, seql);
             int mergeind = HMM::Token::tracePath(&viterbiM, &backtraceM, endindex, seql, true);
 
             string ats;
@@ -309,7 +309,7 @@ int FusionServer(int argc, const char **argv) {
 
         if (FLAGS_lfapp_debug) {
             INFO(FLAGS_decode, ": features(", feat->M, ")");
-            for (int i=0; i<feat->M; i++) Vector::print((double*)decoder->featB.ind(i), Features::dimension()*3);
+            for (int i=0; i<feat->M; i++) Vector::Print((double*)decoder->featB.Ind(i), Features::dimension()*3);
         }
 
         AcousticEventHeader *AEH = (AcousticEventHeader*)response.content;

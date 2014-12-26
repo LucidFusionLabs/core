@@ -87,15 +87,15 @@ struct LiveSpectogram {
 
     void Resize(int width) {
         feature_width = width;
-        buf.resize(feature_rate, feature_rate*FLAGS_sample_secs, feature_width*sizeof(double));
-        handle.init();
+        buf.Resize(feature_rate, feature_rate*FLAGS_sample_secs, feature_width*sizeof(double));
+        handle.Init();
         asset("live")->tex.Resize(feature_width, feature_rate*FLAGS_sample_secs);
         asset("snap")->tex.Resize(feature_width, feature_rate*FLAGS_sample_secs);
     }
 
     void XForm(const string &n) {
         if (n == "mel") {
-            Typed::Replace<Matrix>(&transform, fft2mel(FLAGS_feat_melbands, FLAGS_feat_minfreq, FLAGS_feat_maxfreq, FLAGS_feat_window, FLAGS_sample_rate)->transpose(mDelA));
+            Typed::Replace<Matrix>(&transform, fft2mel(FLAGS_feat_melbands, FLAGS_feat_minfreq, FLAGS_feat_maxfreq, FLAGS_feat_window, FLAGS_sample_rate)->Transpose(mDelA));
             Resize(FLAGS_feat_melbands);
         } else {
             Typed::Replace<Matrix>(&transform, 0);
@@ -108,12 +108,12 @@ struct LiveSpectogram {
         Asset *live = asset("live");
 
         while(samples_available >= samples_processed + FLAGS_feat_window) {
-            const double *last = handle.read(-1)->row(0);
+            const double *last = handle.Read(-1)->row(0);
             RingBuf::Handle L(app->audio.IL, app->audio.RL.next-Behind(), FLAGS_feat_window);
 
             Matrix *Frame, *FFT;
-            Frame = FFT = spectogram(&L, transform ? 0 : handle.write(), FLAGS_feat_window, FLAGS_feat_hop, FLAGS_feat_window, 0, PowerDomain::abs);
-            if (transform) Frame = Matrix::mult(FFT, transform, handle.write());
+            Frame = FFT = spectogram(&L, transform ? 0 : handle.Write(), FLAGS_feat_window, FLAGS_feat_hop, FLAGS_feat_window, 0, PowerDomain::abs);
+            if (transform) Frame = Matrix::Mult(FFT, transform, handle.Write());
             if (transform) delete FFT;
 
             int ind = texture_slide * live->tex.width * Pixel::size(live->tex.pf);

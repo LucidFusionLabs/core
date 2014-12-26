@@ -744,9 +744,9 @@ struct Tiles {
     Tile *GetTile(int x, int y) {
         int add; unsigned texid;
         CHECK_GE(x, 0);
-        if (1)      { if ((add =  x + zero_col - mat.N + 1) > 0) { mat.addcols(add); } }
-        if (y >= 0) { if ((add =  y + zero_row - mat.M + 1) > 0) { mat.addrows(add); } }
-        else        { if ((add = -y - zero_row            ) > 0) { mat.addrows(add, true); zero_row += add; } }
+        if (1)      { if ((add =  x + zero_col - mat.N + 1) > 0) { mat.AddCols(add); } }
+        if (y >= 0) { if ((add =  y + zero_row - mat.M + 1) > 0) { mat.AddRows(add); } }
+        else        { if ((add = -y - zero_row            ) > 0) { mat.AddRows(add, true); zero_row += add; } }
 
         y = zero_row + y;
         CHECK_RANGE(y, 0, mat.M);

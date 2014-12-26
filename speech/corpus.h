@@ -115,12 +115,12 @@ struct FeatCorpus {
 
     static int feat_iter_matlist(const char *fn, FeatCB cb, void *arg) {
         MatrixArchiveIn featlist;
-        featlist.open(fn);
+        featlist.Open(fn);
         int count=0;
 
         while (Running()) {
             MatrixFile feat;
-            featlist.read(&feat);
+            featlist.Read(&feat);
             if (!feat.F) break;
             if (feat.F->M < 12) { ERROR("feature '", feat.H, "' too short ", feat.F->M, ", skipping"); count++; continue; }
             string afn = archive_filename(fn, count);
@@ -131,7 +131,7 @@ struct FeatCorpus {
     }
 
     static void add_feature(MatrixFile *feat, const char *pn, FeatCB cb, void *arg) {
-        Matrix *orig = feat->F->clone();
+        Matrix *orig = feat->F->Clone();
         feat->F = Features::fromFeat(feat->F, Features::Flag::Full);
         DEBUG("processing %s : %s", pn,  feat->Text());
         cb(pn, orig, feat->F, feat->Text(), arg);
@@ -152,7 +152,7 @@ struct PathCorpus {
 
     static void add_path(MatrixArchiveOut *out, Matrix *viterbi, const char *uttfilename) {
         MatrixFile f(viterbi, basename(uttfilename,0,0));
-        out->write(&f, "viterbi");
+        out->Write(&f, "viterbi");
         f.Clear();
     }
 
@@ -164,7 +164,7 @@ struct PathCorpus {
             MatrixFile path, utt;
 
             /* read utterance viterbi path */
-            if (paths->read(&path)) { ERROR("read utterance path: ", paths->index); break; }
+            if (paths->Read(&path)) { ERROR("read utterance path: ", paths->index); break; }
 
             string uttfilename = string(featdir) + path.Text();
             int uttindex = FeatCorpus::archive_filename_index(uttfilename.c_str(), &uttfilename);
@@ -175,20 +175,20 @@ struct PathCorpus {
             else {
                 /* archive url */
                 if (string_changed(lastarchive, uttfilename.c_str())) {
-                    utts.close();
-                    utts.open(uttfilename.c_str());
+                    utts.Close();
+                    utts.Open(uttfilename);
                 }
 
                 /* seek to archive index */
-                while (utts.index < uttindex) utts.skip();
+                while (utts.index < uttindex) utts.Skip();
                 if (utts.index != uttindex) { ERROR("skipping ", uttfilename, " ", utts.index, " != ", uttindex); continue; }
-                utts.read(&utt);
+                utts.Read(&utt);
             }
             if (!utt.F) { ERROR("skipping ", uttfilename); continue; }
             if (path.F->M != utt.F->M) { ERROR("path/utt mismatch offset ", uttindex, " len ", path.F->M, " != ", utt.F->M, " transcript='", utt.Text(), "' file=", uttfilename); continue; }
 
             DEBUG("processing %s", uttfilename.c_str());
-            Matrix *orig = utt.F->clone();
+            Matrix *orig = utt.F->Clone();
             utt.F = Features::fromFeat(utt.F, Features::Flag::Full);
             cb(0, path.F, 0, vtime.time(), orig, utt.F, utt.Text(), arg);
             delete orig;

@@ -47,7 +47,7 @@ TEST(MathTest, matrix) {
     EXPECT_EQ(init_M-1, max_I);
     EXPECT_EQ(init_N-1, max_J);
 
-    m.addrows(1);
+    m.AddRows(1);
     EXPECT_EQ(init_M+1, m.M);
     count = 0; MatrixIter(&m) {
         if (i == init_M) EXPECT_EQ(0,   m.row(i)[j]);
@@ -56,7 +56,7 @@ TEST(MathTest, matrix) {
     }
     EXPECT_EQ((init_M+1) * init_N, count);
 
-    m.addcols(1);
+    m.AddCols(1);
     EXPECT_EQ(init_N+1, m.N);
     count = 0; MatrixIter(&m) {
         if (i == init_M || j == init_N) EXPECT_EQ(0,   m.row(i)[j]);
@@ -65,7 +65,7 @@ TEST(MathTest, matrix) {
     }
     EXPECT_EQ((init_M+1) * (init_N+1), count);
 
-    m.addcols(1, true);
+    m.AddCols(1, true);
     EXPECT_EQ(init_N+2, m.N);
     count = 0; MatrixIter(&m) {
         if (i == init_M || j == init_N+1 || !j) EXPECT_EQ(0,   m.row(i)[j]);
@@ -74,7 +74,7 @@ TEST(MathTest, matrix) {
     }
     EXPECT_EQ((init_M+1) * (init_N+2), count);
 
-    m.addrows(1, true);
+    m.AddRows(1, true);
     EXPECT_EQ(init_M+2, m.M);
     count = 0; MatrixIter(&m) {
         if (i == init_M+1 || j == init_N+1 || !j || !i) EXPECT_EQ(0,   m.row(i)[j]);
@@ -92,14 +92,14 @@ TEST(MathTest, matrix) {
         { double *r = B.row(1); r[0] = 1; r[1] =  2; }
         { double *r = B.row(2); r[0] = 6; r[1] =  1; }
 
-        EXPECT_EQ(&C, Matrix::mult(&A, &B, &C));
+        EXPECT_EQ(&C, Matrix::Mult(&A, &B, &C));
         { double *r = C.row(0); EXPECT_EQ(11, r[0]); EXPECT_EQ( 0, r[1]); }
         { double *r = C.row(1); EXPECT_EQ(35, r[0]); EXPECT_EQ(20, r[1]); }
     }
 
     { // convolve
         Matrix A(10, 10, 1), B(3, 3, 1), C(A.M, A.N);
-        EXPECT_EQ(&C, Matrix::convolve(&A, &B, &C));
+        EXPECT_EQ(&C, Matrix::Convolve(&A, &B, &C));
         MatrixIter(&C) {
             bool border_i = (i == 0 || i == C.M-1), border_j = (j == 0 || j == C.N-1);
             if      (border_i && border_j) EXPECT_EQ(4, C.row(i)[j]);

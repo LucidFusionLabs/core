@@ -137,7 +137,7 @@ struct TextGUI : public KeyboardGUI {
         void AppendText  (       const String16 &s, int a=0) {                                data->text.append(s);    data->text_attr.append(   String16(s.size(), a)); }
         void AssignText  (       const string   &s, int a=0) { data->text = String::ToUTF16(s); data->text_attr = String16(data->text.size(), a); }
         void AssignText  (       const String16 &s, int a=0) { data->text = s;                  data->text_attr = String16(data->text.size(), a); }
-        void UpdateAttr(int ind, int len, int a) { Vec<short>::assign((short*)data->text_attr.data() + ind, a, len); }
+        void UpdateAttr(int ind, int len, int a) { Vec<short>::Assign((short*)data->text_attr.data() + ind, a, len); }
         void Layout(Box win) {
             data->glyphs.Clear();
             Flow flow(&win, parent->font, &data->glyphs, &parent->layout);

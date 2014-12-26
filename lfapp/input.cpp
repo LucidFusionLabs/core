@@ -330,8 +330,8 @@ void TouchDevice::openKeyboard() {}
 void TouchDevice::closeKeyboard() {}
 const char *Clipboard::get()              { return glfwGetClipboardString((GLFWwindow*)screen->id   ); }
 void        Clipboard::set(const char *s) {        glfwSetClipboardString((GLFWwindow*)screen->id, s); }
-void Mouse::grabFocus()    { glfwSetInputMode((GLFWwindow*)screen->id, GLFW_CURSOR, GLFW_CURSOR_DISABLED); app->grabMode.on();  screen->cursor_grabbed=true;  }
-void Mouse::releaseFocus() { glfwSetInputMode((GLFWwindow*)screen->id, GLFW_CURSOR, GLFW_CURSOR_NORMAL);   app->grabMode.off(); screen->cursor_grabbed=false; }
+void Mouse::grabFocus()    { glfwSetInputMode((GLFWwindow*)screen->id, GLFW_CURSOR, GLFW_CURSOR_DISABLED); app->grabMode.On();  screen->cursor_grabbed=true;  }
+void Mouse::releaseFocus() { glfwSetInputMode((GLFWwindow*)screen->id, GLFW_CURSOR, GLFW_CURSOR_NORMAL);   app->grabMode.Off(); screen->cursor_grabbed=false; }
 #endif
 
 #ifdef LFL_SDLINPUT
@@ -585,7 +585,7 @@ int Input::KeyEventDispatch(int key, int keymod, bool down) {
 void Input::MouseMove(int x, int y, int dx, int dy) {
     screen->events.mouse_move++;
     screen->events.gui += MouseEventDispatch(Bind::MOUSEMOTION, x, y, 0);
-    if (!app->grabMode.enabled()) return;
+    if (!app->grabMode.Enabled()) return;
     if (dx<0) screen->camMain->YawLeft  (-dx); else if (dx>0) screen->camMain->YawRight(dx);
     if (dy<0) screen->camMain->PitchDown(-dy); else if (dy>0) screen->camMain->PitchUp (dy);
 }
@@ -790,8 +790,8 @@ void Shell::fillmode(const vector<string>&) {
 #endif
 }
 
-void Shell::grabmode(const vector<string> &a) { if (app->grabMode.next()) mousein(a); else mouseout(a); }
-void Shell::texmode(const vector<string>&) { if (app->texMode.next()) screen->gd->EnableTexture(); else screen->gd->DisableTexture(); }
+void Shell::grabmode(const vector<string> &a) { if (app->grabMode.Next()) mousein(a); else mouseout(a); }
+void Shell::texmode(const vector<string>&) { if (app->texMode.Next()) screen->gd->EnableTexture(); else screen->gd->DisableTexture(); }
 void Shell::swapaxis(const vector<string>&) { screen->SwapAxis(); }
 
 void Shell::campos(const vector<string>&) {
@@ -888,11 +888,11 @@ void shell_filter(const vector<string> &arg, bool FFTfilter, int taps, int hop=0
 
     if (1) {
         int N=20; string b="input = ";
-        for (int i=0; i<N; i++) StringAppendf(&b, "x[%d]=%f, ", i, I.read(i));
+        for (int i=0; i<N; i++) StringAppendf(&b, "x[%d]=%f, ", i, I.Read(i));
         INFO(b);
 
         b = "output = ";
-        for (int i=0; i<N; i++) StringAppendf(&b, "y[%d]=%f, ", i, O.read(i));
+        for (int i=0; i<N; i++) StringAppendf(&b, "y[%d]=%f, ", i, O.Read(i));
         INFO(b);
     }
 

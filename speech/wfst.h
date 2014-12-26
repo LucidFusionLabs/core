@@ -86,7 +86,7 @@ struct WFST {
         void reset() { delete str; delete map; str=0; map=0; }
 
         int id(string s) const { return id(fnv32(s.c_str(), s.size())); }
-        int id(unsigned hash) const { double *row = HashMatrix::get(map, hash, HashValues); return row ? row[1] : -1; }
+        int id(unsigned hash) const { double *row = HashMatrix::Get(map, hash, HashValues); return row ? row[1] : -1; }
         string name(int id) const {
             if (aux && IOAlphabet::auxiliary_symbol(id)) return aux->name(IOAlphabet::auxiliary_symbol_offset(id));
             if (id < 0 || id >= str->size()) { ERROR("bad id: ", id); return ""; }
@@ -111,7 +111,7 @@ struct WFST {
             for (int i=0, l=A->size(); i<l; i++) {
                 string name = A->name(i);
                 StringFile::WriteRow(&out, name.c_str());
-                double *he = HashMatrix::set(&map, fnv32(name.c_str()), HashValues);
+                double *he = HashMatrix::Set(&map, fnv32(name.c_str()), HashValues);
                 if (!he) FATAL("Matrix hash collision: ", name);
                 he[1] = i;
             }

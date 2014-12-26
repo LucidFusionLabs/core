@@ -105,7 +105,7 @@ struct AcousticModel {
             name = s->name;
             prior = s->prior;
             txself = s->txself;
-            transition.assignDataPtr(s->transition.M, s->transition.N, s->transition.m);
+            transition.AssignDataPtr(s->transition.M, s->transition.N, s->transition.m);
             emission.assignDataPtr(&s->emission);
             val = s->val;
         }
@@ -194,7 +194,7 @@ struct AcousticModelFile : public AcousticModel::Compiled {
     ~AcousticModelFile() { reset(); }
     void reset() { delete initial; initial=0; delete mean; mean=0; delete covar; covar=0; delete prior; prior=0; delete transit; transit=0; delete map; map=0; delete tied; tied=0; delete names; names=0; }
     AcousticModel::State *getState(unsigned hash) { double *he = getHashEntry(hash); return he ? &state[(int)he[1]] : 0; }
-    double *getHashEntry(unsigned hash) { return HashMatrix::get(map, hash, 4); }
+    double *getHashEntry(unsigned hash) { return HashMatrix::Get(map, hash, 4); }
     Matrix *tiedStates() { return tied; }
     int read(const char *name, const char *dir, int lastiter=-1, bool rebuildTransit=0);
 };

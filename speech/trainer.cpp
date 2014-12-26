@@ -105,7 +105,7 @@ struct Wav2Features {
         if (targ != Target::ARCHIVE) return;
         string outfile = dir + StringPrintf("%lx.featlist", ::rand());
         INFO("selected output file: ", outfile);
-        out.open(outfile.c_str());
+        out.Open(outfile);
     }
 
     static void add_features(const char *sd, SoundAsset *wav, const char *transcript, void *a) { return ((Wav2Features*)a)->addFeatures(sd, wav, transcript); }
@@ -121,7 +121,7 @@ struct Wav2Features {
             feat.Write(outfile, wav->filename);
         }
         else if (targ == Target::ARCHIVE) {
-            out.write(&feat, wav->filename.c_str());
+            out.Write(&feat, wav->filename);
         }
     }   
 };
@@ -203,17 +203,17 @@ int model1init(const char *modeldir, int K, int D, Matrix *mean=0, Matrix *covar
             AcousticModel::State *s = new AcousticModel::State();
             s->name = AcousticModel::name(phone, j);
             
-            s->emission.prior.open(K, 1, mw);
+            s->emission.prior.Open(K, 1, mw);
 
             if (phone == Phoneme::SIL) {
-                s->transition.open(LFL_PHONES, TransitCols, log(1.0/LFL_PHONES));
+                s->transition.Open(LFL_PHONES, TransitCols, log(1.0/LFL_PHONES));
                 for (int k=0; k<LFL_PHONES; k++) {
                     s->transition.row(k)[TC_Self] = s->id();
                     s->transition.row(k)[TC_Edge] = fnv32(AcousticModel::name(k, 0).c_str());
                 }
             }
             else {
-                s->transition.open(2, TransitCols, tp);
+                s->transition.Open(2, TransitCols, tp);
                 s->transition.row(0)[TC_Self] = s->id();
                 s->transition.row(0)[TC_Edge] = s->id(); /* to self */
 
@@ -221,11 +221,11 @@ int model1init(const char *modeldir, int K, int D, Matrix *mean=0, Matrix *covar
                 s->transition.row(1)[TC_Edge] = fnv32(j == states-1 ? "Model_SIL_State_00" : AcousticModel::name(phone, j+1).c_str());
             }
 
-            s->emission.mean.open(K, D);
-            if (mean) MatrixRowIter(&s->emission.mean) Vector::assign(s->emission.mean.row(i), mean->row(0), D);
+            s->emission.mean.Open(K, D);
+            if (mean) MatrixRowIter(&s->emission.mean) Vector::Assign(s->emission.mean.row(i), mean->row(0), D);
 
-            s->emission.diagcov.open(K, D);
-            if (covar) MatrixRowIter(&s->emission.diagcov) Vector::assign(s->emission.diagcov.row(i), covar->row(0), D);
+            s->emission.diagcov.Open(K, D);
+            if (covar) MatrixRowIter(&s->emission.diagcov) Vector::Assign(s->emission.diagcov.row(i), covar->row(0), D);
 
             model.add(s, phone_id++);
         }
@@ -258,9 +258,9 @@ int model3initwrite(vector<string> &list, Matrix *siltrans, const char *modeldir
 
         s3->name = (*it).c_str();
 
-        if (phone == Phoneme::SIL) s3->transition.assignDataPtr(siltrans->M, siltrans->N, siltrans->m);
+        if (phone == Phoneme::SIL) s3->transition.AssignDataPtr(siltrans->M, siltrans->N, siltrans->m);
         else {
-            s3->transition.open(2, TransitCols, log(.5));
+            s3->transition.Open(2, TransitCols, log(.5));
             s3->transition.row(0)[TC_Self] = s3->id();
             s3->transition.row(0)[TC_Edge] = s3->id(); /* to self */
 
@@ -400,7 +400,7 @@ int growDecisionTrees(const char *modeldir, AcousticModel::Compiled *model3, int
     if (!FLAGS_UttPathsInFile.size()) { ERROR("tie model states requires -UttPathsInFile: ", -1); return -1; }
 
     MatrixArchiveIn UttPathsIn;
-    UttPathsIn.open(modeldir + FLAGS_UttPathsInFile);
+    UttPathsIn.Open(modeldir + FLAGS_UttPathsInFile);
     PathCorpus::path_iter(featdir, &UttPathsIn, Features2Pronunciation::add_path, &f2p);
     if (!Running()) return 0;
 
@@ -482,7 +482,7 @@ int tieModelStates(const char *modeldir, AcousticModel::StateCollection *model3,
             ERROR("read tree ", Phoneme::name(phone), " ", state);
             CART::blank(QL, &tree[t], (double)fnv32(AcousticModel::name(phone, state).c_str()));
         }
-        if (!tree[t].namemap.M) tree[t].namemap.open(5, CART::Tree::map_buckets*CART::Tree::map_values);
+        if (!tree[t].namemap.M) tree[t].namemap.Open(5, CART::Tree::map_buckets*CART::Tree::map_values);
 
         int N = tree[t].leafnamemap.N;
         MatrixRowIter(&tree[t].leafnamemap) {
@@ -579,9 +579,9 @@ int growComponents(const char *modeldir, AcousticModel::StateCollection *model, 
         AcousticModel::State *sn = &modelNext.state[ind];
         sn->assignPtr(s);
         sn->val.emission_index = ind++;
-        sn->emission.mean.open(newComponents, s->emission.mean.N);
-        sn->emission.diagcov.open(newComponents, s->emission.diagcov.N);
-        sn->emission.prior.open(newComponents, s->emission.prior.N);
+        sn->emission.mean.Open(newComponents, s->emission.mean.N);
+        sn->emission.diagcov.Open(newComponents, s->emission.diagcov.N);
+        sn->emission.prior.Open(newComponents, s->emission.prior.N);
     }
     
     if (AcousticModel::write(&modelNext, "AcousticModel", modeldir, lastiter+1, 0)) ERROR("write ", modeldir);
@@ -863,7 +863,7 @@ struct Wav2Segments {
     static void add_wav(const char *sd, SoundAsset *wav, const char *transcript, void *arg) {
         Wav2Segments *args = (Wav2Segments*)arg;
         Matrix *MFCC = Features::fromAsset(wav, Features::Flag::Storable);
-        Matrix *features = Features::fromFeat(MFCC->clone(), Features::Flag::Full);
+        Matrix *features = Features::fromFeat(MFCC->Clone(), Features::Flag::Full);
 
         AcousticModel::Compiled *hmm = AcousticModel::fromUtterance1(args->model, transcript, args->HMMFlag & AcousticHMM::Flag::UseTransit);
         if (!hmm) return DEBUG("utterance decode failed");
@@ -893,7 +893,7 @@ struct Wav2Segments {
                 transitions, iter.beg*FLAGS_feat_hop, (iter.beg+len)*FLAGS_feat_hop,
                 hmm->state[(int)viterbi.row(iter.beg)[0]].name.c_str());
 
-            out->index.write(&f, fn.c_str());
+            out->index.Write(&f, fn);
             f.Clear();
 
             transitions++;  

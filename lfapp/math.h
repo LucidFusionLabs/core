@@ -186,18 +186,18 @@ struct Plane {
 struct Complex {
     double r, i;
 
-    void add(Complex n) { r += n.r; i += n.i; }
-    void sub(Complex n) { r -= n.r; i -= n.i; }
-    void mult(Complex n) {
+    void Add(Complex n) { r += n.r; i += n.i; }
+    void Sub(Complex n) { r -= n.r; i -= n.i; }
+    void Mult(Complex n) {
         Complex l = *this;
         r = l.r*n.r - l.i*n.i;
         i = l.r*n.i + l.i*n.r;
     }
-    Complex conjugate() const { Complex ret = {r,-i}; return ret; }
+    Complex Conjugate() const { Complex ret = {r,-i}; return ret; }
 
-    static Complex add(Complex a, Complex b) { a.add(b); return a; }
-    static Complex sub(Complex a, Complex b) { a.sub(b); return a; }
-    static Complex mult(Complex a, Complex b) { a.mult(b); return a; }
+    static Complex Add(Complex a, Complex b) { a.Add(b); return a; }
+    static Complex Sub(Complex a, Complex b) { a.Sub(b); return a; }
+    static Complex Mult(Complex a, Complex b) { a.Mult(b); return a; }
 };
 
 double logadd(double *, double);
@@ -206,40 +206,40 @@ unsigned logadd(unsigned *, unsigned);
 
 template <class X> struct Vec {
     virtual ~Vec() {}
-    virtual int len() const = 0;
-    virtual X read(int i) const = 0;
+    virtual int Len() const = 0;
+    virtual X Read(int i) const = 0;
 
-    static string str(const X *v1,              int D) { string line; for (int i=0; i<D; i++) line += (line.size() ? ", " : "") + Typed::Str(v1[i]); return line; }
-    static void print(const X *v1,              int D) { INFO(str(v1, D)); }
-    static X    dist2(const X *v1, const X *v2, int D) { X ret=0; for (int i=0; i<D; i++) ret += squared(v1[i]-v2[i]); return ret; }
-    static X      dot(const X *v1, const X *v2, int D) { X ret=0; for (int i=0; i<D; i++) ret += v1[i] * v2[i];        return ret; }
-    static void add (const X *v1, const X *v2, X *vOut, int D) { for (int i=0; i<D; i++) vOut[i] = v1[i] + v2[i]; }
-    static void add (const X *v1,       X  v2, X *vOut, int D) { for (int i=0; i<D; i++) vOut[i] = v1[i] + v2;    }
-    static void sub (const X *v1, const X *v2, X *vOut, int D) { for (int i=0; i<D; i++) vOut[i] = v1[i] - v2[i]; }
-    static void sub (const X *v1,       X  v2, X *vOut, int D) { for (int i=0; i<D; i++) vOut[i] = v1[i] - v2;    }
-    static void mult(const X *v1, const X *v2, X *vOut, int D) { for (int i=0; i<D; i++) vOut[i] = v1[i] * v2[i]; }
-    static void mult(const X *v1,       X  v2, X *vOut, int D) { for (int i=0; i<D; i++) vOut[i] = v1[i] * v2;    }
-    static void div (const X *v1, const X *v2, X *vOut, int D) { for (int i=0; i<D; i++) vOut[i] = v1[i] / v2[i]; }
-    static void div (const X *v1,       X  v2, X *vOut, int D) { for (int i=0; i<D; i++) vOut[i] = v1[i] / v2;    }
-    static void add   (X *v1, const X *v2, int D) { return add (v1,v2,v1,D); }
-    static void add   (X *v1,       X  v2, int D) { return add (v1,v2,v1,D); }
-    static void sub   (X *v1, const X *v2, int D) { return sub (v1,v2,v1,D); }
-    static void sub   (X *v1,       X  v2, int D) { return sub (v1,v2,v1,D); }
-    static void mult  (X *v1, const X *v2, int D) { return mult(v1,v2,v1,D); }
-    static void mult  (X *v1,       X  v2, int D) { return mult(v1,v2,v1,D); }
-    static void div   (X *v1, const X *v2, int D) { return div (v1,v2,v1,D); }
-    static void div   (X *v1,       X  v2, int D) { return div (v1,v2,v1,D); }
-    static void exp   (X *v1, const X *v2, int D) { for (int i=0; i<D; i++) v1[i] = ::exp(v2[i]); }
-    static void assign(X *v1, const X *v2, int D) { for (int i=0; i<D; i++) v1[i] = v2[i]; }
-    static void assign(X *v1,       X  v2, int D) { for (int i=0; i<D; i++) v1[i] = v2; }
-    static void log   (X *v1, const X *v2, int D) { for (int i=0; i<D; i++) v1[i] = ::log(v2[i]); }
-    static void logadd(X *v1, const X *v2, int D) { for (int i=0; i<D; i++) LFL::logadd(&v1[i], v2[i]); }
-    static void exp   (      X *v1, int D) { exp(v1, v1, D); }
-    static void log   (      X *v1, int D) { log(v1, v1, D); }
-    static double  sum(const X *v1, int D) { X ret=0; for (int i=0; i<D; i++) ret += v1[i]; return ret; }
-    static double _min(const X *v1, int D) { X ret=(X) INFINITY; for (int i=0; i<D; i++) if (v1[i] < ret) ret = v1[i]; return (double)ret; }
-    static double _max(const X *v1, int D) { X ret=(X)-INFINITY; for (int i=0; i<D; i++) if (v1[i] > ret) ret = v1[i]; return (double)ret; }
-    static int  maxind(const X *v1, int D) { X mx =(X)-INFINITY; int ret=-1; for (int i=0; i<D; i++) if (v1[i] > mx) { mx = v1[i]; ret = i; } return ret; }
+    static string Str(const X *v1,              int D) { string line; for (int i=0; i<D; i++) line += (line.size() ? ", " : "") + Typed::Str(v1[i]); return line; }
+    static void Print(const X *v1,              int D) { INFO(Str(v1, D)); }
+    static X    Dist2(const X *v1, const X *v2, int D) { X ret=0; for (int i=0; i<D; i++) ret += squared(v1[i]-v2[i]); return ret; }
+    static X      Dot(const X *v1, const X *v2, int D) { X ret=0; for (int i=0; i<D; i++) ret += v1[i] * v2[i];        return ret; }
+    static void Add (const X *v1, const X *v2, X *vOut, int D) { for (int i=0; i<D; i++) vOut[i] = v1[i] + v2[i]; }
+    static void Add (const X *v1,       X  v2, X *vOut, int D) { for (int i=0; i<D; i++) vOut[i] = v1[i] + v2;    }
+    static void Sub (const X *v1, const X *v2, X *vOut, int D) { for (int i=0; i<D; i++) vOut[i] = v1[i] - v2[i]; }
+    static void Sub (const X *v1,       X  v2, X *vOut, int D) { for (int i=0; i<D; i++) vOut[i] = v1[i] - v2;    }
+    static void Mult(const X *v1, const X *v2, X *vOut, int D) { for (int i=0; i<D; i++) vOut[i] = v1[i] * v2[i]; }
+    static void Mult(const X *v1,       X  v2, X *vOut, int D) { for (int i=0; i<D; i++) vOut[i] = v1[i] * v2;    }
+    static void Div (const X *v1, const X *v2, X *vOut, int D) { for (int i=0; i<D; i++) vOut[i] = v1[i] / v2[i]; }
+    static void Div (const X *v1,       X  v2, X *vOut, int D) { for (int i=0; i<D; i++) vOut[i] = v1[i] / v2;    }
+    static void Add   (X *v1, const X *v2, int D) { return Add (v1,v2,v1,D); }
+    static void Add   (X *v1,       X  v2, int D) { return Add (v1,v2,v1,D); }
+    static void Sub   (X *v1, const X *v2, int D) { return Sub (v1,v2,v1,D); }
+    static void Sub   (X *v1,       X  v2, int D) { return Sub (v1,v2,v1,D); }
+    static void Mult  (X *v1, const X *v2, int D) { return Mult(v1,v2,v1,D); }
+    static void Mult  (X *v1,       X  v2, int D) { return Mult(v1,v2,v1,D); }
+    static void Div   (X *v1, const X *v2, int D) { return Div (v1,v2,v1,D); }
+    static void Div   (X *v1,       X  v2, int D) { return Div (v1,v2,v1,D); }
+    static void Exp   (X *v1, const X *v2, int D) { for (int i=0; i<D; i++) v1[i] = ::exp(v2[i]); }
+    static void Assign(X *v1, const X *v2, int D) { for (int i=0; i<D; i++) v1[i] = v2[i]; }
+    static void Assign(X *v1,       X  v2, int D) { for (int i=0; i<D; i++) v1[i] = v2; }
+    static void Log   (X *v1, const X *v2, int D) { for (int i=0; i<D; i++) v1[i] = ::log(v2[i]); }
+    static void LogAdd(X *v1, const X *v2, int D) { for (int i=0; i<D; i++) LFL::logadd(&v1[i], v2[i]); }
+    static void Exp   (      X *v1, int D) { exp(v1, v1, D); }
+    static void Log   (      X *v1, int D) { log(v1, v1, D); }
+    static double Sum (const X *v1, int D) { X ret=0; for (int i=0; i<D; i++) ret += v1[i]; return ret; }
+    static double Min (const X *v1, int D) { X ret=(X) INFINITY; for (int i=0; i<D; i++) if (v1[i] < ret) ret = v1[i]; return (double)ret; }
+    static double Max (const X *v1, int D) { X ret=(X)-INFINITY; for (int i=0; i<D; i++) if (v1[i] > ret) ret = v1[i]; return (double)ret; }
+    static int  MaxInd(const X *v1, int D) { X mx =(X)-INFINITY; int ret=-1; for (int i=0; i<D; i++) if (v1[i] > mx) { mx = v1[i]; ret = i; } return ret; }
 };
 typedef Vec<double> Vector;
 
@@ -255,10 +255,10 @@ template <class T=double> struct matrix {
     T *m;
 
     matrix() : M(0), N(0), flag(0), bytes(0), alloc(Singleton<MallocAlloc>::Get()), m(0) {}
-    matrix(int Mrows, int Ncols, T InitialVal=T(), int Flag=0, Allocator *Alloc=0) : m(0) { open(Mrows, Ncols, InitialVal, Flag, Alloc); }
-    matrix(const matrix<T> &copy) : m(0), alloc(0) { open(copy.M, copy.N, T(), copy.flag); assignL(&copy); }
-    matrix(const char *bitmap, int Mrows, int Ncols, int Flag=0, int Chans=1, int ChanInd=0, Allocator *Alloc=0) : m(0) { open(Mrows, Ncols, bitmap, Flag, Alloc); }
-    matrix& operator=(const matrix &copy) { open(copy.M, copy.N, T(), copy.flag); assignL(&copy); return *this; }
+    matrix(int Mrows, int Ncols, T InitialVal=T(), int Flag=0, Allocator *Alloc=0) : m(0) { Open(Mrows, Ncols, InitialVal, Flag, Alloc); }
+    matrix(const matrix<T> &copy) : m(0), alloc(0) { Open(copy.M, copy.N, T(), copy.flag); AssignL(&copy); }
+    matrix(const char *bitmap, int Mrows, int Ncols, int Flag=0, int Chans=1, int ChanInd=0, Allocator *Alloc=0) : m(0) { Open(Mrows, Ncols, bitmap, Flag, Alloc); }
+    matrix& operator=(const matrix &copy) { Open(copy.M, copy.N, T(), copy.flag); AssignL(&copy); return *this; }
     virtual ~matrix() { alloc->free(m); }
 
     virtual T             *row(int i)        { if (i>=M||i<0) return 0; return &m[i*N*((flag&Flag::Complex)?2:1)]; }
@@ -269,7 +269,7 @@ template <class T=double> struct matrix {
     virtual T       *lastrow()       { return row(M-1); }
     virtual const T *lastrow() const { return row(M-1); }
  
-    void addrows(int rows, bool prepend=false) {
+    void AddRows(int rows, bool prepend=false) {
         CHECK_GE(M+rows, 0);
         M += rows;
         bytes = M*N*sizeof(T)*((flag&Flag::Complex)?2:1);
@@ -286,35 +286,35 @@ template <class T=double> struct matrix {
             }
         }
     }
-    void addcols(unsigned cols, bool prepend=false) {
+    void AddCols(unsigned cols, bool prepend=false) {
         matrix<T> new_matrix(M, N+cols, 0, flag, alloc);
-        if (!prepend) new_matrix.assignR(this);
+        if (!prepend) new_matrix.AssignR(this);
         else MatrixIter(this) new_matrix.row(i)[j+cols] = row(i)[j];
         Typed::Swap(m, new_matrix.m);
         Typed::MinusPlus(&new_matrix.N, &N, (int)cols);
         bytes = M*N*sizeof(T)*((flag&Flag::Complex)?2:1);
     }
 
-    void assign(int Mrows, int Ncols, long long Bytes, int Flag, Allocator *Alloc) { M=Mrows; N=Ncols; bytes=Bytes; flag=Flag; alloc=Alloc; }
-    void assignL(const matrix *m) { MatrixIter(this) row(i)[j] = m->row(i)[j]; }
-    void assignR(const matrix *m) { MatrixIter(m)    row(i)[j] = m->row(i)[j]; }
-    void assignL(const matrix *m, int flag) { bool neg=flag&mNeg; MatrixIter(this) row(i)[j] = neg ? Typed::Negate(m->row(i)[j]) : m->row(i)[j]; CompleteOperation(m, 0, 0, flag); }
-    void assignR(const matrix *m, int flag) { bool neg=flag&mNeg; MatrixIter(m)    row(i)[j] = neg ? Typed::Negate(m->row(i)[j]) : m->row(i)[j]; CompleteOperation(m, 0, 0, flag); }
-    void assignDiagonal(double v) { MatrixRowIter(this) row(i)[i] = v; }
-    void absorb(matrix *nm) { 
+    void Assign(int Mrows, int Ncols, long long Bytes, int Flag, Allocator *Alloc) { M=Mrows; N=Ncols; bytes=Bytes; flag=Flag; alloc=Alloc; }
+    void AssignL(const matrix *m) { MatrixIter(this) row(i)[j] = m->row(i)[j]; }
+    void AssignR(const matrix *m) { MatrixIter(m)    row(i)[j] = m->row(i)[j]; }
+    void AssignL(const matrix *m, int flag) { bool neg=flag&mNeg; MatrixIter(this) row(i)[j] = neg ? Typed::Negate(m->row(i)[j]) : m->row(i)[j]; CompleteOperation(m, 0, 0, flag); }
+    void AssignR(const matrix *m, int flag) { bool neg=flag&mNeg; MatrixIter(m)    row(i)[j] = neg ? Typed::Negate(m->row(i)[j]) : m->row(i)[j]; CompleteOperation(m, 0, 0, flag); }
+    void AssignDiagonal(double v) { MatrixRowIter(this) row(i)[i] = v; }
+    void Absorb(matrix *nm) { 
         if (m) { alloc->free(m); m=0; }
-        assign(nm->M, nm->N, nm->M*nm->N*sizeof(T), nm->flag, nm->alloc);
+        Assign(nm->M, nm->N, nm->M*nm->N*sizeof(T), nm->flag, nm->alloc);
         m = nm->m;
         nm->m = 0;
         delete nm;
     }
-    void assignDataPtr(int nm, int nn, T *nv, Allocator *Alloc=0) {
+    void AssignDataPtr(int nm, int nn, T *nv, Allocator *Alloc=0) {
         if (m) { alloc->free(m); m=0; }
         if (!Alloc) Alloc = Singleton<NullAlloc>::Get();
-        assign(nm, nn, nm*nn*sizeof(T), 0, Alloc);
+        Assign(nm, nn, nm*nn*sizeof(T), 0, Alloc);
         m = nv;
     }
-    void open(int Mrows, int Ncols, T InitialVal=0, int Flag=0, Allocator *Alloc=0) {
+    void Open(int Mrows, int Ncols, T InitialVal=0, int Flag=0, Allocator *Alloc=0) {
         if (m) { alloc->free(m); m=0; }
         long long bytes = Mrows*Ncols*sizeof(T)*((Flag&Flag::Complex)?2:1);
         if (!Alloc) {
@@ -323,57 +323,57 @@ template <class T=double> struct matrix {
             if (bytes >= (1<<30)) Alloc = MMapAlloc::open("/dev/zero", true, false, bytes);
 #endif
         }
-        assign(Mrows, Ncols, bytes, Flag, Alloc);
-        addrows(0);
+        Assign(Mrows, Ncols, bytes, Flag, Alloc);
+        AddRows(0);
         MatrixIter(this) { row(i)[j] = InitialVal; }
     }
-    void open(int Mrows, int Ncols, const char *bitmap, int Flag=0, Allocator *Alloc=0) {
+    void Open(int Mrows, int Ncols, const char *bitmap, int Flag=0, Allocator *Alloc=0) {
         if (m) { alloc->free(m); m=0; }
         if (!Alloc) Alloc = Singleton<MallocAlloc>::Get();
-        assign(Mrows, Ncols, Mrows*Ncols*sizeof(T), Flag, Alloc);
-        addrows(0);
+        Assign(Mrows, Ncols, Mrows*Ncols*sizeof(T), Flag, Alloc);
+        AddRows(0);
         MatrixIter(this) { row(i)[j] = (unsigned char)bitmap[i + j*M]; }
     }
-    void clear() {
+    void Clear() {
         if (m) { alloc->free(m); m=0; }
         M = N = 0;
         bytes = 0;
     }
-    matrix *clone() const {
+    matrix *Clone() const {
         if (!this) return 0;
         matrix *ret = new matrix(M,N,flag);
         MatrixIter(ret) { ret->row(i)[j] = row(i)[j]; }
         return ret;
     }
 
-    matrix *transpose(int flag=0) const { return matrix::transpose(this, flag); }
-    matrix *mult(matrix *B, int flag=0) const { return matrix::mult(this, B, flag); }
-    void multdiagR(double *diagonalmatrix, int len=0) { /* this = this * diagnolmatrix */
+    matrix *Transpose(int flag=0) const { return matrix::Transpose(this, flag); }
+    matrix *Mult(matrix *B, int flag=0) const { return matrix::Mult(this, B, flag); }
+    void MultdiagR(double *diagonalmatrix, int len=0) { /* this = this * diagnolmatrix */
         if (len && len != N) FATAL("mismatch ", len, " != ", N);
         MatrixIter(this) row(i)[j] *= diagonalmatrix[j];
     }
 
-    static matrix *transpose(const matrix *A, int flag=0) {
+    static matrix *Transpose(const matrix *A, int flag=0) {
         matrix *C = new matrix(A->N, A->M);
         MatrixIter(A) C->row(j)[i] = A->row(i)[j];
         if (flag & mDelA) delete A;
         return C;
     }
-    static matrix *add(const matrix *A, const matrix *B, matrix *C, int flag=0) {
+    static matrix *Add(const matrix *A, const matrix *B, matrix *C, int flag=0) {
         if (A->M != B->M || B->M != C->M || A->N != B->N || B->N != C->N) { ERROR("add ", A->M, ", ", A->N, ", ", B->M, ", ", B->N, ", ", C->M, ", ", C->N); return 0; }
         MatrixIter(A) C->row(i)[j] = A->row(i)[j] + B->row(i)[j];
         return CompleteOperation(A, B, C, flag);
     }
-    static matrix *sub(const matrix *A, const matrix *B, matrix *C, int flag=0) {
+    static matrix *Sub(const matrix *A, const matrix *B, matrix *C, int flag=0) {
         if (A->M != B->M || B->M != C->M || A->N != B->N || B->N != C->N) { ERROR("sub ", A->M, ", ", A->N, ", ", B->M, ", ", B->N, ", ", C->M, ", ", C->N); return 0; }
         MatrixIter(A) C->row(i)[j] = A->row(i)[j] - B->row(i)[j];
         return CompleteOperation(A, B, C, flag);
     }
-    static matrix *mult(const matrix *A, const matrix *B, int flag=0) {
+    static matrix *Mult(const matrix *A, const matrix *B, int flag=0) {
         matrix *C = new matrix((flag & mTrnpA)?A->N:A->M, (flag & mTrnpB)?B->M:B->N);
-        return matrix::mult(A, B, C, flag);
+        return matrix::Mult(A, B, C, flag);
     }
-    static matrix *mult(const matrix *A, const matrix *B, matrix *C, int flag=0) {
+    static matrix *Mult(const matrix *A, const matrix *B, matrix *C, int flag=0) {
         bool trnpA = flag & mTrnpA, trnpB = flag & mTrnpB, trnpC = flag & mTrnpC, neg = flag & mNeg;
         int AM = trnpA ? A->N : A->M, AN = trnpA ? A->M : A->N;
         int BM = trnpB ? B->N : B->M, BN = trnpB ? B->M : B->N;
@@ -394,7 +394,7 @@ template <class T=double> struct matrix {
         }
         return CompleteOperation(A, B, C, flag);
     }
-    static matrix *convolve(const matrix *A, const matrix *B, matrix *C, int flag=0) {
+    static matrix *Convolve(const matrix *A, const matrix *B, matrix *C, int flag=0) {
         if (A->M != C->M || A->N != C->N || (B->M % 2) != 1 || (B->N % 2) != 1) { ERROR("convolve ", A->M, ", ", A->N, " ", B->M, ", ", B->N, " ", C->M, ", ", C->N); return 0; }
         bool zero_only = flag & mZeroOnly;
         MatrixIter(A) {
@@ -425,9 +425,9 @@ template <class T=double> struct matrix {
         MatrixIter(A) ret = max(ret, A->row(i)[j]);
         return ret;
     }
-    static void print(const matrix *A, const string &name) {
+    static void Print(const matrix *A, const string &name) {
         INFO(name, " Matrix(", A->M, ",", A->N, ") = ");
-        MatrixRowIter(A) Vec<T>::print(A->row(i), A->N);
+        MatrixRowIter(A) Vec<T>::Print(A->row(i), A->N);
     }
 };
 typedef matrix<double> Matrix;
@@ -455,10 +455,10 @@ struct RollingAvg {
         if (count < window) count++;
         accum = 0;
     }
-    double _min() const { return Vec<unsigned>::_min(buf, count); }
-    double _max() const { return Vec<unsigned>::_max(buf, count); }
+    double _min() const { return Vec<unsigned>::Min(buf, count); }
+    double _max() const { return Vec<unsigned>::Max(buf, count); }
     double avg() const { return count ? total / count : 0; }
-    double sumavg() const { return count ? Vec<unsigned>::sum(buf, count) / count : 0; }
+    double sumavg() const { return count ? Vec<unsigned>::Sum(buf, count) / count : 0; }
     float stddev() const { return count ? sqrt(dev) : 0; }
     float fps() const { return 1000.0/avg(); }
 };
@@ -591,15 +591,15 @@ struct GMM {
     void assignDataPtr(GMM *m) { assignDataPtr(m->mean.M, m->mean.N, m->mean.m, m->diagcov.m, m->prior.m, m->norm.m); }
 
     void assignDataPtr(int M, int N, double *m, double *v, double *p, double *n=0) {
-        mean.assignDataPtr(M, N, m);
-        diagcov.assignDataPtr(M, N, v);
-        prior.assignDataPtr(M, 1, p);
-        if (n) norm.assignDataPtr(M, 1, n);
+        mean.AssignDataPtr(M, N, m);
+        diagcov.AssignDataPtr(M, N, v);
+        prior.AssignDataPtr(M, 1, p);
+        if (n) norm.AssignDataPtr(M, 1, n);
         else computeNorms();
     }
 
     void computeNorms() {
-        if (!norm.m) norm.open(diagcov.M, 1);
+        if (!norm.m) norm.Open(diagcov.M, 1);
         MatrixRowIter(&diagcov) norm.row(i)[0] = gausNormC(diagcov.row(i), diagcov.N);
     };
 

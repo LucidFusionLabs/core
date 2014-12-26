@@ -50,7 +50,7 @@ int features2cluster(const char *featdir, const char *modeldir, int algo) {
 
     if (algo == ClusterAlgorithm::KMeans) { /* k-means */
         KMeans kmeans(model->M, model->N);
-        kmeans.means->assignL(model);
+        kmeans.means->AssignL(model);
 
         for (int i=0; i<FLAGS_MaxIterations; i++) { /* loop */
             FeatCorpus::feat_iter(featdir, KMeans::add_features, &kmeans);

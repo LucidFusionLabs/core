@@ -58,14 +58,14 @@ struct GMMEM {
             double *featscaled=(double*)alloca(D*sizeof(double));
 
             MatrixRowIter(&mixture->mean) {
-                Vector::mult(feature, exp(posteriors[i]), featscaled, D);
-                Vector::add(newmeans->row(i), featscaled, D);
+                Vector::Mult(feature, exp(posteriors[i]), featscaled, D);
+                Vector::Add(newmeans->row(i), featscaled, D);
 
                 logadd(&denoms[i], posteriors[i]);
  
                 if (!FullVariance) {
-                    Vector::mult(featscaled, feature, D);
-                    Vector::add(accums->row(i), featscaled, D);
+                    Vector::Mult(featscaled, feature, D);
+                    Vector::Add(accums->row(i), featscaled, D);
                 }
             }
             count++;
@@ -75,10 +75,10 @@ struct GMMEM {
             double *diff=(double*)alloca(D*sizeof(double));
 
             MatrixRowIter(newmeans) {
-                Vector::sub(newmeans->row(i), feature, diff, D);
-                Vector::mult(diff, diff, D);
-                Vector::mult(diff, exp(posteriors[i]), D);
-                Vector::add(accums->row(i), diff, D);
+                Vector::Sub(newmeans->row(i), feature, diff, D);
+                Vector::Mult(diff, diff, D);
+                Vector::Mult(diff, exp(posteriors[i]), D);
+                Vector::Add(accums->row(i), diff, D);
             }
             if (!FullVariance) FATAL("incompatible modes ", -1);
         }
@@ -95,7 +95,7 @@ struct GMMEM {
                 double dn = exp(denoms[i]);
                 if (dn < FLAGS_CovarFloor) dn = FLAGS_CovarFloor;
 
-                Vector::div(newmeans->row(i), dn, N); /* update newmeans */
+                Vector::Div(newmeans->row(i), dn, N); /* update newmeans */
             }
         }
         else if (mode == Mode::Cov) {
@@ -110,12 +110,12 @@ struct GMMEM {
                     mixture->prior.row(i)[0] = v < FLAGS_PriorFloor ? FLAGS_PriorFloor : v; /* update priors */
                 }
 
-                Vector::assign(mixture->mean.row(i), newmeans->row(i), N); /* update means */
-                Vector::div(accums->row(i), dn, mixture->diagcov.row(i), N); /* update covariance */
+                Vector::Assign(mixture->mean.row(i), newmeans->row(i), N); /* update means */
+                Vector::Div(accums->row(i), dn, mixture->diagcov.row(i), N); /* update covariance */
 
                 if (!FullVariance) {
-                    Vector::mult(mixture->mean.row(i), mixture->mean.row(i), x, D);
-                    Vector::sub(mixture->diagcov.row(i), x, D);
+                    Vector::Mult(mixture->mean.row(i), mixture->mean.row(i), x, D);
+                    Vector::Sub(mixture->diagcov.row(i), x, D);
                 }
 
                 MatrixColIter(&mixture->diagcov) if (mixture->diagcov.row(i)[j] < FLAGS_CovarFloor) mixture->diagcov.row(i)[j] = FLAGS_CovarFloor;

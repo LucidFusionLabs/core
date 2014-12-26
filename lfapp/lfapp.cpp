@@ -136,10 +136,10 @@ DEFINE_int(chans_out, -1, "Audio output channels");
 DEFINE_int(target_fps, 100, "Max frames per second");
 DEFINE_int(min_fps, 1, "Min frames per second");
 
-Printable::Printable(const vector<string> &x) : string(StrCat("{", Vec<string>::str(&x[0], x.size()), "}")) {}
-Printable::Printable(const vector<double> &x) : string(StrCat("{", Vec<double>::str(&x[0], x.size()), "}")) {}
-Printable::Printable(const vector<float>  &x) : string(StrCat("{", Vec<float> ::str(&x[0], x.size()), "}")) {}
-Printable::Printable(const vector<int>    &x) : string(StrCat("{", Vec<int>   ::str(&x[0], x.size()), "}")) {}
+Printable::Printable(const vector<string> &x) : string(StrCat("{", Vec<string>::Str(&x[0], x.size()), "}")) {}
+Printable::Printable(const vector<double> &x) : string(StrCat("{", Vec<double>::Str(&x[0], x.size()), "}")) {}
+Printable::Printable(const vector<float>  &x) : string(StrCat("{", Vec<float> ::Str(&x[0], x.size()), "}")) {}
+Printable::Printable(const vector<int>    &x) : string(StrCat("{", Vec<int>   ::Str(&x[0], x.size()), "}")) {}
 Printable::Printable(const Color          &x) : string(x.DebugString()) {}
 Printable::Printable(const String16       &x) : string(String::ToUTF8(x)) {}
 Printable::Printable(const void           *x) : string(StringPrintf("%p", x)) {}

@@ -1533,7 +1533,7 @@ void SimpleVideoResampler::Filter(unsigned char *buf, int w, int h,
     Matrix M(h, w), out(h, w);
     int pw = Pixel::size(pf);
     ColorChannelToMatrix(buf, w, h, pw, ls, x, y, &M, ColorChannel::PixelOffset(channel));
-    Matrix::convolve(&M, kernel, &out, (flag & Flag::ZeroOnly) ? mZeroOnly : 0);
+    Matrix::Convolve(&M, kernel, &out, (flag & Flag::ZeroOnly) ? mZeroOnly : 0);
     MatrixToColorChannel(&out, w, h, pw, ls, x, y, buf, ColorChannel::PixelOffset(channel));
 }
 

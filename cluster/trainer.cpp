@@ -146,7 +146,7 @@ int main(int argc, const char *argv[]) {
         else MatrixIter(&input) input.row(i)[j] = in->row(i)[j];
 
         Matrix projected(in->M, in->N);
-        Matrix::mult(intx, &input, &projected, mTrnpB|mTrnpC);
+        Matrix::Mult(intx, &input, &projected, mTrnpB|mTrnpC);
 
         MatrixIter(in) in->row(i)[j] = projected.row(i)[j];
     }
@@ -163,7 +163,7 @@ int main(int argc, const char *argv[]) {
            int ind = label.size();
            if (ind >= chosen.M) break;
 
-           double sum = Vec<double>::sum(in->row(i), in->N);
+           double sum = Vec<double>::Sum(in->row(i), in->N);
            MatrixColIter(in) chosen.row(ind)[j] = in->row(i)[j] / (FLAGS_normalize ? sum : 1);
 
            label.push_back(inlabel ? (*inlabel)[i] : "");

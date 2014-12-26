@@ -993,8 +993,8 @@ struct QTKitCamera : public CameraImpl {
         }
         if (!new_frame) return 0;
 
-        image = (unsigned char*)L.frames->read(-1, L.next);
-        image_timestamp = L.frames->readtimestamp(-1, L.next);
+        image = (unsigned char*)L.frames->Read(-1, L.next);
+        image_timestamp = L.frames->ReadTimestamp(-1, L.next);
 
         return 1;
     }
@@ -1015,12 +1015,12 @@ struct QTKitCamera : public CameraImpl {
             camera->image_linesize = FLAGS_camera_image_width*4;
         }
 
-        memcpy(camera->L.frames->write(RingBuf::Peek | RingBuf::Stamp), imageData, imageSize);
+        memcpy(camera->L.frames->Write(RingBuf::Peek | RingBuf::Stamp), imageData, imageSize);
 
         /* commit */  
         {
             ScopedMutex ML(camera->lock);
-            camera->L.frames->write();
+            camera->L.frames->Write();
             camera->frames_read++;
         } 
     }

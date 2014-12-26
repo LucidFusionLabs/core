@@ -342,10 +342,10 @@ Matrix *PCA(const Matrix *obv, Matrix *projected, double *var) {
     SVD(&A, &D, &U, &V);
     MatrixIter(&A) A.row(i)[j] *= scale;
 
-    if (!Matrix::mult(&V, &A, projected, mTrnpB|mTrnpC)) FATAL("mult failed");
+    if (!Matrix::Mult(&V, &A, projected, mTrnpB|mTrnpC)) FATAL("mult failed");
 
     if (var) MatrixRowIter(&D) var[i] = pow(D.row(i)[0], 2);
-    return V.clone();
+    return V.Clone();
 }
 
 }; // namespace LFL
