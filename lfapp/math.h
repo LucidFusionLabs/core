@@ -468,7 +468,6 @@ double squared(double n);
 float decimals(float n);
 float rand(float a, float b);
 unsigned long long rand64();
-bool Equal(float l, float r, float eps = 1e-6);
 float clamp(float x, float floor, float ceil);
 void clamp(float *x, float floor, float ceil);
 v3 clamp(const v3& x, float floor, float ceil);

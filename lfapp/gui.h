@@ -71,6 +71,139 @@ struct GUI {
     virtual void ToggleConsole() { if (!display) app->shell.console(vector<string>()); }
 };
 
+struct Widget {
+    struct Interface {
+        GUI *gui;
+        int drawbox_ind=1;
+        vector<int> hitbox;
+        bool del_hitbox=0;
+        virtual ~Interface() { if (del_hitbox) DelHitBox(); }
+        Interface(GUI *g) : gui(g) {}
+
+        void AddClickBox(const Box &w, const MouseController::Callback &cb) { hitbox.push_back(gui->mouse.hit.Insert(MouseController::HitBox(MouseController::Event::Click, w, cb))); }
+        void AddHoverBox(const Box &w, const MouseController::Callback &cb) { hitbox.push_back(gui->mouse.hit.Insert(MouseController::HitBox(MouseController::Event::Hover, w, cb))); }
+        void DelHitBox() { for (vector<int>::const_iterator i = hitbox.begin(); i != hitbox.end(); ++i) gui->mouse.hit.Erase(*i); hitbox.clear(); }
+        MouseController::HitBox &GetHitBox(int i=0) const { return gui->mouse.hit[hitbox[i]]; }
+        Box GetHitBoxBox(int i=0) const { return Box::Add(GetHitBox(i).box, gui->box.TopLeft()); }
+        Drawable::Box *GetDrawBox() const { return drawbox_ind >= 0 ? VectorGet(gui->child_box.data, drawbox_ind) : 0; }
+    };
+    struct Vector : public vector<Interface*> {
+        virtual ~Vector() {}
+    };
+    struct Window : public Box, Interface {
+        virtual ~Window() {}
+        Window(GUI *Gui, Box window) : Box(window), Interface(Gui) {}
+        Window(GUI *Gui, int X, int Y, int W, int H) : Interface(Gui) { x=X; y=Y; w=W; h=H; }
+    };
+    struct Button : public Interface {
+        Box box; Drawable *drawable=0;
+        Font *font=0; string text; point textsize;
+        MouseController::Callback cb;
+        bool init=0, hover=0; int decay=0;
+        Color *outline=0; string link;
+        Button() : Interface(0) {}
+        Button(GUI *G, Drawable *D, Font *F, const string &T, const MouseController::Callback &CB)
+            : Interface(G), drawable(D), font(F), text(T), cb(CB), init(1) { if (F && T.size()) SetText(T); }
+
+        void SetText(const string &t) { text = t; Box w; font->Size(text, &w); textsize = w.Dimension(); }
+        void EnableHover() { AddHoverBox(box, MouseController::CB(bind(&Button::ToggleHover, this))); }
+        void ToggleHover() { hover = !hover; }
+        void Visit() { SystemBrowser::open(link.c_str()); }
+
+        void Layout(Flow *flow, const point &d) { box.SetDimension(d); Layout(flow); }
+        void Layout(Flow *flow) { 
+            flow->SetFGColor(&Color::white);
+            LayoutComplete(flow, flow->out->data[flow->AppendBox(box.w, box.h, drawable)].box);
+        }
+        void LayoutBox(Flow *flow, const Box &b) {
+            flow->SetFGColor(&Color::white);
+            if (drawable) flow->out->PushBack(b, flow->cur_attr, drawable, &drawbox_ind);
+            LayoutComplete(flow, b);
+        }
+        void LayoutComplete(Flow *flow, const Box &b) {
+            box = b;
+            hitbox.clear();
+            AddClickBox(box, cb);
+            if (outline) {
+                flow->SetFont(0);
+                flow->SetFGColor(outline);
+                flow->out->PushBack(box, flow->cur_attr, Singleton<BoxOutline>::Get());
+            }
+            point save_p = flow->p;
+            flow->SetFont(font);
+            flow->SetFGColor(0);
+            flow->p = box.Position() + point(Box(0, 0, box.w, box.h).centerX(textsize.x), 0);
+            flow->AppendText(text);
+            flow->p = save_p;
+            init = 0;
+        }
+    };
+    struct Scrollbar : public Interface {
+        struct Flag { enum { Attached=1, Horizontal=2, AttachedHorizontal=Attached|Horizontal }; };
+        Box win;
+        int flag=0, doc_height=200, dot_size=25;
+        float scrolled=0, last_scrolled=0, increment=20;
+        Color color=Color(15, 15, 15, 55);
+        Font *menuicon2=0;
+        bool dragging=0, dirty=0;
+        virtual ~Scrollbar() {}
+        Scrollbar(GUI *Gui, Box window=Box(), int f=Flag::Attached) : Interface(Gui), win(window), flag(f),
+        menuicon2(Fonts::Get("MenuAtlas2", 0, Color::black, 0)) {
+            if (win.w && win.h) { if (f & Flag::Attached) LayoutAttached(win); else LayoutFixed(win); } 
+        }
+
+        float Delta() { float ret=scrolled-last_scrolled; last_scrolled=scrolled; return ret; }
+        void LayoutFixed(const Box &w) { win = w; Layout(dot_size, dot_size, flag & Flag::Horizontal); }
+        void LayoutAttached(const Box &w) {
+            win = w;
+            win.y = -win.h;
+            int aw = dot_size, ah = dot_size;
+            bool flip = flag & Flag::Horizontal;
+            if (!flip) { win.x += win.w - aw - 1; win.w = aw; }
+            else win.h = ah;
+            Layout(aw, ah, flip);
+        }
+        void Layout(int aw, int ah, bool flip) {
+            Box arrow_down = win;
+            if (flip) { arrow_down.w = aw; win.x += aw; }
+            else      { arrow_down.h = ah; win.y += ah; }
+
+            Box scroll_dot = arrow_down, arrow_up = win;
+            if (flip) { arrow_up.w = aw; win.w -= 2*aw; arrow_up.x += win.w; }
+            else      { arrow_up.h = ah; win.h -= 2*ah; arrow_up.y += win.h; }
+
+            if (gui) {
+                int attr_id = gui->child_box.attr.GetAttrId(Drawable::Attr());
+                gui->child_box.PushBack(arrow_up,   attr_id, menuicon2 ? menuicon2->FindGlyph(flip ? 64 : 66) : 0);
+                gui->child_box.PushBack(arrow_down, attr_id, menuicon2 ? menuicon2->FindGlyph(flip ? 65 : 61) : 0);
+                gui->child_box.PushBack(scroll_dot, attr_id, menuicon2 ? menuicon2->FindGlyph(            72) : 0, &drawbox_ind);
+
+                AddClickBox(scroll_dot, MouseController::CB(bind(&Scrollbar::DragScrollDot, this)));
+                AddClickBox(arrow_up,   MouseController::CB(bind(flip ? &Scrollbar::ScrollDown : &Scrollbar::ScrollUp,   this)));
+                AddClickBox(arrow_down, MouseController::CB(bind(flip ? &Scrollbar::ScrollUp   : &Scrollbar::ScrollDown, this)));
+            }
+            Update(true);
+        }
+        void Update(bool force=false) {
+            if (!app->input.MouseButton1Down()) dragging = false;
+            if (!dragging && !dirty && !force) return;
+            bool flip = flag & Flag::Horizontal;
+            int aw = dot_size, ah = dot_size;
+            if (dragging) {
+                if (flip) scrolled = clamp(    (float)(gui->MousePosition().x - win.x) / win.w, 0, 1);
+                else      scrolled = clamp(1 - (float)(gui->MousePosition().y - win.y) / win.h, 0, 1);
+            }
+            if (flip) gui->UpdateBoxX(win.x          + (int)((win.w - aw) * scrolled), drawbox_ind, IndexOrDefault(hitbox, 0, -1));
+            else      gui->UpdateBoxY(win.top() - ah - (int)((win.h - ah) * scrolled), drawbox_ind, IndexOrDefault(hitbox, 0, -1));
+            dirty = false;
+        }
+        void SetDocHeight(int v) { doc_height = v; }
+        void ScrollUp  () { scrolled -= increment / doc_height; clamp(&scrolled, 0, 1); dirty=true; }
+        void ScrollDown() { scrolled += increment / doc_height; clamp(&scrolled, 0, 1); dirty=true; }
+        void DragScrollDot() { dragging = true; dirty = true; }
+    };
+};
+
 struct KeyboardGUI : public KeyboardController {
     typedef function<void(const string &text)> RunCB;
     RunCB runcb;
@@ -94,8 +227,15 @@ struct KeyboardGUI : public KeyboardController {
 };
 
 struct TextGUI : public KeyboardGUI {
-    struct Link;
     struct Lines;
+    struct Link {
+        Widget::Button widget;
+        DOM::Attr image_src;
+        DOM::HTMLImageElement image;
+        Link(GUI *G, const string &url) : widget(G, 0, 0, "", MouseController::CB(bind(&Widget::Button::Visit, &widget))),
+        image_src(0), image(0) { widget.link=url; widget.del_hitbox=true; widget.EnableHover(); }
+    };
+    typedef function<void(Link*)> LinkCB;
     struct LineData {
         BoxArray glyphs;
         String16 text, text_attr;
@@ -307,152 +447,7 @@ struct TextGUI : public KeyboardGUI {
     virtual void DrawCursor(point p);
 };
 
-struct Widget {
-    struct Interface {
-        GUI *gui;
-        int drawbox_ind=1;
-        vector<int> hitbox;
-        bool del_hitbox=0;
-        virtual ~Interface() { if (del_hitbox) DelHitBox(); }
-        Interface(GUI *g) : gui(g) {}
-
-        void AddClickBox(const Box &w, const MouseController::Callback &cb) { hitbox.push_back(gui->mouse.hit.Insert(MouseController::HitBox(MouseController::Event::Click, w, cb))); }
-        void AddHoverBox(const Box &w, const MouseController::Callback &cb) { hitbox.push_back(gui->mouse.hit.Insert(MouseController::HitBox(MouseController::Event::Hover, w, cb))); }
-        void DelHitBox() { for (vector<int>::const_iterator i = hitbox.begin(); i != hitbox.end(); ++i) gui->mouse.hit.Erase(*i); hitbox.clear(); }
-        MouseController::HitBox &GetHitBox(int i=0) const { return gui->mouse.hit[hitbox[i]]; }
-        Box GetHitBoxBox(int i=0) const { return Box::Add(GetHitBox(i).box, gui->box.TopLeft()); }
-        Drawable::Box *GetDrawBox() const { return drawbox_ind >= 0 ? VectorGet(gui->child_box.data, drawbox_ind) : 0; }
-    };
-    struct Vector : public vector<Interface*> {
-        virtual ~Vector() {}
-    };
-    struct Window : public Box, Interface {
-        virtual ~Window() {}
-        Window(GUI *Gui, Box window) : Box(window), Interface(Gui) {}
-        Window(GUI *Gui, int X, int Y, int W, int H) : Interface(Gui) { x=X; y=Y; w=W; h=H; }
-    };
-    struct Button : public Interface {
-        Box box; Drawable *drawable=0;
-        Font *font=0; string text; point textsize;
-        MouseController::Callback cb;
-        bool init=0, hover=0; int decay=0;
-        Color *outline=0; string link;
-        Button() : Interface(0) {}
-        Button(GUI *G, Drawable *D, Font *F, const string &T, const MouseController::Callback &CB)
-            : Interface(G), drawable(D), font(F), text(T), cb(CB), init(1) { if (F && T.size()) SetText(T); }
-
-        void SetText(const string &t) { text = t; Box w; font->Size(text, &w); textsize = w.Dimension(); }
-        void EnableHover() { AddHoverBox(box, MouseController::CB(bind(&Button::ToggleHover, this))); }
-        void ToggleHover() { hover = !hover; }
-        void Visit() { SystemBrowser::open(link.c_str()); }
-
-        void Layout(Flow *flow, const point &d) { box.SetDimension(d); Layout(flow); }
-        void Layout(Flow *flow) { 
-            flow->SetFGColor(&Color::white);
-            LayoutComplete(flow, flow->out->data[flow->AppendBox(box.w, box.h, drawable)].box);
-        }
-        void LayoutBox(Flow *flow, const Box &b) {
-            flow->SetFGColor(&Color::white);
-            if (drawable) flow->out->PushBack(b, flow->cur_attr, drawable, &drawbox_ind);
-            LayoutComplete(flow, b);
-        }
-        void LayoutComplete(Flow *flow, const Box &b) {
-            box = b;
-            hitbox.clear();
-            AddClickBox(box, cb);
-            if (outline) {
-                flow->SetFont(0);
-                flow->SetFGColor(outline);
-                flow->out->PushBack(box, flow->cur_attr, Singleton<BoxOutline>::Get());
-            }
-            point save_p = flow->p;
-            flow->SetFont(font);
-            flow->SetFGColor(0);
-            flow->p = box.Position() + point(Box(0, 0, box.w, box.h).centerX(textsize.x), 0);
-            flow->AppendText(text);
-            flow->p = save_p;
-            init = 0;
-        }
-    };
-    struct Scrollbar : public Interface {
-        struct Flag { enum { Attached=1, Horizontal=2, AttachedHorizontal=Attached|Horizontal }; };
-        Box win;
-        int flag=0, doc_height=200, dot_size=25;
-        float scrolled=0, increment=20;
-        Color color=Color(15, 15, 15, 55);
-        Font *menuicon2=0;
-        bool dragging=0, dirty=0;
-        virtual ~Scrollbar() {}
-        Scrollbar(GUI *Gui, Box window=Box(), int f=Flag::Attached) : Interface(Gui), win(window), flag(f),
-        menuicon2(Fonts::Get("MenuAtlas2", 0, Color::black, 0)) {
-            if (win.w && win.h) { if (f & Flag::Attached) LayoutAttached(win); else LayoutFixed(win); } 
-        }
-
-        void LayoutFixed(const Box &w) { win = w; Layout(dot_size, dot_size, flag & Flag::Horizontal); }
-        void LayoutAttached(const Box &w) {
-            win = w;
-            win.y = -win.h;
-            int aw = dot_size, ah = dot_size;
-            bool flip = flag & Flag::Horizontal;
-            if (!flip) { win.x += win.w - aw - 1; win.w = aw; }
-            else win.h = ah;
-            Layout(aw, ah, flip);
-        }
-        void Layout(int aw, int ah, bool flip) {
-            Box arrow_down = win;
-            if (flip) { arrow_down.w = aw; win.x += aw; }
-            else      { arrow_down.h = ah; win.y += ah; }
-
-            Box scroll_dot = arrow_down, arrow_up = win;
-            if (flip) { arrow_up.w = aw; win.w -= 2*aw; arrow_up.x += win.w; }
-            else      { arrow_up.h = ah; win.h -= 2*ah; arrow_up.y += win.h; }
-
-            if (gui) {
-                int attr_id = gui->child_box.attr.GetAttrId(Drawable::Attr());
-                gui->child_box.PushBack(arrow_up,   attr_id, menuicon2 ? menuicon2->FindGlyph(flip ? 64 : 66) : 0);
-                gui->child_box.PushBack(arrow_down, attr_id, menuicon2 ? menuicon2->FindGlyph(flip ? 65 : 61) : 0);
-                gui->child_box.PushBack(scroll_dot, attr_id, menuicon2 ? menuicon2->FindGlyph(            72) : 0, &drawbox_ind);
-
-                AddClickBox(scroll_dot, MouseController::CB(bind(&Scrollbar::DragScrollDot, this)));
-                AddClickBox(arrow_up,   MouseController::CB(bind(flip ? &Scrollbar::ScrollDown : &Scrollbar::ScrollUp,   this)));
-                AddClickBox(arrow_down, MouseController::CB(bind(flip ? &Scrollbar::ScrollUp   : &Scrollbar::ScrollDown, this)));
-            }
-            Update(true);
-        }
-        void Update(bool force=false) {
-            if (!app->input.MouseButton1Down()) dragging = false;
-            if (!dragging && !dirty && !force) return;
-            bool flip = flag & Flag::Horizontal;
-            int aw = dot_size, ah = dot_size;
-            if (dragging) {
-                if (flip) scrolled = clamp(    (float)(gui->MousePosition().x - win.x) / win.w, 0, 1);
-                else      scrolled = clamp(1 - (float)(gui->MousePosition().y - win.y) / win.h, 0, 1);
-            }
-            if (flip) gui->UpdateBoxX(win.x          + (int)((win.w - aw) * scrolled), drawbox_ind, IndexOrDefault(hitbox, 0, -1));
-            else      gui->UpdateBoxY(win.top() - ah - (int)((win.h - ah) * scrolled), drawbox_ind, IndexOrDefault(hitbox, 0, -1));
-            dirty = false;
-        }
-        void SetDocHeight(int v) { doc_height = v; }
-        void ScrollUp  () { scrolled -= increment / doc_height; clamp(&scrolled, 0, 1); dirty=true; }
-        void ScrollDown() { scrolled += increment / doc_height; clamp(&scrolled, 0, 1); dirty=true; }
-        void DragScrollDot() { dragging = true; dirty = true; }
-    };
-};
-
 struct TextArea : public TextGUI {
-    struct Link {
-        Widget::Button widget;
-        DOM::Attr image_src;
-        DOM::HTMLImageElement image;
-        Link(GUI *G, const string &url) : widget(G, 0, 0, "", MouseController::CB(bind(&Widget::Button::Visit, &widget))),
-        image_src(0), image(0) {
-            widget.link = url;
-            widget.del_hitbox = true;
-            widget.EnableHover();
-        }
-    };
-    typedef function<void(Link*)> LinkCB;
-
     Lines line;
     LinesFrameBuffer line_fb;
     GUI mouse_gui;
@@ -492,12 +487,16 @@ struct Editor : public TextArea {
         bool operator<(const LineOffset &l) const { return wrapped_line_number < l.wrapped_line_number; }
     };
     typedef pair<int, int> LineOffsetSegment, WrappedLineOffset;
-    WrappedLineOffset first_line, last_line;
-    int last_fb_lines=0, wrapped_lines=0;
-    float last_v_scrolled=0;
+
     shared_ptr<File> file;
     vector<LineOffset> file_line;
+    WrappedLineOffset first_line, last_line;
+    int last_fb_lines=0, wrapped_lines=0;
+    float v_scrolled=0, h_scrolled=0, last_v_scrolled=0, last_h_scrolled=0;
     Editor(Window *W, Font *F, File *I) : TextArea(W, F), file(I) { /*line_fb.wrap=1;*/ BuildLineMap(); }
+
+    void PageUp  () { v_scrolled = clamp(v_scrolled - 10.0/X_or_Y(wrapped_lines, 100), 0, 1); }
+    void PageDown() { v_scrolled = clamp(v_scrolled + 10.0/X_or_Y(wrapped_lines, 100), 0, 1); } 
 
     bool Wrap() const { return line_fb.wrap; }
     void BuildLineMap() {
@@ -505,6 +504,7 @@ struct Editor : public TextArea {
         for (const char *l = file->nextlineraw(&offset); l; l = file->nextlineraw(&offset))
             file_line.push_back(LineOffset(offset, file->nr.record_len, TextArea::font->size,
                                            ind++, TextArea::font->Width(l)));
+        wrapped_lines = file_line.size();
     }
     void UpdateWrappedLines(int cur_font_size, int box_width) {
         wrapped_lines = 0;
@@ -515,21 +515,14 @@ struct Editor : public TextArea {
     }
     void GetWrappedLineOffset(float percent, WrappedLineOffset *out) const {
         if (!Wrap()) { *out = WrappedLineOffset(percent * file_line.size(), 0); return; }
-        int wrapped_line = percent * wrapped_lines;
-        auto it = lower_bound(file_line.begin(), file_line.end(), LineOffset(0,0,0,wrapped_line));
+        int target_line = percent * wrapped_lines;
+        auto it = lower_bound(file_line.begin(), file_line.end(), LineOffset(0,0,0,target_line));
         if (it == file_line.end()) { *out = WrappedLineOffset(file_line.size(), 0); return; }
         int wrapped_line_index = it - file_line.begin();
-        *out = WrappedLineOffset(wrapped_line_index, wrapped_line - wrapped_line_index - 1);
+        *out = WrappedLineOffset(wrapped_line_index, target_line - wrapped_line_index - 1);
     }
-    int Distance(const WrappedLineOffset &o, bool reverse) {
-        int dist = 0; // for (int i=a_first_line; i<=b_first_line; i++) dist += 
-        return abs(o.first - first_line.first);
-    }
-    void UpdateLines(float v_scrolled, float h_scrolled);
-    void Draw(const Box &box, float v_scrolled, float h_scrolled) {
-        TextArea::Draw(box, true);
-        UpdateLines(v_scrolled, h_scrolled);
-    }
+    void UpdateLines();
+    void Draw(const Box &box) { TextArea::Draw(box, true); UpdateLines(); }
 };
 
 struct Terminal : public TextArea, public Drawable::AttrSource {
@@ -642,6 +635,7 @@ struct Terminal : public TextArea, public Drawable::AttrSource {
     }
     void FlushParseText();
     void Newline(bool carriage_return=false);
+    void TopNewline();
 };
 
 struct Console : public TextArea {
@@ -776,7 +770,12 @@ struct EditorDialog : public Dialog {
     }
     void Draw() {
         Dialog::Draw();
-        editor.Draw(box, v_scrollbar.scrolled, h_scrollbar.scrolled);
+        editor.active = screen->top_dialog == this;
+        v_scrollbar.scrolled = editor.v_scrolled = clamp(editor.v_scrolled + v_scrollbar.Delta(), 0, 1);
+        h_scrollbar.scrolled = editor.h_scrolled = clamp(editor.h_scrolled + h_scrollbar.Delta(), 0, 1);
+        if (Typed::EqualChanged(&v_scrollbar.last_scrolled, v_scrollbar.scrolled)) v_scrollbar.dirty = 1;
+        if (Typed::EqualChanged(&h_scrollbar.last_scrolled, h_scrollbar.scrolled)) h_scrollbar.dirty = 1;
+        editor.Draw(box);
         GUI::Draw();
         if (1)              v_scrollbar.Update();
         if (!editor.Wrap()) h_scrollbar.Update();

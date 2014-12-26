@@ -475,7 +475,7 @@ struct Window : public NativeWindow {
 
     Window();
     virtual ~Window();
-    void OpenConsole();
+    void InitConsole();
     void ClearEvents();
     void ClearGesture();
     void Reshape(int w, int h);

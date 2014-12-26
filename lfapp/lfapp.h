@@ -288,12 +288,13 @@ typedef function<void()> Callback;
 struct LogLevel { enum { Fatal=-1, Error=0, Info=3, Debug=7 }; int l; };
 extern "C" void lfapp_log(int level, const char *file, int line, const string &message);
 
-unsigned           fnv32(const void *buf, unsigned len=0, unsigned           hval=0);
-unsigned long long fnv64(const void *buf, unsigned len=0, unsigned long long hval=0);
-
 Time Now();
 void Msleep(int x);
 timeval Time2timeval(Time x);
+inline bool Equal(float a, float b, float eps=1e-6) { return fabs(a-b) < eps; }
+
+unsigned           fnv32(const void *buf, unsigned len=0, unsigned           hval=0);
+unsigned long long fnv64(const void *buf, unsigned len=0, unsigned long long hval=0);
 
 template <class X> struct Singleton { static X *Get() { static X instance; return &instance; } };
 
@@ -317,7 +318,8 @@ struct Typed {
     template <class X> static void Swap(X& a, X& b) { X swap=a; a=b; b=swap; }
     template <class X> static void Replace(X** p, X* r) { delete (*p); (*p) = r; }
     template <class X> static void AllocReplace(X** p, X* r) { if (*p && (*p)->alloc) (*p)->alloc->free(*p); *p = r; }
-    template <class X> static bool Changed(X* p, const X& r) { bool ret = *p != r; *p = r; return ret; }
+    template <class X> static bool Changed     (X* p, const X& r) { bool ret = *p != r;       *p = r; return ret; }
+    template <class X> static bool EqualChanged(X* p, const X& r) { bool ret = !Equal(*p, r); *p = r; return ret; }
     template <class X> static X Min(X a, X b) { return b < a ? b : a; }
     template <class X> static X Max(X a, X b) { return b > a ? b : a; }
     template <class X> static X Negate(X x) { return x ? -x : x; }
