@@ -90,7 +90,7 @@ struct Color {
     Color(const Color &c, double A) { *this = c; a() = A; }
     Color operator+(const Color &y) const { Color ret = *this; for (int i=0;i<4;i++) ret.x[i] += y.x[i]; return ret; }
     Color operator-(const Color &y) const { Color ret = *this; for (int i=0;i<4;i++) ret.x[i] -= y.x[i]; return ret; }
-    bool operator< (const Color &y) const { return Quadruple<float, float, float, float>(x[0], x[1], x[2], x[3]) < Quadruple<float, float, float, float>(y.x[0], y.x[1], y.x[2], y.x[3]); }
+    bool operator< (const Color &y) const { SortMacro4(x[0], y.x[0], x[1], y.x[1], x[2], y.x[2], x[3], y.x[3]); }
     bool operator==(const Color &y) const { return R()==y.R() && G()==y.G() && B()==y.B() && A()==y.A(); }
     bool operator!=(const Color &y) const { return !(*this == y); }
     string DebugString() const { return HexString(); }
@@ -256,7 +256,7 @@ struct Box {
     bool within(const point &p) const { return p.x >= x && p.x <= x+w && p.y >= y && p.y <= y+h; }
     bool operator==(const Box &c) const { return x == c.x && y == c.y && w == c.w && h == c.h; }
     bool operator!=(const Box &c) const { return !(*this == c); }
-    bool operator<(const Box &c) const { return Quadruple<int,int,int,int>(x, y, w, h) < Quadruple<int,int,int,int>(c.x, c.y, c.w, c.h); }
+    bool operator<(const Box &c) const { SortMacro4(x, c.x, y, c.y, w, c.w, h, c.h); }
     void scale(float xf, float yf) { x = round_f(x*xf); w = round_f(w*xf); y = round_f(y*yf); h = round_f(h*yf); }
     void swapaxis(int width, int height) { x += w; y += h; Typed::Swap(x,y); Typed::Swap(w,h); y = width - y; x = height - x; } 
     void AddBorder(const Border &b) { *this = AddBorder(*this, b); }

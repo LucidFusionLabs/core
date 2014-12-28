@@ -152,7 +152,6 @@ struct Widget {
             if (win.w && win.h) { if (f & Flag::Attached) LayoutAttached(win); else LayoutFixed(win); } 
         }
 
-        float Delta() { float ret=scrolled-last_scrolled; last_scrolled=scrolled; return ret; }
         void LayoutFixed(const Box &w) { win = w; Layout(dot_size, dot_size, flag & Flag::Horizontal); }
         void LayoutAttached(const Box &w) {
             win = w;
@@ -198,16 +197,21 @@ struct Widget {
             dirty = false;
         }
         void SetDocHeight(int v) { doc_height = v; }
+        void DragScrollDot() { dragging = true; dirty = true; }
         void ScrollUp  () { scrolled -= increment / doc_height; clamp(&scrolled, 0, 1); dirty=true; }
         void ScrollDown() { scrolled += increment / doc_height; clamp(&scrolled, 0, 1); dirty=true; }
-        void DragScrollDot() { dragging = true; dirty = true; }
+        float Delta() { float ret=scrolled-last_scrolled; last_scrolled=scrolled; return ret; }
+        float AddDelta(float cur_val) { 
+            scrolled = clamp(cur_val + Delta(), 0, 1);
+            if (Typed::EqualChanged(&last_scrolled, scrolled)) dirty = 1;
+            return scrolled;
+        }
     };
 };
 
 struct KeyboardGUI : public KeyboardController {
     typedef function<void(const string &text)> RunCB;
     RunCB runcb;
-    string startcmd;
     RingVector<string> lastcmd;
     int lastcmd_ind=-1;
     Bind toggle_bind;
@@ -221,9 +225,9 @@ struct KeyboardGUI : public KeyboardController {
     virtual bool Toggle() { return toggle_active.Toggle(); }
     virtual void Run(string cmd) { if (runcb) runcb(cmd); }
 
-    void AddHistory(string cmd);
-    int WriteHistory(const char *dir, const char *name);
-    int ReadHistory(const char *dir, const char *name);
+    void AddHistory  (const string &cmd);
+    int  ReadHistory (const string &dir, const string &name);
+    int  WriteHistory(const string &dir, const string &name, const string &hdr);
 };
 
 struct TextGUI : public KeyboardGUI {
@@ -359,16 +363,16 @@ struct TextGUI : public KeyboardGUI {
             if (layout) l->Layout(wrap ? w : 0);
             RingFrameBuffer::Update(l, Box(0, l->Lines() * font_height), paint_cb, vwrap);
         }
-        int PushFrontAndUpdate(Line *l, int max_lines=0, bool vwrap=true, bool reverse=false) {
+        int PushFrontAndUpdate(Line *l, int wlo=0, int wll=0, bool vwrap=true) {
             l->Layout(wrap ? w : 0);
-            int lh = (max_lines ? min(max_lines, l->Lines()) : l->Lines()) * font_height;
-            Box b(0, !reverse ? (l->Lines() * font_height - lh) : 0, 0, lh);
+            int wl = max(0, l->Lines() - wlo), lh = (wll ? min(wll, wl) : wl) * font_height;
+            Box b(0, wl * font_height - lh, 0, lh);
             return RingFrameBuffer::PushFrontAndUpdate(l, b, paint_cb, vwrap) / font_height;
         }
-        int PushBackAndUpdate(Line *l, int max_lines=0, bool vwrap=true, bool reverse=false) {
+        int PushBackAndUpdate(Line *l, int wlo=0, int wll=0, bool vwrap=true) {
             l->Layout(wrap ? w : 0);
-            int lh = (max_lines ? min(max_lines, l->Lines()) : l->Lines()) * font_height;
-            Box b(0, reverse ? (l->Lines() * font_height - lh) : 0, 0, lh);
+            int wl = max(0, l->Lines() - wlo), lh = (wll ? min(wll, wl) : wl) * font_height;
+            Box b(0, wlo * font_height, 0, lh);
             return RingFrameBuffer::PushBackAndUpdate(l, b, paint_cb, vwrap) / font_height;
         }
         void PushFrontAndUpdateOffset(Line *l, int lo, bool vwrap=true) {
@@ -483,17 +487,23 @@ struct Editor : public TextArea {
     struct LineOffset { 
         int offset, size, font_size, wrapped_line_number; float width; 
         LineOffset(int O=0, int S=0, int FS=0, int WLN=0, float W=0) :
-            offset(O), size(S), font_size(FS), wrapped_line_number(WLN), width(W) {}
+           offset(O), size(S), font_size(FS), wrapped_line_number(WLN), width(W) {}
         bool operator<(const LineOffset &l) const { return wrapped_line_number < l.wrapped_line_number; }
     };
-    typedef pair<int, int> LineOffsetSegment, WrappedLineOffset;
+    typedef pair<int, int> LineOffsetSegment;
+
+    struct WrappedLineOffset {
+        int first, second;
+        WrappedLineOffset(int F=0, int S=0) : first(F), second(S) {}
+        bool operator<(const WrappedLineOffset &x) { SortMacro2(first, x.first, second, x.second); }
+    };
 
     shared_ptr<File> file;
     vector<LineOffset> file_line;
     WrappedLineOffset first_line, last_line;
     int last_fb_lines=0, wrapped_lines=0;
     float v_scrolled=0, h_scrolled=0, last_v_scrolled=0, last_h_scrolled=0;
-    Editor(Window *W, Font *F, File *I) : TextArea(W, F), file(I) { /*line_fb.wrap=1;*/ BuildLineMap(); }
+    Editor(Window *W, Font *F, File *I) : TextArea(W, F), file(I) { line_fb.wrap=1; BuildLineMap(); }
 
     void PageUp  () { v_scrolled = clamp(v_scrolled - 10.0/X_or_Y(wrapped_lines, 100), 0, 1); }
     void PageDown() { v_scrolled = clamp(v_scrolled + 10.0/X_or_Y(wrapped_lines, 100), 0, 1); } 
@@ -518,8 +528,8 @@ struct Editor : public TextArea {
         int target_line = percent * wrapped_lines;
         auto it = lower_bound(file_line.begin(), file_line.end(), LineOffset(0,0,0,target_line));
         if (it == file_line.end()) { *out = WrappedLineOffset(file_line.size(), 0); return; }
-        int wrapped_line_index = it - file_line.begin();
-        *out = WrappedLineOffset(wrapped_line_index, target_line - wrapped_line_index - 1);
+        int pln = it == file_line.begin() ? 0 : (it-1)->wrapped_line_number;
+        *out = WrappedLineOffset(it - file_line.begin(), target_line - pln);
     }
     void UpdateLines();
     void Draw(const Box &box) { TextArea::Draw(box, true); UpdateLines(); }
@@ -639,10 +649,11 @@ struct Terminal : public TextArea, public Drawable::AttrSource {
 };
 
 struct Console : public TextArea {
+    string startcmd;
     double screenPercent=.4;
     Color color=Color(25,60,130,120);
     int animTime=333; Time animBegin=0;
-    bool animating=0, drawing=0, bottom_or_top=0, blend=1;
+    bool animating=0, drawing=0, bottom_or_top=0, blend=1, ran_startcmd=0;
     Console(Window *W, Font *F) : TextArea(W,F, Key::Backquote) { write_timestamp = 1; }
 
     virtual ~Console() {}
@@ -655,6 +666,8 @@ struct Console : public TextArea {
         return true;
     }
     virtual void Draw() {
+        if (!ran_startcmd && (ran_startcmd = 1)) if (startcmd.size()) Run(startcmd);
+
         drawing = 1;
         Time now=Now(), elapsed;
         int h = active ? (int)(screen->height*screenPercent) : 0;
@@ -673,6 +686,8 @@ struct Console : public TextArea {
         screen->gd->SetColor(Color::white);
         TextArea::Draw(Box(0, y, screen->width, h), true);
     }
+    int WriteHistory(const string &dir, const string &name)
+    { return KeyboardGUI::WriteHistory(dir, name, startcmd); }
 };
 
 struct Dialog : public GUI {
@@ -770,15 +785,14 @@ struct EditorDialog : public Dialog {
     }
     void Draw() {
         Dialog::Draw();
-        editor.active = screen->top_dialog == this;
-        v_scrollbar.scrolled = editor.v_scrolled = clamp(editor.v_scrolled + v_scrollbar.Delta(), 0, 1);
-        h_scrollbar.scrolled = editor.h_scrolled = clamp(editor.h_scrolled + h_scrollbar.Delta(), 0, 1);
-        if (Typed::EqualChanged(&v_scrollbar.last_scrolled, v_scrollbar.scrolled)) v_scrollbar.dirty = 1;
-        if (Typed::EqualChanged(&h_scrollbar.last_scrolled, h_scrollbar.scrolled)) h_scrollbar.dirty = 1;
-        editor.Draw(box);
-        GUI::Draw();
-        if (1)              v_scrollbar.Update();
-        if (!editor.Wrap()) h_scrollbar.Update();
+        bool wrap = editor.Wrap();
+        if (1)     editor.active = screen->top_dialog == this;
+        if (1)     editor.v_scrolled = v_scrollbar.AddDelta(editor.v_scrolled);
+        if (!wrap) editor.h_scrolled = h_scrollbar.AddDelta(editor.h_scrolled);
+        if (1)     editor.Draw(box);
+        if (1)     GUI::Draw();
+        if (1)     v_scrollbar.Update();
+        if (!wrap) h_scrollbar.Update();
     }
 };
 

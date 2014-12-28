@@ -106,38 +106,32 @@ void Window::ClearGesture() {
 }
 
 void Window::DrawDialogs() {
-    static bool ran_console_startcmd = 0;
-    if (!ran_console_startcmd && (ran_console_startcmd = 1))
-        if (screen->console->startcmd.size()) screen->console->Run(screen->console->startcmd);
-
-    screen->console->Draw();
-
+    if (screen->console) screen->console->Draw();
     if (FLAGS_draw_grid) {
         Color c(.7, .7, .7);
         glIntersect(screen->mouse.x, screen->mouse.y, &c);
         Fonts::Default()->Draw(StrCat("draw_grid ", screen->mouse.x, " , ", screen->mouse.y), point(0,0));
     }
-
     for (auto i = screen->dialogs.rbegin(); i != screen->dialogs.rend(); ++i) (*i)->Draw();
 }
 
-void KeyboardGUI::AddHistory(string cmd) {
+void KeyboardGUI::AddHistory(const string &cmd) {
     lastcmd.ring.PushBack(1);
     lastcmd[(lastcmd_ind = -1)] = cmd;
 }
 
-int KeyboardGUI::WriteHistory(const char *dir, const char *name) {
+int KeyboardGUI::WriteHistory(const string &dir, const string &name, const string &hdr) {
     if (!lastcmd.ring.count) return 0;
-    LocalFile history(string(dir) + MatrixFile::Filename(name, "history", "string", 0), "w");
-    MatrixFile::WriteHeader(&history, basename(history.fn.c_str(),0,0), startcmd.c_str(), lastcmd.ring.count, 1);
-    for (int i=0, ind; i<lastcmd.ring.count; i++) StringFile::WriteRow(&history, lastcmd[-1-i].c_str());
+    LocalFile history(dir + MatrixFile::Filename(name, "history", "string", 0), "w");
+    MatrixFile::WriteHeader(&history, basename(history.fn.c_str(),0,0), hdr, lastcmd.ring.count, 1);
+    for (int i=0; i<lastcmd.ring.count; i++) StringFile::WriteRow(&history, lastcmd[-1-i]);
     return 0;
 }
 
-int KeyboardGUI::ReadHistory(const char *dir, const char *name) {
-    StringFile history; int lastiter=0;
-    VersionedFileName vfn(dir, name, "history");
-    if (history.ReadVersioned(vfn, lastiter) < 0) { ERROR(name, ".", lastiter, ".name"); return -1; }
+int KeyboardGUI::ReadHistory(const string &dir, const string &name) {
+    StringFile history;
+    VersionedFileName vfn(dir.c_str(), name.c_str(), "history");
+    if (history.ReadVersioned(vfn) < 0) { ERROR("missing ", name); return -1; }
     for (int i=0, l=history.Lines(); i<l; i++) AddHistory((*history.F)[l-1-i]);
     return 0;
 }
@@ -226,7 +220,7 @@ void TextArea::Resized(int w, int h) {
     int lines = adjust_lines + skip_last_lines;
     line_fb.p = point(0, adjust_lines * font->height);
     for (int i=start_line; i<line.ring.count && lines < line_fb.lines; i++)
-        lines += line_fb.PushFrontAndUpdate(&line[-i-1], 0, false);
+        lines += line_fb.PushFrontAndUpdate(&line[-i-1], 0, 0, false);
 }
 
 void TextArea::Draw(const Box &b, bool draw_cursor) {
@@ -381,10 +375,12 @@ void Editor::UpdateLines() {
     bool resized = last_fb_lines != line_fb.lines;
     if (resized) { line.Clear(); if (Wrap()) UpdateWrappedLines(TextArea::font->size, line_fb.w); }
     else if (Equal(last_v_scrolled, v_scrolled)) return;
+    if (!file_line.size()) return;
 
     LineOffsetSegment read_lines;
-    WrappedLineOffset new_first_line, new_last_line;
+    WrappedLineOffset new_first_line, new_last_line=last_line;
     GetWrappedLineOffset(v_scrolled, &new_first_line);
+
     bool reverse = new_first_line < first_line && !resized;
     int dist = abs(new_first_line.first - first_line.first);
     if (dist < line_fb.lines && !resized) {
@@ -401,21 +397,21 @@ void Editor::UpdateLines() {
 
     Line *L = 0;
     line_fb.fb.Attach();
-    if (!resized && reverse && first_line.second) {
-        start_line = adjust_lines = 0;
-    }
-    if (!resized && !reverse && last_line.second) {
-        start_line = adjust_lines = 0;
-    }
+    int wl=0, tl=read_lines.second;
+    if (!resized &&  reverse && first_line.second) wl += line_fb.PushFrontAndUpdate(line.Front(), first_line.second, tl);
+    if (!resized && !reverse &&  last_line.second) wl += line_fb.PushBackAndUpdate (line.Back (), last_line .second, tl);
 
-    for (int i=0, wl=0, tl=read_lines.second, bo=0, l; i<tl && wl<tl; i++, bo += l+(!reverse || i)) {
-        l = file_line[read_lines.first + (reverse ? (read_lines.second-1-i) : i)].size;
+    for (int i=0, bo=0, l, il; i<tl && wl<tl; i++, bo += l+(!reverse || i)) {
+        int ind = read_lines.first + (reverse ? (read_lines.second-1-i) : i);
+        l = file_line[ind].size;
         if (reverse) (L = line.PushFront())->AssignText(buf.substr(read_len - bo - l, l));
         else         (L = line.PushBack ())->AssignText(buf.substr(bo,                l));
         if (reverse && !resized) line.PopBack (1);
         else if (      !resized) line.PopFront(1);
-        if (reverse) wl += line_fb.PushFrontAndUpdate(L);
-        else         wl += line_fb. PushBackAndUpdate(L);
+        if (reverse) il = line_fb.PushFrontAndUpdate(L, 0, tl-wl);
+        else         il = line_fb. PushBackAndUpdate(L, 0, tl-wl);
+        new_last_line = WrappedLineOffset(ind, il == L->Lines() ? 0 : il);
+        wl += il;
     }
     for (int i=0; !reverse && i<add_blank_lines; i++) { 
         (L = line.PushBack())->Clear();
@@ -423,10 +419,17 @@ void Editor::UpdateLines() {
         line_fb.PushBackAndUpdate(L);
     }
     line_fb.fb.Release();
+
+    printf("UpdateLines first_line %d,%d -> %d,%d last_line %d,%d -> %d,%d\n",
+           first_line.first, first_line.second, new_first_line.first, new_first_line.second,
+           last_line.first,  last_line.second,  new_last_line.first,  new_last_line.second);
+    printf("read_lines %d %d\n", read_lines.first, read_lines.second);
+
     first_line = new_first_line;
     last_line = new_last_line;
     last_fb_lines = line_fb.lines;
     last_v_scrolled = v_scrolled;
+    // start_line = adjust_lines = 0;
 }
 
 /* Terminal */
@@ -2088,7 +2091,7 @@ void HelperGUI::Draw() {
         glLine(i->label_center.x, i->label_center.y, i->target_center.x, i->target_center.y, &font->fg);
         screen->gd->FillColor(Color::black);
         Box::AddBorder(i->label, 4, 0).Draw();
-        font->Draw(i->description.c_str(), point(i->label.x, i->label.y));
+        font->Draw(i->description, point(i->label.x, i->label.y));
     }
 }
 
