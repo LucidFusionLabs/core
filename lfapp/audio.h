@@ -70,7 +70,7 @@ struct Audio : public Module {
     SoundAsset *playing=0, *loop=0;
     deque<float> Out;
     int outlast=0;
-    void *impl=0;
+    Module *impl=0;
     Audio() : micL(FLAGS_sample_rate*FLAGS_sample_secs), micR(FLAGS_sample_rate*FLAGS_sample_secs),
     IL(&micL), IR(&micR), Out(32768)  {}
 

@@ -33,6 +33,7 @@ chmod +x $PKGNAME.app/Contents/MacOS/$BINNAME.sh
 cp assets/icon.icns $PKGNAME.app/Contents/Resources/
 cp -r assets $PKGNAME.app/Contents/Resources/
 rm -rf $PKGNAME.app/Contents/Resources/assets/.svn
+cp ../lfapp/*.glsl $PKGNAME.app/Contents/Resources/assets
 
 cp ../imports/SDL/build/.libs/libSDL-1.3.0.dylib $PKGNAME.app/Contents/Libraries/
 cp ../imports/portaudio/lib/.libs/libportaudio.2.dylib $PKGNAME.app/Contents/Libraries/

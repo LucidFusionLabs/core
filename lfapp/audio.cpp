@@ -34,6 +34,9 @@ extern "C" {
 #ifdef _WIN32
 #define inline _inline
 #endif
+#ifdef LFL_SDLAUDIO
+#include "SDL.h"
+#endif
 #ifdef LFL_AUDIOQUEUE
 #include <AudioToolbox/AudioToolbox.h>
 #endif
@@ -161,391 +164,396 @@ int SystemAudio::GetMaxVolume() {
 }
 
 #ifdef LFL_PORTAUDIO
-int io_portaudio(const void *inputBuffer, void *outputBuffer, unsigned long samplesPerFrame,
-                 const PaStreamCallbackTimeInfo *timeInfo, PaStreamCallbackFlags statusFlags, void *opaque) {
-    Audio *s = (Audio*)opaque;
-    float *in = (float*)inputBuffer;
-    float *out = (float *)outputBuffer;
+struct PortaudioAudioModule : public Module {
+    Audio *audio;
+    void *impl=0;
+    PortaudioAudioModule(Audio *A) : audio(A) {}
 
-    double step = Seconds(1)*1000/FLAGS_sample_rate;
-    Time stamp = AudioResampler::monotonouslyIncreasingTimestamp(s->IL->ReadTimestamp(-1), Now()*1000, &step, samplesPerFrame);
+    int Init() {
+        INFO("PortaudioAudioModule::Init");
+        PaError err = Pa_Initialize();
+        if (err != paNoError) { ERROR("init_portaudio: ", Pa_GetErrorText(err)); return -1; }
 
-    RingBuf::WriteAheadHandle IL(s->IL), IR(s->IR);
-    for (unsigned i=0; i<samplesPerFrame; i++) {
-        Time timestamp = stamp + i*step;
-        IL.Write(in[i*FLAGS_chans_in+0], RingBuf::Stamp, timestamp);
-        if (FLAGS_chans_in == 1) continue;
-        IR.Write(in[i*FLAGS_chans_in+1], RingBuf::Stamp, timestamp);
-    }
+        int numDevices = Pa_GetDeviceCount();
+        if (numDevices <= 0) { ERROR("open_portaudio: devices=", numDevices); return -1; }
 
-    {
-        ScopedMutex ML(s->inlock);
-        IL.Commit();
-        IR.Commit();
-        app->samples_read += samplesPerFrame;
-    }
-
-    {
-        ScopedMutex ML(s->outlock);
-        for (unsigned i=0; i<samplesPerFrame*FLAGS_chans_out; i++) 
-            out[i] = s->Out.size() ? PopFront(s->Out) : 0;
-    }
-    return 0;
-}
-
-int open_portaudio(Audio *s) {
-    if (FLAGS_audio_input_device  == -1) FLAGS_audio_input_device  = Pa_GetDefaultInputDevice();
-    if (FLAGS_audio_output_device == -1) FLAGS_audio_output_device = Pa_GetDefaultOutputDevice();
-
-    if (FLAGS_print_audio_devices) {
-        INFO("audio_input_device=", FLAGS_audio_input_device, " audio_output_device=", FLAGS_audio_output_device);
-        PaDeviceIndex num = Pa_GetDeviceCount();
-        for (int i=0; i<num; i++) {
-            const PaDeviceInfo *d = Pa_GetDeviceInfo(i);
-            INFO("audio_device[", i, "] = ", d->name, " : ", d->maxInputChannels, "/", d->maxOutputChannels, " I/O chans @ ", d->defaultSampleRate);
+        for (int i=0; false && i<numDevices; i++) {
+            const PaDeviceInfo *di = Pa_GetDeviceInfo(i);
+            ERROR(di->name, ",", di->hostApi, ", mi=", di->maxInputChannels, ", mo=", di->maxOutputChannels, ", ", di->defaultSampleRate, " ", di->defaultHighInputLatency);
         }
+        return 0;
     }
+    int Start() {
+        if (FLAGS_audio_input_device  == -1) FLAGS_audio_input_device  = Pa_GetDefaultInputDevice();
+        if (FLAGS_audio_output_device == -1) FLAGS_audio_output_device = Pa_GetDefaultOutputDevice();
 
-    const PaDeviceInfo *ii=Pa_GetDeviceInfo(FLAGS_audio_input_device), *oi=Pa_GetDeviceInfo(FLAGS_audio_output_device);
-    if (FLAGS_sample_rate == -1) FLAGS_sample_rate = ii->defaultSampleRate;
-    if (FLAGS_chans_in == -1) FLAGS_chans_in = min(ii->maxInputChannels, 2);
-    if (FLAGS_chans_out == -1) FLAGS_chans_out = min(oi->maxOutputChannels, 2);
+        if (FLAGS_print_audio_devices) {
+            INFO("audio_input_device=", FLAGS_audio_input_device, " audio_output_device=", FLAGS_audio_output_device);
+            PaDeviceIndex num = Pa_GetDeviceCount();
+            for (int i=0; i<num; i++) {
+                const PaDeviceInfo *d = Pa_GetDeviceInfo(i);
+                INFO("audio_device[", i, "] = ", d->name, " : ", d->maxInputChannels, "/", d->maxOutputChannels, " I/O chans @ ", d->defaultSampleRate);
+            }
+        }
 
-    PaStreamParameters in  = { FLAGS_audio_input_device,  FLAGS_chans_in,  paFloat32, ii->defaultHighInputLatency, 0 };
-    PaStreamParameters out = { FLAGS_audio_output_device, FLAGS_chans_out, paFloat32, oi->defaultHighInputLatency, 0 };
+        const PaDeviceInfo *ii=Pa_GetDeviceInfo(FLAGS_audio_input_device), *oi=Pa_GetDeviceInfo(FLAGS_audio_output_device);
+        if (FLAGS_sample_rate == -1) FLAGS_sample_rate = ii->defaultSampleRate;
+        if (FLAGS_chans_in == -1) FLAGS_chans_in = min(ii->maxInputChannels, 2);
+        if (FLAGS_chans_out == -1) FLAGS_chans_out = min(oi->maxOutputChannels, 2);
 
-    PaError err = Pa_OpenStream(&s->impl, &in, FLAGS_chans_out ? &out : 0, FLAGS_sample_rate, paFramesPerBufferUnspecified, 0, io_portaudio, s);
-    if (err != paNoError) { ERROR("open_portaudio: ", Pa_GetErrorText(err)); return -1; }
+        PaStreamParameters in  = { FLAGS_audio_input_device,  FLAGS_chans_in,  paFloat32, ii->defaultHighInputLatency, 0 };
+        PaStreamParameters out = { FLAGS_audio_output_device, FLAGS_chans_out, paFloat32, oi->defaultHighInputLatency, 0 };
 
-    err = Pa_StartStream(s->impl);
-    if (err != paNoError) { ERROR("open_portaudio2: ", Pa_GetErrorText(err)); return -1; }
+        PaError err = Pa_OpenStream(&impl, &in, FLAGS_chans_out ? &out : 0, FLAGS_sample_rate,
+                                    paFramesPerBufferUnspecified, 0, &PortaudioAudioModule::IOCB, this);
+        if (err != paNoError) { ERROR("open_portaudio: ", Pa_GetErrorText(err)); return -1; }
 
-    return 0;
-}
-
-int init_portaudio(Audio *s) {
-    PaError err = Pa_Initialize();
-    if (err != paNoError) { ERROR("init_portaudio: ", Pa_GetErrorText(err)); return -1; }
-
-    int numDevices = Pa_GetDeviceCount();
-    if(numDevices<=0) { ERROR("open_portaudio: devices=", numDevices); return -1; }
-
-    for(int i=0; false && i<numDevices; i++) {
-        const PaDeviceInfo *di = Pa_GetDeviceInfo(i);
-        ERROR(di->name, ",", di->hostApi, ", mi=", di->maxInputChannels, ", mo=", di->maxOutputChannels, ", ", di->defaultSampleRate, " ", di->defaultHighInputLatency);
+        err = Pa_StartStream(impl);
+        if (err != paNoError) { ERROR("open_portaudio2: ", Pa_GetErrorText(err)); return -1; }
+        return 0;
     }
+    int Free() {
+        PaError err = Pa_StopStream(impl);
+        if (err != paNoError) { ERROR("free_portaudio: stop ", Pa_GetErrorText(err)); return 0; }
 
-    return 0;
-}
-
-int free_portaudio(Audio *s) {
-    PaError err = Pa_StopStream(s->impl);
-    if (err != paNoError) { ERROR("free_portaudio: stop ", Pa_GetErrorText(err)); return 0; }
-
-    err = Pa_Terminate();
-    if (err != paNoError) { ERROR("free_portaudio: term ", Pa_GetErrorText(err)); return 0; }
-    return 0;
-}
-
+        err = Pa_Terminate();
+        if (err != paNoError) { ERROR("free_portaudio: term ", Pa_GetErrorText(err)); return 0; }
+        return 0;
+    }
+    int IO(const void *input, void *output, unsigned long samplesPerFrame,
+           const PaStreamCallbackTimeInfo *timeInfo, PaStreamCallbackFlags flags) {
+        float *in = (float*)input, *out = (float *)output;
+        double step = Seconds(1)*1000/FLAGS_sample_rate;
+        Time stamp = AudioResampler::monotonouslyIncreasingTimestamp(audio->IL->ReadTimestamp(-1), Now()*1000, &step, samplesPerFrame);
+        RingBuf::WriteAheadHandle IL(audio->IL), IR(audio->IR);
+        for (unsigned i=0; i<samplesPerFrame; i++) {
+            Time timestamp = stamp + i*step;
+            IL.Write(in[i*FLAGS_chans_in+0], RingBuf::Stamp, timestamp);
+            if (FLAGS_chans_in == 1) continue;
+            IR.Write(in[i*FLAGS_chans_in+1], RingBuf::Stamp, timestamp);
+        }
+        {
+            ScopedMutex ML(audio->inlock);
+            IL.Commit();
+            IR.Commit();
+            app->samples_read += samplesPerFrame;
+        }
+        {
+            ScopedMutex ML(audio->outlock);
+            for (unsigned i=0; i<samplesPerFrame*FLAGS_chans_out; i++) 
+                out[i] = audio->Out.size() ? PopFront(audio->Out) : 0;
+        }
+        return 0;
+    }
+    static int IOCB(const void *input, void *output, unsigned long samplesPerFrame,
+                    const PaStreamCallbackTimeInfo *timeInfo, PaStreamCallbackFlags flags, void *opaque) {
+        return ((PortaudioAudioModule*)opaque)->IO(input, output, samplesPerFrame, timeInfo, flags);
+    }
+};
 #endif /* LFL_PORTAUDIO */
 
 #ifdef LFL_SDLAUDIO
-void io_sdlaudio(void *udata, Uint8 *stream, int len) {
-    Audio *s = (Audio*)udata;
-    short *out = (short*)stream;
-    int frames = len/sizeof(short)/FLAGS_chans_out;
-    
-    ScopedMutex ML(s->outlock);
-    for (int i=0; i<frames*FLAGS_chans_out; i++)
-        out[i] = (s->Out.size() ? s->Out.pop_front() : 0) * 32768.0;
-}
+struct SDLAudioModule : public Module {
+    Audio *audio;
+    SDLAudioModule(Audio *A) : audio(A) {}
 
-int init_sdlaudio(Audio *s) {
-    if (print_audio_devices) {
-        INFO("audio_input_device=", FLAGS_audio_input_device, " audio_output_device=", FLAGS_audio_output_device);
+    int Init() {
+        INFO("SDLAudioModule::Init");
+        if (FLAGS_print_audio_devices) {
+            INFO("audio_input_device=", FLAGS_audio_input_device, " audio_output_device=", FLAGS_audio_output_device);
 
-        int count = SDL_GetNumAudioDevices(true);
-        for (int i=0; i < count; i++) INFO("audio_input_device[", i, "] = ", SDL_GetAudioDeviceName(i, true));
+            int count = SDL_GetNumAudioDevices(true);
+            for (int i=0; i < count; i++) INFO("audio_input_device[", i, "] = ", SDL_GetAudioDeviceName(i, true));
 
-        count = SDL_GetNumAudioDevices(false);
-        for (int i=0; i < count; i++) INFO("audio_output_device[", i, "] = ", SDL_GetAudioDeviceName(i, false));
+            count = SDL_GetNumAudioDevices(false);
+            for (int i=0; i < count; i++) INFO("audio_output_device[", i, "] = ", SDL_GetAudioDeviceName(i, false));
+        }
+
+        SDL_AudioSpec desired, obtained;
+        desired.freq = FLAGS_sample_rate;
+        desired.format = AUDIO_S16;
+        desired.channels = FLAGS_chans_out > 0 ? FLAGS_chans_out : 2;
+        desired.samples = 1024;
+        desired.callback = &SDLAudioModule::IOCB;
+        desired.userdata = this;
+
+        if (SDL_OpenAudio(&desired, &obtained) < 0) { ERROR("SDL_OpenAudio:", SDL_GetError()); return -1; }
+        if (obtained.freq != FLAGS_sample_rate) { ERROR("SDL_OpenAudio: sample_rate ", obtained.freq, " != ", FLAGS_sample_rate); return -1; }
+
+        FLAGS_chans_out = obtained.channels;
+        SDL_PauseAudio(0);
+        return 0;
     }
+    int Free() {
+        SDL_PauseAudio(0);
+        return 0;
+    }
+    void IO(Uint8 *stream, int len) {
+        short *out = (short*)stream;
+        int frames = len/sizeof(short)/FLAGS_chans_out;
 
-    SDL_AudioSpec desired, obtained;
-    desired.freq = FLAGS_sample_rate;
-    desired.format = AUDIO_S16;
-    desired.channels = FLAGS_chans_out > 0 ? FLAGS_chans_out : 2;
-    desired.samples = 1024;
-    desired.callback = io_sdlaudio;
-    desired.userdata = s;
-
-    if (SDL_OpenAudio(&desired, &obtained) < 0) { ERROR("SDL_OpenAudio:", SDL_GetError()); return -1; }
-    if (obtained.freq != FLAGS_sample_rate) { ERROR("SDL_OpenAudio: sample_rate ", obtained.freq, " != ", FLAGS_sample_rate); return -1; }
-
-    FLAGS_chans_out = obtained.channels;
-    SDL_PauseAudio(0);
-    return 0;
-}
-
-int free_sdlaudio(Audio *s) {
-    SDL_PauseAudio(0);
-    return 0;
-}
+        ScopedMutex ML(audio->outlock);
+        for (int i=0; i<frames*FLAGS_chans_out; i++)
+            out[i] = (audio->Out.size() ? PopFront(audio->Out) : 0) * 32768.0;
+    }
+    static void IOCB(void *udata, Uint8 *stream, int len) { ((SDLAudioModule*)udata)->IO(stream, len); }
+};
 #endif /* LFL_SDLAUDIO */
 
 #ifdef LFL_AUDIOQUEUE
-AudioQueueRef inputAudioQueue=0, outputAudioQueue=0;
-static const int AQbuffers=3, AQframesPerCB=512;
+struct AudioQueueAudioModule : public Module {
+    static const int AQbuffers=3, AQframesPerCB=512;
+    AudioQueueRef inputAudioQueue=0, outputAudioQueue=0;
+    Audio *audio;
+    AudioQueueAudioModule(Audio *A) : audio(A) {}
 
-void io_audioqueue_in(void *opaque, AudioQueueRef inAQ, AudioQueueBufferRef inB, const AudioTimeStamp *inStartTime, UInt32 count, const AudioStreamPacketDescription *) {
-    short *in = (short *)inB->mAudioData;
-    Audio *s = (Audio*)opaque;
+    int Init() {
+        INFO("AudioQueueAudioModule::Init");
+        if (inputAudioQueue || outputAudioQueue) return -1;
+        if (FLAGS_chans_in == -1) FLAGS_chans_in = 2;
+        if (FLAGS_chans_out == -1) FLAGS_chans_out = 2;
 
-    double step = Seconds(1)*1000/FLAGS_sample_rate;
-    Time stamp = AudioResampler::monotonouslyIncreasingTimestamp(s->IL->readtimestamp(-1), Now()*1000, &step, count);
+        AudioStreamBasicDescription desc_in;
+        memset(&desc_in, 0, sizeof(desc_in));
+        desc_in.mSampleRate = FLAGS_sample_rate;
+        desc_in.mFormatID = kAudioFormatLinearPCM;
+        desc_in.mFormatFlags = kAudioFormatFlagIsSignedInteger | kAudioFormatFlagIsPacked;
+        desc_in.mChannelsPerFrame = FLAGS_chans_in;
+        desc_in.mBytesPerFrame = desc_in.mChannelsPerFrame * sizeof(short);
+        desc_in.mFramesPerPacket = 1;
+        desc_in.mBytesPerPacket = desc_in.mFramesPerPacket * desc_in.mBytesPerFrame;
+        desc_in.mBitsPerChannel = 8 * sizeof(short);
 
-    RingBuf::WriteAheadHandle IL(s->IL), IR(s->IR);
-    for (int i=0; i<count; i++) {
-        Time timestamp = stamp + i*step;
-        IL.write(in[i*FLAGS_chans_in+0]/32768.0, RingBuf::Stamp, timestamp);
+        int err = AudioQueueNewInput(&desc_in, AudioQueueAudioModule::IOInCB, this, 0, kCFRunLoopCommonModes, 0, &inputAudioQueue);
+        if (err == kAudioFormatUnsupportedDataFormatError) { ERROR("AudioQueueNewInput: format unsupported sr=", desc_in.mSampleRate); return -1; }
+        if (err || !inputAudioQueue) { ERROR("AudioQueueNewInput: error ", err); return -1; }
 
-        if (FLAGS_chans_in == 1) continue;
-        IR.write(in[i*FLAGS_chans_in+1]/32768.0, RingBuf::Stamp, timestamp);
+        AudioStreamBasicDescription desc_out = desc_in;
+        desc_out.mChannelsPerFrame = FLAGS_chans_out;
+        desc_out.mBytesPerFrame = desc_out.mChannelsPerFrame * sizeof(short);
+        desc_out.mBytesPerPacket = desc_out.mFramesPerPacket * desc_out.mBytesPerFrame;
+
+        err = AudioQueueNewOutput(&desc_out, &AudioQueueAudioModule::IOOutCB, this, 0, kCFRunLoopCommonModes, 0, &outputAudioQueue);
+        if (err == kAudioFormatUnsupportedDataFormatError) { ERROR("AudioQueueNewOutput: format unsupported sr=", desc_out.mSampleRate); return -1; }
+        if (err || !outputAudioQueue) { ERROR("AudioQueueNewOutput: error ", err); return -1; }
+
+        for (int i=0; i<AQbuffers; i++) {
+            AudioQueueBufferRef buf_in, buf_out;
+            if ((err = AudioQueueAllocateBuffer(inputAudioQueue, AQframesPerCB*desc_in.mBytesPerFrame, &buf_in))) { ERROR("AudioQueueAllocateBuffer: error ", err); return -1; }
+            if ((err = AudioQueueEnqueueBuffer(inputAudioQueue, buf_in, 0, 0))) { ERROR("AudioQueueEnqueueBuffer: error ", err); return -1; }
+
+            if ((err = AudioQueueAllocateBuffer(outputAudioQueue, AQframesPerCB*desc_out.mBytesPerFrame, &buf_out))) { ERROR("AudioQueueAllocateBuffer: error ", err); return -1; }
+            buf_out->mAudioDataByteSize = AQframesPerCB * FLAGS_chans_out * sizeof(short);
+            memset(buf_out->mAudioData, 0, buf_out->mAudioDataByteSize);
+            if ((err = AudioQueueEnqueueBuffer(outputAudioQueue, buf_out, 0, 0))) { ERROR("AudioQueueEnqueueBuffer: error ", err); return -1; }
+        }
+
+        if ((err = AudioQueueStart(inputAudioQueue, 0))) { ERROR("AudioQueueStart: error ", err); return -1; }
+        if ((err = AudioQueueStart(outputAudioQueue, 0))) { ERROR("AudioQueueStart: error ", err); return -1; }
+        return 0;
     }
-    
-    { 
-        ScopedMutex ML(s->inlock);
-        IL.commit();
-        IR.commit();
-        samples_read += count;
+    int Free() {
+        if (inputAudioQueue) {
+            AudioQueueStop(inputAudioQueue, true);
+            AudioQueueDispose(inputAudioQueue, true);
+        }
+        if (outputAudioQueue) {
+            AudioQueueStop(outputAudioQueue, true);
+            AudioQueueDispose(outputAudioQueue, true);
+        }
+        return 0;
     }
+    void IOIn(AudioQueueRef inAQ, AudioQueueBufferRef inB, const AudioTimeStamp *inStartTime, UInt32 count, const AudioStreamPacketDescription *) {
+        short *in = (short *)inB->mAudioData;
+        double step = Seconds(1)*1000/FLAGS_sample_rate;
+        Time stamp = AudioResampler::monotonouslyIncreasingTimestamp(audio->IL->ReadTimestamp(-1), Now()*1000, &step, count);
+        RingBuf::WriteAheadHandle IL(audio->IL), IR(audio->IR);
+        for (int i=0; i<count; i++) {
+            Time timestamp = stamp + i*step;
+            IL.Write(in[i*FLAGS_chans_in+0]/32768.0, RingBuf::Stamp, timestamp);
 
-    AudioQueueEnqueueBuffer(inAQ, inB, 0, 0);
-}
-
-void io_audioqueue_out(void *opaque, AudioQueueRef outAQ, AudioQueueBufferRef outB) {
-    Audio *s = (Audio*)opaque;
-    short *out = (short *)outB->mAudioData;
-    outB->mAudioDataByteSize = AQframesPerCB * FLAGS_chans_out * sizeof(short);
-
-    ScopedMutex ML(s->outlock);
-    for (int i=0, l=AQframesPerCB*FLAGS_chans_out; i<l; i++)
-        out[i] = (s->Out.size() ? s->Out.pop_front() : 0) * 32768.0;
-
-    AudioQueueEnqueueBuffer(outAQ, outB, 0, 0);
-}
-
-int init_audioqueue(Audio *s) {
-    if (inputAudioQueue || outputAudioQueue) return -1;
-    if (FLAGS_chans_in == -1) FLAGS_chans_in = 2;
-    if (FLAGS_chans_out == -1) FLAGS_chans_out = 2;
-
-    AudioStreamBasicDescription desc_in;
-    memset(&desc_in, 0, sizeof(desc_in));
-    desc_in.mSampleRate = FLAGS_sample_rate;
-    desc_in.mFormatID = kAudioFormatLinearPCM;
-    desc_in.mFormatFlags = kAudioFormatFlagIsSignedInteger | kAudioFormatFlagIsPacked;
-    desc_in.mChannelsPerFrame = FLAGS_chans_in;
-    desc_in.mBytesPerFrame = desc_in.mChannelsPerFrame * sizeof(short);
-    desc_in.mFramesPerPacket = 1;
-    desc_in.mBytesPerPacket = desc_in.mFramesPerPacket * desc_in.mBytesPerFrame;
-    desc_in.mBitsPerChannel = 8 * sizeof(short);
-
-    int err = AudioQueueNewInput(&desc_in, io_audioqueue_in, s, 0, kCFRunLoopCommonModes, 0, &inputAudioQueue);
-    if (err == kAudioFormatUnsupportedDataFormatError) { ERROR("AudioQueueNewInput: format unsupported sr=", desc_in.mSampleRate); return -1; }
-    if (err || !inputAudioQueue) { ERROR("AudioQueueNewInput: error ", err); return -1; }
-
-    AudioStreamBasicDescription desc_out = desc_in;
-    desc_out.mChannelsPerFrame = FLAGS_chans_out;
-    desc_out.mBytesPerFrame = desc_out.mChannelsPerFrame * sizeof(short);
-    desc_out.mBytesPerPacket = desc_out.mFramesPerPacket * desc_out.mBytesPerFrame;
-   
-    err = AudioQueueNewOutput(&desc_out, io_audioqueue_out, s, 0, kCFRunLoopCommonModes, 0, &outputAudioQueue);
-    if (err == kAudioFormatUnsupportedDataFormatError) { ERROR("AudioQueueNewOutput: format unsupported sr=", desc_out.mSampleRate); return -1; }
-    if (err || !outputAudioQueue) { ERROR("AudioQueueNewOutput: error ", err); return -1; }
-
-    for (int i=0; i<AQbuffers; i++) {
-        AudioQueueBufferRef buf_in, buf_out;
-        if ((err = AudioQueueAllocateBuffer(inputAudioQueue, AQframesPerCB*desc_in.mBytesPerFrame, &buf_in))) { ERROR("AudioQueueAllocateBuffer: error ", err); return -1; }
-        if ((err = AudioQueueEnqueueBuffer(inputAudioQueue, buf_in, 0, 0))) { ERROR("AudioQueueEnqueueBuffer: error ", err); return -1; }
-
-        if ((err = AudioQueueAllocateBuffer(outputAudioQueue, AQframesPerCB*desc_out.mBytesPerFrame, &buf_out))) { ERROR("AudioQueueAllocateBuffer: error ", err); return -1; }
-        buf_out->mAudioDataByteSize = AQframesPerCB * FLAGS_chans_out * sizeof(short);
-        memset(buf_out->mAudioData, 0, buf_out->mAudioDataByteSize);
-        if ((err = AudioQueueEnqueueBuffer(outputAudioQueue, buf_out, 0, 0))) { ERROR("AudioQueueEnqueueBuffer: error ", err); return -1; }
+            if (FLAGS_chans_in == 1) continue;
+            IR.Write(in[i*FLAGS_chans_in+1]/32768.0, RingBuf::Stamp, timestamp);
+        }
+        { 
+            ScopedMutex ML(audio->inlock);
+            IL.Commit();
+            IR.Commit();
+            app->samples_read += count;
+        }
+        AudioQueueEnqueueBuffer(inAQ, inB, 0, 0);
     }
+    void IOOut(AudioQueueRef outAQ, AudioQueueBufferRef outB) {
+        short *out = (short *)outB->mAudioData;
+        outB->mAudioDataByteSize = AQframesPerCB * FLAGS_chans_out * sizeof(short);
 
-    if ((err = AudioQueueStart(inputAudioQueue, 0))) { ERROR("AudioQueueStart: error ", err); return -1; }
-    if ((err = AudioQueueStart(outputAudioQueue, 0))) { ERROR("AudioQueueStart: error ", err); return -1; }
-    return 0;
-}
+        ScopedMutex ML(audio->outlock);
+        for (int i=0, l=AQframesPerCB*FLAGS_chans_out; i<l; i++)
+            out[i] = (audio->Out.size() ? PopFront(audio->Out) : 0) * 32768.0;
 
-int free_audioqueue(Audio *s) {
-    if (inputAudioQueue) {
-        AudioQueueStop(inputAudioQueue, true);
-        AudioQueueDispose(inputAudioQueue, true);
+        AudioQueueEnqueueBuffer(outAQ, outB, 0, 0);
     }
-    if (outputAudioQueue) {
-        AudioQueueStop(outputAudioQueue, true);
-        AudioQueueDispose(outputAudioQueue, true);
+    static void IOInCB(void *opaque, AudioQueueRef inAQ, AudioQueueBufferRef inB,
+                       const AudioTimeStamp *inStartTime, UInt32 count,
+                       const AudioStreamPacketDescription *pd) {
+        return ((AudioQueueAudioModule*)opaque)->IOIn(inAQ, inB, inStartTime, count, pd);
     }
-    return 0;
-}
+    static void IOOutCB(void *opaque, AudioQueueRef outAQ, AudioQueueBufferRef outB) {
+        return ((AudioQueueAudioModule*)opaque)->IOOut(outAQ, outB);
+    }
+};
 #endif /* LFL_AUDIOQUEUE */
 
 #ifdef LFL_AUDIOUNIT
-AudioComponentInstance inst_audiounit = 0;
-static const int au_output_element=0, au_input_element=1;
+struct AudioUnitAudioModule : public Module {
+    static const int au_output_element=0, au_input_element=1;
+    AudioComponentInstance inst_audiounit = 0;
+    Audio *audio;
+    AudioUnitAudioModule(Audio *A) : audio(A) {}
 
-OSStatus io_audiounit_in(void *inRefCon, AudioUnitRenderActionFlags *ioActionFlags, const AudioTimeStamp *inTimeStamp, UInt32 inBusNumber, UInt32 inNumberFrames, AudioBufferList *ioData) {
-    static const int insize=2*16384;
-    static short in[insize];
-    Audio *s = &app->audio;
+    int Init() {
+        INFO("AudioUnitAudioModule::Init");
+        if (FLAGS_chans_in == -1) FLAGS_chans_in = 2;
+        if (FLAGS_chans_out == -1) FLAGS_chans_out = 2;
 
-    AudioBufferList list;
-    list.mNumberBuffers = 1;
-    list.mBuffers[0].mData = in;
-    list.mBuffers[0].mNumberChannels = FLAGS_chans_in;
-    list.mBuffers[0].mDataByteSize = sizeof(short) * inNumberFrames * FLAGS_chans_in;
-    if (list.mBuffers[0].mDataByteSize > insize) FATAL("overflow ", list.mBuffers[0].mDataByteSize, " > ", insize);
-    ioData = &list;
+        AudioComponentDescription compdesc;
+        compdesc.componentType = kAudioUnitType_Output;
+        compdesc.componentSubType = kAudioUnitSubType_RemoteIO;
+        compdesc.componentManufacturer = kAudioUnitManufacturer_Apple;
+        compdesc.componentFlags = 0;
+        compdesc.componentFlagsMask = 0;
 
-    AudioUnitRender(inst_audiounit, ioActionFlags, inTimeStamp, au_input_element, inNumberFrames, ioData);
+        AudioComponent comp = AudioComponentFindNext(0, &compdesc);
+        AudioComponentInstanceNew(comp, &inst_audiounit);
 
-    double step = Seconds(1)*1000/FLAGS_sample_rate;
-    Time stamp = AudioResampler::monotonouslyIncreasingTimestamp(s->IL->readtimestamp(-1), Now()*1000, &step, inNumberFrames);
+        UInt32 enableIO = 1; int err;
+        if ((err = AudioUnitSetProperty(inst_audiounit, kAudioOutputUnitProperty_EnableIO, kAudioUnitScope_Input,  au_input_element,  &enableIO, sizeof(enableIO)))) { ERROR("AudioUnitSetProperty: ", err); return -1; }
+        if ((err = AudioUnitSetProperty(inst_audiounit, kAudioOutputUnitProperty_EnableIO, kAudioUnitScope_Output, au_output_element, &enableIO, sizeof(enableIO)))) { ERROR("AudioUnitSetProperty: ", err); return -1; }
 
-    RingBuf::WriteAheadHandle IL(s->IL), IR(s->IR);
-    for (int i=0; i<inNumberFrames; i++) {
-        Time timestamp = stamp + i*step;
-        IL.write(in[i*FLAGS_chans_in+0]/32768.0, RingBuf::Stamp, timestamp);
+        AudioStreamBasicDescription desc;
+        memset(&desc, 0, sizeof(desc));
+        desc.mSampleRate = FLAGS_sample_rate;
+        desc.mFormatID = kAudioFormatLinearPCM;
+        desc.mFormatFlags = kAudioFormatFlagIsSignedInteger | kAudioFormatFlagIsPacked;
+        desc.mChannelsPerFrame = FLAGS_chans_in;
+        desc.mBytesPerFrame = desc.mChannelsPerFrame * sizeof(short);
+        desc.mFramesPerPacket = 1;
+        desc.mBytesPerPacket = desc.mFramesPerPacket * desc.mBytesPerFrame;
+        desc.mBitsPerChannel = 8 * sizeof(short);
 
-        if (FLAGS_chans_in == 1) continue;
-        IR.write(in[i*FLAGS_chans_in+1]/32768.0, RingBuf::Stamp, timestamp);
+        if ((err = AudioUnitSetProperty(inst_audiounit, kAudioUnitProperty_StreamFormat, kAudioUnitScope_Input,  au_output_element, &desc, sizeof(AudioStreamBasicDescription)))) { ERROR("AudioUnitSetProperty: ", err); return -1; }
+        if ((err = AudioUnitSetProperty(inst_audiounit, kAudioUnitProperty_StreamFormat, kAudioUnitScope_Output, au_input_element,  &desc, sizeof(AudioStreamBasicDescription)))) { ERROR("AudioUnitSetProperty: ", err); return -1; }
+
+        AURenderCallbackStruct cbin, cbout;
+        cbin.inputProc = &AudioUnitAudioModule::IOInCB;
+        cbin.inputProcRefCon = inst_audiounit;
+        cbout.inputProc = &AudioUnitAudioModule::IOOutCB;
+        cbout.inputProcRefCon = inst_audiounit;
+
+        if ((err = AudioUnitSetProperty(inst_audiounit, kAudioOutputUnitProperty_SetInputCallback, kAudioUnitScope_Global, au_input_element,  &cbin,  sizeof( cbin)))) { ERROR("AudioUnitSetProperty: ", err); return -1; }
+        if ((err = AudioUnitSetProperty(inst_audiounit, kAudioUnitProperty_SetRenderCallback,      kAudioUnitScope_Global,  au_output_element, &cbout, sizeof(cbout)))) { ERROR("AudioUnitSetProperty: ", err); return -1; }
+
+        // UInt32 shouldAllocateBuffer = 0;
+        // if ((err = AudioUnitSetProperty(inst_audiounit, kAudioUnitProperty_ShouldAllocateBuffer, kAudioUnitScope_Output, au_input_element,   &shouldAllocateBuffer, sizeof(shouldAllocateBuffer)))) { ERROR("AudioUnitSetProperty: ", err); return -1; };
+
+        char errBuf[sizeof(int)+1]; errBuf[sizeof(errBuf)-1] = 0;
+        if (err = AudioSessionInitialize(NULL, NULL, NULL, NULL)) { memcpy(errBuf, &err, sizeof(int)); INFO("AudioSessionInitialize - ", errBuf); }
+
+        UInt32 sessionCategory = kAudioSessionCategory_PlayAndRecord;    
+        if (err = AudioSessionSetProperty (kAudioSessionProperty_AudioCategory, sizeof (sessionCategory), &sessionCategory)) {  memcpy(errBuf, &err, sizeof(int)); INFO("AudioSessionSetProperty - kAudioSessionProperty_AudioCategory - ", errBuf); }
+
+        UInt32 newRoute = kAudioSessionOverrideAudioRoute_Speaker;
+        if (err = AudioSessionSetProperty(kAudioSessionProperty_OverrideAudioRoute, sizeof(newRoute), &newRoute)) { memcpy(errBuf, &err, sizeof(int)); INFO("AudioSessionSetProperty - kAudioSessionProperty_OverrideAudioRoute - Set speaker on ", errBuf); }
+
+        if ((err = AudioUnitInitialize(inst_audiounit))) { ERROR("AudioUnitInitialize: ", err); return -1; }
+        return 0;
     }
-    
-    { 
-        ScopedMutex ML(s->inlock);
-        IL.commit();
-        IR.commit();
-        samples_read += inNumberFrames;
+    int Start() {
+        int err;
+        if ((err = AudioOutputUnitStart(inst_audiounit))) { ERROR("AudioOutputUnitState: ", err); return -1; }
+        return 0;
     }
-    return 0;
-}
-
-OSStatus io_audiounit_out(void *inRefCon, AudioUnitRenderActionFlags *ioActionFlags, const AudioTimeStamp *inTimeStamp, UInt32 inBusNumber, UInt32 inNumberFrames, AudioBufferList *ioData) {
-    if (!ioData || ioData->mNumberBuffers != 1) FATAL("unexpected parameters ", ioData, " ", ioData?ioData->mNumberBuffers:-1);
-    ioData->mBuffers[0].mDataByteSize = inNumberFrames * FLAGS_chans_out * sizeof(short);
-
-    short *out = (short *)ioData->mBuffers[0].mData;
-    Audio *s = &app->audio;
-
-    {
-        ScopedMutex ML(s->outlock);
-        for (int i=0, l=inNumberFrames*FLAGS_chans_out; i<l; i++)
-            out[i] = (s->Out.size() ? s->Out.pop_front() : 0) * 32768.0;
+    int Free() {
+        AudioUnitUninitialize(inst_audiounit);
+        return 0;
     }
-    return 0;
-}
+    OSStatus IOIn(void *inRefCon, AudioUnitRenderActionFlags *ioActionFlags, const AudioTimeStamp *inTimeStamp, UInt32 inBusNumber, UInt32 inNumberFrames, AudioBufferList *ioData) {
+        static const int insize=2*16384;
+        static short in[insize];
 
-int init_audiounit(Audio *s) {
-    if (FLAGS_chans_in == -1) FLAGS_chans_in = 2;
-    if (FLAGS_chans_out == -1) FLAGS_chans_out = 2;
+        AudioBufferList list;
+        list.mNumberBuffers = 1;
+        list.mBuffers[0].mData = in;
+        list.mBuffers[0].mNumberChannels = FLAGS_chans_in;
+        list.mBuffers[0].mDataByteSize = sizeof(short) * inNumberFrames * FLAGS_chans_in;
+        if (list.mBuffers[0].mDataByteSize > insize) FATAL("overflow ", list.mBuffers[0].mDataByteSize, " > ", insize);
+        ioData = &list;
+        AudioUnitRender(inst_audiounit, ioActionFlags, inTimeStamp, au_input_element, inNumberFrames, ioData);
 
-    AudioComponentDescription compdesc;
-    compdesc.componentType = kAudioUnitType_Output;
-    compdesc.componentSubType = kAudioUnitSubType_RemoteIO;
-    compdesc.componentManufacturer = kAudioUnitManufacturer_Apple;
-    compdesc.componentFlags = 0;
-    compdesc.componentFlagsMask = 0;
+        double step = Seconds(1)*1000/FLAGS_sample_rate;
+        Time stamp = AudioResampler::monotonouslyIncreasingTimestamp(audio->IL->ReadTimestamp(-1), Now()*1000, &step, inNumberFrames);
+        RingBuf::WriteAheadHandle IL(audio->IL), IR(audio->IR);
+        for (int i=0; i<inNumberFrames; i++) {
+            Time timestamp = stamp + i*step;
+            IL.Write(in[i*FLAGS_chans_in+0]/32768.0, RingBuf::Stamp, timestamp);
 
-    AudioComponent comp = AudioComponentFindNext(0, &compdesc);
-    AudioComponentInstanceNew(comp, &inst_audiounit);
-
-    UInt32 enableIO = 1; int err;
-    if ((err = AudioUnitSetProperty(inst_audiounit, kAudioOutputUnitProperty_EnableIO, kAudioUnitScope_Input,  au_input_element,  &enableIO, sizeof(enableIO)))) { ERROR("AudioUnitSetProperty: ", err); return -1; }
-    if ((err = AudioUnitSetProperty(inst_audiounit, kAudioOutputUnitProperty_EnableIO, kAudioUnitScope_Output, au_output_element, &enableIO, sizeof(enableIO)))) { ERROR("AudioUnitSetProperty: ", err); return -1; }
-
-    AudioStreamBasicDescription desc;
-    memset(&desc, 0, sizeof(desc));
-    desc.mSampleRate = FLAGS_sample_rate;
-    desc.mFormatID = kAudioFormatLinearPCM;
-    desc.mFormatFlags = kAudioFormatFlagIsSignedInteger | kAudioFormatFlagIsPacked;
-    desc.mChannelsPerFrame = FLAGS_chans_in;
-    desc.mBytesPerFrame = desc.mChannelsPerFrame * sizeof(short);
-    desc.mFramesPerPacket = 1;
-    desc.mBytesPerPacket = desc.mFramesPerPacket * desc.mBytesPerFrame;
-    desc.mBitsPerChannel = 8 * sizeof(short);
-
-    if ((err = AudioUnitSetProperty(inst_audiounit, kAudioUnitProperty_StreamFormat, kAudioUnitScope_Input,  au_output_element, &desc, sizeof(AudioStreamBasicDescription)))) { ERROR("AudioUnitSetProperty: ", err); return -1; }
-    if ((err = AudioUnitSetProperty(inst_audiounit, kAudioUnitProperty_StreamFormat, kAudioUnitScope_Output, au_input_element,  &desc, sizeof(AudioStreamBasicDescription)))) { ERROR("AudioUnitSetProperty: ", err); return -1; }
-
-    AURenderCallbackStruct cbin, cbout;
-    cbin.inputProc = io_audiounit_in;
-    cbin.inputProcRefCon = inst_audiounit;
-    cbout.inputProc = io_audiounit_out;
-    cbout.inputProcRefCon = inst_audiounit;
-
-    if ((err = AudioUnitSetProperty(inst_audiounit, kAudioOutputUnitProperty_SetInputCallback, kAudioUnitScope_Global, au_input_element,  &cbin,  sizeof( cbin)))) { ERROR("AudioUnitSetProperty: ", err); return -1; }
-    if ((err = AudioUnitSetProperty(inst_audiounit, kAudioUnitProperty_SetRenderCallback,      kAudioUnitScope_Global,  au_output_element, &cbout, sizeof(cbout)))) { ERROR("AudioUnitSetProperty: ", err); return -1; }
-
-#if 0
-    UInt32 shouldAllocateBuffer = 0;
-    if ((err = AudioUnitSetProperty(inst_audiounit, kAudioUnitProperty_ShouldAllocateBuffer, kAudioUnitScope_Output, au_input_element,   &shouldAllocateBuffer, sizeof(shouldAllocateBuffer)))) { ERROR("AudioUnitSetProperty: ", err); return -1; };
-#endif
-
-	char errBuf[sizeof(int)+1]; errBuf[sizeof(errBuf)-1] = 0;
-	if (err = AudioSessionInitialize(NULL, NULL, NULL, NULL)) { memcpy(errBuf, &err, sizeof(int)); INFO("AudioSessionInitialize - ", errBuf); }
-
-	UInt32 sessionCategory = kAudioSessionCategory_PlayAndRecord;    
-	if (err = AudioSessionSetProperty (kAudioSessionProperty_AudioCategory, sizeof (sessionCategory), &sessionCategory)) {  memcpy(errBuf, &err, sizeof(int)); INFO("AudioSessionSetProperty - kAudioSessionProperty_AudioCategory - ", errBuf); }
-
-	UInt32 newRoute = kAudioSessionOverrideAudioRoute_Speaker;
-	if (err = AudioSessionSetProperty(kAudioSessionProperty_OverrideAudioRoute, sizeof(newRoute), &newRoute)) { memcpy(errBuf, &err, sizeof(int)); INFO("AudioSessionSetProperty - kAudioSessionProperty_OverrideAudioRoute - Set speaker on ", errBuf); }
-
-    if ((err = AudioUnitInitialize(inst_audiounit))) { ERROR("AudioUnitInitialize: ", err); return -1; }
-    return 0;
-}
-
-int start_audiounit(Audio *s) {
-    int err;
-    if ((err = AudioOutputUnitStart(inst_audiounit))) { ERROR("AudioOutputUnitState: ", err); return -1; }
-    return 0;
-}
-
-int free_audiounit(Audio *s) {
-    AudioUnitUninitialize(inst_audiounit);
-    return 0;
+            if (FLAGS_chans_in == 1) continue;
+            IR.Write(in[i*FLAGS_chans_in+1]/32768.0, RingBuf::Stamp, timestamp);
+        }
+        { 
+            ScopedMutex ML(audio->inlock);
+            IL.Commit();
+            IR.Commit();
+            app->samples_read += inNumberFrames;
+        }
+        return 0;
+    }
+    OSStatus IOOut(void *inRefCon, AudioUnitRenderActionFlags *ioActionFlags, const AudioTimeStamp *inTimeStamp, UInt32 inBusNumber, UInt32 inNumberFrames, AudioBufferList *ioData) {
+        if (!ioData || ioData->mNumberBuffers != 1) FATAL("unexpected parameters ", ioData, " ", ioData?ioData->mNumberBuffers:-1);
+        ioData->mBuffers[0].mDataByteSize = inNumberFrames * FLAGS_chans_out * sizeof(short);
+        short *out = (short *)ioData->mBuffers[0].mData;
+        {
+            ScopedMutex ML(audio->outlock);
+            for (int i=0, l=inNumberFrames*FLAGS_chans_out; i<l; i++)
+                out[i] = (audio->Out.size() ? PopFront(audio->Out) : 0) * 32768.0;
+        }
+        return 0;
+    }
+    static OSStatus IOInCB (void *inRefCon, AudioUnitRenderActionFlags *ioActionFlags, const AudioTimeStamp *inTimeStamp, UInt32 inBusNumber, UInt32 inNumberFrames, AudioBufferList *ioData) {
+        return ((AudioUnitAudioModule*)app->audio.impl)->IOIn(inRefCon, ioActionFlags, inTimeStamp, inBusNumber, inNumberFrames, ioData);
+    }
+    static OSStatus IOOutCB(void *inRefCon, AudioUnitRenderActionFlags *ioActionFlags, const AudioTimeStamp *inTimeStamp, UInt32 inBusNumber, UInt32 inNumberFrames, AudioBufferList *ioData) {
+        return ((AudioUnitAudioModule*)app->audio.impl)->IOOut(inRefCon, ioActionFlags, inTimeStamp, inBusNumber, inNumberFrames, ioData);
+    }
 };
 #endif /* LFL_AUDIOUNIT */
 
 #ifdef LFL_OPENSL
-int init_opensl(Audio *s) {
-    if (FLAGS_chans_in == -1) FLAGS_chans_in = 2;
-    if (FLAGS_chans_out == -1) FLAGS_chans_out = 2;
-    return 0;
-}
+struct OpenSLAudioModule : public Module {
+    Audio *audio;
+    OpenSLAudioModule(Audio *A) : audio(A) {}
+    int Init() {
+        INFO("OpenSLAudioModule::Init");
+        if (FLAGS_chans_in == -1) FLAGS_chans_in = 2;
+        if (FLAGS_chans_out == -1) FLAGS_chans_out = 2;
+        return 0;
+    }
+};
 #endif /* LFL_OPENSL */
 
 int Audio::Init() {
     RL = RingBuf::Handle(IL);
     RR = RingBuf::Handle(IR);
 #if defined(LFL_PORTAUDIO)
-    INFO("audio_engine: PortAudio");
-    if (init_portaudio(this) < 0) return -1;
-    if (open_portaudio(this) < 0) return -1;
+    impl = new PortaudioAudioModule(this);
 #elif defined(LFL_SDLAUDIO)
-    INFO("audio_engine: SDL Audio");
-    if (init_sdlaudio(this) < 0) return -1;
+    impl = new SDLAudioModule(this);
 #elif defined(LFL_AUDIOQUEUE)
-    INFO("audio_engine: AudioQueue");
-    if (init_audioqueue(this) < 0) return -1;
+    impl = new AudioQueueAudioModule(this);
 #elif defined(LFL_AUDIOUNIT)
-    INFO("audio_engine: AudioUnit");
-    if (init_audiounit(this) < 0) return -1;
+    impl = new AudioUnitAudioModule(this);
 #elif defined(LFL_OPENSL)
-    INFO("audio_engine: OpenSL");
-    if (init_opensl(this) < 0) return -1;
+    impl = new OpenSLAudioModule(this);
 #elif defined(LFL_IPHONE)
     INFO("audio_engine: iPhone");
 #elif defined(LFL_ANDROID)
@@ -553,28 +561,18 @@ int Audio::Init() {
 #else
     FLAGS_lfapp_audio = false;
 #endif
+    if (impl && impl->Init()) return -1;
+    if (impl && impl->Start()) return -1;
     if (FLAGS_chans_out < 0) FLAGS_chans_out = 0;
     return 0;
 }
 
 int Audio::Free() {
-#if defined(LFL_PORTAUDIO)
-    free_portaudio(this);
-#elif defined(LFL_SDLAUDIO)
-    free_sdlaudio(this);
-#elif defined(LFL_AUDIOQUEUE)
-    free_audioqueue(this);
-#elif defined(LFL_AUDIOUNIT)
-    free_audiounit(this);
-#endif
+    if (impl) impl->Free();
     return 0;
 }
 
 int Audio::Start() {
-    if (!FLAGS_lfapp_audio) return 0;
-#ifdef LFL_AUDIOUNIT
-    if (start_audiounit(this) < 0) return -1;
-#endif
     return 0;
 }
 

@@ -34,6 +34,26 @@ static __forceinline int ffsl(long x) {
 static __forceinline int ffs(int x) { return ffsl(x); }
 #endif
 
+#define SortMacro1(x1, y2) return x1 < y2;
+#define SortMacro2(x1, y1, x2, y2)  \
+    if      (x1 < y1) return true;  \
+    else if (x1 > y1) return false; \
+    else return x2 < y2;
+#define SortMacro3(x1, y1, x2, y2, x3, y3) \
+    if      (x1 < y1) return true;  \
+    else if (x1 > y1) return false; \
+    if      (x2 < y2) return true;  \
+    else if (x2 > y2) return false; \
+    else return x3 < y3;
+#define SortMacro4(x1, y1, x2, y2, x3, y3, x4, y4) \
+    if      (x1 < y1) return true;  \
+    else if (x1 > y1) return false; \
+    if      (x2 < y2) return true;  \
+    else if (x2 > y2) return false; \
+    if      (x3 < y3) return true;  \
+    else if (x3 > y3) return false; \
+    else return x4 < y4;
+
 namespace LFL {
 template <typename K, typename V> typename map<K, V>::iterator FindOrInsert(map<K, V> &m, K k, V v, int *inserted) {
     LFL_STL_NAMESPACE::pair<typename map<K, V>::iterator, bool> ret = m.insert(typename map<K, V>::value_type(k, v));
@@ -148,13 +168,7 @@ template <class T1, class T2, class T3> struct Triple {
     Triple(const T1 &t1, const T2 &t2, const T3 &t3) : first(t1), second(t2), third(t3) {}
     Triple(const Triple &copy) : first(copy.first), second(copy.second), third(copy.third) {}
     const Triple &operator=(const Triple &r) { first=r.first; second=r.second; third=r.third; return *this; }
-    bool operator<(const Triple &r) const { 
-        if      (first  < r.first)  return true;
-        else if (first  > r.first)  return false;
-        else if (second < r.second) return true;
-        else if (second > r.second) return false;
-        else return third < r.third;
-    }
+    bool operator<(const Triple &r) const { SortMacro3(first, r.first, second, r.second, third, r.third); }
 };
 
 template <class T1, class T2, class T3, class T4> struct Quadruple {
@@ -163,15 +177,7 @@ template <class T1, class T2, class T3, class T4> struct Quadruple {
     Quadruple(const T1 &t1, const T2 &t2, const T3 &t3, const T4 &t4) : first(t1), second(t2), third(t3), fourth(t4) {}
     Quadruple(const Quadruple &copy) : first(copy.first), second(copy.second), third(copy.third), fourth(copy.fourth) {}
     const Quadruple &operator=(const Quadruple &r) { first=r.first; second=r.second; third=r.third; fourth=r.fourth; return *this; }
-    bool operator<(const Quadruple &r) const { 
-        if      (first  < r.first)  return true;
-        else if (first  > r.first)  return false;
-        else if (second < r.second) return true;
-        else if (second > r.second) return false;
-        else if (third  < r.third) return true;
-        else if (third  > r.third) return false;
-        else return fourth < r.fourth;
-    }
+    bool operator<(const Quadruple &r) const { SortMacro4(first, r.first, second, r.second, third, r.third, fourth, r.fourth); }
 };
 
 template <class X> struct FreeListVector : public vector<X> {
@@ -343,8 +349,10 @@ template <class X> struct RingVector {
     X&       operator[](int i)       { return data[ring.Index(i)]; }
     const X& operator[](int i) const { return data[ring.Index(i)]; }
     virtual int IndexOf(const X *v) const { return ring.IndexOf(v - &data[0]); }
-    virtual X   *PushBack ()     { ring.PushBack (1); return &data[ring.Back()]; }
-    virtual X   *PushFront()     { ring.PushFront(1); return &data[ring.Front()]; }
+    virtual X   *Back ()         { return &data[ring.Back()]; }
+    virtual X   *Front()         { return &data[ring.Front()]; }
+    virtual X   *PushBack ()     { ring.PushBack (1); return Back(); }
+    virtual X   *PushFront()     { ring.PushFront(1); return Front(); }
     virtual void PopFront(int n) { ring.PopFront(n); }
     virtual void PopBack (int n) { ring.PopBack (n); }
     virtual void Clear() { ring.Clear(); }

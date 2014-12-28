@@ -423,8 +423,8 @@ void TouchDevice::openKeyboard() {
     SDL_iPhoneKeyboardShow((SDL_Window*)screen->id);
 #endif
 }
-void Mouse::grabFocus()    { SDL_ShowCursor(0); SDL_SetWindowGrab((SDL_Window*)screen->id, SDL_TRUE);  SDL_SetRelativeMouseMode(SDL_TRUE);  app->grabMode.on();  screen->cursor_grabbed=true; }
-void Mouse::releaseFocus() { SDL_ShowCursor(1); SDL_SetWindowGrab((SDL_Window*)screen->id, SDL_FALSE); SDL_SetRelativeMouseMode(SDL_FALSE); app->grabMode.off(); screen->cursor_grabbed=false; }
+void Mouse::grabFocus()    { SDL_ShowCursor(0); SDL_SetWindowGrab((SDL_Window*)screen->id, SDL_TRUE);  SDL_SetRelativeMouseMode(SDL_TRUE);  app->grabMode.On();  screen->cursor_grabbed=true; }
+void Mouse::releaseFocus() { SDL_ShowCursor(1); SDL_SetWindowGrab((SDL_Window*)screen->id, SDL_FALSE); SDL_SetRelativeMouseMode(SDL_FALSE); app->grabMode.Off(); screen->cursor_grabbed=false; }
 #endif /* LFL_SDLINPUT */
 
 int Input::Init() {
