@@ -31,7 +31,7 @@ struct AcousticEventDetector {
     long long samples_processed, samples_available;
 
     FeatureSink *sink;
-    vector<Filter> featureFilters;
+    vector<StatefulFilter> featureFilters;
     RingBuf *featureBuf;
 
     /* An Adaptive and Fast Speech Detection Algorithm by Dragos Burileanu */
@@ -141,8 +141,8 @@ struct AcousticEventDetector {
         }
 
         /* compute ZCR & PE */
-        float ZCR = *(float*)zcr.Write() = zeroCrossings(/*&filtered_input*/ in, FLAGS_feat_window, 0);
-        float PE = *(float*)pe.Write() = pseudoEnergy(/*&filtered_input*/ in, FLAGS_feat_window, 0);
+        float ZCR = *(float*)zcr.Write() = ZeroCrossings(/*&filtered_input*/ in, FLAGS_feat_window, 0);
+        float PE = *(float*)pe.Write() = PseudoEnergy(/*&filtered_input*/ in, FLAGS_feat_window, 0);
         total++;
 
         /* smoothed zero crossing rate */

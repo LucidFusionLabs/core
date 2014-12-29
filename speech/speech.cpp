@@ -242,7 +242,7 @@ Matrix *Features::fromAsset(SoundAsset *wav, int flag) {
     return fromFeat(features, flag);
 }
 
-Matrix *Features::fromBuf(const RingBuf::Handle *in, Matrix *out, vector<Filter> *filter, Allocator *alloc) {
+Matrix *Features::fromBuf(const RingBuf::Handle *in, Matrix *out, vector<StatefulFilter> *filter, Allocator *alloc) {
     Matrix *features = 0;
     if      (FLAGS_feat_type == "MFCC") features = MFCC(in, out, alloc);
     else if (FLAGS_feat_type == "PLP")  features = PLP(in, out, filter, alloc);
@@ -1046,7 +1046,7 @@ void Decoder::visualizeFeatures(AcousticModel::Compiled *model, Matrix *MFCC, Ma
     sa.wav = Features::reverse(MFCC, FLAGS_sample_rate);
     RingBuf::Handle B = RingBuf::Handle(sa.wav);
 
-    Matrix *spect = spectogram(&B, 0, FLAGS_feat_window, FLAGS_feat_hop, FLAGS_feat_window, 0, PowerDomain::dB);
+    Matrix *spect = Spectogram(&B, 0, FLAGS_feat_window, FLAGS_feat_hop, FLAGS_feat_window, 0, PowerDomain::dB);
     Asset *snap = app->shell.asset("snap");
     glSpectogram(spect, snap, 0);
     delete spect;
@@ -1101,7 +1101,7 @@ int resynthesize(Audio *s, const SoundAsset *sa) {
     if (!sa->wav) return -1;
     RingBuf::Handle B(sa->wav);
     Matrix *m = Features::fromBuf(&B);
-    Matrix *f0 = f0stream(&B, 0, FLAGS_feat_window, FLAGS_feat_hop);
+    Matrix *f0 = F0Stream(&B, 0, FLAGS_feat_window, FLAGS_feat_hop);
 
     int ret = -1;
     RingBuf *resynth = Features::reverse(m, B.Rate(), f0);

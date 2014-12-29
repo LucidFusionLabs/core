@@ -82,69 +82,69 @@ struct Audio : public Module {
     int Snapshot(SoundAsset *sa);
 };
 
-int sinthesize(Audio *s, int hz1, int hz2, int hz3);
-double lowpass_filter(int n, int i, int maxfreq);
-double highpass_filter(int n, int i, int minfreq);
-float pseudoEnergy(const RingBuf::Handle *in, int window, int offset);
-int zeroCrossings(const RingBuf::Handle *in, int window, int offset);
-RingBuf *decimate(const RingBuf::Handle *in, int factor);
-int cross_correlateTDOA(const RingBuf::Handle *a, const RingBuf::Handle *b, int window, int offset, int samps);
+int Sinthesize(Audio *s, int hz1, int hz2, int hz3);
+double LowPassFilter(int n, int i, int maxfreq);
+double HighPassFilter(int n, int i, int minfreq);
+float PseudoEnergy(const RingBuf::Handle *in, int window, int offset);
+int ZeroCrossings(const RingBuf::Handle *in, int window, int offset);
+RingBuf *Decimate(const RingBuf::Handle *in, int factor);
+int CrossCorrelateTDOA(const RingBuf::Handle *a, const RingBuf::Handle *b, int window, int offset, int samps);
 inline vector<double> PreEmphasisFilter() { vector<double> v { 1, FLAGS_feat_preemphasis_filter }; return v; }
 
 struct AudioResampler {
     SwrContext *swr=0;
     int input_processed=0, input_chans=0, output_available=0, output_chans=0, output_rate=0;
     RingBuf *out=0;
-    AudioResampler() { clear(); }
-    ~AudioResampler() { close(); }
+    AudioResampler() { Clear(); }
+    ~AudioResampler() { Close(); }
 
-    void clear();
-    void close();
-    bool opened() { return swr; }
-    int open(RingBuf *out, int  in_channels, int  in_sample_rate, int  in_sample_type,
+    void Clear();
+    void Close();
+    bool Opened() { return swr; }
+    int Open(RingBuf *out, int  in_channels, int  in_sample_rate, int  in_sample_type,
                            int out_channels, int out_sample_rate, int out_sample_type);
-    int update(int samples, const short *in);
-    int update(int samples, RingBuf::Handle *L, RingBuf::Handle *R);
-    int update(int samples, const short **in, short *tmp, Time timestamp, int maxSamplesOut);
+    int Update(int samples, const short *in);
+    int Update(int samples, RingBuf::Handle *L, RingBuf::Handle *R);
+    int Update(int samples, const short **in, short *tmp, Time timestamp, int maxSamplesOut);
 
-    static Time monotonouslyIncreasingTimestamp(Time laststamp, Time stamp, double *step, int steps);
+    static Time MonotonouslyIncreasingTimestamp(Time laststamp, Time stamp, double *step, int steps);
 };
 
-struct Filter { /* stateful filter */
+struct StatefulFilter {
     double state[32];
     int size=0, next=0, filterLenB=0, filterLenA=0, samples=0;
     const double *filterB=0, *filterA=0;
 
-    void open(int FilterLenB, const double *FilterB, int FilterLenA, const double *FilterA);
+    void Open(int FilterLenB, const double *FilterB, int FilterLenA, const double *FilterA);
 
-    double filter(double sample);
-    int filter(const RingBuf::Handle *in, RingBuf::Handle *out, int start, int length=0);
+    double Filter(double sample);
+    int Filter(const RingBuf::Handle *in, RingBuf::Handle *out, int start, int length=0);
 };
 
 /* stateless filters */
-double filter(const RingBuf::Handle *in, int offset, int filterlen, const double *filter, bool nohistory=0);
-double filter(const RingBuf::Handle *in, int offset1, const RingBuf::Handle *out, int offset2, int filterlenB, const double *filterB, int filterlenA, const double *filterA, double initialcondition, bool nohistory);
+double Filter(const RingBuf::Handle *in, int offset, int filterlen, const double *filter, bool nohistory=0);
+double Filter(const RingBuf::Handle *in, int offset1, const RingBuf::Handle *out, int offset2, int filterlenB, const double *filterB, int filterlenA, const double *filterA, double initialcondition, bool nohistory);
 
-int filter(const RingBuf::Handle *in, RingBuf::Handle *out, int filterlen, const double *filter, bool nohistory=0);
-int filter(const RingBuf::Handle *in, RingBuf::Handle *out, int filterlenB, const double *filterB, int filterlenA, const double *filterA, int start, double *ic, double iclen, bool nohistory);
+int Filter(const RingBuf::Handle *in, RingBuf::Handle *out, int filterlen, const double *filter, bool nohistory=0);
+int Filter(const RingBuf::Handle *in, RingBuf::Handle *out, int filterlenB, const double *filterB, int filterlenA, const double *filterA, int start, double *ic, double iclen, bool nohistory);
 
 /* streaming overlap-add fft/ifft */
-int fft(const RingBuf::Handle *in, int i, int window, int hop, int fftlen, float *out, bool preemph=false, bool hamming=true, int scale=1);
-int ifft(const Complex *in, int i, int window, int hop, int fftlen, RingBuf::Handle *out);
+int FFT(const RingBuf::Handle *in, int i, int window, int hop, int fftlen, float *out, bool preemph=false, bool hamming=true, int scale=1);
+int IFFT(const Complex *in, int i, int window, int hop, int fftlen, RingBuf::Handle *out);
 
 /* fft filter */
-void fft_filter_compile(int n, double *filter);
-int fft_filter(const RingBuf::Handle *in, RingBuf::Handle *out, int window, int hop, const double *filter);
+void FFTFilterCompile(int n, double *filter);
+int FFTFilter(const RingBuf::Handle *in, RingBuf::Handle *out, int window, int hop, const double *filter);
 
-float fundamentalFrequency(const RingBuf::Handle *in, int window, int offset, int method=F0EstmMethod::Default);
+float FundamentalFrequency(const RingBuf::Handle *in, int window, int offset, int method=F0EstmMethod::Default);
 
-Matrix *fft2mel(int outrows, double minfreq, double maxfreq, int fftlen, int samplerate);
-Matrix *mel2fft(int outrows, double minfreq, double maxfreq, int fftlen, int samplerate);
+Matrix *FFT2Mel(int outrows, double minfreq, double maxfreq, int fftlen, int samplerate);
+Matrix *Mel2FFT(int outrows, double minfreq, double maxfreq, int fftlen, int samplerate);
 
-Matrix *spectogram(const RingBuf::Handle *in, Matrix *out, int window, int hop, int fftlen, bool preemph=false, int pd=PowerDomain::dB, int scale=1);
-Matrix *f0stream(const RingBuf::Handle *in, Matrix *out, int window, int hop, int method=F0EstmMethod::Default);
+Matrix *Spectogram(const RingBuf::Handle *in, Matrix *out, int window, int hop, int fftlen, bool preemph=false, int pd=PowerDomain::dB, int scale=1);
+Matrix *F0Stream(const RingBuf::Handle *in, Matrix *out, int window, int hop, int method=F0EstmMethod::Default);
 
-Matrix *PLP(const RingBuf::Handle *in, Matrix *out=0, vector<Filter> *rastaFilter=0, Allocator *alloc=0);
+Matrix *PLP(const RingBuf::Handle *in, Matrix *out=0, vector<StatefulFilter> *rastaFilter=0, Allocator *alloc=0);
 RingBuf *InvPLP(const Matrix *in, int samplerate, Allocator *alloc=0);
 
 Matrix *MFCC(const RingBuf::Handle *in, Matrix *out=0, Allocator *alloc=0);

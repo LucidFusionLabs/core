@@ -224,7 +224,7 @@ struct PortaudioAudioModule : public Module {
            const PaStreamCallbackTimeInfo *timeInfo, PaStreamCallbackFlags flags) {
         float *in = (float*)input, *out = (float *)output;
         double step = Seconds(1)*1000/FLAGS_sample_rate;
-        Time stamp = AudioResampler::monotonouslyIncreasingTimestamp(audio->IL->ReadTimestamp(-1), Now()*1000, &step, samplesPerFrame);
+        Time stamp = AudioResampler::MonotonouslyIncreasingTimestamp(audio->IL->ReadTimestamp(-1), Now()*1000, &step, samplesPerFrame);
         RingBuf::WriteAheadHandle IL(audio->IL), IR(audio->IR);
         for (unsigned i=0; i<samplesPerFrame; i++) {
             Time timestamp = stamp + i*step;
@@ -617,7 +617,7 @@ int Audio::Snapshot(SoundAsset *out) {
     return 0;
 }
 
-int sinthesize(Audio *s, int hz1, int hz2, int hz3) {
+int Sinthesize(Audio *s, int hz1, int hz2, int hz3) {
     RingBuf tonebuf(FLAGS_sample_rate, FLAGS_sample_rate);
     RingBuf::Handle tone(&tonebuf);
     double f = 2 * M_PI / tone.Rate();
@@ -631,16 +631,16 @@ int sinthesize(Audio *s, int hz1, int hz2, int hz3) {
     return 0;
 }
 
-double lowpass_filter(int n, int i, int maxfreq) {
+double LowPassFilter(int n, int i, int maxfreq) {
     int ind = i-(n-1)/2;
     double R=2.0*maxfreq/FLAGS_sample_rate;
     return R*sinc(ind*R);
 }
 
-double highpass_filter(int n, int i, int minfreq) {
+double HighPassFilter(int n, int i, int minfreq) {
     int ind = i-(n-1)/2;
     double impulse = ind ? 0 : 1;
-    return impulse - lowpass_filter(n,i,minfreq);
+    return impulse - LowPassFilter(n,i,minfreq);
 }
 
 Matrix *EqualLoudnessCurve(int outrows, double max) {
@@ -653,7 +653,7 @@ Matrix *EqualLoudnessCurve(int outrows, double max) {
     return ret;
 }
 
-double *lifterMatrixROSA(int n, double L, bool inverse=false) {
+double *LifterMatrixROSA(int n, double L, bool inverse=false) {
     double *dm = new double[n];
     for (int i=0; i<n; i++) {
         dm[i] = !i ? 1 : pow(i, L);
@@ -662,7 +662,7 @@ double *lifterMatrixROSA(int n, double L, bool inverse=false) {
     return dm;
 }
 
-double *lifterMatrixHTK(int n, double L, bool inverse=false) {
+double *LifterMatrixHTK(int n, double L, bool inverse=false) {
     double *dm = new double[n];
     for (int i=0; i<n; i++) {
         dm[i] = !i ? 1 : (1+L/2*sin(i*M_PI/L));
@@ -671,13 +671,13 @@ double *lifterMatrixHTK(int n, double L, bool inverse=false) {
     return dm;
 }
 
-float pseudoEnergy(const RingBuf::Handle *in, int window, int offset) {
+float PseudoEnergy(const RingBuf::Handle *in, int window, int offset) {
     float e=0;
     for (int i=0; i<window; i++) e += fabs(in->Read(offset+i) * 32768.0);
     return e;
 }
 
-int zeroCrossings(const RingBuf::Handle *in, int window, int offset) {
+int ZeroCrossings(const RingBuf::Handle *in, int window, int offset) {
     int zcr=0;
     float last = in->Read(offset);
     for (int i=1; i<window; i++) {
@@ -688,7 +688,7 @@ int zeroCrossings(const RingBuf::Handle *in, int window, int offset) {
     return zcr;
 }
 
-RingBuf *decimate(const RingBuf::Handle *inh, int factor) {
+RingBuf *Decimate(const RingBuf::Handle *inh, int factor) {
     const int SPS=inh->Rate(), SPB=inh->Len();
     RingBuf *outbuf = new RingBuf(SPS/factor, SPB/factor);
     RingBuf::Handle out(outbuf);
@@ -707,7 +707,7 @@ RingBuf *decimate(const RingBuf::Handle *inh, int factor) {
     return outbuf;
 }
 
-int cross_correlateTDOA(const RingBuf::Handle *a, const RingBuf::Handle *b, int window, int offset, int samps) {
+int CrossCorrelateTDOA(const RingBuf::Handle *a, const RingBuf::Handle *b, int window, int offset, int samps) {
 
     float max=0; int maxind=0;
     float res[100];
@@ -732,17 +732,17 @@ int cross_correlateTDOA(const RingBuf::Handle *a, const RingBuf::Handle *b, int 
 
 /* AudioResampler */
 
-void AudioResampler::clear() { out=0; input_processed=output_available=output_rate=output_chans=0; }
+void AudioResampler::Clear() { out=0; input_processed=output_available=output_rate=output_chans=0; }
 
 #ifdef LFL_FFMPEG
-void AudioResampler::close() {
+void AudioResampler::Close() {
     if (swr) { swr_free(&swr); swr=0; }
-    clear();
+    Clear();
 }
 
-int AudioResampler::open(RingBuf *rb, int in_channels,  int in_sample_rate,  int in_sample_type,
+int AudioResampler::Open(RingBuf *rb, int in_channels,  int in_sample_rate,  int in_sample_type,
                                      int out_channels, int out_sample_rate, int out_sample_type) {
-    close();
+    Close();
     out = rb;
     input_chans = in_channels;
     output_chans = out_channels;
@@ -755,15 +755,15 @@ int AudioResampler::open(RingBuf *rb, int in_channels,  int in_sample_rate,  int
     return 0;
 }
 
-int AudioResampler::update(int samples, const short *in) {
+int AudioResampler::Update(int samples, const short *in) {
     if (!out || !in) return -1;
     const short *input[SWR_CH_MAX] = { in, 0 }; 
     Allocator *tlsalloc = ThreadLocalStorage::GetAllocator();
     short *rsout = (short*)tlsalloc->malloc(AVCODEC_MAX_AUDIO_FRAME_SIZE + FF_INPUT_BUFFER_PADDING_SIZE);
-    return update(samples, input, rsout, -1, AVCODEC_MAX_AUDIO_FRAME_SIZE/output_chans/2);
+    return Update(samples, input, rsout, -1, AVCODEC_MAX_AUDIO_FRAME_SIZE/output_chans/2);
 }
 
-int AudioResampler::update(int samples, RingBuf::Handle *L, RingBuf::Handle *R) {
+int AudioResampler::Update(int samples, RingBuf::Handle *L, RingBuf::Handle *R) {
     int channels = (L!=0) + (R!=0);
     if (!out || !channels) return -1;
     Allocator *tlsalloc = ThreadLocalStorage::GetAllocator();
@@ -777,10 +777,10 @@ int AudioResampler::update(int samples, RingBuf::Handle *L, RingBuf::Handle *R) 
             rsin[i*channels + j] = chan[j]->Read(i) * 32768.0;
 
     const short *input[SWR_CH_MAX] = { rsin, 0 }; 
-    return update(samples, input, rsout, chan[0]->ReadTimestamp(0), AVCODEC_MAX_AUDIO_FRAME_SIZE/output_chans/2);
+    return Update(samples, input, rsout, chan[0]->ReadTimestamp(0), AVCODEC_MAX_AUDIO_FRAME_SIZE/output_chans/2);
 }
 
-int AudioResampler::update(int samples, const short **in, short *rsout, Time timestamp, int max_samples_out) {
+int AudioResampler::Update(int samples, const short **in, short *rsout, Time timestamp, int max_samples_out) {
     CHECK(swr);
     uint8_t *aout[SWR_CH_MAX] = { (uint8_t*)rsout, 0 };
     int resampled = swr_convert(swr, aout, max_samples_out, (const uint8_t**)in, samples);
@@ -789,7 +789,7 @@ int AudioResampler::update(int samples, const short **in, short *rsout, Time tim
 
     double step = Seconds(1)*1000/output_rate;
     int output = resampled * output_chans;
-    Time stamp = monotonouslyIncreasingTimestamp(out->ReadTimestamp(-1), timestamp, &step, output);
+    Time stamp = MonotonouslyIncreasingTimestamp(out->ReadTimestamp(-1), timestamp, &step, output);
     for (int i=0; i<output; i++) {
         if (timestamp != -1) out->stamp[out->ring.back] = stamp + i/output_chans*step;
         *(float*)out->Write() = rsout[i] / 32768.0;
@@ -800,15 +800,15 @@ int AudioResampler::update(int samples, const short **in, short *rsout, Time tim
     return 0;
 }
 #else
-void AudioResampler::close() {}
-int AudioResampler::open(RingBuf *rb, int in_channels,  int in_sample_rate,  int in_sample_type,
+void AudioResampler::Close() {}
+int AudioResampler::Open(RingBuf *rb, int in_channels,  int in_sample_rate,  int in_sample_type,
                                       int out_channels, int out_sample_rate, int out_sample_type)            { FATAL("not implemented"); }
-int AudioResampler::update(int samples, const short **in, short *rsout, Time timestamp, int max_samples_out) { FATAL("not implemented"); }
-int AudioResampler::update(int samples, const short *in)                                                     { FATAL("not implemented"); }
-int AudioResampler::update(int samples, RingBuf::Handle *L, RingBuf::Handle *R)                              { FATAL("not implemented"); }
+int AudioResampler::Update(int samples, const short **in, short *rsout, Time timestamp, int max_samples_out) { FATAL("not implemented"); }
+int AudioResampler::Update(int samples, const short *in)                                                     { FATAL("not implemented"); }
+int AudioResampler::Update(int samples, RingBuf::Handle *L, RingBuf::Handle *R)                              { FATAL("not implemented"); }
 #endif /* LFL_FFMPEG */
 
-long long AudioResampler::monotonouslyIncreasingTimestamp(Time laststamp, Time stamp, double *step, int steps) {
+long long AudioResampler::MonotonouslyIncreasingTimestamp(Time laststamp, Time stamp, double *step, int steps) {
     if (laststamp > stamp) {
         Time end = (Time)(stamp + (steps-1) * (*step));
         *step = (double)(end - laststamp) / steps;
@@ -818,9 +818,9 @@ long long AudioResampler::monotonouslyIncreasingTimestamp(Time laststamp, Time s
     return stamp;
 }
 
-/* stateful filter */
+/* StatefulFilter */
 
-void Filter::open(int FilterLenB, const double *FilterB, int FilterLenA, const double *FilterA) {
+void StatefulFilter::Open(int FilterLenB, const double *FilterB, int FilterLenA, const double *FilterA) {
     next = samples = 0;
 
     filterB    = FilterB;    filterA    = FilterA;
@@ -830,7 +830,7 @@ void Filter::open(int FilterLenB, const double *FilterB, int FilterLenA, const d
     memset(state, 0, sizeof(state));
 }
 
-double Filter::filter(double sample) {
+double StatefulFilter::Filter(double sample) {
     for (int i=0; i<filterLenB; i++) {
         int si = (next+i) % size;
         state[si] += sample * filterB[i];
@@ -848,11 +848,11 @@ double Filter::filter(double sample) {
     return ret;
 }
 
-int Filter::filter(const RingBuf::Handle *in, RingBuf::Handle *out, int start, int length) {
+int StatefulFilter::Filter(const RingBuf::Handle *in, RingBuf::Handle *out, int start, int length) {
     int count = 0;
     if (!length) length = in->Len();
     for (int i=start; i<length; i++) {
-        double yi = filter(in->Read(i));
+        double yi = Filter(in->Read(i));
         if (out) out->Write(yi);
         count++;
     }
@@ -861,7 +861,7 @@ int Filter::filter(const RingBuf::Handle *in, RingBuf::Handle *out, int start, i
 
 /* stateless filters */
 
-double filter(const RingBuf::Handle *in, int offset1,
+double Filter(const RingBuf::Handle *in, int offset1,
               const RingBuf::Handle *out, int offset2,
               int filterlenB, const double *filterB,
               int filterlenA, const double *filterA,
@@ -881,21 +881,21 @@ double filter(const RingBuf::Handle *in, int offset1,
     return yi;
 }
 
-double filter(const RingBuf::Handle *in, int offset, int filterlen, const double *filter, bool nohistory) { return LFL::filter(in, offset, 0, 0, filterlen, filter, 0, 0, 0, nohistory); }
+double Filter(const RingBuf::Handle *in, int offset, int filterlen, const double *filter, bool nohistory) { return LFL::Filter(in, offset, 0, 0, filterlen, filter, 0, 0, 0, nohistory); }
 
-int filter(const RingBuf::Handle *in, RingBuf::Handle *out, int filterlenB, const double *filterB, int filterlenA, const double *filterA, int start, double *ic, double iclen, bool nohistory) {
+int Filter(const RingBuf::Handle *in, RingBuf::Handle *out, int filterlenB, const double *filterB, int filterlenA, const double *filterA, int start, double *ic, double iclen, bool nohistory) {
     for (int i=start; i<in->Len(); i++) {
-        double yi = LFL::filter(in, i, out, i, filterlenB, filterB, filterlenA, filterA, (iclen-- > 0) ? *ic++ : 0, nohistory);
+        double yi = LFL::Filter(in, i, out, i, filterlenB, filterB, filterlenA, filterA, (iclen-- > 0) ? *ic++ : 0, nohistory);
         out->Write(yi);
     }
     return 0;
 }
 
-int filter(const RingBuf::Handle *in, RingBuf::Handle *out, int filterlen, const double *filter, bool nohistory) { return LFL::filter(in, out, filterlen, filter, 0, 0, 0, 0, 0, nohistory); }
+int Filter(const RingBuf::Handle *in, RingBuf::Handle *out, int filterlen, const double *filter, bool nohistory) { return LFL::Filter(in, out, filterlen, filter, 0, 0, 0, 0, 0, nohistory); }
 
 /* streaming overlap-add fft/ifft */
 
-int fft(const RingBuf::Handle *in, int i, int window, int hop, int fftlen, float *out, bool doPreEmphasis, bool doHamming, int scale) {
+int FFT(const RingBuf::Handle *in, int i, int window, int hop, int fftlen, float *out, bool doPreEmphasis, bool doHamming, int scale) {
     vector<double> pef = doPreEmphasis ? PreEmphasisFilter() : vector<double>();
     int padding=fftlen-window, split=window/2, bits=which_log2(fftlen), ind;
     if (bits < 0 || window % 2 != 0) return -1;
@@ -905,7 +905,7 @@ int fft(const RingBuf::Handle *in, int i, int window, int hop, int fftlen, float
         else if (j < split + padding) { out[j] = 0; continue; }
         else                          { ind = i*hop + j - split - padding; }
 
-        double v = pef.size() ? filter(in, ind, pef.size(), &pef[0]) : in->Read(ind);
+        double v = pef.size() ? Filter(in, ind, pef.size(), &pef[0]) : in->Read(ind);
 
         if (doHamming) v *= hamming(window, ind - i*hop);
         out[j] = v * scale;
@@ -919,7 +919,7 @@ int fft(const RingBuf::Handle *in, int i, int window, int hop, int fftlen, float
     return 0;
 }
 
-int ifft(const Complex *in, int i, int window, int hop, int fftlen, RingBuf::Handle *out) {
+int IFFT(const Complex *in, int i, int window, int hop, int fftlen, RingBuf::Handle *out) {
     float *fftbuf=(float*)alloca(sizeof(float)*fftlen*2);
     int split=fftlen/2, bits=which_log2(fftlen); Complex zero={0,0};
     if (bits < 0) return -1;
@@ -950,17 +950,17 @@ int ifft(const Complex *in, int i, int window, int hop, int fftlen, RingBuf::Han
 
 /* fft filter */
 
-void fft_filter_compile(int n, double *filter) {
+void FFTFilterCompile(int n, double *filter) {
     RingBuf filtbuf(FLAGS_sample_rate, n);
     RingBuf::Handle filtcoef(&filtbuf);
     for (int i=0; i<n; i++) filtcoef.Write(filter[i]);
 
     float *fftbuf = (float *)alloca(sizeof(float)*n);
-    fft(&filtcoef, 0, n, 0, n, fftbuf);
+    FFT(&filtcoef, 0, n, 0, n, fftbuf);
     for (int i=0; i<n; i++) filter[i] = fftbuf[i];
 }
 
-int fft_filter(const RingBuf::Handle *in, RingBuf::Handle *out, int window, int hop, const double *filter) {
+int FFTFilter(const RingBuf::Handle *in, RingBuf::Handle *out, int window, int hop, const double *filter) {
     int frames = (in->Len() - (window - hop)) / hop;
     float *fftbuf = (float*)alloca(sizeof(float)*window);
     Complex *ifftb = (Complex*)alloca(sizeof(Complex)*window/2);
@@ -968,7 +968,7 @@ int fft_filter(const RingBuf::Handle *in, RingBuf::Handle *out, int window, int 
     for (int j=0; j<in->Len(); j++) *out->Index(j) = 0;
 
     for (int i=0; i<frames; i++) {
-        if (fft(in, i, window, hop, window, fftbuf)) return -1;
+        if (FFT(in, i, window, hop, window, fftbuf)) return -1;
 
         for (int j=0; j<window/2; j++) {
             Complex x={fft_r(fftbuf, window, j), fft_i(fftbuf, window, j)};
@@ -976,18 +976,18 @@ int fft_filter(const RingBuf::Handle *in, RingBuf::Handle *out, int window, int 
             ifftb[j] = Complex::Mult(x, h); /* cyclic convolution */
         }
 
-        if (ifft(ifftb, i, window, hop, window, out)) return -1;
+        if (IFFT(ifftb, i, window, hop, window, out)) return -1;
     }
     return 0;
 }
 
-float fundamentalFrequency(const RingBuf::Handle *in, int window, int offset, int method) {
+float FundamentalFrequency(const RingBuf::Handle *in, int window, int offset, int method) {
     int bits = which_log2(window);
     if (bits<0) return -1;
 
     if (method == F0EstmMethod::fftbucket) { /* max(fft.bucket) */
         float *samp = (float *)alloca(window*sizeof(float));
-        fft(in, 1, window, offset, window, samp);
+        FFT(in, 1, window, offset, window, samp);
 
         int maxind=0; double max=0;
         for (int i=1; i<window/2; i++) {
@@ -1005,7 +1005,7 @@ float fundamentalFrequency(const RingBuf::Handle *in, int window, int offset, in
 
         /* fft */
         float *buf = (float *)alloca(window*2*sizeof(float));
-        fft(&zpin, 0, window*2, 0, window*2, buf, false);
+        FFT(&zpin, 0, window*2, 0, window*2, buf, false);
 
         /* to spectrum */
         fft_r(buf, window*2, 0) = pow(fft_r(buf, window*2, 0), 2);
@@ -1042,7 +1042,7 @@ float fundamentalFrequency(const RingBuf::Handle *in, int window, int offset, in
     }
     else if (method == F0EstmMethod::cepstral) { /* cepstral analysis */
         float *buf = (float *)alloca(window*sizeof(float));
-        fft(in, 1, window, offset, window, buf);
+        FFT(in, 1, window, offset, window, buf);
 
         /* to log spectrum */
         RingBuf spe(in->Rate(), window);
@@ -1053,7 +1053,7 @@ float fundamentalFrequency(const RingBuf::Handle *in, int window, int offset, in
         for (int i=1; i<window/2; i++) *spec.Index(window/2+i) = *spec.Index(window/2-i);
 
         /* fft */
-        fft(&spec, 0, window, 0, window, buf, false); 
+        FFT(&spec, 0, window, 0, window, buf, false); 
 
         /* cepstrum */
         int minlag = min(in->Rate() / 1000, window/2); /* 1000 hz */
@@ -1073,12 +1073,12 @@ float fundamentalFrequency(const RingBuf::Handle *in, int window, int offset, in
     }
     else if (method == F0EstmMethod::harmonicity) { /* harmonicity */
         float *buf = (float *)alloca(window*sizeof(float));
-        fft(in, 1, window, offset, window, buf);
+        FFT(in, 1, window, offset, window, buf);
     }
     return -1;
 }
 
-Matrix *fft2bark(int outrows, double minfreq, double maxfreq, int fftlen, int samplerate) {
+Matrix *FFT2Bark(int outrows, double minfreq, double maxfreq, int fftlen, int samplerate) {
     Matrix *m = new Matrix(outrows, fftlen/2);
     double minbark = hz2bark(minfreq), maxbark = hz2bark(maxfreq);
     double nyqbark = maxbark - minbark, stepbark = nyqbark/(outrows-1);
@@ -1099,7 +1099,7 @@ Matrix *fft2bark(int outrows, double minfreq, double maxfreq, int fftlen, int sa
     return m;
 }
 
-Matrix *fft2mel(int outrows, double minfreq, double maxfreq, int fftlen, int samplerate) {
+Matrix *FFT2Mel(int outrows, double minfreq, double maxfreq, int fftlen, int samplerate) {
     Matrix *m = new Matrix(outrows, fftlen/2);
     double minmel = hz2mel(minfreq), maxmel = hz2mel(maxfreq);
 
@@ -1121,8 +1121,8 @@ Matrix *fft2mel(int outrows, double minfreq, double maxfreq, int fftlen, int sam
     return m;
 }
 
-Matrix *mel2fft(int outrows, double minfreq, double maxfreq, int fftlen, int samplerate) {
-    Matrix *m = fft2mel(outrows, minfreq, maxfreq, fftlen, samplerate);
+Matrix *Mel2FFT(int outrows, double minfreq, double maxfreq, int fftlen, int samplerate) {
+    Matrix *m = FFT2Mel(outrows, minfreq, maxfreq, fftlen, samplerate);
     Matrix *w = Matrix::Mult(m, m, mTrnpA);
 
     float diagmean=0; int diagcount=0;
@@ -1140,7 +1140,7 @@ Matrix *mel2fft(int outrows, double minfreq, double maxfreq, int fftlen, int sam
     return m;
 };
 
-Matrix *spectogram(const RingBuf::Handle *in, Matrix *out, int window, int hop, int fftlen, bool preemph, int pd, int scale) {
+Matrix *Spectogram(const RingBuf::Handle *in, Matrix *out, int window, int hop, int fftlen, bool preemph, int pd, int scale) {
     bool complex = (pd==PowerDomain::complex);
     int frames = (in->Len() - (window - hop)) / hop;
     float *fftbuf = (float*)alloca(sizeof(float)*fftlen);
@@ -1151,7 +1151,7 @@ Matrix *spectogram(const RingBuf::Handle *in, Matrix *out, int window, int hop, 
 
     for (int i=0; i<frames; i++) {
         double *row = m->row(i);
-        if (fft(in, i, window, hop, fftlen, fftbuf, preemph, true, scale)) { if (!out) delete m; return 0; }
+        if (FFT(in, i, window, hop, fftlen, fftbuf, preemph, true, scale)) { if (!out) delete m; return 0; }
 
         for (int j=0; j<fftlen/2; j++) {
             if (pd == PowerDomain::complex) {
@@ -1169,17 +1169,17 @@ Matrix *spectogram(const RingBuf::Handle *in, Matrix *out, int window, int hop, 
     return m;
 }
 
-RingBuf *ispectogram(const Matrix *in, int window, int hop, int fftlen, int samplerate) {
+RingBuf *ISpectogram(const Matrix *in, int window, int hop, int fftlen, int samplerate) {
     RingBuf *outbuf = new RingBuf(samplerate, fftlen + hop * (in->M-1));
     RingBuf::Handle out(outbuf);
     
     for (int i=0; i<in->M; i++) {
-        if (ifft(in->crow(i), i, window, hop, fftlen, &out)) { delete outbuf; return 0; }
+        if (IFFT(in->crow(i), i, window, hop, fftlen, &out)) { delete outbuf; return 0; }
     }
     return outbuf;
 }
 
-Matrix *f0stream(const RingBuf::Handle *in, Matrix *out, int window, int hop, int method) {
+Matrix *F0Stream(const RingBuf::Handle *in, Matrix *out, int window, int hop, int method) {
     int frames = (in->Len() - (window - hop)) / hop;
 
     Matrix *m;
@@ -1188,22 +1188,22 @@ Matrix *f0stream(const RingBuf::Handle *in, Matrix *out, int window, int hop, in
 
     for (int i=0; i<frames; i++) {
         double *row = m->row(i); 
-        row[0] = fundamentalFrequency(in, window, i*hop, method);
+        row[0] = FundamentalFrequency(in, window, i*hop, method);
     }
     return m;
 }
 
-Matrix *PLP(const RingBuf::Handle *in, Matrix *out, vector<Filter> *rastaFilters, Allocator *alloc) {
+Matrix *PLP(const RingBuf::Handle *in, Matrix *out, vector<StatefulFilter> *rastaFilters, Allocator *alloc) {
     /* http://seed.ucsd.edu/mediawiki/images/5/5c/PLP.pdf */
     if (!alloc) alloc = Singleton<MallocAlloc>::Get();
 
     /* plp = melfcc(x, sr, 'lifterexp', -22, 'nbands', 21, 'maxfreq', sr/2, 'fbtype', 'bark', 'modelorder', 12, 'usecmp',1, 'wintime', 512/sr, 'hoptime', 256/sr, 'preemph', 0, 'dcttype', 1) */
-    static const Matrix *barktrans = fft2bark(feat_barkbands, FLAGS_feat_minfreq, FLAGS_feat_maxfreq, FLAGS_feat_window, FLAGS_sample_rate)->Transpose(mDelA);
+    static const Matrix *barktrans = FFT2Bark(feat_barkbands, FLAGS_feat_minfreq, FLAGS_feat_maxfreq, FLAGS_feat_window, FLAGS_sample_rate)->Transpose(mDelA);
 
     /* fft */
     int frames = (in->Len() - (FLAGS_feat_window - FLAGS_feat_hop)) / FLAGS_feat_hop;
     Matrix fftbuf(frames, FLAGS_feat_window/2, 0.0, 0, alloc);
-    if (!spectogram(in, &fftbuf, FLAGS_feat_window, FLAGS_feat_hop, FLAGS_feat_window, false, PowerDomain::abs2, 32768)) return 0;
+    if (!Spectogram(in, &fftbuf, FLAGS_feat_window, FLAGS_feat_hop, FLAGS_feat_window, false, PowerDomain::abs2, 32768)) return 0;
     if (FLAGS_feat_dither) MatrixIter(&fftbuf) fftbuf.row(i)[j] += FLAGS_feat_window;
 
     /* to bark scale critcal bands */
@@ -1215,23 +1215,23 @@ Matrix *PLP(const RingBuf::Handle *in, Matrix *out, vector<Filter> *rastaFilters
         Matrix rastabuf(barkbuf.M, barkbuf.N, 0.0, 0, alloc);
 
         if (rastaFilters) {
-            if (!rastaFilters->size()) MatrixColIter(&rastabuf) rastaFilters->push_back(Filter());
+            if (!rastaFilters->size()) MatrixColIter(&rastabuf) rastaFilters->push_back(StatefulFilter());
             if (rastaFilters->size() != rastabuf.N) FATAL("mismatch ", rastaFilters, " != ", rastabuf.N);
         } 
 
         MatrixColIter(&rastabuf) {
             ColMatPtrRingBuf bandTrajectory(&barkbuf, j), rastaOut(&rastabuf, j);
             RingBuf::HandleT<double> bt(&bandTrajectory), ro(&rastaOut);
-            Filter RFbuf, *RF = rastaFilters ? &(*rastaFilters)[j] : &RFbuf;
+            StatefulFilter RFbuf, *RF = rastaFilters ? &(*rastaFilters)[j] : &RFbuf;
             int processed = 0;
 
-            if (!RF->samples) RF->open(sizeof(feat_rastaB)/sizeof(double), feat_rastaB, 0, feat_rastaA);
+            if (!RF->samples) RF->Open(sizeof(feat_rastaB)/sizeof(double), feat_rastaB, 0, feat_rastaA);
             if (RF->samples < 4) {
-                processed = RF->filter(&bt, 0, 0, min(4-RF->samples, bt.Len()));
+                processed = RF->Filter(&bt, 0, 0, min(4-RF->samples, bt.Len()));
                 for (int i=0; i<processed; i++) ro.Write(0.0);
             }
             if (RF->samples == 4) RF->filterLenA = sizeof(feat_rastaA)/sizeof(double);
-            RF->filter(&bt, &ro, processed);
+            RF->Filter(&bt, &ro, processed);
         }
         MatrixIter(&barkbuf) barkbuf.row(i)[j] = exp(rastabuf.row(i)[j]);
     }
@@ -1285,7 +1285,7 @@ Matrix *PLP(const RingBuf::Handle *in, Matrix *out, vector<Filter> *rastaFilters
     }
 
     /* lifter */
-    static double *lifter = lifterMatrixROSA(ceps, 0.6); // lifterMatrixHTK(ceps, 22);
+    static double *lifter = LifterMatrixROSA(ceps, 0.6); // lifterMatrixHTK(ceps, 22);
     out->MultdiagR(lifter, ceps);
 
     return out;
@@ -1298,7 +1298,7 @@ RingBuf *InvPLP(const Matrix *in, int samplerate, Allocator *alloc) {
     plpcc.AssignL(in);
 
     int ceps = feat_lpccoefs+1;
-    static double *unlifter = lifterMatrixHTK(ceps, 22, true); // lifterMatrixROSA(ceps, 0.6, true);
+    static double *unlifter = LifterMatrixHTK(ceps, 22, true); // lifterMatrixROSA(ceps, 0.6, true);
     plpcc.MultdiagR(unlifter, ceps);
     Matrix::Print(&plpcc, "sec plp");
 
@@ -1309,13 +1309,13 @@ Matrix *MFCC(const RingBuf::Handle *in, Matrix *out, Allocator *alloc) {
     if (!alloc) alloc = Singleton<MallocAlloc>::Get();
 
     /* [mm,aspc,pspc] = melfcc(y/32768, sr, 'maxfreq', sr/2, 'numcep', 20, 'nbands', 40, 'fbtype', 'htkmel', 'dcttype', 3, 'usecmp', 0, 'wintime', 512/44100, 'hoptime', 256/44100, 'dither', 0, 'lifterexp', 0) */
-    static const Matrix *meltrans = fft2mel(FLAGS_feat_melbands, FLAGS_feat_minfreq, FLAGS_feat_maxfreq, FLAGS_feat_window, FLAGS_sample_rate)->Transpose(mDelA);
+    static const Matrix *meltrans = FFT2Mel(FLAGS_feat_melbands, FLAGS_feat_minfreq, FLAGS_feat_maxfreq, FLAGS_feat_window, FLAGS_sample_rate)->Transpose(mDelA);
     static const Matrix *ceptrans = DCT2(FLAGS_feat_cepcoefs, FLAGS_feat_melbands)->Transpose(mDelA);
     
     /* fft */
     int frames = (in->Len() - (FLAGS_feat_window - FLAGS_feat_hop)) / FLAGS_feat_hop;
     Matrix fftbuf(frames, FLAGS_feat_window/2, 0.0, 0, alloc);
-    if (!spectogram(in, &fftbuf, FLAGS_feat_window, FLAGS_feat_hop, FLAGS_feat_window, FLAGS_feat_preemphasis, PowerDomain::abs2)) return 0;
+    if (!Spectogram(in, &fftbuf, FLAGS_feat_window, FLAGS_feat_hop, FLAGS_feat_window, FLAGS_feat_preemphasis, PowerDomain::abs2)) return 0;
     
     /* to mel scale */
     Matrix melbuf(fftbuf.M, meltrans->N, 0.0, 0, alloc);
@@ -1340,7 +1340,7 @@ RingBuf *InvMFCC(const Matrix *in, int samplerate, const Matrix *f0) {
     Matrix *m = Matrix::Mult(in, transform, mDelB);
     MatrixIter(m) m->row(i)[j] = exp(m->row(i)[j]);
 
-    transform = mel2fft(FLAGS_feat_melbands, FLAGS_feat_minfreq, FLAGS_feat_maxfreq, FLAGS_feat_window, samplerate);
+    transform = Mel2FFT(FLAGS_feat_melbands, FLAGS_feat_minfreq, FLAGS_feat_maxfreq, FLAGS_feat_window, samplerate);
     m = Matrix::Mult(m, transform, mTrnpB|mDelB);
 
     if (0 && f0) {
@@ -1371,7 +1371,7 @@ RingBuf *InvMFCC(const Matrix *in, int samplerate, const Matrix *f0) {
             double f = (2 * M_PI * 440) / out.Rate();
             for (int i=0; i<out.Len(); i++) out.Write(sin(f*i)/16 + rand(-1,1)/2);
         }
-        Matrix *spec = spectogram(&out, 0, FLAGS_feat_window, FLAGS_feat_hop, FLAGS_feat_window, 0, PowerDomain::complex);
+        Matrix *spec = Spectogram(&out, 0, FLAGS_feat_window, FLAGS_feat_hop, FLAGS_feat_window, 0, PowerDomain::complex);
         delete outbuf;
 
         if (m->M != spec->M || m->N != spec->N) { delete m; delete spec; return 0; }	
@@ -1381,7 +1381,7 @@ RingBuf *InvMFCC(const Matrix *in, int samplerate, const Matrix *f0) {
         }
         delete m;
 
-        outbuf = ispectogram(spec, FLAGS_feat_window, FLAGS_feat_hop, FLAGS_feat_window/2, samplerate);
+        outbuf = ISpectogram(spec, FLAGS_feat_window, FLAGS_feat_hop, FLAGS_feat_window/2, samplerate);
         delete spec;
         return outbuf;
     }

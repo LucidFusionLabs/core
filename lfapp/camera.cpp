@@ -21,6 +21,7 @@
 #endif
 
 #include "lfapp/lfapp.h"
+#include "lfapp/camera.h"
 
 #ifdef LFL_CAMERA
 #ifdef _WIN32
@@ -73,25 +74,25 @@ DEFINE_int(camera_image_height, 0, "Camera capture image height");
 #ifdef LFL_OPENCV_CAMERA
 LFL_IMPORT extern int OPENCV_FPS;
 
-struct OpenCvCamera : public CameraImpl {
+struct OpenCvCamera : public Module {
     Thread thread;
     Mutex lock;
-
-    struct Camera { 
-        CvCapture *capture;
-        int width, height;
-        void dimensions(int W, int H) { width=W; height=H; }
-
-        RingBuf *frames;
-        int next;
-
-        Camera() : capture(0), width(0), height(0), frames(0), next(0) {}
+    struct Stream { 
+        CvCapture *capture=0;
+        RingBuf *frames=0;
+        int width=0, height=0, next=0;
+        void SetDimensions(int W, int H) { width=W; height=H; }
     } L, R;
+    Camera *camera;
+    OpenCvCamera(Camera *C) : thread(Threadthunk, this), camera(C) {}
 
-    virtual ~OpenCvCamera() {}
-    OpenCvCamera() : thread(threadthunk, this) {}
-
-    int init() {
+    int Free() {
+        if (thread.started) thread.Wait();
+        if (&L.capture) cvReleaseCapture(&L.capture);
+        if (&R.capture) cvReleaseCapture(&R.capture);
+        return 0;
+    }
+    int Init() {
         OPENCV_FPS = FLAGS_camera_fps;
 
         if (!(L.capture = cvCaptureFromCAM(0))) { FLAGS_lfapp_camera=0; return 0; }
@@ -100,10 +101,34 @@ struct OpenCvCamera : public CameraImpl {
         if (!thread.Start()) { FLAGS_lfapp_camera=0; return -1; }
         return 0;
     }
+    int Frame(unsigned) {
+        bool new_frame = false;
+        {
+            ScopedMutex ML(lock);
+            if (camera->frames_read > camera->last_frames_read) {
 
-    static int threadthunk(void *p) { return ((OpenCvCamera *)p)->threadproc(); }
+                /* frame align stream handles */
+                if (L.capture) L.next = L.frames->ring.back;
+                if (R.capture) R.next = R.frames->ring.back;
 
-    int threadproc() {
+                new_frame = true;
+            }
+            camera->last_frames_read = camera->frames_read;
+        }
+
+        if (!new_frame) return 0;
+
+        camera->image = (unsigned char*)L.frames->read(-1, L.next);
+        camera->image_timestamp = L.frames->readtimestamp(-1, L.next);
+        FLAGS_camera_image_width = L.width;
+        FLAGS_camera_image_height = L.height;
+
+        camera->image_format = Pixel::BGR24;
+        camera->image_linesize = camera->image_width*3;
+
+        return 1;
+    }
+    int Threadproc() {
         while (app->run) {
             /* grab */
             bool lg=0, rg=0;
@@ -134,56 +159,22 @@ struct OpenCvCamera : public CameraImpl {
                 ScopedMutex ML(lock);
                 if (lf) L.frames->write();
                 if (rf) R.frames->write();
-                frames_read++;
+                camera->frames_read++;
             }
             else Msleep(1);
         }
         return 0;
     };
-
-    int frame() {
-        bool new_frame = false;
-        {
-            ScopedMutex ML(lock);
-            if (frames_read > last_frames_read) {
-
-                /* frame align stream handles */
-                if (L.capture) L.next = L.frames->ring.back;
-                if (R.capture) R.next = R.frames->ring.back;
-
-                new_frame = true;
-            }
-            last_frames_read = frames_read;
-        }
-
-        if (!new_frame) return 0;
-
-        image = (unsigned char*)L.frames->read(-1, L.next);
-        image_timestamp = L.frames->readtimestamp(-1, L.next);
-        FLAGS_camera_image_width = L.width;
-        FLAGS_camera_image_height = L.height;
-
-        image_format = Pixel::BGR24;
-        image_linesize = image_width*3;
-
-        return 1;
-    }
-
-    int free() {
-        if (thread.started) thread.Wait();
-        if (&L.capture) cvReleaseCapture(&L.capture);
-        if (&R.capture) cvReleaseCapture(&R.capture);
-        return 0;
-    }
+    static int Threadthunk(void *p) { return ((OpenCvCamera *)p)->Threadproc(); }
 };
 #endif /* LFL_OPENCV_CAMERA */
 
 #ifdef LFL_FFMPEG_CAMERA
-struct FFmpegCamera : public CameraImpl {
+struct FFmpegCamera : public Module {
     Thread thread;
     Mutex lock;
 
-    struct Camera { 
+    struct Stream { 
         AVFormatContext *fctx;
 
         struct FramePtr {
@@ -201,13 +192,16 @@ struct FFmpegCamera : public CameraImpl {
         RingBuf *frames;
         int next;
 
-        Camera() : fctx(0), frames(0), next(0) {}
+        Stream() : fctx(0), frames(0), next(0) {}
     } L, R;
+    Camera *camera;
+    FFmpegCamera(Camera *C) : thread(Threadthunk, this), camera(C) {}
 
-    virtual ~FFmpegCamera() {}
-    FFmpegCamera() : thread(threadthunk, this) {}
-
-    int init() {
+    int Free() {
+        if (thread.started) thread.Wait();
+        return 0;
+    }
+    int Init() {
 #ifdef _WIN32
         static const char *ifmtname = "vfwcap";
         static const char *ifilename[2] = { "0", "1" };
@@ -227,7 +221,7 @@ struct FFmpegCamera : public CameraImpl {
             FLAGS_lfapp_camera = 0;
             return 0;
         }
-        L.frames = new RingBuf(FLAGS_camera_fps, FLAGS_camera_fps, sizeof(Camera::FramePtr));
+        L.frames = new RingBuf(FLAGS_camera_fps, FLAGS_camera_fps, sizeof(Stream::FramePtr));
         av_dict_free(&options);
 
         if (!thread.Start()) { FLAGS_lfapp_camera=0; return -1; }
@@ -235,37 +229,15 @@ struct FFmpegCamera : public CameraImpl {
         AVCodecContext *codec = L.fctx->streams[0]->codec;
         FLAGS_camera_image_width = codec->width;
         FLAGS_camera_image_height = codec->height;
-        image_format = Pixel::FromFFMpegId(codec->pix_fmt);
-        image_linesize = FLAGS_camera_image_width * Pixel::size(image_format);
+        camera->image_format = Pixel::FromFFMpegId(codec->pix_fmt);
+        camera->image_linesize = FLAGS_camera_image_width * Pixel::size(camera->image_format);
         return 0;
     }
-
-    static int threadthunk(void *p) { return ((FFmpegCamera *)p)->threadproc(); }
-
-    int threadproc() {
-        while (app->run) {
-            /* grab */
-            Camera::FramePtr Lframe(0);
-            if (av_read_frame(L.fctx, &Lframe.data) < 0) { ERROR("av_read_frame"); return -1; }
-            else Lframe.dirty = 1;
-
-            Camera::FramePtr::swap((Camera::FramePtr*)L.frames->write(RingBuf::Peek | RingBuf::Stamp), &Lframe);
-            
-            /* commit */  
-            {
-                ScopedMutex ML(lock);
-                L.frames->write();
-                frames_read++;
-            }
-        }
-        return 0;
-    };
-
-    int frame() {
+    int Frame(unsigned) {
         bool new_frame = false;
         {
             ScopedMutex ML(lock);
-            if (frames_read > last_frames_read) {
+            if (camera->frames_read > camera->last_frames_read) {
 
                 /* frame align stream handles */
                 if (L.fctx) L.next = L.frames->ring.back;
@@ -273,40 +245,54 @@ struct FFmpegCamera : public CameraImpl {
 
                 new_frame = true;
             }
-            last_frames_read = frames_read;
+            camera->last_frames_read = camera->frames_read;
         }
         if (!new_frame) return 0;
 
-        AVPacket *f = (AVPacket*)L.frames->read(-1, L.next);
-        image = f->data;
-        image_timestamp = L.frames->readtimestamp(-1, L.next);
+        AVPacket *f = (AVPacket*)L.frames->Read(-1, L.next);
+        camera->image = f->data;
+        camera->image_timestamp = L.frames->ReadTimestamp(-1, L.next);
         return 1;
     }
+    int Threadproc() {
+        while (app->run) {
+            /* grab */
+            Stream::FramePtr Lframe(0);
+            if (av_read_frame(L.fctx, &Lframe.data) < 0) { ERROR("av_read_frame"); return -1; }
+            else Lframe.dirty = 1;
 
-    int free() {
-        if (thread.started) thread.Wait();
+            Stream::FramePtr::swap((Stream::FramePtr*)L.frames->Write(RingBuf::Peek | RingBuf::Stamp), &Lframe);
+
+            /* commit */  
+            {
+                ScopedMutex ML(lock);
+                L.frames->Write();
+                camera->frames_read++;
+            }
+        }
         return 0;
-    }
+    };
+    static int Threadthunk(void *p) { return ((FFmpegCamera *)p)->Threadproc(); }
 };
 #endif /* LFL_FFMPEG_CAMERA */
 
 #ifdef LFL_DSVL_CAMERA
-struct DsvlCamera : public CameraImpl {
+struct DsvlCamera : public Module {
     Thread thread;
     Mutex lock;
-
-    struct Camera { 
-        DSVL_VideoSource *vs;
-        RingBuf *frames;
-        int next;
-
-        Camera() : vs(0), frames(0), next(0) {}
+    struct Stream { 
+        DSVL_VideoSource *vs=0;
+        RingBuf *frames=0;
+        int next=0;
     } L, R;
+    Camera *camera;
+    DsvlCamera(Camera *C) : thread(Threadthunk, this), camera(C) {}
 
-    virtual ~DsvlCamera() {}
-    DsvlCamera() : thread(threadthunk, this) {}
-
-    int init() {
+    int Free() {
+        if (thread.started) thread.Wait();
+        return 0;
+    }
+    int Init() {
         char config[] = "<?xml version='1.0' encoding='UTF-8'?> <dsvl_input>"
             "<camera frame_rate='5.0' show_format_dialog='true'>"
             "<pixel_format><RGB24 flip_v='true'/></pixel_format>"
@@ -328,8 +314,8 @@ struct DsvlCamera : public CameraImpl {
         int depth;
         if (pf == PIXELFORMAT_RGB24) {
             depth = 3;
-            image_format = Pixel::RGB24;
-            image_linesize = FLAGS_camera_image_width * depth;
+            camera->image_format = Pixel::RGB24;
+            camera->image_linesize = FLAGS_camera_image_width * depth;
         }
         else { ERROR("unknown pixel format: ", pf); return -1; }
 
@@ -340,10 +326,27 @@ struct DsvlCamera : public CameraImpl {
         INFO("opened camera ", FLAGS_camera_image_width, "x", FLAGS_camera_image_height, " @ ", FLAGS_camera_fps, "fps");
         return 0;
     }
+    int Frame(unsigned) {
+        bool new_frame = false;
+        {
+            ScopedMutex ML(lock);
+            if (camera->frames_read > camera->last_frames_read) {
 
-    static int threadthunk(void *p) { return ((DsvlCamera *)p)->threadproc(); }
+                /* frame align stream handles */
+                if (L.vs) L.next = L.frames->ring.back;
+                if (R.vs) R.next = R.frames->ring.back;
 
-    int threadproc() {
+                new_frame = true;
+            }
+            camera->last_frames_read = camera->frames_read;
+        }
+        if (!new_frame) return 0;
+
+        camera->image = (unsigned char*)L.frames->read(-1, L.next);
+        camera->image_timestamp = L.frames->readtimestamp(-1, L.next);
+        return 1;
+    }
+    int Threadproc() {
         while (app->run) {
             DWORD ret = L.vs->WaitForNextSample(1000/FLAGS_camera_fps);
             if (ret != WAIT_OBJECT_0) continue;
@@ -356,37 +359,12 @@ struct DsvlCamera : public CameraImpl {
             { /* commit */ 
                 ScopedMutex ML(lock);
                 L.frames->write();
-                frames_read++;
+                camera->frames_read++;
             }
         }
         return 0;
     };
-
-    int frame() {
-        bool new_frame = false;
-        {
-            ScopedMutex ML(lock);
-            if (frames_read > last_frames_read) {
-
-                /* frame align stream handles */
-                if (L.vs) L.next = L.frames->ring.back;
-                if (R.vs) R.next = R.frames->ring.back;
-
-                new_frame = true;
-            }
-            last_frames_read = frames_read;
-        }
-        if (!new_frame) return 0;
-
-        image = (unsigned char*)L.frames->read(-1, L.next);
-        image_timestamp = L.frames->readtimestamp(-1, L.next);
-        return 1;
-    }
-
-    int free() {
-        if (thread.started) thread.Wait();
-        return 0;
-    }
+    static int Threadthunk(void *p) { return ((DsvlCamera *)p)->Threadproc(); }
 };
 #endif /* LFL_DSVL_CAMERA */
 
@@ -461,7 +439,7 @@ template <class T> struct SampleGrabberThunker : public ISampleGrabberCB {
     }
 };
 
-struct DirectShowCamera : public CameraImpl {
+struct DirectShowCamera : public Module {
     CComPtr<IGraphBuilder> pGraph;
     CComPtr<IMediaControl> pMC;
     CComPtr<IMediaEventEx> pME;
@@ -480,10 +458,15 @@ struct DirectShowCamera : public CameraImpl {
     Mutex lock;
     bool invert;
 
+    Camera *camera;
+    DirectShowCamera(Camer *C) : thunker(this), frames(0), next(0), invert(0), camera(C) {}
     virtual ~DirectShowCamera() { delete frames; }
-    DirectShowCamera() : thunker(this), frames(0), next(0), invert(0) {}
 
-    int init() {
+    int Free() {
+        pMC->Stop();
+        return 0;
+    }
+    int Init() {
         FLAGS_lfapp_camera = 0;
         if (FAILED(CoInitialize(0))) return 0;
 
@@ -577,7 +560,7 @@ struct DirectShowCamera : public CameraImpl {
         while (pMTEnum->Next(1, &pMT, 0) == S_OK) {
             vih = (VIDEOINFOHEADER *)pMT->pbFormat;
             int fps = round_f(10000000.0/vih->AvgTimePerFrame);
-            int fmt = mst2pf(pMT->subtype, mst2invert(pMT->subtype), mediatype_enumerate);
+            int fmt = MST2PF(pMT->subtype, MST2invert(pMT->subtype), mediatype_enumerate);
 
             if ((!FLAGS_camera_image_width  || vih->bmiHeader.biWidth  == FLAGS_camera_image_width) &&
                 (!FLAGS_camera_image_height || vih->bmiHeader.biHeight == FLAGS_camera_image_height) &&
@@ -634,11 +617,11 @@ struct DirectShowCamera : public CameraImpl {
         if (FAILED(pMC->Run())) return 0;
 
         /* expose capture parameters */
-        invert = mst2invert(pMT->subtype);
+        invert = MST2invert(pMT->subtype);
         FLAGS_camera_image_width = vih->bmiHeader.biWidth;
         FLAGS_camera_image_height = vih->bmiHeader.biHeight;
         FLAGS_camera_fps = round_f(10000000.0/vih->AvgTimePerFrame);
-        image_format = mst2pf(pMT->subtype, invert);
+        image_format = MST2PF(pMT->subtype, invert);
         CoTaskMemFree((void*)pMT);
 
         image_linesize = FLAGS_camera_image_width * Pixel::size(image_format);
@@ -651,38 +634,25 @@ struct DirectShowCamera : public CameraImpl {
         INFO("opened camera ", FLAGS_camera_image_width, "x", FLAGS_camera_image_height, " @ ", FLAGS_camera_fps, " fps");
         return 0;
     }
+    int Frame(unsigned) {
+        bool new_frame = false;
+        {
+            ScopedMutex ML(lock);
+            if (camera->frames_read > camera->last_frames_read) {
 
-    static int mst2pf(GUID mst, bool invert, bool logerror=false) {
-        if      (mst == MEDIASUBTYPE_RGB24)  return invert ? Pixel::RGB24   : Pixel::BGR24;
-        else if (mst == MEDIASUBTYPE_RGB32)  return invert ? Pixel::RGB32   : Pixel::BGR32;
-        else if (mst == MEDIASUBTYPE_RGB555) return invert ? Pixel::RGB555  : Pixel::BGR555;
-        else if (mst == MEDIASUBTYPE_RGB565) return invert ? Pixel::RGB565  : Pixel::BGR565;
-        else if (mst == MEDIASUBTYPE_YUY2)   return invert ? Pixel::YUYV422 : Pixel::YUYV422;
-        else {
-            if (logerror) {
-                OLECHAR *bstrGuid;
-                StringFromCLSID(mst, &bstrGuid);
-                _bstr_t n = bstrGuid;
-                ERROR("unknown pixel format : ", (char*)n);
-                CoTaskMemFree(bstrGuid);
+                /* frame align stream handle */
+                next = frames->ring.back;
+
+                new_frame = true;
             }
-            return 0;
+            camera->last_frames_read = camera->frames_read;
         }
+        if (!new_frame) return 0;
+
+        camera->image = (unsigned char*)frames->read(-1, next);
+        camera->image_timestamp = frames->readtimestamp(-1, next);
+        return 1;
     }
-
-    static bool mst2invert(GUID mst) { return mst2pf(mst, false) != mst2pf(mst, true); }
-
-    static void PinEnum(IEnumPins *pPinEnum) {
-        CComPtr<IPin> pPin; PIN_INFO pin; int pinId=0; 
-        while (pPinEnum->Next(1, &pPin, 0) == S_OK) {
-            pPin->QueryPinInfo(&pin);
-            pin.pFilter->Release();
-            pPin.Release();
-            INFO("PinEnum ", pinId++, " ", pin.dir);
-        }
-        pPinEnum->Reset();
-    }
-
     HRESULT SampleGrabberCB(double time, IMediaSample *pSample) {
         /* get sample buffer */
         char *buf;
@@ -701,45 +671,47 @@ struct DirectShowCamera : public CameraImpl {
         {
             ScopedMutex ML(lock);
             frames->write();
-            frames_read++;
+            camera->frames_read++;
         }
         return S_OK;
     }
-
-    int frame() {
-        bool new_frame = false;
-        {
-            ScopedMutex ML(lock);
-            if (frames_read > last_frames_read) {
-
-                /* frame align stream handle */
-                next = frames->ring.back;
-
-                new_frame = true;
+    static bool MST2invert(GUID mst) { return MST2PF(mst, false) != MST2PF(mst, true); }
+    static int MST2PF(GUID mst, bool invert, bool logerror=false) {
+        if      (mst == MEDIASUBTYPE_RGB24)  return invert ? Pixel::RGB24   : Pixel::BGR24;
+        else if (mst == MEDIASUBTYPE_RGB32)  return invert ? Pixel::RGB32   : Pixel::BGR32;
+        else if (mst == MEDIASUBTYPE_RGB555) return invert ? Pixel::RGB555  : Pixel::BGR555;
+        else if (mst == MEDIASUBTYPE_RGB565) return invert ? Pixel::RGB565  : Pixel::BGR565;
+        else if (mst == MEDIASUBTYPE_YUY2)   return invert ? Pixel::YUYV422 : Pixel::YUYV422;
+        else {
+            if (logerror) {
+                OLECHAR *bstrGuid;
+                StringFromCLSID(mst, &bstrGuid);
+                _bstr_t n = bstrGuid;
+                ERROR("unknown pixel format : ", (char*)n);
+                CoTaskMemFree(bstrGuid);
             }
-            last_frames_read = frames_read;
+            return 0;
         }
-        if (!new_frame) return 0;
-
-        image = (unsigned char*)frames->read(-1, next);
-        image_timestamp = frames->readtimestamp(-1, next);
-        return 1;
     }
-
-    int free() {
-        pMC->Stop();
-        return 0;
+    static void PinEnum(IEnumPins *pPinEnum) {
+        CComPtr<IPin> pPin; PIN_INFO pin; int pinId=0; 
+        while (pPinEnum->Next(1, &pPin, 0) == S_OK) {
+            pPin->QueryPinInfo(&pin);
+            pin.pFilter->Release();
+            pPin.Release();
+            INFO("PinEnum ", pinId++, " ", pin.dir);
+        }
+        pPinEnum->Reset();
     }
 };
 #endif /* LFL_DIRECTSHOW_CAMERA */
 
 #ifdef LFL_QUICKTIME_CAMERA
-struct QuickTimeCamera : public CameraImpl {
+struct QuickTimeCamera : public Module {
     Thread thread;
     VideoResampler conv;
     Mutex lock;
-
-    struct Camera {
+    struct Stream {
         SeqGrabComponent grabber;
         SGChannel channel;
         GWorldPtr gworld;
@@ -749,15 +721,14 @@ struct QuickTimeCamera : public CameraImpl {
 
         RingBuf *frames;
         int next;
-        Camera() : grabber(0), channel(0), gworld(0), seq(0), frames(0), next(0) {}
+        Stream() : grabber(0), channel(0), gworld(0), seq(0), frames(0), next(0) {}
     } L, R;
+    Camera *camera;
+    QuickTimeCamera(Camera *C) : thread(Threadthunk, this), camera(C) {}
 
-    virtual ~QuickTimeCamera() {}
-    QuickTimeCamera() : thread(threadthunk, this) {}
-
-    int init() {
-        image_format = Pixel::BGR24;
-        int image_depth = Pixel::size(image_format);
+    int Init() {
+        camera->image_format = Pixel::BGR24;
+        int image_depth = Pixel::size(camera->image_format);
 
         /* open device */
         SGDeviceList devlist; int devind=-1, di=0, ret;
@@ -798,9 +769,9 @@ struct QuickTimeCamera : public CameraImpl {
         if ((ret = SGSetGWorld(L.grabber, L.gworld, 0)) != noErr) { ERROR("SGSetGWorld: ", ret); return -1; }
         if ((ret = SGSetChannelBounds(L.channel, &L.rect)) != noErr) { ERROR("SGSetChannelBounds: ", ret); return -1; }
         DisposeGWorld(oldgworld);
-        image_linesize = FLAGS_camera_image_width * image_depth;
-        conv.open(FLAGS_camera_image_width, FLAGS_camera_image_height, Pixel::BGR32,
-                  FLAGS_camera_image_width, FLAGS_camera_image_height, image_format);
+        camera->image_linesize = FLAGS_camera_image_width * image_depth;
+        conv.Open(FLAGS_camera_image_width, FLAGS_camera_image_height, Pixel::BGR32,
+                  FLAGS_camera_image_width, FLAGS_camera_image_height, camera->image_format);
 
         /* start */
         L.frames = new RingBuf(FLAGS_camera_fps, FLAGS_camera_fps, FLAGS_camera_image_width*FLAGS_camera_image_height*image_depth);
@@ -811,10 +782,44 @@ struct QuickTimeCamera : public CameraImpl {
         if (!thread.Start()) return -1;
         return 0;
     }
+    int Free() {
+        if (thread.started) thread.Wait();
+        if (L.grabber) {
+            SGStop(L.grabber);
+            CloseComponent(L.grabber);
+        }
+        if (L.seq) CDSequenceEnd(L.seq);
+        if (L.gworld) DisposeGWorld(L.gworld);
+        return 0;
+    }
+    int Frame(unsigned) {
+        bool new_frame = false;
+        {
+            ScopedMutex ML(lock);
+            if (camera->frames_read > camera->last_frames_read) {
 
-    static OSErr SGDataProcL(SGChannel chan, Ptr buf, long len, long *, long, TimeValue, short, long opaque) { QuickTimeCamera *cam=(QuickTimeCamera*)opaque; return cam->SGDataProc(chan, buf, len, &cam->L); }
-    static OSErr SGDataProcR(SGChannel chan, Ptr buf, long len, long *, long, TimeValue, short, long opaque) { QuickTimeCamera *cam=(QuickTimeCamera*)opaque; return cam->SGDataProc(chan, buf, len, &cam->R); }
-    OSErr SGDataProc(SGChannel chan, Ptr buf, long len, Camera *cam) {
+                /* frame align stream handles */
+                if (L.frames) L.next = L.frames->ring.back;
+                if (R.frames) R.next = R.frames->ring.back;
+
+                new_frame = true;
+            }
+            camera->last_frames_read = camera->frames_read;
+        }
+        if (!new_frame) return 0;
+
+        camera->image = (unsigned char*)L.frames->read(-1, L.next);
+        camera->image_timestamp = L.frames->readtimestamp(-1, L.next);
+        return 1;
+    }
+    int Threadproc() {
+        while (app->run) {
+            if (L.grabber) SGIdle(L.grabber);
+            if (R.grabber) SGIdle(R.grabber);
+            Msleep(1);
+        }
+    }
+    OSErr SGDataProc(SGChannel chan, Ptr buf, long len, Stream *cam) {
         CodecFlags codecflags; int ret;
         if (!cam->seq) {
             ImageDescriptionHandle desc = (ImageDescriptionHandle)NewHandle(0);
@@ -827,92 +832,49 @@ struct QuickTimeCamera : public CameraImpl {
         if ((ret = DecompressSequenceFrameS(cam->seq, buf, len, 0, &codecflags, 0)) != noErr) { ERROR("DecompressSequenceFrame: ", ret); return -1; }
 
         /* write */
-        char *in = (char*)(GetPixBaseAddr(cam->pixmap)+1);
-        char *out = (char*)cam->frames->write(RingBuf::Peek | RingBuf::Stamp);
+        unsigned char *in = (unsigned char*)(GetPixBaseAddr(cam->pixmap)+1);
+        unsigned char *out = (unsigned char*)cam->frames->Write(RingBuf::Peek | RingBuf::Stamp);
         int inlinesize = GetPixRowBytes(L.pixmap);
-        conv.Resample(in, inlinesize, out, image_linesize);
+        conv.Resample(in, inlinesize, out, camera->image_linesize);
 
         /* commit */
         {
             ScopedMutex ML(lock);
-            cam->frames->write();
-            frames_read++;
+            cam->frames->Write();
+            camera->frames_read++;
         }
         return noErr;
     }
-
-    static int threadthunk(void *p) { return ((QuickTimeCamera*)p)->threadproc(); }
-    int threadproc() {
-        while (app->run) {
-            if (L.grabber) SGIdle(L.grabber);
-            if (R.grabber) SGIdle(R.grabber);
-            Msleep(1);
-        }
-    }
-
-    int frame() {
-        bool new_frame = false;
-        {
-            ScopedMutex ML(lock);
-            if (frames_read > last_frames_read) {
-
-                /* frame align stream handles */
-                if (L.frames) L.next = L.frames->ring.back;
-                if (R.frames) R.next = R.frames->ring.back;
-
-                new_frame = true;
-            }
-            last_frames_read = frames_read;
-        }
-        if (!new_frame) return 0;
-
-        image = (unsigned char*)L.frames->read(-1, L.next);
-        image_timestamp = L.frames->readtimestamp(-1, L.next);
-        return 1;
-    }
-
-    int free() {
-        if (thread.started) thread.Wait();
-        if (L.grabber) {
-            SGStop(L.grabber);
-            CloseComponent(L.grabber);
-        }
-        if (L.seq) CDSequenceEnd(L.seq);
-        if (L.gworld) DisposeGWorld(L.gworld);
-        return 0;
-    }
+    static int Threadthunk(void *p) { return ((QuickTimeCamera*)p)->Threadproc(); }
+    static OSErr SGDataProcL(SGChannel chan, Ptr buf, long len, long *, long, TimeValue, short, long opaque) { QuickTimeCamera *cam=(QuickTimeCamera*)opaque; return cam->SGDataProc(chan, buf, len, &cam->L); }
+    static OSErr SGDataProcR(SGChannel chan, Ptr buf, long len, long *, long, TimeValue, short, long opaque) { QuickTimeCamera *cam=(QuickTimeCamera*)opaque; return cam->SGDataProc(chan, buf, len, &cam->R); }
 };
 #endif /* LFL_QUICKTIME_CAMERA */
 
 #ifdef LFL_AVCAPTURE_CAMERA
-struct AVCaptureCamera : public CameraImpl {
+struct AVCaptureCamera : public Module {
     Mutex lock; 
-
-    struct Camera {
-        RingBuf *frames;
-        int next;
-        Camera() : frames(0), next(0) {}
+    struct Stream {
+        RingBuf *frames=0;
+        int next=0;
     } L, R;
+    Camera *camera;
+	AVCaptureCamera(Camera *C) : camera(C) {} 
 
-    virtual ~AVCaptureCamera() {}
-	AVCaptureCamera() {} 
-
-    int init() {
+    int Init() {
         AVCaptureInit(FLAGS_camera_fps);
         /* hardcoded for now per AVCaptureSessionPresetLow */
         FLAGS_camera_image_height = 144;
         FLAGS_camera_image_width = 192;
-
-        image_format = Pixel::BGR32;
-        image_linesize = FLAGS_camera_image_width*4;
+        camera->image_format = Pixel::BGR32;
+        camera->image_linesize = FLAGS_camera_image_width*4;
         return 0;
     }
-
-    int frame() {
+    int Frame(unsigned) {
         bool new_frame = false;
         {
             ScopedMutex ML(lock);
-            if (frames_read > last_frames_read) {
+            if (camera->frames_read > camera->last_frames_read) {
 
                 /* frame align stream handles */
                 if (L.frames) L.next = L.frames->ring.back;
@@ -920,68 +882,51 @@ struct AVCaptureCamera : public CameraImpl {
 
                 new_frame = true;
             }
-            last_frames_read = frames_read;
+            camera->last_frames_read = camera->frames_read;
         }
         if (!new_frame) return 0;
-
-        image = (unsigned char*)L.frames->read(-1, L.next);
-        image_timestamp = L.frames->readtimestamp(-1, L.next);
-
+        camera->image = (unsigned char*)L.frames->Read(-1, L.next);
+        camera->image_timestamp = L.frames->ReadTimestamp(-1, L.next);
         return 1;
     }
-
-    int free() {
+    int Free() {
         AVCaptureShutdown();
         return 0;
     }
-
-    static void UpdateFrame(const char *imageData, int width, int height, int imageSize) {
-        AVCaptureCamera *camera = (AVCaptureCamera*)::camera;
-
-        if (!camera->L.frames) 
-            camera->L.frames = new RingBuf(FLAGS_camera_fps, FLAGS_camera_fps, imageSize);
-
-        memcpy(camera->L.frames->write(RingBuf::Peek | RingBuf::Stamp), imageData, imageSize);
-
-        /* commit */  
-        {
-            ScopedMutex ML(camera->lock);
-            camera->L.frames->write();
-            camera->L.frames_read++;
+    void UpdateFrame(const char *imageData, int width, int height, int imageSize) {
+        if (!L.frames) L.frames = new RingBuf(FLAGS_camera_fps, FLAGS_camera_fps, imageSize);
+        memcpy(L.frames->Write(RingBuf::Peek | RingBuf::Stamp), imageData, imageSize);
+        { /* commit */  
+            ScopedMutex ML(lock);
+            L.frames->Write();
+            camera->frames_read++;
         } 
     }
 };
-
-extern "C" {
-    void UpdateFrame(const char *imageData, int width, int height, int imageSize) {
-        AVCaptureCamera::UpdateFrame(imageData, width, height, imageSize);
-    }
-};
+extern "C" void UpdateFrame(const char *imageData, int width, int height, int imageSize) {
+    return ((AVCaptureCamera*)app->camera.impl)->UpdateFrame(imageData, width, height, imageSize);
+}
 #endif /* LFL_AVCAPTURE_CAMERA */
 
 #ifdef LFL_QTKIT_CAMERA
-struct QTKitCamera : public CameraImpl {
+struct QTKitCamera : public Module {
     Mutex lock; 
-
-    struct Camera {
-        RingBuf *frames;
-        int next;
-        Camera() : frames(0), next(0) {}
+    struct Stream {
+        RingBuf *frames=0;
+        int next=0;
     } L, R;
+    Camera *camera;
+	QTKitCamera(Camera *C) : camera(C) {} 
 
-    virtual ~QTKitCamera() {}
-	QTKitCamera() {} 
-
-    int init() {
+    int Init() {
         QTKitInit(FLAGS_camera_fps);
         return 0;
     }
-
-    int frame() {
+    int Frame(unsigned) {
         bool new_frame = false;
         {
             ScopedMutex ML(lock);
-            if (frames_read > last_frames_read) {
+            if (camera->frames_read > camera->last_frames_read) {
 
                 /* frame align stream handles */
                 if (L.frames) L.next = L.frames->ring.back;
@@ -989,95 +934,69 @@ struct QTKitCamera : public CameraImpl {
 
                 new_frame = true;
             }
-            last_frames_read = frames_read;
+            camera->last_frames_read = camera->frames_read;
         }
         if (!new_frame) return 0;
-
-        image = (unsigned char*)L.frames->Read(-1, L.next);
-        image_timestamp = L.frames->ReadTimestamp(-1, L.next);
-
+        camera->image = (unsigned char*)L.frames->Read(-1, L.next);
+        camera->image_timestamp = L.frames->ReadTimestamp(-1, L.next);
         return 1;
     }
-
-    int free() {
+    int Free() {
         QTKitShutdown();
         return 0;
     }
-
-    static void UpdateFrame(const char *imageData, int width, int height, int imageSize) {
-        QTKitCamera *camera = (QTKitCamera*)app->camera.camera;
-
-        if (!camera->L.frames) {
-            camera->L.frames = new RingBuf(FLAGS_camera_fps, FLAGS_camera_fps, imageSize);
+    void UpdateFrame(const char *imageData, int width, int height, int imageSize) {
+        if (!L.frames) {
+            L.frames = new RingBuf(FLAGS_camera_fps, FLAGS_camera_fps, imageSize);
             FLAGS_camera_image_width = width;
             FLAGS_camera_image_height = height;
             camera->image_format = Pixel::RGB32;
             camera->image_linesize = FLAGS_camera_image_width*4;
         }
-
-        memcpy(camera->L.frames->Write(RingBuf::Peek | RingBuf::Stamp), imageData, imageSize);
-
-        /* commit */  
-        {
-            ScopedMutex ML(camera->lock);
-            camera->L.frames->Write();
+        memcpy(L.frames->Write(RingBuf::Peek | RingBuf::Stamp), imageData, imageSize);
+        { /* commit */  
+            ScopedMutex ML(lock);
+            L.frames->Write();
             camera->frames_read++;
         } 
     }
 };
-
-extern "C" {
-    void UpdateFrame(const char *imageData, int width, int height, int imageSize) {
-        QTKitCamera::UpdateFrame(imageData, width, height, imageSize);
-    }
-};
+extern "C" void UpdateFrame(const char *imageData, int width, int height, int imageSize) {
+    return ((QTKitCamera*)app->camera.impl)->UpdateFrame(imageData, width, height, imageSize);
+}
 #endif /* LFL_QTKIT_CAMERA */
 
 int Camera::Init() {
-
-#ifdef LFL_OPENCV_CAMERA
-    camera = new OpenCvCamera();
-#endif
-
-#ifdef LFL_FFMPEG_CAMERA
-    camera = new FFmpegCamera();
-#endif
-
-#ifdef LFL_DSVL_CAMERA
-    camera = new DsvlCamera();
-#endif
-
-#ifdef LFL_DIRECTSHOW_CAMERA
-    camera = new DirectShowCamera();
-#endif
-
-#ifdef LFL_QUICKTIME_CAMERA
-    camera = new QuickTimeCamera();
-#endif
-
-#ifdef LFL_AVCAPTURE_CAMERA
-	camera = new AVCaptureCamera();
-#endif
-
-#ifdef LFL_QTKIT_CAMERA
-	camera = new QTKitCamera();
+#if defined(LFL_OPENCV_CAMERA)
+    impl = new OpenCvCamera(this);
+#elif defined(LFL_FFMPEG_CAMERA)
+    impl = new FFmpegCamera(this);
+#elif defined(LFL_DSVL_CAMERA)
+    impl = new DsvlCamera(this);
+#elif defined(LFL_DIRECTSHOW_CAMERA)
+    impl = new DirectShowCamera(this);
+#elif defined(LFL_QUICKTIME_CAMERA)
+    impl = new QuickTimeCamera(this);
+#elif defined(LFL_AVCAPTURE_CAMERA)
+	impl = new AVCaptureCamera(this);
+#elif defined(LFL_QTKIT_CAMERA)
+	impl = new QTKitCamera(this);
 #endif
 
     int ret = 0;
-    if (camera) ret = camera->init();
+    if (impl) ret = impl->Init();
     else FLAGS_lfapp_camera = 0;
-    
-    if (!FLAGS_lfapp_camera) INFO("no camera found");
 
+    if (!FLAGS_lfapp_camera) INFO("no camera found");
     return ret;
 }
 
-int Camera::Frame(unsigned t) { return camera->frame(); }
+int Camera::Frame(unsigned t) { return impl->Frame(t); }
 
 int Camera::Free() {
-    int ret = camera->free();
-    delete camera;
-    camera = 0;
+    int ret = impl ? impl->Free() : 0;
+    delete impl;
+    impl = 0;
     return ret;
 }
 
