@@ -95,7 +95,7 @@ struct LiveSpectogram {
 
     void XForm(const string &n) {
         if (n == "mel") {
-            Typed::Replace<Matrix>(&transform, fft2mel(FLAGS_feat_melbands, FLAGS_feat_minfreq, FLAGS_feat_maxfreq, FLAGS_feat_window, FLAGS_sample_rate)->Transpose(mDelA));
+            Typed::Replace<Matrix>(&transform, FFT2Mel(FLAGS_feat_melbands, FLAGS_feat_minfreq, FLAGS_feat_maxfreq, FLAGS_feat_window, FLAGS_sample_rate)->Transpose(mDelA));
             Resize(FLAGS_feat_melbands);
         } else {
             Typed::Replace<Matrix>(&transform, 0);
@@ -112,7 +112,7 @@ struct LiveSpectogram {
             RingBuf::Handle L(app->audio.IL, app->audio.RL.next-Behind(), FLAGS_feat_window);
 
             Matrix *Frame, *FFT;
-            Frame = FFT = spectogram(&L, transform ? 0 : handle.Write(), FLAGS_feat_window, FLAGS_feat_hop, FLAGS_feat_window, 0, PowerDomain::abs);
+            Frame = FFT = Spectogram(&L, transform ? 0 : handle.Write(), FLAGS_feat_window, FLAGS_feat_hop, FLAGS_feat_window, 0, PowerDomain::abs);
             if (transform) Frame = Matrix::Mult(FFT, transform, handle.Write());
             if (transform) delete FFT;
 
@@ -202,8 +202,8 @@ struct LiveCamera {
 
         if (FLAGS_lfapp_camera && cam == asset("camera")) {
             /* update camera buffer */
-            cam->tex.UpdateBuffer(app->camera.camera->image, FLAGS_camera_image_width, FLAGS_camera_image_height, app->camera.camera->image_format,
-                                  app->camera.camera->image_linesize, Texture::Flag::Resample);
+            cam->tex.UpdateBuffer(app->camera.image, FLAGS_camera_image_width, FLAGS_camera_image_height, app->camera.image_format,
+                                  app->camera.image_linesize, Texture::Flag::Resample);
 
             /* flush camera buffer */
             cam->tex.Bind();
@@ -427,7 +427,7 @@ struct AudioGUI : public GUI {
         /* f0 */
         if (0) {
             RingBuf::Handle f0in(app->audio.IL, app->audio.RL.next-FLAGS_feat_window, FLAGS_feat_window);
-            text->Draw(StringPrintf("hz %.0f", fundamentalFrequency(&f0in, FLAGS_feat_window, 0)), point(screen->width*.85, screen->height*.05));
+            text->Draw(StringPrintf("hz %.0f", FundamentalFrequency(&f0in, FLAGS_feat_window, 0)), point(screen->width*.85, screen->height*.05));
         }
 
         /* SNR */

@@ -154,16 +154,16 @@ int PngWriter::Write(const string &fn, const Texture &tex) {
 const JOCTET EOI_BUFFER[1] = { JPEG_EOI };
 struct MyJpegErrorMgr  { jpeg_error_mgr  pub; jmp_buf setjmp_buffer; };
 struct MyJpegSourceMgr { jpeg_source_mgr pub; const JOCTET *data; size_t len; } ;
-void my_jpeg_error_exit(j_common_ptr jcs) { longjmp(((MyJpegErrorMgr*)jcs->err)->setjmp_buffer, 1); }
-void my_jpeg_init_source(j_decompress_ptr jds) {}
-void my_jpeg_term_source(j_decompress_ptr jds) {}
-boolean my_jpeg_fill_input_buffer(j_decompress_ptr jds) {
+static void my_jpeg_error_exit(j_common_ptr jcs) { longjmp(((MyJpegErrorMgr*)jcs->err)->setjmp_buffer, 1); }
+static void my_jpeg_init_source(j_decompress_ptr jds) {}
+static void my_jpeg_term_source(j_decompress_ptr jds) {}
+static boolean my_jpeg_fill_input_buffer(j_decompress_ptr jds) {
     MyJpegSourceMgr *src = (MyJpegSourceMgr*)jds->src;
     src->pub.next_input_byte = EOI_BUFFER;
     src->pub.bytes_in_buffer = 1;
     return true;
 }
-void my_jpeg_skip_input_data(j_decompress_ptr jds, long len) {
+static void my_jpeg_skip_input_data(j_decompress_ptr jds, long len) {
     MyJpegSourceMgr *src = (MyJpegSourceMgr*)jds->src;
     if (src->pub.bytes_in_buffer < len) {
         src->pub.next_input_byte = EOI_BUFFER;
@@ -173,7 +173,7 @@ void my_jpeg_skip_input_data(j_decompress_ptr jds, long len) {
         src->pub.bytes_in_buffer -= len;
     }
 }
-void my_jpeg_mem_src(j_decompress_ptr jds, const char *buf, size_t len) {
+static void my_jpeg_mem_src(j_decompress_ptr jds, const char *buf, size_t len) {
     if (!jds->src) jds->src = (jpeg_source_mgr*)(*jds->mem->alloc_small)((j_common_ptr)jds, JPOOL_PERMANENT, sizeof(MyJpegSourceMgr));
     MyJpegSourceMgr *src = (MyJpegSourceMgr*)jds->src;
     src->pub.init_source       = my_jpeg_init_source;
@@ -596,7 +596,7 @@ struct FFMpegAssetLoader : public AudioAssetLoader, public VideoAssetLoader, pub
 
         if (!a->refill) {
             avcodec_close(fctx->streams[a->handle_arg1]->codec);
-            a->resampler.close();
+            a->resampler.Close();
         }
     }
 
@@ -619,7 +619,7 @@ struct FFMpegAssetLoader : public AudioAssetLoader, public VideoAssetLoader, pub
         }
 
         if (open_resampler)
-            a->resampler.open(a->wav, avctx->channels, avctx->sample_rate, Sample::FromFFMpegId(avctx->sample_fmt),
+            a->resampler.Open(a->wav, avctx->channels, avctx->sample_rate, Sample::FromFFMpegId(avctx->sample_fmt),
                                       a->channels,     a->sample_rate,     Sample::S16);
 
         a->wav->ring.back = 0;
@@ -670,7 +670,7 @@ struct FFMpegAssetLoader : public AudioAssetLoader, public VideoAssetLoader, pub
             sa->sample_rate = FLAGS_sample_rate;
             sa->seconds = FLAGS_soundasset_seconds;
             sa->wav = new RingBuf(sa->sample_rate, SoundAssetSize(sa));
-            sa->resampler.open(sa->wav, avctx->channels, avctx->sample_rate, Sample::FromFFMpegId(avctx->sample_fmt),
+            sa->resampler.Open(sa->wav, avctx->channels, avctx->sample_rate, Sample::FromFFMpegId(avctx->sample_fmt),
                                            sa->channels,    sa->sample_rate, Sample::S16);
         }
     }
@@ -701,7 +701,7 @@ struct FFMpegAssetLoader : public AudioAssetLoader, public VideoAssetLoader, pub
                     int sampsIn  = frame->nb_samples;
                     int sampsOut = max(0, SoundAssetSize(sa) - wrote) / sa->channels;
 
-                    sa->resampler.update(sampsIn, (const short**)frame->extended_data, rsout, -1, sampsOut);
+                    sa->resampler.Update(sampsIn, (const short**)frame->extended_data, rsout, -1, sampsOut);
                     wrote = sa->resampler.output_available - begin_resamples_available;
                     av_frame_unref(frame);
                 }
@@ -1126,7 +1126,7 @@ Waveform Waveform::Decimated(point dim, const Color *c, const RingBuf::Handle *s
     unique_ptr<RingBuf> dsb;
     RingBuf::Handle dsbh;
     if (decimateBy) {
-        dsb = unique_ptr<RingBuf>(decimate(sbh, decimateBy));
+        dsb = unique_ptr<RingBuf>(Decimate(sbh, decimateBy));
         dsbh = RingBuf::Handle(dsb.get());
         sbh = &dsbh;
     }
@@ -1200,7 +1200,7 @@ void glSpectogram(SoundAsset *sa, Asset *a, Matrix *transform, float *max, float
     const RingBuf::Handle B(sa->wav);
 
     /* 20*log10(abs(specgram(y,2048,sr,hamming(512),256))) */
-    Matrix *m = spectogram(&B, 0, FLAGS_feat_window, FLAGS_feat_hop, FLAGS_feat_window, 0, PowerDomain::abs);
+    Matrix *m = Spectogram(&B, 0, FLAGS_feat_window, FLAGS_feat_hop, FLAGS_feat_window, 0, PowerDomain::abs);
     if (transform) m = Matrix::Mult(m, transform, mDelA);
 
     glSpectogram(m, a, max, clip, PowerDomain::abs);

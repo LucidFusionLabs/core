@@ -860,9 +860,9 @@ void shell_filter(const vector<string> &arg, bool FFTfilter, int taps, int hop=0
     if (arg.size() > 1) {
         filter.resize(taps);
         if        (arg[1] == "low") {
-            for (int i=0; i<taps; i++) filter[i] = lowpass_filter(taps, i, (int)cutoff);
+            for (int i=0; i<taps; i++) filter[i] = LowPassFilter(taps, i, (int)cutoff);
         } else if (arg[1] == "high") {
-            for (int i=0; i<taps; i++) filter[i] = highpass_filter(taps, i, (int)cutoff);
+            for (int i=0; i<taps; i++) filter[i] = HighPassFilter(taps, i, (int)cutoff);
         } else if (arg[1] == "preemph") {
             taps = 2;
             filter = PreEmphasisFilter();
@@ -879,11 +879,11 @@ void shell_filter(const vector<string> &arg, bool FFTfilter, int taps, int hop=0
     RingBuf::Handle I(sa->wav), O(&filtered);
     
     if (FFTfilter) {
-        fft_filter_compile(taps, &filter[0]);
-        if (fft_filter(&I, &O, taps, hop, &filter[0])) return;
+        FFTFilterCompile(taps, &filter[0]);
+        if (FFTFilter(&I, &O, taps, hop, &filter[0])) return;
     }
     else {
-        if (LFL::filter(&I, &O, taps, &filter[0])) return;
+        if (LFL::Filter(&I, &O, taps, &filter[0])) return;
     }
 
     if (1) {
@@ -916,12 +916,12 @@ void Shell::f0(const vector<string> &arg) {
 
     if (offset) {
         RingBuf::Handle I(sa->wav, offset);
-        float f0 = fundamentalFrequency(&I, FLAGS_feat_window, 0, method);
+        float f0 = FundamentalFrequency(&I, FLAGS_feat_window, 0, method);
         INFO("f0 = (", sa->name, ":", offset, ") = ", f0);    
     }
     else {
         RingBuf::Handle I(sa->wav, offset);
-        Matrix *f0 = f0stream(&I, 0, FLAGS_feat_window, FLAGS_feat_hop, method);
+        Matrix *f0 = F0Stream(&I, 0, FLAGS_feat_window, FLAGS_feat_hop, method);
         for (int i=0; i<f0->M; /**/) {
             char buf[1024]; int len=0;
             for (int j=0; j<20 && i<f0->M; j++,i++) len += sprint(buf+len, sizeof(buf)-len, "%.2f, ", f0->row(i)[0]);
@@ -933,7 +933,7 @@ void Shell::f0(const vector<string> &arg) {
 void Shell::sinth(const vector<string> &a) { 
     int hz[3] = { 440, 0, 0};
     for (int i=0; i<sizeofarray(hz) && i<a.size(); i++) hz[i] = atof(a[i].c_str());
-    sinthesize(&app->audio, hz[0], hz[1], hz[2]);
+    Sinthesize(&app->audio, hz[0], hz[1], hz[2]);
 }
 
 void Shell::writesnap(const vector<string> &a) {

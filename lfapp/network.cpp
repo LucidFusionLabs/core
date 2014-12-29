@@ -2239,12 +2239,12 @@ void HTTPServer::StreamResource::update(int audio_samples, bool video_sample) {
     if (ac && audio_samples) {
         if (!resampler.out) {
             resampler.out = new RingBuf(ac->sample_rate, ac->sample_rate*channels);
-            resampler.open(resampler.out, FLAGS_chans_in, FLAGS_sample_rate, Sample::S16,
+            resampler.Open(resampler.out, FLAGS_chans_in, FLAGS_sample_rate, Sample::S16,
                                           channels,       ac->sample_rate,   Sample::FromFFMpegId(ac->channel_layout));
         };
         RingBuf::Handle L(app->audio.IL, app->audio.IL->ring.back-audio_samples, audio_samples);
         RingBuf::Handle R(app->audio.IR, app->audio.IR->ring.back-audio_samples, audio_samples);
-        if (resampler.update(audio_samples, &L, FLAGS_chans_in > 1 ? &R : 0)) open=0;
+        if (resampler.Update(audio_samples, &L, FLAGS_chans_in > 1 ? &R : 0)) open=0;
     }
 
     for (;;) {
@@ -2259,7 +2259,7 @@ void HTTPServer::StreamResource::update(int audio_samples, bool video_sample) {
         int audio_behind = resampler.output_available - resamples_processed;
         unsigned long long audio_timestamp = resampler.out->ReadTimestamp(0, resampler.out->ring.back - audio_behind);
 
-        if (audio_timestamp < app->camera.camera->image_timestamp) sendAudio();
+        if (audio_timestamp < app->camera.image_timestamp) sendAudio();
         else { sendVideo(); video_sample=0; }
     }
 }
@@ -2293,11 +2293,11 @@ void HTTPServer::StreamResource::sendVideo() {
 
     /* convert video */
     if (!conv)
-        conv = sws_getContext(FLAGS_camera_image_width, FLAGS_camera_image_height, (PixelFormat)Pixel::ToFFMpegId(app->camera.camera->image_format),
+        conv = sws_getContext(FLAGS_camera_image_width, FLAGS_camera_image_height, (PixelFormat)Pixel::ToFFMpegId(app->camera.image_format),
                               vc->width, vc->height, vc->pix_fmt, SWS_BICUBIC, 0, 0, 0);
 
-    int camera_linesize[4] = { app->camera.camera->image_linesize, 0, 0, 0 };
-    sws_scale(conv, (uint8_t**)&app->camera.camera->image, camera_linesize, 0, FLAGS_camera_image_height, picture->data, picture->linesize);
+    int camera_linesize[4] = { app->camera.image_linesize, 0, 0, 0 };
+    sws_scale(conv, (uint8_t**)&app->camera.image, camera_linesize, 0, FLAGS_camera_image_height, picture->data, picture->linesize);
 
     /* broadcast */
     AVPacket pkt; int got=0;
@@ -2306,7 +2306,7 @@ void HTTPServer::StreamResource::sendVideo() {
     pkt.size = 0;
 
     avcodec_encode_video2(vc, &pkt, picture, &got);
-    if (got) broadcast(&pkt, app->camera.camera->image_timestamp);
+    if (got) broadcast(&pkt, app->camera.image_timestamp);
 
     av_free_packet(&pkt);
 }

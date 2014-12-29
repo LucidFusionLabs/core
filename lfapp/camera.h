@@ -24,22 +24,14 @@ DECLARE_int(camera_fps);
 DECLARE_int(camera_image_width);
 DECLARE_int(camera_image_height);
 
-struct CameraImpl {
-    virtual ~CameraImpl() {}
-    virtual int init() = 0;
-    virtual int frame() = 0;
-    virtual int free() = 0;
-
-    unsigned char *image;
-    int image_format, image_linesize;
-    unsigned long long image_timestamp, frames_read, last_frames_read;
-    CameraImpl() : image(0), image_format(0), image_linesize(0), image_timestamp(0), frames_read(0), last_frames_read(0) {}
-};
-
 struct Camera : public Module {
     RollingAvg fps;
-    CameraImpl *camera;
-    Camera() : fps(64), camera(0) {}
+    Module *impl=0;
+    unsigned char *image=0;
+    int image_format=0, image_linesize=0;
+    unsigned long long image_timestamp=0, frames_read=0, last_frames_read=0;
+    Camera() : fps(64) {}
+
     int Init ();
     int Free ();
     int Frame(unsigned time);

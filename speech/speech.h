@@ -67,7 +67,7 @@ struct Features {
     static Matrix *fromAsset(SoundAsset *wav, int flag);
     static Matrix *fromFeat(Matrix *features, int flag);
     static Matrix *fromFeat(Matrix *features, int flag, bool FilterZeroth, bool Deltas, bool DeltaDeltas, bool MeanNorm, bool VarNorm);
-    static Matrix *fromBuf(const RingBuf::Handle *in, Matrix *out=0, vector<Filter> *filter=0, Allocator *alloc=0);
+    static Matrix *fromBuf(const RingBuf::Handle *in, Matrix *out=0, vector<StatefulFilter> *filter=0, Allocator *alloc=0);
     static RingBuf *reverse(const Matrix *in, int samplerate, const Matrix *f0=0, Allocator *alloc=0);
     static int dimension();
 };
