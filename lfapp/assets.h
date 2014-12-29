@@ -88,6 +88,13 @@ struct Asset {
         : parent(0), name(N), texture(Tex), cb(CB), scale(S), translate(T), rotate(R), geometry(G), hull(H), texgen(TG),
         typeID(0), particleTexID(0), blends(GraphicsDevice::SrcAlpha), blendt(GraphicsDevice::OneMinusSrcAlpha), color(0), zsort(0) { tex.cubemap=CM; }
 
+    void Load(void *handle=0, VideoAssetLoader *l=0);
+    void Load(const void *FromBuf, const char *filename, int size);
+    void Unload();
+
+    static void Load(vector<Asset> *assets) { for (int i=0; i<assets->size(); ++i) (*assets)[i].Load(); }
+    static void LoadTexture(const string &fn, Texture *out, VideoAssetLoader *l=0) { LoadTexture(0, fn, out, l); }
+    static void LoadTexture(void *h, const string &fn, Texture *out, VideoAssetLoader *l=0);
     static void Copy(const Asset *in, Asset *out) {
         string name = out->name;
         unsigned typeID = out->typeID;
@@ -95,17 +102,12 @@ struct Asset {
         out->name = name;
         out->typeID = typeID;
     }
-
-    static void Load(vector<Asset> *assets) { for (int i=0; i<assets->size(); ++i) (*assets)[i].Load(); }
-    void Load(void *handle=0, VideoAssetLoader *l=0);
-    void Load(const void *FromBuf, const char *filename, int size);
-    void Unload();
 };
 
 struct SoundAsset {
-#   define SoundAssetSize(sa) ((sa)->seconds * FLAGS_sample_rate * FLAGS_chans_out)
     static const int FlagNoRefill, FromBufPad;
     typedef function<int(SoundAsset*, int)> RefillCB;
+#   define SoundAssetSize(sa) ((sa)->seconds * FLAGS_sample_rate * FLAGS_chans_out)
 
     SoundAssetMap *parent;
     string name, filename;
@@ -144,35 +146,35 @@ struct MapAsset {
 };
 
 struct AudioAssetLoader {
-    virtual void *load_audio_file(const string &fn) = 0;
-    virtual void unload_audio_file(void *h) = 0;
+    virtual void *LoadAudioFile(const string &fn) = 0;
+    virtual void UnloadAudioFile(void *h) = 0;
 
-    virtual void *load_audio_buf(const char *buf, int len, const char *mimetype) = 0;
-    virtual void unload_audio_buf(void *h) = 0;
+    virtual void *LoadAudioBuf(const char *buf, int len, const char *mimetype) = 0;
+    virtual void UnloadAudioBuf(void *h) = 0;
 
-    virtual void load(SoundAsset *a, void *h, int seconds, int flag) = 0;
-    virtual int refill(SoundAsset *a, int reset) = 0;
+    virtual void LoadAudio(void *h, SoundAsset *a, int seconds, int flag) = 0;
+    virtual int RefillAudio(SoundAsset *a, int reset) = 0;
 };
 
 struct VideoAssetLoader {
-    virtual void *load_video_file(const string &fn) = 0;
-    virtual void unload_video_file(void *h) = 0;
+    virtual void *LoadVideoFile(const string &fn) = 0;
+    virtual void UnloadVideoFile(void *h) = 0;
 
-    virtual void *load_video_buf(const char *buf, int len, const char *mimetype) = 0;
-    virtual void unload_video_buf(void *h) = 0;
+    virtual void *LoadVideoBuf(const char *buf, int len, const char *mimetype) = 0;
+    virtual void UnloadVideoBuf(void *h) = 0;
 
-    virtual void load(Asset *a, void *h, Texture *out) = 0;
+    virtual void LoadVideo(void *h, Texture *out, bool clear=true) = 0;
 };
 
 struct MovieAssetLoader {
-    virtual void *load_movie_file(const string &fn) = 0;
-    virtual void unload_movie_file(void *h) = 0;
+    virtual void *LoadMovieFile(const string &fn) = 0;
+    virtual void UnloadMovieFile(void *h) = 0;
 
-    virtual void *load_movie_buf(const char *buf, int len, const char *mimetype) = 0;
-    virtual void unload_movie_buf(void *h) = 0;
+    virtual void *LoadMovieBuf(const char *buf, int len, const char *mimetype) = 0;
+    virtual void UnloadMovieBuf(void *h) = 0;
 
-    virtual void load(MovieAsset *a, void *h) = 0;
-    virtual int play(MovieAsset *a, int seek) = 0;
+    virtual void LoadMovie(void *h, MovieAsset *a) = 0;
+    virtual int PlayMovie(MovieAsset *a, int seek) = 0;
 };
 
 struct JpegReader {
@@ -269,13 +271,11 @@ struct Grid {
     static Geometry *Grid2D(float x, float y, float range, float step);
 };
 
-struct TexSeq {
-    Asset *a; int num, ind;
-    TexSeq() : a(0), num(0), ind(0) {}
-    ~TexSeq() { if (a) { for (int i=0; i<num; ++i) a[i].Unload(); delete [] a; } }
-    static void load(Asset *out, const char *name, const char *filename);
-    void load(const char *fmt, const char *prefix, const char *suffix, int N);
-    void draw(Asset *out, Entity *e);
+struct TextureArray {
+    vector<Texture> a; int ind=0;
+    void ClearGL() { for (auto &i : a) i.ClearGL(); }
+    void Load(const string &fmt, const string &prefix, const string &suffix, int N);
+    void DrawSequence(Asset *out, Entity *e);
 };
 
 struct Skybox {

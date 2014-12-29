@@ -1667,6 +1667,7 @@ void Texture::UpdateBuffer(const unsigned char *B, int X, int Y, int W, int H, i
 }
 
 void Texture::Bind() const { screen->gd->BindTexture(GLTexType(), ID); }
+void Texture::ClearGL() { if (ID) screen->gd->DelTextures(1, &ID); ID=0; }
 
 void Texture::LoadGL(const unsigned char *B, int W, int H, int PF, int linesize, int flag) {
     Texture temp;
@@ -2035,9 +2036,9 @@ Font *Font::Clone(int pointsize, Color Fg, int Flag) {
 }
 
 Font *Font::OpenAtlas(const string &name, int size, Color c, int flag) {
-    TexSeq tex;
-    tex.load("%s%02d.%s", name.c_str(), "png", 1);
-    if (!tex.a || !tex.a->tex.ID) { ERROR("load ", name, "00.png failed"); return 0; }
+    Texture tex;
+    Asset::LoadTexture(StrCat(ASSETS_DIR, name, "00.png"), &tex);
+    if (!tex.ID) { ERROR("load ", name, "00.png failed"); return 0; }
 
     MatrixFile gm;
     gm.ReadVersioned(VersionedFileName(ASSETS_DIR, name.c_str(), "glyphs"), 0);
@@ -2047,7 +2048,7 @@ Font *Font::OpenAtlas(const string &name, int size, Color c, int flag) {
     ret->fg = c;
     ret->size = size;
     ret->flag = flag;
-    ret->glyph = shared_ptr<Font::Glyphs>(new Font::Glyphs(ret, new Atlas(tex.a->tex.ID, tex.a->tex.width, tex.a->tex.height)));
+    ret->glyph = shared_ptr<Font::Glyphs>(new Font::Glyphs(ret, new Atlas(tex.ID, tex.width, tex.height)));
     Atlas *atlas = ret->glyph->atlas.back().get();
     float max_t = 0, max_u = 0;
 
@@ -2055,7 +2056,7 @@ Font *Font::OpenAtlas(const string &name, int size, Color c, int flag) {
         int glyph_ind = (int)gm.F->row(i)[0];
         Glyph *g = ret->FindOrInsertGlyph(glyph_ind);
         g->FromArray(gm.F->row(i), gm.F->N);
-        g->tex.ID = tex.a->tex.ID;
+        g->tex.ID = tex.ID;
         if (g->tex.height > ret->height)    ret->height    = g->tex.height;
         if (g->tex.width  > ret->max_width) ret->max_width = g->tex.width;
         if (g->top        > ret->max_top)   ret->max_top   = g->top;
@@ -2071,8 +2072,8 @@ Font *Font::OpenAtlas(const string &name, int size, Color c, int flag) {
     atlas->flow.p.x =  max_t * atlas->tex.width;
     atlas->flow.p.y = -max_u * atlas->tex.height;
 
-    INFO("OpenAtlas ", name, ", texID=", tex.a->tex.ID);
-    tex.a->tex.ID = 0;
+    INFO("OpenAtlas ", name, ", texID=", tex.ID);
+    tex.ID = 0;
     return ret;
 }
 
