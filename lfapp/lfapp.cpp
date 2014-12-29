@@ -148,20 +148,20 @@ string Flag::ToString() const { string v=Get(); return StrCat(name, v.size()?" =
 extern "C" void NotImplemented() { FATAL("not implemented"); }
 extern "C" void ShellRun(const char *text) { return app->shell.Run(text); }
 extern "C" NativeWindow *GetNativeWindow() { return screen; }
-void default_lfapp_window_closed_cb() { delete screen; }
+void DefaultLFAppWindowClosedCB() { delete screen; }
 
 bool Running() { return app->run; }
 bool MainThread() { return Thread::Id() == app->main_thread_id; }
-void RunInMainThread(Callback *cb) { app->messageQueue.write(ThreadPool::messageQueueCallback, cb); }
-double FPS() { return screen->fps.fps(); }
-double CamFPS() { return app->camera.fps.fps(); }
-void break_hook() { INFO("break hook"); }
-void press_any_key() {
+void RunInMainThread(Callback *cb) { app->message_queue.Write(ThreadPool::message_queue_callback, cb); }
+double FPS() { return screen->fps.FPS(); }
+double CamFPS() { return app->camera.fps.FPS(); }
+void BreakHook() { INFO("break hook"); }
+void PressAnyKey() {
     printf("Press [enter] to continue..."); fflush(stdout);
     char buf[32]; fgets(buf, sizeof(buf), stdin);
 }
-bool input_fgets(char *buf, int len) { return nb_fgets(stdin, buf, len); }
-bool nb_fgets(FILE *f, char *buf, int len) {
+bool FGets(char *buf, int len) { return NBFGets(stdin, buf, len); }
+bool NBFGets(FILE *f, char *buf, int len) {
 #ifndef WIN32
     int fd = fileno(f);
     SelectSocketSet ss;
@@ -174,16 +174,16 @@ bool nb_fgets(FILE *f, char *buf, int len) {
     return 0;
 #endif
 }
-int nb_read(int fd, char *buf, int len) {
+int NBRead(int fd, char *buf, int len) {
     SelectSocketSet ss;
     ss.Add(fd, SocketSet::READABLE, 0);
     ss.Select(0);
     if (!app->run || !ss.GetReadable(fd)) return 0;
     return read(fd, buf, len);
 }
-string nb_read(int fd, int len) {
+string NBRead(int fd, int len) {
     string ret(len, 0);
-    int l = nb_read(fd, (char*)ret.data(), ret.size());
+    int l = NBRead(fd, (char*)ret.data(), ret.size());
     if (l <= 0) return "";
     ret.resize(l);
     return ret;
@@ -220,7 +220,7 @@ int atoi(const short *v) {
     return neg ? -ret : ret;
 }
 
-int doubleSort(double a, double b) {
+int DoubleSort(double a, double b) {
     bool na=isnan(a), nb=isnan(b);
 
     if (na && nb) return 0;
@@ -231,8 +231,8 @@ int doubleSort(double a, double b) {
     else if (a > b) return -1;
     else return 0;
 }
-int doubleSort (const void *a, const void *b) { return doubleSort(*(double*)a, *(double*)b); }
-int doubleSortR(const void *a, const void *b) { return doubleSort(*(double*)b, *(double*)a); }
+int DoubleSort (const void *a, const void *b) { return DoubleSort(*(double*)a, *(double*)b); }
+int DoubleSortR(const void *a, const void *b) { return DoubleSort(*(double*)b, *(double*)a); }
 
 const char *Default(const char *in, const char *default_in) { return (in && in[0]) ? in : default_in; }
 string TrimWhiteSpace(const string &s) {
@@ -784,22 +784,22 @@ Time RFC822Date(const char *text) {
     struct tm tm; memset(&tm, 0, sizeof(tm));
     const char *comma = strchr(text, ','), *start = comma ? comma + 1 : text, *parsetext;
     StringWordIter words(start);
-    tm.tm_mday = atoi(BlankNull(words.next()));
-    tm.tm_mon = RFC822Month(BlankNull(words.next()));
-    tm.tm_year = atoi(BlankNull(words.next())) - 1900;
-    const char *timetext = BlankNull(words.next());
+    tm.tm_mday = atoi(BlankNull(words.Next()));
+    tm.tm_mon = RFC822Month(BlankNull(words.Next()));
+    tm.tm_year = atoi(BlankNull(words.Next())) - 1900;
+    const char *timetext = BlankNull(words.Next());
     if (!RFC822Time(timetext, &tm.tm_hour, &tm.tm_min, &tm.tm_sec))
         { ERROR("RFC822Date('", text, "') RFC822Time('", timetext, "') failed"); return 0; }
-    int hours_from_gmt = RFC822TimeZone(BlankNull(words.next()));
+    int hours_from_gmt = RFC822TimeZone(BlankNull(words.Next()));
     return (timegm(&tm) - hours_from_gmt * 3600) * 1000;
 }
 
 bool NumericTime(const char *text, int *hour, int *min, int *sec) {
     int textlen = strlen(text);
     StringWordIter words(text, textlen, isint<':'>);
-    *hour = atoi(BlankNull(words.next()));
-    *min = atoi(BlankNull(words.next()));
-    *sec = atoi(BlankNull(words.next()));
+    *hour = atoi(BlankNull(words.Next()));
+    *min = atoi(BlankNull(words.Next()));
+    *sec = atoi(BlankNull(words.Next()));
     if (textlen >= 2 && !strcmp(text+textlen-2, "pm") && *hour != 12) *hour += 12;
     return true;
 }
@@ -807,9 +807,9 @@ bool NumericTime(const char *text, int *hour, int *min, int *sec) {
 Time NumericDate(const char *datetext, const char *timetext, const char *timezone) {
     struct tm tm; memset(&tm, 0, sizeof(tm));
     StringWordIter words(datetext, 0, isint<'/'>);
-    tm.tm_mon = atoi(BlankNull(words.next())) - 1;
-    tm.tm_mday = atoi(BlankNull(words.next()));
-    tm.tm_year = atoi(BlankNull(words.next())) - 1900;
+    tm.tm_mon = atoi(BlankNull(words.Next())) - 1;
+    tm.tm_mday = atoi(BlankNull(words.Next()));
+    tm.tm_year = atoi(BlankNull(words.Next())) - 1900;
     NumericTime(timetext, &tm.tm_hour, &tm.tm_min, &tm.tm_sec);
     int hours_from_gmt = RFC822TimeZone(BlankNull(timezone));
     return (timegm(&tm) - hours_from_gmt * 3600) * 1000;
@@ -827,10 +827,10 @@ const char *LocalTimeZone(Time t) { struct tm tm; localtm(t ? Time2time_t(t) : t
 const char *LocalTimeZone(Time t) { return _tzname[_daylight]; }
 #endif
 
-void Allocator::reset() { FATAL(name(), ": reset"); }
+void Allocator::Reset() { FATAL(Name(), ": reset"); }
 
-void *MallocAlloc::malloc(int size) { return ::malloc(size); }
-void *MallocAlloc::realloc(void *p, int size) { 
+void *MallocAlloc::Malloc(int size) { return ::malloc(size); }
+void *MallocAlloc::Realloc(void *p, int size) { 
     if (!p) return ::malloc(size);
 #ifdef __APPLE__
     else return ::reallocf(p, size);
@@ -838,7 +838,7 @@ void *MallocAlloc::realloc(void *p, int size) {
     else return ::realloc(p, size);
 #endif
 }
-void  MallocAlloc::free(void *p) { return ::free(p); }
+void  MallocAlloc::Free(void *p) { return ::free(p); }
 
 MMapAlloc::~MMapAlloc() {
 #ifdef WIN32
@@ -850,7 +850,7 @@ MMapAlloc::~MMapAlloc() {
 #endif
 }
 
-MMapAlloc *MMapAlloc::open(const char *path, bool logerror, bool readonly, long long size) {
+MMapAlloc *MMapAlloc::Open(const char *path, bool logerror, bool readonly, long long size) {
 #ifdef LFL_ANDROID
     return 0;
 #endif
@@ -887,8 +887,8 @@ MMapAlloc *MMapAlloc::open(const char *path, bool logerror, bool readonly, long 
 #endif
 }
 
-void *BlockChainAlloc::malloc(int n) { 
-    n = next_multiple_of_power_of_two(n, 16);
+void *BlockChainAlloc::Malloc(int n) { 
+    n = NextMultipleOfPowerOfTwo(n, 16);
     CHECK_LT(n, block_size);
     if (cur_block_ind == -1 || blocks[cur_block_ind].len + n > blocks[cur_block_ind].size) {
         cur_block_ind++;
@@ -1103,7 +1103,7 @@ ThreadLocalStorage *ThreadLocalStorage::Get() {
 }
 
 const char LocalFile::Slash = '/';
-int LocalFile::isdirectory(const string &filename) {
+int LocalFile::IsDirectory(const string &filename) {
 #if !defined(LFL_IPHONE) && !defined(LFL_ANDROID) /* XXX */
     struct stat buf;
     if (stat(filename.c_str(), &buf)) { ERROR("stat(", filename, ") failed: ", strerror(errno)); return 0; }
@@ -1192,7 +1192,7 @@ int NTService::MainWrapper(const char *name, MainCB mainCB, int argc, const char
 Allocator *ThreadLocalStorage::GetAllocator(bool reset_allocator) {
     ThreadLocalStorage *tls = Get();
     if (!tls->alloc) tls->alloc = new FixedAlloc<1024*1024>;
-    if (reset_allocator) tls->alloc->reset();
+    if (reset_allocator) tls->alloc->Reset();
     return tls->alloc;
 }
 
@@ -1213,47 +1213,47 @@ struct DownloadDirectory {
 };
 const char *dldir() { return Singleton<DownloadDirectory>::Get()->text.c_str(); }
 
-string File::contents() {
-    if (!opened()) return "";
-    int l = size();
+string File::Contents() {
+    if (!Opened()) return "";
+    int l = Size();
     if (!l) return "";
-    reset();
+    Reset();
 
     string ret;
     ret.resize(l);
-    read((char*)ret.data(), l);
+    Read((char*)ret.data(), l);
     return ret;
 }
 
-const char *File::nextline(int *offset, int *nextoffset) {
+const char *File::NextLine(int *offset, int *nextoffset) {
     const char *nl;
-    if (!(nl = nr.nextrecord(this, offset, nextoffset, LFL::nextline))) return 0;
+    if (!(nl = nr.GetNextRecord(this, offset, nextoffset, LFL::nextline))) return 0;
     if (nl) nr.buf[nr.record_offset + nr.record_len] = 0;
     return nl;
 }
 
-const char *File::nextlineraw(int *offset, int *nextoffset) {
+const char *File::NextLineRaw(int *offset, int *nextoffset) {
     const char *nl;
-    if (!(nl = nr.nextrecord(this, offset, nextoffset, LFL::nextlineraw))) return 0;
+    if (!(nl = nr.GetNextRecord(this, offset, nextoffset, LFL::nextlineraw))) return 0;
     if (nl) nr.buf[nr.record_offset + nr.record_len] = 0;
     return nl;
 }
 
-const char *File::nextchunk(int *offset, int *nextoffset) {
+const char *File::NextChunk(int *offset, int *nextoffset) {
     const char *nc;
-    if (!(nc = nr.nextrecord(this, offset, nextoffset, LFL::nextchunk<4096>))) return 0;
+    if (!(nc = nr.GetNextRecord(this, offset, nextoffset, LFL::nextchunk<4096>))) return 0;
     if (nc) nr.buf[nr.record_offset + nr.record_len] = 0;
     return nc;
 }
 
-const char *File::nextproto(int *offset, int *nextoffset, ProtoHeader *bhout) {
+const char *File::NextProto(int *offset, int *nextoffset, ProtoHeader *bhout) {
     const char *np;
-    if (!(np = nr.nextrecord(this, offset, nextoffset, LFL::nextproto))) return 0;
+    if (!(np = nr.GetNextRecord(this, offset, nextoffset, LFL::nextproto))) return 0;
     if (bhout) *bhout = ProtoHeader(np);
     return np + ProtoHeader::size;
 }
 
-const char *File::NextRecord::nextrecord(File *f, int *offsetOut, int *nextoffsetOut, NextRecordCB nextcb) {
+const char *File::NextRecord::GetNextRecord(File *f, int *offsetOut, int *nextoffsetOut, NextRecordCB nextcb) {
     const char *next, *text; int left; bool read_short = false;
     if (buf_dirty) buf_offset = buf.size();
     for (;;) {
@@ -1273,7 +1273,7 @@ const char *File::NextRecord::nextrecord(File *f, int *offsetOut, int *nextoffse
         buf.erase(0, buf_offset);
         int buf_filled = buf.size();
         buf.resize(buf.size() < 4096 ? 4096 : buf.size()*2);
-        int len = f->read((char*)buf.data()+buf_filled, buf.size()-buf_filled);
+        int len = f->Read((char*)buf.data()+buf_filled, buf.size()-buf_filled);
         read_short = len < buf.size()-buf_filled;
         buf.resize(max(len,0) + buf_filled);
         buf_dirty = false;
@@ -1281,45 +1281,45 @@ const char *File::NextRecord::nextrecord(File *f, int *offsetOut, int *nextoffse
     }
 }
 
-int File::writeproto(const ProtoHeader *hdr, const Proto *msg, bool doflush) {
+int File::WriteProto(const ProtoHeader *hdr, const Proto *msg, bool doflush) {
 #ifdef LFL_PROTOBUF
     std::string v = msg->SerializeAsString();
     CHECK_EQ(hdr->len, v.size());
     v.insert(0, (const char *)hdr, ProtoHeader::size);
-    int ret = (write(v.c_str(), v.size()) == v.size()) ? v.size() : -1;
-    if (doflush) flush();
+    int ret = (Write(v.c_str(), v.size()) == v.size()) ? v.size() : -1;
+    if (doflush) Flush();
     return ret;
 #else
     return -1;
 #endif
 }
 
-int File::writeproto(ProtoHeader *hdr, const Proto *msg, bool doflush) {
+int File::WriteProto(ProtoHeader *hdr, const Proto *msg, bool doflush) {
 #ifdef LFL_PROTOBUF
     std::string v = msg->SerializeAsString();
     hdr->SetLength(v.size());
     v.insert(0, (const char *)hdr, ProtoHeader::size);
-    int ret = (write(v.c_str(), v.size()) == v.size()) ? v.size() : -1;
-    if (doflush) flush();
+    int ret = (Write(v.c_str(), v.size()) == v.size()) ? v.size() : -1;
+    if (doflush) Flush();
     return ret;
 #else
     return -1;
 #endif
 }
 
-int File::writeprotoflag(const ProtoHeader *hdr, bool doflush) {
-    int ret = write(&hdr->flag, sizeof(int)) == sizeof(int) ? sizeof(int) : -1;
-    if (doflush) flush();
+int File::WriteProtoFlag(const ProtoHeader *hdr, bool doflush) {
+    int ret = Write(&hdr->flag, sizeof(int)) == sizeof(int) ? sizeof(int) : -1;
+    if (doflush) Flush();
     return ret;
 }
 
-long long BufferFile::seek(long long offset, int whence) {
+long long BufferFile::Seek(long long offset, int whence) {
     if (offset < 0 || offset >= buf.size()) return -1;
     nr.buf_dirty = true;
     return rdo = wro = nr.file_offset = offset;
 }
 
-int BufferFile::read(void *out, int size) {
+int BufferFile::Read(void *out, int size) {
     int l = min(size, buf.size() - rdo);
     memcpy(out, buf.data() + rdo, l);
     rdo += l;
@@ -1328,7 +1328,7 @@ int BufferFile::read(void *out, int size) {
     return l;
 }
 
-int BufferFile::write(const void *In, int size) {
+int BufferFile::Write(const void *In, int size) {
     const char *in = (const char *)In;
     if (size == -1) size = strlen(in);
     int l = min(size, buf.size() - wro);
@@ -1389,14 +1389,14 @@ bool LocalFile::mkdir(const string &dir, int mode) {
     return ::mkdir(dir.c_str(), mode) == 0;
 #endif
 }
-int LocalFile::whencemap(int n) {
+int LocalFile::WhenceMap(int n) {
     if      (n == Whence::SET) return SEEK_SET;
     else if (n == Whence::CUR) return SEEK_CUR;
     else if (n == Whence::END) return SEEK_END;
     else return -1;
 }
 
-bool LocalFile::open(const string &path, const string &mode, bool pre_create) {
+bool LocalFile::Open(const string &path, const string &mode, bool pre_create) {
     fn = path;
     if (pre_create) {
         FILE *created = fopen(fn.c_str(), "a");
@@ -1407,19 +1407,19 @@ bool LocalFile::open(const string &path, const string &mode, bool pre_create) {
 #else
     if (!(impl = fopen(fn.c_str(), mode.c_str()))) return 0;
 #endif
-    nr.reset();
+    nr.Reset();
 
-    if (!opened()) return false;
+    if (!Opened()) return false;
     writable = strchr(mode.c_str(), 'w');
     return true;
 }
 
-void LocalFile::reset() {
+void LocalFile::Reset() {
     fseek((FILE*)impl, 0, SEEK_SET);
-    nr.reset();
+    nr.Reset();
 }
 
-int LocalFile::size() {
+int LocalFile::Size() {
     if (!impl) return -1;
 
     int place = ftell((FILE*)impl);
@@ -1430,14 +1430,14 @@ int LocalFile::size() {
     return ret;
 }
 
-void LocalFile::close() {
+void LocalFile::Close() {
     if (impl) fclose((FILE*)impl);
     impl = 0;
-    nr.reset();
+    nr.Reset();
 }
 
-long long LocalFile::seek(long long offset, int whence) {
-    long long ret = fseek((FILE*)impl, offset, whencemap(whence));
+long long LocalFile::Seek(long long offset, int whence) {
+    long long ret = fseek((FILE*)impl, offset, WhenceMap(whence));
     if (ret < 0) return ret;
     if (whence == Whence::SET) ret = offset;
     else ret = ftell((FILE*)impl);
@@ -1446,7 +1446,7 @@ long long LocalFile::seek(long long offset, int whence) {
     return ret;
 }
 
-int LocalFile::read(void *buf, int size) {
+int LocalFile::Read(void *buf, int size) {
     int ret = fread(buf, 1, size, (FILE*)impl);
     if (ret < 0) return ret;
     nr.file_offset += ret;
@@ -1454,7 +1454,7 @@ int LocalFile::read(void *buf, int size) {
     return ret;
 }
 
-int LocalFile::write(const void *buf, int size) {
+int LocalFile::Write(const void *buf, int size) {
     int ret = fwrite(buf, 1, size!=-1?size:strlen((char*)buf), (FILE*)impl);
     if (ret < 0) return ret;
     nr.file_offset += ret;
@@ -1462,14 +1462,14 @@ int LocalFile::write(const void *buf, int size) {
     return ret;
 }
 
-bool LocalFile::flush() { fflush((FILE*)impl); return true; }
+bool LocalFile::Flush() { fflush((FILE*)impl); return true; }
 #endif /* LFL_ANDROID */
 
 int ThreadPool::HandleMessages(void *q) {
-    MessageQueue *messageQueue = (MessageQueue*)q;
+    MessageQueue *message_queue = (MessageQueue*)q;
     void *message; int message_id;
-    while ((message_id = messageQueue->read(&message))) {
-        if (message_id == messageQueueCallback) {
+    while ((message_id = message_queue->Read(&message))) {
+        if (message_id == message_queue_callback) {
             Callback *cb = (Callback*)message;
             (*cb)();
             delete cb;
@@ -1487,9 +1487,9 @@ int ThreadPool::HandleMessagesLoop(void *q) {
 }
 
 DirectoryIter::DirectoryIter(const char *path, int dirs, const char *Pref, const char *Suf) : P(Pref), S(Suf), init(0) {
-    if (LocalFile::isdirectory(path)) pathname = path;
+    if (LocalFile::IsDirectory(path)) pathname = path;
     else {
-        if (LocalFile(path, "r").opened()) {
+        if (LocalFile(path, "r").Opened()) {
             pathname = string(path, dirnamelen(path)) + LocalFile::Slash;
             filemap[basename(path)] = 1;
         }
@@ -1537,7 +1537,7 @@ DirectoryIter::DirectoryIter(const char *path, int dirs, const char *Pref, const
 #endif /* _WIN32 */
 }
 
-const char *DirectoryIter::next() {
+const char *DirectoryIter::Next() {
     const char *fn=0;
     for (;;) {
         if (!init) { init=1; iter = filemap.begin(); }
@@ -1555,7 +1555,7 @@ const char *DirectoryIter::next() {
 template struct StringLineIterT<char>;
 template struct StringLineIterT<short>;
 
-template <class X> const X *StringLineIterT<X>::next() {
+template <class X> const X *StringLineIterT<X>::Next() {
     first = false;
     if (offset < 0) return 0;
     const X *line=in+offset, *next=nextline(line, len?len-offset:0, false, &linelen);
@@ -1577,7 +1577,7 @@ template <class X> StringWordIterT<X>::StringWordIterT(const X *input, int inlen
     if (in) while(*(in+offset) && IsSpace(*(in+offset))) offset++;
 }
 
-template <class X> const X *StringWordIterT<X>::next() {
+template <class X> const X *StringWordIterT<X>::Next() {
     if (offset<0) return 0;
     const X *word=in+offset, *next=nextchar(word, IsSpace, IsQuote, len?len-offset:0, &wordlen);
     while (next && *next && IsSpace(*next)) next++;
@@ -1590,8 +1590,8 @@ template <class X> const X *StringWordIterT<X>::next() {
     return 0;
 }
 
-template           const char *StringWordIterT<char>::remaining();
-template <class X> const X    *StringWordIterT<X   >::remaining() {
+template           const char *StringWordIterT<char>::Remaining();
+template <class X> const X    *StringWordIterT<X   >::Remaining() {
     if (flag & Flag::InPlace) return in+offset;
     if (len) buf.assign(in+offset, len-offset);
 
@@ -1599,15 +1599,15 @@ template <class X> const X    *StringWordIterT<X   >::remaining() {
     return buf.c_str();
 }
 
-const char *IterWordIter::next() {
+const char *IterWordIter::Next() {
     if (!iter) return 0;
-    const char *w = word.in ? word.next() : 0;
+    const char *w = word.in ? word.Next() : 0;
     while(!w) {
         line_count++;
-        const char *line = iter->next();
+        const char *line = iter->Next();
         if (!line) return 0;
         word = StringWordIter(line, 0, word.IsSpace);
-        w = word.next();
+        w = word.Next();
     }
     return w;
 }    
@@ -1628,28 +1628,28 @@ ArchiveIter::ArchiveIter(const char *path) {
         archive_read_finish((archive*)impl); impl=0; return;
     }
 }
-const char *ArchiveIter::next() {
+const char *ArchiveIter::Next() {
     int ret;
     if (!impl) return 0;
     if ((ret = archive_read_next_header((archive*)impl, (archive_entry**)&entry))) { ERROR("read_next: ", ret, " ", archive_error_string((archive*)impl)); return 0; }
     return archive_entry_pathname((archive_entry*)entry);
 }
-const void *ArchiveIter::data() {
-    int l=size(); free(dat); dat=malloc(l);
+const void *ArchiveIter::Data() {
+    int l=Size(); free(dat); dat=malloc(l);
     if (archive_read_data_into_buffer((archive*)impl, dat, l)) { free(dat); dat=0; }
     return dat;
 }
-void ArchiveIter::skip() { archive_read_data_skip((archive*)impl); }
-long long ArchiveIter::size() { return archive_entry_size((archive_entry*)entry); }
+void ArchiveIter::Skip() { archive_read_data_skip((archive*)impl); }
+long long ArchiveIter::Size() { return archive_entry_size((archive_entry*)entry); }
 
 #else /* LFL_LIBARCHIVE */
 
 ArchiveIter::~ArchiveIter() { free(dat); }
 ArchiveIter::ArchiveIter(const char *path) { entry=0; dat=0; impl=0; }
-const char *ArchiveIter::next() { return 0; }
-long long ArchiveIter::size() { return 0; }
-const void *ArchiveIter::data() { return 0; }
-void ArchiveIter::skip() {}
+const char *ArchiveIter::Next() { return 0; }
+long long ArchiveIter::Size() { return 0; }
+const void *ArchiveIter::Data() { return 0; }
+void ArchiveIter::Skip() {}
 #endif /* LFL_LIBARCHIVE */
 
 #ifdef LFL_RE2
@@ -1814,7 +1814,7 @@ string Crypto::MD5(const string &in) { FATAL("not implemented"); }
 string Crypto::Blowfish(const string &passphrase, const string &in, bool encrypt_or_decrypt) { FATAL("not implemented"); }
 #endif
 
-void SystemBrowser::open(const char *url_text) {
+void SystemBrowser::Open(const char *url_text) {
 #ifdef LFL_ANDROID
     android_open_browser(url_text);
 #endif
@@ -1831,13 +1831,13 @@ void SystemBrowser::open(const char *url_text) {
 #endif // LFL_IPHONE
 }
 
-void Advertising::showAds() {
+void Advertising::ShowAds() {
 #ifdef LFL_ANDROID
     android_show_ads();
 #endif
 }
 
-void Advertising::hideAds() {
+void Advertising::HideAds() {
 #ifdef LFL_ANDROID
     android_hide_ads();
 #endif
@@ -1872,7 +1872,7 @@ string FlagMap::Match(const string &key, const char *source_filename) const {
         const string &t = text[i];
         vector<int> textiv; double dist;
         for (int j=0, l=t.size(); j<l; j++) textiv.push_back(t[j]);
-        if ((dist = levenshtein(keyv, textiv)) < mindist) { mindist = dist; mindistflag = t; }
+        if ((dist = Levenshtein(keyv, textiv)) < mindist) { mindist = dist; mindistflag = t; }
     }
     return mindistflag;
 }
@@ -2067,8 +2067,8 @@ int Application::Init() {
     av_register_all();
 #endif /* LFL_FFMPEG */
 
-    threadPool.Open(FLAGS_threadpool_size);
-    if (FLAGS_lfapp_multithreaded) threadPool.Start();
+    thread_pool.Open(FLAGS_threadpool_size);
+    if (FLAGS_lfapp_multithreaded) thread_pool.Start();
 
     if (FLAGS_lfapp_audio || FLAGS_lfapp_video) {
         if (assets.Init()) { ERROR("assets init failed"); return -1; }
@@ -2121,10 +2121,10 @@ int Application::Init() {
         cuda.Init();
     }
 
-    appTime.time(true);
-    frameTime.time(true);
-    maxfps.timer.time(true);
-    if (FLAGS_lfapp_wait_forever) frame_mutex.enter();
+    app_time.GetTime(true);
+    frame_time.GetTime(true);
+    maxfps.timer.GetTime(true);
+    if (FLAGS_lfapp_wait_forever) frame_mutex.Enter();
     INFO("lfapp_open: succeeded");
     opened = true;
     return 0;
@@ -2155,8 +2155,8 @@ int Application::PreFrame(unsigned clicks, unsigned *mic_samples, bool *camera_s
             assets.movie_playing->Play(0);
         } else if ((audio.playing || audio.loop) && audio.Out.size() < refillWhen) {
             //  audio.QueueMix(audio.playing ? audio.playing : audio.loop, !audio.playing ? MixFlag::Reset : 0, -1, -1);
-            threadPool.Write(ThreadPool::messageQueueCallback,
-                             new Callback(bind(&Audio::QueueMix, &audio, audio.playing ? audio.playing : audio.loop, !audio.playing ? MixFlag::Reset : 0, -1, -1)));
+            thread_pool.Write(ThreadPool::message_queue_callback,
+                              new Callback(bind(&Audio::QueueMix, &audio, audio.playing ? audio.playing : audio.loop, !audio.playing ? MixFlag::Reset : 0, -1, -1)));
         }
     } else {
         if (mic_samples) *mic_samples = 0;
@@ -2167,7 +2167,7 @@ int Application::PreFrame(unsigned clicks, unsigned *mic_samples, bool *camera_s
         clicks_since_last += clicks;
 
         if ((*camera_sample = (camera.Frame(clicks) == 1))) { 
-            camera.fps.add(clicks_since_last);
+            camera.fps.Add(clicks_since_last);
             clicks_since_last = 0;
         }
     } else {
@@ -2180,10 +2180,10 @@ int Application::PreFrame(unsigned clicks, unsigned *mic_samples, bool *camera_s
     }
 
     // handle messages sent to main thread
-    if (run) ThreadPool::HandleMessages(&messageQueue);
+    if (run) ThreadPool::HandleMessages(&message_queue);
 
     // fake threadpool that executes in main thread
-    if (run && !FLAGS_lfapp_multithreaded) ThreadPool::HandleMessages(threadPool.queue[0]);
+    if (run && !FLAGS_lfapp_multithreaded) ThreadPool::HandleMessages(thread_pool.queue[0]);
 
     if (run && FLAGS_lfapp_network) {
         network.Frame();
@@ -2217,8 +2217,8 @@ int Application::Wakeup() {
 
 int Application::Frame() {
     if (FLAGS_lfapp_wait_forever) {
-        wait_mutex.enter();
-        frame_mutex.leave();
+        wait_mutex.Enter();
+        frame_mutex.Leave();
 #if defined(LFL_GLFWINPUT)
         glfwWaitEvents();
 #elif defined(LFL_SDLINPUT)
@@ -2226,11 +2226,11 @@ int Application::Frame() {
 #else
         FATAL("not implemented");
 #endif
-        frame_mutex.enter();
-        wait_mutex.leave();
+        frame_mutex.Enter();
+        wait_mutex.Leave();
     }
 
-    unsigned clicks = frameTime.time(true);
+    unsigned clicks = frame_time.GetTime(true);
 
     /* pre */
     bool cam_sample; unsigned mic_samples; int flag=0;
@@ -2267,7 +2267,7 @@ int Application::Frame() {
 
         /* allow app to skip frame */
         if (ret < 0) continue;
-        screen->fps.add(clicks);
+        screen->fps.Add(clicks);
 
         for (auto i = modules.begin(); i != modules.end(); ++i) (*i)->Frame(clicks);
 
@@ -2324,7 +2324,7 @@ int Application::Free() {
 int Application::Exiting() {
     run = 0;
     INFO("exiting");
-    if (FLAGS_lfapp_wait_forever) frame_mutex.leave();
+    if (FLAGS_lfapp_wait_forever) frame_mutex.Leave();
 #ifdef _WIN32
     if (FLAGS_open_console) press_any_key();
 #endif

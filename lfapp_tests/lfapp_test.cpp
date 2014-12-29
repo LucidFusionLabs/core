@@ -290,36 +290,36 @@ TEST(StringTest, basename) {
 TEST(IterTest, LineIter) {
     string b = "1 2 3\n4 5 6";
     StringLineIter line(b.data(), b.size());
-    EXPECT_EQ(0, strcmp(BlankNull(line.next()), "1 2 3"));
-    EXPECT_EQ(0, strcmp(BlankNull(line.next()), "4 5 6"));
+    EXPECT_EQ(0, strcmp(BlankNull(line.Next()), "1 2 3"));
+    EXPECT_EQ(0, strcmp(BlankNull(line.Next()), "4 5 6"));
 }
 
 TEST(BufferFileTest, Read) {
     string b = "1 2 3\n4 5 6", z = "7 8 9\n9 8 7\n7 8 9";
     BufferFile bf(b.data(), b.size());
-    EXPECT_EQ(b.size(), bf.size());
-    EXPECT_EQ(0, strcmp(BlankNull(bf.nextline()), "1 2 3"));
-    EXPECT_EQ(0, strcmp(BlankNull(bf.nextline()), "4 5 6"));
-    EXPECT_EQ(b, bf.contents());
-    bf.write(z.data(), z.size());
-    EXPECT_EQ(z.size(), bf.size());
-    EXPECT_EQ(z, bf.contents());
+    EXPECT_EQ(b.size(), bf.Size());
+    EXPECT_EQ(0, strcmp(BlankNull(bf.NextLine()), "1 2 3"));
+    EXPECT_EQ(0, strcmp(BlankNull(bf.NextLine()), "4 5 6"));
+    EXPECT_EQ(b, bf.Contents());
+    bf.Write(z.data(), z.size());
+    EXPECT_EQ(z.size(), bf.Size());
+    EXPECT_EQ(z, bf.Contents());
 }
 
 TEST(LocalFileTest, Read) {
     {
-        string fn = "../fv/assets/MenuAtlas1,0,0,0,0,000.png", contents = LocalFile::filecontents(fn), buf;
+        string fn = "../fv/assets/MenuAtlas1,0,0,0,0,000.png", contents = LocalFile::FileContents(fn), buf;
         INFO("Read ", fn, " ", contents.size(), " bytes");
         LocalFile f(fn, "r");
-        for (const char *line = f.nextchunk(); line; line = f.nextchunk()) buf.append(line, f.nr.record_len);
+        for (const char *line = f.NextChunk(); line; line = f.NextChunk()) buf.append(line, f.nr.record_len);
         EXPECT_EQ(contents, buf);
     }
     {
-        string fn = "../lfapp/lfapp.cpp", contents = LocalFile::filecontents(fn), buf;
+        string fn = "../lfapp/lfapp.cpp", contents = LocalFile::FileContents(fn), buf;
         INFO("Read ", fn, " ", contents.size(), " bytes");
         if (contents.back() != '\n') contents.append("\n");
         LocalFile f(fn, "r");
-        for (const char *line = f.nextlineraw(); line; line = f.nextlineraw())
+        for (const char *line = f.NextLineRaw(); line; line = f.NextLineRaw())
             buf += string(line, f.nr.record_len) + "\n";
         EXPECT_EQ(contents, buf);
     }

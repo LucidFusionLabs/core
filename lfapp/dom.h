@@ -948,11 +948,11 @@ namespace DOM {
 
     template <class X> struct ObjectWrapperAlloc : public X {
         vector<void*> allocs;
-        virtual void *malloc(int n)           { void *ret = X::malloc(n);     allocs.push_back(ret); return ret; }
-        virtual void *realloc(void *p, int n) { void *ret = X::realloc(p, n); allocs.push_back(ret); return ret; }
-        virtual void reset() {
+        virtual void *Malloc(int n)           { void *ret = X::Malloc(n);     allocs.push_back(ret); return ret; }
+        virtual void *Realloc(void *p, int n) { void *ret = X::Realloc(p, n); allocs.push_back(ret); return ret; }
+        virtual void Reset() {
             for (vector<void*>::iterator i = allocs.begin(); i != allocs.end(); i++) ((LFL::DOM::Object*)*i)->~Object();
-            X::reset();
+            X::Reset();
             allocs.clear();
         }
     };

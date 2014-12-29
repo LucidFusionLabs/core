@@ -106,7 +106,7 @@ struct AcousticModel {
             prior = s->prior;
             txself = s->txself;
             transition.AssignDataPtr(s->transition.M, s->transition.N, s->transition.m);
-            emission.assignDataPtr(&s->emission);
+            emission.AssignDataPtr(&s->emission);
             val = s->val;
         }
 
@@ -265,10 +265,10 @@ struct AcousticHMM {
         Allocator *alloc;
         double *emission;
 
-        ~EmissionArray() { if (alloc) alloc->free(emission); }
+        ~EmissionArray() { if (alloc) alloc->Free(emission); }
         EmissionArray(AcousticModel::Compiled *M, Matrix *Observed, bool UsePrior, Allocator *Alloc=0) : model(M),
             observed(Observed), UsePriorProb(UsePrior), time_index(0), alloc(Alloc?Alloc:Singleton<MallocAlloc>::Get()),
-            emission((double*)alloc->malloc(sizeof(double)*model->states)) {}
+            emission((double*)alloc->Malloc(sizeof(double)*model->states)) {}
 
         double *observation(int t) { return observed->row(t); }
         int observations() { return observed->M; }
@@ -292,11 +292,11 @@ struct AcousticHMM {
         bool *calcd;
         double *cudaPosterior;
 
-        ~EmissionMatrix() { if (!alloc) return; alloc->free(calcd); alloc->free(cudaPosterior); }
+        ~EmissionMatrix() { if (!alloc) return; alloc->Free(calcd); alloc->Free(cudaPosterior); }
         EmissionMatrix(AcousticModel::Compiled *M, Matrix *Observed, bool UsePrior, Allocator *Alloc=0) : model(M), observed(Observed), UsePriorProb(UsePrior),
             K(model->state[0].emission.mean.M), time_index(0), alloc(Alloc?Alloc:Singleton<MallocAlloc>::Get()),
             emission(observed->M, model->states, 0, 0, Alloc), emissionPosterior(observed->M, model->states*K, 0, 0, Alloc),
-            calcd((bool*)alloc->malloc(observed->M)), cudaPosterior((double*)alloc->malloc(model->states*K*sizeof(double)))
+            calcd((bool*)alloc->Malloc(observed->M)), cudaPosterior((double*)alloc->Malloc(model->states*K*sizeof(double)))
             { memset(calcd, 0, observed->M);  }
 
         double *observation(int t) { return observed->row(t); }

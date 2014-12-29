@@ -163,9 +163,9 @@ struct Q3MapAsset : public MapAsset {
 
         { // first pass to find the .bsp
             ArchiveIter iter(fn.c_str());
-            for (const char *afn = iter.next(); Running() && afn; afn = iter.next()) {
-                if (!SuffixMatch(afn, ".bsp", false)) { iter.skip(); continue; }
-                BufferFile bf((const char *)iter.data(), iter.size());
+            for (const char *afn = iter.Next(); Running() && afn; afn = iter.Next()) {
+                if (!SuffixMatch(afn, ".bsp", false)) { iter.Skip(); continue; }
+                BufferFile bf((const char *)iter.Data(), iter.Size());
                 if (ret->LoadBSP(&bf)) { delete ret; return 0; }
                 break;
             }
@@ -173,10 +173,10 @@ struct Q3MapAsset : public MapAsset {
 
         { // second pass for rest of the files
             ArchiveIter iter(fn.c_str());
-            for (const char *afnp = iter.next(); Running() && afnp; afnp = iter.next()) {
+            for (const char *afnp = iter.Next(); Running() && afnp; afnp = iter.Next()) {
                 string afn = afnp, afp = afn.substr(0, afn.rfind('.'));
                 for (int i=0, l=ret->num[kTextures]; i<l; i++) if (afp == ret->texture[i].strName) {
-                    ret->asset[i].Load(iter.data(), afn.c_str(), iter.size());
+                    ret->asset[i].Load(iter.Data(), afn.c_str(), iter.Size());
                     INFO("load[", i, "] ", afn, " tex=", ret->asset[i].tex.ID);
                 }
             }
@@ -211,27 +211,27 @@ struct Q3MapAsset : public MapAsset {
         num[kLightVolumes] = lumps[kLightVolumes].length / sizeof(tBSPLights);
 
         int map_assets = num[kTextures] + num[kLightmaps];
-        asset = (Asset*)alloc.malloc(sizeof(Asset) * map_assets);
+        asset = (Asset*)alloc.Malloc(sizeof(Asset) * map_assets);
         lightmap = asset + num[kTextures];
         for (int i = 0; i < map_assets; ++i) new((void*)&asset[i]) Asset();
 
-        out[kVertices]     = vertex      =    (tBSPVertex*)alloc.malloc(lumps[kVertices]    .length);
-        out[kFaces]        = face        =      (tBSPFace*)alloc.malloc(lumps[kFaces]       .length);
-        out[kTextures]     = texture     =   (tBSPTexture*)alloc.malloc(lumps[kTextures]    .length);
-        out[kLightmaps]                  =  (tBSPLightmap*)alloc.malloc(lumps[kLightmaps]   .length);
-        out[kNodes]        = node        =      (tBSPNode*)alloc.malloc(lumps[kNodes]       .length);
-        out[kLeafs]        = leaf        =      (tBSPLeaf*)alloc.malloc(lumps[kLeafs]       .length);
-        out[kLeafFaces]    = leaffaces   =           (int*)alloc.malloc(lumps[kLeafFaces]   .length);
-        out[kPlanes]       = plane       =     (tBSPPlane*)alloc.malloc(lumps[kPlanes]      .length);
-        out[kVisData]      = visdata     =   (tBSPVisData*)alloc.malloc(lumps[kVisData]     .length);
-        out[kEntities]     = strEntities =          (char*)alloc.malloc(lumps[kEntities]    .length);
-        out[kBrushes]      = brush       =     (tBSPBrush*)alloc.malloc(lumps[kBrushes]     .length);
-        out[kLeafBrushes]  = leafbrushes =           (int*)alloc.malloc(lumps[kLeafBrushes] .length);
-        out[kBrushSides]   = brushside   = (tBSPBrushSide*)alloc.malloc(lumps[kBrushSides]  .length);
-        out[kModels]       = model       =     (tBSPModel*)alloc.malloc(lumps[kModels]      .length);
-        out[kMeshVerts]    = meshverts   =           (int*)alloc.malloc(lumps[kMeshVerts]   .length);
-        out[kShaders]      = shader      =    (tBSPShader*)alloc.malloc(lumps[kShaders]     .length);
-        out[kLightVolumes] = lights      =    (tBSPLights*)alloc.malloc(lumps[kLightVolumes].length);
+        out[kVertices]     = vertex      =    (tBSPVertex*)alloc.Malloc(lumps[kVertices]    .length);
+        out[kFaces]        = face        =      (tBSPFace*)alloc.Malloc(lumps[kFaces]       .length);
+        out[kTextures]     = texture     =   (tBSPTexture*)alloc.Malloc(lumps[kTextures]    .length);
+        out[kLightmaps]                  =  (tBSPLightmap*)alloc.Malloc(lumps[kLightmaps]   .length);
+        out[kNodes]        = node        =      (tBSPNode*)alloc.Malloc(lumps[kNodes]       .length);
+        out[kLeafs]        = leaf        =      (tBSPLeaf*)alloc.Malloc(lumps[kLeafs]       .length);
+        out[kLeafFaces]    = leaffaces   =           (int*)alloc.Malloc(lumps[kLeafFaces]   .length);
+        out[kPlanes]       = plane       =     (tBSPPlane*)alloc.Malloc(lumps[kPlanes]      .length);
+        out[kVisData]      = visdata     =   (tBSPVisData*)alloc.Malloc(lumps[kVisData]     .length);
+        out[kEntities]     = strEntities =          (char*)alloc.Malloc(lumps[kEntities]    .length);
+        out[kBrushes]      = brush       =     (tBSPBrush*)alloc.Malloc(lumps[kBrushes]     .length);
+        out[kLeafBrushes]  = leafbrushes =           (int*)alloc.Malloc(lumps[kLeafBrushes] .length);
+        out[kBrushSides]   = brushside   = (tBSPBrushSide*)alloc.Malloc(lumps[kBrushSides]  .length);
+        out[kModels]       = model       =     (tBSPModel*)alloc.Malloc(lumps[kModels]      .length);
+        out[kMeshVerts]    = meshverts   =           (int*)alloc.Malloc(lumps[kMeshVerts]   .length);
+        out[kShaders]      = shader      =    (tBSPShader*)alloc.Malloc(lumps[kShaders]     .length);
+        out[kLightVolumes] = lights      =    (tBSPLights*)alloc.Malloc(lumps[kLightVolumes].length);
 
         visdata->pBitsets = ((unsigned char*)visdata) + sizeof(int)*2;
         vert_id = ind_id = -1;
@@ -258,7 +258,7 @@ struct Q3MapAsset : public MapAsset {
             }
         }
 
-        INFO("loaded q3 map ", f->filename());
+        INFO("loaded q3 map ", f->Filename());
         return 0;
     }
 

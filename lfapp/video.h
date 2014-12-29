@@ -104,15 +104,15 @@ struct Color {
     float       &g()       { return x[1]; }
     float       &b()       { return x[2]; }     
     float       &a()       { return x[3]; }
-    int          R() const { return round_f(x[0]*255); } 
-    int          G() const { return round_f(x[1]*255); }
-    int          B() const { return round_f(x[2]*255); } 
-    int          A() const { return round_f(x[3]*255); }
+    int          R() const { return RoundF(x[0]*255); } 
+    int          G() const { return RoundF(x[1]*255); }
+    int          B() const { return RoundF(x[2]*255); } 
+    int          A() const { return RoundF(x[3]*255); }
     Color r(float v) const { Color c=*this; c.r() = v; return c; }
     Color g(float v) const { Color c=*this; c.g() = v; return c; }
     Color b(float v) const { Color c=*this; c.b() = v; return c; }
     Color a(float v) const { Color c=*this; c.a() = v; return c; }
-    void scale(float f) { r() = clamp(r()*f, 0, 1); g() = clamp(g()*f, 0, 1); b() = clamp(b()*f, 0, 1); }
+    void scale(float f) { r() = Clamp(r()*f, 0, 1); g() = Clamp(g()*f, 0, 1); b() = Clamp(b()*f, 0, 1); }
     void ToHSV(float *h, float *s, float *v) const {
         float M = Typed::Max(r(), Typed::Max(g(), b()));
         float m = Typed::Min(r(), Typed::Min(g(), b()));
@@ -134,7 +134,7 @@ struct Color {
         while (h >= 360) h -= 360;
         while (h <    0) h += 360;
 
-        float hf = decimals(h / 60);
+        float hf = Decimals(h / 60);
         float p = v * (1 - s);
         float q = v * (1 - s * hf);
         float t = v * (1 - s * (1 - hf));
@@ -163,7 +163,7 @@ struct Color {
     }
     static Color Interpolate(Color l, Color r, float mix) { l.scale(mix); r.scale(1-mix); return add(l,r); }
     static Color add(const Color &l, const Color &r) {
-        return Color(clamp(l.r()+r.r(), 0, 1), clamp(l.g()+r.g(), 0, 1), clamp(l.b()+r.b(), 0, 1), clamp(l.a()+r.a(), 0, 1));
+        return Color(Clamp(l.r()+r.r(), 0, 1), Clamp(l.g()+r.g(), 0, 1), Clamp(l.b()+r.b(), 0, 1), Clamp(l.a()+r.a(), 0, 1));
     }
     static Color white, black, red, green, blue, cyan, yellow, magenta, grey90, grey80, grey70, grey60, grey50, grey40, grey30, grey20, grey10;
 };
@@ -220,12 +220,12 @@ struct Box {
     Box(int X, int Y, int W, int H) : x(X), y(Y), w(W), h(H) {}
     Box(const point &P, int W, int H) : x(P.x), y(P.y), w(W), h(H) {}
     Box(float X, float Y, float W, float H, bool round) {
-        if (round) { x=round_f(X); y=round_f(Y); w=round_f(W); h=round_f(H); }
-        else       { x=  (int)(X); y=  (int)(Y); w=  (int)(W); h=  (int)(H); }
+        if (round) { x=RoundF(X); y=RoundF(Y); w=RoundF(W); h=RoundF(H); }
+        else       { x= (int)(X); y= (int)(Y); w= (int)(W); h= (int)(H); }
     }
     Box(const float *v4, bool round) {
-        if (round) { x=round_f(v4[0]); y=round_f(v4[1]); w=round_f(v4[2]); h=round_f(v4[3]); }
-        else       { x=  (int)(v4[0]); y=  (int)(v4[1]); w=  (int)(v4[2]); h=  (int)(v4[3]); }
+        if (round) { x=RoundF(v4[0]); y=RoundF(v4[1]); w=RoundF(v4[2]); h=RoundF(v4[3]); }
+        else       { x= (int)(v4[0]); y= (int)(v4[1]); w= (int)(v4[2]); h= (int)(v4[3]); }
     }
     virtual const FloatContainer *AsFloatContainer() const { return 0; }
     virtual       FloatContainer *AsFloatContainer()       { return 0; }
@@ -257,7 +257,7 @@ struct Box {
     bool operator==(const Box &c) const { return x == c.x && y == c.y && w == c.w && h == c.h; }
     bool operator!=(const Box &c) const { return !(*this == c); }
     bool operator<(const Box &c) const { SortMacro4(x, c.x, y, c.y, w, c.w, h, c.h); }
-    void scale(float xf, float yf) { x = round_f(x*xf); w = round_f(w*xf); y = round_f(y*yf); h = round_f(h*yf); }
+    void scale(float xf, float yf) { x = RoundF(x*xf); w = RoundF(w*xf); y = RoundF(y*yf); h = RoundF(h*yf); }
     void swapaxis(int width, int height) { x += w; y += h; Typed::Swap(x,y); Typed::Swap(w,h); y = width - y; x = height - x; } 
     void AddBorder(const Border &b) { *this = AddBorder(*this, b); }
     void DelBorder(const Border &b) { *this = DelBorder(*this, b); }
@@ -273,8 +273,8 @@ struct Box {
     static bool   VerticalIntersect(const Box &w1, const Box &w2) { return w1.y < (w2.y + w2.h) && w2.y < (w1.y + w1.h); }
     static bool HorizontalIntersect(const Box &w1, const Box &w2) { return w1.x < (w2.x + w2.w) && w2.x < (w1.x + w1.w); }
     static Box Add(const Box &w, const point &p) { return Box(w.x+p.x, w.y+p.y, w.w, w.h); }
-    static Box AddBorder(const Box &w, int xb, int yb) { return Box(w.x-round_f(xb/2.0, 1), w.y-round_f(yb/2.0, 1), max(0,w.w+xb), max(0,w.h+yb)); }
-    static Box DelBorder(const Box &w, int xb, int yb) { return Box(w.x+round_f(xb/2.0, 1), w.y-round_f(yb/2.0, 1), max(0,w.w-xb), max(0,w.h-yb)); }
+    static Box AddBorder(const Box &w, int xb, int yb) { return Box(w.x-RoundF(xb/2.0, 1), w.y-RoundF(yb/2.0, 1), max(0,w.w+xb), max(0,w.h+yb)); }
+    static Box DelBorder(const Box &w, int xb, int yb) { return Box(w.x+RoundF(xb/2.0, 1), w.y-RoundF(yb/2.0, 1), max(0,w.w-xb), max(0,w.h-yb)); }
     static Box AddBorder(const Box &w, int tb, int rb, int bb, int lb) { return Box(w.x-lb, w.y-bb, max(0,w.w+lb+rb), max(0,w.h+tb+bb)); }
     static Box DelBorder(const Box &w, int tb, int rb, int bb, int lb) { return Box(w.x+lb, w.y+bb, max(0,w.w-lb-rb), max(0,w.h-tb-bb)); }
     static Box AddBorder(const Box &w, const Border &b) { return AddBorder(w, b.top, b.right, b.bottom, b.left); }
@@ -1326,7 +1326,7 @@ struct Atlas {
     static void WriteGlyphFile(const string &name, Font *glyphs);
     static void MakeFromPNGFiles(const string &name, const vector<string> &png, int atlas_dim, Font **glyphs_out);
     static void SplitIntoPNGFiles(const string &input_png_fn, const map<int, v4> &glyphs, const string &dir_out);
-    static int Dimension(int n, int w, int h) { return 1 << max(8,floor_log2(sqrt((w+4)*(h+4)*n))); }
+    static int Dimension(int n, int w, int h) { return 1 << max(8,FloorLog2(sqrt((w+4)*(h+4)*n))); }
 };
 
 }; // namespace LFL

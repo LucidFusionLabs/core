@@ -177,7 +177,7 @@ struct ViterbiTrain {
     }
     void add_features(AcousticModel::Compiled *hmm, const char *fn, Matrix *MFCC, Matrix *features, const char *transcript) {
         if (!hmm) return DEBUG("utterance construct failed: ", transcript);
-        if (!dim_check("VT", features->N, hmm->state[0].emission.mean.N)) return;
+        if (!DimCheck("VT", features->N, hmm->state[0].emission.mean.N)) return;
 
         MatrixIter(features) if (!isfinite(features->row(i)[j]))
             return ERRORf("feat '%s' (%s) has [%d,%d] = %f", transcript, fn, i, j, features->row(i)[j]);
@@ -194,7 +194,7 @@ struct ViterbiTrain {
 
         /* write & process path */
         if (UttPathsOut.file) PathCorpus::add_path(&UttPathsOut, &viterbi, fn);
-        add_path(hmm, &viterbi, vprob, vtime.time(), MFCC, features, transcript);
+        add_path(hmm, &viterbi, vprob, vtime.GetTime(), MFCC, features, transcript);
         delete hmm;
     }
     static void add_features(const char *fn, Matrix *MFCC, Matrix *features, const char *transcript, void *arg) { return ((ViterbiTrain*)arg)->add_features(fn, MFCC, features, transcript); }
@@ -250,7 +250,7 @@ struct ViterbiTrain {
 
                 s->emission.diagcov.AssignL(accum[i]->cov());
                 if (accum[i]->prior()) s->emission.prior.AssignL(accum[i]->prior());
-                s->emission.computeNorms();
+                s->emission.ComputeNorms();
 
                 s->val.samples = accum[i]->count();
             }

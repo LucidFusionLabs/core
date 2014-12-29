@@ -34,7 +34,7 @@ struct KMeans {
     void reset() { memset(accums->m,0,accums->bytes); memset(count,0,K*sizeof(int)); totaldist=0; }
     
     void add_features(Matrix *features) {
-        if (!dim_check("KMeans", features->N, D)) return;
+        if (!DimCheck("KMeans", features->N, D)) return;
         for (int i=0; i<features->M; i++) add_feature(features->row(i));
     }
     static void add_features(const char *fn, Matrix *, Matrix *features, const char *transcript, void *arg) { ((KMeans*)arg)->add_features(features); }
@@ -88,7 +88,7 @@ struct KMeansInit {
         }
 
         for (int i=0, j=0; i<kmeans->K; i++) { 
-            pick[i] = rand(0, features-1); /* choose uniform randomly */
+            pick[i] = Rand(0, features-1); /* choose uniform randomly */
 
             /* dupe check */
             for (j=0; j<i; j++) if (pick[j] == pick[i]) break;
@@ -112,7 +112,7 @@ struct KMeansInit {
     static void add_feature(double *feature, void *arg) { ((KMeansInit*)arg)->add_feature(feature); }
 
     void add_features(Matrix *features) {
-        if (!dim_check("KMeans.init", features->N, kmeans->D)) return;
+        if (!DimCheck("KMeans.init", features->N, kmeans->D)) return;
         for (int i=0; i<features->M; i++) add_feature(features->row(i));
     }
     static void add_features(const char *fn, Matrix *, Matrix *features, const char *transcript, void *arg) { ((KMeansInit*)arg)->add_features(features); }

@@ -61,10 +61,10 @@ struct BlasterConfig : public HTMLParser {
             map<string, string>::const_iterator i = policies.find(name);
             if (i == policies.end()) FATAL("missing policy ", name);
             StringLineIter lines(i->second.c_str(), i->second.size());
-            for (const char *line = lines.next(); line; line = lines.next()) {
+            for (const char *line = lines.Next(); line; line = lines.Next()) {
                 StringWordIter words(line, lines.linelen);
-                string k = toconvert(tolower(BlankNull(words.next())), tochar<'-','_'>);
-                string v = BlankNull(words.next());
+                string k = toconvert(tolower(BlankNull(words.Next())), tochar<'-','_'>);
+                string v = BlankNull(words.Next());
                 if (SuffixMatch(k, ":")) k.erase(k.size()-1);
                 if (k == "ip_address") StrAppend(&ip_addresses, ip_addresses.size()?",":"", v);
                 else if (!fm->Set(k, v)) FATAL("Unknown var '", k, "', Did you mean -", fm->Match(k, __FILE__), "?");
@@ -122,7 +122,7 @@ struct BulkMailTemplate {
         if (text.empty()) return false;
         string current_textblock;
         StringLineIter lines(text.c_str(), text.size(), StringLineIter::Flag::BlankLines);
-        for (const char *line = lines.next(); line; line = lines.next()) {
+        for (const char *line = lines.Next(); line; line = lines.Next()) {
             if (!*line) current_textblock += "\r\n";
             for (const char *li = line; *li; /**/) {
                 const char *template_var_begin = strchr(li, '['), *template_var_end = 0;
@@ -380,8 +380,8 @@ struct BulkMailer {
             string line = StrCat(logtime(Now()), " ", mail.rcpt_to[0], " (", mail.mail_from, " ", IPV4Endpoint::name(c->src_addr, c->src_port), ") ");
             StrAppend(&line, FLAGS_configuration, " ", parent->template_name,  " ", delivery_mx_host, "=", IPV4Endpoint::name(delivery_mx_ip));
             StrAppend(&line, " response: ", msg.size()?ReplaceNewlines(msg, "<EOL>"):"<Lost Connection>", "\r\n");
-            out->write(line);
-            out->flush();
+            out->Write(line);
+            out->Flush();
         }
     };
     vector<Target*> queue, next_queue;
@@ -389,9 +389,9 @@ struct BulkMailer {
     DiscreteDistribution outstanding_sampler;
 
     int OpenEmailList(File *f) {
-        if (!f->opened()) return 0;
+        if (!f->Opened()) return 0;
         long long queue_attempted_start = queue_attempted;
-        for (const char *line = f->nextline(); line; line = f->nextline()) {
+        for (const char *line = f->NextLine(); line; line = f->NextLine()) {
             vector<string> email;
             Split(line, isint3<'@', ' ', '\t'>, &email);
             CHECK_EQ(email.size(), 2);
@@ -402,7 +402,7 @@ struct BulkMailer {
     }
 
     int OpenDNSCache(File *f) {
-        if (!f->opened()) return 0;
+        if (!f->Opened()) return 0;
 
         long long queued_start = queued;
         map<MXsAddrs, Target*> targets;
@@ -411,7 +411,7 @@ struct BulkMailer {
         map<MXAddrs, MX*> MXs;
 
         // For each line of resolve.out.txt
-        for (const char *line = f->nextline(); line; line = f->nextline()) {
+        for (const char *line = f->NextLine(); line; line = f->NextLine()) {
             vector<ResolvedMX> resolvedA, resolvedMX, *targetMXlist = &resolvedMX;
             ParseResolverOutput(line, f->nr.record_len, &resolvedA, &resolvedMX);
             if (!resolvedA.size()) { ERROR("failed: ", line); continue; }
@@ -494,9 +494,9 @@ struct BulkMailer {
         if (!logdir.empty() && logdir[logdir.size()-1] != LocalFile::Slash) logdir.append(StringPrintf("%c", LocalFile::Slash));
 
         string logfile = StrCat(logdir, logfiledaytime(now), "-", template_name, "-");
-        delivery_log = new LocalFile(StrCat(logfile, "delivery.log"), "a"); if (!delivery_log->opened()) FATAL("open ", delivery_log->filename());
-        bounce_log   = new LocalFile(StrCat(logfile, "bounce.log"),   "a"); if (!bounce_log  ->opened()) FATAL("open ", bounce_log  ->filename());
-        retry_log    = new LocalFile(StrCat(logfile, "retry.log"),    "a"); if (!retry_log   ->opened()) FATAL("open ", retry_log   ->filename());
+        delivery_log = new LocalFile(StrCat(logfile, "delivery.log"), "a"); if (!delivery_log->Opened()) FATAL("open ", delivery_log->Filename());
+        bounce_log   = new LocalFile(StrCat(logfile, "bounce.log"),   "a"); if (!bounce_log  ->Opened()) FATAL("open ", bounce_log  ->Filename());
+        retry_log    = new LocalFile(StrCat(logfile, "retry.log"),    "a"); if (!retry_log   ->Opened()) FATAL("open ", retry_log   ->Filename());
 
         smtp_client = Singleton<SMTPClient>::Get();
         started = Now();
@@ -548,7 +548,7 @@ struct BulkMailer {
                 else sample_retrys--;
             }
         }
-        connects_per_frame.add(connected);
+        connects_per_frame.Add(connected);
 
         if (!init_connections_reached && smtp_client->conn.size() >= FLAGS_init_connections) {
             init_connections_reached = true;
@@ -589,7 +589,7 @@ int frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample
     bulk_mailer.Frame();
 
     char buf[256];
-    if (input_fgets(buf, sizeof(buf))) ERROR("FPS=", FPS(), ", ", bulk_mailer.StatusLine());
+    if (FGets(buf, sizeof(buf))) ERROR("FPS=", FPS(), ", ", bulk_mailer.StatusLine());
     return 0;
 }
 
@@ -603,9 +603,9 @@ struct StatusGUI : public HTTPServer::Resource {
 
         StrAppend(&response, GChartsHTML::JSFooter(), "</head><body><h>Blaster Version 1.0 Up ", intervaltime(Now() - bulk_mailer.started), "  </h>\n");
         StrAppend(&response, "<p>", bulk_mailer.StatusLine(), "</p>\n");
-        StrAppend(&response, "<p>target conn/sec=", FLAGS_target_fps * FLAGS_frame_connect_max, ", conn/sec=", FPS() * bulk_mailer.connects_per_frame.avg(), "</p>\n");
+        StrAppend(&response, "<p>target conn/sec=", FLAGS_target_fps * FLAGS_frame_connect_max, ", conn/sec=", FPS() * bulk_mailer.connects_per_frame.Avg(), "</p>\n");
         StrAppend(&response, "<p>target_fps=", FLAGS_target_fps, ", FPS=", FPS(), "</p>\n");
-        StrAppend(&response, "<p>frame_connect_max=", FLAGS_frame_connect_max, ", connects_per_frame=", bulk_mailer.connects_per_frame.avg(), "</p>\n");
+        StrAppend(&response, "<p>frame_connect_max=", FLAGS_frame_connect_max, ", connects_per_frame=", bulk_mailer.connects_per_frame.Avg(), "</p>\n");
 
         StrAppend(&response, GChartsHTML::DivElement("viz1", 600, 400), "\n");
         StrAppend(&response, "<p>Delivery code histogram:<br/>\n");
@@ -631,7 +631,7 @@ int main(int argc, const char **argv) {
 
     if (!FLAGS_configuration_file.empty()) {
         LocalFile lf(FLAGS_configuration_file, "r");
-        if (lf.opened()) blaster_config.Parse(&lf);
+        if (lf.Opened()) blaster_config.Parse(&lf);
     }
     if (!FLAGS_configuration.empty()) blaster_config.Apply(FLAGS_configuration);
     else                              blaster_config.Apply(FLAGS_configuration=blaster_config.default_policy);
@@ -645,7 +645,7 @@ int main(int argc, const char **argv) {
 
     CHECK(!FLAGS_domain.empty());
     if (!FLAGS_gui_port && (FLAGS_email_list.empty() || FLAGS_dns_cache.empty())) { INFO("nothing to do"); return 0; }
-    CHECK(bulk_mail_template.Open(LocalFile(FLAGS_template, "r").contents()));
+    CHECK(bulk_mail_template.Open(LocalFile(FLAGS_template, "r").Contents()));
     if (!FLAGS_email_list.empty()) {
         LocalFile email_list(FLAGS_email_list, "r");
         CHECK(bulk_mailer.OpenEmailList(&email_list));

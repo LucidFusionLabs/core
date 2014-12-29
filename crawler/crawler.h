@@ -77,10 +77,10 @@ struct Crawler {
 
     bool add(const char *qfn, const char *cfn) {
         ProtoFile *qf = new ProtoFile(qfn);
-        if (!qf->file->opened()) { ERROR("crawler input open: ", qfn); delete qf; return false; }
+        if (!qf->file->Opened()) { ERROR("crawler input open: ", qfn); delete qf; return false; }
 
         ProtoFile *cf = new ProtoFile(cfn);
-        if (!cf->file->opened()) { ERROR("crawler output open: ", cfn); delete cf; return false; }
+        if (!cf->file->Opened()) { ERROR("crawler output open: ", cfn); delete cf; return false; }
 
         queue.push_back(Queue(qf, cf));
         return true;

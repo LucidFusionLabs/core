@@ -60,8 +60,8 @@ struct VoxForgeTgzFile {
     s2smap wav2transcript;
 
     void wav_iter(const char *srcdir, WavCorpus::WavCB cb, void *cbarg) {
-        for (const char *afn = a.next(); Running() && afn; afn = a.next()) {
-            if (SuffixMatch(afn, "etc/prompts", false)) handle_prompts((const char *)a.data(), a.size());
+        for (const char *afn = a.Next(); Running() && afn; afn = a.Next()) {
+            if (SuffixMatch(afn, "etc/prompts", false)) handle_prompts((const char *)a.Data(), a.Size());
             else if (basedir(afn, "wav")) handle_wav_filename(srcdir, afn, cb, cbarg);
         }
     }
@@ -70,8 +70,8 @@ struct VoxForgeTgzFile {
         string promptsfile(promptsdata, promptsdatalen);
         LocalFileLineIter prompts(promptsfile.c_str());
 
-        for (const char *line = prompts.next(); line; line = prompts.next()) {
-            StringWordIter words(line); const char *key=words.next(); int val=words.offset;
+        for (const char *line = prompts.Next(); line; line = prompts.Next()) {
+            StringWordIter words(line); const char *key=words.Next(); int val=words.offset;
             if (!key || val<0) continue;
             wav2transcript[basename(key,0,0)] = &line[val];
         }
@@ -84,7 +84,7 @@ struct VoxForgeTgzFile {
         const char *transcript = s2sval(wav2transcript, name.c_str());
         if (!transcript) { ERROR("wav2transcript missing ", name); return; }
 
-        WavCorpus::Thunk(srcdir, afn, (char*)a.data(), a.size(), transcript, cb, cbarg);
+        WavCorpus::Thunk(srcdir, afn, (char*)a.Data(), a.Size(), transcript, cb, cbarg);
     }
     
     static const char *s2sval(s2smap &map, const char *key) { s2smap::iterator i=map.find(key); return i != map.end() ? (*i).second.c_str() : 0; }
@@ -96,7 +96,7 @@ struct FeatCorpus {
     static int feat_iter(const char *featdir, FeatCB cb, void *arg) {
         DirectoryIter d(featdir); int count=0;
 
-        for (const char *fn = d.next(); Running() && fn; fn = d.next()) {
+        for (const char *fn = d.Next(); Running() && fn; fn = d.Next()) {
             bool matrixF=SuffixMatch(fn, ".feat", false), txtF=SuffixMatch(fn, ".txt", false), listF=SuffixMatch(fn, ".featlist", false);
             string pn = string(featdir) + fn;
 
@@ -190,7 +190,7 @@ struct PathCorpus {
             DEBUG("processing %s", uttfilename.c_str());
             Matrix *orig = utt.F->Clone();
             utt.F = Features::fromFeat(utt.F, Features::Flag::Full);
-            cb(0, path.F, 0, vtime.time(), orig, utt.F, utt.Text(), arg);
+            cb(0, path.F, 0, vtime.GetTime(), orig, utt.F, utt.Text(), arg);
             delete orig;
             count++;
         }
@@ -213,10 +213,10 @@ void WavCorpus::Run(const char *fn, void *Cb, void *arg) {
     else if (SuffixMatch(fn, ".wav", false)) { /* TIMIT style: .wav with matching .txt */
         string tfn = string(fn, strlen(fn)-3) + "txt";
         LocalFile tf(tfn.c_str(), "r");
-        if (!tf.opened()) return;
+        if (!tf.Opened()) return;
 
-        StringWordIter words(tf.nextline());
-        if (bool skip_two_words=true) { words.next(); words.next(); }
+        StringWordIter words(tf.NextLine());
+        if (bool skip_two_words=true) { words.Next(); words.Next(); }
         string transcript = toupper(words.in + words.offset);
         transcript = togrep(transcript.c_str(), isalnum, isspace);
 

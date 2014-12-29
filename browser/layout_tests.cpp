@@ -41,14 +41,14 @@ struct LayoutTests {
     }
     bool Next() {
         for (;;) {
-            current.html_fn = BlankNull(files.next());
+            current.html_fn = BlankNull(files.Next());
             if (current.html_fn.empty()) break;
             current.html_fn = StrCat(files.pathname, current.html_fn);
             current.log_fn  = current.html_fn.substr(0, current.html_fn.size()-5) + "-expected.txt";
             current.png_fn  = current.html_fn.substr(0, current.html_fn.size()-5) + "-expected.png";
-            if (!LocalFile(current.html_fn, "r").opened()) current.html_fn.clear();
-            if (!LocalFile(current.png_fn,  "r").opened()) current.png_fn .clear();
-            if (!current.log_fn.empty()) current.log_expected = LocalFile::filecontents(current.log_fn);
+            if (!LocalFile(current.html_fn, "r").Opened()) current.html_fn.clear();
+            if (!LocalFile(current.png_fn,  "r").Opened()) current.png_fn .clear();
+            if (!current.log_fn.empty()) current.log_expected = LocalFile::FileContents(current.log_fn);
             else if (current.png_fn.empty()) continue;
             count++;
             return true;

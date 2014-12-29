@@ -57,7 +57,7 @@ int frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample
         }
     }
     
-    char buf[256]; if (input_fgets(buf, sizeof(buf))) ERROR("FPS=", FPS(), smtp_tester.StatsLine());
+    char buf[256]; if (FGets(buf, sizeof(buf))) ERROR("FPS=", FPS(), smtp_tester.StatsLine());
     return 0;
 }
 

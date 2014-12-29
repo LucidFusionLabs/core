@@ -60,19 +60,19 @@ struct Entity {
     static bool cmp(const Entity *l, const Entity *r) { return l->zsort > r->zsort; }
 
     void SetName(const string &n) { name=n; namehash=fnv32(n.c_str()); }
-    void raise(float f) { v3 u = up;  u.scale( f); pos.add(u); }
-    void lower(float f) { v3 d = up;  d.scale(-f); pos.add(d); }
-    void fwd  (float f) { v3 s = ort; s.scale( f); pos.add(s); }
-    void rev  (float f) { v3 r = ort; r.scale(-f); pos.add(r); }
-    void right(float f) { v3 r = v3::cross(ort, up); r.scale( f); pos.add(r); }
-    void left (float f) { v3 l = v3::cross(ort, up); l.scale(-f); pos.add(l); } 
-    void rollleft (float f) { m33 m = m33::rotaxis( f, ort.x, ort.y, ort.z); up  = m.transform(up ); }
-    void rollright(float f) { m33 m = m33::rotaxis(-f, ort.x, ort.y, ort.z); up  = m.transform(up ); }
-    void yawleft  (float f) { m33 m = m33::rotaxis(-f, up .x, up .y, up .z); ort = m.transform(ort); }
-    void yawright (float f) { m33 m = m33::rotaxis( f, up .x, up .y, up .z); ort = m.transform(ort); }
-    void pitchup  (float f) { v3 r = v3::cross(ort, up); r.norm(); m33 m = m33::rotaxis( f, r.x, r.y, r.z); up = m.transform(up); ort = m.transform(ort); }
-    void pitchdown(float f) { v3 r = v3::cross(ort, up); r.norm(); m33 m = m33::rotaxis(-f, r.x, r.y, r.z); up = m.transform(up); ort = m.transform(ort); }
-    void look() { v3 targ = pos; targ.add(ort); screen->gd->LookAt(pos, targ, up); }
+    void raise(float f) { v3 u = up;  u.Scale( f); pos.Add(u); }
+    void lower(float f) { v3 d = up;  d.Scale(-f); pos.Add(d); }
+    void fwd  (float f) { v3 s = ort; s.Scale( f); pos.Add(s); }
+    void rev  (float f) { v3 r = ort; r.Scale(-f); pos.Add(r); }
+    void right(float f) { v3 r = v3::Cross(ort, up); r.Scale( f); pos.Add(r); }
+    void left (float f) { v3 l = v3::Cross(ort, up); l.Scale(-f); pos.Add(l); } 
+    void rollleft (float f) { m33 m = m33::RotAxis( f, ort.x, ort.y, ort.z); up  = m.Transform(up ); }
+    void rollright(float f) { m33 m = m33::RotAxis(-f, ort.x, ort.y, ort.z); up  = m.Transform(up ); }
+    void yawleft  (float f) { m33 m = m33::RotAxis(-f, up .x, up .y, up .z); ort = m.Transform(ort); }
+    void yawright (float f) { m33 m = m33::RotAxis( f, up .x, up .y, up .z); ort = m.Transform(ort); }
+    void pitchup  (float f) { v3 r = v3::Cross(ort, up); r.Norm(); m33 m = m33::RotAxis( f, r.x, r.y, r.z); up = m.Transform(up); ort = m.Transform(ort); }
+    void pitchdown(float f) { v3 r = v3::Cross(ort, up); r.Norm(); m33 m = m33::RotAxis(-f, r.x, r.y, r.z); up = m.Transform(up); ort = m.Transform(ort); }
+    void look() { v3 targ = pos; targ.Add(ort); screen->gd->LookAt(pos, targ, up); }
 
     void MoveUp   (unsigned t) { raise    (t/1000.0*FLAGS_ksens); }
     void MoveDown (unsigned t) { lower    (t/1000.0*FLAGS_ksens); }

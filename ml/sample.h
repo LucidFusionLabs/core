@@ -34,7 +34,7 @@ struct SampleExtent {
             vec_min = new double[D]; vec_max = new double[D];
             Vector::Assign(vec_min, INFINITY, D); Vector::Assign(vec_max, -INFINITY, D);
         }
-        if (!dim_check("SampleExtents", features->N, D)) return;
+        if (!DimCheck("SampleExtents", features->N, D)) return;
 
         MatrixIter(features) {
             if (features->row(i)[j] < vec_min[j]) vec_min[j] = features->row(i)[j];
@@ -57,7 +57,7 @@ struct SampleMean {
 
     void add_features(Matrix *features) {
         if (!vec) { D = features->N; vec = new double[D](); }
-        if (!dim_check("SampleMean", features->N, D)) return;
+        if (!DimCheck("SampleMean", features->N, D)) return;
 
         MatrixIter(features) { vec[j] += features->row(i)[j]; }
         count += features->M;
@@ -76,7 +76,7 @@ struct SampleCovariance {
     void reset() { memset(accums->m,0,accums->bytes); memset(count,0,K*sizeof(int)); }
     
     void add_features(Matrix *features) {
-        if (!dim_check("SampleCovariance", features->N, D)) return;
+        if (!DimCheck("SampleCovariance", features->N, D)) return;
         for (int i=0; i<features->M; i++) add_feature(features->row(i));
     }
     static void add_features(const char *fn, Matrix *MFCC, Matrix *features, const char *transcript, void *arg) { return ((SampleCovariance*)arg)->add_features(features); }
@@ -126,13 +126,13 @@ struct SampleProb {
     void reset() { prob=-INFINITY; }
     
     void add_features(Matrix *features) {
-        if (!dim_check("SampleProb", features->N, means->N)) return;
+        if (!DimCheck("SampleProb", features->N, means->N)) return;
         for (int i=0; i<features->M; i++) add_feature(features->row(i));
     }
     static void add_features(const char *fn, Matrix *, Matrix *features, const char *transcript, void *arg) { ((SampleProb*)arg)->add_features(features); }
 
     void add_feature(double *feature) {
-        double p = gmmPdfEval(means, diagcovar, feature);
+        double p = GmmPdfEval(means, diagcovar, feature);
         DEBUG("prob = ", exp(p));
         prob += p;
     }

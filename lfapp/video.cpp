@@ -422,16 +422,16 @@ struct OpenGLES2 : public GraphicsDevice {
     } position_ptr, tex_ptr, color_ptr, normal_ptr;
 
     OpenGLES2() : QT_init(0), QT_grabbed(0), QT_mx(0), QT_my(0), shader(0), enabled_array(-1), enabled_indexarray(-1), matrix_target(-1), dirty_matrix(1), dirty_color(1), cubemap_on(0), normals_on(0), texture_on(0), colorverts_on(0), lighting_on(0) {
-        modelview_matrix.push_back(m44::identity());
-        projection_matrix.push_back(m44::identity());
+        modelview_matrix.push_back(m44::Identity());
+        projection_matrix.push_back(m44::Identity());
         default_color.push_back(Color(1.0, 1.0, 1.0, 1.0));
     }
 
     void Init() {
         // GetIntegerv(GL_FRAMEBUFFER_BINDING, &oldFBO);
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-        string vertex_shader = LocalFile::filecontents(StrCat(ASSETS_DIR, "lfapp_vertex.glsl"));
-        string pixel_shader  = LocalFile::filecontents(StrCat(ASSETS_DIR, "lfapp_pixel.glsl"));
+        string vertex_shader = LocalFile::FileContents(StrCat(ASSETS_DIR, "lfapp_vertex.glsl"));
+        string pixel_shader  = LocalFile::FileContents(StrCat(ASSETS_DIR, "lfapp_pixel.glsl"));
         Shader::create("lfapp",          vertex_shader.c_str(), pixel_shader.c_str(), "#define TEX2D  \r\n#define VERTEXCOLOR\r\n", &app->video.shader_default);
         Shader::create("lfapp_cubemap",  vertex_shader.c_str(), pixel_shader.c_str(), "#define TEXCUBE\r\n#define VERTEXCOLOR\r\n", &app->video.shader_cubemap);
         Shader::create("lfapp_normals",  vertex_shader.c_str(), pixel_shader.c_str(), "#define TEX2D  \r\n#define NORMALS\r\n",     &app->video.shader_normals);
@@ -505,7 +505,7 @@ struct OpenGLES2 : public GraphicsDevice {
         bool light_pos = 0, light_color = 0;
         if (n != 0) { ERROR("ignoring Light(", n, ")"); return; }
 
-        if      (t == GL_POSITION) { light_pos=1;   light[n].pos = modelview_matrix.back().transform(v4(v)); }
+        if      (t == GL_POSITION) { light_pos=1;   light[n].pos = modelview_matrix.back().Transform(v4(v)); }
         else if (t == GL_AMBIENT)  { light_color=1; light[n].color.ambient  = Color(v); }
         else if (t == GL_DIFFUSE)  { light_color=1; light[n].color.diffuse  = Color(v); }
         else if (t == GL_SPECULAR) { light_color=1; light[n].color.specular = Color(v); }
@@ -570,13 +570,13 @@ struct OpenGLES2 : public GraphicsDevice {
     void PopMatrix() {
         vector<m44> *target = TargetMatrix();
         if      (target->size() >= 1) target->pop_back();
-        else if (target->size() == 1) target->back().assign(m44::identity());
+        else if (target->size() == 1) target->back().Assign(m44::Identity());
         UpdateMatrix();
     }
     void PrintMatrix()        { TargetMatrix()->back().Print(StrCat("mt", matrix_target)); }
     void PushMatrix()         { TargetMatrix()->push_back(TargetMatrix()->back()); UpdateMatrix(); }
-    void LoadIdentity()       { TargetMatrix()->back().assign(m44::identity());    UpdateMatrix(); }
-    void Mult(const float *m) { TargetMatrix()->back().mult(m44(m));               UpdateMatrix(); }
+    void LoadIdentity()       { TargetMatrix()->back().Assign(m44::Identity());    UpdateMatrix(); }
+    void Mult(const float *m) { TargetMatrix()->back().Mult(m44(m));               UpdateMatrix(); }
     void Scalef(float x, float y, float z) {
 #if 0
         TargetMatrix()->back().mult(m44::scale(x, y, z));
@@ -588,9 +588,9 @@ struct OpenGLES2 : public GraphicsDevice {
 #endif
         UpdateMatrix();
     }
-    void Rotatef(float angle, float x, float y, float z) { TargetMatrix()->back().mult(m44::rotate(degree2radian(angle), x, y, z)); UpdateMatrix(); }
-    void Ortho  (float l, float r, float b, float t, float nv, float fv) { TargetMatrix()->back().mult(m44::ortho  (l, r, b, t, nv, fv)); UpdateMatrix(); }
-    void Frustum(float l, float r, float b, float t, float nv, float fv) { TargetMatrix()->back().mult(m44::frustum(l, r, b, t, nv, fv)); UpdateMatrix(); }
+    void Rotatef(float angle, float x, float y, float z) { TargetMatrix()->back().Mult(m44::Rotate(DegreeToRadian(angle), x, y, z)); UpdateMatrix(); }
+    void Ortho  (float l, float r, float b, float t, float nv, float fv) { TargetMatrix()->back().Mult(m44::Ortho  (l, r, b, t, nv, fv)); UpdateMatrix(); }
+    void Frustum(float l, float r, float b, float t, float nv, float fv) { TargetMatrix()->back().Mult(m44::Frustum(l, r, b, t, nv, fv)); UpdateMatrix(); }
     void Translate(float x, float y, float z) { 
 #if 0
         TargetMatrix()->back().mult(m44::translate(x, y, z));
@@ -645,7 +645,7 @@ struct OpenGLES2 : public GraphicsDevice {
         if (dirty_matrix) {
             dirty_matrix = false;
             m44 m = projection_matrix.back();
-            m.mult(modelview_matrix.back());
+            m.Mult(modelview_matrix.back());
             glUniformMatrix4fv(shader->uniform_modelviewproj, 1, 0, m[0]);
             glUniformMatrix4fv(shader->uniform_modelview,     1, 0, modelview_matrix.back()[0]);
         }
@@ -776,9 +776,9 @@ void GraphicsDevice::DrawMode(int _2D, int W, int H, bool flush) {
 }
 
 void GraphicsDevice::LookAt(const v3 &pos, const v3 &targ, const v3 &up) {
-    v3 Z = pos - targ;       Z.norm();
-    v3 X = v3::cross(up, Z); X.norm();
-    v3 Y = v3::cross(Z,  X); Y.norm();
+    v3 Z = pos - targ;       Z.Norm();
+    v3 X = v3::Cross(up, Z); X.Norm();
+    v3 Y = v3::Cross(Z,  X); Y.Norm();
     float m[16] = {
         X.x, Y.x, Z.x, 0.0,
         X.y, Y.y, Z.y, 0.0,
@@ -1478,7 +1478,7 @@ void SimpleVideoResampler::Resample(const unsigned char *sb, int sls, unsigned c
             for (int y=0; y<d_height; y++) {
                 for (int x=0; x<d_width; x++) {
                     unsigned char *dp = (db + dls * (flip_y ? d_height-1-y : y) + (flip_x ? d_width-1-x : x) * dw);
-                    *(dp + po) = matrixAsFunc(&M, x?(float)x/(d_width-1):0, y?(float)y/(d_height-1):0) * 255;
+                    *(dp + po) = MatrixAsFunc(&M, x?(float)x/(d_width-1):0, y?(float)y/(d_height-1):0) * 255;
                 }
             }
         }
@@ -1639,7 +1639,7 @@ void Texture::Resize(int W, int H, int PF, int flag) {
             glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         }
     }
-    int opengl_width = next_power_of_two(width), opengl_height = next_power_of_two(height);
+    int opengl_width = NextPowerOfTwo(width), opengl_height = NextPowerOfTwo(height);
     if (ID || cubemap) {
         int gl_tt = GLTexType(), gl_pt = GLPixelType();
         if (ID) screen->gd->BindTexture(gl_tt, ID);
@@ -1715,7 +1715,7 @@ void DepthTexture::Resize(int W, int H, int DF, int flag) {
     if (DF) df = DF;
     width=W; height=H;
     if (!ID && (flag & Flag::CreateGL)) glGenRenderbuffers(1, &ID);
-    int opengl_width = next_power_of_two(width), opengl_height = next_power_of_two(height);
+    int opengl_width = NextPowerOfTwo(width), opengl_height = NextPowerOfTwo(height);
     if (ID) {
         glBindRenderbuffer(GL_RENDERBUFFER, ID);
         glRenderbufferStorage(GL_RENDERBUFFER, Depth::OpenGLID(df), opengl_width, opengl_height);
@@ -1906,7 +1906,7 @@ void Atlas::Update(const string &name, Font *f, bool dump) {
     if (dump) {
         LocalFile lf(ASSETS_DIR + name + "00.png", "w");
         PngWriter::Write(&lf, tex);
-        INFO("wrote ", lf.filename());
+        INFO("wrote ", lf.Filename());
         WriteGlyphFile(name, f);
     }
     if (1) { /* complete atlas */
@@ -1938,7 +1938,7 @@ void Atlas::MakeFromPNGFiles(const string &name, const vector<string> &png, int 
 
     for (int i = 0, skipped = 0; i < png.size(); ++i) {
         LocalFile in(png[i], "r");
-        if (!in.opened()) { INFO("Skipped: ", png[i]); skipped++; continue; }
+        if (!in.Opened()) { INFO("Skipped: ", png[i]); skipped++; continue; }
         Font::Glyph *out = &ret->glyph->table[i - skipped];
         out->id = i - skipped;
 
@@ -1962,14 +1962,14 @@ void Atlas::MakeFromPNGFiles(const string &name, const vector<string> &png, int 
 
 void Atlas::SplitIntoPNGFiles(const string &input_png_fn, const map<int, v4> &glyphs, const string &dir_out) {
     LocalFile in(input_png_fn, "r");
-    if (!in.opened()) { ERROR("open: ", input_png_fn); return; }
+    if (!in.Opened()) { ERROR("open: ", input_png_fn); return; }
 
     Texture png;
     if (PngReader::Read(&in, &png)) { ERROR("read: ", input_png_fn); return; }
 
     for (map<int, v4>::const_iterator i = glyphs.begin(); i != glyphs.end(); ++i) {
-        unsigned gx1 = round_f(i->second.x * png.width), gy1 = round_f((1 - i->second.y) * png.height);
-        unsigned gx2 = round_f(i->second.z * png.width), gy2 = round_f((1 - i->second.w) * png.height);
+        unsigned gx1 = RoundF(i->second.x * png.width), gy1 = RoundF((1 - i->second.y) * png.height);
+        unsigned gx2 = RoundF(i->second.z * png.width), gy2 = RoundF((1 - i->second.w) * png.height);
         unsigned gw = gx2 - gx1, gh = gy1 - gy2;
         CHECK(gw > 0 && gh > 0);
 
@@ -1980,7 +1980,7 @@ void Atlas::SplitIntoPNGFiles(const string &input_png_fn, const map<int, v4> &gl
                                    glyph.pf, glyph.LineSize(), 0,   0);
 
         LocalFile lf(dir_out + StringPrintf("glyph%03d.png", i->first), "w");
-        CHECK(lf.opened());
+        CHECK(lf.Opened());
         PngWriter::Write(&lf, glyph);
     }
 }
@@ -2098,10 +2098,10 @@ void Font::Scale(int new_size) {
 
     size        = new_size;
     scale       = (float)size / primary->size;
-    height      = round_f(primary->height      * scale);
-    max_top     = round_f(primary->max_top     * scale);
-    max_width   = round_f(primary->max_width   * scale);
-    fixed_width = round_f(primary->fixed_width * scale);
+    height      = RoundF(primary->height      * scale);
+    max_top     = RoundF(primary->max_top     * scale);
+    max_width   = RoundF(primary->max_width   * scale);
+    fixed_width = RoundF(primary->fixed_width * scale);
 }
 
 template           void Font::Size<char> (const StringPiece     &text, Box *out, int maxwidth, int *lines_out);
@@ -2271,7 +2271,7 @@ Font *TTFFont::Open(const shared_ptr<TTFFont::Resource> &resource, int size, Col
             if (face->glyph->bitmap_top  > max_top)     max_top     = face->glyph->bitmap_top;
         }
 
-        ret->max_top = max_top + (FLAGS_atlas_pad_top ? round_f(size * FLAGS_atlas_pad_top) : 0);
+        ret->max_top = max_top + (FLAGS_atlas_pad_top ? RoundF(size * FLAGS_atlas_pad_top) : 0);
         ret->height = ret->max_top + max_bottom;
         ret->max_width = max_advance;
         if (ret->mono) ret->fixed_width = ret->max_width;
@@ -2354,10 +2354,10 @@ Font *CoreTextFont::Open(const string &name, int size, Color c, int flag, int ct
 }
 
 static bool CoreTextFontLoadGlyph(CGRect *bounds, Font *ret, Font::Glyph *out, bool subpixel) {
-    out->left       = -round_f(bounds->origin.x);
-    out->tex.width  =  round_f(bounds->size.width);
-    out->tex.height =  round_f(bounds->size.height);
-    out->top        =  round_f(bounds->origin.y) + out->tex.height;
+    out->left       = -RoundF(bounds->origin.x);
+    out->tex.width  =  RoundF(bounds->size.width);
+    out->tex.height =  RoundF(bounds->size.height);
+    out->top        =  RoundF(bounds->origin.y) + out->tex.height;
     if (out->tex.width && !ret->fixed_width)                   ret->fixed_width = out->tex.width;
     if (out->tex.width &&  ret->fixed_width != out->tex.width) ret->fixed_width = 0;
     return true;
@@ -2508,7 +2508,7 @@ Font *Fonts::InsertAtlas(const string &filename, const string &family, int point
 }
 
 Font *Fonts::InsertFreetype(const string &filename, const string &family, int pointsize, const Color &fg, int flag) {
-    TTFFont::Resource *resource = new TTFFont::Resource(LocalFile::filecontents(StrCat(ASSETS_DIR, filename)),
+    TTFFont::Resource *resource = new TTFFont::Resource(LocalFile::FileContents(StrCat(ASSETS_DIR, filename)),
                                                         FontName(filename, pointsize, fg, flag),
                                                         (FLAGS_atlas_dump ? TTFFont::Flag::WriteAtlas : 0));
     if (resource->content.empty()) { ERROR("InsertFretype ", filename); delete resource; return 0; }

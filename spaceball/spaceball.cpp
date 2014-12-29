@@ -179,7 +179,7 @@ void ShipDraw(Asset *a, Entity *e) {
     screen->gd->BindTexture(GraphicsDevice::Texture2D, lightning_glyph->tex.ID);
 
     float lightning_offset = (e->namehash % 11) / 10.0;
-    lightning_obj->ScrollTexCoord(-.4 * ToSeconds(lightning_timer.time(true)),
+    lightning_obj->ScrollTexCoord(-.4 * ToSeconds(lightning_timer.GetTime(true)),
                                   lightning_offset - last_lightning_offset,
                                   &lightning_texcoord_min_int_x);
     last_lightning_offset = lightning_offset;
@@ -264,8 +264,8 @@ struct SpaceballClient : public GameClient {
                 screen->camMain->ort.z *= -1;
                 screen->camMain->up.z *= -1;
             }
-            screen->camMain->ort.norm();
-            screen->camMain->up.norm();
+            screen->camMain->ort.Norm();
+            screen->camMain->up.Norm();
         }
         else if (cmd == "win") {
             gameover.start_ind = ::atoi(arg.c_str());
@@ -525,8 +525,8 @@ int Frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample
         if (server->ball) {
             // Replay camera tracks ball
             v3 targ = server->ball->pos + server->ball->vel;
-            v3 yaw_delta = v3::norm(targ - v3(screen->camMain->pos.x, targ.y, screen->camMain->pos.z));
-            v3 ort = v3::norm(targ - screen->camMain->pos);
+            v3 yaw_delta = v3::Norm(targ - v3(screen->camMain->pos.x, targ.y, screen->camMain->pos.z));
+            v3 ort = v3::Norm(targ - screen->camMain->pos);
             v3 delta = ort - yaw_delta;
             screen->camMain->up = v3(0,1,0) + delta;
             screen->camMain->ort = ort;
@@ -685,14 +685,14 @@ extern "C" int main(int argc, const char *argv[]) {
     scene.Add(new Entity("lines", lines));
 
     if (screen->gd->ShaderSupport()) {
-        string lfapp_vertex_shader = LocalFile::filecontents(StrCat(ASSETS_DIR, "lfapp_vertex.glsl"));
-        string lfapp_pixel_shader = LocalFile::filecontents(StrCat(ASSETS_DIR, "lfapp_pixel.glsl"));
-        string vertex_shader = LocalFile::filecontents(StrCat(ASSETS_DIR, "vertex.glsl"));
-        string fader_shader  = LocalFile::filecontents(StrCat(ASSETS_DIR, "fader.glsl"));
-        string warper_shader = LocalFile::filecontents(StrCat(ASSETS_DIR, "warper.glsl"));
+        string lfapp_vertex_shader = LocalFile::FileContents(StrCat(ASSETS_DIR, "lfapp_vertex.glsl"));
+        string lfapp_pixel_shader = LocalFile::FileContents(StrCat(ASSETS_DIR, "lfapp_pixel.glsl"));
+        string vertex_shader = LocalFile::FileContents(StrCat(ASSETS_DIR, "vertex.glsl"));
+        string fader_shader  = LocalFile::FileContents(StrCat(ASSETS_DIR, "fader.glsl"));
+        string warper_shader = LocalFile::FileContents(StrCat(ASSETS_DIR, "warper.glsl"));
         string explode_shader = lfapp_vertex_shader;
         CHECK(StringReplace(&explode_shader, "// LFLPositionShaderMarker",
-                                             LocalFile::filecontents(StrCat(ASSETS_DIR, "explode.glsl"))));
+                                             LocalFile::FileContents(StrCat(ASSETS_DIR, "explode.glsl"))));
 
         Shader::create("fadershader",         vertex_shader.c_str(),       fader_shader.c_str(), "",                                          &fadershader);
         Shader::create("warpershader",  lfapp_vertex_shader.c_str(),      warper_shader.c_str(), "#define TEX2D \r\n#define VERTEXCOLOR\r\n", &warpershader);

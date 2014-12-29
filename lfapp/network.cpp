@@ -595,7 +595,7 @@ int SelectSocketThread::ThreadProc() {
             SelectSocketSet my_sockets;
             { ScopedMutex sm(sockets_mutex); my_sockets = sockets; }
             my_sockets.Select(-1);
-            if (my_sockets.GetReadable(pipe[0])) nb_read(pipe[0], 4096);
+            if (my_sockets.GetReadable(pipe[0])) NBRead(pipe[0], 4096);
         }
         if (app->run) app->Wakeup();
         { ScopedMutex sm(app->wait_mutex); }
@@ -629,7 +629,7 @@ int DNS::WriteRequest(unsigned short id, const string &querytext, unsigned short
     hdr->qdcount = htons(1);
 
     StringWordIter words(querytext.c_str(), 0, isdot);
-    for (string word = BlankNull(words.next()); !word.empty(); word = BlankNull(words.next())) {
+    for (string word = BlankNull(words.Next()); !word.empty(); word = BlankNull(words.Next())) {
         CHECK_LT(word.size(), 64);
         os.Write8((unsigned char)word.size());
         os.String(word);
@@ -886,7 +886,7 @@ int HTTP::argGrep(const char *args, const char *end, int num, ...) {
 
     int alen=end-args, anlen;
     StringWordIter words(args, alen, isand, 0, StringWordIter::Flag::InPlace);
-    for (const char *a = words.next(); a; a = words.next()) {
+    for (const char *a = words.Next(); a; a = words.Next()) {
         if (!(anlen = HTTP::argNameLen(a))) continue;
         for (int i=0; i<num; i++) if (anlen == kl[i] && !strncasecmp(k[i], a, anlen)) {
             if (*(a+anlen) && *(a+anlen) == '=') v[i]->assign(a+anlen+1, words.wordlen-anlen-1);
@@ -903,7 +903,7 @@ int HTTP::headerGrep(const char *headers, const char *end, int num, ...) {
 
     int hlen=end-headers, hnlen;
     StringLineIter lines(headers, hlen, StringLineIter::Flag::InPlace);
-    for (const char *h = lines.next(); h; h = lines.next()) {
+    for (const char *h = lines.Next(); h; h = lines.Next()) {
         if (!(hnlen = HTTP::headerNameLen(h))) continue;
         for (int i=0; i<num; i++) if (hnlen == kl[i] && !strncasecmp(k[i], h, hnlen)) {
             const char *hv = nextchar(h+hnlen+1, notspace, lines.linelen-hnlen-1);
@@ -920,7 +920,7 @@ string HTTP::headerGrep(const char *headers, const char *end, const string &name
 
     int hlen=end-headers, hnlen;
     StringLineIter lines(headers, hlen, StringLineIter::Flag::InPlace);
-    for (const char *line = lines.next(); line; line = lines.next()) {
+    for (const char *line = lines.Next(); line; line = lines.Next()) {
         if (!(hnlen = HTTP::headerNameLen(line))) continue;
         if (hnlen == name.size() && !strncasecmp(name.c_str(), line, hnlen)) return string(line+hnlen+2, lines.linelen-hnlen-2);
     }
@@ -1442,12 +1442,12 @@ void Resolver::DefaultNameserver(vector<IPV4::Addr> *nameservers) {
     nameservers->push_back(IP.AddrArray[0]);
 #else
     LocalFile file("/etc/resolv.conf", "r");
-    if (!file.opened()) return;
+    if (!file.Opened()) return;
 
-    for (const char *line = file.nextline(); line; line = file.nextline()) {
+    for (const char *line = file.NextLine(); line; line = file.NextLine()) {
         StringWordIter words(line);
-        if (strcmp(words.next(), "nameserver")) continue;
-        nameservers->push_back(Network::resolve(words.next()));
+        if (strcmp(words.Next(), "nameserver")) continue;
+        nameservers->push_back(Network::resolve(words.Next()));
     }
 #endif
 }
@@ -1736,7 +1736,7 @@ struct HTTPClientQuery {
         File *out;
         HTTPClient::ResponseCB cb;
 
-        virtual ~WGet() { if (out) INFO("close ", out->filename()); delete out; }
+        virtual ~WGet() { if (out) INFO("close ", out->Filename()); delete out; }
         WGet(Service *Svc, bool SSL, const string &Host, int Port, const string &Path, File *Out, HTTPClient::ResponseCB CB=HTTPClient::ResponseCB()) :
             Protocol(false), svc(Svc), ssl(SSL), host(Host), path(Path), port(Port), out(Out), cb(CB) {}
 
@@ -1748,7 +1748,7 @@ struct HTTPClientQuery {
         }
 
         void Content(Connection *c, const char *content, int len) {
-            if (out) { if (out->write(content, len) != len) ERROR("write ", out->filename()); }
+            if (out) { if (out->Write(content, len) != len) ERROR("write ", out->Filename()); }
             if (cb) cb(c, 0, content_type, content, len);
         }
 
@@ -1806,7 +1806,7 @@ bool HTTPClient::WGet(const string &url, File *out, ResponseCB cb) {
     bool ssl; int tcp_port; string host, path, prot;
     if (!HTTP::URL(url.c_str(), &ssl, 0, &tcp_port, &host, &path, 0, &prot)) {
         if (prot != "file") return 0;
-        string fn = StrCat(!host.empty() ? "/" : "", host , "/", path), content = LocalFile::filecontents(fn);
+        string fn = StrCat(!host.empty() ? "/" : "", host , "/", path), content = LocalFile::FileContents(fn);
         if (!content.empty() && cb) cb(0, 0, string(), content.data(), content.size());
         if (cb)                     cb(0, 0, string(), 0,              0);
         return true;
@@ -1816,7 +1816,7 @@ bool HTTPClient::WGet(const string &url, File *out, ResponseCB cb) {
         string fn = basename(path.c_str(),0,0);
         if (fn.empty()) fn = "index.html";
         out = new LocalFile(StrCat(dldir(), fn), "w");
-        if (!out->opened()) { ERROR("open file"); delete out; return 0; }
+        if (!out->Opened()) { ERROR("open file"); delete out; return 0; }
     }
 
     IPV4::Addr addr;
@@ -1934,7 +1934,7 @@ struct HTTPServerConnection : public Query {
         /* process request */
         Timer timer;
         HTTPServer::Response response = server->Request(c, type, url, args, headers, postdata, postlen);
-        INFOf("%s %s %s %d cl=%d %f ms", c->name().c_str(), HTTPServer::Method::name(type), url, response.code, response.content_length, timer.time()); 
+        INFOf("%s %s %s %d cl=%d %f ms", c->name().c_str(), HTTPServer::Method::name(type), url, response.code, response.content_length, timer.GetTime()); 
         if (response.refill) c->readable = 0;
 
         /* write response/headers */
@@ -2010,9 +2010,9 @@ struct FileResourceQuery : public Query {
     LocalFile f;
     FileResourceQuery(const string &fn) : f(fn, "r") {}
     int Flushed(Connection *c) {
-        if (!f.opened()) return 0;
+        if (!f.Opened()) return 0;
         c->writable = 1;
-        c->wl = f.read(c->wb, sizeof(c->wb));
+        c->wl = f.Read(c->wb, sizeof(c->wb));
         if (c->wl < sizeof(c->wb)) return 0;
         return 1;
     }
@@ -2345,7 +2345,7 @@ struct SMTPClientConnection : public Query {
     int Read(Connection *c) {
         int processed = 0;
         StringLineIter lines(c->rb, c->rl, StringLineIter::Flag::BlankLines);
-        for (const char *line = lines.next(); line; line = lines.next()) {
+        for (const char *line = lines.Next(); line; line = lines.Next()) {
             processed = lines.offset;
             if (!response_lines.empty()) response_lines.append("\r\n");
             response_lines.append(line, lines.linelen);
@@ -2440,19 +2440,19 @@ struct SMTPServerConnection : public Query {
     int ReadCommands(Connection *c, const char *in, int len) {
         int processed = 0;
         StringLineIter lines(in, len, StringLineIter::Flag::BlankLines | StringLineIter::Flag::InPlace);
-        for (const char *line = lines.next(); line && lines.offset>=0 && !in_data; line = lines.next()) {
+        for (const char *line = lines.Next(); line && lines.offset>=0 && !in_data; line = lines.Next()) {
             processed = lines.offset;
             StringWordIter words(line, lines.linelen, isint3<' ', '\t', ':'>);
-            string cmd = toupper(BlankNull(words.next()));
-            string a1_orig = BlankNull(words.next());
+            string cmd = toupper(BlankNull(words.Next()));
+            string a1_orig = BlankNull(words.Next());
             string a1 = toupper(a1_orig), response="500 unrecognized command\r\n";
 
             if (cmd == "MAIL" && a1 == "FROM") {
                 ClearStateTable();
-                message.mail_from = words.remaining();
+                message.mail_from = words.Remaining();
                 response = "250 OK\r\n";
             }
-            else if (cmd == "RCPT" && a1 == "TO") { message.rcpt_to.push_back(words.remaining()); response="250 OK\r\n"; }
+            else if (cmd == "RCPT" && a1 == "TO") { message.rcpt_to.push_back(words.Remaining()); response="250 OK\r\n"; }
             else if (cmd == "DATA") {
                 if      (!message.rcpt_to.size())   response = "503 valid RCPT command must precede DATA\r\n";
                 else if (!message.mail_from.size()) response = "503 valid FROM command must precede DATA\r\n";
@@ -2472,7 +2472,7 @@ struct SMTPServerConnection : public Query {
     int ReadData(Connection *c, const char *in, int len) {
         int processed = 0;
         StringLineIter lines(in, len, StringLineIter::Flag::BlankLines | StringLineIter::Flag::InPlace);
-        for (const char *line = lines.next(); line && lines.offset>=0; line = lines.next()) {
+        for (const char *line = lines.Next(); line && lines.offset>=0; line = lines.Next()) {
             processed = lines.offset;
             if (lines.linelen == 1 && *line == '.') { in_data=0; break; }
             message.content.append(line, lines.linelen);

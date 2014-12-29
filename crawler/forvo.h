@@ -42,9 +42,9 @@ struct ForvoApi : public Crawler, public HTMLParser {
 
     void init(const char *filename) {
         LocalFile file(filename, "r");
-        if (!file.opened()) { ERROR("Open: ", filename); return; }
+        if (!file.Opened()) { ERROR("Open: ", filename); return; }
 
-        for (const char *line = file.nextline(); line; line = file.nextline()) 
+        for (const char *line = file.NextLine(); line; line = file.NextLine()) 
             queue[0].add(URL(line));
     }
 
@@ -126,7 +126,7 @@ struct ForvoApi : public Crawler, public HTMLParser {
                     string fn = StrCat(dir, word, "_", i+1, ".mp3");
                     INFO("Writing mp3 ", fn);
                     LocalFile file(fn, "w");
-                    file.write(entry.content().data(), len);
+                    file.Write(entry.content().data(), len);
                 }
 
                 if (FLAGS_forvo_dumpwav) {
@@ -139,7 +139,7 @@ struct ForvoApi : public Crawler, public HTMLParser {
 
                     fn = fn.substr(0, fn.size()-3) + "txt";
                     LocalFile transcript(fn, "w");
-                    transcript.write(StrCat("0 ", sa.wav->ring.size, " ", word, "\r\n").c_str());
+                    transcript.Write(StrCat("0 ", sa.wav->ring.size, " ", word, "\r\n").c_str());
                 }
 
                 sa.Unload();

@@ -71,23 +71,23 @@ int Pixel::ToPngId(int fmt) {
     else { ERROR("unknown pixel fmt: ", fmt); return 0; }
 }
 
-static void PngRead (png_structp png_ptr, png_bytep data, png_size_t length) { ((File*)png_get_io_ptr(png_ptr))->read (data, length); }
-static void PngWrite(png_structp png_ptr, png_bytep data, png_size_t length) { ((File*)png_get_io_ptr(png_ptr))->write(data, length); }
+static void PngRead (png_structp png_ptr, png_bytep data, png_size_t length) { ((File*)png_get_io_ptr(png_ptr))->Read (data, length); }
+static void PngWrite(png_structp png_ptr, png_bytep data, png_size_t length) { ((File*)png_get_io_ptr(png_ptr))->Write(data, length); }
 static void PngFlush(png_structp png_ptr) {}
 
 int PngReader::Read(File *lf, Texture *out) {
     char header[8];
-    if (lf->read(header, sizeof(header)) != sizeof(header)) { ERROR("read: ", lf->filename()); return -1; }
-    if (png_sig_cmp((png_byte*)header, 0, 8)) { ERROR("png_sig_cmp: ", lf->filename()); return -1; }
+    if (lf->Read(header, sizeof(header)) != sizeof(header)) { ERROR("read: ", lf->Filename()); return -1; }
+    if (png_sig_cmp((png_byte*)header, 0, 8)) { ERROR("png_sig_cmp: ", lf->Filename()); return -1; }
 
     png_structp png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, 0, 0, 0);
-    if (!png_ptr) { ERROR("png_create_read_struct: ", lf->filename()); return -1; }
+    if (!png_ptr) { ERROR("png_create_read_struct: ", lf->Filename()); return -1; }
 
     png_infop info_ptr = png_create_info_struct(png_ptr);
-    if (!info_ptr) { ERROR("png_create_info_struct: ", lf->filename()); png_destroy_read_struct(&png_ptr, 0, 0); return -1; }
+    if (!info_ptr) { ERROR("png_create_info_struct: ", lf->Filename()); png_destroy_read_struct(&png_ptr, 0, 0); return -1; }
 
     if (setjmp(png_jmpbuf(png_ptr)))
-    { ERROR("png error: ", lf->filename()); png_destroy_read_struct(&png_ptr, &info_ptr, 0); return -1; }
+    { ERROR("png error: ", lf->Filename()); png_destroy_read_struct(&png_ptr, &info_ptr, 0); return -1; }
     png_set_read_fn(png_ptr, lf, PngRead);
 
     png_set_sig_bytes(png_ptr, sizeof(header));
@@ -114,13 +114,13 @@ int PngReader::Read(File *lf, Texture *out) {
 
 int PngWriter::Write(File *lf, const Texture &tex) {
     png_structp png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, 0, 0, 0);
-    if (!png_ptr) { ERROR("png_create_read_struct: ", lf->filename()); return -1; }
+    if (!png_ptr) { ERROR("png_create_read_struct: ", lf->Filename()); return -1; }
 
     png_infop info_ptr = png_create_info_struct(png_ptr);
-    if (!info_ptr) { ERROR("png_create_info_struct: ", lf->filename()); png_destroy_write_struct(&png_ptr, 0); return -1; }
+    if (!info_ptr) { ERROR("png_create_info_struct: ", lf->Filename()); png_destroy_write_struct(&png_ptr, 0); return -1; }
 
     if (setjmp(png_jmpbuf(png_ptr)))
-    { ERROR("setjmp: ", lf->filename()); png_destroy_write_struct(&png_ptr, &info_ptr); return -1; }
+    { ERROR("setjmp: ", lf->Filename()); png_destroy_write_struct(&png_ptr, &info_ptr); return -1; }
 
     png_set_write_fn(png_ptr, lf, PngWrite, PngFlush);
 
@@ -146,7 +146,7 @@ int PngWriter::Write(File *lf, const Texture &tex) { FATAL("not implemented"); }
 
 int PngWriter::Write(const string &fn, const Texture &tex) {
     LocalFile lf(fn, "w");
-    if (!lf.opened()) { ERROR("open: ", fn); return -1; }
+    if (!lf.Opened()) { ERROR("open: ", fn); return -1; }
     return PngWriter::Write(&lf, tex);
 }
 
@@ -186,7 +186,7 @@ static void JpegMemSrc(j_decompress_ptr jds, const char *buf, size_t len) {
     src->pub.bytes_in_buffer = len;
     src->pub.next_input_byte = src->data;
 }
-int JpegReader::Read(File *lf,           Texture *out) { return Read(lf->contents(), out); }
+int JpegReader::Read(File *lf,           Texture *out) { return Read(lf->Contents(), out); }
 int JpegReader::Read(const string &data, Texture *out) {
     MyJpegErrorMgr jerr;
     jpeg_decompress_struct jds;
@@ -226,9 +226,9 @@ int JpegReader::Read(const string &data, Texture *out) { FATAL("not implemented"
 
 #ifdef LFL_GIF
 static int GIFInput(GifFileType *gif, GifByteType *out, int size) {
-    return ((BufferFile*)gif->UserData)->read(out, size);
+    return ((BufferFile*)gif->UserData)->Read(out, size);
 }
-int GIFReader::Read(File *lf,           Texture *out) { return Read(lf->contents(), out); }
+int GIFReader::Read(File *lf,           Texture *out) { return Read(lf->Contents(), out); }
 int GIFReader::Read(const string &data, Texture *out) {
     int error_code = 0;
     BufferFile bf(data.data(), data.size());
@@ -275,34 +275,34 @@ struct WavHeader {
     static const int Size=44;
 };
 
-void WavWriter::Open(File *F) { delete f; f=F; wrote=WavHeader::Size; if (f && f->opened()) Flush(); }
+void WavWriter::Open(File *F) { delete f; f=F; wrote=WavHeader::Size; if (f && f->Opened()) Flush(); }
 void WavReader::Open(File *F) { delete f; f=F; last =WavHeader::Size; }
 
 int WavReader::Read(RingBuf::Handle *B, int off, int num) {
-    if (!f->opened()) return -1;
+    if (!f->Opened()) return -1;
     int offset = WavHeader::Size + off * sizeof(short), bytes = num * sizeof(short);
-    if (f->seek(offset, File::Whence::SET) != offset) return -1;
+    if (f->Seek(offset, File::Whence::SET) != offset) return -1;
 
     short *data = (short *)alloca(bytes);
-    if (f->read(data, bytes) != bytes) return -1;
+    if (f->Read(data, bytes) != bytes) return -1;
     for (int i=0; i<num; i++) B->Write(data[i] / 32768.0);
     last = offset + bytes;
     return 0;
 }
 
 int WavWriter::Write(const RingBuf::Handle *B, bool flush) {
-    if (!f->opened()) return -1;
+    if (!f->Opened()) return -1;
     int bytes = B->Len() * sizeof(short);
     short *data = (short *)alloca(bytes);
     for (int i=0; B && i<B->Len(); i++) data[i] = (short)(B->Read(i) * 32768.0);
 
-    if (f->write(data, bytes) != bytes) return -1;
+    if (f->Write(data, bytes) != bytes) return -1;
     wrote += bytes;
     return flush ? Flush() : 0;
 }
 
 int WavWriter::Flush() {
-    if (!f->opened()) return -1;
+    if (!f->Opened()) return -1;
     WavHeader hdr;
     hdr.chunk_id = *(unsigned*)"RIFF";    
     hdr.format = *(unsigned*)"WAVE";
@@ -318,9 +318,9 @@ int WavWriter::Flush() {
     hdr.subchunk_size2 = wrote - WavHeader::Size;
     hdr.chunk_size = 4 + (8 + hdr.subchunk_size) + (8 + hdr.subchunk_size2);
 
-    if (f->seek(0, File::Whence::SET) != 0) return -1;
-    if (f->write(&hdr, WavHeader::Size) != WavHeader::Size) return -1;
-    if (f->seek(wrote, File::Whence::SET) != wrote) return -1;
+    if (f->Seek(0, File::Whence::SET) != 0) return -1;
+    if (f->Write(&hdr, WavHeader::Size) != WavHeader::Size) return -1;
+    if (f->Seek(wrote, File::Whence::SET) != wrote) return -1;
     return 0;
 }
 
@@ -329,7 +329,7 @@ struct SimpleAssetLoader : public AudioAssetLoader, public VideoAssetLoader, pub
 
     virtual void *LoadFile(const string &filename) {
         LocalFile *lf = new LocalFile(filename, "r");
-        if (!lf->opened()) { ERROR("open: ", filename); delete lf; return 0; }
+        if (!lf->Opened()) { ERROR("open: ", filename); delete lf; return 0; }
         return lf;    
     }
     virtual void UnloadFile(void *h) { delete (File*)h; }
@@ -356,9 +356,9 @@ struct SimpleAssetLoader : public AudioAssetLoader, public VideoAssetLoader, pub
         static char gifhdr[4] = { 'G', 'I', 'F', '8' };
         static char pnghdr[8] = { '\211', 'P', 'N', 'G', '\r', '\n', '\032', '\n' };
 
-        File *f = (File*)handle; string fn = f->filename(); unsigned char hdr[8];
-        if (f->read(hdr, 8) != 8) { ERROR("load ", fn, " : failed"); return; }
-        f->reset();
+        File *f = (File*)handle; string fn = f->Filename(); unsigned char hdr[8];
+        if (f->Read(hdr, 8) != 8) { ERROR("load ", fn, " : failed"); return; }
+        f->Reset();
 
         if (0) {}
 #ifdef LFL_PNG
@@ -414,36 +414,36 @@ struct IPhoneAudioAssetLoader : public AudioAssetLoader {
 
 #ifdef LFL_FFMPEG
 struct FFBIOFile {
-    static void *alloc(File *f) {
+    static void *Alloc(File *f) {
         int bufsize = 16384;
-        return avio_alloc_context((unsigned char *)malloc(bufsize), bufsize, 0, f, read, write, seek);
+        return avio_alloc_context((unsigned char *)malloc(bufsize), bufsize, 0, f, Read, Write, Seek);
     }
-    static void free(void *in) {
+    static void Free(void *in) {
         AVIOContext *s = (AVIOContext*)in;
         delete (File*)s->opaque;
         ::free(s->buffer);
         av_free(s);
     }
-    static int     read(void *f, uint8_t *buf, int buf_size) { return ((File*)f)->read (buf, buf_size); }
-    static int    write(void *f, uint8_t *buf, int buf_size) { return ((File*)f)->write(buf, buf_size); }
-    static int64_t seek(void *f, int64_t offset, int whence) { return ((File*)f)->seek (offset, whence); }
+    static int     Read(void *f, uint8_t *buf, int buf_size) { return ((File*)f)->Read (buf, buf_size); }
+    static int    Write(void *f, uint8_t *buf, int buf_size) { return ((File*)f)->Write(buf, buf_size); }
+    static int64_t Seek(void *f, int64_t offset, int whence) { return ((File*)f)->Seek (offset, whence); }
 };
 
 struct FFBIOC {
     void const *buf; int len, offset;
     FFBIOC(void const *b, int l) : buf(b), len(l), offset(0) {}
 
-    static void *alloc(void const *buf, int len) {
+    static void *Alloc(void const *buf, int len) {
         static const int bufsize = 32768;
-        return avio_alloc_context((unsigned char *)malloc(bufsize), bufsize, 0, new FFBIOC(buf, len), read, write, seek);
+        return avio_alloc_context((unsigned char *)malloc(bufsize), bufsize, 0, new FFBIOC(buf, len), Read, Write, Seek);
     }
-    static void free(void *in) {
+    static void Free(void *in) {
         AVIOContext *s = (AVIOContext*)in;
         delete (FFBIOC*)s->opaque;
         ::free(s->buffer);
         av_free(s);
     }
-    static int read(void *opaque, uint8_t *buf, int buf_size) {
+    static int Read(void *opaque, uint8_t *buf, int buf_size) {
         FFBIOC *s = (FFBIOC*)opaque;
         int len = min(buf_size, s->len - s->offset);
         if (len <= 0) return len;
@@ -452,8 +452,8 @@ struct FFBIOC {
         s->offset += len;
         return len;
     }
-    static int write(void *opaque, uint8_t *buf, int buf_size) { return -1; }
-    static int64_t seek(void *opaque, int64_t offset, int whence) {
+    static int Write(void *opaque, uint8_t *buf, int buf_size) { return -1; }
+    static int64_t Seek(void *opaque, int64_t offset, int whence) {
         FFBIOC *s = (FFBIOC*)opaque;
         if      (whence == SEEK_SET) s->offset = offset;
         else if (whence == SEEK_CUR) s->offset += offset;
@@ -502,9 +502,9 @@ struct FFMpegAssetLoader : public AudioAssetLoader, public VideoAssetLoader, pub
 #else
         LocalFile *lf = new LocalFile(filename, "r");
         if (!lf->opened()) { ERROR("FFLoadFile: open ", filename); delete lf; return 0; }
-        void *pb = FFBIOFile::alloc(lf);
+        void *pb = FFBIOFile::Alloc(lf);
         AVFormatContext *ret = Load((AVIOContext*)pb, filename, 0, 0, pbOut);
-        if (!ret) FFBIOFile::free(pb);
+        if (!ret) FFBIOFile::Free(pb);
         return ret;
 #endif
     }
@@ -517,7 +517,7 @@ struct FFMpegAssetLoader : public AudioAssetLoader, public VideoAssetLoader, pub
             avcodec_close(stream->codec);
         }
 #if defined(LFL_ANDROID) || defined(LFL_IPHONE)
-        FFBIOFile::free(handle->pb);
+        FFBIOFile::Free(handle->pb);
 #endif
         avformat_close_input(&handle);
     }
@@ -525,14 +525,14 @@ struct FFMpegAssetLoader : public AudioAssetLoader, public VideoAssetLoader, pub
     virtual void *LoadBuf(const char *buf, int len, const char *filename) { return LoadBuf(buf, len, filename, 0); }
     AVFormatContext *LoadBuf(void const *buf, int len, const char *filename, AVIOContext **pbOut) {
         const char *suffix = strchr(filename, '.');
-        void *pb = FFBIOC::alloc(buf, len);
+        void *pb = FFBIOC::Alloc(buf, len);
         AVFormatContext *ret = Load((AVIOContext*)pb, suffix ? suffix+1 : filename, (char*)buf, min(4096, len), pbOut);
-        if (!ret) FFBIOC::free(pb);
+        if (!ret) FFBIOC::Free(pb);
         return ret;
     }
     virtual void UnloadBuf(void *h) {
         AVFormatContext *handle = (AVFormatContext*)h;
-        FFBIOC::free(handle->pb);
+        FFBIOC::Free(handle->pb);
         avformat_close_input(&handle);
     }
 
@@ -681,8 +681,8 @@ struct FFMpegAssetLoader : public AudioAssetLoader, public VideoAssetLoader, pub
                     char errstr[128]; av_strerror(ret, errstr, sizeof(errstr));
                     ERROR("avcodec_decode_audio4: ", errstr);
                 } else {
-                    tlsalloc->reset();
-                    short *rsout = (short*)tlsalloc->malloc(AVCODEC_MAX_AUDIO_FRAME_SIZE + FF_INPUT_BUFFER_PADDING_SIZE);
+                    tlsalloc->Reset();
+                    short *rsout = (short*)tlsalloc->Malloc(AVCODEC_MAX_AUDIO_FRAME_SIZE + FF_INPUT_BUFFER_PADDING_SIZE);
 
                     int sampsIn  = frame->nb_samples;
                     int sampsOut = max(0, SoundAssetSize(sa) - wrote) / sa->channels;
@@ -721,26 +721,26 @@ struct AliasWavefrontObjLoader {
         dir.assign(filename, 0, dirnamelen(filename.c_str(), filename.size(), true));
 
         LocalFile file(filename, "r");
-        if (!file.opened()) { ERROR("LocalFile::open(", file.filename(), ")"); return 0; }
+        if (!file.Opened()) { ERROR("LocalFile::open(", file.Filename(), ")"); return 0; }
 
         vector<v3> vert, vertOut, norm, normOut;
         vector<v2> tex, texOut;
         Material mat; v3 xyz; v2 xy;
         int format=0, material=0, ind[3];
 
-        for (const char *cmd = 0, *line = file.nextline(); line; line = file.nextline()) {
+        for (const char *cmd = 0, *line = file.NextLine(); line; line = file.NextLine()) {
             if (!line[0] || line[0] == '#') continue;
 
             StringWordIter word(line);
-            if (!(cmd = word.next())) continue;
+            if (!(cmd = word.Next())) continue;
 
-            if      (!strcmp(cmd, "mtllib")) LoadMaterial(word.next());
+            if      (!strcmp(cmd, "mtllib")) LoadMaterial(word.Next());
             else if (!strcmp(cmd, "usemtl")) {
-                MtlMap::iterator it = MaterialMap.find(word.next());
+                MtlMap::iterator it = MaterialMap.find(word.Next());
                 if (it != MaterialMap.end()) { mat = (*it).second; material = 1; }
             }
             else if (!strcmp(cmd, "v" )) { word.ScanN(&xyz[0], 3);             vert.push_back(xyz); }
-            else if (!strcmp(cmd, "vn")) { word.ScanN(&xyz[0], 3); xyz.norm(); norm.push_back(xyz); }
+            else if (!strcmp(cmd, "vn")) { word.ScanN(&xyz[0], 3); xyz.Norm(); norm.push_back(xyz); }
             else if (!strcmp(cmd, "vt")) {
                 word.ScanN(&xy[0], 2);
                 if (map_tex_coord) {
@@ -751,7 +751,7 @@ struct AliasWavefrontObjLoader {
             }
             else if (!strcmp(cmd, "f")) {
                 vector<v3> face; 
-                for (const char *fi = word.next(); fi; fi = word.next()) {
+                for (const char *fi = word.Next(); fi; fi = word.Next()) {
                     StringWordIter indexword(fi, 0, isint<'/'>);
                     indexword.ScanN(ind, 3);
 
@@ -793,14 +793,14 @@ struct AliasWavefrontObjLoader {
 
     int LoadMaterial(const string &filename) {
         LocalFile file(StrCat(dir, filename), "r");
-        if (!file.opened()) { ERROR("LocalFile::open(", file.filename(), ")"); return -1; }
+        if (!file.Opened()) { ERROR("LocalFile::open(", file.Filename(), ")"); return -1; }
 
         Material m; string name;
-        for (const char *cmd = 0, *line = file.nextline(); line; line = file.nextline()) {
+        for (const char *cmd = 0, *line = file.NextLine(); line; line = file.NextLine()) {
             if (!line[0] || line[0] == '#') continue;
 
             StringWordIter word(line);
-            if (!(cmd = word.next())) continue;
+            if (!(cmd = word.Next())) continue;
 
             if      (!strcmp(cmd, "Ka")) word.ScanN(m.ambient .x, 4);
             else if (!strcmp(cmd, "Kd")) word.ScanN(m.diffuse .x, 4);
@@ -808,7 +808,7 @@ struct AliasWavefrontObjLoader {
             else if (!strcmp(cmd, "Ke")) word.ScanN(m.emissive.x, 4);
             else if (!strcmp(cmd, "newmtl")) {
                 if (name.size()) MaterialMap[name] = m;
-                name = word.next();
+                name = word.Next();
             }
         }
         if (name.size()) MaterialMap[name] = m;
@@ -901,14 +901,14 @@ int Assets::Init() {
 
 void Asset::Unload() {
     if (parent) parent->Unloaded(this);
-    if (tex.ID && screen) { screen->gd->DelTextures(1, &tex.ID); tex.ID   = 0; }
-    if (geometry)         { delete geometry;                     geometry = 0; }
-    if (hull)             { delete hull;                         hull     = 0; }
+    if (tex.ID && screen) tex.ClearGL();
+    if (geometry) { delete geometry; geometry = 0; }
+    if (hull)     { delete hull;     hull     = 0; }
 }
 
 void Asset::Load(void *h, VideoAssetLoader *l) {
-    static int nextAssetTypeID = 1, nextListID = 1;
-    if (!name.empty()) typeID = nextAssetTypeID++;
+    static int next_asset_type_id = 1, next_list_id = 1;
+    if (!name.empty()) typeID = next_asset_type_id++;
     if (!geom_fn.empty()) geometry = Geometry::LoadOBJ(StrCat(ASSETS_DIR, geom_fn));
     if (!texture.empty() || h) LoadTexture(h, StrCat(ASSETS_DIR, texture), &tex, l);
 }
@@ -1080,7 +1080,7 @@ void glTimeResolutionShaderWindows(Shader *shader, const Color &backup_color, co
     if (!shader) screen->gd->SetColor(backup_color);
     else {
         screen->gd->UseShader(shader);
-        shader->setUniform1f("time", ToSeconds(app->appTime.time()));
+        shader->setUniform1f("time", ToSeconds(app->app_time.GetTime()));
         shader->setUniform2f("resolution", screen->width, screen->height);
     }
     if (tex) { screen->gd->EnableLayering(); tex->Bind(); }
@@ -1138,11 +1138,11 @@ void glSpectogram(Matrix *m, unsigned char *data, int width, int height, int hju
         for(int i=0; i<height; i++) {
             double v;
             if (!interpolate) v = m->row(j)[i];
-            else v = matrixAsFunc(m, i?(float)i/(height-1):0, j?(float)j/(width-1):0);
+            else v = MatrixAsFunc(m, i?(float)i/(height-1):0, j?(float)j/(width-1):0);
 
             if      (pd == PowerDomain::dB)   { /**/ }
-            else if (pd == PowerDomain::abs)  { v = fft_abs_to_dB(v); }
-            else if (pd == PowerDomain::abs2) { v = fft_abs2_to_dB(v); }
+            else if (pd == PowerDomain::abs)  { v = AmplitudeRatioDecibels(v, 1); }
+            else if (pd == PowerDomain::abs2) { v = AmplitudeRatioDecibels(sqrt(v), 1); }
 
             if (v < clip) v = clip;
             v = (v - clip) / (vmax - clip);
@@ -1161,7 +1161,7 @@ void glSpectogram(Matrix *m, Asset *a, float *max, float clip, int pd) {
     if (!a->tex.ID) a->tex.CreateBacked(m->N, m->M);
     else {
         if (a->tex.width < m->N || a->tex.height < m->M) a->tex.Resize(m->N, m->M);
-        else Texture::Coordinates(a->tex.coord, m->N, m->M, next_power_of_two(a->tex.width), next_power_of_two(a->tex.height));
+        else Texture::Coordinates(a->tex.coord, m->N, m->M, NextPowerOfTwo(a->tex.width), NextPowerOfTwo(a->tex.height));
     }
 
     if (clip == -INFINITY) clip = -65;

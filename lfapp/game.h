@@ -376,18 +376,18 @@ struct Game {
         bool GetPlayerList() { return Get(24); }
 
         v3 Acceleration(v3 ort, v3 u) {
-            v3 ret, r = v3::cross(ort, u);
-            ort.norm(); u.norm(); r.norm();
+            v3 ret, r = v3::Cross(ort, u);
+            ort.Norm(); u.Norm(); r.Norm();
             bool up=GetUp(), down=GetDown(), forward=GetForward(), back=GetBack(), left=GetLeft(), right=GetRight();
 
-            if (forward && !back) {                ret.add(ort); }
-            if (back && !forward) { ort.scale(-1); ret.add(ort); }
-            if (right && !left)   {                ret.add(r);   }
-            if (!right && left)   { r.scale(-1);   ret.add(r);   }
-            if (up && !down)      {                ret.add(u);   }
-            if (down && !up)      { u.scale(-1);   ret.add(u);   }
+            if (forward && !back) {                ret.Add(ort); }
+            if (back && !forward) { ort.Scale(-1); ret.Add(ort); }
+            if (right && !left)   {                ret.Add(r);   }
+            if (!right && left)   { r.Scale(-1);   ret.Add(r);   }
+            if (up && !down)      {                ret.Add(u);   }
+            if (down && !up)      { u.Scale(-1);   ret.Add(u);   }
 
-            ret.norm();
+            ret.Norm();
             return ret;
         }
 
@@ -582,7 +582,7 @@ struct GameServer : public Query {
 
         Game::ConnectionData *cd = Game::ConnectionData::Get(c);
         StringLineIter lines(rcon->Text.c_str());
-        for (const char *line = lines.next(); line; line = lines.next()) {
+        for (const char *line = lines.Next(); line; line = lines.Next()) {
             if (FLAGS_rcon_debug) INFO("rcon: ", line);
             string cmd, arg;
             Split(line, isspace, &cmd, &arg);
@@ -848,7 +848,7 @@ struct GameClient {
     }
     void RconRequestCB(Connection *c, Game::Protocol::Header *hdr, const string &rcon) {
         StringLineIter lines(rcon.c_str());
-        for (const char *line = lines.next(); line; line = lines.next()) {
+        for (const char *line = lines.Next(); line; line = lines.Next()) {
             if (FLAGS_rcon_debug) INFO("rcon: ", line);
             string cmd, arg;
             Split(line, isspace, &cmd, &arg);
@@ -988,9 +988,9 @@ struct GameClient {
 
                 if (updateLast) {
                     delta_pos = next_pos;
-                    delta_pos.sub(e->pos);
-                    delta_pos.scale(min(1000.0f, (float)updateLast) / updateInterval);
-                    e->pos.add(delta_pos);
+                    delta_pos.Sub(e->pos);
+                    delta_pos.Scale(min(1000.0f, (float)updateLast) / updateInterval);
+                    e->pos.Add(delta_pos);
                 }
 
                 if (e1->anim_id != e->animation.id) {
@@ -1023,13 +1023,13 @@ struct GameClient {
         screen->camMain->pos = e->pos;
         if (cam == 1) {
             v3 v = screen->camMain->ort * 2;
-            screen->camMain->pos.sub(v);
+            screen->camMain->pos.Sub(v);
         }
         else if (cam == 2) {
             v3 v = screen->camMain->ort * 2;
-            screen->camMain->pos.sub(v);
+            screen->camMain->pos.Sub(v);
             v = screen->camMain->up * .1;
-            screen->camMain->pos.add(v);
+            screen->camMain->pos.Add(v);
         }
         else if (cam == 3) {
             assign_entity = false;
@@ -1159,8 +1159,8 @@ struct GameMenuGUI : public GUI, public Query {
                                                    atoi(text.c_str()+delim+1), "ping\n", 5);
     }
 
-    void ToggleDisplayOn() { display=1; selected=last_selected=0; app->shell.mouseout(vector<string>()); Advertising::hideAds(); }
-    void ToggleDisplayOff() { display=0; UpdateSettings(); tab3_player_name.active=false; Advertising::showAds(); }
+    void ToggleDisplayOn() { display=1; selected=last_selected=0; app->shell.mouseout(vector<string>()); Advertising::HideAds(); }
+    void ToggleDisplayOff() { display=0; UpdateSettings(); tab3_player_name.active=false; Advertising::ShowAds(); }
     bool DecayBoxIfMatch(int l1, int l2) { if (l1 != l2) return 0; decay_box_line = l1; decay_box_left = 10; return 1; }
     void UpdateSettings() {
         app->shell.Run(StrCat("name ", tab3_player_name.Text()));
@@ -1176,7 +1176,7 @@ struct GameMenuGUI : public GUI, public Query {
         if (!cb || !cl) return;
         string servers(cb, cl);
         StringLineIter lines(servers.c_str());
-        for (const char *p, *l = lines.next(); l; l = lines.next()) {
+        for (const char *p, *l = lines.Next(); l; l = lines.Next()) {
             if (!(p = strchr(l, ':'))) continue;
             Network::sendto(pinger.listener()->socket, Network::addr(string(l, p-l)), atoi(p+1), "ping\n", 5);
         }
@@ -1193,7 +1193,7 @@ struct GameMenuGUI : public GUI, public Query {
         if (ip && ip == c->addr) return;
         string name, players;
         StringLineIter lines(reply.c_str());
-        for (const char *p, *l = lines.next(); l; l = lines.next()) {
+        for (const char *p, *l = lines.Next(); l; l = lines.Next()) {
             if (!(p = strchr(l, '='))) continue;
             string k(l, p-l), v(p+1);
             if      (k == "name")    name    = v;
@@ -1268,7 +1268,7 @@ struct GameMenuGUI : public GUI, public Query {
 
                     menuflow.AppendText("\n[ add server ]");
                     if (DecayBoxIfMatch(line_clicked, menuflow.out->line.size())) {
-                        TouchDevice::openKeyboard();
+                        TouchDevice::OpenKeyboard();
                         tab2_server_address.active = true;
                     }
 
@@ -1301,7 +1301,7 @@ struct GameMenuGUI : public GUI, public Query {
 #endif
             menuflow.AppendText("\nPlayer Name:");
             if (DecayBoxIfMatch(line_clicked, menuflow.out->line.size())) {
-                TouchDevice::openKeyboard();
+                TouchDevice::OpenKeyboard();
                 tab3_player_name.active = true;
             }
             menuflow.AppendTextGUI(.6, &tab3_player_name);
@@ -1405,17 +1405,17 @@ struct GamePlayerListGUI : public GUI {
     void HandleTextMessage(const string &in) {
         playerlist.clear();
         StringLineIter lines(in.c_str());
-        const char *hdr = lines.next();
+        const char *hdr = lines.Next();
         string red_score_text, blue_score_text;
         Split(hdr, iscomma, &red_score_text, &blue_score_text);
         int red_score=atoi(red_score_text.c_str()), blue_score=atoi(blue_score_text.c_str());
         winning_team = blue_score > red_score ? Game::Team::Blue : Game::Team::Red;
         titletext = StrCat(titlename, " ", red_score, "-", blue_score);
 
-        for (const char *line = lines.next(); line; line = lines.next()) {
+        for (const char *line = lines.Next(); line; line = lines.Next()) {
             StringWordIter words(line, 0, iscomma);
             Player player;
-            for (const char *word = words.next(); word; word = words.next()) player.push_back(word);
+            for (const char *word = words.Next(); word; word = words.Next()) player.push_back(word);
             if (player.size() < 5) continue;
             playerlist.push_back(player);
         }
@@ -1482,8 +1482,8 @@ struct GameMultiTouchControls {
         dpad_font(Fonts::Get("dpad_atlas", 0, Color::black)),
         lpad_win(screen->Box(.03, .05, .2, .2)),
         rpad_win(screen->Box(.78, .05, .2, .2)),
-        lpad_tbx(round_f(lpad_win.w * .6)), lpad_tby(round_f(lpad_win.h *.6)),
-        rpad_tbx(round_f(rpad_win.w * .6)), rpad_tby(round_f(rpad_win.h *.6)) {}
+        lpad_tbx(RoundF(lpad_win.w * .6)), lpad_tby(RoundF(lpad_win.h *.6)),
+        rpad_tbx(RoundF(rpad_win.w * .6)), rpad_tby(RoundF(rpad_win.h *.6)) {}
 
     void Draw() {
         dpad_font->Select();
@@ -1618,7 +1618,7 @@ struct SimplePhysics : public Physics {
         for (Scene::EntityAssetMap::iterator i = scene->assetMap.begin(); i != scene->assetMap.end(); i++)
             for (Scene::EntityVector::iterator j = (*i).second.begin(); j != (*i).second.end(); j++) Update(*j, timestep);
     }
-    static void Update(Entity *e, unsigned timestep) { e->pos.add(e->vel * (timestep / 1000.0)); }
+    static void Update(Entity *e, unsigned timestep) { e->pos.Add(e->vel * (timestep / 1000.0)); }
 };
 }; // namespace LFL
 

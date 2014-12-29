@@ -66,7 +66,7 @@ void Print(Matrix *m, int cols=0, vector<string> *l=0, int *indexmap=0) {
 int WritePloticus(string tofile, const Matrix *in, vector<string> *l, int *indmap, string (*plot)(const Matrix *, vector<string> *, int *)) {
     LocalFile f(tofile.c_str(), "w");
     string v = plot(in, l, indmap);
-    return f.write(v.data(), v.size()) == v.size();
+    return f.Write(v.data(), v.size()) == v.size();
 }
 
 int *indexmap1D(const Matrix *in) {

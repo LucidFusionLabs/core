@@ -587,14 +587,14 @@ void Audio::QueueMixBuf(const RingBuf::Handle *B, int channels, int flag) {
                 int ind = i*FLAGS_chans_out + j;
                 bool mixable = mix && ind < Out.size();
                 if (dont_queue && !mixable) return;
-                if (mixable) Out[ind] = clamp(Out[ind] + B->Read(i), -32767, 32768);
+                if (mixable) Out[ind] = Clamp(Out[ind] + B->Read(i), -32767, 32768);
                 else Out.push_back(B->Read(i));
             }
         }
         else if (channels == FLAGS_chans_out) {
             bool mixable = mix && i < Out.size();
             if (dont_queue && !mixable) return;
-            if (mixable) Out[i] = clamp(Out[i] + B->Read(i), -32767, 32768);
+            if (mixable) Out[i] = Clamp(Out[i] + B->Read(i), -32767, 32768);
             else Out.push_back(B->Read(i));
         }
         else FATAL("QueueMix unsupported channel combo ", channels, ", ", FLAGS_chans_out);
@@ -634,7 +634,7 @@ int Sinthesize(Audio *s, int hz1, int hz2, int hz3) {
 double LowPassFilter(int n, int i, int maxfreq) {
     int ind = i-(n-1)/2;
     double R=2.0*maxfreq/FLAGS_sample_rate;
-    return R*sinc(ind*R);
+    return R*Sinc(ind*R);
 }
 
 double HighPassFilter(int n, int i, int minfreq) {
@@ -644,10 +644,10 @@ double HighPassFilter(int n, int i, int minfreq) {
 }
 
 Matrix *EqualLoudnessCurve(int outrows, double max) {
-    double maxbark = hz2bark(max), stepbark = maxbark/(outrows-1);   
+    double maxbark = HZToBark(max), stepbark = maxbark/(outrows-1);   
     Matrix *ret = new Matrix(outrows, 1);
     MatrixIter(ret) {
-        double bandcfhz = bark2hz(i*stepbark), fsq = pow(bandcfhz, 2);
+        double bandcfhz = BarkToHZ(i*stepbark), fsq = pow(bandcfhz, 2);
         ret->row(i)[j] = pow(fsq/(fsq + 1.6e5), 2) * ((fsq + 1.44e6) / (fsq + 9.61e6));
     }
     return ret;
@@ -759,7 +759,7 @@ int AudioResampler::Update(int samples, const short *in) {
     if (!out || !in) return -1;
     const short *input[SWR_CH_MAX] = { in, 0 }; 
     Allocator *tlsalloc = ThreadLocalStorage::GetAllocator();
-    short *rsout = (short*)tlsalloc->malloc(AVCODEC_MAX_AUDIO_FRAME_SIZE + FF_INPUT_BUFFER_PADDING_SIZE);
+    short *rsout = (short*)tlsalloc->Malloc(AVCODEC_MAX_AUDIO_FRAME_SIZE + FF_INPUT_BUFFER_PADDING_SIZE);
     return Update(samples, input, rsout, -1, AVCODEC_MAX_AUDIO_FRAME_SIZE/output_chans/2);
 }
 
@@ -767,8 +767,8 @@ int AudioResampler::Update(int samples, RingBuf::Handle *L, RingBuf::Handle *R) 
     int channels = (L!=0) + (R!=0);
     if (!out || !channels) return -1;
     Allocator *tlsalloc = ThreadLocalStorage::GetAllocator();
-    short *rsin = (short*)tlsalloc->malloc(AVCODEC_MAX_AUDIO_FRAME_SIZE + FF_INPUT_BUFFER_PADDING_SIZE);
-    short *rsout = (short*)tlsalloc->malloc(AVCODEC_MAX_AUDIO_FRAME_SIZE + FF_INPUT_BUFFER_PADDING_SIZE);
+    short *rsin = (short*)tlsalloc->Malloc(AVCODEC_MAX_AUDIO_FRAME_SIZE + FF_INPUT_BUFFER_PADDING_SIZE);
+    short *rsout = (short*)tlsalloc->Malloc(AVCODEC_MAX_AUDIO_FRAME_SIZE + FF_INPUT_BUFFER_PADDING_SIZE);
     memset(rsin+samples*channels, 0, FF_INPUT_BUFFER_PADDING_SIZE);
 
     RingBuf::Handle *chan[2] = { L, R }; 
@@ -897,7 +897,7 @@ int Filter(const RingBuf::Handle *in, RingBuf::Handle *out, int filterlen, const
 
 int FFT(const RingBuf::Handle *in, int i, int window, int hop, int fftlen, float *out, bool doPreEmphasis, bool doHamming, int scale) {
     vector<double> pef = doPreEmphasis ? PreEmphasisFilter() : vector<double>();
-    int padding=fftlen-window, split=window/2, bits=which_log2(fftlen), ind;
+    int padding=fftlen-window, split=window/2, bits=WhichLog2(fftlen), ind;
     if (bits < 0 || window % 2 != 0) return -1;
 
     for (int j=0; j<fftlen; j++) {			
@@ -907,7 +907,7 @@ int FFT(const RingBuf::Handle *in, int i, int window, int hop, int fftlen, float
 
         double v = pef.size() ? Filter(in, ind, pef.size(), &pef[0]) : in->Read(ind);
 
-        if (doHamming) v *= hamming(window, ind - i*hop);
+        if (doHamming) v *= Hamming(window, ind - i*hop);
         out[j] = v * scale;
     }
 
@@ -921,7 +921,7 @@ int FFT(const RingBuf::Handle *in, int i, int window, int hop, int fftlen, float
 
 int IFFT(const Complex *in, int i, int window, int hop, int fftlen, RingBuf::Handle *out) {
     float *fftbuf=(float*)alloca(sizeof(float)*fftlen*2);
-    int split=fftlen/2, bits=which_log2(fftlen); Complex zero={0,0};
+    int split=fftlen/2, bits=WhichLog2(fftlen); Complex zero={0,0};
     if (bits < 0) return -1;
 
     for (int j=0; j<split; j++) {
@@ -982,7 +982,7 @@ int FFTFilter(const RingBuf::Handle *in, RingBuf::Handle *out, int window, int h
 }
 
 float FundamentalFrequency(const RingBuf::Handle *in, int window, int offset, int method) {
-    int bits = which_log2(window);
+    int bits = WhichLog2(window);
     if (bits<0) return -1;
 
     if (method == F0EstmMethod::fftbucket) { /* max(fft.bucket) */
@@ -1080,12 +1080,12 @@ float FundamentalFrequency(const RingBuf::Handle *in, int window, int offset, in
 
 Matrix *FFT2Bark(int outrows, double minfreq, double maxfreq, int fftlen, int samplerate) {
     Matrix *m = new Matrix(outrows, fftlen/2);
-    double minbark = hz2bark(minfreq), maxbark = hz2bark(maxfreq);
+    double minbark = HZToBark(minfreq), maxbark = HZToBark(maxfreq);
     double nyqbark = maxbark - minbark, stepbark = nyqbark/(outrows-1);
 
     double *binbark = (double *)alloca(fftlen/2 * sizeof(double));
     for (int i=0; i<fftlen/2; i++)
-        binbark[i] = hz2bark((double)i/fftlen*samplerate);
+        binbark[i] = HZToBark((double)i/fftlen*samplerate);
 
     for (int i=0; i<outrows; i++) {
         double *row = m->row(i), midbark = minbark + i*stepbark;
@@ -1101,11 +1101,11 @@ Matrix *FFT2Bark(int outrows, double minfreq, double maxfreq, int fftlen, int sa
 
 Matrix *FFT2Mel(int outrows, double minfreq, double maxfreq, int fftlen, int samplerate) {
     Matrix *m = new Matrix(outrows, fftlen/2);
-    double minmel = hz2mel(minfreq), maxmel = hz2mel(maxfreq);
+    double minmel = HZToMel(minfreq), maxmel = HZToMel(maxfreq);
 
     double *mel = (double *)alloca((outrows+2) * sizeof(double));
     for (int i=0; i<outrows+2; i++)
-        mel[i] = mel2hz(minmel + ((double)i/(double)(outrows+1)) * (maxmel-minmel)); 
+        mel[i] = MelToHZ(minmel + ((double)i/(double)(outrows+1)) * (maxmel-minmel)); 
 
     for (int i=0; i<outrows; i++) {
         double *row = m->row(i);
@@ -1162,7 +1162,7 @@ Matrix *Spectogram(const RingBuf::Handle *in, Matrix *out, int window, int hop, 
 
             if      (pd == PowerDomain::abs)  row[j] = sqrt(fft_abs2(fftbuf, fftlen, j));
             else if (pd == PowerDomain::abs2) row[j] = fft_abs2(fftbuf, fftlen, j);      
-            else if (pd == PowerDomain::dB)   row[j] = fft_abs2_to_dB(fft_abs2(fftbuf, fftlen, j));
+            else if (pd == PowerDomain::dB)   row[j] = AmplitudeRatioDecibels(sqrt(fft_abs2(fftbuf, fftlen, j)), 1);
         }
     }
 
@@ -1260,7 +1260,7 @@ Matrix *PLP(const RingBuf::Handle *in, Matrix *out, vector<StatefulFilter> *rast
     Matrix LPC(xcorr.M, ceps, 0.0, 0, alloc);
     double *reflect = (double*)alloca(order*sizeof(double)), *lpc = (double*)alloca(order*sizeof(double));
     MatrixRowIter(&xcorr) {
-        double err = levinsondurbin(order, xcorr.row(i), reflect, lpc);
+        double err = LevinsonDurbin(order, xcorr.row(i), reflect, lpc);
         MatrixColIter(&LPC) LPC.row(i)[j] = (!j ? 1.0 : lpc[j-1]) / err;
     }
 
@@ -1369,7 +1369,7 @@ RingBuf *InvMFCC(const Matrix *in, int samplerate, const Matrix *f0) {
         RingBuf::Handle out(outbuf);
         { 
             double f = (2 * M_PI * 440) / out.Rate();
-            for (int i=0; i<out.Len(); i++) out.Write(sin(f*i)/16 + rand(-1,1)/2);
+            for (int i=0; i<out.Len(); i++) out.Write(sin(f*i)/16 + Rand(-1,1)/2);
         }
         Matrix *spec = Spectogram(&out, 0, FLAGS_feat_window, FLAGS_feat_hop, FLAGS_feat_window, 0, PowerDomain::complex);
         delete outbuf;

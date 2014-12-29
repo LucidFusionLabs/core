@@ -22,12 +22,12 @@
 using namespace LFL;
 
 TEST(MathTest, util) {
-    EXPECT_EQ(true,  Equal(decimals( 10.23456),  .23456));
-    EXPECT_EQ(true,  Equal(decimals(-10.23456), -.23456));
-    EXPECT_EQ(false, is_power_of_two(0));
-    EXPECT_EQ(true,  is_power_of_two(1));
-    EXPECT_EQ(true,  is_power_of_two(2));
-    EXPECT_EQ(false, is_power_of_two(3));
+    EXPECT_EQ(true,  Equal(Decimals( 10.23456),  .23456));
+    EXPECT_EQ(true,  Equal(Decimals(-10.23456), -.23456));
+    EXPECT_EQ(false, IsPowerOfTwo(0));
+    EXPECT_EQ(true,  IsPowerOfTwo(1));
+    EXPECT_EQ(true,  IsPowerOfTwo(2));
+    EXPECT_EQ(false, IsPowerOfTwo(3));
     { short str[] = { ' ', ' ', '-', '3', '7', '4', 'a', 0 }; EXPECT_EQ(-374, atoi(str)); }
 }
 

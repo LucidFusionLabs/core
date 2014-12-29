@@ -83,7 +83,7 @@ int features2cluster(const char *featdir, const char *modeldir, int algo) {
         }
 
         GMM gmm;
-        gmm.assignDataPtr(model->M, model->N, model->m, mcov->m, prior->m);
+        gmm.AssignDataPtr(model->M, model->N, model->m, mcov->m, prior->m);
         GMMEM EM(&gmm, true);
 
         for (int i=0; i<FLAGS_MaxIterations; i++) {
