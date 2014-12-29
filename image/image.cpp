@@ -229,7 +229,10 @@ extern "C" int main(int argc, const char *argv[]) {
         input_3D = false;
         FLAGS_draw_grid = true;
         Texture pb;
-        app->assets.default_video_loader->load(asset_input, app->assets.default_video_loader->load_video_file(FLAGS_input.c_str()), &pb);
+        app->assets.default_video_loader->LoadVideo
+            (app->assets.default_video_loader->LoadVideoFile(FLAGS_input), &asset_input->tex, false);
+        pb.AssignBuffer(&asset_input->tex, true);
+
         if (pb.width && pb.height) screen->Reshape(FLAGS_input_scale ? pb.width *FLAGS_input_scale : pb.width,
                                                    FLAGS_input_scale ? pb.height*FLAGS_input_scale : pb.height);
         INFO("input dim = (", pb.width, ", ", pb.height, ") pf=", pb.pf);

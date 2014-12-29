@@ -58,7 +58,7 @@ bool             builtin_server_enabled;
 #endif
 
 // Rippling caustics
-TexSeq caust;
+TextureArray caust;
 
 // Trails
 typedef Particles<256, 1, true> BallTrails;
@@ -659,7 +659,7 @@ extern "C" int main(int argc, const char *argv[]) {
     asset.Add(Asset("particles",  "particle.png",   1,                0,     0,      0,            0,                               0,           0,      Asset::DrawCB(bind(&BallTrails::AssetDrawCB,    &ball_trail,     _1, _2))));
     asset.Add(Asset("stars",      "",               1,                0,     0,      0,            0,                               0,           0,      Asset::DrawCB(bind(&ShootingStars::AssetDrawCB, &shooting_stars, _1, _2))));
     asset.Add(Asset("glow",       "glow.png",       1,                0,     0,      0,            0,                               0,           0));
-    asset.Add(Asset("field",      "",               1,                0,     0,      0,            0,                               0,           0,      Asset::DrawCB(bind(&TexSeq::draw, &caust, _1, _2))));
+    asset.Add(Asset("field",      "",               1,                0,     0,      0,            0,                               0,           0,      Asset::DrawCB(bind(&TextureArray::DrawSequence, &caust, _1, _2))));
     asset.Add(Asset("lines",      "lines.png",      1,                0,     0,      0,            0,                               0,           0));
     asset.Add(Asset("ball",       "",               MyBall::radius(), 1,     0,      "sphere.obj", 0,                               0));
     asset.Add(Asset("ship",       "ship.png",       .05,              1,     0,      "ship.obj",   Cube::Create(MyShip::radius()),  0,                   Asset::DrawCB(bind(&ShipDraw, _1, _2))));
@@ -676,7 +676,7 @@ extern "C" int main(int argc, const char *argv[]) {
     soundasset.Load();
     app->shell.soundassets = &soundasset;
 
-    caust.load("%s%02d.%s", "caust", "png", 32);
+    caust.Load("%s%02d.%s", StrCat(ASSETS_DIR, "caust"), "png", 32);
     scene.Add(new Entity("field", asset("field")));
     asset("field")->blendt = GraphicsDevice::SrcAlpha;
 

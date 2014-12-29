@@ -71,9 +71,9 @@ int Pixel::ToPngId(int fmt) {
     else { ERROR("unknown pixel fmt: ", fmt); return 0; }
 }
 
-static void png_read (png_structp png_ptr, png_bytep data, png_size_t length) { ((File*)png_get_io_ptr(png_ptr))->read (data, length); }
-static void png_write(png_structp png_ptr, png_bytep data, png_size_t length) { ((File*)png_get_io_ptr(png_ptr))->write(data, length); }
-static void png_flush(png_structp png_ptr) {}
+static void PngRead (png_structp png_ptr, png_bytep data, png_size_t length) { ((File*)png_get_io_ptr(png_ptr))->read (data, length); }
+static void PngWrite(png_structp png_ptr, png_bytep data, png_size_t length) { ((File*)png_get_io_ptr(png_ptr))->write(data, length); }
+static void PngFlush(png_structp png_ptr) {}
 
 int PngReader::Read(File *lf, Texture *out) {
     char header[8];
@@ -88,7 +88,7 @@ int PngReader::Read(File *lf, Texture *out) {
 
     if (setjmp(png_jmpbuf(png_ptr)))
     { ERROR("png error: ", lf->filename()); png_destroy_read_struct(&png_ptr, &info_ptr, 0); return -1; }
-    png_set_read_fn(png_ptr, lf, png_read);
+    png_set_read_fn(png_ptr, lf, PngRead);
 
     png_set_sig_bytes(png_ptr, sizeof(header));
     png_read_info(png_ptr, info_ptr);
@@ -122,7 +122,7 @@ int PngWriter::Write(File *lf, const Texture &tex) {
     if (setjmp(png_jmpbuf(png_ptr)))
     { ERROR("setjmp: ", lf->filename()); png_destroy_write_struct(&png_ptr, &info_ptr); return -1; }
 
-    png_set_write_fn(png_ptr, lf, png_write, png_flush);
+    png_set_write_fn(png_ptr, lf, PngWrite, PngFlush);
 
     png_set_IHDR(png_ptr, info_ptr, tex.width, tex.height,
                  8, Pixel::ToPngId(tex.pf), PNG_INTERLACE_NONE,
@@ -154,16 +154,16 @@ int PngWriter::Write(const string &fn, const Texture &tex) {
 const JOCTET EOI_BUFFER[1] = { JPEG_EOI };
 struct MyJpegErrorMgr  { jpeg_error_mgr  pub; jmp_buf setjmp_buffer; };
 struct MyJpegSourceMgr { jpeg_source_mgr pub; const JOCTET *data; size_t len; } ;
-static void my_jpeg_error_exit(j_common_ptr jcs) { longjmp(((MyJpegErrorMgr*)jcs->err)->setjmp_buffer, 1); }
-static void my_jpeg_init_source(j_decompress_ptr jds) {}
-static void my_jpeg_term_source(j_decompress_ptr jds) {}
-static boolean my_jpeg_fill_input_buffer(j_decompress_ptr jds) {
+static void JpegErrorExit(j_common_ptr jcs) { longjmp(((MyJpegErrorMgr*)jcs->err)->setjmp_buffer, 1); }
+static void JpegInitSource(j_decompress_ptr jds) {}
+static void JpegTermSource(j_decompress_ptr jds) {}
+static boolean JpegFillInputBuffer(j_decompress_ptr jds) {
     MyJpegSourceMgr *src = (MyJpegSourceMgr*)jds->src;
     src->pub.next_input_byte = EOI_BUFFER;
     src->pub.bytes_in_buffer = 1;
     return true;
 }
-static void my_jpeg_skip_input_data(j_decompress_ptr jds, long len) {
+static void JpegSkipInputData(j_decompress_ptr jds, long len) {
     MyJpegSourceMgr *src = (MyJpegSourceMgr*)jds->src;
     if (src->pub.bytes_in_buffer < len) {
         src->pub.next_input_byte = EOI_BUFFER;
@@ -173,14 +173,14 @@ static void my_jpeg_skip_input_data(j_decompress_ptr jds, long len) {
         src->pub.bytes_in_buffer -= len;
     }
 }
-static void my_jpeg_mem_src(j_decompress_ptr jds, const char *buf, size_t len) {
+static void JpegMemSrc(j_decompress_ptr jds, const char *buf, size_t len) {
     if (!jds->src) jds->src = (jpeg_source_mgr*)(*jds->mem->alloc_small)((j_common_ptr)jds, JPOOL_PERMANENT, sizeof(MyJpegSourceMgr));
     MyJpegSourceMgr *src = (MyJpegSourceMgr*)jds->src;
-    src->pub.init_source       = my_jpeg_init_source;
-    src->pub.fill_input_buffer = my_jpeg_fill_input_buffer;
-    src->pub.skip_input_data   = my_jpeg_skip_input_data;
+    src->pub.init_source       = JpegInitSource;
+    src->pub.fill_input_buffer = JpegFillInputBuffer;
+    src->pub.skip_input_data   = JpegSkipInputData;
     src->pub.resync_to_restart = jpeg_resync_to_restart;
-    src->pub.term_source       = my_jpeg_term_source;
+    src->pub.term_source       = JpegTermSource;
     src->data = (const JOCTET *)buf;
     src->len = len;
     src->pub.bytes_in_buffer = len;
@@ -191,14 +191,14 @@ int JpegReader::Read(const string &data, Texture *out) {
     MyJpegErrorMgr jerr;
     jpeg_decompress_struct jds;
     jds.err = jpeg_std_error(&jerr.pub);
-    jerr.pub.error_exit = my_jpeg_error_exit;
+    jerr.pub.error_exit = JpegErrorExit;
     if (setjmp(jerr.setjmp_buffer)) {
         char buf[JMSG_LENGTH_MAX]; jds.err->format_message((j_common_ptr)&jds, buf);
         INFO("jpeg decompress failed ", buf); jpeg_destroy_decompress(&jds); return -1;
     }
 
     jpeg_create_decompress(&jds);
-    my_jpeg_mem_src(&jds, data.data(), data.size());
+    JpegMemSrc(&jds, data.data(), data.size());
     if (jpeg_read_header(&jds, 1) != 1) 
     { INFO("jpeg decompress failed "); jpeg_destroy_decompress(&jds); return -1; }
 
@@ -225,14 +225,14 @@ int JpegReader::Read(const string &data, Texture *out) { FATAL("not implemented"
 #endif /* LFL_JPEG */
 
 #ifdef LFL_GIF
-int gif_input(GifFileType *gif, GifByteType *out, int size) {
+static int GIFInput(GifFileType *gif, GifByteType *out, int size) {
     return ((BufferFile*)gif->UserData)->read(out, size);
 }
 int GIFReader::Read(File *lf,           Texture *out) { return Read(lf->contents(), out); }
 int GIFReader::Read(const string &data, Texture *out) {
     int error_code = 0;
     BufferFile bf(data.data(), data.size());
-    GifFileType *gif = DGifOpen(&bf, &gif_input, &error_code);
+    GifFileType *gif = DGifOpen(&bf, &GIFInput, &error_code);
     if (!gif) { INFO("gif open failed: ", error_code); return -1; }
     if (DGifSlurp(gif) != GIF_OK) { INFO("gif slurp failed"); DGifCloseFile(gif, &error_code); return -1; }
     out->Resize(gif->SWidth, gif->SHeight, Pixel::RGBA, Texture::Flag::CreateBuf);
@@ -267,11 +267,11 @@ int GIFReader::Read(const string &data, Texture *out) { FATAL("not implemented")
 #endif /* LFL_GIF */
 
 struct WavHeader {
-    unsigned chunkID, chunkSize, format, subchunkID, subchunkSize;
-    unsigned short audioFormat, numChannels;
-    unsigned sampleRate, byteRate;
-    unsigned short blockAlign, bitsPerSample;
-    unsigned subchunkID2, subchunkSize2;
+    unsigned chunk_id, chunk_size, format, subchunk_id, subchunk_size;
+    unsigned short audio_format, num_channels;
+    unsigned sampleRate, byte_rate;
+    unsigned short block_align, bits_per_sample;
+    unsigned subchunk_id2, subchunk_size2;
     static const int Size=44;
 };
 
@@ -304,19 +304,19 @@ int WavWriter::Write(const RingBuf::Handle *B, bool flush) {
 int WavWriter::Flush() {
     if (!f->opened()) return -1;
     WavHeader hdr;
-    hdr.chunkID = *(unsigned*)"RIFF";    
+    hdr.chunk_id = *(unsigned*)"RIFF";    
     hdr.format = *(unsigned*)"WAVE";
-    hdr.subchunkID = *(unsigned*)"fmt ";
-    hdr.audioFormat = 1;
-    hdr.numChannels = 1;
+    hdr.subchunk_id = *(unsigned*)"fmt ";
+    hdr.audio_format = 1;
+    hdr.num_channels = 1;
     hdr.sampleRate = FLAGS_sample_rate;
-    hdr.byteRate = hdr.sampleRate * hdr.numChannels * sizeof(short);
-    hdr.blockAlign = hdr.numChannels * sizeof(short);
-    hdr.bitsPerSample = 16;
-    hdr.subchunkID2 = *(unsigned*)"data";
-    hdr.subchunkSize = 16;
-    hdr.subchunkSize2 = wrote - WavHeader::Size;
-    hdr.chunkSize = 4 + (8 + hdr.subchunkSize) + (8 + hdr.subchunkSize2);
+    hdr.byte_rate = hdr.sampleRate * hdr.num_channels * sizeof(short);
+    hdr.block_align = hdr.num_channels * sizeof(short);
+    hdr.bits_per_sample = 16;
+    hdr.subchunk_id2 = *(unsigned*)"data";
+    hdr.subchunk_size = 16;
+    hdr.subchunk_size2 = wrote - WavHeader::Size;
+    hdr.chunk_size = 4 + (8 + hdr.subchunk_size) + (8 + hdr.subchunk_size2);
 
     if (f->seek(0, File::Whence::SET) != 0) return -1;
     if (f->write(&hdr, WavHeader::Size) != WavHeader::Size) return -1;
@@ -327,31 +327,31 @@ int WavWriter::Flush() {
 struct SimpleAssetLoader : public AudioAssetLoader, public VideoAssetLoader, public MovieAssetLoader {
     SimpleAssetLoader() { INFO("SimpleAssetLoader"); }
 
-    virtual void *load_file(const string &filename) {
+    virtual void *LoadFile(const string &filename) {
         LocalFile *lf = new LocalFile(filename, "r");
         if (!lf->opened()) { ERROR("open: ", filename); delete lf; return 0; }
         return lf;    
     }
-    virtual void unload_file(void *h) { delete (File*)h; }
-    virtual void *load_buf(const char *buf, int len, const char *mimetype) { return new BufferFile(buf, len, mimetype); }
-    virtual void unload_buf(void *h) { delete (File*)h; }
+    virtual void UnloadFile(void *h) { delete (File*)h; }
+    virtual void *LoadBuf(const char *buf, int len, const char *mimetype) { return new BufferFile(buf, len, mimetype); }
+    virtual void UnloadBuf(void *h) { delete (File*)h; }
 
-    virtual void *load_audio_file(const string &filename) { return load_file(filename); }
-    virtual void unload_audio_file(void *h) { return unload_file(h); }
-    virtual void *load_audio_buf(const char *buf, int len, const char *mimetype) { return load_buf(buf, len, mimetype); }
-    virtual void unload_audio_buf(void *h) { return unload_buf(h); }
+    virtual void *LoadAudioFile(const string &filename) { return LoadFile(filename); }
+    virtual void UnloadAudioFile(void *h) { return UnloadFile(h); }
+    virtual void *LoadAudioBuf(const char *buf, int len, const char *mimetype) { return LoadBuf(buf, len, mimetype); }
+    virtual void UnloadAudioBuf(void *h) { return UnloadBuf(h); }
 
-    virtual void *load_video_file(const string &filename) { return load_file(filename); }
-    virtual void unload_video_file(void *h) { return unload_file(h); }
-    virtual void *load_video_buf(const char *buf, int len, const char *mimetype) { return load_buf(buf, len, mimetype); }
-    virtual void unload_video_buf(void *h) { return unload_buf(h); }
+    virtual void *LoadVideoFile(const string &filename) { return LoadFile(filename); }
+    virtual void UnloadVideoFile(void *h) { return UnloadFile(h); }
+    virtual void *LoadVideoBuf(const char *buf, int len, const char *mimetype) { return LoadBuf(buf, len, mimetype); }
+    virtual void UnloadVideoBuf(void *h) { return UnloadBuf(h); }
 
-    virtual void *load_movie_file(const string &filename) { return load_file(filename); }
-    virtual void unload_movie_file(void *h) { return unload_file(h); }
-    virtual void *load_movie_buf(const char *buf, int len, const char *mimetype) { return load_buf(buf, len, mimetype); }
-    virtual void unload_movie_buf(void *h) { return unload_buf(h); }
+    virtual void *LoadMovieFile(const string &filename) { return LoadFile(filename); }
+    virtual void UnloadMovieFile(void *h) { return UnloadFile(h); }
+    virtual void *LoadMovieBuf(const char *buf, int len, const char *mimetype) { return LoadBuf(buf, len, mimetype); }
+    virtual void UnloadMovieBuf(void *h) { return UnloadBuf(h); }
 
-    virtual void load(Asset *a, void *handle, Texture *pbOut) {
+    virtual void LoadVideo(void *handle, Texture *out, bool clear=true) {
         static char jpghdr[2] = { '\xff', '\xd8' }; // 0xff, 0xd8 };
         static char gifhdr[4] = { 'G', 'I', 'F', '8' };
         static char pnghdr[8] = { '\211', 'P', 'N', 'G', '\r', '\n', '\032', '\n' };
@@ -363,52 +363,52 @@ struct SimpleAssetLoader : public AudioAssetLoader, public VideoAssetLoader, pub
         if (0) {}
 #ifdef LFL_PNG
         else if (!memcmp(hdr, pnghdr, sizeof(pnghdr))) {
-            if (PngReader::Read(f, &a->tex)) return;
+            if (PngReader::Read(f, out)) return;
         }
 #endif
 #ifdef LFL_JPEG
         else if (!memcmp(hdr, jpghdr, sizeof(jpghdr))) {
-            if (JpegReader::Read(f, &a->tex)) return;
+            if (JpegReader::Read(f, out)) return;
         }
 #endif
 #ifdef LFL_GIF
         else if (!memcmp(hdr, gifhdr, sizeof(gifhdr))) {
-            if (GIFReader::Read(f, &a->tex)) return;
+            if (GIFReader::Read(f, out)) return;
         }
 #endif
         else { ERROR("load ", fn, " : failed"); return; }
 
-        a->tex.LoadGL();
-        if (pbOut) pbOut->AssignBuffer(&a->tex, true);
-        a->tex.ClearBuffer();
+        out->LoadGL();
+        if (clear) out->ClearBuffer();
     }
 
-    virtual void load(MovieAsset *a, void *h) {}
-    virtual void load(SoundAsset *a, void *h, int seconds, int flag) {}
-    virtual int refill(SoundAsset *a, int reset) { return 0; }
-    virtual int play(MovieAsset *a, int seek) { return 0; }
+    virtual void LoadAudio(void *h, SoundAsset *a, int seconds, int flag) {}
+    virtual int RefillAudio(SoundAsset *a, int reset) { return 0; }
+
+    virtual void LoadMovie(void *h, MovieAsset *a) {}
+    virtual int PlayMovie(MovieAsset *a, int seek) { return 0; }
 };
 
 #ifdef LFL_ANDROID
 struct AndroidAudioAssetLoader : public AudioAssetLoader {
-    virtual void *load_audio_file(const string &filename) { return android_load_music_asset(filename.c_str()); }
-    virtual void unload_audio_file(void *h) {}
-    virtual void *load_audio_buf(const char *buf, int len, const char *mimetype) { return 0; }
-    virtual void unload_audio_buf(void *h) {}
-    virtual void load(SoundAsset *a, void *handle, int seconds, int flag) { a->handle = handle; }
-    virtual int refill(SoundAsset *a, int reset) { return 0; }
+    virtual void *LoadAudioFile(const string &filename) { return android_load_music_asset(filename.c_str()); }
+    virtual void UnloadAudioFile(void *h) {}
+    virtual void *LoadAudioBuf(const char *buf, int len, const char *mimetype) { return 0; }
+    virtual void UnloadAudioBuf(void *h) {}
+    virtual void LoadAudio(void *handle, SoundAsset *a, int seconds, int flag) { a->handle = handle; }
+    virtual int RefillAudio(SoundAsset *a, int reset) { return 0; }
 };
 #endif
 
 #ifdef LFL_IPHONE
 extern void *iphone_load_music_asset(const char *filename);
 struct IPhoneAudioAssetLoader : public AudioAssetLoader {
-    virtual void *load_audio_file(const string &filename) { return iphone_load_music_asset(filename.c_str()); }
-    virtual void unload_audio_file(void *h) {}
-    virtual void *load_audio_buf(const char *buf, int len, const char *mimetype) { return 0; }
-    virtual void unload_audio_buf(void *h) {}
-    virtual void load(SoundAsset *a, void *handle, int seconds, int flag) { a->handle = handle; }
-    virtual int refill(SoundAsset *a, int reset) { return 0; }
+    virtual void *LoadAudioFile(const string &filename) { return iphone_load_music_asset(filename.c_str()); }
+    virtual void UnloadAudioFile(void *h) {}
+    virtual void *LoadAudioBuf(const char *buf, int len, const char *mimetype) { return 0; }
+    virtual void UnloadAudioBuf(void *h) {}
+    virtual void LoadAudio(void *handle, SoundAsset *a, int seconds, int flag) { a->handle = handle; }
+    virtual int RefillAudio(SoundAsset *a, int reset) { return 0; }
 };
 #endif
 
@@ -465,7 +465,7 @@ struct FFBIOC {
 
 struct FFMpegAssetLoader : public AudioAssetLoader, public VideoAssetLoader, public MovieAssetLoader {
     FFMpegAssetLoader() { INFO("FFMpegAssetLoader"); }
-    static AVFormatContext *load(AVIOContext *pb, const string &filename, char *probe_buf, int probe_buflen, AVIOContext **pbOut=0) {
+    static AVFormatContext *Load(AVIOContext *pb, const string &filename, char *probe_buf, int probe_buflen, AVIOContext **pbOut=0) {
         AVProbeData probe_data;
         memzero(probe_data);
         probe_data.filename = basename(filename.c_str(),0,0);
@@ -493,8 +493,8 @@ struct FFMpegAssetLoader : public AudioAssetLoader, public VideoAssetLoader, pub
         return fctx;
     }
 
-    virtual void *load_file(const string &filename) { return load_file(filename, 0); }
-    AVFormatContext *load_file(const string &filename, AVIOContext **pbOut) {
+    virtual void *LoadFile(const string &filename) { return LoadFile(filename, 0); }
+    AVFormatContext *LoadFile(const string &filename, AVIOContext **pbOut) {
 #if !defined(LFL_ANDROID) && !defined(LFL_IPHONE)
         AVFormatContext *fctx = 0;
         if (avformat_open_input(&fctx, filename.c_str(), 0, 0)) { ERROR("av_open_input_file: ", filename); return 0; }
@@ -503,13 +503,12 @@ struct FFMpegAssetLoader : public AudioAssetLoader, public VideoAssetLoader, pub
         LocalFile *lf = new LocalFile(filename, "r");
         if (!lf->opened()) { ERROR("FFLoadFile: open ", filename); delete lf; return 0; }
         void *pb = FFBIOFile::alloc(lf);
-        AVFormatContext *ret = load((AVIOContext*)pb, filename, 0, 0, pbOut);
+        AVFormatContext *ret = Load((AVIOContext*)pb, filename, 0, 0, pbOut);
         if (!ret) FFBIOFile::free(pb);
         return ret;
 #endif
     }
-
-    virtual void unload_file(void *h) {
+    virtual void UnloadFile(void *h) {
         AVFormatContext *handle = (AVFormatContext*)h;
         for (int i = handle->nb_streams - 1; handle->streams && i >= 0; --i) {
             AVStream* stream = handle->streams[i];
@@ -523,37 +522,36 @@ struct FFMpegAssetLoader : public AudioAssetLoader, public VideoAssetLoader, pub
         avformat_close_input(&handle);
     }
 
-    virtual void *load_buf(const char *buf, int len, const char *filename) { return load_buf(buf, len, filename, 0); }
-    AVFormatContext *load_buf(void const *buf, int len, const char *filename, AVIOContext **pbOut) {
+    virtual void *LoadBuf(const char *buf, int len, const char *filename) { return LoadBuf(buf, len, filename, 0); }
+    AVFormatContext *LoadBuf(void const *buf, int len, const char *filename, AVIOContext **pbOut) {
         const char *suffix = strchr(filename, '.');
         void *pb = FFBIOC::alloc(buf, len);
-        AVFormatContext *ret = load((AVIOContext*)pb, suffix ? suffix+1 : filename, (char*)buf, min(4096, len), pbOut);
+        AVFormatContext *ret = Load((AVIOContext*)pb, suffix ? suffix+1 : filename, (char*)buf, min(4096, len), pbOut);
         if (!ret) FFBIOC::free(pb);
         return ret;
     }
-
-    virtual void unload_buf(void *h) {
+    virtual void UnloadBuf(void *h) {
         AVFormatContext *handle = (AVFormatContext*)h;
         FFBIOC::free(handle->pb);
         avformat_close_input(&handle);
     }
 
-    virtual void *load_audio_file(const string &filename) { return load_file(filename); }
-    virtual void unload_audio_file(void *h) { return unload_file(h); }
-    virtual void *load_audio_buf(const char *buf, int len, const char *mimetype) { return load_buf(buf, len, mimetype); }
-    virtual void unload_audio_buf(void *h) { return unload_buf(h); }
+    virtual void *LoadAudioFile(const string &filename) { return LoadFile(filename); }
+    virtual void UnloadAudioFile(void *h) { return UnloadFile(h); }
+    virtual void *LoadAudioBuf(const char *buf, int len, const char *mimetype) { return LoadBuf(buf, len, mimetype); }
+    virtual void UnloadAudioBuf(void *h) { return UnloadBuf(h); }
 
-    virtual void *load_video_file(const string &filename) { return load_file(filename); }
-    virtual void unload_video_file(void *h) { return unload_file(h); }
-    virtual void *load_video_buf(const char *buf, int len, const char *mimetype) { return load_buf(buf, len, mimetype); }
-    virtual void unload_video_buf(void *h) { return unload_buf(h); }
+    virtual void *LoadVideoFile(const string &filename) { return LoadFile(filename); }
+    virtual void UnloadVideoFile(void *h) { return UnloadFile(h); }
+    virtual void *LoadVideoBuf(const char *buf, int len, const char *mimetype) { return LoadBuf(buf, len, mimetype); }
+    virtual void UnloadVideoBuf(void *h) { return UnloadBuf(h); }
 
-    virtual void *load_movie_file(const string &filename) { return load_file(filename); }
-    virtual void unload_movie_file(void *h) { return unload_file(h); }
-    virtual void *load_movie_buf(const char *buf, int len, const char *mimetype) { return load_buf(buf, len, mimetype); }
-    virtual void unload_movie_buf(void *h) { return unload_buf(h); }
+    virtual void *LoadMovieFile(const string &filename) { return LoadFile(filename); }
+    virtual void UnloadMovieFile(void *h) { return UnloadFile(h); }
+    virtual void *LoadMovieBuf(const char *buf, int len, const char *mimetype) { return LoadBuf(buf, len, mimetype); }
+    virtual void UnloadMovieBuf(void *h) { return UnloadBuf(h); }
 
-    void load(Asset *a, void *handle, Texture *pbOut) {
+    void LoadVideo(void *handle, Texture *out, bool clear=true) {
         AVFormatContext *fctx = (AVFormatContext*)handle;
         int video_index = -1, got=0;
         for (int i=0; i<fctx->nb_streams; i++) {
@@ -576,10 +574,10 @@ struct FFMpegAssetLoader : public AudioAssetLoader, public VideoAssetLoader, pub
             ERROR("avcodec_decode_video2: ", codec->name, " ", ret, ": ", errstr);
         } else {
             int pf = Pixel::FromFFMpegId(avctx->pix_fmt);
-            a->tex.width  = avctx->width;
-            a->tex.height = avctx->height;
-            a->tex.LoadGL(*frame->data, a->tex.width, a->tex.height, pf, frame->linesize[0]);
-            if (pbOut) pbOut->LoadBuffer(frame->data[0], a->tex.width, a->tex.height, pf, frame->linesize[0]);
+            out->width  = avctx->width;
+            out->height = avctx->height;
+            out->LoadGL(*frame->data, out->width, out->height, pf, frame->linesize[0]);
+            if (!clear) out->LoadBuffer(frame->data[0], out->width, out->height, pf, frame->linesize[0]);
             // av_frame_unref(frame);
         }
 
@@ -587,59 +585,50 @@ struct FFMpegAssetLoader : public AudioAssetLoader, public VideoAssetLoader, pub
         // av_frame_free(&frame);
     }
 
-    void load(SoundAsset *a, void *handle, int seconds, int flag) {
+    void LoadAudio(void *handle, SoundAsset *a, int seconds, int flag) {
         AVFormatContext *fctx = (AVFormatContext*)handle;
-        load(a, 0, fctx);
+        LoadMovie(a, 0, fctx);
 
-        int samples = refill(a, 1);
-        if (samples == SoundAssetSize(a) && !(flag & SoundAsset::FlagNoRefill)) a->refill = refillCB;
+        int samples = RefillAudio(a, 1);
+        if (samples == SoundAssetSize(a) && !(flag & SoundAsset::FlagNoRefill)) a->refill = RefillAudioCB;
 
         if (!a->refill) {
             avcodec_close(fctx->streams[a->handle_arg1]->codec);
             a->resampler.Close();
         }
     }
-
-    int refill(SoundAsset *a, int reset) { return refillCB(a, reset); }
-    static int refillCB(SoundAsset *a, int reset) {
+    int RefillAudio(SoundAsset *a, int reset) { return RefillAudioCB(a, reset); }
+    static int RefillAudioCB(SoundAsset *a, int reset) {
         AVFormatContext *fctx = (AVFormatContext*)a->handle;
         AVCodecContext *avctx = fctx->streams[a->handle_arg1]->codec;
         bool open_resampler = false;
-
         if (reset) {
             av_seek_frame(fctx, a->handle_arg1, 0, AVSEEK_FLAG_BYTE);
             a->wav->ring.size = SoundAssetSize(a);
             a->wav->bytes = a->wav->ring.size * a->wav->width;
             open_resampler = true;
         }
-
         if (!a->wav) {
             a->wav = new RingBuf(a->sample_rate, SoundAssetSize(a));
             open_resampler = true;
         }
-
         if (open_resampler)
             a->resampler.Open(a->wav, avctx->channels, avctx->sample_rate, Sample::FromFFMpegId(avctx->sample_fmt),
                                       a->channels,     a->sample_rate,     Sample::S16);
-
         a->wav->ring.back = 0;
-
-        int wrote = play(a, 0, fctx, 0);
-
+        int wrote = PlayMovie(a, 0, fctx, 0);
         if (wrote < SoundAssetSize(a)) {
             a->wav->ring.size = wrote;
             a->wav->bytes = a->wav->ring.size * a->wav->width;
         }
-
         return wrote;
     }
 
-    void load(MovieAsset *ma, void *handle) {
-        load(&ma->audio, &ma->video, (AVFormatContext*)handle);
-        play(&ma->audio, &ma->video, (AVFormatContext*)handle, 0);
+    void LoadMovie(void *handle, MovieAsset *ma) {
+        LoadMovie(&ma->audio, &ma->video, (AVFormatContext*)handle);
+        PlayMovie(&ma->audio, &ma->video, (AVFormatContext*)handle, 0);
     }
-
-    static void load(SoundAsset *sa, Asset *va, AVFormatContext *fctx) {
+    static void LoadMovie(SoundAsset *sa, Asset *va, AVFormatContext *fctx) {
         if (avformat_find_stream_info(fctx, 0) < 0) { ERROR("av_find_stream_info"); return; }
 
         int audio_index = -1, video_index = -1, got=0;
@@ -649,7 +638,6 @@ struct FFMpegAssetLoader : public AudioAssetLoader, public VideoAssetLoader, pub
             if (avctx->codec_type == AVMEDIA_TYPE_AUDIO) audio_index = i;
             if (avctx->codec_type == AVMEDIA_TYPE_VIDEO) video_index = i;
         }
-
         if (va) {
             if (video_index < 0) { ERROR("no v-stream: ", fctx->nb_streams); return; }
             AVCodecContext *avctx = fctx->streams[video_index]->codec;
@@ -657,7 +645,6 @@ struct FFMpegAssetLoader : public AudioAssetLoader, public VideoAssetLoader, pub
             if (!codec || avcodec_open2(avctx, codec, 0) < 0) { ERROR("avcodec_open2: ", codec); return; }
             va->tex.CreateBacked(avctx->width, avctx->height, Pixel::BGR32);
         }
-
         if (sa) {
             if (audio_index < 0) { ERROR("no a-stream: ", fctx->nb_streams); return; }
             AVCodecContext *avctx = fctx->streams[audio_index]->codec;
@@ -675,9 +662,8 @@ struct FFMpegAssetLoader : public AudioAssetLoader, public VideoAssetLoader, pub
         }
     }
 
-    int play(MovieAsset *ma, int seek) { return play(&ma->audio, &ma->video, (AVFormatContext*)ma->handle, seek); }
-
-    static int play(SoundAsset *sa, Asset *va, AVFormatContext *fctx, int seek_unused) {
+    int PlayMovie(MovieAsset *ma, int seek) { return PlayMovie(&ma->audio, &ma->video, (AVFormatContext*)ma->handle, seek); }
+    static int PlayMovie(SoundAsset *sa, Asset *va, AVFormatContext *fctx, int seek_unused) {
         int begin_resamples_available = sa->resampler.output_available, wrote=0, done=0;
         Allocator *tlsalloc = ThreadLocalStorage::GetAllocator();
 
@@ -705,8 +691,7 @@ struct FFMpegAssetLoader : public AudioAssetLoader, public VideoAssetLoader, pub
                     wrote = sa->resampler.output_available - begin_resamples_available;
                     av_frame_unref(frame);
                 }
-            }
-            else if (va) {
+            } else if (va) {
                 if ((ret = avcodec_decode_video2(avctx, frame, &got, &packet)) <= 0 || !got) {
                     char errstr[128]; av_strerror(ret, errstr, sizeof(errstr));
                     ERROR("avcodec_decode_video2 ", ret, ": ", errstr);
@@ -719,7 +704,6 @@ struct FFMpegAssetLoader : public AudioAssetLoader, public VideoAssetLoader, pub
                     done = 1;
                 }
             }
-
             av_free_packet(&packet);
             av_frame_free(&frame);
         }
@@ -924,32 +908,28 @@ void Asset::Unload() {
 
 void Asset::Load(void *h, VideoAssetLoader *l) {
     static int nextAssetTypeID = 1, nextListID = 1;
-    if (!name.empty()) {
-        typeID = nextAssetTypeID++;
-    }
-
-    if (!geom_fn.empty())
-        geometry = Geometry::LoadOBJ(StrCat(ASSETS_DIR, geom_fn));
-
-    if (!FLAGS_lfapp_video) return;
-    if (!texture.empty() || h) {
-        if (!l) l = app->assets.default_video_loader;
-        string fn = StrCat(ASSETS_DIR, texture);
-        void *handle = h ? h : l->load_video_file(fn.c_str());
-        if (!handle) { ERROR("load: ", fn); return; }
-        l->load(this, handle, 0);
-        if (!h) l->unload_video_file(handle);
-    }
+    if (!name.empty()) typeID = nextAssetTypeID++;
+    if (!geom_fn.empty()) geometry = Geometry::LoadOBJ(StrCat(ASSETS_DIR, geom_fn));
+    if (!texture.empty() || h) LoadTexture(h, StrCat(ASSETS_DIR, texture), &tex, l);
 }
 
 void Asset::Load(const void *FromBuf, const char *filename, int size) {
     VideoAssetLoader *l = app->assets.default_video_loader;
     // work around ffmpeg image2 format being AVFMT_NO_FILE; ie doesnt work with custom AVIOContext
     if (FileSuffix::Image(filename)) l = Singleton<SimpleAssetLoader>::Get();
-    void *handle = l->load_video_buf((const char *)FromBuf, size, filename);
+    void *handle = l->LoadVideoBuf((const char *)FromBuf, size, filename);
     if (!handle) return;
     Load(handle, l);
-    l->unload_video_buf(handle);
+    l->UnloadVideoBuf(handle);
+}
+
+void Asset::LoadTexture(void *h, const string &fn, Texture *out, VideoAssetLoader *l) {
+    if (!FLAGS_lfapp_video) return;
+    if (!l) l = app->assets.default_video_loader;
+    void *handle = h ? h : l->LoadVideoFile(fn);
+    if (!handle) { ERROR("load: ", fn); return; }
+    l->LoadVideo(handle, out);
+    if (!h) l->UnloadVideoFile(handle);
 }
 
 void SoundAsset::Unload() {
@@ -960,16 +940,16 @@ void SoundAsset::Unload() {
 
 void SoundAsset::Load(void *handle, const char *FN, int Secs, int flag) {
     if (!FLAGS_lfapp_audio) { ERROR("load: ", FN, ": lfapp_audio = ", FLAGS_lfapp_audio); return; }
-    if (handle) app->assets.default_audio_loader->load(this, handle, Secs, flag);
+    if (handle) app->assets.default_audio_loader->LoadAudio(handle, this, Secs, flag);
 }
 
 void SoundAsset::Load(void const *buf, int len, char const *FN, int Secs) {
-    void *handle = app->assets.default_audio_loader->load_audio_buf((const char *)buf, len, FN);
+    void *handle = app->assets.default_audio_loader->LoadAudioBuf((const char *)buf, len, FN);
     if (!handle) return;
 
     Load(handle, FN, Secs, FlagNoRefill);
     if (!refill) {
-        app->assets.default_audio_loader->unload_audio_buf(handle);
+        app->assets.default_audio_loader->UnloadAudioBuf(handle);
         handle = 0;
     }
 }
@@ -981,32 +961,32 @@ void SoundAsset::Load(int Secs, bool unload) {
         fn = filename;
         if (fn.length() && isalpha(fn[0])) fn = ASSETS_DIR + fn;
 
-        handle = app->assets.default_audio_loader->load_audio_file(fn.c_str());
-        if (!handle) ERROR("load_file: ", fn);
+        handle = app->assets.default_audio_loader->LoadAudioFile(fn);
+        if (!handle) ERROR("SoundAsset::Load ", fn);
     }
 
     Load(handle, fn.c_str(), Secs);
 
 #if !defined(LFL_IPHONE) && !defined(LFL_ANDROID) /* XXX */
     if (!refill && handle && unload) {
-        app->assets.default_audio_loader->unload_audio_file(handle);
+        app->assets.default_audio_loader->UnloadAudioFile(handle);
         handle = 0;
     }
 #endif
 }
 
-int SoundAsset::Refill(int reset) { return app->assets.default_audio_loader->refill(this, reset); }
+int SoundAsset::Refill(int reset) { return app->assets.default_audio_loader->RefillAudio(this, reset); }
 
 void MovieAsset::Load(const char *fn) {
-    if (!fn || !(handle = app->assets.default_movie_loader->load_movie_file(StrCat(ASSETS_DIR, fn)))) return;
-    app->assets.default_movie_loader->load(this, handle);
+    if (!fn || !(handle = app->assets.default_movie_loader->LoadMovieFile(StrCat(ASSETS_DIR, fn)))) return;
+    app->assets.default_movie_loader->LoadMovie(handle, this);
     audio.Load();
     video.Load();
 }
 
 int MovieAsset::Play(int seek) {
     app->assets.movie_playing = this; int ret;
-    if ((ret = app->assets.default_movie_loader->play(this, 0) <= 0)) app->assets.movie_playing = 0;
+    if ((ret = app->assets.default_movie_loader->PlayMovie(this, 0) <= 0)) app->assets.movie_playing = 0;
     return ret;
 }
 
@@ -1324,8 +1304,6 @@ Geometry *Cube::CreateBottomFace(float r) {
     return new Geometry(GraphicsDevice::Triangles, verts.size(), &verts[0], 0, &tex[0]);
 }
 
-/* Grid */
-
 Geometry *Grid::Grid3D() {
     const float scaleFactor = 1;
     const float range = powf(10, scaleFactor);
@@ -1354,27 +1332,17 @@ Geometry *Grid::Grid2D(float x, float y, float range, float step) {
     return new Geometry(GraphicsDevice::Lines, verts.size(), &verts[0], 0, 0, Color(0,0,0));
 }
 
-/* Texture Sequence */
-
-void TexSeq::load(Asset *out, const char *name, const char *filename) {
-    out->name = name;
-    out->texture = filename;
-    out->Load();
-}
-
-void TexSeq::load(const char *fmt, const char *prefix, const char *suffix, int N) {
+void TextureArray::Load(const string &fmt, const string &prefix, const string &suffix, int N) {
     ind = 0;
-    num = N;
-    CHECK(!a);
-    a = new Asset[num];
-    for (int i=0; i<num; i++) load(&a[i], "", StringPrintf(fmt, prefix, i, suffix).c_str());
+    a.resize(N);
+    for (int i=0, l=a.size(); i<l; i++)
+        Asset::LoadTexture(StringPrintf(fmt.c_str(), prefix.c_str(), i, suffix.c_str()), &a[i]);
 }
 
-void TexSeq::draw(Asset *out, Entity *e) {
-    ind = (ind + 1) % num;
-    const Asset *in = &a[ind];
-    out->texture = in->texture;
-    out->tex.ID = in->tex.ID;
+void TextureArray::DrawSequence(Asset *out, Entity *e) {
+    ind = (ind + 1) % a.size();
+    const Texture *in = &a[ind];
+    out->tex.ID = in->ID;
     if (out->geometry) Scene::Draw(out->geometry, e);
 }
 
