@@ -55,9 +55,9 @@ struct SpeechDecodeClient : public FeatureSink {
         }
         if (flagstate == 1) return 0;
 
-        alloc.reset();
+        alloc.Reset();
         int len = sizeof(AcousticEventHeader) + sizeof(float) * feat->M * feat->N;
-        char *buf = (char *)alloc.malloc(len);
+        char *buf = (char *)alloc.Malloc(len);
 
         AcousticEventHeader *AEH = (AcousticEventHeader *)buf;
         AEH->timestamp = timestamp;
@@ -85,9 +85,9 @@ struct SpeechDecodeClient : public FeatureSink {
     void Flush() {
         if (!connected()) return;
 
-        alloc.reset();
+        alloc.Reset();
         int len = sizeof(AcousticEventHeader);
-        char *buf = (char *)alloc.malloc(len);
+        char *buf = (char *)alloc.Malloc(len);
 
         AcousticEventHeader *AEH = (AcousticEventHeader *)buf;
         memset(AEH, 0, sizeof(AcousticEventHeader));
@@ -120,8 +120,8 @@ struct SpeechDecodeClient : public FeatureSink {
         int AERlen = sizeof(AcousticEventHeader) + AEH->m * AEH->n * sizeof(float);
         if (content_length < AERlen) { ERROR("corrupt response ", content_length, " < ", AERlen); return; }
 
-        alloc.reset();
-        AEH = (AcousticEventHeader*)alloc.malloc(AERlen);
+        alloc.Reset();
+        AEH = (AcousticEventHeader*)alloc.Malloc(AERlen);
         memcpy(AEH, content, AERlen);
 
         if (!AEH->m || AEH->n != 2) return;
@@ -135,7 +135,7 @@ struct SpeechDecodeClient : public FeatureSink {
         string tsa;
         StringWordIter ts(transcript);
         for (int i=0; i<AEH->m; i++) {
-            const char *w = ts.next();
+            const char *w = ts.Next();
             if (!w) continue;
 
             long long ts = AEH->timestamp + timestamp[i*2], ts2 = AEH->timestamp + timestamp[i*2+1];

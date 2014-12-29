@@ -143,7 +143,7 @@ void TextGUI::Enter() {
         AddHistory(cmd);
         Run(cmd);
     }
-    TouchDevice::closeKeyboard();
+    TouchDevice::CloseKeyboard();
     if (deactivate_on_enter) active = false;
 }
 
@@ -187,7 +187,7 @@ void TextArea::Write(const string &s, bool update_fb, bool release_fb) {
     if (update_fb && line_fb.lines) line_fb.fb.Attach();
     ScopedDrawMode drawmode(update_fb ? DrawMode::_2D : DrawMode::NullOp);
     StringLineIter add_lines(s, StringLineIter::Flag::BlankLines);
-    for (const char *add_line = add_lines.next(); add_line; add_line = add_lines.next()) {
+    for (const char *add_line = add_lines.Next(); add_line; add_line = add_lines.Next()) {
         bool append = !write_newline && add_lines.first && *add_line && line.ring.count;
         LineUpdate l(append ? &line[-1] : line.InsertAt(-1), &line_fb,
                      (!append ? LineUpdate::PushBack : 0) | (update_fb ? 0 : LineUpdate::DontUpdate));
@@ -392,8 +392,8 @@ void Editor::UpdateLines() {
     read_lines.second = Typed::Max<int>(0, read_lines.second - add_blank_lines);
     for (int i=read_lines.first, n=i+read_lines.second; i<n; i++) read_len += file_line[i].size + (i<(n-1));
     string buf(read_len, 0);
-    file->seek(file_line[read_lines.first].offset, File::Whence::SET);
-    CHECK_EQ(read_len, file->read((char*)buf.data(), read_len));
+    file->Seek(file_line[read_lines.first].offset, File::Whence::SET);
+    CHECK_EQ(read_len, file->Read((char*)buf.data(), read_len));
 
     Line *L = 0;
     line_fb.fb.Attach();
@@ -585,8 +585,8 @@ void Terminal::Write(const string &s, bool update_fb, bool release_fb) {
             else if (c == 'C') term_cursor.x = min(term_cursor.x + X_or_1(parse_csi_argv[0]), term_width);
             else if (c == 'D') term_cursor.x = max(term_cursor.x - X_or_1(parse_csi_argv[0]), 1);
             else if (c == 'H') {
-                term_cursor.y = clamp(parse_csi_argv[0], 1, term_height);
-                term_cursor.x = clamp(parse_csi_argv[1], 1, term_width);
+                term_cursor.y = Clamp(parse_csi_argv[0], 1, term_height);
+                term_cursor.x = Clamp(parse_csi_argv[1], 1, term_width);
             } else if (c =='J') {
                 LineUpdate l(GetCursorLine(), fb_cb);
                 int clear_beg_y = 1, clear_end_y = term_height;
@@ -810,30 +810,30 @@ void DOM::Element::setAttribute(const DOMString &name, const DOMString &value) {
 
 float DOM::CSSPrimitiveValue::ConvertToPixels(float n, unsigned short u, unsigned short prt, Flow *inline_context) {
     switch (u) {
-        case CSS_PX:         return         n;
-        case CSS_EXS:        return         n  * inline_context->cur_attr.font->max_width;
-        case CSS_EMS:        return         n  * inline_context->cur_attr.font->size;
-        case CSS_IN:         return         n  * FLAGS_dots_per_inch;
-        case CSS_CM:         return cm2inch(n) * FLAGS_dots_per_inch;
-        case CSS_MM:         return mm2inch(n) * FLAGS_dots_per_inch;
-        case CSS_PC:         return         n  /   6 * FLAGS_dots_per_inch;
-        case CSS_PT:         return         n  /  72 * FLAGS_dots_per_inch;
-        case CSS_PERCENTAGE: return         n  / 100 * LFL::PercentRefersTo(prt, inline_context);
+        case CSS_PX:         return          n;
+        case CSS_EXS:        return          n  * inline_context->cur_attr.font->max_width;
+        case CSS_EMS:        return          n  * inline_context->cur_attr.font->size;
+        case CSS_IN:         return          n  * FLAGS_dots_per_inch;
+        case CSS_CM:         return CMToInch(n) * FLAGS_dots_per_inch;
+        case CSS_MM:         return MMToInch(n) * FLAGS_dots_per_inch;
+        case CSS_PC:         return          n  /   6 * FLAGS_dots_per_inch;
+        case CSS_PT:         return          n  /  72 * FLAGS_dots_per_inch;
+        case CSS_PERCENTAGE: return          n  / 100 * LFL::PercentRefersTo(prt, inline_context);
     }; return 0;
 }
 
 float DOM::CSSPrimitiveValue::ConvertFromPixels(float n, unsigned short u, unsigned short prt, Flow *inline_context) {
     switch (u) {
-        case CSS_PX:         return         n;
-        case CSS_EXS:        return         n / inline_context->cur_attr.font->max_width;
-        case CSS_EMS:        return         n / inline_context->cur_attr.font->size;
-        case CSS_IN:         return         n / FLAGS_dots_per_inch;
-        case CSS_CM:         return inch2cm(n / FLAGS_dots_per_inch);
-        case CSS_MM:         return inch2mm(n / FLAGS_dots_per_inch);
-        case CSS_PC:         return         n *   6 / FLAGS_dots_per_inch;
-        case CSS_PT:         return         n *  72 / FLAGS_dots_per_inch;
-        case CSS_PERCENTAGE: return         n * 100 / LFL::PercentRefersTo(prt, inline_context);
-    }; return 0;
+        case CSS_PX:         return          n;
+        case CSS_EXS:        return          n / inline_context->cur_attr.font->max_width;
+        case CSS_EMS:        return          n / inline_context->cur_attr.font->size;
+        case CSS_IN:         return          n / FLAGS_dots_per_inch;
+        case CSS_CM:         return InchToCM(n / FLAGS_dots_per_inch);
+        case CSS_MM:         return InchToMM(n / FLAGS_dots_per_inch);
+        case CSS_PC:         return          n *   6 / FLAGS_dots_per_inch;
+        case CSS_PT:         return          n *  72 / FLAGS_dots_per_inch;
+        case CSS_PERCENTAGE: return          n * 100 / LFL::PercentRefersTo(prt, inline_context);
+    }; return 0;                            
 }
 
 int DOM::FontSize::getFontSizeValue(Flow *flow) {
@@ -1241,7 +1241,7 @@ void SimpleBrowser::Clear() {
     v_scrollbar.LayoutAttached(Viewport());
     h_scrollbar.LayoutAttached(Viewport());
     outstanding.clear();
-    alloc.reset();
+    alloc.Reset();
     doc.node = AllocatorNew(&alloc, (DOM::HTMLDocument), (this, &alloc, &gui));
     doc.node->style_context = AllocatorNew(&alloc, (StyleContext), (doc.node));
     doc.node->style_context->AppendSheet(StyleSheet::Default());
@@ -1249,7 +1249,7 @@ void SimpleBrowser::Clear() {
 }
 
 void SimpleBrowser::Navigate(const string &url) {
-    if (layers.empty()) return SystemBrowser::open(url.c_str());
+    if (layers.empty()) return SystemBrowser::Open(url.c_str());
 }
 
 void SimpleBrowser::OpenHTML(const string &content) {
@@ -1544,8 +1544,8 @@ DOM::Node *SimpleBrowser::LayoutNode(Flow *flow, DOM::Node *n, bool reflow) {
 
         point dim(n->render->width_px, n->render->height_px);
         if      (!dim.x && !dim.y)                      dim   = point(asset->tex.width, asset->tex.height);
-        if      ( dim.x && !dim.y && asset->tex.width ) dim.y = round_f((float)asset->tex.height/asset->tex.width *dim.x);
-        else if (!dim.x &&  dim.y && asset->tex.height) dim.x = round_f((float)asset->tex.width /asset->tex.height*dim.y);
+        if      ( dim.x && !dim.y && asset->tex.width ) dim.y = RoundF((float)asset->tex.height/asset->tex.width *dim.x);
+        else if (!dim.x &&  dim.y && asset->tex.height) dim.x = RoundF((float)asset->tex.width /asset->tex.height*dim.y);
 
         bool add_margin = !n->render->floating && !n->render->position_absolute && !n->render->position_fixed;
         Border margin = add_margin ? n->render->MarginOffset() : Border();
@@ -1857,11 +1857,11 @@ void Dialog::TextureBox(const string &n) {}
 Browser *CreateQTWebKitBrowser(Asset *a) { return 0; }
 
 void Dialog::MessageBox(const string &n) {
-    Mouse::releaseFocus();
+    Mouse::ReleaseFocus();
     new MessageBoxDialog(n);
 }
 void Dialog::TextureBox(const string &n) {
-    Mouse::releaseFocus();
+    Mouse::ReleaseFocus();
     new TextureBoxDialog(n);
 }
 #endif /* LFL_QT */

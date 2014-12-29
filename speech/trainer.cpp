@@ -137,7 +137,7 @@ struct Features2Pronunciation {
         PronunciationDict *dict = PronunciationDict::instance();
 
         StringWordIter worditer(transcript);
-        for (const char *word = worditer.next(); word; word = worditer.next()) {
+        for (const char *word = worditer.Next(); word; word = worditer.Next()) {
             if (!dict->pronounce(word)) ERROR("no pronunciation dictionary for '", word, "'");
             words.incr(word);
         }
@@ -157,7 +157,7 @@ struct Features2Pronunciation {
         PronunciationDict *dict = PronunciationDict::instance();
 
         StringWordIter worditer(transcript);
-        for (const char *word = worditer.next(); word; word = worditer.next()) {
+        for (const char *word = worditer.Next(); word; word = worditer.Next()) {
             if (!dict->pronounce(word)) ERROR("no pronunciation dictionary for '", word, "'");
             words.incr(word);
         }
@@ -311,7 +311,7 @@ int model3init(const char *modeldir, AcousticModel::StateCollection *model1, int
     /* from vocab file */
     if (vfn) {
         LocalFileLineIter vocab(vfn);
-        for (const char *word=vocab.next(); word; word=vocab.next()) {
+        for (const char *word=vocab.Next(); word; word=vocab.Next()) {
             inventory_add_word(inventory, dict, word);
         }
     }
@@ -514,7 +514,7 @@ int tieModelStates(const char *modeldir, AcousticModel::StateCollection *model3,
     if ((wroteiter = modelWrote.read("AcousticModel", modeldir))<0 || wroteiter != lastiter+1) { ERROR("read ", modeldir, " ", lastiter+1); return -1; }
 
     LocalFile tiedstates(string(modeldir) + MatrixFile::Filename("AcousticModel", "tiedstates", "matrix", lastiter+1), "w");
-    MatrixFile::WriteHeader(&tiedstates, basename(tiedstates.filename(),0,0), "", powf(LFL_PHONES, 3)*AcousticModel::StatesPerPhone, 1);
+    MatrixFile::WriteHeader(&tiedstates, basename(tiedstates.Filename(),0,0), "", powf(LFL_PHONES, 3)*AcousticModel::StatesPerPhone, 1);
 
     for (int i=0; i<LFL_PHONES; i++) {
         for (int j=0; j<LFL_PHONES; j++) {
@@ -545,7 +545,7 @@ int tieModelStates(const char *modeldir, AcousticModel::StateCollection *model3,
 
 int tieIndependentStates(const char *modeldir, AcousticModel::StateCollection *model1, int lastiter) {
     LocalFile tiedstates(string(modeldir) + MatrixFile::Filename("AcousticModel", "tiedstates", "matrix", lastiter), "w");
-    MatrixFile::WriteHeader(&tiedstates, basename(tiedstates.filename(),0,0), "", powf(LFL_PHONES, 3)*AcousticModel::StatesPerPhone, 1);
+    MatrixFile::WriteHeader(&tiedstates, basename(tiedstates.Filename(),0,0), "", powf(LFL_PHONES, 3)*AcousticModel::StatesPerPhone, 1);
 
     for (int i=0; i<LFL_PHONES; i++) {
         for (int j=0; j<LFL_PHONES; j++) {
@@ -681,7 +681,7 @@ int compileRecognitionNetwork(const char *modeldir, AcousticModel::Compiled *AM,
     L->writeGraphViz("aa1.gv");
 
     /* G */
-    vocab.reset();
+    vocab.Reset();
     WFST *G = WFST::grammar(K, &words, LM, &vocab);
     WFST::write(G, "grammar", modeldir, lastiter, false, false);
     delete G;
@@ -689,7 +689,7 @@ int compileRecognitionNetwork(const char *modeldir, AcousticModel::Compiled *AM,
     /* C */
     WFST *C = WFST::contextDependencyTransducer(K, &phones, &cd, &aux);
     WFST::determinize(C, Singleton<TropicalSemiring>::Get());
-    WFST::addAuxiliarySymbols((WFST::TransitMapBuilder*)C->E, &aux, K->one());
+    WFST::addAuxiliarySymbols((WFST::TransitMapBuilder*)C->E, &aux, K->One());
     WFST::invert((WFST::TransitMapBuilder*)C->E, &C->A, &C->B);
     WFST::contextDependencyRebuildFinal(C);
     ((WFST::Statevec*)C->F)->push_back(0);
@@ -708,7 +708,7 @@ int compileRecognitionNetwork(const char *modeldir, AcousticModel::Compiled *AM,
     WFST::removeNulls(H); /* only to remove 1 null */
     WFST::removeNonAccessible(H);
     WFST::closure(H->K, (WFST::TransitMapBuilder*)H->E, H->I, H->F);
-    WFST::addAuxiliarySymbols((WFST::TransitMapBuilder*)H->E, &aux, 0, K->one());
+    WFST::addAuxiliarySymbols((WFST::TransitMapBuilder*)H->E, &aux, 0, K->One());
     ((WFST::TransitMapBuilder*)H->E)->sort();
 
     /* H o C o L */
@@ -723,7 +723,7 @@ int compileRecognitionNetwork(const char *modeldir, AcousticModel::Compiled *AM,
 
     /* HW */
     WFST *HW = WFST::hmmWeightTransducer(K, &ama); 
-    WFST::addAuxiliarySymbols((WFST::TransitMapBuilder*)HW->E, &aux, K->one());
+    WFST::addAuxiliarySymbols((WFST::TransitMapBuilder*)HW->E, &aux, K->One());
     ((WFST::TransitMapBuilder*)HW->E)->sort();
 
     /* HW o H o C o L */
@@ -757,8 +757,8 @@ int recognizeQuery(RecognitionModel *model, const char *input) {
     vector<int> query, query2;
     int pp = 0;
 
-    for (string nextword, word = words.next(); word.size(); word = nextword) {
-        nextword = BlankNull(words.next());
+    for (string nextword, word = words.Next(); word.size(); word = nextword) {
+        nextword = BlankNull(words.Next());
         const char *pronunciation = dict->pronounce(word.c_str());
         query2.push_back(model->recognitionNetworkOut.id(word.c_str()));
 
@@ -825,7 +825,7 @@ struct RecognizeCorpus {
         Timer vtime; double vprob = 0;
         matrix<HMM::Token> *viterbi = Recognizer::decodeFeatures(recognize, features, FLAGS_BeamWidth, FLAGS_UseTransition, &vprob, FLAGS_lfapp_debug ? &recognize->nameCB : 0);
         string decodescript = Recognizer::transcript(recognize, viterbi);
-        double time = vtime.time(), wer = Recognizer::wordErrorRate(recognize, transcript, decodescript);
+        double time = vtime.GetTime(), wer = Recognizer::wordErrorRate(recognize, transcript, decodescript);
         WER += wer; total++;
         INFO("OUT = '", decodescript, "' WER=", wer, " (total ", WER/total, ")");
         if (FLAGS_lfapp_video) visualize(recognize, MFCC, viterbi, vprob, time);
@@ -867,11 +867,11 @@ struct Wav2Segments {
 
         AcousticModel::Compiled *hmm = AcousticModel::fromUtterance1(args->model, transcript, args->HMMFlag & AcousticHMM::Flag::UseTransit);
         if (!hmm) return DEBUG("utterance decode failed");
-        if (!dim_check("Wav2Segments", features->N, hmm->state[0].emission.mean.N)) return;
+        if (!DimCheck("Wav2Segments", features->N, hmm->state[0].emission.mean.N)) return;
 
         Matrix viterbi(features->M, 1); Timer vtime;
         double vprob = AcousticHMM::viterbi(hmm, features, &viterbi, 2, FLAGS_BeamWidth, args->HMMFlag);
-        if (FLAGS_lfapp_video) Decoder::visualizeFeatures(hmm, MFCC, &viterbi, vprob, vtime.time(), FLAGS_interactive);
+        if (FLAGS_lfapp_video) Decoder::visualizeFeatures(hmm, MFCC, &viterbi, vprob, vtime.GetTime(), FLAGS_interactive);
 
         int transitions=0, longrun=0;
         for (Decoder::PhoneIter iter(hmm, &viterbi); !iter.done(); iter.next()) {
@@ -1103,7 +1103,7 @@ extern "C" int main(int argc, const char *argv[]) {
             HMM::Token::printViterbi(viterbi, &recognize.nameCB);
             if (!transcript.size()) { ERROR("decode failed ", transcript.size()); break; }
             INFO("vprob = ", vprob, " : '", transcript, "'");
-            if (FLAGS_lfapp_video) RecognizeCorpus::visualize(&recognize, MFCC, viterbi, vprob, vtimer.time());
+            if (FLAGS_lfapp_video) RecognizeCorpus::visualize(&recognize, MFCC, viterbi, vprob, vtimer.GetTime());
             delete viterbi;
             delete MFCC;
         } while (Running() && FLAGS_visualize && FLAGS_interactive);

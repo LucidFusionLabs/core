@@ -156,13 +156,13 @@ struct CART {
         const char *flagtext = QL->name;
 
         int buckets=Tree::map_buckets, values=Tree::map_values;
-        Matrix namemap(next_prime(tree.name.size()*4), buckets*values), leafnamemap(next_prime(tree.leafname.size()*4), buckets*values);
+        Matrix namemap(NextPrime(tree.name.size()*4), buckets*values), leafnamemap(NextPrime(tree.leafname.size()*4), buckets*values);
 
         LocalFile names    (string(dir) + MatrixFile::Filename(name, "name",      "string", iteration), "w");
         LocalFile questions(string(dir) + MatrixFile::Filename(name, "questions", "matrix", iteration), "w");
 
-        MatrixFile::WriteHeader(&names,     basename(names.filename(),0,0),     flagtext, tree.name.size(),     1);
-        MatrixFile::WriteHeader(&questions, basename(questions.filename(),0,0), flagtext, tree.question.size(), 1);
+        MatrixFile::WriteHeader(&names,     basename(names.Filename(),0,0),     flagtext, tree.name.size(),     1);
+        MatrixFile::WriteHeader(&questions, basename(questions.Filename(),0,0), flagtext, tree.question.size(), 1);
 
         for (int i=0; i<tree.question.size(); i++) {
             const char *n = tree.name[i].c_str();
@@ -304,7 +304,7 @@ struct PhoneticDecisionTree {
             Vector::Sub(covar, x, D);
 
             /* determine node likelihood */ 
-            return -0.5 * ((1 + log(2*M_PI))*D + diagdet(covar, D)) * denom;
+            return -0.5 * ((1 + log(2*M_PI))*D + DiagDet(covar, D)) * denom;
         }
     };
 };

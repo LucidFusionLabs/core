@@ -611,8 +611,8 @@ struct HTTPServer : public Service {
         FileResource(const char *fn, const char *mimetype=0) : filename(fn), size(0) {
             type = mimetype ? mimetype : "application/octet-stream";
             LocalFile f(filename, "r");
-            if (!f.opened()) return;
-            size = f.size();
+            if (!f.Opened()) return;
+            size = f.Size();
         }
         Response Request(Connection *, int method, const char *url, const char *args, const char *headers, const char *postdata, int postlen);
     };

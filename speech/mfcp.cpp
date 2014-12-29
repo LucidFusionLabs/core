@@ -64,24 +64,24 @@ int main(int argc, const char *argv[]) {
         /* open input */
         INFO("input = ", in);
         LocalFileLineIter lfi(in);
-        if (!lfi.f.opened()) { ERROR("FileWordIter: ", in); return -1; }
+        if (!lfi.f.Opened()) { ERROR("FileWordIter: ", in); return -1; }
         IterWordIter word(&lfi);
 
         string hdr;
         if (MatrixFile::ReadHeader(&word, &hdr) < 0) { ERROR("readHeader: ", -1); return -1; }
-        int M=atof(word.next()), N=atof(word.next()), ret;
+        int M=atof(word.Next()), N=atof(word.Next()), ret;
 
         /* open output */
         INFO("output = ", out);
         LocalFile file(out, "w");
-        if (!file.opened()) { ERROR("LocalFile: ", strerror(errno)); return -1;  }
+        if (!file.Opened()) { ERROR("LocalFile: ", strerror(errno)); return -1;  }
         if (MatrixFile::WriteBinaryHeader(&file, basename(out,0,0), hdr.c_str(), M, N) < 0) { ERROR("writeBinaryHeader: ", -1); return -1; }
 
         /* read & write */
         double *row = (double *)alloca(N*sizeof(double));
         for (int i=0; i<M; i++) {
-            for (int j=0; j<N; j++) row[j] = atof(word.next()); 
-            if ((ret = file.write(row, N*sizeof(double))) != N*sizeof(double)) FATAL("file write ret: ", ret);
+            for (int j=0; j<N; j++) row[j] = atof(word.Next()); 
+            if ((ret = file.Write(row, N*sizeof(double))) != N*sizeof(double)) FATAL("file write ret: ", ret);
         }
     }
 

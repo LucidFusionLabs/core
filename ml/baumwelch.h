@@ -88,7 +88,7 @@ struct BaumWelch : public HMM::BaumWelchAccum {
     }
 
     void add_features(const char *fn, Matrix *MFCC, Matrix *features, const char *transcript) {
-        if (!dim_check("BW", features->N, D)) return;
+        if (!DimCheck("BW", features->N, D)) return;
 
         AcousticModel::Compiled *hmm = AcousticModel::fromUtterance(model, transcript, UseTransition);
         if (!hmm) return DEBUG("utterance construct failed: ", transcript);
@@ -103,7 +103,7 @@ struct BaumWelch : public HMM::BaumWelchAccum {
     void add_prior(int state, double pi) {
         if (state < 0 || state >= model->states) FATAL("OOB emission index ", state);
         Accum *a = accum[state];
-        logadd(&a->prior, pi);
+        LogAdd(&a->prior, pi);
     }
 
     void add_emission(int state, const double *feature, const double *emissionPosterior, double emissionTotal, double gamma) {
@@ -121,7 +121,7 @@ struct BaumWelch : public HMM::BaumWelchAccum {
                 if (emissionPosterior[i] < minposterior) continue;
                 Vector::Mult(feature, exp(posterior[i]), featscaled, D);
                 Vector::Add(a->mixture.mean.row(i), featscaled, D);
-                logadd(&a->mixture.prior.row(i)[0], posterior[i]);
+                LogAdd(&a->mixture.prior.row(i)[0], posterior[i]);
 
                 if (!FullVariance) {
                     Vector::Mult(featscaled, feature, D);
@@ -129,7 +129,7 @@ struct BaumWelch : public HMM::BaumWelchAccum {
                 }
             }
             a->count++;
-            logadd(&a->total, emissionTotal); 
+            LogAdd(&a->total, emissionTotal); 
             accumprob += emissionTotal;
         }
         else if (mode == Mode::Cov) {
@@ -157,15 +157,15 @@ struct BaumWelch : public HMM::BaumWelchAccum {
             i = a->transit.find(Rstate);
         }
 
-        logadd(&(*i).second, xi);
-        logadd(&a->transtotal, xi);
+        LogAdd(&(*i).second, xi);
+        LogAdd(&a->transtotal, xi);
 
         AcousticModel::State *s1 = &model->state[Lstate], *s2 = &model->state[Rstate];
         int ap, an, phone1 = AcousticModel::parseName(s1->name, 0, &ap, &an);
         int bp, bn, phone2 = AcousticModel::parseName(s2->name, 0, &bp, &bn);
         if (phone1 >= 0 && phone2 >= 0 && phone1 != phone2) {
-            logadd(&phonetx.row(phone1)[phone2], xi);
-            logadd(&phonetxtotal.row(phone1)[0], xi);
+            LogAdd(&phonetx.row(phone1)[phone2], xi);
+            LogAdd(&phonetxtotal.row(phone1)[0], xi);
         }
     }
 
@@ -186,7 +186,7 @@ struct BaumWelch : public HMM::BaumWelchAccum {
             double totalprior = -INFINITY;
             for (int si=0; si<model->states; si++) {
                 Accum *a = accum[si];
-                logadd(&totalprior, a->prior);
+                LogAdd(&totalprior, a->prior);
             }
 
             if (model->phonetx && model->phonetx->M == LFL_PHONES && model->phonetx->N == LFL_PHONES) {
@@ -218,7 +218,7 @@ struct BaumWelch : public HMM::BaumWelchAccum {
                     double prior = sum - lc;
                     s->emission.prior.row(i)[0] = prior < FLAGS_PriorFloor ? FLAGS_PriorFloor : prior;
 
-                    s->emission.computeNorms();
+                    s->emission.ComputeNorms();
 
                     s->prior = a->prior - totalprior;
                 }

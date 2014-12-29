@@ -86,12 +86,12 @@ int Key::F12        = 0;
 int Key::Home       = 0;
 int Key::End        = 0;
 
-const char *Clipboard::get() { return ""; }
-void Clipboard::set(const char *s) {}
-void TouchDevice::openKeyboard() {}
-void TouchDevice::closeKeyboard() {}
-void Mouse::grabFocus() {}
-void Mouse::releaseFocus() {}
+const char *Clipboard::Get() { return ""; }
+void Clipboard::Set(const char *s) {}
+void TouchDevice::OpenKeyboard() {}
+void TouchDevice::CloseKeyboard() {}
+void Mouse::GrabFocus() {}
+void Mouse::ReleaseFocus() {}
 #endif
 
 #ifdef LFL_ANDROID
@@ -136,12 +136,12 @@ int Key::F12        = -1;
 int Key::Home       = -1;
 int Key::End        = -1;
 
-const char *Clipboard::get() { return ""; }
-void Clipboard::set(const char *s) {}
-void TouchDevice::openKeyboard()  { if ( android_keyboard_toggled) return; android_toggle_keyboard(); android_keyboard_toggled=1; }
-void TouchDevice::closeKeyboard() { if (!android_keyboard_toggled) return; android_toggle_keyboard(); android_keyboard_toggled=0; }
-void Mouse::grabFocus() {}
-void Mouse::releaseFocus() {}
+const char *Clipboard::Get() { return ""; }
+void Clipboard::Set(const char *s) {}
+void TouchDevice::OpenKeyboard()  { if ( android_keyboard_toggled) return; android_toggle_keyboard(); android_keyboard_toggled=1; }
+void TouchDevice::CloseKeyboard() { if (!android_keyboard_toggled) return; android_toggle_keyboard(); android_keyboard_toggled=0; }
+void Mouse::GrabFocus() {}
+void Mouse::ReleaseFocus() {}
 #endif
 
 #ifdef LFL_IPHONE
@@ -185,12 +185,12 @@ int Key::Home       = -1;
 int Key::End        = -1;
 
 int iphone_show_keyboard();
-const char *Clipboard::get() { return ""; }
-void Clipboard::set(const char *s) {}
-void TouchDevice::openKeyboard() { iphone_show_keyboard(); }
-void TouchDevice::closeKeyboard() {}
-void Mouse::grabFocus() {}
-void Mouse::releaseFocus() {}
+const char *Clipboard::Get() { return ""; }
+void Clipboard::Set(const char *s) {}
+void TouchDevice::OpenKeyboard() { iphone_show_keyboard(); }
+void TouchDevice::CloseKeyboard() {}
+void Mouse::GrabFocus() {}
+void Mouse::ReleaseFocus() {}
 #endif
 
 #ifdef LFL_QT
@@ -237,10 +237,10 @@ int Key::F12        = Qt::Key_F12;
 int Key::Home       = Qt::Key_Home;
 int Key::End        = Qt::Key_End;
 
-const char *Clipboard::get() { return ""; }
-void Clipboard::set(const char *s) {}
-void TouchDevice::openKeyboard() {}
-void TouchDevice::closeKeyboard() {}
+const char *Clipboard::Get() { return ""; }
+void Clipboard::Set(const char *s) {}
+void TouchDevice::OpenKeyboard() {}
+void TouchDevice::CloseKeyboard() {}
 #endif /* LFL_QT */
 
 #ifdef LFL_GLFWINPUT
@@ -326,12 +326,12 @@ int Key::F12        = GLFW_KEY_F12;
 int Key::Home       = GLFW_KEY_HOME;
 int Key::End        = GLFW_KEY_END;
 
-void TouchDevice::openKeyboard() {}
-void TouchDevice::closeKeyboard() {}
-const char *Clipboard::get()              { return glfwGetClipboardString((GLFWwindow*)screen->id   ); }
-void        Clipboard::set(const char *s) {        glfwSetClipboardString((GLFWwindow*)screen->id, s); }
-void Mouse::grabFocus()    { glfwSetInputMode((GLFWwindow*)screen->id, GLFW_CURSOR, GLFW_CURSOR_DISABLED); app->grabMode.On();  screen->cursor_grabbed=true;  }
-void Mouse::releaseFocus() { glfwSetInputMode((GLFWwindow*)screen->id, GLFW_CURSOR, GLFW_CURSOR_NORMAL);   app->grabMode.Off(); screen->cursor_grabbed=false; }
+void TouchDevice::OpenKeyboard() {}
+void TouchDevice::CloseKeyboard() {}
+const char *Clipboard::Get()              { return glfwGetClipboardString((GLFWwindow*)screen->id   ); }
+void        Clipboard::Set(const char *s) {        glfwSetClipboardString((GLFWwindow*)screen->id, s); }
+void Mouse::GrabFocus()    { glfwSetInputMode((GLFWwindow*)screen->id, GLFW_CURSOR, GLFW_CURSOR_DISABLED); app->grab_mode.On();  screen->cursor_grabbed=true;  }
+void Mouse::ReleaseFocus() { glfwSetInputMode((GLFWwindow*)screen->id, GLFW_CURSOR, GLFW_CURSOR_NORMAL);   app->grab_mode.Off(); screen->cursor_grabbed=false; }
 #endif
 
 #ifdef LFL_SDLINPUT
@@ -411,20 +411,20 @@ int Key::F12        = SDLK_F12;
 int Key::Home       = SDLK_HOME;
 int Key::End        = SDLK_END;
 
-const char *Clipboard::get() { return SDL_GetClipboardText(); }
-void Clipboard::set(const char *s) { SDL_SetClipboardText(s); }
-void TouchDevice::closeKeyboard() {
+const char *Clipboard::Get() { return SDL_GetClipboardText(); }
+void Clipboard::Set(const char *s) { SDL_SetClipboardText(s); }
+void TouchDevice::CloseKeyboard() {
 #ifdef LFL_IPHONE 
     SDL_iPhoneKeyboardHide((SDL_Window*)screen->id);
 #endif
 }
-void TouchDevice::openKeyboard() {
+void TouchDevice::OpenKeyboard() {
 #ifdef LFL_IPHONE 
     SDL_iPhoneKeyboardShow((SDL_Window*)screen->id);
 #endif
 }
-void Mouse::grabFocus()    { SDL_ShowCursor(0); SDL_SetWindowGrab((SDL_Window*)screen->id, SDL_TRUE);  SDL_SetRelativeMouseMode(SDL_TRUE);  app->grabMode.On();  screen->cursor_grabbed=true; }
-void Mouse::releaseFocus() { SDL_ShowCursor(1); SDL_SetWindowGrab((SDL_Window*)screen->id, SDL_FALSE); SDL_SetRelativeMouseMode(SDL_FALSE); app->grabMode.Off(); screen->cursor_grabbed=false; }
+void Mouse::GrabFocus()    { SDL_ShowCursor(0); SDL_SetWindowGrab((SDL_Window*)screen->id, SDL_TRUE);  SDL_SetRelativeMouseMode(SDL_TRUE);  app->grabMode.On();  screen->cursor_grabbed=true; }
+void Mouse::ReleaseFocus() { SDL_ShowCursor(1); SDL_SetWindowGrab((SDL_Window*)screen->id, SDL_FALSE); SDL_SetRelativeMouseMode(SDL_FALSE); app->grabMode.Off(); screen->cursor_grabbed=false; }
 #endif /* LFL_SDLINPUT */
 
 int Input::Init() {
@@ -568,9 +568,9 @@ int Input::KeyEventDispatch(int key, int keymod, bool down) {
         else if (key == Key::Tab)                             { g->Tab();                    return 1; }
         else if (key == Key::Escape)                          { g->Escape();                 return 1; }
 #ifdef __APPLE__
-        else if (key == 'v' && CmdKeyDown())                  { g->Input(Clipboard::get());  return 1; }
+        else if (key == 'v' && CmdKeyDown())                  { g->Input(Clipboard::Get());  return 1; }
 #else                                                     
-        else if (key == 'v' && CtrlKeyDown())                 { g->Input(Clipboard::get());  return 1; }
+        else if (key == 'v' && CtrlKeyDown())                 { g->Input(Clipboard::Get());  return 1; }
 #endif
         else if (CmdKeyDown()) /* skip command keys */        { g->events.total--;           return 0; }
         else if (key >= 0 && key<128)                         { g->Input(key);               return 1; }
@@ -585,7 +585,7 @@ int Input::KeyEventDispatch(int key, int keymod, bool down) {
 void Input::MouseMove(int x, int y, int dx, int dy) {
     screen->events.mouse_move++;
     screen->events.gui += MouseEventDispatch(Bind::MOUSEMOTION, x, y, 0);
-    if (!app->grabMode.Enabled()) return;
+    if (!app->grab_mode.Enabled()) return;
     if (dx<0) screen->camMain->YawLeft  (-dx); else if (dx>0) screen->camMain->YawRight(dx);
     if (dy<0) screen->camMain->PitchDown(-dy); else if (dy>0) screen->camMain->PitchUp (dy);
 }
@@ -710,7 +710,7 @@ MovieAsset *Shell::movieasset(const string &n) { return movieassets ? (*movieass
 
 bool Shell::FGets() {
     char buf[1024];
-    if (!input_fgets(buf, sizeof(buf))) return false;
+    if (!LFL::FGets(buf, sizeof(buf))) return false;
     chompnl(buf, strlen(buf));
     Shell::Run(buf);
     return true;
@@ -744,12 +744,12 @@ void Shell::Run(const string &text) {
     INFO("unkown cmd '", cmd, "'");
 }
 
-void Shell::mousein (const vector<string>&) { Mouse::grabFocus(); }
-void Shell::mouseout(const vector<string>&) { Mouse::releaseFocus(); }
+void Shell::mousein (const vector<string>&) { Mouse::GrabFocus(); }
+void Shell::mouseout(const vector<string>&) { Mouse::ReleaseFocus(); }
 
 void Shell::quit(const vector<string>&) { app->run = false; }
 void Shell::console(const vector<string>&) { screen->console->Toggle(); }
-void Shell::showkeyboard(const vector<string>&) { TouchDevice::openKeyboard(); }
+void Shell::showkeyboard(const vector<string>&) { TouchDevice::OpenKeyboard(); }
 
 void Shell::browser(const vector<string> &arg) {
     Asset *a = app->shell.asset("browser");
@@ -760,8 +760,8 @@ void Shell::browser(const vector<string> &arg) {
 }
 
 void Shell::clipboard(const vector<string> &a) {
-    if (a.empty()) INFO(Clipboard::get());
-    else Clipboard::set(Join(a, " ").c_str());
+    if (a.empty()) INFO(Clipboard::Get());
+    else Clipboard::Set(Join(a, " ").c_str());
 }
 
 void Shell::consolecolor(const vector<string>&) {
@@ -790,8 +790,8 @@ void Shell::fillmode(const vector<string>&) {
 #endif
 }
 
-void Shell::grabmode(const vector<string> &a) { if (app->grabMode.Next()) mousein(a); else mouseout(a); }
-void Shell::texmode(const vector<string>&) { if (app->texMode.Next()) screen->gd->EnableTexture(); else screen->gd->DisableTexture(); }
+void Shell::grabmode(const vector<string> &a) { if (app->grab_mode.Next()) mousein(a); else mouseout(a); }
+void Shell::texmode(const vector<string>&) { if (app->tex_mode.Next()) screen->gd->EnableTexture(); else screen->gd->DisableTexture(); }
 void Shell::swapaxis(const vector<string>&) { screen->SwapAxis(); }
 
 void Shell::campos(const vector<string>&) {
@@ -967,7 +967,7 @@ void Shell::Slider(const vector<string> &a) {
 }
 
 void Shell::Edit(const vector<string> &a) {
-    string s = LocalFile::filecontents(StrCat(ASSETS_DIR, "lfapp_vertex.glsl"));
+    string s = LocalFile::FileContents(StrCat(ASSETS_DIR, "lfapp_vertex.glsl"));
     new EditorDialog(screen, Fonts::Default(), new BufferFile(s.c_str(), s.size()));
 }
 

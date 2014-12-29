@@ -65,10 +65,10 @@ struct AcousticEventDetector {
         else if (t == 2) return (sl-nl)/nl;
         else if (t == 3) return sl2/nl;
         else if (t == 4) return (sl2-nl)/nl;
-        else if (t == 5) return rsl.avg() / rnl.avg();
-        else if (t == 6) return (rsl.avg() - rnl.avg()) / rnl.avg();
-        else if (t == 7) return rsl2.avg() / rnl.avg();
-        else if (t == 8) return (rsl2.avg() - rnl.avg()) / rnl.avg();
+        else if (t == 5) return rsl.Avg() / rnl.Avg();
+        else if (t == 6) return (rsl.Avg() - rnl.Avg()) / rnl.Avg();
+        else if (t == 7) return rsl2.Avg() / rnl.Avg();
+        else if (t == 8) return (rsl2.Avg() - rnl.Avg()) / rnl.Avg();
         else FATAL("unknown SNR_id ", t);
     }
 
@@ -93,7 +93,7 @@ struct AcousticEventDetector {
 
     void signal(long long begin, long long end) {
         if (!sink || speech_client_manual()) return;
-        alloc.reset();
+        alloc.Reset();
 
         int frames = end - begin + 1;
         int offset = total - begin;
@@ -128,7 +128,7 @@ struct AcousticEventDetector {
 
     /* for each feat_hop */
     void update(RingBuf::Handle *in) {
-        alloc.reset();
+        alloc.Reset();
 
         /* burn 10 frames on init */
         if (++initcount < 10) return;
@@ -152,25 +152,25 @@ struct AcousticEventDetector {
 
         /* track average zcr and standard deviation */
         float zcrdist = pow(zcravg - ZCR, 2);
-        zcravg = avg_cumulative(zcravg, ZCR, ++zcrcount);
-        zcrdev = avg_cumulative(zcrdev, zcrdist, zcrcount);
+        zcravg = CumulativeAvg(zcravg, ZCR, ++zcrcount);
+        zcrdev = CumulativeAvg(zcrdev, zcrdist, zcrcount);
 
         /* track average smoothed zcr and standard deviation */
         float szcrdist = pow(szcravg - SZCR, 2);
-        szcravg = avg_cumulative(szcravg, SZCR, ++szcrcount);
-        szcrdev = avg_cumulative(szcrdev, szcrdist, szcrcount);
+        szcravg = CumulativeAvg(szcravg, SZCR, ++szcrcount);
+        szcrdev = CumulativeAvg(szcrdev, szcrdist, szcrcount);
 
         /* track min & max energy */
         if (PE < emin) emin = PE;
         if (PE > emax) emax = PE;
 
         /* connect remin to PEdevB and remax to PEdevA with springs */
-        float PEdevB = rnl.avg();
-        float PEdevA = rnl.avg() * 2;
-        remin.add(PE < PEdevB ? PE : PEdevB);
-        remax.add(PE > PEdevA ? PE : PEdevA);
-        float min = remin.count == remin.window ? remin.avg() : emin;
-        float max = remax.count == remax.window ? remax.avg() : emax;
+        float PEdevB = rnl.Avg();
+        float PEdevA = rnl.Avg() * 2;
+        remin.Add(PE < PEdevB ? PE : PEdevB);
+        remax.Add(PE > PEdevA ? PE : PEdevA);
+        float min = remin.count == remin.window ? remin.Avg() : emin;
+        float max = remax.count == remax.window ? remax.Avg() : emax;
 
         /* pass thru */
         if (speech_client_flood()) return signal(total, total);
@@ -178,10 +178,10 @@ struct AcousticEventDetector {
         /* burn 10 more frames on init */
         if (total < 10) {
             float PEfakeA=min*2, PEfakeB=min;
-            sl = avg_cumulative(sl, PEfakeA, ++slcount);
-            nl = avg_cumulative(nl, PEfakeB, ++nlcount);
-            rsl.add(PEfakeA);
-            rnl.add(PEfakeB);
+            sl = CumulativeAvg(sl, PEfakeA, ++slcount);
+            nl = CumulativeAvg(nl, PEfakeB, ++nlcount);
+            rsl.Add(PEfakeA);
+            rnl.Add(PEfakeB);
             return;
         }
 
@@ -192,15 +192,15 @@ struct AcousticEventDetector {
 
         /* track t1 crossings */
         if (PE > t1) {
-            sl = avg_cumulative(sl, PE, ++slcount);
-            rsl.add(PE);
+            sl = CumulativeAvg(sl, PE, ++slcount);
+            rsl.Add(PE);
 
             t1countA++;
             if (t1countB > 0) { t1countB=0; t1A=total; }
         }
         else {
-            nl = avg_cumulative(nl, PE, ++nlcount);
-            rnl.add(PE);
+            nl = CumulativeAvg(nl, PE, ++nlcount);
+            rnl.Add(PE);
 
             t1countB++;
             if (t1countA > 0) { t1countA=0; t1B=total; }
@@ -208,8 +208,8 @@ struct AcousticEventDetector {
 
         /* track t2 crossings */
         if (PE > t2 && slcount > 0) {
-            sl2 = avg_cumulative(sl2, PE, ++sl2count);
-            rsl2.add(PE);
+            sl2 = CumulativeAvg(sl2, PE, ++sl2count);
+            rsl2.Add(PE);
 
             t2countA++;
             if (t2countB > 0) { t2countB=0; t2A=total; }
@@ -312,7 +312,7 @@ struct AcousticEventDetector {
 #ifdef __LFL_LFAPP_GUI_H__
 struct AcousticEventGUI {
     static void Draw(AcousticEventDetector *AED, Box win, bool flip=false) {
-        AED->alloc.reset();
+        AED->alloc.Reset();
 
         int maxverts = AED->words.size()*6+speech_client_flood()*2;
         Geometry *geom = new Geometry(GraphicsDevice::Lines, maxverts, (v2*)0, 0, 0, Color(1.0,1.0,1.0));

@@ -149,9 +149,9 @@ void Scene::Draw(Asset *a, Entity *e) {
     screen->gd->PushMatrix();
 
     if (a->translate) {
-        v3 ort = e->ort; ort.norm();
-        v3 up = e->up; up.norm();
-        v3 right = v3::cross(e->ort, e->up); right.norm();
+        v3 ort = e->ort; ort.Norm();
+        v3 up = e->up; up.Norm();
+        v3 right = v3::Cross(e->ort, e->up); right.Norm();
 
         float m[16] = { right.x, right.y, right.z, 0,
                         up.x,    up.y,    up.z,    0,
@@ -214,7 +214,7 @@ void Scene::DrawParticles(Entity *e, unsigned dt) {
     particles->ort = e->ort;
     particles->updir = e->up;
     particles->vel = e->ort;
-    particles->vel.scale(-0.01);
+    particles->vel.Scale(-0.01);
     particles->Update(dt,0,0,0);
     particles->Draw();
     screen->gd->EnableDepthTest();
@@ -226,7 +226,7 @@ void Scene::ZSortDraw(Filter *filter, unsigned dt) {
         Entity *e = *j;
         if (filter && filter->filter(e)) continue;
 
-        float zangle = v3::dot(screen->camMain->ort, e->ort);
+        float zangle = v3::Dot(screen->camMain->ort, e->ort);
         if (zangle <= 0) { DrawParticles(e, dt); last_asset=0; }
 
         if (e->asset != last_asset) { Select(e->asset); last_asset = e->asset; }
@@ -245,7 +245,7 @@ void Scene::ZSort(const vector<Asset> &assets) {
         EntityVector &eav = assetMap[a->name];
         for (EntityVector::const_iterator j = eav.begin(); j != eav.end(); j++) {
              Entity *e = *j;
-             e->zsort = v3::dot(screen->camMain->ort, e->pos);
+             e->zsort = v3::Dot(screen->camMain->ort, e->pos);
              zsortVector.push_back(e);
         }
     }

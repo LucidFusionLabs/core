@@ -21,7 +21,7 @@ struct BulkResolver {
     File *out; RecursiveResolver *rr; int min_rr_completed;
     BulkResolver() : out(0), rr(0), min_rr_completed(0) {}
     void OpenLog(const string &fn) {
-        if (LocalFile(fn, "r").opened()) FATAL(fn, " already exists");
+        if (LocalFile(fn, "r").Opened()) FATAL(fn, " already exists");
         out = new LocalFile(fn, "w");
     }
 
@@ -59,7 +59,7 @@ struct BulkResolver {
                 StrAppend(&ret, "; MX", i->first, "=", hn, ":", i->second.second);
             }
             ret += "\n";
-            if (parent->out) parent->out->write(ret);
+            if (parent->out) parent->out->Write(ret);
         }
         void ResponseCB(IPV4::Addr addr, DNS::Response *res) {
             bool resolved = (addr != -1 && res);
@@ -75,7 +75,7 @@ struct BulkResolver {
     void AddQueriesFromFile(const string &fn) {
         int start_size = queue.size();
         LocalFile file(fn, "r");
-        for (const char *line = file.nextline(); line; line = file.nextline()) {
+        for (const char *line = file.NextLine(); line; line = file.NextLine()) {
             queue.push_back(new Query(tolower(line), this)); 
         }
         INFO("Added ", queue.size() - start_size, " from ", fn); 
@@ -100,7 +100,7 @@ int frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample
     if (!FLAGS_resolve.empty()) bulk_resolver.Frame();
     
     char buf[256];
-    if (input_fgets(buf, sizeof(buf))) ERROR("FPS=", FPS(), bulk_resolver.StatsLine());
+    if (FGets(buf, sizeof(buf))) ERROR("FPS=", FPS(), bulk_resolver.StatsLine());
     return 0;
 }
 

@@ -65,9 +65,9 @@ struct RecognitionModel {
                                source, &cifilter, 0, 0, WFST::ShortestDistance::Transduce, 32);
 
         Semiring *K = Singleton<TropicalSemiring>::Get();
-        int out=0; double val=K->zero(); 
+        int out=0; double val=K->Zero(); 
         for (WFST::ShortestDistance::PathMap::iterator i = dist.begin(); i != dist.end(); i++)
-            if ((*i).second.out.size() == 1 && K->add((*i).second.D, val) != val) { 
+            if ((*i).second.out.size() == 1 && K->Add((*i).second.D, val) != val) { 
                 out = (*i).second.out[0];
                 val = (*i).second.D;
             }
@@ -163,10 +163,10 @@ struct RecognitionHMM {
         HMM::ActiveStateIndex beam;
         double *emission;
 
-        ~Emission() { if (alloc) alloc->free(emission); }
+        ~Emission() { if (alloc) alloc->Free(emission); }
         Emission(RecognitionModel *M, HMM::Observation *O, TransitMap *T, Allocator *Alloc=0, bool UsePrior=false) :
             model(M), observed(O), transit(T), UsePriorProb(UsePrior),
-            alloc(Alloc?Alloc:Singleton<MallocAlloc>::Get()), beam(model->emissions, 1, model->emissions, 0, alloc), emission((double*)alloc->malloc(model->emissions*sizeof(double))) {}
+            alloc(Alloc?Alloc:Singleton<MallocAlloc>::Get()), beam(model->emissions, 1, model->emissions, 0, alloc), emission((double*)alloc->Malloc(model->emissions*sizeof(double))) {}
 
         double *observation(int t) { return observed->observation(t); }
         int observations() { return observed->observations(); }
@@ -276,7 +276,7 @@ struct Recognizer {
 
     static matrix<HMM::Token> *decodeFeatures(RecognitionModel *model, Matrix *features, double beamWidth,
                                               bool UseTransit=0, double *vprobout=0, TokenNameCB<HMM::Token> *nameCB=0) {
-        if (!dim_check("decodeFeatures", features->N, model->acousticModel.state[0].emission.mean.N)) return 0;
+        if (!DimCheck("decodeFeatures", features->N, model->acousticModel.state[0].emission.mean.N)) return 0;
         matrix<HMM::Token> *viterbi = new matrix<HMM::Token>(features->M, 1, HMM::Token());
         double vprob = RecognitionHMM::viterbi(model, features, viterbi, beamWidth, UseTransit, nameCB);
         if (vprobout) *vprobout = vprob;
@@ -379,9 +379,9 @@ struct Recognizer {
     static double wordErrorRate(const RecognitionModel *model, string gold, string x) {
         vector<int> A, B;
         LFL::StringWordIter aw(gold.c_str()), bw(x.c_str());
-        for (const char *w = aw.next(); w; w = aw.next()) A.push_back(model->recognitionNetworkOut.id(tolower(w).c_str()));
-        for (const char *w = bw.next(); w; w = bw.next()) B.push_back(model->recognitionNetworkOut.id(tolower(w).c_str()));
-        return (double)levenshtein(A, B) / A.size();
+        for (const char *w = aw.Next(); w; w = aw.Next()) A.push_back(model->recognitionNetworkOut.id(tolower(w).c_str()));
+        for (const char *w = bw.Next(); w; w = bw.Next()) B.push_back(model->recognitionNetworkOut.id(tolower(w).c_str()));
+        return (double)Levenshtein(A, B) / A.size();
     }
 };
 

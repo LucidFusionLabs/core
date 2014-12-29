@@ -38,7 +38,7 @@ AssetMap asset;
 int Frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample, int flag) {
 #ifdef LFL_CLING
     char buf[8192]={0}, result[512]={0}, *space;
-    if (!input_fgets(buf, sizeof(buf))) return false;
+    if (!FGets(buf, sizeof(buf))) return false;
     // cling::Interpreter::getSelf()->process(buf);
 #else
     app->shell.FGets();

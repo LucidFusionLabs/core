@@ -26,7 +26,7 @@ struct MailFilter {
         bool h = type == HEADER, d = type == DEFAULT;
         static const char *typestr[] = { "", "MAIL_FROM", "RCPT_TO", "HEADER", "CONTENT", "DEFAULT" };
         string t = (type > 0 && type < 6) ? string(typestr[type]) : StringPrintf("%d", type);
-        return StrCat(t, h?"=":"", h?header:"", d?": ":": /", regex, d?"":"/ ", out?out->filename():"/dev/null");
+        return StrCat(t, h?"=":"", h?header:"", d?": ":": /", regex, d?"":"/ ", out?out->Filename():"/dev/null");
     }
 };
 
@@ -38,38 +38,38 @@ struct ReceiverConfig {
     ReceiverConfig() { outputs["/dev/null"] = 0; }
 
     void OpenDomains(File *f) {
-        for (const char *line = f->nextline(); line; line = f->nextline()) domains.push_back(tolower(line));
+        for (const char *line = f->NextLine(); line; line = f->NextLine()) domains.push_back(tolower(line));
     }
 
     void OpenFilters(File *f) {
-        for (const char *word, *line = f->nextline(); line; line = f->nextline()) {
+        for (const char *word, *line = f->NextLine(); line; line = f->NextLine()) {
             MailFilter filter;
 
             StringWordIter words(line, f->nr.record_len, isspace, isint<'/'>);
-            if (!(word = words.next()) || !word[0] || word[0] == '#') continue;
+            if (!(word = words.Next()) || !word[0] || word[0] == '#') continue;
             if      (!strcasecmp(word, "Catch-all")) { filter.type=MailFilter::DEFAULT; }
             else if (!strcasecmp(word, "mail-from")) { filter.type=MailFilter::MAIL_FROM; }
             else if (!strcasecmp(word, "rcpt-to"))   { filter.type=MailFilter::RCPT_TO; }
-            else if (!strcasecmp(word, "header"))    { filter.type=MailFilter::HEADER; filter.header=BlankNull(words.next()); }
+            else if (!strcasecmp(word, "header"))    { filter.type=MailFilter::HEADER; filter.header=BlankNull(words.Next()); }
             else if (!strcasecmp(word, "content"))   { filter.type=MailFilter::CONTENT; }
             else FATAL("Parse failed '", line, "'");
 
             if (filter.type != MailFilter::DEFAULT) {
-                string regex = BlankNull(words.next());
+                string regex = BlankNull(words.Next());
                 CHECK(!regex.empty());
                 CHECK_EQ(regex[0],              '/');
                 CHECK_EQ(regex[regex.size()-1], '/');
                 filter.regex = regex.substr(1, regex.size()-2);
             }
 
-            string filename = BlankNull(words.next());
+            string filename = BlankNull(words.Next());
             CHECK(!filename.empty());
 
             map<string, File*>::const_iterator out_i = outputs.find(filename);
             if (out_i != outputs.end()) filter.out = out_i->second;
             else {
                 LocalFile *lfo = new LocalFile(filename, "a");
-                if (!lfo->opened()) FATAL("open ", filename, " failed");
+                if (!lfo->Opened()) FATAL("open ", filename, " failed");
                 outputs[filename] = lfo;
                 filter.out = lfo;
             }
@@ -122,7 +122,7 @@ struct MySMTPServer : public SMTPServer {
     void Open(const string &dom) {
         domain = dom;
         for (map<string, File*>::const_iterator i = receiver_config.outputs.begin(); i != receiver_config.outputs.end(); ++i) 
-            if (i->second) mbox_wrote[i->second->filename()] = 0;
+            if (i->second) mbox_wrote[i->second->Filename()] = 0;
 
         vector<const long long *> table; vector<string> labels;
         for (map<string, long long>::const_iterator i = mbox_wrote.begin(); i != mbox_wrote.end(); ++i) {
@@ -136,9 +136,9 @@ struct MySMTPServer : public SMTPServer {
         File *outfile = out ? out->out : 0;
         if (outfile) {
             MailboxWrite(c, mail, outfile);
-            mbox_wrote[outfile->filename()]++;
+            mbox_wrote[outfile->Filename()]++;
         }
-        INFO("ReceiveMail FROM=", mail.mail_from, ", TO=", mail.rcpt_to, " OUT=", outfile?outfile->filename():"/dev/null");
+        INFO("ReceiveMail FROM=", mail.mail_from, ", TO=", mail.rcpt_to, " OUT=", outfile?outfile->Filename():"/dev/null");
     }
     string StatusLine() const {
         string ret = StrCat("connections=", conn.size());;
@@ -147,16 +147,16 @@ struct MySMTPServer : public SMTPServer {
         return ret;
     }
     static void MailboxWrite(Connection *c, const SMTP::Message &mail, File *out) {
-        out->write(StrCat("From MAILER-DAEMON ", localmboxtime(Now()), "\r\n"));
-        out->write(mail.content);
-        out->flush();
+        out->Write(StrCat("From MAILER-DAEMON ", localmboxtime(Now()), "\r\n"));
+        out->Write(mail.content);
+        out->Flush();
     }
 } smtp_server;
 
 int frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample, int flag) {
     smtp_server.stat_log->Update();
     char buf[256];
-    if (input_fgets(buf, sizeof(buf))) ERROR("FPS=", FPS(), ", ", smtp_server.StatusLine());
+    if (FGets(buf, sizeof(buf))) ERROR("FPS=", FPS(), ", ", smtp_server.StatusLine());
     return 0;
 }
 
@@ -188,12 +188,12 @@ int main(int argc, const char **argv) {
 
     if (!FLAGS_configuration_file.empty()) {
         LocalFile lf(FLAGS_configuration_file, "r");
-        if (lf.opened()) receiver_config.OpenFilters(&lf);
+        if (lf.Opened()) receiver_config.OpenFilters(&lf);
     }
 
     if (!FLAGS_recipients.empty()) {
         LocalFile lf(FLAGS_recipients, "r");
-        if (lf.opened()) receiver_config.OpenDomains(&lf);
+        if (lf.Opened()) receiver_config.OpenDomains(&lf);
     }
 
     HTTPServer httpd(FLAGS_gui_port, false);

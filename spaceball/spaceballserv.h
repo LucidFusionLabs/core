@@ -145,7 +145,7 @@ struct SpaceballGame : public Game {
             return 0;
         }
         Ship(Asset *a, void *b, const v3 &p, const v3 &o, const v3 &u, float YSnapped=0) : Entity("", a, p, o, u), boost(0), Ysnapped(YSnapped)
-        { body = b; color1 = Color::fade(rand(0,1)); }
+        { body = b; color1 = Color::fade(Rand(0,1)); }
     };
 
     struct StartPositions {
@@ -355,10 +355,10 @@ struct SpaceballGame : public Game {
                     float boost = min(1000.0f, ship->val_boost(&but));
                     if (!boost) {
                         e->vel = but.Acceleration(e->ort, e->up);
-                        e->vel.scale(5);
+                        e->vel.Scale(5);
                     } else {
                         e->vel = e->ort;
-                        e->vel.scale(boost / 40);
+                        e->vel.Scale(boost / 40);
                     }
 
                     if (boost > 200) e->animation.Start(AnimShipBoost);
@@ -385,7 +385,7 @@ struct SpaceballGame : public Game {
                     if (goal) ResetBall(e, goal);
                     else {
                         v3 gravity(0, -0.01f, 0);
-                        e->vel.scale(0.98);
+                        e->vel.Scale(0.98);
                         e->vel += gravity * timestep;
                     }
 
@@ -554,7 +554,7 @@ struct SpaceballBots : public GameBots {
                 float nearest_dist = INFINITY, nearest_not_behind_dist = INFINITY;
                 for (vector<Player>::iterator i = players.begin(); i != players.end(); i++) {
                     i->cover = 0;
-                    float dist = v3::dist2(i->entity->pos, carrier->pos);
+                    float dist = v3::Dist2(i->entity->pos, carrier->pos);
                     if (dist < nearest_dist) { nearest_dist = dist; nearest = &(*i); }
                     if (dist < nearest_not_behind_dist &&
                         ((not_behind_op <= 0 && i->entity->pos.z < carrier->pos.z) ||
@@ -570,7 +570,7 @@ struct SpaceballBots : public GameBots {
                 float nearest_dist = INFINITY;
                 for (vector<Player>::iterator j = players.begin(); j != players.end(); j++) {
                     if (j->cover) continue;
-                    float dist = v3::dist2(i->entity->pos, j->entity->pos);
+                    float dist = v3::Dist2(i->entity->pos, j->entity->pos);
                     if (dist < nearest_dist) { nearest_dist = dist; nearest = &(*j); }
                 }
                 if (nearest) nearest->cover = i->entity;
@@ -605,8 +605,8 @@ struct SpaceballBots : public GameBots {
 
                 Team *team = red ? &redteam : &blueteam, *opponent = red ? &blueteam : &redteam;
                 team->players.push_back(Player(*j, (Game::ConnectionData*)(*j)->userdata,
-                    v3::dist2((*j)->pos, team->goal_center),
-                    v3::dist2((*j)->pos, opponent->goal_center)));
+                    v3::Dist2((*j)->pos, team->goal_center),
+                    v3::Dist2((*j)->pos, opponent->goal_center)));
             }
         }
         if (!ball) return;
@@ -620,7 +620,7 @@ struct SpaceballBots : public GameBots {
             Team *team = red ? &redteam : &blueteam;
             for (Scene::EntityVector::iterator j = (*i).second.begin(); j != (*i).second.end(); j++) {                
                 Entity *e = *j;
-                float dist2 = v3::dist2(ball->pos, e->pos);
+                float dist2 = v3::Dist2(ball->pos, e->pos);
                 if (dist2 < team->closest_player_distance_to_ball) {
                     team->closest_player_distance_to_ball = dist2;
                     team->closest_player_to_ball = e;
@@ -671,7 +671,7 @@ struct SpaceballBots : public GameBots {
 
             /* Swarm AI: A Solution to Soccer (Kutsenok) http://www.dreamspike.com/kutsenok/attachments/File/SwarmAISoccerThesis04-_Kutsenok.pdf */
             if (my_ball) {
-                float goaldist = v3::dist2(opponent->goal_center, i->entity->pos); 
+                float goaldist = v3::Dist2(opponent->goal_center, i->entity->pos); 
                 float space = opponent->closest_player_distance_to_ball;
 
                 if (can_shoot && goaldist < AlwaysShootDistance() && (fire = Shoot(b, ball, opponent->goal_center, &buttons))) { /**/ }
@@ -684,7 +684,7 @@ struct SpaceballBots : public GameBots {
                 else {
                     v3 dribble_target = opponent->goal_center;
                     float vertical_third = SpaceballGame::FieldDefinition::get()->VerticalThird(i->entity->pos);
-                    if (vertical_third < 2 || vertical_third >= 3) dribble_target += v3(rand(0.3, 0.6), 0, 0) * (vertical_third - 1.5);
+                    if (vertical_third < 2 || vertical_third >= 3) dribble_target += v3(Rand(0.3, 0.6), 0, 0) * (vertical_third - 1.5);
                     Dribble(b, ball, dribble_target, &buttons);
                 }
             } else {
@@ -707,7 +707,7 @@ struct SpaceballBots : public GameBots {
     void Intercept(Bot *b, Entity *ball, Game::Controller *buttons) {
         v3 dir = ball->pos - b->entity->pos;
         dir.y = 0;
-        dir.norm();
+        dir.Norm();
         b->entity->ort = dir;
         buttons->SetForward();
     }
@@ -722,9 +722,9 @@ struct SpaceballBots : public GameBots {
     bool Shoot(Bot *b, Entity *ball, v3 goal_center, Game::Controller *buttons) {
         SpaceballGame *spaceball = (SpaceballGame*)world;
         v3 targ = goal_center;
-        targ.x += fabs(spaceball->goal_max_x - spaceball->goal_min_x) / 2 * rand(-1.0, 1.0);
+        targ.x += fabs(spaceball->goal_max_x - spaceball->goal_min_x) / 2 * Rand(-1.0, 1.0);
         b->entity->ort = targ - b->entity->pos;
-        b->entity->ort.norm();
+        b->entity->ort.Norm();
         return true;
     }
     bool Cover(Bot *b, Entity *ball, Entity *target, Game::Controller *buttons) {

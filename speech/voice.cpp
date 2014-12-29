@@ -25,7 +25,7 @@ namespace LFL {
 int VoiceModel::read(const char *dir) {
     string pre = "seg", post = ".mat";
     DirectoryIter d(dir, 0, pre.c_str(), post.c_str());
-    for (const char *fn = d.next(); fn; fn = d.next()) {
+    for (const char *fn = d.Next(); fn; fn = d.Next()) {
         const char *nb=fn+pre.length(), *ne=strstr(nb,post.c_str());
         int phoneme = Phoneme::id(nb, ne?ne-nb:0);
         if (phoneme == -1) continue;

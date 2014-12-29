@@ -362,7 +362,7 @@ struct RingBuf {
     RingIndex ring;
     int samplesPerSec, width, bytes;
     Allocator *alloc; char *buf; Time *stamp;
-    ~RingBuf() { alloc->free((void*)buf); alloc->free((void*)stamp); }
+    ~RingBuf() { alloc->Free((void*)buf); alloc->Free((void*)stamp); }
     RingBuf(int SPS=0, int SPB=0, int Width=0, Allocator *Alloc=0) : samplesPerSec(0), width(0), bytes(0), alloc(Alloc?Alloc:Singleton<MallocAlloc>::Get()), buf(0), stamp(0)
     { if (SPS) Resize(SPS, X_or_Y(SPB, SPS), Width); }
 
@@ -635,7 +635,7 @@ struct ProtoFile {
     File *file; int read_offset, write_offset; bool done;
     ProtoFile(const char *fn=0) : file(0) { Open(fn); }
     ~ProtoFile() { delete file; }
-    bool Opened() { return file && file->opened(); }
+    bool Opened() { return file && file->Opened(); }
     void Open(const char *fn);
     int Add(const Proto *msg, int status);
     bool Update(int offset, const ProtoHeader *ph, const Proto *msg);
@@ -789,8 +789,8 @@ struct HashMatrixT {
     }
     static double *SetBinary(File *lf, int M, int N, int hdr_size, X hash, int VPE, double *hashrow) {
         long long ind = hash % M, row_size = N * sizeof(double), offset = hdr_size + ind * row_size, ret;
-        if ((ret = lf->seek(offset, File::Whence::SET)) != offset) { ERROR("seek: ", offset,   " != ", ret); return 0; } 
-        if ((ret = lf->read(hashrow, row_size))       != row_size) { ERROR("read: ", row_size, " != ", ret); return 0; }
+        if ((ret = lf->Seek(offset, File::Whence::SET)) != offset) { ERROR("seek: ", offset,   " != ", ret); return 0; } 
+        if ((ret = lf->Read(hashrow, row_size))       != row_size) { ERROR("read: ", row_size, " != ", ret); return 0; }
 
         for (int k=0; k<N/VPE; k++) {
             int hri = k*VPE;
@@ -799,7 +799,7 @@ struct HashMatrixT {
                 continue;
             }
             int hri_offset = offset + hri * sizeof(double);
-            if ((ret = lf->seek(hri_offset, File::Whence::SET)) != hri_offset) { ERROR("seek: ", hri_offset, " != ", ret); return 0; } 
+            if ((ret = lf->Seek(hri_offset, File::Whence::SET)) != hri_offset) { ERROR("seek: ", hri_offset, " != ", ret); return 0; } 
             Assign(&hashrow[hri], hash);
             return &hashrow[hri];
         }
@@ -807,7 +807,7 @@ struct HashMatrixT {
     }
     static void SetBinaryFlush(LocalFile *lf, int VPE, const double *hashrow) {
         int write_size = VPE * sizeof(double);
-        if (lf->write(hashrow, write_size) != write_size) ERROR("read: ", write_size);
+        if (lf->Write(hashrow, write_size) != write_size) ERROR("read: ", write_size);
     }
 };
 

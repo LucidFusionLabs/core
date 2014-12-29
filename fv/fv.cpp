@@ -132,7 +132,7 @@ struct LiveSpectogram {
     void Draw(Box win, bool onoff, bool fullscreen) {
         int orientation = fullscreen ? 3 : 5;
         StringWordIter plotIter(FLAGS_plot.c_str());
-        for (const char *ploti = plotIter.next(); ploti; ploti = plotIter.next()) { 
+        for (const char *ploti = plotIter.Next(); ploti; ploti = plotIter.Next()) { 
             if (!strcmp(ploti, "sg")) {
                 if (onoff) asset("live")->tex.DrawCrimped(win, orientation, 0, -scroll);
                 else       asset("snap")->tex.DrawCrimped(win, orientation, 0, 0);

@@ -201,7 +201,7 @@ struct WavReader {
     ~WavReader() { Close(); }
     WavReader(File *F=0) { Open(F); }
     void Open(File *F);
-    void Close() { if (f) f->close(); }
+    void Close() { if (f) f->Close(); }
     int Read(RingBuf::Handle *, int offset, int size);
 };
 
@@ -352,10 +352,10 @@ template <int MP, int MH, bool PerParticleColor> struct Particles : public Parti
 
         void InitColor() {
             if (config->rand_color) {
-                color = Color(rand(config->rand_color_min.r(), config->rand_color_max.r()),
-                              rand(config->rand_color_min.g(), config->rand_color_max.g()),
-                              rand(config->rand_color_min.b(), config->rand_color_max.b()),
-                              rand(config->rand_color_min.a(), config->rand_color_max.a()));
+                color = Color(Rand(config->rand_color_min.r(), config->rand_color_max.r()),
+                              Rand(config->rand_color_min.g(), config->rand_color_max.g()),
+                              Rand(config->rand_color_min.b(), config->rand_color_max.b()),
+                              Rand(config->rand_color_min.a(), config->rand_color_max.a()));
             }
             else if (config->emitter_type & Emitter::RainbowFade) {
                 color = Color::fade(config->color_fade);
@@ -366,31 +366,31 @@ template <int MP, int MH, bool PerParticleColor> struct Particles : public Parti
         }
         void Init() {
             InitColor();
-            radius = rand(config->radius_min, config->radius_max);
-            history_len = Trails ? (int)rand(max(3.0f, config->radius_min), MaxHistory) : 1;
+            radius = Rand(config->radius_min, config->radius_max);
+            history_len = Trails ? (int)Rand(max(3.0f, config->radius_min), MaxHistory) : 1;
 
             v3 start;
             if (!config->move_with_pos) start = config->pos;
             if (config->pos_transform) {
                 const v3 &tf = (*config->pos_transform)[config->pos_transform_index++];
-                v3 right = v3::cross(config->ort, config->updir);
-                start.add(right * tf.x + config->updir * tf.y + config->ort * tf.z);
+                v3 right = v3::Cross(config->ort, config->updir);
+                start.Add(right * tf.x + config->updir * tf.y + config->ort * tf.z);
                 if (config->pos_transform_index >= config->pos_transform->size()) config->pos_transform_index = 0;
             }
-            start.add(v3::rand() * rand(0, config->rand_initpos));
+            start.Add(v3::Rand() * Rand(0, config->rand_initpos));
 
             for (int i=0; i<history_len; i++) history[i] = start;
 
             if (config->emitter_type & Emitter::Sprinkler) {
                 if (1) vel  = v3(2.0*cos(config->emitter_angle), 2.0,               2.0*sin(config->emitter_angle));
-                if (0) vel += v3(0.5*rand(1,2)-.25,              0.5*rand(1,2)-.25, 0.5*rand(1,2)-.25);
+                if (0) vel += v3(0.5*Rand(1,2)-.25,              0.5*Rand(1,2)-.25, 0.5*Rand(1,2)-.25);
             } else { 
-                vel = config->vel*25.0 + v3::rand()*rand(0, config->rand_initvel);
+                vel = config->vel*25.0 + v3::Rand()*Rand(0, config->rand_initvel);
             }
 
             remaining = 1;
             bounceage = 2;
-            maxage = rand(config->age_min, config->age_max);
+            maxage = Rand(config->age_min, config->age_max);
             dead = false;
             age = 0; 
         }
@@ -399,7 +399,7 @@ template <int MP, int MH, bool PerParticleColor> struct Particles : public Parti
             if (config->gravity) vel += v3(0, config->gravity * secs, 0);
             if (config->floor && history[0].y + vel.y < config->floorval) {
                 bounced = true;
-                vel.scale(0.75);
+                vel.Scale(0.75);
                 vel.y *= -0.5f;
             }
 
@@ -508,17 +508,17 @@ template <int MP, int MH, bool PerParticleColor> struct Particles : public Parti
         if (emitter_type & Emitter::FadeFromWhite) particle->color = Color::Interpolate(Color::white, particle->start_color, remaining);
 
         v3 p = particle->history[0];
-        if (move_with_pos) p.add(pos);
+        if (move_with_pos) p.Add(pos);
 
         v3 o1=p, o2=p, o3=p, o4=p, right, up;
 
-        if (billboard) { right = v3::cross(screen->camMain->ort, screen->camMain->up) * size; up = screen->camMain->up * size; }
+        if (billboard) { right = v3::Cross(screen->camMain->ort, screen->camMain->up) * size; up = screen->camMain->up * size; }
         else           { right = v3(size, 0, 0);                                              up = v3(0, size, 0); }
 
-        o1.add(-right + -up);
-        o2.add(-right +  up);
-        o3.add( right + -up);
-        o4.add( right +  up);
+        o1.Add(-right + -up);
+        o2.Add(-right +  up);
+        o3.Add( right + -up);
+        o4.Add( right +  up);
 
         AssignPosColor(v, o1, PerParticleColor ? &particle->color : 0, 2); v += VertFloats;
         AssignPosColor(v, o2, PerParticleColor ? &particle->color : 0, 2); v += VertFloats;
@@ -539,10 +539,10 @@ template <int MP, int MH, bool PerParticleColor> struct Particles : public Parti
             for (int i = 0; i < history_len - 1; i++) {
                 float step = 1.0f - i / (float)(history_len-1);
                 v3 dp = history[i] - history[i+1];
-                v3 perp1 = v3::cross(dp, updir);
-                v3 perp2 = v3::cross(dp, perp1);
-                perp1 = v3::cross(dp, perp2);
-                perp1.norm();
+                v3 perp1 = v3::Cross(dp, updir);
+                v3 perp2 = v3::Cross(dp, perp1);
+                perp1 = v3::Cross(dp, perp2);
+                perp1.Norm();
 
                 Color trail_color(step, step * 0.25f, 1.0 - step, step * 0.5);
                 v3 off = perp1 * (particle->radius * particle->remaining * step * 0.1);
@@ -686,7 +686,7 @@ struct Tiles {
 #define TilesMatrixIter(m) MatrixIter(m) if (Tile *tile = (Tile*)(m)->row(i)[j])
     FrameBuffer fb;
     Box current_tile;
-    Tiles(int w=256, int h=256) : W(w), H(h), mat(1,1) { CHECK(is_power_of_two(W)); CHECK(is_power_of_two(H)); }
+    Tiles(int w=256, int h=256) : W(w), H(h), mat(1,1) { CHECK(IsPowerOfTwo(W)); CHECK(IsPowerOfTwo(H)); }
 
     void Run();
     void Draw(const Box &viewport, int scrolled_x, int scrolled_y);

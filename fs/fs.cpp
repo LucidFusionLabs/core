@@ -67,8 +67,8 @@ struct SpeechDecodeSession : public HTTPServer::Resource {
         varB      (feature_rate, feature_rate*FLAGS_sample_secs, feats_dim*sizeof(double),           &once),
         backtraceB(feature_rate, feature_rate*FLAGS_sample_secs, FLAGS_BeamWidth*sizeof(HMM::Token), &once),
         viterbiB  (feature_rate, feature_rate*FLAGS_sample_secs, sizeof(HMM::Token),                 &once),
-        rollingMean    ((double*)once.malloc(sizeof(double)*feats_dim)),
-        rollingVariance((double*)once.malloc(sizeof(double)*feats_dim)),
+        rollingMean    ((double*)once.Malloc(sizeof(double)*feats_dim)),
+        rollingVariance((double*)once.Malloc(sizeof(double)*feats_dim)),
         transit(model, FLAGS_UseTransition), emit(model, &obptr, &transit), beam(model, 1, NBest, FLAGS_BeamWidth, &btptr)
     {
         memset(rollingMean,     0, sizeof(double)*feats_dim);
@@ -128,7 +128,7 @@ struct SpeechDecodeSession : public HTTPServer::Resource {
     }
 
     template <class X> HTTPServer::Response Request(X *featureData, int M, int N, long long timestamp, bool flush) {
-        alloc.reset();
+        alloc.Reset();
 
         for (int i=0; i<M; i++) {
             double *feat = (double*)featB.Write(RingBuf::Stamp, timestamp+i);
@@ -158,8 +158,8 @@ struct SpeechDecodeSession : public HTTPServer::Resource {
         }
 
         if (Features::MeanNormalization || Features::VarianceNormalization) {
-            double *rmean = (double*)alloc.malloc(feats_dim*sizeof(double));
-            double *rvariance = (double*)alloc.malloc(feats_dim*sizeof(double));
+            double *rmean = (double*)alloc.Malloc(feats_dim*sizeof(double));
+            double *rvariance = (double*)alloc.Malloc(feats_dim*sizeof(double));
             FeatureRollingMeanAndVariance(rmean, rvariance);
 
             for (/**/; feats_available > feats_normalized; feats_normalized++) {
@@ -169,7 +169,7 @@ struct SpeechDecodeSession : public HTTPServer::Resource {
         }
         else feats_normalized = feats_available;
 
-        AcousticEventHeader *response = (AcousticEventHeader*)alloc.malloc(sizeof(AcousticEventHeader) + sizeof(float)*MaxResponseWords + MaxResponseTranscript);
+        AcousticEventHeader *response = (AcousticEventHeader*)alloc.Malloc(sizeof(AcousticEventHeader) + sizeof(float)*MaxResponseWords + MaxResponseTranscript);
         response->m = 0; response->n = 2;
         float *responseV = (float*)(response+1);
         int prior_feats_processed = feats_processed, decode_end, endseq=0, endindex;

@@ -195,7 +195,7 @@ void GenerateMagicNumbers(int p, const BitBoard *occupancyMask, const vector<Bit
 
     bool fail=0;
     for (int attempts=0; /**/; ++attempts, fail=0) {
-        magicNumber = rand64() & rand64() & rand64();
+        magicNumber = Rand64() & Rand64() & Rand64();
 
         for (int i=0;          i<variationCount; i++) usedBy[i] = 0;
         for (int i=0; !fail && i<variationCount; i++) {

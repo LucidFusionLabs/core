@@ -72,7 +72,7 @@ struct HTMLParser {
     virtual void WGetContentEnd(Connection *c) {}
 
     void ParseDeferred() { Parse(deferred.data(), deferred.size()); deferred.clear(); }
-    void Parse(File *f) { for (const char *chunk = f->nextchunk(); chunk; chunk = f->nextchunk()) Parse(chunk, f->nr.record_len); }
+    void Parse(File *f) { for (const char *chunk = f->NextChunk(); chunk; chunk = f->NextChunk()) Parse(chunk, f->nr.record_len); }
     void Parse(const string &content) { return Parse(content.c_str(), content.size()); }
     void Parse(const char *input_content, int input_content_len) {
         static const char *target_charset = LFL::DOM::Encoding<Char>();

@@ -105,7 +105,7 @@ struct Senator : public Query {
     }
     int Read(Connection *c) {
         StringLineIter iter(c->rb, c->rl);
-        for (const char *line = iter.next(); line; line = iter.next()) {
+        for (const char *line = iter.Next(); line; line = iter.Next()) {
             if (FLAGS_print) INFO("Senator ", nick, " read '", line, "'");
 
             if (!strncasecmp(line, "PING ", 5))
@@ -113,12 +113,12 @@ struct Senator : public Query {
 
             if (bot) do {
                 StringWordIter words(line);
-                string source = StripColon(BlankNull(words.next()));
-                string server_cmd = BlankNull(words.next());
+                string source = StripColon(BlankNull(words.Next()));
+                string server_cmd = BlankNull(words.Next());
                 if (server_cmd != "PRIVMSG") break;
 
                 string source_nick = source.substr(0, source.find("!")); 
-                string target = BlankNull(words.next());
+                string target = BlankNull(words.Next());
                 string text = StripColon(words.offset >= 0 ? &line[words.offset] : "");
                 bot->Chat(Singleton<IRCBotServer>::Get(), c, source_nick, target, text);
             } while(0);
@@ -207,7 +207,7 @@ void MySayFile(const vector<string> &args) {
     if (!args.size()) return;
     delete SayFile;
     SayFile = new LocalFile(args[0], "r");
-    INFO("SayFile(", SayFile, ") = ", args[0], " ", SayFile->opened());
+    INFO("SayFile(", SayFile, ") = ", args[0], " ", SayFile->Opened());
 }
 
 void MyVPrefix(const vector<string> &args) {
@@ -227,7 +227,7 @@ void MyVPrefixSize(const vector<string> &args) {
 int Frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample, int flag) {
     for (Senators::iterator i = senators.begin(); i != senators.end(); i++) i->first->Heartbeat(i->second);
     static RollingAvg fps(128);
-    fps.add(clicks);
+    fps.Add(clicks);
 
     static int sayrate_hz = 10;
     static FrameRateLimitter sayrate(&sayrate_hz);
@@ -235,11 +235,11 @@ int Frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample
         sayrate_hz = FLAGS_sayfire;
         sayrate.Limit();
 
-        if (SayFile && SayFile->opened()) {
+        if (SayFile && SayFile->Opened()) {
             static string sayfilebuf;
             while (sayfilebuf.size() < FLAGS_linelen) {
-                const char *line = SayFile->nextline();
-                if (!line) { SayFile->reset(); line = SayFile->nextline(); }
+                const char *line = SayFile->NextLine();
+                if (!line) { SayFile->Reset(); line = SayFile->NextLine(); }
                 if (!line) { delete SayFile; SayFile = 0; return 0; }
                 sayfilebuf.append(line);
                 sayfilebuf += " ";

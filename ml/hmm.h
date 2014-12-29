@@ -34,7 +34,7 @@ struct HMM {
         sortPair() : val(-INFINITY), ind(-1) {}
 
         bool operator<(const sortPair &r) const {
-            int ret = doubleSort(val, r.val);
+            int ret = DoubleSort(val, r.val);
             if      (ret < 0) return true;
             else if (ret > 0) return false;
             else {
@@ -137,14 +137,14 @@ struct HMM {
             virtual void apply(ActiveState::Iterator *, TransitMap::Iterator *, double prob, int NBest, double *out, double *traceout) = 0;
         };
         struct Forward : public Interface {
-            void apply(ActiveState::Iterator *, TransitMap::Iterator *, double prob, int NBest, double *out, double *) { logadd(out, prob); }
+            void apply(ActiveState::Iterator *, TransitMap::Iterator *, double prob, int NBest, double *out, double *) { LogAdd(out, prob); }
         };
         struct Viterbi : public Interface {
             void apply(ActiveState::Iterator *Lstate, TransitMap::Iterator *Rstate, double prob, int NBest, double *out, double *trace) {
                 return apply(NBest, prob, Lstate->index, out, trace);
             }
             void apply(int NBest, double prob, int backtrace, double *out, double *trace) {
-                if (doubleSort(out[NBest-1], prob) > 0) {
+                if (DoubleSort(out[NBest-1], prob) > 0) {
                     out[NBest-1] = prob;
                     if (trace) trace[NBest-1] = backtrace;
                     if (NBest > 1) sortBest(out, trace, NBest);
@@ -156,8 +156,8 @@ struct HMM {
     struct ActiveStateIndex : public ActiveState {
         int *active, count, init_max;
 
-        ~ActiveStateIndex() { alloc->free(active); }
-        ActiveStateIndex(int NS, int NB, int BW, int InitMax=0, Allocator *Alloc=0) : ActiveState(NS, NB, BW, Alloc), active((int*)alloc->malloc(sizeof(int)*BeamWidth)), count(0), init_max(InitMax) { if (!active) FATAL(alloc->name(), " failed"); }
+        ~ActiveStateIndex() { alloc->Free(active); }
+        ActiveStateIndex(int NS, int NB, int BW, int InitMax=0, Allocator *Alloc=0) : ActiveState(NS, NB, BW, Alloc), active((int*)alloc->Malloc(sizeof(int)*BeamWidth)), count(0), init_max(InitMax) { if (!active) FATAL(alloc->Name(), " failed"); }
         int size() { 
             if (!time_index) return init_max ? init_max : NumStates;
             return count;
@@ -318,10 +318,10 @@ struct HMM {
         Algorithm::Viterbi *viterbi;
         T *active, *nextActive;
 
-        virtual ~TokenPasser() { if (alloc) { alloc->free(active); alloc->free(nextActive); } }
+        virtual ~TokenPasser() { if (alloc) { alloc->Free(active); alloc->Free(nextActive); } }
         TokenPasser(int NS, int NB, int BW, TokenBacktrace<T> *BT, int Scale=100, Allocator *Alloc=0) : ActiveState(NS, NB, BW, Alloc), backtrace(BT), num(BeamWidth*Scale),
-        count(0), nextCount(0), viterbi(Singleton<Algorithm::Viterbi>::Get()), active((T*)alloc->malloc(sizeof(T)*num)), nextActive((T*)alloc->malloc(sizeof(T)*num)) {
-            if (!active) FATAL(alloc->name(), " failed");
+        count(0), nextCount(0), viterbi(Singleton<Algorithm::Viterbi>::Get()), active((T*)alloc->Malloc(sizeof(T)*num)), nextActive((T*)alloc->Malloc(sizeof(T)*num)) {
+            if (!active) FATAL(alloc->Name(), " failed");
             clearNext();
         }
         void clearNext() { for (int i=0; i<num; i++) nextActive[i].val = -INFINITY; }
@@ -481,7 +481,7 @@ struct HMM {
         int final_state = forward(active, transit, emission, &beam, Singleton<Algorithm::Forward>::Get());
 
         double forwardTotal = -INFINITY, backwardTotal = -INFINITY;
-        for (int j=0; j<NumStates; j++) logadd(&forwardTotal, alpha->row(len-1)[j]);
+        for (int j=0; j<NumStates; j++) LogAdd(&forwardTotal, alpha->row(len-1)[j]);
         for (int j=0; j<NumStates; j++) beta->row(len-1)[j] = 0;
         if (isnan(forwardTotal) || isinf(forwardTotal)) return forwardTotal;
 
@@ -500,7 +500,7 @@ struct HMM {
                     if (!i) BWaccum->add_prior(transit->id(Lstate), LstateProb);
                     BWaccum->add_emission(transit->id(Lstate), emission->observation(i), emission->posterior(active, &LstateI), emission->prob(active, &LstateI), LstateProb);
                 }
-                if (!i) { if (!isinf(prob)) logadd(&backwardTotal, prob); continue; }
+                if (!i) { if (!isinf(prob)) LogAdd(&backwardTotal, prob); continue; }
 
                 TransitMap::Iterator RstateI;
                 for (transit->begin(&RstateI, active, &LstateI); !RstateI.done; transit->next(&RstateI)) {
@@ -512,10 +512,10 @@ struct HMM {
 
                     float prob = last_prob + trans + emit;
                     if (isinf(prob)) continue;
-                    logadd(&beta->row(i-1)[Lstate], prob);
+                    LogAdd(&beta->row(i-1)[Lstate], prob);
 
                     prob += alpha->row(i-1)[Lstate] - forwardTotal;
-                    logadd(&xi->row(Lstate)[Rstate], prob);
+                    LogAdd(&xi->row(Lstate)[Rstate], prob);
                     if (BWaccum) BWaccum->add_transition(transit->id(Lstate), transit->id(Rstate), prob);
                 }
             }

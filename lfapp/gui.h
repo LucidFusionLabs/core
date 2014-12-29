@@ -108,7 +108,7 @@ struct Widget {
         void SetText(const string &t) { text = t; Box w; font->Size(text, &w); textsize = w.Dimension(); }
         void EnableHover() { AddHoverBox(box, MouseController::CB(bind(&Button::ToggleHover, this))); }
         void ToggleHover() { hover = !hover; }
-        void Visit() { SystemBrowser::open(link.c_str()); }
+        void Visit() { SystemBrowser::Open(link.c_str()); }
 
         void Layout(Flow *flow, const point &d) { box.SetDimension(d); Layout(flow); }
         void Layout(Flow *flow) { 
@@ -189,8 +189,8 @@ struct Widget {
             bool flip = flag & Flag::Horizontal;
             int aw = dot_size, ah = dot_size;
             if (dragging) {
-                if (flip) scrolled = clamp(    (float)(gui->MousePosition().x - win.x) / win.w, 0, 1);
-                else      scrolled = clamp(1 - (float)(gui->MousePosition().y - win.y) / win.h, 0, 1);
+                if (flip) scrolled = Clamp(    (float)(gui->MousePosition().x - win.x) / win.w, 0, 1);
+                else      scrolled = Clamp(1 - (float)(gui->MousePosition().y - win.y) / win.h, 0, 1);
             }
             if (flip) gui->UpdateBoxX(win.x          + (int)((win.w - aw) * scrolled), drawbox_ind, IndexOrDefault(hitbox, 0, -1));
             else      gui->UpdateBoxY(win.top() - ah - (int)((win.h - ah) * scrolled), drawbox_ind, IndexOrDefault(hitbox, 0, -1));
@@ -198,11 +198,11 @@ struct Widget {
         }
         void SetDocHeight(int v) { doc_height = v; }
         void DragScrollDot() { dragging = true; dirty = true; }
-        void ScrollUp  () { scrolled -= increment / doc_height; clamp(&scrolled, 0, 1); dirty=true; }
-        void ScrollDown() { scrolled += increment / doc_height; clamp(&scrolled, 0, 1); dirty=true; }
+        void ScrollUp  () { scrolled -= increment / doc_height; Clamp(&scrolled, 0, 1); dirty=true; }
+        void ScrollDown() { scrolled += increment / doc_height; Clamp(&scrolled, 0, 1); dirty=true; }
         float Delta() { float ret=scrolled-last_scrolled; last_scrolled=scrolled; return ret; }
         float AddDelta(float cur_val) { 
-            scrolled = clamp(cur_val + Delta(), 0, 1);
+            scrolled = Clamp(cur_val + Delta(), 0, 1);
             if (Typed::EqualChanged(&last_scrolled, scrolled)) dirty = 1;
             return scrolled;
         }
@@ -505,13 +505,13 @@ struct Editor : public TextArea {
     float v_scrolled=0, h_scrolled=0, last_v_scrolled=0, last_h_scrolled=0;
     Editor(Window *W, Font *F, File *I) : TextArea(W, F), file(I) { line_fb.wrap=1; BuildLineMap(); }
 
-    void PageUp  () { v_scrolled = clamp(v_scrolled - 10.0/X_or_Y(wrapped_lines, 100), 0, 1); }
-    void PageDown() { v_scrolled = clamp(v_scrolled + 10.0/X_or_Y(wrapped_lines, 100), 0, 1); } 
+    void PageUp  () { v_scrolled = Clamp(v_scrolled - 10.0/X_or_Y(wrapped_lines, 100), 0, 1); }
+    void PageDown() { v_scrolled = Clamp(v_scrolled + 10.0/X_or_Y(wrapped_lines, 100), 0, 1); } 
 
     bool Wrap() const { return line_fb.wrap; }
     void BuildLineMap() {
         int ind=0, offset=0;
-        for (const char *l = file->nextlineraw(&offset); l; l = file->nextlineraw(&offset))
+        for (const char *l = file->NextLineRaw(&offset); l; l = file->NextLineRaw(&offset))
             file_line.push_back(LineOffset(offset, file->nr.record_len, TextArea::font->size,
                                            ind++, TextArea::font->Width(l)));
         wrapped_lines = file_line.size();
@@ -992,8 +992,8 @@ struct DeltaSampler {
     Timer timer; int interval; vector<string> label; vector<const Value*> input; vector<Entry> data; Entry cur;
     DeltaSampler(int I, const vector<const Value*> &in, const vector<string> &l) : interval(I), label(l), input(in) { cur.Assign(input); }
     void Update() {
-        if (timer.time() < interval) return;
-        float buckets = (float)timer.time(true) / interval;
+        if (timer.GetTime() < interval) return;
+        float buckets = (float)timer.GetTime(true) / interval;
         if (fabs(buckets - 1.0) > .5) ERROR("buckets = ", buckets);
         Entry last = cur;
         cur.Assign(input);

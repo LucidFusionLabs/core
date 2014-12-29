@@ -300,12 +300,12 @@ template <class X> struct Singleton { static X *Get() { static X instance; retur
 
 struct Allocator {
     virtual ~Allocator() {}
-    virtual const char *name() = 0;
-    virtual void *malloc(int size) = 0;
-    virtual void *realloc(void *p, int size) = 0;
-    virtual void free(void *p) = 0;
-    virtual void reset();
-#define AllocatorNew(allocator, type, constructor_args) (new((allocator)->malloc(sizeof type )) type constructor_args)
+    virtual const char *Name() = 0;
+    virtual void *Malloc(int size) = 0;
+    virtual void *Realloc(void *p, int size) = 0;
+    virtual void Free(void *p) = 0;
+    virtual void Reset();
+#define AllocatorNew(allocator, type, constructor_args) (new((allocator)->Malloc(sizeof type )) type constructor_args)
 };
 
 struct typed_ptr {
@@ -520,12 +520,12 @@ bool MainThread();
 void RunInMainThread(Callback *cb);
 double FPS();
 double CamFPS();
-void break_hook();
-void press_any_key();
-bool input_fgets(char *buf, int size);
-bool nb_fgets(FILE*, char *buf, int size);
-int nb_read(int fd, char *buf, int size);
-string nb_read(int fd, int size);
+void BreakHook();
+void PressAnyKey();
+bool FGets(char *buf, int size);
+bool NBFGets(FILE*, char *buf, int size);
+int NBRead(int fd, char *buf, int size);
+string NBRead(int fd, int size);
 const char *dldir();
 
 template <int V>          int                 isint (int N) { return N == V; }
@@ -557,12 +557,12 @@ int atoi(const short *v);
 template <int F, int T>                 int tochar (int i) { return i == F ? T :  i; }
 template <int F, int T, int F2, int T2> int tochar2(int i) { return i == F ? T : (i == F2 ? T2 : i); }
 
-int doubleSort(double a, double b);
-int doubleSort (const void *a, const void *b);
-int doubleSortR(const void *a, const void *b);
-int next_multiple_of_power_of_two(int input, int align);
-double squared(double n);
-float rand(float a, float b);
+int DoubleSort(double a, double b);
+int DoubleSort (const void *a, const void *b);
+int DoubleSortR(const void *a, const void *b);
+int NextMultipleOfPowerOfTwo(int input, int align);
+double Squared(double n);
+float Rand(float a, float b);
 
 template <class X> const X *BlankNull(const X *x) { return x ? x : StringPieceT<X>::Blank(); }
 template <class X> const X *SpellNull(const X *x) { return x ? x : StringPieceT<X>::NullSpelled(); }
@@ -740,24 +740,24 @@ const char *LocalTimeZone(Time t=0);
 bool IsDaylightSavings(Time t=0);
 
 struct NullAlloc : public Allocator {
-    const char *name() { return "NullAlloc"; }
-    void *malloc(int size) { return 0; }
-    void *realloc(void *p, int size) { return 0; }
-    void free(void *p) {}
+    const char *Name() { return "NullAlloc"; }
+    void *Malloc(int size) { return 0; }
+    void *Realloc(void *p, int size) { return 0; }
+    void Free(void *p) {}
 };
 
 struct MallocAlloc : public Allocator {
-    const char *name() { return "MallocAlloc"; }
-    void *malloc(int size);
-    void *realloc(void *p, int size);
-    void free(void *p);
+    const char *Name() { return "MallocAlloc"; }
+    void *Malloc(int size);
+    void *Realloc(void *p, int size);
+    void Free(void *p);
 };
 
 struct NewAlloc : public Allocator {
-    const char *name() { return "NewAlloc"; }
-    void *malloc(int size) { return new char[size]; }
-    void *realloc(void *p, int size) { return !p ? malloc(size) : 0; }
-    void free(void *p) { delete [] (char *)p; }
+    const char *Name() { return "NewAlloc"; }
+    void *Malloc(int size) { return new char[size]; }
+    void *Realloc(void *p, int size) { return !p ? malloc(size) : 0; }
+    void Free(void *p) { delete [] (char *)p; }
 };
 
 struct MMapAlloc : public Allocator {
@@ -769,35 +769,35 @@ struct MMapAlloc : public Allocator {
     MMapAlloc(void *Addr, long long Size) : addr(Addr), size(Size) {}
 #endif
     virtual ~MMapAlloc();
-    static MMapAlloc *open(const char *fn, const bool logerror=true, const bool readonly=true, long long size=0);
+    static MMapAlloc *Open(const char *fn, const bool logerror=true, const bool readonly=true, long long size=0);
     
-    const char *name() { return "MMapAlloc"; }
-    void *malloc(int size) { return 0; }
-    void *realloc(void *p, int size) { return 0; }
-    void free(void *p) { delete this; }
+    const char *Name() { return "MMapAlloc"; }
+    void *Malloc(int size) { return 0; }
+    void *Realloc(void *p, int size) { return 0; }
+    void Free(void *p) { delete this; }
 };
 
 template <int S> struct FixedAlloc : public Allocator {
-    const char *name() { return "FixedAlloc"; }
+    const char *Name() { return "FixedAlloc"; }
     static const int size = S;
     char buf[S]; int len;
-    FixedAlloc() { reset(); }
-    virtual void reset() { len=0; }
-    virtual void *malloc(int n) { if (len+n > size) FATALf("FixedAlloc::malloc(): %d > %d", len+n, size); char *ret = &buf[len]; len += next_multiple_of_power_of_two(n, 16); return ret; }
-    virtual void *realloc(void *p, int n) { if (p) FATALf("FixedAlloc::realoc(%p, %d)", p, size); return this->malloc(n); }
-    virtual void free(void *p) {}
+    FixedAlloc() { Reset(); }
+    virtual void Reset() { len=0; }
+    virtual void *Malloc(int n) { if (len+n > size) FATALf("FixedAlloc::malloc(): %d > %d", len+n, size); char *ret = &buf[len]; len += NextMultipleOfPowerOfTwo(n, 16); return ret; }
+    virtual void *Realloc(void *p, int n) { if (p) FATALf("FixedAlloc::realoc(%p, %d)", p, size); return this->Malloc(n); }
+    virtual void Free(void *p) {}
 };
 
 struct BlockChainAlloc : public Allocator {
-    const char *name() { return "BlockChainAlloc"; }
+    const char *Name() { return "BlockChainAlloc"; }
     struct Block { char *buf; int size, len; Block(char *B, int S) : buf(B), size(S), len(0) {} };
     vector<Block> blocks; int block_size, cur_block_ind;
     BlockChainAlloc(int s=1024*1024) : block_size(s), cur_block_ind(-1) {}
     ~BlockChainAlloc() { for (int i=0; i<blocks.size(); i++) delete [] blocks[i].buf; }
-    void reset() { for (int i=0; i<blocks.size(); i++) blocks[i].len = 0; cur_block_ind = blocks.size() ? 0 : -1; }
-    void *realloc(void *p, int n) { if (p) FATAL("BlockAlloc::realoc(", p, ", ", n, ")"); return this->malloc(n); }
-    void *malloc(int n);
-    void free(void *p) {}
+    void Reset() { for (int i=0; i<blocks.size(); i++) blocks[i].len = 0; cur_block_ind = blocks.size() ? 0 : -1; }
+    void *Realloc(void *p, int n) { if (p) FATAL("BlockAlloc::realoc(", p, ", ", n, ")"); return this->Malloc(n); }
+    void *Malloc(int n);
+    void Free(void *p) {}
 };
 
 struct ThreadLocalStorage {
@@ -841,8 +841,8 @@ struct Mutex {
     CRITICAL_SECTION impl;
     Mutex() { InitializeCriticalSection(&impl); }
     ~Mutex() { DeleteCriticalSection(&impl); }
-    void enter() { EnterCriticalSection(&impl); }
-    void leave() { LeaveCriticalSection(&impl); }
+    void Enter() { EnterCriticalSection(&impl); }
+    void Leave() { LeaveCriticalSection(&impl); }
 };
 #else /* _WIN32 */
 struct Thread {
@@ -864,8 +864,8 @@ struct Mutex {
     pthread_mutex_t impl;
     Mutex() { pthread_mutex_init(&impl, 0); }
     ~Mutex() { pthread_mutex_destroy(&impl); }
-    void enter() { pthread_mutex_lock(&impl); }
-    void leave() { pthread_mutex_unlock(&impl); }
+    void Enter() { pthread_mutex_lock(&impl); }
+    void Leave() { pthread_mutex_unlock(&impl); }
 };
 #define min(x, y) ((x) < (y) ? (x) : (y))
 #define max(x, y) ((x) > (y) ? (x) : (y))
@@ -873,8 +873,8 @@ struct Mutex {
 
 struct ScopedMutex {
     Mutex &m;
-    ScopedMutex(Mutex &M) : m(M) { m.enter(); }
-    ~ScopedMutex() { m.leave(); }
+    ScopedMutex(Mutex &M) : m(M) { m.Enter(); }
+    ~ScopedMutex() { m.Leave(); }
 };
 
 struct Process {
@@ -904,96 +904,96 @@ struct FileSuffix {
 
 struct File {
     virtual ~File() {}
-    virtual bool opened() = 0;
-    virtual void close() = 0;
-    virtual bool open(const string &path, const string &mode, bool pre_create=0) = 0;
-    virtual const char *filename() const = 0;
-    virtual int size() = 0;
-    virtual void reset() = 0;
+    virtual bool Opened() = 0;
+    virtual void Close() = 0;
+    virtual bool Open(const string &path, const string &mode, bool pre_create=0) = 0;
+    virtual const char *Filename() const = 0;
+    virtual int Size() = 0;
+    virtual void Reset() = 0;
 
     struct Whence { enum { SET=SEEK_SET, CUR=SEEK_CUR, END=SEEK_END }; int x; };
-    virtual long long seek(long long offset, int whence) = 0;
-    virtual int read(void *buf, int size) = 0;
-    virtual int write(const void *buf, int size=-1) = 0;
-    virtual bool flush() { return false; }
+    virtual long long Seek(long long offset, int whence) = 0;
+    virtual int Read(void *buf, int size) = 0;
+    virtual int Write(const void *buf, int size=-1) = 0;
+    virtual bool Flush() { return false; }
 
     struct NextRecord { 
         string buf; bool buf_dirty; int buf_offset, file_offset, record_offset, record_len;
-        NextRecord() { reset(); }
-        void reset() { buf.clear(); buf_dirty = 0; buf_offset = file_offset = record_offset = record_len = 0; }
-        void set_file_offset(int v) { file_offset = v; buf_dirty = 1; }
+        NextRecord() { Reset(); }
+        void Reset() { buf.clear(); buf_dirty = 0; buf_offset = file_offset = record_offset = record_len = 0; }
+        void SetFileOffset(int v) { file_offset = v; buf_dirty = 1; }
         typedef const char* (*NextRecordCB)(const char *, int, bool, int *);
-        const char *nextrecord(File *f, int *offset, int *nextoffset, NextRecordCB cb); 
+        const char *GetNextRecord(File *f, int *offset, int *nextoffset, NextRecordCB cb); 
     } nr;
 
-    string contents();
-    const char *nextline   (int *offset=0, int *nextoffset=0);
-    const char *nextlineraw(int *offset=0, int *nextoffset=0);
-    const char *nextchunk  (int *offset=0, int *nextoffset=0);
-    const char *nextproto  (int *offset=0, int *nextoffset=0, ProtoHeader *phout=0);
+    string Contents();
+    const char *NextLine   (int *offset=0, int *nextoffset=0);
+    const char *NextLineRaw(int *offset=0, int *nextoffset=0);
+    const char *NextChunk  (int *offset=0, int *nextoffset=0);
+    const char *NextProto  (int *offset=0, int *nextoffset=0, ProtoHeader *phout=0);
 
-    int write(const string &b) { return write(b.c_str(), b.size()); }
-    int writeproto(ProtoHeader *hdr, const Proto *msg, bool flush=0);
-    int writeproto(const ProtoHeader *hdr, const Proto *msg, bool flush=0);
-    int writeprotoflag(const ProtoHeader *hdr, bool flush=0);
+    int Write(const string &b) { return Write(b.c_str(), b.size()); }
+    int WriteProto(ProtoHeader *hdr, const Proto *msg, bool flush=0);
+    int WriteProto(const ProtoHeader *hdr, const Proto *msg, bool flush=0);
+    int WriteProtoFlag(const ProtoHeader *hdr, bool flush=0);
 
-    static bool ReadSuccess(File *f, void *out, int len) { return f->read(out, len) == len; }
-    static bool SeekSuccess(File *f, long long pos) { return f->seek(pos, Whence::SET) == pos; }
+    static bool ReadSuccess(File *f, void *out, int len) { return f->Read(out, len) == len; }
+    static bool SeekSuccess(File *f, long long pos) { return f->Seek(pos, Whence::SET) == pos; }
     static bool SeekReadSuccess(File *f, long long pos, void *out, int len) { if (!SeekSuccess(f, pos)) return false; return ReadSuccess(f, out, len); }
 };
 
 struct BufferFile : public File {
     string buf, fn; int rdo, wro;
     BufferFile(const char *in, int inlen, const char *FN=0) : buf(in, inlen), fn(FN?FN:""), rdo(0), wro(0) {}
-    ~BufferFile() { close(); }
+    ~BufferFile() { Close(); }
 
-    bool opened() { return true; }
-    bool open(const string &path, const string &mode, bool pre_create=0) { return false; }
-    const char *filename() const { return fn.c_str(); }
-    int size() { return buf.size(); }
-    void reset() { rdo=wro=0; nr.reset(); }
-    void close() { buf.clear(); reset(); }
+    bool Opened() { return true; }
+    bool Open(const string &path, const string &mode, bool pre_create=0) { return false; }
+    const char *Filename() const { return fn.c_str(); }
+    int Size() { return buf.size(); }
+    void Reset() { rdo=wro=0; nr.Reset(); }
+    void Close() { buf.clear(); Reset(); }
 
-    long long seek(long long pos, int whence);
-    int read(void *out, int size);
-    int write(const void *in, int size=-1);
+    long long Seek(long long pos, int whence);
+    int Read(void *out, int size);
+    int Write(const void *in, int size=-1);
 };
 
 struct LocalFile : public File {
     void *impl; string fn; bool writable;
-    virtual ~LocalFile() { close(); }
+    virtual ~LocalFile() { Close(); }
     LocalFile() : impl(0), writable(0) {}
-    LocalFile(const string &path, const string &mode, bool pre_create=0) : impl(0) { open(path, mode, pre_create); }
-    static int whencemap(int n);
+    LocalFile(const string &path, const string &mode, bool pre_create=0) : impl(0) { Open(path, mode, pre_create); }
+    static int WhenceMap(int n);
 
     static const char Slash;
     static bool mkdir(const string &dir, int mode);
-    static int isdirectory(const string &localfilename);
-    static string filecontents(const string &localfilename) { return LocalFile(localfilename, "r").contents(); }
-    static int writefile(const string &path, const StringPiece &sp) {
+    static int IsDirectory(const string &localfilename);
+    static string FileContents(const string &localfilename) { return LocalFile(localfilename, "r").Contents(); }
+    static int WriteFile(const string &path, const StringPiece &sp) {
         LocalFile file(path, "w");
-        return file.opened() ? file.write(sp.data(), sp.size()) : -1;
+        return file.Opened() ? file.Write(sp.data(), sp.size()) : -1;
     }
 
-    bool opened() { return impl; }
-    bool open(const string &path, const string &mode, bool pre_create=0);
-    const char *filename() const { return fn.c_str(); }
-    int size();
-    void reset();
-    void close();
+    bool Opened() { return impl; }
+    bool Open(const string &path, const string &mode, bool pre_create=0);
+    const char *Filename() const { return fn.c_str(); }
+    int Size();
+    void Reset();
+    void Close();
 
-    long long seek(long long pos, int whence);
-    int read(void *buf, int size);
-    int write(const void *buf, int size=-1);
-    bool flush();
+    long long Seek(long long pos, int whence);
+    int Read(void *buf, int size);
+    int Write(const void *buf, int size=-1);
+    bool Flush();
 };
 
 template <class X> struct IterT {
     virtual ~IterT() {}
-    virtual void reset() {}
-    virtual const X *next() = 0;
+    virtual void Reset() {}
+    virtual const X *Next() = 0;
     template <class Y> void ScanN(Y *out, int N)
-    { for (int i=0; i<N; i++) { const X *v=next(); out[i] = v ? Scannable::Scan(Y(), v): 0; } }
+    { for (int i=0; i<N; i++) { const X *v=Next(); out[i] = v ? Scannable::Scan(Y(), v): 0; } }
 };
 typedef IterT<char> Iter;
 
@@ -1006,29 +1006,29 @@ struct DirectoryIter : public Iter {
     bool init;
     DirectoryIter() : P(0), S(0), init(0) {}
     DirectoryIter(const char *path, int dirs=0, const char *FilePrefix=0, const char *FileSuffix=0);
-    const char *next();
-    static void add(void *self, const char *k, int v) { ((DirectoryIter*)self)->filemap[k] = v; }
+    const char *Next();
+    static void Add(void *self, const char *k, int v) { ((DirectoryIter*)self)->filemap[k] = v; }
 };
 
 struct FileLineIter : public Iter {
     File *f;
     FileLineIter(File *F) : f(F) {}
-    const char *next() { return f->nextline(); }
-    void reset() { f->reset(); }
+    const char *Next() { return f->NextLine(); }
+    void Reset() { f->Reset(); }
 };
 
 struct LocalFileLineIter : public Iter {
     LocalFile f;
     LocalFileLineIter(const string &path) : f(path, "r") {};
-    const char *next() { return f.nextline(); }
-    void reset() { f.reset(); }
+    const char *Next() { return f.NextLine(); }
+    void Reset() { f.Reset(); }
 };
    
 struct BufferFileLineIter : public Iter {
     BufferFile f;
     BufferFileLineIter(const char *buf, int len) : f(buf, len) {};
-    const char *next() { return f.nextline(); }
-    void reset() { f.reset(); }
+    const char *Next() { return f.NextLine(); }
+    void Reset() { f.Reset(); }
 };
 
 template <class X> struct StringLineIterT : public IterT<X> {
@@ -1039,7 +1039,7 @@ template <class X> struct StringLineIterT : public IterT<X> {
     StringLineIterT(const X *B, int L=0, int F=0) : in(B), len(L), linelen(0), offset(0), flag(F), first(1) {}
     StringLineIterT(const basic_string<X> &S, int F=0) : StringLineIterT(S.c_str(), S.size(), F) {}
     StringLineIterT() : in(0), len(0), linelen(0), offset(-1), flag(0), first(0) {}
-    const X *next();
+    const X *Next();
 };
 typedef StringLineIterT<char>  StringLineIter;
 typedef StringLineIterT<short> StringLine16Iter;
@@ -1051,8 +1051,8 @@ template <class X> struct StringWordIterT : public IterT<X> {
     struct Flag { enum { BlankLines=1, InPlace=2 }; };
     StringWordIterT(const X *instr, int len=0, int (*IsSpace)(int)=0, int(*IsQuote)(int)=0, int Flag=0);
     StringWordIterT() : in(0), len(0), wordlen(0), offset(0), IsSpace(0), flag(0) {};
-    const X *next();
-    const X *remaining();
+    const X *Next();
+    const X *Remaining();
 };
 typedef StringWordIterT<char>  StringWordIter;
 typedef StringWordIterT<short> StringWord16Iter;
@@ -1064,8 +1064,8 @@ struct IterWordIter : public Iter {
     bool own_iter;
     ~IterWordIter() { if (own_iter) delete iter; }
     IterWordIter(Iter *i, bool owner=false) : iter(i), line_count(0), own_iter(owner) {};
-    void reset() { if (iter) iter->reset(); line_count=0; }
-    const char *next();
+    void Reset() { if (iter) iter->Reset(); line_count=0; }
+    const char *Next();
 };
 
 struct ArchiveIter : public Iter {
@@ -1073,16 +1073,16 @@ struct ArchiveIter : public Iter {
     ArchiveIter(const char *path);
     ArchiveIter(){};
     ~ArchiveIter();
-    void skip();
-    const char *next();
-    long long size();
-    const void *data();
+    void Skip();
+    const char *Next();
+    long long Size();
+    const void *Data();
 };
 
 template <class X, class Y> int Split(const X *in, int (*ischar)(int), int (*isquote)(int), vector<Y> *out) {
     out->clear(); if (!in) return 0;
     StringWordIterT<X> words(in, 0, ischar, isquote);
-    for (const X *word = words.next(); word; word = words.next()) out->push_back(Scannable::Scan(Y(), word));
+    for (const X *word = words.Next(); word; word = words.Next()) out->push_back(Scannable::Scan(Y(), word));
     return out->size();
 }
 template <class X> int Split(const string   &in, int (*ischar)(int), int (*isquote)(int), vector<X> *out) { return Split<char,  X>(in.c_str(), ischar, isquote, out); }
@@ -1097,7 +1097,7 @@ template <class X> int Split(const short    *in, int (*ischar)(int),            
 template <class X> int Split(const char   *in, int (*ischar)(int), int (*isquote)(int), set<X> *out) {
     out->clear(); if (!in) return 0;
     StringWordIter words(in, 0, ischar, isquote);
-    for (const char *word = words.next(); word; word = words.next()) out->insert(Scannable::Scan(X(), word));
+    for (const char *word = words.Next(); word; word = words.Next()) out->insert(Scannable::Scan(X(), word));
     return out->size();
 }
 template <class X> int Split(const char   *in, int (*ischar)(int),                      set<X> *out) { return Split(in, ischar, NULL, out); }
@@ -1106,12 +1106,12 @@ template <class X> int Split(const string &in, int (*ischar)(int),              
 
 struct Timer {
     Time begin;
-    Timer() { reset(); }
-    Time reset() { Time last_begin=begin; begin=Now(); return last_begin; }
-    Time time() const { return Now() - begin; }
-    Time time(bool do_reset) {
-        if (!do_reset) return time();
-        Time last_begin = reset();
+    Timer() { Reset(); }
+    Time Reset() { Time last_begin=begin; begin=Now(); return last_begin; }
+    Time GetTime() const { return Now() - begin; }
+    Time GetTime(bool do_reset) {
+        if (!do_reset) return GetTime();
+        Time last_begin = Reset();
         return max(0LL, begin - last_begin);
     }
 };
@@ -1125,7 +1125,7 @@ struct PerformanceTimers {
     vector<Accumulator> timers; Timer cur_timer; int cur_timer_id;
     PerformanceTimers() { cur_timer_id = Create("Default"); }
     int Create(const string &n) { timers.push_back(Accumulator(n)); return timers.size()-1; }
-    void AccumulateTo(int timer_id) { timers[cur_timer_id].time += cur_timer.time(true); cur_timer_id = timer_id; }
+    void AccumulateTo(int timer_id) { timers[cur_timer_id].time += cur_timer.GetTime(true); cur_timer_id = timer_id; }
     string DebugString() { string v; for (int i = 0; i < timers.size(); i++) StrAppend(&v, timers[i].name, " ", timers[i].time / 1000.0, "\n"); return v; }
 };
 
@@ -1138,7 +1138,7 @@ struct Module {
 
 struct FrameFlag { enum { DontSkip=8 }; };
 typedef function<int (LFL::Window*, unsigned, unsigned, bool, int)> FrameCB;
-void default_lfapp_window_closed_cb();
+void DefaultLFAppWindowClosedCB();
 }; // namespace LFL
 
 #include "lfapp/math.h"
@@ -1157,8 +1157,8 @@ struct MessageQueue {
     struct Entry { int id; void *opaque; };
     deque<Entry> queue;
     Mutex mutex;
-    void write(int n, void *x) { ScopedMutex sm(mutex); Entry e = { n, x }; queue.push_back(e); }
-    int read(void** out) { ScopedMutex sm(mutex); if (!queue.size()) return 0; Entry e = PopBack(queue); *out = e.opaque; return e.id; }
+    void Write(int n, void *x) { ScopedMutex sm(mutex); Entry e = { n, x }; queue.push_back(e); }
+    int Read(void** out) { ScopedMutex sm(mutex); if (!queue.size()) return 0; Entry e = PopBack(queue); *out = e.opaque; return e.id; }
 };
 
 struct ThreadPool {
@@ -1179,10 +1179,10 @@ struct ThreadPool {
     void Start() { for (int i=0, n=thread.size(); i<n; i++) thread[i]->Start(); }
     void Stop()  { for (int i=0, n=thread.size(); i<n; i++) thread[i]->Wait();  }
     void Write(int mid, void *m) {
-        queue[next_thread]->write(mid, m);
+        queue[next_thread]->Write(mid, m);
         next_thread = (next_thread + 1) % thread.size();
     }
-    static const int messageQueueCallback = 1;
+    static const int message_queue_callback = 1;
     static int HandleMessages(void *q);
     static int HandleMessagesLoop(void *q);
 };
@@ -1191,17 +1191,17 @@ struct FrameRateLimitter {
     int *target_hz; float avgframe; Timer timer; RollingAvg sleep_bias;
     FrameRateLimitter(int *HZ) : target_hz(HZ), avgframe(0), sleep_bias(32) {}
     void Limit() {
-        int since = timer.time(true);
-        int targetframe = (int)(1000.0 / *target_hz), sleep = (int)max(0.0, targetframe - since - sleep_bias.avg());
-        if (sleep) { Msleep(sleep); sleep_bias.add(timer.time(true) - sleep); }
+        int since = timer.GetTime(true);
+        int targetframe = (int)(1000.0 / *target_hz), sleep = (int)max(0.0, targetframe - since - sleep_bias.Avg());
+        if (sleep) { Msleep(sleep); sleep_bias.Add(timer.GetTime(true) - sleep); }
     }
 };
 
 struct Regex {
     struct Match {
         int begin, end;
-        string text(const string &t) const { return t.substr(begin, end - begin); }
-        float floatval(const string &t) const { return atof(text(t).c_str()); }
+        string Text(const string &t) const { return t.substr(begin, end - begin); }
+        float FloatVal(const string &t) const { return atof(Text(t).c_str()); }
     };
     static int Run(const string &pattern, const string &text, vector<Match> *out);
 };
@@ -1246,11 +1246,11 @@ struct Browser {
     virtual string GetURL() = 0;
 };
 
-struct SystemBrowser { static void open(const char *url); };
-struct Clipboard { static const char *get(); static void set(const char *s); };
-struct Mouse { static void grabFocus(); static void releaseFocus(); };
-struct TouchDevice { static void openKeyboard(); static void closeKeyboard(); };
-struct Advertising { static void showAds(); static void hideAds(); };
+struct SystemBrowser { static void Open(const char *url); };
+struct Clipboard { static const char *Get(); static void Set(const char *s); };
+struct Mouse { static void GrabFocus(); static void ReleaseFocus(); };
+struct TouchDevice { static void OpenKeyboard(); static void CloseKeyboard(); };
+struct Advertising { static void ShowAds(); static void HideAds(); };
 struct CUDA : public Module { int Init(); };
 
 struct Application : public ::LFApp, public Module {
@@ -1259,11 +1259,11 @@ struct Application : public ::LFApp, public Module {
     FrameCB frame_cb;
     void (*reshaped_cb)(), (*window_closed_cb)();
     Mutex frame_mutex, wait_mutex, log_mutex;
-    Timer appTime, frameTime;
-    ThreadPool threadPool;
-    MessageQueue messageQueue;
+    Timer app_time, frame_time;
+    ThreadPool thread_pool;
+    MessageQueue message_queue;
     FrameRateLimitter maxfps;
-    ValueSet<int> fillMode, grabMode, texMode;
+    ValueSet<int> fill_mode, grab_mode, tex_mode;
     Audio audio;
     Video video;
     Input input;
@@ -1275,9 +1275,9 @@ struct Application : public ::LFApp, public Module {
     vector<Module*> modules;
     void LoadModule(Module *M) { modules.push_back(M); M->Init(); }
 
-    Application() : logfile(0), reshaped_cb(0), window_closed_cb(default_lfapp_window_closed_cb),
-    maxfps(&FLAGS_target_fps), fillMode(3, GraphicsDevice::Fill, GraphicsDevice::Line, GraphicsDevice::Point),
-    grabMode(2, false, true), texMode(2, true, false) { run=1; opened=0; main_thread_id=frames_ran=pre_frames_ran=samples_read=samples_read_last=0; }
+    Application() : logfile(0), reshaped_cb(0), window_closed_cb(DefaultLFAppWindowClosedCB),
+    maxfps(&FLAGS_target_fps), fill_mode(3, GraphicsDevice::Fill, GraphicsDevice::Line, GraphicsDevice::Point),
+    grab_mode(2, false, true), tex_mode(2, true, false) { run=1; opened=0; main_thread_id=frames_ran=pre_frames_ran=samples_read=samples_read_last=0; }
 
     int Create(int argc, const char **argv, const char *source_filename);
     int Init();

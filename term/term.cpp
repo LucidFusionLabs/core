@@ -98,7 +98,7 @@ int Frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample
     bool resized = tw->terminal->line_fb.w != root.w || tw->terminal->line_fb.h != root.h;
     bool custom_shader = tw->activeshader != &app->video.shader_default, dont_skip = flag & FrameFlag::DontSkip;
 
-    string terminal_output = nb_read(fileno(tw->process.in), 4096);
+    string terminal_output = NBRead(fileno(tw->process.in), 4096);
     if (!terminal_output.empty()) tw->terminal->Write(terminal_output);
     if (!terminal_output.empty() || resized || font_changed || (custom_shader && dont_skip) ||
         tw->terminal->mouse_gui.mouse.events.hover) {
@@ -222,8 +222,8 @@ extern "C" int main(int argc, const char *argv[]) {
     binds.push_back(Bind('n', Key::Modifier::Cmd, Bind::CB(bind(&MyNewWindow,       vector<string>()))));
     binds.push_back(Bind('6', Key::Modifier::Cmd, Bind::CB(bind(&MyConsole,         vector<string>()))));
 
-    string lfapp_vertex_shader = LocalFile::filecontents(StrCat(ASSETS_DIR, "lfapp_vertex.glsl"));
-    string warper_shader = LocalFile::filecontents(StrCat(ASSETS_DIR, "warper.glsl"));
+    string lfapp_vertex_shader = LocalFile::FileContents(StrCat(ASSETS_DIR, "lfapp_vertex.glsl"));
+    string warper_shader = LocalFile::FileContents(StrCat(ASSETS_DIR, "warper.glsl"));
     Shader::create("warpershader", lfapp_vertex_shader.c_str(), warper_shader.c_str(),
                    "#define TEX2D\n#define VERTEXCOLOR\n", &warpershader);
 

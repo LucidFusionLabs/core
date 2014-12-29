@@ -32,11 +32,11 @@ struct Corpus {
     }
 
     static void Run(Corpus *runner, const char *file_or_dir, void *cb, void *arg, void *arg2) {
-        if (!LocalFile::isdirectory(file_or_dir))
+        if (!LocalFile::IsDirectory(file_or_dir))
             return runner->Run(file_or_dir, cb, arg);                     
 
         DirectoryIter iter(file_or_dir, -1);
-        for (const char *fn = iter.next(); Running() && fn; fn = iter.next()) {
+        for (const char *fn = iter.Next(); Running() && fn; fn = iter.Next()) {
             string pn = StrCat(file_or_dir, fn);
             Run(runner, pn.c_str(), cb, arg, arg2);
         }

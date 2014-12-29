@@ -57,11 +57,11 @@ void RingBuf::Resize(int SPS, int SPB, int Width) {
         samplesPerSec = SPS;
         width = Width ? Width : sizeof(float);
         bytes = ring.size * width;
-        if (buf) alloc->free(buf);
-        buf = (char*)alloc->malloc(bytes);
+        if (buf) alloc->Free(buf);
+        buf = (char*)alloc->Malloc(bytes);
         memset(buf, 0, bytes);
-        if (stamp) alloc->free(stamp);
-        stamp = (Time*)alloc->malloc(ring.size * sizeof(Time));
+        if (stamp) alloc->Free(stamp);
+        stamp = (Time*)alloc->Malloc(ring.size * sizeof(Time));
         memset(stamp, 0, ring.size * sizeof(Time));
     }
     ring.back = 0;
@@ -126,32 +126,32 @@ void ProtoFile::Open(const char *fn) {
     file = fn ? new LocalFile(fn, "r+", true) : 0;
     read_offset = 0;
     write_offset = -1;
-    done = (file ? file->size() : 0) <= 0;
+    done = (file ? file->Size() : 0) <= 0;
 }
 
 int ProtoFile::Add(const Proto *msg, int status) {
     done = 0;
-    write_offset = file->seek(0, File::Whence::END);
+    write_offset = file->Seek(0, File::Whence::END);
 
     ProtoHeader ph(status);
-    return file->writeproto(&ph, msg, true) > 0;
+    return file->WriteProto(&ph, msg, true) > 0;
 }
 
 bool ProtoFile::Update(int offset, const ProtoHeader *ph, const Proto *msg) {
-    if (offset < 0 || (write_offset = file->seek(offset, File::Whence::SET)) != offset) return false;
-    return file->writeproto(ph, msg, true) > 0;
+    if (offset < 0 || (write_offset = file->Seek(offset, File::Whence::SET)) != offset) return false;
+    return file->WriteProto(ph, msg, true) > 0;
 }
 
 bool ProtoFile::Update(int offset, int status) {
-    if (offset < 0 || (write_offset = file->seek(offset, File::Whence::SET)) != offset) return false;
+    if (offset < 0 || (write_offset = file->Seek(offset, File::Whence::SET)) != offset) return false;
     ProtoHeader ph(status);
-    return file->writeprotoflag(&ph, true) > 0;
+    return file->WriteProtoFlag(&ph, true) > 0;
 }
 
 bool ProtoFile::Get(Proto *out, int offset, int status) {
     int record_offset;
     write_offset = 0;
-    file->seek(offset, File::Whence::SET);
+    file->Seek(offset, File::Whence::SET);
     bool ret = Next(out, &record_offset, status);
     if (!ret) return 0;
     return offset == record_offset;
@@ -163,12 +163,12 @@ bool ProtoFile::Next(ProtoHeader *hdr, Proto *out, int *offsetOut, int status) {
 
     if (write_offset >= 0) {
         write_offset = -1;
-        file->seek(read_offset, File::Whence::SET);
+        file->Seek(read_offset, File::Whence::SET);
     }
 
     for (;;) {
         const char *text; int offset;
-        if (!(text = file->nextproto(&offset, &read_offset, hdr))) { done=true; return false; }
+        if (!(text = file->NextProto(&offset, &read_offset, hdr))) { done=true; return false; }
 #ifdef LFL_PROTOBUF
         if (!out->ParseFromArray(text, hdr->len)) { ERROR("parse failed, shutting down"); done=1; app->run=0; return false; }
 #endif
@@ -199,7 +199,7 @@ int StringFile::WriteVersioned(const VersionedFileName &fn, int iteration, const
 
 int StringFile::Read(const string &path, int header) {
     LocalFileLineIter lfi(path);
-    if (!lfi.f.opened()) return -1;
+    if (!lfi.f.Opened()) return -1;
     IterWordIter word(&lfi);
     return Read(&word, header);
 }
@@ -207,26 +207,26 @@ int StringFile::Read(const string &path, int header) {
 int StringFile::Read(IterWordIter *word, int header) {
     int M, N;
     if (header == MatrixFile::Header::DIM_PLUS) {
-        const char *name=word->iter->next();
+        const char *name=word->iter->Next();
         if (!name) return -1;
         
-        const char *transcript=word->iter->next();
+        const char *transcript=word->iter->Next();
         if (!transcript) return -1;
         H = transcript;
 
-        const char *format=word->iter->next();
+        const char *format=word->iter->Next();
         if (!format) return -1;
     }
     if (header != MatrixFile::Header::NONE) {
-        M = (int)atof(word->next());
-        N = (int)atof(word->next());
+        M = (int)atof(word->Next());
+        N = (int)atof(word->Next());
     } else {
         if (MatrixFile::ReadDimensions(word, &M, &N)) return -1;
     }
 
     if (!F) F = new vector<string>;
     else F->clear(); 
-    for (const char *line=word->iter->next(); line; line=word->iter->next()) F->push_back(line);
+    for (const char *line=word->iter->Next(); line; line=word->iter->Next()) F->push_back(line);
     return 0;
 }
 
@@ -239,13 +239,13 @@ int StringFile::Write(File *file, const string &name) {
 
 int StringFile::Write(const string &path, const string &name) {
     LocalFile file(path, "w");
-    if (!file.opened()) return -1;
+    if (!file.Opened()) return -1;
     return Write(&file, name);
 }
 
 int StringFile::WriteRow(File *file, const string &rowval) {
     string row = StrCat(rowval, "\r\n");
-    if (file->write(row.c_str(), row.size()) != row.size()) return -1;
+    if (file->Write(row.c_str(), row.size()) != row.size()) return -1;
     return 0;
 }
 
@@ -279,7 +279,7 @@ int MatrixFile::WriteVersionedBinary(const VersionedFileName &fn, int iter) {
 
 int MatrixFile::Read(const string &path, int header, int (*IsSpace)(int)) {      
     LocalFileLineIter lfi(path);
-    if (!lfi.f.opened()) return -1;
+    if (!lfi.f.Opened()) return -1;
     IterWordIter word(&lfi);
     if (IsSpace) word.word.IsSpace = IsSpace;
     return Read(&word, header);
@@ -289,8 +289,8 @@ int MatrixFile::Read(IterWordIter *word, int header) {
     int M, N;
     if (header == Header::DIM_PLUS) { if (ReadHeader(word, &H) < 0) return -1; }
     if (header != Header::NONE) {
-        M = (int)atof(word->next());
-        N = (int)atof(word->next());
+        M = (int)atof(word->Next());
+        N = (int)atof(word->Next());
     } else {
         if (ReadDimensions(word, &M, &N)) return -1;
     }
@@ -300,7 +300,7 @@ int MatrixFile::Read(IterWordIter *word, int header) {
 
     MatrixIter(F) {
         double *ov = &F->row(i)[j];
-        const char *w = word->next();
+        const char *w = word->Next();
         if (!w) FATAL("%s", "MatrixFile: unexpected EOF");
         if (!strcmp(w, "-1.#INF00") || !strcmp(w, "-inf")) { *ov = -INFINITY; continue; }
         *ov = atof(w);
@@ -309,7 +309,7 @@ int MatrixFile::Read(IterWordIter *word, int header) {
 }
 
 int MatrixFile::ReadBinary(const string &path) {
-    MMapAlloc *mmap = MMapAlloc::open(path.c_str(), false, false);
+    MMapAlloc *mmap = MMapAlloc::Open(path.c_str(), false, false);
     if (!mmap) return -1;
 
     char *buf = (char *)mmap->addr;
@@ -341,24 +341,24 @@ int MatrixFile::Write(File *file, const string &name) {
 
 int MatrixFile::Write(const string &path, const string &name) {
     LocalFile file(path, "w");
-    if (!file.opened()) return -1;
+    if (!file.Opened()) return -1;
     int ret = Write(&file, name);
-    file.close();
+    file.Close();
     return ret;
 }
 
 int MatrixFile::WriteBinary(File *file, const string &name) {    
     if (!file) return -1;
     if (WriteBinaryHeader(file, name, Text(), F->M, F->N) < 0) return -1;
-    if (file->write(F->m, F->bytes) != F->bytes) return -1;
+    if (file->Write(F->m, F->bytes) != F->bytes) return -1;
     return 0;
 }
 
 int MatrixFile::WriteBinary(const string &path, const string &name) {
     LocalFile file(path, "w");
-    if (!file.opened()) return -1;
+    if (!file.Opened()) return -1;
     int ret = WriteBinary(&file, name);
-    file.close();
+    file.Close();
     return ret;
 }
 
@@ -372,7 +372,7 @@ int MatrixFile::FindHighestIteration(const VersionedFileName &fn, const string &
     string suf  = StrCat(".", fn.var, ".", Suffix);
 
     DirectoryIter d(fn.dir, 0, pref.c_str(), suf.c_str());
-    for (const char *f = d.next(); app->run && f; f = d.next()) {
+    for (const char *f = d.Next(); app->run && f; f = d.Next()) {
         if ((iter = atoi(f + pref.length())) > iteration) iteration = iter;
     }
     return iteration;
@@ -385,14 +385,14 @@ int MatrixFile::FindHighestIteration(const VersionedFileName &fn, const string &
 }
 
 int MatrixFile::ReadHeader(IterWordIter *word, string *hdrout) {
-    const char *name=word->iter->next();
+    const char *name=word->iter->Next();
     if (!name) return -1;
 
-    const char *transcript=word->iter->next();
+    const char *transcript=word->iter->Next();
     if (!transcript) return -1;
     *hdrout = transcript;
 
-    const char *format=word->iter->next();
+    const char *format=word->iter->Next();
     if (!format) return -1;
 
     return 0;
@@ -400,7 +400,7 @@ int MatrixFile::ReadHeader(IterWordIter *word, string *hdrout) {
 
 int MatrixFile::ReadDimensions(IterWordIter *word, int *M, int *N) {
     int last_line_count = 1, rows = 0, cols = 0;
-    for (const char *w = word->next(); /**/; w = word->next()) {
+    for (const char *w = word->Next(); /**/; w = word->Next()) {
         if (last_line_count != word->line_count) {
             if (word->line_count == 2) *N = cols;
             else if (*N != cols) FATAL(*N, " != ", cols);
@@ -412,27 +412,27 @@ int MatrixFile::ReadDimensions(IterWordIter *word, int *M, int *N) {
         cols++;
         if (!w) break;
     }
-    word->reset();
+    word->Reset();
     *M = rows;
     return !(*M > 0 && *N > 0);
 }
 
 int MatrixFile::WriteHeader(File *file, const string &name, const string &hdr, int M, int N) {
     string buf = StringPrintf("%s\r\n%s\r\nMatrix\r\n%d %d\r\n", name.c_str(), hdr.c_str(), M, N);
-    if (file->write(buf.c_str(), buf.size()) != buf.size()) return -1;
+    if (file->Write(buf.c_str(), buf.size()) != buf.size()) return -1;
     return buf.size();
 }
 
 int MatrixFile::WriteBinaryHeader(File *file, const string &name, const string &hdr, int M, int N) {
     int nl=name.size()+1, hl=hdr.size()+1;
-    int pnl=next_multiple_of_n(nl, 32), phl=next_multiple_of_n(hl, 32);
+    int pnl=NextMultipleOfN(nl, 32), phl=NextMultipleOfN(hl, 32);
     BinaryHeader hdrbuf = { (int)0xdeadbeef, M, N, (int)sizeof(BinaryHeader), (int)sizeof(BinaryHeader)+pnl, (int)sizeof(BinaryHeader)+pnl+phl, 0, 0 };
-    if (file->write(&hdrbuf, sizeof(BinaryHeader)) != sizeof(BinaryHeader)) return -1;
+    if (file->Write(&hdrbuf, sizeof(BinaryHeader)) != sizeof(BinaryHeader)) return -1;
     char *buf = (char*)alloca(pnl+phl);
     memset(buf, 0, pnl+phl);
     strncpy(buf, name.c_str(), nl);
     strncpy(buf+pnl, hdr.c_str(), hl);
-    if (file->write(buf, pnl+phl) != pnl+phl) return -1;
+    if (file->Write(buf, pnl+phl) != pnl+phl) return -1;
     return sizeof(BinaryHeader)+pnl+phl;
 }
 
@@ -446,7 +446,7 @@ int MatrixFile::WriteRow(File *file, const double *row, int N, bool lastrow) {
         if (val == ival) l += sprint(buf+l,sizeof(buf)-l, "%u%s", ival, delim);
         else             l += sprint(buf+l,sizeof(buf)-l, "%f%s", val, delim);
     }
-    if (file->write(buf, l) != l) return -1;
+    if (file->Write(buf, l) != l) return -1;
     return 0;
 }
 
@@ -477,13 +477,13 @@ int SettingsFile::Write(const vector<string> &fields, const string &dir, const s
 MatrixArchiveOut::~MatrixArchiveOut() { Close(); }
 MatrixArchiveOut::MatrixArchiveOut(const string &name) : file(0) { if (name.size()) Open(name); }
 void MatrixArchiveOut::Close() { if (file) { delete file; file=0; } }
-int MatrixArchiveOut::Open(const string &name) { file = new LocalFile(name, "w"); if (file->opened()) return 0; Close(); return -1; }
+int MatrixArchiveOut::Open(const string &name) { file = new LocalFile(name, "w"); if (file->Opened()) return 0; Close(); return -1; }
 int MatrixArchiveOut::Write(Matrix *m, const string &hdr, const string &name) { return MatrixFile(m, hdr).Write(file, name); } 
 
 MatrixArchiveIn::~MatrixArchiveIn() { Close(); }
 MatrixArchiveIn::MatrixArchiveIn(const string &name) : file(0), index(0) { if (name.size()) Open(name); }
 void MatrixArchiveIn::Close() {if (file) { delete file; file=0; } index=0; }
-int MatrixArchiveIn::Open(const string &name) { LocalFileLineIter *lfi=new LocalFileLineIter(name); file=new IterWordIter(lfi, true); return !lfi->f.opened(); }
+int MatrixArchiveIn::Open(const string &name) { LocalFileLineIter *lfi=new LocalFileLineIter(name); file=new IterWordIter(lfi, true); return !lfi->f.Opened(); }
 int MatrixArchiveIn::Read(Matrix **out, string *hdrout) { index++; return MatrixFile::Read(file, out, hdrout); }
 int MatrixArchiveIn::Skip() { index++; return MatrixFile().Read(file, 1); }
 string MatrixArchiveIn::Filename() { if (!file) return ""; return ""; } // file->file->f.filename(); }

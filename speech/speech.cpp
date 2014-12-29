@@ -55,14 +55,14 @@ PronunciationDict *PronunciationDict::instance() {
     inst = new PronunciationDict();
 
     LocalFileLineIter file(StrCat(ASSETS_DIR, "cmudict.txt"));
-    if (!file.f.opened()) { ERROR("no ", ASSETS_DIR, "cmudict.txt"); return 0; }    
+    if (!file.f.Opened()) { ERROR("no ", ASSETS_DIR, "cmudict.txt"); return 0; }    
 
     readDictionary(&file, inst);
     return inst;
 }
 
 int PronunciationDict::readDictionary(Iter *in, PronunciationDict *out) {
-    for (const char *line = in->next(); line; line = in->next()) {
+    for (const char *line = in->Next(); line; line = in->Next()) {
         const char *c=line; if ((*c) == ';') continue; /* skip comments */
 
         /* Format: word <two spaces> pronunciation */
@@ -88,7 +88,7 @@ int PronunciationDict::readDictionary(Iter *in, PronunciationDict *out) {
 
 int PronunciationDict::readPronunciation(const char *in, int len, char *phonesOut, char *accentOut, int outlen) {
     StringWordIter phones(in, len); int outi=0;
-    for (const char *phone=phones.next(); phone; phone=phones.next()) {
+    for (const char *phone=phones.Next(); phone; phone=phones.Next()) {
         if (outi >= outlen) return -1;
         
         int accent = lengthchar(phone, isalpha);
@@ -112,7 +112,7 @@ const char *PronunciationDict::pronounce(const char *in) {
 
 int PronunciationDict::pronounce(const char *utterance, const char **w, const char **wa, int *phones, int max) {
     StringWordIter script(utterance, 0); int words=0; *phones=0;
-    for (const char *word=script.next(); word; word=script.next()) {
+    for (const char *word=script.Next(); word; word=script.Next()) {
         const char *pronunciation = pronounce(word);
         if (!pronunciation || words+1 >= max) { DEBUG("pronunciation %s count=%d", word, words); return -1; }
 
@@ -274,7 +274,7 @@ double *AcousticModel::State::transit(Compiled *model, Matrix *transit, State *R
 
 double *AcousticModel::State::transit(Matrix *trans, unsigned K) { double k[3]={0,(double)K,0}; return (double*)bsearch(k, trans->m, trans->M, sizeof(double)*TransitCols, transitionSort); }
 
-int AcousticModel::State::transitionSort(const void *a, const void *b) { return doubleSortR((void*)((double*)a+1), (void*)((double*)b+1)); }
+int AcousticModel::State::transitionSort(const void *a, const void *b) { return DoubleSortR((void*)((double*)a+1), (void*)((double*)b+1)); }
 
 void AcousticModel::State::sortTransitionMap(double *trans, int M) { qsort(trans, M, sizeof(double)*TransitCols, transitionSort); }
 
@@ -410,7 +410,7 @@ string AcousticModel::flags() {
 
 void AcousticModel::loadflags(const char *flags) {
     StringWordIter iter(flags, 0, iscomma);
-    for (const char *k = iter.next(); k; k = iter.next()) {
+    for (const char *k = iter.Next(); k; k = iter.Next()) {
 
         char *v; double val;
         if ((v = (char*)strchr(k, '='))) { *v++=0; val=atof(v); }
@@ -455,7 +455,7 @@ int AcousticModel::write(StateCollection *model, const char *name, const char *d
 
     /* open map */
     const int buckets=5, values=4;
-    Matrix map(next_prime(states*4), buckets*values);
+    Matrix map(NextPrime(states*4), buckets*values);
 
     /* open data */
     LocalFile names  (string(dir) + MatrixFile::Filename(name, "name",       "string", iteration), "w");
@@ -466,12 +466,12 @@ int AcousticModel::write(StateCollection *model, const char *name, const char *d
     LocalFile covar  (string(dir) + MatrixFile::Filename(name, "emCov",      "matrix", iteration), "w");
 
     /* write data headers */
-    MatrixFile::WriteHeader(&names,   basename(names.filename(),0,0),   flagtext, states,   1);
-    MatrixFile::WriteHeader(&initial, basename(initial.filename(),0,0), flagtext, states,   1);
-    MatrixFile::WriteHeader(&transit, basename(transit.filename(),0,0), flagtext, transits, TransitCols);
-    MatrixFile::WriteHeader(&prior,   basename(prior.filename(),0,0),   flagtext, states,   K);
-    MatrixFile::WriteHeader(&mean,    basename(mean.filename(),0,0),    flagtext, means,    D);
-    MatrixFile::WriteHeader(&covar,   basename(covar.filename(),0,0),   flagtext, means,    D);
+    MatrixFile::WriteHeader(&names,   basename(names.Filename(),0,0),   flagtext, states,   1);
+    MatrixFile::WriteHeader(&initial, basename(initial.Filename(),0,0), flagtext, states,   1);
+    MatrixFile::WriteHeader(&transit, basename(transit.Filename(),0,0), flagtext, transits, TransitCols);
+    MatrixFile::WriteHeader(&prior,   basename(prior.Filename(),0,0),   flagtext, states,   K);
+    MatrixFile::WriteHeader(&mean,    basename(mean.Filename(),0,0),    flagtext, means,    D);
+    MatrixFile::WriteHeader(&covar,   basename(covar.Filename(),0,0),   flagtext, means,    D);
 
     /* write data */
     states=means=transits=0;
@@ -842,7 +842,7 @@ int AcousticModelFile::read(const char *name, const char *dir, int lastiter, boo
     for (int i=0; i<states; i++) {
         state[i].name = (*names)[i];
         state[i].prior = initial->row(i)[0];
-        state[i].emission.assignDataPtr(K, N, mean->row(i*K), covar->row(i*K), prior->row(i));
+        state[i].emission.AssignDataPtr(K, N, mean->row(i*K), covar->row(i*K), prior->row(i));
         state[i].val.emission_index = i;
 
         unsigned hash = state[i].id();
@@ -926,7 +926,7 @@ double AcousticHMM::viterbi(AcousticModel::Compiled *model, Matrix *observations
 }
 
 double AcousticHMM::uniformViterbi(AcousticModel::Compiled *model, Matrix *observations, Matrix *viterbi, int Unused1, double Unused2, int uu3) {
-    if (!dim_check("HMM::viterbi", viterbi->M, observations->M)) return -INFINITY;
+    if (!DimCheck("HMM::viterbi", viterbi->M, observations->M)) return -INFINITY;
 
     int obvs = observations->M, states=0;
     for (int i=0; i<model->states; i++) {
@@ -941,7 +941,7 @@ double AcousticHMM::uniformViterbi(AcousticModel::Compiled *model, Matrix *obser
     for (int i=0; i<model->states; i++) {
         if (AcousticModel::isSilence(model->state[i].name)) continue;
         for (int j=0; j<spm && len<obvs; j++) viterbi->row(len++)[0] = i;
-        if (len<obvs && rand(0.0, 1.0) < spmF) viterbi->row(len++)[0] = i;
+        if (len<obvs && Rand(0.0, 1.0) < spmF) viterbi->row(len++)[0] = i;
     }
     while (len<obvs) viterbi->row(len++)[0] = model->states-1;
     return 0;
@@ -1011,12 +1011,12 @@ Matrix *Decoder::decodeFile(AcousticModel::Compiled *model, const char *fn, doub
 }
 
 Matrix *Decoder::decodeFeatures(AcousticModel::Compiled *model, Matrix *features, double beamWidth, int flag) {
-    if (!dim_check("decodeFeatures", features->N, model->state[0].emission.mean.N)) return 0;
+    if (!DimCheck("decodeFeatures", features->N, model->state[0].emission.mean.N)) return 0;
     if (FLAGS_lfapp_debug) AcousticHMM::printLattice(model);
 
     Matrix *viterbi = new Matrix(features->M, 1); Timer vtime;
     double vprob = AcousticHMM::viterbi(model, features, viterbi, 0, beamWidth, flag);
-    if (flag & AcousticHMM::Flag::Visualize) Decoder::visualizeFeatures(model, features, viterbi, vprob, vtime.time(), flag & AcousticHMM::Flag::Interactive);
+    if (flag & AcousticHMM::Flag::Visualize) Decoder::visualizeFeatures(model, features, viterbi, vprob, vtime.GetTime(), flag & AcousticHMM::Flag::Interactive);
 
     return viterbi;
 }
@@ -1057,7 +1057,7 @@ void Decoder::visualizeFeatures(AcousticModel::Compiled *model, Matrix *MFCC, Ma
 
     Box wcc = Box(5,345, 400,100);
     while (Running() && (app->audio.Out.size() || (interactive && !interactive_done))) {
-        app->PreFrame(app->frameTime.time(true), 0, 0);
+        app->PreFrame(app->frame_time.GetTime(true), 0, 0);
 
         screen->gd->DrawMode(DrawMode::_2D);
         app->shell.asset("snap")->tex.Draw(wcc); // 4);

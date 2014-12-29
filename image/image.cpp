@@ -92,7 +92,7 @@ void Frame2D(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sam
         MyShader.setUniform1f("y_offset", 0);
 
         v3 up = screen->camMain->up, ort = screen->camMain->ort, pos = screen->camMain->pos;
-        v3 right = v3::cross(ort, up);
+        v3 right = v3::Cross(ort, up);
         float m[16] = { right.x, right.y, right.z, 0,
                         up.x,    up.y,    up.z,    0,
                         ort.x,   ort.y,   ort.z,   0,
@@ -169,7 +169,7 @@ extern "C" int main(int argc, const char *argv[]) {
         FLAGS_atlas_dump=1;
         vector<string> png;
         DirectoryIter d(FLAGS_make_png_atlas.c_str(), 0, 0, ".png");
-        for (const char *fn = d.next(); fn; fn = d.next()) png.push_back(FLAGS_make_png_atlas + fn);
+        for (const char *fn = d.Next(); fn; fn = d.Next()) png.push_back(FLAGS_make_png_atlas + fn);
         Atlas::MakeFromPNGFiles("png_atlas", png, FLAGS_make_png_atlas_size, NULL);
     }
 
@@ -202,8 +202,8 @@ extern "C" int main(int argc, const char *argv[]) {
     Asset *asset_input = asset("input");
 
     if (!FLAGS_shader.empty()) {
-        string vertex_shader = LocalFile::filecontents(StrCat(ASSETS_DIR, "vertex.glsl"));
-        string fragment_shader = LocalFile::filecontents(FLAGS_shader.c_str());
+        string vertex_shader = LocalFile::FileContents(StrCat(ASSETS_DIR, "vertex.glsl"));
+        string fragment_shader = LocalFile::FileContents(FLAGS_shader.c_str());
         Shader::create("my_shader", vertex_shader.c_str(), fragment_shader.c_str(), "", &MyShader);
     }
 
@@ -222,7 +222,7 @@ extern "C" int main(int argc, const char *argv[]) {
             if (filter_invert || FLAGS_input_filter == "prims")    filter = true;
             if (filter) Split(FLAGS_input_prims, isint2<',', ' '>, &filter_prims);
             string out = Geometry::ExportOBJ(asset_input->geometry, filter ? &filter_prims : 0, filter_invert);
-            int ret = LocalFile::writefile(FLAGS_output, out);
+            int ret = LocalFile::WriteFile(FLAGS_output, out);
             INFO("write ", FLAGS_output, " = ", ret);
         }
     } else {

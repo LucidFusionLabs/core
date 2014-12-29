@@ -23,101 +23,97 @@
 #include "lfapp/lfapp.h"
 
 namespace LFL {
-double squared(double n) { return n*n; }
-float decimals(float n) { return n - (int)n; }
-float rand(float a, float b) { return ((b-a)*((float)::rand()/RAND_MAX))+a; }
-unsigned long long rand64() { return (unsigned long long)::rand()<<32 | ::rand(); }
+bool v4::operator<(const v4 &c) const { SortMacro4(x, c.x, y, c.y, z, c.z, w, c.w); }
 
-bool v4::operator<(const v4 &c) const {
-    return Quadruple<float,float,float,float>(x, y, z, w) < Quadruple<float,float,float,float>(c.x, c.y, c.z, c.w);
-}
+double Squared(double n) { return n*n; }
+float Decimals(float n) { return n - (int)n; }
+float Rand(float a, float b) { return ((b-a)*((float)::rand()/RAND_MAX))+a; }
+unsigned long long Rand64() { return (unsigned long long)::rand()<<32 | ::rand(); }
 
-void clamp(float *x, float floor, float ceil) { *x = clamp(*x, floor, ceil); }
-float clamp(float x, float floor, float ceil) {
+void Clamp(float *x, float floor, float ceil) { *x = Clamp(*x, floor, ceil); }
+float Clamp(float x, float floor, float ceil) {
     if (x < floor) return floor; if (x > ceil) return ceil; return x;
 }
-
-v3 clamp(const v3& x, float floor, float ceil) {
-    return v3(clamp(x.x, floor, ceil), clamp(x.y, floor, ceil), clamp(x.z, floor, ceil));
+v3 Clamp(const v3& x, float floor, float ceil) {
+    return v3(Clamp(x.x, floor, ceil), Clamp(x.y, floor, ceil), Clamp(x.z, floor, ceil));
+}
+v4 Clamp(const v4& x, float floor, float ceil) {
+    return v4(Clamp(x.x, floor, ceil), Clamp(x.y, floor, ceil), Clamp(x.z, floor, ceil), Clamp(x.w, floor, ceil));
 }
 
-v4 clamp(const v4& x, float floor, float ceil) {
-    return v4(clamp(x.x, floor, ceil), clamp(x.y, floor, ceil), clamp(x.z, floor, ceil), clamp(x.w, floor, ceil));
-}
-
-int round_f(float f, bool round_point_five_up) {
+int RoundF(float f, bool round_point_five_up) {
     if (round_point_five_up) return (int)((f - (int)f) >= 0.5 ? f+1 : f); 
     else                     return (int)((f - (int)f) >  0.5 ? f+1 : f); 
 }
 
-int cmp_i(const void *a, const void *b) { return *(int *)a - *(int *)b; }
+int OpaqueIntPtrSort(const void *a, const void *b) { return *(int *)a - *(int *)b; }
 
-int dim_check(const char *alg, int d1, int d2) {
+int DimCheck(const char *alg, int d1, int d2) {
     if (d1 != d2) { ERROR(alg, ".dim ", d1, " != ", d2); return 0; }
     return 1;
 }
 
-int next_power_of_two(int input) {
+int NextPowerOfTwo(int input) {
     int value = 1;
     while ( value < input ) value <<= 1;
     return value;
 }
 
-bool is_power_of_two(unsigned x) { return x && (x & (~x + 1)) == x; }
-int next_multiple_of_power_of_two(int input, int align) { return (input+align-1) & ~(align-1); }
-void *next_multiple_of_power_of_two(void *input, int align) { return (void*)(((unsigned long long)input+align-1) & ~(align-1)); }
-int next_multiple_of_n(int input, int N) { return (input % N) ? (input/N+1)*N : input; }
-int prev_multiple_of_n(int input, int N) { return (input % N) ? (input/N  )*N : input; }
+bool IsPowerOfTwo(unsigned x) { return x && (x & (~x + 1)) == x; }
+int NextMultipleOfPowerOfTwo(int input, int align) { return (input+align-1) & ~(align-1); }
+void *NextMultipleOfPowerOfTwo(void *input, int align) { return (void*)(((unsigned long long)input+align-1) & ~(align-1)); }
+int NextMultipleOfN(int input, int N) { return (input % N) ? (input/N+1)*N : input; }
+int PrevMultipleOfN(int input, int N) { return (input % N) ? (input/N  )*N : input; }
 
-int which_log2(int n) {
+int WhichLog2(int n) {
     bool power_of_two = (n & (n-1)) == 0;
     if (!n || !power_of_two) return -1;
 
     static int wl2_pwr[] = { 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536 };
     static int wl2_exp[] = { 0, 1, 2, 3, 4,  5,  6,  7,   8,   9,   10,   11,   12,   13,   14,    15,    16    };
 
-    int *which = (int*)bsearch(&n, wl2_pwr, sizeof(wl2_pwr)/sizeof(int), sizeof(int), cmp_i);
+    int *which = (int*)bsearch(&n, wl2_pwr, sizeof(wl2_pwr)/sizeof(int), sizeof(int), OpaqueIntPtrSort);
     if (!which) return -1;
     return wl2_exp[which - wl2_pwr];
 }
 
-int floor_log2(int n) {
+int FloorLog2(int n) {
     for (int i=0; i<31; i++) if (n < (1<<i)) return i;
     return -1;
 }
 
-int is_prime(int n) {
+int IsPrime(int n) {
     int r = (int)sqrtf(n);
     for (int i=2; i<=r; i++) if (!(n % i)) return 0;
     return 1;
 }
 
-int next_prime(int n) {
-    for (/**/; !is_prime(n); n++) {}
+int NextPrime(int n) {
+    for (/**/; !IsPrime(n); n++) {}
     return n;
 }
 
-double radian2degree(float rad) { return rad * 180 / M_PI; }
-double degree2radian(float deg) { return deg * M_PI / 180; }
-double hz2mel(double f) { return 2595 * log10(f/700 + 1); }
-double mel2hz(double f) { return 700 * (pow(10, f/2595) - 1); }
-double hz2bark(double f) { return 6 * asinh(f/600); }
-double bark2hz(double f) { return 600 * sinh(f/6); }
-float cm2inch(float f) { return f * 0.393701;  }
-float mm2inch(float f) { return f * 0.0393701; }
-float inch2cm(float f) { return f / 0.393701;  }
-float inch2mm(float f) { return f / 0.0393701; }
+double RadianToDegree(float rad) { return rad * 180 / M_PI; }
+double DegreeToRadian(float deg) { return deg * M_PI / 180; }
+double HZToMel(double f) { return 2595 * log10(f/700 + 1); }
+double MelToHZ(double f) { return 700 * (pow(10, f/2595) - 1); }
+double HZToBark(double f) { return 6 * asinh(f/600); }
+double BarkToHZ(double f) { return 600 * sinh(f/6); }
+float CMToInch(float f) { return f * 0.393701;  }
+float MMToInch(float f) { return f * 0.0393701; }
+float InchToCM(float f) { return f / 0.393701;  }
+float InchToMM(float f) { return f / 0.0393701; }
 
-double avg_cumulative(double last, double next, int count) { return (last*(count-1) + next) / count; }
+double CumulativeAvg(double last, double next, int count) { return (last*(count-1) + next) / count; }
 
 /* interpolate f(x) : 0<=x<=1 */
-double arrayAsFunc(double *Array, int ArrayLen, double x) {
+double ArrayAsFunc(double *Array, int ArrayLen, double x) {
     double xi=x*(ArrayLen-1); int xind=(int)xi;
     return (Array[xind+1] - Array[xind]) * (xi-xind) + Array[xind]; 
 }
 
 #if 0
-double matrixAsFunc(Matrix *m, double x, double y)
+double MatrixAsFunc(Matrix *m, double x, double y)
 {
     double yi=y*(m->M-1), xi=x*(m->N-1);
     int yind=yi, xind=xi;
@@ -126,7 +122,7 @@ double matrixAsFunc(Matrix *m, double x, double y)
 }
 #else
 /* bilinearly interpolate m as f(x,y) : 0<=x<=1 */
-double matrixAsFunc(Matrix *m, double x, double y) {
+double MatrixAsFunc(Matrix *m, double x, double y) {
     double yi=y*(m->M-1), xi=x*(m->N-1);
     int yind=(int)yi, xind=(int)xi;
     int yp=yind!=m->M-1, xp=xind!=m->N-1;
@@ -141,7 +137,7 @@ double matrixAsFunc(Matrix *m, double x, double y) {
 }
 #endif
 
-int levenshtein(const vector<int> &source, const vector<int> &target, vector<pair<int, int> > *alignment) {
+int Levenshtein(const vector<int> &source, const vector<int> &target, vector<pair<int, int> > *alignment) {
     matrix<int> mat(source.size()+1, target.size()+1);
     matrix<pair<int, int> > bt(mat.M, mat.N, pair<int,int>());
     MatrixRowIter(&mat) mat.row(i)[0] = i;
@@ -161,7 +157,7 @@ int levenshtein(const vector<int> &source, const vector<int> &target, vector<pai
     return mat.row(mat.M-1)[mat.N-1];
 }
 
-double levinsondurbin(int order, const double *ac, double *ref, double *lpc) {
+double LevinsonDurbin(int order, const double *ac, double *ref, double *lpc) {
     double r, mmse = ac[0]; int i, j;
     if (!ac[0]) { for (i=0; i<order; i++) ref[i] = 0; return 0; }
 
@@ -184,30 +180,32 @@ double levinsondurbin(int order, const double *ac, double *ref, double *lpc) {
     return mmse;
 }
 
-double sinc(double x) { return x ? sin(M_PI*x)/(M_PI*x) : 1; }
+double Sinc(double x) { return x ? sin(M_PI*x)/(M_PI*x) : 1; }
 
-double hamming(int n, int i) { return 0.54 - 0.46 * cos(2*M_PI*i/(n-1)); }
+double Hamming(int n, int i) { return 0.54 - 0.46 * cos(2*M_PI*i/(n-1)); }
+
+double AmplitudeRatioDecibels(float a1, float a2) { return 20*log10(1e-20+a1/a2); }
 
 #ifdef _WIN32
 double log1p (double x) { double y=1+x, z=y-1; return log(y)-(z-x)/y; }
 #endif
 
-double logadd(double *x, int n) {
+double LogAdd(double *x, int n) {
     const double *xi, *xe = x + n;
     double x_max = -INFINITY, x_minus_max_sum_exp = 0;
     for (xi = x; xi < xe; xi++) if (*xi > x_max) x_max = *xi;
     for (xi = x; xi < xe; xi++) x_minus_max_sum_exp += exp(*xi - x_max);
     return x_max + log(x_minus_max_sum_exp);
 }
-double logadd(double x, double y) {
+double LogAdd(double x, double y) {
     if (x<y) return y + log1p(exp(x - y));
     else     return x + log1p(exp(y - x));
 }
-double logadd(double *x, double y) { return (*x = logadd(*x, y)); }
-float logadd(float  *x, float y)  { return (*x = logadd(*x, y)); }
-unsigned logadd(unsigned *x, unsigned y) { FATAL("not implemented"); }
-double logsub(double *x, double y) { return (*x = logsub(*x, y)); }
-double logsub(double x, double y) { return x + log1p(-exp(y - x)); }
+double LogAdd(double *x, double y) { return (*x = LogAdd(*x, y)); }
+float LogAdd(float  *x, float y)  { return (*x = LogAdd(*x, y)); }
+unsigned LogAdd(unsigned *x, unsigned y) { FATAL("not implemented"); }
+double LogSub(double *x, double y) { return (*x = LogSub(*x, y)); }
+double LogSub(double x, double y) { return x + log1p(-exp(y - x)); }
 
 double asinh(double x) { return log(x + sqrt(x*x + 1)); }
 double acosh(double x) { return log(x + sqrt(x*x - 1)); }
@@ -232,17 +230,12 @@ const double &fft_r(const double *a, int fftlen, int index) { return a[index*2];
 const float  &fft_i(const float  *a, int fftlen, int index) { return a[index*2+1]; }
 const double &fft_i(const double *a, int fftlen, int index) { return a[index*2+1]; }
 #endif
-
 double fft_abs2(int fftlen, int index, float r, float i) {
     if (index == 0 || index == fftlen/2) return r*r;
     else return r*r + i*i;
 }
-
 double fft_abs2(const float  *a, int fftlen, int index) { return fft_abs2(fftlen, index, fft_r(a, fftlen, index), fft_i(a, fftlen, index)); }
 double fft_abs2(const double *a, int fftlen, int index) { return fft_abs2(fftlen, index, fft_r(a, fftlen, index), fft_i(a, fftlen, index)); }
-
-double fft_abs_to_dB(float fft_abs) { return 20*log10(1e-20+fft_abs); }
-double fft_abs2_to_dB(float fft_abs2) { return fft_abs_to_dB(sqrt(fft_abs2)); }
 
 Matrix *IDFT(int rows, int cols) {
     Matrix *m = new Matrix(rows, cols);
@@ -261,7 +254,7 @@ Matrix *DCT2(int rows, int cols) {
     return m;
 }
 
-double mahaldist2(const double *mean, const double *diagcovar, const double *vec, int D) {
+double MahalDist2(const double *mean, const double *diagcovar, const double *vec, int D) {
     double sum=0;
     for (int i=0; i<D; i++) {
         double diff=mean[i]-vec[i];
@@ -270,30 +263,29 @@ double mahaldist2(const double *mean, const double *diagcovar, const double *vec
     return sum;
 }
 
-double diagdet(const double *diagmat, int D) {
+double DiagDet(const double *diagmat, int D) {
     double det=0;
     for (int i=0; i<D; i++) det += log(diagmat[i]);
     return det;
 }
 
-double gausNormC(const double *diagcovar, int D) {
+double GausNormC(const double *diagcovar, int D) {
     static const double log_tau = log(M_TAU);
-    return -0.5 * (log_tau*D + diagdet(diagcovar, D));
+    return -0.5 * (log_tau*D + DiagDet(diagcovar, D));
 }
 
-double gausPdfEval(const double *mean, const double *diagcovar, const double *normC, const double *observation, int D) {
-    return (normC ? *normC : gausNormC(diagcovar, D)) - 0.5 * mahaldist2(mean, diagcovar, observation, D);
+double GausPdfEval(const double *mean, const double *diagcovar, const double *normC, const double *observation, int D) {
+    return (normC ? *normC : GausNormC(diagcovar, D)) - 0.5 * MahalDist2(mean, diagcovar, observation, D);
 }
 
-double gmmPdfEval(const Matrix *means, const Matrix *diagcovar,
-                  const double *obv, const double *prior, const double *normC, double *outPosteriors)
-{
+double GmmPdfEval(const Matrix *means, const Matrix *diagcovar,
+                  const double *obv, const double *prior, const double *normC, double *outPosteriors) {
     int K=means->M, D=means->N;
     double total=-INFINITY, *prob=(double *)alloca(K*sizeof(double));
     MatrixRowIter(means) {
-        prob[i] = gausPdfEval(means->row(i), diagcovar->row(i), normC?&normC[i]:0, obv, D);
+        prob[i] = GausPdfEval(means->row(i), diagcovar->row(i), normC?&normC[i]:0, obv, D);
         if (prior) prob[i] += prior[i];
-        logadd(&total, prob[i]); 
+        LogAdd(&total, prob[i]); 
     }
     if (outPosteriors) {
         MatrixRowIter(means) { outPosteriors[i] = prob[i] - total; }

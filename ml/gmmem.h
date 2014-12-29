@@ -44,7 +44,7 @@ struct GMMEM {
     }
 
     void add_features(Matrix *features) {
-        if (!dim_check("GMEM", features->N, newmeans->N)) return;
+        if (!DimCheck("GMEM", features->N, newmeans->N)) return;
         for (int i=0; i<features->M; i++) add_feature(features->row(i));
     }
     static void add_features(const char *fn, Matrix *, Matrix *features, const char *transcript, void *arg) { return ((GMMEM*)arg)->add_features(features); }
@@ -61,7 +61,7 @@ struct GMMEM {
                 Vector::Mult(feature, exp(posteriors[i]), featscaled, D);
                 Vector::Add(newmeans->row(i), featscaled, D);
 
-                logadd(&denoms[i], posteriors[i]);
+                LogAdd(&denoms[i], posteriors[i]);
  
                 if (!FullVariance) {
                     Vector::Mult(featscaled, feature, D);
@@ -120,7 +120,7 @@ struct GMMEM {
 
                 MatrixColIter(&mixture->diagcov) if (mixture->diagcov.row(i)[j] < FLAGS_CovarFloor) mixture->diagcov.row(i)[j] = FLAGS_CovarFloor;
 
-                mixture->computeNorms();
+                mixture->ComputeNorms();
             }
             reset(); /* full reset */
         }

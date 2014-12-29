@@ -104,10 +104,10 @@ struct WFST {
 
         static int write(IOAlphabet *A, const char *dir, const char *name1, const char *name2, int iteration) {
             LocalFile out(string(dir) + MatrixFile::Filename(name1, name2, "string", iteration), "w");
-            MatrixFile::WriteHeader(&out, basename(out.filename(),0,0), A->FactoryName() ? A->FactoryName() : "", A->size(), 1);
+            MatrixFile::WriteHeader(&out, basename(out.Filename(),0,0), A->FactoryName() ? A->FactoryName() : "", A->size(), 1);
             if (A->FactoryName()) return 0;
 
-            Matrix map(next_prime(A->size()*4), HashBuckets * HashValues);
+            Matrix map(NextPrime(A->size()*4), HashBuckets * HashValues);
             for (int i=0, l=A->size(); i<l; i++) {
                 string name = A->name(i);
                 StringFile::WriteRow(&out, name.c_str());
@@ -205,7 +205,7 @@ struct WFST {
             return set->row(ind)[0];
         }
         int find(int state) {
-            double x = state, *row = (double*)bsearch(&x, set->m, set->M, sizeof(double), doubleSortR);
+            double x = state, *row = (double*)bsearch(&x, set->m, set->M, sizeof(double), DoubleSortR);
             return row ? row - set->m : -1;
         }
         void clear()                   { FATAL(this, " function not implemented"); }
@@ -214,7 +214,7 @@ struct WFST {
 
         static int write(StateSet *S, const char *dir, const char *name1, const char *name2, int iteration) {
             LocalFile out(string(dir) + MatrixFile::Filename(name1, name2, "matrix", iteration), "w");
-            MatrixFile::WriteHeader(&out, basename(out.filename(),0,0), "", S->states(), 1);
+            MatrixFile::WriteHeader(&out, basename(out.Filename(),0,0), "", S->states(), 1);
             for (int i=0, l=S->states(); i<l; i++) {
                 double row[] = { (double)S->state(i) };
                 MatrixFile::WriteRow(&out, row, 1);
@@ -419,11 +419,11 @@ struct WFST {
             LocalFile state  (string(dir) + MatrixFile::Filename(name, "state",      "matrix", iteration), "w");
             LocalFile transit(string(dir) + MatrixFile::Filename(name, "transition", "matrix", iteration), "w");
 
-            MatrixFile::WriteHeader(&state,   basename(state.filename(),0,0),   "", M->states(),      StateValues);
-            MatrixFile::WriteHeader(&transit, basename(transit.filename(),0,0), "", M->transitions(), Edge::Cols);
+            MatrixFile::WriteHeader(&state,   basename(state.Filename(),0,0),   "", M->states(),      StateValues);
+            MatrixFile::WriteHeader(&transit, basename(transit.Filename(),0,0), "", M->transitions(), Edge::Cols);
 
             int transits = 0;
-            Matrix map(next_prime(M->transitions()*4), HashBuckets * HashValues);
+            Matrix map(NextPrime(M->transitions()*4), HashBuckets * HashValues);
             for (int i=0, l=M->states(); i<l; i++) {
                 double row[] = { (double)i, (double)transits, (double)M->transitions(i), 0 };
 
@@ -563,7 +563,7 @@ struct WFST {
             join(merged, filter, 0, F);
 
             for (int i=0, l=I->states(); i<l; i++)
-                add(0, I->state(i)+1, 0, 0, K ? K->one() : 0);
+                add(0, I->state(i)+1, 0, 0, K ? K->One() : 0);
 
             I->clear();
             I->add(0);
@@ -651,7 +651,7 @@ struct WFST {
         }
 
         void divideWeightsBySum(Semiring *K) {
-            for (ResidualSubset::iterator it = begin(); it != end(); it++) K->div(&(*it).second.residualWeight, residualWeightSum);
+            for (ResidualSubset::iterator it = begin(); it != end(); it++) K->Div(&(*it).second.residualWeight, residualWeightSum);
         }
 
         string print(string v="") {
@@ -750,7 +750,7 @@ struct WFST {
 
     int writeGraphViz(string tofile, State::LabelSet *label=0) {
         LocalFile f(tofile.c_str(), "w"); string v=tostrGraphViz(label);
-        return f.write(v.data(), v.size()) == v.size();
+        return f.Write(v.data(), v.size()) == v.size();
     }
 
     int read(const char *name, const char *dir, int lastiter=-1) {
@@ -812,7 +812,7 @@ struct WFST {
 
     struct ShortestDistanceVector : public ShortestDistance {
         vector<Path> path;
-        ShortestDistanceVector(Semiring *K, int size) { path.resize(size, ShortestDistance::Path(K->zero())); }
+        ShortestDistanceVector(Semiring *K, int size) { path.resize(size, ShortestDistance::Path(K->Zero())); }
         Path *get(int s) { return &path[s]; }
     };
 
@@ -820,7 +820,7 @@ struct WFST {
         Semiring *K;
         PathMap *path;
         ShortestDistanceMapPtr(Semiring *k, PathMap *p) : K(k), path(p) {}
-        Path *get(int s) { return &FindOrInsert(*path, s, ShortestDistance::Path(K->zero()))->second; }
+        Path *get(int s) { return &FindOrInsert(*path, s, ShortestDistance::Path(K->Zero()))->second; }
     };
 
     struct ShortestDistanceMap : public ShortestDistanceMapPtr {
@@ -846,7 +846,7 @@ struct WFST {
         for (int i=0, l=S->states(); i<l; i++) {
             int source = S->state(i);
             ShortestDistance::Path *path = search->get(source);
-            path->D = path->R = K->one();
+            path->D = path->R = K->One();
             path->depth = 0;
             search->reachable.insert(source);
             queue.push_back(source);
@@ -864,8 +864,8 @@ struct WFST {
             vector<int> out = path->out, traceback = path->traceback;
             int nextin = (in && depth < in->size()) ? (*in)[depth] : 0;
 
-            path->R = K->zero();
-            if (iterations++ < initialQueueSize && sourcereset) *path = ShortestDistance::Path(K->zero());
+            path->R = K->Zero();
+            if (iterations++ < initialQueueSize && sourcereset) *path = ShortestDistance::Path(K->Zero());
             if (maxiter && iterations >= maxiter) break;
 
             TransitMap::Iterator edge;
@@ -873,13 +873,13 @@ struct WFST {
                 if (in && edge.in && edge.in != nextin) continue;
                 if (efilter && (*efilter)(edge)) continue;
 
-                double rw = K->mult(r, edge.weight);
+                double rw = K->Mult(r, edge.weight);
                 int state2 = reverse ? edge.prevState : edge.nextState;
                 ShortestDistance::Path *path2 = search->get(state2);
 
-                if (path2->D != K->add(path2->D, rw)) {
-                    K->add(&path2->D, rw);
-                    K->add(&path2->R, rw);
+                if (path2->D != K->Add(path2->D, rw)) {
+                    K->Add(&path2->D, rw);
+                    K->Add(&path2->R, rw);
 
                     path2->depth = depth + (edge.in != 0);
                     if (transduce) { path2->out = out; if (edge.out) path2->out.push_back(edge.out); }
@@ -979,7 +979,7 @@ struct WFST {
                     if (matches == 1) {
                         if (!singleMatchOut) return matches;
                         T2->E->begin(&edge2, (*j).first, r2i);
-                        edge2.weight = T2->K->mult(edge2.weight, (*j).second);
+                        edge2.weight = T2->K->Mult(edge2.weight, (*j).second);
                         *singleMatchOut = edge2;
                     }
                 }
@@ -1135,12 +1135,12 @@ struct WFST {
         }
 
         void compose_null_left(trip &q, int qid) {
-            Edge e2nl(q.second, q.second, NULL2, NULL1, T2->K->one());
+            Edge e2nl(q.second, q.second, NULL2, NULL1, T2->K->One());
             compose_left(q.first, e2nl, qid, q.third);
         }
 
         void compose_null_right(trip &q, int qid, Edge *singleMatchOut=0) {
-            Edge e1nl(q.first, q.first, NULL1, NULL2, T2->K->one());
+            Edge e1nl(q.first, q.first, NULL1, NULL2, T2->K->One());
             compose_right(q.second, NULL1, e1nl, qid, q.third, singleMatchOut);
         }
 
@@ -1169,7 +1169,7 @@ struct WFST {
         void add(Edge &e1, Edge &e2, int qid, int q3) {
             trip p(e1.nextState, e2.nextState, q3);
             int pid = tripid(p);
-            out.E->add(qid, pid, e1.in, e2.out, T2->K->mult(e1.weight, e2.weight));
+            out.E->add(qid, pid, e1.in, e2.out, T2->K->Mult(e1.weight, e2.weight));
             if (done.find(p) == done.end()) { done.insert(p); S.push_back(p); }
         }
 
@@ -1188,7 +1188,7 @@ struct WFST {
 
     static void closure(Semiring *K, TransitMapBuilder *E, StateSet *I, StateSet *F) {
         if (I->states() != 1) FATAL("expected 1 intial state, got ", I->states());
-        for (int i=0, l=F->states(); i<l; i++) E->add(F->state(i), I->state(0), 0, 0, K->one());
+        for (int i=0, l=F->states(); i<l; i++) E->add(F->state(i), I->state(0), 0, 0, K->One());
         E->sort();
     }
 
@@ -1229,7 +1229,7 @@ struct WFST {
 
         /* for each initial state */
         for (int i=0, l=t->I->states(); i<l; i++) {
-            ResidualSubset s = ResidualSubset(t->I->state(i), K->one());
+            ResidualSubset s = ResidualSubset(t->I->state(i), K->One());
             S.push_back(s);
             done.insert(s);
             I->push_back(nextid);
@@ -1255,22 +1255,22 @@ struct WFST {
                 for (t->E->begin(&edge, state); !edge.done; t->E->next(&edge)) {
 
                     /* find input label */
-                    map<int, ResidualSubset>::iterator j = FindOrInsert(X, edge.in, ResidualSubset(K->zero()));
+                    map<int, ResidualSubset>::iterator j = FindOrInsert(X, edge.in, ResidualSubset(K->Zero()));
                     edges = true;
 
                     /* update input label residual sum */
-                    double pqw = K->mult(pw, edge.weight);
-                    K->add(&(*j).second.residualWeightSum, pqw);
+                    double pqw = K->Mult(pw, edge.weight);
+                    K->Add(&(*j).second.residualWeightSum, pqw);
 
                     /* add to target set */
-                    Residual qr(K->zero(), &(*i).second.residualOut);
+                    Residual qr(K->Zero(), &(*i).second.residualOut);
                     ResidualSubset::iterator q = FindOrInsert((*j).second, edge.nextState, qr, &inserted);
                     
                     /* update target out */
                     if (inserted && edge.out) (*q).second.out.push_back(edge.out);
                     
                     /* update target residual weight */
-                    K->add(&(*q).second.residualWeight, pqw);
+                    K->Add(&(*q).second.residualWeight, pqw);
 
                     /* target out conlict check */
                     if ((!(*q).second.out.size() && edge.out) || ((*q).second.out.size() && (*q).second.out[(*q).second.out.size()-1] != edge.out)) 
@@ -1295,7 +1295,7 @@ struct WFST {
                     
                     /* update target residual weight */
                     ResidualSubset::iterator q = (*j).second.begin();
-                    K->add(&(*q).second.residualWeight, pw);
+                    K->Add(&(*q).second.residualWeight, pw);
                     
                     /* target out conlict check */
                     if ((*q).second.out.size())
@@ -1355,8 +1355,8 @@ struct WFST {
         for (TransitMapBuilder::Edgevec::iterator it = E->transits.begin(); it != E->transits.end(); it++) {
             double dp = search.path[(*it).prevState].D, dn = search.path[(*it).nextState].D;
 
-            if (dp != K->zero())
-                (*it).weight = K->div(K->mult((*it).weight, dn), dp);
+            if (dp != K->Zero())
+                (*it).weight = K->Div(K->Mult((*it).weight, dn), dp);
         }
 
         E->reverse = false;
@@ -1417,7 +1417,7 @@ struct WFST {
                 TransitMap::Iterator iter2;
                 for (t->E->begin(&iter2, (*it).first); !iter2.done; t->E->next(&iter2))
                     if (!(*filter)(iter2))
-                        E->add(i, iter2.nextState, iter2.in, iter2.out, t->K->mult((*it).second.D, iter2.weight));
+                        E->add(i, iter2.nextState, iter2.in, iter2.out, t->K->Mult((*it).second.D, iter2.weight));
             }
         }
 
@@ -1442,7 +1442,7 @@ struct WFST {
 
         /* for each initial state */
         for (int i=0, l=t->I->states(); i<l; i++) {
-            ResidualSubset s = ResidualSubset(t->I->state(i), t->K->one());
+            ResidualSubset s = ResidualSubset(t->I->state(i), t->K->One());
             S.push_back(s);
             done.insert(s);
             I->push_back(nextid);
@@ -1485,7 +1485,7 @@ struct WFST {
                         int out = q.shiftLongestCommonPrefixOne();
 
                         id2 = FindOrInsert(idmap, q, nextid, &nextid);
-                        E->add((*id1).second, (*id2).second, iter2.in, out, t->K->mult(iter2.weight, (*it).second.D));
+                        E->add((*id1).second, (*id2).second, iter2.in, out, t->K->Mult(iter2.weight, (*it).second.D));
                         if (done.find(q) == done.end()) { S.push_back(q); done.insert(q); }
                     }
             }
@@ -1495,7 +1495,7 @@ struct WFST {
             else {
                 int out = p.shiftLongestCommonPrefixOne();
                 id2 = FindOrInsert(idmap, p, nextid, &nextid);
-                E->add((*id1).second, (*id2).second, 0, out, t->K->one());
+                E->add((*id1).second, (*id2).second, 0, out, t->K->One());
                 S.push_back(p); done.insert(p);
             }
         }
@@ -1581,7 +1581,7 @@ struct WFST {
         int state = 0;
         I->push_back(state++);
 
-        for (const char *word=vocab->next(); word; word=vocab->next()) {
+        for (const char *word=vocab->Next(); word; word=vocab->Next()) {
             unsigned wordhash = fnv32(word);
             int LM_priorInd, LM_transitInd, LM_count=0, LM_transits=0;
             int out = A->id(word);
@@ -1621,7 +1621,7 @@ struct WFST {
         map<string, int> homophone;
         int state = 0, max_homophones = 0, id;
 
-        for (const char *word=vocab->next(); word; word=vocab->next()) {
+        for (const char *word=vocab->Next(); word; word=vocab->Next()) {
             const char *pronunciation = dict->pronounce(word);
             if (!pronunciation || !*pronunciation) { ERROR("no pronuciation for existing word '", word, "'"); continue; }
 
@@ -1636,7 +1636,7 @@ struct WFST {
 
                 bool out_on_first = true, out_on_this = (!out_on_first && j == l-1) || (out_on_first && !j);
 
-                double weight = K->one(); int priorInd;
+                double weight = K->One(); int priorInd;
                 if (out_on_this && LM && LM->get(word, &priorInd)) /* unigram LM */
                     weight = -log((double)LM->occurences(priorInd) / LM->total);
 
@@ -1645,7 +1645,7 @@ struct WFST {
             }
 
             int nextState = state+1;
-            E->add(state++, nextState, IOAlphabet::auxiliary_symbol_id((*hpi).second), 0, K->one());
+            E->add(state++, nextState, IOAlphabet::auxiliary_symbol_id((*hpi).second), 0, K->One());
             F->push_back(state++);
         }
 
@@ -1660,12 +1660,12 @@ struct WFST {
         int aux1 = IOAlphabet::auxiliary_symbol_id(1);
         int word1=B->id("cat"), word2=B->id("dog");
         I->push_back(0); I->push_back(1);
-        E->add(0, 2, 1, word1, K->one());
-        E->add(1, 3, 2, word2, K->one());
-        E->add(2, 4, 2,     0, K->one());
-        E->add(3, 5, 1,     0, K->one());
-        E->add(4, 6, aux1,  0, K->one());
-        E->add(5, 7, aux1,  0, K->one());
+        E->add(0, 2, 1, word1, K->One());
+        E->add(1, 3, 2, word2, K->One());
+        E->add(2, 4, 2,     0, K->One());
+        E->add(3, 5, 1,     0, K->One());
+        E->add(4, 6, aux1,  0, K->One());
+        E->add(5, 7, aux1,  0, K->One());
         F->push_back(6); F->push_back(7);
         return new WFST(K, A, B, I, F, E);
     }
@@ -1679,12 +1679,12 @@ struct WFST {
         for (int i=1; i<LFL_PHONES; i++) {
             for (int j=0; j<LFL_PHONES; j++) {
                 int state = (i-1)*LFL_PHONES+j+1;
-                E->add(0, state, i, B->add(AcousticModel::name(0,i,j,0)), K->one());
+                E->add(0, state, i, B->add(AcousticModel::name(0,i,j,0)), K->One());
                 if (!j) continue;
 
                 for (int k=0; k<LFL_PHONES; k++) {
                     int nextstate = (j-1)*LFL_PHONES+k+1;
-                    E->add(state, nextstate, j, B->add(AcousticModel::name(i,j,k,0)), K->one());
+                    E->add(state, nextstate, j, B->add(AcousticModel::name(i,j,k,0)), K->One());
                     if (!k) F->push_back(nextstate);
                 }
             }
@@ -1761,7 +1761,7 @@ struct WFST {
                 unsigned hash = AcousticModel::State::tied(A->AM->tiedStates(), pp, p, pn, j);
                 int in = A->AM->getState(hash)->val.emission_index;
                 int nextstate = state+1;
-                E->add(state++, nextstate, in, !j ? iter.id : 0, K->one());
+                E->add(state++, nextstate, in, !j ? iter.id : 0, K->One());
             }
             F->push_back(state++);
         }
