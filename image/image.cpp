@@ -59,7 +59,7 @@ void DrawInput3D(Asset *a, Entity *e) {
 }
 
 void Frame3D(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample, int flag) {
-    screen->camMain->look();
+    screen->cam->Look();
     scene.Draw(&asset.vec);
 }
 
@@ -71,27 +71,27 @@ void Frame2D(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sam
         screen->gd->ActiveTexture(0);
         screen->gd->BindTexture(GraphicsDevice::Texture2D, a->tex.ID);
         screen->gd->UseShader(&MyShader);
-        MyShader.setUniform1f("xres", screen->width);
+        MyShader.SetUniform1f("xres", screen->width);
 
         // mandelbox params
         float par[20][3] = { 0.25, -1.77 };
-        MyShader.setUniform3fv("par", sizeofarray(par), &par[0][0]);
-        MyShader.setUniform1f("fov_x", FLAGS_field_of_view);
-        MyShader.setUniform1f("fov_y", FLAGS_field_of_view);
-        MyShader.setUniform1f("min_dist", .000001);
-        MyShader.setUniform1i("max_steps", 128);
-        MyShader.setUniform1i("iters", 14);
-        MyShader.setUniform1i("color_iters", 10);
-        MyShader.setUniform1f("ao_eps", .0005);
-        MyShader.setUniform1f("ao_strength", .1);
-        MyShader.setUniform1f("glow_strength", .5);
-        MyShader.setUniform1f("dist_to_color", .2);
-        MyShader.setUniform1f("x_scale", 1);
-        MyShader.setUniform1f("x_offset", 0);
-        MyShader.setUniform1f("y_scale", 1);
-        MyShader.setUniform1f("y_offset", 0);
+        MyShader.SetUniform3fv("par", sizeofarray(par), &par[0][0]);
+        MyShader.SetUniform1f("fov_x", FLAGS_field_of_view);
+        MyShader.SetUniform1f("fov_y", FLAGS_field_of_view);
+        MyShader.SetUniform1f("min_dist", .000001);
+        MyShader.SetUniform1i("max_steps", 128);
+        MyShader.SetUniform1i("iters", 14);
+        MyShader.SetUniform1i("color_iters", 10);
+        MyShader.SetUniform1f("ao_eps", .0005);
+        MyShader.SetUniform1f("ao_strength", .1);
+        MyShader.SetUniform1f("glow_strength", .5);
+        MyShader.SetUniform1f("dist_to_color", .2);
+        MyShader.SetUniform1f("x_scale", 1);
+        MyShader.SetUniform1f("x_offset", 0);
+        MyShader.SetUniform1f("y_scale", 1);
+        MyShader.SetUniform1f("y_offset", 0);
 
-        v3 up = screen->camMain->up, ort = screen->camMain->ort, pos = screen->camMain->pos;
+        v3 up = screen->cam->up, ort = screen->cam->ort, pos = screen->cam->pos;
         v3 right = v3::Cross(ort, up);
         float m[16] = { right.x, right.y, right.z, 0,
                         up.x,    up.y,    up.z,    0,
@@ -155,27 +155,27 @@ extern "C" int main(int argc, const char *argv[]) {
     binds.push_back(Bind(Key::Quote,     Bind::CB(bind([&](){ screen->console->Toggle(); }))));
     binds.push_back(Bind(Key::Escape,    Bind::CB(bind(&Shell::quit,            &app->shell, vector<string>()))));
     binds.push_back(Bind(Key::Return,    Bind::CB(bind(&Shell::grabmode,        &app->shell, vector<string>()))));
-    binds.push_back(Bind(Key::LeftShift, Bind::TimeCB(bind(&Entity::RollLeft,   screen->camMain, _1))));
-    binds.push_back(Bind(Key::Space,     Bind::TimeCB(bind(&Entity::RollRight,  screen->camMain, _1))));
-    binds.push_back(Bind('w',            Bind::TimeCB(bind(&Entity::MoveFwd,    screen->camMain, _1))));
-    binds.push_back(Bind('s',            Bind::TimeCB(bind(&Entity::MoveRev,    screen->camMain, _1))));
-    binds.push_back(Bind('a',            Bind::TimeCB(bind(&Entity::MoveLeft,   screen->camMain, _1))));
-    binds.push_back(Bind('d',            Bind::TimeCB(bind(&Entity::MoveRight,  screen->camMain, _1))));
-    binds.push_back(Bind('q',            Bind::TimeCB(bind(&Entity::MoveDown,   screen->camMain, _1))));
-    binds.push_back(Bind('e',            Bind::TimeCB(bind(&Entity::MoveUp,     screen->camMain, _1))));
+    binds.push_back(Bind(Key::LeftShift, Bind::TimeCB(bind(&Entity::RollLeft,   screen->cam, _1))));
+    binds.push_back(Bind(Key::Space,     Bind::TimeCB(bind(&Entity::RollRight,  screen->cam, _1))));
+    binds.push_back(Bind('w',            Bind::TimeCB(bind(&Entity::MoveFwd,    screen->cam, _1))));
+    binds.push_back(Bind('s',            Bind::TimeCB(bind(&Entity::MoveRev,    screen->cam, _1))));
+    binds.push_back(Bind('a',            Bind::TimeCB(bind(&Entity::MoveLeft,   screen->cam, _1))));
+    binds.push_back(Bind('d',            Bind::TimeCB(bind(&Entity::MoveRight,  screen->cam, _1))));
+    binds.push_back(Bind('q',            Bind::TimeCB(bind(&Entity::MoveDown,   screen->cam, _1))));
+    binds.push_back(Bind('e',            Bind::TimeCB(bind(&Entity::MoveUp,     screen->cam, _1))));
     screen->binds = &binds;
 
     if (!FLAGS_make_png_atlas.empty()) {
         FLAGS_atlas_dump=1;
         vector<string> png;
-        DirectoryIter d(FLAGS_make_png_atlas.c_str(), 0, 0, ".png");
+        DirectoryIter d(FLAGS_make_png_atlas, 0, 0, ".png");
         for (const char *fn = d.Next(); fn; fn = d.Next()) png.push_back(FLAGS_make_png_atlas + fn);
         Atlas::MakeFromPNGFiles("png_atlas", png, FLAGS_make_png_atlas_size, NULL);
     }
 
     if (!FLAGS_split_png_atlas.empty()) {
-        Fonts::InsertAtlas     (FLAGS_split_png_atlas.c_str(), "", 0, Color::black, 0);
-        Font *font = Fonts::Get(FLAGS_split_png_atlas.c_str(),     0, Color::black);
+        Fonts::InsertAtlas     (FLAGS_split_png_atlas, "", 0, Color::black, 0);
+        Font *font = Fonts::Get(FLAGS_split_png_atlas,     0, Color::black);
         CHECK(font);
         map<v4, int> glyph_index;
         for (int i = 255; i >= 0; i--) {
@@ -186,8 +186,8 @@ extern "C" int main(int argc, const char *argv[]) {
         for (map<v4, int>::const_iterator i = glyph_index.begin(); i != glyph_index.end(); ++i) glyphs[i->second] = i->first;
 
         string outdir = StrCat(ASSETS_DIR, FLAGS_split_png_atlas);
-        LocalFile::mkdir(outdir.c_str(), 0755);
-        string atlas_png_fn = StrCat(ASSETS_DIR, Fonts::FontName(FLAGS_split_png_atlas.c_str(), 0, Color::black, 0), "00.png");
+        LocalFile::mkdir(outdir, 0755);
+        string atlas_png_fn = StrCat(ASSETS_DIR, Fonts::FontName(FLAGS_split_png_atlas, 0, Color::black, 0), "00.png");
         Atlas::SplitIntoPNGFiles(atlas_png_fn, glyphs, outdir + LocalFile::Slash);
     }
 
@@ -203,8 +203,8 @@ extern "C" int main(int argc, const char *argv[]) {
 
     if (!FLAGS_shader.empty()) {
         string vertex_shader = LocalFile::FileContents(StrCat(ASSETS_DIR, "vertex.glsl"));
-        string fragment_shader = LocalFile::FileContents(FLAGS_shader.c_str());
-        Shader::create("my_shader", vertex_shader.c_str(), fragment_shader.c_str(), "", &MyShader);
+        string fragment_shader = LocalFile::FileContents(FLAGS_shader);
+        Shader::Create("my_shader", vertex_shader, fragment_shader, "", &MyShader);
     }
 
     if (SuffixMatch(FLAGS_input, ".obj", false)) {

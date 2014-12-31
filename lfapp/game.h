@@ -820,7 +820,7 @@ struct GameClient {
         pup.id_WorldUpdate = last.id_WorldUpdate;
         pup.time_since_WorldUpdate = Now() - last.time_recv_WorldUpdate[0];
         pup.buttons = CS.buttons;
-        pup.ort.From(screen->camMain->ort, screen->camMain->up);
+        pup.ort.From(screen->cam->ort, screen->cam->up);
         net->Write(conn, UDPClient::Write, seq++, &pup);
 
         last.buttons = CS.buttons;
@@ -885,7 +885,7 @@ struct GameClient {
                 }
 
                 e->updated = last.time_frame;
-                if (me && reorienting) { reorienting=0; e1->ort.To(&screen->camMain->ort, &screen->camMain->up); }
+                if (me && reorienting) { reorienting=0; e1->ort.To(&screen->cam->ort, &screen->cam->up); }
                 if (me && !replay.enabled()) Me(e, cam, !reorienting);
                 i++; j++;
             }
@@ -970,29 +970,25 @@ struct GameClient {
     }
 
     static void Me(Entity *e, int cam, bool assign_entity) {
-        screen->camMain->pos = e->pos;
+        screen->cam->pos = e->pos;
         if (cam == 1) {
-            v3 v = screen->camMain->ort * 2;
-            screen->camMain->pos.Sub(v);
-        }
-        else if (cam == 2) {
-            v3 v = screen->camMain->ort * 2;
-            screen->camMain->pos.Sub(v);
-            v = screen->camMain->up * .1;
-            screen->camMain->pos.Add(v);
-        }
-        else if (cam == 3) {
+            v3 v = screen->cam->ort * 2;
+            screen->cam->pos.Sub(v);
+        } else if (cam == 2) {
+            v3 v = screen->cam->ort * 2;
+            screen->cam->pos.Sub(v);
+            v = screen->cam->up * .1;
+            screen->cam->pos.Add(v);
+        } else if (cam == 3) {
             assign_entity = false;
-        }
-        else if (cam == 4) {
-            screen->camMain->pos = v3(0,3.8,0);
-            screen->camMain->ort = v3(0,-1,0);
-            screen->camMain->up = v3(0,0,-1);
-            assign_entity = false;
-        }
-        if (assign_entity) {
-            e->ort = screen->camMain->ort;
-            e->up = screen->camMain->up;
+        } else if (cam == 4) {
+            screen->cam->pos = v3(0,3.8,0);
+            screen->cam->ort = v3(0,-1,0);
+            screen->cam->up  = v3(0,0,-1);
+            assign_entity    = false;
+        } if (assign_entity) {
+            e->ort = screen->cam->ort;
+            e->up  = screen->cam->up;
         }
     }
 };
@@ -1047,8 +1043,8 @@ struct GameMenuGUI : public GUI, public Query {
     sub_tab1(this, 0, font, "g+",             MouseController::CB([&]() { sub_selected=1; })),
     sub_tab2(this, 0, font, "join",           MouseController::CB([&]() { sub_selected=2; })),
     sub_tab3(this, 0, font, "start",          MouseController::CB([&]() { sub_selected=3; })),
-    tab2_server_address(W, font, 0, ToggleBool::OneShot),
-    tab3_player_name   (W, font, 0, ToggleBool::OneShot),
+    tab2_server_address(W, font),
+    tab3_player_name   (W, font),
     tab1_options    (this, menuftr1),
     tab2_servers    (this, menuftr2),
     tab3_sensitivity(this, Box(), Widget::Scrollbar::Flag::Horizontal),
@@ -1068,6 +1064,8 @@ struct GameMenuGUI : public GUI, public Query {
         tab3_player_name.cmd_prefix.clear();
         tab3_player_name.deactivate_on_enter = tab2_server_address.deactivate_on_enter = true;
         tab3_player_name.runcb = bind(&TextGUI::AssignInput, (TextGUI*)&tab3_player_name, _1);
+        tab3_player_name   .SetToggleKey(0, ToggleBool::OneShot);
+        tab2_server_address.SetToggleKey(0, ToggleBool::OneShot);
         tab2_server_address.runcb = bind(&GameMenuGUI::MenuAddServer, this, _1);
         tab3_sensitivity.increment = .1;
         tab3_sensitivity.doc_height = 10;
@@ -1075,6 +1073,7 @@ struct GameMenuGUI : public GUI, public Query {
         tab3_volume.increment = .5;
         tab3_volume.doc_height = SystemAudio::GetMaxVolume();
         tab3_volume.scrolled = (float)SystemAudio::GetVolume() / tab3_volume.doc_height;
+
         sub_selected = 2;
         if (parts) {
             particles.emitter_type = MenuParticles::Emitter::Mouse | MenuParticles::Emitter::GlowFade;
@@ -1404,7 +1403,10 @@ struct GamePlayerListGUI : public GUI {
 
 struct GameChatGUI : public TextArea {
     GameClient **server;
-    GameChatGUI(LFL::Window *W, int key, GameClient **s) : TextArea(W, Fonts::Get("Origicide.ttf", 10, Color::grey80), key, ToggleBool::OneShot), server(s) { write_timestamp=deactivate_on_enter=true; }
+    GameChatGUI(LFL::Window *W, int key, GameClient **s) : TextArea(W, Fonts::Get("Origicide.ttf", 10, Color::grey80)), server(s) { 
+        SetToggleKey(key, ToggleBool::OneShot);
+        write_timestamp=deactivate_on_enter=true;
+    }
 
     void Run(string text) {
         if (server && *server) (*server)->Rcon(StrCat("say ", text));
@@ -1461,23 +1463,23 @@ struct GameMultiTouchControls {
 
             lpad_down = rpad_down = 0;
             if (FLAGS_swap_axis) {
-                if (dp0_y > 0) { lpad_down = LEFT;    client->MoveLeft (clicks); }
-                if (dp0_y < 0) { lpad_down = RIGHT;   client->MoveRight(clicks); }
-                if (dp0_x < 0) { lpad_down = UP;      client->MoveFwd  (clicks); }
-                if (dp0_x > 0) { lpad_down = DOWN;    client->MoveRev  (clicks); }
-                if (dp1_y > 0) { rpad_down = LEFT;    screen->camMain->YawLeft (clicks); }
-                if (dp1_y < 0) { rpad_down = RIGHT;   screen->camMain->YawRight(clicks); }
-                if (dp1_x < 0) { rpad_down = UP;   /* screen->camMain->MoveUp  (clicks); */ }
-                if (dp1_x > 0) { rpad_down = DOWN; /* screen->camMain->MoveDown(clicks); */ }
+                if (dp0_y > 0) { lpad_down = LEFT;    client->MoveLeft     (clicks); }
+                if (dp0_y < 0) { lpad_down = RIGHT;   client->MoveRight    (clicks); }
+                if (dp0_x < 0) { lpad_down = UP;      client->MoveFwd      (clicks); }
+                if (dp0_x > 0) { lpad_down = DOWN;    client->MoveRev      (clicks); }
+                if (dp1_y > 0) { rpad_down = LEFT;    screen->cam->YawLeft (clicks); }
+                if (dp1_y < 0) { rpad_down = RIGHT;   screen->cam->YawRight(clicks); }
+                if (dp1_x < 0) { rpad_down = UP;   /* screen->cam->MoveUp  (clicks); */ }
+                if (dp1_x > 0) { rpad_down = DOWN; /* screen->cam->MoveDown(clicks); */ }
             } else {
-                if (dp1_x < 0) { lpad_down = LEFT;    client->MoveLeft (clicks); }
-                if (dp1_x > 0) { lpad_down = RIGHT;   client->MoveRight(clicks); }
-                if (dp1_y < 0) { lpad_down = UP;      client->MoveFwd  (clicks); }
-                if (dp1_y > 0) { lpad_down = DOWN;    client->MoveRev  (clicks); }
-                if (dp0_x < 0) { rpad_down = LEFT;    screen->camMain->YawLeft(clicks); } 
-                if (dp0_x > 0) { rpad_down = RIGHT;   screen->camMain->YawRight(clicks); }
-                if (dp0_y < 0) { rpad_down = UP;   /* screen->camMain->MoveUp  (clicks); */ }
-                if (dp0_y > 0) { rpad_down = DOWN; /* screen->camMain->MoveDown(clicks); */ }
+                if (dp1_x < 0) { lpad_down = LEFT;    client->MoveLeft     (clicks); }
+                if (dp1_x > 0) { lpad_down = RIGHT;   client->MoveRight    (clicks); }
+                if (dp1_y < 0) { lpad_down = UP;      client->MoveFwd      (clicks); }
+                if (dp1_y > 0) { lpad_down = DOWN;    client->MoveRev      (clicks); }
+                if (dp0_x < 0) { rpad_down = LEFT;    screen->cam->YawLeft (clicks); } 
+                if (dp0_x > 0) { rpad_down = RIGHT;   screen->cam->YawRight(clicks); }
+                if (dp0_y < 0) { rpad_down = UP;   /* screen->cam->MoveUp  (clicks); */ }
+                if (dp0_y > 0) { rpad_down = DOWN; /* screen->cam->MoveDown(clicks); */ }
             }
         } else {
             point l, r;
@@ -1521,8 +1523,8 @@ struct GameMultiTouchControls {
                 bool g1 = (rpad_win.w * (r.y - (rpad_win.y))              - rpad_win.h * (r.x - rpad_win.x)) > 0; 
                 bool g2 = (rpad_win.w * (r.y - (rpad_win.y + rpad_win.h)) + rpad_win.h * (r.x - rpad_win.x)) > 0; 
 
-                if      ( g1 && !g2) { rpad_down = LEFT;  screen->camMain->YawLeft (clicks); }
-                else if (!g1 &&  g2) { rpad_down = RIGHT; screen->camMain->YawRight(clicks); }
+                if      ( g1 && !g2) { rpad_down = LEFT;  screen->cam->YawLeft (clicks); }
+                else if (!g1 &&  g2) { rpad_down = RIGHT; screen->cam->YawRight(clicks); }
                 else if ( g1 &&  g2) { rpad_down = UP;    }
                 else if (!g1 && !g2) { rpad_down = DOWN;  }
             }

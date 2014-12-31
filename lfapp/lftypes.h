@@ -348,6 +348,7 @@ template <class X> struct RingVector {
     RingVector(int S=0) : ring(S), data(S) {}
     X&       operator[](int i)       { return data[ring.Index(i)]; }
     const X& operator[](int i) const { return data[ring.Index(i)]; }
+    virtual int Size() const { return ring.count; }
     virtual int IndexOf(const X *v) const { return ring.IndexOf(v - &data[0]); }
     virtual X   *Back ()         { return &data[ring.Back()]; }
     virtual X   *Front()         { return &data[ring.Front()]; }

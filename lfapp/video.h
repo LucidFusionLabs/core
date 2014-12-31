@@ -437,16 +437,16 @@ struct Shader {
         dirty_material=0; memzeros(dirty_light_pos); memzeros(dirty_light_color);
     }
 
-    static int create(const char *name, const char *vertex_shader, const char *fragment_shader, const char *defines, Shader *out);
-    int getUniformIndex(const char *name);
-    void setUniform1i(const char *name, float v);
-    void setUniform1f(const char *name, float v);
-    void setUniform2f(const char *name, float v1, float v2);
-    void setUniform3fv(const char *name, const float *v);
-    void setUniform3fv(const char *name, int n, const float *v);
+    static int Create(const string &name, const string &vertex_shader, const string &fragment_shader, const string &defines, Shader *out);
+    int GetUniformIndex(const string &name);
+    void SetUniform1i(const string &name, float v);
+    void SetUniform1f(const string &name, float v);
+    void SetUniform2f(const string &name, float v1, float v2);
+    void SetUniform3fv(const string &name, const float *v);
+    void SetUniform3fv(const string &name, int n, const float *v);
 
-    static void SetGlobalUniform1f(const char *name, float v);
-    static void SetGlobalUniform2f(const char *name, float v1, float v2);
+    static void SetGlobalUniform1f(const string &name, float v);
+    static void SetGlobalUniform2f(const string &name, float v1, float v2);
 };
 
 struct Video : public Module {
@@ -470,7 +470,7 @@ struct Window : public NativeWindow {
     RollingAvg fps;
     Dialog *top_dialog;
     vector<Dialog*> dialogs;
-    Entity *camMain;
+    Entity *cam;
     vector<GUI*> mouse_gui;
     vector<KeyboardGUI*> keyboard_gui;
 
@@ -562,12 +562,12 @@ struct GraphicsDevice {
     void ShaderSource(int shader, int count, const char **source, int *len);
     void CompileShader(int shader);
     void AttachShader(int prog, int shader);
-    void BindAttribLocation(int prog, int loc, const char *name);
+    void BindAttribLocation(int prog, int loc, const string &name);
     void LinkProgram(int prog);
     void GetProgramiv(int p, int t, int *out);
     void GetIntegerv(int t, int *out);
-    int GetAttribLocation(int prog, const char *name);
-    int GetUniformLocation(int prog, const char *name);
+    int GetAttribLocation(int prog, const string &name);
+    int GetUniformLocation(int prog, const string &name);
     void Uniform1i(int u, int v);
     void Uniform1f(int u, float v);
     void Uniform2f(int u, float v1, float v2);

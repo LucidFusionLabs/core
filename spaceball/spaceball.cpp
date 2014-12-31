@@ -159,7 +159,7 @@ void ShipDraw(Asset *a, Entity *e) {
     if (e->animation.ShaderActive()) {
         anim_shader = e->animation.shader;
         screen->gd->UseShader(anim_shader);
-        anim_shader->setUniform1f("time", e->animation.Percent());
+        anim_shader->SetUniform1f("time", e->animation.Percent());
     }
     Scene::Draw(a->geometry, e);
     if (anim_shader) screen->gd->UseShader(0);
@@ -194,9 +194,9 @@ void ShipDraw(Asset *a, Entity *e) {
 
 void SetInitialCameraPosition() {
     // position camera for a nice earth shot; from command 'campos'
-    screen->camMain->pos = v3(5.54,1.70,4.39);
-    screen->camMain->ort = v3(-0.14,0.02,-0.69);
-    screen->camMain->up = v3(0.01,1.00,0.02);
+    screen->cam->pos = v3(5.54,1.70,4.39);
+    screen->cam->ort = v3(-0.14,0.02,-0.69);
+    screen->cam->up = v3(0.01,1.00,0.02);
 }
 
 struct SpaceballClient : public GameClient {
@@ -255,17 +255,17 @@ struct SpaceballClient : public GameClient {
             replay.while_seq = last.seq_WorldUpdate = seq;
             replay.start = Now();
 
-            screen->camMain->pos = v3(1.73,   2.53, 16.83);
-            screen->camMain->up  = v3(-0.01,  0.98, -0.19);
-            screen->camMain->ort = v3(-0.03, -0.13, -0.69);
+            screen->cam->pos = v3(1.73,   2.53, 16.83);
+            screen->cam->up  = v3(-0.01,  0.98, -0.19);
+            screen->cam->ort = v3(-0.03, -0.13, -0.69);
 
             if (last_scored_team == Game::Team::Blue) {
-                screen->camMain->pos.z *= -1;
-                screen->camMain->ort.z *= -1;
-                screen->camMain->up.z *= -1;
+                screen->cam->pos.z *= -1;
+                screen->cam->ort.z *= -1;
+                screen->cam->up.z *= -1;
             }
-            screen->camMain->ort.Norm();
-            screen->camMain->up.Norm();
+            screen->cam->ort.Norm();
+            screen->cam->up.Norm();
         }
         else if (cmd == "win") {
             gameover.start_ind = ::atoi(arg.c_str());
@@ -473,7 +473,7 @@ int Frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample
         glTimeResolutionShaderWindows(&warpershader, Color::black, screen->Box(), &framebuffer.tex);
 
     } else {
-        screen->camMain->look();
+        screen->cam->Look();
         shooting_stars.Update(clicks, 0, 0, 0);
         ball_trail.Update(clicks, 0, 0, 0);
         if (server->ball) ball_particles->pos = server->ball->pos;
@@ -482,7 +482,7 @@ int Frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample
         Scene::LastUpdatedFilter scene_filter_deleted(0, server->last.time_frame, &deleted);
 
         screen->gd->Light(0, GraphicsDevice::Position, &sbmap->home->light.pos.x);
-        sbmap->Draw(*screen->camMain);
+        sbmap->Draw(*screen->cam);
 
         // Custom Scene::Draw();
         for (vector<Asset>::iterator a = asset.vec.begin(); a != asset.vec.end(); ++a) {
@@ -525,11 +525,11 @@ int Frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample
         if (server->ball) {
             // Replay camera tracks ball
             v3 targ = server->ball->pos + server->ball->vel;
-            v3 yaw_delta = v3::Norm(targ - v3(screen->camMain->pos.x, targ.y, screen->camMain->pos.z));
-            v3 ort = v3::Norm(targ - screen->camMain->pos);
+            v3 yaw_delta = v3::Norm(targ - v3(screen->cam->pos.x, targ.y, screen->cam->pos.z));
+            v3 ort = v3::Norm(targ - screen->cam->pos);
             v3 delta = ort - yaw_delta;
-            screen->camMain->up = v3(0,1,0) + delta;
-            screen->camMain->ort = ort;
+            screen->cam->up = v3(0,1,0) + delta;
+            screen->cam->ort = ort;
         }
 
         Box win(screen->width*.4, screen->height*.8, screen->width*.2, screen->height*.1, false);
@@ -565,8 +565,8 @@ int Frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample
 
     if (server->replay.just_ended) {
         server->replay.just_ended = false;
-        screen->camMain->ort = SpaceballGame::StartOrientation(server->team);
-        screen->camMain->up  = v3(0, 1, 0);
+        screen->cam->ort = SpaceballGame::StartOrientation(server->team);
+        screen->cam->up  = v3(0, 1, 0);
     }
 
     if (team_select->display) team_select->Draw(fadershader.ID > 0 ? &fadershader : 0);
@@ -694,9 +694,9 @@ extern "C" int main(int argc, const char *argv[]) {
         CHECK(StringReplace(&explode_shader, "// LFLPositionShaderMarker",
                                              LocalFile::FileContents(StrCat(ASSETS_DIR, "explode.glsl"))));
 
-        Shader::create("fadershader",         vertex_shader.c_str(),       fader_shader.c_str(), "",                                          &fadershader);
-        Shader::create("warpershader",  lfapp_vertex_shader.c_str(),      warper_shader.c_str(), "#define TEX2D \r\n#define VERTEXCOLOR\r\n", &warpershader);
-        Shader::create("explodeshader",      explode_shader.c_str(), lfapp_pixel_shader.c_str(), "#define TEX2D \r\n#define NORMALS\r\n",     &explodeshader);
+        Shader::Create("fadershader",         vertex_shader,       fader_shader, "",                                          &fadershader);
+        Shader::Create("warpershader",  lfapp_vertex_shader,      warper_shader, "#define TEX2D \r\n#define VERTEXCOLOR\r\n", &warpershader);
+        Shader::Create("explodeshader",      explode_shader, lfapp_pixel_shader, "#define TEX2D \r\n#define NORMALS\r\n",     &explodeshader);
     }
 
     // ball trail
@@ -833,8 +833,8 @@ extern "C" int main(int argc, const char *argv[]) {
 #if !defined(LFL_IPHONE) && !defined(LFL_ANDROID)
     binds.push_back(Bind(Bind::MOUSE1,    Bind::TimeCB(bind(&SpaceballClient::MoveBoost, server, _1))));
 #endif
-    binds.push_back(Bind(Key::LeftShift,  Bind::TimeCB(bind(&Entity::RollLeft,   screen->camMain, _1))));
-    binds.push_back(Bind(Key::Space,      Bind::TimeCB(bind(&Entity::RollRight,  screen->camMain, _1))));
+    binds.push_back(Bind(Key::LeftShift,  Bind::TimeCB(bind(&Entity::RollLeft,   screen->cam, _1))));
+    binds.push_back(Bind(Key::Space,      Bind::TimeCB(bind(&Entity::RollRight,  screen->cam, _1))));
     binds.push_back(Bind(Key::Tab,        Bind::TimeCB(bind(&GUI::EnableDisplay, playerlist))));
     binds.push_back(Bind(Key::F1,         Bind::CB(bind(&GameClient::SetCamera,  server,          vector<string>(1, string("1"))))));
     binds.push_back(Bind(Key::F2,         Bind::CB(bind(&GameClient::SetCamera,  server,          vector<string>(1, string("2"))))));

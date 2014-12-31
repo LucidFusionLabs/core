@@ -35,7 +35,7 @@ GeoResolution *geo;
 
 // engine callback driven by LFL::Application
 int Frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample, int flag) {
-    scene.Get("arrow")->yawright((double)clicks/500);
+    scene.Get("arrow")->YawRight((double)clicks/500);
     scene.Draw(&asset.vec);
 
     // Press tick for console
@@ -100,14 +100,14 @@ extern "C" int main(int argc, const char *argv[]) {
     binds.push_back(Bind(Key::Quote,     Bind::CB(bind([&](){ screen->console->Toggle(); }))));
     binds.push_back(Bind(Key::Escape,    Bind::CB(bind(&Shell::quit,            &app->shell, vector<string>()))));
     binds.push_back(Bind(Key::Return,    Bind::CB(bind(&Shell::grabmode,        &app->shell, vector<string>()))));
-    binds.push_back(Bind(Key::LeftShift, Bind::TimeCB(bind(&Entity::RollLeft,   screen->camMain, _1))));
-    binds.push_back(Bind(Key::Space,     Bind::TimeCB(bind(&Entity::RollRight,  screen->camMain, _1))));
-    binds.push_back(Bind('w',            Bind::TimeCB(bind(&Entity::MoveFwd,    screen->camMain, _1))));
-    binds.push_back(Bind('s',            Bind::TimeCB(bind(&Entity::MoveRev,    screen->camMain, _1))));
-    binds.push_back(Bind('a',            Bind::TimeCB(bind(&Entity::MoveLeft,   screen->camMain, _1))));
-    binds.push_back(Bind('d',            Bind::TimeCB(bind(&Entity::MoveRight,  screen->camMain, _1))));
-    binds.push_back(Bind('q',            Bind::TimeCB(bind(&Entity::MoveDown,   screen->camMain, _1))));
-    binds.push_back(Bind('e',            Bind::TimeCB(bind(&Entity::MoveUp,     screen->camMain, _1))));
+    binds.push_back(Bind(Key::LeftShift, Bind::TimeCB(bind(&Entity::RollLeft,   screen->cam, _1))));
+    binds.push_back(Bind(Key::Space,     Bind::TimeCB(bind(&Entity::RollRight,  screen->cam, _1))));
+    binds.push_back(Bind('w',            Bind::TimeCB(bind(&Entity::MoveFwd,    screen->cam, _1))));
+    binds.push_back(Bind('s',            Bind::TimeCB(bind(&Entity::MoveRev,    screen->cam, _1))));
+    binds.push_back(Bind('a',            Bind::TimeCB(bind(&Entity::MoveLeft,   screen->cam, _1))));
+    binds.push_back(Bind('d',            Bind::TimeCB(bind(&Entity::MoveRight,  screen->cam, _1))));
+    binds.push_back(Bind('q',            Bind::TimeCB(bind(&Entity::MoveDown,   screen->cam, _1))));
+    binds.push_back(Bind('e',            Bind::TimeCB(bind(&Entity::MoveUp,     screen->cam, _1))));
     screen->binds = &binds;
 
     scene.Add(new Entity("axis",  asset("axis")));

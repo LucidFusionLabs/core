@@ -217,13 +217,13 @@ struct KeyboardGUI : public KeyboardController {
     Bind toggle_bind;
     ToggleBool toggle_active;
     Window *parent;
-    KeyboardGUI(Window *W, Font *F, int TK=0, int TM=ToggleBool::Default, int LastCommands=50)
-        : toggle_active(&active, TM), lastcmd(LastCommands), parent(W)
-    { parent->keyboard_gui.push_back(this); toggle_bind.key=TK; }
+    KeyboardGUI(Window *W, Font *F, int LastCommands=50)
+        : toggle_active(&active), lastcmd(LastCommands), parent(W) { parent->keyboard_gui.push_back(this); }
     virtual ~KeyboardGUI() { if (parent) VectorEraseByValue(&parent->keyboard_gui, this); }
     virtual void Enable() { active = true; }
     virtual bool Toggle() { return toggle_active.Toggle(); }
     virtual void Run(string cmd) { if (runcb) runcb(cmd); }
+    virtual void SetToggleKey(int TK, int TM=ToggleBool::Default) { toggle_bind.key=TK; toggle_active.mode=TM; }
 
     void AddHistory  (const string &cmd);
     int  ReadHistory (const string &dir, const string &name);
@@ -247,9 +247,10 @@ struct TextGUI : public KeyboardGUI {
     };
     struct Line {
         point p;
+        Lines *cont;
         TextGUI *parent;
         shared_ptr<LineData> data;
-        Line(TextGUI *P=0) : parent(P), data(new LineData()) {}
+        Line(Lines *C=0, TextGUI *P=0) : cont(C), parent(P), data(new LineData()) {}
         Line &operator=(const Line &s) { data=s.data; return *this; }
         static void Move (Line &t, Line &s) { swap(t.data, s.data); }
         static void MoveP(Line &t, Line &s) { swap(t.data, s.data); t.p=s.p; }
@@ -273,7 +274,7 @@ struct TextGUI : public KeyboardGUI {
         int Size () const { return data->glyphs.Size(); }
         int Lines() const { return max(1, data->glyphs.line.size()); }
         string Text() const { return String::ToUTF8(data->text); }
-        void Clear() { data->text.clear(); data->text_attr.clear(); data->glyphs.Clear(); }
+        void Clear() { if (cont) cont->wrapped_lines -= Lines(); data->text.clear(); data->text_attr.clear(); data->glyphs.Clear(); }
         void Erase(int o, unsigned long long l=String16::npos) { if (data->text.size() > o) { data->text.erase(o, l);  data->text_attr.erase(o, l); } }
         void InsertTextAt(int o, const string   &s, int a=0) { String16 v=String::ToUTF16(s); data->text.insert(o, v); data->text_attr.insert(o, String16(v.size(), a)); }
         void InsertTextAt(int o, const String16 &s, int a=0) {                                data->text.insert(o, s); data->text_attr.insert(o, String16(s.size(), a)); }
@@ -283,6 +284,7 @@ struct TextGUI : public KeyboardGUI {
         void AssignText  (       const String16 &s, int a=0) { data->text = s;                  data->text_attr = String16(data->text.size(), a); }
         void UpdateAttr(int ind, int len, int a) { Vec<short>::Assign((short*)data->text_attr.data() + ind, a, len); }
         void Layout(Box win) {
+            int start_lines = cont ? Lines() : 0;
             data->glyphs.Clear();
             Flow flow(&win, parent->font, &data->glyphs, &parent->layout);
             for (ArraySegmentIter<short> iter(data->text_attr); !iter.Done(); iter.Increment()) {
@@ -291,6 +293,7 @@ struct TextGUI : public KeyboardGUI {
             }
             flow.Complete();
             CHECK_EQ(data->text.size(), data->glyphs.Size());
+            if (cont) cont->wrapped_lines += (Lines() - start_lines);
         }
 #endif
         void UpdateText(int x, const String16 &v, int attr, int max_width=0) {
@@ -324,10 +327,12 @@ struct TextGUI : public KeyboardGUI {
         }
     };
     struct Lines : public RingVector<Line> {
+        int wrapped_lines;
         function<void(Line&, Line&)> move_cb, movep_cb;
-        Lines(TextGUI *P, int ML=200) : RingVector<Line>(ML),
-        move_cb (bind(&Line::Move,  _1, _2)), 
-        movep_cb(bind(&Line::MoveP, _1, _2)) { for (auto &i : data) i.parent = P; }
+        Lines(TextGUI *P, int ML=200) :
+            RingVector<Line>(ML), wrapped_lines(ML),
+            move_cb (bind(&Line::Move,  _1, _2)), 
+            movep_cb(bind(&Line::MoveP, _1, _2)) { for (auto &i : data) { i.cont = this; i.parent = P; } }
 
         Line *PushFront() { Line *l = RingVector<Line>::PushFront(); l->Clear(); return l; }
         Line *InsertAt(int dest_line, int lines=1, int dont_move_last=0) {
@@ -418,8 +423,8 @@ struct TextGUI : public KeyboardGUI {
     string cmd_prefix="> ";
     Color cmd_color=Color::white;
     bool deactivate_on_enter=0, clickable_links=0, insert_mode=0;
-    int scroll_inc=100, scrolled_lines=0, adjust_lines=0, skip_last_lines=0, start_line=0;
-    TextGUI(Window *W, Font *F, int TK=0, int TM=ToggleBool::Default) : KeyboardGUI(W, F, TK, TM), font(F), cmd_line(this) {}
+    int adjust_lines=0, skip_last_lines=0, start_line=0;
+    TextGUI(Window *W, Font *F) : KeyboardGUI(W, F), font(F), cmd_line(0, this) {}
 
     virtual ~TextGUI() {}
     virtual int CommandLines() const { return 0; }
@@ -452,30 +457,45 @@ struct TextGUI : public KeyboardGUI {
 };
 
 struct TextArea : public TextGUI {
+    typedef pair<int,int> WrappedLineOffset;
+
     Lines line;
     LinesFrameBuffer line_fb;
     GUI mouse_gui;
     Time write_last=0;
     const Border *clip=0;
+    WrappedLineOffset first_line, last_line;
     bool wrap_lines=1, write_timestamp=0, write_newline=1;
     bool selection_changing=0, selection_changing_previously=0;
+    float v_scrolled=0, h_scrolled=0, last_v_scrolled=0, last_h_scrolled=0;
+    int scroll_inc=10, scrolled_lines=0;
     point selection_beg, selection_end;
     LinkCB new_link_cb, hover_link_cb;
 
-    TextArea(Window *W, Font *F, int TK=0, int TM=ToggleBool::Default) : TextGUI(W, F, TK, TM), line(this), mouse_gui(W) {}
+    TextArea(Window *W, Font *F) : TextGUI(W, F), line(this), mouse_gui(W) {}
     virtual ~TextArea() {}
 
     /// Write() is thread-safe.
     virtual void Write(const string &s, bool update_fb=true, bool release_fb=true);
-    virtual void PageUp();
-    virtual void PageDown();
+    virtual void PageUp  () { v_scrolled = Clamp(v_scrolled - (float)scroll_inc/WrappedLines(), 0, 1); UpdateScrolled(); }
+    virtual void PageDown() { v_scrolled = Clamp(v_scrolled + (float)scroll_inc/WrappedLines(), 0, 1); UpdateScrolled(); } 
     virtual void Resized(int w, int h);
+
+    virtual int  WrappedLines() const { return line.wrapped_lines; }
+    virtual void IncrementWrappedLineOffset(WrappedLineOffset *o, int n) const;
+    virtual WrappedLineOffset GetWrappedLineOffset(float percent) const
+    { WrappedLineOffset o; IncrementWrappedLineOffset(&o, percent * (WrappedLines() - 1)); return o; }
+
+    virtual void UpdateScrolled();
+    virtual void UpdateLines(const WrappedLineOffset &nfl, const WrappedLineOffset &nll)
+    { start_line = nfl.first; adjust_lines = -nfl.second; }
 
     virtual void Draw(const Box &w, bool cursor);
     // void UpdateLineOffsets(bool size_changed, bool cursor);
     // void UpdateWrapping(int width, bool new_lines_only);
     // void DrawOrCopySelection();
 
+    bool Wrap() const { return line_fb.wrap; }
     void ClickCB(int button, int x, int y, int down) {
         if (1)    selection_changing = down;
         if (down) selection_beg = point(x, y);
@@ -484,31 +504,19 @@ struct TextArea : public TextGUI {
 };
 
 struct Editor : public TextArea {
+    typedef pair<int, int> LineOffsetSegment;
     struct LineOffset { 
         int offset, size, font_size, wrapped_line_number; float width; 
         LineOffset(int O=0, int S=0, int FS=0, int WLN=0, float W=0) :
            offset(O), size(S), font_size(FS), wrapped_line_number(WLN), width(W) {}
         bool operator<(const LineOffset &l) const { return wrapped_line_number < l.wrapped_line_number; }
     };
-    typedef pair<int, int> LineOffsetSegment;
-
-    struct WrappedLineOffset {
-        int first, second;
-        WrappedLineOffset(int F=0, int S=0) : first(F), second(S) {}
-        bool operator<(const WrappedLineOffset &x) { SortMacro2(first, x.first, second, x.second); }
-    };
 
     shared_ptr<File> file;
     vector<LineOffset> file_line;
-    WrappedLineOffset first_line, last_line;
     int last_fb_lines=0, wrapped_lines=0;
-    float v_scrolled=0, h_scrolled=0, last_v_scrolled=0, last_h_scrolled=0;
+
     Editor(Window *W, Font *F, File *I) : TextArea(W, F), file(I) { line_fb.wrap=1; BuildLineMap(); }
-
-    void PageUp  () { v_scrolled = Clamp(v_scrolled - 10.0/X_or_Y(wrapped_lines, 100), 0, 1); }
-    void PageDown() { v_scrolled = Clamp(v_scrolled + 10.0/X_or_Y(wrapped_lines, 100), 0, 1); } 
-
-    bool Wrap() const { return line_fb.wrap; }
     void BuildLineMap() {
         int ind=0, offset=0;
         for (const char *l = file->NextLineRaw(&offset); l; l = file->NextLineRaw(&offset))
@@ -516,6 +524,8 @@ struct Editor : public TextArea {
                                            ind++, TextArea::font->Width(l)));
         wrapped_lines = file_line.size();
     }
+
+    int WrappedLines() const { return wrapped_lines; }
     void UpdateWrappedLines(int cur_font_size, int box_width) {
         wrapped_lines = 0;
         for (auto &l : file_line) {
@@ -523,16 +533,16 @@ struct Editor : public TextArea {
             l.wrapped_line_number = wrapped_lines;
         }
     }
-    void GetWrappedLineOffset(float percent, WrappedLineOffset *out) const {
-        if (!Wrap()) { *out = WrappedLineOffset(percent * file_line.size(), 0); return; }
+    WrappedLineOffset GetWrappedLineOffset(float percent) const {
+        if (!Wrap()) return WrappedLineOffset(percent * file_line.size(), 0);
         int target_line = percent * wrapped_lines;
         auto it = lower_bound(file_line.begin(), file_line.end(), LineOffset(0,0,0,target_line));
-        if (it == file_line.end()) { *out = WrappedLineOffset(file_line.size(), 0); return; }
+        if (it == file_line.end()) return WrappedLineOffset(file_line.size(), 0);
         int pln = it == file_line.begin() ? 0 : (it-1)->wrapped_line_number;
-        *out = WrappedLineOffset(it - file_line.begin(), target_line - pln);
+        return WrappedLineOffset(it - file_line.begin(), target_line - pln);
     }
-    void UpdateLines();
-    void Draw(const Box &box) { TextArea::Draw(box, true); UpdateLines(); }
+    void UpdateLines(const WrappedLineOffset &nfl, const WrappedLineOffset &nll);
+    void Draw(const Box &box) { TextArea::Draw(box, true); }
 };
 
 struct Terminal : public TextArea, public Drawable::AttrSource {
@@ -584,8 +594,8 @@ struct Terminal : public TextArea, public Drawable::AttrSource {
     Border clip_border;
     Colors *colors=0;
 
-    Terminal(int FD, Window *W, Font *F, int TK=0, int TM=ToggleBool::Default) :
-        TextArea(W, F, TK, TM), fd(FD), fb_cb(bind(&Terminal::GetFrameBuffer, this, _1)) {
+    Terminal(int FD, Window *W, Font *F) :
+        TextArea(W, F), fd(FD), fb_cb(bind(&Terminal::GetFrameBuffer, this, _1)) {
         CHECK(F->fixed_width || (F->flag & FontDesc::Mono));
         wrap_lines = write_newline = 0;
         for (int i=0; i<line.ring.size; i++) line[i].data->glyphs.attr.source = this;
@@ -654,11 +664,13 @@ struct Console : public TextArea {
     Color color=Color(25,60,130,120);
     int animTime=333; Time animBegin=0;
     bool animating=0, drawing=0, bottom_or_top=0, blend=1, ran_startcmd=0;
-    Console(Window *W, Font *F) : TextArea(W,F, Key::Backquote) { write_timestamp = 1; }
+    Console(Window *W, Font *F) : TextArea(W,F) { write_timestamp=1; SetToggleKey(Key::Backquote); }
 
     virtual ~Console() {}
     virtual int CommandLines() const { return cmd_line.Lines(); }
     virtual void Run(string in) { app->shell.Run(in); }
+    virtual void PageUp  () { TextArea::PageDown(); }
+    virtual void PageDown() { TextArea::PageUp(); }
     virtual bool Toggle() {
         if (!TextGUI::Toggle()) return false;
         Time elapsed = Now()-animBegin;
@@ -789,6 +801,7 @@ struct EditorDialog : public Dialog {
         if (1)     editor.active = screen->top_dialog == this;
         if (1)     editor.v_scrolled = v_scrollbar.AddDelta(editor.v_scrolled);
         if (!wrap) editor.h_scrolled = h_scrollbar.AddDelta(editor.h_scrolled);
+        if (1)     editor.UpdateScrolled();
         if (1)     editor.Draw(box);
         if (1)     GUI::Draw();
         if (1)     v_scrollbar.Update();
