@@ -90,6 +90,32 @@ TEST(GUITest, TextArea) {
     EXPECT_EQ("u", lines[-3] .Text()); EXPECT_EQ(-3,  lines.IndexOf(&lines[-3]));
     EXPECT_EQ("w", lines[-2] .Text()); EXPECT_EQ(-2,  lines.IndexOf(&lines[-2]));
     EXPECT_EQ("z", lines[-1] .Text()); EXPECT_EQ(-1,  lines.IndexOf(&lines[-1]));
+
+    {
+        TextGUI::Line *L;
+        TextArea ta(screen, Fonts::Fake());
+        (L = ta.line.PushFront())->AssignText("1   "); L->Layout();
+        (L = ta.line.PushFront())->AssignText("2\n2"); L->Layout();
+        (L = ta.line.PushFront())->AssignText("3   "); L->Layout();
+        (L = ta.line.PushFront())->AssignText("4   "); L->Layout();
+
+        TextArea::WrappedLineOffset o = ta.GetWrappedLineOffset(0);
+        EXPECT_EQ(TextArea::WrappedLineOffset(), o);
+        ta.IncrementWrappedLineOffset(&o, 1);
+        EXPECT_EQ(TextArea::WrappedLineOffset(1,0), o);
+        ta.IncrementWrappedLineOffset(&o, 1);
+        EXPECT_EQ(TextArea::WrappedLineOffset(1,1), o);
+        ta.IncrementWrappedLineOffset(&o, 1);
+        EXPECT_EQ(TextArea::WrappedLineOffset(2,0), o);
+
+        o = TextArea::WrappedLineOffset(2, 0);
+        ta.IncrementWrappedLineOffset(&o, -1);
+        EXPECT_EQ(TextArea::WrappedLineOffset(1,1), o);
+        ta.IncrementWrappedLineOffset(&o, -1);
+        EXPECT_EQ(TextArea::WrappedLineOffset(1,0), o);
+        ta.IncrementWrappedLineOffset(&o, -1);
+        EXPECT_EQ(TextArea::WrappedLineOffset(0,0), o);
+    }
 }
 
 TEST(BrowserTest, DOMTest) {

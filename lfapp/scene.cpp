@@ -28,7 +28,7 @@ Entity *Scene::Add(const string &name, Entity *e) {
     if (e->asset) {
         EntityVector &eav = assetMap[e->asset->name];
         eav.push_back(e);
-        sort(eav.begin(), eav.end(), Entity::cmp);
+        sort(eav.begin(), eav.end(), Entity::ZSort);
     }
     return e;
 }
@@ -47,7 +47,7 @@ bool Scene::ChangeAsset(Entity *e, Asset *new_asset) {
     if (new_asset) {
         EntityVector &eav = assetMap[e->asset->name];
         eav.push_back(e);
-        sort(eav.begin(), eav.end(), Entity::cmp);
+        sort(eav.begin(), eav.end(), Entity::ZSort);
     }
     return true;
 }
@@ -226,7 +226,7 @@ void Scene::ZSortDraw(Filter *filter, unsigned dt) {
         Entity *e = *j;
         if (filter && filter->filter(e)) continue;
 
-        float zangle = v3::Dot(screen->camMain->ort, e->ort);
+        float zangle = v3::Dot(screen->cam->ort, e->ort);
         if (zangle <= 0) { DrawParticles(e, dt); last_asset=0; }
 
         if (e->asset != last_asset) { Select(e->asset); last_asset = e->asset; }
@@ -245,12 +245,12 @@ void Scene::ZSort(const vector<Asset> &assets) {
         EntityVector &eav = assetMap[a->name];
         for (EntityVector::const_iterator j = eav.begin(); j != eav.end(); j++) {
              Entity *e = *j;
-             e->zsort = v3::Dot(screen->camMain->ort, e->pos);
+             e->zsort = v3::Dot(screen->cam->ort, e->pos);
              zsortVector.push_back(e);
         }
     }
 
-    sort(zsortVector.begin(), zsortVector.end(), Entity::cmp);
+    sort(zsortVector.begin(), zsortVector.end(), Entity::ZSort);
 }
 
 }; // namespace LFL

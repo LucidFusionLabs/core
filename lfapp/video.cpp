@@ -432,10 +432,10 @@ struct OpenGLES2 : public GraphicsDevice {
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
         string vertex_shader = LocalFile::FileContents(StrCat(ASSETS_DIR, "lfapp_vertex.glsl"));
         string pixel_shader  = LocalFile::FileContents(StrCat(ASSETS_DIR, "lfapp_pixel.glsl"));
-        Shader::create("lfapp",          vertex_shader.c_str(), pixel_shader.c_str(), "#define TEX2D  \r\n#define VERTEXCOLOR\r\n", &app->video.shader_default);
-        Shader::create("lfapp_cubemap",  vertex_shader.c_str(), pixel_shader.c_str(), "#define TEXCUBE\r\n#define VERTEXCOLOR\r\n", &app->video.shader_cubemap);
-        Shader::create("lfapp_normals",  vertex_shader.c_str(), pixel_shader.c_str(), "#define TEX2D  \r\n#define NORMALS\r\n",     &app->video.shader_normals);
-        Shader::create("lfapp_cubenorm", vertex_shader.c_str(), pixel_shader.c_str(), "#define TEXCUBE\r\n#define NORMALS\r\n",     &app->video.shader_cubenorm);
+        Shader::Create("lfapp",          vertex_shader, pixel_shader, "#define TEX2D  \r\n#define VERTEXCOLOR\r\n", &app->video.shader_default);
+        Shader::Create("lfapp_cubemap",  vertex_shader, pixel_shader, "#define TEXCUBE\r\n#define VERTEXCOLOR\r\n", &app->video.shader_cubemap);
+        Shader::Create("lfapp_normals",  vertex_shader, pixel_shader, "#define TEX2D  \r\n#define NORMALS\r\n",     &app->video.shader_normals);
+        Shader::Create("lfapp_cubenorm", vertex_shader, pixel_shader, "#define TEXCUBE\r\n#define NORMALS\r\n",     &app->video.shader_cubenorm);
         UseShader(0);
     }
 
@@ -702,7 +702,7 @@ void GraphicsDevice::CompileShader(int shader) {
     if (l) INFO(buf);
 }
 void GraphicsDevice::AttachShader(int prog, int shader) { glAttachShader(prog, shader); }
-void GraphicsDevice::BindAttribLocation(int prog, int loc, const char *name) { glBindAttribLocation(prog, loc, name); }
+void GraphicsDevice::BindAttribLocation(int prog, int loc, const string &name) { glBindAttribLocation(prog, loc, name.c_str()); }
 void GraphicsDevice::LinkProgram(int prog) {
     char buf[1024] = {0}; int l=0;
     glLinkProgram(prog);
@@ -714,8 +714,8 @@ void GraphicsDevice::LinkProgram(int prog) {
 }
 void GraphicsDevice::GetProgramiv(int p, int t, int *out) { glGetProgramiv(p, t, out); }
 void GraphicsDevice::GetIntegerv(int t, int *out) { glGetIntegerv(t, out); }
-int GraphicsDevice::GetAttribLocation (int prog, const char *name) { return glGetAttribLocation (prog, name); }
-int GraphicsDevice::GetUniformLocation(int prog, const char *name) { return glGetUniformLocation(prog, name); }
+int GraphicsDevice::GetAttribLocation (int prog, const string &name) { return glGetAttribLocation (prog, name.c_str()); }
+int GraphicsDevice::GetUniformLocation(int prog, const string &name) { return glGetUniformLocation(prog, name.c_str()); }
 void GraphicsDevice::Uniform1i(int u, int v) { glUniform1i(u, v); }
 void GraphicsDevice::Uniform1f(int u, float v) { glUniform1f(u, v); }
 void GraphicsDevice::Uniform2f(int u, float v1, float v2) { glUniform2f(u, v1, v2); }
@@ -886,12 +886,12 @@ const int GraphicsDevice::Point = 0;
 
 int GraphicsDevice::CreateProgram() { return 0; }
 int GraphicsDevice::CreateShader(int t) { return 0; }
-int GraphicsDevice::GetAttribLocation (int prog, const char *name) { return 0; }
-int GraphicsDevice::GetUniformLocation(int prog, const char *name) { return 0; }
+int GraphicsDevice::GetAttribLocation (int prog, const string &name) { return 0; }
+int GraphicsDevice::GetUniformLocation(int prog, const string &name) { return 0; }
 void GraphicsDevice::ShaderSource(int shader, int count, const char **source, int *len) {}
 void GraphicsDevice::CompileShader(int shader) {}
 void GraphicsDevice::AttachShader(int prog, int shader) {}
-void GraphicsDevice::BindAttribLocation(int prog, int loc, const char *name) {}
+void GraphicsDevice::BindAttribLocation(int prog, int loc, const string &name) {}
 void GraphicsDevice::LinkProgram(int prog) {}
 void GraphicsDevice::GetProgramiv(int p, int t, int *out) {}
 void GraphicsDevice::GetIntegerv(int t, int *out) {}
@@ -1770,22 +1770,22 @@ void FrameBuffer::Render(FrameCB cb) {
 
 /* Shader */
 
-void Shader::SetGlobalUniform1f(const char *name, float v) {
-    screen->gd->UseShader(&app->video.shader_default);  app->video.shader_default .setUniform1f(name, v);
-    screen->gd->UseShader(&app->video.shader_normals);  app->video.shader_normals .setUniform1f(name, v);
-    screen->gd->UseShader(&app->video.shader_cubemap);  app->video.shader_cubemap .setUniform1f(name, v);
-    screen->gd->UseShader(&app->video.shader_cubenorm); app->video.shader_cubenorm.setUniform1f(name, v);
+void Shader::SetGlobalUniform1f(const string &name, float v) {
+    screen->gd->UseShader(&app->video.shader_default);  app->video.shader_default .SetUniform1f(name, v);
+    screen->gd->UseShader(&app->video.shader_normals);  app->video.shader_normals .SetUniform1f(name, v);
+    screen->gd->UseShader(&app->video.shader_cubemap);  app->video.shader_cubemap .SetUniform1f(name, v);
+    screen->gd->UseShader(&app->video.shader_cubenorm); app->video.shader_cubenorm.SetUniform1f(name, v);
 }
 
-void Shader::SetGlobalUniform2f(const char *name, float v1, float v2){ 
-    screen->gd->UseShader(&app->video.shader_default);  app->video.shader_default .setUniform2f(name, v1, v2);
-    screen->gd->UseShader(&app->video.shader_normals);  app->video.shader_normals .setUniform2f(name, v1, v2);
-    screen->gd->UseShader(&app->video.shader_cubemap);  app->video.shader_cubemap .setUniform2f(name, v1, v2);
-    screen->gd->UseShader(&app->video.shader_cubenorm); app->video.shader_cubenorm.setUniform2f(name, v1, v2);
+void Shader::SetGlobalUniform2f(const string &name, float v1, float v2){ 
+    screen->gd->UseShader(&app->video.shader_default);  app->video.shader_default .SetUniform2f(name, v1, v2);
+    screen->gd->UseShader(&app->video.shader_normals);  app->video.shader_normals .SetUniform2f(name, v1, v2);
+    screen->gd->UseShader(&app->video.shader_cubemap);  app->video.shader_cubemap .SetUniform2f(name, v1, v2);
+    screen->gd->UseShader(&app->video.shader_cubenorm); app->video.shader_cubenorm.SetUniform2f(name, v1, v2);
 }
 
 #ifdef LFL_GLSL_SHADERS
-int Shader::create(const char *name, const char *vertex_shader, const char *fragment_shader, const char *defines, Shader *out) {
+int Shader::Create(const string &name, const string &vertex_shader, const string &fragment_shader, const string &defines, Shader *out) {
     GLuint p = screen->gd->CreateProgram();
 
     string hdr; 
@@ -1794,17 +1794,17 @@ int Shader::create(const char *name, const char *vertex_shader, const char *frag
 #endif
     hdr += defines + string("\r\n");
 
-    if (vertex_shader) {
+    if (vertex_shader.size()) {
         GLuint vs = screen->gd->CreateShader(GL_VERTEX_SHADER);
-        const char *vss[] = { hdr.c_str(), vertex_shader, 0 };
+        const char *vss[] = { hdr.c_str(), vertex_shader.c_str(), 0 };
         screen->gd->ShaderSource(vs, 2, vss, 0);
         screen->gd->CompileShader(vs);
         screen->gd->AttachShader(p, vs);
     }
 
-    if (fragment_shader) {
+    if (fragment_shader.size()) {
         GLuint fs = screen->gd->CreateShader(GL_FRAGMENT_SHADER);
-        const char *fss[] = { hdr.c_str(), fragment_shader, 0 };
+        const char *fss[] = { hdr.c_str(), fragment_shader.c_str(), 0 };
         screen->gd->ShaderSource(fs, 2, fss, 0);
         screen->gd->CompileShader(fs);
         screen->gd->AttachShader(p, fs);
@@ -1864,23 +1864,23 @@ int Shader::create(const char *name, const char *vertex_shader, const char *frag
     return p;
 }
 
-int Shader::getUniformIndex(const char *name) { return screen->gd->GetUniformLocation(ID, name); }
-void Shader::setUniform1i(const char *name, float v) { screen->gd->Uniform1i(getUniformIndex(name), v); }
-void Shader::setUniform1f(const char *name, float v) { screen->gd->Uniform1f(getUniformIndex(name), v); }
-void Shader::setUniform2f(const char *name, float v1, float v2) { screen->gd->Uniform2f(getUniformIndex(name), v1, v2); }
-void Shader::setUniform3fv(const char *name, const float *v) { screen->gd->Uniform3fv(getUniformIndex(name), 1, v); }
-void Shader::setUniform3fv(const char *name, int n, const float *v) { screen->gd->Uniform3fv(getUniformIndex(name), n, v); }
+int Shader::GetUniformIndex(const string &name) { return screen->gd->GetUniformLocation(ID, name); }
+void Shader::SetUniform1i(const string &name, float v) { screen->gd->Uniform1i(GetUniformIndex(name), v); }
+void Shader::SetUniform1f(const string &name, float v) { screen->gd->Uniform1f(GetUniformIndex(name), v); }
+void Shader::SetUniform2f(const string &name, float v1, float v2) { screen->gd->Uniform2f(GetUniformIndex(name), v1, v2); }
+void Shader::SetUniform3fv(const string &name, const float *v) { screen->gd->Uniform3fv(GetUniformIndex(name), 1, v); }
+void Shader::SetUniform3fv(const string &name, int n, const float *v) { screen->gd->Uniform3fv(GetUniformIndex(name), n, v); }
 
 #else /* LFL_GLSL_SHADERS */
 
-int Shader::create(const char *vertex_shader, const char *fragment_shader, const char *defines, Shader *out) { return -1; }
-int Shader::getUniformIndex(const char *name) { return -1; }
-void Shader::setUniform1i(const char *name, float v) {}
-void Shader::setUniform1f(const char *name, float v) {}
-void Shader::setUniform2f(const char *name, float v1, float v2) {}
-void Shader::setUniform3fv(const char *name, const float *v) {}
-void Shader::setUniform3fv(const char *name, int n, const float *v) {}
-void Shader::activeTexture(int n) {}
+int Shader::Create(const string &vertex_shader, const string &fragment_shader, const string &defines, Shader *out) { return -1; }
+int Shader::GetUniformIndex(const string &name) { return -1; }
+void Shader::SetUniform1i(const string &name, float v) {}
+void Shader::SetUniform1f(const string &name, float v) {}
+void Shader::SetUniform2f(const string &name, float v1, float v2) {}
+void Shader::SetUniform3fv(const string &name, const float *v) {}
+void Shader::SetUniform3fv(const string &name, int n, const float *v) {}
+void Shader::ActiveTexture(int n) {}
 #endif /* LFL_GLSL_SHADERS */
 
 /* Atlas */

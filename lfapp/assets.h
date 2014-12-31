@@ -512,8 +512,8 @@ template <int MP, int MH, bool PerParticleColor> struct Particles : public Parti
 
         v3 o1=p, o2=p, o3=p, o4=p, right, up;
 
-        if (billboard) { right = v3::Cross(screen->camMain->ort, screen->camMain->up) * size; up = screen->camMain->up * size; }
-        else           { right = v3(size, 0, 0);                                              up = v3(0, size, 0); }
+        if (billboard) { right = v3::Cross(screen->cam->ort, screen->cam->up) * size; up = screen->cam->up * size; }
+        else           { right = v3(size, 0, 0);                                      up = v3(0, size, 0); }
 
         o1.Add(-right + -up);
         o2.Add(-right +  up);

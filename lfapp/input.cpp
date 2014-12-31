@@ -586,8 +586,8 @@ void Input::MouseMove(int x, int y, int dx, int dy) {
     screen->events.mouse_move++;
     screen->events.gui += MouseEventDispatch(Bind::MOUSEMOTION, x, y, 0);
     if (!app->grab_mode.Enabled()) return;
-    if (dx<0) screen->camMain->YawLeft  (-dx); else if (dx>0) screen->camMain->YawRight(dx);
-    if (dy<0) screen->camMain->PitchDown(-dy); else if (dy>0) screen->camMain->PitchUp (dy);
+    if (dx<0) screen->cam->YawLeft  (-dx); else if (dx>0) screen->cam->YawRight(dx);
+    if (dy<0) screen->cam->PitchDown(-dy); else if (dy>0) screen->cam->PitchUp (dy);
 }
 
 void Input::MouseWheel(int dw, int, int, int) {
@@ -795,9 +795,9 @@ void Shell::texmode(const vector<string>&) { if (app->tex_mode.Next()) screen->g
 void Shell::swapaxis(const vector<string>&) { screen->SwapAxis(); }
 
 void Shell::campos(const vector<string>&) {
-    INFO("camMain.pos=",  screen->camMain->pos.DebugString(),
-         " camMain.ort=", screen->camMain->ort.DebugString(),
-         " camMain.up=",  screen->camMain->up .DebugString());
+    INFO("camMain.pos=",  screen->cam->pos.DebugString(),
+         " camMain.ort=", screen->cam->ort.DebugString(),
+         " camMain.up=",  screen->cam->up .DebugString());
 }
 
 void Shell::snap(const vector<string> &arg) {

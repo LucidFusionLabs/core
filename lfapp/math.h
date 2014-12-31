@@ -102,6 +102,7 @@ struct m33 {
     v3 m[3]; m33() {}
     v3 &operator[](unsigned i) { return m[i]; }
     const v3 &operator[](unsigned i) const { return m[i]; }
+    static m33 RotAxis(float f, const v3 &v) { return RotAxis(f, v.x, v.y, v.z); }
     static m33 RotAxis(float f, float x, float y, float z) {
         float s=sin(f), c=cos(f); m33 m;
         m[0][0] =    c + x*x*(1-c); m[1][0] =  z*s + y*x*(1-c); m[2][0] = -y*s + z*x*(1-c);

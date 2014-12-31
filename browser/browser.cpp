@@ -53,8 +53,9 @@ struct MyBrowserWindow : public GUI {
     back   (this, &menu_atlas1->FindGlyph(20)->tex, 0, "", MouseController::CB([&](){ screen->browser_window->BackButton(); })),
     forward(this, &menu_atlas1->FindGlyph(22)->tex, 0, "", MouseController::CB([&](){ screen->browser_window->ForwardButton(); })),
     refresh(this, &menu_atlas2->FindGlyph(50)->tex, 0, "", MouseController::CB([&](){ screen->browser_window->RefreshButton(); })),
-    address_box(W, Fonts::Get(FLAGS_default_font, 12, Color::black), 0, ToggleBool::OneShot),
+    address_box(W, Fonts::Get(FLAGS_default_font, 12, Color::black)),
     simple_browser(0), webkit_browser(0), berkelium_browser(0) {
+        address_box.SetToggleKey(0, ToggleBool::OneShot);
         address_box.cmd_prefix.clear();
         address_box.deactivate_on_enter = true;
         address_box.runcb = [&](const string &t){ screen->browser_window->Open(t); };

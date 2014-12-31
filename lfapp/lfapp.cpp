@@ -1486,12 +1486,12 @@ int ThreadPool::HandleMessagesLoop(void *q) {
     return 0;
 }
 
-DirectoryIter::DirectoryIter(const char *path, int dirs, const char *Pref, const char *Suf) : P(Pref), S(Suf), init(0) {
+DirectoryIter::DirectoryIter(const string &path, int dirs, const char *Pref, const char *Suf) : P(Pref), S(Suf), init(0) {
     if (LocalFile::IsDirectory(path)) pathname = path;
     else {
         if (LocalFile(path, "r").Opened()) {
-            pathname = string(path, dirnamelen(path)) + LocalFile::Slash;
-            filemap[basename(path)] = 1;
+            pathname = string(path, dirnamelen(path.c_str())) + LocalFile::Slash;
+            filemap[basename(path.c_str())] = 1;
         }
         return;
     }

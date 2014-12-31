@@ -1005,7 +1005,7 @@ struct DirectoryIter : public Iter {
     const char *P, *S;
     bool init;
     DirectoryIter() : P(0), S(0), init(0) {}
-    DirectoryIter(const char *path, int dirs=0, const char *FilePrefix=0, const char *FileSuffix=0);
+    DirectoryIter(const string &path, int dirs=0, const char *FilePrefix=0, const char *FileSuffix=0);
     const char *Next();
     static void Add(void *self, const char *k, int v) { ((DirectoryIter*)self)->filemap[k] = v; }
 };

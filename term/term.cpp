@@ -224,7 +224,7 @@ extern "C" int main(int argc, const char *argv[]) {
 
     string lfapp_vertex_shader = LocalFile::FileContents(StrCat(ASSETS_DIR, "lfapp_vertex.glsl"));
     string warper_shader = LocalFile::FileContents(StrCat(ASSETS_DIR, "warper.glsl"));
-    Shader::create("warpershader", lfapp_vertex_shader.c_str(), warper_shader.c_str(),
+    Shader::Create("warpershader", lfapp_vertex_shader.c_str(), warper_shader.c_str(),
                    "#define TEX2D\n#define VERTEXCOLOR\n", &warpershader);
 
     image_browser = new SimpleBrowser();

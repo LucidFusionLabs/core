@@ -1080,8 +1080,8 @@ void glTimeResolutionShaderWindows(Shader *shader, const Color &backup_color, co
     if (!shader) screen->gd->SetColor(backup_color);
     else {
         screen->gd->UseShader(shader);
-        shader->setUniform1f("time", ToSeconds(app->app_time.GetTime()));
-        shader->setUniform2f("resolution", screen->width, screen->height);
+        shader->SetUniform1f("time", ToSeconds(app->app_time.GetTime()));
+        shader->SetUniform2f("resolution", screen->width, screen->height);
     }
     if (tex) { screen->gd->EnableLayering(); tex->Bind(); }
     else screen->gd->DisableTexture();
