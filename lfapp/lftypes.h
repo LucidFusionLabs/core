@@ -163,6 +163,12 @@ template <class X, class Y> void Move(X &buf, int to_ind, int from_ind, int size
     else                         { for (int i=0; i <= size-1; i++) move_cb(buf[to_ind+i], buf[from_ind+i]); }
 } 
 
+template <class X> struct ScopedValue {
+    X *v, ov;
+    ScopedValue(X *V, X nv) : v(V), ov(V?*V:X()) { *v = nv; }
+    ~ScopedValue() { *v = ov; }
+};
+
 template <class T1, class T2, class T3> struct Triple {
     T1 first; T2 second; T3 third;
     Triple() {}
@@ -228,13 +234,16 @@ template <typename X, typename Y, Y (X::*Z)> struct ArrayMemberSegmentIter {
 };
 
 template <class X, int (*GetVal)(const X&, int), class Iter>
+Iter LastFlattenedArrayValIter(const X &data, int l) { return Iter(X_or_1(l)-1, l ? GetVal(data, l-1)-1 : 0); }
+
+template <class X, int (*GetVal)(const X&, int), class Iter>
 void IterFlattenedArrayVals(const X &data, int l, Iter *o, int n) {
     for (int i=abs(n), d; i; i-=d) {
         int v = GetVal(data, o->first);
         if (n > 0) {
             d = min(i, v - o->second);
             if ((o->second += d) >= v) {
-                if (o->first >= l-1) { *o = Iter(l-1, GetVal(data, l-1)-1); return; }
+                if (o->first >= l-1) { *o = LastFlattenedArrayValIter<X, GetVal, Iter>(data, l); return; }
                 *o = Iter(o->first+1, 0);
             }
         } else {

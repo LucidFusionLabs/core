@@ -709,7 +709,7 @@ struct BoxArray {
         return last ? b.TopRight() : b.TopLeft();
     }
 
-    void Clear() { data.clear(); attr.clear(); line.clear(); height=0; }
+    void Clear() { data.clear(); attr.clear(); line.clear(); line_ind.clear(); height=0; }
     BoxArray *Reset() { Clear(); return this; }
     void Erase(int o, size_t l=UINT_MAX) { 
         if (data.size() > o) data.erase(data.begin() + o, data.begin() + min(o+l, data.size()));
@@ -1087,7 +1087,6 @@ struct Flow {
     Box CurrentLineBox() const { return Box(cur_line.beg, p.y, p.x - cur_line.beg, cur_line.height); }
     int LayoutLineHeight() const { return X_or_Y(layout.line_height, cur_attr.font ? cur_attr.font->height : 0); }
 
-    bool AppendTextGUI(float col, TextGUI *tg, int flag=0) { return 0; }
     void AppendVerticalSpace(int h) {
         if (h <= 0) return;
         if (!cur_line.fresh) AppendNewline();
@@ -1103,6 +1102,26 @@ struct Flow {
         *box_out = Box::DelBorder(*box_out, h ? b : b.LeftRight());
     }
     void AppendRow(float x=0, float w=0, Box *box_out=0) { AppendBox(x, container->w*w, cur_line.height, box_out); }
+    bool AppendTextGUI(float col, TextGUI *tg, int flag=0) { 
+        return 0;
+    }
+    void AppendBoxArrayText(const BoxArray &in) {
+        ScopedValue<bool> SWW(&layout.wrap_lines, false);
+        int offset = 0, next_line_end_index = 0, next_line_end = IndexOrDefault(in.line_ind, next_line_end_index, -1);
+        for (ArrayMemberSegmentIter<Drawable::Box, int, &Drawable::Box::attr_id> iter(in.data); !iter.Done(); iter.Increment()) {
+            cur_attr = in.attr.GetAttr(iter.cur_attr);
+            string text = BoxRun(iter.Data(), iter.Length()).Text();
+            for (int i=0, il=text.size(), l; i<il; i+=l, offset+=l) {
+                l = next_line_end >= 0 ? min(next_line_end-offset, il-i) : il-i;
+                AppendText(StringPiece(text.data()+i, l));
+                if (next_line_end >= 0 && offset+l >= next_line_end) {
+                    next_line_end = IndexOrDefault(in.line_ind, ++next_line_end_index, -1);
+                    AppendNewline(0, 0);
+                }
+            }
+        }
+        CHECK_EQ(out->line_ind.size(), in.line_ind.size());
+    }
 
     int AppendBox(float x, int w, int h, Drawable *drawable) { p.x=container->w*x; return AppendBox(w, h, drawable); }
     int AppendBox(/**/     int w, int h, Drawable *drawable) { 
@@ -1197,11 +1216,11 @@ struct Flow {
     }
 
     void AppendNewlines(int n) { for (int i=0; i<n; i++) AppendNewline(); }
-    State AppendNewline(int need_height=0) {
+    State AppendNewline(int need_height=0, bool next_glyph_preadded=1) {
         if (out) {        
             AlignCurrentLine();
             out->line.push_back(CurrentLineBox());
-            out->line_ind.push_back(cur_line.out_ind);
+            out->line_ind.push_back(out ? Typed::Max<int>(0, out->data.size()-next_glyph_preadded) : 0);
             out->height += out->line.back().h;
             if (out->data.size() > cur_line.out_ind)
                 Typed::Max(&max_line_width, out->data.back().box.right() - out->data[cur_line.out_ind].box.x);
