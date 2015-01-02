@@ -134,6 +134,7 @@ template <class X> int VectorEraseByValue(vector<X> *v, const X& x) {
     return orig_size - v->size();
 }
 
+template <class X> X BackOrDefault (const vector<X> &a)                    { return a.size() ? a.back() : X(); }
 template <class X> X IndexOrDefault(const vector<X> &a, int n)             { return n < a.size() ? a[n] : X(); }
 template <class X> X IndexOrDefault(const vector<X> &a, int n, const X& b) { return n < a.size() ? a[n] : b; }
 
@@ -225,6 +226,26 @@ template <typename X, typename Y, Y (X::*Z)> struct ArrayMemberSegmentIter {
     void Update() { cur_start = ind; if (!Done()) cur_attr = buf[ind].*Z; }
     void Increment() { Update(); while (ind != len && cmp(cur_attr, buf[ind].*Z)) { if (cb) cb(buf[ind]); ind++; } i++; }
 };
+
+template <class X, int (*GetVal)(const X&, int), class Iter>
+void IterFlattenedArrayVals(const X &data, int l, Iter *o, int n) {
+    for (int i=abs(n), d; i; i-=d) {
+        int v = GetVal(data, o->first);
+        if (n > 0) {
+            d = min(i, v - o->second);
+            if ((o->second += d) >= v) {
+                if (o->first >= l-1) { *o = Iter(l-1, GetVal(data, l-1)-1); return; }
+                *o = Iter(o->first+1, 0);
+            }
+        } else {
+            d = min(i, o->second+1);
+            if ((o->second -= d) < 0) {
+                if (o->first <= 0) { *o = Iter(0, 0); return; }
+                *o = Iter(o->first-1, GetVal(data, o->first-1)-1);
+            }
+        }
+    }
+}
 
 template <class X> struct ValueSet {
     int i, c; X *d;

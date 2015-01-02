@@ -247,30 +247,39 @@ struct TextGUI : public KeyboardGUI {
     };
     struct Line {
         point p;
-        Lines *cont;
-        TextGUI *parent;
+        Lines *cont=0;
+        TextGUI *parent=0;
         shared_ptr<LineData> data;
-        Line(Lines *C=0, TextGUI *P=0) : cont(C), parent(P), data(new LineData()) {}
+        Line() : data(new LineData()) {}
         Line &operator=(const Line &s) { data=s.data; return *this; }
         static void Move (Line &t, Line &s) { swap(t.data, s.data); }
         static void MoveP(Line &t, Line &s) { swap(t.data, s.data); t.p=s.p; }
+        int GetAttrId(const Drawable::Attr &a) { return data->glyphs.attr.GetAttrId(a); }
 #if 0
-        int Size () const { return glyphs.Size(); }
-        int Lines() const { return max(1, glyphs.line.size()); }
-        string Text() const { return glyphs.Text(); }
-        void Clear() { glyphs.Clear(); }
-        void Erase(int o, unsigned l=UINT_MAX) { return glyphs.Erase(o, l); }
-        void InsertTextAt(int o, const string   &s, int a=-1) { glyphs.InsertAt(o,                  EncodeText(s, a)); }
-        void InsertTextAt(int o, const String16 &s, int a=-1) { glyphs.InsertAt(o,                  EncodeText(s, a)); }
-        void AppendText  (       const string   &s, int a=-1) { glyphs.InsertAt(glyphs.data.size(), EncodeText(s, a)); }
-        void AppendText  (       const String16 &s, int a=-1) { glyphs.InsertAt(glyphs.data.size(), EncodeText(s, a)); }
-        void AssignText  (       const string   &s, int a=-1) { glyphs.Clear(); AppendText(s, a); }
-        void AssignText  (       const String16 &s, int a=-1) { glyphs.Clear(); AppendText(s, a); }
-        vector<Drawable::Box> EncodeText(const string   &s, int a=-1) { BoxArray b; parent->font->Encode(s, Box(), &b, 0, a); return b.data; }
-        vector<Drawable::Box> EncodeText(const String16 &s, int a=-1) { BoxArray b; parent->font->Encode(s, Box(), &b, 0, a); return b.data; }
+        Box box; Flow flow;
+        void InitFlow() { flow = Flow(&box, parent->font, &data->glyphs, &parent->layout); }
+        void Init(Lines *C, TextGUI *P) { cont=C; parent=P; InitFlow(); }
+        int Size () const { return data->glyphs.Size(); }
+        int Lines() const { return max(1, data->glyphs.line.size()); }
+        string Text() const { return data->glyphs.Text(); }
+        void Clear() { data->glyphs.Clear(); InitFlow(); }
+        void Erase(int o, unsigned l=UINT_MAX) { return data->glyphs.Erase(o, l); }
+        void InsertTextAt(int o, const string   &s, int a=-1) { data->glyphs.InsertAt(o, EncodeText(s, a, data->glyphs.Position(o))); }
+        void InsertTextAt(int o, const String16 &s, int a=-1) { data->glyphs.InsertAt(o, EncodeText(s, a, data->glyphs.Position(o))); }
+        void AppendText  (       const string   &s, int a=-1) { flow.AppendText(s, a); }
+        void AppendText  (       const String16 &s, int a=-1) { flow.AppendText(s, a); }
+        void AssignText  (       const string   &s, int a=-1) { data->glyphs.Clear(); AppendText(s, a); }
+        void AssignText  (       const String16 &s, int a=-1) { data->glyphs.Clear(); AppendText(s, a); }
+        vector<Drawable::Box> EncodeText(const string   &s, int a, const point &p) { 
+            printf("Encode '%s' %d %s\n", s.c_str(), a, p.DebugString().c_str());
+            BoxArray b; parent->font->Encode(s, Box(p,0,0), &b, 0, a); return b.data; }
+        vector<Drawable::Box> EncodeText(const String16 &s, int a, const point &p) { 
+            printf("Encode '%s' %d %s\n", String::ToUTF8(s).c_str(), a, p.DebugString().c_str());
+            BoxArray b; parent->font->Encode(s, Box(p,0,0), &b, 0, a); return b.data; }
         void UpdateAttr(int ind, int len, int a) {}
         void Layout(Box win) {}
 #else
+        void Init(Lines *C, TextGUI *P) { cont=C; parent=P; }
         int Size () const { return data->glyphs.Size(); }
         int Lines() const { return max(1, data->glyphs.line.size()); }
         string Text() const { return String::ToUTF8(data->text); }
@@ -299,7 +308,8 @@ struct TextGUI : public KeyboardGUI {
         void UpdateText(int x, const String16 &v, int attr, int max_width=0) {
             if (Size() < x) AppendText(string(x - Size(), ' '), attr);
             if (!parent->insert_mode) Erase       (x, v.size());
-            if (1)                    InsertTextAt(x, v, attr);
+            if (Size() == x)          AppendText  (   v, attr);
+            else                      InsertTextAt(x, v, attr);
             if (parent->insert_mode && max_width) Erase(max_width);
         }
         void UpdateAttr(int ind, int len) {
@@ -332,7 +342,7 @@ struct TextGUI : public KeyboardGUI {
         Lines(TextGUI *P, int ML=200) :
             RingVector<Line>(ML), wrapped_lines(ML),
             move_cb (bind(&Line::Move,  _1, _2)), 
-            movep_cb(bind(&Line::MoveP, _1, _2)) { for (auto &i : data) { i.cont = this; i.parent = P; } }
+            movep_cb(bind(&Line::MoveP, _1, _2)) { for (auto &i : data) i.Init(this, P); }
 
         Line *PushFront() { Line *l = RingVector<Line>::PushFront(); l->Clear(); return l; }
         Line *InsertAt(int dest_line, int lines=1, int dont_move_last=0) {
@@ -343,6 +353,7 @@ struct TextGUI : public KeyboardGUI {
             for (int i=0; i<lines; i++) (*this)[dest_line + i*clear_dir].Clear();
             return &(*this)[dest_line];
         }
+        static int GetBackLineLines(const Lines &l, int i) { return l[-i-1].Lines(); }
     };
     struct LinesFrameBuffer : public RingFrameBuffer {
         typedef function<point(Line*, point, const Box&)> PaintCB;
@@ -360,31 +371,31 @@ struct TextGUI : public KeyboardGUI {
             if (*last_fb != this) fb.Attach();
             return *last_fb = this;
         }
-        void Clear(Line *l, bool vwrap=true) {
-            RingFrameBuffer::Clear(l, Box(0, l->Lines() * font_height), vwrap);
+        void Clear(Line *l) {
+            RingFrameBuffer::Clear(l, Box(0, l->Lines() * font_height), true);
         }
-        void Update(Line *l, const point &p, bool lo=true, bool vw=true) { l->p=p; Update(l, lo, vw); }
-        void Update(Line *l, bool layout=true, bool vwrap=true) {
-            if (layout) l->Layout(wrap ? w : 0);
-            RingFrameBuffer::Update(l, Box(0, l->Lines() * font_height), paint_cb, vwrap);
+        void Update(Line *l, const point &p, bool lo=true) { l->p=p; Update(l, lo); }
+        void Update(Line *l, bool lo=true) {
+            if (lo) l->Layout(wrap ? w : 0);
+            RingFrameBuffer::Update(l, Box(0, l->Lines() * font_height), paint_cb, true);
         }
-        int PushFrontAndUpdate(Line *l, int wlo=0, int wll=0, bool vwrap=true) {
-            l->Layout(wrap ? w : 0);
+        int PushFrontAndUpdate(Line *l, int wlo=0, int wll=0, bool lo=true, bool vwrap=true) {
+            if (lo) l->Layout(wrap ? w : 0);
             int wl = max(0, l->Lines() - wlo), lh = (wll ? min(wll, wl) : wl) * font_height;
             Box b(0, wl * font_height - lh, 0, lh);
             return RingFrameBuffer::PushFrontAndUpdate(l, b, paint_cb, vwrap) / font_height;
         }
-        int PushBackAndUpdate(Line *l, int wlo=0, int wll=0, bool vwrap=true) {
-            l->Layout(wrap ? w : 0);
+        int PushBackAndUpdate(Line *l, int wlo=0, int wll=0, bool lo=true) {
+            if (lo) l->Layout(wrap ? w : 0);
             int wl = max(0, l->Lines() - wlo), lh = (wll ? min(wll, wl) : wl) * font_height;
             Box b(0, wlo * font_height, 0, lh);
-            return RingFrameBuffer::PushBackAndUpdate(l, b, paint_cb, vwrap) / font_height;
+            return RingFrameBuffer::PushBackAndUpdate(l, b, paint_cb, true) / font_height;
         }
-        void PushFrontAndUpdateOffset(Line *l, int lo, bool vwrap=true) {
+        void PushFrontAndUpdateOffset(Line *l, int lo) {
             Update(l, RingFrameBuffer::BackPlus(point(0, (1 + lo) * font_height)));
             RingFrameBuffer::AdvancePixels(-l->Lines() * font_height);
         }
-        void PushBackAndUpdateOffset(Line *l, int lo, bool vwrap=true) {
+        void PushBackAndUpdateOffset(Line *l, int lo) {
             Update(l, RingFrameBuffer::BackPlus(point(0, lo * font_height)));
             RingFrameBuffer::AdvancePixels(l->Lines() * font_height);
         }
@@ -424,7 +435,8 @@ struct TextGUI : public KeyboardGUI {
     Color cmd_color=Color::white;
     bool deactivate_on_enter=0, clickable_links=0, insert_mode=0;
     int adjust_lines=0, skip_last_lines=0, start_line=0;
-    TextGUI(Window *W, Font *F) : KeyboardGUI(W, F), font(F), cmd_line(0, this) {}
+    TextGUI(Window *W, Font *F) : KeyboardGUI(W, F), font(F)
+    { cmd_line.Init(0,this); cmd_line.GetAttrId(Drawable::Attr(F)); }
 
     virtual ~TextGUI() {}
     virtual int CommandLines() const { return 0; }
@@ -440,12 +452,7 @@ struct TextGUI : public KeyboardGUI {
 
     virtual string Text() const { return cmd_line.Text(); }
     virtual void AssignInput(const string &text) { cmd_line.AssignText(text); UpdateCommandFB(); UpdateCursor(); }
-    virtual void UpdateCursor() {
-        bool right = cursor.i.x >= cmd_line.data->glyphs.Size();
-        const Box &b = !cmd_line.data->glyphs.data.size() ? Box() :
-            cmd_line.data->glyphs.data[right ? cmd_line.data->glyphs.data.size()-1 : cursor.i.x].box;
-        cursor.p = right ? b.TopRight() : b.TopLeft();
-    }
+    virtual void UpdateCursor() { cursor.p = cmd_line.data->glyphs.Position(cursor.i.x); }
     virtual void UpdateCommandFB() { 
         cmd_fb.fb.Attach();
         ScopedDrawMode drawmode(DrawMode::_2D);
@@ -481,10 +488,11 @@ struct TextArea : public TextGUI {
     virtual void PageDown() { v_scrolled = Clamp(v_scrolled + (float)scroll_inc/WrappedLines(), 0, 1); UpdateScrolled(); } 
     virtual void Resized(int w, int h);
 
-    virtual int  WrappedLines() const { return line.wrapped_lines; }
-    virtual void IncrementWrappedLineOffset(WrappedLineOffset *o, int n) const;
+    virtual int WrappedLines() const { return line.wrapped_lines; }
     virtual WrappedLineOffset GetWrappedLineOffset(float percent) const
     { WrappedLineOffset o; IncrementWrappedLineOffset(&o, percent * (WrappedLines() - 1)); return o; }
+    virtual void IncrementWrappedLineOffset(WrappedLineOffset *o, int n) const
+    { IterFlattenedArrayVals<TextGUI::Lines, &TextGUI::Lines::GetBackLineLines, WrappedLineOffset>(line, line.Size(), o, n); }
 
     virtual void UpdateScrolled();
     virtual void UpdateLines(const WrappedLineOffset &nfl, const WrappedLineOffset &nll)
@@ -506,11 +514,12 @@ struct TextArea : public TextGUI {
 struct Editor : public TextArea {
     typedef pair<int, int> LineOffsetSegment;
     struct LineOffset { 
-        int offset, size, font_size, wrapped_line_number; float width; 
-        LineOffset(int O=0, int S=0, int FS=0, int WLN=0, float W=0) :
-           offset(O), size(S), font_size(FS), wrapped_line_number(WLN), width(W) {}
+        int offset, size, font_size, wrapped_lines, wrapped_line_number; float width; 
+        LineOffset(int O=0, int S=0, int FS=0, int WL=1, int WLN=0, float W=0) :
+           offset(O), size(S), font_size(FS), wrapped_lines(WL), wrapped_line_number(WLN), width(W) {}
         bool operator<(const LineOffset &l) const { return wrapped_line_number < l.wrapped_line_number; }
     };
+    static int GetLineOffsetLines(const vector<LineOffset> &v, int i) { return v[i].wrapped_lines; }
 
     shared_ptr<File> file;
     vector<LineOffset> file_line;
@@ -521,7 +530,7 @@ struct Editor : public TextArea {
         int ind=0, offset=0;
         for (const char *l = file->NextLineRaw(&offset); l; l = file->NextLineRaw(&offset))
             file_line.push_back(LineOffset(offset, file->nr.record_len, TextArea::font->size,
-                                           ind++, TextArea::font->Width(l)));
+                                           1, ++ind, TextArea::font->Width(l)));
         wrapped_lines = file_line.size();
     }
 
@@ -529,17 +538,24 @@ struct Editor : public TextArea {
     void UpdateWrappedLines(int cur_font_size, int box_width) {
         wrapped_lines = 0;
         for (auto &l : file_line) {
-            wrapped_lines += 1 + l.width * cur_font_size / l.font_size / box_width;
-            l.wrapped_line_number = wrapped_lines;
+            l.wrapped_lines = 1 + l.width * cur_font_size / l.font_size / box_width;
+            l.wrapped_line_number = (wrapped_lines += l.wrapped_lines);
         }
     }
+    WrappedLineOffset LastWrappedLineOffset() const
+    { return WrappedLineOffset(X_or_1(file_line.size())-1, BackOrDefault(file_line).wrapped_lines-1); }
+
     WrappedLineOffset GetWrappedLineOffset(float percent) const {
         if (!Wrap()) return WrappedLineOffset(percent * file_line.size(), 0);
         int target_line = percent * wrapped_lines;
-        auto it = lower_bound(file_line.begin(), file_line.end(), LineOffset(0,0,0,target_line));
-        if (it == file_line.end()) return WrappedLineOffset(file_line.size(), 0);
-        int pln = it == file_line.begin() ? 0 : (it-1)->wrapped_line_number;
-        return WrappedLineOffset(it - file_line.begin(), target_line - pln);
+        auto it = lower_bound(file_line.begin(), file_line.end(), LineOffset(0,0,0,0,target_line));
+        if (it == file_line.end()) return LastWrappedLineOffset();
+        int prev_wrapped_line_number = (it == file_line.begin()) ? 0 : (it-1)->wrapped_line_number;
+        WrappedLineOffset ret(it - file_line.begin(), target_line - prev_wrapped_line_number);
+        return ret;
+    }
+    void IncrementWrappedLineOffset(WrappedLineOffset *o, int n) const {
+        IterFlattenedArrayVals<vector<LineOffset>, &Editor::GetLineOffsetLines, WrappedLineOffset>(file_line, file_line.size(), o, n);
     }
     void UpdateLines(const WrappedLineOffset &nfl, const WrappedLineOffset &nll);
     void Draw(const Box &box) { TextArea::Draw(box, true); }

@@ -204,23 +204,7 @@ void TextArea::Resized(int w, int h) {
     int lines = adjust_lines + skip_last_lines;
     line_fb.p = point(0, adjust_lines * font->height);
     for (int i=start_line; i<line.ring.count && lines < line_fb.lines; i++)
-        lines += line_fb.PushFrontAndUpdate(&line[-i-1], 0, 0, false);
-}
-
-void TextArea::IncrementWrappedLineOffset(WrappedLineOffset *o, int n) const {
-    for (int l=line.Size(), od=(n>=0?1:-1), i=abs(n); i; i--) { // XXX optimize
-        const TextGUI::Line *L = &line[-o->first-1];
-        o->second += od;
-        if (o->second >= L->Lines()) {
-            CHECK_EQ(1, od);
-            if (o->first >= l-1) { *o = WrappedLineOffset(l-1, line[-l].Lines()-1); return; }
-            *o = WrappedLineOffset(o->first+1, 0);
-        } else if (o->second < 0) {
-            CHECK_EQ(-1, od);
-            if (o->first <= 0) { *o = WrappedLineOffset(0, 0); return; }
-            *o = WrappedLineOffset(o->first-1, line[-o->first].Lines()-1);
-        }
-    }
+        lines += line_fb.PushFrontAndUpdate(&line[-i-1], 0, 0, true, false);
 }
 
 void TextArea::UpdateScrolled() {
@@ -421,11 +405,12 @@ void Editor::UpdateLines(const WrappedLineOffset &new_first_line, const WrappedL
     bool resized = last_fb_lines != line_fb.lines;
     if (resized) { line.Clear(); if (Wrap()) UpdateWrappedLines(TextArea::font->size, line_fb.w); }
     if (!file_line.size()) return;
-    printf("editor update-lines-2 %d,%d\n", new_first_line.first, new_first_line.second);
+    printf("editor update-lines-2 %d,%d %d\n", new_first_line.first, new_first_line.second, resized);
 
     LineOffsetSegment read_lines;
     bool reverse = new_first_line < first_line && !resized;
     int dist = abs(new_first_line.first - first_line.first);
+    printf("y0y0 dist %d\n", dist);
     if (dist < line_fb.lines && !resized) {
         if (reverse) read_lines = LineOffsetSegment(new_first_line.first, dist);
         else         read_lines = LineOffsetSegment(new_first_line.first + line_fb.lines - dist, dist);

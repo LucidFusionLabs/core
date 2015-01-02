@@ -703,14 +703,23 @@ struct BoxArray {
     
     int Size() const { return data.size(); }
     string Text() const { return data.size() ? BoxRun(&data[0], data.size()).Text() : ""; }
-    point Position(int o) const { return data[o].box.Position(); }
+    point Position(int o) const { 
+        CHECK_GE(o, 0); bool last = o >= Size();
+        const Box &b = !data.size() ? Box() : data[last ? data.size()-1 : o].box;
+        return last ? b.TopRight() : b.TopLeft();
+    }
+
     void Clear() { data.clear(); attr.clear(); line.clear(); height=0; }
     BoxArray *Reset() { Clear(); return this; }
     void Erase(int o, size_t l=UINT_MAX) { 
-        if (data.size() > o) data.erase(data.begin() + o, data.begin() + min(l, data.size()));
+        if (data.size() > o) data.erase(data.begin() + o, data.begin() + min(o+l, data.size()));
     }
-    void InsertAt(int o, const BoxArray &x) { data.insert(data.begin()+o, x.data.begin(), x.data.end()); }
-    void InsertAt(int o, const vector<Drawable::Box> &x) { data.insert(data.begin()+o, x.begin(), x.end()); }
+    void InsertAt(int o, const BoxArray &x) { InsertAt(o, x.data); }
+    void InsertAt(int o, const vector<Drawable::Box> &x) {
+        int w = x.size() ? x.back().box.right() : 0;
+        auto i = data.insert(data.begin()+o, x.begin(), x.end()) + x.size();
+        for (; i != data.end(); ++i) i->box += point(w,0);
+    }
 
     Drawable::Box &PushBack(const Box &box, const Drawable::Attr &cur_attr, Drawable *drawable, int *ind_out=0) { return PushBack(box, attr.GetAttrId(cur_attr), drawable, ind_out); }
     Drawable::Box &PushBack(const Box &box, int                   cur_attr, Drawable *drawable, int *ind_out=0) {
