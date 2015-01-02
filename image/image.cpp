@@ -50,7 +50,7 @@ void DrawInput3D(Asset *a, Entity *e) {
         screen->gd->DisableLighting();
         screen->gd->Color4f(1.0, 0.0, 0.0, 1.0);
         int vpp = GraphicsDevice::VertsPerPrimitive(a->geometry->primtype);
-        for (vector<int>::const_iterator i = highlight_input_prims.begin(); i != highlight_input_prims.end(); ++i) {
+        for (auto i = highlight_input_prims.begin(); i != highlight_input_prims.end(); ++i) {
             CHECK_LT(*i, a->geometry->count / vpp);
             scene.Draw(a->geometry, e, *i * vpp, vpp);
         }
@@ -65,7 +65,7 @@ void Frame3D(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sam
 
 void Frame2D(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample, int flag) {
     Asset *a = asset("input");
-    Box w(0, 0, screen->width, screen->height);
+    Box w(screen->width, screen->height);
 
     if (MyShader.ID) {
         screen->gd->ActiveTexture(0);
@@ -107,8 +107,6 @@ void Frame2D(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sam
     }
 }
 
-// engine callback
-// driven by lfapp_frame()
 int Frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample, int flag) {
 
     if (input_3D)  Frame3D(W, clicks, mic_samples, cam_sample, flag);

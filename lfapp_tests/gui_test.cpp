@@ -24,72 +24,57 @@
 
 using namespace LFL;
 
-TEST(GUITest, TextArea) {
-    int cursor_attr = 0;
-    Terminal::Attr::SetFGColorIndex(&cursor_attr, 7);
-    EXPECT_EQ(7,  Terminal::Attr::GetFGColorIndex(cursor_attr));
-    Terminal::Attr::SetFGColorIndex(&cursor_attr, 2);
-    EXPECT_EQ(2,  Terminal::Attr::GetFGColorIndex(cursor_attr));
-    Terminal::Attr::SetBGColorIndex(&cursor_attr, 3);
-    EXPECT_EQ(3,  Terminal::Attr::GetBGColorIndex(cursor_attr));
-    EXPECT_EQ(2,  Terminal::Attr::GetFGColorIndex(cursor_attr));
-    cursor_attr |= Terminal::Attr::Bold;
-    EXPECT_EQ(10, Terminal::Attr::GetFGColorIndex(cursor_attr));
-    EXPECT_EQ(3,  Terminal::Attr::GetBGColorIndex(cursor_attr));
-    Terminal::Attr::SetFGColorIndex(&cursor_attr, 4);
-    Terminal::Attr::SetBGColorIndex(&cursor_attr, 0);
-    EXPECT_EQ(12, Terminal::Attr::GetFGColorIndex(cursor_attr));
-    EXPECT_EQ(0,  Terminal::Attr::GetBGColorIndex(cursor_attr));
-    cursor_attr &= ~Terminal::Attr::Bold;
-    EXPECT_EQ(4,  Terminal::Attr::GetFGColorIndex(cursor_attr));
+TEST(GUITest, TextArea) { 
+    {
+        TextArea ta(screen, Fonts::Fake());
+        TextArea::Lines lines(&ta, 10);
+        lines.InsertAt(-1)->AssignText("a");
+        EXPECT_EQ("a", lines[-1].Text());
 
-    TextArea::Lines lines(0, 10);
-    lines.InsertAt(-1)->AssignText("a");
-    EXPECT_EQ("a", lines[-1].Text());
-
-    lines.InsertAt(-1)->AssignText("b");
-    lines.InsertAt(-1)->AssignText("c");
-    lines.InsertAt(-1)->AssignText("d");
-    EXPECT_EQ("a", lines[-4].Text()); EXPECT_EQ(-4, lines.IndexOf(&lines[-4]));
-    EXPECT_EQ("b", lines[-3].Text()); EXPECT_EQ(-3, lines.IndexOf(&lines[-3]));
-    EXPECT_EQ("c", lines[-2].Text()); EXPECT_EQ(-2, lines.IndexOf(&lines[-2]));
-    EXPECT_EQ("d", lines[-1].Text()); EXPECT_EQ(-1, lines.IndexOf(&lines[-1]));
-    lines.InsertAt(-4)->AssignText("z");
-    EXPECT_EQ("z", lines[-4].Text());
-    EXPECT_EQ("a", lines[-3].Text());
-    EXPECT_EQ("b", lines[-2].Text());
-    EXPECT_EQ("c", lines[-1].Text());
-    lines.InsertAt(-2)->AssignText("y");
-    EXPECT_EQ("z", lines[-4].Text());
-    EXPECT_EQ("a", lines[-3].Text());
-    EXPECT_EQ("y", lines[-2].Text());
-    EXPECT_EQ("b", lines[-1].Text());
-    lines.PopBack(2);
-    EXPECT_EQ("z", lines[-2].Text());
-    EXPECT_EQ("a", lines[-1].Text());
-    lines.PushFront()->AssignText("w");
-    lines.PushFront()->AssignText("u");
-    EXPECT_EQ("u", lines[-4].Text());
-    EXPECT_EQ("w", lines[-3].Text());
-    EXPECT_EQ("z", lines[-2].Text());
-    EXPECT_EQ("a", lines[-1].Text());
-    lines.PushFront()->AssignText("1");
-    lines.PushFront()->AssignText("2");
-    lines.PushFront()->AssignText("3");
-    lines.PushFront()->AssignText("4");
-    lines.PushFront()->AssignText("5");
-    lines.PushFront()->AssignText("6");
-    lines.PushFront()->AssignText("7");
-    EXPECT_EQ("7", lines[-10].Text()); EXPECT_EQ(-10, lines.IndexOf(&lines[-10]));
-    EXPECT_EQ("6", lines[-9] .Text()); EXPECT_EQ(-9,  lines.IndexOf(&lines[-9]));
-    EXPECT_EQ("5", lines[-8] .Text()); EXPECT_EQ(-8,  lines.IndexOf(&lines[-8]));
-    EXPECT_EQ("4", lines[-7] .Text()); EXPECT_EQ(-7,  lines.IndexOf(&lines[-7]));
-    EXPECT_EQ("3", lines[-6] .Text()); EXPECT_EQ(-6,  lines.IndexOf(&lines[-6]));
-    EXPECT_EQ("2", lines[-5] .Text()); EXPECT_EQ(-5,  lines.IndexOf(&lines[-5]));
-    EXPECT_EQ("1", lines[-4] .Text()); EXPECT_EQ(-4,  lines.IndexOf(&lines[-4]));
-    EXPECT_EQ("u", lines[-3] .Text()); EXPECT_EQ(-3,  lines.IndexOf(&lines[-3]));
-    EXPECT_EQ("w", lines[-2] .Text()); EXPECT_EQ(-2,  lines.IndexOf(&lines[-2]));
-    EXPECT_EQ("z", lines[-1] .Text()); EXPECT_EQ(-1,  lines.IndexOf(&lines[-1]));
+        lines.InsertAt(-1)->AssignText("b");
+        lines.InsertAt(-1)->AssignText("c");
+        lines.InsertAt(-1)->AssignText("d");
+        EXPECT_EQ("a", lines[-4].Text()); EXPECT_EQ(-4, lines.IndexOf(&lines[-4]));
+        EXPECT_EQ("b", lines[-3].Text()); EXPECT_EQ(-3, lines.IndexOf(&lines[-3]));
+        EXPECT_EQ("c", lines[-2].Text()); EXPECT_EQ(-2, lines.IndexOf(&lines[-2]));
+        EXPECT_EQ("d", lines[-1].Text()); EXPECT_EQ(-1, lines.IndexOf(&lines[-1]));
+        lines.InsertAt(-4)->AssignText("z");
+        EXPECT_EQ("z", lines[-4].Text());
+        EXPECT_EQ("a", lines[-3].Text());
+        EXPECT_EQ("b", lines[-2].Text());
+        EXPECT_EQ("c", lines[-1].Text());
+        lines.InsertAt(-2)->AssignText("y");
+        EXPECT_EQ("z", lines[-4].Text());
+        EXPECT_EQ("a", lines[-3].Text());
+        EXPECT_EQ("y", lines[-2].Text());
+        EXPECT_EQ("b", lines[-1].Text());
+        lines.PopBack(2);
+        EXPECT_EQ("z", lines[-2].Text());
+        EXPECT_EQ("a", lines[-1].Text());
+        lines.PushFront()->AssignText("w");
+        lines.PushFront()->AssignText("u");
+        EXPECT_EQ("u", lines[-4].Text());
+        EXPECT_EQ("w", lines[-3].Text());
+        EXPECT_EQ("z", lines[-2].Text());
+        EXPECT_EQ("a", lines[-1].Text());
+        lines.PushFront()->AssignText("1");
+        lines.PushFront()->AssignText("2");
+        lines.PushFront()->AssignText("3");
+        lines.PushFront()->AssignText("4");
+        lines.PushFront()->AssignText("5");
+        lines.PushFront()->AssignText("6");
+        lines.PushFront()->AssignText("7");
+        EXPECT_EQ("7", lines[-10].Text()); EXPECT_EQ(-10, lines.IndexOf(&lines[-10]));
+        EXPECT_EQ("6", lines[-9] .Text()); EXPECT_EQ(-9,  lines.IndexOf(&lines[-9]));
+        EXPECT_EQ("5", lines[-8] .Text()); EXPECT_EQ(-8,  lines.IndexOf(&lines[-8]));
+        EXPECT_EQ("4", lines[-7] .Text()); EXPECT_EQ(-7,  lines.IndexOf(&lines[-7]));
+        EXPECT_EQ("3", lines[-6] .Text()); EXPECT_EQ(-6,  lines.IndexOf(&lines[-6]));
+        EXPECT_EQ("2", lines[-5] .Text()); EXPECT_EQ(-5,  lines.IndexOf(&lines[-5]));
+        EXPECT_EQ("1", lines[-4] .Text()); EXPECT_EQ(-4,  lines.IndexOf(&lines[-4]));
+        EXPECT_EQ("u", lines[-3] .Text()); EXPECT_EQ(-3,  lines.IndexOf(&lines[-3]));
+        EXPECT_EQ("w", lines[-2] .Text()); EXPECT_EQ(-2,  lines.IndexOf(&lines[-2]));
+        EXPECT_EQ("z", lines[-1] .Text()); EXPECT_EQ(-1,  lines.IndexOf(&lines[-1]));
+    }
 
     {
         TextGUI::Line *L;
@@ -98,6 +83,10 @@ TEST(GUITest, TextArea) {
         (L = ta.line.PushFront())->AssignText("2\n2"); L->Layout();
         (L = ta.line.PushFront())->AssignText("3   "); L->Layout();
         (L = ta.line.PushFront())->AssignText("4   "); L->Layout();
+        EXPECT_EQ(1, ta.line[-1].Lines());
+        EXPECT_EQ(2, ta.line[-2].Lines());
+        EXPECT_EQ(1, ta.line[-3].Lines());
+        EXPECT_EQ(1, ta.line[-4].Lines());
 
         TextArea::WrappedLineOffset o = ta.GetWrappedLineOffset(0);
         EXPECT_EQ(TextArea::WrappedLineOffset(), o);
@@ -116,6 +105,26 @@ TEST(GUITest, TextArea) {
         ta.IncrementWrappedLineOffset(&o, -1);
         EXPECT_EQ(TextArea::WrappedLineOffset(0,0), o);
     }
+}
+
+TEST(GUITest, Terminal) {
+    int cursor_attr = 0;
+    Terminal::Attr::SetFGColorIndex(&cursor_attr, 7);
+    EXPECT_EQ(7,  Terminal::Attr::GetFGColorIndex(cursor_attr));
+    Terminal::Attr::SetFGColorIndex(&cursor_attr, 2);
+    EXPECT_EQ(2,  Terminal::Attr::GetFGColorIndex(cursor_attr));
+    Terminal::Attr::SetBGColorIndex(&cursor_attr, 3);
+    EXPECT_EQ(3,  Terminal::Attr::GetBGColorIndex(cursor_attr));
+    EXPECT_EQ(2,  Terminal::Attr::GetFGColorIndex(cursor_attr));
+    cursor_attr |= Terminal::Attr::Bold;
+    EXPECT_EQ(10, Terminal::Attr::GetFGColorIndex(cursor_attr));
+    EXPECT_EQ(3,  Terminal::Attr::GetBGColorIndex(cursor_attr));
+    Terminal::Attr::SetFGColorIndex(&cursor_attr, 4);
+    Terminal::Attr::SetBGColorIndex(&cursor_attr, 0);
+    EXPECT_EQ(12, Terminal::Attr::GetFGColorIndex(cursor_attr));
+    EXPECT_EQ(0,  Terminal::Attr::GetBGColorIndex(cursor_attr));
+    cursor_attr &= ~Terminal::Attr::Bold;
+    EXPECT_EQ(4,  Terminal::Attr::GetFGColorIndex(cursor_attr));
 }
 
 TEST(BrowserTest, DOMTest) {
@@ -172,7 +181,7 @@ TEST(BrowserTest, DOMTest) {
     EXPECT_EQ(&B,  doc->firstChild());   EXPECT_EQ(&C, doc->lastChild());
 }
 
-TEST(BrowserTest, HTMLTest) {
+TEST(BrowserTest, DOM) {
     SimpleBrowser sb(screen, Fonts::Fake(), screen->Box());
     sb.OpenHTML("<html>\n"
                 "<head><style> h1 { background-color: #111111; } </style></head>\n"
@@ -385,7 +394,7 @@ TEST(BrowserTest, HTMLTest) {
 
 #ifdef LFL_LIBCSS
 #include "lfapp/css.h"
-TEST(BrowserTest, CSSTest) {
+TEST(BrowserTest, CSS) {
     StyleSheet sheet(0, 0);
     sheet.Parse("h1 { color: red }\n"
                 "em { color: blue }\n"
