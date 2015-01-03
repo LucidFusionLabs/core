@@ -134,7 +134,8 @@ template <class X> int VectorEraseByValue(vector<X> *v, const X& x) {
     return orig_size - v->size();
 }
 
-template <class X> X BackOrDefault (const vector<X> &a)                    { return a.size() ? a.back() : X(); }
+template <class X> X BackOrDefault (const vector<X> &a)                    { return a.size() ? a.back () : X(); }
+template <class X> X FrontOrDefault(const vector<X> &a)                    { return a.size() ? a.front() : X(); }
 template <class X> X IndexOrDefault(const vector<X> &a, int n)             { return n < a.size() ? a[n] : X(); }
 template <class X> X IndexOrDefault(const vector<X> &a, int n, const X& b) { return n < a.size() ? a[n] : b; }
 

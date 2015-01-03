@@ -64,7 +64,7 @@ TEST(VideoTest, Color) {
     EXPECT_EQ("008BFF", Color::FromHSV(h, s, v).HexString());
 }
 
-TEST(VideoTest, FloatContainerTest) {
+TEST(VideoTest, FloatContainer) {
     FloatContainer container;
     LFL::DOM::Text A(0), B(0), C(0), D(0);
     Box ab, bb, cb, db;
@@ -145,7 +145,7 @@ TEST(VideoTest, FloatContainerTest) {
     EXPECT_EQ(container.float_left [1], child.float_left [1]);
 }
 
-TEST(VideoTest, FlowLayoutTest1) {
+TEST(VideoTest, FlowLayout) {
     Box dim(128, 128), box;
     Flow flow(&dim);
     int bw=20, bh=20;

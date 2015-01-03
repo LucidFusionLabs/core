@@ -2117,6 +2117,7 @@ template <class X> void Font::Size       (const StringPieceT<X> &text, Box *out,
 template           void Font::Encode<short>(const String16Piece   &text, const Box &box, BoxArray *out, int draw_flag, int attr_id);
 template <class X> void Font::Encode       (const StringPieceT<X> &text, const Box &box, BoxArray *out, int draw_flag, int attr_id) {
     Flow flow(&box, this, out);
+    if (draw_flag & Flag::AssignFlowX) flow.p.x = box.x;
     flow.layout.wrap_lines   = !(draw_flag & Flag::NoWrap) && box.w;
     flow.layout.word_break   = !(draw_flag & Flag::GlyphBreak);
     flow.layout.align_center =  (draw_flag & Flag::AlignCenter);
