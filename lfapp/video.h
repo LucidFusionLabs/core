@@ -712,11 +712,12 @@ struct BoxArray {
     void Clear() { data.clear(); attr.clear(); line.clear(); line_ind.clear(); height=0; }
     BoxArray *Reset() { Clear(); return this; }
     void Erase(int o, size_t l=UINT_MAX) { 
-        if (data.size() > o) data.erase(data.begin() + o, data.begin() + min(o+l, data.size()));
+        if (data.size() <= o) return;
+        data.erase(data.begin() + o, data.begin() + min(o+l, data.size()));
     }
     void InsertAt(int o, const BoxArray &x) { InsertAt(o, x.data); }
     void InsertAt(int o, const vector<Drawable::Box> &x) {
-        int w = x.size() ? x.back().box.right() : 0;
+        int w = x.size() ? (x.back().box.right() - x.front().box.x) : 0;
         auto i = data.insert(data.begin()+o, x.begin(), x.end()) + x.size();
         for (; i != data.end(); ++i) i->box += point(w,0);
     }
@@ -1030,7 +1031,7 @@ struct FloatContainer : public Box {
 
 struct Flow {
     struct Layout {
-        bool wrap_lines=1, word_break=1, align_center=0, align_right=0;
+        bool wrap_lines=1, word_break=1, align_center=0, align_right=0, ignore_newlines=0;
         int char_spacing=0, word_spacing=0, line_height=0, valign_offset=0;
         int (*char_tf)(int)=0, (*word_start_char_tf)(int)=0;
     } layout;
@@ -1106,21 +1107,23 @@ struct Flow {
         return 0;
     }
     void AppendBoxArrayText(const BoxArray &in) {
-        ScopedValue<bool> SWW(&layout.wrap_lines, false);
-        int offset = 0, next_line_end_index = 0, next_line_end = IndexOrDefault(in.line_ind, next_line_end_index, -1);
+        bool attr_fwd = in.attr.source;
+        ScopedValue<bool> SWW(&layout.wrap_lines, false), INL(&layout.ignore_newlines, true);
+        int start_out_lines = out->line_ind.size(), offset = 0, next_line_end_index = 0;
+        int next_line_end = IndexOrDefault(in.line_ind, next_line_end_index, -1);
         for (ArrayMemberSegmentIter<Drawable::Box, int, &Drawable::Box::attr_id> iter(in.data); !iter.Done(); iter.Increment()) {
-            cur_attr = in.attr.GetAttr(iter.cur_attr);
+            if (!attr_fwd) cur_attr = in.attr.GetAttr(iter.cur_attr);
             string text = BoxRun(iter.Data(), iter.Length()).Text();
             for (int i=0, il=text.size(), l; i<il; i+=l, offset+=l) {
                 l = next_line_end >= 0 ? min(next_line_end-offset, il-i) : il-i;
-                AppendText(StringPiece(text.data()+i, l));
+                AppendText(StringPiece(text.data()+i, l), attr_fwd ? iter.cur_attr : 0);
                 if (next_line_end >= 0 && offset+l >= next_line_end) {
                     next_line_end = IndexOrDefault(in.line_ind, ++next_line_end_index, -1);
                     AppendNewline(0, 0);
                 }
             }
         }
-        CHECK_EQ(out->line_ind.size(), in.line_ind.size());
+        CHECK_EQ(in.line_ind.size(), out->line_ind.size() - start_out_lines);
     }
 
     int AppendBox(float x, int w, int h, Drawable *drawable) { p.x=container->w*x; return AppendBox(w, h, drawable); }
@@ -1206,7 +1209,7 @@ struct Flow {
         }
         cur_line.fresh = 0;
         cur_word.fresh = 0;
-        if (c == '\n') { AppendNewline(); return State::OK; }
+        if (c == '\n') { if (!layout.ignore_newlines) AppendNewline(); return State::OK; }
 
         int advance = box->drawable ? box->drawable->Layout(&cur_attr, &box->box) : box->box.w;
         box->box.y += cur_line.base;

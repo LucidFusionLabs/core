@@ -138,7 +138,7 @@ template <class X> X BackOrDefault (const vector<X> &a)                    { ret
 template <class X> X IndexOrDefault(const vector<X> &a, int n)             { return n < a.size() ? a[n] : X(); }
 template <class X> X IndexOrDefault(const vector<X> &a, int n, const X& b) { return n < a.size() ? a[n] : b; }
 
-template <class X> void ValueFilter(X *v, const typename X::value_type &val) {
+template <class X> void FilterValues(X *v, const typename X::value_type &val) {
     for (typename X::iterator i = v->begin(); i != v->end(); /**/) {
         if (*i == val) i = v->erase(i);
         else i++;
@@ -165,8 +165,14 @@ template <class X, class Y> void Move(X &buf, int to_ind, int from_ind, int size
 
 template <class X> struct ScopedValue {
     X *v, ov;
-    ScopedValue(X *V, X nv) : v(V), ov(V?*V:X()) { *v = nv; }
-    ~ScopedValue() { *v = ov; }
+    ScopedValue(X *V, X nv) : v(V), ov(V ? *V : X()) { *v = nv; }
+    ~ScopedValue() { if (v) *v = ov; }
+};
+
+template <class X> struct ScopedDeltaAdder {
+    X *v, ov; function<X()> f;
+    ScopedDeltaAdder(X *V, const function<X()> &F) : v(V), ov(V ? F() : X()), f(F) {}
+    ~ScopedDeltaAdder() { if (v) (*v) += (f() - ov); }
 };
 
 template <class T1, class T2, class T3> struct Triple {
