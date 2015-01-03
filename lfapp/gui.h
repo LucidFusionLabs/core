@@ -242,17 +242,11 @@ struct TextGUI : public KeyboardGUI {
     typedef function<void(Link*)> LinkCB;
     struct LineData {
         BoxArray glyphs;
+        Box box; Flow flow;
         String16 text, text_attr;
         vector<shared_ptr<Link> > links;
-        Box box; Flow flow;
     };
     struct Line {
-        struct WrappedLinesUpdate {
-            Line *L; int start_lines;
-            WrappedLinesUpdate(Line *l) : L(l->cont ? l : 0), start_lines(L ? L->Lines() : 0) {}
-            ~WrappedLinesUpdate() { if (L) L->cont->wrapped_lines += (L->Lines() - start_lines); };
-        };
-
         point p;
         Lines *cont=0;
         TextGUI *parent=0;
@@ -262,6 +256,7 @@ struct TextGUI : public KeyboardGUI {
         static void Move (Line &t, Line &s) { swap(t.data, s.data); }
         static void MoveP(Line &t, Line &s) { swap(t.data, s.data); t.p=s.p; }
         int GetAttrId(const Drawable::Attr &a) { return data->glyphs.attr.GetAttrId(a); }
+#define ScopedLineLinesTracker ScopedDeltaAdder<int> SWLT(cont ? &cont->wrapped_lines : 0, bind(&Line::Lines, this))
 #if 1
         void InitFlow() { data->flow = Flow(&data->box, parent->font, &data->glyphs, &parent->layout); }
         void Init(Lines *C, TextGUI *P) { cont=C; parent=P; InitFlow(); }
@@ -274,21 +269,18 @@ struct TextGUI : public KeyboardGUI {
         void InsertTextAt(int o, const String16 &s, int a=0) { data->glyphs.InsertAt(o, EncodeText(s, a, data->glyphs.Position(o))); }
         void AppendText  (       const string   &s, int a=0) { data->flow.AppendText(s, a); }
         void AppendText  (       const String16 &s, int a=0) { data->flow.AppendText(s, a); }
-        void AssignText  (       const string   &s, int a=0) { data->glyphs.Clear(); AppendText(s, a); }
-        void AssignText  (       const String16 &s, int a=0) { data->glyphs.Clear(); AppendText(s, a); }
-        vector<Drawable::Box> EncodeText(const string   &s, int a, const point &p) { 
-            printf("Encode '%s' %d %s\n", s.c_str(), a, p.DebugString().c_str());
-            BoxArray b; parent->font->Encode(s, Box(p,0,0), &b, 0, a); return b.data; }
-        vector<Drawable::Box> EncodeText(const String16 &s, int a, const point &p) { 
-            printf("Encode '%s' %d %s\n", String::ToUTF8(s).c_str(), a, p.DebugString().c_str());
-            BoxArray b; parent->font->Encode(s, Box(p,0,0), &b, 0, a); return b.data; }
+        void AssignText  (       const string   &s, int a=0) { Clear(); AppendText(s, a); }
+        void AssignText  (       const String16 &s, int a=0) { Clear(); AppendText(s, a); }
+        vector<Drawable::Box> EncodeText(const string   &s, int a, const point &p) { BoxArray b; parent->font->Encode(s, Box(p,0,0), &b, 0, a); return b.data; }
+        vector<Drawable::Box> EncodeText(const String16 &s, int a, const point &p) { BoxArray b; parent->font->Encode(s, Box(p,0,0), &b, 0, a); return b.data; }
         void UpdateAttr(int ind, int len, int a) {}
         void Layout(Box win) {
             // if (data->box.w == win.w) return;
             data->box = win;
-            WrappedLinesUpdate WLU(this);
+            ScopedLineLinesTracker;
             BoxArray b;
             swap(b, data->glyphs);
+            data->glyphs.attr.source = b.attr.source;
             Clear();
             data->flow.AppendBoxArrayText(b);
         }
@@ -307,7 +299,7 @@ struct TextGUI : public KeyboardGUI {
         void AssignText  (       const String16 &s, int a=0) { data->text = s;                  data->text_attr = String16(data->text.size(), a); }
         void UpdateAttr(int ind, int len, int a) { Vec<short>::Assign((short*)data->text_attr.data() + ind, a, len); }
         void Layout(Box win) {
-            WrappedLinesUpdate WLU(this);
+            ScopedLineLinesTracker;
             data->glyphs.Clear();
             Flow flow(&win, parent->font, &data->glyphs, &parent->layout);
             for (ArraySegmentIter<short> iter(data->text_attr); !iter.Done(); iter.Increment()) {
@@ -320,9 +312,9 @@ struct TextGUI : public KeyboardGUI {
 #endif
         void UpdateText(int x, const String16 &v, int attr, int max_width=0) {
             if (Size() < x) AppendText(string(x - Size(), ' '), attr);
-            if (!parent->insert_mode) Erase       (x, v.size());
-            if (Size() == x)          AppendText  (   v, attr);
-            else                      InsertTextAt(x, v, attr);
+            else if (!parent->insert_mode) Erase(x, v.size());
+            if (Size() == x) AppendText  (   v, attr);
+            else             InsertTextAt(x, v, attr);
             if (parent->insert_mode && max_width) Erase(max_width);
         }
         void UpdateAttr(int ind, int len) {
@@ -446,7 +438,7 @@ struct TextGUI : public KeyboardGUI {
     LinesFrameBuffer cmd_fb;
     string cmd_prefix="> ";
     Color cmd_color=Color::white;
-    bool deactivate_on_enter=0, clickable_links=0, insert_mode=0;
+    bool deactivate_on_enter=0, clickable_links=0, insert_mode=1;
     int adjust_lines=0, skip_last_lines=0, start_line=0;
     TextGUI(Window *W, Font *F) : KeyboardGUI(W, F), font(F)
     { cmd_line.Init(0,this); cmd_line.GetAttrId(Drawable::Attr(F)); }
@@ -459,12 +451,14 @@ struct TextGUI : public KeyboardGUI {
     virtual void CursorLeft()  { cursor.i.x = max(cursor.i.x-1, 0);               UpdateCursor(); }
     virtual void Home()        { cursor.i.x = 0;                                  UpdateCursor(); }
     virtual void End()         { cursor.i.x = cmd_line.Size();                    UpdateCursor(); }
-    virtual void HistUp()      { if (int c=lastcmd.ring.count) { AssignInput(lastcmd[lastcmd_ind]); lastcmd_ind=max(lastcmd_ind-1, -c); cursor.i.x = cmd_line.Size(); } }
-    virtual void HistDown()    { if (int c=lastcmd.ring.count) { AssignInput(lastcmd[lastcmd_ind]); lastcmd_ind=min(lastcmd_ind+1, -1); cursor.i.x = cmd_line.Size(); } }
+    virtual void HistUp()      { if (int c=lastcmd.ring.count) { AssignInput(lastcmd[lastcmd_ind]); lastcmd_ind=max(lastcmd_ind-1, -c); } }
+    virtual void HistDown()    { if (int c=lastcmd.ring.count) { AssignInput(lastcmd[lastcmd_ind]); lastcmd_ind=min(lastcmd_ind+1, -1); } }
     virtual void Enter();
 
     virtual string Text() const { return cmd_line.Text(); }
-    virtual void AssignInput(const string &text) { cmd_line.AssignText(text); UpdateCommandFB(); UpdateCursor(); }
+    virtual void AssignInput(const string &text)
+    { cmd_line.AssignText(text); cursor.i.x=cmd_line.Size(); UpdateCommandFB(); UpdateCursor(); }
+
     virtual void UpdateCursor() { cursor.p = cmd_line.data->glyphs.Position(cursor.i.x); }
     virtual void UpdateCommandFB() { 
         cmd_fb.fb.Attach();
@@ -623,7 +617,7 @@ struct Terminal : public TextArea, public Drawable::AttrSource {
     Terminal(int FD, Window *W, Font *F) :
         TextArea(W, F), fd(FD), fb_cb(bind(&Terminal::GetFrameBuffer, this, _1)) {
         CHECK(F->fixed_width || (F->flag & FontDesc::Mono));
-        wrap_lines = write_newline = 0;
+        wrap_lines = write_newline = insert_mode = 0;
         for (int i=0; i<line.ring.size; i++) line[i].data->glyphs.attr.source = this;
         SetColors(Singleton<StandardVGAColors>::Get());
         cursor.attr = default_cursor_attr;
