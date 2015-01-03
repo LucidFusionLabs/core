@@ -22,7 +22,7 @@
 using namespace LFL;
 
 #ifdef LFL_PNG
-TEST(ImageFormatTest, PNGTest) {
+TEST(ImageFormatTest, PNG) {
     Texture tex(256, 256), tex_in;
     tex.RenewBuffer();
     for (int i=0; i<tex.height; i++)
@@ -59,7 +59,7 @@ int tile_test_k=0; void TileTestK() { tile_test_k++; }
 int tile_test_l=0; void TileTestL() { tile_test_l++; }
 int tile_test_m=0; void TileTestM() { tile_test_m++; }
 
-TEST(GUITest, TilesTest) {
+TEST(GUITest, Tiles) {
     Tiles tiles, *T = &tiles;
     T->Run();
     T->ContextOpen();

@@ -127,7 +127,7 @@ TEST(GUITest, Terminal) {
     EXPECT_EQ(4,  Terminal::Attr::GetFGColorIndex(cursor_attr));
 }
 
-TEST(BrowserTest, DOMTest) {
+TEST(BrowserTest, DOMNode) {
     LFL::DOM::FixedObjectAlloc<65536> alloc;
     LFL::DOM::HTMLDocument *doc = AllocatorNew(&alloc, (LFL::DOM::HTMLDocument), (0, &alloc, 0));
     LFL::DOM::Text A(doc), B(doc), C(doc), D(doc);

@@ -704,22 +704,27 @@ struct BoxArray {
     int Size() const { return data.size(); }
     string Text() const { return data.size() ? BoxRun(&data[0], data.size()).Text() : ""; }
     point Position(int o) const { 
-        CHECK_GE(o, 0); bool last = o >= Size();
-        const Box &b = !data.size() ? Box() : data[last ? data.size()-1 : o].box;
+        CHECK_GE(o, 0); bool last = o >= Size(); Box e;
+        const Box &b = data.size() ? data[last ? data.size()-1 : o].box : e;
         return last ? b.TopRight() : b.TopLeft();
     }
 
     void Clear() { data.clear(); attr.clear(); line.clear(); line_ind.clear(); height=0; }
     BoxArray *Reset() { Clear(); return this; }
-    void Erase(int o, size_t l=UINT_MAX) { 
-        if (data.size() <= o) return;
-        data.erase(data.begin() + o, data.begin() + min(o+l, data.size()));
+    void Erase(int o, size_t l=UINT_MAX, bool shift=false) { 
+        if (!l || data.size() <= o) return;
+        if (shift) CHECK_EQ(0, line.size());
+        vector<Drawable::Box>::iterator b = data.begin() + o, e = data.begin() + min(o+l, data.size());
+        point p(shift ? ((e-1)->box.right() - b->box.x) : 0, 0);
+        auto i = data.erase(b, e);
+        if (shift) for (; i != data.end(); ++i) i->box -= p;
     }
     void InsertAt(int o, const BoxArray &x) { InsertAt(o, x.data); }
     void InsertAt(int o, const vector<Drawable::Box> &x) {
-        int w = x.size() ? (x.back().box.right() - x.front().box.x) : 0;
+        CHECK_EQ(0, line.size());
+        point p(x.size() ? (x.back().box.right() - x.front().box.x) : 0, 0);
         auto i = data.insert(data.begin()+o, x.begin(), x.end()) + x.size();
-        for (; i != data.end(); ++i) i->box += point(w,0);
+        for (; i != data.end(); ++i) i->box += p;
     }
 
     Drawable::Box &PushBack(const Box &box, const Drawable::Attr &cur_attr, Drawable *drawable, int *ind_out=0) { return PushBack(box, attr.GetAttrId(cur_attr), drawable, ind_out); }
@@ -809,7 +814,8 @@ struct Font : public FontInterface {
         enum {
             NoWrap=1<<6, GlyphBreak=1<<7, AlignCenter=1<<8, AlignRight=1<<9, 
             Underline=1<<10, Overline=1<<11, Midline=1<<12, Blink=1<<13,
-            Uppercase=1<<14, Lowercase=1<<15, Capitalize=1<<16, Clipped=1<<17
+            Uppercase=1<<14, Lowercase=1<<15, Capitalize=1<<16, Clipped=1<<17,
+            AssignFlowX=1<<18
         };
         static int Orientation(int f) { return f & 0xf; };
     };

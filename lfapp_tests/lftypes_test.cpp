@@ -21,7 +21,7 @@
 
 using namespace LFL;
 
-TEST(util, MoveTest) {
+TEST(UtilTest, Move) {
     //               01234567890123456789012345
     { char text[] = "abcdefghijklmnopqrstuvwxyz";
         //               |  |       |

@@ -243,7 +243,6 @@ struct TextGUI : public KeyboardGUI {
     struct LineData {
         BoxArray glyphs;
         Box box; Flow flow;
-        String16 text, text_attr;
         vector<shared_ptr<Link> > links;
     };
     struct Line {
@@ -264,18 +263,18 @@ struct TextGUI : public KeyboardGUI {
         int Lines() const { return 1+data->glyphs.line.size(); }
         string Text() const { return data->glyphs.Text(); }
         void Clear() { data->glyphs.Clear(); InitFlow(); }
-        void Erase(int o, unsigned l=UINT_MAX) { return data->glyphs.Erase(o, l); }
+        void Erase(int o, unsigned l=UINT_MAX) { return data->glyphs.Erase(o, l, true); }
         void InsertTextAt(int o, const string   &s, int a=0) { data->glyphs.InsertAt(o, EncodeText(s, a, data->glyphs.Position(o))); }
         void InsertTextAt(int o, const String16 &s, int a=0) { data->glyphs.InsertAt(o, EncodeText(s, a, data->glyphs.Position(o))); }
         void AppendText  (       const string   &s, int a=0) { data->flow.AppendText(s, a); }
         void AppendText  (       const String16 &s, int a=0) { data->flow.AppendText(s, a); }
         void AssignText  (       const string   &s, int a=0) { Clear(); AppendText(s, a); }
         void AssignText  (       const String16 &s, int a=0) { Clear(); AppendText(s, a); }
-        vector<Drawable::Box> EncodeText(const string   &s, int a, const point &p) { BoxArray b; parent->font->Encode(s, Box(p,0,0), &b, 0, a); return b.data; }
-        vector<Drawable::Box> EncodeText(const String16 &s, int a, const point &p) { BoxArray b; parent->font->Encode(s, Box(p,0,0), &b, 0, a); return b.data; }
+        vector<Drawable::Box> EncodeText(const string   &s, int a, const point &p) { BoxArray b; parent->font->Encode(s, Box(p,0,0), &b, Font::Flag::AssignFlowX, a); return b.data; }
+        vector<Drawable::Box> EncodeText(const String16 &s, int a, const point &p) { BoxArray b; parent->font->Encode(s, Box(p,0,0), &b, Font::Flag::AssignFlowX, a); return b.data; }
         void UpdateAttr(int ind, int len, int a) {}
         void Layout(Box win) {
-            // if (data->box.w == win.w) return;
+            if (data->box.w == win.w) return;
             data->box = win;
             ScopedLineLinesTracker;
             BoxArray b;
@@ -284,7 +283,7 @@ struct TextGUI : public KeyboardGUI {
             Clear();
             data->flow.AppendBoxArrayText(b);
         }
-#else
+#else   // LineData: String16 text, text_attr;
         void Init(Lines *C, TextGUI *P) { cont=C; parent=P; }
         int Size () const { return data->glyphs.Size(); }
         int Lines() const { return max(1, data->glyphs.line.size()); }
