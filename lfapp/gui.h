@@ -386,13 +386,13 @@ struct TextGUI : public KeyboardGUI {
         int PushFrontAndUpdate(Line *l, int wlo=0, int wll=0, bool lo=true, bool vwrap=true) {
             if (lo) l->Layout(wrap ? w : 0);
             int wl = max(0, l->Lines() - wlo), lh = (wll ? min(wll, wl) : wl) * font_height;
-            Box b(0, wl * font_height - lh, 0, lh);
+            if (!lh) return 0; Box b(0, wl * font_height - lh, 0, lh);
             return RingFrameBuffer::PushFrontAndUpdate(l, b, paint_cb, vwrap) / font_height;
         }
         int PushBackAndUpdate(Line *l, int wlo=0, int wll=0, bool lo=true) {
             if (lo) l->Layout(wrap ? w : 0);
             int wl = max(0, l->Lines() - wlo), lh = (wll ? min(wll, wl) : wl) * font_height;
-            Box b(0, wlo * font_height, 0, lh);
+            if (!lh) return 0; Box b(0, wlo * font_height, 0, lh);
             return RingFrameBuffer::PushBackAndUpdate(l, b, paint_cb, true) / font_height;
         }
         void PushFrontAndUpdateOffset(Line *l, int lo) {
@@ -503,6 +503,8 @@ struct TextArea : public TextGUI {
     virtual void UpdateScrolled();
     virtual void UpdateLines(const WrappedLineOffset &nfl, const WrappedLineOffset &nll)
     { start_line = nfl.first; adjust_lines = -nfl.second; }
+    virtual void UpdateLines(const WrappedLineOffset &nfl, WrappedLineOffset *nll)
+    { *nll = nfl; IncrementWrappedLineOffset(nll, line_fb.lines); UpdateLines(nfl, *nll); }
 
     virtual void Draw(const Box &w, bool cursor);
     // void UpdateLineOffsets(bool size_changed, bool cursor);

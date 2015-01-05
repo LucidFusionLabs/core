@@ -199,20 +199,27 @@ void TextArea::Write(const string &s, bool update_fb, bool release_fb) {
 }
 
 void TextArea::Resized(int w, int h) {
+    UpdateLines(first_line, &last_line);
     // mouse_gui.mouse.AddClickBox(box, MouseController::CoordCB(bind(&TextArea::ClickCB, this, _1, _2, _3, _4)));
     // if (tw->terminal->colors) W->gd->ClearColor(tw->terminal->colors->c[tw->terminal->colors->bg_index]);
     int lines = adjust_lines + skip_last_lines;
     line_fb.p = point(0, adjust_lines * font->height);
     for (int i=start_line; i<line.ring.count && lines < line_fb.lines; i++)
         lines += line_fb.PushFrontAndUpdate(&line[-i-1], 0, 0, true, false);
+    line_fb.p = point(0, line_fb.Height());
 }
 
 void TextArea::UpdateScrolled() {
     if (!Typed::EqualChanged(&last_v_scrolled, v_scrolled)) return;
-    WrappedLineOffset new_first_line=GetWrappedLineOffset(v_scrolled), new_last_line=new_first_line;
+    WrappedLineOffset new_first_line=GetWrappedLineOffset(v_scrolled), new_last_line;
     if (new_first_line == first_line) return;
-    IncrementWrappedLineOffset(&new_last_line, line_fb.lines);
-    UpdateLines(new_first_line, new_last_line);
+    UpdateLines(new_first_line, &new_last_line);
+
+    printf("UpdateScrolled first_line %d,%d -> %d,%d last_line %d,%d -> %d,%d\n",
+           first_line.first, first_line.second, new_first_line.first, new_first_line.second,
+           last_line.first,  last_line.second,  new_last_line.first,  new_last_line.second);
+    first_line = new_first_line;
+    last_line = new_last_line;
 
     line_fb.fb.Attach();
     ScopedDrawMode drawmode(DrawMode::_2D);
@@ -220,13 +227,6 @@ void TextArea::UpdateScrolled() {
     Resized(line_fb.w, line_fb.h);
     line_fb.scroll=v2();
     line_fb.fb.Release();
-
-    printf("UpdateScrolled first_line %d,%d -> %d,%d last_line %d,%d -> %d,%d\n",
-           first_line.first, first_line.second, new_first_line.first, new_first_line.second,
-           last_line.first,  last_line.second,  new_last_line.first,  new_last_line.second);
-
-    first_line = new_first_line;
-    last_line = new_last_line;
     return;
 
     bool resized=0;

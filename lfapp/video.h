@@ -513,6 +513,12 @@ struct GraphicsDevice {
     static const int Ambient, Diffuse, Specular, Emission, Position;
     static const int One, SrcAlpha, OneMinusSrcAlpha, OneMinusDstColor;
     static const int Fill, Line, Point;
+
+    int draw_mode = 0;
+    vector<Color> default_color;
+    vector<vector<Box> > scissor_stack;
+    GraphicsDevice() : scissor_stack(1) {}
+
     virtual void Init() = 0;
     virtual bool ShaderSupport() = 0;
     virtual void EnableTexture() = 0;
@@ -599,16 +605,21 @@ struct GraphicsDevice {
     void Scissor(Box w);
     void PushScissor(Box w);
     void PopScissor();
-    int draw_mode = 0;
-    vector<Box> scissor_stack;
-    vector<Color> default_color;
+    void PushScissorStack();
+    void PopScissorStack();
+
     static int VertsPerPrimitive(int gl_primtype);
 };
 
 struct Scissor {
-    ~Scissor() { screen->gd->PopScissor(); }
-    Scissor(Box w) { screen->gd->PushScissor(w); }
     Scissor(int x, int y, int w, int h) { screen->gd->PushScissor(Box(x, y, w, h)); }
+    Scissor(Box w) { screen->gd->PushScissor(w); }
+    ~Scissor()     { screen->gd->PopScissor(); }
+};
+
+struct ScissorStack {
+    ScissorStack()  { screen->gd->PushScissorStack(); }
+    ~ScissorStack() { screen->gd->PopScissorStack(); }
 };
 
 struct ScopedDrawMode {
@@ -711,21 +722,6 @@ struct BoxArray {
 
     void Clear() { data.clear(); attr.clear(); line.clear(); line_ind.clear(); height=0; }
     BoxArray *Reset() { Clear(); return this; }
-    void Erase(int o, size_t l=UINT_MAX, bool shift=false) { 
-        if (!l || data.size() <= o) return;
-        if (shift) CHECK_EQ(0, line.size());
-        vector<Drawable::Box>::iterator b = data.begin() + o, e = data.begin() + min(o+l, data.size());
-        point p(shift ? ((e-1)->box.right() - b->box.x) : 0, 0);
-        auto i = data.erase(b, e);
-        if (shift) for (; i != data.end(); ++i) i->box -= p;
-    }
-    void InsertAt(int o, const BoxArray &x) { InsertAt(o, x.data); }
-    void InsertAt(int o, const vector<Drawable::Box> &x) {
-        CHECK_EQ(0, line.size());
-        point p(x.size() ? (x.back().box.right() - x.front().box.x) : 0, 0);
-        auto i = data.insert(data.begin()+o, x.begin(), x.end()) + x.size();
-        for (; i != data.end(); ++i) i->box += p;
-    }
 
     Drawable::Box &PushBack(const Box &box, const Drawable::Attr &cur_attr, Drawable *drawable, int *ind_out=0) { return PushBack(box, attr.GetAttrId(cur_attr), drawable, ind_out); }
     Drawable::Box &PushBack(const Box &box, int                   cur_attr, Drawable *drawable, int *ind_out=0) {
@@ -733,17 +729,33 @@ struct BoxArray {
         return LFL::PushBack(data, Drawable::Box(box, drawable, cur_attr, line.size()));
     }
 
-    string DebugString() const {
-        string ret = StrCat("BoxArray H=", height, " ");
-        for (ArrayMemberSegmentIter<Drawable::Box, int, &Drawable::Box::attr_id> iter(data); !iter.Done(); iter.Increment()) 
-            StrAppend(&ret, "R", iter.i, "(", BoxRun(iter.Data(), iter.Length()).DebugString(), "), ");
-        return ret;
+    void InsertAt(int o, const BoxArray &x) { InsertAt(o, x.data); }
+    void InsertAt(int o, const vector<Drawable::Box> &x) {
+        CHECK_EQ(0, line_ind.size());
+        point p(x.size() ? (x.back().box.right() - x.front().box.x) : 0, 0);
+        auto i = data.insert(data.begin()+o, x.begin(), x.end()) + x.size();
+        for (; i != data.end(); ++i) i->box += p;
     }
+    void Erase(int o, size_t l=UINT_MAX, bool shift=false) { 
+        if (!l || data.size() <= o) return;
+        if (shift) CHECK_EQ(0, line_ind.size());
+        vector<Drawable::Box>::iterator b = data.begin() + o, e = data.begin() + min(o+l, data.size());
+        point p(shift ? ((e-1)->box.right() - b->box.x) : 0, 0);
+        auto i = data.erase(b, e);
+        if (shift) for (; i != data.end(); ++i) i->box -= p;
+    }
+
     point Draw(point p) {
         point e;
         for (ArrayMemberSegmentIter<Drawable::Box, int, &Drawable::Box::attr_id> iter(data); !iter.Done(); iter.Increment())
             e = BoxRun(iter.Data(), iter.Length(), attr.GetAttr(iter.cur_attr), &line).Draw(p);
         return e;
+    }
+    string DebugString() const {
+        string ret = StrCat("BoxArray H=", height, " ");
+        for (ArrayMemberSegmentIter<Drawable::Box, int, &Drawable::Box::attr_id> iter(data); !iter.Done(); iter.Increment()) 
+            StrAppend(&ret, "R", iter.i, "(", BoxRun(iter.Data(), iter.Length()).DebugString(), "), ");
+        return ret;
     }
     void GetGlyphFromCoords(const point &p, int *glyph_index_out, Box *glyph_box_out) {}
     int   GetLineFromCoords(const point &p) { return 0; }
@@ -1109,27 +1121,12 @@ struct Flow {
         *box_out = Box::DelBorder(*box_out, h ? b : b.LeftRight());
     }
     void AppendRow(float x=0, float w=0, Box *box_out=0) { AppendBox(x, container->w*w, cur_line.height, box_out); }
-    bool AppendTextGUI(float col, TextGUI *tg, int flag=0) { 
-        return 0;
-    }
     void AppendBoxArrayText(const BoxArray &in) {
         bool attr_fwd = in.attr.source;
-        ScopedValue<bool> SWW(&layout.wrap_lines, false), INL(&layout.ignore_newlines, true);
-        int start_out_lines = out->line_ind.size(), offset = 0, next_line_end_index = 0;
-        int next_line_end = IndexOrDefault(in.line_ind, next_line_end_index, -1);
         for (ArrayMemberSegmentIter<Drawable::Box, int, &Drawable::Box::attr_id> iter(in.data); !iter.Done(); iter.Increment()) {
             if (!attr_fwd) cur_attr = in.attr.GetAttr(iter.cur_attr);
-            string text = BoxRun(iter.Data(), iter.Length()).Text();
-            for (int i=0, il=text.size(), l; i<il; i+=l, offset+=l) {
-                l = next_line_end >= 0 ? min(next_line_end-offset, il-i) : il-i;
-                AppendText(StringPiece(text.data()+i, l), attr_fwd ? iter.cur_attr : 0);
-                if (next_line_end >= 0 && offset+l >= next_line_end) {
-                    next_line_end = IndexOrDefault(in.line_ind, ++next_line_end_index, -1);
-                    AppendNewline(0, 0);
-                }
-            }
+            AppendText(BoxRun(iter.Data(), iter.Length()).Text(), attr_fwd ? iter.cur_attr : 0);
         }
-        CHECK_EQ(in.line_ind.size(), out->line_ind.size() - start_out_lines);
     }
 
     int AppendBox(float x, int w, int h, Drawable *drawable) { p.x=container->w*x; return AppendBox(w, h, drawable); }
