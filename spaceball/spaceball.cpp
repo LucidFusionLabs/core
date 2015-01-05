@@ -741,7 +741,7 @@ extern "C" int main(int argc, const char *argv[]) {
     fireworks.rand_color = true;
 
     menubar = new GameMenuGUI(screen, FLAGS_master.c_str(), FLAGS_default_port, asset("title"), asset("glow"));
-    menubar->tab3_player_name.cmd_line.AssignText(FLAGS_player_name);
+    menubar->tab3_player_name.AssignInput(FLAGS_player_name);
     menubar->settings = &sbsettings;
     menubar->display = true;
 

@@ -1167,6 +1167,7 @@ struct GameMenuGUI : public GUI, public Query {
         }
     }
     void LayoutMenu() {
+        Box b;
         Flow menuflow(&box, font, Reset());
         mouse.AddClickBox(Box(0, -box.h, box.w, box.h), MouseController::CB(bind(&GameMenuGUI::MenuLineClicked, this)));
 
@@ -1222,8 +1223,9 @@ struct GameMenuGUI : public GUI, public Query {
                     }
 
                     if (tab2_server_address.active) menuflow.AppendText(.37, ":");
-                    menuflow.AppendTextGUI(.4, &tab2_server_address);
+                    menuflow.AppendRow(.4, .6, &b);
                     menuflow.AppendNewlines(1);
+                    { ScissorStack ss; tab2_server_address.Draw(b + box.TopLeft()); }
                 }
                 tab2_server_join.LayoutBox(&menuflow, Box(box.w*.2, -box.h*.8, box.w*.6, box.h*.1));
             } else if (sub_selected == 3) {
@@ -1253,17 +1255,17 @@ struct GameMenuGUI : public GUI, public Query {
                 TouchDevice::OpenKeyboard();
                 tab3_player_name.active = true;
             }
-            menuflow.AppendTextGUI(.6, &tab3_player_name);
+            menuflow.AppendRow(.6, .4, &b);
+            { ScissorStack ss; tab3_player_name.Draw(b + box.TopLeft()); }
 
-            Box w;
             menuflow.AppendText("\nControl Sensitivity:");
-            menuflow.AppendRow(.6, .35, &w);
-            tab3_sensitivity.LayoutFixed(w);
+            menuflow.AppendRow(.6, .35, &b);
+            tab3_sensitivity.LayoutFixed(b);
             tab3_sensitivity.Update();
 
             menuflow.AppendText("\nVolume:");
-            menuflow.AppendRow(.6, .35, &w);
-            tab3_volume.LayoutFixed(w);
+            menuflow.AppendRow(.6, .35, &b);
+            tab3_volume.LayoutFixed(b);
             tab3_volume.Update();
 
             if (tab3_volume.dirty) {

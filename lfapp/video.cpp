@@ -801,15 +801,28 @@ void GraphicsDevice::Scissor(Box w) {
 }
 
 void GraphicsDevice::PushScissor(Box w) {
-    if (scissor_stack.empty()) scissor_stack.push_back(w);
-    else scissor_stack.push_back(w.Intersect(scissor_stack.back()));
-    screen->gd->Scissor(scissor_stack.back());
+    auto &ss = scissor_stack.back();
+    if (ss.empty()) ss.push_back(w);
+    else ss.push_back(w.Intersect(ss.back()));
+    screen->gd->Scissor(ss.back());
 }
 
 void GraphicsDevice::PopScissor() {
-    if (scissor_stack.size()) scissor_stack.pop_back();
-    if (scissor_stack.size()) screen->gd->Scissor(scissor_stack.back());
-    else                      glDisable(GL_SCISSOR_TEST);
+    auto &ss = scissor_stack.back();
+    if (ss.size()) ss.pop_back();
+    if (ss.size()) screen->gd->Scissor(ss.back());
+    else           glDisable(GL_SCISSOR_TEST);
+}
+
+void GraphicsDevice::PushScissorStack() {
+    scissor_stack.push_back(vector<Box>());
+    glDisable(GL_SCISSOR_TEST);
+}
+
+void GraphicsDevice::PopScissorStack() {
+    CHECK_GT(scissor_stack.size(), 1);
+    scissor_stack.pop_back();
+    screen->gd->Scissor(scissor_stack.back().back());
 }
 
 int GraphicsDevice::VertsPerPrimitive(int primtype) {
