@@ -1934,10 +1934,10 @@ void Atlas::WriteGlyphFile(const string &name, Font *f) {
     GlyphTableIter(f) if (i->       tex.width) glyph_count++;
     GlyphIndexIter(f) if (i->second.tex.width) glyph_count++;
 
-    Matrix gm(glyph_count, 10);
-    GlyphTableIter(f) if (i->       tex.width) i->       ToArray(gm.row(glyph_out++), gm.N);
-    GlyphIndexIter(f) if (i->second.tex.width) i->second.ToArray(gm.row(glyph_out++), gm.N);
-    MatrixFile(&gm, "").WriteVersioned(VersionedFileName(ASSETS_DIR, name.c_str(), "glyphs"), 0);
+    Matrix *gm = new Matrix(glyph_count, 10);
+    GlyphTableIter(f) if (i->       tex.width) i->       ToArray(gm->row(glyph_out++), gm->N);
+    GlyphIndexIter(f) if (i->second.tex.width) i->second.ToArray(gm->row(glyph_out++), gm->N);
+    MatrixFile(gm, "").WriteVersioned(VersionedFileName(ASSETS_DIR, name.c_str(), "glyphs"), 0);
 }
 
 void Atlas::MakeFromPNGFiles(const string &name, const vector<string> &png, int atlas_dim, Font **glyphs_out) {
@@ -2016,13 +2016,12 @@ point BoxRun::Draw(point p, DrawCB cb) {
 
 void BoxRun::DrawBackground(point p, DrawBackgroundCB cb) {
     if (attr.bg) screen->gd->FillColor(*attr.bg);
-    if (!attr.bg || !line) return;
-    HorizontalExtentTracker width;
-    for (ArrayMemberSegmentIter<Drawable::Box, int, &Drawable::Box::line_id>
-         iter(data.data(), data.size(), bind(&HorizontalExtentTracker::AddDrawableBox, &width, _1));
-         !iter.Done(); iter.Increment()) if (const Box *lb = VectorGet(*line, iter.cur_attr))
-        cb(width.Get(lb->y, lb->h) + p);
-    // XXX else ERROR("line_id ", line->size(), " ", iter.cur_attr);
+    if (!attr.bg) return;
+    int line_height = line ? line->h : (attr.font ? attr.font->height : 0);
+    if (!line_height) return;
+    HorizontalExtentTracker extent;
+    for (int i=0; i<data.size(); i++) extent.AddDrawableBox(data.data()[i]);
+    cb(extent.Get(-line_height, line_height) + p);
 }
 
 /* Font */
