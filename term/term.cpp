@@ -204,6 +204,7 @@ extern "C" int main(int argc, const char *argv[]) {
     FLAGS_default_font_size = 16;
     // FLAGS_default_font_flag = FontDesc::Mono;
     FLAGS_atlas_font_sizes = "32";
+    FLAGS_default_missing_glyph = 42;
 
     Singleton<HTTPClient>::Get()->select_socket_thread = &select_socket_thread;
     Singleton <UDPClient>::Get()->select_socket_thread = &select_socket_thread;

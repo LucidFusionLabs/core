@@ -1347,12 +1347,12 @@ void TextureArray::DrawSequence(Asset *out, Entity *e) {
 }
 
 void Tiles::AddBoxArray(const BoxArray &box, point p) {
-    for (ArrayMemberSegmentIter<Drawable::Box, int, &Drawable::Box::attr_id> iter(box.data); !iter.Done(); iter.Increment()) {
-        Drawable::Attr attr = box.attr.GetAttr(iter.cur_attr);
+    for (Drawable::Box::Iterator iter(box.data); !iter.Done(); iter.Increment()) {
+        Drawable::Attr attr = box.attr.GetAttr(iter.cur_attr1);
         if (attr.bg) {
             ContextOpen();
             TilesPreAdd(this, &BoxRun::DrawBackground, BoxRun(0,0,attr), p, &BoxRun::DefaultDrawBackgroundCB);
-            BoxRun(iter.Data(), iter.Length(), attr, &box.line)
+            BoxRun(iter.Data(), iter.Length(), attr, VectorGet(box.line, iter.cur_attr2))
                 .DrawBackground(p, [&] (const Box &w) { TilesAdd(this, &w, &Box::Draw, w, (float*)0); });
             ContextClose();
         }

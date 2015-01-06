@@ -202,10 +202,10 @@ void TextArea::Resized(int w, int h) {
     UpdateLines(first_line, &last_line);
     // mouse_gui.mouse.AddClickBox(box, MouseController::CoordCB(bind(&TextArea::ClickCB, this, _1, _2, _3, _4)));
     // if (tw->terminal->colors) W->gd->ClearColor(tw->terminal->colors->c[tw->terminal->colors->bg_index]);
-    int lines = adjust_lines + skip_last_lines;
+    int lines = adjust_lines + skip_last_lines, fb_flag = LinesFrameBuffer::Flag::NoVWrap | LinesFrameBuffer::Flag::Flush;
     line_fb.p = point(0, adjust_lines * font->height);
     for (int i=start_line; i<line.ring.count && lines < line_fb.lines; i++)
-        lines += line_fb.PushFrontAndUpdate(&line[-i-1], 0, 0, true, false);
+        lines += line_fb.PushFrontAndUpdate(&line[-i-1], 0, 0, fb_flag);
     line_fb.p = point(0, line_fb.Height());
 }
 
@@ -401,16 +401,13 @@ void TextArea::DrawOrCopySelection() {
 /* Editor */
 
 void Editor::UpdateLines(const WrappedLineOffset &new_first_line, const WrappedLineOffset &new_last_line) {
-    printf("editor update-lines-1 %d,%d\n", new_first_line.first, new_first_line.second);
     bool resized = last_fb_lines != line_fb.lines;
     if (resized) { line.Clear(); if (Wrap()) UpdateWrappedLines(TextArea::font->size, line_fb.w); }
     if (!file_line.size()) return;
-    printf("editor update-lines-2 %d,%d %d\n", new_first_line.first, new_first_line.second, resized);
 
     LineOffsetSegment read_lines;
     bool reverse = new_first_line < first_line && !resized;
     int dist = abs(new_first_line.first - first_line.first);
-    printf("y0y0 dist %d\n", dist);
     if (dist < line_fb.lines && !resized) {
         if (reverse) read_lines = LineOffsetSegment(new_first_line.first, dist);
         else         read_lines = LineOffsetSegment(new_first_line.first + line_fb.lines - dist, dist);
@@ -436,11 +433,6 @@ void Editor::UpdateLines(const WrappedLineOffset &new_first_line, const WrappedL
         (L = line.PushBack())->Clear();
         if (!resized) line.PopFront(1);
     }
-
-    printf("UpdateLines first_line %d,%d -> %d,%d last_line %d,%d -> %d,%d\n",
-           first_line.first, first_line.second, new_first_line.first, new_first_line.second,
-           last_line.first,  last_line.second,  new_last_line.first,  new_last_line.second);
-    printf("read_lines %d %d\n", read_lines.first, read_lines.second);
 
     last_fb_lines = line_fb.lines;
 }
@@ -501,12 +493,12 @@ void Terminal::SetScrollRegion(int b, int e, bool release_fb) {
     int scroll_beg_or_1=X_or_1(scroll_region_beg), scroll_end_or_ht=X_or_Y(scroll_region_end, term_height);
 
     if (scroll_beg_or_1 != prev_beg_or_1 || prev_end_or_ht != scroll_end_or_ht) GetPrimaryFrameBuffer();
-    for (int i =  scroll_beg_or_1; i <    prev_beg_or_1; i++) line_fb.Update(GetTermLine(i),   line_fb.BackPlus(point(0, (term_height-i+1)*font->height)), 0);
-    for (int i =   prev_end_or_ht; i < scroll_end_or_ht; i++) line_fb.Update(GetTermLine(i+1), line_fb.BackPlus(point(0, (term_height-i)  *font->height)), 0);
+    for (int i =  scroll_beg_or_1; i <    prev_beg_or_1; i++) line_fb.Update(GetTermLine(i),   line_fb.BackPlus(point(0, (term_height-i+1)*font->height)), LinesFrameBuffer::Flag::NoLayout);
+    for (int i =   prev_end_or_ht; i < scroll_end_or_ht; i++) line_fb.Update(GetTermLine(i+1), line_fb.BackPlus(point(0, (term_height-i)  *font->height)), LinesFrameBuffer::Flag::NoLayout);
 
     if (prev_beg_or_1 < scroll_beg_or_1 || scroll_end_or_ht < prev_end_or_ht) GetSecondaryFrameBuffer();
-    for (int i =    prev_beg_or_1; i < scroll_beg_or_1; i++) cmd_fb.Update(GetTermLine(i),   point(0, GetCursorY(i)),   0);
-    for (int i = scroll_end_or_ht; i <  prev_end_or_ht; i++) cmd_fb.Update(GetTermLine(i+1), point(0, GetCursorY(i+1)), 0);
+    for (int i =    prev_beg_or_1; i < scroll_beg_or_1; i++) cmd_fb.Update(GetTermLine(i),   point(0, GetCursorY(i)),   LinesFrameBuffer::Flag::NoLayout);
+    for (int i = scroll_end_or_ht; i <  prev_end_or_ht; i++) cmd_fb.Update(GetTermLine(i+1), point(0, GetCursorY(i+1)), LinesFrameBuffer::Flag::NoLayout);
     if (release_fb) cmd_fb.fb.Release();
 }
 
@@ -1407,7 +1399,7 @@ void SimpleBrowser::DrawNode(Flow *flow, DOM::Node *n, const point &displacement
     ComputedStyle *style = &render->style;
     bool is_body  = n->htmlElementType == DOM::HTML_BODY_ELEMENT;
     bool is_table = n->htmlElementType == DOM::HTML_TABLE_ELEMENT;
-    if (render->style_dirty || render->layout_dirty) LayoutNode(flow, n, 0);
+    if (render->style_dirty || render->layout_dirty) { ScissorStack ss; LayoutNode(flow, n, 0); }
     if (render->display_none) return;
 
     if (!render->done_positioned) {

@@ -263,7 +263,7 @@ struct TextGUI : public KeyboardGUI {
         int Lines() const { return 1+data->glyphs.line.size(); }
         string Text() const { return data->glyphs.Text(); }
         void Clear() { data->glyphs.Clear(); InitFlow(); }
-        void Erase(int o, unsigned l=UINT_MAX) { return data->glyphs.Erase(o, l, true); }
+        void Erase(int o, unsigned l=UINT_MAX) { data->glyphs.Erase(o, l, true); data->flow.p.x = BackOrDefault(data->glyphs.data).box.right(); }
         void InsertTextAt(int o, const string   &s, int a=0) { data->glyphs.InsertAt(o, EncodeText(s, a, data->glyphs.Position(o))); }
         void InsertTextAt(int o, const String16 &s, int a=0) { data->glyphs.InsertAt(o, EncodeText(s, a, data->glyphs.Position(o))); }
         void AppendText  (       const string   &s, int a=0) { data->flow.AppendText(s, a); }
@@ -273,8 +273,8 @@ struct TextGUI : public KeyboardGUI {
         vector<Drawable::Box> EncodeText(const string   &s, int a, const point &p) { BoxArray b; parent->font->Encode(s, Box(p,0,0), &b, Font::Flag::AssignFlowX, a); return b.data; }
         vector<Drawable::Box> EncodeText(const String16 &s, int a, const point &p) { BoxArray b; parent->font->Encode(s, Box(p,0,0), &b, Font::Flag::AssignFlowX, a); return b.data; }
         void UpdateAttr(int ind, int len, int a) {}
-        void Layout(Box win) {
-            if (data->box.w == win.w) return;
+        void Layout(Box win, bool flush=0) {
+            if (data->box.w == win.w && !flush) return;
             data->box = win;
             ScopedLineLinesTracker;
             BoxArray b;
@@ -283,7 +283,7 @@ struct TextGUI : public KeyboardGUI {
             Clear();
             data->flow.AppendBoxArrayText(b);
         }
-#else   // LineData: String16 text, text_attr;
+#else   // struct LineData { String16 text, text_attr; };
         void Init(Lines *C, TextGUI *P) { cont=C; parent=P; }
         int Size () const { return data->glyphs.Size(); }
         int Lines() const { return max(1, data->glyphs.line.size()); }
@@ -297,7 +297,7 @@ struct TextGUI : public KeyboardGUI {
         void AssignText  (       const string   &s, int a=0) { data->text = String::ToUTF16(s); data->text_attr = String16(data->text.size(), a); }
         void AssignText  (       const String16 &s, int a=0) { data->text = s;                  data->text_attr = String16(data->text.size(), a); }
         void UpdateAttr(int ind, int len, int a) { Vec<short>::Assign((short*)data->text_attr.data() + ind, a, len); }
-        void Layout(Box win) {
+        void Layout(Box win, bool flush=0) {
             ScopedLineLinesTracker;
             data->glyphs.Clear();
             Flow flow(&win, parent->font, &data->glyphs, &parent->layout);
@@ -333,7 +333,7 @@ struct TextGUI : public KeyboardGUI {
             }
 #endif
         }
-        void Layout(int width=0) { return Layout(Box(0,0,width,0)); }
+        void Layout(int width=0, bool flush=0) { return Layout(Box(0,0,width,0), flush); }
         point Draw(point pos, bool relayout, int relayout_width) {
             if (relayout) Layout(relayout_width);
             data->glyphs.Draw((p = pos));
@@ -362,6 +362,7 @@ struct TextGUI : public KeyboardGUI {
     struct LinesFrameBuffer : public RingFrameBuffer {
         typedef function<point(Line*, point, const Box&)> PaintCB;
         typedef function<LinesFrameBuffer*(const Line*)> FromLineCB;
+        struct Flag { enum { NoLayout=1, NoVWrap=2, Flush=4 }; };
         int lines=0;
         PaintCB paint_cb;
         LinesFrameBuffer() : paint_cb(bind(&LinesFrameBuffer::Paint, this, _1, _2, _3)) {}
@@ -378,19 +379,19 @@ struct TextGUI : public KeyboardGUI {
         void Clear(Line *l) {
             RingFrameBuffer::Clear(l, Box(0, l->Lines() * font_height), true);
         }
-        void Update(Line *l, const point &p, bool lo=true) { l->p=p; Update(l, lo); }
-        void Update(Line *l, bool lo=true) {
-            if (lo) l->Layout(wrap ? w : 0);
+        void Update(Line *l, const point &p, int flag=0) { l->p=p; Update(l, flag); }
+        void Update(Line *l, int flag=0) {
+            if (!(flag & Flag::NoLayout)) l->Layout(wrap ? w : 0, flag & Flag::Flush);
             RingFrameBuffer::Update(l, Box(0, l->Lines() * font_height), paint_cb, true);
         }
-        int PushFrontAndUpdate(Line *l, int wlo=0, int wll=0, bool lo=true, bool vwrap=true) {
-            if (lo) l->Layout(wrap ? w : 0);
+        int PushFrontAndUpdate(Line *l, int wlo=0, int wll=0, int flag=0) {
+            if (!(flag & Flag::NoLayout)) l->Layout(wrap ? w : 0, flag & Flag::Flush);
             int wl = max(0, l->Lines() - wlo), lh = (wll ? min(wll, wl) : wl) * font_height;
             if (!lh) return 0; Box b(0, wl * font_height - lh, 0, lh);
-            return RingFrameBuffer::PushFrontAndUpdate(l, b, paint_cb, vwrap) / font_height;
+            return RingFrameBuffer::PushFrontAndUpdate(l, b, paint_cb, !(flag & Flag::NoVWrap)) / font_height;
         }
-        int PushBackAndUpdate(Line *l, int wlo=0, int wll=0, bool lo=true) {
-            if (lo) l->Layout(wrap ? w : 0);
+        int PushBackAndUpdate(Line *l, int wlo=0, int wll=0, int flag=0) {
+            if (!(flag & Flag::NoLayout)) l->Layout(wrap ? w : 0, flag & Flag::Flush);
             int wl = max(0, l->Lines() - wlo), lh = (wll ? min(wll, wl) : wl) * font_height;
             if (!lh) return 0; Box b(0, wlo * font_height, 0, lh);
             return RingFrameBuffer::PushBackAndUpdate(l, b, paint_cb, true) / font_height;

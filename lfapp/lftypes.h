@@ -111,8 +111,8 @@ template <typename X> typename X::value_type &PushBack (X &v, const typename X::
 template <typename X> typename X::value_type  PopFront (X &v) { typename X::value_type ret = v.front(); v.pop_front(); return ret; }
 template <typename X> typename X::value_type  PopBack  (X &v) { typename X::value_type ret = v.back (); v.pop_back (); return ret; }
 
-template <class X>       X *VectorGet(      vector<X> &x, int n) { return n < x.size() ? &x[n] : 0; }
-template <class X> const X *VectorGet(const vector<X> &x, int n) { return n < x.size() ? &x[n] : 0; }
+template <class X>       X *VectorGet(      vector<X> &x, int n) { return (n >= 0 && n < x.size()) ? &x[n] : 0; }
+template <class X> const X *VectorGet(const vector<X> &x, int n) { return (n >= 0 && n < x.size()) ? &x[n] : 0; }
 template <class X> X *VectorEnsureElement(vector<X> &x, int n) { EnsureSize(x, n+1); return &x[n]; }
 template <class X> X *VectorCheckElement(vector<X> &x, int n) { CHECK_LT(n, x.size()); return &x[n]; }
 template <typename X, class Y> void VectorAppend(vector<X> &out, const Y& begin, const Y& end) {
@@ -238,6 +238,34 @@ template <typename X, typename Y, Y (X::*Z)> struct ArrayMemberSegmentIter {
     bool Done() const { return cur_start == len; }
     void Update() { cur_start = ind; if (!Done()) cur_attr = buf[ind].*Z; }
     void Increment() { Update(); while (ind != len && cmp(cur_attr, buf[ind].*Z)) { if (cb) cb(buf[ind]); ind++; } i++; }
+};
+
+template <typename X, typename Y, Y (X::*Z1), Y (X::*Z2)> struct ArrayMemberPairSegmentIter {
+    typedef function<void (const X&)> CB;
+    typedef function<bool (const Y&, const Y&)> Cmp;
+    const X *buf; int i, ind, len, cur_start; Y cur_attr1, cur_attr2; CB cb; Cmp cmp;
+    ArrayMemberPairSegmentIter(const vector<X> &B)              : buf(B.size() ? &B[0] : 0), i(-1), ind(0), len(B.size()),         cmp(equal_to<Y>()) { Increment(); }
+    ArrayMemberPairSegmentIter(const X *B, int L)               : buf(B),                    i(-1), ind(0), len(L),                cmp(equal_to<Y>()) { Increment(); }
+    ArrayMemberPairSegmentIter(const X *B, int L, const CB &Cb) : buf(B),                    i(-1), ind(0), len(L),        cb(Cb), cmp(equal_to<Y>()) { Increment(); }
+    const X *Data() const { return &buf[cur_start]; }
+    int Length() const { return ind - cur_start; }
+    bool Done() const { return cur_start == len; }
+    void Update() { cur_start = ind; if (!Done()) { const X& b = buf[ind]; cur_attr1 = b.*Z1; cur_attr2 = b.*Z2; } }
+    void Increment() { Update(); while (ind != len) { const X& b = buf[ind]; if (!cmp(cur_attr1, b.*Z1) || !cmp(cur_attr2, b.*Z2)) break; if (cb) cb(buf[ind]); ind++; } i++; }
+};
+
+template <typename X, typename Y, Y (X::*Z)() const> struct ArrayMethodSegmentIter {
+    typedef function<void (const X&)> CB;
+    typedef function<bool (const Y&, const Y&)> Cmp;
+    const X *buf; int i, ind, len, cur_start; Y cur_attr; CB cb; Cmp cmp;
+    ArrayMethodSegmentIter(const vector<X> &B)              : buf(B.size() ? &B[0] : 0), i(-1), ind(0), len(B.size()),         cmp(equal_to<Y>()) { Increment(); }
+    ArrayMethodSegmentIter(const X *B, int L)               : buf(B),                    i(-1), ind(0), len(L),                cmp(equal_to<Y>()) { Increment(); }
+    ArrayMethodSegmentIter(const X *B, int L, const CB &Cb) : buf(B),                    i(-1), ind(0), len(L),        cb(Cb), cmp(equal_to<Y>()) { Increment(); }
+    const X *Data() const { return &buf[cur_start]; }
+    int Length() const { return ind - cur_start; }
+    bool Done() const { return cur_start == len; }
+    void Update() { cur_start = ind; if (!Done()) cur_attr = (buf[ind].*Z)(); }
+    void Increment() { Update(); while (ind != len && cmp(cur_attr, (buf[ind].*Z)())) { if (cb) cb(buf[ind]); ind++; } i++; }
 };
 
 template <class X, int (*GetVal)(const X&, int), class Iter>

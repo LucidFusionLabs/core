@@ -319,6 +319,7 @@ struct Drawable {
         LFL::Box box; const Drawable *drawable; int attr_id, line_id;
         Box(                   const Drawable *D=0, int A=0, int L=-1) :         drawable(D), attr_id(A), line_id(L) {}
         Box(const LFL::Box &B, const Drawable *D=0, int A=0, int L=-1) : box(B), drawable(D), attr_id(A), line_id(L) {}
+        typedef ArrayMemberPairSegmentIter<Box, int, &Box::attr_id, &Box::line_id> Iterator;
     };
     struct Attr { 
         Font *font=0; const Color *fg=0, *bg=0; const Texture *tex=0; const LFL::Box *scissor=0;
@@ -685,12 +686,30 @@ struct HorizontalExtentTracker {
     Box Get(int y, int h) { Box ret = count ? Box(x, y, right-x, h) : Box(0, y, 0, h); Clear(); return ret; }
 };
 
+struct VerticalExtentTracker {
+    int y, top, count;
+    VerticalExtentTracker() { Clear(); }
+    void Clear() { y = INT_MAX; top = INT_MIN; count = 0; }
+    void AddDrawableBox(const Drawable::Box &b) { AddBox(b.box); }
+    void AddBox(const Box &b) { Typed::Min(&y, b.y); Typed::Max(&top, b.top()); count++; }
+    Box Get(int x, int w) { Box ret = count ? Box(x, y, w, top-y) : Box(x, 0, w, 0); Clear(); return ret; }
+};
+
+struct BoxExtentTracker {
+    HorizontalExtentTracker x;
+    VerticalExtentTracker   y;
+    void Clear() { x.Clear(); y.Clear(); }
+    void AddDrawableBox(const Drawable::Box &b) { AddBox(b.box); }
+    void AddBox(const Box &b) { x.AddBox(b); y.AddBox(b); }
+    Box Get() { return x.Get(y.y, y.top-y.y); }
+};
+
 struct BoxRun {
     Drawable::Attr attr;
     ArrayPiece<Drawable::Box> data;
-    const vector<Box> *line;
-    BoxRun(const Drawable::Box *buf=0, int len=0)                                                :          data(buf, len), line(0) {}
-    BoxRun(const Drawable::Box *buf,   int len, const Drawable::Attr &A, const vector<Box> *L=0) : attr(A), data(buf, len), line(L) {}
+    const Box *line;
+    BoxRun(const Drawable::Box *buf=0, int len=0)                                        :          data(buf, len), line(0) {}
+    BoxRun(const Drawable::Box *buf,   int len, const Drawable::Attr &A, const Box *L=0) : attr(A), data(buf, len), line(L) {}
     string Text() const { string t(data.size(), 0); for (int i=0; i<t.size(); i++) t[i] = data.buf[i].drawable ? data.buf[i].drawable->Id() : 0; return t; }
     string DebugString() const { return StrCat("BoxRun='", Text(), "'"); }
 
@@ -747,13 +766,13 @@ struct BoxArray {
 
     point Draw(point p) {
         point e;
-        for (ArrayMemberSegmentIter<Drawable::Box, int, &Drawable::Box::attr_id> iter(data); !iter.Done(); iter.Increment())
-            e = BoxRun(iter.Data(), iter.Length(), attr.GetAttr(iter.cur_attr), &line).Draw(p);
+        for (Drawable::Box::Iterator iter(data); !iter.Done(); iter.Increment())
+            e = BoxRun(iter.Data(), iter.Length(), attr.GetAttr(iter.cur_attr1), VectorGet(line, iter.cur_attr2)).Draw(p);
         return e;
     }
     string DebugString() const {
         string ret = StrCat("BoxArray H=", height, " ");
-        for (ArrayMemberSegmentIter<Drawable::Box, int, &Drawable::Box::attr_id> iter(data); !iter.Done(); iter.Increment()) 
+        for (Drawable::Box::Iterator iter(data); !iter.Done(); iter.Increment()) 
             StrAppend(&ret, "R", iter.i, "(", BoxRun(iter.Data(), iter.Length()).DebugString(), "), ");
         return ret;
     }
@@ -819,7 +838,7 @@ struct Font : public FontInterface {
 
     virtual Glyph *FindGlyph        (unsigned gind);
     virtual Glyph *FindOrInsertGlyph(unsigned gind);
-    virtual Glyph *LoadGlyph        (unsigned gind) { return &glyph->table[127]; }
+    virtual Glyph *LoadGlyph        (unsigned gind) { return &glyph->table[missing_glyph]; }
     void DrawGlyph(int g, const Box &w, int orientation=1) { return FindGlyph(g)->tex.Draw(w); }
 
     struct Flag {
@@ -1123,9 +1142,9 @@ struct Flow {
     void AppendRow(float x=0, float w=0, Box *box_out=0) { AppendBox(x, container->w*w, cur_line.height, box_out); }
     void AppendBoxArrayText(const BoxArray &in) {
         bool attr_fwd = in.attr.source;
-        for (ArrayMemberSegmentIter<Drawable::Box, int, &Drawable::Box::attr_id> iter(in.data); !iter.Done(); iter.Increment()) {
-            if (!attr_fwd) cur_attr = in.attr.GetAttr(iter.cur_attr);
-            AppendText(BoxRun(iter.Data(), iter.Length()).Text(), attr_fwd ? iter.cur_attr : 0);
+        for (Drawable::Box::Iterator iter(in.data); !iter.Done(); iter.Increment()) {
+            if (!attr_fwd) cur_attr = in.attr.GetAttr(iter.cur_attr1);
+            AppendText(BoxRun(iter.Data(), iter.Length()).Text(), attr_fwd ? iter.cur_attr1 : 0);
         }
     }
 
