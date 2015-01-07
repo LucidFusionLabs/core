@@ -933,6 +933,8 @@ void GraphicsDevice::ViewPort(Box w) {}
 void GraphicsDevice::Scissor(Box w) {}
 void GraphicsDevice::PushScissor(Box w) {}
 void GraphicsDevice::PopScissor() {}
+void GraphicsDevice::PushScissorStack() {}
+void GraphicsDevice::PopScissorStack() {}
 int GraphicsDevice::VertsPerPrimitive(int primtype) { return 0; }
 
 bool Window::Create(Window *W) { screen->gd = new FakeGraphicsDevice(); Window::active[W->id] = W; return true; }

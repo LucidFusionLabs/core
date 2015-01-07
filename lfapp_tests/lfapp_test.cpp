@@ -24,6 +24,23 @@
 
 using namespace LFL;
 
+struct StringMethodResolutionTest {
+    int A=0, B=0, C=0, D=0;
+    template <class X> void F(const StringPieceT<X> &text) { A++; }
+    /**/               void F(const string          &text) { B++; F(StringPiece           (text)); }
+    /**/               void F(const String16        &text) { C++; F(String16Piece         (text)); }
+    template <class X> void F(const X               *text) { D++; F(StringPiece::Unbounded(text)); }
+};
+
+TEST(StringTest, MethodResolution) {
+    StringMethodResolutionTest t;
+    t.F("a");             EXPECT_EQ(1, t.A); EXPECT_EQ(0, t.B); EXPECT_EQ(0, t.C); EXPECT_EQ(1, t.D);
+    t.F(string());        EXPECT_EQ(2, t.A); EXPECT_EQ(1, t.B); EXPECT_EQ(0, t.C); EXPECT_EQ(1, t.D);
+    t.F(String16());      EXPECT_EQ(3, t.A); EXPECT_EQ(1, t.B); EXPECT_EQ(1, t.C); EXPECT_EQ(1, t.D);
+    t.F(StringPiece());   EXPECT_EQ(4, t.A); EXPECT_EQ(1, t.B); EXPECT_EQ(1, t.C); EXPECT_EQ(1, t.D);
+    t.F(String16Piece()); EXPECT_EQ(5, t.A); EXPECT_EQ(1, t.B); EXPECT_EQ(1, t.C); EXPECT_EQ(1, t.D);
+}
+
 TEST(StringTest, FNVHash) {
     char text1[] = "The quick brown fox jumped over the lazy dog.";
     EXPECT_EQ(583960891,             fnv32(text1));

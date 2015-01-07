@@ -852,28 +852,28 @@ struct Font : public FontInterface {
     };
 
     template <class X> void Size(const StringPieceT<X> &text, Box *out, int width=0, int *lines_out=0);
-    /**/               void Size(const StringPiece     &text, Box *out, int width=0, int *lines_out=0) { return Size<char> (                text,  out, width, lines_out); }
-    /**/               void Size(const String16Piece   &text, Box *out, int width=0, int *lines_out=0) { return Size<short>(                text,  out, width, lines_out); }
+    /**/               void Size(const string          &text, Box *out, int width=0, int *lines_out=0) { return Size(StringPiece           (text), out, width, lines_out); }
+    /**/               void Size(const String16        &text, Box *out, int width=0, int *lines_out=0) { return Size(String16Piece         (text), out, width, lines_out); }
     template <class X> void Size(const X               *text, Box *out, int width=0, int *lines_out=0) { return Size(StringPiece::Unbounded(text), out, width, lines_out); }
 
     template <class X> int Width(const StringPieceT<X> &text) { Box b; Size(text, &b); CHECK_EQ(b.h, height); return b.w; }
-    /**/               int Width(const StringPiece     &text) { return Width<char> (text); }
-    /**/               int Width(const String16Piece   &text) { return Width<short>(text); }
+    /**/               int Width(const string          &text) { return Width(StringPiece           (text)); }
+    /**/               int Width(const String16        &text) { return Width(String16Piece         (text)); }
     template <class X> int Width(const X               *text) { return Width(StringPiece::Unbounded(text)); }
 
     template <class X> void Encode(const StringPieceT<X> &text, const Box &box, BoxArray *out, int draw_flag=0, int attr_id=0);
-    /**/               void Encode(const StringPiece     &text, const Box &box, BoxArray *out, int draw_flag=0, int attr_id=0) { return Encode<char> (                text,  box, out, draw_flag, attr_id); }
-    /**/               void Encode(const String16Piece   &text, const Box &box, BoxArray *out, int draw_flag=0, int attr_id=0) { return Encode<short>(                text,  box, out, draw_flag, attr_id); }
+    /**/               void Encode(const string          &text, const Box &box, BoxArray *out, int draw_flag=0, int attr_id=0) { return Encode(StringPiece           (text), box, out, draw_flag, attr_id); }
+    /**/               void Encode(const String16        &text, const Box &box, BoxArray *out, int draw_flag=0, int attr_id=0) { return Encode(String16Piece         (text), box, out, draw_flag, attr_id); }
     template <class X> void Encode(const X               *text, const Box &box, BoxArray *out, int draw_flag=0, int attr_id=0) { return Encode(StringPiece::Unbounded(text), box, out, draw_flag, attr_id); }
 
     template <class X> int Draw(const StringPieceT<X> &text, point cp,       vector<Box> *lb=0, int draw_flag=0) { return Draw<X>    (                text,  Box(cp.x,cp.y+height,0,0), lb, draw_flag); }
-    /**/               int Draw(const StringPiece     &text, point cp,       vector<Box> *lb=0, int draw_flag=0) { return Draw<char> (                text,  Box(cp.x,cp.y+height,0,0), lb, draw_flag); }
-    /**/               int Draw(const String16Piece   &text, point cp,       vector<Box> *lb=0, int draw_flag=0) { return Draw<short>(                text,  Box(cp.x,cp.y+height,0,0), lb, draw_flag); }
+    /**/               int Draw(const string          &text, point cp,       vector<Box> *lb=0, int draw_flag=0) { return Draw(StringPiece           (text), Box(cp.x,cp.y+height,0,0), lb, draw_flag); }
+    /**/               int Draw(const String16        &text, point cp,       vector<Box> *lb=0, int draw_flag=0) { return Draw(String16Piece         (text), Box(cp.x,cp.y+height,0,0), lb, draw_flag); }
     template <class X> int Draw(const X               *text, point cp,       vector<Box> *lb=0, int draw_flag=0) { return Draw(StringPiece::Unbounded(text), Box(cp.x,cp.y+height,0,0), lb, draw_flag); }
     
     template <class X> int Draw(const StringPieceT<X> &text, const Box &box, vector<Box> *lb=0, int draw_flag=0);
-    /**/               int Draw(const StringPiece     &text, const Box &box, vector<Box> *lb=0, int draw_flag=0) { return Draw<char>(                 text,  box, lb, draw_flag); }
-    /**/               int Draw(const String16Piece   &text, const Box &box, vector<Box> *lb=0, int draw_flag=0) { return Draw<short>(                text,  box, lb, draw_flag); }
+    /**/               int Draw(const string          &text, const Box &box, vector<Box> *lb=0, int draw_flag=0) { return Draw(StringPiece           (text), box, lb, draw_flag); }
+    /**/               int Draw(const String16        &text, const Box &box, vector<Box> *lb=0, int draw_flag=0) { return Draw(String16Piece         (text), box, lb, draw_flag); }
     template <class X> int Draw(const X               *text, const Box &box, vector<Box> *lb=0, int draw_flag=0) { return Draw(StringPiece::Unbounded(text), box, lb, draw_flag); }
 };
 
@@ -1178,13 +1178,13 @@ struct Flow {
         cur_word.len = 0;
     }
 
-    /**/               void AppendText(float x, const StringPiece     &text) { p.x=container->w*x; AppendText<char> (                text,  0); }
-    /**/               void AppendText(float x, const String16Piece   &text) { p.x=container->w*x; AppendText<short>(                text,  0); }
+    /**/               void AppendText(float x, const string          &text) { p.x=container->w*x; AppendText(StringPiece           (text), 0); }
+    /**/               void AppendText(float x, const String16        &text) { p.x=container->w*x; AppendText(String16Piece         (text), 0); }
     template <class X> void AppendText(float x, const X               *text) { p.x=container->w*x; AppendText(StringPiece::Unbounded(text), 0); }
-    template <class X> void AppendText(float x, const StringPieceT<X> &text) { p.x=container->w*x; AppendText<X>    (                text,  0); }
+    template <class X> void AppendText(float x, const StringPieceT<X> &text) { p.x=container->w*x; AppendText<X>(                    text,  0); }
 
-    /**/               void AppendText(const StringPiece     &text, int attr_id=0) { AppendText<char> (                text,  attr_id); }
-    /**/               void AppendText(const String16Piece   &text, int attr_id=0) { AppendText<short>(                text,  attr_id); }
+    /**/               void AppendText(const string          &text, int attr_id=0) { AppendText(StringPiece           (text), attr_id); }
+    /**/               void AppendText(const String16        &text, int attr_id=0) { AppendText(String16Piece         (text), attr_id); }
     template <class X> void AppendText(const X               *text, int attr_id=0) { AppendText(StringPiece::Unbounded(text), attr_id); }
     template <class X> void AppendText(const StringPieceT<X> &text, int attr_id=0) {
         if (!attr_id) attr_id = out->attr.GetAttrId(cur_attr);

@@ -437,8 +437,8 @@ void Editor::UpdateLines(const WrappedLineOffset &new_first_line, const WrappedL
     for (int i=0, bo=0, tl=read_lines.second, l; i<tl; i++, bo += l+(!reverse || i)) {
         int ind = read_lines.first + (reverse ? (read_lines.second-1-i) : i);
         l = file_line[ind].size;
-        if (reverse) (L = line.PushFront())->AssignText(buf.substr(read_len - bo - l, l));
-        else         (L = line.PushBack ())->AssignText(buf.substr(bo,                l));
+        if (reverse) (L = line.PushFront())->AssignText(StringPiece(buf.data() + read_len - bo - l, l));
+        else         (L = line.PushBack ())->AssignText(StringPiece(buf.data() + bo,                l));
         if (reverse && !resized) line.PopBack (1);
         else if (      !resized) line.PopFront(1);
     }
@@ -576,7 +576,7 @@ void Terminal::Write(const string &s, bool update_fb, bool release_fb) {
             int parsed_csi=0, parse_csi_argc=0, parse_csi_argv[16];
             unsigned char parse_csi_argv00 = parse_csi.empty() ? 0 : (isdig(parse_csi[0]) ? 0 : parse_csi[0]);
             for (/**/; Typed::Within<int>(parse_csi[parsed_csi], 0x20, 0x2f); parsed_csi++) {}
-            string intermed = parse_csi.substr(0, parsed_csi);
+            StringPiece intermed(parse_csi.data(), parsed_csi);
 
             memzeros(parse_csi_argv);
             bool parse_csi_arg_done = 0;
@@ -646,7 +646,7 @@ void Terminal::Write(const string &s, bool update_fb, bool release_fb) {
                     else if (parse_csi_argv00 == '?' && mode ==   25) { cursor_enabled = true;        }
                     else if (parse_csi_argv00 == '?' && mode ==   47) { /* alternate screen buffer */ }
                     else if (parse_csi_argv00 == '?' && mode == 1049) { /* save screen */             }
-                    else ERROR("unhandled CSI-h mode = ", mode, " av00 = ", parse_csi_argv00, " i= ", intermed);
+                    else ERROR("unhandled CSI-h mode = ", mode, " av00 = ", parse_csi_argv00, " i= ", intermed.str());
                 } break;
                 case 'l': { // reset mode
                     int mode = parse_csi_argv[0];
@@ -656,7 +656,7 @@ void Terminal::Write(const string &s, bool update_fb, bool release_fb) {
                     else if (parse_csi_argv00 == '?' && mode ==   25) { cursor_enabled = false;              }
                     else if (parse_csi_argv00 == '?' && mode ==   47) { /* normal screen buffer */           }
                     else if (parse_csi_argv00 == '?' && mode == 1049) { /* restore screen */                 }
-                    else ERROR("unhandled CSI-l mode = ", mode, " av00 = ", parse_csi_argv00, " i= ", intermed);
+                    else ERROR("unhandled CSI-l mode = ", mode, " av00 = ", parse_csi_argv00, " i= ", intermed.str());
                 } break;
                 case 'm':
                     for (int i=0; i<parse_csi_argc; i++) {
@@ -725,11 +725,11 @@ void Terminal::FlushParseText() {
             LineUpdate l(GetCursorLine(), fb_cb);
             int remaining = input_text.size() - wrote;
             write_size = min(remaining, term_width - term_cursor.x + 1);
-            l->UpdateText(term_cursor.x-1, input_text.substr(wrote, write_size), cursor.attr, term_width);
+            l->UpdateText(term_cursor.x-1, String16Piece(input_text.data()+wrote, write_size), cursor.attr, term_width);
         }
     }
     term_cursor.x += write_size;
-    parse_text = parse_text.substr(consumed);
+    parse_text.erase(0, consumed);
 }
 
 void Terminal::Newline(bool carriage_return) {
