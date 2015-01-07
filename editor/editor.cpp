@@ -44,11 +44,11 @@ using namespace LFL;
 
 extern "C" int main(int argc, const char *argv[]) {
 
-    app->logfilename = StrCat(dldir(), "$BINNAME.txt");
+    app->logfilename = StrCat(dldir(), "editor.txt");
     app->frame_cb = Frame;
     screen->width = 420;
     screen->height = 380;
-    screen->caption = "$PKGNAME";
+    screen->caption = "Editor";
 
     if (app->Create(argc, argv, __FILE__)) { app->Free(); return -1; }
     if (app->Init()) { app->Free(); return -1; }

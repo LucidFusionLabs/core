@@ -502,6 +502,8 @@ struct TextArea : public TextGUI {
     { IterFlattenedArrayVals<TextGUI::Lines, &TextGUI::Lines::GetBackLineLines, WrappedLineOffset>(line, line.Size(), o, n); }
 
     virtual void UpdateScrolled();
+    virtual void UpdateHScrolled(int x, bool update_fb=true);
+    virtual void UpdateVScrolled(const WrappedLineOffset &nfl, const WrappedLineOffset &nll);
     virtual void UpdateLines(const WrappedLineOffset &nfl, const WrappedLineOffset &nll)
     { start_line = nfl.first; adjust_lines = -nfl.second; }
     virtual void UpdateLines(const WrappedLineOffset &nfl, WrappedLineOffset *nll)
