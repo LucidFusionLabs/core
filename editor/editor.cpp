@@ -26,14 +26,9 @@ BindMap binds;
 AssetMap asset;
 SoundAssetMap soundasset;
 Scene scene;
+EditorDialog *editor; 
 
-// engine callback driven by LFL::Application
 int Frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample, int flag) {
-    screen->cam->Look();
-    scene.Get("arrow")->YawRight((double)clicks/500);
-    scene.Draw(&asset.vec);
-
-    // Press tick for console
     screen->gd->DrawMode(DrawMode::_2D);
     screen->DrawDialogs();
     return 0;
@@ -46,45 +41,21 @@ extern "C" int main(int argc, const char *argv[]) {
 
     app->logfilename = StrCat(dldir(), "editor.txt");
     app->frame_cb = Frame;
-    screen->width = 420;
-    screen->height = 380;
+    screen->width = 840;
+    screen->height = 760;
     screen->caption = "Editor";
 
     if (app->Create(argc, argv, __FILE__)) { app->Free(); return -1; }
     if (app->Init()) { app->Free(); return -1; }
 
-    // asset.Add(Asset(name, texture,  scale, translate, rotate, geometry              0, 0, 0, callback));
-    asset.Add(Asset("axis",  "",       0,     0,         0,      0,                    0, 0, 0, glAxis  ));
-    asset.Add(Asset("grid",  "",       0,     0,         0,      Grid::Grid3D(),       0, 0, 0          ));
-    asset.Add(Asset("room",  "",       0,     0,         0,      0,                    0, 0, 0, glRoom  ));
-    asset.Add(Asset("arrow", "",      .005,   1,        -90,     "arrow.obj",          0, 0             ));
-    asset.Load();
-    app->shell.assets = &asset;
-
-    // soundasset.Add(SoundAsset(name, filename,   ringbuf, channels, sample_rate, seconds ));
-    soundasset.Add(SoundAsset("draw",  "Draw.wav", 0,       0,        0,           0       ));
-    soundasset.Load();
-    app->shell.soundassets = &soundasset;
-
     // binds.push_back(Bind(key,         callback));
     binds.push_back(Bind(Key::Backquote, Bind::CB(bind([&]() { screen->console->Toggle(); }))));
     binds.push_back(Bind(Key::Quote,     Bind::CB(bind([&]() { screen->console->Toggle(); }))));
     binds.push_back(Bind(Key::Escape,    Bind::CB(bind(&Shell::quit, &app->shell, vector<string>()))));
-    binds.push_back(Bind(Key::Return,    Bind::CB(bind(&Shell::grabmode, &app->shell, vector<string>()))));
-    binds.push_back(Bind(Key::LeftShift, Bind::TimeCB(bind(&Entity::RollLeft,   screen->cam, _1))));
-    binds.push_back(Bind(Key::Space,     Bind::TimeCB(bind(&Entity::RollRight,  screen->cam, _1))));
-    binds.push_back(Bind('w',            Bind::TimeCB(bind(&Entity::MoveFwd,    screen->cam, _1))));
-    binds.push_back(Bind('s',            Bind::TimeCB(bind(&Entity::MoveRev,    screen->cam, _1))));
-    binds.push_back(Bind('a',            Bind::TimeCB(bind(&Entity::MoveLeft,   screen->cam, _1))));
-    binds.push_back(Bind('d',            Bind::TimeCB(bind(&Entity::MoveRight,  screen->cam, _1))));
-    binds.push_back(Bind('q',            Bind::TimeCB(bind(&Entity::MoveDown,   screen->cam, _1))));
-    binds.push_back(Bind('e',            Bind::TimeCB(bind(&Entity::MoveUp,     screen->cam, _1))));
     screen->binds = &binds;
 
-    scene.Add(new Entity("axis",  asset("axis")));
-    scene.Add(new Entity("grid",  asset("grid")));
-    scene.Add(new Entity("room",  asset("room")));
-    scene.Add(new Entity("arrow", asset("arrow"), v3(1, .24, 1)));
+    string s = LocalFile::FileContents(StrCat(ASSETS_DIR, "lfapp_vertex.glsl"));
+    editor = new EditorDialog(screen, Fonts::Default(), new BufferFile(s.c_str(), s.size()), 1, 1);
 
     // start our engine
     return app->Main();

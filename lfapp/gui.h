@@ -254,9 +254,9 @@ struct TextGUI : public KeyboardGUI {
         Line &operator=(const Line &s) { data=s.data; return *this; }
         static void Move (Line &t, Line &s) { swap(t.data, s.data); }
         static void MoveP(Line &t, Line &s) { swap(t.data, s.data); t.p=s.p; }
-        int GetAttrId(const Drawable::Attr &a) { return data->glyphs.attr.GetAttrId(a); }
 #define ScopedLineLinesTracker ScopedDeltaAdder<int> SWLT(cont ? &cont->wrapped_lines : 0, bind(&Line::Lines, this))
-#if 1
+
+        int GetAttrId(const Drawable::Attr &a) { return data->glyphs.attr.GetAttrId(a); }
         void InitFlow() { data->flow = Flow(&data->box, parent->font, &data->glyphs, &parent->layout); }
         void Init(Lines *C, TextGUI *P) { cont=C; parent=P; InitFlow(); }
         int Size () const { return data->glyphs.Size(); }
@@ -264,14 +264,14 @@ struct TextGUI : public KeyboardGUI {
         string Text() const { return data->glyphs.Text(); }
         void Clear() { data->glyphs.Clear(); InitFlow(); }
         void Erase(int o, unsigned l=UINT_MAX) { data->glyphs.Erase(o, l, true); data->flow.p.x = BackOrDefault(data->glyphs.data).box.right(); }
-        void InsertTextAt(int o, const string   &s, int a=0) { data->glyphs.InsertAt(o, EncodeText(s, a, data->glyphs.Position(o))); }
-        void InsertTextAt(int o, const String16 &s, int a=0) { data->glyphs.InsertAt(o, EncodeText(s, a, data->glyphs.Position(o))); }
-        void AppendText  (       const string   &s, int a=0) { data->flow.AppendText(s, a); }
-        void AppendText  (       const String16 &s, int a=0) { data->flow.AppendText(s, a); }
-        void AssignText  (       const string   &s, int a=0) { Clear(); AppendText(s, a); }
-        void AssignText  (       const String16 &s, int a=0) { Clear(); AppendText(s, a); }
-        vector<Drawable::Box> EncodeText(const string   &s, int a, const point &p) { BoxArray b; parent->font->Encode(s, Box(p,0,0), &b, Font::Flag::AssignFlowX, a); return b.data; }
-        vector<Drawable::Box> EncodeText(const String16 &s, int a, const point &p) { BoxArray b; parent->font->Encode(s, Box(p,0,0), &b, Font::Flag::AssignFlowX, a); return b.data; }
+        void InsertTextAt(int o, const StringPiece   &s, int a=0) { data->glyphs.InsertAt(o, EncodeText(s, a, data->glyphs.Position(o))); }
+        void InsertTextAt(int o, const String16Piece &s, int a=0) { data->glyphs.InsertAt(o, EncodeText(s, a, data->glyphs.Position(o))); }
+        void AppendText  (       const StringPiece   &s, int a=0) { data->flow.AppendText(s, a); }
+        void AppendText  (       const String16Piece &s, int a=0) { data->flow.AppendText(s, a); }
+        void AssignText  (       const StringPiece   &s, int a=0) { Clear(); AppendText(s, a); }
+        void AssignText  (       const String16Piece &s, int a=0) { Clear(); AppendText(s, a); }
+        vector<Drawable::Box> EncodeText(const StringPiece   &s, int a, const point &p) { BoxArray b; parent->font->Encode(s, Box(p,0,0), &b, Font::Flag::AssignFlowX, a); return b.data; }
+        vector<Drawable::Box> EncodeText(const String16Piece &s, int a, const point &p) { BoxArray b; parent->font->Encode(s, Box(p,0,0), &b, Font::Flag::AssignFlowX, a); return b.data; }
         void UpdateAttr(int ind, int len, int a) {}
         void Layout(Box win, bool flush=0) {
             if (data->box.w == win.w && !flush) return;
@@ -283,33 +283,7 @@ struct TextGUI : public KeyboardGUI {
             Clear();
             data->flow.AppendBoxArrayText(b);
         }
-#else   // struct LineData { String16 text, text_attr; };
-        void Init(Lines *C, TextGUI *P) { cont=C; parent=P; }
-        int Size () const { return data->glyphs.Size(); }
-        int Lines() const { return max(1, data->glyphs.line.size()); }
-        string Text() const { return String::ToUTF8(data->text); }
-        void Clear() { if (cont) cont->wrapped_lines -= max(0,Lines()-1); data->text.clear(); data->text_attr.clear(); data->glyphs.Clear(); }
-        void Erase(int o, unsigned long long l=String16::npos) { if (data->text.size() > o) { data->text.erase(o, l);  data->text_attr.erase(o, l); } }
-        void InsertTextAt(int o, const string   &s, int a=0) { String16 v=String::ToUTF16(s); data->text.insert(o, v); data->text_attr.insert(o, String16(v.size(), a)); }
-        void InsertTextAt(int o, const String16 &s, int a=0) {                                data->text.insert(o, s); data->text_attr.insert(o, String16(s.size(), a)); }
-        void AppendText  (       const string   &s, int a=0) { String16 v=String::ToUTF16(s); data->text.append(v);    data->text_attr.append(   String16(v.size(), a)); }
-        void AppendText  (       const String16 &s, int a=0) {                                data->text.append(s);    data->text_attr.append(   String16(s.size(), a)); }
-        void AssignText  (       const string   &s, int a=0) { data->text = String::ToUTF16(s); data->text_attr = String16(data->text.size(), a); }
-        void AssignText  (       const String16 &s, int a=0) { data->text = s;                  data->text_attr = String16(data->text.size(), a); }
-        void UpdateAttr(int ind, int len, int a) { Vec<short>::Assign((short*)data->text_attr.data() + ind, a, len); }
-        void Layout(Box win, bool flush=0) {
-            ScopedLineLinesTracker;
-            data->glyphs.Clear();
-            Flow flow(&win, parent->font, &data->glyphs, &parent->layout);
-            for (ArraySegmentIter<short> iter(data->text_attr); !iter.Done(); iter.Increment()) {
-                if (parent->clickable_links) {}
-                flow.AppendText(String16Piece(&data->text[iter.cur_start], iter.Length()), iter.cur_attr);
-            }
-            flow.Complete();
-            CHECK_EQ(data->text.size(), data->glyphs.Size());
-        }
-#endif
-        void UpdateText(int x, const String16 &v, int attr, int max_width=0) {
+        void UpdateText(int x, const String16Piece &v, int attr, int max_width=0) {
             if (Size() < x) AppendText(string(x - Size(), ' '), attr);
             else if (!parent->insert_mode) Erase(x, v.size());
             if (Size() == x) AppendText  (   v, attr);
@@ -812,7 +786,7 @@ struct SliderTweakDialog : public Dialog {
 struct EditorDialog : public Dialog {
     Editor editor;
     Widget::Scrollbar v_scrollbar, h_scrollbar;
-    EditorDialog(Window *W, Font *F, File *I) : Dialog(.5, .5), editor(W, F, I),
+    EditorDialog(Window *W, Font *F, File *I, float w=.5, float h=.5) : Dialog(w, h), editor(W, F, I),
     v_scrollbar(this), h_scrollbar(this, Box(), Widget::Scrollbar::Flag::AttachedHorizontal) {}
 
     void Layout() {
