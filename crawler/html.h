@@ -282,16 +282,27 @@ struct HTMLParser {
     static bool TableDependent(const string &n) { return n == "caption" || n == "col" || n == "colgroup" || n == "thead" || n == "tbody" || n == "tfoot"; }
     static bool TableDependent(int n) { return n == Tag::caption || n == Tag::col || n == Tag::colgroup || TableSection(n); }
     static bool BlockElement(int n) {
-        return n == Tag::blockquote || n == Tag::canvas || n == Tag::div || n == Tag::dl || n == Tag::fieldset
-            || n == Tag::form || n == Tag::h1 || n == Tag::h2 || n == Tag::h3 || n == Tag::h4 || n == Tag::h5 || n == Tag::h6
-            || n == Tag::hr || n == Tag::menu || n == Tag::ol || n == Tag::p || n == Tag::pre || n == Tag::table || n == Tag::ul;
+        switch (n) {
+            case Tag::blockquote:    case Tag::canvas:     case Tag::div:     case Tag::dl:
+            case Tag::fieldset:      case Tag::form:       case Tag::h1:      case Tag::h2:
+            case Tag::h3:            case Tag::h4:         case Tag::h5:      case Tag::h6:
+            case Tag::hr:            case Tag::menu:       case Tag::ol:      case Tag::p:
+            case Tag::pre:           case Tag::table:      case Tag::ul:      return 1;
+            default:                                                          return 0;
+        }
     }
     static bool InlineElement(int n) {
-        return n == Tag::abbr || n == Tag::acronym || n ==  Tag::b || n == Tag::bdo || n == Tag::big || n == Tag::blink
-            || n == Tag::cite || n ==  Tag::code || n ==  Tag::del || n == Tag::dfn || n == Tag::em || n == Tag::i
-            || n == Tag::ins || n ==  Tag::kbd || n ==  Tag::q || n == Tag::rb || n == Tag::rbc || n == Tag::rp
-            || n == Tag::rt || n ==  Tag::rtc || n ==  Tag::ruby || n == Tag::s || n == Tag::samp || n == Tag::_small
-            || n == Tag::strike || n ==  Tag::strong || n ==  Tag::sub || n == Tag::sup || n == Tag::tt || n ==  Tag::u;
+        switch (n) {
+            case Tag::abbr:      case Tag::acronym:    case Tag::b:       case Tag::bdo:
+            case Tag::big:       case Tag::blink:      case Tag::cite:    case Tag::code:
+            case Tag::del:       case Tag::dfn:        case Tag::em:      case Tag::i:
+            case Tag::ins:       case Tag::kbd:        case Tag::q:       case Tag::rb:
+            case Tag::rbc:       case Tag::rp:         case Tag::rt:      case Tag::rtc:
+            case Tag::ruby:      case Tag::s:          case Tag::samp:    case Tag::_small:
+            case Tag::strike:    case Tag::strong:     case Tag::sub:     case Tag::sup:
+            case Tag::tt:        case Tag::u:          return 1;
+            default:                                   return 0;
+        }
     }
     static bool TagSoupCantClose(int n) { return n == Tag::body || n == Tag::form || n == Tag::table; }
     static bool TagSoupRestartable(int n) { return InlineElement(n); }

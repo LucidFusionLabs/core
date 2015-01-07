@@ -189,11 +189,12 @@ void TextArea::Write(const string &s, bool update_fb, bool release_fb) {
     StringLineIter add_lines(s, StringLineIter::Flag::BlankLines);
     for (const char *add_line = add_lines.Next(); add_line; add_line = add_lines.Next()) {
         bool append = !write_newline && add_lines.first && *add_line && line.ring.count;
-        LineUpdate l(append ? &line[-1] : line.InsertAt(-1), &line_fb,
-                     (!append ? LineUpdate::PushBack : 0) | (update_fb ? 0 : LineUpdate::DontUpdate));
+        Line *l = append ? &line[-1] : line.InsertAt(-1);
         if (!append) l->Clear();
         if (write_timestamp) l->AppendText(StrCat(logtime(Now()), " "), cursor.attr);
         l->AppendText(add_line, cursor.attr);
+        if (!update_fb || (append && start_line)) continue;
+        LineUpdate(&line[-start_line-1], &line_fb, (!append ? LineUpdate::PushBack : 0)); // XXX
     }
     if (update_fb && release_fb && line_fb.lines) line_fb.fb.Release();
 }
@@ -521,25 +522,24 @@ void Terminal::Write(const string &s, bool update_fb, bool release_fb) {
         if (parse_state == State::ESC) {
             parse_state = State::TEXT; // default next state
             // INFOf("ESC %c", c);
-
-            if (c == '[') {
-                parse_state = State::CSI; // control sequence introducer
-                parse_csi.clear();
-            } else if (c == ']') {
-                parse_state = State::OSC; // operating system command
-                parse_osc.clear();
-                parse_osc_escape = false;
-            } else if (c >= '(' && c <= '/') {
+            if (c >= '(' && c <= '/') {
                 parse_state = State::CHARSET;
                 parse_charset = c;
+            } else switch (c) {
+                case '[':
+                    parse_state = State::CSI; // control sequence introducer
+                    parse_csi.clear(); break;
+                case ']':
+                    parse_state = State::OSC; // operating system command
+                    parse_osc.clear();
+                    parse_osc_escape = false; break;
+                case 'D': Newline();                       break;
+                case 'M': TopNewline();                    break;
+                case '7': saved_term_cursor = term_cursor; break;
+                case '8': term_cursor = saved_term_cursor; break;
+                case '=': case '>':                        break; // application or normal keypad
+                default: ERRORf("unhandled escape %c (%02x)", c, c);
             }
-            else if (c == 'D') Newline();
-            else if (c == 'M') TopNewline();
-            else if (c == '7') saved_term_cursor = term_cursor;
-            else if (c == '8') term_cursor = saved_term_cursor;
-            else if (c == '=' || c == '>') { /* application or normal keypad */ }
-            else ERRORf("unhandled escape %c (%02x)", c, c);
-
         } else if (parse_state == State::CHARSET) {
             // INFOf("charset %c%c", parse_charset, c);
             parse_state = State::TEXT;
@@ -580,104 +580,114 @@ void Terminal::Write(const string &s, bool update_fb, bool release_fb) {
             }
             if (!parse_csi_arg_done) parse_csi_argc++;
 
-            if (c == '@') {
-                LineUpdate l(GetCursorLine(), fb_cb);
-                l->InsertTextAt(term_cursor.x-1, string(X_or_1(parse_csi_argv[0]), ' '), cursor.attr);
-                l->Erase(term_width);
-            }
-            else if (c == 'A') term_cursor.y = max(term_cursor.y - X_or_1(parse_csi_argv[0]), 1);
-            else if (c == 'B') term_cursor.y = min(term_cursor.y + X_or_1(parse_csi_argv[0]), term_height);
-            else if (c == 'C') term_cursor.x = min(term_cursor.x + X_or_1(parse_csi_argv[0]), term_width);
-            else if (c == 'D') term_cursor.x = max(term_cursor.x - X_or_1(parse_csi_argv[0]), 1);
-            else if (c == 'H') {
-                term_cursor.y = Clamp(parse_csi_argv[0], 1, term_height);
-                term_cursor.x = Clamp(parse_csi_argv[1], 1, term_width);
-            } else if (c =='J') {
-                LineUpdate l(GetCursorLine(), fb_cb);
-                int clear_beg_y = 1, clear_end_y = term_height;
-                if      (parse_csi_argv[0] == 0) { l->Erase(term_cursor.x-1);  clear_beg_y = term_cursor.y; }
-                else if (parse_csi_argv[0] == 1) { l->Erase(0, term_cursor.x); clear_end_y = term_cursor.y; }
-                else if (parse_csi_argv[0] == 2) { l->Clear(); term_cursor.x = term_cursor.y = 1; }
-                for (int i = clear_beg_y; i <= clear_end_y; i++) LineUpdate(GetTermLine(i), fb_cb)->Clear();
-            } else if (c =='K') {
-                LineUpdate l(GetCursorLine(), fb_cb);
-                if      (parse_csi_argv[0] == 0) { l->Erase(term_cursor.x-1);  }
-                else if (parse_csi_argv[0] == 1) { l->Erase(0, term_cursor.x); }
-                else if (parse_csi_argv[0] == 2) { l->Clear();                 }
-            } else if (c == 'L' || c == 'M')  {
-                int sl = (c == 'L' ? 1 : -1) * X_or_1(parse_csi_argv[0]);
-                if (clip && term_cursor.y < scroll_region_beg) {
-                    ERROR(term_cursor.DebugString(), " outside scroll region ", scroll_region_beg, "-", scroll_region_end);
-                } else {
-                    int end_line = X_or_Y(scroll_region_end, term_height);
-                    int flag = sl < 0 ? LineUpdate::PushBack : LineUpdate::PushFront;
-                    int offset = sl < 0 ? start_line : -skip_last_lines;
-                    Scroll(term_cursor.y, end_line, sl, clip);
-                    GetPrimaryFrameBuffer();
-                    for (int i=0, l=abs(sl); i<l; i++)
-                        LineUpdate(GetTermLine(sl<0 ? (end_line-l+i+1) : (term_cursor.y+l-i-1)),
-                                   &line_fb, flag, offset);
-                }
-            } else if (c == 'P') {
-                LineUpdate l(GetCursorLine(), fb_cb);
-                int erase = max(1, parse_csi_argv[0]);
-                l->Erase(term_cursor.x-1, erase);
-            } else if (c == 'h') { // set mode
-                int mode = parse_csi_argv[0];
-                if      (parse_csi_argv00 == 0   && mode ==    4) { insert_mode = true;           }
-                else if (parse_csi_argv00 == 0   && mode ==   34) { /* steady cursor */           }
-                else if (parse_csi_argv00 == '?' && mode ==    1) { /* guarded area tx = all */   }
-                else if (parse_csi_argv00 == '?' && mode ==   25) { cursor_enabled = true;        }
-                else if (parse_csi_argv00 == '?' && mode ==   47) { /* alternate screen buffer */ }
-                else if (parse_csi_argv00 == '?' && mode == 1049) { /* save screen */             }
-                else ERROR("unhandled CSI-h mode = ", mode, " av00 = ", parse_csi_argv00, " i= ", intermed);
-            } else if (c == 'l') { // reset mode
-                int mode = parse_csi_argv[0];
-                if      (parse_csi_argv00 == 0   && mode ==    4) { insert_mode = false;                 }
-                else if (parse_csi_argv00 == 0   && mode ==   34) { /* blink cursor */                   }
-                else if (parse_csi_argv00 == '?' && mode ==    1) { /* guarded areax tx = unprot only */ }
-                else if (parse_csi_argv00 == '?' && mode ==   25) { cursor_enabled = false;              }
-                else if (parse_csi_argv00 == '?' && mode ==   47) { /* normal screen buffer */           }
-                else if (parse_csi_argv00 == '?' && mode == 1049) { /* restore screen */                 }
-                else ERROR("unhandled CSI-l mode = ", mode, " av00 = ", parse_csi_argv00, " i= ", intermed);
-            } else if (c == 'm') {
-                for (int i=0; i<parse_csi_argc; i++) {
-                    int sgr = parse_csi_argv[i]; // select graphic rendition
-                    if      (sgr ==  0)              cursor.attr  =  default_cursor_attr;
-                    else if (sgr ==  1)              cursor.attr |=  Attr::Bold;
-                    else if (sgr ==  3)              cursor.attr |=  Attr::Italic;
-                    else if (sgr ==  4)              cursor.attr |=  Attr::Underline;
-                    else if (sgr ==  5 || sgr ==  6) cursor.attr |=  Attr::Blink;
-                    else if (sgr ==  7)              cursor.attr |=  Attr::Reverse;
-                    else if (sgr == 22)              cursor.attr &= ~Attr::Bold;
-                    else if (sgr == 23)              cursor.attr &= ~Attr::Italic;
-                    else if (sgr == 24)              cursor.attr &= ~Attr::Underline;
-                    else if (sgr == 25)              cursor.attr &= ~Attr::Blink;
-                    else if (sgr >= 30 && sgr <= 37) Attr::SetFGColorIndex(&cursor.attr, sgr-30);
-                    else if (sgr >= 40 && sgr <= 47) Attr::SetBGColorIndex(&cursor.attr, sgr-40);
-                    else if (sgr == 39)              Attr::SetFGColorIndex(&cursor.attr, 7);
-                    else if (sgr == 49)              Attr::SetBGColorIndex(&cursor.attr, 0);
-                    else ERROR("unhandled SGR ", sgr);
-                }
-            } else if (c == 'r' && parse_csi_argc == 2) {
-                SetScrollRegion(parse_csi_argv[0], parse_csi_argv[1]);
-            } else {
-                ERRORf("unhandled CSI %s%c", parse_csi.c_str(), c);
+            switch (c) {
+                case '@': {
+                    LineUpdate l(GetCursorLine(), fb_cb);
+                    l->InsertTextAt(term_cursor.x-1, string(X_or_1(parse_csi_argv[0]), ' '), cursor.attr);
+                    l->Erase(term_width);
+                } break;
+                case 'A': term_cursor.y = max(term_cursor.y - X_or_1(parse_csi_argv[0]), 1);           break;
+                case 'B': term_cursor.y = min(term_cursor.y + X_or_1(parse_csi_argv[0]), term_height); break;
+                case 'C': term_cursor.x = min(term_cursor.x + X_or_1(parse_csi_argv[0]), term_width);  break;
+                case 'D': term_cursor.x = max(term_cursor.x - X_or_1(parse_csi_argv[0]), 1);           break;
+                case 'H': term_cursor = point(Clamp(parse_csi_argv[1], 1, term_width),
+                                              Clamp(parse_csi_argv[0], 1, term_height)); break;
+                case 'J': {
+                    LineUpdate l(GetCursorLine(), fb_cb);
+                    int clear_beg_y = 1, clear_end_y = term_height;
+                    if      (parse_csi_argv[0] == 0) { l->Erase(term_cursor.x-1);  clear_beg_y = term_cursor.y; }
+                    else if (parse_csi_argv[0] == 1) { l->Erase(0, term_cursor.x); clear_end_y = term_cursor.y; }
+                    else if (parse_csi_argv[0] == 2) { l->Clear(); term_cursor.x = term_cursor.y = 1; }
+                    for (int i = clear_beg_y; i <= clear_end_y; i++) LineUpdate(GetTermLine(i), fb_cb)->Clear();
+                } break;
+                case 'K': {
+                    LineUpdate l(GetCursorLine(), fb_cb);
+                    if      (parse_csi_argv[0] == 0) l->Erase(term_cursor.x-1);
+                    else if (parse_csi_argv[0] == 1) l->Erase(0, term_cursor.x);
+                    else if (parse_csi_argv[0] == 2) l->Clear();
+                } break;
+                case 'L': case 'M': {
+                    int sl = (c == 'L' ? 1 : -1) * X_or_1(parse_csi_argv[0]);
+                    if (clip && term_cursor.y < scroll_region_beg) {
+                        ERROR(term_cursor.DebugString(), " outside scroll region ", scroll_region_beg, "-", scroll_region_end);
+                    } else {
+                        int end_line = X_or_Y(scroll_region_end, term_height);
+                        int flag = sl < 0 ? LineUpdate::PushBack : LineUpdate::PushFront;
+                        int offset = sl < 0 ? start_line : -skip_last_lines;
+                        Scroll(term_cursor.y, end_line, sl, clip);
+                        GetPrimaryFrameBuffer();
+                        for (int i=0, l=abs(sl); i<l; i++)
+                            LineUpdate(GetTermLine(sl<0 ? (end_line-l+i+1) : (term_cursor.y+l-i-1)),
+                                       &line_fb, flag, offset);
+                    }
+                } break;
+                case 'P': {
+                    LineUpdate l(GetCursorLine(), fb_cb);
+                    int erase = max(1, parse_csi_argv[0]);
+                    l->Erase(term_cursor.x-1, erase);
+                } break;
+                case 'h': { // set mode
+                    int mode = parse_csi_argv[0];
+                    if      (parse_csi_argv00 == 0   && mode ==    4) { insert_mode = true;           }
+                    else if (parse_csi_argv00 == 0   && mode ==   34) { /* steady cursor */           }
+                    else if (parse_csi_argv00 == '?' && mode ==    1) { /* guarded area tx = all */   }
+                    else if (parse_csi_argv00 == '?' && mode ==   25) { cursor_enabled = true;        }
+                    else if (parse_csi_argv00 == '?' && mode ==   47) { /* alternate screen buffer */ }
+                    else if (parse_csi_argv00 == '?' && mode == 1049) { /* save screen */             }
+                    else ERROR("unhandled CSI-h mode = ", mode, " av00 = ", parse_csi_argv00, " i= ", intermed);
+                } break;
+                case 'l': { // reset mode
+                    int mode = parse_csi_argv[0];
+                    if      (parse_csi_argv00 == 0   && mode ==    4) { insert_mode = false;                 }
+                    else if (parse_csi_argv00 == 0   && mode ==   34) { /* blink cursor */                   }
+                    else if (parse_csi_argv00 == '?' && mode ==    1) { /* guarded areax tx = unprot only */ }
+                    else if (parse_csi_argv00 == '?' && mode ==   25) { cursor_enabled = false;              }
+                    else if (parse_csi_argv00 == '?' && mode ==   47) { /* normal screen buffer */           }
+                    else if (parse_csi_argv00 == '?' && mode == 1049) { /* restore screen */                 }
+                    else ERROR("unhandled CSI-l mode = ", mode, " av00 = ", parse_csi_argv00, " i= ", intermed);
+                } break;
+                case 'm':
+                    for (int i=0; i<parse_csi_argc; i++) {
+                        int sgr = parse_csi_argv[i]; // select graphic rendition
+                        if      (sgr >= 30 && sgr <= 37) Attr::SetFGColorIndex(&cursor.attr, sgr-30);
+                        else if (sgr >= 40 && sgr <= 47) Attr::SetBGColorIndex(&cursor.attr, sgr-40);
+                        else switch(sgr) {
+                            case 0:         cursor.attr  =  default_cursor_attr;    break;
+                            case 1:         cursor.attr |=  Attr::Bold;             break;
+                            case 3:         cursor.attr |=  Attr::Italic;           break;
+                            case 4:         cursor.attr |=  Attr::Underline;        break;
+                            case 5: case 6: cursor.attr |=  Attr::Blink;            break;
+                            case 7:         cursor.attr |=  Attr::Reverse;          break;
+                            case 22:        cursor.attr &= ~Attr::Bold;             break;
+                            case 23:        cursor.attr &= ~Attr::Italic;           break;
+                            case 24:        cursor.attr &= ~Attr::Underline;        break;
+                            case 25:        cursor.attr &= ~Attr::Blink;            break;
+                            case 39:        Attr::SetFGColorIndex(&cursor.attr, 7); break;
+                            case 49:        Attr::SetBGColorIndex(&cursor.attr, 0); break;
+                            default:        ERROR("unhandled SGR ", sgr);
+                        }
+                    } break;
+                case 'r':
+                    if (parse_csi_argc == 2) SetScrollRegion(parse_csi_argv[0], parse_csi_argv[1]);
+                    else ERROR("invalid scroll region", parse_csi_argc);
+                    break;
+                default:
+                    ERRORf("unhandled CSI %s%c", parse_csi.c_str(), c);
             }
         } else {
             // http://en.wikipedia.org/wiki/C0_and_C1_control_codes#C0_.28ASCII_and_derivatives.29
             bool C0_control = (c >= 0x00 && c <= 0x1f) || c == 0x7f;
             bool C1_control = (c >= 0x80 && c <= 0x9f);
             if (C0_control || C1_control) FlushParseText();
-            if (C0_control) {
-                if      (c == '\a') INFO("bell");                              /* bell */
-                else if (c == '\b') term_cursor.x = max(term_cursor.x-1, 1);   /* backspace */
-                else if (c == '\t') term_cursor.x = term_cursor.x+8;           /* tab */ 
-                else if (c == '\r') term_cursor.x = 1;                         /* carriage return */
-                else if (c == '\x14' || c == '\x15' || c == '\x7f') {}         /* shift charset in, out, delete */
-                else if (c == '\n'   || c == '\v'   || c == '\f'  ) Newline(); /* line feed, vertical tab, form feed */
-                else if (c == '\x1b') parse_state = State::ESC;
-                else ERRORf("unhandled C0 control %02x", c);
+            if (C0_control) switch(c) {
+                case '\a':   INFO("bell");                            break; // bell
+                case '\b':   term_cursor.x = max(term_cursor.x-1, 1); break; // backspace
+                case '\t':   term_cursor.x = term_cursor.x+8;         break; // tab 
+                case '\r':   term_cursor.x = 1;                       break; // carriage return
+                case '\x1b': parse_state = State::ESC;                break;
+                case '\x14': case '\x15': case '\x7f':                break; // shift charset in, out, delete
+                case '\n':   case '\v':   case '\f':       Newline(); break; // line feed, vertical tab, form feed
+                default:                                   ERRORf("unhandled C0 control %02x", c);
             } else if (0 && C1_control) {
                 if (0) {}
                 else ERRORf("unhandled C1 control %02x", c);
@@ -1915,16 +1925,18 @@ struct BerkeliumBrowser : public Browser, public Berkelium::WindowDelegate {
     void MouseWheel(int xs, int ys) { window->mouseWheel(xs, ys); }
     void KeyEvent(int key, bool down) {
         int bk = -1;
-        if      (key == Key::PageUp)    bk = 0x21;
-        else if (key == Key::PageDown)  bk = 0x22;
-        else if (key == Key::Left)      bk = 0x25;
-        else if (key == Key::Up)        bk = 0x26;
-        else if (key == Key::Right)     bk = 0x27;
-        else if (key == Key::Down)      bk = 0x28;
-        else if (key == Key::Delete)    bk = 0x2E;
-        else if (key == Key::Backspace) bk = 0x2E;
-        else if (key == Key::Return)    bk = '\r';
-        else if (key == Key::Tab)       bk = '\t';
+        switch (key) {
+            case Key::PageUp:    bk = 0x21; break;
+            case Key::PageDown:  bk = 0x22; break;
+            case Key::Left:      bk = 0x25; break;
+            case Key::Up:        bk = 0x26; break;
+            case Key::Right:     bk = 0x27; break;
+            case Key::Down:      bk = 0x28; break;
+            case Key::Delete:    bk = 0x2E; break;
+            case Key::Backspace: bk = 0x2E; break;
+            case Key::Return:    bk = '\r'; break;
+            case Key::Tab:       bk = '\t'; break;
+        }
 
         int mods = ctrl_key_down() ? Berkelium::CONTROL_MOD : 0 | shift_key_down() ? Berkelium::SHIFT_MOD : 0;
         window->keyEvent(down, mods, bk != -1 ? bk : key, 0);
