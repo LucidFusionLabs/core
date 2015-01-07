@@ -1607,7 +1607,6 @@ int Pixel::FromFFMpegId(int fmt) {
         case AV_PIX_FMT_BGR32:    return Pixel::BGR32;
         case AV_PIX_FMT_RGB24:    return Pixel::RGB24;
         case AV_PIX_FMT_BGR24:    return Pixel::BGR24;
-        case AV_PIX_FMT_RGBA:     return Pixel::RGBA;
         case AV_PIX_FMT_GRAY8:    return Pixel::GRAY8;
         case AV_PIX_FMT_YUV410P:  return Pixel::YUV410P;
         case AV_PIX_FMT_YUV420P:  return Pixel::YUV420P;

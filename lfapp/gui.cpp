@@ -211,11 +211,23 @@ void TextArea::Resized(int w, int h) {
 }
 
 void TextArea::UpdateScrolled() {
-    if (!Typed::EqualChanged(&last_v_scrolled, v_scrolled)) return;
-    WrappedLineOffset new_first_line=GetWrappedLineOffset(v_scrolled), new_last_line;
-    if (new_first_line == first_line) return;
-    UpdateLines(new_first_line, &new_last_line);
+    bool h_changed = Wrap() ? 0 : Typed::EqualChanged(&last_h_scrolled, h_scrolled);
+    bool v_updated=0, v_changed = Typed::EqualChanged(&last_v_scrolled, v_scrolled);
+    if (v_changed) {
+        WrappedLineOffset new_first_line = GetWrappedLineOffset(v_scrolled), new_last_line;
+        if ((v_updated = new_first_line != first_line)) {
+            UpdateLines(new_first_line, &new_last_line);
+            if (h_changed) UpdateHScrolled(0, false);
+            if (1)         UpdateVScrolled(new_first_line, new_last_line);
+        }
+    }
+    if (h_changed && !v_updated) UpdateHScrolled(0, true);
+}
 
+void TextArea::UpdateHScrolled(int x, bool update_fb) {
+}
+
+void TextArea::UpdateVScrolled(const WrappedLineOffset &new_first_line, const WrappedLineOffset &new_last_line) {
     printf("UpdateScrolled first_line %d,%d -> %d,%d last_line %d,%d -> %d,%d\n",
            first_line.first, first_line.second, new_first_line.first, new_first_line.second,
            last_line.first,  last_line.second,  new_last_line.first,  new_last_line.second);
@@ -245,7 +257,7 @@ void TextArea::UpdateScrolled() {
 
         if (reverse) il = line_fb.PushFrontAndUpdate(L, 0, tl-wl);
         else         il = line_fb. PushBackAndUpdate(L, 0, tl-wl);
-        new_last_line = WrappedLineOffset(ind, il == L->Lines() ? 0 : il);
+        // new_last_line = WrappedLineOffset(ind, il == L->Lines() ? 0 : il);
         wl += il;
     }
     line_fb.fb.Release();

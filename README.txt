@@ -10,16 +10,17 @@ and CUDA.
 
 Projects include:
 
-- fv:           Fusion Viewer, a speech and image recognition client
+- term:         LTerminal, a modern terminal
+- editor:       LEditor, a text editor and IDE
+- browser:      LBrowser, a full HTML4/CSS2 web browser with V8 javascript
+- image:        LImage, an image and 3D-model manipulation utility
 - fs:           Fusion Server, a speech and image recognition server
+- fv:           Fusion Viewer, a speech and image recognition client
+- market:       Financial data visualization and automated trading code
 - spaceball:    Spaceball Future, a multiplayer 3d game
 - cb:           Crystal Bawl, a geopacket visualization screensaver
-- term:         LTerminal, a modern terminal
-- browser:      LBrowser, a full HTML4/CSS2 web browser with V8 javascript
 - chess:        LChess, a magic bitboard chess engine and FICS client
-- image:        LImage, an image and 3D-model manipulation utility
 - quake:        LQuake, a quake clone
-- market:       Financial data visualization and automated trading code
 - senators:     IRC bots with NLP capabilties
 
 The following applies to any app derived from lfl/new_app_template.

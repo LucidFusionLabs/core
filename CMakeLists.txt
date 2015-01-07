@@ -212,6 +212,12 @@ add_subdirectory(calculator)
 # terminal
 add_subdirectory(term)
 
+# editor
+add_subdirectory(editor)
+
+# web browser
+add_subdirectory(browser)
+
 # chess
 add_subdirectory(chess)
 
@@ -229,9 +235,6 @@ add_subdirectory(blaster)
 
 # market app
 add_subdirectory(market)
-
-# web browser
-add_subdirectory(browser)
 
 # q3 clone
 add_subdirectory(quake)
