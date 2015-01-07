@@ -1283,19 +1283,23 @@ const char *Pixel::Name(int p) {
 }
 
 int Pixel::size(int p) {
-    if (p == RGB32 || p == BGR32 || p == RGBA) return 4;
-    else if (p == RGB24 || p == BGR24 || p == LCD) return 3;
-    else if (p == RGB555 || p == BGR555 || p == RGB565 || p == BGR565 || p == GRAYA8) return 2;
-    else if (p == YUYV422 || p == GRAY8) return 1;
-    else return 0;
+    switch (p) {
+        case RGB32:   case BGR32:  case RGBA:                             return 4;
+        case RGB24:   case BGR24:  case LCD:                              return 3;
+        case RGB555:  case BGR555: case RGB565: case BGR565: case GRAYA8: return 2;
+        case YUYV422: case GRAY8:                                         return 1;
+        default:                                                          return 0;
+    }
 }
 
 int Pixel::OpenGLID(int p) {
-    if      (p == RGBA || p == RGB32 || p == BGR32) return GL_RGBA;
-    else if (p == RGB24 || p == BGR24) return GL_RGB;
-    else if (p == GRAYA8) return GL_LUMINANCE_ALPHA;
-    else if (p == GRAY8) return GL_LUMINANCE;
-    else return -1;
+    switch (p) {
+        case RGBA:   case RGB32: case BGR32: return GL_RGBA;
+        case RGB24:  case BGR24:             return GL_RGB;
+        case GRAYA8:                         return GL_LUMINANCE_ALPHA;
+        case GRAY8:                          return GL_LUMINANCE;
+        default:                             return -1;
+    }
 }
 
 string FloatContainer::DebugString() const {
@@ -1327,103 +1331,103 @@ void Box::Draw(const float *texcoord) const {
 }
 
 void Box::DrawCrimped(const float *texcoord, int orientation, float scrollX, float scrollY) const {
-    float left=x, right=x+w, top=y, bottom=y+h, xmid, ymid;
+    float left=x, right=x+w, top=y, bottom=y+h;
     float texMinX, texMinY, texMaxX, texMaxY, texMidX1, texMidX2, texMidY1, texMidY2;
 
+    scrollX *= (texcoord[2] - texcoord[0]);
     scrollY *= (texcoord[3] - texcoord[1]);
     scrollY = ScrollCrimped(texcoord[1], texcoord[3], scrollY, &texMinY, &texMidY1, &texMidY2, &texMaxY);
-    if      (orientation == 0 || orientation == 2) ymid = y + h * scrollY;
-    else if (orientation == 1 || orientation == 3) ymid = y + h * (1-scrollY);
-    else if (orientation == 4 || orientation == 6) xmid = x + w * (1-scrollY);
-    else if (orientation == 5 || orientation == 7) xmid = x + w * scrollY;
-
-    scrollX *= (texcoord[2] - texcoord[0]);
     scrollX = ScrollCrimped(texcoord[0], texcoord[2], scrollX, &texMinX, &texMidX1, &texMidX2, &texMaxX);
-    if      (orientation == 0 || orientation == 1) xmid = x + w * scrollX;
-    else if (orientation == 2 || orientation == 3) xmid = x + w * (1-scrollX);
-    else if (orientation == 4 || orientation == 5) ymid = y + h * scrollX;
-    else if (orientation == 6 || orientation == 7) ymid = y + h * (1-scrollX);
 
-    if (orientation == 0) {
-        static int vind = -1;
-        float verts[] = {
-            /*02*/ xmid,  top,  texMidX1, texMaxY,  /*01*/ left, top,  texMinX,  texMaxY,  /*03*/ xmid,  ymid,   texMidX1, texMidY1, /*04*/ left, ymid,   texMinX,  texMidY1,
-            /*06*/ right, top,  texMaxX,  texMaxY,  /*05*/ xmid, top,  texMidX2, texMaxY,  /*07*/ right, ymid,   texMaxX,  texMidY1, /*08*/ xmid, ymid,   texMidX2, texMidY1,
-            /*10*/ right, ymid, texMaxX,  texMidY2, /*09*/ xmid, ymid, texMidX2, texMidY2, /*11*/ right, bottom, texMaxX,  texMinY,  /*12*/ xmid, bottom, texMidX2, texMinY,
-            /*14*/ xmid,  ymid, texMidX1, texMidY2, /*13*/ left, ymid, texMinX,  texMidY2, /*15*/ xmid,  bottom, texMidX1, texMinY,  /*16*/ left, bottom, texMinX,  texMinY 
-        };
-        screen->gd->VertexPointer(2, GraphicsDevice::Float, 4*sizeof(float), 0,               verts, sizeof(verts), &vind, true);
-        screen->gd->TexPointer   (2, GraphicsDevice::Float, 4*sizeof(float), 2*sizeof(float), verts, sizeof(verts), &vind, false);
-    } else if (orientation == 1) {
-        static int vind = -1;
-        float verts[] = {
-            /*02*/ xmid,  top,  texMidX1, texMinY,  /*01*/ left,  top,  texMinX,  texMinY,  /*03*/ xmid, ymid,    texMidX1, texMidY2, /*04*/ left, ymid,   texMinX,  texMidY2,
-            /*06*/ right, top,  texMaxX,  texMinY,  /*05*/ xmid,  top,  texMidX2, texMinY,  /*07*/ right, ymid,   texMaxX,  texMidY2, /*08*/ xmid, ymid,   texMidX2, texMidY2,
-            /*10*/ right, ymid, texMaxX,  texMidY1, /*09*/ xmid,  ymid, texMidX2, texMidY1, /*11*/ right, bottom, texMaxX,  texMaxY,  /*12*/ xmid, bottom, texMidX2, texMaxY,
-            /*14*/ xmid,  ymid, texMidX1, texMidY1, /*13*/ left,  ymid, texMinX,  texMidY1, /*15*/ xmid, bottom,  texMidX1, texMaxY,  /*16*/ left, bottom, texMinX,  texMaxY 
-        };
-        screen->gd->VertexPointer(2, GraphicsDevice::Float, 4*sizeof(float), 0,               verts, sizeof(verts), &vind, true);
-        screen->gd->TexPointer   (2, GraphicsDevice::Float, 4*sizeof(float), 2*sizeof(float), verts, sizeof(verts), &vind, false);
-    } else if (orientation == 2) {
-        static int vind = -1;
-        float verts[] = {
-            /*02*/ xmid,  top,  texMidX2, texMaxY,  /*01*/ left,  top,  texMaxX,  texMaxY,  /*03*/ xmid, ymid,    texMidX2, texMidY1, /*04*/ left, ymid,   texMaxX,  texMidY1,
-            /*06*/ right, top,  texMinX,  texMaxY,  /*05*/ xmid,  top,  texMidX1, texMaxY,  /*07*/ right, ymid,   texMinX,  texMidY1, /*08*/ xmid, ymid,   texMidX1, texMidY1,
-            /*10*/ right, ymid, texMinX,  texMidY2, /*09*/ xmid,  ymid, texMidX1, texMidY2, /*11*/ right, bottom, texMinX,  texMinY,  /*12*/ xmid, bottom, texMidX1, texMinY,
-            /*14*/ xmid,  ymid, texMidX2, texMidY2, /*13*/ left,  ymid, texMaxX,  texMidY2, /*15*/ xmid, bottom,  texMidX2, texMinY,  /*16*/ left, bottom, texMaxX,  texMinY 
-        };
-        screen->gd->VertexPointer(2, GraphicsDevice::Float, 4*sizeof(float), 0,               verts, sizeof(verts), &vind, true);
-        screen->gd->TexPointer   (2, GraphicsDevice::Float, 4*sizeof(float), 2*sizeof(float), verts, sizeof(verts), &vind, false);
-    } else if (orientation == 3) {
-        static int vind = -1;
-        float verts[] = {
-            /*02*/ xmid,  top,  texMidX2, texMinY,  /*01*/ left,  top,   texMaxX,  texMinY,  /*03*/ xmid, ymid,    texMidX2, texMidY2, /*04*/ left, ymid,   texMaxX,  texMidY2,
-            /*06*/ right, top,  texMinX,  texMinY,  /*05*/ xmid,  top,   texMidX1, texMinY,  /*07*/ right, ymid,   texMinX,  texMidY2, /*08*/ xmid, ymid,   texMidX1, texMidY2,
-            /*10*/ right, ymid, texMinX,  texMidY1, /*09*/ xmid,  ymid,  texMidX1, texMidY1, /*11*/ right, bottom, texMinX,  texMaxY,  /*12*/ xmid, bottom, texMidX1, texMaxY,
-            /*14*/ xmid,  ymid, texMidX2, texMidY1, /*13*/ left,  ymid,  texMaxX,  texMidY1, /*15*/ xmid, bottom,  texMidX2, texMaxY,  /*16*/ left, bottom, texMaxX,  texMaxY 
-        };
-        screen->gd->VertexPointer(2, GraphicsDevice::Float, 4*sizeof(float), 0,               verts, sizeof(verts), &vind, true);
-        screen->gd->TexPointer   (2, GraphicsDevice::Float, 4*sizeof(float), 2*sizeof(float), verts, sizeof(verts), &vind, false);
-    } else if (orientation == 4) {
-        static int vind = -1;
-        float verts[] = {
-            /*13*/ xmid,  top,  texMinX,  texMidY2, /*16*/ left,  top,  texMinX,  texMaxY,  /*14*/ xmid, ymid,    texMidX1, texMidY2, /*15*/ left, ymid,   texMidX1, texMaxY, 
-            /*01*/ right, top,  texMinX,  texMinY,  /*04*/ xmid,  top,  texMinX,  texMidY1, /*02*/ right, ymid,   texMidX1, texMinY,  /*03*/ xmid, ymid,   texMidX1, texMidY1,
-            /*05*/ right, ymid, texMidX2, texMinY,  /*08*/ xmid,  ymid, texMidX2, texMidY1, /*06*/ right, bottom, texMaxX,  texMinY,  /*07*/ xmid, bottom, texMaxX,  texMidY1,
-            /*09*/ xmid,  ymid, texMidX2, texMidY2, /*12*/ left,  ymid, texMidX2, texMaxY,  /*10*/ xmid, bottom,  texMaxX,  texMidY2, /*11*/ left, bottom, texMaxX,  texMaxY 
-        };
-        screen->gd->VertexPointer(2, GraphicsDevice::Float, 4*sizeof(float), 0,               verts, sizeof(verts), &vind, true);
-        screen->gd->TexPointer   (2, GraphicsDevice::Float, 4*sizeof(float), 2*sizeof(float), verts, sizeof(verts), &vind, false);
-    } else if (orientation == 5) {
-        static int vind = -1;
-        float verts[] = {
-            /*13*/ xmid,  top,  texMinX,  texMidY1, /*16*/ left,  top,  texMinX,  texMinY,  /*14*/ xmid, ymid,    texMidX1, texMidY1, /*15*/ left, ymid,   texMidX1, texMinY, 
-            /*01*/ right, top,  texMinX,  texMaxY,  /*04*/ xmid,  top,  texMinX,  texMidY2, /*02*/ right, ymid,   texMidX1, texMaxY,  /*03*/ xmid, ymid,   texMidX1, texMidY2,
-            /*05*/ right, ymid, texMidX2, texMaxY,  /*08*/ xmid,  ymid, texMidX2, texMidY2, /*06*/ right, bottom, texMaxX,  texMaxY,  /*07*/ xmid, bottom, texMaxX,  texMidY2,
-            /*09*/ xmid,  ymid, texMidX2, texMidY1, /*12*/ left,  ymid, texMidX2, texMinY,  /*10*/ xmid, bottom,  texMaxX,  texMidY1, /*11*/ left, bottom, texMaxX,  texMinY 
-        };
-        screen->gd->VertexPointer(2, GraphicsDevice::Float, 4*sizeof(float), 0,               verts, sizeof(verts), &vind, true);
-        screen->gd->TexPointer   (2, GraphicsDevice::Float, 4*sizeof(float), 2*sizeof(float), verts, sizeof(verts), &vind, false);
-    } else if (orientation == 6) {
-        static int vind = -1;
-        float verts[] = {
-            /*13*/ xmid,  top,  texMaxX,  texMidY2, /*16*/ left,  top,  texMaxX,  texMaxY,  /*14*/ xmid, ymid,    texMidX2, texMidY2, /*15*/ left, ymid,   texMidX2, texMaxY, 
-            /*01*/ right, top,  texMaxX,  texMinY,  /*04*/ xmid,  top,  texMaxX,  texMidY1, /*02*/ right, ymid,   texMidX2, texMinY,  /*03*/ xmid, ymid,   texMidX2, texMidY1,
-            /*05*/ right, ymid, texMidX1, texMinY,  /*08*/ xmid,  ymid, texMidX1, texMidY1, /*06*/ right, bottom, texMinX,  texMinY,  /*07*/ xmid, bottom, texMinX,  texMidY1,
-            /*09*/ xmid,  ymid, texMidX1, texMidY2, /*12*/ left,  ymid, texMidX1, texMaxY,  /*10*/ xmid, bottom,  texMinX,  texMidY2, /*11*/ left, bottom, texMinX,  texMaxY 
-        };
-        screen->gd->VertexPointer(2, GraphicsDevice::Float, 4*sizeof(float), 0,               verts, sizeof(verts), &vind, true);
-        screen->gd->TexPointer   (2, GraphicsDevice::Float, 4*sizeof(float), 2*sizeof(float), verts, sizeof(verts), &vind, false);
-    } else if (orientation == 7) {
-        static int vind = -1;
-        float verts[] = {
-            /*13*/ xmid,  top,  texMaxX,  texMidY1, /*16*/ left,  top,  texMaxX,  texMinY,  /*14*/ xmid, ymid,    texMidX2, texMidY1, /*15*/ left, ymid,   texMidX2, texMinY, 
-            /*01*/ right, top,  texMaxX,  texMaxY,  /*04*/ xmid,  top,  texMaxX,  texMidY2, /*02*/ right, ymid,   texMidX2, texMaxY,  /*03*/ xmid, ymid,   texMidX2, texMidY2,
-            /*05*/ right, ymid, texMidX1, texMaxY,  /*08*/ xmid,  ymid, texMidX1, texMidY2, /*06*/ right, bottom, texMinX,  texMaxY,  /*07*/ xmid, bottom, texMinX,  texMidY2,
-            /*09*/ xmid,  ymid, texMidX1, texMidY1, /*12*/ left,  ymid, texMidX1, texMinY,  /*10*/ xmid, bottom,  texMinX,  texMidY1, /*11*/ left, bottom, texMinX,  texMinY 
-        };
-        screen->gd->VertexPointer(2, GraphicsDevice::Float, 4*sizeof(float), 0,               verts, sizeof(verts), &vind, true);
-        screen->gd->TexPointer   (2, GraphicsDevice::Float, 4*sizeof(float), 2*sizeof(float), verts, sizeof(verts), &vind, false);
+    switch (orientation) {
+        case 0: {
+            static int vind = -1;
+            float xmid = x + w * scrollX, ymid = y + h * scrollY, verts[] = {
+                /*02*/ xmid,  top,  texMidX1, texMaxY,  /*01*/ left, top,  texMinX,  texMaxY,  /*03*/ xmid,  ymid,   texMidX1, texMidY1, /*04*/ left, ymid,   texMinX,  texMidY1,
+                /*06*/ right, top,  texMaxX,  texMaxY,  /*05*/ xmid, top,  texMidX2, texMaxY,  /*07*/ right, ymid,   texMaxX,  texMidY1, /*08*/ xmid, ymid,   texMidX2, texMidY1,
+                /*10*/ right, ymid, texMaxX,  texMidY2, /*09*/ xmid, ymid, texMidX2, texMidY2, /*11*/ right, bottom, texMaxX,  texMinY,  /*12*/ xmid, bottom, texMidX2, texMinY,
+                /*14*/ xmid,  ymid, texMidX1, texMidY2, /*13*/ left, ymid, texMinX,  texMidY2, /*15*/ xmid,  bottom, texMidX1, texMinY,  /*16*/ left, bottom, texMinX,  texMinY 
+            };
+            screen->gd->VertexPointer(2, GraphicsDevice::Float, 4*sizeof(float), 0,               verts, sizeof(verts), &vind, true);
+            screen->gd->TexPointer   (2, GraphicsDevice::Float, 4*sizeof(float), 2*sizeof(float), verts, sizeof(verts), &vind, false);
+        } break;
+        case 1: {
+            static int vind = -1;
+            float xmid = x + w * scrollX, ymid = y + h * (1-scrollY), verts[] = {
+                /*02*/ xmid,  top,  texMidX1, texMinY,  /*01*/ left,  top,  texMinX,  texMinY,  /*03*/ xmid, ymid,    texMidX1, texMidY2, /*04*/ left, ymid,   texMinX,  texMidY2,
+                /*06*/ right, top,  texMaxX,  texMinY,  /*05*/ xmid,  top,  texMidX2, texMinY,  /*07*/ right, ymid,   texMaxX,  texMidY2, /*08*/ xmid, ymid,   texMidX2, texMidY2,
+                /*10*/ right, ymid, texMaxX,  texMidY1, /*09*/ xmid,  ymid, texMidX2, texMidY1, /*11*/ right, bottom, texMaxX,  texMaxY,  /*12*/ xmid, bottom, texMidX2, texMaxY,
+                /*14*/ xmid,  ymid, texMidX1, texMidY1, /*13*/ left,  ymid, texMinX,  texMidY1, /*15*/ xmid, bottom,  texMidX1, texMaxY,  /*16*/ left, bottom, texMinX,  texMaxY 
+            };
+            screen->gd->VertexPointer(2, GraphicsDevice::Float, 4*sizeof(float), 0,               verts, sizeof(verts), &vind, true);
+            screen->gd->TexPointer   (2, GraphicsDevice::Float, 4*sizeof(float), 2*sizeof(float), verts, sizeof(verts), &vind, false);
+        } break;
+        case 2: {
+            static int vind = -1;
+            float xmid = x + w * (1-scrollX), ymid = y + h * scrollY, verts[] = {
+                /*02*/ xmid,  top,  texMidX2, texMaxY,  /*01*/ left,  top,  texMaxX,  texMaxY,  /*03*/ xmid, ymid,    texMidX2, texMidY1, /*04*/ left, ymid,   texMaxX,  texMidY1,
+                /*06*/ right, top,  texMinX,  texMaxY,  /*05*/ xmid,  top,  texMidX1, texMaxY,  /*07*/ right, ymid,   texMinX,  texMidY1, /*08*/ xmid, ymid,   texMidX1, texMidY1,
+                /*10*/ right, ymid, texMinX,  texMidY2, /*09*/ xmid,  ymid, texMidX1, texMidY2, /*11*/ right, bottom, texMinX,  texMinY,  /*12*/ xmid, bottom, texMidX1, texMinY,
+                /*14*/ xmid,  ymid, texMidX2, texMidY2, /*13*/ left,  ymid, texMaxX,  texMidY2, /*15*/ xmid, bottom,  texMidX2, texMinY,  /*16*/ left, bottom, texMaxX,  texMinY 
+            };
+            screen->gd->VertexPointer(2, GraphicsDevice::Float, 4*sizeof(float), 0,               verts, sizeof(verts), &vind, true);
+            screen->gd->TexPointer   (2, GraphicsDevice::Float, 4*sizeof(float), 2*sizeof(float), verts, sizeof(verts), &vind, false);
+        } break;
+        case 3: {
+            static int vind = -1;
+            float xmid = x + w * (1-scrollX), ymid = y + h * (1-scrollY), verts[] = {
+                /*02*/ xmid,  top,  texMidX2, texMinY,  /*01*/ left,  top,   texMaxX,  texMinY,  /*03*/ xmid, ymid,    texMidX2, texMidY2, /*04*/ left, ymid,   texMaxX,  texMidY2,
+                /*06*/ right, top,  texMinX,  texMinY,  /*05*/ xmid,  top,   texMidX1, texMinY,  /*07*/ right, ymid,   texMinX,  texMidY2, /*08*/ xmid, ymid,   texMidX1, texMidY2,
+                /*10*/ right, ymid, texMinX,  texMidY1, /*09*/ xmid,  ymid,  texMidX1, texMidY1, /*11*/ right, bottom, texMinX,  texMaxY,  /*12*/ xmid, bottom, texMidX1, texMaxY,
+                /*14*/ xmid,  ymid, texMidX2, texMidY1, /*13*/ left,  ymid,  texMaxX,  texMidY1, /*15*/ xmid, bottom,  texMidX2, texMaxY,  /*16*/ left, bottom, texMaxX,  texMaxY 
+            };
+            screen->gd->VertexPointer(2, GraphicsDevice::Float, 4*sizeof(float), 0,               verts, sizeof(verts), &vind, true);
+            screen->gd->TexPointer   (2, GraphicsDevice::Float, 4*sizeof(float), 2*sizeof(float), verts, sizeof(verts), &vind, false);
+        } break;
+        case 4: {
+            static int vind = -1;
+            float xmid = x + w * (1-scrollY), ymid = y + h * scrollX, verts[] = {
+                /*13*/ xmid,  top,  texMinX,  texMidY2, /*16*/ left,  top,  texMinX,  texMaxY,  /*14*/ xmid, ymid,    texMidX1, texMidY2, /*15*/ left, ymid,   texMidX1, texMaxY, 
+                /*01*/ right, top,  texMinX,  texMinY,  /*04*/ xmid,  top,  texMinX,  texMidY1, /*02*/ right, ymid,   texMidX1, texMinY,  /*03*/ xmid, ymid,   texMidX1, texMidY1,
+                /*05*/ right, ymid, texMidX2, texMinY,  /*08*/ xmid,  ymid, texMidX2, texMidY1, /*06*/ right, bottom, texMaxX,  texMinY,  /*07*/ xmid, bottom, texMaxX,  texMidY1,
+                /*09*/ xmid,  ymid, texMidX2, texMidY2, /*12*/ left,  ymid, texMidX2, texMaxY,  /*10*/ xmid, bottom,  texMaxX,  texMidY2, /*11*/ left, bottom, texMaxX,  texMaxY 
+            };
+            screen->gd->VertexPointer(2, GraphicsDevice::Float, 4*sizeof(float), 0,               verts, sizeof(verts), &vind, true);
+            screen->gd->TexPointer   (2, GraphicsDevice::Float, 4*sizeof(float), 2*sizeof(float), verts, sizeof(verts), &vind, false);
+        } break;
+        case 5: {
+            static int vind = -1;
+            float xmid = x + w * scrollY, ymid = y + h * scrollX, verts[] = {
+                /*13*/ xmid,  top,  texMinX,  texMidY1, /*16*/ left,  top,  texMinX,  texMinY,  /*14*/ xmid, ymid,    texMidX1, texMidY1, /*15*/ left, ymid,   texMidX1, texMinY, 
+                /*01*/ right, top,  texMinX,  texMaxY,  /*04*/ xmid,  top,  texMinX,  texMidY2, /*02*/ right, ymid,   texMidX1, texMaxY,  /*03*/ xmid, ymid,   texMidX1, texMidY2,
+                /*05*/ right, ymid, texMidX2, texMaxY,  /*08*/ xmid,  ymid, texMidX2, texMidY2, /*06*/ right, bottom, texMaxX,  texMaxY,  /*07*/ xmid, bottom, texMaxX,  texMidY2,
+                /*09*/ xmid,  ymid, texMidX2, texMidY1, /*12*/ left,  ymid, texMidX2, texMinY,  /*10*/ xmid, bottom,  texMaxX,  texMidY1, /*11*/ left, bottom, texMaxX,  texMinY 
+            };
+            screen->gd->VertexPointer(2, GraphicsDevice::Float, 4*sizeof(float), 0,               verts, sizeof(verts), &vind, true);
+            screen->gd->TexPointer   (2, GraphicsDevice::Float, 4*sizeof(float), 2*sizeof(float), verts, sizeof(verts), &vind, false);
+        } break;
+        case 6: {
+            static int vind = -1;
+            float xmid = x + w * (1-scrollY), ymid = y + h * (1-scrollX), verts[] = {
+                /*13*/ xmid,  top,  texMaxX,  texMidY2, /*16*/ left,  top,  texMaxX,  texMaxY,  /*14*/ xmid, ymid,    texMidX2, texMidY2, /*15*/ left, ymid,   texMidX2, texMaxY, 
+                /*01*/ right, top,  texMaxX,  texMinY,  /*04*/ xmid,  top,  texMaxX,  texMidY1, /*02*/ right, ymid,   texMidX2, texMinY,  /*03*/ xmid, ymid,   texMidX2, texMidY1,
+                /*05*/ right, ymid, texMidX1, texMinY,  /*08*/ xmid,  ymid, texMidX1, texMidY1, /*06*/ right, bottom, texMinX,  texMinY,  /*07*/ xmid, bottom, texMinX,  texMidY1,
+                /*09*/ xmid,  ymid, texMidX1, texMidY2, /*12*/ left,  ymid, texMidX1, texMaxY,  /*10*/ xmid, bottom,  texMinX,  texMidY2, /*11*/ left, bottom, texMinX,  texMaxY 
+            };
+            screen->gd->VertexPointer(2, GraphicsDevice::Float, 4*sizeof(float), 0,               verts, sizeof(verts), &vind, true);
+            screen->gd->TexPointer   (2, GraphicsDevice::Float, 4*sizeof(float), 2*sizeof(float), verts, sizeof(verts), &vind, false);
+        } break;
+        case 7: {
+            static int vind = -1;
+            float xmid = x + w * scrollY, ymid = y + h * (1-scrollX), verts[] = {
+                /*13*/ xmid,  top,  texMaxX,  texMidY1, /*16*/ left,  top,  texMaxX,  texMinY,  /*14*/ xmid, ymid,    texMidX2, texMidY1, /*15*/ left, ymid,   texMidX2, texMinY, 
+                /*01*/ right, top,  texMaxX,  texMaxY,  /*04*/ xmid,  top,  texMaxX,  texMidY2, /*02*/ right, ymid,   texMidX2, texMaxY,  /*03*/ xmid, ymid,   texMidX2, texMidY2,
+                /*05*/ right, ymid, texMidX1, texMaxY,  /*08*/ xmid,  ymid, texMidX1, texMidY2, /*06*/ right, bottom, texMinX,  texMaxY,  /*07*/ xmid, bottom, texMinX,  texMidY2,
+                /*09*/ xmid,  ymid, texMidX1, texMidY1, /*12*/ left,  ymid, texMidX1, texMinY,  /*10*/ xmid, bottom,  texMinX,  texMidY1, /*11*/ left, bottom, texMinX,  texMinY 
+            };
+            screen->gd->VertexPointer(2, GraphicsDevice::Float, 4*sizeof(float), 0,               verts, sizeof(verts), &vind, true);
+            screen->gd->TexPointer   (2, GraphicsDevice::Float, 4*sizeof(float), 2*sizeof(float), verts, sizeof(verts), &vind, false);
+        } break;
     }
 
     screen->gd->DrawArrays(GraphicsDevice::TriangleStrip, 0, 4);
@@ -1598,35 +1602,39 @@ void FFMPEGVideoResampler::Resample(const unsigned char *s, int sls, unsigned ch
 }
 
 int Pixel::FromFFMpegId(int fmt) {
-    if      (fmt == AV_PIX_FMT_RGB32) return Pixel::RGB32;
-    else if (fmt == AV_PIX_FMT_BGR32) return Pixel::BGR32;
-    else if (fmt == AV_PIX_FMT_RGB24) return Pixel::RGB24;
-    else if (fmt == AV_PIX_FMT_BGR24) return Pixel::BGR24;
-    else if (fmt == AV_PIX_FMT_RGBA)  return Pixel::RGBA;
-    else if (fmt == AV_PIX_FMT_GRAY8) return Pixel::GRAY8;
-    else if (fmt == AV_PIX_FMT_YUV410P) return Pixel::YUV410P;
-    else if (fmt == AV_PIX_FMT_YUV420P) return Pixel::YUV420P;
-    else if (fmt == AV_PIX_FMT_YUYV422) return Pixel::YUYV422;
-    else if (fmt == AV_PIX_FMT_YUVJ420P) return Pixel::YUVJ420P;
-    else if (fmt == AV_PIX_FMT_YUVJ422P) return Pixel::YUVJ422P;
-    else if (fmt == AV_PIX_FMT_YUVJ444P) return Pixel::YUVJ444P;
-    else { ERROR("unknown pixel fmt: ", fmt); return 0; }
+    switch (fmt) {
+        case AV_PIX_FMT_RGB32:    return Pixel::RGB32;
+        case AV_PIX_FMT_BGR32:    return Pixel::BGR32;
+        case AV_PIX_FMT_RGB24:    return Pixel::RGB24;
+        case AV_PIX_FMT_BGR24:    return Pixel::BGR24;
+        case AV_PIX_FMT_RGBA:     return Pixel::RGBA;
+        case AV_PIX_FMT_GRAY8:    return Pixel::GRAY8;
+        case AV_PIX_FMT_YUV410P:  return Pixel::YUV410P;
+        case AV_PIX_FMT_YUV420P:  return Pixel::YUV420P;
+        case AV_PIX_FMT_YUYV422:  return Pixel::YUYV422;
+        case AV_PIX_FMT_YUVJ420P: return Pixel::YUVJ420P;
+        case AV_PIX_FMT_YUVJ422P: return Pixel::YUVJ422P;
+        case AV_PIX_FMT_YUVJ444P: return Pixel::YUVJ444P;
+        default: ERROR("unknown pixel fmt: ", fmt); return 0;
+    }
 }
 
 int Pixel::ToFFMpegId(int fmt) {
-    if      (fmt == Pixel::RGB32) return AV_PIX_FMT_RGB32;
-    else if (fmt == Pixel::BGR32) return AV_PIX_FMT_BGR32;
-    else if (fmt == Pixel::RGB24) return AV_PIX_FMT_RGB24;
-    else if (fmt == Pixel::BGR24) return AV_PIX_FMT_BGR24;
-    else if (fmt == Pixel::RGBA)  return AV_PIX_FMT_RGBA;
-    else if (fmt == Pixel::GRAY8) return AV_PIX_FMT_GRAY8;
-    else if (fmt == Pixel::YUV410P) return AV_PIX_FMT_YUV410P;
-    else if (fmt == Pixel::YUV420P) return AV_PIX_FMT_YUV420P;
-    else if (fmt == Pixel::YUYV422) return AV_PIX_FMT_YUYV422;
-    else if (fmt == Pixel::YUVJ420P) return AV_PIX_FMT_YUVJ420P;
-    else if (fmt == Pixel::YUVJ422P) return AV_PIX_FMT_YUVJ422P;
-    else if (fmt == Pixel::YUVJ444P) return AV_PIX_FMT_YUVJ444P;
-    else { ERROR("unknown pixel fmt: ", fmt); return 0; }
+    switch (fmt) {
+        case Pixel::RGB32:    return AV_PIX_FMT_RGB32;
+        case Pixel::BGR32:    return AV_PIX_FMT_BGR32;
+        case Pixel::RGB24:    return AV_PIX_FMT_RGB24;
+        case Pixel::BGR24:    return AV_PIX_FMT_BGR24;
+        case Pixel::RGBA:     return AV_PIX_FMT_RGBA;
+        case Pixel::GRAY8:    return AV_PIX_FMT_GRAY8;
+        case Pixel::YUV410P:  return AV_PIX_FMT_YUV410P;
+        case Pixel::YUV420P:  return AV_PIX_FMT_YUV420P;
+        case Pixel::YUYV422:  return AV_PIX_FMT_YUYV422;
+        case Pixel::YUVJ420P: return AV_PIX_FMT_YUVJ420P;
+        case Pixel::YUVJ422P: return AV_PIX_FMT_YUVJ422P;
+        case Pixel::YUVJ444P: return AV_PIX_FMT_YUVJ444P;
+        default: ERROR("unknown pixel fmt: ", fmt); return 0;
+    }
 }
 #endif /* LFL_FFMPEG */
 

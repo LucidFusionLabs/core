@@ -25,9 +25,9 @@ DECLARE_float(ksens);
 DECLARE_float(msens);
 
 struct Key {
-    static int Escape, Return, Up, Down, Left, Right, LeftShift, RightShift, LeftCtrl, RightCtrl, LeftCmd, RightCmd;
-    static int Tab, Space, Backspace, Delete, Quote, Backquote, PageUp, PageDown, Home, End;
-    static int F1, F2, F3, F4, F5, F6, F7, F8, F9, F10, F11, F12;
+    static const int Escape, Return, Up, Down, Left, Right, LeftShift, RightShift, LeftCtrl, RightCtrl, LeftCmd, RightCmd;
+    static const int Tab, Space, Backspace, Delete, Quote, Backquote, PageUp, PageDown, Home, End;
+    static const int F1, F2, F3, F4, F5, F6, F7, F8, F9, F10, F11, F12;
     struct Modifier { enum { Ctrl=1, Cmd=2 }; };
 };
 

@@ -82,41 +82,47 @@ DEFINE_int(feat_melbands, 40, "Mel bands used to create MFCC features");
 DEFINE_int(feat_cepcoefs, 20, "Number of cepstrum coefficients");
 
 int Sample::Size(int fmt) {
-    if      (fmt == Sample::U8     || fmt == Sample::U8P)     return 1;
-    else if (fmt == Sample::S16    || fmt == Sample::S16P)    return 2;
-    else if (fmt == Sample::S32    || fmt == Sample::S32P)    return 4;
-    else if (fmt == Sample::FLOAT  || fmt == Sample::FLOATP)  return 4;
-    else if (fmt == Sample::DOUBLE || fmt == Sample::DOUBLEP) return 8;
-    else { ERROR("unknown sample fmt: ", fmt); return 0; }
+    switch (fmt) {
+        case Sample::U8:     case Sample::U8P:     return 1;
+        case Sample::S16:    case Sample::S16P:    return 2;
+        case Sample::S32:    case Sample::S32P:    return 4;
+        case Sample::FLOAT:  case Sample::FLOATP:  return 4;
+        case Sample::DOUBLE: case Sample::DOUBLEP: return 8;
+        default: ERROR("unknown sample fmt: ", fmt); return 0;
+    }
 }
 
 #ifdef LFL_FFMPEG
 int Sample::FromFFMpegId(int fmt) {
-    if      (fmt == AV_SAMPLE_FMT_U8)   return Sample::U8;
-    else if (fmt == AV_SAMPLE_FMT_U8P)  return Sample::U8P;
-    else if (fmt == AV_SAMPLE_FMT_S16)  return Sample::S16;
-    else if (fmt == AV_SAMPLE_FMT_S16P) return Sample::S16P;
-    else if (fmt == AV_SAMPLE_FMT_S32)  return Sample::S32;
-    else if (fmt == AV_SAMPLE_FMT_S32P) return Sample::S32P;
-    else if (fmt == AV_SAMPLE_FMT_FLT)  return Sample::FLOAT;
-    else if (fmt == AV_SAMPLE_FMT_FLTP) return Sample::FLOATP;
-    else if (fmt == AV_SAMPLE_FMT_DBL)  return Sample::DOUBLE;
-    else if (fmt == AV_SAMPLE_FMT_DBLP) return Sample::DOUBLEP;
-    else { ERROR("unknown sample fmt: ", fmt); return 0; }
+    switch(fmt) {
+        case AV_SAMPLE_FMT_U8:   return Sample::U8;
+        case AV_SAMPLE_FMT_U8P:  return Sample::U8P;
+        case AV_SAMPLE_FMT_S16:  return Sample::S16;
+        case AV_SAMPLE_FMT_S16P: return Sample::S16P;
+        case AV_SAMPLE_FMT_S32:  return Sample::S32;
+        case AV_SAMPLE_FMT_S32P: return Sample::S32P;
+        case AV_SAMPLE_FMT_FLT:  return Sample::FLOAT;
+        case AV_SAMPLE_FMT_FLTP: return Sample::FLOATP;
+        case AV_SAMPLE_FMT_DBL:  return Sample::DOUBLE;
+        case AV_SAMPLE_FMT_DBLP: return Sample::DOUBLEP;
+        default: ERROR("unknown sample fmt: ", fmt); return 0;
+    }
 }
 
 int Sample::ToFFMpegId(int fmt) {
-    if      (fmt == Sample::U8)      return AV_SAMPLE_FMT_U8;
-    else if (fmt == Sample::U8P)     return AV_SAMPLE_FMT_U8P;
-    else if (fmt == Sample::S16)     return AV_SAMPLE_FMT_S16;
-    else if (fmt == Sample::S16P)    return AV_SAMPLE_FMT_S16P;
-    else if (fmt == Sample::S32)     return AV_SAMPLE_FMT_S32;
-    else if (fmt == Sample::S32P)    return AV_SAMPLE_FMT_S32P;
-    else if (fmt == Sample::FLOAT)   return AV_SAMPLE_FMT_FLT;
-    else if (fmt == Sample::FLOATP)  return AV_SAMPLE_FMT_FLTP;
-    else if (fmt == Sample::DOUBLE)  return AV_SAMPLE_FMT_DBL;
-    else if (fmt == Sample::DOUBLEP) return AV_SAMPLE_FMT_DBLP;
-    else { ERROR("unknown sample fmt: ", fmt); return 0; }
+    switch(fmt) {
+        case Sample::U8:      return AV_SAMPLE_FMT_U8;
+        case Sample::U8P:     return AV_SAMPLE_FMT_U8P;
+        case Sample::S16:     return AV_SAMPLE_FMT_S16;
+        case Sample::S16P:    return AV_SAMPLE_FMT_S16P;
+        case Sample::S32:     return AV_SAMPLE_FMT_S32;
+        case Sample::S32P:    return AV_SAMPLE_FMT_S32P;
+        case Sample::FLOAT:   return AV_SAMPLE_FMT_FLT;
+        case Sample::FLOATP:  return AV_SAMPLE_FMT_FLTP;
+        case Sample::DOUBLE:  return AV_SAMPLE_FMT_DBL;
+        case Sample::DOUBLEP: return AV_SAMPLE_FMT_DBLP;
+        default: ERROR("unknown sample fmt: ", fmt); return 0;
+    }
 }
 #endif
 

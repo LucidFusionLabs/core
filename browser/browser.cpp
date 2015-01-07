@@ -100,7 +100,9 @@ struct MyBrowserWindow : public GUI {
     void Draw() {
         box = screen->Box();
         GUI::Draw();
-        screen->gd->SetColor(Color::white);
+        screen->gd->FillColor(Color::white);
+        topbar.Draw();
+        screen->gd->EnableLayering();
         if (!address_box.active) {
             string url = screen->browser_window->GetURL();
             if (url != address_box.Text()) address_box.cmd_line.AssignText(url);

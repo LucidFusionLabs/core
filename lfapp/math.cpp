@@ -46,8 +46,6 @@ int RoundF(float f, bool round_point_five_up) {
     else                     return (int)((f - (int)f) >  0.5 ? f+1 : f); 
 }
 
-int OpaqueIntPtrSort(const void *a, const void *b) { return *(int *)a - *(int *)b; }
-
 int DimCheck(const char *alg, int d1, int d2) {
     if (d1 != d2) { ERROR(alg, ".dim ", d1, " != ", d2); return 0; }
     return 1;
@@ -66,15 +64,14 @@ int NextMultipleOfN(int input, int N) { return (input % N) ? (input/N+1)*N : inp
 int PrevMultipleOfN(int input, int N) { return (input % N) ? (input/N  )*N : input; }
 
 int WhichLog2(int n) {
-    bool power_of_two = (n & (n-1)) == 0;
-    if (!n || !power_of_two) return -1;
-
-    static int wl2_pwr[] = { 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536 };
-    static int wl2_exp[] = { 0, 1, 2, 3, 4,  5,  6,  7,   8,   9,   10,   11,   12,   13,   14,    15,    16    };
-
-    int *which = (int*)bsearch(&n, wl2_pwr, sizeof(wl2_pwr)/sizeof(int), sizeof(int), OpaqueIntPtrSort);
-    if (!which) return -1;
-    return wl2_exp[which - wl2_pwr];
+    switch (n) {
+        case 1:  return 0;    case 64:   return 6;     case 4096:  return 12;
+        case 2:  return 1;    case 128:  return 7;     case 8192:  return 13;
+        case 4:  return 2;    case 256:  return 8;     case 16384: return 14;
+        case 8:  return 3;    case 512:  return 9;     case 32768: return 15;
+        case 16: return 4;    case 1024: return 10;    case 65536: return 16;
+        case 32: return 5;    case 2048: return 11;
+    } return -1;
 }
 
 int FloorLog2(int n) {

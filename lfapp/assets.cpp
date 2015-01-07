@@ -55,20 +55,24 @@ const int SoundAsset::FromBufPad = 0;
 
 #ifdef LFL_PNG
 int Pixel::FromPngId(int fmt) {
-    if      (fmt == PNG_COLOR_TYPE_RGB)        return Pixel::RGB24;
-    else if (fmt == PNG_COLOR_TYPE_RGBA)       return Pixel::RGBA;
-    else if (fmt == PNG_COLOR_TYPE_GRAY)       return Pixel::GRAY8;
-    else if (fmt == PNG_COLOR_TYPE_GRAY_ALPHA) return Pixel::GRAYA8;
-    else if (fmt == PNG_COLOR_TYPE_PALETTE) { ERROR("not supported: ", fmt); return 0; } 
-    else { ERROR("unknown pixel fmt: ", fmt); return 0; }
+    switch (fmt) {
+        case PNG_COLOR_TYPE_RGB:        return Pixel::RGB24;
+        case PNG_COLOR_TYPE_RGBA:       return Pixel::RGBA;
+        case PNG_COLOR_TYPE_GRAY:       return Pixel::GRAY8;
+        case PNG_COLOR_TYPE_GRAY_ALPHA: return Pixel::GRAYA8;
+        case PNG_COLOR_TYPE_PALETTE:    ERROR("not supported: ",     fmt); return 0;
+        default:                        ERROR("unknown pixel fmt: ", fmt); return 0;
+    }
 }
 
 int Pixel::ToPngId(int fmt) {
-    if      (fmt == Pixel::RGB24)  return PNG_COLOR_TYPE_RGB; 
-    else if (fmt == Pixel::RGBA)   return PNG_COLOR_TYPE_RGBA;
-    if      (fmt == Pixel::GRAY8)  return PNG_COLOR_TYPE_GRAY; 
-    else if (fmt == Pixel::GRAYA8) return PNG_COLOR_TYPE_GRAY_ALPHA;
-    else { ERROR("unknown pixel fmt: ", fmt); return 0; }
+    switch (fmt) {
+        case Pixel::RGB24:  return PNG_COLOR_TYPE_RGB; 
+        case Pixel::RGBA:   return PNG_COLOR_TYPE_RGBA;
+        case Pixel::GRAY8:  return PNG_COLOR_TYPE_GRAY; 
+        case Pixel::GRAYA8: return PNG_COLOR_TYPE_GRAY_ALPHA;
+        default:            ERROR("unknown pixel fmt: ", fmt); return 0;
+    }
 }
 
 static void PngRead (png_structp png_ptr, png_bytep data, png_size_t length) { ((File*)png_get_io_ptr(png_ptr))->Read (data, length); }

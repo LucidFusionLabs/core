@@ -686,7 +686,8 @@ struct Console : public TextArea {
     Color color=Color(25,60,130,120);
     int animTime=333; Time animBegin=0;
     bool animating=0, drawing=0, bottom_or_top=0, blend=1, ran_startcmd=0;
-    Console(Window *W, Font *F) : TextArea(W,F) { write_timestamp=1; SetToggleKey(Key::Backquote); }
+    Console(Window *W, Font *F) : TextArea(W,F)
+    { line_fb.wrap=write_timestamp=1; SetToggleKey(Key::Backquote); }
 
     virtual ~Console() {}
     virtual int CommandLines() const { return cmd_line.Lines(); }
