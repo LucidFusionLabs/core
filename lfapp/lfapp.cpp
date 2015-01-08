@@ -148,11 +148,18 @@ string Flag::ToString() const { string v=Get(); return StrCat(name, v.size()?" =
 extern "C" void NotImplemented() { FATAL("not implemented"); }
 extern "C" void ShellRun(const char *text) { return app->shell.Run(text); }
 extern "C" NativeWindow *GetNativeWindow() { return screen; }
-void DefaultLFAppWindowClosedCB() { delete screen; }
+extern "C" int LFAppMain()                 { return app->Main(); }
+extern "C" int LFAppFrame()                { return app->Frame(); }
+extern "C" void Reshaped(int w, int h)     { screen->Reshaped(w, h); }
+extern "C" void Minimized()                { screen->Minimized(); }
+extern "C" void UnMinimized()              { screen->UnMinimized(); }
+extern "C" void KeyPress  (int b, int d, int,   int  ) { app->input.KeyPress  (b, d, 0, 0); }
+extern "C" void MouseClick(int b, int d, int x, int y) { app->input.MouseClick(b, d, x, y); }
 
 bool Running() { return app->run; }
 bool MainThread() { return Thread::Id() == app->main_thread_id; }
 void RunInMainThread(Callback *cb) { app->message_queue.Write(ThreadPool::message_queue_callback, cb); }
+void DefaultLFAppWindowClosedCB() { delete screen; }
 double FPS() { return screen->fps.FPS(); }
 double CamFPS() { return app->camera.fps.FPS(); }
 void BreakHook() { INFO("break hook"); }
@@ -2131,14 +2138,14 @@ int Application::Init() {
 }
 
 int Application::Start() {
-    if (audio.Start()) return -1;
+    if (FLAGS_lfapp_audio && audio.Start()) return -1;
     return 0;
 }
 
 int Application::PreFrame(unsigned clicks, unsigned *mic_samples, bool *camera_sample) {
     pre_frames_ran++;
 
-    if (run && FLAGS_lfapp_audio) {
+    if (FLAGS_lfapp_audio && run) {
         { 
             ScopedMutex(audio.inlock);				
             /* frame align stream handles */
@@ -2162,7 +2169,7 @@ int Application::PreFrame(unsigned clicks, unsigned *mic_samples, bool *camera_s
         if (mic_samples) *mic_samples = 0;
     }
 
-    if (run && FLAGS_lfapp_camera) {
+    if (FLAGS_lfapp_camera && run) {
         static int clicks_since_last = 0;
         clicks_since_last += clicks;
 
@@ -2174,7 +2181,7 @@ int Application::PreFrame(unsigned clicks, unsigned *mic_samples, bool *camera_s
         if (camera_sample) *camera_sample = 0;
     }
 
-    if (run && FLAGS_lfapp_input) {
+    if (FLAGS_lfapp_input && run) {
         int ret = input.Frame(clicks);
         if (ret < 0) { /**/ }
     }
@@ -2185,7 +2192,7 @@ int Application::PreFrame(unsigned clicks, unsigned *mic_samples, bool *camera_s
     // fake threadpool that executes in main thread
     if (run && !FLAGS_lfapp_multithreaded) ThreadPool::HandleMessages(thread_pool.queue[0]);
 
-    if (run && FLAGS_lfapp_network) {
+    if (FLAGS_lfapp_network && run) {
         network.Frame();
     }
     return 0;
@@ -2239,7 +2246,7 @@ int Application::Frame() {
     Window *previous_screen = screen;
     for (auto i = Window::active.begin(); run && i != Window::active.end(); ++i) {
         if (i->second->minimized) continue;
-        Window::MakeCurrent(i->second);
+        if (screen != i->second) Window::MakeCurrent(i->second);
 
         if (FLAGS_lfapp_input) {
             if (screen->gesture_swipe_up)   { if (screen->console && screen->console->active) screen->console->PageUp();   }

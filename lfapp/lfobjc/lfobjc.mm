@@ -19,7 +19,7 @@
 #include <stdio.h>
 #include <Foundation/NSThread.h>
 
-static int DoNothing(void *) { return 0; }
+#include "../lfexport.h"
 
 @interface MyThread : NSObject {}
 @property int (*CB)(void*);
@@ -37,6 +37,11 @@ void NativeThreadStart(int (*CB)(void *), void *arg) {
 }
 
 #ifndef LFL_IPHONE
+#import <AppKit/NSFont.h>
+#import <AppKit/NSFontManager.h>
+
+static int DoNothing(void *) { return 0; }
+
 extern "C" void NativeWindowInit() {
 #if 0
     NativeThreadStart(DoNothing, 0);
@@ -48,9 +53,7 @@ extern "C" void NativeWindowQuit() {}
 extern "C" void NativeWindowSize(int *widthOut, int *heightOut) {}
 extern "C" int NativeWindowOrientation() { return 1; }
 
-#import <AppKit/NSFont.h>
-#import <AppKit/NSFontManager.h>
-int NSFMreadfonts(void *FontsIter, void (*FontsIterAdd)(void *fi, const char *name, const char *family, int flag)) {
+extern "C" int OSXReadFonts(void *FontsIter, void (*FontsIterAdd)(void *fi, const char *name, const char *family, int flag)) {
     NSFontManager *nsFontManager = [NSFontManager sharedFontManager];
     [nsFontManager retain];
 
@@ -64,9 +67,125 @@ int NSFMreadfonts(void *FontsIter, void (*FontsIterAdd)(void *fi, const char *na
     [nsFontManager release];
     return 0;
 }
+#endif // LFL_IPHONE
 
-#else // LFL_IPHONE
+#ifdef LFL_OSXVIDEO
+#import <Cocoa/Cocoa.h>
+#import <OpenGL/gl.h>
 
+extern "C" int OSXMain(int argc, const char **argv);
+
+static int osx_argc = 0, osx_evcount = 0;
+static const char **osx_argv = 0;
+
+// GameView
+@interface GameView : NSOpenGLView<NSWindowDelegate>
+@end
+
+@implementation GameView
+    static NSTimer *timer = nil;
+    - (void)prepareOpenGL {
+        // XXX init_gl();
+
+        // this sets swap interval for double buffering
+        GLint swapInt = 1;
+        [[self openGLContext] setValues:&swapInt forParameter:NSOpenGLCPSwapInterval];
+        
+        // this enables alpha in the frame buffer (commented now)
+        // GLint opaque = 0;
+        // [[self openGLContext] setValues:&opaque forParameter:NSOpenGLCPSurfaceOpacity];
+    }
+    - (void)drawRect:(NSRect)dirtyRect {
+        glClear(GL_COLOR_BUFFER_BIT);    
+        glLoadIdentity();
+
+        // XXX draw_screen();
+        
+        // glFlush();
+        // the correct way to do double buffering on Mac is this:
+        [[self openGLContext] flushBuffer];
+        
+        int err;
+        if ((err = glGetError()) != 0) NSLog(@"glGetError(): %d", err); 
+    }
+    - (void)reshape {
+        float screen_w = [self frame].size.width, screen_h = [self frame].size.height;
+        Reshaped((int)screen_w, (int)screen_h);
+    }
+    - (BOOL)acceptsFirstResponder { return YES; }
+    - (void)keyDown:(NSEvent *)theEvent {
+        if ([theEvent isARepeat]) return;
+        NSString *str = [theEvent charactersIgnoringModifiers];
+        unichar c = [str characterAtIndex:0];
+        if (c < ' ' || c > '~') c = 0;    // only ASCII please
+        KeyPress(c, 1, 0, 0);
+    }
+    - (void)keyUp:(NSEvent *)theEvent {
+        NSString *str = [theEvent charactersIgnoringModifiers];
+        unichar c = [str characterAtIndex:0];
+        if (c < ' ' || c > '~') c = 0;    // only ASCII please
+        KeyPress(c, 0, 0, 0);
+    }
+    - (void)windowDidResignMain:(NSNotification *)notification {
+        [timer invalidate];
+        Minimized();
+        [self setNeedsDisplay:YES];
+    }
+    - (void)windowDidBecomeMain:(NSNotification *)notification {
+        UnMinimized();
+        [self setNeedsDisplay:YES];
+
+        float FRAME_INTERVAL = 1.0/60.0 ;
+        timer = [NSTimer timerWithTimeInterval:FRAME_INTERVAL 
+                   target:self 
+                   selector:@selector(timerEvent:) 
+                   userInfo:nil 
+                   repeats:YES];
+        
+        [[NSRunLoop mainRunLoop] addTimer:timer forMode:NSDefaultRunLoopMode];
+    }
+    - (void)timerEvent:(NSTimer *)t {
+        LFAppFrame();
+        [self setNeedsDisplay:YES];
+    }
+@end
+
+// ViewController
+@interface ViewController : NSViewController
+@end
+
+@implementation ViewController
+    - (void)viewDidLoad { [super viewDidLoad]; }
+    - (void)setRepresentedObject:(id)representedObject { [super setRepresentedObject:representedObject]; }
+@end
+
+// AppDelegate
+@interface AppDelegate : NSObject <NSApplicationDelegate>
+@end
+
+@implementation AppDelegate
+    - (void)applicationWillTerminate:(NSNotification *)aNotification {}
+    - (void)applicationDidFinishLaunching:(NSNotification *)aNotification {
+        // [[NSFileManager defaultManager] changeCurrentDirectoryPath: [[NSBundle mainBundle] resourcePath]];
+        OSXMain(osx_argc, osx_argv);
+        [self performSelector:@selector(postFinishLaunch) withObject:nil afterDelay:0.0];
+    }
+    - (void)postFinishLaunch { LFAppMain(); }
+@end
+
+id app_delegate = nil;
+extern "C" int main(int argc, const char **argv) {
+	osx_argc = argc; osx_argv = argv;
+    NSAutoreleasePool * pool = [[NSAutoreleasePool alloc] init];
+    app_delegate = [[AppDelegate alloc] init];
+    [[NSApplication sharedApplication] setDelegate: app_delegate];
+    int ret = NSApplicationMain(argc, argv);
+    [pool release];
+    return ret;
+}
+#endif // LFL_OSXVIDEO
+
+#ifdef LFL_IPHONE
 #import <UIKit/UIKit.h>
 #import <UIKit/UIScreen.h>
 #import <OpenGLES/EAGL.h>
@@ -85,29 +204,12 @@ int NSFMreadfonts(void *FontsIter, void (*FontsIterAdd)(void *fi, const char *na
 /* AVFoundation Class Reference: http://developer.apple.com/library/ios/#documentation/AVFoundation/Reference/AVCaptureSession_Class/Reference/Reference.html */
 #endif // LFL_IPHONESIM
 
-int iphone_evcount = 0;
-extern int gui_gesture_swipe_up, gui_gesture_swipe_down, gui_gesture_tap[2], gui_gesture_dpad_stop[2];
-extern float gui_gesture_dpad_x[2], gui_gesture_dpad_y[2], gui_gesture_dpad_dx[2], gui_gesture_dpad_dy[2];
-extern void key(int button, int down, int, int);
-extern void click(int button, int down, int x, int y);
+struct IPhoneKeyCode { enum { Backspace = 8, Return = 10 }; };
+extern "C" int iPhoneMain(int argc, const char **argv);
 
-extern "C" int iphone_main(int argc, char **argv);
-extern int lfapp_main();
-
-static int iphone_argc;
-static char **iphone_argv;
-
-int main(int ac, char **av) {
-	iphone_argc = ac; iphone_argv = av;
-    NSAutoreleasePool * pool = [[NSAutoreleasePool alloc] init];
-    int retVal = UIApplicationMain(iphone_argc, iphone_argv, nil, @"LFUIApplication");
-    [pool release];
-    return retVal;
-}
-
-// LFViewController
-@interface LFViewController : UIViewController<UITextFieldDelegate> {}
-@end
+static int iphone_argc = 0, iphone_evcount = 0;
+static const char **iphone_argv = 0;
+static NSString *documentsDirectory = nil;
 
 // LFUIView
 @interface LFUIView : UIView {}
@@ -156,22 +258,25 @@ int main(int ac, char **av) {
     }
 @end
 
-struct IPhoneKeyCode { enum { Backspace = 8, Return = 10 }; };
-#define handle_key(k) { key((k), 1, 0, 0); key((k), 0, 0, 0); iphone_evcount++; }
+// LFViewController
+@interface LFViewController : UIViewController<UITextFieldDelegate> {}
+@end
+
 @implementation LFViewController
     - (BOOL)textField: (UITextField *)textField shouldChangeCharactersInRange:(NSRange)range replacementString:(NSString *)string {
         int l = [string length];
-        if (!l) handle_key(IPhoneKeyCode::Backspace);
+        if (!l) handleKey(IPhoneKeyCode::Backspace);
         for (int i = 0, l = [string length]; i < l; i++) {
             unichar k = [string characterAtIndex: i];
-            handle_key(k);
+            handleKey(k);
         }
     }
     - (BOOL)textFieldShouldReturn: (UITextField *)textField {
-        handle_key(IPhoneKeyCode::Return);
+        handleKey(IPhoneKeyCode::Return);
         [textField resignFirstResponder];
         return YES;
     }
+    - (void)handleKey: (int)k { key(k, 1, 0, 0); key(k, 0, 0, 0); iphone_evcount++; }
 @end
 
 // LFUIApplication
@@ -230,14 +335,12 @@ struct IPhoneKeyCode { enum { Backspace = 8, Return = 10 }; };
         [self.view setCurrentContext];
 
         [[NSFileManager defaultManager] changeCurrentDirectoryPath: [[NSBundle mainBundle] resourcePath]];
-        iphone_main(iphone_argc, iphone_argv);
+        iPhoneMain(iphone_argc, iphone_argv);
 
         [self performSelector:@selector(postFinishLaunch) withObject:nil afterDelay:0.0];
         return YES;
     }
-    - (void)postFinishLaunch {
-        lfapp_main();
-    }
+    - (void)postFinishLaunch { LFAppMain(); }
     - (void)applicationWillTerminate:(UIApplication *)application {}
     - (void)applicationWillResignActive:(UIApplication*)application {}
     - (void)applicationDidBecomeActive:(UIApplication*)application {}
@@ -247,58 +350,6 @@ struct IPhoneKeyCode { enum { Backspace = 8, Return = 10 }; };
     }
     - (void)showKeyboard { [self.textField becomeFirstResponder]; }
 @end
-
-int iphone_video_swap() {
-	[[LFUIApplication sharedAppDelegate] swapBuffers];
-	return 0;
-}
-
-int iphone_show_keyboard() {
-    [[LFUIApplication sharedAppDelegate] showKeyboard];
-    return 0;
-}
-
-int iphone_input(unsigned clicks, unsigned *events) {
-    SInt32 result;
-    do {
-        result = CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0, TRUE);
-    } while (result == kCFRunLoopRunHandledSource);
-
-    if (events) *events = iphone_evcount = 0;
-    iphone_evcount = 0;
-    return 0;
-}
-
-int iphone_open_browser(const char *url_text) {
-    NSString *url_string = [[NSString alloc] initWithUTF8String: url_text];
-    NSURL *url = [NSURL URLWithString: url_string];  
-    [[UIApplication sharedApplication] openURL:url];
-    return 0;
-}
-
-void *iphone_load_music_asset(const char *filename) {
-#ifdef LFL_IPHONESIM
-    return 0;
-#else // LFL_IPHONESIM
-    NSError *error;
-    NSString *fn = [NSString stringWithCString:filename encoding:NSASCIIStringEncoding];
-    NSURL *url = [NSURL fileURLWithPath:[NSString stringWithFormat:@"%@/%@", [[NSBundle mainBundle] resourcePath], fn]];
-    AVAudioPlayer *audioPlayer = [[AVAudioPlayer alloc] initWithContentsOfURL:url error:&error];
-    if (audioPlayer == nil) NSLog([error description]);
-    return audioPlayer;
-#endif // LFL_IPHONESIM
-}
-
-void iphone_play_music(void *handle) {
-    AVAudioPlayer *audioPlayer = (AVAudioPlayer*)handle;
-    [audioPlayer play];
-}
-
-void iphone_play_background_music(void *handle) {
-    AVAudioPlayer *audioPlayer = (AVAudioPlayer*)handle;
-    audioPlayer.numberOfLoops = -1;
-    [audioPlayer play];
-}
 
 @interface LFApp : NSObject { }
     - (int) orientation;
@@ -310,10 +361,10 @@ void iphone_play_background_music(void *handle) {
     - (void) shutdownGestureRecognizers;
 @end
 
-static int currentOrientation = 0;
 @implementation LFApp
     static LFApp *gLFapp = nil;
-   
+    static int currentOrientation = 0;
+
     - (id) init {
         fprintf(stderr, "LFApp init\n");
         self = [super init];
@@ -322,44 +373,37 @@ static int currentOrientation = 0;
         [self initGestureRecognizers];
         return self;
     }
-   
     - (void) dealloc {
         fprintf(stderr, "dealloc LFApp\n");
         [self shutdownNotifications];
         [self shutdownGestureRecognizers];
         [super dealloc];
     }
-   
     + (void) shutdown {
         fprintf(stderr, "shutdown LFApp\n");
         if (gLFapp != nil) { [gLFapp release]; gLFapp = nil; }
     }
-   
-    + (LFApp *) sharedApp {
+    + (LFApp*) sharedApp {
         if (gLFapp == nil) {
             fprintf(stderr, "sharedApp alloc/init LFApp\n");
             gLFapp = [[[LFApp alloc] init] retain];
         }
         return gLFapp;
     }
-   
     - (void) shutdownNotifications {
         fprintf(stderr, "shutdown notifications\n");
         [[UIDevice currentDevice] endGeneratingDeviceOrientationNotifications];
         [[NSNotificationCenter defaultCenter] removeObserver:self name:@"UIDeviceOrientationDidChangeNotification" object:nil]; 
     }
-   
     - (void) orientationChanged: (id)sender {
         fprintf(stderr, "notification of new orientation: %d -> %d \n", currentOrientation, [[UIDevice currentDevice] orientation]);
         currentOrientation = [[UIDevice currentDevice] orientation];
     }
-   
     - (int) orientation {
         fprintf(stderr, "status bar orientation: %d -> %d\n", currentOrientation, [[UIApplication sharedApplication] statusBarOrientation]);
         currentOrientation = [[UIApplication sharedApplication] statusBarOrientation];
         return currentOrientation;
     }
-   
     - (void) initNotifications {
         fprintf(stderr, "init notifications\n");
         [[UIDevice currentDevice] beginGeneratingDeviceOrientationNotifications]; 
@@ -367,7 +411,6 @@ static int currentOrientation = 0;
             selector:@selector(orientationChanged:)
             name:@"UIDeviceOrientationDidChangeNotification" object:nil];
     }
-
     - (void) initGestureRecognizers {
         UIWindow *window = [[[UIApplication sharedApplication] windows] objectAtIndex:0];
         fprintf(stderr, "UIWindow frame: %s", [NSStringFromCGRect(window.frame) cString]);
@@ -383,7 +426,6 @@ static int currentOrientation = 0;
         down.numberOfTouchesRequired = 2;
         [window addGestureRecognizer:down];
         [down release];
-
 #if 0
         // one-finger press and drag sends control stick movements- up, down, left, right
         UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(panGesture:)];
@@ -404,22 +446,14 @@ static int currentOrientation = 0;
         [tap release];
 #endif
     }
-
     - (void) shutdownGestureRecognizers {
         UIWindow *window = [[[UIApplication sharedApplication] windows] objectAtIndex:0];
         NSArray *gestures = [window gestureRecognizers];
         for (int i = 0; i < [gestures count]; i++)
             [window removeGestureRecognizer:[gestures objectAtIndex:i]];
     }
-
-    - (void) doubleSwipeUp: (id)sender {
-        gui_gesture_swipe_up = 1;
-    }
-
-    - (void) doubleSwipeDown: (id)sender {
-        gui_gesture_swipe_down = 1;
-    }
-	
+    - (void) doubleSwipeUp:   (id)sender { gui_gesture_swipe_up   = 1; }
+    - (void) doubleSwipeDown: (id)sender { gui_gesture_swipe_down = 1; }
     - (void) tapGesture: (UITapGestureRecognizer *)tapGestureRecognizer {
         UIView *view = [tapGestureRecognizer view];
         CGPoint position = [tapGestureRecognizer locationInView:view];
@@ -430,7 +464,6 @@ static int currentOrientation = 0;
         gui_gesture_dpad_x[dpind] = position.x;
         gui_gesture_dpad_y[dpind] = position.y;
     }
-
     - (void) panGesture: (UIPanGestureRecognizer *)panGestureRecognizer {
         UIView *view = [panGestureRecognizer view];
         int dpind = view.frame.origin.y == 0;
@@ -463,8 +496,6 @@ static int currentOrientation = 0;
     }
 @end
 
-static NSString *documentsDirectory = nil;
-
 extern "C" void NativeWindowInit() {
     LFApp *lfApp = [LFApp sharedApp];
 }
@@ -482,7 +513,59 @@ extern "C" void NativeWindowSize(int *width, int *height) {
 
 extern "C" int NativeWindowOrientation() { return currentOrientation; }
 
-char *NSFMDocumentPath() {
+extern "C" int iPhoneVideoSwap() {
+	[[LFUIApplication sharedAppDelegate] swapBuffers];
+	return 0;
+}
+
+extern "C" int iPhoneShowKeyboard() {
+    [[LFUIApplication sharedAppDelegate] showKeyboard];
+    return 0;
+}
+
+extern "C" int iPhoneInput(unsigned clicks, unsigned *events) {
+    SInt32 result;
+    do {
+        result = CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0, TRUE);
+    } while (result == kCFRunLoopRunHandledSource);
+
+    if (events) *events = iphone_evcount = 0;
+    iphone_evcount = 0;
+    return 0;
+}
+
+extern "C" int iPhoneOpenBrowser(const char *url_text) {
+    NSString *url_string = [[NSString alloc] initWithUTF8String: url_text];
+    NSURL *url = [NSURL URLWithString: url_string];  
+    [[UIApplication sharedApplication] openURL:url];
+    return 0;
+}
+
+extern "C" void *iPhoneLoadMusicAsset(const char *filename) {
+#ifdef LFL_IPHONESIM
+    return 0;
+#else // LFL_IPHONESIM
+    NSError *error;
+    NSString *fn = [NSString stringWithCString:filename encoding:NSASCIIStringEncoding];
+    NSURL *url = [NSURL fileURLWithPath:[NSString stringWithFormat:@"%@/%@", [[NSBundle mainBundle] resourcePath], fn]];
+    AVAudioPlayer *audioPlayer = [[AVAudioPlayer alloc] initWithContentsOfURL:url error:&error];
+    if (audioPlayer == nil) NSLog([error description]);
+    return audioPlayer;
+#endif // LFL_IPHONESIM
+}
+
+extern "C" void iPhonePlayMusic(void *handle) {
+    AVAudioPlayer *audioPlayer = (AVAudioPlayer*)handle;
+    [audioPlayer play];
+}
+
+extern "C" void iPhonePlayBackgroundMusic(void *handle) {
+    AVAudioPlayer *audioPlayer = (AVAudioPlayer*)handle;
+    audioPlayer.numberOfLoops = -1;
+    [audioPlayer play];
+}
+
+extern "C" char *iPhoneDocumentPath() {
     if (documentsDirectory == nil) {
         NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
         documentsDirectory = [[paths objectAtIndex:0] copy];
@@ -490,8 +573,8 @@ char *NSFMDocumentPath() {
     return strdup([documentsDirectory UTF8String]);
 }
 
-int NSFMreaddir(const char *path, int dirs, void *DirectoryIter, void (*DirectoryIterAdd)(void *di, const char *k, int)) {
-
+extern "C" int iPhoneReadDir(const char *path, int dirs,
+                             void *DirectoryIter, void (*DirectoryIterAdd)(void *di, const char *k, int)) {
     NSString *dirName = [[NSString alloc] initWithUTF8String:path];
     NSArray *dirContents = [[NSFileManager defaultManager] directoryContentsAtPath:dirName];
 
@@ -507,6 +590,14 @@ int NSFMreaddir(const char *path, int dirs, void *DirectoryIter, void (*Director
         DirectoryIterAdd(DirectoryIter, [fileName UTF8String], 1);
     }
     return 0;
+}
+
+extern "C" int main(int ac, const char **av) {
+	iphone_argc = ac; iphone_argv = av;
+    NSAutoreleasePool * pool = [[NSAutoreleasePool alloc] init];
+    int ret = UIApplicationMain(iphone_argc, iphone_argv, nil, @"LFUIApplication");
+    [pool release];
+    return ret;
 }
 
 #endif /* LFL_IPHONE */

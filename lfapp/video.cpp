@@ -133,10 +133,10 @@ extern "C" {
 #include <QApplication>
 #undef main
 static QApplication *lfl_qapp;
-static vector<string> lfl_QT_argv;  
-extern "C" int LFL_QT_main(int argc, const char *argv[]);
-extern "C" int        main(int argc, const char *argv[]) {
-    for (int i=0; i<argc; i++) lfl_QT_argv.push_back(argv[i]);
+static vector<string> lfl_argv;  
+extern "C" int LFLQTMain(int argc, const char *argv[]);
+extern "C" int      main(int argc, const char *argv[]) {
+    for (int i=0; i<argc; i++) lfl_argv.push_back(argv[i]);
     QApplication app(argc, (char**)argv);
     lfl_qapp = &app;
     LFL::Window::Create(LFL::screen);
@@ -367,9 +367,9 @@ class OpenGLES2 : public QWindow, protected QOpenGLFunctions, public GraphicsDev
             initializeOpenGLFunctions();
 
             vector<const char *> av;
-            for (int i=0; i<lfl_QT_argv.size(); i++) av.push_back(lfl_QT_argv[i].c_str());
+            for (int i=0; i<lfl_argv.size(); i++) av.push_back(lfl_argv[i].c_str());
             av.push_back(0);
-            LFL_QT_main(lfl_QT_argv.size(), &av[0]);
+            LFLQTMain(lfl_argv.size(), &av[0]);
             QT_init = true;
             if (!app->run) { app->Free(); lfl_qapp->exit(); return true; }
         }
@@ -943,7 +943,7 @@ void Window::MakeCurrent(Window *W) {}
 #endif // LFL_HEADLESS
 
 #ifdef LFL_ANDROID
-struct AndroidVideoModule : public VideoModule {
+struct AndroidVideoModule : public Module {
     int Init() {
         INFO("AndroidVideoModule::Init()");
         if (android_video_init(FLAGS_request_gles_version)) return -1;
@@ -953,7 +953,7 @@ struct AndroidVideoModule : public VideoModule {
 #endif
 
 #ifdef LFL_IPHONE
-struct IPhoneVideoModule : public VideoModule {
+struct IPhoneVideoModule : public Module {
     int Init() {
         INFO("IPhoneVideoModule::Init()");
         NativeWindowInit();
@@ -961,6 +961,18 @@ struct IPhoneVideoModule : public VideoModule {
         return 0;
     }
 };
+#endif
+
+#ifdef LFL_OSXVIDEO
+struct OSXVideoModule : public Module {
+    int Init() {
+        INFO("OSXVideoModule::Init()");
+        return 0;
+    }
+};
+bool Window::Create(Window *W) { Window::active[W->id] = W; return true; }
+void Window::MakeCurrent(Window *W) {}
+void Window::Close(Window *W) {}
 #endif
 
 #ifdef LFL_QT
@@ -999,8 +1011,8 @@ void Window::MakeCurrent(Window *W) {
     screen = W; 
     ((QOpenGLContext*)screen->gl)->makeCurrent((QWindow*)screen->id);
 }
-void Mouse::grabFocus()    { ((OpenGLES2*)screen->gd)->QT_grabbed=1; ((QWindow*)screen->id)->setCursor(Qt::BlankCursor); app->grabMode.on();  screen->cursor_grabbed=true;  }
-void Mouse::releaseFocus() { ((OpenGLES2*)screen->gd)->QT_grabbed=0; ((QWindow*)screen->id)->unsetCursor();              app->grabMode.off(); screen->cursor_grabbed=false; }
+void Mouse::GrabFocus()    { ((OpenGLES2*)screen->gd)->QT_grabbed=1; ((QWindow*)screen->id)->setCursor(Qt::BlankCursor); app->grabMode.on();  screen->cursor_grabbed=true;  }
+void Mouse::ReleaseFocus() { ((OpenGLES2*)screen->gd)->QT_grabbed=0; ((QWindow*)screen->id)->unsetCursor();              app->grabMode.off(); screen->cursor_grabbed=false; }
 #endif
 
 #ifdef LFL_GLFWVIDEO
@@ -1111,6 +1123,8 @@ int Video::Init() {
     impl = new AndroidVideoModule();
 #elif defined(LFL_IPHONE)
     impl = new IPhoneVideoModule();
+#elif defined(LFL_OSXVIDEO)
+    impl = new OSXVideoModule();
 #endif
     if (impl) if (impl->Init()) return -1;
 
@@ -1338,8 +1352,16 @@ void Box::DrawCrimped(const float *texcoord, int orientation, float scrollX, flo
 
     scrollX *= (texcoord[2] - texcoord[0]);
     scrollY *= (texcoord[3] - texcoord[1]);
-    scrollY = ScrollCrimped(texcoord[1], texcoord[3], scrollY, &texMinY, &texMidY1, &texMidY2, &texMaxY);
     scrollX = ScrollCrimped(texcoord[0], texcoord[2], scrollX, &texMinX, &texMidX1, &texMidX2, &texMaxX);
+    scrollY = ScrollCrimped(texcoord[1], texcoord[3], scrollY, &texMinY, &texMidY1, &texMidY2, &texMaxY);
+
+#   define DrawCrimpedBoxTriangleStrip() \
+    screen->gd->VertexPointer(2, GraphicsDevice::Float, 4*sizeof(float), 0,               verts, sizeof(verts), &vind, true); \
+    screen->gd->TexPointer   (2, GraphicsDevice::Float, 4*sizeof(float), 2*sizeof(float), verts, sizeof(verts), &vind, false); \
+    screen->gd->DrawArrays(GraphicsDevice::TriangleStrip, 0, 4); \
+    screen->gd->DrawArrays(GraphicsDevice::TriangleStrip, 4, 4); \
+    screen->gd->DrawArrays(GraphicsDevice::TriangleStrip, 8, 4); \
+    screen->gd->DrawArrays(GraphicsDevice::TriangleStrip, 12, 4);
 
     switch (orientation) {
         case 0: {
@@ -1350,8 +1372,7 @@ void Box::DrawCrimped(const float *texcoord, int orientation, float scrollX, flo
                 /*10*/ right, ymid, texMaxX,  texMidY2, /*09*/ xmid, ymid, texMidX2, texMidY2, /*11*/ right, bottom, texMaxX,  texMinY,  /*12*/ xmid, bottom, texMidX2, texMinY,
                 /*14*/ xmid,  ymid, texMidX1, texMidY2, /*13*/ left, ymid, texMinX,  texMidY2, /*15*/ xmid,  bottom, texMidX1, texMinY,  /*16*/ left, bottom, texMinX,  texMinY 
             };
-            screen->gd->VertexPointer(2, GraphicsDevice::Float, 4*sizeof(float), 0,               verts, sizeof(verts), &vind, true);
-            screen->gd->TexPointer   (2, GraphicsDevice::Float, 4*sizeof(float), 2*sizeof(float), verts, sizeof(verts), &vind, false);
+            DrawCrimpedBoxTriangleStrip();
         } break;
         case 1: {
             static int vind = -1;
@@ -1361,8 +1382,7 @@ void Box::DrawCrimped(const float *texcoord, int orientation, float scrollX, flo
                 /*10*/ right, ymid, texMaxX,  texMidY1, /*09*/ xmid,  ymid, texMidX2, texMidY1, /*11*/ right, bottom, texMaxX,  texMaxY,  /*12*/ xmid, bottom, texMidX2, texMaxY,
                 /*14*/ xmid,  ymid, texMidX1, texMidY1, /*13*/ left,  ymid, texMinX,  texMidY1, /*15*/ xmid, bottom,  texMidX1, texMaxY,  /*16*/ left, bottom, texMinX,  texMaxY 
             };
-            screen->gd->VertexPointer(2, GraphicsDevice::Float, 4*sizeof(float), 0,               verts, sizeof(verts), &vind, true);
-            screen->gd->TexPointer   (2, GraphicsDevice::Float, 4*sizeof(float), 2*sizeof(float), verts, sizeof(verts), &vind, false);
+            DrawCrimpedBoxTriangleStrip();
         } break;
         case 2: {
             static int vind = -1;
@@ -1372,8 +1392,7 @@ void Box::DrawCrimped(const float *texcoord, int orientation, float scrollX, flo
                 /*10*/ right, ymid, texMinX,  texMidY2, /*09*/ xmid,  ymid, texMidX1, texMidY2, /*11*/ right, bottom, texMinX,  texMinY,  /*12*/ xmid, bottom, texMidX1, texMinY,
                 /*14*/ xmid,  ymid, texMidX2, texMidY2, /*13*/ left,  ymid, texMaxX,  texMidY2, /*15*/ xmid, bottom,  texMidX2, texMinY,  /*16*/ left, bottom, texMaxX,  texMinY 
             };
-            screen->gd->VertexPointer(2, GraphicsDevice::Float, 4*sizeof(float), 0,               verts, sizeof(verts), &vind, true);
-            screen->gd->TexPointer   (2, GraphicsDevice::Float, 4*sizeof(float), 2*sizeof(float), verts, sizeof(verts), &vind, false);
+            DrawCrimpedBoxTriangleStrip();
         } break;
         case 3: {
             static int vind = -1;
@@ -1383,8 +1402,7 @@ void Box::DrawCrimped(const float *texcoord, int orientation, float scrollX, flo
                 /*10*/ right, ymid, texMinX,  texMidY1, /*09*/ xmid,  ymid,  texMidX1, texMidY1, /*11*/ right, bottom, texMinX,  texMaxY,  /*12*/ xmid, bottom, texMidX1, texMaxY,
                 /*14*/ xmid,  ymid, texMidX2, texMidY1, /*13*/ left,  ymid,  texMaxX,  texMidY1, /*15*/ xmid, bottom,  texMidX2, texMaxY,  /*16*/ left, bottom, texMaxX,  texMaxY 
             };
-            screen->gd->VertexPointer(2, GraphicsDevice::Float, 4*sizeof(float), 0,               verts, sizeof(verts), &vind, true);
-            screen->gd->TexPointer   (2, GraphicsDevice::Float, 4*sizeof(float), 2*sizeof(float), verts, sizeof(verts), &vind, false);
+            DrawCrimpedBoxTriangleStrip();
         } break;
         case 4: {
             static int vind = -1;
@@ -1394,8 +1412,7 @@ void Box::DrawCrimped(const float *texcoord, int orientation, float scrollX, flo
                 /*05*/ right, ymid, texMidX2, texMinY,  /*08*/ xmid,  ymid, texMidX2, texMidY1, /*06*/ right, bottom, texMaxX,  texMinY,  /*07*/ xmid, bottom, texMaxX,  texMidY1,
                 /*09*/ xmid,  ymid, texMidX2, texMidY2, /*12*/ left,  ymid, texMidX2, texMaxY,  /*10*/ xmid, bottom,  texMaxX,  texMidY2, /*11*/ left, bottom, texMaxX,  texMaxY 
             };
-            screen->gd->VertexPointer(2, GraphicsDevice::Float, 4*sizeof(float), 0,               verts, sizeof(verts), &vind, true);
-            screen->gd->TexPointer   (2, GraphicsDevice::Float, 4*sizeof(float), 2*sizeof(float), verts, sizeof(verts), &vind, false);
+            DrawCrimpedBoxTriangleStrip();
         } break;
         case 5: {
             static int vind = -1;
@@ -1405,8 +1422,7 @@ void Box::DrawCrimped(const float *texcoord, int orientation, float scrollX, flo
                 /*05*/ right, ymid, texMidX2, texMaxY,  /*08*/ xmid,  ymid, texMidX2, texMidY2, /*06*/ right, bottom, texMaxX,  texMaxY,  /*07*/ xmid, bottom, texMaxX,  texMidY2,
                 /*09*/ xmid,  ymid, texMidX2, texMidY1, /*12*/ left,  ymid, texMidX2, texMinY,  /*10*/ xmid, bottom,  texMaxX,  texMidY1, /*11*/ left, bottom, texMaxX,  texMinY 
             };
-            screen->gd->VertexPointer(2, GraphicsDevice::Float, 4*sizeof(float), 0,               verts, sizeof(verts), &vind, true);
-            screen->gd->TexPointer   (2, GraphicsDevice::Float, 4*sizeof(float), 2*sizeof(float), verts, sizeof(verts), &vind, false);
+            DrawCrimpedBoxTriangleStrip();
         } break;
         case 6: {
             static int vind = -1;
@@ -1416,8 +1432,7 @@ void Box::DrawCrimped(const float *texcoord, int orientation, float scrollX, flo
                 /*05*/ right, ymid, texMidX1, texMinY,  /*08*/ xmid,  ymid, texMidX1, texMidY1, /*06*/ right, bottom, texMinX,  texMinY,  /*07*/ xmid, bottom, texMinX,  texMidY1,
                 /*09*/ xmid,  ymid, texMidX1, texMidY2, /*12*/ left,  ymid, texMidX1, texMaxY,  /*10*/ xmid, bottom,  texMinX,  texMidY2, /*11*/ left, bottom, texMinX,  texMaxY 
             };
-            screen->gd->VertexPointer(2, GraphicsDevice::Float, 4*sizeof(float), 0,               verts, sizeof(verts), &vind, true);
-            screen->gd->TexPointer   (2, GraphicsDevice::Float, 4*sizeof(float), 2*sizeof(float), verts, sizeof(verts), &vind, false);
+            DrawCrimpedBoxTriangleStrip();
         } break;
         case 7: {
             static int vind = -1;
@@ -1427,15 +1442,9 @@ void Box::DrawCrimped(const float *texcoord, int orientation, float scrollX, flo
                 /*05*/ right, ymid, texMidX1, texMaxY,  /*08*/ xmid,  ymid, texMidX1, texMidY2, /*06*/ right, bottom, texMinX,  texMaxY,  /*07*/ xmid, bottom, texMinX,  texMidY2,
                 /*09*/ xmid,  ymid, texMidX1, texMidY1, /*12*/ left,  ymid, texMidX1, texMinY,  /*10*/ xmid, bottom,  texMinX,  texMidY1, /*11*/ left, bottom, texMinX,  texMinY 
             };
-            screen->gd->VertexPointer(2, GraphicsDevice::Float, 4*sizeof(float), 0,               verts, sizeof(verts), &vind, true);
-            screen->gd->TexPointer   (2, GraphicsDevice::Float, 4*sizeof(float), 2*sizeof(float), verts, sizeof(verts), &vind, false);
+            DrawCrimpedBoxTriangleStrip();
         } break;
     }
-
-    screen->gd->DrawArrays(GraphicsDevice::TriangleStrip, 0, 4);
-    screen->gd->DrawArrays(GraphicsDevice::TriangleStrip, 4, 4);
-    screen->gd->DrawArrays(GraphicsDevice::TriangleStrip, 8, 4);
-    screen->gd->DrawArrays(GraphicsDevice::TriangleStrip, 12, 4);
 }
 
 float Box::ScrollCrimped(float tex0, float tex1, float scroll, float *min, float *mid1, float *mid2, float *max) {

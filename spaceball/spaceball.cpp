@@ -846,6 +846,7 @@ extern "C" int main(int argc, const char *argv[]) {
 	binds.push_back(Bind(Key::Escape,     Bind::CB(bind([&](){ menubar->ToggleDisplay(); }))));
     binds.push_back(Bind(Key::Backquote,  Bind::CB(bind(&GUI::ToggleConsole,     menubar))));
     binds.push_back(Bind(Key::Quote,      Bind::CB(bind(&GUI::ToggleConsole,     menubar))));
+    binds.repeat = 1;
 
     // start our engine
     return app->Main();

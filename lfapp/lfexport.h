@@ -18,7 +18,9 @@
 
 #ifndef __LFL_LFAPP_LFEXPORT_H__
 #define __LFL_LFAPP_LFEXPORT_H__
+#ifdef __cplusplus
 extern "C" {
+#endif
 
 struct LFApp {
     struct Events {
@@ -42,9 +44,18 @@ void NativeWindowInit();
 void NativeWindowQuit();
 void NativeWindowSize(int *widthOut, int *heightOut);
 int NativeWindowOrientation();
-
 NativeWindow *GetNativeWindow();
+
+int LFAppMain();
+int LFAppFrame();
+void Reshaped(int w, int h);
+void Minimized(); 
+void UnMinimized(); 
+void KeyPress(int button, int down, int, int);
+void MouseClick(int button, int down, int x, int y);
 void ShellRun(const char *text);
 
+#ifdef __cplusplus
 };
+#endif
 #endif // __LFL_LFAPP_LFEXPORT_H__
