@@ -82,6 +82,7 @@ extern "C" int main(int argc, const char *argv[]) {
     binds.push_back(Bind('d',            Bind::TimeCB(bind(&Entity::MoveRight,  screen->cam, _1))));
     binds.push_back(Bind('q',            Bind::TimeCB(bind(&Entity::MoveDown,   screen->cam, _1))));
     binds.push_back(Bind('e',            Bind::TimeCB(bind(&Entity::MoveUp,     screen->cam, _1))));
+    binds.repeat = 1;
     screen->binds = &binds;
 
     scene.Add(new Entity("axis",  asset("axis")));

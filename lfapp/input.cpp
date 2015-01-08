@@ -446,7 +446,7 @@ int Input::Frame(unsigned clicks) {
     if (impl) impl->Frame(clicks);
     if (screen) {
         KeyPressRepeat(clicks);
-        if (screen->binds) screen->binds->Repeat(clicks);
+        if (screen->binds && screen->binds->repeat) screen->binds->Repeat(clicks);
     }
     return 0;
 }

@@ -84,6 +84,7 @@ struct Bind {
 };
 
 struct BindMap : public vector<Bind> {
+    bool repeat=0;
     int Run(int key, int key_mod, int down) {
         for (vector<Bind>::iterator b = this->begin(); b != this->end(); ++b) 
             if (b->Match(key, key_mod)) {

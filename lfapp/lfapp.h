@@ -1158,7 +1158,7 @@ struct MessageQueue {
     deque<Entry> queue;
     Mutex mutex;
     void Write(int n, void *x) { ScopedMutex sm(mutex); Entry e = { n, x }; queue.push_back(e); }
-    int Read(void** out) { ScopedMutex sm(mutex); if (!queue.size()) return 0; Entry e = PopBack(queue); *out = e.opaque; return e.id; }
+    int Read(void** out) { if (!queue.size()) return 0; ScopedMutex sm(mutex); if (!queue.size()) return 0; Entry e = PopBack(queue); *out = e.opaque; return e.id; }
 };
 
 struct ThreadPool {
@@ -1292,13 +1292,15 @@ struct Application : public ::LFApp, public Module {
 };
 
 #if defined(LFL_QT)
-#define main LFL_QT_main
+#define main LFLQTMain
 #elif defined(LFL_IPHONE)
-#define main iphone_main
-int iphone_video_init();
-int iphone_video_swap();
-int iphone_input(unsigned clicks, unsigned *events);
-int iphone_open_browser(const char *url_text);
+#define main iPhoneMain
+extern "C" int iPhoneVideoInit();
+extern "C" int iPhoneVideoSwap();
+extern "C" int iPhoneInput(unsigned clicks, unsigned *events);
+extern "C" int iPhoneOpenBrowser(const char *url_text);
+#elif defined(LFL_OSXVIDEO)
+#define main OSXMain
 #endif
 
 extern Application *app;
