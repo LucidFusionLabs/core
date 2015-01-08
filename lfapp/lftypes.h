@@ -98,7 +98,7 @@ template <typename X> typename X::mapped_type FindOrDefault(const X &m, const ty
 
 template <typename X> typename X::mapped_type FindOrDie(const char *file, int line, const X &m, const typename X::key_type &k) {
     typename X::const_iterator iter = m.find(k);
-    if (iter == m.end()) lfapp_log(LogLevel::Fatal, file, line, StrCat("FindOrDie(", k, ")"));
+    if (iter == m.end()) Log(LFApp::Log::Fatal, file, line, StrCat("FindOrDie(", k, ")"));
     return iter->second;
 }
 #define FindOrDie(m, k) FindOrDie(__FILE__, __LINE__, m, k)

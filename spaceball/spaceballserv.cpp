@@ -54,7 +54,7 @@ struct SpaceballStatusServer : public HTTPServer::Resource {
 
 int Frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample, int flag) { return server->Frame(); }
 
-int spaceball_server(int argc, const char **argv) {
+int SpaceballServer(int argc, const char **argv) {
     FLAGS_target_fps = FLAGS_framerate;
     app->frame_cb = Frame;
 
@@ -96,8 +96,8 @@ extern "C" int main(int argc, const char **argv) {
     if (install) { NTService::Install(service_name, argv[0]); exit=1; }
     if (uninstall) { NTService::Uninstall(service_name); exit=1; }
 #endif
-    if (FLAGS_run_server) { return spaceball_server(argc, argv); }
+    if (FLAGS_run_server) { return SpaceballServer(argc, argv); }
     if (exit) return app->Free();
 
-    return NTService::MainWrapper(service_name, spaceball_server, argc, argv);
+    return NTService::WrapMain(service_name, SpaceballServer, argc, argv);
 }

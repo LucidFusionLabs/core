@@ -722,7 +722,7 @@ void GraphicsDevice::Uniform2f(int u, float v1, float v2) { glUniform2f(u, v1, v
 void GraphicsDevice::Uniform3fv(int u, int n, const float *v) { glUniform3fv(u, n, v); }
 
 // Common layer
-void GraphicsDevice::Clear() { glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT); }
+void GraphicsDevice::Clear() { glClear(GL_COLOR_BUFFER_BIT | (draw_mode = DrawMode::_3D ? GL_DEPTH_BUFFER_BIT : 0)); }
 void GraphicsDevice::ClearColor(const Color &c) { glClearColor(c.r(), c.g(), c.b(), c.a()); }
 void GraphicsDevice::PushColor() { default_color.push_back(default_color.back()); UpdateColor();  }
 void GraphicsDevice::PopColor() {
@@ -957,7 +957,7 @@ struct IPhoneVideoModule : public Module {
     int Init() {
         INFO("IPhoneVideoModule::Init()");
         NativeWindowInit();
-        NativeWindowSize(&width, &height);
+        NativeWindowSize(&screen->width, &screen->height);
         return 0;
     }
 };
@@ -967,6 +967,8 @@ struct IPhoneVideoModule : public Module {
 struct OSXVideoModule : public Module {
     int Init() {
         INFO("OSXVideoModule::Init()");
+        NativeWindowInit();
+        NativeWindowSize(&screen->width, &screen->height);
         return 0;
     }
 };

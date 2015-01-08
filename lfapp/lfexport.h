@@ -18,11 +18,25 @@
 
 #ifndef __LFL_LFAPP_LFEXPORT_H__
 #define __LFL_LFAPP_LFEXPORT_H__
+
+#define DECLARE_FLAG(name, type) extern type FLAGS_ ## name
+#define DECLARE_int(name) DECLARE_FLAG(name, int)
+#define DECLARE_bool(name) DECLARE_FLAG(name, bool)
+#define DECLARE_float(name) DECLARE_FLAG(name, float)
+#define DECLARE_double(name) DECLARE_FLAG(name, double)
+#define DECLARE_string(name) DECLARE_FLAG(name, string)
+
+#define  INFOf(fmt, ...) LFAppLog(LFApp::Log::Info,  __FILE__, __LINE__, fmt, __VA_ARGS__)
+#define DEBUGf(fmt, ...) LFAppLog(LFApp::Log::Debug, __FILE__, __LINE__, fmt, __VA_ARGS__)
+#define ERRORf(fmt, ...) LFAppLog(LFApp::Log::Error, __FILE__, __LINE__, fmt, __VA_ARGS__)
+#define FATALf(fmt, ...) { LFAppLog(LFApp::Log::Fatal, __FILE__, __LINE__, fmt, __VA_ARGS__); throw(0); }
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 struct LFApp {
+    struct Log { enum { Fatal=-1, Error=0, Info=3, Debug=7 }; int v; };
     struct Events {
         int input, mouse_click, mouse_wheel, mouse_move, mouse_hover, key, gui, bind;
     };
@@ -48,6 +62,8 @@ NativeWindow *GetNativeWindow();
 
 int LFAppMain();
 int LFAppFrame();
+void LFAppLog(int level, const char *file, int line, const char *fmt, ...);
+void LFAppFatal();
 void Reshaped(int w, int h);
 void Minimized(); 
 void UnMinimized(); 

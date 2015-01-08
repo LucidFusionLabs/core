@@ -37,7 +37,7 @@ DECLARE_string(atlas_font_sizes);
 DECLARE_int(scale_font_height);
 DECLARE_int(add_font_size);
 
-struct DrawMode { enum { _3D=0, _2D=1, NullOp=2 }; int m; };
+struct DrawMode { enum { _2D=0, _3D=1, NullOp=2 }; int m; };
 struct TexGen { enum { LINEAR=1, REFLECTION=2 }; };
 
 struct Depth {
