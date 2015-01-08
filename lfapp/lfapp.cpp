@@ -145,20 +145,10 @@ Printable::Printable(const String16       &x) : string(String::ToUTF8(x)) {}
 Printable::Printable(const void           *x) : string(StringPrintf("%p", x)) {}
 string Flag::ToString() const { string v=Get(); return StrCat(name, v.size()?" = ":"", v.size()?v:"", " : ", desc); } 
 
-extern "C" void NotImplemented() { FATAL("not implemented"); }
-extern "C" void ShellRun(const char *text) { return app->shell.Run(text); }
-extern "C" NativeWindow *GetNativeWindow() { return screen; }
-extern "C" int LFAppMain()                 { return app->Main(); }
-extern "C" int LFAppFrame()                { return app->Frame(); }
-extern "C" void Reshaped(int w, int h)     { screen->Reshaped(w, h); }
-extern "C" void Minimized()                { screen->Minimized(); }
-extern "C" void UnMinimized()              { screen->UnMinimized(); }
-extern "C" void KeyPress  (int b, int d, int,   int  ) { app->input.KeyPress  (b, d, 0, 0); }
-extern "C" void MouseClick(int b, int d, int x, int y) { app->input.MouseClick(b, d, x, y); }
-
 bool Running() { return app->run; }
 bool MainThread() { return Thread::Id() == app->main_thread_id; }
 void RunInMainThread(Callback *cb) { app->message_queue.Write(ThreadPool::message_queue_callback, cb); }
+void Log(int level, const char *file, int line, const string &m) { app->Log(level, file, line, m); }
 void DefaultLFAppWindowClosedCB() { delete screen; }
 double FPS() { return screen->fps.FPS(); }
 double CamFPS() { return app->camera.fps.FPS(); }
@@ -910,7 +900,7 @@ void *BlockChainAlloc::Malloc(int n) {
 }
 
 #ifdef WIN32
-MainCB nt_service_mainCB = 0;
+MainCB nt_service_main = 0;
 const char *nt_service_name = 0;
 SERVICE_STATUS_HANDLE nt_service_status_handle = 0;
 DEFINE_bool(open_console, 0, "Open console output");
@@ -999,7 +989,7 @@ BOOL UpdateSCMStatus(DWORD dwCurrentState, DWORD dwWin32ExitCode,
     return SetServiceStatus(nt_service_status_handle, &serviceStatus);
 }
 
-void nt_service_control_handler(DWORD controlCode) {
+void HandleNTServiceControl(DWORD controlCode) {
     if (controlCode == SERVICE_CONTROL_SHUTDOWN || controlCode == SERVICE_CONTROL_STOP) {
         UpdateSCMStatus(SERVICE_STOPPED, NO_ERROR, 0, 0, 0);
         app->run = 0;
@@ -1008,15 +998,15 @@ void nt_service_control_handler(DWORD controlCode) {
     }
 }
 
-int nt_service_main_dispatch(int argc, char **argv) {
-    nt_service_status_handle = RegisterServiceCtrlHandler(nt_service_name, (LPHANDLER_FUNCTION)nt_service_control_handler);
+int DispatchNTServiceMain(int argc, char **argv) {
+    nt_service_status_handle = RegisterServiceCtrlHandler(nt_service_name, (LPHANDLER_FUNCTION)HandleNTServiceControl);
     if (!nt_service_status_handle) { ERROR("RegisterServiceCtrlHandler: ", GetLastError()); return -1; }
 
     if (!UpdateSCMStatus(SERVICE_RUNNING, NO_ERROR, 0, 0, 0)) {
         ERROR("UpdateSCMStatus: ", GetLastError()); return -1;
     }
     
-    return nt_service_mainCB(argc, (const char **)argv);
+    return nt_service_main(argc, (const char **)argv);
 }
 
 int NTService::Install(const char *name, const char *path) {
@@ -1059,12 +1049,12 @@ int NTService::Uninstall(const char *name) {
     return 0;
 }
 
-int NTService::MainWrapper(const char *name, MainCB mainCB, int argc, const char **argv) {
+int NTService::WrapMain(const char *name, MainCB main_cb, int argc, const char **argv) {
     nt_service_name = name;
-    nt_service_mainCB = mainCB;
+    nt_service_main = main_cb;
 
     SERVICE_TABLE_ENTRY serviceTable[] = {
-        { (LPSTR)name, (LPSERVICE_MAIN_FUNCTION)nt_service_main_dispatch},
+        { (LPSTR)name, (LPSERVICE_MAIN_FUNCTION)DispatchNTServiceMain},
         { 0, 0 }
     };
 
@@ -1192,7 +1182,7 @@ void Process::Daemonize(FILE *fout, FILE *ferr) {
 
 int NTService::Install(const char *name, const char *path) { FATAL("not implemented"); }
 int NTService::Uninstall(const char *name) { FATAL("not implemented"); }
-int NTService::MainWrapper(const char *name, MainCB mainCB, int argc, const char **argv) { return mainCB(argc, argv); }
+int NTService::WrapMain(const char *name, MainCB main_cb, int argc, const char **argv) { return main_cb(argc, argv); }
 
 #endif /* WIN32 */
 
@@ -1919,38 +1909,25 @@ void FlagMap::Print(const char *source_filename) const {
     }
 }
 
-extern "C" void lfapp_fatal() {
-    ERROR("lfapp_fatal");
-    static bool suicide = true;
-    if (suicide) *(volatile int*)0 = 0;
-    app->run = 0;
-    exit(-1);
-}
-
-extern "C" void lfapp_log(int level, const char *file, int line, const string &message) {
-    if (level > FLAGS_loglevel || (level >= LogLevel::Debug && !FLAGS_lfapp_debug)) return;
-
+void Application::Log(int level, const char *file, int line, const string &message) {
+    if (level > FLAGS_loglevel || (level >= LFApp::Log::Debug && !FLAGS_lfapp_debug)) return;
     char tbuf[64];
     logtime(tbuf, sizeof(tbuf));
-
     {
-        ScopedMutex sm(app->log_mutex);
+        ScopedMutex sm(log_mutex);
 
         fprintf(stdout, "%s %s (%s:%d)\r\n", tbuf, message.c_str(), file, line);
         fflush(stdout);
 
-        if (app->logfile) {
+        if (logfile) {
             fprintf(app->logfile, "%s %s (%s:%d)\r\n", tbuf, message.c_str(), file, line);
             fflush(app->logfile);
         }
-
 #ifdef LFL_ANDROID
         __android_log_print(ANDROID_LOG_INFO, caption.c_str(), "%s (%s:%d)", message.c_str(), file, line);
 #endif
     }
-
-    if (level == LogLevel::Fatal) lfapp_fatal();
-
+    if (level == LFApp::Log::Fatal) LFAppFatal();
     if (FLAGS_lfapp_video && screen && screen->console) screen->console->Write(message);
 }
 
@@ -2291,7 +2268,7 @@ int Application::Frame() {
             screen->ClearGesture();
         }
     }
-    if (previous_screen) Window::MakeCurrent(previous_screen);
+    if (previous_screen != screen) Window::MakeCurrent(previous_screen);
 
     /* post */
     PostFrame();
@@ -2341,26 +2318,24 @@ int Application::Exiting() {
 /* CUDA */
 
 #ifdef LFL_CUDA
-void cuda_printDevProp(cudaDeviceProp *devProp) {
-    debug("Major revision number:         %d",  devProp->major);
-    debug("Minor revision number:         %d",  devProp->minor);
-    debug("Name:                          %s",  devProp->name);
-    debug("Total global memory:           %u",  devProp->totalGlobalMem);
-    debug("Total shared memory per block: %u",  devProp->sharedMemPerBlock);
-    debug("Total registers per block:     %d",  devProp->regsPerBlock);
-    debug("Warp size:                     %d",  devProp->warpSize);
-    debug("Maximum memory pitch:          %u",  devProp->memPitch);
-    debug("Maximum threads per block:     %d",  devProp->maxThreadsPerBlock);
-    for (int i = 0; i < 3; ++i)
-        debug("Maximum dimension %d of block:  %d", i, devProp->maxThreadsDim[i]);
-    for (int i = 0; i < 3; ++i)
-        debug("Maximum dimension %d of grid:   %d", i, devProp->maxGridSize[i]);
-    debug("Clock rate:                    %d",  devProp->clockRate);
-    debug("Total constant memory:         %u",  devProp->totalConstMem);
-    debug("Texture alignment:             %u",  devProp->textureAlignment);
-    debug("Concurrent copy and execution: %s",  (devProp->deviceOverlap ? "Yes" : "No"));
-    debug("Number of multiprocessors:     %d",  devProp->multiProcessorCount);
-    debug("Kernel execution timeout:      %s",  (devProp->kernelExecTimeoutEnabled ? "Yes" : "No"));
+void PrintCUDAProperties(cudaDeviceProp *prop) {
+    DEBUGf("Major revision number:         %d", prop->major);
+    DEBUGf("Minor revision number:         %d", prop->minor);
+    DEBUGf("Name:                          %s", prop->name);
+    DEBUGf("Total global memory:           %u", prop->totalGlobalMem);
+    DEBUGf("Total shared memory per block: %u", prop->sharedMemPerBlock);
+    DEBUGf("Total registers per block:     %d", prop->regsPerBlock);
+    DEBUGf("Warp size:                     %d", prop->warpSize);
+    DEBUGf("Maximum memory pitch:          %u", prop->memPitch);
+    DEBUGf("Maximum threads per block:     %d", prop->maxThreadsPerBlock);
+    for (int i = 0; i < 3; ++i) DEBUGf("Maximum dimension %d of block: %d", i, prop->maxThreadsDim[i]);
+    for (int i = 0; i < 3; ++i) DEBUGf("Maximum dimension %d of grid:  %d", i, prop->maxGridSize[i]);
+    DEBUGf("Clock rate:                    %d", prop->clockRate);
+    DEBUGf("Total constant memory:         %u", prop->totalConstMem);
+    DEBUGf("Texture alignment:             %u", prop->textureAlignment);
+    DEBUGf("Concurrent copy and execution: %s", (prop->deviceOverlap ? "Yes" : "No"));
+    DEBUGf("Number of multiprocessors:     %d", prop->multiProcessorCount);
+    DEBUGf("Kernel execution timeout:      %s", (prop->kernelExecTimeoutEnabled ? "Yes" : "No"));
 }
 
 AcousticModel::State *cuda_AM_state(AcousticModel::StateCollection *model, int id) { return model->getState(id); }
@@ -2374,11 +2349,11 @@ int CUDA::Init() {
     if ((err = cudaGetDeviceCount(&cuda_devices)) != cudaSuccess)
     { ERROR("cudaGetDeviceCount error ", cudaGetErrorString(err)); return 0; }
 
-    cudaDeviceProp devProp;
+    cudaDeviceProp prop;
     for (int i=0; i<cuda_devices; i++) {
-        if ((err = cudaGetDeviceProperties(&devProp, i)) != cudaSuccess) { ERROR("cudaGetDeviceProperties error ", err); return 0; }
-        if (FLAGS_lfapp_debug) cuda_printDevProp(&devProp);
-        if (strstr(devProp.name, "Emulation")) continue;
+        if ((err = cudaGetDeviceProperties(&prop, i)) != cudaSuccess) { ERROR("cudaGetDeviceProperties error ", err); return 0; }
+        if (FLAGS_lfapp_debug) PrintCUDAProperties(&prop);
+        if (strstr(prop.name, "Emulation")) continue;
         FLAGS_lfapp_cuda=1;
     }
 
@@ -2619,19 +2594,41 @@ JSContext *CreateV8JSContext(Console *js_console, DOM::Node *doc) { Singleton<My
 #else /* LFL_V8JS */
 JSContext *CreateV8JSContext(Console *js_console, DOM::Node *doc) { return 0; }
 #endif /* LFL_V8JS */
-
 }; // namespace LFL
+
+extern "C" void NotImplemented() { FATAL("not implemented"); }
+extern "C" void ShellRun(const char *text) { return LFL::app->shell.Run(text); }
+extern "C" NativeWindow *GetNativeWindow() { return LFL::screen; }
+extern "C" int LFAppMain()                 { return LFL::app->Main(); }
+extern "C" int LFAppFrame()                { return LFL::app->Frame(); }
+extern "C" void Reshaped(int w, int h)     { LFL::screen->Reshaped(w, h); }
+extern "C" void Minimized()                { LFL::screen->Minimized(); }
+extern "C" void UnMinimized()              { LFL::screen->UnMinimized(); }
+extern "C" void KeyPress  (int b, int d, int,   int  ) { LFL::app->input.KeyPress  (b, d, 0, 0); }
+extern "C" void MouseClick(int b, int d, int x, int y) { LFL::app->input.MouseClick(b, d, x, y); }
+extern "C" void LFAppLog(int level, const char *file, int line, const char *fmt, ...) {
+    string message;
+    StringPrintfImpl(&message, fmt, vsnprintf, char, 0);
+    LFL::app->Log(level, file, line, message);
+}
+extern "C" void LFAppFatal() {
+    ERROR("LFAppFatal");
+    if (bool suicide=true) *(volatile int*)0 = 0;
+    LFL::app->run = 0;
+    exit(-1);
+}
 
 #ifdef _WIN32
 int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR lpCmdLine, int nCmdShow) {
-	LFL::WIN32_Init();
-	LFL::StringWordIter cmdline(lpCmdLine); vector<const char *> av;
-	for (const char *word = cmdline.next(); word; word = cmdline.next()) {
-		char *buf = (char *)alloca(strlen(word) + 1); strcpy(buf, word); av.push_back(buf);
-	}
-	int argc = av.size() + 1; const char **argv = (const char**)alloca((argc + 1)*sizeof(char *));
-	char buf[1024]; GetModuleFileName(hInst, buf, sizeof(buf)); argv[0] = buf; argv[argc] = 0;
-	for (int i = 0; i<av.size(); i++) argv[i + 1] = av[i];
-	return main(argc, argv);
+    LFL::WIN32_Init();
+    vector<const char *> av;
+    vector<string> a(1);
+    a[0].resize(1024);
+	GetModuleFileName(hInst, (char*)a.data(), a.size());
+	LFL::StringWordIter word_iter(lpCmdLine);
+    for (auto word = word_iter.next(); word; word = word_iter.next()) a.push_back(word);
+    for (auto i : a) av.push_back(i->c_str()); 
+    av.push_back(0);
+	return main(av.size()-1, &av[0]);
 }
 #endif

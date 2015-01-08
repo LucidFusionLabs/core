@@ -40,19 +40,6 @@ void NativeThreadStart(int (*CB)(void *), void *arg) {
 #import <AppKit/NSFont.h>
 #import <AppKit/NSFontManager.h>
 
-static int DoNothing(void *) { return 0; }
-
-extern "C" void NativeWindowInit() {
-#if 0
-    NativeThreadStart(DoNothing, 0);
-    BOOL mt1 = [NSThread isMultiThreaded];
-    printf("NSthread multithread %d\n", mt1);
-#endif
-}
-extern "C" void NativeWindowQuit() {}
-extern "C" void NativeWindowSize(int *widthOut, int *heightOut) {}
-extern "C" int NativeWindowOrientation() { return 1; }
-
 extern "C" int OSXReadFonts(void *FontsIter, void (*FontsIterAdd)(void *fi, const char *name, const char *family, int flag)) {
     NSFontManager *nsFontManager = [NSFontManager sharedFontManager];
     [nsFontManager retain];
@@ -137,10 +124,10 @@ static const char **osx_argv = 0;
 
         float FRAME_INTERVAL = 1.0/60.0 ;
         timer = [NSTimer timerWithTimeInterval:FRAME_INTERVAL 
-                   target:self 
-                   selector:@selector(timerEvent:) 
-                   userInfo:nil 
-                   repeats:YES];
+                 target:self 
+                 selector:@selector(timerEvent:) 
+                 userInfo:nil 
+                 repeats:YES];
         
         [[NSRunLoop mainRunLoop] addTimer:timer forMode:NSDefaultRunLoopMode];
     }
@@ -161,27 +148,59 @@ static const char **osx_argv = 0;
 
 // AppDelegate
 @interface AppDelegate : NSObject <NSApplicationDelegate>
+@property (nonatomic,strong) IBOutlet NSWindow *window;
+@property (nonatomic,strong) IBOutlet GameView *view;
+@property (nonatomic,strong) IBOutlet ViewController *viewController;
 @end
 
 @implementation AppDelegate
-    - (void)applicationWillTerminate:(NSNotification *)aNotification {}
-    - (void)applicationDidFinishLaunching:(NSNotification *)aNotification {
+    - (void)applicationWillTerminate: (NSNotification *)aNotification {}
+    - (void)applicationDidFinishLaunching: (NSNotification *)aNotification {
         // [[NSFileManager defaultManager] changeCurrentDirectoryPath: [[NSBundle mainBundle] resourcePath]];
         OSXMain(osx_argc, osx_argv);
         [self performSelector:@selector(postFinishLaunch) withObject:nil afterDelay:0.0];
     }
     - (void)postFinishLaunch { LFAppMain(); }
+    - (void)createWindow: (int)w height:(int)h {
+        INFOf("OSXVideoModule: AppDelegate::createWindow(%d, %d)", w, h);
+        self.window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, w, h)
+                                        styleMask:NSClosableWindowMask|NSMiniaturizableWindowMask|NSResizableWindowMask|NSTitledWindowMask
+                                        backing:NSBackingStoreBuffered defer:NO];
+        self.view = [[GameView alloc] initWithFrame:self.window.frame pixelFormat:nil];
+        self.viewController = [[ViewController alloc] init];
+
+        //[self.window.contentView addSubview:self.viewController.view];
+        [self.window.contentView replaceSubview:self.view with:self.viewController.view];
+        //[self.viewController.view.frame = ((NSView*)self.window.contentView).bounds;
+        [self.window setContentView:self.view];
+#if 0
+        self.viewController = [[ViewController alloc] init];
+
+        CGRect wbounds = [self.window bounds];
+        self.view = [[EAGLView alloc] initWithFrame:wbounds
+            pixelFormat:kEAGLColorFormatRGB565	// kEAGLColorFormatRGBA8
+            depthFormat:0                       // GL_DEPTH_COMPONENT16_OES
+            preserveBackbuffer:false];
+
+        [self.viewController setView:self.view]; 
+        [self.window addSubview:self.view];
+        [self.view setCurrentContext];
+        #endif
+    }
 @end
 
-id app_delegate = nil;
+extern "C" void NativeWindowInit() {}
+extern "C" void NativeWindowQuit() {}
+extern "C" int NativeWindowOrientation() { return 1; }
+extern "C" void NativeWindowSize(int *width, int *height) {
+    [(AppDelegate*)[NSApp delegate] createWindow:*width height:*height];
+}
+
 extern "C" int main(int argc, const char **argv) {
-	osx_argc = argc; osx_argv = argv;
-    NSAutoreleasePool * pool = [[NSAutoreleasePool alloc] init];
-    app_delegate = [[AppDelegate alloc] init];
+    osx_argc = argc; osx_argv = argv;
+    AppDelegate *app_delegate = [[AppDelegate alloc] init];
     [[NSApplication sharedApplication] setDelegate: app_delegate];
-    int ret = NSApplicationMain(argc, argv);
-    [pool release];
-    return ret;
+    return NSApplicationMain(argc, argv);
 }
 #endif // LFL_OSXVIDEO
 
@@ -307,7 +326,7 @@ static NSString *documentsDirectory = nil;
         CGRect wbounds = [self.window bounds];
         self.view = [[EAGLView alloc] initWithFrame:wbounds
             pixelFormat:kEAGLColorFormatRGB565	// kEAGLColorFormatRGBA8
-            depthFormat:0						// GL_DEPTH_COMPONENT16_OES
+            depthFormat:0                       // GL_DEPTH_COMPONENT16_OES
             preserveBackbuffer:false];
 
         // left view  
@@ -501,7 +520,7 @@ extern "C" void NativeWindowInit() {
 }
 
 extern "C" void NativeWindowQuit() {
-	if (documentsDirectory != nil) { [documentsDirectory release]; documentsDirectory = nil; }
+    if (documentsDirectory != nil) { [documentsDirectory release]; documentsDirectory = nil; }
 }
 
 extern "C" void NativeWindowSize(int *width, int *height) {
@@ -514,8 +533,8 @@ extern "C" void NativeWindowSize(int *width, int *height) {
 extern "C" int NativeWindowOrientation() { return currentOrientation; }
 
 extern "C" int iPhoneVideoSwap() {
-	[[LFUIApplication sharedAppDelegate] swapBuffers];
-	return 0;
+    [[LFUIApplication sharedAppDelegate] swapBuffers];
+    return 0;
 }
 
 extern "C" int iPhoneShowKeyboard() {
@@ -593,7 +612,7 @@ extern "C" int iPhoneReadDir(const char *path, int dirs,
 }
 
 extern "C" int main(int ac, const char **av) {
-	iphone_argc = ac; iphone_argv = av;
+    iphone_argc = ac; iphone_argv = av;
     NSAutoreleasePool * pool = [[NSAutoreleasePool alloc] init];
     int ret = UIApplicationMain(iphone_argc, iphone_argv, nil, @"LFUIApplication");
     [pool release];

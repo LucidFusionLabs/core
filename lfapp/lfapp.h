@@ -139,6 +139,8 @@ extern "C" int isinf(double);
 #include <stdarg.h>
 #include <string.h>
 
+#include "lfapp/lfexport.h"
+
 #if _WIN32 || _WIN64
  #if _WIN64
   #define LFL64
@@ -172,22 +174,10 @@ extern "C" int isinf(double);
 #define XY_or_Y(x, y) ((x) ? ((x)*(y)) : (y))
 #define X_or_Y_or_Z(x, y, z) ((x) ? (x) : ((y) ? (y) : (z)))
 
-#define  INFO(...) lfapp_log(LogLevel::Info,  __FILE__, __LINE__, StrCat(__VA_ARGS__))
-#define DEBUG(...) lfapp_log(LogLevel::Debug, __FILE__, __LINE__, StrCat(__VA_ARGS__))
-#define ERROR(...) lfapp_log(LogLevel::Error, __FILE__, __LINE__, StrCat(__VA_ARGS__))
-#define FATAL(...) { lfapp_log(LogLevel::Fatal, __FILE__, __LINE__, StrCat(__VA_ARGS__)); throw(0); }
-
-#define  INFOf(fmt, ...) lfapp_log(LogLevel::Info,  __FILE__, __LINE__, StringPrintf(fmt, __VA_ARGS__))
-#define DEBUGf(fmt, ...) lfapp_log(LogLevel::Debug, __FILE__, __LINE__, StringPrintf(fmt, __VA_ARGS__))
-#define ERRORf(fmt, ...) lfapp_log(LogLevel::Error, __FILE__, __LINE__, StringPrintf(fmt, __VA_ARGS__))
-#define FATALf(fmt, ...) { lfapp_log(LogLevel::Fatal, __FILE__, __LINE__, StringPrintf(fmt, __VA_ARGS__)); throw(0); }
-
-#define DECLARE_FLAG(name, type) extern type FLAGS_ ## name
-#define DECLARE_int(name) DECLARE_FLAG(name, int)
-#define DECLARE_bool(name) DECLARE_FLAG(name, bool)
-#define DECLARE_float(name) DECLARE_FLAG(name, float)
-#define DECLARE_double(name) DECLARE_FLAG(name, double)
-#define DECLARE_string(name) DECLARE_FLAG(name, string)
+#define  INFO(...) ::LFL::Log(::LFApp::Log::Info,  __FILE__, __LINE__, ::LFL::StrCat(__VA_ARGS__))
+#define DEBUG(...) ::LFL::Log(::LFApp::Log::Debug, __FILE__, __LINE__, ::LFL::StrCat(__VA_ARGS__))
+#define ERROR(...) ::LFL::Log(::LFApp::Log::Error, __FILE__, __LINE__, ::LFL::StrCat(__VA_ARGS__))
+#define FATAL(...) { ::LFL::Log(::LFApp::Log::Fatal, __FILE__, __LINE__, ::LFL::StrCat(__VA_ARGS__)); throw(0); }
 
 #define ONCE(x) { static bool once=0; if (!once && (once=1)) { x; } }
 #define EVERY_N(x, y) { static int every_N=0; if (every_N++ % (x) == 0) { y; } }
@@ -285,12 +275,10 @@ typedef google::protobuf::Message Proto;
 typedef basic_string<short> String16;
 typedef function<void()> Callback;
 
-struct LogLevel { enum { Fatal=-1, Error=0, Info=3, Debug=7 }; int l; };
-extern "C" void lfapp_log(int level, const char *file, int line, const string &message);
-
 Time Now();
 void Msleep(int x);
 timeval Time2timeval(Time x);
+void Log(int level, const char *file, int line, const string &m);
 inline bool Equal(float a, float b, float eps=1e-6) { return fabs(a-b) < eps; }
 
 unsigned           fnv32(const void *buf, unsigned len=0, unsigned           hval=0);
@@ -1142,7 +1130,6 @@ void DefaultLFAppWindowClosedCB();
 }; // namespace LFL
 
 #include "lfapp/math.h"
-#include "lfapp/lfexport.h"
 #include "lfapp/lftypes.h"
 #include "lfapp/audio.h"
 #include "lfapp/video.h"
@@ -1279,6 +1266,7 @@ struct Application : public ::LFApp, public Module {
     maxfps(&FLAGS_target_fps), fill_mode(3, GraphicsDevice::Fill, GraphicsDevice::Line, GraphicsDevice::Point),
     grab_mode(2, false, true), tex_mode(2, true, false) { run=1; opened=0; main_thread_id=frames_ran=pre_frames_ran=samples_read=samples_read_last=0; }
 
+    void Log(int level, const char *file, int line, const string &message);
     int Create(int argc, const char **argv, const char *source_filename);
     int Init();
     int Start();
@@ -1309,7 +1297,7 @@ typedef int (*MainCB)(int argc, const char **argv);
 struct NTService {
     static int Install  (const char *name, const char *path);
     static int Uninstall(const char *name);
-    static int MainWrapper(const char *name, MainCB mainCB, int argc, const char **argv);
+    static int WrapMain (const char *name, MainCB main_cb, int argc, const char **argv);
 };
 
 }; // namespace LFL

@@ -369,6 +369,6 @@ int main(int argc, const char **argv) {
     string exedir(argv[0], dirnamelen(argv[0]));
     chdir(exedir.c_str());
 #endif
-    return NTService::MainWrapper(service_name, FusionServer, argc, argv);
+    return NTService::WrapMain(service_name, FusionServer, argc, argv);
 }
 }
