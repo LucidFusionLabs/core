@@ -70,7 +70,7 @@ int SpaceballServer(int argc, const char **argv) {
     httpd.AddURL("/favicon.ico", new HTTPServer::FileResource("./assets/icon.ico", "image/x-icon"));
     httpd.AddURL("/", new SpaceballStatusServer());
 
-    server = new SpaceballServer(FLAGS_name.c_str(), FLAGS_port, FLAGS_framerate, &assets);
+    server = new LFL::SpaceballServer(FLAGS_name, FLAGS_port, FLAGS_framerate, &assets);
     if (!FLAGS_rconpw.empty()) server->rcon_auth_passwd = FLAGS_rconpw;
     if (!FLAGS_master.empty()) server->master_sink_url = FLAGS_master;
     if (app->network.Enable(server->udp_transport)) return -1;
@@ -96,8 +96,8 @@ extern "C" int main(int argc, const char **argv) {
     if (install) { NTService::Install(service_name, argv[0]); exit=1; }
     if (uninstall) { NTService::Uninstall(service_name); exit=1; }
 #endif
-    if (FLAGS_run_server) { return SpaceballServer(argc, argv); }
+    if (FLAGS_run_server) { return ::SpaceballServer(argc, argv); }
     if (exit) return app->Free();
 
-    return NTService::WrapMain(service_name, SpaceballServer, argc, argv);
+    return NTService::WrapMain(service_name, ::SpaceballServer, argc, argv);
 }
