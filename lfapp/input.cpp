@@ -50,7 +50,7 @@ DEFINE_int(keyboard_repeat, 50, "Keyboard repeat in milliseconds");
 DEFINE_int(keyboard_delay, 180, "Keyboard delay until repeat in milliseconds");
 DEFINE_bool(input_debug, false, "Debug input events");
 
-#if !defined(LFL_ANDROID) && !defined(LFL_IPHONE) && !defined(LFL_GLFWINPUT) && !defined(LFL_SDLINPUT) && !defined(LFL_QT)
+#if !defined(LFL_ANDROID) && !defined(LFL_IPHONE) && !defined(LFL_GLFWINPUT) && !defined(LFL_SDLINPUT) && !defined(LFL_QT) && !defined(LFL_OSXINPUT)
 const int Key::Escape     = -1;
 const int Key::Return     = -2;
 const int Key::Up         = -3;
@@ -423,9 +423,53 @@ void TouchDevice::OpenKeyboard() {
     SDL_iPhoneKeyboardShow((SDL_Window*)screen->id);
 #endif
 }
-void Mouse::GrabFocus()    { SDL_ShowCursor(0); SDL_SetWindowGrab((SDL_Window*)screen->id, SDL_TRUE);  SDL_SetRelativeMouseMode(SDL_TRUE);  app->grabMode.On();  screen->cursor_grabbed=true; }
-void Mouse::ReleaseFocus() { SDL_ShowCursor(1); SDL_SetWindowGrab((SDL_Window*)screen->id, SDL_FALSE); SDL_SetRelativeMouseMode(SDL_FALSE); app->grabMode.Off(); screen->cursor_grabbed=false; }
+void Mouse::GrabFocus()    { SDL_ShowCursor(0); SDL_SetWindowGrab((SDL_Window*)screen->id, SDL_TRUE);  SDL_SetRelativeMouseMode(SDL_TRUE);  app->grab_mode.On();  screen->cursor_grabbed=true; }
+void Mouse::ReleaseFocus() { SDL_ShowCursor(1); SDL_SetWindowGrab((SDL_Window*)screen->id, SDL_FALSE); SDL_SetRelativeMouseMode(SDL_FALSE); app->grab_mode.Off(); screen->cursor_grabbed=false; }
 #endif /* LFL_SDLINPUT */
+
+#ifdef LFL_OSXINPUT
+const int Key::Escape     = 0x81;
+const int Key::Return     = '\r';
+const int Key::Up         = 0xBE;
+const int Key::Down       = 0xBD;
+const int Key::Left       = 0xBB;
+const int Key::Right      = 0xBC;
+const int Key::LeftShift  = 0x83;
+const int Key::RightShift = 0x87;
+const int Key::LeftCtrl   = 0x86;
+const int Key::RightCtrl  = 0x89;
+const int Key::LeftCmd    = 0x82;
+const int Key::RightCmd   = -12;
+const int Key::Tab        = '\t';
+const int Key::Space      = ' ';
+const int Key::Backspace  = 0x80;
+const int Key::Delete     = -16;
+const int Key::Quote      = '\'';
+const int Key::Backquote  = '`';
+const int Key::PageUp     = 0xB4;
+const int Key::PageDown   = 0xB9;
+const int Key::F1         = 0xBA;
+const int Key::F2         = 0xB8;
+const int Key::F3         = 0xA8;
+const int Key::F4         = 0xB6;
+const int Key::F5         = 0xA5;
+const int Key::F6         = 0xA6;
+const int Key::F7         = 0xA7;
+const int Key::F8         = 0xA9;
+const int Key::F9         = 0xAA;
+const int Key::F10        = 0xAF;
+const int Key::F11        = 0xAB;
+const int Key::F12        = 0xB0;
+const int Key::Home       = 0xB3;
+const int Key::End        = 0xB7;
+
+const char *Clipboard::Get() { return ""; }
+void Clipboard::Set(const char *s) {}
+void TouchDevice::OpenKeyboard() {}
+void TouchDevice::CloseKeyboard() {}
+void Mouse::GrabFocus() {}
+void Mouse::ReleaseFocus() {}
+#endif // LFL_OSXINPUT
 
 int Input::Init() {
 #if defined(LFL_QT)

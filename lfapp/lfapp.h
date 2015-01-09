@@ -1283,8 +1283,6 @@ struct Application : public ::LFApp, public Module {
 #define main LFLQTMain
 #elif defined(LFL_IPHONE)
 #define main iPhoneMain
-extern "C" int iPhoneVideoInit();
-extern "C" int iPhoneVideoSwap();
 extern "C" int iPhoneInput(unsigned clicks, unsigned *events);
 extern "C" int iPhoneOpenBrowser(const char *url_text);
 #elif defined(LFL_OSXVIDEO)

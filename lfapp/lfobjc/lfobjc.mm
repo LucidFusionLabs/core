@@ -70,31 +70,21 @@ static const char **osx_argv = 0;
 @end
 
 @implementation GameView
-    static NSTimer *timer = nil;
+    bool displayLinkInit = 0;
+    CVDisplayLinkRef displayLink;
     - (void)prepareOpenGL {
-        // XXX init_gl();
-
-        // this sets swap interval for double buffering
-        GLint swapInt = 1;
+        GLint swapInt = 1, opaque = 0;
         [[self openGLContext] setValues:&swapInt forParameter:NSOpenGLCPSwapInterval];
-        
-        // this enables alpha in the frame buffer (commented now)
-        // GLint opaque = 0;
         // [[self openGLContext] setValues:&opaque forParameter:NSOpenGLCPSurfaceOpacity];
+        CVDisplayLinkCreateWithActiveCGDisplays(&displayLink);
+        CVDisplayLinkSetOutputCallback(displayLink, &MyDisplayLinkCallback, self);
+        CGLContextObj cglContext = [[self openGLContext] CGLContextObj];
+        // CGLEnable(cglContext, kCGLCEMPEngine);
+        CGLPixelFormatObj cglPixelFormat = [[self pixelFormat] CGLPixelFormatObj];
+        CVDisplayLinkSetCurrentCGDisplayFromOpenGLContext(displayLink, cglContext, cglPixelFormat);
     }
-    - (void)drawRect:(NSRect)dirtyRect {
-        glClear(GL_COLOR_BUFFER_BIT);    
-        glLoadIdentity();
-
-        // XXX draw_screen();
-        
-        // glFlush();
-        // the correct way to do double buffering on Mac is this:
-        [[self openGLContext] flushBuffer];
-        
-        int err;
-        if ((err = glGetError()) != 0) NSLog(@"glGetError(): %d", err); 
-    }
+    - (void)startDisplayLink { CVDisplayLinkStart(displayLink); }
+    - (void)drawRect:(NSRect)dirtyRect { INFOf("%s", "drawRect"); }
     - (void)reshape {
         float screen_w = [self frame].size.width, screen_h = [self frame].size.height;
         Reshaped((int)screen_w, (int)screen_h);
@@ -102,90 +92,108 @@ static const char **osx_argv = 0;
     - (BOOL)acceptsFirstResponder { return YES; }
     - (void)keyDown:(NSEvent *)theEvent {
         if ([theEvent isARepeat]) return;
-        NSString *str = [theEvent charactersIgnoringModifiers];
-        unichar c = [str characterAtIndex:0];
-        if (c < ' ' || c > '~') c = 0;    // only ASCII please
-        KeyPress(c, 1, 0, 0);
+        int c = getKeyCode([theEvent keyCode]);
+        if (c) KeyPress(c, 1, 0, 0);
+        if (c) INFOf("keyDown '%c'", c);
     }
     - (void)keyUp:(NSEvent *)theEvent {
-        NSString *str = [theEvent charactersIgnoringModifiers];
-        unichar c = [str characterAtIndex:0];
-        if (c < ' ' || c > '~') c = 0;    // only ASCII please
-        KeyPress(c, 0, 0, 0);
+        int c = getKeyCode([theEvent keyCode]);
+        if (c) KeyPress(c, 0, 0, 0);
     }
-    - (void)windowDidResignMain:(NSNotification *)notification {
-        [timer invalidate];
-        Minimized();
-        [self setNeedsDisplay:YES];
+    static int getKeyCode(int c) {
+        static unsigned char keyCode[] = {
+            'a',  /* 0x00: kVK_ANSI_A */               's',  /* 0x01: kVK_ANSI_S */                 'd',  /* 0x02: kVK_ANSI_D */
+            'f',  /* 0x03: kVK_ANSI_F */               'h',  /* 0x04: kVK_ANSI_H */                 'g',  /* 0x05: kVK_ANSI_G */
+            'z',  /* 0x06: kVK_ANSI_Z */               'x',  /* 0x07: kVK_ANSI_X */                 'c',  /* 0x08: kVK_ANSI_C */
+            'v',  /* 0x09: kVK_ANSI_V */               0,    /* 0x0A: */                            'b',  /* 0x0B: kVK_ANSI_B */
+            'q',  /* 0x0C: kVK_ANSI_Q */               'w',  /* 0x0D: kVK_ANSI_W */                 'e',  /* 0x0E: kVK_ANSI_E */
+            'r',  /* 0x0F: kVK_ANSI_R */               'y',  /* 0x10: kVK_ANSI_Y */                 't',  /* 0x11: kVK_ANSI_T */
+            '1',  /* 0x12: kVK_ANSI_1 */               '2',  /* 0x13: kVK_ANSI_2 */                 '3',  /* 0x14: kVK_ANSI_3 */
+            '4',  /* 0x15: kVK_ANSI_4 */               '6',  /* 0x16: kVK_ANSI_6 */                 '5',  /* 0x17: kVK_ANSI_5 */
+            '=',  /* 0x18: kVK_ANSI_Equal */           '9',  /* 0x19: kVK_ANSI_9 */                 '7',  /* 0x1A: kVK_ANSI_7 */
+            '-',  /* 0x1B: kVK_ANSI_Minus */           '8',  /* 0x1C: kVK_ANSI_8 */                 '0',  /* 0x1D: kVK_ANSI_0 */
+            ']',  /* 0x1E: kVK_ANSI_RightBracket */    'o',  /* 0x1F: kVK_ANSI_O */                 'u',  /* 0x20: kVK_ANSI_U */
+            '[',  /* 0x21: kVK_ANSI_LeftBracket */     'i',  /* 0x22: kVK_ANSI_I */                 'p',  /* 0x23: kVK_ANSI_P */
+            '\r', /* 0x24: kVK_Return */               'l',  /* 0x25: kVK_ANSI_L */                 'j',  /* 0x26: kVK_ANSI_J */
+            '\'', /* 0x27: kVK_ANSI_Quote */           'k',  /* 0x28: kVK_ANSI_K */                 ';',  /* 0x29: kVK_ANSI_Semicolon */
+            '\\', /* 0x2A: kVK_ANSI_Backslash */       ',',  /* 0x2B: kVK_ANSI_Comma */             '/',  /* 0x2C: kVK_ANSI_Slash */ 
+            'n',  /* 0x2D: kVK_ANSI_N */               'm',  /* 0x2E: kVK_ANSI_M */                 '.',  /* 0x2F: kVK_ANSI_Period */ 
+            '\t', /* 0x30: kVK_Tab */                  ' ',  /* 0x31: kVK_Space */                  '`',  /* 0x32: kVK_ANSI_Grave */             
+            0x80, /* 0x33: kVK_Delete */               0,    /* 0x34: */                            0x81, /* 0x35: kVK_Escape */ 
+            0,    /* 0x36: */                          0x82, /* 0x37: kVK_Command */                0x83, /* 0x38: kVK_Shift */ 
+            0x84, /* 0x39: kVK_CapsLock */             0x85, /* 0x3A: kVK_Option */                 0x86, /* 0x3B: kVK_Control */ 
+            0x87, /* 0x3C: kVK_RightShift */           0x88, /* 0x3D: kVK_RightOption */            0x89, /* 0x3E: kVK_RightControl */ 
+            0x8A, /* 0x3F: kVK_Function */             0x8B, /* 0x40: kVK_F17 */                    0x8C, /* 0x41: kVK_ANSI_KeypadDecimal */
+            0,    /* 0x42: */                          0x8D, /* 0x43: kVK_ANSI_KeypadMultiply */    0,    /* 0x44: */
+            0x8E, /* 0x45: kVK_ANSI_KeypadPlus */      0x8F, /* 0x46: */                            0x90, /* 0x47: kVK_ANSI_KeypadClear */ 
+            0x91, /* 0x48: kVK_VolumeUp */             0x92, /* 0x49: kVK_VolumeDown */             0x93, /* 0x4A: kVK_Mute */
+            0x94, /* 0x4B: kVK_ANSI_KeypadDivide */    0x95, /* 0x4C: kVK_ANSI_KeypadEnter */       0,    /* 0x4D: */
+            0x96, /* 0x4E: kVK_ANSI_KeypadMinus */     0x97, /* 0x4F: kVK_F18 */                    0x98, /* 0x50: kVK_F19 */
+            0x99, /* 0x51: kVK_ANSI_KeypadEquals */    0x9A, /* 0x52: kVK_ANSI_Keypad0 */           0x9B, /* 0x53: kVK_ANSI_Keypad1 */ 
+            0x9C, /* 0x54: kVK_ANSI_Keypad2 */         0x9D, /* 0x55: kVK_ANSI_Keypad3 */           0x9E, /* 0x56: kVK_ANSI_Keypad4 */ 
+            0x9F, /* 0x57: kVK_ANSI_Keypad5 */         0xA0, /* 0x58: kVK_ANSI_Keypad6 */           0xA1, /* 0x59: kVK_ANSI_Keypad7 */            
+            0xA2, /* 0x5A: kVK_F20 */                  0xA3, /* 0x5B: kVK_ANSI_Keypad8 */           0xA4, /* 0x5C: kVK_ANSI_Keypad9 */ 
+            0,    /* 0x5D: */                          0,    /* 0x5E: */                            0,    /* 0x5F: */
+            0xA5, /* 0x60: kVK_F5 */                   0xA6, /* 0x61: kVK_F6 */                     0xA7, /* 0x62: kVK_F7 */ 
+            0xA8, /* 0x63: kVK_F3 */                   0xA9, /* 0x64: kVK_F8 */                     0xAA, /* 0x65: kVK_F9 */ 
+            0,    /* 0x66: */                          0xAB, /* 0x67: kVK_F11 */                    0,    /* 0x68: */
+            0xAC, /* 0x69: kVK_F13 */                  0xAD, /* 0x6A: kVK_F16 */                    0xAE, /* 0x6B: kVK_F14 */
+            0,    /* 0x6C: */                          0xAF, /* 0x6D: kVK_F10 */                    0,    /* 0x6E: */
+            0xB0, /* 0x6F: kVK_F12 */                  0,    /* 0x70: */                            0xB1, /* 0x71: kVK_F15 */
+            0xB2, /* 0x72: kVK_Help */                 0xB3, /* 0x73: kVK_Home */                   0xB4, /* 0x74: kVK_PageUp */
+            0xB5, /* 0x75: kVK_ForwardDelete */        0xB6, /* 0x76: kVK_F4 */                     0xB7, /* 0x77: kVK_End */
+            0xB8, /* 0x78: kVK_F2 */                   0xB9, /* 0x79: kVK_PageDown */               0xBA, /* 0x7A: kVK_F1 */
+            0xBB, /* 0x7B: kVK_LeftArrow */            0xBC, /* 0x7C: kVK_RightArrow */             0xBD, /* 0x7D: kVK_DownArrow */
+            0xBE, /* 0x7E: kVK_UpArrow */              0     /* 0x7f: */                            
+        };
+        return (c >= 0 && c < 128) ? keyCode[c] : 0;
     }
-    - (void)windowDidBecomeMain:(NSNotification *)notification {
-        UnMinimized();
-        [self setNeedsDisplay:YES];
-
-        float FRAME_INTERVAL = 1.0/60.0 ;
-        timer = [NSTimer timerWithTimeInterval:FRAME_INTERVAL 
-                 target:self 
-                 selector:@selector(timerEvent:) 
-                 userInfo:nil 
-                 repeats:YES];
-        
-        [[NSRunLoop mainRunLoop] addTimer:timer forMode:NSDefaultRunLoopMode];
+    static CVReturn MyDisplayLinkCallback(CVDisplayLinkRef displayLink, const CVTimeStamp* now, const CVTimeStamp* outputTime, CVOptionFlags flagsIn, CVOptionFlags* flagsOut, void* displayLinkContext) {
+        NSAutoreleasePool * pool = [[NSAutoreleasePool alloc] init];
+        [(GameView*)displayLinkContext getFrameForTime:outputTime];
+        [pool release];
+        return kCVReturnSuccess;
     }
-    - (void)timerEvent:(NSTimer *)t {
+    - (void)getFrameForTime:(const CVTimeStamp*)outputTime {
+        if (!displayLinkInit && (displayLinkInit=1)) {
+            [[self openGLContext] makeCurrentContext];
+            SetLFAppMainThread();
+        }
         LFAppFrame();
-        [self setNeedsDisplay:YES];
     }
-@end
-
-// ViewController
-@interface ViewController : NSViewController
-@end
-
-@implementation ViewController
-    - (void)viewDidLoad { [super viewDidLoad]; }
-    - (void)setRepresentedObject:(id)representedObject { [super setRepresentedObject:representedObject]; }
+    - (void)dealloc {
+        CVDisplayLinkRelease(displayLink);
+        [super dealloc];
+    }
 @end
 
 // AppDelegate
 @interface AppDelegate : NSObject <NSApplicationDelegate>
 @property (nonatomic,strong) IBOutlet NSWindow *window;
 @property (nonatomic,strong) IBOutlet GameView *view;
-@property (nonatomic,strong) IBOutlet ViewController *viewController;
 @end
 
 @implementation AppDelegate
     - (void)applicationWillTerminate: (NSNotification *)aNotification {}
     - (void)applicationDidFinishLaunching: (NSNotification *)aNotification {
         // [[NSFileManager defaultManager] changeCurrentDirectoryPath: [[NSBundle mainBundle] resourcePath]];
+        INFOf("OSXModule::Init argc=%d\n", osx_argc);
         OSXMain(osx_argc, osx_argv);
         [self performSelector:@selector(postFinishLaunch) withObject:nil afterDelay:0.0];
     }
-    - (void)postFinishLaunch { LFAppMain(); }
+    - (void)postFinishLaunch {
+        INFOf("%s", "OSXModule::Init done");
+        [self.view startDisplayLink];
+    }
     - (void)createWindow: (int)w height:(int)h {
         INFOf("OSXVideoModule: AppDelegate::createWindow(%d, %d)", w, h);
         self.window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, w, h)
                                         styleMask:NSClosableWindowMask|NSMiniaturizableWindowMask|NSResizableWindowMask|NSTitledWindowMask
                                         backing:NSBackingStoreBuffered defer:NO];
-        self.view = [[GameView alloc] initWithFrame:self.window.frame pixelFormat:nil];
-        self.viewController = [[ViewController alloc] init];
-
-        //[self.window.contentView addSubview:self.viewController.view];
-        [self.window.contentView replaceSubview:self.view with:self.viewController.view];
-        //[self.viewController.view.frame = ((NSView*)self.window.contentView).bounds;
+        self.view = [[GameView alloc] initWithFrame:self.window.frame pixelFormat:GameView.defaultPixelFormat];
+        [[self.view openGLContext] setView: self.view];
         [self.window setContentView:self.view];
-#if 0
-        self.viewController = [[ViewController alloc] init];
-
-        CGRect wbounds = [self.window bounds];
-        self.view = [[EAGLView alloc] initWithFrame:wbounds
-            pixelFormat:kEAGLColorFormatRGB565	// kEAGLColorFormatRGBA8
-            depthFormat:0                       // GL_DEPTH_COMPONENT16_OES
-            preserveBackbuffer:false];
-
-        [self.viewController setView:self.view]; 
-        [self.window addSubview:self.view];
-        [self.view setCurrentContext];
-        #endif
+        [self.window makeKeyAndOrderFront:nil];
     }
 @end
 
@@ -194,6 +202,12 @@ extern "C" void NativeWindowQuit() {}
 extern "C" int NativeWindowOrientation() { return 1; }
 extern "C" void NativeWindowSize(int *width, int *height) {
     [(AppDelegate*)[NSApp delegate] createWindow:*width height:*height];
+}
+extern "C" int OSXVideoSwap() {
+    // INFOf("%s", "OSXVideoSwap");
+    // [[[(AppDelegate*)[NSApp delegate] view] openGLContext] flushBuffer];
+    CGLFlushDrawable([[[(AppDelegate*)[NSApp delegate] view] openGLContext] CGLContextObj]);
+    return 0;
 }
 
 extern "C" int main(int argc, const char **argv) {

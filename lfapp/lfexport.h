@@ -59,11 +59,13 @@ void NativeWindowQuit();
 void NativeWindowSize(int *widthOut, int *heightOut);
 int NativeWindowOrientation();
 NativeWindow *GetNativeWindow();
+LFApp *GetLFApp();
 
 int LFAppMain();
 int LFAppFrame();
 void LFAppLog(int level, const char *file, int line, const char *fmt, ...);
 void LFAppFatal();
+void SetLFAppMainThread();
 void Reshaped(int w, int h);
 void Minimized(); 
 void UnMinimized(); 

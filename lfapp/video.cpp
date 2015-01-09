@@ -153,21 +153,8 @@ extern "C" int      main(int argc, const char *argv[]) {
 #if defined(LFL_ANDROID)
 extern "C" {
 #include "SDL_androidvideo.h"
-void NativeWindowInit() {}
-void NativeWindowQuit() {}
-void NativeWindowSize(int *widthOut, int *heightOut) { *widthOut = Android_ScreenWidth; *heightOut = Android_ScreenHeight; }
-int NativeWindowOrientation() { return 1; }
 };
 #endif
-#endif
-
-#if defined(LFL_HEADLESS) || defined(_WIN32) || defined(__linux__)
-extern "C" {
-void NativeWindowInit() {}
-void NativeWindowQuit() {}
-void NativeWindowSize(int *widthOut, int *heightOut) {}
-int NAtiveWindowOrientation() { return 1; }
-};
 #endif
 
 namespace LFL {
@@ -750,15 +737,16 @@ void GraphicsDevice::DisableBlend() { GDDebug("Blend=0"); glDisable(GL_BLEND); }
 void GraphicsDevice::EnableBlend()  { GDDebug("Blend=1");  glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); }
 void GraphicsDevice::BlendMode(int sm, int dm) { GDDebug("BlendMode=", sm, ",", dm); glBlendFunc(sm, dm); }
 void GraphicsDevice::RestoreViewport(int dm) { ViewPort(screen->Box()); DrawMode(dm); }
-void GraphicsDevice::DrawMode(int _2D, bool flush) { return DrawMode(_2D, screen->width, screen->height, flush); }
-void GraphicsDevice::DrawMode(int _2D, int W, int H, bool flush) {
-    if (draw_mode == _2D && !flush) return;
-    draw_mode = _2D;
+void GraphicsDevice::DrawMode(int dm, bool flush) { return DrawMode(dm, screen->width, screen->height, flush); }
+void GraphicsDevice::DrawMode(int dm, int W, int H, bool flush) {
+    if (draw_mode == dm && !flush) return;
+    draw_mode = dm;
     Color4f(1,1,1,1);
     MatrixProjection();
     LoadIdentity();
     if (FLAGS_rotate_view) Rotatef(FLAGS_rotate_view,0,0,1);
 
+    bool _2D = draw_mode == DrawMode::_2D;
     if (_2D) Ortho(0, W, 0, H, 0, 100);
     else {
         float aspect=(float)W/H;
@@ -925,9 +913,9 @@ void GraphicsDevice::DisableDepthTest() {}
 void GraphicsDevice::DisableBlend() {}
 void GraphicsDevice::EnableBlend() {}
 void GraphicsDevice::BlendMode(int sm, int dm) {}
-void GraphicsDevice::RestoreViewport(int _2D) {}
-void GraphicsDevice::DrawMode(int _2D, bool flush) {}
-void GraphicsDevice::DrawMode(int _2D, int W, int H, bool flush) {}
+void GraphicsDevice::RestoreViewport(int dm) {}
+void GraphicsDevice::DrawMode(int dm, bool flush) {}
+void GraphicsDevice::DrawMode(int dm, int W, int H, bool flush) {}
 void GraphicsDevice::LookAt(const v3 &pos, const v3 &targ, const v3 &up) {}
 void GraphicsDevice::ViewPort(Box w) {}
 void GraphicsDevice::Scissor(Box w) {}
@@ -953,6 +941,7 @@ struct AndroidVideoModule : public Module {
 #endif
 
 #ifdef LFL_IPHONE
+extern "C" int iPhoneVideoSwap();
 struct IPhoneVideoModule : public Module {
     int Init() {
         INFO("IPhoneVideoModule::Init()");
@@ -964,16 +953,23 @@ struct IPhoneVideoModule : public Module {
 #endif
 
 #ifdef LFL_OSXVIDEO
+extern "C" int OSXVideoSwap();
 struct OSXVideoModule : public Module {
     int Init() {
         INFO("OSXVideoModule::Init()");
         NativeWindowInit();
         NativeWindowSize(&screen->width, &screen->height);
+        CHECK(Window::Create(screen));
         return 0;
     }
 };
-bool Window::Create(Window *W) { Window::active[W->id] = W; return true; }
-void Window::MakeCurrent(Window *W) {}
+bool Window::Create(Window *W) { 
+    static long next_id = 1;
+    W->id = (void*)next_id++;
+    Window::active[W->id] = W;
+    return true; 
+}
+void Window::MakeCurrent(Window *W) { screen=W; }
 void Window::Close(Window *W) {}
 #endif
 
@@ -1022,7 +1018,6 @@ void Mouse::ReleaseFocus() { ((OpenGLES2*)screen->gd)->QT_grabbed=0; ((QWindow*)
 struct GLFWVideoModule : public Module {
     int Init() {
         INFO("GLFWVideoModule::Init");
-        NativeWindowInit();
         CHECK(Window::Create(screen));
         Window::MakeCurrent(screen);
         glfwSwapInterval(1);
@@ -1059,8 +1054,6 @@ struct SDLVideoModule : public Module {
     int Init() {
         INFO("SFLVideoModule::Init");
         CHECK(Window::Create(screen));
-        NativeWindowInit();
-        NativeWindowSize(&screen->width, &screen->height);
         Window::MakeCurrent(screen);
         SDL_GL_SetSwapInterval(1);
         return 0;
@@ -1206,31 +1199,30 @@ int Video::Flush() {
 #else
     glFlush();
 #endif
-#ifdef LFL_ANDROID
-    android_video_swap();
-#endif
-#ifdef LFL_GLFWVIDEO
+#if defined(LFL_ANDROID)
+    AndroidVideoSwap();
+#elif defined(LFL_GLFWVIDEO)
     glfwSwapBuffers((GLFWwindow*)screen->id);
-#endif
-#ifdef LFL_SDLVIDEO
+#elif defined(LFL_SDLVIDEO)
     SDL_GL_SwapWindow((SDL_Window*)screen->id);
-#endif
-#ifdef LFL_IPHONE
-    iphone_video_swap();
+#elif defined(LFL_IPHONE)
+    iPhoneVideoSwap();
+#elif defined(LFL_OSXVIDEO)
+    OSXVideoSwap();
 #endif
 
     GLint gl_error=0, gl_validate_status=0;
 #ifdef LFL_GLSL_SHADERS
-    if (screen->opengles_version == 2) {
 #if 0
+    if (screen->opengles_version == 2) {
         glGetProgramiv(GraphicsDevice::shader, GL_VALIDATE_STATUS, &gl_validate_status);
         if (gl_validate_status != GL_TRUE) ERROR("gl validate status ", gl_validate_status);
 
         char buf[1024]; int len;
         glGetProgramInfoLog(GraphicsDevice::shader, sizeof(buf), &len, buf);
         if (len) INFO(buf);
-#endif
     }
+#endif
 #endif
     if ((gl_error = glGetError())) ERROR("gl error ", gl_error);
     return 0;
@@ -1251,9 +1243,9 @@ void Window::Reshape(int w, int h) {
 }
 
 void Window::Reshaped(int w, int h) {
-    float wr = (float)w/width, hr = (float)h/height;
     width = w;
     height = h;
+    if (!gd) return;
     gd->ViewPort(LFL::Box(width, height));
     gd->DrawMode(DrawMode::_3D);
     for (auto g = screen->mouse_gui.begin(); g != screen->mouse_gui.end(); ++g) (*g)->Layout();

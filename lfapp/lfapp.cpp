@@ -1812,31 +1812,25 @@ string Crypto::Blowfish(const string &passphrase, const string &in, bool encrypt
 #endif
 
 void SystemBrowser::Open(const char *url_text) {
-#ifdef LFL_ANDROID
-    android_open_browser(url_text);
+#if defined(LFL_ANDROID)
+    AndroidOpenBrowser(url_text);
+#elif defined(LFL_IPHONE)
+    iPhoneOpenBrowser(url_text);
+#elif defined(__APPLE__)
+    CFURLRef url = CFURLCreateWithBytes(0, (UInt8*)url_text, strlen(url_text), kCFStringEncodingASCII, 0);
+    if (url) { LSOpenCFURLRef(url, 0); CFRelease(url); }
 #endif
-#ifdef LFL_IPHONE
-    iphone_open_browser(url_text);
-#else // LFL_IPHONE
-#ifdef __APPLE__
-    CFURLRef url = CFURLCreateWithBytes(NULL, (UInt8*)url_text, strlen(url_text), kCFStringEncodingASCII, NULL);
-    if (url) {
-        LSOpenCFURLRef(url,0);
-        CFRelease(url);
-    }
-#endif // __APPLE__
-#endif // LFL_IPHONE
 }
 
 void Advertising::ShowAds() {
-#ifdef LFL_ANDROID
-    android_show_ads();
+#if defined(LFL_ANDROID)
+    AndroidShowAds();
 #endif
 }
 
 void Advertising::HideAds() {
-#ifdef LFL_ANDROID
-    android_hide_ads();
+#if defined(LFL_ANDROID)
+    AndroidHideAds();
 #endif
 }
 
@@ -1935,7 +1929,7 @@ int Application::Create(int argc, const char **argv, const char *source_filename
 #ifdef LFL_GLOG
     google::InstallFailureSignalHandler();
 #endif
-    main_thread_id = Thread::Id();
+    SetLFAppMainThread();
     progname = argv[0];
 
 #ifdef __APPLE__
@@ -2017,7 +2011,7 @@ int Application::Create(int argc, const char **argv, const char *source_filename
 
     if (FLAGS_daemonize) {
         Process::Daemonize();
-        main_thread_id = Thread::Id();
+        SetLFAppMainThread();
     }
 
     return 0;
@@ -2172,6 +2166,9 @@ int Application::PreFrame(unsigned clicks, unsigned *mic_samples, bool *camera_s
     if (FLAGS_lfapp_network && run) {
         network.Frame();
     }
+
+    for (auto i = modules.begin(); i != modules.end() && run; ++i) (*i)->Frame(clicks);
+
     return 0;
 }
 
@@ -2193,6 +2190,7 @@ int Application::Wakeup() {
     SDL_zero(event);
     event.type = my_event_type;
     SDL_PushEvent(&event);
+#elif defined(LFL_OSXINPUT)
 #else
     FATAL("not implemented");
 #endif
@@ -2207,6 +2205,7 @@ int Application::Frame() {
         glfwWaitEvents();
 #elif defined(LFL_SDLINPUT)
         SDL_WaitEvent(NULL);
+#elif defined(LFL_OSXINPUT)
 #else
         FATAL("not implemented");
 #endif
@@ -2253,8 +2252,6 @@ int Application::Frame() {
         if (ret < 0) continue;
         screen->fps.Add(clicks);
 
-        for (auto i = modules.begin(); i != modules.end(); ++i) (*i)->Frame(clicks);
-
         if (FLAGS_lfapp_video) {
             if (FLAGS_multitouch) {
                 static Font *mobile_font = Fonts::Get("MobileAtlas", 0, Color::black);
@@ -2279,7 +2276,7 @@ int Application::Frame() {
 int Application::Main() {
     if (Start()) return Exiting();
 
-#ifdef LFL_QT
+#if defined(LFL_QT) || defined(LFL_OSXVIDEO)
     return 0;
 #endif
 
@@ -2599,6 +2596,7 @@ JSContext *CreateV8JSContext(Console *js_console, DOM::Node *doc) { return 0; }
 extern "C" void NotImplemented() { FATAL("not implemented"); }
 extern "C" void ShellRun(const char *text) { return LFL::app->shell.Run(text); }
 extern "C" NativeWindow *GetNativeWindow() { return LFL::screen; }
+extern "C" LFApp        *GetLFApp()        { return LFL::app; }
 extern "C" int LFAppMain()                 { return LFL::app->Main(); }
 extern "C" int LFAppFrame()                { return LFL::app->Frame(); }
 extern "C" void Reshaped(int w, int h)     { LFL::screen->Reshaped(w, h); }
@@ -2606,6 +2604,7 @@ extern "C" void Minimized()                { LFL::screen->Minimized(); }
 extern "C" void UnMinimized()              { LFL::screen->UnMinimized(); }
 extern "C" void KeyPress  (int b, int d, int,   int  ) { LFL::app->input.KeyPress  (b, d, 0, 0); }
 extern "C" void MouseClick(int b, int d, int x, int y) { LFL::app->input.MouseClick(b, d, x, y); }
+extern "C" void SetLFAppMainThread() { LFL::app->main_thread_id = LFL::Thread::Id(); }
 extern "C" void LFAppLog(int level, const char *file, int line, const char *fmt, ...) {
     string message;
     StringPrintfImpl(&message, fmt, vsnprintf, char, 0);
