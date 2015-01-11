@@ -253,13 +253,13 @@ struct Listener;
 struct Service;
 struct Font;
 struct Flow;
-struct FloatedBox;
 struct FloatContainer;
+struct BrowserInterface;
+struct InputController;
 struct GUI;
 struct KeyboardGUI;
 struct TextGUI;
 struct Console;
-struct Browser;
 struct Dialog;
 struct Tiles;
 struct Bind;
@@ -487,21 +487,6 @@ template <class X> struct FlagOfType : public Flag {
 #define DEFINE_float(name, initial, description) DEFINE_FLAG(name, float, initial, description)
 #define DEFINE_double(name, initial, description) DEFINE_FLAG(name, double, initial, description)
 #define DEFINE_string(name, initial, description) DEFINE_FLAG(name, string, initial, description)
-
-DECLARE_bool(lfapp_audio);
-DECLARE_bool(lfapp_video);
-DECLARE_bool(lfapp_input);
-DECLARE_bool(lfapp_network);
-DECLARE_bool(lfapp_camera);
-DECLARE_bool(lfapp_cuda);
-DECLARE_bool(lfapp_multithreaded);
-DECLARE_bool(lfapp_wait_forever);
-DECLARE_bool(lfapp_debug);
-DECLARE_int(target_fps);
-DECLARE_int(min_fps);
-DECLARE_bool(max_rlimit_core);
-DECLARE_bool(max_rlimit_open_files);
-DECLARE_bool(open_console);
 
 bool Running();
 bool MainThread();
@@ -820,6 +805,7 @@ struct Thread {
     bool Start() { return (started = (impl = (HANDLE)_beginthreadex(0, 0, Run, this, 0, &id)) != 0); }
     static unsigned long long Id() { return GetCurrentThreadId(); }
     static unsigned __stdcall Run(void *arg) {
+        INFOf("Startred thread(%lld)", Id());
         ScopedThreadLocalStorage tls;
         Thread *t = (Thread*)arg;
         return t->cb ? t->cb(t->arg) : 0;
@@ -843,6 +829,7 @@ struct Thread {
     bool Start() { return (started = !pthread_create(&impl, 0, Run, this)); }
     static unsigned long long Id() { return (unsigned long long)pthread_self(); }
     static void* Run(void* arg) {
+        INFOf("Startred thread(%lld)", Id());
         ScopedThreadLocalStorage tls;
         Thread *t = (Thread*)arg;
         return t->cb ? (void*)(long)t->cb(t->arg) : 0;
@@ -1217,7 +1204,7 @@ struct JSContext {
 };
 JSContext *CreateV8JSContext(Console *js_console=0, LFL::DOM::Node *document=0);
 
-struct Browser {
+struct BrowserInterface {
     virtual void Draw(Box *viewport) = 0;
     virtual void Open(const string &url) = 0;
     virtual void Navigate(const string &url) { Open(url); }
@@ -1235,7 +1222,6 @@ struct Browser {
 
 struct SystemBrowser { static void Open(const char *url); };
 struct Clipboard { static const char *Get(); static void Set(const char *s); };
-struct Mouse { static void GrabFocus(); static void ReleaseFocus(); };
 struct TouchDevice { static void OpenKeyboard(); static void CloseKeyboard(); };
 struct Advertising { static void ShowAds(); static void HideAds(); };
 struct CUDA : public Module { int Init(); };

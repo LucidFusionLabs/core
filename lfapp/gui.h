@@ -867,7 +867,7 @@ struct Renderer : public Object {
     int MarginRightAuto (Flow *flow, int w) { return max(0, flow->container->w - br_px - pr_px - w - LeftMarginOffset()); } 
 }; }; // namespace DOM
 
-struct SimpleBrowser : public Browser {
+struct SimpleBrowser : public BrowserInterface {
     GUI gui;
     Font *font;
     Layers layers;
@@ -912,7 +912,7 @@ struct SimpleBrowser : public Browser {
     void ForwardButton() {}
     void RefreshButton() {}
     void AnchorClicked(DOM::HTMLAnchorElement *anchor);
-    void InitLayers() { layers.Init(2); gui.mouse.dont_deactivate=1; }
+    void InitLayers() { layers.Init(2); }
     string GetURL() { return String::ToUTF8(doc.node->URL); }
 
     bool Dirty(Box *viewport);
@@ -931,9 +931,9 @@ struct SimpleBrowser : public Browser {
     static int ScreenToWebKitY(const Box &w) { return -w.y - w.h; }
 };
 
-Browser *CreateQTWebKitBrowser(Asset *a);
-Browser *CreateBerkeliumBrowser(Asset *a, int w=1024, int h=1024);
-Browser *CreateDefaultBrowser(Window *W, Asset *a, int w=1024, int h=1024);
+BrowserInterface *CreateQTWebKitBrowser(Asset *a);
+BrowserInterface *CreateBerkeliumBrowser(Asset *a, int w=1024, int h=1024);
+BrowserInterface *CreateDefaultBrowser(Window *W, Asset *a, int w=1024, int h=1024);
 
 struct HelperGUI : public GUI {
     HelperGUI(Window *W) : GUI(W), font(Fonts::Get(FLAGS_default_font, 9, Color::white)) {}

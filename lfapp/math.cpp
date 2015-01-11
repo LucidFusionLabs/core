@@ -23,7 +23,7 @@
 #include "lfapp/lfapp.h"
 
 namespace LFL {
-bool v4::operator<(const v4 &c) const { SortMacro4(x, c.x, y, c.y, z, c.z, w, c.w); }
+bool v4::operator<(const v4 &c) const { SortImpl4(x, c.x, y, c.y, z, c.z, w, c.w); }
 
 double Squared(double n) { return n*n; }
 float Decimals(float n) { return n - (int)n; }

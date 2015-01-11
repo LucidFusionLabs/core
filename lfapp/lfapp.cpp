@@ -120,7 +120,6 @@ DEFINE_bool(lfapp_cuda, true, "Enable CUDA acceleration");
 DEFINE_bool(lfapp_network, true, "Enable asynchronous network engine");
 DEFINE_bool(lfapp_debug, false, "Enable debug mode");
 DEFINE_bool(lfapp_wait_forever, false, "Sleep until events occur");
-DEFINE_bool(lfapp_multithreaded, false, "Enable IPC");
 DEFINE_bool(cursor_grabbed, false, "Center cursor every frame");
 DEFINE_bool(daemonize, false, "Daemonize server");
 DEFINE_bool(rcon_debug, false, "Print rcon commands");
@@ -2045,8 +2044,8 @@ int Application::Init() {
     av_register_all();
 #endif /* LFL_FFMPEG */
 
-    thread_pool.Open(FLAGS_threadpool_size);
-    if (FLAGS_lfapp_multithreaded) thread_pool.Start();
+    thread_pool.Open(X_or_1(FLAGS_threadpool_size));
+    if (FLAGS_threadpool_size) thread_pool.Start();
 
     if (FLAGS_lfapp_audio || FLAGS_lfapp_video) {
         if (assets.Init()) { ERROR("assets init failed"); return -1; }
@@ -2161,7 +2160,7 @@ int Application::PreFrame(unsigned clicks, unsigned *mic_samples, bool *camera_s
     if (run) ThreadPool::HandleMessages(&message_queue);
 
     // fake threadpool that executes in main thread
-    if (run && !FLAGS_lfapp_multithreaded) ThreadPool::HandleMessages(thread_pool.queue[0]);
+    if (run && !FLAGS_threadpool_size) ThreadPool::HandleMessages(thread_pool.queue[0]);
 
     if (FLAGS_lfapp_network && run) {
         network.Frame();
@@ -2229,8 +2228,8 @@ int Application::Frame() {
             if (screen->gesture_swipe_down) { if (screen->console && screen->console->active) screen->console->PageDown(); }
 
             /* Active GUIs should be activate()'d each frame, usally when drawn */
-            screen->DeactivateMouseGUIs();
-            screen->gui_root->mouse.Activate();
+            //screen->DeactivateMouseGUIs();
+            //screen->gui_root->mouse.Activate();
         }
 
         if (FLAGS_lfapp_video) {
@@ -2602,8 +2601,9 @@ extern "C" int LFAppFrame()                { return LFL::app->Frame(); }
 extern "C" void Reshaped(int w, int h)     { LFL::screen->Reshaped(w, h); }
 extern "C" void Minimized()                { LFL::screen->Minimized(); }
 extern "C" void UnMinimized()              { LFL::screen->UnMinimized(); }
-extern "C" void KeyPress  (int b, int d, int,   int  ) { LFL::app->input.KeyPress  (b, d, 0, 0); }
-extern "C" void MouseClick(int b, int d, int x, int y) { LFL::app->input.MouseClick(b, d, x, y); }
+extern "C" void KeyPress  (int b, int d)                 { LFL::app->input.KeyPress  (b, d); }
+extern "C" void MouseClick(int b, int d, int x,  int y)  { LFL::app->input.MouseClick(b, d, LFL::point(x, y)); }
+extern "C" void MouseMove (int x, int y, int dx, int dy) { LFL::app->input.MouseMove (LFL::point(x, y), LFL::point(dx, dy)); }
 extern "C" void SetLFAppMainThread() { LFL::app->main_thread_id = LFL::Thread::Id(); }
 extern "C" void LFAppLog(int level, const char *file, int line, const char *fmt, ...) {
     string message;
