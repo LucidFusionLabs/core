@@ -27,7 +27,7 @@
 #include "spaceballserv.h"
 
 namespace LFL {
-BindMap binds;
+BindMap *binds;
 AssetMap asset;
 SoundAssetMap soundasset;
 SpaceballSettings sbsettings;
@@ -609,13 +609,11 @@ extern "C" int main(int argc, const char *argv[]) {
 
     app->logfilename = StrCat(dldir(), "spaceball.txt");
     app->frame_cb = Frame;
-    screen->binds = &binds;
 #if defined(LFL_ANDROID) || defined(LFL_IPHONE)
     FLAGS_target_fps = 30;
     screen->width = 420;
     screen->height = 380;
 #else
-    FLAGS_lfapp_multithreaded = true;
     FLAGS_target_fps = 50;
     screen->width = 620;
     screen->height = 480;
@@ -626,6 +624,7 @@ extern "C" int main(int argc, const char *argv[]) {
     FLAGS_default_font = "Origicide.ttf";
     screen->caption = "Spaceball 6006";
     screen->multitouch_keyboard_x = .37;
+    screen->binds = binds = new BindMap();
 
     if (app->Create(argc, argv, __FILE__)) { app->Free(); return -1; }
     if (app->Init())                       { app->Free(); return -1; }
@@ -816,37 +815,36 @@ extern "C" int main(int argc, const char *argv[]) {
     app->shell.command.push_back(Shell::Command("me",           bind(&GameClient::MyEntityName, server, _1)));
 
 #if 0                                   
-    binds.push_back(Bind('w',             Bind::TimeCB(bind(&Entity::MoveFwd,       screen->camMain, _1))));
-    binds.push_back(Bind('s',             Bind::TimeCB(bind(&Entity::MoveRev,       screen->camMain, _1))));
-    binds.push_back(Bind('a',             Bind::TimeCB(bind(&Entity::MoveLeft,      screen->camMain, _1))));
-    binds.push_back(Bind('d',             Bind::TimeCB(bind(&Entity::MoveRight,     screen->camMain, _1))));
-    binds.push_back(Bind('q',             Bind::TimeCB(bind(&Entity::MoveDown,      screen->camMain, _1))));
-    binds.push_back(Bind('e',             Bind::TimeCB(bind(&Entity::MoveUp,        screen->camMain, _1))));
+    binds->Add(Bind('w',             Bind::TimeCB(bind(&Entity::MoveFwd,       screen->camMain, _1))));
+    binds->Add(Bind('s',             Bind::TimeCB(bind(&Entity::MoveRev,       screen->camMain, _1))));
+    binds->Add(Bind('a',             Bind::TimeCB(bind(&Entity::MoveLeft,      screen->camMain, _1))));
+    binds->Add(Bind('d',             Bind::TimeCB(bind(&Entity::MoveRight,     screen->camMain, _1))));
+    binds->Add(Bind('q',             Bind::TimeCB(bind(&Entity::MoveDown,      screen->camMain, _1))));
+    binds->Add(Bind('e',             Bind::TimeCB(bind(&Entity::MoveUp,        screen->camMain, _1))));
 #else
-    binds.push_back(Bind('w',             Bind::TimeCB(bind(&GameClient::MoveFwd,   server, _1))));
-    binds.push_back(Bind('s',             Bind::TimeCB(bind(&GameClient::MoveRev,   server, _1))));
-    binds.push_back(Bind('a',             Bind::TimeCB(bind(&GameClient::MoveLeft,  server, _1))));
-    binds.push_back(Bind('d',             Bind::TimeCB(bind(&GameClient::MoveRight, server, _1))));
-    binds.push_back(Bind('q',             Bind::TimeCB(bind(&GameClient::MoveDown,  server, _1))));
-    binds.push_back(Bind('e',             Bind::TimeCB(bind(&GameClient::MoveUp,    server, _1))));
+    binds->Add(Bind('w',             Bind::TimeCB(bind(&GameClient::MoveFwd,   server, _1))));
+    binds->Add(Bind('s',             Bind::TimeCB(bind(&GameClient::MoveRev,   server, _1))));
+    binds->Add(Bind('a',             Bind::TimeCB(bind(&GameClient::MoveLeft,  server, _1))));
+    binds->Add(Bind('d',             Bind::TimeCB(bind(&GameClient::MoveRight, server, _1))));
+    binds->Add(Bind('q',             Bind::TimeCB(bind(&GameClient::MoveDown,  server, _1))));
+    binds->Add(Bind('e',             Bind::TimeCB(bind(&GameClient::MoveUp,    server, _1))));
 #endif
 #if !defined(LFL_IPHONE) && !defined(LFL_ANDROID)
-    binds.push_back(Bind(Bind::MOUSE1,    Bind::TimeCB(bind(&SpaceballClient::MoveBoost, server, _1))));
+    binds->Add(Bind(Mouse::Button::_1, Bind::TimeCB(bind(&SpaceballClient::MoveBoost, server, _1))));
 #endif
-    binds.push_back(Bind(Key::LeftShift,  Bind::TimeCB(bind(&Entity::RollLeft,   screen->cam, _1))));
-    binds.push_back(Bind(Key::Space,      Bind::TimeCB(bind(&Entity::RollRight,  screen->cam, _1))));
-    binds.push_back(Bind(Key::Tab,        Bind::TimeCB(bind(&GUI::EnableDisplay, playerlist))));
-    binds.push_back(Bind(Key::F1,         Bind::CB(bind(&GameClient::SetCamera,  server,          vector<string>(1, string("1"))))));
-    binds.push_back(Bind(Key::F2,         Bind::CB(bind(&GameClient::SetCamera,  server,          vector<string>(1, string("2"))))));
-    binds.push_back(Bind(Key::F3,         Bind::CB(bind(&GameClient::SetCamera,  server,          vector<string>(1, string("3"))))));
-    binds.push_back(Bind(Key::F4,         Bind::CB(bind(&GameClient::SetCamera,  server,          vector<string>(1, string("4"))))));
-    binds.push_back(Bind(Key::Return,     Bind::CB(bind(&Shell::grabmode,        &app->shell,     vector<string>()))));
-    binds.push_back(Bind('r',             Bind::CB(bind(&MySwitchPlayerCmd,                       vector<string>())))); 
-	binds.push_back(Bind('t',             Bind::CB(bind([&](){ chat->Toggle(); }))));
-	binds.push_back(Bind(Key::Escape,     Bind::CB(bind([&](){ menubar->ToggleDisplay(); }))));
-    binds.push_back(Bind(Key::Backquote,  Bind::CB(bind(&GUI::ToggleConsole,     menubar))));
-    binds.push_back(Bind(Key::Quote,      Bind::CB(bind(&GUI::ToggleConsole,     menubar))));
-    binds.repeat = 1;
+    binds->Add(Bind(Key::LeftShift,  Bind::TimeCB(bind(&Entity::RollLeft,   screen->cam, _1))));
+    binds->Add(Bind(Key::Space,      Bind::TimeCB(bind(&Entity::RollRight,  screen->cam, _1))));
+    binds->Add(Bind(Key::Tab,        Bind::TimeCB(bind(&GUI::EnableDisplay, playerlist))));
+    binds->Add(Bind(Key::F1,         Bind::CB(bind(&GameClient::SetCamera,  server,          vector<string>(1, string("1"))))));
+    binds->Add(Bind(Key::F2,         Bind::CB(bind(&GameClient::SetCamera,  server,          vector<string>(1, string("2"))))));
+    binds->Add(Bind(Key::F3,         Bind::CB(bind(&GameClient::SetCamera,  server,          vector<string>(1, string("3"))))));
+    binds->Add(Bind(Key::F4,         Bind::CB(bind(&GameClient::SetCamera,  server,          vector<string>(1, string("4"))))));
+    binds->Add(Bind(Key::Return,     Bind::CB(bind(&Shell::grabmode,        &app->shell,     vector<string>()))));
+    binds->Add(Bind('r',             Bind::CB(bind(&MySwitchPlayerCmd,                       vector<string>())))); 
+	binds->Add(Bind('t',             Bind::CB(bind([&](){ chat->Toggle(); }))));
+	binds->Add(Bind(Key::Escape,     Bind::CB(bind([&](){ menubar->ToggleDisplay(); }))));
+    binds->Add(Bind(Key::Backquote,  Bind::CB(bind(&GUI::ToggleConsole,     menubar))));
+    binds->Add(Bind(Key::Quote,      Bind::CB(bind(&GUI::ToggleConsole,     menubar))));
 
     // start our engine
     return app->Main();

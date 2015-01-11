@@ -1492,8 +1492,8 @@ struct GameMultiTouchControls {
                 r.x=(int)screen->gesture_dpad_x[0]; r.y=(int)screen->gesture_dpad_y[0];
                 l.x=(int)screen->gesture_dpad_x[1]; l.y=(int)screen->gesture_dpad_y[1];
             }
-            l = app->input.TransformMouseCoordinate(l);
-            r = app->input.TransformMouseCoordinate(r);
+            l = Input::TransformMouseCoordinate(l);
+            r = Input::TransformMouseCoordinate(r);
 #if 0
             INFOf("l(%d, %d) lw(%f, %f, %f, %f) r(%d, %d) rw(%f, %f, %f, %f)", 
                  l.x, l.y, lpad_win.x, lpad_win.y, lpad_win.w, lpad_win.h,

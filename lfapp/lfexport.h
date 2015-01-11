@@ -19,6 +19,11 @@
 #ifndef __LFL_LFAPP_LFEXPORT_H__
 #define __LFL_LFAPP_LFEXPORT_H__
 
+#define  INFOf(fmt, ...) LFAppLog(LFApp::Log::Info,  __FILE__, __LINE__, fmt, __VA_ARGS__)
+#define DEBUGf(fmt, ...) LFAppLog(LFApp::Log::Debug, __FILE__, __LINE__, fmt, __VA_ARGS__)
+#define ERRORf(fmt, ...) LFAppLog(LFApp::Log::Error, __FILE__, __LINE__, fmt, __VA_ARGS__)
+#define FATALf(fmt, ...) { LFAppLog(LFApp::Log::Fatal, __FILE__, __LINE__, fmt, __VA_ARGS__); throw(0); }
+
 #define DECLARE_FLAG(name, type) extern type FLAGS_ ## name
 #define DECLARE_int(name) DECLARE_FLAG(name, int)
 #define DECLARE_bool(name) DECLARE_FLAG(name, bool)
@@ -26,12 +31,25 @@
 #define DECLARE_double(name) DECLARE_FLAG(name, double)
 #define DECLARE_string(name) DECLARE_FLAG(name, string)
 
-#define  INFOf(fmt, ...) LFAppLog(LFApp::Log::Info,  __FILE__, __LINE__, fmt, __VA_ARGS__)
-#define DEBUGf(fmt, ...) LFAppLog(LFApp::Log::Debug, __FILE__, __LINE__, fmt, __VA_ARGS__)
-#define ERRORf(fmt, ...) LFAppLog(LFApp::Log::Error, __FILE__, __LINE__, fmt, __VA_ARGS__)
-#define FATALf(fmt, ...) { LFAppLog(LFApp::Log::Fatal, __FILE__, __LINE__, fmt, __VA_ARGS__); throw(0); }
-
 #ifdef __cplusplus
+namespace LFL {
+DECLARE_bool(lfapp_audio);
+DECLARE_bool(lfapp_video);
+DECLARE_bool(lfapp_input);
+DECLARE_bool(lfapp_network);
+DECLARE_bool(lfapp_camera);
+DECLARE_bool(lfapp_cuda);
+DECLARE_bool(lfapp_wait_forever);
+DECLARE_bool(lfapp_debug);
+DECLARE_int(target_fps);
+DECLARE_int(min_fps);
+DECLARE_bool(max_rlimit_core);
+DECLARE_bool(max_rlimit_open_files);
+DECLARE_bool(open_console);
+DECLARE_int(invert);
+DECLARE_float(ksens);
+DECLARE_float(msens);
+}; // namespace LFL
 extern "C" {
 #endif
 
@@ -69,8 +87,9 @@ void SetLFAppMainThread();
 void Reshaped(int w, int h);
 void Minimized(); 
 void UnMinimized(); 
-void KeyPress(int button, int down, int, int);
+void KeyPress(int button, int down);
 void MouseClick(int button, int down, int x, int y);
+void MouseMove(int x, int y, int dx, int dy);
 void ShellRun(const char *text);
 
 #ifdef __cplusplus

@@ -72,8 +72,8 @@ struct Entity {
     void YawLeft  (unsigned t) { RotUp   (t/-1000.0*FLAGS_msens); }
     void RollLeft (unsigned t) { RotOrt  (t/ 1000.0*FLAGS_msens); }
     void RollRight(unsigned t) { RotOrt  (t/-1000.0*FLAGS_msens); }
-    void PitchUp  (unsigned t) { RotRight(t/ 1000.0*FLAGS_msens*FLAGS_invert); }
-    void PitchDown(unsigned t) { RotRight(t/-1000.0*FLAGS_msens*FLAGS_invert); }
+    void PitchDown(unsigned t) { RotRight(t/ 1000.0*FLAGS_msens*FLAGS_invert); }
+    void PitchUp  (unsigned t) { RotRight(t/-1000.0*FLAGS_msens*FLAGS_invert); }
 
     void AddUp   (float f) { v3 u = up;  u.Scale(f); pos.Add(u); }
     void AddOrt  (float f) { v3 s = ort; s.Scale(f); pos.Add(s); }

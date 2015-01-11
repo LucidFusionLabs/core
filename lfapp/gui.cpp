@@ -55,12 +55,12 @@ DEFINE_bool(draw_grid, false, "Draw lines intersecting mouse x,y");
 Window::WindowMap Window::active;
 Window *Window::Get(void *id) { return FindOrNull(Window::active, id); }
 
-Window::Window() : gd(0), caption("lfapp"), binds(0), console(0), browser_window(0), fps(128), top_dialog(0) {
+Window::Window() : caption("lfapp"), fps(128) {
     id = gl = surface = glew_context = user1 = user2 = user3 = 0;
-    width = 640; height = 480;
     minimized = cursor_grabbed = 0;
     opengles_version = 1;
     opengles_cubemap = 0;
+    width = 640; height = 480;
     multitouch_keyboard_x = .93; 
     gui_root = new GUI(this);
     cam = new Entity(v3(5.54, 1.70, 4.39), v3(-.51, -.03, -.49), v3(-.03, 1, -.03));
@@ -77,18 +77,14 @@ Window::~Window() {
     delete cam;
 }
 
-void Window::DeactivateMouseGUIs() {
-    for (auto i = mouse_gui.begin(); i != mouse_gui.end(); ++i)
-        if (!(*i)->mouse.dont_deactivate) (*i)->mouse.Deactivate();
-}
-void Window::DeactivateKeyboardGUIs() {
-    for (auto i = keyboard_gui.begin(); i != keyboard_gui.end(); ++i) (*i)->Deactivate();
-}
 void Window::ClearMouseGUIEvents() {
     for (auto i = mouse_gui.begin(); i != mouse_gui.end(); ++i) (*i)->mouse.ClearEvents();
 }
 void Window::ClearKeyboardGUIEvents() {
     for (auto i = keyboard_gui.begin(); i != keyboard_gui.end(); ++i) (*i)->ClearEvents();
+}
+void Window::ClearInputBindEvents() {
+    for (auto i = input_bind.begin(); i != input_bind.end(); ++i) (*i)->ClearEvents();
 }
 
 void Window::InitConsole() {
@@ -786,8 +782,8 @@ void Dialog::Draw() {
 
 /* Browsers */
 
-Browser *CreateDefaultBrowser(Window *W, Asset *a, int w, int h) {
-    Browser *ret = 0;
+BrowserInterface *CreateDefaultBrowser(Window *W, Asset *a, int w, int h) {
+    BrowserInterface *ret = 0;
     if ((ret = CreateQTWebKitBrowser(a)))        return ret;
     if ((ret = CreateBerkeliumBrowser(a, w, h))) return ret;
     return new SimpleBrowser(W, Fonts::Default(), Box(0, 0, w, h));
@@ -1790,9 +1786,23 @@ void SimpleBrowser::UpdateRenderLog(DOM::Node *n) {
     }
 }
 
+struct BrowserController : public InputController {
+    BrowserInterface *browser;
+    BrowserController(BrowserInterface *B) : browser(B) {}
+    void Input(int event, bool down) {
+        int key = KeyFromEvent(event);
+        if (key) browser->KeyEvent(key, down);
+        else switch (event) {
+            case Mouse::Event::Motion: browser->MouseMoved(screen->mouse.x, screen->mouse.y);
+            case Mouse::Event::Wheel:  browser->MouseWheel(0, down*32); 
+            default:                   browser->MouseButton(event, down); 
+        }
+    }
+};
+
 #ifdef LFL_QT
 extern QApplication *lfl_qapp;
-class QTWebKitBrowser : public QObject, public Browser {
+class QTWebKitBrowser : public QObject, public BrowserInterface {
     Q_OBJECT
   public:
     Asset* asset;
@@ -1863,7 +1873,7 @@ class QTWebKitBrowser : public QObject, public Browser {
     }
 };
 
-Browser *CreateQTWebKitBrowser(Asset *a) { return new QTWebKitBrowser(a); }
+BrowserInterface *CreateQTWebKitBrowser(Asset *a) { return new QTWebKitBrowser(a); }
 
 #include "gui.moc"
 
@@ -1881,7 +1891,7 @@ void Dialog::MessageBox(const string &n) {
 void Dialog::TextureBox(const string &n) {}
 
 #else /* LFL_QT */
-Browser *CreateQTWebKitBrowser(Asset *a) { return 0; }
+BrowserInterface *CreateQTWebKitBrowser(Asset *a) { return 0; }
 
 void Dialog::MessageBox(const string &n) {
     Mouse::ReleaseFocus();
@@ -1912,7 +1922,7 @@ struct BerkeliumModule : public Module {
     }
 };
 
-struct BerkeliumBrowser : public Browser, public Berkelium::WindowDelegate {
+struct BerkeliumBrowser : public BrowserInterface, public Berkelium::WindowDelegate {
     Asset *asset; int W, H; Berkelium::Window *window;
     BerkeliumBrowser(Asset *a, int win, int hin) : asset(a), window(0) { 
         Singleton<BerkeliumModule>::Get();
@@ -2031,14 +2041,14 @@ struct BerkeliumBrowser : public Browser, public Berkelium::WindowDelegate {
     }
 };
 
-Browser *CreateBerkeliumBrowser(Asset *a, int W, int H) {
+BrowserInterface *CreateBerkeliumBrowser(Asset *a, int W, int H) {
     BerkeliumBrowser *browser = new BerkeliumBrowser(a, W, H);
     Berkelium::WideString click = Berkelium::WideString::point_to(L"lfapp_browser_click");
     browser->window->bind(click, Berkelium::Script::Variant::bindFunction(click, true));
     return browser;
 }
 #else /* LFL_BERKELIUM */
-Browser *CreateBerkeliumBrowser(Asset *a, int W, int H) { return 0; }
+BrowserInterface *CreateBerkeliumBrowser(Asset *a, int W, int H) { return 0; }
 #endif /* LFL_BERKELIUM */
 
 }; // namespace LFL
