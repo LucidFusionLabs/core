@@ -353,8 +353,8 @@ void MyGameFinished(SpaceballGame *world) {
     MyLocalServerDisable();
     server->Reset();
 
-    if (world->game_type == SpaceballSettings::TYPE_TOURNAMENT) team_select->display = true;
-    else { menubar->ToggleDisplay(); menubar->selected = 1; }
+    if (world->game_type == SpaceballSettings::TYPE_TOURNAMENT) team_select->active = true;
+    else { menubar->ToggleActive(); menubar->selected = 1; }
 
     SetInitialCameraPosition();
 }
@@ -401,8 +401,8 @@ void MyLocalServerEnable(int game_type) {
 void MyLocalServerCmd(const vector<string>&) {
     int game_type = sbsettings.GetIndex(SpaceballSettings::GAME_TYPE);
     if (game_type == SpaceballSettings::TYPE_TOURNAMENT) {
-        if (!team_select->display) { team_select->display = true; return; }
-        team_select->display = false;
+        if (!team_select->active) { team_select->active = true; return; }
+        team_select->active = false;
     }
     MyLocalServerEnable(game_type);
     server->Connect("127.0.0.1", FLAGS_default_port);
@@ -510,7 +510,7 @@ int Frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample
         touchcontrols->Draw();
 
         // Game menu and player list buttons
-        GUI *root = screen->gui_root;
+        GUI *root = 0; // screen->gui_root;
         static Font *mobile_font = Fonts::Get("MobileAtlas", 0, Color::black);
         // static Widget::Button gamePlayerListButton(root, 0, 0, Box::FromScreen(.465, .05, .07, .05), MouseController::CB(bind(&GUI::ToggleDisplay, (GUI*)playerlist)));
         // static Widget::Button           helpButton(root, 0, 0, Box::FromScreen(.56,  .05, .07, .05), MouseController::CB(bind(&GUI::ToggleDisplay, (GUI*)helper)));
@@ -569,16 +569,16 @@ int Frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample
         screen->cam->up  = v3(0, 1, 0);
     }
 
-    if (team_select->display) team_select->Draw(fadershader.ID > 0 ? &fadershader : 0);
+    if (team_select->active) team_select->Draw(fadershader.ID > 0 ? &fadershader : 0);
 
     // Press escape for menubar
-    else if (menubar->display) menubar->Draw(clicks, fadershader.ID > 0 ? &fadershader : 0);
+    else if (menubar->active) menubar->Draw(clicks, fadershader.ID > 0 ? &fadershader : 0);
 
     // Press 't' to talk
     else if (chat->active) {}
 
     // Press tab for playerlist
-    else if (playerlist->display || server->gameover.enabled()) {
+    else if (playerlist->active || server->gameover.enabled()) {
         server->control.SetPlayerList();
         playerlist->Draw(fadershader.ID > 0 ? &fadershader : 0);
     }
@@ -588,16 +588,16 @@ int Frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample
 
     Scene::Select();
 
-    if (helper && helper->display) {
+    if (helper && helper->active) {
         screen->gd->SetColor(helper->font->fg);
         BoxOutline().Draw(menubar->topbar.box);
         helper->Draw();
     }
 
     static Font *text = Fonts::Get(FLAGS_default_font, 8, Color::white);
-    if (FLAGS_draw_fps)    text->Draw(StringPrintf("FPS = %.2f", FPS()),                    point(screen->width*.05, screen->height*.05));
-    if (!menubar->display) text->Draw(intervalminutes(Now() - server->map_started),         point(screen->width*.93, screen->height*.97));
-    if (!menubar->display) text->Draw(StrCat(sbmap->home->name, " vs ", sbmap->away->name), point(screen->width*.01, screen->height*.97));
+    if (FLAGS_draw_fps)   text->Draw(StringPrintf("FPS = %.2f", FPS()),                    point(screen->width*.05, screen->height*.05));
+    if (!menubar->active) text->Draw(intervalminutes(Now() - server->map_started),         point(screen->width*.93, screen->height*.97));
+    if (!menubar->active) text->Draw(StrCat(sbmap->home->name, " vs ", sbmap->away->name), point(screen->width*.01, screen->height*.97));
 
     return 0;
 }
@@ -742,7 +742,8 @@ extern "C" int main(int argc, const char *argv[]) {
     menubar = new GameMenuGUI(screen, FLAGS_master.c_str(), FLAGS_default_port, asset("title"), asset("glow"));
     menubar->tab3_player_name.AssignInput(FLAGS_player_name);
     menubar->settings = &sbsettings;
-    menubar->display = true;
+    menubar->Activate();
+    menubar->selected = 1;
 
     playerlist = new GamePlayerListGUI(screen, "Spaceball 6006", "Team 1: silver", "Team 2: ontario");
     chat = new GameChatGUI(screen, 't', (GameClient**)&server);
@@ -834,7 +835,7 @@ extern "C" int main(int argc, const char *argv[]) {
 #endif
     binds->Add(Bind(Key::LeftShift,  Bind::TimeCB(bind(&Entity::RollLeft,   screen->cam, _1))));
     binds->Add(Bind(Key::Space,      Bind::TimeCB(bind(&Entity::RollRight,  screen->cam, _1))));
-    binds->Add(Bind(Key::Tab,        Bind::TimeCB(bind(&GUI::EnableDisplay, playerlist))));
+    binds->Add(Bind(Key::Tab,        Bind::TimeCB(bind(&GUI::Activate, playerlist))));
     binds->Add(Bind(Key::F1,         Bind::CB(bind(&GameClient::SetCamera,  server,          vector<string>(1, string("1"))))));
     binds->Add(Bind(Key::F2,         Bind::CB(bind(&GameClient::SetCamera,  server,          vector<string>(1, string("2"))))));
     binds->Add(Bind(Key::F3,         Bind::CB(bind(&GameClient::SetCamera,  server,          vector<string>(1, string("3"))))));
@@ -842,7 +843,7 @@ extern "C" int main(int argc, const char *argv[]) {
     binds->Add(Bind(Key::Return,     Bind::CB(bind(&Shell::grabmode,        &app->shell,     vector<string>()))));
     binds->Add(Bind('r',             Bind::CB(bind(&MySwitchPlayerCmd,                       vector<string>())))); 
 	binds->Add(Bind('t',             Bind::CB(bind([&](){ chat->Toggle(); }))));
-	binds->Add(Bind(Key::Escape,     Bind::CB(bind([&](){ menubar->ToggleDisplay(); }))));
+	binds->Add(Bind(Key::Escape,     Bind::CB(bind([&](){ menubar->ToggleActive(); }))));
     binds->Add(Bind(Key::Backquote,  Bind::CB(bind(&GUI::ToggleConsole,     menubar))));
     binds->Add(Bind(Key::Quote,      Bind::CB(bind(&GUI::ToggleConsole,     menubar))));
 

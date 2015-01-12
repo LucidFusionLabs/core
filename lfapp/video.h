@@ -468,7 +468,6 @@ struct Window : public NativeWindow {
     BindMap *binds=0;
     Entity *cam=0;
     Console *console=0;
-    GUI *gui_root=0;
     Dialog *top_dialog=0;
     vector<Dialog*> dialogs;
     vector<GUI*> mouse_gui;

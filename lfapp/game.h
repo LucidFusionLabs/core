@@ -1034,9 +1034,9 @@ struct GameMenuGUI : public GUI, public Query {
     GameMenuGUI(LFL::Window *W, const string &master_url, int port, Asset *t=0, Asset *parts=0) :
     GUI(W), topbar(W), pinger(-1), master_get_url(master_url), title(t),
     font(Fonts::Get("Origicide.ttf", 12, Color::white)), default_port(port),
-    tab1(&topbar, 0, font, "single player", MouseController::CB([&](){ if (!Typed::Changed(&selected, 1)) ToggleDisplay(); })),
-    tab2(&topbar, 0, font, "multi player",  MouseController::CB([&](){ if (!Typed::Changed(&selected, 2)) ToggleDisplay(); })), 
-    tab3(&topbar, 0, font, "options",       MouseController::CB([&](){ if (!Typed::Changed(&selected, 3)) ToggleDisplay(); })),
+    tab1(&topbar, 0, font, "single player", MouseController::CB([&](){ if (!Typed::Changed(&selected, 1)) ToggleActive(); })),
+    tab2(&topbar, 0, font, "multi player",  MouseController::CB([&](){ if (!Typed::Changed(&selected, 2)) ToggleActive(); })), 
+    tab3(&topbar, 0, font, "options",       MouseController::CB([&](){ if (!Typed::Changed(&selected, 3)) ToggleActive(); })),
     tab4(&topbar, 0, font, "quit",          MouseController::CB(bind(&GameMenuGUI::MenuQuit, this))),
     tab1_server_start(this, 0, font, "start", MouseController::CB(bind(&GameMenuGUI::MenuServerStart, this))),
     tab2_server_join (this, 0, font, "join",  MouseController::CB(bind(&GameMenuGUI::MenuServerJoin,  this))),
@@ -1059,7 +1059,6 @@ struct GameMenuGUI : public GUI, public Query {
     browser(W, font, box), particles("GameMenuParticles") {
         tab1.outline = tab2.outline = tab3.outline = tab4.outline = tab1_server_start.outline = tab2_server_join.outline = sub_tab1.outline = sub_tab2.outline = sub_tab3.outline = &font->fg;
         Layout();
-        screen->gui_root->mouse.AddClickBox(topbar.box, MouseController::CB([&](){ if (mouse.NotActive()) ToggleDisplay(); }));
         tab2_server_address.cmd_prefix.clear();
         tab3_player_name.cmd_prefix.clear();
         tab3_player_name.deactivate_on_enter = tab2_server_address.deactivate_on_enter = true;
@@ -1090,8 +1089,8 @@ struct GameMenuGUI : public GUI, public Query {
         Sniffer::GetBroadcastAddress(&broadcast_ip);
     }
 
-    void ToggleDisplayOn() { display=1; selected=last_selected=0; app->shell.mouseout(vector<string>()); Advertising::HideAds(); }
-    void ToggleDisplayOff() { display=0; UpdateSettings(); tab3_player_name.active=false; Advertising::ShowAds(); }
+    void Activate  () { active=1; topbar.active=1; selected=last_selected=0; app->shell.mouseout(vector<string>()); Advertising::HideAds(); }
+    void Deactivate() { active=0; topbar.active=0; UpdateSettings(); tab3_player_name.active=false; Advertising::ShowAds(); }
     bool DecayBoxIfMatch(int l1, int l2) { if (l1 != l2) return 0; decay_box_line = l1; decay_box_left = 10; return 1; }
     void UpdateSettings() {
         app->shell.Run(StrCat("name ", tab3_player_name.Text()));
@@ -1102,12 +1101,12 @@ struct GameMenuGUI : public GUI, public Query {
     void MenuLineClicked() { line_clicked = -MousePosition().y / font->height; }
     void MenuServerStart() {
         if (selected != 1 && !(selected == 2 && sub_selected == 3)) return;
-        ToggleDisplay();
+        ToggleActive();
         app->shell.Run("local_server");
     }
     void MenuServerJoin() {
         if (selected != 2 || master_server_selected < 0 || master_server_selected >= master_server_list.size()) return;
-        ToggleDisplay();
+        ToggleActive();
         app->shell.Run(StrCat("server ", master_server_list[master_server_selected].addr));
     }
     void MenuAddServer(const string &text) {
@@ -1169,7 +1168,7 @@ struct GameMenuGUI : public GUI, public Query {
     void LayoutMenu() {
         Box b;
         Flow menuflow(&box, font, Reset());
-        mouse.AddClickBox(Box(0, -box.h, box.w, box.h), MouseController::CB(bind(&GameMenuGUI::MenuLineClicked, this)));
+        AddClickBox(Box(0, -box.h, box.w, box.h), MouseController::CB(bind(&GameMenuGUI::MenuLineClicked, this)));
 
         current_scrollbar = 0;
         if      (selected == 1) { current_scrollbar = &tab1_options;        menuflow.container = &menuftr1; }
@@ -1348,7 +1347,6 @@ struct GamePlayerListGUI : public GUI {
         : GUI(W), font(Fonts::Get("Origicide.ttf", 12, Color::black)),
         titlename(TitleName), team1(Team1), team2(Team2) {}
 
-    bool ToggleDisplay() { toggled = !toggled; if (toggled) display = true; return true; }
     void HandleTextMessage(const string &in) {
         playerlist.clear();
         StringLineIter lines(in.c_str());
@@ -1369,9 +1367,7 @@ struct GamePlayerListGUI : public GUI {
         sort(playerlist.begin(), playerlist.end(), PlayerCompareScore);
     }
     void Draw(Shader *MyShader) {
-        mouse.Activate();
-        if (!toggled) display = false;
-
+        if (!toggled) Deactivate();
         screen->gd->EnableBlend();
         Box win = screen->Box(.1, .1, .8, .8, false);
         glTimeResolutionShaderWindows(MyShader, Color(255, 255, 255, 120), win);

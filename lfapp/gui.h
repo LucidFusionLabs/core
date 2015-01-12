@@ -23,52 +23,47 @@ namespace LFL {
 DECLARE_bool(multitouch);
 DECLARE_bool(draw_grid);
 
-struct GUI {
+struct GUI : public MouseController {
     Box box;
     Window *parent;
     BoxArray child_box;
-    MouseController mouse;
-    bool display=0; ToggleBool toggleDisplay;
-    GUI()                        :         parent(0), toggleDisplay(&display) {}
-    GUI(Window *W)               :         parent(W), toggleDisplay(&display) { parent->mouse_gui.push_back(this); }
-    GUI(Window *W, const Box &B) : box(B), parent(W), toggleDisplay(&display) { parent->mouse_gui.push_back(this); }
+    ToggleBool toggle_active;
+    GUI()                        :         parent(0), toggle_active(&active) {}
+    GUI(Window *W)               :         parent(W), toggle_active(&active) { parent->mouse_gui.push_back(this); }
+    GUI(Window *W, const Box &B) : box(B), parent(W), toggle_active(&active) { parent->mouse_gui.push_back(this); }
     virtual ~GUI() { if (parent) VectorEraseByValue(&parent->mouse_gui, this); }
 
     point MousePosition() const { return screen->mouse - box.TopLeft(); }
     BoxArray *Reset() { Clear(); return &child_box; }
-    void Clear() { child_box.Clear(); mouse.Clear(); }
+    void Clear() { child_box.Clear(); MouseController::Clear(); }
     void UpdateBox(const Box &b, int draw_box_ind, int input_box_ind) {
         if (draw_box_ind  >= 0) child_box.data[draw_box_ind ].box = b;
-        if (input_box_ind >= 0) mouse.hit     [input_box_ind].box = b;
+        if (input_box_ind >= 0) hit           [input_box_ind].box = b;
     }
     void UpdateBoxX(int x, int draw_box_ind, int input_box_ind) {
         if (draw_box_ind  >= 0) child_box.data[draw_box_ind ].box.x = x;
-        if (input_box_ind >= 0) mouse.hit     [input_box_ind].box.x = x;
+        if (input_box_ind >= 0) hit           [input_box_ind].box.x = x;
     }
     void UpdateBoxY(int y, int draw_box_ind, int input_box_ind) {
         if (draw_box_ind  >= 0) child_box.data[draw_box_ind ].box.y = y;
-        if (input_box_ind >= 0) mouse.hit     [input_box_ind].box.y = y;
+        if (input_box_ind >= 0) hit           [input_box_ind].box.y = y;
     }
 
     virtual void SetLayoutDirty() { child_box.Clear(); }
     virtual void Layout() {}
     virtual void Draw(const Box &b) { box=b; Draw(); }
     virtual void Draw() {
-        mouse.Activate();
         if (child_box.data.empty()) Layout();
         child_box.Draw(box.TopLeft());
     }
     virtual void HandleTextMessage(const string &s) {}
 
-    virtual void EnableDisplay() { display = true; }
-    virtual bool ToggleDisplay() {
-        bool ret = toggleDisplay.Toggle();
-        display ? ToggleDisplayOn() : ToggleDisplayOff();
+    virtual bool ToggleActive() {
+        bool ret = toggle_active.Toggle();
+        active ? Activate() : Deactivate();
         return ret;
     }
-    virtual void ToggleDisplayOn() { display=1; }
-    virtual void ToggleDisplayOff() { display=0; }
-    virtual void ToggleConsole() { if (!display) app->shell.console(vector<string>()); }
+    virtual void ToggleConsole() { if (!active) app->shell.console(vector<string>()); }
 };
 
 struct Widget {
@@ -80,10 +75,10 @@ struct Widget {
         virtual ~Interface() { if (del_hitbox) DelHitBox(); }
         Interface(GUI *g) : gui(g) {}
 
-        void AddClickBox(const Box &w, const MouseController::Callback &cb) { hitbox.push_back(gui->mouse.hit.Insert(MouseController::HitBox(MouseController::Event::Click, w, cb))); }
-        void AddHoverBox(const Box &w, const MouseController::Callback &cb) { hitbox.push_back(gui->mouse.hit.Insert(MouseController::HitBox(MouseController::Event::Hover, w, cb))); }
-        void DelHitBox() { for (vector<int>::const_iterator i = hitbox.begin(); i != hitbox.end(); ++i) gui->mouse.hit.Erase(*i); hitbox.clear(); }
-        MouseController::HitBox &GetHitBox(int i=0) const { return gui->mouse.hit[hitbox[i]]; }
+        void AddClickBox(const Box &w, const MouseController::Callback &cb) { hitbox.push_back(gui->hit.Insert(MouseController::HitBox(MouseController::Event::Click, w, cb))); }
+        void AddHoverBox(const Box &w, const MouseController::Callback &cb) { hitbox.push_back(gui->hit.Insert(MouseController::HitBox(MouseController::Event::Hover, w, cb))); }
+        void DelHitBox() { for (vector<int>::const_iterator i = hitbox.begin(); i != hitbox.end(); ++i) gui->hit.Erase(*i); hitbox.clear(); }
+        MouseController::HitBox &GetHitBox(int i=0) const { return gui->hit[hitbox[i]]; }
         Box GetHitBoxBox(int i=0) const { return Box::Add(GetHitBox(i).box, gui->box.TopLeft()); }
         Drawable::Box *GetDrawBox() const { return drawbox_ind >= 0 ? VectorGet(gui->child_box.data, drawbox_ind) : 0; }
     };
@@ -211,14 +206,14 @@ struct Widget {
 
 struct KeyboardGUI : public KeyboardController {
     typedef function<void(const string &text)> RunCB;
+    Window *parent;
+    ToggleBool toggle_active;
+    Bind toggle_bind;
     RunCB runcb;
     RingVector<string> lastcmd;
     int lastcmd_ind=-1;
-    Bind toggle_bind;
-    ToggleBool toggle_active;
-    Window *parent;
     KeyboardGUI(Window *W, Font *F, int LastCommands=50)
-        : toggle_active(&active), lastcmd(LastCommands), parent(W) { parent->keyboard_gui.push_back(this); }
+        : parent(W), toggle_active(&active), lastcmd(LastCommands) { parent->keyboard_gui.push_back(this); }
     virtual ~KeyboardGUI() { if (parent) VectorEraseByValue(&parent->keyboard_gui, this); }
     virtual void Enable() { active = true; }
     virtual bool Toggle() { return toggle_active.Toggle(); }
@@ -723,11 +718,11 @@ struct Dialog : public GUI {
         resize_bottom = Box(0,       -box.h, box.w, 3);
 
         Box close = Box(box.w-10, title.top()-10, 10, 10);
-        mouse.AddClickBox(resize_left,   MouseController::CB(bind(&Dialog::Reshape,     this, &resizing_left)));
-        mouse.AddClickBox(resize_right,  MouseController::CB(bind(&Dialog::Reshape,     this, &resizing_right)));
-        mouse.AddClickBox(resize_bottom, MouseController::CB(bind(&Dialog::Reshape,     this, &resizing_bottom)));
-        mouse.AddClickBox(title,         MouseController::CB(bind(&Dialog::Reshape,     this, &moving)));
-        mouse.AddClickBox(close,         MouseController::CB(bind(&Dialog::MarkDeleted, this)));
+        AddClickBox(resize_left,   MouseController::CB(bind(&Dialog::Reshape,     this, &resizing_left)));
+        AddClickBox(resize_right,  MouseController::CB(bind(&Dialog::Reshape,     this, &resizing_right)));
+        AddClickBox(resize_bottom, MouseController::CB(bind(&Dialog::Reshape,     this, &resizing_bottom)));
+        AddClickBox(title,         MouseController::CB(bind(&Dialog::Reshape,     this, &moving)));
+        AddClickBox(close,         MouseController::CB(bind(&Dialog::MarkDeleted, this)));
     }
     void BringToFront() {
         if (screen->top_dialog == this) return;
@@ -845,7 +840,7 @@ struct Renderer : public Object {
     void Finish();
 
     bool Dirty() { return style_dirty || layout_dirty; }
-    void InputActivate() { style.node->ownerDocument->gui->mouse.Activate(); }
+    void InputActivate() { style.node->ownerDocument->gui->Activate(); }
     int TopBorderOffset    () { return pt_px + bt_px; }
     int RightBorderOffset  () { return pr_px + br_px; }
     int BottomBorderOffset () { return pb_px + bb_px; }
@@ -957,7 +952,7 @@ struct HelperGUI : public GUI {
     };
     vector<Label> label;
     void AddLabel(const Box &w, const string &d, int h, float ly=.05, float lx=.02) { label.push_back(Label(w, d, h, font, ly, lx)); }
-    void ToggleDisplayOn() { display=1; /* ForceDirectedLayout(); */ }
+    void Activate() { active=1; /* ForceDirectedLayout(); */ }
     void ForceDirectedLayout();
     void Draw();
 };
