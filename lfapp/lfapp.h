@@ -36,6 +36,7 @@
 #include <functional>
 #include <unordered_map>
 #include <unordered_set>
+#include <thread>
 #define LFL_STL11_NAMESPACE std
 
 #ifdef _WIN32
@@ -50,6 +51,7 @@
 #define LFL_IMPORT __declspec(dllimport)
 #define _USE_MATH_DEFINES
 #define UNION struct
+#define thread_local __declspec(thread)
 typedef SOCKET Socket;
 inline int SystemBind(Socket s, const sockaddr *a, int al) { return bind(s, a, al); }
 #else /* _WIN32 */
@@ -59,6 +61,7 @@ inline int SystemBind(Socket s, const sockaddr *a, int al) { return bind(s, a, a
 #define LFL_EXPORT
 #define LFL_IMPORT
 #define UNION union
+#define thread_local __thread
 typedef int Socket;
 #define SystemBind(s, a, al) ::bind(s, a, al)
 #endif
@@ -92,6 +95,8 @@ using LFL_STL11_NAMESPACE::placeholders::_3;
 using LFL_STL11_NAMESPACE::placeholders::_4;
 using LFL_STL11_NAMESPACE::placeholders::_5;
 using LFL_STL11_NAMESPACE::placeholders::_6;
+using LFL_STL11_NAMESPACE::mutex;
+using LFL_STL11_NAMESPACE::move;
 
 #include <errno.h>
 #include <math.h>
@@ -773,83 +778,49 @@ struct BlockChainAlloc : public Allocator {
     void Free(void *p) {}
 };
 
-struct ThreadLocalStorage {
-    Allocator *alloc;
-#ifndef _WIN32
-    ThreadLocalStorage() : alloc(0) {}
-    ~ThreadLocalStorage() { delete alloc; }
-#endif
-
-    static void Init();
-    static void Free();
-    static void ThreadInit();
-    static void ThreadFree();
-
-    static ThreadLocalStorage *Get();
-    static Allocator *GetAllocator(bool reset_allocator=true);
-};
-
-struct ScopedThreadLocalStorage {
-    ScopedThreadLocalStorage()  { ThreadLocalStorage::ThreadInit(); }
-    ~ScopedThreadLocalStorage() { ThreadLocalStorage::ThreadFree(); }
-};
-
-#ifdef _WIN32
-struct Thread {
-    typedef int (*CB)(void *);
-    HANDLE impl; unsigned id; CB cb; void *arg; bool started;
-    Thread() : impl(0), cb(0), arg(0), started(0) {}
-    Thread(CB c, void *a) : impl(0), cb(c), arg(a), started(0) {}
-    void Open(CB c, void *a) { cb=c; arg=a; }
-    void Wait() { WaitForSingleObject(impl, INFINITE); CloseHandle(impl); }
-    bool Start() { return (started = (impl = (HANDLE)_beginthreadex(0, 0, Run, this, 0, &id)) != 0); }
-    static unsigned long long Id() { return GetCurrentThreadId(); }
-    static unsigned __stdcall Run(void *arg) {
-        INFOf("Startred thread(%lld)", Id());
-        ScopedThreadLocalStorage tls;
-        Thread *t = (Thread*)arg;
-        return t->cb ? t->cb(t->arg) : 0;
-    }
-};
-struct Mutex {
-    CRITICAL_SECTION impl;
-    Mutex() { InitializeCriticalSection(&impl); }
-    ~Mutex() { DeleteCriticalSection(&impl); }
-    void Enter() { EnterCriticalSection(&impl); }
-    void Leave() { LeaveCriticalSection(&impl); }
-};
-#else /* _WIN32 */
-struct Thread {
-    typedef int (*CB)(void *);
-    pthread_t impl; CB cb; void *arg; bool started;
-    Thread() : impl(0), cb(0), arg(0), started(0) {}
-    Thread(CB c, void *a) : impl(0), cb(c), arg(a), started(0) {}
-    void Open(CB c, void *a) { cb=c; arg=a; }
-    void Wait() { pthread_join(impl, 0); }
-    bool Start() { return (started = !pthread_create(&impl, 0, Run, this)); }
-    static unsigned long long Id() { return (unsigned long long)pthread_self(); }
-    static void* Run(void* arg) {
-        INFOf("Startred thread(%lld)", Id());
-        ScopedThreadLocalStorage tls;
-        Thread *t = (Thread*)arg;
-        return t->cb ? (void*)(long)t->cb(t->arg) : 0;
-    }
-};
-struct Mutex {
-    pthread_mutex_t impl;
-    Mutex() { pthread_mutex_init(&impl, 0); }
-    ~Mutex() { pthread_mutex_destroy(&impl); }
-    void Enter() { pthread_mutex_lock(&impl); }
-    void Leave() { pthread_mutex_unlock(&impl); }
-};
-#define min(x, y) ((x) < (y) ? (x) : (y))
-#define max(x, y) ((x) > (y) ? (x) : (y))
-#endif
-
 struct ScopedMutex {
-    Mutex &m;
-    ScopedMutex(Mutex &M) : m(M) { m.Enter(); }
-    ~ScopedMutex() { m.Leave(); }
+    mutex &m;
+    ScopedMutex(mutex &M) : m(M) { m.lock(); }
+    ~ScopedMutex() { m.unlock(); }
+};
+
+struct ThreadLocalStorage {
+    Allocator *alloc=0;
+    virtual ~ThreadLocalStorage() { delete alloc; }
+    static thread_local ThreadLocalStorage *instance;
+    static ThreadLocalStorage *Get() {
+        if (!instance) instance = new ThreadLocalStorage();
+        return instance;
+    }
+    static Allocator *GetAllocator(bool reset_allocator=true) {
+        ThreadLocalStorage *tls = Get();
+        if (!tls->alloc) tls->alloc = new FixedAlloc<1024*1024>;
+        if (reset_allocator) tls->alloc->Reset();
+        return tls->alloc;
+    }
+};
+
+struct Thread {
+    typedef unsigned long long Id;
+    Id id=0;
+    Callback cb;
+    mutex start_mutex;
+    unique_ptr<std::thread> impl;
+    Thread(const Callback &CB=Callback()) : cb(CB) {}
+    void Open(const Callback &CB) { cb=CB; }
+    void Wait() { if (impl) impl->join(); }
+    void Start() {
+        ScopedMutex sm(start_mutex);
+        impl = move(unique_ptr<std::thread>(new std::thread(bind(&Thread::ThreadProc, this))));
+        id = std::hash<std::thread::id>()(impl->get_id());
+    }
+    void ThreadProc() {
+        { ScopedMutex sm(start_mutex); }
+        INFOf("Started thread(%llx)", id);
+        cb();
+        delete ThreadLocalStorage::instance;
+    }
+    static Id GetId() { return std::hash<std::thread::id>()(std::this_thread::get_id()); }
 };
 
 struct Process {
@@ -888,8 +859,8 @@ struct File {
 
     struct Whence { enum { SET=SEEK_SET, CUR=SEEK_CUR, END=SEEK_END }; int x; };
     virtual long long Seek(long long offset, int whence) = 0;
-    virtual int Read(void *buf, int size) = 0;
-    virtual int Write(const void *buf, int size=-1) = 0;
+    virtual int Read(void *buf, size_t size) = 0;
+    virtual int Write(const void *buf, size_t size=-1) = 0;
     virtual bool Flush() { return false; }
 
     struct NextRecord { 
@@ -930,8 +901,8 @@ struct BufferFile : public File {
     void Close() { buf.clear(); Reset(); }
 
     long long Seek(long long pos, int whence);
-    int Read(void *out, int size);
-    int Write(const void *in, int size=-1);
+    int Read(void *out, size_t size);
+    int Write(const void *in, size_t size=-1);
 };
 
 struct LocalFile : public File {
@@ -958,8 +929,8 @@ struct LocalFile : public File {
     void Close();
 
     long long Seek(long long pos, int whence);
-    int Read(void *buf, int size);
-    int Write(const void *buf, int size=-1);
+    int Read(void *buf, size_t size);
+    int Write(const void *buf, size_t size=-1);
     bool Flush();
 };
 
@@ -1128,37 +1099,49 @@ void DefaultLFAppWindowClosedCB();
 
 namespace LFL {
 struct MessageQueue {
+    static const int CallbackMessage = 1;
     struct Entry { int id; void *opaque; };
     deque<Entry> queue;
-    Mutex mutex;
+    mutex mutex;
+
     void Write(int n, void *x) { ScopedMutex sm(mutex); Entry e = { n, x }; queue.push_back(e); }
     int Read(void** out) { if (!queue.size()) return 0; ScopedMutex sm(mutex); if (!queue.size()) return 0; Entry e = PopBack(queue); *out = e.opaque; return e.id; }
+    void HandleMessagesLoop() { while (GetLFApp()->run) { HandleMessages(); Msleep(30); } }
+    void HandleMessages() {
+        void *message; int message_id;
+        while ((message_id = Read(&message))) {
+            if (message_id == CallbackMessage) {
+                Callback *cb = (Callback*)message;
+                (*cb)();
+                delete cb;
+            } else ERROR("unknown message id=", message_id);
+        }
+    }
 };
 
 struct ThreadPool {
-    int next_thread;
-    vector<Thread*>       thread;
+    vector<Thread*> thread;
     vector<MessageQueue*> queue;
-    ThreadPool() : next_thread(0) {}
-    ~ThreadPool() { for (int i=0, n=thread.size(); i<n; i++) { delete queue[i]; delete thread[i]; } }
+    int round_robin_next=0;
+    virtual ~ThreadPool() {
+        for (auto &t : thread) delete t;
+        for (auto &q : queue)  delete q;
+    }
     void Open(int num) {
         CHECK(thread.empty() && queue.empty());
-        thread.resize(num, 0);
-        queue .resize(num, 0);
-        for (int i=0, n=thread.size(); i<n; i++) {
+        thread.resize(num);
+        queue .resize(num);
+        for (int i=0; i<num; i++) {
             queue [i] = new MessageQueue();
-            thread[i] = new Thread(HandleMessagesLoop, queue[i]);
+            thread[i] = new Thread(bind(&MessageQueue::HandleMessagesLoop, queue[i]));
         }
     }
-    void Start() { for (int i=0, n=thread.size(); i<n; i++) thread[i]->Start(); }
-    void Stop()  { for (int i=0, n=thread.size(); i<n; i++) thread[i]->Wait();  }
+    void Start() { for (auto &t : thread) t->Start(); }
+    void Stop()  { for (auto &t : thread) t->Wait(); }
     void Write(int mid, void *m) {
-        queue[next_thread]->Write(mid, m);
-        next_thread = (next_thread + 1) % thread.size();
+        queue[round_robin_next]->Write(mid, m);
+        round_robin_next = (round_robin_next + 1) % thread.size();
     }
-    static const int message_queue_callback = 1;
-    static int HandleMessages(void *q);
-    static int HandleMessagesLoop(void *q);
 };
 
 struct FrameRateLimitter {
@@ -1231,7 +1214,7 @@ struct Application : public ::LFApp, public Module {
     FILE *logfile;
     FrameCB frame_cb;
     void (*reshaped_cb)(), (*window_closed_cb)();
-    Mutex frame_mutex, wait_mutex, log_mutex;
+    mutex frame_mutex, wait_mutex, log_mutex;
     Timer app_time, frame_time;
     ThreadPool thread_pool;
     MessageQueue message_queue;
@@ -1250,7 +1233,7 @@ struct Application : public ::LFApp, public Module {
 
     Application() : logfile(0), reshaped_cb(0), window_closed_cb(DefaultLFAppWindowClosedCB),
     maxfps(&FLAGS_target_fps), fill_mode(3, GraphicsDevice::Fill, GraphicsDevice::Line, GraphicsDevice::Point),
-    grab_mode(2, false, true), tex_mode(2, true, false) { run=1; opened=0; main_thread_id=frames_ran=pre_frames_ran=samples_read=samples_read_last=0; }
+    grab_mode(2, false, true), tex_mode(2, true, false) { run=1; initialized=0; main_thread_id=0; frames_ran=pre_frames_ran=samples_read=samples_read_last=0; }
 
     void Log(int level, const char *file, int line, const string &message);
     int Create(int argc, const char **argv, const char *source_filename);
@@ -1269,8 +1252,6 @@ struct Application : public ::LFApp, public Module {
 #define main LFLQTMain
 #elif defined(LFL_IPHONE)
 #define main iPhoneMain
-extern "C" int iPhoneInput(unsigned clicks, unsigned *events);
-extern "C" int iPhoneOpenBrowser(const char *url_text);
 #elif defined(LFL_OSXVIDEO)
 #define main OSXMain
 #endif

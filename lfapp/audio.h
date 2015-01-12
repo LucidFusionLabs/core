@@ -63,7 +63,7 @@ struct SystemAudio {
 };
 
 struct Audio : public Module {
-    Mutex inlock, outlock;
+    mutex inlock, outlock;
     RingBuf micL, micR;
     RingBuf *IL, *IR;
     RingBuf::Handle RL, RR;

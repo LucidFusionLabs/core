@@ -509,9 +509,13 @@ int Frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample
         touchcontrols->Update(clicks);
         touchcontrols->Draw();
 
+        // iPhone keyboard
+        // static Font *mobile_font = Fonts::Get("MobileAtlas", 0, Color::black);
+        // static Widget::Button iPhoneKeyboardButton(screen->gui_root, 0, 0, Box::FromScreen(screen->multitouch_keyboard_x, .05, .07, .05),
+        //                                           MouseController::CB(bind(&Shell::showkeyboard, &app->shell, vector<string>())));
+        // iPhoneKeyboardButton.Draw(mobile_font, 5);
+
         // Game menu and player list buttons
-        GUI *root = 0; // screen->gui_root;
-        static Font *mobile_font = Fonts::Get("MobileAtlas", 0, Color::black);
         // static Widget::Button gamePlayerListButton(root, 0, 0, Box::FromScreen(.465, .05, .07, .05), MouseController::CB(bind(&GUI::ToggleDisplay, (GUI*)playerlist)));
         // static Widget::Button           helpButton(root, 0, 0, Box::FromScreen(.56,  .05, .07, .05), MouseController::CB(bind(&GUI::ToggleDisplay, (GUI*)helper)));
 
