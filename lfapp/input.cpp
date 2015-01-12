@@ -465,6 +465,7 @@ void Mouse::ReleaseFocus() { SDL_ShowCursor(1); SDL_SetWindowGrab((SDL_Window*)s
 #ifdef LFL_OSXINPUT
 extern "C" void OSXGrabMouseFocus();
 extern "C" void OSXReleaseMouseFocus();
+extern "C" void OSXSetMousePosition(int x, int y);
 
 const unsigned short Key::Escape     = 0x81;
 const unsigned short Key::Return     = '\r';
@@ -505,8 +506,10 @@ const char *Clipboard::Get() { return ""; }
 void Clipboard::Set(const char *s) {}
 void TouchDevice::OpenKeyboard() {}
 void TouchDevice::CloseKeyboard() {}
-void Mouse::GrabFocus   () { OSXGrabMouseFocus(); }
-void Mouse::ReleaseFocus() { OSXReleaseMouseFocus(); }
+void Mouse::ReleaseFocus() { OSXReleaseMouseFocus(); app->grab_mode.Off(); screen->cursor_grabbed=0; }
+void Mouse::GrabFocus   () { OSXGrabMouseFocus();    app->grab_mode.On();  screen->cursor_grabbed=1;
+    OSXSetMousePosition(screen->width/2, screen->height/2);
+}
 #endif // LFL_OSXINPUT
 
 int Input::Init() {
@@ -672,14 +675,14 @@ int Input::MouseEventDispatch(int event, const point &p, int down) {
 
     int fired = 0;
     for (auto g = screen->mouse_gui.begin(); g != screen->mouse_gui.end(); ++g)
-        if ((*g)->mouse.active) fired += (*g)->mouse.Input(event, (*g)->MousePosition(), down, 0);
+        if ((*g)->active) fired += (*g)->Input(event, (*g)->MousePosition(), down, 0);
 
     vector<Dialog*> removed;
     Dialog *bring_to_front = 0;
     for (auto i = screen->dialogs.begin(); i != screen->dialogs.end(); /**/) {
         Dialog *gui = (*i);
-        if (!gui->mouse.active) { i++; continue; }
-        fired += gui->mouse.Input(event, screen->mouse, down, 0);
+        if (!gui->active) { i++; continue; }
+        fired += gui->Input(event, screen->mouse, down, 0);
         if (gui->deleted) { delete gui; i = screen->dialogs.erase(i); continue; }
         if (event == Mouse::Event::Button1 && down && gui->BoxAndTitle().within(screen->mouse)) { bring_to_front = *i; break; }
         i++;
@@ -850,9 +853,9 @@ void Shell::snap(const vector<string> &arg) {
 }
 
 void Shell::play(const vector<string> &arg) {
-    SoundAsset *sa     = arg.size() > 0 ? soundasset(arg[0])         : soundasset("snap");
-    int         offset = arg.size() > 1 ?       atoi(arg[1].c_str()) : -1;
-    int         len    = arg.size() > 2 ?       atoi(arg[2].c_str()) : -1;
+    SoundAsset *sa     = arg.size() > 0 ? soundasset(arg[0]) : soundasset("snap");
+    int         offset = arg.size() > 1 ?       atoi(arg[1]) : -1;
+    int         len    = arg.size() > 2 ?       atoi(arg[2]) : -1;
     if (sa) app->audio.QueueMix(sa, MixFlag::Reset, offset, len);
 }
 
@@ -899,7 +902,7 @@ void shell_filter(const vector<string> &arg, bool FFTfilter, int taps, int hop=0
     SoundAsset *sa=0; vector<double> filter; double cutoff=0;
 
     if (arg.size() > 0) sa     = app->shell.soundasset(arg[0]);
-    if (arg.size() > 2) cutoff = atof(arg[2].c_str());
+    if (arg.size() > 2) cutoff = atof(arg[2]);
     if (arg.size() > 1) {
         filter.resize(taps);
         if        (arg[1] == "low") {
@@ -911,7 +914,7 @@ void shell_filter(const vector<string> &arg, bool FFTfilter, int taps, int hop=0
             filter = PreEmphasisFilter();
         }
     }
-    if (arg.size() > 3) { taps = atoi(arg[3].c_str()); hop = taps/2; }
+    if (arg.size() > 3) { taps = atoi(arg[3]); hop = taps/2; }
 
     if (!sa || filter.empty() || !taps) {
         INFO("filter <asset> <low,high> <cutoff> [taps]");
@@ -949,8 +952,8 @@ void Shell::f0(const vector<string> &arg) {
     SoundAsset *sa=0; int offset=0; int method=F0EstmMethod::Default;
 
     if (arg.size() > 0) sa = app->shell.soundasset(arg[0]);
-    if (arg.size() > 1) offset = atoi(arg[1].c_str());
-    if (arg.size() > 2) method = atoi(arg[2].c_str());
+    if (arg.size() > 1) offset = atoi(arg[1]);
+    if (arg.size() > 2) method = atoi(arg[2]);
 
     if (!sa || !sa->wav || sa->wav->ring.size < offset+FLAGS_feat_window) {
         INFO("f0 <asset> <offset>");
@@ -975,7 +978,7 @@ void Shell::f0(const vector<string> &arg) {
 
 void Shell::sinth(const vector<string> &a) { 
     int hz[3] = { 440, 0, 0};
-    for (int i=0; i<sizeofarray(hz) && i<a.size(); i++) hz[i] = atof(a[i].c_str());
+    for (int i=0; i<sizeofarray(hz) && i<a.size(); i++) hz[i] = atof(a[i]);
     Sinthesize(&app->audio, hz[0], hz[1], hz[2]);
 }
 
@@ -1004,8 +1007,8 @@ void Shell::TextureBox(const vector<string> &a) { Dialog::TextureBox(a.size() ? 
 void Shell::Slider(const vector<string> &a) {
     if (a.empty()) { INFO("slider <flag_name> [total] [inc]"); return; }
     string flag_name = a[0];
-    float total = a.size() >= 1 ? atof(a[1].c_str()) : 0;
-    float inc   = a.size() >= 2 ? atof(a[2].c_str()) : 0;
+    float total = a.size() >= 1 ? atof(a[1]) : 0;
+    float inc   = a.size() >= 2 ? atof(a[2]) : 0;
     new SliderTweakDialog(flag_name, total ? total : 100, inc ? inc : 1);
 }
 

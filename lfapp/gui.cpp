@@ -62,7 +62,6 @@ Window::Window() : caption("lfapp"), fps(128) {
     opengles_cubemap = 0;
     width = 640; height = 480;
     multitouch_keyboard_x = .93; 
-    gui_root = new GUI(this);
     cam = new Entity(v3(5.54, 1.70, 4.39), v3(-.51, -.03, -.49), v3(-.03, 1, -.03));
     ClearEvents();
     ClearGesture();
@@ -73,12 +72,11 @@ Window::~Window() {
         console->WriteHistory(dldir(), "console");
         delete console;
     }
-    delete gui_root;
     delete cam;
 }
 
 void Window::ClearMouseGUIEvents() {
-    for (auto i = mouse_gui.begin(); i != mouse_gui.end(); ++i) (*i)->mouse.ClearEvents();
+    for (auto i = mouse_gui.begin(); i != mouse_gui.end(); ++i) (*i)->ClearEvents();
 }
 void Window::ClearKeyboardGUIEvents() {
     for (auto i = keyboard_gui.begin(); i != keyboard_gui.end(); ++i) (*i)->ClearEvents();
@@ -751,7 +749,6 @@ void Terminal::TopNewline() {
 /* Dialog */
 
 void Dialog::Draw() {
-    mouse.Activate();
     if (moving) box.SetPosition(win_start + screen->mouse - mouse_start);
 
     Box outline = BoxAndTitle();
@@ -1362,7 +1359,7 @@ void SimpleBrowser::OpenStyleImport(const string &url) {
 
 void SimpleBrowser::KeyEvent(int key, bool down) {}
 void SimpleBrowser::MouseMoved(int x, int y) { mx=x; my=y; }
-void SimpleBrowser::MouseButton(int b, bool d) { gui.mouse.Input(b, point(mx, my), d, 1); }
+void SimpleBrowser::MouseButton(int b, bool d) { gui.Input(b, point(mx, my), d, 1); }
 void SimpleBrowser::MouseWheel(int xs, int ys) {}
 void SimpleBrowser::AnchorClicked(DOM::HTMLAnchorElement *anchor) {
     anchor->ownerDocument->ownerBrowser->Navigate(String::ToUTF8(anchor->getAttribute("href")));
@@ -1408,7 +1405,7 @@ void SimpleBrowser::DrawScrollbar() {
     v_scrollbar.SetDocHeight(doc.height);
     v_scrollbar.Update();
     h_scrollbar.Update();
-    gui.mouse.Activate();
+    gui.Activate();
 }
 
 void SimpleBrowser::DrawNode(Flow *flow, DOM::Node *n, const point &displacement_in) {

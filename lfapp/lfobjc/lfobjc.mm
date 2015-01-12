@@ -71,9 +71,10 @@ static const char **osx_argv = 0;
 
 @implementation GameView
     LFApp *app = 0;
+    NativeWindow *screen = 0;
     NSTimer *timer = 0;
-    NSPoint prev_mouse_pos;
     CVDisplayLinkRef displayLink;
+    NSPoint prev_mouse_pos;
     bool use_timer = 1, use_display_link = 0, display_link_init = 0;
     bool cmd_down = 0, ctrl_down = 0, shift_down = 0;
 
@@ -119,6 +120,7 @@ static const char **osx_argv = 0;
             [[self openGLContext] makeCurrentContext];
             SetLFAppMainThread();
             app = GetLFApp();
+            screen = GetNativeWindow();
         }
         if (app->run) LFAppFrame();
         else [self stopVideoThreadAndExit];
@@ -129,8 +131,15 @@ static const char **osx_argv = 0;
     }
     - (void)mouseDown:    (NSEvent*)e { NSPoint p=[e locationInWindow]; MouseClick(1, 1, p.x, p.y); prev_mouse_pos=p; }
     - (void)mouseUp  :    (NSEvent*)e { NSPoint p=[e locationInWindow]; MouseClick(1, 0, p.x, p.y); prev_mouse_pos=p; }
-    - (void)mouseDragged: (NSEvent*)e { NSPoint p=[e locationInWindow], d=NSMakePoint(p.x-prev_mouse_pos.x, p.y-prev_mouse_pos.y); MouseMove(p.x, p.y, d.x, d.y); prev_mouse_pos=p; }
-    - (void)mouseMoved:   (NSEvent*)e { NSPoint p=[e locationInWindow], d=NSMakePoint(p.x-prev_mouse_pos.x, p.y-prev_mouse_pos.y); MouseMove(p.x, p.y, d.x, d.y); prev_mouse_pos=p; }
+    - (void)mouseDragged: (NSEvent*)e { [self mouseMoved:e]; }
+    - (void)mouseMoved:   (NSEvent*)e {
+        if (screen->cursor_grabbed) MouseMove(prev_mouse_pos.x, prev_mouse_pos.y, [e deltaX], -[e deltaY]);
+        else {
+            NSPoint p=[e locationInWindow], d=NSMakePoint(p.x-prev_mouse_pos.x, p.y-prev_mouse_pos.y);
+            MouseMove(p.x, p.y, d.x, d.y);
+            prev_mouse_pos = p;
+        }
+    }
     - (void)keyDown:(NSEvent *)theEvent {
         if ([theEvent isARepeat]) return;
         int c = getKeyCode([theEvent keyCode]);
@@ -248,8 +257,19 @@ extern "C" void NativeWindowSize(int *width, int *height) {
     [(AppDelegate*)[NSApp delegate] createWindow:*width height:*height];
 }
 
-extern "C" void OSXGrabMouseFocus   () { CGDisplayHideCursor(kCGDirectMainDisplay);  }
-extern "C" void OSXReleaseMouseFocus() { CGDisplayShowCursor(kCGDirectMainDisplay);  }
+extern "C" void OSXGrabMouseFocus() { 
+    CGDisplayHideCursor(kCGDirectMainDisplay);
+    CGAssociateMouseAndMouseCursorPosition(false);
+}
+extern "C" void OSXReleaseMouseFocus() {
+    CGDisplayShowCursor(kCGDirectMainDisplay);
+    CGAssociateMouseAndMouseCursorPosition(true);
+}
+extern "C" void OSXSetMousePosition(int x, int y) {
+    CGWarpMouseCursorPosition
+        (NSPointToCGPoint([[[(AppDelegate*)[NSApp delegate] view] window]
+                          convertRectToScreen:NSMakeRect(x, y, 0, 0)].origin));
+}
 
 extern "C" int OSXVideoSwap() {
     // INFOf("%s", "OSXVideoSwap");
