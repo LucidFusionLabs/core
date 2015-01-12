@@ -85,18 +85,24 @@ void Window::ClearInputBindEvents() {
     for (auto i = input_bind.begin(); i != input_bind.end(); ++i) (*i)->ClearEvents();
 }
 
+void Window::ClearEvents() { 
+    memzero(events);
+    ClearMouseGUIEvents();
+    ClearKeyboardGUIEvents();
+    ClearInputBindEvents();
+}
+
+void Window::ClearGesture() {
+    gesture_swipe_up = gesture_swipe_down = 0;
+    gesture_tap[0] = gesture_tap[1] = gesture_dpad_stop[0] = gesture_dpad_stop[1] = 0;
+    gesture_dpad_dx[0] = gesture_dpad_dx[1] = gesture_dpad_dy[0] = gesture_dpad_dy[1] = 0;
+}
+
 void Window::InitConsole() {
     console = new Console(screen, Fonts::Get(FLAGS_default_font, 9, Color::white));
     console->ReadHistory(dldir(), "console");
     console->Write(StrCat(screen->caption, " started"));
     console->Write("Try console commands 'cmds' and 'flags'");
-}
-
-void Window::ClearEvents() { memzero(events); }
-void Window::ClearGesture() {
-    gesture_swipe_up = gesture_swipe_down = 0;
-    gesture_tap[0] = gesture_tap[1] = gesture_dpad_stop[0] = gesture_dpad_stop[1] = 0;
-    gesture_dpad_dx[0] = gesture_dpad_dx[1] = gesture_dpad_dy[0] = gesture_dpad_dy[1] = 0;
 }
 
 void Window::DrawDialogs() {

@@ -208,10 +208,10 @@ struct SelectSocketSet : public SocketSet {
 
 struct SelectSocketThread {
     SelectSocketSet sockets;
-    Mutex sockets_mutex;
+    mutex sockets_mutex;
     Thread thread;
     int pipe[2];
-    SelectSocketThread() : thread(ThreadProc, this) { pipe[0] = pipe[1] = -1; }
+    SelectSocketThread() : thread(bind(&SelectSocketThread::ThreadProc, this)) { pipe[0] = pipe[1] = -1; }
     ~SelectSocketThread() { close(pipe[0]); close(pipe[1]); }
 
     void AddSocket(Socket fd, int flag, void *v=0) { { ScopedMutex sm(sockets_mutex); sockets.Add(fd, flag, v); } Wakeup(); }
@@ -226,8 +226,7 @@ struct SelectSocketThread {
     }
     void Wait() { thread.Wait(); }
     void Wakeup() { char c=0; if (pipe[1] >= 0) CHECK_EQ((int)write(pipe[1], &c, 1), 1); }
-    int ThreadProc();
-    static int ThreadProc(void *v) { return ((SelectSocketThread*)v)->ThreadProc(); }
+    void ThreadProc();
 };
 
 #if defined(LFL_EPOLL) && LFL_LINUX_SERVER
@@ -728,7 +727,7 @@ struct Sniffer {
     int ip, mask;
     void *handle;
     Sniffer(void *H, int I, int M, CB C) : cb(C), handle(H), ip(I), mask(M) {}
-    ~Sniffer() { if (thread.started) thread.Wait(); }
+    ~Sniffer() { thread.Wait(); }
 };
 
 struct GeoResolution {

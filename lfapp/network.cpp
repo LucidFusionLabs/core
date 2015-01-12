@@ -588,7 +588,7 @@ string Network::gethostbyaddr(IPV4::Addr addr) {
     return h ? h->h_name : "";
 }
 
-int SelectSocketThread::ThreadProc() {
+void SelectSocketThread::ThreadProc() {
     while (app->run) {
         { ScopedMutex sm(app->frame_mutex); }
         if (app->run) {
@@ -600,7 +600,6 @@ int SelectSocketThread::ThreadProc() {
         if (app->run) app->Wakeup();
         { ScopedMutex sm(app->wait_mutex); }
     }
-    return 0;
 }
 
 int SelectSocketSet::Select(int wait_time) {

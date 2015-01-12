@@ -179,8 +179,10 @@ void Mouse::ReleaseFocus() {}
 #endif
 
 #ifdef LFL_IPHONE
+extern "C" int iPhoneInput(unsigned clicks, unsigned *events);
+
 struct IPhoneInputModule : public Module {
-    int Frame(unsigned clicks) { return iphone_input(clicks); }
+    int Frame(unsigned clicks) { return iPhoneInput(clicks); }
 };
 
 const unsigned short Key::Escape     = -1;
@@ -529,7 +531,12 @@ int Input::Init() {
 
 int Input::Frame(unsigned clicks) {
     if (impl) impl->Frame(clicks);
-    if (screen && screen->binds) screen->binds->Repeat(clicks);
+    if (screen) { // XXX support multiple windows
+        if (screen->binds) screen->binds->Repeat(clicks);
+        if (screen->gesture_swipe_up)   { if (screen->console && screen->console->active) screen->console->PageUp();   }
+        if (screen->gesture_swipe_down) { if (screen->console && screen->console->active) screen->console->PageDown(); }
+        screen->ClearGesture();
+    }
     return 0;
 }
 

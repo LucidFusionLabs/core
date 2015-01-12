@@ -108,9 +108,14 @@ extern "C" {
 #include <v8.h>
 #endif
 
+#ifdef LFL_IPHONE
+extern "C" int iPhoneOpenBrowser(const char *url_text);
+#endif
+
 namespace LFL {
 Application *app = new Application();
 Window *screen = new Window();
+thread_local ThreadLocalStorage *ThreadLocalStorage::instance = 0;
 
 DEFINE_bool(lfapp_audio, true, "Enable audio in/out");
 DEFINE_bool(lfapp_video, true, "Enable OpenGL");
@@ -145,8 +150,8 @@ Printable::Printable(const void           *x) : string(StringPrintf("%p", x)) {}
 string Flag::ToString() const { string v=Get(); return StrCat(name, v.size()?" = ":"", v.size()?v:"", " : ", desc); } 
 
 bool Running() { return app->run; }
-bool MainThread() { return Thread::Id() == app->main_thread_id; }
-void RunInMainThread(Callback *cb) { app->message_queue.Write(ThreadPool::message_queue_callback, cb); }
+bool MainThread() { return Thread::GetId() == app->main_thread_id; }
+void RunInMainThread(Callback *cb) { app->message_queue.Write(MessageQueue::CallbackMessage, cb); }
 void Log(int level, const char *file, int line, const string &m) { app->Log(level, file, line, m); }
 void DefaultLFAppWindowClosedCB() { delete screen; }
 double FPS() { return screen->fps.FPS(); }
@@ -904,13 +909,6 @@ const char *nt_service_name = 0;
 SERVICE_STATUS_HANDLE nt_service_status_handle = 0;
 DEFINE_bool(open_console, 0, "Open console output");
 
-__declspec(thread) ThreadLocalStorage tls;
-void ThreadLocalStorage::Init() {}
-void ThreadLocalStorage::Free() {}
-void ThreadLocalStorage::ThreadInit() { tls.alloc = 0; }
-void ThreadLocalStorage::ThreadFree() { delete tls.alloc; }
-ThreadLocalStorage *ThreadLocalStorage::Get() { return &tls; }
-
 void WIN32_Init() { timeBeginPeriod(1); }
 Time Now() { return timeGetTime(); }
 void Msleep(int milliseconds) { Sleep(milliseconds); }
@@ -1072,32 +1070,6 @@ void Msleep(int milliseconds) { usleep(milliseconds * 1000); }
 void HandleSigInt(int sig) { app->run=0; if (FLAGS_lfapp_wait_forever) app->Wakeup(); }
 Time Now() { struct timeval tv; gettimeofday(&tv, 0); return (Time)tv.tv_sec * 1000 + tv.tv_usec / 1000; }
 
-static pthread_key_t tls_key;
-void ThreadLocalStorage::Init() { 
-    pthread_key_create(&tls_key, 0);
-    INFOf("ThreadLocalStorage::Init() tid=%llxd", Thread::Id());
-    ThreadInit();
-}
-void ThreadLocalStorage::Free() { 
-    ThreadFree();
-    pthread_key_delete(tls_key);
-}
-void ThreadLocalStorage::ThreadInit() {
-    ThreadLocalStorage *tls = new ThreadLocalStorage();
-    pthread_setspecific(tls_key, tls);
-    INFOf("ThreadLocalStorage::ThreadInit(%p) tid=%llxd", tls, Thread::Id());
-}
-void ThreadLocalStorage::ThreadFree() {
-    ThreadLocalStorage *tls = (ThreadLocalStorage*)pthread_getspecific(tls_key);
-    if (tls) delete tls;
-}
-ThreadLocalStorage *ThreadLocalStorage::Get() {
-    ThreadLocalStorage *ret = (ThreadLocalStorage*)pthread_getspecific(tls_key);
-    if (ret) return ret;
-    ThreadInit();
-    return Get();
-}
-
 const char LocalFile::Slash = '/';
 int LocalFile::IsDirectory(const string &filename) {
 #if !defined(LFL_IPHONE) && !defined(LFL_ANDROID) /* XXX */
@@ -1184,13 +1156,6 @@ int NTService::Uninstall(const char *name) { FATAL("not implemented"); }
 int NTService::WrapMain(const char *name, MainCB main_cb, int argc, const char **argv) { return main_cb(argc, argv); }
 
 #endif /* WIN32 */
-
-Allocator *ThreadLocalStorage::GetAllocator(bool reset_allocator) {
-    ThreadLocalStorage *tls = Get();
-    if (!tls->alloc) tls->alloc = new FixedAlloc<1024*1024>;
-    if (reset_allocator) tls->alloc->Reset();
-    return tls->alloc;
-}
 
 struct DownloadDirectory {
     string text;
@@ -1315,8 +1280,8 @@ long long BufferFile::Seek(long long offset, int whence) {
     return rdo = wro = nr.file_offset = offset;
 }
 
-int BufferFile::Read(void *out, int size) {
-    int l = min(size, buf.size() - rdo);
+int BufferFile::Read(void *out, size_t size) {
+    size_t l = min(size, buf.size() - rdo);
     memcpy(out, buf.data() + rdo, l);
     rdo += l;
     nr.file_offset += l;
@@ -1324,10 +1289,10 @@ int BufferFile::Read(void *out, int size) {
     return l;
 }
 
-int BufferFile::Write(const void *In, int size) {
+int BufferFile::Write(const void *In, size_t size) {
     const char *in = (const char *)In;
     if (size == -1) size = strlen(in);
-    int l = min(size, buf.size() - wro);
+    size_t l = min(size, buf.size() - wro);
     buf.replace(wro, l, in, l);
     if (size > l) buf.append(in + l, size - l);
     wro += size;
@@ -1442,7 +1407,7 @@ long long LocalFile::Seek(long long offset, int whence) {
     return ret;
 }
 
-int LocalFile::Read(void *buf, int size) {
+int LocalFile::Read(void *buf, size_t size) {
     int ret = fread(buf, 1, size, (FILE*)impl);
     if (ret < 0) return ret;
     nr.file_offset += ret;
@@ -1450,7 +1415,7 @@ int LocalFile::Read(void *buf, int size) {
     return ret;
 }
 
-int LocalFile::Write(const void *buf, int size) {
+int LocalFile::Write(const void *buf, size_t size) {
     int ret = fwrite(buf, 1, size!=-1?size:strlen((char*)buf), (FILE*)impl);
     if (ret < 0) return ret;
     nr.file_offset += ret;
@@ -1460,27 +1425,6 @@ int LocalFile::Write(const void *buf, int size) {
 
 bool LocalFile::Flush() { fflush((FILE*)impl); return true; }
 #endif /* LFL_ANDROID */
-
-int ThreadPool::HandleMessages(void *q) {
-    MessageQueue *message_queue = (MessageQueue*)q;
-    void *message; int message_id;
-    while ((message_id = message_queue->Read(&message))) {
-        if (message_id == message_queue_callback) {
-            Callback *cb = (Callback*)message;
-            (*cb)();
-            delete cb;
-        } else ERROR("unknown message id=", message_id);
-    }
-    return 0;
-}
-
-int ThreadPool::HandleMessagesLoop(void *q) {
-    while (app->run) {
-        HandleMessages(q);
-        Msleep(30);
-    }
-    return 0;
-}
 
 DirectoryIter::DirectoryIter(const string &path, int dirs, const char *Pref, const char *Suf) : P(Pref), S(Suf), init(0) {
     if (LocalFile::IsDirectory(path)) pathname = path;
@@ -1981,7 +1925,6 @@ int Application::Create(int argc, const char **argv, const char *source_filename
 
     char cwd[256]; getcwd(cwd, sizeof(cwd));
     INFO(screen->caption, ": lfapp init: LFLHOME=", cwd, " DLDIR=", dldir());
-    ThreadLocalStorage::Init();
 
 #ifndef _WIN32
     if (FLAGS_max_rlimit_core) {
@@ -2101,9 +2044,9 @@ int Application::Init() {
     app_time.GetTime(true);
     frame_time.GetTime(true);
     maxfps.timer.GetTime(true);
-    if (FLAGS_lfapp_wait_forever) frame_mutex.Enter();
+    if (FLAGS_lfapp_wait_forever) frame_mutex.lock();
     INFO("lfapp_open: succeeded");
-    opened = true;
+    initialized = true;
     return 0;
 }
 
@@ -2132,7 +2075,7 @@ int Application::PreFrame(unsigned clicks, unsigned *mic_samples, bool *camera_s
             assets.movie_playing->Play(0);
         } else if ((audio.playing || audio.loop) && audio.Out.size() < refillWhen) {
             //  audio.QueueMix(audio.playing ? audio.playing : audio.loop, !audio.playing ? MixFlag::Reset : 0, -1, -1);
-            thread_pool.Write(ThreadPool::message_queue_callback,
+            thread_pool.Write(MessageQueue::CallbackMessage,
                               new Callback(bind(&Audio::QueueMix, &audio, audio.playing ? audio.playing : audio.loop, !audio.playing ? MixFlag::Reset : 0, -1, -1)));
         }
     } else {
@@ -2157,10 +2100,10 @@ int Application::PreFrame(unsigned clicks, unsigned *mic_samples, bool *camera_s
     }
 
     // handle messages sent to main thread
-    if (run) ThreadPool::HandleMessages(&message_queue);
+    if (run) message_queue.HandleMessages();
 
     // fake threadpool that executes in main thread
-    if (run && !FLAGS_threadpool_size) ThreadPool::HandleMessages(thread_pool.queue[0]);
+    if (run && !FLAGS_threadpool_size) thread_pool.queue[0]->HandleMessages();
 
     if (FLAGS_lfapp_network && run) {
         network.Frame();
@@ -2197,9 +2140,11 @@ int Application::Wakeup() {
 }
 
 int Application::Frame() {
+    if (!MainThread()) ERROR("Frame() called from thread ", Thread::GetId());
+
     if (FLAGS_lfapp_wait_forever) {
-        wait_mutex.Enter();
-        frame_mutex.Leave();
+        wait_mutex.lock();
+        frame_mutex.unlock();
 #if defined(LFL_GLFWINPUT)
         glfwWaitEvents();
 #elif defined(LFL_SDLINPUT)
@@ -2208,8 +2153,8 @@ int Application::Frame() {
 #else
         FATAL("not implemented");
 #endif
-        frame_mutex.Enter();
-        wait_mutex.Leave();
+        frame_mutex.lock();
+        wait_mutex.unlock();
     }
 
     unsigned clicks = frame_time.GetTime(true);
@@ -2222,46 +2167,24 @@ int Application::Frame() {
     for (auto i = Window::active.begin(); run && i != Window::active.end(); ++i) {
         if (i->second->minimized) continue;
         if (screen != i->second) Window::MakeCurrent(i->second);
-
-        if (FLAGS_lfapp_input) {
-            if (screen->gesture_swipe_up)   { if (screen->console && screen->console->active) screen->console->PageUp();   }
-            if (screen->gesture_swipe_down) { if (screen->console && screen->console->active) screen->console->PageDown(); }
-
-            /* Active GUIs should be activate()'d each frame, usally when drawn */
-            //screen->DeactivateMouseGUIs();
-            //screen->gui_root->mouse.Activate();
-        }
+        if (pre_frames_ran % (int)(*maxfps.target_hz / FLAGS_min_fps) == 0) flag |= FrameFlag::DontSkip;
 
         if (FLAGS_lfapp_video) {
-            /* view transform */
             screen->gd->Clear();
             screen->gd->LoadIdentity();
         }
 
-        /* heartbeat */
-        if (pre_frames_ran % (int)(*maxfps.target_hz / FLAGS_min_fps) == 0) flag |= FrameFlag::DontSkip;
-
         /* frame */
         int ret = frame_cb ? frame_cb(screen, clicks, mic_samples, cam_sample, flag) : 0;
         screen->ClearEvents();
-        screen->ClearMouseGUIEvents();
-        screen->ClearKeyboardGUIEvents();
 
         /* allow app to skip frame */
         if (ret < 0) continue;
         screen->fps.Add(clicks);
 
         if (FLAGS_lfapp_video) {
-            if (FLAGS_multitouch) {
-                static Font *mobile_font = Fonts::Get("MobileAtlas", 0, Color::black);
-                // static Widget::Button iPhoneKeyboardButton(screen->gui_root, 0, 0, Box::FromScreen(screen->multitouch_keyboard_x, .05, .07, .05),
-                //                                           MouseController::CB(bind(&Shell::showkeyboard, &app->shell, vector<string>())));
-                // iPhoneKeyboardButton.Draw(mobile_font, 5);
-            }
-
             video.Flush();
             screen->gd->DrawMode(DrawMode::_3D);
-            screen->ClearGesture();
         }
     }
     if (previous_screen != screen) Window::MakeCurrent(previous_screen);
@@ -2304,7 +2227,7 @@ int Application::Free() {
 int Application::Exiting() {
     run = 0;
     INFO("exiting");
-    if (FLAGS_lfapp_wait_forever) frame_mutex.Leave();
+    if (FLAGS_lfapp_wait_forever) frame_mutex.unlock();
 #ifdef _WIN32
     if (FLAGS_open_console) press_any_key();
 #endif
@@ -2604,7 +2527,11 @@ extern "C" void UnMinimized()              { LFL::screen->UnMinimized(); }
 extern "C" void KeyPress  (int b, int d)                 { LFL::app->input.KeyPress  (b, d); }
 extern "C" void MouseClick(int b, int d, int x,  int y)  { LFL::app->input.MouseClick(b, d, LFL::point(x, y)); }
 extern "C" void MouseMove (int x, int y, int dx, int dy) { LFL::app->input.MouseMove (LFL::point(x, y), LFL::point(dx, dy)); }
-extern "C" void SetLFAppMainThread() { LFL::app->main_thread_id = LFL::Thread::Id(); }
+extern "C" void SetLFAppMainThread() {
+    LFL::Thread::Id id = LFL::Thread::GetId();
+    if (LFL::app->main_thread_id != id) INFOf("LFApp->main_thread_id changed from %llx to %llx", LFL::app->main_thread_id, id);
+    LFL::app->main_thread_id = id; 
+}
 extern "C" void LFAppLog(int level, const char *file, int line, const char *fmt, ...) {
     string message;
     StringPrintfImpl(&message, fmt, vsnprintf, char, 0);

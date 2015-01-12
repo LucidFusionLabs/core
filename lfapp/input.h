@@ -144,7 +144,7 @@ struct Input : public Module {
     bool left_shift_down=0, right_shift_down=0, left_ctrl_down=0, right_ctrl_down=0;
     bool left_cmd_down=0, right_cmd_down=0, mouse_but1_down=0, mouse_but2_down=0;
     vector<Callback> queued_input;
-    Mutex queued_input_mutex;
+    mutex queued_input_mutex;
     Module *impl=0;
 
     void QueueKey(int key, bool down) {
