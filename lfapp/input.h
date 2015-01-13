@@ -21,22 +21,22 @@
 namespace LFL {
 
 struct InputEvent {
-    typedef long long ID;
-    static int GetKey(ID event) { return event & 0xffffffff; }
+    typedef long long Id;
+    static int GetKey(Id event) { return event & 0xffffffff; }
 };
 
 struct Key {
     typedef long long Mod;
-    struct Modifier { enum { Ctrl=1<<32, Cmd=1<<33 }; }; /// On PC Alt=Cmd
+    struct Modifier { static const InputEvent::Id Ctrl, Cmd; }; /// On PC Alt=Cmd
     static const int Escape, Return, Up, Down, Left, Right, LeftShift, RightShift, LeftCtrl, RightCtrl, LeftCmd, RightCmd;
     static const int Tab, Space, Backspace, Delete, Quote, Backquote, PageUp, PageDown, Home, End;
     static const int F1, F2, F3, F4, F5, F6, F7, F8, F9, F10, F11, F12;
 };
 
 struct Mouse {
-    struct Button { enum { _1=1<<34, _2=1<<35 }; };
-    struct Event { enum { Z=1<<36, Motion=Z, Wheel=Z+1, Button1=Button::_1, Button2=Button::_2 }; };
-    static InputEvent::ID ButtonID(int button) {
+    struct Button { static const InputEvent::Id _1, _2; };
+    struct Event  { static const InputEvent::Id Motion, Wheel, Button1, Button2; };
+    static InputEvent::Id ButtonID(int button) {
         switch (button) {
             case 1: return Button::_1;
             case 2: return Button::_2;
@@ -56,7 +56,7 @@ struct InputController {
     void ClearEvents() { memzero(events); }
     virtual void Activate  () { active = 1; }
     virtual void Deactivate() { active = 0; }
-    virtual void Input(int event, bool down) {}
+    virtual void Input(InputEvent::Id event, bool down) {}
 };
 
 struct KeyboardController {
@@ -141,7 +141,7 @@ struct MouseController {
     virtual bool NotActive() const { return !active; }
     virtual int AddClickBox(const Box &w, const Callback &cb) { return hit.Insert(HitBox(Event::Click, w, cb)); }
     virtual int AddHoverBox(const Box &w, const Callback &cb) { return hit.Insert(HitBox(Event::Hover, w, cb)); }
-    virtual int Input(int button, const point &p, int down, int flag);
+    virtual int Input(InputEvent::Id, const point &p, int down, int flag);
 };
 
 struct Input : public Module {
@@ -179,12 +179,12 @@ struct Input : public Module {
     int DispatchQueuedInput();
 
     void KeyPress(int key, bool down);
-    int  KeyEventDispatch(InputEvent::ID event, bool down);
+    int  KeyEventDispatch(InputEvent::Id event, bool down);
 
     void MouseMove(const point &p, const point &d);
     void MouseWheel(int dw);
     void MouseClick(int button, bool down, const point &p);
-    int  MouseEventDispatch(InputEvent::ID event, const point &p, int down);
+    int  MouseEventDispatch(InputEvent::Id event, const point &p, int down);
 
     static point TransformMouseCoordinate(point p) {
         if (FLAGS_swap_axis) p = point(screen->width - p.y, p.x);
@@ -202,12 +202,12 @@ struct Bind {
         FunctionPointer() {}
         ~FunctionPointer() {}
     } cb;
-    InputEvent::ID key;
-    Bind(int K=0, Key::Mod M=0)               : cb_type(NONE),    key(K|M) {}
-    Bind(int K,             const CB     &Cb) : cb_type(CB_VOID), key(K|0) { new (&cb.cb_void)     CB(Cb); }
-    Bind(int K, Key::Mod M, const CB     &Cb) : cb_type(CB_VOID), key(K|M) { new (&cb.cb_void)     CB(Cb); }
-    Bind(int K,             const TimeCB &Cb) : cb_type(CB_TIME), key(K|0) { new (&cb.cb_time) TimeCB(Cb); }
-    Bind(int K, Key::Mod M, const TimeCB &Cb) : cb_type(CB_TIME), key(K|M) { new (&cb.cb_time) TimeCB(Cb); }
+    InputEvent::Id key;
+    Bind(InputEvent::Id K=0, Key::Mod M=0)               : cb_type(NONE),    key(K|M) {}
+    Bind(InputEvent::Id K,             const CB     &Cb) : cb_type(CB_VOID), key(K|0) { new (&cb.cb_void)     CB(Cb); }
+    Bind(InputEvent::Id K, Key::Mod M, const CB     &Cb) : cb_type(CB_VOID), key(K|M) { new (&cb.cb_void)     CB(Cb); }
+    Bind(InputEvent::Id K,             const TimeCB &Cb) : cb_type(CB_TIME), key(K|0) { new (&cb.cb_time) TimeCB(Cb); }
+    Bind(InputEvent::Id K, Key::Mod M, const TimeCB &Cb) : cb_type(CB_TIME), key(K|M) { new (&cb.cb_time) TimeCB(Cb); }
     Bind(const Bind &c) { Assign(c); }
     Bind &operator=(const Bind &c) { Destruct(); Assign(c); return *this; }
     bool operator<(const Bind &c) const { SortImpl1(key, c.key); }
@@ -241,7 +241,7 @@ struct Bind {
 }; // namespace LFL
 namespace std {
     template <> struct ::std::hash<LFL::Bind> {
-        size_t operator()(const LFL::Bind &v) const { return ::std::hash<int>()(v.key); }
+        size_t operator()(const LFL::Bind &v) const { return ::std::hash<LFL::InputEvent::Id>()(v.key); }
     };
 }; // namespace std;
 namespace LFL {
@@ -250,13 +250,14 @@ struct BindMap : public InputController {
     unordered_set<Bind> data, down;
     BindMap() { active = 1; }
     void Add(const Bind &b) { data.insert(b); }
-    void Repeat(unsigned clicks) { for (auto b = down.begin(); b != down.end(); ++b) b->Run(clicks); }
-    void Input(int event, bool d) {
+    void Repeat(unsigned clicks) { for (auto b : down) b.Run(clicks); }
+    void Input(InputEvent::Id event, bool d) {
         auto b = data.find(event);
         if (b == data.end()) return;
         if (b->cb_type == Bind::CB_TIME) { Bind r=*b; r.key=InputEvent::GetKey(r.key); InsertOrErase(&down, r, d); }
         else if (d) b->Run(0);
     }
+    string DebugString() const { string v="{ "; for (auto b : data) StrAppend(&v, b.key, " "); return v + "}"; }
 };
 
 struct Shell {

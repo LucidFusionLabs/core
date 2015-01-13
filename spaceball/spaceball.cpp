@@ -451,7 +451,7 @@ void MyFieldColorCmd(const vector<string> &arg) {
 int Frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample, int flag) {
     if (Singleton<FlagMap>::Get()->dirty) {
         Singleton<FlagMap>::Get()->dirty = false;
-        SettingsFile::Write(save_settings, dldir(), "settings");
+        SettingsFile::Write(save_settings, LFAppDownloadDir(), "settings");
     }
 
     if (FLAGS_multitouch) {
@@ -611,7 +611,7 @@ using namespace LFL;
 
 extern "C" int main(int argc, const char *argv[]) {
 
-    app->logfilename = StrCat(dldir(), "spaceball.txt");
+    app->logfilename = StrCat(LFAppDownloadDir(), "spaceball.txt");
     app->frame_cb = Frame;
 #if defined(LFL_ANDROID) || defined(LFL_IPHONE)
     FLAGS_target_fps = 30;
@@ -643,7 +643,7 @@ extern "C" int main(int argc, const char *argv[]) {
     save_settings.push_back("player_name");
     save_settings.push_back("first_run");
     save_settings.push_back("msens");
-    SettingsFile::Read(dldir(), "settings");
+    SettingsFile::Read(LFAppDownloadDir(), "settings");
     Singleton<FlagMap>::Get()->dirty = false;
 
     if (FLAGS_player_name.empty()) {
