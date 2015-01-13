@@ -1792,14 +1792,12 @@ void SimpleBrowser::UpdateRenderLog(DOM::Node *n) {
 struct BrowserController : public InputController {
     BrowserInterface *browser;
     BrowserController(BrowserInterface *B) : browser(B) {}
-    void Input(int event, bool down) {
+    void Input(InputEvent::Id event, bool down) {
         int key = InputEvent::GetKey(event);
-        if (key) browser->KeyEvent(key, down);
-        else switch (event) {
-            case Mouse::Event::Motion: browser->MouseMoved(screen->mouse.x, screen->mouse.y);
-            case Mouse::Event::Wheel:  browser->MouseWheel(0, down*32); 
-            default:                   browser->MouseButton(event, down); 
-        }
+        if (key)                                browser->KeyEvent(key, down);
+        else if (event == Mouse::Event::Motion) browser->MouseMoved(screen->mouse.x, screen->mouse.y);
+        else if (event == Mouse::Event::Wheel)  browser->MouseWheel(0, down*32);
+        else                                    browser->MouseButton(event, down);
     }
 };
 

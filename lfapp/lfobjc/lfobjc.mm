@@ -131,6 +131,13 @@ static const char **osx_argv = 0;
         float screen_w = [self frame].size.width, screen_h = [self frame].size.height;
         Reshaped((int)screen_w, (int)screen_h);
     }
+    - (void)fileDataAvailable: (NSNotification *)notification { 
+        // [self setNeedsDisplay:YES]; 
+        [self getFrameForTime:nil];
+        NSFileHandle *fh = (NSFileHandle*) [notification object];
+        [fh waitForDataInBackgroundAndNotify];
+    }
+    - (void)fileReadCompleted: (NSNotification *)notification {}
     - (void)mouseDown:    (NSEvent*)e { NSPoint p=[e locationInWindow]; MouseClick(1, 1, p.x, p.y); prev_mouse_pos=p; }
     - (void)mouseUp  :    (NSEvent*)e { NSPoint p=[e locationInWindow]; MouseClick(1, 0, p.x, p.y); prev_mouse_pos=p; }
     - (void)mouseDragged: (NSEvent*)e { [self mouseMoved:e]; }
@@ -143,7 +150,7 @@ static const char **osx_argv = 0;
         }
     }
     - (void)keyDown:(NSEvent *)theEvent {
-        if ([theEvent isARepeat]) return;
+        // if ([theEvent isARepeat]) return;
         int c = getKeyCode([theEvent keyCode]);
         if (c) KeyPress(c, 1);
     }
@@ -259,6 +266,11 @@ extern "C" void NativeWindowSize(int *width, int *height) {
     [(AppDelegate*)[NSApp delegate] createWindow:*width height:*height];
 }
 
+extern "C" void OSXVideoSwap() {
+    // [[[(AppDelegate*)[NSApp delegate] view] openGLContext] flushBuffer];
+    CGLFlushDrawable([[[(AppDelegate*)[NSApp delegate] view] openGLContext] CGLContextObj]);
+}
+
 extern "C" void OSXGrabMouseFocus() { 
     CGDisplayHideCursor(kCGDirectMainDisplay);
     CGAssociateMouseAndMouseCursorPosition(false);
@@ -274,13 +286,18 @@ extern "C" void OSXSetMousePosition(int x, int y) {
 }
 
 extern "C" void OSXTriggerFrame() {
-    [[(AppDelegate*)[NSApp delegate] view] setNeedsDisplay:YES];
+    [[(AppDelegate*)[NSApp delegate] view]
+        performSelectorOnMainThread:@selector(setNeedsDisplay:) withObject:@YES waitUntilDone:NO];
 }
 
-extern "C" void OSXVideoSwap() {
-    // INFOf("%s", "OSXVideoSwap");
-    // [[[(AppDelegate*)[NSApp delegate] view] openGLContext] flushBuffer];
-    CGLFlushDrawable([[[(AppDelegate*)[NSApp delegate] view] openGLContext] CGLContextObj]);
+extern "C" void OSXAddWaitForeverSocket(int fd) {
+    NSFileHandle *fh = [[NSFileHandle alloc] initWithFileDescriptor:fd];
+    // [[NSNotificationCenter defaultCenter] addObserver:[(AppDelegate*)[NSApp delegate] view]
+    //     selector:@selector(fileReadCompleted:) name:NSFileHandleReadCompletionNotification object:nil];
+    // [fh readInBackgroundAndNotify];
+    [[NSNotificationCenter defaultCenter] addObserver:[(AppDelegate*)[NSApp delegate] view]
+        selector:@selector(fileDataAvailable:) name:NSFileHandleDataAvailableNotification object:nil];
+    [fh waitForDataInBackgroundAndNotify];
 }
 
 extern "C" int main(int argc, const char **argv) {

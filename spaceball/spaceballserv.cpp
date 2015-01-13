@@ -81,7 +81,7 @@ int SpaceballServer(int argc, const char **argv) {
 
 extern "C" int main(int argc, const char **argv) {
     static const char *service_name = "Spaceball 6006 Server";
-    app->logfilename = StrCat(dldir(), "spaceballserv.txt");
+    app->logfilename = StrCat(LFAppDownloadDir(), "spaceballserv.txt");
     FLAGS_lfapp_camera = FLAGS_lfapp_audio = FLAGS_lfapp_video = FLAGS_lfapp_input = 0;
 
 #ifdef _WIN32

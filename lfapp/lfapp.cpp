@@ -112,6 +112,7 @@ extern "C" {
 extern "C" void iPhoneOpenBrowser(const char *url_text);
 #elif defined(__APPLE__)
 extern "C" void OSXTriggerFrame();
+extern "C" void OSXAddWaitForeverSocket(int fd);
 #endif
 
 namespace LFL {
@@ -1069,7 +1070,7 @@ int NTService::WrapMain(const char *name, MainCB main_cb, int argc, const char *
 void OpenConsole() {}
 void CloseConsole() {}
 void Msleep(int milliseconds) { usleep(milliseconds * 1000); }
-void HandleSigInt(int sig) { app->run=0; if (FLAGS_lfapp_wait_forever) app->Wakeup(); }
+void HandleSigInt(int sig) { app->run=0; app->scheduler.Wakeup(); }
 Time Now() { struct timeval tv; gettimeofday(&tv, 0); return (Time)tv.tv_sec * 1000 + tv.tv_usec / 1000; }
 
 const char LocalFile::Slash = '/';
@@ -2120,25 +2121,6 @@ int Application::PostFrame() {
     return 0;
 }
 
-int Application::Wakeup() {
-#if defined(LFL_QT)
-#elif defined(LFL_GLFWINPUT)
-    glfwPostEmptyEvent();
-#elif defined(LFL_SDLINPUT)
-    static int my_event_type = SDL_RegisterEvents(1);
-    CHECK_GE(my_event_type, 0);
-    SDL_Event event;
-    SDL_zero(event);
-    event.type = my_event_type;
-    SDL_PushEvent(&event);
-#elif defined(LFL_OSXINPUT)
-    OSXTriggerFrame();
-#else
-    FATAL("not implemented");
-#endif
-    return 0;
-}
-
 int Application::Frame() {
     if (!MainThread()) ERROR("Frame() called from thread ", Thread::GetId());
     scheduler.FrameWait();
@@ -2222,7 +2204,7 @@ int Application::Exiting() {
 
 FrameScheduler::FrameScheduler() : maxfps(&FLAGS_target_fps), select_thread(&frame_mutex, &wait_mutex) {
 #ifdef LFL_OSXINPUT
-    rate_limit = synchronize_waits = 0;
+    rate_limit = synchronize_waits = wait_forever_thread = 0;
 #endif
 }
 void FrameScheduler::AddWaitForeverService(Service *svc) {
@@ -2230,6 +2212,9 @@ void FrameScheduler::AddWaitForeverService(Service *svc) {
 }
 void FrameScheduler::AddWaitForeverSocket(Socket fd, int flag, void *val) {
     if (FLAGS_lfapp_wait_forever && wait_forever_thread) select_thread.Add(fd, flag, val);
+#ifdef LFL_OSXINPUT
+    if (!wait_forever_thread) { CHECK_EQ(SocketSet::READABLE, flag); OSXAddWaitForeverSocket(fd); }
+#endif
 }
 void FrameScheduler::DelWaitForeverSocket(Socket fd) {
     if (FLAGS_lfapp_wait_forever && wait_forever_thread) select_thread.Del(fd);
@@ -2265,6 +2250,25 @@ void FrameScheduler::FrameWait() {
             frame_mutex.lock();
             wait_mutex.unlock();
         }
+    }
+}
+void FrameScheduler::Wakeup() {
+    if (FLAGS_lfapp_wait_forever && wait_forever_thread) {
+#if defined(LFL_QT)
+#elif defined(LFL_GLFWINPUT)
+        glfwPostEmptyEvent();
+#elif defined(LFL_SDLINPUT)
+        static int my_event_type = SDL_RegisterEvents(1);
+        CHECK_GE(my_event_type, 0);
+        SDL_Event event;
+        SDL_zero(event);
+        event.type = my_event_type;
+        SDL_PushEvent(&event);
+#elif defined(LFL_OSXINPUT)
+        OSXTriggerFrame();
+#else
+        FATAL("not implemented");
+#endif
     }
 }
 

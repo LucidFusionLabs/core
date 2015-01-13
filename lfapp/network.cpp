@@ -597,7 +597,7 @@ void SelectSocketThread::ThreadProc() {
             my_sockets.Select(-1);
             if (my_sockets.GetReadable(pipe[0])) NBRead(pipe[0], 4096);
         }
-        if (app->run) app->Wakeup();
+        if (app->run) app->scheduler.Wakeup();
         if (wait_mutex) { ScopedMutex sm(*wait_mutex); }
     }
 }

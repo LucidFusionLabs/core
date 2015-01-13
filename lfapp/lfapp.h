@@ -1168,6 +1168,7 @@ struct FrameScheduler {
     void Start();
     void FrameWait();
     void FrameDone();
+    void Wakeup();
 };
 
 struct Regex {
@@ -1257,7 +1258,6 @@ struct Application : public ::LFApp, public Module {
     int Start();
     int PreFrame(unsigned clicks, unsigned *mic_samples, bool *camera_sample);
     int PostFrame();
-    int Wakeup();
     int Frame();
     int Main();
     int Free();

@@ -50,6 +50,16 @@ DEFINE_int(keyboard_repeat, 50, "Keyboard repeat in milliseconds");
 DEFINE_int(keyboard_delay, 180, "Keyboard delay until repeat in milliseconds");
 DEFINE_bool(input_debug, false, "Debug input events");
 
+const InputEvent::Id Key::Modifier::Ctrl   = 1LL<<32;
+const InputEvent::Id Key::Modifier::Cmd    = 1LL<<33;
+const InputEvent::Id Mouse::Button::_1     = 1LL<<34;
+const InputEvent::Id Mouse::Button::_2     = 1LL<<35;
+const InputEvent::Id MouseEvent            = 1LL<<36;
+const InputEvent::Id Mouse::Event::Motion  = MouseEvent+0;
+const InputEvent::Id Mouse::Event::Wheel   = MouseEvent+1;
+const InputEvent::Id Mouse::Event::Button1 = Mouse::Button::_1;
+const InputEvent::Id Mouse::Event::Button2 = Mouse::Button::_2;
+
 #if 0
 struct KeyRepeater {
     static const int repeat_keys=512;
@@ -563,7 +573,7 @@ void Input::KeyPress(int key, bool down) {
         case Key::RightCmd:     right_cmd_down = down; break;
     }
 
-    int event = key | (CtrlKeyDown() ? Key::Modifier::Ctrl : 0) | (CmdKeyDown() ? Key::Modifier::Cmd : 0);
+    InputEvent::Id event = key | (CtrlKeyDown() ? Key::Modifier::Ctrl : 0) | (CmdKeyDown() ? Key::Modifier::Cmd : 0);
     int fired = KeyEventDispatch(event, down);
     screen->events.key++;
     screen->events.gui += fired;
@@ -573,7 +583,7 @@ void Input::KeyPress(int key, bool down) {
         if ((*g)->active) (*g)->Input(event, down); 
 }
 
-int Input::KeyEventDispatch(InputEvent::ID event, bool down) {
+int Input::KeyEventDispatch(InputEvent::Id event, bool down) {
     if (!down) return 0;
     int key = InputEvent::GetKey(event);
     bool shift_down = ShiftKeyDown(), ctrl_down = CtrlKeyDown(), cmd_down = CmdKeyDown();
@@ -608,9 +618,9 @@ int Input::KeyEventDispatch(InputEvent::ID event, bool down) {
         }
 
         if (cmd_down) { g->events.total--; return 0; }
-        if (key >= 256) { g->events.total--; /* ERROR("unhandled key ", event); */ continue; }
+        if (key >= 128) { g->events.total--; /* ERROR("unhandled key ", event); */ continue; }
 
-        if (shift_down && key < 256) {
+        if (shift_down) {
             if (isalpha(key)) key = ::toupper(key);
             else switch(key) {
                 case '\'': key='"'; break;
@@ -637,7 +647,7 @@ int Input::KeyEventDispatch(InputEvent::ID event, bool down) {
             }
         }
 
-        if (ctrl_down && key < 256) {
+        if (ctrl_down) {
             if (isalpha(key)) key = ::toupper(key);
             if (key >= 'A' && key <= '_') key -= 0x40;
         }
@@ -662,7 +672,7 @@ void Input::MouseWheel(int dw) {
 }
 
 void Input::MouseClick(int button, bool down, const point &p) {
-    int event = Mouse::ButtonID(button);
+    InputEvent::Id event = Mouse::ButtonID(button);
     if      (event == Mouse::Button::_1) mouse_but1_down = down;
     else if (event == Mouse::Button::_2) mouse_but2_down = down;
 
@@ -675,7 +685,7 @@ void Input::MouseClick(int button, bool down, const point &p) {
         if ((*g)->active) (*g)->Input(event, down); 
 }
 
-int Input::MouseEventDispatch(InputEvent::ID event, const point &p, int down) {
+int Input::MouseEventDispatch(InputEvent::Id event, const point &p, int down) {
     screen->mouse = p;
     if (FLAGS_input_debug && down) INFO("MouseEvent ", screen->mouse.DebugString());
 
@@ -699,7 +709,7 @@ int Input::MouseEventDispatch(InputEvent::ID event, const point &p, int down) {
     return fired;
 }
 
-int MouseController::Input(int event, const point &p, int down, int flag) {
+int MouseController::Input(InputEvent::Id event, const point &p, int down, int flag) {
     int fired = 0;
     for (auto e = hit.begin(); e != hit.end(); ++e) {
         if (e->deleted || !e->active ||
