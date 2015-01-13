@@ -69,7 +69,7 @@ Window::Window() : caption("lfapp"), fps(128) {
 
 Window::~Window() {
     if (console) {
-        console->WriteHistory(dldir(), "console");
+        console->WriteHistory(LFAppDownloadDir(), "console");
         delete console;
     }
     delete cam;
@@ -100,7 +100,7 @@ void Window::ClearGesture() {
 
 void Window::InitConsole() {
     console = new Console(screen, Fonts::Get(FLAGS_default_font, 9, Color::white));
-    console->ReadHistory(dldir(), "console");
+    console->ReadHistory(LFAppDownloadDir(), "console");
     console->Write(StrCat(screen->caption, " started"));
     console->Write("Try console commands 'cmds' and 'flags'");
 }
@@ -1793,7 +1793,7 @@ struct BrowserController : public InputController {
     BrowserInterface *browser;
     BrowserController(BrowserInterface *B) : browser(B) {}
     void Input(int event, bool down) {
-        int key = KeyFromEvent(event);
+        int key = InputEvent::GetKey(event);
         if (key) browser->KeyEvent(key, down);
         else switch (event) {
             case Mouse::Event::Motion: browser->MouseMoved(screen->mouse.x, screen->mouse.y);
@@ -1883,7 +1883,7 @@ BrowserInterface *CreateQTWebKitBrowser(Asset *a) { return new QTWebKitBrowser(a
 /* Dialogs */
 
 void Dialog::MessageBox(const string &n) {
-    Mouse::releaseFocus();
+    Mouse::ReleaseFocus();
     QMessageBox *msg = new QMessageBox();
     msg->setAttribute(Qt::WA_DeleteOnClose);
     msg->setText("MesssageBox");
@@ -1912,7 +1912,7 @@ struct BerkeliumModule : public Module {
     int Frame(unsigned t) { Berkelium::update(); return 0; }
     int Free() { Berkelium::destroy(); return 0; }
     int Init() {
-        const char *homedir = dldir();
+        const char *homedir = LFAppDownloadDir();
         INFO("berkelium init");
         Berkelium::init(
 #ifdef _WIN32

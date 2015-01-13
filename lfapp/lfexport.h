@@ -92,6 +92,7 @@ void KeyPress(int button, int down);
 void MouseClick(int button, int down, int x, int y);
 void MouseMove(int x, int y, int dx, int dy);
 void ShellRun(const char *text);
+const char *LFAppDownloadDir();
 
 #ifdef __cplusplus
 };

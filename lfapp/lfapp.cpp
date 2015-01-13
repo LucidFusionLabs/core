@@ -108,8 +108,10 @@ extern "C" {
 #include <v8.h>
 #endif
 
-#ifdef LFL_IPHONE
-extern "C" int iPhoneOpenBrowser(const char *url_text);
+#if defined(LFL_IPHONE)
+extern "C" void iPhoneOpenBrowser(const char *url_text);
+#elif defined(__APPLE__)
+extern "C" void OSXTriggerFrame();
 #endif
 
 namespace LFL {
@@ -117,12 +119,12 @@ Application *app = new Application();
 Window *screen = new Window();
 thread_local ThreadLocalStorage *ThreadLocalStorage::instance = 0;
 
-DEFINE_bool(lfapp_audio, true, "Enable audio in/out");
-DEFINE_bool(lfapp_video, true, "Enable OpenGL");
-DEFINE_bool(lfapp_input, true, "Enable keyboard/mouse input");
+DEFINE_bool(lfapp_audio, false, "Enable audio in/out");
+DEFINE_bool(lfapp_video, false, "Enable OpenGL");
+DEFINE_bool(lfapp_input, false, "Enable keyboard/mouse input");
 DEFINE_bool(lfapp_camera, false, "Enable camera capture");
 DEFINE_bool(lfapp_cuda, true, "Enable CUDA acceleration");
-DEFINE_bool(lfapp_network, true, "Enable asynchronous network engine");
+DEFINE_bool(lfapp_network, false, "Enable asynchronous network engine");
 DEFINE_bool(lfapp_debug, false, "Enable debug mode");
 DEFINE_bool(lfapp_wait_forever, false, "Sleep until events occur");
 DEFINE_bool(cursor_grabbed, false, "Center cursor every frame");
@@ -132,7 +134,7 @@ DEFINE_string(nameserver, "", "Default namesver");
 DEFINE_bool(max_rlimit_core, false, "Max core dump rlimit");
 DEFINE_bool(max_rlimit_open_files, false, "Max number of open files rlimit");
 DEFINE_int(loglevel, 7, "Log level: [Fatal=-1, Error=0, Info=3, Debug=7]");
-DEFINE_int(threadpool_size, 1, "Threadpool size");
+DEFINE_int(threadpool_size, 0, "Threadpool size");
 DEFINE_int(sample_rate, 16000, "Audio sample rate");
 DEFINE_int(sample_secs, 3, "Seconds of RingBuf audio");
 DEFINE_int(chans_in, -1, "Audio input channels");
@@ -1172,7 +1174,6 @@ struct DownloadDirectory {
 #endif
     }
 };
-const char *dldir() { return Singleton<DownloadDirectory>::Get()->text.c_str(); }
 
 string File::Contents() {
     if (!Opened()) return "";
@@ -1924,7 +1925,7 @@ int Application::Create(int argc, const char **argv, const char *source_filename
     if (LFLHOME && *LFLHOME) chdir(LFLHOME);
 
     char cwd[256]; getcwd(cwd, sizeof(cwd));
-    INFO(screen->caption, ": lfapp init: LFLHOME=", cwd, " DLDIR=", dldir());
+    INFO(screen->caption, ": lfapp init: LFLHOME=", cwd, " DLDIR=", LFAppDownloadDir());
 
 #ifndef _WIN32
     if (FLAGS_max_rlimit_core) {
@@ -2043,8 +2044,7 @@ int Application::Init() {
 
     app_time.GetTime(true);
     frame_time.GetTime(true);
-    maxfps.timer.GetTime(true);
-    if (FLAGS_lfapp_wait_forever) frame_mutex.lock();
+    scheduler.Init();
     INFO("lfapp_open: succeeded");
     initialized = true;
     return 0;
@@ -2116,14 +2116,13 @@ int Application::PreFrame(unsigned clicks, unsigned *mic_samples, bool *camera_s
 
 int Application::PostFrame() {
     frames_ran++;
-
-    /* rate limit to maxfps */
-    if (run) maxfps.Limit();
+    scheduler.FrameDone();
     return 0;
 }
 
 int Application::Wakeup() {
-#if defined(LFL_GLFWINPUT)
+#if defined(LFL_QT)
+#elif defined(LFL_GLFWINPUT)
     glfwPostEmptyEvent();
 #elif defined(LFL_SDLINPUT)
     static int my_event_type = SDL_RegisterEvents(1);
@@ -2133,6 +2132,7 @@ int Application::Wakeup() {
     event.type = my_event_type;
     SDL_PushEvent(&event);
 #elif defined(LFL_OSXINPUT)
+    OSXTriggerFrame();
 #else
     FATAL("not implemented");
 #endif
@@ -2141,22 +2141,7 @@ int Application::Wakeup() {
 
 int Application::Frame() {
     if (!MainThread()) ERROR("Frame() called from thread ", Thread::GetId());
-
-    if (FLAGS_lfapp_wait_forever) {
-        wait_mutex.lock();
-        frame_mutex.unlock();
-#if defined(LFL_GLFWINPUT)
-        glfwWaitEvents();
-#elif defined(LFL_SDLINPUT)
-        SDL_WaitEvent(NULL);
-#elif defined(LFL_OSXINPUT)
-#else
-        FATAL("not implemented");
-#endif
-        frame_mutex.lock();
-        wait_mutex.unlock();
-    }
-
+    scheduler.FrameWait();
     unsigned clicks = frame_time.GetTime(true);
 
     /* pre */
@@ -2167,7 +2152,6 @@ int Application::Frame() {
     for (auto i = Window::active.begin(); run && i != Window::active.end(); ++i) {
         if (i->second->minimized) continue;
         if (screen != i->second) Window::MakeCurrent(i->second);
-        if (pre_frames_ran % (int)(*maxfps.target_hz / FLAGS_min_fps) == 0) flag |= FrameFlag::DontSkip;
 
         if (FLAGS_lfapp_video) {
             screen->gd->Clear();
@@ -2227,11 +2211,61 @@ int Application::Free() {
 int Application::Exiting() {
     run = 0;
     INFO("exiting");
-    if (FLAGS_lfapp_wait_forever) frame_mutex.unlock();
+    scheduler.Free();
 #ifdef _WIN32
     if (FLAGS_open_console) press_any_key();
 #endif
     return 0;
+}
+
+/* FrameScheduler */
+
+FrameScheduler::FrameScheduler() : maxfps(&FLAGS_target_fps), select_thread(&frame_mutex, &wait_mutex) {
+#ifdef LFL_OSXINPUT
+    rate_limit = synchronize_waits = 0;
+#endif
+}
+void FrameScheduler::AddWaitForeverService(Service *svc) {
+    if (FLAGS_lfapp_wait_forever && wait_forever_thread) svc->active.mirror = &select_thread;
+}
+void FrameScheduler::AddWaitForeverSocket(Socket fd, int flag, void *val) {
+    if (FLAGS_lfapp_wait_forever && wait_forever_thread) select_thread.Add(fd, flag, val);
+}
+void FrameScheduler::DelWaitForeverSocket(Socket fd) {
+    if (FLAGS_lfapp_wait_forever && wait_forever_thread) select_thread.Del(fd);
+}
+void FrameScheduler::Init() { 
+    maxfps.timer.GetTime(true);
+    if (FLAGS_lfapp_wait_forever && synchronize_waits) frame_mutex.lock();
+}
+void FrameScheduler::Free() { 
+    if (FLAGS_lfapp_wait_forever && synchronize_waits) frame_mutex.unlock();
+    if (FLAGS_lfapp_wait_forever && wait_forever_thread) select_thread.Wait();
+}
+void FrameScheduler::Start() {
+    if (FLAGS_lfapp_wait_forever && wait_forever_thread) select_thread.Start();
+}
+void FrameScheduler::FrameDone() { if (rate_limit && app->run) maxfps.Limit(); }
+void FrameScheduler::FrameWait() {
+    if (FLAGS_lfapp_wait_forever) {
+        if (synchronize_waits) {
+            wait_mutex.lock();
+            frame_mutex.unlock();
+        }
+#if defined(LFL_QT)
+#elif defined(LFL_GLFWINPUT)
+        glfwWaitEvents();
+#elif defined(LFL_SDLINPUT)
+        SDL_WaitEvent(NULL);
+#elif defined(LFL_OSXINPUT)
+#else
+        FATAL("not implemented");
+#endif
+        if (synchronize_waits) {
+            frame_mutex.lock();
+            wait_mutex.unlock();
+        }
+    }
 }
 
 /* CUDA */
@@ -2527,6 +2561,7 @@ extern "C" void UnMinimized()              { LFL::screen->UnMinimized(); }
 extern "C" void KeyPress  (int b, int d)                 { LFL::app->input.KeyPress  (b, d); }
 extern "C" void MouseClick(int b, int d, int x,  int y)  { LFL::app->input.MouseClick(b, d, LFL::point(x, y)); }
 extern "C" void MouseMove (int x, int y, int dx, int dy) { LFL::app->input.MouseMove (LFL::point(x, y), LFL::point(dx, dy)); }
+extern "C" const char *LFAppDownloadDir() { return LFL::Singleton<LFL::DownloadDirectory>::Get()->text.c_str(); }
 extern "C" void SetLFAppMainThread() {
     LFL::Thread::Id id = LFL::Thread::GetId();
     if (LFL::app->main_thread_id != id) INFOf("LFApp->main_thread_id changed from %llx to %llx", LFL::app->main_thread_id, id);

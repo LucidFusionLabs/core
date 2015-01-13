@@ -15,7 +15,7 @@ endif(${_def})
 endmacro(lfapp_lib)
 
 # init
-set(LFAPP_INCLUDE ${LFAPP_INCLUDE} .. ${PLATFORM_INCLUDE} ${OPENGL_INCLUDE})
+set(LFAPP_INCLUDE ${LFL_ROOT} ${LFAPP_INCLUDE} ${PLATFORM_INCLUDE} ${OPENGL_INCLUDE})
 set(LFAPP_LIB ${LFL_PROJECT}_lfapp ${OPENGL_LIB})
 set(LFAPP_DEF -DLFL_BUILD ${PLATFORM_DEF})
 
@@ -96,7 +96,7 @@ endif(CMAKE_SYSTEM_NAME MATCHES "Darwin")
 
 # lfapp
 add_library(${LFL_PROJECT}_lfapp ${LFAPP_LIB_TYPE} lfapp.cpp lftypes.cpp assets.cpp audio.cpp video.cpp input.cpp math.cpp network.cpp gui.cpp camera.cpp scene.cpp ${PROTO_SRC})
-target_include_directories(${LFL_PROJECT}_lfapp PUBLIC ${LFAPP_INCLUDE} ../${LFL_PROJECT}/lfapp_obj)
+target_include_directories(${LFL_PROJECT}_lfapp PUBLIC ${LFAPP_INCLUDE} ${LFL_PROJECT_DIR}/lfapp_obj)
 target_compile_definitions(${LFL_PROJECT}_lfapp PUBLIC ${LFAPP_DEF})
 if(LFAPP_LIB_TYPE MATCHES "^SHARED$")
 target_link_libraries(${LFL_PROJECT}_lfapp ${LFAPP_LIB})

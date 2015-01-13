@@ -338,7 +338,7 @@ struct OpenGLES1 : public GraphicsDevice {
 class OpenGLES2 : public QWindow, protected QOpenGLFunctions, public GraphicsDevice {
   public:
     bool QT_init, QT_grabbed;
-    int  QT_mx, QT_my;
+    point QT_mp;
 
     void render_request() { QCoreApplication::postEvent(this, new QEvent(QEvent::UpdateRequest)); }
     bool event(QEvent *event) {
@@ -370,17 +370,17 @@ class OpenGLES2 : public QWindow, protected QOpenGLFunctions, public GraphicsDev
     void resizeEvent(QResizeEvent *ev) { QWindow::resizeEvent(ev); if (!QT_init) return; LFL::screen->Reshaped(ev->size().width(), ev->size().height()); }
     void keyPressEvent  (QKeyEvent *ev) { if (!QT_init) return; app->input.QueueKey(QT_key(ev->key()), 1); ev->accept(); }
     void keyReleaseEvent(QKeyEvent *ev) { if (!QT_init) return; app->input.QueueKey(QT_key(ev->key()), 0); ev->accept(); }
-    void mousePressEvent  (QMouseEvent *ev) { if (!QT_init) return; app->input.QueueMouseClick(QT_mouse_button(ev->button()), 1, ev->x(), ev->y()); }
-    void mouseReleaseEvent(QMouseEvent *ev) { if (!QT_init) return; app->input.QueueMouseClick(QT_mouse_button(ev->button()), 0, ev->x(), ev->y()); }
+    void mousePressEvent  (QMouseEvent *ev) { if (!QT_init) return; app->input.QueueMouseClick(QT_mouse_button(ev->button()), 1, point(ev->x(), ev->y())); }
+    void mouseReleaseEvent(QMouseEvent *ev) { if (!QT_init) return; app->input.QueueMouseClick(QT_mouse_button(ev->button()), 0, point(ev->x(), ev->y())); }
     void mouseMoveEvent   (QMouseEvent *ev) {
-        int x=ev->x(), y=ev->y(), dx=x-QT_mx, dy=y-QT_my;;
-        if (!QT_init || (!dx && !dy)) return;
-        app->input.QueueMouseMovement(x, y, dx, dy);
+        point p(ev->x(), ev->y()), dx = p - QT_mp;
+        if (!QT_init || (!p.x && !p.y)) return;
+        app->input.QueueMouseMovement(p, dx);
         if (!QT_grabbed) {
-            QT_mx=x; QT_my=y;
+            QT_mp = p;
         } else {
-            QT_mx=width()/2; QT_my=height()/2;
-            QCursor::setPos(mapToGlobal(QPoint(QT_mx, QT_my)));
+            QT_mp = point(width()/2, height()/2);
+            QCursor::setPos(mapToGlobal(QPoint(QT_mp.x, QT_mp.y)));
         }
     }
     static unsigned QT_key(unsigned k) { return k < 256 && isalpha(k) ? ::tolower(k) : k; }
@@ -408,7 +408,7 @@ struct OpenGLES2 : public GraphicsDevice {
         VertexAttribPointer(int M, int T, int W, int O) : m(M), t(T), w(W), o(O) {}
     } position_ptr, tex_ptr, color_ptr, normal_ptr;
 
-    OpenGLES2() : QT_init(0), QT_grabbed(0), QT_mx(0), QT_my(0), shader(0), enabled_array(-1), enabled_indexarray(-1), matrix_target(-1), dirty_matrix(1), dirty_color(1), cubemap_on(0), normals_on(0), texture_on(0), colorverts_on(0), lighting_on(0) {
+    OpenGLES2() : QT_init(0), QT_grabbed(0), shader(0), enabled_array(-1), enabled_indexarray(-1), matrix_target(-1), dirty_matrix(1), dirty_color(1), cubemap_on(0), normals_on(0), texture_on(0), colorverts_on(0), lighting_on(0) {
         modelview_matrix.push_back(m44::Identity());
         projection_matrix.push_back(m44::Identity());
         default_color.push_back(Color(1.0, 1.0, 1.0, 1.0));
@@ -941,7 +941,7 @@ struct AndroidVideoModule : public Module {
 #endif
 
 #ifdef LFL_IPHONE
-extern "C" int iPhoneVideoSwap();
+extern "C" void iPhoneVideoSwap();
 struct IPhoneVideoModule : public Module {
     int Init() {
         INFO("IPhoneVideoModule::Init()");
@@ -953,7 +953,7 @@ struct IPhoneVideoModule : public Module {
 #endif
 
 #ifdef LFL_OSXVIDEO
-extern "C" int OSXVideoSwap();
+extern "C" void OSXVideoSwap();
 struct OSXVideoModule : public Module {
     int Init() {
         INFO("OSXVideoModule::Init()");
@@ -1009,8 +1009,8 @@ void Window::MakeCurrent(Window *W) {
     screen = W; 
     ((QOpenGLContext*)screen->gl)->makeCurrent((QWindow*)screen->id);
 }
-void Mouse::GrabFocus()    { ((OpenGLES2*)screen->gd)->QT_grabbed=1; ((QWindow*)screen->id)->setCursor(Qt::BlankCursor); app->grabMode.on();  screen->cursor_grabbed=true;  }
-void Mouse::ReleaseFocus() { ((OpenGLES2*)screen->gd)->QT_grabbed=0; ((QWindow*)screen->id)->unsetCursor();              app->grabMode.off(); screen->cursor_grabbed=false; }
+void Mouse::GrabFocus()    { ((OpenGLES2*)screen->gd)->QT_grabbed=1; ((QWindow*)screen->id)->setCursor(Qt::BlankCursor); app->grab_mode.On();  screen->cursor_grabbed=true;  }
+void Mouse::ReleaseFocus() { ((OpenGLES2*)screen->gd)->QT_grabbed=0; ((QWindow*)screen->id)->unsetCursor();              app->grab_mode.Off(); screen->cursor_grabbed=false; }
 #endif
 
 #ifdef LFL_GLFWVIDEO
@@ -1132,6 +1132,7 @@ int Video::Init() {
 #endif
 
     if (!screen->gd) CreateGraphicsDevice();
+    InitGraphicsDevice();
 
     INFO("OpenGL Version: ", SpellNull((const char *)glGetString(GL_VERSION)));
     INFO("OpenGL Vendor: ",  SpellNull((const char *)glGetString(GL_VENDOR)));
@@ -1175,7 +1176,9 @@ void Video::CreateGraphicsDevice() {
 #endif /* LFL_GLES2 */
     screen->gd = new OpenGLES1();
 #endif /* LFL_HEADLESS */
+}
 
+void Video::InitGraphicsDevice() {
     screen->gd->Init();
     screen->gd->ViewPort(screen->Box());
     screen->gd->DrawMode(DrawMode::_3D);

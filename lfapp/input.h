@@ -19,18 +19,24 @@
 #ifndef __LFL_LFAPP_INPUT_H__
 #define __LFL_LFAPP_INPUT_H__
 namespace LFL {
-    
+
+struct InputEvent {
+    typedef long long ID;
+    static int GetKey(ID event) { return event & 0xffffffff; }
+};
+
 struct Key {
-    static const unsigned short Escape, Return, Up, Down, Left, Right, LeftShift, RightShift, LeftCtrl, RightCtrl, LeftCmd, RightCmd;
-    static const unsigned short Tab, Space, Backspace, Delete, Quote, Backquote, PageUp, PageDown, Home, End;
-    static const unsigned short F1, F2, F3, F4, F5, F6, F7, F8, F9, F10, F11, F12;
-    struct Modifier { enum { Ctrl=1<<16, Cmd=1<<17 }; }; /// On PC Alt=Cmd
+    typedef long long Mod;
+    struct Modifier { enum { Ctrl=1<<32, Cmd=1<<33 }; }; /// On PC Alt=Cmd
+    static const int Escape, Return, Up, Down, Left, Right, LeftShift, RightShift, LeftCtrl, RightCtrl, LeftCmd, RightCmd;
+    static const int Tab, Space, Backspace, Delete, Quote, Backquote, PageUp, PageDown, Home, End;
+    static const int F1, F2, F3, F4, F5, F6, F7, F8, F9, F10, F11, F12;
 };
 
 struct Mouse {
-    struct Button { enum { _1=1<<18, _2=1<<19 }; };
-    struct Event { enum { Z=1<<20, Motion=Z, Wheel=Z+1, Button1=Button::_1, Button2=Button::_2 }; };
-    static int ButtonID(int button) {
+    struct Button { enum { _1=1<<34, _2=1<<35 }; };
+    struct Event { enum { Z=1<<36, Motion=Z, Wheel=Z+1, Button1=Button::_1, Button2=Button::_2 }; };
+    static InputEvent::ID ButtonID(int button) {
         switch (button) {
             case 1: return Button::_1;
             case 2: return Button::_2;
@@ -51,8 +57,6 @@ struct InputController {
     virtual void Activate  () { active = 1; }
     virtual void Deactivate() { active = 0; }
     virtual void Input(int event, bool down) {}
-
-    static int KeyFromEvent(int event) { return event & 0xffff; }
 };
 
 struct KeyboardController {
@@ -175,12 +179,12 @@ struct Input : public Module {
     int DispatchQueuedInput();
 
     void KeyPress(int key, bool down);
-    int  KeyEventDispatch(int key_code, bool down);
+    int  KeyEventDispatch(InputEvent::ID event, bool down);
 
     void MouseMove(const point &p, const point &d);
     void MouseWheel(int dw);
     void MouseClick(int button, bool down, const point &p);
-    int  MouseEventDispatch(int event, const point &p, int down);
+    int  MouseEventDispatch(InputEvent::ID event, const point &p, int down);
 
     static point TransformMouseCoordinate(point p) {
         if (FLAGS_swap_axis) p = point(screen->width - p.y, p.x);
@@ -198,12 +202,12 @@ struct Bind {
         FunctionPointer() {}
         ~FunctionPointer() {}
     } cb;
-    int key;
-    Bind(int K=0, int M=0)               : cb_type(NONE),    key(K|M) {}
-    Bind(int K,        const CB     &Cb) : cb_type(CB_VOID), key(K|0) { new (&cb.cb_void)     CB(Cb); }
-    Bind(int K, int M, const CB     &Cb) : cb_type(CB_VOID), key(K|M) { new (&cb.cb_void)     CB(Cb); }
-    Bind(int K,        const TimeCB &Cb) : cb_type(CB_TIME), key(K|0) { new (&cb.cb_time) TimeCB(Cb); }
-    Bind(int K, int M, const TimeCB &Cb) : cb_type(CB_TIME), key(K|M) { new (&cb.cb_time) TimeCB(Cb); }
+    InputEvent::ID key;
+    Bind(int K=0, Key::Mod M=0)               : cb_type(NONE),    key(K|M) {}
+    Bind(int K,             const CB     &Cb) : cb_type(CB_VOID), key(K|0) { new (&cb.cb_void)     CB(Cb); }
+    Bind(int K, Key::Mod M, const CB     &Cb) : cb_type(CB_VOID), key(K|M) { new (&cb.cb_void)     CB(Cb); }
+    Bind(int K,             const TimeCB &Cb) : cb_type(CB_TIME), key(K|0) { new (&cb.cb_time) TimeCB(Cb); }
+    Bind(int K, Key::Mod M, const TimeCB &Cb) : cb_type(CB_TIME), key(K|M) { new (&cb.cb_time) TimeCB(Cb); }
     Bind(const Bind &c) { Assign(c); }
     Bind &operator=(const Bind &c) { Destruct(); Assign(c); return *this; }
     bool operator<(const Bind &c) const { SortImpl1(key, c.key); }
@@ -250,7 +254,7 @@ struct BindMap : public InputController {
     void Input(int event, bool d) {
         auto b = data.find(event);
         if (b == data.end()) return;
-        if (b->cb_type == Bind::CB_TIME) { Bind r=*b; r.key=KeyFromEvent(r.key); InsertOrErase(&down, r, d); }
+        if (b->cb_type == Bind::CB_TIME) { Bind r=*b; r.key=InputEvent::GetKey(r.key); InsertOrErase(&down, r, d); }
         else if (d) b->Run(0);
     }
 };

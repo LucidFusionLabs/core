@@ -626,6 +626,7 @@ extern "C" int main(int argc, const char *argv[]) {
     FLAGS_soundasset_seconds = 1;
     FLAGS_scale_font_height = 320;
     FLAGS_default_font = "Origicide.ttf";
+    FLAGS_lfapp_audio = FLAGS_lfapp_video = FLAGS_lfapp_input = FLAGS_lfapp_network = 1;
     screen->caption = "Spaceball 6006";
     screen->multitouch_keyboard_x = .37;
     screen->binds = binds = new BindMap();

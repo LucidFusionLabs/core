@@ -590,7 +590,7 @@ string Network::gethostbyaddr(IPV4::Addr addr) {
 
 void SelectSocketThread::ThreadProc() {
     while (app->run) {
-        { ScopedMutex sm(app->frame_mutex); }
+        if (frame_mutex) { ScopedMutex sm(*frame_mutex); }
         if (app->run) {
             SelectSocketSet my_sockets;
             { ScopedMutex sm(sockets_mutex); my_sockets = sockets; }
@@ -598,7 +598,7 @@ void SelectSocketThread::ThreadProc() {
             if (my_sockets.GetReadable(pipe[0])) NBRead(pipe[0], 4096);
         }
         if (app->run) app->Wakeup();
-        { ScopedMutex sm(app->wait_mutex); }
+        if (wait_mutex) { ScopedMutex sm(*wait_mutex); }
     }
 }
 
@@ -1126,7 +1126,6 @@ string Connection::lasterror() {
 
 void Service::Close(Connection *c) {
     active.Del(c->socket);
-    if (select_socket_thread) select_socket_thread->DelSocket(c->socket);
     close(c->socket);
     if (connect_src_pool && (c->src_addr || c->src_port)) connect_src_pool->Close(c->src_addr, c->src_port);
 }
@@ -1173,7 +1172,6 @@ Socket Service::Listen(IPV4::Addr addr, int port, Listener *listener) {
         { ERROR("Network::listen(", protocol, ", ", port, "): ", Connection::lasterror().c_str()); return -1; }
     }
     active.Add(listener->socket, SocketSet::READABLE, &listener->self_reference);
-    if (select_socket_thread) select_socket_thread->AddSocket(listener->socket, SocketSet::READABLE);
     return listener->socket;
 }
 
@@ -1181,7 +1179,6 @@ Connection *Service::Accept(int state, Socket socket, IPV4::Addr addr, int port)
     Connection *c = new Connection(this, state, socket, addr, port);
     conn[c->socket] = c;
     active.Add(c->socket, SocketSet::READABLE, &c->self_reference);
-    if (select_socket_thread) select_socket_thread->AddSocket(c->socket, SocketSet::READABLE);
     return c;
 }
 
@@ -1213,10 +1210,8 @@ Connection *Service::Connect(IPV4::Addr addr, int port, IPV4EndpointSource *src_
         if (this->Connected(c) < 0) c->_error();
         if (c->query) { if (c->query->Connected(c) < 0) { ERROR(c->name(), ": query connected"); c->_error(); } }
         active.Add(c->socket, (c->readable ? SocketSet::READABLE : 0), &c->self_reference);
-        if (select_socket_thread) select_socket_thread->AddSocket(c->socket, (c->readable ? SocketSet::READABLE : 0));
     } else {
         active.Add(c->socket, SocketSet::READABLE|SocketSet::WRITABLE, &c->self_reference);
-        if (select_socket_thread) select_socket_thread->AddSocket(c->socket, SocketSet::READABLE|SocketSet::WRITABLE);
     }
     return c;
 }
@@ -1252,7 +1247,6 @@ Connection *Service::SSLConnect(SSL_CTX *sslctx, const char *hostport) {
     INFO(c->name(), ": connecting (fd=", c->socket, ")");
     conn[c->socket] = c;
     active.Add(c->socket, SocketSet::WRITABLE, &c->self_reference);
-    if (select_socket_thread) select_socket_thread->AddSocket(c->socket, SocketSet::WRITABLE);
     return c;
 #else
     return 0;
@@ -1283,7 +1277,6 @@ Connection *Service::SSLConnect(SSL_CTX *sslctx, IPV4::Addr addr, int port) {
     INFO(c->name(), ": connecting (fd=", c->socket, ")");
     conn[c->socket] = c;
     active.Add(c->socket, SocketSet::WRITABLE, &c->self_reference);
-    if (select_socket_thread) select_socket_thread->AddSocket(c->socket, SocketSet::WRITABLE);
     return c;
 #else
     return 0;
@@ -1335,7 +1328,6 @@ void Service::UpdateActive(Connection *c) {
     if (FLAGS_network_debug) INFO(c->name(), " active = { ", c->readable?"READABLE":"", " , ", c->writable?"WRITABLE":"", " }");
     int flag = (c->readable?SocketSet::READABLE:0) | (c->writable?SocketSet::WRITABLE:0);
     c->svc->active.Set(c->socket, flag, &c->self_reference);
-    if (c->svc->select_socket_thread) c->svc->select_socket_thread->SetSocket(c->socket, flag);
 }
 
 /* UDP Client */
@@ -1814,7 +1806,7 @@ bool HTTPClient::WGet(const string &url, File *out, ResponseCB cb) {
     if (!out && !cb) {
         string fn = basename(path.c_str(),0,0);
         if (fn.empty()) fn = "index.html";
-        out = new LocalFile(StrCat(dldir(), fn), "w");
+        out = new LocalFile(StrCat(LFAppDownloadDir(), fn), "w");
         if (!out->Opened()) { ERROR("open file"); delete out; return 0; }
     }
 

@@ -504,7 +504,6 @@ bool FGets(char *buf, int size);
 bool NBFGets(FILE*, char *buf, int size);
 int NBRead(int fd, char *buf, int size);
 string NBRead(int fd, int size);
-const char *dldir();
 
 template <int V>          int                 isint (int N) { return N == V; }
 template <int V1, int V2> int                 isint2(int N) { return (N == V1) || (N == V2); }
@@ -1154,6 +1153,23 @@ struct FrameRateLimitter {
     }
 };
 
+struct FrameScheduler {
+    FrameRateLimitter maxfps;
+    mutex frame_mutex, wait_mutex;
+    SelectSocketThread select_thread;
+    bool rate_limit = 1, synchronize_waits = 1, wait_forever_thread = 1;
+    FrameScheduler();
+
+    void AddWaitForeverService(Service*);
+    void AddWaitForeverSocket(Socket fd, int flag, void *val=0);
+    void DelWaitForeverSocket(Socket fd);
+    void Init();
+    void Free();
+    void Start();
+    void FrameWait();
+    void FrameDone();
+};
+
 struct Regex {
     struct Match {
         int begin, end;
@@ -1214,12 +1230,12 @@ struct Application : public ::LFApp, public Module {
     FILE *logfile;
     FrameCB frame_cb;
     void (*reshaped_cb)(), (*window_closed_cb)();
-    mutex frame_mutex, wait_mutex, log_mutex;
+    mutex log_mutex;
     Timer app_time, frame_time;
     ThreadPool thread_pool;
     MessageQueue message_queue;
-    FrameRateLimitter maxfps;
     ValueSet<int> fill_mode, grab_mode, tex_mode;
+    FrameScheduler scheduler;
     Audio audio;
     Video video;
     Input input;
@@ -1232,8 +1248,8 @@ struct Application : public ::LFApp, public Module {
     void LoadModule(Module *M) { modules.push_back(M); M->Init(); }
 
     Application() : logfile(0), reshaped_cb(0), window_closed_cb(DefaultLFAppWindowClosedCB),
-    maxfps(&FLAGS_target_fps), fill_mode(3, GraphicsDevice::Fill, GraphicsDevice::Line, GraphicsDevice::Point),
-    grab_mode(2, false, true), tex_mode(2, true, false) { run=1; initialized=0; main_thread_id=0; frames_ran=pre_frames_ran=samples_read=samples_read_last=0; }
+    fill_mode(3, GraphicsDevice::Fill, GraphicsDevice::Line, GraphicsDevice::Point), grab_mode(2, false, true),
+    tex_mode(2, true, false) { run=1; initialized=0; main_thread_id=0; frames_ran=pre_frames_ran=samples_read=samples_read_last=0; }
 
     void Log(int level, const char *file, int line, const string &message);
     int Create(int argc, const char **argv, const char *source_filename);
