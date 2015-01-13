@@ -75,7 +75,7 @@ static const char **osx_argv = 0;
     NSTimer *timer = 0;
     CVDisplayLinkRef displayLink;
     NSPoint prev_mouse_pos;
-    bool use_timer = 1, use_display_link = 0, display_link_init = 0;
+    bool use_timer = 1, use_display_link = 0, video_thread_init = 0;
     bool cmd_down = 0, ctrl_down = 0, shift_down = 0;
 
     - (BOOL)acceptsFirstResponder { return YES; }
@@ -97,12 +97,13 @@ static const char **osx_argv = 0;
         }
     }
     - (void)startVideoThread {
-        if (use_display_link) {
-            INFOf("%s", "OSXVideoModule impl = DisplayLink");
+        if (LFL::FLAGS_lfapp_wait_forever) {
+            INFOf("OSXVideoModule impl = %s", "WaitForever");
+        } else if (use_display_link) {
+            INFOf("OSXVideoModule impl = %s", "DisplayLink");
             CVDisplayLinkStart(displayLink);
-        }
-        if (use_timer) {
-            INFOf("%s", "OSXVideoModule impl = NSTimer");
+        } else if (use_timer) {
+            INFOf("OSXVideoModule impl = %s", "NSTimer");
             timer = [NSTimer timerWithTimeInterval: 1.0/LFL::FLAGS_target_fps
                 target:self selector:@selector(timerFired:) userInfo:nil repeats:YES];
             [[NSRunLoop currentRunLoop] addTimer:timer forMode:NSDefaultRunLoopMode];
@@ -116,12 +117,13 @@ static const char **osx_argv = 0;
     - (void)timerFired:(id)sender { [self setNeedsDisplay:YES]; }
     - (void)drawRect:(NSRect)dirtyRect { if (use_timer) [self getFrameForTime:0]; }
     - (void)getFrameForTime:(const CVTimeStamp*)outputTime {
-        if (!display_link_init && (display_link_init = 1)) {
+        if (!video_thread_init && (video_thread_init = 1)) {
             [[self openGLContext] makeCurrentContext];
             SetLFAppMainThread();
             app = GetLFApp();
             screen = GetNativeWindow();
         }
+        if (!app->initialized) return;
         if (app->run) LFAppFrame();
         else [self stopVideoThreadAndExit];
     }
@@ -271,11 +273,14 @@ extern "C" void OSXSetMousePosition(int x, int y) {
                           convertRectToScreen:NSMakeRect(x, y, 0, 0)].origin));
 }
 
-extern "C" int OSXVideoSwap() {
+extern "C" void OSXTriggerFrame() {
+    [[(AppDelegate*)[NSApp delegate] view] setNeedsDisplay:YES];
+}
+
+extern "C" void OSXVideoSwap() {
     // INFOf("%s", "OSXVideoSwap");
     // [[[(AppDelegate*)[NSApp delegate] view] openGLContext] flushBuffer];
     CGLFlushDrawable([[[(AppDelegate*)[NSApp delegate] view] openGLContext] CGLContextObj]);
-    return 0;
 }
 
 extern "C" int main(int argc, const char **argv) {

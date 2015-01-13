@@ -28,10 +28,9 @@ DEFINE_int(normal_fps, 15,    "Normal peak FPS");
 DEFINE_bool(draw_fps,  false, "Draw FPS");
 
 Scene scene;
-BindMap binds;
+BindMap *binds;
 Shader warpershader;
 AnyBoolSet effects_mode;
-SelectSocketThread select_socket_thread;
 SimpleBrowser *image_browser;
 
 void MyNewLinkCB(TextArea::Link *link) {
@@ -66,7 +65,7 @@ struct MyTerminalWindow {
     AnyBoolElement effects_mode;
 
     MyTerminalWindow() : activeshader(&app->video.shader_default), font_size(FLAGS_default_font_size), effects_mode(&::effects_mode) {}
-    ~MyTerminalWindow() { if (process.in) select_socket_thread.DelSocket(fileno(process.in)); }
+    ~MyTerminalWindow() { if (process.in) app->scheduler.DelWaitForeverSocket(fileno(process.in)); }
 
     void Open() {
         setenv("TERM", "screen", 1);
@@ -74,12 +73,11 @@ struct MyTerminalWindow {
         CHECK(!shell.empty());
         const char *av[] = { shell.c_str(), 0 };
         CHECK_EQ(process.OpenPTY(av), 0);
-        select_socket_thread.AddSocket(fileno(process.in), SocketSet::READABLE, 0);
+        app->scheduler.AddWaitForeverSocket(fileno(process.in), SocketSet::READABLE, 0);
 
         terminal = new Terminal(fileno(process.out), screen, Fonts::Get(FLAGS_default_font, font_size, Color::white));
         terminal->new_link_cb = MyNewLinkCB;
         terminal->hover_link_cb = MyHoverLinkCB;
-        terminal->mouse_gui.mouse.dont_deactivate = true;
         terminal->Draw(screen->Box(), false);
         terminal->active = true;
     }
@@ -101,8 +99,8 @@ int Frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample
     string terminal_output = NBRead(fileno(tw->process.in), 4096);
     if (!terminal_output.empty()) tw->terminal->Write(terminal_output);
     if (!terminal_output.empty() || resized || font_changed || (custom_shader && dont_skip) ||
-        tw->terminal->mouse_gui.mouse.events.hover) {
-        tw->terminal->mouse_gui.mouse.Deactivate();
+        tw->terminal->mouse_gui.events.hover) {
+        tw->terminal->mouse_gui.Deactivate();
         tw->terminal->Draw(root, custom_shader);
         terminal_updated = true;
     }
@@ -110,7 +108,7 @@ int Frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample
 
     tw->effects_mode.Set(custom_shader || W->console->animating);
     UpdateTargetFPS();
-    if (!terminal_updated && !tw->effects_mode.Get() && !W->events.bind && !W->events.mouse_click &&
+    if (0 && !terminal_updated && !tw->effects_mode.Get() && !W->events.bind && !W->events.mouse_click &&
         !W->console->events.total && !tw->terminal->selection_changing && !dont_skip) return -1;
 
     W->gd->DrawMode(DrawMode::_2D);
@@ -165,14 +163,13 @@ void MyTermDebugCmd(const vector<string> &arg) {
         TextGUI::Line *l = &tw->terminal->line[-1-i];
         StrAppend(&out, -1-i, " ", l->p.DebugString(), " ", l->Text(), "\n");
     }
-    printf("y0y0yfuzz %s\n%s\n", tw->terminal->line_fb.p.DebugString().c_str(), out.c_str());
 }
 
 void MyWindowDefaults(LFL::Window *W) {
     W->width = 80*10;
     W->height = 25*17;
     W->caption = "Terminal";
-    W->binds = &binds;
+    W->binds = binds;
     W->user1 = new MyTerminalWindow();
 }
 void MyNewWindow(const vector<string>&) {
@@ -192,12 +189,12 @@ void MyWindowClosedCB() {
 
 extern "C" int main(int argc, const char *argv[]) {
 
-    app->logfilename = StrCat(dldir(), "term.txt");
+    app->logfilename = StrCat(LFAppDownloadDir(), "term.txt");
     app->frame_cb = Frame;
     MyWindowDefaults(screen);
     FLAGS_lfapp_wait_forever = true;
     FLAGS_target_fps = FLAGS_normal_fps;
-    FLAGS_lfapp_audio = 0;
+    FLAGS_lfapp_video = FLAGS_lfapp_input = 1;
     // FLAGS_font_engine = "coretext";
     // FLAGS_default_font = "Monaco"; // "DejaVuSansMono-Bold.ttf"; // "Monaco";
     FLAGS_default_font = "VeraMono.ttf";
@@ -206,8 +203,8 @@ extern "C" int main(int argc, const char *argv[]) {
     FLAGS_atlas_font_sizes = "32";
     FLAGS_default_missing_glyph = 42;
 
-    Singleton<HTTPClient>::Get()->select_socket_thread = &select_socket_thread;
-    Singleton <UDPClient>::Get()->select_socket_thread = &select_socket_thread;
+    app->scheduler.AddWaitForeverService(Singleton<HTTPClient>::Get());
+    app->scheduler.AddWaitForeverService(Singleton <UDPClient>::Get());
 
     if (app->Create(argc, argv, __FILE__)) { app->Free(); return -1; }
     if (app->Init()) { app->Free(); return -1; }
@@ -218,10 +215,11 @@ extern "C" int main(int argc, const char *argv[]) {
     app->shell.command.push_back(Shell::Command("scroll_region", bind(&MyScrollRegionCmd, _1)));
     app->shell.command.push_back(Shell::Command("term_debug", bind(&MyTermDebugCmd, _1)));
 
-    binds.push_back(Bind('=', Key::Modifier::Cmd, Bind::CB(bind(&MyIncreaseFontCmd, vector<string>()))));
-    binds.push_back(Bind('-', Key::Modifier::Cmd, Bind::CB(bind(&MyDecreaseFontCmd, vector<string>()))));
-    binds.push_back(Bind('n', Key::Modifier::Cmd, Bind::CB(bind(&MyNewWindow,       vector<string>()))));
-    binds.push_back(Bind('6', Key::Modifier::Cmd, Bind::CB(bind(&MyConsole,         vector<string>()))));
+    screen->binds = binds = new BindMap();
+    binds->Add(Bind('=', Key::Modifier::Cmd, Bind::CB(bind(&MyIncreaseFontCmd, vector<string>()))));
+    binds->Add(Bind('-', Key::Modifier::Cmd, Bind::CB(bind(&MyDecreaseFontCmd, vector<string>()))));
+    binds->Add(Bind('n', Key::Modifier::Cmd, Bind::CB(bind(&MyNewWindow,       vector<string>()))));
+    binds->Add(Bind('6', Key::Modifier::Cmd, Bind::CB(bind(&MyConsole,         vector<string>()))));
 
     string lfapp_vertex_shader = LocalFile::FileContents(StrCat(ASSETS_DIR, "lfapp_vertex.glsl"));
     string warper_shader = LocalFile::FileContents(StrCat(ASSETS_DIR, "warper.glsl"));
@@ -235,8 +233,6 @@ extern "C" int main(int argc, const char *argv[]) {
     INFO("Starting Terminal ", FLAGS_default_font, " (w=", tw->terminal->font->fixed_width,
                                                    ", h=", tw->terminal->font->height, ")");
 
-    select_socket_thread.Start();
-    int ret = app->Main();
-    select_socket_thread.Wait();
-    return ret;
+    app->scheduler.Start();
+    return app->Main();
 }

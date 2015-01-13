@@ -9,6 +9,7 @@ CMAKE_POLICY(SET CMP0004 OLD)
 # http://atrpms.net/dist/el5/cmake/
 include(${CMAKE_CURRENT_SOURCE_DIR}/CMake/Autoconf.cmake)
 include(${CMAKE_CURRENT_SOURCE_DIR}/CMake/util.cmake)
+set(LFL_ROOT ${CMAKE_CURRENT_SOURCE_DIR})
 
 if(WIN32)
 link_directories("")
@@ -119,6 +120,7 @@ endif(LFL_PROTOBUF)
 # macros
 macro(lfl_project _name)
 set(LFL_PROJECT ${_name})
+set(LFL_PROJECT_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 set(LFAPP_LIB_TYPE STATIC)
 if(LFL_QT)
  set(CMAKE_AUTOMOC ON)

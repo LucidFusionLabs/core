@@ -69,14 +69,10 @@ struct KeyRepeater {
             int elapsed = now - key_down_repeat[*i], delay = key_delay[*i];
             if ((!delay && elapsed < FLAGS_keyboard_delay) ||
                 ( delay && elapsed < FLAGS_keyboard_repeat)) continue;
-
             for (int j=0, max_repeat=10; elapsed >= FLAGS_keyboard_repeat; ++j) {
                 if (!delay) { delay=1; key_delay[*i]=true; elapsed -= FLAGS_keyboard_delay; }
                 else        {                              elapsed -= FLAGS_keyboard_repeat; }
-
-                if (j >= max_repeat) continue;
-                app->input.KeyEventDispatch(*i, false);
-                app->input.KeyEventDispatch(*i, true);
+                if (j < max_repeat) app->input.KeyEventDispatch(*i, true);
             }
             key_down_repeat[*i] = now - elapsed;
         }
@@ -85,40 +81,40 @@ struct KeyRepeater {
 #endif
 
 #if !defined(LFL_ANDROID) && !defined(LFL_IPHONE) && !defined(LFL_GLFWINPUT) && !defined(LFL_SDLINPUT) && !defined(LFL_QT) && !defined(LFL_OSXINPUT)
-const unsigned short Key::Escape     = -1;
-const unsigned short Key::Return     = -2;
-const unsigned short Key::Up         = -3;
-const unsigned short Key::Down       = -4;
-const unsigned short Key::Left       = -5;
-const unsigned short Key::Right      = -6;
-const unsigned short Key::LeftShift  = -7;
-const unsigned short Key::RightShift = -8;
-const unsigned short Key::LeftCtrl   = -9;
-const unsigned short Key::RightCtrl  = -10;
-const unsigned short Key::LeftCmd    = -11;
-const unsigned short Key::RightCmd   = -12;
-const unsigned short Key::Tab        = -13;
-const unsigned short Key::Space      = -14;
-const unsigned short Key::Backspace  = -15;
-const unsigned short Key::Delete     = -16;
-const unsigned short Key::Quote      = -17;
-const unsigned short Key::Backquote  = -18;
-const unsigned short Key::PageUp     = -19;
-const unsigned short Key::PageDown   = -20;
-const unsigned short Key::F1         = -21;
-const unsigned short Key::F2         = -22;
-const unsigned short Key::F3         = -23;
-const unsigned short Key::F4         = -24;
-const unsigned short Key::F5         = -25;
-const unsigned short Key::F6         = -26;
-const unsigned short Key::F7         = -27;
-const unsigned short Key::F8         = -28;
-const unsigned short Key::F9         = -29;
-const unsigned short Key::F10        = -30;
-const unsigned short Key::F11        = -31;
-const unsigned short Key::F12        = -32;
-const unsigned short Key::Home       = -33;
-const unsigned short Key::End        = -34;
+const int Key::Escape     = -1;
+const int Key::Return     = -2;
+const int Key::Up         = -3;
+const int Key::Down       = -4;
+const int Key::Left       = -5;
+const int Key::Right      = -6;
+const int Key::LeftShift  = -7;
+const int Key::RightShift = -8;
+const int Key::LeftCtrl   = -9;
+const int Key::RightCtrl  = -10;
+const int Key::LeftCmd    = -11;
+const int Key::RightCmd   = -12;
+const int Key::Tab        = -13;
+const int Key::Space      = -14;
+const int Key::Backspace  = -15;
+const int Key::Delete     = -16;
+const int Key::Quote      = -17;
+const int Key::Backquote  = -18;
+const int Key::PageUp     = -19;
+const int Key::PageDown   = -20;
+const int Key::F1         = -21;
+const int Key::F2         = -22;
+const int Key::F3         = -23;
+const int Key::F4         = -24;
+const int Key::F5         = -25;
+const int Key::F6         = -26;
+const int Key::F7         = -27;
+const int Key::F8         = -28;
+const int Key::F9         = -29;
+const int Key::F10        = -30;
+const int Key::F11        = -31;
+const int Key::F12        = -32;
+const int Key::Home       = -33;
+const int Key::End        = -34;
 
 const char *Clipboard::Get() { return ""; }
 void Clipboard::Set(const char *s) {}
@@ -135,40 +131,40 @@ struct AndroidInputModule : public Module {
 
 static bool android_keyboard_toggled = false;
 
-const unsigned short Key::Escape     = -1;
-const unsigned short Key::Return     = 10;
-const unsigned short Key::Up         = -3;
-const unsigned short Key::Down       = -4;
-const unsigned short Key::Left       = -5;
-const unsigned short Key::Right      = -6;
-const unsigned short Key::LeftShift  = -7;
-const unsigned short Key::RightShift = -8;
-const unsigned short Key::LeftCtrl   = -9;
-const unsigned short Key::RightCtrl  = -10;
-const unsigned short Key::LeftCmd    = -11;
-const unsigned short Key::RightCmd   = -12;
-const unsigned short Key::Tab        = -13;
-const unsigned short Key::Space      = -14;
-const unsigned short Key::Backspace  = 0;
-const unsigned short Key::Delete     = -16;
-const unsigned short Key::Quote      = '\'';
-const unsigned short Key::Backquote  = '`';
-const unsigned short Key::PageUp     = -19;
-const unsigned short Key::PageDown   = -20;
-const unsigned short Key::F1         = -21;
-const unsigned short Key::F2         = -22;
-const unsigned short Key::F3         = -23;
-const unsigned short Key::F4         = -24;
-const unsigned short Key::F5         = -25;
-const unsigned short Key::F6         = -26;
-const unsigned short Key::F7         = -27;
-const unsigned short Key::F8         = -28;
-const unsigned short Key::F9         = -29;
-const unsigned short Key::F10        = -30;
-const unsigned short Key::F11        = -31;
-const unsigned short Key::F12        = -32;
-const unsigned short Key::Home       = -33;
-const unsigned short Key::End        = -34;
+const int Key::Escape     = -1;
+const int Key::Return     = 10;
+const int Key::Up         = -3;
+const int Key::Down       = -4;
+const int Key::Left       = -5;
+const int Key::Right      = -6;
+const int Key::LeftShift  = -7;
+const int Key::RightShift = -8;
+const int Key::LeftCtrl   = -9;
+const int Key::RightCtrl  = -10;
+const int Key::LeftCmd    = -11;
+const int Key::RightCmd   = -12;
+const int Key::Tab        = -13;
+const int Key::Space      = -14;
+const int Key::Backspace  = 0;
+const int Key::Delete     = -16;
+const int Key::Quote      = '\'';
+const int Key::Backquote  = '`';
+const int Key::PageUp     = -19;
+const int Key::PageDown   = -20;
+const int Key::F1         = -21;
+const int Key::F2         = -22;
+const int Key::F3         = -23;
+const int Key::F4         = -24;
+const int Key::F5         = -25;
+const int Key::F6         = -26;
+const int Key::F7         = -27;
+const int Key::F8         = -28;
+const int Key::F9         = -29;
+const int Key::F10        = -30;
+const int Key::F11        = -31;
+const int Key::F12        = -32;
+const int Key::Home       = -33;
+const int Key::End        = -34;
 
 const char *Clipboard::Get() { return ""; }
 void Clipboard::Set(const char *s) {}
@@ -185,40 +181,40 @@ struct IPhoneInputModule : public Module {
     int Frame(unsigned clicks) { return iPhoneInput(clicks); }
 };
 
-const unsigned short Key::Escape     = -1;
-const unsigned short Key::Return     = 10;
-const unsigned short Key::Up         = -3;
-const unsigned short Key::Down       = -4;
-const unsigned short Key::Left       = -5;
-const unsigned short Key::Right      = -6;
-const unsigned short Key::LeftShift  = -7;
-const unsigned short Key::RightShift = -8;
-const unsigned short Key::LeftCtrl   = -9;
-const unsigned short Key::RightCtrl  = -10;
-const unsigned short Key::LeftCmd    = -11;
-const unsigned short Key::RightCmd   = -12;
-const unsigned short Key::Tab        = -13;
-const unsigned short Key::Space      = -14;
-const unsigned short Key::Backspace  = 8;
-const unsigned short Key::Delete     = -16;
-const unsigned short Key::Quote      = -17;
-const unsigned short Key::Backquote  = '~';
-const unsigned short Key::PageUp     = -19;
-const unsigned short Key::PageDown   = -20;
-const unsigned short Key::F1         = -21;
-const unsigned short Key::F2         = -22;
-const unsigned short Key::F3         = -23;
-const unsigned short Key::F4         = -24;
-const unsigned short Key::F5         = -25;
-const unsigned short Key::F6         = -26;
-const unsigned short Key::F7         = -27;
-const unsigned short Key::F8         = -28;
-const unsigned short Key::F9         = -29;
-const unsigned short Key::F10        = -30;
-const unsigned short Key::F11        = -31;
-const unsigned short Key::F12        = -32;
-const unsigned short Key::Home       = -33;
-const unsigned short Key::End        = -34;
+const int Key::Escape     = -1;
+const int Key::Return     = 10;
+const int Key::Up         = -3;
+const int Key::Down       = -4;
+const int Key::Left       = -5;
+const int Key::Right      = -6;
+const int Key::LeftShift  = -7;
+const int Key::RightShift = -8;
+const int Key::LeftCtrl   = -9;
+const int Key::RightCtrl  = -10;
+const int Key::LeftCmd    = -11;
+const int Key::RightCmd   = -12;
+const int Key::Tab        = -13;
+const int Key::Space      = -14;
+const int Key::Backspace  = 8;
+const int Key::Delete     = -16;
+const int Key::Quote      = -17;
+const int Key::Backquote  = '~';
+const int Key::PageUp     = -19;
+const int Key::PageDown   = -20;
+const int Key::F1         = -21;
+const int Key::F2         = -22;
+const int Key::F3         = -23;
+const int Key::F4         = -24;
+const int Key::F5         = -25;
+const int Key::F6         = -26;
+const int Key::F7         = -27;
+const int Key::F8         = -28;
+const int Key::F9         = -29;
+const int Key::F10        = -30;
+const int Key::F11        = -31;
+const int Key::F12        = -32;
+const int Key::Home       = -33;
+const int Key::End        = -34;
 
 int iphone_show_keyboard();
 const char *Clipboard::Get() { return ""; }
@@ -238,40 +234,40 @@ struct QTInputModule : public Module {
     }
 };
 
-const unsigned short Key::Escape     = Qt::Key_Escape;
-const unsigned short Key::Return     = Qt::Key_Return;
-const unsigned short Key::Up         = Qt::Key_Up;
-const unsigned short Key::Down       = Qt::Key_Down;
-const unsigned short Key::Left       = Qt::Key_Left;
-const unsigned short Key::Right      = Qt::Key_Right;
-const unsigned short Key::LeftShift  = Qt::Key_Shift;
-const unsigned short Key::RightShift = -8;
-const unsigned short Key::LeftCtrl   = Qt::Key_Meta;
-const unsigned short Key::RightCtrl  = -10;
-const unsigned short Key::LeftCmd    = Qt::Key_Control;
-const unsigned short Key::RightCmd   = -12;
-const unsigned short Key::Tab        = Qt::Key_Tab;
-const unsigned short Key::Space      = Qt::Key_Space;
-const unsigned short Key::Backspace  = Qt::Key_Backspace;
-const unsigned short Key::Delete     = Qt::Key_Delete;
-const unsigned short Key::Quote      = Qt::Key_Apostrophe;
-const unsigned short Key::Backquote  = Qt::Key_QuoteLeft;
-const unsigned short Key::PageUp     = Qt::Key_PageUp;
-const unsigned short Key::PageDown   = Qt::Key_PageDown;
-const unsigned short Key::F1         = Qt::Key_F1;
-const unsigned short Key::F2         = Qt::Key_F2;
-const unsigned short Key::F3         = Qt::Key_F3;
-const unsigned short Key::F4         = Qt::Key_F4;
-const unsigned short Key::F5         = Qt::Key_F5;
-const unsigned short Key::F6         = Qt::Key_F6;
-const unsigned short Key::F7         = Qt::Key_F7;
-const unsigned short Key::F8         = Qt::Key_F8;
-const unsigned short Key::F9         = Qt::Key_F9;
-const unsigned short Key::F10        = Qt::Key_F10;
-const unsigned short Key::F11        = Qt::Key_F11;
-const unsigned short Key::F12        = Qt::Key_F12;
-const unsigned short Key::Home       = Qt::Key_Home;
-const unsigned short Key::End        = Qt::Key_End;
+const int Key::Escape     = Qt::Key_Escape;
+const int Key::Return     = Qt::Key_Return;
+const int Key::Up         = Qt::Key_Up;
+const int Key::Down       = Qt::Key_Down;
+const int Key::Left       = Qt::Key_Left;
+const int Key::Right      = Qt::Key_Right;
+const int Key::LeftShift  = Qt::Key_Shift;
+const int Key::RightShift = -8;
+const int Key::LeftCtrl   = Qt::Key_Meta;
+const int Key::RightCtrl  = -10;
+const int Key::LeftCmd    = Qt::Key_Control;
+const int Key::RightCmd   = -12;
+const int Key::Tab        = Qt::Key_Tab;
+const int Key::Space      = Qt::Key_Space;
+const int Key::Backspace  = Qt::Key_Backspace;
+const int Key::Delete     = Qt::Key_Delete;
+const int Key::Quote      = Qt::Key_Apostrophe;
+const int Key::Backquote  = Qt::Key_QuoteLeft;
+const int Key::PageUp     = Qt::Key_PageUp;
+const int Key::PageDown   = Qt::Key_PageDown;
+const int Key::F1         = Qt::Key_F1;
+const int Key::F2         = Qt::Key_F2;
+const int Key::F3         = Qt::Key_F3;
+const int Key::F4         = Qt::Key_F4;
+const int Key::F5         = Qt::Key_F5;
+const int Key::F6         = Qt::Key_F6;
+const int Key::F7         = Qt::Key_F7;
+const int Key::F8         = Qt::Key_F8;
+const int Key::F9         = Qt::Key_F9;
+const int Key::F10        = Qt::Key_F10;
+const int Key::F11        = Qt::Key_F11;
+const int Key::F12        = Qt::Key_F12;
+const int Key::Home       = Qt::Key_Home;
+const int Key::End        = Qt::Key_End;
 
 const char *Clipboard::Get() { return ""; }
 void Clipboard::Set(const char *s) {}
@@ -297,8 +293,9 @@ struct GLFWInputModule : public Module {
     static void WindowSize (GLFWwindow *W, int w, int h) { if (!LoadScreen(W)) return; Window::MakeCurrent(screen); screen->Reshaped(w, h); }
     static void WindowClose(GLFWwindow *W)               { if (!LoadScreen(W)) return; Window::MakeCurrent(screen); Window::Close(screen); }
     static void Key(GLFWwindow *W, int k, int s, int a, int m) {
-        if (a == GLFW_REPEAT || !LoadScreen(W)) return;
-        app->input.KeyPress((unsigned)k < 256 && isalpha((unsigned)k) ? ::tolower((unsigned)k) : k, a == GLFW_PRESS);
+        if (!LoadScreen(W)) return;
+        app->input.KeyPress((unsigned)k < 256 && isalpha((unsigned)k) ? ::tolower((unsigned)k) : k,
+                            (a == GLFW_PRESS || a == GLFW_REPEAT));
     }
     static void MouseClick(GLFWwindow *W, int b, int a, int m) {
         if (!LoadScreen(W)) return;
@@ -328,40 +325,40 @@ struct GLFWInputModule : public Module {
 point  GLFWInputModule::mp;
 double GLFWInputModule::mw;
 
-const unsigned short Key::Escape     = GLFW_KEY_ESCAPE;
-const unsigned short Key::Return     = GLFW_KEY_ENTER;
-const unsigned short Key::Up         = GLFW_KEY_UP;
-const unsigned short Key::Down       = GLFW_KEY_DOWN;
-const unsigned short Key::Left       = GLFW_KEY_LEFT;
-const unsigned short Key::Right      = GLFW_KEY_RIGHT;
-const unsigned short Key::LeftShift  = GLFW_KEY_LEFT_SHIFT;
-const unsigned short Key::RightShift = GLFW_KEY_RIGHT_SHIFT;
-const unsigned short Key::LeftCtrl   = GLFW_KEY_LEFT_CONTROL;
-const unsigned short Key::RightCtrl  = GLFW_KEY_RIGHT_CONTROL;
-const unsigned short Key::LeftCmd    = GLFW_KEY_LEFT_SUPER;
-const unsigned short Key::RightCmd   = GLFW_KEY_RIGHT_SUPER;
-const unsigned short Key::Tab        = GLFW_KEY_TAB;
-const unsigned short Key::Space      = GLFW_KEY_SPACE;
-const unsigned short Key::Backspace  = GLFW_KEY_BACKSPACE;
-const unsigned short Key::Delete     = GLFW_KEY_DELETE;
-const unsigned short Key::Quote      = '\'';
-const unsigned short Key::Backquote  = '`';
-const unsigned short Key::PageUp     = GLFW_KEY_PAGE_UP;
-const unsigned short Key::PageDown   = GLFW_KEY_PAGE_DOWN;
-const unsigned short Key::F1         = GLFW_KEY_F1;
-const unsigned short Key::F2         = GLFW_KEY_F2;
-const unsigned short Key::F3         = GLFW_KEY_F3;
-const unsigned short Key::F4         = GLFW_KEY_F4;
-const unsigned short Key::F5         = GLFW_KEY_F5;
-const unsigned short Key::F6         = GLFW_KEY_F6;
-const unsigned short Key::F7         = GLFW_KEY_F7;
-const unsigned short Key::F8         = GLFW_KEY_F8;
-const unsigned short Key::F9         = GLFW_KEY_F9;
-const unsigned short Key::F10        = GLFW_KEY_F10;
-const unsigned short Key::F11        = GLFW_KEY_F11;
-const unsigned short Key::F12        = GLFW_KEY_F12;
-const unsigned short Key::Home       = GLFW_KEY_HOME;
-const unsigned short Key::End        = GLFW_KEY_END;
+const int Key::Escape     = GLFW_KEY_ESCAPE;
+const int Key::Return     = GLFW_KEY_ENTER;
+const int Key::Up         = GLFW_KEY_UP;
+const int Key::Down       = GLFW_KEY_DOWN;
+const int Key::Left       = GLFW_KEY_LEFT;
+const int Key::Right      = GLFW_KEY_RIGHT;
+const int Key::LeftShift  = GLFW_KEY_LEFT_SHIFT;
+const int Key::RightShift = GLFW_KEY_RIGHT_SHIFT;
+const int Key::LeftCtrl   = GLFW_KEY_LEFT_CONTROL;
+const int Key::RightCtrl  = GLFW_KEY_RIGHT_CONTROL;
+const int Key::LeftCmd    = GLFW_KEY_LEFT_SUPER;
+const int Key::RightCmd   = GLFW_KEY_RIGHT_SUPER;
+const int Key::Tab        = GLFW_KEY_TAB;
+const int Key::Space      = GLFW_KEY_SPACE;
+const int Key::Backspace  = GLFW_KEY_BACKSPACE;
+const int Key::Delete     = GLFW_KEY_DELETE;
+const int Key::Quote      = '\'';
+const int Key::Backquote  = '`';
+const int Key::PageUp     = GLFW_KEY_PAGE_UP;
+const int Key::PageDown   = GLFW_KEY_PAGE_DOWN;
+const int Key::F1         = GLFW_KEY_F1;
+const int Key::F2         = GLFW_KEY_F2;
+const int Key::F3         = GLFW_KEY_F3;
+const int Key::F4         = GLFW_KEY_F4;
+const int Key::F5         = GLFW_KEY_F5;
+const int Key::F6         = GLFW_KEY_F6;
+const int Key::F7         = GLFW_KEY_F7;
+const int Key::F8         = GLFW_KEY_F8;
+const int Key::F9         = GLFW_KEY_F9;
+const int Key::F10        = GLFW_KEY_F10;
+const int Key::F11        = GLFW_KEY_F11;
+const int Key::F12        = GLFW_KEY_F12;
+const int Key::Home       = GLFW_KEY_HOME;
+const int Key::End        = GLFW_KEY_END;
 
 void TouchDevice::OpenKeyboard() {}
 void TouchDevice::CloseKeyboard() {}
@@ -374,8 +371,8 @@ void Mouse::ReleaseFocus() { glfwSetInputMode((GLFWwindow*)screen->id, GLFW_CURS
 #ifdef LFL_SDLINPUT
 struct SDLInputModule : public Module {
     int Frame(unsigned clicks) {
-        SDL_Event ev; int mx, my;
-        SDL_GetMouseState(&mx, &my);
+        SDL_Event ev; point mp;
+        SDL_GetMouseState(&mp.x, &mp.y);
         bool mouse_moved = false;
 
         while (SDL_PollEvent(&ev)) {
@@ -391,16 +388,16 @@ struct SDLInputModule : public Module {
                 if      (ev.window.event == SDL_WINDOWEVENT_RESIZED) screen->Reshape(ev.window.data1, ev.window.data2);
                 else if (ev.window.event == SDL_WINDOWEVENT_CLOSE) Window::Close(screen);
             }
-            else if (ev.type == SDL_KEYDOWN) app->input.KeyPress(ev.key.keysym.sym, 1, 0, 0);
-            else if (ev.type == SDL_KEYUP)   app->input.KeyPress(ev.key.keysym.sym, 0, 0, 0);
+            else if (ev.type == SDL_KEYDOWN) app->input.KeyPress(ev.key.keysym.sym, 1);
+            else if (ev.type == SDL_KEYUP)   app->input.KeyPress(ev.key.keysym.sym, 0);
             else if (ev.type == SDL_MOUSEMOTION) {
-                app->input.MouseMove(mx, my, ev.motion.xrel, ev.motion.yrel);
+                app->input.MouseMove(mp, point(ev.motion.xrel, ev.motion.yrel));
                 mouse_moved = true;
             }
-            else if (ev.type == SDL_MOUSEBUTTONDOWN) app->input.MouseClick(ev.button.button, 1, ev.button.x, ev.button.y);
-            else if (ev.type == SDL_MOUSEBUTTONUP)   app->input.MouseClick(ev.button.button, 0, ev.button.x, ev.button.y);
+            else if (ev.type == SDL_MOUSEBUTTONDOWN) app->input.MouseClick(ev.button.button, 1, point(ev.button.x, ev.button.y));
+            else if (ev.type == SDL_MOUSEBUTTONUP)   app->input.MouseClick(ev.button.button, 0, point(ev.button.x, ev.button.y));
             // else if (ev.type == SDL_ACTIVEEVENT && ev.active.state & SDL_APPACTIVE) { if ((minimized = ev.active.gain)) return 0; }
-            screen->events.input++;
+            if (screen) screen->events.input++;
         }
 
 #ifndef __APPLE__
@@ -413,40 +410,40 @@ struct SDLInputModule : public Module {
     }
 };
 
-const unsigned short Key::Escape     = SDLK_ESCAPE;
-const unsigned short Key::Return     = SDLK_RETURN;
-const unsigned short Key::Up         = SDLK_UP;
-const unsigned short Key::Down       = SDLK_DOWN;
-const unsigned short Key::Left       = SDLK_LEFT;
-const unsigned short Key::Right      = SDLK_RIGHT;
-const unsigned short Key::LeftShift  = SDLK_LSHIFT;
-const unsigned short Key::RightShift = SDLK_RSHIFT;
-const unsigned short Key::LeftCtrl   = SDLK_LCTRL;
-const unsigned short Key::RightCtrl  = SDLK_RCTRL;
-const unsigned short Key::LeftCmd    = SDLK_LGUI;
-const unsigned short Key::RightCmd   = SDLK_RGUI;
-const unsigned short Key::Tab        = SDLK_TAB;
-const unsigned short Key::Space      = SDLK_SPACE;
-const unsigned short Key::Backspace  = SDLK_BACKSPACE;
-const unsigned short Key::Delete     = SDLK_DELETE;
-const unsigned short Key::Quote      = SDLK_QUOTE;
-const unsigned short Key::Backquote  = SDLK_BACKQUOTE;
-const unsigned short Key::PageUp     = SDLK_PAGEUP;
-const unsigned short Key::PageDown   = SDLK_PAGEDOWN;
-const unsigned short Key::F1         = SDLK_F1;
-const unsigned short Key::F2         = SDLK_F2;
-const unsigned short Key::F3         = SDLK_F3;
-const unsigned short Key::F4         = SDLK_F4;
-const unsigned short Key::F5         = SDLK_F5;
-const unsigned short Key::F6         = SDLK_F6;
-const unsigned short Key::F7         = SDLK_F7;
-const unsigned short Key::F8         = SDLK_F8;
-const unsigned short Key::F9         = SDLK_F9;
-const unsigned short Key::F10        = SDLK_F10;
-const unsigned short Key::F11        = SDLK_F11;
-const unsigned short Key::F12        = SDLK_F12;
-const unsigned short Key::Home       = SDLK_HOME;
-const unsigned short Key::End        = SDLK_END;
+const int Key::Escape     = SDLK_ESCAPE;
+const int Key::Return     = SDLK_RETURN;
+const int Key::Up         = SDLK_UP;
+const int Key::Down       = SDLK_DOWN;
+const int Key::Left       = SDLK_LEFT;
+const int Key::Right      = SDLK_RIGHT;
+const int Key::LeftShift  = SDLK_LSHIFT;
+const int Key::RightShift = SDLK_RSHIFT;
+const int Key::LeftCtrl   = SDLK_LCTRL;
+const int Key::RightCtrl  = SDLK_RCTRL;
+const int Key::LeftCmd    = SDLK_LGUI;
+const int Key::RightCmd   = SDLK_RGUI;
+const int Key::Tab        = SDLK_TAB;
+const int Key::Space      = SDLK_SPACE;
+const int Key::Backspace  = SDLK_BACKSPACE;
+const int Key::Delete     = SDLK_DELETE;
+const int Key::Quote      = SDLK_QUOTE;
+const int Key::Backquote  = SDLK_BACKQUOTE;
+const int Key::PageUp     = SDLK_PAGEUP;
+const int Key::PageDown   = SDLK_PAGEDOWN;
+const int Key::F1         = SDLK_F1;
+const int Key::F2         = SDLK_F2;
+const int Key::F3         = SDLK_F3;
+const int Key::F4         = SDLK_F4;
+const int Key::F5         = SDLK_F5;
+const int Key::F6         = SDLK_F6;
+const int Key::F7         = SDLK_F7;
+const int Key::F8         = SDLK_F8;
+const int Key::F9         = SDLK_F9;
+const int Key::F10        = SDLK_F10;
+const int Key::F11        = SDLK_F11;
+const int Key::F12        = SDLK_F12;
+const int Key::Home       = SDLK_HOME;
+const int Key::End        = SDLK_END;
 
 const char *Clipboard::Get() { return SDL_GetClipboardText(); }
 void Clipboard::Set(const char *s) { SDL_SetClipboardText(s); }
@@ -469,40 +466,40 @@ extern "C" void OSXGrabMouseFocus();
 extern "C" void OSXReleaseMouseFocus();
 extern "C" void OSXSetMousePosition(int x, int y);
 
-const unsigned short Key::Escape     = 0x81;
-const unsigned short Key::Return     = '\r';
-const unsigned short Key::Up         = 0xBE;
-const unsigned short Key::Down       = 0xBD;
-const unsigned short Key::Left       = 0xBB;
-const unsigned short Key::Right      = 0xBC;
-const unsigned short Key::LeftShift  = 0x83;
-const unsigned short Key::RightShift = 0x87;
-const unsigned short Key::LeftCtrl   = 0x86;
-const unsigned short Key::RightCtrl  = 0x89;
-const unsigned short Key::LeftCmd    = 0x82;
-const unsigned short Key::RightCmd   = -12;
-const unsigned short Key::Tab        = '\t';
-const unsigned short Key::Space      = ' ';
-const unsigned short Key::Backspace  = 0x80;
-const unsigned short Key::Delete     = -16;
-const unsigned short Key::Quote      = '\'';
-const unsigned short Key::Backquote  = '`';
-const unsigned short Key::PageUp     = 0xB4;
-const unsigned short Key::PageDown   = 0xB9;
-const unsigned short Key::F1         = 0xBA;
-const unsigned short Key::F2         = 0xB8;
-const unsigned short Key::F3         = 0xA8;
-const unsigned short Key::F4         = 0xB6;
-const unsigned short Key::F5         = 0xA5;
-const unsigned short Key::F6         = 0xA6;
-const unsigned short Key::F7         = 0xA7;
-const unsigned short Key::F8         = 0xA9;
-const unsigned short Key::F9         = 0xAA;
-const unsigned short Key::F10        = 0xAF;
-const unsigned short Key::F11        = 0xAB;
-const unsigned short Key::F12        = 0xB0;
-const unsigned short Key::Home       = 0xB3;
-const unsigned short Key::End        = 0xB7;
+const int Key::Escape     = 0x81;
+const int Key::Return     = '\r';
+const int Key::Up         = 0xBE;
+const int Key::Down       = 0xBD;
+const int Key::Left       = 0xBB;
+const int Key::Right      = 0xBC;
+const int Key::LeftShift  = 0x83;
+const int Key::RightShift = 0x87;
+const int Key::LeftCtrl   = 0x86;
+const int Key::RightCtrl  = 0x89;
+const int Key::LeftCmd    = 0x82;
+const int Key::RightCmd   = -12;
+const int Key::Tab        = '\t';
+const int Key::Space      = ' ';
+const int Key::Backspace  = 0x80;
+const int Key::Delete     = -16;
+const int Key::Quote      = '\'';
+const int Key::Backquote  = '`';
+const int Key::PageUp     = 0xB4;
+const int Key::PageDown   = 0xB9;
+const int Key::F1         = 0xBA;
+const int Key::F2         = 0xB8;
+const int Key::F3         = 0xA8;
+const int Key::F4         = 0xB6;
+const int Key::F5         = 0xA5;
+const int Key::F6         = 0xA6;
+const int Key::F7         = 0xA7;
+const int Key::F8         = 0xA9;
+const int Key::F9         = 0xAA;
+const int Key::F10        = 0xAF;
+const int Key::F11        = 0xAB;
+const int Key::F12        = 0xB0;
+const int Key::Home       = 0xB3;
+const int Key::End        = 0xB7;
 
 const char *Clipboard::Get() { return ""; }
 void Clipboard::Set(const char *s) {}
@@ -555,6 +552,8 @@ int Input::DispatchQueuedInput() {
 }
 
 void Input::KeyPress(int key, bool down) {
+    // if (!MainThread()) ERROR("KeyPress() called from thread ", Thread::GetId());
+
     switch (key) {
         case Key::LeftShift:   left_shift_down = down; break;
         case Key::RightShift: right_shift_down = down; break;
@@ -564,35 +563,35 @@ void Input::KeyPress(int key, bool down) {
         case Key::RightCmd:     right_cmd_down = down; break;
     }
 
-    int keycode = key | (CtrlKeyDown() ? Key::Modifier::Ctrl : 0) | (CmdKeyDown() ? Key::Modifier::Cmd : 0);
-    int fired = KeyEventDispatch(keycode, down);
+    int event = key | (CtrlKeyDown() ? Key::Modifier::Ctrl : 0) | (CmdKeyDown() ? Key::Modifier::Cmd : 0);
+    int fired = KeyEventDispatch(event, down);
     screen->events.key++;
     screen->events.gui += fired;
     if (fired) return;
 
     for (auto g = screen->input_bind.begin(); g != screen->input_bind.end(); ++g)
-        if ((*g)->active) (*g)->Input(keycode, down); 
+        if ((*g)->active) (*g)->Input(event, down); 
 }
 
-int Input::KeyEventDispatch(int keycode, bool down) {
+int Input::KeyEventDispatch(InputEvent::ID event, bool down) {
     if (!down) return 0;
-    int key = InputController::KeyFromEvent(keycode);
+    int key = InputEvent::GetKey(event);
     bool shift_down = ShiftKeyDown(), ctrl_down = CtrlKeyDown(), cmd_down = CmdKeyDown();
     for (auto it = screen->keyboard_gui.begin(); it != screen->keyboard_gui.end(); ++it) {
         KeyboardGUI *g = *it;
         if (!g->active) continue;
-        if (g->toggle_bind.key == keycode && g->toggle_active.mode != ToggleBool::OneShot) return 0;
+        if (g->toggle_bind.key == event && g->toggle_active.mode != ToggleBool::OneShot) return 0;
 
         g->events.total++;
 #ifdef __APPLE__
-        if      (keycode == Bind('v', Key::Modifier::Cmd).key)  { g->Input(Clipboard::Get()); return 1; }
+        if      (event == Bind('v', Key::Modifier::Cmd).key)  { g->Input(Clipboard::Get()); return 1; }
 #else
-        if      (keycode == Bind('v', Key::Modifier::Ctrl).key) { g->Input(Clipboard::Get()); return 1; }
+        if      (event == Bind('v', Key::Modifier::Ctrl).key) { g->Input(Clipboard::Get()); return 1; }
 #endif
 #ifdef LFL_IPHONE
-        else if (keycode == '6' && shift_down) { g->HistUp(); return 1; }
+        else if (event == '6' && shift_down) { g->HistUp(); return 1; }
 #endif
-        switch (keycode) {
+        switch (event) {
             case Key::Backspace: g->Erase();       return 1;
             case Key::Delete:    g->Erase();       return 1;
             case Key::Return:    g->Enter();       return 1;
@@ -609,7 +608,7 @@ int Input::KeyEventDispatch(int keycode, bool down) {
         }
 
         if (cmd_down) { g->events.total--; return 0; }
-        if (key >= 256) { g->events.total--; /* ERROR("unhandled key ", keycode); */ continue; }
+        if (key >= 256) { g->events.total--; /* ERROR("unhandled key ", event); */ continue; }
 
         if (shift_down && key < 256) {
             if (isalpha(key)) key = ::toupper(key);
@@ -676,7 +675,7 @@ void Input::MouseClick(int button, bool down, const point &p) {
         if ((*g)->active) (*g)->Input(event, down); 
 }
 
-int Input::MouseEventDispatch(int event, const point &p, int down) {
+int Input::MouseEventDispatch(InputEvent::ID event, const point &p, int down) {
     screen->mouse = p;
     if (FLAGS_input_debug && down) INFO("MouseEvent ", screen->mouse.DebugString());
 
@@ -827,7 +826,7 @@ void Shell::startcmd(const vector<string> &a) {
     screen->console->startcmd = Join(a, " ");
 }
 
-void Shell::dldir(const vector<string>&) { INFO(LFL::dldir()); }
+void Shell::dldir(const vector<string>&) { INFO(LFAppDownloadDir()); }
 
 void Shell::screenshot(const vector<string> &a) {
     if (a.empty()) return INFO("usage: screenshot <file>");
@@ -992,7 +991,7 @@ void Shell::sinth(const vector<string> &a) {
 void Shell::writesnap(const vector<string> &a) {
     SoundAsset *sa = app->shell.soundasset(a.size() ? a[0] : "snap");
     if (sa) {
-        string filename = StrCat(LFL::dldir(), "snap.wav"); 
+        string filename = StrCat(LFAppDownloadDir(), "snap.wav"); 
         RingBuf::Handle B(sa->wav);
         LocalFile lf(filename, "r");
         WavWriter w(&lf);

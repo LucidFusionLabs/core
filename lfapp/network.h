@@ -178,23 +178,24 @@ struct Network : public Module {
 struct SocketSet {
     enum { READABLE=1, WRITABLE=2, EXCEPTION=4 };
     virtual ~SocketSet() {}
-    virtual int Select(int wait_time) = 0;
     virtual void Del(Socket fd) = 0;
     virtual void Add(Socket fd, int flag, void *val) = 0;
     virtual void Set(Socket fd, int flag, void *val) = 0;
-    virtual int GetReadable(Socket fd) = 0;
-    virtual int GetWritable(Socket fd) = 0;
-    virtual int GetException(Socket fd) = 0;
+    virtual int GetReadable(Socket fd) { return 0; };
+    virtual int GetWritable(Socket fd) { return 0; };
+    virtual int GetException(Socket fd) { return 0; };
+    virtual int Select(int wait_time) { return 0; };
 };
 
 struct SelectSocketSet : public SocketSet {
     unordered_map<Socket, int> socket;
     fd_set rfds, wfds, xfds;
+    SocketSet *mirror=0;
 
     int Select(int wait_time);
-    void Del(Socket fd) { socket.erase(fd); }
-    void Add(Socket fd, int flag, void *val) { Set(fd, flag, val); }
-    void Set(Socket fd, int flag, void *val) { socket[fd] = flag; }
+    void Del(Socket fd)                    { socket.erase(fd);  if (mirror) mirror->Del(fd); }
+    void Add(Socket fd, int flag, void *v) { socket[fd] = flag; if (mirror) mirror->Add(fd, flag, v); }
+    void Set(Socket fd, int flag, void *v) { socket[fd] = flag; if (mirror) mirror->Set(fd, flag, v); }
     int Get(Socket fd, fd_set *set) { return FD_ISSET(fd, set); } 
     int GetReadable(Socket fd) { return Get(fd, &rfds); }
     int GetWritable(Socket fd) { return Get(fd, &wfds); }
@@ -206,17 +207,19 @@ struct SelectSocketSet : public SocketSet {
     }
 };
 
-struct SelectSocketThread {
+struct SelectSocketThread : public SocketSet {
+    mutex *frame_mutex, *wait_mutex;
     SelectSocketSet sockets;
     mutex sockets_mutex;
     Thread thread;
     int pipe[2];
-    SelectSocketThread() : thread(bind(&SelectSocketThread::ThreadProc, this)) { pipe[0] = pipe[1] = -1; }
+    SelectSocketThread(mutex *FM=0, mutex *WM=0) : frame_mutex(FM), wait_mutex(WM),
+        thread(bind(&SelectSocketThread::ThreadProc, this)) { pipe[0] = pipe[1] = -1; }
     ~SelectSocketThread() { close(pipe[0]); close(pipe[1]); }
 
-    void AddSocket(Socket fd, int flag, void *v=0) { { ScopedMutex sm(sockets_mutex); sockets.Add(fd, flag, v); } Wakeup(); }
-    void SetSocket(Socket fd, int flag, void *v=0) { { ScopedMutex sm(sockets_mutex); sockets.Set(fd, flag, v); } Wakeup(); }
-    void DelSocket(Socket fd)                      { { ScopedMutex sm(sockets_mutex); sockets.Del(fd);          } Wakeup(); }
+    void Add(Socket s, int f, void *v) { { ScopedMutex m(sockets_mutex); sockets.Add(s, f, v); } Wakeup(); }
+    void Set(Socket s, int f, void *v) { { ScopedMutex m(sockets_mutex); sockets.Set(s, f, v); } Wakeup(); }
+    void Del(Socket s)                 { { ScopedMutex m(sockets_mutex); sockets.Del(s);       } Wakeup(); }
     void Start() {
 #ifndef _WIN32
         CHECK_EQ(::pipe(pipe), 0);
@@ -404,8 +407,6 @@ struct Service {
 
     typedef map<string, Connection*> EndpointMap;
     EndpointMap endpoint;
-
-    SelectSocketThread *select_socket_thread=0;
 
     void QueueListen(IPV4::Addr addr, int port, bool SSL=false) { listen[IPV4Endpoint(addr,port).ToString()] = new Listener(SSL); }
     int OpenSocket(Connection *c, int protocol, int blocking, IPV4EndpointSource*);

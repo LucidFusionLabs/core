@@ -457,6 +457,7 @@ struct Video : public Module {
     int Free();
     int Flush();
     void CreateGraphicsDevice();
+    void InitGraphicsDevice();
 };
 
 extern Window *screen;
