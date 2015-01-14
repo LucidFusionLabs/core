@@ -5,6 +5,10 @@ cmake_minimum_required(VERSION 3.0)
 CMAKE_POLICY(SET CMP0004 OLD)
 # MESSAGE(FATAL_ERROR "Debug message")
 
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE "Debug")
+endif(NOT CMAKE_BUILD_TYPE)
+
 # http://www.cmake.org/cmake/resources/software.html
 # http://atrpms.net/dist/el5/cmake/
 include(${CMAKE_CURRENT_SOURCE_DIR}/CMake/Autoconf.cmake)
@@ -17,11 +21,11 @@ set(CMAKE_EXE_LINKER_FLAGS "/SAFESEH:NO /NODEFAULTLIB:LIBCMTD")
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /MT")
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /MTd")
 else(WIN32)
-set(CMAKE_CXX_FLAGS "-std=c++11") # -stdlib=libc++")
+set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -std=c++11") # -stdlib=libc++")
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -std=c++11") # -stdlib=libc++")
 #set(CMAKE_EXE_LINKER_FLAGS "-stdlib=libc++")
 #set(CMAKE_SHARED_LINKER_FLAGS "-stdlib=libc++")
 #set(CMAKE_MODULE_LINKER_FLAGS "-stdlib=libc++")
-add_definitions("-ggdb")
 endif(WIN32)
 add_definitions("-D__STDC_CONSTANT_MACROS")
 

@@ -1221,7 +1221,7 @@ struct BrowserInterface {
 };
 
 struct SystemBrowser { static void Open(const char *url); };
-struct Clipboard { static const char *Get(); static void Set(const char *s); };
+struct Clipboard { static string Get(); static void Set(const string &s); };
 struct TouchDevice { static void OpenKeyboard(); static void CloseKeyboard(); };
 struct Advertising { static void ShowAds(); static void HideAds(); };
 struct CUDA : public Module { int Init(); };

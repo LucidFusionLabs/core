@@ -446,16 +446,14 @@ int sprint(char *out, int len, const char *fmt, ...) {
     return ret;
 }
 
-template           int isnl(const char *line);
-template <class X> int isnl(const X    *line) {
+template <class X> int isnl(const X *line) {
     if (!*line) return 0;
     if (*line == '\n') return 1;
     if (*line == '\r' && *(line+1) == '\n') return 2;
     return 0;
 }
 
-template           int chompnl(char *line, int len);
-template <class X> int chompnl(X    *line, int len) {
+template <class X> int chompnl(X *line, int len) {
     int ret = 0;
     if (line[len-1] == '\n') { line[len-1] = 0; ret++; }
     if (line[len-2] == '\r') { line[len-2] = 0; ret++; }
@@ -475,6 +473,10 @@ template <class X> int dirnamelen(const X *path, int len, bool include_slash) {
     for (const X *p=start; p>path; p--) if (isfileslash(*p)) { slash=p; break; }
     return !slash ? 0 : len - (start-slash+!include_slash);
 }
+
+template int isnl(const char *line);
+template int chompnl(char *line, int len);
+
 int dirnamelen(const char  *text, int len, bool include_slash) { return dirnamelen<char> (text, len, include_slash); }
 int dirnamelen(const short *text, int len, bool include_slash) { return dirnamelen<short>(text, len, include_slash); }
 
@@ -535,8 +537,6 @@ const short *nextline   (const short *text, int len, bool final, int *outlen) { 
 const char  *nextlineraw(const char  *text, int len, bool final, int *outlen) { return nextline<char,  false>(text, len, final, outlen); }
 const short *nextlineraw(const short *text, int len, bool final, int *outlen) { return nextline<short, false>(text, len, final, outlen); }
 
-template char*  nextchar<char >(char*,  int (*)(int), int, int*);
-template short* nextchar<short>(short*, int (*)(int), int, int*);
 template <class X>       X *nextchar(      X *text, int (*ischar)(int), int len, int *outlen) { return (X*)nextchar((const X *)text, ischar, len, outlen); }
 template <class X> const X *nextchar(const X *text, int (*ischar)(int), int len, int *outlen) { return nextchar(text, ischar, 0, len, outlen); }
 template <class X>       X *nextchar(      X *text, int (*ischar)(int), int (*isquotec)(int), int len, int *outlen) { return (X*)nextchar((const X *)text, ischar, isquotec, len, outlen); }
@@ -549,6 +549,10 @@ template <class X> const X *nextchar(const X *text, int (*ischar)(int), int (*is
     if (outlen) *outlen = ret ? ret-text : p-text;
     return ret;
 }
+template       char*  nextchar<char >(      char*,  int (*)(int), int, int*);
+template const char*  nextchar<char >(const char*,  int (*)(int), int, int*);
+template       short* nextchar<short>(      short*, int (*)(int), int, int*);
+template const short* nextchar<short>(const short*, int (*)(int), int, int*);
 
 template <class X> int lengthchar(const X *text, int (*ischar)(int), int len) {
     const X *p;
@@ -1494,9 +1498,6 @@ const char *DirectoryIter::Next() {
     }
 }
 
-template struct StringLineIterT<char>;
-template struct StringLineIterT<short>;
-
 template <class X> const X *StringLineIterT<X>::Next() {
     first = false;
     if (offset < 0) return 0;
@@ -1511,8 +1512,8 @@ template <class X> const X *StringLineIterT<X>::Next() {
     return 0;
 }
 
-template struct StringWordIterT<char>;
-template struct StringWordIterT<short>;
+template struct StringLineIterT<char>;
+template struct StringLineIterT<short>;
 
 template <class X> StringWordIterT<X>::StringWordIterT(const X *input, int inlen, int (*delim)(int), int (*quote)(int), int inflag) : in(input), len(inlen), wordlen(0), offset(0), IsQuote(quote), flag(inflag) {
     IsSpace = delim ? delim : ::isspace;
@@ -1532,14 +1533,16 @@ template <class X> const X *StringWordIterT<X>::Next() {
     return 0;
 }
 
-template           const char *StringWordIterT<char>::Remaining();
-template <class X> const X    *StringWordIterT<X   >::Remaining() {
+template <class X> const X *StringWordIterT<X>::Remaining() {
     if (flag & Flag::InPlace) return in+offset;
     if (len) buf.assign(in+offset, len-offset);
 
     else buf.assign(in+offset);
     return buf.c_str();
 }
+
+template struct StringWordIterT<char>;
+template struct StringWordIterT<short>;
 
 const char *IterWordIter::Next() {
     if (!iter) return 0;

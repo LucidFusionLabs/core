@@ -126,8 +126,8 @@ const int Key::F12        = -32;
 const int Key::Home       = -33;
 const int Key::End        = -34;
 
-const char *Clipboard::Get() { return ""; }
-void Clipboard::Set(const char *s) {}
+string Clipboard::Get() { return ""; }
+void Clipboard::Set(const string &s) {}
 void TouchDevice::OpenKeyboard() {}
 void TouchDevice::CloseKeyboard() {}
 void Mouse::GrabFocus() {}
@@ -176,8 +176,8 @@ const int Key::F12        = -32;
 const int Key::Home       = -33;
 const int Key::End        = -34;
 
-const char *Clipboard::Get() { return ""; }
-void Clipboard::Set(const char *s) {}
+string Clipboard::Get() { return ""; }
+void Clipboard::Set(const string &s) {}
 void TouchDevice::OpenKeyboard()  { if ( android_keyboard_toggled) return; android_toggle_keyboard(); android_keyboard_toggled=1; }
 void TouchDevice::CloseKeyboard() { if (!android_keyboard_toggled) return; android_toggle_keyboard(); android_keyboard_toggled=0; }
 void Mouse::GrabFocus() {}
@@ -227,8 +227,8 @@ const int Key::Home       = -33;
 const int Key::End        = -34;
 
 int iphone_show_keyboard();
-const char *Clipboard::Get() { return ""; }
-void Clipboard::Set(const char *s) {}
+string Clipboard::Get() { return ""; }
+void Clipboard::Set(const string &s) {}
 void TouchDevice::OpenKeyboard() { iphone_show_keyboard(); }
 void TouchDevice::CloseKeyboard() {}
 void Mouse::GrabFocus() {}
@@ -279,8 +279,8 @@ const int Key::F12        = Qt::Key_F12;
 const int Key::Home       = Qt::Key_Home;
 const int Key::End        = Qt::Key_End;
 
-const char *Clipboard::Get() { return ""; }
-void Clipboard::Set(const char *s) {}
+string Clipboard::Get() { return ""; }
+void Clipboard::Set(const string &s) {}
 void TouchDevice::OpenKeyboard() {}
 void TouchDevice::CloseKeyboard() {}
 #endif /* LFL_QT */
@@ -372,8 +372,8 @@ const int Key::End        = GLFW_KEY_END;
 
 void TouchDevice::OpenKeyboard() {}
 void TouchDevice::CloseKeyboard() {}
-const char *Clipboard::Get()              { return glfwGetClipboardString((GLFWwindow*)screen->id   ); }
-void        Clipboard::Set(const char *s) {        glfwSetClipboardString((GLFWwindow*)screen->id, s); }
+string Clipboard::Get()                { return glfwGetClipboardString((GLFWwindow*)screen->id); }
+void   Clipboard::Set(const string &s) {        glfwSetClipboardString((GLFWwindow*)screen->id, s.c_str()); }
 void Mouse::GrabFocus()    { glfwSetInputMode((GLFWwindow*)screen->id, GLFW_CURSOR, GLFW_CURSOR_DISABLED); app->grab_mode.On();  screen->cursor_grabbed=true;  }
 void Mouse::ReleaseFocus() { glfwSetInputMode((GLFWwindow*)screen->id, GLFW_CURSOR, GLFW_CURSOR_NORMAL);   app->grab_mode.Off(); screen->cursor_grabbed=false; }
 #endif
@@ -455,8 +455,8 @@ const int Key::F12        = SDLK_F12;
 const int Key::Home       = SDLK_HOME;
 const int Key::End        = SDLK_END;
 
-const char *Clipboard::Get() { return SDL_GetClipboardText(); }
-void Clipboard::Set(const char *s) { SDL_SetClipboardText(s); }
+string Clipboard::Get() { return SDL_GetClipboardText(); }
+void Clipboard::Set(const string &s) { SDL_SetClipboardText(s.c_str()); }
 void TouchDevice::CloseKeyboard() {
 #ifdef LFL_IPHONE 
     SDL_iPhoneKeyboardHide((SDL_Window*)screen->id);
@@ -475,6 +475,8 @@ void Mouse::ReleaseFocus() { SDL_ShowCursor(1); SDL_SetWindowGrab((SDL_Window*)s
 extern "C" void OSXGrabMouseFocus();
 extern "C" void OSXReleaseMouseFocus();
 extern "C" void OSXSetMousePosition(int x, int y);
+extern "C" void OSXClipboardSet(const char *v);
+extern "C" const char *OSXClipboardGet();
 
 const int Key::Escape     = 0x81;
 const int Key::Return     = '\r';
@@ -511,10 +513,10 @@ const int Key::F12        = 0xB0;
 const int Key::Home       = 0xB3;
 const int Key::End        = 0xB7;
 
-const char *Clipboard::Get() { return ""; }
-void Clipboard::Set(const char *s) {}
 void TouchDevice::OpenKeyboard() {}
 void TouchDevice::CloseKeyboard() {}
+void Clipboard::Set(const string &s) { OSXClipboardSet(s.c_str()); }
+string Clipboard::Get() { const char *v=OSXClipboardGet(); string ret=v; free((void*)v); return ret; }
 void Mouse::ReleaseFocus() { OSXReleaseMouseFocus(); app->grab_mode.Off(); screen->cursor_grabbed=0; }
 void Mouse::GrabFocus   () { OSXGrabMouseFocus();    app->grab_mode.On();  screen->cursor_grabbed=1;
     OSXSetMousePosition(screen->width/2, screen->height/2);
@@ -823,7 +825,7 @@ void Shell::showkeyboard(const vector<string>&) { TouchDevice::OpenKeyboard(); }
 
 void Shell::clipboard(const vector<string> &a) {
     if (a.empty()) INFO(Clipboard::Get());
-    else Clipboard::Set(Join(a, " ").c_str());
+    else Clipboard::Set(Join(a, " "));
 }
 
 void Shell::consolecolor(const vector<string>&) {
