@@ -2131,9 +2131,7 @@ void Font::Scale(int new_size) {
     fixed_width = RoundF(primary->fixed_width * scale);
 }
 
-template           void Font::Size<char> (const StringPiece     &text, Box *out, int maxwidth, int *lines_out);
-template           void Font::Size<short>(const String16Piece   &text, Box *out, int maxwidth, int *lines_out);
-template <class X> void Font::Size       (const StringPieceT<X> &text, Box *out, int maxwidth, int *lines_out) {
+template <class X> void Font::Size(const StringPieceT<X> &text, Box *out, int maxwidth, int *lines_out) {
     vector<Box> line_box;
     int lines = Draw(text, Box(0,0,maxwidth,0), &line_box, Flag::Clipped);
     if (lines_out) *lines_out = lines;
@@ -2141,8 +2139,7 @@ template <class X> void Font::Size       (const StringPieceT<X> &text, Box *out,
     for (int i=0; i<line_box.size(); i++) out->w = max(out->w, line_box[i].w);
 }
 
-template           void Font::Encode<short>(const String16Piece   &text, const Box &box, BoxArray *out, int draw_flag, int attr_id);
-template <class X> void Font::Encode       (const StringPieceT<X> &text, const Box &box, BoxArray *out, int draw_flag, int attr_id) {
+template <class X> void Font::Encode(const StringPieceT<X> &text, const Box &box, BoxArray *out, int draw_flag, int attr_id) {
     Flow flow(&box, this, out);
     if (draw_flag & Flag::AssignFlowX) flow.p.x = box.x;
     flow.layout.wrap_lines   = !(draw_flag & Flag::NoWrap) && box.w;
@@ -2162,14 +2159,20 @@ template <class X> void Font::Encode       (const StringPieceT<X> &text, const B
     flow.Complete();
 }
 
-template           int Font::Draw<short>(const String16Piece   &text, const Box &box, vector<Box> *lb, int draw_flag);
-template <class X> int Font::Draw       (const StringPieceT<X> &text, const Box &box, vector<Box> *lb, int draw_flag) {
+template <class X> int Font::Draw(const StringPieceT<X> &text, const Box &box, vector<Box> *lb, int draw_flag) {
     BoxArray out;
     Encode(text, box, &out, draw_flag);
     if (lb) *lb = out.line;
     if (!(draw_flag & Flag::Clipped)) out.Draw(box.TopLeft());
     return out.line.size();
 }
+
+template void Font::Size  <char> (const StringPiece   &text, Box *out, int maxwidth, int *lines_out);
+template void Font::Size  <short>(const String16Piece &text, Box *out, int maxwidth, int *lines_out);
+template void Font::Encode<char> (const StringPiece   &text, const Box &box, BoxArray *out, int draw_flag, int attr_id);
+template void Font::Encode<short>(const String16Piece &text, const Box &box, BoxArray *out, int draw_flag, int attr_id);
+template int  Font::Draw  <char> (const StringPiece   &text, const Box &box, vector<Box> *lb, int draw_flag);
+template int  Font::Draw  <short>(const String16Piece &text, const Box &box, vector<Box> *lb, int draw_flag);
 
 /* FreeType */
 

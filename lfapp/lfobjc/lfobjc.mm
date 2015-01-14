@@ -285,6 +285,18 @@ extern "C" void OSXSetMousePosition(int x, int y) {
                           convertRectToScreen:NSMakeRect(x, y, 0, 0)].origin));
 }
 
+extern "C" void OSXClipboardSet(const char *v) {
+    NSPasteboard *pasteboard = [NSPasteboard generalPasteboard];
+    [pasteboard clearContents];
+    [pasteboard declareTypes:[NSArray arrayWithObject:NSPasteboardTypeString] owner:nil];
+    [pasteboard setString:[[NSString alloc] initWithUTF8String:v] forType:NSPasteboardTypeString];
+}
+extern "C" const char *OSXClipboardGet() {
+    NSPasteboard *pasteboard = [NSPasteboard generalPasteboard];
+    NSString *v = [pasteboard stringForType:NSPasteboardTypeString];
+    return strdup([v UTF8String]);
+}
+
 extern "C" void OSXTriggerFrame() {
     [[(AppDelegate*)[NSApp delegate] view]
         performSelectorOnMainThread:@selector(setNeedsDisplay:) withObject:@YES waitUntilDone:NO];
