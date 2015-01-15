@@ -90,7 +90,7 @@ struct KeyRepeater {
 };
 #endif
 
-#if !defined(LFL_ANDROID) && !defined(LFL_IPHONE) && !defined(LFL_GLFWINPUT) && !defined(LFL_SDLINPUT) && !defined(LFL_QT) && !defined(LFL_OSXINPUT)
+#if !defined(LFL_ANDROIDINPUT) && !defined(LFL_IPHONEINPUT) && !defined(LFL_GLFWINPUT) && !defined(LFL_SDLINPUT) && !defined(LFL_QT) && !defined(LFL_OSXINPUT)
 const int Key::Escape     = -1;
 const int Key::Return     = -2;
 const int Key::Up         = -3;
@@ -134,7 +134,7 @@ void Mouse::GrabFocus() {}
 void Mouse::ReleaseFocus() {}
 #endif
 
-#ifdef LFL_ANDROID
+#ifdef LFL_ANDROIDINPUT
 struct AndroidInputModule : public Module {
     int Frame(unsigned clicks) { return android_input(clicks); }
 };
@@ -184,7 +184,7 @@ void Mouse::GrabFocus() {}
 void Mouse::ReleaseFocus() {}
 #endif
 
-#ifdef LFL_IPHONE
+#ifdef LFL_IPHONEINPUT
 extern "C" int iPhoneInput(unsigned clicks, unsigned *events);
 
 struct IPhoneInputModule : public Module {
@@ -530,9 +530,9 @@ int Input::Init() {
     impl = new GLFWInputModule((GLFWwindow*)screen->id);
 #elif defined(LFL_SDLINPUT)
     impl = new SDLInputModule();
-#elif defined(LFL_ANDROID)
+#elif defined(LFL_ANDROIDINPUT)
     impl = new AndroidInputModule();
-#elif defined(LFL_IPHONE)
+#elif defined(LFL_IPHONEINPUT)
     impl = new IPhoneInputModule();
 #endif
     return 0;

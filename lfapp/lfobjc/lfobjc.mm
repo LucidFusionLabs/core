@@ -232,7 +232,8 @@ static const char **osx_argv = 0;
     - (void)applicationDidFinishLaunching: (NSNotification *)aNotification {
         INFOf("OSXModule::Main argc=%d\n", osx_argc);
         // [[NSFileManager defaultManager] changeCurrentDirectoryPath: [[NSBundle mainBundle] resourcePath]];
-        OSXMain(osx_argc, osx_argv);
+        int ret = OSXMain(osx_argc, osx_argv);
+        if (ret) exit(ret);
         [self performSelector:@selector(postFinishLaunch) withObject:nil afterDelay:0.0];
     }
     - (void)postFinishLaunch {

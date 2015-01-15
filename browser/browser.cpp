@@ -27,7 +27,7 @@ DEFINE_string(url, "http://news.google.com/", "Url to open");
 DEFINE_int(width, 1040, "browser width");
 DEFINE_int(height, 768, "browser height");
 
-BindMap binds;
+BindMap *binds;
 
 struct JavaScriptConsole : public Console {
     SimpleBrowser *simple_browser;
@@ -44,21 +44,21 @@ struct MyBrowserWindow : public GUI {
     Box win, topbar, addressbar;
     Widget::Button back, forward, refresh;
     TextGUI address_box;
-    SimpleBrowser *simple_browser;
-    Browser *webkit_browser, *berkelium_browser;
+    BrowserInterface *browser=0;
+    SimpleBrowser *simple_browser=0;
+    BrowserInterface *webkit_browser=0, *berkelium_browser=0;
 
     MyBrowserWindow(LFL::Window *W) : GUI(W),
     menu_atlas1(Fonts::Get("MenuAtlas1", 0, Color::black)),
     menu_atlas2(Fonts::Get("MenuAtlas2", 0, Color::black)),
-    back   (this, &menu_atlas1->FindGlyph(20)->tex, 0, "", MouseController::CB([&](){ screen->browser_window->BackButton(); })),
-    forward(this, &menu_atlas1->FindGlyph(22)->tex, 0, "", MouseController::CB([&](){ screen->browser_window->ForwardButton(); })),
-    refresh(this, &menu_atlas2->FindGlyph(50)->tex, 0, "", MouseController::CB([&](){ screen->browser_window->RefreshButton(); })),
-    address_box(W, Fonts::Get(FLAGS_default_font, 12, Color::black)),
-    simple_browser(0), webkit_browser(0), berkelium_browser(0) {
+    back   (this, &menu_atlas1->FindGlyph(20)->tex, 0, "", MouseController::CB([&](){ browser->BackButton(); })),
+    forward(this, &menu_atlas1->FindGlyph(22)->tex, 0, "", MouseController::CB([&](){ browser->ForwardButton(); })),
+    refresh(this, &menu_atlas2->FindGlyph(50)->tex, 0, "", MouseController::CB([&](){ browser->RefreshButton(); })),
+    address_box(W, Fonts::Get(FLAGS_default_font, 12, Color::black)) {
         address_box.SetToggleKey(0, ToggleBool::OneShot);
         address_box.cmd_prefix.clear();
         address_box.deactivate_on_enter = true;
-        address_box.runcb = [&](const string &t){ screen->browser_window->Open(t); };
+        address_box.runcb = [&](const string &t){ browser->Open(t); };
         refresh.AddClickBox(addressbar, MouseController::CB([&](){ address_box.active = true; }));
     }
 
@@ -82,16 +82,16 @@ struct MyBrowserWindow : public GUI {
     void Open() {
         Layout();
 #if LFL_QT
-        if (!screen->browser_window) screen->browser_window = webkit_browser = CreateQTWebKitBrowser(new Asset());
+        if (!browser) browser = webkit_browser = CreateQTWebKitBrowser(new Asset());
 #endif
 #ifdef LFL_EAWEBKIT
-        if (!screen->browser_window) screen->browser_window = webkit_browser = CreateEAWebKitBrowser(new Asset());
+        if (!browser) browser = webkit_browser = CreateEAWebKitBrowser(new Asset());
 #endif
 #ifdef LFL_BERKELIUM
-        if (!screen->browser_window) screen->browser_window = berkelium_browser = CreateBerkeliumBrowser(new Asset());
+        if (!browser) browser = berkelium_browser = CreateBerkeliumBrowser(new Asset());
 #endif
-        if (!screen->browser_window) {
-            screen->browser_window = simple_browser = new SimpleBrowser(screen, 0, win);
+        if (!browser) {
+            browser = simple_browser = new SimpleBrowser(screen, 0, win);
             simple_browser->js_console = new JavaScriptConsole(screen, Fonts::Default(), simple_browser);
             simple_browser->InitLayers();
         }
@@ -104,11 +104,11 @@ struct MyBrowserWindow : public GUI {
         topbar.Draw();
         screen->gd->EnableLayering();
         if (!address_box.active) {
-            string url = screen->browser_window->GetURL();
+            string url = browser->GetURL();
             if (url != address_box.Text()) address_box.cmd_line.AssignText(url);
         }
         address_box.Draw(addressbar);
-        screen->browser_window->Draw(&win);
+        browser->Draw(&win);
         if (simple_browser) {
             simple_browser->DrawScrollbar();
             if (simple_browser->js_console) simple_browser->js_console->Draw();
@@ -135,15 +135,17 @@ void MyWindowDefaults(LFL::Window *W) {
     W->width = FLAGS_width;
     W->height = FLAGS_height;
     W->caption = "Browser";
-    W->binds = &binds;
-    if (app->opened) W->user1 = new MyBrowserWindow(W);
+    W->binds = binds;
+    if (app->initialized) W->user1 = new MyBrowserWindow(W);
 }
 
 extern "C" int main(int argc, const char *argv[]) {
     
     app->frame_cb = Frame;
-    app->logfilename = StrCat(dldir(), "browser.txt");
+    app->logfilename = StrCat(LFAppDownloadDir(), "browser.txt");
+    binds = new BindMap();
     MyWindowDefaults(screen);
+    FLAGS_lfapp_video = FLAGS_lfapp_input = FLAGS_lfapp_network = 1;
     FLAGS_font_engine = "freetype";
     FLAGS_default_font = "DejaVuSans.ttf";
     FLAGS_default_font_family = "sans-serif";
@@ -168,13 +170,13 @@ extern "C" int main(int argc, const char *argv[]) {
         Fonts::InsertFreetype("DejaVuSerifCondensed-Bold.ttf", "fantasy",    size, Color::white, 0);
     }
 
-    binds.push_back(Bind('6', Key::Modifier::Cmd, Bind::CB(bind([&](){ screen->console->Toggle(); }))));
-    binds.push_back(Bind('7', Key::Modifier::Cmd, Bind::CB(bind(&MyJavaScriptConsole))));
+    binds->Add(Bind('6', Key::Modifier::Cmd, Bind::CB(bind([&](){ screen->console->Toggle(); }))));
+    binds->Add(Bind('7', Key::Modifier::Cmd, Bind::CB(bind(&MyJavaScriptConsole))));
 
     screen->user1 = new MyBrowserWindow(screen);
     MyBrowserWindow *bw = (MyBrowserWindow*)screen->user1;
     bw->Open();
-    if (screen->browser_window && !FLAGS_url.empty()) screen->browser_window->Open(FLAGS_url);
+    if (bw->browser && !FLAGS_url.empty()) bw->browser->Open(FLAGS_url);
 
     return app->Main();
 }

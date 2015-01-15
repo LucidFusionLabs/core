@@ -706,6 +706,7 @@ struct Dialog : public GUI {
     Dialog(float w, float h) : GUI(screen), font(Fonts::Get(FLAGS_default_font, 14, Color::white)) {
         screen->dialogs.push_back(this);
         box = screen->Box().center(screen->Box(w, h));
+        active = true;
         Layout();
     }
     virtual ~Dialog() {}

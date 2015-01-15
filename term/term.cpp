@@ -191,6 +191,7 @@ extern "C" int main(int argc, const char *argv[]) {
 
     app->logfilename = StrCat(LFAppDownloadDir(), "term.txt");
     app->frame_cb = Frame;
+    binds = new BindMap();
     MyWindowDefaults(screen);
     FLAGS_lfapp_wait_forever = true;
     FLAGS_target_fps = FLAGS_normal_fps;
@@ -215,7 +216,6 @@ extern "C" int main(int argc, const char *argv[]) {
     app->shell.command.push_back(Shell::Command("scroll_region", bind(&MyScrollRegionCmd, _1)));
     app->shell.command.push_back(Shell::Command("term_debug", bind(&MyTermDebugCmd, _1)));
 
-    screen->binds = binds = new BindMap();
     binds->Add(Bind('=', Key::Modifier::Cmd, Bind::CB(bind(&MyIncreaseFontCmd, vector<string>()))));
     binds->Add(Bind('-', Key::Modifier::Cmd, Bind::CB(bind(&MyDecreaseFontCmd, vector<string>()))));
     binds->Add(Bind('n', Key::Modifier::Cmd, Bind::CB(bind(&MyNewWindow,       vector<string>()))));

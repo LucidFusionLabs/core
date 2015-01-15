@@ -76,7 +76,7 @@ LFL_IMPORT extern int OPENCV_FPS;
 
 struct OpenCvCamera : public Module {
     Thread thread;
-    Mutex lock;
+    mutex lock;
     struct Stream { 
         CvCapture *capture=0;
         RingBuf *frames=0;
@@ -172,7 +172,7 @@ struct OpenCvCamera : public Module {
 #ifdef LFL_FFMPEG_CAMERA
 struct FFmpegCamera : public Module {
     Thread thread;
-    Mutex lock;
+    mutex lock;
 
     struct Stream { 
         AVFormatContext *fctx;
@@ -279,7 +279,7 @@ struct FFmpegCamera : public Module {
 #ifdef LFL_DSVL_CAMERA
 struct DsvlCamera : public Module {
     Thread thread;
-    Mutex lock;
+    mutex lock;
     struct Stream { 
         DSVL_VideoSource *vs=0;
         RingBuf *frames=0;
@@ -455,7 +455,7 @@ struct DirectShowCamera : public Module {
 
     RingBuf *frames;
     int next;
-    Mutex lock;
+    mutex lock;
     bool invert;
 
     Camera *camera;
@@ -710,7 +710,7 @@ struct DirectShowCamera : public Module {
 struct QuickTimeCamera : public Module {
     Thread thread;
     VideoResampler conv;
-    Mutex lock;
+    mutex lock;
     struct Stream {
         SeqGrabComponent grabber;
         SGChannel channel;
@@ -853,7 +853,7 @@ struct QuickTimeCamera : public Module {
 
 #ifdef LFL_AVCAPTURE_CAMERA
 struct AVCaptureCamera : public Module {
-    Mutex lock; 
+    mutex lock; 
     struct Stream {
         RingBuf *frames=0;
         int next=0;
@@ -910,7 +910,7 @@ extern "C" void UpdateFrame(const char *imageData, int width, int height, int im
 
 #ifdef LFL_QTKIT_CAMERA
 struct QTKitCamera : public Module {
-    Mutex lock; 
+    mutex lock; 
     struct Stream {
         RingBuf *frames=0;
         int next=0;

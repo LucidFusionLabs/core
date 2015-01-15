@@ -269,7 +269,7 @@ extern "C" int main(int argc, const char *argv[]) {
 
     screen->caption = "senators";
     app->frame_cb = Frame;
-    app->logfilename = StrCat(dldir(), "senators.txt");
+    app->logfilename = StrCat(LFAppDownloadDir(), "senators.txt");
     FLAGS_lfapp_audio = FLAGS_lfapp_video = FLAGS_lfapp_input = FLAGS_lfapp_camera = 0;
     FLAGS_lfapp_network = 1;
 #ifdef _WIN32

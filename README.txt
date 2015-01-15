@@ -84,7 +84,7 @@ BUILDING Linux
         touch crawler/crawler.pb.h
         touch crawler/crawler.pb.cc
         cmake .
-        cd fv && make
+        cd fv && make -j4
 
         ./pkg/lin.sh
         export LD_LIBRARY_PATH=./FusionViewer
@@ -121,7 +121,7 @@ BUILDING Mac
         touch crawler/crawler.pb.h
         touch crawler/crawler.pb.cc
         cmake .
-        make
+        make -j4
 
         cd lfl/fv
         ./pkg/macprep.sh
@@ -137,7 +137,7 @@ BUILDING iPhone Device
 
         cd lfl
         cmake -D LFL_IPHONE=1 .
-        make
+        make -j4
 
         cd fv
         cp -R assets fv-iphone
@@ -161,7 +161,7 @@ BUILDING iPhone Simulator
 
         cd lfl
         cmake -D LFL_IPHONESIM=1 .
-        make
+        make -j4
 
         cd fv
         cp -R assets fv-iphone
@@ -197,7 +197,7 @@ BUILDING Android
         cd lfl
         ** Modify ANDROIDROOT in CMakeLists.txt
         cmake -D LFL_ANDROID=1 .
-        make
+        make -j4
 
         cd lfl/fv/fv-android/jni
         ../../pkg/androidprebuild.sh

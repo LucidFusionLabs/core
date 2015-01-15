@@ -68,7 +68,7 @@ int MasterServer(int argc, const char **argv) {
 using namespace LFL;
 
 extern "C" int main(int argc, const char **argv) {
-    app->logfilename = StrCat(dldir(), "masterserv.txt");
+    app->logfilename = StrCat(LFAppDownloadDir(), "masterserv.txt");
     static const char *service_name = "LFL Master Server";
 
     FLAGS_lfapp_camera = FLAGS_lfapp_audio = FLAGS_lfapp_video = FLAGS_lfapp_input = 0;

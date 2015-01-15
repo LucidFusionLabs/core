@@ -74,10 +74,9 @@ using namespace LFL;
 
 extern "C" int main(int argc, const char *argv[]) {
 
-    app->logfilename = StrCat(dldir(), "crawler.txt");
+    app->logfilename = StrCat(LFAppDownloadDir(), "crawler.txt");
     app->frame_cb = Frame;
     screen->caption = "crawler";
-    FLAGS_lfapp_audio = FLAGS_lfapp_video = FLAGS_lfapp_input = FLAGS_lfapp_camera = 0;
     FLAGS_lfapp_network = 1;
 #ifdef _WIN32
     FLAGS_open_console = 1;

@@ -90,7 +90,6 @@ DEFINE_int   (UseTransition,         1,           "Use transition probabilities 
 DEFINE_string(UttPathsInFile,        "",          "Viterbi paths input file");
 DEFINE_string(UttPathsOutFile,       "",          "Viterbi paths output file");
 
-BindMap binds;
 AssetMap asset;
 SoundAssetMap soundasset;
 
@@ -911,7 +910,7 @@ using namespace LFL;
 
 extern "C" int main(int argc, const char *argv[]) {
 
-    app->logfilename = StrCat(dldir(), "trainer.txt");
+    app->logfilename = StrCat(LFAppDownloadDir(), "trainer.txt");
     screen->caption = "trainer";
     if (app->Create(argc, argv, __FILE__)) { app->Free(); return -1; }
     INFO("LFL_PHONES=", LFL_PHONES);
@@ -931,13 +930,13 @@ extern "C" int main(int argc, const char *argv[]) {
     soundasset.Load();
     app->shell.soundassets = &soundasset;
 
-    binds.push_back(Bind(Key::Backquote, Bind::CB(bind([&](){ screen->console->Toggle(); }))));
-    binds.push_back(Bind(Key::Escape,    Bind::CB(bind(&Shell::quit,   &app->shell, vector<string>()))));
-    binds.push_back(Bind(Key::F5,        Bind::CB(bind(&Shell::play,   &app->shell, vector<string>(1, "snap")))));
-    binds.push_back(Bind(Key::F6,        Bind::CB(bind(&Shell::snap,   &app->shell, vector<string>(1, "snap")))));
-    binds.push_back(Bind(Key::F7,        Bind::CB(bind(&MyResynth,                  vector<string>(1, "snap")))));
-    binds.push_back(Bind(Key::F8,        Bind::CB(bind(&Shell::sinth,  &app->shell, vector<string>(1, "440" )))));
-    screen->binds = &binds;
+    BindMap *binds = screen->binds = new BindMap();
+    binds->Add(Bind(Key::Backquote, Bind::CB(bind([&](){ screen->console->Toggle(); }))));
+    binds->Add(Bind(Key::Escape,    Bind::CB(bind(&Shell::quit,   &app->shell, vector<string>()))));
+    binds->Add(Bind(Key::F5,        Bind::CB(bind(&Shell::play,   &app->shell, vector<string>(1, "snap")))));
+    binds->Add(Bind(Key::F6,        Bind::CB(bind(&Shell::snap,   &app->shell, vector<string>(1, "snap")))));
+    binds->Add(Bind(Key::F7,        Bind::CB(bind(&MyResynth,                  vector<string>(1, "snap")))));
+    binds->Add(Bind(Key::F8,        Bind::CB(bind(&Shell::sinth,  &app->shell, vector<string>(1, "440" )))));
 
     string wavdir=FLAGS_homedir, featdir=FLAGS_homedir, modeldir=FLAGS_homedir, dtdir=FLAGS_homedir;
     wavdir += "/" + FLAGS_WavDir + "/";

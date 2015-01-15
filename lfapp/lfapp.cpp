@@ -141,7 +141,6 @@ DEFINE_int(sample_secs, 3, "Seconds of RingBuf audio");
 DEFINE_int(chans_in, -1, "Audio input channels");
 DEFINE_int(chans_out, -1, "Audio output channels");
 DEFINE_int(target_fps, 100, "Max frames per second");
-DEFINE_int(min_fps, 1, "Min frames per second");
 
 Printable::Printable(const vector<string> &x) : string(StrCat("{", Vec<string>::Str(&x[0], x.size()), "}")) {}
 Printable::Printable(const vector<double> &x) : string(StrCat("{", Vec<double>::Str(&x[0], x.size()), "}")) {}
@@ -559,6 +558,8 @@ template <class X> int lengthchar(const X *text, int (*ischar)(int), int len) {
     for (p=text; *p && (len ? p-text<len : 1); p++) if (!ischar(*p)) break;
     return p-text;
 }
+template int lengthchar(const char  *, int (*)(int), int);
+template int lengthchar(const short *, int (*)(int), int);
 
 template <class X> int rlengthchar(const X *text, int (*ischar)(int), int len) {
     if (!len) return 0;
@@ -566,6 +567,8 @@ template <class X> int rlengthchar(const X *text, int (*ischar)(int), int len) {
     for (p=text; text-p<len; p--) if (!ischar(*p)) break;
     return text-p;
 }
+template int rlengthchar(const char  *, int (*)(int), int);
+template int rlengthchar(const short *, int (*)(int), int);
 
 string strip(const char *s, int (*stripchar1)(int), int (*stripchar2)(int)) {
     string ret;
@@ -1796,22 +1799,22 @@ bool FlagMap::Set(const string &k, const string &v) {
 }
 
 string FlagMap::Match(const string &key, const char *source_filename) const {
-    vector<int> keyv; vector<string> text;
-    double mindist = INFINITY; string mindistflag = "";
-    for (int j=0, l=key.size(); j<l; j++) keyv.push_back(key[j]);
-    if (source_filename) {
-        FileFlags::const_iterator i = fileflags.find(source_filename);
-        if (i != fileflags.end())
-            for (vector<Flag*>::const_iterator j = i->second.begin(); j != i->second.end(); ++j)
-                text.push_back((*j)->name);
-    } else {
-        for (AllFlags::const_iterator i = flagmap.begin(); i != flagmap.end(); i++) text.push_back(i->first);
+    vector<int> keyv(key.size());
+    for (int j=0, l=key.size(); j<l; j++) keyv[0] = key[j];
+
+    vector<string> db;
+    for (AllFlags::const_iterator i = flagmap.begin(); i != flagmap.end(); i++) {
+        if (source_filename && strcmp(source_filename, i->second->file)) continue;
+        db.push_back(i->first);
     }
-    for (int i = 0; i < text.size(); i++) {
-        const string &t = text[i];
-        vector<int> textiv; double dist;
-        for (int j=0, l=t.size(); j<l; j++) textiv.push_back(t[j]);
-        if ((dist = Levenshtein(keyv, textiv)) < mindist) { mindist = dist; mindistflag = t; }
+
+    string mindistflag = "";
+    double dist, mindist = INFINITY;
+    for (int i = 0; i < db.size(); i++) {
+        const string &t = db[i];
+        vector<int> dbiv(t.size());
+        for (int j=0, l=t.size(); j<l; j++) dbiv[j] = t[j];
+        if ((dist = Levenshtein(keyv, dbiv)) < mindist) { mindist = dist; mindistflag = t; }
     }
     return mindistflag;
 }
@@ -1829,8 +1832,8 @@ int FlagMap::getopt(int argc, const char **argv, const char *source_filename) {
             if (PrefixMatch(key, "psn_")) continue;
 #endif
             INFO("unknown flag: ", key);
-            string nearest = Match(key, source_filename);
-            INFO("Did you mean -", nearest, " ?");
+            string nearest1 = Match(key), nearest2 = Match(key, source_filename);
+            INFO("Did you mean -", nearest2.size() ? StrCat(nearest2, " or -") : "", nearest1, " ?");
             INFO("usage: ", argv[0], " -k v");
             Print(source_filename);
             return -1;
@@ -1840,15 +1843,11 @@ int FlagMap::getopt(int argc, const char **argv, const char *source_filename) {
 }
 
 void FlagMap::Print(const char *source_filename) const {
-    if (source_filename) {
-        FileFlags::const_iterator i = fileflags.find(source_filename);
-        if (i != fileflags.end())
-            for (vector<Flag*>::const_iterator j = i->second.begin(); j != i->second.end(); ++j)
-                INFO((*j)->ToString());
-        INFO("fullhelp : Display full help"); 
-    } else {
-        for (AllFlags::const_iterator i = flagmap.begin(); i != flagmap.end(); i++) INFO(i->second->ToString());
+    for (AllFlags::const_iterator i = flagmap.begin(); i != flagmap.end(); i++) {
+        if (source_filename && strcmp(source_filename, i->second->file)) continue;
+        INFO(i->second->ToString());
     }
+    if (source_filename) INFO("fullhelp : Display full help"); 
 }
 
 void Application::Log(int level, const char *file, int line, const string &message) {

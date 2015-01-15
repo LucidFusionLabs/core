@@ -346,10 +346,10 @@ using namespace LFL;
 
 extern "C" {
 int main(int argc, const char **argv) {
-    app->logfilename = StrCat(dldir(), "fs.txt");
+    app->logfilename = StrCat(LFAppDownloadDir(), "fs.txt");
     static const char *service_name = "LFL Fusion Server";
 
-    FLAGS_lfapp_camera = FLAGS_lfapp_audio = FLAGS_lfapp_video = FLAGS_lfapp_input = 0;
+    FLAGS_lfapp_network = 1;
 #ifdef _WIN32
     if (argc>1) open_console = 1;
 #endif

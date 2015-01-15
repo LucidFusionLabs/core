@@ -39,7 +39,6 @@ DEFINE_string(quote_clear_response_text, "", "Clear response text from quote fil
 
 struct Watcher;
 
-BindMap binds;
 vector<Crawler*> crawlers;
 vector<Watcher*> watchers;
 
@@ -148,7 +147,7 @@ using namespace LFL;
 extern "C" int main(int argc, const char *argv[]) {
 
     app->frame_cb = Frame;
-    app->logfilename = StrCat(dldir(), "market.txt");
+    app->logfilename = StrCat(LFAppDownloadDir(), "market.txt");
     screen->caption = "Market";
     screen->width = 640;
     screen->height = 480;
@@ -160,9 +159,9 @@ extern "C" int main(int argc, const char *argv[]) {
 
     if (app->Init()) { app->Free(); return -1; }
 
-    binds.push_back(Bind(Key::Backquote, Bind::CB(bind([&](){ screen->console->Toggle(); }))));
-    binds.push_back(Bind(Key::Escape,    Bind::CB(bind(&Shell::quit, &app->shell, vector<string>()))));
-    screen->binds = &binds;
+    BindMap *binds = screen->binds = new BindMap();
+    binds->Add(Bind(Key::Backquote, Bind::CB(bind([&](){ screen->console->Toggle(); }))));
+    binds->Add(Bind(Key::Escape,    Bind::CB(bind(&Shell::quit, &app->shell, vector<string>()))));
 
     if (!FLAGS_quote_dump.empty()) {
         ProtoFile pf(FLAGS_quote_dump.c_str()); Quote entry;

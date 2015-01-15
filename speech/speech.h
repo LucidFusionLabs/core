@@ -387,10 +387,12 @@ struct PhoneticSegmentationGUI : public GUI {
     int sound_asset_len;
 
     PhoneticSegmentationGUI(LFL::Window *w, FeatureSink::DecodedWords &decoded, int len, const string &AN) : GUI(w), sound_asset_name(AN), sound_asset_len(len) {
+        Activate();
         for (int i=0, l=decoded.size(); i<l; i++)
             segments.push_back(Segment(decoded[i].text, decoded[i].beg, decoded[i].end));
     }
     PhoneticSegmentationGUI(LFL::Window *w, AcousticModel::Compiled *model, Matrix *decoded, const string &AN) : GUI(w), sound_asset_name(AN), sound_asset_len(decoded ? decoded->M : 0) {
+        Activate();
         for (Decoder::PhoneIter iter(model, decoded); !iter.done(); iter.next()) {
             if (!iter.phone) continue;
             segments.push_back(Segment(StrCat("phone: ", Phoneme::name(iter.phone)), iter.beg, iter.end));
@@ -411,8 +413,8 @@ struct PhoneticSegmentationGUI : public GUI {
             verts.push_back(!flip ? v2(we, -box.h) : v2(box.w, we));
 
             segments[i].win = !flip ? Box(wb, -box.h, (float)len/total*box.w, box.h) : Box(0, wb, box.w, (float)len/total*box.h);
-            mouse.AddHoverBox(segments[i].win, Callback([&,i](){ segments[i].hover = !segments[i].hover; })); 
-            mouse.AddClickBox(segments[i].win, Callback([&,beg,len](){ Play(beg, len); }));
+            AddHoverBox(segments[i].win, Callback([&,i](){ segments[i].hover = !segments[i].hover; })); 
+            AddClickBox(segments[i].win, Callback([&,beg,len](){ Play(beg, len); }));
         }
 
         if (verts.size()) geometry = unique_ptr<Geometry>
@@ -421,7 +423,6 @@ struct PhoneticSegmentationGUI : public GUI {
 
     void Frame(Box win, Font *font, bool flip=false) {
         box = win;
-        mouse.Activate();
         if (!geometry.get() && segments.size()) Layout(flip);
 
         if (geometry.get()) {

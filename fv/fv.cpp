@@ -41,7 +41,6 @@ DEFINE_bool(camera_effects, true, "Render camera effects");
 DEFINE_int(camera_orientation, 3, "Camera orientation");
 DEFINE_string(speech_client, "auto", "Speech client send [manual, auto, flood]");
 
-BindMap binds;
 AssetMap asset;
 SoundAssetMap soundasset;
 
@@ -60,8 +59,7 @@ void ReloadAED(void *aed);
 FeatureSink *serverSink = new SpeechDecodeClient(ReloadAED, &AED);
 string speech_client_last;
 
-void SetMyTab(int a) { myTab = a; }
-
+void SetMyTab(int a);
 void ReloadAED(void *aed) { 
     AcousticEventDetector **AED = (AcousticEventDetector**)aed;
     delete *AED;
@@ -381,8 +379,8 @@ struct AudioGUI : public GUI {
 
         last_audio_count = app->audio.Out.size();
         if (0 && skip && !(flag & FrameFlag::DontSkip)) {
-            if (segments) segments->mouse.Activate();
-            mouse.Activate();
+            if (segments) segments->Activate();
+            Activate();
             return -1;
         }
 
@@ -470,7 +468,7 @@ int VideoFrame(LFL::Window *W, unsigned clocks, unsigned samples, bool cam_sampl
 
 int RoomModelFrame(LFL::Window *W, unsigned clicks, unsigned samples, bool cam_sample, int flag) {
     screen->cam->Look();
-    scene.Get("arrow")->YawRight((double)clicks/500);	
+    scene.Get("arrow")->YawRight(clicks);	
     scene.Draw(&asset.vec);
     return 0;
 }
@@ -541,10 +539,10 @@ struct FVGUI : public GUI {
     FVGUI(Window *W) : GUI(W), font(Fonts::Get(FLAGS_default_font, 12, Color::grey70)),
     tab1(this, 0, font, "audio gui",  MouseController::CB(bind(&SetMyTab, 1))),
     tab2(this, 0, font, "video gui",  MouseController::CB(bind(&SetMyTab, 2))), 
-    tab3(this, 0, font, "room model", MouseController::CB(bind(&SetMyTab, 3))) {}
+    tab3(this, 0, font, "room model", MouseController::CB(bind(&SetMyTab, 3))) { Activate(); }
 
     int Frame(LFL::Window *W, unsigned clicks, unsigned samples, bool cam_sample, int flag) {
-#if !defined(LFL_IPHONE) && !defined(LFL_ANDROID)
+#if defined(LFL_IPHONE) || defined(LFL_ANDROID)
         int orientation = NativeWindowOrientation();
         bool orientation_fs = orientation == 5 || orientation == 4 || orientation == 3;
         bool fullscreen = myTab == 4;
@@ -572,6 +570,12 @@ struct FVGUI : public GUI {
     }
 } *fv_gui;
 
+void SetMyTab(int a) { 
+    myTab = a; 
+    audio_gui     ->active = myTab == 1;
+    fullscreen_gui->active = myTab == 4;
+}
+
 int Frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample, int flag) {
 
     if (AED) AED->update(mic_samples);
@@ -589,11 +593,11 @@ using namespace LFL;
 extern "C" int main(int argc, const char *argv[]) {
 
 	app->frame_cb = Frame;
-	app->logfilename = StrCat(dldir(), "fv.txt");
+	app->logfilename = StrCat(LFAppDownloadDir(), "fv.txt");
 	screen->width = 640;
 	screen->height = 480;
 	screen->caption = "fusion viewer";
-	FLAGS_lfapp_camera = true;
+	FLAGS_lfapp_video = FLAGS_lfapp_audio = FLAGS_lfapp_input = FLAGS_lfapp_network = FLAGS_lfapp_camera = true;
 
 	if (app->Create(argc, argv, __FILE__)) { app->Free(); return -1; }
 	if (app->Init()) { app->Free(); return -1; }
@@ -640,20 +644,20 @@ extern "C" int main(int argc, const char *argv[]) {
 	app->shell.command.push_back(Shell::Command("server", bind(&MyServer, _1)));
 	app->shell.command.push_back(Shell::Command("startcamera", bind(&MyStartCamera, _1)));
 
-	//  binds.push_back(Bind(key,            callback,         arg));
-	binds.push_back(Bind(Key::Backquote, Bind::CB(bind([&](){ screen->console->Toggle(); }))));
-	binds.push_back(Bind(Key::Quote,     Bind::CB(bind([&](){ screen->console->Toggle(); }))));
-    binds.push_back(Bind(Key::Escape,    Bind::CB(bind(&Shell::quit,            &app->shell, vector<string>()))));
-    binds.push_back(Bind(Key::Return,    Bind::CB(bind(&Shell::grabmode,        &app->shell, vector<string>()))));
-    binds.push_back(Bind(Key::LeftShift, Bind::TimeCB(bind(&Entity::RollLeft,   screen->cam, _1))));
-    binds.push_back(Bind(Key::Space,     Bind::TimeCB(bind(&Entity::RollRight,  screen->cam, _1))));
-    binds.push_back(Bind('w',            Bind::TimeCB(bind(&Entity::MoveFwd,    screen->cam, _1))));
-    binds.push_back(Bind('s',            Bind::TimeCB(bind(&Entity::MoveRev,    screen->cam, _1))));
-    binds.push_back(Bind('a',            Bind::TimeCB(bind(&Entity::MoveLeft,   screen->cam, _1))));
-    binds.push_back(Bind('d',            Bind::TimeCB(bind(&Entity::MoveRight,  screen->cam, _1))));
-    binds.push_back(Bind('q',            Bind::TimeCB(bind(&Entity::MoveDown,   screen->cam, _1))));
-    binds.push_back(Bind('e',            Bind::TimeCB(bind(&Entity::MoveUp,     screen->cam, _1))));
-    screen->binds = &binds;
+    BindMap *binds = screen->binds = new BindMap();
+	// binds->Add(Bind(key,            callback,         arg));
+	binds->Add(Bind(Key::Backquote, Bind::CB(bind([&](){ screen->console->Toggle(); }))));
+	binds->Add(Bind(Key::Quote,     Bind::CB(bind([&](){ screen->console->Toggle(); }))));
+    binds->Add(Bind(Key::Escape,    Bind::CB(bind(&Shell::quit,            &app->shell, vector<string>()))));
+    binds->Add(Bind(Key::Return,    Bind::CB(bind(&Shell::grabmode,        &app->shell, vector<string>()))));
+    binds->Add(Bind(Key::LeftShift, Bind::TimeCB(bind(&Entity::RollLeft,   screen->cam, _1))));
+    binds->Add(Bind(Key::Space,     Bind::TimeCB(bind(&Entity::RollRight,  screen->cam, _1))));
+    binds->Add(Bind('w',            Bind::TimeCB(bind(&Entity::MoveFwd,    screen->cam, _1))));
+    binds->Add(Bind('s',            Bind::TimeCB(bind(&Entity::MoveRev,    screen->cam, _1))));
+    binds->Add(Bind('a',            Bind::TimeCB(bind(&Entity::MoveLeft,   screen->cam, _1))));
+    binds->Add(Bind('d',            Bind::TimeCB(bind(&Entity::MoveRight,  screen->cam, _1))));
+    binds->Add(Bind('q',            Bind::TimeCB(bind(&Entity::MoveDown,   screen->cam, _1))));
+    binds->Add(Bind('e',            Bind::TimeCB(bind(&Entity::MoveUp,     screen->cam, _1))));
 
 #if !defined(LFL_IPHONE) && !defined(LFL_ANDROID)
     HTTPServer *httpd = new HTTPServer(4040, false);
@@ -702,6 +706,7 @@ extern "C" int main(int argc, const char *argv[]) {
     audio_gui = new AudioGUI(screen);
     fv_gui = new FVGUI(screen);
     fullscreen_gui = new FullscreenGUI(screen);
+    SetMyTab(1);
 
     return app->Main();
 }

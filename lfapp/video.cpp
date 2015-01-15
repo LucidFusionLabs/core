@@ -930,17 +930,17 @@ void Window::Close(Window *W) {}
 void Window::MakeCurrent(Window *W) {}
 #endif // LFL_HEADLESS
 
-#ifdef LFL_ANDROID
+#ifdef LFL_ANDROIDVIDEO
 struct AndroidVideoModule : public Module {
     int Init() {
         INFO("AndroidVideoModule::Init()");
-        if (android_video_init(FLAGS_request_gles_version)) return -1;
+        if (AndroidVideoInit(FLAGS_request_gles_version)) return -1;
         return 0;
     }
 };
 #endif
 
-#ifdef LFL_IPHONE
+#ifdef LFL_IPHONEVIDEO
 extern "C" void iPhoneVideoSwap();
 struct IPhoneVideoModule : public Module {
     int Init() {
@@ -1114,9 +1114,9 @@ int Video::Init() {
     impl = new GLFWVideoModule();
 #elif defined(LFL_SDLVIDEO)
     impl = new SDLVideoModule();
-#elif defined(LFL_ANDROID)
+#elif defined(LFL_ANDROIDVIDEO)
     impl = new AndroidVideoModule();
-#elif defined(LFL_IPHONE)
+#elif defined(LFL_IPHONEVIDEO)
     impl = new IPhoneVideoModule();
 #elif defined(LFL_OSXVIDEO)
     impl = new OSXVideoModule();
@@ -1202,13 +1202,13 @@ int Video::Flush() {
 #else
     glFlush();
 #endif
-#if defined(LFL_ANDROID)
+#if defined(LFL_ANDROIDVIDEO)
     AndroidVideoSwap();
 #elif defined(LFL_GLFWVIDEO)
     glfwSwapBuffers((GLFWwindow*)screen->id);
 #elif defined(LFL_SDLVIDEO)
     SDL_GL_SwapWindow((SDL_Window*)screen->id);
-#elif defined(LFL_IPHONE)
+#elif defined(LFL_IPHONEVIDEO)
     iPhoneVideoSwap();
 #elif defined(LFL_OSXVIDEO)
     OSXVideoSwap();
