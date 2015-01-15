@@ -25,7 +25,6 @@
 namespace LFL {
 DEFINE_FLAG(sniff_device, int, 0, "Network interface index");
 
-BindMap binds;
 AssetMap asset;
 SoundAssetMap soundasset;
 
@@ -71,11 +70,12 @@ using namespace LFL;
 extern "C" int main(int argc, const char *argv[]) {
 
     app->frame_cb = Frame;
-    app->logfilename = StrCat(dldir(), "cb.txt");
+    app->logfilename = StrCat(LFAppDownloadDir(), "cb.txt");
     screen->width = 420;
     screen->height = 380;
     screen->caption = "CrystalBawl";
-    FLAGS_lfapp_multithreaded = true;
+    FLAGS_lfapp_video = FLAGS_lfapp_input = FLAGS_lfapp_network = 1;
+    FLAGS_threadpool_size = 1;
 
     if (app->Create(argc, argv, __FILE__)) { app->Free(); return -1; }
     if (app->Init()) { app->Free(); return -1; }
@@ -95,20 +95,20 @@ extern "C" int main(int argc, const char *argv[]) {
     soundasset.Load();
     app->shell.soundassets = &soundasset;
 
-//  binds.push_back(Bind(key,            callback));
-    binds.push_back(Bind(Key::Backquote, Bind::CB(bind([&](){ screen->console->Toggle(); }))));
-    binds.push_back(Bind(Key::Quote,     Bind::CB(bind([&](){ screen->console->Toggle(); }))));
-    binds.push_back(Bind(Key::Escape,    Bind::CB(bind(&Shell::quit,            &app->shell, vector<string>()))));
-    binds.push_back(Bind(Key::Return,    Bind::CB(bind(&Shell::grabmode,        &app->shell, vector<string>()))));
-    binds.push_back(Bind(Key::LeftShift, Bind::TimeCB(bind(&Entity::RollLeft,   screen->cam, _1))));
-    binds.push_back(Bind(Key::Space,     Bind::TimeCB(bind(&Entity::RollRight,  screen->cam, _1))));
-    binds.push_back(Bind('w',            Bind::TimeCB(bind(&Entity::MoveFwd,    screen->cam, _1))));
-    binds.push_back(Bind('s',            Bind::TimeCB(bind(&Entity::MoveRev,    screen->cam, _1))));
-    binds.push_back(Bind('a',            Bind::TimeCB(bind(&Entity::MoveLeft,   screen->cam, _1))));
-    binds.push_back(Bind('d',            Bind::TimeCB(bind(&Entity::MoveRight,  screen->cam, _1))));
-    binds.push_back(Bind('q',            Bind::TimeCB(bind(&Entity::MoveDown,   screen->cam, _1))));
-    binds.push_back(Bind('e',            Bind::TimeCB(bind(&Entity::MoveUp,     screen->cam, _1))));
-    screen->binds = &binds;
+    BindMap *binds = screen->binds = new BindMap();
+//  binds->Add(Bind(key,            callback));
+    binds->Add(Bind(Key::Backquote, Bind::CB(bind([&](){ screen->console->Toggle(); }))));
+    binds->Add(Bind(Key::Quote,     Bind::CB(bind([&](){ screen->console->Toggle(); }))));
+    binds->Add(Bind(Key::Escape,    Bind::CB(bind(&Shell::quit,            &app->shell, vector<string>()))));
+    binds->Add(Bind(Key::Return,    Bind::CB(bind(&Shell::grabmode,        &app->shell, vector<string>()))));
+    binds->Add(Bind(Key::LeftShift, Bind::TimeCB(bind(&Entity::RollLeft,   screen->cam, _1))));
+    binds->Add(Bind(Key::Space,     Bind::TimeCB(bind(&Entity::RollRight,  screen->cam, _1))));
+    binds->Add(Bind('w',            Bind::TimeCB(bind(&Entity::MoveFwd,    screen->cam, _1))));
+    binds->Add(Bind('s',            Bind::TimeCB(bind(&Entity::MoveRev,    screen->cam, _1))));
+    binds->Add(Bind('a',            Bind::TimeCB(bind(&Entity::MoveLeft,   screen->cam, _1))));
+    binds->Add(Bind('d',            Bind::TimeCB(bind(&Entity::MoveRight,  screen->cam, _1))));
+    binds->Add(Bind('q',            Bind::TimeCB(bind(&Entity::MoveDown,   screen->cam, _1))));
+    binds->Add(Bind('e',            Bind::TimeCB(bind(&Entity::MoveUp,     screen->cam, _1))));
 
     scene.Add(new Entity("axis",  asset("axis")));
     scene.Add(new Entity("grid",  asset("grid")));

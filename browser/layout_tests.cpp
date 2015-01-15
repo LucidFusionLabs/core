@@ -81,10 +81,11 @@ int Frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample
 extern "C" int main(int argc, const char *argv[]) {
     
     app->frame_cb = Frame;
-    app->logfilename = StrCat(dldir(), "layout_tests.txt");
+    app->logfilename = StrCat(LFAppDownloadDir(), "layout_tests.txt");
     screen->caption = "layout_tests";
     screen->width = 800;
     screen->height = 600;
+    FLAGS_lfapp_video = FLAGS_lfapp_input = FLAGS_lfapp_network = 1;
     FLAGS_font_engine = "freetype";
     FLAGS_default_font = "DejaVuSans.ttf";
     FLAGS_default_font_family = "sans-serif";

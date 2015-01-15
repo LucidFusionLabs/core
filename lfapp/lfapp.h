@@ -279,6 +279,7 @@ typedef long long Time;
 typedef google::protobuf::Message Proto;
 typedef basic_string<short> String16;
 typedef function<void()> Callback;
+typedef int (*MainCB)(int argc, const char **argv);
 
 Time Now();
 void Msleep(int x);
@@ -449,22 +450,20 @@ struct Flag {
     virtual ~Flag() {}
 
     string ToString() const;
-    virtual void Update(const char *val) = 0;
+    virtual void Update(const char *text) = 0;
     virtual string Get() const = 0;
     virtual bool IsBool() const = 0;
 };
 
 struct FlagMap {
     typedef map<string, Flag*> AllFlags;
-    typedef map<string, vector<Flag*> > FileFlags;
     const char *optarg=0; int optind=0;
     AllFlags flagmap;
-    FileFlags fileflags;
     bool dirty=0;
     FlagMap() {}
 
     int getopt(int argc, const char **argv, const char *source_filename);
-    void Add(Flag *f) { flagmap[f->name] = f; fileflags[f->file].push_back(f); }
+    void Add(Flag *f) { flagmap[f->name] = f; }
     bool Set(const string &k, const string &v);
     bool IsBool(const string &k) const;
     string Get(const string &k) const;
@@ -478,7 +477,7 @@ template <class X> struct FlagOfType : public Flag {
     FlagOfType(const char *N, const char *D, const char *F, int L, X *V)
         : Flag(N, D, F, L), v(V) { Singleton<FlagMap>::Get()->Add(this); } 
 
-    void Update(const char *val) { if (val) *v = Scannable::Scan(*v, val); }
+    void Update(const char *text) { if (text) *v = Scannable::Scan(*v, text); }
     string Get() const { return Typed::Str(*v); }
     bool IsBool() const { return Typed::Id<X>() == Typed::Id<bool>(); }
 };
@@ -831,6 +830,12 @@ struct Process {
     int Close();
     static void Daemonize(const char *dir="");
     static void Daemonize(FILE *fout, FILE *ferr);
+};
+
+struct NTService {
+    static int Install  (const char *name, const char *path);
+    static int Uninstall(const char *name);
+    static int WrapMain (const char *name, MainCB main_cb, int argc, const char **argv);
 };
 
 struct MIMEType {
@@ -1263,6 +1268,13 @@ struct Application : public ::LFApp, public Module {
     int Free();
     int Exiting();
 };
+extern Application *app;
+
+DECLARE_bool(open_console);
+DECLARE_bool(max_rlimit_core);
+DECLARE_bool(max_rlimit_open_files);
+
+}; // namespace LFL
 
 #if defined(LFL_QT)
 #define main LFLQTMain
@@ -1271,17 +1283,6 @@ struct Application : public ::LFApp, public Module {
 #elif defined(LFL_OSXVIDEO)
 #define main OSXMain
 #endif
-
-extern Application *app;
-typedef int (*MainCB)(int argc, const char **argv);
-
-struct NTService {
-    static int Install  (const char *name, const char *path);
-    static int Uninstall(const char *name);
-    static int WrapMain (const char *name, MainCB main_cb, int argc, const char **argv);
-};
-
-}; // namespace LFL
 
 extern "C" int main(int argc, const char **argv);
 

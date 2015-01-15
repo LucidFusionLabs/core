@@ -619,9 +619,9 @@ struct StatusGUI : public HTTPServer::Resource {
 extern "C" {
 int main(int argc, const char **argv) {
     app->frame_cb = frame;
-    app->logfilename = StrCat(dldir(), "blaster.txt");
+    app->logfilename = StrCat(LFAppDownloadDir(), "blaster.txt");
     FLAGS_max_rlimit_core = FLAGS_max_rlimit_open_files = 1;
-    FLAGS_lfapp_camera = FLAGS_lfapp_audio = FLAGS_lfapp_video = FLAGS_lfapp_input = 0;
+    FLAGS_lfapp_network = 1;
 
     if (app->Create(argc, argv, __FILE__)) { ERROR("lfapp init failed: ", strerror(errno)); return app->Free(); }
     if (app->Init())                       { ERROR("lfapp open failed: ", strerror(errno)); return app->Free(); }

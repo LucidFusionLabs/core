@@ -23,7 +23,6 @@
 #include "chess.h"
 
 namespace LFL {
-BindMap binds;
 AssetMap asset;
 SoundAssetMap soundasset;
 Chess::Position position;
@@ -58,11 +57,12 @@ using namespace LFL;
 
 extern "C" int main(int argc, const char *argv[]) {
 
-    app->logfilename = StrCat(dldir(), "chess.txt");
+    app->logfilename = StrCat(LFAppDownloadDir(), "chess.txt");
     app->frame_cb = Frame;
     screen->width = 630;
     screen->height = 570;
     screen->caption = "Chess";
+    FLAGS_lfapp_video = FLAGS_lfapp_input = FLAGS_lfapp_network = 1;
 
     if (app->Create(argc, argv, __FILE__)) { app->Free(); return -1; }
     if (app->Init()) { app->Free(); return -1; }
@@ -79,11 +79,11 @@ extern "C" int main(int argc, const char *argv[]) {
     soundasset.Load();
     app->shell.soundassets = &soundasset;
 
-//  binds.push_back(Bind(key,            callback));
-    binds.push_back(Bind(Key::Backquote, Bind::CB(bind([&](){ screen->console->Toggle(); }))));
-    binds.push_back(Bind(Key::Quote,     Bind::CB(bind([&](){ screen->console->Toggle(); }))));
-    binds.push_back(Bind(Key::Escape,    Bind::CB(bind(&Shell::quit,            &app->shell, vector<string>()))));
-    screen->binds = &binds;
+    BindMap *binds = screen->binds = new BindMap();
+//  binds->Add(Bind(key,            callback));
+    binds->Add(Bind(Key::Backquote, Bind::CB(bind([&](){ screen->console->Toggle(); }))));
+    binds->Add(Bind(Key::Quote,     Bind::CB(bind([&](){ screen->console->Toggle(); }))));
+    binds->Add(Bind(Key::Escape,    Bind::CB(bind(&Shell::quit,            &app->shell, vector<string>()))));
 
     // start our engine
     return app->Main();

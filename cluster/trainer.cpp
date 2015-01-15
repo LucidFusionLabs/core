@@ -126,7 +126,7 @@ using namespace LFL;
 
 extern "C" {
 int main(int argc, const char *argv[]) {
-    app->logfilename = StrCat(dldir(), "trainer.txt");
+    app->logfilename = StrCat(LFAppDownloadDir(), "trainer.txt");
     if (app->Create(argc, argv, __FILE__)) { app->Free(); return -1; }
 
     if (!FLAGS_input.size()) FATAL("nothing to do");
@@ -198,10 +198,10 @@ int main(int argc, const char *argv[]) {
         INFO("output:");
         Print(&projected, 1, inlabel, indexmap);
 
-        WritePloticus(string(dldir()) + "plot.htm", &projected, inlabel, indexmap, tostrPloticus1D);
+        WritePloticus(string(LFAppDownloadDir()) + "plot.htm", &projected, inlabel, indexmap, tostrPloticus1D);
     }
 
-    string modeldir = dldir();
+    string modeldir = LFAppDownloadDir();
 
     if (FLAGS_cluster) features2cluster("", modeldir.c_str(), ClusterAlgorithm::KMeans);
 

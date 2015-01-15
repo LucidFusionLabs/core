@@ -729,6 +729,7 @@ struct Sniffer {
     void *handle;
     Sniffer(void *H, int I, int M, CB C) : cb(C), handle(H), ip(I), mask(M) {}
     ~Sniffer() { thread.Wait(); }
+    void Threadproc();
 };
 
 struct GeoResolution {

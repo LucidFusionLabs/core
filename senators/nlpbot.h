@@ -42,8 +42,8 @@ struct NLPBot : public Bot {
         UserSaid(deque<string> *W, Parser *P, ::Parse *H) : wrap(W), /*parser(P), history(H),*/ histind(-1) { Load(0); }
 #endif
         int Size() { return wrap->size(); }
-        const string* Text(int ind) {
-            int bounded_ind = wrap->size()-1 - max(0, min(ind, wrap->size()-1));
+        const string* Text(size_t ind) {
+            size_t bounded_ind = wrap->size()-1 - max(size_t(0), min(ind, wrap->size()-1));
             return &(*wrap)[bounded_ind];
         }
 #if 0

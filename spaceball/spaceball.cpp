@@ -27,7 +27,6 @@
 #include "spaceballserv.h"
 
 namespace LFL {
-BindMap *binds;
 AssetMap asset;
 SoundAssetMap soundasset;
 SpaceballSettings sbsettings;
@@ -629,7 +628,6 @@ extern "C" int main(int argc, const char *argv[]) {
     FLAGS_lfapp_audio = FLAGS_lfapp_video = FLAGS_lfapp_input = FLAGS_lfapp_network = 1;
     screen->caption = "Spaceball 6006";
     screen->multitouch_keyboard_x = .37;
-    screen->binds = binds = new BindMap();
 
     if (app->Create(argc, argv, __FILE__)) { app->Free(); return -1; }
     if (app->Init())                       { app->Free(); return -1; }
@@ -820,6 +818,7 @@ extern "C" int main(int argc, const char *argv[]) {
     app->shell.command.push_back(Shell::Command("team",         bind(&GameClient::SetTeam,      server, _1)));
     app->shell.command.push_back(Shell::Command("me",           bind(&GameClient::MyEntityName, server, _1)));
 
+    BindMap *binds = screen->binds = new BindMap();
 #if 0                                   
     binds->Add(Bind('w',             Bind::TimeCB(bind(&Entity::MoveFwd,       screen->camMain, _1))));
     binds->Add(Bind('s',             Bind::TimeCB(bind(&Entity::MoveRev,       screen->camMain, _1))));

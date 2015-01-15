@@ -2534,14 +2534,12 @@ void Sniffer::PrintDevices(vector<string> *out) {
     }
 }
 
-int Sniffer_threadproc(void *opaque) {
-    Sniffer *sniffer = (Sniffer*)opaque;
+void Sniffer::Threadproc() {
     pcap_pkthdr *pkthdr; const unsigned char *packet; int ret;
-    while (Running() && (ret = pcap_next_ex((pcap_t*)sniffer->handle, &pkthdr, &packet)) >= 0) {
+    while (Running() && (ret = pcap_next_ex((pcap_t*)handle, &pkthdr, &packet)) >= 0) {
         if (!ret) continue;
-        sniffer->cb((const char *)packet, pkthdr->caplen, pkthdr->len);
+        cb((const char *)packet, pkthdr->caplen, pkthdr->len);
     }
-    return ret;
 }
 
 Sniffer *Sniffer::Open(const string &dev, const string &filter, int snaplen, CB cb) {
@@ -2556,14 +2554,14 @@ Sniffer *Sniffer::Open(const string &dev, const string &filter, int snaplen, CB 
         if (pcap_setfilter(handle, &fp)) { ERROR("install filter: ", filter, ": ", pcap_geterr(handle)); return 0; }
     }
     Sniffer *sniffer = new Sniffer(handle, ip, mask, cb);
-    sniffer->thread.Open(Sniffer_threadproc, sniffer);
+    sniffer->thread.Open(bind(&Sniffer::Threadproc, sniffer));
     sniffer->thread.Start();
     return sniffer;
 }
 #else /* LFL_PCAP */
 void Sniffer::GetDeviceAddressSet(set<IPV4::Addr> *out) {}
 void Sniffer::PrintDevices(vector<string> *out) {}
-int Sniffer_threadproc(void *opaque) { return 0; }
+void Sniffer::Threadproc() {}
 Sniffer *Sniffer::Open(const string &dev, const string &filter, int snaplen, CB cb) { ERROR("sniffer not implemented"); return 0; }
 #endif /* LFL_PCAP */
 void Sniffer::GetIPAddress(IPV4::Addr *out) {

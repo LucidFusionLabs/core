@@ -22,7 +22,6 @@
 #include "lfapp/gui.h"
 
 namespace LFL {
-BindMap binds;
 AssetMap asset;
 SoundAssetMap soundasset;
 Scene scene;
@@ -39,7 +38,8 @@ using namespace LFL;
 
 extern "C" int main(int argc, const char *argv[]) {
 
-    app->logfilename = StrCat(dldir(), "editor.txt");
+    FLAGS_lfapp_video = FLAGS_lfapp_input = true;
+    app->logfilename = StrCat(LFAppDownloadDir(), "editor.txt");
     app->frame_cb = Frame;
     screen->width = 840;
     screen->height = 760;
@@ -48,11 +48,11 @@ extern "C" int main(int argc, const char *argv[]) {
     if (app->Create(argc, argv, __FILE__)) { app->Free(); return -1; }
     if (app->Init()) { app->Free(); return -1; }
 
+    BindMap *binds = screen->binds = new BindMap();
     // binds.push_back(Bind(key,         callback));
-    binds.push_back(Bind(Key::Backquote, Bind::CB(bind([&]() { screen->console->Toggle(); }))));
-    binds.push_back(Bind(Key::Quote,     Bind::CB(bind([&]() { screen->console->Toggle(); }))));
-    binds.push_back(Bind(Key::Escape,    Bind::CB(bind(&Shell::quit, &app->shell, vector<string>()))));
-    screen->binds = &binds;
+    binds->Add(Bind(Key::Backquote, Bind::CB(bind([&]() { screen->console->Toggle(); }))));
+    binds->Add(Bind(Key::Quote,     Bind::CB(bind([&]() { screen->console->Toggle(); }))));
+    binds->Add(Bind(Key::Escape,    Bind::CB(bind(&Shell::quit, &app->shell, vector<string>()))));
 
     string s = LocalFile::FileContents(StrCat(ASSETS_DIR, "lfapp_vertex.glsl"));
     editor = new EditorDialog(screen, Fonts::Default(), new BufferFile(s.c_str(), s.size()), 1, 1);
