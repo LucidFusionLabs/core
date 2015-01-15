@@ -596,7 +596,8 @@ extern "C" int main(int argc, const char *argv[]) {
 	app->logfilename = StrCat(LFAppDownloadDir(), "fv.txt");
 	screen->width = 640;
 	screen->height = 480;
-	screen->caption = "fusion viewer";
+    screen->caption = "fusion viewer";
+    FLAGS_target_fps = 50;
 	FLAGS_lfapp_video = FLAGS_lfapp_audio = FLAGS_lfapp_input = FLAGS_lfapp_network = FLAGS_lfapp_camera = true;
 
 	if (app->Create(argc, argv, __FILE__)) { app->Free(); return -1; }

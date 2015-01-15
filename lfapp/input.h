@@ -86,16 +86,17 @@ struct KeyboardController {
 
 struct MouseController {
     typedef function<void()> CB;
-    typedef function<bool()> IfCB;
+    typedef function<bool()> BoolCB;
     typedef function<void(int, int, int, int)> CoordCB;
 
     struct Event { enum { Click=1, Hover=2 }; };
     struct Events { int total, click, hover; };
 
     struct Callback {
-        enum { NONE=0, CB_VOID=1, CB_COORD=2 } type;
+        enum { NONE=0, CB_VOID=1, CB_BOOL=2, CB_COORD=3 } type;
         UNION FunctionPointer {
             CB      cb_void;
+            BoolCB  cb_bool;
             CoordCB cb_coord;
             FunctionPointer() {}
             ~FunctionPointer() {}
@@ -103,21 +104,34 @@ struct MouseController {
         ~Callback() { Destruct(); }
         Callback()                  : type(NONE) {}
         Callback(const CB       &c) : type(CB_VOID)  { new (&cb.cb_void)  CB     (c); }
+        Callback(const BoolCB   &c) : type(CB_BOOL)  { new (&cb.cb_bool)  BoolCB (c); }
         Callback(const CoordCB  &c) : type(CB_COORD) { new (&cb.cb_coord) CoordCB(c); }
         Callback(const Callback &c) { Assign(c); }
         Callback &operator=(const Callback &c) { Destruct(); Assign(c); return *this; }
         void Destruct() {
-            if      (type == CB_VOID)  cb.cb_void.~CB();
-            else if (type == CB_COORD) cb.cb_coord.~CoordCB();
+            switch(type) {
+                case CB_VOID:  cb.cb_void .~CB();      break;
+                case CB_BOOL:  cb.cb_bool .~BoolCB();  break;
+                case CB_COORD: cb.cb_coord.~CoordCB(); break;
+                default:                               break;
+            }
         }
         void Assign(const Callback &c) {
-            type = c.type;
-            if      (type == CB_VOID)  new (&cb.cb_void)  CB     (c.cb.cb_void);
-            else if (type == CB_COORD) new (&cb.cb_coord) CoordCB(c.cb.cb_coord);
+            switch ((type = c.type)) {
+                case CB_VOID:  new (&cb.cb_void)  CB     (c.cb.cb_void);  break;
+                case CB_BOOL:  new (&cb.cb_bool)  BoolCB (c.cb.cb_bool);  break;
+                case CB_COORD: new (&cb.cb_coord) CoordCB(c.cb.cb_coord); break;
+                default:                                                  break;
+            }
         }
-        void Run(const point &p, int button, int down) {
-            if      (type == CB_VOID)  cb.cb_void();
-            else if (type == CB_COORD) cb.cb_coord(button, p.x, p.y, down);
+        bool Run(const point &p, int button, int down) {
+            bool ret = 1;
+            switch (type) {
+                case CB_VOID:  cb.cb_void();                        break;
+                case CB_BOOL:  ret = cb.cb_bool();                  break;
+                case CB_COORD: cb.cb_coord(button, p.x, p.y, down); break;
+                default:                                            break;
+            } return ret;
         }
     };
 
@@ -153,19 +167,19 @@ struct Input : public Module {
 
     void QueueKey(int key, bool down) {
         ScopedMutex sm(queued_input_mutex);
-        queued_input.push_back(bind(&Input::KeyPress, this, key, down));
+        queued_input.push_back(bind([&](){ KeyPress(key, down); }));
     }
     void QueueMouseClick(int button, bool down, const point &p) {
         ScopedMutex sm(queued_input_mutex);
-        queued_input.push_back(bind(&Input::MouseClick, this, button, down, p));
+        queued_input.push_back(bind([&](){ MouseClick(button, down, p); }));
     }
     void QueueMouseMovement(const point &p, const point &d) {
         ScopedMutex sm(queued_input_mutex);
-        queued_input.push_back(bind(&Input::MouseMove, this, p, d));
+        queued_input.push_back(bind([&](){ MouseMove(p, d); }));
     }
     void QueueMouseWheel(int dw) {
         ScopedMutex sm(queued_input_mutex);
-        queued_input.push_back(bind(&Input::MouseWheel, this, dw));
+        queued_input.push_back(bind([&](){ MouseWheel(dw); }));
     }
     
     bool ShiftKeyDown() const { return left_shift_down || right_shift_down; }
@@ -178,12 +192,12 @@ struct Input : public Module {
     int Frame(unsigned time);
     int DispatchQueuedInput();
 
-    void KeyPress(int key, bool down);
+    int  KeyPress(int key, bool down);
     int  KeyEventDispatch(InputEvent::Id event, bool down);
 
-    void MouseMove(const point &p, const point &d);
-    void MouseWheel(int dw);
-    void MouseClick(int button, bool down, const point &p);
+    int  MouseMove(const point &p, const point &d);
+    int  MouseWheel(int dw);
+    int  MouseClick(int button, bool down, const point &p);
     int  MouseEventDispatch(InputEvent::Id event, const point &p, int down);
 
     static point TransformMouseCoordinate(point p) {

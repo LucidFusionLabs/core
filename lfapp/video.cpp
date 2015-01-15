@@ -364,7 +364,7 @@ class OpenGLES2 : public QWindow, protected QOpenGLFunctions, public GraphicsDev
         app->Frame();
 
         if (!app->run) { app->Free(); lfl_qapp->exit(); return true; }
-        if (!FLAGS_lfapp_wait_forever) render_request();
+        if (!app->scheduler.wait_forever) render_request();
         return true;
     }
     void resizeEvent(QResizeEvent *ev) { QWindow::resizeEvent(ev); if (!QT_init) return; LFL::screen->Reshaped(ev->size().width(), ev->size().height()); }

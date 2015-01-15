@@ -54,6 +54,7 @@ extern "C" int main(int argc, const char *argv[]) {
 	screen->caption = "Quake";
 	FLAGS_far_plane = 10000;
     FLAGS_ksens = 150;
+    FLAGS_target_fps = 50;
     FLAGS_lfapp_video = FLAGS_lfapp_input = true;
 
 	if (app->Create(argc, argv, __FILE__)) { app->Free(); return -1; }

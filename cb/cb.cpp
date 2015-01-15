@@ -75,6 +75,7 @@ extern "C" int main(int argc, const char *argv[]) {
     screen->height = 380;
     screen->caption = "CrystalBawl";
     FLAGS_lfapp_video = FLAGS_lfapp_input = FLAGS_lfapp_network = 1;
+    FLAGS_target_fps = 50;
     FLAGS_threadpool_size = 1;
 
     if (app->Create(argc, argv, __FILE__)) { app->Free(); return -1; }
