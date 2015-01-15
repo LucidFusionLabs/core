@@ -563,7 +563,7 @@ int Input::DispatchQueuedInput() {
     return ret;
 }
 
-void Input::KeyPress(int key, bool down) {
+int Input::KeyPress(int key, bool down) {
     // if (!MainThread()) ERROR("KeyPress() called from thread ", Thread::GetId());
 
     switch (key) {
@@ -579,10 +579,12 @@ void Input::KeyPress(int key, bool down) {
     int fired = KeyEventDispatch(event, down);
     screen->events.key++;
     screen->events.gui += fired;
-    if (fired) return;
+    if (fired) return fired;
 
     for (auto g = screen->input_bind.begin(); g != screen->input_bind.end(); ++g)
         if ((*g)->active) (*g)->Input(event, down); 
+
+    return fired;
 }
 
 int Input::KeyEventDispatch(InputEvent::Id event, bool down) {
@@ -660,20 +662,24 @@ int Input::KeyEventDispatch(InputEvent::Id event, bool down) {
     return 0;
 }
 
-void Input::MouseMove(const point &p, const point &d) {
+int Input::MouseMove(const point &p, const point &d) {
+    int fired = MouseEventDispatch(Mouse::Event::Motion, p, 0);
     screen->events.mouse_move++;
-    screen->events.gui += MouseEventDispatch(Mouse::Event::Motion, p, 0);
-    if (!app->grab_mode.Enabled()) return;
+    screen->events.gui += fired;
+    if (!app->grab_mode.Enabled()) return fired;
     if (d.x<0) screen->cam->YawLeft  (-d.x); else if (d.x>0) screen->cam->YawRight(d.x);
     if (d.y<0) screen->cam->PitchDown(-d.y); else if (d.y>0) screen->cam->PitchUp (d.y);
+    return fired;
 }
 
-void Input::MouseWheel(int dw) {
+int Input::MouseWheel(int dw) {
+    int fired = MouseEventDispatch(Mouse::Event::Wheel, screen->mouse, dw);
     screen->events.mouse_wheel++;
-    screen->events.gui += MouseEventDispatch(Mouse::Event::Wheel, screen->mouse, dw);
+    screen->events.gui += fired;
+    return fired;
 }
 
-void Input::MouseClick(int button, bool down, const point &p) {
+int Input::MouseClick(int button, bool down, const point &p) {
     InputEvent::Id event = Mouse::ButtonID(button);
     if      (event == Mouse::Button::_1) mouse_but1_down = down;
     else if (event == Mouse::Button::_2) mouse_but2_down = down;
@@ -681,10 +687,12 @@ void Input::MouseClick(int button, bool down, const point &p) {
     int fired = MouseEventDispatch(event, p, down);
     screen->events.mouse_click++;
     screen->events.gui += fired;
-    if (fired) return;
+    if (fired) return fired;
 
     for (auto g = screen->input_bind.begin(); g != screen->input_bind.end(); ++g)
-        if ((*g)->active) (*g)->Input(event, down); 
+        if ((*g)->active) (*g)->Input(event, down);
+
+    return fired;
 }
 
 int Input::MouseEventDispatch(InputEvent::Id event, const point &p, int down) {
@@ -729,7 +737,7 @@ int MouseController::Input(InputEvent::Id event, const point &p, int down, int f
 
         if (thunk) {
             if (FLAGS_input_debug && down) INFO("MouseController::Input ", p.DebugString(), " ", e->box.DebugString());
-            e->CB.Run(p, event, down);
+            if (!e->CB.Run(p, event, down)) continue;
 
             if (1)                         events.total++;
             if (e->evtype == Event::Hover) events.hover++;

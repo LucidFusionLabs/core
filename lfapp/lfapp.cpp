@@ -112,6 +112,10 @@ extern "C" {
 extern "C" void iPhoneOpenBrowser(const char *url_text);
 #elif defined(__APPLE__)
 extern "C" void OSXTriggerFrame();
+extern "C" void OSXAddWaitForeverMouse();
+extern "C" void OSXDelWaitForeverMouse();
+extern "C" void OSXAddWaitForeverKeyboard();
+extern "C" void OSXDelWaitForeverKeyboard();
 extern "C" void OSXAddWaitForeverSocket(int fd);
 #endif
 
@@ -127,7 +131,6 @@ DEFINE_bool(lfapp_camera, false, "Enable camera capture");
 DEFINE_bool(lfapp_cuda, true, "Enable CUDA acceleration");
 DEFINE_bool(lfapp_network, false, "Enable asynchronous network engine");
 DEFINE_bool(lfapp_debug, false, "Enable debug mode");
-DEFINE_bool(lfapp_wait_forever, false, "Sleep until events occur");
 DEFINE_bool(cursor_grabbed, false, "Center cursor every frame");
 DEFINE_bool(daemonize, false, "Daemonize server");
 DEFINE_bool(rcon_debug, false, "Print rcon commands");
@@ -140,7 +143,7 @@ DEFINE_int(sample_rate, 16000, "Audio sample rate");
 DEFINE_int(sample_secs, 3, "Seconds of RingBuf audio");
 DEFINE_int(chans_in, -1, "Audio input channels");
 DEFINE_int(chans_out, -1, "Audio output channels");
-DEFINE_int(target_fps, 100, "Max frames per second");
+DEFINE_int(target_fps, 0, "Max frames per second");
 
 Printable::Printable(const vector<string> &x) : string(StrCat("{", Vec<string>::Str(&x[0], x.size()), "}")) {}
 Printable::Printable(const vector<double> &x) : string(StrCat("{", Vec<double>::Str(&x[0], x.size()), "}")) {}
@@ -2209,32 +2212,21 @@ FrameScheduler::FrameScheduler() : maxfps(&FLAGS_target_fps), select_thread(&fra
     rate_limit = synchronize_waits = wait_forever_thread = 0;
 #endif
 }
-void FrameScheduler::AddWaitForeverService(Service *svc) {
-    if (FLAGS_lfapp_wait_forever && wait_forever_thread) svc->active.mirror = &select_thread;
-}
-void FrameScheduler::AddWaitForeverSocket(Socket fd, int flag, void *val) {
-    if (FLAGS_lfapp_wait_forever && wait_forever_thread) select_thread.Add(fd, flag, val);
-#ifdef LFL_OSXINPUT
-    if (!wait_forever_thread) { CHECK_EQ(SocketSet::READABLE, flag); OSXAddWaitForeverSocket(fd); }
-#endif
-}
-void FrameScheduler::DelWaitForeverSocket(Socket fd) {
-    if (FLAGS_lfapp_wait_forever && wait_forever_thread) select_thread.Del(fd);
-}
 void FrameScheduler::Init() { 
+    wait_forever = !FLAGS_target_fps;
     maxfps.timer.GetTime(true);
-    if (FLAGS_lfapp_wait_forever && synchronize_waits) frame_mutex.lock();
+    if (wait_forever && synchronize_waits) frame_mutex.lock();
 }
 void FrameScheduler::Free() { 
-    if (FLAGS_lfapp_wait_forever && synchronize_waits) frame_mutex.unlock();
-    if (FLAGS_lfapp_wait_forever && wait_forever_thread) select_thread.Wait();
+    if (wait_forever && synchronize_waits) frame_mutex.unlock();
+    if (wait_forever && wait_forever_thread) select_thread.Wait();
 }
 void FrameScheduler::Start() {
-    if (FLAGS_lfapp_wait_forever && wait_forever_thread) select_thread.Start();
+    if (wait_forever && wait_forever_thread) select_thread.Start();
 }
 void FrameScheduler::FrameDone() { if (rate_limit && app->run) maxfps.Limit(); }
 void FrameScheduler::FrameWait() {
-    if (FLAGS_lfapp_wait_forever) {
+    if (wait_forever) {
         if (synchronize_waits) {
             wait_mutex.lock();
             frame_mutex.unlock();
@@ -2255,23 +2247,57 @@ void FrameScheduler::FrameWait() {
     }
 }
 void FrameScheduler::Wakeup() {
-    if (FLAGS_lfapp_wait_forever && wait_forever_thread) {
+    if (wait_forever) {
 #if defined(LFL_QT)
 #elif defined(LFL_GLFWINPUT)
-        glfwPostEmptyEvent();
+        if (wait_forever_thread) glfwPostEmptyEvent();
 #elif defined(LFL_SDLINPUT)
-        static int my_event_type = SDL_RegisterEvents(1);
-        CHECK_GE(my_event_type, 0);
-        SDL_Event event;
-        SDL_zero(event);
-        event.type = my_event_type;
-        SDL_PushEvent(&event);
+        if (wait_forever_thread) {
+            static int my_event_type = SDL_RegisterEvents(1);
+            CHECK_GE(my_event_type, 0);
+            SDL_Event event;
+            SDL_zero(event);
+            event.type = my_event_type;
+            SDL_PushEvent(&event);
+        }
 #elif defined(LFL_OSXINPUT)
         OSXTriggerFrame();
 #else
         FATAL("not implemented");
 #endif
     }
+}
+void FrameScheduler::AddWaitForeverMouse() {
+#if defined(LFL_OSXINPUT)
+    OSXAddWaitForeverMouse();
+#endif
+}
+void FrameScheduler::DelWaitForeverMouse() {
+#if defined(LFL_OSXINPUT)
+    OSXDelWaitForeverMouse();
+#endif
+}
+void FrameScheduler::AddWaitForeverKeyboard() {
+#if defined(LFL_OSXINPUT)
+    OSXAddWaitForeverKeyboard();
+#endif
+}
+void FrameScheduler::DelWaitForeverKeyboard() {
+#if defined(LFL_OSXINPUT)
+    OSXDelWaitForeverKeyboard();
+#endif
+}
+void FrameScheduler::AddWaitForeverService(Service *svc) {
+    if (wait_forever && wait_forever_thread) svc->active.mirror = &select_thread;
+}
+void FrameScheduler::AddWaitForeverSocket(Socket fd, int flag, void *val) {
+    if (wait_forever && wait_forever_thread) select_thread.Add(fd, flag, val);
+#ifdef LFL_OSXINPUT
+    if (!wait_forever_thread) { CHECK_EQ(SocketSet::READABLE, flag); OSXAddWaitForeverSocket(fd); }
+#endif
+}
+void FrameScheduler::DelWaitForeverSocket(Socket fd) {
+    if (wait_forever && wait_forever_thread) select_thread.Del(fd);
 }
 
 /* CUDA */
@@ -2564,9 +2590,9 @@ extern "C" int LFAppFrame()                { return LFL::app->Frame(); }
 extern "C" void Reshaped(int w, int h)     { LFL::screen->Reshaped(w, h); }
 extern "C" void Minimized()                { LFL::screen->Minimized(); }
 extern "C" void UnMinimized()              { LFL::screen->UnMinimized(); }
-extern "C" void KeyPress  (int b, int d)                 { LFL::app->input.KeyPress  (b, d); }
-extern "C" void MouseClick(int b, int d, int x,  int y)  { LFL::app->input.MouseClick(b, d, LFL::point(x, y)); }
-extern "C" void MouseMove (int x, int y, int dx, int dy) { LFL::app->input.MouseMove (LFL::point(x, y), LFL::point(dx, dy)); }
+extern "C" int  KeyPress  (int b, int d)                 { return LFL::app->input.KeyPress  (b, d); }
+extern "C" int  MouseClick(int b, int d, int x,  int y)  { return LFL::app->input.MouseClick(b, d, LFL::point(x, y)); }
+extern "C" int  MouseMove (int x, int y, int dx, int dy) { return LFL::app->input.MouseMove (LFL::point(x, y), LFL::point(dx, dy)); }
 extern "C" const char *LFAppDownloadDir() { return LFL::Singleton<LFL::DownloadDirectory>::Get()->text.c_str(); }
 extern "C" void SetLFAppMainThread() {
     LFL::Thread::Id id = LFL::Thread::GetId();

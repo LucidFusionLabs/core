@@ -23,9 +23,8 @@
 
 using namespace LFL;
 
-DEFINE_int(peak_fps,   60,    "Peak FPS");
-DEFINE_int(normal_fps, 15,    "Normal peak FPS");
-DEFINE_bool(draw_fps,  false, "Draw FPS");
+DEFINE_int(peak_fps,  50,    "Peak FPS");
+DEFINE_bool(draw_fps, false, "Draw FPS");
 
 Scene scene;
 BindMap *binds;
@@ -84,8 +83,7 @@ struct MyTerminalWindow {
 };
 
 void UpdateTargetFPS() {
-    FLAGS_lfapp_wait_forever = !effects_mode.Get();
-    FLAGS_target_fps = FLAGS_lfapp_wait_forever ? FLAGS_normal_fps : FLAGS_peak_fps;
+    FLAGS_target_fps = effects_mode.Get() ? FLAGS_peak_fps : 0;
 }
 
 int Frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample, int flag) {
@@ -193,8 +191,7 @@ extern "C" int main(int argc, const char *argv[]) {
     app->frame_cb = Frame;
     binds = new BindMap();
     MyWindowDefaults(screen);
-    FLAGS_lfapp_wait_forever = true;
-    FLAGS_target_fps = FLAGS_normal_fps;
+    FLAGS_target_fps = 0;
     FLAGS_lfapp_video = FLAGS_lfapp_input = 1;
     // FLAGS_font_engine = "coretext";
     // FLAGS_default_font = "Monaco"; // "DejaVuSansMono-Bold.ttf"; // "Monaco";

@@ -1162,18 +1162,22 @@ struct FrameScheduler {
     FrameRateLimitter maxfps;
     mutex frame_mutex, wait_mutex;
     SelectSocketThread select_thread;
-    bool rate_limit = 1, synchronize_waits = 1, wait_forever_thread = 1;
+    bool rate_limit = 1, wait_forever = 1, wait_forever_thread = 1, synchronize_waits = 1;
     FrameScheduler();
 
-    void AddWaitForeverService(Service*);
-    void AddWaitForeverSocket(Socket fd, int flag, void *val=0);
-    void DelWaitForeverSocket(Socket fd);
     void Init();
     void Free();
     void Start();
     void FrameWait();
     void FrameDone();
     void Wakeup();
+    void AddWaitForeverMouse();
+    void DelWaitForeverMouse();
+    void AddWaitForeverKeyboard();
+    void DelWaitForeverKeyboard();
+    void AddWaitForeverService(Service*);
+    void AddWaitForeverSocket(Socket fd, int flag, void *val=0);
+    void DelWaitForeverSocket(Socket fd);
 };
 
 struct Regex {

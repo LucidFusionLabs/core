@@ -38,15 +38,17 @@ using namespace LFL;
 
 extern "C" int main(int argc, const char *argv[]) {
 
-    FLAGS_lfapp_video = FLAGS_lfapp_input = true;
     app->logfilename = StrCat(LFAppDownloadDir(), "editor.txt");
     app->frame_cb = Frame;
     screen->width = 840;
     screen->height = 760;
     screen->caption = "Editor";
+    FLAGS_lfapp_video = FLAGS_lfapp_input = true;
 
     if (app->Create(argc, argv, __FILE__)) { app->Free(); return -1; }
     if (app->Init()) { app->Free(); return -1; }
+    app->scheduler.AddWaitForeverKeyboard();
+    app->scheduler.AddWaitForeverMouse();
 
     BindMap *binds = screen->binds = new BindMap();
     // binds.push_back(Bind(key,         callback));

@@ -195,9 +195,9 @@ struct Widget {
         void DragScrollDot() { dragging = true; dirty = true; }
         void ScrollUp  () { scrolled -= increment / doc_height; Clamp(&scrolled, 0, 1); dirty=true; }
         void ScrollDown() { scrolled += increment / doc_height; Clamp(&scrolled, 0, 1); dirty=true; }
-        float Delta() { float ret=scrolled-last_scrolled; last_scrolled=scrolled; return ret; }
-        float AddDelta(float cur_val) { 
-            scrolled = Clamp(cur_val + Delta(), 0, 1);
+        float ScrollDelta() { float ret=scrolled-last_scrolled; last_scrolled=scrolled; return ret; }
+        float AddScrollDelta(float cur_val) { 
+            scrolled = Clamp(cur_val + ScrollDelta(), 0, 1);
             if (Typed::EqualChanged(&last_scrolled, scrolled)) dirty = 1;
             return scrolled;
         }
@@ -794,8 +794,8 @@ struct EditorDialog : public Dialog {
         Dialog::Draw();
         bool wrap = editor.Wrap();
         if (1)     editor.active = screen->top_dialog == this;
-        if (1)     editor.v_scrolled = v_scrollbar.AddDelta(editor.v_scrolled);
-        if (!wrap) editor.h_scrolled = h_scrollbar.AddDelta(editor.h_scrolled);
+        if (1)     editor.v_scrolled = v_scrollbar.AddScrollDelta(editor.v_scrolled);
+        if (!wrap) editor.h_scrolled = h_scrollbar.AddScrollDelta(editor.h_scrolled);
         if (1)     editor.UpdateScrolled();
         if (1)     editor.Draw(box);
         if (1)     GUI::Draw();

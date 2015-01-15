@@ -77,8 +77,11 @@ static const char **osx_argv = 0;
     NSPoint prev_mouse_pos;
     bool use_timer = 1, use_display_link = 0, video_thread_init = 0;
     bool cmd_down = 0, ctrl_down = 0, shift_down = 0;
+    bool frame_on_keyboard_input = 0, frame_on_mouse_input = 0;
 
     - (BOOL)acceptsFirstResponder { return YES; }
+    - (void)setFrameOnMouseInput:(bool)v { frame_on_mouse_input = v; }
+    - (void)setFrameOnKeyboardInput:(bool)v { frame_on_keyboard_input = v; }
     - (void)dealloc {
         CVDisplayLinkRelease(displayLink);
         [super dealloc];
@@ -97,8 +100,9 @@ static const char **osx_argv = 0;
         }
     }
     - (void)startVideoThread {
-        if (LFL::FLAGS_lfapp_wait_forever) {
+        if (LFL::FLAGS_target_fps == 0) {
             INFOf("OSXVideoModule impl = %s", "WaitForever");
+            [self setNeedsDisplay:YES];
         } else if (use_display_link) {
             INFOf("OSXVideoModule impl = %s", "DisplayLink");
             CVDisplayLinkStart(displayLink);
@@ -138,25 +142,31 @@ static const char **osx_argv = 0;
         [fh waitForDataInBackgroundAndNotify];
     }
     - (void)fileReadCompleted: (NSNotification *)notification {}
-    - (void)mouseDown:    (NSEvent*)e { NSPoint p=[e locationInWindow]; MouseClick(1, 1, p.x, p.y); prev_mouse_pos=p; }
-    - (void)mouseUp  :    (NSEvent*)e { NSPoint p=[e locationInWindow]; MouseClick(1, 0, p.x, p.y); prev_mouse_pos=p; }
-    - (void)mouseDragged: (NSEvent*)e { [self mouseMoved:e]; }
-    - (void)mouseMoved:   (NSEvent*)e {
+    - (void)mouseDown:(NSEvent*)e { [self mouseClick:e down:1]; }
+    - (void)mouseUp  :(NSEvent*)e { [self mouseClick:e down:0]; }
+    - (void)mouseClick:(NSEvent*)e down:(bool)d {
+        NSPoint p = [e locationInWindow];
+        int fired = MouseClick(1, d, p.x, p.y);
+        if (fired && frame_on_mouse_input) [self setNeedsDisplay:YES]; 
+        prev_mouse_pos = p;
+    }
+    - (void)mouseDragged:(NSEvent*)e { [self mouseMove:e drag:1]; }
+    - (void)mouseMoved:  (NSEvent*)e { [self mouseMove:e drag:0]; }
+    - (void)mouseMove: (NSEvent*)e drag:(bool)drag {
         if (screen->cursor_grabbed) MouseMove(prev_mouse_pos.x, prev_mouse_pos.y, [e deltaX], -[e deltaY]);
         else {
             NSPoint p=[e locationInWindow], d=NSMakePoint(p.x-prev_mouse_pos.x, p.y-prev_mouse_pos.y);
-            MouseMove(p.x, p.y, d.x, d.y);
+            int fired = MouseMove(p.x, p.y, d.x, d.y);
+            if ((fired || drag) && frame_on_mouse_input) [self setNeedsDisplay:YES]; 
             prev_mouse_pos = p;
         }
     }
-    - (void)keyDown:(NSEvent *)theEvent {
-        // if ([theEvent isARepeat]) return;
+    - (void)keyDown:(NSEvent *)theEvent { [self keyPress:theEvent down:1]; }
+    - (void)keyUp:  (NSEvent *)theEvent { [self keyPress:theEvent down:0]; }
+    - (void)keyPress:(NSEvent *)theEvent down:(bool)d {
         int c = getKeyCode([theEvent keyCode]);
-        if (c) KeyPress(c, 1);
-    }
-    - (void)keyUp:(NSEvent *)theEvent {
-        int c = getKeyCode([theEvent keyCode]);
-        if (c) KeyPress(c, 0);
+        int fired = c ? KeyPress(c, d) : 0;
+        if (fired && frame_on_keyboard_input) [self setNeedsDisplay:YES]; 
     }
     - (void)flagsChanged:(NSEvent *)theEvent {
         int flags = [theEvent modifierFlags];
@@ -248,11 +258,13 @@ static const char **osx_argv = 0;
         self.view = [[GameView alloc] initWithFrame:self.window.frame pixelFormat:GameView.defaultPixelFormat];
         [[self.view openGLContext] setView: self.view];
         [self.window setContentView:self.view];
+        [self.window center];
         [self.window makeKeyAndOrderFront:nil];
         if (1) {
             _window.acceptsMouseMovedEvents = YES;
             [_window makeFirstResponder:self.view];
         }
+        [NSApp activateIgnoringOtherApps:YES];
     }
     - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication *)theApplication {
         GetLFApp()->run = false;
@@ -303,6 +315,10 @@ extern "C" void OSXTriggerFrame() {
         performSelectorOnMainThread:@selector(setNeedsDisplay:) withObject:@YES waitUntilDone:NO];
 }
 
+extern "C" void OSXAddWaitForeverMouse() { [[(AppDelegate*)[NSApp delegate] view] setFrameOnMouseInput:1]; }
+extern "C" void OSXDelWaitForeverMouse() { [[(AppDelegate*)[NSApp delegate] view] setFrameOnMouseInput:0]; }
+extern "C" void OSXAddWaitForeverKeyboard() { [[(AppDelegate*)[NSApp delegate] view] setFrameOnKeyboardInput:1]; }
+extern "C" void OSXDelWaitForeverKeyboard() { [[(AppDelegate*)[NSApp delegate] view] setFrameOnKeyboardInput:0]; }
 extern "C" void OSXAddWaitForeverSocket(int fd) {
     NSFileHandle *fh = [[NSFileHandle alloc] initWithFileDescriptor:fd];
     // [[NSNotificationCenter defaultCenter] addObserver:[(AppDelegate*)[NSApp delegate] view]
