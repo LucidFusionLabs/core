@@ -21,8 +21,7 @@
 #include "lfapp/css.h"
 #include "lfapp/gui.h"
 
-using namespace LFL;
-
+namespace LFL {
 DEFINE_int(peak_fps,  50,    "Peak FPS");
 DEFINE_bool(draw_fps, false, "Draw FPS");
 
@@ -63,7 +62,7 @@ struct MyTerminalWindow {
     int font_size;
     AnyBoolElement effects_mode;
 
-    MyTerminalWindow() : activeshader(&app->video.shader_default), font_size(FLAGS_default_font_size), effects_mode(&::effects_mode) {}
+    MyTerminalWindow() : activeshader(&app->video.shader_default), font_size(FLAGS_default_font_size), effects_mode(&LFL::effects_mode) {}
     ~MyTerminalWindow() { if (process.in) app->scheduler.DelWaitForeverSocket(fileno(process.in)); }
 
     void Open() {
@@ -86,7 +85,7 @@ void UpdateTargetFPS() {
     FLAGS_target_fps = effects_mode.Get() ? FLAGS_peak_fps : 0;
 }
 
-int Frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample, int flag) {
+int Frame(Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample, int flag) {
     MyTerminalWindow *tw = (MyTerminalWindow*)W->user1;
     Box root = screen->Box();
 
@@ -163,34 +162,30 @@ void MyTermDebugCmd(const vector<string> &arg) {
     }
 }
 
-void MyWindowDefaults(LFL::Window *W) {
+void MyWindowInitCB(Window *W) {
     W->width = 80*10;
     W->height = 25*17;
     W->caption = "Terminal";
     W->binds = binds;
     W->user1 = new MyTerminalWindow();
-}
-void MyNewWindow(const vector<string>&) {
-    LFL::Window *new_window = new LFL::Window();
-    MyWindowDefaults(new_window);
-    CHECK(LFL::Window::Create(new_window));
-    LFL::Window::MakeCurrent(new_window);
-    app->video.CreateGraphicsDevice();
-    screen->InitConsole();
-    MyTerminalWindow *tw = (MyTerminalWindow*)screen->user1;
-    tw->Open();
+    if (app->initialized) {
+        screen->InitConsole();
+        ((MyTerminalWindow*)screen->user1)->Open();
+    }
 }
 void MyWindowClosedCB() {
     delete (MyTerminalWindow*)screen->user1;
-    delete screen;
 }
+
+}; // naemspace LFL
+using namespace LFL;
 
 extern "C" int main(int argc, const char *argv[]) {
 
     app->logfilename = StrCat(LFAppDownloadDir(), "term.txt");
     app->frame_cb = Frame;
     binds = new BindMap();
-    MyWindowDefaults(screen);
+    MyWindowInitCB(screen);
     FLAGS_target_fps = 0;
     FLAGS_lfapp_video = FLAGS_lfapp_input = 1;
     // FLAGS_font_engine = "coretext";
@@ -207,6 +202,7 @@ extern "C" int main(int argc, const char *argv[]) {
     if (app->Create(argc, argv, __FILE__)) { app->Free(); return -1; }
     if (app->Init()) { app->Free(); return -1; }
 
+    app->window_init_cb = MyWindowInitCB;
     app->window_closed_cb = MyWindowClosedCB;
     app->shell.command.push_back(Shell::Command("colors", bind(&MyColorsCmd, _1)));
     app->shell.command.push_back(Shell::Command("shader", bind(&MyShaderCmd, _1)));
@@ -215,8 +211,8 @@ extern "C" int main(int argc, const char *argv[]) {
 
     binds->Add(Bind('=', Key::Modifier::Cmd, Bind::CB(bind(&MyIncreaseFontCmd, vector<string>()))));
     binds->Add(Bind('-', Key::Modifier::Cmd, Bind::CB(bind(&MyDecreaseFontCmd, vector<string>()))));
-    binds->Add(Bind('n', Key::Modifier::Cmd, Bind::CB(bind(&MyNewWindow,       vector<string>()))));
     binds->Add(Bind('6', Key::Modifier::Cmd, Bind::CB(bind(&MyConsole,         vector<string>()))));
+    binds->Add(Bind('n', Key::Modifier::Cmd, Bind::CB(bind(&Application::CreateNewWindow, app))));
 
     string lfapp_vertex_shader = LocalFile::FileContents(StrCat(ASSETS_DIR, "lfapp_vertex.glsl"));
     string warper_shader = LocalFile::FileContents(StrCat(ASSETS_DIR, "warper.glsl"));

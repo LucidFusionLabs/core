@@ -111,12 +111,12 @@ extern "C" {
 #if defined(LFL_IPHONE)
 extern "C" void iPhoneOpenBrowser(const char *url_text);
 #elif defined(__APPLE__)
-extern "C" void OSXTriggerFrame();
-extern "C" void OSXAddWaitForeverMouse();
-extern "C" void OSXDelWaitForeverMouse();
-extern "C" void OSXAddWaitForeverKeyboard();
-extern "C" void OSXDelWaitForeverKeyboard();
-extern "C" void OSXAddWaitForeverSocket(int fd);
+extern "C" void OSXTriggerFrame(void*);
+extern "C" void OSXAddWaitForeverMouse(void*);
+extern "C" void OSXDelWaitForeverMouse(void*);
+extern "C" void OSXAddWaitForeverKeyboard(void*);
+extern "C" void OSXDelWaitForeverKeyboard(void*);
+extern "C" void OSXAddWaitForeverSocket(void*, int fd);
 #endif
 
 namespace LFL {
@@ -1875,6 +1875,14 @@ void Application::Log(int level, const char *file, int line, const string &messa
     if (FLAGS_lfapp_video && screen && screen->console) screen->console->Write(message);
 }
 
+void Application::CreateNewWindow() {
+    Window *new_window = new Window();
+    if (window_init_cb) window_init_cb(new_window);
+    CHECK(Window::Create(new_window));
+    Window::MakeCurrent(new_window);
+    app->video.CreateGraphicsDevice();
+}
+
 int Application::Create(int argc, const char **argv, const char *source_filename) {
 #ifdef LFL_GLOG
     google::InstallFailureSignalHandler();
@@ -2261,7 +2269,7 @@ void FrameScheduler::Wakeup() {
             SDL_PushEvent(&event);
         }
 #elif defined(LFL_OSXINPUT)
-        OSXTriggerFrame();
+        OSXTriggerFrame(screen->id);
 #else
         FATAL("not implemented");
 #endif
@@ -2269,22 +2277,22 @@ void FrameScheduler::Wakeup() {
 }
 void FrameScheduler::AddWaitForeverMouse() {
 #if defined(LFL_OSXINPUT)
-    OSXAddWaitForeverMouse();
+    OSXAddWaitForeverMouse(screen->id);
 #endif
 }
 void FrameScheduler::DelWaitForeverMouse() {
 #if defined(LFL_OSXINPUT)
-    OSXDelWaitForeverMouse();
+    OSXDelWaitForeverMouse(screen->id);
 #endif
 }
 void FrameScheduler::AddWaitForeverKeyboard() {
 #if defined(LFL_OSXINPUT)
-    OSXAddWaitForeverKeyboard();
+    OSXAddWaitForeverKeyboard(screen->id);
 #endif
 }
 void FrameScheduler::DelWaitForeverKeyboard() {
 #if defined(LFL_OSXINPUT)
-    OSXDelWaitForeverKeyboard();
+    OSXDelWaitForeverKeyboard(screen->id);
 #endif
 }
 void FrameScheduler::AddWaitForeverService(Service *svc) {
@@ -2293,7 +2301,7 @@ void FrameScheduler::AddWaitForeverService(Service *svc) {
 void FrameScheduler::AddWaitForeverSocket(Socket fd, int flag, void *val) {
     if (wait_forever && wait_forever_thread) select_thread.Add(fd, flag, val);
 #ifdef LFL_OSXINPUT
-    if (!wait_forever_thread) { CHECK_EQ(SocketSet::READABLE, flag); OSXAddWaitForeverSocket(fd); }
+    if (!wait_forever_thread) { CHECK_EQ(SocketSet::READABLE, flag); OSXAddWaitForeverSocket(screen->id, fd); }
 #endif
 }
 void FrameScheduler::DelWaitForeverSocket(Socket fd) {

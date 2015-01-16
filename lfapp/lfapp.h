@@ -1238,14 +1238,14 @@ struct CUDA : public Module { int Init(); };
 struct Application : public ::LFApp, public Module {
     string progname, logfilename;
     FILE *logfile;
-    FrameCB frame_cb;
-    void (*reshaped_cb)(), (*window_closed_cb)();
     mutex log_mutex;
     Timer app_time, frame_time;
     ThreadPool thread_pool;
     MessageQueue message_queue;
-    ValueSet<int> fill_mode, grab_mode, tex_mode;
     FrameScheduler scheduler;
+    FrameCB frame_cb;
+    Callback reshaped_cb, window_closed_cb;
+    function<void(Window*)> window_init_cb;
     Audio audio;
     Video video;
     Input input;
@@ -1255,13 +1255,16 @@ struct Application : public ::LFApp, public Module {
     CUDA cuda;
     Shell shell;
     vector<Module*> modules;
-    void LoadModule(Module *M) { modules.push_back(M); M->Init(); }
+    ValueSet<int> fill_mode, grab_mode, tex_mode;
 
     Application() : logfile(0), reshaped_cb(0), window_closed_cb(DefaultLFAppWindowClosedCB),
     fill_mode(3, GraphicsDevice::Fill, GraphicsDevice::Line, GraphicsDevice::Point), grab_mode(2, false, true),
     tex_mode(2, true, false) { run=1; initialized=0; main_thread_id=0; frames_ran=pre_frames_ran=samples_read=samples_read_last=0; }
 
+    void LoadModule(Module *M) { modules.push_back(M); M->Init(); }
     void Log(int level, const char *file, int line, const string &message);
+    void CreateNewWindow();
+
     int Create(int argc, const char **argv, const char *source_filename);
     int Init();
     int Start();

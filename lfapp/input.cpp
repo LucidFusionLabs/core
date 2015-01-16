@@ -474,7 +474,7 @@ void Mouse::ReleaseFocus() { SDL_ShowCursor(1); SDL_SetWindowGrab((SDL_Window*)s
 #ifdef LFL_OSXINPUT
 extern "C" void OSXGrabMouseFocus();
 extern "C" void OSXReleaseMouseFocus();
-extern "C" void OSXSetMousePosition(int x, int y);
+extern "C" void OSXSetMousePosition(void*, int x, int y);
 extern "C" void OSXClipboardSet(const char *v);
 extern "C" const char *OSXClipboardGet();
 
@@ -519,7 +519,7 @@ void Clipboard::Set(const string &s) { OSXClipboardSet(s.c_str()); }
 string Clipboard::Get() { const char *v=OSXClipboardGet(); string ret=v; free((void*)v); return ret; }
 void Mouse::ReleaseFocus() { OSXReleaseMouseFocus(); app->grab_mode.Off(); screen->cursor_grabbed=0; }
 void Mouse::GrabFocus   () { OSXGrabMouseFocus();    app->grab_mode.On();  screen->cursor_grabbed=1;
-    OSXSetMousePosition(screen->width/2, screen->height/2);
+    OSXSetMousePosition(screen->id, screen->width/2, screen->height/2);
 }
 #endif // LFL_OSXINPUT
 
