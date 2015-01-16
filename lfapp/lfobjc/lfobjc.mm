@@ -71,6 +71,7 @@ static const char **osx_argv = 0;
 
 @implementation GameView
     LFApp *app = 0;
+    NSWindow *window = 0;
     NativeWindow *screen = 0;
     NSTimer *timer = 0;
     CVDisplayLinkRef displayLink;
@@ -80,6 +81,7 @@ static const char **osx_argv = 0;
     bool frame_on_keyboard_input = 0, frame_on_mouse_input = 0;
 
     - (BOOL)acceptsFirstResponder { return YES; }
+    - (void)setWindow:(NSWindow*)w { window = w; }
     - (void)setFrameOnMouseInput:(bool)v { frame_on_mouse_input = v; }
     - (void)setFrameOnKeyboardInput:(bool)v { frame_on_keyboard_input = v; }
     - (void)dealloc {
@@ -233,8 +235,6 @@ static const char **osx_argv = 0;
 
 // AppDelegate
 @interface AppDelegate : NSObject <NSApplicationDelegate>
-@property (nonatomic,strong) IBOutlet NSWindow *window;
-@property (nonatomic,strong) IBOutlet GameView *view;
 @end
 
 @implementation AppDelegate
@@ -244,26 +244,25 @@ static const char **osx_argv = 0;
         // [[NSFileManager defaultManager] changeCurrentDirectoryPath: [[NSBundle mainBundle] resourcePath]];
         int ret = OSXMain(osx_argc, osx_argv);
         if (ret) exit(ret);
-        [self performSelector:@selector(postFinishLaunch) withObject:nil afterDelay:0.0];
-    }
-    - (void)postFinishLaunch {
         INFOf("%s", "OSXModule::Main done");
-        [self.view startVideoThread];
+        [(GameView*)GetNativeWindow()->id startVideoThread];
     }
     - (void)createWindow: (int)w height:(int)h {
         INFOf("OSXVideoModule: AppDelegate::createWindow(%d, %d)", w, h);
-        self.window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, w, h)
-                                        styleMask:NSClosableWindowMask|NSMiniaturizableWindowMask|NSResizableWindowMask|NSTitledWindowMask
-                                        backing:NSBackingStoreBuffered defer:NO];
-        self.view = [[GameView alloc] initWithFrame:self.window.frame pixelFormat:GameView.defaultPixelFormat];
-        [[self.view openGLContext] setView: self.view];
-        [self.window setContentView:self.view];
-        [self.window center];
-        [self.window makeKeyAndOrderFront:nil];
+        NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, w, h)
+                                             styleMask:NSClosableWindowMask|NSMiniaturizableWindowMask|NSResizableWindowMask|NSTitledWindowMask
+                                             backing:NSBackingStoreBuffered defer:NO];
+        GameView *view = [[GameView alloc] initWithFrame:window.frame pixelFormat:GameView.defaultPixelFormat];
+        [view setWindow:window];
+        [[view openGLContext] setView:view];
+        [window setContentView:view];
+        [window center];
+        [window makeKeyAndOrderFront:nil];
         if (1) {
-            _window.acceptsMouseMovedEvents = YES;
-            [_window makeFirstResponder:self.view];
+            window.acceptsMouseMovedEvents = YES;
+            [window makeFirstResponder:view];
         }
+        GetNativeWindow()->id = view;
         [NSApp activateIgnoringOtherApps:YES];
     }
     - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication *)theApplication {
@@ -279,9 +278,12 @@ extern "C" void NativeWindowSize(int *width, int *height) {
     [(AppDelegate*)[NSApp delegate] createWindow:*width height:*height];
 }
 
-extern "C" void OSXVideoSwap() {
-    // [[[(AppDelegate*)[NSApp delegate] view] openGLContext] flushBuffer];
-    CGLFlushDrawable([[[(AppDelegate*)[NSApp delegate] view] openGLContext] CGLContextObj]);
+extern "C" void OSXSetWindowSize(void *O, int W, int H) {
+    [[(GameView*)O window] setContentSize:NSMakeSize(W, H)];
+}
+extern "C" void OSXVideoSwap(void *O) {
+    // [[(GameView*)O openGLContext] flushBuffer];
+    CGLFlushDrawable([[(GameView*)O openGLContext] CGLContextObj]);
 }
 
 extern "C" void OSXGrabMouseFocus() { 
@@ -292,10 +294,9 @@ extern "C" void OSXReleaseMouseFocus() {
     CGDisplayShowCursor(kCGDirectMainDisplay);
     CGAssociateMouseAndMouseCursorPosition(true);
 }
-extern "C" void OSXSetMousePosition(int x, int y) {
+extern "C" void OSXSetMousePosition(void *O, int x, int y) {
     CGWarpMouseCursorPosition
-        (NSPointToCGPoint([[[(AppDelegate*)[NSApp delegate] view] window]
-                          convertRectToScreen:NSMakeRect(x, y, 0, 0)].origin));
+        (NSPointToCGPoint([[(GameView*)O window] convertRectToScreen:NSMakeRect(x, y, 0, 0)].origin));
 }
 
 extern "C" void OSXClipboardSet(const char *v) {
@@ -310,21 +311,20 @@ extern "C" const char *OSXClipboardGet() {
     return strdup([v UTF8String]);
 }
 
-extern "C" void OSXTriggerFrame() {
-    [[(AppDelegate*)[NSApp delegate] view]
-        performSelectorOnMainThread:@selector(setNeedsDisplay:) withObject:@YES waitUntilDone:NO];
+extern "C" void OSXTriggerFrame(void *O) {
+    [(GameView*)O performSelectorOnMainThread:@selector(setNeedsDisplay:) withObject:@YES waitUntilDone:NO];
 }
 
-extern "C" void OSXAddWaitForeverMouse() { [[(AppDelegate*)[NSApp delegate] view] setFrameOnMouseInput:1]; }
-extern "C" void OSXDelWaitForeverMouse() { [[(AppDelegate*)[NSApp delegate] view] setFrameOnMouseInput:0]; }
-extern "C" void OSXAddWaitForeverKeyboard() { [[(AppDelegate*)[NSApp delegate] view] setFrameOnKeyboardInput:1]; }
-extern "C" void OSXDelWaitForeverKeyboard() { [[(AppDelegate*)[NSApp delegate] view] setFrameOnKeyboardInput:0]; }
-extern "C" void OSXAddWaitForeverSocket(int fd) {
+extern "C" void OSXAddWaitForeverMouse(void *O) { [(GameView*)O setFrameOnMouseInput:1]; }
+extern "C" void OSXDelWaitForeverMouse(void *O) { [(GameView*)O setFrameOnMouseInput:0]; }
+extern "C" void OSXAddWaitForeverKeyboard(void *O) { [(GameView*)O setFrameOnKeyboardInput:1]; }
+extern "C" void OSXDelWaitForeverKeyboard(void *O) { [(GameView*)O setFrameOnKeyboardInput:0]; }
+extern "C" void OSXAddWaitForeverSocket(void *O, int fd) {
     NSFileHandle *fh = [[NSFileHandle alloc] initWithFileDescriptor:fd];
-    // [[NSNotificationCenter defaultCenter] addObserver:[(AppDelegate*)[NSApp delegate] view]
+    // [[NSNotificationCenter defaultCenter] addObserver:(GameView*)O
     //     selector:@selector(fileReadCompleted:) name:NSFileHandleReadCompletionNotification object:nil];
     // [fh readInBackgroundAndNotify];
-    [[NSNotificationCenter defaultCenter] addObserver:[(AppDelegate*)[NSApp delegate] view]
+    [[NSNotificationCenter defaultCenter] addObserver:(GameView*)O
         selector:@selector(fileDataAvailable:) name:NSFileHandleDataAvailableNotification object:nil];
     [fh waitForDataInBackgroundAndNotify];
 }

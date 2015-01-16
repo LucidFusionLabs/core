@@ -953,7 +953,8 @@ struct IPhoneVideoModule : public Module {
 #endif
 
 #ifdef LFL_OSXVIDEO
-extern "C" void OSXVideoSwap();
+extern "C" void OSXVideoSwap(void*);
+extern "C" void OSXSetWindowSize(void*, int W, int H);
 struct OSXVideoModule : public Module {
     int Init() {
         INFO("OSXVideoModule::Init()");
@@ -964,8 +965,7 @@ struct OSXVideoModule : public Module {
     }
 };
 bool Window::Create(Window *W) { 
-    static long next_id = 1;
-    W->id = (void*)next_id++;
+    CHECK(W->id);
     Window::active[W->id] = W;
     return true; 
 }
@@ -1211,7 +1211,7 @@ int Video::Flush() {
 #elif defined(LFL_IPHONEVIDEO)
     iPhoneVideoSwap();
 #elif defined(LFL_OSXVIDEO)
-    OSXVideoSwap();
+    OSXVideoSwap(screen->id);
 #endif
 
     GLint gl_error=0, gl_validate_status=0;
@@ -1242,6 +1242,10 @@ void Window::Reshape(int w, int h) {
     Window::MakeCurrent(screen);
 #elif defined(LFL_GLFWVIDEO)
     glfwSetWindowSize((GLFWwindow*)id, w, h);
+#elif defined(LFL_SDLVIDEO)
+    SDL_SetWindowSize((SDL_Window*)id, w, h);
+#elif defined(LFL_OSXVIDEO)
+    OSXSetWindowSize(id, w, h);
 #endif
 }
 
