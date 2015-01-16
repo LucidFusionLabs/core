@@ -77,6 +77,7 @@ NativeWindow *GetNativeWindow();
 LFApp *GetLFApp();
 
 int LFAppMain();
+int LFAppMainLoop();
 int LFAppFrame();
 void LFAppLog(int level, const char *file, int line, const char *fmt, ...);
 void LFAppFatal();

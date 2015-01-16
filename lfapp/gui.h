@@ -479,6 +479,8 @@ struct TextArea : public TextGUI {
     { *nll = nfl; IncrementWrappedLineOffset(nll, line_fb.lines); UpdateLines(nfl, *nll); }
 
     virtual void Draw(const Box &w, bool cursor);
+    virtual void DrawWithShader(const Box &w, bool cursor, Shader *shader)
+    { glTimeResolutionShader(shader); Draw(w, cursor); screen->gd->UseShader(0); }
     // void UpdateLineOffsets(bool size_changed, bool cursor);
     // void UpdateWrapping(int width, bool new_lines_only);
     // void DrawOrCopySelection();

@@ -101,25 +101,29 @@ static const char **osx_argv = 0;
             CVDisplayLinkSetCurrentCGDisplayFromOpenGLContext(displayLink, cglContext, cglPixelFormat);
         }
     }
-    - (void)startVideoThread {
-        if (LFL::FLAGS_target_fps == 0) {
-            INFOf("OSXVideoModule impl = %s", "WaitForever");
+    - (void)startThread {
+        if (!LFL::FLAGS_lfapp_input) {
+            INFOf("OSXModule impl = %s", "PassThru");
+            exit(LFAppMainLoop());
+        } else if (LFL::FLAGS_target_fps == 0) {
+            INFOf("OSXModule impl = %s", "WaitForever");
             [self setNeedsDisplay:YES];
         } else if (use_display_link) {
-            INFOf("OSXVideoModule impl = %s", "DisplayLink");
+            INFOf("OSXModule impl = %s", "DisplayLink");
             CVDisplayLinkStart(displayLink);
         } else if (use_timer) {
-            INFOf("OSXVideoModule impl = %s", "NSTimer");
+            INFOf("OSXModule impl = %s", "NSTimer");
             timer = [NSTimer timerWithTimeInterval: 1.0/LFL::FLAGS_target_fps
                 target:self selector:@selector(timerFired:) userInfo:nil repeats:YES];
             [[NSRunLoop currentRunLoop] addTimer:timer forMode:NSDefaultRunLoopMode];
             // [[NSRunLoop currentRunLoop] addTimer:timer forMode:NSEventTrackingRunLoopMode];
         }
     }
-    - (void)stopVideoThreadAndExit {
-        if (use_display_link) CVDisplayLinkStop(displayLink);
-        exit(0);
+    - (void)stopThread {
+        if (displayLink) CVDisplayLinkStop(displayLink);
+        if (timer) { [timer invalidate]; timer = nil; }
     }
+    - (void)stopThreadAndExit { [self stopThread]; exit(0); }
     - (void)timerFired:(id)sender { [self setNeedsDisplay:YES]; }
     - (void)drawRect:(NSRect)dirtyRect { if (use_timer) [self getFrameForTime:0]; }
     - (void)getFrameForTime:(const CVTimeStamp*)outputTime {
@@ -131,7 +135,7 @@ static const char **osx_argv = 0;
         }
         if (!app->initialized) return;
         if (app->run) LFAppFrame();
-        else [self stopVideoThreadAndExit];
+        else [self stopThreadAndExit];
     }
     - (void)reshape {
         float screen_w = [self frame].size.width, screen_h = [self frame].size.height;
@@ -245,7 +249,7 @@ static const char **osx_argv = 0;
         int ret = OSXMain(osx_argc, osx_argv);
         if (ret) exit(ret);
         INFOf("%s", "OSXModule::Main done");
-        [(GameView*)GetNativeWindow()->id startVideoThread];
+        [(GameView*)GetNativeWindow()->id startThread];
     }
     - (void)createWindow: (int)w height:(int)h {
         INFOf("OSXVideoModule: AppDelegate::createWindow(%d, %d)", w, h);

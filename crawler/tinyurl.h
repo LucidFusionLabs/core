@@ -55,8 +55,8 @@ struct URLShortener {
     void Update(vector<Query*> *out) {
         if (!out) return;
         out->clear();
-        for (QuerySet::iterator it = queries.begin(); it != queries.end(); it++) if ((*it)->done) out->push_back(*it);
-        for (vector<Query*>::iterator it = out->begin(); it != out->end(); it++) queries.erase(*it);
+        for (auto it = queries.begin(); it != queries.end(); it++) if ((*it)->done) out->push_back(*it);
+        for (auto it = out->begin(); it != out->end(); it++) queries.erase(*it);
     }
 };
 

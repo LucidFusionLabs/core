@@ -280,15 +280,11 @@ struct CSSPrimitiveValue : public CSSValue {
     const char *GetUnitString() const { return GetUnitString(primitiveType); }
     static const char *GetUnitString(unsigned short u) {
         switch (u) {
-            case CSS_PX:         return "px";
-            case CSS_EXS:        return "ex";
-            case CSS_EMS:        return "em";
-            case CSS_IN:         return "in";
-            case CSS_CM:         return "cm";
-            case CSS_MM:         return "mm";
-            case CSS_PT:         return "pt";
-            case CSS_PC:         return "pc";
-            case CSS_PERCENTAGE: return "%" ;
+            case CSS_PX:  return "px";    case CSS_MM:         return "mm";
+            case CSS_EXS: return "ex";    case CSS_PT:         return "pt";
+            case CSS_EMS: return "em";    case CSS_PC:         return "pc";
+            case CSS_IN:  return "in";    case CSS_PERCENTAGE: return "%" ;
+            case CSS_CM:  return "cm";
         }; return "";
     }
 };
@@ -1597,20 +1593,13 @@ struct ComputedStyle : public LFL::DOM::CSSStyleDeclaration {
 
     LFL::DOM::Display Display() {
         switch (node->htmlElementType) {
-            case LFL::DOM::HTML_BLOCK_QUOTE_ELEMENT:
-            case LFL::DOM::HTML_CANVAS_ELEMENT:
-            case LFL::DOM::HTML_DIV_ELEMENT:
-            case LFL::DOM::HTML_D_LIST_ELEMENT:
-            case LFL::DOM::HTML_FIELD_SET_ELEMENT:
-            case LFL::DOM::HTML_FORM_ELEMENT:
-            case LFL::DOM::HTML_HEADING_ELEMENT:
-            case LFL::DOM::HTML_HR_ELEMENT:
-            case LFL::DOM::HTML_MENU_ELEMENT:
-            case LFL::DOM::HTML_O_LIST_ELEMENT:
-            case LFL::DOM::HTML_PARAGRAPH_ELEMENT:
-            case LFL::DOM::HTML_PRE_ELEMENT:
-            case LFL::DOM::HTML_TABLE_ELEMENT:
-            case LFL::DOM::HTML_U_LIST_ELEMENT:
+            case LFL::DOM::HTML_BLOCK_QUOTE_ELEMENT:    case LFL::DOM::HTML_HR_ELEMENT:
+            case LFL::DOM::HTML_CANVAS_ELEMENT:         case LFL::DOM::HTML_MENU_ELEMENT:
+            case LFL::DOM::HTML_DIV_ELEMENT:            case LFL::DOM::HTML_O_LIST_ELEMENT:
+            case LFL::DOM::HTML_D_LIST_ELEMENT:         case LFL::DOM::HTML_PARAGRAPH_ELEMENT:
+            case LFL::DOM::HTML_FIELD_SET_ELEMENT:      case LFL::DOM::HTML_PRE_ELEMENT:
+            case LFL::DOM::HTML_FORM_ELEMENT:           case LFL::DOM::HTML_TABLE_ELEMENT:
+            case LFL::DOM::HTML_HEADING_ELEMENT:        case LFL::DOM::HTML_U_LIST_ELEMENT:
                 return LFL::DOM::Display(LFL::DOM::Display::Block);
         } return LFL::DOM::Display(LFL::DOM::Display::Inline);
     }

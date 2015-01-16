@@ -1171,6 +1171,7 @@ struct FrameScheduler {
     void FrameWait();
     void FrameDone();
     void Wakeup();
+    void UpdateTargetFPS(int fps);
     void AddWaitForeverMouse();
     void DelWaitForeverMouse();
     void AddWaitForeverKeyboard();
@@ -1237,7 +1238,7 @@ struct CUDA : public Module { int Init(); };
 
 struct Application : public ::LFApp, public Module {
     string progname, logfilename;
-    FILE *logfile;
+    FILE *logfile=0;
     mutex log_mutex;
     Timer app_time, frame_time;
     ThreadPool thread_pool;
@@ -1255,11 +1256,11 @@ struct Application : public ::LFApp, public Module {
     CUDA cuda;
     Shell shell;
     vector<Module*> modules;
-    ValueSet<int> fill_mode, grab_mode, tex_mode;
+    ValueSet<int> tex_mode, grab_mode, fill_mode;
 
-    Application() : logfile(0), reshaped_cb(0), window_closed_cb(DefaultLFAppWindowClosedCB),
-    fill_mode(3, GraphicsDevice::Fill, GraphicsDevice::Line, GraphicsDevice::Point), grab_mode(2, false, true),
-    tex_mode(2, true, false) { run=1; initialized=0; main_thread_id=0; frames_ran=pre_frames_ran=samples_read=samples_read_last=0; }
+    Application() : window_closed_cb(DefaultLFAppWindowClosedCB), tex_mode(2, 1, 0), grab_mode(2, 0, 1),
+    fill_mode(3, GraphicsDevice::Fill, GraphicsDevice::Line, GraphicsDevice::Point)
+    { run=1; initialized=0; main_thread_id=0; frames_ran=pre_frames_ran=samples_read=samples_read_last=0; }
 
     void LoadModule(Module *M) { modules.push_back(M); M->Init(); }
     void Log(int level, const char *file, int line, const string &message);
@@ -1272,6 +1273,7 @@ struct Application : public ::LFApp, public Module {
     int PostFrame();
     int Frame();
     int Main();
+    int MainLoop();
     int Free();
     int Exiting();
 };
