@@ -27,6 +27,10 @@ SoundAssetMap soundasset;
 Scene scene;
 EditorDialog *editor; 
 
+void Reshaped() {
+    editor->box = screen->Box();
+    editor->Layout();
+}
 int Frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample, int flag) {
     screen->gd->DrawMode(DrawMode::_2D);
     screen->DrawDialogs();
@@ -49,6 +53,7 @@ extern "C" int main(int argc, const char *argv[]) {
     if (app->Init()) { app->Free(); return -1; }
     app->scheduler.AddWaitForeverKeyboard();
     app->scheduler.AddWaitForeverMouse();
+    app->reshaped_cb = LFL::Reshaped;
 
     BindMap *binds = screen->binds = new BindMap();
     // binds.push_back(Bind(key,         callback));

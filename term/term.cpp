@@ -31,6 +31,11 @@ Shader warpershader;
 AnyBoolSet effects_mode;
 SimpleBrowser *image_browser;
 
+void UpdateTargetFPS() {
+    int target_fps = effects_mode.Get() ? FLAGS_peak_fps : 0;
+    if (target_fps != FLAGS_target_fps) app->scheduler.UpdateTargetFPS(target_fps);
+}
+
 void MyNewLinkCB(TextArea::Link *link) {
     string image_url = link->widget.link;
     if (!FileSuffix::Image(image_url)) {
@@ -81,10 +86,6 @@ struct MyTerminalWindow {
     }
 };
 
-void UpdateTargetFPS() {
-    FLAGS_target_fps = effects_mode.Get() ? FLAGS_peak_fps : 0;
-}
-
 int Frame(Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample, int flag) {
     MyTerminalWindow *tw = (MyTerminalWindow*)W->user1;
     Box root = screen->Box();
@@ -109,7 +110,7 @@ int Frame(Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample, int
         !W->console->events.total && !tw->terminal->selection_changing && !dont_skip) return -1;
 
     W->gd->DrawMode(DrawMode::_2D);
-    tw->terminal->Draw(root, tw->activeshader);
+    tw->terminal->DrawWithShader(root, true, tw->activeshader);
 
     if (!custom_shader) {
         // ((TextGUI*)tw->terminal)->Draw(0, root.x + tw->terminal->cursor.p.x, root.y + tw->terminal->cursor.p.y);

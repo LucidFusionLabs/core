@@ -1079,14 +1079,15 @@ void glIntersect(int x, int y, Color *c) {
     Scene::Draw(geom.get(), 0);
 }
 
+void glTimeResolutionShader(Shader *shader) {
+    screen->gd->UseShader(shader);
+    shader->SetUniform1f("time", ToSeconds(app->app_time.GetTime()));
+    shader->SetUniform2f("resolution", screen->width, screen->height);
+}
 void glTimeResolutionShaderWindows(Shader *shader, const Color &backup_color, const Box &w,             const Texture *tex) { Box wc=w; vector<Box*> wv; wv.push_back(&wc); glTimeResolutionShaderWindows(shader, backup_color, wv, tex); }
 void glTimeResolutionShaderWindows(Shader *shader, const Color &backup_color, const vector<Box*> &wins, const Texture *tex) {
-    if (!shader) screen->gd->SetColor(backup_color);
-    else {
-        screen->gd->UseShader(shader);
-        shader->SetUniform1f("time", ToSeconds(app->app_time.GetTime()));
-        shader->SetUniform2f("resolution", screen->width, screen->height);
-    }
+    if (shader) glTimeResolutionShader(shader);
+    else screen->gd->SetColor(backup_color);
     if (tex) { screen->gd->EnableLayering(); tex->Bind(); }
     else screen->gd->DisableTexture();
     for (vector<Box*>::const_iterator i = wins.begin(); i != wins.end(); ++i) (*i)->Draw(tex ? tex->coord : 0);

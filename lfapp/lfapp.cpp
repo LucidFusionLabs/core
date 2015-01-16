@@ -2176,11 +2176,13 @@ int Application::Frame() {
 
 int Application::Main() {
     if (Start()) return Exiting();
-
 #if defined(LFL_QT) || defined(LFL_OSXVIDEO)
     return 0;
 #endif
-
+    return MainLoop();
+}
+    
+int Application::MainLoop() {
     while (run) {
         // if (!minimized)
         Frame();
@@ -2232,9 +2234,9 @@ void FrameScheduler::Free() {
 void FrameScheduler::Start() {
     if (wait_forever && wait_forever_thread) select_thread.Start();
 }
-void FrameScheduler::FrameDone() { if (rate_limit && app->run) maxfps.Limit(); }
+void FrameScheduler::FrameDone() { if (rate_limit && app->run && FLAGS_target_fps) maxfps.Limit(); }
 void FrameScheduler::FrameWait() {
-    if (wait_forever) {
+    if (wait_forever && !FLAGS_target_fps) {
         if (synchronize_waits) {
             wait_mutex.lock();
             frame_mutex.unlock();
@@ -2274,6 +2276,9 @@ void FrameScheduler::Wakeup() {
         FATAL("not implemented");
 #endif
     }
+}
+void FrameScheduler::UpdateTargetFPS(int fps) {
+    FLAGS_target_fps = fps;
 }
 void FrameScheduler::AddWaitForeverMouse() {
 #if defined(LFL_OSXINPUT)
@@ -2594,6 +2599,7 @@ extern "C" void ShellRun(const char *text) { return LFL::app->shell.Run(text); }
 extern "C" NativeWindow *GetNativeWindow() { return LFL::screen; }
 extern "C" LFApp        *GetLFApp()        { return LFL::app; }
 extern "C" int LFAppMain()                 { return LFL::app->Main(); }
+extern "C" int LFAppMainLoop()             { return LFL::app->MainLoop(); }
 extern "C" int LFAppFrame()                { return LFL::app->Frame(); }
 extern "C" void Reshaped(int w, int h)     { LFL::screen->Reshaped(w, h); }
 extern "C" void Minimized()                { LFL::screen->Minimized(); }

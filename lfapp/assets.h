@@ -227,6 +227,7 @@ void glLine(float x1, float y1, float x2, float y2, const Color *color);
 void glAxis(Asset*, Entity*);
 void glRoom(Asset*, Entity*);
 void glIntersect(int x, int y, Color *c);
+void glTimeResolutionShader(Shader *shader);
 void glTimeResolutionShaderWindows(Shader *shader, const Color &backup_color, const Box          &win, const Texture *tex=0);
 void glTimeResolutionShaderWindows(Shader *shader, const Color &backup_color, const vector<Box*> &win, const Texture *tex=0);
 void glSpectogram(Matrix *m, unsigned char *data, int width, int height, int hjump, float max, float clip, bool interpolate, int pd=PowerDomain::dB);
