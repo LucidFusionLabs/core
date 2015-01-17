@@ -42,6 +42,7 @@ using namespace LFL;
 
 extern "C" int main(int argc, const char *argv[]) {
 
+    if (argc < 2) { fprintf(stderr, "Usage: %s <file>\n", argv[0]); return -1; }
     app->logfilename = StrCat(LFAppDownloadDir(), "editor.txt");
     app->frame_cb = Frame;
     screen->width = 840;
@@ -61,8 +62,11 @@ extern "C" int main(int argc, const char *argv[]) {
     binds->Add(Bind(Key::Quote,     Bind::CB(bind([&]() { screen->console->Toggle(); }))));
     binds->Add(Bind(Key::Escape,    Bind::CB(bind(&Shell::quit, &app->shell, vector<string>()))));
 
-    string s = LocalFile::FileContents(StrCat(ASSETS_DIR, "lfapp_vertex.glsl"));
-    editor = new EditorDialog(screen, Fonts::Default(), new BufferFile(s.c_str(), s.size()), 1, 1);
+    chdir(app->startdir.c_str());
+    string s = LocalFile::FileContents(StrCat(argv[1]));
+    Font *font = Fonts::Get(FLAGS_default_font, FLAGS_default_font_size, Color::black);
+    editor = new EditorDialog(screen, font, new BufferFile(s.c_str(), s.size()), 1, 1, Dialog::Flag::Fullscreen);
+    editor->color = Color::white;
 
     // start our engine
     return app->Main();

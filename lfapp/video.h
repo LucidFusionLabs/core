@@ -320,6 +320,7 @@ struct Drawable {
         Box(                   const Drawable *D=0, int A=0, int L=-1) :         drawable(D), attr_id(A), line_id(L) {}
         Box(const LFL::Box &B, const Drawable *D=0, int A=0, int L=-1) : box(B), drawable(D), attr_id(A), line_id(L) {}
         typedef ArrayMemberPairSegmentIter<Box, int, &Box::attr_id, &Box::line_id> Iterator;
+        typedef ArrayMemberSegmentIter    <Box, int, &Box::attr_id>             RawIterator;
     };
     struct Attr { 
         Font *font=0; const Color *fg=0, *bg=0; const Texture *tex=0; const LFL::Box *scissor=0;
@@ -492,7 +493,7 @@ struct Window : public NativeWindow {
     void DrawDialogs();
 
     LFL::Box Box() const { return LFL::Box(0, 0, width, height); }
-    LFL::Box Box(float xs, float ys) const { return LFL::Box(0, 0, width*xs, width*ys); }
+    LFL::Box Box(float xs, float ys) const { return LFL::Box(0, 0, width*xs, height*ys); }
     LFL::Box Box(float xp, float yp, float xs, float ys, float xbl=0, float ybt=0, float xbr=-INFINITY, float ybb=-INFINITY) const {
         if (isinf(xbr)) xbr = xbl;
         if (isinf(ybb)) ybb = ybt;
@@ -1143,9 +1144,9 @@ struct Flow {
     void AppendRow(float x=0, float w=0, Box *box_out=0) { AppendBox(x, container->w*w, cur_line.height, box_out); }
     void AppendBoxArrayText(const BoxArray &in) {
         bool attr_fwd = in.attr.source;
-        for (Drawable::Box::Iterator iter(in.data); !iter.Done(); iter.Increment()) {
-            if (!attr_fwd) cur_attr = in.attr.GetAttr(iter.cur_attr1);
-            AppendText(BoxRun(iter.Data(), iter.Length()).Text(), attr_fwd ? iter.cur_attr1 : 0);
+        for (Drawable::Box::RawIterator iter(in.data); !iter.Done(); iter.Increment()) {
+            if (!attr_fwd) cur_attr = in.attr.GetAttr(iter.cur_attr);
+            AppendText(BoxRun(iter.Data(), iter.Length()).Text(), attr_fwd ? iter.cur_attr : 0);
         }
     }
 
@@ -1215,7 +1216,8 @@ struct Flow {
     State AppendBoxOrChar(int c, Drawable::Box *box, int h) {
         bool space = isspace(c);
         if (space) cur_word.len = 0;
-        for (int i=0; layout.wrap_lines && i<1000; i++) {
+        int max_line_shifts = 1000;
+        for (; layout.wrap_lines && max_line_shifts; max_line_shifts--) {
             bool wrap = 0;
             if (!cur_word.len) cur_word.fresh = 1;
             if (!layout.word_break) wrap = cur_line.end && p.x + box->box.w > cur_line.end;
@@ -1230,6 +1232,7 @@ struct Flow {
             }
             break;
         }
+        CHECK(max_line_shifts);
         cur_line.fresh = 0;
         cur_word.fresh = 0;
         if (c == '\n') { if (!layout.ignore_newlines) AppendNewline(); return State::OK; }

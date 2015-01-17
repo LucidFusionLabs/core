@@ -1438,6 +1438,13 @@ int LocalFile::Write(const void *buf, size_t size) {
 bool LocalFile::Flush() { fflush((FILE*)impl); return true; }
 #endif /* LFL_ANDROID */
 
+string LocalFile::CurrentDirectory(int max_size) {
+    string ret(max_size, 0); 
+    getcwd((char*)ret.data(), ret.size());
+    ret.resize(strlen(ret.data()));
+    return ret;
+}
+
 DirectoryIter::DirectoryIter(const string &path, int dirs, const char *Pref, const char *Suf) : P(Pref), S(Suf), init(0) {
     if (LocalFile::IsDirectory(path)) pathname = path;
     else {
@@ -1889,6 +1896,7 @@ int Application::Create(int argc, const char **argv, const char *source_filename
 #endif
     SetLFAppMainThread();
     progname = argv[0];
+    startdir = LocalFile::CurrentDirectory();
 
 #ifdef __APPLE__
     char rpath[1024];
@@ -1937,9 +1945,7 @@ int Application::Create(int argc, const char **argv, const char *source_filename
 
     const char *LFLHOME=getenv("LFLHOME");
     if (LFLHOME && *LFLHOME) chdir(LFLHOME);
-
-    char cwd[256]; getcwd(cwd, sizeof(cwd));
-    INFO(screen->caption, ": lfapp init: LFLHOME=", cwd, " DLDIR=", LFAppDownloadDir());
+    INFO(screen->caption, ": lfapp init: LFLHOME=", LocalFile::CurrentDirectory(), " DLDIR=", LFAppDownloadDir());
 
 #ifndef _WIN32
     if (FLAGS_max_rlimit_core) {

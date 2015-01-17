@@ -919,6 +919,7 @@ struct LocalFile : public File {
     static const char Slash;
     static bool mkdir(const string &dir, int mode);
     static int IsDirectory(const string &localfilename);
+    static string CurrentDirectory(int max_size=1024);
     static string FileContents(const string &localfilename) { return LocalFile(localfilename, "r").Contents(); }
     static int WriteFile(const string &path, const StringPiece &sp) {
         LocalFile file(path, "w");
@@ -1237,7 +1238,7 @@ struct Advertising { static void ShowAds(); static void HideAds(); };
 struct CUDA : public Module { int Init(); };
 
 struct Application : public ::LFApp, public Module {
-    string progname, logfilename;
+    string progname, logfilename, startdir;
     FILE *logfile=0;
     mutex log_mutex;
     Timer app_time, frame_time;

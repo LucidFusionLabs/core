@@ -507,7 +507,7 @@ struct Editor : public TextArea {
     vector<LineOffset> file_line;
     int last_fb_lines=0, wrapped_lines=0;
 
-    Editor(Window *W, Font *F, File *I) : TextArea(W, F), file(I) { line_fb.wrap=1; BuildLineMap(); }
+    Editor(Window *W, Font *F, File *I) : TextArea(W, F), file(I) { /*line_fb.wrap=1;*/ BuildLineMap(); }
     void BuildLineMap() {
         int ind=0, offset=0;
         for (const char *l = file->NextLineRaw(&offset); l; l = file->NextLineRaw(&offset))
@@ -699,15 +699,17 @@ struct Console : public TextArea {
 };
 
 struct Dialog : public GUI {
+    struct Flag { enum { None=0, Fullscreen=1 }; };
     Font *font=0;
     Color color=Color(25,60,130,220);
     Box title, resize_left, resize_right, resize_bottom, close;
-    bool deleted=0, moving=0, resizing_left=0, resizing_right=0, resizing_top=0, resizing_bottom=0;
+    bool deleted=0, moving=0, resizing_left=0, resizing_right=0, resizing_top=0, resizing_bottom=0, fullscreen=0;
     point mouse_start, win_start;
     int zsort=0;
-    Dialog(float w, float h) : GUI(screen), font(Fonts::Get(FLAGS_default_font, 14, Color::white)) {
+    Dialog(float w, float h, int flag=0) : GUI(screen), font(Fonts::Get(FLAGS_default_font, 14, Color::white)) {
         screen->dialogs.push_back(this);
         box = screen->Box().center(screen->Box(w, h));
+        fullscreen = flag & Flag::Fullscreen;
         active = true;
         Layout();
     }
@@ -715,6 +717,7 @@ struct Dialog : public GUI {
     virtual void Draw();
     virtual void Layout() {
         Reset();
+        if (fullscreen) return;
         title         = Box(0,       0,      box.w, screen->height*.05);
         resize_left   = Box(0,       -box.h, 3,     box.h);
         resize_right  = Box(box.w-3, -box.h, 3,     box.h);
@@ -784,7 +787,7 @@ struct SliderTweakDialog : public Dialog {
 struct EditorDialog : public Dialog {
     Editor editor;
     Widget::Scrollbar v_scrollbar, h_scrollbar;
-    EditorDialog(Window *W, Font *F, File *I, float w=.5, float h=.5) : Dialog(w, h), editor(W, F, I),
+    EditorDialog(Window *W, Font *F, File *I, float w=.5, float h=.5, int flag=0) : Dialog(w, h, flag), editor(W, F, I),
     v_scrollbar(this), h_scrollbar(this, Box(), Widget::Scrollbar::Flag::AttachedHorizontal) {}
 
     void Layout() {
