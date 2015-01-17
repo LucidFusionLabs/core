@@ -278,6 +278,7 @@ Iter LastFlattenedArrayValIter(const X &data, int l) { return Iter(X_or_1(l)-1, 
 
 template <class X, int (*GetVal)(const X&, int), class Iter>
 void IterFlattenedArrayVals(const X &data, int l, Iter *o, int n) {
+    if (!l) return;
     for (int i=abs(n), d; i; i-=d) {
         int v = GetVal(data, o->first);
         if (n > 0) {
