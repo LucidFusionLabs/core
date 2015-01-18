@@ -858,7 +858,7 @@ struct Font : public FontInterface {
     /**/               void Size(const String16        &text, Box *out, int width=0, int *lines_out=0) { return Size(String16Piece         (text), out, width, lines_out); }
     template <class X> void Size(const X               *text, Box *out, int width=0, int *lines_out=0) { return Size(StringPiece::Unbounded(text), out, width, lines_out); }
 
-    template <class X> int Width(const StringPieceT<X> &text) { Box b; Size(text, &b); CHECK_EQ(b.h, height); return b.w; }
+    template <class X> int Width(const StringPieceT<X> &text) { Box b; Size(text, &b); if (b.w) CHECK_EQ(b.h, height); return b.w; }
     /**/               int Width(const string          &text) { return Width(StringPiece           (text)); }
     /**/               int Width(const String16        &text) { return Width(String16Piece         (text)); }
     template <class X> int Width(const X               *text) { return Width(StringPiece::Unbounded(text)); }
