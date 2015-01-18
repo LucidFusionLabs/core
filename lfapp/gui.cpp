@@ -206,7 +206,7 @@ void TextArea::Resized(int w, int h) {
     int lines = adjust_lines + skip_last_lines, fb_flag = LinesFrameBuffer::Flag::NoVWrap | LinesFrameBuffer::Flag::Flush;
     line_fb.p = point(0, adjust_lines * font->height);
     for (int i=start_line; i<line.ring.count && lines < line_fb.lines; i++)
-        lines += line_fb.PushFrontAndUpdate(&line[-i-1], 0, 0, fb_flag);
+        lines += line_fb.PushFrontAndUpdate(&line[-i-1], -line_left, 0, 0, fb_flag);
     line_fb.p = point(0, line_fb.Height());
 }
 
@@ -217,20 +217,31 @@ void TextArea::UpdateScrolled() {
         WrappedLineOffset new_first_line = GetWrappedLineOffset(v_scrolled), new_last_line;
         if ((v_updated = new_first_line != first_line)) {
             UpdateLines(new_first_line, &new_last_line);
-            if (h_changed) UpdateHScrolled(0, false);
+            if (h_changed) UpdateHScrolled(4000 * h_scrolled, false);
             if (1)         UpdateVScrolled(new_first_line, new_last_line);
         }
     }
-    if (h_changed && !v_updated) UpdateHScrolled(0, true);
+    if (h_changed && !v_updated) UpdateHScrolled(4000 * h_scrolled, true);
 }
 
 void TextArea::UpdateHScrolled(int x, bool update_fb) {
+    line_left = x;
+    if (!update_fb) return;
+
+    line_fb.fb.Attach();
+    ScopedDrawMode drawmode(DrawMode::_2D);
+    screen->gd->Clear();
+    Resized(line_fb.w, line_fb.h);
+    line_fb.scroll=v2();
+    line_fb.fb.Release();
 }
 
 void TextArea::UpdateVScrolled(const WrappedLineOffset &new_first_line, const WrappedLineOffset &new_last_line) {
+#if 0
     printf("UpdateScrolled first_line %d,%d -> %d,%d last_line %d,%d -> %d,%d\n",
            first_line.first, first_line.second, new_first_line.first, new_first_line.second,
            last_line.first,  last_line.second,  new_last_line.first,  new_last_line.second);
+#endif
     first_line = new_first_line;
     last_line = new_last_line;
 
@@ -248,15 +259,15 @@ void TextArea::UpdateVScrolled(const WrappedLineOffset &new_first_line, const Wr
 
     line_fb.fb.Attach();
     int wl=0, tl=0; //read_lines.second;
-    if (!resized &&  reverse && first_line.second) wl += line_fb.PushFrontAndUpdate(line.Front(), first_line.second, tl);
-    if (!resized && !reverse &&  last_line.second) wl += line_fb.PushBackAndUpdate (line.Back (), last_line .second, tl);
+    if (!resized &&  reverse && first_line.second) wl += line_fb.PushFrontAndUpdate(line.Front(), -line_left, first_line.second, tl);
+    if (!resized && !reverse &&  last_line.second) wl += line_fb.PushBackAndUpdate (line.Back (), -line_left, last_line .second, tl);
 
     for (int i=0, bo=0, l, il; i<tl && wl<tl; i++, bo += l+(!reverse || i)) {
         Line *L = 0;
         int ind =0;
 
-        if (reverse) il = line_fb.PushFrontAndUpdate(L, 0, tl-wl);
-        else         il = line_fb. PushBackAndUpdate(L, 0, tl-wl);
+        if (reverse) il = line_fb.PushFrontAndUpdate(L, -line_left, 0, tl-wl);
+        else         il = line_fb. PushBackAndUpdate(L, -line_left, 0, tl-wl);
         // new_last_line = WrappedLineOffset(ind, il == L->Lines() ? 0 : il);
         wl += il;
     }
@@ -290,55 +301,9 @@ void TextArea::Draw(const Box &b, bool draw_cursor) {
 #endif
 }
 
-#if 0
-void TextArea::UpdateLineOffsets(bool size_changed, bool draw_cursor, int scrolled_lines) {
-    start_line = -1;
-    for (int i=0; i<line.ring.count; i++) {
-        Line *l = &line[-i-1];
-        if (size_changed) l->Layout();
-        int wrapped_line_lines = l->Lines();
-        seen_lines += wrapped_line_lines;
-        if (start_line < 0 && seen_lines > scrolled_lines) {
-            start_line = i;
-            break;
-        }
-    }
-            want_lines -= (seen_lines - wrapped_line_lines - scrolled_lines);
-}
-
-void TextArea::UpdateLineOffsets(bool size_changed, bool draw_cursor, int start_line, int ) {
-    int scrolled_lines = scrolled_up / font->height, h = box_lines * font->height;
-    if (scrolled_lines) UpdateLineOffsets(size_changed, draw_cursor, scrolled_lines);
-    int want_lines = h / font->height - ((draw_cursor && cursor_newline && !scrolled_up) ? cmd_lines : 0);
-    int seen_lines = 0;
-
-
-    end_line = -1;
-    for (int i=0; i<line.ring.count; i++) {
-        Line *l = &line[-i-1];
-        if (size_changed) l->Layout();
-        int wrapped_line_lines = l->Lines();
-        seen_lines += wrapped_line_lines;
-        if (start_line < 0 && seen_lines > scrolled_lines) {
-            start_line = i;
-            want_lines -= (seen_lines - wrapped_line_lines - scrolled_lines);
-        }
-        if (seen_lines >= scrolled_lines + want_lines) {
-            end_line = i;
-            break;
-        }
-    }
-    pad_lines = seen_lines - scrolled_lines - want_lines;
-    if (!bottom_align && pad_lines < 0) pad_lines = 0;
-    if (start_line < 0) { start_line = end_line = 0; }
-    if (end_line < 0) end_line = line.ring.count;
-}
-#endif
-
-#if 0
 void TextArea::DrawOrCopySelection() {
-    bool copy = last_selection_changing && !selection_changing;
-    last_selection_changing = selection_changing;
+    bool copy = selection_changing_previously && !selection_changing;
+    selection_changing_previously = selection_changing;
     if (selection_changing) selection_end = screen->mouse;
     if (selection_beg == selection_end) return;
     Box sel_glyph_beg, sel_glyph_end;
@@ -347,14 +312,14 @@ void TextArea::DrawOrCopySelection() {
     point sel_beg = selection_beg, sel_end = selection_end;
     if (copy) selection_beg = selection_end = point();
 
-    int h = prev_multiple_of_n(draw_win.h, font->height);
-    Box win(draw_win.x, draw_win.y, draw_win.w, h + pad_lines * font->height + 1);
+    int h = line_fb.Height();
+    Box win(line_fb.Width(), h);
 
-    int sel_bl = prev_multiple_of_n(sel_beg.y-win.y, font->height);
-    int sel_el = prev_multiple_of_n(sel_end.y-win.y, font->height);
+    int sel_bl = PrevMultipleOfN(sel_beg.y-win.y, font->height);
+    int sel_el = PrevMultipleOfN(sel_end.y-win.y, font->height);
     if (sel_el > sel_bl || (sel_el == sel_bl && sel_end.x < sel_beg.x)) Typed::Swap(sel_end, sel_beg);
 
-    int lines = end_line - start_line, seen_lines = 0, last_seen_y = win.h;
+    int lines = last_line.first - first_line.first, seen_lines = 0, last_seen_y = win.h;
     for (int i=0, n = min(lines, line.ring.count); i<n && (!found_line_beg || !found_line_end); i++) {
         // font->FindGlyphFromCoords(l->text, point(sp.x, last_seen_y - sp.y), win.w, &sc, &sg);
 #define MyFindGlyph(sp, sl, sg, sc) \
@@ -362,12 +327,14 @@ void TextArea::DrawOrCopySelection() {
         l->glyphs.GetGlyphFromCoords(point(sp.x, last_seen_y - sp.y), &sc, &sg); \
         sg.y += last_seen_y - font->height;
 
+#if 0
         Line *l = &line[-end_line+i];
         seen_lines += l->Lines();
         int seen_y = win.y + win.h - seen_lines * font->height;
         if (seen_y < sel_beg.y && !found_line_beg) { found_line_beg=1; MyFindGlyph(sel_beg, sel_line_beg, sel_glyph_beg, sel_char_beg); }
         if (seen_y < sel_end.y && !found_line_end) { found_line_end=1; MyFindGlyph(sel_end, sel_line_end, sel_glyph_end, sel_char_end); }
         last_seen_y = seen_y;
+#endif
     }
     if (!found_line_beg || !found_line_end) { ERROR("DrawOrCopySelection failed"); return; }
 
@@ -407,9 +374,8 @@ void TextArea::DrawOrCopySelection() {
         }
         if (len == l->Size()) copy_text += "\n";
     }
-    if (!copy_text.empty()) Clipboard::set(copy_text.c_str());
+    if (!copy_text.empty()) Clipboard::Set(copy_text);
 }
-#endif
 
 /* Editor */
 
@@ -420,8 +386,8 @@ void Editor::UpdateLines(const WrappedLineOffset &new_first_line, const WrappedL
 
     LineOffsetSegment read_lines;
     bool reverse = new_first_line < first_line && !resized;
-    int dist = abs(new_first_line.first - first_line.first);
-    if (dist < line_fb.lines && !resized) {
+    int dist = resized ? line_fb.lines : abs(new_first_line.first - first_line.first);
+    if (dist < line_fb.lines) {
         if (reverse) read_lines = LineOffsetSegment(new_first_line.first, dist);
         else         read_lines = LineOffsetSegment(new_first_line.first + line_fb.lines - dist, dist);
     } else           read_lines = LineOffsetSegment(new_first_line.first, line_fb.lines);

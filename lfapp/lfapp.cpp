@@ -1831,10 +1831,10 @@ string FlagMap::Match(const string &key, const char *source_filename) const {
 
 int FlagMap::getopt(int argc, const char **argv, const char *source_filename) {
     for (optind=1; optind<argc; /**/) {
-        const char *arg = argv[optind++], *key = arg + 1, *val = "";
+        const char *arg = argv[optind], *key = arg + 1, *val = "";
         if (*arg != '-' || *(arg+1) == 0) break;
 
-        if (optind < argc && !(IsBool(key) && *(argv[optind]) == '-')) val = argv[optind++];
+        if (++optind < argc && !(IsBool(key) && *(argv[optind]) == '-')) val = argv[optind++];
         if (!strcmp(key, "fullhelp")) { Print(); return -1; }
 
         if (!Set(key, val)) {

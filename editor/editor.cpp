@@ -22,6 +22,7 @@
 #include "lfapp/gui.h"
 
 namespace LFL {
+DEFINE_bool(wrap, 0, "Wrap lines");
 AssetMap asset;
 SoundAssetMap soundasset;
 Scene scene;
@@ -42,7 +43,6 @@ using namespace LFL;
 
 extern "C" int main(int argc, const char *argv[]) {
 
-    if (argc < 2) { fprintf(stderr, "Usage: %s <file>\n", argv[0]); return -1; }
     app->logfilename = StrCat(LFAppDownloadDir(), "editor.txt");
     app->frame_cb = Frame;
     screen->width = 840;
@@ -63,9 +63,13 @@ extern "C" int main(int argc, const char *argv[]) {
     binds->Add(Bind(Key::Escape,    Bind::CB(bind(&Shell::quit, &app->shell, vector<string>()))));
 
     chdir(app->startdir.c_str());
-    string s = LocalFile::FileContents(StrCat(argv[1]));
+    int optind = Singleton<FlagMap>::Get()->optind;
+    if (optind >= argc) { fprintf(stderr, "Usage: %s [-flags] <file>\n", argv[0]); return -1; }
+    string s = LocalFile::FileContents(StrCat(argv[optind]));
+
     Font *font = Fonts::Get(FLAGS_default_font, FLAGS_default_font_size, Color::black);
-    editor = new EditorDialog(screen, font, new BufferFile(s.c_str(), s.size()), 1, 1, Dialog::Flag::Fullscreen);
+    editor = new EditorDialog(screen, font, new BufferFile(s.c_str(), s.size()), 1, 1,
+                              Dialog::Flag::Fullscreen | (FLAGS_wrap ? EditorDialog::Flag::Wrap : 0));
     editor->color = Color::white;
 
     // start our engine

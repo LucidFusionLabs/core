@@ -353,16 +353,16 @@ struct TextGUI : public KeyboardGUI {
             if (!(flag & Flag::NoLayout)) l->Layout(wrap ? w : 0, flag & Flag::Flush);
             RingFrameBuffer::Update(l, Box(0, l->Lines() * font_height), paint_cb, true);
         }
-        int PushFrontAndUpdate(Line *l, int wlo=0, int wll=0, int flag=0) {
+        int PushFrontAndUpdate(Line *l, int xo=0, int wlo=0, int wll=0, int flag=0) {
             if (!(flag & Flag::NoLayout)) l->Layout(wrap ? w : 0, flag & Flag::Flush);
             int wl = max(0, l->Lines() - wlo), lh = (wll ? min(wll, wl) : wl) * font_height;
-            if (!lh) return 0; Box b(0, wl * font_height - lh, 0, lh);
+            if (!lh) return 0; Box b(xo, wl * font_height - lh, 0, lh);
             return RingFrameBuffer::PushFrontAndUpdate(l, b, paint_cb, !(flag & Flag::NoVWrap)) / font_height;
         }
-        int PushBackAndUpdate(Line *l, int wlo=0, int wll=0, int flag=0) {
+        int PushBackAndUpdate(Line *l, int xo=0, int wlo=0, int wll=0, int flag=0) {
             if (!(flag & Flag::NoLayout)) l->Layout(wrap ? w : 0, flag & Flag::Flush);
             int wl = max(0, l->Lines() - wlo), lh = (wll ? min(wll, wl) : wl) * font_height;
-            if (!lh) return 0; Box b(0, wlo * font_height, 0, lh);
+            if (!lh) return 0; Box b(xo, wlo * font_height, 0, lh);
             return RingFrameBuffer::PushBackAndUpdate(l, b, paint_cb, true) / font_height;
         }
         void PushFrontAndUpdateOffset(Line *l, int lo) {
@@ -451,7 +451,7 @@ struct TextArea : public TextGUI {
     bool wrap_lines=1, write_timestamp=0, write_newline=1;
     bool selection_changing=0, selection_changing_previously=0;
     float v_scrolled=0, h_scrolled=0, last_v_scrolled=0, last_h_scrolled=0;
-    int scroll_inc=10, scrolled_lines=0;
+    int line_left=0, scroll_inc=10, scrolled_lines=0;
     point selection_beg, selection_end;
     LinkCB new_link_cb, hover_link_cb;
 
@@ -481,9 +481,7 @@ struct TextArea : public TextGUI {
     virtual void Draw(const Box &w, bool cursor);
     virtual void DrawWithShader(const Box &w, bool cursor, Shader *shader)
     { glTimeResolutionShader(shader); Draw(w, cursor); screen->gd->UseShader(0); }
-    // void UpdateLineOffsets(bool size_changed, bool cursor);
-    // void UpdateWrapping(int width, bool new_lines_only);
-    // void DrawOrCopySelection();
+    void DrawOrCopySelection();
 
     bool Wrap() const { return line_fb.wrap; }
     void ClickCB(int button, int x, int y, int down) {
@@ -507,7 +505,7 @@ struct Editor : public TextArea {
     vector<LineOffset> file_line;
     int last_fb_lines=0, wrapped_lines=0;
 
-    Editor(Window *W, Font *F, File *I) : TextArea(W, F), file(I) { /*line_fb.wrap=1;*/ BuildLineMap(); }
+    Editor(Window *W, Font *F, File *I, bool Wrap=0) : TextArea(W, F), file(I) { line_fb.wrap=Wrap; BuildLineMap(); }
     void BuildLineMap() {
         int ind=0, offset=0;
         for (const char *l = file->NextLineRaw(&offset); l; l = file->NextLineRaw(&offset))
@@ -699,7 +697,7 @@ struct Console : public TextArea {
 };
 
 struct Dialog : public GUI {
-    struct Flag { enum { None=0, Fullscreen=1 }; };
+    struct Flag { enum { None=0, Fullscreen=1, Next=2 }; };
     Font *font=0;
     Color color=Color(25,60,130,220);
     Box title, resize_left, resize_right, resize_bottom, close;
@@ -785,9 +783,10 @@ struct SliderTweakDialog : public Dialog {
 };
 
 struct EditorDialog : public Dialog {
+    struct Flag { enum { Wrap=Dialog::Flag::Next }; };
     Editor editor;
     Widget::Scrollbar v_scrollbar, h_scrollbar;
-    EditorDialog(Window *W, Font *F, File *I, float w=.5, float h=.5, int flag=0) : Dialog(w, h, flag), editor(W, F, I),
+    EditorDialog(Window *W, Font *F, File *I, float w=.5, float h=.5, int flag=0) : Dialog(w, h, flag), editor(W, F, I, flag & Flag::Wrap),
     v_scrollbar(this), h_scrollbar(this, Box(), Widget::Scrollbar::Flag::AttachedHorizontal) {}
 
     void Layout() {
