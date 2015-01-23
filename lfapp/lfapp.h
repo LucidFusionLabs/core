@@ -80,6 +80,7 @@ using LFL_STL_NAMESPACE::inserter;
 using LFL_STL_NAMESPACE::search;
 using LFL_STL_NAMESPACE::sort;
 using LFL_STL_NAMESPACE::unique;
+using LFL_STL_NAMESPACE::reverse;
 using LFL_STL_NAMESPACE::equal_to;
 using LFL_STL_NAMESPACE::lower_bound;
 using LFL_STL_NAMESPACE::set_difference;

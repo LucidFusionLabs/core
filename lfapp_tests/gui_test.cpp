@@ -22,8 +22,7 @@
 #include "lfapp/css.h"
 #include "lfapp/gui.h"
 
-using namespace LFL;
-
+namespace LFL {
 TEST(GUITest, TextArea) { 
     {
         TextArea ta(screen, Fonts::Fake());
@@ -402,3 +401,4 @@ TEST(BrowserTest, CSS) {
     sheet.Done();
 }
 #endif
+}; // namespace LFL

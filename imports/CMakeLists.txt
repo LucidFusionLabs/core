@@ -65,7 +65,7 @@ endif(LFL_GLOG)
 if(LFL_GTEST)
 add_subdirectory(protobuf/gtest)
 set(GTEST_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/protobuf/gtest/include PARENT_SCOPE)
-set(GTEST_LIB ${CMAKE_CURRENT_SOURCE_DIR}/protobuf/gtest/lib/.libs/libgtest.a ${CMAKE_CURRENT_SOURCE_DIR}/protobuf/gtest/lib/.libs/libgtest_main.a PARENT_SCOPE)
+set(GTEST_LIB ${CMAKE_CURRENT_SOURCE_DIR}/protobuf/gtest/lib/.libs/libgtest.a PARENT_SCOPE)
 endif(LFL_GTEST)
 
 # tcmalloc

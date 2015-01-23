@@ -20,8 +20,7 @@
 #include "lfapp/lfapp.h"
 #include "lfapp/dom.h"
 
-using namespace LFL;
-
+namespace LFL {
 TEST(VideoTest, Color) {
     float h, s, v;
     Color r(1.0, 0.0, 0.0, 1.0);
@@ -173,3 +172,4 @@ TEST(VideoTest, FlowLayout) {
         }
     }
 }
+}; // namespace LFL

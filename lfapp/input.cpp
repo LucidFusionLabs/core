@@ -721,7 +721,7 @@ int Input::MouseEventDispatch(InputEvent::Id event, const point &p, int down) {
 
 int MouseController::Input(InputEvent::Id event, const point &p, int down, int flag) {
     int fired = 0;
-    for (auto e = hit.begin(); e != hit.end(); ++e) {
+    for (auto e = hit.data.begin(); e != hit.data.end(); ++e) {
         if (e->deleted || !e->active ||
             (!down && e->evtype == Event::Click && e->CB.type != Callback::CB_COORD)) continue;
 
@@ -747,7 +747,7 @@ int MouseController::Input(InputEvent::Id event, const point &p, int down, int f
             if (flag) break;
         }
     }
-    if (FLAGS_input_debug && down) INFO("MouseController::Input ", screen->mouse.DebugString(), " fired=", fired, ", hitboxes=", hit.size());
+    if (FLAGS_input_debug && down) INFO("MouseController::Input ", screen->mouse.DebugString(), " fired=", fired, ", hitboxes=", hit.data.size());
     return fired;
 }
 

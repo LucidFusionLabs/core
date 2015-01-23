@@ -143,7 +143,7 @@ struct MouseController {
         HitBox(int ET=0, const Box &b=Box(), const Callback &cb=Callback()) : box(b), evtype(ET), CB(cb) {}
     };
 
-    FreeListVector<HitBox> hit;
+    IterableFreeListVector<HitBox> hit;
     Events events;
     bool active=0;
     virtual ~MouseController() { Clear(); }
