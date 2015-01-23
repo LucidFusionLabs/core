@@ -19,8 +19,7 @@
 #include "gtest/gtest.h"
 #include "lfapp/lfapp.h"
 
-using namespace LFL;
-
+namespace LFL {
 #ifdef LFL_PNG
 TEST(ImageFormatTest, PNG) {
     Texture tex(256, 256), tex_in;
@@ -107,3 +106,4 @@ TEST(GUITest, Tiles) {
     EXPECT_EQ(8, tile_test_b);
     EXPECT_EQ(8, tile_test_j);
 }
+}; // namespace LFL

@@ -19,8 +19,7 @@
 #include "gtest/gtest.h"
 #include "lfapp/lfapp.h"
 
-using namespace LFL;
-
+namespace LFL {
 TEST(MathTest, util) {
     EXPECT_EQ(true,  Equal(Decimals( 10.23456),  .23456));
     EXPECT_EQ(true,  Equal(Decimals(-10.23456), -.23456));
@@ -118,3 +117,4 @@ TEST(MathTest, matrix) {
         { double *r = Ainv.row(1); EXPECT_EQ(1, Equal(-0.2, r[0])); EXPECT_EQ(1, Equal( 0.4, r[1])); }
     }
 }
+}; // namespace LFL

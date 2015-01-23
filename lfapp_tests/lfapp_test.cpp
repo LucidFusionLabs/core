@@ -22,8 +22,7 @@
 #include "lfapp/css.h"
 #include "lfapp/gui.h"
 
-using namespace LFL;
-
+namespace LFL {
 struct StringMethodResolutionTest {
     int A=0, B=0, C=0, D=0;
     template <class X> void F(const StringPieceT<X> &text) { A++; }
@@ -341,3 +340,4 @@ TEST(LocalFileTest, Read) {
         EXPECT_EQ(contents, buf);
     }
 }
+}; // namespace LFL

@@ -16,3 +16,6 @@ include_directories(${GTEST_INCLUDE})
 
 add_executable(tests test.cpp assets_test.cpp gui_test.cpp lfapp_test.cpp lftypes_test.cpp math_test.cpp video_test.cpp)
 target_link_libraries(tests ${LFAPP_LIB} ${GTEST_LIB})
+
+add_executable(datastructure_test datastructure_test.cpp)
+target_link_libraries(datastructure_test ${LFAPP_LIB} ${GTEST_LIB})

@@ -199,23 +199,34 @@ template <class T1, class T2, class T3, class T4> struct Quadruple {
     bool operator<(const Quadruple &r) const { SortImpl4(first, r.first, second, r.second, third, r.third, fourth, r.fourth); }
 };
 
-template <class X> struct FreeListVector : public vector<X> {
+template <class X> struct FreeListVector {
+    vector<X> data;
     vector<int> free_list;
-    void Clear() { this->clear(); free_list.clear(); }
-    int Insert(const X &v) {
+
+    const X& operator[](int i) const { return data[i]; }
+    /**/  X& operator[](int i)       { return data[i]; }
+
+    virtual void Clear() { data.clear(); free_list.clear(); }
+    virtual int Insert(const X &v) {
         if (free_list.empty()) {
-            this->push_back(v);
-            return this->size()-1;
+            data.push_back(v);
+            return data.size()-1;
         } else {
             int free_ind = PopBack(free_list);
-            (*this)[free_ind] = v;
+            data[free_ind] = v;
             return free_ind;
         }
     }
-    void Erase(unsigned ind) {
-        CHECK_LT(ind, this->size());
-        (*this)[ind].deleted = 1; // expectes X.deleted
+    virtual void Erase(unsigned ind) {
+        CHECK_LT(ind, data.size());
         free_list.push_back(ind);
+    }
+};
+
+template <class X> struct IterableFreeListVector : public FreeListVector<X> { /// Expects X.deleted
+    virtual void Erase(unsigned ind) {
+        FreeListVector<X>::Erase(ind);
+        FreeListVector<X>::data[ind].deleted = 1;
     }
 };
 
@@ -295,6 +306,20 @@ void IterFlattenedArrayVals(const X &data, int l, Iter *o, int n) {
             }
         }
     }
+}
+
+template <class X, int (*GetVal)(const X&, int), class Iter>
+int FlattenedArrayValDist(const X &data, int l, Iter i1, Iter i2, int maxdist=0) {
+    int dist = 0;
+    if (i2 < i1) swap(i1, i2);
+    for (int i = i1.first; i <= i2.first; i++) {
+        int v = GetVal(data, i);
+        dist += v;
+        if (i == i1.first) dist -= i1.second;
+        if (i == i2.first) dist -= (v - i2.second);
+        if (maxdist && dist >= maxdist) return maxdist;
+    }
+    return dist;
 }
 
 template <class X> struct ValueSet {

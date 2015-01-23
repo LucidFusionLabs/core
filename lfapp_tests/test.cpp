@@ -19,18 +19,20 @@
 #include "gtest/gtest.h"
 #include "lfapp/lfapp.h"
 
-using namespace LFL;
+GTEST_API_ int main(int argc, const char **argv) {
+    testing::InitGoogleTest(&argc, (char**)argv);
+    LFL::FLAGS_default_font = LFL::FakeFont::Filename();
+    CHECK_EQ(LFL::app->Create(argc, argv, __FILE__), 0);
+    return RUN_ALL_TESTS();
+}
 
+namespace LFL {
 class MyEnvironment : public ::testing::Environment {
   public:
     virtual ~MyEnvironment() {}
     virtual void TearDown() {}
-    virtual void SetUp() { 
-        FLAGS_default_font = FakeFont::Filename();
-        const char *av[] = { "testargv0", 0 };
-        CHECK_EQ(app->Create(1, av, __FILE__), 0);
-    }
+    virtual void SetUp() {}
 };
 
 ::testing::Environment* const my_env = ::testing::AddGlobalTestEnvironment(new MyEnvironment);
-
+}; // namespace LFL
