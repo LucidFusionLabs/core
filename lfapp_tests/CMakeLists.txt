@@ -7,6 +7,7 @@ set(LFL_OPENCV 1)
 set(LFL_LIBCSS 1)
 set(LFL_ICONV 1)
 set(LFL_PNG 1)
+set(LFL_JUDY 1)
 
 lfl_project(lfapp_test)
 add_subdirectory(../lfapp ${CMAKE_CURRENT_BINARY_DIR}/lfapp_obj)
