@@ -68,10 +68,9 @@ struct judymap_impl {
         void *k, **v;
         bool done;
 
-        iterator(judymap_impl *Impl, void *K=0) : impl(Impl), k(K), v(0), done(0) { if (k) done = !(v = impl->get(k)); }
-        iterator(const iterator &r) : impl(r.impl), k(r.k), v(r.v), done(r.done) {}
-
-        bool operator==(const iterator &r) { return (done && r.done) || (!done && !r.done && k == r.k); }
+        iterator(judymap_impl *Impl) : impl(Impl), k(0), v(0), done(0) {}
+        iterator(judymap_impl *Impl, void *K) : impl(Impl), k(K) { done = !(v = impl->get(k)); }
+        bool operator==(const iterator &r) const { return (done && r.done) || (!done && !r.done && k == r.k); }
         void operator++(int) { impl->next(this); }
     };
 
@@ -104,6 +103,8 @@ template <class X, class Y> struct judymap {
         const_pair(key_type k, value_type *v) : first(k), second(*v) {}
     };
 
+    struct const_iterator;
+
     struct iterator {
         judymap_impl::iterator impl;
 
@@ -116,8 +117,10 @@ template <class X, class Y> struct judymap {
         pair       operator*()       { return       pair((key_type)(long long)impl.k, (value_type*)impl.v); } /* non const dereference */
         const_pair operator*() const { return const_pair((key_type)(long long)impl.k, (value_type*)impl.v); }
 
-        bool operator==(const iterator &r) { return   impl == r.impl;  }
-        bool operator!=(const iterator &r) { return !(impl == r.impl); }
+        bool operator==(const       iterator &r) const { return   impl == r.impl;  }
+        bool operator!=(const       iterator &r) const { return !(impl == r.impl); }
+        bool operator==(const const_iterator &r) const { return   impl == r.impl;  }
+        bool operator!=(const const_iterator &r) const { return !(impl == r.impl); }
 
         void operator++()    { impl++; }
         void operator++(int) { impl++; }
@@ -133,10 +136,12 @@ template <class X, class Y> struct judymap {
 
         const_iterator& operator=(const const_iterator &r) { impl=r.impl; return *this; }
 
-        const_pair operator*() const { return const_pair((key_type)impl.k, (value_type*)impl.v); }
+        const_pair operator*() const { return const_pair((key_type)(long)impl.k, (value_type*)impl.v); }
 
-        bool operator==(const const_iterator &r) { return   impl == r.impl;  }
-        bool operator!=(const const_iterator &r) { return !(impl == r.impl); }
+        bool operator==(const const_iterator &r) const { return   impl == r.impl;  }
+        bool operator!=(const const_iterator &r) const { return !(impl == r.impl); }
+        bool operator==(const       iterator &r) const { return   impl == r.impl;  }
+        bool operator!=(const       iterator &r) const { return !(impl == r.impl); }
 
         void operator++()    { impl++; }
         void operator++(int) { impl++; }
@@ -153,19 +158,19 @@ template <class X, class Y> struct judymap {
     iterator       end()       { iterator       iter(this); iter.impl.done=1; return iter; }
     const_iterator end() const { const_iterator iter(this); iter.impl.done=1; return iter; }
 
-    iterator       find(const key_type &k)       { iterator       iter(this, (void*)k); return iter; }
-    const_iterator find(const key_type &k) const { const_iterator iter(this, (void*)k); return iter; }
+    iterator       find(const key_type &k)       { iterator       iter(this, (void*)(long)k); return iter; }
+    const_iterator find(const key_type &k) const { const_iterator iter(this, (void*)(long)k); return iter; }
 
-    iterator       lower_bound(const key_type &k)       { iterator       iter(this, (void*)k); if (!iter.impl.done) return iter; impl.next(&iter.impl, (void*)k); return iter; }
-    const_iterator lower_bound(const key_type &k) const { const_iterator iter(this, (void*)k); if (!iter.impl.done) return iter; impl.next(&iter.impl, (void*)k); return iter; }
+    iterator       lower_bound(const key_type &k)       { iterator       iter(this, (void*)(long)k); if (!iter.impl.done) return iter; impl.next(&iter.impl, (void*)(long)k); return iter; }
+    const_iterator lower_bound(const key_type &k) const { const_iterator iter(this, (void*)(long)k); if (!iter.impl.done) return iter; impl.next(&iter.impl, (void*)(long)k); return iter; }
 
-    iterator       upper_bound(const key_type &k)       { iterator       iter(this, (void*)k);                                   impl.next(&iter.impl, (void*)k); return iter; }
-    const_iterator upper_bound(const key_type &k) const { const_iterator iter(this, (void*)k);                                   impl.next(&iter.impl, (void*)k); return iter; }
+    iterator       upper_bound(const key_type &k)       { iterator       iter(this, (void*)(long)k);                                   impl.next(&iter.impl, (void*)(long)k); return iter; }
+    const_iterator upper_bound(const key_type &k) const { const_iterator iter(this, (void*)(long)k);                                   impl.next(&iter.impl, (void*)(long)k); return iter; }
 
     void erase(iterator it) { impl.remove(it.impl.k); }
-    int  erase(const key_type &k) { return impl.remove((void*)k); }
+    int  erase(const key_type &k) { return impl.remove((void*)(long)k); }
 
-    value_type& operator[](X k) { return *(value_type *)impl.set((void*)k); }
+    value_type& operator[](X k) { return *(value_type *)impl.set((void*)(long)k); }
 };
 
 struct judysmap_impl {
