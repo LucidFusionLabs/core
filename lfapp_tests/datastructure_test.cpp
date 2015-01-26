@@ -136,16 +136,26 @@ template <class K, class V> struct SkipList {
     static int RandomLevel() { static float logP = log(.5); return 1 + (int)(log(Rand(0,1)) / logP); }
 };
 
+struct AVLTreeZipper {
+    vector<int> node; int sum=0; 
+    AVLTreeZipper() { node.reserve(64); }
+};
+
 template <class K, class V> struct AVLTreeNode {
     K key; unsigned val:30, left:30, right:30, height:6;
     AVLTreeNode(K k, unsigned v) : key(k), val(v), left(0), right(0), height(1) {}
     void SetChildren(unsigned l, unsigned r) { left=l; right=r; }
+    virtual bool LessThan(const K &k, AVLTreeZipper *z) const { return key < k; }
+    virtual bool MoreThan(const K &k, AVLTreeZipper *z) const { return k < key; }
+    virtual void ComputeStateFromChildren(AVLTreeNode<K,V> *lc, AVLTreeNode<K,V> *rc) {
+        height = max(lc ? lc->height : 0, rc ? rc->height : 0) + 1;
+    }
 };
 
 template <class K, class V, class Node = AVLTreeNode<K,V> > struct AVLTree {
     struct Query {
-        const K &key; const V *val; V *ret;
-        Query(const K &k, const V *v=0) : key(k), val(v), ret(0) {}
+        const K &key; const V *val; V *ret; AVLTreeZipper *z;
+        Query(const K &k, const V *v=0) : key(k), val(v), ret(0), z(0) {}
     };
 
     FreeListVector<Node> node;
@@ -158,31 +168,31 @@ template <class K, class V, class Node = AVLTreeNode<K,V> > struct AVLTree {
     bool     Erase (const K &k)             { Query q(k);     head = Erase (head, &q); return q.ret; }
     void     Print() const { PrintGraphVizHeader("AVLTree"); Print(head); PrintGraphVizFooter(); }
 
-    int Find(int ind, Query *q) const {
+    virtual int Find(int ind, Query *q) const {
         if (!ind) return 0;
         const Node *n = &node[ind-1];
-        if      (q->key < n->key) return Find(n->left,  q);
-        else if (n->key < q->key) return Find(n->right, q);
+        if      (n->MoreThan(q->key, q->z)) return Find(n->left,  q);
+        else if (n->LessThan(q->key, q->z)) return Find(n->right, q);
         else return n->val+1;
     }
-    int Insert(int ind, Query *q) {
+    virtual int Insert(int ind, Query *q) {
         if (!ind) return Create(q);
         Node *n = &node[ind-1];
-        if      (q->key < n->key) node[ind-1].left  = Insert(n->left,  q);
-        else if (n->key < q->key) node[ind-1].right = Insert(n->right, q);
+        if      (n->MoreThan(q->key, q->z)) node[ind-1].left  = Insert(n->left,  q);
+        else if (n->LessThan(q->key, q->z)) node[ind-1].right = Insert(n->right, q);
         else { q->ret = &(val[n->val] = *q->val); return ind; }
         return Balance(ind);
     }
-    int Create(Query *q) {
+    virtual int Create(Query *q) {
         int val_ind = val.Insert(*q->val);
         q->ret = &val[val_ind];
         return node.Insert(Node(q->key, val_ind))+1;
     }
-    int Erase(int ind, Query *q) {
+    virtual int Erase(int ind, Query *q) {
         if (!ind) return 0;
         Node *n = &node[ind-1];
-        if      (q->key < n->key) n->left  = Erase(n->left,  q);
-        else if (n->key < q->key) n->right = Erase(n->right, q);
+        if      (n->MoreThan(q->key, q->z)) n->left  = Erase(n->left,  q);
+        else if (n->LessThan(q->key, q->z)) n->right = Erase(n->right, q);
         else {
             q->ret = &val[n->val];
             int left = n->left, right = n->right;
@@ -203,7 +213,7 @@ template <class K, class V, class Node = AVLTreeNode<K,V> > struct AVLTree {
     }
     int Balance(int ind) {
         Node *n = &node[ind-1];
-        n->height = GetHeight(n);
+        ComputeStateFromChildren(n);
         int nbal = GetBalance(ind);
         if (GetBalance(ind) > 1) {
             if (GetBalance(n->right) < 0) n->right = RotateRight(n->right);
@@ -218,8 +228,8 @@ template <class K, class V, class Node = AVLTreeNode<K,V> > struct AVLTree {
         Node *n = &node[ind-1], *o = &node[(right_ind = n->right)-1];
         n->right = o->left;
         o->left = ind;
-        n->height = GetHeight(n);
-        o->height = GetHeight(o);
+        ComputeStateFromChildren(n);
+        ComputeStateFromChildren(o);
         return right_ind;
     }
     int RotateRight(int ind) {
@@ -227,17 +237,16 @@ template <class K, class V, class Node = AVLTreeNode<K,V> > struct AVLTree {
         Node *n = &node[ind-1], *o = &node[(left_ind = n->left)-1];
         n->left = o->right;
         o->right = ind;
-        n->height = GetHeight(n);
-        o->height = GetHeight(o);
+        ComputeStateFromChildren(n);
+        ComputeStateFromChildren(o);
         return left_ind;
+    }
+    void ComputeStateFromChildren(Node *n) {
+        n->ComputeStateFromChildren(n->left ? &node[n->left -1] : 0, n->right ? &node[n->right-1] : 0);
     }
     int GetMinNode(int ind) const {
         const Node *n = &node[ind-1];
         return n->left ? GetMinNode(n->left) : ind;
-    }
-    int GetHeight(Node *n) const {
-        return max(n->left  ? node[n->left -1].height : 0,
-                   n->right ? node[n->right-1].height : 0) + 1;
     }
     int GetBalance(int ind) const {
         const Node *n = &node[ind-1];
@@ -252,10 +261,39 @@ template <class K, class V, class Node = AVLTreeNode<K,V> > struct AVLTree {
     }
 };
 
+template <class K, class V> struct PrefixSumAVLTreeNode : public AVLTreeNode<K,V> {
+    int right_sum; // use key as left_sum
+    PrefixSumAVLTreeNode(K k=K(), unsigned v=0) : AVLTreeNode<K,V>(k,v), right_sum(0) {}
+    virtual int NodeValue() { return 1; }
+    virtual bool LessThan(const K &k, AVLTreeZipper *z) const { if (!(z->sum + NodeValue() < k)) return 0; z->sum += AVLTreeNode<K,V>::key + NodeValue(); return 1; }
+    virtual bool MoreThan(const K &k, AVLTreeZipper *z) const { return k < (z->sum + NodeValue()); }
+    virtual void ComputeStateFromChildren(AVLTreeNode<K,V> *lc, AVLTreeNode<K,V> *rc) {
+        AVLTreeNode<K,V>::ComputeStateFromChildren(lc, rc);
+        AVLTreeNode<K,V>::key       = lc ? (lc->key + lc->right_sum + lc->NodeValue()) : 0;
+        /**/              right_sum = rc ? (rc->key + rc->right_sum + rc->NodeValue()) : 0;
+    }
+};
+
+template <class K, class V, class N = PrefixSumAVLTreeNode<K,V> >
+struct PrefixSumAVLTree : public AVLTree<K,V,N> {
+    virtual int Find  (int ind, typename AVLTree<K,V,N>::Query *q) const { AVLTreeZipper z; q->z = &z; return AVLTree<K,V,N>::Find  (ind, q); }
+    virtual int Insert(int ind, typename AVLTree<K,V,N>::Query *q)       { AVLTreeZipper z; q->z = &z; return AVLTree<K,V,N>::Insert(ind, q); }
+    virtual int Erase (int ind, typename AVLTree<K,V,N>::Query *q)       { AVLTreeZipper z; q->z = &z; return AVLTree<K,V,N>::Erase (ind, q); }
+    virtual int Create(         typename AVLTree<K,V,N>::Query *q)       { AVLTreeZipper z; q->z = &z; return AVLTree<K,V,N>::Create(     q); }
+};
+
+struct RedBlackTreeZipper {
+    int sum=0; 
+    vector<int> node;
+    RedBlackTreeZipper() { node.reserve(64); }
+};
+
 template <class K, class V> struct RedBlackTreeNode {
     K key; unsigned val:31, left, right, parent, color:1;
     RedBlackTreeNode(K k, unsigned v) : key(k), val(v), left(0), right(0), parent(0), color(0) {}
     void Assign(K k, unsigned v) { key=k; val=v; }
+    virtual bool LessThan(const K &k, RedBlackTreeZipper *z) const { return key < k; }
+    virtual bool MoreThan(const K &k, RedBlackTreeZipper *z) const { return k < key; }
 };
 
 template <class K, class V, class Node = RedBlackTreeNode<K,V> > struct RedBlackTree {
@@ -267,62 +305,57 @@ template <class K, class V, class Node = RedBlackTreeNode<K,V> > struct RedBlack
 
     const V* Find (const K &k) const { const Node *n = FindNode(k); return n ? &val[n->val] : 0; }
     /**/  V* Find (const K &k)       { const Node *n = FindNode(k); return n ? &val[n->val] : 0; }
-    const Node *FindNode(const K &k) const {
+    const Node *FindNode(const K &k, RedBlackTreeZipper *z=0) const {
         for (int ind = head; ind;) {
             const Node *n = &node[ind-1];
-            if      (k < n->key) ind = n->left;
-            else if (n->key < k) ind = n->right;
+            if      (n->MoreThan(k, z)) ind = n->left;
+            else if (n->LessThan(k, z)) ind = n->right;
             else return n;
         } return 0;
     }
 
-    V* Insert(const K &k, const V &v) {
+    V* Insert(const K &k, const V &v, RedBlackTreeZipper *z=0) {
         Node *new_node;
         int new_ind = node.Insert(Node(k, 0))+1, val_ind;
         if (int ind = head) {
             for (;;) {
                 Node *n = &node[ind-1];
-                if      (k < n->key) { if (!n->left)  { n->left  = new_ind; break; } ind = n->left;  }
-                else if (n->key < k) { if (!n->right) { n->right = new_ind; break; } ind = n->right; }
-                else                 { node.Erase(new_ind-1); return &(val[n->val] = v); }
+                if      (n->MoreThan(k, z)) { if (!n->left)  { n->left  = new_ind; break; } ind = n->left;  }
+                else if (n->LessThan(k, z)) { if (!n->right) { n->right = new_ind; break; } ind = n->right; }
+                else                        { node.Erase(new_ind-1); return &(val[n->val] = v); }
             }
             (new_node = &node[new_ind-1])->parent = ind;
         } else new_node = &node[(head = new_ind)-1];
         new_node->val = val_ind = val.Insert(v);
-        InsertCase1(new_ind);
+        InsertBalance(new_ind);
         return &val[val_ind];
     }
-    void InsertCase1(int ind) {
-        Node *n = &node[ind-1];
-        if (n->parent) InsertCase2(ind);
-        else n->color = Color::Black;
-    }
-    void InsertCase2(int ind) { if (GetColor(node[ind-1].parent) == Color::Red) InsertCase3(ind); }
-    void InsertCase3(int ind) {
-        int uncle_ind, parent_ind, grandparent_ind;
-        if (GetColor((uncle_ind = GetUncle(ind))) == Color::Black) return InsertCase4(ind);
-        node[(parent_ind = GetParent(ind))-1].color = node[uncle_ind-1].color = Color::Black;
-        node[(grandparent_ind = GetParent(parent_ind))-1].color = Color::Red;
-        InsertCase1(grandparent_ind);
-    }
-    void InsertCase4(int ind) {
-        int p_ind = GetParent(ind);
-        Node *p = &node[p_ind-1];
-        if      (ind == p->right && p_ind == node[p->parent-1].left)  { RotateLeft (p_ind); ind = node[ind-1].left; }
-        else if (ind == p->left  && p_ind == node[p->parent-1].right) { RotateRight(p_ind); ind = node[ind-1].right; }
-        InsertCase5(ind);
-    }
-    void InsertCase5(int ind) {
-        int p_ind = GetParent(ind), gp_ind;
-        Node *p = &node[p_ind-1], *gp = &node[(gp_ind = p->parent)-1];
+    void InsertBalance(int ind) {
+        int p_ind, gp_ind, u_ind;
+        Node *n = &node[ind-1], *p, *gp, *u;
+        if (!(p_ind = n->parent)) { n->color = Color::Black; return; }
+        if ((p = &node[p_ind-1])->color == Color::Black) return;
+        gp = &node[(gp_ind = p->parent)-1];
+        if ((u_ind = GetSibling(gp, p_ind)) && (u = &node[u_ind-1])->color == Color::Red) {
+            p->color = u->color = Color::Black;
+            gp->color = Color::Red;
+            return InsertBalance(gp_ind);
+        }
+        do {
+            if      (ind == p->right && p_ind == gp->left)  { RotateLeft (p_ind); ind = node[ind-1].left; }
+            else if (ind == p->left  && p_ind == gp->right) { RotateRight(p_ind); ind = node[ind-1].right; }
+            else break;
+            p  = &node[(p_ind  = GetParent(ind))-1];
+            gp = &node[(gp_ind = p->parent)     -1];
+        } while (0);
         p->color = Color::Black;
         gp->color = Color::Red;
         if (ind == p->left && p_ind == gp->left) RotateRight(gp_ind);
         else                                     RotateLeft (gp_ind);
     }
 
-    bool Erase(const K &k) {
-        Node *n = (Node*)FindNode(k);
+    bool Erase(const K &k, RedBlackTreeZipper *z=0) {
+        Node *n = (Node*)FindNode(k, z);
         if (!n) return false;
         val.Erase(n->val);
         int ind = n - &node.data[0] + 1, m_ind;
@@ -334,59 +367,40 @@ template <class K, class V, class Node = RedBlackTreeNode<K,V> > struct RedBlack
         int child = X_or_Y(n->right, n->left);
         if (n->color == Color::Black) {
             n->color = GetColor(child);
-            EraseCase1(ind);
+            EraseBalance(ind);
         }
         ReplaceNode(ind, child);
         node.Erase(ind-1);
         return true;
     }
-    void EraseCase1(int ind) {
-        Node *n = &node[ind-1];
-        if (n->parent) EraseCase2(ind);
-    }
-    void EraseCase2(int ind) {
-        Node *p, *s;
+    void EraseBalance(int ind) {
         int p_ind, s_ind;
-        if ((s_ind = GetSibling(ind)) && (s = &node[s_ind-1])->color == Color::Red) {
-            p = &node[(p_ind = GetParent(ind))-1];
+        Node *n = &node[ind-1], *p, *s;
+        if (!n->parent) return;
+        p = &node[(p_ind = n->parent)-1];
+        s = &node[(s_ind = GetSibling(p, ind))-1];
+        if (s->color == Color::Red) {
             p->color = Color::Red;
             s->color = Color::Black;
             if (ind == p->left) RotateLeft (p_ind);
             else                RotateRight(p_ind);
+            s = &node[(s_ind = GetSibling(p, ind))-1];
         }
-        EraseCase3(ind);
-    }
-    void EraseCase3(int ind) {
-        int p_ind = GetParent(ind), s_ind = GetSibling(ind);
-        Node *s = &node[s_ind-1];
-        if (GetColor(p_ind)   == Color::Black && s->color           == Color::Black &&
-            GetColor(s->left) == Color::Black && GetColor(s->right) == Color::Black) {
-            s->color = Color::Red;
-            EraseCase1(p_ind);
-        } else EraseCase4(ind);
-    }
-    void EraseCase4(int ind) {
-        int p_ind = GetParent(ind), s_ind = GetSibling(ind);
-        Node *p = &node[p_ind-1], *s = &node[s_ind-1];
-        if (GetColor(p_ind)   == Color::Red   && s->color           == Color::Black &&
-            GetColor(s->left) == Color::Black && GetColor(s->right) == Color::Black) {
-            s->color = Color::Red;
-            p->color = Color::Black;
-        } else EraseCase5(ind);
-    } 
-    void EraseCase5(int ind) {
-        int p_ind = GetParent(ind), s_ind = GetSibling(ind);
-        Node *p = &node[p_ind-1], *s = &node[s_ind-1];
         if (s->color == Color::Black) {
             int csl = GetColor(s->left), csr = GetColor(s->right);
+            if (p->color == Color::Black && csl == Color::Black && csr == Color::Black) {
+                s->color = Color::Red;
+                return EraseBalance(p_ind);
+            }
+            if (p->color == Color::Red && csl == Color::Black && csr == Color::Black) {
+                s->color = Color::Red;
+                p->color = Color::Black;
+                return;
+            }
             if      (ind == p->left  && csl == Color::Red   && csr == Color::Black) { s->color = Color::Red; node[s->left -1].color = Color::Black; RotateRight(s_ind); }
             else if (ind == p->right && csl == Color::Black && csr == Color::Red  ) { s->color = Color::Red; node[s->right-1].color = Color::Black; RotateLeft (s_ind); }
+            s = &node[(s_ind = GetSibling(p, ind))-1];
         }
-        EraseCase6(ind);
-    }
-    void EraseCase6(int ind) {
-        int p_ind = GetParent(ind), s_ind = GetSibling(ind);
-        Node *n = &node[ind-1], *p = &node[p_ind-1], *s = &node[s_ind-1];
         s->color = p->color;
         p->color = Color::Black;
         if (ind == p->left) { node[s->right-1].color = Color::Black; RotateLeft (p_ind); }
@@ -423,11 +437,7 @@ template <class K, class V, class Node = RedBlackTreeNode<K,V> > struct RedBlack
 
     int GetColor  (int ind) const { return ind ? node[ind-1].color : Color::Black; }
     int GetParent (int ind) const { return node[ind-1].parent; }
-    int GetUncle  (int ind) const { return GetSibling(GetParent(ind)); }
-    int GetSibling(int ind) const {
-        const Node *parent = &node[GetParent(ind)-1];
-        return ind == parent->left ? parent->right : parent->left;
-    }
+    int GetSibling(int ind) const { return GetSibling(&node[GetParent(ind)-1], ind); }
     int GetMaxNode(int ind) const {
         const Node *n = &node[ind-1];
         return n->right ? GetMaxNode(n->right) : ind;
@@ -443,9 +453,9 @@ template <class K, class V, class Node = RedBlackTreeNode<K,V> > struct RedBlack
     void PrintNodes(int ind, int color) const {
         if (!ind) return;
         const Node *n = &node[ind-1];
-        PrintColor(n->left, color);
+        PrintNodes(n->left, color);
         if (n->color == color) printf("\"%d\";\r\n", n->key);
-        PrintColor(n->right, color);
+        PrintNodes(n->right, color);
     }
     void PrintEdges(int ind) const {
         if (!ind) return;
@@ -453,10 +463,11 @@ template <class K, class V, class Node = RedBlackTreeNode<K,V> > struct RedBlack
         if (l) { PrintEdges(n->left);  printf("\"%d\" -> \"%d\" [ label = \"left\"  ];\r\n", n->key, l->key); }
         if (r) { PrintEdges(n->right); printf("\"%d\" -> \"%d\" [ label = \"right\" ];\r\n", n->key, r->key); }
     }
+
+    static int GetSibling(const Node *parent, int ind) { return ind == parent->left ? parent->right : parent->left; }
 };
 
 template <class K, class V> struct PrefixSumRedBlackTreeNode : public RedBlackTreeNode<K,V> {
-    V sum=V();
     PrefixSumRedBlackTreeNode(K k=K(), unsigned v=0) : RedBlackTreeNode<K,V>(k,v) {}
 };
 
@@ -464,29 +475,32 @@ template <class K, class V, class Node = PrefixSumRedBlackTreeNode<K,V> >
 struct PrefixSumRedBlackTree : public RedBlackTree<K,V,Node> {
 };
 
-TEST(DatastructureTest, StdMap) {
+TEST(DatastructureTest, StdMultiMap) {
     PerformanceTimers *timers = Singleton<PerformanceTimers>::Get();
+    int dup_val[] = { 5, 2, 1 }, sum_dup_val = 8, j;
     for (auto i : my_env->db) {
         auto &db = *i.second, &sorted_db = *i.third;
-        map<int, int> m;
-        map<int, int>::const_iterator mi;
-        int ctid = timers->Create(StrCat("std::map  ", i.first, " ins1  "));
-        int qtid = timers->Create(StrCat("std::map  ", i.first, " query1"));
-        int itid = timers->Create(StrCat("std::map  ", i.first, " iterO1")), iind=0;
-        int dtid = timers->Create(StrCat("std::map  ", i.first, " del   "));
-        int rtid = timers->Create(StrCat("std::map  ", i.first, " query2"));
-        int Ctid = timers->Create(StrCat("std::map  ", i.first, " ins2  "));
+        std::multimap<int, int> m;
+        std::multimap<int, int>::const_iterator mi;
+        int ctid = timers->Create(StrCat("std::mmap ", i.first, " ins1  "));
+        int qtid = timers->Create(StrCat("std::mmap ", i.first, " query1"));
+        int itid = timers->Create(StrCat("std::mmap ", i.first, " iterU1")), iind=0;
+        int dtid = timers->Create(StrCat("std::mmap ", i.first, " del   "));
+        int rtid = timers->Create(StrCat("std::mmap ", i.first, " query2"));
+        int Ctid = timers->Create(StrCat("std::mmap ", i.first, " ins2  "));
+        int Dtid = timers->Create(StrCat("std::mmap ", i.first, " del2  ")); 
 
-        timers->AccumulateTo(ctid); for (auto i : db) m[i] = i;
-        timers->AccumulateTo(qtid); for (auto i : db) { EXPECT_NE(m.end(), (mi=m.find(i))); if (mi!=m.end()) EXPECT_EQ(i, mi->second); }
-        timers->AccumulateTo(itid); for (auto i : m)  { EXPECT_EQ(sorted_db[iind], i.first); EXPECT_EQ(sorted_db[iind], i.second); iind++; }
-        timers->AccumulateTo(dtid); for (int i=0, l=db.size()/2; i<l; i++) EXPECT_EQ(1, m.erase(db[i]));
+        timers->AccumulateTo(ctid); for (auto i : db) for (j=0; j<3; j++) m.insert(pair<int,int>(i, i+dup_val[j]));
+        timers->AccumulateTo(qtid); for (auto i : db) { mi=m.find(i); int sum=0; for (j=0; j<3; j++, mi++) { EXPECT_NE(m.end(), mi); if (mi!=m.end()) sum += mi->second; } EXPECT_EQ(i*3+sum_dup_val, sum); }
+        timers->AccumulateTo(itid); for (auto i : m) {}
+        timers->AccumulateTo(dtid); for (int i=0, l=db.size()/2; i<l; i++) EXPECT_EQ(3, m.erase(db[i]));
         timers->AccumulateTo(rtid);
         for (int i=0, l=db.size(), hl=l/2; i<l; i++) {
-            if (i < hl) EXPECT_EQ(m.end(), m.find(db[i]));
-            else { EXPECT_NE(m.end(), (mi=m.find(db[i]))); if (mi!=m.end()) EXPECT_EQ(db[i], mi->second); }
+            if (i < hl) { EXPECT_EQ(m.end(), m.find(db[i])); continue; }
+            mi=m.find(db[i]); int sum=0; for (j=0; j<3; j++, mi++) { EXPECT_NE(m.end(), mi); if (mi!=m.end()) sum += mi->second; } EXPECT_EQ(db[i]*3+sum_dup_val, sum);
         }
-        timers->AccumulateTo(Ctid); for (int i=db.size()/2-1; i>=0; i--) m[db[i]] = db[i];
+        timers->AccumulateTo(Ctid); for (int i=db.size()/2-1; i>=0; i--) for (j=0; j<3; j++) m.insert(pair<int,int>(db[i], db[i]+dup_val[j]));
+        timers->AccumulateTo(Dtid); for (auto i : db) EXPECT_EQ(3, m.erase(i));
         timers->AccumulateTo(0);
     }
 }
@@ -503,6 +517,7 @@ TEST(DatastructureTest, StdUnorderedMap) {
         int dtid = timers->Create(StrCat("std::umap ", i.first, " del   "));
         int rtid = timers->Create(StrCat("std::umap ", i.first, " query2"));
         int Ctid = timers->Create(StrCat("std::umap ", i.first, " ins2  "));
+        int Dtid = timers->Create(StrCat("std::umap ", i.first, " del2  ")); 
 
         timers->AccumulateTo(ctid); for (auto i : db) m[i] = i;
         timers->AccumulateTo(qtid); for (auto i : db) { EXPECT_NE(m.end(), (mi=m.find(i))); if (mi!=m.end()) EXPECT_EQ(i, mi->second); }
@@ -514,6 +529,36 @@ TEST(DatastructureTest, StdUnorderedMap) {
             else { EXPECT_NE(m.end(), (mi=m.find(db[i]))); if (mi!=m.end()) EXPECT_EQ(db[i], mi->second); }
         }
         timers->AccumulateTo(Ctid); for (int i=db.size()/2-1; i>=0; i--) m[db[i]] = db[i];
+        timers->AccumulateTo(Dtid); for (auto i : db) EXPECT_EQ(1, m.erase(i));
+        timers->AccumulateTo(0);
+    }
+}
+
+TEST(DatastructureTest, StdMap) {
+    PerformanceTimers *timers = Singleton<PerformanceTimers>::Get();
+    for (auto i : my_env->db) {
+        auto &db = *i.second, &sorted_db = *i.third;
+        map<int, int> m;
+        map<int, int>::const_iterator mi;
+        int ctid = timers->Create(StrCat("std::map  ", i.first, " ins1  "));
+        int qtid = timers->Create(StrCat("std::map  ", i.first, " query1"));
+        int itid = timers->Create(StrCat("std::map  ", i.first, " iterO1")), iind=0;
+        int dtid = timers->Create(StrCat("std::map  ", i.first, " del   "));
+        int rtid = timers->Create(StrCat("std::map  ", i.first, " query2"));
+        int Ctid = timers->Create(StrCat("std::map  ", i.first, " ins2  "));
+        int Dtid = timers->Create(StrCat("std::map  ", i.first, " del2  ")); 
+
+        timers->AccumulateTo(ctid); for (auto i : db) m[i] = i;
+        timers->AccumulateTo(qtid); for (auto i : db) { EXPECT_NE(m.end(), (mi=m.find(i))); if (mi!=m.end()) EXPECT_EQ(i, mi->second); }
+        timers->AccumulateTo(itid); for (auto i : m)  { EXPECT_EQ(sorted_db[iind], i.first); EXPECT_EQ(sorted_db[iind], i.second); iind++; }
+        timers->AccumulateTo(dtid); for (int i=0, l=db.size()/2; i<l; i++) EXPECT_EQ(1, m.erase(db[i]));
+        timers->AccumulateTo(rtid);
+        for (int i=0, l=db.size(), hl=l/2; i<l; i++) {
+            if (i < hl) EXPECT_EQ(m.end(), m.find(db[i]));
+            else { EXPECT_NE(m.end(), (mi=m.find(db[i]))); if (mi!=m.end()) EXPECT_EQ(db[i], mi->second); }
+        }
+        timers->AccumulateTo(Ctid); for (int i=db.size()/2-1; i>=0; i--) m[db[i]] = db[i];
+        timers->AccumulateTo(Dtid); for (auto i : db) EXPECT_EQ(1, m.erase(i));
         timers->AccumulateTo(0);
     }
 }
@@ -557,6 +602,7 @@ TEST(DatastructureTest, SkipList) {
         int dtid = timers->Create(StrCat("SkipList  ", i.first, " del   ")); 
         int rtid = timers->Create(StrCat("SkipList  ", i.first, " query2"));
         int Ctid = timers->Create(StrCat("SkipList  ", i.first, " ins2  ")), *v; 
+        int Dtid = timers->Create(StrCat("SkipList  ", i.first, " del2  ")); 
 
         timers->AccumulateTo(ctid); for (auto i : db) t.Insert(i, i);
         timers->AccumulateTo(qtid); for (auto i : db) { EXPECT_NE((int*)0, (v=t.Find(i))); if (v) EXPECT_EQ(i, *v); }
@@ -567,6 +613,7 @@ TEST(DatastructureTest, SkipList) {
             else { EXPECT_NE((int*)0, (v=t.Find(db[i]))); if (v) EXPECT_EQ(db[i], *v); }
         }
         timers->AccumulateTo(Ctid); for (int i=db.size()/2-1; i>=0; i--) t.Insert(db[i], db[i]);
+        timers->AccumulateTo(Dtid); for (auto i : db) EXPECT_EQ(true, t.Erase(i));
         timers->AccumulateTo(0);
     }
 }
@@ -581,6 +628,7 @@ TEST(DatastructureTest, AVLTree) {
         int dtid = timers->Create(StrCat("AVLTree   ", i.first, " del   ")); 
         int rtid = timers->Create(StrCat("AVLTree   ", i.first, " query2"));
         int Ctid = timers->Create(StrCat("AVLTree   ", i.first, " ins2  ")), *v; 
+        int Dtid = timers->Create(StrCat("AVLTree   ", i.first, " del2  ")); 
                                                     
         timers->AccumulateTo(ctid); for (auto i : db) t.Insert(i, i);
         timers->AccumulateTo(qtid); for (auto i : db) { EXPECT_NE((int*)0, (v=t.Find(i))); if (v) EXPECT_EQ(i, *v); }
@@ -591,6 +639,7 @@ TEST(DatastructureTest, AVLTree) {
             else { EXPECT_NE((int*)0, (v=t.Find(db[i]))); if (v) EXPECT_EQ(db[i], *v); }
         }
         timers->AccumulateTo(Ctid); for (int i=db.size()/2-1; i>=0; i--) t.Insert(db[i], db[i]);
+        timers->AccumulateTo(Dtid); for (auto i : db) EXPECT_EQ(true, t.Erase(i));
         timers->AccumulateTo(0);
     }
 }
@@ -605,6 +654,7 @@ TEST(DatastructureTest, RedBlackTree) {
         int dtid = timers->Create(StrCat("RBTree    ", i.first, " del   ")); 
         int rtid = timers->Create(StrCat("RBTree    ", i.first, " query2"));
         int Ctid = timers->Create(StrCat("RBTree    ", i.first, " ins2  ")), *v; 
+        int Dtid = timers->Create(StrCat("RBTree    ", i.first, " del2  ")); 
                                                     
         timers->AccumulateTo(ctid); for (auto i : db) t.Insert(i, i);
         timers->AccumulateTo(qtid); for (auto i : db) { EXPECT_NE((int*)0, (v=t.Find(i))); if (v) EXPECT_EQ(i, *v); }
@@ -615,6 +665,7 @@ TEST(DatastructureTest, RedBlackTree) {
             else { EXPECT_NE((int*)0, (v=t.Find(db[i]))); if (v) EXPECT_EQ(db[i], *v); }
         }
         timers->AccumulateTo(Ctid); for (int i=db.size()/2-1; i>=0; i--) t.Insert(db[i], db[i]);
+        timers->AccumulateTo(Dtid); for (auto i : db) EXPECT_EQ(true, t.Erase(i));
         timers->AccumulateTo(0);
     }
 }
