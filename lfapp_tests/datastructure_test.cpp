@@ -1,5 +1,5 @@
 /*
- * $Id: lfapp.cpp 1309 2014-10-10 19:20:55Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -308,9 +308,9 @@ template <class K, class V> struct PrefixSumKeyedAVLTreeNode : public AVLTreeNod
     }
 };
 
-template <class K, class V, class N = PrefixSumKeyedAVLTreeNode<K,V> >
-struct PrefixSumKeyedAVLTree : public AVLTree<K,V,N> {
-    typedef AVLTree<K,V,N> Parent;
+template <class K, class V, class Node = PrefixSumKeyedAVLTreeNode<K,V> >
+struct PrefixSumKeyedAVLTree : public AVLTree<K,V,Node> {
+    typedef AVLTree<K,V,Node> Parent;
     mutable AVLTreeZipper z;
     virtual K NodeValue(const V *v) const { return 1; }
     virtual K GetCreateNodeKey(const typename Parent::Query *q) const { return NodeValue(q->ret); }
@@ -333,8 +333,8 @@ struct PrefixSumKeyedAVLTree : public AVLTree<K,V,N> {
     }
     virtual void PrintNodes(int ind, string *out) const {
         if (!ind) return;
-        const N *n = &Parent::node[ind-1];
-        const V *v = &Parent::val[n->val];
+        const Node *n = &Parent::node[ind-1];
+        const V    *v = &Parent::val[n->val];
         PrintNodes(n->left, out);
         StrAppend(out, "node [label = \"", *v, " v:", n->key,
                   "\nlsum:", n->left_sum, " rsum:", n->right_sum, "\"];\r\n\"", *v, "\";\r\n");
@@ -342,8 +342,8 @@ struct PrefixSumKeyedAVLTree : public AVLTree<K,V,N> {
     }
     virtual void PrintEdges(int ind, string *out) const {
         if (!ind) return;
-        const N *n = &Parent::node[ind-1], *l=n->left?&Parent::node[n->left-1]:0, *r=n->right?&Parent::node[n->right-1]:0;
-        const V *v = &Parent::val[n->val], *lv = l?&Parent::val[l->val]:0, *rv = r?&Parent::val[r->val]:0;
+        const Node *n = &Parent::node[ind-1], *l=n->left?&Parent::node[n->left-1]:0, *r=n->right?&Parent::node[n->right-1]:0;
+        const V    *v = &Parent::val[n->val], *lv = l?&Parent::val[l->val]:0, *rv = r?&Parent::val[r->val]:0;
         if (l) { PrintEdges(n->left,  out); StrAppend(out, "\"", *v, "\" -> \"", *lv, "\" [ label = \"left\"  ];\r\n"); }
         if (r) { PrintEdges(n->right, out); StrAppend(out, "\"", *v, "\" -> \"", *rv, "\" [ label = \"right\" ];\r\n"); }
     }
@@ -354,7 +354,7 @@ struct PrefixSumKeyedAVLTree : public AVLTree<K,V,N> {
     int BuildTreeFromSortedVal(int beg_val_ind, int end_val_ind) {
         if (end_val_ind < beg_val_ind) return 0;
         int mid_val_ind = (beg_val_ind + end_val_ind) / 2;
-        int ind = Parent::node.Insert(N(NodeValue(&Parent::val[mid_val_ind]), mid_val_ind))+1;
+        int ind = Parent::node.Insert(Node(NodeValue(&Parent::val[mid_val_ind]), mid_val_ind))+1;
         Parent::node[ind-1].left  = BuildTreeFromSortedVal(beg_val_ind,   mid_val_ind-1);
         Parent::node[ind-1].right = BuildTreeFromSortedVal(mid_val_ind+1, end_val_ind);
         Parent::ComputeStateFromChildren(&Parent::node[ind-1]);
@@ -372,10 +372,11 @@ struct RedBlackTreeZipper {
 template <class K, class V> struct RedBlackTreeNode {
     enum { Left, Right };
     K key; unsigned val:31, left, right, parent, color:1;
-    RedBlackTreeNode(K k, unsigned v) : key(k), val(v), left(0), right(0), parent(0), color(0) {}
+    RedBlackTreeNode(K k, unsigned v, bool C=0) : key(k), val(v), left(0), right(0), parent(0), color(C) {}
     void Assign(K k, unsigned v) { key=k; val=v; }
     virtual bool LessThan(const K &k, int ind, RedBlackTreeZipper *z) const { return key < k; }
     virtual bool MoreThan(const K &k, int ind, RedBlackTreeZipper *z) const { return k < key; }
+    virtual void ComputeStateFromChildren(const RedBlackTreeNode<K,V> *lc, const RedBlackTreeNode<K,V> *rc) {}
 };
 
 template <class K, class V, class Node = RedBlackTreeNode<K,V> > struct RedBlackTree {
@@ -516,6 +517,9 @@ template <class K, class V, class Node = RedBlackTreeNode<K,V> > struct RedBlack
         }
         if (new_ind) node[new_ind-1].parent = n->parent;
     }
+    void ComputeStateFromChildren(Node *n) {
+        n->ComputeStateFromChildren(n->left ? &node[n->left -1] : 0, n->right ? &node[n->right-1] : 0);
+    }
 
     int GetColor  (int ind) const { return ind ? node[ind-1].color : Black; }
     int GetParent (int ind) const { return node[ind-1].parent; }
@@ -523,6 +527,25 @@ template <class K, class V, class Node = RedBlackTreeNode<K,V> > struct RedBlack
     int GetMaxNode(int ind) const {
         const Node *n = &node[ind-1];
         return n->right ? GetMaxNode(n->right) : ind;
+    }
+
+    struct LoadFromSortedArraysQuery { const K *k; const V *v; int max_height; };
+    virtual void LoadFromSortedArrays(const K *k, const V *v, int n) {
+        CHECK_EQ(0, node.size());
+        LoadFromSortedArraysQuery q = { k, v, WhichLog2(NextPowerOfTwo(n, true)) };
+        head = BuildTreeFromSortedArrays(&q, 0, n-1, 1);
+    }
+    virtual int BuildTreeFromSortedArrays(LoadFromSortedArraysQuery *q, int beg_ind, int end_ind, int h) {
+        if (end_ind < beg_ind) return 0;
+        CHECK_LE(h, q->max_height);
+        int mid_ind = (beg_ind + end_ind) / 2, color = (h == q->max_height ? Red : Black);
+        int node_ind = node.Insert(Node(q->k[mid_ind], val.Insert(q->v[mid_ind]), color))+1;
+        int left_ind  = node[node_ind-1].left  = BuildTreeFromSortedArrays(q, beg_ind,   mid_ind-1, h+1);
+        int right_ind = node[node_ind-1].right = BuildTreeFromSortedArrays(q, mid_ind+1, end_ind,   h+1);
+        if (left_ind)  node[ left_ind-1].parent = node_ind;
+        if (right_ind) node[right_ind-1].parent = node_ind;
+        ComputeStateFromChildren(&node[node_ind-1]);
+        return node_ind;
     }
 
     virtual string DebugString(const string &name=string()) const {
@@ -763,7 +786,7 @@ TEST(DatastructureTest, PrefixSumKeyedAVLTree) {
 TEST(DatastructureTest, RedBlackTree) {
     PerformanceTimers *timers = Singleton<PerformanceTimers>::Get();
     for (auto i : my_env->db) {
-        auto &db = *i.second;
+        auto &db = *i.second, &sorted_db = *i.third;
         RedBlackTree<int, int> t;
         int ctid = timers->Create(StrCat("RBTree    ", i.first, " ins1  "));
         int qtid = timers->Create(StrCat("RBTree    ", i.first, " query1"));
@@ -771,18 +794,31 @@ TEST(DatastructureTest, RedBlackTree) {
         int rtid = timers->Create(StrCat("RBTree    ", i.first, " query2"));
         int Ctid = timers->Create(StrCat("RBTree    ", i.first, " ins2  ")), *v; 
         int Dtid = timers->Create(StrCat("RBTree    ", i.first, " del2  ")); 
-                                                    
-        timers->AccumulateTo(ctid); for (auto i : db) t.Insert(i, i);
-        timers->AccumulateTo(qtid); for (auto i : db) { EXPECT_NE((int*)0, (v=t.Find(i))); if (v) EXPECT_EQ(i, *v); }
-        timers->AccumulateTo(dtid); for (int i=0, hl=db.size()/2; i<hl; i++) EXPECT_EQ(true, t.Erase(db[i]));
-        timers->AccumulateTo(rtid);
-        for (int i=0, l=db.size(), hl=l/2; i<l; i++) {
-            if (i < hl) EXPECT_EQ(0, t.Find(db[i]));
-            else { EXPECT_NE((int*)0, (v=t.Find(db[i]))); if (v) EXPECT_EQ(db[i], *v); }
+        int Stid = timers->Create(StrCat("RBTree    ", i.first, " insHS ")); 
+        int Rtid = timers->Create(StrCat("RBTree    ", i.first, " queryS"));
+
+        {                                                
+            timers->AccumulateTo(ctid); for (auto i : db) t.Insert(i, i);
+            timers->AccumulateTo(qtid); for (auto i : db) { EXPECT_NE((int*)0, (v=t.Find(i))); if (v) EXPECT_EQ(i, *v); }
+            timers->AccumulateTo(dtid); for (int i=0, hl=db.size()/2; i<hl; i++) EXPECT_EQ(true, t.Erase(db[i]));
+            timers->AccumulateTo(rtid);
+            for (int i=0, l=db.size(), hl=l/2; i<l; i++) {
+                if (i < hl) EXPECT_EQ(0, t.Find(db[i]));
+                else { EXPECT_NE((int*)0, (v=t.Find(db[i]))); if (v) EXPECT_EQ(db[i], *v); }
+            }
+            timers->AccumulateTo(Ctid); for (int i=db.size()/2-1; i>=0; i--) t.Insert(db[i], db[i]);
+            timers->AccumulateTo(Dtid); for (auto i : db) EXPECT_EQ(true, t.Erase(i));
+            timers->AccumulateTo(0);
         }
-        timers->AccumulateTo(Ctid); for (int i=db.size()/2-1; i>=0; i--) t.Insert(db[i], db[i]);
-        timers->AccumulateTo(Dtid); for (auto i : db) EXPECT_EQ(true, t.Erase(i));
-        timers->AccumulateTo(0);
+        {
+            RedBlackTree<int, int> t;
+            timers->AccumulateTo(Stid);
+            t.LoadFromSortedArrays(&sorted_db[0], &sorted_db[0], sorted_db.size()/2);
+            for (int l=db.size(), i=l/2; i<l; i++) t.Insert(sorted_db[i], sorted_db[i]);
+            //LocalFile::WriteFile("/Users/p/lfl/lfapp_tests/rb.gv", t.DebugString(i.first));
+            timers->AccumulateTo(Rtid); for (auto i : db) { EXPECT_NE((int*)0, (v=t.Find(i))); if (v) EXPECT_EQ(i, *v); }
+            timers->AccumulateTo(0);
+        }
     }
 }
 }; // namespace LFL
