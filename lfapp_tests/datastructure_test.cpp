@@ -148,6 +148,7 @@ template <class K, class V> struct AVLTreeNode {
     K key; unsigned val:30, left:30, right:30, height:6;
     AVLTreeNode(K k, unsigned v) : key(k), val(v), left(0), right(0), height(1) {}
     void SetChildren(unsigned l, unsigned r) { left=l; right=r; }
+    void SwapKV(AVLTreeNode *n) { swap(key, n->key); unsigned v=val; val=n->val; n->val=v; }
     virtual bool LessThan(const K &k, int ind, AVLTreeZipper *z) const { return key < k; }
     virtual bool MoreThan(const K &k, int ind, AVLTreeZipper *z) const { return k < key; }
     virtual void ComputeStateFromChildren(const AVLTreeNode<K,V> *lc, const AVLTreeNode<K,V> *rc) {
@@ -172,11 +173,11 @@ template <class K, class V, class Node = AVLTreeNode<K,V> > struct AVLTree {
     bool     Erase (const K &k)             { Query q=GetQuery(k);     head = EraseNode (head, &q); return q.ret; }
 
     virtual Query GetQuery(const K &k, const V *v=0) { return Query(k, v); }
-    virtual int GetCreateNodeKey(const Query *q) const { return q->key; }
-    virtual bool ResolveInsertCollision(int *ind, Query *q) { 
-        Node *n = &node[*ind-1];
+    virtual K GetCreateNodeKey(const Query *q) const { return q->key; }
+    virtual int ResolveInsertCollision(int ind, Query *q) { 
+        Node *n = &node[ind-1];
         if (update_on_dup_insert) q->ret = &(val[n->val] = *q->val);
-        return true;
+        return ind;
     }
 
     int FindNode(int ind, Query *q) const {
@@ -191,7 +192,7 @@ template <class K, class V, class Node = AVLTreeNode<K,V> > struct AVLTree {
         Node *n = &node[ind-1];
         if      (n->MoreThan(q->key, ind, q->z)) node[ind-1].left  = InsertNode(n->left,  q);
         else if (n->LessThan(q->key, ind, q->z)) node[ind-1].right = InsertNode(n->right, q);
-        else if (ResolveInsertCollision(&ind, q)) return ind;
+        else return ResolveInsertCollision(ind, q);
         return Balance(ind);
     }
     int CreateNode(Query *q) {
@@ -287,20 +288,21 @@ template <class K, class V, class Node = AVLTreeNode<K,V> > struct AVLTree {
 };
 
 template <class K, class V> struct PrefixSumKeyedAVLTreeNode : public AVLTreeNode<K,V> {
+    typedef AVLTreeNode<K,V> Parent;
+    typedef PrefixSumKeyedAVLTreeNode<K,V> Self;
     int left_sum=0, right_sum=0;
     PrefixSumKeyedAVLTreeNode(K k=K(), unsigned v=0) : AVLTreeNode<K,V>(k,v) {}
     virtual bool LessThan(const K &k, int ind, AVLTreeZipper *z) const {
-        if (!((z->sum + left_sum + AVLTreeNode<K,V>::key) < k)) return 0;
-        z->sum += left_sum + AVLTreeNode<K,V>::key;
+        if (!((z->sum + left_sum + Parent::key) < k)) return 0;
+        z->sum += left_sum + Parent::key;
         return 1;
     }
     virtual bool MoreThan(const K &k, int ind, AVLTreeZipper *z) const {
-        if (!(k < (z->sum + left_sum + AVLTreeNode<K,V>::key))) return 0;
+        if (!(k < (z->sum + left_sum + Parent::key))) return 0;
         return 1;
     }
-    virtual void ComputeStateFromChildren(const PrefixSumKeyedAVLTreeNode<K,V> *lc,
-                                          const PrefixSumKeyedAVLTreeNode<K,V> *rc) {
-        AVLTreeNode<K,V>::ComputeStateFromChildren(lc, rc);
+    virtual void ComputeStateFromChildren(const Self *lc, const Self *rc) {
+        Parent::ComputeStateFromChildren(lc, rc);
         left_sum  = lc ? (lc->left_sum + lc->right_sum + lc->key) : 0;
         right_sum = rc ? (rc->left_sum + rc->right_sum + rc->key) : 0;
     }
@@ -308,22 +310,31 @@ template <class K, class V> struct PrefixSumKeyedAVLTreeNode : public AVLTreeNod
 
 template <class K, class V, class N = PrefixSumKeyedAVLTreeNode<K,V> >
 struct PrefixSumKeyedAVLTree : public AVLTree<K,V,N> {
+    typedef AVLTree<K,V,N> Parent;
     mutable AVLTreeZipper z;
-    virtual int NodeValue(const V *v) const { return 1; }
-    virtual typename AVLTree<K,V,N>::Query GetQuery(const K &k, const V *v=0) { z.Reset(); return typename AVLTree<K,V,N>::Query(k+1, v, &z); }
-    virtual int GetCreateNodeKey(const typename AVLTree<K,V,N>::Query *q) const { return NodeValue(q->ret); }
-    virtual bool ResolveInsertCollision(int *ind, typename AVLTree<K,V,N>::Query *q) { 
-        int min_ind = AVLTree<K,V,N>::GetMinNode(*ind);
-        N *min_n = &AVLTree<K,V,N>::node[min_ind-1];
-        min_n->left = AVLTree<K,V,N>::CreateNode(q);
-        swap(AVLTree<K,V,N>::node[min_n->left-1], AVLTree<K,V,N>::node[*ind-1]);
-        *ind = min_n->left;
-        return false;
+    virtual K NodeValue(const V *v) const { return 1; }
+    virtual K GetCreateNodeKey(const typename Parent::Query *q) const { return NodeValue(q->ret); }
+    virtual typename Parent::Query GetQuery(const K &k, const V *v=0) {
+        z.Reset();
+        return typename Parent::Query(k + (v ? 0 : 1), v, &z);
+    }
+    virtual int ResolveInsertCollision(int ind, typename Parent::Query *q) { 
+        Parent::node[ind-1].left = ResolveInsertCollision(Parent::node[ind-1].left, ind, q);
+        return Parent::Balance(ind);
+    }
+    virtual int ResolveInsertCollision(int ind, int dup_ind, typename Parent::Query *q) {
+        if (!ind) {
+            int new_ind = Parent::CreateNode(q);
+            Parent::node[new_ind-1].SwapKV(&Parent::node[dup_ind-1]);
+            return new_ind;
+        }
+        Parent::node[ind-1].right = ResolveInsertCollision(Parent::node[ind-1].right, dup_ind, q);
+        return Parent::Balance(ind);
     }
     virtual void PrintNodes(int ind, string *out) const {
         if (!ind) return;
-        const N *n = &AVLTree<K,V,N>::node[ind-1];
-        const V *v = &AVLTree<K,V,N>::val[n->val];
+        const N *n = &Parent::node[ind-1];
+        const V *v = &Parent::val[n->val];
         PrintNodes(n->left, out);
         StrAppend(out, "node [label = \"", *v, " v:", n->key,
                   "\nlsum:", n->left_sum, " rsum:", n->right_sum, "\"];\r\n\"", *v, "\";\r\n");
@@ -331,10 +342,23 @@ struct PrefixSumKeyedAVLTree : public AVLTree<K,V,N> {
     }
     virtual void PrintEdges(int ind, string *out) const {
         if (!ind) return;
-        const N *n = &AVLTree<K,V,N>::node[ind-1], *l=n->left?&AVLTree<K,V,N>::node[n->left-1]:0, *r=n->right?&AVLTree<K,V,N>::node[n->right-1]:0;
-        const V *v = &AVLTree<K,V,N>::val[n->val], *lv = l?&AVLTree<K,V,N>::val[l->val]:0, *rv = r?&AVLTree<K,V,N>::val[r->val]:0;
+        const N *n = &Parent::node[ind-1], *l=n->left?&Parent::node[n->left-1]:0, *r=n->right?&Parent::node[n->right-1]:0;
+        const V *v = &Parent::val[n->val], *lv = l?&Parent::val[l->val]:0, *rv = r?&Parent::val[r->val]:0;
         if (l) { PrintEdges(n->left,  out); StrAppend(out, "\"", *v, "\" -> \"", *lv, "\" [ label = \"left\"  ];\r\n"); }
         if (r) { PrintEdges(n->right, out); StrAppend(out, "\"", *v, "\" -> \"", *rv, "\" [ label = \"right\" ];\r\n"); }
+    }
+    void LoadFromSortedVal() {
+        CHECK_EQ(0, Parent::node.size());
+        Parent::head = BuildTreeFromSortedVal(0, Parent::val.size()-1);
+    }
+    int BuildTreeFromSortedVal(int beg_val_ind, int end_val_ind) {
+        if (end_val_ind < beg_val_ind) return 0;
+        int mid_val_ind = (beg_val_ind + end_val_ind) / 2;
+        int ind = Parent::node.Insert(N(NodeValue(&Parent::val[mid_val_ind]), mid_val_ind))+1;
+        Parent::node[ind-1].left  = BuildTreeFromSortedVal(beg_val_ind,   mid_val_ind-1);
+        Parent::node[ind-1].right = BuildTreeFromSortedVal(mid_val_ind+1, end_val_ind);
+        Parent::ComputeStateFromChildren(&Parent::node[ind-1]);
+        return ind;
     }
 };
 
@@ -342,6 +366,7 @@ struct RedBlackTreeZipper {
     int sum=0;
     vector<pair<int, bool> > path;
     RedBlackTreeZipper() { path.reserve(64); }
+    void Reset() { sum=0; path.clear(); }
 };
 
 template <class K, class V> struct RedBlackTreeNode {
@@ -713,17 +738,25 @@ TEST(DatastructureTest, PrefixSumKeyedAVLTree) {
         int Ctid = timers->Create(StrCat("PSAVLTree ", i.first, " ins2  ")), *v; 
         int Rtid = timers->Create(StrCat("PSAVLTree ", i.first, " query3"));
         int Dtid = timers->Create(StrCat("PSAVLTree ", i.first, " del2  ")); 
+        int Stid = timers->Create(StrCat("PSAVLTree ", i.first, " insS  ")); 
 
-        PrefixSumKeyedAVLTree<int, int> t;
-        timers->AccumulateTo(ctid); for (auto i : db) { EXPECT_NE((int*)0, t.Insert(i, i)); }
-        // LocalFile::WriteFile("/Users/p/lfl/lfapp_tests/avl.gv", t.DebugString(i.first));
-        timers->AccumulateTo(qtid); for (auto i : db) { EXPECT_NE((int*)0, (v=t.Find(i))); if (v) EXPECT_EQ(i, *v); }
-        timers->AccumulateTo(dtid); for (int i=0, hl=db.size()/2; i<hl; i++) EXPECT_EQ(true, t.Erase(0));
-        timers->AccumulateTo(rtid); for (int i=0, hl=db.size()/2; i<hl; i++) { EXPECT_NE((int*)0, (v=t.Find(db[i]))); if (v) EXPECT_EQ(db[hl+i], *v); }
-        timers->AccumulateTo(Ctid); for (int i=db.size()/2-1; i>=0; i--) t.Insert(-1, db[i]);
-        timers->AccumulateTo(Rtid); for (auto i : db) { EXPECT_NE((int*)0, (v=t.Find(i))); if (v) EXPECT_EQ(i, *v); }
-        timers->AccumulateTo(Dtid); for (auto i : db) EXPECT_EQ(true, t.Erase(0));
-        timers->AccumulateTo(0);
+        {
+            PrefixSumKeyedAVLTree<int, int> t;
+            timers->AccumulateTo(ctid); for (auto i : db) { EXPECT_NE((int*)0, t.Insert(i, i)); }
+            timers->AccumulateTo(qtid); for (auto i : db) { EXPECT_NE((int*)0, (v=t.Find(i))); if (v) EXPECT_EQ(i, *v); }
+            timers->AccumulateTo(dtid); for (int i=0, hl=db.size()/2; i<hl; i++) EXPECT_EQ(true, t.Erase(0));
+            timers->AccumulateTo(rtid); for (int i=0, hl=db.size()/2; i<hl; i++) { EXPECT_NE((int*)0, (v=t.Find(db[i]))); if (v) EXPECT_EQ(db[hl+i], *v); }
+            timers->AccumulateTo(Ctid); for (int i=db.size()/2-1; i>=0; i--) t.Insert(0, db[i]);
+            timers->AccumulateTo(Rtid); for (auto i : db) { EXPECT_NE((int*)0, (v=t.Find(i))); if (v) EXPECT_EQ(i, *v); }
+            timers->AccumulateTo(Dtid); for (auto i : db) EXPECT_EQ(true, t.Erase(0));
+            timers->AccumulateTo(0);
+        }
+        {
+            PrefixSumKeyedAVLTree<int, int> t;
+            timers->AccumulateTo(Stid); for (auto i : db) t.val.Insert(i); t.LoadFromSortedVal();
+            timers->AccumulateTo(0);
+            for (auto i : db) { EXPECT_NE((int*)0, (v=t.Find(i))); if (v) EXPECT_EQ(i, *v); }
+        }
     }
 }
 
