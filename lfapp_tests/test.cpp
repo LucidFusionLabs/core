@@ -1,5 +1,5 @@
 /*
- * $Id: lfapp.cpp 1309 2014-10-10 19:20:55Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
