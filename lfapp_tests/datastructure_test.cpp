@@ -362,7 +362,7 @@ struct PrefixSumKeyedAVLTree : public AVLTree<K,V,Node> {
     }
 };
 
-struct RedBlackTreeZipper {};
+struct RedBlackTreeZipper { RedBlackTreeZipper(bool update) {} };
 
 template <class K, class V, class Zipper = RedBlackTreeZipper> struct RedBlackTreeNode {
     enum { Left, Right };
@@ -370,17 +370,17 @@ template <class K, class V, class Zipper = RedBlackTreeZipper> struct RedBlackTr
     K key; unsigned val:31, left, right, parent, color:1;
     RedBlackTreeNode(K k, unsigned v, unsigned P, bool C=0) : key(k), val(v), left(0), right(0), parent(P), color(C) {}
     void SwapKV(RedBlackTreeNode *n) { swap(key, n->key); unsigned v=val; val=n->val; n->val=v; }
-    virtual bool LessThan(const K &k, int ind, Zipper *z) const { return key < k; }
-    virtual bool MoreThan(const K &k, int ind, Zipper *z) const { return k < key; }
-    virtual void ComputeStateFromChildren(const Self *lc, const Self *rc) {}
+    virtual bool LessThan(const K &k, int, Zipper*) const { return key < k; }
+    virtual bool MoreThan(const K &k, int, Zipper*) const { return k < key; }
+    virtual void ComputeStateFromChildren(const Self*, const Self*) {}
 };
 
 template <class K, class V, class Zipper = RedBlackTreeZipper, class Node = RedBlackTreeNode<K,V,Zipper> >
 struct RedBlackTree {
     enum Color { Red, Black };
     struct Query {
-        const K key; const V *val; V *ret=0; Zipper *z; int update_ind=0, update_ind2=0;
-        Query(const K &k, const V *v=0, Zipper *Z=0) : key(k), val(v), z(Z) {}
+        const K key; const V *val; V *ret=0; Zipper z; int update_ind=0, update_ind2=0;
+        Query(const K &k, const V *v=0, bool update=0) : key(k), val(v), z(update) {}
     };
 
     FreeListVector<Node> node;
@@ -390,51 +390,43 @@ struct RedBlackTree {
 
     const V* Find  (const K &k) const       { Query q=GetQuery(k); int vind = FindNode  (head, &q); return vind ? &val[vind-1] : 0; }
     V*       Find  (const K &k)             { Query q=GetQuery(k); int vind = FindNode  (head, &q); return vind ? &val[vind-1] : 0; }
-    V*       Insert(const K &k, const V &v) { Query q=GetQuery(k, &v); head = InsertNode(head, 0, &q); if (q.update_ind) InsertBalance(q.update_ind);               return q.ret; }
-    bool     Erase (const K &k)             { Query q=GetQuery(k);     head = EraseNode (head,    &q); if (q.update_ind) EraseBalance(q.update_ind2, q.update_ind); return q.ret; }
+    V*       Insert(const K &k, const V &v) { Query q=GetQuery(k, &v, 1); head = InsertNode(head, 0, &q); if (q.update_ind) InsertBalance(q.update_ind);                return q.ret; }
+    bool     Erase (const K &k)             { Query q=GetQuery(k, 0,  1); head = EraseNode (head,    &q); if (q.update_ind) EraseBalance (q.update_ind2, q.update_ind); return q.ret; }
 
-    virtual Query GetQuery(const K &k, const V *v=0) { return Query(k, v); }
+    virtual Query GetQuery(const K &k, const V *v=0, bool update=0) { return Query(k, v); }
     virtual K GetCreateNodeKey(const Query *q) const { return q->key; }
+    virtual void ComputeStateFromChildrenOnPath(Query *q) {}
     virtual int ResolveInsertCollision(int ind, Query *q) { 
         Node *n = &node[ind-1];
         if (update_on_dup_insert) q->ret = &(val[n->val] = *q->val);
-        return ind;
+        return head;
     }
 
-#if 1
     int FindNode(int ind, Query *q) const {
         const Node *n;
         while (ind) {
             n = &node[ind-1];
-            if      (n->MoreThan(q->key, ind, q->z)) ind = n->left;
-            else if (n->LessThan(q->key, ind, q->z)) ind = n->right;
+            if      (n->MoreThan(q->key, ind, &q->z)) ind = n->left;
+            else if (n->LessThan(q->key, ind, &q->z)) ind = n->right;
             else return n->val+1;
         } return 0;
     }
-#else
-    int FindNode(int ind, Query *q) const {
-        if (!ind) return 0;
-        const Node *n = &node[ind-1];
-        if      (n->MoreThan(q->key, ind, q->z)) return FindNode(n->left,  q);
-        else if (n->LessThan(q->key, ind, q->z)) return FindNode(n->right, q);
-        else return n->val+1;
-    }
-#endif
 
 #if 1
     int InsertNode(int, int, Query *q) {
         Node *new_node;
-        int new_ind = node.Insert(Node(q->key, 0, 0))+1;
+        int new_ind = node.Insert(Node(GetCreateNodeKey(q), 0, 0))+1;
         if (int ind = head) {
             for (;;) {
                 Node *n = &node[ind-1];
-                if      (n->MoreThan(q->key, ind, q->z)) { if (!n->left)  { n->left  = new_ind; break; } ind = n->left;  }
-                else if (n->LessThan(q->key, ind, q->z)) { if (!n->right) { n->right = new_ind; break; } ind = n->right; }
-                else                                     { node.Erase(new_ind-1); q->ret = &(val[n->val] = *q->val); return head; }
+                if      (n->MoreThan(q->key, ind, &q->z)) { if (!n->left)  { n->left  = new_ind; break; } ind = n->left;  }
+                else if (n->LessThan(q->key, ind, &q->z)) { if (!n->right) { n->right = new_ind; break; } ind = n->right; }
+                else { node.Erase(new_ind-1); return ResolveInsertCollision(ind, q); }
             }
             (new_node = &node[new_ind-1])->parent = ind;
         } else new_node = &node[(head = new_ind)-1];
         q->ret = &val[(new_node->val = val.Insert(*q->val))];
+        ComputeStateFromChildrenOnPath(q);
         InsertBalance(new_ind);
         return head;
     }
@@ -442,19 +434,24 @@ struct RedBlackTree {
     int InsertNode(int ind, int p_ind, Query *q) {
         if (!ind) return (q->update_ind = CreateNode(q, p_ind));
         Node *n = &node[ind-1];
-        if      (n->MoreThan(q->key, ind, q->z)) { if (n->left)  InsertNode(n->left,  ind, q); else node[ind-1].left  = InsertNode(n->left,  ind, q); }
-        else if (n->LessThan(q->key, ind, q->z)) { if (n->right) InsertNode(n->right, ind, q); else node[ind-1].right = InsertNode(n->right,  ind, q); }
+        if      (n->MoreThan(q->key, ind, &q->z)) { if (n->left)  InsertNode(n->left,  ind, q); else node[ind-1].left  = InsertNode(n->left,  ind, q); }
+        else if (n->LessThan(q->key, ind, &q->z)) { if (n->right) InsertNode(n->right, ind, q); else node[ind-1].right = InsertNode(n->right,  ind, q); }
         else return ResolveInsertCollision(ind, q);
         ComputeStateFromChildren(&node[ind-1]);
         return ind;
+    }
+    int CreateNode(Query *q, int parent_ind) {
+        int val_ind = val.Insert(*q->val);
+        q->ret = &val[val_ind];
+        return node.Insert(Node(GetCreateNodeKey(q), val_ind, parent_ind))+1;
     }
 #endif
     void InsertBalance(int ind) {
         int p_ind, gp_ind, u_ind;
         Node *n = &node[ind-1], *p, *gp, *u;
         if (!(p_ind = n->parent)) { n->color = Black; return; }
-        if ((p = &node[p_ind-1])->color == Black) return;
-        gp = &node[(gp_ind = p->parent)-1];
+        if ((p = &node[p_ind-1])->color == Black || !(gp_ind = p->parent)) return;
+        gp = &node[gp_ind-1];
         if ((u_ind = GetSibling(gp, p_ind)) && (u = &node[u_ind-1])->color == Red) {
             p->color = u->color = Black;
             gp->color = Red;
@@ -473,26 +470,31 @@ struct RedBlackTree {
         else                                     RotateLeft (gp_ind);
     }
 
-#if 1    
+#if 1
     int EraseNode(int ind, Query *q) {
         Node *n;
         while (ind) {
             n = &node[ind-1];
-            if      (n->MoreThan(q->key, ind, q->z)) ind = n->left;
-            else if (n->LessThan(q->key, ind, q->z)) ind = n->right;
+            if      (n->MoreThan(q->key, ind, &q->z)) ind = n->left;
+            else if (n->LessThan(q->key, ind, &q->z)) ind = n->right;
             else break;
         }
         if (!ind) return head;
+        int orig_ind = ind, max_path = 0;
         q->ret = &val[n->val];
         val.Erase(n->val);
         if (n->left && n->right) {
-            n->SwapKV(&node[(ind = GetMaxNode(n->left))-1]);
+            n->SwapKV(&node[(ind = GetMaxNode((max_path = n->left)))-1]);
             n = &node[ind-1];
         }
         bool balance = n->color == Black;
         int child = X_or_Y(n->left, n->right), parent = n->parent;
         ReplaceNode(ind, child);
         node.Erase(ind-1);
+        if (child == head && head) node[head-1].color = Black;
+        if (max_path) ComputeStateFromChildrenOnMaxPath(max_path);
+        if (max_path) ComputeStateFromChildren(&node[orig_ind-1]);
+        ComputeStateFromChildrenOnPath(q);
         if (balance) EraseBalance(child, parent);
         return head;
     }
@@ -500,8 +502,8 @@ struct RedBlackTree {
     int EraseNode(int ind, Query *q) {
         if (!ind) return 0;
         Node *n = &node[ind-1];
-        if      (n->MoreThan(q->key, ind, q->z)) n->left  = EraseNode(n->left,  q);
-        else if (n->LessThan(q->key, ind, q->z)) n->right = EraseNode(n->right, q);
+        if      (n->MoreThan(q->key, ind, &q->z)) n->left  = EraseNode(n->left,  q);
+        else if (n->LessThan(q->key, ind, &q->z)) n->right = EraseNode(n->right, q);
         else {
             int orig_ind = 0, orig_left = 0;
             q->ret = &val[n->val];
@@ -523,9 +525,11 @@ struct RedBlackTree {
     }
 #endif
     void EraseBalance(int ind, int p_ind) {
-        int s_ind;
         if (!p_ind) return;
-        Node *p = &node[p_ind-1], *s = &node[(s_ind = GetSibling(p, ind))-1];
+        Node *p = &node[p_ind-1];
+        int s_ind = GetSibling(p, ind);
+        if (!s_ind) return;
+        Node *s = &node[s_ind-1];
         if (s->color == Red) {
             p->color = Red;
             s->color = Black;
@@ -548,18 +552,12 @@ struct RedBlackTree {
         else                { SetColor(s->left,  Black); RotateRight(p_ind); }
     }
 
-    int CreateNode(Query *q, int parent_ind) {
-        int val_ind = val.Insert(*q->val);
-        q->ret = &val[val_ind];
-        return node.Insert(Node(GetCreateNodeKey(q), val_ind, parent_ind))+1;
-    }
     void ReplaceNode(int ind, int new_ind) {
         Node *n = &node[ind-1];
         if (!n->parent) head = new_ind;
         else if (Node *parent = &node[n->parent-1]) {
             if (ind == parent->left) parent->left  = new_ind;
             else                     parent->right = new_ind;
-            ComputeStateFromChildren(parent);
         }
         if (new_ind) node[new_ind-1].parent = n->parent;
     }
@@ -611,7 +609,7 @@ struct RedBlackTree {
     virtual int BuildTreeFromSortedArrays(LoadFromSortedArraysQuery *q, int beg_ind, int end_ind, int h) {
         if (end_ind < beg_ind) return 0;
         CHECK_LE(h, q->max_height);
-        int mid_ind = (beg_ind + end_ind) / 2, color = (h == q->max_height ? Red : Black);
+        int mid_ind = (beg_ind + end_ind) / 2, color = ((h>1 && h == q->max_height) ? Red : Black);
         int node_ind = node.Insert(Node(q->k[mid_ind], val.Insert(q->v[mid_ind]), 0, color))+1;
         int left_ind  = node[node_ind-1].left  = BuildTreeFromSortedArrays(q, beg_ind,   mid_ind-1, h+1);
         int right_ind = node[node_ind-1].right = BuildTreeFromSortedArrays(q, mid_ind+1, end_ind,   h+1);
@@ -675,9 +673,9 @@ struct RedBlackTree {
 
 struct PrefixSumZipper {
     int sum=0;
+    bool update;
     vector<pair<int, bool> > path;
-    PrefixSumZipper() { path.reserve(64); }
-    void Reset() { sum=0; path.clear(); }
+    PrefixSumZipper(bool U) : update(U) { path.reserve(64); }
 };
 
 template <class K, class V, class Zipper = PrefixSumZipper>
@@ -688,11 +686,13 @@ struct PrefixSumKeyedRedBlackTreeNode : public RedBlackTreeNode<K,V,Zipper> {
     PrefixSumKeyedRedBlackTreeNode(K k=K(), unsigned v=0, unsigned p=0, bool c=0) : RedBlackTreeNode<K,V,Zipper>(k,v,p,c) {}
     virtual bool LessThan(const K &k, int ind, PrefixSumZipper *z) const {
         if (!((z->sum + left_sum + Parent::key) < k)) return 0;
+        if (z->update) z->path.emplace_back(ind, Parent::Left);
         z->sum += left_sum + Parent::key;
         return 1;
     }
     virtual bool MoreThan(const K &k, int ind, PrefixSumZipper *z) const {
         if (!(k < (z->sum + left_sum + Parent::key))) return 0;
+        if (z->update) z->path.emplace_back(ind, Parent::Right);
         return 1;
     }
     virtual void ComputeStateFromChildren(const Self *lc, const Self *rc) {
@@ -707,16 +707,28 @@ struct PrefixSumKeyedRedBlackTree : public RedBlackTree<K,V,PrefixSumZipper,Node
     typedef RedBlackTree<K,V,PrefixSumZipper,Node> Parent;
     function<K(const V*)> node_value_cb = bind([&](){ return 1; });
 
-    virtual K GetCreateNodeKey(const K&, const V &v) const { return node_value_cb(&v); }
-    virtual V *ResolveInsertCollision(int ind, const V &v) {
-        int val_ind = Parent::val.Insert(v);
-        int new_ind = Parent::node.Insert(Node(GetCreateNodeKey(K(),v), val_ind))+1;
-        Node *n = &Parent::node[ind-1];
-        if (!n->left) n->left                                           = new_ind;
-        else          Parent::node[Parent::GetMaxNode(n->left)-1].right = new_ind;
-        n->SwapKV(&Parent::node[new_ind-1]);
+    virtual K GetCreateNodeKey(const typename Parent::Query *q) const { return node_value_cb(q->ret); }
+    virtual typename Parent::Query GetQuery(const K &k, const V *v=0, bool update=0) {
+        return typename Parent::Query(k + (v ? 0 : 1), v, update);
+    }
+    virtual int ResolveInsertCollision(int ind, typename Parent::Query *q) { 
+        int val_ind = Parent::val.Insert(*q->val), p_ind = ind;
+        int new_ind = Parent::node.Insert(Node(GetCreateNodeKey(q), val_ind))+1;
+        q->ret = &Parent::val[val_ind];
+        Node *n = &Parent::node[ind-1], *nn;
+        if (!n->left) n->left = new_ind;
+        else Parent::node[(p_ind = Parent::GetMaxNode(n->left))-1].right = new_ind;
+        n->SwapKV((nn = &Parent::node[new_ind-1]));
+        nn->parent = p_ind;
+        Parent::ComputeStateFromChildrenOnMaxPath(n->left);
+        Parent::ComputeStateFromChildren(n);
+        ComputeStateFromChildrenOnPath(q);
         Parent::InsertBalance(new_ind);
-        return &Parent::val[val_ind];
+        return Parent::head;
+    }
+    virtual void ComputeStateFromChildrenOnPath(typename Parent::Query *q) {
+        for (auto i = q->z.path.rbegin(), e = q->z.path.rend(); i != e; ++i) 
+            Parent::ComputeStateFromChildren(&Parent::node[i->first-1]);
     }
 
     virtual void PrintNodes(int ind, int color, string *out) const {
@@ -734,7 +746,7 @@ struct PrefixSumKeyedRedBlackTree : public RedBlackTree<K,V,PrefixSumZipper,Node
         const V    *v = &Parent::val[n->val], *lv = l?&Parent::val[l->val]:0, *rv = r?&Parent::val[r->val]:0;
         if (l) { PrintEdges(n->left,  out); StrAppend(out, "\"", *v, "\" -> \"", *lv, "\" [ label = \"left\"  ];\r\n"); }
         if (r) { PrintEdges(n->right, out); StrAppend(out, "\"", *v, "\" -> \"", *rv, "\" [ label = \"right\" ];\r\n"); }
-    }
+   }
 
     void LoadFromSortedVal() {
         int n = Parent::val.size();
@@ -744,7 +756,7 @@ struct PrefixSumKeyedRedBlackTree : public RedBlackTree<K,V,PrefixSumZipper,Node
     int BuildTreeFromSortedVal(int beg_val_ind, int end_val_ind, int h, int max_h) {
         if (end_val_ind < beg_val_ind) return 0;
         CHECK_LE(h, max_h);
-        int mid_val_ind = (beg_val_ind + end_val_ind) / 2, color = (h == max_h ? Parent::Red : Parent::Black);
+        int mid_val_ind = (beg_val_ind + end_val_ind) / 2, color = ((h>1 && h == max_h) ? Parent::Red : Parent::Black);
         int ind = Parent::node.Insert(Node(node_value_cb(&Parent::val[mid_val_ind]), mid_val_ind))+1;
         int left_ind  = Parent::node[ind-1].left  = BuildTreeFromSortedVal(beg_val_ind,   mid_val_ind-1, h+1, max_h);
         int right_ind = Parent::node[ind-1].right = BuildTreeFromSortedVal(mid_val_ind+1, end_val_ind,   h+1, max_h);
@@ -1016,13 +1028,16 @@ TEST(DatastructureTest, PrefixSumKeyedRedBlackTree) {
         {
             PrefixSumKeyedRedBlackTree<int, int> t;
             timers->AccumulateTo(ctid); for (auto i : db) { EXPECT_NE((int*)0, t.Insert(i, i)); }
-            // LocalFile::WriteFile("/Users/p/lfl/lfapp_tests/rb.gv", t.DebugString(i.first));
+            timers->AccumulateTo(0);    t.CheckProperties();
             timers->AccumulateTo(qtid); for (auto i : db) { EXPECT_NE((int*)0, (v=t.Find(i))); if (v) EXPECT_EQ(i, *v); }
             timers->AccumulateTo(dtid); for (int i=0, hl=db.size()/2; i<hl; i++) EXPECT_EQ(true, t.Erase(0));
+            timers->AccumulateTo(0);    t.CheckProperties();
             timers->AccumulateTo(rtid); for (int i=0, hl=db.size()/2; i<hl; i++) { EXPECT_NE((int*)0, (v=t.Find(db[i]))); if (v) EXPECT_EQ(db[hl+i], *v); }
             timers->AccumulateTo(Ctid); for (int i=db.size()/2-1; i>=0; i--) t.Insert(0, db[i]);
+            timers->AccumulateTo(0);    t.CheckProperties();
             timers->AccumulateTo(Rtid); for (auto i : db) { EXPECT_NE((int*)0, (v=t.Find(i))); if (v) EXPECT_EQ(i, *v); }
             timers->AccumulateTo(Dtid); for (auto i : db) EXPECT_EQ(true, t.Erase(0));
+            timers->AccumulateTo(0);    t.CheckProperties();
             timers->AccumulateTo(0);
         }
         {
