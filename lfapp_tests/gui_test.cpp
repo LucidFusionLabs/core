@@ -86,23 +86,6 @@ TEST(GUITest, TextArea) {
         EXPECT_EQ(2, ta.line[-2].Lines());
         EXPECT_EQ(1, ta.line[-3].Lines());
         EXPECT_EQ(1, ta.line[-4].Lines());
-
-        TextArea::WrappedLineOffset o = ta.GetWrappedLineOffset(0);
-        EXPECT_EQ(TextArea::WrappedLineOffset(), o);
-        ta.IncrementWrappedLineOffset(&o, 1);
-        EXPECT_EQ(TextArea::WrappedLineOffset(1,0), o);
-        ta.IncrementWrappedLineOffset(&o, 1);
-        EXPECT_EQ(TextArea::WrappedLineOffset(1,1), o);
-        ta.IncrementWrappedLineOffset(&o, 1);
-        EXPECT_EQ(TextArea::WrappedLineOffset(2,0), o);
-
-        o = TextArea::WrappedLineOffset(2, 0);
-        ta.IncrementWrappedLineOffset(&o, -1);
-        EXPECT_EQ(TextArea::WrappedLineOffset(1,1), o);
-        ta.IncrementWrappedLineOffset(&o, -1);
-        EXPECT_EQ(TextArea::WrappedLineOffset(1,0), o);
-        ta.IncrementWrappedLineOffset(&o, -1);
-        EXPECT_EQ(TextArea::WrappedLineOffset(0,0), o);
     }
 }
 
