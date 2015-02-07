@@ -70,35 +70,29 @@ TEST(ArrayTest, Segment) {
     }
 }
 
-typedef pair<int, int> AT_FAV_Iter;
-static void AT_FAV_Iterate(const vector<int> &v, AT_FAV_Iter *i, int n) {
-    IterFlattenedArrayVals<vector<int>, &IndexOrDefault<int>, AT_FAV_Iter>(v, v.size(), i, n);
-}
-static int AT_FAV_Distance(const vector<int> &v, AT_FAV_Iter i1, AT_FAV_Iter i2) {
-    return FlattenedArrayValDist<vector<int>, &IndexOrDefault<int>, AT_FAV_Iter>(v, v.size(), i1, i2);
-}
-
 TEST(ArrayTest, FlattenedArrayVals) {
+    typedef pair<int, int> AT_FAV_Iter;
     vector<int> v = { 1, 3, 1, 2, 1, 3, 2 };
-    AT_FAV_Iter i1, i2, last = LastFlattenedArrayValIter<vector<int>, &IndexOrDefault<int>, AT_FAV_Iter>(v, v.size());
+    FlattenedArrayValues<vector<int>, &IndexOrDefault<int> > at_fav(v, v.size());
+    AT_FAV_Iter i1, i2, last = at_fav.LastIter();
     EXPECT_EQ(AT_FAV_Iter(0, 0), i1);
     EXPECT_EQ(AT_FAV_Iter(v.size()-1, v.back()-1), last);
 
-    AT_FAV_Iterate(v, &i1, 1); EXPECT_EQ(AT_FAV_Iter(1, 0), i1); EXPECT_EQ(1, AT_FAV_Distance(v, i1, i2)); i2=i1;
-    AT_FAV_Iterate(v, &i1, 1); EXPECT_EQ(AT_FAV_Iter(1, 1), i1); EXPECT_EQ(1, AT_FAV_Distance(v, i1, i2)); i2=i1;
-    AT_FAV_Iterate(v, &i1, 1); EXPECT_EQ(AT_FAV_Iter(1, 2), i1); EXPECT_EQ(1, AT_FAV_Distance(v, i1, i2)); i2=i1;
-    AT_FAV_Iterate(v, &i1, 1); EXPECT_EQ(AT_FAV_Iter(2, 0), i1); EXPECT_EQ(1, AT_FAV_Distance(v, i1, i2)); i2=i1;
-    AT_FAV_Iterate(v, &i1, 2); EXPECT_EQ(AT_FAV_Iter(3, 1), i1); EXPECT_EQ(2, AT_FAV_Distance(v, i1, i2)); i2=i1;
-    AT_FAV_Iterate(v, &i1, 3); EXPECT_EQ(AT_FAV_Iter(5, 1), i1); EXPECT_EQ(3, AT_FAV_Distance(v, i1, i2)); i2=i1;
-    AT_FAV_Iterate(v, &i1, 1); EXPECT_EQ(AT_FAV_Iter(5, 2), i1); EXPECT_EQ(1, AT_FAV_Distance(v, i1, i2)); i2=i1;
-    AT_FAV_Iterate(v, &i1, 1); EXPECT_EQ(AT_FAV_Iter(6, 0), i1); EXPECT_EQ(1, AT_FAV_Distance(v, i1, i2)); i2=i1;
-    AT_FAV_Iterate(v, &i1, 1); EXPECT_EQ(AT_FAV_Iter(6, 1), i1); EXPECT_EQ(1, AT_FAV_Distance(v, i1, i2)); i2=i1;
-    AT_FAV_Iterate(v, &i1, 1); EXPECT_EQ(AT_FAV_Iter(6, 1), i1); EXPECT_EQ(0, AT_FAV_Distance(v, i1, i2)); i2=i1;
-    AT_FAV_Iterate(v, &i1, 9); EXPECT_EQ(AT_FAV_Iter(6, 1), i1); EXPECT_EQ(0, AT_FAV_Distance(v, i1, i2)); i2=i1;
+    at_fav.AdvanceIter(&i1, 1); EXPECT_EQ(AT_FAV_Iter(1, 0), i1); EXPECT_EQ(1, at_fav.Distance(i1, i2)); i2=i1;
+    at_fav.AdvanceIter(&i1, 1); EXPECT_EQ(AT_FAV_Iter(1, 1), i1); EXPECT_EQ(1, at_fav.Distance(i1, i2)); i2=i1;
+    at_fav.AdvanceIter(&i1, 1); EXPECT_EQ(AT_FAV_Iter(1, 2), i1); EXPECT_EQ(1, at_fav.Distance(i1, i2)); i2=i1;
+    at_fav.AdvanceIter(&i1, 1); EXPECT_EQ(AT_FAV_Iter(2, 0), i1); EXPECT_EQ(1, at_fav.Distance(i1, i2)); i2=i1;
+    at_fav.AdvanceIter(&i1, 2); EXPECT_EQ(AT_FAV_Iter(3, 1), i1); EXPECT_EQ(2, at_fav.Distance(i1, i2)); i2=i1;
+    at_fav.AdvanceIter(&i1, 3); EXPECT_EQ(AT_FAV_Iter(5, 1), i1); EXPECT_EQ(3, at_fav.Distance(i1, i2)); i2=i1;
+    at_fav.AdvanceIter(&i1, 1); EXPECT_EQ(AT_FAV_Iter(5, 2), i1); EXPECT_EQ(1, at_fav.Distance(i1, i2)); i2=i1;
+    at_fav.AdvanceIter(&i1, 1); EXPECT_EQ(AT_FAV_Iter(6, 0), i1); EXPECT_EQ(1, at_fav.Distance(i1, i2)); i2=i1;
+    at_fav.AdvanceIter(&i1, 1); EXPECT_EQ(AT_FAV_Iter(6, 1), i1); EXPECT_EQ(1, at_fav.Distance(i1, i2)); i2=i1;
+    at_fav.AdvanceIter(&i1, 1); EXPECT_EQ(AT_FAV_Iter(6, 1), i1); EXPECT_EQ(0, at_fav.Distance(i1, i2)); i2=i1;
+    at_fav.AdvanceIter(&i1, 9); EXPECT_EQ(AT_FAV_Iter(6, 1), i1); EXPECT_EQ(0, at_fav.Distance(i1, i2)); i2=i1;
 
     int sum = 0; for (auto i : v) sum += i;
-    EXPECT_EQ(sum-1, AT_FAV_Distance(v, AT_FAV_Iter(), last));
-    EXPECT_EQ(sum-1, AT_FAV_Distance(v, last, AT_FAV_Iter()));
+    EXPECT_EQ(sum-1, at_fav.Distance(AT_FAV_Iter(), last));
+    EXPECT_EQ(sum-1, at_fav.Distance(last, AT_FAV_Iter()));
 }
 
 TEST(BitTest, Bit) {

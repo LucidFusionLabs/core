@@ -621,9 +621,10 @@ TEST(DatastructureTest, PrefixSumKeyedRedBlackTree) {
             PrefixSumKeyedRedBlackTree<int, int>::Iterator ti;
             timers->AccumulateTo(ctid); for (auto i : db) { EXPECT_NE((int*)0, t.Insert(i, i).val); }
             timers->AccumulateTo(0);    t.CheckProperties();
-            timers->AccumulateTo(qtid); for (auto i : db) { EXPECT_NE((int*)0, (ti=t.Find(i)).val); if (ti.val) EXPECT_EQ(i, *ti.val); }
-            timers->AccumulateTo(itid); for (ti = t. Begin(); ti.ind; ++ti) {         EXPECT_EQ(db[iind]+1, ti.key); EXPECT_EQ(db[iind], *ti.val); iind++; }
-            timers->AccumulateTo(0);    for (ti = t.RBegin(); ti.ind; --ti) { iind--; EXPECT_EQ(db[iind]+1, ti.key); EXPECT_EQ(db[iind], *ti.val);         }
+            timers->AccumulateTo(qtid); for (auto i : db) { EXPECT_NE((int*)0, (ti=t.      Find(i)).val); if (ti.val) EXPECT_EQ(i, *ti.val); }
+            timers->AccumulateTo(0);    for (auto i : db) { EXPECT_NE((int*)0, (ti=t.LowerBound(i)).val); if (ti.val) EXPECT_EQ(i, *ti.val); }
+            timers->AccumulateTo(itid); for (ti = t. Begin(); ti.ind; ++ti) {         EXPECT_EQ(db[iind], ti.key); EXPECT_EQ(db[iind], *ti.val); iind++; }
+            timers->AccumulateTo(0);    for (ti = t.RBegin(); ti.ind; --ti) { iind--; EXPECT_EQ(db[iind], ti.key); EXPECT_EQ(db[iind], *ti.val);         }
             timers->AccumulateTo(dtid); for (int i=0, hl=db.size()/2; i<hl; i++) EXPECT_EQ(true, t.Erase(0));
             timers->AccumulateTo(0);    t.CheckProperties();
             timers->AccumulateTo(rtid); for (int i=0, hl=db.size()/2; i<hl; i++) { EXPECT_NE((int*)0, (ti=t.Find(db[i])).val); if (ti.val) EXPECT_EQ(db[hl+i], *ti.val); }
@@ -642,11 +643,13 @@ TEST(DatastructureTest, PrefixSumKeyedRedBlackTree) {
             timers->AccumulateTo(0);    t.CheckProperties();
             for (auto i : db) { EXPECT_NE((int*)0, (ti=t.Find(i)).val); if (ti.val) EXPECT_EQ(i, *ti.val); }
             t.node_value_cb = bind([&]() { return 10; });
-            t.Update(0,   0);
-            t.Update(4+9, 0);
-            for (auto i : db) { EXPECT_NE((int*)0, (ti=t.Find(i+9+(i>=4?9:0))).val); if (ti.val) EXPECT_EQ(i, *ti.val); }
-            iind=0; for (ti = t. Begin(); ti.ind; ++ti) {         EXPECT_EQ(db[iind]+1+9+(iind>=4?9:0), ti.key); EXPECT_EQ(db[iind], *ti.val); iind++; }
-            /**/    for (ti = t.RBegin(); ti.ind; --ti) { iind--; EXPECT_EQ(db[iind]+1+9+(iind>=4?9:0), ti.key); EXPECT_EQ(db[iind], *ti.val);         }
+            t.Update(0,   0); for (int i=1; i<=10; i++) { EXPECT_NE((int*)0, (ti=t.LowerBound(    i)).val); if (ti.val) EXPECT_EQ(db[1], *ti.val); }
+            t.Update(9+4, 0); for (int i=1; i<=10; i++) { EXPECT_NE((int*)0, (ti=t.LowerBound(    i)).val); if (ti.val) EXPECT_EQ(db[1], *ti.val); }
+            /**/              for (int i=1; i<=10; i++) { EXPECT_NE((int*)0, (ti=t.LowerBound(9+4+i)).val); if (ti.val) EXPECT_EQ(db[5], *ti.val); }
+            for (auto i : db) { EXPECT_NE((int*)0, (ti=t.      Find(i+(i>0?9:0)+(i>4?9:0))).val); if (ti.val) EXPECT_EQ(i, *ti.val); }
+            for (auto i : db) { EXPECT_NE((int*)0, (ti=t.LowerBound(i+(i>0?9:0)+(i>4?9:0))).val); if (ti.val) EXPECT_EQ(i, *ti.val); }
+            iind=0; for (ti = t. Begin(); ti.ind; ++ti) {         EXPECT_EQ(db[iind]+(iind>0?9:0)+(iind>4?9:0), ti.key); EXPECT_EQ(db[iind], *ti.val); iind++; }
+            /**/    for (ti = t.RBegin(); ti.ind; --ti) { iind--; EXPECT_EQ(db[iind]+(iind>0?9:0)+(iind>4?9:0), ti.key); EXPECT_EQ(db[iind], *ti.val);         }
         }
     }
 }

@@ -36,7 +36,7 @@ struct SpaceballSettings : public GameSettings {
 struct SpaceballTeam {
     string name, skybox_name; int font_index;
     Color field_color, goal_color, stripe_colors[6];
-    LFL::Light light; Material ship_color;
+    Light light; Material ship_color;
 
     SpaceballTeam(const string &n, const string &sn, int fi, const Color &FC, const Color &GC, const Color &SC, const v4 &light_pos, const Color &light_color, bool stripe_color_fwd) 
         : name(n), skybox_name(sn), font_index(fi), field_color(FC), goal_color(GC) {

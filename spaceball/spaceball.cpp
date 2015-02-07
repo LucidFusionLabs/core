@@ -77,7 +77,7 @@ vector<v3> fireworks_positions;
 #define MyShip SpaceballGame::Ship
 #define MyBall SpaceballGame::Ball
 
-int Frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample, int flag);
+int Frame(Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample, int flag);
 
 Geometry *FieldGeometry(const Color &rg, const Color &bg, const Color &fc) {
     vector<v3> verts, norm; vector<v2> tex; vector<Color> col; int ci=0;
@@ -294,7 +294,7 @@ struct TeamSelectGUI : public GUI {
     vector<Widget::Button> team_buttons;
     int home_team=0, away_team=0;
 
-    TeamSelectGUI(LFL::Window *w) : GUI(w), teams(SpaceballTeam::GetList()),
+    TeamSelectGUI(Window *w) : GUI(w), teams(SpaceballTeam::GetList()),
     font(Fonts::Get("Origicide.ttf", 8, Color::white)), team_font(Fonts::Get("sbmaps", 0, Color::black)),
     start_button(this, 0, font, "start", MouseController::CB(bind(&TeamSelectGUI::Start, this))) {
         start_button.outline = &font->fg;
@@ -447,7 +447,7 @@ void MyFieldColorCmd(const vector<string> &arg) {
 }
 
 // LFL::Application FrameCB
-int Frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample, int flag) {
+int Frame(Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample, int flag) {
     if (Singleton<FlagMap>::Get()->dirty) {
         Singleton<FlagMap>::Get()->dirty = false;
         SettingsFile::Write(save_settings, LFAppDownloadDir(), "settings");

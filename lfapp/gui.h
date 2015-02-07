@@ -50,8 +50,8 @@ struct GUI : public MouseController {
     }
 
     virtual void SetLayoutDirty() { child_box.Clear(); }
+    virtual void Layout(const Box &b) { box=b; Layout(); }
     virtual void Layout() {}
-    virtual void Draw(const Box &b) { box=b; Draw(); }
     virtual void Draw() {
         if (child_box.data.empty()) Layout();
         child_box.Draw(box.TopLeft());
@@ -249,7 +249,6 @@ struct TextGUI : public KeyboardGUI {
         Line &operator=(const Line &s) { data=s.data; return *this; }
         static void Move (Line &t, Line &s) { swap(t.data, s.data); }
         static void MoveP(Line &t, Line &s) { swap(t.data, s.data); t.p=s.p; }
-#define ScopedLineLinesTracker ScopedDeltaAdder<int> SWLT(cont ? &cont->wrapped_lines : 0, bind(&Line::Lines, this))
 
         int GetAttrId(const Drawable::Attr &a) { return data->glyphs.attr.GetAttrId(a); }
         void InitFlow() { data->flow = Flow(&data->box, parent->font, &data->glyphs, &parent->layout); }
@@ -271,7 +270,7 @@ struct TextGUI : public KeyboardGUI {
         void Layout(Box win, bool flush=0) {
             if (data->box.w == win.w && !flush) return;
             data->box = win;
-            ScopedLineLinesTracker;
+            ScopedDeltaTracker<int> SWLT(cont ? &cont->wrapped_lines : 0, bind(&Line::Lines, this));
             BoxArray b;
             swap(b, data->glyphs);
             data->glyphs.attr.source = b.attr.source;
@@ -306,7 +305,7 @@ struct TextGUI : public KeyboardGUI {
         point Draw(point pos, bool relayout, int relayout_width) {
             if (relayout) Layout(relayout_width);
             data->glyphs.Draw((p = pos));
-            return p - point(0, max(parent->font->height, data->glyphs.height));
+            return p - point(0, parent->font->height + data->glyphs.height);
         }
     };
     struct Lines : public RingVector<Line> {
@@ -328,57 +327,24 @@ struct TextGUI : public KeyboardGUI {
         }
         static int GetBackLineLines(const Lines &l, int i) { return l[-i-1].Lines(); }
     };
-    struct LinesFrameBuffer : public RingFrameBuffer {
-        typedef function<point(Line*, point, const Box&)> PaintCB;
+    struct LinesFrameBuffer : public RingFrameBuffer<Line> {
         typedef function<LinesFrameBuffer*(const Line*)> FromLineCB;
         struct Flag { enum { NoLayout=1, NoVWrap=2, Flush=4 }; };
         int lines=0;
         PaintCB paint_cb;
         LinesFrameBuffer() : paint_cb(bind(&LinesFrameBuffer::Paint, this, _1, _2, _3)) {}
 
+        LinesFrameBuffer *Attach(LinesFrameBuffer **last_fb);
+        bool SizeChanged(int W, int H, Font *font);
         int Height() const { return lines * font_height; }
-        bool SizeChanged(int W, int H, Font *font) {
-            lines = H / font->height;
-            return RingFrameBuffer::SizeChanged(W, H, font);
-        }
-        LinesFrameBuffer *Attach(LinesFrameBuffer **last_fb) {
-            if (*last_fb != this) fb.Attach();
-            return *last_fb = this;
-        }
-        void Clear(Line *l) {
-            RingFrameBuffer::Clear(l, Box(0, l->Lines() * font_height), true);
-        }
+        void Clear(Line *l) { RingFrameBuffer::Clear(l, Box(0, l->Lines() * font_height), true); }
+        void Update(Line *l, int flag=0);
         void Update(Line *l, const point &p, int flag=0) { l->p=p; Update(l, flag); }
-        void Update(Line *l, int flag=0) {
-            if (!(flag & Flag::NoLayout)) l->Layout(wrap ? w : 0, flag & Flag::Flush);
-            RingFrameBuffer::Update(l, Box(0, l->Lines() * font_height), paint_cb, true);
-        }
-        int PushFrontAndUpdate(Line *l, int xo=0, int wlo=0, int wll=0, int flag=0) {
-            if (!(flag & Flag::NoLayout)) l->Layout(wrap ? w : 0, flag & Flag::Flush);
-            int wl = max(0, l->Lines() - wlo), lh = (wll ? min(wll, wl) : wl) * font_height;
-            if (!lh) return 0; Box b(xo, wl * font_height - lh, 0, lh);
-            return RingFrameBuffer::PushFrontAndUpdate(l, b, paint_cb, !(flag & Flag::NoVWrap)) / font_height;
-        }
-        int PushBackAndUpdate(Line *l, int xo=0, int wlo=0, int wll=0, int flag=0) {
-            if (!(flag & Flag::NoLayout)) l->Layout(wrap ? w : 0, flag & Flag::Flush);
-            int wl = max(0, l->Lines() - wlo), lh = (wll ? min(wll, wl) : wl) * font_height;
-            if (!lh) return 0; Box b(xo, wlo * font_height, 0, lh);
-            return RingFrameBuffer::PushBackAndUpdate(l, b, paint_cb, true) / font_height;
-        }
-        void PushFrontAndUpdateOffset(Line *l, int lo) {
-            Update(l, RingFrameBuffer::BackPlus(point(0, (1 + lo) * font_height)));
-            RingFrameBuffer::AdvancePixels(-l->Lines() * font_height);
-        }
-        void PushBackAndUpdateOffset(Line *l, int lo) {
-            Update(l, RingFrameBuffer::BackPlus(point(0, lo * font_height)));
-            RingFrameBuffer::AdvancePixels(l->Lines() * font_height);
-        }
-        point Paint(Line *l, point lp, const Box &b) {
-            Scissor scissor(0, lp.y - b.h, w, b.h);
-            screen->gd->Clear();
-            point ret = l->Draw(lp + b.Position(), 0, 0);
-            return ret;
-        }
+        int PushFrontAndUpdate(Line *l, int xo=0, int wlo=0, int wll=0, int flag=0);
+        int PushBackAndUpdate (Line *l, int xo=0, int wlo=0, int wll=0, int flag=0);
+        void PushFrontAndUpdateOffset(Line *l, int lo);
+        void PushBackAndUpdateOffset (Line *l, int lo);
+        point Paint(Line *l, point lp, const Box &b);
     };
     struct LineUpdate {
         enum { PushBack=1, PushFront=2, DontUpdate=4 }; 
@@ -440,18 +406,15 @@ struct TextGUI : public KeyboardGUI {
 };
 
 struct TextArea : public TextGUI {
-    typedef pair<int,int> WrappedLineOffset;
-
     Lines line;
     LinesFrameBuffer line_fb;
     GUI mouse_gui;
     Time write_last=0;
     const Border *clip=0;
-    WrappedLineOffset first_line, last_line;
     bool wrap_lines=1, write_timestamp=0, write_newline=1;
-    bool selection_changing=0, selection_changing_previously=0;
+    bool reverse_line_fb=0, selection_changing=0, selection_changing_previously=0;
     float v_scrolled=0, h_scrolled=0, last_v_scrolled=0, last_h_scrolled=0;
-    int line_left=0, scroll_inc=10, scrolled_lines=0;
+    int line_left=0, lines_cutoff=0, scroll_inc=10, scrolled_lines=0;
     point selection_beg, selection_end;
     LinkCB new_link_cb, hover_link_cb;
 
@@ -464,19 +427,12 @@ struct TextArea : public TextGUI {
     virtual void PageDown() { v_scrolled = Clamp(v_scrolled + (float)scroll_inc/WrappedLines(), 0, 1); UpdateScrolled(); } 
     virtual void Resized(int w, int h);
 
-    virtual int WrappedLines() const { return line.wrapped_lines; }
-    virtual WrappedLineOffset GetWrappedLineOffset(float percent) const
-    { WrappedLineOffset o; IncrementWrappedLineOffset(&o, percent * (WrappedLines() - 1)); return o; }
-    virtual void IncrementWrappedLineOffset(WrappedLineOffset *o, int n) const
-    { IterFlattenedArrayVals<TextGUI::Lines, &TextGUI::Lines::GetBackLineLines, WrappedLineOffset>(line, line.Size(), o, n); }
-
+    virtual void Redraw(bool attach=true);
     virtual void UpdateScrolled();
     virtual void UpdateHScrolled(int x, bool update_fb=true);
-    virtual void UpdateVScrolled(const WrappedLineOffset &nfl, const WrappedLineOffset &nll);
-    virtual void UpdateLines(const WrappedLineOffset &nfl, const WrappedLineOffset &nll)
-    { start_line = nfl.first; adjust_lines = -nfl.second; }
-    virtual void UpdateLines(const WrappedLineOffset &nfl, WrappedLineOffset *nll)
-    { *nll = nfl; IncrementWrappedLineOffset(nll, line_fb.lines); UpdateLines(nfl, *nll); }
+    virtual void UpdateVScrolled(int dist, bool reverse, int first_offset);
+    virtual int UpdateLines(float v_scrolled, int *first_offset);
+    virtual int WrappedLines() const { return line.wrapped_lines; }
 
     virtual void Draw(const Box &w, bool cursor);
     virtual void DrawWithShader(const Box &w, bool cursor, Shader *shader)
@@ -484,6 +440,8 @@ struct TextArea : public TextGUI {
     void DrawOrCopySelection();
 
     bool Wrap() const { return line_fb.wrap; }
+    int LineFBPushBack () const { return reverse_line_fb ? LineUpdate::PushFront : LineUpdate::PushBack;  }
+    int LineFBPushFront() const { return reverse_line_fb ? LineUpdate::PushBack  : LineUpdate::PushFront; }
     void ClickCB(int button, int x, int y, int down) {
         if (1)    selection_changing = down;
         if (down) selection_beg = point(x, y);
@@ -492,49 +450,30 @@ struct TextArea : public TextGUI {
 };
 
 struct Editor : public TextArea {
-    typedef pair<int, int> LineOffsetSegment;
     struct LineOffset { 
-        int offset, size, font_size, wrapped_lines, wrapped_line_number; float width; 
-        LineOffset(int O=0, int S=0, int FS=0, int WL=1, int WLN=0, float W=0) :
-           offset(O), size(S), font_size(FS), wrapped_lines(WL), wrapped_line_number(WLN), width(W) {}
-        bool operator<(const LineOffset &l) const { return wrapped_line_number < l.wrapped_line_number; }
+        int id; long long offset; int size, wrapped_lines;
+        LineOffset(int I=0, int O=0, int S=0, int WL=1) : id(I), offset(O), size(S), wrapped_lines(WL) {}
+        static string GetString(const LineOffset *v) { return StrCat(v->id); }
+        static int    GetLines (const LineOffset *v) { return v->wrapped_lines; }
+        static int VectorGetLines(const vector<LineOffset> &v, int i) { return v[i].wrapped_lines; }
     };
-    static int GetLineOffsetLines(const vector<LineOffset> &v, int i) { return v[i].wrapped_lines; }
+    typedef PrefixSumKeyedRedBlackTree<int, LineOffset> LineMap;
 
     shared_ptr<File> file;
-    vector<LineOffset> file_line;
-    int last_fb_lines=0, wrapped_lines=0;
+    LineMap file_line;
+    int last_fb_width=0, last_fb_lines=0, last_first_line=0, wrapped_lines=0;
 
-    Editor(Window *W, Font *F, File *I, bool Wrap=0) : TextArea(W, F), file(I) { line_fb.wrap=Wrap; BuildLineMap(); }
-    void BuildLineMap() {
-        int ind=0, offset=0;
-        for (const char *l = file->NextLineRaw(&offset); l; l = file->NextLineRaw(&offset))
-            file_line.push_back(LineOffset(offset, file->nr.record_len, TextArea::font->size,
-                                           1, ++ind, TextArea::font->Width(l)));
-        wrapped_lines = file_line.size();
+    Editor(Window *W, Font *F, File *I, bool Wrap=0) : TextArea(W, F), file(I) {
+        reverse_line_fb = 1;
+        line_fb.wrap = Wrap;
+        file_line.node_value_cb = &LineOffset::GetLines;
+        file_line.node_print_cb = &LineOffset::GetString;
     }
 
     int WrappedLines() const { return wrapped_lines; }
-    void UpdateWrappedLines(int cur_font_size, int box_width) {
-        wrapped_lines = 0;
-        for (auto &l : file_line) {
-            l.wrapped_lines = 1 + l.width * cur_font_size / l.font_size / box_width;
-            l.wrapped_line_number = (wrapped_lines += l.wrapped_lines);
-        }
-    }
-    WrappedLineOffset GetWrappedLineOffset(float percent) const {
-        if (!Wrap()) return WrappedLineOffset(percent * file_line.size(), 0);
-        int target_line = percent * wrapped_lines;
-        auto it = lower_bound(file_line.begin(), file_line.end(), LineOffset(0,0,0,0,target_line));
-        if (it == file_line.end()) return LastFlattenedArrayValIter<vector<LineOffset>, &Editor::GetLineOffsetLines, WrappedLineOffset>(file_line, file_line.size());
-        int prev_wrapped_line_number = (it == file_line.begin()) ? 0 : (it-1)->wrapped_line_number;
-        WrappedLineOffset ret(it - file_line.begin(), target_line - prev_wrapped_line_number);
-        return ret;
-    }
-    void IncrementWrappedLineOffset(WrappedLineOffset *o, int n) const {
-        IterFlattenedArrayVals<vector<LineOffset>, &Editor::GetLineOffsetLines, WrappedLineOffset>(file_line, file_line.size(), o, n);
-    }
-    void UpdateLines(const WrappedLineOffset &nfl, const WrappedLineOffset &nll);
+    void UpdateWrappedLines(int cur_font_size, int width);
+    int UpdateLines(float v_scrolled, int *first_offset);
+    void PopExtraLines(bool reverse);
     void Draw(const Box &box) { TextArea::Draw(box, true); }
 };
 

@@ -617,7 +617,8 @@ template <int MP, int MH, bool PerParticleColor> struct Particles : public Parti
     void AssetDrawCB(Asset *out, Entity *e) { pos = e->pos; Draw(); }
 };
 
-struct RingFrameBuffer {
+template <class Line> struct RingFrameBuffer {
+    typedef function<point(Line*, point, const Box&)> PaintCB;
     FrameBuffer fb; v2 scroll; point p; bool wrap=0;
     int w=0, h=0, font_size=0, font_height=0;
 
@@ -640,16 +641,16 @@ struct RingFrameBuffer {
         (box + adjust).DrawCrimped(fb.tex.coord, 0, 0, scroll.y);
         if (scissor) screen->gd->PopScissor();
     }
-    template <class X> void Clear(X *l, const Box &b, bool vwrap=true) {
+    void Clear(Line *l, const Box &b, bool vwrap=true) {
         if (1)                         { Scissor s(0, l->p.y - b.h,      w, b.h); screen->gd->Clear(); }
         if (l->p.y - b.h < 0 && vwrap) { Scissor s(0, l->p.y + Height(), w, b.h); screen->gd->Clear(); }
     }
-    template <class X> void Update(X *l, const Box &b, const function<point(X*, point, const Box&)> &paint, bool vwrap=true) {
+    void Update(Line *l, const Box &b, const PaintCB &paint, bool vwrap=true) {
         Box box(0, b.h);
         point lp = paint(l, l->p, box);
         if (lp.y < 0 && vwrap) paint(l, point(0, lp.y + Height() + b.h), box);
     }
-    template <class X> int PushFrontAndUpdate(X *l, const Box &b, const function<point(X*, point, const Box&)> &paint, bool vwrap=true) {
+    int PushFrontAndUpdate(Line *l, const Box &b, const PaintCB &paint, bool vwrap=true) {
         int ht = Height();
         if (b.h >= ht)     p = paint(l,      point(0, ht),         b);
         else                   paint(l, (p = point(0, p.y + b.h)), b);
@@ -657,7 +658,7 @@ struct RingFrameBuffer {
         ScrollPercent((float)-b.h / ht);
         return b.h;
     }
-    template <class X> int PushBackAndUpdate(X *l, const Box &b, const function<point(X*, point, const Box&)> &paint, bool vwrap=true) {
+    int PushBackAndUpdate(Line *l, const Box &b, const PaintCB &paint, bool vwrap=true) {
         int ht = Height();
         if (p.y == 0)         p =          point(0, ht);
         if (b.h >= ht)        p = paint(l, point(0, b.h),            b);
