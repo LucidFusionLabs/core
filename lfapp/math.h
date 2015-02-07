@@ -476,7 +476,7 @@ int NextMultipleOfPowerOfTwo(int input, int align);
 void *NextMultipleOfPowerOfTwo(void *input, int align);
 int PrevMultipleOfN(int input, int N);
 int NextMultipleOfN(int input, int N);
-int NextPowerOfTwo(int n);
+int NextPowerOfTwo(int n, bool strict=false);
 bool IsPowerOfTwo(unsigned n);
 int WhichLog2(int n);
 int FloorLog2(int n);

@@ -21,7 +21,10 @@
 
 namespace LFL {
 
-struct RedBlackTreeZipper { RedBlackTreeZipper(bool update=0) {} };
+struct RedBlackTreeZipper {
+    RedBlackTreeZipper(bool update=0) {} 
+    string DebugString() const { return ""; }
+};
 
 template <class K, class V, class Zipper = RedBlackTreeZipper> struct RedBlackTreeNode {
     enum { Left, Right };
@@ -30,6 +33,7 @@ template <class K, class V, class Zipper = RedBlackTreeZipper> struct RedBlackTr
     RedBlackTreeNode(K k, unsigned v, unsigned P, bool C=0) : key(k), val(v), left(0), right(0), parent(P), color(C) {}
     void SwapKV(RedBlackTreeNode *n) { swap(key, n->key); unsigned v=val; val=n->val; n->val=v; }
     virtual K GetKey(Zipper*) const { return key; }
+    virtual int WalkLeft   (Zipper *z) const { return left; }
     virtual int WalkRight  (Zipper *z) const { return right; }
     virtual int UnwalkRight(Zipper *z) const { return parent; }
     virtual bool LessThan(const K &k, int, Zipper*) const { return key < k; }
@@ -45,8 +49,8 @@ struct RedBlackTree {
         Self *tree; int ind; K key; V *val; Zipper zipper;
         Iterator(Self *T=0, int I=0)        : tree(T), ind(I), key(0), val(0) {                  if (ind) LoadKV(); }
         Iterator(Self *T, int I, Zipper &z) : tree(T), ind(I), key(0), val(0) { swap(z, zipper); if (ind) LoadKV(); }
-        Iterator& operator--() { if ((ind = tree->DecrementNode(ind, &zipper))) LoadKV(); else val = 0; return *this; }
-        Iterator& operator++() { if ((ind = tree->IncrementNode(ind, &zipper))) LoadKV(); else val = 0; return *this; }
+        Iterator& operator--() { if (!ind) *this = tree->RBegin(); else if ((ind = tree->DecrementNode(ind, &zipper))) LoadKV(); else val = 0; return *this; }
+        Iterator& operator++() { CHECK(ind);                            if ((ind = tree->IncrementNode(ind, &zipper))) LoadKV(); else val = 0; return *this; }
         bool operator!=(const Iterator &i) { return tree != i.tree || ind != i.ind; }
         void LoadKV() { if (const Node *n = &tree->node[ind-1]) { key = n->GetKey(&zipper); val = &tree->val[n->val]; } }
     };
@@ -55,8 +59,8 @@ struct RedBlackTree {
         ConstIterator(const Self *T=0, int I=0)        : tree(T), ind(I), key(0), val(0) {                  if (ind) LoadKV(); }
         ConstIterator(const Self *T, int I, Zipper &z) : tree(T), ind(I), key(0), val(0) { swap(z, zipper); if (ind) LoadKV(); }
         ConstIterator(const Iterator &i) : tree(i.tree), ind(i.ind), key(i.key), val(i.val), zipper(i.zipper) {}
-        ConstIterator& operator-- () { if ((ind = tree->DecrementNode(ind, &zipper))) LoadKV(); else val = 0; return *this; }
-        ConstIterator& operator++ () { if ((ind = tree->IncrementNode(ind, &zipper))) LoadKV(); else val = 0; return *this; }
+        ConstIterator& operator-- () { if (!ind) *this = tree->RBegin(); else if ((ind = tree->DecrementNode(ind, &zipper))) LoadKV(); else val = 0; return *this; }
+        ConstIterator& operator++ () { CHECK(ind);                            if ((ind = tree->IncrementNode(ind, &zipper))) LoadKV(); else val = 0; return *this; }
         bool operator!=(const ConstIterator &i) { return tree != i.tree || ind != i.ind; }
         void LoadKV() { if (const Node *n = &tree->node[ind-1]) { key = n->GetKey(&zipper); val = &tree->val[n->val]; } }
     };
@@ -72,17 +76,21 @@ struct RedBlackTree {
 
     int size() const { return count; }
     void Clear() { head=count=0; node.Clear(); val.Clear(); }
-    Iterator  Begin() { Zipper z; return Iterator(this, head ? GetMinNode(head)     : 0, z); }
-    Iterator RBegin() { Zipper z; return Iterator(this, head ? GetMaxNode(head, &z) : 0, z); }
+    /**/ Iterator  Begin()       { Zipper z; int n = head ? GetMinNode(head)     : 0; return      Iterator(this, n, z); }
+    ConstIterator  Begin() const { Zipper z; int n = head ? GetMinNode(head)     : 0; return ConstIterator(this, n, z); }
+    /**/ Iterator RBegin()       { Zipper z; int n = head ? GetMaxNode(head, &z) : 0; return      Iterator(this, n, z); }
+    ConstIterator RBegin() const { Zipper z; int n = head ? GetMaxNode(head, &z) : 0; return ConstIterator(this, n, z); }
 
-    ConstIterator Find      (const K &k) const   { Query q=GetQuery(k);        return Iterator(this, FindNode      (&q), q.z); }
-    /**/ Iterator Find      (const K &k)         { Query q=GetQuery(k);        return Iterator(this, FindNode      (&q), q.z); }
-    ConstIterator LowerBound(const K &k) const   { Query q=GetQuery(k);        return Iterator(this, LowerBoundNode(&q), q.z); }
-    /**/ Iterator LowerBound(const K &k)         { Query q=GetQuery(k);        return Iterator(this, LowerBoundNode(&q), q.z); }
-    /**/ Iterator Insert(const K &k, const V &v) { Query q=GetQuery(k, &v, 1); return Iterator(this, InsertNode    (&q), q.z); }
     bool          Erase (const K &k)             { Query q=GetQuery(k, 0,  1); return EraseNode(&q); }
+    /**/ Iterator Insert(const K &k, const V &v) { Query q=GetQuery(k, &v, 1); int n=InsertNode    (&q); return Iterator(this, n, q.z); }
+    ConstIterator Find       (const K &k) const  { Query q=GetQuery(k);        int n=FindNode      (&q); return Iterator(this, n, q.z); }
+    /**/ Iterator Find       (const K &k)        { Query q=GetQuery(k);        int n=FindNode      (&q); return Iterator(this, n, q.z); }
+    ConstIterator LowerBound (const K &k) const  { Query q=GetQuery(k);        int n=LowerBoundNode(&q); return Iterator(this, n, q.z); }
+    /**/ Iterator LowerBound (const K &k)        { Query q=GetQuery(k);        int n=LowerBoundNode(&q); return Iterator(this, n, q.z); }
+    ConstIterator LesserBound(const K &k) const  { Query q=GetQuery(k);        int n=LowerBoundNode(&q); Iterator i(this, n, q.z); if (i.val && i.key > k) --i; return i; }
+    /**/ Iterator LesserBound(const K &k)        { Query q=GetQuery(k);        int n=LowerBoundNode(&q); Iterator i(this, n, q.z); if (i.val && i.key > k) --i; return i; }
 
-    virtual Query GetQuery(const K &k, const V *v=0, bool update=0) const { return Query(k, v); }
+    virtual Query GetQuery(const K &k, const V *v=0, bool update=0) const { return Query(k, v, update); }
     virtual K GetCreateNodeKey(const Query *q) const { return q->key; }
     virtual void ComputeStateFromChildrenOnPath(Query *q) {}
     virtual int ResolveInsertCollision(int ind, Query *q) { 
@@ -95,8 +103,8 @@ struct RedBlackTree {
         const Node *n;
         for (int ind=head; ind;) {
             n = &node[ind-1];
-            if      (n->MoreThan(q->key, ind, &q->z)) ind = n->left;
-            else if (n->LessThan(q->key, ind, &q->z)) ind = n->right;
+            if      (n->MoreThan(q->key, ind, &q->z)) ind = n->WalkLeft (&q->z);
+            else if (n->LessThan(q->key, ind, &q->z)) ind = n->WalkRight(&q->z);
             else return ind;
         } return 0;
     }
@@ -105,10 +113,10 @@ struct RedBlackTree {
         int ind = head;
         while (ind) {
             n = &node[ind-1];
-            if      (n->MoreThan(q->key, ind, &q->z)) { if (!n->left) break; ind = n->left; }
+            if      (n->MoreThan(q->key, ind, &q->z)) { if (!n->left) break; ind = n->WalkLeft(&q->z); }
             else if (n->LessThan(q->key, ind, &q->z)) {
                 if (!n->right) { ind = IncrementNode(ind, &q->z); break; }
-                ind = n->right;
+                ind = n->WalkRight(&q->z);
             } else break;
         }
         return ind;
@@ -140,8 +148,8 @@ struct RedBlackTree {
         if (int ind = head) {
             for (;;) {
                 Node *n = &node[ind-1];
-                if      (n->MoreThan(q->key, ind, &q->z)) { if (!n->left)  { n->left  = new_ind; break; } ind = n->left;  }
-                else if (n->LessThan(q->key, ind, &q->z)) { if (!n->right) { n->right = new_ind; break; } ind = n->right; }
+                if      (n->MoreThan(q->key, ind, &q->z)) { if (!n->left)  { n->left  = new_ind; break; } ind = n->WalkLeft (&q->z); }
+                else if (n->LessThan(q->key, ind, &q->z)) { if (!n->right) { n->right = new_ind; break; } ind = n->WalkRight(&q->z); }
                 else { node.Erase(new_ind-1); return ResolveInsertCollision(ind, q); }
             }
             (new_node = &node[new_ind-1])->parent = ind;
@@ -181,8 +189,8 @@ struct RedBlackTree {
         int ind = head;
         while (ind) {
             n = &node[ind-1];
-            if      (n->MoreThan(q->key, ind, &q->z)) ind = n->left;
-            else if (n->LessThan(q->key, ind, &q->z)) ind = n->right;
+            if      (n->MoreThan(q->key, ind, &q->z)) ind = n->WalkLeft (&q->z);
+            else if (n->LessThan(q->key, ind, &q->z)) ind = n->WalkRight(&q->z);
             else break;
         }
         if (!ind) return false;
@@ -361,6 +369,11 @@ struct PrefixSumZipper {
     bool update;
     vector<pair<int, bool> > path;
     PrefixSumZipper(bool U=0) : update(U) { if (update) path.reserve(64); }
+    string DebugString() const { 
+        string p;
+        for (auto i : path) StrAppend(&p, p.size()?", ":"", i.first);
+        return StrCat("PrefixSumZipper: sum=", sum, ", update=", update, ", path={", p, "}");
+    }
 };
 
 template <class K, class V, class Zipper = PrefixSumZipper>
@@ -369,13 +382,12 @@ struct PrefixSumKeyedRedBlackTreeNode : public RedBlackTreeNode<K,V,Zipper> {
     typedef PrefixSumKeyedRedBlackTreeNode<K,V,Zipper> Self;
     int left_sum=0, right_sum=0;
     PrefixSumKeyedRedBlackTreeNode(K k=K(), unsigned v=0, unsigned p=0, bool c=0) : RedBlackTreeNode<K,V,Zipper>(k,v,p,c) {}
-    virtual K GetKey(PrefixSumZipper *z) const { return z->sum + left_sum + Parent::key; }
+    virtual K GetKey(PrefixSumZipper *z) const { return z->sum + left_sum; }
     virtual int WalkRight  (Zipper *z) const { if (z) z->sum += (left_sum + Parent::key); return Parent::right; }
     virtual int UnwalkRight(Zipper *z) const { if (z) z->sum -= (left_sum + Parent::key); return Parent::parent; }
     virtual bool LessThan(const K &k, int ind, PrefixSumZipper *z) const {
         if (!(GetKey(z) < k)) return 0;
         if (z->update) z->path.emplace_back(ind, Parent::Left);
-        WalkRight(z);
         return 1;
     }
     virtual bool MoreThan(const K &k, int ind, PrefixSumZipper *z) const {
@@ -393,19 +405,16 @@ struct PrefixSumKeyedRedBlackTreeNode : public RedBlackTreeNode<K,V,Zipper> {
 template <class K, class V, class Zipper = PrefixSumZipper, class Node = PrefixSumKeyedRedBlackTreeNode<K,V,Zipper> >
 struct PrefixSumKeyedRedBlackTree : public RedBlackTree<K,V,PrefixSumZipper,Node> {
     typedef RedBlackTree<K,V,PrefixSumZipper,Node> Parent;
-    function<K(const V*)> node_value_cb = bind([&](){ return 1; });
+    function<K     (const V*)> node_value_cb = [](const V *v){ return 1;          };
+    function<string(const V*)> node_print_cb = [](const V *v){ return StrCat(*v); };
 
     virtual K GetCreateNodeKey(const typename Parent::Query *q) const { return node_value_cb(q->val); }
-    virtual typename Parent::Query GetQuery(const K &k, const V *v=0, bool update=0) const {
-        return typename Parent::Query(k + (v ? 0 : 1), v, update);
-    }
     virtual int ResolveInsertCollision(int ind, typename Parent::Query *q) { 
         int val_ind = Parent::val.Insert(*q->val), p_ind = ind;
-        int new_ind = Parent::node.Insert(Node(GetCreateNodeKey(q), val_ind))+1;
-        Node *n = &Parent::node[ind-1], *nn;
+        int new_ind = Parent::node.Insert(Node(GetCreateNodeKey(q), val_ind, 0))+1;
+        Node *n = &Parent::node[ind-1], *nn = &Parent::node[new_ind-1];
         if (!n->left) n->left = new_ind;
         else Parent::node[(p_ind = Parent::GetMaxNode(n->left))-1].right = new_ind;
-        n->SwapKV((nn = &Parent::node[new_ind-1]));
         nn->parent = p_ind;
         Parent::ComputeStateFromChildrenOnMaxPath(n->left);
         Parent::ComputeStateFromChildren(n);
@@ -422,19 +431,19 @@ struct PrefixSumKeyedRedBlackTree : public RedBlackTree<K,V,PrefixSumZipper,Node
     virtual void PrintNodes(int ind, int color, string *out) const {
         if (!ind) return;
         const Node *n = &Parent::node[ind-1];
-        const V    *v = &Parent::val[n->val];
+        string v = node_print_cb(&Parent::val[n->val]);
         PrintNodes(n->left, color, out);
-        if (n->color == color) StrAppend(out, "node [label = \"", *v, " v:", n->key, "\nlsum:", n->left_sum,
-                                         " rsum:", n->right_sum, "\"];\r\n\"", *v, "\";\r\n");
+        if (n->color == color) StrAppend(out, "node [label = \"", v, " v:", n->key, "\nlsum:", n->left_sum,
+                                         " rsum:", n->right_sum, "\"];\r\n\"", v, "\";\r\n");
         PrintNodes(n->right, color, out);
     }
     virtual void PrintEdges(int ind, string *out) const {
         if (!ind) return;
         const Node *n = &Parent::node[ind-1], *l=n->left?&Parent::node[n->left-1]:0, *r=n->right?&Parent::node[n->right-1]:0;
-        const V    *v = &Parent::val[n->val], *lv = l?&Parent::val[l->val]:0, *rv = r?&Parent::val[r->val]:0;
-        if (l) { PrintEdges(n->left,  out); StrAppend(out, "\"", *v, "\" -> \"", *lv, "\" [ label = \"left\"  ];\r\n"); }
-        if (r) { PrintEdges(n->right, out); StrAppend(out, "\"", *v, "\" -> \"", *rv, "\" [ label = \"right\" ];\r\n"); }
-   }
+        string v = node_print_cb(&Parent::val[n->val]), lv = l?node_print_cb(&Parent::val[l->val]):"", rv = r?node_print_cb(&Parent::val[r->val]):"";
+        if (l) { PrintEdges(n->left,  out); StrAppend(out, "\"", v, "\" -> \"", lv, "\" [ label = \"left\"  ];\r\n"); }
+        if (r) { PrintEdges(n->right, out); StrAppend(out, "\"", v, "\" -> \"", rv, "\" [ label = \"right\" ];\r\n"); }
+    }
 
     void LoadFromSortedVal() {
         int n = Parent::val.size();
@@ -456,15 +465,16 @@ struct PrefixSumKeyedRedBlackTree : public RedBlackTree<K,V,PrefixSumZipper,Node
     }
 
     V *Update(const K &k, const V &v) {
-        typename Parent::Query q = GetQuery(k, 0, 1); 
+        typename Parent::Query q = Parent::GetQuery(k, 0, 1); 
         Node *n;
         for (int ind = Parent::head; ind; ) {
             n = &Parent::node[ind-1];
-            if      (n->MoreThan(q.key, ind, &q.z)) ind = n->left;
-            else if (n->LessThan(q.key, ind, &q.z)) ind = n->right;
+            if      (n->MoreThan(q.key, ind, &q.z)) ind = n->WalkLeft (&q.z);
+            else if (n->LessThan(q.key, ind, &q.z)) ind = n->WalkRight(&q.z);
             else {
                 n->key = node_value_cb(&v);
                 ComputeStateFromChildrenOnPath(&q);
+                return &Parent::val[n->val];
             }
         } return 0;
     }

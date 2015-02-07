@@ -287,6 +287,7 @@ void Msleep(int x);
 timeval Time2timeval(Time x);
 void Log(int level, const char *file, int line, const string &m);
 inline bool Equal(float a, float b, float eps=1e-6) { return fabs(a-b) < eps; }
+string StringPrintf(const char *fmt, ...);
 
 unsigned           fnv32(const void *buf, unsigned len=0, unsigned           hval=0);
 unsigned long long fnv64(const void *buf, unsigned len=0, unsigned long long hval=0);
@@ -321,7 +322,7 @@ struct Typed {
     template <class X> static bool Max(X *a, X b) { if (b <= *a) return 0; *a = b; return 1; }
     template <class X> static bool Min(X *a, X b) { if (b >= *a) return 0; *a = b; return 1; }
     template <class X> static bool Within(X x, X a, X b) { return x >= a && x <= b; }
-    template <class X> static string Str(const X& x) { std::stringstream in; in << x; return string(in.str().c_str()); }
+    template <class X> static string Str(const X& x) { std::stringstream in; in << x; return in.str(); }
     template <class X> static int Id()   { static int ret = fnv32(typeid(X).name()); return ret; }
     template <class X> static int Id(X*) { static int ret = fnv32(typeid(X).name()); return ret; }
     template <class X> static typed_ptr Pointer(X* v) { return typed_ptr(Typed::Id<X>(), v); }
@@ -343,6 +344,7 @@ struct Printable : public string {
     Printable(const basic_string<short> &x);
     Printable(const string &x) : string(x) {}
     Printable(const char *x) : string(x) {}
+    Printable(      char *x) : string(x) {}
     Printable(const int &x) : string(Typed::Str(x)) {}
     Printable(const long &x) : string(Typed::Str(x)) {}
     Printable(const unsigned char *x) : string((char*)x) {}
@@ -359,6 +361,8 @@ struct Printable : public string {
     Printable(const vector<float> &x);
     Printable(const vector<int> &x);
     Printable(const Color &x);
+    template <size_t N> Printable(const char (&x)[N]) : string(x) {}
+    template <class X> Printable(const X& x) : string(StringPrintf("%s(%p)", typeid(X).name(), &x)) {}
 };
 inline string StrCat(const Printable &x1) { return x1; }
 
@@ -549,7 +553,6 @@ string   ReplaceEmpty (const string   &in, const string   &replace_with);
 String16 ReplaceEmpty (const String16 &in, const string   &replace_with);
 String16 ReplaceEmpty (const String16 &in, const String16 &replace_with);
 string ReplaceNewlines(const string   &in, const string   &replace_with);
-string StringPrintf(const char *fmt, ...);
 string WStringPrintf(const wchar_t *fmt, ...);
 String16 String16Printf(const char *fmt, ...);
 void StringAppendf(string *out, const char *fmt, ...);
@@ -1079,6 +1082,16 @@ struct PerformanceTimers {
     int Create(const string &n) { timers.push_back(Accumulator(n)); return timers.size()-1; }
     void AccumulateTo(int timer_id) { timers[cur_timer_id].time += cur_timer.GetTime(true); cur_timer_id = timer_id; }
     string DebugString() { string v; for (int i = 0; i < timers.size(); i++) StrAppend(&v, timers[i].name, " ", timers[i].time / 1000.0, "\n"); return v; }
+};
+
+struct GraphViz {
+    static string DigraphHeader(const string &name);
+    static string NodeColor(const string &s);
+    static string NodeShape(const string &s);
+    static string NodeStyle(const string &s);
+    static string Footer();
+    static void AppendNode(string *out, const string &n1, const string &label=string());
+    static void AppendEdge(string *out, const string &n1, const string &n2, const string &label=string());
 };
 
 struct Module {

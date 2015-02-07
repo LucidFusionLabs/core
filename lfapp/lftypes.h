@@ -175,10 +175,10 @@ template <class X> struct ScopedValue {
     ~ScopedValue() { if (v) *v = ov; }
 };
 
-template <class X> struct ScopedDeltaAdder {
+template <class X> struct ScopedDeltaTracker {
     X *v, ov; function<X()> f;
-    ScopedDeltaAdder(X *V, const function<X()> &F) : v(V), ov(V ? F() : X()), f(F) {}
-    ~ScopedDeltaAdder() { if (v) (*v) += (f() - ov); }
+    ScopedDeltaTracker(X *V, const function<X()> &F) : v(V), ov(V ? F() : X()), f(F) {}
+    ~ScopedDeltaTracker() { if (v) (*v) += (f() - ov); }
 };
 
 template <class T1, class T2, class T3> struct Triple {
@@ -203,6 +203,8 @@ template <class X> struct FreeListVector {
     vector<X> data;
     vector<int> free_list;
 
+    int size() const { return data.size(); }
+    const X& back() const { return data.back(); }
     const X& operator[](int i) const { return data[i]; }
     /**/  X& operator[](int i)       { return data[i]; }
 
@@ -284,43 +286,44 @@ template <typename X, typename Y, Y (X::*Z)() const> struct ArrayMethodSegmentIt
     void Increment() { Update(); while (ind != len && cmp(cur_attr, (buf[ind].*Z)())) { if (cb) cb(buf[ind]); ind++; } i++; }
 };
 
-template <class X, int (*GetVal)(const X&, int), class Iter>
-Iter LastFlattenedArrayValIter(const X &data, int l) { return Iter(X_or_1(l)-1, l ? GetVal(data, l-1)-1 : 0); }
+template <class X, int (*GetVal)(const X&, int)> struct FlattenedArrayValues {
+    typedef pair<int, int> Iter;
+    const X &data; int l;
+    FlattenedArrayValues(const X &D, int L) : data(D), l(L) {}
 
-template <class X, int (*GetVal)(const X&, int), class Iter>
-void IterFlattenedArrayVals(const X &data, int l, Iter *o, int n) {
-    if (!l) return;
-    for (int i=abs(n), d; i; i-=d) {
-        int v = GetVal(data, o->first);
-        if (n > 0) {
-            d = min(i, v - o->second);
-            if ((o->second += d) >= v) {
-                if (o->first >= l-1) { *o = LastFlattenedArrayValIter<X, GetVal, Iter>(data, l); return; }
-                *o = Iter(o->first+1, 0);
-            }
-        } else {
-            d = min(i, o->second+1);
-            if ((o->second -= d) < 0) {
-                if (o->first <= 0) { *o = Iter(0, 0); return; }
-                *o = Iter(o->first-1, GetVal(data, o->first-1)-1);
+    Iter LastIter() { return Iter(X_or_1(l)-1, l ? GetVal(data, l-1)-1 : 0); }
+    void AdvanceIter(Iter *o, int n) {
+        if (!l) return;
+        for (int i=abs(n), d; i; i-=d) {
+            int v = GetVal(data, o->first);
+            if (n > 0) {
+                d = min(i, v - o->second);
+                if ((o->second += d) >= v) {
+                    if (o->first >= l-1) { *o = LastIter(); return; }
+                    *o = Iter(o->first+1, 0);
+                }
+            } else {
+                d = min(i, o->second+1);
+                if ((o->second -= d) < 0) {
+                    if (o->first <= 0) { *o = Iter(0, 0); return; }
+                    *o = Iter(o->first-1, GetVal(data, o->first-1)-1);
+                }
             }
         }
     }
-}
-
-template <class X, int (*GetVal)(const X&, int), class Iter>
-int FlattenedArrayValDist(const X &data, int l, Iter i1, Iter i2, int maxdist=0) {
-    int dist = 0;
-    if (i2 < i1) swap(i1, i2);
-    for (int i = i1.first; i <= i2.first; i++) {
-        int v = GetVal(data, i);
-        dist += v;
-        if (i == i1.first) dist -= i1.second;
-        if (i == i2.first) dist -= (v - i2.second);
-        if (maxdist && dist >= maxdist) return maxdist;
+    int Distance(Iter i1, Iter i2, int maxdist=0) {
+        int dist = 0;
+        if (i2 < i1) swap(i1, i2);
+        for (int i = i1.first; i <= i2.first; i++) {
+            int v = GetVal(data, i);
+            dist += v;
+            if (i == i1.first) dist -= i1.second;
+            if (i == i2.first) dist -= (v - i2.second);
+            if (maxdist && dist >= maxdist) return maxdist;
+        }
+        return dist;
     }
-    return dist;
-}
+};
 
 template <class X> struct ValueSet {
     int i, c; X *d;
@@ -927,4 +930,7 @@ struct HashMatrix64F {
 struct HashMatrix64 : public HashMatrixT<unsigned long long, &HashMatrix64F::Assign, &HashMatrix64F::Equals> {};
 
 }; // namespace LFL
+
+#include "lfapp/tree.h"
+
 #endif // __LFL_LFAPP_LFTYPES_H__

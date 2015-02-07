@@ -40,6 +40,8 @@ extern "C" {
 #include <Windns.h>
 #include <sys/stat.h>
 #define stat(x,y) _stat(x,y)
+#define gmtime_r(i,o) memcpy(o, gmtime(&in), sizeof(tm))
+#define localtime_r(i,o) memcpy(o, localtime(&in), sizeof(tm))
 #else
 #include <dirent.h>
 #include <signal.h>
@@ -690,10 +692,10 @@ int RFC822TimeZone(const char *text) {
     return 0;
 }
 
-void GMTtm(time_t in, struct tm *t) { memcpy(t, gmtime(&in), sizeof(tm)); }
+void GMTtm(time_t in, struct tm *t) { gmtime_r(&in, t); }
 void GMTtm(struct tm *t) { return GMTtm(time(0), t); }
 
-void localtm(time_t in, struct tm *t) { memcpy(t, localtime(&in), sizeof(tm)); }
+void localtm(time_t in, struct tm *t) { localtime_r(&in, t);}
 void localtm(struct tm *t) { return localtm(time(0), t); }
 
 string logtime(Time t) { char buf[128] = {0}; logtime(t, buf, sizeof(buf)); return buf; }
@@ -1737,6 +1739,28 @@ string Base64::Decode(const char *data, size_t input_length) {
         if (j < decoded_data.size()) decoded_data[j++] = (triple >> 0 * 8) & 0xFF;
     }
     return decoded_data;
+}
+
+string GraphViz::Footer() { return "}\r\n"; }
+string GraphViz::DigraphHeader(const string &name) {
+    return StrCat("digraph ", name, " {\r\n"
+                  "rankdir=LR;\r\n"
+                  "size=\"8,5\"\r\n"
+                  "node [style = solid];\r\n"
+                  "node [shape = circle];\r\n");
+}
+string GraphViz::NodeColor(const string &s) { return StrCat("node [color = ", s, "];\r\n"); }
+string GraphViz::NodeShape(const string &s) { return StrCat("node [shape = ", s, "];\r\n"); }
+string GraphViz::NodeStyle(const string &s) { return StrCat("node [style = ", s, "];\r\n"); }
+void GraphViz::AppendNode(string *out, const string &n1, const string &label) {
+    StrAppend(out, "\"", n1, "\"",
+              (label.size() ? StrCat(" [ label = \"", label, "\" ] ") : ""),
+              ";\r\n");
+}
+void GraphViz::AppendEdge(string *out, const string &n1, const string &n2, const string &label) {
+    StrAppend(out, "\"", n1, "\" -> \"", n2, "\"",
+              (label.size() ? StrCat(" [ label = \"", label, "\" ] ") : ""),
+              ";\r\n");
 }
 
 #ifdef LFL_OPENSSL

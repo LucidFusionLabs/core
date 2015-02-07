@@ -431,11 +431,12 @@ struct AudioGUI : public GUI {
         /* SNR */
         if (AED) text->Draw(StringPrintf("SNR = %.2f", AED->SNR()), point(screen->width*.75, screen->height*.05));
 
-        GUI::Draw(screen->Box());
+        GUI::Draw();
         return 0;
     }
 
     void Layout() {
+        box = screen->Box();
         Flow flow(&box, 0, &child_box);
 
         play_button  .LayoutBox(&flow, screen->Box(0,  -.85, .5, .15, .16, .0001));
@@ -514,7 +515,7 @@ struct FullscreenGUI : public GUI {
                 text->Draw((*it).name, point(box.centerX(), box.percentY((float)(*it).beg/total)), 0, Font::Flag::Orientation(3));
         }
 
-        Draw(screen->Box().TopLeft());
+        Draw();
 
         if (decode || decoding)
             decode_icon.drawable->Draw(screen->Box(.9, -.07, .09, .07));
@@ -524,6 +525,7 @@ struct FullscreenGUI : public GUI {
     }
 
     void Layout() {
+        box = screen->Box();
         Flow flow(&box, 0, &child_box);
         play_button      .LayoutBox(&flow, screen->Box(0,    -1, .09, .07));
         close_button     .LayoutBox(&flow, screen->Box(0,  -.07, .09, .07));
@@ -557,12 +559,13 @@ struct FVGUI : public GUI {
         if (ret < 0) return ret;
 
         screen->gd->DrawMode(DrawMode::_2D);
-        Draw(screen->Box().TopLeft());
+        Draw();
         screen->DrawDialogs();
         return 0;
     }
 
     void Layout() {
+        box = screen->Box();
         Flow flow(&box, 0, &child_box);
         tab1.Layout(&flow, point(screen->width/3, screen->height*.05));
         tab2.Layout(&flow, point(screen->width/3, screen->height*.05));

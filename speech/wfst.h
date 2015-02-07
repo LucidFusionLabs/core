@@ -718,32 +718,26 @@ struct WFST {
     string tostrGraphViz(State::LabelSet *label=0) {
         State::LabelSet defaultLabel;
         if (!label) label = &defaultLabel;
+        string v = GraphViz::DigraphHeader("WFST");
 
-        string v;
-        v += "digraph WFST {\r\n"
-            "rankdir=LR;\r\n"
-            "size=\"8,5\"\r\n"
-            "node [style = bold];\r\n";
+        for (int i=0, l=I->states(); i<l; i++) GraphViz::AppendNode(&v, label->name(I->state(i)));
 
-        for (int i=0, l=I->states(); i<l; i++) StrAppend(&v, "\"", label->name(I->state(i)), "\";\r\n");
+        v += GraphViz::NodeStyle("solid");
+        v += GraphViz::NodeShape("doublecircle");
 
-        v += "node [style = solid];\r\n"
-            "node [shape = doublecircle];\r\n";
+        for (int i=0, l=F->states(); i<l; i++) GraphViz::AppendNode(&v, label->name(F->state(i)));
 
-        for (int i=0, l=F->states(); i<l; i++) StrAppend(&v, "\"", label->name(F->state(i)), "\";\r\n");
-
-        v += "node [shape = circle];\r\n";
+        v += GraphViz::NodeShape("circle");
 
         for (int i=0, l=E->states(); i<l; i++) {
             TransitMap::Iterator edge;
             for (E->begin(&edge, i); !edge.done; E->next(&edge)) 
-                StringAppendf(&v, "\"%s\" -> \"%s\" [ label = \"%s : %s / %.2f\" ];\r\n",
-                              label->name(edge.prevState).c_str(), label->name(edge.nextState).c_str(),
-                              A->name(edge.in).c_str(), B->name(edge.out).c_str(), edge.weight);
+                GraphViz::AppendEdge(&v, label->name(edge.prevState), label->name(edge.nextState),
+                                     StrCat(A->name(edge.in), " : ", B->name(edge.out), " / ",
+                                            StringPrintf("%.2f", edge.weight)));
         }
-        v += "}\r\n";
 
-        return v;
+        return v + GraphViz::Footer();
     }
 
     void printGraphViz() { string v = tostrGraphViz(); printf("%s", v.c_str()); fflush(stdout); }

@@ -1,5 +1,5 @@
 /*
- * $Id: new_app_template.cpp 1305 2014-09-02 08:10:25Z justin $
+ * $Id$
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -58,9 +58,7 @@ extern "C" int main(int argc, const char *argv[]) {
 
     BindMap *binds = screen->binds = new BindMap();
     // binds.push_back(Bind(key,         callback));
-    binds->Add(Bind(Key::Backquote, Bind::CB(bind([&]() { screen->console->Toggle(); }))));
-    binds->Add(Bind(Key::Quote,     Bind::CB(bind([&]() { screen->console->Toggle(); }))));
-    binds->Add(Bind(Key::Escape,    Bind::CB(bind(&Shell::quit, &app->shell, vector<string>()))));
+    binds->Add(Bind('6', Key::Modifier::Cmd, Bind::CB(bind([&]() { screen->console->Toggle(); }))));
 
     chdir(app->startdir.c_str());
     int optind = Singleton<FlagMap>::Get()->optind;
