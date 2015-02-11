@@ -162,6 +162,13 @@ extern "C" int isinf(double);
  #endif
 #endif
 
+#ifdef LFL_TEST
+#define DEXPECT_EQ(x,y) EXPECT_EQ(x.DebugString(), y.DebugString())
+#define tvirtual virtual
+#else
+#define tvirtual
+#endif
+
 #define LFL_MOBILE (defined(LFL_ANDROID) || defined(LFL_IPHONE))
 #define LFL_LINUX_SERVER (defined(__linux__) && !defined(LFL_MOBILE))
 

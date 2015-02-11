@@ -23,69 +23,319 @@
 #include "lfapp/gui.h"
 
 namespace LFL {
+struct LinesFrameBufferTest : public TextGUI::LinesFrameBuffer {
+    struct LineOp {
+        point p; string text; int xo, wlo, wll;
+        LineOp(TextGUI::Line *L, int X, int O, int S) : p(L->p), text(L->Text()), xo(X), wlo(O), wll(S) {}
+        string DebugString() const { return StrCat("LineOp text(", text, ") ", xo, " ", wlo, " ", wll); }
+    };
+    struct PaintOp {
+        point p; string text; Box b;
+        PaintOp(TextGUI::Line *L, const point &P, const Box &B) : p(P), text(L->Text()), b(B) {}
+        string DebugString() const { return StrCat("PaintOp text(", text, ") ", p, " ", b); }
+    };
+    vector<LineOp> front, back;
+    vector<PaintOp> paint;
+    LinesFrameBufferTest() { paint_cb = bind(&LinesFrameBufferTest::PaintTest, this, _1, _2, _3); }
+    virtual void Clear(TextGUI::Line *l)                              override { EXPECT_EQ(0, 1); }
+    virtual void Update(TextGUI::Line *l, int flag=0)                 override { EXPECT_EQ(0, 1); }
+    virtual void Update(TextGUI::Line *l, const point &p, int flag=0) override { EXPECT_EQ(0, 1); }
+    virtual void PushFrontAndUpdateOffset(TextGUI::Line *l, int lo)   override { EXPECT_EQ(0, 1); }
+    virtual void PushBackAndUpdateOffset (TextGUI::Line *l, int lo)   override { EXPECT_EQ(0, 1); }
+    virtual int PushFrontAndUpdate(TextGUI::Line *l, int xo=0, int wlo=0, int wll=0, int flag=0) override { int ret = TextGUI::LinesFrameBuffer::PushFrontAndUpdate(l,xo,wlo,wll); front.emplace_back(l,xo,wlo,wll); return ret; }
+    virtual int PushBackAndUpdate (TextGUI::Line *l, int xo=0, int wlo=0, int wll=0, int flag=0) override { int ret = TextGUI::LinesFrameBuffer::PushBackAndUpdate (l,xo,wlo,wll); back .emplace_back(l,xo,wlo,wll); return ret; }
+    point PaintTest(TextGUI::Line *l, point lp, const Box &b)
+    { l->Draw(lp + b.Position(), 0, 0); paint.emplace_back(l, lp, b); return point(lp.x, lp.y-b.h); }
+};
+struct TextAreaTest : public TextArea {
+    LinesFrameBufferTest line_fb_test;
+    TextAreaTest(Window *W, Font *F, int S=200) : TextArea(W,F,S) {}
+    virtual LinesFrameBuffer *GetFrameBuffer() override { return &line_fb_test; }
+};
+
 TEST(GUITest, TextArea) { 
     {
-        TextArea ta(screen, Fonts::Fake());
-        TextArea::Lines lines(&ta, 10);
-        lines.InsertAt(-1)->AssignText("a");
-        EXPECT_EQ("a", lines[-1].Text());
+        TextAreaTest ta(screen, Fonts::Fake(), 10);
+        ta.line.InsertAt(-1)->AssignText("a");
+        EXPECT_EQ("a", ta.line[-1].Text());
 
-        lines.InsertAt(-1)->AssignText("b");
-        lines.InsertAt(-1)->AssignText("c");
-        lines.InsertAt(-1)->AssignText("d");
-        EXPECT_EQ("a", lines[-4].Text()); EXPECT_EQ(-4, lines.IndexOf(&lines[-4]));
-        EXPECT_EQ("b", lines[-3].Text()); EXPECT_EQ(-3, lines.IndexOf(&lines[-3]));
-        EXPECT_EQ("c", lines[-2].Text()); EXPECT_EQ(-2, lines.IndexOf(&lines[-2]));
-        EXPECT_EQ("d", lines[-1].Text()); EXPECT_EQ(-1, lines.IndexOf(&lines[-1]));
-        lines.InsertAt(-4)->AssignText("z");
-        EXPECT_EQ("z", lines[-4].Text());
-        EXPECT_EQ("a", lines[-3].Text());
-        EXPECT_EQ("b", lines[-2].Text());
-        EXPECT_EQ("c", lines[-1].Text());
-        lines.InsertAt(-2)->AssignText("y");
-        EXPECT_EQ("z", lines[-4].Text());
-        EXPECT_EQ("a", lines[-3].Text());
-        EXPECT_EQ("y", lines[-2].Text());
-        EXPECT_EQ("b", lines[-1].Text());
-        lines.PopBack(2);
-        EXPECT_EQ("z", lines[-2].Text());
-        EXPECT_EQ("a", lines[-1].Text());
-        lines.PushFront()->AssignText("w");
-        lines.PushFront()->AssignText("u");
-        EXPECT_EQ("u", lines[-4].Text());
-        EXPECT_EQ("w", lines[-3].Text());
-        EXPECT_EQ("z", lines[-2].Text());
-        EXPECT_EQ("a", lines[-1].Text());
-        lines.PushFront()->AssignText("1");
-        lines.PushFront()->AssignText("2");
-        lines.PushFront()->AssignText("3");
-        lines.PushFront()->AssignText("4");
-        lines.PushFront()->AssignText("5");
-        lines.PushFront()->AssignText("6");
-        lines.PushFront()->AssignText("7");
-        EXPECT_EQ("7", lines[-10].Text()); EXPECT_EQ(-10, lines.IndexOf(&lines[-10]));
-        EXPECT_EQ("6", lines[-9] .Text()); EXPECT_EQ(-9,  lines.IndexOf(&lines[-9]));
-        EXPECT_EQ("5", lines[-8] .Text()); EXPECT_EQ(-8,  lines.IndexOf(&lines[-8]));
-        EXPECT_EQ("4", lines[-7] .Text()); EXPECT_EQ(-7,  lines.IndexOf(&lines[-7]));
-        EXPECT_EQ("3", lines[-6] .Text()); EXPECT_EQ(-6,  lines.IndexOf(&lines[-6]));
-        EXPECT_EQ("2", lines[-5] .Text()); EXPECT_EQ(-5,  lines.IndexOf(&lines[-5]));
-        EXPECT_EQ("1", lines[-4] .Text()); EXPECT_EQ(-4,  lines.IndexOf(&lines[-4]));
-        EXPECT_EQ("u", lines[-3] .Text()); EXPECT_EQ(-3,  lines.IndexOf(&lines[-3]));
-        EXPECT_EQ("w", lines[-2] .Text()); EXPECT_EQ(-2,  lines.IndexOf(&lines[-2]));
-        EXPECT_EQ("z", lines[-1] .Text()); EXPECT_EQ(-1,  lines.IndexOf(&lines[-1]));
+        ta.line.InsertAt(-1)->AssignText("b");
+        ta.line.InsertAt(-1)->AssignText("c");
+        ta.line.InsertAt(-1)->AssignText("d");
+        EXPECT_EQ("a", ta.line[-4].Text()); EXPECT_EQ(-4, ta.line.IndexOf(&ta.line[-4]));
+        EXPECT_EQ("b", ta.line[-3].Text()); EXPECT_EQ(-3, ta.line.IndexOf(&ta.line[-3]));
+        EXPECT_EQ("c", ta.line[-2].Text()); EXPECT_EQ(-2, ta.line.IndexOf(&ta.line[-2]));
+        EXPECT_EQ("d", ta.line[-1].Text()); EXPECT_EQ(-1, ta.line.IndexOf(&ta.line[-1]));
+        ta.line.InsertAt(-4)->AssignText("z");
+        EXPECT_EQ("z", ta.line[-4].Text());
+        EXPECT_EQ("a", ta.line[-3].Text());
+        EXPECT_EQ("b", ta.line[-2].Text());
+        EXPECT_EQ("c", ta.line[-1].Text());
+        ta.line.InsertAt(-2)->AssignText("y");
+        EXPECT_EQ("z", ta.line[-4].Text());
+        EXPECT_EQ("a", ta.line[-3].Text());
+        EXPECT_EQ("y", ta.line[-2].Text());
+        EXPECT_EQ("b", ta.line[-1].Text());
+        ta.line.PopBack(2);
+        EXPECT_EQ("z", ta.line[-2].Text());
+        EXPECT_EQ("a", ta.line[-1].Text());
+        ta.line.PushFront()->AssignText("w");
+        ta.line.PushFront()->AssignText("u");
+        EXPECT_EQ("u", ta.line[-4].Text());
+        EXPECT_EQ("w", ta.line[-3].Text());
+        EXPECT_EQ("z", ta.line[-2].Text());
+        EXPECT_EQ("a", ta.line[-1].Text());
+        ta.line.PushFront()->AssignText("1");
+        ta.line.PushFront()->AssignText("2");
+        ta.line.PushFront()->AssignText("3");
+        ta.line.PushFront()->AssignText("4");
+        ta.line.PushFront()->AssignText("5");
+        ta.line.PushFront()->AssignText("6");
+        ta.line.PushFront()->AssignText("7");
+        EXPECT_EQ("7", ta.line[-10].Text()); EXPECT_EQ(-10, ta.line.IndexOf(&ta.line[-10]));
+        EXPECT_EQ("6", ta.line[-9] .Text()); EXPECT_EQ(-9,  ta.line.IndexOf(&ta.line[-9]));
+        EXPECT_EQ("5", ta.line[-8] .Text()); EXPECT_EQ(-8,  ta.line.IndexOf(&ta.line[-8]));
+        EXPECT_EQ("4", ta.line[-7] .Text()); EXPECT_EQ(-7,  ta.line.IndexOf(&ta.line[-7]));
+        EXPECT_EQ("3", ta.line[-6] .Text()); EXPECT_EQ(-6,  ta.line.IndexOf(&ta.line[-6]));
+        EXPECT_EQ("2", ta.line[-5] .Text()); EXPECT_EQ(-5,  ta.line.IndexOf(&ta.line[-5]));
+        EXPECT_EQ("1", ta.line[-4] .Text()); EXPECT_EQ(-4,  ta.line.IndexOf(&ta.line[-4]));
+        EXPECT_EQ("u", ta.line[-3] .Text()); EXPECT_EQ(-3,  ta.line.IndexOf(&ta.line[-3]));
+        EXPECT_EQ("w", ta.line[-2] .Text()); EXPECT_EQ(-2,  ta.line.IndexOf(&ta.line[-2]));
+        EXPECT_EQ("z", ta.line[-1] .Text()); EXPECT_EQ(-1,  ta.line.IndexOf(&ta.line[-1]));
     }
 
-    {
+    { // 0: 122, 1: 222, 2: 223, 3: 234, 4: 344, 5: 445
         TextGUI::Line *L;
-        TextArea ta(screen, Fonts::Fake());
-        (L = ta.line.PushFront())->AssignText("1   "); L->Layout();
-        (L = ta.line.PushFront())->AssignText("2\n2"); L->Layout();
-        (L = ta.line.PushFront())->AssignText("3   "); L->Layout();
-        (L = ta.line.PushFront())->AssignText("4   "); L->Layout();
+        Font *font = Fonts::Fake();
+        TextAreaTest ta(screen, font);
+        (L = ta.line.PushFront())->AssignText("1");       L->Layout();
+        (L = ta.line.PushFront())->AssignText("2\n2\n2"); L->Layout();
+        (L = ta.line.PushFront())->AssignText("3");       L->Layout();
+        (L = ta.line.PushFront())->AssignText("4\n4");    L->Layout();
+        (L = ta.line.PushFront())->AssignText("5");       L->Layout();
         EXPECT_EQ(1, ta.line[-1].Lines());
-        EXPECT_EQ(2, ta.line[-2].Lines());
+        EXPECT_EQ(3, ta.line[-2].Lines());
         EXPECT_EQ(1, ta.line[-3].Lines());
-        EXPECT_EQ(1, ta.line[-4].Lines());
+        EXPECT_EQ(2, ta.line[-4].Lines());
+        EXPECT_EQ(1, ta.line[-5].Lines());
+
+        LinesFrameBufferTest *test_fb = &ta.line_fb_test;
+        int fh = font->height;
+        Box b(128, 3*fh);
+        ta.Draw(b, false);
+        int w = test_fb->w;
+
+        // 0: 122 : 1=1:0, 2=2:2, 3=2:1
+        EXPECT_EQ(b.w, test_fb->w);
+        EXPECT_EQ(b.h, test_fb->h);
+        EXPECT_EQ(0, ta.start_line); EXPECT_EQ(0, ta.start_line_adjust);
+        EXPECT_EQ(1, ta.end_line);   EXPECT_EQ(1, ta.end_line_cutoff);
+        EXPECT_EQ(2, test_fb->front.size());
+        EXPECT_EQ(1, Equal(0, test_fb->scroll.y));
+        EXPECT_EQ(point(0,0), test_fb->p);
+        if (test_fb->front.size() > 0)  EXPECT_EQ("1",           test_fb->front[0].text);
+        if (test_fb->front.size() > 0)  EXPECT_EQ(0,             test_fb->front[0].wlo);
+        if (test_fb->front.size() > 0)  EXPECT_EQ(3,             test_fb->front[0].wll);
+        if (test_fb->front.size() > 0) DEXPECT_EQ(point(0,fh),   test_fb->front[0].p);
+        if (test_fb->front.size() > 1)  EXPECT_EQ("2\n2\n2",     test_fb->front[1].text);
+        if (test_fb->front.size() > 1)  EXPECT_EQ(0,             test_fb->front[1].wlo);
+        if (test_fb->front.size() > 1)  EXPECT_EQ(2,             test_fb->front[1].wll);
+        if (test_fb->front.size() > 1) DEXPECT_EQ(point(0,4*fh), test_fb->front[1].p);
+        test_fb->front.clear();
+        EXPECT_EQ(2, test_fb->paint.size());
+        if (test_fb->paint.size() > 0)  EXPECT_EQ("1",              test_fb->paint[0].text);
+        if (test_fb->paint.size() > 0) DEXPECT_EQ(point(0,fh),      test_fb->paint[0].p);
+        if (test_fb->paint.size() > 0) DEXPECT_EQ(Box(0,0,0,fh),    test_fb->paint[0].b);
+        if (test_fb->paint.size() > 1)  EXPECT_EQ("2\n2\n2",        test_fb->paint[1].text);
+        if (test_fb->paint.size() > 1) DEXPECT_EQ(point(0,3*fh),    test_fb->paint[1].p);
+        if (test_fb->paint.size() > 1) DEXPECT_EQ(Box(0,fh,0,2*fh), test_fb->paint[1].b);
+        test_fb->paint.clear();
+
+        // 1: 222 : 2=2:2, 3=2:1, 1=2:0
+        ta.v_scrolled = 1.0/(ta.WrappedLines()-1);
+        ta.UpdateScrolled();
+        EXPECT_EQ(1, ta.start_line); EXPECT_EQ(0, ta.start_line_adjust);
+        EXPECT_EQ(1, ta.end_line);   EXPECT_EQ(0, ta.end_line_cutoff);
+        EXPECT_EQ(1, test_fb->front.size());
+        EXPECT_EQ(1, Equal(-1/3.0, test_fb->scroll.y));
+        EXPECT_EQ(point(0,fh), test_fb->p);
+        if (test_fb->front.size() > 0)  EXPECT_EQ("2\n2\n2",   test_fb->front[0].text);
+        if (test_fb->front.size() > 0)  EXPECT_EQ(2,           test_fb->front[0].wlo);
+        if (test_fb->front.size() > 0)  EXPECT_EQ(1,           test_fb->front[0].wll);
+        if (test_fb->front.size() > 0) DEXPECT_EQ(point(0,fh), test_fb->front[0].p);
+        test_fb->front.clear();
+        EXPECT_EQ(1, test_fb->paint.size());
+        if (test_fb->paint.size() > 0)  EXPECT_EQ("2\n2\n2",        test_fb->paint[0].text);
+        if (test_fb->paint.size() > 0) DEXPECT_EQ(point(0,fh),      test_fb->paint[0].p);
+        if (test_fb->paint.size() > 0) DEXPECT_EQ(Box(0,0,0,fh),    test_fb->paint[0].b);
+        test_fb->paint.clear();
+
+        // 2: 223 : 3=2:1, 1=2:0, 2=3:0
+        ta.v_scrolled = 2.0/(ta.WrappedLines()-1);
+        ta.UpdateScrolled();
+        EXPECT_EQ(1, ta.start_line); EXPECT_EQ(-1, ta.start_line_adjust);
+        EXPECT_EQ(2, ta.end_line);   EXPECT_EQ( 0, ta.end_line_cutoff);
+        EXPECT_EQ(1, test_fb->front.size());
+        EXPECT_EQ(1, Equal(-2/3.0, test_fb->scroll.y));
+        EXPECT_EQ(point(0,2*fh), test_fb->p);
+        if (test_fb->front.size() > 0) EXPECT_EQ("3",           test_fb->front[0].text);
+        if (test_fb->front.size() > 0) EXPECT_EQ(0,             test_fb->front[0].wlo);
+        if (test_fb->front.size() > 0) EXPECT_EQ(1,             test_fb->front[0].wll);
+        if (test_fb->front.size() > 0) EXPECT_EQ(point(0,fh*2), test_fb->front[0].p);
+        test_fb->front.clear();
+        EXPECT_EQ(1, test_fb->paint.size());
+        if (test_fb->paint.size() > 0)  EXPECT_EQ("3",           test_fb->paint[0].text);
+        if (test_fb->paint.size() > 0) DEXPECT_EQ(point(0,fh*2), test_fb->paint[0].p);
+        if (test_fb->paint.size() > 0) DEXPECT_EQ(Box(0,0,0,fh), test_fb->paint[0].b);
+        test_fb->paint.clear();
+
+        // 1: 222 : 2=2:2, 3=2:1, 1=2:0
+        ta.v_scrolled = 1.0/(ta.WrappedLines()-1);
+        ta.UpdateScrolled();
+        EXPECT_EQ(1, ta.start_line); EXPECT_EQ(0, ta.start_line_adjust);
+        EXPECT_EQ(1, ta.end_line);   EXPECT_EQ(0, ta.end_line_cutoff);
+        EXPECT_EQ(1, test_fb->back.size());
+        EXPECT_EQ(1, Equal(-1/3.0, test_fb->scroll.y));
+        EXPECT_EQ(point(0,fh), test_fb->p);
+        if (test_fb->back.size() > 0) EXPECT_EQ("2\n2\n2",     test_fb->back[0].text);
+        if (test_fb->back.size() > 0) EXPECT_EQ(2,             test_fb->back[0].wlo);
+        if (test_fb->back.size() > 0) EXPECT_EQ(1,             test_fb->back[0].wll);
+        if (test_fb->back.size() > 0) EXPECT_EQ(point(0,fh*4), test_fb->back[0].p);
+        test_fb->back.clear();
+        EXPECT_EQ(1, test_fb->paint.size());
+        if (test_fb->paint.size() > 0)  EXPECT_EQ("2\n2\n2",        test_fb->paint[0].text);
+        if (test_fb->paint.size() > 0) DEXPECT_EQ(point(0,fh*2),    test_fb->paint[0].p);
+        if (test_fb->paint.size() > 0) DEXPECT_EQ(Box(0,fh*2,0,fh), test_fb->paint[0].b);
+        test_fb->paint.clear();
+
+        // 0: 122 : 1=1:0, 2=2:2, 3=2:1
+        ta.v_scrolled = 0;
+        ta.UpdateScrolled();
+        EXPECT_EQ(0, ta.start_line); EXPECT_EQ(0, ta.start_line_adjust);
+        EXPECT_EQ(1, ta.end_line);   EXPECT_EQ(1, ta.end_line_cutoff);
+        EXPECT_EQ(1, test_fb->back.size());
+        EXPECT_EQ(1, Equal(0, test_fb->scroll.y));
+        EXPECT_EQ(point(0,0), test_fb->p);
+        if (test_fb->back.size() > 0) EXPECT_EQ("1",         test_fb->back[0].text);
+        if (test_fb->back.size() > 0) EXPECT_EQ(0,           test_fb->back[0].wlo);
+        if (test_fb->back.size() > 0) EXPECT_EQ(point(0,fh), test_fb->back[0].p);
+        test_fb->back.clear();
+        EXPECT_EQ(1, test_fb->paint.size());
+        if (test_fb->paint.size() > 0)  EXPECT_EQ("1",           test_fb->paint[0].text);
+        if (test_fb->paint.size() > 0) DEXPECT_EQ(point(0,fh),   test_fb->paint[0].p);
+        if (test_fb->paint.size() > 0) DEXPECT_EQ(Box(0,0,0,fh), test_fb->paint[0].b);
+        test_fb->paint.clear();
+
+        // 2: 223 : 3=2:1, 1=2:0, 2=3:0
+        ta.v_scrolled = 2.0/(ta.WrappedLines()-1);
+        ta.UpdateScrolled();
+        EXPECT_EQ(1, ta.start_line); EXPECT_EQ(-1, ta.start_line_adjust);
+        EXPECT_EQ(2, ta.end_line);   EXPECT_EQ( 0, ta.end_line_cutoff);
+        EXPECT_EQ(2, test_fb->front.size());
+        EXPECT_EQ(1, Equal(-2/3.0, test_fb->scroll.y));
+        EXPECT_EQ(point(0,2*fh), test_fb->p);
+        if (test_fb->front.size() > 0)  EXPECT_EQ("2\n2\n2",     test_fb->front[0].text);
+        if (test_fb->front.size() > 0)  EXPECT_EQ(2,             test_fb->front[0].wlo);
+        if (test_fb->front.size() > 0)  EXPECT_EQ(1,             test_fb->front[0].wll);
+        if (test_fb->front.size() > 0) DEXPECT_EQ(point(0,fh),   test_fb->front[0].p);
+        if (test_fb->front.size() > 1)  EXPECT_EQ("3",           test_fb->front[1].text);
+        if (test_fb->front.size() > 1)  EXPECT_EQ(0,             test_fb->front[1].wlo);
+        if (test_fb->front.size() > 1)  EXPECT_EQ(1,             test_fb->front[1].wll);
+        if (test_fb->front.size() > 1) DEXPECT_EQ(point(0,fh*2), test_fb->front[1].p);
+        test_fb->front.clear();
+        EXPECT_EQ(2, test_fb->paint.size());
+        if (test_fb->paint.size() > 0)  EXPECT_EQ("2\n2\n2",     test_fb->paint[0].text);
+        if (test_fb->paint.size() > 0) DEXPECT_EQ(point(0,fh),   test_fb->paint[0].p);
+        if (test_fb->paint.size() > 0) DEXPECT_EQ(Box(0,0,0,fh), test_fb->paint[0].b);
+        if (test_fb->paint.size() > 1)  EXPECT_EQ("3",           test_fb->paint[1].text);
+        if (test_fb->paint.size() > 1) DEXPECT_EQ(point(0,2*fh), test_fb->paint[1].p);
+        if (test_fb->paint.size() > 1) DEXPECT_EQ(Box(0,0,0,fh), test_fb->paint[1].b);
+        test_fb->paint.clear();
+
+        // 4: 344 : 2=3:0, 3=4:1, 1=4:0
+        ta.v_scrolled = 4.0/(ta.WrappedLines()-1);
+        ta.UpdateScrolled();
+        EXPECT_EQ(2, ta.start_line); EXPECT_EQ( 0, ta.start_line_adjust);
+        EXPECT_EQ(3, ta.end_line);   EXPECT_EQ( 0, ta.end_line_cutoff);
+        EXPECT_EQ(1, test_fb->front.size());
+        EXPECT_EQ(1, Equal(-1/3.0, test_fb->scroll.y));
+        EXPECT_EQ(point(0,fh), test_fb->p);
+        if (test_fb->front.size() > 0)  EXPECT_EQ("4\n4",      test_fb->front[0].text);
+        if (test_fb->front.size() > 0)  EXPECT_EQ(0,           test_fb->front[0].wlo);
+        if (test_fb->front.size() > 0)  EXPECT_EQ(2,           test_fb->front[0].wll);
+        if (test_fb->front.size() > 0) DEXPECT_EQ(point(0,fh), test_fb->front[0].p);
+        test_fb->front.clear();
+        EXPECT_EQ(2, test_fb->paint.size());
+        if (test_fb->paint.size() > 0)  EXPECT_EQ("4\n4",          test_fb->paint[0].text);
+        if (test_fb->paint.size() > 0) DEXPECT_EQ(point(0,4*fh),   test_fb->paint[0].p);
+        if (test_fb->paint.size() > 0) DEXPECT_EQ(Box(0,0,0,2*fh), test_fb->paint[0].b);
+        if (test_fb->paint.size() > 1)  EXPECT_EQ("4\n4",          test_fb->paint[1].text);
+        if (test_fb->paint.size() > 1) DEXPECT_EQ(point(0,fh),     test_fb->paint[1].p);
+        if (test_fb->paint.size() > 1) DEXPECT_EQ(Box(0,0,0,2*fh), test_fb->paint[1].b);
+        test_fb->paint.clear();
+
+        // 5: 445 : 3=4:1, 1=4:0, 2=5:0
+        ta.v_scrolled = 5.0/(ta.WrappedLines()-1);
+        ta.UpdateScrolled();
+        EXPECT_EQ(3, ta.start_line); EXPECT_EQ( 0, ta.start_line_adjust);
+        EXPECT_EQ(4, ta.end_line);   EXPECT_EQ( 0, ta.end_line_cutoff);
+        EXPECT_EQ(1, test_fb->front.size());
+        EXPECT_EQ(1, Equal(-2/3.0, test_fb->scroll.y));
+        EXPECT_EQ(point(0,2*fh), test_fb->p);
+        if (test_fb->front.size() > 0)  EXPECT_EQ("5",           test_fb->front[0].text);
+        if (test_fb->front.size() > 0)  EXPECT_EQ(0,             test_fb->front[0].wlo);
+        if (test_fb->front.size() > 0)  EXPECT_EQ(1,             test_fb->front[0].wll);
+        if (test_fb->front.size() > 0) DEXPECT_EQ(point(0,2*fh), test_fb->front[0].p);
+        test_fb->front.clear();
+        EXPECT_EQ(1, test_fb->paint.size());
+        if (test_fb->paint.size() > 0)  EXPECT_EQ("5",           test_fb->paint[0].text);
+        if (test_fb->paint.size() > 0) DEXPECT_EQ(point(0,2*fh), test_fb->paint[0].p);
+        if (test_fb->paint.size() > 0) DEXPECT_EQ(Box(0,0,0,fh), test_fb->paint[0].b);
+        test_fb->paint.clear();
+
+        // 3: 234 : 1=2:0, 2=3:0, 3=4:1
+        ta.v_scrolled = 3.0/(ta.WrappedLines()-1);
+        ta.UpdateScrolled();
+        EXPECT_EQ(1, ta.start_line); EXPECT_EQ(-2, ta.start_line_adjust);
+        EXPECT_EQ(3, ta.end_line);   EXPECT_EQ( 1, ta.end_line_cutoff);
+        EXPECT_EQ(2, test_fb->back.size());
+        EXPECT_EQ(1, Equal(0, test_fb->scroll.y));
+        EXPECT_EQ(point(0,0), test_fb->p);
+        if (test_fb->back.size() > 0) EXPECT_EQ("3",           test_fb->back[0].text);
+        if (test_fb->back.size() > 0) EXPECT_EQ(0,             test_fb->back[0].wlo);
+        if (test_fb->back.size() > 0) EXPECT_EQ(point(0,2*fh), test_fb->back[0].p);
+        if (test_fb->back.size() > 1) EXPECT_EQ("2\n2\n2",     test_fb->back[1].text);
+        if (test_fb->back.size() > 1) EXPECT_EQ(0,             test_fb->back[1].wlo);
+        if (test_fb->back.size() > 1) EXPECT_EQ(point(0,fh),   test_fb->back[1].p);
+        test_fb->back.clear();
+        EXPECT_EQ(2, test_fb->paint.size());
+        if (test_fb->paint.size() > 0)  EXPECT_EQ("3",           test_fb->paint[0].text);
+        if (test_fb->paint.size() > 0) DEXPECT_EQ(point(0,2*fh), test_fb->paint[0].p);
+        if (test_fb->paint.size() > 0) DEXPECT_EQ(Box(0,0,0,fh), test_fb->paint[0].b);
+        if (test_fb->paint.size() > 0)  EXPECT_EQ("2\n2\n2",     test_fb->paint[1].text);
+        if (test_fb->paint.size() > 0) DEXPECT_EQ(point(0,fh),   test_fb->paint[1].p);
+        if (test_fb->paint.size() > 0) DEXPECT_EQ(Box(0,0,0,fh), test_fb->paint[1].b);
+        test_fb->paint.clear();
+
+        // 1: 222 : 2=2:2, 3=2:1, 1=2:0
+        ta.v_scrolled = 1.0/(ta.WrappedLines()-1);
+        ta.UpdateScrolled();
+        EXPECT_EQ(1, ta.start_line); EXPECT_EQ(0, ta.start_line_adjust);
+        EXPECT_EQ(1, ta.end_line);   EXPECT_EQ(0, ta.end_line_cutoff);
+        EXPECT_EQ(1, test_fb->back.size());
+        EXPECT_EQ(1, Equal(2/3.0, test_fb->scroll.y));
+        EXPECT_EQ(point(0,fh), test_fb->p);
+        if (test_fb->back.size() > 0)  EXPECT_EQ("2\n2\n2",     test_fb->back[0].text);
+        if (test_fb->back.size() > 0)  EXPECT_EQ(1,             test_fb->back[0].wlo);
+        if (test_fb->back.size() > 0)  EXPECT_EQ(2,             test_fb->back[0].wll);
+        if (test_fb->back.size() > 0) DEXPECT_EQ(point(0,fh*4), test_fb->back[0].p);
+        test_fb->back.clear();
+        EXPECT_EQ(1, test_fb->paint.size());
+        if (test_fb->paint.size() > 0)  EXPECT_EQ("2\n2\n2",        test_fb->paint[0].text);
+        if (test_fb->paint.size() > 0) DEXPECT_EQ(point(0,fh*3),    test_fb->paint[0].p);
+        if (test_fb->paint.size() > 0) DEXPECT_EQ(Box(0,fh,0,fh*2), test_fb->paint[0].b);
+        test_fb->paint.clear();
+
     }
 }
 

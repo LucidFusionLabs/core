@@ -1,5 +1,6 @@
 # $Id: CMakeLists.txt 1334 2014-11-28 09:14:21Z justin $
 
+set(LFL_TEST 1)
 set(LFL_GLOG 1)
 set(LFL_GTEST 1)
 set(LFL_HEADLESS 1)

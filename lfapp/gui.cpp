@@ -221,8 +221,8 @@ void TextGUI::LinesFrameBuffer::PushBackAndUpdateOffset(TextGUI::Line *l, int lo
 point TextGUI::LinesFrameBuffer::Paint(TextGUI::Line *l, point lp, const Box &b) {
     Scissor scissor(0, lp.y - b.h, w, b.h);
     screen->gd->Clear();
-    point ret = l->Draw(lp + b.Position(), 0, 0);
-    return ret;
+    l->Draw(lp + b.Position(), 0, 0);
+    return point(lp.x, lp.y-b.h);
 }
 
 /* TextArea */
@@ -231,74 +231,93 @@ void TextArea::Write(const string &s, bool update_fb, bool release_fb) {
     if (!MainThread()) return RunInMainThread(new Callback(bind(&TextArea::Write, this, s, update_fb, release_fb)));
     write_last = Now();
     int update_flag = LineFBPushBack();
-    if (update_fb && line_fb.lines) line_fb.fb.Attach();
+    LinesFrameBuffer *fb = GetFrameBuffer();
+    if (update_fb && fb->lines) fb->fb.Attach();
     ScopedDrawMode drawmode(update_fb ? DrawMode::_2D : DrawMode::NullOp);
     StringLineIter add_lines(s, StringLineIter::Flag::BlankLines);
     for (const char *add_line = add_lines.Next(); add_line; add_line = add_lines.Next()) {
         bool append = !write_newline && add_lines.first && *add_line && line.ring.count;
         Line *l = append ? &line[-1] : line.InsertAt(-1);
-        if (!append) l->Clear();
+        if (!append) {
+            l->Clear();
+            if (start_line) { start_line++; end_line++; }
+        }
         if (write_timestamp) l->AppendText(StrCat(logtime(Now()), " "), cursor.attr);
         l->AppendText(add_line, cursor.attr);
-        if (!update_fb || (append && start_line)) continue;
-        LineUpdate(&line[-start_line-1], &line_fb, (!append ? update_flag : 0)); // XXX
+        l->Layout(line_fb.w);
+        if (scrolled_lines) v_scrolled = (float)++scrolled_lines / (WrappedLines()-1);
+        if (!update_fb || start_line) continue;
+        LineUpdate(&line[-start_line-1], fb, (!append ? update_flag : 0));
     }
-    if (update_fb && release_fb && line_fb.lines) line_fb.fb.Release();
+    if (update_fb && release_fb && fb->lines) fb->fb.Release();
 }
 
 void TextArea::Resized(int w, int h) {
-    UpdateLines(last_v_scrolled, 0); // first_line, &last_line);
+    UpdateLines(last_v_scrolled, 0, 0, 0); // first_line, &last_line);
     Redraw(false);
 }
 
 void TextArea::Redraw(bool attach) {
     ScopedDrawMode drawmode(DrawMode::_2D);
+    LinesFrameBuffer *fb = GetFrameBuffer();
     if (attach) {
-        line_fb.fb.Attach();
+        fb->fb.Attach();
         screen->gd->Clear();
     }
     // mouse_gui.mouse.AddClickBox(box, MouseController::CoordCB(bind(&TextArea::ClickCB, this, _1, _2, _3, _4)));
     // if (tw->terminal->colors) W->gd->ClearColor(tw->terminal->colors->c[tw->terminal->colors->bg_index]);
     int fb_flag = LinesFrameBuffer::Flag::NoVWrap | LinesFrameBuffer::Flag::Flush;
-    int lines = adjust_lines + skip_last_lines;
+    int lines = start_line_adjust + skip_last_lines;
     if (!reverse_line_fb) { 
-        line_fb.p = point(0, adjust_lines * font->height);
-        for (int i=start_line; i<line.ring.count && lines < line_fb.lines; i++)
-            lines += line_fb.PushFrontAndUpdate(&line[-i-1], -line_left, 0, 0, fb_flag);
-        line_fb.p = point(0, line_fb.Height());
+        fb->p = point(0, start_line_adjust * font->height);
+        for (int i=start_line; i<line.ring.count && lines < fb->lines; i++)
+            lines += fb->PushFrontAndUpdate(&line[-i-1], -line_left, 0, fb->lines - lines, fb_flag);
+        fb->p = point(0, fb->Height());
     } else {
-        line_fb.p = point(0, line_fb.Height() - adjust_lines * font->height);
-        for (int i=start_line; i<line.ring.count && lines < line_fb.lines; i++)
-            lines += line_fb.PushBackAndUpdate(&line[-i-1], -line_left, 0, 0, fb_flag);
-        line_fb.p = point(0, line_fb.Height());
+        fb->p = point(0, fb->Height() - start_line_adjust * font->height);
+        for (int i=start_line; i<line.ring.count && lines < fb->lines; i++)
+            lines += fb->PushBackAndUpdate(&line[-i-1], -line_left, 0, fb->lines - lines, fb_flag);
+        fb->p = point(0, fb->Height());
     }
     if (attach) {
-        line_fb.scroll = v2();
-        line_fb.fb.Release();
+        fb->scroll = v2();
+        fb->fb.Release();
     }
 }
 
-int TextArea::UpdateLines(float v_scrolled, int *first_offset) {
-    pair<int, int> ofl(start_line, -adjust_lines), nfl, nll;
-    FlattenedArrayValues<TextGUI::Lines, &TextGUI::Lines::GetBackLineLines> flattened_lines(line, line.Size());
-    flattened_lines.AdvanceIter(&nfl, v_scrolled * (WrappedLines() - 1));
-    flattened_lines.AdvanceIter(&(nll = nfl), line_fb.lines);
-    bool reverse = nfl < ofl;
-    if (first_offset) *first_offset = reverse ? lines_cutoff : -adjust_lines;
-    start_line = nfl.first;
-    adjust_lines = -nfl.second;
-    lines_cutoff =  nll.second;
-    return flattened_lines.Distance(nfl, ofl, line_fb.lines) * (reverse ? -1 : 1);
+int TextArea::UpdateLines(float v_scrolled, int *first_ind, int *first_offset, int *first_len) {
+    LinesFrameBuffer *fb = GetFrameBuffer();
+    pair<int, int> old_first_line(start_line, -start_line_adjust), old_last_line(end_line, end_line_adjust);
+    pair<int, int> new_first_line, new_last_line;
+    FlattenedArrayValues<TextGUI::Lines>
+        flattened_lines(&line, line.Size(), bind(&TextArea::LayoutBackLine, this, _1, _2));
+    flattened_lines.AdvanceIter(&new_first_line, (scrolled_lines = v_scrolled * (WrappedLines()-1)));
+    flattened_lines.AdvanceIter(&(new_last_line = new_first_line), fb->lines-1);
+    LayoutBackLine(&line, new_last_line.first);
+    bool up = new_first_line < old_first_line;
+    int dist = flattened_lines.Distance(new_first_line, old_first_line, fb->lines-1);
+    if (first_offset) *first_offset = up ?  start_line_cutoff+1 :  end_line_adjust+1;
+    if (first_ind)    *first_ind    = up ? -start_line-1        : -end_line-1;
+    if (first_len)    *first_len    = up ? -start_line_adjust   :  end_line_cutoff;
+    start_line        =  new_first_line.first;
+    start_line_adjust = -new_first_line.second;
+    end_line          =  new_last_line.first;
+    end_line_adjust   =  new_last_line.second;
+    end_line_cutoff   = line[  -end_line-1].Lines() -  new_last_line.second - 1;
+    start_line_cutoff = line[-start_line-1].Lines() - new_first_line.second - 1;
+    return dist * (up ? -1 : 1);
 }
 
 void TextArea::UpdateScrolled() {
     bool h_changed = Wrap() ? 0 : Typed::EqualChanged(&last_h_scrolled, h_scrolled);
     bool v_updated=0, v_changed = Typed::EqualChanged(&last_v_scrolled, v_scrolled);
+    printf("update scrolled %d %d\n", v_changed, h_changed);
     if (v_changed) {
-        int first_offset = 0, dist = UpdateLines(v_scrolled, &first_offset);
+        int first_ind = 0, first_offset = 0, first_len =0;
+        int dist = UpdateLines(v_scrolled, &first_ind, &first_offset, &first_len);
         if ((v_updated = dist)) {
             if (h_changed) UpdateHScrolled(4000 * h_scrolled, false);
-            if (1)         UpdateVScrolled(abs(dist), dist<0, first_offset);
+            if (1)         UpdateVScrolled(abs(dist), dist<0, first_ind, first_offset, first_len);
         }
     }
     if (h_changed && !v_updated) UpdateHScrolled(4000 * h_scrolled, true);
@@ -310,37 +329,37 @@ void TextArea::UpdateHScrolled(int x, bool update_fb) {
     Redraw(true);
 }
 
-void TextArea::UpdateVScrolled(int dist, bool reverse, int first_offset) {
-    // const WrappedLineOffset &new_first_line, const WrappedLineOffset &new_last_line) {
-    // bool reverse = new_first_line < first_line;
-    // int dist = GetWrappedLineDistance(reverse ? first_line     : last_line,
-     //                                 reverse ? new_first_line : new_last_line, line_fb.lines);
-    // printf("UpdateScrolled first_line %d,%d -> %d,%d last_line %d,%d -> %d,%d dist %d ringcount %d\n",
-    //       first_line.first, first_line.second, new_first_line.first, new_first_line.second,
-    //       last_line.first,  last_line.second,  new_last_line.first,  new_last_line.second, dist, line.ring.count);
-    if (dist >= line_fb.lines || 1) Redraw(true);
+void TextArea::UpdateVScrolled(int dist, bool up, int ind, int first_offset, int first_len) {
+    LinesFrameBuffer *fb = GetFrameBuffer();
+    if (dist >= fb->lines) Redraw(true);
     else {
-        line_fb.fb.Attach();
-        int ind = reverse ? -line.ring.count+dist : -1-dist, wl = 0;
-        if ( reverse && first_offset) { wl += line_fb.PushFrontAndUpdate(&line[ind], -line_left, first_offset, dist); printf("add first %d '%s' %d %d\n", ind, line[ind].Text().c_str(), first_offset, dist); } 
-        if (!reverse && first_offset) { wl += line_fb.PushBackAndUpdate (&line[ind], -line_left, first_offset, dist); printf("add last  %d '%s' %d %d\n", ind, line[ind].Text().c_str(), first_offset, dist); } 
-        for (int i=0, il; i<dist && wl<dist; i++) {
-            Line *L = &line[reverse ? --ind : ++ind];
-            if (reverse) il = line_fb.PushFrontAndUpdate(L, -line_left, 0, dist-wl);
-            else         il = line_fb. PushBackAndUpdate(L, -line_left, 0, dist-wl);
-            printf("add %d %d = %d (%d) %s (%s)\n", ind, dist-wl, il, L->Lines(), line_fb.p.DebugString().c_str(), L->Text().c_str());
-            wl += il;
+        bool front = (up && reverse_line_fb) || (!up && !reverse_line_fb);
+        printf("UVS mm dist=%d up=%d ind=%d first_offset=%d first_len=%d front=%d fb->lines=%d\n", dist, up, ind, first_offset, first_len, front, fb->lines);
+        ScopedDrawMode drawmode(DrawMode::_2D);
+        fb->fb.Attach();
+        int wl = 0;
+        Line *L;
+        if (first_len) {
+            if (front) wl += fb->PushFrontAndUpdate((L = &line[ind]), -line_left, first_offset, min(dist, first_len)); 
+            else       wl += fb->PushBackAndUpdate ((L = &line[ind]), -line_left, first_offset, min(dist, first_len)); 
+            printf("first_offset ind=%d dist=%d wl=%d L->Lines()=%d fb->p=%s text='%s'\n", ind, dist, wl, L->Lines(), fb->p.DebugString().c_str(), L->Text().c_str());
         }
-        line_fb.fb.Release();
+        for (int il; wl < dist; wl += il) {
+            L = &line[front ? --ind : ++ind];
+            point pp = fb->p;
+            if (front) il = fb->PushFrontAndUpdate(L, -line_left, 0, dist-wl);
+            else       il = fb-> PushBackAndUpdate(L, -line_left, 0, dist-wl);
+            printf("add ind=%d dist-wl=%d il=%d L->Lines()=%d pp=%s fb->p=%s text'%s'\n", ind, dist-wl, il, L->Lines(), pp.DebugString().c_str(), fb->p.DebugString().c_str(), L->Text().c_str());
+        }
+        fb->fb.Release();
     }
-    // first_line = new_first_line;
-    // last_line = new_last_line;
 }
 
 void TextArea::Draw(const Box &b, bool draw_cursor) {
-    if (line_fb.SizeChanged(b.w, b.h, font)) { Resized(b.w, b.h); line_fb.SizeChangedDone(); }
+    LinesFrameBuffer *fb = GetFrameBuffer();
+    if (fb->SizeChanged(b.w, b.h, font)) { Resized(b.w, b.h); printf("hrm999999 %s\n", fb->p.DebugString().c_str()); fb->SizeChangedDone(); }
     if (clip) screen->gd->PushScissor(Box::DelBorder(b, *clip));
-    line_fb.Draw(b.Position(), point(0, CommandLines() * font->height));
+    fb->Draw(b.Position(), point(0, CommandLines() * font->height));
     if (clip) screen->gd->PopScissor();
     if (draw_cursor) TextGUI::Draw(Box(b.x, b.y, b.w, font->height));
 #if 0
@@ -444,15 +463,15 @@ void Editor::UpdateWrappedLines(int cur_font_size, int width) {
     wrapped_lines = 0;
     file_line.Clear();
     file->Reset();
-    int offset = 0, count =0;
+    int offset = 0;
     for (const char *l = file->NextLineRaw(&offset); l; l = file->NextLineRaw(&offset)) {
-        file_line.val.Insert(LineOffset(count++, offset, file->nr.record_len, TextArea::font->Lines(l, width)));
+        file_line.val.Insert(LineOffset(offset, file->nr.record_len, TextArea::font->Lines(l, width)));
         wrapped_lines += file_line.val.back().wrapped_lines;
     }
     file_line.LoadFromSortedVal();
 }
 
-int Editor::UpdateLines(float v_scrolled, int *first_offset) {
+int Editor::UpdateLines(float v_scrolled, int *first_ind, int *first_offset, int *first_len) {
     bool width_changed = last_fb_width != line_fb.w;
     if (width_changed) UpdateWrappedLines(TextArea::font->size, (last_fb_width = line_fb.w)); 
 
@@ -460,105 +479,90 @@ int Editor::UpdateLines(float v_scrolled, int *first_offset) {
     if (resized) { line.Clear(); line.wrapped_lines = 0; }
 
     int new_first_line = v_scrolled * (wrapped_lines - 1), new_last_line = new_first_line + line_fb.lines;
-    int dist = resized ? line_fb.lines : abs(new_first_line - last_first_line), read_len = 0, bo = 0, l;
+    int dist = resized ? line_fb.lines : abs(new_first_line - last_first_line), read_len = 0, bo = 0, l, e;
     if (!dist || !file_line.size()) return 0;
+    printf("uppdizzo (%d) %d %d\n", last_first_line, new_first_line, new_last_line);
 
-    bool reverse = !resized && new_first_line < last_first_line;
+    bool up = !resized && new_first_line < last_first_line;
+    if (first_offset) *first_offset = up ? end_line_cutoff : -start_line_adjust;
+
     pair<int, int> read_lines;
     if (dist < line_fb.lines) {
-        if (reverse) read_lines = pair<int, int>(new_first_line, dist);
-        else         read_lines = pair<int, int>(new_first_line + line_fb.lines - dist, dist);
-    } else           read_lines = pair<int, int>(new_first_line, line_fb.lines);
+        if (up) read_lines = pair<int, int>(new_first_line, dist);
+        else    read_lines = pair<int, int>(new_first_line + line_fb.lines - dist, dist);
+    } else      read_lines = pair<int, int>(new_first_line, line_fb.lines);
 
-    int past_end_lines = max(0, min(dist, read_lines.first + read_lines.second - wrapped_lines));
+    int past_end_lines = max(0, min(dist, read_lines.first + read_lines.second - wrapped_lines)), added = 0;
     read_lines.second = max(0, read_lines.second - past_end_lines);
 
-    bool head_read = new_first_line == read_lines.first, prev_adjust_lines = adjust_lines;
+    bool head_read = new_first_line == read_lines.first;
     bool tail_read = new_last_line  == read_lines.first + read_lines.second;
-    bool short_read = !(head_read && tail_read), skip = 0;
-    if      ( reverse && dist <= -adjust_lines) { skip = 1; adjust_lines += dist; }
-    else if (!reverse && dist <=  lines_cutoff) { skip = 1; lines_cutoff -= dist; }
+    bool short_read = !(head_read && tail_read), shorten_read = short_read && head_read && start_line_adjust;
+    if      ( up && dist <= -start_line_adjust) { start_line_adjust += dist; read_lines.second=past_end_lines=0; }
+    else if (!up && dist <=  end_line_cutoff)   { end_line_cutoff   -= dist; read_lines.second=past_end_lines=0; }
 
     LineMap::ConstIterator lib, lie;
-    if (read_lines.second && !skip) {
+    if (read_lines.second) {
         CHECK((lib = file_line.LesserBound(read_lines.first)).val);
         if (wrap) {
-            if (head_read) adjust_lines = min(0, lib.key - new_first_line);
-            if (short_read && tail_read && lines_cutoff) ++lib;
+            if (head_read) start_line_adjust = min(0, lib.key - new_first_line);
+            if (short_read && tail_read && end_line_cutoff) ++lib;
         }
-
-        lie = lib;
-        for (; lie.val && lie.key <= read_lines.first + read_lines.second-1; ++lie)
-            if (lie.val->offset >= 0) read_len += (lie.val->size + 1);
-
-        if (wrap) {
-            if (tail_read) {
-                LineMap::ConstIterator i = lie;
-                --i;
-                lines_cutoff = max(0, i.key + i.val->wrapped_lines - new_last_line);
-            }
-            if (short_read && head_read && prev_adjust_lines) {
-                --lie;
-                if (lie.val->offset >= 0) read_len -= (lie.val->size + 1);
-            }
+        int last_read_line = read_lines.first + read_lines.second - 1;
+        for (lie = lib; lie.val && lie.key <= last_read_line; ++lie) {
+            auto v = lie.val;
+            if (shorten_read && !(lie.key + v->wrapped_lines <= last_read_line)) break;
+            if (v->size >= 0) read_len += (v->size + 1);
         }
-        // printf("kay %d %d %d (general %d %d)\n", lib.key, new_first_line, read_lines.first, WrappedLines(), file_line.size());
+        if (wrap && tail_read) {
+            LineMap::ConstIterator i = lie;
+            end_line_cutoff = max(0, (--i).key + i.val->wrapped_lines - new_last_line);
+        }
     }
-    // printf("read lines %d %d (adjust %d) (skip %d)\n", read_lines.first, read_lines.second, adjust_lines, skip);
 
-    // *first_offset = lib.key - new_first_line;
-    if (first_offset) *first_offset = 0;
-
-    if (read_len) read_len--;
-    string buf(read_len, 0);
-    if (read_len && !skip) {
+    string buf((read_len = X_or_1(read_len)-1), 0);
+    if (read_len) {
         file->Seek(lib.val->offset, File::Whence::SET);
         CHECK_EQ(buf.size(), file->Read((char*)buf.data(), buf.size()));
-        // printf("read %lld %d '%s'\n", lib.val->offset, read_len, buf.c_str());
     }
     
     Line *L = 0;
-    if (skip) {} // for (int i=0; i<dist; i++) if (reverse) line.PopFront(1); else line.PopBack(1); }
-    else if (reverse) for (LineMap::ConstIterator li = lie; /**/; bo += l + (L != 0)) {
-        if (!(li != lib)) break;
-        --li;
-        l = li.val->size;
-        (L = line.PushBack())->AssignText(StringPiece(buf.data() + read_len - bo - l, l));
-        line.wrapped_lines += L->Lines();
-        if (!(li != lib)) break;
-    }
-    else for (LineMap::ConstIterator li = lib; li != lie; ++li, bo += l+1) {
-        l = li.val->size;
-        (L = line.PushFront())->AssignText(StringPiece(buf.data() + bo, l));
+    if (up) for (LineMap::ConstIterator li = lie; li != lib; bo += l + (L != 0), added++) {
+        l = (e = -min(0, (--li).val->size)) ? 0 : li.val->size;
+        (L = line.PushBack())->AssignText(e ? edits[e-1] : StringPiece(buf.data() + read_len - bo - l, l));
         line.wrapped_lines += L->Lines();
     }
-
-    if (!reverse && !skip) for (int i=0; i<past_end_lines; i++) { 
+    else for (LineMap::ConstIterator li = lib; li != lie; ++li, bo += l+1, added++) {
+        l = (e = -min(0, li.val->size)) ? 0 : li.val->size;
+        (L = line.PushFront())->AssignText(e ? edits[e-1] : StringPiece(buf.data() + bo, l));
+        line.wrapped_lines += L->Lines();
+    }
+    if (!up) for (int i=0; i<past_end_lines; i++, added++) { 
         (L = line.PushFront())->Clear();
         line.wrapped_lines += L->Lines();
     }
 
-    if (!resized) PopExtraLines(reverse);
+    CHECK_LT(line.ring.count, line.ring.size);
+    if (!resized) {
+        L = up ? line.Front() : line.Back(); 
+        while (line.wrapped_lines + (up ? start_line_adjust : -end_line_cutoff) - L->Lines() >= line_fb.lines) {
+            line.wrapped_lines -= L->Lines();
+            if (up) line.PopFront(1);
+            else    line.PopBack (1);
+            L = up ? line.Front() : line.Back();
+        }
+        if (up) end_line_cutoff   =  (line.wrapped_lines + start_line_adjust - line_fb.lines);
+        else    start_line_adjust = -(line.wrapped_lines - end_line_cutoff   - line_fb.lines);
+    }
+
+    if (first_ind) *first_ind = up ? -X_or_1(added) : -line.Size()+X_or_1(added)-2;
+    if (first_ind) {
+        printf("hm first_ind %d added %d size %d\n", *first_ind, added, line.Size());
+        printf("last line %s\n", line.Front()->Text().c_str());
+    }
     last_fb_lines = line_fb.lines;
     last_first_line = new_first_line;
-    return dist * (reverse ? -1 : 1);
-}
-
-void Editor::PopExtraLines(bool reverse) {
-    CHECK_LT(line.ring.count, line.ring.size);
-    Line *L = reverse ? line.Front() : line.Back(); 
-    while (line.wrapped_lines + (reverse ? adjust_lines : -lines_cutoff) - L->Lines() >= line_fb.lines) {
-        line.wrapped_lines -= L->Lines();
-        if (reverse) line.PopFront(1);
-        else         line.PopBack (1);
-        L = reverse ? line.Front() : line.Back();
-    }
-    //printf("wl=%d adjust=%d cutoff=%d LL=%d fbl=%d\n", line.wrapped_lines, adjust_lines, lines_cutoff, L->Lines(), line_fb.lines);
-    if (reverse) lines_cutoff =  (line.wrapped_lines + adjust_lines - line_fb.lines);
-    else         adjust_lines = -(line.wrapped_lines - lines_cutoff - line_fb.lines);
-
-    //if (reverse) printf("popextra set cutoff = %d (%s)\n", lines_cutoff, L->Text().c_str());
-    //else         printf("popextra set adjust = %d (%s)\n", adjust_lines, L->Text().c_str());
+    return dist * (up ? -1 : 1);
 }
 
 /* Terminal */
@@ -606,9 +610,9 @@ void Terminal::SetScrollRegion(int b, int e, bool release_fb) {
     bool no_region = !scroll_region_beg || !scroll_region_end ||
         (scroll_region_beg == 1 && scroll_region_end == term_height);
     skip_last_lines = no_region ? 0 : scroll_region_beg - 1;
-    adjust_lines = start_line = no_region ? 0 : term_height - scroll_region_end;
+    start_line_adjust = start_line = no_region ? 0 : term_height - scroll_region_end;
     clip_border.top    = font->height * skip_last_lines;
-    clip_border.bottom = font->height * adjust_lines;
+    clip_border.bottom = font->height * start_line_adjust;
     clip = no_region ? 0 : &clip_border;
     ResizedLeftoverRegion(line_fb.w, line_fb.h, false);
 
@@ -734,13 +738,13 @@ void Terminal::Write(const string &s, bool update_fb, bool release_fb) {
                     if (clip && term_cursor.y < scroll_region_beg) {
                         ERROR(term_cursor.DebugString(), " outside scroll region ", scroll_region_beg, "-", scroll_region_end);
                     } else {
-                        int end_line = X_or_Y(scroll_region_end, term_height);
+                        int end_y = X_or_Y(scroll_region_end, term_height);
                         int flag = sl < 0 ? LineUpdate::PushBack : LineUpdate::PushFront;
                         int offset = sl < 0 ? start_line : -skip_last_lines;
-                        Scroll(term_cursor.y, end_line, sl, clip);
+                        Scroll(term_cursor.y, end_y, sl, clip);
                         GetPrimaryFrameBuffer();
                         for (int i=0, l=abs(sl); i<l; i++)
-                            LineUpdate(GetTermLine(sl<0 ? (end_line-l+i+1) : (term_cursor.y+l-i-1)),
+                            LineUpdate(GetTermLine(sl<0 ? (end_y-l+i+1) : (term_cursor.y+l-i-1)),
                                        &line_fb, flag, offset);
                     }
                 } break;
@@ -855,10 +859,10 @@ void Terminal::Newline(bool carriage_return) {
 
 void Terminal::TopNewline() {
     if (clip && term_cursor.y == scroll_region_beg) {
-        LineUpdate(line.InsertAt(GetTermLineIndex(term_cursor.y), 1, adjust_lines),
+        LineUpdate(line.InsertAt(GetTermLineIndex(term_cursor.y), 1, start_line_adjust),
                    GetPrimaryFrameBuffer(), LineUpdate::PushFront, skip_last_lines);
     } else if (term_cursor.y == 1) {
-        if (!clip) LineUpdate(line.InsertAt(-term_height, 1, adjust_lines),
+        if (!clip) LineUpdate(line.InsertAt(-term_height, 1, start_line_adjust),
                               GetPrimaryFrameBuffer(), LineUpdate::PushFront);
     } else term_cursor.y = max(1, term_cursor.y-1);
 }
