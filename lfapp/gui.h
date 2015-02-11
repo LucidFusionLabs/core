@@ -301,7 +301,7 @@ struct TextGUI : public KeyboardGUI {
             }
 #endif
         }
-        void Layout(int width=0, bool flush=0) { return Layout(Box(0,0,width,0), flush); }
+        int Layout(int width=0, bool flush=0) { Layout(Box(0,0,width,0), flush); return Lines(); }
         point Draw(point pos, bool relayout, int relayout_width) {
             if (relayout) Layout(relayout_width);
             data->glyphs.Draw((p = pos));
@@ -311,8 +311,8 @@ struct TextGUI : public KeyboardGUI {
     struct Lines : public RingVector<Line> {
         int wrapped_lines;
         function<void(Line&, Line&)> move_cb, movep_cb;
-        Lines(TextGUI *P, int ML=200) :
-            RingVector<Line>(ML), wrapped_lines(ML),
+        Lines(TextGUI *P, int N) :
+            RingVector<Line>(N), wrapped_lines(N),
             move_cb (bind(&Line::Move,  _1, _2)), 
             movep_cb(bind(&Line::MoveP, _1, _2)) { for (auto &i : data) i.Init(this, P); }
 
@@ -335,15 +335,15 @@ struct TextGUI : public KeyboardGUI {
         LinesFrameBuffer() : paint_cb(bind(&LinesFrameBuffer::Paint, this, _1, _2, _3)) {}
 
         LinesFrameBuffer *Attach(LinesFrameBuffer **last_fb);
-        bool SizeChanged(int W, int H, Font *font);
-        int Height() const { return lines * font_height; }
-        void Clear(Line *l) { RingFrameBuffer::Clear(l, Box(0, l->Lines() * font_height), true); }
-        void Update(Line *l, int flag=0);
-        void Update(Line *l, const point &p, int flag=0) { l->p=p; Update(l, flag); }
-        int PushFrontAndUpdate(Line *l, int xo=0, int wlo=0, int wll=0, int flag=0);
-        int PushBackAndUpdate (Line *l, int xo=0, int wlo=0, int wll=0, int flag=0);
-        void PushFrontAndUpdateOffset(Line *l, int lo);
-        void PushBackAndUpdateOffset (Line *l, int lo);
+        virtual bool SizeChanged(int W, int H, Font *font);
+        virtual int Height() const { return lines * font_height; }
+        tvirtual void Clear(Line *l) { RingFrameBuffer::Clear(l, Box(0, l->Lines() * font_height), true); }
+        tvirtual void Update(Line *l, int flag=0);
+        tvirtual void Update(Line *l, const point &p, int flag=0) { l->p=p; Update(l, flag); }
+        tvirtual int PushFrontAndUpdate(Line *l, int xo=0, int wlo=0, int wll=0, int flag=0);
+        tvirtual int PushBackAndUpdate (Line *l, int xo=0, int wlo=0, int wll=0, int flag=0);
+        tvirtual void PushFrontAndUpdateOffset(Line *l, int lo);
+        tvirtual void PushBackAndUpdateOffset (Line *l, int lo);
         point Paint(Line *l, point lp, const Box &b);
     };
     struct LineUpdate {
@@ -374,7 +374,7 @@ struct TextGUI : public KeyboardGUI {
     string cmd_prefix="> ";
     Color cmd_color=Color::white;
     bool deactivate_on_enter=0, clickable_links=0, insert_mode=1;
-    int adjust_lines=0, skip_last_lines=0, start_line=0;
+    int start_line=0, end_line=0, start_line_adjust=0, skip_last_lines=0;
     TextGUI(Window *W, Font *F) : KeyboardGUI(W, F), font(F)
     { cmd_line.Init(0,this); cmd_line.GetAttrId(Drawable::Attr(F)); }
 
@@ -413,26 +413,29 @@ struct TextArea : public TextGUI {
     const Border *clip=0;
     bool wrap_lines=1, write_timestamp=0, write_newline=1;
     bool reverse_line_fb=0, selection_changing=0, selection_changing_previously=0;
+    int line_left=0, end_line_adjust=0, start_line_cutoff=0, end_line_cutoff=0;
+    int scroll_inc=10, scrolled_lines=0;
     float v_scrolled=0, h_scrolled=0, last_v_scrolled=0, last_h_scrolled=0;
-    int line_left=0, lines_cutoff=0, scroll_inc=10, scrolled_lines=0;
+
     point selection_beg, selection_end;
     LinkCB new_link_cb, hover_link_cb;
 
-    TextArea(Window *W, Font *F) : TextGUI(W, F), line(this), mouse_gui(W) {}
+    TextArea(Window *W, Font *F, int S=200) : TextGUI(W, F), line(this, S), mouse_gui(W) {}
     virtual ~TextArea() {}
 
     /// Write() is thread-safe.
     virtual void Write(const string &s, bool update_fb=true, bool release_fb=true);
-    virtual void PageUp  () { v_scrolled = Clamp(v_scrolled - (float)scroll_inc/WrappedLines(), 0, 1); UpdateScrolled(); }
-    virtual void PageDown() { v_scrolled = Clamp(v_scrolled + (float)scroll_inc/WrappedLines(), 0, 1); UpdateScrolled(); } 
+    virtual void PageUp  () { v_scrolled = Clamp(v_scrolled - (float)scroll_inc/(WrappedLines()-1), 0, 1); UpdateScrolled(); }
+    virtual void PageDown() { v_scrolled = Clamp(v_scrolled + (float)scroll_inc/(WrappedLines()-1), 0, 1); UpdateScrolled(); }
     virtual void Resized(int w, int h);
 
     virtual void Redraw(bool attach=true);
     virtual void UpdateScrolled();
     virtual void UpdateHScrolled(int x, bool update_fb=true);
-    virtual void UpdateVScrolled(int dist, bool reverse, int first_offset);
-    virtual int UpdateLines(float v_scrolled, int *first_offset);
+    virtual void UpdateVScrolled(int dist, bool reverse, int first_ind, int first_offset, int first_len);
+    virtual int UpdateLines(float v_scrolled, int *first_ind, int *first_offset, int *first_len);
     virtual int WrappedLines() const { return line.wrapped_lines; }
+    virtual LinesFrameBuffer *GetFrameBuffer() { return &line_fb; }
 
     virtual void Draw(const Box &w, bool cursor);
     virtual void DrawWithShader(const Box &w, bool cursor, Shader *shader)
@@ -442,6 +445,7 @@ struct TextArea : public TextGUI {
     bool Wrap() const { return line_fb.wrap; }
     int LineFBPushBack () const { return reverse_line_fb ? LineUpdate::PushFront : LineUpdate::PushBack;  }
     int LineFBPushFront() const { return reverse_line_fb ? LineUpdate::PushBack  : LineUpdate::PushFront; }
+    int LayoutBackLine(Lines *l, int i) { return (*l)[-i-1].Layout(line_fb.w); }
     void ClickCB(int button, int x, int y, int down) {
         if (1)    selection_changing = down;
         if (down) selection_beg = point(x, y);
@@ -451,9 +455,9 @@ struct TextArea : public TextGUI {
 
 struct Editor : public TextArea {
     struct LineOffset { 
-        int id; long long offset; int size, wrapped_lines;
-        LineOffset(int I=0, int O=0, int S=0, int WL=1) : id(I), offset(O), size(S), wrapped_lines(WL) {}
-        static string GetString(const LineOffset *v) { return StrCat(v->id); }
+        long long offset; int size, wrapped_lines;
+        LineOffset(int O=0, int S=0, int WL=1) : offset(O), size(S), wrapped_lines(WL) {}
+        static string GetString(const LineOffset *v) { return StrCat(v->offset); }
         static int    GetLines (const LineOffset *v) { return v->wrapped_lines; }
         static int VectorGetLines(const vector<LineOffset> &v, int i) { return v[i].wrapped_lines; }
     };
@@ -461,6 +465,7 @@ struct Editor : public TextArea {
 
     shared_ptr<File> file;
     LineMap file_line;
+    FreeListVector<string> edits;
     int last_fb_width=0, last_fb_lines=0, last_first_line=0, wrapped_lines=0;
 
     Editor(Window *W, Font *F, File *I, bool Wrap=0) : TextArea(W, F), file(I) {
@@ -472,8 +477,7 @@ struct Editor : public TextArea {
 
     int WrappedLines() const { return wrapped_lines; }
     void UpdateWrappedLines(int cur_font_size, int width);
-    int UpdateLines(float v_scrolled, int *first_offset);
-    void PopExtraLines(bool reverse);
+    int UpdateLines(float v_scrolled, int *first_ind, int *first_offset, int *first_len);
     void Draw(const Box &box) { TextArea::Draw(box, true); }
 };
 

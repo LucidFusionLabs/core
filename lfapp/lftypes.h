@@ -136,8 +136,9 @@ template <class X> int VectorEraseByValue(vector<X> *v, const X& x) {
 
 template <class X> X BackOrDefault (const vector<X> &a)                    { return a.size() ? a.back () : X(); }
 template <class X> X FrontOrDefault(const vector<X> &a)                    { return a.size() ? a.front() : X(); }
-template <class X> X IndexOrDefault(const vector<X> &a, int n)             { return n < a.size() ? a[n] : X(); }
-template <class X> X IndexOrDefault(const vector<X> &a, int n, const X& b) { return n < a.size() ? a[n] : b; }
+template <class X> X IndexOrDefault(const vector<X> &a, int n)             { return n < a. size() ?   a [n] : X(); }
+template <class X> X IndexOrDefault(      vector<X> *a, int n)             { return n < a->size() ? (*a)[n] : X(); }
+template <class X> X IndexOrDefault(const vector<X> &a, int n, const X& b) { return n < a. size() ?   a [n] : b; }
 
 template <class X> void InsertOrErase(X *v, const typename X::value_type &val, bool insert) {
     if (insert) v->insert(val);
@@ -286,16 +287,17 @@ template <typename X, typename Y, Y (X::*Z)() const> struct ArrayMethodSegmentIt
     void Increment() { Update(); while (ind != len && cmp(cur_attr, (buf[ind].*Z)())) { if (cb) cb(buf[ind]); ind++; } i++; }
 };
 
-template <class X, int (*GetVal)(const X&, int)> struct FlattenedArrayValues {
+template <class X> struct FlattenedArrayValues {
     typedef pair<int, int> Iter;
-    const X &data; int l;
-    FlattenedArrayValues(const X &D, int L) : data(D), l(L) {}
+    typedef function<int(X*, int)> GetValCB;
+    X *data; int l; GetValCB get_val;
+    FlattenedArrayValues(X *D, int L, GetValCB cb) : data(D), l(L), get_val(cb) {}
 
-    Iter LastIter() { return Iter(X_or_1(l)-1, l ? GetVal(data, l-1)-1 : 0); }
+    Iter LastIter() { return Iter(X_or_1(l)-1, l ? get_val(data, l-1)-1 : 0); }
     void AdvanceIter(Iter *o, int n) {
         if (!l) return;
         for (int i=abs(n), d; i; i-=d) {
-            int v = GetVal(data, o->first);
+            int v = get_val(data, o->first);
             if (n > 0) {
                 d = min(i, v - o->second);
                 if ((o->second += d) >= v) {
@@ -306,7 +308,7 @@ template <class X, int (*GetVal)(const X&, int)> struct FlattenedArrayValues {
                 d = min(i, o->second+1);
                 if ((o->second -= d) < 0) {
                     if (o->first <= 0) { *o = Iter(0, 0); return; }
-                    *o = Iter(o->first-1, GetVal(data, o->first-1)-1);
+                    *o = Iter(o->first-1, get_val(data, o->first-1)-1);
                 }
             }
         }
@@ -315,7 +317,7 @@ template <class X, int (*GetVal)(const X&, int)> struct FlattenedArrayValues {
         int dist = 0;
         if (i2 < i1) swap(i1, i2);
         for (int i = i1.first; i <= i2.first; i++) {
-            int v = GetVal(data, i);
+            int v = get_val(data, i);
             dist += v;
             if (i == i1.first) dist -= i1.second;
             if (i == i2.first) dist -= (v - i2.second);

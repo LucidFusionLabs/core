@@ -73,7 +73,7 @@ TEST(ArrayTest, Segment) {
 TEST(ArrayTest, FlattenedArrayVals) {
     typedef pair<int, int> AT_FAV_Iter;
     vector<int> v = { 1, 3, 1, 2, 1, 3, 2 };
-    FlattenedArrayValues<vector<int>, &IndexOrDefault<int> > at_fav(v, v.size());
+    FlattenedArrayValues<vector<int>> at_fav(&v, v.size(), (int(*)(vector<int>*,int))&IndexOrDefault<int>);
     AT_FAV_Iter i1, i2, last = at_fav.LastIter();
     EXPECT_EQ(AT_FAV_Iter(0, 0), i1);
     EXPECT_EQ(AT_FAV_Iter(v.size()-1, v.back()-1), last);
@@ -91,8 +91,13 @@ TEST(ArrayTest, FlattenedArrayVals) {
     at_fav.AdvanceIter(&i1, 9); EXPECT_EQ(AT_FAV_Iter(6, 1), i1); EXPECT_EQ(0, at_fav.Distance(i1, i2)); i2=i1;
 
     int sum = 0; for (auto i : v) sum += i;
-    EXPECT_EQ(sum-1, at_fav.Distance(AT_FAV_Iter(), last));
-    EXPECT_EQ(sum-1, at_fav.Distance(last, AT_FAV_Iter()));
+    i1 = AT_FAV_Iter();
+    i2 = last;
+    for (int i=1; i<=sum; i++) {
+        EXPECT_EQ(sum-i, at_fav.Distance(i1, i2));
+        EXPECT_EQ(sum-i, at_fav.Distance(i2, i1));
+        at_fav.AdvanceIter(&i1, 1);
+    }
 }
 
 TEST(BitTest, Bit) {

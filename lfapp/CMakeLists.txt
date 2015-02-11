@@ -40,6 +40,7 @@ endif(LFL_IPHONE)
 endif(LFL_LFLVIDEO)
 
 lfapp_def(LFL_HEADLESS)
+lfapp_def(LFL_TEST)
 lfapp_def(LFL_GLES2)
 lfapp_def(LFL_CAMERA)
 lfapp_def(LFL_GLFWVIDEO)
