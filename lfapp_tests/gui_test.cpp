@@ -52,6 +52,11 @@ struct TextAreaTest : public TextArea {
     TextAreaTest(Window *W, Font *F, int S=200) : TextArea(W,F,S) {}
     virtual LinesFrameBuffer *GetFrameBuffer() override { return &line_fb_test; }
 };
+struct EditorTest : public Editor {
+    LinesFrameBufferTest line_fb_test;
+    EditorTest(Window *W, Font *F, File *I, bool Wrap=0) : Editor(W,F,I,Wrap) {}
+    virtual LinesFrameBuffer *GetFrameBuffer() override { return &line_fb_test; }
+};
 
 TEST(GUITest, TextArea) { 
     {
@@ -108,6 +113,7 @@ TEST(GUITest, TextArea) {
         TextGUI::Line *L;
         Font *font = Fonts::Fake();
         TextAreaTest ta(screen, font);
+        ta.line_fb.wrap = 1;
         (L = ta.line.PushFront())->AssignText("1");       L->Layout();
         (L = ta.line.PushFront())->AssignText("2\n2\n2"); L->Layout();
         (L = ta.line.PushFront())->AssignText("3");       L->Layout();
@@ -335,8 +341,18 @@ TEST(GUITest, TextArea) {
         if (test_fb->paint.size() > 0) DEXPECT_EQ(point(0,fh*3),    test_fb->paint[0].p);
         if (test_fb->paint.size() > 0) DEXPECT_EQ(Box(0,fh,0,fh*2), test_fb->paint[0].b);
         test_fb->paint.clear();
-
     }
+}
+
+TEST(GUITest, Editor) {
+    Font *font = Fonts::Fake();
+    EditorTest e(screen, font, new BufferFile("1\n222\n3\n44\n5\n"), true);
+    LinesFrameBufferTest *test_fb = &e.line_fb_test;
+    int fh = font->height, w = font->max_width;
+    Box b(w, 3*fh);
+    e.Draw(b);
+    EXPECT_EQ(3, test_fb->back.size());
+    EXPECT_EQ(3, test_fb->paint.size());
 }
 
 TEST(GUITest, Terminal) {

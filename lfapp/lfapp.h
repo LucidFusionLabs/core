@@ -905,7 +905,7 @@ struct File {
 
 struct BufferFile : public File {
     string buf, fn; int rdo, wro;
-    BufferFile(const char *in, int inlen, const char *FN=0) : buf(in, inlen), fn(FN?FN:""), rdo(0), wro(0) {}
+    BufferFile(const string &s, const char *FN=0) : buf(s), fn(FN?FN:""), rdo(0), wro(0) {}
     ~BufferFile() { Close(); }
 
     bool Opened() { return true; }
@@ -988,7 +988,7 @@ struct LocalFileLineIter : public Iter {
    
 struct BufferFileLineIter : public Iter {
     BufferFile f;
-    BufferFileLineIter(const char *buf, int len) : f(buf, len) {};
+    BufferFileLineIter(const string &s) : f(s) {};
     const char *Next() { return f.NextLine(); }
     void Reset() { f.Reset(); }
 };

@@ -337,7 +337,7 @@ struct SimpleAssetLoader : public AudioAssetLoader, public VideoAssetLoader, pub
         return lf;    
     }
     virtual void UnloadFile(void *h) { delete (File*)h; }
-    virtual void *LoadBuf(const char *buf, int len, const char *mimetype) { return new BufferFile(buf, len, mimetype); }
+    virtual void *LoadBuf(const char *buf, int len, const char *mimetype) { return new BufferFile(string(buf, len), mimetype); }
     virtual void UnloadBuf(void *h) { delete (File*)h; }
 
     virtual void *LoadAudioFile(const string &filename) { return LoadFile(filename); }

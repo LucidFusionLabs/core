@@ -312,7 +312,7 @@ TEST(IterTest, LineIter) {
 
 TEST(BufferFileTest, Read) {
     string b = "1 2 3\n4 5 6", z = "7 8 9\n9 8 7\n7 8 9";
-    BufferFile bf(b.data(), b.size());
+    BufferFile bf(b);
     EXPECT_EQ(b.size(), bf.Size());
     EXPECT_EQ(0, strcmp(BlankNull(bf.NextLine()), "1 2 3"));
     EXPECT_EQ(0, strcmp(BlankNull(bf.NextLine()), "4 5 6"));
