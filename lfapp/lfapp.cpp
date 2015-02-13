@@ -1327,7 +1327,7 @@ bool LocalFile::open(const char *path, const char *mode, bool pre_create) {
     b = (char*)malloc(l);
     fread(b, l, 1, f);
     fclose(f);
-    impl = new BufferFile(b, l);
+    impl = new BufferFile(string(b, l));
     ((BufferFile*)impl)->free = true;
     return true;
 }
@@ -1343,7 +1343,7 @@ bool LocalFile::open(const string &path, const string &mode, bool pre_create) {
     if (internal_path) { if ((ret = android_internal_read(path.c_str(), &b, &l))) return false; }
     else               { if ((ret = android_file_read    (path.c_str(), &b, &l))) return false; }
 
-    impl = new BufferFile(b, l);
+    impl = new BufferFile(string(b, l));
     ((BufferFile*)impl)->free = true;
     return true;
 }

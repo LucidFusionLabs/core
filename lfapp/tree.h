@@ -87,8 +87,8 @@ struct RedBlackTree {
     /**/ Iterator Find       (const K &k)        { Query q=GetQuery(k);        int n=FindNode      (&q); return Iterator(this, n, q.z); }
     ConstIterator LowerBound (const K &k) const  { Query q=GetQuery(k);        int n=LowerBoundNode(&q); return Iterator(this, n, q.z); }
     /**/ Iterator LowerBound (const K &k)        { Query q=GetQuery(k);        int n=LowerBoundNode(&q); return Iterator(this, n, q.z); }
-    ConstIterator LesserBound(const K &k) const  { Query q=GetQuery(k);        int n=LowerBoundNode(&q); Iterator i(this, n, q.z); if (i.val && i.key > k) --i; return i; }
-    /**/ Iterator LesserBound(const K &k)        { Query q=GetQuery(k);        int n=LowerBoundNode(&q); Iterator i(this, n, q.z); if (i.val && i.key > k) --i; return i; }
+    ConstIterator LesserBound(const K &k) const  { Query q=GetQuery(k);        int n=LowerBoundNode(&q); Iterator i(this, n, q.z); if (i.val && k < i.key) --i; return i; }
+    /**/ Iterator LesserBound(const K &k)        { Query q=GetQuery(k);        int n=LowerBoundNode(&q); Iterator i(this, n, q.z); if (i.val && k < i.key) --i; return i; }
 
     virtual Query GetQuery(const K &k, const V *v=0, bool update=0) const { return Query(k, v, update); }
     virtual K GetCreateNodeKey(const Query *q) const { return q->key; }

@@ -445,7 +445,7 @@ struct TextArea : public TextGUI {
     bool Wrap() const { return line_fb.wrap; }
     int LineFBPushBack () const { return reverse_line_fb ? LineUpdate::PushFront : LineUpdate::PushBack;  }
     int LineFBPushFront() const { return reverse_line_fb ? LineUpdate::PushBack  : LineUpdate::PushFront; }
-    int LayoutBackLine(Lines *l, int i) { return (*l)[-i-1].Layout(line_fb.w); }
+    int LayoutBackLine(Lines *l, int i) { return Wrap() ? (*l)[-i-1].Layout(line_fb.w) : 1; }
     void ClickCB(int button, int x, int y, int down) {
         if (1)    selection_changing = down;
         if (down) selection_beg = point(x, y);
