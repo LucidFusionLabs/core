@@ -147,6 +147,9 @@ DEFINE_int(chans_in, -1, "Audio input channels");
 DEFINE_int(chans_out, -1, "Audio output channels");
 DEFINE_int(target_fps, 0, "Max frames per second");
 
+::std::ostream& operator<<(::std::ostream& os, const point &x) { return os << x.DebugString(); }
+::std::ostream& operator<<(::std::ostream& os, const Box   &x) { return os << x.DebugString(); }
+
 Printable::Printable(const vector<string> &x) : string(StrCat("{", Vec<string>::Str(&x[0], x.size()), "}")) {}
 Printable::Printable(const vector<double> &x) : string(StrCat("{", Vec<double>::Str(&x[0], x.size()), "}")) {}
 Printable::Printable(const vector<float>  &x) : string(StrCat("{", Vec<float> ::Str(&x[0], x.size()), "}")) {}

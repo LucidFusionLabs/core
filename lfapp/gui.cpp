@@ -480,15 +480,15 @@ int Editor::UpdateLines(float v_scrolled, int *first_ind, int *first_offset, int
     }
 
     bool resized = (width_changed && wrap) || last_fb_lines != fb->lines;
-    if (resized) { line.Clear(); line.wrapped_lines = 0; }
+    if (resized) { line.Clear(); fb_wrapped_lines = 0; }
 
     int new_first_line = v_scrolled * (wrapped_lines - 1), new_last_line = new_first_line + fb->lines;
     int dist = resized ? fb->lines : abs(new_first_line - last_first_line), read_len = 0, bo = 0, l, e;
     if (!dist || !file_line.size()) return 0;
 
     bool up = !resized && new_first_line < last_first_line;
-    if (first_offset) *first_offset = up ? -start_line_adjust+1 :  end_line_cutoff+1;
-    if (first_len)    *first_len    = up ?  start_line_cutoff   :  end_line_adjust;
+    if (first_offset) *first_offset = up ?  start_line_cutoff : end_line_adjust;
+    if (first_len)    *first_len    = up ? -start_line_adjust : end_line_cutoff;
 
     pair<int, int> read_lines;
     if (dist < fb->lines) {
@@ -505,11 +505,9 @@ int Editor::UpdateLines(float v_scrolled, int *first_ind, int *first_offset, int
     if      ( up && dist <= -start_line_adjust) { start_line_adjust += dist; read_lines.second=past_end_lines=0; }
     else if (!up && dist <=  end_line_cutoff)   { end_line_cutoff   -= dist; read_lines.second=past_end_lines=0; }
 
-    printf("updizzo %d-%d from %d\n", new_first_line, new_last_line, last_first_line);
     LineMap::ConstIterator lib, lie;
     if (read_lines.second) {
         CHECK((lib = file_line.LesserBound(read_lines.first)).val);
-        printf("Lib query %d res %d\n", read_lines.first, lib.key);
         if (wrap) {
             if (head_read) start_line_adjust = min(0, lib.key - new_first_line);
             if (short_read && tail_read && end_line_cutoff) ++lib;
@@ -536,39 +534,34 @@ int Editor::UpdateLines(float v_scrolled, int *first_ind, int *first_offset, int
     if (up) for (LineMap::ConstIterator li = lie; li != lib; bo += l + (L != 0), added++) {
         l = (e = -min(0, (--li).val->size)) ? 0 : li.val->size;
         (L = line.PushBack())->AssignText(e ? edits[e-1] : StringPiece(buf.data() + read_len - bo - l, l));
-        line.wrapped_lines += L->Lines();
+        fb_wrapped_lines += L->Layout(fb->w);
     }
     else for (LineMap::ConstIterator li = lib; li != lie; ++li, bo += l+1, added++) {
         l = (e = -min(0, li.val->size)) ? 0 : li.val->size;
         (L = line.PushFront())->AssignText(e ? edits[e-1] : StringPiece(buf.data() + bo, l));
-        line.wrapped_lines += L->Lines();
+        fb_wrapped_lines += L->Layout(fb->w);
     }
     if (!up) for (int i=0; i<past_end_lines; i++, added++) { 
         (L = line.PushFront())->Clear();
-        line.wrapped_lines += L->Lines();
+        fb_wrapped_lines += L->Layout(fb->w);
     }
 
     CHECK_LT(line.ring.count, line.ring.size);
     if (!resized) {
-        L = up ? line.Front() : line.Back(); 
-        while (line.wrapped_lines + (up ? start_line_adjust : -end_line_cutoff) - L->Lines() >= fb->lines) {
-            line.wrapped_lines -= L->Lines();
+        for (bool first=1;;first=0) {
+            int ll = (L = up ? line.Front() : line.Back())->Lines();
+            if (fb_wrapped_lines + (up ? start_line_adjust : -end_line_cutoff) - ll < fb->lines) break;
+            fb_wrapped_lines -= ll;
             if (up) line.PopFront(1);
             else    line.PopBack (1);
-            L = up ? line.Front() : line.Back();
         }
-        if (up) end_line_cutoff   =  (line.wrapped_lines + start_line_adjust - fb->lines);
-        else    start_line_adjust = -(line.wrapped_lines - end_line_cutoff   - fb->lines);
-        if (up) end_line_adjust   = line.Back ()->Lines() - end_line_cutoff;
-        else    start_line_cutoff = line.Front()->Lines() + start_line_adjust;
+        if (up) end_line_cutoff   =  (fb_wrapped_lines + start_line_adjust - fb->lines);
+        else    start_line_adjust = -(fb_wrapped_lines - end_line_cutoff   - fb->lines);
     }
 
-    if (first_ind)    *first_ind    = up ? -added-1             : -line.Size() + added;
-
-    if (first_ind) {
-        printf("hm first_ind %d added %d size %d\n", *first_ind, added, line.Size());
-        printf("last line (%p) %s\n", line.Front(), line.Front()->Text().c_str());
-    }
+    end_line_adjust   = line.Front()->Lines() - end_line_cutoff;
+    start_line_cutoff = line.Back ()->Lines() + start_line_adjust;
+    if (first_ind) *first_ind = up ? -added-1 : -line.Size()+added;
 
     last_fb_lines = fb->lines;
     last_first_line = new_first_line;

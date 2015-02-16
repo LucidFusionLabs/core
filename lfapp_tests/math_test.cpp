@@ -21,8 +21,8 @@
 
 namespace LFL {
 TEST(MathTest, util) {
-    EXPECT_EQ(true,  Equal(Decimals( 10.23456),  .23456));
-    EXPECT_EQ(true,  Equal(Decimals(-10.23456), -.23456));
+    EXPECT_FLOAT_EQ(Decimals( 10.23456),  .23456);
+    EXPECT_FLOAT_EQ(Decimals(-10.23456), -.23456);
     EXPECT_EQ(false, IsPowerOfTwo(0));
     EXPECT_EQ(true,  IsPowerOfTwo(1));
     EXPECT_EQ(true,  IsPowerOfTwo(2));
@@ -113,8 +113,8 @@ TEST(MathTest, matrix) {
         { double *r = A.row(1); r[0] = 2; r[1] = 6; }
 
         Invert(&A, &Ainv);
-        { double *r = Ainv.row(0); EXPECT_EQ(1, Equal( 0.6, r[0])); EXPECT_EQ(1, Equal(-0.7, r[1])); }
-        { double *r = Ainv.row(1); EXPECT_EQ(1, Equal(-0.2, r[0])); EXPECT_EQ(1, Equal( 0.4, r[1])); }
+        { double *r = Ainv.row(0); EXPECT_NEAR( 0.6, r[0], 1e-6); EXPECT_NEAR(-0.7, r[1], 1e-6); }
+        { double *r = Ainv.row(1); EXPECT_NEAR(-0.2, r[0], 1e-6); EXPECT_NEAR( 0.4, r[1], 1e-6); }
     }
 }
 }; // namespace LFL

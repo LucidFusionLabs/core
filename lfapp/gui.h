@@ -466,7 +466,7 @@ struct Editor : public TextArea {
     shared_ptr<File> file;
     LineMap file_line;
     FreeListVector<string> edits;
-    int last_fb_width=0, last_fb_lines=0, last_first_line=0, wrapped_lines=0;
+    int last_fb_width=0, last_fb_lines=0, last_first_line=0, wrapped_lines=0, fb_wrapped_lines=0;
 
     Editor(Window *W, Font *F, File *I, bool Wrap=0) : TextArea(W, F), file(I) {
         reverse_line_fb = 1;
