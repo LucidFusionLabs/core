@@ -163,7 +163,6 @@ extern "C" int isinf(double);
 #endif
 
 #ifdef LFL_TEST
-#define DEXPECT_EQ(x,y) EXPECT_EQ(x.DebugString(), y.DebugString())
 #define tvirtual virtual
 #else
 #define tvirtual
@@ -1124,6 +1123,9 @@ void DefaultLFAppWindowClosedCB();
 #include "lfapp/camera.h"
 
 namespace LFL {
+::std::ostream& operator<<(::std::ostream& os, const point &x);
+::std::ostream& operator<<(::std::ostream& os, const Box   &x);
+
 struct MessageQueue {
     static const int CallbackMessage = 1;
     struct Entry { int id; void *opaque; };
