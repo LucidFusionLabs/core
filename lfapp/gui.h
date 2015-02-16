@@ -591,7 +591,7 @@ struct Terminal : public TextArea, public Drawable::AttrSource {
     }
     void FlushParseText();
     void Newline(bool carriage_return=false);
-    void TopNewline();
+    void NewTopline();
 };
 
 struct Console : public TextArea {
