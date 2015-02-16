@@ -268,17 +268,16 @@ void TextArea::Redraw(bool attach) {
     // if (tw->terminal->colors) W->gd->ClearColor(tw->terminal->colors->c[tw->terminal->colors->bg_index]);
     int fb_flag = LinesFrameBuffer::Flag::NoVWrap | LinesFrameBuffer::Flag::Flush;
     int lines = start_line_adjust + skip_last_lines;
-    if (!reverse_line_fb) { 
-        fb->p = point(0, start_line_adjust * font->height);
-        for (int i=start_line; i<line.ring.count && lines < fb->lines; i++)
-            lines += fb->PushFrontAndUpdate(&line[-i-1], -line_left, 0, fb->lines - lines, fb_flag);
-        fb->p = point(0, fb->Height());
-    } else {
+    if (reverse_line_fb) { 
         fb->p = point(0, fb->Height() - start_line_adjust * font->height);
         for (int i=start_line; i<line.ring.count && lines < fb->lines; i++)
             lines += fb->PushBackAndUpdate(&line[-i-1], -line_left, 0, fb->lines - lines, fb_flag);
-        fb->p = point(0, fb->Height());
+    } else {
+        fb->p = point(0, start_line_adjust * font->height);
+        for (int i=start_line; i<line.ring.count && lines < fb->lines; i++)
+            lines += fb->PushFrontAndUpdate(&line[-i-1], -line_left, 0, fb->lines - lines, fb_flag);
     }
+    fb->p = point(0, fb->Height());
     if (attach) {
         fb->scroll = v2();
         fb->fb.Release();
@@ -332,24 +331,19 @@ void TextArea::UpdateVScrolled(int dist, bool up, int ind, int first_offset, int
     LinesFrameBuffer *fb = GetFrameBuffer();
     if (dist >= fb->lines) Redraw(true);
     else {
-        bool front = (up && reverse_line_fb) || (!up && !reverse_line_fb);
-        printf("UVS mm dist=%d up=%d ind=%d first_offset=%d first_len=%d front=%d fb->lines=%d\n", dist, up, ind, first_offset, first_len, front, fb->lines);
+        int wl = 0;
+        bool front = up == reverse_line_fb, decr = front != reverse_line_fb;
         ScopedDrawMode drawmode(DrawMode::_2D);
         fb->fb.Attach();
-        int wl = 0;
-        Line *L;
         if (first_len) {
-            if (front) wl += fb->PushFrontAndUpdate((L = &line[ind]), -line_left, first_offset, min(dist, first_len)); 
-            else       wl += fb->PushBackAndUpdate ((L = &line[ind]), -line_left, first_offset, min(dist, first_len)); 
-            printf("first_offset ind=%d dist=%d wl=%d L->Lines()=%d fb->p=%s text='%s'\n", ind, dist, wl, L->Lines(), fb->p.DebugString().c_str(), L->Text().c_str());
+            Line *L = &line[ind];
+            if (front) wl += fb->PushFrontAndUpdate(L, -line_left, first_offset, min(dist, first_len)); 
+            else       wl += fb->PushBackAndUpdate (L, -line_left, first_offset, min(dist, first_len)); 
         }
-        bool decr = (front && !reverse_line_fb) || (!front && reverse_line_fb);
         for (int il; wl < dist; wl += il) {
-            L = &line[decr ? --ind : ++ind];
-            point pp = fb->p;
+            Line *L = &line[decr ? --ind : ++ind];
             if (front) il = fb->PushFrontAndUpdate(L, -line_left, 0, dist-wl);
             else       il = fb-> PushBackAndUpdate(L, -line_left, 0, dist-wl);
-            printf("add ind=%d dist-wl=%d il=%d L->Lines()=%d pp=%s fb->p=%s text'%s'\n", ind, dist-wl, il, L->Lines(), pp.DebugString().c_str(), fb->p.DebugString().c_str(), L->Text().c_str());
         }
         fb->fb.Release();
     }
@@ -496,12 +490,12 @@ int Editor::UpdateLines(float v_scrolled, int *first_ind, int *first_offset, int
         else    read_lines = pair<int, int>(new_first_line + fb->lines - dist, dist);
     } else      read_lines = pair<int, int>(new_first_line, fb->lines);
 
-    int past_end_lines = max(0, min(dist, read_lines.first + read_lines.second - wrapped_lines)), added = 0;
-    read_lines.second = max(0, read_lines.second - past_end_lines);
-
     bool head_read = new_first_line == read_lines.first;
     bool tail_read = new_last_line  == read_lines.first + read_lines.second;
     bool short_read = !(head_read && tail_read), shorten_read = short_read && head_read && start_line_adjust;
+    int past_end_lines = max(0, min(dist, read_lines.first + read_lines.second - wrapped_lines)), added = 0;
+    read_lines.second = max(0, read_lines.second - past_end_lines);
+
     if      ( up && dist <= -start_line_adjust) { start_line_adjust += dist; read_lines.second=past_end_lines=0; }
     else if (!up && dist <=  end_line_cutoff)   { end_line_cutoff   -= dist; read_lines.second=past_end_lines=0; }
 
@@ -664,7 +658,7 @@ void Terminal::Write(const string &s, bool update_fb, bool release_fb) {
                     parse_osc.clear();
                     parse_osc_escape = false; break;
                 case 'D': Newline();                       break;
-                case 'M': TopNewline();                    break;
+                case 'M': NewTopline();                    break;
                 case '7': saved_term_cursor = term_cursor; break;
                 case '8': term_cursor = saved_term_cursor; break;
                 case '=': case '>':                        break; // application or normal keypad
@@ -860,7 +854,7 @@ void Terminal::Newline(bool carriage_return) {
     if (carriage_return) term_cursor.x = 1;
 }
 
-void Terminal::TopNewline() {
+void Terminal::NewTopline() {
     if (clip && term_cursor.y == scroll_region_beg) {
         LineUpdate(line.InsertAt(GetTermLineIndex(term_cursor.y), 1, start_line_adjust),
                    GetPrimaryFrameBuffer(), LineUpdate::PushFront, skip_last_lines);

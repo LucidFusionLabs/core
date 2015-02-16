@@ -581,9 +581,7 @@ TEST(GUITest, Editor) {
 
     // 1: 222 : 2=2:0, 1=2:1, 3=2:2
     e.v_scrolled = 1.0/(e.WrappedLines()-1);
-    printf("hrrrrrrrrm-1\n");
     e.UpdateScrolled();
-    printf("hrrrrrrrrm-2\n");
     EXPECT_EQ(0, e.start_line_adjust);
     EXPECT_EQ(3, e.start_line_cutoff);
     EXPECT_EQ(0, e.end_line_cutoff);
