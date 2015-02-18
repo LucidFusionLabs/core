@@ -89,7 +89,7 @@ struct MouseController {
     typedef function<bool()> BoolCB;
     typedef function<void(int, int, int, int)> CoordCB;
 
-    struct Event { enum { Click=1, Hover=2 }; };
+    struct Event { enum { Click=1, Hover=2, Drag=3 }; };
     struct Events { int total, click, hover; };
 
     struct Callback {
@@ -144,6 +144,7 @@ struct MouseController {
     };
 
     IterableFreeListVector<HitBox> hit;
+    unordered_set<int> drag;
     Events events;
     bool active=0;
     virtual ~MouseController() { Clear(); }
@@ -155,6 +156,7 @@ struct MouseController {
     virtual bool NotActive() const { return !active; }
     virtual int AddClickBox(const Box &w, const Callback &cb) { return hit.Insert(HitBox(Event::Click, w, cb)); }
     virtual int AddHoverBox(const Box &w, const Callback &cb) { return hit.Insert(HitBox(Event::Hover, w, cb)); }
+    virtual int AddDragBox (const Box &w, const Callback &cb) { return hit.Insert(HitBox(Event::Drag,  w, cb)); }
     virtual int Input(InputEvent::Id, const point &p, int down, int flag);
 };
 

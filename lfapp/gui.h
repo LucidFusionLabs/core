@@ -75,8 +75,9 @@ struct Widget {
         virtual ~Interface() { if (del_hitbox) DelHitBox(); }
         Interface(GUI *g) : gui(g) {}
 
-        void AddClickBox(const Box &w, const MouseController::Callback &cb) { hitbox.push_back(gui->hit.Insert(MouseController::HitBox(MouseController::Event::Click, w, cb))); }
-        void AddHoverBox(const Box &w, const MouseController::Callback &cb) { hitbox.push_back(gui->hit.Insert(MouseController::HitBox(MouseController::Event::Hover, w, cb))); }
+        void AddClickBox(const Box &w, const MouseController::Callback &cb) { hitbox.push_back(gui->AddClickBox(w, cb)); }
+        void AddHoverBox(const Box &w, const MouseController::Callback &cb) { hitbox.push_back(gui->AddHoverBox(w, cb)); }
+        void AddDragBox (const Box &w, const MouseController::Callback &cb) { hitbox.push_back(gui->AddDragBox (w, cb)); }
         void DelHitBox() { for (vector<int>::const_iterator i = hitbox.begin(); i != hitbox.end(); ++i) gui->hit.Erase(*i); hitbox.clear(); }
         MouseController::HitBox &GetHitBox(int i=0) const { return gui->hit[hitbox[i]]; }
         Box GetHitBoxBox(int i=0) const { return Box::Add(GetHitBox(i).box, gui->box.TopLeft()); }
@@ -365,14 +366,22 @@ struct TextGUI : public KeyboardGUI {
         Time blink_begin=0;
         point i, p;
     };
+    struct Selection {
+        bool enabled=1, changing=0, changing_previously=0;
+        struct Point { 
+            int line_ind=0, char_ind=0; point click; Box glyph;
+            string DebugString() const { return StrCat("i=", click.DebugString(), " l=", line_ind, " c=", char_ind, " b=", glyph.DebugString()); }
+        } beg, end;
+    };
 
     Font *font;
     Flow::Layout layout;
     Cursor cursor;
+    Selection selection;
     Line cmd_line;
     LinesFrameBuffer cmd_fb;
     string cmd_prefix="> ";
-    Color cmd_color=Color::white;
+    Color cmd_color=Color::white, selection_color=Color(Color::grey70, 0.5);
     bool deactivate_on_enter=0, clickable_links=0, insert_mode=1;
     int start_line=0, end_line=0, start_line_adjust=0, skip_last_lines=0;
     TextGUI(Window *W, Font *F) : KeyboardGUI(W, F), font(F)
@@ -411,13 +420,10 @@ struct TextArea : public TextGUI {
     GUI mouse_gui;
     Time write_last=0;
     const Border *clip=0;
-    bool wrap_lines=1, write_timestamp=0, write_newline=1;
-    bool reverse_line_fb=0, selection_changing=0, selection_changing_previously=0;
+    bool wrap_lines=1, write_timestamp=0, write_newline=1, reverse_line_fb=0;
     int line_left=0, end_line_adjust=0, start_line_cutoff=0, end_line_cutoff=0;
     int scroll_inc=10, scrolled_lines=0;
     float v_scrolled=0, h_scrolled=0, last_v_scrolled=0, last_h_scrolled=0;
-
-    point selection_beg, selection_end;
     LinkCB new_link_cb, hover_link_cb;
 
     TextArea(Window *W, Font *F, int S=200) : TextGUI(W, F), line(this, S), mouse_gui(W) {}
@@ -440,17 +446,16 @@ struct TextArea : public TextGUI {
     virtual void Draw(const Box &w, bool cursor);
     virtual void DrawWithShader(const Box &w, bool cursor, Shader *shader)
     { glTimeResolutionShader(shader); Draw(w, cursor); screen->gd->UseShader(0); }
-    void DrawOrCopySelection();
 
     bool Wrap() const { return line_fb.wrap; }
     int LineFBPushBack () const { return reverse_line_fb ? LineUpdate::PushFront : LineUpdate::PushBack;  }
     int LineFBPushFront() const { return reverse_line_fb ? LineUpdate::PushBack  : LineUpdate::PushFront; }
     int LayoutBackLine(Lines *l, int i) { return Wrap() ? (*l)[-i-1].Layout(line_fb.w) : 1; }
-    void ClickCB(int button, int x, int y, int down) {
-        if (1)    selection_changing = down;
-        if (down) selection_beg = point(x, y);
-        else      selection_end = point(x, y);
-    }
+
+    void DrawSelection();
+    void ClickCB(int button, int x, int y, int down);
+    bool GetGlyphFromCoords(const point &p, Selection::Point *out);
+    void CopyText(const Selection::Point &beg, const Selection::Point &end);
 };
 
 struct Editor : public TextArea {
@@ -529,6 +534,7 @@ struct Terminal : public TextArea, public Drawable::AttrSource {
     LinesFrameBuffer *last_fb=0;
     Border clip_border;
     Colors *colors=0;
+    Color *bg_color=0;
 
     Terminal(int FD, Window *W, Font *F) :
         TextArea(W, F), fd(FD), fb_cb(bind(&Terminal::GetFrameBuffer, this, _1)) {
@@ -582,6 +588,7 @@ struct Terminal : public TextArea, public Drawable::AttrSource {
         colors = C;
         Attr::SetFGColorIndex(&default_cursor_attr, colors->normal_index);
         Attr::SetBGColorIndex(&default_cursor_attr, colors->bg_index);
+        bg_color = &colors->c[colors->bg_index];
     }
     void Scroll(int sy, int ey, int dy, bool move_fb_p) {
         CHECK_LT(sy, ey);
