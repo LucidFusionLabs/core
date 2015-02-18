@@ -103,6 +103,12 @@ template <typename X> typename X::mapped_type FindOrDie(const char *file, int li
 }
 #define FindOrDie(m, k) FindOrDie(__FILE__, __LINE__, m, k)
 
+template <class I, class T> I LesserBound(I first, I last, const T& v) {
+    I i = lower_bound(first, last, v);
+    if (i == last || i == first) return last;
+    return (v < *i) ? i : --i;
+}
+
 template <typename X> bool Contains(const X &c, const typename X::key_type &k) { return c.find(k) != c.end(); }
 template <typename X> void EnsureSize(X &x, int n) { if (x.size() < n) x.resize(n); }
 

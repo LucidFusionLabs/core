@@ -77,7 +77,7 @@ using LFL_STL_NAMESPACE::map;
 using LFL_STL_NAMESPACE::set;
 using LFL_STL_NAMESPACE::deque;
 using LFL_STL_NAMESPACE::inserter;
-using LFL_STL_NAMESPACE::search;
+using LFL_STL_NAMESPACE::binary_search;
 using LFL_STL_NAMESPACE::sort;
 using LFL_STL_NAMESPACE::unique;
 using LFL_STL_NAMESPACE::reverse;

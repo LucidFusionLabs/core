@@ -663,7 +663,7 @@ int Input::KeyEventDispatch(InputEvent::Id event, bool down) {
 }
 
 int Input::MouseMove(const point &p, const point &d) {
-    int fired = MouseEventDispatch(Mouse::Event::Motion, p, 0);
+    int fired = MouseEventDispatch(Mouse::Event::Motion, p, MouseButton1Down());
     screen->events.mouse_move++;
     screen->events.gui += fired;
     if (!app->grab_mode.Enabled()) return fired;
@@ -721,6 +721,7 @@ int Input::MouseEventDispatch(InputEvent::Id event, const point &p, int down) {
 
 int MouseController::Input(InputEvent::Id event, const point &p, int down, int flag) {
     int fired = 0;
+    bool but1 = event == Mouse::Event::Button1;
     for (auto e = hit.data.begin(); e != hit.data.end(); ++e) {
         if (e->deleted || !e->active ||
             (!down && e->evtype == Event::Click && e->CB.type != Callback::CB_COORD)) continue;
@@ -728,10 +729,12 @@ int MouseController::Input(InputEvent::Id event, const point &p, int down, int f
         bool thunk = 0;
         if (e->box.within(p)) {
             if (e->run_only_if_first && fired) continue;
-            if      (e->evtype == Event::Click && event == Mouse::Event::Button1) thunk=1;
-            else if (e->evtype == Event::Hover && !e->val) { e->val=1; thunk=1; }
-        }
-        else {
+            switch (e->evtype) { 
+                case Event::Click: if (but1)         {           thunk=1; } break;
+                case Event::Drag:  if (but1 && down) {           thunk=1; } break;
+                case Event::Hover: if (!e->val)      { e->val=1; thunk=1; } break;
+            }
+        } else {
             if (e->evtype == Event::Hover && e->val) { e->val=0; thunk=1; }
         }
 
@@ -744,9 +747,12 @@ int MouseController::Input(InputEvent::Id event, const point &p, int down, int f
             else                           events.click++;
             fired++;
 
+            if (e->evtype == Event::Drag && down) drag.insert(e - hit.data.begin());
             if (flag) break;
         }
     }
+    if (event == Mouse::Event::Motion) for (auto d : drag) hit.data[d].CB.Run(p, event, down);
+    else if (!down && but1) {          for (auto d : drag) hit.data[d].CB.Run(p, event, down); drag.clear(); }
     if (FLAGS_input_debug && down) INFO("MouseController::Input ", screen->mouse.DebugString(), " fired=", fired, ", hitboxes=", hit.data.size());
     return fired;
 }

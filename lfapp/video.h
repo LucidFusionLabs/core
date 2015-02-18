@@ -319,6 +319,7 @@ struct Drawable {
         LFL::Box box; const Drawable *drawable; int attr_id, line_id;
         Box(                   const Drawable *D=0, int A=0, int L=-1) :         drawable(D), attr_id(A), line_id(L) {}
         Box(const LFL::Box &B, const Drawable *D=0, int A=0, int L=-1) : box(B), drawable(D), attr_id(A), line_id(L) {}
+        bool operator<(const Drawable::Box &x) const { return box < x.box; }
         typedef ArrayMemberPairSegmentIter<Box, int, &Box::attr_id, &Box::line_id> Iterator;
         typedef ArrayMemberSegmentIter    <Box, int, &Box::attr_id>             RawIterator;
     };
@@ -778,8 +779,19 @@ struct BoxArray {
             StrAppend(&ret, "R", iter.i, "(", BoxRun(iter.Data(), iter.Length()).DebugString(), "), ");
         return ret;
     }
-    void GetGlyphFromCoords(const point &p, int *glyph_index_out, Box *glyph_box_out) {}
+
     int   GetLineFromCoords(const point &p) { return 0; }
+    bool GetGlyphFromCoords(const point &p, int *index_out, Box *box_out) { return GetGlyphFromCoords(p, index_out, box_out, GetLineFromCoords(p)); }
+    bool GetGlyphFromCoords(const point &p, int *index_out, Box *box_out, int li) {
+        vector<Drawable::Box>::const_iterator gb, ge, it;
+        gb = data.begin() + (li < line_ind.size() ? line_ind[li] : 0);
+        ge = (li+1) < line_ind.size() ? (data.begin() + line_ind[li+1]) : data.end();
+        it = LesserBound(gb, ge, Drawable::Box(Box(p,0,0)));
+        if (it == data.end()) return false;
+        *index_out = it - data.begin();
+        *box_out = it->box;
+        return true;
+    }
 
     struct RollbackState { size_t data_size, attr_size, line_size; int height; };
     RollbackState GetRollbackState() const { return { data.size(), attr.size(), line.size(), height }; }

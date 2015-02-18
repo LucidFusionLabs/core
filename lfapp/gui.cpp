@@ -139,10 +139,7 @@ int KeyboardGUI::ReadHistory(const string &dir, const string &name) {
 void TextGUI::Enter() {
     string cmd = Text();
     AssignInput("");
-    if (!cmd.empty()) {
-        AddHistory(cmd);
-        Run(cmd);
-    }
+    if (!cmd.empty()) { AddHistory(cmd); Run(cmd); }
     TouchDevice::CloseKeyboard();
     if (deactivate_on_enter) active = false;
 }
@@ -253,41 +250,35 @@ void TextArea::Write(const string &s, bool update_fb, bool release_fb) {
 }
 
 void TextArea::Resized(int w, int h) {
-    UpdateLines(last_v_scrolled, 0, 0, 0); // first_line, &last_line);
+    if (selection.enabled) {
+        mouse_gui.Clear();
+        mouse_gui.Activate();
+        mouse_gui.AddDragBox(Box(w,h), MouseController::CoordCB(bind(&TextArea::ClickCB, this, _1, _2, _3, _4)));
+    }
+    UpdateLines(last_v_scrolled, 0, 0, 0);
     Redraw(false);
 }
 
 void TextArea::Redraw(bool attach) {
     ScopedDrawMode drawmode(DrawMode::_2D);
     LinesFrameBuffer *fb = GetFrameBuffer();
-    if (attach) {
-        fb->fb.Attach();
-        screen->gd->Clear();
-    }
-    // mouse_gui.mouse.AddClickBox(box, MouseController::CoordCB(bind(&TextArea::ClickCB, this, _1, _2, _3, _4)));
-    // if (tw->terminal->colors) W->gd->ClearColor(tw->terminal->colors->c[tw->terminal->colors->bg_index]);
     int fb_flag = LinesFrameBuffer::Flag::NoVWrap | LinesFrameBuffer::Flag::Flush;
     int lines = start_line_adjust + skip_last_lines;
-    if (reverse_line_fb) { 
-        fb->p = point(0, fb->Height() - start_line_adjust * font->height);
-        for (int i=start_line; i<line.ring.count && lines < fb->lines; i++)
-            lines += fb->PushBackAndUpdate(&line[-i-1], -line_left, 0, fb->lines - lines, fb_flag);
-    } else {
-        fb->p = point(0, start_line_adjust * font->height);
-        for (int i=start_line; i<line.ring.count && lines < fb->lines; i++)
-            lines += fb->PushFrontAndUpdate(&line[-i-1], -line_left, 0, fb->lines - lines, fb_flag);
-    }
+    int (LinesFrameBuffer::*update_cb)(Line*, int, int, int, int) =
+        reverse_line_fb ? &LinesFrameBuffer::PushBackAndUpdate
+                        : &LinesFrameBuffer::PushFrontAndUpdate;
+    fb->p = reverse_line_fb ? point(0, fb->Height() - start_line_adjust * font->height)
+                            : point(0, start_line_adjust * font->height);
+    if (attach) { fb->fb.Attach(); screen->gd->Clear(); }
+    for (int i=start_line; i<line.ring.count && lines < fb->lines; i++)
+        lines += (fb->*update_cb)(&line[-i-1], -line_left, 0, fb->lines - lines, fb_flag);
     fb->p = point(0, fb->Height());
-    if (attach) {
-        fb->scroll = v2();
-        fb->fb.Release();
-    }
+    if (attach) { fb->scroll = v2(); fb->fb.Release(); }
 }
 
 int TextArea::UpdateLines(float v_scrolled, int *first_ind, int *first_offset, int *first_len) {
     LinesFrameBuffer *fb = GetFrameBuffer();
-    pair<int, int> old_first_line(start_line, -start_line_adjust), old_last_line(end_line, end_line_adjust);
-    pair<int, int> new_first_line, new_last_line;
+    pair<int, int> old_first_line(start_line, -start_line_adjust), new_first_line, new_last_line;
     FlattenedArrayValues<TextGUI::Lines>
         flattened_lines(&line, line.Size(), bind(&TextArea::LayoutBackLine, this, _1, _2));
     flattened_lines.AdvanceIter(&new_first_line, (scrolled_lines = v_scrolled * (WrappedLines()-1)));
@@ -308,17 +299,18 @@ int TextArea::UpdateLines(float v_scrolled, int *first_ind, int *first_offset, i
 }
 
 void TextArea::UpdateScrolled() {
+    int max_w = 4000;
     bool h_changed = Wrap() ? 0 : Typed::EqualChanged(&last_h_scrolled, h_scrolled);
     bool v_updated=0, v_changed = Typed::EqualChanged(&last_v_scrolled, v_scrolled);
     if (v_changed) {
-        int first_ind = 0, first_offset = 0, first_len =0;
+        int first_ind = 0, first_offset = 0, first_len = 0;
         int dist = UpdateLines(v_scrolled, &first_ind, &first_offset, &first_len);
         if ((v_updated = dist)) {
-            if (h_changed) UpdateHScrolled(4000 * h_scrolled, false);
+            if (h_changed) UpdateHScrolled(max_w * h_scrolled, false);
             if (1)         UpdateVScrolled(abs(dist), dist<0, first_ind, first_offset, first_len);
         }
     }
-    if (h_changed && !v_updated) UpdateHScrolled(4000 * h_scrolled, true);
+    if (h_changed && !v_updated) UpdateHScrolled(max_w * h_scrolled, true);
 }
 
 void TextArea::UpdateHScrolled(int x, bool update_fb) {
@@ -331,20 +323,13 @@ void TextArea::UpdateVScrolled(int dist, bool up, int ind, int first_offset, int
     LinesFrameBuffer *fb = GetFrameBuffer();
     if (dist >= fb->lines) Redraw(true);
     else {
-        int wl = 0;
         bool front = up == reverse_line_fb, decr = front != reverse_line_fb;
+        int wl = 0, (LinesFrameBuffer::*update_cb)(Line*, int, int, int, int) =
+            front ? &LinesFrameBuffer::PushFrontAndUpdate : &LinesFrameBuffer::PushBackAndUpdate;
         ScopedDrawMode drawmode(DrawMode::_2D);
         fb->fb.Attach();
-        if (first_len) {
-            Line *L = &line[ind];
-            if (front) wl += fb->PushFrontAndUpdate(L, -line_left, first_offset, min(dist, first_len)); 
-            else       wl += fb->PushBackAndUpdate (L, -line_left, first_offset, min(dist, first_len)); 
-        }
-        for (int il; wl < dist; wl += il) {
-            Line *L = &line[decr ? --ind : ++ind];
-            if (front) il = fb->PushFrontAndUpdate(L, -line_left, 0, dist-wl);
-            else       il = fb-> PushBackAndUpdate(L, -line_left, 0, dist-wl);
-        }
+        if (first_len)  wl += (fb->*update_cb)(&line[ind], -line_left, first_offset, min(dist, first_len), 0); 
+        while (wl<dist) wl += (fb->*update_cb)(&line[decr ? --ind : ++ind], -line_left, 0, dist-wl, 0);
         fb->fb.Release();
     }
 }
@@ -356,6 +341,7 @@ void TextArea::Draw(const Box &b, bool draw_cursor) {
     fb->Draw(b.Position(), point(0, CommandLines() * font->height));
     if (clip) screen->gd->PopScissor();
     if (draw_cursor) TextGUI::Draw(Box(b.x, b.y, b.w, font->height));
+    if (selection.changing) DrawSelection();
 #if 0
         vector<Link*> hover_link;
         Link *link = 0;
@@ -375,73 +361,65 @@ void TextArea::Draw(const Box &b, bool draw_cursor) {
 #endif
 }
 
-void TextArea::DrawOrCopySelection() {
-    bool copy = selection_changing_previously && !selection_changing;
-    selection_changing_previously = selection_changing;
-    if (selection_changing) selection_end = screen->mouse;
-    if (selection_beg == selection_end) return;
-    Box sel_glyph_beg, sel_glyph_end;
-    bool found_line_beg = 0, found_line_end = 0;
-    int sel_line_beg = -1, sel_line_end = -1, sel_char_beg = -1, sel_char_end = -1;
-    point sel_beg = selection_beg, sel_end = selection_end;
-    if (copy) selection_beg = selection_end = point();
-
-    int h = line_fb.Height();
-    Box win(line_fb.Width(), h);
-
-    int sel_bl = PrevMultipleOfN(sel_beg.y-win.y, font->height);
-    int sel_el = PrevMultipleOfN(sel_end.y-win.y, font->height);
-    if (sel_el > sel_bl || (sel_el == sel_bl && sel_end.x < sel_beg.x)) Typed::Swap(sel_end, sel_beg);
-
-    int lines = 0 /*last_line.first - first_line.first*/, seen_lines = 0, last_seen_y = win.h;
-    for (int i=0, n = min(lines, line.ring.count); i<n && (!found_line_beg || !found_line_end); i++) {
-        // font->FindGlyphFromCoords(l->text, point(sp.x, last_seen_y - sp.y), win.w, &sc, &sg);
-#define MyFindGlyph(sp, sl, sg, sc) \
-        sl = -end_line + i; \
-        l->glyphs.GetGlyphFromCoords(point(sp.x, last_seen_y - sp.y), &sc, &sg); \
-        sg.y += last_seen_y - font->height;
-
-#if 0
-        Line *l = &line[-end_line+i];
-        seen_lines += l->Lines();
-        int seen_y = win.y + win.h - seen_lines * font->height;
-        if (seen_y < sel_beg.y && !found_line_beg) { found_line_beg=1; MyFindGlyph(sel_beg, sel_line_beg, sel_glyph_beg, sel_char_beg); }
-        if (seen_y < sel_end.y && !found_line_end) { found_line_end=1; MyFindGlyph(sel_end, sel_line_end, sel_glyph_end, sel_char_end); }
-        last_seen_y = seen_y;
-#endif
-    }
-    if (!found_line_beg || !found_line_end) { ERROR("DrawOrCopySelection failed"); return; }
-
+void TextArea::DrawSelection() {
     screen->gd->EnableBlend();
-    Color c = Color::grey70;
-    c.a() = 0.5;
-    screen->gd->FillColor(c);
-
-    int fh = font->height, sgex = sel_glyph_end.x + sel_glyph_end.w;
-    if (sel_glyph_end.w == 0) sel_glyph_end.x += win.w;
+    screen->gd->FillColor(selection_color);
+    Box win(line_fb.Width(), line_fb.Height()), gb = selection.beg.glyph, ge = selection.end.glyph;
+    int fh = font->height, sgex = ge.x + ge.w;
+    if (ge.w == 0) ge.x += win.w;
 #if 1
-    if (sel_glyph_beg.y == sel_glyph_end.y) {
-        Box(sel_glyph_beg.x, sel_glyph_beg.y, sgex - sel_glyph_beg.x, fh)                       .Draw();
+    if (gb.y == ge.y) {
+        Box(gb.x, gb.y, sgex - gb.x, fh)                       .Draw();
     } else {
-        Box::AddBorder(Box(sel_glyph_beg.x, sel_glyph_beg.y, win.w - sel_glyph_beg.x, fh), 2, 1).Draw();
-        Box(0, sel_glyph_end.y + fh, win.w, sel_glyph_beg.y - sel_glyph_end.y - fh)             .Draw();
-        Box::AddBorder(Box(0, sel_glyph_end.y, sgex, font->height), 2, 1)                       .Draw();
+        Box::AddBorder(Box(gb.x, gb.y, win.w - gb.x, fh), 2, 1).Draw();
+        Box(0, ge.y + fh, win.w, gb.y - ge.y - fh)             .Draw();
+        Box::AddBorder(Box(0, ge.y, sgex, font->height), 2, 1) .Draw();
     }
 #else
-    Box3 box3(&box3, &win, sel_glyph_beg.Position(), point(sgex, sel_glyph_end.y), fh,
-              sel_glyph_beg.y - sel_glyph_end.y - fh, font->height, sel_line_end - sel_line_beg).glWindow(&c);
+    Box3 box3(&box3, &win, gb.Position(), point(sgex, ge.y), fh,
+              gb.y - ge.y - fh, font->height, selection.end.line_ind - selection.beg.line_ind).glWindow(&c);
 #endif
-    if (!copy) return;
+}
+
+void TextArea::ClickCB(int button, int x, int y, int down) {
+    if (!(selection.changing = down)) {
+        INFO(button, " wanna copy text ", selection.beg.DebugString(), " ", selection.end.DebugString());
+        CopyText(selection.beg, selection.end);
+        selection.changing_previously=0;
+        return;
+    }
+    if (selection.changing_previously) GetGlyphFromCoords((selection.end.click = point(x,y)), &selection.end);
+    else                             { GetGlyphFromCoords((selection.beg.click = point(x,y)), &selection.beg); selection.end = selection.beg; }
+    selection.changing_previously = selection.changing;
+}
+
+bool TextArea::GetGlyphFromCoords(const point &p, Selection::Point *out) {
+    LinesFrameBuffer *fb = GetFrameBuffer();
+    int targ = reverse_line_fb ? ((fb->Height() - p.y) / font->height - start_line_adjust)
+                               : (p.y                  / font->height + start_line_adjust);
+    for (int i=start_line, lines=0, ll; i<line.ring.count && lines<line_fb.lines; i++, lines += ll) {
+        Line *L = &line[-i-1];
+        if (lines + (ll = L->Lines()) < targ) continue;
+        L->data->glyphs.GetGlyphFromCoords(p, &out->char_ind, &out->glyph, targ - lines);
+        out->line_ind = i;
+        out->glyph += L->p;
+        return true;
+    }
+    //printf("DrawOrCopy %s %s %d %d\n", selection.beg_click.DebugString().c_str(), selection.end_point.DebugString().c_str(), found_beg, found_end);
+    return false;
+}
+
+void TextArea::CopyText(const Selection::Point &beg, const Selection::Point &end) {
     string copy_text;
-    for (int i = sel_line_beg; i <= sel_line_end; i++) {
-        Line *l = &line[i];
+    for (int i = beg.line_ind; i <= end.line_ind; i++) {
+        Line *l = &line[-i-1];
         int len = l->Size();
-        if (i == sel_line_beg) {
-            if (!l->Size() || sel_char_beg < 0) continue;
-            len = (sel_line_beg == sel_line_end && sel_char_end >= 0) ? sel_char_end+1 : l->Size();
-            copy_text += l->Text().substr(sel_char_beg, max(0, len - sel_char_beg));
-        } else if (i == sel_line_end) {
-            len =                                 (sel_char_end >= 0) ? sel_char_end+1 : l->Size();
+        if (i == beg.line_ind) {
+            if (!l->Size() || beg.char_ind < 0) continue;
+            len = (beg.line_ind == end.line_ind && end.char_ind >= 0) ? end.char_ind+1 : l->Size();
+            copy_text += l->Text().substr(beg.char_ind, max(0, len - beg.char_ind));
+        } else if (i == end.line_ind) {
+            len =                                 (end.char_ind >= 0) ? end.char_ind+1 : l->Size();
             copy_text += l->Text().substr(0, len);
         } else {
             copy_text += l->Text();
@@ -634,11 +612,13 @@ void Terminal::Draw(const Box &b, bool draw_cursor) {
         { Scissor s(Box::BotBorder(b, *clip)); cmd_fb.Draw(b.Position(), point(), false); }
     }
     if (draw_cursor) TextGUI::DrawCursor(b.Position() + cursor.p);
+    if (selection.enabled) DrawSelection();
 }
 
 void Terminal::Write(const string &s, bool update_fb, bool release_fb) {
     if (!MainThread()) return RunInMainThread(new Callback(bind(&Terminal::Write, this, s, update_fb, release_fb)));
     screen->gd->DrawMode(DrawMode::_2D, 0);
+    if (bg_color) screen->gd->ClearColor(*bg_color);
     last_fb = 0;
     for (int i = 0; i < s.size(); i++) {
         unsigned char c = s[i];
