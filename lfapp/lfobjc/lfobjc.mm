@@ -163,7 +163,7 @@ static const char **osx_argv = 0;
         else {
             NSPoint p=[e locationInWindow], d=NSMakePoint(p.x-prev_mouse_pos.x, p.y-prev_mouse_pos.y);
             int fired = MouseMove(p.x, p.y, d.x, d.y);
-            if ((fired || drag) && frame_on_mouse_input) [self setNeedsDisplay:YES]; 
+            if (fired && frame_on_mouse_input) [self setNeedsDisplay:YES]; 
             prev_mouse_pos = p;
         }
     }

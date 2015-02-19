@@ -751,8 +751,8 @@ int MouseController::Input(InputEvent::Id event, const point &p, int down, int f
             if (flag) break;
         }
     }
-    if (event == Mouse::Event::Motion) for (auto d : drag) hit.data[d].CB.Run(p, event, down);
-    else if (!down && but1) {          for (auto d : drag) hit.data[d].CB.Run(p, event, down); drag.clear(); }
+    if (event == Mouse::Event::Motion) { for (auto d : drag) if (hit.data[d].CB.Run(p, event, down)) fired++; }
+    else if (!down && but1)            { for (auto d : drag) if (hit.data[d].CB.Run(p, event, down)) fired++; drag.clear(); }
     if (FLAGS_input_debug && down) INFO("MouseController::Input ", screen->mouse.DebugString(), " fired=", fired, ", hitboxes=", hit.data.size());
     return fired;
 }

@@ -364,67 +364,66 @@ void TextArea::Draw(const Box &b, bool draw_cursor) {
 void TextArea::DrawSelection() {
     screen->gd->EnableBlend();
     screen->gd->FillColor(selection_color);
-    Box win(line_fb.Width(), line_fb.Height()), gb = selection.beg.glyph, ge = selection.end.glyph;
-    int fh = font->height, sgex = ge.x + ge.w;
-    if (ge.w == 0) ge.x += win.w;
-#if 1
-    if (gb.y == ge.y) {
-        Box(gb.x, gb.y, sgex - gb.x, fh)                       .Draw();
-    } else {
-        Box::AddBorder(Box(gb.x, gb.y, win.w - gb.x, fh), 2, 1).Draw();
-        Box(0, ge.y + fh, win.w, gb.y - ge.y - fh)             .Draw();
-        Box::AddBorder(Box(0, ge.y, sgex, font->height), 2, 1) .Draw();
-    }
-#else
-    Box3 box3(&box3, &win, gb.Position(), point(sgex, ge.y), fh,
-              gb.y - ge.y - fh, font->height, selection.end.line_ind - selection.beg.line_ind).glWindow(&c);
-#endif
+    selection.box.Draw();
 }
 
 void TextArea::ClickCB(int button, int x, int y, int down) {
-    if (!(selection.changing = down)) {
-        INFO(button, " wanna copy text ", selection.beg.DebugString(), " ", selection.end.DebugString());
-        CopyText(selection.beg, selection.end);
-        selection.changing_previously=0;
+    LinesFrameBuffer *fb = GetFrameBuffer();
+    Selection *s = &selection;
+    if (!(s->changing = down)) {
+        bool swap = s->end < s->beg;
+        CopyText(swap ? s->end : s->beg, swap ? s->beg : s->end);
+        s->changing_previously = 0;
         return;
     }
-    if (selection.changing_previously) GetGlyphFromCoords((selection.end.click = point(x,y)), &selection.end);
-    else                             { GetGlyphFromCoords((selection.beg.click = point(x,y)), &selection.beg); selection.end = selection.beg; }
-    selection.changing_previously = selection.changing;
+
+    int scp = s->changing_previously, fh = font->height;
+    if (scp) GetGlyphFromCoords((s->end.click = point(line_left+x,y)), &s->end);
+    else   { GetGlyphFromCoords((s->beg.click = point(line_left+x,y)), &s->beg); s->end = s->beg; }
+
+    bool swap = s->end < s->beg;
+    const Box &gb = swap ? s->end.glyph : s->beg.glyph;
+    const Box &ge = swap ? s->beg.glyph : s->end.glyph;
+    s->box = Box3(Box(fb->Width(), fb->Height()), gb.Position(), ge.Position(), fh, fh, ge.w);
+    s->changing_previously = s->changing;
 }
 
 bool TextArea::GetGlyphFromCoords(const point &p, Selection::Point *out) {
     LinesFrameBuffer *fb = GetFrameBuffer();
-    int targ = reverse_line_fb ? ((fb->Height() - p.y) / font->height - start_line_adjust)
-                               : (p.y                  / font->height + start_line_adjust);
+    int h = fb->Height(), fh = font->height;
+    int targ = reverse_line_fb ? ((h - p.y) / font->height - start_line_adjust) 
+                               : ((    p.y) / font->height + start_line_adjust);
     for (int i=start_line, lines=0, ll; i<line.ring.count && lines<line_fb.lines; i++, lines += ll) {
         Line *L = &line[-i-1];
-        if (lines + (ll = L->Lines()) < targ) continue;
+        if (lines + (ll = L->Lines()) <= targ) continue;
         L->data->glyphs.GetGlyphFromCoords(p, &out->char_ind, &out->glyph, targ - lines);
+        out->glyph.y = lines * fh;
         out->line_ind = i;
-        out->glyph += L->p;
         return true;
     }
-    //printf("DrawOrCopy %s %s %d %d\n", selection.beg_click.DebugString().c_str(), selection.end_point.DebugString().c_str(), found_beg, found_end);
     return false;
 }
 
 void TextArea::CopyText(const Selection::Point &beg, const Selection::Point &end) {
     string copy_text;
-    for (int i = beg.line_ind; i <= end.line_ind; i++) {
+    int d = reverse_line_fb ? 1 : -1;
+    int b = reverse_line_fb ? end.line_ind : beg.line_ind;
+    int e = reverse_line_fb ? beg.line_ind : end.line_ind;
+    for (int i = b; /**/; i += d) {
         Line *l = &line[-i-1];
         int len = l->Size();
         if (i == beg.line_ind) {
-            if (!l->Size() || beg.char_ind < 0) continue;
-            len = (beg.line_ind == end.line_ind && end.char_ind >= 0) ? end.char_ind+1 : l->Size();
-            copy_text += l->Text().substr(beg.char_ind, max(0, len - beg.char_ind));
+            if (!l->Size() || beg.char_ind < 0) len = -1;
+            else {
+                len = (beg.line_ind == end.line_ind && end.char_ind >= 0) ? end.char_ind+1 : l->Size();
+                copy_text += l->Text().substr(beg.char_ind, max(0, len - beg.char_ind));
+            }
         } else if (i == end.line_ind) {
-            len =                                 (end.char_ind >= 0) ? end.char_ind+1 : l->Size();
+            len = (end.char_ind >= 0) ? end.char_ind+1 : l->Size();
             copy_text += l->Text().substr(0, len);
-        } else {
-            copy_text += l->Text();
-        }
+        } else copy_text += l->Text();
         if (len == l->Size()) copy_text += "\n";
+        if (i == e) break;
     }
     if (!copy_text.empty()) Clipboard::Set(copy_text);
 }
@@ -612,7 +611,7 @@ void Terminal::Draw(const Box &b, bool draw_cursor) {
         { Scissor s(Box::BotBorder(b, *clip)); cmd_fb.Draw(b.Position(), point(), false); }
     }
     if (draw_cursor) TextGUI::DrawCursor(b.Position() + cursor.p);
-    if (selection.enabled) DrawSelection();
+    if (selection.changing) DrawSelection();
 }
 
 void Terminal::Write(const string &s, bool update_fb, bool release_fb) {

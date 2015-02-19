@@ -2315,21 +2315,25 @@ void FrameScheduler::UpdateTargetFPS(int fps) {
 }
 void FrameScheduler::AddWaitForeverMouse() {
 #if defined(LFL_OSXINPUT)
+    CHECK(screen->id);
     OSXAddWaitForeverMouse(screen->id);
 #endif
 }
 void FrameScheduler::DelWaitForeverMouse() {
 #if defined(LFL_OSXINPUT)
+    CHECK(screen->id);
     OSXDelWaitForeverMouse(screen->id);
 #endif
 }
 void FrameScheduler::AddWaitForeverKeyboard() {
 #if defined(LFL_OSXINPUT)
+    CHECK(screen->id);
     OSXAddWaitForeverKeyboard(screen->id);
 #endif
 }
 void FrameScheduler::DelWaitForeverKeyboard() {
 #if defined(LFL_OSXINPUT)
+    CHECK(screen->id);
     OSXDelWaitForeverKeyboard(screen->id);
 #endif
 }
