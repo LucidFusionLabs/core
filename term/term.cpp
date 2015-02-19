@@ -88,35 +88,12 @@ struct MyTerminalWindow {
 
 int Frame(Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample, int flag) {
     MyTerminalWindow *tw = (MyTerminalWindow*)W->user1;
-    Box root = screen->Box();
-
-    bool font_changed = tw->terminal->font->size != tw->terminal->line_fb.font_size, terminal_updated = false;
-    bool resized = tw->terminal->line_fb.w != root.w || tw->terminal->line_fb.h != root.h;
-    bool custom_shader = tw->activeshader != &app->video.shader_default, dont_skip = flag & FrameFlag::DontSkip;
-
     string terminal_output = NBRead(fileno(tw->process.in), 4096);
     if (!terminal_output.empty()) tw->terminal->Write(terminal_output);
-    if (!terminal_output.empty() || resized || font_changed || (custom_shader && dont_skip) ||
-        tw->terminal->mouse_gui.events.hover) {
-        tw->terminal->mouse_gui.Deactivate();
-        tw->terminal->Draw(root, custom_shader);
-        terminal_updated = true;
-    }
-    // else return -1;
-
-    tw->effects_mode.Set(custom_shader || W->console->animating);
-    UpdateTargetFPS();
-    if (0 && !terminal_updated && !tw->effects_mode.Get() && !W->events.bind && !W->events.mouse_click &&
-        !W->console->events.total && !tw->terminal->selection_changing && !dont_skip) return -1;
 
     W->gd->DrawMode(DrawMode::_2D);
-    tw->terminal->DrawWithShader(root, true, tw->activeshader);
-
-    if (!custom_shader) {
-        // ((TextGUI*)tw->terminal)->Draw(0, root.x + tw->terminal->cursor.p.x, root.y + tw->terminal->cursor.p.y);
-        // tw->terminal->DrawOrCopySelection();
-    }
-    screen->DrawDialogs();
+    tw->terminal->DrawWithShader(W->Box(), true, tw->activeshader);
+    W->DrawDialogs();
     if (FLAGS_draw_fps) Fonts::Default()->Draw(StringPrintf("FPS = %.2f", FPS()), point(W->width*.85, 0));
     return 0;
 }
@@ -147,6 +124,10 @@ void MyShaderCmd(const vector<string> &arg) {
     MyTerminalWindow *tw = (MyTerminalWindow*)screen->user1;
     if (shader_name == "warper") tw->activeshader = &warpershader;
     else                         tw->activeshader = &app->video.shader_default;
+#if 0
+    tw->effects_mode.Set(custom_shader || W->console->animating);
+    UpdateTargetFPS();
+#endif
 }
 void MyScrollRegionCmd(const vector<string> &arg) {
     if (arg.size() < 2) { ERROR("scroll_region b e"); return; }
@@ -203,6 +184,7 @@ extern "C" int main(int argc, const char *argv[]) {
     if (app->Create(argc, argv, __FILE__)) { app->Free(); return -1; }
     if (app->Init()) { app->Free(); return -1; }
 
+    app->scheduler.AddWaitForeverMouse();
     app->window_init_cb = MyWindowInitCB;
     app->window_closed_cb = MyWindowClosedCB;
     app->shell.command.push_back(Shell::Command("colors", bind(&MyColorsCmd, _1)));

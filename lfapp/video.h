@@ -286,12 +286,15 @@ struct Box {
 struct Box3 {
     Box v[3];
     Box3() {}
-    Box3(const Box *container, const point &pb, const point &pe, int first_line_height, int last_line_height, int mid_region_height, int lines) {
-        v[1].h = v[2].h = 0; int ll=1+(lines>1);
-        if (pe.y == pb.y) v[0]  = Box(pb.x, pb.y, pe.x               - pb.x, first_line_height);
-        else {            v[0]  = Box(pb.x, pb.y, container->right() - pb.x, first_line_height);
-            if (lines>1){ v[1]  = Box(container->x, pb.y - mid_region_height, container->w, mid_region_height); CHECK(last_line_height); }
-            if (lines)    v[ll] = Box(container->x, pe.y,              pe.x - container->x, last_line_height);
+    Box3(const Box &cont, const point &pb, const point &pe,
+         int first_line_height, int last_line_height, int last_glyph_width) {
+        if (pb.y == pe.y) {
+            v[0] = Box(pb.x, pb.y, pe.x + last_glyph_width - pb.x, first_line_height);
+            v[1] = v[2] = Box();
+        } else {
+            v[0] = Box(pb.x, pb.y, cont.w - pb.x, first_line_height);
+            v[1] = Box(0, pe.y + last_line_height, cont.w, pb.y - pe.y - first_line_height);
+            v[2] = Box(0, pe.y, pe.x + last_glyph_width, last_line_height);
         }
     }
     Box       &operator[](int i)       { return v[i]; }
@@ -301,7 +304,7 @@ struct Box3 {
     string DebugString() const { string ret = "Box3{"; for (int i=0; i<3; i++) if (!i || v[i].h) StrAppend(&ret, v[i].DebugString(), ", "); return ret + "}"; }
     void AddBorder(const Border &b, Box3 *out) const { for (int i=0; i<3; i++) if (!i || v[i].h) out->v[i] = Box::AddBorder(v[i], b); }
     void DelBorder(const Border &b, Box3 *out) const { for (int i=0; i<3; i++) if (!i || v[i].h) out->v[i] = Box::DelBorder(v[i], b); }
-    void Draw(const Color *c) const;
+    void Draw(const Color *c=0) const;
     bool VerticalIntersect(const Box &w) const {
         for (int i=0; i<3; i++) if (v[i].h && Box::VerticalIntersect(v[i], w)) return true;
         return false;
@@ -786,11 +789,9 @@ struct BoxArray {
         vector<Drawable::Box>::const_iterator gb, ge, it;
         gb = data.begin() + (li < line_ind.size() ? line_ind[li] : 0);
         ge = (li+1) < line_ind.size() ? (data.begin() + line_ind[li+1]) : data.end();
-        it = LesserBound(gb, ge, Drawable::Box(Box(p,0,0)));
-        if (it == data.end()) return false;
-        *index_out = it - data.begin();
-        *box_out = it->box;
-        return true;
+        it = LesserBound(gb, ge, Drawable::Box(Box(p,0,0)), true);
+        if (it == data.end()) { *index_out = -1; *box_out = BackOrDefault(data).box; return false; }
+        else                  { *index_out = it - data.begin(); *box_out = it->box;  return true; }
     }
 
     struct RollbackState { size_t data_size, attr_size, line_size; int height; };
