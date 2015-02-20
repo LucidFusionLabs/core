@@ -1113,12 +1113,7 @@ struct StyleSheet : public LFL::DOM::Object {
     void Done() { CHECK_EQ(css_stylesheet_data_done(sheet), CSS_OK); }
     static StyleSheet *Default() { static StyleSheet ret(0, "", "UTF-8", 0, 0, LFL::CSS::Default); return &ret; }
     static css_error Resolve(void *pw, const char *base, lwc_string *rel, lwc_string **abs) { *abs = lwc_string_ref(rel); return CSS_OK; }
-    static css_error Import(void *pw, css_stylesheet *parent, lwc_string *url, uint64_t media) {
-        LFL::DOM::Document *D = (LFL::DOM::Document*)((StyleSheet*)pw)->ownerDocument;
-        if (D) D->ownerBrowser->OpenStyleImport(LibCSS_String::ToUTF8String(url)); // XXX use parent
-        INFO("libcss Import ", LibCSS_String::ToString(url));
-        return CSS_INVALID; // CSS_OK;
-    }
+    static css_error Import(void *pw, css_stylesheet *parent, lwc_string *url, uint64_t media);
     static css_error Color(void *pw, lwc_string *name, css_color *color) {
         // INFO("libcss Color ", LibCSS_String::ToString(name)); // none, medium, ridge, solid, thin, threedface, no-repeat, center
         return CSS_INVALID; // CSS_OK;

@@ -1028,7 +1028,7 @@ struct GameMenuGUI : public GUI, public Query {
 #ifdef LFL_ANDROID
     Widget::Button gplus_signin_button, gplus_signout_button, gplus_quick, gplus_invite, gplus_accept;
 #endif
-    SimpleBrowser browser;
+    Browser browser;
     MenuParticles particles;
 
     GameMenuGUI(LFL::Window *W, const string &master_url, int port, Asset *t=0, Asset *parts=0) :
@@ -1056,7 +1056,7 @@ struct GameMenuGUI : public GUI, public Query {
     gplus_invite        (this, 0, font, "invite",     MouseController::CB([&](){ android_gplus_invite(); })),
     gplus_accept        (this, 0, font, "accept",     MouseController::CB([&](){ android_gplus_accept(); })),
 #endif
-    browser(W, font, box), particles("GameMenuParticles") {
+    browser(W, box), particles("GameMenuParticles") {
         tab1.outline = tab2.outline = tab3.outline = tab4.outline = tab1_server_start.outline = tab2_server_join.outline = sub_tab1.outline = sub_tab2.outline = sub_tab3.outline = &font->fg;
         Layout();
         tab2_server_address.cmd_prefix.clear();
@@ -1171,9 +1171,9 @@ struct GameMenuGUI : public GUI, public Query {
         AddClickBox(Box(0, -box.h, box.w, box.h), MouseController::CB(bind(&GameMenuGUI::MenuLineClicked, this)));
 
         current_scrollbar = 0;
-        if      (selected == 1) { current_scrollbar = &tab1_options;        menuflow.container = &menuftr1; }
-        else if (selected == 2) { current_scrollbar = &tab2_servers;        menuflow.container = &menuftr2; }
-        else if (selected == 3) { current_scrollbar = &browser.v_scrollbar; menuflow.container = &box; }
+        if      (selected == 1) { current_scrollbar = &tab1_options;            menuflow.container = &menuftr1; }
+        else if (selected == 2) { current_scrollbar = &tab2_servers;            menuflow.container = &menuftr2; }
+        else if (selected == 3) { current_scrollbar = &browser.doc.v_scrollbar; menuflow.container = &box; }
         menuflow.p.y -= current_scrollbar ? (int)(current_scrollbar->scrolled * current_scrollbar->doc_height) : 0;
 
         int my_selected = selected;

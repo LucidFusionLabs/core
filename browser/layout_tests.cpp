@@ -20,6 +20,8 @@
 #include "lfapp/dom.h"
 #include "lfapp/css.h"
 #include "lfapp/gui.h"
+#include "crawler/html.h"
+#include "crawler/document.h"
 
 using namespace LFL;
 
@@ -27,8 +29,8 @@ DEFINE_string(render_url,   "",           "Url to render");
 DEFINE_string(render_png,   "render.png", "Filename to render to");
 DEFINE_string(layout_tests, "",           "e.g. WebKit/LayoutTests/css2.1/");
 
-SimpleBrowser *browser;
-SimpleBrowser::RenderLog render_log;
+Browser *browser;
+Browser::RenderLog render_log;
 
 struct LayoutTests {
     int count;
@@ -59,10 +61,10 @@ struct LayoutTests {
 int Frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample, int flag) {
     screen->gd->DrawMode(DrawMode::_2D);
     Box rootwin = screen->Box();
-    bool load_done = browser->requested == browser->completed;
+    bool load_done = browser->doc.parser->requested == browser->doc.parser->completed;
     if (!load_done) return -1;
     else {
-        if (browser->requested) {
+        if (browser->doc.parser->requested) {
             browser->Draw(&rootwin);
             app->shell.screenshot(vector<string>(1, FLAGS_render_png));
             if (layout_tests) {
@@ -95,7 +97,7 @@ extern "C" int main(int argc, const char *argv[]) {
     if (app->Init()) { app->Free(); return -1; }
 
     screen->gd->ClearColor(Color::white);
-    browser = new SimpleBrowser(screen, 0, screen->Box());
+    browser = new Browser(screen, screen->Box());
     browser->InitLayers();
     browser->render_log = &render_log;
     if (!FLAGS_layout_tests.empty()) layout_tests = new LayoutTests(FLAGS_layout_tests);

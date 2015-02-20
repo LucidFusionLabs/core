@@ -30,11 +30,11 @@ DEFINE_int(height, 768, "browser height");
 BindMap *binds;
 
 struct JavaScriptConsole : public Console {
-    SimpleBrowser *simple_browser;
-    JavaScriptConsole(LFL::Window *W, Font *f, SimpleBrowser *B) : Console(W, f), simple_browser(B)
+    Browser *browser;
+    JavaScriptConsole(LFL::Window *W, Font *f, Browser *B) : Console(W, f), browser(B)
     { bottom_or_top = 1; write_timestamp = blend = 0; }
     virtual void Run(string in) {
-        string ret = simple_browser->js_context->Execute(in);
+        string ret = browser->doc.js_context->Execute(in);
         if (!ret.empty()) Write(ret);
     }
 };
@@ -44,8 +44,8 @@ struct MyBrowserWindow : public GUI {
     Box win, topbar, addressbar;
     Widget::Button back, forward, refresh;
     TextGUI address_box;
+    Browser *lfl_browser=0;
     BrowserInterface *browser=0;
-    SimpleBrowser *simple_browser=0;
     BrowserInterface *webkit_browser=0, *berkelium_browser=0;
 
     MyBrowserWindow(LFL::Window *W) : GUI(W),
@@ -91,12 +91,12 @@ struct MyBrowserWindow : public GUI {
         if (!browser) browser = berkelium_browser = CreateBerkeliumBrowser(new Asset());
 #endif
         if (!browser) {
-            browser = simple_browser = new SimpleBrowser(screen, 0, win);
-            simple_browser->js_console = new JavaScriptConsole(screen, Fonts::Default(), simple_browser);
-            simple_browser->InitLayers();
+            browser = lfl_browser = new Browser(screen, win);
+            lfl_browser->doc.js_console = new JavaScriptConsole(screen, Fonts::Default(), lfl_browser);
+            lfl_browser->InitLayers();
         }
     }
-    bool Dirty() { return simple_browser ? simple_browser->Dirty(&win) : true; }
+    bool Dirty() { return lfl_browser ? lfl_browser->Dirty(&win) : true; }
     void Draw() {
         box = screen->Box();
         GUI::Draw();
@@ -109,9 +109,9 @@ struct MyBrowserWindow : public GUI {
         }
         address_box.Draw(addressbar);
         browser->Draw(&win);
-        if (simple_browser) {
-            simple_browser->DrawScrollbar();
-            if (simple_browser->js_console) simple_browser->js_console->Draw();
+        if (lfl_browser) {
+            lfl_browser->DrawScrollbar();
+            if (lfl_browser->doc.js_console) lfl_browser->doc.js_console->Draw();
         }
     }
 };
@@ -128,7 +128,7 @@ int Frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample
 
 void MyJavaScriptConsole() {
     MyBrowserWindow *tw = (MyBrowserWindow*)screen->user1;
-    if (tw->simple_browser && tw->simple_browser->js_console) tw->simple_browser->js_console->Toggle();
+    if (tw->lfl_browser && tw->lfl_browser->doc.js_console) tw->lfl_browser->doc.js_console->Toggle();
 }
 
 void MyWindowDefaults(LFL::Window *W) {
