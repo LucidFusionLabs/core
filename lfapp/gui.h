@@ -819,43 +819,35 @@ struct Renderer : public Object {
     int MarginRightAuto (Flow *flow, int w) { return max(0, flow->container->w - br_px - pr_px - w - LeftMarginOffset()); } 
 }; }; // namespace DOM
 
-struct SimpleBrowser : public BrowserInterface {
-    GUI gui;
-    Font *font;
-    Layers layers;
-    point initial_displacement;
-    Widget::Scrollbar v_scrollbar, h_scrollbar;
-    set<void*> outstanding;
-    int requested=0, completed=0, mx=0, my=0;
-    DOM::BlockChainObjectAlloc alloc;
+struct Browser : public BrowserInterface {
     struct Document {
-        DOM::HTMLDocument *node;
+        DOM::BlockChainObjectAlloc alloc;
+        DOM::HTMLDocument *node=0;
         string content_type, char_set;
         vector<StyleSheet*> style_sheet;
-        int height;
-        Document() : node(0), height(0) {}
-    } doc;
-    JSContext *js_context=0;
-    Console *js_console=0;
+        DocumentParser *parser=0;
+        JSContext *js_context=0;
+        Console *js_console=0;
+        int height=0;
+        GUI gui;
+        Widget::Scrollbar v_scrollbar, h_scrollbar;
+
+        ~Document();
+        Document(Window *W=0, const Box &V=Box());
+        void Clear();
+    };
+    struct RenderLog { string data; int indent; };
+
+    Layers layers;
+    Document doc;
+    RenderLog *render_log=0;
     Asset missing_image;
-    unordered_map<string, Asset*> image_cache;
-    struct RenderLog { string data; int indent; } *render_log=0;
+    point mouse, initial_displacement;
+    Browser(Window *W=0, const Box &V=Box());
 
-    SimpleBrowser()                          :            font(0), v_scrollbar(&gui, Box()),         h_scrollbar(&gui, Box(),         Widget::Scrollbar::Flag::AttachedHorizontal), alloc(1024*1024) { Construct(); Clear(); }
-    SimpleBrowser(Window *W, Font *F, Box V) : gui(W, V), font(F), v_scrollbar(&gui, Box(V.w, V.h)), h_scrollbar(&gui, Box(V.w, V.h), Widget::Scrollbar::Flag::AttachedHorizontal), alloc(1024*1024) { Construct(); Clear(); }
-    ~SimpleBrowser() { Clear(); delete js_context; } 
-
-    void Construct() { if (Font *maf = Fonts::Get("MenuAtlas1", 0, Color::black, 0)) { missing_image.tex = maf->glyph->table[12].tex; missing_image.tex.width = missing_image.tex.height = 16; } }
-    bool Running(void *h) { return outstanding.find(h) != outstanding.end(); }
-    Box Viewport() const { return gui.box; }
-    void Clear();
+    Box Viewport() const { return doc.gui.box; }
     void Navigate(const string &url);
-    void OpenHTML(const string &content);
-    void Open(const string &url) { Open(url, (DOM::Frame*)NULL); }
-    void Open(const string &url, DOM::Frame *frame);
-    void Open(const string &url, DOM::Node *target);
-    Asset *OpenImage(const string &url);
-    void OpenStyleImport(const string &url);
+    void Open(const string &url);
     void KeyEvent(int key, bool down);
     void MouseMoved(int x, int y);
     void MouseButton(int b, bool d);

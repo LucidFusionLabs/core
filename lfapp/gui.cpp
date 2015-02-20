@@ -21,6 +21,7 @@
 #include "lfapp/css.h"
 #include "lfapp/gui.h"
 #include "../crawler/html.h"
+#include "../crawler/document.h"
 
 #ifndef _WIN32
 #include <sys/ioctl.h>
@@ -880,7 +881,7 @@ BrowserInterface *CreateDefaultBrowser(Window *W, Asset *a, int w, int h) {
     BrowserInterface *ret = 0;
     if ((ret = CreateQTWebKitBrowser(a)))        return ret;
     if ((ret = CreateBerkeliumBrowser(a, w, h))) return ret;
-    return new SimpleBrowser(W, Fonts::Default(), Box(0, 0, w, h));
+    return new Browser(W, Box(w, h));
 }
 
 int PercentRefersTo(unsigned short prt, Flow *inline_context) {
@@ -891,6 +892,15 @@ int PercentRefersTo(unsigned short prt, Flow *inline_context) {
         case DOM::CSSPrimitiveValue::PercentRefersTo::ContainingBoxHeight: return inline_context->container->h;
     }; return inline_context->container->w;
 }
+
+#ifdef LFL_LIBCSS
+css_error StyleSheet::Import(void *pw, css_stylesheet *parent, lwc_string *url, uint64_t media) {
+    LFL::DOM::Document *D = (LFL::DOM::Document*)((StyleSheet*)pw)->ownerDocument;
+    if (D) D->parser->OpenStyleImport(LibCSS_String::ToUTF8String(url)); // XXX use parent
+    INFO("libcss Import ", LibCSS_String::ToString(url));
+    return CSS_INVALID; // CSS_OK;
+}
+#endif
 
 string DOM::Node::HTML4Style() { 
     string ret;
@@ -1083,7 +1093,7 @@ void DOM::Renderer::UpdateStyle(Flow *F) {
     outline       = Color(style.OutlineColor     ().v, 1.0);
 
     if (!bgimage.Null() && !background_image)
-        background_image = n->ownerDocument->ownerBrowser->OpenImage(String::ToUTF8(bgimage.v));
+        background_image = n->ownerDocument->parser->OpenImage(String::ToUTF8(bgimage.v));
 
     DOM::CSSNormNumericValue lineheight = style.LineHeight(), charspacing = style.LetterSpacing(), wordspacing = style.WordSpacing();
     lineheight_px  = (!lineheight .Null() && !lineheight. _norm) ? lineheight .getPixelValue(F) : 0;
@@ -1211,258 +1221,49 @@ void DOM::Renderer::Finish() {
     tile_context_opened = 0;
 }
 
-struct MySimpleBrowser {
-    struct Handler {
-        SimpleBrowser *browser;
-        string url;
-        virtual ~Handler() {}
-        Handler(SimpleBrowser *B, const string &URL) : browser(B), url(URL) {}
-        void SetDocumentLayoutDirty() { DOM::Node *html = browser->doc.node->documentElement(); if (html) html->render->layout_dirty = true; }
-        void SetDocumentStyleDirty()  { DOM::Node *html = browser->doc.node->documentElement(); if (html) html->render->style_dirty  = true; }
-        virtual void Complete(void *self) {
-            browser->completed++;
-            browser->outstanding.erase(self);
-            SetDocumentLayoutDirty();
-            delete this;
-        }
-    };
-    struct StyleHandler : public Handler {
-        string charset; StyleSheet *style_target;
-        StyleHandler(SimpleBrowser *b, const string &url, const DOM::DOMString &cs) : Handler(b, url), charset(String::ToUTF8(cs)),
-        style_target(new StyleSheet(browser->doc.node, "", charset.empty() ? "UTF-8" : charset.c_str(), 0, 0)) { b->doc.style_sheet.push_back(style_target); }
+Browser::Document::~Document() { delete parser; }
+Browser::Document::Document(Window *W, const Box &V) : gui(W, V), parser(new DocumentParser(this)),
+    v_scrollbar(&gui, Box(V.w, V.h)),
+    h_scrollbar(&gui, Box(V.w, V.h), Widget::Scrollbar::Flag::AttachedHorizontal), alloc(1024*1024) {}
 
-        virtual void Complete(void *self) { 
-            style_target->Done();
-            if (browser->Running(self)) {
-                browser->doc.node->style_context->AppendSheet(style_target);
-                SetDocumentStyleDirty();
-            }
-            Handler::Complete(self);
-        }
-        void WGetResponseCB(Connection *c, const char *h, const string &ct, const char *cb, int cl) {
-            if      (!h && (!cb || !cl)) Complete(this);
-            else if (!h)                 style_target->Parse(string(cb, cl));
-        }
-    };
-    struct HTMLHandler : public HTMLParser, public StyleHandler {
-        vector<DOM::Node*> target;
-        HTMLHandler(SimpleBrowser *b, const string &url, DOM::Node *t) : StyleHandler(b, url, "") { target.push_back(t); }
-
-        void ParseChunkCB(const char *content, int content_len) { SetDocumentLayoutDirty(); }
-        void WGetContentBegin(Connection *c, const char *h, const string &ct) { browser->doc.content_type=ct; }
-        void WGetContentEnd(Connection *c) { StyleHandler::Complete(this); }
-        void CloseTag(const String &tag, const KV &attr, const TagStack &stack) {
-            if (target.size() && tag == target.back()->nodeName()) target.pop_back();
-        }
-        void OpenTag(const String &input_tag, const KV &attr, const TagStack &stack) {
-            string tag = LFL::String::ToAscii(input_tag);
-            DOM::Node *parentNode = target.back();
-            DOM::Element *addNode = 0;
-            if (tag == "col") { CHECK(parentNode->AsHTMLTableColElement()); }
-            if (tag == "td" || tag == "th") {
-                DOM::HTMLTableRowElement *row = parentNode->AsHTMLTableRowElement();
-                CHECK(row);
-                addNode = row->insertCell(row->cells.length());
-            } else if (tag == "tr") {
-                DOM::HTMLTableElement        *table   = parentNode->AsHTMLTableElement();
-                DOM::HTMLTableSectionElement *section = parentNode->AsHTMLTableSectionElement();
-                CHECK(table || section);
-                if (table) addNode = table  ->insertRow(table               ->rows.length());
-                else       addNode = section->insertRow(section->parentTable->rows.length());
-            } else if (HTMLParser::TableDependent(tag) && tag != "col") {
-                DOM::HTMLTableElement *table = parentNode->AsHTMLTableElement();
-                CHECK(table);
-                if      (tag == "thead")    addNode = table->createTHead();
-                else if (tag == "tbody")    addNode = table->createTBody();
-                else if (tag == "tfoot")    addNode = table->createTFoot();
-                else if (tag == "caption")  addNode = table->createCaption();
-                else if (tag == "colgroup") addNode = table->createColGroup();
-            } else {
-                addNode = parentNode->document()->createElement(tag);
-            }
-            if (!addNode) return;
-            addNode->tagName = tag;
-            addNode->ParseAttributes(attr);
-            addNode->AttachRender();
-            parentNode->appendChild(addNode);
-            target.push_back(addNode);
-            if (tag == "body") {
-                int ind; string pseudo_style = addNode->AsHTMLBodyElement()->HTML4PseudoClassStyle();
-                if (!pseudo_style.empty() && style_target) style_target->Parse(pseudo_style);
-            } else if (tag == "img" || (tag == "input" && StringEquals(addNode->getAttribute("type"), "image"))) {
-                browser->Open(LFL::String::ToUTF8(addNode->getAttribute("src")), addNode);
-            } else if (tag == "link") {
-                if (StringEquals       (addNode->getAttribute("rel"),   "stylesheet") &&
-                    StringEmptyOrEquals(addNode->getAttribute("media"), "screen", "all")) {
-                    browser->Open(LFL::String::ToUTF8(addNode->getAttribute("href")), addNode);
-                }
-            }
-        }
-        void Text(const String &input_text, const TagStack &stack) {
-            if (!browser->Running(this)) return;
-            DOM::Node *parentNode = target.back();
-            DOM::Text *ret = parentNode->document()->createTextNode(DOM::DOMString());
-            ret->AttachRender();
-            parentNode->appendChild(ret);
-
-            bool link = parentNode->htmlElementType == DOM::HTML_ANCHOR_ELEMENT;
-            if (link) {
-                // ret->render->activate_id.push_back(ret->ownerDocument->gui->mouse.AddClickBox(ret->render->box, MouseController::CB(bind(&SimpleBrowser::AnchorClick, parentNode))));
-            }
-
-            if (!inpre) {
-                for (const char *p = text.data(), *e = p + text.size(); p < e; /**/) {
-                    if (isspace(*p)) {
-                        ret->appendData(DOM::StringPiece::Space());
-                        while (p<e && isspace(*p)) p++;
-                    } else {
-                        const char *b = p;
-                        while (p<e && !isspace(*p)) p++;
-                        ret->appendData(HTMLParser::ReplaceEntitySymbols(string(b, p-b)));
-                    }
-                }
-            } else ret->appendData(text);
-        }
-        void Script(const String &text, const TagStack &stack) {}
-        void Style(const String &text, const TagStack &stack) {
-            if (style_target) style_target->Parse(LFL::String::ToUTF8(text));
-        }
-    };
-    struct ImageHandler : public Handler {
-        string content; Asset *target;
-        ImageHandler(SimpleBrowser *b, const string &url, Asset *t) : Handler(b, url), target(t) {}
-        void Complete(const string &content_type) {
-            if (!content.empty() && browser->Running(this)) {
-                string fn = basename(url.c_str(), 0, 0);
-                if      (MIMEType::Jpg(content_type) && !FileSuffix::Jpg(fn)) fn += ".jpg";
-                else if (MIMEType::Png(content_type) && !FileSuffix::Png(fn)) fn += ".png";
-
-                if (PrefixMatch(content_type, "text/html")) INFO("ImageHandler content='", content, "'");
-
-                target->Load(content.data(), fn.c_str(), content.size());
-                INFO("ImageHandler ", content_type, ": ", url, " ", fn, " ", target->tex.width, " ", target->tex.height);
-            }
-            Handler::Complete(this);
-        }
-        void WGetResponseCB(Connection *c, const char *h, const string &ct, const char *cb, int cl) { 
-            if      (!h && (!cb || !cl)) Complete(ct);
-            else if (!h)                 content.append(cb, cl);
-        }
-    };
-};
-
-void SimpleBrowser::Clear() {
+void Browser::Document::Clear() {
     delete js_context;
-    VectorClear(&doc.style_sheet);
+    VectorClear(&style_sheet);
     gui.Clear();
-    v_scrollbar.LayoutAttached(Viewport());
-    h_scrollbar.LayoutAttached(Viewport());
-    outstanding.clear();
+    v_scrollbar.LayoutAttached(gui.box);
+    h_scrollbar.LayoutAttached(gui.box);
     alloc.Reset();
-    doc.node = AllocatorNew(&alloc, (DOM::HTMLDocument), (this, &alloc, &gui));
-    doc.node->style_context = AllocatorNew(&alloc, (StyleContext), (doc.node));
-    doc.node->style_context->AppendSheet(StyleSheet::Default());
-    js_context = CreateV8JSContext(js_console, doc.node);
+    node = AllocatorNew(&alloc, (DOM::HTMLDocument), (parser, &alloc, &gui));
+    node->style_context = AllocatorNew(&alloc, (StyleContext), (node));
+    node->style_context->AppendSheet(StyleSheet::Default());
+    js_context = CreateV8JSContext(js_console, node);
 }
 
-void SimpleBrowser::Navigate(const string &url) {
+Browser::Browser(Window *W, const Box &V) : doc(W, V) {
+    if (Font *maf = Fonts::Get("MenuAtlas1", 0, Color::black, 0)) {
+        missing_image.tex = maf->glyph->table[12].tex;
+        missing_image.tex.width = missing_image.tex.height = 16;
+    }
+    doc.Clear(); 
+}
+
+void Browser::Navigate(const string &url) {
     if (layers.empty()) return SystemBrowser::Open(url.c_str());
 }
 
-void SimpleBrowser::OpenHTML(const string &content) {
-    Clear();
-    MySimpleBrowser::HTMLHandler *html_handler = new MySimpleBrowser::HTMLHandler(this, "", doc.node);
-    outstanding.insert(html_handler);
-    html_handler->WGetCB(0, 0, string(), content.c_str(), content.size());
-    html_handler->WGetCB(0, 0, string(), 0,               0);
+void Browser::Open(const string &url) {
+    doc.parser->Open(url, (DOM::Frame*)NULL);
 }
 
-void SimpleBrowser::Open(const string &url, DOM::Frame *frame) {
-    Clear();
-    doc.node->setURL(url);
-    doc.node->setDomain(HTTP::HostURL(url.c_str()).c_str());
-    string urldir = url.substr(0, dirnamelen(url.c_str(), 0, 1));
-    doc.node->setBaseURI((urldir.size() >= 3 && urldir.substr(urldir.size()-3) == "://") ? url : urldir);
-    Open(url, doc.node);
+void Browser::KeyEvent(int key, bool down) {}
+void Browser::MouseMoved(int x, int y) { mouse=point(x,y); }
+void Browser::MouseButton(int b, bool d) { doc.gui.Input(b, mouse, d, 1); }
+void Browser::MouseWheel(int xs, int ys) {}
+void Browser::AnchorClicked(DOM::HTMLAnchorElement *anchor) {
+    Navigate(String::ToUTF8(anchor->getAttribute("href")));
 }
 
-void SimpleBrowser::Open(const string &input_url, DOM::Node *target) {
-    if (input_url.empty()) return;
-    string url = input_url;
-    bool data_url = PrefixMatch(url, "data:");
-    if (data_url) { /**/
-    } else if (PrefixMatch(url, "/")) {
-        if (PrefixMatch(url, "//")) url = "http:"                          + url;
-        else if (doc.node)          url = String::ToUTF8(doc.node->domain) + url;
-    } else if (url.substr(0, 8).find("://") == string::npos) {
-        if (doc.node) url = StrCat(doc.node->baseURI, "/", url);
-    }
-
-    void *handler = 0;
-    HTTPClient::ResponseCB callback;
-    DOM::HTMLDocument     *html  = target->AsHTMLDocument();
-    DOM::HTMLImageElement *image = target->AsHTMLImageElement();
-    DOM::HTMLLinkElement  *link  = target->AsHTMLLinkElement();
-    DOM::HTMLInputElement *input = target->AsHTMLInputElement();
-    bool input_image = input && StringEquals(input->getAttribute("type"), "image");
-    Asset **image_asset = input_image ? &input->image_asset : (image ? &image->asset : 0);
-
-    if (image_asset) {
-        CHECK_EQ(*image_asset, 0);
-        if ((*image_asset = FindOrNull(image_cache, url))) return;
-        *image_asset = new Asset();
-        image_cache[url] = *image_asset;
-    }
-
-    if (data_url) {
-        int semicolon=url.find(";"), comma=url.find(",");
-        if (semicolon != string::npos && comma != string::npos && semicolon < comma) {
-            string mimetype=url.substr(5, semicolon-5), encoding=url.substr(semicolon+1, comma-semicolon-1);
-            if (PrefixMatch(mimetype, "image/") && image_asset) {
-                string fn = toconvert(mimetype, tochar<'/', '.'>);
-                if (encoding == "base64") {
-                    string content = Singleton<Base64>::Get()->Decode(url.c_str()+comma+1, url.size()-comma-1);
-                    (*image_asset)->Load(content.data(), fn.c_str(), content.size());
-                } else INFO("unhandled: data:url encoding ", encoding);
-            } else INFO("unhandled data:url mimetype ", mimetype);
-        } else INFO("unhandled data:url ", input_url);
-        return;
-    }
-
-    if      (html)        { handler = new MySimpleBrowser::HTMLHandler (this, url, html);                          callback = bind(&HTMLParser::WGetCB        ,                    (MySimpleBrowser::HTMLHandler*) handler, _1, _2, _3, _4, _5); }
-    else if (image_asset) { handler = new MySimpleBrowser::ImageHandler(this, url, *image_asset);                  callback = bind(&MySimpleBrowser::ImageHandler::WGetResponseCB, (MySimpleBrowser::ImageHandler*)handler, _1, _2, _3, _4, _5); }
-    else if (link)        { handler = new MySimpleBrowser::StyleHandler(this, url, link->getAttribute("charset")); callback = bind(&MySimpleBrowser::StyleHandler::WGetResponseCB, (MySimpleBrowser::StyleHandler*)handler, _1, _2, _3, _4, _5); }
-
-    if (handler) {
-        INFO("Browser open '", url, "'");
-        requested++;
-        outstanding.insert(handler);
-        Singleton<HTTPClient>::Get()->WGet(url, 0, callback);
-    } else {
-        ERROR("unknown mimetype for url ", url);
-    }
-}
-
-Asset *SimpleBrowser::OpenImage(const string &url) {
-    DOM::HTMLImageElement image(0);
-    Open(url, &image);
-    return image.asset;
-}
-
-void SimpleBrowser::OpenStyleImport(const string &url) {
-    DOM::HTMLLinkElement link(0);
-    Open(url, &link);
-}
-
-void SimpleBrowser::KeyEvent(int key, bool down) {}
-void SimpleBrowser::MouseMoved(int x, int y) { mx=x; my=y; }
-void SimpleBrowser::MouseButton(int b, bool d) { gui.Input(b, point(mx, my), d, 1); }
-void SimpleBrowser::MouseWheel(int xs, int ys) {}
-void SimpleBrowser::AnchorClicked(DOM::HTMLAnchorElement *anchor) {
-    anchor->ownerDocument->ownerBrowser->Navigate(String::ToUTF8(anchor->getAttribute("href")));
-}
-
-bool SimpleBrowser::Dirty(Box *VP) {
+bool Browser::Dirty(Box *VP) {
     if (layers.empty()) return true;
     DOM::Node *n = doc.node->documentElement();
     Box viewport = Viewport();
@@ -1471,18 +1272,18 @@ bool SimpleBrowser::Dirty(Box *VP) {
     return n && (n->render->layout_dirty || n->render->style_dirty);
 }
 
-void SimpleBrowser::Draw(Box *VP) { return Draw(VP, Dirty(VP)); }
-void SimpleBrowser::Draw(Box *VP, bool dirty) {
+void Browser::Draw(Box *VP) { return Draw(VP, Dirty(VP)); }
+void Browser::Draw(Box *VP, bool dirty) {
     if (!VP || !doc.node || !doc.node->documentElement()) return;
-    gui.box = *VP;
+    doc.gui.box = *VP;
     bool tiles = layers.size();
-    int v_scrolled = v_scrollbar.scrolled * v_scrollbar.doc_height;
-    int h_scrolled = h_scrollbar.scrolled * 1000; // v_scrollbar.doc_height;
+    int v_scrolled = doc.v_scrollbar.scrolled * doc.v_scrollbar.doc_height;
+    int h_scrolled = doc.h_scrollbar.scrolled * 1000; // doc.v_scrollbar.doc_height;
     if (dirty) {
         DOM::Renderer *html_render = doc.node->documentElement()->render;
         html_render->tiles = tiles ? layers[0] : 0;
         html_render->child_bg.Reset();
-        Flow flow(html_render->box.Reset(), font, html_render->child_box.Reset());
+        Flow flow(html_render->box.Reset(), 0, html_render->child_box.Reset());
         flow.p.y -= tiles ? 0 : v_scrolled;
         Draw(&flow, Viewport().TopLeft());
         doc.height = html_render->box.h;
@@ -1491,21 +1292,21 @@ void SimpleBrowser::Draw(Box *VP, bool dirty) {
     for (int i=0; i<layers.size(); i++) layers[i]->Draw(Viewport(), !i ? h_scrolled : 0, !i ? -v_scrolled : 0);
 }
 
-void SimpleBrowser::Draw(Flow *flow, const point &displacement) {
+void Browser::Draw(Flow *flow, const point &displacement) {
     initial_displacement = displacement;
     DrawNode(flow, doc.node->documentElement(), initial_displacement);
     if (layers.empty()) DrawScrollbar();
 }
 
-void SimpleBrowser::DrawScrollbar() {
-    gui.Draw();
-    v_scrollbar.SetDocHeight(doc.height);
-    v_scrollbar.Update();
-    h_scrollbar.Update();
-    gui.Activate();
+void Browser::DrawScrollbar() {
+    doc.gui.Draw();
+    doc.v_scrollbar.SetDocHeight(doc.height);
+    doc.v_scrollbar.Update();
+    doc.h_scrollbar.Update();
+    doc.gui.Activate();
 }
 
-void SimpleBrowser::DrawNode(Flow *flow, DOM::Node *n, const point &displacement_in) {
+void Browser::DrawNode(Flow *flow, DOM::Node *n, const point &displacement_in) {
     if (!n) return;
     DOM::Renderer *render = n->render;
     ComputedStyle *style = &render->style;
@@ -1599,7 +1400,7 @@ void SimpleBrowser::DrawNode(Flow *flow, DOM::Node *n, const point &displacement
     render->Finish();
 }
 
-DOM::Node *SimpleBrowser::LayoutNode(Flow *flow, DOM::Node *n, bool reflow) {
+DOM::Node *Browser::LayoutNode(Flow *flow, DOM::Node *n, bool reflow) {
     if (!n) return 0;
     DOM::Renderer *render = n->render;
     ComputedStyle *style = &render->style;
@@ -1737,7 +1538,7 @@ DOM::Node *SimpleBrowser::LayoutNode(Flow *flow, DOM::Node *n, bool reflow) {
     return (render->floating && !render->done_floated) ? n : 0;
 }
 
-void SimpleBrowser::LayoutBackground(DOM::Node *n) {
+void Browser::LayoutBackground(DOM::Node *n) {
     bool is_body = n->htmlElementType == DOM::HTML_BODY_ELEMENT;
     DOM::Renderer *render = n->render;
     ComputedStyle *style = &render->style;
@@ -1800,7 +1601,7 @@ void SimpleBrowser::LayoutBackground(DOM::Node *n) {
     }
 }
 
-void SimpleBrowser::LayoutTable(Flow *flow, DOM::HTMLTableElement *n) {
+void Browser::LayoutTable(Flow *flow, DOM::HTMLTableElement *n) {
     UpdateTableStyle(flow, n);
     TableFlow table(flow);
     table.Select();
@@ -1835,7 +1636,7 @@ void SimpleBrowser::LayoutTable(Flow *flow, DOM::HTMLTableElement *n) {
     }
 }
 
-void SimpleBrowser::UpdateTableStyle(Flow *flow, DOM::Node *n) {
+void Browser::UpdateTableStyle(Flow *flow, DOM::Node *n) {
     for (int i=0, l=n->childNodes.length(); i<l; i++) {
         DOM::Node *child = n->childNodes.item(i);
         DOM::HTMLTableCellElement *cell = child->AsHTMLTableCellElement();
@@ -1858,7 +1659,7 @@ void SimpleBrowser::UpdateTableStyle(Flow *flow, DOM::Node *n) {
     n->render->style_dirty = 0;
 }
 
-void SimpleBrowser::UpdateRenderLog(DOM::Node *n) {
+void Browser::UpdateRenderLog(DOM::Node *n) {
     DOM::Renderer *render = n->render;
     if (render_log->data.empty()) {
         CHECK(render->style.is_root);

@@ -165,7 +165,7 @@ struct Q3MapAsset : public MapAsset {
             ArchiveIter iter(fn.c_str());
             for (const char *afn = iter.Next(); Running() && afn; afn = iter.Next()) {
                 if (!SuffixMatch(afn, ".bsp", false)) { iter.Skip(); continue; }
-                BufferFile bf((const char *)iter.Data(), iter.Size());
+                BufferFile bf(string((const char *)iter.Data(), iter.Size()));
                 if (ret->LoadBSP(&bf)) { delete ret; return 0; }
                 break;
             }

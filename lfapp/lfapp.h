@@ -267,6 +267,7 @@ struct Font;
 struct Flow;
 struct FloatContainer;
 struct BrowserInterface;
+struct DocumentParser;
 struct InputController;
 struct GUI;
 struct KeyboardGUI;

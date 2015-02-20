@@ -20,6 +20,8 @@
 #include "lfapp/dom.h"
 #include "lfapp/css.h"
 #include "lfapp/gui.h"
+#include "crawler/html.h"
+#include "crawler/document.h"
 
 namespace LFL {
 DEFINE_int(peak_fps,  50,    "Peak FPS");
@@ -29,7 +31,7 @@ Scene scene;
 BindMap *binds;
 Shader warpershader;
 AnyBoolSet effects_mode;
-SimpleBrowser *image_browser;
+Browser *image_browser;
 
 void UpdateTargetFPS() {
     int target_fps = effects_mode.Get() ? FLAGS_peak_fps : 0;
@@ -49,7 +51,7 @@ void MyNewLinkCB(TextArea::Link *link) {
     }
     link->image_src.SetNameValue("src", image_url);
     link->image.setAttributeNode(&link->image_src);
-    image_browser->Open(image_url, &link->image);
+    image_browser->doc.parser->Open(image_url, &link->image);
 }
 
 void MyHoverLinkCB(TextArea::Link *link) {
@@ -202,7 +204,7 @@ extern "C" int main(int argc, const char *argv[]) {
     Shader::Create("warpershader", lfapp_vertex_shader.c_str(), warper_shader.c_str(),
                    "#define TEX2D\n#define VERTEXCOLOR\n", &warpershader);
 
-    image_browser = new SimpleBrowser();
+    image_browser = new Browser();
     MyTerminalWindow *tw = (MyTerminalWindow*)screen->user1;
     tw->Open();
 

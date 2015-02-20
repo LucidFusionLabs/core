@@ -380,12 +380,12 @@ namespace DOM {
         DocumentType        doctype;
         DOMImplementation   implementation;
 
-        BrowserInterface *ownerBrowser;
+        DocumentParser   *parser;
         Allocator        *alloc;
         GUI              *gui;
         StyleContext     *style_context;
 
-        Document(BrowserInterface *b, Allocator *a, GUI *g) : Node(DOCUMENT_NODE, this), doctype(this), ownerBrowser(b), alloc(a), gui(g), style_context(0) {}
+        Document(DocumentParser *p, Allocator *a, GUI *g) : Node(DOCUMENT_NODE, this), doctype(this), parser(p), alloc(a), gui(g), style_context(0) {}
 
         virtual DOMString nodeName()  const { return "#document"; }
         virtual DOMString nodeValue() const { return DOMStringNull; }
@@ -908,7 +908,7 @@ namespace DOM {
     };
 
     struct HTMLDocument : public Document {
-        HTMLDocument(BrowserInterface *b, Allocator *a, GUI *g) : Document(b, a, g) {}
+        HTMLDocument(DocumentParser *p, Allocator *a, GUI *g) : Document(p, a, g) {}
         DOMString title, referrer, domain, URL, baseURI, cookie;
         HTMLElement *body;
         HTMLCollection images, applets, links, forms, anchors;

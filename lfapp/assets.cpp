@@ -235,7 +235,7 @@ static int GIFInput(GifFileType *gif, GifByteType *out, int size) {
 int GIFReader::Read(File *lf,           Texture *out) { return Read(lf->Contents(), out); }
 int GIFReader::Read(const string &data, Texture *out) {
     int error_code = 0;
-    BufferFile bf(data.data(), data.size());
+    BufferFile bf(data);
     GifFileType *gif = DGifOpen(&bf, &GIFInput, &error_code);
     if (!gif) { INFO("gif open failed: ", error_code); return -1; }
     if (DGifSlurp(gif) != GIF_OK) { INFO("gif slurp failed"); DGifCloseFile(gif, &error_code); return -1; }
