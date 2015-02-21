@@ -36,9 +36,9 @@ struct LinesFrameBufferTest : public TextGUI::LinesFrameBuffer {
         PaintOp(TextGUI::Line *L, const point &P, const Box &B) : text(L->Text()), lines(L->Lines()), p(P), b(B) {}
         string DebugString() const { return StrCat("PaintOp text(", text, ") ", p, " ", b); }
     };
-    vector<LineOp> front, back;
-    vector<PaintOp> paint;
-    LinesFrameBufferTest() { paint_cb = bind(&LinesFrameBufferTest::PaintTest, this, _1, _2, _3); }
+    static vector<LineOp> front, back;
+    static vector<PaintOp> paint;
+    LinesFrameBufferTest() { paint_cb = &LinesFrameBufferTest::PaintTest; }
     virtual void Clear(TextGUI::Line *l)                              override { EXPECT_EQ(0, 1); }
     virtual void Update(TextGUI::Line *l, int flag=0)                 override { EXPECT_EQ(0, 1); }
     virtual void Update(TextGUI::Line *l, const point &p, int flag=0) override { EXPECT_EQ(0, 1); }
@@ -46,9 +46,13 @@ struct LinesFrameBufferTest : public TextGUI::LinesFrameBuffer {
     virtual void PushBackAndUpdateOffset (TextGUI::Line *l, int lo)   override { EXPECT_EQ(0, 1); }
     virtual int PushFrontAndUpdate(TextGUI::Line *l, int xo=0, int wlo=0, int wll=0, int flag=0) override { int ret = TextGUI::LinesFrameBuffer::PushFrontAndUpdate(l,xo,wlo,wll); front.emplace_back(l,xo,wlo,wll); return ret; }
     virtual int PushBackAndUpdate (TextGUI::Line *l, int xo=0, int wlo=0, int wll=0, int flag=0) override { int ret = TextGUI::LinesFrameBuffer::PushBackAndUpdate (l,xo,wlo,wll); back .emplace_back(l,xo,wlo,wll); return ret; }
-    point PaintTest(TextGUI::Line *l, point lp, const Box &b)
-    { l->Draw(lp + b.Position(), 0, 0); paint.emplace_back(l, lp, b); return point(lp.x, lp.y-b.h); }
+    static point PaintTest(TextGUI::Line *l, point lp, const Box &b)
+    { l->Draw(lp + b.Position()); paint.emplace_back(l, lp, b); return point(lp.x, lp.y-b.h); }
 };
+vector<LinesFrameBufferTest::LineOp> LinesFrameBufferTest::front;
+vector<LinesFrameBufferTest::LineOp> LinesFrameBufferTest::back;
+vector<LinesFrameBufferTest::PaintOp> LinesFrameBufferTest::paint;
+
 struct TextAreaTest : public TextArea {
     LinesFrameBufferTest line_fb_test;
     TextAreaTest(Window *W, Font *F, int S=200) : TextArea(W,F,S) {}
@@ -153,10 +157,10 @@ TEST(GUITest, TextArea) {
         EXPECT_EQ(2, test_fb->paint.size());
         if (test_fb->paint.size() > 0) EXPECT_EQ("1",              test_fb->paint[0].text);
         if (test_fb->paint.size() > 0) EXPECT_EQ(point(0,fh),      test_fb->paint[0].p);
-        if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,0,0,fh),    test_fb->paint[0].b);
+        if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,0,w,fh),    test_fb->paint[0].b);
         if (test_fb->paint.size() > 1) EXPECT_EQ("2\n2\n2",        test_fb->paint[1].text);
         if (test_fb->paint.size() > 1) EXPECT_EQ(point(0,3*fh),    test_fb->paint[1].p);
-        if (test_fb->paint.size() > 1) EXPECT_EQ(Box(0,fh,0,2*fh), test_fb->paint[1].b);
+        if (test_fb->paint.size() > 1) EXPECT_EQ(Box(0,fh,w,2*fh), test_fb->paint[1].b);
         test_fb->paint.clear();
 
         // 1: 222 : 2=2:2, 3=2:1, 1=2:0
@@ -175,7 +179,7 @@ TEST(GUITest, TextArea) {
         EXPECT_EQ(1, test_fb->paint.size());
         if (test_fb->paint.size() > 0) EXPECT_EQ("2\n2\n2",        test_fb->paint[0].text);
         if (test_fb->paint.size() > 0) EXPECT_EQ(point(0,fh),      test_fb->paint[0].p);
-        if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,0,0,fh),    test_fb->paint[0].b);
+        if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,0,w,fh),    test_fb->paint[0].b);
         test_fb->paint.clear();
 
         // 2: 223 : 3=2:1, 1=2:0, 2=3:0
@@ -194,7 +198,7 @@ TEST(GUITest, TextArea) {
         EXPECT_EQ(1, test_fb->paint.size());
         if (test_fb->paint.size() > 0) EXPECT_EQ("3",           test_fb->paint[0].text);
         if (test_fb->paint.size() > 0) EXPECT_EQ(point(0,fh*2), test_fb->paint[0].p);
-        if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,0,0,fh), test_fb->paint[0].b);
+        if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,0,w,fh), test_fb->paint[0].b);
         test_fb->paint.clear();
 
         // 1: 222 : 2=2:2, 3=2:1, 1=2:0
@@ -213,7 +217,7 @@ TEST(GUITest, TextArea) {
         EXPECT_EQ(1, test_fb->paint.size());
         if (test_fb->paint.size() > 0) EXPECT_EQ("2\n2\n2",        test_fb->paint[0].text);
         if (test_fb->paint.size() > 0) EXPECT_EQ(point(0,fh*2),    test_fb->paint[0].p);
-        if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,fh*2,0,fh), test_fb->paint[0].b);
+        if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,fh*2,w,fh), test_fb->paint[0].b);
         test_fb->paint.clear();
 
         // 0: 122 : 1=1:0, 2=2:2, 3=2:1
@@ -231,7 +235,7 @@ TEST(GUITest, TextArea) {
         EXPECT_EQ(1, test_fb->paint.size());
         if (test_fb->paint.size() > 0) EXPECT_EQ("1",           test_fb->paint[0].text);
         if (test_fb->paint.size() > 0) EXPECT_EQ(point(0,fh),   test_fb->paint[0].p);
-        if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,0,0,fh), test_fb->paint[0].b);
+        if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,0,w,fh), test_fb->paint[0].b);
         test_fb->paint.clear();
 
         // 2: 223 : 3=2:1, 1=2:0, 2=3:0
@@ -254,10 +258,10 @@ TEST(GUITest, TextArea) {
         EXPECT_EQ(2, test_fb->paint.size());
         if (test_fb->paint.size() > 0) EXPECT_EQ("2\n2\n2",     test_fb->paint[0].text);
         if (test_fb->paint.size() > 0) EXPECT_EQ(point(0,fh),   test_fb->paint[0].p);
-        if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,0,0,fh), test_fb->paint[0].b);
+        if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,0,w,fh), test_fb->paint[0].b);
         if (test_fb->paint.size() > 1) EXPECT_EQ("3",           test_fb->paint[1].text);
         if (test_fb->paint.size() > 1) EXPECT_EQ(point(0,2*fh), test_fb->paint[1].p);
-        if (test_fb->paint.size() > 1) EXPECT_EQ(Box(0,0,0,fh), test_fb->paint[1].b);
+        if (test_fb->paint.size() > 1) EXPECT_EQ(Box(0,0,w,fh), test_fb->paint[1].b);
         test_fb->paint.clear();
 
         // 4: 344 : 2=3:0, 3=4:1, 1=4:0
@@ -276,10 +280,10 @@ TEST(GUITest, TextArea) {
         EXPECT_EQ(2, test_fb->paint.size());
         if (test_fb->paint.size() > 0) EXPECT_EQ("4\n4",          test_fb->paint[0].text);
         if (test_fb->paint.size() > 0) EXPECT_EQ(point(0,4*fh),   test_fb->paint[0].p);
-        if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,0,0,2*fh), test_fb->paint[0].b);
+        if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,0,w,2*fh), test_fb->paint[0].b);
         if (test_fb->paint.size() > 1) EXPECT_EQ("4\n4",          test_fb->paint[1].text);
         if (test_fb->paint.size() > 1) EXPECT_EQ(point(0,fh),     test_fb->paint[1].p);
-        if (test_fb->paint.size() > 1) EXPECT_EQ(Box(0,0,0,2*fh), test_fb->paint[1].b);
+        if (test_fb->paint.size() > 1) EXPECT_EQ(Box(0,0,w,2*fh), test_fb->paint[1].b);
         test_fb->paint.clear();
 
         // 5: 445 : 3=4:1, 1=4:0, 2=5:0
@@ -298,7 +302,7 @@ TEST(GUITest, TextArea) {
         EXPECT_EQ(1, test_fb->paint.size());
         if (test_fb->paint.size() > 0) EXPECT_EQ("5",           test_fb->paint[0].text);
         if (test_fb->paint.size() > 0) EXPECT_EQ(point(0,2*fh), test_fb->paint[0].p);
-        if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,0,0,fh), test_fb->paint[0].b);
+        if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,0,w,fh), test_fb->paint[0].b);
         test_fb->paint.clear();
 
         // 3: 234 : 1=2:0, 2=3:0, 3=4:1
@@ -319,10 +323,10 @@ TEST(GUITest, TextArea) {
         EXPECT_EQ(2, test_fb->paint.size());
         if (test_fb->paint.size() > 0) EXPECT_EQ("3",           test_fb->paint[0].text);
         if (test_fb->paint.size() > 0) EXPECT_EQ(point(0,2*fh), test_fb->paint[0].p);
-        if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,0,0,fh), test_fb->paint[0].b);
+        if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,0,w,fh), test_fb->paint[0].b);
         if (test_fb->paint.size() > 0) EXPECT_EQ("2\n2\n2",     test_fb->paint[1].text);
         if (test_fb->paint.size() > 0) EXPECT_EQ(point(0,fh),   test_fb->paint[1].p);
-        if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,0,0,fh), test_fb->paint[1].b);
+        if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,0,w,fh), test_fb->paint[1].b);
         test_fb->paint.clear();
 
         // 1: 222 : 2=2:2, 3=2:1, 1=2:0
@@ -341,7 +345,7 @@ TEST(GUITest, TextArea) {
         EXPECT_EQ(1, test_fb->paint.size());
         if (test_fb->paint.size() > 0) EXPECT_EQ("2\n2\n2",        test_fb->paint[0].text);
         if (test_fb->paint.size() > 0) EXPECT_EQ(point(0,fh*3),    test_fb->paint[0].p);
-        if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,fh,0,fh*2), test_fb->paint[0].b);
+        if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,fh,w,fh*2), test_fb->paint[0].b);
         test_fb->paint.clear();
     }
 }
@@ -375,11 +379,11 @@ TEST(GUITest, Editor) {
     EXPECT_EQ(2, test_fb->paint.size());
     if (test_fb->paint.size() > 0) EXPECT_EQ("1",             test_fb->paint[0].text);
     if (test_fb->paint.size() > 0) EXPECT_EQ(point(0,3*fh),   test_fb->paint[0].p);
-    if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,0,0,fh),   test_fb->paint[0].b);
+    if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,0,w,fh),   test_fb->paint[0].b);
     if (test_fb->paint.size() > 1) EXPECT_EQ("2 2 2",         test_fb->paint[1].text);
     if (test_fb->paint.size() > 1) EXPECT_EQ(3,               test_fb->paint[1].lines);
     if (test_fb->paint.size() > 1) EXPECT_EQ(point(0,2*fh),   test_fb->paint[1].p);
-    if (test_fb->paint.size() > 1) EXPECT_EQ(Box(0,0,0,2*fh), test_fb->paint[1].b);
+    if (test_fb->paint.size() > 1) EXPECT_EQ(Box(0,0,w,2*fh), test_fb->paint[1].b);
     test_fb->paint.clear();
 
     // 1: 222 : 2=2:0, 1=2:1, 3=2:2
@@ -402,7 +406,7 @@ TEST(GUITest, Editor) {
     EXPECT_EQ(1, test_fb->paint.size());
     if (test_fb->paint.size() > 0) EXPECT_EQ("2 2 2",          test_fb->paint[0].text);
     if (test_fb->paint.size() > 0) EXPECT_EQ(point(0,3*fh),    test_fb->paint[0].p);
-    if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,2*fh,0,fh), test_fb->paint[0].b);
+    if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,2*fh,w,fh), test_fb->paint[0].b);
     test_fb->paint.clear();
 
     // 2: 223 : 1=2:1, 3=2:2, 2=3:0
@@ -425,7 +429,7 @@ TEST(GUITest, Editor) {
     EXPECT_EQ(1, test_fb->paint.size());
     if (test_fb->paint.size() > 0) EXPECT_EQ("3",           test_fb->paint[0].text);
     if (test_fb->paint.size() > 0) EXPECT_EQ(point(0,2*fh), test_fb->paint[0].p);
-    if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,0,0,fh), test_fb->paint[0].b);
+    if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,0,w,fh), test_fb->paint[0].b);
     test_fb->paint.clear();
 
     // 1: 222 : 2=2:0, 1=2:1, 3=2:2
@@ -448,7 +452,7 @@ TEST(GUITest, Editor) {
     EXPECT_EQ(1, test_fb->paint.size());
     if (test_fb->paint.size() > 0) EXPECT_EQ("2 2 2",       test_fb->paint[0].text);
     if (test_fb->paint.size() > 0) EXPECT_EQ(point(0,2*fh), test_fb->paint[0].p);
-    if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,0,0,fh), test_fb->paint[0].b);
+    if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,0,w,fh), test_fb->paint[0].b);
     test_fb->paint.clear();
 
     // 0: 122 : 3=1:0, 2=2:0, 1=2:1
@@ -469,7 +473,7 @@ TEST(GUITest, Editor) {
     EXPECT_EQ(1, test_fb->paint.size());
     if (test_fb->paint.size() > 0) EXPECT_EQ("1",           test_fb->paint[0].text);
     if (test_fb->paint.size() > 0) EXPECT_EQ(point(0,3*fh), test_fb->paint[0].p);
-    if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,0,0,fh), test_fb->paint[0].b);
+    if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,0,w,fh), test_fb->paint[0].b);
     test_fb->paint.clear();
 
     // 2: 223 : 1=2:1, 3=2:2, 2=3:0
@@ -496,10 +500,10 @@ TEST(GUITest, Editor) {
     EXPECT_EQ(2, test_fb->paint.size());
     if (test_fb->paint.size() > 0) EXPECT_EQ("2 2 2",          test_fb->paint[0].text);
     if (test_fb->paint.size() > 0) EXPECT_EQ(point(0,3*fh),    test_fb->paint[0].p);
-    if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,2*fh,0,fh), test_fb->paint[0].b);
+    if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,2*fh,w,fh), test_fb->paint[0].b);
     if (test_fb->paint.size() > 1) EXPECT_EQ("3",              test_fb->paint[1].text);
     if (test_fb->paint.size() > 1) EXPECT_EQ(point(0,2*fh),    test_fb->paint[1].p);
-    if (test_fb->paint.size() > 1) EXPECT_EQ(Box(0,0,0,fh),    test_fb->paint[1].b);
+    if (test_fb->paint.size() > 1) EXPECT_EQ(Box(0,0,w,fh),    test_fb->paint[1].b);
     test_fb->paint.clear();
 
     // 4: 344 : 2=3:0, 1=4:0, 3=4:1
@@ -522,10 +526,10 @@ TEST(GUITest, Editor) {
     EXPECT_EQ(2, test_fb->paint.size());
     if (test_fb->paint.size() > 0) EXPECT_EQ("4 4",           test_fb->paint[0].text);
     if (test_fb->paint.size() > 0) EXPECT_EQ(point(0,fh),     test_fb->paint[0].p);
-    if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,0,0,2*fh), test_fb->paint[0].b);
+    if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,0,w,2*fh), test_fb->paint[0].b);
     if (test_fb->paint.size() > 1) EXPECT_EQ("4 4",           test_fb->paint[1].text);
     if (test_fb->paint.size() > 1) EXPECT_EQ(point(0,4*fh),   test_fb->paint[1].p);
-    if (test_fb->paint.size() > 1) EXPECT_EQ(Box(0,0,0,2*fh), test_fb->paint[1].b);
+    if (test_fb->paint.size() > 1) EXPECT_EQ(Box(0,0,w,2*fh), test_fb->paint[1].b);
     test_fb->paint.clear();
 
     // 5: 445 : 1=4:0, 3=4:1, 2=5:0
@@ -548,7 +552,7 @@ TEST(GUITest, Editor) {
     EXPECT_EQ(1, test_fb->paint.size());
     if (test_fb->paint.size() > 0) EXPECT_EQ("5",           test_fb->paint[0].text);
     if (test_fb->paint.size() > 0) EXPECT_EQ(point(0,2*fh), test_fb->paint[0].p);
-    if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,0,0,fh), test_fb->paint[0].b);
+    if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,0,w,fh), test_fb->paint[0].b);
     test_fb->paint.clear();
 
     // 3: 234 : 3=2:2, 2=3:0, 1=4:0
@@ -575,10 +579,10 @@ TEST(GUITest, Editor) {
     EXPECT_EQ(2, test_fb->paint.size());
     if (test_fb->paint.size() > 0) EXPECT_EQ("3",              test_fb->paint[0].text);
     if (test_fb->paint.size() > 0) EXPECT_EQ(point(0,2*fh),    test_fb->paint[0].p);
-    if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,0,0,fh),    test_fb->paint[0].b);
+    if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,0,w,fh),    test_fb->paint[0].b);
     if (test_fb->paint.size() > 1) EXPECT_EQ("2 2 2",          test_fb->paint[1].text);
     if (test_fb->paint.size() > 1) EXPECT_EQ(point(0,3*fh),    test_fb->paint[1].p);
-    if (test_fb->paint.size() > 1) EXPECT_EQ(Box(0,2*fh,0,fh), test_fb->paint[1].b);
+    if (test_fb->paint.size() > 1) EXPECT_EQ(Box(0,2*fh,w,fh), test_fb->paint[1].b);
     test_fb->paint.clear();
 
     // 1: 222 : 2=2:0, 1=2:1, 3=2:2
@@ -601,10 +605,10 @@ TEST(GUITest, Editor) {
     EXPECT_EQ(2, test_fb->paint.size());
     if (test_fb->paint.size() > 0) EXPECT_EQ("2 2 2",         test_fb->paint[0].text);
     if (test_fb->paint.size() > 0) EXPECT_EQ(point(0,5*fh),   test_fb->paint[0].p);
-    if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,0,0,2*fh), test_fb->paint[0].b);
+    if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,0,w,2*fh), test_fb->paint[0].b);
     if (test_fb->paint.size() > 1) EXPECT_EQ("2 2 2",         test_fb->paint[1].text);
     if (test_fb->paint.size() > 1) EXPECT_EQ(point(0,2*fh),   test_fb->paint[1].p);
-    if (test_fb->paint.size() > 1) EXPECT_EQ(Box(0,0,0,2*fh), test_fb->paint[1].b);
+    if (test_fb->paint.size() > 1) EXPECT_EQ(Box(0,0,w,2*fh), test_fb->paint[1].b);
     test_fb->paint.clear();
 }
 
