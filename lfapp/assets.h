@@ -618,7 +618,7 @@ template <int MP, int MH, bool PerParticleColor> struct Particles : public Parti
 };
 
 template <class Line> struct RingFrameBuffer {
-    typedef function<point(Line*, point, const Box&)> PaintCB;
+    typedef point(*PaintCB)(Line*, point, const Box&);
     FrameBuffer fb; v2 scroll; point p; bool wrap=0;
     int w=0, h=0, font_size=0, font_height=0;
 
@@ -642,13 +642,12 @@ template <class Line> struct RingFrameBuffer {
         if (scissor) screen->gd->PopScissor();
     }
     void Clear(Line *l, const Box &b, bool vwrap=true) {
-        if (1)                         { Scissor s(0, l->p.y - b.h,      w, b.h); screen->gd->Clear(); }
-        if (l->p.y - b.h < 0 && vwrap) { Scissor s(0, l->p.y + Height(), w, b.h); screen->gd->Clear(); }
+        if (1)                         { Scissor s(0, l->p.y - b.h,      b.w, b.h); screen->gd->Clear(); }
+        if (l->p.y - b.h < 0 && vwrap) { Scissor s(0, l->p.y + Height(), b.w, b.h); screen->gd->Clear(); }
     }
     void Update(Line *l, const Box &b, const PaintCB &paint, bool vwrap=true) {
-        Box box(0, b.h);
-        point lp = paint(l, l->p, box);
-        if (lp.y < 0 && vwrap) paint(l, point(0, lp.y + Height() + b.h), box);
+        point lp = paint(l, l->p, b);
+        if (lp.y < 0 && vwrap) paint(l, point(0, lp.y + Height() + b.h), b);
     }
     int PushFrontAndUpdate(Line *l, const Box &b, const PaintCB &paint, bool vwrap=true) {
         int ht = Height();

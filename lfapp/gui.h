@@ -28,9 +28,8 @@ struct GUI : public MouseController {
     Window *parent;
     BoxArray child_box;
     ToggleBool toggle_active;
-    GUI()                        :         parent(0), toggle_active(&active) {}
-    GUI(Window *W)               :         parent(W), toggle_active(&active) { parent->mouse_gui.push_back(this); }
-    GUI(Window *W, const Box &B) : box(B), parent(W), toggle_active(&active) { parent->mouse_gui.push_back(this); }
+    GUI(Window *W=0, const Box &B=Box()) : box(B), parent(W), toggle_active(&active)
+    { if (parent) parent->mouse_gui.push_back(this); }
     virtual ~GUI() { if (parent) VectorEraseByValue(&parent->mouse_gui, this); }
 
     point MousePosition() const { return screen->mouse - box.TopLeft(); }
@@ -278,12 +277,14 @@ struct TextGUI : public KeyboardGUI {
             Clear();
             data->flow.AppendBoxArrayText(b);
         }
-        void UpdateText(int x, const String16Piece &v, int attr, int max_width=0) {
-            if (Size() < x) AppendText(string(x - Size(), ' '), attr);
+        bool UpdateText(int x, const String16Piece &v, int attr, int max_width=0) {
+            int size = Size(); bool append = size <= x;
+            if (size < x) AppendText(string(x - size, ' '), attr);
             else if (!parent->insert_mode) Erase(x, v.size());
-            if (Size() == x) AppendText  (   v, attr);
-            else             InsertTextAt(x, v, attr);
+            if (size == x) AppendText  (   v, attr);
+            else           InsertTextAt(x, v, attr);
             if (parent->insert_mode && max_width) Erase(max_width);
+            return append;
         }
         void UpdateAttr(int ind, int len) {
             if (!parent || !parent->clickable_links) return;
@@ -303,9 +304,9 @@ struct TextGUI : public KeyboardGUI {
 #endif
         }
         int Layout(int width=0, bool flush=0) { Layout(Box(0,0,width,0), flush); return Lines(); }
-        point Draw(point pos, bool relayout, int relayout_width) {
-            if (relayout) Layout(relayout_width);
-            data->glyphs.Draw((p = pos));
+        point Draw(point pos, int relayout_width=-1, int g_offset=0, int g_len=-1) {
+            if (relayout_width >= 0) Layout(relayout_width);
+            data->glyphs.Draw((p = pos), g_offset, g_len);
             return p - point(0, parent->font->height + data->glyphs.height);
         }
     };
@@ -331,21 +332,21 @@ struct TextGUI : public KeyboardGUI {
     struct LinesFrameBuffer : public RingFrameBuffer<Line> {
         typedef function<LinesFrameBuffer*(const Line*)> FromLineCB;
         struct Flag { enum { NoLayout=1, NoVWrap=2, Flush=4 }; };
+        PaintCB paint_cb = &LinesFrameBuffer::PaintCB;
         int lines=0;
-        PaintCB paint_cb;
-        LinesFrameBuffer() : paint_cb(bind(&LinesFrameBuffer::Paint, this, _1, _2, _3)) {}
 
         LinesFrameBuffer *Attach(LinesFrameBuffer **last_fb);
         virtual bool SizeChanged(int W, int H, Font *font);
         virtual int Height() const { return lines * font_height; }
-        tvirtual void Clear(Line *l) { RingFrameBuffer::Clear(l, Box(0, l->Lines() * font_height), true); }
+        tvirtual void Clear(Line *l) { RingFrameBuffer::Clear(l, Box(w, l->Lines() * font_height), true); }
         tvirtual void Update(Line *l, int flag=0);
         tvirtual void Update(Line *l, const point &p, int flag=0) { l->p=p; Update(l, flag); }
         tvirtual int PushFrontAndUpdate(Line *l, int xo=0, int wlo=0, int wll=0, int flag=0);
         tvirtual int PushBackAndUpdate (Line *l, int xo=0, int wlo=0, int wll=0, int flag=0);
         tvirtual void PushFrontAndUpdateOffset(Line *l, int lo);
-        tvirtual void PushBackAndUpdateOffset (Line *l, int lo);
-        point Paint(Line *l, point lp, const Box &b);
+        tvirtual void PushBackAndUpdateOffset (Line *l, int lo); 
+        static point PaintCB(Line *l, point lp, const Box &b) { return Paint(l, lp, b); }
+        static point Paint  (Line *l, point lp, const Box &b, int offset=0, int len=-1);
     };
     struct LineUpdate {
         enum { PushBack=1, PushFront=2, DontUpdate=4 }; 
@@ -353,7 +354,7 @@ struct TextGUI : public KeyboardGUI {
         LineUpdate(Line *V=0, LinesFrameBuffer *FB=0, int F=0, int O=0) : v(V), fb(FB), flag(F), o(O) {}
         LineUpdate(Line *V, const LinesFrameBuffer::FromLineCB &cb, int F=0, int O=0) : v(V), fb(cb(V)), flag(F), o(O) {}
         ~LineUpdate() {
-            if (!fb->lines || (flag & DontUpdate)) v->Layout();
+            if (!fb->lines || (flag & DontUpdate)) v->Layout(fb->wrap ? fb->w : 0);
             else if (flag & PushFront) { if (o) fb->PushFrontAndUpdateOffset(v,o); else fb->PushFrontAndUpdate(v); }
             else if (flag & PushBack)  { if (o) fb->PushBackAndUpdateOffset (v,o); else fb->PushBackAndUpdate (v); }
             else fb->Update(v);

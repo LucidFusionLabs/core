@@ -736,7 +736,10 @@ struct BoxArray {
     vector<int> line_ind;
     int height;
     BoxArray() : height(0) { Clear(); }
-    
+
+    /**/  Drawable::Box& operator[](int i)       { return data[i]; }
+    const Drawable::Box& operator[](int i) const { return data[i]; }
+    const Drawable::Box& Back() const { return data.back(); }
     int Size() const { return data.size(); }
     string Text() const { return data.size() ? BoxRun(&data[0], data.size()).Text() : ""; }
     point Position(int o) const { 
@@ -770,9 +773,9 @@ struct BoxArray {
         if (shift) for (; i != data.end(); ++i) i->box -= p;
     }
 
-    point Draw(point p) {
+    point Draw(point p, int glyph_start=0, int glyph_len=-1) {
         point e;
-        for (Drawable::Box::Iterator iter(data); !iter.Done(); iter.Increment())
+        for (Drawable::Box::Iterator iter(&data[glyph_start], Xge0_or_Y(glyph_len, data.size())); !iter.Done(); iter.Increment())
             e = BoxRun(iter.Data(), iter.Length(), attr.GetAttr(iter.cur_attr1), VectorGet(line, iter.cur_attr2)).Draw(p);
         return e;
     }

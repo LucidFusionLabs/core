@@ -148,7 +148,7 @@ void TextGUI::Enter() {
 void TextGUI::Draw(const Box &b) {
     if (cmd_fb.SizeChanged(b.w, b.h, font)) {
         cmd_fb.p = point(0, font->height);
-        cmd_line.Draw(point(0, cmd_line.Lines() * font->height), true, cmd_fb.w);
+        cmd_line.Draw(point(0, cmd_line.Lines() * font->height), cmd_fb.w);
         cmd_fb.SizeChangedDone();
     }
     // screen->gd->PushColor();
@@ -189,20 +189,20 @@ bool TextGUI::LinesFrameBuffer::SizeChanged(int W, int H, Font *font) {
 
 void TextGUI::LinesFrameBuffer::Update(TextGUI::Line *l, int flag) {
     if (!(flag & Flag::NoLayout)) l->Layout(wrap ? w : 0, flag & Flag::Flush);
-    RingFrameBuffer::Update(l, Box(0, l->Lines() * font_height), paint_cb, true);
+    RingFrameBuffer::Update(l, Box(w, l->Lines() * font_height), paint_cb, true);
 }
 
 int TextGUI::LinesFrameBuffer::PushFrontAndUpdate(TextGUI::Line *l, int xo, int wlo, int wll, int flag) {
     if (!(flag & Flag::NoLayout)) l->Layout(wrap ? w : 0, flag & Flag::Flush);
     int wl = max(0, l->Lines() - wlo), lh = (wll ? min(wll, wl) : wl) * font_height;
-    if (!lh) return 0; Box b(xo, wl * font_height - lh, 0, lh);
+    if (!lh) return 0; Box b(xo, wl * font_height - lh, w, lh);
     return RingFrameBuffer::PushFrontAndUpdate(l, b, paint_cb, !(flag & Flag::NoVWrap)) / font_height;
 }
 
 int TextGUI::LinesFrameBuffer::PushBackAndUpdate(TextGUI::Line *l, int xo, int wlo, int wll, int flag) {
     if (!(flag & Flag::NoLayout)) l->Layout(wrap ? w : 0, flag & Flag::Flush);
     int wl = max(0, l->Lines() - wlo), lh = (wll ? min(wll, wl) : wl) * font_height;
-    if (!lh) return 0; Box b(xo, wlo * font_height, 0, lh);
+    if (!lh) return 0; Box b(xo, wlo * font_height, w, lh);
     return RingFrameBuffer::PushBackAndUpdate(l, b, paint_cb, !(flag & Flag::NoVWrap)) / font_height;
 }
 
@@ -216,10 +216,10 @@ void TextGUI::LinesFrameBuffer::PushBackAndUpdateOffset(TextGUI::Line *l, int lo
     RingFrameBuffer::AdvancePixels(l->Lines() * font_height);
 }
 
-point TextGUI::LinesFrameBuffer::Paint(TextGUI::Line *l, point lp, const Box &b) {
-    Scissor scissor(0, lp.y - b.h, w, b.h);
+point TextGUI::LinesFrameBuffer::Paint(TextGUI::Line *l, point lp, const Box &b, int offset, int len) {
+    Scissor scissor(lp.x, lp.y - b.h, b.w, b.h);
     screen->gd->Clear();
-    l->Draw(lp + b.Position(), 0, 0);
+    l->Draw(lp + b.Position(), -1, offset, len);
     return point(lp.x, lp.y-b.h);
 }
 
@@ -228,6 +228,7 @@ point TextGUI::LinesFrameBuffer::Paint(TextGUI::Line *l, point lp, const Box &b)
 void TextArea::Write(const string &s, bool update_fb, bool release_fb) {
     if (!MainThread()) return RunInMainThread(new Callback(bind(&TextArea::Write, this, s, update_fb, release_fb)));
     write_last = Now();
+    bool wrap = Wrap();
     int update_flag = LineFBPushBack();
     LinesFrameBuffer *fb = GetFrameBuffer();
     if (update_fb && fb->lines) fb->fb.Attach();
@@ -242,7 +243,7 @@ void TextArea::Write(const string &s, bool update_fb, bool release_fb) {
         }
         if (write_timestamp) l->AppendText(StrCat(logtime(Now()), " "), cursor.attr);
         l->AppendText(add_line, cursor.attr);
-        l->Layout(fb->w);
+        l->Layout(wrap ? fb->w : 0);
         if (scrolled_lines) v_scrolled = (float)++scrolled_lines / (WrappedLines()-1);
         if (!update_fb || start_line) continue;
         LineUpdate(&line[-start_line-1], fb, (!append ? update_flag : 0));
@@ -378,13 +379,14 @@ void TextArea::ClickCB(int button, int x, int y, int down) {
         return;
     }
 
-    int scp = s->changing_previously, fh = font->height;
+    int scp = s->changing_previously, fh = font->height, h = fb->Height();
     if (scp) GetGlyphFromCoords((s->end.click = point(line_left+x,y)), &s->end);
     else   { GetGlyphFromCoords((s->beg.click = point(line_left+x,y)), &s->beg); s->end = s->beg; }
 
     bool swap = s->end < s->beg;
-    const Box &gb = swap ? s->end.glyph : s->beg.glyph;
-    const Box &ge = swap ? s->beg.glyph : s->end.glyph;
+    Box gb = swap ? s->end.glyph : s->beg.glyph;
+    Box ge = swap ? s->beg.glyph : s->end.glyph;
+    if (reverse_line_fb) { gb.y=h-gb.y-gb.h; ge.y=h-ge.y-ge.h; }
     s->box = Box3(Box(fb->Width(), fb->Height()), gb.Position(), ge.Position(), fh, fh, ge.w);
     s->changing_previously = s->changing;
 }
@@ -621,7 +623,7 @@ void Terminal::Write(const string &s, bool update_fb, bool release_fb) {
     if (bg_color) screen->gd->ClearColor(*bg_color);
     last_fb = 0;
     for (int i = 0; i < s.size(); i++) {
-        unsigned char c = s[i];
+        const unsigned char &c = s[i];
         if (c == 0x18 || c == 0x1a) { /* CAN or SUB */ parse_state = State::TEXT; continue; }
         if (parse_state == State::ESC) {
             parse_state = State::TEXT; // default next state
@@ -813,12 +815,17 @@ void Terminal::FlushParseText() {
     String16 input_text = String::ToUTF16(parse_text, &consumed);
     for (int wrote = 0; wrote < input_text.size(); wrote += write_size) {
         if (wrote) Newline(true);
-        {
-            LineUpdate l(GetCursorLine(), fb_cb);
-            int remaining = input_text.size() - wrote;
-            write_size = min(remaining, term_width - term_cursor.x + 1);
-            l->UpdateText(term_cursor.x-1, String16Piece(input_text.data()+wrote, write_size), cursor.attr, term_width);
-        }
+        Line *l = GetCursorLine();
+        LinesFrameBuffer *fb = GetFrameBuffer(l);
+        int remaining = input_text.size() - wrote, o = term_cursor.x-1;
+        write_size = min(remaining, term_width - o);
+        bool append = l->UpdateText(o, String16Piece(input_text.data()+wrote, write_size),
+                                    cursor.attr, term_width);
+        l->Layout();
+        if (!fb->lines) continue;
+        int sx = l->data->glyphs[o].box.x, ex = l->data->glyphs.Back().box.right(), ol = l->Size() - o;
+        if (append) l->Draw(l->p, -1, o, ol);
+        else LinesFrameBuffer::Paint(l, point(sx, l->p.y), Box(-sx, 0, ex - sx, fb->font_height), o, ol);
     }
     term_cursor.x += write_size;
     parse_text.erase(0, consumed);
