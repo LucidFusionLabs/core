@@ -405,8 +405,11 @@ struct PrefixSumKeyedRedBlackTreeNode : public RedBlackTreeNode<K,V,Zipper> {
 template <class K, class V, class Zipper = PrefixSumZipper, class Node = PrefixSumKeyedRedBlackTreeNode<K,V,Zipper> >
 struct PrefixSumKeyedRedBlackTree : public RedBlackTree<K,V,PrefixSumZipper,Node> {
     typedef RedBlackTree<K,V,PrefixSumZipper,Node> Parent;
-    function<K     (const V*)> node_value_cb = [](const V *v){ return 1;          };
-    function<string(const V*)> node_print_cb = [](const V *v){ return StrCat(*v); };
+    function<K     (const V*)> node_value_cb;
+    function<string(const V*)> node_print_cb;
+    PrefixSumKeyedRedBlackTree() : 
+        node_value_cb([](const V *v){ return 1;          }), 
+        node_print_cb([](const V *v){ return StrCat(*v); }) {}
 
     virtual K GetCreateNodeKey(const typename Parent::Query *q) const { return node_value_cb(q->val); }
     virtual int ResolveInsertCollision(int ind, typename Parent::Query *q) { 

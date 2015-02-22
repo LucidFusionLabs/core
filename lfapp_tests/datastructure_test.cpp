@@ -303,7 +303,9 @@ template <class K, class V, class Node = PrefixSumKeyedAVLTreeNode<K,V> >
 struct PrefixSumKeyedAVLTree : public AVLTree<K,V,Node> {
     typedef AVLTree<K,V,Node> Parent;
     mutable AVLTreeZipper z;
-    function<K(const V*)> node_value_cb = bind([&](){ return 1; });
+    function<K(const V*)> node_value_cb;
+    PrefixSumKeyedAVLTree() : node_value_cb([&](const V*){ return 1; }) {}
+
     virtual K GetCreateNodeKey(const typename Parent::Query *q) const { return node_value_cb(q->ret); }
     virtual typename Parent::Query GetQuery(const K &k, const V *v=0) {
         z.Reset();

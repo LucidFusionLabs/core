@@ -761,8 +761,8 @@ struct BoxArray {
     void InsertAt(int o, const vector<Drawable::Box> &x) {
         CHECK_EQ(0, line_ind.size());
         point p(x.size() ? (x.back().box.right() - x.front().box.x) : 0, 0);
-        auto i = data.insert(data.begin()+o, x.begin(), x.end()) + x.size();
-        for (; i != data.end(); ++i) i->box += p;
+        data.insert(data.begin()+o, x.begin(), x.end());
+        for (auto i = data.begin()+o+x.size(); i != data.end(); ++i) i->box += p;
     }
     void Erase(int o, size_t l=UINT_MAX, bool shift=false) { 
         if (!l || data.size() <= o) return;
