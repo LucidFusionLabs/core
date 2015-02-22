@@ -256,7 +256,7 @@ struct Bind {
 
 }; // namespace LFL
 namespace std {
-    template <> struct ::std::hash<LFL::Bind> {
+    template <> struct hash<LFL::Bind> {
         size_t operator()(const LFL::Bind &v) const { return ::std::hash<LFL::InputEvent::Id>()(v.key); }
     };
 }; // namespace std;

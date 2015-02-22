@@ -313,15 +313,15 @@ struct HTMLParser {
     }
     static int FindStackOffset(const TagStack &stack, const String &tag, const String &stop) {
         for (int i=stack.size()-1; i>=0; i--) {
-            if (stack[i].name == stop) return max(0UL, stack.size()-i-2);
-            if (stack[i].name == tag)  return          stack.size()-i-1;
+            if (stack[i].name == stop) return Xge0_or_Y(stack.size()-i-2, 0);
+            if (stack[i].name == tag)  return           stack.size()-i-1;
         }
         return -1;
     }
     static int FindStackOffset(const TagStack &stack, const String &tag, const String &stop1, const String &stop2) {
         for (int i=stack.size()-1; i>=0; i--) {
-            if (stack[i].name == stop1 || stack[i].name == stop2) return max(0UL, stack.size()-i-2);
-            if (stack[i].name == tag)                             return          stack.size()-i-1;
+            if (stack[i].name == stop1 || stack[i].name == stop2) return Xge0_or_Y(stack.size()-i-2, 0);
+            if (stack[i].name == tag)                             return           stack.size()-i-1;
         }
         return -1;
     }

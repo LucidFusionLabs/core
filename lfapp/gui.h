@@ -242,8 +242,8 @@ struct TextGUI : public KeyboardGUI {
     };
     struct Line {
         point p;
-        Lines *cont=0;
         TextGUI *parent=0;
+        TextGUI::Lines *cont=0;
         shared_ptr<LineData> data;
         Line() : data(new LineData()) {}
         Line &operator=(const Line &s) { data=s.data; return *this; }
@@ -252,7 +252,7 @@ struct TextGUI : public KeyboardGUI {
 
         int GetAttrId(const Drawable::Attr &a) { return data->glyphs.attr.GetAttrId(a); }
         void InitFlow() { data->flow = Flow(&data->box, parent->font, &data->glyphs, &parent->layout); }
-        void Init(Lines *C, TextGUI *P) { cont=C; parent=P; InitFlow(); }
+        void Init(TextGUI *P, TextGUI::Lines *C) { parent=P; cont=C; InitFlow(); }
         int Size () const { return data->glyphs.Size(); }
         int Lines() const { return 1+data->glyphs.line.size(); }
         string Text() const { return data->glyphs.Text(); }
@@ -316,7 +316,7 @@ struct TextGUI : public KeyboardGUI {
         Lines(TextGUI *P, int N) :
             RingVector<Line>(N), wrapped_lines(N),
             move_cb (bind(&Line::Move,  _1, _2)), 
-            movep_cb(bind(&Line::MoveP, _1, _2)) { for (auto &i : data) i.Init(this, P); }
+            movep_cb(bind(&Line::MoveP, _1, _2)) { for (auto &i : data) i.Init(P, this); }
 
         Line *PushFront() { Line *l = RingVector<Line>::PushFront(); l->Clear(); return l; }
         Line *InsertAt(int dest_line, int lines=1, int dont_move_last=0) {
@@ -388,7 +388,7 @@ struct TextGUI : public KeyboardGUI {
     bool deactivate_on_enter=0, clickable_links=0, insert_mode=1;
     int start_line=0, end_line=0, start_line_adjust=0, skip_last_lines=0;
     TextGUI(Window *W, Font *F) : KeyboardGUI(W, F), font(F)
-    { cmd_line.Init(0,this); cmd_line.GetAttrId(Drawable::Attr(F)); }
+    { cmd_line.Init(this,0); cmd_line.GetAttrId(Drawable::Attr(F)); }
 
     virtual ~TextGUI() {}
     virtual int CommandLines() const { return 0; }

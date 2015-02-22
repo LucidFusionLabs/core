@@ -37,6 +37,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <thread>
+#include <mutex>
 #define LFL_STL11_NAMESPACE std
 
 #ifdef _WIN32
@@ -1132,10 +1133,10 @@ struct MessageQueue {
     static const int CallbackMessage = 1;
     struct Entry { int id; void *opaque; };
     deque<Entry> queue;
-    mutex mutex;
+    mutex lock;
 
-    void Write(int n, void *x) { ScopedMutex sm(mutex); Entry e = { n, x }; queue.push_back(e); }
-    int Read(void** out) { if (!queue.size()) return 0; ScopedMutex sm(mutex); if (!queue.size()) return 0; Entry e = PopBack(queue); *out = e.opaque; return e.id; }
+    void Write(int n, void *x) { ScopedMutex sm(lock); Entry e = { n, x }; queue.push_back(e); }
+    int Read(void** out) { if (!queue.size()) return 0; ScopedMutex sm(lock); if (!queue.size()) return 0; Entry e = PopBack(queue); *out = e.opaque; return e.id; }
     void HandleMessagesLoop() { while (GetLFApp()->run) { HandleMessages(); Msleep(30); } }
     void HandleMessages() {
         void *message; int message_id;
