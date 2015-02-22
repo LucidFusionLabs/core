@@ -190,15 +190,22 @@ int NBRead(int fd, char *buf, int len) {
     ss.Add(fd, SocketSet::READABLE, 0);
     ss.Select(0);
     if (!app->run || !ss.GetReadable(fd)) return 0;
-    return read(fd, buf, len);
+    int o = 0, s = 0;
+    do if ((s = ::read(fd, buf+o, len-o)) > 0) o += s;
+    while (s > 0 && len - o > 1024);
+    return o;
+}
+int NBRead(int fd, string *buf) {
+    int l = NBRead(fd, (char*)buf->data(), buf->size());
+    buf->resize(max(0,l));
+    return l;
 }
 string NBRead(int fd, int len) {
     string ret(len, 0);
-    int l = NBRead(fd, (char*)ret.data(), ret.size());
-    if (l <= 0) return "";
-    ret.resize(l);
+    NBRead(fd, &ret);
     return ret;
 }
+
 timeval Time2timeval(Time x) {
     struct timeval ret = { (long)ToSeconds(x), 0 };
     ret.tv_usec = ToMicroSeconds(x - Seconds(ret.tv_sec));
@@ -2195,7 +2202,7 @@ int Application::Frame() {
         screen->fps.Add(clicks);
 
         if (FLAGS_lfapp_video) {
-            video.Flush();
+            video.Swap();
             screen->gd->DrawMode(DrawMode::_3D);
         }
     }

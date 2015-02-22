@@ -516,6 +516,7 @@ void PressAnyKey();
 bool FGets(char *buf, int size);
 bool NBFGets(FILE*, char *buf, int size);
 int NBRead(int fd, char *buf, int size);
+int NBRead(int fd, string *buf);
 string NBRead(int fd, int size);
 
 template <int V>          int                 isint (int N) { return N == V; }
