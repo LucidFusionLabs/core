@@ -74,11 +74,13 @@ const char *Protocol::Name(int p) {
     else return "";
 }
 
+IPV4::Addr IPV4::Parse(const string &ip) { return inet_addr(ip.c_str()); }
+
 void IPV4::ParseCSV(const string &text, vector<IPV4::Addr> *out) {
     vector<string> addrs; IPV4::Addr addr;
     Split(text, iscomma, &addrs);
     for (int i = 0; i < addrs.size(); i++) {
-        if ((addr = Network::addr(addrs[i])) == INADDR_NONE) FATAL("unknown addr ", addrs[i]);
+        if ((addr = Parse(addrs[i])) == INADDR_NONE) FATAL("unknown addr ", addrs[i]);
         out->push_back(addr);
     }
 }
@@ -87,7 +89,7 @@ void IPV4::ParseCSV(const string &text, set<IPV4::Addr> *out) {
     vector<string> addrs; IPV4::Addr addr;
     Split(text, iscomma, &addrs);
     for (int i = 0; i < addrs.size(); i++) {
-        if ((addr = Network::addr(addrs[i])) == INADDR_NONE) FATAL("unknown addr ", addrs[i]);
+        if ((addr = Parse(addrs[i])) == INADDR_NONE) FATAL("unknown addr ", addrs[i]);
         out->insert(addr);
     }
 }
@@ -452,7 +454,7 @@ void Network::UDPConnectionFrame(Service *svc, Connection *c, vector<string> *re
     }
 }
 
-Socket Network::socket_open(int protocol) {
+Socket Network::OpenSocket(int protocol) {
     if (protocol == Protocol::TCP) return socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
     else if (protocol == Protocol::UDP) {
         Socket ret;
@@ -470,7 +472,7 @@ Socket Network::socket_open(int protocol) {
     else return -1;
 }
 
-int Network::socket_blocking(Socket fd, int blocking) {
+int Network::SetSocketBlocking(Socket fd, int blocking) {
 #ifdef _WIN32
     u_long ioctlarg = !blocking ? 1 : 0;
     if (ioctlsocket(fd, FIONBIO, &ioctlarg) < 0) return -1;
@@ -480,30 +482,28 @@ int Network::socket_blocking(Socket fd, int blocking) {
     return 0;
 }
 
-int Network::broadcast_enabled(Socket fd, int optval) {
-    if (setsockopt(fd, SOL_SOCKET, SO_BROADCAST, (const char*)&optval, sizeof(optval)) == -1)
+int Network::SetSocketBroadcastEnabled(Socket fd, int optval) {
+    if (setsockopt(fd, SOL_SOCKET, SO_BROADCAST, (const char*)&optval, sizeof(optval)))
     { ERROR("setsockopt: ", Connection::lasterror()); return -1; }
     return 0;
 }
 
-IPV4::Addr Network::addr(const string &ip) { return inet_addr(ip.c_str()); }
-IPV4::Addr Network::resolve(const string &host) {
-    struct hostent *h;
-    struct in_addr a;
-
-    a.s_addr = Network::addr(host);
-    if (a.s_addr != INADDR_NONE) return (int)a.s_addr;
-
-    h = gethostbyname(host.c_str());
-    if (h && h->h_length == 4) return *(int *)h->h_addr_list[0];
-
-    ERROR("Network::resolve ", host);
-    return -1;
+int Network::SetSocketReceiveBufferSize(Socket fd, int optval) {
+    if (setsockopt(fd, SOL_SOCKET, SO_RCVBUF, (const char *)&optval, sizeof(optval)))
+    { ERROR("setsockopt: ", Connection::lasterror()); return -1; }
+    return 0;
 }
 
-int Network::bind(int fd, IPV4::Addr addr, int port) {
+int Network::GetSocketReceiveBufferSize(Socket fd) {
+    int res=0, resSize=sizeof(res);
+    if (getsockopt(fd, SOL_SOCKET, SO_RCVBUF, (char*)&res, (socklen_t*)&resSize))
+    { ERROR("getsockopt: ", Connection::lasterror()); return -1; }
+    return res;
+}
+
+int Network::Bind(int fd, IPV4::Addr addr, int port) {
     sockaddr_in sin; int optval = 1;
-    if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (const char*)&optval, sizeof(optval)) == -1)
+    if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (const char*)&optval, sizeof(optval)))
     { ERROR("setsockopt: ", Connection::lasterror()); return -1; }
 
     memset(&sin, 0, sizeof(sockaddr_in));
@@ -518,26 +518,26 @@ int Network::bind(int fd, IPV4::Addr addr, int port) {
     return 0;
 }
 
-Socket Network::listen(int protocol, IPV4::Addr addr, int port) {
+Socket Network::Listen(int protocol, IPV4::Addr addr, int port) {
     Socket fd;
-    if ((fd = Network::socket_open(protocol)) < 0) 
+    if ((fd = Network::OpenSocket(protocol)) < 0) 
     { ERROR("network_socket_open: ", Connection::lasterror()); return -1; }
 
-    if (Network::bind(fd, addr, port) == -1) { close(fd); return -1; }
+    if (Network::Bind(fd, addr, port) == -1) { close(fd); return -1; }
 
     if (protocol == Protocol::TCP) {
         if (::listen(fd, 32) == -1)
         { ERROR("listen: ", Connection::lasterror()); close(fd); return -1; }
     }
 
-    if (Network::socket_blocking(fd, 0))
+    if (Network::SetSocketBlocking(fd, 0))
     { ERROR("Network::socket_blocking: ", Connection::lasterror()); close(fd); return -1; }
 
     INFO("listen(port=", port, ", protocol=", (protocol == Protocol::TCP) ? "TCP" : "UDP", ")");
     return fd;
 }
 
-int Network::connect(Socket fd, IPV4::Addr addr, int port, int *connected) {
+int Network::Connect(Socket fd, IPV4::Addr addr, int port, int *connected) {
     struct sockaddr_in sin;
     memset(&sin, 0, sizeof(struct sockaddr_in));
     sin.sin_family = AF_INET;
@@ -553,7 +553,7 @@ int Network::connect(Socket fd, IPV4::Addr addr, int port, int *connected) {
     return 0;
 }
 
-int Network::sendto(Socket fd, IPV4::Addr addr, int port, const char *buf, int len) {
+int Network::SendTo(Socket fd, IPV4::Addr addr, int port, const char *buf, int len) {
     sockaddr_in sin; int sinSize=sizeof(sin);
     sin.sin_family = PF_INET;
     sin.sin_addr.s_addr = addr;
@@ -561,7 +561,7 @@ int Network::sendto(Socket fd, IPV4::Addr addr, int port, const char *buf, int l
     return ::sendto(fd, buf, len, 0, (struct sockaddr*)&sin, sinSize);
 }
 
-int Network::getpeername(Socket fd, IPV4::Addr *addr_out, int *port_out) {
+int Network::GetPeerName(Socket fd, IPV4::Addr *addr_out, int *port_out) {
     struct sockaddr_in sin; int sinSize=sizeof(sin);
     if (::getpeername(fd, (struct sockaddr *)&sin, (socklen_t*)&sinSize) < 0)
     { ERROR("getpeername: ", strerror(errno)); return -1; }
@@ -570,7 +570,7 @@ int Network::getpeername(Socket fd, IPV4::Addr *addr_out, int *port_out) {
     return 0;
 }
 
-int Network::getsockname(Socket fd, IPV4::Addr *addr_out, int *port_out) {
+int Network::GetSockName(Socket fd, IPV4::Addr *addr_out, int *port_out) {
     struct sockaddr_in sin; int sinSize=sizeof(sin);
     if (::getsockname(fd, (struct sockaddr *)&sin, (socklen_t*)&sinSize) < 0)
     { ERROR("getsockname: ", strerror(errno)); return -1; }
@@ -579,13 +579,27 @@ int Network::getsockname(Socket fd, IPV4::Addr *addr_out, int *port_out) {
     return 0;
 }
 
-string Network::gethostbyaddr(IPV4::Addr addr) {
+string Network::GetHostByAddr(IPV4::Addr addr) {
 #if defined(_WIN32) || defined(LFL_ANDROID)
     struct hostent *h = ::gethostbyaddr((const char *)&addr, sizeof(addr), PF_INET);
 #else
     struct hostent *h = ::gethostbyaddr((const void *)&addr, sizeof(addr), PF_INET);
 #endif
     return h ? h->h_name : "";
+}
+
+IPV4::Addr Network::GetHostByName(const string &host) {
+    struct hostent *h;
+    struct in_addr a;
+
+    a.s_addr = IPV4::Parse(host);
+    if (a.s_addr != INADDR_NONE) return (int)a.s_addr;
+
+    h = gethostbyname(host.c_str());
+    if (h && h->h_length == 4) return *(int *)h->h_addr_list[0];
+
+    ERROR("Network::resolve ", host);
+    return -1;
 }
 
 void SelectSocketThread::ThreadProc() {
@@ -766,7 +780,7 @@ bool HTTP::host(const char *hostname, const char *host_end, IPV4::Addr *ipv4_add
 
 bool HTTP::resolve(const string &host, const string &port, IPV4::Addr *ipv4_addr, int *tcp_port, bool ssl, int default_port) {
     if (ipv4_addr) {
-        *ipv4_addr = Network::resolve(host);
+        *ipv4_addr = Network::GetHostByName(host);
         if (*ipv4_addr == -1) { ERROR("resolve"); return 0; }
     }
     if (tcp_port) {
@@ -991,7 +1005,7 @@ int Connection::read() {
         }
 #endif
     }
-    else {
+    else { // XXX loop until read -1 with EAGAIN
         if ((len = recv(socket, rb+rl, readlen, 0)) <= 0) {
             if      (!len)                      ERROR(name(), ": read() zero");
             else if (len < 0 && !ewouldblock()) ERROR(name(), ": read(): ", Connection::lasterror());
@@ -1104,7 +1118,7 @@ int Connection::writeflush() {
     return wrote;
 }
 
-int Connection::sendto(const char *buf, int len) { return Network::sendto(socket, addr, port, buf, len); }
+int Connection::sendto(const char *buf, int len) { return Network::SendTo(socket, addr, port, buf, len); }
 
 bool Connection::ewouldblock() {
 #ifdef _WIN32
@@ -1131,11 +1145,11 @@ void Service::Close(Connection *c) {
 }
 
 int Service::OpenSocket(Connection *c, int protocol, int blocking, IPV4EndpointSource* src_pool) {
-    Socket fd = Network::socket_open(protocol);
+    Socket fd = Network::OpenSocket(protocol);
     if (fd == -1) return -1;
 
     if (!blocking) {
-        if (Network::socket_blocking(fd, 0))
+        if (Network::SetSocketBlocking(fd, 0))
         { close(fd); return -1; }
     }
 
@@ -1146,7 +1160,7 @@ int Service::OpenSocket(Connection *c, int protocol, int blocking, IPV4EndpointS
             if (i >= max_bind_attempts || (i && c->src_addr == last_src.addr && c->src_port == last_src.port))
             { ERROR("connect-bind ", IPV4Endpoint::name(c->src_addr, c->src_port), ": ", strerror(errno)); close(fd); return -1; }
 
-            if (Network::bind(fd, c->src_addr, c->src_port) != -1) break;
+            if (Network::Bind(fd, c->src_addr, c->src_port) != -1) break;
             src_pool->BindFailed(c->src_addr, c->src_port);
             last_src = IPV4Endpoint(c->src_addr, c->src_port);
         }
@@ -1168,7 +1182,7 @@ Socket Service::Listen(IPV4::Addr addr, int port, Listener *listener) {
         BIO_set_accept_bios(listener->ssl, BIO_new_ssl(lfapp_ssl, 0));
 #endif
     } else {
-        if ((listener->socket = Network::listen(protocol, addr, port)) == -1)
+        if ((listener->socket = Network::Listen(protocol, addr, port)) == -1)
         { ERROR("Network::listen(", protocol, ", ", port, "): ", Connection::lasterror().c_str()); return -1; }
     }
     active.Add(listener->socket, SocketSet::READABLE, &listener->self_reference);
@@ -1193,7 +1207,7 @@ Connection *Service::Connect(IPV4::Addr addr, int port, IPV4EndpointSource *src_
     { ERROR(c->name(), ": connecting: ", c->lasterror()); delete c; return 0; }
 
     int connected = 0;
-    if (Network::connect(c->socket, c->addr, c->port, &connected) == -1) {
+    if (Network::Connect(c->socket, c->addr, c->port, &connected) == -1) {
         ERROR(c->name(), ": connecting: ", c->lasterror());
         close(c->socket);
         delete c;
@@ -1438,7 +1452,7 @@ void Resolver::DefaultNameserver(vector<IPV4::Addr> *nameservers) {
     for (const char *line = file.NextLine(); line; line = file.NextLine()) {
         StringWordIter words(line);
         if (strcmp(words.Next(), "nameserver")) continue;
-        nameservers->push_back(Network::resolve(words.Next()));
+        nameservers->push_back(IPV4::Parse(words.Next()));
     }
 #endif
 }
@@ -1519,7 +1533,7 @@ void Resolver::Nameserver::Dequeue() {
 RecursiveResolver::RecursiveResolver() : queries_requested(0), queries_completed(0) {
     vector<IPV4::Addr> addrs;
 #   define XX(x)
-#   define YY(x) addrs.push_back(Network::addr(x));
+#   define YY(x) addrs.push_back(IPV4::Parse(x));
 #   include "lfapp/namedroot.h"
     root.resolver.Connect(addrs);
 }
@@ -1812,7 +1826,7 @@ bool HTTPClient::WGet(const string &url, File *out, ResponseCB cb) {
 
     IPV4::Addr addr;
     HTTPClientQuery::WGet *query = new HTTPClientQuery::WGet(this, ssl, host, tcp_port, path, out, cb);
-    if ((addr = Network::addr(host)) != INADDR_NONE) query->ResolverResponseCB(addr, 0);
+    if ((addr = IPV4::Parse(host)) != INADDR_NONE) query->ResolverResponseCB(addr, 0);
     else if (!Singleton<Resolver>::Get()->Resolve(Resolver::Request(host, DNS::Type::A, bind(&HTTPClientQuery::WGet::ResolverResponseCB, query, _1, _2))))
     { ERROR("resolver: ", url); delete query; return 0; }
     return true;
@@ -2565,7 +2579,7 @@ void Sniffer::Threadproc() {}
 Sniffer *Sniffer::Open(const string &dev, const string &filter, int snaplen, CB cb) { ERROR("sniffer not implemented"); return 0; }
 #endif /* LFL_PCAP */
 void Sniffer::GetIPAddress(IPV4::Addr *out) {
-    static IPV4::Addr localhost = Network::addr("127.0.0.1");
+    static IPV4::Addr localhost = IPV4::Parse("127.0.0.1");
     *out = 0;
 #if defined(_WIN32)
 #elif defined(LFL_ANDROID)
@@ -2584,7 +2598,7 @@ void Sniffer::GetIPAddress(IPV4::Addr *out) {
 #endif
 }
 void Sniffer::GetBroadcastAddress(IPV4::Addr *out) {
-    static IPV4::Addr localhost = Network::addr("127.0.0.1");
+    static IPV4::Addr localhost = IPV4::Parse("127.0.0.1");
     *out = 0;
 #if defined(_WIN32)
 #elif defined(LFL_ANDROID)

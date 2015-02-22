@@ -60,6 +60,7 @@ struct IPV4 {
         int version() const { return vhl >> 4; }
         int hdrlen() const { return (vhl & 0x0f); }
     };
+    static Addr Parse(const string &ip);
     static void ParseCSV(const string &text, vector<Addr> *out);
     static void ParseCSV(const string &text, set<Addr> *out);
     static string MakeCSV(const vector<Addr> &in);
@@ -161,18 +162,20 @@ struct Network : public Module {
     void EndpointClose(Service *svc, Connection *c, vector<string> *removelist, const string &epk);
     void EndpointCloseAll(Service *svc);
 
-    static Socket socket_open(int protocol);
-    static int socket_blocking(Socket fd, int blocking);
-    static int broadcast_enabled(Socket fd, int enabled);
-    static IPV4::Addr addr(const string &ip);
-    static IPV4::Addr resolve(const string &host);
-    static int bind(int fd, IPV4::Addr addr, int port);
-    static Socket listen(int protocol, IPV4::Addr addr, int port);
-    static int connect(Socket fd, IPV4::Addr addr, int port, int *connected);
-    static int sendto(Socket fd, IPV4::Addr addr, int port, const char *buf, int len);
-    static int getsockname(Socket fd, IPV4::Addr *addr_out, int *port_out);
-    static int getpeername(Socket fd, IPV4::Addr *addr_out, int *port_out);
-    static string gethostbyaddr(IPV4::Addr addr);
+    static Socket OpenSocket(int protocol);
+    static int SetSocketBlocking(Socket fd, int blocking);
+    static int SetSocketBroadcastEnabled(Socket fd, int enabled);
+    static int SetSocketReceiveBufferSize(Socket fd, int size);
+    static int GetSocketReceiveBufferSize(Socket fd);
+
+    static int Bind(int fd, IPV4::Addr addr, int port);
+    static Socket Listen(int protocol, IPV4::Addr addr, int port);
+    static int Connect(Socket fd, IPV4::Addr addr, int port, int *connected);
+    static int SendTo(Socket fd, IPV4::Addr addr, int port, const char *buf, int len);
+    static int GetSockName(Socket fd, IPV4::Addr *addr_out, int *port_out);
+    static int GetPeerName(Socket fd, IPV4::Addr *addr_out, int *port_out);
+    static string GetHostByAddr(IPV4::Addr addr);
+    static IPV4::Addr GetHostByName(const string &host);
 };
 
 struct SocketSet {
@@ -372,7 +375,7 @@ struct Connection {
     void connected() { state = Connected; ct = Now(); }
     void reconnect() { state = Reconnect; ct = Now(); }
     void connecting() { state = Connecting; ct = Now(); }
-    int set_source_address() { return Network::getsockname(socket, &src_addr, &src_port); }
+    int set_source_address() { return Network::GetSockName(socket, &src_addr, &src_port); }
     int write(const string &buf) { return write(buf.c_str(), buf.size()); }
     int write(const char *buf, int len);
     int writeflush();

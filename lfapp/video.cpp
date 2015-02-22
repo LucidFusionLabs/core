@@ -709,6 +709,7 @@ void GraphicsDevice::Uniform2f(int u, float v1, float v2) { glUniform2f(u, v1, v
 void GraphicsDevice::Uniform3fv(int u, int n, const float *v) { glUniform3fv(u, n, v); }
 
 // Common layer
+void GraphicsDevice::Flush() { glFlush(); }
 void GraphicsDevice::Clear() { glClear(GL_COLOR_BUFFER_BIT | (draw_mode = DrawMode::_3D ? GL_DEPTH_BUFFER_BIT : 0)); }
 void GraphicsDevice::ClearColor(const Color &c) { glClearColor(c.r(), c.g(), c.b(), c.a()); }
 void GraphicsDevice::PushColor() { default_color.push_back(default_color.back()); UpdateColor();  }
@@ -1196,13 +1197,14 @@ void Video::InitGraphicsDevice() {
          ", opengles_version: ", screen->opengles_version);
 }
 
-int Video::Flush() {
-#ifdef LFL_QT
-    ((QOpenGLContext*)screen->gl)->swapBuffers((QWindow*)screen->id);
-#else
-    glFlush();
+int Video::Swap() {
+#ifndef LFL_QT
+    screen->gd->Flush();
 #endif
-#if defined(LFL_ANDROIDVIDEO)
+
+#if defined(LFL_QT)
+    ((QOpenGLContext*)screen->gl)->swapBuffers((QWindow*)screen->id);
+#elif defined(LFL_ANDROIDVIDEO)
     AndroidVideoSwap();
 #elif defined(LFL_GLFWVIDEO)
     glfwSwapBuffers((GLFWwindow*)screen->id);

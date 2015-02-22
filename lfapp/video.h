@@ -460,7 +460,7 @@ struct Video : public Module {
     Module *impl = 0;
     int Init();
     int Free();
-    int Flush();
+    int Swap();
     void CreateGraphicsDevice();
     void InitGraphicsDevice();
 };
@@ -587,6 +587,7 @@ struct GraphicsDevice {
     void Uniform3fv(int u, int n, const float *v);
 
     // Common layer
+    void Flush();
     void Clear();
     void ClearColor(const Color &c);
     void FillColor(const Color &c) { DisableTexture(); SetColor(c); };

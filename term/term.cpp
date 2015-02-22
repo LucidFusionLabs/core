@@ -62,14 +62,21 @@ void MyHoverLinkCB(TextArea::Link *link) {
     Box::DelBorder(screen->Box(), screen->width*.2, screen->height*.2).Draw();
 }
 
+struct ReadBuffer {
+    string data; int size;
+    ReadBuffer(int S=0) : size(S), data(S, 0) {}
+    void Reset() { data.resize(size); }
+};
+
 struct MyTerminalWindow {
     Process process;
+    ReadBuffer read_buf;
     Terminal *terminal=0;
     Shader *activeshader;
     int font_size;
     AnyBoolElement effects_mode;
 
-    MyTerminalWindow() : activeshader(&app->video.shader_default), font_size(FLAGS_default_font_size), effects_mode(&LFL::effects_mode) {}
+    MyTerminalWindow() : read_buf(65536), activeshader(&app->video.shader_default), font_size(FLAGS_default_font_size), effects_mode(&LFL::effects_mode) {}
     ~MyTerminalWindow() { if (process.in) app->scheduler.DelWaitForeverSocket(fileno(process.in)); }
 
     void Open() {
@@ -90,8 +97,8 @@ struct MyTerminalWindow {
 
 int Frame(Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample, int flag) {
     MyTerminalWindow *tw = (MyTerminalWindow*)W->user1;
-    string terminal_output = NBRead(fileno(tw->process.in), 4096);
-    if (!terminal_output.empty()) tw->terminal->Write(terminal_output);
+    tw->read_buf.Reset();
+    if (NBRead(fileno(tw->process.in), &tw->read_buf.data)) tw->terminal->Write(tw->read_buf.data);
 
     W->gd->DrawMode(DrawMode::_2D);
     tw->terminal->DrawWithShader(W->Box(), true, tw->activeshader);
