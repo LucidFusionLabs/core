@@ -589,13 +589,10 @@ string Network::GetHostByAddr(IPV4::Addr addr) {
 }
 
 IPV4::Addr Network::GetHostByName(const string &host) {
-    struct hostent *h;
-    struct in_addr a;
+    in_addr a;
+    if ((a.s_addr = IPV4::Parse(host)) != INADDR_NONE) return (int)a.s_addr;
 
-    a.s_addr = IPV4::Parse(host);
-    if (a.s_addr != INADDR_NONE) return (int)a.s_addr;
-
-    h = gethostbyname(host.c_str());
+    hostent *h = gethostbyname(host.c_str());
     if (h && h->h_length == 4) return *(int *)h->h_addr_list[0];
 
     ERROR("Network::resolve ", host);

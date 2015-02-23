@@ -1524,7 +1524,8 @@ void SimpleVideoResampler::CopyPixel(int s_fmt, int d_fmt, const unsigned char *
         case Pixel::RGB32: r = *sp++; g = *sp++; b = *sp++; a=*sp++; break;
         case Pixel::BGR32: r = *sp++; g = *sp++; b = *sp++; a=*sp++; break;
         case Pixel::RGBA:  r = *sp++; g = *sp++; b = *sp++; a=*sp++; break;
-        case Pixel::GRAY8: r = 255;   g = 255;   b = 255;   a=*sp++; break;
+        //   Pixel::GRAY8: r = 255;   g = 255;   b = 255;   a=*sp++; break;
+        case Pixel::GRAY8: r = g = b = a = *sp++; break;
         case Pixel::LCD: 
             r = (sxb ? 0 : *(sp-1)) / 3.0 + *sp / 3.0 + (          *(sp+1)) / 3.0; sp++; 
             g = (          *(sp-1)) / 3.0 + *sp / 3.0 + (          *(sp+1)) / 3.0; sp++; 
@@ -1715,6 +1716,11 @@ void Texture::UpdateGL(const unsigned char *B, int X, int Y, int W, int H, int f
     int gl_tt = GLTexType(), gl_y = (flag & Flag::FlipY) ? height-Y-H : Y;
     screen->gd->BindTexture(gl_tt, ID);
     glTexSubImage2D(gl_tt, 0, X, gl_y, W, H, GLPixelType(), GL_UNSIGNED_BYTE, B);
+}
+
+void Texture::DumpGL() {
+    RenewBuffer();
+    glGetTexImage(GLTexType(), 0, GLPixelType(), GL_UNSIGNED_BYTE, buf);
 }
 
 void Texture::ToIplImage(_IplImage *out) {
@@ -1936,18 +1942,10 @@ bool Atlas::Add(int *x_out, int *y_out, float *texcoord, int w, int h, int max_h
     return true;
 }
 
-void Atlas::Update(const string &name, Font *f, bool dump) {
-    if (dump) {
-        LocalFile lf(ASSETS_DIR + name + "00.png", "w");
-        PngWriter::Write(&lf, tex);
-        INFO("wrote ", lf.Filename());
-        WriteGlyphFile(name, f);
-    }
-    if (1) { /* complete atlas */
-        tex.LoadGL();
-        GlyphTableIter(f) if (i->       tex.width) i->       tex.ID = tex.ID;
-        GlyphIndexIter(f) if (i->second.tex.width) i->second.tex.ID = tex.ID;
-    }
+void Atlas::Update(Font *f) {
+    tex.LoadGL();
+    GlyphTableIter(f) if (i->       tex.width) i->       tex.ID = tex.ID;
+    GlyphIndexIter(f) if (i->second.tex.width) i->second.tex.ID = tex.ID;
 }
 
 void Atlas::WriteGlyphFile(const string &name, Font *f) {
@@ -1987,7 +1985,8 @@ void Atlas::MakeFromPNGFiles(const string &name, const vector<string> &png, int 
         out->tex.ClearBuffer();
     }
 
-    atlas->Update(name, ret, true);
+    ret->WriteAtlas(name, &atlas->tex);
+    atlas->Update(ret);
     atlas->tex.ClearBuffer();
 
     if (glyphs_out) *glyphs_out = ret;
@@ -2066,6 +2065,14 @@ Font *Font::Clone(int pointsize, Color Fg, int Flag) {
     ret->flag = Flag;
     ret->Scale(pointsize);
     return ret;
+}
+
+void Font::WriteAtlas(const string &name) { WriteAtlas(name, &glyph->atlas[0]->tex); }
+void Font::WriteAtlas(const string &name, Texture *t) {
+    LocalFile lf(ASSETS_DIR + name + "00.png", "w");
+    PngWriter::Write(&lf, *t);
+    INFO("wrote ", lf.Filename());
+    Atlas::WriteGlyphFile(name, this);
 }
 
 Font *Font::OpenAtlas(const string &name, int size, Color c, int flag) {
@@ -2275,7 +2282,7 @@ Font::Glyph *TTFFont::LoadGlyph(unsigned glyph_id) {
 
 Font *TTFFont::Open(const shared_ptr<TTFFont::Resource> &resource, int size, Color c, int flag) {
     FT_FaceRec_ *face = resource->face; int count = 0, error;
-    bool fixed_width = FT_IS_FIXED_WIDTH(face), write_atlas = resource->flag & Flag::WriteAtlas, outline = resource->flag & Flag::Outline;
+    bool fixed_width = FT_IS_FIXED_WIDTH(face), outline = resource->flag & Flag::Outline;
     if ((error = FT_Set_Pixel_Sizes(face, 0, size))) { ERROR("FT_Set_Pixel_Sizes(", size, ") = ", error); return 0; }
 
     TTFFont *ret = 0; Atlas *atlas = 0;
@@ -2332,7 +2339,8 @@ Font *TTFFont::Open(const shared_ptr<TTFFont::Resource> &resource, int size, Col
         TTFFontFilter(atlas->tex.buf, wd, ht, atlas->tex.pf, atlas->tex.LineSize(), atlas_x + out->left, atlas_y);
     }
 
-    atlas->Update(resource->name, ret, write_atlas);
+    if (resource->flag & Flag::WriteAtlas) ret->WriteAtlas(resource->name, &atlas->tex);
+    atlas->Update(ret);
     atlas->tex.ClearBuffer();
     INFO("TTTFont(", SpellNull(face->family_name), "), FW=", fixed_width, ", texID=", atlas->tex.ID);
     return ret;
@@ -2484,7 +2492,8 @@ Font *CoreTextFont::Open(const shared_ptr<Resource> &resource, int size, Color c
     }
     CGContextRelease(context);
 
-    atlas->Update(resource->name, ret, resource->flag & Flag::WriteAtlas);
+    if (resource->flag & Flag::WriteAtlas) ret->WriteAtlas(resource->name, &atlas->tex);
+    atlas->Update(ret);
     atlas->tex.ClearBuffer();
 
     CFStringRef font_name = CGFontCopyFullName(resource->cgfont);
