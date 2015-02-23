@@ -83,11 +83,6 @@ extern "C" {
 #include "libarchive/archive_entry.h"
 #endif
 
-#ifdef LFL_RE2
-#define LFL_REGEX
-#include "regexp.h"
-#endif
-
 #ifdef LFL_ICONV
 #include <iconv.h>
 #endif
@@ -104,7 +99,15 @@ extern "C" {
 #include "lualib.h"
 #include "lauxlib.h"
 #endif
+
+#ifdef LFL_SREGEX
+#include "sregex.h"
+#endif
 };
+
+#ifdef LFL_REGEX
+#include "regexp.h"
+#endif
 
 #ifdef LFL_V8JS
 #include <v8.h>
@@ -1622,28 +1625,55 @@ const void *ArchiveIter::Data() { return 0; }
 void ArchiveIter::Skip() {}
 #endif /* LFL_LIBARCHIVE */
 
-#ifdef LFL_RE2
-int Regex::Run(const string &patternstr, const string &text, vector<Regex::Match> *out) {
-    regexp* compiled; int retval;
-    if ((retval = re_comp(&compiled, patternstr.c_str())) < 0) return retval;
-
-    int num_matches = re_nsubexp(compiled);
-    regmatch* matches = new regmatch[num_matches];
-    retval = re_exec(compiled, text.c_str(), re_nsubexp(compiled), &matches[0]);
-    re_free(compiled);
-    if (retval < 1) { delete [] matches; return retval; }
-
-    for (int i=0; i<num_matches; i++) {
-        Match m = { matches[i].begin, matches[i].end };
-        if (out) out->push_back(m);
-    }
-    delete[] matches;
+#ifdef LFL_REGEX
+Regex::~Regex() { re_free((regexp*)impl); }
+Regex::Regex(const string &patternstr) {
+    regexp* compiled = 0;
+    if (!re_comp(&compiled, patternstr.c_str())) impl = compiled;
+}
+int Regex::Match(const string &text, vector<Regex::Result> *out) {
+    if (!impl) return -1;
+    regexp* compiled = (regexp*)impl;
+    vector<regmatch> matches(re_nsubexp(compiled));
+    int retval = re_exec(compiled, text.c_str(), matches.size(), &matches[0]);
+    if (retval < 1) return retval;
+    if (out) for (auto i : matches) out->emplace_back(i.begin, i.end);
     return 1;
 }
+#else
+Regex::~Regex() {}
+Regex::Regex(const string &patternstr) {}
+int Regex::Match(const string &text, vector<Regex::Result> *out) { return 0; }
 #endif
 
-#ifndef LFL_REGEX
-int Regex::Run(const string &patternstr, const string &text, vector<Regex::Match> *out) { return 0; }
+#ifdef LFL_SREGEX
+StreamRegex::~StreamRegex() {
+    if (ppool) sre_destroy_pool((sre_pool_t*)ppool);
+    if (cpool) sre_destroy_pool((sre_pool_t*)cpool);
+}
+StreamRegex::StreamRegex(const string &patternstr) : ppool(sre_create_pool(1024)), cpool(sre_create_pool(1024)) {
+    sre_uint_t ncaps;
+    sre_int_t err_offset = -1;
+    sre_regex_t *re = sre_regex_parse((sre_pool_t*)cpool, (sre_char *)patternstr.c_str(), &ncaps, 0, &err_offset);
+    prog = sre_regex_compile((sre_pool_t*)ppool, re);
+    sre_reset_pool((sre_pool_t*)cpool);
+    res.resize(2*(ncaps+1));
+    ctx = sre_vm_pike_create_ctx((sre_pool_t*)cpool, (sre_program_t*)prog, &res[0], res.size()*sizeof(sre_int_t));
+}
+int StreamRegex::Match(const string &text, vector<Regex::Result> *out, bool eof) {
+    int offset = last_end + since_last_end;
+    sre_int_t rc = sre_vm_pike_exec((sre_vm_pike_ctx_t*)ctx, (sre_char*)text.data(), text.size(), eof, NULL);
+    if (rc >= 0) {
+        since_last_end = 0;
+        for (int i = 0, l = res.size(); i < l; i += 2) 
+            out->emplace_back(res[i] - offset, (last_end = res[i+1]) - offset);
+    } else since_last_end += text.size();
+    return 1;
+}
+#else
+StreamRegex::~StreamRegex() {}
+StreamRegex::StreamRegex(const string &patternstr) {}
+int StreamRegex::Match(const string &text, vector<Regex::Result> *out) { return 0; }
 #endif
 
 #ifdef LFL_ICONV

@@ -44,6 +44,7 @@
 #define glReadPixels(a,b,c,d,e,f,g)
 #define glTexImage2D(a,b,c,d,e,f,g,h,i)
 #define glTexSubImage2D(a,b,c,d,e,f,g,h,i)
+#define glGetTexImage(a,b,c,d,e)
 #define glTexParameteri(a,b,c)
 #define glGenRenderbuffers(a,b)
 #define glGenFramebuffers(a,b)
@@ -901,6 +902,7 @@ void GraphicsDevice::Uniform1i(int u, int v) {}
 void GraphicsDevice::Uniform1f(int u, float v) {}
 void GraphicsDevice::Uniform2f(int u, float v1, float v2) {}
 void GraphicsDevice::Uniform3fv(int u, int n, const float *v) {}
+void GraphicsDevice::Flush() {}
 void GraphicsDevice::Clear() {}
 void GraphicsDevice::ClearColor(const Color &c) {}
 void GraphicsDevice::PushColor() {}

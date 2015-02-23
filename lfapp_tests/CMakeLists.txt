@@ -21,3 +21,6 @@ target_link_libraries(tests ${LFAPP_LIB} ${GTEST_LIB})
 
 add_executable(datastructure_test datastructure_test.cpp)
 target_link_libraries(datastructure_test ${LFAPP_LIB} ${GTEST_LIB})
+
+add_executable(regex_test regex_test.cpp)
+target_link_libraries(regex_test ${LFAPP_LIB} ${GTEST_LIB})
