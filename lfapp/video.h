@@ -382,6 +382,7 @@ struct Texture : public Drawable {
     void UpdateGL(int X, int Y, int W, int H, int flag=0) { return UpdateGL(buf?(buf+(Y*width+X)*PixelSize()):0, X, Y, W, H, flag); }
     void UpdateGL() { UpdateGL(0, 0, width, height); }
     void LoadGL() { LoadGL(buf, width, height, pf, LineSize()); }
+    void DumpGL();
 
     virtual int Id() const { return 0; }
     virtual int Layout(const point &p, Box *out) const { *out = LFL::Box(p, width, height); return width; } 
@@ -821,6 +822,8 @@ struct Font : public FontInterface {
     virtual ~Font() {}
     virtual Font *Clone(int pointsize, Color fg, int flag=0);
     static  Font *OpenAtlas(const string &name, int size, Color c, int fonts_flag);
+    void WriteAtlas(const string &name, Texture *t);
+    void WriteAtlas(const string &name);
 
     void Select();
     void Scale(int new_size);
@@ -1400,7 +1403,7 @@ struct Atlas {
     Texture tex; Box dim; Flow flow;
     Atlas(unsigned T, int W, int H=0) : tex(W, H?H:W, Pixel::RGBA, T), dim(tex.width, tex.height), flow(&dim) {}
     bool Add(int *x_out, int *y_out, float *out_texcoord, int w, int h, int max_height=0);
-    void Update(const string &name, Font *glyphs, bool dump);
+    void Update(Font *glyphs);
 
     static void WriteGlyphFile(const string &name, Font *glyphs);
     static void MakeFromPNGFiles(const string &name, const vector<string> &png, int atlas_dim, Font **glyphs_out);
