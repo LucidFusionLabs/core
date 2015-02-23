@@ -340,4 +340,57 @@ TEST(LocalFileTest, Read) {
         EXPECT_EQ(contents, buf);
     }
 }
+
+TEST(RegexTest, URL) {
+    Regex url_matcher("https?://");
+    vector<Regex::Result> matches;
+
+    string in = "aa http://foo bb";
+    url_matcher.Match(in, &matches);
+    EXPECT_EQ(1, matches.size()); EXPECT_EQ("http://", matches[0].Text(in));
+    matches.clear();
+
+    in = "aa https://foo bb";
+    url_matcher.Match(in, &matches);
+    EXPECT_EQ(1, matches.size()); EXPECT_EQ("https://", matches[0].Text(in));
+    matches.clear();
+}
+
+TEST(RegexTest, StreamURL) {
+    StreamRegex url_matcher("https?://");
+    vector<Regex::Result> matches;
+
+    string in = "aa http://foo bb";
+    url_matcher.Match(in, &matches);
+    EXPECT_EQ(1, matches.size()); EXPECT_EQ("http://", matches[0].Text(in));
+    matches.clear();
+
+    in = "aa https://foo bb xxxxxxxxxxx ";
+    url_matcher.Match(in, &matches);
+    EXPECT_EQ(1, matches.size()); EXPECT_EQ("https://", matches[0].Text(in));
+    matches.clear();
+    
+    in = " nothing of note here ";
+    url_matcher.Match(in, &matches);
+    EXPECT_EQ(0, matches.size());
+    matches.clear();
+
+    in = "aa zzzzzzzzzzzz ddddddddddd https://foo qqqqq bb";
+    url_matcher.Match(in, &matches);
+    EXPECT_EQ(1, matches.size()); EXPECT_EQ("https://", matches[0].Text(in));
+    matches.clear();
+
+    in = "drzzz http://coo rrrz";
+    url_matcher.Match(in, &matches);
+    EXPECT_EQ(1, matches.size()); EXPECT_EQ("http://", matches[0].Text(in));
+    matches.clear();
+
+    in = " and um htt";
+    url_matcher.Match(in, &matches);
+    EXPECT_EQ(0, matches.size());
+
+    in = "p://doo ddd ";
+    url_matcher.Match(in, &matches);
+    EXPECT_EQ(1, matches.size()); EXPECT_EQ(-3, matches[0].begin); EXPECT_EQ(4, matches[0].end);
+}
 }; // namespace LFL

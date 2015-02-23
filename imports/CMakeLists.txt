@@ -226,12 +226,19 @@ else(WIN32)
 set(ARCHIVE_LIB ${CMAKE_CURRENT_SOURCE_DIR}/libarchive/.libs/libarchive.a PARENT_SCOPE)
 endif(WIN32)
 
-# re2 regex
-if(LFL_RE2)
-add_subdirectory(re2)
-set(RE2_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/re2 PARENT_SCOPE)
-set(RE2_LIB re2 PARENT_SCOPE)
-endif(LFL_RE2)
+# regex
+if(LFL_REGEX)
+add_subdirectory(regex)
+set(REGEX_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/regex PARENT_SCOPE)
+set(REGEX_LIB regex PARENT_SCOPE)
+endif(LFL_REGEX)
+
+# sregex
+if(LFL_SREGEX)
+add_subdirectory(sregex)
+set(SREGEX_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/sregex/src/sregex PARENT_SCOPE)
+set(SREGEX_LIB sregex PARENT_SCOPE)
+endif(LFL_SREGEX)
 
 # judy
 if(LFL_JUDY)

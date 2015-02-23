@@ -1210,12 +1210,25 @@ struct FrameScheduler {
 };
 
 struct Regex {
-    struct Match {
+    struct Result {
         int begin, end;
+        Result(int B=0, int E=0) : begin(B), end(E) {}
         string Text(const string &t) const { return t.substr(begin, end - begin); }
         float FloatVal(const string &t) const { return atof(Text(t).c_str()); }
     };
-    static int Run(const string &pattern, const string &text, vector<Match> *out);
+    void *impl=0;
+    ~Regex();
+    Regex(const string &pattern);
+    int Match(const string &text, vector<Result> *out);
+};
+
+struct StreamRegex {
+    void *prog=0, *ctx=0, *ppool=0, *cpool=0;
+    int last_end=0, since_last_end=0;
+    vector<long> res;
+    ~StreamRegex();
+    StreamRegex(const string &pattern);
+    int Match(const string &text, vector<Regex::Result> *out, bool eof=0);
 };
 
 struct Base64 {
