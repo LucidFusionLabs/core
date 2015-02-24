@@ -8,18 +8,13 @@ add_definitions(${LFAPP_DEF})
 include_directories(../lflpub ${LFAPP_INCLUDE})
 
 # nlp
-# set(LFL_NLP_SOURCE ../nlp/nlp.cpp)
-# set(LFL_NLP_SOURCE ${LFL_NLP_SOURCE} PARENT_SCOPE)
-# add_library(nlp ${LFL_NLP_SOURCE})
+set(LFL_NLP_SOURCE ../nlp/nlp.cpp)
+set(LFL_NLP_SOURCE ${LFL_NLP_SOURCE} PARENT_SCOPE)
+add_library(nlp ${LFL_NLP_SOURCE})
 
 # trainer
-# add_executable(nlp-trainer trainer.cpp ${SDL_MAIN})
-# set_target_properties(nlp-trainer PROPERTIES OUTPUT_NAME trainer)
-# target_link_libraries(nlp-trainer ${LFAPP_LIB} nlp)
-# lfapp_post_build(nlp-trainer trainer)
-
-# pgrep
-# add_executable(pgrep pgrep.cpp ${SDL_MAIN})
-# target_link_libraries(pgrep ${LFAPP_LIB} recognition)
-# lfapp_post_build(pgrep pgrep)
+add_executable(nlp-trainer trainer.cpp ${SDL_MAIN})
+set_target_properties(nlp-trainer PROPERTIES OUTPUT_NAME trainer)
+target_link_libraries(nlp-trainer ${LFAPP_LIB} nlp)
+lfapp_post_build(nlp-trainer trainer)
 

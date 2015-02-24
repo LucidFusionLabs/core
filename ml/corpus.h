@@ -21,25 +21,17 @@
 namespace LFL {
 
 struct Corpus {
+    Callback start_cb, finish_cb;
     virtual ~Corpus() {}
-    virtual void RunBegin(void *cb, void *arg) {} 
-    virtual void Run(const char *filename, void *cb, void *arg) = 0;
-
-    static void Run(Corpus *runner, const char *file_or_dir, void *cb, void *arg) {
-        if (runner) runner->RunBegin(cb, arg);
-        if (!file_or_dir || !*file_or_dir) return;
-        Run(runner, file_or_dir, cb, arg, 0);
-    }
-
-    static void Run(Corpus *runner, const char *file_or_dir, void *cb, void *arg, void *arg2) {
-        if (!LocalFile::IsDirectory(file_or_dir))
-            return runner->Run(file_or_dir, cb, arg);                     
-
-        DirectoryIter iter(file_or_dir, -1);
-        for (const char *fn = iter.Next(); Running() && fn; fn = iter.Next()) {
-            string pn = StrCat(file_or_dir, fn);
-            Run(runner, pn.c_str(), cb, arg, arg2);
+    virtual void RunFile(const string &filename) {}
+    virtual void Run(const string &file_or_dir) {
+        if (start_cb) start_cb();
+        if (!file_or_dir.empty() && !LocalFile::IsDirectory(file_or_dir)) RunFile(file_or_dir);
+        else {
+            DirectoryIter iter(file_or_dir, -1);
+            for (const char *fn = iter.Next(); Running() && fn; fn = iter.Next()) Run(StrCat(file_or_dir, fn));
         }
+        if (finish_cb) finish_cb();
     }  
 };  
 

@@ -42,16 +42,18 @@ struct CART {
     
     /* classification */
     struct Tree {
-        QuestionList *inventory;
-        Matrix questions, namemap, leafnamemap;
-        vector<string> name; 
         static const int map_buckets=5, map_values=2;
+        QuestionList *inventory;
+        Matrix questions, namemap_data, leafnamemap_data;
+        HashMatrix namemap, leafnamemap;
+        vector<string> name;
+        Tree() : namemap(&namemap_data, map_values), leafnamemap(&leafnamemap_data, map_values) {}
     };
 
     static const double *query(const Tree *model, const Feature *f) {
         string node="t";
         for (;;) {
-            const double *he = HashMatrix::Get(&model->namemap, fnv32(node.c_str()), Tree::map_values);
+            const double *he = model->namemap.Get(fnv32(node.c_str()));
             if (!he) break;
 
             int ind = he[1], qind = model->questions.row(ind)[0];
@@ -59,12 +61,12 @@ struct CART {
             node += q->answer(f) ? "l" : "r";
         }
 
-        return HashMatrix::Get(&model->leafnamemap, fnv32(node.c_str()), Tree::map_values);
+        return model->leafnamemap.Get(fnv32(node.c_str()));
     }
 
     static int read(const char *dir, const char *name, int lastiter, QuestionList *inventory, Tree *out) {
         out->inventory = inventory;
-        Matrix *outp[] = { &out->questions, &out->namemap, &out->leafnamemap };
+        Matrix *outp[] = { &out->questions, out->namemap.map, out->leafnamemap.map };
         vector<string> *outs[] = { &out->name };
         if (MatrixFile::ReadVersioned(dir, name, "questions",   &outp[0], 0, lastiter)<0) { ERROR(name, ".", lastiter, ".questions"  ); return -1; }
         if (MatrixFile::ReadVersioned(dir, name, "namemap",     &outp[1], 0, lastiter)<0) { ERROR(name, ".", lastiter, ".namemap"    ); return -1; }
@@ -75,9 +77,9 @@ struct CART {
 
     static void blank(QuestionList *inventory, Tree *out, double val) {
         out->inventory = inventory;
-        out->namemap.Open(4, Tree::map_buckets*Tree::map_values);
-        out->leafnamemap.Open(4, Tree::map_buckets*Tree::map_values);
-        double *he = HashMatrix::Set(&out->leafnamemap, fnv32("t"), Tree::map_values);
+        out->namemap    .map->Open(4, Tree::map_buckets*Tree::map_values);
+        out->leafnamemap.map->Open(4, Tree::map_buckets*Tree::map_values);
+        double *he = out->leafnamemap.Set(fnv32("t"));
         he[1] = val;
     }
 
@@ -156,7 +158,9 @@ struct CART {
         const char *flagtext = QL->name;
 
         int buckets=Tree::map_buckets, values=Tree::map_values;
-        Matrix namemap(NextPrime(tree.name.size()*4), buckets*values), leafnamemap(NextPrime(tree.leafname.size()*4), buckets*values);
+        Matrix namemap_data    (NextPrime(tree.name.size()*4),     buckets*values);
+        Matrix leafnamemap_data(NextPrime(tree.leafname.size()*4), buckets*values);
+        HashMatrix namemap(&namemap_data, values), leafnamemap(&leafnamemap_data, values);
 
         LocalFile names    (string(dir) + MatrixFile::Filename(name, "name",      "string", iteration), "w");
         LocalFile questions(string(dir) + MatrixFile::Filename(name, "questions", "matrix", iteration), "w");
@@ -171,7 +175,7 @@ struct CART {
             double qrow[1] = { (double)tree.question[i] };
             MatrixFile::WriteRow(&questions, qrow, 1);
 
-            double *he = HashMatrix::Set(&namemap, fnv32(n), values);
+            double *he = namemap.Set(fnv32(n));
             if (!he) FATAL("Matrix hash collision: ", n);
             he[1] = i;
         }
@@ -179,13 +183,13 @@ struct CART {
         for (map<string, unsigned>::const_iterator i = tree.leafname.begin(); i != tree.leafname.end(); i++) {
             const char *n = (*i).first.c_str();
             unsigned v = (*i).second;
-            double *he = HashMatrix::Set(&leafnamemap, fnv32(n), values);
+            double *he = leafnamemap.Set(fnv32(n));
             if (!he) FATAL("Matrix hash collision: ", n);
             he[1] = v;
         }
 
-        if (MatrixFile(&namemap,     flagtext).WriteVersioned(dir, name,     "namemap", iteration)<0) { ERROR(name, " write namemap"    ); return -1; }
-        if (MatrixFile(&leafnamemap, flagtext).WriteVersioned(dir, name, "leafnamemap", iteration)<0) { ERROR(name, " write leafnamemap"); return -1; }
+        if (MatrixFile(namemap.map,     flagtext).WriteVersioned(dir, name,     "namemap", iteration)<0) { ERROR(name, " write namemap"    ); return -1; }
+        if (MatrixFile(leafnamemap.map, flagtext).WriteVersioned(dir, name, "leafnamemap", iteration)<0) { ERROR(name, " write leafnamemap"); return -1; }
 
         return 0;
     }

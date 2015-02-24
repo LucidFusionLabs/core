@@ -21,73 +21,69 @@
 namespace LFL {
 
 struct WavCorpus : public Corpus {
-
-    typedef void (*WavCB)(const char *sd, SoundAsset *wav, const char *transcript, void *arg);
-
-    void Run(const char *fn, void *Cb, void *arg);
-
     const static int MaxSecs = 60, MinWindows = 16;
+    typedef function<void(const string&, SoundAsset*, const char*)> WavCB;
 
-    static void Thunk(const char *srcdir, const char *afn, const char *adata, int adatalen, const char *transcript, WavCB cb, void *cbarg) {
-        SoundAsset wav; wav.filename = afn;
-        wav.Load(adata, adatalen, afn, MaxSecs);
-        Thunk(srcdir, &wav, transcript, cb, cbarg);
+    WavCB wav_cb;
+    WavCorpus(const WavCB &cb) : wav_cb(cb) {}
+
+    void RunFile(const string &fn);
+    void RunBuf(const string &srcdir, const string &afn, const char *adata, int adatalen, const char *transcript) {
+        SoundAsset wav;
+        wav.filename = afn;
+        wav.Load(adata, adatalen, afn.c_str(), MaxSecs);
+        RunWAV(srcdir, &wav, transcript);
     }
-
-    static void Thunk(const char *srcdir, const char *afn, const char *transcript, WavCB cb, void *cbarg) {
-        SoundAsset wav; wav.filename = afn;
+    void RunFile(const string &srcdir, const string &afn, const char *transcript) {
+        SoundAsset wav;
+        wav.filename = afn;
         wav.Load(MaxSecs);
-        Thunk(srcdir, &wav, transcript, cb, cbarg);
+        RunWAV(srcdir, &wav, transcript);
     }
-
-    static void Thunk(const char *srcdir, SoundAsset *wav, const char *transcript, WavCB cb, void *cbarg) {
+    void RunWAV(const string &srcdir, SoundAsset *wav, const char *transcript) {
         if (!wav->wav) ERROR("no audio data for ", wav->filename); 
         else if (wav->wav->ring.size < MinWindows * FLAGS_feat_window) ERROR(wav->wav->ring.size, " audio samples for ", wav->filename, " < MinSamples ", MinWindows * FLAGS_feat_window);
-        else cb(srcdir, wav, transcript, cbarg); /* thunk */
-
+        else wav_cb(srcdir, wav, transcript); /* thunk */
         wav->filename.clear();
         wav->Unload();
     }
 };
 
 struct VoxForgeTgzFile { 
-    VoxForgeTgzFile() {}
+    WavCorpus *wav_corpus;
+    map<string, string> wav2transcript;
+    VoxForgeTgzFile(WavCorpus *wc) : wav_corpus(wc) {}
 
-    ArchiveIter a;
-    int open(const char *file) { ArchiveIter A(file); a=A; A.impl=0; return !a.impl; }
-    
-    typedef map<string, string> s2smap;
-    s2smap wav2transcript;
-
-    void wav_iter(const char *srcdir, WavCorpus::WavCB cb, void *cbarg) {
+    void Run(const string &file) {
+        ArchiveIter a(file.c_str());
+        if (!a.impl) return;
         for (const char *afn = a.Next(); Running() && afn; afn = a.Next()) {
-            if (SuffixMatch(afn, "etc/prompts", false)) handle_prompts((const char *)a.Data(), a.Size());
-            else if (basedir(afn, "wav")) handle_wav_filename(srcdir, afn, cb, cbarg);
+            if (SuffixMatch(afn, "etc/prompts", false)) HandlePrompts(       (const char *)a.Data(), a.Size());
+            else if (basedir(afn, "wav"))               HandleWAV(file, afn, (const char *)a.Data(), a.Size());
         }
     }
-
-    void handle_prompts(const char *promptsdata, int promptsdatalen) {
+    void HandlePrompts(const char *promptsdata, int promptsdatalen) {
         string promptsfile(promptsdata, promptsdatalen);
         LocalFileLineIter prompts(promptsfile.c_str());
 
         for (const char *line = prompts.Next(); line; line = prompts.Next()) {
-            StringWordIter words(line); const char *key=words.Next(); int val=words.offset;
+            StringWordIter words(line); 
+            const char *key = words.Next();
+            int val = words.offset;
             if (!key || val<0) continue;
             wav2transcript[basename(key,0,0)] = &line[val];
         }
     }
-
-    void handle_wav_filename(const char *srcdir, const char *afn, WavCorpus::WavCB cb, void *cbarg) {
-        int bnl; const char *bn = basename(afn, 0, &bnl);
+    void HandleWAV(const string &srcdir, const string &afn, const char *ad, int as) {
+        int bnl;
+        const char *bn = basename(afn.c_str(), 0, &bnl);
         string name = string(bn, bnl);
 
-        const char *transcript = s2sval(wav2transcript, name.c_str());
-        if (!transcript) { ERROR("wav2transcript missing ", name); return; }
+        auto ti = wav2transcript.find(name);
+        if (ti == wav2transcript.end()) { ERROR("wav2transcript missing ", name); return; }
 
-        WavCorpus::Thunk(srcdir, afn, (char*)a.Data(), a.Size(), transcript, cb, cbarg);
+        wav_corpus->RunBuf(srcdir, afn, ad, as, ti->second.c_str());
     }
-    
-    static const char *s2sval(s2smap &map, const char *key) { s2smap::iterator i=map.find(key); return i != map.end() ? (*i).second.c_str() : 0; }
 };
 
 struct FeatCorpus {
@@ -200,18 +196,15 @@ struct PathCorpus {
     static bool string_changed(string &last, const char *next) { if (!strcmp(last.c_str(), next)) return 0; last=next; return 1; }
 };
 
-void WavCorpus::Run(const char *fn, void *Cb, void *arg) { 
-    WavCB cb = (WavCB)Cb;
-    string dn = string(fn, dirnamelen(fn));
+void WavCorpus::RunFile(const string &fn) { 
+    string dn = string(fn, dirnamelen(fn.c_str()));
 
     /* /corpus/wav/voxforge/k-20090202-afe.tgz */ 
     if (SuffixMatch(fn, ".tgz", false) || SuffixMatch(fn, ".tar.gz", false) || SuffixMatch(fn, ".tar", false)) {
-        VoxForgeTgzFile vftgz;
-        if (vftgz.open(fn)) return;
-        vftgz.wav_iter(dn.c_str(), cb, arg);
-    }
-    else if (SuffixMatch(fn, ".wav", false)) { /* TIMIT style: .wav with matching .txt */
-        string tfn = string(fn, strlen(fn)-3) + "txt";
+        VoxForgeTgzFile vftgz(this);
+        vftgz.Run(fn);
+    } else if (SuffixMatch(fn, ".wav", false)) { /* TIMIT style: .wav with matching .txt */
+        string tfn = string(fn, fn.size()-3) + "txt";
         LocalFile tf(tfn.c_str(), "r");
         if (!tf.Opened()) return;
 
@@ -220,7 +213,7 @@ void WavCorpus::Run(const char *fn, void *Cb, void *arg) {
         string transcript = toupper(words.in + words.offset);
         transcript = togrep(transcript.c_str(), isalnum, isspace);
 
-        WavCorpus::Thunk(dn.c_str(), fn, transcript.c_str(), cb, arg);
+        WavCorpus::RunFile(dn, fn, transcript.c_str());
     }
 }
 
