@@ -1,0 +1,75 @@
+/*
+ * $Id$
+ * Copyright (C) 2009 Lucid Fusion Labs
+
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+#include "lfapp/lfapp.h"
+#include "lfapp/dom.h"
+#include "ml/corpus.h"
+#include "ml/counter.h"
+#include "ml/hmm.h"
+#include "speech/speech.h"
+#include "corpus.h"
+#include "lm.h"
+
+namespace LFL {
+DEFINE_string(query,           "",                          "Query corpus");
+DEFINE_string(target,          "printer",                   "Handler [printer,lmbuilder]");
+DEFINE_string(modeldir,        "model/",                    "Model directory");
+DEFINE_int   (min_occurrences, 0,                           "Minimum occurrences");
+DEFINE_string(corpus,          "text",                      "Corpus [query,text,treebank,propbank,nombank]");
+DEFINE_string(corpuspath,      "",                          "Corpus path");
+DEFINE_string(treecorpuspath,  "corpus/penn/combined/wsj/", "Treebank path");
+DEFINE_string(propcorpuspath,  "corpus/propbank/frames/",   "Propbank path");
+DEFINE_string(nomcorpuspath,   "corpus/nombank/frames/",    "Nombank path");
+}; // namespace LFL
+using namespace LFL;
+
+extern "C" int main(int argc, const char *argv[]) {
+    app->logfilename = StrCat(LFAppDownloadDir(), "trainer.txt");
+    screen->caption = "trainer";
+    FLAGS_open_console = 1;
+    if (app->Create(argc, argv, __FILE__)) { app->Free(); return -1; }
+    if (app->Init()) { app->Free(); return -1; }
+
+    Callback finish_cb;
+    SentenceCorpus::SentenceCB input_cb;
+    if (FLAGS_target == "printer") {
+        input_cb = [=](const string &fn, SentenceCorpus::Sentence *s) {
+            printf("%s\n", s->DebugString().c_str());
+        };
+    } else if (FLAGS_target == "lmbuilder") {
+        BigramLanguageModelBuilder *target =
+            new BigramLanguageModelBuilder(FLAGS_modeldir, "LanguageModel", 0, FLAGS_min_occurrences);
+        input_cb  = bind(&BigramLanguageModelBuilder::Input, target, _1, _2);
+        finish_cb = bind(&BigramLanguageModelBuilder::Done,  target);
+    } else if (FLAGS_target == "lmquery") {
+        LanguageModel *lm = new LanguageModel();
+        lm->Open("LanguageModel", FLAGS_modeldir.c_str());
+        input_cb = [=](const string &fn, SentenceCorpus::Sentence *s) {
+            for (auto w : *s) printf("%s\n", lm->DebugString(tolower(w.text).c_str()).c_str());
+        };
+    } else { ERROR("unknown target ", FLAGS_target); return -1; }
+
+    SentenceCorpus *corpus = 0;
+    if      (!FLAGS_query.empty())   corpus = new QueryCorpus(input_cb, FLAGS_query);
+    else if (FLAGS_corpus == "text") corpus = new TextCorpus(input_cb);
+    else { ERROR("unknown corpus ", FLAGS_corpus); return -1; }
+
+    corpus->finish_cb = finish_cb;
+    corpus->Run(FLAGS_corpuspath);
+    return 0;
+};

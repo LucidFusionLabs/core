@@ -149,6 +149,7 @@ DEFINE_int(sample_secs, 3, "Seconds of RingBuf audio");
 DEFINE_int(chans_in, -1, "Audio input channels");
 DEFINE_int(chans_out, -1, "Audio output channels");
 DEFINE_int(target_fps, 0, "Max frames per second");
+DEFINE_bool(open_console, 0, "Open console on win32");
 
 ::std::ostream& operator<<(::std::ostream& os, const point &x) { return os << x.DebugString(); }
 ::std::ostream& operator<<(::std::ostream& os, const Box   &x) { return os << x.DebugString(); }
@@ -935,7 +936,6 @@ void *BlockChainAlloc::Malloc(int n) {
 MainCB nt_service_main = 0;
 const char *nt_service_name = 0;
 SERVICE_STATUS_HANDLE nt_service_status_handle = 0;
-DEFINE_bool(open_console, 0, "Open console output");
 
 void WIN32_Init() { timeBeginPeriod(1); }
 Time Now() { return timeGetTime(); }

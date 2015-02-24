@@ -71,7 +71,6 @@ struct RedBlackTree {
 
     FreeListVector<Node> node;
     FreeListVector<V> val;
-    bool update_on_dup_insert=1;
     int head=0, count=0;
 
     int size() const { return count; }
@@ -95,7 +94,7 @@ struct RedBlackTree {
     virtual void ComputeStateFromChildrenOnPath(Query *q) {}
     virtual int ResolveInsertCollision(int ind, Query *q) { 
         Node *n = &node[ind-1];
-        if (update_on_dup_insert) val[n->val] = *q->val;
+        if (bool update_on_dup_insert = 1) val[n->val] = *q->val;
         return ind;
     }
 

@@ -77,16 +77,16 @@ struct WFST {
 
     struct StringFileAlphabet : public IOAlphabet {
         vector<string> *str;
-        Matrix *map;
+        HashMatrix map;
         IOAlphabet *aux;
 
         static const int HashBuckets = 5, HashValues = 2;
-        StringFileAlphabet(vector<string> *S=0, Matrix *M=0, IOAlphabet *Aux=0) : str(S), map(M), aux(Aux) {}
+        StringFileAlphabet(vector<string> *S=0, Matrix *M=0, IOAlphabet *Aux=0) : str(S), map(M, HashValues), aux(Aux) {}
         virtual ~StringFileAlphabet() { reset(); }
-        void reset() { delete str; delete map; str=0; map=0; }
+        void reset() { delete str; delete map.map; str=0; map.map=0; }
 
         int id(string s) const { return id(fnv32(s.c_str(), s.size())); }
-        int id(unsigned hash) const { double *row = HashMatrix::Get(map, hash, HashValues); return row ? row[1] : -1; }
+        int id(unsigned hash) const { const double *row = map.Get(hash); return row ? row[1] : -1; }
         string name(int id) const {
             if (aux && IOAlphabet::auxiliary_symbol(id)) return aux->name(IOAlphabet::auxiliary_symbol_offset(id));
             if (id < 0 || id >= str->size()) { ERROR("bad id: ", id); return ""; }
@@ -97,8 +97,8 @@ struct WFST {
         void next(Iterator *iter) const { if ((iter->id = iter->impl++) >= str->size()) iter->done = 1; else iter->name = (*str)[iter->id].c_str(); }
 
         int read(const char *dir, const char *name1, const char *name2, int iteration) {
-            if (StringFile::ReadVersioned(dir, name1, name2, &str, 0, iteration)<0) { ERROR(name2, ".", iteration, ".in.string"); return -1; }
-            if (MatrixFile::ReadVersioned(dir, name1, name2, &map, 0, iteration)<0) { ERROR(name2, ".", iteration, ".in.matrix"); return -1; }
+            if (StringFile::ReadVersioned(dir, name1, name2, &str,     0, iteration)<0) { ERROR(name2, ".", iteration, ".in.string"); return -1; }
+            if (MatrixFile::ReadVersioned(dir, name1, name2, &map.map, 0, iteration)<0) { ERROR(name2, ".", iteration, ".in.matrix"); return -1; }
             return 0;
         }
 
@@ -107,15 +107,16 @@ struct WFST {
             MatrixFile::WriteHeader(&out, basename(out.Filename(),0,0), A->FactoryName() ? A->FactoryName() : "", A->size(), 1);
             if (A->FactoryName()) return 0;
 
-            Matrix map(NextPrime(A->size()*4), HashBuckets * HashValues);
+            Matrix map_data(NextPrime(A->size()*4), HashBuckets * HashValues);
+            HashMatrix map(&map_data, HashValues);
             for (int i=0, l=A->size(); i<l; i++) {
                 string name = A->name(i);
                 StringFile::WriteRow(&out, name.c_str());
-                double *he = HashMatrix::Set(&map, fnv32(name.c_str()), HashValues);
+                double *he = map.Set(fnv32(name.c_str()));
                 if (!he) FATAL("Matrix hash collision: ", name);
                 he[1] = i;
             }
-            if (MatrixFile(&map).WriteVersioned(dir, name1, name2, iteration) < 0) { ERROR(name1, " write map"); return -1; }
+            if (MatrixFile(map.map).WriteVersioned(dir, name1, name2, iteration) < 0) { ERROR(name1, " write map"); return -1; }
             return 0;
         }
     };
@@ -1581,10 +1582,10 @@ struct WFST {
             int out = A->id(word);
             if (out < 0) continue;
 
-            if (!LM->get(wordhash, &LM_priorInd, &LM_transitInd)) { DEBUG("LM missing '%s'", word); LM_count=1; }
+            if (!LM->Get(wordhash, &LM_priorInd, &LM_transitInd)) { DEBUG("LM missing '%s'", word); LM_count=1; }
             if (!LM_count) {
-                LM_transits = LM->transits(LM_transitInd, wordhash);
-                LM_count = LM->occurences(LM_priorInd);
+                LM_transits = LM->Transits(LM_transitInd, wordhash);
+                LM_count = LM->Occurences(LM_priorInd);
             }
 
             int prevState = FindOrInsert(idmap, wordhash, state, &state)->second;
@@ -1596,9 +1597,9 @@ struct WFST {
                 unsigned wordhash2 = tr[TC_Edge];
 
                 int LM_priorInd2, out2;
-                if (!LM->get(wordhash2, &LM_priorInd2)) continue;
-                const char *word2 = LM->name(LM_priorInd2);
-                if ((out2 = A->id(word2)) < 0) continue;
+                if (!LM->Get(wordhash2, &LM_priorInd2)) continue;
+                string word2 = LM->Name(LM_priorInd2);
+                if ((out2 = A->id(word2.c_str())) < 0) continue;
 
                 int nextState = FindOrInsert(idmap, wordhash2, state, &state)->second;
                 E->add(prevState, nextState, out2, out2, -tr[TC_Cost]);
@@ -1631,8 +1632,8 @@ struct WFST {
                 bool out_on_first = true, out_on_this = (!out_on_first && j == l-1) || (out_on_first && !j);
 
                 double weight = K->One(); int priorInd;
-                if (out_on_this && LM && LM->get(word, &priorInd)) /* unigram LM */
-                    weight = -log((double)LM->occurences(priorInd) / LM->total);
+                if (out_on_this && LM && LM->Get(word, &priorInd)) /* unigram LM */
+                    weight = -log((double)LM->Occurences(priorInd) / LM->total);
 
                 int nextstate = state+1;
                 E->add(state++, nextstate, pronunciation[j], out_on_this ? B->add(word) : 0, weight);

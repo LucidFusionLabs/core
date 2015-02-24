@@ -60,26 +60,29 @@ template <typename K, typename V> typename map<K, V>::iterator FindOrInsert(map<
     if (inserted) (*inserted)++;
     return ret.first;
 }
-
 template <typename K, typename V> typename map<K, V>::iterator FindOrInsert(map<K, V> &m, K k, V v, bool *inserted=0) {
     LFL_STL_NAMESPACE::pair<typename map<K, V>::iterator, bool> ret = m.insert(typename map<K, V>::value_type(k, v));
     if (inserted) *inserted = ret.second;
     return ret.first;
 }
-
 template <typename K, typename V> typename map<K, V*>::iterator FindOrInsert(map<K, V*> &m, K k, V* v, bool *inserted=0) {
     LFL_STL_NAMESPACE::pair<typename map<K, V*>::iterator, bool> ret = m.insert(typename map<K, V*>::value_type(k, v));
     if (inserted) *inserted = ret.second;
     return ret.first;
 }
-
+template <typename K, typename V> typename map<K, V>::iterator FindOrInsert(map<K, V> &m, K k, bool *inserted=0) {
+    typename map<K, V>::iterator i = m.find(k);
+    if (i != m.end()) return i;
+    if (inserted) *inserted = 1;
+    LFL_STL_NAMESPACE::pair<typename map<K, V>::iterator, bool> ret = m.insert(typename map<K, V>::value_type(k, V()));
+    return ret.first;
+}
 template <typename K, typename V> typename map<K, V*>::iterator FindOrInsert(map<K, V*> &m, K k, bool *inserted=0) {
     LFL_STL_NAMESPACE::pair<typename map<K, V*>::iterator, bool> ret = m.insert(typename map<K, V*>::value_type(k, 0));
     if (ret.second) ret.first->second = new V();
     if (inserted) *inserted = ret.second;
     return ret.first;
 }
-
 template <typename K, typename V> typename unordered_map<K, V>::iterator FindOrInsert(unordered_map<K, V> &m, K k, V v, bool *inserted) {
     LFL_STL_NAMESPACE::pair<typename unordered_map<K, V>::iterator, bool> ret = m.insert(typename unordered_map<K, V>::value_type(k, v));
     if (inserted) *inserted = ret.second;
@@ -149,6 +152,12 @@ template <class X> X IndexOrDefault(const vector<X> &a, int n, const X& b) { ret
 template <class X> void InsertOrErase(X *v, const typename X::value_type &val, bool insert) {
     if (insert) v->insert(val);
     else        v->erase(val);
+}
+
+template <class I1, class I2> size_t MismatchOffset(I1 first1, I1 last1, I2 first2, I2 last2) {
+    int ret = 0;
+    while (first1 != last1 && *first1 == *first2) { ++first1; ++first2; ++ret; }
+    return ret;
 }
 
 template <class X> void FilterValues(X *v, const typename X::value_type &val) {
@@ -871,17 +880,21 @@ struct MatrixArchiveIn {
 
 template <class X, void (*Assign)(double *, X), bool (*Equals)(const double*, X)>
 struct HashMatrixT {
-    static double *Get(Matrix *map, X hash, int VPE) {
-        double *hashrow = map->row(hash % map->M);
-        for (int k=0, l=map->N/VPE; k<l; k++) if (Equals(&hashrow[k*VPE], hash)) return &hashrow[k*VPE];
-        return 0;
-    }
-    static const double *Get(const Matrix *map, X hash, int VPE) {
+    Matrix *map;
+    int VPE;
+    HashMatrixT(Matrix *M=0, int vpe=0) : map(M), VPE(vpe) {}
+
+    const double *Get(X hash) const {
         const double *hashrow = map->row(hash % map->M);
         for (int k=0, l=map->N/VPE; k<l; k++) if (Equals(&hashrow[k*VPE], hash)) return &hashrow[k*VPE];
         return 0;
     }
-    static double *Set(Matrix *map, X hash, int VPE) {
+    double *Get(X hash) {
+        double *hashrow = map->row(hash % map->M);
+        for (int k=0, l=map->N/VPE; k<l; k++) if (Equals(&hashrow[k*VPE], hash)) return &hashrow[k*VPE];
+        return 0;
+    }
+    double *Set(X hash) {
         long long ind = hash % map->M;
         double *hashrow = map->row(ind);
         for (int k=0; k<map->N/VPE; k++) {
@@ -895,7 +908,15 @@ struct HashMatrixT {
         }
         return 0;
     }
-    static double *SetBinary(File *lf, int M, int N, int hdr_size, X hash, int VPE, double *hashrow) {
+};
+
+template <class X, void (*Assign)(double *, X), bool (*Equals)(const double*, X)>
+struct HashMatrixFileT {
+    File *lf;
+    int M, N, hdr_size, VPE;
+    HashMatrixFileT(File *F=0, int m=0, int n=0, int hs=0, int vpe=0) : lf(F), M(m), N(n), hdr_size(hs), VPE(vpe) {}
+
+    double *SetBinary(X hash, double *hashrow) {
         long long ind = hash % M, row_size = N * sizeof(double), offset = hdr_size + ind * row_size, ret;
         if ((ret = lf->Seek(offset, File::Whence::SET)) != offset) { ERROR("seek: ", offset,   " != ", ret); return 0; } 
         if ((ret = lf->Read(hashrow, row_size))       != row_size) { ERROR("read: ", row_size, " != ", ret); return 0; }
@@ -913,7 +934,7 @@ struct HashMatrixT {
         }
         return 0;
     }
-    static void SetBinaryFlush(LocalFile *lf, int VPE, const double *hashrow) {
+    void SetBinaryFlush(const double *hashrow) {
         int write_size = VPE * sizeof(double);
         if (lf->Write(hashrow, write_size) != write_size) ERROR("read: ", write_size);
     }
@@ -923,7 +944,8 @@ struct HashMatrixF {
     static void Assign(/**/  double *hashrow, unsigned hash) { if (1) hashrow[0] =  hash; }
     static bool Equals(const double *hashrow, unsigned hash) { return hashrow[0] == hash; }
 };
-struct HashMatrix : public HashMatrixT<unsigned, &HashMatrixF::Assign, &HashMatrixF::Equals> {};
+struct HashMatrix     : public HashMatrixT    <unsigned, &HashMatrixF::Assign, &HashMatrixF::Equals> { HashMatrix(Matrix *M=0, int vpe=0) : HashMatrixT(M,vpe) {} };
+struct HashMatrixFile : public HashMatrixFileT<unsigned, &HashMatrixF::Assign, &HashMatrixF::Equals> {};
 
 struct HashMatrix64F {
     static void Assign(double *hashrow, unsigned long long hash) {
@@ -935,7 +957,8 @@ struct HashMatrix64F {
                hashrow[1] == static_cast<unsigned>(hash&0xffffffff);
     }
 };
-struct HashMatrix64 : public HashMatrixT<unsigned long long, &HashMatrix64F::Assign, &HashMatrix64F::Equals> {};
+struct HashMatrix64     : public HashMatrixT    <unsigned long long, &HashMatrix64F::Assign, &HashMatrix64F::Equals> {};
+struct HashMatrix64File : public HashMatrixFileT<unsigned long long, &HashMatrix64F::Assign, &HashMatrix64F::Equals> {};
 
 }; // namespace LFL
 

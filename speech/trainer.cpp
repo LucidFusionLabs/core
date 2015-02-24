@@ -96,30 +96,26 @@ SoundAssetMap soundasset;
 void MyResynth(const vector<string> &args) { SoundAsset *sa=soundasset(args.size()?args[0]:"snap"); if (sa) { resynthesize(&app->audio, sa); } }
 
 struct Wav2Features {
-    string dir; int targ; MatrixArchiveOut out;
+    enum Target { File, Archive };
+    string dir;
+    Target targ;
+    MatrixArchiveOut out;
 
-    struct Target { enum { FILE, ARCHIVE }; int t; };
-
-    Wav2Features(const char *Dir, int Targ) : dir(Dir), targ(Targ) {
-        if (targ != Target::ARCHIVE) return;
-        string outfile = dir + StringPrintf("%lx.featlist", ::rand());
-        INFO("selected output file: ", outfile);
-        out.Open(outfile);
+    Wav2Features(const string &Dir, Target Targ) : dir(Dir), targ(Targ) {
+        if (targ == Archive) {
+            string outfile = dir + StringPrintf("%lx.featlist", ::rand());
+            INFO("selected output file: ", outfile);
+            out.Open(outfile);
+        }
     }
 
-    static void add_features(const char *sd, SoundAsset *wav, const char *transcript, void *a) { return ((Wav2Features*)a)->addFeatures(sd, wav, transcript); }
-
-    void addFeatures(const char *sd, SoundAsset *wav, const char *transcript) {
+    void AddFeatures(const string &sd, SoundAsset *wav, const char *transcript) {
         Matrix *features = Features::fromAsset(wav, Features::Flag::Storable);
         MatrixFile feat(features, transcript);
-        const char *fn = basename(wav->filename.c_str(),0,0);
-        string name = StringPrintf("%lx.feat", fnv32(fn));
-
-        if (targ == Target::FILE) {
-            string outfile = dir + name;
+        if (targ == File) {
+            string outfile = dir + StringPrintf("%lx.feat", fnv32(basename(wav->filename.c_str(),0,0)));
             feat.Write(outfile, wav->filename);
-        }
-        else if (targ == Target::ARCHIVE) {
+        } else if (targ == Archive) {
             out.Write(&feat, wav->filename);
         }
     }   
@@ -481,12 +477,12 @@ int tieModelStates(const char *modeldir, AcousticModel::StateCollection *model3,
             ERROR("read tree ", Phoneme::name(phone), " ", state);
             CART::blank(QL, &tree[t], (double)fnv32(AcousticModel::name(phone, state).c_str()));
         }
-        if (!tree[t].namemap.M) tree[t].namemap.Open(5, CART::Tree::map_buckets*CART::Tree::map_values);
+        if (!tree[t].namemap.map->M) tree[t].namemap.map->Open(5, CART::Tree::map_buckets*CART::Tree::map_values);
 
-        int N = tree[t].leafnamemap.N;
-        MatrixRowIter(&tree[t].leafnamemap) {
+        int N = tree[t].leafnamemap.map->N;
+        MatrixRowIter(tree[t].leafnamemap.map) {
             for (int j=0; j<N; j+=CART::Tree::map_values) {
-                double *he = &tree[t].leafnamemap.row(i)[j];
+                double *he = &tree[t].leafnamemap.map->row(i)[j];
                 if (he[0] || he[1]) leaves.push_back(he[1]);
             }
         }
@@ -510,7 +506,7 @@ int tieModelStates(const char *modeldir, AcousticModel::StateCollection *model3,
 
     /* open model just wrote */
     AcousticModelFile modelWrote; int wroteiter;
-    if ((wroteiter = modelWrote.read("AcousticModel", modeldir))<0 || wroteiter != lastiter+1) { ERROR("read ", modeldir, " ", lastiter+1); return -1; }
+    if ((wroteiter = modelWrote.Open("AcousticModel", modeldir))<0 || wroteiter != lastiter+1) { ERROR("read ", modeldir, " ", lastiter+1); return -1; }
 
     LocalFile tiedstates(string(modeldir) + MatrixFile::Filename("AcousticModel", "tiedstates", "matrix", lastiter+1), "w");
     MatrixFile::WriteHeader(&tiedstates, basename(tiedstates.Filename(),0,0), "", powf(LFL_PHONES, 3)*AcousticModel::StatesPerPhone, 1);
@@ -590,7 +586,7 @@ int growComponents(const char *modeldir, AcousticModel::StateCollection *model, 
 
 int viterbiTrain(const char *featdir, const char *modeldir) {
     AcousticModelFile model; int lastiter;
-    if ((lastiter = model.read("AcousticModel", modeldir))<0) { ERROR("read ", modeldir, " ", lastiter); return -1; }
+    if ((lastiter = model.Open("AcousticModel", modeldir))<0) { ERROR("read ", modeldir, " ", lastiter); return -1; }
     AcousticModel::toCUDA(&model);
 
     ViterbiTrain train(&model, FLAGS_BeamWidth, FLAGS_UsePrior, FLAGS_UseTransition, FLAGS_FullVariance, (!FLAGS_Initialize && !FLAGS_AcceptIncomplete), FLAGS_Initialize ? ViterbiTrain::KMeansAccum::create : ViterbiTrain::GMMAccum::create);
@@ -635,7 +631,7 @@ int viterbiTrain(const char *featdir, const char *modeldir) {
 
 int baumWelch(const char *featdir, const char *modeldir) {
     AcousticModelFile model; int lastiter;
-    if ((lastiter = model.read("AcousticModel", modeldir))<0) { ERROR("read ", modeldir, " ", lastiter); return -1; }
+    if ((lastiter = model.Open("AcousticModel", modeldir))<0) { ERROR("read ", modeldir, " ", lastiter); return -1; }
     model.phonetx = new Matrix(LFL_PHONES, LFL_PHONES);
     AcousticModel::toCUDA(&model);
 
@@ -853,23 +849,21 @@ struct Wav2Segments {
     int HMMFlag;
 
     ~Wav2Segments() { for (int i=0; i<LFL_PHONES; i++) delete out[i]; delete [] out; }
-
     Wav2Segments(AcousticModel::Compiled *M, const char *dir) : model(M), out(new Out *[LFL_PHONES]), HMMFlag(0) {
         int len = 0;
         for (int i=0; i<LFL_PHONES; i++) out[len++] = new Out(StrCat(dir, "seg", Phoneme::name(i)).c_str());
     }
 
-    static void add_wav(const char *sd, SoundAsset *wav, const char *transcript, void *arg) {
-        Wav2Segments *args = (Wav2Segments*)arg;
+    void AddWAV(const string &sd, SoundAsset *wav, const char *transcript) {
         Matrix *MFCC = Features::fromAsset(wav, Features::Flag::Storable);
         Matrix *features = Features::fromFeat(MFCC->Clone(), Features::Flag::Full);
 
-        AcousticModel::Compiled *hmm = AcousticModel::fromUtterance1(args->model, transcript, args->HMMFlag & AcousticHMM::Flag::UseTransit);
+        AcousticModel::Compiled *hmm = AcousticModel::fromUtterance1(model, transcript, HMMFlag & AcousticHMM::Flag::UseTransit);
         if (!hmm) return DEBUG("utterance decode failed");
         if (!DimCheck("Wav2Segments", features->N, hmm->state[0].emission.mean.N)) return;
 
         Matrix viterbi(features->M, 1); Timer vtime;
-        double vprob = AcousticHMM::viterbi(hmm, features, &viterbi, 2, FLAGS_BeamWidth, args->HMMFlag);
+        double vprob = AcousticHMM::viterbi(hmm, features, &viterbi, 2, FLAGS_BeamWidth, HMMFlag);
         if (FLAGS_lfapp_video) Decoder::visualizeFeatures(hmm, MFCC, &viterbi, vprob, vtime.GetTime(), FLAGS_interactive);
 
         int transitions=0, longrun=0;
@@ -879,20 +873,20 @@ struct Wav2Segments {
             if (len > longrun) longrun = len;
 
             RingBuf::Handle B(wav->wav, iter.beg*FLAGS_feat_hop, len*FLAGS_feat_hop);
-            Out *out = args->out[iter.phone];
-            out->wav.Write(&B);
+            Out *o = out[iter.phone];
+            o->wav.Write(&B);
 
             Matrix seg(1,2);
-            seg.row(0)[0] = out->samples;
-            seg.row(0)[1] = out->samples + len*FLAGS_feat_hop;
-            out->samples += len*FLAGS_feat_hop;
+            seg.row(0)[0] = o->samples;
+            seg.row(0)[1] = o->samples + len*FLAGS_feat_hop;
+            o->samples += len*FLAGS_feat_hop;
 
             MatrixFile f(&seg, "range");
-            string fn = StringPrintf("%d:%s:%d:%d-%d:%s", out->count++, wav->filename.c_str(),
+            string fn = StringPrintf("%d:%s:%d:%d-%d:%s", o->count++, wav->filename.c_str(),
                 transitions, iter.beg*FLAGS_feat_hop, (iter.beg+len)*FLAGS_feat_hop,
                 hmm->state[(int)viterbi.row(iter.beg)[0]].name.c_str());
 
-            out->index.Write(&f, fn);
+            o->index.Write(&f, fn);
             f.Clear();
 
             transitions++;  
@@ -945,18 +939,18 @@ extern "C" int main(int argc, const char *argv[]) {
     dtdir += "/" + FLAGS_DTreeDir + "/"; 
 
 #define LOAD_ACOUSTIC_MODEL(model, lastiter) AcousticModelFile model; int lastiter; \
-    if ((lastiter = model.read("AcousticModel", modeldir.c_str(), FLAGS_WantIter)) < 0) FATAL("LOAD_ACOUSTIC_MODEL ", modeldir, " ", lastiter); \
+    if ((lastiter = model.Open("AcousticModel", modeldir.c_str(), FLAGS_WantIter)) < 0) FATAL("LOAD_ACOUSTIC_MODEL ", modeldir, " ", lastiter); \
     INFO("loaded acoustic model iter ", lastiter, ", ", model.getStateCount(), " states");
 
 #define LOAD_LANGUAGE_MODEL(model, lastiter) LanguageModel model; int lastiter; \
-    if ((lastiter = model.read("LanguageModel", modeldir.c_str())) < 0) FATAL("LOAD_LANGUAGE_MODEL ", modeldir, " ", lastiter); \
+    if ((lastiter = model.Open("LanguageModel", modeldir.c_str())) < 0) FATAL("LOAD_LANGUAGE_MODEL ", modeldir, " ", lastiter); \
     INFO("loaded language model iter ", lastiter, ", ", model.prior->M, " words, ", model.transit->M, " transits");
 
     if (FLAGS_wav2feats) {
         INFO("wav2features begin (wavdir='", wavdir, "', featdir='", featdir, "')");
-        WavCorpus wav;
-        Wav2Features w2f(featdir.c_str(), Wav2Features::Target::ARCHIVE);
-        Corpus::Run(&wav, wavdir.c_str(), (void*)Wav2Features::add_features, (void*)&w2f);
+        Wav2Features w2f(featdir, Wav2Features::Target::Archive);
+        WavCorpus wav(bind(&Wav2Features::AddFeatures, &w2f, _1, _2, _3));
+        wav.Run(wavdir);
         INFO("wav2features end");
     }
     if (FLAGS_feats2cluster) {
@@ -1025,9 +1019,9 @@ extern "C" int main(int argc, const char *argv[]) {
     if (FLAGS_wav2segs) {
         LOAD_ACOUSTIC_MODEL(model, lastiter);
         INFO("segmentation begin (wavdir='", wavdir, "', modeldir='", modeldir, "')");
-        WavCorpus wav;
         Wav2Segments w2s(&model, modeldir.c_str());
-        Corpus::Run(&wav, wavdir.c_str(), (void*)Wav2Segments::add_wav, &w2s);
+        WavCorpus wav(bind(&Wav2Segments::AddWAV, &w2s, _1, _2, _3));
+        wav.Run(wavdir);
         INFO("segmentation end (", wavdir, ")");
     }
     if (FLAGS_compilerecognition) {
@@ -1042,7 +1036,7 @@ extern "C" int main(int argc, const char *argv[]) {
     if (FLAGS_rewritemodel) {
         INFO("rewrite model begin");
         AcousticModelFile model; int lastiter;
-        if ((lastiter = model.read("AcousticModel", modeldir.c_str(), FLAGS_WantIter, true)) < 0) FATAL("LOAD_ACOUSTIC_MODEL ", modeldir, " ", lastiter);
+        if ((lastiter = model.Open("AcousticModel", modeldir.c_str(), FLAGS_WantIter, true)) < 0) FATAL("LOAD_ACOUSTIC_MODEL ", modeldir, " ", lastiter);
         INFO("loaded acoustic model iter ", lastiter, ", ", model.getStateCount(), " states");
 
         if (AcousticModel::write(&model, "AcousticModel", modeldir.c_str(), lastiter+1, 0)) ERROR("write ", modeldir);

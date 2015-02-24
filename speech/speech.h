@@ -189,14 +189,16 @@ struct AcousticModel {
 };
 
 struct AcousticModelFile : public AcousticModel::Compiled {
-    Matrix *initial=0, *mean=0, *covar=0, *prior=0, *transit=0, *map=0, *tied=0;
+    Matrix *initial=0, *mean=0, *covar=0, *prior=0, *transit=0, *tied=0;
+    HashMatrix map;
     vector<string> *names=0;
-    ~AcousticModelFile() { reset(); }
-    void reset() { delete initial; initial=0; delete mean; mean=0; delete covar; covar=0; delete prior; prior=0; delete transit; transit=0; delete map; map=0; delete tied; tied=0; delete names; names=0; }
+    AcousticModelFile() : map(0, 4) {}
+    ~AcousticModelFile() { Reset(); }
+    void Reset() { delete initial; initial=0; delete mean; mean=0; delete covar; covar=0; delete prior; prior=0; delete transit; transit=0; delete map.map; map.map=0; delete tied; tied=0; delete names; names=0; }
     AcousticModel::State *getState(unsigned hash) { double *he = getHashEntry(hash); return he ? &state[(int)he[1]] : 0; }
-    double *getHashEntry(unsigned hash) { return HashMatrix::Get(map, hash, 4); }
+    double *getHashEntry(unsigned hash) { return map.Get(hash); }
     Matrix *tiedStates() { return tied; }
-    int read(const char *name, const char *dir, int lastiter=-1, bool rebuildTransit=0);
+    int Open(const char *name, const char *dir, int lastiter=-1, bool rebuildTransit=0);
 };
 
 struct AcousticModelBuilder : public AcousticModel::StateCollection {

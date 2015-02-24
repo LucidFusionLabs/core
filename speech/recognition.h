@@ -34,7 +34,7 @@ struct RecognitionModel {
 
     int read(const char *name, const char *dir, int WantIter=-1) {
         int amiter, recogiter, ret;
-        if ((amiter = acousticModel.read("AcousticModel", dir, WantIter)) < 0) { ERROR("acousticModel ", dir, " ", amiter); return -1; }
+        if ((amiter = acousticModel.Open("AcousticModel", dir, WantIter)) < 0) { ERROR("acousticModel ", dir, " ", amiter); return -1; }
         emissions = acousticModel.states;
 
         if ((recogiter = recognitionNetwork.read("recognition", dir, WantIter)) < 0) { ERROR("recognition ", dir, " ", recogiter); return -1; }

@@ -52,7 +52,7 @@ int main(int argc, const char *argv[]) {
     string featdir  = StrCat(FLAGS_homedir, "/", FLAGS_FeatDir,  "/");
 
 #define LOAD_ACOUSTIC_MODEL(model, lastiter) AcousticModelFile model; int lastiter; \
-    if ((lastiter = model.read("AcousticModel", modeldir.c_str(), FLAGS_WantIter)) < 0) FATAL("LOAD_ACOUSTIC_MODEL ", modeldir, " ", lastiter); \
+    if ((lastiter = model.Open("AcousticModel", modeldir.c_str(), FLAGS_WantIter)) < 0) FATAL("LOAD_ACOUSTIC_MODEL ", modeldir, " ", lastiter); \
     INFO("loaded acoustic model iter ", lastiter, ", ", model.getStateCount(), " states");
 
     if (FLAGS_vp) {

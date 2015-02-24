@@ -455,7 +455,8 @@ int AcousticModel::write(StateCollection *model, const char *name, const char *d
 
     /* open map */
     const int buckets=5, values=4;
-    Matrix map(NextPrime(states*4), buckets*values);
+    Matrix map_data(NextPrime(states*4), buckets*values);
+    HashMatrix map(&map_data, values);
 
     /* open data */
     LocalFile names  (string(dir) + MatrixFile::Filename(name, "name",       "string", iteration), "w");
@@ -495,7 +496,7 @@ int AcousticModel::write(StateCollection *model, const char *name, const char *d
         }
 
         /* build map */
-        double *he = HashMatrix::Set(&map, s->id(), values);
+        double *he = map.Set(s->id());
         if (!he) FATAL("Matrix hash collision: ", s->name);
         he[1] = states;
         he[2] = means;
@@ -508,7 +509,7 @@ int AcousticModel::write(StateCollection *model, const char *name, const char *d
     }
 
     /* write map & tied */
-    if (1                   && MatrixFile(&map,                flagtext).WriteVersioned(VersionedFileName(dir, name, "map"),        iteration) < 0) { ERROR(name, " write map");     ret=-1; }
+    if (1                   && MatrixFile(map.map,             flagtext).WriteVersioned(VersionedFileName(dir, name, "map"),        iteration) < 0) { ERROR(name, " write map");     ret=-1; }
     if (model->tiedStates() && MatrixFile(model->tiedStates(), flagtext).WriteVersioned(VersionedFileName(dir, name, "tiedstates"), iteration) < 0) { ERROR(name, " write tied");    ret=-1; }
     if (model->phoneTx()    && MatrixFile(model->phoneTx(),    flagtext).WriteVersioned(VersionedFileName(dir, name, "phonetx"),    iteration) < 0) { ERROR(name, " write phonetx"); ret=-1; }
 
@@ -802,9 +803,8 @@ AcousticModel::Compiled *AcousticModel::fromModel1(StateCollection *model, bool 
     return hmm;
 }
 
-int AcousticModelFile::read(const char *name, const char *dir, int lastiter, bool rebuildTransit) {
-    reset();
-
+int AcousticModelFile::Open(const char *name, const char *dir, int lastiter, bool rebuild_transit) {
+    Reset();
     string flags;
     lastiter = MatrixFile::ReadVersioned(dir, name, "transition", &transit, &flags, lastiter);
     if (!transit) { ERROR("no acoustic model: ", name); return -1; }
@@ -815,7 +815,7 @@ int AcousticModelFile::read(const char *name, const char *dir, int lastiter, boo
     if (MatrixFile::ReadVersioned(dir, name, "emMeans",    &mean,    0, lastiter)<0) { ERROR(name, ".", lastiter, ".emMean" ); return -1; }
     if (MatrixFile::ReadVersioned(dir, name, "emCov",      &covar,   0, lastiter)<0) { ERROR(name, ".", lastiter, ".emCov"  ); return -1; }
     if (MatrixFile::ReadVersioned(dir, name, "emPrior",    &prior,   0, lastiter)<0) { ERROR(name, ".", lastiter, ".emPrior"); return -1; }
-    if (MatrixFile::ReadVersioned(dir, name, "map",        &map,     0, lastiter)<0) { ERROR(name, ".", lastiter, ".map"    ); return -1; }
+    if (MatrixFile::ReadVersioned(dir, name, "map",        &map.map, 0, lastiter)<0) { ERROR(name, ".", lastiter, ".map"    ); return -1; }
     if (StringFile::ReadVersioned(dir, name, "name",       &names,   0, lastiter)<0) { ERROR(name, ".", lastiter, ".name"   ); return -1; }
     if (MatrixFile::ReadVersioned(dir, name, "tiedstates", &tied,    0, lastiter)<0) { ERROR(name, ".", lastiter, ".tied"   );       /**/ }
 
@@ -823,7 +823,7 @@ int AcousticModelFile::read(const char *name, const char *dir, int lastiter, boo
     int M=prior->M, K=prior->N, N=mean->N, transind=0;
 
     LFL_STL_NAMESPACE::map<unsigned, pair<int, int> > txmap;
-    if (rebuildTransit) {
+    if (rebuild_transit) {
         unsigned last = -1; int count = 0, beg;
         MatrixRowIter(transit) {
             unsigned self = transit->row(i)[TC_Self];
@@ -846,7 +846,7 @@ int AcousticModelFile::read(const char *name, const char *dir, int lastiter, boo
         state[i].val.emission_index = i;
 
         unsigned hash = state[i].id();
-        if (rebuildTransit) {
+        if (rebuild_transit) {
             LFL_STL_NAMESPACE::map<unsigned, pair<int, int> >::iterator it = txmap.find(hash);
             if (it == txmap.end()) { ERROR("find state ", state[i].name, " in transition failed ", hash); return -1; }
             state[i].transition.AssignDataPtr((*it).second.second, transit->N, transit->row((*it).second.first));
