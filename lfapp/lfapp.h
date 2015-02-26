@@ -363,6 +363,7 @@ struct Printable : public string {
     Printable(const unsigned &x) : string(Typed::Str(x)) {}
     Printable(const long long &x) : string(Typed::Str(x)) {}
     Printable(const unsigned char &x) : string(Typed::Str(x)) {}
+    Printable(const unsigned short &x) : string(Typed::Str(x)) {}
     Printable(const unsigned long &x) : string(Typed::Str(x)) {}
     Printable(const unsigned long long &x) : string(Typed::Str(x)) {}
     Printable(const vector<string> &x);
