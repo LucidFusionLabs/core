@@ -248,6 +248,53 @@ template <class X> struct IterableFreeListVector : public FreeListVector<X> { //
     }
 };
 
+template <class X, class Alloc = std::allocator<X> > struct FreeListBlockAllocator {
+    typedef pair<X*, int> Block;
+    const int block_size;
+    Alloc alloc;
+    vector<Block> data;
+    vector<int> free_list;
+
+    ~FreeListBlockAllocator() { Clear(); }
+    FreeListBlockAllocator(int bs=1024) : block_size(bs) {}
+
+    int size() const { return data.empty() ? 0 : (data.size()-1) * block_size + data.back().second; }
+    const X& back() const { return data.back().first[data.back().second-1]; }
+    const X& operator[](int i) const { return data[GetBlockFromIndex(i)].first[GetOffsetFromIndex(i)]; }
+    /**/  X& operator[](int i)       { return data[GetBlockFromIndex(i)].first[GetOffsetFromIndex(i)]; }
+
+    int MakeIndex(int block, int offset) const { return block * block_size + offset; }
+    int GetBlockFromIndex(int ind) const { return ind / block_size; }
+    int GetOffsetFromIndex(int ind) const { return ind % block_size; }
+
+    void Clear() {
+        for (auto b : data) {
+            for (X *j = b.first, *je = j + b.second; j != je; ++j) alloc.destroy(j);
+            alloc.deallocate(b.first, block_size);
+        }
+        data.clear();
+        free_list.clear();
+    }
+
+    int Insert(const X &v) {
+        if (free_list.empty()) {
+            if (!data.size() || data.back().second == block_size)
+                data.emplace_back(alloc.allocate(block_size), 0);
+            Block *b = &data.back();
+            alloc.construct(&b->first[b->second], v);
+            return MakeIndex(data.size()-1, b->second++);
+        } else {
+            int free_ind = PopBack(free_list);
+            X *j = &(*this)[free_ind];
+            alloc.destroy(j);
+            alloc.construct(j, v);
+            return free_ind;
+        }
+    }
+
+    void Erase(unsigned ind) { free_list.push_back(ind); }
+};
+
 template <typename X> struct ArraySegmentIter {
     const X *buf; int i, ind, len, cur_start; X cur_attr;
     ArraySegmentIter(const basic_string<X> &B) : buf(B.size() ? &B[0] : 0), i(-1), ind(0), len(B.size()) { Increment(); }
