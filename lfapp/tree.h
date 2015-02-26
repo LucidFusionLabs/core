@@ -18,7 +18,6 @@
 
 #ifndef __LFL_LFAPP_TREE_H__
 #define __LFL_LFAPP_TREE_H__
-
 namespace LFL {
 
 struct RedBlackTreeZipper {

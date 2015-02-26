@@ -35,12 +35,9 @@ struct LanguageModel {
         string flags;
         int lastiter = MatrixFile::ReadVersioned(dir, name, "transition", &transit, &flags);
         if (!transit) { ERROR("no language model: ", name); return -1; }
-        if (flags.size()) DEBUG("loading ", name, " ", lastiter, " : ", flags);
-
         if (MatrixFile::ReadVersioned(dir, name, "prior", &prior,   0, lastiter) < 0) { ERROR(name, ".", lastiter, ".prior"); return -1; }
         if (MatrixFile::ReadVersioned(dir, name, "map",   &map.map, 0, lastiter) < 0) { ERROR(name, ".", lastiter, ".map"  ); return -1; }
         if (StringFile::ReadVersioned(dir, name, "name",  &names,   0, lastiter) < 0) { ERROR(name, ".", lastiter, ".name" ); return -1; }
-
         MatrixRowIter(prior) total += prior->row(i)[0];
         return lastiter;
     }

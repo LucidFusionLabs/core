@@ -18,6 +18,7 @@
 
 #include "lfapp/lfapp.h"
 #include "lfapp/dom.h"
+#include "lfapp/trie.h"
 #include "ml/corpus.h"
 #include "ml/counter.h"
 #include "ml/hmm.h"
@@ -27,7 +28,7 @@
 
 namespace LFL {
 DEFINE_string(query,           "",                          "Query corpus");
-DEFINE_string(target,          "printer",                   "Handler [printer,lmbuilder]");
+DEFINE_string(target,          "printer",                   "Handler [printer,lmbuilder,triebuilder]");
 DEFINE_string(modeldir,        "model/",                    "Model directory");
 DEFINE_int   (min_occurrences, 0,                           "Minimum occurrences");
 DEFINE_string(corpus,          "text",                      "Corpus [query,text,treebank,propbank,nombank]");
@@ -61,6 +62,18 @@ extern "C" int main(int argc, const char *argv[]) {
         lm->Open("LanguageModel", FLAGS_modeldir.c_str());
         input_cb = [=](const string &fn, SentenceCorpus::Sentence *s) {
             for (auto w : *s) printf("%s\n", lm->DebugString(tolower(w.text).c_str()).c_str());
+        };
+    } else if (FLAGS_target == "triebuilder") {
+        CounterS *words = new CounterS();
+        input_cb = [=](const string &fn, SentenceCorpus::Sentence *s) { for (auto w : *s) words->incr(tolower(w.text)); };
+        finish_cb = [=]() {
+            PatriciaTrie<char, int> trie(words->count.begin(), words->count.end());
+            for (auto w : words->count) {
+                Trie<char, int>::Node *n = trie.Query(w.first);
+                CHECK(n);
+                CHECK(n->val_ind);
+                CHECK_EQ(w.second, trie.val[n->val_ind-1].val);
+            }
         };
     } else { ERROR("unknown target ", FLAGS_target); return -1; }
 
