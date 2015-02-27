@@ -34,6 +34,17 @@ TEST(UtilTest, Move) {
     }
 }
 
+TEST(UtilTest, TopN) {
+    TopN<int> top(3);
+    top.Insert(87);
+    top.Insert(99);
+    top.Insert(1003);
+    top.Insert(1009);
+    top.Insert(41);
+    int expect[] = { 41, 87, 99 }, ind = 0;
+    for (auto i : top.data) EXPECT_EQ(expect[ind++], i);
+}
+
 TEST(ArrayTest, Segment) {
     {
         struct ZZSeg1 { int x, y; ZZSeg1(int X=0, int Y=0) : x(X), y(Y) {} };

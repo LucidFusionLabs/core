@@ -67,7 +67,7 @@ extern "C" int main(int argc, const char *argv[]) {
         CounterS *words = new CounterS();
         input_cb = [=](const string &fn, SentenceCorpus::Sentence *s) { for (auto w : *s) words->incr(tolower(w.text)); };
         finish_cb = [=]() {
-            PatriciaTrie<char, int> trie(words->count.begin(), words->count.end());
+            PatriciaCompleter<char, int> trie(words->count.begin(), words->count.end());
             for (auto w : words->count) {
                 Trie<char, int>::Node *n = trie.Query(w.first);
                 CHECK(n);

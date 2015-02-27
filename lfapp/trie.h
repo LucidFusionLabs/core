@@ -34,7 +34,7 @@ template <class K> struct TrieNodeNext {
 
 template <class K, class V> struct TrieNodeValue {
     V val;
-    TrieNodeValue(const basic_string<K>&, const V &v) : val(v) {}
+    TrieNodeValue(const basic_string<K>&, int, const V &v) : val(v) {}
 };
 
 template <class K, class V, class TN = TrieNode<K>, class TV = TrieNodeValue<K, V> > struct Trie {
@@ -79,11 +79,11 @@ template <class K, class V, class TN = TrieNode<K>, class TV = TrieNodeValue<K, 
         void Input(const String &in, const String &lookahead, const V &v) {
             PopPrefixesNotMatching(in);
             AddPrefixesOf(in, lookahead);
-            stack.emplace_back(in[stack.size()-1], (this->*insert_cb)(in.substr(stack.size()), &v));
+            stack.emplace_back(in[stack.size()-1], (this->*insert_cb)(in, &v));
         }
 
-        int Phase1Insert(const String &leaf, const V *v) { 
-            if (v) out->val.push_back(Value(leaf, *v)); 
+        int Phase1Insert(const String &in, const V *v) { 
+            if (v) out->val.push_back(Value(in, stack.size(), *v)); 
             out->data.push_back(Node(v ? out->val.size() : 0));
             return out->data.size();
         }
@@ -131,27 +131,32 @@ template <class K, class V, class TN = TrieNode<K>, class TV = TrieNodeValue<K, 
     template <class I> Trie(I b, I e) { SortedInputConstructor(this, b, e, Patricia()); }
 
     virtual bool Patricia() const { return 0; }
-    virtual Node *DeadEnd(const String &leaf, Node *n) { return 0; }
+    virtual Node *DeadEnd(const String &in, int leaf_ind, Node *n) { return 0; }
     virtual void ComputeStateFromChildren(Node *n) {}
 
     Node *Query(const String &s) {
         if (!head) return 0;
         if (s.empty()) return &data[head-1];
         Node *n = &data[head-1];
-        for (auto c = s.begin(), ce = s.end(); c != ce; ++c) {
-            Next *t = &next[n->next_ind-1], *te = t + n->next_len;
-            auto tn = lower_bound(t, te, Next(*c));
-            if (tn == te || tn->key != *c) return DeadEnd(s.substr(c-s.begin()), n);
-            n = &data[tn->next-1];
-        }
+        for (auto c = s.begin(), ce = s.end(); c != ce; ++c)
+            if (int child = GetChildIndex(n, *c)) n = &data[child-1];
+            else return DeadEnd(s, c-s.begin(), n);
         return n;
     }
+
+    int GetChildIndex(Node *n, K key) {
+        Next *t = &next[n->next_ind-1], *te = t + n->next_len;
+        auto tn = lower_bound(t, te, Next(key));
+        return (tn != te && tn->key == key) ? tn->next : 0;
+    }
 };
+
+// Patricia Trie
 
 template <class K, class V> struct PatriciaTrieNodeValue {
     V val;
     basic_string<K> leaf;
-    PatriciaTrieNodeValue(const basic_string<K> &s, const V &v) : val(v), leaf(s) {}
+    PatriciaTrieNodeValue(const basic_string<K> &s, int leaf_ind, const V &v) : val(v), leaf(s.substr(leaf_ind)) {}
 };
 
 template <class K, class V, class TN = TrieNode<K>, class TV = PatriciaTrieNodeValue<K, V> >
@@ -160,17 +165,114 @@ struct PatriciaTrie : public Trie<K, V, TN, TV> {
     template <class I> PatriciaTrie(I b, I e) : Trie<K, V, TN, TV>(b, e) {}
 
     virtual bool Patricia() const { return 1; }
-    virtual typename Parent::Node *DeadEnd(const typename Parent::String &leaf, typename Parent::Node *n) {
+    virtual typename Parent::Node *DeadEnd(const typename Parent::String &key, int leaf_ind,
+                                           typename Parent::Node *n) {
         if (!n->val_ind) return 0;
         typename Parent::Value *v = &Parent::val[n->val_ind-1];
-        if (leaf != v->leaf) return 0;
+        if (key.substr(leaf_ind) != v->leaf) return 0;
         return n;
     }
 };
 
-struct AhoCorasickMatcher {
-    unsigned fail;
-    AhoCorasickMatcher(const vector<string> &sorted_in) {
+// Patricia Completer
+
+template <class K, class V> struct PatriciaCompleterNodeValue {
+    V val;
+    basic_string<K> key;
+    PatriciaCompleterNodeValue(const basic_string<K> &s, int, const V &v) : val(v), key(s) {}
+};
+
+template <class K, const int C> struct PatriciaCompleterNode : public TrieNode<K> {
+    static const int completions = C;
+    int completion[completions];
+    PatriciaCompleterNode(int V=0) : TrieNode<K>(V) { memzero(completion); }
+};
+
+template <class K, class V, class TN = PatriciaCompleterNode<K, 10>, class TV = PatriciaCompleterNodeValue<K, V> >
+struct PatriciaCompleter : public Trie<K, V, TN, TV> {
+    typedef Trie<K, V, TN, TV> Parent;
+    function<int(const V*)> completion_sort_cb;
+    template <class I> PatriciaCompleter(I b, I e) :
+        Trie<K, V, TN, TV>(b, e), completion_sort_cb([](const V *v){ return *v; }) {}
+
+    virtual bool Patricia() const { return 1; }
+    virtual typename Parent::Node *DeadEnd(const typename Parent::String &key, int leaf_ind,
+                                           typename Parent::Node *n) {
+        if (!n->val_ind) return 0;
+        typename Parent::Value *v = &Parent::val[n->val_ind-1];
+        if (key.substr(leaf_ind) != v->key.substr(leaf_ind)) return 0;
+        return n;
+    }
+    virtual void ComputeStateFromChildren(typename Parent::Node *n) {
+        TopN<pair<int, int> > completion(TN::completions);
+        if (n->val_ind) AddCompletion(&completion, n->val_ind);
+        for (typename Parent::Next *t = &Parent::next[n->next_ind-1], *te = t + n->next_len; t != te; ++t) {
+            auto nn = &Parent::data[t->next-1]; 
+            if (nn->val_ind) AddCompletion(&completion, nn->val_ind);
+        }
+        int ind = 0;
+        for (auto i : completion.data) n->completion[ind++] = i.second;
+    }
+    void AddCompletion(TopN<pair<int, int> > *out, int val_ind) const {
+        out->Insert(pair<int, int>(-completion_sort_cb(&Parent::val[val_ind-1].val), val_ind));
+    }
+};
+
+template <class K> struct AhoCorasickMatcherNode : public TrieNode<K> {
+    int fail=-1;
+    vector<int> out;
+    AhoCorasickMatcherNode(int V=0) : TrieNode<K>(V) {}
+};
+
+template <class K = char, class V = int> struct AhoCorasickMatcher {
+    typedef Trie<K, V, AhoCorasickMatcherNode<K> > FSM;
+    typedef typename FSM::String String;
+    typedef pair<String, V> Input;
+    FSM fsm;
+    int match_state;
+
+    AhoCorasickMatcher(const vector<Input> &sorted_in) : AhoCorasickMatcher(sorted_in.begin(), sorted_in.end()) {}
+    template <class I> AhoCorasickMatcher(I b, I e) : fsm(b, e), match_state(fsm.head) {
+        if (!fsm.head || !fsm.data.size()) return;
+        std::queue<int> q;
+        auto n = &fsm.data[fsm.head-1];
+        n->fail = fsm.head;
+        for (auto t = &fsm.next[n->next_ind-1], te = t+n->next_len; t != te; ++t) {
+            auto nn = &fsm.data[t->next-1]; 
+            nn->fail = fsm.head;
+            q.push(t->next);
+        }
+        while (q.size()) {
+            int node_ind = PopFront(q);
+            n = &fsm.data[node_ind-1];
+            for (auto t = &fsm.next[n->next_ind-1], te = t+n->next_len; t != te; ++t) {
+                q.push(t->next);
+                int state = n->fail;
+                for (;;) {
+                    auto fn = &fsm.data[state-1];
+                    if (int child = fsm.GetChildIndex(fn, t->key)) { state = child; break; }
+                    else if (state == fsm.head) break;
+                    state = fn->fail;
+                }
+                auto nn = &fsm.data[t->next-1]; 
+                auto fn = &fsm.data[state-1];
+                nn->fail = state;
+                nn->out.insert(nn->out.end(), fn->out.begin(), fn->out.end());
+            }
+        }
+    }
+
+    void Match(const String &text, vector<Regex::Result> *out) {
+        for (auto c = text.begin(), ce = text.end(); c != ce; ++c) {
+            for (;;) {
+                auto n = &fsm.data[match_state-1];
+                if (int child = fsm.GetChildIndex(n, *c)) { match_state = child; break; }
+                else if (match_state == fsm.head) break;
+                match_state = n->fail;
+            }
+            auto n = &fsm.data[match_state-1];
+            for (auto o : n->out) out->push_back(Regex::Result(c - text.begin(), o));
+        }
     }
 };
 
