@@ -18,6 +18,7 @@
 
 #include "gtest/gtest.h"
 #include "lfapp/lfapp.h"
+#include "lfapp/trie.h"
 
 GTEST_API_ int main(int argc, const char **argv) {
     testing::InitGoogleTest(&argc, (char**)argv);
@@ -71,6 +72,22 @@ TEST(RegexTest, RegexStreamURL) {
 
     vector<Regex::Result> matches;
     StreamRegex url_matcher("https?://");
+    timers->AccumulateTo(tid);
+    for (int i=0; i<FLAGS_size; ++i) {
+        url_matcher.Match(my_env->test1, &matches);
+        EXPECT_EQ(1, matches.size()); EXPECT_EQ("http://", matches[0].Text(my_env->test1));
+        matches.clear();
+    }
+    timers->AccumulateTo(0);
+}
+
+TEST(RegexTest, AhoCorasickURL) {
+    PerformanceTimers *timers = Singleton<PerformanceTimers>::Get();
+    int tid = timers->Create("AhoCorasickURL");
+
+    vector<Regex::Result> matches;
+    vector<pair<string, int> > pattern = { pair<string, int>("http://", 0), pair<string, int>("https://", 1) };
+    AhoCorasickMatcher<char> url_matcher(pattern);
     timers->AccumulateTo(tid);
     for (int i=0; i<FLAGS_size; ++i) {
         url_matcher.Match(my_env->test1, &matches);

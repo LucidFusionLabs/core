@@ -28,6 +28,7 @@
 #include <string>
 #include <map>
 #include <set>
+#include <queue>
 #include <deque>
 #include <algorithm>
 #define LFL_STL_NAMESPACE std

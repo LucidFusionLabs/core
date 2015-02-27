@@ -117,8 +117,9 @@ template <typename X> void EnsureSize(X &x, int n) { if (x.size() < n) x.resize(
 
 template <typename X> typename X::value_type &PushFront(X &v, const typename X::value_type &x) { v.push_front(x); return v.front(); }
 template <typename X> typename X::value_type &PushBack (X &v, const typename X::value_type &x) { v.push_back (x); return v.back (); }
-template <typename X> typename X::value_type  PopFront (X &v) { typename X::value_type ret = v.front(); v.pop_front(); return ret; }
 template <typename X> typename X::value_type  PopBack  (X &v) { typename X::value_type ret = v.back (); v.pop_back (); return ret; }
+template <typename X> typename X::value_type  PopFront (X &v) { typename X::value_type ret = v.front(); v.pop_front(); return ret; }
+template <typename X> typename std::queue<X>::value_type PopFront(std::queue<X> &v) { typename std::queue<X>::value_type ret = v.front(); v.pop(); return ret; }
 
 template <class X>       X *VectorGet(      vector<X> &x, int n) { return (n >= 0 && n < x.size()) ? &x[n] : 0; }
 template <class X> const X *VectorGet(const vector<X> &x, int n) { return (n >= 0 && n < x.size()) ? &x[n] : 0; }
@@ -293,6 +294,20 @@ template <class X, class Alloc = std::allocator<X> > struct FreeListBlockAllocat
     }
 
     void Erase(unsigned ind) { free_list.push_back(ind); }
+};
+
+template <class X> struct TopN {
+    const int num;
+    set<X> data;
+    TopN(int n) : num(n) {}
+
+    void Insert(const X &v) {
+        if (data.size() < num) data.insert(v);
+        else if (v < *data.rbegin()) {
+            data.erase((++data.rbegin()).base());
+            data.insert(v);
+        }
+    }
 };
 
 template <typename X> struct ArraySegmentIter {
@@ -693,14 +708,14 @@ struct Serializable {
     int      Read(const Stream *is) { if (!HdrCheck(is)) return -1; return In(is); }
 
     struct Stream {
+        char *buf; int size; mutable int offset; mutable bool error;
+        Stream(char *B, int S) : buf(B), size(S), offset(0), error(0) {}
+
         virtual unsigned char  *N8()            = 0;
         virtual unsigned short *N16()           = 0;
         virtual unsigned       *N32()           = 0;
         virtual char           *Get(int size=0) = 0;
         virtual char           *End()           = 0;
-
-        char *buf; int size; mutable int offset; mutable bool error;
-        Stream(char *B, int S) : buf(B), size(S), offset(0), error(0) {}
 
         int Len() const { return size; }
         int Pos() const { return offset; };
