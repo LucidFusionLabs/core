@@ -34,6 +34,7 @@
 #define LFL_STL_NAMESPACE std
 
 #include <memory>
+#include <numeric>
 #include <functional>
 #include <unordered_map>
 #include <unordered_set>

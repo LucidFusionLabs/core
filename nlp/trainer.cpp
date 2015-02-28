@@ -69,7 +69,7 @@ extern "C" int main(int argc, const char *argv[]) {
         finish_cb = [=]() {
             PatriciaCompleter<char, int> trie(words->count.begin(), words->count.end());
             for (auto w : words->count) {
-                Trie<char, int>::Node *n = trie.Query(w.first);
+                auto n = trie.Query(w.first);
                 CHECK(n);
                 CHECK(n->val_ind);
                 CHECK_EQ(w.second, trie.val[n->val_ind-1].val);

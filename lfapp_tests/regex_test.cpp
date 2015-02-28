@@ -47,6 +47,8 @@ TEST(RegexTest, StrstrURL) {
         const char *match = strstr(my_env->test1.c_str(), "http://");
         EXPECT_NE(nullptr, match);
         EXPECT_EQ(0, strncmp(match, "http://", 7));
+        match = strstr(my_env->test1.c_str(), "https://");
+        EXPECT_EQ(nullptr, match);
     }
     timers->AccumulateTo(0);
 }
@@ -86,8 +88,7 @@ TEST(RegexTest, AhoCorasickURL) {
     int tid = timers->Create("AhoCorasickURL");
 
     vector<Regex::Result> matches;
-    vector<pair<string, int> > pattern = { pair<string, int>("http://", 0), pair<string, int>("https://", 1) };
-    AhoCorasickMatcher<char> url_matcher(pattern);
+    AhoCorasickMatcher<char> url_matcher({ "http://", "https://" });
     timers->AccumulateTo(tid);
     for (int i=0; i<FLAGS_size; ++i) {
         url_matcher.Match(my_env->test1, &matches);

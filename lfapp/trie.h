@@ -54,7 +54,7 @@ template <class K, class V, class TN = TrieNode<K>, class TV = TrieNodeValue<K, 
 
         Self *out;
         int insert_id=0;
-        bool patricia=true;
+        bool patricia;
         vector<Prenode> stack;
         InsertCB     insert_cb = &SortedInputConstructor::Phase1Insert;
         CompleteCB complete_cb = &SortedInputConstructor::Phase1Complete;
@@ -69,9 +69,9 @@ template <class K, class V, class TN = TrieNode<K>, class TV = TrieNodeValue<K, 
         }
         template <class I> void Input(I b, I e) { 
             for (auto i = b; i != e; /**/) {
-                const String &k = i->first;
-                const V      &v = i->second;
-                Input(k, ++i != e ? i->first : "", v);
+                const String &k = (*i).first;
+                const V      &v = (*i).second;
+                Input(k, ++i != e ? (*i).first : "", v);
             }
             while (stack.size()) (this->*complete_cb)(PopBack(stack));
             out->head = 1;
@@ -116,7 +116,7 @@ template <class K, class V, class TN = TrieNode<K>, class TV = TrieNodeValue<K, 
             int add_prefixes;
             if (patricia) {
                 int matching_lookahead = MismatchOffset(in.begin(), in.end(), lookahead.begin(), lookahead.end()); 
-                add_prefixes = matching_lookahead - stack.size() - (matching_lookahead == in.size());
+                add_prefixes = matching_lookahead - stack.size();
             } else add_prefixes = in.size() - stack.size();
             for (int i=0; i<add_prefixes; i++) {
                 stack.emplace_back(in[stack.size()-1], (this->*insert_cb)("", NULL));
@@ -128,9 +128,9 @@ template <class K, class V, class TN = TrieNode<K>, class TV = TrieNodeValue<K, 
     vector<Next> next;
     vector<Value> val;
     int head=0;
-    template <class I> Trie(I b, I e) { SortedInputConstructor(this, b, e, Patricia()); }
+    Trie() {}
+    template <class I> Trie(I b, I e) { SortedInputConstructor(this, b, e, false); }
 
-    virtual bool Patricia() const { return 0; }
     virtual Node *DeadEnd(const String &in, int leaf_ind, Node *n) { return 0; }
     virtual void ComputeStateFromChildren(Node *n) {}
 
@@ -162,9 +162,8 @@ template <class K, class V> struct PatriciaTrieNodeValue {
 template <class K, class V, class TN = TrieNode<K>, class TV = PatriciaTrieNodeValue<K, V> >
 struct PatriciaTrie : public Trie<K, V, TN, TV> {
     typedef Trie<K, V, TN, TV> Parent;
-    template <class I> PatriciaTrie(I b, I e) : Trie<K, V, TN, TV>(b, e) {}
+    template <class I> PatriciaTrie(I b, I e) { typename Parent::SortedInputConstructor(this, b, e, true); }
 
-    virtual bool Patricia() const { return 1; }
     virtual typename Parent::Node *DeadEnd(const typename Parent::String &key, int leaf_ind,
                                            typename Parent::Node *n) {
         if (!n->val_ind) return 0;
@@ -192,10 +191,10 @@ template <class K, class V, class TN = PatriciaCompleterNode<K, 10>, class TV = 
 struct PatriciaCompleter : public Trie<K, V, TN, TV> {
     typedef Trie<K, V, TN, TV> Parent;
     function<int(const V*)> completion_sort_cb;
-    template <class I> PatriciaCompleter(I b, I e) :
-        Trie<K, V, TN, TV>(b, e), completion_sort_cb([](const V *v){ return *v; }) {}
+    template <class I> PatriciaCompleter(I b, I e) : completion_sort_cb([](const V *v){ return *v; }) {
+        typename Parent::SortedInputConstructor(this, b, e, true);
+    }
 
-    virtual bool Patricia() const { return 1; }
     virtual typename Parent::Node *DeadEnd(const typename Parent::String &key, int leaf_ind,
                                            typename Parent::Node *n) {
         if (!n->val_ind) return 0;
@@ -219,28 +218,36 @@ struct PatriciaCompleter : public Trie<K, V, TN, TV> {
 };
 
 template <class K> struct AhoCorasickMatcherNode : public TrieNode<K> {
-    int fail=-1;
-    vector<int> out;
+    int fail=-1, out_ind=-1, out_len=0;
     AhoCorasickMatcherNode(int V=0) : TrieNode<K>(V) {}
 };
 
-template <class K = char, class V = int> struct AhoCorasickMatcher {
-    typedef Trie<K, V, AhoCorasickMatcherNode<K> > FSM;
+template <class K = char> struct AhoCorasickMatcher {
+    struct PatternTable : public vector<int> {
+        PatternTable(int s) : vector<int>(s) { std::iota(begin(), end(), 0); }
+    };
+    typedef Trie<K, int, AhoCorasickMatcherNode<K> > FSM;
     typedef typename FSM::String String;
-    typedef pair<String, V> Input;
+    typedef IterPair<typename vector<String>::const_iterator, typename PatternTable::const_iterator> InputPair;
+
+    PatternTable pattern;
     FSM fsm;
+    vector<int> out;
     int match_state;
 
-    AhoCorasickMatcher(const vector<Input> &sorted_in) : AhoCorasickMatcher(sorted_in.begin(), sorted_in.end()) {}
-    template <class I> AhoCorasickMatcher(I b, I e) : fsm(b, e), match_state(fsm.head) {
+    AhoCorasickMatcher(const vector<String> &sorted_in) : pattern(sorted_in.size()),
+    fsm(InputPair(sorted_in.begin(), pattern.begin()), InputPair(sorted_in.end(), pattern.end())),
+    match_state(fsm.head) {
+        for (int i=0, l=sorted_in.size(); i != l; ++i) pattern[i] = sorted_in[i].size();
         if (!fsm.head || !fsm.data.size()) return;
         std::queue<int> q;
         auto n = &fsm.data[fsm.head-1];
         n->fail = fsm.head;
         for (auto t = &fsm.next[n->next_ind-1], te = t+n->next_len; t != te; ++t) {
+            q.push(t->next);
             auto nn = &fsm.data[t->next-1]; 
             nn->fail = fsm.head;
-            q.push(t->next);
+            AddOutput(t->next, nn, NULL);
         }
         while (q.size()) {
             int node_ind = PopFront(q);
@@ -254,15 +261,22 @@ template <class K = char, class V = int> struct AhoCorasickMatcher {
                     else if (state == fsm.head) break;
                     state = fn->fail;
                 }
-                auto nn = &fsm.data[t->next-1]; 
                 auto fn = &fsm.data[state-1];
+                auto nn = &fsm.data[t->next-1]; 
                 nn->fail = state;
-                nn->out.insert(nn->out.end(), fn->out.begin(), fn->out.end());
+                AddOutput(t->next, nn, fn);
             }
         }
     }
 
-    void Match(const String &text, vector<Regex::Result> *out) {
+    void AddOutput(int nid, typename FSM::Node *n, typename FSM::Node *f) {
+        int start_size = out.size();
+        if (n->val_ind) out.push_back(fsm.val[n->val_ind-1].val);
+        if (f) for (int i=0, l=f->out_len; i != l; ++i) out.push_back(out[f->out_ind+i]);
+        if ((n->out_len = out.size() - start_size)) n->out_ind = start_size;
+    }
+
+    void Match(const String &text, vector<Regex::Result> *result) {
         for (auto c = text.begin(), ce = text.end(); c != ce; ++c) {
             for (;;) {
                 auto n = &fsm.data[match_state-1];
@@ -271,7 +285,11 @@ template <class K = char, class V = int> struct AhoCorasickMatcher {
                 match_state = n->fail;
             }
             auto n = &fsm.data[match_state-1];
-            for (auto o : n->out) out->push_back(Regex::Result(c - text.begin(), o));
+            if (!result || n->out_ind < 0) continue;
+            for (auto i = &out[n->out_ind], e = i + n->out_len; i != e; ++i) {
+                int pattern_len = pattern[*i], offset = c - text.begin() - pattern_len + 1;
+                result->push_back(Regex::Result(offset, offset + pattern_len));
+            }
         }
     }
 };
