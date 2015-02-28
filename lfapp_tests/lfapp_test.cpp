@@ -21,6 +21,7 @@
 #include "lfapp/dom.h"
 #include "lfapp/css.h"
 #include "lfapp/gui.h"
+#include "lfapp/trie.h"
 
 namespace LFL {
 struct StringMethodResolutionTest {
@@ -389,6 +390,51 @@ TEST(RegexTest, StreamURL) {
     url_matcher.Match(in, &matches);
     EXPECT_EQ(0, matches.size());
 
+    in = "p://doo ddd ";
+    url_matcher.Match(in, &matches);
+    EXPECT_EQ(1, matches.size()); EXPECT_EQ(-3, matches[0].begin); EXPECT_EQ(4, matches[0].end);
+}
+
+TEST(RegexTest, AhoCorasick) {
+    AhoCorasickMatcher<char> url_matcher({"http://", "https://"});
+    vector<Regex::Result> matches;
+
+    printf("t1\n");
+    string in = "aa http://foo bb";
+    url_matcher.Match(in, &matches);
+    EXPECT_EQ(1, matches.size()); EXPECT_EQ("http://", matches[0].Text(in));
+    matches.clear();
+
+    printf("t2\n");
+    in = "aa https://foo bb xxxxxxxxxxx ";
+    url_matcher.Match(in, &matches);
+    EXPECT_EQ(1, matches.size()); EXPECT_EQ("https://", matches[0].Text(in));
+    matches.clear();
+    
+    printf("t3\n");
+    in = " nothing of note here ";
+    url_matcher.Match(in, &matches);
+    EXPECT_EQ(0, matches.size());
+    matches.clear();
+
+    printf("t4\n");
+    in = "aa zzzzzzzzzzzz ddddddddddd https://foo qqqqq bb";
+    url_matcher.Match(in, &matches);
+    EXPECT_EQ(1, matches.size()); EXPECT_EQ("https://", matches[0].Text(in));
+    matches.clear();
+
+    printf("t5\n");
+    in = "drzzz http://coo rrrz";
+    url_matcher.Match(in, &matches);
+    EXPECT_EQ(1, matches.size()); EXPECT_EQ("http://", matches[0].Text(in));
+    matches.clear();
+
+    printf("t6\n");
+    in = " and um htt";
+    url_matcher.Match(in, &matches);
+    EXPECT_EQ(0, matches.size());
+
+    printf("t7\n");
     in = "p://doo ddd ";
     url_matcher.Match(in, &matches);
     EXPECT_EQ(1, matches.size()); EXPECT_EQ(-3, matches[0].begin); EXPECT_EQ(4, matches[0].end);

@@ -216,6 +216,16 @@ template <class T1, class T2, class T3, class T4> struct Quadruple {
     bool operator<(const Quadruple &r) const { SortImpl4(first, r.first, second, r.second, third, r.third, fourth, r.fourth); }
 };
 
+template <class I1, class I2> struct IterPair {
+    typedef pair<const typename I1::value_type&, const typename I2::value_type&> value_type;
+    I1 i1; I2 i2;
+    IterPair(I1 x1, I2 x2) : i1(x1), i2(x2) {}
+    IterPair& operator++() { ++i1; ++i2; return *this; }
+    IterPair& operator++(int) { IterPair v(*this); ++(*this); return v; }
+    value_type operator*() const { return value_type(*i1, *i2); }
+    bool operator!=(const IterPair &x) const { return i1 != x.i1; }
+};
+
 template <class X> struct FreeListVector {
     vector<X> data;
     vector<int> free_list;
