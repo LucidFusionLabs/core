@@ -31,7 +31,8 @@ namespace LFL {
 DEFINE_int(size, 1024*1024, "Test size"); 
 
 struct MyEnvironment : public ::testing::Environment {
-    string test1 = "yeah fun http://url and whatever ";
+    string prefix1="yeah fun ", prot1="http://", url1="url", suffix1=" and whatever ";
+    string test1 = prefix1 + prot1 + url1 + suffix1;
     virtual ~MyEnvironment() {}
     virtual void TearDown() { INFO(Singleton<PerformanceTimers>::Get()->DebugString()); }
     virtual void SetUp() {}
@@ -68,9 +69,9 @@ TEST(RegexTest, RegexpURL) {
     timers->AccumulateTo(0);
 }
 
-TEST(RegexTest, RegexStreamURL) {
+TEST(RegexTest, StreamRegexURL) {
     PerformanceTimers *timers = Singleton<PerformanceTimers>::Get();
-    int tid = timers->Create("StreamURL");
+    int tid = timers->Create("StreamRegexURL");
 
     vector<Regex::Result> matches;
     StreamRegex url_matcher("https?://");
@@ -94,6 +95,30 @@ TEST(RegexTest, AhoCorasickURL) {
         url_matcher.Match(my_env->test1, &matches);
         EXPECT_EQ(1, matches.size()); EXPECT_EQ("http://", matches[0].Text(my_env->test1));
         matches.clear();
+    }
+    timers->AccumulateTo(0);
+}
+
+TEST(RegexTest, AhoCorasickMatcherURL) {
+    PerformanceTimers *timers = Singleton<PerformanceTimers>::Get();
+    int tid = timers->Create("AhoCorasickMatcherURL");
+
+    AhoCorasickMatcher<char> url_matcher({ "http://", "https://" });
+    StringMatcher<char> matcher(&url_matcher);
+    timers->AccumulateTo(tid);
+    string r1 = my_env->prefix1 + my_env->prot1;
+    for (int i=0; i<FLAGS_size; ++i) {
+        StringMatcher<char>::iterator chunk = matcher.Begin(my_env->test1);
+        EXPECT_NE(chunk.b, chunk.e);
+        EXPECT_EQ(r1, string(chunk.b, chunk.nb));
+        ++chunk;
+        EXPECT_NE(chunk.b, chunk.e);
+        EXPECT_EQ(my_env->url1, string(chunk.b, chunk.nb));
+        ++chunk;
+        EXPECT_NE(chunk.b, chunk.e);
+        EXPECT_EQ(my_env->suffix1, string(chunk.b, chunk.nb));
+        ++chunk;
+        EXPECT_EQ(chunk.e, chunk.b);
     }
     timers->AccumulateTo(0);
 }

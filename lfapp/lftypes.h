@@ -1035,5 +1035,6 @@ struct HashMatrix64File : public HashMatrixFileT<unsigned long long, &HashMatrix
 }; // namespace LFL
 
 #include "lfapp/tree.h"
+#include "lfapp/trie.h"
 
 #endif // __LFL_LFAPP_LFTYPES_H__

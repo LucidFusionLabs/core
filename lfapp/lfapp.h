@@ -1097,6 +1097,40 @@ struct PerformanceTimers {
     string DebugString() { string v; for (int i = 0; i < timers.size(); i++) StrAppend(&v, timers[i].name, " ", timers[i].time / 1000.0, "\n"); return v; }
 };
 
+struct Regex {
+    struct Result {
+        int begin, end;
+        Result(int B=0, int E=0) : begin(B), end(E) {}
+        string Text(const string &t) const { return t.substr(begin, end - begin); }
+        float FloatVal(const string &t) const { return atof(Text(t).c_str()); }
+    };
+    void *impl=0;
+    ~Regex();
+    Regex(const string &pattern);
+    int Match(const string &text, vector<Result> *out);
+};
+
+struct StreamRegex {
+    void *prog=0, *ctx=0, *ppool=0, *cpool=0;
+    int last_end=0, since_last_end=0;
+    vector<long> res;
+    ~StreamRegex();
+    StreamRegex(const string &pattern);
+    int Match(const string &text, vector<Regex::Result> *out, bool eof=0);
+};
+
+struct Base64 {
+    Base64();
+    string encoding_table, decoding_table; int mod_table[3];
+    string Encode(const char *in,   size_t input_length);
+    string Decode(const char *data, size_t input_length);
+};
+
+struct Crypto {
+    string MD5(const string &in);
+    string Blowfish(const string &passphrase, const string &in, bool encrypt_or_decrypt);
+};
+
 struct GraphViz {
     static string DigraphHeader(const string &name);
     static string NodeColor(const string &s);
@@ -1210,40 +1244,6 @@ struct FrameScheduler {
     void AddWaitForeverService(Service*);
     void AddWaitForeverSocket(Socket fd, int flag, void *val=0);
     void DelWaitForeverSocket(Socket fd);
-};
-
-struct Regex {
-    struct Result {
-        int begin, end;
-        Result(int B=0, int E=0) : begin(B), end(E) {}
-        string Text(const string &t) const { return t.substr(begin, end - begin); }
-        float FloatVal(const string &t) const { return atof(Text(t).c_str()); }
-    };
-    void *impl=0;
-    ~Regex();
-    Regex(const string &pattern);
-    int Match(const string &text, vector<Result> *out);
-};
-
-struct StreamRegex {
-    void *prog=0, *ctx=0, *ppool=0, *cpool=0;
-    int last_end=0, since_last_end=0;
-    vector<long> res;
-    ~StreamRegex();
-    StreamRegex(const string &pattern);
-    int Match(const string &text, vector<Regex::Result> *out, bool eof=0);
-};
-
-struct Base64 {
-    Base64();
-    string encoding_table, decoding_table; int mod_table[3];
-    string Encode(const char *in,   size_t input_length);
-    string Decode(const char *data, size_t input_length);
-};
-
-struct Crypto {
-    string MD5(const string &in);
-    string Blowfish(const string &passphrase, const string &in, bool encrypt_or_decrypt);
 };
 
 struct LuaContext {

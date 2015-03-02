@@ -60,18 +60,18 @@ template <class K, class V, class TN = TrieNode<K>, class TV = TrieNodeValue<K, 
         CompleteCB complete_cb = &SortedInputConstructor::Phase1Complete;
 
         template <class I> SortedInputConstructor(Self *O, I b, I e, bool P=true) : out(O), patricia(P) {
-            stack.emplace_back(K(), (this->*insert_cb)("", NULL));
+            stack.emplace_back(K(), (this->*insert_cb)(String(), NULL));
             Input(b, e);
             insert_cb   = &SortedInputConstructor::Phase2Insert;
             complete_cb = &SortedInputConstructor::Phase2Complete;
-            stack.emplace_back(K(), (this->*insert_cb)("", NULL));
+            stack.emplace_back(K(), (this->*insert_cb)(String(), NULL));
             Input(b, e);
         }
         template <class I> void Input(I b, I e) { 
             for (auto i = b; i != e; /**/) {
                 const String &k = (*i).first;
                 const V      &v = (*i).second;
-                Input(k, ++i != e ? (*i).first : "", v);
+                Input(k, ++i != e ? (*i).first : String(), v);
             }
             while (stack.size()) (this->*complete_cb)(PopBack(stack));
             out->head = 1;
@@ -119,7 +119,7 @@ template <class K, class V, class TN = TrieNode<K>, class TV = TrieNodeValue<K, 
                 add_prefixes = matching_lookahead - stack.size();
             } else add_prefixes = in.size() - stack.size();
             for (int i=0; i<add_prefixes; i++) {
-                stack.emplace_back(in[stack.size()-1], (this->*insert_cb)("", NULL));
+                stack.emplace_back(in[stack.size()-1], (this->*insert_cb)(String(), NULL));
             }
         }
     };
@@ -217,6 +217,8 @@ struct PatriciaCompleter : public Trie<K, V, TN, TV> {
     }
 };
 
+// Aho-Corasick Matcher
+
 template <class K> struct AhoCorasickMatcherNode : public TrieNode<K> {
     int fail=-1, out_ind=-1, out_len=0;
     AhoCorasickMatcherNode(int V=0) : TrieNode<K>(V) {}
@@ -276,8 +278,9 @@ template <class K = char> struct AhoCorasickMatcher {
         if ((n->out_len = out.size() - start_size)) n->out_ind = start_size;
     }
 
-    void Match(const String &text, vector<Regex::Result> *result) {
-        for (auto c = text.begin(), ce = text.end(); c != ce; ++c) {
+    typename String::const_iterator MatchOne(typename String::const_iterator s, typename String::const_iterator b,
+                                             typename String::const_iterator e, vector<Regex::Result> *result) {
+        for (auto c = b; c != e; ++c) {
             for (;;) {
                 auto n = &fsm.data[match_state-1];
                 if (int child = fsm.GetChildIndex(n, *c)) { match_state = child; break; }
@@ -285,12 +288,64 @@ template <class K = char> struct AhoCorasickMatcher {
                 match_state = n->fail;
             }
             auto n = &fsm.data[match_state-1];
-            if (!result || n->out_ind < 0) continue;
+            if (!result || !n->out_len) continue;
             for (auto i = &out[n->out_ind], e = i + n->out_len; i != e; ++i) {
-                int pattern_len = pattern[*i], offset = c - text.begin() - pattern_len + 1;
+                int pattern_len = pattern[*i], offset = c - s - pattern_len + 1;
                 result->push_back(Regex::Result(offset, offset + pattern_len));
             }
+            return ++c;
         }
+        return e;
+    }
+
+    void Match(const String &text, vector<Regex::Result> *result) {
+        for (auto s = text.begin(), b = s, e = text.end(); b != e; /**/) b = MatchOne(s, b, e, result);
+    }
+};
+
+// StringMatcher
+
+template <class K=char, class M=AhoCorasickMatcher<K> > struct StringMatcher {
+    typedef basic_string<K> String;
+    struct iterator {
+        StringMatcher *parent;
+        typename String::const_iterator s, e, b, nb;
+        int size=0; bool match_begin=0, match_begin_next=0, match_end=0;
+
+        iterator(StringMatcher *p, const String &in)
+            : parent(p), s(in.begin()), e(in.end()) { if ((b=nb=s) != e) ++(*this); }
+
+        bool MatchBegin() const { return match_begin; }
+        bool Matching  () const { return match_begin || match_end || (parent->in_match && !match_begin_next); }
+        bool MatchEnd  () const { return match_end; }
+
+        iterator &operator++() {
+            match_begin = match_begin_next;
+            match_begin_next = match_end = 0;
+            if ((b = nb) == e) return *this;
+            if (parent->in_match) {
+                if ((nb = std::find_if(b, e, parent->match_end_condition)) != e) { parent->in_match=0; match_end=1; }
+            } else {
+                vector<Regex::Result> result;
+                nb = parent->impl ? parent->impl->MatchOne(s, b, e, &result) : e;
+                if (result.size()) { parent->in_match=1; parent->match_begin=result[0].begin; match_begin_next=1; }
+            }
+            size = nb - b;
+            return *this;
+        }
+    };
+
+    M *impl;
+    bool in_match=0;
+    string match_buf;
+    int match_begin=0, last_input_size=0;
+    int (*match_end_condition)(int) = &isspace;
+    StringMatcher(M *m=0) : impl(m) {}
+
+    iterator Begin(const String &in) {
+        if (in_match) match_begin -= last_input_size;
+        last_input_size = in.size();
+        return iterator(this, in);
     }
 };
 
