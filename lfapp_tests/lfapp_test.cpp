@@ -395,48 +395,120 @@ TEST(RegexTest, StreamURL) {
     EXPECT_EQ(1, matches.size()); EXPECT_EQ(-3, matches[0].begin); EXPECT_EQ(4, matches[0].end);
 }
 
-TEST(RegexTest, AhoCorasick) {
+TEST(RegexTest, AhoCorasickURL) {
     AhoCorasickMatcher<char> url_matcher({"http://", "https://"});
     vector<Regex::Result> matches;
 
-    printf("t1\n");
     string in = "aa http://foo bb";
     url_matcher.Match(in, &matches);
     EXPECT_EQ(1, matches.size()); EXPECT_EQ("http://", matches[0].Text(in));
     matches.clear();
 
-    printf("t2\n");
     in = "aa https://foo bb xxxxxxxxxxx ";
     url_matcher.Match(in, &matches);
     EXPECT_EQ(1, matches.size()); EXPECT_EQ("https://", matches[0].Text(in));
     matches.clear();
     
-    printf("t3\n");
     in = " nothing of note here ";
     url_matcher.Match(in, &matches);
     EXPECT_EQ(0, matches.size());
     matches.clear();
 
-    printf("t4\n");
     in = "aa zzzzzzzzzzzz ddddddddddd https://foo qqqqq bb";
     url_matcher.Match(in, &matches);
     EXPECT_EQ(1, matches.size()); EXPECT_EQ("https://", matches[0].Text(in));
     matches.clear();
 
-    printf("t5\n");
     in = "drzzz http://coo rrrz";
     url_matcher.Match(in, &matches);
     EXPECT_EQ(1, matches.size()); EXPECT_EQ("http://", matches[0].Text(in));
     matches.clear();
 
-    printf("t6\n");
     in = " and um htt";
     url_matcher.Match(in, &matches);
     EXPECT_EQ(0, matches.size());
 
-    printf("t7\n");
     in = "p://doo ddd ";
     url_matcher.Match(in, &matches);
     EXPECT_EQ(1, matches.size()); EXPECT_EQ(-3, matches[0].begin); EXPECT_EQ(4, matches[0].end);
 }
+
+TEST(RegexTest, StringMatcherURL) {
+    AhoCorasickMatcher<char> url_matcher({"http://", "https://"});
+    StringMatcher<char> matcher(&url_matcher);
+
+    string in = "aa http://foo bb";
+    StringMatcher<char>::iterator mi = matcher.Begin(in);
+    EXPECT_NE(mi.b, mi.e);
+    EXPECT_EQ("aa http://", string(mi.b, mi.nb));
+    EXPECT_EQ(0, mi.MatchBegin()); EXPECT_EQ(0, mi.Matching()); EXPECT_EQ(0, mi.MatchEnd());
+    ++mi;
+    EXPECT_NE(mi.b, mi.e);
+    EXPECT_EQ("foo", string(mi.b, mi.nb));
+    EXPECT_EQ(1, mi.MatchBegin()); EXPECT_EQ(1, mi.Matching()); EXPECT_EQ(1, mi.MatchEnd());
+    ++mi;
+    EXPECT_NE(mi.b, mi.e);
+    EXPECT_EQ(" bb", string(mi.b, mi.nb));
+    EXPECT_EQ(0, mi.MatchBegin()); EXPECT_EQ(0, mi.Matching()); EXPECT_EQ(0, mi.MatchEnd());
+    ++mi;
+    EXPECT_EQ(mi.b, mi.e);
+
+    in = "aa https://foo bb xxxxxxxxxxx ";
+    mi = matcher.Begin(in);
+    EXPECT_NE(mi.b, mi.e);
+    EXPECT_EQ("aa https://", string(mi.b, mi.nb));
+    EXPECT_EQ(0, mi.MatchBegin()); EXPECT_EQ(0, mi.Matching()); EXPECT_EQ(0, mi.MatchEnd());
+    ++mi;
+    EXPECT_NE(mi.b, mi.e);
+    EXPECT_EQ("foo", string(mi.b, mi.nb));
+    EXPECT_EQ(1, mi.MatchBegin()); EXPECT_EQ(1, mi.Matching()); EXPECT_EQ(1, mi.MatchEnd());
+    ++mi;
+    EXPECT_NE(mi.b, mi.e);
+    EXPECT_EQ(" bb xxxxxxxxxxx ", string(mi.b, mi.nb));
+    EXPECT_EQ(0, mi.MatchBegin()); EXPECT_EQ(0, mi.Matching()); EXPECT_EQ(0, mi.MatchEnd());
+    ++mi;
+    EXPECT_EQ(mi.b, mi.e);
+
+    in = " nothing of note here ";
+    mi = matcher.Begin(in);
+    EXPECT_NE(mi.b, mi.e);
+    EXPECT_EQ(in, string(mi.b, mi.nb));
+    ++mi;
+    EXPECT_EQ(mi.b, mi.e);
+
+    in = " and um htt";
+    mi = matcher.Begin(in);
+    EXPECT_NE(mi.b, mi.e);
+    EXPECT_EQ(in, string(mi.b, mi.nb));
+    ++mi;
+    EXPECT_EQ(mi.b, mi.e);
+
+    in = "p://doo ddd ";
+    mi = matcher.Begin(in);
+    EXPECT_NE(mi.b, mi.e);
+    EXPECT_EQ("p://", string(mi.b, mi.nb));
+    ++mi;
+    EXPECT_NE(mi.b, mi.e);
+    EXPECT_EQ("doo", string(mi.b, mi.nb));
+    EXPECT_EQ(1, mi.MatchBegin()); EXPECT_EQ(1, mi.Matching()); EXPECT_EQ(1, mi.MatchEnd());
+    EXPECT_EQ(-3, matcher.match_begin);
+    ++mi;
+    EXPECT_NE(mi.b, mi.e);
+    EXPECT_EQ(" ddd ", string(mi.b, mi.nb));
+    EXPECT_EQ(0, mi.MatchBegin()); EXPECT_EQ(0, mi.Matching()); EXPECT_EQ(0, mi.MatchEnd());
+    ++mi;
+    EXPECT_EQ(mi.b, mi.e);
+}
+
+TEST(RegexTest, AhoCorasick) {
+    AhoCorasickMatcher<char> matcher({"he", "hers", "his", "she"});
+    string in = "ushers";
+    vector<Regex::Result> matches;
+    matcher.Match(in, &matches);
+    EXPECT_EQ(3, matches.size()); 
+    EXPECT_EQ("she",  matches[0].Text(in));
+    EXPECT_EQ("he",   matches[1].Text(in));
+    EXPECT_EQ("hers", matches[2].Text(in));
+}
+
 }; // namespace LFL
