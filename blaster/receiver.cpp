@@ -20,13 +20,13 @@ DEFINE_string(configuration_file,  "receiver.cnf", "Regex rule file for storing 
 
 struct MailFilter {
     enum { MAIL_FROM=1, RCPT_TO=2, HEADER=3, CONTENT=4, DEFAULT=5 };
-    int type; string regex, header; File *out;
+    int type; string regex_pattern, header; Regex regex; File *out;
     MailFilter() : type(0), out(0) {}
     string DebugString() const {
         bool h = type == HEADER, d = type == DEFAULT;
         static const char *typestr[] = { "", "MAIL_FROM", "RCPT_TO", "HEADER", "CONTENT", "DEFAULT" };
         string t = (type > 0 && type < 6) ? string(typestr[type]) : StringPrintf("%d", type);
-        return StrCat(t, h?"=":"", h?header:"", d?": ":": /", regex, d?"":"/ ", out?out->Filename():"/dev/null");
+        return StrCat(t, h?"=":"", h?header:"", d?": ":": /", regex_pattern, d?"":"/ ", out?out->Filename():"/dev/null");
     }
 };
 
@@ -59,7 +59,7 @@ struct ReceiverConfig {
                 CHECK(!regex.empty());
                 CHECK_EQ(regex[0],              '/');
                 CHECK_EQ(regex[regex.size()-1], '/');
-                filter.regex = regex.substr(1, regex.size()-2);
+                filter.regex = Regex((filter.regex_pattern = regex.substr(1, regex.size()-2)));
             }
 
             string filename = BlankNull(words.Next());
@@ -85,10 +85,10 @@ struct ReceiverConfig {
         for (int i = 0; i < filters.size(); i++) {
             MailFilter *f = filters[i];
             if      (f->type == MailFilter::DEFAULT)      { default_filter = f; }
-            else if (f->type == MailFilter::MAIL_FROM)    { if (Regex::Run(f->regex, mail.mail_from,  0) > 0) return f; }
-            else if (f->type == MailFilter::CONTENT)      { if (Regex::Run(f->regex, mail.content,    0) > 0) return f; }
+            else if (f->type == MailFilter::MAIL_FROM)    { if (f->regex.Match(mail.mail_from,  0) > 0) return f; }
+            else if (f->type == MailFilter::CONTENT)      { if (f->regex.Match(mail.content,    0) > 0) return f; }
             else if (f->type == MailFilter::RCPT_TO) {
-                for (int j=0; j<mail.rcpt_to.size(); j++) { if (Regex::Run(f->regex, mail.rcpt_to[j], 0) > 0) return f; }
+                for (int j=0; j<mail.rcpt_to.size(); j++) { if (f->regex.Match(mail.rcpt_to[j], 0) > 0) return f; }
             }
         }
 
@@ -106,7 +106,7 @@ struct ReceiverConfig {
 
             for (int i = 0; i < hfi->second.size(); i++) {
                 MailFilter *f = hfi->second[i];
-                if (Regex::Run(f->regex, hv, 0) > 0) return f;
+                if (f->regex.Match(hv, 0) > 0) return f;
             }
         }
 
@@ -217,10 +217,10 @@ int main(int argc, const char **argv) {
         if (smtp_server.domain.empty()) {
             if (!listen_addrs.size()) Sniffer::GetDeviceAddressSet(&listen_addrs);
             for (set<IPV4::Addr>::const_iterator i = listen_addrs.begin(); i != listen_addrs.end(); ++i)
-                smtp_server.domains[*i] = Network::gethostbyaddr(*i); 
+                smtp_server.domains[*i] = Network::GetHostByAddr(*i); 
             CHECK_GT(smtp_server.domains.size(), 0);
-            smtp_server.domains[Network::addr("0.0.0.0")  ] = "localhost";
-            smtp_server.domains[Network::addr("127.0.0.1")] = "localhost";
+            smtp_server.domains[IPV4::Parse("0.0.0.0")  ] = "localhost";
+            smtp_server.domains[IPV4::Parse("127.0.0.1")] = "localhost";
         }
     }
 

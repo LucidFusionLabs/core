@@ -24,6 +24,7 @@
 
 #include "ml/corpus.h"
 #include "ml/counter.h"
+#include "nlp/corpus.h"
 #include "nlp/lm.h"
 #include "speech/wfst.h"
 #include "speech/recognition.h"

@@ -2524,7 +2524,7 @@ Connection *GPlusClient::PersistentConnection(const string &name, UDPClient::Res
 
 #ifdef LFL_PCAP
 void Sniffer::GetDeviceAddressSet(set<IPV4::Addr> *out) {
-    static IPV4::Addr localhost = Network::addr("127.0.0.1");
+    static IPV4::Addr localhost = IPV4::Parse("127.0.0.1");
     char errbuf[PCAP_ERRBUF_SIZE]; pcap_if_t *devs = 0; int ret;
     if ((ret = pcap_findalldevs(&devs, errbuf))) FATAL("pcap_findalldevs: ", ret);
     for (pcap_if_t *d = devs; d; d = d->next) {

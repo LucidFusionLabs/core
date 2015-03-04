@@ -235,12 +235,13 @@ template <class K = char> struct AhoCorasickMatcher {
     PatternTable pattern;
     FSM fsm;
     vector<int> out;
-    int match_state;
+    int match_state=0, max_pattern_size=0;
 
     AhoCorasickMatcher(const vector<String> &sorted_in) : pattern(sorted_in.size()),
     fsm(InputPair(sorted_in.begin(), pattern.begin()), InputPair(sorted_in.end(), pattern.end())),
     match_state(fsm.head) {
-        for (int i=0, l=sorted_in.size(); i != l; ++i) pattern[i] = sorted_in[i].size();
+        for (int i=0, l=sorted_in.size(); i != l; ++i)
+            Typed::Max(&max_pattern_size, (pattern[i] = sorted_in[i].size()));
         if (!fsm.head || !fsm.data.size()) return;
         std::queue<int> q;
         auto n = &fsm.data[fsm.head-1];
@@ -271,6 +272,7 @@ template <class K = char> struct AhoCorasickMatcher {
         }
     }
 
+    void Reset() { match_state = fsm.head; }
     void AddOutput(int nid, typename FSM::Node *n, typename FSM::Node *f) {
         int start_size = out.size();
         if (n->val_ind) out.push_back(fsm.val[n->val_ind-1].val);
@@ -278,8 +280,7 @@ template <class K = char> struct AhoCorasickMatcher {
         if ((n->out_len = out.size() - start_size)) n->out_ind = start_size;
     }
 
-    typename String::const_iterator MatchOne(typename String::const_iterator s, typename String::const_iterator b,
-                                             typename String::const_iterator e, vector<Regex::Result> *result) {
+    template <class I> I MatchOne(I s, I b, I e, vector<Regex::Result> *result) {
         for (auto c = b; c != e; ++c) {
             for (;;) {
                 auto n = &fsm.data[match_state-1];
@@ -298,9 +299,11 @@ template <class K = char> struct AhoCorasickMatcher {
         return e;
     }
 
-    void Match(const String &text, vector<Regex::Result> *result) {
-        for (auto s = text.begin(), b = s, e = text.end(); b != e; /**/) b = MatchOne(s, b, e, result);
+    template <class I> void Match(I s, I e, vector<Regex::Result> *result) {
+        for (auto b = s; b != e; /**/) b = MatchOne(s, b, e, result);
     }
+
+    void Match(const String &text, vector<Regex::Result> *result) { Match(text.begin(), text.end(), result); }
 };
 
 // StringMatcher

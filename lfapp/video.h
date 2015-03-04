@@ -718,8 +718,19 @@ struct BoxRun {
     const Box *line;
     BoxRun(const Drawable::Box *buf=0, int len=0)                                        :          data(buf, len), line(0) {}
     BoxRun(const Drawable::Box *buf,   int len, const Drawable::Attr &A, const Box *L=0) : attr(A), data(buf, len), line(L) {}
-    string Text() const { string t(data.size(), 0); for (int i=0; i<t.size(); i++) t[i] = data.buf[i].drawable ? data.buf[i].drawable->Id() : 0; return t; }
-    string DebugString() const { return StrCat("BoxRun='", Text(), "'"); }
+
+    template <class K> basic_string<K> Text(int i, int l) const {
+        basic_string<K> t(l, 0);
+        auto bi = &data.buf[i];
+        for (auto ti = t.begin(), te = t.end(); ti != te; ++ti, ++bi)
+            *ti = bi->drawable ? bi->drawable->Id() : 0;
+        return t;
+    }
+    string   Text  ()             const { return Text<char> (0, data.size()); }
+    String16 Text16()             const { return Text<short>(0, data.size()); }
+    string   Text  (int i, int l) const { return Text<char> (i, l); }
+    String16 Text16(int i, int l) const { return Text<short>(i, l); }
+    string   DebugString()        const { return StrCat("BoxRun='", Text(), "'"); }
 
     typedef function<void    (const Drawable *,  const Box &)> DrawCB;
     static void DefaultDrawCB(const Drawable *d, const Box &w) { d->Draw(w); }
@@ -743,7 +754,12 @@ struct BoxArray {
     const Drawable::Box& operator[](int i) const { return data[i]; }
     const Drawable::Box& Back() const { return data.back(); }
     int Size() const { return data.size(); }
-    string Text() const { return data.size() ? BoxRun(&data[0], data.size()).Text() : ""; }
+
+    string   Text  ()             const { return data.size() ? BoxRun(&data[0], data.size()).Text  ()     : string();   }
+    String16 Text16()             const { return data.size() ? BoxRun(&data[0], data.size()).Text16()     : String16(); }
+    string   Text  (int i, int l) const { return data.size() ? BoxRun(&data[0], data.size()).Text  (i, l) : string();   }
+    String16 Text16(int i, int l) const { return data.size() ? BoxRun(&data[0], data.size()).Text16(i, l) : String16(); }
+
     point Position(int o) const { 
         CHECK_GE(o, 0); bool last = o >= Size(); Box e;
         const Box &b = data.size() ? data[last ? data.size()-1 : o].box : e;
@@ -1217,7 +1233,7 @@ struct Flow {
         if (!attr_id) attr_id = out->attr.GetAttrId(cur_attr);
         out->data.reserve(out->data.size() + text.size());
         int initial_out_lines = out->line.size(), line_start_ind = 0, c_bytes = 0, ci_bytes = 0;
-        for (const X *p = text.data(); !text.end(p); p += c_bytes) {
+        for (const X *p = text.data(); !text.Done(p); p += c_bytes) {
             int c = UTF<X>::ReadGlyph(text, p, &c_bytes);
             if (AppendChar(c, attr_id, &PushBack(out->data, Drawable::Box())) == State::NEW_WORD) {
                 for (const X *pi=p; *pi && notspace(*pi); pi += ci_bytes) {

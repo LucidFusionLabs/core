@@ -666,10 +666,10 @@ int main(int argc, const char **argv) {
     else {
         set<IPV4::Addr> ips; IPV4::ParseCSV(FLAGS_ip_address, &ips);
         for (set<IPV4::Addr>::const_iterator i = ips.begin(); i != ips.end(); ++i)
-            smtp->domains[*i] = Network::gethostbyaddr(*i);
+            smtp->domains[*i] = Network::GetHostByAddr(*i);
         CHECK_GT(smtp->domains.size(), 0);
-        smtp->domains[Network::addr("0.0.0.0")  ] = "localhost";
-        smtp->domains[Network::addr("127.0.0.1")] = "localhost";
+        smtp->domains[IPV4::Parse("0.0.0.0")  ] = "localhost";
+        smtp->domains[IPV4::Parse("127.0.0.1")] = "localhost";
     }
     if (app->network.Enable(smtp)) return -1;
 

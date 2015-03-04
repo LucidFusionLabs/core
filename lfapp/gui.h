@@ -266,7 +266,6 @@ struct TextGUI : public KeyboardGUI {
         void AssignText  (       const String16Piece &s, int a=0) { Clear(); AppendText(s, a); }
         vector<Drawable::Box> EncodeText(const StringPiece   &s, int a, const point &p) { BoxArray b; parent->font->Encode(s, Box(p,0,0), &b, Font::Flag::AssignFlowX, a); return b.data; }
         vector<Drawable::Box> EncodeText(const String16Piece &s, int a, const point &p) { BoxArray b; parent->font->Encode(s, Box(p,0,0), &b, Font::Flag::AssignFlowX, a); return b.data; }
-        void UpdateAttr(int ind, int len, int a) {}
         void Layout(Box win, bool flush=0) {
             if (data->box.w == win.w && !flush) return;
             data->box = win;
@@ -285,23 +284,6 @@ struct TextGUI : public KeyboardGUI {
             else           InsertTextAt(x, v, attr);
             if (parent->insert_mode && max_width) Erase(max_width);
             return append;
-        }
-        void UpdateAttr(int ind, int len) {
-            if (!parent || !parent->clickable_links) return;
-#if 0
-            for (int i = 0, len = 0; i < ret.size(); i += len) {
-                for (/**/; i < ret.size(); i++)
-                    if (PrefixMatch(s.data() + i, "http://") ||
-                        PrefixMatch(s.data() + i, "https://")) break;
-                if (i == ret.size()) break;
-                const short *start = s.data() + i, *end = nextchar(start, isspace);
-                len = end ? (end - start) : (s.size() - i);
-                UpdateAttr(i, len, attr | Attr::Link);
-                // Link *link = new Link(parent->gui, ::String::ToUTF8(start, len));
-                // links.push_back(link);
-                // if (parent->new_link_cb) parent->new_link_cb(link);
-            }
-#endif
         }
         int Layout(int width=0, bool flush=0) { Layout(Box(0,0,width,0), flush); return Lines(); }
         point Draw(point pos, int relayout_width=-1, int g_offset=0, int g_len=-1) {
@@ -428,6 +410,7 @@ struct TextArea : public TextGUI {
     int scroll_inc=10, scrolled_lines=0;
     float v_scrolled=0, h_scrolled=0, last_v_scrolled=0, last_h_scrolled=0;
     LinkCB new_link_cb, hover_link_cb;
+    AhoCorasickMatcher<short> *url_matcher=0;
 
     TextArea(Window *W, Font *F, int S=200) : TextGUI(W, F), line(this, S), mouse_gui(W) {}
     virtual ~TextArea() {}
@@ -459,6 +442,7 @@ struct TextArea : public TextGUI {
     void ClickCB(int button, int x, int y, int down);
     bool GetGlyphFromCoords(const point &p, Selection::Point *out);
     void CopyText(const Selection::Point &beg, const Selection::Point &end);
+    void UpdateLineAttributes(Line *l, int o, const String16Piece &update);
 };
 
 struct Editor : public TextArea {
@@ -549,6 +533,7 @@ struct Terminal : public TextArea, public Drawable::AttrSource {
         cursor.type = Cursor::Block;
         clickable_links = 1;
         cmd_prefix = "";
+        url_matcher = new AhoCorasickMatcher<short>({String::ToUTF16("http://"), String::ToUTF16("https//")});
     }
     virtual ~Terminal() {}
     virtual void Resized(int w, int h);

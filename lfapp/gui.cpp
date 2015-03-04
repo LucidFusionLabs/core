@@ -431,6 +431,22 @@ void TextArea::CopyText(const Selection::Point &beg, const Selection::Point &end
     if (!copy_text.empty()) Clipboard::Set(copy_text);
 }
 
+void TextArea::UpdateLineAttributes(Line *l, int o, const String16Piece &update) {
+    vector<Regex::Result> url;
+    int overlap = url_matcher->max_pattern_size - 1;
+    url_matcher->Reset();
+    url_matcher->Match(l->data->glyphs.Text16(max(0, o-overlap), min(o, overlap)), &url);
+    url_matcher->Match(update.begin(), update.end(), &url);
+    int post_url_start = url.size(), line_size = l->data->glyphs.Size();
+    url_matcher->Match(l->data->glyphs.Text16(min(line_size, o+update.size()),
+                                              min(line_size-o-update.size(), overlap)), &url);
+    if (url.size()) {
+        printf("got %ld url\n", url.size());
+        url.clear();
+    }
+}
+
+
 /* Editor */
 
 void Editor::UpdateWrappedLines(int cur_font_size, int width) {
@@ -819,8 +835,9 @@ void Terminal::FlushParseText() {
         LinesFrameBuffer *fb = GetFrameBuffer(l);
         int remaining = input_text.size() - wrote, o = term_cursor.x-1;
         write_size = min(remaining, term_width - o);
-        bool append = l->UpdateText(o, String16Piece(input_text.data()+wrote, write_size),
-                                    cursor.attr, term_width);
+        String16Piece update(input_text.data() + wrote, write_size);
+        bool append = l->UpdateText(o, update, cursor.attr, term_width);
+        if (url_matcher) UpdateLineAttributes(l, o, update);
         l->Layout();
         if (!fb->lines) continue;
         int sx = l->data->glyphs[o].box.x, ex = l->data->glyphs.Back().box.right(), ol = l->Size() - o;

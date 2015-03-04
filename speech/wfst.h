@@ -1585,7 +1585,7 @@ struct WFST {
             if (!LM->Get(wordhash, &LM_priorInd, &LM_transitInd)) { DEBUG("LM missing '%s'", word); LM_count=1; }
             if (!LM_count) {
                 LM_transits = LM->Transits(LM_transitInd, wordhash);
-                LM_count = LM->Occurences(LM_priorInd);
+                LM_count = LM->Occurrences(LM_priorInd);
             }
 
             int prevState = FindOrInsert(idmap, wordhash, state, &state)->second;
@@ -1633,7 +1633,7 @@ struct WFST {
 
                 double weight = K->One(); int priorInd;
                 if (out_on_this && LM && LM->Get(word, &priorInd)) /* unigram LM */
-                    weight = -log((double)LM->Occurences(priorInd) / LM->total);
+                    weight = -log((double)LM->Occurrences(priorInd) / LM->total);
 
                 int nextstate = state+1;
                 E->add(state++, nextstate, pronunciation[j], out_on_this ? B->add(word) : 0, weight);

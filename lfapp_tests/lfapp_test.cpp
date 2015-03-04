@@ -24,6 +24,28 @@
 #include "lfapp/trie.h"
 
 namespace LFL {
+
+struct RValueResolutionTest1 {
+    int A, B;
+    vector<string> data;
+    RValueResolutionTest1(const vector<string>  &in) : data(in), A(1), B(0) {}
+};
+struct RValueResolutionTest2 {
+    int A, B;
+    vector<string> data;
+    RValueResolutionTest2(const vector<string>  &in) : data(in), A(1), B(0) {}
+    RValueResolutionTest2(      vector<string> &&in) : data(in), A(0), B(1) {}
+};
+TEST(CPlusPlusTest, RValuedResolution) {
+    vector<string> foo;
+    EXPECT_EQ(1, RValueResolutionTest1(     foo) .A);
+    EXPECT_EQ(1, RValueResolutionTest2(     foo) .A);
+    EXPECT_EQ(0, RValueResolutionTest1(move(foo)).B);
+    EXPECT_EQ(1, RValueResolutionTest2(move(foo)).B);
+    EXPECT_EQ(0, RValueResolutionTest1(vector<string>()).B);
+    EXPECT_EQ(1, RValueResolutionTest2(vector<string>()).B);
+}
+    
 struct StringMethodResolutionTest {
     int A=0, B=0, C=0, D=0;
     template <class X> void F(const StringPieceT<X> &text) { A++; }
@@ -31,8 +53,7 @@ struct StringMethodResolutionTest {
     /**/               void F(const String16        &text) { C++; F(String16Piece         (text)); }
     template <class X> void F(const X               *text) { D++; F(StringPiece::Unbounded(text)); }
 };
-
-TEST(StringTest, MethodResolution) {
+TEST(CPlusPlusTest, MethodResolution) {
     StringMethodResolutionTest t;
     t.F("a");             EXPECT_EQ(1, t.A); EXPECT_EQ(0, t.B); EXPECT_EQ(0, t.C); EXPECT_EQ(1, t.D);
     t.F(string());        EXPECT_EQ(2, t.A); EXPECT_EQ(1, t.B); EXPECT_EQ(0, t.C); EXPECT_EQ(1, t.D);
