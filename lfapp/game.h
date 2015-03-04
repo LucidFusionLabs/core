@@ -1084,7 +1084,7 @@ struct GameMenuGUI : public GUI, public Query {
 #endif
         pinger.query = this;
         app->network.Enable(&pinger);
-        Network::broadcast_enabled(pinger.listener()->socket, true);
+        Network::SetSocketBroadcastEnabled(pinger.listener()->socket, true);
         Sniffer::GetIPAddress(&ip);
         Sniffer::GetBroadcastAddress(&broadcast_ip);
     }
@@ -1111,12 +1111,12 @@ struct GameMenuGUI : public GUI, public Query {
     }
     void MenuAddServer(const string &text) {
         int delim = text.find(':');
-        if (delim != string::npos) Network::sendto(pinger.listener()->socket, Network::resolve(text.substr(0, delim)),
+        if (delim != string::npos) Network::SendTo(pinger.listener()->socket, Network::GetHostByName(text.substr(0, delim)),
                                                    atoi(text.c_str()+delim+1), "ping\n", 5);
     }
 
     void Refresh() { 
-        if (broadcast_ip) Network::sendto(pinger.listener()->socket, broadcast_ip, default_port, "ping\n", 5);
+        if (broadcast_ip) Network::SendTo(pinger.listener()->socket, broadcast_ip, default_port, "ping\n", 5);
         if (!master_get_url.empty()) Singleton<HTTPClient>::Get()->WGet(master_get_url.c_str(), 0, bind(&GameMenuGUI::MasterGetResponseCB, this, _1, _2, _3, _4, _5));
         master_server_list.clear(); master_server_selected=-1;
     }
@@ -1126,7 +1126,7 @@ struct GameMenuGUI : public GUI, public Query {
         StringLineIter lines(servers.c_str());
         for (const char *p, *l = lines.Next(); l; l = lines.Next()) {
             if (!(p = strchr(l, ':'))) continue;
-            Network::sendto(pinger.listener()->socket, Network::addr(string(l, p-l)), atoi(p+1), "ping\n", 5);
+            Network::SendTo(pinger.listener()->socket, IPV4::Parse(string(l, p-l)), atoi(p+1), "ping\n", 5);
         }
     }
     void Close(Connection *c) { c->query=0; }

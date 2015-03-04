@@ -34,6 +34,7 @@
 #include "ml/baumwelch.h"
 #include "ml/cart.h"
 #include "ml/cluster.h"
+#include "nlp/corpus.h"
 #include "nlp/lm.h"
 
 #include "wfst.h"

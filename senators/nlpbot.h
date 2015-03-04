@@ -118,9 +118,9 @@ struct NLPBot : public Bot {
 #endif
         else if (cmd == "!re") {
             if (SayLast(source, &said)) {
-                vector<Regex::Match> match;
+                vector<Regex::Result> match;
                 const string &text = *said.Text(0);
-                Regex::Run(arg1star, text, &match);
+                Regex(arg1star).Match(text, &match);
                 for (int i=0; i<match.size(); i++) {
                     server->Say(c, source, target, text.substr(match[i].begin, match[i].end-match[i].begin));
                 }

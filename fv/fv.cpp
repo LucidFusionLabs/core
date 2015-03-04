@@ -686,7 +686,7 @@ extern "C" int main(int argc, const char *argv[]) {
         "</html>\r\n"));
 
     AcousticModelFile *model = new AcousticModelFile();
-    if (model->read("AcousticModel", "./assets/")<0) { ERROR("am read ./assets/"); return -1; }
+    if (model->Open("AcousticModel", "./assets/")<0) { ERROR("am read ./assets/"); return -1; }
 
     if (!(decodeModel = AcousticModel::fromModel1(model, true))) { ERROR("model create failed"); return -1; }
     AcousticModel::toCUDA(model);

@@ -379,6 +379,8 @@ struct Printable : public string {
 inline string StrCat(const Printable &x1) { return x1; }
 
 template <class X> struct ArrayPiece {
+    typedef       X*       iterator;
+    typedef const X* const_iterator;
     const X *buf; int len;
     ArrayPiece()                  : buf(0), len(0) {}
     ArrayPiece(const X *b, int l) : buf(b), len(l) {}
@@ -389,7 +391,8 @@ template <class X> struct ArrayPiece {
     int size() const { return max(0, len); }
     void assign(const X *b, int l) { buf=b; len=l; }
     const X *data() const { return buf; }
-    const X *end() const { return buf+len; }
+    const_iterator begin() const { return buf; }
+    const_iterator end() const { return buf+len; }
 };
 
 template <class X> struct StringPieceT : public ArrayPiece<X> {
@@ -401,7 +404,7 @@ template <class X> struct StringPieceT : public ArrayPiece<X> {
         if (this->buf && this->len < 0) return this->buf;
         return this->buf ? basic_string<X>(this->buf, this->len) : basic_string<X>();
     }
-    bool end(const X* p) const { return (this->len >= 0 && p >= this->buf + this->len) || !*p; }
+    bool Done(const X* p) const { return (this->len >= 0 && p >= this->buf + this->len) || !*p; }
     static StringPieceT<X> Unbounded (const X *b) { return StringPieceT<X>(b, -1); }
     static StringPieceT<X> FromString(const X *b) { return StringPieceT<X>(b, b?Len(b):0); }
     static size_t Len(const X *b) { const X *p=b; while(*p) p++; return p-b; }
@@ -1106,6 +1109,7 @@ struct Regex {
     };
     void *impl=0;
     ~Regex();
+    Regex() {}
     Regex(const string &pattern);
     int Match(const string &text, vector<Result> *out);
 };

@@ -1715,7 +1715,7 @@ int UTF8 ::ReadGlyph(const StringPiece   &s, const char  *p, int *len) {
     if ((c0 & (1<<7)) == 0) return c0; // ascii
     if ((c0 & (1<<6)) == 0) { ERROR("unexpected continuation byte"); return 0; }
     for ((*len)++; *len < 4; (*len)++) {
-        if (s.end(p + *len - 1)) { ERROR("unexpected end of string"); return 0; }
+        if (s.Done(p + *len - 1)) { ERROR("unexpected end of string"); return 0; }
         if ((c0 & (1<<(7 - *len))) == 0) break;
     }
 
