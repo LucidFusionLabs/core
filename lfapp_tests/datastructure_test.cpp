@@ -655,4 +655,41 @@ TEST(DatastructureTest, PrefixSumKeyedRedBlackTree) {
         }
     }
 }
+
+TEST(DatastructureTest, RedBlackIntervalTree) {
+    RedBlackIntervalTree<int,int> t;
+    RedBlackIntervalTree<int,int>::ConstIterator i;
+    t.Insert(pair<int,int>(3, 10), 0);
+    t.Insert(pair<int,int>(4, 11), 1);
+    t.Insert(pair<int,int>(5, 9),  2);
+
+    i = t.IntersectAll(2);  EXPECT_EQ(nullptr, i.val);
+
+    i = t.IntersectAll(3);  EXPECT_NE(nullptr, i.val); if (i.val) EXPECT_EQ(0, *i.val);
+    t.IntersectAllNext(&i); EXPECT_EQ(nullptr, i.val);
+
+    i = t.IntersectAll(4);  EXPECT_NE(nullptr, i.val); if (i.val) EXPECT_EQ(1, *i.val);
+    t.IntersectAllNext(&i); EXPECT_NE(nullptr, i.val); if (i.val) EXPECT_EQ(0, *i.val);
+    t.IntersectAllNext(&i); EXPECT_EQ(nullptr, i.val);
+
+    i = t.IntersectAll(5);  EXPECT_NE(nullptr, i.val); if (i.val) EXPECT_EQ(1, *i.val);
+    t.IntersectAllNext(&i); EXPECT_NE(nullptr, i.val); if (i.val) EXPECT_EQ(0, *i.val);
+    t.IntersectAllNext(&i); EXPECT_NE(nullptr, i.val); if (i.val) EXPECT_EQ(2, *i.val);
+    t.IntersectAllNext(&i); EXPECT_EQ(nullptr, i.val);
+
+    i = t.IntersectAll(9);  EXPECT_NE(nullptr, i.val); if (i.val) EXPECT_EQ(1, *i.val);
+    t.IntersectAllNext(&i); EXPECT_NE(nullptr, i.val); if (i.val) EXPECT_EQ(0, *i.val);
+    t.IntersectAllNext(&i); EXPECT_NE(nullptr, i.val); if (i.val) EXPECT_EQ(2, *i.val);
+    t.IntersectAllNext(&i); EXPECT_EQ(nullptr, i.val);
+
+    i = t.IntersectAll(10); EXPECT_NE(nullptr, i.val); if (i.val) EXPECT_EQ(1, *i.val);
+    t.IntersectAllNext(&i); EXPECT_NE(nullptr, i.val); if (i.val) EXPECT_EQ(0, *i.val);
+    t.IntersectAllNext(&i); EXPECT_EQ(nullptr, i.val);
+
+    i = t.IntersectAll(11); EXPECT_NE(nullptr, i.val); if (i.val) EXPECT_EQ(1, *i.val);
+    t.IntersectAllNext(&i); EXPECT_EQ(nullptr, i.val);
+
+    i = t.IntersectAll(12); EXPECT_EQ(nullptr, i.val);
+}
+
 }; // namespace LFL

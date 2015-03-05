@@ -47,8 +47,8 @@ struct RedBlackTree {
     enum Color { Red, Black };
     struct Iterator { 
         RedBlackTree *tree; int ind; K key; V *val; Zipper zipper;
-        Iterator(RedBlackTree *T=0, int I=0)        : tree(T), ind(I), key(0), val(0) {                  if (ind) LoadKV(); }
-        Iterator(RedBlackTree *T, int I, Zipper &z) : tree(T), ind(I), key(0), val(0) { swap(z, zipper); if (ind) LoadKV(); }
+        Iterator(RedBlackTree *T=0, int I=0)        : tree(T), ind(I), key(), val(0) {                  if (ind) LoadKV(); }
+        Iterator(RedBlackTree *T, int I, Zipper &z) : tree(T), ind(I), key(), val(0) { swap(z, zipper); if (ind) LoadKV(); }
         Iterator& operator--() { if (!ind) *this = tree->RBegin(); else if ((ind = tree->DecrementNode(ind, &zipper))) LoadKV(); else val = 0; return *this; }
         Iterator& operator++() { CHECK(ind);                            if ((ind = tree->IncrementNode(ind, &zipper))) LoadKV(); else val = 0; return *this; }
         bool operator!=(const Iterator &i) { return tree != i.tree || ind != i.ind; }
@@ -56,8 +56,8 @@ struct RedBlackTree {
     };
     struct ConstIterator { 
         const RedBlackTree *tree; int ind; K key; const V *val; Zipper zipper;
-        ConstIterator(const RedBlackTree *T=0, int I=0)        : tree(T), ind(I), key(0), val(0) {                  if (ind) LoadKV(); }
-        ConstIterator(const RedBlackTree *T, int I, Zipper &z) : tree(T), ind(I), key(0), val(0) { swap(z, zipper); if (ind) LoadKV(); }
+        ConstIterator(const RedBlackTree *T=0, int I=0)        : tree(T), ind(I), key(), val(0) {                  if (ind) LoadKV(); }
+        ConstIterator(const RedBlackTree *T, int I, Zipper &z) : tree(T), ind(I), key(), val(0) { swap(z, zipper); if (ind) LoadKV(); }
         ConstIterator(const Iterator &i) : tree(i.tree), ind(i.ind), key(i.key), val(i.val), zipper(i.zipper) {}
         ConstIterator& operator-- () { if (!ind) *this = tree->RBegin(); else if ((ind = tree->DecrementNode(ind, &zipper))) LoadKV(); else val = 0; return *this; }
         ConstIterator& operator++ () { CHECK(ind);                            if ((ind = tree->IncrementNode(ind, &zipper))) LoadKV(); else val = 0; return *this; }
@@ -364,10 +364,18 @@ struct RedBlackTree {
 
 // RedBlackIntervalTree 
 
-template <class K, class V, class Zipper = RedBlackTreeZipper> struct RedBlackIntervalTreeNode {
+template <class K> struct RedBlackIntervalTreeZipper {
+    pair<K, K> query;
+    vector<pair<int, int> > path;
+    RedBlackIntervalTreeZipper(bool update=0) {}
+    RedBlackIntervalTreeZipper(const pair<K, K> &q, bool r) : query(q) { if (r) path.reserve(64); }
+    string DebugString() const { return ""; }
+};
+
+template <class K, class V, class Zipper = RedBlackIntervalTreeZipper<K> > struct RedBlackIntervalTreeNode {
     enum { Left, Right };
     pair<K,K> key;
-    K left_max=0, right_max=0;
+    K left_max=0, right_max=0, left_min=0, right_min=0;
     unsigned val:31, left, right, parent, color:1;
     RedBlackIntervalTreeNode(pair<K,K> k, unsigned v, unsigned P, bool C=0)
         : key(k), val(v), left(0), right(0), parent(P), color(C) {}
@@ -380,27 +388,53 @@ template <class K, class V, class Zipper = RedBlackTreeZipper> struct RedBlackIn
     bool LessThan(const pair<K,K> &k, int, Zipper*) const { return key.first < k.first; }
     bool MoreThan(const pair<K,K> &k, int, Zipper*) const { return k.first < key.first; }
     void ComputeStateFromChildren(const RedBlackIntervalTreeNode *lc, const RedBlackIntervalTreeNode *rc) {
-        left_max  = lc ? max(lc->left_max, lc->right_max) : 0;
-        right_max = rc ? max(rc->left_max, rc->right_max) : 0;
+        left_max  = lc ? max(lc->key.second, max(lc->left_max, lc->right_max)) : 0;
+        right_max = rc ? max(rc->key.second, max(rc->left_max, rc->right_max)) : 0;
+        left_min  = lc ? ComputeMinFromChild(lc) : 0;
+        right_min = lc ? ComputeMinFromChild(rc) : 0;
+    }
+    static K ComputeMinFromChild(const RedBlackIntervalTreeNode *n) {
+        K ret = n->key.first;
+        if (n->left_min)  ret = min(ret, n->left_min);
+        if (n->right_min) ret = min(ret, n->right_min);
+        return ret;
     }
 };
 
-template <class K, class V, class Zipper = RedBlackTreeZipper, class Node = RedBlackIntervalTreeNode<K, V, Zipper> >
+template <class K, class V, class Zipper = RedBlackIntervalTreeZipper<K>,
+          class Node = RedBlackIntervalTreeNode<K, V, Zipper> >
 struct RedBlackIntervalTree : public RedBlackTree<pair<K, K>, V, Zipper, Node> {
-    typedef RedBlackTree<K, V, Zipper, Node> Parent;
-    
-    typename Parent::ConstIterator IntersectOne(const K &k) const { typename Parent::Query q(k); int n=IntersectOneNode(&q); return typename Parent::ConstIterator(this, n, q.z); }
-    typename Parent::Iterator      IntersectOne(const K &k)       { typename Parent::Query q(k); int n=IntersectOneNode(&q); return typename Parent::Iterator     (this, n, q.z); }
+    typedef RedBlackTree<pair<K, K>, V, Zipper, Node> Parent;
 
-    int IntersectOneNode(typename Parent::Query *q) const {
+    const V *IntersectOne(const K &k) const { int n=IntersectOneNode(k); return n ? &Parent::val[Parent::data[n-1].val] : 0; }
+          V *IntersectOne(const K &k)       { int n=IntersectOneNode(k); return n ? &Parent::val[Parent::data[n-1].val] : 0; }
+
+    typename Parent::ConstIterator IntersectAll(const K &k) const { Zipper z(pair<K,K>(k,k),1); z.path.emplace_back(Parent::head, 0); int n=IntersectAllNode(&z); return typename Parent::ConstIterator(this, n, z); }
+    typename Parent::Iterator      IntersectAll(const K &k)       { Zipper z(pair<K,K>(k,k),1); z.path.emplace_back(Parent::head, 0); int n=IntersectAllNode(&z); return typename Parent::Iterator     (this, n, z); }
+    void IntersectAllNext(typename Parent::ConstIterator *i) const { if ((i->ind = IntersectAllNode(&i->zipper))) i->LoadKV(); else i->val=0; }
+    void IntersectAllNext(typename Parent::Iterator      *i)       { if ((i->ind = IntersectAllNode(&i->zipper))) i->LoadKV(); else i->val=0; }
+
+    int IntersectOneNode(const K &q) const {
         const Node *n;
-        for (int ind=Parent::head; ind;) {
+        for (int ind = Parent::head; ind; /**/) {
             n = &Parent::node[ind-1];
-            if (n->key <= q->key && q->key < n->end) return ind;
-            else if (!n->left)             ind = n->WalkRight(&q->z);
-            else if (n->left_max < q->key) ind = n->WalkRight(&q->z);
-            else                           ind = n->WalkLeft (&q->z);
+            if (n->key.first <= q && q < n->key.second) return ind;
+            ind = (n->left && q <= n->left_max) ? n->left : n->right;
         } return 0;
+    }
+    int IntersectAllNode(Zipper *z) const {
+        const Node *n;
+        while (z->path.size()) {
+            auto &i = z->path.back();
+            n = &Parent::node[i.first-1];
+            if (i.second == 0 && ++i.second) if (Intersect(z->query, n->key)) return i.first;
+            if (i.second == 1 && ++i.second && n->left  && z->query.first  <= n->left_max)  { z->path.emplace_back(n->left,  0); continue; }
+            if (i.second == 2 && ++i.second && n->right && z->query.second >= n->right_min) { z->path.emplace_back(n->right, 0); continue; }
+            z->path.pop_back();
+        } return 0;
+    }
+    static bool Intersect(const pair<K,K> &q, const pair<K,K> &p) {
+        return q.first <= p.second && p.first <= q.second;
     }
 };
 
