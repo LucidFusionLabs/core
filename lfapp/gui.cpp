@@ -137,44 +137,40 @@ int KeyboardGUI::ReadHistory(const string &dir, const string &name) {
     return 0;
 }
 
-void TextGUI::Enter() {
-    string cmd = Text();
-    AssignInput("");
-    if (!cmd.empty()) { AddHistory(cmd); Run(cmd); }
-    TouchDevice::CloseKeyboard();
-    if (deactivate_on_enter) active = false;
+template <class X> bool TextGUI::Line::UpdateText(int x, const StringPieceT<X> &v, int attr, int max_width) {
+    int size = Size(); bool append = size <= x;
+    if (size < x) AppendText(string(x - size, ' '), attr);
+    else if (!parent->insert_mode) Erase(x, v.size());
+    if (size == x) AppendText  (   v, attr);
+    else           InsertTextAt(x, v, attr);
+    if (parent->insert_mode && max_width) Erase(max_width);
+    return append;
 }
 
-void TextGUI::Draw(const Box &b) {
-    if (cmd_fb.SizeChanged(b.w, b.h, font)) {
-        cmd_fb.p = point(0, font->height);
-        cmd_line.Draw(point(0, cmd_line.Lines() * font->height), cmd_fb.w);
-        cmd_fb.SizeChangedDone();
-    }
-    // screen->gd->PushColor();
-    // screen->gd->SetColor(cmd_color);
-    cmd_fb.Draw(b.Position(), point());
-    DrawCursor(b.Position() + cursor.p);
-    // screen->gd->PopColor();
+template <class X> int TextGUI::Line::UpdateAttr(int x, const StringPieceT<X> &v, int erase, int attr) {
+    return attr;
 }
 
-void TextGUI::DrawCursor(point p) {
-    if (cursor.type == Cursor::Block) {
-        screen->gd->EnableBlend();
-        screen->gd->BlendMode(GraphicsDevice::OneMinusDstColor, GraphicsDevice::OneMinusSrcAlpha);
-        screen->gd->FillColor(cmd_color);
-        Box(p.x, p.y - font->height, font->max_width, font->height).Draw();
-        screen->gd->BlendMode(GraphicsDevice::SrcAlpha, GraphicsDevice::One);
-        screen->gd->DisableBlend();
-    } else {
-        bool blinking = false;
-        Time now = Now(), elapsed; 
-        if (active && (elapsed = now - cursor.blink_begin) > cursor.blink_time) {
-            if (elapsed > cursor.blink_time * 2) cursor.blink_begin = now;
-            else blinking = true;
-        }
-        if (blinking) font->Draw("_", p);
-    }
+template bool TextGUI::Line::UpdateText<char> (int x, const StringPiece   &v, int attr, int max_width);
+template bool TextGUI::Line::UpdateText<short>(int x, const String16Piece &v, int attr, int max_width);
+template int  TextGUI::Line::UpdateAttr<char> (int x, const StringPiece   &v, int erase, int attr);
+template int  TextGUI::Line::UpdateAttr<short>(int x, const String16Piece &v, int erase, int attr);
+
+void TextGUI::Line::Layout(Box win, bool flush) {
+    if (data->box.w == win.w && !flush) return;
+    data->box = win;
+    ScopedDeltaTracker<int> SWLT(cont ? &cont->wrapped_lines : 0, bind(&Line::Lines, this));
+    BoxArray b;
+    swap(b, data->glyphs);
+    data->glyphs.attr.source = b.attr.source;
+    Clear();
+    data->flow.AppendBoxArrayText(b);
+}
+
+point TextGUI::Line::Draw(point pos, int relayout_width, int g_offset, int g_len) {
+    if (relayout_width >= 0) Layout(relayout_width);
+    data->glyphs.Draw((p = pos), g_offset, g_len);
+    return p - point(0, parent->font->height + data->glyphs.height);
 }
 
 TextGUI::LinesFrameBuffer *TextGUI::LinesFrameBuffer::Attach(TextGUI::LinesFrameBuffer **last_fb) {
@@ -221,6 +217,46 @@ point TextGUI::LinesFrameBuffer::Paint(TextGUI::Line *l, point lp, const Box &b,
     screen->gd->Clear();
     l->Draw(lp + b.Position(), -1, offset, len);
     return point(lp.x, lp.y-b.h);
+}
+
+void TextGUI::Enter() {
+    string cmd = Text();
+    AssignInput("");
+    if (!cmd.empty()) { AddHistory(cmd); Run(cmd); }
+    TouchDevice::CloseKeyboard();
+    if (deactivate_on_enter) active = false;
+}
+
+void TextGUI::Draw(const Box &b) {
+    if (cmd_fb.SizeChanged(b.w, b.h, font)) {
+        cmd_fb.p = point(0, font->height);
+        cmd_line.Draw(point(0, cmd_line.Lines() * font->height), cmd_fb.w);
+        cmd_fb.SizeChangedDone();
+    }
+    // screen->gd->PushColor();
+    // screen->gd->SetColor(cmd_color);
+    cmd_fb.Draw(b.Position(), point());
+    DrawCursor(b.Position() + cursor.p);
+    // screen->gd->PopColor();
+}
+
+void TextGUI::DrawCursor(point p) {
+    if (cursor.type == Cursor::Block) {
+        screen->gd->EnableBlend();
+        screen->gd->BlendMode(GraphicsDevice::OneMinusDstColor, GraphicsDevice::OneMinusSrcAlpha);
+        screen->gd->FillColor(cmd_color);
+        Box(p.x, p.y - font->height, font->max_width, font->height).Draw();
+        screen->gd->BlendMode(GraphicsDevice::SrcAlpha, GraphicsDevice::One);
+        screen->gd->DisableBlend();
+    } else {
+        bool blinking = false;
+        Time now = Now(), elapsed; 
+        if (active && (elapsed = now - cursor.blink_begin) > cursor.blink_time) {
+            if (elapsed > cursor.blink_time * 2) cursor.blink_begin = now;
+            else blinking = true;
+        }
+        if (blinking) font->Draw("_", p);
+    }
 }
 
 /* TextArea */
@@ -430,22 +466,6 @@ void TextArea::CopyText(const Selection::Point &beg, const Selection::Point &end
     }
     if (!copy_text.empty()) Clipboard::Set(copy_text);
 }
-
-void TextArea::UpdateLineAttributes(Line *l, int o, const String16Piece &update) {
-    vector<Regex::Result> url;
-    int overlap = url_matcher->max_pattern_size - 1;
-    url_matcher->Reset();
-    url_matcher->Match(l->data->glyphs.Text16(max(0, o-overlap), min(o, overlap)), &url);
-    url_matcher->Match(update.begin(), update.end(), &url);
-    int post_url_start = url.size(), line_size = l->data->glyphs.Size();
-    url_matcher->Match(l->data->glyphs.Text16(min(line_size, o+update.size()),
-                                              min(line_size-o-update.size(), overlap)), &url);
-    if (url.size()) {
-        printf("got %ld url\n", url.size());
-        url.clear();
-    }
-}
-
 
 /* Editor */
 
@@ -835,9 +855,8 @@ void Terminal::FlushParseText() {
         LinesFrameBuffer *fb = GetFrameBuffer(l);
         int remaining = input_text.size() - wrote, o = term_cursor.x-1;
         write_size = min(remaining, term_width - o);
-        String16Piece update(input_text.data() + wrote, write_size);
-        bool append = l->UpdateText(o, update, cursor.attr, term_width);
-        if (url_matcher) UpdateLineAttributes(l, o, update);
+        bool append = l->UpdateText(o, String16Piece(input_text.data() + wrote, write_size),
+                                    cursor.attr, term_width);
         l->Layout();
         if (!fb->lines) continue;
         int sx = l->data->glyphs[o].box.x, ex = l->data->glyphs.Back().box.right(), ol = l->Size() - o;
