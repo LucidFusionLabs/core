@@ -236,8 +236,9 @@ struct TextGUI : public KeyboardGUI {
     };
     typedef function<void(Link*)> LinkCB;
     struct LineData {
+        Box box;
+        Flow flow;
         BoxArray glyphs;
-        Box box; Flow flow;
         vector<shared_ptr<Link> > links;
     };
     struct Line {
@@ -257,40 +258,20 @@ struct TextGUI : public KeyboardGUI {
         int Lines() const { return 1+data->glyphs.line.size(); }
         string Text() const { return data->glyphs.Text(); }
         void Clear() { data->glyphs.Clear(); InitFlow(); }
-        void Erase(int o, unsigned l=UINT_MAX) { data->glyphs.Erase(o, l, true); data->flow.p.x = BackOrDefault(data->glyphs.data).box.right(); }
-        void InsertTextAt(int o, const StringPiece   &s, int a=0) { data->glyphs.InsertAt(o, EncodeText(s, a, data->glyphs.Position(o))); }
-        void InsertTextAt(int o, const String16Piece &s, int a=0) { data->glyphs.InsertAt(o, EncodeText(s, a, data->glyphs.Position(o))); }
-        void AppendText  (       const StringPiece   &s, int a=0) { data->flow.AppendText(s, a); }
-        void AppendText  (       const String16Piece &s, int a=0) { data->flow.AppendText(s, a); }
+        void Erase(int o, unsigned l=UINT_MAX) { UpdateAttr(o, String16Piece(), l, 0); data->glyphs.Erase(o, l, true); data->flow.p.x = BackOrDefault(data->glyphs.data).box.right(); }
+        void InsertTextAt(int o, const StringPiece   &s, int a=0) { a=UpdateAttr(o,s,0,a); BoxArray b; parent->font->Encode(s, Box(data->glyphs.Position(o),0,0), &b, Font::Flag::AssignFlowX, a); data->glyphs.InsertAt(o, b.data); }
+        void InsertTextAt(int o, const String16Piece &s, int a=0) { a=UpdateAttr(o,s,0,a); BoxArray b; parent->font->Encode(s, Box(data->glyphs.Position(o),0,0), &b, Font::Flag::AssignFlowX, a); data->glyphs.InsertAt(o, b.data); }
+        void AppendText  (       const StringPiece   &s, int a=0) { a=UpdateAttr(data->glyphs.Size(),s,0,a); data->flow.AppendText(s, a); }
+        void AppendText  (       const String16Piece &s, int a=0) { a=UpdateAttr(data->glyphs.Size(),s,0,a); data->flow.AppendText(s, a); }
         void AssignText  (       const StringPiece   &s, int a=0) { Clear(); AppendText(s, a); }
         void AssignText  (       const String16Piece &s, int a=0) { Clear(); AppendText(s, a); }
-        vector<Drawable::Box> EncodeText(const StringPiece   &s, int a, const point &p) { BoxArray b; parent->font->Encode(s, Box(p,0,0), &b, Font::Flag::AssignFlowX, a); return b.data; }
-        vector<Drawable::Box> EncodeText(const String16Piece &s, int a, const point &p) { BoxArray b; parent->font->Encode(s, Box(p,0,0), &b, Font::Flag::AssignFlowX, a); return b.data; }
-        void Layout(Box win, bool flush=0) {
-            if (data->box.w == win.w && !flush) return;
-            data->box = win;
-            ScopedDeltaTracker<int> SWLT(cont ? &cont->wrapped_lines : 0, bind(&Line::Lines, this));
-            BoxArray b;
-            swap(b, data->glyphs);
-            data->glyphs.attr.source = b.attr.source;
-            Clear();
-            data->flow.AppendBoxArrayText(b);
-        }
-        bool UpdateText(int x, const String16Piece &v, int attr, int max_width=0) {
-            int size = Size(); bool append = size <= x;
-            if (size < x) AppendText(string(x - size, ' '), attr);
-            else if (!parent->insert_mode) Erase(x, v.size());
-            if (size == x) AppendText  (   v, attr);
-            else           InsertTextAt(x, v, attr);
-            if (parent->insert_mode && max_width) Erase(max_width);
-            return append;
-        }
+        bool UpdateText(int x, const string   &v, int attr, int max_width=0) { return UpdateText(x, StringPiece  (v), attr, max_width); }
+        bool UpdateText(int x, const String16 &v, int attr, int max_width=0) { return UpdateText(x, String16Piece(v), attr, max_width); }
+        template <class X> bool UpdateText(int x, const StringPieceT<X> &v, int attr, int max_width=0);
+        template <class X> int  UpdateAttr(int x, const StringPieceT<X> &v, int erase, int attr);
         int Layout(int width=0, bool flush=0) { Layout(Box(0,0,width,0), flush); return Lines(); }
-        point Draw(point pos, int relayout_width=-1, int g_offset=0, int g_len=-1) {
-            if (relayout_width >= 0) Layout(relayout_width);
-            data->glyphs.Draw((p = pos), g_offset, g_len);
-            return p - point(0, parent->font->height + data->glyphs.height);
-        }
+        void Layout(Box win, bool flush=0);
+        point Draw(point pos, int relayout_width=-1, int g_offset=0, int g_len=-1);
     };
     struct Lines : public RingVector<Line> {
         int wrapped_lines;
@@ -410,7 +391,6 @@ struct TextArea : public TextGUI {
     int scroll_inc=10, scrolled_lines=0;
     float v_scrolled=0, h_scrolled=0, last_v_scrolled=0, last_h_scrolled=0;
     LinkCB new_link_cb, hover_link_cb;
-    AhoCorasickMatcher<short> *url_matcher=0;
 
     TextArea(Window *W, Font *F, int S=200) : TextGUI(W, F), line(this, S), mouse_gui(W) {}
     virtual ~TextArea() {}
@@ -442,7 +422,6 @@ struct TextArea : public TextGUI {
     void ClickCB(int button, int x, int y, int down);
     bool GetGlyphFromCoords(const point &p, Selection::Point *out);
     void CopyText(const Selection::Point &beg, const Selection::Point &end);
-    void UpdateLineAttributes(Line *l, int o, const String16Piece &update);
 };
 
 struct Editor : public TextArea {
@@ -533,7 +512,6 @@ struct Terminal : public TextArea, public Drawable::AttrSource {
         cursor.type = Cursor::Block;
         clickable_links = 1;
         cmd_prefix = "";
-        url_matcher = new AhoCorasickMatcher<short>({String::ToUTF16("http://"), String::ToUTF16("https//")});
     }
     virtual ~Terminal() {}
     virtual void Resized(int w, int h);

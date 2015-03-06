@@ -368,7 +368,7 @@ template <class K> struct RedBlackIntervalTreeZipper {
     pair<K, K> query;
     vector<pair<int, int> > path;
     RedBlackIntervalTreeZipper(bool update=0) {}
-    RedBlackIntervalTreeZipper(const pair<K, K> &q, bool r) : query(q) { if (r) path.reserve(64); }
+    RedBlackIntervalTreeZipper(const K &q, int head) : query(pair<K,K>(q,q)) { path.reserve(64); path.emplace_back(head, 0); }
     string DebugString() const { return ""; }
 };
 
@@ -409,8 +409,8 @@ struct RedBlackIntervalTree : public RedBlackTree<pair<K, K>, V, Zipper, Node> {
     const V *IntersectOne(const K &k) const { int n=IntersectOneNode(k); return n ? &Parent::val[Parent::data[n-1].val] : 0; }
           V *IntersectOne(const K &k)       { int n=IntersectOneNode(k); return n ? &Parent::val[Parent::data[n-1].val] : 0; }
 
-    typename Parent::ConstIterator IntersectAll(const K &k) const { Zipper z(pair<K,K>(k,k),1); z.path.emplace_back(Parent::head, 0); int n=IntersectAllNode(&z); return typename Parent::ConstIterator(this, n, z); }
-    typename Parent::Iterator      IntersectAll(const K &k)       { Zipper z(pair<K,K>(k,k),1); z.path.emplace_back(Parent::head, 0); int n=IntersectAllNode(&z); return typename Parent::Iterator     (this, n, z); }
+    typename Parent::ConstIterator IntersectAll(const K &k) const { Zipper z(k, Parent::head); int n=IntersectAllNode(&z); return typename Parent::ConstIterator(this, n, z); }
+    typename Parent::Iterator      IntersectAll(const K &k)       { Zipper z(k, Parent::head); int n=IntersectAllNode(&z); return typename Parent::Iterator     (this, n, z); }
     void IntersectAllNext(typename Parent::ConstIterator *i) const { if ((i->ind = IntersectAllNode(&i->zipper))) i->LoadKV(); else i->val=0; }
     void IntersectAllNext(typename Parent::Iterator      *i)       { if ((i->ind = IntersectAllNode(&i->zipper))) i->LoadKV(); else i->val=0; }
 
