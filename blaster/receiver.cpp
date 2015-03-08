@@ -7,6 +7,7 @@
 #include "lfapp/dom.h"
 #include "lfapp/css.h"
 #include "lfapp/gui.h"
+#include "crawler/google_chart.h"
 
 using namespace LFL;
 

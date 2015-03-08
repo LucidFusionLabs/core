@@ -7,6 +7,7 @@
 #include "lfapp/css.h"
 #include "lfapp/gui.h"
 #include "crawler/html.h"
+#include "crawler/google_chart.h"
 #include "resolver.h"
 
 namespace LFL {

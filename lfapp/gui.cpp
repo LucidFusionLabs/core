@@ -137,24 +137,86 @@ int KeyboardGUI::ReadHistory(const string &dir, const string &name) {
     return 0;
 }
 
+template <class X> struct SyntaxProcessor {
+    TextGUI::Line *L;
+    const BoxArray *glyphs;
+    bool sw=0, ew=0, pw=0, nw=0;
+    unsigned x, size, erase, pi=0, ni=0;
+    StringPieceT<X> v;
+
+    SyntaxProcessor(TextGUI::Line *l, unsigned o, const StringPieceT<X> &V, unsigned Erase) : L(l),
+    glyphs(L?&L->data->glyphs:0), x(o), size(L?glyphs->Size():0), erase(Erase), v(V) {
+        if (!L) return;
+        CHECK_LE(x, size);
+        const Drawable *p=0, *n=0;
+        sw = v.len && !isspace(v.buf[0]);
+        ew = v.len && !isspace(v.buf[v.len-1]);
+        ni = x + (erase ? erase : 0);
+        nw = ni<size && (n=(*glyphs)[ni ].drawable) && !isspace(n->Id());
+        pw = x >0    && (p=(*glyphs)[x-1].drawable) && !isspace(p->Id());
+        pi = x - pw;
+        if ((pw && nw) || (pw && sw)) while (pi > 0      && (p = (*glyphs)[pi-1].drawable) && !isspace(p->Id())) pi--;
+        if ((pw && nw) || (nw && ew)) while (ni < size-1 && (n = (*glyphs)[ni+1].drawable) && !isspace(n->Id())) ni++;
+        printf("pw=%d, nw=%d, sw=%d, ew=%d\n", pw, nw, sw, ew);
+    }
+    void ProcessUpdate() {
+        StringWordIterT<X> word(v.buf, v.len, isspace, 0, StringWordIter::Flag::InPlace);
+        for (const X *w = word.Next(); w; w = word.Next())  {
+            int start_offset = w - v.buf, end_offset = start_offset + word.wordlen;
+            bool first = start_offset == 0, last = end_offset == v.len;
+            if (first && last && pw && nw) L->parent->UpdateSyntax(L, BoxRun(&(*glyphs)[pi], ni-pi+1),                             erase ? -1 : 1);
+            else if (first && pw)          L->parent->UpdateSyntax(L, BoxRun(&(*glyphs)[pi], x+end_offset-pi),                     erase ? -2 : 2);
+            else if (last && nw)           L->parent->UpdateSyntax(L, BoxRun(&(*glyphs)[x+start_offset], ni-x-start_offset+1),     erase ? -3 : 3);
+            else                           L->parent->UpdateSyntax(L, BoxRun(&(*glyphs)[x+start_offset], end_offset-start_offset), erase ? -4 : 4);
+        }
+    }
+    void ProcessResult() {
+        if      (pw && nw) L->parent->UpdateSyntax(L, BoxRun(&(*glyphs)[pi], ni - pi + 1), erase ? 5 : -5);
+        else if (pw && sw) L->parent->UpdateSyntax(L, BoxRun(&(*glyphs)[pi], x  - pi),     erase ? 6 : -6);
+        else if (nw && ew) L->parent->UpdateSyntax(L, BoxRun(&(*glyphs)[x],  ni - x + 1),  erase ? 7 : -7);
+    }
+};
+
+void TextGUI::Line::Erase(int x, unsigned l) {
+    bool syntax_processing = parent->syntax_processing;
+    l = max(0U, min((unsigned)Size() - x, l));
+    String16 text = syntax_processing ? BoxRun(&data->glyphs[x], l).Text16() : String16();
+    SyntaxProcessor<short> update(syntax_processing ? this : 0, x, String16Piece(text), l);
+    if (syntax_processing) update.ProcessUpdate();
+    data->glyphs.Erase(x, l, true);
+    data->flow.p.x = BackOrDefault(data->glyphs.data).box.right();
+    if (update.nw) update.ni -= l;
+    if (syntax_processing) update.ProcessResult();
+}
+
+template <class X> void TextGUI::Line::InsertTextAt(int x, const StringPieceT<X> &v, int attr) {
+    bool syntax_processing = parent->syntax_processing;
+    SyntaxProcessor<X> update(syntax_processing ? this : 0, x, v, 0);
+    if (syntax_processing && parent->insert_mode) update.ProcessResult();
+    if (x == Size()) data->flow.AppendText(v, attr);
+    else {
+        BoxArray b;
+        parent->font->Encode(v, Box(data->glyphs.Position(x),0,0), &b, Font::Flag::AssignFlowX, attr);
+        data->glyphs.InsertAt(x, b.data);
+        if (update.nw) update.ni += v.len;
+    }
+    if (syntax_processing) update.ProcessUpdate();
+}
+
 template <class X> bool TextGUI::Line::UpdateText(int x, const StringPieceT<X> &v, int attr, int max_width) {
-    int size = Size(); bool append = size <= x;
-    if (size < x) AppendText(string(x - size, ' '), attr);
-    else if (!parent->insert_mode) Erase(x, v.size());
-    if (size == x) AppendText  (   v, attr);
-    else           InsertTextAt(x, v, attr);
-    if (parent->insert_mode && max_width) Erase(max_width);
+    int size; bool append;
+    if ((size = Size()) < x)                   data->flow.AppendText(basic_string<X>(x - size, ' '), attr);
+    else if (!parent->insert_mode && size > x) Erase(x, v.size());
+    if ((append = (Size() == x)))              AppendText  (   v, attr);
+    else                                       InsertTextAt(x, v, attr);
+    if (parent->insert_mode && max_width)      Erase(max_width);
     return append;
 }
 
-template <class X> int TextGUI::Line::UpdateAttr(int x, const StringPieceT<X> &v, int erase, int attr) {
-    return attr;
-}
-
-template bool TextGUI::Line::UpdateText<char> (int x, const StringPiece   &v, int attr, int max_width);
-template bool TextGUI::Line::UpdateText<short>(int x, const String16Piece &v, int attr, int max_width);
-template int  TextGUI::Line::UpdateAttr<char> (int x, const StringPiece   &v, int erase, int attr);
-template int  TextGUI::Line::UpdateAttr<short>(int x, const String16Piece &v, int erase, int attr);
+template bool TextGUI::Line::UpdateText<char>   (int x, const StringPiece   &v, int attr, int max_width);
+template bool TextGUI::Line::UpdateText<short>  (int x, const String16Piece &v, int attr, int max_width);
+template void TextGUI::Line::InsertTextAt<char> (int x, const StringPiece   &v, int attr);
+template void TextGUI::Line::InsertTextAt<short>(int x, const String16Piece &v, int attr);
 
 void TextGUI::Line::Layout(Box win, bool flush) {
     if (data->box.w == win.w && !flush) return;
@@ -257,6 +319,11 @@ void TextGUI::DrawCursor(point p) {
         }
         if (blinking) font->Draw("_", p);
     }
+}
+
+void TextGUI::UpdateSyntax(Line*, const BoxRun &word, int update_type) {
+    if (update_type >= 0) printf("AddSyntax '%s' %d\n", word.Text().c_str(), update_type);
+    else                  printf("DelSyntax '%s' %d\n", word.Text().c_str(), update_type);
 }
 
 /* TextArea */
@@ -663,7 +730,7 @@ void Terminal::Write(const string &s, bool update_fb, bool release_fb) {
         if (c == 0x18 || c == 0x1a) { /* CAN or SUB */ parse_state = State::TEXT; continue; }
         if (parse_state == State::ESC) {
             parse_state = State::TEXT; // default next state
-            // INFOf("ESC %c", c);
+            // printf("ESC %c\n", c);
             if (c >= '(' && c <= '/') {
                 parse_state = State::CHARSET;
                 parse_charset = c;
@@ -700,7 +767,7 @@ void Terminal::Write(const string &s, bool update_fb, bool release_fb) {
         } else if (parse_state == State::CSI) {
             // http://en.wikipedia.org/wiki/ANSI_escape_code#CSI_codes
             if (c < 0x40 || c > 0x7e) { parse_csi += c; continue; }
-            // INFOf("CSI %s%c (cur=%d,%d)", parse_csi.c_str(), c, term_cursor.x, term_cursor.y);
+            // printf("CSI %s%c (cur=%d,%d)\n", parse_csi.c_str(), c, term_cursor.x, term_cursor.y);
             parse_state = State::TEXT;
 
             int parsed_csi=0, parse_csi_argc=0, parse_csi_argv[16];
@@ -855,8 +922,10 @@ void Terminal::FlushParseText() {
         LinesFrameBuffer *fb = GetFrameBuffer(l);
         int remaining = input_text.size() - wrote, o = term_cursor.x-1;
         write_size = min(remaining, term_width - o);
+        // printf("input-to-flush '%s' insert mode =%d\n", String::ToUTF8(l->Text()).c_str(), insert_mode);
         bool append = l->UpdateText(o, String16Piece(input_text.data() + wrote, write_size),
                                     cursor.attr, term_width);
+        // printf("flush '%s'\n", String::ToUTF8(String16Piece(input_text.data() + wrote, write_size).str()).c_str());
         l->Layout();
         if (!fb->lines) continue;
         int sx = l->data->glyphs[o].box.x, ex = l->data->glyphs.Back().box.right(), ol = l->Size() - o;
