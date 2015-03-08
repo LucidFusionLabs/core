@@ -319,7 +319,9 @@ struct Box3 {
 
 struct Drawable {
     struct Box {
-        LFL::Box box; const Drawable *drawable; int attr_id, line_id;
+        LFL::Box box;
+        const Drawable *drawable;
+        int attr_id, line_id;
         Box(                   const Drawable *D=0, int A=0, int L=-1) :         drawable(D), attr_id(A), line_id(L) {}
         Box(const LFL::Box &B, const Drawable *D=0, int A=0, int L=-1) : box(B), drawable(D), attr_id(A), line_id(L) {}
         bool operator<(const Drawable::Box &x) const { return box < x.box; }
@@ -327,18 +329,21 @@ struct Drawable {
         typedef ArrayMemberSegmentIter    <Box, int, &Box::attr_id>             RawIterator;
     };
     struct Attr { 
-        Font *font=0; const Color *fg=0, *bg=0; const Texture *tex=0; const LFL::Box *scissor=0;
+        Font *font=0;
+        const Color *fg=0, *bg=0;
+        const Texture *tex=0;
+        const LFL::Box *scissor=0;
         bool underline=0, overline=0, midline=0, blink=0;
         Attr(Font *F=0, const Color *FG=0, const Color *BG=0, bool UL=0) : font(F), fg(FG), bg(BG), underline(UL) {}
         bool operator==(const Attr &y) const { return font==y.font && fg==y.fg && bg==y.bg && tex==y.tex && scissor==y.scissor && underline==y.underline && overline==y.overline && midline==y.midline && blink==y.blink; }
         bool operator!=(const Attr &y) const { return !(*this == y); }
         void Clear() { font=0; fg=bg=0; tex=0; scissor=0; underline=overline=midline=blink=0; }
     };
-    struct AttrSource { virtual Attr GetAttr(int attr_id) const = 0; };
+    struct AttrSource { virtual const Attr *GetAttr(int attr_id) const = 0; };
     struct AttrVec : public AttrSource, public vector<Attr> {
         Attr current;
         AttrSource *source=0;
-        Attr GetAttr(int attr_id) const { return source ? source->GetAttr(attr_id) : (*this)[attr_id-1]; }
+        const Attr *GetAttr(int attr_id) const { return source ? source->GetAttr(attr_id) : &(*this)[attr_id-1]; }
         int GetAttrId(const Attr &v)
         { CHECK(!source); if (empty() || this->back() != v) push_back(v); return size(); }
     };
@@ -713,11 +718,11 @@ struct BoxExtentTracker {
 };
 
 struct BoxRun {
-    Drawable::Attr attr;
+    const Drawable::Attr *attr;
     ArrayPiece<Drawable::Box> data;
     const Box *line;
-    BoxRun(const Drawable::Box *buf=0, int len=0)                                        :          data(buf, len), line(0) {}
-    BoxRun(const Drawable::Box *buf,   int len, const Drawable::Attr &A, const Box *L=0) : attr(A), data(buf, len), line(L) {}
+    BoxRun(const Drawable::Box *buf=0, int len=0)                                        : attr(0), data(buf, len), line(0) {}
+    BoxRun(const Drawable::Box *buf,   int len, const Drawable::Attr *A, const Box *L=0) : attr(A), data(buf, len), line(L) {}
 
     template <class K> basic_string<K> Text(int i, int l) const {
         basic_string<K> t(l, 0);
@@ -1186,7 +1191,7 @@ struct Flow {
     void AppendBoxArrayText(const BoxArray &in) {
         bool attr_fwd = in.attr.source;
         for (Drawable::Box::RawIterator iter(in.data); !iter.Done(); iter.Increment()) {
-            if (!attr_fwd) cur_attr = in.attr.GetAttr(iter.cur_attr);
+            if (!attr_fwd) cur_attr = *in.attr.GetAttr(iter.cur_attr);
             AppendText(BoxRun(iter.Data(), iter.Length()).Text(), attr_fwd ? iter.cur_attr : 0);
         }
     }

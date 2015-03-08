@@ -55,8 +55,14 @@ vector<LinesFrameBufferTest::PaintOp> LinesFrameBufferTest::paint;
 
 struct TextAreaTest : public TextArea {
     LinesFrameBufferTest line_fb_test;
+    struct UpdateSyntaxOp {
+        Line *l; string word; int type;
+        UpdateSyntaxOp(Line *L, const BoxRun &W, int T) : l(L), word(W.Text()), type(T) {}
+    };
+    vector<UpdateSyntaxOp> syntax;
     TextAreaTest(Window *W, Font *F, int S=200) : TextArea(W,F,S) {}
     virtual LinesFrameBuffer *GetFrameBuffer() override { return &line_fb_test; }
+    virtual void UpdateSyntax(Line *l, const BoxRun &w, int t) override { syntax.emplace_back(l, w, t); }
 };
 struct EditorTest : public Editor {
     LinesFrameBufferTest line_fb_test;
@@ -630,6 +636,58 @@ TEST(GUITest, Terminal) {
     EXPECT_EQ(0,  Terminal::Attr::GetBGColorIndex(cursor_attr));
     cursor_attr &= ~Terminal::Attr::Bold;
     EXPECT_EQ(4,  Terminal::Attr::GetFGColorIndex(cursor_attr));
+}
+
+TEST(GUITest, SyntaxProcessing) {
+    TextAreaTest ta(screen, Fonts::Fake(), 10);
+    ta.syntax_processing = 1;
+    TextGUI::Line *L = ta.line.InsertAt(-1);
+
+    L->UpdateText(0, "a", 0);
+    EXPECT_EQ("a", L->Text()); EXPECT_EQ(1, ta.syntax.size());
+    if (ta.syntax.size()>0) { EXPECT_EQ(ta.syntax[0].type, 4); EXPECT_EQ("a", ta.syntax[0].word); }
+    ta.syntax.clear();
+
+    L->UpdateText(1, "c", 0);
+    EXPECT_EQ("ac", L->Text()); EXPECT_EQ(2, ta.syntax.size());
+    if (ta.syntax.size()>0) { EXPECT_EQ(ta.syntax[0].type, -6); EXPECT_EQ("a",  ta.syntax[0].word); }
+    if (ta.syntax.size()>1) { EXPECT_EQ(ta.syntax[1].type,  2); EXPECT_EQ("ac", ta.syntax[1].word); }
+    ta.syntax.clear();
+
+    L->UpdateText(1, "b", 0);
+    EXPECT_EQ("abc", L->Text()); EXPECT_EQ(2, ta.syntax.size());
+    if (ta.syntax.size()>0) { EXPECT_EQ(ta.syntax[0].type, -5); EXPECT_EQ("ac",  ta.syntax[0].word); }
+    if (ta.syntax.size()>1) { EXPECT_EQ(ta.syntax[1].type,  1); EXPECT_EQ("abc", ta.syntax[1].word); }
+    ta.syntax.clear();
+
+    L->UpdateText(0, "0", 0);
+    EXPECT_EQ("0abc", L->Text()); EXPECT_EQ(2, ta.syntax.size());
+    if (ta.syntax.size()>0) { EXPECT_EQ(ta.syntax[0].type, -7); EXPECT_EQ("abc",  ta.syntax[0].word); }
+    if (ta.syntax.size()>1) { EXPECT_EQ(ta.syntax[1].type,  3); EXPECT_EQ("0abc", ta.syntax[1].word); }
+    ta.syntax.clear();
+
+    L->Erase(0, 1);
+    EXPECT_EQ("abc", L->Text()); EXPECT_EQ(2, ta.syntax.size());
+    if (ta.syntax.size()>0) { EXPECT_EQ(ta.syntax[0].type,  -3); EXPECT_EQ("0abc", ta.syntax[0].word); }
+    if (ta.syntax.size()>1) { EXPECT_EQ(ta.syntax[1].type,   7); EXPECT_EQ("abc",  ta.syntax[1].word); }
+    ta.syntax.clear();
+
+    L->Erase(1, 1);
+    EXPECT_EQ("ac", L->Text()); EXPECT_EQ(2, ta.syntax.size());
+    if (ta.syntax.size()>0) { EXPECT_EQ(ta.syntax[0].type,  -1); EXPECT_EQ("abc", ta.syntax[0].word); }
+    if (ta.syntax.size()>1) { EXPECT_EQ(ta.syntax[1].type,   5); EXPECT_EQ("ac",  ta.syntax[1].word); }
+    ta.syntax.clear();
+
+    L->Erase(1, 1);
+    EXPECT_EQ("a", L->Text()); EXPECT_EQ(2, ta.syntax.size());
+    if (ta.syntax.size()>0) { EXPECT_EQ(ta.syntax[0].type,  -2); EXPECT_EQ("ac", ta.syntax[0].word); }
+    if (ta.syntax.size()>1) { EXPECT_EQ(ta.syntax[1].type,   6); EXPECT_EQ("a",  ta.syntax[1].word); }
+    ta.syntax.clear();
+
+    L->Erase(0, 1);
+    EXPECT_EQ("", L->Text()); EXPECT_EQ(1, ta.syntax.size());
+    if (ta.syntax.size()>0) { EXPECT_EQ(ta.syntax[0].type,  -4); EXPECT_EQ("a", ta.syntax[0].word); }
+    ta.syntax.clear();
 }
 
 TEST(BrowserTest, DOMNode) {

@@ -2025,21 +2025,21 @@ void Atlas::SplitIntoPNGFiles(const string &input_png_fn, const map<int, v4> &gl
 point BoxRun::Draw(point p, DrawCB cb) {
     Box w;
     DrawBackground(p);
-    if (attr.tex) attr.tex->Bind();
-    if (attr.tex || attr.font) screen->gd-> SetColor(attr.fg ? *attr.fg : Color::white);
-    else                       screen->gd->FillColor(attr.fg ? *attr.fg : Color::white);
-    if (attr.font) attr.font->Select();
-    else if (attr.tex) screen->gd->EnableLayering();
-    if (attr.scissor) screen->gd->PushScissor(*attr.scissor + p);
+    if (attr->tex) attr->tex->Bind();
+    if (attr->tex || attr->font) screen->gd-> SetColor(attr->fg ? *attr->fg : Color::white);
+    else                         screen->gd->FillColor(attr->fg ? *attr->fg : Color::white);
+    if (attr->font) attr->font->Select();
+    else if (attr->tex) screen->gd->EnableLayering();
+    if (attr->scissor) screen->gd->PushScissor(*attr->scissor + p);
     for (auto i = data.buf, e = data.end(); i != e; ++i) if (i->drawable) cb(i->drawable, (w = i->box + p));
-    if (attr.scissor) screen->gd->PopScissor();
+    if (attr->scissor) screen->gd->PopScissor();
     return point(w.x + w.w, w.y);
 }
 
 void BoxRun::DrawBackground(point p, DrawBackgroundCB cb) {
-    if (attr.bg) screen->gd->FillColor(*attr.bg);
-    if (!attr.bg) return;
-    int line_height = line ? line->h : (attr.font ? attr.font->height : 0);
+    if (attr->bg) screen->gd->FillColor(*attr->bg);
+    if (!attr->bg) return;
+    int line_height = line ? line->h : (attr->font ? attr->font->height : 0);
     if (!line_height) return;
     HorizontalExtentTracker extent;
     for (int i=0; i<data.size(); i++) extent.AddDrawableBox(data.data()[i]);

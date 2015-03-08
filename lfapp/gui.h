@@ -258,17 +258,17 @@ struct TextGUI : public KeyboardGUI {
         int Lines() const { return 1+data->glyphs.line.size(); }
         string Text() const { return data->glyphs.Text(); }
         void Clear() { data->glyphs.Clear(); InitFlow(); }
-        void Erase(int o, unsigned l=UINT_MAX) { UpdateAttr(o, String16Piece(), l, 0); data->glyphs.Erase(o, l, true); data->flow.p.x = BackOrDefault(data->glyphs.data).box.right(); }
-        void InsertTextAt(int o, const StringPiece   &s, int a=0) { a=UpdateAttr(o,s,0,a); BoxArray b; parent->font->Encode(s, Box(data->glyphs.Position(o),0,0), &b, Font::Flag::AssignFlowX, a); data->glyphs.InsertAt(o, b.data); }
-        void InsertTextAt(int o, const String16Piece &s, int a=0) { a=UpdateAttr(o,s,0,a); BoxArray b; parent->font->Encode(s, Box(data->glyphs.Position(o),0,0), &b, Font::Flag::AssignFlowX, a); data->glyphs.InsertAt(o, b.data); }
-        void AppendText  (       const StringPiece   &s, int a=0) { a=UpdateAttr(data->glyphs.Size(),s,0,a); data->flow.AppendText(s, a); }
-        void AppendText  (       const String16Piece &s, int a=0) { a=UpdateAttr(data->glyphs.Size(),s,0,a); data->flow.AppendText(s, a); }
-        void AssignText  (       const StringPiece   &s, int a=0) { Clear(); AppendText(s, a); }
-        void AssignText  (       const String16Piece &s, int a=0) { Clear(); AppendText(s, a); }
-        bool UpdateText(int x, const string   &v, int attr, int max_width=0) { return UpdateText(x, StringPiece  (v), attr, max_width); }
-        bool UpdateText(int x, const String16 &v, int attr, int max_width=0) { return UpdateText(x, String16Piece(v), attr, max_width); }
-        template <class X> bool UpdateText(int x, const StringPieceT<X> &v, int attr, int max_width=0);
-        template <class X> int  UpdateAttr(int x, const StringPieceT<X> &v, int erase, int attr);
+        void Erase(int o, unsigned l=UINT_MAX);
+        void AssignText(const StringPiece   &s, int a=0) { Clear(); AppendText(s, a); }
+        void AssignText(const String16Piece &s, int a=0) { Clear(); AppendText(s, a); }
+        void AppendText(const StringPiece   &s, int a=0) { InsertTextAt(Size(), s, a); }
+        void AppendText(const String16Piece &s, int a=0) { InsertTextAt(Size(), s, a); }
+        template <class X> void InsertTextAt(int o, const StringPieceT<X> &s, int attr=0);
+        template <class X> bool UpdateText  (int o, const StringPieceT<X> &s, int attr, int max_width=0);
+        void InsertTextAt(int o, const string   &s, int a=0) { return InsertTextAt(o, s, a); }
+        void InsertTextAt(int o, const String16 &s, int a=0) { return InsertTextAt(o, s, a); }
+        bool UpdateText(int o, const string   &s, int attr, int max_width=0) { return UpdateText(o, StringPiece  (s), attr, max_width); }
+        bool UpdateText(int o, const String16 &s, int attr, int max_width=0) { return UpdateText(o, String16Piece(s), attr, max_width); }
         int Layout(int width=0, bool flush=0) { Layout(Box(0,0,width,0), flush); return Lines(); }
         void Layout(Box win, bool flush=0);
         point Draw(point pos, int relayout_width=-1, int g_offset=0, int g_len=-1);
@@ -348,7 +348,7 @@ struct TextGUI : public KeyboardGUI {
     LinesFrameBuffer cmd_fb;
     string cmd_prefix="> ";
     Color cmd_color=Color::white, selection_color=Color(Color::grey70, 0.5);
-    bool deactivate_on_enter=0, clickable_links=0, insert_mode=1;
+    bool deactivate_on_enter=0, syntax_processing=0, insert_mode=1;
     int start_line=0, end_line=0, start_line_adjust=0, skip_last_lines=0;
     TextGUI(Window *W, Font *F) : KeyboardGUI(W, F), font(F)
     { cmd_line.Init(this,0); cmd_line.GetAttrId(Drawable::Attr(F)); }
@@ -378,6 +378,7 @@ struct TextGUI : public KeyboardGUI {
     }
     virtual void Draw(const Box &b);
     virtual void DrawCursor(point p);
+    virtual void UpdateSyntax(Line*, const BoxRun &word, int update_type);
 };
 
 struct TextArea : public TextGUI {
@@ -510,7 +511,7 @@ struct Terminal : public TextArea, public Drawable::AttrSource {
         SetColors(Singleton<StandardVGAColors>::Get());
         cursor.attr = default_cursor_attr;
         cursor.type = Cursor::Block;
-        clickable_links = 1;
+        syntax_processing = 1;
         cmd_prefix = "";
     }
     virtual ~Terminal() {}
@@ -533,11 +534,13 @@ struct Terminal : public TextArea, public Drawable::AttrSource {
     virtual void Home       () { char k = 'A' - 0x40;  write(fd, &k, 1); }
     virtual void End        () { char k = 'E' - 0x40;  write(fd, &k, 1);  }
     virtual void UpdateCursor() { cursor.p = point(GetCursorX(term_cursor.x), GetCursorY(term_cursor.y)); }
-    virtual Drawable::Attr GetAttr(int attr) const {
+    virtual const Drawable::Attr *GetAttr(int attr) const {
+        static thread_local Drawable::Attr ret;
         Color *fg = colors ? &colors->c[Attr::GetFGColorIndex(attr)] : 0;
         Color *bg = colors ? &colors->c[Attr::GetBGColorIndex(attr)] : 0;
         if (attr & Attr::Reverse) Typed::Swap(fg, bg);
-        return Drawable::Attr(font, fg, bg, attr & Attr::Underline);
+        ret = Drawable::Attr(font, fg, bg, attr & Attr::Underline);
+        return &ret;
     }
     int GetCursorX(int x) const { return (x - 1) * font->FixedWidth(); }
     int GetCursorY(int y) const { return (term_height - y + 1) * font->height; }
@@ -868,78 +871,6 @@ struct HelperGUI : public GUI {
     void Activate() { active=1; /* ForceDirectedLayout(); */ }
     void ForceDirectedLayout();
     void Draw();
-};
-
-struct GChartsHTML {
-    static string JSFooter() { return "}\ngoogle.setOnLoadCallback(drawVisualization);\n</script>\n"; }
-    static string JSHeader() {
-        return
-            "<script type=\"text/javascript\" src=\"//www.google.com/jsapi\"></script>\n"
-            "<script type=\"text/javascript\">\n"
-            "google.load('visualization', '1', {packages: ['corechart']});\n"
-            "function drawVisualization() {\n"
-            "var data; var ac;\n";
-    };
-    static string JSAreaChart(const string &div_id, int width, int height,
-                              const string &title, const string &vaxis_label, const string &haxis_label,
-                              const vector<vector<string> > &table) {
-        string ret = "data = google.visualization.arrayToDataTable([\n";
-        for (int i = 0; i < table.size(); i++) {
-            const vector<string> &l = table[i];
-            ret += "[";
-            for (int j = 0; j < l.size(); j++) StrAppend(&ret, l[j], ", ");
-            ret += "],\n";
-        };
-        StrAppend(&ret, "]);\nac = new google.visualization.AreaChart(document.getElementById('", div_id, "'));\n");
-        StrAppend(&ret, "ac.draw(data, {\ntitle : '", title, "',\n");
-        StrAppend(&ret, "isStacked: true,\nwidth: ", width, ",\nheight: ", height, ",\n");
-        StrAppend(&ret, "vAxis: {title: \"", vaxis_label, "\"},\nhAxis: {title: \"", haxis_label, "\"}\n");
-        StrAppend(&ret, "});\n");
-        return ret;
-    }
-    static string DivElement(const string &div_id, int width, int height) {
-        return StrCat("<div id=\"", div_id, "\" style=\"width: ", width, "px; height: ", height, "px;\"></div>");
-    }
-};
-
-struct DeltaSampler {
-    typedef long long Value;
-    struct Entry : public vector<Value> {
-        void Assign(const vector<const Value*> &in) { resize(in.size()); for (int i=0; i<size(); i++) (*this)[i] = *in[i]; }
-        void Subtract(const Entry &e) {      CHECK_EQ(size(), e.size()); for (int i=0; i<size(); i++) (*this)[i] -=  e[i]; }
-        void Divide  (float v)        {                                  for (int i=0; i<size(); i++) (*this)[i] = static_cast<long long>((*this)[i] / v); }
-    };
-    Timer timer; int interval; vector<string> label; vector<const Value*> input; vector<Entry> data; Entry cur;
-    DeltaSampler(int I, const vector<const Value*> &in, const vector<string> &l) : interval(I), label(l), input(in) { cur.Assign(input); }
-    void Update() {
-        if (timer.GetTime() < interval) return;
-        float buckets = (float)timer.GetTime(true) / interval;
-        if (fabs(buckets - 1.0) > .5) ERROR("buckets = ", buckets);
-        Entry last = cur;
-        cur.Assign(input);
-        Entry diff = cur;
-        diff.Subtract(last);
-        data.push_back(diff);
-    }
-};
-
-struct DeltaGrapher {
-    static void JSTable(const DeltaSampler &sampler, vector<vector<string> > *out, int window_size) {
-        vector<string> v; v.push_back("'Time'");
-        for (int i=0; i<sampler.label.size(); i++) v.push_back(StrCat("'", sampler.label[i], "'"));
-        out->push_back(v);
-
-        v.clear();
-        for (int j=0; j<sampler.label.size()+1; j++) v.push_back("0");
-        out->push_back(v);
-
-        for (int l=sampler.data.size(), i=max(0,l-window_size); i<l; i++) {
-            const DeltaSampler::Entry &le = sampler.data[i];
-            v.clear(); v.push_back(StrCat(i+1));
-            for (int j=0; j<le.size(); j++) v.push_back(StrCat(le[j]));
-            out->push_back(v);
-        }
-    }
 };
 
 }; // namespace LFL

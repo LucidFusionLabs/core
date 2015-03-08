@@ -1353,8 +1353,8 @@ void TextureArray::DrawSequence(Asset *out, Entity *e) {
 
 void Tiles::AddBoxArray(const BoxArray &box, point p) {
     for (Drawable::Box::Iterator iter(box.data); !iter.Done(); iter.Increment()) {
-        Drawable::Attr attr = box.attr.GetAttr(iter.cur_attr1);
-        if (attr.bg) {
+        const Drawable::Attr *attr = box.attr.GetAttr(iter.cur_attr1);
+        if (attr->bg) {
             ContextOpen();
             TilesPreAdd(this, &BoxRun::DrawBackground, BoxRun(0,0,attr), p, &BoxRun::DefaultDrawBackgroundCB);
             BoxRun(iter.Data(), iter.Length(), attr, VectorGet(box.line, iter.cur_attr2))
@@ -1364,8 +1364,8 @@ void Tiles::AddBoxArray(const BoxArray &box, point p) {
         if (1) {
             ContextOpen();
             TilesPreAdd(this, &BoxRun::draw, BoxRun(0,0,attr), p);
-            if (attr.scissor) {
-                TilesPreAdd (this, &Tiles::PushScissor, this, *attr.scissor + p);
+            if (attr->scissor) {
+                TilesPreAdd (this, &Tiles::PushScissor, this, *attr->scissor + p);
                 TilesPostAdd(this, &GraphicsDevice::PopScissor, screen->gd);
             }
             BoxRun(iter.Data(), iter.Length(), attr)
