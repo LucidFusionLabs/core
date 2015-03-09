@@ -137,51 +137,11 @@ int KeyboardGUI::ReadHistory(const string &dir, const string &name) {
     return 0;
 }
 
-template <class X> struct SyntaxProcessor {
-    TextGUI::Line *L;
-    const BoxArray *glyphs;
-    bool sw=0, ew=0, pw=0, nw=0;
-    unsigned x, size, erase, pi=0, ni=0;
-    StringPieceT<X> v;
-
-    SyntaxProcessor(TextGUI::Line *l, unsigned o, const StringPieceT<X> &V, unsigned Erase) : L(l),
-    glyphs(L?&L->data->glyphs:0), x(o), size(L?glyphs->Size():0), erase(Erase), v(V) {
-        if (!L) return;
-        CHECK_LE(x, size);
-        const Drawable *p=0, *n=0;
-        sw = v.len && !isspace(v.buf[0]);
-        ew = v.len && !isspace(v.buf[v.len-1]);
-        ni = x + (erase ? erase : 0);
-        nw = ni<size && (n=(*glyphs)[ni ].drawable) && !isspace(n->Id());
-        pw = x >0    && (p=(*glyphs)[x-1].drawable) && !isspace(p->Id());
-        pi = x - pw;
-        if ((pw && nw) || (pw && sw)) while (pi > 0      && (p = (*glyphs)[pi-1].drawable) && !isspace(p->Id())) pi--;
-        if ((pw && nw) || (nw && ew)) while (ni < size-1 && (n = (*glyphs)[ni+1].drawable) && !isspace(n->Id())) ni++;
-        printf("pw=%d, nw=%d, sw=%d, ew=%d\n", pw, nw, sw, ew);
-    }
-    void ProcessUpdate() {
-        StringWordIterT<X> word(v.buf, v.len, isspace, 0, StringWordIter::Flag::InPlace);
-        for (const X *w = word.Next(); w; w = word.Next())  {
-            int start_offset = w - v.buf, end_offset = start_offset + word.wordlen;
-            bool first = start_offset == 0, last = end_offset == v.len;
-            if (first && last && pw && nw) L->parent->UpdateSyntax(L, BoxRun(&(*glyphs)[pi], ni-pi+1),                             erase ? -1 : 1);
-            else if (first && pw)          L->parent->UpdateSyntax(L, BoxRun(&(*glyphs)[pi], x+end_offset-pi),                     erase ? -2 : 2);
-            else if (last && nw)           L->parent->UpdateSyntax(L, BoxRun(&(*glyphs)[x+start_offset], ni-x-start_offset+1),     erase ? -3 : 3);
-            else                           L->parent->UpdateSyntax(L, BoxRun(&(*glyphs)[x+start_offset], end_offset-start_offset), erase ? -4 : 4);
-        }
-    }
-    void ProcessResult() {
-        if      (pw && nw) L->parent->UpdateSyntax(L, BoxRun(&(*glyphs)[pi], ni - pi + 1), erase ? 5 : -5);
-        else if (pw && sw) L->parent->UpdateSyntax(L, BoxRun(&(*glyphs)[pi], x  - pi),     erase ? 6 : -6);
-        else if (nw && ew) L->parent->UpdateSyntax(L, BoxRun(&(*glyphs)[x],  ni - x + 1),  erase ? 7 : -7);
-    }
-};
-
-void TextGUI::Line::Erase(int x, unsigned l) {
+void TextGUI::Line::Erase(int x, int l) {
+    if (!(l = max(0, min(Size() - x, l)))) return;
     bool syntax_processing = parent->syntax_processing;
-    l = max(0U, min((unsigned)Size() - x, l));
     String16 text = syntax_processing ? BoxRun(&data->glyphs[x], l).Text16() : String16();
-    SyntaxProcessor<short> update(syntax_processing ? this : 0, x, String16Piece(text), l);
+    LineSyntaxProcessor<short> update(syntax_processing ? this : 0, x, String16Piece(text), l);
     if (syntax_processing) update.ProcessUpdate();
     data->glyphs.Erase(x, l, true);
     data->flow.p.x = BackOrDefault(data->glyphs.data).box.right();
@@ -191,8 +151,8 @@ void TextGUI::Line::Erase(int x, unsigned l) {
 
 template <class X> void TextGUI::Line::InsertTextAt(int x, const StringPieceT<X> &v, int attr) {
     bool syntax_processing = parent->syntax_processing;
-    SyntaxProcessor<X> update(syntax_processing ? this : 0, x, v, 0);
-    if (syntax_processing && parent->insert_mode) update.ProcessResult();
+    LineSyntaxProcessor<X> update(syntax_processing ? this : 0, x, v, 0);
+    if (syntax_processing) update.ProcessResult();
     if (x == Size()) data->flow.AppendText(v, attr);
     else {
         BoxArray b;
@@ -203,13 +163,29 @@ template <class X> void TextGUI::Line::InsertTextAt(int x, const StringPieceT<X>
     if (syntax_processing) update.ProcessUpdate();
 }
 
+template <class X> void TextGUI::Line::OverwriteTextAt(int x, const StringPieceT<X> &v, int attr) {
+    bool syntax_processing = parent->syntax_processing;
+    basic_string<X> text = syntax_processing ? BoxRun(&data->glyphs[x], v.len).Text<X>(0, v.len) : basic_string<X>();
+    LineSyntaxProcessor<X> update(syntax_processing ? this : 0, x, StringPieceT<X>(text), v.len);
+    if (syntax_processing) update.ProcessUpdate();
+    BoxArray b;
+    parent->font->Encode(v, Box(data->glyphs.Position(x),0,0), &b, Font::Flag::AssignFlowX, attr);
+    data->glyphs.OverwriteAt(x, b.data);
+    if (syntax_processing) { update.erase=0; update.v=v; update.ProcessUpdate(); }
+}
+
 template <class X> bool TextGUI::Line::UpdateText(int x, const StringPieceT<X> &v, int attr, int max_width) {
-    int size; bool append;
-    if ((size = Size()) < x)                   data->flow.AppendText(basic_string<X>(x - size, ' '), attr);
-    else if (!parent->insert_mode && size > x) Erase(x, v.size());
-    if ((append = (Size() == x)))              AppendText  (   v, attr);
-    else                                       InsertTextAt(x, v, attr);
-    if (parent->insert_mode && max_width)      Erase(max_width);
+    bool append = 0;
+    int size = Size();
+    if (parent->insert_mode) {
+        if (size < x) data->flow.AppendText(basic_string<X>(x - size, ' '), attr);
+        if ((append = (Size() == x))) AppendText  (   v, attr);
+        else                          InsertTextAt(x, v, attr);
+        if (max_width)                Erase(max_width);
+    } else {
+        if (size < x + v.len) data->flow.AppendText(basic_string<X>(x + v.len - size, ' '), attr);
+        OverwriteTextAt(x, v, attr);
+    }
     return append;
 }
 
@@ -233,6 +209,48 @@ point TextGUI::Line::Draw(point pos, int relayout_width, int g_offset, int g_len
     if (relayout_width >= 0) Layout(relayout_width);
     data->glyphs.Draw((p = pos), g_offset, g_len);
     return p - point(0, parent->font->height + data->glyphs.height);
+}
+
+template <class X>
+TextGUI::LineSyntaxProcessor<X>::LineSyntaxProcessor(TextGUI::Line *l, int o, const StringPieceT<X> &V, int Erase)
+    : L(l), x(o), size(L?L->Size():0), erase(Erase), v(V) {
+    if (!L) return;
+    CHECK_LE(x, size);
+    const BoxArray &glyphs = L->data->glyphs;
+    const Drawable *p=0, *n=0;
+    sw = v.len && !isspace(v.buf[0]);
+    ew = v.len && !isspace(v.buf[v.len-1]);
+    ni = x + (Erase ? Erase : 0);
+    nw = ni<size && (n=glyphs[ni ].drawable) && !isspace(n->Id());
+    pw = x >0    && (p=glyphs[x-1].drawable) && !isspace(p->Id());
+    pi = x - pw;
+    if ((pw && nw) || (pw && sw)) FindPrev(glyphs);
+    if ((pw && nw) || (nw && ew)) FindNext(glyphs);
+}
+
+template <class X> void TextGUI::LineSyntaxProcessor<X>::ProcessUpdate() {
+    int tokens = 0;
+    const BoxArray &glyphs = L->data->glyphs;
+    StringWordIterT<X> word(v.buf, v.len, isspace, 0, StringWordIter::Flag::InPlace);
+    for (const X *w = word.Next(); w; w = word.Next(), tokens++)  {
+        int start_offset = w - v.buf, end_offset = start_offset + word.wordlen;
+        bool first = start_offset == 0, last = end_offset == v.len;
+        if (first && last && pw && nw) L->parent->UpdateSyntax(L, BoxRun(&glyphs[pi], ni-pi+1),                             erase ? -1 : 1);
+        else if (first && pw)          L->parent->UpdateSyntax(L, BoxRun(&glyphs[pi], x+end_offset-pi),                     erase ? -2 : 2);
+        else if (last && nw)           L->parent->UpdateSyntax(L, BoxRun(&glyphs[x+start_offset], ni-x-start_offset+1),     erase ? -3 : 3);
+        else                           L->parent->UpdateSyntax(L, BoxRun(&glyphs[x+start_offset], end_offset-start_offset), erase ? -4 : 4);
+    }
+    if (!tokens && v.len) {
+        if (pw) { FindPrev(glyphs); L->parent->UpdateSyntax(L, BoxRun(&glyphs[pi], x-pi),              erase ? -5 : 5); }
+        if (nw) { FindNext(glyphs); L->parent->UpdateSyntax(L, BoxRun(&glyphs[x+v.len], ni-x-v.len+1), erase ? -6 : 6); }
+    }
+}
+
+template <class X> void TextGUI::LineSyntaxProcessor<X>::ProcessResult() {
+    const BoxArray &glyphs = L->data->glyphs;
+    if      (pw && nw) L->parent->UpdateSyntax(L, BoxRun(&glyphs[pi], ni - pi + 1), erase ? 7 : -7);
+    else if (pw && sw) L->parent->UpdateSyntax(L, BoxRun(&glyphs[pi], x  - pi),     erase ? 8 : -8);
+    else if (nw && ew) L->parent->UpdateSyntax(L, BoxRun(&glyphs[x],  ni - x + 1),  erase ? 9 : -9);
 }
 
 TextGUI::LinesFrameBuffer *TextGUI::LinesFrameBuffer::Attach(TextGUI::LinesFrameBuffer **last_fb) {
@@ -340,10 +358,7 @@ void TextArea::Write(const string &s, bool update_fb, bool release_fb) {
     for (const char *add_line = add_lines.Next(); add_line; add_line = add_lines.Next()) {
         bool append = !write_newline && add_lines.first && *add_line && line.ring.count;
         Line *l = append ? &line[-1] : line.InsertAt(-1);
-        if (!append) {
-            l->Clear();
-            if (start_line) { start_line++; end_line++; }
-        }
+        if (!append) { l->Clear(); if (start_line) { start_line++; end_line++; } }
         if (write_timestamp) l->AppendText(StrCat(logtime(Now()), " "), cursor.attr);
         l->AppendText(add_line, cursor.attr);
         l->Layout(wrap ? fb->w : 0);
@@ -922,10 +937,8 @@ void Terminal::FlushParseText() {
         LinesFrameBuffer *fb = GetFrameBuffer(l);
         int remaining = input_text.size() - wrote, o = term_cursor.x-1;
         write_size = min(remaining, term_width - o);
-        // printf("input-to-flush '%s' insert mode =%d\n", String::ToUTF8(l->Text()).c_str(), insert_mode);
         bool append = l->UpdateText(o, String16Piece(input_text.data() + wrote, write_size),
                                     cursor.attr, term_width);
-        // printf("flush '%s'\n", String::ToUTF8(String16Piece(input_text.data() + wrote, write_size).str()).c_str());
         l->Layout();
         if (!fb->lines) continue;
         int sx = l->data->glyphs[o].box.x, ex = l->data->glyphs.Back().box.right(), ol = l->Size() - o;

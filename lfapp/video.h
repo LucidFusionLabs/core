@@ -787,6 +787,11 @@ struct BoxArray {
         data.insert(data.begin()+o, x.begin(), x.end());
         for (auto i = data.begin()+o+x.size(); i != data.end(); ++i) i->box += p;
     }
+    void OverwriteAt(int o, const vector<Drawable::Box> &x) {
+        CHECK_LE(o+x.size(), data.size());
+        auto xi = x.begin();
+        for (auto i = data.begin()+o, e = i+x.size(); i != e; ++i, ++xi) *i = *xi;
+    }
     void Erase(int o, size_t l=UINT_MAX, bool shift=false) { 
         if (!l || data.size() <= o) return;
         if (shift) CHECK_EQ(0, line_ind.size());

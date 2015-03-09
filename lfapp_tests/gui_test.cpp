@@ -638,7 +638,7 @@ TEST(GUITest, Terminal) {
     EXPECT_EQ(4,  Terminal::Attr::GetFGColorIndex(cursor_attr));
 }
 
-TEST(GUITest, SyntaxProcessing) {
+TEST(GUITest, LineSyntaxProcessor) {
     TextAreaTest ta(screen, Fonts::Fake(), 10);
     ta.syntax_processing = 1;
     TextGUI::Line *L = ta.line.InsertAt(-1);
@@ -650,43 +650,107 @@ TEST(GUITest, SyntaxProcessing) {
 
     L->UpdateText(1, "c", 0);
     EXPECT_EQ("ac", L->Text()); EXPECT_EQ(2, ta.syntax.size());
-    if (ta.syntax.size()>0) { EXPECT_EQ(ta.syntax[0].type, -6); EXPECT_EQ("a",  ta.syntax[0].word); }
+    if (ta.syntax.size()>0) { EXPECT_EQ(ta.syntax[0].type, -8); EXPECT_EQ("a",  ta.syntax[0].word); }
     if (ta.syntax.size()>1) { EXPECT_EQ(ta.syntax[1].type,  2); EXPECT_EQ("ac", ta.syntax[1].word); }
     ta.syntax.clear();
 
     L->UpdateText(1, "b", 0);
     EXPECT_EQ("abc", L->Text()); EXPECT_EQ(2, ta.syntax.size());
-    if (ta.syntax.size()>0) { EXPECT_EQ(ta.syntax[0].type, -5); EXPECT_EQ("ac",  ta.syntax[0].word); }
+    if (ta.syntax.size()>0) { EXPECT_EQ(ta.syntax[0].type, -7); EXPECT_EQ("ac",  ta.syntax[0].word); }
     if (ta.syntax.size()>1) { EXPECT_EQ(ta.syntax[1].type,  1); EXPECT_EQ("abc", ta.syntax[1].word); }
     ta.syntax.clear();
 
     L->UpdateText(0, "0", 0);
     EXPECT_EQ("0abc", L->Text()); EXPECT_EQ(2, ta.syntax.size());
-    if (ta.syntax.size()>0) { EXPECT_EQ(ta.syntax[0].type, -7); EXPECT_EQ("abc",  ta.syntax[0].word); }
+    if (ta.syntax.size()>0) { EXPECT_EQ(ta.syntax[0].type, -9); EXPECT_EQ("abc",  ta.syntax[0].word); }
     if (ta.syntax.size()>1) { EXPECT_EQ(ta.syntax[1].type,  3); EXPECT_EQ("0abc", ta.syntax[1].word); }
     ta.syntax.clear();
 
     L->Erase(0, 1);
     EXPECT_EQ("abc", L->Text()); EXPECT_EQ(2, ta.syntax.size());
     if (ta.syntax.size()>0) { EXPECT_EQ(ta.syntax[0].type,  -3); EXPECT_EQ("0abc", ta.syntax[0].word); }
-    if (ta.syntax.size()>1) { EXPECT_EQ(ta.syntax[1].type,   7); EXPECT_EQ("abc",  ta.syntax[1].word); }
+    if (ta.syntax.size()>1) { EXPECT_EQ(ta.syntax[1].type,   9); EXPECT_EQ("abc",  ta.syntax[1].word); }
     ta.syntax.clear();
 
     L->Erase(1, 1);
     EXPECT_EQ("ac", L->Text()); EXPECT_EQ(2, ta.syntax.size());
     if (ta.syntax.size()>0) { EXPECT_EQ(ta.syntax[0].type,  -1); EXPECT_EQ("abc", ta.syntax[0].word); }
-    if (ta.syntax.size()>1) { EXPECT_EQ(ta.syntax[1].type,   5); EXPECT_EQ("ac",  ta.syntax[1].word); }
+    if (ta.syntax.size()>1) { EXPECT_EQ(ta.syntax[1].type,   7); EXPECT_EQ("ac",  ta.syntax[1].word); }
     ta.syntax.clear();
 
     L->Erase(1, 1);
     EXPECT_EQ("a", L->Text()); EXPECT_EQ(2, ta.syntax.size());
     if (ta.syntax.size()>0) { EXPECT_EQ(ta.syntax[0].type,  -2); EXPECT_EQ("ac", ta.syntax[0].word); }
-    if (ta.syntax.size()>1) { EXPECT_EQ(ta.syntax[1].type,   6); EXPECT_EQ("a",  ta.syntax[1].word); }
+    if (ta.syntax.size()>1) { EXPECT_EQ(ta.syntax[1].type,   8); EXPECT_EQ("a",  ta.syntax[1].word); }
     ta.syntax.clear();
 
     L->Erase(0, 1);
     EXPECT_EQ("", L->Text()); EXPECT_EQ(1, ta.syntax.size());
     if (ta.syntax.size()>0) { EXPECT_EQ(ta.syntax[0].type,  -4); EXPECT_EQ("a", ta.syntax[0].word); }
+    ta.syntax.clear();
+    
+    L->UpdateText(0, "aabb", 0);
+    EXPECT_EQ("aabb", L->Text()); EXPECT_EQ(1, ta.syntax.size());
+    if (ta.syntax.size()>0) { EXPECT_EQ(ta.syntax[0].type, 4); EXPECT_EQ("aabb", ta.syntax[0].word); }
+    ta.syntax.clear();
+
+    L->UpdateText(2, " ", 0);
+    EXPECT_EQ("aa bb", L->Text()); EXPECT_EQ(3, ta.syntax.size());
+    if (ta.syntax.size()>0) { EXPECT_EQ(ta.syntax[0].type, -7); EXPECT_EQ("aabb", ta.syntax[0].word); }
+    if (ta.syntax.size()>1) { EXPECT_EQ(ta.syntax[1].type,  5); EXPECT_EQ("aa",   ta.syntax[1].word); }
+    if (ta.syntax.size()>2) { EXPECT_EQ(ta.syntax[2].type,  6); EXPECT_EQ("bb",   ta.syntax[2].word); }
+    ta.syntax.clear();
+
+    L->Erase(2, 1);
+    EXPECT_EQ("aabb", L->Text()); EXPECT_EQ(3, ta.syntax.size());
+    if (ta.syntax.size()>0) { EXPECT_EQ(ta.syntax[0].type, -5); EXPECT_EQ("aa",   ta.syntax[0].word); }
+    if (ta.syntax.size()>1) { EXPECT_EQ(ta.syntax[1].type, -6); EXPECT_EQ("bb",   ta.syntax[1].word); }
+    if (ta.syntax.size()>2) { EXPECT_EQ(ta.syntax[2].type,  7); EXPECT_EQ("aabb", ta.syntax[2].word); }
+    ta.syntax.clear();
+
+    L->Clear();
+    ta.insert_mode = 0;
+    L->UpdateText(0, "a", 0);
+    EXPECT_EQ("a", L->Text()); EXPECT_EQ(1, ta.syntax.size());
+    if (ta.syntax.size()>0) { EXPECT_EQ(ta.syntax[0].type, 4); EXPECT_EQ("a", ta.syntax[0].word); }
+    ta.syntax.clear();
+
+    L->UpdateText(1, "cc", 0);
+    EXPECT_EQ("acc", L->Text()); EXPECT_EQ(2, ta.syntax.size());
+    if (ta.syntax.size()>0) { EXPECT_EQ(ta.syntax[0].type, -5); EXPECT_EQ("a",   ta.syntax[0].word); }
+    if (ta.syntax.size()>1) { EXPECT_EQ(ta.syntax[1].type,  2); EXPECT_EQ("acc", ta.syntax[1].word); }
+    ta.syntax.clear();
+
+    L->UpdateText(1, "b", 0);
+    EXPECT_EQ("abc", L->Text()); EXPECT_EQ(2, ta.syntax.size());
+    if (ta.syntax.size()>0) { EXPECT_EQ(ta.syntax[0].type, -1); EXPECT_EQ("acc", ta.syntax[0].word); }
+    if (ta.syntax.size()>1) { EXPECT_EQ(ta.syntax[1].type,  1); EXPECT_EQ("abc", ta.syntax[1].word); }
+    ta.syntax.clear();
+
+    L->UpdateText(3, "bb", 0);
+    EXPECT_EQ("abcbb", L->Text()); EXPECT_EQ(2, ta.syntax.size());
+    if (ta.syntax.size()>0) { EXPECT_EQ(ta.syntax[0].type, -5); EXPECT_EQ("abc",   ta.syntax[0].word); }
+    if (ta.syntax.size()>1) { EXPECT_EQ(ta.syntax[1].type,  2); EXPECT_EQ("abcbb", ta.syntax[1].word); }
+    ta.syntax.clear();
+
+    L->UpdateText(0, "aab", 0);
+    EXPECT_EQ("aabbb", L->Text()); EXPECT_EQ(2, ta.syntax.size());
+    if (ta.syntax.size()>0) { EXPECT_EQ(ta.syntax[0].type, -3); EXPECT_EQ("abcbb", ta.syntax[0].word); }
+    if (ta.syntax.size()>1) { EXPECT_EQ(ta.syntax[1].type,  3); EXPECT_EQ("aabbb", ta.syntax[1].word); }
+    ta.syntax.clear();
+
+    L->UpdateText(2, " ", 0);
+    EXPECT_EQ("aa bb", L->Text()); EXPECT_EQ(3, ta.syntax.size());
+    if (ta.syntax.size()>0) { EXPECT_EQ(ta.syntax[0].type, -1); EXPECT_EQ("aabbb", ta.syntax[0].word); }
+    if (ta.syntax.size()>1) { EXPECT_EQ(ta.syntax[1].type,  5); EXPECT_EQ("aa",    ta.syntax[1].word); }
+    if (ta.syntax.size()>2) { EXPECT_EQ(ta.syntax[2].type,  6); EXPECT_EQ("bb",    ta.syntax[2].word); }
+    ta.syntax.clear();
+
+    L->UpdateText(2, "c", 0);
+    EXPECT_EQ("aacbb", L->Text()); EXPECT_EQ(3, ta.syntax.size());
+    if (ta.syntax.size()>0) { EXPECT_EQ(ta.syntax[0].type, -5); EXPECT_EQ("aa",    ta.syntax[0].word); }
+    if (ta.syntax.size()>1) { EXPECT_EQ(ta.syntax[1].type, -6); EXPECT_EQ("bb",    ta.syntax[1].word); }
+    if (ta.syntax.size()>2) { EXPECT_EQ(ta.syntax[2].type,  1); EXPECT_EQ("aacbb", ta.syntax[2].word); }
     ta.syntax.clear();
 }
 
