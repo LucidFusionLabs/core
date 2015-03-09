@@ -258,20 +258,32 @@ struct TextGUI : public KeyboardGUI {
         int Lines() const { return 1+data->glyphs.line.size(); }
         string Text() const { return data->glyphs.Text(); }
         void Clear() { data->glyphs.Clear(); InitFlow(); }
-        void Erase(int o, unsigned l=UINT_MAX);
+        void Erase(int o, int l=INT_MAX);
         void AssignText(const StringPiece   &s, int a=0) { Clear(); AppendText(s, a); }
         void AssignText(const String16Piece &s, int a=0) { Clear(); AppendText(s, a); }
         void AppendText(const StringPiece   &s, int a=0) { InsertTextAt(Size(), s, a); }
         void AppendText(const String16Piece &s, int a=0) { InsertTextAt(Size(), s, a); }
-        template <class X> void InsertTextAt(int o, const StringPieceT<X> &s, int attr=0);
-        template <class X> bool UpdateText  (int o, const StringPieceT<X> &s, int attr, int max_width=0);
-        void InsertTextAt(int o, const string   &s, int a=0) { return InsertTextAt(o, s, a); }
-        void InsertTextAt(int o, const String16 &s, int a=0) { return InsertTextAt(o, s, a); }
-        bool UpdateText(int o, const string   &s, int attr, int max_width=0) { return UpdateText(o, StringPiece  (s), attr, max_width); }
-        bool UpdateText(int o, const String16 &s, int attr, int max_width=0) { return UpdateText(o, String16Piece(s), attr, max_width); }
+        template <class X> void OverwriteTextAt(int o, const StringPieceT<X> &s, int attr=0);
+        template <class X> void InsertTextAt   (int o, const StringPieceT<X> &s, int attr=0);
+        template <class X> bool UpdateText     (int o, const StringPieceT<X> &s, int attr, int max_width=0);
+        void InsertTextAt(int o, const string   &s, int a=0) { return InsertTextAt<char> (o, s, a); }
+        void InsertTextAt(int o, const String16 &s, int a=0) { return InsertTextAt<short>(o, s, a); }
+        bool UpdateText(int o, const string   &s, int attr, int max_width=0) { return UpdateText<char> (o, s, attr, max_width); }
+        bool UpdateText(int o, const String16 &s, int attr, int max_width=0) { return UpdateText<short>(o, s, attr, max_width); }
         int Layout(int width=0, bool flush=0) { Layout(Box(0,0,width,0), flush); return Lines(); }
         void Layout(Box win, bool flush=0);
         point Draw(point pos, int relayout_width=-1, int g_offset=0, int g_len=-1);
+    };
+    template <class X> struct LineSyntaxProcessor {
+        Line *L;
+        bool sw=0, ew=0, pw=0, nw=0;
+        int x, size, erase, pi=0, ni=0;
+        StringPieceT<X> v;
+        LineSyntaxProcessor(Line *l, int o, const StringPieceT<X> &V, int Erase);
+        void FindPrev(const BoxArray &g) { const Drawable *p; while (pi > 0      && (p = g[pi-1].drawable) && !isspace(p->Id())) pi--; }
+        void FindNext(const BoxArray &g) { const Drawable *n; while (ni < size-1 && (n = g[ni+1].drawable) && !isspace(n->Id())) ni++; }
+        void ProcessUpdate();
+        void ProcessResult();
     };
     struct Lines : public RingVector<Line> {
         int wrapped_lines;
