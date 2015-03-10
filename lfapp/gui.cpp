@@ -164,21 +164,28 @@ template <class X> void TextGUI::Line::InsertTextAt(int x, const StringPieceT<X>
 }
 
 template <class X> void TextGUI::Line::OverwriteTextAt(int x, const StringPieceT<X> &v, int attr) {
+    // XXX user character BoxRun iterators
     bool syntax_processing = parent->syntax_processing;
     basic_string<X> text = syntax_processing ? BoxRun(&data->glyphs[x], v.len).Text<X>(0, v.len) : basic_string<X>();
     LineSyntaxProcessor<X> update(syntax_processing ? this : 0, x, StringPieceT<X>(text), v.len);
-    if (syntax_processing) update.ProcessUpdate();
+    if (syntax_processing) {
+        update.FindBoundaryConditions(v, &update.osw, &update.oew);
+        update.ProcessUpdate();
+    }
     BoxArray b;
     parent->font->Encode(v, Box(data->glyphs.Position(x),0,0), &b, Font::Flag::AssignFlowX, attr);
     data->glyphs.OverwriteAt(x, b.data);
-    if (syntax_processing) { update.erase=0; update.v=v; update.ProcessUpdate(); }
+    if (syntax_processing) {
+        update.PrepareOverwrite(v);
+        update.ProcessUpdate();
+    }
 }
 
 template <class X> bool TextGUI::Line::UpdateText(int x, const StringPieceT<X> &v, int attr, int max_width) {
     bool append = 0;
     int size = Size();
     if (parent->insert_mode) {
-        if (size < x) data->flow.AppendText(basic_string<X>(x - size, ' '), attr);
+        if (size < x)                 data->flow.AppendText(basic_string<X>(x - size, ' '), attr);
         if ((append = (Size() == x))) AppendText  (   v, attr);
         else                          InsertTextAt(x, v, attr);
         if (max_width)                Erase(max_width);
@@ -213,13 +220,12 @@ point TextGUI::Line::Draw(point pos, int relayout_width, int g_offset, int g_len
 
 template <class X>
 TextGUI::LineSyntaxProcessor<X>::LineSyntaxProcessor(TextGUI::Line *l, int o, const StringPieceT<X> &V, int Erase)
-    : L(l), x(o), size(L?L->Size():0), erase(Erase), v(V) {
+    : L(l), x(o), size(L?L->Size():0), erase(Erase) {
     if (!L) return;
-    CHECK_LE(x, size);
     const BoxArray &glyphs = L->data->glyphs;
     const Drawable *p=0, *n=0;
-    sw = v.len && !isspace(v.buf[0]);
-    ew = v.len && !isspace(v.buf[v.len-1]);
+    CHECK_LE(x, size);
+    LoadV(V);
     ni = x + (Erase ? Erase : 0);
     nw = ni<size && (n=glyphs[ni ].drawable) && !isspace(n->Id());
     pw = x >0    && (p=glyphs[x-1].drawable) && !isspace(p->Id());
@@ -240,9 +246,9 @@ template <class X> void TextGUI::LineSyntaxProcessor<X>::ProcessUpdate() {
         else if (last && nw)           L->parent->UpdateSyntax(L, BoxRun(&glyphs[x+start_offset], ni-x-start_offset+1),     erase ? -3 : 3);
         else                           L->parent->UpdateSyntax(L, BoxRun(&glyphs[x+start_offset], end_offset-start_offset), erase ? -4 : 4);
     }
-    if (!tokens && v.len) {
-        if (pw) { FindPrev(glyphs); L->parent->UpdateSyntax(L, BoxRun(&glyphs[pi], x-pi),              erase ? -5 : 5); }
-        if (nw) { FindNext(glyphs); L->parent->UpdateSyntax(L, BoxRun(&glyphs[x+v.len], ni-x-v.len+1), erase ? -6 : 6); }
+    if ((!tokens || overwrite) && v.len) {
+        if (pw && !sw && osw) { FindPrev(glyphs); L->parent->UpdateSyntax(L, BoxRun(&glyphs[pi], x-pi),              erase ? -5 : 5); }
+        if (nw && !ew && oew) { FindNext(glyphs); L->parent->UpdateSyntax(L, BoxRun(&glyphs[x+v.len], ni-x-v.len+1), erase ? -6 : 6); }
     }
 }
 
@@ -340,8 +346,13 @@ void TextGUI::DrawCursor(point p) {
 }
 
 void TextGUI::UpdateSyntax(Line*, const BoxRun &word, int update_type) {
-    if (update_type >= 0) printf("AddSyntax '%s' %d\n", word.Text().c_str(), update_type);
-    else                  printf("DelSyntax '%s' %d\n", word.Text().c_str(), update_type);
+    int url_offset = -1;
+    string text = word.Text();
+    if      (PrefixMatch(text, "http://"))  url_offset = 7;
+    else if (PrefixMatch(text, "https://")) url_offset = 8;
+    if (url_offset >= 0) {
+        printf("%s url '%s'\n", update_type >= 0 ? "Add" : "Del", text.c_str());
+    }
 }
 
 /* TextArea */
