@@ -276,14 +276,20 @@ struct TextGUI : public KeyboardGUI {
     };
     template <class X> struct LineSyntaxProcessor {
         Line *L;
-        bool sw=0, ew=0, pw=0, nw=0;
+        bool sw=0, ew=0, pw=0, nw=0, overwrite=0, osw=1, oew=1;
         int x, size, erase, pi=0, ni=0;
         StringPieceT<X> v;
         LineSyntaxProcessor(Line *l, int o, const StringPieceT<X> &V, int Erase);
+        void LoadV(const StringPieceT<X> &V) { FindBoundaryConditions((v=V), &sw, &ew); }
         void FindPrev(const BoxArray &g) { const Drawable *p; while (pi > 0      && (p = g[pi-1].drawable) && !isspace(p->Id())) pi--; }
         void FindNext(const BoxArray &g) { const Drawable *n; while (ni < size-1 && (n = g[ni+1].drawable) && !isspace(n->Id())) ni++; }
+        void PrepareOverwrite(const StringPieceT<X> &V) { osw=sw; oew=ew; LoadV(V); erase=0; overwrite=1; }
         void ProcessUpdate();
         void ProcessResult();
+        static void FindBoundaryConditions(const StringPieceT<X> &v, bool *sw, bool *ew) {
+            *sw = v.len && !isspace(v.buf[0]);
+            *ew = v.len && !isspace(v.buf[v.len-1]);
+        }
     };
     struct Lines : public RingVector<Line> {
         int wrapped_lines;

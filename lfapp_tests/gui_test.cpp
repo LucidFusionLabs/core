@@ -752,6 +752,28 @@ TEST(GUITest, LineSyntaxProcessor) {
     if (ta.syntax.size()>1) { EXPECT_EQ(ta.syntax[1].type, -6); EXPECT_EQ("bb",    ta.syntax[1].word); }
     if (ta.syntax.size()>2) { EXPECT_EQ(ta.syntax[2].type,  1); EXPECT_EQ("aacbb", ta.syntax[2].word); }
     ta.syntax.clear();
+
+    L->UpdateText(5, "ccdee", 0);
+    EXPECT_EQ("aacbbccdee", L->Text()); EXPECT_EQ(2, ta.syntax.size());
+    if (ta.syntax.size()>0) { EXPECT_EQ(ta.syntax[0].type, -5); EXPECT_EQ("aacbb",      ta.syntax[0].word); }
+    if (ta.syntax.size()>1) { EXPECT_EQ(ta.syntax[1].type,  2); EXPECT_EQ("aacbbccdee", ta.syntax[1].word); }
+    ta.syntax.clear();
+
+    L->UpdateText(5, " ccdee", 0);
+    EXPECT_EQ("aacbb ccdee", L->Text()); EXPECT_EQ(3, ta.syntax.size());
+    if (ta.syntax.size()>0) { EXPECT_EQ(ta.syntax[0].type, -2); EXPECT_EQ("aacbbccdee", ta.syntax[0].word); }
+    if (ta.syntax.size()>1) { EXPECT_EQ(ta.syntax[1].type,  4); EXPECT_EQ("ccdee",      ta.syntax[1].word); }
+    if (ta.syntax.size()>2) { EXPECT_EQ(ta.syntax[2].type,  5); EXPECT_EQ("aacbb",      ta.syntax[2].word); }
+    ta.syntax.clear();
+
+    L->UpdateText(5, " ccdee", 0);
+    EXPECT_EQ("aacbb ccdee", L->Text()); EXPECT_EQ(2, ta.syntax.size());
+    if (ta.syntax.size()>0) { EXPECT_EQ(ta.syntax[0].type, -4); EXPECT_EQ("ccdee",      ta.syntax[0].word); }
+    if (ta.syntax.size()>1) { EXPECT_EQ(ta.syntax[1].type,  4); EXPECT_EQ("ccdee",      ta.syntax[1].word); }
+    ta.syntax.clear();
+
+    L->UpdateText(5, " ", 0);
+    EXPECT_EQ("aacbb ccdee", L->Text()); EXPECT_EQ(0, ta.syntax.size());
 }
 
 TEST(BrowserTest, DOMNode) {
