@@ -39,7 +39,7 @@ void UpdateTargetFPS() {
 }
 
 void MyNewLinkCB(TextArea::Link *link) {
-    string image_url = link->widget.link;
+    string image_url = link->link;
     if (!FileSuffix::Image(image_url)) {
         string prot, host, port, path;
         if (HTTP::URL(image_url.c_str(), &prot, &host, &port, &path) &&

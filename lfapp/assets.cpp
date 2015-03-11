@@ -996,11 +996,11 @@ int MovieAsset::Play(int seek) {
 
 /* asset impls */
 
-void glLine(float x1, float y1, float x2, float y2, const Color *color) {
+void glLine(const point &p1, const point &p2, const Color *color) {
     static int verts_ind=-1;
     screen->gd->DisableTexture();
 
-    float verts[] = { /*1*/ x1, y1, /*2*/ x2, y2 };
+    float verts[] = { /*1*/ (float)p1.x, (float)p1.y, /*2*/ (float)p2.x, (float)p2.y };
     screen->gd->VertexPointer(2, GraphicsDevice::Float, 0, 0, verts, sizeof(verts), &verts_ind, true);
 
     if (color) screen->gd->Color4f(color->r(), color->g(), color->b(), color->a());

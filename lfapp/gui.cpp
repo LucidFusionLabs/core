@@ -355,7 +355,7 @@ void TextGUI::UpdateToken(Line *L, int word_offset, int word_len, int update_typ
         int lx = glyphs[word_offset].box.x, rx = glyphs[word_offset+word_len-1].box.right();
         Box box(lx, L->p.y - font->height, rx - lx, font->height);
         if (update_type < 0) L->data->links.erase(word_offset);
-        else if (Link *link = new Link(&L->parent->mouse_gui, box, text)) {
+        else if (Link *link = new Link(this, &mouse_gui, box, text)) {
             L->data->links[word_offset] = shared_ptr<Link>(link);
         }
     }
@@ -479,23 +479,10 @@ void TextArea::Draw(const Box &b, bool draw_cursor) {
     if (clip) screen->gd->PopScissor();
     if (draw_cursor) TextGUI::Draw(Box(b.x, b.y, b.w, font->height));
     if (selection.changing) DrawSelection();
-#if 0
-        vector<Link*> hover_link;
-        Link *link = 0;
-        if (cur_attr & Attr::Link) {
-            CHECK_LT(link_ind, l->links.size());
-            link = l->links[link_ind].v;
-            if (link->widget.hover) underline = true;
-            link->widget.Activate();
-        }
-        if (link) {
-            link->widget.win = l->win[0];
-            if (link->widget.hover && line.hover_link_cb) hover_link.push_back(link);
-            link_ind++;
-        }
-        mouse_gui.activate();
-        for (int i=0; i<hover_link.size(); i++) hover_link_cb(hover_link[i]);
-#endif
+    if (hover_link) {
+        glLine(hover_link->box.BottomLeft(), hover_link->box.BottomRight(), &Color::white);
+        if (hover_link_cb) hover_link_cb(hover_link);
+    }
 }
 
 void TextArea::DrawSelection() {
@@ -2163,7 +2150,8 @@ void HelperGUI::ForceDirectedLayout() {
 
 void HelperGUI::Draw() {
     for (auto i = label.begin(); i != label.end(); ++i) {
-        glLine(i->label_center.x, i->label_center.y, i->target_center.x, i->target_center.y, &font->fg);
+        glLine(point(i->label_center.x, i->label_center.y),
+               point(i->target_center.x, i->target_center.y), &font->fg);
         screen->gd->FillColor(Color::black);
         Box::AddBorder(i->label, 4, 0).Draw();
         font->Draw(i->description, point(i->label.x, i->label.y));
