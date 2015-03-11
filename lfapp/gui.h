@@ -237,11 +237,11 @@ struct TextGUI : public KeyboardGUI {
         Link(TextGUI *P, GUI *G, const Box &b, const string &U)
             : Interface(G), box(b), link(U), parent(P), image_src(0), image(0) {
             AddClickBox(b, MouseController::CB(bind(&Link::Visit, this)));
-            AddHoverBox(b, MouseController::CB(bind(&Link::Hover, this)));
+            AddHoverBox(b, MouseController::CoordCB(bind(&Link::Hover, this, _1, _2, _3, _4)));
             del_hitbox = true;
         }
         ~Link() { if (parent->hover_link == this) parent->hover_link = 0; }
-        void Hover() { parent->hover_link = parent->hover_link ? 0 : this; }
+        void Hover(int, int, int, int down) { parent->hover_link = down ? this : 0; }
         void Visit() { SystemBrowser::Open(link.c_str()); }
     };
     typedef function<void(Link*)> LinkCB;
@@ -267,7 +267,7 @@ struct TextGUI : public KeyboardGUI {
         int Size () const { return data->glyphs.Size(); }
         int Lines() const { return 1+data->glyphs.line.size(); }
         string Text() const { return data->glyphs.Text(); }
-        void Clear() { data->glyphs.Clear(); InitFlow(); }
+        void Clear() { data->links.clear(); data->glyphs.Clear(); InitFlow(); }
         void Erase(int o, int l=INT_MAX);
         void AssignText(const StringPiece   &s, int a=0) { Clear(); AppendText(s, a); }
         void AssignText(const String16Piece &s, int a=0) { Clear(); AppendText(s, a); }
@@ -342,7 +342,10 @@ struct TextGUI : public KeyboardGUI {
     struct LinesGUI : public GUI {
         LinesFrameBuffer *fb;
         LinesGUI(Window *W=0, const Box &B=Box(), LinesFrameBuffer *FB=0) : GUI(W, B), fb(FB) {}
-        point MousePosition() const { return fb->BackPlus(screen->mouse - box.TopLeft()); }
+        point MousePosition() const {
+            point p = screen->mouse - box.TopLeft();
+            return (p.y >= 0 && p.y < fb->h) ? fb->BackPlus(p) : p;
+        }
     };
     struct LineUpdate {
         enum { PushBack=1, PushFront=2, DontUpdate=4 }; 

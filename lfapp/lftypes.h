@@ -140,6 +140,16 @@ template <class X> void VectorErase(X* v, int ind) {
     CHECK_RANGE(ind, 0, v->size());
     v->erase(v->begin()+ind, v->begin()+ind+1);
 }
+template <class X, class I> I VectorEraseIterSwapBack(X* v, I i) {
+    bool last = (i+1) == v->end();
+    if (!last) swap(*i, v->back());
+    v->pop_back();
+    return last ? v->end() : i;
+}
+template <class X> void VectorEraseSwapBack(X* v, int ind) {
+    CHECK_RANGE(ind, 0, v->size());
+    VectorEraseIterSwapBack(v, v->begin()+ind);
+}
 template <class X> int VectorEraseByValue(vector<X> *v, const X& x) {
     int orig_size = v->size();
     v->erase(LFL_STL_NAMESPACE::remove(v->begin(), v->end(), x), v->end());

@@ -253,7 +253,7 @@ struct Box {
     int percentX(float px) const { return x+w*px; }
     int percentY(float py) const { return y+h*py; }
     bool Empty() const { return !w && !h; }
-    bool within(const point &p) const { return p.x >= x && p.x <= x+w && p.y >= y && p.y <= y+h; }
+    bool within(const point &p) const { return p.x >= x && p.x < right() && p.y >= y && p.y < top(); }
     bool operator==(const Box &c) const { return x == c.x && y == c.y && w == c.w && h == c.h; }
     bool operator!=(const Box &c) const { return !(*this == c); }
     bool operator<(const Box &c) const { SortImpl4(x, c.x, y, c.y, w, c.w, h, c.h); }

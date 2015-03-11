@@ -722,37 +722,49 @@ int Input::MouseEventDispatch(InputEvent::Id event, const point &p, int down) {
 int MouseController::Input(InputEvent::Id event, const point &p, int down, int flag) {
     int fired = 0;
     bool but1 = event == Mouse::Event::Button1;
-    for (auto e = hit.data.rbegin(); e != hit.data.rend(); ++e) {
-        if (e->deleted || !e->active ||
+
+    for (auto h = hover.begin(); h != hover.end(); /**/) {
+        auto e = &hit.data[*h];
+        if (e->box.within(p)) { ++h; continue; }
+        h = VectorEraseIterSwapBack(&hover, h);
+        e->val = 0;
+        e->CB.Run(p, event, 0);
+        events.hover++;
+        fired++;
+    }
+
+    for (auto e = hit.data.rbegin(), ee = hit.data.rend(); e != ee; ++e) {
+        bool thunk = 0, e_hover = e->evtype == Event::Hover;
+
+        if (e->deleted || !e->active || (e_hover && e->val) || 
             (!down && e->evtype == Event::Click && e->CB.type != Callback::CB_COORD)) continue;
 
-        bool thunk = 0;
         if (e->box.within(p)) {
             if (e->run_only_if_first && fired) continue;
             switch (e->evtype) { 
-                case Event::Click: if (but1)         {           thunk=1; } break;
-                case Event::Drag:  if (but1 && down) {           thunk=1; } break;
-                case Event::Hover: if (!e->val)      { e->val=1; thunk=1; } break;
+                case Event::Click: if (but1)         { thunk=1; } break;
+                case Event::Drag:  if (but1 && down) { thunk=1; } break;
+                case Event::Hover: if ((e->val = 1)) { thunk=1; } break;
             }
-        } else {
-            if (e->evtype == Event::Hover && e->val) { e->val=0; thunk=1; }
         }
 
         if (thunk) {
             if (FLAGS_input_debug && down) INFO("MouseController::Input ", p.DebugString(), " ", e->box.DebugString());
-            if (!e->CB.Run(p, event, down)) continue;
+            if (!e->CB.Run(p, event, e_hover ? 1 : down)) continue;
 
-            if (1)                         events.total++;
-            if (e->evtype == Event::Hover) events.hover++;
-            else                           events.click++;
+            if (1)       { events.total++; }
+            if (e_hover) { events.hover++; hover.push_back(ForwardIteratorFromReverse(e) - hit.data.begin()); }
+            else         { events.click++; }
             fired++;
 
             if (e->evtype == Event::Drag && down) drag.insert(ForwardIteratorFromReverse(e) - hit.data.begin());
             if (flag) break;
         }
     }
+
     if (event == Mouse::Event::Motion) { for (auto d : drag) if (hit.data[d].CB.Run(p, event, down)) fired++; }
     else if (!down && but1)            { for (auto d : drag) if (hit.data[d].CB.Run(p, event, down)) fired++; drag.clear(); }
+
     if (FLAGS_input_debug && down) INFO("MouseController::Input ", screen->mouse.DebugString(), " fired=", fired, ", hitboxes=", hit.data.size());
     return fired;
 }

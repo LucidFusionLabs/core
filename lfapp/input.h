@@ -145,6 +145,7 @@ struct MouseController {
 
     IterableFreeListVector<HitBox> hit;
     unordered_set<int> drag;
+    vector<int> hover;
     Events events;
     bool active=0;
     virtual ~MouseController() { Clear(); }
