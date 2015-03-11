@@ -722,7 +722,7 @@ int Input::MouseEventDispatch(InputEvent::Id event, const point &p, int down) {
 int MouseController::Input(InputEvent::Id event, const point &p, int down, int flag) {
     int fired = 0;
     bool but1 = event == Mouse::Event::Button1;
-    for (auto e = hit.data.begin(); e != hit.data.end(); ++e) {
+    for (auto e = hit.data.rbegin(); e != hit.data.rend(); ++e) {
         if (e->deleted || !e->active ||
             (!down && e->evtype == Event::Click && e->CB.type != Callback::CB_COORD)) continue;
 
@@ -747,7 +747,7 @@ int MouseController::Input(InputEvent::Id event, const point &p, int down, int f
             else                           events.click++;
             fired++;
 
-            if (e->evtype == Event::Drag && down) drag.insert(e - hit.data.begin());
+            if (e->evtype == Event::Drag && down) drag.insert(ForwardIteratorFromReverse(e) - hit.data.begin());
             if (flag) break;
         }
     }

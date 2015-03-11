@@ -139,20 +139,20 @@ int KeyboardGUI::ReadHistory(const string &dir, const string &name) {
 
 void TextGUI::Line::Erase(int x, int l) {
     if (!(l = max(0, min(Size() - x, l)))) return;
-    bool syntax_processing = parent->syntax_processing;
-    String16 text = syntax_processing ? BoxRun(&data->glyphs[x], l).Text16() : String16();
-    LineSyntaxProcessor<short> update(syntax_processing ? this : 0, x, String16Piece(text), l);
-    if (syntax_processing) update.ProcessUpdate();
+    bool token_processing = parent->token_processing;
+    String16 text = token_processing ? BoxRun(&data->glyphs[x], l).Text16() : String16();
+    LineTokenProcessor<short> update(token_processing ? this : 0, x, String16Piece(text), l);
+    if (token_processing) update.ProcessUpdate();
     data->glyphs.Erase(x, l, true);
     data->flow.p.x = BackOrDefault(data->glyphs.data).box.right();
     if (update.nw) update.ni -= l;
-    if (syntax_processing) update.ProcessResult();
+    if (token_processing) update.ProcessResult();
 }
 
 template <class X> void TextGUI::Line::InsertTextAt(int x, const StringPieceT<X> &v, int attr) {
-    bool syntax_processing = parent->syntax_processing;
-    LineSyntaxProcessor<X> update(syntax_processing ? this : 0, x, v, 0);
-    if (syntax_processing) update.ProcessResult();
+    bool token_processing = parent->token_processing;
+    LineTokenProcessor<X> update(token_processing ? this : 0, x, v, 0);
+    if (token_processing) update.ProcessResult();
     if (x == Size()) data->flow.AppendText(v, attr);
     else {
         BoxArray b;
@@ -160,22 +160,22 @@ template <class X> void TextGUI::Line::InsertTextAt(int x, const StringPieceT<X>
         data->glyphs.InsertAt(x, b.data);
         if (update.nw) update.ni += v.len;
     }
-    if (syntax_processing) update.ProcessUpdate();
+    if (token_processing) update.ProcessUpdate();
 }
 
 template <class X> void TextGUI::Line::OverwriteTextAt(int x, const StringPieceT<X> &v, int attr) {
     // XXX user character BoxRun iterators
-    bool syntax_processing = parent->syntax_processing;
-    basic_string<X> text = syntax_processing ? BoxRun(&data->glyphs[x], v.len).Text<X>(0, v.len) : basic_string<X>();
-    LineSyntaxProcessor<X> update(syntax_processing ? this : 0, x, StringPieceT<X>(text), v.len);
-    if (syntax_processing) {
+    bool token_processing = parent->token_processing;
+    basic_string<X> text = token_processing ? BoxRun(&data->glyphs[x], v.len).Text<X>(0, v.len) : basic_string<X>();
+    LineTokenProcessor<X> update(token_processing ? this : 0, x, StringPieceT<X>(text), v.len);
+    if (token_processing) {
         update.FindBoundaryConditions(v, &update.osw, &update.oew);
         update.ProcessUpdate();
     }
     BoxArray b;
     parent->font->Encode(v, Box(data->glyphs.Position(x),0,0), &b, Font::Flag::AssignFlowX, attr);
     data->glyphs.OverwriteAt(x, b.data);
-    if (syntax_processing) {
+    if (token_processing) {
         update.PrepareOverwrite(v);
         update.ProcessUpdate();
     }
@@ -219,7 +219,7 @@ point TextGUI::Line::Draw(point pos, int relayout_width, int g_offset, int g_len
 }
 
 template <class X>
-TextGUI::LineSyntaxProcessor<X>::LineSyntaxProcessor(TextGUI::Line *l, int o, const StringPieceT<X> &V, int Erase)
+TextGUI::LineTokenProcessor<X>::LineTokenProcessor(TextGUI::Line *l, int o, const StringPieceT<X> &V, int Erase)
     : L(l), x(o), size(L?L->Size():0), erase(Erase) {
     if (!L) return;
     const BoxArray &glyphs = L->data->glyphs;
@@ -234,29 +234,29 @@ TextGUI::LineSyntaxProcessor<X>::LineSyntaxProcessor(TextGUI::Line *l, int o, co
     if ((pw && nw) || (nw && ew)) FindNext(glyphs);
 }
 
-template <class X> void TextGUI::LineSyntaxProcessor<X>::ProcessUpdate() {
+template <class X> void TextGUI::LineTokenProcessor<X>::ProcessUpdate() {
     int tokens = 0;
-    const BoxArray &glyphs = L->data->glyphs;
     StringWordIterT<X> word(v.buf, v.len, isspace, 0, StringWordIter::Flag::InPlace);
-    for (const X *w = word.Next(); w; w = word.Next(), tokens++)  {
+    for (const X *w = word.Next(); w; w = word.Next(), tokens++) {
         int start_offset = w - v.buf, end_offset = start_offset + word.wordlen;
         bool first = start_offset == 0, last = end_offset == v.len;
-        if (first && last && pw && nw) L->parent->UpdateSyntax(L, BoxRun(&glyphs[pi], ni-pi+1),                             erase ? -1 : 1);
-        else if (first && pw)          L->parent->UpdateSyntax(L, BoxRun(&glyphs[pi], x+end_offset-pi),                     erase ? -2 : 2);
-        else if (last && nw)           L->parent->UpdateSyntax(L, BoxRun(&glyphs[x+start_offset], ni-x-start_offset+1),     erase ? -3 : 3);
-        else                           L->parent->UpdateSyntax(L, BoxRun(&glyphs[x+start_offset], end_offset-start_offset), erase ? -4 : 4);
+        if (first && last && pw && nw) L->parent->UpdateToken(L, pi, ni-pi+1,                             erase ? -1 : 1);
+        else if (first && pw)          L->parent->UpdateToken(L, pi, x+end_offset-pi,                     erase ? -2 : 2);
+        else if (last && nw)           L->parent->UpdateToken(L, x+start_offset, ni-x-start_offset+1,     erase ? -3 : 3);
+        else                           L->parent->UpdateToken(L, x+start_offset, end_offset-start_offset, erase ? -4 : 4);
     }
     if ((!tokens || overwrite) && v.len) {
-        if (pw && !sw && osw) { FindPrev(glyphs); L->parent->UpdateSyntax(L, BoxRun(&glyphs[pi], x-pi),              erase ? -5 : 5); }
-        if (nw && !ew && oew) { FindNext(glyphs); L->parent->UpdateSyntax(L, BoxRun(&glyphs[x+v.len], ni-x-v.len+1), erase ? -6 : 6); }
+        const BoxArray &glyphs = L->data->glyphs;
+        if (pw && !sw && osw) { FindPrev(glyphs); L->parent->UpdateToken(L, pi, x-pi,              erase ? -5 : 5); }
+        if (nw && !ew && oew) { FindNext(glyphs); L->parent->UpdateToken(L, x+v.len, ni-x-v.len+1, erase ? -6 : 6); }
     }
 }
 
-template <class X> void TextGUI::LineSyntaxProcessor<X>::ProcessResult() {
+template <class X> void TextGUI::LineTokenProcessor<X>::ProcessResult() {
     const BoxArray &glyphs = L->data->glyphs;
-    if      (pw && nw) L->parent->UpdateSyntax(L, BoxRun(&glyphs[pi], ni - pi + 1), erase ? 7 : -7);
-    else if (pw && sw) L->parent->UpdateSyntax(L, BoxRun(&glyphs[pi], x  - pi),     erase ? 8 : -8);
-    else if (nw && ew) L->parent->UpdateSyntax(L, BoxRun(&glyphs[x],  ni - x + 1),  erase ? 9 : -9);
+    if      (pw && nw) L->parent->UpdateToken(L, pi, ni - pi + 1, erase ? 7 : -7);
+    else if (pw && sw) L->parent->UpdateToken(L, pi, x  - pi,     erase ? 8 : -8);
+    else if (nw && ew) L->parent->UpdateToken(L, x,  ni - x + 1,  erase ? 9 : -9);
 }
 
 TextGUI::LinesFrameBuffer *TextGUI::LinesFrameBuffer::Attach(TextGUI::LinesFrameBuffer **last_fb) {
@@ -345,13 +345,19 @@ void TextGUI::DrawCursor(point p) {
     }
 }
 
-void TextGUI::UpdateSyntax(Line*, const BoxRun &word, int update_type) {
+void TextGUI::UpdateToken(Line *L, int word_offset, int word_len, int update_type) {
     int url_offset = -1;
-    string text = word.Text();
+    const BoxArray &glyphs = L->data->glyphs;
+    string text = BoxRun(&glyphs[word_offset], word_len).Text();
     if      (PrefixMatch(text, "http://"))  url_offset = 7;
     else if (PrefixMatch(text, "https://")) url_offset = 8;
     if (url_offset >= 0) {
-        printf("%s url '%s'\n", update_type >= 0 ? "Add" : "Del", text.c_str());
+        int lx = glyphs[word_offset].box.x, rx = glyphs[word_offset+word_len-1].box.right();
+        Box box(lx, L->p.y - font->height, rx - lx, font->height);
+        if (update_type < 0) L->data->links.erase(word_offset);
+        else if (Link *link = new Link(&L->parent->mouse_gui, box, text)) {
+            L->data->links[word_offset] = shared_ptr<Link>(link);
+        }
     }
 }
 
@@ -498,7 +504,8 @@ void TextArea::DrawSelection() {
     selection.box.Draw();
 }
 
-void TextArea::ClickCB(int button, int x, int y, int down) {
+void TextArea::ClickCB(int button, int, int, int down) {
+    point p = screen->mouse - mouse_gui.box.TopLeft();
     LinesFrameBuffer *fb = GetFrameBuffer();
     Selection *s = &selection;
     if (!(s->changing = down)) {
@@ -509,8 +516,8 @@ void TextArea::ClickCB(int button, int x, int y, int down) {
     }
 
     int scp = s->changing_previously, fh = font->height, h = fb->Height();
-    if (scp) GetGlyphFromCoords((s->end.click = point(line_left+x,y)), &s->end);
-    else   { GetGlyphFromCoords((s->beg.click = point(line_left+x,y)), &s->beg); s->end = s->beg; }
+    if (scp) GetGlyphFromCoords((s->end.click = point(line_left+p.x, p.y)), &s->end);
+    else   { GetGlyphFromCoords((s->beg.click = point(line_left+p.x, p.y)), &s->beg); s->end = s->beg; }
 
     bool swap = s->end < s->beg;
     Box gb = swap ? s->end.glyph : s->beg.glyph;

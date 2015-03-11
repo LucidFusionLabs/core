@@ -112,6 +112,8 @@ template <class I, class T> I LesserBound(I first, I last, const T& v, bool stri
     return (!strict && v < *i) ? i : --i;
 }
 
+template <typename RI> typename RI::iterator_type ForwardIteratorFromReverse(RI ri) { return (++ri).base(); }
+
 template <typename X> bool Contains(const X &c, const typename X::key_type &k) { return c.find(k) != c.end(); }
 template <typename X> void EnsureSize(X &x, int n) { if (x.size() < n) x.resize(n); }
 
@@ -314,7 +316,7 @@ template <class X> struct TopN {
     void Insert(const X &v) {
         if (data.size() < num) data.insert(v);
         else if (v < *data.rbegin()) {
-            data.erase((++data.rbegin()).base());
+            data.erase(ForwardIteratorFromReverse(data.rbegin()));
             data.insert(v);
         }
     }
