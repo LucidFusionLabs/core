@@ -68,8 +68,8 @@ struct GUI : public MouseController {
 struct Widget {
     struct Interface {
         GUI *gui;
-        int drawbox_ind=1;
         vector<int> hitbox;
+        int drawbox_ind=-1;
         bool del_hitbox=0;
         virtual ~Interface() { if (del_hitbox) DelHitBox(); }
         Interface(GUI *g) : gui(g) {}
@@ -91,20 +91,23 @@ struct Widget {
         Window(GUI *Gui, int X, int Y, int W, int H) : Interface(Gui) { x=X; y=Y; w=W; h=H; }
     };
     struct Button : public Interface {
-        Box box; Drawable *drawable=0;
-        Font *font=0; string text; point textsize;
+        Box box;
+        Font *font=0;
+        string text;
+        point textsize;
+        Color *outline=0;
+        Drawable *drawable=0;
         MouseController::Callback cb;
-        bool init=0, hover=0; int decay=0;
-        Color *outline=0; string link;
+        bool init=0, hover=0;
+        int decay=0;
         Button() : Interface(0) {}
         Button(GUI *G, Drawable *D, Font *F, const string &T, const MouseController::Callback &CB)
-            : Interface(G), drawable(D), font(F), text(T), cb(CB), init(1) { if (F && T.size()) SetText(T); }
+            : Interface(G), font(F), text(T), drawable(D), cb(CB), init(1) { if (F && T.size()) SetText(T); }
 
         void SetBox(const Box &b) { box=b; hitbox.clear(); AddClickBox(box, cb); init=0; }
         void SetText(const string &t) { text = t; Box w; font->Size(text, &w); textsize = w.Dimension(); }
         void EnableHover() { AddHoverBox(box, MouseController::CB(bind(&Button::ToggleHover, this))); }
         void ToggleHover() { hover = !hover; }
-        void Visit() { SystemBrowser::Open(link.c_str()); }
 
         void Layout(Flow *flow, const point &d) { box.SetDimension(d); Layout(flow); }
         void Layout(Flow *flow) { 
@@ -225,13 +228,21 @@ struct KeyboardGUI : public KeyboardController {
 
 struct TextGUI : public KeyboardGUI {
     struct Lines;
-    struct Link {
-        Widget::Button widget;
+    struct Link : public Widget::Interface {
+        Box box;
+        string link;
+        TextGUI *parent=0;
         DOM::Attr image_src;
         DOM::HTMLImageElement image;
-        Link(GUI *G, const Box &b, const string &url) :
-            widget(G, 0, 0, "", MouseController::CB(bind(&Widget::Button::Visit, &widget))), image_src(0), image(0)
-        { widget.SetBox(b); widget.link=url; widget.del_hitbox=true; widget.EnableHover(); }
+        Link(TextGUI *P, GUI *G, const Box &b, const string &U)
+            : Interface(G), box(b), link(U), parent(P), image_src(0), image(0) {
+            AddClickBox(b, MouseController::CB(bind(&Link::Visit, this)));
+            AddHoverBox(b, MouseController::CB(bind(&Link::Hover, this)));
+            del_hitbox = true;
+        }
+        ~Link() { if (parent->hover_link == this) parent->hover_link = 0; }
+        void Hover() { parent->hover_link = parent->hover_link ? 0 : this; }
+        void Visit() { SystemBrowser::Open(link.c_str()); }
     };
     typedef function<void(Link*)> LinkCB;
     struct LineData {
@@ -373,6 +384,9 @@ struct TextGUI : public KeyboardGUI {
     Color cmd_color=Color::white, selection_color=Color(Color::grey70, 0.5);
     bool deactivate_on_enter=0, token_processing=0, insert_mode=1;
     int start_line=0, end_line=0, start_line_adjust=0, skip_last_lines=0;
+    LinkCB new_link_cb, hover_link_cb;
+    Link *hover_link=0;
+
     TextGUI(Window *W, Font *F) : KeyboardGUI(W, F), mouse_gui(W), font(F)
     { cmd_line.Init(this,0); cmd_line.GetAttrId(Drawable::Attr(F)); }
 
@@ -413,7 +427,6 @@ struct TextArea : public TextGUI {
     int line_left=0, end_line_adjust=0, start_line_cutoff=0, end_line_cutoff=0;
     int scroll_inc=10, scrolled_lines=0;
     float v_scrolled=0, h_scrolled=0, last_v_scrolled=0, last_h_scrolled=0;
-    LinkCB new_link_cb, hover_link_cb;
 
     TextArea(Window *W, Font *F, int S=200) : TextGUI(W, F), line(this, S) { mouse_gui.fb=&line_fb; }
     virtual ~TextArea() {}

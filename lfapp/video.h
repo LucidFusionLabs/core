@@ -264,8 +264,10 @@ struct Box {
     Box Intersect(const Box &w) const { Box ret(max(x, w.x), max(y, w.y), min(right(), w.right()), min(top(), w.top())); ret.w -= ret.x; ret.h -= ret.y; return (ret.w >= 0 && ret.h >= 0) ? ret : Box(); }
     Box BottomLeft(const Box &sub) const { return Box(x+sub.x, y+sub.y,           sub.w, sub.h); }
     Box    TopLeft(const Box &sub) const { return Box(x+sub.x, top()-sub.y-sub.h, sub.w, sub.h); }
-    point  TopLeft () const { return point(x,       top()); }
-    point  TopRight() const { return point(right(), top()); }
+    point  TopLeft   () const { return point(x,       top()); }
+    point  TopRight  () const { return point(right(), top()); }
+    point BottomLeft () const { return point(x,       y);     }
+    point BottomRight() const { return point(right(), y);     }
     void Draw(const float *texcoord=0) const;
     void DrawCrimped(const float *texcoord, int orientation, float scrollX=0, float scrollY=0) const;
 

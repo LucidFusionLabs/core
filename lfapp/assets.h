@@ -223,7 +223,7 @@ struct Assets : public Module {
     int Init();
 };
 
-void glLine(float x1, float y1, float x2, float y2, const Color *color);
+void glLine(const point &p1, const point &p2, const Color *color);
 void glAxis(Asset*, Entity*);
 void glRoom(Asset*, Entity*);
 void glIntersect(int x, int y, Color *c);
