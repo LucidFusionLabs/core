@@ -480,7 +480,9 @@ void TextArea::Draw(const Box &b, bool draw_cursor) {
     if (draw_cursor) TextGUI::Draw(Box(b.x, b.y, b.w, font->height));
     if (selection.changing) DrawSelection();
     if (hover_link) {
-        point p = line_fb.BackPlus(hover_link->box.BottomLeft());
+        int fb_h = line_fb.Height();
+        point p = hover_link->box.BottomLeft();
+        p.y = RingIndex::Wrap(p.y + line_fb.scroll.y * fb_h, fb_h);
         glLine(p, point(hover_link->box.BottomRight().x, p.y), &Color::white);
         if (hover_link_cb) hover_link_cb(hover_link);
     }
