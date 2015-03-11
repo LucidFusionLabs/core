@@ -32,7 +32,6 @@ struct GUI : public MouseController {
     { if (parent) parent->mouse_gui.push_back(this); }
     virtual ~GUI() { if (parent) VectorEraseByValue(&parent->mouse_gui, this); }
 
-    point MousePosition() const { return screen->mouse - box.TopLeft(); }
     BoxArray *Reset() { Clear(); return &child_box; }
     void Clear() { child_box.Clear(); MouseController::Clear(); }
     void UpdateBox(const Box &b, int draw_box_ind, int input_box_ind) {
@@ -48,6 +47,7 @@ struct GUI : public MouseController {
         if (input_box_ind >= 0) hit           [input_box_ind].box.y = y;
     }
 
+    virtual point MousePosition() const { return screen->mouse - box.TopLeft(); }
     virtual void SetLayoutDirty() { child_box.Clear(); }
     virtual void Layout(const Box &b) { box=b; Layout(); }
     virtual void Layout() {}
@@ -100,6 +100,7 @@ struct Widget {
         Button(GUI *G, Drawable *D, Font *F, const string &T, const MouseController::Callback &CB)
             : Interface(G), drawable(D), font(F), text(T), cb(CB), init(1) { if (F && T.size()) SetText(T); }
 
+        void SetBox(const Box &b) { box=b; hitbox.clear(); AddClickBox(box, cb); init=0; }
         void SetText(const string &t) { text = t; Box w; font->Size(text, &w); textsize = w.Dimension(); }
         void EnableHover() { AddHoverBox(box, MouseController::CB(bind(&Button::ToggleHover, this))); }
         void ToggleHover() { hover = !hover; }
@@ -116,9 +117,7 @@ struct Widget {
             LayoutComplete(flow, b);
         }
         void LayoutComplete(Flow *flow, const Box &b) {
-            box = b;
-            hitbox.clear();
-            AddClickBox(box, cb);
+            SetBox(b);
             if (outline) {
                 flow->SetFont(0);
                 flow->SetFGColor(outline);
@@ -130,7 +129,6 @@ struct Widget {
             flow->p = box.Position() + point(Box(0, 0, box.w, box.h).centerX(textsize.x), 0);
             flow->AppendText(text);
             flow->p = save_p;
-            init = 0;
         }
     };
     struct Scrollbar : public Interface {
@@ -231,15 +229,16 @@ struct TextGUI : public KeyboardGUI {
         Widget::Button widget;
         DOM::Attr image_src;
         DOM::HTMLImageElement image;
-        Link(GUI *G, const string &url) : widget(G, 0, 0, "", MouseController::CB(bind(&Widget::Button::Visit, &widget))),
-        image_src(0), image(0) { widget.link=url; widget.del_hitbox=true; widget.EnableHover(); }
+        Link(GUI *G, const Box &b, const string &url) :
+            widget(G, 0, 0, "", MouseController::CB(bind(&Widget::Button::Visit, &widget))), image_src(0), image(0)
+        { widget.SetBox(b); widget.link=url; widget.del_hitbox=true; widget.EnableHover(); }
     };
     typedef function<void(Link*)> LinkCB;
     struct LineData {
         Box box;
         Flow flow;
         BoxArray glyphs;
-        vector<shared_ptr<Link> > links;
+        unordered_map<int, shared_ptr<Link> > links;
     };
     struct Line {
         point p;
@@ -274,12 +273,12 @@ struct TextGUI : public KeyboardGUI {
         void Layout(Box win, bool flush=0);
         point Draw(point pos, int relayout_width=-1, int g_offset=0, int g_len=-1);
     };
-    template <class X> struct LineSyntaxProcessor {
+    template <class X> struct LineTokenProcessor {
         Line *L;
         bool sw=0, ew=0, pw=0, nw=0, overwrite=0, osw=1, oew=1;
         int x, size, erase, pi=0, ni=0;
         StringPieceT<X> v;
-        LineSyntaxProcessor(Line *l, int o, const StringPieceT<X> &V, int Erase);
+        LineTokenProcessor(Line *l, int o, const StringPieceT<X> &V, int Erase);
         void LoadV(const StringPieceT<X> &V) { FindBoundaryConditions((v=V), &sw, &ew); }
         void FindPrev(const BoxArray &g) { const Drawable *p; while (pi > 0      && (p = g[pi-1].drawable) && !isspace(p->Id())) pi--; }
         void FindNext(const BoxArray &g) { const Drawable *n; while (ni < size-1 && (n = g[ni+1].drawable) && !isspace(n->Id())) ni++; }
@@ -329,6 +328,11 @@ struct TextGUI : public KeyboardGUI {
         static point PaintCB(Line *l, point lp, const Box &b) { return Paint(l, lp, b); }
         static point Paint  (Line *l, point lp, const Box &b, int offset=0, int len=-1);
     };
+    struct LinesGUI : public GUI {
+        LinesFrameBuffer *fb;
+        LinesGUI(Window *W=0, const Box &B=Box(), LinesFrameBuffer *FB=0) : GUI(W, B), fb(FB) {}
+        point MousePosition() const { return fb->BackPlus(screen->mouse - box.TopLeft()); }
+    };
     struct LineUpdate {
         enum { PushBack=1, PushFront=2, DontUpdate=4 }; 
         Line *v; LinesFrameBuffer *fb; int flag, o;
@@ -358,6 +362,7 @@ struct TextGUI : public KeyboardGUI {
         Box3 box;
     };
 
+    LinesGUI mouse_gui;
     Font *font;
     Flow::Layout layout;
     Cursor cursor;
@@ -366,9 +371,9 @@ struct TextGUI : public KeyboardGUI {
     LinesFrameBuffer cmd_fb;
     string cmd_prefix="> ";
     Color cmd_color=Color::white, selection_color=Color(Color::grey70, 0.5);
-    bool deactivate_on_enter=0, syntax_processing=0, insert_mode=1;
+    bool deactivate_on_enter=0, token_processing=0, insert_mode=1;
     int start_line=0, end_line=0, start_line_adjust=0, skip_last_lines=0;
-    TextGUI(Window *W, Font *F) : KeyboardGUI(W, F), font(F)
+    TextGUI(Window *W, Font *F) : KeyboardGUI(W, F), mouse_gui(W), font(F)
     { cmd_line.Init(this,0); cmd_line.GetAttrId(Drawable::Attr(F)); }
 
     virtual ~TextGUI() {}
@@ -396,13 +401,12 @@ struct TextGUI : public KeyboardGUI {
     }
     virtual void Draw(const Box &b);
     virtual void DrawCursor(point p);
-    virtual void UpdateSyntax(Line*, const BoxRun &word, int update_type);
+    virtual void UpdateToken(Line*, int word_offset, int word_len, int update_type);
 };
 
 struct TextArea : public TextGUI {
     Lines line;
     LinesFrameBuffer line_fb;
-    GUI mouse_gui;
     Time write_last=0;
     const Border *clip=0;
     bool wrap_lines=1, write_timestamp=0, write_newline=1, reverse_line_fb=0;
@@ -411,7 +415,7 @@ struct TextArea : public TextGUI {
     float v_scrolled=0, h_scrolled=0, last_v_scrolled=0, last_h_scrolled=0;
     LinkCB new_link_cb, hover_link_cb;
 
-    TextArea(Window *W, Font *F, int S=200) : TextGUI(W, F), line(this, S), mouse_gui(W) {}
+    TextArea(Window *W, Font *F, int S=200) : TextGUI(W, F), line(this, S) { mouse_gui.fb=&line_fb; }
     virtual ~TextArea() {}
 
     /// Write() is thread-safe.
@@ -529,7 +533,7 @@ struct Terminal : public TextArea, public Drawable::AttrSource {
         SetColors(Singleton<StandardVGAColors>::Get());
         cursor.attr = default_cursor_attr;
         cursor.type = Cursor::Block;
-        syntax_processing = 1;
+        token_processing = 1;
         cmd_prefix = "";
     }
     virtual ~Terminal() {}
