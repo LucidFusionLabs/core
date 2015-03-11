@@ -608,9 +608,11 @@ struct Terminal : public TextArea, public Drawable::AttrSource {
 struct Console : public TextArea {
     string startcmd;
     double screenPercent=.4;
-    Color color=Color(25,60,130,120);
+    Callback animating_cb;
     int animTime=333; Time animBegin=0;
     bool animating=0, drawing=0, bottom_or_top=0, blend=1, ran_startcmd=0;
+    Color color=Color(25,60,130,120);
+
     Console(Window *W, Font *F) : TextArea(W,F)
     { line_fb.wrap=write_timestamp=1; SetToggleKey(Key::Backquote); }
 
@@ -619,33 +621,8 @@ struct Console : public TextArea {
     virtual void Run(string in) { app->shell.Run(in); }
     virtual void PageUp  () { TextArea::PageDown(); }
     virtual void PageDown() { TextArea::PageUp(); }
-    virtual bool Toggle() {
-        if (!TextGUI::Toggle()) return false;
-        Time elapsed = Now()-animBegin;
-        animBegin = Now() - (elapsed<animTime ? animTime-elapsed : 0);
-        return true;
-    }
-    virtual void Draw() {
-        if (!ran_startcmd && (ran_startcmd = 1)) if (startcmd.size()) Run(startcmd);
-
-        drawing = 1;
-        Time now=Now(), elapsed;
-        int h = active ? (int)(screen->height*screenPercent) : 0;
-        if ((animating = (elapsed=now-animBegin) < animTime)) {
-            if (active) h = (int)(screen->height*(  (double)elapsed/animTime)*screenPercent);
-            else        h = (int)(screen->height*(1-(double)elapsed/animTime)*screenPercent);
-        } else if (!active) { drawing = 0; return; }
-        
-        screen->gd->FillColor(color);
-        if (blend) screen->gd->EnableBlend(); 
-        else       screen->gd->DisableBlend();
-
-        int y = bottom_or_top ? 0 : screen->height-h;
-        Box(0, y, screen->width, h).Draw();
-
-        screen->gd->SetColor(Color::white);
-        TextArea::Draw(Box(0, y, screen->width, h), true);
-    }
+    virtual bool Toggle();
+    virtual void Draw();
     int WriteHistory(const string &dir, const string &name)
     { return KeyboardGUI::WriteHistory(dir, name, startcmd); }
 };
