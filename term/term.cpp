@@ -33,11 +33,6 @@ Shader warpershader;
 AnyBoolSet effects_mode;
 Browser *image_browser;
 
-void UpdateTargetFPS() {
-    int target_fps = effects_mode.Get() ? FLAGS_peak_fps : 0;
-    if (target_fps != FLAGS_target_fps) app->scheduler.UpdateTargetFPS(target_fps);
-}
-
 void MyNewLinkCB(TextArea::Link *link) {
     string image_url = link->link;
     if (!FileSuffix::Image(image_url)) {
@@ -93,6 +88,12 @@ struct MyTerminalWindow {
         terminal->Draw(screen->Box(), false);
         terminal->active = true;
     }
+    void UpdateTargetFPS() {
+        bool custom_shader = activeshader != &app->video.shader_default;
+        effects_mode.Set(custom_shader || screen->console->animating);
+        int target_fps = effects_mode.Get() ? FLAGS_peak_fps : 0;
+        if (target_fps != FLAGS_target_fps) app->scheduler.UpdateTargetFPS(target_fps);
+    }
 };
 
 int Frame(Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample, int flag) {
@@ -114,14 +115,15 @@ void SetFontSize(int n) {
     screen->Reshape(tw->terminal->font->fixed_width * tw->terminal->term_width,
                     tw->terminal->font->height      * tw->terminal->term_height);
 }
+void MyConsoleAnimating(Window *W) { 
+    ((MyTerminalWindow*)W->user1)->UpdateTargetFPS();
+    if (!screen->console->animating) {
+        if (screen->console->active) app->scheduler.AddWaitForeverKeyboard();
+        else                         app->scheduler.DelWaitForeverKeyboard();
+    }
+}
 void MyIncreaseFontCmd(const vector<string>&) { SetFontSize(((MyTerminalWindow*)screen->user1)->font_size + 1); }
 void MyDecreaseFontCmd(const vector<string>&) { SetFontSize(((MyTerminalWindow*)screen->user1)->font_size - 1); }
-void MyConsole(const vector<string>&) {
-    MyTerminalWindow *tw = (MyTerminalWindow*)screen->user1;
-    tw->effects_mode.Set(true);
-    UpdateTargetFPS();
-    app->shell.console(vector<string>());
-}
 void MyColorsCmd(const vector<string> &arg) {
     string colors_name = arg.size() ? arg[0] : "";
     MyTerminalWindow *tw = (MyTerminalWindow*)screen->user1;
@@ -133,26 +135,13 @@ void MyShaderCmd(const vector<string> &arg) {
     MyTerminalWindow *tw = (MyTerminalWindow*)screen->user1;
     if (shader_name == "warper") tw->activeshader = &warpershader;
     else                         tw->activeshader = &app->video.shader_default;
-#if 0
-    tw->effects_mode.Set(custom_shader || W->console->animating);
-    UpdateTargetFPS();
-#endif
-}
-void MyScrollRegionCmd(const vector<string> &arg) {
-    if (arg.size() < 2) { ERROR("scroll_region b e"); return; }
-    INFO("set scroll region ", arg[0], " ", arg[1]);
-    MyTerminalWindow *tw = (MyTerminalWindow*)screen->user1;
-    tw->terminal->SetScrollRegion(atoi(arg[0]), atoi(arg[1]), true);
-}
-void MyTermDebugCmd(const vector<string> &arg) {
-    string out;
-    MyTerminalWindow *tw = (MyTerminalWindow*)screen->user1;
-    for (int i=0; i<tw->terminal->term_height; i++) {
-        TextGUI::Line *l = &tw->terminal->line[-1-i];
-        StrAppend(&out, -1-i, " ", l->p.DebugString(), " ", l->Text(), "\n");
-    }
+    tw->UpdateTargetFPS();
 }
 
+void MyWindowOpen() {
+    ((MyTerminalWindow*)screen->user1)->Open();
+    screen->console->animating_cb = bind(&MyConsoleAnimating, screen);
+}
 void MyWindowInitCB(Window *W) {
     W->width = 80*10;
     W->height = 25*17;
@@ -161,7 +150,7 @@ void MyWindowInitCB(Window *W) {
     W->user1 = new MyTerminalWindow();
     if (app->initialized) {
         screen->InitConsole();
-        ((MyTerminalWindow*)screen->user1)->Open();
+        MyWindowOpen();
     }
 }
 void MyWindowClosedCB() {
@@ -198,13 +187,11 @@ extern "C" int main(int argc, const char *argv[]) {
     app->window_closed_cb = MyWindowClosedCB;
     app->shell.command.push_back(Shell::Command("colors", bind(&MyColorsCmd, _1)));
     app->shell.command.push_back(Shell::Command("shader", bind(&MyShaderCmd, _1)));
-    app->shell.command.push_back(Shell::Command("scroll_region", bind(&MyScrollRegionCmd, _1)));
-    app->shell.command.push_back(Shell::Command("term_debug", bind(&MyTermDebugCmd, _1)));
 
     binds->Add(Bind('=', Key::Modifier::Cmd, Bind::CB(bind(&MyIncreaseFontCmd, vector<string>()))));
     binds->Add(Bind('-', Key::Modifier::Cmd, Bind::CB(bind(&MyDecreaseFontCmd, vector<string>()))));
-    binds->Add(Bind('6', Key::Modifier::Cmd, Bind::CB(bind(&MyConsole,         vector<string>()))));
     binds->Add(Bind('n', Key::Modifier::Cmd, Bind::CB(bind(&Application::CreateNewWindow, app))));
+    binds->Add(Bind('6', Key::Modifier::Cmd, Bind::CB(bind([&](){ screen->console->Toggle(); }))));
 
     string lfapp_vertex_shader = LocalFile::FileContents(StrCat(ASSETS_DIR, "lfapp_vertex.glsl"));
     string warper_shader = LocalFile::FileContents(StrCat(ASSETS_DIR, "warper.glsl"));
@@ -212,9 +199,8 @@ extern "C" int main(int argc, const char *argv[]) {
                    "#define TEX2D\n#define VERTEXCOLOR\n", &warpershader);
 
     image_browser = new Browser();
+    MyWindowOpen();
     MyTerminalWindow *tw = (MyTerminalWindow*)screen->user1;
-    tw->Open();
-
     INFO("Starting Terminal ", FLAGS_default_font, " (w=", tw->terminal->font->fixed_width,
                                                    ", h=", tw->terminal->font->height, ")");
 

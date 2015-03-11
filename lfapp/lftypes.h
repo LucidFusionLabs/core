@@ -516,7 +516,7 @@ struct BloomFilter {
 struct RingIndex {
     int size, back, count, total;
     RingIndex(int S=0) : size(S), back(0), count(0), total(0) {}
-    static int Wrap(int i, int s) { if ((i = i % s) < 0) i += s; return i; }
+    static int Wrap(int i, int s) { if ((i = s ? (i % s) : 0) < 0) i += s; return i; }
     static int WrapOver(int i, int s) { return i == s ? i : Wrap(i, s); }
     int Back() const { return Index(-1); }
     int Front() const { return Index(-count); }

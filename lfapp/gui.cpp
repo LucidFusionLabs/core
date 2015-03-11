@@ -480,7 +480,8 @@ void TextArea::Draw(const Box &b, bool draw_cursor) {
     if (draw_cursor) TextGUI::Draw(Box(b.x, b.y, b.w, font->height));
     if (selection.changing) DrawSelection();
     if (hover_link) {
-        glLine(hover_link->box.BottomLeft(), hover_link->box.BottomRight(), &Color::white);
+        point p = line_fb.BackPlus(hover_link->box.BottomLeft());
+        glLine(p, point(hover_link->box.BottomRight().x, p.y), &Color::white);
         if (hover_link_cb) hover_link_cb(hover_link);
     }
 }
@@ -972,6 +973,45 @@ void Terminal::NewTopline() {
         if (!clip) LineUpdate(line.InsertAt(-term_height, 1, start_line_adjust),
                               GetPrimaryFrameBuffer(), LineUpdate::PushFront);
     } else term_cursor.y = max(1, term_cursor.y-1);
+}
+
+/* Console */
+
+bool Console::Toggle() {
+    if (!TextGUI::Toggle()) return false;
+    bool last_animating = animating;
+    Time now = Now(), elapsed = now - animBegin;
+    animBegin = now - (elapsed < animTime ? animTime - elapsed : 0);
+    animating = (elapsed = now - animBegin) < animTime;
+    if (animating && !last_animating && animating_cb) animating_cb();
+    return true;
+}
+
+void Console::Draw() {
+    if (!ran_startcmd && (ran_startcmd = 1)) if (startcmd.size()) Run(startcmd);
+
+    drawing = 1;
+    Time now=Now(), elapsed;
+    bool last_animating = animating;
+    int h = active ? (int)(screen->height*screenPercent) : 0;
+    if ((animating = (elapsed = now - animBegin) < animTime)) {
+        if (active) h = (int)(screen->height*(  (double)elapsed/animTime)*screenPercent);
+        else        h = (int)(screen->height*(1-(double)elapsed/animTime)*screenPercent);
+    }
+    if (!animating) {
+        if (last_animating && animating_cb) animating_cb();
+        if (!active) { drawing = 0; return; }
+    }
+
+    screen->gd->FillColor(color);
+    if (blend) screen->gd->EnableBlend(); 
+    else       screen->gd->DisableBlend();
+
+    int y = bottom_or_top ? 0 : screen->height-h;
+    Box(0, y, screen->width, h).Draw();
+
+    screen->gd->SetColor(Color::white);
+    TextArea::Draw(Box(0, y, screen->width, h), true);
 }
 
 /* Dialog */

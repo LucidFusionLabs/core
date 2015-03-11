@@ -74,7 +74,7 @@ static const char **osx_argv = 0;
     NSWindow *window = 0;
     NativeWindow *screen = 0;
     NSTimer *timer = 0;
-    CVDisplayLinkRef displayLink;
+    CVDisplayLinkRef displayLink = 0;
     NSPoint prev_mouse_pos;
     bool use_timer = 1, use_display_link = 0, video_thread_init = 0;
     bool cmd_down = 0, ctrl_down = 0, shift_down = 0;
@@ -120,7 +120,7 @@ static const char **osx_argv = 0;
         }
     }
     - (void)stopThread {
-        if (displayLink) CVDisplayLinkStop(displayLink);
+        if (displayLink) { CVDisplayLinkStop(displayLink); displayLink = nil; }
         if (timer) { [timer invalidate]; timer = nil; }
     }
     - (void)stopThreadAndExit { [self stopThread]; exit(0); }
@@ -317,6 +317,11 @@ extern "C" const char *OSXClipboardGet() {
 
 extern "C" void OSXTriggerFrame(void *O) {
     [(GameView*)O performSelectorOnMainThread:@selector(setNeedsDisplay:) withObject:@YES waitUntilDone:NO];
+}
+
+extern "C" void OSXUpdateTargetFPS(void *O) {
+    [(GameView*)O stopThread];
+    [(GameView*)O startThread];
 }
 
 extern "C" void OSXAddWaitForeverMouse(void *O) { [(GameView*)O setFrameOnMouseInput:1]; }
