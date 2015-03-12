@@ -181,6 +181,7 @@ Color Color::grey40(.4, .4, .4);
 Color Color::grey30(.3, .3, .3);
 Color Color::grey20(.2, .2, .2);
 Color Color::grey10(.1, .1, .1);
+Color Color::clear(0.0, 0.0, 0.0, 0.0);
 
 #ifdef LFL_GLES2
 DEFINE_int(request_gles_version, 2, "OpenGLES version");
@@ -1925,6 +1926,32 @@ void Shader::SetUniform3fv(const string &name, int n, const float *v) {}
 void Shader::ActiveTexture(int n) {}
 #endif /* LFL_GLSL_SHADERS */
 
+/* BoxRun */
+
+point BoxRun::Draw(point p, DrawCB cb) {
+    Box w;
+    DrawBackground(p);
+    if (attr->tex) attr->tex->Bind();
+    if (attr->tex || attr->font) screen->gd-> SetColor(attr->fg ? *attr->fg : Color::white);
+    else                         screen->gd->FillColor(attr->fg ? *attr->fg : Color::white);
+    if (attr->font) attr->font->Select();
+    else if (attr->tex) screen->gd->EnableLayering();
+    if (attr->scissor) screen->gd->PushScissor(*attr->scissor + p);
+    for (auto i = data.buf, e = data.end(); i != e; ++i) if (i->drawable) cb(i->drawable, (w = i->box + p));
+    if (attr->scissor) screen->gd->PopScissor();
+    return point(w.x + w.w, w.y);
+}
+
+void BoxRun::DrawBackground(point p, DrawBackgroundCB cb) {
+    if (attr->bg) screen->gd->FillColor(*attr->bg);
+    if (!attr->bg) return;
+    int line_height = line ? line->h : (attr->font ? attr->font->height : 0);
+    if (!line_height) return;
+    HorizontalExtentTracker extent;
+    for (int i=0; i<data.size(); i++) extent.AddDrawableBox(data.data()[i]);
+    cb(extent.Get(-line_height, line_height) + p);
+}
+
 /* Atlas */
 
 bool Atlas::Add(int *x_out, int *y_out, float *texcoord, int w, int h, int max_height) {
@@ -2018,32 +2045,6 @@ void Atlas::SplitIntoPNGFiles(const string &input_png_fn, const map<int, v4> &gl
         CHECK(lf.Opened());
         PngWriter::Write(&lf, glyph);
     }
-}
-
-/* BoxRun */
-
-point BoxRun::Draw(point p, DrawCB cb) {
-    Box w;
-    DrawBackground(p);
-    if (attr->tex) attr->tex->Bind();
-    if (attr->tex || attr->font) screen->gd-> SetColor(attr->fg ? *attr->fg : Color::white);
-    else                         screen->gd->FillColor(attr->fg ? *attr->fg : Color::white);
-    if (attr->font) attr->font->Select();
-    else if (attr->tex) screen->gd->EnableLayering();
-    if (attr->scissor) screen->gd->PushScissor(*attr->scissor + p);
-    for (auto i = data.buf, e = data.end(); i != e; ++i) if (i->drawable) cb(i->drawable, (w = i->box + p));
-    if (attr->scissor) screen->gd->PopScissor();
-    return point(w.x + w.w, w.y);
-}
-
-void BoxRun::DrawBackground(point p, DrawBackgroundCB cb) {
-    if (attr->bg) screen->gd->FillColor(*attr->bg);
-    if (!attr->bg) return;
-    int line_height = line ? line->h : (attr->font ? attr->font->height : 0);
-    if (!line_height) return;
-    HorizontalExtentTracker extent;
-    for (int i=0; i<data.size(); i++) extent.AddDrawableBox(data.data()[i]);
-    cb(extent.Get(-line_height, line_height) + p);
 }
 
 /* Font */

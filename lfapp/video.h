@@ -165,7 +165,7 @@ struct Color {
     static Color add(const Color &l, const Color &r) {
         return Color(Clamp(l.r()+r.r(), 0, 1), Clamp(l.g()+r.g(), 0, 1), Clamp(l.b()+r.b(), 0, 1), Clamp(l.a()+r.a(), 0, 1));
     }
-    static Color white, black, red, green, blue, cyan, yellow, magenta, grey90, grey80, grey70, grey60, grey50, grey40, grey30, grey20, grey10;
+    static Color white, black, red, green, blue, cyan, yellow, magenta, grey90, grey80, grey70, grey60, grey50, grey40, grey30, grey20, grey10, clear;
 };
 
 struct Material {
@@ -869,7 +869,7 @@ struct Font : public FontInterface {
         virtual int Layout(const Drawable::Attr *attr, LFL::Box *out) const {
             float scale = attr->font->scale;
             int center_width = attr->font->mono ? attr->font->max_width : 0;
-            int gw=XY_or_Y(scale, tex.width), gh=XY_or_Y(scale, tex.height), gt=XY_or_Y(scale, top);
+            int gw=RoundXY_or_Y(scale, tex.width), gh=RoundXY_or_Y(scale, tex.height), gt=RoundXY_or_Y(scale, top);
             *out = LFL::Box(center_width ? (center_width - gw) / 2 : 0, (gt ? gt - gh : 0), gw, gh);
             return X_or_Y(center_width, gw);
         }
@@ -890,6 +890,7 @@ struct Font : public FontInterface {
     virtual Glyph *FindOrInsertGlyph(unsigned gind);
     virtual Glyph *LoadGlyph        (unsigned gind) { return &glyph->table[missing_glyph]; }
     void DrawGlyph(int g, const Box &w, int orientation=1) { return FindGlyph(g)->tex.Draw(w); }
+    int GetGlyphWidth(int g) { return RoundXY_or_Y(scale, FindGlyph(g)->tex.width); }
 
     struct Flag {
         enum {
@@ -1248,10 +1249,8 @@ struct Flow {
         for (const X *p = text.data(); !text.Done(p); p += c_bytes) {
             int c = UTF<X>::ReadGlyph(text, p, &c_bytes);
             if (AppendChar(c, attr_id, &PushBack(out->data, Drawable::Box())) == State::NEW_WORD) {
-                for (const X *pi=p; *pi && notspace(*pi); pi += ci_bytes) {
-                    int ci = UTF<X>::ReadGlyph(text, pi, &ci_bytes);
-                    cur_word.len += XY_or_Y(cur_attr.font->scale, cur_attr.font->FindGlyph(ci)->tex.width);
-                }
+                for (const X *pi=p; *pi && notspace(*pi); pi += ci_bytes)
+                    cur_word.len += cur_attr.font->GetGlyphWidth(UTF<X>::ReadGlyph(text, pi, &ci_bytes));
                 AppendChar(c, attr_id, &out->data.back());
             }
         }

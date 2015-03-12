@@ -188,6 +188,7 @@ extern "C" int isinf(double);
 #define X_or_Y(x, y) ((x) ? (x) : (y))
 #define XY_or_Y(x, y) ((x) ? ((x)*(y)) : (y))
 #define Xge0_or_Y(x, y) ((x) >= 0 ? (x) : (y))
+#define RoundXY_or_Y(x, y) ((x) ? RoundF((x)*(y)) : (y))
 #define X_or_Y_or_Z(x, y, z) ((x) ? (x) : ((y) ? (y) : (z)))
 
 #define  INFO(...) ::LFL::Log(::LFApp::Log::Info,  __FILE__, __LINE__, ::LFL::StrCat(__VA_ARGS__))
