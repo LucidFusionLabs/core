@@ -101,18 +101,18 @@ static const char **osx_argv = 0;
             CVDisplayLinkSetCurrentCGDisplayFromOpenGLContext(displayLink, cglContext, cglPixelFormat);
         }
     }
-    - (void)startThread {
+    - (void)startThread:(bool)first {
         if (!LFL::FLAGS_lfapp_input) {
-            INFOf("OSXModule impl = %s", "PassThru");
+            if (first) INFOf("OSXModule impl = %s", "PassThru");
             exit(LFAppMainLoop());
         } else if (LFL::FLAGS_target_fps == 0) {
-            INFOf("OSXModule impl = %s", "WaitForever");
+            if (first) INFOf("OSXModule impl = %s", "WaitForever");
             [self setNeedsDisplay:YES];
         } else if (use_display_link) {
-            INFOf("OSXModule impl = %s", "DisplayLink");
+            if (first) INFOf("OSXModule impl = %s", "DisplayLink");
             CVDisplayLinkStart(displayLink);
         } else if (use_timer) {
-            INFOf("OSXModule impl = %s", "NSTimer");
+            if (first) INFOf("OSXModule impl = %s", "NSTimer");
             timer = [NSTimer timerWithTimeInterval: 1.0/LFL::FLAGS_target_fps
                 target:self selector:@selector(timerFired:) userInfo:nil repeats:YES];
             [[NSRunLoop currentRunLoop] addTimer:timer forMode:NSDefaultRunLoopMode];
@@ -249,7 +249,7 @@ static const char **osx_argv = 0;
         int ret = OSXMain(osx_argc, osx_argv);
         if (ret) exit(ret);
         INFOf("%s", "OSXModule::Main done");
-        [(GameView*)GetNativeWindow()->id startThread];
+        [(GameView*)GetNativeWindow()->id startThread:true];
     }
     - (void)createWindow: (int)w height:(int)h {
         INFOf("OSXVideoModule: AppDelegate::createWindow(%d, %d)", w, h);
@@ -321,7 +321,7 @@ extern "C" void OSXTriggerFrame(void *O) {
 
 extern "C" void OSXUpdateTargetFPS(void *O) {
     [(GameView*)O stopThread];
-    [(GameView*)O startThread];
+    [(GameView*)O startThread:false];
 }
 
 extern "C" void OSXAddWaitForeverMouse(void *O) { [(GameView*)O setFrameOnMouseInput:1]; }

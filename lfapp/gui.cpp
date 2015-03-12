@@ -1012,6 +1012,7 @@ void Console::Draw() {
     int y = bottom_or_top ? 0 : screen->height-h;
     Box(0, y, screen->width, h).Draw();
 
+    screen->gd->ClearColor(Color::clear);
     screen->gd->SetColor(Color::white);
     TextArea::Draw(Box(0, y, screen->width, h), true);
 }
