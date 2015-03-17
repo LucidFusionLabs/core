@@ -21,6 +21,7 @@
 #include "lfapp/network.h"
 #include "lfapp/dom.h"
 #include "lfapp/css.h"
+#include "lfapp/flow.h"
 #include "lfapp/gui.h"
 #include "lfapp/game.h"
 

@@ -19,6 +19,7 @@
 #include "lfapp/lfapp.h"
 #include "lfapp/dom.h"
 #include "lfapp/css.h"
+#include "lfapp/flow.h"
 #include "lfapp/gui.h"
 #include "../crawler/html.h"
 #include "../crawler/document.h"
@@ -144,7 +145,7 @@ void TextGUI::Line::Erase(int x, int l) {
     LineTokenProcessor<short> update(token_processing ? this : 0, x, String16Piece(text), l);
     if (token_processing) update.ProcessUpdate();
     data->glyphs.Erase(x, l, true);
-    data->flow.p.x = BackOrDefault(data->glyphs.data).box.right();
+    data->flow.p.x = data->glyphs.Position(data->glyphs.Size()).x;
     if (update.nw) update.ni -= l;
     if (token_processing) update.ProcessResult();
 }
@@ -164,7 +165,7 @@ template <class X> void TextGUI::Line::InsertTextAt(int x, const StringPieceT<X>
 }
 
 template <class X> void TextGUI::Line::OverwriteTextAt(int x, const StringPieceT<X> &v, int attr) {
-    // XXX user character BoxRun iterators
+    // XXX use character BoxRun iterators
     bool token_processing = parent->token_processing;
     basic_string<X> text = token_processing ? BoxRun(&data->glyphs[x], v.len).Text<X>(0, v.len) : basic_string<X>();
     LineTokenProcessor<X> update(token_processing ? this : 0, x, StringPieceT<X>(text), v.len);

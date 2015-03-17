@@ -29,6 +29,7 @@ extern "C" {
 #include "lfapp/lfapp.h"
 #include "lfapp/dom.h"
 #include "lfapp/css.h"
+#include "lfapp/flow.h"
 #include "lfapp/gui.h"
 
 #include <time.h>
@@ -1868,7 +1869,7 @@ bool FlagMap::Set(const string &k, const string &v) {
     Flag *f = FindOrNull(flagmap, k);
     if (!f) return false;
     INFO("set flag ", k, " = ", v);
-    if (f->Get() != v) dirty = true;
+    if (f->Get() != v) f->override = dirty = true;
     else return true;
     f->Update(v.c_str());
     return true;
@@ -1963,6 +1964,7 @@ int Application::Create(int argc, const char **argv, const char *source_filename
     SetLFAppMainThread();
     progname = argv[0];
     startdir = LocalFile::CurrentDirectory();
+    time_started = Now();
 
 #ifdef __APPLE__
     char rpath[1024];

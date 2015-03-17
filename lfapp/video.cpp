@@ -23,6 +23,7 @@
 #include "lfapp/lfapp.h"
 #include "lfapp/dom.h"
 #include "lfapp/css.h"
+#include "lfapp/flow.h"
 #include "lfapp/gui.h"
 
 #if defined(LFL_GLEW) && !defined(LFL_HEADLESS)
@@ -204,7 +205,6 @@ DEFINE_int(default_font_flag, 0, "Default font flag");
 DEFINE_int(default_missing_glyph, 127, "Default glyph returned for missing requested glyph");
 DEFINE_bool(atlas_dump, false, "Dump .png files for every font");
 DEFINE_string(atlas_font_sizes, "8,16,32,64", "Load font atlas CSV sizes");
-DEFINE_float(atlas_pad_top, 0, "Pad top of each glyph with size*atlas_pad_top pixels");
 DEFINE_int(glyph_table_size, 128, "Load lowest glyph_table_size unicode code points");
 DEFINE_bool(subpixel_fonts, false, "Treat RGB components as subpixels, tripling width");
 DEFINE_bool(font_dont_reopen, false, "Scale atlas to font size instead of re-raster");
@@ -1527,8 +1527,8 @@ void SimpleVideoResampler::CopyPixel(int s_fmt, int d_fmt, const unsigned char *
         case Pixel::RGB32: r = *sp++; g = *sp++; b = *sp++; a=*sp++; break;
         case Pixel::BGR32: r = *sp++; g = *sp++; b = *sp++; a=*sp++; break;
         case Pixel::RGBA:  r = *sp++; g = *sp++; b = *sp++; a=*sp++; break;
-        //   Pixel::GRAY8: r = 255;   g = 255;   b = 255;   a=*sp++; break;
-        case Pixel::GRAY8: r = g = b = a = *sp++; break;
+        case Pixel::GRAY8: r = 255;   g = 255;   b = 255;   a=*sp++; break;
+        // case Pixel::GRAY8: r = g = b = a = *sp++; break;
         case Pixel::LCD: 
             r = (sxb ? 0 : *(sp-1)) / 3.0 + *sp / 3.0 + (          *(sp+1)) / 3.0; sp++; 
             g = (          *(sp-1)) / 3.0 + *sp / 3.0 + (          *(sp+1)) / 3.0; sp++; 
@@ -1944,23 +1944,26 @@ point BoxRun::Draw(point p, DrawCB cb) {
 
 void BoxRun::DrawBackground(point p, DrawBackgroundCB cb) {
     if (attr->bg) screen->gd->FillColor(*attr->bg);
-    if (!attr->bg) return;
+    if (!attr->bg || !data.size()) return;
     int line_height = line ? line->h : (attr->font ? attr->font->height : 0);
     if (!line_height) return;
-    HorizontalExtentTracker extent;
-    for (int i=0; i<data.size(); i++) extent.AddDrawableBox(data.data()[i]);
-    cb(extent.Get(-line_height, line_height) + p);
+    int left = data[0].LeftBound(attr), right = data.back().RightBound(attr);
+    cb(Box(p.x + left, p.y - line_height, right - left, line_height));
 }
 
 /* Atlas */
 
+Atlas::~Atlas() { delete flow; }
+Atlas::Atlas(unsigned T, int W, int H) :
+    tex(W, H?H:W, Pixel::RGBA, T), dim(tex.width, tex.height), flow(new Flow(&dim)) {}
+
 bool Atlas::Add(int *x_out, int *y_out, float *texcoord, int w, int h, int max_height) {
     Box box;
-    flow.SetMinimumAscent(max_height);
-    flow.AppendBox(w, h, Border(2,2,2,2), &box);
+    flow->SetMinimumAscent(max_height);
+    flow->AppendBox(w, h, Border(2,2,2,2), &box);
 
     *x_out = box.x;
-    *y_out = box.y + flow.container->top();
+    *y_out = box.y + flow->container->top();
     if (*x_out < 0 || *x_out + w > tex.width ||
         *y_out < 0 || *y_out + h > tex.height) return false;
 
@@ -1979,12 +1982,12 @@ void Atlas::Update(Font *f) {
 
 void Atlas::WriteGlyphFile(const string &name, Font *f) {
     int glyph_count = 0, glyph_out = 0;
-    GlyphTableIter(f) if (i->       tex.width) glyph_count++;
-    GlyphIndexIter(f) if (i->second.tex.width) glyph_count++;
+    GlyphTableIter(f) if (i->       advance) glyph_count++;
+    GlyphIndexIter(f) if (i->second.advance) glyph_count++;
 
     Matrix *gm = new Matrix(glyph_count, 10);
-    GlyphTableIter(f) if (i->       tex.width) i->       ToArray(gm->row(glyph_out++), gm->N);
-    GlyphIndexIter(f) if (i->second.tex.width) i->second.ToArray(gm->row(glyph_out++), gm->N);
+    GlyphTableIter(f) if (i->       advance) i->       ToArray(gm->row(glyph_out++), gm->N);
+    GlyphIndexIter(f) if (i->second.advance) i->second.ToArray(gm->row(glyph_out++), gm->N);
     MatrixFile(gm, "").WriteVersioned(VersionedFileName(ASSETS_DIR, name.c_str(), "glyphs"), 0);
 }
 
@@ -2004,7 +2007,7 @@ void Atlas::MakeFromPNGFiles(const string &name, const vector<string> &png, int 
         out->id = i - skipped;
 
         if (PngReader::Read(&in, &out->tex)) { skipped++; continue; }
-        Typed::Max(&ret->height, out->tex.height);
+        Typed::Max(&ret->height, (short)out->tex.height);
 
         int atlas_x, atlas_y;
         CHECK(atlas->Add(&atlas_x, &atlas_y, out->tex.coord, out->tex.width, out->tex.height, ret->height));
@@ -2051,15 +2054,25 @@ void Atlas::SplitIntoPNGFiles(const string &input_png_fn, const map<int, v4> &gl
 
 void Font::Glyph::FromArray(const double *in, int l) {
     CHECK_GE(l, 10);
-    id   = (int)in[0];        /* 0  = in[1]*/ tex.width    = (int)in[2];  tex.height   = (int)in[3]; top          = (int)in[4];
-    left = (int)in[5]; tex.coord[0] = in[6];  tex.coord[1] =      in[7];  tex.coord[2] =      in[8]; tex.coord[3] =      in[9];
+    id        = (int)in[0]; advance      = (int)in[1]; tex.width    = (int)in[2]; tex.height   = (int)in[3]; bearing_y    = (int)in[4];
+    bearing_x = (int)in[5]; tex.coord[0] =      in[6]; tex.coord[1] =      in[7]; tex.coord[2] =      in[8]; tex.coord[3] =      in[9];
 }
 
 int Font::Glyph::ToArray(double *out, int l) {
     CHECK_GE(l, 10);
-    out[0] = id;   out[1] = 0;            out[2] = tex.width;    out[3] = tex.height;   out[4] = top;
-    out[5] = left; out[6] = tex.coord[0]; out[7] = tex.coord[1]; out[8] = tex.coord[2]; out[9] = tex.coord[3];
-    return sizeof(float)*8;
+    out[0] = id;        out[1] = advance;      out[2] = tex.width;    out[3] = tex.height;   out[4] = bearing_y;
+    out[5] = bearing_x; out[6] = tex.coord[0]; out[7] = tex.coord[1]; out[8] = tex.coord[2]; out[9] = tex.coord[3];
+    return sizeof(double)*10;
+}
+
+int Font::Glyph::Layout(const Drawable::Attr *attr, LFL::Box *out) const {
+    float scale = attr->font->scale;
+    int center_width = (!attr->font->fixed_width && attr->font->mono) ? attr->font->max_width : 0;
+    int gw = RoundXY_or_Y(scale, tex.width), gh = RoundXY_or_Y(scale, tex.height);
+    int bx = RoundXY_or_Y(scale, bearing_x), by = RoundXY_or_Y(scale, bearing_y);
+    int ax = RoundXY_or_Y(scale, advance);
+    *out = LFL::Box(bx + (center_width ? RoundF((center_width - ax) / 2.0) : 0), by-gh, gw, gh);
+    return X_or_Y(center_width, ax);
 }
 
 Font *Font::Clone(int pointsize, Color Fg, int Flag) {
@@ -2094,37 +2107,47 @@ Font *Font::OpenAtlas(const string &name, int size, Color c, int flag) {
     ret->glyph = shared_ptr<Font::Glyphs>(new Font::Glyphs(ret, new Atlas(tex.ID, tex.width, tex.height)));
     Atlas *atlas = ret->glyph->atlas.back().get();
     float max_t = 0, max_u = 0;
+    int descender = 0;
 
     MatrixRowIter(gm.F) {
         int glyph_ind = (int)gm.F->row(i)[0];
         Glyph *g = ret->FindOrInsertGlyph(glyph_ind);
         g->FromArray(gm.F->row(i), gm.F->N);
         g->tex.ID = tex.ID;
-        if (g->tex.height > ret->height)    ret->height    = g->tex.height;
-        if (g->tex.width  > ret->max_width) ret->max_width = g->tex.width;
-        if (g->top        > ret->max_top)   ret->max_top   = g->top;
-        if (g->tex.width && !ret->fixed_width)                 ret->fixed_width = g->tex.width;
-        if (g->tex.width &&  ret->fixed_width != g->tex.width) ret->fixed_width = 0;
+        if (!g->advance) {
+            g->advance = g->tex.width;
+            g->bearing_y = g->tex.height;
+            g->bearing_x = 0;
+        }
+
+        int descent = g->tex.height - g->bearing_y;
+        if (g->advance   > ret->max_width) ret->max_width = g->advance;
+        if (g->bearing_y > ret->ascender)  ret->ascender  = g->bearing_y;
+        if (descent      > descender)      descender      = descent;
+        if (g->advance && !ret->fixed_width)               ret->fixed_width = g->advance;
+        if (g->advance &&  ret->fixed_width != g->advance) ret->fixed_width = -1;
 
         for (int j=0; j<4; j++) {
             max_t = max(max(max_t, g->tex.coord[0]), g->tex.coord[2]);
             max_u = max(max(max_u, g->tex.coord[1]), g->tex.coord[3]);
         }
     }
-    atlas->flow.SetMinimumAscent(ret->height);
-    atlas->flow.p.x =  max_t * atlas->tex.width;
-    atlas->flow.p.y = -max_u * atlas->tex.height;
 
-    INFO("OpenAtlas ", name, ", texID=", tex.ID);
+    if (ret->fixed_width < 0) ret->fixed_width = 0;
+    atlas->flow->SetMinimumAscent((ret->height = ret->ascender + descender));
+    atlas->flow->p.x =  max_t * atlas->tex.width;
+    atlas->flow->p.y = -max_u * atlas->tex.height;
+
+    INFO("OpenAtlas ", name, ", texID=", tex.ID, " fixed_width=", ret->fixed_width);
     tex.ID = 0;
     return ret;
 }
 
-Font::Glyph *Font::FindOrInsertGlyph(unsigned gind) {
+Font::Glyph *Font::FindOrInsertGlyph(unsigned short gind) {
     return gind < glyph->table.size() ? &glyph->table[gind] : &glyph->index[gind];
 }
 
-Font::Glyph *Font::FindGlyph(unsigned gind) {
+Font::Glyph *Font::FindGlyph(unsigned short gind) {
     if (gind < glyph->table.size()) return &glyph->table[gind];
     map<int, Glyph>::iterator i = glyph->index.find(gind);
     return i != glyph->index.end() ? &i->second : glyph->primary->LoadGlyph(gind);
@@ -2142,7 +2165,7 @@ void Font::Scale(int new_size) {
     size        = new_size;
     scale       = (float)size / primary->size;
     height      = RoundF(primary->height      * scale);
-    max_top     = RoundF(primary->max_top     * scale);
+    ascender    = RoundF(primary->ascender    * scale);
     max_width   = RoundF(primary->max_width   * scale);
     fixed_width = RoundF(primary->fixed_width * scale);
 }
@@ -2232,18 +2255,19 @@ Font *TTFFont::OpenBuffer(const shared_ptr<TTFFont::Resource> &res, int size, Co
 }
 
 static bool TTFFontLoadGlyph(FT_FaceRec_ *face, int glyph_index, Font *ret, Font::Glyph *out, bool subpixel) {
-    int error; FT_Int32 flags = FT_LOAD_RENDER | (subpixel ? FT_LOAD_TARGET_LCD : 0);
+    int error; FT_Int32 flags = FT_LOAD_RENDER | (subpixel ? FT_LOAD_TARGET_LCD : 0) | FT_LOAD_FORCE_AUTOHINT;
     if ((error = FT_Load_Glyph(face, glyph_index, flags))) { ERROR("FT_Load_Glyph(", glyph_index, ") = ", error); return false; }
     if (( subpixel && face->glyph->bitmap.pixel_mode != FT_PIXEL_MODE_LCD) ||
         (!subpixel && face->glyph->bitmap.pixel_mode != FT_PIXEL_MODE_GRAY))
     { ERROR("glyph bitmap pixel_mode ", face->glyph->bitmap.pixel_mode); return false; }
 
-    out->top = face->glyph->bitmap_top;
-    out->left = face->glyph->bitmap_left;
-    out->tex.width = face->glyph->advance.x/64;
+    out->tex.width  = face->glyph->bitmap.width / (subpixel ? 3 : 1);
     out->tex.height = face->glyph->bitmap.rows;
-    if (out->tex.width && !ret->fixed_width)                   ret->fixed_width = out->tex.width;
-    if (out->tex.width &&  ret->fixed_width != out->tex.width) ret->fixed_width = 0;
+    out->bearing_x  = face->glyph->bitmap_left;
+    out->bearing_y  = face->glyph->bitmap_top;
+    out->advance    = RoundF(face->glyph->advance.x/64.0);
+    if (out->advance && !ret->fixed_width)                 ret->fixed_width = out->advance;
+    if (out->advance &&  ret->fixed_width != out->advance) ret->fixed_width = -1;
 
     return true;
 }
@@ -2255,7 +2279,7 @@ static void TTFFontFilter(unsigned char *buf, int wd, int ht, int pf, int linesi
     }
 }
 
-Font::Glyph *TTFFont::LoadGlyph(unsigned glyph_id) {
+Font::Glyph *TTFFont::LoadGlyph(unsigned short glyph_id) {
     Atlas *atlas_cur = glyph->atlas.back().get();
     Glyph *out = &glyph->index[glyph_id]; 
     if (out->id) { ERROR((void*)this, " glyph ", glyph_id, " already loaded"); return out; }
@@ -2268,25 +2292,25 @@ Font::Glyph *TTFFont::LoadGlyph(unsigned glyph_id) {
     if ((error = FT_Set_Pixel_Sizes(face, 0, size))) { ERROR("FT_Set_Pixel_Sizes(", size, ") = ", error); return out; }
 
     if (!TTFFontLoadGlyph(face, glyph_index, this, out, FLAGS_subpixel_fonts)) return out;
-    int ht = face->glyph->bitmap.rows, wd = face->glyph->bitmap.width / (FLAGS_subpixel_fonts ? 3 : 1);
     int spf = FLAGS_subpixel_fonts ? Pixel::LCD : Pixel::GRAY8, atlas_x, atlas_y;
     if (!atlas_cur->Add(&atlas_x, &atlas_y, out->tex.coord, out->tex.width, out->tex.height, height)) FATAL("atlas full");
     out->tex.ID = atlas_cur->tex.ID;
 
     Texture glyph(0, 0, atlas_cur->tex.pf);
-    glyph.LoadBuffer(face->glyph->bitmap.buffer, wd, ht, spf, face->glyph->bitmap.pitch,
+    glyph.LoadBuffer(face->glyph->bitmap.buffer, out->tex.width, out->tex.height, spf, face->glyph->bitmap.pitch,
                      SimpleVideoResampler::Flag::TransparentBlack | SimpleVideoResampler::Flag::FlipY);
-    TTFFontFilter(glyph.buf, wd, ht, glyph.pf, glyph.LineSize(), 0, 0);
+    TTFFontFilter(glyph.buf, out->tex.width, out->tex.height, glyph.pf, glyph.LineSize(), 0, 0);
 
     // PngWriter::Write(StringPrintf("glyph%06x.png", glyph_id), glyph);
-    atlas_cur->tex.UpdateGL(glyph.buf, atlas_x + out->left, atlas_y, wd, ht, Texture::Flag::FlipY); 
+    atlas_cur->tex.UpdateGL(glyph.buf, atlas_x, atlas_y, out->tex.width, out->tex.height, Texture::Flag::FlipY); 
     return out;
 }
 
 Font *TTFFont::Open(const shared_ptr<TTFFont::Resource> &resource, int size, Color c, int flag) {
-    FT_FaceRec_ *face = resource->face; int count = 0, error;
-    bool fixed_width = FT_IS_FIXED_WIDTH(face), outline = resource->flag & Flag::Outline;
+    FT_FaceRec_ *face = resource->face;
+    int error, count = 0;
     if ((error = FT_Set_Pixel_Sizes(face, 0, size))) { ERROR("FT_Set_Pixel_Sizes(", size, ") = ", error); return 0; }
+    bool fixed_width = FT_IS_FIXED_WIDTH(face), outline = resource->flag & Flag::Outline;
 
     TTFFont *ret = 0; Atlas *atlas = 0;
     if (!ret) {
@@ -2303,8 +2327,8 @@ Font *TTFFont::Open(const shared_ptr<TTFFont::Resource> &resource, int size, Col
         }                                                                
 #endif
         // determine maximum glyph dimensions
-        int max_advance=0, max_top=0, max_bottom=0;
-        FT_Int32 ttf_flags = FT_LOAD_RENDER | (FLAGS_subpixel_fonts ? FT_LOAD_TARGET_LCD : 0);
+        FT_Int32 ttf_flags = FT_LOAD_RENDER | (FLAGS_subpixel_fonts ? FT_LOAD_TARGET_LCD : 0) | FT_LOAD_FORCE_AUTOHINT;
+        int descender=0; 
 #if 0
         for (int glyph_index=0; glyph_index<face->num_glyphs; glyph_index++) {
 #else
@@ -2312,16 +2336,15 @@ Font *TTFFont::Open(const shared_ptr<TTFFont::Resource> &resource, int size, Col
             if (!(glyph_index = ret->glyph->table[i].id)) continue;
 #endif
             if ((error = FT_Load_Glyph(face, glyph_index, ttf_flags))) { ERROR("FT_Load_Glyph(", glyph_index, ") = ", error); delete ret; continue; }
-            int bottom = face->glyph->bitmap.rows - face->glyph->bitmap_top, advance = face->glyph->advance.x/64;
-            if (bottom                   > max_bottom)  max_bottom  = bottom;
-            if (advance                  > max_advance) max_advance = advance;
-            if (face->glyph->bitmap_top  > max_top)     max_top     = face->glyph->bitmap_top;
+            int descent = face->glyph->bitmap.rows - face->glyph->bitmap_top;
+            int advance = RoundF(face->glyph->advance.x/64.0);
+            if (advance                 > ret->max_width) ret->max_width = advance;
+            if (face->glyph->bitmap_top > ret->ascender)  ret->ascender  = face->glyph->bitmap_top;
+            if (descent                 > descender)      descender      = descent;
         }
 
-        ret->max_top = max_top + (FLAGS_atlas_pad_top ? RoundF(size * FLAGS_atlas_pad_top) : 0);
-        ret->height = ret->max_top + max_bottom;
-        ret->max_width = max_advance;
-        if (ret->mono) ret->fixed_width = ret->max_width;
+        ret->height = ret->ascender + descender;
+        if (ret->fixed_width < 0) ret->fixed_width = 0;
         ret->glyph->atlas.push_back(shared_ptr<Atlas>(new Atlas(0, Atlas::Dimension(ret->max_width, ret->height, count))));
         atlas = ret->glyph->atlas.back().get();
         atlas->tex.RenewBuffer();
@@ -2334,12 +2357,11 @@ Font *TTFFont::Open(const shared_ptr<TTFFont::Resource> &resource, int size, Col
         out->id = i;
 
         if (!TTFFontLoadGlyph(face, glyph_index, ret, out, FLAGS_subpixel_fonts)) continue;
-        int ht = face->glyph->bitmap.rows, wd = face->glyph->bitmap.width / (FLAGS_subpixel_fonts ? 3 : 1);
         int spf = FLAGS_subpixel_fonts ? Pixel::LCD : Pixel::GRAY8, atlas_x, atlas_y;
         CHECK(atlas->Add(&atlas_x, &atlas_y, out->tex.coord, out->tex.width, out->tex.height, ret->height));
-        atlas->tex.UpdateBuffer(face->glyph->bitmap.buffer, atlas_x + out->left, atlas_y,
-                                wd, ht, spf, face->glyph->bitmap.pitch, SimpleVideoResampler::Flag::TransparentBlack);
-        TTFFontFilter(atlas->tex.buf, wd, ht, atlas->tex.pf, atlas->tex.LineSize(), atlas_x + out->left, atlas_y);
+        atlas->tex.UpdateBuffer(face->glyph->bitmap.buffer, atlas_x, atlas_y, out->tex.width, out->tex.height,
+                                spf, face->glyph->bitmap.pitch, SimpleVideoResampler::Flag::TransparentBlack);
+        TTFFontFilter(atlas->tex.buf, out->tex.width, out->tex.height, atlas->tex.pf, atlas->tex.LineSize(), atlas_x, atlas_y);
     }
 
     if (resource->flag & Flag::WriteAtlas) ret->WriteAtlas(resource->name, &atlas->tex);
@@ -2350,7 +2372,7 @@ Font *TTFFont::Open(const shared_ptr<TTFFont::Resource> &resource, int size, Col
 }
 #else /* LFL_FREETYPE */
 TTFFont::Resource::~Resource() {}
-Font::Glyph *TTFFont::LoadGlyph(unsigned gind) { return 0; }
+Font::Glyph *TTFFont::LoadGlyph(unsigned short gind) { return 0; }
 void  TTFFont::Init() {}
 Font *TTFFont::Clone(int pointsize, Color fg, int flag) { return 0; }
 Font *TTFFont::OpenFile(const string &filename, const string &name, int size, Color c, int flag, int ttf_flag) { return 0; }
@@ -2359,11 +2381,11 @@ Font *TTFFont::Open      (const shared_ptr<TTFFont::Resource> &res, int size, Co
 #endif /* LFL_FREETYPE */
 
 #ifdef __APPLE__
-CFStringRef ToCFStr(const string &n) { return CFStringCreateWithCString(0, n.c_str(), kCFStringEncodingUTF8); }
+CFStringRef ToCFStr(const string &n) { return CFStringCreateWithCString(0, n.data(), kCFStringEncodingUTF8); }
 string FromCFStr(CFStringRef in) {
     string ret(CFStringGetMaximumSizeForEncoding(CFStringGetLength(in), kCFStringEncodingUTF8), 0);
     if (!CFStringGetCString(in, (char*)ret.data(), ret.size(), kCFStringEncodingUTF8)) return string();
-    for (int i=0; i<ret.size(); i++) if (!ret[i]) { ret.resize(i); break; }
+    ret.resize(strlen(ret.data()));
     return ret;
 }
 
@@ -2379,9 +2401,7 @@ CGContextRef Texture::CGBitMap(int X, int Y, int W, int H) {
     return ret;
 }
 
-int NSFMreadfonts(void *Iter, void (*IterAdd)(void *iter, const char *name, const char *family, int flag));
-void FontsIterAdd(void *iter, const char *name, const char *family, int flag) { INFO("font ", name); }
-void CoreTextFont::Init() { if (0) NSFMreadfonts(0, FontsIterAdd); }
+void CoreTextFont::Init() {}
 
 Font *CoreTextFont::Clone(int pointsize, Color Fg, int Flag) {
     if (!FLAGS_font_dont_reopen) return Open(resource, pointsize, Fg, Flag);
@@ -2393,52 +2413,90 @@ Font *CoreTextFont::Clone(int pointsize, Color Fg, int Flag) {
 }
 
 Font *CoreTextFont::Open(const string &name, int size, Color c, int flag, int ct_flag) {
-    CFStringRef cfsname = ToCFStr(name);
-    CGFontRef cgfont = CGFontCreateWithFontName(cfsname);
-    CFRelease(cfsname);
-    if (!cgfont) return 0;
-    shared_ptr<Resource> res(new Resource(name.c_str(), cgfont, ct_flag));
+    CFStringRef cfname = ToCFStr(name);
+    CGFontRef font = CGFontCreateWithFontName(cfname);
+    CFRelease(cfname);
+    if (!font) return 0;
+    shared_ptr<Resource> res(new Resource(name.c_str(), font, ct_flag));
     return Open(res, size, c, flag);
 }
 
-static bool CoreTextFontLoadGlyph(CGRect *bounds, Font *ret, Font::Glyph *out, bool subpixel) {
-    out->left       = -RoundF(bounds->origin.x);
-    out->tex.width  =  RoundF(bounds->size.width);
-    out->tex.height =  RoundF(bounds->size.height);
-    out->top        =  RoundF(bounds->origin.y) + out->tex.height;
-    if (out->tex.width && !ret->fixed_width)                   ret->fixed_width = out->tex.width;
-    if (out->tex.width &&  ret->fixed_width != out->tex.width) ret->fixed_width = 0;
+static bool CoreTextFontLoadGlyph(CGRect *bounds, CGSize *advance, Font *ret, Font::Glyph *out) {
+    out->tex.width  = RoundF(bounds->size.width);
+    out->tex.height = RoundF(bounds->size.height);
+    out->bearing_x  = RoundF(bounds->origin.x);
+    out->bearing_y  = RoundF(bounds->origin.y + bounds->size.height);
+    out->advance    = RoundF(advance->width);
+    if (out->advance && !ret->fixed_width)                   ret->fixed_width = out->advance;
+    if (out->advance &&  ret->fixed_width != out->tex.width) ret->fixed_width = -1;
     return true;
 }
 
-Font::Glyph *CoreTextFont::LoadGlyph(unsigned glyph_id) {
+Font::Glyph *CoreTextFont::LoadGlyph(unsigned short glyph_id) {
     Atlas *atlas_cur = glyph->atlas.back().get();
     Glyph *out = &glyph->index[glyph_id]; 
     if (out->id) { ERROR((void*)this, " glyph ", glyph_id, " already loaded"); return out; }
+
+    CGGlyph cgglyph;
+    CGFontRef cgfont = 0;
+    CTFontRef ctfont = CTFontCreateWithGraphicsFont(resource->font, size, 0, 0);
+    {
+        const CFStringRef attr_key[] = { kCTFontAttributeName, /*kCTForegroundColorAttributeName*/ };
+        const CFTypeRef attr_val[] = { ctfont, /*cgColor*/ };
+        CFDictionaryRef attr = CFDictionaryCreate
+            (kCFAllocatorDefault, (const void**)&attr_key, (const void**)&attr_val, sizeofarray(attr_key),
+             &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+
+        CFStringRef str = CFStringCreateWithCharacters(kCFAllocatorDefault, &glyph_id, 1);
+        CFAttributedStringRef astr = CFAttributedStringCreate(kCFAllocatorDefault, str, attr);
+
+        CTLineRef line = CTLineCreateWithAttributedString(astr);
+        CFArrayRef runs = CTLineGetGlyphRuns(line);
+        CHECK_EQ(1, CFArrayGetCount(runs));
+        CTRunRef run = (CTRunRef)CFArrayGetValueAtIndex(runs, 0);
+        CHECK_EQ(1, CTRunGetGlyphCount(run));
+        CTRunGetGlyphs(run, CFRangeMake(0,0), &cgglyph);
+        CFDictionaryRef run_attr = CTRunGetAttributes(run);
+
+        CTFontRef substituted_font = (CTFontRef)CFDictionaryGetValue(run_attr, kCTFontAttributeName);
+        CFRetain(substituted_font);
+        cgfont = CTFontCopyGraphicsFont(substituted_font, NULL);
+
+        CFRelease(line);
+        CFRelease(astr);
+        CFRelease(str);
+        CFRelease(attr);
+        CFRelease(ctfont);
+        ctfont = substituted_font;
+    }
+    
+    CGRect bounds; 
+    CGSize advance;
+    CTFontGetBoundingRectsForGlyphs(ctfont, kCTFontDefaultOrientation, &cgglyph, &bounds,  1);
+    CTFontGetAdvancesForGlyphs     (ctfont, kCTFontDefaultOrientation, &cgglyph, &advance, 1);
+
     *out = *Font::LoadGlyph(glyph_id);
     out->id = glyph_id;
     out->tex.ID = atlas_cur->tex.ID;
+    CoreTextFontLoadGlyph(&bounds, &advance, this, out);
 
-    CGGlyph cgglyph; CGRect bounds; UniChar uc = glyph_id;
-    CTFontRef ctfont = CTFontCreateWithGraphicsFont(resource->cgfont, size, 0, 0);
-    CTFontGetGlyphsForCharacters(ctfont, &uc, &cgglyph, 1);
-    CTFontGetBoundingRectsForGlyphs(ctfont, kCTFontDefaultOrientation, &cgglyph, &bounds, 1);
-    CoreTextFontLoadGlyph(&bounds, this, out, FLAGS_subpixel_fonts);
-    CFRelease(ctfont);
-
-    Texture glyph(out->tex.width, out->tex.height, atlas_cur->tex.pf);
-    glyph.RenewBuffer();
-    CGContextRef context = glyph.CGBitMap();
+    Texture tex(out->tex.width, out->tex.height, atlas_cur->tex.pf);
+    tex.RenewBuffer();
+    CGContextRef context = tex.CGBitMap();
+    CGContextSetRGBFillColor(context, 0, 0, 0, 1);
+    CGContextFillRect(context, CGRectMake(0, 0, out->tex.width, out->tex.height));
     CGContextSetRGBFillColor(context, 1, 1, 1, 1);
-    CGContextSetFont(context, resource->cgfont);
+    CGContextSetFont(context, cgfont);
     CGContextSetFontSize(context, size);
-    CGPoint point = CGPointMake(0, 0);
+    CGPoint point = CGPointMake(-bounds.origin.x, -bounds.origin.y);
     CGContextShowGlyphsAtPositions(context, &cgglyph, &point, 1);
     CGContextRelease(context);
+    CFRelease(ctfont);
+    CFRelease(cgfont);
 
     int atlas_x=0, atlas_y=0;
     if (!atlas_cur->Add(&atlas_x, &atlas_y, out->tex.coord, out->tex.width, out->tex.height, height)) FATAL("atlas full");
-    atlas_cur->tex.UpdateGL(glyph.buf, atlas_x + out->left, atlas_y, out->tex.width, out->tex.height, Texture::Flag::FlipY); 
+    atlas_cur->tex.UpdateGL(tex.buf, atlas_x, atlas_y, out->tex.width, out->tex.height, Texture::Flag::FlipY); 
     INFOf("LoadGlyph U+%06x texID=%d", glyph_id, atlas_cur->tex.ID);
     return out;
 }
@@ -2456,32 +2514,36 @@ Font *CoreTextFont::Open(const shared_ptr<Resource> &resource, int size, Color c
 
         vector<CGGlyph> glyphs(ascii.size());
         vector<CGRect> bounds(glyphs.size());
-        CTFontRef ctfont = CTFontCreateWithGraphicsFont(resource->cgfont, size, 0, 0);
-        CTFontGetGlyphsForCharacters(ctfont, &ascii[0], &glyphs[0], glyphs.size());
+        CTFontRef ctfont = CTFontCreateWithGraphicsFont(resource->font, size, 0, 0);
+        CHECK(CTFontGetGlyphsForCharacters(ctfont, &ascii[0], &glyphs[0], glyphs.size()));
         CTFontGetBoundingRectsForGlyphs(ctfont, kCTFontDefaultOrientation, &glyphs[0], &bounds[0], glyphs.size());
-        CFRelease(ctfont);
 
-        int max_bottom = 0;
+        CGSize advance;
+        int descender = 0;
         for (int i=0; i<glyphs.size(); i++) {
             int ind = ascii_glyph_start + i;
             Glyph *g = &ret->glyph->table[ind];
             g->id = glyphs[i];
-
-            CoreTextFontLoadGlyph(&bounds[i], ret, g, FLAGS_subpixel_fonts);
-            Typed::Max(&ret->max_top,   g->top);
-            Typed::Max(&ret->max_width, g->tex.width);
-            Typed::Max(&max_bottom,     g->tex.height - g->top);
+            CTFontGetAdvancesForGlyphs(ctfont, kCTFontDefaultOrientation, &glyphs[i], &advance, 1);
+            CoreTextFontLoadGlyph(&bounds[i], &advance, ret, g);
+            Typed::Max(&ret->ascender,  g->bearing_y);
+            Typed::Max(&ret->max_width, (short)g->tex.width);
+            Typed::Max(&descender,      g->tex.height - g->bearing_y);
         }
-        ret->height = ret->max_top + max_bottom;
-        if (ret->mono) ret->fixed_width = ret->max_width;
+        CFRelease(ctfont);
+
+        ret->height = ret->ascender + descender;
+        if (ret->fixed_width < 0) ret->fixed_width = 0;
         ret->glyph->atlas.push_back(shared_ptr<Atlas>(new Atlas(0, Atlas::Dimension(ret->max_width, ret->height, ascii_glyphs))));
         atlas = ret->glyph->atlas.back().get();
         atlas->tex.RenewBuffer();
     }
 
     CGContextRef context = atlas->tex.CGBitMap();
+    CGContextSetRGBFillColor(context, 0, 0, 0, 1);
+    CGContextFillRect(context, CGRectMake(0, 0, atlas->tex.width, atlas->tex.height));
     CGContextSetRGBFillColor(context, 1, 1, 1, 1);
-    CGContextSetFont(context, resource->cgfont);
+    CGContextSetFont(context, resource->font);
     CGContextSetFontSize(context, size);
     for (CGGlyph glyph_index, i=0; i<ret->glyph->table.size(); i++) {
         if (!(glyph_index = ret->glyph->table[i].id)) continue;
@@ -2490,7 +2552,7 @@ Font *CoreTextFont::Open(const shared_ptr<Resource> &resource, int size, Color c
 
         int atlas_x, atlas_y;
         CHECK(atlas->Add(&atlas_x, &atlas_y, out->tex.coord, out->tex.width, out->tex.height, ret->height));
-        CGPoint point = CGPointMake(atlas_x + out->left, atlas->tex.height - atlas_y - out->top);
+        CGPoint point = CGPointMake(atlas_x - out->bearing_x, atlas->tex.height - atlas_y - out->bearing_y);
         CGContextShowGlyphsAtPositions(context, &glyph_index, &point, 1);
     }
     CGContextRelease(context);
@@ -2499,8 +2561,8 @@ Font *CoreTextFont::Open(const shared_ptr<Resource> &resource, int size, Color c
     atlas->Update(ret);
     atlas->tex.ClearBuffer();
 
-    CFStringRef font_name = CGFontCopyFullName(resource->cgfont);
-    INFO("CoreTextFont(", FromCFStr(font_name), "), texID=", atlas->tex.ID);
+    CFStringRef font_name = CGFontCopyFullName(resource->font);
+    INFO("CoreTextFont(", FromCFStr(font_name), "), texID=", atlas->tex.ID, " fixed_width=", ret->fixed_width, " mono=", ret->mono?ret->max_width:0);
     CFRelease(font_name);
     return ret;
 }

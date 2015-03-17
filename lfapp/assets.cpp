@@ -32,6 +32,7 @@ extern "C" {
 #include "lfapp/lfapp.h"
 #include "lfapp/dom.h"
 #include "lfapp/css.h"
+#include "lfapp/flow.h"
 #include "lfapp/gui.h"
 
 extern "C" {
@@ -1081,7 +1082,7 @@ void glIntersect(int x, int y, Color *c) {
 
 void glTimeResolutionShader(Shader *shader) {
     screen->gd->UseShader(shader);
-    shader->SetUniform1f("time", ToSeconds(app->app_time.GetTime()));
+    shader->SetUniform1f("time", ToSeconds(Now() - app->time_started));
     shader->SetUniform2f("resolution", screen->width, screen->height);
 }
 void glTimeResolutionShaderWindows(Shader *shader, const Color &backup_color, const Box &w,             const Texture *tex) { Box wc=w; vector<Box*> wv; wv.push_back(&wc); glTimeResolutionShaderWindows(shader, backup_color, wv, tex); }
