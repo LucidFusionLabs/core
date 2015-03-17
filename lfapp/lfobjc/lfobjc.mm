@@ -36,26 +36,6 @@ void NativeThreadStart(int (*CB)(void *), void *arg) {
     [NSThread detachNewThreadSelector:@selector(myMain) toTarget:thread withObject:nil];
 }
 
-#ifndef LFL_IPHONE
-#import <AppKit/NSFont.h>
-#import <AppKit/NSFontManager.h>
-
-extern "C" int OSXReadFonts(void *FontsIter, void (*FontsIterAdd)(void *fi, const char *name, const char *family, int flag)) {
-    NSFontManager *nsFontManager = [NSFontManager sharedFontManager];
-    [nsFontManager retain];
-
-    NSArray *fontArray = [nsFontManager availableFonts];
-    NSUInteger totalFonts = [fontArray count];
-    for (int i = 0; i < totalFonts; i++) {
-        NSString *str = [fontArray objectAtIndex:i];
-        FontsIterAdd(FontsIter, [str UTF8String], "", 0);
-    }
-
-    [nsFontManager release];
-    return 0;
-}
-#endif // LFL_IPHONE
-
 #ifdef LFL_OSXVIDEO
 #import <Cocoa/Cocoa.h>
 #import <OpenGL/gl.h>

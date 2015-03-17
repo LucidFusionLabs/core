@@ -19,6 +19,7 @@
 #include "lfapp/lfapp.h"
 #include "lfapp/dom.h"
 #include "lfapp/css.h"
+#include "lfapp/flow.h"
 #include "lfapp/gui.h"
 #include "crawler/html.h"
 #include "crawler/document.h"
@@ -26,6 +27,7 @@
 namespace LFL {
 DEFINE_int(peak_fps,  50,    "Peak FPS");
 DEFINE_bool(draw_fps, false, "Draw FPS");
+extern FlagOfType<string> FLAGS_default_font_;
 
 Scene scene;
 BindMap *binds;
@@ -89,11 +91,11 @@ struct MyTerminalWindow {
         terminal->active = true;
     }
     void UpdateTargetFPS() {
-        bool custom_shader = activeshader != &app->video.shader_default;
-        effects_mode.Set(custom_shader || screen->console->animating);
+        effects_mode.Set(CustomShader() || screen->console->animating);
         int target_fps = effects_mode.Get() ? FLAGS_peak_fps : 0;
         if (target_fps != FLAGS_target_fps) app->scheduler.UpdateTargetFPS(target_fps);
     }
+    bool CustomShader() const { return activeshader != &app->video.shader_default; }
 };
 
 int Frame(Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample, int flag) {
@@ -112,8 +114,8 @@ void SetFontSize(int n) {
     MyTerminalWindow *tw = (MyTerminalWindow*)screen->user1;
     tw->font_size = n;
     tw->terminal->font = Fonts::Get(FLAGS_default_font, tw->font_size, Color::white);
-    screen->Reshape(tw->terminal->font->fixed_width * tw->terminal->term_width,
-                    tw->terminal->font->height      * tw->terminal->term_height);
+    screen->Reshape(tw->terminal->font->FixedWidth() * tw->terminal->term_width,
+                    tw->terminal->font->height       * tw->terminal->term_height);
 }
 void MyConsoleAnimating(Window *W) { 
     ((MyTerminalWindow*)W->user1)->UpdateTargetFPS();
@@ -168,20 +170,27 @@ extern "C" int main(int argc, const char *argv[]) {
     MyWindowInitCB(screen);
     FLAGS_target_fps = 0;
     FLAGS_lfapp_video = FLAGS_lfapp_input = 1;
-    // FLAGS_font_engine = "coretext";
-    // FLAGS_default_font = "Monaco"; // "DejaVuSansMono-Bold.ttf"; // "Monaco";
-    FLAGS_default_font = "VeraMono.ttf";
-    FLAGS_default_font_size = 16;
-    // FLAGS_default_font_flag = FontDesc::Mono;
-    FLAGS_atlas_font_sizes = "32";
-    FLAGS_default_missing_glyph = 42;
+    FLAGS_font_engine = "coretext";
 
     app->scheduler.AddWaitForeverService(Singleton<HTTPClient>::Get());
     app->scheduler.AddWaitForeverService(Singleton <UDPClient>::Get());
-
     if (app->Create(argc, argv, __FILE__)) { app->Free(); return -1; }
-    if (app->Init()) { app->Free(); return -1; }
 
+    if (FLAGS_default_font_.override) {
+    } else if (FLAGS_font_engine == "coretext") {
+        FLAGS_default_font = "Monaco";
+        FLAGS_default_font_flag = FontDesc::Mono;
+    } else if (FLAGS_font_engine == "freetype") { 
+        FLAGS_default_font = "VeraMoBd.ttf"; // "DejaVuSansMono-Bold.ttf";
+        FLAGS_default_missing_glyph = 42;
+    } else if (FLAGS_font_engine == "atlas") {
+        FLAGS_default_font = "VeraMoBd.ttf";
+        FLAGS_default_missing_glyph = 42;
+    }
+    FLAGS_default_font_size = 32;
+    FLAGS_atlas_font_sizes = "32";
+
+    if (app->Init()) { app->Free(); return -1; }
     app->scheduler.AddWaitForeverMouse();
     app->window_init_cb = MyWindowInitCB;
     app->window_closed_cb = MyWindowClosedCB;
@@ -201,6 +210,7 @@ extern "C" int main(int argc, const char *argv[]) {
     image_browser = new Browser();
     MyWindowOpen();
     MyTerminalWindow *tw = (MyTerminalWindow*)screen->user1;
+    SetFontSize(tw->font_size);
     INFO("Starting Terminal ", FLAGS_default_font, " (w=", tw->terminal->font->fixed_width,
                                                    ", h=", tw->terminal->font->height, ")");
 

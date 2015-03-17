@@ -19,6 +19,7 @@
 #include "lfapp/lfapp.h"
 #include "lfapp/dom.h"
 #include "lfapp/css.h"
+#include "lfapp/flow.h"
 #include "lfapp/gui.h"
 #include "crawler/html.h"
 #include "crawler/document.h"

@@ -361,6 +361,7 @@ struct Printable : public string {
     Printable(const long &x) : string(Typed::Str(x)) {}
     Printable(const unsigned char *x) : string((char*)x) {}
     Printable(const char &x) : string(Typed::Str(x)) {}
+    Printable(const short &x) : string(Typed::Str(x)) {}
     Printable(const float &x) : string(Typed::Str(x)) {}
     Printable(const double &x) : string(Typed::Str(x)) {}
     Printable(const unsigned &x) : string(Typed::Str(x)) {}
@@ -386,6 +387,8 @@ template <class X> struct ArrayPiece {
     const X *buf; int len;
     ArrayPiece()                  : buf(0), len(0) {}
     ArrayPiece(const X *b, int l) : buf(b), len(l) {}
+    const X& operator[](int i) const { return buf[i]; }
+    const X& back() const { return buf[len-1]; }
     void clear() { buf=0; len=0; }
     bool null() const { return !buf; }
     bool empty() const { return !buf || len <= 0; }
@@ -467,8 +470,8 @@ template <> struct UTF<short> {
 };
 
 struct Flag {
-    const char *name, *desc, *file; int line;
-    Flag(const char *N, const char *D, const char *F, int L) : name(N), desc(D), file(F), line(L) {}
+    const char *name, *desc, *file; int line; bool override;
+    Flag(const char *N, const char *D, const char *F, int L) : name(N), desc(D), file(F), line(L), override(0) {}
     virtual ~Flag() {}
 
     string ToString() const;
@@ -506,7 +509,7 @@ template <class X> struct FlagOfType : public Flag {
 
 #define DEFINE_FLAG(name, type, initial, description) \
     type FLAGS_ ## name = initial; \
-    FlagOfType<type> FLAGS_ ## name ## _WRAPPER(#name, description, __FILE__, __LINE__, &FLAGS_ ## name)
+    FlagOfType<type> FLAGS_ ## name ## _(#name, description, __FILE__, __LINE__, &FLAGS_ ## name)
 
 #define DEFINE_int(name, initial, description) DEFINE_FLAG(name, int, initial, description)
 #define DEFINE_bool(name, initial, description) DEFINE_FLAG(name, bool, initial, description)
@@ -1290,6 +1293,7 @@ struct Application : public ::LFApp, public Module {
     string progname, logfilename, startdir;
     FILE *logfile=0;
     mutex log_mutex;
+    Time time_started;
     Timer app_time, frame_time;
     ThreadPool thread_pool;
     MessageQueue message_queue;
