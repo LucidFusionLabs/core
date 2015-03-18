@@ -1335,7 +1335,6 @@ string FloatContainer::DebugString() const {
 string Box::DebugString() const { return StringPrintf("Box = { %d, %d, %d, %d }", x, y, w, h); }
 
 void Box::Draw(const float *texcoord) const {
-#if defined(LFL_GLES2) || defined(LFL_MOBILE)
     static int verts_ind=-1;
     static const float default_texcoord[4] = {0, 0, 1, 1};
     const float *tc = X_or_Y(texcoord, default_texcoord);
@@ -1346,10 +1345,6 @@ void Box::Draw(const float *texcoord) const {
     if (1)        screen->gd->VertexPointer(2, GraphicsDevice::Float, sizeof(float)*4, 0,               verts, sizeof(verts), &verts_ind, true);
     if (texcoord) screen->gd->TexPointer   (2, GraphicsDevice::Float, sizeof(float)*4, sizeof(float)*2, verts, sizeof(verts), &verts_ind, false);
     if (1)        screen->gd->DrawArrays(GraphicsDevice::TriangleStrip, 0, 4);
-#else
-    float rx=w.x*2.0/screen->width-1, ry=w.y*2.0/screen->height-1;
-    glRectf(rx, ry, rx+(w.w-2)*2.0/screen->width, ry+(w.h-2)*2.0/screen->height);
-#endif
 }
 
 void Box::DrawCrimped(const float *texcoord, int orientation, float scrollX, float scrollY) const {
@@ -1471,9 +1466,9 @@ float Box::ScrollCrimped(float tex0, float tex1, float scroll, float *min, float
     return (*mid1 - *min) / (tex1 - tex0); 
 }
 
-void Box3::Draw(const Color *c) const {
+void Box3::Draw(const point &p, const Color *c) const {
     if (c) screen->gd->SetColor(*c);
-    for (int i=0; i<3; i++) if (v[i].h) v[i].Draw();
+    for (int i=0; i<3; i++) if (v[i].h) (v[i] + p).Draw();
 }
 
 void SimpleVideoResampler::RGB2BGRCopyPixels(unsigned char *dst, const unsigned char *src, int l, int bpp) {
@@ -1743,6 +1738,20 @@ void Texture::ToIplImage(_IplImage *out) {
     ERROR("ToIplImage not implemented");
 #endif
 }
+
+#ifdef __APPLE__
+CGContextRef Texture::CGBitMap() { return CGBitMap(0, 0, width, height); }
+CGContextRef Texture::CGBitMap(int X, int Y, int W, int H) {
+    int linesize = LineSize(); CGImageAlphaInfo alpha_info;
+    if      (pf == Pixel::RGBA)                        alpha_info = kCGImageAlphaPremultipliedLast;
+    else if (pf == Pixel::RGB32 || pf == Pixel::BGR32) alpha_info = kCGImageAlphaNoneSkipLast;
+    else { ERROR("unsupported pixel format: ", Pixel::Name(pf)); return 0; }
+    CGColorSpaceRef colors = CGColorSpaceCreateDeviceRGB();
+    CGContextRef ret = CGBitmapContextCreate(buf + Y*linesize + X*PixelSize(), W, H, 8, linesize, colors, alpha_info);
+    CGColorSpaceRelease(colors);
+    return ret;
+}
+#endif
 
 void Texture::Screenshot() {
     Resize(screen->width, screen->height, Pixel::RGBA, Flag::CreateBuf);
@@ -2389,20 +2398,7 @@ string FromCFStr(CFStringRef in) {
     return ret;
 }
 
-CGContextRef Texture::CGBitMap() { return CGBitMap(0, 0, width, height); }
-CGContextRef Texture::CGBitMap(int X, int Y, int W, int H) {
-    int linesize = LineSize(); CGImageAlphaInfo alpha_info;
-    if      (pf == Pixel::RGBA)                        alpha_info = kCGImageAlphaPremultipliedLast;
-    else if (pf == Pixel::RGB32 || pf == Pixel::BGR32) alpha_info = kCGImageAlphaNoneSkipLast;
-    else { ERROR("unsupported pixel format: ", Pixel::Name(pf)); return 0; }
-    CGColorSpaceRef colors = CGColorSpaceCreateDeviceRGB();
-    CGContextRef ret = CGBitmapContextCreate(buf + Y*linesize + X*PixelSize(), W, H, 8, linesize, colors, alpha_info);
-    CGColorSpaceRelease(colors);
-    return ret;
-}
-
 void CoreTextFont::Init() {}
-
 Font *CoreTextFont::Clone(int pointsize, Color Fg, int Flag) {
     if (!FLAGS_font_dont_reopen) return Open(resource, pointsize, Fg, Flag);
     Font *ret = new CoreTextFont(*this);

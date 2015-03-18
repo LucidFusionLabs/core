@@ -387,11 +387,10 @@ void TextArea::Write(const string &s, bool update_fb, bool release_fb) {
     if (update_fb && release_fb && fb->lines) fb->fb.Release();
 }
 
-void TextArea::Resized(int w, int h) {
+void TextArea::Resized(const Box &b) {
     if (selection.enabled) {
-        mouse_gui.Clear();
-        mouse_gui.Activate();
-        mouse_gui.AddDragBox(Box(w,h), MouseController::CoordCB(bind(&TextArea::ClickCB, this, _1, _2, _3, _4)));
+        mouse_gui.box.SetDimension(b.Dimension());
+        mouse_gui.UpdateBox(Box(b.Dimension()), -1, selection.gui_ind);
     }
     UpdateLines(last_v_scrolled, 0, 0, 0);
     Redraw(false);
@@ -474,11 +473,12 @@ void TextArea::UpdateVScrolled(int dist, bool up, int ind, int first_offset, int
 
 void TextArea::Draw(const Box &b, bool draw_cursor) {
     LinesFrameBuffer *fb = GetFrameBuffer();
-    if (fb->SizeChanged(b.w, b.h, font)) { Resized(b.w, b.h); fb->SizeChangedDone(); }
+    if (fb->SizeChanged(b.w, b.h, font)) { Resized(b); fb->SizeChangedDone(); }
     if (clip) screen->gd->PushScissor(Box::DelBorder(b, *clip));
     fb->Draw(b.Position(), point(0, CommandLines() * font->height));
     if (clip) screen->gd->PopScissor();
     if (draw_cursor) TextGUI::Draw(Box(b.x, b.y, b.w, font->height));
+    if (selection.enabled) mouse_gui.box.SetPosition(b.Position());
     if (selection.changing) DrawSelection();
     if (hover_link) {
         int fb_h = line_fb.Height();
@@ -489,14 +489,20 @@ void TextArea::Draw(const Box &b, bool draw_cursor) {
     }
 }
 
+void TextArea::InitSelection() {
+    mouse_gui.Activate();
+    selection.gui_ind = mouse_gui.AddDragBox
+        (Box(), MouseController::CoordCB(bind(&TextArea::DragCB, this, _1, _2, _3, _4)));
+}
+
 void TextArea::DrawSelection() {
     screen->gd->EnableBlend();
     screen->gd->FillColor(selection_color);
-    selection.box.Draw();
+    selection.box.Draw(mouse_gui.box.BottomLeft());
 }
 
-void TextArea::ClickCB(int button, int, int, int down) {
-    point p = screen->mouse - mouse_gui.box.TopLeft();
+void TextArea::DragCB(int button, int, int, int down) {
+    point p = screen->mouse - mouse_gui.box.BottomLeft();
     LinesFrameBuffer *fb = GetFrameBuffer();
     Selection *s = &selection;
     if (!(s->changing = down)) {
@@ -510,7 +516,7 @@ void TextArea::ClickCB(int button, int, int, int down) {
     if (scp) GetGlyphFromCoords((s->end.click = point(line_left+p.x, p.y)), &s->end);
     else   { GetGlyphFromCoords((s->beg.click = point(line_left+p.x, p.y)), &s->beg); s->end = s->beg; }
 
-    bool swap = s->end < s->beg;
+    bool swap = (!reverse_line_fb && s->end < s->beg) || (reverse_line_fb && s->beg < s->end);
     Box gb = swap ? s->end.glyph : s->beg.glyph;
     Box ge = swap ? s->beg.glyph : s->end.glyph;
     if (reverse_line_fb) { gb.y=h-gb.y-gb.h; ge.y=h-ge.y-ge.h; }
@@ -546,11 +552,11 @@ void TextArea::CopyText(const Selection::Point &beg, const Selection::Point &end
             if (!l->Size() || beg.char_ind < 0) len = -1;
             else {
                 len = (beg.line_ind == end.line_ind && end.char_ind >= 0) ? end.char_ind+1 : l->Size();
-                copy_text += l->Text().substr(beg.char_ind, max(0, len - beg.char_ind));
+                copy_text += Substr(l->Text(), beg.char_ind, max(0, len - beg.char_ind));
             }
         } else if (i == end.line_ind) {
             len = (end.char_ind >= 0) ? end.char_ind+1 : l->Size();
-            copy_text += l->Text().substr(0, len);
+            copy_text += Substr(l->Text(), 0, len);
         } else copy_text += l->Text();
         if (len == l->Size()) copy_text += "\n";
         if (i == e) break;
@@ -581,13 +587,14 @@ int Editor::UpdateLines(float v_scrolled, int *first_ind, int *first_offset, int
     }
 
     bool resized = (width_changed && wrap) || last_fb_lines != fb->lines;
-    if (resized) { line.Clear(); fb_wrapped_lines = 0; }
-
     int new_first_line = v_scrolled * (wrapped_lines - 1), new_last_line = new_first_line + fb->lines;
     int dist = resized ? fb->lines : abs(new_first_line - last_first_line), read_len = 0, bo = 0, l, e;
     if (!dist || !file_line.size()) return 0;
 
-    bool up = !resized && new_first_line < last_first_line;
+    bool redraw = dist >= fb->lines;
+    if (redraw) { line.Clear(); fb_wrapped_lines = 0; }
+
+    bool up = !redraw && new_first_line < last_first_line;
     if (first_offset) *first_offset = up ?  start_line_cutoff : end_line_adjust;
     if (first_len)    *first_len    = up ? -start_line_adjust : end_line_cutoff;
 
@@ -648,7 +655,7 @@ int Editor::UpdateLines(float v_scrolled, int *first_ind, int *first_offset, int
     }
 
     CHECK_LT(line.ring.count, line.ring.size);
-    if (!resized) {
+    if (!redraw) {
         for (bool first=1;;first=0) {
             int ll = (L = up ? line.Front() : line.Back())->Lines();
             if (fb_wrapped_lines + (up ? start_line_adjust : -end_line_cutoff) - ll < fb->lines) break;
@@ -671,11 +678,11 @@ int Editor::UpdateLines(float v_scrolled, int *first_ind, int *first_offset, int
 
 /* Terminal */
 
-void Terminal::Resized(int w, int h) {
+void Terminal::Resized(const Box &b) {
     bool init = !term_width && !term_height;
     int old_term_height = term_height;
-    term_width  = w / font->FixedWidth();
-    term_height = h / font->height;
+    term_width  = b.w / font->FixedWidth();
+    term_height = b.h / font->height;
     if (init) TextArea::Write(string(term_height, '\n'), 0);
     else {
         int height_dy = term_height - old_term_height;
@@ -692,8 +699,8 @@ void Terminal::Resized(int w, int h) {
     ioctl(fd, TIOCSWINSZ, &ws);
 #endif
     UpdateCursor();
-    TextArea::Resized(w, h);
-    ResizedLeftoverRegion(w, h);
+    TextArea::Resized(b);
+    ResizedLeftoverRegion(b.w, b.h);
 }
 
 void Terminal::ResizedLeftoverRegion(int w, int h, bool update_fb) {
@@ -1021,6 +1028,7 @@ void Console::Draw() {
 /* Dialog */
 
 void Dialog::Draw() {
+    if (child_box.data.empty()) Layout();
     if (moving) box.SetPosition(win_start + screen->mouse - mouse_start);
 
     Box outline = BoxAndTitle();
@@ -1047,6 +1055,8 @@ void Dialog::Draw() {
 
     if (moving || resizing_left || resizing_right || resizing_top || resizing_bottom)
         BoxOutline().Draw(outline);
+
+    child_box.Draw(box.TopLeft());
 }
 
 /* Browsers */

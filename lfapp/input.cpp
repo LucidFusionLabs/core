@@ -61,6 +61,16 @@ const InputEvent::Id Mouse::Event::Wheel   = MouseEvent+1;
 const InputEvent::Id Mouse::Event::Button1 = Mouse::Button::_1;
 const InputEvent::Id Mouse::Event::Button2 = Mouse::Button::_2;
 
+const char *InputEvent::Name(InputEvent::Id event) {
+    switch (event) {
+        case Mouse::Event::Motion:  return "MouseMotion";
+        case Mouse::Event::Wheel:   return "MouseWheel";
+        case Mouse::Event::Button1: return "MouseButton1";
+        case Mouse::Event::Button2: return "MouseButton2";
+        default:                    return "Unknown";
+    }
+}
+
 #if 0
 struct KeyRepeater {
     static const int repeat_keys=512;
@@ -698,17 +708,20 @@ int Input::MouseClick(int button, bool down, const point &p) {
 
 int Input::MouseEventDispatch(InputEvent::Id event, const point &p, int down) {
     screen->mouse = p;
-    if (FLAGS_input_debug && down) INFO("MouseEvent ", screen->mouse.DebugString());
+    if (FLAGS_input_debug && down)
+        INFO("MouseEvent ", InputEvent::Name(event), " ", screen->mouse.DebugString());
 
     int fired = 0;
-    for (auto g = screen->mouse_gui.begin(); g != screen->mouse_gui.end(); ++g)
-        if ((*g)->active) fired += (*g)->Input(event, (*g)->MousePosition(), down, 0);
+    for (auto g = screen->mouse_gui.begin(); g != screen->mouse_gui.end(); ++g) {
+        if ((*g)->NotActive()) continue;
+        fired += (*g)->Input(event, (*g)->MousePosition(), down, 0);
+    }
 
     vector<Dialog*> removed;
     Dialog *bring_to_front = 0;
     for (auto i = screen->dialogs.begin(); i != screen->dialogs.end(); /**/) {
         Dialog *gui = (*i);
-        if (!gui->active) { i++; continue; }
+        if (gui->NotActive()) { i++; continue; }
         fired += gui->Input(event, screen->mouse, down, 0);
         if (gui->deleted) { delete gui; i = screen->dialogs.erase(i); continue; }
         if (event == Mouse::Event::Button1 && down && gui->BoxAndTitle().within(screen->mouse)) { bring_to_front = *i; break; }
