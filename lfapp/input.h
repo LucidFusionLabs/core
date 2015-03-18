@@ -23,6 +23,7 @@ namespace LFL {
 struct InputEvent {
     typedef long long Id;
     static int GetKey(Id event) { return event & 0xffffffff; }
+    static const char *Name(Id event);
 };
 
 struct Key {

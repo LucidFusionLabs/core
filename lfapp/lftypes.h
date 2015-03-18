@@ -114,6 +114,10 @@ template <class I, class T> I LesserBound(I first, I last, const T& v, bool stri
 
 template <typename RI> typename RI::iterator_type ForwardIteratorFromReverse(RI ri) { return (++ri).base(); }
 
+template <class X> basic_string<X> Substr(const basic_string<X> &in, size_t o=0, size_t l=basic_string<X>::npos) {
+    return o < in.size() ? in.substr(o, l) : basic_string<X>();
+}
+
 template <typename X> bool Contains(const X &c, const typename X::key_type &k) { return c.find(k) != c.end(); }
 template <typename X> void EnsureSize(X &x, int n) { if (x.size() < n) x.resize(n); }
 

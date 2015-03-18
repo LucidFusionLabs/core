@@ -306,7 +306,7 @@ struct Box3 {
     string DebugString() const { string ret = "Box3{"; for (int i=0; i<3; i++) if (!i || v[i].h) StrAppend(&ret, v[i].DebugString(), ", "); return ret + "}"; }
     void AddBorder(const Border &b, Box3 *out) const { for (int i=0; i<3; i++) if (!i || v[i].h) out->v[i] = Box::AddBorder(v[i], b); }
     void DelBorder(const Border &b, Box3 *out) const { for (int i=0; i<3; i++) if (!i || v[i].h) out->v[i] = Box::DelBorder(v[i], b); }
-    void Draw(const Color *c=0) const;
+    void Draw(const point &p=point(), const Color *c=0) const;
     bool VerticalIntersect(const Box &w) const {
         for (int i=0; i<3; i++) if (v[i].h && Box::VerticalIntersect(v[i], w)) return true;
         return false;

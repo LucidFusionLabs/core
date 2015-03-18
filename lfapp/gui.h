@@ -154,7 +154,7 @@ struct Widget {
             win.y = -win.h;
             int aw = dot_size, ah = dot_size;
             bool flip = flag & Flag::Horizontal;
-            if (!flip) { win.x += win.w - aw - 1; win.w = aw; }
+            if (!flip) { win.x += win.w - aw; win.w = aw; }
             else win.h = ah;
             Layout(aw, ah, flip);
         }
@@ -173,7 +173,7 @@ struct Widget {
                 gui->child_box.PushBack(arrow_down, attr_id, menuicon2 ? menuicon2->FindGlyph(flip ? 65 : 61) : 0);
                 gui->child_box.PushBack(scroll_dot, attr_id, menuicon2 ? menuicon2->FindGlyph(            72) : 0, &drawbox_ind);
 
-                AddClickBox(scroll_dot, MouseController::CB(bind(&Scrollbar::DragScrollDot, this)));
+                AddDragBox(scroll_dot, MouseController::CB(bind(&Scrollbar::DragScrollDot, this)));
                 AddClickBox(arrow_up,   MouseController::CB(bind(flip ? &Scrollbar::ScrollDown : &Scrollbar::ScrollUp,   this)));
                 AddClickBox(arrow_down, MouseController::CB(bind(flip ? &Scrollbar::ScrollUp   : &Scrollbar::ScrollDown, this)));
             }
@@ -342,10 +342,8 @@ struct TextGUI : public KeyboardGUI {
     struct LinesGUI : public GUI {
         LinesFrameBuffer *fb;
         LinesGUI(Window *W=0, const Box &B=Box(), LinesFrameBuffer *FB=0) : GUI(W, B), fb(FB) {}
-        point MousePosition() const {
-            point p = screen->mouse - box.TopLeft();
-            return (p.y >= 0 && p.y < fb->h) ? fb->BackPlus(p) : p;
-        }
+        bool NotActive() const { return !box.within(screen->mouse); }
+        point MousePosition() const { return fb->BackPlus(screen->mouse - box.BottomLeft()); }
     };
     struct LineUpdate {
         enum { PushBack=1, PushFront=2, DontUpdate=4 }; 
@@ -368,6 +366,7 @@ struct TextGUI : public KeyboardGUI {
     };
     struct Selection {
         bool enabled=1, changing=0, changing_previously=0;
+        int gui_ind=-1;
         struct Point { 
             int line_ind=0, char_ind=0; point click; Box glyph;
             bool operator<(const Point &c) const { SortImpl2(c.glyph.y, glyph.y, glyph.x, c.glyph.x); }
@@ -431,14 +430,15 @@ struct TextArea : public TextGUI {
     int scroll_inc=10, scrolled_lines=0;
     float v_scrolled=0, h_scrolled=0, last_v_scrolled=0, last_h_scrolled=0;
 
-    TextArea(Window *W, Font *F, int S=200) : TextGUI(W, F), line(this, S) { mouse_gui.fb=&line_fb; }
+    TextArea(Window *W, Font *F, int S=200) : TextGUI(W, F), line(this, S)
+    { mouse_gui.fb = &line_fb; if (selection.enabled) InitSelection(); }
     virtual ~TextArea() {}
 
     /// Write() is thread-safe.
     virtual void Write(const string &s, bool update_fb=true, bool release_fb=true);
     virtual void PageUp  () { v_scrolled = Clamp(v_scrolled - (float)scroll_inc/(WrappedLines()-1), 0, 1); UpdateScrolled(); }
     virtual void PageDown() { v_scrolled = Clamp(v_scrolled + (float)scroll_inc/(WrappedLines()-1), 0, 1); UpdateScrolled(); }
-    virtual void Resized(int w, int h);
+    virtual void Resized(const Box &b);
 
     virtual void Redraw(bool attach=true);
     virtual void UpdateScrolled();
@@ -457,8 +457,9 @@ struct TextArea : public TextGUI {
     int LineFBPushFront() const { return reverse_line_fb ? LineUpdate::PushBack  : LineUpdate::PushFront; }
     int LayoutBackLine(Lines *l, int i) { return Wrap() ? (*l)[-i-1].Layout(line_fb.w) : 1; }
 
+    void InitSelection();
     void DrawSelection();
-    void ClickCB(int button, int x, int y, int down);
+    void DragCB(int button, int x, int y, int down);
     bool GetGlyphFromCoords(const point &p, Selection::Point *out);
     void CopyText(const Selection::Point &beg, const Selection::Point &end);
 };
@@ -488,7 +489,6 @@ struct Editor : public TextArea {
     int WrappedLines() const { return wrapped_lines; }
     void UpdateWrappedLines(int cur_font_size, int width);
     int UpdateLines(float v_scrolled, int *first_ind, int *first_offset, int *first_len);
-    void Draw(const Box &box) { TextArea::Draw(box, true); }
 };
 
 struct Terminal : public TextArea, public Drawable::AttrSource {
@@ -553,7 +553,7 @@ struct Terminal : public TextArea, public Drawable::AttrSource {
         cmd_prefix = "";
     }
     virtual ~Terminal() {}
-    virtual void Resized(int w, int h);
+    virtual void Resized(const Box &b);
     virtual void ResizedLeftoverRegion(int w, int h, bool update_fb=true);
     virtual void SetScrollRegion(int b, int e, bool release_fb=false);
     virtual void Draw(const Box &b, bool draw_cursor);
@@ -642,7 +642,7 @@ struct Dialog : public GUI {
         screen->dialogs.push_back(this);
         box = screen->Box().center(screen->Box(w, h));
         fullscreen = flag & Flag::Fullscreen;
-        active = true;
+        Activate();
         Layout();
     }
     virtual ~Dialog() {}
@@ -719,24 +719,27 @@ struct SliderTweakDialog : public Dialog {
 struct EditorDialog : public Dialog {
     struct Flag { enum { Wrap=Dialog::Flag::Next }; };
     Editor editor;
+    Box content_box;
     Widget::Scrollbar v_scrollbar, h_scrollbar;
-    EditorDialog(Window *W, Font *F, File *I, float w=.5, float h=.5, int flag=0) : Dialog(w, h, flag), editor(W, F, I, flag & Flag::Wrap),
-    v_scrollbar(this), h_scrollbar(this, Box(), Widget::Scrollbar::Flag::AttachedHorizontal) {}
+    EditorDialog(Window *W, Font *F, File *I, float w=.5, float h=.5, int flag=0) :
+        Dialog(w, h, flag), editor(W, F, I, flag & Flag::Wrap), v_scrollbar(this),
+        h_scrollbar(this, Box(), Widget::Scrollbar::Flag::AttachedHorizontal) {}
 
     void Layout() {
         Dialog::Layout();
-        if (1)              v_scrollbar.LayoutAttached(box.Dimension());
-        if (!editor.Wrap()) h_scrollbar.LayoutAttached(box.Dimension());
+        content_box = box;
+        if (1)              { v_scrollbar.LayoutAttached(box.Dimension()); content_box.w -= v_scrollbar.dot_size; }
+        if (!editor.Wrap()) { h_scrollbar.LayoutAttached(box.Dimension()); Typed::MinusPlus(&content_box.h, &content_box.y, v_scrollbar.dot_size); }
+        printf("layout called box %s content %s\n", box.DebugString().c_str(), content_box.DebugString().c_str());
     }
     void Draw() {
-        Dialog::Draw();
         bool wrap = editor.Wrap();
         if (1)     editor.active = screen->top_dialog == this;
         if (1)     editor.v_scrolled = v_scrollbar.AddScrollDelta(editor.v_scrolled);
         if (!wrap) editor.h_scrolled = h_scrollbar.AddScrollDelta(editor.h_scrolled);
         if (1)     editor.UpdateScrolled();
-        if (1)     editor.Draw(box);
-        if (1)     GUI::Draw();
+        if (1)     Dialog::Draw();
+        if (1)     editor.Draw(content_box, true);
         if (1)     v_scrollbar.Update();
         if (!wrap) h_scrollbar.Update();
     }
