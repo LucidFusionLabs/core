@@ -65,7 +65,6 @@ void Frame3D(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sam
 
 void Frame2D(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample, int flag) {
     Asset *a = asset("input");
-    Box w(-screen->width/2, -screen->height/2, screen->width, screen->height);
 
     if (MyShader.ID) {
         screen->gd->ActiveTexture(0);
@@ -100,10 +99,11 @@ void Frame2D(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sam
         screen->gd->LoadIdentity();
         screen->gd->Mult(m);
 
-        glTimeResolutionShaderWindows(&MyShader, Color::black, w);
+        glTimeResolutionShaderWindows
+            (&MyShader, Color::black, Box(-screen->width/2, -screen->height/2, screen->width, screen->height));
     } else {
         screen->gd->EnableLayering();
-        a->tex.Draw(w);
+        a->tex.Draw(screen->Box());
     }
 }
 

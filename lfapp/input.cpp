@@ -881,9 +881,10 @@ void Shell::startcmd(const vector<string> &a) {
 void Shell::dldir(const vector<string>&) { INFO(LFAppDownloadDir()); }
 
 void Shell::screenshot(const vector<string> &a) {
-    if (a.empty()) return INFO("usage: screenshot <file>");
+    if (a.empty()) return INFO("usage: screenshot <file> [tex_id]");
     Texture tex;
-    tex.Screenshot();
+    if (a.size() == 1) tex.Screenshot();
+    else               tex.DumpGL(atoi(a[1]));
     LocalFile lf(a[0], "w");
     PngWriter::Write(&lf, tex);
 }

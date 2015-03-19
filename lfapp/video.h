@@ -395,7 +395,7 @@ struct Texture : public Drawable {
     void UpdateGL(int X, int Y, int W, int H, int flag=0) { return UpdateGL(buf?(buf+(Y*width+X)*PixelSize()):0, X, Y, W, H, flag); }
     void UpdateGL() { UpdateGL(0, 0, width, height); }
     void LoadGL() { LoadGL(buf, width, height, pf, LineSize()); }
-    void DumpGL();
+    void DumpGL(unsigned tex_id=0);
 
     virtual int Id() const { return 0; }
     virtual int Layout(const point &p, Box *out) const { *out = LFL::Box(p, width, height); return width; } 
@@ -446,7 +446,7 @@ struct ShaderDefines {
         if (vertex_color) StrAppend(&text, "#define VERTEXCOLOR\r\n");
         if (normals)      StrAppend(&text, "#define NORMALS\r\n");
         if (tex_2d)       StrAppend(&text, "#define TEX2D\r\n");
-        if (tex_cube)     StrAppend(&text, "#define TEX2CUBE\r\n");
+        if (tex_cube)     StrAppend(&text, "#define TEXCUBE\r\n");
     }
 };
 
@@ -547,7 +547,7 @@ struct GraphicsDevice {
     static const int One, SrcAlpha, OneMinusSrcAlpha, OneMinusDstColor;
     static const int Fill, Line, Point;
 
-    int draw_mode = 0;
+    int default_draw_mode = DrawMode::_2D, draw_mode = 0;
     vector<Color> default_color;
     vector<vector<Box> > scissor_stack;
     GraphicsDevice() : scissor_stack(1) {}
