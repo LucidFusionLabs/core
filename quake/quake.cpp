@@ -59,7 +59,8 @@ extern "C" int main(int argc, const char *argv[]) {
     FLAGS_lfapp_video = FLAGS_lfapp_input = true;
 
 	if (app->Create(argc, argv, __FILE__)) { app->Free(); return -1; }
-	if (app->Init()) { app->Free(); return -1; }
+    if (app->Init()) { app->Free(); return -1; }
+    screen->gd->default_draw_mode = DrawMode::_3D;
 
 	//  asset.Add(Asset(name, texture,  scale, translate, rotate, geometry, 0, 0));
 	asset.Add(Asset("arrow", "", .005, 1, -90, "arrow.obj", 0, 0));

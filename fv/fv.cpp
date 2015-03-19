@@ -605,7 +605,8 @@ extern "C" int main(int argc, const char *argv[]) {
 	FLAGS_lfapp_video = FLAGS_lfapp_audio = FLAGS_lfapp_input = FLAGS_lfapp_network = FLAGS_lfapp_camera = true;
 
 	if (app->Create(argc, argv, __FILE__)) { app->Free(); return -1; }
-	if (app->Init()) { app->Free(); return -1; }
+    if (app->Init()) { app->Free(); return -1; }
+    screen->gd->default_draw_mode = DrawMode::_3D;
 
 	//  asset.Add(Asset(name,          texture,          scale, translate, rotate, geometry     0, 0, 0));
 	asset.Add(Asset("axis", "", 0, 0, 0, 0, 0, 0, 0, bind(&glAxis, _1, _2)));

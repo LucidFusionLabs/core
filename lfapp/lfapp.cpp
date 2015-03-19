@@ -2237,7 +2237,7 @@ int Application::Frame() {
 
         if (FLAGS_lfapp_video) {
             video.Swap();
-            screen->gd->DrawMode(DrawMode::_3D);
+            screen->gd->DrawMode(screen->gd->default_draw_mode);
         }
     }
     if (previous_screen != screen) Window::MakeCurrent(previous_screen);

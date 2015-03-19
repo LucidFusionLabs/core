@@ -716,7 +716,7 @@ void GraphicsDevice::Uniform3fv(int u, int n, const float *v) { glUniform3fv(u, 
 
 // Common layer
 void GraphicsDevice::Flush() { glFlush(); }
-void GraphicsDevice::Clear() { glClear(GL_COLOR_BUFFER_BIT | (draw_mode = DrawMode::_3D ? GL_DEPTH_BUFFER_BIT : 0)); }
+void GraphicsDevice::Clear() { glClear(GL_COLOR_BUFFER_BIT | (draw_mode == DrawMode::_3D ? GL_DEPTH_BUFFER_BIT : 0)); }
 void GraphicsDevice::ClearColor(const Color &c) { glClearColor(c.r(), c.g(), c.b(), c.a()); }
 void GraphicsDevice::PushColor() { default_color.push_back(default_color.back()); UpdateColor();  }
 void GraphicsDevice::PopColor() {
@@ -741,7 +741,8 @@ void GraphicsDevice::GenTextures(int t, int n, unsigned *out) {
 void GraphicsDevice::CheckForError() {
     GLint gl_error=0, gl_validate_status=0;
     if ((gl_error = glGetError())) {
-#ifdef LFL_GLSL_SHADERS
+        ERROR("gl error ", gl_error);
+#ifdef LFL_GLES2
         if (screen->opengles_version == 2) {
             Shader *shader = ((OpenGLES2*)screen->gd)->shader;
             glValidateProgram(shader->ID);
@@ -1208,7 +1209,7 @@ void Video::CreateGraphicsDevice() {
 void Video::InitGraphicsDevice() {
     screen->gd->Init();
     screen->gd->ViewPort(screen->Box());
-    screen->gd->DrawMode(DrawMode::_3D);
+    screen->gd->DrawMode(screen->gd->default_draw_mode);
 
     float pos[]={-.5,1,-.3f,0}, grey20[]={.2f,.2f,.2f,1}, white[]={1,1,1,1}, black[]={0,0,0,1};
     screen->gd->EnableLight(0);
@@ -1269,7 +1270,7 @@ void Window::Reshaped(int w, int h) {
     height = h;
     if (!gd) return;
     gd->ViewPort(LFL::Box(width, height));
-    gd->DrawMode(DrawMode::_3D);
+    gd->DrawMode(screen->gd->default_draw_mode);
     for (auto g = screen->mouse_gui.begin(); g != screen->mouse_gui.end(); ++g) (*g)->Layout();
     if (app->reshaped_cb) app->reshaped_cb();
 }
@@ -1726,7 +1727,15 @@ void Texture::UpdateGL(const unsigned char *B, int X, int Y, int W, int H, int f
     glTexSubImage2D(gl_tt, 0, X, gl_y, W, H, GLPixelType(), GL_UNSIGNED_BYTE, B);
 }
 
-void Texture::DumpGL() {
+void Texture::DumpGL(unsigned tex_id) {
+    if (tex_id) {
+        GLint gl_tt = GLTexType(), tex_w = 0, tex_h = 0;
+        screen->gd->BindTexture(gl_tt, tex_id);
+        glGetTexLevelParameteriv(gl_tt, 0, GL_TEXTURE_WIDTH, &tex_w);
+        glGetTexLevelParameteriv(gl_tt, 0, GL_TEXTURE_WIDTH, &tex_h);
+        CHECK_GT((width  = tex_w), 0);
+        CHECK_GT((height = tex_h), 0);
+    }
     RenewBuffer();
     glGetTexImage(GLTexType(), 0, GLPixelType(), GL_UNSIGNED_BYTE, buf);
 }
@@ -1822,12 +1831,13 @@ void FrameBuffer::Attach(int ct, int dt) {
 }
 
 void FrameBuffer::Render(FrameCB cb) {
+    int dm = screen->gd->draw_mode;
     Attach();
     screen->gd->ViewPort(Box(0, 0, tex.width, tex.height));
     screen->gd->Clear();
     cb(0, 0, 0, 0, 0);
     Release();
-    screen->gd->RestoreViewport(DrawMode::_3D);
+    screen->gd->RestoreViewport(dm);
 }
 
 /* Shader */

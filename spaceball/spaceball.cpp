@@ -644,6 +644,7 @@ extern "C" int main(int argc, const char *argv[]) {
     save_settings.push_back("msens");
     SettingsFile::Read(LFAppDownloadDir(), "settings");
     Singleton<FlagMap>::Get()->dirty = false;
+    screen->gd->default_draw_mode = DrawMode::_3D;
 
     if (FLAGS_player_name.empty()) {
 #if defined(LFL_ANDROID)
@@ -697,9 +698,9 @@ extern "C" int main(int argc, const char *argv[]) {
         CHECK(StringReplace(&explode_shader, "// LFLPositionShaderMarker",
                                              LocalFile::FileContents(StrCat(ASSETS_DIR, "explode.glsl"))));
 
-        Shader::Create("fadershader",         vertex_shader,       fader_shader, "",                                          &fadershader);
-        Shader::Create("warpershader",  lfapp_vertex_shader,      warper_shader, "#define TEX2D \r\n#define VERTEXCOLOR\r\n", &warpershader);
-        Shader::Create("explodeshader",      explode_shader, lfapp_pixel_shader, "#define TEX2D \r\n#define NORMALS\r\n",     &explodeshader);
+        Shader::Create("fadershader",         vertex_shader,       fader_shader, "",                     &fadershader);
+        Shader::Create("warpershader",  lfapp_vertex_shader,      warper_shader, ShaderDefines(1,0,1,0), &warpershader);
+        Shader::Create("explodeshader",      explode_shader, lfapp_pixel_shader, ShaderDefines(0,1,1,0), &explodeshader);
     }
 
     // ball trail
