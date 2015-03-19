@@ -13,6 +13,7 @@ void main(void) {
     uv.y = sin(a) / r;
     uv /= 10.0;
     uv += time * 0.05;
+    uv = mod(uv, 1.0);
 
     vec3 color = texture2D(Texture, uv).rgb;
     gl_FragColor = vec4(color * r * 1.5, 1.0);

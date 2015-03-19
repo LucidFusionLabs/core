@@ -533,7 +533,7 @@ struct Terminal : public TextArea, public Drawable::AttrSource {
     int scroll_region_beg=0, scroll_region_end=0;
     string parse_text, parse_csi, parse_osc;
     unsigned char parse_charset=0;
-    bool parse_osc_escape=0, cursor_enabled=1;
+    bool parse_osc_escape=0, cursor_enabled=1, first_resize=1;
     point term_cursor=point(1,1), saved_term_cursor=point(1,1);
     LinesFrameBuffer::FromLineCB fb_cb;
     LinesFrameBuffer *last_fb=0;
@@ -730,7 +730,6 @@ struct EditorDialog : public Dialog {
         content_box = box;
         if (1)              { v_scrollbar.LayoutAttached(box.Dimension()); content_box.w -= v_scrollbar.dot_size; }
         if (!editor.Wrap()) { h_scrollbar.LayoutAttached(box.Dimension()); Typed::MinusPlus(&content_box.h, &content_box.y, v_scrollbar.dot_size); }
-        printf("layout called box %s content %s\n", box.DebugString().c_str(), content_box.DebugString().c_str());
     }
     void Draw() {
         bool wrap = editor.Wrap();

@@ -357,7 +357,8 @@ struct Printable : public string {
     Printable(const string &x) : string(x) {}
     Printable(const char *x) : string(x) {}
     Printable(      char *x) : string(x) {}
-    Printable(const int &x) : string(Typed::Str(x)) {}
+    Printable(const bool &x) : string(Typed::Str(x)) {}
+    Printable(const int  &x) : string(Typed::Str(x)) {}
     Printable(const long &x) : string(Typed::Str(x)) {}
     Printable(const unsigned char *x) : string((char*)x) {}
     Printable(const char &x) : string(Typed::Str(x)) {}

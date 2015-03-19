@@ -757,7 +757,7 @@ extern "C" int main(int argc, const char *argv[]) {
     server = new SpaceballClient(world, playerlist, chat);
 
     // init frame buffer
-    framebuffer.Create(screen->width, screen->height, FrameBuffer::Flag::ReleaseFB);
+    framebuffer.Create(screen->width, screen->height, FrameBuffer::Flag::CreateTexture | FrameBuffer::Flag::ReleaseFB);
     fb_tex1 = framebuffer.tex.ID;
     framebuffer.AllocTexture(&fb_tex2);
 

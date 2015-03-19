@@ -438,6 +438,18 @@ struct FrameBuffer {
     void Render(FrameCB cb);
 };
 
+struct ShaderDefines {
+    string text;
+    bool vertex_color, normals, tex_2d, tex_cube;
+    ShaderDefines(                 bool vc=0, bool n=0, bool t2D=0, bool tC=0) : ShaderDefines("", vc, n, t2D, tC) {}
+    ShaderDefines(const string &t, bool vc=0, bool n=0, bool t2D=0, bool tC=0) : text(t), vertex_color(vc), normals(n), tex_2d(t2D), tex_cube(tC) {
+        if (vertex_color) StrAppend(&text, "#define VERTEXCOLOR\r\n");
+        if (normals)      StrAppend(&text, "#define NORMALS\r\n");
+        if (tex_2d)       StrAppend(&text, "#define TEX2D\r\n");
+        if (tex_cube)     StrAppend(&text, "#define TEX2CUBE\r\n");
+    }
+};
+
 struct Shader {
     string name;
 
@@ -457,7 +469,7 @@ struct Shader {
         dirty_material=0; memzeros(dirty_light_pos); memzeros(dirty_light_color);
     }
 
-    static int Create(const string &name, const string &vertex_shader, const string &fragment_shader, const string &defines, Shader *out);
+    static int Create(const string &name, const string &vertex_shader, const string &fragment_shader, const ShaderDefines&, Shader *out);
     int GetUniformIndex(const string &name);
     void SetUniform1i(const string &name, float v);
     void SetUniform1f(const string &name, float v);
@@ -613,6 +625,7 @@ struct GraphicsDevice {
     void LineWidth(float n);
     void GenTextures(int t, int n, unsigned *out);
     void DelTextures(int n, const unsigned *id);
+    void CheckForError();
     void EnableDepthTest();
     void DisableDepthTest();
     void EnableBlend();
@@ -754,6 +767,9 @@ struct BoxArray {
         const Drawable::Attr *a = attr.GetAttr(b.attr_id);
         return last ? point(b.RightBound(a), b.TopBound(a)) : point(b.LeftBound(a), b.TopBound(a));
     }
+
+    int LeftBound (int o) const { const Drawable::Box &b = data[o]; return b.LeftBound (attr.GetAttr(b.attr_id)); }
+    int RightBound(int o) const { const Drawable::Box &b = data[o]; return b.RightBound(attr.GetAttr(b.attr_id)); }
     int BoundingWidth(const Drawable::Box &b, const Drawable::Box &e) const {
         CHECK_LE(b.box.x, e.box.x);
         return e.RightBound(attr.GetAttr(e.attr_id)) - b.LeftBound(attr.GetAttr(b.attr_id));
