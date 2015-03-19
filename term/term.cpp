@@ -87,8 +87,9 @@ struct MyTerminalWindow {
         terminal = new Terminal(fileno(process.out), screen, Fonts::Get(FLAGS_default_font, font_size, Color::white));
         terminal->new_link_cb = MyNewLinkCB;
         terminal->hover_link_cb = MyHoverLinkCB;
-        terminal->Draw(screen->Box(), false);
         terminal->active = true;
+        terminal->term_width = 80;
+        terminal->term_height = 25;
     }
     void UpdateTargetFPS() {
         effects_mode.Set(CustomShader() || screen->console->animating);
@@ -211,6 +212,7 @@ extern "C" int main(int argc, const char *argv[]) {
     MyWindowOpen();
     MyTerminalWindow *tw = (MyTerminalWindow*)screen->user1;
     SetFontSize(tw->font_size);
+    tw->terminal->Draw(screen->Box(), false);
     INFO("Starting Terminal ", FLAGS_default_font, " (w=", tw->terminal->font->fixed_width,
                                                    ", h=", tw->terminal->font->height, ")");
 

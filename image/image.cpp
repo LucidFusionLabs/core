@@ -65,7 +65,7 @@ void Frame3D(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sam
 
 void Frame2D(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample, int flag) {
     Asset *a = asset("input");
-    Box w(screen->width, screen->height);
+    Box w(-screen->width/2, -screen->height/2, screen->width, screen->height);
 
     if (MyShader.ID) {
         screen->gd->ActiveTexture(0);

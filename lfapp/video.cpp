@@ -212,7 +212,11 @@ DEFINE_int(scale_font_height, 0, "Scale font when height != scale_font_height");
 DEFINE_int(add_font_size, 0, "Increase all font sizes by add_font_size");
 
 #ifndef LFL_HEADLESS
-#define GDDebug(...) if (FLAGS_gd_debug) INFO(__VA_ARGS__)
+#ifdef LFL_GDDEBUG
+#define GDDebug(...) { screen->gd->CheckForError(); if (FLAGS_gd_debug) INFO(__VA_ARGS__); }
+#else 
+#define GDDebug(...)
+#endif
 const int GraphicsDevice::Float            = GL_FLOAT;
 const int GraphicsDevice::Points           = GL_POINTS;
 const int GraphicsDevice::Lines            = GL_LINES;
@@ -421,10 +425,10 @@ struct OpenGLES2 : public GraphicsDevice {
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
         string vertex_shader = LocalFile::FileContents(StrCat(ASSETS_DIR, "lfapp_vertex.glsl"));
         string pixel_shader  = LocalFile::FileContents(StrCat(ASSETS_DIR, "lfapp_pixel.glsl"));
-        Shader::Create("lfapp",          vertex_shader, pixel_shader, "#define TEX2D  \r\n#define VERTEXCOLOR\r\n", &app->video.shader_default);
-        Shader::Create("lfapp_cubemap",  vertex_shader, pixel_shader, "#define TEXCUBE\r\n#define VERTEXCOLOR\r\n", &app->video.shader_cubemap);
-        Shader::Create("lfapp_normals",  vertex_shader, pixel_shader, "#define TEX2D  \r\n#define NORMALS\r\n",     &app->video.shader_normals);
-        Shader::Create("lfapp_cubenorm", vertex_shader, pixel_shader, "#define TEXCUBE\r\n#define NORMALS\r\n",     &app->video.shader_cubenorm);
+        Shader::Create("lfapp",          vertex_shader, pixel_shader, ShaderDefines(1,0,1,0), &app->video.shader_default);
+        Shader::Create("lfapp_cubemap",  vertex_shader, pixel_shader, ShaderDefines(1,0,0,1), &app->video.shader_cubemap);
+        Shader::Create("lfapp_normals",  vertex_shader, pixel_shader, ShaderDefines(0,1,1,0), &app->video.shader_normals);
+        Shader::Create("lfapp_cubenorm", vertex_shader, pixel_shader, ShaderDefines(0,1,0,1), &app->video.shader_cubenorm);
         UseShader(0);
     }
 
@@ -734,6 +738,24 @@ void GraphicsDevice::GenTextures(int t, int n, unsigned *out) {
     }
 }
 
+void GraphicsDevice::CheckForError() {
+    GLint gl_error=0, gl_validate_status=0;
+    if ((gl_error = glGetError())) {
+#ifdef LFL_GLSL_SHADERS
+        if (screen->opengles_version == 2) {
+            Shader *shader = ((OpenGLES2*)screen->gd)->shader;
+            glValidateProgram(shader->ID);
+            glGetProgramiv(shader->ID, GL_VALIDATE_STATUS, &gl_validate_status);
+            if (gl_validate_status != GL_TRUE) ERROR(shader->name, ": gl validate status ", gl_validate_status);
+
+            char buf[1024]; int len;
+            glGetProgramInfoLog(shader->ID, sizeof(buf), &len, buf);
+            if (len) INFO(buf);
+        }
+#endif
+    }
+}
+
 void GraphicsDevice::EnableDepthTest()  { GDDebug("DepthTest=1");  glEnable(GL_DEPTH_TEST); glDepthMask(GL_TRUE);  }
 void GraphicsDevice::DisableDepthTest() { GDDebug("DepthTest=0"); glDisable(GL_DEPTH_TEST); glDepthMask(GL_FALSE); }
 void GraphicsDevice::DisableBlend() { GDDebug("Blend=0"); glDisable(GL_BLEND); }
@@ -912,6 +934,7 @@ void GraphicsDevice::PointSize(float n) {}
 void GraphicsDevice::LineWidth(float n) {}
 void GraphicsDevice::DelTextures(int n, const unsigned *id) {}
 void GraphicsDevice::GenTextures(int t, int n, unsigned *out) {}
+void GraphicsDevice::CheckForError() {}
 void GraphicsDevice::EnableDepthTest() {}
 void GraphicsDevice::DisableDepthTest() {}
 void GraphicsDevice::DisableBlend() {}
@@ -1219,20 +1242,7 @@ int Video::Swap() {
     OSXVideoSwap(screen->id);
 #endif
 
-    GLint gl_error=0, gl_validate_status=0;
-#ifdef LFL_GLSL_SHADERS
-#if 0
-    if (screen->opengles_version == 2) {
-        glGetProgramiv(GraphicsDevice::shader, GL_VALIDATE_STATUS, &gl_validate_status);
-        if (gl_validate_status != GL_TRUE) ERROR("gl validate status ", gl_validate_status);
-
-        char buf[1024]; int len;
-        glGetProgramInfoLog(GraphicsDevice::shader, sizeof(buf), &len, buf);
-        if (len) INFO(buf);
-    }
-#endif
-#endif
-    if ((gl_error = glGetError())) ERROR("gl error ", gl_error);
+    screen->gd->CheckForError();
     return 0;
 }
 
@@ -1837,14 +1847,14 @@ void Shader::SetGlobalUniform2f(const string &name, float v1, float v2){
 }
 
 #ifdef LFL_GLSL_SHADERS
-int Shader::Create(const string &name, const string &vertex_shader, const string &fragment_shader, const string &defines, Shader *out) {
+int Shader::Create(const string &name, const string &vertex_shader, const string &fragment_shader, const ShaderDefines &defines, Shader *out) {
     GLuint p = screen->gd->CreateProgram();
 
     string hdr; 
 #ifdef LFL_GLES2
     if (screen->opengles_version == 2) hdr += "#define LFL_GLES2\r\n";
 #endif
-    hdr += defines + string("\r\n");
+    hdr += defines.text + string("\r\n");
 
     if (vertex_shader.size()) {
         GLuint vs = screen->gd->CreateShader(GL_VERTEX_SHADER);
@@ -1862,10 +1872,10 @@ int Shader::Create(const string &name, const string &vertex_shader, const string
         screen->gd->AttachShader(p, fs);
     }
 
-    screen->gd->BindAttribLocation(p, 0, "Position"   );
-    screen->gd->BindAttribLocation(p, 1, "Normal"     );
-    screen->gd->BindAttribLocation(p, 2, "VertexColor");
-    screen->gd->BindAttribLocation(p, 3, "TexCoordIn" );
+    if (1)                    screen->gd->BindAttribLocation(p, 0, "Position"   );
+    if (defines.normals)      screen->gd->BindAttribLocation(p, 1, "Normal"     );
+    if (defines.vertex_color) screen->gd->BindAttribLocation(p, 2, "VertexColor");
+    if (defines.tex_2d)       screen->gd->BindAttribLocation(p, 3, "TexCoordIn" );
 
     screen->gd->LinkProgram(p);
 
@@ -2147,7 +2157,7 @@ Font *Font::OpenAtlas(const string &name, int size, Color c, int flag) {
     atlas->flow->p.x =  max_t * atlas->tex.width;
     atlas->flow->p.y = -max_u * atlas->tex.height;
 
-    INFO("OpenAtlas ", name, ", texID=", tex.ID, " fixed_width=", ret->fixed_width);
+    INFO("OpenAtlas ", name, ", texID=", tex.ID, ", height=", ret->height, ", fixed_width=", ret->fixed_width);
     tex.ID = 0;
     return ret;
 }
@@ -2376,7 +2386,8 @@ Font *TTFFont::Open(const shared_ptr<TTFFont::Resource> &resource, int size, Col
     if (resource->flag & Flag::WriteAtlas) ret->WriteAtlas(resource->name, &atlas->tex);
     atlas->Update(ret);
     atlas->tex.ClearBuffer();
-    INFO("TTTFont(", SpellNull(face->family_name), "), FW=", fixed_width, ", texID=", atlas->tex.ID);
+    INFO("TTTFont(", SpellNull(face->family_name), "), H=", ret->height, ", FW=",
+         ret->fixed_width, ", texID=", atlas->tex.ID);
     return ret;
 }
 #else /* LFL_FREETYPE */

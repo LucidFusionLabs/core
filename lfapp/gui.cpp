@@ -679,11 +679,10 @@ int Editor::UpdateLines(float v_scrolled, int *first_ind, int *first_offset, int
 /* Terminal */
 
 void Terminal::Resized(const Box &b) {
-    bool init = !term_width && !term_height;
     int old_term_height = term_height;
     term_width  = b.w / font->FixedWidth();
     term_height = b.h / font->height;
-    if (init) TextArea::Write(string(term_height, '\n'), 0);
+    if (first_resize && !(first_resize=0)) TextArea::Write(string(term_height, '\n'), 0);
     else {
         int height_dy = term_height - old_term_height;
         if      (height_dy > 0) TextArea::Write(string(height_dy, '\n'), 0);
@@ -957,7 +956,7 @@ void Terminal::FlushParseText() {
                                     cursor.attr, term_width);
         l->Layout();
         if (!fb->lines) continue;
-        int sx = l->data->glyphs[o].box.x, ex = l->data->glyphs.Back().box.right(), ol = l->Size() - o;
+        int s = l->Size(), ol = s - o, sx = l->data->glyphs.LeftBound(o), ex = l->data->glyphs.RightBound(s-1);
         if (append) l->Draw(l->p, -1, o, ol);
         else LinesFrameBuffer::Paint(l, point(sx, l->p.y), Box(-sx, 0, ex - sx, fb->font_height), o, ol);
     }
