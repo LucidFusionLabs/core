@@ -242,6 +242,7 @@ static const char **osx_argv = 0;
         [window setContentView:view];
         [window center];
         [window makeKeyAndOrderFront:nil];
+        [window setMinSize:NSMakeSize(256, 256)];
         if (1) {
             window.acceptsMouseMovedEvents = YES;
             [window makeFirstResponder:view];

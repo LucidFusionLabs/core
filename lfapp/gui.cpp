@@ -237,6 +237,7 @@ TextGUI::LineTokenProcessor<X>::LineTokenProcessor(TextGUI::Line *l, int o, cons
 
 template <class X> void TextGUI::LineTokenProcessor<X>::ProcessUpdate() {
     int tokens = 0;
+    if (!v.len) return;
     StringWordIterT<X> word(v.buf, v.len, isspace, 0, StringWordIter::Flag::InPlace);
     for (const X *w = word.Next(); w; w = word.Next(), tokens++) {
         int start_offset = w - v.buf, end_offset = start_offset + word.wordlen;
@@ -679,9 +680,19 @@ int Editor::UpdateLines(float v_scrolled, int *first_ind, int *first_offset, int
 /* Terminal */
 
 void Terminal::Resized(const Box &b) {
-    int old_term_height = term_height;
+    int old_term_width = term_width, old_term_height = term_height;
     term_width  = b.w / font->FixedWidth();
     term_height = b.h / font->height;
+    bool grid_changed = term_width != old_term_width || term_height != old_term_height;
+#ifndef _WIN32
+    if (grid_changed || first_resize) {
+        struct winsize ws;
+        memzero(ws);
+        ws.ws_row = term_height;
+        ws.ws_col = term_width;
+        ioctl(fd, TIOCSWINSZ, &ws);
+    }
+#endif
     if (first_resize && !(first_resize=0)) TextArea::Write(string(term_height, '\n'), 0);
     else {
         int height_dy = term_height - old_term_height;
@@ -690,13 +701,6 @@ void Terminal::Resized(const Box &b) {
     }
     term_cursor.x = min(term_cursor.x, term_width);
     term_cursor.y = min(term_cursor.y, term_height);
-#ifndef _WIN32
-    struct winsize ws;
-    memzero(ws);
-    ws.ws_row = term_height;
-    ws.ws_col = term_width;
-    ioctl(fd, TIOCSWINSZ, &ws);
-#endif
     UpdateCursor();
     TextArea::Resized(b);
     ResizedLeftoverRegion(b.w, b.h);
