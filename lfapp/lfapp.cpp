@@ -1676,7 +1676,7 @@ int StreamRegex::Match(const string &text, vector<Regex::Result> *out, bool eof)
 #else
 StreamRegex::~StreamRegex() {}
 StreamRegex::StreamRegex(const string &patternstr) {}
-int StreamRegex::Match(const string &text, vector<Regex::Result> *out) { return 0; }
+int StreamRegex::Match(const string &text, vector<Regex::Result> *out, bool eof) { return 0; }
 #endif
 
 #ifdef LFL_ICONV

@@ -257,7 +257,7 @@ struct Flow {
         for (const X *p = text.data(); !text.Done(p); p += c_bytes) {
             int c = UTF<X>::ReadGlyph(text, p, &c_bytes);
             if (AppendChar(c, attr_id, &PushBack(out->data, Drawable::Box())) == State::NEW_WORD) {
-                for (const X *pi=p; *pi && notspace(*pi); pi += ci_bytes)
+                for (const X *pi=p; !text.Done(pi) && notspace(*pi); pi += ci_bytes)
                     cur_word.len += cur_attr.font->GetGlyphWidth(UTF<X>::ReadGlyph(text, pi, &ci_bytes));
                 AppendChar(c, attr_id, &out->data.back());
             }
