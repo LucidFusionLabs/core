@@ -256,7 +256,7 @@ int Network::Shutdown(Service *svc) {
 
 int Network::Frame() {
     Service *svc; Socket fd; void **v;
-    int listener_type = Typed::Id<Listener>(), connection_type = Typed::Id<Connection>();
+    int listener_type = TypeId<Listener>(), connection_type = TypeId<Connection>();
 
     /* pre loop */
     ServiceTableIter(service_table) {
@@ -1961,7 +1961,7 @@ struct HTTPServerConnection : public Query {
         if (refill) {
             int ret;
             if ((ret = refill->Flushed(c))) return ret;
-            Typed::Replace<Query>(&refill, 0);
+            Replace<Query>(&refill, 0);
             c->readable = 1;
             return 0;
         }

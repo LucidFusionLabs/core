@@ -94,10 +94,10 @@ struct LiveSpectogram {
 
     void XForm(const string &n) {
         if (n == "mel") {
-            Typed::Replace<Matrix>(&transform, FFT2Mel(FLAGS_feat_melbands, FLAGS_feat_minfreq, FLAGS_feat_maxfreq, FLAGS_feat_window, FLAGS_sample_rate)->Transpose(mDelA));
+            Replace<Matrix>(&transform, FFT2Mel(FLAGS_feat_melbands, FLAGS_feat_minfreq, FLAGS_feat_maxfreq, FLAGS_feat_window, FLAGS_sample_rate)->Transpose(mDelA));
             Resize(FLAGS_feat_melbands);
         } else {
-            Typed::Replace<Matrix>(&transform, 0);
+            Replace<Matrix>(&transform, 0);
             Resize(FLAGS_feat_window/2);
         }
     }
@@ -262,7 +262,7 @@ void MySnap(const vector<string> &args) {
 
     FLAGS_speech_client = "manual";
     transcript.clear();
-    Typed::Replace(&segments, (PhoneticSegmentationGUI*)0);
+    Replace(&segments, (PhoneticSegmentationGUI*)0);
 
     app->audio.Snapshot(sa);
     MyDraw(args);
@@ -279,7 +279,7 @@ void MySnap(const vector<string> &args) {
             decode.push_back(FeatureSink::DecodedWord(word->text.c_str(), beg, end));
             transcript += (!i ? "" : "  ") + word->text;
         }
-        if (decode.size()) Typed::Replace
+        if (decode.size()) Replace
             (&segments, new PhoneticSegmentationGUI(screen, decode, AED->feature_rate * FLAGS_sample_secs, "snap"));
     }
 }
@@ -288,7 +288,7 @@ void MyNetDecodeResponse(FeatureSink::DecodedWords &decode, int responselen) {
     transcript.clear();
     for (int i=0, l=decode.size(); i<l; i++) transcript += (!i ? "" : "  ") + decode[i].text;
     INFO("transcript: ", transcript);
-    Typed::Replace(&segments, new PhoneticSegmentationGUI(screen, decode, responselen, "snap"));
+    Replace(&segments, new PhoneticSegmentationGUI(screen, decode, responselen, "snap"));
     decoding = 0;
 }
 
@@ -297,7 +297,7 @@ void MyNetDecode(const vector<string> &args) {
     if (!sa) { INFO("decode <assset>"); return; }
     if (!AED || !AED->sink || !AED->sink->connected()) { INFO("not connected"); return; }
 
-    Typed::Replace(&segments, (PhoneticSegmentationGUI*)0);
+    Replace(&segments, (PhoneticSegmentationGUI*)0);
     Matrix *features = Features::fromAsset(sa, Features::Flag::Storable);
     AED->sink->decode.clear();
     int posted = AED->sink->Write(features, 0, true, MyNetDecodeResponse);
@@ -323,7 +323,7 @@ void MyDecode(const vector<string> &args) {
     Matrix *viterbi = Decoder::decodeFeatures(decodeModel, features, 1024);
 
     transcript = Decoder::transcript(decodeModel, viterbi);     
-    Typed::Replace(&segments, new PhoneticSegmentationGUI(screen, decodeModel, viterbi, "snap"));
+    Replace(&segments, new PhoneticSegmentationGUI(screen, decodeModel, viterbi, "snap"));
 
     delete features;
     delete viterbi;

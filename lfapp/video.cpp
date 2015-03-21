@@ -46,6 +46,7 @@
 #define glTexImage2D(a,b,c,d,e,f,g,h,i)
 #define glTexSubImage2D(a,b,c,d,e,f,g,h,i)
 #define glGetTexImage(a,b,c,d,e)
+#define glGetTexLevelParameteriv(a,b,c,d)
 #define glTexParameteri(a,b,c)
 #define glGenRenderbuffers(a,b)
 #define glGenFramebuffers(a,b)
@@ -61,6 +62,7 @@
 #define GL_RGB 0
 #define GL_RGBA 0
 #define GL_TEXTURE_2D 0
+#define GL_TEXTURE_WIDTH 0
 #define GL_TEXTURE_CUBE_MAP 0
 #define GL_TEXTURE_CUBE_MAP_NEGATIVE_X 0
 #define GL_TEXTURE_CUBE_MAP_NEGATIVE_Y 0
@@ -476,14 +478,14 @@ struct OpenGLES2 : public GraphicsDevice {
 
     bool ShaderSupport() { return true; }
     bool LightingSupport() { return false; }
-    void EnableTexture()  { GDDebug("Texture=1"); if (Typed::Changed(&texture_on, 1)) UpdateTexture(); }
-    void DisableTexture() { GDDebug("Texture=0"); if (Typed::Changed(&texture_on, 0)) UpdateTexture(); }
+    void EnableTexture()  { GDDebug("Texture=1"); if (Changed(&texture_on, 1)) UpdateTexture(); }
+    void DisableTexture() { GDDebug("Texture=0"); if (Changed(&texture_on, 0)) UpdateTexture(); }
     void EnableLighting()  { GDDebug("Lighting=1"); lighting_on=1; }
     void DisableLighting() { GDDebug("Lighting=0"); lighting_on=0; }
-    void EnableVertexColor()  { GDDebug("VertexColor=1"); if (Typed::Changed(&colorverts_on, 1)) UpdateColorVerts(); }
-    void DisableVertexColor() { GDDebug("VertexColor=0"); if (Typed::Changed(&colorverts_on, 0)) UpdateColorVerts(); }
-    void EnableNormals()  { GDDebug("Normals=1"); if (Typed::Changed(&normals_on, 1)) { UpdateShader(); UpdateNormals(); } }
-    void DisableNormals() { GDDebug("Normals=0"); if (Typed::Changed(&normals_on, 0)) { UpdateShader(); UpdateNormals(); } }
+    void EnableVertexColor()  { GDDebug("VertexColor=1"); if (Changed(&colorverts_on, 1)) UpdateColorVerts(); }
+    void DisableVertexColor() { GDDebug("VertexColor=0"); if (Changed(&colorverts_on, 0)) UpdateColorVerts(); }
+    void EnableNormals()  { GDDebug("Normals=1"); if (Changed(&normals_on, 1)) { UpdateShader(); UpdateNormals(); } }
+    void DisableNormals() { GDDebug("Normals=0"); if (Changed(&normals_on, 0)) { UpdateShader(); UpdateNormals(); } }
     void EnableLight(int n) {}
     void DisableLight(int n) {}
     void Material(int t, float *v) {
@@ -506,8 +508,8 @@ struct OpenGLES2 : public GraphicsDevice {
         if (light_pos)   { shader->dirty_light_pos  [n] = app->video.shader_cubenorm.dirty_light_pos  [n] = app->video.shader_normals.dirty_light_pos  [n] = 1; }
         if (light_color) { shader->dirty_light_color[n] = app->video.shader_cubenorm.dirty_light_color[n] = app->video.shader_normals.dirty_light_color[n] = 1; }
     }
-    void DisableCubeMap()   { GDDebug("CubeMap=", 0); if (Typed::Changed(&cubemap_on, 0)) { UpdateShader(); glUniform1i(shader->uniform_cubeon, 0); } }
-    void BindCubeMap(int n) { GDDebug("CubeMap=", n); if (Typed::Changed(&cubemap_on, 1)) { UpdateShader(); glUniform1i(shader->uniform_cubeon, 1); } glUniform1i(shader->uniform_cubetex, 0); glBindTexture(GL_TEXTURE_CUBE_MAP, n); }
+    void DisableCubeMap()   { GDDebug("CubeMap=", 0); if (Changed(&cubemap_on, 0)) { UpdateShader(); glUniform1i(shader->uniform_cubeon, 0); } }
+    void BindCubeMap(int n) { GDDebug("CubeMap=", n); if (Changed(&cubemap_on, 1)) { UpdateShader(); glUniform1i(shader->uniform_cubeon, 1); } glUniform1i(shader->uniform_cubetex, 0); glBindTexture(GL_TEXTURE_CUBE_MAP, n); }
     void TextureGenLinear() {}
     void TextureGenReflection() {}
     void ActiveTexture(int n) { glActiveTexture(n ? GL_TEXTURE1 : GL_TEXTURE0); }
@@ -2036,7 +2038,7 @@ void Atlas::MakeFromPNGFiles(const string &name, const vector<string> &png, int 
         out->id = i - skipped;
 
         if (PngReader::Read(&in, &out->tex)) { skipped++; continue; }
-        Typed::Max(&ret->height, (short)out->tex.height);
+        Max(&ret->height, (short)out->tex.height);
 
         int atlas_x, atlas_y;
         CHECK(atlas->Add(&atlas_x, &atlas_y, out->tex.coord, out->tex.width, out->tex.height, ret->height));
@@ -2543,9 +2545,9 @@ Font *CoreTextFont::Open(const shared_ptr<Resource> &resource, int size, Color c
             g->id = glyphs[i];
             CTFontGetAdvancesForGlyphs(ctfont, kCTFontDefaultOrientation, &glyphs[i], &advance, 1);
             CoreTextFontLoadGlyph(&bounds[i], &advance, ret, g);
-            Typed::Max(&ret->ascender,  g->bearing_y);
-            Typed::Max(&ret->max_width, (short)g->tex.width);
-            Typed::Max(&descender,      g->tex.height - g->bearing_y);
+            Max(&ret->ascender,  g->bearing_y);
+            Max(&ret->max_width, (short)g->tex.width);
+            Max(&descender,      g->tex.height - g->bearing_y);
         }
         CFRelease(ctfont);
 

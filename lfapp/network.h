@@ -344,7 +344,7 @@ struct Listener {
     BIO *ssl;
     Socket socket;
     typed_ptr self_reference;
-    Listener(bool ssl=false) : ssl((BIO*)ssl), socket(-1), self_reference(Typed::Pointer(this)) {}
+    Listener(bool ssl=false) : ssl((BIO*)ssl), socket(-1), self_reference(TypePointer(this)) {}
 };
 
 struct Connection {
@@ -365,10 +365,10 @@ struct Connection {
     Query *query;
 
     ~Connection() { delete query; }
-    Connection(Service *s, Query *q)                                       : svc(s), socket(-1),   ct(Now()), rt(Now()), wt(Now()), addr(0),    state(Error), port(0),    self_reference(Typed::Pointer(this)), query(q) {}
-    Connection(Service *s, int State, int Sock)                            : svc(s), socket(Sock), ct(Now()), rt(Now()), wt(Now()), addr(0),    state(State), port(0),    self_reference(Typed::Pointer(this)), query(0) {}
-    Connection(Service *s, int State, IPV4::Addr Addr, int Port)           : svc(s), socket(-1),   ct(Now()), rt(Now()), wt(Now()), addr(Addr), state(State), port(Port), self_reference(Typed::Pointer(this)), query(0) {}
-    Connection(Service *s, int State, int Sock, IPV4::Addr Addr, int Port) : svc(s), socket(Sock), ct(Now()), rt(Now()), wt(Now()), addr(Addr), state(State), port(Port), self_reference(Typed::Pointer(this)), query(0) {}
+    Connection(Service *s, Query *q)                                       : svc(s), socket(-1),   ct(Now()), rt(Now()), wt(Now()), addr(0),    state(Error), port(0),    self_reference(TypePointer(this)), query(q) {}
+    Connection(Service *s, int State, int Sock)                            : svc(s), socket(Sock), ct(Now()), rt(Now()), wt(Now()), addr(0),    state(State), port(0),    self_reference(TypePointer(this)), query(0) {}
+    Connection(Service *s, int State, IPV4::Addr Addr, int Port)           : svc(s), socket(-1),   ct(Now()), rt(Now()), wt(Now()), addr(Addr), state(State), port(Port), self_reference(TypePointer(this)), query(0) {}
+    Connection(Service *s, int State, int Sock, IPV4::Addr Addr, int Port) : svc(s), socket(Sock), ct(Now()), rt(Now()), wt(Now()), addr(Addr), state(State), port(Port), self_reference(TypePointer(this)), query(0) {}
 
     string name() { return !endpoint_name.empty() ? endpoint_name : IPV4Endpoint::name(addr, port); }
     void _error() { state = Error; ct = Now(); }

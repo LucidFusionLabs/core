@@ -70,7 +70,7 @@ struct MyBrowserWindow : public GUI {
         win.h    = max(0,         win.h - topbar.h);
 
         addressbar = topbar;
-        Typed::MinusPlus(&addressbar.w, &addressbar.x, 16*3 + 20);
+        MinusPlus(&addressbar.w, &addressbar.x, 16*3 + 20);
 
         Flow flow(&box, 0, Reset());
         back.Layout(&flow, point(16, 16));

@@ -1036,7 +1036,7 @@ void Decoder::visualizeFeatures(AcousticModel::Compiled *model, Matrix *MFCC, Ma
     static PhoneticSegmentationGUI *segments = 0;
     static bool interactive_done;
 
-    Typed::Replace(&segments, new PhoneticSegmentationGUI(screen, model, viterbi, "visbuf"));
+    Replace(&segments, new PhoneticSegmentationGUI(screen, model, viterbi, "visbuf"));
     interactive_done = 0;
 
     SoundAsset sa;

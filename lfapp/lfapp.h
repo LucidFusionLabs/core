@@ -322,24 +322,10 @@ struct typed_ptr {
     typed_ptr(int T, void *P) : type(T), value(P) {}
 };
 
-struct Typed {
-    template <class X> static void Swap(X& a, X& b) { X swap=a; a=b; b=swap; }
-    template <class X> static void Replace(X** p, X* r) { delete (*p); (*p) = r; }
-    template <class X> static void AllocReplace(X** p, X* r) { if (*p && (*p)->alloc) (*p)->alloc->free(*p); *p = r; }
-    template <class X> static bool Changed     (X* p, const X& r) { bool ret = *p != r;       *p = r; return ret; }
-    template <class X> static bool EqualChanged(X* p, const X& r) { bool ret = !Equal(*p, r); *p = r; return ret; }
-    template <class X> static X Min(X a, X b) { return b < a ? b : a; }
-    template <class X> static X Max(X a, X b) { return b > a ? b : a; }
-    template <class X> static X Negate(X x) { return x ? -x : x; }
-    template <class X> static bool Max(X *a, X b) { if (b <= *a) return 0; *a = b; return 1; }
-    template <class X> static bool Min(X *a, X b) { if (b >= *a) return 0; *a = b; return 1; }
-    template <class X> static bool Within(X x, X a, X b) { return x >= a && x <= b; }
-    template <class X> static string Str(const X& x) { std::stringstream in; in << x; return in.str(); }
-    template <class X> static int Id()   { static int ret = fnv32(typeid(X).name()); return ret; }
-    template <class X> static int Id(X*) { static int ret = fnv32(typeid(X).name()); return ret; }
-    template <class X> static typed_ptr Pointer(X* v) { return typed_ptr(Typed::Id<X>(), v); }
-    template <class X> static void MinusPlus(X *m, X* p, X v) { *m -= v; *p += v; }
-};
+template <class X> static int TypeId()   { static int ret = fnv32(typeid(X).name()); return ret; }
+template <class X> static int TypeId(X*) { static int ret = fnv32(typeid(X).name()); return ret; }
+template <class X> static typed_ptr TypePointer(X* v) { return typed_ptr(TypeId<X>(), v); }
+template <class X> static string ToString(const X& x) { std::stringstream in; in << x; return in.str(); }
 
 struct Scannable {
     static bool     Scan(const bool&,     const char  *v) { return *v ? atoi(v) : true; }
@@ -357,20 +343,20 @@ struct Printable : public string {
     Printable(const string &x) : string(x) {}
     Printable(const char *x) : string(x) {}
     Printable(      char *x) : string(x) {}
-    Printable(const bool &x) : string(Typed::Str(x)) {}
-    Printable(const int  &x) : string(Typed::Str(x)) {}
-    Printable(const long &x) : string(Typed::Str(x)) {}
+    Printable(const bool &x) : string(ToString(x)) {}
+    Printable(const int  &x) : string(ToString(x)) {}
+    Printable(const long &x) : string(ToString(x)) {}
     Printable(const unsigned char *x) : string((char*)x) {}
-    Printable(const char &x) : string(Typed::Str(x)) {}
-    Printable(const short &x) : string(Typed::Str(x)) {}
-    Printable(const float &x) : string(Typed::Str(x)) {}
-    Printable(const double &x) : string(Typed::Str(x)) {}
-    Printable(const unsigned &x) : string(Typed::Str(x)) {}
-    Printable(const long long &x) : string(Typed::Str(x)) {}
-    Printable(const unsigned char &x) : string(Typed::Str(x)) {}
-    Printable(const unsigned short &x) : string(Typed::Str(x)) {}
-    Printable(const unsigned long &x) : string(Typed::Str(x)) {}
-    Printable(const unsigned long long &x) : string(Typed::Str(x)) {}
+    Printable(const char &x) : string(ToString(x)) {}
+    Printable(const short &x) : string(ToString(x)) {}
+    Printable(const float &x) : string(ToString(x)) {}
+    Printable(const double &x) : string(ToString(x)) {}
+    Printable(const unsigned &x) : string(ToString(x)) {}
+    Printable(const long long &x) : string(ToString(x)) {}
+    Printable(const unsigned char &x) : string(ToString(x)) {}
+    Printable(const unsigned short &x) : string(ToString(x)) {}
+    Printable(const unsigned long &x) : string(ToString(x)) {}
+    Printable(const unsigned long long &x) : string(ToString(x)) {}
     Printable(const pair<int, int> &x);
     Printable(const vector<string> &x);
     Printable(const vector<double> &x);
@@ -475,10 +461,10 @@ struct Flag {
     Flag(const char *N, const char *D, const char *F, int L) : name(N), desc(D), file(F), line(L), override(0) {}
     virtual ~Flag() {}
 
-    string ToString() const;
-    virtual void Update(const char *text) = 0;
+    string GetString() const;
     virtual string Get() const = 0;
     virtual bool IsBool() const = 0;
+    virtual void Update(const char *text) = 0;
 };
 
 struct FlagMap {
@@ -503,9 +489,9 @@ template <class X> struct FlagOfType : public Flag {
     FlagOfType(const char *N, const char *D, const char *F, int L, X *V)
         : Flag(N, D, F, L), v(V) { Singleton<FlagMap>::Get()->Add(this); } 
 
+    string Get() const { return ToString(*v); }
+    bool IsBool() const { return TypeId<X>() == TypeId<bool>(); }
     void Update(const char *text) { if (text) *v = Scannable::Scan(*v, text); }
-    string Get() const { return Typed::Str(*v); }
-    bool IsBool() const { return Typed::Id<X>() == Typed::Id<bool>(); }
 };
 
 #define DEFINE_FLAG(name, type, initial, description) \

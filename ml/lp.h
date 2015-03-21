@@ -107,8 +107,8 @@ struct LinearProgram {
     }
     void PushConstraints(int n) {
         int var_max = 0;
-        for (auto i :     basic) Typed::Max(&var_max, i);
-        for (auto i : non_basic) Typed::Max(&var_max, i);
+        for (auto i :     basic) Max(&var_max, i);
+        for (auto i : non_basic) Max(&var_max, i);
         for (int i=0; i<n; i++) basic.push_back(var_max+1+i);
         M += n;
         A.AddRows(n);
@@ -152,12 +152,12 @@ struct LinearProgram {
     int ComplementaryVariableID(int v) const { return v <= N ? M + v : v - N; }
     int EnteringVariableIndex(double *m, int n) const {
         int min_id = INT_MAX, min_ind = -1;
-        for (int i=0; i<n; i++) if (m[i] > epsilon && Typed::Min(&min_id, non_basic[i])) min_ind = i;
+        for (int i=0; i<n; i++) if (m[i] > epsilon && Min(&min_id, non_basic[i])) min_ind = i;
         return min_ind;
     }
     void LoadProblemColumn(int var_id, Matrix *Aout, int aj, Matrix *Cout) const {
         int vj = FindOrDie(var, var_id), vN = non_basic.size();
-        MatrixRowIter(&A) Aout->row(i)[aj] = (vj < vN) ? Typed::Negate(A.row(i)[vj]) : (vj - vN == i);
+        MatrixRowIter(&A) Aout->row(i)[aj] = (vj < vN) ? Negate(A.row(i)[vj]) : (vj - vN == i);
         if (1)            Cout->row(aj)[0] = (vj < vN) ? C.row(vj)[0] : 0; 
     }
     void ChangeObjectiveToConstant(double v=-1) { MatrixRowIter(&C) C.row(i)[0] = v; }
@@ -191,7 +191,7 @@ struct LinearProgram {
         MatrixIter(&ahat) {
             if ((Ahati = ahat.row(i)[0]) >= -epsilon) continue;
             double inc = bhat.row(i)[0] / -Ahati;
-            if (!Typed::Min(&min_inc, inc) &&
+            if (!Min(&min_inc, inc) &&
                 !(Equal(inc, min_inc, epsilon) && basic[i] < *leaving_id)) continue;
             *leaving_id = basic[i];
             leaving_ind = i;
@@ -199,7 +199,7 @@ struct LinearProgram {
         if (leaving_ind < 0) { *leaving_id = -1; return; }
 
         objective = Z0 + Vector::Dot(pi.m, B.m, pi.N) + chat.row(0)[entering_ind] * min_inc;
-        Typed::Swap(non_basic[entering_ind], basic[leaving_ind]);
+        swap(non_basic[entering_ind], basic[leaving_ind]);
     }
     static int Optimize(LinearProgram *LP) {
         LP->PrintRevised();

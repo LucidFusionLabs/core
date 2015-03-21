@@ -41,12 +41,12 @@ struct FloatContainer : public Box {
     virtual       FloatContainer *AsFloatContainer()       { return this; }
     virtual float baseleft(float py, float ph, int *adjacent_out=0) const {
         int max_left = x;
-        basedir(py, ph, &float_left, adjacent_out, [&](const Box &b){ return Typed::Max(&max_left, b.right()); });
+        basedir(py, ph, &float_left, adjacent_out, [&](const Box &b){ return Max(&max_left, b.right()); });
         return max_left - x;
     }
     virtual float baseright(float py, float ph, int *adjacent_out=0) const { 
         int min_right = x + w;
-        basedir(py, ph, &float_right, adjacent_out, [&](const Box &b){ return Typed::Min(&min_right, b.x); });
+        basedir(py, ph, &float_right, adjacent_out, [&](const Box &b){ return Min(&min_right, b.x); });
         return min_right - x;
     }
     void basedir(float py, float ph, const vector<Float> *float_target, int *adjacent_out, function<bool (const Box&)> filter_cb) const {
@@ -62,16 +62,16 @@ struct FloatContainer : public Box {
     int CenterFloatWidth(int fy, int fh) const { return baseright(fy, fh) - baseleft(fy, fh); }
     int FloatHeight() const {
         int min_y = 0;
-        for (auto i = float_left .begin(); i != float_left .end(); ++i) if (!i->inherited) Typed::Min(&min_y, i->y);
-        for (auto i = float_right.begin(); i != float_right.end(); ++i) if (!i->inherited) Typed::Min(&min_y, i->y);
+        for (auto i = float_left .begin(); i != float_left .end(); ++i) if (!i->inherited) Min(&min_y, i->y);
+        for (auto i = float_right.begin(); i != float_right.end(); ++i) if (!i->inherited) Min(&min_y, i->y);
         return -min_y;
     }
     int ClearFloats(int fy, int fh, bool clear_left, bool clear_right) const {
         if (!clear_left && !clear_right) return 0;
         int fl = -1, fr = -1, sy = fy, ch;
         while (clear_left || clear_right) {
-            if (clear_left)  { baseleft (fy, fh, &fl); if (fl >= 0) Typed::Min(&fy, float_left [fl].Position().y - fh); }
-            if (clear_right) { baseright(fy, fh, &fr); if (fr >= 0) Typed::Min(&fy, float_right[fr].Position().y - fh); }
+            if (clear_left)  { baseleft (fy, fh, &fl); if (fl >= 0) Min(&fy, float_left [fl].Position().y - fh); }
+            if (clear_right) { baseright(fy, fh, &fr); if (fr >= 0) Min(&fy, float_right[fr].Position().y - fh); }
             if ((!clear_left || fl<0) && (!clear_right || fr<0)) break;
         }
         return max(0, sy - fy);
@@ -169,15 +169,15 @@ struct Flow {
     void SetFont(Font *F) {
         if (!(cur_attr.font = F)) return;
         int prev_height = cur_line.height, prev_ascent = cur_line.ascent, prev_descent = cur_line.descent;
-        Typed::Max(&cur_line.height,  F->height);
-        Typed::Max(&cur_line.ascent,  F->ascender);
-        Typed::Max(&cur_line.descent, F->Descender());
+        Max(&cur_line.height,  F->height);
+        Max(&cur_line.ascent,  F->ascender);
+        Max(&cur_line.descent, F->Descender());
         UpdateCurrentLine(cur_line.height-prev_height, cur_line.ascent-prev_ascent, cur_line.descent-prev_descent);
     }
     void SetMinimumAscent(short line_ascent) {
         int prev_height = cur_line.height, prev_ascent = cur_line.ascent;
-        Typed::Max(&cur_line.ascent, line_ascent);
-        Typed::Max(&cur_line.height, (short)(cur_line.ascent + cur_line.descent));
+        Max(&cur_line.ascent, line_ascent);
+        Max(&cur_line.height, (short)(cur_line.ascent + cur_line.descent));
         UpdateCurrentLine(cur_line.height-prev_height, cur_line.ascent-prev_ascent, 0);
     }
     void UpdateCurrentLine(int height_delta, int ascent_delta, int descent_delta) {
@@ -267,7 +267,7 @@ struct Flow {
     State AppendChar(int c, int attr_id, Drawable::Box *box) {
         if (layout.char_tf) c = layout.char_tf(c);
         if (state == State::NEW_WORD && layout.word_start_char_tf) c = layout.word_start_char_tf(c);
-        Typed::Max(&cur_line.height, cur_attr.font->height);
+        Max(&cur_line.height, cur_attr.font->height);
         box->drawable = cur_attr.font->FindGlyph(c);
         box->attr_id = attr_id;
         box->line_id = out ? out->line.size() : -1;
@@ -311,10 +311,10 @@ struct Flow {
         if (out) {        
             AlignCurrentLine();
             out->line.push_back(CurrentLineBox());
-            out->line_ind.push_back(out ? Typed::Max<int>(0, out->data.size()-next_glyph_preadded) : 0);
+            out->line_ind.push_back(out ? max<int>(0, out->data.size()-next_glyph_preadded) : 0);
             out->height += out->line.back().h;
             if (out->data.size() > cur_line.out_ind)
-                Typed::Max(&max_line_width, out->data.back().box.right() - out->data[cur_line.out_ind].box.x);
+                Max(&max_line_width, out->data.back().box.right() - out->data[cur_line.out_ind].box.x);
         }
         cur_line.fresh = 1;
         cur_line.height = cur_line.ascent = cur_line.descent = 0;
@@ -338,7 +338,7 @@ struct Flow {
     }
     void GetCurrentLineExtents(int *min_x, int *max_x) { 
         *min_x=INT_MAX; *max_x=INT_MIN;
-        for (auto i = out->data.begin() + cur_line.out_ind; i != out->data.end(); ++i) { Typed::Min(min_x, i->box.x); Typed::Max(max_x, i->box.right()); } 
+        for (auto i = out->data.begin() + cur_line.out_ind; i != out->data.end(); ++i) { Min(min_x, i->box.x); Max(max_x, i->box.right()); } 
     }
     void SetCurrentLineBounds() {
         cur_line.beg = container->baseleft (p.y, cur_line.height, &adj_float_left)  - container->x;
@@ -366,7 +366,7 @@ struct TableFlow {
     void Select() { flow->layout.wrap_lines=0; }
     void SetMinColumnWidth(int j, int width, int colspan=1) {
         EnsureSize(column, j+colspan);
-        if (width) for (int v=width/colspan, k=j; k<j+colspan; k++) Typed::Max(&column[k].width, v);
+        if (width) for (int v=width/colspan, k=j; k<j+colspan; k++) Max(&column[k].width, v);
     }
     Column *SetCellDim(int j, int width, int colspan=1, int rowspan=1) {
         while (VectorEnsureElement(column, j+col_skipped)->remaining_rowspan) col_skipped++;
@@ -422,7 +422,7 @@ struct TableFlow {
         if (!max_cell_height) max_cell_height = split_cell_height;
         TableFlowColIter(this) {
             cj->remaining_rowspan = max(0, cj->remaining_rowspan - 1);
-            if (!cj->remaining_rowspan) Typed::Max(&max_cell_height, cj->remaining_height);
+            if (!cj->remaining_rowspan) Max(&max_cell_height, cj->remaining_height);
         }
         TableFlowColIter(this) {
             int subtracted = min(max_cell_height, cj->remaining_height);

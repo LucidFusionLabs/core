@@ -1034,9 +1034,9 @@ struct GameMenuGUI : public GUI, public Query {
     GameMenuGUI(LFL::Window *W, const string &master_url, int port, Asset *t=0, Asset *parts=0) :
     GUI(W), topbar(W), pinger(-1), master_get_url(master_url), title(t),
     font(Fonts::Get("Origicide.ttf", 12, Color::white)), default_port(port),
-    tab1(&topbar, 0, font, "single player", MouseController::CB([&](){ if (!Typed::Changed(&selected, 1)) ToggleActive(); })),
-    tab2(&topbar, 0, font, "multi player",  MouseController::CB([&](){ if (!Typed::Changed(&selected, 2)) ToggleActive(); })), 
-    tab3(&topbar, 0, font, "options",       MouseController::CB([&](){ if (!Typed::Changed(&selected, 3)) ToggleActive(); })),
+    tab1(&topbar, 0, font, "single player", MouseController::CB([&](){ if (!Changed(&selected, 1)) ToggleActive(); })),
+    tab2(&topbar, 0, font, "multi player",  MouseController::CB([&](){ if (!Changed(&selected, 2)) ToggleActive(); })), 
+    tab3(&topbar, 0, font, "options",       MouseController::CB([&](){ if (!Changed(&selected, 3)) ToggleActive(); })),
     tab4(&topbar, 0, font, "quit",          MouseController::CB(bind(&GameMenuGUI::MenuQuit, this))),
     tab1_server_start(this, 0, font, "start", MouseController::CB(bind(&GameMenuGUI::MenuServerStart, this))),
     tab2_server_join (this, 0, font, "join",  MouseController::CB(bind(&GameMenuGUI::MenuServerJoin,  this))),

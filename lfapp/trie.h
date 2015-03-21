@@ -241,7 +241,7 @@ template <class K = char> struct AhoCorasickMatcher {
     fsm(InputPair(sorted_in.begin(), pattern.begin()), InputPair(sorted_in.end(), pattern.end())),
     match_state(fsm.head) {
         for (int i=0, l=sorted_in.size(); i != l; ++i)
-            Typed::Max(&max_pattern_size, (pattern[i] = sorted_in[i].size()));
+            Max(&max_pattern_size, (pattern[i] = sorted_in[i].size()));
         if (!fsm.head || !fsm.data.size()) return;
         std::queue<int> q;
         auto n = &fsm.data[fsm.head-1];

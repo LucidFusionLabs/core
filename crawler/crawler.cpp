@@ -102,7 +102,7 @@ extern "C" int main(int argc, const char *argv[]) {
 
         if (FLAGS_forvo_dump.size()) ((ForvoApi*)crawler)->dump(FLAGS_forvo_dump.c_str());
 
-        if (!FLAGS_forvo_crawl) Typed::Replace<Crawler>(&crawler, 0);
+        if (!FLAGS_forvo_crawl) Replace<Crawler>(&crawler, 0);
     }
 
     /* google */
@@ -113,7 +113,7 @@ extern "C" int main(int argc, const char *argv[]) {
 
         if (FLAGS_google_init.size()) ((GoogleApi*)crawler)->init(FLAGS_google_init.c_str());
 
-        if (!FLAGS_google_crawl) Typed::Replace<Crawler>(&crawler, 0);
+        if (!FLAGS_google_crawl) Replace<Crawler>(&crawler, 0);
     }
 
     /* main */
