@@ -114,8 +114,8 @@ struct Color {
     Color a(float v) const { Color c=*this; c.a() = v; return c; }
     void scale(float f) { r() = Clamp(r()*f, 0, 1); g() = Clamp(g()*f, 0, 1); b() = Clamp(b()*f, 0, 1); }
     void ToHSV(float *h, float *s, float *v) const {
-        float M = Typed::Max(r(), Typed::Max(g(), b()));
-        float m = Typed::Min(r(), Typed::Min(g(), b()));
+        float M = max(r(), max(g(), b()));
+        float m = min(r(), min(g(), b()));
         float C = M - m;
         if (!C) { *h = *s = 0; *v = m; return; }
 
@@ -258,7 +258,7 @@ struct Box {
     bool operator!=(const Box &c) const { return !(*this == c); }
     bool operator<(const Box &c) const { SortImpl4(x, c.x, y, c.y, w, c.w, h, c.h); }
     void scale(float xf, float yf) { x = RoundF(x*xf); w = RoundF(w*xf); y = RoundF(y*yf); h = RoundF(h*yf); }
-    void swapaxis(int width, int height) { x += w; y += h; Typed::Swap(x,y); Typed::Swap(w,h); y = width - y; x = height - x; } 
+    void swapaxis(int width, int height) { x += w; y += h; swap(x,y); swap(w,h); y = width - y; x = height - x; } 
     void AddBorder(const Border &b) { *this = AddBorder(*this, b); }
     void DelBorder(const Border &b) { *this = DelBorder(*this, b); }
     Box Intersect(const Box &w) const { Box ret(max(x, w.x), max(y, w.y), min(right(), w.right()), min(top(), w.top())); ret.w -= ret.x; ret.h -= ret.y; return (ret.w >= 0 && ret.h >= 0) ? ret : Box(); }

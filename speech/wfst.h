@@ -551,7 +551,7 @@ struct WFST {
         }
 
         void invert() {
-            for (Edgevec::iterator i = transits.begin(); i != transits.end(); i++) Typed::Swap((*i).in, (*i).out);
+            for (Edgevec::iterator i = transits.begin(); i != transits.end(); i++) swap((*i).in, (*i).out);
             sort();
         }
 
@@ -1177,7 +1177,7 @@ struct WFST {
         }
     };
 
-    static void invert(TransitMapBuilder *E, IOAlphabet**A, IOAlphabet**B) { E->invert(); if (A && B) Typed::Swap(*A, *B); }
+    static void invert(TransitMapBuilder *E, IOAlphabet**A, IOAlphabet**B) { E->invert(); if (A && B) swap(*A, *B); }
 
     static void Union(Semiring *K, TransitMapBuilder *E, StateSet *I, StateSet *F=0) { E->Union(K, I, F); }
 

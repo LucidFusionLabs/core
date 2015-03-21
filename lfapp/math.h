@@ -20,6 +20,14 @@
 #define __LFL_LFAPP_MATH_H__
 namespace LFL {
 
+template <class X> static X Negate(X x) { return x ? -x : x; }
+template <class X> static bool Min(X *a, X b) { if (b >= *a) return 0; *a = b; return 1; }
+template <class X> static bool Max(X *a, X b) { if (b <= *a) return 0; *a = b; return 1; }
+template <class X> static bool Within(X x, X a, X b) { return x >= a && x <= b; }
+template <class X> static bool Changed     (X* p, const X& r) { bool ret = *p != r;       *p = r; return ret; }
+template <class X> static bool EqualChanged(X* p, const X& r) { bool ret = !Equal(*p, r); *p = r; return ret; }
+template <class X> static void MinusPlus(X *m, X* p, X v) { *m -= v; *p += v; }
+
 template <class X> struct V2 {
     X x, y;
     V2() : x(0), y(0) {}
@@ -210,7 +218,7 @@ template <class X> struct Vec {
     virtual int Len() const = 0;
     virtual X Read(int i) const = 0;
 
-    static string Str(const X *v1,              int D) { string line; for (int i=0; i<D; i++) line += (line.size() ? ", " : "") + Typed::Str(v1[i]); return line; }
+    static string Str(const X *v1,              int D) { string line; for (int i=0; i<D; i++) line += (line.size() ? ", " : "") + ToString(v1[i]); return line; }
     static void Print(const X *v1,              int D) { INFO(Str(v1, D)); }
     static X    Dist2(const X *v1, const X *v2, int D) { X ret=0; for (int i=0; i<D; i++) ret += Squared(v1[i]-v2[i]); return ret; }
     static X      Dot(const X *v1, const X *v2, int D) { X ret=0; for (int i=0; i<D; i++) ret += v1[i] * v2[i];        return ret; }
@@ -291,16 +299,16 @@ template <class T=double> struct matrix {
         matrix<T> new_matrix(M, N+cols, 0, flag, alloc);
         if (!prepend) new_matrix.AssignR(this);
         else MatrixIter(this) new_matrix.row(i)[j+cols] = row(i)[j];
-        Typed::Swap(m, new_matrix.m);
-        Typed::MinusPlus(&new_matrix.N, &N, (int)cols);
+        swap(m, new_matrix.m);
+        MinusPlus(&new_matrix.N, &N, (int)cols);
         bytes = M*N*sizeof(T)*((flag&Flag::Complex)?2:1);
     }
 
     void Assign(int Mrows, int Ncols, long long Bytes, int Flag, Allocator *Alloc) { M=Mrows; N=Ncols; bytes=Bytes; flag=Flag; alloc=Alloc; }
     void AssignL(const matrix *m) { MatrixIter(this) row(i)[j] = m->row(i)[j]; }
     void AssignR(const matrix *m) { MatrixIter(m)    row(i)[j] = m->row(i)[j]; }
-    void AssignL(const matrix *m, int flag) { bool neg=flag&mNeg; MatrixIter(this) row(i)[j] = neg ? Typed::Negate(m->row(i)[j]) : m->row(i)[j]; CompleteOperation(m, 0, 0, flag); }
-    void AssignR(const matrix *m, int flag) { bool neg=flag&mNeg; MatrixIter(m)    row(i)[j] = neg ? Typed::Negate(m->row(i)[j]) : m->row(i)[j]; CompleteOperation(m, 0, 0, flag); }
+    void AssignL(const matrix *m, int flag) { bool neg=flag&mNeg; MatrixIter(this) row(i)[j] = neg ? Negate(m->row(i)[j]) : m->row(i)[j]; CompleteOperation(m, 0, 0, flag); }
+    void AssignR(const matrix *m, int flag) { bool neg=flag&mNeg; MatrixIter(m)    row(i)[j] = neg ? Negate(m->row(i)[j]) : m->row(i)[j]; CompleteOperation(m, 0, 0, flag); }
     void AssignDiagonal(double v) { MatrixRowIter(this) row(i)[i] = v; }
     void Absorb(matrix *nm) { 
         if (m) { alloc->Free(m); m=0; }

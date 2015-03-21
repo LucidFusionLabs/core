@@ -438,8 +438,8 @@ int TextArea::UpdateLines(float v_scrolled, int *first_ind, int *first_offset, i
 
 void TextArea::UpdateScrolled() {
     int max_w = 4000;
-    bool h_changed = Wrap() ? 0 : Typed::EqualChanged(&last_h_scrolled, h_scrolled);
-    bool v_updated=0, v_changed = Typed::EqualChanged(&last_v_scrolled, v_scrolled);
+    bool h_changed = Wrap() ? 0 : EqualChanged(&last_h_scrolled, h_scrolled);
+    bool v_updated=0, v_changed = EqualChanged(&last_v_scrolled, v_scrolled);
     if (v_changed) {
         int first_ind = 0, first_offset = 0, first_len = 0;
         int dist = UpdateLines(v_scrolled, &first_ind, &first_offset, &first_len);
@@ -806,13 +806,13 @@ void Terminal::Write(const string &s, bool update_fb, bool release_fb) {
 
             int parsed_csi=0, parse_csi_argc=0, parse_csi_argv[16];
             unsigned char parse_csi_argv00 = parse_csi.empty() ? 0 : (isdig(parse_csi[0]) ? 0 : parse_csi[0]);
-            for (/**/; Typed::Within<int>(parse_csi[parsed_csi], 0x20, 0x2f); parsed_csi++) {}
+            for (/**/; Within<int>(parse_csi[parsed_csi], 0x20, 0x2f); parsed_csi++) {}
             StringPiece intermed(parse_csi.data(), parsed_csi);
 
             memzeros(parse_csi_argv);
             bool parse_csi_arg_done = 0;
             // http://www.inwap.com/pdp10/ansicode.txt 
-            for (/**/; Typed::Within<int>(parse_csi[parsed_csi], 0x30, 0x3f); parsed_csi++) {
+            for (/**/; Within<int>(parse_csi[parsed_csi], 0x30, 0x3f); parsed_csi++) {
                 if (parse_csi[parsed_csi] <= '9') { // 0x30 == '0'
                     AccumulateAsciiDigit(&parse_csi_argv[parse_csi_argc], parse_csi[parsed_csi]);
                     parse_csi_arg_done = 0;
@@ -1036,9 +1036,9 @@ void Dialog::Draw() {
 
     Box outline = BoxAndTitle();
     static const int min_width = 50, min_height = 1;
-    if (resizing_left)   Typed::MinusPlus(&outline.x, &outline.w, Typed::Max(-outline.w + min_width,            (int)(mouse_start.x - screen->mouse.x)));
-    if (resizing_bottom) Typed::MinusPlus(&outline.y, &outline.h, Typed::Max(-outline.h + min_height + title.h, (int)(mouse_start.y - screen->mouse.y)));
-    if (resizing_right)  outline.w += Typed::Max(-outline.w + min_width, (int)(screen->mouse.x - mouse_start.x));
+    if (resizing_left)   MinusPlus(&outline.x, &outline.w, max(-outline.w + min_width,            (int)(mouse_start.x - screen->mouse.x)));
+    if (resizing_bottom) MinusPlus(&outline.y, &outline.h, max(-outline.h + min_height + title.h, (int)(mouse_start.y - screen->mouse.y)));
+    if (resizing_right)  outline.w += max(-outline.w + min_width, (int)(screen->mouse.x - mouse_start.x));
 
     if (!app->input.MouseButton1Down()) {
         if (resizing_left || resizing_right || resizing_top || resizing_bottom) {
@@ -1676,7 +1676,7 @@ DOM::Node *Browser::LayoutNode(Flow *flow, DOM::Node *n, bool reflow) {
         if (render->style_dirty  && !reflow_child) child->render->style_dirty  = 1;
         if (render->layout_dirty && !reflow_child) child->render->layout_dirty = 1;
         DOM::Node *descendent_float = LayoutNode(render->flow, child, reflow_child);
-        Typed::Max(&render->max_child_i, i);
+        Max(&render->max_child_i, i);
         if (!descendent_float) continue;
         if (!render->block_level_box) return descendent_float;
 
@@ -1801,8 +1801,8 @@ void Browser::LayoutTable(Flow *flow, DOM::HTMLTableElement *n) {
             DOM::Renderer *cr = cell->render;
             TableFlow::Column *cj = table.SetCellDim(j, cr->MarginBoxWidth(), cr->cell_colspan, cr->cell_rowspan);
             if (!n->render->width_auto || !cr->width_auto) continue;
-            cr->box = Box(0,0); LayoutNode(flow, cell, 0); Typed::Max(&cj->max_width, cr->flow->max_line_width + cr->MarginWidth()); 
-            cr->box = Box(1,0); LayoutNode(flow, cell, 0); Typed::Max(&cj->min_width, cr->flow->max_line_width + cr->MarginWidth());
+            cr->box = Box(0,0); LayoutNode(flow, cell, 0); Max(&cj->max_width, cr->flow->max_line_width + cr->MarginWidth()); 
+            cr->box = Box(1,0); LayoutNode(flow, cell, 0); Max(&cj->min_width, cr->flow->max_line_width + cr->MarginWidth());
         }
         table.NextRowDim();
     }

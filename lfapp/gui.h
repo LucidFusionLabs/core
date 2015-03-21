@@ -199,7 +199,7 @@ struct Widget {
         float ScrollDelta() { float ret=scrolled-last_scrolled; last_scrolled=scrolled; return ret; }
         float AddScrollDelta(float cur_val) { 
             scrolled = Clamp(cur_val + ScrollDelta(), 0, 1);
-            if (Typed::EqualChanged(&last_scrolled, scrolled)) dirty = 1;
+            if (EqualChanged(&last_scrolled, scrolled)) dirty = 1;
             return scrolled;
         }
     };
@@ -576,7 +576,7 @@ struct Terminal : public TextArea, public Drawable::AttrSource {
         static thread_local Drawable::Attr ret;
         Color *fg = colors ? &colors->c[Attr::GetFGColorIndex(attr)] : 0;
         Color *bg = colors ? &colors->c[Attr::GetBGColorIndex(attr)] : 0;
-        if (attr & Attr::Reverse) Typed::Swap(fg, bg);
+        if (attr & Attr::Reverse) swap(fg, bg);
         ret = Drawable::Attr(font, fg, bg, attr & Attr::Underline);
         return &ret;
     }
@@ -729,7 +729,7 @@ struct EditorDialog : public Dialog {
         Dialog::Layout();
         content_box = box;
         if (1)              { v_scrollbar.LayoutAttached(box.Dimension()); content_box.w -= v_scrollbar.dot_size; }
-        if (!editor.Wrap()) { h_scrollbar.LayoutAttached(box.Dimension()); Typed::MinusPlus(&content_box.h, &content_box.y, v_scrollbar.dot_size); }
+        if (!editor.Wrap()) { h_scrollbar.LayoutAttached(box.Dimension()); MinusPlus(&content_box.h, &content_box.y, v_scrollbar.dot_size); }
     }
     void Draw() {
         bool wrap = editor.Wrap();

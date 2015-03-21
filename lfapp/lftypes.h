@@ -55,6 +55,9 @@ static __forceinline int ffs(int x) { return ffsl(x); }
     else return x4 < y4;
 
 namespace LFL {
+template <class X> static void Replace(X** p, X* r) { delete (*p); (*p) = r; }
+template <class X> static void AllocReplace(X** p, X* r) { if (*p && (*p)->alloc) (*p)->alloc->free(*p); *p = r; }
+
 template <typename K, typename V> typename map<K, V>::iterator FindOrInsert(map<K, V> &m, K k, V v, int *inserted) {
     LFL_STL_NAMESPACE::pair<typename map<K, V>::iterator, bool> ret = m.insert(typename map<K, V>::value_type(k, v));
     if (inserted) (*inserted)++;

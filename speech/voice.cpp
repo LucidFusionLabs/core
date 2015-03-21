@@ -43,7 +43,7 @@ int VoiceModel::read(const char *dir) {
             unit[phoneme].sample[count].offset = beg;
             unit[phoneme].sample[count].len = end - beg;
 
-            Typed::Replace<Matrix>(&m, 0);
+            Replace<Matrix>(&m, 0);
             count++;
         }
         

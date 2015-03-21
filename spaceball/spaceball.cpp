@@ -140,7 +140,7 @@ void SpaceballMap::Load(const string &home_name, const string &away_name) {
     asset("shipblue")->col = away->ship_color.diffuse;
 
     Asset *field = asset("field");
-    Typed::Replace<Geometry>(&field->geometry, FieldGeometry(home->goal_color, away->goal_color, home->field_color));
+    Replace<Geometry>(&field->geometry, FieldGeometry(home->goal_color, away->goal_color, home->field_color));
 
     screen->gd->EnableLight(0);
     screen->gd->Light(0, GraphicsDevice::Ambient,  home->light.color.ambient.x);
@@ -251,7 +251,7 @@ struct SpaceballClient : public GameClient {
             INFO(last_scored_PlayerName, " scores for ", last_scored_team == Game::Team::Red ? "red" : "blue");
 
             unsigned updateInterval = last.time_recv_WorldUpdate[0] - last.time_recv_WorldUpdate[1];
-            replay.start_ind = Typed::Max(1, (int)(last.WorldUpdate.size() - (SpaceballGame::ReplaySeconds-1) * 1000.0 / updateInterval));
+            replay.start_ind = max(1, (int)(last.WorldUpdate.size() - (SpaceballGame::ReplaySeconds-1) * 1000.0 / updateInterval));
             replay.while_seq = last.seq_WorldUpdate = seq;
             replay.start = Now();
 
@@ -443,7 +443,7 @@ void MySwitchPlayerCmd(const vector<string> &) {
 void MyFieldColorCmd(const vector<string> &arg) {
     Color fc(arg.size() ? arg[0] : "");
     Asset *field = asset("field");
-    Typed::Replace<Geometry>(&field->geometry, FieldGeometry(sbmap->home->goal_color, sbmap->away->goal_color, fc));
+    Replace<Geometry>(&field->geometry, FieldGeometry(sbmap->home->goal_color, sbmap->away->goal_color, fc));
     INFO("field_color = ", fc.HexString());
 }
 

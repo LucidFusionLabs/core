@@ -773,8 +773,8 @@ struct SpaceballServer : public GameServer {
                 Entity *nearest = bots->bots[i].entity;
                 if (nearest != team->closest_bot_to_ball) continue;
 
-                Typed::Swap(old_player_entity->type, nearest->type);
-                Typed::Swap(old_player_entity->userdata, nearest->userdata);
+                swap(old_player_entity->type, nearest->type);
+                swap(old_player_entity->userdata, nearest->userdata);
                 ((Game::ConnectionData*)old_player_entity->userdata)->entityID = cd->entityID;
                 bots->bots[i].entity = old_player_entity;
                 cd->entityID = Game::GetID(nearest);

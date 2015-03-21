@@ -164,7 +164,7 @@ Printable::Printable(const vector<int>    &x) : string(StrCat("{", Vec<int>   ::
 Printable::Printable(const Color          &x) : string(x.DebugString()) {}
 Printable::Printable(const String16       &x) : string(String::ToUTF8(x)) {}
 Printable::Printable(const void           *x) : string(StringPrintf("%p", x)) {}
-string Flag::ToString() const { string v=Get(); return StrCat(name, v.size()?" = ":"", v.size()?v:"", " : ", desc); } 
+string Flag::GetString() const { string v=Get(); return StrCat(name, v.size()?" = ":"", v.size()?v:"", " : ", desc); } 
 
 bool Running() { return app->run; }
 bool MainThread() { return Thread::GetId() == app->main_thread_id; }
@@ -1646,7 +1646,7 @@ int Regex::Match(const string &text, vector<Regex::Result> *out) {
 #else
 Regex::~Regex() {}
 Regex::Regex(const string &patternstr) {}
-int Regex::Match(const string &text, vector<Regex::Result> *out) { return 0; }
+int Regex::Match(const string &text, vector<Regex::Result> *out) { ERROR("regex not implemented"); return 0; }
 #endif
 
 #ifdef LFL_SREGEX
@@ -1922,7 +1922,7 @@ int FlagMap::getopt(int argc, const char **argv, const char *source_filename) {
 void FlagMap::Print(const char *source_filename) const {
     for (AllFlags::const_iterator i = flagmap.begin(); i != flagmap.end(); i++) {
         if (source_filename && strcmp(source_filename, i->second->file)) continue;
-        INFO(i->second->ToString());
+        INFO(i->second->GetString());
     }
     if (source_filename) INFO("fullhelp : Display full help"); 
 }
@@ -2493,7 +2493,7 @@ template <class X> inline X CastV8InternalFieldTo(v8::Local<v8::Object> &self, i
     v8::Local<v8::Object> impl_obj = (js_context->*OT)->NewInstance(); \
     impl_obj->SetInternalField(0, v8::External::New(args.GetIsolate(), js_context)); \
     impl_obj->SetInternalField(1, v8::External::New(args.GetIsolate(), val)); \
-    impl_obj->SetInternalField(2, v8::Integer ::New(args.GetIsolate(), Typed::Id(val))); \
+    impl_obj->SetInternalField(2, v8::Integer ::New(args.GetIsolate(), TypeId(val))); \
     args.GetReturnValue().Set(impl_obj);
 
 template <typename X, int (X::*Y)() const> void MemberIntFunc(const v8::FunctionCallbackInfo<v8::Value> &args) {
@@ -2598,7 +2598,7 @@ struct MyV8JSContext : public JSContext {
             v8::Local<v8::Object> node_obj = node->NewInstance();
             node_obj->SetInternalField(0, v8::External::New(isolate, this));
             node_obj->SetInternalField(1, v8::External::New(isolate, D));
-            node_obj->SetInternalField(2, v8::Integer::New(isolate, Typed::Id(D)));
+            node_obj->SetInternalField(2, v8::Integer::New(isolate, TypeId(D)));
             context->Global()->Set(v8::String::NewFromUtf8(isolate, "document"), node_obj);
         }
     }
@@ -2611,7 +2611,7 @@ struct MyV8JSContext : public JSContext {
                 if (result->IsObject() && js_console) {
                     v8::Local<v8::Object> obj = result->ToObject();
                     if (obj->InternalFieldCount() >= 3) {
-                        if (obj->GetInternalField(2)->Int32Value() == Typed::Id<DOM::Node>()) {
+                        if (obj->GetInternalField(2)->Int32Value() == TypeId<DOM::Node>()) {
                             js_console->Write(CastV8InternalFieldTo<DOM::Node*>(obj, 1)->DebugString());
                         }
                     }
@@ -2643,7 +2643,7 @@ struct MyV8JSContext : public JSContext {
         v8::Local<v8::Object> impl_obj = js_context->css_style_declaration->NewInstance();
         impl_obj->SetInternalField(0, v8::External::New(args.GetIsolate(), js_context));
         impl_obj->SetInternalField(1, v8::External::New(args.GetIsolate(), val));
-        impl_obj->SetInternalField(2, v8::Integer ::New(args.GetIsolate(), Typed::Id(val)));
+        impl_obj->SetInternalField(2, v8::Integer ::New(args.GetIsolate(), TypeId(val)));
         args.GetReturnValue().Set(impl_obj);
     }
     template <typename X, typename Y, Y (X::*Z), v8::Handle<v8::ObjectTemplate> (MyV8JSContext::*OT)>
