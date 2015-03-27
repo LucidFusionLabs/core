@@ -66,7 +66,7 @@ extern "C" int main(int argc, const char *argv[]) {
     if (optind >= argc) { fprintf(stderr, "Usage: %s [-flags] <file>\n", argv[0]); return -1; }
     string s = LocalFile::FileContents(StrCat(argv[optind]));
 
-    Font *font = Fonts::Get(FLAGS_default_font, FLAGS_default_font_size, Color::black);
+    Font *font = Fonts::Get(FLAGS_default_font, "", FLAGS_default_font_size, Color::black);
     editor = new EditorDialog(screen, font, new BufferFile(s), 1, 1,
                               Dialog::Flag::Fullscreen | (FLAGS_wrap ? EditorDialog::Flag::Wrap : 0));
     editor->color = Color::white;

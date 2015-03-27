@@ -110,11 +110,13 @@ struct Widget {
         void ToggleHover() { hover = !hover; }
 
         void Layout(Flow *flow, const point &d) { box.SetDimension(d); Layout(flow); }
-        void Layout(Flow *flow) { 
+        void Layout(Flow *flow) {
+            flow->SetFont(0);
             flow->SetFGColor(&Color::white);
             LayoutComplete(flow, flow->out->data[flow->AppendBox(box.w, box.h, drawable)].box);
         }
         void LayoutBox(Flow *flow, const Box &b) {
+            flow->SetFont(0);
             flow->SetFGColor(&Color::white);
             if (drawable) flow->out->PushBack(b, flow->cur_attr, drawable, &drawbox_ind);
             LayoutComplete(flow, b);
@@ -144,7 +146,7 @@ struct Widget {
         bool dragging=0, dirty=0;
         virtual ~Scrollbar() {}
         Scrollbar(GUI *Gui, Box window=Box(), int f=Flag::Attached) : Interface(Gui), win(window), flag(f),
-        menuicon2(Fonts::Get("MenuAtlas2", 0, Color::black, 0)) {
+        menuicon2(Fonts::Get("MenuAtlas2", "", 0, Color::black)) {
             if (win.w && win.h) { if (f & Flag::Attached) LayoutAttached(win); else LayoutFixed(win); } 
         }
 
@@ -581,7 +583,7 @@ struct Terminal : public TextArea, public Drawable::AttrSource {
         return &ret;
     }
     int GetCursorX(int x) const { return (x - 1) * font->FixedWidth(); }
-    int GetCursorY(int y) const { return (term_height - y + 1) * font->height; }
+    int GetCursorY(int y) const { return (term_height - y + 1) * font->Height(); }
     int GetTermLineIndex(int y) const { return -term_height + y-1; }
     Line *GetTermLine(int y) { return &line[GetTermLineIndex(y)]; }
     Line *GetCursorLine() { return GetTermLine(term_cursor.y); }
@@ -638,7 +640,7 @@ struct Dialog : public GUI {
     bool deleted=0, moving=0, resizing_left=0, resizing_right=0, resizing_top=0, resizing_bottom=0, fullscreen=0;
     point mouse_start, win_start;
     int zsort=0;
-    Dialog(float w, float h, int flag=0) : GUI(screen), font(Fonts::Get(FLAGS_default_font, 14, Color::white)) {
+    Dialog(float w, float h, int flag=0) : GUI(screen), font(Fonts::Get(FLAGS_default_font, "", 14, Color::white)) {
         screen->dialogs.push_back(this);
         box = screen->Box().center(screen->Box(w, h));
         fullscreen = flag & Flag::Fullscreen;
@@ -864,7 +866,7 @@ BrowserInterface *CreateBerkeliumBrowser(Asset *a, int w=1024, int h=1024);
 BrowserInterface *CreateDefaultBrowser(Window *W, Asset *a, int w=1024, int h=1024);
 
 struct HelperGUI : public GUI {
-    HelperGUI(Window *W) : GUI(W), font(Fonts::Get(FLAGS_default_font, 9, Color::white)) {}
+    HelperGUI(Window *W) : GUI(W), font(Fonts::Get(FLAGS_default_font, "", 9, Color::white)) {}
     Font *font;
     struct Hint { enum { UP, UPLEFT, UPRIGHT, DOWN, DOWNLEFT, DOWNRIGHT }; };
     struct Label {

@@ -167,8 +167,8 @@ void ShipDraw(Asset *a, Entity *e) {
     static Timer lightning_timer;
     static float last_lightning_offset = 0;
     static int lightning_texcoord_min_int_x = 0;
-    static Font *lightning_font = Fonts::Get("lightning", 0, Color::black);
-    static Font::Glyph *lightning_glyph = &lightning_font->glyph->table[2];
+    static Font *lightning_font = Fonts::Get("lightning", "", 0, Color::black);
+    static Glyph *lightning_glyph = &lightning_font->glyph->table[2];
     static Geometry *lightning_obj = 0;
     if (!lightning_obj) {
         float lightning_glyph_texcoord[4];
@@ -296,7 +296,7 @@ struct TeamSelectGUI : public GUI {
     int home_team=0, away_team=0;
 
     TeamSelectGUI(Window *w) : GUI(w), teams(SpaceballTeam::GetList()),
-    font(Fonts::Get("Origicide.ttf", 8, Color::white)), team_font(Fonts::Get("sbmaps", 0, Color::black)),
+    font(Fonts::Get("Origicide.ttf", "", 8, Color::white)), team_font(Fonts::Get("sbmaps", "", 0, Color::black)),
     start_button(this, 0, font, "start", MouseController::CB(bind(&TeamSelectGUI::Start, this))) {
         start_button.outline = &font->fg;
         team_buttons.resize(teams->size());
@@ -541,10 +541,10 @@ int Frame(Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample, int
         goal->tex.Bind();
         win.Draw(goal->tex.coord);
 
-        static Font *font = Fonts::Get("Origicide.ttf", 16, Color::white);
+        static Font *font = Fonts::Get("Origicide.ttf", "", 16);
         font->Draw(StrCat(server->last_scored_PlayerName, " scores"),
                    Box(win.x, win.y - screen->height*.1, screen->width*.2, screen->height*.1, false), 
-                   0, Font::Flag::AlignCenter | Font::Flag::NoWrap);
+                   0, Font::DrawFlag::AlignCenter | Font::DrawFlag::NoWrap);
 
         SpaceballTeam *scored_team = server->last_scored_team == Game::Team::Home ? sbmap->home : sbmap->away;
         fireworks.rand_color_min = fireworks.rand_color_max = scored_team->goal_color;
@@ -562,9 +562,9 @@ int Frame(Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample, int
 
     if (server->gameover.enabled()) {
         Box win(screen->width*.4, screen->height*.9, screen->width*.2, screen->height*.1, false);
-        static Font *font = Fonts::Get("Origicide.ttf", 16, Color::white);
+        static Font *font = Fonts::Get("Origicide.ttf", "", 16);
         font->Draw(StrCat(server->gameover.start_ind == SpaceballGame::Team::Home ? sbmap->home->name : sbmap->away->name, " wins"),
-                   win, 0, Font::Flag::AlignCenter);
+                   win, 0, Font::DrawFlag::AlignCenter);
     }
 
     if (server->replay.just_ended) {
@@ -598,7 +598,7 @@ int Frame(Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample, int
         helper->Draw();
     }
 
-    static Font *text = Fonts::Get(FLAGS_default_font, 8, Color::white);
+    static Font *text = Fonts::Get(FLAGS_default_font, "", 8, Color::white);
     if (FLAGS_draw_fps)   text->Draw(StringPrintf("FPS = %.2f", FPS()),                    point(screen->width*.05, screen->height*.05));
     if (!menubar->active) text->Draw(intervalminutes(Now() - server->map_started),         point(screen->width*.93, screen->height*.97));
     if (!menubar->active) text->Draw(StrCat(sbmap->home->name, " vs ", sbmap->away->name), point(screen->width*.01, screen->height*.97));
@@ -634,10 +634,11 @@ extern "C" int main(int argc, const char *argv[]) {
     if (app->Init())                       { app->Free(); return -1; }
     INFO("BUILD Version ", "1.02.1");
 
-    Fonts::InsertAtlas("MobileAtlas", "", 0, Color::black, 0);
-    Fonts::InsertAtlas("dpad_atlas",  "", 0, Color::black, 0);
-    Fonts::InsertAtlas("sbmaps",      "", 0, Color::black, 0);
-    Fonts::InsertAtlas("lightning",   "", 0, Color::black, 0);
+    FontEngine *atlas_engine = Singleton<AtlasFontEngine>::Get();
+    atlas_engine->Init(FontDesc("MobileAtlas", "", 0, Color::black));
+    atlas_engine->Init(FontDesc("dpad_atlas",  "", 0, Color::black));
+    atlas_engine->Init(FontDesc("sbmaps",      "", 0, Color::black));
+    atlas_engine->Init(FontDesc("lightning",   "", 0, Color::black));
 
     save_settings.push_back("player_name");
     save_settings.push_back("first_run");

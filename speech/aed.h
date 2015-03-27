@@ -38,7 +38,7 @@ struct AcousticEventDetector {
     RingBuf pe, zcr, szcr;
     float emax, emin, sl, sl2, nl, zcravg, zcrdev, szcravg, szcrdev;
     int initcount, slcount, sl2count, nlcount, zcrcount, szcrcount;
-    RollingAvg remax, remin, rsl, rsl2, rnl;
+    RollingAvg<unsigned> remax, remin, rsl, rsl2, rnl;
 
     int t1countA, t1countB, t2countA, t2countB;
     long long total, t1A, t1B, t2A, t2B;
@@ -367,8 +367,8 @@ struct AcousticEventGUI {
                 if (!flip) { tx = win.x + perc * win.w; ty = win.centerY();        }
                 else       { tx = win.centerX();        ty = win.y + perc * win.h; }
 
-                static Font *text = Fonts::Get(FLAGS_default_font, 12, Color::white, TTFFont::Flag::Outline);
-                text->Draw(AED->sink->decode[i].text, point(tx, ty), 0, Font::Flag::Orientation(!flip ? 1 : 3));
+                static Font *text = Fonts::Get(FLAGS_default_font, "", 12, Color::white, Color::clear, FontDesc::Outline);
+                text->Draw(AED->sink->decode[i].text, point(tx, ty), 0, Font::DrawFlag::Orientation(!flip ? 1 : 3));
             }
         }
 

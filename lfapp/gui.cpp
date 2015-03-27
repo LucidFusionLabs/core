@@ -101,7 +101,7 @@ void Window::ClearGesture() {
 }
 
 void Window::InitConsole() {
-    console = new Console(screen, Fonts::Get(FLAGS_default_font, 9, Color::white));
+    console = new Console(screen, Fonts::Get(FLAGS_default_font, "", 9, Color::white));
     console->ReadHistory(LFAppDownloadDir(), "console");
     console->Write(StrCat(screen->caption, " started"));
     console->Write("Try console commands 'cmds' and 'flags'");
@@ -157,7 +157,7 @@ template <class X> void TextGUI::Line::InsertTextAt(int x, const StringPieceT<X>
     if (x == Size()) data->flow.AppendText(v, attr);
     else {
         BoxArray b;
-        parent->font->Encode(v, Box(data->glyphs.Position(x),0,0), &b, Font::Flag::AssignFlowX, attr);
+        parent->font->Encode(v, Box(data->glyphs.Position(x),0,0), &b, Font::DrawFlag::AssignFlowX, attr);
         data->glyphs.InsertAt(x, b.data);
         if (update.nw) update.ni += v.len;
     }
@@ -174,7 +174,7 @@ template <class X> void TextGUI::Line::OverwriteTextAt(int x, const StringPieceT
         update.ProcessUpdate();
     }
     BoxArray b;
-    parent->font->Encode(v, Box(data->glyphs.Position(x),0,0), &b, Font::Flag::AssignFlowX, attr);
+    parent->font->Encode(v, Box(data->glyphs.Position(x),0,0), &b, Font::DrawFlag::AssignFlowX, attr);
     data->glyphs.OverwriteAt(x, b.data);
     if (token_processing) {
         update.PrepareOverwrite(v);
@@ -216,7 +216,7 @@ void TextGUI::Line::Layout(Box win, bool flush) {
 point TextGUI::Line::Draw(point pos, int relayout_width, int g_offset, int g_len) {
     if (relayout_width >= 0) Layout(relayout_width);
     data->glyphs.Draw((p = pos), g_offset, g_len);
-    return p - point(0, parent->font->height + data->glyphs.height);
+    return p - point(0, parent->font->Height() + data->glyphs.height);
 }
 
 template <class X>
@@ -267,7 +267,7 @@ TextGUI::LinesFrameBuffer *TextGUI::LinesFrameBuffer::Attach(TextGUI::LinesFrame
 }
 
 bool TextGUI::LinesFrameBuffer::SizeChanged(int W, int H, Font *font) {
-    lines = H / font->height;
+    lines = H / font->Height();
     return RingFrameBuffer::SizeChanged(W, H, font);
 }
 
@@ -317,8 +317,8 @@ void TextGUI::Enter() {
 
 void TextGUI::Draw(const Box &b) {
     if (cmd_fb.SizeChanged(b.w, b.h, font)) {
-        cmd_fb.p = point(0, font->height);
-        cmd_line.Draw(point(0, cmd_line.Lines() * font->height), cmd_fb.w);
+        cmd_fb.p = point(0, font->Height());
+        cmd_line.Draw(point(0, cmd_line.Lines() * font->Height()), cmd_fb.w);
         cmd_fb.SizeChangedDone();
     }
     // screen->gd->PushColor();
@@ -333,7 +333,7 @@ void TextGUI::DrawCursor(point p) {
         screen->gd->EnableBlend();
         screen->gd->BlendMode(GraphicsDevice::OneMinusDstColor, GraphicsDevice::OneMinusSrcAlpha);
         screen->gd->FillColor(cmd_color);
-        Box(p.x, p.y - font->height, font->max_width, font->height).Draw();
+        Box(p.x, p.y - font->Height(), font->max_width, font->Height()).Draw();
         screen->gd->BlendMode(GraphicsDevice::SrcAlpha, GraphicsDevice::One);
         screen->gd->DisableBlend();
     } else {
@@ -348,14 +348,14 @@ void TextGUI::DrawCursor(point p) {
 }
 
 void TextGUI::UpdateToken(Line *L, int word_offset, int word_len, int update_type) {
-    int url_offset = -1;
+    int url_offset = -1, font_height = font->Height();
     const BoxArray &glyphs = L->data->glyphs;
     string text = BoxRun(&glyphs[word_offset], word_len).Text();
     if      (PrefixMatch(text, "http://"))  url_offset = 7;
     else if (PrefixMatch(text, "https://")) url_offset = 8;
     if (url_offset >= 0) {
         int lx = glyphs[word_offset].box.x, rx = glyphs[word_offset+word_len-1].box.right();
-        Box box(lx, L->p.y - font->height, rx - lx, font->height);
+        Box box(lx, L->p.y - font_height, rx - lx, font_height);
         if (update_type < 0) L->data->links.erase(word_offset);
         else if (Link *link = new Link(this, &mouse_gui, box, text)) {
             L->data->links[word_offset] = shared_ptr<Link>(link);
@@ -401,12 +401,12 @@ void TextArea::Redraw(bool attach) {
     ScopedDrawMode drawmode(DrawMode::_2D);
     LinesFrameBuffer *fb = GetFrameBuffer();
     int fb_flag = LinesFrameBuffer::Flag::NoVWrap | LinesFrameBuffer::Flag::Flush;
-    int lines = start_line_adjust + skip_last_lines;
+    int lines = start_line_adjust + skip_last_lines, font_height = font->Height();
     int (LinesFrameBuffer::*update_cb)(Line*, int, int, int, int) =
         reverse_line_fb ? &LinesFrameBuffer::PushBackAndUpdate
                         : &LinesFrameBuffer::PushFrontAndUpdate;
-    fb->p = reverse_line_fb ? point(0, fb->Height() - start_line_adjust * font->height)
-                            : point(0, start_line_adjust * font->height);
+    fb->p = reverse_line_fb ? point(0, fb->Height() - start_line_adjust * font_height)
+                            : point(0, start_line_adjust * font_height);
     if (attach) { fb->fb.Attach(); screen->gd->Clear(); }
     for (int i=start_line; i<line.ring.count && lines < fb->lines; i++)
         lines += (fb->*update_cb)(&line[-i-1], -line_left, 0, fb->lines - lines, fb_flag);
@@ -473,12 +473,13 @@ void TextArea::UpdateVScrolled(int dist, bool up, int ind, int first_offset, int
 }
 
 void TextArea::Draw(const Box &b, bool draw_cursor) {
+    int font_height = font->Height();
     LinesFrameBuffer *fb = GetFrameBuffer();
     if (fb->SizeChanged(b.w, b.h, font)) { Resized(b); fb->SizeChangedDone(); }
     if (clip) screen->gd->PushScissor(Box::DelBorder(b, *clip));
-    fb->Draw(b.Position(), point(0, CommandLines() * font->height));
+    fb->Draw(b.Position(), point(0, CommandLines() * font_height));
     if (clip) screen->gd->PopScissor();
-    if (draw_cursor) TextGUI::Draw(Box(b.x, b.y, b.w, font->height));
+    if (draw_cursor) TextGUI::Draw(Box(b.x, b.y, b.w, font_height));
     if (selection.enabled) mouse_gui.box.SetPosition(b.Position());
     if (selection.changing) DrawSelection();
     if (hover_link) {
@@ -513,7 +514,7 @@ void TextArea::DragCB(int button, int, int, int down) {
         return;
     }
 
-    int scp = s->changing_previously, fh = font->height, h = fb->Height();
+    int scp = s->changing_previously, fh = font->Height(), h = fb->Height();
     if (scp) GetGlyphFromCoords((s->end.click = point(line_left+p.x, p.y)), &s->end);
     else   { GetGlyphFromCoords((s->beg.click = point(line_left+p.x, p.y)), &s->beg); s->end = s->beg; }
 
@@ -527,9 +528,9 @@ void TextArea::DragCB(int button, int, int, int down) {
 
 bool TextArea::GetGlyphFromCoords(const point &p, Selection::Point *out) {
     LinesFrameBuffer *fb = GetFrameBuffer();
-    int h = fb->Height(), fh = font->height;
-    int targ = reverse_line_fb ? ((h - p.y) / font->height - start_line_adjust) 
-                               : ((    p.y) / font->height + start_line_adjust);
+    int h = fb->Height(), fh = font->Height();
+    int targ = reverse_line_fb ? ((h - p.y) / fh - start_line_adjust) 
+                               : ((    p.y) / fh + start_line_adjust);
     for (int i=start_line, lines=0, ll; i<line.ring.count && lines<line_fb.lines; i++, lines += ll) {
         Line *L = &line[-i-1];
         if (lines + (ll = L->Lines()) <= targ) continue;
@@ -682,7 +683,7 @@ int Editor::UpdateLines(float v_scrolled, int *first_ind, int *first_offset, int
 void Terminal::Resized(const Box &b) {
     int old_term_width = term_width, old_term_height = term_height;
     term_width  = b.w / font->FixedWidth();
-    term_height = b.h / font->height;
+    term_height = b.h / font->Height();
     bool grid_changed = term_width != old_term_width || term_height != old_term_height;
 #ifndef _WIN32
     if (grid_changed || first_resize) {
@@ -718,15 +719,15 @@ void Terminal::ResizedLeftoverRegion(int w, int h, bool update_fb) {
 
 void Terminal::SetScrollRegion(int b, int e, bool release_fb) {
     if (b<0 || e<0 || e>term_height || b>e) { ERROR(b, "-", e, " outside 1-", term_height); return; }
-    int prev_region_beg = scroll_region_beg, prev_region_end = scroll_region_end;
+    int prev_region_beg = scroll_region_beg, prev_region_end = scroll_region_end, font_height = font->Height();
     scroll_region_beg = b;
     scroll_region_end = e;
     bool no_region = !scroll_region_beg || !scroll_region_end ||
         (scroll_region_beg == 1 && scroll_region_end == term_height);
     skip_last_lines = no_region ? 0 : scroll_region_beg - 1;
     start_line_adjust = start_line = no_region ? 0 : term_height - scroll_region_end;
-    clip_border.top    = font->height * skip_last_lines;
-    clip_border.bottom = font->height * start_line_adjust;
+    clip_border.top    = font_height * skip_last_lines;
+    clip_border.bottom = font_height * start_line_adjust;
     clip = no_region ? 0 : &clip_border;
     ResizedLeftoverRegion(line_fb.w, line_fb.h, false);
 
@@ -735,8 +736,8 @@ void Terminal::SetScrollRegion(int b, int e, bool release_fb) {
     int scroll_beg_or_1=X_or_1(scroll_region_beg), scroll_end_or_ht=X_or_Y(scroll_region_end, term_height);
 
     if (scroll_beg_or_1 != prev_beg_or_1 || prev_end_or_ht != scroll_end_or_ht) GetPrimaryFrameBuffer();
-    for (int i =  scroll_beg_or_1; i <    prev_beg_or_1; i++) line_fb.Update(GetTermLine(i),   line_fb.BackPlus(point(0, (term_height-i+1)*font->height)), LinesFrameBuffer::Flag::NoLayout);
-    for (int i =   prev_end_or_ht; i < scroll_end_or_ht; i++) line_fb.Update(GetTermLine(i+1), line_fb.BackPlus(point(0, (term_height-i)  *font->height)), LinesFrameBuffer::Flag::NoLayout);
+    for (int i =  scroll_beg_or_1; i <    prev_beg_or_1; i++) line_fb.Update(GetTermLine(i),   line_fb.BackPlus(point(0, (term_height-i+1)*font_height)), LinesFrameBuffer::Flag::NoLayout);
+    for (int i =   prev_end_or_ht; i < scroll_end_or_ht; i++) line_fb.Update(GetTermLine(i+1), line_fb.BackPlus(point(0, (term_height-i)  *font_height)), LinesFrameBuffer::Flag::NoLayout);
 
     if (prev_beg_or_1 < scroll_beg_or_1 || scroll_end_or_ht < prev_end_or_ht) GetSecondaryFrameBuffer();
     for (int i =    prev_beg_or_1; i < scroll_beg_or_1; i++) cmd_fb.Update(GetTermLine(i),   point(0, GetCursorY(i)),   LinesFrameBuffer::Flag::NoLayout);
@@ -1074,7 +1075,7 @@ BrowserInterface *CreateDefaultBrowser(Window *W, Asset *a, int w, int h) {
 int PercentRefersTo(unsigned short prt, Flow *inline_context) {
     switch (prt) {
         case DOM::CSSPrimitiveValue::PercentRefersTo::FontWidth:           return inline_context->cur_attr.font->max_width;
-        case DOM::CSSPrimitiveValue::PercentRefersTo::FontHeight:          return inline_context->cur_attr.font->height;
+        case DOM::CSSPrimitiveValue::PercentRefersTo::FontHeight:          return inline_context->cur_attr.font->Height();
         case DOM::CSSPrimitiveValue::PercentRefersTo::LineHeight:          return inline_context->layout.line_height;
         case DOM::CSSPrimitiveValue::PercentRefersTo::ContainingBoxHeight: return inline_context->container->h;
     }; return inline_context->container->w;
@@ -1298,7 +1299,7 @@ Font *DOM::Renderer::UpdateFont(Flow *F) {
     int font_size_px = font_size.getFontSizeValue(F);
     int font_flag = ((font_weight.v == DOM::FontWeight::_700 || font_weight.v == DOM::FontWeight::_800 || font_weight.v == DOM::FontWeight::_900 || font_weight.v == DOM::FontWeight::Bold || font_weight.v == DOM::FontWeight::Bolder) ? FontDesc::Bold : 0) |
         ((font_style.v == DOM::FontStyle::Italic || font_style.v == DOM::FontStyle::Oblique) ? FontDesc::Italic : 0);
-    Font *font = font_family.attr ? Fonts::Get("", String::ToUTF8(font_family.cssText()), font_size_px, Color::white, font_flag) : 0;
+    Font *font = font_family.attr ? Fonts::Get("", String::ToUTF8(font_family.cssText()), font_size_px, Color::white, Color::clear, font_flag) : 0;
     for (int i=0; !font && i<font_family.name.size(); i++) {
         vector<DOM::FontFace> ff;
         style.node->ownerDocument->style_context->FontFaces(font_family.name[i], &ff);
@@ -1307,7 +1308,7 @@ Font *DOM::Renderer::UpdateFont(Flow *F) {
             //      " ", ff[j].source.size() ? ff[j].source[0] : "<NO2>");
         }
     }
-    return font ? font : Fonts::Get(FLAGS_default_font, font_size_px, Color::white);
+    return font ? font : Fonts::Get(FLAGS_default_font, "", font_size_px, Color::white);
 }
 
 void DOM::Renderer::UpdateDimensions(Flow *F) {
@@ -1427,7 +1428,7 @@ void Browser::Document::Clear() {
 }
 
 Browser::Browser(Window *W, const Box &V) : doc(W, V) {
-    if (Font *maf = Fonts::Get("MenuAtlas1", 0, Color::black, 0)) {
+    if (Font *maf = Fonts::Get("MenuAtlas1", "", 0, Color::black)) {
         missing_image.tex = maf->glyph->table[12].tex;
         missing_image.tex.width = missing_image.tex.height = 16;
     }

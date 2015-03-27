@@ -169,12 +169,12 @@ extern "C" int main(int argc, const char *argv[]) {
         vector<string> png;
         DirectoryIter d(FLAGS_make_png_atlas, 0, 0, ".png");
         for (const char *fn = d.Next(); fn; fn = d.Next()) png.push_back(FLAGS_make_png_atlas + fn);
-        Atlas::MakeFromPNGFiles("png_atlas", png, FLAGS_make_png_atlas_size, NULL);
+        AtlasFontEngine::MakeFromPNGFiles("png_atlas", png, FLAGS_make_png_atlas_size, NULL);
     }
 
     if (!FLAGS_split_png_atlas.empty()) {
-        Fonts::InsertAtlas     (FLAGS_split_png_atlas, "", 0, Color::black, 0);
-        Font *font = Fonts::Get(FLAGS_split_png_atlas,     0, Color::black);
+        Singleton<AtlasFontEngine>::Get()->Init(FontDesc(FLAGS_split_png_atlas, "", 0, Color::black));
+        Font *font = Fonts::Get(FLAGS_split_png_atlas, "", 0, Color::black);
         CHECK(font);
         map<v4, int> glyph_index;
         for (int i = 255; i >= 0; i--) {
@@ -186,13 +186,13 @@ extern "C" int main(int argc, const char *argv[]) {
 
         string outdir = StrCat(ASSETS_DIR, FLAGS_split_png_atlas);
         LocalFile::mkdir(outdir, 0755);
-        string atlas_png_fn = StrCat(ASSETS_DIR, Fonts::FontName(FLAGS_split_png_atlas, 0, Color::black, 0), "00.png");
-        Atlas::SplitIntoPNGFiles(atlas_png_fn, glyphs, outdir + LocalFile::Slash);
+        string atlas_png_fn = StrCat(ASSETS_DIR, FLAGS_split_png_atlas, "0,0,0,0,0", "00.png");
+        AtlasFontEngine::SplitIntoPNGFiles(atlas_png_fn, glyphs, outdir + LocalFile::Slash);
     }
 
     if (!FLAGS_filter_png_atlas.empty()) {
-        if (Font *f = Font::OpenAtlas(FLAGS_filter_png_atlas, 0, Color::white, 0)) {
-            Atlas::WriteGlyphFile(FLAGS_filter_png_atlas, f);
+        if (Font *f = AtlasFontEngine::OpenAtlas(FontDesc(FLAGS_filter_png_atlas, "", 0, Color::white))) {
+            AtlasFontEngine::WriteGlyphFile(FLAGS_filter_png_atlas, f);
             INFO("filtered ", FLAGS_filter_png_atlas);
         }
     }

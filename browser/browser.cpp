@@ -50,12 +50,12 @@ struct MyBrowserWindow : public GUI {
     BrowserInterface *webkit_browser=0, *berkelium_browser=0;
 
     MyBrowserWindow(LFL::Window *W) : GUI(W),
-    menu_atlas1(Fonts::Get("MenuAtlas1", 0, Color::black)),
-    menu_atlas2(Fonts::Get("MenuAtlas2", 0, Color::black)),
+    menu_atlas1(Fonts::Get("MenuAtlas1", "", 0, Color::black)),
+    menu_atlas2(Fonts::Get("MenuAtlas2", "", 0, Color::black)),
     back   (this, &menu_atlas1->FindGlyph(20)->tex, 0, "", MouseController::CB([&](){ browser->BackButton(); })),
     forward(this, &menu_atlas1->FindGlyph(22)->tex, 0, "", MouseController::CB([&](){ browser->ForwardButton(); })),
     refresh(this, &menu_atlas2->FindGlyph(50)->tex, 0, "", MouseController::CB([&](){ browser->RefreshButton(); })),
-    address_box(W, Fonts::Get(FLAGS_default_font, 12, Color::black)) {
+    address_box(W, Fonts::Get(FLAGS_default_font, "", 12, Color::black)) {
         address_box.SetToggleKey(0, ToggleBool::OneShot);
         address_box.cmd_prefix.clear();
         address_box.deactivate_on_enter = true;
@@ -158,17 +158,18 @@ extern "C" int main(int argc, const char *argv[]) {
 
     vector<string> atlas_font_size;
     Split(FLAGS_atlas_font_sizes, iscomma, &atlas_font_size);
+    FontEngine *freetype = Singleton<FreetypeFontEngine>::Get();
     for (int i=0; i<atlas_font_size.size(); i++) {
         int size = ::atoi(atlas_font_size[i].c_str());
-        Fonts::InsertFreetype("DejaVuSans-Bold.ttf",           "sans-serif", size, Color::white, FontDesc::Bold);
-        Fonts::InsertFreetype("DejaVuSans-Oblique.ttf",        "sans-serif", size, Color::white, FontDesc::Italic);
-        Fonts::InsertFreetype("DejaVuSans-BoldOblique.ttf",    "sans-serif", size, Color::white, FontDesc::Italic | FontDesc::Bold);
-        Fonts::InsertFreetype("DejaVuSansMono.ttf",            "monospace",  size, Color::white, 0);
-        Fonts::InsertFreetype("DejaVuSansMono-Bold.ttf",       "monospace",  size, Color::white, FontDesc::Bold);
-        Fonts::InsertFreetype("DejaVuSerif.ttf",               "serif",      size, Color::white, 0);
-        Fonts::InsertFreetype("DejaVuSerif-Bold.ttf",          "serif",      size, Color::white, FontDesc::Bold);
-        Fonts::InsertFreetype("DejaVuSansMono-Oblique.ttf",    "cursive",    size, Color::white, 0);
-        Fonts::InsertFreetype("DejaVuSerifCondensed-Bold.ttf", "fantasy",    size, Color::white, 0);
+        freetype->Init(FontDesc("DejaVuSans-Bold.ttf",           "sans-serif", size, Color::white, Color::clear, FontDesc::Bold));
+        freetype->Init(FontDesc("DejaVuSans-Oblique.ttf",        "sans-serif", size, Color::white, Color::clear, FontDesc::Italic));
+        freetype->Init(FontDesc("DejaVuSans-BoldOblique.ttf",    "sans-serif", size, Color::white, Color::clear, FontDesc::Italic | FontDesc::Bold));
+        freetype->Init(FontDesc("DejaVuSansMono.ttf",            "monospace",  size, Color::white, Color::clear, 0));
+        freetype->Init(FontDesc("DejaVuSansMono-Bold.ttf",       "monospace",  size, Color::white, Color::clear, FontDesc::Bold));
+        freetype->Init(FontDesc("DejaVuSerif.ttf",               "serif",      size, Color::white, Color::clear, 0));
+        freetype->Init(FontDesc("DejaVuSerif-Bold.ttf",          "serif",      size, Color::white, Color::clear, FontDesc::Bold));
+        freetype->Init(FontDesc("DejaVuSansMono-Oblique.ttf",    "cursive",    size, Color::white, Color::clear, 0));
+        freetype->Init(FontDesc("DejaVuSerifCondensed-Bold.ttf", "fantasy",    size, Color::white, Color::clear, 0));
     }
 
     binds->Add(Bind('6', Key::Modifier::Cmd, Bind::CB(bind([&](){ screen->console->Toggle(); }))));

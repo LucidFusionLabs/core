@@ -1033,7 +1033,7 @@ struct GameMenuGUI : public GUI, public Query {
 
     GameMenuGUI(LFL::Window *W, const string &master_url, int port, Asset *t=0, Asset *parts=0) :
     GUI(W), topbar(W), pinger(-1), master_get_url(master_url), title(t),
-    font(Fonts::Get("Origicide.ttf", 12, Color::white)), default_port(port),
+    font(Fonts::Get("Origicide.ttf", "", 12)), default_port(port),
     tab1(&topbar, 0, font, "single player", MouseController::CB([&](){ if (!Changed(&selected, 1)) ToggleActive(); })),
     tab2(&topbar, 0, font, "multi player",  MouseController::CB([&](){ if (!Changed(&selected, 2)) ToggleActive(); })), 
     tab3(&topbar, 0, font, "options",       MouseController::CB([&](){ if (!Changed(&selected, 3)) ToggleActive(); })),
@@ -1098,7 +1098,7 @@ struct GameMenuGUI : public GUI, public Query {
     }
 
     void MenuQuit() { selected=4; app->run=0; }
-    void MenuLineClicked() { line_clicked = -MousePosition().y / font->height; }
+    void MenuLineClicked() { line_clicked = -MousePosition().y / font->Height(); }
     void MenuServerStart() {
         if (selected != 1 && !(selected == 2 && sub_selected == 3)) return;
         ToggleActive();
@@ -1155,9 +1155,9 @@ struct GameMenuGUI : public GUI, public Query {
         topbar.box = screen->Box(0, .95, 1, .05);
         titlewin   = screen->Box(.15, .9, .7, .05); 
         box        = screen->Box(.15, .4, .7, .5);
-        menuhdr    = Box (box.x, box.y+box.h-font->height, box.w, font->height);
-        menuftr1   = Box (box.x, box.y+font->height*4, box.w, box.h-font->height*5);
-        menuftr2   = Box (box.x, box.y+font->height*4, box.w, box.h-font->height*6); 
+        menuhdr    = Box (box.x, box.y+box.h-font->Height(), box.w, font->Height());
+        menuftr1   = Box (box.x, box.y+font->Height()*4, box.w, box.h-font->Height()*5);
+        menuftr2   = Box (box.x, box.y+font->Height()*4, box.w, box.h-font->Height()*6); 
         { 
             Flow topbarflow(&topbar.box, font, topbar.Reset());
             tab1.box = tab2.box = tab3.box = tab4.box = Box(topbar.box.w/4, topbar.box.h);
@@ -1178,7 +1178,7 @@ struct GameMenuGUI : public GUI, public Query {
 
         int my_selected = selected;
         if (my_selected == 2) {
-            sub_tab1.box = sub_tab2.box = sub_tab3.box = Box(box.w/3, font->height);
+            sub_tab1.box = sub_tab2.box = sub_tab3.box = Box(box.w/3, font->Height());
             sub_tab1.outline = (sub_selected == 1) ? 0 : &Color::white;
             sub_tab2.outline = (sub_selected == 2) ? 0 : &Color::white;
             sub_tab3.outline = (sub_selected == 3) ? 0 : &Color::white;
@@ -1344,7 +1344,7 @@ struct GamePlayerListGUI : public GUI {
     PlayerList playerlist;
     int winning_team=0;
     GamePlayerListGUI(LFL::Window *W, const char *TitleName, const char *Team1, const char *Team2)
-        : GUI(W), font(Fonts::Get("Origicide.ttf", 12, Color::black)),
+        : GUI(W), font(Fonts::Get("Origicide.ttf", "", 12, Color::black)),
         titlename(TitleName), team1(Team1), team2(Team2) {}
 
     void HandleTextMessage(const string &in) {
@@ -1372,7 +1372,7 @@ struct GamePlayerListGUI : public GUI {
         Box win = screen->Box(.1, .1, .8, .8, false);
         glTimeResolutionShaderWindows(MyShader, Color(255, 255, 255, 120), win);
 
-        int fh = win.h/2-font->height*2;
+        int fh = win.h/2-font->Height()*2;
         BoxArray outgeom1, outgeom2;
         Box out1(win.x, win.centerY(), win.w, fh), out2(win.x, win.y, win.w, fh);
         Flow menuflow1(&out1, font, &outgeom1), menuflow2(&out2, font, &outgeom2);
@@ -1384,7 +1384,7 @@ struct GamePlayerListGUI : public GUI {
         }
         outgeom1.Draw(out1.TopLeft());
         outgeom2.Draw(out2.TopLeft());
-        font->Draw(titletext, Box(win.x, win.top()-font->height, win.w, font->height), 0, Font::Flag::AlignCenter);
+        font->Draw(titletext, Box(win.x, win.top()-font->Height(), win.w, font->Height()), 0, Font::DrawFlag::AlignCenter);
     }
     void LayoutLine(Flow *flow, const string &name, const string &score, const string &ping) {
         flow->AppendText(name);
@@ -1401,7 +1401,7 @@ struct GamePlayerListGUI : public GUI {
 
 struct GameChatGUI : public TextArea {
     GameClient **server;
-    GameChatGUI(LFL::Window *W, int key, GameClient **s) : TextArea(W, Fonts::Get("Origicide.ttf", 10, Color::grey80)), server(s) { 
+    GameChatGUI(LFL::Window *W, int key, GameClient **s) : TextArea(W, Fonts::Get("Origicide.ttf", "", 10, Color::grey80)), server(s) { 
         SetToggleKey(key, ToggleBool::OneShot);
         write_timestamp=deactivate_on_enter=true;
     }
@@ -1431,7 +1431,7 @@ struct GameMultiTouchControls {
     bool swipe_controls=0;
 
     GameMultiTouchControls(GameClient *C) : client(C),
-        dpad_font(Fonts::Get("dpad_atlas", 0, Color::black)),
+        dpad_font(Fonts::Get("dpad_atlas", "", 0, Color::black)),
         lpad_win(screen->Box(.03, .05, .2, .2)),
         rpad_win(screen->Box(.78, .05, .2, .2)),
         lpad_tbx(RoundF(lpad_win.w * .6)), lpad_tby(RoundF(lpad_win.h *.6)),

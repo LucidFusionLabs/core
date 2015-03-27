@@ -234,11 +234,11 @@ void glSpectogram(Matrix *m, unsigned char *data, int width, int height, int hju
 void glSpectogram(Matrix *m, Asset *a, float *max=0, float clip=-INFINITY, int pd=PowerDomain::dB);
 void glSpectogram(SoundAsset *sa, Asset *a, Matrix *transform=0, float *max=0, float clip=-INFINITY);
 
-struct BoxFilled : public Drawable { void Draw(const LFL::Box &b) const { b.Draw(); } };
+struct BoxFilled : public Drawable { void Draw(const LFL::Box &b, const Drawable::Attr *a=0) const { b.Draw(); } };
 struct BoxOutline : public Drawable {
     int line_width;
     BoxOutline(int LW=1) : line_width(LW) {}
-    void Draw(const LFL::Box &b) const;
+    void Draw(const LFL::Box &b, const Drawable::Attr *a=0) const;
 };
 
 struct Waveform : public Drawable {
@@ -247,7 +247,7 @@ struct Waveform : public Drawable {
     Waveform() : width(0), height(0), geom(0) {}
     Waveform(point dim, const Color *c, const Vec<float> *);
     static Waveform Decimated(point dim, const Color *c, const RingBuf::Handle *, int decimateBy);
-    void Draw(const LFL::Box &w) const {
+    void Draw(const LFL::Box &w, const Drawable::Attr *a=0) const {
         if (!geom) return;
         geom->SetPosition(w.Position());
         screen->gd->DisableTexture();
@@ -627,7 +627,7 @@ template <class Line> struct RingFrameBuffer {
     virtual void SizeChangedDone() { fb.Release(); scroll=v2(); p=point(); }
     virtual bool SizeChanged(int W, int H, Font *font) {
         if (W == w && H == h && font->size == font_size) return false;
-        w = W; h = H; font_size = font->size; font_height = font->height; 
+        SetDimensions(W, H, font);
         fb.Resize(w, Height(), FrameBuffer::Flag::CreateGL | FrameBuffer::Flag::CreateTexture);
         screen->gd->Clear();
         screen->gd->DrawMode(DrawMode::_2D, false);
@@ -666,6 +666,7 @@ template <class Line> struct RingFrameBuffer {
         ScrollPercent((float)b.h / ht);
         return b.h;
     }
+    void SetDimensions(int W, int H, Font *f) { w = W; h = H; font_size = f->size; font_height = f->Height(); }
     void ScrollPercent(float y) { scroll.y = fmod(scroll.y + y, 1.0); }
     void ScrollPixels(int y) { ScrollPercent((float)y / Height()); }
     void AdvancePixels(int y) { ScrollPixels(y); p.y = RingIndex::Wrap(p.y - y, Height());  }

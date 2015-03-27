@@ -26,16 +26,6 @@ DECLARE_int(dots_per_inch);
 DECLARE_float(field_of_view);
 DECLARE_float(near_plane);
 DECLARE_float(far_plane);
-DECLARE_string(font_engine);
-DECLARE_string(default_font);
-DECLARE_string(default_font_family);
-DECLARE_int(default_font_size);
-DECLARE_int(default_font_flag);
-DECLARE_int(default_missing_glyph);
-DECLARE_bool(atlas_dump);
-DECLARE_string(atlas_font_sizes);
-DECLARE_int(scale_font_height);
-DECLARE_int(add_font_size);
 
 struct DrawMode { enum { _2D=0, _3D=1, NullOp=2 }; int m; };
 struct TexGen { enum { LINEAR=1, REFLECTION=2 }; };
@@ -93,9 +83,11 @@ struct Color {
     bool operator< (const Color &y) const { SortImpl4(x[0], y.x[0], x[1], y.x[1], x[2], y.x[2], x[3], y.x[3]); }
     bool operator==(const Color &y) const { return R()==y.R() && G()==y.G() && B()==y.B() && A()==y.A(); }
     bool operator!=(const Color &y) const { return !(*this == y); }
+    bool Transparent() const { return a() == 0; }
     string DebugString() const { return HexString(); }
     string IntString() const { return StrCat("Color(", R(), ",", G(), ",", B(), ",", A(), ")"); }
     string HexString() const { return StringPrintf("%02X%02X%02X", R(), G(), B()); }
+    unsigned AsUnsigned() const { return (unsigned char)R()<<24 | (unsigned char)G()<<16 | (unsigned char)B()<<8 | (unsigned char)A(); }
     const float &r() const { return x[0]; }
     const float &g() const { return x[1]; }
     const float &b() const { return x[2]; }     
@@ -219,6 +211,7 @@ struct Box {
     Box(const point &D) : x(0), y(0), w(D.x), h(D.y) {}
     Box(int X, int Y, int W, int H) : x(X), y(Y), w(W), h(H) {}
     Box(const point &P, int W, int H) : x(P.x), y(P.y), w(W), h(H) {}
+    Box(const point &P, const point &D) : x(P.x), y(P.y), w(D.x), h(D.y) {}
     Box(float X, float Y, float W, float H, bool round) {
         if (round) { x=RoundF(X); y=RoundF(Y); w=RoundF(W); h=RoundF(H); }
         else       { x= (int)(X); y= (int)(Y); w= (int)(W); h= (int)(H); }
@@ -335,9 +328,10 @@ struct Drawable {
     struct AttrVec : public AttrSource, public vector<Attr> {
         Attr current;
         AttrSource *source=0;
+        RefSet font_refs;
         const Attr *GetAttr(int attr_id) const { return source ? source->GetAttr(attr_id) : &(*this)[attr_id-1]; }
-        int GetAttrId(const Attr &v)
-        { CHECK(!source); if (empty() || this->back() != v) push_back(v); return size(); }
+        int GetAttrId(const Attr &v) { CHECK(!source); if (empty() || this->back() != v) Insert(v); return size(); }
+        void Insert(const Attr &v);
     };
     struct Box {
         LFL::Box box;
@@ -347,29 +341,36 @@ struct Drawable {
         Box(const LFL::Box &B, const Drawable *D=0, int A=0, int L=-1) : box(B), drawable(D), attr_id(A), line_id(L) {}
         bool operator<(const Drawable::Box &x) const { return box < x.box; }
         int LeftBound (const Attr *A) const { return box.x - (drawable ? drawable->LeftBearing(A) : 0); }
-        int RightBound(const Attr *A) const { return box.x + (drawable ? (drawable->Advance (A, &box) - drawable->LeftBearing(A)) : box.w); }
-        int TopBound  (const Attr *A) const { return box.y + (drawable ? drawable->Ascender(A, &box) : box.h); }
+        int RightBound(const Attr *A) const { return box.x + (drawable ? (drawable->Advance(&box, A) - drawable->LeftBearing(A)) : box.w); }
+        int TopBound  (const Attr *A) const { return box.y + (drawable ? drawable->Ascender(&box, A) : box.h); }
         typedef ArrayMemberPairSegmentIter<Box, int, &Box::attr_id, &Box::line_id> Iterator;
         typedef ArrayMemberSegmentIter    <Box, int, &Box::attr_id>             RawIterator;
     };
-    virtual int  Id()                                         const { return 0; }
-    virtual int  LeftBearing(const Attr *)                    const { return 0; }
-    virtual int  Ascender   (const Attr *, const LFL::Box *B) const { return B ? B->h : 0; }
-    virtual int  Advance    (const Attr *, const LFL::Box *B) const { return B ? B->w : 0; }
-    virtual int  Layout     (const Attr *,       LFL::Box *B) const { return B ? B->w : 0; }
-    virtual void Draw       (const LFL::Box &B)               const = 0;
+    virtual int  Id()                                            const { return 0; }
+    virtual int  LeftBearing(                   const Attr *A=0) const { return 0; }
+    virtual int  Ascender   (const LFL::Box *B, const Attr *A=0) const { return B ? B->h : 0; }
+    virtual int  Advance    (const LFL::Box *B, const Attr *A=0) const { return B ? B->w : 0; }
+    virtual int  Layout     (      LFL::Box *B, const Attr *A=0) const { return B ? B->w : 0; }
+    virtual void Draw       (const LFL::Box &B, const Attr *A=0) const = 0;
 };
 
-struct DrawableNullOp : public Drawable { void Draw(const LFL::Box &B) const {} };
+struct DrawableNullOp : public Drawable { void Draw(const LFL::Box &B, const Drawable::Attr *A=0) const {} };
 #define DrawableNop() Singleton<DrawableNullOp>::Get()
 
 struct Texture : public Drawable {
-    unsigned ID; int width, height, pf, cubemap; float coord[4]; unsigned char *buf; bool buf_owner;
+    unsigned ID;
+    int width, height, pf, cubemap;
+    unsigned char *buf;
+    bool buf_owner;
+    float coord[4];
+
     Texture(int w=0, int h=0, int PF=Pixel::RGBA, unsigned id=0) : ID(id), width(w), height(h), cubemap(0), pf(PF), buf(0), buf_owner(1) { Coordinates(coord,1,1,1,1); }
     Texture(int w,   int h,   int PF,          unsigned char *B) : ID(0),  width(w), height(h), cubemap(0), pf(PF), buf(B), buf_owner(0) { Coordinates(coord,1,1,1,1); }
     Texture(const Texture &t) : ID(t.ID), width(t.width), height(t.height), pf(t.pf), cubemap(t.cubemap), buf(t.buf), buf_owner(buf?0:1) { memcpy(&coord, t.coord, sizeof(coord)); }
     virtual ~Texture() { ClearBuffer(); }
+
     void Bind() const;
+    point Dimension() const { return point(width, height); }
     int PixelSize() const { return Pixel::size(pf); }
     int LineSize() const { return width * PixelSize(); }
     int GLPixelType() const { return Pixel::OpenGLID(pf); }
@@ -384,22 +385,22 @@ struct Texture : public Drawable {
     void CreateBacked(int W, int H, int PF=0) { Resize(W, H, PF, Flag::CreateGL | Flag::CreateBuf); }
     void Resize(int W, int H, int PF=0, int flag=0);
 
-    void AssignBuffer(Texture *t, bool become_owner=0) { AssignBuffer(t->buf, t->width, t->height, t->pf, become_owner); if (become_owner) t->buf_owner=0; }
-    void AssignBuffer(      unsigned char *B, int W, int H, int PF, bool become_owner=0) { buf=B; width=W; height=H; pf=PF; buf_owner=become_owner; }
-    void LoadBuffer  (const unsigned char *B, int W, int H, int PF, int linesize, int flag=0);
-    void UpdateBuffer(const unsigned char *B, int W, int H, int PF, int linesize, int flag=0);
-    void UpdateBuffer(const unsigned char *B, int X, int Y, int W, int H, int PF, int linesize, int blit_flag=0);
+    void AssignBuffer(Texture *t, bool become_owner=0) { AssignBuffer(t->buf, point(t->width, t->height), t->pf, become_owner); if (become_owner) t->buf_owner=0; }
+    void AssignBuffer(      unsigned char *B, const point &dim, int PF, bool become_owner=0) { buf=B; width=dim.x; height=dim.y; pf=PF; buf_owner=become_owner; }
+    void LoadBuffer  (const unsigned char *B, const point &dim, int PF, int linesize, int flag=0);
+    void UpdateBuffer(const unsigned char *B, const point &dim, int PF, int linesize, int flag=0);
+    void UpdateBuffer(const unsigned char *B, const ::LFL::Box &box, int PF, int linesize, int blit_flag=0);
 
-    void LoadGL  (const unsigned char *B, int W, int H, int PF, int linesize, int flag=0);
-    void UpdateGL(const unsigned char *B, int X, int Y, int W, int H, int flag=0);
-    void UpdateGL(int X, int Y, int W, int H, int flag=0) { return UpdateGL(buf?(buf+(Y*width+X)*PixelSize()):0, X, Y, W, H, flag); }
-    void UpdateGL() { UpdateGL(0, 0, width, height); }
-    void LoadGL() { LoadGL(buf, width, height, pf, LineSize()); }
+    void LoadGL  (const unsigned char *B, const point &dim, int PF, int linesize, int flag=0);
+    void UpdateGL(const unsigned char *B, const ::LFL::Box &box, int flag=0);
+    void UpdateGL(const ::LFL::Box &b, int flag=0) { return UpdateGL(buf ? (buf+(b.y*width+b.x)*PixelSize()) : 0, b, flag); }
+    void UpdateGL() { UpdateGL(LFL::Box(0, 0, width, height)); }
+    void LoadGL() { LoadGL(buf, point(width, height), pf, LineSize()); }
     void DumpGL(unsigned tex_id=0);
 
     virtual int Id() const { return 0; }
-    virtual int Layout(const point &p, Box *out) const { *out = LFL::Box(p, width, height); return width; } 
-    virtual void Draw(const LFL::Box &B) const { Bind(); B.Draw(coord); }
+    virtual int LayoutAtPoint(const point &p, LFL::Box *out) const { *out = LFL::Box(p, width, height); return width; } 
+    virtual void Draw(const LFL::Box &B, const Drawable::Attr *A=0) const { Bind(); B.Draw(coord); }
     virtual void DrawCrimped(const LFL::Box &B, int ort, float sx, float sy) const { Bind(); B.DrawCrimped(coord, ort, sx, sy); }
 
     void Screenshot();
@@ -413,7 +414,8 @@ struct Texture : public Drawable {
 };
 
 struct DepthTexture {
-    unsigned ID; int width, height, df;
+    unsigned ID;
+    int width, height, df;
     DepthTexture(int w=0, int h=0, int DF=Depth::_16, unsigned id=0) : ID(id), width(w), height(h), df(DF) {}
 
     struct Flag { enum { CreateGL=1 }; };
@@ -422,7 +424,10 @@ struct DepthTexture {
 };
 
 struct FrameBuffer {
-    unsigned ID; int width, height; DepthTexture depth; Texture tex;
+    unsigned ID;
+    int width, height;
+    Texture tex;
+    DepthTexture depth;
     FrameBuffer(int w=0, int h=0, unsigned id=0) : ID(id), width(w), height(h) {}
 
     struct Flag { enum { CreateGL=1, CreateTexture=2, CreateDepthTexture=4, ReleaseFB=8 }; };
@@ -451,23 +456,16 @@ struct ShaderDefines {
 };
 
 struct Shader {
-    string name;
-
     static const int MaxVertexAttrib = 4;
+    string name;
     int unused_attrib_slot[MaxVertexAttrib];
-
-    bool dirty_material, dirty_light_pos[4], dirty_light_color[4];
-    int ID, slot_position, slot_normal, slot_tex, slot_color, uniform_modelview, uniform_modelviewproj, uniform_tex,
-        uniform_cubetex, uniform_normalon, uniform_texon, uniform_coloron, uniform_cubeon, uniform_colordefault,
-        uniform_material_ambient, uniform_material_diffuse, uniform_material_specular, uniform_material_emission,
-        uniform_light0_pos, uniform_light0_ambient, uniform_light0_diffuse, uniform_light0_specular;
-    Shader()
-        : ID(0), slot_position(-1), slot_normal(-1), slot_tex(-1), slot_color(-1), uniform_modelviewproj(-1), uniform_tex(-1),
-        uniform_cubetex(-1), uniform_normalon(-1), uniform_texon(-1), uniform_coloron(-1), uniform_cubeon(-1), uniform_colordefault(-1),
-        uniform_material_ambient(-1), uniform_material_diffuse(-1), uniform_material_specular(-1), uniform_material_emission(-1),
-        uniform_light0_pos(-1), uniform_light0_ambient(-1), uniform_light0_diffuse(-1), uniform_light0_specular(-1) {
-        dirty_material=0; memzeros(dirty_light_pos); memzeros(dirty_light_color);
-    }
+    bool dirty_material=0, dirty_light_pos[4], dirty_light_color[4];
+    int ID=0, slot_position=-1, slot_normal=-1, slot_tex=-1, slot_color=-1, uniform_modelview=-1, uniform_modelviewproj=-1,
+        uniform_tex=-1,uniform_cubetex=-1, uniform_normalon=-1, uniform_texon=-1, uniform_coloron=-1, uniform_cubeon=-1,
+        uniform_colordefault=-1, uniform_material_ambient=-1, uniform_material_diffuse=-1, uniform_material_specular=-1,
+        uniform_material_emission=-1, uniform_light0_pos=-1, uniform_light0_ambient=-1, uniform_light0_diffuse=-1,
+        uniform_light0_specular=-1;
+    Shader() { memzeros(dirty_light_pos); memzeros(dirty_light_color); }
 
     static int Create(const string &name, const string &vertex_shader, const string &fragment_shader, const ShaderDefines&, Shader *out);
     int GetUniformIndex(const string &name);
@@ -496,7 +494,7 @@ struct Window : public NativeWindow {
     GraphicsDevice *gd=0;
     point mouse;
     string caption;
-    RollingAvg fps;
+    RollingAvg<unsigned> fps;
     BindMap *binds=0;
     Entity *cam=0;
     Console *console=0;
@@ -642,6 +640,7 @@ struct GraphicsDevice {
     void PopScissor();
     void PushScissorStack();
     void PopScissorStack();
+    void DrawPixels(const Box &screen_coords, const Texture &tex);
 
     static int VertsPerPrimitive(int gl_primtype);
 };
@@ -731,8 +730,8 @@ struct BoxRun {
     String16 Text16(int i, int l) const { return Text<short>(i, l); }
     string   DebugString()        const { return StrCat("BoxRun='", Text(), "'"); }
 
-    typedef function<void    (const Drawable *,  const Box &)> DrawCB;
-    static void DefaultDrawCB(const Drawable *d, const Box &w) { d->Draw(w); }
+    typedef function<void    (const Drawable *,  const Box &,  const Drawable::Attr *)> DrawCB;
+    static void DefaultDrawCB(const Drawable *d, const Box &w, const Drawable::Attr *a) { d->Draw(w, a); }
     point Draw(point p, DrawCB = &DefaultDrawCB);
 	void draw(point p) { Draw(p); }
 
@@ -832,200 +831,6 @@ struct BoxArray {
     struct RollbackState { size_t data_size, attr_size, line_size; int height; };
     RollbackState GetRollbackState() const { return { data.size(), attr.size(), line.size(), height }; }
     void Rollback(const RollbackState &s) { data.resize(s.data_size); attr.resize(s.attr_size); line.resize(s.line_size); height=s.height; }
-};
-
-struct Atlas {
-    Texture tex; Box dim; Flow *flow;
-    Atlas(unsigned T, int W, int H=0);
-    ~Atlas();
-
-    bool Add(int *x_out, int *y_out, float *out_texcoord, int w, int h, int max_height=0);
-    void Update(Font *glyphs);
-
-    static void WriteGlyphFile(const string &name, Font *glyphs);
-    static void MakeFromPNGFiles(const string &name, const vector<string> &png, int atlas_dim, Font **glyphs_out);
-    static void SplitIntoPNGFiles(const string &input_png_fn, const map<int, v4> &glyphs, const string &dir_out);
-    static int Dimension(int n, int w, int h) { return 1 << max(8,FloorLog2(sqrt((w+4)*(h+4)*n))); }
-};
-
-struct FontDesc {
-    enum { Bold=1, Italic=2, Mono=4 };
-};
-
-struct FontInterface {
-    short size=0, ascender=0, height=0, max_width=0, fixed_width=0, missing_glyph=0;
-    int flag=0;
-    bool mono=0;
-    FontInterface(short S=0, int F=0) : size(S), flag(F), missing_glyph(FLAGS_default_missing_glyph), mono(F & FontDesc::Mono) {}
-    short Descender() const { return height - ascender; }
-    short FixedWidth() const { return X_or_Y(fixed_width, mono ? max_width : 0); }
-};
-
-struct Font : public FontInterface {
-    Color fg; bool mix_fg; float scale;
-    Font()                             :                             mix_fg(0), scale(0) {}
-    Font(int S, const Color &C, int F) : FontInterface(S, F), fg(C), mix_fg(0), scale(0) {}
-    virtual ~Font() {}
-    virtual Font *Clone(int pointsize, Color fg, int flag=0);
-    static  Font *OpenAtlas(const string &name, int size, Color c, int fonts_flag);
-    void WriteAtlas(const string &name, Texture *t);
-    void WriteAtlas(const string &name);
-
-    void Select();
-    void Scale(int new_size);
-
-    struct Glyph : public Drawable {
-        unsigned short id=0;
-        short bearing_x=0, bearing_y=0, advance=0;
-        Texture tex;
-
-        bool operator<(const Glyph &y) const { return id < y.id; }
-        int  ToArray  (      double *out, int l);
-        void FromArray(const double *in,  int l);
-
-        virtual int  Id()                                                  const { return id; }
-        virtual void Draw       (const LFL::Box &B)                        const { return tex.Draw(B); }
-        virtual int  Ascender   (const Drawable::Attr *a, const LFL::Box*) const { return a->font->ascender; }
-        virtual int  Advance    (const Drawable::Attr *a, const LFL::Box*) const { return RoundXY_or_Y(a->font->scale, advance); }
-        virtual int  LeftBearing(const Drawable::Attr *a)                  const { return RoundXY_or_Y(a->font->scale, bearing_x); }
-        virtual int  Layout     (const Drawable::Attr *a,       LFL::Box*) const;
-    };
-    struct Glyphs {
-        vector<Glyph>              table;
-        map<int, Glyph>            index;
-        vector<shared_ptr<Atlas> > atlas;
-        Font                      *primary;
-        Glyphs(Font *P=0, Atlas *A=0) : table(128), primary(P) { if (A) atlas.push_back(shared_ptr<Atlas>(A)); }
-    };
-    shared_ptr<Glyphs> glyph;
-
-#   define GlyphTableIter(f) for (auto i = (f)->glyph->table.begin(); i != (f)->glyph->table.end(); ++i)
-#   define GlyphIndexIter(f) for (auto i = (f)->glyph->index.begin(); i != (f)->glyph->index.end(); ++i)
-
-    virtual Glyph *FindGlyph        (unsigned short gind);
-    virtual Glyph *FindOrInsertGlyph(unsigned short gind);
-    virtual Glyph *LoadGlyph        (unsigned short gind) { return &glyph->table[missing_glyph]; }
-    void DrawGlyph(int g, const Box &w, int orientation=1) { return FindGlyph(g)->tex.Draw(w); }
-    int GetGlyphWidth(int g) { return RoundXY_or_Y(scale, FindGlyph(g)->advance); }
-
-    struct Flag {
-        enum {
-            NoWrap=1<<6, GlyphBreak=1<<7, AlignCenter=1<<8, AlignRight=1<<9, 
-            Underline=1<<10, Overline=1<<11, Midline=1<<12, Blink=1<<13,
-            Uppercase=1<<14, Lowercase=1<<15, Capitalize=1<<16, Clipped=1<<17,
-            AssignFlowX=1<<18
-        };
-        static int Orientation(int f) { return f & 0xf; };
-    };
-
-    template <class X> void Size(const StringPieceT<X> &text, Box *out, int width=0, int *lines_out=0);
-    /**/               void Size(const string          &text, Box *out, int width=0, int *lines_out=0) { return Size(StringPiece           (text), out, width, lines_out); }
-    /**/               void Size(const String16        &text, Box *out, int width=0, int *lines_out=0) { return Size(String16Piece         (text), out, width, lines_out); }
-    template <class X> void Size(const X               *text, Box *out, int width=0, int *lines_out=0) { return Size(StringPiece::Unbounded(text), out, width, lines_out); }
-
-    template <class X> int Lines(const StringPieceT<X> &text, int width) { if (!width) return 1; Box b; Size(text, &b, width); return b.h / height; }
-    /**/               int Lines(const string          &text, int width) { return Lines(StringPiece           (text), width); }
-    /**/               int Lines(const String16        &text, int width) { return Lines(String16Piece         (text), width); }
-    template <class X> int Lines(const X               *text, int width) { return Lines(StringPiece::Unbounded(text), width); }
-
-    template <class X> int Width(const StringPieceT<X> &text) { Box b; Size(text, &b); if (b.w) CHECK_EQ(b.h, height); return b.w; }
-    /**/               int Width(const string          &text) { return Width(StringPiece           (text)); }
-    /**/               int Width(const String16        &text) { return Width(String16Piece         (text)); }
-    template <class X> int Width(const X               *text) { return Width(StringPiece::Unbounded(text)); }
-
-    template <class X> void Encode(const StringPieceT<X> &text, const Box &box, BoxArray *out, int draw_flag=0, int attr_id=0);
-    /**/               void Encode(const string          &text, const Box &box, BoxArray *out, int draw_flag=0, int attr_id=0) { return Encode(StringPiece           (text), box, out, draw_flag, attr_id); }
-    /**/               void Encode(const String16        &text, const Box &box, BoxArray *out, int draw_flag=0, int attr_id=0) { return Encode(String16Piece         (text), box, out, draw_flag, attr_id); }
-    template <class X> void Encode(const X               *text, const Box &box, BoxArray *out, int draw_flag=0, int attr_id=0) { return Encode(StringPiece::Unbounded(text), box, out, draw_flag, attr_id); }
-
-    template <class X> int Draw(const StringPieceT<X> &text, point cp,       vector<Box> *lb=0, int draw_flag=0) { return Draw<X>    (                text,  Box(cp.x,cp.y+height,0,0), lb, draw_flag); }
-    /**/               int Draw(const string          &text, point cp,       vector<Box> *lb=0, int draw_flag=0) { return Draw(StringPiece           (text), Box(cp.x,cp.y+height,0,0), lb, draw_flag); }
-    /**/               int Draw(const String16        &text, point cp,       vector<Box> *lb=0, int draw_flag=0) { return Draw(String16Piece         (text), Box(cp.x,cp.y+height,0,0), lb, draw_flag); }
-    template <class X> int Draw(const X               *text, point cp,       vector<Box> *lb=0, int draw_flag=0) { return Draw(StringPiece::Unbounded(text), Box(cp.x,cp.y+height,0,0), lb, draw_flag); }
-    
-    template <class X> int Draw(const StringPieceT<X> &text, const Box &box, vector<Box> *lb=0, int draw_flag=0);
-    /**/               int Draw(const string          &text, const Box &box, vector<Box> *lb=0, int draw_flag=0) { return Draw(StringPiece           (text), box, lb, draw_flag); }
-    /**/               int Draw(const String16        &text, const Box &box, vector<Box> *lb=0, int draw_flag=0) { return Draw(String16Piece         (text), box, lb, draw_flag); }
-    template <class X> int Draw(const X               *text, const Box &box, vector<Box> *lb=0, int draw_flag=0) { return Draw(StringPiece::Unbounded(text), box, lb, draw_flag); }
-};
-
-struct FakeFont : public Font {
-    static const char *Filename() { return "__FakeFontFilename__"; }
-    FakeFont() {
-        glyph = shared_ptr<Glyphs>(new Glyphs(this));
-        fg=Color::white; fixed_width=max_width=8; ascender=9; height=14; size=10; 
-        for (int i = 0; i < 128; i++) {
-            Glyph *g = &glyph->table[i];
-            g->id = i;
-            g->tex.height = g->bearing_y = height;
-            g->tex.width = g->advance = fixed_width;
-        }
-    }
-};
-
-struct TTFFont : public Font {
-    struct Resource {
-        string content, name; FT_FaceRec_ *face; int flag;
-        Resource() : face(0), flag(0) {}
-        Resource(FT_FaceRec_ *FR, const string &N, int F=0) : face(FR), name(N), flag(F) {}
-        Resource(const string &C, const string &N, int F=0) : content(C), face(0), name(N), flag(F) {}
-        virtual ~Resource();
-    };
-    shared_ptr<Resource> resource;
-    TTFFont(const shared_ptr<Resource> &R, int S, const Color &C, int F) : resource(R), Font(S,C,F) {}
-    virtual Font *Clone(int pointsize, Color fg, int flag=0);
-    virtual Glyph *LoadGlyph(unsigned short gind);
-
-    static void Init();
-    struct Flag { enum { WriteAtlas=1, Outline=2 }; };
-    static Font *OpenFile  (const string &filename, const string &name, int size, Color c, int flag, int ttf_flag);
-    static Font *OpenBuffer(const shared_ptr<Resource> &R,              int size, Color c, int flag);
-    static Font *Open      (const shared_ptr<Resource> &R,              int size, Color c, int flag);
-};
-
-#ifdef __APPLE__
-struct CoreTextFont : public Font {
-    struct Resource {
-        string name; CGFontRef font; int flag;
-        Resource(const char *N=0, CGFontRef Font=0, int F=0) : name(BlankNull(N)), font(Font), flag(F) {}
-    };
-    shared_ptr<Resource> resource;
-    CoreTextFont(const shared_ptr<Resource> &R, int S, const Color &C, int F) : resource(R), Font(S,C,F) {}
-    virtual Font *Clone(int pointsize, Color fg, int flag=0);
-    virtual Glyph *LoadGlyph(unsigned short gind);
-
-    static void Init();
-    struct Flag { enum { WriteAtlas=1 }; };
-    static Font *Open(const string &name,            int size, Color c, int flag, int ct_flag);
-    static Font *Open(const shared_ptr<Resource> &R, int size, Color c, int flag);
-};
-#endif
-
-struct Fonts {
-    typedef map<unsigned, Font*> FontSizeMap;
-    typedef map<unsigned, FontSizeMap> FontColorMap;
-    typedef map<string, FontColorMap> FontMap;
-    FontMap font_map;
-
-    struct Family { set<string> normal, bold, italic, bold_italic; };
-    typedef map<string, Family> FamilyMap;
-    FamilyMap family_map;
-
-    static string FontName(const string &filename, int pointsize, Color fg, int flag);
-    static unsigned FontColor(Color fg, int FontFlag);
-    static int ScaledFontSize(int pointsize);
-
-    static Font *Default();
-    static Font *Fake();
-
-    static Font *Insert        (Font*, const string &filename, const string &family, int pointsize, const Color &fg, int flag);
-    static Font *InsertAtlas   (/**/   const string &filename, const string &family, int pointsize, const Color &fg, int flag);
-    static Font *InsertFreetype(/**/   const string &filename, const string &family, int pointsize, const Color &fg, int flag);
-    static Font *InsertCoreText(/**/   const string &filename, const string &family, int pointsize, const Color &fg, int flag);
-
-    static Font *Get(FontColorMap *colors,                         int pointsize, Color fg, int flag=-1);
-    static Font *Get(const string &filename,                       int pointsize, Color fg, int flag=-1);
-    static Font *Get(const string &filename, const string &family, int pointsize, Color fg, int flag=-1);
 };
 
 }; // namespace LFL
