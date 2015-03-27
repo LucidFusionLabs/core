@@ -219,8 +219,11 @@ extern "C" int isinf(double);
 #define sizeofarray(x) (sizeof(x) / sizeof((x)[0]))
 
 struct FT_FaceRec_;
-typedef struct CGFont    *CGFontRef;
+struct CGRect;
+struct CGSize;
+typedef struct CGFont *CGFontRef;
 typedef struct CGContext *CGContextRef;
+typedef const struct __CTFont *CTFontRef;
 
 extern "C" {
 struct _IplImage;
@@ -268,6 +271,7 @@ struct GraphicsDevice;
 struct Connection;
 struct Listener;
 struct Service;
+struct Glyph;
 struct Font;
 struct Flow;
 struct FloatContainer;
@@ -1153,6 +1157,7 @@ void DefaultLFAppWindowClosedCB();
 #include "lfapp/lftypes.h"
 #include "lfapp/audio.h"
 #include "lfapp/video.h"
+#include "lfapp/font.h"
 #include "lfapp/input.h"
 #include "lfapp/scene.h"
 #include "lfapp/assets.h"
@@ -1210,7 +1215,10 @@ struct ThreadPool {
 };
 
 struct FrameRateLimitter {
-    int *target_hz; float avgframe; Timer timer; RollingAvg sleep_bias;
+    int *target_hz;
+    float avgframe;
+    Timer timer;
+    RollingAvg<unsigned> sleep_bias;
     FrameRateLimitter(int *HZ) : target_hz(HZ), avgframe(0), sleep_bias(32) {}
     void Limit() {
         int since = timer.GetTime(true);

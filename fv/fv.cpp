@@ -119,7 +119,7 @@ struct LiveSpectogram {
             glSpectogram(Frame, live->tex.buf+ind, 1, feature_width, feature_width, vmax, FLAGS_clip, 0, PowerDomain::abs);
 
             live->tex.Bind();
-            live->tex.UpdateGL(0, texture_slide, live->tex.width, 1);
+            live->tex.UpdateGL(Box(0, texture_slide, live->tex.width, 1));
 
             samples_processed += FLAGS_feat_hop;
             scroll = (float)(texture_slide + 1) / (feature_rate * FLAGS_sample_secs);
@@ -201,8 +201,8 @@ struct LiveCamera {
 
         if (FLAGS_lfapp_camera && cam == asset("camera")) {
             /* update camera buffer */
-            cam->tex.UpdateBuffer(app->camera.image, FLAGS_camera_image_width, FLAGS_camera_image_height, app->camera.image_format,
-                                  app->camera.image_linesize, Texture::Flag::Resample);
+            cam->tex.UpdateBuffer(app->camera.image, point(FLAGS_camera_image_width, FLAGS_camera_image_height),
+                                  app->camera.image_format, app->camera.image_linesize, Texture::Flag::Resample);
 
             /* flush camera buffer */
             cam->tex.Bind();
@@ -369,8 +369,8 @@ struct AudioGUI : public GUI {
     Font *norm, *text;
     Widget::Button play_button, decode_button, record_button;
     AudioGUI(Window *W) : GUI(W),
-        norm(Fonts::Get(FLAGS_default_font, 12, Color::grey70)),
-        text(Fonts::Get(FLAGS_default_font, 8,  Color::grey80)),
+        norm(Fonts::Get(FLAGS_default_font, "", 12, Color::grey70)),
+        text(Fonts::Get(FLAGS_default_font, "", 8,  Color::grey80)),
         play_button  (this, DrawableNop(), norm, "play",    MouseController::CB([&](){ if (!app->audio.Out.size()) app->shell.play(vector<string>(1,"snap")); })),
         decode_button(this, DrawableNop(), norm, "decode",  MouseController::CB([&](){ decode = true; })),
         record_button(this, DrawableNop(), norm, "monitor", MouseController::CB([&](){ myMonitor = !myMonitor; })) {}
@@ -463,7 +463,7 @@ int VideoFrame(LFL::Window *W, unsigned clocks, unsigned samples, bool cam_sampl
         liveCam->Draw(st, sb);
     }
 
-    static Font *text = Fonts::Get(FLAGS_default_font, 9, Color::grey80);
+    static Font *text = Fonts::Get(FLAGS_default_font, "", 9, Color::grey80);
     text->Draw(StringPrintf("press tick for console - FPS = %.2f - CR = %.2f", FPS(), CamFPS()), point(screen->width*.05, screen->height*.05));
     return 0;
 }
@@ -482,8 +482,8 @@ struct FullscreenGUI : public GUI {
     Widget::Button play_button, close_button, decode_icon, fullscreen_button;
 
     FullscreenGUI(Window *W) : GUI(W),
-    norm(Fonts::Get(FLAGS_default_font, 12, Color::grey70)),
-    text(Fonts::Get(FLAGS_default_font, 12, Color::white, TTFFont::Flag::Outline)),
+    norm(Fonts::Get(FLAGS_default_font, "", 12, Color::grey70)),
+    text(Fonts::Get(FLAGS_default_font, "", 12, Color::white, Color::clear, FontDesc::Outline)),
     play_button      (this, 0, 0, "", MouseController::CB([&](){ myMonitor=1; })),
     close_button     (this, 0, 0, "", MouseController::CB([&](){ close=1; })),
     decode_icon      (this, 0, 0, "", MouseController::CB()),
@@ -513,7 +513,7 @@ struct FullscreenGUI : public GUI {
 
             int total = AED->feature_rate * FLAGS_sample_secs;
             for (auto it = segments->segments.begin(); it != segments->segments.end(); it++)
-                text->Draw((*it).name, point(box.centerX(), box.percentY((float)(*it).beg/total)), 0, Font::Flag::Orientation(3));
+                text->Draw((*it).name, point(box.centerX(), box.percentY((float)(*it).beg/total)), 0, Font::DrawFlag::Orientation(3));
         }
 
         Draw();
@@ -539,7 +539,7 @@ struct FullscreenGUI : public GUI {
 struct FVGUI : public GUI {
     Font *font;
     Widget::Button tab1, tab2, tab3;
-    FVGUI(Window *W) : GUI(W), font(Fonts::Get(FLAGS_default_font, 12, Color::grey70)),
+    FVGUI(Window *W) : GUI(W), font(Fonts::Get(FLAGS_default_font, "", 12, Color::grey70)),
     tab1(this, 0, font, "audio gui",  MouseController::CB(bind(&SetMyTab, 1))),
     tab2(this, 0, font, "video gui",  MouseController::CB(bind(&SetMyTab, 2))), 
     tab3(this, 0, font, "room model", MouseController::CB(bind(&SetMyTab, 3))) { Activate(); }

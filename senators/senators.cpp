@@ -226,7 +226,7 @@ void MyVPrefixSize(const vector<string> &args) {
 
 int Frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample, int flag) {
     for (Senators::iterator i = senators.begin(); i != senators.end(); i++) i->first->Heartbeat(i->second);
-    static RollingAvg fps(128);
+    static RollingAvg<unsigned> fps(128);
     fps.Add(clicks);
 
     static int sayrate_hz = 10;

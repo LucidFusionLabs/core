@@ -169,9 +169,9 @@ struct Flow {
     void SetFont(Font *F) {
         if (!(cur_attr.font = F)) return;
         int prev_height = cur_line.height, prev_ascent = cur_line.ascent, prev_descent = cur_line.descent;
-        Max(&cur_line.height,  F->height);
+        Max(&cur_line.height,  F->Height());
         Max(&cur_line.ascent,  F->ascender);
-        Max(&cur_line.descent, F->Descender());
+        Max(&cur_line.descent, F->descender);
         UpdateCurrentLine(cur_line.height-prev_height, cur_line.ascent-prev_ascent, cur_line.descent-prev_descent);
     }
     void SetMinimumAscent(short line_ascent) {
@@ -187,7 +187,7 @@ struct Flow {
 
     int Height() const { return -p.y - (cur_line.fresh ? cur_line.height : 0); }
     Box CurrentLineBox() const { return Box(cur_line.beg, p.y, p.x - cur_line.beg, cur_line.height); }
-    int LayoutLineHeight() const { return X_or_Y(layout.line_height, cur_attr.font ? cur_attr.font->height : 0); }
+    int LayoutLineHeight() const { return X_or_Y(layout.line_height, cur_attr.font ? cur_attr.font->Height() : 0); }
 
     void AppendVerticalSpace(int h) {
         if (h <= 0) return;
@@ -267,11 +267,11 @@ struct Flow {
     State AppendChar(int c, int attr_id, Drawable::Box *box) {
         if (layout.char_tf) c = layout.char_tf(c);
         if (state == State::NEW_WORD && layout.word_start_char_tf) c = layout.word_start_char_tf(c);
-        Max(&cur_line.height, cur_attr.font->height);
+        Max(&cur_line.height, cur_attr.font->Height());
         box->drawable = cur_attr.font->FindGlyph(c);
         box->attr_id = attr_id;
         box->line_id = out ? out->line.size() : -1;
-        return AppendBoxOrChar(c, box, cur_attr.font->height);
+        return AppendBoxOrChar(c, box, cur_attr.font->Height());
     }
     State AppendBoxOrChar(int c, Drawable::Box *box, int h) {
         bool space = isspace(c);
@@ -281,7 +281,7 @@ struct Flow {
             bool wrap = 0;
             if (!cur_word.len) cur_word.fresh = 1;
             if (!layout.word_break) {
-                int box_width = box->drawable ? box->drawable->Advance(&cur_attr, &box->box) : box->box.w;
+                int box_width = box->drawable ? box->drawable->Advance(&box->box, &cur_attr) : box->box.w;
                 wrap = cur_line.end && p.x + box_width > cur_line.end;
             } else if (cur_word.fresh && !space) {
                 if (!cur_word.len) return state = State::NEW_WORD;
@@ -299,7 +299,7 @@ struct Flow {
         cur_word.fresh = 0;
         if (c == '\n') { if (!layout.ignore_newlines) AppendNewline(); return State::OK; }
 
-        int advance = box->drawable ? box->drawable->Layout(&cur_attr, &box->box) : box->box.w;
+        int advance = box->drawable ? box->drawable->Layout(&box->box, &cur_attr) : box->box.w;
         box->box.y += cur_line.descent;
         box->box += p;
         p.x += advance;

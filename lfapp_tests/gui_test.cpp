@@ -141,7 +141,7 @@ TEST(GUITest, TextArea) {
         EXPECT_EQ(1, ta.line[-5].Lines());
 
         LinesFrameBufferTest *test_fb = &ta.line_fb_test;
-        int fh = font->height;
+        int fh = font->Height();
         Box b(128, 3*fh);
         ta.Draw(b, false);
         int w = test_fb->w;
@@ -361,7 +361,7 @@ TEST(GUITest, TextArea) {
 
 TEST(GUITest, Editor) {
     Font *font = Fonts::Fake();
-    int fh = font->height, w = font->fixed_width;
+    int fh = font->Height(), w = font->fixed_width;
     EXPECT_NE(0, fh); EXPECT_NE(0, w);
     EditorTest e(screen, font, new BufferFile("1\n2 2 2\n3\n4 4\n5\n"), true);
     LinesFrameBufferTest *test_fb = &e.line_fb_test;

@@ -246,7 +246,7 @@ struct Q3MapAsset : public MapAsset {
 
         for (int i = 0; i < num[kLightmaps]; i++) {
             const unsigned char *src = (const unsigned char*)out[kLightmaps] + LightMapSize * i;
-            lightmap[i].tex.LoadGL(src, 128, 128, Pixel::RGB24, 128*3);
+            lightmap[i].tex.LoadGL(src, point(128, 128), Pixel::RGB24, 128*3);
             INFO("lm[", i, "] tex=", lightmap[i].tex.ID);
         }
 

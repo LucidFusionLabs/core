@@ -441,32 +441,31 @@ template <class T=double> struct matrix {
 };
 typedef matrix<double> Matrix;
 
-struct RollingAvg { 
-    unsigned total=0; float dev=0;
-    vector<unsigned> buf; vector<float> dbuf;
-    int window=0, index=0, count=0, init=0, accum=0;
-    RollingAvg(int W) : window(W), buf(W, 0), dbuf(W, 0) {}
+template <class X> struct RollingAvg { 
+    X total=0, accum=0;
+    float dev=0;
+    vector<X> buf;
+    vector<float> dbuf;
+    int window=0, index=0, count=0;
+    RollingAvg(int W) : buf(W, 0), dbuf(W, 0), window(W) {}
 
-    void Add(unsigned n) {
-        unsigned ov = buf[index], nv = n + accum;
+    void Add(X n) {
+        X     ov = buf [index], nv = n + accum;
         float od = dbuf[index], nd = pow(Avg() - nv, 2);
-
-        buf[index] = nv;
+        buf [index] = nv;
         dbuf[index] = nd;
-
         index = (index + 1) % window;
         total += nv - ov;
-        dev += nd - od;
-
+        dev   += nd - od;
         if (count < window) count++;
         accum = 0;
     }
-    double Min() const { return Vec<unsigned>::Min(&buf[0], count); }
-    double Max() const { return Vec<unsigned>::Max(&buf[0], count); }
-    double Avg() const { return count ? total / count : 0; }
-    double SumAvg() const { return count ? Vec<unsigned>::Sum(&buf[0], count) / count : 0; }
-    float StdDev() const { return count ? sqrt(dev) : 0; }
-    float FPS() const { return 1000.0/Avg(); }
+    double Min   () const { return Vec<X>::Min(&buf[0], count); }
+    double Max   () const { return Vec<X>::Max(&buf[0], count); }
+    double Avg   () const { return count ? total / count : 0; }
+    double SumAvg() const { return count ? Vec<X>::Sum(&buf[0], count) / count : 0; }
+    float  StdDev() const { return count ? sqrt(dev) : 0; }
+    float  FPS   () const { return 1000.0/Avg(); }
 };
 
 /* util */

@@ -188,7 +188,7 @@ struct BulkMailer {
     long long queue_attempted, queued, completed, sent, delivered, rejected, aborted;
     File *delivery_log, *bounce_log, *retry_log;
     map<int, HistogramValue> delivery_code_histogram;
-    RollingAvg connects_per_frame;
+    RollingAvg<unsigned> connects_per_frame;
     string logdir, template_name;
     SMTPClient *smtp_client;
     DeltaSampler *stat_log;

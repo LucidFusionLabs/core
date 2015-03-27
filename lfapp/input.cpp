@@ -870,7 +870,7 @@ void Shell::clipboard(const vector<string> &a) {
 
 void Shell::consolecolor(const vector<string>&) {
     delete screen->console->font;
-    screen->console->font = Fonts::Get(FLAGS_default_font, 9, Color::black);
+    screen->console->font = Fonts::Get(FLAGS_default_font, "", 9, Color::black);
 }
 
 void Shell::startcmd(const vector<string> &a) {

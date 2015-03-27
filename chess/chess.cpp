@@ -43,7 +43,7 @@ int Frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample
     board->tex.Draw(win);
 
     int black_font_index[7] = { 0, 3, 2, 0, 5, 4, 1 }, bits[65];
-    static Font *pieces = Fonts::Get("ChessPieces1", 0, Color::black);
+    static Font *pieces = Fonts::Get("ChessPieces1", "", 0, Color::black);
     for (int i=Chess::PAWN; i <= Chess::KING; i++) {
         Bit::Indices(position.white[i], bits); for (int *b = bits; *b != -1; b++) { Box w=SquareCoords(*b); pieces->DrawGlyph(black_font_index[i]+6, w); }
         Bit::Indices(position.black[i], bits); for (int *b = bits; *b != -1; b++) { Box w=SquareCoords(*b); pieces->DrawGlyph(black_font_index[i],   w); }
@@ -68,7 +68,7 @@ extern "C" int main(int argc, const char *argv[]) {
     if (app->Create(argc, argv, __FILE__)) { app->Free(); return -1; }
     if (app->Init()) { app->Free(); return -1; }
 
-    Fonts::InsertAtlas("ChessPieces1", "", 0, Color::black, 0);
+    Singleton<AtlasFontEngine>::Get()->Init(FontDesc("ChessPieces1", "", 0, Color::black));
 
     // asset.Add(Asset(name, texture,     scale, translate, rotate, geometry, 0, 0, 0));
     asset.Add(Asset("board", "board.png", 0,     0,         0,      0,        0, 0, 0));

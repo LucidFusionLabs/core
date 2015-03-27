@@ -84,7 +84,7 @@ struct MyTerminalWindow {
         CHECK_EQ(process.OpenPTY(av), 0);
         app->scheduler.AddWaitForeverSocket(fileno(process.in), SocketSet::READABLE, 0);
 
-        terminal = new Terminal(fileno(process.out), screen, Fonts::Get(FLAGS_default_font, font_size, Color::white));
+        terminal = new Terminal(fileno(process.out), screen, Fonts::Get(FLAGS_default_font, "", font_size));
         terminal->new_link_cb = MyNewLinkCB;
         terminal->hover_link_cb = MyHoverLinkCB;
         terminal->active = true;
@@ -114,9 +114,9 @@ int Frame(Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample, int
 void SetFontSize(int n) {
     MyTerminalWindow *tw = (MyTerminalWindow*)screen->user1;
     tw->font_size = n;
-    tw->terminal->font = Fonts::Get(FLAGS_default_font, tw->font_size, Color::white);
+    tw->terminal->font = Fonts::Get(FLAGS_default_font, "", tw->font_size);
     screen->Reshape(tw->terminal->font->FixedWidth() * tw->terminal->term_width,
-                    tw->terminal->font->height       * tw->terminal->term_height);
+                    tw->terminal->font->Height()     * tw->terminal->term_height);
 }
 void MyConsoleAnimating(Window *W) { 
     ((MyTerminalWindow*)W->user1)->UpdateTargetFPS();
@@ -214,7 +214,7 @@ extern "C" int main(int argc, const char *argv[]) {
     SetFontSize(tw->font_size);
     tw->terminal->Draw(screen->Box(), false);
     INFO("Starting Terminal ", FLAGS_default_font, " (w=", tw->terminal->font->fixed_width,
-                                                   ", h=", tw->terminal->font->height, ")");
+                                                   ", h=", tw->terminal->font->Height(), ")");
 
     app->scheduler.Start();
     return app->Main();

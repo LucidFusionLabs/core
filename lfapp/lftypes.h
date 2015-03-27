@@ -55,39 +55,59 @@ static __forceinline int ffs(int x) { return ffsl(x); }
     else return x4 < y4;
 
 namespace LFL {
+struct RefCounter {
+    int count=0;
+    virtual void AddRef() { count++; }
+    virtual void DelRef() { count--; }
+};
+
+struct RefSet {
+    unordered_set<RefCounter*> refs;
+    virtual ~RefSet() { for (auto i : refs) i->DelRef(); }
+    void Insert(RefCounter *x) { auto i = refs.insert(x); if (i.second) x->AddRef(); }
+};
+
 template <class X> static void Replace(X** p, X* r) { delete (*p); (*p) = r; }
 template <class X> static void AllocReplace(X** p, X* r) { if (*p && (*p)->alloc) (*p)->alloc->free(*p); *p = r; }
 
 template <typename K, typename V> typename map<K, V>::iterator FindOrInsert(map<K, V> &m, K k, V v, int *inserted) {
-    LFL_STL_NAMESPACE::pair<typename map<K, V>::iterator, bool> ret = m.insert(typename map<K, V>::value_type(k, v));
+    auto ret = m.insert(typename map<K, V>::value_type(k, v));
     if (inserted) (*inserted)++;
     return ret.first;
 }
 template <typename K, typename V> typename map<K, V>::iterator FindOrInsert(map<K, V> &m, K k, V v, bool *inserted=0) {
-    LFL_STL_NAMESPACE::pair<typename map<K, V>::iterator, bool> ret = m.insert(typename map<K, V>::value_type(k, v));
+    auto ret = m.insert(typename map<K, V>::value_type(k, v));
     if (inserted) *inserted = ret.second;
     return ret.first;
 }
 template <typename K, typename V> typename map<K, V*>::iterator FindOrInsert(map<K, V*> &m, K k, V* v, bool *inserted=0) {
-    LFL_STL_NAMESPACE::pair<typename map<K, V*>::iterator, bool> ret = m.insert(typename map<K, V*>::value_type(k, v));
+    auto ret = m.insert(typename map<K, V*>::value_type(k, v));
     if (inserted) *inserted = ret.second;
     return ret.first;
 }
 template <typename K, typename V> typename map<K, V>::iterator FindOrInsert(map<K, V> &m, K k, bool *inserted=0) {
-    typename map<K, V>::iterator i = m.find(k);
+    auto i = m.find(k);
     if (i != m.end()) return i;
     if (inserted) *inserted = 1;
-    LFL_STL_NAMESPACE::pair<typename map<K, V>::iterator, bool> ret = m.insert(typename map<K, V>::value_type(k, V()));
+    auto ret = m.insert(typename map<K, V>::value_type(k, V()));
     return ret.first;
 }
 template <typename K, typename V> typename map<K, V*>::iterator FindOrInsert(map<K, V*> &m, K k, bool *inserted=0) {
-    LFL_STL_NAMESPACE::pair<typename map<K, V*>::iterator, bool> ret = m.insert(typename map<K, V*>::value_type(k, 0));
+    auto ret = m.insert(typename map<K, V*>::value_type(k, 0));
     if (ret.second) ret.first->second = new V();
     if (inserted) *inserted = ret.second;
     return ret.first;
 }
+
+template <typename K, typename V> typename unordered_map<K, V>::iterator FindOrInsert(unordered_map<K, V> &m, K k, bool *inserted=0) {
+    auto i = m.find(k);
+    if (i != m.end()) return i;
+    if (inserted) *inserted = 1;
+    auto ret = m.insert(typename unordered_map<K, V>::value_type(k, V()));
+    return ret.first;
+}
 template <typename K, typename V> typename unordered_map<K, V>::iterator FindOrInsert(unordered_map<K, V> &m, K k, V v, bool *inserted) {
-    LFL_STL_NAMESPACE::pair<typename unordered_map<K, V>::iterator, bool> ret = m.insert(typename unordered_map<K, V>::value_type(k, v));
+    auto ret = m.insert(typename unordered_map<K, V>::value_type(k, v));
     if (inserted) *inserted = ret.second;
     return ret.first;
 }

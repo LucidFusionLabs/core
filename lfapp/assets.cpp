@@ -581,8 +581,8 @@ struct FFMpegAssetLoader : public AudioAssetLoader, public VideoAssetLoader, pub
             int pf = Pixel::FromFFMpegId(avctx->pix_fmt);
             out->width  = avctx->width;
             out->height = avctx->height;
-            out->LoadGL(*frame->data, out->width, out->height, pf, frame->linesize[0]);
-            if (!clear) out->LoadBuffer(frame->data[0], out->width, out->height, pf, frame->linesize[0]);
+            out->LoadGL(*frame->data, point(out->width, out->height), pf, frame->linesize[0]);
+            if (!clear) out->LoadBuffer(frame->data[0], point(out->width, out->height), pf, frame->linesize[0]);
             // av_frame_unref(frame);
         }
 
@@ -702,7 +702,7 @@ struct FFMpegAssetLoader : public AudioAssetLoader, public VideoAssetLoader, pub
                     ERROR("avcodec_decode_video2 ", ret, ": ", errstr);
                 } else {
                     screen->gd->BindTexture(GraphicsDevice::Texture2D, va->tex.ID);
-                    va->tex.UpdateBuffer(*frame->data, avctx->width, avctx->height, Pixel::FromFFMpegId(avctx->pix_fmt), 
+                    va->tex.UpdateBuffer(*frame->data, point(avctx->width, avctx->height), Pixel::FromFFMpegId(avctx->pix_fmt), 
                                          frame->linesize[0], Texture::Flag::Resample);
                     va->tex.UpdateGL();
                     av_frame_unref(frame);
@@ -1095,7 +1095,7 @@ void glTimeResolutionShaderWindows(Shader *shader, const Color &backup_color, co
     if (shader) screen->gd->UseShader(0);
 }
 
-void BoxOutline::Draw(const LFL::Box &w) const {
+void BoxOutline::Draw(const LFL::Box &w, const Drawable::Attr*) const {
     screen->gd->DisableTexture();
     if (line_width <= 1) {
         static int verts_ind = -1;
@@ -1370,7 +1370,8 @@ void Tiles::AddBoxArray(const BoxArray &box, point p) {
                 TilesPostAdd(this, &GraphicsDevice::PopScissor, screen->gd);
             }
             BoxRun(iter.Data(), iter.Length(), attr)
-                .Draw(p, [&] (const Drawable *d, const Box &w) { TilesAdd(this, &w, &Drawable::Draw, d, w); });
+                .Draw(p, [&] (const Drawable *d, const Box &w, const Drawable::Attr *a)
+                      { TilesAdd(this, &w, &Drawable::Draw, d, w, a); });
             ContextClose();
         }
     }
