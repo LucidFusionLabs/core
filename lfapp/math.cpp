@@ -41,9 +41,18 @@ v4 Clamp(const v4& x, float floor, float ceil) {
     return v4(Clamp(x.x, floor, ceil), Clamp(x.y, floor, ceil), Clamp(x.z, floor, ceil), Clamp(x.w, floor, ceil));
 }
 
+int Sign(float f) {
+    if      (f > 0) return  1;
+    else if (f < 0) return -1;
+    else            return  0;
+}
+
+int RoundDown(float f) { return f; }
+int RoundUp  (float f) { if (!(f - (int)f)) return f; return f > 0 ? ((int)f + 1) : ((int)f - 1); }
+
 int RoundF(float f, bool round_point_five_up) {
-    if (round_point_five_up) return (int)((f - (int)f) >= 0.5 ? f+1 : f); 
-    else                     return (int)((f - (int)f) >  0.5 ? f+1 : f); 
+    if (round_point_five_up) return (int)(fabs(f - (int)f) >= 0.5 ? (f + Sign(f)) : f); 
+    else                     return (int)(fabs(f - (int)f) >  0.5 ? (f + Sign(f)) : f); 
 }
 
 int DimCheck(const char *alg, int d1, int d2) {

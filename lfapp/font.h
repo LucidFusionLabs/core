@@ -76,9 +76,13 @@ struct FontEngine {
 struct Glyph : public Drawable {
     unsigned short id=0;
     short bearing_x=0, bearing_y=0, advance=0;
-    int internal_id=0;
+    union Internal {
+        struct FreeType { int id; }                                          freetype;
+        struct CoreText { int id; float origin_x, origin_y, width, height; } coretext;
+    } internal;
     mutable Texture tex;
     mutable bool ready=0;
+    Glyph() { memzero(internal); }
 
     bool operator<(const Glyph &y) const { return id < y.id; }
     void FromArray(const double *in,  int l);
@@ -241,7 +245,7 @@ struct AtlasFontEngine : public FontEngine {
 };
 
 #ifdef LFL_FREETYPE
-struct FreetypeFontEngine : public FontEngine {
+struct FreeTypeFontEngine : public FontEngine {
     struct Resource : public FontEngine::Resource {
         string name, content;
         FT_FaceRec_ *face=0;
@@ -249,8 +253,8 @@ struct FreetypeFontEngine : public FontEngine {
         Resource(FT_FaceRec_ *FR=0, const string &N="", string *C=0) : face(FR), name(N) { if (C) swap(*C, content); }
     };
     unordered_map<string, shared_ptr<Resource> > resource;
-    GlyphCache::FilterCB subpixel_filter = &FreetypeFontEngine::SubPixelFilter;
-    virtual const char *Name() { return "FreetypeFontEngine"; }
+    GlyphCache::FilterCB subpixel_filter = &FreeTypeFontEngine::SubPixelFilter;
+    virtual const char *Name() { return "FreeTypeFontEngine"; }
     virtual bool  Init(const FontDesc&);
     virtual Font *Open(const FontDesc&);
     virtual int   InitGlyphs(Font *f,       Glyph *g, int n);

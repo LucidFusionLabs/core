@@ -128,45 +128,54 @@ bool GlyphCache::Add(point *out, float *texcoord, int w, int h, int max_height) 
 
 void GlyphCache::Upload(const Glyph *g, const point &p, const unsigned char *buf, int linesize, int spf,
                         const GlyphCache::FilterCB &filter) {
-    if (tex.buf) {
+    bool cache_glyph = true;
+    if (tex.buf && cache_glyph) {
         tex.UpdateBuffer(buf, Box(p, g->tex.width, g->tex.height), spf, linesize, SimpleVideoResampler::Flag::TransparentBlack);
         if (filter) filter(Box(p, g->tex.Dimension()), tex.buf, tex.LineSize(), tex.pf);
     } else {
-        Texture glyph_tex(0, 0, tex.pf);
-        glyph_tex.LoadBuffer(buf, g->tex.Dimension(), spf, linesize,
-                             SimpleVideoResampler::Flag::TransparentBlack | SimpleVideoResampler::Flag::FlipY);
-        if (filter) filter(Box(g->tex.Dimension()), glyph_tex.buf, glyph_tex.LineSize(), glyph_tex.pf);
-        tex.UpdateGL(glyph_tex.buf, Box(p, g->tex.width, g->tex.height), Texture::Flag::FlipY); 
+        g->tex.pf = tex.pf;
+        g->tex.LoadBuffer(buf, g->tex.Dimension(), spf, linesize,
+                          SimpleVideoResampler::Flag::TransparentBlack | SimpleVideoResampler::Flag::FlipY);
+        if (filter) filter(Box(g->tex.Dimension()), g->tex.buf, g->tex.LineSize(), g->tex.pf);
+        if (cache_glyph) {
+            tex.UpdateGL(g->tex.buf, Box(p, g->tex.width, g->tex.height), Texture::Flag::FlipY); 
+            g->tex.ClearBuffer();
+        }
         // PngWriter::Write(StringPrintf("glyph%06x.png", g->id), glyph_tex);
     }
 }
 
 void GlyphCache::Upload(const Glyph *g, const point &p, CGFontRef cgfont, int size) {
-    if (!g->internal_id || !g->tex.width || !g->tex.height) return;
-    CGGlyph cg = g->internal_id;
-    if (tex.buf) {
-        CGPoint point = CGPointMake(p.x - g->bearing_x, tex.height - p.y - g->bearing_y);
+    if (!g->internal.coretext.id || !g->tex.width || !g->tex.height) return;
+    CGGlyph cg = g->internal.coretext.id;
+    float origin_x = g->internal.coretext.origin_x, bearing_y = g->internal.coretext.height + g->internal.coretext.origin_y;
+    bool cache_glyph = true;
+    if (tex.buf && cache_glyph) {
+        CGPoint point = CGPointMake(p.x - RoundDown(origin_x), tex.height - p.y - g->bearing_y);
         CGContextSetRGBFillColor(cgcontext, 0, 0, 0, 1);
-        CGContextFillRect(cgcontext, CGRectMake(point.x, point.y, g->tex.width, g->tex.height));
+        CGContextFillRect(cgcontext, CGRectMake(p.x, tex.height - p.y - g->tex.height, g->tex.width, g->tex.height));
         CGContextSetRGBFillColor(cgcontext, 1, 1, 1, 1);
         CGContextSetFont(cgcontext, cgfont);
         CGContextSetFontSize(cgcontext, size);
         CGContextShowGlyphsAtPositions(cgcontext, &cg, &point, 1);
     } else {
-        CGPoint point = CGPointMake(-g->bearing_x, -g->bearing_y + g->tex.height);
-        Texture glyph_tex(g->tex.width, g->tex.height, tex.pf);
-        glyph_tex.RenewBuffer();
-        CGContextRef context = glyph_tex.CGBitMap();
+        g->tex.pf = tex.pf;
+        g->tex.RenewBuffer();
+        CGContextRef context = g->tex.CGBitMap();
+        CGContextSetTextMatrix(context, CGAffineTransformMakeScale(1.0f, -1.0f));
+        CGPoint point = CGPointMake(-RoundDown(origin_x), -RoundUp(bearing_y));
         CGContextSetRGBFillColor(context, 0, 0, 0, 1);
         CGContextFillRect(context, CGRectMake(0, 0, g->tex.width, g->tex.height));
         CGContextSetRGBFillColor(context, 1, 1, 1, 1);
         CGContextSetFont(context, cgfont);
         CGContextSetFontSize(context, size);
         CGContextShowGlyphsAtPositions(context, &cg, &point, 1);
-
-        tex.UpdateGL(glyph_tex.buf, Box(p, g->tex.Dimension()), Texture::Flag::FlipY); 
-        INFOf("LoadGlyph U+%06x texID=%d", g->id, tex.ID);
         CGContextRelease(context);
+        if (cache_glyph) {
+            tex.UpdateGL(g->tex.buf, Box(p, g->tex.Dimension()), Texture::Flag::FlipY); 
+            g->tex.ClearBuffer();
+        }
+        INFOf("LoadGlyph U+%06x texID=%d", g->id, tex.ID);
     }
 }
 
@@ -403,11 +412,11 @@ void AtlasFontEngine::SplitIntoPNGFiles(const string &input_png_fn, const map<in
 }
 
 #ifdef LFL_FREETYPE
-FreetypeFontEngine::Resource::~Resource() {
+FreeTypeFontEngine::Resource::~Resource() {
     if (face) FT_Done_Face(face);
 }
 
-bool FreetypeFontEngine::Init(const FontDesc &d) {
+bool FreeTypeFontEngine::Init(const FontDesc &d) {
     if (Contains(resource, d.name)) return true;
     string content = LocalFile::FileContents(StrCat(ASSETS_DIR, d.name));
     if (Resource *r = OpenBuffer(d, &content)) {
@@ -418,7 +427,7 @@ bool FreetypeFontEngine::Init(const FontDesc &d) {
     return false;
 }
 
-void FreetypeFontEngine::Init() {
+void FreeTypeFontEngine::Init() {
     static bool init = false;
     if (!init && (init=true)) {
         int error;
@@ -426,12 +435,12 @@ void FreetypeFontEngine::Init() {
     }
 }
 
-void FreetypeFontEngine::SubPixelFilter(const Box &b, unsigned char *buf, int linesize, int pf) {
+void FreeTypeFontEngine::SubPixelFilter(const Box &b, unsigned char *buf, int linesize, int pf) {
     Matrix kernel(3, 3, 1/8.0); 
     SimpleVideoResampler::Filter(buf, b.w, b.h, pf, linesize, b.x, b.y, &kernel, ColorChannel::Alpha, SimpleVideoResampler::Flag::ZeroOnly);
 }
 
-FreetypeFontEngine::Resource *FreetypeFontEngine::OpenFile(const FontDesc &d) {
+FreeTypeFontEngine::Resource *FreeTypeFontEngine::OpenFile(const FontDesc &d) {
     Init(); 
     int error;
     FT_FaceRec_ *face = 0;
@@ -441,7 +450,7 @@ FreetypeFontEngine::Resource *FreetypeFontEngine::OpenFile(const FontDesc &d) {
     return new Resource(face, d.name);
 }
 
-FreetypeFontEngine::Resource *FreetypeFontEngine::OpenBuffer(const FontDesc &d, string *content) {
+FreeTypeFontEngine::Resource *FreeTypeFontEngine::OpenBuffer(const FontDesc &d, string *content) {
     Init();
     int error;
     Resource *r = new Resource(0, d.name, content);
@@ -451,15 +460,15 @@ FreetypeFontEngine::Resource *FreetypeFontEngine::OpenBuffer(const FontDesc &d, 
     return r;
 }
 
-int FreetypeFontEngine::InitGlyphs(Font *f, Glyph *g, int n) {
+int FreeTypeFontEngine::InitGlyphs(Font *f, Glyph *g, int n) {
     int count = 0, error;
     FT_FaceRec_ *face = ((Resource*)f->resource.get())->face;
     FT_Int32 flags = FT_LOAD_RENDER | (FLAGS_subpixel_fonts ? FT_LOAD_TARGET_LCD : 0) | FT_LOAD_FORCE_AUTOHINT;
     if ((error = FT_Set_Pixel_Sizes(face, 0, f->size))) { ERROR("FT_Set_Pixel_Sizes(", f->size, ") = ", error); return 0; }
 
     for (Glyph *e = g + n; g != e; ++g, count++) {
-        if (!(g->internal_id = FT_Get_Char_Index(face, g->id))) { /* assign missing glyph? */ continue; }
-        if ((error = FT_Load_Glyph(face, g->internal_id, flags))) { ERROR("FT_Load_Glyph(", g->internal_id, ") = ", error); continue; }
+        if (!(g->internal.freetype.id = FT_Get_Char_Index(face, g->id))) { /* assign missing glyph? */ continue; }
+        if ((error = FT_Load_Glyph(face, g->internal.freetype.id, flags))) { ERROR("FT_Load_Glyph(", g->internal.freetype.id, ") = ", error); continue; }
         if (( FLAGS_subpixel_fonts && face->glyph->bitmap.pixel_mode != FT_PIXEL_MODE_LCD) ||
             (!FLAGS_subpixel_fonts && face->glyph->bitmap.pixel_mode != FT_PIXEL_MODE_GRAY))
         { ERROR("glyph bitmap pixel_mode ", face->glyph->bitmap.pixel_mode); continue; }
@@ -474,8 +483,8 @@ int FreetypeFontEngine::InitGlyphs(Font *f, Glyph *g, int n) {
     return count;
 }
 
-int FreetypeFontEngine::LoadGlyphs(Font *f, const Glyph *g, int n) {
-    if (!g->internal_id) return false;
+int FreeTypeFontEngine::LoadGlyphs(Font *f, const Glyph *g, int n) {
+    if (!g->internal.freetype.id) return false;
     point cache_p;
     int count = 0, spf = FLAGS_subpixel_fonts ? Pixel::LCD : Pixel::GRAY8, error;
     bool outline = f->flag & FontDesc::Outline;
@@ -486,17 +495,17 @@ int FreetypeFontEngine::LoadGlyphs(Font *f, const Glyph *g, int n) {
 
     for (const Glyph *e = g + n; g != e; ++g, count++) {
         g->ready = true;
-        if (!g->internal_id) continue;
-        if ((error = FT_Load_Glyph(face, g->internal_id, flags))) { ERROR("FT_Load_Glyph(", g->internal_id, ") = ", error); continue; }
-        if (!cache->Add(&cache_p, g->tex.coord, g->tex.width, g->tex.height, f->Height())) FATAL("cache full");
         g->tex.ID = cache->tex.ID;
+        if (!g->internal.freetype.id) continue;
+        if ((error = FT_Load_Glyph(face, g->internal.freetype.id, flags))) { ERROR("FT_Load_Glyph(", g->internal.freetype.id, ") = ", error); continue; }
+        if (!cache->Add(&cache_p, g->tex.coord, g->tex.width, g->tex.height, f->Height())) FATAL("cache full");
         cache->Upload(g, cache_p, face->glyph->bitmap.buffer, face->glyph->bitmap.pitch, spf,
                       FLAGS_subpixel_fonts ? subpixel_filter : GlyphCache::FilterCB());
     }
     return count;
 }
 
-Font *FreetypeFontEngine::Open(const FontDesc &d) {
+Font *FreeTypeFontEngine::Open(const FontDesc &d) {
     auto ri = resource.find(d.name);
     if (ri == resource.end()) return 0;
     Font *ret = new Font(this, d, ri->second);
@@ -527,7 +536,7 @@ int CoreTextFontEngine::InitGlyphs(Font *f, Glyph *g, int n) {
     CGSize advance;
     Resource *resource = (Resource*)f->resource.get();
     CTFontRef ctfont = CTFontCreateWithGraphicsFont(resource->cgfont, f->size, 0, 0);
-    if (bool substitution = false) {
+    if (bool no_substitution = false) {
         vector<UniChar> ascii (n);
         vector<CGGlyph> glyphs(n);
         vector<CGRect>  bounds(n);
@@ -541,15 +550,14 @@ int CoreTextFontEngine::InitGlyphs(Font *f, Glyph *g, int n) {
         for (Glyph *e = g + n; g != e; ++g, ++b, ++cg) {
             CTFontGetAdvancesForGlyphs(ctfont, kCTFontDefaultOrientation, cg, &advance, 1);
             AssignGlyph(g, *b, advance);
-            g->internal_id = *cg;
+            g->internal.coretext.id = *cg;
             f->UpdateMetrics(g);
         }
     } else for (Glyph *e = g + n; g != e; ++g) {
         CGRect b;
-        Resource  substituted;
         CTFontRef substituted_ctfont;
-        GetSubstitutedFont(ctfont, g->id, &substituted.cgfont, &substituted_ctfont, &g->internal_id);
-        CGGlyph cg = g->internal_id;
+        GetSubstitutedFont(ctfont, g->id, 0, &substituted_ctfont, &g->internal.coretext.id);
+        CGGlyph cg = g->internal.coretext.id;
         CTFontGetBoundingRectsForGlyphs(substituted_ctfont, kCTFontDefaultOrientation, &cg, &b,       1);
         CTFontGetAdvancesForGlyphs     (substituted_ctfont, kCTFontDefaultOrientation, &cg, &advance, 1);
         CFRelease(substituted_ctfont);
@@ -634,11 +642,15 @@ void CoreTextFontEngine::GetSubstitutedFont(CTFontRef ctfont, unsigned short gly
 }
 
 void CoreTextFontEngine::AssignGlyph(Glyph *g, const CGRect &bounds, struct CGSize &advance) {
-    g->tex.width  = RoundF(bounds.size.width);
-    g->tex.height = RoundF(bounds.size.height);
-    g->bearing_x  = RoundF(bounds.origin.x);
-    g->bearing_y  = RoundF(bounds.origin.y + bounds.size.height);
-    g->advance    = RoundF(advance.width);
+    g->tex.width  = RoundUp(bounds.size.width);
+    g->tex.height = RoundUp(bounds.size.height);
+    g->bearing_x  = RoundUp(bounds.origin.x);
+    g->bearing_y  = RoundUp(bounds.origin.y + bounds.size.height);
+    g->advance    = RoundUp(advance.width);
+    g->internal.coretext.origin_x = bounds.origin.x;
+    g->internal.coretext.origin_y = bounds.origin.y;
+    g->internal.coretext.width    = bounds.size.width;
+    g->internal.coretext.height   = bounds.size.height;
 }
 #endif /* __APPLE__ */
 
@@ -647,7 +659,7 @@ FontEngine *Fonts::DefaultFontEngine() {
     if (!default_font_engine) {
         if      (FLAGS_font_engine == "atlas")    default_font_engine = Singleton<AtlasFontEngine>   ::Get();
 #ifdef LFL_FREETYPE
-        else if (FLAGS_font_engine == "freetype") default_font_engine = Singleton<FreetypeFontEngine>::Get();
+        else if (FLAGS_font_engine == "freetype") default_font_engine = Singleton<FreeTypeFontEngine>::Get();
 #endif
 #ifdef __APPLE__
         else if (FLAGS_font_engine == "coretext") default_font_engine = Singleton<CoreTextFontEngine>::Get();
