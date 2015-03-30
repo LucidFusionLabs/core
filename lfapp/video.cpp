@@ -810,7 +810,12 @@ void GraphicsDevice::PopScissorStack() {
     screen->gd->Scissor(scissor_stack.back().back());
 }
 
-void GraphicsDevice::DrawPixels(const Box &screen_coords, const Texture &tex) {
+void GraphicsDevice::DrawPixels(const Box &b, const Texture &tex) {
+    Texture temp;
+    temp.Resize(tex.width, tex.height, tex.pf, Texture::Flag::CreateGL);
+    temp.UpdateGL(tex.buf, LFL::Box(tex.width, tex.height), Texture::Flag::FlipY); 
+    b.Draw(temp.coord);
+    temp.ClearGL();
 }
 
 int GraphicsDevice::VertsPerPrimitive(int primtype) {
@@ -1663,13 +1668,13 @@ void Texture::Resize(int W, int H, int PF, int flag) {
             glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         }
     }
-    int opengl_width = NextPowerOfTwo(width), opengl_height = NextPowerOfTwo(height);
     if (ID || cubemap) {
+        int opengl_width = NextPowerOfTwo(width), opengl_height = NextPowerOfTwo(height);
         int gl_tt = GLTexType(), gl_pt = GLPixelType();
         if (ID) screen->gd->BindTexture(gl_tt, ID);
         glTexImage2D(gl_tt, 0, gl_pt, opengl_width, opengl_height, 0, gl_pt, GL_UNSIGNED_BYTE, 0);
+        Coordinates(coord, width, height, opengl_width, opengl_height);
     }
-    Coordinates(coord, width, height, opengl_width, opengl_height);
 }
 
 void Texture::LoadBuffer(const unsigned char *B, const point &dim, int PF, int linesize, int flag) {
@@ -1698,7 +1703,7 @@ void Texture::LoadGL(const unsigned char *B, const point &dim, int PF, int lines
     temp .Resize(dim.x, dim.y, Pixel::RGBA, Flag::CreateBuf);
     temp .UpdateBuffer(B, dim, PF, linesize, Flag::FlipY);
     this->Resize(dim.x, dim.y, Pixel::RGBA, Flag::CreateGL);
-    this->UpdateGL(temp.buf, LFL::Box(point(), dim), flag);
+    this->UpdateGL(temp.buf, LFL::Box(dim), flag);
 }
 
 void Texture::UpdateGL(const unsigned char *B, const ::LFL::Box &box, int flag) {

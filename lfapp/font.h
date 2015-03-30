@@ -34,6 +34,32 @@ DECLARE_int(glyph_table_size);
 
 struct FontDesc {
     enum { Bold=1, Italic=2, Mono=4, Outline=8 };
+    struct Hasher {
+        size_t operator()(const FontDesc &v) const {
+            size_t h = fnv32(v.name  .data(), v.name  .size(), 0);
+            /**/   h = fnv32(v.family.data(), v.family.size(), h);
+            /**/   h = fnv32(&v.size,         sizeof(v.size),  h);
+            return     fnv32(&v.flag,         sizeof(v.flag),  h);
+        }
+    };
+    struct ColoredHasher {
+        size_t operator()(const FontDesc &v) const {
+            size_t h = Hasher()(v), fgc = v.fg.AsUnsigned(), bgc = v.bg.AsUnsigned();
+            /**/ h = fnv32(&fgc, sizeof(fgc), h);
+            return   fnv32(&bgc, sizeof(bgc), h);
+        }
+    };
+    struct Equal {
+        bool operator()(const FontDesc &x, const FontDesc &y) const {
+            return x.name == y.name && x.family == y.family && x.size == y.size && x.flag == y.flag;
+        }
+    };
+    struct ColoredEqual {
+        bool operator()(const FontDesc &x, const FontDesc &y) const {
+            return Equal()(x, y) && x.fg == y.fg && x.bg == y.bg;
+        } 
+    };
+
     string name, family;
     int size, flag;
     Color fg, bg;
@@ -41,27 +67,11 @@ struct FontDesc {
              const Color &fgc=Color::white,
              const Color &bgc=Color::clear, int f=-1) :
         name(n), family(fam), size(s), fg(fgc), bg(bgc), flag(f == -1 ? FLAGS_default_font_flag : f) {}
-    bool operator==(const FontDesc &x) const {
-        return name == x.name && family == x.family && size == x.size && flag == x.flag && fg == x.fg && bg == x.bg;
+
+    string DebugString() const {
+        return StrCat(name, " (", family, ") ", size, " ", fg.DebugString(), " ", bg.DebugString(), " ", flag);
     }
 };
-
-}; // namespace LFL
-namespace std {
-    template <> struct hash<LFL::FontDesc> {
-        size_t operator()(const LFL::FontDesc &v) const {
-            unsigned h = 0, fgc = v.fg.AsUnsigned(), bgc = v.bg.AsUnsigned();
-            h = LFL::fnv32(v.name  .data(), v.name  .size(), h);
-            h = LFL::fnv32(v.family.data(), v.family.size(), h);
-            h = LFL::fnv32(&v.size,         sizeof(v.size),  h);
-            h = LFL::fnv32(&v.flag,         sizeof(v.flag),  h);
-            h = LFL::fnv32(&fgc,            sizeof(fgc),     h);
-            h = LFL::fnv32(&bgc,            sizeof(bgc),     h);
-            return h;
-        }
-    };
-}; // namespace std;
-namespace LFL {
 
 struct FontEngine {
     struct Resource { virtual ~Resource() {} };
@@ -106,8 +116,14 @@ struct GlyphCache {
     ~GlyphCache();
 
     bool Add(point *out, float *out_texcoord, int w, int h, int max_height=0);
-    void Upload(const Glyph *g, const point &p, const unsigned char *buf, int linesize, int pf, const FilterCB &f=FilterCB());
-    void Upload(const Glyph *g, const point &p, CGFontRef cgfont, int size);
+    void Upload(const Font*, const Glyph*, const point&, const unsigned char *buf, int linesize, int pf, const FilterCB &f=FilterCB());
+    void Upload(const Font*, const Glyph*, const point&, CGFontRef cgfont, int size);
+
+    static GlyphCache *Get() {
+        static GlyphCache inst(0, 1024);
+        if (!inst.tex.ID) inst.tex.Create(inst.tex.width, inst.tex.height);
+        return &inst;
+    }
 };
 
 struct GlyphMap {
@@ -139,7 +155,8 @@ struct Font {
     int flag=0;
     Color fg, bg;
     RefCounter ref;
-    FontEngine *engine;
+    const FontDesc *desc=0;
+    FontEngine* const engine;
     shared_ptr<GlyphMap> glyph;
     shared_ptr<FontEngine::Resource> resource;
 
@@ -223,11 +240,12 @@ struct FakeFontEngine : public FontEngine {
 
 struct AtlasFontEngine : public FontEngine {
     struct Resource : public FontEngine::Resource { Font *primary=0; };
-    typedef map<unsigned, Font*> FontSizeMap;
-    typedef map<unsigned, FontSizeMap> FontFlagMap;
-    typedef map<unsigned, FontFlagMap> FontColorMap;
+    typedef map<size_t, Font*> FontSizeMap;
+    typedef map<size_t, FontSizeMap> FontFlagMap;
+    typedef map<size_t, FontFlagMap> FontColorMap;
     typedef map<string, FontColorMap> FontMap;
     FontMap font_map;
+
     virtual const char *Name() { return "AtlasFontEngine"; }
     virtual bool  Init(const FontDesc&);
     virtual Font *Open(const FontDesc&);
@@ -252,8 +270,10 @@ struct FreeTypeFontEngine : public FontEngine {
         virtual ~Resource();
         Resource(FT_FaceRec_ *FR=0, const string &N="", string *C=0) : face(FR), name(N) { if (C) swap(*C, content); }
     };
+    unordered_map<FontDesc, Font*, FontDesc::Hasher, FontDesc::Equal> font_map;
     unordered_map<string, shared_ptr<Resource> > resource;
     GlyphCache::FilterCB subpixel_filter = &FreeTypeFontEngine::SubPixelFilter;
+
     virtual const char *Name() { return "FreeTypeFontEngine"; }
     virtual bool  Init(const FontDesc&);
     virtual Font *Open(const FontDesc&);
@@ -301,7 +321,7 @@ struct Fonts {
             else                      normal     .push_back(n);
         }
     };
-    unordered_map<FontDesc, Font*> desc_map;
+    unordered_map<FontDesc, Font*, FontDesc::ColoredHasher, FontDesc::ColoredEqual> desc_map;
     unordered_map<string, Family> family_map;
     Font *FindOrInsert(FontEngine *engine, const FontDesc &d);
 
@@ -310,6 +330,7 @@ struct Fonts {
     static Font *Fake();
     static Font *GetByDesc(FontEngine*, FontDesc);
     template <class... Args> static Font *Get(Args&&... args) { return GetByDesc(DefaultFontEngine(), FontDesc(args...)); }
+    static Font *Change(Font*, int new_size, const Color &new_fg, const Color &new_bg, int new_flag=0);
     static int ScaledFontSize(int pointsize);
 };
 

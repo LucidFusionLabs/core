@@ -191,7 +191,10 @@ template <class X> bool TextGUI::Line::UpdateText(int x, const StringPieceT<X> &
         else                          InsertTextAt(x, v, attr);
         if (max_width)                Erase(max_width);
     } else {
-        if (size < x + v.len) data->flow.AppendText(basic_string<X>(x + v.len - size, ' '), attr);
+        if (size < x + v.len) {
+            data->flow.cur_attr.font = parent->font;
+            data->flow.AppendText(basic_string<X>(x + v.len - size, ' '), attr);
+        }
         OverwriteTextAt(x, v, attr);
     }
     return append;
@@ -745,6 +748,17 @@ void Terminal::SetScrollRegion(int b, int e, bool release_fb) {
     if (release_fb) cmd_fb.fb.Release();
 }
 
+const Drawable::Attr *Terminal::GetAttr(int attr) const {
+    static thread_local Drawable::Attr ret;
+    Color *fg = colors ? &colors->c[Attr::GetFGColorIndex(attr)] : 0;
+    Color *bg = colors ? &colors->c[Attr::GetBGColorIndex(attr)] : 0;
+    if (attr & Attr::Reverse) swap(fg, bg);
+    ret.bg = bg;
+    ret.font = Fonts::Change(font, font->size, *fg, *bg, font->flag);
+    ret.underline = attr & Attr::Underline;
+    return &ret;
+}
+
 void Terminal::Draw(const Box &b, bool draw_cursor) {
     TextArea::Draw(b, false);
     if (clip) {
@@ -950,6 +964,7 @@ void Terminal::FlushParseText() {
     if (parse_text.empty()) return;
     CHECK_GE(term_cursor.x, 1);
     int consumed = 0, write_size = 0;
+    font = GetAttr(cursor.attr)->font;
     String16 input_text = String::ToUTF16(parse_text, &consumed);
     for (int wrote = 0; wrote < input_text.size(); wrote += write_size) {
         if (wrote) Newline(true);

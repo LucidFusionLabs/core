@@ -2329,8 +2329,11 @@ struct SMTPClientConnection : public Query {
     }
     static bool DeliveringState(int state) { return (state >= MAIL_FROM && state <= SENDING); }
 
-    SMTPClient *server; SMTPClient::DeliverableCB deliverable_cb; SMTPClient::DeliveredCB delivered_cb; void *arg;
-    int state, rcpt_index; string greeting, helo_domain, ehlo_response, response_lines; SMTP::Message mail;
+    SMTPClient *server;
+    SMTPClient::DeliverableCB deliverable_cb;
+    SMTPClient::DeliveredCB delivered_cb;
+    int state, rcpt_index; string greeting, helo_domain, ehlo_response, response_lines;
+    SMTP::Message mail;
     string RcptTo(int index) const { return StrCat("RCPT TO: <", mail.rcpt_to[index], ">\r\n"); }
 
     SMTPClientConnection(SMTPClient *S, SMTPClient::DeliverableCB CB1, SMTPClient::DeliveredCB CB2)
@@ -2499,8 +2502,9 @@ void SMTPServer::ReceiveMail(Connection *c, const SMTP::Message &mail) {
 
 struct GPlusClientQuery {
     struct PersistentConnection : public Query {
-        UDPClient::ResponseCB responseCB; UDPClient::HeartbeatCB heartbeatCB; void *arg;
-        PersistentConnection(UDPClient::ResponseCB RCB, UDPClient::HeartbeatCB HCB, void *Arg) : responseCB(RCB), heartbeatCB(HCB), arg(Arg) {}
+        UDPClient::ResponseCB responseCB;
+        UDPClient::HeartbeatCB heartbeatCB;
+        PersistentConnection(UDPClient::ResponseCB RCB, UDPClient::HeartbeatCB HCB) : responseCB(RCB), heartbeatCB(HCB) {}
 
         int Heartbeat(Connection *c) { if (heartbeatCB) heartbeatCB(c); return 0; }
         void Close(Connection *c) { if (responseCB) responseCB(c, 0, 0); }
@@ -2514,9 +2518,9 @@ struct GPlusClientQuery {
     };
 };
 
-Connection *GPlusClient::PersistentConnection(const string &name, UDPClient::ResponseCB responseCB, UDPClient::HeartbeatCB HCB, void *arg) {
+Connection *GPlusClient::PersistentConnection(const string &name, UDPClient::ResponseCB responseCB, UDPClient::HeartbeatCB HCB) {
     Connection *c = EndpointConnect(name);
-    c->query = new GPlusClientQuery::PersistentConnection(responseCB, HCB, arg);
+    c->query = new GPlusClientQuery::PersistentConnection(responseCB, HCB);
     return c;
 }
 

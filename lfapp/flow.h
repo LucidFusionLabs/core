@@ -207,7 +207,8 @@ struct Flow {
     void AppendBoxArrayText(const BoxArray &in) {
         bool attr_fwd = in.attr.source;
         for (Drawable::Box::RawIterator iter(in.data); !iter.Done(); iter.Increment()) {
-            if (!attr_fwd) cur_attr = *in.attr.GetAttr(iter.cur_attr);
+            if (!attr_fwd) cur_attr      = *in.attr.GetAttr(iter.cur_attr);
+            else           cur_attr.font =  in.attr.GetAttr(iter.cur_attr)->font;
             AppendText(BoxRun(iter.Data(), iter.Length()).Text(), attr_fwd ? iter.cur_attr : 0);
         }
     }
