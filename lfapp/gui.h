@@ -574,14 +574,7 @@ struct Terminal : public TextArea, public Drawable::AttrSource {
     virtual void Home       () { char k = 'A' - 0x40;  write(fd, &k, 1); }
     virtual void End        () { char k = 'E' - 0x40;  write(fd, &k, 1);  }
     virtual void UpdateCursor() { cursor.p = point(GetCursorX(term_cursor.x), GetCursorY(term_cursor.y)); }
-    virtual const Drawable::Attr *GetAttr(int attr) const {
-        static thread_local Drawable::Attr ret;
-        Color *fg = colors ? &colors->c[Attr::GetFGColorIndex(attr)] : 0;
-        Color *bg = colors ? &colors->c[Attr::GetBGColorIndex(attr)] : 0;
-        if (attr & Attr::Reverse) swap(fg, bg);
-        ret = Drawable::Attr(font, fg, bg, attr & Attr::Underline);
-        return &ret;
-    }
+    virtual const Drawable::Attr *GetAttr(int attr) const;
     int GetCursorX(int x) const { return (x - 1) * font->FixedWidth(); }
     int GetCursorY(int y) const { return (term_height - y + 1) * font->Height(); }
     int GetTermLineIndex(int y) const { return -term_height + y-1; }

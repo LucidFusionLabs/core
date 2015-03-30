@@ -708,7 +708,7 @@ struct GPlusClient : public Service {
     static const int MTU = 1500;
     enum { Write=1, Sendto=2 };
     GPlusClient() : Service(Protocol::GPLUS) { heartbeats=true; }
-    Connection *PersistentConnection(const string &name, UDPClient::ResponseCB cb, UDPClient::HeartbeatCB HCB, void *arg);
+    Connection *PersistentConnection(const string &name, UDPClient::ResponseCB cb, UDPClient::HeartbeatCB HCB);
 };
 
 struct GPlusServer : public Service {

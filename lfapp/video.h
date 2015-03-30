@@ -84,9 +84,9 @@ struct Color {
     bool operator==(const Color &y) const { return R()==y.R() && G()==y.G() && B()==y.B() && A()==y.A(); }
     bool operator!=(const Color &y) const { return !(*this == y); }
     bool Transparent() const { return a() == 0; }
-    string DebugString() const { return HexString(); }
     string IntString() const { return StrCat("Color(", R(), ",", G(), ",", B(), ",", A(), ")"); }
     string HexString() const { return StringPrintf("%02X%02X%02X", R(), G(), B()); }
+    string DebugString() const { return StringPrintf("%02X%02X%02X%02X", R(), G(), B(), A()); }
     unsigned AsUnsigned() const { return (unsigned char)R()<<24 | (unsigned char)G()<<16 | (unsigned char)B()<<8 | (unsigned char)A(); }
     const float &r() const { return x[0]; }
     const float &g() const { return x[1]; }
@@ -640,7 +640,7 @@ struct GraphicsDevice {
     void PopScissor();
     void PushScissorStack();
     void PopScissorStack();
-    void DrawPixels(const Box &screen_coords, const Texture &tex);
+    void DrawPixels(const Box &b, const Texture &tex);
 
     static int VertsPerPrimitive(int gl_primtype);
 };
