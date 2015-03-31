@@ -173,7 +173,6 @@ void Log(int level, const char *file, int line, const string &m) { app->Log(leve
 void DefaultLFAppWindowClosedCB() { delete screen; }
 double FPS() { return screen->fps.FPS(); }
 double CamFPS() { return app->camera.fps.FPS(); }
-void BreakHook() { INFO("break hook"); }
 void PressAnyKey() {
     printf("Press [enter] to continue..."); fflush(stdout);
     char buf[32]; fgets(buf, sizeof(buf), stdin);
@@ -512,6 +511,18 @@ int basedir(const char *path, const char *cmp) {
     }
     if (slash < 1 || s2-s1-1 != l2) return 0;
     return !strncasecmp(&path[s1]+1, cmp, l2);
+}
+
+const char *ParseProtocol(const char *url, string *protO) {
+    static const int hdr_size = 3;
+    static const char hdr[] = "://";
+    const char *prot_end = strstr(url, hdr), *prot, *host;
+    if (prot_end) { prot = url; host = prot_end + hdr_size; }
+    else          { prot = 0;   host = url;                 }
+    while (prot && *prot && isspace(*prot)) prot++;
+    while (host && *host && isspace(*host)) host++;
+    if (protO) protO->assign(prot ? prot : "", prot ? prot_end-prot : 0);
+    return host;
 }
 
 const char *basename(const char *path, int len, int *outlen) {
@@ -2052,7 +2063,7 @@ int Application::Init() {
     if (FLAGS_lfapp_video) {
 #if defined(LFL_GLFWVIDEO) || defined(LFL_GLFWINPUT)
         INFO("lfapp_open: glfwInit()");
-        if(!glfwInit()) { ERROR("glfwInit: ", strerror(errno)); return -1; }
+        if (!glfwInit()) { ERROR("glfwInit: ", strerror(errno)); return -1; }
 #endif
     }
 
@@ -2676,6 +2687,7 @@ JSContext *CreateV8JSContext(Console *js_console, DOM::Node *doc) { return 0; }
 #endif /* LFL_V8JS */
 }; // namespace LFL
 
+extern "C" void BreakHook() {}
 extern "C" void NotImplemented() { FATAL("not implemented"); }
 extern "C" void ShellRun(const char *text) { return LFL::app->shell.Run(text); }
 extern "C" NativeWindow *GetNativeWindow() { return LFL::screen; }

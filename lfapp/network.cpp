@@ -760,7 +760,7 @@ string DNS::Response::DebugString() const {
 
 /* HTTP */
 
-bool HTTP::host(const char *host, const char *host_end, string *hostO, string *portO) {
+bool HTTP::ParseHost(const char *host, const char *host_end, string *hostO, string *portO) {
     const char *colon = strstr(host, ":"), *port = 0;
     if (!host_end) host_end = host + strlen(host);
     if (colon && colon < host_end) port = colon+1;
@@ -769,13 +769,13 @@ bool HTTP::host(const char *host, const char *host_end, string *hostO, string *p
     return 1;
 }
 
-bool HTTP::host(const char *hostname, const char *host_end, IPV4::Addr *ipv4_addr, int *tcp_port, bool ssl) {
+bool HTTP::ResolveHost(const char *hostname, const char *host_end, IPV4::Addr *ipv4_addr, int *tcp_port, bool ssl) {
     string h, p;
-    if (!host(hostname, host_end, &h, &p)) return 0;
-    return resolve(h, p, ipv4_addr, tcp_port, ssl);
+    if (!ParseHost(hostname, host_end, &h, &p)) return 0;
+    return ResolveEndpoint(h, p, ipv4_addr, tcp_port, ssl);
 }
 
-bool HTTP::resolve(const string &host, const string &port, IPV4::Addr *ipv4_addr, int *tcp_port, bool ssl, int default_port) {
+bool HTTP::ResolveEndpoint(const string &host, const string &port, IPV4::Addr *ipv4_addr, int *tcp_port, bool ssl, int default_port) {
     if (ipv4_addr) {
         *ipv4_addr = Network::GetHostByName(host);
         if (*ipv4_addr == -1) { ERROR("resolve"); return 0; }
@@ -787,41 +787,32 @@ bool HTTP::resolve(const string &host, const string &port, IPV4::Addr *ipv4_addr
     return 1;
 }
 
-bool HTTP::URL(const char *url, string *protO, string *hostO, string *portO, string *pathO) {
-    static char protHdr[] = "://";
-    const char *prot = url, *prot_end = strstr(prot, protHdr), *host;
-    if (prot_end) host = prot_end + strlen(protHdr);
-    else { prot=0; host = url; }
-
-    while (prot && *prot && isspace(*prot)) prot++;
-    while (host && *host && isspace(*host)) host++;
-
+bool HTTP::ParseURL(const char *url, string *protO, string *hostO, string *portO, string *pathO) {
+    const char *host = ParseProtocol(url, protO);
     const char *host_end = strstr(host, "/");
-    HTTP::host(host, host_end, hostO, portO);
-
-    if (protO) protO->assign(prot ? prot : "", prot ? prot_end-prot : 0);
+    HTTP::ParseHost(host, host_end, hostO, portO);
     if (pathO) pathO->assign(host_end ? host_end+1 : "");
     return 1;
 }
 
-bool HTTP::URL(const char *url, bool *ssl, IPV4::Addr *ipv4_addr, int *tcp_port, string *host, string *path, int default_port, string *prot) {
+bool HTTP::ResolveURL(const char *url, bool *ssl, IPV4::Addr *ipv4_addr, int *tcp_port, string *host, string *path, int default_port, string *prot) {
     string my_prot, port, my_host, my_path; bool my_ssl;
     if (!prot) prot = &my_prot;
     if (!host) host = &my_host;
     if (!path) path = &my_path;
     if (!ssl) ssl = &my_ssl;
 
-    HTTP::URL(url, prot, host, &port, path);
+    ParseURL(url, prot, host, &port, path);
     *ssl = !prot->empty() && !strcasecmp(prot->c_str(), "https");
     if (!prot->empty() && strcasecmp(prot->c_str(), "http") && !*ssl) return 0;
     if (host->empty()) { ERROR("no host or path"); return 0; }
-    if (!HTTP::resolve(*host, port, ipv4_addr, tcp_port, *ssl, default_port)) { ERROR("HTTP::URL resolve ", host); return 0; }
+    if (!HTTP::ResolveEndpoint(*host, port, ipv4_addr, tcp_port, *ssl, default_port)) { ERROR("HTTP::ResolveURL ", host); return 0; }
     return 1;
 }
 
 string HTTP::HostURL(const char *url) {
     string my_prot, my_port, my_host, my_path;
-    HTTP::URL(url, &my_prot, &my_host, &my_port, &my_path);
+    ParseURL(url, &my_prot, &my_host, &my_port, &my_path);
     string ret = !my_prot.empty() ? StrCat(my_prot, "://") : "http://";
     if (!my_host.empty()) ret += my_host;
     if (!my_port.empty()) ret += string(":") + my_port;
@@ -1229,7 +1220,7 @@ Connection *Service::Connect(IPV4::Addr addr, int port, IPV4EndpointSource *src_
 
 Connection *Service::Connect(const char *hostport) {
     IPV4::Addr addr; int port;
-    if (!HTTP::host(hostport, 0, &addr, &port, 0)) { ERROR("resolve ", hostport, " failed"); return 0; }
+    if (!HTTP::ResolveHost(hostport, 0, &addr, &port, 0)) { ERROR("resolve ", hostport, " failed"); return 0; }
     return Connect(addr, port);
 }
 
@@ -1239,7 +1230,7 @@ Connection *Service::SSLConnect(SSL_CTX *sslctx, const char *hostport) {
     if (!sslctx) { ERROR("no ssl: ", -1); return 0; }
 
     Connection *c = new Connection(this, Connection::Connecting, 0, 0);
-    if (!HTTP::host(hostport, 0, &c->addr, &c->port, true)) { ERROR("resolve: ", hostport); return 0; }
+    if (!HTTP::ResolveHost(hostport, 0, &c->addr, &c->port, true)) { ERROR("resolve: ", hostport); return 0; }
 
     c->bio = BIO_new_ssl_connect(sslctx);
     BIO_set_conn_hostname(c->bio, hostport);
@@ -1362,7 +1353,7 @@ struct UDPClientQuery {
 
 Connection *UDPClient::PersistentConnection(const string &url, ResponseCB responseCB, HeartbeatCB heartbeatCB, int default_port) {
     IPV4::Addr ipv4_addr; int udp_port;
-    if (!HTTP::URL(url.c_str(), (bool*)0, &ipv4_addr, &udp_port, (string*)0, (string*)0, default_port))
+    if (!HTTP::ResolveURL(url.c_str(), (bool*)0, &ipv4_addr, &udp_port, (string*)0, (string*)0, default_port))
     { INFO(url, ": connect failed"); return 0; }
 
     Connection *c = Connect(ipv4_addr, udp_port);
@@ -1806,7 +1797,7 @@ int HTTPClient::request(Connection *c, int method, const char *host, const char 
 
 bool HTTPClient::WGet(const string &url, File *out, ResponseCB cb) {
     bool ssl; int tcp_port; string host, path, prot;
-    if (!HTTP::URL(url.c_str(), &ssl, 0, &tcp_port, &host, &path, 0, &prot)) {
+    if (!HTTP::ResolveURL(url.c_str(), &ssl, 0, &tcp_port, &host, &path, 0, &prot)) {
         if (prot != "file") return 0;
         string fn = StrCat(!host.empty() ? "/" : "", host , "/", path), content = LocalFile::FileContents(fn);
         if (!content.empty() && cb) cb(0, 0, string(), content.data(), content.size());
@@ -1831,7 +1822,7 @@ bool HTTPClient::WGet(const string &url, File *out, ResponseCB cb) {
 
 bool HTTPClient::WPost(const string &url, const string &mimetype, const char *postdata, int postlen, ResponseCB cb) {
     bool ssl; int tcp_port; string host, path;
-    if (!HTTP::URL(url.c_str(), &ssl, 0, &tcp_port, &host, &path)) return 0;
+    if (!HTTP::ResolveURL(url.c_str(), &ssl, 0, &tcp_port, &host, &path)) return 0;
 
     HTTPClientQuery::WPost *query = new HTTPClientQuery::WPost(this, ssl, host, tcp_port, path, mimetype, postdata, postlen, cb);
     if (!Singleton<Resolver>::Get()->Resolve(Resolver::Request(host, DNS::Type::A, bind(&HTTPClientQuery::WGet::ResolverResponseCB, query, _1, _2))))
@@ -1842,7 +1833,7 @@ bool HTTPClient::WPost(const string &url, const string &mimetype, const char *po
 
 Connection *HTTPClient::PersistentConnection(const string &url, string *host, string *path, ResponseCB responseCB) {
     bool ssl; IPV4::Addr ipv4_addr; int tcp_port;
-    if (!HTTP::URL(url.c_str(), &ssl, &ipv4_addr, &tcp_port, host, path)) return 0;
+    if (!HTTP::ResolveURL(url.c_str(), &ssl, &ipv4_addr, &tcp_port, host, path)) return 0;
 
     Connection *c = 
 #ifdef LFL_OPENSSL

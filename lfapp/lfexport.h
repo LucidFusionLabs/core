@@ -90,6 +90,7 @@ int MouseClick(int button, int down, int x, int y);
 int MouseMove(int x, int y, int dx, int dy);
 void ShellRun(const char *text);
 const char *LFAppDownloadDir();
+void BreakHook();
 
 #ifdef __cplusplus
 };

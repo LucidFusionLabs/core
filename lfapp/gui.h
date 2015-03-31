@@ -22,6 +22,7 @@ namespace LFL {
 
 DECLARE_bool(multitouch);
 DECLARE_bool(draw_grid);
+DECLARE_string(console_font);
 
 struct GUI : public MouseController {
     Box box;
@@ -611,7 +612,7 @@ struct Console : public TextArea {
     bool animating=0, drawing=0, bottom_or_top=0, blend=1, ran_startcmd=0;
     Color color=Color(25,60,130,120);
 
-    Console(Window *W, Font *F) : TextArea(W,F)
+    Console(Window *W, Font *F) : TextArea(W, F)
     { line_fb.wrap=write_timestamp=1; SetToggleKey(Key::Backquote); }
 
     virtual ~Console() {}

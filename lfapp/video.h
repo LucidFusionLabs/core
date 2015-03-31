@@ -481,12 +481,16 @@ struct Shader {
 
 struct Video : public Module {
     Shader shader_default, shader_normals, shader_cubemap, shader_cubenorm;
+    Callback init_fonts_cb = &Video::InitFonts;
     Module *impl = 0;
+
     int Init();
     int Free();
     int Swap();
-    void CreateGraphicsDevice();
-    void InitGraphicsDevice();
+
+    static void CreateGraphicsDevice();
+    static void InitGraphicsDevice();
+    static void InitFonts();
 };
 
 extern Window *screen;
@@ -623,7 +627,7 @@ struct GraphicsDevice {
     void LineWidth(float n);
     void GenTextures(int t, int n, unsigned *out);
     void DelTextures(int n, const unsigned *id);
-    void CheckForError();
+    void CheckForError(const char *file, int line);
     void EnableDepthTest();
     void DisableDepthTest();
     void EnableBlend();
