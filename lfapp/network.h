@@ -305,12 +305,13 @@ struct DNS {
 };
 
 struct HTTP {
-    static bool host(const char *host, const char *host_end, string *hostO, string *portO);
-    static bool host(const char *host, const char *host_end, IPV4::Addr *ipv4_addr, int *tcp_port, bool ssl);
-    static bool resolve(const string &host, const string &port, IPV4::Addr *ipv4_addr, int *tcp_port, bool ssl, int defport=0);
-    static bool URL(const char *url, string *protO, string *hostO, string *portO, string *pathO);
-    static bool URL(const char *url, bool *ssl, IPV4::Addr *ipv4_addr, int *tcp_port, string *host, string *path, int defport=0, string *prot=0);
+    static bool ParseHost(const char *host, const char *host_end, string *hostO, string *portO);
+    static bool ResolveHost(const char *host, const char *host_end, IPV4::Addr *ipv4_addr, int *tcp_port, bool ssl);
+    static bool ResolveEndpoint(const string &host, const string &port, IPV4::Addr *ipv4_addr, int *tcp_port, bool ssl, int defport=0);
+    static bool ParseURL(const char *url, string *protO, string *hostO, string *portO, string *pathO);
+    static bool ResolveURL(const char *url, bool *ssl, IPV4::Addr *ipv4_addr, int *tcp_port, string *host, string *path, int defport=0, string *prot=0);
     static string HostURL(const char *url);
+
     static int request(char *buf, char **methodO, char **urlO, char **argsO, char **verO);
     static char *headersStart(char *buf);
     static char *headerEnd(char *buf);

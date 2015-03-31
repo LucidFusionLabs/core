@@ -190,6 +190,7 @@ extern "C" int isinf(double);
 #define Xge0_or_Y(x, y) ((x) >= 0 ? (x) : (y))
 #define RoundXY_or_Y(x, y) ((x) ? RoundF((x)*(y)) : (y))
 #define X_or_Y_or_Z(x, y, z) ((x) ? (x) : ((y) ? (y) : (z)))
+#define A_or_B(x, y) ((x.size()) ? (x) : (y))
 
 #define  INFO(...) ::LFL::Log(::LFApp::Log::Info,  __FILE__, __LINE__, ::LFL::StrCat(__VA_ARGS__))
 #define DEBUG(...) ::LFL::Log(::LFApp::Log::Debug, __FILE__, __LINE__, ::LFL::StrCat(__VA_ARGS__))
@@ -513,7 +514,6 @@ bool MainThread();
 void RunInMainThread(Callback *cb);
 double FPS();
 double CamFPS();
-void BreakHook();
 void PressAnyKey();
 bool FGets(char *buf, int size);
 bool NBFGets(FILE*, char *buf, int size);
@@ -653,6 +653,7 @@ template <class X> int chompnl_len(const X *str, int len);
 int dirnamelen(const char  *text, int len=0, bool include_slash=false);
 int dirnamelen(const short *text, int len=0, bool include_slash=false);
 int basedir(const char *path, const char *cmp);
+const char *ParseProtocol(const char *url, string *protO);
 const char  *basename   (const char  *text, int len=0, int *outlen=0);
 const char  *nextline   (const char  *text, int len=0, bool final=0, int *outlen=0);
 const short *nextline   (const short *text, int len=0, bool final=0, int *outlen=0);

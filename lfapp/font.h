@@ -31,9 +31,19 @@ DECLARE_string(atlas_font_sizes);
 DECLARE_int(scale_font_height);
 DECLARE_int(add_font_size);
 DECLARE_int(glyph_table_size);
+DECLARE_int(glyph_table_start);
 
 struct FontDesc {
     enum { Bold=1, Italic=2, Mono=4, Outline=8 };
+    struct Engine {
+        enum { Default=0, Atlas=1, FreeType=2, CoreText=3 };
+        static int Parse(const string &s) {
+            if      (s == "atlas")    return Atlas;
+            else if (s == "freetype") return FreeType;
+            else if (s == "coretext") return CoreText;
+            return Default;
+        };
+    };
     struct Hasher {
         size_t operator()(const FontDesc &v) const {
             size_t h = fnv32(v.name  .data(), v.name  .size(), 0);
@@ -61,13 +71,21 @@ struct FontDesc {
     };
 
     string name, family;
-    int size, flag;
+    int size, flag, engine;
     Color fg, bg;
     FontDesc(const string &n="", const string &fam="", int s=0,
              const Color &fgc=Color::white,
              const Color &bgc=Color::clear, int f=-1) :
-        name(n), family(fam), size(s), fg(fgc), bg(bgc), flag(f == -1 ? FLAGS_default_font_flag : f) {}
+        family(fam), size(s), fg(fgc), bg(bgc), flag(f == -1 ? FLAGS_default_font_flag : f), engine(0)
+    {
+        string engine_proto;
+        name = ParseProtocol(n.data(), &engine_proto);
+        if (!engine_proto.empty()) engine = Engine::Parse(engine_proto);
+    }
 
+    string Filename() const {
+        return StrCat(name, ",", size, ",", fg.R(), ",", fg.G(), ",", fg.B(), ",0"); // fg.A());
+    }
     string DebugString() const {
         return StrCat(name, " (", family, ") ", size, " ", fg.DebugString(), " ", bg.DebugString(), " ", flag);
     }
@@ -120,18 +138,19 @@ struct GlyphCache {
     void Upload(const Font*, const Glyph*, const point&, CGFontRef cgfont, int size);
 
     static GlyphCache *Get() {
-        static GlyphCache inst(0, 1024);
+        static GlyphCache inst(0, 512);
         if (!inst.tex.ID) inst.tex.Create(inst.tex.width, inst.tex.height);
         return &inst;
     }
 };
 
 struct GlyphMap {
-    int table_start=0;
+    int table_start;
     vector<Glyph>             table;
     unordered_map<int, Glyph> index;
     shared_ptr<GlyphCache>    cache;
-    GlyphMap(const shared_ptr<GlyphCache> &C = shared_ptr<GlyphCache>()) : table(FLAGS_glyph_table_size), cache(C) {
+    GlyphMap(const shared_ptr<GlyphCache> &C = shared_ptr<GlyphCache>()) :
+        table_start(FLAGS_glyph_table_start), table(FLAGS_glyph_table_size), cache(C) {
         for (auto b = table.begin(), g = b, e = table.end(); g != e; ++g) g->id = table_start + g - b;
     }
 };
@@ -150,7 +169,7 @@ struct Font {
     };
 
     short size=0, ascender=0, descender=0, max_width=0, fixed_width=-1, missing_glyph=0;
-    bool mono=0, mix_fg=0;
+    bool mono=0, mix_fg=0, has_bg=0, fix_metrics=0;
     float scale=0;
     int flag=0;
     Color fg, bg;
@@ -176,6 +195,7 @@ struct Font {
     int GetGlyphWidth(int g) { return RoundXY_or_Y(scale, FindGlyph(g)->advance); }
 
     void UpdateMetrics(const Glyph *g) {
+        if (fix_metrics) return;
         int descent = g->tex.height - g->bearing_y;
         if (g->advance && fixed_width == -1)         fixed_width = g->advance;
         if (g->advance && fixed_width != g->advance) fixed_width = 0;
@@ -305,7 +325,7 @@ struct CoreTextFontEngine : public FontEngine {
     struct Flag { enum { WriteAtlas=1 }; };
     static Font *Open(const string &name,            int size, Color c, int flag, int ct_flag);
     static Font *Open(const shared_ptr<Resource> &R, int size, Color c, int flag);
-    static void GetSubstitutedFont(CTFontRef, unsigned short gid, CGFontRef *cgout, CTFontRef *ctout, int *id_out);
+    static void GetSubstitutedFont(Font*, CTFontRef, unsigned short gid, CGFontRef *cgout, CTFontRef *ctout, int *id_out);
     static void AssignGlyph(Glyph *out, const CGRect &bounds, struct CGSize &advance);
 };
 #endif
@@ -323,13 +343,17 @@ struct Fonts {
     };
     unordered_map<FontDesc, Font*, FontDesc::ColoredHasher, FontDesc::ColoredEqual> desc_map;
     unordered_map<string, Family> family_map;
+
+    Font *Find        (                    const FontDesc &d);
+    Font *Insert      (FontEngine *engine, const FontDesc &d);
     Font *FindOrInsert(FontEngine *engine, const FontDesc &d);
 
+    static FontEngine *GetFontEngine(int engine_type);
     static FontEngine *DefaultFontEngine();
     static Font *Default();
     static Font *Fake();
-    static Font *GetByDesc(FontEngine*, FontDesc);
-    template <class... Args> static Font *Get(Args&&... args) { return GetByDesc(DefaultFontEngine(), FontDesc(args...)); }
+    static Font *GetByDesc(FontDesc);
+    template <class... Args> static Font *Get(Args&&... args) { return GetByDesc(FontDesc(args...)); }
     static Font *Change(Font*, int new_size, const Color &new_fg, const Color &new_bg, int new_flag=0);
     static int ScaledFontSize(int pointsize);
 };

@@ -184,7 +184,7 @@ DEFINE_bool(swap_axis, false," Swap x,y axis");
 
 #ifndef LFL_HEADLESS
 #ifdef LFL_GDDEBUG
-#define GDDebug(...) { screen->gd->CheckForError(); if (FLAGS_gd_debug) INFO(__VA_ARGS__); }
+#define GDDebug(...) { screen->gd->CheckForError(__FILE__, __LINE__); if (FLAGS_gd_debug) INFO(__VA_ARGS__); }
 #else 
 #define GDDebug(...)
 #endif
@@ -222,6 +222,7 @@ struct OpenGLES1 : public GraphicsDevice {
         // glLightModelf(GL_LIGHT_MODEL_COLOR_CONTROL, GL_SEPARATE_SPECULAR_COLOR);
         glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
 #endif
+        GDDebug("Init");
     }
     void UpdateColor() { const Color &c = default_color.back(); glColor4f(c.r(), c.g(), c.b(), c.a()); }
     bool ShaderSupport() {
@@ -231,18 +232,18 @@ struct OpenGLES1 : public GraphicsDevice {
         const char *ver = (const char*)glGetString(GL_VERSION);
         return ver && *ver == '2';
     }
-    void  EnableTexture() { GDDebug("Texture=1");  glEnable(GL_TEXTURE_2D);  glEnableClientState(GL_TEXTURE_COORD_ARRAY); }
-    void DisableTexture() { GDDebug("Texture=0"); glDisable(GL_TEXTURE_2D); glDisableClientState(GL_TEXTURE_COORD_ARRAY); }
-    void  EnableLighting() { GDDebug("Lighting=1");  glEnable(GL_LIGHTING);  glEnable(GL_COLOR_MATERIAL); }
-    void DisableLighting() { GDDebug("Lighting=0"); glDisable(GL_LIGHTING); glDisable(GL_COLOR_MATERIAL); }
-    void  EnableVertexColor() { GDDebug("VertexColor=1");  glEnableClientState(GL_COLOR_ARRAY); }
-    void DisableVertexColor() { GDDebug("VertexColor=0"); glDisableClientState(GL_COLOR_ARRAY); }
-    void  EnableNormals() { GDDebug("Normals=1");  glEnableClientState(GL_NORMAL_ARRAY); }
-    void DisableNormals() { GDDebug("Normals=0"); glDisableClientState(GL_NORMAL_ARRAY); }
-    //void TextureEnvReplace()  { GDDebug("TextureEnv=R"); glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE); }
-    //void TextureEnvModulate() { GDDebug("TextureEnv=M"); glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE); }
-    void  EnableLight(int n) { GDDebug("Light", n, "=1"); if (n)  glEnable(GL_LIGHT1); else  glEnable(GL_LIGHT0); }
-    void DisableLight(int n) { GDDebug("Light", n, "=0"); if (n) glDisable(GL_LIGHT1); else glDisable(GL_LIGHT0); }
+    void  EnableTexture() {  glEnable(GL_TEXTURE_2D);  glEnableClientState(GL_TEXTURE_COORD_ARRAY); GDDebug("Texture=1"); }
+    void DisableTexture() { glDisable(GL_TEXTURE_2D); glDisableClientState(GL_TEXTURE_COORD_ARRAY); GDDebug("Texture=0"); }
+    void  EnableLighting() {  glEnable(GL_LIGHTING);  glEnable(GL_COLOR_MATERIAL); GDDebug("Lighting=1"); }
+    void DisableLighting() { glDisable(GL_LIGHTING); glDisable(GL_COLOR_MATERIAL); GDDebug("Lighting=0"); }
+    void  EnableVertexColor() {  glEnableClientState(GL_COLOR_ARRAY); GDDebug("VertexColor=1"); }
+    void DisableVertexColor() { glDisableClientState(GL_COLOR_ARRAY); GDDebug("VertexColor=0"); }
+    void  EnableNormals() {  glEnableClientState(GL_NORMAL_ARRAY); GDDebug("Normals=1"); }
+    void DisableNormals() { glDisableClientState(GL_NORMAL_ARRAY); GDDebug("Normals=0"); }
+    //void TextureEnvReplace()  { glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);  GDDebug("TextureEnv=R"); }
+    //void TextureEnvModulate() { glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE); GDDebug("TextureEnv=M"); }
+    void  EnableLight(int n) { if (n)  glEnable(GL_LIGHT1); else  glEnable(GL_LIGHT0); GDDebug("Light", n, "=1"); }
+    void DisableLight(int n) { if (n) glDisable(GL_LIGHT1); else glDisable(GL_LIGHT0); GDDebug("Light", n, "=0"); }
     void Material(int t, float *color) { glMaterialfv(GL_FRONT_AND_BACK, t, color); }
     void Light(int n, int t, float *color) { glLightfv(((n) ? GL_LIGHT1 : GL_LIGHT0), t, color); }
 #if defined(LFL_IPHONE) || defined(LFL_ANDROID)
@@ -250,8 +251,8 @@ struct OpenGLES1 : public GraphicsDevice {
     void TextureGenReflection() {}
     void DisableTextureGen() {}
 #else
-    void  EnableTextureGen() { GDDebug("TextureGen=1");  glEnable(GL_TEXTURE_GEN_S);  glEnable(GL_TEXTURE_GEN_T);  glEnable(GL_TEXTURE_GEN_R); }
-    void DisableTextureGen() { GDDebug("TextureGen=0"); glDisable(GL_TEXTURE_GEN_S); glDisable(GL_TEXTURE_GEN_T); glDisable(GL_TEXTURE_GEN_R); }
+    void  EnableTextureGen() {  glEnable(GL_TEXTURE_GEN_S);  glEnable(GL_TEXTURE_GEN_T);  glEnable(GL_TEXTURE_GEN_R); GDDebug("TextureGen=1"); }
+    void DisableTextureGen() { glDisable(GL_TEXTURE_GEN_S); glDisable(GL_TEXTURE_GEN_T); glDisable(GL_TEXTURE_GEN_R); GDDebug("TextureGen=0"); }
     void TextureGenLinear() {
         static float X[4] = { -1,0,0,0 }, Y[4] = { 0,-1,0,0 }, Z[4] = { 0,0,-1,0 };
         EnableTextureGen();
@@ -271,20 +272,20 @@ struct OpenGLES1 : public GraphicsDevice {
         GDDebug("TextureGen=R");
     }
 #endif
-    void DisableCubeMap()   { GDDebug("CubeMap=", 0); glDisable(GL_TEXTURE_CUBE_MAP); DisableTextureGen(); }
-    void BindCubeMap(int n) { GDDebug("CubeMap=", n);  glEnable(GL_TEXTURE_CUBE_MAP); glBindTexture(GL_TEXTURE_CUBE_MAP, n); }
+    void DisableCubeMap()   { glDisable(GL_TEXTURE_CUBE_MAP); DisableTextureGen();                   GDDebug("CubeMap=", 0); }
+    void BindCubeMap(int n) {  glEnable(GL_TEXTURE_CUBE_MAP); glBindTexture(GL_TEXTURE_CUBE_MAP, n); GDDebug("CubeMap=", n); }
     void ActiveTexture(int n) {
-        GDDebug("ActiveTexture=", n);
         glClientActiveTexture(GL_TEXTURE0 + n);
         glActiveTexture(GL_TEXTURE0 + n);
         // glTexEnvf (GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_COMBINE);
         // glTexEnvf (GL_TEXTURE_ENV, GL_COMBINE_RGB_EXT, GL_MODULATE);
+        GDDebug("ActiveTexture=", n);
     }
-    void BindTexture(int t, int n) { GDDebug("BindTexture=", t, ",", n); glBindTexture(t, n); }
-    void VertexPointer(int m, int t, int w, int o, float *verts, int l, int *out, bool ud) { glVertexPointer(m, t, w, verts + o/sizeof(float)); }
-    void TexPointer(int m, int t, int w, int o, float *tex, int l, int *out, bool ud) { glTexCoordPointer(m, t, w, tex + o/sizeof(float)); }
-    void ColorPointer(int m, int t, int w, int o, float *verts, int l, int *out, bool ud) { glColorPointer(m, t, w, verts + o/sizeof(float)); }
-    void NormalPointer(int m, int t, int w, int o, float *verts, int l, int *out, bool ud) { glNormalPointer(t, w, verts + o/sizeof(float)); }
+    void BindTexture(int t, int n) { glBindTexture(t, n); GDDebug("BindTexture=", t, ",", n); }
+    void VertexPointer(int m, int t, int w, int o, float *verts, int l, int *out, bool ud) { glVertexPointer  (m, t, w, verts + o/sizeof(float)); GDDebug("VertexPointer"); }
+    void TexPointer   (int m, int t, int w, int o, float *tex,   int l, int *out, bool ud) { glTexCoordPointer(m, t, w, tex   + o/sizeof(float)); GDDebug("TexPointer"); }
+    void ColorPointer (int m, int t, int w, int o, float *verts, int l, int *out, bool ud) { glColorPointer   (m, t, w, verts + o/sizeof(float)); GDDebug("ColorPointer"); }
+    void NormalPointer(int m, int t, int w, int o, float *verts, int l, int *out, bool ud) { glNormalPointer  (   t, w, verts + o/sizeof(float)); GDDebug("NormalPointer"); }
     void Color4f(float r, float g, float b, float a) { default_color.back() = Color(r,g,b,a); UpdateColor(); }
     void MatrixProjection() { target_matrix=2; glMatrixMode(GL_PROJECTION); }
     void MatrixModelview() { target_matrix=1; glMatrixMode(GL_MODELVIEW); }
@@ -300,14 +301,14 @@ struct OpenGLES1 : public GraphicsDevice {
     void Mult(const float *m) { glMultMatrixf(m); }
     void Translate(float x, float y, float z) { glTranslatef(x, y, z); }
     void Draw(int pt, int np, int it, int o, void *index, int l, int *out, bool dirty) {
-        GDDebug("Draw(", pt, ", ", np, ", ", it, ", ", o, ", ", index, ", ", l, ", ", dirty, ")");
         glDrawElements(pt, np, it, (char*)index + o);
+        GDDebug("Draw(", pt, ", ", np, ", ", it, ", ", o, ", ", index, ", ", l, ", ", dirty, ")");
     }
     void DrawArrays(int type, int o, int n) {
-        GDDebug("DrawArrays(", type, ", ", o, ", ", n, ")");
         glDrawArrays(type, o, n);
+        GDDebug("DrawArrays(", type, ", ", o, ", ", n, ")");
     }
-    void UseShader(Shader *S) { if (!S) S = &app->video.shader_default; GDDebug("Shader=", S->name); glUseProgram(S->ID); }
+    void UseShader(Shader *S) { if (!S) S = &app->video.shader_default; glUseProgram(S->ID); GDDebug("Shader=", S->name); }
 };
 
 #ifdef LFL_GLES2
@@ -401,6 +402,7 @@ struct OpenGLES2 : public GraphicsDevice {
         Shader::Create("lfapp_normals",  vertex_shader, pixel_shader, ShaderDefines(0,1,1,0), &app->video.shader_normals);
         Shader::Create("lfapp_cubenorm", vertex_shader, pixel_shader, ShaderDefines(0,1,0,1), &app->video.shader_cubenorm);
         UseShader(0);
+        GDDebug("Init");
     }
 
     vector<m44> *TargetMatrix() {
@@ -447,14 +449,14 @@ struct OpenGLES2 : public GraphicsDevice {
 
     bool ShaderSupport() { return true; }
     bool LightingSupport() { return false; }
-    void EnableTexture()  { GDDebug("Texture=1"); if (Changed(&texture_on, 1)) UpdateTexture(); }
-    void DisableTexture() { GDDebug("Texture=0"); if (Changed(&texture_on, 0)) UpdateTexture(); }
-    void EnableLighting()  { GDDebug("Lighting=1"); lighting_on=1; }
-    void DisableLighting() { GDDebug("Lighting=0"); lighting_on=0; }
-    void EnableVertexColor()  { GDDebug("VertexColor=1"); if (Changed(&colorverts_on, 1)) UpdateColorVerts(); }
-    void DisableVertexColor() { GDDebug("VertexColor=0"); if (Changed(&colorverts_on, 0)) UpdateColorVerts(); }
-    void EnableNormals()  { GDDebug("Normals=1"); if (Changed(&normals_on, 1)) { UpdateShader(); UpdateNormals(); } }
-    void DisableNormals() { GDDebug("Normals=0"); if (Changed(&normals_on, 0)) { UpdateShader(); UpdateNormals(); } }
+    void EnableTexture()  { if (Changed(&texture_on, 1)) UpdateTexture(); GDDebug("Texture=1"); }
+    void DisableTexture() { if (Changed(&texture_on, 0)) UpdateTexture(); GDDebug("Texture=0"); }
+    void EnableLighting()  { lighting_on=1; GDDebug("Lighting=1"); }
+    void DisableLighting() { lighting_on=0; GDDebug("Lighting=0"); }
+    void EnableVertexColor()  { if (Changed(&colorverts_on, 1)) UpdateColorVerts(); GDDebug("VertexColor=1"); }
+    void DisableVertexColor() { if (Changed(&colorverts_on, 0)) UpdateColorVerts(); GDDebug("VertexColor=0"); }
+    void EnableNormals()  { if (Changed(&normals_on, 1)) { UpdateShader(); UpdateNormals(); } GDDebug("Normals=1"); }
+    void DisableNormals() { if (Changed(&normals_on, 0)) { UpdateShader(); UpdateNormals(); } GDDebug("Normals=0"); }
     void EnableLight(int n) {}
     void DisableLight(int n) {}
     void Material(int t, float *v) {
@@ -477,11 +479,11 @@ struct OpenGLES2 : public GraphicsDevice {
         if (light_pos)   { shader->dirty_light_pos  [n] = app->video.shader_cubenorm.dirty_light_pos  [n] = app->video.shader_normals.dirty_light_pos  [n] = 1; }
         if (light_color) { shader->dirty_light_color[n] = app->video.shader_cubenorm.dirty_light_color[n] = app->video.shader_normals.dirty_light_color[n] = 1; }
     }
-    void DisableCubeMap()   { GDDebug("CubeMap=", 0); if (Changed(&cubemap_on, 0)) { UpdateShader(); glUniform1i(shader->uniform_cubeon, 0); } }
-    void BindCubeMap(int n) { GDDebug("CubeMap=", n); if (Changed(&cubemap_on, 1)) { UpdateShader(); glUniform1i(shader->uniform_cubeon, 1); } glUniform1i(shader->uniform_cubetex, 0); glBindTexture(GL_TEXTURE_CUBE_MAP, n); }
+    void DisableCubeMap()   { if (Changed(&cubemap_on, 0)) { UpdateShader(); glUniform1i(shader->uniform_cubeon, 0); }                                                                                 GDDebug("CubeMap=", 0); }
+    void BindCubeMap(int n) { if (Changed(&cubemap_on, 1)) { UpdateShader(); glUniform1i(shader->uniform_cubeon, 1); } glUniform1i(shader->uniform_cubetex, 0); glBindTexture(GL_TEXTURE_CUBE_MAP, n); GDDebug("CubeMap=", n); }
     void TextureGenLinear() {}
     void TextureGenReflection() {}
-    void ActiveTexture(int n) { glActiveTexture(n ? GL_TEXTURE1 : GL_TEXTURE0); }
+    void ActiveTexture(int n) { glActiveTexture(n ? GL_TEXTURE1 : GL_TEXTURE0); GDDebug("ActivteTexture=", n); }
     void BindTexture(int t, int n) {
         glActiveTexture(GL_TEXTURE0); 
         glBindTexture(t, n);
@@ -506,27 +508,31 @@ struct OpenGLES2 : public GraphicsDevice {
             if (first) glBufferData(GL_ARRAY_BUFFER, l, verts, input_dirty ? GL_DYNAMIC_DRAW : GL_STATIC_DRAW);
             else       glBufferSubData(GL_ARRAY_BUFFER, 0, l, verts);
         }
+        GDDebug("VertexPointer");
     }
     void TexPointer(int m, int t, int w, int o, float *tex, int l, int *out, bool dirty) {
         CHECK_LT(o, w);
         CHECK(*out == enabled_array);
         tex_ptr = VertexAttribPointer(m, t, w, o);
         if (!texture_on) EnableTexture();
-        else SetVertexAttribPointer(shader->slot_tex, tex_ptr);
+        else if (shader->slot_tex >= 0) SetVertexAttribPointer(shader->slot_tex, tex_ptr);
+        GDDebug("TexPointer");
     }
     void ColorPointer(int m, int t, int w, int o, float *verts, int l, int *out, bool dirty) {
         CHECK_LT(o, w);
         CHECK(*out == enabled_array);
         color_ptr = VertexAttribPointer(m, t, w, o);
         if (!colorverts_on) EnableVertexColor();
-        else SetVertexAttribPointer(shader->slot_color, color_ptr);
+        else if (shader->slot_color >= 0) SetVertexAttribPointer(shader->slot_color, color_ptr);
+        GDDebug("ColorPointer");
     }
     void NormalPointer(int m, int t, int w, int o, float *verts, int l, int *out, bool dirty) {
         CHECK_LT(o, w);
         CHECK(*out == enabled_array);
         normal_ptr = VertexAttribPointer(m, t, w, o);
         if (!normals_on) EnableNormals();
-        else SetVertexAttribPointer(shader->slot_normal, normal_ptr);
+        else if (shader->slot_normal >= 0) SetVertexAttribPointer(shader->slot_normal, normal_ptr);
+        GDDebug("NormalPointer");
     }
     void MatrixModelview()  { matrix_target=1; }
     void MatrixProjection() { matrix_target=2; }
@@ -577,8 +583,6 @@ struct OpenGLES2 : public GraphicsDevice {
         }
     }
     void Draw(int pt, int np, int it, int o, void *index, int l, int *out, bool dirty) {
-        GDDebug("Draw(", pt, ", ", np, ", ", it, ", ", o, ", ", index, ", ", l, ", ", dirty, ")");
-
         bool input_dirty = dirty;
         if (*out == -1) { glGenBuffers(1, (GLuint*)out); dirty = true; }
         if (*out != enabled_indexarray) { 
@@ -595,15 +599,16 @@ struct OpenGLES2 : public GraphicsDevice {
 
         PushDirtyState();
         glDrawElements(pt, np, it, (GLvoid*)(long)o);
+        GDDebug("Draw(", pt, ", ", np, ", ", it, ", ", o, ", ", index, ", ", l, ", ", dirty, ")");
     }
     void DrawArrays(int type, int o, int n) {
-        GDDebug("DrawArrays(", type, ", ", o, ", ", n, ")");
-
+        GDDebug("DrawArrays-Pre(", type, ", ", o, ", ", n, ")");
         //glBindBuffer(GL_ARRAY_BUFFER, 0);
         //glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-
+        GDDebug("DrawArrays-Push(", type, ", ", o, ", ", n, ")");
         PushDirtyState();
         glDrawArrays(type, o, n);
+        GDDebug("DrawArrays-Post(", type, ", ", o, ", ", n, ")");
     }
     void PushDirtyState() {
         if (dirty_matrix) {
@@ -709,10 +714,11 @@ void GraphicsDevice::GenTextures(int t, int n, unsigned *out) {
     }
 }
 
-void GraphicsDevice::CheckForError() {
+void GraphicsDevice::CheckForError(const char *file, int line) {
     GLint gl_error=0, gl_validate_status=0;
     if ((gl_error = glGetError())) {
-        ERROR("gl error ", gl_error);
+        ERROR(file, ":", line, " gl error: ", gl_error);
+        BreakHook();
 #ifdef LFL_GLES2
         if (screen->opengles_version == 2) {
             Shader *shader = ((OpenGLES2*)screen->gd)->shader;
@@ -728,11 +734,11 @@ void GraphicsDevice::CheckForError() {
     }
 }
 
-void GraphicsDevice::EnableDepthTest()  { GDDebug("DepthTest=1");  glEnable(GL_DEPTH_TEST); glDepthMask(GL_TRUE);  }
-void GraphicsDevice::DisableDepthTest() { GDDebug("DepthTest=0"); glDisable(GL_DEPTH_TEST); glDepthMask(GL_FALSE); }
-void GraphicsDevice::DisableBlend() { GDDebug("Blend=0"); glDisable(GL_BLEND); }
-void GraphicsDevice::EnableBlend()  { GDDebug("Blend=1");  glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); }
-void GraphicsDevice::BlendMode(int sm, int dm) { GDDebug("BlendMode=", sm, ",", dm); glBlendFunc(sm, dm); }
+void GraphicsDevice::EnableDepthTest()  {  glEnable(GL_DEPTH_TEST); glDepthMask(GL_TRUE);  GDDebug("DepthTest=1"); }
+void GraphicsDevice::DisableDepthTest() { glDisable(GL_DEPTH_TEST); glDepthMask(GL_FALSE); GDDebug("DepthTest=0"); }
+void GraphicsDevice::DisableBlend() { glDisable(GL_BLEND);                                                    GDDebug("Blend=0"); }
+void GraphicsDevice::EnableBlend()  {  glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); GDDebug("Blend=1"); }
+void GraphicsDevice::BlendMode(int sm, int dm) { glBlendFunc(sm, dm); GDDebug("BlendMode=", sm, ",", dm); }
 void GraphicsDevice::RestoreViewport(int dm) { ViewPort(screen->Box()); DrawMode(dm); }
 void GraphicsDevice::DrawMode(int dm, bool flush) { return DrawMode(dm, screen->width, screen->height, flush); }
 void GraphicsDevice::DrawMode(int dm, int W, int H, bool flush) {
@@ -1156,18 +1162,7 @@ int Video::Init() {
 #endif
     INFO("lfapp_opengles_cubemap = ", screen->opengles_cubemap ? "true" : "false");
 
-    vector<string> atlas_font_size;
-    Split(FLAGS_atlas_font_sizes, iscomma, &atlas_font_size);
-    for (int i=0; i<atlas_font_size.size(); i++) {
-        int size = atoi(atlas_font_size[i].c_str());
-        FontEngine *font_engine = Fonts::DefaultFontEngine();
-        font_engine->Init(FontDesc(FLAGS_default_font, FLAGS_default_font_family, size, Color::white, Color::clear, FLAGS_default_font_flag));
-    }
-
-    FontEngine *atlas_engine = Singleton<AtlasFontEngine>::Get();
-    atlas_engine->Init(FontDesc("MenuAtlas1", "", 0, Color::black));
-    atlas_engine->Init(FontDesc("MenuAtlas2", "", 0, Color::black));
-
+    init_fonts_cb();
     if (!screen->console) screen->InitConsole();
     return 0;
 }
@@ -1204,6 +1199,20 @@ void Video::InitGraphicsDevice() {
          ", opengles_version: ", screen->opengles_version);
 }
 
+void Video::InitFonts() {
+    vector<string> atlas_font_size;
+    Split(FLAGS_atlas_font_sizes, iscomma, &atlas_font_size);
+    FontEngine *font_engine = Fonts::DefaultFontEngine();
+    for (int i=0; i<atlas_font_size.size(); i++) {
+        int size = atoi(atlas_font_size[i].c_str());
+        font_engine->Init(FontDesc(FLAGS_default_font, FLAGS_default_font_family, size, Color::white, Color::clear, FLAGS_default_font_flag));
+    }
+
+    FontEngine *atlas_engine = Singleton<AtlasFontEngine>::Get();
+    atlas_engine->Init(FontDesc("MenuAtlas1", "", 0, Color::black));
+    atlas_engine->Init(FontDesc("MenuAtlas2", "", 0, Color::black));
+}
+
 int Video::Swap() {
 #ifndef LFL_QT
     screen->gd->Flush();
@@ -1223,7 +1232,7 @@ int Video::Swap() {
     OSXVideoSwap(screen->id);
 #endif
 
-    screen->gd->CheckForError();
+    screen->gd->CheckForError(__FILE__, __LINE__);
     return 0;
 }
 

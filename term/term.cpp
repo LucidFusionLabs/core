@@ -39,7 +39,7 @@ void MyNewLinkCB(TextArea::Link *link) {
     string image_url = link->link;
     if (!FileSuffix::Image(image_url)) {
         string prot, host, port, path;
-        if (HTTP::URL(image_url.c_str(), &prot, &host, &port, &path) &&
+        if (HTTP::ParseURL(image_url.c_str(), &prot, &host, &port, &path) &&
             SuffixMatch(host, "imgur.com") && !FileSuffix::Image(path)) {
             image_url += ".jpg";
         } else { 
@@ -132,6 +132,7 @@ void MyColorsCmd(const vector<string> &arg) {
     MyTerminalWindow *tw = (MyTerminalWindow*)screen->user1;
     if      (colors_name ==       "vga") tw->terminal->SetColors(Singleton<Terminal::StandardVGAColors>::Get());
     else if (colors_name == "solarized") tw->terminal->SetColors(Singleton<Terminal::SolarizedColors>  ::Get());
+    tw->terminal->Redraw();
 }
 void MyShaderCmd(const vector<string> &arg) {
     string shader_name = arg.size() ? arg[0] : "";
@@ -141,6 +142,12 @@ void MyShaderCmd(const vector<string> &arg) {
     tw->UpdateTargetFPS();
 }
 
+void MyInitFonts() {
+    Video::InitFonts();
+    string console_font = "VeraMoBd.ttf";
+    Singleton<AtlasFontEngine>::Get()->Init(FontDesc(console_font, "", 32));
+    FLAGS_console_font = StrCat("atlas://", console_font);
+}
 void MyWindowOpen() {
     ((MyTerminalWindow*)screen->user1)->Open();
     screen->console->animating_cb = bind(&MyConsoleAnimating, screen);
@@ -177,10 +184,11 @@ extern "C" int main(int argc, const char *argv[]) {
     app->scheduler.AddWaitForeverService(Singleton <UDPClient>::Get());
     if (app->Create(argc, argv, __FILE__)) { app->Free(); return -1; }
 
+    if (FLAGS_font_engine == "coretext") FLAGS_default_font_flag = FontDesc::Mono;
+    if (FLAGS_font_engine != "atlas") app->video.init_fonts_cb = &MyInitFonts;
     if (FLAGS_default_font_.override) {
     } else if (FLAGS_font_engine == "coretext") {
         FLAGS_default_font = "Monaco";
-        FLAGS_default_font_flag = FontDesc::Mono;
     } else if (FLAGS_font_engine == "freetype") { 
         FLAGS_default_font = "VeraMoBd.ttf"; // "DejaVuSansMono-Bold.ttf";
         FLAGS_default_missing_glyph = 42;
