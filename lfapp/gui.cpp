@@ -792,11 +792,12 @@ void Terminal::Write(const string &s, bool update_fb, bool release_fb) {
                     parse_state = State::OSC; // operating system command
                     parse_osc.clear();
                     parse_osc_escape = false; break;
+                case '=': case '>':                        break; // application or normal keypad
                 case 'D': Newline();                       break;
                 case 'M': NewTopline();                    break;
                 case '7': saved_term_cursor = term_cursor; break;
-                case '8': term_cursor = saved_term_cursor; break;
-                case '=': case '>':                        break; // application or normal keypad
+                case '8': term_cursor = point(Clamp(saved_term_cursor.x, 1, term_width),
+                                              Clamp(saved_term_cursor.y, 1, term_height));
                 default: ERRORf("unhandled escape %c (%02x)", c, c);
             }
         } else if (parse_state == State::CHARSET) {
@@ -939,14 +940,14 @@ void Terminal::Write(const string &s, bool update_fb, bool release_fb) {
             bool C1_control = (c >= 0x80 && c <= 0x9f);
             if (C0_control || C1_control) FlushParseText();
             if (C0_control) switch(c) {
-                case '\a':   INFO("bell");                            break; // bell
-                case '\b':   term_cursor.x = max(term_cursor.x-1, 1); break; // backspace
-                case '\t':   term_cursor.x = term_cursor.x+8;         break; // tab 
-                case '\r':   term_cursor.x = 1;                       break; // carriage return
-                case '\x1b': parse_state = State::ESC;                break;
-                case '\x14': case '\x15': case '\x7f':                break; // shift charset in, out, delete
-                case '\n':   case '\v':   case '\f':       Newline(); break; // line feed, vertical tab, form feed
-                default:                                   ERRORf("unhandled C0 control %02x", c);
+                case '\a':   INFO("bell");                                     break; // bell
+                case '\b':   term_cursor.x = max(term_cursor.x-1, 1);          break; // backspace
+                case '\t':   term_cursor.x = min(term_cursor.x+8, term_width); break; // tab 
+                case '\r':   term_cursor.x = 1;                                break; // carriage return
+                case '\x1b': parse_state = State::ESC;                         break;
+                case '\x14': case '\x15': case '\x7f':                         break; // shift charset in, out, delete
+                case '\n':   case '\v':   case '\f':   Newline();              break; // line feed, vertical tab, form feed
+                default:                               ERRORf("unhandled C0 control %02x", c);
             } else if (0 && C1_control) {
                 if (0) {}
                 else ERRORf("unhandled C1 control %02x", c);
@@ -963,9 +964,9 @@ void Terminal::Write(const string &s, bool update_fb, bool release_fb) {
 
 void Terminal::FlushParseText() {
     if (parse_text.empty()) return;
-    CHECK_GE(term_cursor.x, 1);
     int consumed = 0, write_size = 0;
     font = GetAttr(cursor.attr)->font;
+    CHECK_RANGE(term_cursor.x-1, 0, term_width);
     String16 input_text = String::ToUTF16(parse_text, &consumed);
     for (int wrote = 0; wrote < input_text.size(); wrote += write_size) {
         if (wrote) Newline(true);
@@ -981,7 +982,8 @@ void Terminal::FlushParseText() {
         if (append) l->Draw(l->p, -1, o, ol);
         else LinesFrameBuffer::Paint(l, point(sx, l->p.y), Box(-sx, 0, ex - sx, fb->font_height), o, ol);
     }
-    term_cursor.x += write_size;
+    if ((term_cursor.x += write_size) > term_width) Newline(true);
+    CHECK_LT(term_cursor.x-1, term_width);
     parse_text.erase(0, consumed);
 }
 

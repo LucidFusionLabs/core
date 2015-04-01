@@ -130,12 +130,20 @@ struct GlyphCache {
     Texture tex;
     Flow *flow=0;
     CGContextRef cgcontext=0;
+    vector<const Glyph*> glyph;
+    int max_width=128, max_height=128;
     GlyphCache(unsigned T, int W, int H=0);
     ~GlyphCache();
 
+    void Clear();
     bool Add(point *out, float *out_texcoord, int w, int h, int max_height=0);
-    void Upload(const Font*, const Glyph*, const point&, const unsigned char *buf, int linesize, int pf, const FilterCB &f=FilterCB());
-    void Upload(const Font*, const Glyph*, const point&, CGFontRef cgfont, int size);
+    void Load(const Font*, const Glyph*, const unsigned char *buf, int linesize, int pf, const FilterCB &f=FilterCB());
+    void Load(const Font*, const Glyph*, CGFontRef cgfont, int size);
+    bool ShouldCacheGlyph(const Texture &t) const {
+       CHECK_LT(t.width,  1024*1024);
+       CHECK_LT(t.height, 1024*1024);
+       return t.width < max_width && t.height < max_height;
+    }
 
     static GlyphCache *Get() {
         static GlyphCache inst(0, 512);

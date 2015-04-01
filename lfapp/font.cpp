@@ -84,7 +84,7 @@ DEFINE_int(default_missing_glyph, 127, "Default glyph returned for missing reque
 DEFINE_bool(atlas_dump, false, "Dump .png files for every font");
 DEFINE_string(atlas_font_sizes, "8,16,32,64", "Load font atlas CSV sizes");
 DEFINE_int(glyph_table_start, 32, "Glyph table start value");
-DEFINE_int(glyph_table_size, 95, "Use array for glyphs [x=glyph_stable_start, x+glyph_table_size]");
+DEFINE_int(glyph_table_size, 96, "Use array for glyphs [x=glyph_stable_start, x+glyph_table_size]");
 DEFINE_bool(subpixel_fonts, false, "Treat RGB components as subpixels, tripling width");
 DEFINE_int(scale_font_height, 0, "Scale font when height != scale_font_height");
 DEFINE_int(add_font_size, 0, "Increase all font sizes by add_font_size");
@@ -125,8 +125,16 @@ void Glyph::Draw(const LFL::Box &b, const Drawable::Attr *a) const {
 }
 
 GlyphCache::~GlyphCache() { delete flow; }
-GlyphCache::GlyphCache(unsigned T, int W, int H) :
-    dim(W, H?H:W), tex(dim.w, dim.h, Pixel::RGBA, T), flow(new Flow(&dim)) {}
+GlyphCache::GlyphCache(unsigned T, int W, int H) : dim(W, H?H:W), tex(dim.w, dim.h, Pixel::RGBA, T) { Clear(); }
+
+void GlyphCache::Clear() {
+    delete flow;
+    flow = new Flow(&dim);
+    for (auto g : glyph) g->ready = false;
+    glyph.clear();
+    if      (tex.buf) tex.RenewBuffer();
+    else if (tex.ID)  tex.RenewGL();
+}
 
 bool GlyphCache::Add(point *out, float *texcoord, int w, int h, int max_height) {
     Box box;
@@ -135,7 +143,10 @@ bool GlyphCache::Add(point *out, float *texcoord, int w, int h, int max_height) 
 
     *out = point(box.x, box.y + flow->container->top());
     if (out->x < 0 || out->x + w > tex.width ||
-        out->y < 0 || out->y + h > tex.height) return false;
+        out->y < 0 || out->y + h > tex.height) {
+        Clear();
+        return Add(out, texcoord, w, h, max_height);
+    }
 
     texcoord[Texture::CoordMinX] =     (float)(out->x    ) / tex.width;
     texcoord[Texture::CoordMinY] = 1 - (float)(out->y + h) / tex.height;
@@ -144,10 +155,14 @@ bool GlyphCache::Add(point *out, float *texcoord, int w, int h, int max_height) 
     return true;
 }
 
-void GlyphCache::Upload(const Font *f, const Glyph *g, const point &p, const unsigned char *buf, int linesize, int spf,
-                        const GlyphCache::FilterCB &filter) {
+void GlyphCache::Load(const Font *f, const Glyph *g, const unsigned char *buf, int linesize, int spf, const GlyphCache::FilterCB &filter) {
     if (!g->tex.width || !g->tex.height) return;
-    bool cache_glyph = true;
+    point p;
+    bool cache_glyph = ShouldCacheGlyph(g->tex);
+    if (cache_glyph) {
+        CHECK(Add(&p, g->tex.coord, g->tex.width, g->tex.height, f->Height()));
+        glyph.push_back(g);
+    }
     if (tex.buf && cache_glyph) {
         tex.UpdateBuffer(buf, Box(p, g->tex.width, g->tex.height), spf, linesize, SimpleVideoResampler::Flag::TransparentBlack);
         if (filter) filter(Box(p, g->tex.Dimension()), tex.buf, tex.LineSize(), tex.pf);
@@ -164,11 +179,16 @@ void GlyphCache::Upload(const Font *f, const Glyph *g, const point &p, const uns
     }
 }
 
-void GlyphCache::Upload(const Font *f, const Glyph *g, const point &p, CGFontRef cgfont, int size) {
+void GlyphCache::Load(const Font *f, const Glyph *g, CGFontRef cgfont, int size) {
     if (!g->internal.coretext.id || !g->tex.width || !g->tex.height) return;
+    point p;
+    bool cache_glyph = ShouldCacheGlyph(g->tex);
+    if (cache_glyph) {
+        CHECK(Add(&p, g->tex.coord, g->tex.width, g->tex.height, f->Height()));
+        glyph.push_back(g);
+    }
     CGGlyph cg = g->internal.coretext.id;
     float origin_x = g->internal.coretext.origin_x, bearing_y = g->internal.coretext.height + g->internal.coretext.origin_y;
-    bool cache_glyph = true;
     if (tex.buf && cache_glyph) {
         CGPoint point = CGPointMake(p.x - origin_x, tex.height - p.y - g->bearing_y);
         CGContextSetRGBFillColor(cgcontext, f->bg.r(), f->bg.g(), f->bg.b(), f->bg.a());
@@ -208,7 +228,11 @@ Glyph *Font::FindGlyph(unsigned short gind) {
     if (ind < glyph->table.size()) return &glyph->table[ind];
     auto i = glyph->index.find(gind);
     if (i != glyph->index.end()) return &i->second;
-    if (!engine->HaveGlyph(this, gind)) return &glyph->table[missing_glyph];
+    if (!engine->HaveGlyph(this, gind)) {
+        ind = missing_glyph - glyph->table_start;
+        CHECK_LT(ind, glyph->table.size());
+        return &glyph->table[ind];
+    }
     Glyph *g = &glyph->index[gind];
     g->id = gind;
     engine->InitGlyphs(this, g, 1);
@@ -506,7 +530,6 @@ int FreeTypeFontEngine::InitGlyphs(Font *f, Glyph *g, int n) {
 }
 
 int FreeTypeFontEngine::LoadGlyphs(Font *f, const Glyph *g, int n) {
-    point cache_p;
     int count = 0, spf = FLAGS_subpixel_fonts ? Pixel::LCD : Pixel::GRAY8, error;
     bool outline = f->flag & FontDesc::Outline;
     GlyphCache *cache = f->glyph->cache.get();
@@ -518,9 +541,8 @@ int FreeTypeFontEngine::LoadGlyphs(Font *f, const Glyph *g, int n) {
         g->ready = true;
         if (!g->internal.freetype.id) continue;
         if ((error = FT_Load_Glyph(face, g->internal.freetype.id, flags))) { ERROR("FT_Load_Glyph(", g->internal.freetype.id, ") = ", error); continue; }
-        if (!cache->Add(&cache_p, g->tex.coord, g->tex.width, g->tex.height, f->Height())) FATAL("cache full");
-        cache->Upload(f, g, cache_p, face->glyph->bitmap.buffer, face->glyph->bitmap.pitch, spf,
-                      FLAGS_subpixel_fonts ? subpixel_filter : GlyphCache::FilterCB());
+        cache->Load(f, g, face->glyph->bitmap.buffer, face->glyph->bitmap.pitch, spf,
+                    FLAGS_subpixel_fonts ? subpixel_filter : GlyphCache::FilterCB());
     }
     return count;
 }
@@ -607,11 +629,9 @@ int CoreTextFontEngine::LoadGlyphs(Font *f, const Glyph *g, int n) {
     CTFontRef ctfont = CTFontCreateWithCGFontAndAttr(resource->cgfont, f->size, 0);
     for (const Glyph *e = g + n; g != e; ++g) {
         g->ready = true;
-        point cache_p;
         Resource substituted;
         GetSubstitutedFont(f, ctfont, g->id, &substituted.cgfont, 0, 0);
-        if (!cache->Add(&cache_p, g->tex.coord, g->tex.width, g->tex.height, f->Height())) FATAL("cache full");
-        cache->Upload(f, g, cache_p, substituted.cgfont, f->size);
+        cache->Load(f, g, substituted.cgfont, f->size);
     }
     CFRelease(ctfont);
     return n;

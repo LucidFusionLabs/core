@@ -254,9 +254,9 @@ struct Flow {
     template <class X> void AppendText(const StringPieceT<X> &text, int attr_id=0) {
         if (!attr_id) attr_id = out->attr.GetAttrId(cur_attr);
         out->data.reserve(out->data.size() + text.size());
-        int initial_out_lines = out->line.size(), line_start_ind = 0, c_bytes = 0, ci_bytes = 0;
+        int initial_out_lines = out->line.size(), line_start_ind = 0, c_bytes = 0, ci_bytes = 0, c;
         for (const X *p = text.data(); !text.Done(p); p += c_bytes) {
-            int c = UTF<X>::ReadGlyph(text, p, &c_bytes);
+            if (!(c = UTF<X>::ReadGlyph(text, p, &c_bytes))) continue;
             if (AppendChar(c, attr_id, &PushBack(out->data, Drawable::Box())) == State::NEW_WORD) {
                 for (const X *pi=p; !text.Done(pi) && notspace(*pi); pi += ci_bytes)
                     cur_word.len += cur_attr.font->GetGlyphWidth(UTF<X>::ReadGlyph(text, pi, &ci_bytes));
