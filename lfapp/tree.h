@@ -302,10 +302,13 @@ struct RedBlackTree {
         CHECK_LE(h, q->max_height);
         int mid_ind = (beg_ind + end_ind) / 2, color = ((h>1 && h == q->max_height) ? Red : Black);
         int node_ind = node.Insert(Node(q->k[mid_ind], val.Insert(q->v[mid_ind]), 0, color))+1;
-        int left_ind  = node[node_ind-1].left  = BuildTreeFromSortedArrays(q, beg_ind,   mid_ind-1, h+1);
-        int right_ind = node[node_ind-1].right = BuildTreeFromSortedArrays(q, mid_ind+1, end_ind,   h+1);
-        if (left_ind)  node[ left_ind-1].parent = node_ind;
-        if (right_ind) node[right_ind-1].parent = node_ind;
+        int left_ind  = BuildTreeFromSortedArrays(q, beg_ind,   mid_ind-1, h+1);
+        int right_ind = BuildTreeFromSortedArrays(q, mid_ind+1, end_ind,   h+1);
+        Node *n = &node[node_ind-1];
+        n->left  = left_ind;
+        n->right = right_ind;
+        if (left_ind)  node[ left_ind-1].parent = node_ind; 
+        if (right_ind) node[right_ind-1].parent = node_ind; 
         ComputeStateFromChildren(&node[node_ind-1]);
         return node_ind;
     }
@@ -537,8 +540,11 @@ struct PrefixSumKeyedRedBlackTree : public RedBlackTree<K, V, Zipper, Node> {
         CHECK_LE(h, max_h);
         int mid_val_ind = (beg_val_ind + end_val_ind) / 2, color = ((h>1 && h == max_h) ? Parent::Red : Parent::Black);
         int ind = Parent::node.Insert(Node(node_value_cb(&Parent::val[mid_val_ind]), mid_val_ind, 0, color))+1;
-        int left_ind  = Parent::node[ind-1].left  = BuildTreeFromSortedVal(beg_val_ind,   mid_val_ind-1, h+1, max_h);
-        int right_ind = Parent::node[ind-1].right = BuildTreeFromSortedVal(mid_val_ind+1, end_val_ind,   h+1, max_h);
+        int left_ind  = BuildTreeFromSortedVal(beg_val_ind,   mid_val_ind-1, h+1, max_h);
+        int right_ind = BuildTreeFromSortedVal(mid_val_ind+1, end_val_ind,   h+1, max_h);
+        Node *n = &Parent::node[ind-1];
+        n->left  = left_ind;
+        n->right = right_ind;
         if (left_ind)  Parent::node[ left_ind-1].parent = ind;
         if (right_ind) Parent::node[right_ind-1].parent = ind;
         Parent::ComputeStateFromChildren(&Parent::node[ind-1]);

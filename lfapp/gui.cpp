@@ -423,7 +423,7 @@ int TextArea::UpdateLines(float v_scrolled, int *first_ind, int *first_offset, i
     pair<int, int> old_first_line(start_line, -start_line_adjust), new_first_line, new_last_line;
     FlattenedArrayValues<TextGUI::Lines>
         flattened_lines(&line, line.Size(), bind(&TextArea::LayoutBackLine, this, _1, _2));
-    flattened_lines.AdvanceIter(&new_first_line, (scrolled_lines = v_scrolled * (WrappedLines()-1)));
+    flattened_lines.AdvanceIter(&new_first_line, (scrolled_lines = RoundF(v_scrolled * (WrappedLines()-1))));
     flattened_lines.AdvanceIter(&(new_last_line = new_first_line), fb->lines-1);
     LayoutBackLine(&line, new_last_line.first);
     bool up = new_first_line < old_first_line;
@@ -448,11 +448,11 @@ void TextArea::UpdateScrolled() {
         int first_ind = 0, first_offset = 0, first_len = 0;
         int dist = UpdateLines(v_scrolled, &first_ind, &first_offset, &first_len);
         if ((v_updated = dist)) {
-            if (h_changed) UpdateHScrolled(max_w * h_scrolled, false);
+            if (h_changed) UpdateHScrolled(RoundF(max_w * h_scrolled), false);
             if (1)         UpdateVScrolled(abs(dist), dist<0, first_ind, first_offset, first_len);
         }
     }
-    if (h_changed && !v_updated) UpdateHScrolled(max_w * h_scrolled, true);
+    if (h_changed && !v_updated) UpdateHScrolled(RoundF(max_w * h_scrolled), true);
 }
 
 void TextArea::UpdateHScrolled(int x, bool update_fb) {
@@ -593,7 +593,7 @@ int Editor::UpdateLines(float v_scrolled, int *first_ind, int *first_offset, int
     }
 
     bool resized = (width_changed && wrap) || last_fb_lines != fb->lines;
-    int new_first_line = v_scrolled * (wrapped_lines - 1), new_last_line = new_first_line + fb->lines;
+    int new_first_line = RoundF(v_scrolled * (wrapped_lines - 1)), new_last_line = new_first_line + fb->lines;
     int dist = resized ? fb->lines : abs(new_first_line - last_first_line), read_len = 0, bo = 0, l, e;
     if (!dist || !file_line.size()) return 0;
 

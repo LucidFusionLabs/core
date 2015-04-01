@@ -1114,7 +1114,7 @@ struct Regex {
 struct StreamRegex {
     void *prog=0, *ctx=0, *ppool=0, *cpool=0;
     int last_end=0, since_last_end=0;
-    vector<long> res;
+    vector<intptr_t> res;
     ~StreamRegex();
     StreamRegex(const string &pattern);
     int Match(const string &text, vector<Regex::Result> *out, bool eof=0);

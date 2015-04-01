@@ -135,15 +135,18 @@ struct GlyphCache {
     GlyphCache(unsigned T, int W, int H=0);
     ~GlyphCache();
 
-    void Clear();
-    bool Add(point *out, float *out_texcoord, int w, int h, int max_height=0);
-    void Load(const Font*, const Glyph*, const unsigned char *buf, int linesize, int pf, const FilterCB &f=FilterCB());
-    void Load(const Font*, const Glyph*, CGFontRef cgfont, int size);
     bool ShouldCacheGlyph(const Texture &t) const {
        CHECK_LT(t.width,  1024*1024);
        CHECK_LT(t.height, 1024*1024);
        return t.width < max_width && t.height < max_height;
     }
+
+    void Clear();
+    bool Add(point *out, float *out_texcoord, int w, int h, int max_height=0);
+    void Load(const Font*, const Glyph*, const unsigned char *buf, int linesize, int pf, const FilterCB &f=FilterCB());
+#ifdef __APPLE__
+    void Load(const Font*, const Glyph*, CGFontRef cgfont, int size);
+#endif
 
     static GlyphCache *Get() {
         static GlyphCache inst(0, 512);

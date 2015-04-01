@@ -155,105 +155,105 @@ TEST(StringTest, StringAppendf) {
 }
 
 TEST(StringTest, StringMatch) {
-    EXPECT_EQ(true,  PrefixMatch(        "y0y0",          "y0"));
-    EXPECT_EQ(true,  PrefixMatch(ToUTF16("y0y0"),         "y0"));
-    EXPECT_EQ(true,  PrefixMatch(ToUTF16("y0y0"), ToUTF16("y0")));
-
-    EXPECT_EQ(false, PrefixMatch(        "y0y0",          "0y"));
-    EXPECT_EQ(false, PrefixMatch(ToUTF16("y0y0"),         "0y"));
-    EXPECT_EQ(false, PrefixMatch(ToUTF16("y0y0"), ToUTF16("0y")));
-
-    EXPECT_EQ(true,  PrefixMatch(        "y0y0",          "y0y0"));
-    EXPECT_EQ(true,  PrefixMatch(ToUTF16("y0y0"),         "y0y0"));
-    EXPECT_EQ(true,  PrefixMatch(ToUTF16("y0y0"), ToUTF16("y0y0")));
-
-    EXPECT_EQ(false, PrefixMatch(        "y0y0",          "0y0y0y"));
-    EXPECT_EQ(false, PrefixMatch(ToUTF16("y0y0"),         "0y0y0y"));
-    EXPECT_EQ(false, PrefixMatch(ToUTF16("y0y0"), ToUTF16("0y0y0y")));
-
-    EXPECT_EQ(false, PrefixMatch(        "y0y0",          "Y0"));
-    EXPECT_EQ(false, PrefixMatch(ToUTF16("y0y0"),         "Y0"));
-    EXPECT_EQ(false, PrefixMatch(ToUTF16("y0y0"), ToUTF16("Y0")));
-
-    EXPECT_EQ(true,  PrefixMatch(        "y0y0",          "Y0",  false));
-    EXPECT_EQ(true,  PrefixMatch(ToUTF16("y0y0"),         "Y0",  false));
-    EXPECT_EQ(true,  PrefixMatch(ToUTF16("y0y0"), ToUTF16("Y0"), false));
-
-    EXPECT_EQ(false, PrefixMatch(        "y0y0",          "Y0Y0"));
-    EXPECT_EQ(false, PrefixMatch(ToUTF16("y0y0"),         "Y0Y0"));
-    EXPECT_EQ(false, PrefixMatch(ToUTF16("y0y0"), ToUTF16("Y0Y0")));
-
-    EXPECT_EQ(true,  PrefixMatch(        "y0y0",          "Y0Y0",  false));
-    EXPECT_EQ(true,  PrefixMatch(ToUTF16("y0y0"),         "Y0Y0",  false));
-    EXPECT_EQ(true,  PrefixMatch(ToUTF16("y0y0"), ToUTF16("Y0Y0"), false));
-
-    EXPECT_EQ(true,  SuffixMatch(        "y0y0",          "y0"));
-    EXPECT_EQ(true,  SuffixMatch(ToUTF16("y0y0"),         "y0"));
-    EXPECT_EQ(true,  SuffixMatch(ToUTF16("y0y0"), ToUTF16("y0")));
-
-    EXPECT_EQ(false, SuffixMatch(        "y0y0",          "0y"));
-    EXPECT_EQ(false, SuffixMatch(ToUTF16("y0y0"),         "0y"));
-    EXPECT_EQ(false, SuffixMatch(ToUTF16("y0y0"), ToUTF16("0y")));
-
-    EXPECT_EQ(true,  SuffixMatch(        "y0y0",          "y0y0"));
-    EXPECT_EQ(true,  SuffixMatch(ToUTF16("y0y0"),         "y0y0"));
-    EXPECT_EQ(true,  SuffixMatch(ToUTF16("y0y0"), ToUTF16("y0y0")));
-
-    EXPECT_EQ(false, SuffixMatch(        "y0y0",          "0y0y0y"));
-    EXPECT_EQ(false, SuffixMatch(ToUTF16("y0y0"),         "0y0y0y"));
-    EXPECT_EQ(false, SuffixMatch(ToUTF16("y0y0"), ToUTF16("0y0y0y")));
-
-    EXPECT_EQ(false, SuffixMatch(        "y0y0",          "Y0"));
-    EXPECT_EQ(false, SuffixMatch(ToUTF16("y0y0"),         "Y0"));
-    EXPECT_EQ(false, SuffixMatch(ToUTF16("y0y0"), ToUTF16("Y0")));
-
-    EXPECT_EQ(true,  SuffixMatch(        "y0y0",          "Y0",  false));
-    EXPECT_EQ(true,  SuffixMatch(ToUTF16("y0y0"),         "Y0",  false));
-    EXPECT_EQ(true,  SuffixMatch(ToUTF16("y0y0"), ToUTF16("Y0"), false));
-
-    EXPECT_EQ(false, SuffixMatch(        "y0y0",          "Y0Y0"));
-    EXPECT_EQ(false, SuffixMatch(ToUTF16("y0y0"),         "Y0Y0"));
-    EXPECT_EQ(false, SuffixMatch(ToUTF16("y0y0"), ToUTF16("Y0Y0")));
-
-    EXPECT_EQ(true,  SuffixMatch(        "y0y0",          "Y0Y0",  false));
-    EXPECT_EQ(true,  SuffixMatch(ToUTF16("y0y0"),         "Y0Y0",  false));
-    EXPECT_EQ(true,  SuffixMatch(ToUTF16("y0y0"), ToUTF16("Y0Y0"), false));
-
-    EXPECT_EQ(true,  StringEquals(        "g0G0",          "G0g0",  false));
-    EXPECT_EQ(true,  StringEquals(ToUTF16("g0G0"),         "G0g0",  false));
-    EXPECT_EQ(true,  StringEquals(ToUTF16("g0G0"), ToUTF16("G0g0"), false));
-
-    EXPECT_EQ(true,  StringEquals(        "g0G0",          "g0G0",  true));
-    EXPECT_EQ(true,  StringEquals(ToUTF16("g0G0"),         "g0G0",  true));
-    EXPECT_EQ(true,  StringEquals(ToUTF16("g0G0"), ToUTF16("g0G0"), true));
-
-    EXPECT_EQ(false, StringEquals(        "g0G0",          "G0g0",  true));
-    EXPECT_EQ(false, StringEquals(ToUTF16("g0G0"),         "G0g0",  true));
-    EXPECT_EQ(false, StringEquals(ToUTF16("g0G0"), ToUTF16("G0g0"), true));
-
-    EXPECT_EQ(false, StringEquals(        "g0G0",          "G0g0z",  false));
-    EXPECT_EQ(false, StringEquals(ToUTF16("g0G0"),         "G0g0z",  false));
-    EXPECT_EQ(false, StringEquals(ToUTF16("g0G0"), ToUTF16("G0g0z"), false));
-
-    EXPECT_EQ(false, StringEquals(        "g0G0z",          "G0g0",  false));
-    EXPECT_EQ(false, StringEquals(ToUTF16("g0G0z"),         "G0g0",  false));
-    EXPECT_EQ(false, StringEquals(ToUTF16("g0G0z"), ToUTF16("G0g0"), false));
-
-    EXPECT_EQ(false, StringEquals(        "a0G0",          "G0g0z",  false));
-    EXPECT_EQ(false, StringEquals(ToUTF16("a0G0"),         "G0g0z",  false));
-    EXPECT_EQ(false, StringEquals(ToUTF16("a0G0"), ToUTF16("G0g0z"), false));
-
-    EXPECT_EQ(false, StringEquals(        "g0G0",          "g0G0z",  true));
-    EXPECT_EQ(false, StringEquals(ToUTF16("g0G0"),         "g0G0z",  true));
-    EXPECT_EQ(false, StringEquals(ToUTF16("g0G0"), ToUTF16("g0G0z"), true));
-
-    EXPECT_EQ(false, StringEquals(        "g0G0z",          "g0G0",  true));
-    EXPECT_EQ(false, StringEquals(ToUTF16("g0G0z"),         "g0G0",  true));
-    EXPECT_EQ(false, StringEquals(ToUTF16("g0G0z"), ToUTF16("g0G0"), true));
+    EXPECT_TRUE (PrefixMatch(        "y0y0",          "y0"));
+    EXPECT_TRUE (PrefixMatch(ToUTF16("y0y0"),         "y0"));
+    EXPECT_TRUE (PrefixMatch(ToUTF16("y0y0"), ToUTF16("y0")));
+                 
+    EXPECT_FALSE(PrefixMatch(        "y0y0",          "0y"));
+    EXPECT_FALSE(PrefixMatch(ToUTF16("y0y0"),         "0y"));
+    EXPECT_FALSE(PrefixMatch(ToUTF16("y0y0"), ToUTF16("0y")));
+                 
+    EXPECT_TRUE (PrefixMatch(        "y0y0",          "y0y0"));
+    EXPECT_TRUE (PrefixMatch(ToUTF16("y0y0"),         "y0y0"));
+    EXPECT_TRUE (PrefixMatch(ToUTF16("y0y0"), ToUTF16("y0y0")));
+                 
+    EXPECT_FALSE(PrefixMatch(        "y0y0",          "0y0y0y"));
+    EXPECT_FALSE(PrefixMatch(ToUTF16("y0y0"),         "0y0y0y"));
+    EXPECT_FALSE(PrefixMatch(ToUTF16("y0y0"), ToUTF16("0y0y0y")));
+                 
+    EXPECT_FALSE(PrefixMatch(        "y0y0",          "Y0"));
+    EXPECT_FALSE(PrefixMatch(ToUTF16("y0y0"),         "Y0"));
+    EXPECT_FALSE(PrefixMatch(ToUTF16("y0y0"), ToUTF16("Y0")));
+                 
+    EXPECT_TRUE (PrefixMatch(        "y0y0",          "Y0",  false));
+    EXPECT_TRUE (PrefixMatch(ToUTF16("y0y0"),         "Y0",  false));
+    EXPECT_TRUE (PrefixMatch(ToUTF16("y0y0"), ToUTF16("Y0"), false));
+                 
+    EXPECT_FALSE(PrefixMatch(        "y0y0",          "Y0Y0"));
+    EXPECT_FALSE(PrefixMatch(ToUTF16("y0y0"),         "Y0Y0"));
+    EXPECT_FALSE(PrefixMatch(ToUTF16("y0y0"), ToUTF16("Y0Y0")));
+                 
+    EXPECT_TRUE (PrefixMatch(        "y0y0",          "Y0Y0",  false));
+    EXPECT_TRUE (PrefixMatch(ToUTF16("y0y0"),         "Y0Y0",  false));
+    EXPECT_TRUE (PrefixMatch(ToUTF16("y0y0"), ToUTF16("Y0Y0"), false));
+                 
+    EXPECT_TRUE (SuffixMatch(        "y0y0",          "y0"));
+    EXPECT_TRUE (SuffixMatch(ToUTF16("y0y0"),         "y0"));
+    EXPECT_TRUE (SuffixMatch(ToUTF16("y0y0"), ToUTF16("y0")));
+                 
+    EXPECT_FALSE(SuffixMatch(        "y0y0",          "0y"));
+    EXPECT_FALSE(SuffixMatch(ToUTF16("y0y0"),         "0y"));
+    EXPECT_FALSE(SuffixMatch(ToUTF16("y0y0"), ToUTF16("0y")));
+                 
+    EXPECT_TRUE (SuffixMatch(        "y0y0",          "y0y0"));
+    EXPECT_TRUE (SuffixMatch(ToUTF16("y0y0"),         "y0y0"));
+    EXPECT_TRUE (SuffixMatch(ToUTF16("y0y0"), ToUTF16("y0y0")));
+                 
+    EXPECT_FALSE(SuffixMatch(        "y0y0",          "0y0y0y"));
+    EXPECT_FALSE(SuffixMatch(ToUTF16("y0y0"),         "0y0y0y"));
+    EXPECT_FALSE(SuffixMatch(ToUTF16("y0y0"), ToUTF16("0y0y0y")));
+                 
+    EXPECT_FALSE(SuffixMatch(        "y0y0",          "Y0"));
+    EXPECT_FALSE(SuffixMatch(ToUTF16("y0y0"),         "Y0"));
+    EXPECT_FALSE(SuffixMatch(ToUTF16("y0y0"), ToUTF16("Y0")));
+                 
+    EXPECT_TRUE (SuffixMatch(        "y0y0",          "Y0",  false));
+    EXPECT_TRUE (SuffixMatch(ToUTF16("y0y0"),         "Y0",  false));
+    EXPECT_TRUE (SuffixMatch(ToUTF16("y0y0"), ToUTF16("Y0"), false));
+                 
+    EXPECT_FALSE(SuffixMatch(        "y0y0",          "Y0Y0"));
+    EXPECT_FALSE(SuffixMatch(ToUTF16("y0y0"),         "Y0Y0"));
+    EXPECT_FALSE(SuffixMatch(ToUTF16("y0y0"), ToUTF16("Y0Y0")));
+                 
+    EXPECT_TRUE (SuffixMatch(        "y0y0",          "Y0Y0",  false));
+    EXPECT_TRUE (SuffixMatch(ToUTF16("y0y0"),         "Y0Y0",  false));
+    EXPECT_TRUE (SuffixMatch(ToUTF16("y0y0"), ToUTF16("Y0Y0"), false));
+                 
+    EXPECT_TRUE (StringEquals(        "g0G0",          "G0g0",  false));
+    EXPECT_TRUE (StringEquals(ToUTF16("g0G0"),         "G0g0",  false));
+    EXPECT_TRUE (StringEquals(ToUTF16("g0G0"), ToUTF16("G0g0"), false));
+                 
+    EXPECT_TRUE (StringEquals(        "g0G0",          "g0G0",  true));
+    EXPECT_TRUE (StringEquals(ToUTF16("g0G0"),         "g0G0",  true));
+    EXPECT_TRUE (StringEquals(ToUTF16("g0G0"), ToUTF16("g0G0"), true));
+                 
+    EXPECT_FALSE(StringEquals(        "g0G0",          "G0g0",  true));
+    EXPECT_FALSE(StringEquals(ToUTF16("g0G0"),         "G0g0",  true));
+    EXPECT_FALSE(StringEquals(ToUTF16("g0G0"), ToUTF16("G0g0"), true));
+                 
+    EXPECT_FALSE(StringEquals(        "g0G0",          "G0g0z",  false));
+    EXPECT_FALSE(StringEquals(ToUTF16("g0G0"),         "G0g0z",  false));
+    EXPECT_FALSE(StringEquals(ToUTF16("g0G0"), ToUTF16("G0g0z"), false));
+                 
+    EXPECT_FALSE(StringEquals(        "g0G0z",          "G0g0",  false));
+    EXPECT_FALSE(StringEquals(ToUTF16("g0G0z"),         "G0g0",  false));
+    EXPECT_FALSE(StringEquals(ToUTF16("g0G0z"), ToUTF16("G0g0"), false));
+                 
+    EXPECT_FALSE(StringEquals(        "a0G0",          "G0g0z",  false));
+    EXPECT_FALSE(StringEquals(ToUTF16("a0G0"),         "G0g0z",  false));
+    EXPECT_FALSE(StringEquals(ToUTF16("a0G0"), ToUTF16("G0g0z"), false));
+                 
+    EXPECT_FALSE(StringEquals(        "g0G0",          "g0G0z",  true));
+    EXPECT_FALSE(StringEquals(ToUTF16("g0G0"),         "g0G0z",  true));
+    EXPECT_FALSE(StringEquals(ToUTF16("g0G0"), ToUTF16("g0G0z"), true));
+                 
+    EXPECT_FALSE(StringEquals(        "g0G0z",          "g0G0",  true));
+    EXPECT_FALSE(StringEquals(ToUTF16("g0G0z"),         "g0G0",  true));
+    EXPECT_FALSE(StringEquals(ToUTF16("g0G0z"), ToUTF16("g0G0"), true));
 
     string a1 = "foo bar baz bat";
-    EXPECT_EQ(true,  StringReplace(&a1, "bar baz", "raz"));
-    EXPECT_EQ(false, StringReplace(&a1, "bar baz", "raz"));
+    EXPECT_TRUE (StringReplace(&a1, "bar baz", "raz"));
+    EXPECT_FALSE(StringReplace(&a1, "bar baz", "raz"));
     EXPECT_EQ(a1, "foo raz bat");
 }
 
@@ -310,20 +310,20 @@ TEST(StringTest, basename) {
     EXPECT_EQ(string("aa/bb/s/"), baz);
 
     baz.assign(bar, 0, dirnamelen("baz", 0, 1));
-    EXPECT_EQ(true, baz.empty());
-
-    EXPECT_EQ(true,  basedir(   "wav/foo.bar", "wav"));
-    EXPECT_EQ(false, basedir(   "wav/foo.bar", "Mav"));
-    EXPECT_EQ(false, basedir(   "wav/foo.bar", "wa" ));
-    EXPECT_EQ(false, basedir(   "wav/foo.bar",  "av"));
-    EXPECT_EQ(true,  basedir(  "/wav/foo.bar", "wav"));
-    EXPECT_EQ(false, basedir(  "/wav/foo.bar", "wa" ));
-    EXPECT_EQ(false, basedir(  "/wav/foo.bar",  "av"));
-    EXPECT_EQ(false, basedir(  "/wav/foo.bar", "Mav"));
-    EXPECT_EQ(true,  basedir("/s/wav/foo.bar", "wav"));
-    EXPECT_EQ(false, basedir("/s/wav/foo.bar", "Mav"));
-    EXPECT_EQ(false, basedir("/s/wav/foo.bar", "wa" ));
-    EXPECT_EQ(false, basedir("/s/wav/foo.bar",  "av"));
+    EXPECT_TRUE (baz.empty());
+                  
+    EXPECT_TRUE (basedir(   "wav/foo.bar", "wav"));
+    EXPECT_FALSE(basedir(   "wav/foo.bar", "Mav"));
+    EXPECT_FALSE(basedir(   "wav/foo.bar", "wa" ));
+    EXPECT_FALSE(basedir(   "wav/foo.bar",  "av"));
+    EXPECT_TRUE (basedir(  "/wav/foo.bar", "wav"));
+    EXPECT_FALSE(basedir(  "/wav/foo.bar", "wa" ));
+    EXPECT_FALSE(basedir(  "/wav/foo.bar",  "av"));
+    EXPECT_FALSE(basedir(  "/wav/foo.bar", "Mav"));
+    EXPECT_TRUE (basedir("/s/wav/foo.bar", "wav"));
+    EXPECT_FALSE(basedir("/s/wav/foo.bar", "Mav"));
+    EXPECT_FALSE(basedir("/s/wav/foo.bar", "wa" ));
+    EXPECT_FALSE(basedir("/s/wav/foo.bar",  "av"));
 }
 
 TEST(IterTest, LineIter) {
