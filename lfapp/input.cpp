@@ -356,8 +356,13 @@ const int Key::LeftShift  = GLFW_KEY_LEFT_SHIFT;
 const int Key::RightShift = GLFW_KEY_RIGHT_SHIFT;
 const int Key::LeftCtrl   = GLFW_KEY_LEFT_CONTROL;
 const int Key::RightCtrl  = GLFW_KEY_RIGHT_CONTROL;
+#ifdef __APPLE__
 const int Key::LeftCmd    = GLFW_KEY_LEFT_SUPER;
 const int Key::RightCmd   = GLFW_KEY_RIGHT_SUPER;
+#else
+const int Key::LeftCmd    = GLFW_KEY_LEFT_ALT;
+const int Key::RightCmd   = GLFW_KEY_RIGHT_ALT;
+#endif
 const int Key::Tab        = GLFW_KEY_TAB;
 const int Key::Space      = GLFW_KEY_SPACE;
 const int Key::Backspace  = GLFW_KEY_BACKSPACE;

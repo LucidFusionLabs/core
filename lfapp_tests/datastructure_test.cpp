@@ -181,8 +181,8 @@ template <class K, class V, class Node = AVLTreeNode<K,V> > struct AVLTree {
     int InsertNode(int ind, Query *q) {
         if (!ind) return CreateNode(q);
         Node *n = &node[ind-1];
-        if      (n->MoreThan(q->key, ind, q->z)) node[ind-1].left  = InsertNode(n->left,  q);
-        else if (n->LessThan(q->key, ind, q->z)) node[ind-1].right = InsertNode(n->right, q);
+        if      (n->MoreThan(q->key, ind, q->z)) { int li = InsertNode(n->left,  q); node[ind-1].left  = li; }
+        else if (n->LessThan(q->key, ind, q->z)) { int ri = InsertNode(n->right, q); node[ind-1].right = ri; }
         else return ResolveInsertCollision(ind, q);
         return Balance(ind);
     }
@@ -194,8 +194,8 @@ template <class K, class V, class Node = AVLTreeNode<K,V> > struct AVLTree {
     int EraseNode(int ind, Query *q) {
         if (!ind) return 0;
         Node *n = &node[ind-1];
-        if      (n->MoreThan(q->key, ind, q->z)) n->left  = EraseNode(n->left,  q);
-        else if (n->LessThan(q->key, ind, q->z)) n->right = EraseNode(n->right, q);
+        if      (n->MoreThan(q->key, ind, q->z)) { int li = EraseNode(n->left,  q); node[ind-1].left  = li; }
+        else if (n->LessThan(q->key, ind, q->z)) { int ri = EraseNode(n->right, q); node[ind-1].right = ri; }
         else {
             q->ret = &val[n->val];
             int left = n->left, right = n->right;
@@ -312,7 +312,8 @@ struct PrefixSumKeyedAVLTree : public AVLTree<K,V,Node> {
         return typename Parent::Query(k + (v ? 0 : 1), v, &z);
     }
     virtual int ResolveInsertCollision(int ind, typename Parent::Query *q) { 
-        Parent::node[ind-1].left = ResolveInsertCollision(Parent::node[ind-1].left, ind, q);
+        int li = ResolveInsertCollision(Parent::node[ind-1].left, ind, q);
+        Parent::node[ind-1].left = li;
         return Parent::Balance(ind);
     }
     virtual int ResolveInsertCollision(int ind, int dup_ind, typename Parent::Query *q) {
@@ -321,7 +322,8 @@ struct PrefixSumKeyedAVLTree : public AVLTree<K,V,Node> {
             Parent::node[new_ind-1].SwapKV(&Parent::node[dup_ind-1]);
             return new_ind;
         }
-        Parent::node[ind-1].right = ResolveInsertCollision(Parent::node[ind-1].right, dup_ind, q);
+        int ri = ResolveInsertCollision(Parent::node[ind-1].right, dup_ind, q);
+        Parent::node[ind-1].right = ri;
         return Parent::Balance(ind);
     }
     virtual void PrintNodes(int ind, string *out) const {
@@ -348,8 +350,10 @@ struct PrefixSumKeyedAVLTree : public AVLTree<K,V,Node> {
         if (end_val_ind < beg_val_ind) return 0;
         int mid_val_ind = (beg_val_ind + end_val_ind) / 2;
         int ind = Parent::node.Insert(Node(node_value_cb(&Parent::val[mid_val_ind]), mid_val_ind))+1;
-        Parent::node[ind-1].left  = BuildTreeFromSortedVal(beg_val_ind,   mid_val_ind-1);
-        Parent::node[ind-1].right = BuildTreeFromSortedVal(mid_val_ind+1, end_val_ind);
+        int li = BuildTreeFromSortedVal(beg_val_ind,   mid_val_ind-1);
+        int ri = BuildTreeFromSortedVal(mid_val_ind+1, end_val_ind);
+        Parent::node[ind-1].left  = li;
+        Parent::node[ind-1].right = ri;
         Parent::ComputeStateFromChildren(&Parent::node[ind-1]);
         return ind;
     }
@@ -486,14 +490,14 @@ TEST(DatastructureTest, SkipList) {
 
         timers->AccumulateTo(ctid); for (auto i : db) t.Insert(i, i);
         timers->AccumulateTo(qtid); for (auto i : db) { EXPECT_NE((int*)0, (v=t.Find(i))); if (v) EXPECT_EQ(i, *v); }
-        timers->AccumulateTo(dtid); for (int i=0, hl=db.size()/2; i<hl; i++) EXPECT_EQ(true, t.Erase(db[i]));
+        timers->AccumulateTo(dtid); for (int i=0, hl=db.size()/2; i<hl; i++) EXPECT_TRUE(t.Erase(db[i]));
         timers->AccumulateTo(rtid);
         for (int i=0, l=db.size(), hl=l/2; i<l; i++) {
             if (i < hl) EXPECT_EQ(0, t.Find(db[i]));
             else { EXPECT_NE((int*)0, (v=t.Find(db[i]))); if (v) EXPECT_EQ(db[i], *v); }
         }
         timers->AccumulateTo(Ctid); for (int i=db.size()/2-1; i>=0; i--) t.Insert(db[i], db[i]);
-        timers->AccumulateTo(Dtid); for (auto i : db) EXPECT_EQ(true, t.Erase(i));
+        timers->AccumulateTo(Dtid); for (auto i : db) EXPECT_TRUE(t.Erase(i));
         timers->AccumulateTo(0);
     }
 }
@@ -512,14 +516,14 @@ TEST(DatastructureTest, AVLTree) {
 
         timers->AccumulateTo(ctid); for (auto i : db) { EXPECT_NE((int*)0, t.Insert(i, i)); }
         timers->AccumulateTo(qtid); for (auto i : db) { EXPECT_NE((int*)0, (v=t.Find(i))); if (v) EXPECT_EQ(i, *v); }
-        timers->AccumulateTo(dtid); for (int i=0, hl=db.size()/2; i<hl; i++) EXPECT_EQ(true, t.Erase(db[i]));
+        timers->AccumulateTo(dtid); for (int i=0, hl=db.size()/2; i<hl; i++) EXPECT_TRUE(t.Erase(db[i]));
         timers->AccumulateTo(rtid);
         for (int i=0, l=db.size(), hl=l/2; i<l; i++) {
             if (i < hl) EXPECT_EQ(0, t.Find(db[i]));
             else { EXPECT_NE((int*)0, (v=t.Find(db[i]))); if (v) EXPECT_EQ(db[i], *v); }
         }
         timers->AccumulateTo(Ctid); for (int i=db.size()/2-1; i>=0; i--) t.Insert(db[i], db[i]);
-        timers->AccumulateTo(Dtid); for (auto i : db) EXPECT_EQ(true, t.Erase(i));
+        timers->AccumulateTo(Dtid); for (auto i : db) EXPECT_TRUE(t.Erase(i));
         timers->AccumulateTo(0);
     }
 }
@@ -542,11 +546,11 @@ TEST(DatastructureTest, PrefixSumKeyedAVLTree) {
             PrefixSumKeyedAVLTree<int, int> t;
             timers->AccumulateTo(ctid); for (auto i : db) { EXPECT_NE((int*)0, t.Insert(i, i)); }
             timers->AccumulateTo(qtid); for (auto i : db) { EXPECT_NE((int*)0, (v=t.Find(i))); if (v) EXPECT_EQ(i, *v); }
-            timers->AccumulateTo(dtid); for (int i=0, hl=db.size()/2; i<hl; i++) EXPECT_EQ(true, t.Erase(0));
+            timers->AccumulateTo(dtid); for (int i=0, hl=db.size()/2; i<hl; i++) EXPECT_TRUE(t.Erase(0));
             timers->AccumulateTo(rtid); for (int i=0, hl=db.size()/2; i<hl; i++) { EXPECT_NE((int*)0, (v=t.Find(db[i]))); if (v) EXPECT_EQ(db[hl+i], *v); }
             timers->AccumulateTo(Ctid); for (int i=db.size()/2-1; i>=0; i--) t.Insert(0, db[i]);
             timers->AccumulateTo(Rtid); for (auto i : db) { EXPECT_NE((int*)0, (v=t.Find(i))); if (v) EXPECT_EQ(i, *v); }
-            timers->AccumulateTo(Dtid); for (auto i : db) EXPECT_EQ(true, t.Erase(0));
+            timers->AccumulateTo(Dtid); for (auto i : db) EXPECT_TRUE(t.Erase(0));
             timers->AccumulateTo(0);
         }
         {
@@ -580,7 +584,7 @@ TEST(DatastructureTest, RedBlackTree) {
             timers->AccumulateTo(qtid); for (auto i : db) { EXPECT_NE((int*)0, (ti=t.Find(i)).val); if (ti.val) EXPECT_EQ(i, *ti.val); }
             timers->AccumulateTo(itid); for (ti = t. Begin(); ti.ind; ++ti) {         EXPECT_EQ(sorted_db[iind], ti.key); EXPECT_EQ(sorted_db[iind], *ti.val); iind++; }
             timers->AccumulateTo(0);    for (ti = t.RBegin(); ti.ind; --ti) { iind--; EXPECT_EQ(sorted_db[iind], ti.key); EXPECT_EQ(sorted_db[iind], *ti.val);         }
-            timers->AccumulateTo(dtid); for (int i=0, hl=db.size()/2; i<hl; i++) EXPECT_EQ(true, t.Erase(db[i]));
+            timers->AccumulateTo(dtid); for (int i=0, hl=db.size()/2; i<hl; i++) EXPECT_TRUE(t.Erase(db[i]));
             timers->AccumulateTo(0);    t.CheckProperties();
             timers->AccumulateTo(rtid);
             for (int i=0, l=db.size(), hl=l/2; i<l; i++) {
@@ -589,7 +593,7 @@ TEST(DatastructureTest, RedBlackTree) {
             }
             timers->AccumulateTo(Ctid); for (int i=db.size()/2-1; i>=0; i--) t.Insert(db[i], db[i]);
             timers->AccumulateTo(0);    t.CheckProperties();
-            timers->AccumulateTo(Dtid); for (auto i : db) EXPECT_EQ(true, t.Erase(i));
+            timers->AccumulateTo(Dtid); for (auto i : db) EXPECT_TRUE(t.Erase(i));
             timers->AccumulateTo(0);    t.CheckProperties();
         }
         {
@@ -627,14 +631,14 @@ TEST(DatastructureTest, PrefixSumKeyedRedBlackTree) {
             timers->AccumulateTo(0);    for (auto i : db) { EXPECT_NE((int*)0, (ti=t.LowerBound(i)).val); if (ti.val) EXPECT_EQ(i, *ti.val); }
             timers->AccumulateTo(itid); for (ti = t. Begin(); ti.ind; ++ti) {         EXPECT_EQ(db[iind], ti.key); EXPECT_EQ(db[iind], *ti.val); iind++; }
             timers->AccumulateTo(0);    for (ti = t.RBegin(); ti.ind; --ti) { iind--; EXPECT_EQ(db[iind], ti.key); EXPECT_EQ(db[iind], *ti.val);         }
-            timers->AccumulateTo(dtid); for (int i=0, hl=db.size()/2; i<hl; i++) EXPECT_EQ(true, t.Erase(0));
+            timers->AccumulateTo(dtid); for (int i=0, hl=db.size()/2; i<hl; i++) EXPECT_TRUE(t.Erase(0));
             timers->AccumulateTo(0);    t.CheckProperties();
             timers->AccumulateTo(rtid); for (int i=0, hl=db.size()/2; i<hl; i++) { EXPECT_NE((int*)0, (ti=t.Find(db[i])).val); if (ti.val) EXPECT_EQ(db[hl+i], *ti.val); }
             timers->AccumulateTo(Ctid); for (int i=db.size()/2-1; i>=0; i--) t.Insert(0, db[i]);
             timers->AccumulateTo(0);    t.CheckProperties();
             timers->AccumulateTo(Rtid); for (auto i : db) { EXPECT_NE((int*)0, (ti=t.Find(i)).val); if (ti.val) EXPECT_EQ(i, *ti.val); }
             timers->AccumulateTo(0);    for (auto i : db) { EXPECT_NE((int*)0, (ti=t.Find(i)).val); if (ti.val) EXPECT_EQ(i, *ti.val); }
-            timers->AccumulateTo(Dtid); for (auto i : db) EXPECT_EQ(true, t.Erase(0));
+            timers->AccumulateTo(Dtid); for (auto i : db) EXPECT_TRUE(t.Erase(0));
             timers->AccumulateTo(0);    t.CheckProperties();
             timers->AccumulateTo(0);
         }

@@ -179,6 +179,7 @@ void GlyphCache::Load(const Font *f, const Glyph *g, const unsigned char *buf, i
     }
 }
 
+#ifdef __APPLE__
 void GlyphCache::Load(const Font *f, const Glyph *g, CGFontRef cgfont, int size) {
     if (!g->internal.coretext.id || !g->tex.width || !g->tex.height) return;
     point p;
@@ -217,6 +218,7 @@ void GlyphCache::Load(const Font *f, const Glyph *g, CGFontRef cgfont, int size)
         // INFOf("LoadGlyph U+%06x '%c' texID=%d %s", g->id, g->id, tex.ID, f->desc->DebugString().c_str());
     }
 }
+#endif
 
 Glyph *Font::FindOrInsertGlyph(unsigned short gind) {
     unsigned ind = gind - glyph->table_start;
@@ -711,8 +713,12 @@ void CoreTextFontEngine::AssignGlyph(Glyph *g, const CGRect &bounds, struct CGSi
 FontEngine *Fonts::GetFontEngine(int engine_type) {
     switch (engine_type) {
         case FontDesc::Engine::Atlas:    return Singleton<AtlasFontEngine>   ::Get();
+#ifdef LFL_FREETYPE
         case FontDesc::Engine::FreeType: return Singleton<FreeTypeFontEngine>::Get();
+#endif
+#ifdef __APLE__
         case FontDesc::Engine::CoreText: return Singleton<CoreTextFontEngine>::Get();
+#endif
         case FontDesc::Engine::Default:  return DefaultFontEngine();
     } return DefaultFontEngine();
 }

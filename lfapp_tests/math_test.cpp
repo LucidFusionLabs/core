@@ -23,10 +23,12 @@ namespace LFL {
 TEST(MathTest, util) {
     EXPECT_FLOAT_EQ(Decimals( 10.23456),  .23456);
     EXPECT_FLOAT_EQ(Decimals(-10.23456), -.23456);
-    EXPECT_EQ(false, IsPowerOfTwo(0));
-    EXPECT_EQ(true,  IsPowerOfTwo(1));
-    EXPECT_EQ(true,  IsPowerOfTwo(2));
-    EXPECT_EQ(false, IsPowerOfTwo(3));
+    EXPECT_FALSE(IsPowerOfTwo(0));
+    EXPECT_TRUE (IsPowerOfTwo(1));
+    EXPECT_TRUE (IsPowerOfTwo(2));
+    EXPECT_FALSE(IsPowerOfTwo(3));
+    EXPECT_EQ(10,    WhichLog2(1024));
+    EXPECT_EQ(2048,  NextPowerOfTwo(1026));
     { short str[] = { ' ', ' ', '-', '3', '7', '4', 'a', 0 }; EXPECT_EQ(-374, atoi(str)); }
 }
 

@@ -68,8 +68,8 @@ TEST(VideoTest, Box) {
     Box box = screen->Box();
     EXPECT_EQ(0, box.x);
     EXPECT_EQ(0, box.y);
-    EXPECT_EQ(true, box.w != 0);
-    EXPECT_EQ(true, box.h != 0);
+    EXPECT_TRUE(box.w != 0);
+    EXPECT_TRUE(box.h != 0);
     EXPECT_EQ(box, screen->Box(1.0, 1.0));
     EXPECT_EQ(box, screen->Box().center(screen->Box(1.0, 1.0)));
 }

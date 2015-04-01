@@ -920,7 +920,7 @@ void GraphicsDevice::PointSize(float n) {}
 void GraphicsDevice::LineWidth(float n) {}
 void GraphicsDevice::DelTextures(int n, const unsigned *id) {}
 void GraphicsDevice::GenTextures(int t, int n, unsigned *out) {}
-void GraphicsDevice::CheckForError() {}
+void GraphicsDevice::CheckForError(const char *file, int line) {}
 void GraphicsDevice::EnableDepthTest() {}
 void GraphicsDevice::DisableDepthTest() {}
 void GraphicsDevice::DisableBlend() {}
