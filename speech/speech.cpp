@@ -67,14 +67,14 @@ int PronunciationDict::readDictionary(Iter *in, PronunciationDict *out) {
         const char *c=line; if ((*c) == ';') continue; /* skip comments */
 
         /* Format: word <two spaces> pronunciation */
-        c += lengthchar(c, notspace);
+        c += LengthChar(StringPiece(c), notspace);
         if (!*c || !isspace(*(c+1))) continue;
         *(char *)c = 0;
 
         const char *word=line, *pronunciation=c+2; /* (k,v) */
 
         char phone[1024], accent[1024], phones; /* pronunciation phone-ID sequence */
-        if ((phones = readPronunciation(pronunciation, 0, phone, accent, sizeof(phone)-1)) <= 0) continue;
+        if ((phones = readPronunciation(pronunciation, -1, phone, accent, sizeof(phone)-1)) <= 0) continue;
         phone[phones]=0;
 
         /* insert(word, valbufOffset) */
@@ -88,11 +88,11 @@ int PronunciationDict::readDictionary(Iter *in, PronunciationDict *out) {
 }
 
 int PronunciationDict::readPronunciation(const char *in, int len, char *phonesOut, char *accentOut, int outlen) {
-    StringWordIter phones(in, len); int outi=0;
+    StringWordIter phones(StringPiece(in, len)); int outi=0;
     for (const char *phone=phones.Next(); phone; phone=phones.Next()) {
         if (outi >= outlen) return -1;
-        
-        int accent = lengthchar(phone, isalpha);
+
+        int accent = LengthChar(StringPiece(phone), isalpha);
         char stress = phone[accent];
         ((char *)phone)[accent]=0;
         accent = isdigit(stress) ? stress - '0' : 0;
@@ -112,7 +112,7 @@ const char *PronunciationDict::pronounce(const char *in) {
 }
 
 int PronunciationDict::pronounce(const char *utterance, const char **w, const char **wa, int *phones, int max) {
-    StringWordIter script(utterance, 0); int words=0; *phones=0;
+    StringWordIter script(utterance); int words=0; *phones=0;
     for (const char *word=script.Next(); word; word=script.Next()) {
         const char *pronunciation = pronounce(word);
         if (!pronunciation || words+1 >= max) { DEBUG("pronunciation %s count=%d", word, words); return -1; }
@@ -410,7 +410,7 @@ string AcousticModel::flags() {
 }
 
 void AcousticModel::loadflags(const char *flags) {
-    StringWordIter iter(flags, 0, iscomma);
+    StringWordIter iter(flags, iscomma);
     for (const char *k = iter.Next(); k; k = iter.Next()) {
 
         char *v; double val;
@@ -468,12 +468,12 @@ int AcousticModel::write(StateCollection *model, const char *name, const char *d
     LocalFile covar  (string(dir) + MatrixFile::Filename(name, "emCov",      "matrix", iteration), "w");
 
     /* write data headers */
-    MatrixFile::WriteHeader(&names,   basename(names.Filename(),0,0),   flagtext, states,   1);
-    MatrixFile::WriteHeader(&initial, basename(initial.Filename(),0,0), flagtext, states,   1);
-    MatrixFile::WriteHeader(&transit, basename(transit.Filename(),0,0), flagtext, transits, TransitCols);
-    MatrixFile::WriteHeader(&prior,   basename(prior.Filename(),0,0),   flagtext, states,   K);
-    MatrixFile::WriteHeader(&mean,    basename(mean.Filename(),0,0),    flagtext, means,    D);
-    MatrixFile::WriteHeader(&covar,   basename(covar.Filename(),0,0),   flagtext, means,    D);
+    MatrixFile::WriteHeader(&names,   BaseName(names.Filename()),   flagtext, states,   1);
+    MatrixFile::WriteHeader(&initial, BaseName(initial.Filename()), flagtext, states,   1);
+    MatrixFile::WriteHeader(&transit, BaseName(transit.Filename()), flagtext, transits, TransitCols);
+    MatrixFile::WriteHeader(&prior,   BaseName(prior.Filename()),   flagtext, states,   K);
+    MatrixFile::WriteHeader(&mean,    BaseName(mean.Filename()),    flagtext, means,    D);
+    MatrixFile::WriteHeader(&covar,   BaseName(covar.Filename()),   flagtext, means,    D);
 
     /* write data */
     states=means=transits=0;

@@ -777,6 +777,29 @@ TEST(GUITest, LineTokenProcessor) {
 
     L->UpdateText(5, " ", 0);
     EXPECT_EQ("aacbb ccdee", L->Text()); EXPECT_EQ(0, ta.token.size());
+
+    L->OverwriteTextAt(10, StringPiece(string("Z")), 0);
+    EXPECT_EQ("aacbb ccdeZ", L->Text()); EXPECT_EQ(2, ta.token.size());
+    if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type, -2); EXPECT_EQ("ccdee",      ta.token[0].word); }
+    if (ta.token.size()>1) { EXPECT_EQ(ta.token[1].type,  2); EXPECT_EQ("ccdeZ",      ta.token[1].word); }
+    ta.token.clear();
+
+    L->OverwriteTextAt(10, StringPiece(string(" ")), 0);
+    EXPECT_EQ("aacbb ccde ", L->Text()); EXPECT_EQ(2, ta.token.size());
+    if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type, -2); EXPECT_EQ("ccdeZ",      ta.token[0].word); }
+    if (ta.token.size()>1) { EXPECT_EQ(ta.token[1].type,  5); EXPECT_EQ("ccde",       ta.token[1].word); }
+    ta.token.clear();
+
+    L->OverwriteTextAt(10, StringPiece(string(" ")), 0);
+    EXPECT_EQ("aacbb ccde ", L->Text()); EXPECT_EQ(0, ta.token.size());
+    ta.token.clear();
+
+    L->OverwriteTextAt(10, StringPiece(string("A")), 0);
+    EXPECT_EQ("aacbb ccdeA", L->Text()); EXPECT_EQ(2, ta.token.size());
+    if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type, -5); EXPECT_EQ("ccde",       ta.token[0].word); }
+    if (ta.token.size()>1) { EXPECT_EQ(ta.token[1].type,  2); EXPECT_EQ("ccdeA",      ta.token[1].word); }
+    ta.token.clear();
+
 }
 
 TEST(BrowserTest, DOMNode) {

@@ -125,7 +125,7 @@ void Glyph::Draw(const LFL::Box &b, const Drawable::Attr *a) const {
 }
 
 GlyphCache::~GlyphCache() { delete flow; }
-GlyphCache::GlyphCache(unsigned T, int W, int H) : dim(W, H?H:W), tex(dim.w, dim.h, Pixel::RGBA, T) { Clear(); }
+GlyphCache::GlyphCache(unsigned T, int W, int H) : dim(W, H?H:W), tex(dim.w, dim.h, Pixel::RGBA, T), flow(new Flow(&dim)) {}
 
 void GlyphCache::Clear() {
     delete flow;
@@ -716,7 +716,7 @@ FontEngine *Fonts::GetFontEngine(int engine_type) {
 #ifdef LFL_FREETYPE
         case FontDesc::Engine::FreeType: return Singleton<FreeTypeFontEngine>::Get();
 #endif
-#ifdef __APLE__
+#ifdef __APPLE__
         case FontDesc::Engine::CoreText: return Singleton<CoreTextFontEngine>::Get();
 #endif
         case FontDesc::Engine::Default:  return DefaultFontEngine();

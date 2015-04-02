@@ -465,7 +465,7 @@ int SettingsFile::Read(const string &dir, const string &name) {
 
 int SettingsFile::Write(const vector<string> &fields, const string &dir, const string &name) {
     LocalFile settings(string(dir) + MatrixFile::Filename(name, VarName(), VarType(), 0), "w");
-    MatrixFile::WriteHeader(&settings, basename(settings.fn.c_str(),0,0), Join(fields, ",").c_str(), fields.size(), 1);
+    MatrixFile::WriteHeader(&settings, BaseName(settings.fn), Join(fields, ",").c_str(), fields.size(), 1);
     for (vector<string>::const_iterator i = fields.begin(); i != fields.end(); i++) {
         StringFile::WriteRow(&settings, StrCat(*i, Separator(), Singleton<FlagMap>::Get()->Get(*i)).c_str());
     }

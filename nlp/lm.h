@@ -122,9 +122,9 @@ struct BigramLanguageModelBuilder {
         LocalFile prior  (string(dir) + MatrixFile::Filename(name, "prior",      "matrix", iteration), "w");
         LocalFile transit(string(dir) + MatrixFile::Filename(name, "transition", "matrix", iteration), "w");
 
-        MatrixFile::WriteHeader(&names,   basename(names.Filename(),0,0),   flagtext, words.size(), 1);
-        MatrixFile::WriteHeader(&prior,   basename(prior.Filename(),0,0),   flagtext, words.size(), 1);
-        MatrixFile::WriteHeader(&transit, basename(transit.Filename(),0,0), flagtext, transits,     TransitCols);
+        MatrixFile::WriteHeader(&names,   BaseName(names.Filename()),   flagtext, words.size(), 1);
+        MatrixFile::WriteHeader(&prior,   BaseName(prior.Filename()),   flagtext, words.size(), 1);
+        MatrixFile::WriteHeader(&transit, BaseName(transit.Filename()), flagtext, transits,     TransitCols);
 
         wordcount = transits = 0;
         for (auto i = words.begin(); i != words.end(); ++i) {

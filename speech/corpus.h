@@ -59,7 +59,7 @@ struct VoxForgeTgzFile {
         if (!a.impl) return;
         for (const char *afn = a.Next(); Running() && afn; afn = a.Next()) {
             if (SuffixMatch(afn, "etc/prompts", false)) HandlePrompts(       (const char *)a.Data(), a.Size());
-            else if (basedir(afn, "wav"))               HandleWAV(file, afn, (const char *)a.Data(), a.Size());
+            else if (BaseDir(afn, "wav"))               HandleWAV(file, afn, (const char *)a.Data(), a.Size());
         }
     }
     void HandlePrompts(const char *promptsdata, int promptsdatalen) {
@@ -71,12 +71,12 @@ struct VoxForgeTgzFile {
             const char *key = words.Next();
             int val = words.offset;
             if (!key || val<0) continue;
-            wav2transcript[basename(key,0,0)] = &line[val];
+            wav2transcript[BaseName(key)] = &line[val];
         }
     }
     void HandleWAV(const string &srcdir, const string &afn, const char *ad, int as) {
         int bnl;
-        const char *bn = basename(afn.c_str(), 0, &bnl);
+        const char *bn = BaseName(afn, &bnl);
         string name = string(bn, bnl);
 
         auto ti = wav2transcript.find(name);
@@ -147,7 +147,7 @@ struct PathCorpus {
     typedef void (*PathCB)(AcousticModel::Compiled *, Matrix *viterbi, double vprob, double vtime, Matrix *MFCC, Matrix *features, const char *transcript, void *arg);
 
     static void add_path(MatrixArchiveOut *out, Matrix *viterbi, const char *uttfilename) {
-        MatrixFile f(viterbi, basename(uttfilename,0,0));
+        MatrixFile f(viterbi, BaseName(uttfilename));
         out->Write(&f, "viterbi");
         f.Clear();
     }
@@ -197,7 +197,7 @@ struct PathCorpus {
 };
 
 void WavCorpus::RunFile(const string &fn) { 
-    string dn = string(fn, dirnamelen(fn.c_str()));
+    string dn = string(fn, DirNameLen(fn));
 
     /* /corpus/wav/voxforge/k-20090202-afe.tgz */ 
     if (SuffixMatch(fn, ".tgz", false) || SuffixMatch(fn, ".tar.gz", false) || SuffixMatch(fn, ".tar", false)) {

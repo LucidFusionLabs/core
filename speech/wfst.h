@@ -104,7 +104,7 @@ struct WFST {
 
         static int write(IOAlphabet *A, const char *dir, const char *name1, const char *name2, int iteration) {
             LocalFile out(string(dir) + MatrixFile::Filename(name1, name2, "string", iteration), "w");
-            MatrixFile::WriteHeader(&out, basename(out.Filename(),0,0), A->FactoryName() ? A->FactoryName() : "", A->size(), 1);
+            MatrixFile::WriteHeader(&out, BaseName(out.Filename()), A->FactoryName() ? A->FactoryName() : "", A->size(), 1);
             if (A->FactoryName()) return 0;
 
             Matrix map_data(NextPrime(A->size()*4), HashBuckets * HashValues);
@@ -215,7 +215,7 @@ struct WFST {
 
         static int write(StateSet *S, const char *dir, const char *name1, const char *name2, int iteration) {
             LocalFile out(string(dir) + MatrixFile::Filename(name1, name2, "matrix", iteration), "w");
-            MatrixFile::WriteHeader(&out, basename(out.Filename(),0,0), "", S->states(), 1);
+            MatrixFile::WriteHeader(&out, BaseName(out.Filename()), "", S->states(), 1);
             for (int i=0, l=S->states(); i<l; i++) {
                 double row[] = { (double)S->state(i) };
                 MatrixFile::WriteRow(&out, row, 1);
@@ -420,8 +420,8 @@ struct WFST {
             LocalFile state  (string(dir) + MatrixFile::Filename(name, "state",      "matrix", iteration), "w");
             LocalFile transit(string(dir) + MatrixFile::Filename(name, "transition", "matrix", iteration), "w");
 
-            MatrixFile::WriteHeader(&state,   basename(state.Filename(),0,0),   "", M->states(),      StateValues);
-            MatrixFile::WriteHeader(&transit, basename(transit.Filename(),0,0), "", M->transitions(), Edge::Cols);
+            MatrixFile::WriteHeader(&state,   BaseName(state.Filename()),   "", M->states(),      StateValues);
+            MatrixFile::WriteHeader(&transit, BaseName(transit.Filename()), "", M->transitions(), Edge::Cols);
 
             int transits = 0;
             Matrix map(NextPrime(M->transitions()*4), HashBuckets * HashValues);

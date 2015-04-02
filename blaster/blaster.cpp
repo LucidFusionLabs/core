@@ -62,9 +62,9 @@ struct BlasterConfig : public HTMLParser {
             INFO("Applying configuration ", name);
             map<string, string>::const_iterator i = policies.find(name);
             if (i == policies.end()) FATAL("missing policy ", name);
-            StringLineIter lines(i->second.c_str(), i->second.size());
+            StringLineIter lines(i->second);
             for (const char *line = lines.Next(); line; line = lines.Next()) {
-                StringWordIter words(line, lines.linelen);
+                StringWordIter words(StringPiece(line, lines.linelen));
                 string k = toconvert(tolower(BlankNull(words.Next())), tochar<'-','_'>);
                 string v = BlankNull(words.Next());
                 if (SuffixMatch(k, ":")) k.erase(k.size()-1);
@@ -123,7 +123,7 @@ struct BulkMailTemplate {
     bool Open(const string &text) {
         if (text.empty()) return false;
         string current_textblock;
-        StringLineIter lines(text.c_str(), text.size(), StringLineIter::Flag::BlankLines);
+        StringLineIter lines(text, StringLineIter::Flag::BlankLines);
         for (const char *line = lines.Next(); line; line = lines.Next()) {
             if (!*line) current_textblock += "\r\n";
             for (const char *li = line; *li; /**/) {
@@ -492,7 +492,7 @@ struct BulkMailer {
 
         Time now = Now(); int len;
         logdir = FLAGS_log_location;
-        template_name = string(basename(FLAGS_template.c_str(), 0, &len)).substr(0, len);
+        template_name = string(BaseName(FLAGS_template, &len)).substr(0, len);
         if (!logdir.empty() && logdir[logdir.size()-1] != LocalFile::Slash) logdir.append(StringPrintf("%c", LocalFile::Slash));
 
         string logfile = StrCat(logdir, logfiledaytime(now), "-", template_name, "-");

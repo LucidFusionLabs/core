@@ -638,7 +638,7 @@ int DNS::WriteRequest(unsigned short id, const string &querytext, unsigned short
     hdr->id = id;
     hdr->qdcount = htons(1);
 
-    StringWordIter words(querytext.c_str(), 0, isdot);
+    StringWordIter words(querytext, isdot);
     for (string word = BlankNull(words.Next()); !word.empty(); word = BlankNull(words.Next())) {
         CHECK_LT(word.size(), 64);
         os.Write8((unsigned char)word.size());
@@ -821,10 +821,10 @@ string HTTP::HostURL(const char *url) {
 
 int HTTP::request(char *buf, char **methodO, char **urlO, char **argsO, char **verO) {
     char *url, *ver, *args;
-    if (!(url = (char*)nextchar(buf, isspace)))    return -1;    *url = 0;
-    if (!(url = (char*)nextchar(url+1, notspace))) return -1;
-    if (!(ver = (char*)nextchar(url, isspace)))    return -1;    *ver = 0;
-    if (!(ver = (char*)nextchar(ver+1, notspace))) return -1;
+    if (!(url = (char*)NextChar(buf, isspace)))    return -1;    *url = 0;
+    if (!(url = (char*)NextChar(url+1, notspace))) return -1;
+    if (!(ver = (char*)NextChar(url, isspace)))    return -1;    *ver = 0;
+    if (!(ver = (char*)NextChar(ver+1, notspace))) return -1;
 
     if ((args = strchr(url, '?'))) *args++ = 0;
 
@@ -886,7 +886,7 @@ int HTTP::argGrep(const char *args, const char *end, int num, ...) {
     if (!end) end = args + strlen(args);
 
     int alen=end-args, anlen;
-    StringWordIter words(args, alen, isand, 0, StringWordIter::Flag::InPlace);
+    StringWordIter words(StringPiece(args, alen), isand, 0, StringWordIter::Flag::InPlace);
     for (const char *a = words.Next(); a; a = words.Next()) {
         if (!(anlen = HTTP::argNameLen(a))) continue;
         for (int i=0; i<num; i++) if (anlen == kl[i] && !strncasecmp(k[i], a, anlen)) {
@@ -903,11 +903,11 @@ int HTTP::headerGrep(const char *headers, const char *end, int num, ...) {
     if (!end) end = headers + strlen(headers);
 
     int hlen=end-headers, hnlen;
-    StringLineIter lines(headers, hlen, StringLineIter::Flag::InPlace);
+    StringLineIter lines(StringPiece(headers, hlen), StringLineIter::Flag::InPlace);
     for (const char *h = lines.Next(); h; h = lines.Next()) {
         if (!(hnlen = HTTP::headerNameLen(h))) continue;
         for (int i=0; i<num; i++) if (hnlen == kl[i] && !strncasecmp(k[i], h, hnlen)) {
-            const char *hv = nextchar(h+hnlen+1, notspace, lines.linelen-hnlen-1);
+            const char *hv = NextChar(h+hnlen+1, notspace, lines.linelen-hnlen-1);
             if (!hv) v[i]->clear();
             else     v[i]->assign(hv, lines.linelen-(hv-h));
         }
@@ -920,7 +920,7 @@ string HTTP::headerGrep(const char *headers, const char *end, const string &name
     if (!end) end = headers + strlen(headers);
 
     int hlen=end-headers, hnlen;
-    StringLineIter lines(headers, hlen, StringLineIter::Flag::InPlace);
+    StringLineIter lines(StringPiece(headers, hlen), StringLineIter::Flag::InPlace);
     for (const char *line = lines.Next(); line; line = lines.Next()) {
         if (!(hnlen = HTTP::headerNameLen(line))) continue;
         if (hnlen == name.size() && !strncasecmp(name.c_str(), line, hnlen)) return string(line+hnlen+2, lines.linelen-hnlen-2);
@@ -1695,9 +1695,9 @@ struct HTTPClientQuery {
             for (;;) {
                 if (chunkedEncoding && !currentChunkLength) {
                     char *cur_in = cur;
-                    cur += isnl(cur);
+                    cur += IsNewline(cur);
                     char *chunkHeader = cur;
-                    if (!(cur = (char*)nextline(cur))) { cur=cur_in; break; }
+                    if (!(cur = (char*)NextLine(cur))) { cur=cur_in; break; }
                     currentChunkLength = strtoul(chunkHeader, 0, 16);
                 }
 
@@ -1806,7 +1806,7 @@ bool HTTPClient::WGet(const string &url, File *out, ResponseCB cb) {
     }
 
     if (!out && !cb) {
-        string fn = basename(path.c_str(),0,0);
+        string fn = BaseName(path);
         if (fn.empty()) fn = "index.html";
         out = new LocalFile(StrCat(LFAppDownloadDir(), fn), "w");
         if (!out->Opened()) { ERROR("open file"); delete out; return 0; }
@@ -2340,13 +2340,13 @@ struct SMTPClientConnection : public Query {
 
     int Read(Connection *c) {
         int processed = 0;
-        StringLineIter lines(c->rb, c->rl, StringLineIter::Flag::BlankLines);
+        StringLineIter lines(StringPiece(c->rb, c->rl), StringLineIter::Flag::BlankLines);
         for (const char *line = lines.Next(); line; line = lines.Next()) {
             processed = lines.offset;
             if (!response_lines.empty()) response_lines.append("\r\n");
             response_lines.append(line, lines.linelen);
 
-            const char *dash = nextchar(line, notnum);
+            const char *dash = NextChar(line, notnum);
             bool multiline = dash && *dash == '-';
             if (multiline) continue;
 
@@ -2435,10 +2435,10 @@ struct SMTPServerConnection : public Query {
 
     int ReadCommands(Connection *c, const char *in, int len) {
         int processed = 0;
-        StringLineIter lines(in, len, StringLineIter::Flag::BlankLines | StringLineIter::Flag::InPlace);
+        StringLineIter lines(StringPiece(in, len), StringLineIter::Flag::BlankLines | StringLineIter::Flag::InPlace);
         for (const char *line = lines.Next(); line && lines.offset>=0 && !in_data; line = lines.Next()) {
             processed = lines.offset;
-            StringWordIter words(line, lines.linelen, isint3<' ', '\t', ':'>);
+            StringWordIter words(StringPiece(line, lines.linelen), isint3<' ', '\t', ':'>);
             string cmd = toupper(BlankNull(words.Next()));
             string a1_orig = BlankNull(words.Next());
             string a1 = toupper(a1_orig), response="500 unrecognized command\r\n";
@@ -2467,7 +2467,7 @@ struct SMTPServerConnection : public Query {
 
     int ReadData(Connection *c, const char *in, int len) {
         int processed = 0;
-        StringLineIter lines(in, len, StringLineIter::Flag::BlankLines | StringLineIter::Flag::InPlace);
+        StringLineIter lines(StringPiece(in, len), StringLineIter::Flag::BlankLines | StringLineIter::Flag::InPlace);
         for (const char *line = lines.Next(); line && lines.offset>=0; line = lines.Next()) {
             processed = lines.offset;
             if (lines.linelen == 1 && *line == '.') { in_data=0; break; }

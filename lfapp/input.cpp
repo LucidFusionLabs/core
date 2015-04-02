@@ -828,7 +828,7 @@ MovieAsset *Shell::movieasset(const string &n) { return movieassets ? (*movieass
 bool Shell::FGets() {
     char buf[1024];
     if (!LFL::FGets(buf, sizeof(buf))) return false;
-    chompnl(buf, strlen(buf));
+    ChompNewline(buf, strlen(buf));
     Shell::Run(buf);
     return true;
 }

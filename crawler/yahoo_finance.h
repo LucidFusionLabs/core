@@ -39,7 +39,7 @@ struct YahooFinanceApi : public Crawler {
 
     static float ParseMBValue(const char *text) {
         float val = atof(text);
-        const char *denomination = nextchar(text, notnum);
+        const char *denomination = NextChar(text, notnum);
         if (denomination) {
             if (*denomination == 'M') val *=    1000000;
             if (*denomination == 'B') val *= 1000000000;
@@ -57,7 +57,7 @@ struct YahooFinanceApi : public Crawler {
 
     static void ScrapeCSV(const CrawlFileEntry *entry, vector<Quote> *out) {
         Time now = Now();
-        StringLineIter lines(entry->content().data(), entry->content().size());
+        StringLineIter lines(entry->content());
         for (const char *line = lines.Next(); line; line = lines.Next()) {
             vector<string> field;
             Split(line, iscomma, isdquote, &field);

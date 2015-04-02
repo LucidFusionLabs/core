@@ -100,13 +100,13 @@ struct HTMLParser {
     }
 
     void Text(String &text) {
-        if (!inpre && !nextchar(text.c_str(), notspace, text.size())) return;
+        if (!inpre && !NextChar(text.c_str(), notspace, text.size())) return;
         Text(text, stack);
     }
 
     void TagText(const String &tag) {
         String tagname; KV attr;
-        Char *base=(Char*)tag.c_str(), *space=nextchar(base, isspace);
+        Char *base=(Char*)tag.c_str(), *space=NextChar(base, isspace);
         bool selfclose = tag.size() && tag[tag.size()-1] == '/';
         if (!space) tagname = tag.substr(0, tag.size()-selfclose);
         else {
@@ -115,21 +115,21 @@ struct HTMLParser {
             len = tag.size()-len-1;
             Char *key, *val; bool done=0, dquote=0;
             for (Char *b=space+1, *e=b+len, *p=b; p && p<e; /**/) {
-                if (!(key = nextchar(p, notspace, len-(p-b), 0))) break;
-                if (!(p = nextchar(key, notalnum, len-(key-b), 0))) break;
+                if (!(key = NextChar(p, notspace, len-(p-b), 0))) break;
+                if (!(p = NextChar(key, notalnum, len-(key-b), 0))) break;
                 if (isspace(*p)) *p++ = 0;
-                if (!(p = nextchar(p, notspace, len-(p-b), 0))) break;
+                if (!(p = NextChar(p, notspace, len-(p-b), 0))) break;
                 if (*p != '=') break;
                 else *p++ = 0;
-                if (!(val = nextchar(p, notspace, len-(p-b), 0))) break;
+                if (!(val = NextChar(p, notspace, len-(p-b), 0))) break;
                 if ((dquote = *val == '"') || *val == '\'') {
                     val++;
-                    if (!(p = nextchar(val, dquote ? isdquote : issquote, len-(val-b), 0))) break;
+                    if (!(p = NextChar(val, dquote ? isdquote : issquote, len-(val-b), 0))) break;
                     *p++ = 0;
                     if (*p && !isspace(*p)) done=1;
                 }
                 else {
-                    if ((p = nextchar(val, isspace, len-(val-b), 0))) *p++ = 0;
+                    if ((p = NextChar(val, isspace, len-(val-b), 0))) *p++ = 0;
                 }
                 attr[lower_attrs ? tolower(key) : key] = val;
                 if (done) break;

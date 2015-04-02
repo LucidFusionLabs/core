@@ -601,7 +601,7 @@ struct GameServer : public Query {
         Write(c, UDPClient::Sendto, hdr->seq, &response);
 
         Game::ConnectionData *cd = Game::ConnectionData::Get(c);
-        StringLineIter lines(rcon->Text.c_str());
+        StringLineIter lines(rcon->Text);
         for (const char *line = lines.Next(); line; line = lines.Next()) {
             if (FLAGS_rcon_debug) INFO("rcon: ", line);
             string cmd, arg;
@@ -926,7 +926,7 @@ struct GameClient {
         RconRequestCB(c, hdr, rcon->Text);
     }
     void RconRequestCB(Connection *c, Game::Protocol::Header *hdr, const string &rcon) {
-        StringLineIter lines(rcon.c_str());
+        StringLineIter lines(rcon);
         for (const char *line = lines.Next(); line; line = lines.Next()) {
             if (FLAGS_rcon_debug) INFO("rcon: ", line);
             string cmd, arg;
@@ -1123,7 +1123,7 @@ struct GameMenuGUI : public GUI, public Query {
     void MasterGetResponseCB(Connection *c, const char *h, const string &ct, const char *cb, int cl) {
         if (!cb || !cl) return;
         string servers(cb, cl);
-        StringLineIter lines(servers.c_str());
+        StringLineIter lines(servers);
         for (const char *p, *l = lines.Next(); l; l = lines.Next()) {
             if (!(p = strchr(l, ':'))) continue;
             Network::SendTo(pinger.listener()->socket, IPV4::Parse(string(l, p-l)), atoi(p+1), "ping\n", 5);
@@ -1140,7 +1140,7 @@ struct GameMenuGUI : public GUI, public Query {
     void PingResponseCB(Connection *c, const string &reply) {
         if (ip && ip == c->addr) return;
         string name, players;
-        StringLineIter lines(reply.c_str());
+        StringLineIter lines(reply);
         for (const char *p, *l = lines.Next(); l; l = lines.Next()) {
             if (!(p = strchr(l, '='))) continue;
             string k(l, p-l), v(p+1);
@@ -1349,7 +1349,7 @@ struct GamePlayerListGUI : public GUI {
 
     void HandleTextMessage(const string &in) {
         playerlist.clear();
-        StringLineIter lines(in.c_str());
+        StringLineIter lines(in);
         const char *hdr = lines.Next();
         string red_score_text, blue_score_text;
         Split(hdr, iscomma, &red_score_text, &blue_score_text);
@@ -1358,7 +1358,7 @@ struct GamePlayerListGUI : public GUI {
         titletext = StrCat(titlename, " ", red_score, "-", blue_score);
 
         for (const char *line = lines.Next(); line; line = lines.Next()) {
-            StringWordIter words(line, 0, iscomma);
+            StringWordIter words(line, iscomma);
             Player player;
             for (const char *word = words.Next(); word; word = words.Next()) player.push_back(word);
             if (player.size() < 5) continue;

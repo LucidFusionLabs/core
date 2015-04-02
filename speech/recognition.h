@@ -378,7 +378,7 @@ struct Recognizer {
 
     static double wordErrorRate(const RecognitionModel *model, string gold, string x) {
         vector<int> A, B;
-        LFL::StringWordIter aw(gold.c_str()), bw(x.c_str());
+        LFL::StringWordIter aw(gold), bw(x);
         for (const char *w = aw.Next(); w; w = aw.Next()) A.push_back(model->recognitionNetworkOut.id(tolower(w).c_str()));
         for (const char *w = bw.Next(); w; w = bw.Next()) B.push_back(model->recognitionNetworkOut.id(tolower(w).c_str()));
         return (double)Levenshtein(A, B) / A.size();
