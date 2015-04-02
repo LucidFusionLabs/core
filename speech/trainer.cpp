@@ -115,7 +115,7 @@ struct Wav2Features {
         Matrix *features = Features::fromAsset(wav, Features::Flag::Storable);
         MatrixFile feat(features, transcript);
         if (targ == File) {
-            string outfile = dir + StringPrintf("%lx.feat", fnv32(basename(wav->filename.c_str(),0,0)));
+            string outfile = dir + StringPrintf("%lx.feat", fnv32(BaseName(wav->filename)));
             feat.Write(outfile, wav->filename);
         } else if (targ == Archive) {
             out.Write(&feat, wav->filename);
@@ -511,7 +511,7 @@ int tieModelStates(const char *modeldir, AcousticModel::StateCollection *model3,
     if ((wroteiter = modelWrote.Open("AcousticModel", modeldir))<0 || wroteiter != lastiter+1) { ERROR("read ", modeldir, " ", lastiter+1); return -1; }
 
     LocalFile tiedstates(string(modeldir) + MatrixFile::Filename("AcousticModel", "tiedstates", "matrix", lastiter+1), "w");
-    MatrixFile::WriteHeader(&tiedstates, basename(tiedstates.Filename(),0,0), "", powf(LFL_PHONES, 3)*AcousticModel::StatesPerPhone, 1);
+    MatrixFile::WriteHeader(&tiedstates, BaseName(tiedstates.Filename()), "", powf(LFL_PHONES, 3)*AcousticModel::StatesPerPhone, 1);
 
     for (int i=0; i<LFL_PHONES; i++) {
         for (int j=0; j<LFL_PHONES; j++) {
@@ -542,7 +542,7 @@ int tieModelStates(const char *modeldir, AcousticModel::StateCollection *model3,
 
 int tieIndependentStates(const char *modeldir, AcousticModel::StateCollection *model1, int lastiter) {
     LocalFile tiedstates(string(modeldir) + MatrixFile::Filename("AcousticModel", "tiedstates", "matrix", lastiter), "w");
-    MatrixFile::WriteHeader(&tiedstates, basename(tiedstates.Filename(),0,0), "", powf(LFL_PHONES, 3)*AcousticModel::StatesPerPhone, 1);
+    MatrixFile::WriteHeader(&tiedstates, BaseName(tiedstates.Filename()), "", powf(LFL_PHONES, 3)*AcousticModel::StatesPerPhone, 1);
 
     for (int i=0; i<LFL_PHONES; i++) {
         for (int j=0; j<LFL_PHONES; j++) {

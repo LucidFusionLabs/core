@@ -69,12 +69,12 @@ TEST(StringTest, FNVHash) {
     EXPECT_EQ(6903599980961175675LL, fnv64(text1));
 }
 
-TEST(StringTest, rlengthchar) {
+TEST(StringTest, RLengthChar) {
     char b1[] = " ", b2[] = "  ", b3[] = "aaa   ";
-    EXPECT_EQ(strlen(b1), rlengthchar(b1+strlen(b1)-1, isspace, strlen(b1)));
-    EXPECT_EQ(strlen(b2), rlengthchar(b2+strlen(b2)-1, isspace, strlen(b2)));
-    EXPECT_EQ(3,          rlengthchar(b3+strlen(b3)-1, isspace, strlen(b3)));
-    EXPECT_EQ(2,          rlengthchar(b3+strlen(b3)-1, isspace, 2));
+    EXPECT_EQ(strlen(b1), RLengthChar(StringPiece(b1+strlen(b1)-1, strlen(b1)), isspace));
+    EXPECT_EQ(strlen(b2), RLengthChar(StringPiece(b2+strlen(b2)-1, strlen(b2)), isspace));
+    EXPECT_EQ(3,          RLengthChar(StringPiece(b3+strlen(b3)-1, strlen(b3)), isspace));
+    EXPECT_EQ(2,          RLengthChar(StringPiece(b3+strlen(b3)-1, 2         ), isspace));
 }
 
 TEST(StringTest, UTF) {
@@ -285,52 +285,85 @@ TEST(StringTest, Split) {
     EXPECT_EQ(48, vi[3]);
 }
 
-TEST(StringTest, basename) {
+TEST(StringTest, BaseName) {
     int len;
-    EXPECT_EQ(string(basename("/s/foo.bar",     0, &len)), "foo.bar"); EXPECT_EQ(3, len);
-    EXPECT_EQ(string(basename("aa/bb/s/foobar", 0, &len)), "foobar");  EXPECT_EQ(6, len);
+    EXPECT_EQ(string(BaseName("/s/foo.bar",     &len)), "foo.bar"); EXPECT_EQ(3, len);
+    EXPECT_EQ(string(BaseName("aa/bb/s/foobar", &len)), "foobar");  EXPECT_EQ(6, len);
 
-    EXPECT_EQ(0, dirnamelen("foo.bar"));
-    EXPECT_EQ(2, dirnamelen("/s/foo.bar"));
-    EXPECT_EQ(3, dirnamelen("/s/foo.bar", 0, 1));
+    EXPECT_EQ(0, DirNameLen("foo.bar"));
+    EXPECT_EQ(2, DirNameLen("/s/foo.bar"));
+    EXPECT_EQ(3, DirNameLen("/s/foo.bar", 1));
 
     char foo[] = "aa/bb/s/foobar";
-    EXPECT_EQ(7, dirnamelen(foo));
-    EXPECT_EQ(8, dirnamelen(foo, 0, 1));
-    EXPECT_EQ(string("aa/bb/s"),  string(foo, dirnamelen(foo)));
-    EXPECT_EQ(string("aa/bb/s/"), string(foo, dirnamelen(foo, 0, 1)));
+    EXPECT_EQ(7, DirNameLen(foo));
+    EXPECT_EQ(8, DirNameLen(foo, 1));
+    EXPECT_EQ(string("aa/bb/s"),  string(foo, DirNameLen(foo)));
+    EXPECT_EQ(string("aa/bb/s/"), string(foo, DirNameLen(foo, 1)));
 
     string bar = "aa/bb/s/foobar", baz;
-    EXPECT_EQ(7, dirnamelen(bar.c_str()));
-    EXPECT_EQ(8, dirnamelen(bar.c_str(), 0, 1));
-    EXPECT_EQ(string("aa/bb/s"),  string(bar.c_str(), dirnamelen(bar.c_str())));
-    EXPECT_EQ(string("aa/bb/s/"), string(bar.c_str(), dirnamelen(bar.c_str(), 0, 1)));
+    EXPECT_EQ(7, DirNameLen(bar));
+    EXPECT_EQ(8, DirNameLen(bar, 1));
+    EXPECT_EQ(string("aa/bb/s"),  string(bar.c_str(), DirNameLen(bar)));
+    EXPECT_EQ(string("aa/bb/s/"), string(bar.c_str(), DirNameLen(bar, 1)));
 
-    baz.assign(bar, 0, dirnamelen(bar.c_str(), 0, 1));
+    baz.assign(bar, 0, DirNameLen(bar, 1));
     EXPECT_EQ(string("aa/bb/s/"), baz);
 
-    baz.assign(bar, 0, dirnamelen("baz", 0, 1));
+    baz.assign(bar, 0, DirNameLen("baz", 1));
     EXPECT_TRUE (baz.empty());
                   
-    EXPECT_TRUE (basedir(   "wav/foo.bar", "wav"));
-    EXPECT_FALSE(basedir(   "wav/foo.bar", "Mav"));
-    EXPECT_FALSE(basedir(   "wav/foo.bar", "wa" ));
-    EXPECT_FALSE(basedir(   "wav/foo.bar",  "av"));
-    EXPECT_TRUE (basedir(  "/wav/foo.bar", "wav"));
-    EXPECT_FALSE(basedir(  "/wav/foo.bar", "wa" ));
-    EXPECT_FALSE(basedir(  "/wav/foo.bar",  "av"));
-    EXPECT_FALSE(basedir(  "/wav/foo.bar", "Mav"));
-    EXPECT_TRUE (basedir("/s/wav/foo.bar", "wav"));
-    EXPECT_FALSE(basedir("/s/wav/foo.bar", "Mav"));
-    EXPECT_FALSE(basedir("/s/wav/foo.bar", "wa" ));
-    EXPECT_FALSE(basedir("/s/wav/foo.bar",  "av"));
+    EXPECT_TRUE (BaseDir(   "wav/foo.bar", "wav"));
+    EXPECT_FALSE(BaseDir(   "wav/foo.bar", "Mav"));
+    EXPECT_FALSE(BaseDir(   "wav/foo.bar", "wa" ));
+    EXPECT_FALSE(BaseDir(   "wav/foo.bar",  "av"));
+    EXPECT_TRUE (BaseDir(  "/wav/foo.bar", "wav"));
+    EXPECT_FALSE(BaseDir(  "/wav/foo.bar", "wa" ));
+    EXPECT_FALSE(BaseDir(  "/wav/foo.bar",  "av"));
+    EXPECT_FALSE(BaseDir(  "/wav/foo.bar", "Mav"));
+    EXPECT_TRUE (BaseDir("/s/wav/foo.bar", "wav"));
+    EXPECT_FALSE(BaseDir("/s/wav/foo.bar", "Mav"));
+    EXPECT_FALSE(BaseDir("/s/wav/foo.bar", "wa" ));
+    EXPECT_FALSE(BaseDir("/s/wav/foo.bar",  "av"));
 }
 
 TEST(IterTest, LineIter) {
     string b = "1 2 3\n4 5 6";
-    StringLineIter line(b.data(), b.size());
+    StringLineIter line(b);
     EXPECT_EQ(0, strcmp(BlankNull(line.Next()), "1 2 3"));
     EXPECT_EQ(0, strcmp(BlankNull(line.Next()), "4 5 6"));
+}
+
+TEST(IterTest, WordIter) {
+    //          01234567890123456789012345678901234567890
+    string b = "aaaaaaaa bbbbbb ccccc  dd         eeeee ffffff          ggggggg     hhhhhhhhhhhh  kkkk";
+    const char *word;
+    {
+        StringWordIter words(StringPiece(b.data(), 40), isspace, 0, StringWordIter::Flag::InPlace);
+        EXPECT_NE(nullptr, ((word = words.Next()))); EXPECT_EQ(0, strncmp(word, "aaaaaaaa", words.wordlen));
+        EXPECT_NE(nullptr, ((word = words.Next()))); EXPECT_EQ(0, strncmp(word, "bbbbbb",   words.wordlen));
+        EXPECT_NE(nullptr, ((word = words.Next()))); EXPECT_EQ(0, strncmp(word, "ccccc",    words.wordlen));
+        EXPECT_NE(nullptr, ((word = words.Next()))); EXPECT_EQ(0, strncmp(word, "dd",       words.wordlen));
+        EXPECT_NE(nullptr, ((word = words.Next()))); EXPECT_EQ(0, strncmp(word, "eeeee",    words.wordlen));
+        EXPECT_EQ(nullptr, ((word = words.Next())));
+    }
+    {
+        StringWordIter words(StringPiece(b.data(), 39), isspace, 0, StringWordIter::Flag::InPlace);
+        EXPECT_NE(nullptr, ((word = words.Next()))); EXPECT_EQ(0, strncmp(word, "aaaaaaaa", words.wordlen));
+        EXPECT_NE(nullptr, ((word = words.Next()))); EXPECT_EQ(0, strncmp(word, "bbbbbb",   words.wordlen));
+        EXPECT_NE(nullptr, ((word = words.Next()))); EXPECT_EQ(0, strncmp(word, "ccccc",    words.wordlen));
+        EXPECT_NE(nullptr, ((word = words.Next()))); EXPECT_EQ(0, strncmp(word, "dd",       words.wordlen));
+        EXPECT_NE(nullptr, ((word = words.Next()))); EXPECT_EQ(0, strncmp(word, "eeeee",    words.wordlen));
+        EXPECT_EQ(nullptr, ((word = words.Next())));
+    }
+    {
+        StringWordIter words(StringPiece(b.data(), 38), isspace, 0, StringWordIter::Flag::InPlace);
+        EXPECT_NE(nullptr, ((word = words.Next()))); EXPECT_EQ(0, strncmp(word, "aaaaaaaa", words.wordlen));
+        EXPECT_NE(nullptr, ((word = words.Next()))); EXPECT_EQ(0, strncmp(word, "bbbbbb",   words.wordlen));
+        EXPECT_NE(nullptr, ((word = words.Next()))); EXPECT_EQ(0, strncmp(word, "ccccc",    words.wordlen));
+        EXPECT_NE(nullptr, ((word = words.Next()))); EXPECT_EQ(0, strncmp(word, "dd",       words.wordlen));
+        EXPECT_NE(nullptr, ((word = words.Next()))); EXPECT_EQ(0, strncmp(word, "eeee",     words.wordlen));
+        EXPECT_EQ(nullptr, ((word = words.Next())));
+    }
 }
 
 TEST(BufferFileTest, Read) {

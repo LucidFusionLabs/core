@@ -165,8 +165,8 @@ struct CART {
         LocalFile names    (string(dir) + MatrixFile::Filename(name, "name",      "string", iteration), "w");
         LocalFile questions(string(dir) + MatrixFile::Filename(name, "questions", "matrix", iteration), "w");
 
-        MatrixFile::WriteHeader(&names,     basename(names.Filename(),0,0),     flagtext, tree.name.size(),     1);
-        MatrixFile::WriteHeader(&questions, basename(questions.Filename(),0,0), flagtext, tree.question.size(), 1);
+        MatrixFile::WriteHeader(&names,     BaseName(names.Filename()),     flagtext, tree.name.size(),     1);
+        MatrixFile::WriteHeader(&questions, BaseName(questions.Filename()), flagtext, tree.question.size(), 1);
 
         for (int i=0; i<tree.question.size(); i++) {
             const char *n = tree.name[i].c_str();

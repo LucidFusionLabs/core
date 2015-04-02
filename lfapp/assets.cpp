@@ -473,7 +473,7 @@ struct FFMpegAssetLoader : public AudioAssetLoader, public VideoAssetLoader, pub
     static AVFormatContext *Load(AVIOContext *pb, const string &filename, char *probe_buf, int probe_buflen, AVIOContext **pbOut=0) {
         AVProbeData probe_data;
         memzero(probe_data);
-        probe_data.filename = basename(filename.c_str(),0,0);
+        probe_data.filename = BaseName(filename);
 
         bool probe_buf_data = probe_buf && probe_buflen;
         if (probe_buf_data) {
@@ -723,7 +723,7 @@ struct AliasWavefrontObjLoader {
     string dir;
 
     Geometry *LoadOBJ(const string &filename, const float *map_tex_coord=0) {
-        dir.assign(filename, 0, dirnamelen(filename.c_str(), filename.size(), true));
+        dir.assign(filename, 0, DirNameLen(filename, true));
 
         LocalFile file(filename, "r");
         if (!file.Opened()) { ERROR("LocalFile::open(", file.Filename(), ")"); return 0; }
@@ -757,7 +757,7 @@ struct AliasWavefrontObjLoader {
             else if (!strcmp(cmd, "f")) {
                 vector<v3> face; 
                 for (const char *fi = word.Next(); fi; fi = word.Next()) {
-                    StringWordIter indexword(fi, 0, isint<'/'>);
+                    StringWordIter indexword(fi, isint<'/'>);
                     indexword.ScanN(ind, 3);
 
                     int count = (ind[0]!=0) + (ind[1]!=0) + (ind[2]!=0);

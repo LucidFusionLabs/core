@@ -158,7 +158,7 @@ extern "C" int main(int argc, const char *argv[]) {
 
     vector<string> atlas_font_size;
     Split(FLAGS_atlas_font_sizes, iscomma, &atlas_font_size);
-    FontEngine *freetype = Singleton<FreetypeFontEngine>::Get();
+    FontEngine *freetype = Singleton<FreeTypeFontEngine>::Get();
     for (int i=0; i<atlas_font_size.size(); i++) {
         int size = ::atoi(atlas_font_size[i].c_str());
         freetype->Init(FontDesc("DejaVuSans-Bold.ttf",           "sans-serif", size, Color::white, Color::clear, FontDesc::Bold));

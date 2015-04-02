@@ -394,17 +394,18 @@ template <class X> struct ArrayPiece {
 
 template <class X> struct StringPieceT : public ArrayPiece<X> {
     StringPieceT() {}
-    StringPieceT(const basic_string<X> &s) : ArrayPiece<X>(s.data(), s.size()) {}
-    StringPieceT(const X *b, int l)        : ArrayPiece<X>(b,        l)        {}
-    StringPieceT(const X *b)               : ArrayPiece<X>(b,        Len(b))   {}
+    StringPieceT(const basic_string<X> &s) : ArrayPiece<X>(s.data(), s.size())  {}
+    StringPieceT(const X *b, int l)        : ArrayPiece<X>(b,        l)         {}
+    StringPieceT(const X *b)               : ArrayPiece<X>(b,        Length(b)) {}
     basic_string<X> str() const {
         if (this->buf && this->len < 0) return this->buf;
         return this->buf ? basic_string<X>(this->buf, this->len) : basic_string<X>();
     }
     bool Done(const X* p) const { return (this->len >= 0 && p >= this->buf + this->len) || !*p; }
+    int Length() const { return this->len >= 0 ? this->len : Length(this->buf); }
     static StringPieceT<X> Unbounded (const X *b) { return StringPieceT<X>(b, -1); }
-    static StringPieceT<X> FromString(const X *b) { return StringPieceT<X>(b, b?Len(b):0); }
-    static size_t Len(const X *b) { const X *p=b; while(*p) p++; return p-b; }
+    static StringPieceT<X> FromString(const X *b) { return StringPieceT<X>(b, b?Length(b):0); }
+    static size_t Length(const X *b) { const X *p = b; while (*p) p++; return p - b; }
     static const X *Blank() { static X x[1] = {0}; return x; }
     static const X *Space() { static X x[2] = {' ',0}; return x; }
     static const X *NullSpelled() { static X x[7] = {'<','N','U','L','L','>',0}; return x; }
@@ -560,7 +561,6 @@ float Rand(float a, float b);
 template <class X> const X *BlankNull(const X *x) { return x ? x : StringPieceT<X>::Blank(); }
 template <class X> const X *SpellNull(const X *x) { return x ? x : StringPieceT<X>::NullSpelled(); }
 const char *Default(const char *x, const char *default_x);
-string TrimWhiteSpace(const string &s);
 string   ReplaceEmpty (const string   &in, const string   &replace_with);
 String16 ReplaceEmpty (const String16 &in, const string   &replace_with);
 String16 ReplaceEmpty (const String16 &in, const String16 &replace_with);
@@ -647,25 +647,25 @@ bool StringReplace(string *text, const string &needle, const string &replace);
 
 template <class X> void AccumulateAsciiDigit(X *v, unsigned char c) { *v = *v * 10 + (c - '0'); }
 template <class X> bool ArrayEquals(const X *x, const X *y, int l) { for (int i=0; i<l; i++) if (x[i] != y[i]) return false; return true; }
-template <class X> int isnl(const X *str);
-template <class X> int chompnl(X *str, int len);
-template <class X> int chompnl_len(const X *str, int len);
-int dirnamelen(const char  *text, int len=0, bool include_slash=false);
-int dirnamelen(const short *text, int len=0, bool include_slash=false);
-int basedir(const char *path, const char *cmp);
+template <class X> int IsNewline(const X *str);
+template <class X> int ChompNewline(X *str, int len);
+template <class X> int ChompNewlineLength(const X *str, int len);
+int DirNameLen(const StringPiece   &text, bool include_slash=false);
+int DirNameLen(const String16Piece &text, bool include_slash=false);
+int BaseDir(const char *path, const char *cmp);
 const char *ParseProtocol(const char *url, string *protO);
-const char  *basename   (const char  *text, int len=0, int *outlen=0);
-const char  *nextline   (const char  *text, int len=0, bool final=0, int *outlen=0);
-const short *nextline   (const short *text, int len=0, bool final=0, int *outlen=0);
-const char  *nextlineraw(const char  *text, int len=0, bool final=0, int *outlen=0);
-const short *nextlineraw(const short *text, int len=0, bool final=0, int *outlen=0);
-const char  *nextproto  (const char  *text, int len=0, bool final=0, int *outlen=0);
-template <class X>       X *nextchar(      X *text, int (*ischar)(int), int len=0, int *outlen=0);
-template <class X> const X *nextchar(const X *text, int (*ischar)(int), int len=0, int *outlen=0);
-template <class X>       X *nextchar(      X *text, int (*ischar)(int), int (*isquote)(int), int len=0, int *outlen=0);
-template <class X> const X *nextchar(const X *text, int (*ischar)(int), int (*isquote)(int), int len=0, int *outlen=0);
-template <class X> int  lengthchar(const X *text, int (*ischar)(int), int len=0);
-template <class X> int rlengthchar(const X *text, int (*ischar)(int), int len=0);
+const char  *BaseName   (const StringPiece   &text, int *outlen=0);
+const char  *NextLine   (const StringPiece   &text, bool final=0, int *outlen=0);
+const short *NextLine   (const String16Piece &text, bool final=0, int *outlen=0);
+const char  *NextLineRaw(const StringPiece   &text, bool final=0, int *outlen=0);
+const short *NextLineRaw(const String16Piece &text, bool final=0, int *outlen=0);
+const char  *NextProto  (const StringPiece   &text, bool final=0, int *outlen=0);
+template <class X>       X *NextChar(      X *text, int (*ischar)(int),                      int len=-1, int *outlen=0);
+template <class X> const X *NextChar(const X *text, int (*ischar)(int),                      int len=-1, int *outlen=0);
+template <class X>       X *NextChar(      X *text, int (*ischar)(int), int (*isquote)(int), int len=-1, int *outlen=0);
+template <class X> const X *NextChar(const X *text, int (*ischar)(int), int (*isquote)(int), int len=-1, int *outlen=0);
+template <class X> int  LengthChar(const StringPieceT<X> &text, int (*ischar)(int));
+template <class X> int RLengthChar(const StringPieceT<X> &text, int (*ischar)(int));
 
 int Split(const char   *in, int (*ischar)(int), string *left, string *right);
 int Split(const string &in, int (*ischar)(int), string *left, string *right);
@@ -889,7 +889,7 @@ struct File {
         NextRecord() { Reset(); }
         void Reset() { buf.clear(); buf_dirty = 0; buf_offset = file_offset = record_offset = record_len = 0; }
         void SetFileOffset(int v) { file_offset = v; buf_dirty = 1; }
-        typedef const char* (*NextRecordCB)(const char *, int, bool, int *);
+        typedef const char* (*NextRecordCB)(const StringPiece&, bool, int *);
         const char *GetNextRecord(File *f, int *offset, int *nextoffset, NextRecordCB cb); 
     } nr;
 
@@ -1000,27 +1000,28 @@ struct BufferFileLineIter : public Iter {
 };
 
 template <class X> struct StringLineIterT : public IterT<X> {
+    struct Flag { enum { BlankLines=1, InPlace=2 }; };
     const X *in;
     basic_string<X> buf;
     int len, linelen, offset, flag; bool first;
-    struct Flag { enum { BlankLines=1, InPlace=2 }; };
-    StringLineIterT(const X *B, int L=0, int F=0) : in(B), len(L), linelen(0), offset(0), flag(F), first(1) {}
-    StringLineIterT(const basic_string<X> &S, int F=0) : StringLineIterT(S.c_str(), S.size(), F) {}
-    StringLineIterT() : in(0), len(0), linelen(0), offset(-1), flag(0), first(0) {}
+    StringLineIterT(const StringPieceT<X> &B, int F=0) : in(B.buf), len(B.len), linelen(0), offset(0),  flag(F), first(1) {}
+    StringLineIterT()                                  : in(0),     len(0),     linelen(0), offset(-1), flag(0), first(0) {}
     const X *Next();
 };
 typedef StringLineIterT<char>  StringLineIter;
 typedef StringLineIterT<short> StringLine16Iter;
 
 template <class X> struct StringWordIterT : public IterT<X> {
+    struct Flag { enum { BlankLines=1, InPlace=2 }; };
     const X *in;
     basic_string<X> buf;
     int len, wordlen, offset, (*IsSpace)(int), (*IsQuote)(int), flag; 
-    struct Flag { enum { BlankLines=1, InPlace=2 }; };
-    StringWordIterT(const X *instr, int len=0, int (*IsSpace)(int)=0, int(*IsQuote)(int)=0, int Flag=0);
+    StringWordIterT(const StringPieceT<X> &B, int (*IsSpace)(int)=0, int(*IsQuote)(int)=0, int Flag=0);
     StringWordIterT() : in(0), len(0), wordlen(0), offset(0), IsSpace(0), flag(0) {};
+
     const X *Next();
     const X *Remaining();
+    void SkipSpace();
 };
 typedef StringWordIterT<char>  StringWordIter;
 typedef StringWordIterT<short> StringWord16Iter;
@@ -1049,7 +1050,7 @@ struct ArchiveIter : public Iter {
 
 template <class X, class Y> int Split(const X *in, int (*ischar)(int), int (*isquote)(int), vector<Y> *out) {
     out->clear(); if (!in) return 0;
-    StringWordIterT<X> words(in, 0, ischar, isquote);
+    StringWordIterT<X> words(in, ischar, isquote);
     for (const X *word = words.Next(); word; word = words.Next()) out->push_back(Scannable::Scan(Y(), word));
     return out->size();
 }
@@ -1064,7 +1065,7 @@ template <class X> int Split(const short    *in, int (*ischar)(int),            
 
 template <class X> int Split(const char   *in, int (*ischar)(int), int (*isquote)(int), set<X> *out) {
     out->clear(); if (!in) return 0;
-    StringWordIter words(in, 0, ischar, isquote);
+    StringWordIter words(in, ischar, isquote);
     for (const char *word = words.Next(); word; word = words.Next()) out->insert(Scannable::Scan(X(), word));
     return out->size();
 }

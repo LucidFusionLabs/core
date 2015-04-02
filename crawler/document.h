@@ -146,7 +146,7 @@ struct DocumentParser {
         ImageParser(DocumentParser *p, const string &url, Asset *t) : Parser(p, url), target(t) {}
         void Complete(const string &content_type) {
             if (!content.empty() && parent->Running(this)) {
-                string fn = basename(url.c_str(), 0, 0);
+                string fn = BaseName(url);
                 if      (MIMEType::Jpg(content_type) && !FileSuffix::Jpg(fn)) fn += ".jpg";
                 else if (MIMEType::Png(content_type) && !FileSuffix::Png(fn)) fn += ".png";
 
@@ -184,7 +184,7 @@ struct DocumentParser {
         Clear();
         doc->node->setURL(url);
         doc->node->setDomain(HTTP::HostURL(url.c_str()).c_str());
-        string urldir = url.substr(0, dirnamelen(url.c_str(), 0, 1));
+        string urldir = url.substr(0, DirNameLen(url, 1));
         doc->node->setBaseURI((urldir.size() >= 3 && urldir.substr(urldir.size()-3) == "://") ? url : urldir);
         Open(url, doc->node);
     }

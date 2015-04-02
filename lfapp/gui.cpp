@@ -126,7 +126,7 @@ void KeyboardGUI::AddHistory(const string &cmd) {
 int KeyboardGUI::WriteHistory(const string &dir, const string &name, const string &hdr) {
     if (!lastcmd.Size()) return 0;
     LocalFile history(dir + MatrixFile::Filename(name, "history", "string", 0), "w");
-    MatrixFile::WriteHeader(&history, basename(history.fn.c_str(),0,0), hdr, lastcmd.ring.count, 1);
+    MatrixFile::WriteHeader(&history, BaseName(history.fn), hdr, lastcmd.ring.count, 1);
     for (int i=0; i<lastcmd.ring.count; i++) StringFile::WriteRow(&history, lastcmd[-1-i]);
     return 0;
 }
@@ -242,7 +242,7 @@ TextGUI::LineTokenProcessor<X>::LineTokenProcessor(TextGUI::Line *l, int o, cons
 template <class X> void TextGUI::LineTokenProcessor<X>::ProcessUpdate() {
     int tokens = 0;
     if (!v.len) return;
-    StringWordIterT<X> word(v.buf, v.len, isspace, 0, StringWordIter::Flag::InPlace);
+    StringWordIterT<X> word(v, isspace, 0, StringWordIter::Flag::InPlace);
     for (const X *w = word.Next(); w; w = word.Next(), tokens++) {
         int start_offset = w - v.buf, end_offset = start_offset + word.wordlen;
         bool first = start_offset == 0, last = end_offset == v.len;
@@ -354,6 +354,7 @@ void TextGUI::DrawCursor(point p) {
 void TextGUI::UpdateToken(Line *L, int word_offset, int word_len, int update_type) {
     int url_offset = -1, font_height = font->Height();
     const BoxArray &glyphs = L->data->glyphs;
+    CHECK_LE(word_offset + word_len, glyphs.Size());
     string text = BoxRun(&glyphs[word_offset], word_len).Text();
     if      (PrefixMatch(text, "http://"))  url_offset = 7;
     else if (PrefixMatch(text, "https://")) url_offset = 8;
@@ -684,6 +685,9 @@ int Editor::UpdateLines(float v_scrolled, int *first_ind, int *first_offset, int
 
 /* Terminal */
 
+#define TerminalTrace(...) printf(__VA_ARGS__)
+#define TerminalDebug(...) ERRORf(__VA_ARGS__)
+
 void Terminal::Resized(const Box &b) {
     int old_term_width = term_width, old_term_height = term_height;
     term_width  = b.w / font->FixedWidth();
@@ -722,7 +726,7 @@ void Terminal::ResizedLeftoverRegion(int w, int h, bool update_fb) {
 }
 
 void Terminal::SetScrollRegion(int b, int e, bool release_fb) {
-    if (b<0 || e<0 || e>term_height || b>e) { ERROR(b, "-", e, " outside 1-", term_height); return; }
+    if (b<0 || e<0 || e>term_height || b>e) { TerminalDebug("%d-%d outside 1-%d", b, e, term_height); return; }
     int prev_region_beg = scroll_region_beg, prev_region_end = scroll_region_end, font_height = font->Height();
     scroll_region_beg = b;
     scroll_region_end = e;
@@ -780,7 +784,7 @@ void Terminal::Write(const string &s, bool update_fb, bool release_fb) {
         if (c == 0x18 || c == 0x1a) { /* CAN or SUB */ parse_state = State::TEXT; continue; }
         if (parse_state == State::ESC) {
             parse_state = State::TEXT; // default next state
-            // printf("ESC %c\n", c);
+            TerminalTrace("ESC %c\n", c);
             if (c >= '(' && c <= '/') {
                 parse_state = State::CHARSET;
                 parse_charset = c;
@@ -798,10 +802,10 @@ void Terminal::Write(const string &s, bool update_fb, bool release_fb) {
                 case '7': saved_term_cursor = term_cursor; break;
                 case '8': term_cursor = point(Clamp(saved_term_cursor.x, 1, term_width),
                                               Clamp(saved_term_cursor.y, 1, term_height));
-                default: ERRORf("unhandled escape %c (%02x)", c, c);
+                default: TerminalDebug("unhandled escape %c (%02x)", c, c);
             }
         } else if (parse_state == State::CHARSET) {
-            // INFOf("charset %c%c", parse_charset, c);
+            TerminalTrace("charset %c%c", parse_charset, c);
             parse_state = State::TEXT;
 
         } else if (parse_state == State::OSC) {
@@ -809,16 +813,16 @@ void Terminal::Write(const string &s, bool update_fb, bool release_fb) {
                 if (c == 0x1b) { parse_osc_escape = 1; continue; }
                 if (c != '\b') { parse_osc       += c; continue; }
             }
-            else if (c != 0x5c) { ERRORf("within-OSC-escape %c (%02x)", c, c); parse_state = State::TEXT; continue; }
+            else if (c != 0x5c) { TerminalDebug("within-OSC-escape %c (%02x)", c, c); parse_state = State::TEXT; continue; }
             parse_state = State::TEXT;
 
             if (0) {}
-            else INFO("unhandled OSC ", parse_osc);
+            else TerminalDebug("unhandled OSC %s", parse_osc.c_str());
 
         } else if (parse_state == State::CSI) {
             // http://en.wikipedia.org/wiki/ANSI_escape_code#CSI_codes
             if (c < 0x40 || c > 0x7e) { parse_csi += c; continue; }
-            // printf("CSI %s%c (cur=%d,%d)\n", parse_csi.c_str(), c, term_cursor.x, term_cursor.y);
+            TerminalTrace("CSI %s%c (cur=%d,%d)\n", parse_csi.c_str(), c, term_cursor.x, term_cursor.y);
             parse_state = State::TEXT;
 
             int parsed_csi=0, parse_csi_argc=0, parse_csi_argv[16];
@@ -869,7 +873,8 @@ void Terminal::Write(const string &s, bool update_fb, bool release_fb) {
                 case 'L': case 'M': {
                     int sl = (c == 'L' ? 1 : -1) * X_or_1(parse_csi_argv[0]);
                     if (clip && term_cursor.y < scroll_region_beg) {
-                        ERROR(term_cursor.DebugString(), " outside scroll region ", scroll_region_beg, "-", scroll_region_end);
+                        TerminalDebug("%s outside scroll region %d-%d",
+                                      term_cursor.DebugString().c_str(), scroll_region_beg, scroll_region_end);
                     } else {
                         int end_y = X_or_Y(scroll_region_end, term_height);
                         int flag = sl < 0 ? LineUpdate::PushBack : LineUpdate::PushFront;
@@ -894,7 +899,7 @@ void Terminal::Write(const string &s, bool update_fb, bool release_fb) {
                     else if (parse_csi_argv00 == '?' && mode ==   25) { cursor_enabled = true;        }
                     else if (parse_csi_argv00 == '?' && mode ==   47) { /* alternate screen buffer */ }
                     else if (parse_csi_argv00 == '?' && mode == 1049) { /* save screen */             }
-                    else ERROR("unhandled CSI-h mode = ", mode, " av00 = ", parse_csi_argv00, " i= ", intermed.str());
+                    else TerminalDebug("unhandled CSI-h mode = %d av00 = %d i= %s", mode, parse_csi_argv00, intermed.str().c_str());
                 } break;
                 case 'l': { // reset mode
                     int mode = parse_csi_argv[0];
@@ -904,7 +909,7 @@ void Terminal::Write(const string &s, bool update_fb, bool release_fb) {
                     else if (parse_csi_argv00 == '?' && mode ==   25) { cursor_enabled = false;              }
                     else if (parse_csi_argv00 == '?' && mode ==   47) { /* normal screen buffer */           }
                     else if (parse_csi_argv00 == '?' && mode == 1049) { /* restore screen */                 }
-                    else ERROR("unhandled CSI-l mode = ", mode, " av00 = ", parse_csi_argv00, " i= ", intermed.str());
+                    else TerminalDebug("unhandled CSI-l mode = %d av00 = %d i= %s", mode, parse_csi_argv00, intermed.str().c_str());
                 } break;
                 case 'm':
                     for (int i=0; i<parse_csi_argc; i++) {
@@ -924,15 +929,15 @@ void Terminal::Write(const string &s, bool update_fb, bool release_fb) {
                             case 25:        cursor.attr &= ~Attr::Blink;            break;
                             case 39:        Attr::SetFGColorIndex(&cursor.attr, 7); break;
                             case 49:        Attr::SetBGColorIndex(&cursor.attr, 0); break;
-                            default:        ERROR("unhandled SGR ", sgr);
+                            default:        TerminalDebug("unhandled SGR %d", sgr);
                         }
                     } break;
                 case 'r':
                     if (parse_csi_argc == 2) SetScrollRegion(parse_csi_argv[0], parse_csi_argv[1]);
-                    else ERROR("invalid scroll region", parse_csi_argc);
+                    else TerminalDebug("invalid scroll region argc %d", parse_csi_argc);
                     break;
                 default:
-                    ERRORf("unhandled CSI %s%c", parse_csi.c_str(), c);
+                    TerminalDebug("unhandled CSI %s%c", parse_csi.c_str(), c);
             }
         } else {
             // http://en.wikipedia.org/wiki/C0_and_C1_control_codes#C0_.28ASCII_and_derivatives.29
@@ -947,10 +952,10 @@ void Terminal::Write(const string &s, bool update_fb, bool release_fb) {
                 case '\x1b': parse_state = State::ESC;                         break;
                 case '\x14': case '\x15': case '\x7f':                         break; // shift charset in, out, delete
                 case '\n':   case '\v':   case '\f':   Newline();              break; // line feed, vertical tab, form feed
-                default:                               ERRORf("unhandled C0 control %02x", c);
+                default:                               TerminalDebug("unhandled C0 control %02x", c);
             } else if (0 && C1_control) {
                 if (0) {}
-                else ERRORf("unhandled C1 control %02x", c);
+                else TerminalDebug("unhandled C1 control %02x", c);
             } else {
                 parse_text += c;
             }

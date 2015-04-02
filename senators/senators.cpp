@@ -104,7 +104,7 @@ struct Senator : public Query {
         return 0;
     }
     int Read(Connection *c) {
-        StringLineIter iter(c->rb, c->rl);
+        StringLineIter iter(StringPiece(c->rb, c->rl));
         for (const char *line = iter.Next(); line; line = iter.Next()) {
             if (FLAGS_print) INFO("Senator ", nick, " read '", line, "'");
 

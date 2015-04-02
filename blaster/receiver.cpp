@@ -47,7 +47,7 @@ struct ReceiverConfig {
         for (const char *word, *line = f->NextLine(); line; line = f->NextLine()) {
             MailFilter filter;
 
-            StringWordIter words(line, f->nr.record_len, isspace, isint<'/'>);
+            StringWordIter words(StringPiece(line, f->nr.record_len), isspace, isint<'/'>);
             if (!(word = words.Next()) || !word[0] || word[0] == '#') continue;
             if      (!strcasecmp(word, "Catch-all")) { filter.type=MailFilter::DEFAULT; }
             else if (!strcasecmp(word, "mail-from")) { filter.type=MailFilter::MAIL_FROM; }
@@ -98,7 +98,7 @@ struct ReceiverConfig {
         if (!headers_end) return default_filter;
 
         int hlen = headers_end - mail.content.c_str(), hnlen;
-        for (const char *h = mail.content.c_str(); h; h = nextline(h, hlen-(h-mail.content.c_str()))) {
+        for (const char *h = mail.content.c_str(); h; h = NextLine(StringPiece(h, hlen-(h-mail.content.c_str())))) {
             if (!(hnlen = HTTP::headerNameLen(h))) continue;
             string hn = string(h, hnlen);
             const char *hv = h+hnlen+2;

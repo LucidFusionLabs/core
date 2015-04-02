@@ -367,7 +367,7 @@ int main(int argc, const char **argv) {
     if (exit) return app->Free();
 
 #ifdef _WIN32
-    string exedir(argv[0], dirnamelen(argv[0]));
+    string exedir(argv[0], DirNameLen(argv[0]));
     chdir(exedir.c_str());
 #endif
     return NTService::WrapMain(service_name, FusionServer, argc, argv);

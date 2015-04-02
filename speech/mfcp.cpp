@@ -58,7 +58,7 @@ int main(int argc, const char *argv[]) {
 
         /* write output */
         INFO("output = ", out);
-        if (mf.WriteBinary(out, basename(out,0,0))) { ERROR("write ", out); return -1; }
+        if (mf.WriteBinary(out, BaseName(out))) { ERROR("write ", out); return -1; }
     }
     else {
         /* open input */
@@ -75,7 +75,7 @@ int main(int argc, const char *argv[]) {
         INFO("output = ", out);
         LocalFile file(out, "w");
         if (!file.Opened()) { ERROR("LocalFile: ", strerror(errno)); return -1;  }
-        if (MatrixFile::WriteBinaryHeader(&file, basename(out,0,0), hdr.c_str(), M, N) < 0) { ERROR("writeBinaryHeader: ", -1); return -1; }
+        if (MatrixFile::WriteBinaryHeader(&file, BaseName(out), hdr.c_str(), M, N) < 0) { ERROR("writeBinaryHeader: ", -1); return -1; }
 
         /* read & write */
         double *row = (double *)alloca(N*sizeof(double));
