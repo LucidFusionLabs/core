@@ -1695,46 +1695,65 @@ StreamRegex::StreamRegex(const string &patternstr) {}
 int StreamRegex::Match(const string &text, vector<Regex::Result> *out, bool eof) { return 0; }
 #endif
 
+#ifdef  LFL_UNICODE_DEBUG
+#define UnicodeDebug(...) ERROR(__VA_ARGS__)
+#else
+#define UnicodeDebug(...)
+#endif
+
 #ifdef LFL_ICONV
 template <class X, class Y>
-int String::Convert(const X *in, int in_len, basic_string<Y> *out, const char *from, const char *to) {
+int String::Convert(const StringPieceT<X> &in, basic_string<Y> *out, const char *from, const char *to) {
     iconv_t cd = iconv_open(to, from);
     if (cd < 0) { ERROR("failed convert ", from, " to ", to); out->clear(); return 0; }
 
-    out->resize(in_len*4/sizeof(Y)+4);
-    char *inp = (char*)in, *top = (char*)out->data();
-    size_t in_remaining = in_len*sizeof(X), to_remaining = out->size()*sizeof(Y);
+    out->resize(in.len*4/sizeof(Y)+4);
+    char *inp = (char*)in.buf, *top = (char*)out->data();
+    size_t in_remaining = in.len*sizeof(X), to_remaining = out->size()*sizeof(Y);
     if (iconv(cd, &inp, &in_remaining, &top, &to_remaining) == -1)
     { /* ERROR("failed convert ", from, " to ", to); */ iconv_close(cd); out->clear(); return 0; }
     out->resize(out->size() - to_remaining/sizeof(Y));
     iconv_close(cd);
 
-    return in_len - in_remaining/sizeof(X);
+    return in.len - in_remaining/sizeof(X);
 }
 #else /* LFL_ICONV */
 template <class X, class Y>
-int String::Convert(const X *in, int in_len, basic_string<Y> *out, const char *from, const char *to) {
+int String::Convert(const StringPieceT<X> &in, basic_string<Y> *out, const char *from, const char *to) {
     if (strcmp(from, to)) ONCE(ERROR("conversion not supported.  copying.  #define LFL_ICONV"));
-    String::Copy(in, in_len, out);
-    return in_len;
+    String::Copy(in, out);
+    return in.len;
 }
 #endif /* LFL_ICONV */
-template int String::Convert<char,  short>(const string  &,   String16*, const char*, const char*);
-template int String::Convert<short, char >(const String16&,   string  *, const char*, const char*);
-template int String::Convert<char,  short>(const char *, int, String16*, const char*, const char*);
-template int String::Convert<short, char >(const short*, int, string  *, const char*, const char*);
-template int String::Convert<char,  char >(const char *, int, string  *, const char*, const char*);
-template int String::Convert<short, short>(const short*, int, String16*, const char*, const char*);
+template int String::Convert<char,  char >(const StringPiece  &, string  *, const char*, const char*);
+template int String::Convert<char,  short>(const StringPiece  &, String16*, const char*, const char*);
+template int String::Convert<short, char >(const String16Piece&, string  *, const char*, const char*);
+template int String::Convert<short, short>(const String16Piece&, String16*, const char*, const char*);
+
+String16 String::ToUTF16(const StringPiece &text, int *consumed) {
+    int input = text.Length(), output = 0, c_bytes, c;
+    String16 ret;
+    ret.resize(input);
+    const char *b = text.data(), *p = b;
+    for (; !text.Done(p); p += c_bytes, output++) {
+        ret[output] = UTF8::ReadGlyph(text, p, &c_bytes);
+        if (!c_bytes) break;
+    }
+    CHECK_LE(output, input);
+    if (consumed) *consumed = p - b;
+    ret.resize(output);
+    return ret;
+}
 
 String16 UTF16::WriteGlyph(int codepoint) { return String16(1, codepoint); }
-int UTF16::ReadGlyph(const String16Piece &s, const short *p, int *len) { *len=1; return *(const unsigned short *)p; }
-int UTF8 ::ReadGlyph(const StringPiece   &s, const char  *p, int *len) {
+int UTF16::ReadGlyph(const String16Piece &s, const short *p, int *len, bool eof) { *len=1; return *(const unsigned short *)p; }
+int UTF8 ::ReadGlyph(const StringPiece   &s, const char  *p, int *len, bool eof) {
     *len = 1;
     unsigned char c0 = *(const unsigned char *)p;
     if ((c0 & (1<<7)) == 0) return c0; // ascii
-    if ((c0 & (1<<6)) == 0) { ERROR("unexpected continuation byte"); return 0; }
+    if ((c0 & (1<<6)) == 0) { UnicodeDebug("unexpected continuation byte"); return c0; }
     for ((*len)++; *len < 4; (*len)++) {
-        if (s.Done(p + *len - 1)) { ERROR("unexpected end of string"); return 0; }
+        if (s.Done(p + *len - 1)) { BreakHook(); UnicodeDebug("unexpected end of string"); *len=eof; return c0; }
         if ((c0 & (1<<(7 - *len))) == 0) break;
     }
 
@@ -1742,19 +1761,20 @@ int UTF8 ::ReadGlyph(const StringPiece   &s, const char  *p, int *len) {
     if      (*len == 2) ret = c0 & 0x1f;
     else if (*len == 3) ret = c0 & 0x0f;
     else if (*len == 4) ret = c0 & 0x07;
-    else FATAL("invalid len ", *len);
+    else { UnicodeDebug("invalid len ", *len); *len=1; return c0; }
 
     for (int i = *len; i > 1; i--) {
         unsigned char c = *(const unsigned char *)++p;
-        if ((c & 0xc0) != 0x80) { ERROR("unexpected non-continuation byte"); return 0; }
+        if ((c & 0xc0) != 0x80) { UnicodeDebug("unexpected non-continuation byte"); *len=1; return c0; }
         ret = (ret << 6) | (c & 0x3f);
     }
     return ret;
 }
 string UTF8::WriteGlyph(int codepoint) {
 #if 1
-    short in[] = { (short)codepoint, 0 }; string out;
-    String::Convert(in, 1, &out, "UTF-16LE", "UTF-8");
+    string out;
+    short in[] = { (short)codepoint, 0 };
+    String::Convert(String16Piece(in, 1), &out, "UTF-16LE", "UTF-8");
     return out;
 #else
 #endif

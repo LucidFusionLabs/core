@@ -559,6 +559,7 @@ struct Terminal : public TextArea, public Drawable::AttrSource {
     virtual void Resized(const Box &b);
     virtual void ResizedLeftoverRegion(int w, int h, bool update_fb=true);
     virtual void SetScrollRegion(int b, int e, bool release_fb=false);
+    virtual void SetDimension(int w, int h);
     virtual void Draw(const Box &b, bool draw_cursor);
     virtual void Write(const string &s, bool update_fb=true, bool release_fb=true);
     virtual void Input(char k) {                       write(fd, &k, 1); }

@@ -685,14 +685,21 @@ int Editor::UpdateLines(float v_scrolled, int *first_ind, int *first_offset, int
 
 /* Terminal */
 
+#ifdef  LFL_TERMINAL_DEBUG
 #define TerminalTrace(...) printf(__VA_ARGS__)
 #define TerminalDebug(...) ERRORf(__VA_ARGS__)
+#else
+#define TerminalTrace(...)
+#define TerminalDebug(...)
+#endif
 
 void Terminal::Resized(const Box &b) {
     int old_term_width = term_width, old_term_height = term_height;
-    term_width  = b.w / font->FixedWidth();
-    term_height = b.h / font->Height();
+    SetDimension(b.w / font->FixedWidth(),
+                 b.h / font->Height());
+    TerminalDebug("Resized %d, %d <- %d, %d", term_width, term_height, old_term_width, old_term_height);
     bool grid_changed = term_width != old_term_width || term_height != old_term_height;
+
 #ifndef _WIN32
     if (grid_changed || first_resize) {
         struct winsize ws;
@@ -702,12 +709,11 @@ void Terminal::Resized(const Box &b) {
         ioctl(fd, TIOCSWINSZ, &ws);
     }
 #endif
-    if (first_resize && !(first_resize=0)) TextArea::Write(string(term_height, '\n'), 0);
-    else {
-        int height_dy = term_height - old_term_height;
-        if      (height_dy > 0) TextArea::Write(string(height_dy, '\n'), 0);
-        else if (height_dy < 0 && term_cursor.y < old_term_height) line.PopBack(-height_dy);
-    }
+
+    int height_dy = term_height - old_term_height;
+    if      (height_dy > 0) TextArea::Write(string(height_dy, '\n'), 0);
+    else if (height_dy < 0 && term_cursor.y < old_term_height) line.PopBack(-height_dy);
+
     term_cursor.x = min(term_cursor.x, term_width);
     term_cursor.y = min(term_cursor.y, term_height);
     UpdateCursor();
@@ -751,6 +757,12 @@ void Terminal::SetScrollRegion(int b, int e, bool release_fb) {
     for (int i =    prev_beg_or_1; i < scroll_beg_or_1; i++) cmd_fb.Update(GetTermLine(i),   point(0, GetCursorY(i)),   LinesFrameBuffer::Flag::NoLayout);
     for (int i = scroll_end_or_ht; i <  prev_end_or_ht; i++) cmd_fb.Update(GetTermLine(i+1), point(0, GetCursorY(i+1)), LinesFrameBuffer::Flag::NoLayout);
     if (release_fb) cmd_fb.fb.Release();
+}
+
+void Terminal::SetDimension(int w, int h) {
+    term_width  = w;
+    term_height = h;
+    if (!line.Size()) TextArea::Write(string(term_height, '\n'), 0);
 }
 
 const Drawable::Attr *Terminal::GetAttr(int attr) const {

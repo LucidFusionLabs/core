@@ -60,23 +60,9 @@ namespace DOM {
     struct DOMString : public basic_string<Char> {
         mutable int hash;
         int Hash() const { hash = fnv32(data(), size()); return hash; }
-
-        basic_string<Char> ToCharSet(const string   &s)     { basic_string<Char> v; String::Convert(s,   &v, Encoding<char> (), Encoding<Char>()); return v; }
-        basic_string<Char> ToCharSet(const String16 &s)     { basic_string<Char> v; String::Convert(s,   &v, Encoding<short>(), Encoding<Char>()); return v; }
-        basic_string<Char> ToCharSet(const char  *s, int n) { basic_string<Char> v; String::Convert(s,n, &v, Encoding<char> (), Encoding<Char>()); return v; }
-        basic_string<Char> ToCharSet(const short *s, int n) { basic_string<Char> v; String::Convert(s,n, &v, Encoding<short>(), Encoding<Char>()); return v; }
-
-        DOMString()                                                     :                                     hash(0) {}
-        DOMString(size_t n, Char c)                                     : basic_string<Char>(n,c),            hash(0) {}
-        DOMString(const DOMString           &s)                         : basic_string<Char>(s),              hash(0) {}
-        DOMString(const basic_string<char>  &s)                         : basic_string<Char>(ToCharSet(s)),   hash(0) {}
-        DOMString(const basic_string<short> &s)                         : basic_string<Char>(ToCharSet(s)),   hash(0) {}
-        DOMString(const char  *s)                                       : basic_string<Char>(ToCharSet(s)),   hash(0) {}
-        DOMString(const short *s)                                       : basic_string<Char>(ToCharSet(s)),   hash(0) {}
-        DOMString(const char  *s, size_t n)                             : basic_string<Char>(ToCharSet(s,n)), hash(0) {}
-        DOMString(const short *s, size_t n)                             : basic_string<Char>(ToCharSet(s,n)), hash(0) {}
-        DOMString(const basic_string<Char> &s, size_t o, size_t l=npos) : basic_string<Char>(s,o,l),          hash(0) {}
-        DOMString(const DOMString          &s, size_t o, size_t l=npos) : basic_string<Char>(s,o,l),          hash(0) {}
+        DOMString()                                                :                                     hash(0) {}
+        DOMString(size_t n, Char c)                                : basic_string<Char>(n,c),            hash(0) {}
+        DOMString(const DOMString     &s, size_t o, size_t l=npos) : basic_string<Char>(s,o,l),          hash(0) {}
     };
 }; }; // namespace LFL::DOM
 namespace LFL_STL_HASH_NAMESPACE {

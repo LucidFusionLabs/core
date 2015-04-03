@@ -683,10 +683,12 @@ void CoreTextFontEngine::GetSubstitutedFont(Font *f, CTFontRef ctfont, unsigned 
     CFArrayRef runs = CTLineGetGlyphRuns(line);
     CHECK_EQ(1, CFArrayGetCount(runs));
     CTRunRef run = (CTRunRef)CFArrayGetValueAtIndex(runs, 0);
-    CHECK_EQ(1, CTRunGetGlyphCount(run));
+    int glyphs = CTRunGetGlyphCount(run);
+    CHECK_GT(glyphs, 0);
+    if (glyphs != 1) ERROR("CoreTextFontEngine ", glyphs, " glyphs for codepoint ", glyph_id);
     if (id_out) {
         CGGlyph cgg;
-        CTRunGetGlyphs(run, CFRangeMake(0,0), &cgg);
+        CTRunGetGlyphs(run, CFRangeMake(0,1), &cgg);
         *id_out = cgg;
     }
     CFDictionaryRef run_attr = CTRunGetAttributes(run);

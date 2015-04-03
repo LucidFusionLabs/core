@@ -375,6 +375,7 @@ struct Texture : public Drawable {
     int LineSize() const { return width * PixelSize(); }
     int GLPixelType() const { return Pixel::OpenGLID(pf); }
     int GLTexType() const { return CubeMap::OpenGLID(cubemap); }
+    string DebugString() const { return StrCat("Texture(", width, ", ", height, ", ", Pixel::Name(pf), ")"); }
     void ClearGL();
     void RenewGL() { ClearGL(); Create(width, height); }
     void ClearBuffer() { if (buf_owner) delete [] buf; buf = 0; buf_owner = 1; }
