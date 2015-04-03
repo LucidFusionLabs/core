@@ -414,52 +414,49 @@ typedef StringPieceT<char> StringPiece;
 typedef StringPieceT<short> String16Piece;
 
 struct String {
-    static void Copy(const string   &in,   string *out) { *out = in; }
-    static void Copy(const String16 &in, String16 *out) { *out = in; }
-    template <class X, class Y> static void Append(const basic_string<X> &in, basic_string<Y> *out) { Copy(in.data(), in.size(), out, out->size()); }
-    template <class X, class Y> static void Copy(const basic_string<X> &in, basic_string<Y> *out, int offset=0) { return Copy(in.data(), in.size(), out, offset); }
-    template <class X, class Y> static void Copy(const X *in, int len, basic_string<Y> *out, int offset=0)
-    { out->resize(len + offset); for (int i=0; i<len; i++) (*out)[i + offset] = (Y)in[i]; }
+    template          <class Y> static void Copy(const string          &in, basic_string<Y> *out, int offset=0) { return Copy<char, Y>(in, out, offset); }
+    template          <class Y> static void Copy(const String16        &in, basic_string<Y> *out, int offset=0) { return Copy<short,Y>(in, out, offset); }
+    template <class X, class Y> static void Copy(const StringPieceT<X> &in, basic_string<Y> *out, int offset=0) {
+        out->resize(offset + in.len);
+        Y* o = &(*out)[offset];
+        for (const X *i = in.buf; !in.Done(i); /**/) *o++ = *i++;
+    }
+    template          <class Y> static void Append(const string          &in, basic_string<Y> *out) { return Append<char, Y>(in, out); }
+    template          <class Y> static void Append(const String16        &in, basic_string<Y> *out) { return Append<short,Y>(in, out); }
+    template <class X, class Y> static void Append(const StringPieceT<X> &in, basic_string<Y> *out) {
+        Copy(in.data(), out, out->size());
+    }
+    template          <class Y> static int Convert(const string          &in, basic_string<Y> *out, const char *fe, const char *te) { return Convert<char,  Y>(in, out, fe, te); }
+    template          <class Y> static int Convert(const String16        &in, basic_string<Y> *out, const char *fe, const char *te) { return Convert<short, Y>(in, out, fe, te); }
+    template <class X, class Y> static int Convert(const StringPieceT<X> &in, basic_string<Y> *out,
+                                                   const char *from_encoding, const char *to_encoding);
 
-    template <class X, class Y> static int
-        Convert(const X *in, int len,      basic_string<Y> *out, const char *from, const char *to);
-    template <class X>          static int
-        Convert(const basic_string<X> &in, basic_string<X> *out, const char *from, const char *to) {
-            if (!strcmp(from, to)) { *out = in; return in.size(); }
-            return Convert(in.data(), in.size(), out, from, to);
-        }
-    template <class X, class Y> static int
-        Convert(const basic_string<X> &in, basic_string<Y> *out, const char *from, const char *to)
-        { return Convert(in.data(), in.size(), out, from, to); }
-
-    static string   ToUTF8 (const char  *s, int l, int *lo=0) { if (lo) *lo=l; return string(s, l); }
-    static string   ToUTF8 (const short *s, int l, int *lo=0) { return ToUTF8(String16(s, l), lo); }
-    static string   ToUTF8 (const String16 &s, int *lo=0) { string v; int l=Convert(s, &v, "UTF-16LE", "UTF-8"); if (lo) *lo=l; return v; }
-    static string   ToUTF8 (const string   &s, int *lo=0) { if (lo) *lo=s.size(); return s; }
-    static String16 ToUTF16(const String16 &s, int *lo=0) { if (lo) *lo=s.size(); return s; }
-    static String16 ToUTF16(const string   &s, int *lo=0) { String16 v; int l=Convert(s, &v, "UTF-8", "UTF-16LE"); if (lo) *lo=l; return v; }
-    static string   ToAscii(const String16 &s, int *lo=0) { string v; int l=Convert(s, &v, "UCS-16LE", "US-ASCII"); if (lo) *lo=l; return v; }
-    static string   ToAscii(const string   &s, int *lo=0) { if (lo) *lo=s.size(); return s; }
+    static string   ToAscii(const StringPiece    &s, int *lo=0) { if (lo) *lo=s.size(); return s.str(); }
+    static string   ToAscii(const String16Piece  &s, int *lo=0) { string v; int l=Convert(s, &v, "UCS-16LE", "US-ASCII"); if (lo) *lo=l; return v; }
+    static string   ToUTF8 (const String16Piece  &s, int *lo=0) { string v; int l=Convert(s, &v, "UTF-16LE", "UTF-8");    if (lo) *lo=l; return v; }
+    static string   ToUTF8 (const StringPiece    &s, int *lo=0) { if (lo) *lo=s.size(); return s.str(); }
+    static String16 ToUTF16(const String16Piece  &s, int *lo=0) { if (lo) *lo=s.size(); return s.str(); }
+    static String16 ToUTF16(const StringPiece    &s, int *lo=0);
 };
 
 struct UTF8 {
     static string WriteGlyph(int codepoint);
-    static int ReadGlyph(const StringPiece   &s, const char  *p, int *l);
+    static int ReadGlyph(const StringPiece   &s, const char  *p, int *l, bool eof=0);
 };
 struct UTF16 {
     static String16 WriteGlyph(int codepoint);
-    static int ReadGlyph(const String16Piece &s, const short *p, int *l);
+    static int ReadGlyph(const String16Piece &s, const short *p, int *l, bool eof=0);
 };
 template <class X> struct UTF {};
 template <> struct UTF<char> {
     static string WriteGlyph(int codepoint) { return UTF8::WriteGlyph(codepoint); }
-    static int ReadGlyph(const StringPiece   &s, const char  *p, int *l) { return UTF8::ReadGlyph(s, p, l); }
-    static int ReadGlyph(const String16Piece &s, const short *p, int *l) { FATAL("not implemented"); }
+    static int ReadGlyph(const StringPiece   &s, const char  *p, int *l, bool eof=0) { return UTF8::ReadGlyph(s, p, l, eof); }
+    static int ReadGlyph(const String16Piece &s, const short *p, int *l, bool eof=0) { FATAL("no such thing as 16bit UTF-8"); }
 };
 template <> struct UTF<short> {
     static String16 WriteGlyph(int codepoint) { return UTF16::WriteGlyph(codepoint); }
-    static int ReadGlyph(const String16Piece &s, const short *p, int *l) { return UTF16::ReadGlyph(s, p, l); }
-    static int ReadGlyph(const StringPiece   &s, const char  *p, int *l) { FATAL("not implemented"); }
+    static int ReadGlyph(const String16Piece &s, const short *p, int *l, bool eof=0) { return UTF16::ReadGlyph(s, p, l, eof); }
+    static int ReadGlyph(const StringPiece   &s, const char  *p, int *l, bool eof=0) { FATAL("no such thing as 8bit UTF-16"); }
 };
 
 struct Flag {

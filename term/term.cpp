@@ -77,19 +77,33 @@ struct MyTerminalWindow {
     ~MyTerminalWindow() { if (process.in) app->scheduler.DelWaitForeverSocket(fileno(process.in)); }
 
     void Open() {
+        int fd = -1;
+#ifndef FUZZ_DEBUG
         setenv("TERM", "screen", 1);
         string shell = BlankNull(getenv("SHELL"));
         CHECK(!shell.empty());
         const char *av[] = { shell.c_str(), 0 };
         CHECK_EQ(process.OpenPTY(av), 0);
-        app->scheduler.AddWaitForeverSocket(fileno(process.in), SocketSet::READABLE, 0);
+        fd = fileno(process.out);
+        app->scheduler.AddWaitForeverSocket(fd, SocketSet::READABLE, 0);
+#endif
 
-        terminal = new Terminal(fileno(process.out), screen, Fonts::Get(FLAGS_default_font, "", font_size));
+        terminal = new Terminal(fd, screen, Fonts::Get(FLAGS_default_font, "", font_size));
         terminal->new_link_cb = MyNewLinkCB;
         terminal->hover_link_cb = MyHoverLinkCB;
         terminal->active = true;
-        terminal->term_width = 80;
-        terminal->term_height = 25;
+        terminal->SetDimension(80, 25);
+
+#ifdef FUZZ_DEBUG
+        for (int i=0; i<256; i++) {
+            INFO("fuzz i = ", i);
+            for (int j=0; j<256; j++)
+                for (int k=0; k<256; k++)
+                    terminal->Write(string(1, i), 1, 1);
+        }
+        terminal->Newline(1);
+        terminal->Write("Hello world.", 1, 1);
+#endif
     }
     void UpdateTargetFPS() {
         effects_mode.Set(CustomShader() || screen->console->animating);
@@ -102,7 +116,7 @@ struct MyTerminalWindow {
 int Frame(Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample, int flag) {
     MyTerminalWindow *tw = (MyTerminalWindow*)W->user1;
     tw->read_buf.Reset();
-    if (NBRead(fileno(tw->process.in), &tw->read_buf.data)) tw->terminal->Write(tw->read_buf.data);
+    if (tw->process.in && NBRead(fileno(tw->process.in), &tw->read_buf.data)) tw->terminal->Write(tw->read_buf.data);
 
     W->gd->DrawMode(DrawMode::_2D);
     tw->terminal->DrawWithShader(W->Box(), true, tw->activeshader);

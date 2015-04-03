@@ -19,6 +19,8 @@
 #ifndef __LFL_LFAPP_FLOW_H__
 #define __LFL_LFAPP_FLOW_H__
 
+#define FlowDebug(...) INFO(__VA_ARGS__)
+
 namespace LFL {
 
 struct FloatContainer : public Box {
@@ -254,12 +256,14 @@ struct Flow {
     template <class X> void AppendText(const StringPieceT<X> &text, int attr_id=0) {
         if (!attr_id) attr_id = out->attr.GetAttrId(cur_attr);
         out->data.reserve(out->data.size() + text.size());
-        int initial_out_lines = out->line.size(), line_start_ind = 0, c_bytes = 0, ci_bytes = 0, c;
+        int initial_out_lines = out->line.size(), line_start_ind = 0, c_bytes = 0, ci_bytes = 0, c, ci;
         for (const X *p = text.data(); !text.Done(p); p += c_bytes) {
-            if (!(c = UTF<X>::ReadGlyph(text, p, &c_bytes))) continue;
+            if (!(c = UTF<X>::ReadGlyph(text, p, &c_bytes, true))) FlowDebug("null glyph");
             if (AppendChar(c, attr_id, &PushBack(out->data, Drawable::Box())) == State::NEW_WORD) {
-                for (const X *pi=p; !text.Done(pi) && notspace(*pi); pi += ci_bytes)
-                    cur_word.len += cur_attr.font->GetGlyphWidth(UTF<X>::ReadGlyph(text, pi, &ci_bytes));
+                for (const X *pi=p; !text.Done(pi) && notspace(*pi); pi += ci_bytes) {
+                    if (!(ci = UTF<X>::ReadGlyph(text, pi, &ci_bytes, true))) FlowDebug("null glyph");
+                    cur_word.len += cur_attr.font->GetGlyphWidth(ci);
+                }
                 AppendChar(c, attr_id, &out->data.back());
             }
         }

@@ -77,15 +77,16 @@ struct HTMLParser {
     void Parse(const char *input_content, int input_content_len) {
         static const char *target_charset = LFL::DOM::Encoding<Char>();
         String charset_normalized_content;
-        if (charset.empty()) {
-            charset = "UTF-8";
-        }
-        ::LFL::String::Convert(input_content, input_content_len, &charset_normalized_content, charset.c_str(), target_charset);
-        const Char *content = charset_normalized_content.data();
-        int     content_len = charset_normalized_content.size();
+        if (charset.empty()) charset = "UTF-8";
+        bool convert_charset = charset != target_charset;
+        if (convert_charset)
+            ::LFL::String::Convert(StringPiece(input_content, input_content_len),
+                                   &charset_normalized_content, charset.c_str(), target_charset);
+        StringPiece content(convert_charset ? charset_normalized_content.data() : input_content,
+                            convert_charset ? charset_normalized_content.size() : input_content_len);
 
         static String comment_start="!--", comment_close="--", style_close="</style", script_close="</script";
-        for (const Char *p=content, *e=content+content_len; app->run && p<e; p++) {
+        for (const Char *p=content.buf, *e=content.buf+content.len; app->run && p<e; p++) {
             if (intag && text.size() == comment_start.size() && text == comment_start) { intag=0; incomment=1; text.clear(); }
             bool inspecial = inscript || instyle || incomment;
             if      (*p == '>' && instyle   && CloseSpecial(style_close,   &HTMLParser::Style,   1)) continue;
@@ -96,7 +97,7 @@ struct HTMLParser {
             text.append(1, *p);
         }
         if (text.size() && !intag && !inscript && !instyle && !incomment) { Text(text); text.clear(); }
-        ParseChunkCB(content, content_len);
+        ParseChunkCB(content.buf, content.len);
     }
 
     void Text(String &text) {
