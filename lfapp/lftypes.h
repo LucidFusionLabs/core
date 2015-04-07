@@ -454,45 +454,33 @@ template <class X> struct FlattenedArrayValues {
 };
 
 template <class X> struct ValueSet {
-    int i, c; X *d;
-    int Match(X x) { for (int j=0; j<c; j++) if (x == d[j]) return j; return -1; }
-    ValueSet(int n, ...) : i(0), c(n), d(new X[c]) { va_list ap; va_start(ap, n); for (int j=0; j<c; j++) d[j] = va_arg(ap, X); va_end(ap); }
-    ~ValueSet() { delete[] d; }
-    X Cur() { return d[i]; }
-    X Next() { i=(i+1)%c; return d[i]; }
-    bool Enabled() { return i!=0; }
-    void On() { i=1; }
-    void Off(){ i=0; }
+    int ind;
+    vector<X> data;
+    ValueSet(int n, ...) : ind(0), data(n)
+    { va_list ap; va_start(ap, n); for (auto &di : data) di = va_arg(ap, X); va_end(ap); }
+
+    X Cur() const { return data[ind]; }
+    bool Enabled() const { return ind != 0; }
+    int Match(X x) const { for (int i=0, n=data.size(); i<n; i++) if (x == data[i]) return i; return -1; }
+    X Next() { return data[(ind = (ind+1) % data.size())]; }
+    void On()  { ind = 1; }
+    void Off() { ind = 0; }
 };
 
-struct AnyBoolSet {
-    int count;
-    AnyBoolSet() : count(0) {}
-    bool Get() const { return count; }
-};
-
-struct AnyBoolElement {
-    AnyBoolSet *parent; bool val;
-    AnyBoolElement(AnyBoolSet *P, bool v=0) : parent(P), val(0) { Set(v); }
-    virtual ~AnyBoolElement() { Set(0); }
-    bool Get() const { return val; }
-    void Set(bool v) {
-        if (val == v) return;
-        if (v) parent->count++;
-        else   parent->count--;
-        val = v;
+struct Toggler {
+    enum { Default = 1, OneShot = 2 };
+    int mode;
+    bool *target;
+    Toggler(bool *T, int M=Default) : target(T), mode(M) {}
+    bool Toggle() {
+        if (*target && mode == OneShot) return false;
+        else { *target = !*target; return true; }
     }
 };
 
-struct ToggleBool {
-    enum { Default = 1, OneShot = 2 };
-    bool *toggle; int mode;
-    ToggleBool(bool *t, int m=Default) : toggle(t), mode(m) {}
-    bool Toggle() { if (*toggle && mode == OneShot) return false; *toggle = !*toggle; return true; }
-};
-
 struct ReallocHeap {
-    char *heap; int size, len;
+    char *heap;
+    int size, len;
     ~ReallocHeap(); 
     ReallocHeap(int startSize=65536);
     void Reset() { len=0; }
@@ -522,7 +510,8 @@ struct BitField {
 };
 
 struct BloomFilter {
-    int M, K; unsigned char *buf;
+    int M, K;
+    unsigned char *buf;
     ~BloomFilter() { free(buf); }
     BloomFilter(int m, int k, unsigned char *B) : M(m), K(k), buf(B) {}
     static BloomFilter *Empty(int M, int K) { int s=M/8+1; BloomFilter *bf = new BloomFilter(M, K, (unsigned char*)calloc(s, 1)); return bf; }

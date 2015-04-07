@@ -56,7 +56,7 @@ struct MyBrowserWindow : public GUI {
     forward(this, &menu_atlas1->FindGlyph(22)->tex, 0, "", MouseController::CB([&](){ browser->ForwardButton(); })),
     refresh(this, &menu_atlas2->FindGlyph(50)->tex, 0, "", MouseController::CB([&](){ browser->RefreshButton(); })),
     address_box(W, Fonts::Get(FLAGS_default_font, "", 12, Color::black)) {
-        address_box.SetToggleKey(0, ToggleBool::OneShot);
+        address_box.SetToggleKey(0, Toggler::OneShot);
         address_box.cmd_prefix.clear();
         address_box.deactivate_on_enter = true;
         address_box.runcb = [&](const string &t){ browser->Open(t); };
@@ -142,8 +142,8 @@ void MyWindowDefaults(LFL::Window *W) {
 
 extern "C" int main(int argc, const char *argv[]) {
     
-    app->frame_cb = Frame;
     app->logfilename = StrCat(LFAppDownloadDir(), "browser.txt");
+    screen->frame_cb = Frame;
     binds = new BindMap();
     MyWindowDefaults(screen);
     FLAGS_lfapp_video = FLAGS_lfapp_input = FLAGS_lfapp_network = 1;

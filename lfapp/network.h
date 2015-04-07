@@ -226,11 +226,12 @@ struct SelectSocketThread : public SocketSet {
     void Start() {
 #ifndef _WIN32
         CHECK_EQ(::pipe(pipe), 0);
+        Network::SetSocketBlocking(pipe[0], 0);
 #endif
         sockets.Add(pipe[0], SocketSet::READABLE, 0);
         thread.Start();
     }
-    void Wait() { thread.Wait(); }
+    void Wait() { Wakeup(); thread.Wait(); }
     void Wakeup() { char c=0; if (pipe[1] >= 0) CHECK_EQ((int)write(pipe[1], &c, 1), 1); }
     void ThreadProc();
 };

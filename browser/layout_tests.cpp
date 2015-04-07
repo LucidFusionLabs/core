@@ -82,8 +82,8 @@ int Frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample
 }
 
 extern "C" int main(int argc, const char *argv[]) {
-    
-    app->frame_cb = Frame;
+
+    screen->frame_cb = Frame;
     app->logfilename = StrCat(LFAppDownloadDir(), "layout_tests.txt");
     screen->caption = "layout_tests";
     screen->width = 800;

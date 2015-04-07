@@ -117,6 +117,7 @@ extern "C" {
 #if defined(LFL_IPHONE)
 extern "C" void iPhoneOpenBrowser(const char *url_text);
 #elif defined(__APPLE__)
+extern "C" void OSXStartWindow(void*);
 extern "C" void OSXTriggerFrame(void*);
 extern "C" void OSXUpdateTargetFPS(void*);
 extern "C" void OSXAddWaitForeverMouse(void*);
@@ -170,7 +171,7 @@ bool Running() { return app->run; }
 bool MainThread() { return Thread::GetId() == app->main_thread_id; }
 void RunInMainThread(Callback *cb) { app->message_queue.Write(MessageQueue::CallbackMessage, cb); }
 void Log(int level, const char *file, int line, const string &m) { app->Log(level, file, line, m); }
-void DefaultLFAppWindowClosedCB() { delete screen; }
+void DefaultLFAppWindowClosedCB(Window *W) { delete W; }
 double FPS() { return screen->fps.FPS(); }
 double CamFPS() { return app->camera.fps.FPS(); }
 void PressAnyKey() {
@@ -1753,7 +1754,7 @@ int UTF8 ::ReadGlyph(const StringPiece   &s, const char  *p, int *len, bool eof)
     if ((c0 & (1<<7)) == 0) return c0; // ascii
     if ((c0 & (1<<6)) == 0) { UnicodeDebug("unexpected continuation byte"); return c0; }
     for ((*len)++; *len < 4; (*len)++) {
-        if (s.Done(p + *len - 1)) { BreakHook(); UnicodeDebug("unexpected end of string"); *len=eof; return c0; }
+        if (s.Done(p + *len - 1)) { UnicodeDebug("unexpected end of string"); *len=eof; return c0; }
         if ((c0 & (1<<(7 - *len))) == 0) break;
     }
 
@@ -1985,12 +1986,20 @@ void Application::Log(int level, const char *file, int line, const string &messa
     if (FLAGS_lfapp_video && screen && screen->console) screen->console->Write(message);
 }
 
-void Application::CreateNewWindow() {
+void Application::CreateNewWindow(const function<void(Window*)> &start_cb) {
+    Window *orig_window = screen;
     Window *new_window = new Window();
     if (window_init_cb) window_init_cb(new_window);
+    app->video.CreateGraphicsDevice(new_window);
     CHECK(Window::Create(new_window));
     Window::MakeCurrent(new_window);
-    app->video.CreateGraphicsDevice();
+    app->video.InitGraphicsDevice(new_window);
+    app->input.Init(new_window);
+    start_cb(new_window);
+#ifdef LFL_OSXINPUT
+    OSXStartWindow(screen->id);
+#endif
+    Window::MakeCurrent(orig_window);
 }
 
 int Application::Create(int argc, const char **argv, const char *source_filename) {
@@ -2140,6 +2149,7 @@ int Application::Init() {
     if (FLAGS_lfapp_input) {
         INFO("lfapp_open: input_init()");
         if (input.Init()) { INFO("input init failed"); return -1; }
+        input.Init(screen);
     }
 
     if (FLAGS_lfapp_network) {
@@ -2166,9 +2176,9 @@ int Application::Init() {
         cuda.Init();
     }
 
-    app_time.GetTime(true);
-    frame_time.GetTime(true);
     scheduler.Init();
+    if (scheduler.monolithic_frame) frame_time.GetTime(true);
+    else                    screen->frame_time.GetTime(true);
     INFO("lfapp_open: succeeded");
     initialized = true;
     return 0;
@@ -2247,36 +2257,20 @@ int Application::PostFrame() {
 int Application::Frame() {
     if (!MainThread()) ERROR("Frame() called from thread ", Thread::GetId());
     scheduler.FrameWait();
-    unsigned clicks = frame_time.GetTime(true);
+    unsigned clicks = scheduler.monolithic_frame ? frame_time.GetTime(true) : screen->frame_time.GetTime(true);
 
     /* pre */
     bool cam_sample; unsigned mic_samples; int flag=0;
     PreFrame(clicks, &mic_samples, &cam_sample);
 
-    Window *previous_screen = screen;
-    for (auto i = Window::active.begin(); run && i != Window::active.end(); ++i) {
-        if (i->second->minimized) continue;
-        if (screen != i->second) Window::MakeCurrent(i->second);
-
-        if (FLAGS_lfapp_video) {
-            screen->gd->Clear();
-            screen->gd->LoadIdentity();
-        }
-
-        /* frame */
-        int ret = frame_cb ? frame_cb(screen, clicks, mic_samples, cam_sample, flag) : 0;
-        screen->ClearEvents();
-
-        /* allow app to skip frame */
-        if (ret < 0) continue;
-        screen->fps.Add(clicks);
-
-        if (FLAGS_lfapp_video) {
-            video.Swap();
-            screen->gd->DrawMode(screen->gd->default_draw_mode);
-        }
+    if (scheduler.monolithic_frame) {
+        Window *previous_screen = screen;
+        for (auto i = Window::active.begin(); run && i != Window::active.end(); ++i)
+            i->second->Frame(clicks, mic_samples, cam_sample, flag);
+        if (previous_screen && previous_screen != screen) Window::MakeCurrent(previous_screen);
+    } else {
+        screen->Frame(clicks, mic_samples, cam_sample, flag);
     }
-    if (previous_screen != screen) Window::MakeCurrent(previous_screen);
 
     /* post */
     PostFrame();
@@ -2329,10 +2323,11 @@ int Application::Exiting() {
 
 FrameScheduler::FrameScheduler() : maxfps(&FLAGS_target_fps), select_thread(&frame_mutex, &wait_mutex) {
 #ifdef LFL_OSXINPUT
-    rate_limit = synchronize_waits = wait_forever_thread = 0;
+    rate_limit = synchronize_waits = wait_forever_thread = monolithic_frame = 0;
 #endif
 }
 void FrameScheduler::Init() { 
+    screen->target_fps = FLAGS_target_fps;
     wait_forever = !FLAGS_target_fps;
     maxfps.timer.GetTime(true);
     if (wait_forever && synchronize_waits) frame_mutex.lock();
@@ -2388,7 +2383,12 @@ void FrameScheduler::Wakeup() {
     }
 }
 void FrameScheduler::UpdateTargetFPS(int fps) {
-    FLAGS_target_fps = fps;
+    screen->target_fps = fps;
+    if (monolithic_frame) {
+        int next_target_fps = 0;
+        for (const auto &w : Window::active) Max(&next_target_fps, w.second->target_fps);
+        FLAGS_target_fps = next_target_fps;
+    }
 #if defined(LFL_OSXINPUT)
     CHECK(screen->id);
     OSXUpdateTargetFPS(screen->id);
@@ -2720,13 +2720,20 @@ extern "C" LFApp        *GetLFApp()        { return LFL::app; }
 extern "C" int LFAppMain()                 { return LFL::app->Main(); }
 extern "C" int LFAppMainLoop()             { return LFL::app->MainLoop(); }
 extern "C" int LFAppFrame()                { return LFL::app->Frame(); }
+extern "C" const char *LFAppDownloadDir()  { return LFL::Singleton<LFL::DownloadDirectory>::Get()->text.c_str(); }
 extern "C" void Reshaped(int w, int h)     { LFL::screen->Reshaped(w, h); }
 extern "C" void Minimized()                { LFL::screen->Minimized(); }
 extern "C" void UnMinimized()              { LFL::screen->UnMinimized(); }
 extern "C" int  KeyPress  (int b, int d)                 { return LFL::app->input.KeyPress  (b, d); }
 extern "C" int  MouseClick(int b, int d, int x,  int y)  { return LFL::app->input.MouseClick(b, d, LFL::point(x, y)); }
 extern "C" int  MouseMove (int x, int y, int dx, int dy) { return LFL::app->input.MouseMove (LFL::point(x, y), LFL::point(dx, dy)); }
-extern "C" const char *LFAppDownloadDir() { return LFL::Singleton<LFL::DownloadDirectory>::Get()->text.c_str(); }
+extern "C" NativeWindow *SetNativeWindowByID(void *id) { return SetNativeWindow(LFL::FindOrNull(LFL::Window::active, id)); }
+extern "C" NativeWindow *SetNativeWindow(NativeWindow *W) {
+    CHECK(W);
+    if (W == LFL::screen) return W;
+    LFL::Window::MakeCurrent((LFL::screen = static_cast<LFL::Window*>(W)));
+    return W;
+}
 extern "C" void SetLFAppMainThread() {
     LFL::Thread::Id id = LFL::Thread::GetId();
     if (LFL::app->main_thread_id != id) INFOf("LFApp->main_thread_id changed from %llx to %llx", LFL::app->main_thread_id, id);

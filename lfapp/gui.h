@@ -28,7 +28,7 @@ struct GUI : public MouseController {
     Box box;
     Window *parent;
     BoxArray child_box;
-    ToggleBool toggle_active;
+    Toggler toggle_active;
     GUI(Window *W=0, const Box &B=Box()) : box(B), parent(W), toggle_active(&active)
     { if (parent) parent->mouse_gui.push_back(this); }
     virtual ~GUI() { if (parent) VectorEraseByValue(&parent->mouse_gui, this); }
@@ -211,7 +211,7 @@ struct Widget {
 struct KeyboardGUI : public KeyboardController {
     typedef function<void(const string &text)> RunCB;
     Window *parent;
-    ToggleBool toggle_active;
+    Toggler toggle_active;
     Bind toggle_bind;
     RunCB runcb;
     RingVector<string> lastcmd;
@@ -222,7 +222,7 @@ struct KeyboardGUI : public KeyboardController {
     virtual void Enable() { active = true; }
     virtual bool Toggle() { return toggle_active.Toggle(); }
     virtual void Run(string cmd) { if (runcb) runcb(cmd); }
-    virtual void SetToggleKey(int TK, int TM=ToggleBool::Default) { toggle_bind.key=TK; toggle_active.mode=TM; }
+    virtual void SetToggleKey(int TK, int TM=Toggler::Default) { toggle_bind.key=TK; toggle_active.mode=TM; }
 
     void AddHistory  (const string &cmd);
     int  ReadHistory (const string &dir, const string &name);

@@ -59,7 +59,7 @@ using namespace LFL;
 extern "C" int main(int argc, const char *argv[]) {
 
     app->logfilename = StrCat(LFAppDownloadDir(), "chess.txt");
-    app->frame_cb = Frame;
+    screen->frame_cb = Frame;
     screen->width = 630;
     screen->height = 570;
     screen->caption = "Chess";

@@ -968,6 +968,8 @@ struct IPhoneVideoModule : public Module {
 
 #ifdef LFL_OSXVIDEO
 extern "C" void OSXVideoSwap(void*);
+extern "C" void *OSXCreateWindow(int W, int H, struct NativeWindow *nw);
+extern "C" void OSXMakeWindowCurrent(void *O);
 extern "C" void OSXSetWindowSize(void*, int W, int H);
 struct OSXVideoModule : public Module {
     int Init() {
@@ -979,11 +981,13 @@ struct OSXVideoModule : public Module {
     }
 };
 bool Window::Create(Window *W) { 
-    CHECK(W->id);
-    Window::active[W->id] = W;
+    W->id = OSXCreateWindow(W->width, W->height, W);
+    if (W->id) Window::active[W->id] = W;
     return true; 
 }
-void Window::MakeCurrent(Window *W) { screen=W; }
+void Window::MakeCurrent(Window *W) { 
+    if (W) OSXMakeWindowCurrent((screen = W)->id);
+}
 void Window::Close(Window *W) {}
 #endif
 
@@ -1057,7 +1061,7 @@ void Window::Close(Window *W) {
     bool done = Window::active.empty();
     if (done) app->shell.quit(vector<string>());
     if (!done) glfwDestroyWindow((GLFWwindow*)W->id);
-    if (app->window_closed_cb) app->window_closed_cb();
+    if (app->window_closed_cb) app->window_closed_cb(W);
     screen = 0;
 }
 #endif
@@ -1116,7 +1120,7 @@ void Window::Close(Window *W) {
         SDL_GL_DeleteContext(W->gl);
     }
     SDL_DestroyWindow((SDL_Window*)W->id);
-    if (app->window_closed_cb) app->window_closed_cb();
+    if (app->window_closed_cb) app->window_closed_cb(W);
     screen = 0;
 }
 #endif /* LFL_SDLVIDEO */
@@ -1145,8 +1149,8 @@ int Video::Init() {
     if ((glew_err = glewInit()) != GLEW_OK) { ERROR("glewInit: ", glewGetErrorString(glew_err)); return -1; }
 #endif
 
-    if (!screen->gd) CreateGraphicsDevice();
-    InitGraphicsDevice();
+    if (!screen->gd) CreateGraphicsDevice(screen);
+    InitGraphicsDevice(screen);
 
     INFO("OpenGL Version: ", SpellNull((const char *)glGetString(GL_VERSION)));
     INFO("OpenGL Vendor: ",  SpellNull((const char *)glGetString(GL_VENDOR)));
@@ -1167,36 +1171,34 @@ int Video::Init() {
     return 0;
 }
 
-void Video::CreateGraphicsDevice() {
-    CHECK(!screen->gd);
+void Video::CreateGraphicsDevice(Window *W) {
+    CHECK(!W->gd);
 #ifndef LFL_HEADLESS
 #ifdef LFL_GLES2
 #if !defined(LFL_IPHONE) && !defined(LFL_ANDROID)
-    screen->opengles_version = FLAGS_request_gles_version;
+    W->opengles_version = FLAGS_request_gles_version;
 #endif
-    if (screen->opengles_version == 2) screen->gd = new OpenGLES2();
+    if (W->opengles_version == 2) W->gd = new OpenGLES2();
     else
 #endif /* LFL_GLES2 */
-    screen->gd = new OpenGLES1();
+    W->gd = new OpenGLES1();
 #endif /* LFL_HEADLESS */
 }
 
-void Video::InitGraphicsDevice() {
-    screen->gd->Init();
-    screen->gd->ViewPort(screen->Box());
-    screen->gd->DrawMode(screen->gd->default_draw_mode);
+void Video::InitGraphicsDevice(Window *W) {
+    W->gd->Init();
+    W->gd->ViewPort(W->Box());
+    W->gd->DrawMode(W->gd->default_draw_mode);
 
     float pos[]={-.5,1,-.3f,0}, grey20[]={.2f,.2f,.2f,1}, white[]={1,1,1,1}, black[]={0,0,0,1};
-    screen->gd->EnableLight(0);
-    screen->gd->Light(0, GraphicsDevice::Position, pos);
-    screen->gd->Light(0, GraphicsDevice::Ambient,  grey20);
-    screen->gd->Light(0, GraphicsDevice::Diffuse,  white);
-    screen->gd->Light(0, GraphicsDevice::Specular, white);
-    screen->gd->Material(GraphicsDevice::Emission, black);
-    screen->gd->Material(GraphicsDevice::Specular, grey20);
-
-    INFO("opengl_init: width=", screen->width, ", height=", screen->height,
-         ", opengles_version: ", screen->opengles_version);
+    W->gd->EnableLight(0);
+    W->gd->Light(0, GraphicsDevice::Position, pos);
+    W->gd->Light(0, GraphicsDevice::Ambient,  grey20);
+    W->gd->Light(0, GraphicsDevice::Diffuse,  white);
+    W->gd->Light(0, GraphicsDevice::Specular, white);
+    W->gd->Material(GraphicsDevice::Emission, black);
+    W->gd->Material(GraphicsDevice::Specular, grey20);
+    INFO("opengl_init: width=", W->width, ", height=", W->height, ", opengles_version: ", W->opengles_version);
 }
 
 void Video::InitFonts() {
@@ -1268,6 +1270,29 @@ void Window::SwapAxis() {
     FLAGS_rotate_view = FLAGS_rotate_view ? 0 : -90;
     FLAGS_swap_axis = FLAGS_rotate_view != 0;
     Reshaped(height, width);
+}
+
+void Window::Frame(unsigned clicks, unsigned mic_samples, bool cam_sample, int flag) {
+    if (minimized) return;
+    if (screen != this) Window::MakeCurrent(this);
+
+    if (FLAGS_lfapp_video) {
+        gd->Clear();
+        gd->LoadIdentity();
+    }
+
+    /* frame */
+    int ret = frame_cb ? frame_cb(screen, clicks, mic_samples, cam_sample, flag) : 0;
+    ClearEvents();
+
+    /* allow app to skip frame */
+    if (ret < 0) return;
+    fps.Add(clicks);
+
+    if (FLAGS_lfapp_video) {
+        app->video.Swap();
+        gd->DrawMode(gd->default_draw_mode);
+    }
 }
 
 int Depth::OpenGLID(int id) {

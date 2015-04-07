@@ -162,12 +162,16 @@ struct MouseController {
     virtual int Input(InputEvent::Id, const point &p, int down, int flag);
 };
 
-struct Input : public Module {
+struct InputModule : public Module {
+    virtual int Init(Window *w) { return 0; }
+};
+
+struct Input : public InputModule {
     bool left_shift_down=0, right_shift_down=0, left_ctrl_down=0, right_ctrl_down=0;
     bool left_cmd_down=0, right_cmd_down=0, mouse_but1_down=0, mouse_but2_down=0;
     vector<Callback> queued_input;
     mutex queued_input_mutex;
-    Module *impl=0;
+    InputModule *impl=0;
 
     void QueueKey(int key, bool down) {
         ScopedMutex sm(queued_input_mutex);
@@ -181,9 +185,9 @@ struct Input : public Module {
         ScopedMutex sm(queued_input_mutex);
         queued_input.push_back(bind([&](){ MouseMove(p, d); }));
     }
-    void QueueMouseWheel(int dw) {
+    void QueueMouseWheel(const point &p, const point &d) {
         ScopedMutex sm(queued_input_mutex);
-        queued_input.push_back(bind([&](){ MouseWheel(dw); }));
+        queued_input.push_back(bind([&](){ MouseWheel(p, d); }));
     }
     
     bool ShiftKeyDown() const { return left_shift_down || right_shift_down; }
@@ -193,6 +197,7 @@ struct Input : public Module {
     bool MouseButton2Down() const { return mouse_but2_down; }
 
     int Init();
+    int Init(Window*);
     int Frame(unsigned time);
     int DispatchQueuedInput();
 
@@ -200,7 +205,7 @@ struct Input : public Module {
     int  KeyEventDispatch(InputEvent::Id event, bool down);
 
     int  MouseMove(const point &p, const point &d);
-    int  MouseWheel(int dw);
+    int  MouseWheel(const point &p, const point &d);
     int  MouseClick(int button, bool down, const point &p);
     int  MouseEventDispatch(InputEvent::Id event, const point &p, int down);
 

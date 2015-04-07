@@ -75,7 +75,7 @@ using namespace LFL;
 extern "C" int main(int argc, const char *argv[]) {
 
     app->logfilename = StrCat(LFAppDownloadDir(), "crawler.txt");
-    app->frame_cb = Frame;
+    screen->frame_cb = Frame;
     screen->caption = "crawler";
     FLAGS_lfapp_network = 1;
 #ifdef _WIN32

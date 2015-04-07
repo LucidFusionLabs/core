@@ -620,7 +620,7 @@ struct StatusGUI : public HTTPServer::Resource {
 
 extern "C" {
 int main(int argc, const char **argv) {
-    app->frame_cb = frame;
+    screen->frame_cb = frame;
     app->logfilename = StrCat(LFAppDownloadDir(), "blaster.txt");
     FLAGS_max_rlimit_core = FLAGS_max_rlimit_open_files = 1;
     FLAGS_lfapp_network = 1;
