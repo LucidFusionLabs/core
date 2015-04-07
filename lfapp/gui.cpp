@@ -61,6 +61,7 @@ Window *Window::Get(void *id) { return FindOrNull(Window::active, id); }
 Window::Window() : caption("lfapp"), fps(128) {
     id = gl = surface = glew_context = user1 = user2 = user3 = 0;
     minimized = cursor_grabbed = 0;
+    target_fps = FLAGS_target_fps;
     opengles_version = 1;
     opengles_cubemap = 0;
     width = 640; height = 480;
@@ -1985,7 +1986,7 @@ class QTWebKitBrowser : public QObject, public BrowserInterface {
             if (true) VideoResampler::RGB2BGRCopyPixels(buf+dst_ind, in+src_ind, mw, bpp);
             else                                 memcpy(buf+dst_ind, in+src_ind, mw*bpp);
         }
-        asset->tex.UpdateGL(0, my, asset->tex.width, dirtyRect.height());
+        asset->tex.UpdateGL(Box(0, my, asset->tex.width, dirtyRect.height()));
     }
 };
 

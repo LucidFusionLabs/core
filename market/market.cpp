@@ -147,7 +147,7 @@ using namespace LFL;
 
 extern "C" int main(int argc, const char *argv[]) {
 
-    app->frame_cb = Frame;
+    screen->frame_cb = Frame;
     app->logfilename = StrCat(LFAppDownloadDir(), "market.txt");
     screen->caption = "Market";
     screen->width = 640;

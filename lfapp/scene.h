@@ -59,8 +59,9 @@ struct Entity {
     Entity(const v3 &p, const v3 &v)              : pos(p), vel(v) {}
     Entity(const v3 &p, const v3 &o, const v3 &u) : pos(p), ort(o), up(u) {}
 
+    v3 Right() const { v3 r = v3::Cross(ort, up); r.Norm(); return r; }
+    void Look() const { v3 targ = pos; targ.Add(ort); screen->gd->LookAt(pos, targ, up); }
     void SetName(const string &n) { name=n; namehash=fnv32(n.c_str()); }
-    void Look() { v3 targ = pos; targ.Add(ort); screen->gd->LookAt(pos, targ, up); }
 
     void MoveUp   (unsigned t) { AddUp   (t/ 1000.0*FLAGS_ksens); }
     void MoveDown (unsigned t) { AddUp   (t/-1000.0*FLAGS_ksens); }
@@ -75,42 +76,20 @@ struct Entity {
     void PitchDown(unsigned t) { RotRight(t/ 1000.0*FLAGS_msens*FLAGS_invert); }
     void PitchUp  (unsigned t) { RotRight(t/-1000.0*FLAGS_msens*FLAGS_invert); }
 
-    void AddUp   (float f) { v3 u = up;  u.Scale(f); pos.Add(u); }
-    void AddOrt  (float f) { v3 s = ort; s.Scale(f); pos.Add(s); }
-    void AddRight(float f) { v3 r = v3::Cross(ort, up); r.Scale( f); pos.Add(r); }
-    void RotOrt  (float f) { m33 m = m33::RotAxis(f, ort); up = m.Transform(up); }
-    void RotUp   (float f) { m33 m = m33::RotAxis(f, up); ort = m.Transform(ort); }
-    void RotRight(float f) { v3 r = v3::Cross(ort, up); r.Norm(); m33 m = m33::RotAxis(f, r); up = m.Transform(up); ort = m.Transform(ort); }
+    void AddUp   (float f) { v3 u = up;      u.Scale(f); pos.Add(u); }
+    void AddOrt  (float f) { v3 s = ort;     s.Scale(f); pos.Add(s); }
+    void AddRight(float f) { v3 r = Right(); r.Scale(f); pos.Add(r); }
+    void RotUp   (float f) { m33 m = m33::RotAxis(f, up);      ort = m.Transform(ort); }
+    void RotOrt  (float f) { m33 m = m33::RotAxis(f, ort);     up  = m.Transform(up); }
+    void RotRight(float f) { m33 m = m33::RotAxis(f, Right()); up  = m.Transform(up); ort = m.Transform(ort); }
 
     static bool ZSort(const Entity *l, const Entity *r) { return l->zsort > r->zsort; }
 };
 
 struct Scene {
-    typedef map<string, Entity*> EntityMap;
-    EntityMap entityMap;
-
     typedef vector<Entity*> EntityVector;
+    typedef map<string, Entity*> EntityMap;
     typedef map<string, EntityVector> EntityAssetMap;
-    EntityAssetMap assetMap;
-
-    EntityVector zsortVector;
-
-    Entity *Get(const string &n) { return FindOrNull(entityMap, n); }
-    Entity *Add(Entity *e) { return Add(e->name, e); }
-    Entity *Add(const string &name, Entity *);
-    bool ChangeAsset(const string &entity_name, Asset *new_asset);
-    bool ChangeAsset(Entity *e, Asset *new_asset);
-    void Del(const string &name);
-    void Del(const EntityVector &vec);
-
-    static void Select(const Asset *);
-    static void Select(Geometry *);
-    static void Select();
-
-    static void Draw(Asset *a, Entity*);
-    static void Draw(const Geometry *a, Entity*, int start_vert=0, int num_verts=0);
-    static void DrawParticles(Entity *e, unsigned dt);
-
     struct Filter { virtual bool filter(Entity *e) = 0; };
     struct EntityFilter : public Filter {
         Entity *entity;
@@ -130,6 +109,26 @@ struct Scene {
             return true;
         }
     };
+
+    EntityMap entityMap;
+    EntityAssetMap assetMap;
+    EntityVector zsortVector;
+
+    Entity *Get(const string &n) { return FindOrNull(entityMap, n); }
+    Entity *Add(Entity *e) { return Add(e->name, e); }
+    Entity *Add(const string &name, Entity *);
+    bool ChangeAsset(const string &entity_name, Asset *new_asset);
+    bool ChangeAsset(Entity *e, Asset *new_asset);
+    void Del(const string &name);
+    void Del(const EntityVector &vec);
+
+    static void Select(const Asset *);
+    static void Select(Geometry *);
+    static void Select();
+
+    static void Draw(Asset *a, Entity*);
+    static void Draw(const Geometry *a, Entity*, int start_vert=0, int num_verts=0);
+    static void DrawParticles(Entity *e, unsigned dt);
 
     void Draw(vector<Asset> *assets);
     void Draw(Asset *a, Filter *filter=0);

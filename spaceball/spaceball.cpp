@@ -612,7 +612,7 @@ using namespace LFL;
 extern "C" int main(int argc, const char *argv[]) {
 
     app->logfilename = StrCat(LFAppDownloadDir(), "spaceball.txt");
-    app->frame_cb = Frame;
+    screen->frame_cb = Frame;
 #if defined(LFL_ANDROID) || defined(LFL_IPHONE)
     FLAGS_target_fps = 30;
     screen->width = 420;

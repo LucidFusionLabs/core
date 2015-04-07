@@ -45,7 +45,7 @@ using namespace LFL;
 extern "C" int main(int argc, const char *argv[]) {
 
     app->logfilename = StrCat(LFAppDownloadDir(), "$BINNAME.txt");
-    app->frame_cb = Frame;
+    screen->frame_cb = Frame;
     screen->width = 420;
     screen->height = 380;
     screen->caption = "$PKGNAME";

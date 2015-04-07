@@ -45,7 +45,7 @@ using namespace LFL;
 extern "C" int main(int argc, const char *argv[]) {
 
     app->logfilename = StrCat(LFAppDownloadDir(), "editor.txt");
-    app->frame_cb = Frame;
+    screen->frame_cb = Frame;
     screen->width = 840;
     screen->height = 760;
     screen->caption = "Editor";

@@ -32,7 +32,6 @@ extern FlagOfType<string> FLAGS_default_font_;
 Scene scene;
 BindMap *binds;
 Shader warpershader;
-AnyBoolSet effects_mode;
 Browser *image_browser;
 
 void MyNewLinkCB(TextArea::Link *link) {
@@ -71,9 +70,9 @@ struct MyTerminalWindow {
     Terminal *terminal=0;
     Shader *activeshader;
     int font_size;
-    AnyBoolElement effects_mode;
+    bool effects_mode=0;
 
-    MyTerminalWindow() : read_buf(65536), activeshader(&app->video.shader_default), font_size(FLAGS_default_font_size), effects_mode(&LFL::effects_mode) {}
+    MyTerminalWindow() : read_buf(65536), activeshader(&app->video.shader_default), font_size(FLAGS_default_font_size) {}
     ~MyTerminalWindow() { if (process.in) app->scheduler.DelWaitForeverSocket(fileno(process.in)); }
 
     void Open() {
@@ -106,8 +105,8 @@ struct MyTerminalWindow {
 #endif
     }
     void UpdateTargetFPS() {
-        effects_mode.Set(CustomShader() || screen->console->animating);
-        int target_fps = effects_mode.Get() ? FLAGS_peak_fps : 0;
+        effects_mode = CustomShader() || screen->console->animating;
+        int target_fps = effects_mode ? FLAGS_peak_fps : 0;
         if (target_fps != FLAGS_target_fps) app->scheduler.UpdateTargetFPS(target_fps);
     }
     bool CustomShader() const { return activeshader != &app->video.shader_default; }
@@ -162,23 +161,23 @@ void MyInitFonts() {
     Singleton<AtlasFontEngine>::Get()->Init(FontDesc(console_font, "", 32));
     FLAGS_console_font = StrCat("atlas://", console_font);
 }
-void MyWindowOpen() {
-    ((MyTerminalWindow*)screen->user1)->Open();
-    screen->console->animating_cb = bind(&MyConsoleAnimating, screen);
-}
+
 void MyWindowInitCB(Window *W) {
     W->width = 80*10;
     W->height = 25*17;
     W->caption = "Terminal";
+    W->frame_cb = Frame;
     W->binds = binds;
-    W->user1 = new MyTerminalWindow();
-    if (app->initialized) {
-        screen->InitConsole();
-        MyWindowOpen();
-    }
 }
-void MyWindowClosedCB() {
-    delete (MyTerminalWindow*)screen->user1;
+void MyWindowStartCB(Window *W) {
+    W->InitConsole();
+    W->user1 = new MyTerminalWindow();
+    ((MyTerminalWindow*)W->user1)->Open();
+    W->console->animating_cb = bind(&MyConsoleAnimating, screen);
+    W->input_bind.push_back(W->binds);
+}
+void MyWindowClosedCB(Window *W) {
+    delete (MyTerminalWindow*)W->user1;
 }
 
 }; // naemspace LFL
@@ -187,7 +186,6 @@ using namespace LFL;
 extern "C" int main(int argc, const char *argv[]) {
 
     app->logfilename = StrCat(LFAppDownloadDir(), "term.txt");
-    app->frame_cb = Frame;
     binds = new BindMap();
     MyWindowInitCB(screen);
     FLAGS_target_fps = 0;
@@ -209,8 +207,8 @@ extern "C" int main(int argc, const char *argv[]) {
     } else if (FLAGS_font_engine == "atlas") {
         FLAGS_default_font = "VeraMoBd.ttf";
         FLAGS_default_missing_glyph = 42;
+        // FLAGS_default_font_size = 32;
     }
-    FLAGS_default_font_size = 32;
     FLAGS_atlas_font_sizes = "32";
 
     if (app->Init()) { app->Free(); return -1; }
@@ -222,8 +220,8 @@ extern "C" int main(int argc, const char *argv[]) {
 
     binds->Add(Bind('=', Key::Modifier::Cmd, Bind::CB(bind(&MyIncreaseFontCmd, vector<string>()))));
     binds->Add(Bind('-', Key::Modifier::Cmd, Bind::CB(bind(&MyDecreaseFontCmd, vector<string>()))));
-    binds->Add(Bind('n', Key::Modifier::Cmd, Bind::CB(bind(&Application::CreateNewWindow, app))));
-    binds->Add(Bind('6', Key::Modifier::Cmd, Bind::CB(bind([&](){ screen->console->Toggle(); }))));
+    binds->Add(Bind('n', Key::Modifier::Cmd, Bind::CB(bind(&Application::CreateNewWindow, app, &MyWindowStartCB))));
+    binds->Add(Bind('6', Key::Modifier::Cmd, Bind::CB(bind([&](){ Window::Get()->console->Toggle(); }))));
 
     string lfapp_vertex_shader = LocalFile::FileContents(StrCat(ASSETS_DIR, "lfapp_vertex.glsl"));
     string warper_shader = LocalFile::FileContents(StrCat(ASSETS_DIR, "warper.glsl"));
@@ -231,8 +229,9 @@ extern "C" int main(int argc, const char *argv[]) {
                    "#define TEX2D\n#define VERTEXCOLOR\n", &warpershader);
 
     image_browser = new Browser();
-    MyWindowOpen();
-    MyTerminalWindow *tw = (MyTerminalWindow*)screen->user1;
+    MyTerminalWindow *tw = new MyTerminalWindow();
+    screen->user1 = tw;
+    tw->Open();
     SetFontSize(tw->font_size);
     tw->terminal->Draw(screen->Box(), false);
     INFO("Starting Terminal ", FLAGS_default_font, " (w=", tw->terminal->font->fixed_width,

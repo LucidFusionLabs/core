@@ -1001,8 +1001,8 @@ struct GameSettings {
     };
     typedef vector<Setting> Vector;
     Vector vec;
-    void SetIndex(int n, int v)  { CHECK(n < vec.size()); vec[n].value->i = v; };
-    int GetIndex(int n)    const { CHECK(n < vec.size()); return vec[n].value->i; }
+    void SetIndex(int n, int v)  { CHECK(n < vec.size()); vec[n].value->ind = v; };
+    int GetIndex(int n)    const { CHECK(n < vec.size()); return vec[n].value->ind; }
     const char *Get(int n) const { CHECK(n < vec.size()); return vec[n].value->Cur(); }
 };
 
@@ -1063,8 +1063,8 @@ struct GameMenuGUI : public GUI, public Query {
         tab3_player_name.cmd_prefix.clear();
         tab3_player_name.deactivate_on_enter = tab2_server_address.deactivate_on_enter = true;
         tab3_player_name.runcb = bind(&TextGUI::AssignInput, (TextGUI*)&tab3_player_name, _1);
-        tab3_player_name   .SetToggleKey(0, ToggleBool::OneShot);
-        tab2_server_address.SetToggleKey(0, ToggleBool::OneShot);
+        tab3_player_name   .SetToggleKey(0, Toggler::OneShot);
+        tab2_server_address.SetToggleKey(0, Toggler::OneShot);
         tab2_server_address.runcb = bind(&GameMenuGUI::MenuAddServer, this, _1);
         tab3_sensitivity.increment = .1;
         tab3_sensitivity.doc_height = 10;
@@ -1402,7 +1402,7 @@ struct GamePlayerListGUI : public GUI {
 struct GameChatGUI : public TextArea {
     GameClient **server;
     GameChatGUI(LFL::Window *W, int key, GameClient **s) : TextArea(W, Fonts::Get("Origicide.ttf", "", 10, Color::grey80)), server(s) { 
-        SetToggleKey(key, ToggleBool::OneShot);
+        SetToggleKey(key, Toggler::OneShot);
         write_timestamp=deactivate_on_enter=true;
     }
 

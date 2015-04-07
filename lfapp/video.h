@@ -490,16 +490,18 @@ struct Video : public Module {
     int Free();
     int Swap();
 
-    static void CreateGraphicsDevice();
-    static void InitGraphicsDevice();
+    static void CreateGraphicsDevice(Window *);
+    static void InitGraphicsDevice(Window *);
     static void InitFonts();
 };
 
 extern Window *screen;
 struct Window : public NativeWindow {
     GraphicsDevice *gd=0;
-    point mouse;
+    point mouse, mouse_wheel;
     string caption;
+    FrameCB frame_cb;
+    Timer frame_time;
     RollingAvg<unsigned> fps;
     BindMap *binds=0;
     Entity *cam=0;
@@ -512,6 +514,7 @@ struct Window : public NativeWindow {
 
     Window();
     virtual ~Window();
+
     void InitConsole();
     void ClearEvents();
     void ClearGesture();
@@ -520,6 +523,7 @@ struct Window : public NativeWindow {
     void Minimized() {}
     void UnMinimized() {}
     void SwapAxis();
+    void Frame(unsigned clicks, unsigned mic_samples, bool cam_sample, int flag);
 
     void ClearMouseGUIEvents();
     void ClearKeyboardGUIEvents();
@@ -539,6 +543,7 @@ struct Window : public NativeWindow {
 
     typedef unordered_map<void*, Window*> WindowMap;
     static WindowMap active;
+    static Window *Get() { return screen; }
     static Window *Get(void *id);
     static bool Create(Window *W);
     static void Close(Window *W);

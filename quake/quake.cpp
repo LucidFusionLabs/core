@@ -49,7 +49,7 @@ using namespace LFL;
 extern "C" int main(int argc, const char *argv[]) {
 
 	app->logfilename = StrCat(LFAppDownloadDir(), "quake.txt");
-	app->frame_cb = Frame;
+	screen->frame_cb = Frame;
 	screen->width = 640;
 	screen->height = 480;
 	screen->caption = "Quake";

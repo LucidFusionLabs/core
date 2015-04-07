@@ -596,7 +596,7 @@ using namespace LFL;
 
 extern "C" int main(int argc, const char *argv[]) {
 
-	app->frame_cb = Frame;
+	screen->frame_cb = Frame;
 	app->logfilename = StrCat(LFAppDownloadDir(), "fv.txt");
 	screen->width = 640;
 	screen->height = 480;

@@ -1148,8 +1148,8 @@ struct Module {
 };
 
 struct FrameFlag { enum { DontSkip=8 }; };
-typedef function<int (LFL::Window*, unsigned, unsigned, bool, int)> FrameCB;
-void DefaultLFAppWindowClosedCB();
+typedef function<int (Window*, unsigned, unsigned, bool, int)> FrameCB;
+void DefaultLFAppWindowClosedCB(Window *);
 }; // namespace LFL
 
 #include "lfapp/math.h"
@@ -1230,7 +1230,7 @@ struct FrameScheduler {
     FrameRateLimitter maxfps;
     mutex frame_mutex, wait_mutex;
     SelectSocketThread select_thread;
-    bool rate_limit = 1, wait_forever = 1, wait_forever_thread = 1, synchronize_waits = 1;
+    bool rate_limit = 1, wait_forever = 1, wait_forever_thread = 1, synchronize_waits = 1, monolithic_frame = 1;
     FrameScheduler();
 
     void Init();
@@ -1288,13 +1288,12 @@ struct Application : public ::LFApp, public Module {
     FILE *logfile=0;
     mutex log_mutex;
     Time time_started;
-    Timer app_time, frame_time;
+    Timer frame_time;
     ThreadPool thread_pool;
     MessageQueue message_queue;
     FrameScheduler scheduler;
-    FrameCB frame_cb;
-    Callback reshaped_cb, window_closed_cb;
-    function<void(Window*)> window_init_cb;
+    Callback reshaped_cb;
+    function<void(Window*)> window_init_cb, window_closed_cb;
     Audio audio;
     Video video;
     Input input;
@@ -1312,7 +1311,7 @@ struct Application : public ::LFApp, public Module {
 
     void LoadModule(Module *M) { modules.push_back(M); M->Init(); }
     void Log(int level, const char *file, int line, const string &message);
-    void CreateNewWindow();
+    void CreateNewWindow(const function<void(Window*)> &start_cb = function<void(Window*)>());
 
     int Create(int argc, const char **argv, const char *source_filename);
     int Init();

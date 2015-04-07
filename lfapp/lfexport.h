@@ -61,7 +61,7 @@ struct LFApp {
 
 struct NativeWindow {
     void *id, *gl, *surface, *glew_context, *user1, *user2, *user3;
-    int width, height;
+    int width, height, target_fps;
     bool minimized, cursor_grabbed;
     int opengles_version, opengles_cubemap;
     int gesture_swipe_up, gesture_swipe_down, gesture_tap[2], gesture_dpad_stop[2];
@@ -74,6 +74,8 @@ void NativeWindowQuit();
 void NativeWindowSize(int *widthOut, int *heightOut);
 int NativeWindowOrientation();
 NativeWindow *GetNativeWindow();
+NativeWindow *SetNativeWindow(NativeWindow*);
+NativeWindow *SetNativeWindowByID(void*);
 LFApp *GetLFApp();
 
 int LFAppMain();

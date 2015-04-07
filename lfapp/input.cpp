@@ -146,7 +146,7 @@ void Mouse::ReleaseFocus() {}
 #endif
 
 #ifdef LFL_ANDROIDINPUT
-struct AndroidInputModule : public Module {
+struct AndroidInputModule : public InputModule {
     int Frame(unsigned clicks) { return android_input(clicks); }
 };
 
@@ -198,7 +198,7 @@ void Mouse::ReleaseFocus() {}
 #ifdef LFL_IPHONEINPUT
 extern "C" int iPhoneInput(unsigned clicks, unsigned *events);
 
-struct IPhoneInputModule : public Module {
+struct IPhoneInputModule : public InputModule {
     int Frame(unsigned clicks) { return iPhoneInput(clicks); }
 };
 
@@ -247,7 +247,7 @@ void Mouse::ReleaseFocus() {}
 #endif
 
 #ifdef LFL_QT
-struct QTInputModule : public Module {
+struct QTInputModule : public InputModule {
     bool grabbed = 0;
     int Frame(unsigned clicks) {
         app->input.DispatchQueuedInput();
@@ -297,10 +297,11 @@ void TouchDevice::CloseKeyboard() {}
 #endif /* LFL_QT */
 
 #ifdef LFL_GLFWINPUT
-struct GLFWInputModule : public Module {
-    static point mp;
-    static double mw;
-    GLFWInputModule(GLFWwindow *W) {
+struct GLFWInputModule : public InputModule {
+    int Init(Window *W) { InitWindow((GLFWwindow*)screen->id); return 0; }
+    int Frame(unsigned clicks) { glfwPollEvents(); return 0; }
+
+    static void InitWindow(GLFWwindow *W) {
         glfwSetInputMode          (W, GLFW_STICKY_KEYS, GL_TRUE);
         glfwSetWindowCloseCallback(W, WindowClose);
         glfwSetWindowSizeCallback (W, WindowSize);
@@ -309,10 +310,13 @@ struct GLFWInputModule : public Module {
         glfwSetCursorPosCallback  (W, MousePosition);
         glfwSetScrollCallback     (W, MouseWheel);
     }
-    int Frame(unsigned clicks) { glfwPollEvents(); return 0; }
-    static bool LoadScreen (GLFWwindow *W) { if (!(screen = Window::Get(W))) return 0; screen->events.input++; return 1; }
-    static void WindowSize (GLFWwindow *W, int w, int h) { if (!LoadScreen(W)) return; Window::MakeCurrent(screen); screen->Reshaped(w, h); }
-    static void WindowClose(GLFWwindow *W)               { if (!LoadScreen(W)) return; Window::MakeCurrent(screen); Window::Close(screen); }
+    static bool LoadScreen(GLFWwindow *W) {
+        if (!SetNativeWindowByID(W)) return 0;
+        screen->events.input++;
+        return 1;
+    }
+    static void WindowSize (GLFWwindow *W, int w, int h) { if (!LoadScreen(W)) return; screen->Reshaped(w, h); }
+    static void WindowClose(GLFWwindow *W)               { if (!LoadScreen(W)) return; Window::Close(screen); }
     static void Key(GLFWwindow *W, int k, int s, int a, int m) {
         if (!LoadScreen(W)) return;
         app->input.KeyPress((unsigned)k < 256 && isalpha((unsigned)k) ? ::tolower((unsigned)k) : k,
@@ -320,18 +324,17 @@ struct GLFWInputModule : public Module {
     }
     static void MouseClick(GLFWwindow *W, int b, int a, int m) {
         if (!LoadScreen(W)) return;
-        app->input.MouseClick(MouseButton(b), a == GLFW_PRESS, mp);
+        app->input.MouseClick(MouseButton(b), a == GLFW_PRESS, screen->mouse);
     }
     static void MousePosition(GLFWwindow *W, double x, double y) {
         if (!LoadScreen(W)) return;
         point p = Input::TransformMouseCoordinate(point(x, y));
-        app->input.MouseMove(p, p - mp);
-        mp = p;
+        app->input.MouseMove(p, p - screen->mouse);
     }
     static void MouseWheel(GLFWwindow *W, double x, double y) {
         if (!LoadScreen(W)) return;
-        app->input.MouseWheel(y - mw);
-        mw=y;
+        point p(x, y);
+        app->input.MouseWheel(p, p -screen->mouse_wheel);
     }
     static unsigned MouseButton(int b) {
         switch (b) {
@@ -342,9 +345,6 @@ struct GLFWInputModule : public Module {
         } return 0;
     }
 };
-
-point  GLFWInputModule::mp;
-double GLFWInputModule::mw;
 
 const int Key::Escape     = GLFW_KEY_ESCAPE;
 const int Key::Return     = GLFW_KEY_ENTER;
@@ -395,7 +395,7 @@ void Mouse::ReleaseFocus() { glfwSetInputMode((GLFWwindow*)screen->id, GLFW_CURS
 #endif
 
 #ifdef LFL_SDLINPUT
-struct SDLInputModule : public Module {
+struct SDLInputModule : public InputModule {
     int Frame(unsigned clicks) {
         SDL_Event ev; point mp;
         SDL_GetMouseState(&mp.x, &mp.y);
@@ -427,7 +427,7 @@ struct SDLInputModule : public Module {
         }
 
 #ifndef __APPLE__
-        if (mouse_moved && cursor_grabbed) {
+        if (mouse_moved && screen->cursor_grabbed) {
             SDL_WarpMouseInWindow((SDL_Window*)screen->id, width/2, height/2);
             while(SDL_PollEvent(&ev)) { /* do nothing */ }
         }
@@ -543,7 +543,7 @@ int Input::Init() {
 #if defined(LFL_QT)
     impl = new QTInputModule();
 #elif defined(LFL_GLFWINPUT)
-    impl = new GLFWInputModule((GLFWwindow*)screen->id);
+    impl = new GLFWInputModule();
 #elif defined(LFL_SDLINPUT)
     impl = new SDLInputModule();
 #elif defined(LFL_ANDROIDINPUT)
@@ -552,6 +552,10 @@ int Input::Init() {
     impl = new IPhoneInputModule();
 #endif
     return 0;
+}
+
+int Input::Init(Window *W) {
+    return impl ? impl->Init(W) : 0;
 }
 
 int Input::Frame(unsigned clicks) {
@@ -610,7 +614,7 @@ int Input::KeyEventDispatch(InputEvent::Id event, bool down) {
     for (auto it = screen->keyboard_gui.begin(); it != screen->keyboard_gui.end(); ++it) {
         KeyboardGUI *g = *it;
         if (!g->active) continue;
-        if (g->toggle_bind.key == event && g->toggle_active.mode != ToggleBool::OneShot) return 0;
+        if (g->toggle_bind.key == event && g->toggle_active.mode != Toggler::OneShot) return 0;
 
         g->events.total++;
 #ifdef __APPLE__
@@ -688,8 +692,8 @@ int Input::MouseMove(const point &p, const point &d) {
     return fired;
 }
 
-int Input::MouseWheel(int dw) {
-    int fired = MouseEventDispatch(Mouse::Event::Wheel, screen->mouse, dw);
+int Input::MouseWheel(const point &p, const point &d) {
+    int fired = MouseEventDispatch(Mouse::Event::Wheel, screen->mouse, d.y);
     screen->events.mouse_wheel++;
     screen->events.gui += fired;
     return fired;
@@ -712,7 +716,9 @@ int Input::MouseClick(int button, bool down, const point &p) {
 }
 
 int Input::MouseEventDispatch(InputEvent::Id event, const point &p, int down) {
-    screen->mouse = p;
+    if (event == Mouse::Event::Wheel) screen->mouse_wheel = p;
+    else                              screen->mouse       = p;
+
     if (FLAGS_input_debug && down)
         INFO("MouseEvent ", InputEvent::Name(event), " ", screen->mouse.DebugString());
 
