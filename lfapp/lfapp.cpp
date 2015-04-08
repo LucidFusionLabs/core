@@ -2128,9 +2128,15 @@ int Application::Init() {
         if (assets.Init()) { ERROR("assets init failed"); return -1; }
     }
 
+    if (FLAGS_lfapp_audio) {
+        INFO("lfapp_open: audio_init()");
+        if (LoadModule(&audio)) { INFO("audio init failed"); return -1; }
+    }
+    else { FLAGS_chans_in=FLAGS_chans_out=1; }
+
     if (FLAGS_lfapp_camera) {
         INFO("lfapp_open: camera_init()");
-        if (camera.Init()) { INFO("camera init failed"); return -1; }
+        if (LoadModule(&camera)) { INFO("camera init failed"); return -1; }
     }
 
     if (FLAGS_lfapp_video) {
@@ -2140,21 +2146,15 @@ int Application::Init() {
         Window::active[screen->id] = screen;
     }
 
-    if (FLAGS_lfapp_audio) {
-        INFO("lfapp_open: audio_init()");
-        if (audio.Init()) { INFO("audio init failed"); return -1; }
-    }
-    else { FLAGS_chans_in=FLAGS_chans_out=1; }
-
     if (FLAGS_lfapp_input) {
         INFO("lfapp_open: input_init()");
-        if (input.Init()) { INFO("input init failed"); return -1; }
+        if (LoadModule(&input)) { INFO("input init failed"); return -1; }
         input.Init(screen);
     }
 
     if (FLAGS_lfapp_network) {
         INFO("lfapp_open: network_init()");
-        if (network.Init()) { INFO("service init failed"); return -1; }
+        if (LoadModule(&network)) { INFO("service init failed"); return -1; }
 
         network.Enable(Singleton<UDPClient>::Get());
         vector<IPV4::Addr> nameservers;
@@ -2189,61 +2189,16 @@ int Application::Start() {
     return 0;
 }
 
-int Application::PreFrame(unsigned clicks, unsigned *mic_samples, bool *camera_sample) {
+int Application::PreFrame(unsigned clicks) {
     pre_frames_ran++;
 
-    if (FLAGS_lfapp_audio && run) {
-        { 
-            ScopedMutex(audio.inlock);				
-            /* frame align stream handles */
-            audio.RL.next = audio.IL->ring.back;
-            audio.RR.next = audio.IR->ring.back;
-
-            if (mic_samples) *mic_samples = samples_read - samples_read_last; 
-            samples_read_last = samples_read;
-        }
-
-        const int refillWhen = FLAGS_sample_rate*FLAGS_chans_out/2; 
-
-        if (assets.movie_playing) {
-            assets.movie_playing->Play(0);
-        } else if ((audio.playing || audio.loop) && audio.Out.size() < refillWhen) {
-            //  audio.QueueMix(audio.playing ? audio.playing : audio.loop, !audio.playing ? MixFlag::Reset : 0, -1, -1);
-            thread_pool.Write(MessageQueue::CallbackMessage,
-                              new Callback(bind(&Audio::QueueMix, &audio, audio.playing ? audio.playing : audio.loop, !audio.playing ? MixFlag::Reset : 0, -1, -1)));
-        }
-    } else {
-        if (mic_samples) *mic_samples = 0;
-    }
-
-    if (FLAGS_lfapp_camera && run) {
-        static int clicks_since_last = 0;
-        clicks_since_last += clicks;
-
-        if ((*camera_sample = (camera.Frame(clicks) == 1))) { 
-            camera.fps.Add(clicks_since_last);
-            clicks_since_last = 0;
-        }
-    } else {
-        if (camera_sample) *camera_sample = 0;
-    }
-
-    if (FLAGS_lfapp_input && run) {
-        int ret = input.Frame(clicks);
-        if (ret < 0) { /**/ }
-    }
+    for (auto i = modules.begin(); i != modules.end() && run; ++i) (*i)->Frame(clicks);
 
     // handle messages sent to main thread
     if (run) message_queue.HandleMessages();
 
     // fake threadpool that executes in main thread
     if (run && !FLAGS_threadpool_size) thread_pool.queue[0]->HandleMessages();
-
-    if (FLAGS_lfapp_network && run) {
-        network.Frame();
-    }
-
-    for (auto i = modules.begin(); i != modules.end() && run; ++i) (*i)->Frame(clicks);
 
     return 0;
 }
@@ -2259,20 +2214,18 @@ int Application::Frame() {
     scheduler.FrameWait();
     unsigned clicks = scheduler.monolithic_frame ? frame_time.GetTime(true) : screen->frame_time.GetTime(true);
 
-    /* pre */
-    bool cam_sample; unsigned mic_samples; int flag=0;
-    PreFrame(clicks, &mic_samples, &cam_sample);
+    int flag = 0;
+    PreFrame(clicks);
 
     if (scheduler.monolithic_frame) {
         Window *previous_screen = screen;
         for (auto i = Window::active.begin(); run && i != Window::active.end(); ++i)
-            i->second->Frame(clicks, mic_samples, cam_sample, flag);
+            i->second->Frame(clicks, audio.mic_samples, camera.have_sample, flag);
         if (previous_screen && previous_screen != screen) Window::MakeCurrent(previous_screen);
     } else {
-        screen->Frame(clicks, mic_samples, cam_sample, flag);
+        screen->Frame(clicks, audio.mic_samples, camera.have_sample, flag);
     }
 
-    /* post */
     PostFrame();
 
     return clicks;

@@ -242,7 +242,7 @@ struct PortaudioAudioModule : public Module {
             ScopedMutex ML(audio->inlock);
             IL.Commit();
             IR.Commit();
-            app->samples_read += samplesPerFrame;
+            app->audio.samples_read += samplesPerFrame;
         }
         {
             ScopedMutex ML(audio->outlock);
@@ -573,12 +573,37 @@ int Audio::Init() {
     return 0;
 }
 
-int Audio::Free() {
-    if (impl) impl->Free();
+int Audio::Start() {
     return 0;
 }
 
-int Audio::Start() {
+int Audio::Frame(unsigned clicks) {
+    {
+        ScopedMutex ML(inlock);
+
+        /* frame align stream handles */
+        RL.next = IL->ring.back;
+        RR.next = IR->ring.back;
+
+        mic_samples = samples_read - samples_read_last;
+        samples_read_last = samples_read;
+    }
+
+    const int refillWhen = FLAGS_sample_rate*FLAGS_chans_out/2;
+
+    if (app->assets.movie_playing) {
+        app->assets.movie_playing->Play(0);
+    } else if ((playing || loop) && Out.size() < refillWhen) {
+        // QueueMix(playing ? playing : loop, !playing ? MixFlag::Reset : 0, -1, -1);
+        app->thread_pool.Write(MessageQueue::CallbackMessage,
+                               new Callback(bind(&Audio::QueueMix, this, playing ? playing : loop,
+                                                 !playing ? MixFlag::Reset : 0, -1, -1)));
+    }
+    return 0;
+}
+
+int Audio::Free() {
+    if (impl) impl->Free();
     return 0;
 }
 

@@ -166,6 +166,7 @@ static const char **osx_argv = 0;
     }
     - (void)reshape {
         if (!initialized) return;
+        [context update];
         SetNativeWindow(screen);
         float screen_w = [self frame].size.width, screen_h = [self frame].size.height;
         Reshaped((int)screen_w, (int)screen_h);

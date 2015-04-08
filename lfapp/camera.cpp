@@ -991,7 +991,14 @@ int Camera::Init() {
     return ret;
 }
 
-int Camera::Frame(unsigned t) { return impl->Frame(t); }
+int Camera::Frame(unsigned clicks) { 
+    since_last_frame += clicks;
+    if ((have_sample = (impl->Frame(clicks) == 1))) {
+        fps.Add(since_last_frame);
+        since_last_frame = 0;
+    }
+    return 0;
+}
 
 int Camera::Free() {
     int ret = impl ? impl->Free() : 0;
