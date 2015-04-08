@@ -67,15 +67,17 @@ struct Audio : public Module {
     RingBuf micL, micR;
     RingBuf *IL, *IR;
     RingBuf::Handle RL, RR;
+    long long samples_read=0, samples_read_last=0;
+    int outlast=0, mic_samples=0;
     SoundAsset *playing=0, *loop=0;
     deque<float> Out;
-    int outlast=0;
     Module *impl=0;
     Audio() : micL(FLAGS_sample_rate*FLAGS_sample_secs), micR(FLAGS_sample_rate*FLAGS_sample_secs),
     IL(&micL), IR(&micR), Out(32768)  {}
 
     int Init ();
     int Start();
+    int Frame(unsigned);
     int Free ();
     void QueueMix(SoundAsset *sa, int flag=MixFlag::Reset, int offset=-1, int len=-1);
     void QueueMixBuf(const RingBuf::Handle *L, int channels=1, int flag=0);

@@ -1307,16 +1307,16 @@ struct Application : public ::LFApp, public Module {
 
     Application() : window_closed_cb(DefaultLFAppWindowClosedCB), tex_mode(2, 1, 0), grab_mode(2, 0, 1),
     fill_mode(3, GraphicsDevice::Fill, GraphicsDevice::Line, GraphicsDevice::Point)
-    { run=1; initialized=0; main_thread_id=0; frames_ran=pre_frames_ran=samples_read=samples_read_last=0; }
+    { run=1; initialized=0; main_thread_id=0; frames_ran=pre_frames_ran=0; }
 
-    void LoadModule(Module *M) { modules.push_back(M); M->Init(); }
+    int LoadModule(Module *M) { modules.push_back(M); return M->Init(); }
     void Log(int level, const char *file, int line, const string &message);
     void CreateNewWindow(const function<void(Window*)> &start_cb = function<void(Window*)>());
 
     int Create(int argc, const char **argv, const char *source_filename);
     int Init();
     int Start();
-    int PreFrame(unsigned clicks, unsigned *mic_samples, bool *camera_sample);
+    int PreFrame(unsigned clicks);
     int PostFrame();
     int Frame();
     int Main();

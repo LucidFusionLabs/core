@@ -65,6 +65,59 @@ inline CTFontRef CTFontCreateWithCGFontAndAttr(CGFontRef cgfont, int size, int f
     CFRelease(ctfont);
     return ctfont_w_attr;
 }
+
+float GetCTFontDescWeight(CTFontDescriptorRef desc) {
+    CGFloat value = 0;
+    CFDictionaryRef dict = (CFDictionaryRef)CTFontDescriptorCopyAttribute(desc, kCTFontTraitsAttribute);
+    CFNumberRef number = (CFNumberRef)CFDictionaryGetValue(dict, kCTFontWeightTrait);
+    CFNumberGetValue(number, kCFNumberCGFloatType, &value);
+    return value;
+}
+
+inline CTFontRef CTFontCreateWithAttributes(const char *name, int size) {
+    CFStringRef cfname = ToCFStr(name);
+#if 0
+    float cfsize = size;
+    const CFStringRef attr_key[] = { kCTFontAttributeName }; //, kCTFontSizeAttribute };
+    const CFTypeRef attr_val[] = { cfname }; // , &cfsize };
+    CFDictionaryRef attr = CFDictionaryCreate
+        (kCFAllocatorDefault, (const void**)&attr_key, (const void**)&attr_val, sizeofarray(attr_key),
+         &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+    CTFontDescriptorRef descriptor = CTFontDescriptorCreateWithAttributes(attr);
+#else 
+    CTFontDescriptorRef desc = CTFontDescriptorCreateWithNameAndSize(cfname, size);
+    printf("first weight %f\n", GetCTFontDescWeight(desc));
+
+    CGFloat value = 1.0;
+    CFNumberRef number = CFNumberCreate(NULL, kCFNumberCGFloatType, &value);
+    const CFStringRef dict_key[] = { kCTFontWeightTrait };
+    const CFTypeRef dict_val[] = { number };
+    CFDictionaryRef dict = CFDictionaryCreate
+        (kCFAllocatorDefault, (const void**)&dict_key, (const void**)&dict_val, sizeofarray(dict_key),
+         &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+    
+    const CFStringRef attr_key[] = { kCTFontTraitsAttribute };
+    const CFTypeRef attr_val[] = { dict };
+    CFDictionaryRef attr = CFDictionaryCreate
+        (kCFAllocatorDefault, (const void**)&attr_key, (const void**)&attr_val, sizeofarray(attr_key),
+         &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+
+    CTFontDescriptorRef descriptor = CTFontDescriptorCreateCopyWithAttributes(desc, attr);
+    CFRelease(desc);
+    printf("second weight %f\n", GetCTFontDescWeight(descriptor));
+#endif
+    CTFontRef font = CTFontCreateWithFontDescriptor(descriptor, 0, NULL);
+    CFRelease(descriptor);
+    CFRelease(cfname);
+    return font;
+}
+inline CGFontRef CGFontCreateWithAttributes(const char *name, int size) {
+    CTFontRef ctfont = CTFontCreateWithAttributes(name, size);
+    if (!ctfont) return NULL;
+    CGFontRef cgfont = CTFontCopyGraphicsFont(ctfont, NULL);
+    CFRelease(ctfont);
+    return cgfont;
+}
 #endif
 
 #ifdef LFL_FREETYPE
@@ -645,6 +698,7 @@ Font *CoreTextFontEngine::Open(const FontDesc &d) {
     if (inserted) {
         CFStringRef cfname = ToCFStr(d.name);
         ri->second = shared_ptr<Resource>(new Resource());
+        // if (!(ri->second->cgfont = CGFontCreateWithAttributes(d.name.c_str(), 16))) { resource.erase(d.name); return 0; }
         if (!(ri->second->cgfont = CGFontCreateWithFontName(cfname))) { CFRelease(cfname); resource.erase(d.name); return 0; }
         CFRelease(cfname);
     }

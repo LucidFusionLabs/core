@@ -254,7 +254,7 @@ int Network::Shutdown(Service *svc) {
     return 0;
 }
 
-int Network::Frame() {
+int Network::Frame(unsigned clicks) {
     Service *svc; Socket fd; void **v;
     int listener_type = TypeId<Listener>(), connection_type = TypeId<Connection>();
 

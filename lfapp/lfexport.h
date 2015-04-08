@@ -56,7 +56,7 @@ struct LFApp {
     };
     bool run, initialized;
     size_t main_thread_id;
-    long long frames_ran, pre_frames_ran, samples_read, samples_read_last;
+    long long frames_ran, pre_frames_ran;
 };
 
 struct NativeWindow {

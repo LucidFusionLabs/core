@@ -27,8 +27,9 @@ DECLARE_int(camera_image_height);
 struct Camera : public Module {
     RollingAvg<unsigned> fps;
     Module *impl=0;
+    bool have_sample=0;
     unsigned char *image=0;
-    int image_format=0, image_linesize=0;
+    int image_format=0, image_linesize=0, since_last_frame=0;
     unsigned long long image_timestamp=0, frames_read=0, last_frames_read=0;
     Camera() : fps(64) {}
 

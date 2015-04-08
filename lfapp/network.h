@@ -150,7 +150,7 @@ struct Network : public Module {
     int Enable(const vector<Service*> &svc);
     int Disable(const vector<Service*> &svc);
     int Shutdown(const vector<Service*> &svc);
-    int Frame();
+    int Frame(unsigned);
     void AcceptFrame(Service *svc, Listener *listener);
     void TCPConnectionFrame(Service *svc, Connection *c, vector<Socket> *removelist);
     void UDPConnectionFrame(Service *svc, Connection *c, vector<string> *removelist, const string &epk);
