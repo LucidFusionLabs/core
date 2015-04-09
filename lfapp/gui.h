@@ -264,25 +264,25 @@ struct TextGUI : public KeyboardGUI {
         static void Move (Line &t, Line &s) { swap(t.data, s.data); }
         static void MoveP(Line &t, Line &s) { swap(t.data, s.data); t.p=s.p; }
 
-        int GetAttrId(const Drawable::Attr &a) { return data->glyphs.attr.GetAttrId(a); }
-        void InitFlow() { data->flow = Flow(&data->box, parent->font, &data->glyphs, &parent->layout); }
+        void InitFlow();
         void Init(TextGUI *P, TextGUI::Lines *C) { parent=P; cont=C; InitFlow(); }
+        int GetAttrId(const Drawable::Attr &a) { return data->glyphs.attr.GetAttrId(a); }
         int Size () const { return data->glyphs.Size(); }
         int Lines() const { return 1+data->glyphs.line.size(); }
         string Text() const { return data->glyphs.Text(); }
         void Clear() { data->links.clear(); data->glyphs.Clear(); InitFlow(); }
-        void Erase(int o, int l=INT_MAX);
-        void AssignText(const StringPiece   &s, int a=0) { Clear(); AppendText(s, a); }
-        void AssignText(const String16Piece &s, int a=0) { Clear(); AppendText(s, a); }
-        void AppendText(const StringPiece   &s, int a=0) { InsertTextAt(Size(), s, a); }
-        void AppendText(const String16Piece &s, int a=0) { InsertTextAt(Size(), s, a); }
-        template <class X> void OverwriteTextAt(int o, const StringPieceT<X> &s, int attr=0);
-        template <class X> void InsertTextAt   (int o, const StringPieceT<X> &s, int attr=0);
-        template <class X> bool UpdateText     (int o, const StringPieceT<X> &s, int attr, int max_width=0);
-        void InsertTextAt(int o, const string   &s, int a=0) { return InsertTextAt<char> (o, s, a); }
-        void InsertTextAt(int o, const String16 &s, int a=0) { return InsertTextAt<short>(o, s, a); }
-        bool UpdateText(int o, const string   &s, int attr, int max_width=0) { return UpdateText<char> (o, s, attr, max_width); }
-        bool UpdateText(int o, const String16 &s, int attr, int max_width=0) { return UpdateText<short>(o, s, attr, max_width); }
+        int Erase(int o, int l=INT_MAX);
+        int AssignText(const StringPiece   &s, int a=0) { Clear(); return AppendText(s, a); }
+        int AssignText(const String16Piece &s, int a=0) { Clear(); return AppendText(s, a); }
+        int AppendText(const StringPiece   &s, int a=0) { return InsertTextAt(Size(), s, a); }
+        int AppendText(const String16Piece &s, int a=0) { return InsertTextAt(Size(), s, a); }
+        template <class X> int OverwriteTextAt(int o, const StringPieceT<X> &s, int attr=0);
+        template <class X> int InsertTextAt   (int o, const StringPieceT<X> &s, int attr=0);
+        template <class X> int UpdateText     (int o, const StringPieceT<X> &s, int attr, int max_width=0, bool *append=0);
+        int InsertTextAt(int o, const string   &s, int a=0) { return InsertTextAt<char> (o, s, a); }
+        int InsertTextAt(int o, const String16 &s, int a=0) { return InsertTextAt<short>(o, s, a); }
+        int UpdateText(int o, const string   &s, int attr, int max_width=0, bool *append=0) { return UpdateText<char> (o, s, attr, max_width, append); }
+        int UpdateText(int o, const String16 &s, int attr, int max_width=0, bool *append=0) { return UpdateText<short>(o, s, attr, max_width, append); }
         int Layout(int width=0, bool flush=0) { Layout(Box(0,0,width,0), flush); return Lines(); }
         void Layout(Box win, bool flush=0);
         point Draw(point pos, int relayout_width=-1, int g_offset=0, int g_len=-1);
@@ -575,12 +575,16 @@ struct Terminal : public TextArea, public Drawable::AttrSource {
     virtual void PageDown   () { char k[] = "\x1b[6~"; write(fd,  k, 4); }
     virtual void Home       () { char k = 'A' - 0x40;  write(fd, &k, 1); }
     virtual void End        () { char k = 'E' - 0x40;  write(fd, &k, 1);  }
-    virtual void UpdateCursor() { cursor.p = point(GetCursorX(term_cursor.x), GetCursorY(term_cursor.y)); }
+    virtual void UpdateCursor() { cursor.p = point(GetCursorX(term_cursor.x, term_cursor.y), GetCursorY(term_cursor.y)); }
     virtual const Drawable::Attr *GetAttr(int attr) const;
-    int GetCursorX(int x) const { return (x - 1) * font->FixedWidth(); }
+    int GetCursorX(int x, int y) const {
+        const Line *l = GetTermLine(y);
+        return x <= l->Size() ? l->data->glyphs.Position(x-1).x : ((x-1) * font->FixedWidth());
+    }
     int GetCursorY(int y) const { return (term_height - y + 1) * font->Height(); }
     int GetTermLineIndex(int y) const { return -term_height + y-1; }
-    Line *GetTermLine(int y) { return &line[GetTermLineIndex(y)]; }
+    const Line *GetTermLine(int y) const { return &line[GetTermLineIndex(y)]; }
+    /**/  Line *GetTermLine(int y)       { return &line[GetTermLineIndex(y)]; }
     Line *GetCursorLine() { return GetTermLine(term_cursor.y); }
     LinesFrameBuffer *GetPrimaryFrameBuffer()   { return line_fb.Attach(&last_fb); }
     LinesFrameBuffer *GetSecondaryFrameBuffer() { return cmd_fb .Attach(&last_fb); }

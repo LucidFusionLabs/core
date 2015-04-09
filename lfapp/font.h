@@ -104,6 +104,7 @@ struct FontEngine {
 struct Glyph : public Drawable {
     unsigned short id=0;
     short bearing_x=0, bearing_y=0, advance=0;
+    bool wide=0;
     union Internal {
         struct FreeType { int id; }                                          freetype;
         struct CoreText { int id; float origin_x, origin_y, width, height; } coretext;
@@ -116,7 +117,8 @@ struct Glyph : public Drawable {
     void FromArray(const double *in,  int l);
     int  ToArray  (      double *out, int l);
 
-    virtual int  Id() const { return id; }
+    virtual int  Id()   const { return id; }
+    virtual bool Wide() const { return wide; }
     virtual int  Ascender   (const LFL::Box *b, const Drawable::Attr *a=0) const;
     virtual int  Advance    (const LFL::Box *b, const Drawable::Attr *a=0) const;
     virtual int  LeftBearing(                   const Drawable::Attr *a=0) const;
@@ -202,18 +204,9 @@ struct Font {
     Glyph *FindOrInsertGlyph(unsigned short gind);
 
     void Select();
+    void UpdateMetrics(Glyph *g);
     void DrawGlyph(int g, const Box &w) { Select(); Drawable::Attr a(this); FindGlyph(g)->Draw(w, &a); }
     int GetGlyphWidth(int g) { return RoundXY_or_Y(scale, FindGlyph(g)->advance); }
-
-    void UpdateMetrics(const Glyph *g) {
-        if (fix_metrics) return;
-        int descent = g->tex.height - g->bearing_y;
-        if (g->advance && fixed_width == -1)         fixed_width = g->advance;
-        if (g->advance && fixed_width != g->advance) fixed_width = 0;
-        if (g->advance   > max_width) max_width = g->advance;
-        if (g->bearing_y > ascender)  ascender  = g->bearing_y;
-        if (descent      > descender) descender = descent;
-    }
 
     template <class X> void Size(const StringPieceT<X> &text, Box *out, int width=0, int *lines_out=0);
     /**/               void Size(const string          &text, Box *out, int width=0, int *lines_out=0) { return Size(StringPiece           (text), out, width, lines_out); }

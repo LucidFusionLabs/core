@@ -294,6 +294,21 @@ Glyph *Font::FindGlyph(unsigned short gind) {
     return g;
 }
 
+void Font::UpdateMetrics(Glyph *g) {
+    if (fix_metrics) {
+        int fixed_width = FixedWidth();
+        g->wide = fixed_width && g->advance > fixed_width;
+        g->advance = fixed_width * 2;
+        return;
+    }
+    int descent = g->tex.height - g->bearing_y;
+    if (g->advance && fixed_width == -1)         fixed_width = g->advance;
+    if (g->advance && fixed_width != g->advance) fixed_width = 0;
+    if (g->advance   > max_width) max_width = g->advance;
+    if (g->bearing_y > ascender)  ascender  = g->bearing_y;
+    if (descent      > descender) descender = descent;
+}
+
 void Font::Select() {
     screen->gd->EnableLayering();
     glyph->cache->tex.Bind();
@@ -312,10 +327,11 @@ template <class X> void Font::Size(const StringPieceT<X> &text, Box *out, int ma
 template <class X> void Font::Encode(const StringPieceT<X> &text, const Box &box, BoxArray *out, int draw_flag, int attr_id) {
     Flow flow(&box, this, out);
     if (draw_flag & DrawFlag::AssignFlowX) flow.p.x = box.x;
-    flow.layout.wrap_lines   = !(draw_flag & DrawFlag::NoWrap) && box.w;
-    flow.layout.word_break   = !(draw_flag & DrawFlag::GlyphBreak);
-    flow.layout.align_center =  (draw_flag & DrawFlag::AlignCenter);
-    flow.layout.align_right  =  (draw_flag & DrawFlag::AlignRight);
+    flow.layout.wrap_lines     = !(draw_flag & DrawFlag::NoWrap) && box.w;
+    flow.layout.word_break     = !(draw_flag & DrawFlag::GlyphBreak);
+    flow.layout.align_center   =  (draw_flag & DrawFlag::AlignCenter);
+    flow.layout.align_right    =  (draw_flag & DrawFlag::AlignRight);
+    flow.layout.pad_wide_chars = FixedWidth();
     if (!attr_id) {
         flow.cur_attr.underline  =  (draw_flag & DrawFlag::Underline);
         flow.cur_attr.overline   =  (draw_flag & DrawFlag::Overline);

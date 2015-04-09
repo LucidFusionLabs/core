@@ -347,6 +347,7 @@ struct Drawable {
         typedef ArrayMemberSegmentIter    <Box, int, &Box::attr_id>             RawIterator;
     };
     virtual int  Id()                                            const { return 0; }
+    virtual bool Wide()                                          const { return 0; }
     virtual int  LeftBearing(                   const Attr *A=0) const { return 0; }
     virtual int  Ascender   (const LFL::Box *B, const Attr *A=0) const { return B ? B->h : 0; }
     virtual int  Advance    (const LFL::Box *B, const Attr *A=0) const { return B ? B->w : 0; }
@@ -775,7 +776,7 @@ struct BoxArray {
         bool last = o >= Size();
         const Drawable::Box &b = last ? data.back() : data[o];
         const Drawable::Attr *a = attr.GetAttr(b.attr_id);
-        return last ? point(b.RightBound(a), b.TopBound(a)) : point(b.LeftBound(a), b.TopBound(a));
+        return point(last ? b.RightBound(a) : b.LeftBound(a), b.TopBound(a));
     }
 
     int LeftBound (int o) const { const Drawable::Box &b = data[o]; return b.LeftBound (attr.GetAttr(b.attr_id)); }
@@ -802,9 +803,12 @@ struct BoxArray {
         for (auto i = data.begin() + o + x.size(); i != data.end(); ++i) i->box += p;
     }
     void OverwriteAt(int o, const vector<Drawable::Box> &x) {
+        if (!x.size()) return;
         CHECK_LE(o + x.size(), data.size());
-        auto xi = x.begin();
-        for (auto i = data.begin() + o, e = i + x.size(); i != e; ++i, ++xi) *i = *xi;
+        auto i = data.begin() + o, e = i + x.size();
+        point p(BoundingWidth(x.front(), x.back()) - (data.size() ? BoundingWidth(*i, *(e-1)) : 0), 0);
+        for (auto xi = x.begin(); i != e; ++i, ++xi) *i = *xi;
+        if (p.x) for (i = e, e = data.end(); i != e; ++i) i->box += p;
     }
     void Erase(int o, size_t l=UINT_MAX, bool shift=false) { 
         if (!l || data.size() <= o) return;

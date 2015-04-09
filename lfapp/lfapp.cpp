@@ -142,6 +142,7 @@ DEFINE_bool(lfapp_debug, false, "Enable debug mode");
 DEFINE_bool(cursor_grabbed, false, "Center cursor every frame");
 DEFINE_bool(daemonize, false, "Daemonize server");
 DEFINE_bool(rcon_debug, false, "Print rcon commands");
+DEFINE_bool(frame_debug, false, "Print each frame");
 DEFINE_string(nameserver, "", "Default namesver");
 DEFINE_bool(max_rlimit_core, false, "Max core dump rlimit");
 DEFINE_bool(max_rlimit_open_files, false, "Max number of open files rlimit");
@@ -2211,6 +2212,7 @@ int Application::PostFrame() {
 
 int Application::Frame() {
     if (!MainThread()) ERROR("Frame() called from thread ", Thread::GetId());
+
     scheduler.FrameWait();
     unsigned clicks = scheduler.monolithic_frame ? frame_time.GetTime(true) : screen->frame_time.GetTime(true);
 
@@ -2219,11 +2221,14 @@ int Application::Frame() {
 
     if (scheduler.monolithic_frame) {
         Window *previous_screen = screen;
-        for (auto i = Window::active.begin(); run && i != Window::active.end(); ++i)
+        for (auto i = Window::active.begin(); run && i != Window::active.end(); ++i) {
             i->second->Frame(clicks, audio.mic_samples, camera.have_sample, flag);
+            if (FLAGS_frame_debug) INFO("frame_debug Application::Frame Window ", i->second->id);
+        }
         if (previous_screen && previous_screen != screen) Window::MakeCurrent(previous_screen);
     } else {
         screen->Frame(clicks, audio.mic_samples, camera.have_sample, flag);
+        if (FLAGS_frame_debug) INFO("frame_debug Application::Frame Window ", screen->id);
     }
 
     PostFrame();
