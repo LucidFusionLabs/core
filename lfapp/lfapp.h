@@ -439,6 +439,10 @@ struct String {
     static String16 ToUTF16(const StringPiece    &s, int *lo=0);
 };
 
+struct Uniciode {
+    static const unsigned char non_breaking_space = 0xA0;
+};
+
 struct UTF8 {
     static string WriteGlyph(int codepoint);
     static int ReadGlyph(const StringPiece   &s, const char  *p, int *l, bool eof=0);

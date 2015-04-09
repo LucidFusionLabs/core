@@ -200,7 +200,6 @@ extern "C" int main(int argc, const char *argv[]) {
     app->scheduler.AddWaitForeverService(Singleton <UDPClient>::Get());
     if (app->Create(argc, argv, __FILE__)) { app->Free(); return -1; }
 
-    if (FLAGS_font_engine == "coretext") FLAGS_default_font_flag = FontDesc::Mono;
     if (FLAGS_font_engine != "atlas") app->video.init_fonts_cb = &MyInitFonts;
     if (FLAGS_default_font_.override) {
     } else if (FLAGS_font_engine == "coretext") {

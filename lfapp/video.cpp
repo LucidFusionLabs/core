@@ -988,7 +988,10 @@ bool Window::Create(Window *W) {
 void Window::MakeCurrent(Window *W) { 
     if (W) OSXMakeWindowCurrent((screen = W)->id);
 }
-void Window::Close(Window *W) {}
+void Window::Close(Window *W) {
+    Window::active.erase(W->id);
+    if (Window::active.empty()) app->run = false;
+}
 #endif
 
 #ifdef LFL_QT

@@ -34,10 +34,6 @@ svn co http://lucidfusionlabs.com/svn/lfl
 
 LFL builds easily for Windows, Linux, Mac OSX, iPhone and Android.
 
-The greatest stumbling block is missing a package dependency in lfl/imports.
-Examine the cmake output carefully for errors, such as missing the yasm
-assembler required to build x264.
-
 * Replace "FusionViewer" and "fv" with "YourPackage" and "YourApp" to
 build other apps.
 
@@ -81,8 +77,6 @@ BUILDING Linux
 
         cd lfl
         ./imports/build.sh
-        touch crawler/crawler.pb.h
-        touch crawler/crawler.pb.cc
         cmake .
         cd fv && make -j4
 
@@ -118,8 +112,6 @@ BUILDING Mac
 
         cd lfl
         ./imports/build.sh
-        touch crawler/crawler.pb.h
-        touch crawler/crawler.pb.cc
         cmake .
         make -j4
 
