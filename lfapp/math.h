@@ -349,7 +349,6 @@ template <class T=double> struct matrix {
         bytes = 0;
     }
     matrix *Clone() const {
-        if (!this) return 0;
         matrix *ret = new matrix(M,N,flag);
         MatrixIter(ret) { ret->row(i)[j] = row(i)[j]; }
         return ret;
