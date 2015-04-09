@@ -319,7 +319,7 @@ struct Drawable {
         const Texture *tex=0;
         const LFL::Box *scissor=0;
         bool underline=0, overline=0, midline=0, blink=0;
-        Attr(Font *F=0, const Color *FG=0, const Color *BG=0, bool UL=0) : font(F), fg(FG), bg(BG), underline(UL) {}
+        constexpr Attr(Font *F=0, const Color *FG=0, const Color *BG=0, bool UL=0) : font(F), fg(FG), bg(BG), underline(UL) {}
         bool operator==(const Attr &y) const { return font==y.font && fg==y.fg && bg==y.bg && tex==y.tex && scissor==y.scissor && underline==y.underline && overline==y.overline && midline==y.midline && blink==y.blink; }
         bool operator!=(const Attr &y) const { return !(*this == y); }
         void Clear() { font=0; fg=bg=0; tex=0; scissor=0; underline=overline=midline=blink=0; }

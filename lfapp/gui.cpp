@@ -175,27 +175,28 @@ template <class X> int TextGUI::Line::InsertTextAt(int x, const StringPieceT<X> 
 }
 
 template <class X> int TextGUI::Line::OverwriteTextAt(int x, const StringPieceT<X> &v, int attr) {
-    int size = Size(), pad1 = max(0, x + v.len - size), pad2 = 0;
-    if (pad1) data->flow.AppendText(basic_string<X>(pad1, ' '), attr);
+    int size = Size(), pad = max(0, x + v.len - size), grow = 0;
+    if (pad) data->flow.AppendText(basic_string<X>(pad, ' '), attr);
 
     BoxArray b;
     parent->font->Encode(v, Box(data->glyphs.Position(x),0,0), &b, Font::DrawFlag::AssignFlowX, attr);
-    if ((size = b.Size()) && (pad2 = size - v.len)) data->flow.AppendText(basic_string<X>(pad2, ' '), attr);
+    if ((size = b.Size()) && (grow = size - v.len) && (pad = max(0, x + size - Size())))
+        data->flow.AppendText(basic_string<X>(pad, ' '), attr);
 
     // XXX use character BoxRun iterators
     bool token_processing = parent->token_processing;
     basic_string<X> text = token_processing           ? BoxRun(&data->glyphs[x], size).Text<X>(0, size) : basic_string<X>();
-    basic_string<X> newt = (token_processing && pad2) ? BoxRun(&b[0],            size).Text<X>(0, size) : basic_string<X>();
+    basic_string<X> newt = (token_processing && grow) ? BoxRun(&b[0],            size).Text<X>(0, size) : basic_string<X>();
     StringPieceT<X> newv(newt);
     LineTokenProcessor<X> update(token_processing ? this : 0, x, StringPieceT<X>(text), size);
     if (token_processing) {
-        update.FindBoundaryConditions(pad2 ? newv : v, &update.osw, &update.oew);
+        update.FindBoundaryConditions(grow ? newv : v, &update.osw, &update.oew);
         update.ProcessUpdate();
     }
     data->glyphs.OverwriteAt(x, b.data);
     data->flow.p.x = data->glyphs.Position(data->glyphs.Size()).x;
     if (token_processing) {
-        update.PrepareOverwrite(pad2 ? newv : v);
+        update.PrepareOverwrite(grow ? newv : v);
         update.ProcessUpdate();
     }
     return size;
