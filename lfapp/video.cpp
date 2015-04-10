@@ -971,6 +971,7 @@ extern "C" void OSXVideoSwap(void*);
 extern "C" void *OSXCreateWindow(int W, int H, struct NativeWindow *nw);
 extern "C" void OSXMakeWindowCurrent(void *O);
 extern "C" void OSXSetWindowSize(void*, int W, int H);
+extern "C" void *OSXCreateGLContext(void *O);
 struct OSXVideoModule : public Module {
     int Init() {
         INFO("OSXVideoModule::Init()");
@@ -1172,6 +1173,14 @@ int Video::Init() {
     init_fonts_cb();
     if (!screen->console) screen->InitConsole();
     return 0;
+}
+
+void *Video::CreateGLContext(Window *W) {
+#if defined(LFL_OSXVIDEO)
+    return OSXCreateGLContext(screen->id);
+#else
+    return 0;
+#endif
 }
 
 void Video::CreateGraphicsDevice(Window *W) {

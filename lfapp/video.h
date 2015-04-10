@@ -491,6 +491,7 @@ struct Video : public Module {
     int Free();
     int Swap();
 
+    static void *CreateGLContext(Window *);
     static void CreateGraphicsDevice(Window *);
     static void InitGraphicsDevice(Window *);
     static void InitFonts();

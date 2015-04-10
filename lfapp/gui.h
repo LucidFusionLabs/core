@@ -234,11 +234,10 @@ struct TextGUI : public KeyboardGUI {
     struct Link : public Widget::Interface {
         Box box;
         string link;
+        Asset *image=0;
         TextGUI *parent=0;
-        DOM::Attr image_src;
-        DOM::HTMLImageElement image;
         Link(TextGUI *P, GUI *G, const Box &b, const string &U)
-            : Interface(G), box(b), link(U), parent(P), image_src(0), image(0) {
+            : Interface(G), box(b), link(U), parent(P) {
             AddClickBox(b, MouseController::CB(bind(&Link::Visit, this)));
             AddHoverBox(b, MouseController::CoordCB(bind(&Link::Hover, this, _1, _2, _3, _4)));
             del_hitbox = true;

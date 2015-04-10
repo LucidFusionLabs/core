@@ -171,7 +171,7 @@ string Flag::GetString() const { string v=Get(); return StrCat(name, v.size()?" 
 
 bool Running() { return app->run; }
 bool MainThread() { return Thread::GetId() == app->main_thread_id; }
-void RunInMainThread(Callback *cb) { app->message_queue.Write(MessageQueue::CallbackMessage, cb); }
+void RunInMainThread(Callback *cb) { app->message_queue.Write(cb); }
 void Log(int level, const char *file, int line, const string &m) { app->Log(level, file, line, m); }
 void DefaultLFAppWindowClosedCB(Window *W) { delete W; }
 double FPS() { return screen->fps.FPS(); }
@@ -1966,6 +1966,15 @@ void FlagMap::Print(const char *source_filename) const {
     if (source_filename) INFO("fullhelp : Display full help"); 
 }
 
+ModuleThread *Application::CreateModuleThread(Module *m) {
+    auto i = find(modules.begin(), modules.end(), m);
+    if (i == modules.end()) return NULL;
+    ModuleThread *ret = new ModuleThread(*i);
+    modules.erase(i);
+    ret->thread->Start();
+    return ret;
+}
+
 void Application::Log(int level, const char *file, int line, const string &message) {
     if (level > FLAGS_loglevel || (level >= LFApp::Log::Debug && !FLAGS_lfapp_debug)) return;
     char tbuf[64];
@@ -2200,7 +2209,7 @@ int Application::PreFrame(unsigned clicks) {
     if (run) message_queue.HandleMessages();
 
     // fake threadpool that executes in main thread
-    if (run && !FLAGS_threadpool_size) thread_pool.queue[0]->HandleMessages();
+    if (run && !FLAGS_threadpool_size) thread_pool.worker[0].queue->HandleMessages();
 
     return 0;
 }

@@ -35,6 +35,7 @@ Scene scene;
 BindMap *binds;
 Shader warpershader;
 Browser *image_browser;
+ModuleThread *network_thread;
 int new_win_width = 80*10, new_win_height = 25*17;
 
 void MyNewLinkCB(TextArea::Link *link) {
@@ -48,13 +49,12 @@ void MyNewLinkCB(TextArea::Link *link) {
             return;
         }
     }
-    link->image_src.SetNameValue("src", image_url);
-    link->image.setAttributeNode(&link->image_src);
-    image_browser->doc.parser->Open(image_url, &link->image);
+    link->image = new Asset();
+    network_thread->queue->Write(new Callback([=]() { image_browser->doc.parser->OpenImage(image_url, link->image); }));
 }
 
 void MyHoverLinkCB(TextArea::Link *link) {
-    Asset *a = link ? link->image.asset : 0;
+    Asset *a = link ? link->image : 0;
     if (!a) return;
     a->tex.Bind();
     screen->gd->SetColor(Color::white - Color::Alpha(0.2));
@@ -227,6 +227,8 @@ extern "C" int main(int argc, const char *argv[]) {
     app->window_closed_cb = MyWindowClosedCB;
     app->shell.command.push_back(Shell::Command("colors", bind(&MyColorsCmd, _1)));
     app->shell.command.push_back(Shell::Command("shader", bind(&MyShaderCmd, _1)));
+    CHECK((network_thread = app->CreateModuleThread(&app->network)));
+    network_thread->queue->Write(new Callback([&](){ Video::CreateGLContext(screen); }));
 
     binds->Add(Bind('=', Key::Modifier::Cmd, Bind::CB(bind(&MyIncreaseFontCmd, vector<string>()))));
     binds->Add(Bind('-', Key::Modifier::Cmd, Bind::CB(bind(&MyDecreaseFontCmd, vector<string>()))));

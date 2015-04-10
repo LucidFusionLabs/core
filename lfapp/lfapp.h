@@ -886,7 +886,9 @@ struct File {
     virtual bool Flush() { return false; }
 
     struct NextRecord { 
-        string buf; bool buf_dirty; int buf_offset, file_offset, record_offset, record_len;
+        string buf;
+        bool buf_dirty;
+        int buf_offset, file_offset, record_offset, record_len;
         NextRecord() { Reset(); }
         void Reset() { buf.clear(); buf_dirty = 0; buf_offset = file_offset = record_offset = record_len = 0; }
         void SetFileOffset(int v) { file_offset = v; buf_dirty = 1; }
@@ -907,11 +909,12 @@ struct File {
 
     static bool ReadSuccess(File *f, void *out, int len) { return f->Read(out, len) == len; }
     static bool SeekSuccess(File *f, long long pos) { return f->Seek(pos, Whence::SET) == pos; }
-    static bool SeekReadSuccess(File *f, long long pos, void *out, int len) { if (!SeekSuccess(f, pos)) return false; return ReadSuccess(f, out, len); }
+    static bool SeekReadSuccess(File *f, long long pos, void *out, int len) { return SeekSuccess(f, pos) ? ReadSuccess(f, out, len) : false; }
 };
 
 struct BufferFile : public File {
-    string buf, fn; int rdo, wro;
+    string buf, fn;
+    int rdo, wro;
     BufferFile(const string &s, const char *FN=0) : buf(s), fn(FN?FN:""), rdo(0), wro(0) {}
     ~BufferFile() { Close(); }
 
@@ -928,7 +931,9 @@ struct BufferFile : public File {
 };
 
 struct LocalFile : public File {
-    void *impl; string fn; bool writable;
+    void *impl;
+    string fn;
+    bool writable;
     virtual ~LocalFile() { Close(); }
     LocalFile() : impl(0), writable(0) {}
     LocalFile(const string &path, const string &mode, bool pre_create=0) : impl(0) { Open(path, mode, pre_create); }
@@ -1088,15 +1093,18 @@ struct Timer {
 
 struct PerformanceTimers {
     struct Accumulator {
-        string name; Time time;
-        Accumulator() : time(0) {}
-        Accumulator(const string &n) : name(n), time(0) {}
+        string name;
+        Time time;
+        Accumulator(const string &n="") : name(n), time(0) {}
     };
-    vector<Accumulator> timers; Timer cur_timer; int cur_timer_id;
+    vector<Accumulator> timers;
+    Timer cur_timer;
+    int cur_timer_id;
     PerformanceTimers() { cur_timer_id = Create("Default"); }
+
     int Create(const string &n) { timers.push_back(Accumulator(n)); return timers.size()-1; }
     void AccumulateTo(int timer_id) { timers[cur_timer_id].time += cur_timer.GetTime(true); cur_timer_id = timer_id; }
-    string DebugString() { string v; for (int i = 0; i < timers.size(); i++) StrAppend(&v, timers[i].name, " ", timers[i].time / 1000.0, "\n"); return v; }
+    string DebugString() const { string v; for (auto &t : timers) StrAppend(&v, t.name, " ", t.time / 1000.0, "\n"); return v; }
 };
 
 struct Regex {
@@ -1171,49 +1179,54 @@ namespace LFL {
 ::std::ostream& operator<<(::std::ostream& os, const point &x);
 ::std::ostream& operator<<(::std::ostream& os, const Box   &x);
 
-struct MessageQueue {
-    static const int CallbackMessage = 1;
-    struct Entry { int id; void *opaque; };
-    deque<Entry> queue;
+template <class X> struct MessageQueue {
+    deque<X> queue;
     mutex lock;
+    void Write(const X &x) { ScopedMutex sm(lock); queue.push_back(x); }
+    bool Read(X* out) {
+        if (queue.empty()) return false;
+        ScopedMutex sm(lock);
+        if (queue.empty()) return false;
+        *out = PopBack(queue);
+        return 1;
+    }
+};
 
-    void Write(int n, void *x) { ScopedMutex sm(lock); Entry e = { n, x }; queue.push_back(e); }
-    int Read(void** out) { if (!queue.size()) return 0; ScopedMutex sm(lock); if (!queue.size()) return 0; Entry e = PopBack(queue); *out = e.opaque; return e.id; }
-    void HandleMessagesLoop() { while (GetLFApp()->run) { HandleMessages(); Msleep(30); } }
-    void HandleMessages() {
-        void *message; int message_id;
-        while ((message_id = Read(&message))) {
-            if (message_id == CallbackMessage) {
-                Callback *cb = (Callback*)message;
-                (*cb)();
-                delete cb;
-            } else ERROR("unknown message id=", message_id);
-        }
+struct CallbackQueue : public MessageQueue<Callback*> {
+    int loop_wait_ms = 30;
+    void HandleMessagesLoop() { while (GetLFApp()->run) { HandleMessages(); Msleep(loop_wait_ms); } }
+    void HandleMessages() { Callback *cb=0; while (Read(&cb)) { (*cb)(); delete cb; } }
+};
+
+struct WorkerThread {
+    unique_ptr<CallbackQueue> queue;
+    unique_ptr<Thread> thread;
+    WorkerThread() : queue(new CallbackQueue()) {}
+    void Init(const Callback &main_cb) { thread = unique_ptr<Thread>(new Thread(main_cb)); }
+};
+
+struct ModuleThread : public WorkerThread {
+    Module *module;
+    ModuleThread(Module *M) : module(M) { queue->loop_wait_ms=5; Init(bind(&ModuleThread::HandleMessagesLoop, this)); }
+    void HandleMessagesLoop() {
+        while (GetLFApp()->run) { module->Frame(0); queue->HandleMessages(); Msleep(queue->loop_wait_ms); }
     }
 };
 
 struct ThreadPool {
-    vector<Thread*> thread;
-    vector<MessageQueue*> queue;
+    vector<WorkerThread> worker;
     int round_robin_next=0;
-    virtual ~ThreadPool() {
-        for (auto &t : thread) delete t;
-        for (auto &q : queue)  delete q;
-    }
+
     void Open(int num) {
-        CHECK(thread.empty() && queue.empty());
-        thread.resize(num);
-        queue .resize(num);
-        for (int i=0; i<num; i++) {
-            queue [i] = new MessageQueue();
-            thread[i] = new Thread(bind(&MessageQueue::HandleMessagesLoop, queue[i]));
-        }
+        CHECK(worker.empty());
+        worker.resize(num);
+        for (auto &w : worker) w.Init(bind(&CallbackQueue::HandleMessagesLoop, w.queue.get()));
     }
-    void Start() { for (auto &t : thread) t->Start(); }
-    void Stop()  { for (auto &t : thread) t->Wait(); }
-    void Write(int mid, void *m) {
-        queue[round_robin_next]->Write(mid, m);
-        round_robin_next = (round_robin_next + 1) % thread.size();
+    void Start() { for (auto &w : worker) w.thread->Start(); }
+    void Stop()  { for (auto &w : worker) w.thread->Wait(); }
+    void Write(Callback *cb) {
+        worker[round_robin_next].queue->Write(cb);
+        round_robin_next = (round_robin_next + 1) % worker.size();
     }
 };
 
@@ -1294,7 +1307,7 @@ struct Application : public ::LFApp, public Module {
     Time time_started;
     Timer frame_time;
     ThreadPool thread_pool;
-    MessageQueue message_queue;
+    CallbackQueue message_queue;
     FrameScheduler scheduler;
     Callback reshaped_cb;
     function<void(Window*)> window_init_cb, window_closed_cb;
@@ -1314,6 +1327,8 @@ struct Application : public ::LFApp, public Module {
     { run=1; initialized=0; main_thread_id=0; frames_ran=pre_frames_ran=0; }
 
     int LoadModule(Module *M) { modules.push_back(M); return M->Init(); }
+    ModuleThread *CreateModuleThread(Module *m);
+
     void Log(int level, const char *file, int line, const string &message);
     void CreateNewWindow(const function<void(Window*)> &start_cb = function<void(Window*)>());
 
@@ -1327,6 +1342,7 @@ struct Application : public ::LFApp, public Module {
     int MainLoop();
     int Free();
     int Exiting();
+
 };
 extern Application *app;
 
