@@ -27,7 +27,9 @@
 namespace LFL {
 DEFINE_int(peak_fps,  50,    "Peak FPS");
 DEFINE_bool(draw_fps, false, "Draw FPS");
+
 extern FlagOfType<string> FLAGS_default_font_;
+extern FlagOfType<bool>   FLAGS_lfapp_network_;
 
 Scene scene;
 BindMap *binds;
@@ -56,7 +58,7 @@ void MyHoverLinkCB(TextArea::Link *link) {
     if (!a) return;
     a->tex.Bind();
     screen->gd->SetColor(Color::white - Color::Alpha(0.2));
-    Box::DelBorder(screen->Box(), screen->width*.2, screen->height*.2).Draw();
+    Box::DelBorder(screen->Box(), screen->width*.2, screen->height*.2).Draw(a->tex.coord);
 }
 
 struct ReadBuffer {
@@ -194,11 +196,16 @@ extern "C" int main(int argc, const char *argv[]) {
     MyWindowInitCB(screen);
     FLAGS_target_fps = 0;
     FLAGS_lfapp_video = FLAGS_lfapp_input = 1;
+#ifdef __APPLE__
     FLAGS_font_engine = "coretext";
+#else
+    FLAGS_font_engine = "freetype";
+#endif
 
     app->scheduler.AddWaitForeverService(Singleton<HTTPClient>::Get());
     app->scheduler.AddWaitForeverService(Singleton <UDPClient>::Get());
     if (app->Create(argc, argv, __FILE__)) { app->Free(); return -1; }
+    if (!FLAGS_lfapp_network_.override) FLAGS_lfapp_network = 1;
 
     if (FLAGS_font_engine != "atlas") app->video.init_fonts_cb = &MyInitFonts;
     if (FLAGS_default_font_.override) {

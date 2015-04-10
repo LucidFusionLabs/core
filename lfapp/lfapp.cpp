@@ -125,6 +125,7 @@ extern "C" void OSXDelWaitForeverMouse(void*);
 extern "C" void OSXAddWaitForeverKeyboard(void*);
 extern "C" void OSXDelWaitForeverKeyboard(void*);
 extern "C" void OSXAddWaitForeverSocket(void*, int fd);
+extern "C" void OSXDelWaitForeverSocket(void*, int fd);
 #endif
 
 namespace LFL {
@@ -2387,6 +2388,10 @@ void FrameScheduler::AddWaitForeverSocket(Socket fd, int flag, void *val) {
 }
 void FrameScheduler::DelWaitForeverSocket(Socket fd) {
     if (wait_forever && wait_forever_thread) select_thread.Del(fd);
+#if defined(LFL_OSXINPUT)
+    CHECK(screen->id);
+    OSXDelWaitForeverSocket(screen->id, fd);
+#endif
 }
 
 /* CUDA */

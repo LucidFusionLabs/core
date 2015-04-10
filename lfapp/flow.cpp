@@ -155,12 +155,13 @@ Flow::State Flow::AppendBoxOrChar(int c, Drawable::Box *box, int h) {
     int advance = drawable ? box->drawable->Layout(&box->box, &cur_attr) : box->box.w;
     box->box.y += cur_line.descent;
     box->box += p;
-
+    p.x += advance;
     state = State::OK;
+
     if (layout.pad_wide_chars && drawable && box->drawable->Wide()) {
-        p.x += advance / 2;
+        p.x -= advance / 2;
         AppendChar(' ', out->attr.GetAttrId(cur_attr), &PushBack(out->data, Drawable::Box()));
-    } else p.x += advance;
+    }
 
     return state;
 }

@@ -439,7 +439,7 @@ struct String {
     static String16 ToUTF16(const StringPiece    &s, int *lo=0);
 };
 
-struct Uniciode {
+struct Unicode {
     static const unsigned char non_breaking_space = 0xA0;
 };
 

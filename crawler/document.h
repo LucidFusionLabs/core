@@ -195,8 +195,8 @@ struct DocumentParser {
         bool data_url = PrefixMatch(url, "data:");
         if (data_url) { /**/
         } else if (PrefixMatch(url, "/")) {
-            if (PrefixMatch(url, "//")) url = "http:"                          + url;
-            else if (doc->node)          url = String::ToUTF8(doc->node->domain) + url;
+            if (PrefixMatch(url, "//")) url = "http:"                           + url;
+            else if (doc->node)         url = String::ToUTF8(doc->node->domain) + url;
         } else if (url.substr(0, 8).find("://") == string::npos) {
             if (doc->node) url = StrCat(doc->node->baseURI, "/", url);
         }
