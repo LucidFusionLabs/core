@@ -103,11 +103,14 @@ int PngReader::Read(File *lf, Texture *out) {
     int number_of_passes = png_set_interlace_handling(png_ptr), pf;
     png_read_update_info(png_ptr, info_ptr);
 
-    if (!(pf = Pixel::FromPngId(color_type))) { png_destroy_read_struct(&png_ptr, &info_ptr, 0); return -1; }
+    if (color_type == PNG_COLOR_TYPE_PALETTE) {
+        png_set_palette_to_rgb(png_ptr);
+        pf = Pixel::RGB24;
+    } else if (!(pf = Pixel::FromPngId(color_type))) { png_destroy_read_struct(&png_ptr, &info_ptr, 0); return -1; }
     out->Resize(png_get_image_width(png_ptr, info_ptr), png_get_image_height(png_ptr, info_ptr), pf, Texture::Flag::CreateBuf);
 
     int linesize = out->LineSize();
-    CHECK_EQ(linesize, png_get_rowbytes(png_ptr, info_ptr));
+    CHECK_LE(png_get_rowbytes(png_ptr, info_ptr), linesize);
 
     vector<png_bytep> row_pointers;
     for (int y=0; y<out->height; y++) row_pointers.push_back((png_bytep)(out->buf + linesize * y));

@@ -142,10 +142,12 @@ struct DocumentParser {
     };
 
     struct ImageParser : public Parser {
-        string content; Asset *target;
-        ImageParser(DocumentParser *p, const string &url, Asset *t) : Parser(p, url), target(t) {}
+        string content;
+        Asset *target;
+        int content_length;
+        ImageParser(DocumentParser *p, const string &url, Asset *t) : Parser(p, url), target(t), content_length(0) {}
         void Complete(const string &content_type) {
-            if (!content.empty() && parent->Running(this)) {
+            if (!content.empty() && content_length == content.size() && parent->Running(this)) {
                 string fn = BaseName(url);
                 if      (MIMEType::Jpg(content_type) && !FileSuffix::Jpg(fn)) fn += ".jpg";
                 else if (MIMEType::Png(content_type) && !FileSuffix::Png(fn)) fn += ".png";
@@ -153,11 +155,13 @@ struct DocumentParser {
                 if (PrefixMatch(content_type, "text/html")) INFO("ImageParser content='", content, "'");
 
                 target->Load(content.data(), fn.c_str(), content.size());
-                INFO("ImageParser ", content_type, ": ", url, " ", fn, " ", target->tex.width, " ", target->tex.height);
+                INFO("ImageParser ", content_type, ": ", url, " ", fn, " ", content.size(), " ",
+                     target->tex.width, " ", target->tex.height);
             }
             Parser::Complete(this);
         }
-        void WGetResponseCB(Connection *c, const char *h, const string &ct, const char *cb, int cl) { 
+        void WGetResponseCB(Connection *c, const char *h, const string &ct, const char *cb, int cl) {
+            if      (h)                  content_length = cl;
             if      (!h && (!cb || !cl)) Complete(ct);
             else if (!h)                 content.append(cb, cl);
         }
@@ -180,7 +184,7 @@ struct DocumentParser {
         html_handler->WGetCB(0, 0, string(), 0,               0);
     }
 
-    void Open(const string &url, DOM::Frame *frame) {
+    void OpenFrame(const string &url, DOM::Frame *frame) {
         Clear();
         doc->node->setURL(url);
         doc->node->setDomain(HTTP::HostURL(url.c_str()).c_str());
@@ -211,10 +215,15 @@ struct DocumentParser {
         Asset **image_asset = input_image ? &input->image_asset : (image ? &image->asset : 0);
 
         if (image_asset) {
-            CHECK_EQ(*image_asset, 0);
-            if ((*image_asset = FindOrNull(image_cache, url))) return;
-            *image_asset = new Asset();
-            image_cache[url] = *image_asset;
+            Asset *a = FindOrNull(image_cache, url);
+            if (a) {
+                if (*image_asset) delete *image_asset;
+                *image_asset = a;
+                return;
+            } else {
+                if (!*image_asset) *image_asset = new Asset();
+                image_cache[url] = *image_asset;
+            }
         }
 
         if (data_url) {
@@ -246,8 +255,9 @@ struct DocumentParser {
         }
     }
 
-    Asset *OpenImage(const string &url) {
+    Asset *OpenImage(const string &url, Asset *a=0) {
         DOM::HTMLImageElement image(0);
+        if (a) image.asset = a;
         Open(url, &image);
         return image.asset;
     }

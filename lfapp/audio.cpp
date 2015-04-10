@@ -595,9 +595,8 @@ int Audio::Frame(unsigned clicks) {
         app->assets.movie_playing->Play(0);
     } else if ((playing || loop) && Out.size() < refillWhen) {
         // QueueMix(playing ? playing : loop, !playing ? MixFlag::Reset : 0, -1, -1);
-        app->thread_pool.Write(MessageQueue::CallbackMessage,
-                               new Callback(bind(&Audio::QueueMix, this, playing ? playing : loop,
-                                                 !playing ? MixFlag::Reset : 0, -1, -1)));
+        RunInMainThread(new Callback(bind(&Audio::QueueMix, this,
+                                          playing ? playing : loop, !playing ? MixFlag::Reset : 0, -1, -1)));
     }
     return 0;
 }

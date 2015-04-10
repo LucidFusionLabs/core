@@ -1493,7 +1493,7 @@ void Browser::Navigate(const string &url) {
 }
 
 void Browser::Open(const string &url) {
-    doc.parser->Open(url, (DOM::Frame*)NULL);
+    doc.parser->OpenFrame(url, (DOM::Frame*)NULL);
 }
 
 void Browser::KeyEvent(int key, bool down) {}

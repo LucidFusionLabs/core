@@ -124,13 +124,17 @@ static const char **osx_argv = 0;
     }
     - (NSOpenGLContext *)openGLContext {
         if (context == nil) {
-            NSOpenGLContext *prev_context = (NSOpenGLContext*)GetNativeWindow()->gl;
-            context = [[NSOpenGLContext alloc] initWithFormat:pixel_format shareContext:prev_context];
+            context = [self createGLContext];
             screen->gl = context;
-            [context setView:self];
             needs_reshape = YES;
         }
         return context;
+    }
+    - (NSOpenGLContext *)createGLContext {
+        NSOpenGLContext *prev_context = (NSOpenGLContext*)GetNativeWindow()->gl;
+        NSOpenGLContext *ret = [[NSOpenGLContext alloc] initWithFormat:pixel_format shareContext:prev_context];
+        [ret setView:self];
+        return ret;
     }
     - (void)startThread:(bool)first {
         initialized = true;
@@ -340,6 +344,11 @@ extern "C" void NativeWindowSize(int *width, int *height) {}
 extern "C" void *OSXCreateWindow(int w, int h, struct NativeWindow *nw) {
     [(GameView*)GetNativeWindow()->id clearKeyModifiers];
     return [(AppDelegate*)[NSApp delegate] createWindow:w height:h nativeWindow:nw];
+}
+extern "C" void *OSXCreateGLContext(void *O) {
+    return [(GameView*)O createGLContext];
+}
+extern "C" void OSXDeleteGLContext(void *O) {
 }
 
 extern "C" void OSXStartWindow(void *O) {
