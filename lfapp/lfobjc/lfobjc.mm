@@ -59,6 +59,7 @@ static const char **osx_argv = 0;
         NSWindow *window;
         NSOpenGLContext  *context;
         NSOpenGLPixelFormat *pixel_format;
+        NSFileHandle *wait_forever_fh;
 
         NSTimer *timer;
         CVDisplayLinkRef displayLink;
@@ -171,11 +172,26 @@ static const char **osx_argv = 0;
         float screen_w = [self frame].size.width, screen_h = [self frame].size.height;
         Reshaped((int)screen_w, (int)screen_h);
     }
+    - (void)setWaitForeverSocket: (int)fd {
+        if (wait_forever_fh) FATALf("wait_forever_fh already set: %p", wait_forever_fh);
+        wait_forever_fh = [[NSFileHandle alloc] initWithFileDescriptor:fd];
+        [[NSNotificationCenter defaultCenter] addObserver:self
+            selector:@selector(fileDataAvailable:) name:NSFileHandleDataAvailableNotification object:wait_forever_fh];
+        [wait_forever_fh waitForDataInBackgroundAndNotify];
+    }
+    - (void)delWaitForeverSocket: (int)fd {
+        if (!wait_forever_fh || [wait_forever_fh fileDescriptor] != fd) FATALf("del mismatching wait_forever_fh %o", wait_forever_fh);
+        [[NSNotificationCenter defaultCenter] removeObserver:self
+            name:NSFileHandleDataAvailableNotification object:wait_forever_fh];
+        // [wait_forever_fh closeFile];
+        wait_forever_fh = nil;
+    }
     - (void)fileDataAvailable: (NSNotification *)notification { 
-        // [self setNeedsDisplay:YES]; 
-        SetNativeWindow(screen);
-        [self getFrameForTime:nil];
         NSFileHandle *fh = (NSFileHandle*) [notification object];
+        if (fh != wait_forever_fh) return;
+        SetNativeWindow(screen);
+        // [self setNeedsDisplay:YES]; 
+        [self getFrameForTime:nil];
         [fh waitForDataInBackgroundAndNotify];
     }
     - (void)fileReadCompleted: (NSNotification *)notification {}
@@ -378,15 +394,8 @@ extern "C" void OSXAddWaitForeverMouse(void *O) { [(GameView*)O setFrameOnMouseI
 extern "C" void OSXDelWaitForeverMouse(void *O) { [(GameView*)O setFrameOnMouseInput:0]; }
 extern "C" void OSXAddWaitForeverKeyboard(void *O) { [(GameView*)O setFrameOnKeyboardInput:1]; }
 extern "C" void OSXDelWaitForeverKeyboard(void *O) { [(GameView*)O setFrameOnKeyboardInput:0]; }
-extern "C" void OSXAddWaitForeverSocket(void *O, int fd) {
-    NSFileHandle *fh = [[NSFileHandle alloc] initWithFileDescriptor:fd];
-    // [[NSNotificationCenter defaultCenter] addObserver:(GameView*)O
-    //     selector:@selector(fileReadCompleted:) name:NSFileHandleReadCompletionNotification object:nil];
-    // [fh readInBackgroundAndNotify];
-    [[NSNotificationCenter defaultCenter] addObserver:(GameView*)O
-        selector:@selector(fileDataAvailable:) name:NSFileHandleDataAvailableNotification object:nil];
-    [fh waitForDataInBackgroundAndNotify];
-}
+extern "C" void OSXAddWaitForeverSocket(void *O, int fd) { [(GameView*)O setWaitForeverSocket: fd]; }
+extern "C" void OSXDelWaitForeverSocket(void *O, int fd) { [(GameView*)O delWaitForeverSocket: fd]; }
 
 extern "C" int main(int argc, const char **argv) {
     osx_argc = argc; osx_argv = argv;

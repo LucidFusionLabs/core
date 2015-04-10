@@ -171,6 +171,7 @@ int Glyph::Layout(LFL::Box *out, const Drawable::Attr *attr) const {
 }
 
 void Glyph::Draw(const LFL::Box &b, const Drawable::Attr *a) const {
+    if (isspace(id) || id == Unicode::non_breaking_space) return;
     if (!a || !a->font) return tex.Draw(b, a);
     if (!ready) a->font->engine->LoadGlyphs(a->font, this, 1);
     if (tex.buf) screen->gd->DrawPixels(b, tex);
@@ -296,9 +297,10 @@ Glyph *Font::FindGlyph(unsigned short gind) {
 
 void Font::UpdateMetrics(Glyph *g) {
     if (fix_metrics) {
-        int fixed_width = FixedWidth();
-        g->wide = fixed_width && g->advance > fixed_width;
-        g->advance = fixed_width * 2;
+        if (int fixed_width = FixedWidth()) {
+            if (0 && (g->wide = g->advance > (fixed_width * 1.5))) g->advance = fixed_width * 2;
+            else                                              g->advance = fixed_width;
+        }
         return;
     }
     int descent = g->tex.height - g->bearing_y;

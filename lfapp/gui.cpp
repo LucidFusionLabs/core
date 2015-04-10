@@ -381,6 +381,7 @@ void TextGUI::UpdateToken(Line *L, int word_offset, int word_len, int update_typ
         if (update_type < 0) L->data->links.erase(word_offset);
         else if (Link *link = new Link(this, &mouse_gui, box, text)) {
             L->data->links[word_offset] = shared_ptr<Link>(link);
+            if (new_link_cb) new_link_cb(link);
         }
     }
 }
@@ -1017,8 +1018,7 @@ void Terminal::FlushParseText() {
         if (append) l->Draw(l->p, -1, o, ol);
         else LinesFrameBuffer::Paint(l, point(sx, l->p.y), Box(-sx, 0, ex - sx, fb->font_height), o, ol);
     }
-    if ((term_cursor.x += update_size) > term_width) Newline(true);
-    CHECK_LT(term_cursor.x-1, term_width);
+    term_cursor.x = min(term_width, term_cursor.x + update_size);
     parse_text.erase(0, consumed);
 }
 
