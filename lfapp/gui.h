@@ -246,7 +246,6 @@ struct TextGUI : public KeyboardGUI {
         void Hover(int, int, int, int down) { parent->hover_link = down ? this : 0; }
         void Visit() { SystemBrowser::Open(link.c_str()); }
     };
-    typedef function<void(Link*)> LinkCB;
     struct LineData {
         Box box;
         Flow flow;
@@ -388,7 +387,8 @@ struct TextGUI : public KeyboardGUI {
     Color cmd_color=Color::white, selection_color=Color(Color::grey70, 0.5);
     bool deactivate_on_enter=0, token_processing=0, insert_mode=1;
     int start_line=0, end_line=0, start_line_adjust=0, skip_last_lines=0;
-    LinkCB new_link_cb, hover_link_cb;
+    function<void(const shared_ptr<Link>&)> new_link_cb;
+    function<void(Link*)> hover_link_cb;
     Link *hover_link=0;
 
     TextGUI(Window *W, Font *F) : KeyboardGUI(W, F), mouse_gui(W), font(F)

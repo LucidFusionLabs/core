@@ -379,9 +379,9 @@ void TextGUI::UpdateToken(Line *L, int word_offset, int word_len, int update_typ
         int lx = glyphs[word_offset].box.x, rx = glyphs[word_offset+word_len-1].box.right();
         Box box(lx, L->p.y - font_height, rx - lx, font_height);
         if (update_type < 0) L->data->links.erase(word_offset);
-        else if (Link *link = new Link(this, &mouse_gui, box, text)) {
-            L->data->links[word_offset] = shared_ptr<Link>(link);
-            if (new_link_cb) new_link_cb(link);
+        else {
+            auto i = Insert(L->data->links, word_offset, shared_ptr<Link>(new Link(this, &mouse_gui, box, text)));
+            if (new_link_cb) new_link_cb(i->second);
         }
     }
 }
