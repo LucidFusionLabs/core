@@ -215,15 +215,10 @@ struct DocumentParser {
         Asset **image_asset = input_image ? &input->image_asset : (image ? &image->asset : 0);
 
         if (image_asset) {
-            Asset *a = FindOrNull(image_cache, url);
-            if (a) {
-                if (*image_asset) delete *image_asset;
-                *image_asset = a;
-                return;
-            } else {
-                if (!*image_asset) *image_asset = new Asset();
-                image_cache[url] = *image_asset;
-            }
+            CHECK_EQ(*image_asset, 0);
+            if ((*image_asset = FindOrNull(image_cache, url))) return;
+            *image_asset = new Asset();
+            image_cache[url] = *image_asset;
         }
 
         if (data_url) {
@@ -255,9 +250,8 @@ struct DocumentParser {
         }
     }
 
-    Asset *OpenImage(const string &url, Asset *a=0) {
+    Asset *OpenImage(const string &url) {
         DOM::HTMLImageElement image(0);
-        if (a) image.asset = a;
         Open(url, &image);
         return image.asset;
     }

@@ -70,6 +70,10 @@ struct RefSet {
 template <class X> static void Replace(X** p, X* r) { delete (*p); (*p) = r; }
 template <class X> static void AllocReplace(X** p, X* r) { if (*p && (*p)->alloc) (*p)->alloc->free(*p); *p = r; }
 
+template <class X> typename X::iterator Insert(X &m, const typename X::key_type &k, const typename X::mapped_type &v) {
+    return m.insert(typename X::value_type(k, v)).first;
+}
+
 template <typename K, typename V> typename map<K, V>::iterator FindOrInsert(map<K, V> &m, K k, V v, int *inserted) {
     auto ret = m.insert(typename map<K, V>::value_type(k, v));
     if (inserted) (*inserted)++;

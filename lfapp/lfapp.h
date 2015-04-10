@@ -1342,7 +1342,6 @@ struct Application : public ::LFApp, public Module {
     int MainLoop();
     int Free();
     int Exiting();
-
 };
 extern Application *app;
 

@@ -38,7 +38,7 @@ Browser *image_browser;
 ModuleThread *network_thread;
 int new_win_width = 80*10, new_win_height = 25*17;
 
-void MyNewLinkCB(TextArea::Link *link) {
+void MyNewLinkCB(const shared_ptr<TextGUI::Link> &link) {
     string image_url = link->link;
     if (!FileSuffix::Image(image_url)) {
         string prot, host, port, path;
@@ -49,11 +49,10 @@ void MyNewLinkCB(TextArea::Link *link) {
             return;
         }
     }
-    link->image = new Asset();
-    network_thread->queue->Write(new Callback([=]() { image_browser->doc.parser->OpenImage(image_url, link->image); }));
+    network_thread->queue->Write(new Callback([=]() { link->image = image_browser->doc.parser->OpenImage(image_url); }));
 }
 
-void MyHoverLinkCB(TextArea::Link *link) {
+void MyHoverLinkCB(TextGUI::Link *link) {
     Asset *a = link ? link->image : 0;
     if (!a) return;
     a->tex.Bind();
