@@ -18,86 +18,23 @@
 
 #ifndef __LFL_LFAPP_NETWORK_H__
 #define __LFL_LFAPP_NETWORK_H__
+
+#include "lfapp/wire.h"
+
 namespace LFL {
 
 DECLARE_bool(dns_dump);
 DECLARE_bool(network_debug);
 
-struct Query {  
-    virtual ~Query() {}
-    virtual int Heartbeat(Connection *c) { return 0; }
-    virtual int Connected(Connection *c) { return 0; }
-    virtual int Read(Connection *c) { return 0; }    
-    virtual int Flushed(Connection *c) { return 0; }
-    virtual void Close(Connection *c) {}
-};
-
 struct IOVec { char *buf; int len; };
-
-struct Protocol { 
-    enum { TCP, UDP, GPLUS }; int p;
-    static const char *Name(int p);
-};
-
-struct Ethernet {
-    struct Header {
-        static const int Size = 14, AddrSize = 6;
-        unsigned char dst[AddrSize], src[AddrSize];
-        unsigned short type;
-	};
-};
-
-struct IPV4 {
-    typedef unsigned Addr;
-    static const Addr ANY;
-	struct Header {
-        static const int MinSize = 20;
-        unsigned char vhl, tos;
-        unsigned short len, id, off;
-        unsigned char ttl, prot;
-        unsigned short checksum;
-        unsigned int src, dst;
-        int version() const { return vhl >> 4; }
-        int hdrlen() const { return (vhl & 0x0f); }
-    };
-    static Addr Parse(const string &ip);
-    static void ParseCSV(const string &text, vector<Addr> *out);
-    static void ParseCSV(const string &text, set<Addr> *out);
-    static string MakeCSV(const vector<Addr> &in);
-    static string MakeCSV(const set<Addr> &in);
-};
-
-struct TCP {
-    struct Header {
-        static const int MinSize = 20;
-        unsigned short src, dst;
-        unsigned int seqn, ackn;
-#ifdef LFL_BIG_ENDIAN
-        unsigned char offx2, fin:1, syn:1, rst:1, push:1, ack:1, urg:1, exe:1, cwr:1;
-#else
-        unsigned char offx2, cwr:1, exe:1, urg:1, ack:1, push:1, rst:1, syn:1, fin:1;
-#endif
-        unsigned short win, checksum, urgp;
-        int offset() const { return offx2 >> 4; }
-    };
-};
-
-struct UDP {
-	struct Header {
-        static const int Size = 8;
-        unsigned short src, dst, len, checksum;
-    };
-};
 
 struct IPV4Endpoint {
     IPV4::Addr addr=0; int port=0;
     IPV4Endpoint() {}
     IPV4Endpoint(int A, int P) : addr(A), port(P) {};
-    string name() const { return name(addr, port); }
+    string name() const { return IPV4::Text(addr, port); }
     string ToString() const { string s; s.resize(sizeof(*this)); memcpy((char*)s.data(), this, sizeof(*this)); return s; }
     static const IPV4Endpoint *FromString(const char *s) { return (const IPV4Endpoint *)s; }
-    static string name(IPV4::Addr addr) { return StringPrintf("%u.%u.%u.%u", addr&0xff, (addr>>8)&0xff, (addr>>16)&0xff, (addr>>24)&0xff); }
-    static string name(IPV4::Addr addr, int port) { return StringPrintf("%u.%u.%u.%u:%u", addr&0xff, (addr>>8)&0xff, (addr>>16)&0xff, (addr>>24)&0xff, port); }
 };
 
 struct IPV4EndpointSource { 
@@ -137,45 +74,6 @@ struct IPV4EndpointPoolFilter : public IPV4EndpointSource {
     void Get(IPV4::Addr addr, int *port) { return wrap->Get(addr, port); }
     bool GetPort(int ind, int *port) { return wrap->GetPort(ind, port); }
     void Get(IPV4::Addr *addr, int *port);
-};
-
-struct Network : public Module {
-    vector<Service*> service_table;
-#   define ServiceTableIter(t) for (int i=0, n=(t).size(); i<n; i++)
-
-    int Init();
-    int Enable(Service *svc);
-    int Disable(Service *svc);
-    int Shutdown(Service *svc);
-    int Enable(const vector<Service*> &svc);
-    int Disable(const vector<Service*> &svc);
-    int Shutdown(const vector<Service*> &svc);
-    int Frame(unsigned);
-    void AcceptFrame(Service *svc, Listener *listener);
-    void TCPConnectionFrame(Service *svc, Connection *c, vector<Socket> *removelist);
-    void UDPConnectionFrame(Service *svc, Connection *c, vector<string> *removelist, const string &epk);
-
-    void ConnClose(Service *svc, Connection *c, vector<Socket> *removelist);
-    void ConnCloseAll(Service *svc);
-
-    void EndpointRead(Service *svc, const char *name, const char *buf, int len);
-    void EndpointClose(Service *svc, Connection *c, vector<string> *removelist, const string &epk);
-    void EndpointCloseAll(Service *svc);
-
-    static Socket OpenSocket(int protocol);
-    static int SetSocketBlocking(Socket fd, int blocking);
-    static int SetSocketBroadcastEnabled(Socket fd, int enabled);
-    static int SetSocketReceiveBufferSize(Socket fd, int size);
-    static int GetSocketReceiveBufferSize(Socket fd);
-
-    static int Bind(int fd, IPV4::Addr addr, int port);
-    static Socket Listen(int protocol, IPV4::Addr addr, int port);
-    static int Connect(Socket fd, IPV4::Addr addr, int port, int *connected);
-    static int SendTo(Socket fd, IPV4::Addr addr, int port, const char *buf, int len);
-    static int GetSockName(Socket fd, IPV4::Addr *addr_out, int *port_out);
-    static int GetPeerName(Socket fd, IPV4::Addr *addr_out, int *port_out);
-    static string GetHostByAddr(IPV4::Addr addr);
-    static IPV4::Addr GetHostByName(const string &host);
 };
 
 struct SocketSet {
@@ -223,14 +121,7 @@ struct SelectSocketThread : public SocketSet {
     void Add(Socket s, int f, void *v) { { ScopedMutex m(sockets_mutex); sockets.Add(s, f, v); } Wakeup(); }
     void Set(Socket s, int f, void *v) { { ScopedMutex m(sockets_mutex); sockets.Set(s, f, v); } Wakeup(); }
     void Del(Socket s)                 { { ScopedMutex m(sockets_mutex); sockets.Del(s);       } Wakeup(); }
-    void Start() {
-#ifndef _WIN32
-        CHECK_EQ(::pipe(pipe), 0);
-        Network::SetSocketBlocking(pipe[0], 0);
-#endif
-        sockets.Add(pipe[0], SocketSet::READABLE, 0);
-        thread.Start();
-    }
+    void Start();
     void Wait() { Wakeup(); thread.Wait(); }
     void Wakeup() { char c=0; if (pipe[1] >= 0) CHECK_EQ((int)write(pipe[1], &c, 1), 1); }
     void ThreadProc();
@@ -270,76 +161,54 @@ template <int S> struct EPollSocketSet : public SocketSet {
 #define LFLSocketSet SelectSocketSet
 #endif
 
-#undef IN
-struct DNS {
-    struct Header {
-        unsigned short id;
-#ifdef LFL_BIG_ENDIAN
-        unsigned short qr:1, opcode:4, aa:1, tc:1, rd:1, ra:1, unused:1, ad:1, cd:1, rcode:4;
-#else
-        unsigned short rd:1, tc:1, aa:1, opcode:4, qr:1, rcode:4, cd:1, ad:1, unused:1, ra:1;
-#endif
-        unsigned short qdcount, ancount, nscount, arcount;
-        static const int size = 12;
-    };
+struct Network : public Module {
+    vector<Service*> service_table;
+#   define ServiceTableIter(t) for (int i=0, n=(t).size(); i<n; i++)
 
-    struct Type { enum { A=1, NS=2, MD=3, MF=4, CNAME=5, SOA=6, MB=7, MG=8, MR=9, _NULL=10, WKS=11, PTR=12, HINFO=13, MINFO=14, MX=15, TXT=16 }; };
-    struct Class { enum { IN=1, CS=2, CH=3, HS=4 }; };
+    int Init();
+    int Enable(Service *svc);
+    int Disable(Service *svc);
+    int Shutdown(Service *svc);
+    int Enable(const vector<Service*> &svc);
+    int Disable(const vector<Service*> &svc);
+    int Shutdown(const vector<Service*> &svc);
+    int Frame(unsigned);
+    void AcceptFrame(Service *svc, Listener *listener);
+    void TCPConnectionFrame(Service *svc, Connection *c, vector<Socket> *removelist);
+    void UDPConnectionFrame(Service *svc, Connection *c, vector<string> *removelist, const string &epk);
 
-    struct Record {
-        string question, answer; unsigned short type=0, _class=0, ttl1=0, ttl2=0, pref=0; IPV4::Addr addr=0;
-        string DebugString() const { return StrCat("Q=", question, ", A=", answer.empty() ? IPV4Endpoint::name(addr) : answer); }
-    };
-    struct Response {
-        vector<DNS::Record> Q, A, NS, E;
-        string DebugString() const;
-    };
+    void ConnClose(Service *svc, Connection *c, vector<Socket> *removelist);
+    void ConnCloseAll(Service *svc);
 
-    static int WriteRequest(unsigned short id, const string &querytext, unsigned short type, char *out, int len);
-    static int ReadResponse(const char *buf, int len, Response *response);
-    static int ReadResourceRecord(const Serializable::Stream *in, int num, vector<Record> *out);
-    static int ReadString(const char *start, const char *cur, const char *end, string *out);
-
-    typedef map<string, vector<IPV4::Addr> > AnswerMap;
-    static void MakeAnswerMap(const vector<Record> &in, AnswerMap *out);
-    static void MakeAnswerMap(const vector<Record> &in, const AnswerMap &qmap, int type, AnswerMap *out);
+    void EndpointRead(Service *svc, const char *name, const char *buf, int len);
+    void EndpointClose(Service *svc, Connection *c, vector<string> *removelist, const string &epk);
+    void EndpointCloseAll(Service *svc);
 };
 
-struct HTTP {
-    static bool ParseHost(const char *host, const char *host_end, string *hostO, string *portO);
-    static bool ResolveHost(const char *host, const char *host_end, IPV4::Addr *ipv4_addr, int *tcp_port, bool ssl);
-    static bool ResolveEndpoint(const string &host, const string &port, IPV4::Addr *ipv4_addr, int *tcp_port, bool ssl, int defport=0);
-    static bool ParseURL(const char *url, string *protO, string *hostO, string *portO, string *pathO);
-    static bool ResolveURL(const char *url, bool *ssl, IPV4::Addr *ipv4_addr, int *tcp_port, string *host, string *path, int defport=0, string *prot=0);
-    static string HostURL(const char *url);
+struct SystemNetwork {
+    static Socket OpenSocket(int protocol);
+    static int SetSocketBlocking(Socket fd, int blocking);
+    static int SetSocketBroadcastEnabled(Socket fd, int enabled);
+    static int SetSocketReceiveBufferSize(Socket fd, int size);
+    static int GetSocketReceiveBufferSize(Socket fd);
 
-    static int request(char *buf, char **methodO, char **urlO, char **argsO, char **verO);
-    static char *headersStart(char *buf);
-    static char *headerEnd(char *buf);
-    static const char *headerEnd(const char *buf);
-    static int headerLen(const char *beg, const char *end);
-    static int headerNameLen(const char *beg);
-    static int argNameLen(const char *beg);
-    static int headerGrep(const char *headers, const char *headersEnd, int num, ...);
-    static string headerGrep(const char *headers, const char *headersEnd, const string &name);
-    static int argGrep(const char *args, const char *argsEnd, int num, ...);
-    static bool connectionClose(const char *connectionHeaderValue);
-    static string encodeURL(const char *url);
+    static int Bind(int fd, IPV4::Addr addr, int port);
+    static Socket Listen(int protocol, IPV4::Addr addr, int port);
+    static int Connect(Socket fd, IPV4::Addr addr, int port, int *connected);
+    static int SendTo(Socket fd, IPV4::Addr addr, int port, const char *buf, int len);
+    static int GetSockName(Socket fd, IPV4::Addr *addr_out, int *port_out);
+    static int GetPeerName(Socket fd, IPV4::Addr *addr_out, int *port_out);
+    static string GetHostByAddr(IPV4::Addr addr);
+    static IPV4::Addr GetHostByName(const string &host);
 };
 
-struct SMTP {
-    struct Message {
-        string mail_from, content;
-        vector<string> rcpt_to;
-        void clear() { mail_from.clear(); content.clear(); rcpt_to.clear(); }
-    };
-    static void HTMLMessage(const string& from, const string& to, const string& subject, const string& content, string *out);
-    static void NativeSendmail(const string &message);
-    static string EmailFrom(const string &message);
-    static int SuccessCode  (int code) { return code == 250; }
-    static int RetryableCode(int code) {
-        return !code || code == 221 || code == 421 || code == 450 || code == 451 || code == 500 || code == 501 || code == 502 || code == 503;
-    }
+struct Query {  
+    virtual ~Query() {}
+    virtual int Heartbeat(Connection *c) { return 0; }
+    virtual int Connected(Connection *c) { return 0; }
+    virtual int Read(Connection *c) { return 0; }    
+    virtual int Flushed(Connection *c) { return 0; }
+    virtual void Close(Connection *c) {}
 };
 
 struct Listener {
@@ -372,12 +241,12 @@ struct Connection {
     Connection(Service *s, int State, IPV4::Addr Addr, int Port)           : svc(s), socket(-1),   ct(Now()), rt(Now()), wt(Now()), addr(Addr), state(State), port(Port), self_reference(TypePointer(this)), query(0) {}
     Connection(Service *s, int State, int Sock, IPV4::Addr Addr, int Port) : svc(s), socket(Sock), ct(Now()), rt(Now()), wt(Now()), addr(Addr), state(State), port(Port), self_reference(TypePointer(this)), query(0) {}
 
-    string name() { return !endpoint_name.empty() ? endpoint_name : IPV4Endpoint::name(addr, port); }
+    string name() { return !endpoint_name.empty() ? endpoint_name : IPV4::Text(addr, port); }
     void _error() { state = Error; ct = Now(); }
     void connected() { state = Connected; ct = Now(); }
     void reconnect() { state = Reconnect; ct = Now(); }
     void connecting() { state = Connecting; ct = Now(); }
-    int set_source_address() { return Network::GetSockName(socket, &src_addr, &src_port); }
+    int set_source_address() { return SystemNetwork::GetSockName(socket, &src_addr, &src_port); }
     int write(const string &buf) { return write(buf.c_str(), buf.size()); }
     int write(const char *buf, int len);
     int writeflush();
@@ -452,84 +321,6 @@ struct UDPServer : public Service {
     Query *query=0;
     UDPServer(int port) { protocol=Protocol::UDP; QueueListen(0, port); }
     virtual int Connected(Connection *c) { c->query = query; return 0; }
-};
-
-struct Resolver {
-    int max_outstanding_per_ns=10, auto_disconnect_seconds=0;
-
-    typedef function<void(IPV4::Addr, DNS::Response*)> ResponseCB;
-    struct Nameserver;
-    struct Request {
-        Nameserver *ns; string query; unsigned short type; ResponseCB cb; Time stamp; unsigned retrys;
-        Request() : ns(0), type(DNS::Type::A), stamp(Now()), retrys(0) {}
-        Request(const string &Q, unsigned short T=DNS::Type::A, ResponseCB CB=ResponseCB(), int R=0) : ns(0), query(Q), type(T), cb(CB), stamp(Now()), retrys(R) {}
-        Request(Nameserver *NS, const string &Q, unsigned short T, ResponseCB CB, int R) : ns(NS), type(T), query(Q), cb(CB), stamp(Now()), retrys(R) {}
-    };
-    vector<Request> queue;
-
-    struct Nameserver {
-        Resolver *parent=0;
-        Connection *c=0;
-        bool timedout=0;
-        typedef unordered_map<unsigned short, Request> RequestMap;
-        RequestMap requestMap;
-        ~Nameserver() { if (c) c->_error(); }
-        Nameserver() {}
-        Nameserver(Resolver *P, IPV4::Addr addr) : parent(P),
-        c(Singleton<UDPClient>::Get()->PersistentConnection
-          (IPV4Endpoint::name(addr, 53),
-           [&](Connection *c, const char *cb, int cl) { Response(c, (DNS::Header*)cb, cl); },
-           [&](Connection *c)                         { Heartbeat(); }, 53)), timedout(0) {}
-
-        unsigned short NextID() const { unsigned short id; for (id = ::rand(); Contains(requestMap, id); id = ::rand()) { /**/ } return id; }
-        bool Resolve(const Request &req);
-        void Response(Connection *c, DNS::Header *hdr, int len);
-        void Heartbeat();
-        void Dequeue();
-    };
-    typedef map<IPV4::Addr, Nameserver*> NameserverMap;
-    NameserverMap conn;
-    vector<IPV4::Addr> conn_available;
-
-    void Reset();
-    bool Connected();
-    Nameserver *Connect(IPV4::Addr addr);
-    Nameserver *Connect(const vector<IPV4::Addr> &addrs);
-    bool Resolve(const Request &req);
-
-    static void DefaultNameserver(vector<IPV4::Addr> *nameservers);
-    static void UDPClientHeartbeatCB(Connection *c, void *a) { ((Nameserver*)a)->Heartbeat(); }
-};
-
-struct RecursiveResolver {
-    long long queries_requested, queries_completed;
-    struct AuthorityTreeNode {
-        int depth=0;
-        typedef map<string, AuthorityTreeNode*> Children;
-        typedef map<string, DNS::Response*> Cache;
-        Children child;
-        Resolver resolver;
-        Cache Acache, MXcache;
-        DNS::Response authority;
-        string authority_domain;
-        AuthorityTreeNode() { resolver.auto_disconnect_seconds=10; }
-    } root;
-    AuthorityTreeNode *GetAuthorityTreeNode(const string &query, bool create);
-    struct Request {
-        RecursiveResolver *resolver; string query; unsigned short type; Resolver::ResponseCB cb; bool missing_answer;
-        vector<DNS::Response> answer; Request *parent_request; set<Request*> child_request, pending_child_request; set<void*> seen_authority;
-        Request(const string &Q, unsigned short T=DNS::Type::A, Resolver::ResponseCB C=Resolver::ResponseCB(), Request *P=0) : resolver(0), query(Q), type(T), cb(C), missing_answer(0), parent_request(P) {}
-        virtual ~Request() { CHECK_EQ(child_request.size(), 0); }
-        int Ancestors() const { return parent_request ? 1 + parent_request->Ancestors() : 0; }
-        void ChildResolve(Request *subreq);
-        void ChildResponse(Request *subreq, DNS::Response *res);
-        void Complete(IPV4::Addr addr, DNS::Response *res);
-        void ResponseCB(IPV4::Addr A, DNS::Response *R) { resolver->Response(this, A, R, 0); }
-    };
-    RecursiveResolver();
-    bool Resolve(Request *req);
-    int ResolveMissing(Request *req, const vector<DNS::Record> &R, const DNS::AnswerMap *answer);
-    void Response(Request *req, IPV4::Addr addr, DNS::Response *res, vector<DNS::Response> *subres);
 };
 
 struct HTTPClient : public Service {

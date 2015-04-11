@@ -505,12 +505,18 @@ struct BitField {
     static int Set  (      unsigned char *b, int bucket) {          b[bucket/8] |=  (1 << (bucket % 8)); return 1; }
     static int Get  (const unsigned char *b, int bucket) { return   b[bucket/8] &   (1 << (bucket % 8));           }
     static int Not  (const unsigned char *b, int bucket) { return !(b[bucket/8] &   (1 << (bucket % 8)));          }
-    static int Get  (      unsigned char *b, int bucket) { return Get((const unsigned char*)b, bucket); }
-    static int Not  (      unsigned char *b, int bucket) { return Not((const unsigned char*)b, bucket); }
+    static int Get  (      unsigned char *b, int bucket) { return Get(reinterpret_cast<const unsigned char*>(b), bucket); }
+    static int Not  (      unsigned char *b, int bucket) { return Not(reinterpret_cast<const unsigned char*>(b), bucket); }
+    static int Set  (               char *b, int bucket) { return Set(reinterpret_cast<      unsigned char*>(b), bucket); }
+    static int Get  (const          char *b, int bucket) { return Get(reinterpret_cast<const unsigned char*>(b), bucket); }
+    static int Get  (               char *b, int bucket) { return Get(reinterpret_cast<      unsigned char*>(b), bucket); }
+    static int Clear(               char *b, int bucket) { return Clear(reinterpret_cast<    unsigned char*>(b), bucket); }
 
     static int FirstSet  (const unsigned char *b, int l) { for (int i=0;   i<l;  i++) { unsigned char c=b[i]; if (c != 0)   return i*8 + ffs( c)-1; } return -1; }
     static int FirstClear(const unsigned char *b, int l) { for (int i=0;   i<l;  i++) { unsigned char c=b[i]; if (c != 255) return i*8 + ffs(~c)-1; } return -1; }
-    static int  LastClear(const unsigned char *b, int l) { for (int i=l-1; i>=0; i--) { unsigned char c=b[i]; if (c != 255) return i*8 + ffs(~c)-1; } return -1; }
+    static int LastClear (const unsigned char *b, int l) { for (int i=l-1; i>=0; i--) { unsigned char c=b[i]; if (c != 255) return i*8 + ffs(~c)-1; } return -1; }
+    static int LastClear (const          char *b, int l) { return LastClear (reinterpret_cast<const unsigned char*>(b), l); }
+    static int FirstClear(const          char *b, int l) { return FirstClear(reinterpret_cast<const unsigned char*>(b), l); }
 };
 
 struct BloomFilter {

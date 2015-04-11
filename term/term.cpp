@@ -226,8 +226,10 @@ extern "C" int main(int argc, const char *argv[]) {
     app->window_closed_cb = MyWindowClosedCB;
     app->shell.command.push_back(Shell::Command("colors", bind(&MyColorsCmd, _1)));
     app->shell.command.push_back(Shell::Command("shader", bind(&MyShaderCmd, _1)));
-    CHECK((network_thread = app->CreateModuleThread(&app->network)));
-    network_thread->queue->Write(new Callback([&](){ Video::CreateGLContext(screen); }));
+    if (FLAGS_lfapp_network) {
+        CHECK((network_thread = app->CreateModuleThread(&app->network)));
+        network_thread->queue->Write(new Callback([&](){ Video::CreateGLContext(screen); }));
+    }
 
     binds->Add(Bind('=', Key::Modifier::Cmd, Bind::CB(bind(&MyIncreaseFontCmd, vector<string>()))));
     binds->Add(Bind('-', Key::Modifier::Cmd, Bind::CB(bind(&MyDecreaseFontCmd, vector<string>()))));

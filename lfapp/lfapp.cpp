@@ -31,6 +31,7 @@ extern "C" {
 #include "lfapp/css.h"
 #include "lfapp/flow.h"
 #include "lfapp/gui.h"
+#include "lfapp/resolver.h"
 
 #include <time.h>
 #include <fcntl.h>
@@ -1907,8 +1908,9 @@ bool   FlagMap::IsBool(const string &k) const { Flag *f = FindOrNull(flagmap, k)
 bool FlagMap::Set(const string &k, const string &v) {
     Flag *f = FindOrNull(flagmap, k);
     if (!f) return false;
+    f->override = true;
     INFO("set flag ", k, " = ", v);
-    if (f->Get() != v) f->override = dirty = true;
+    if (f->Get() != v) dirty = true;
     else return true;
     f->Update(v.c_str());
     return true;
