@@ -696,7 +696,7 @@ struct Tiles {
     void Run();
     void Draw(const Box &viewport, int scrolled_x, int scrolled_y);
     void PushScissor(const Box &w) { screen->gd->PushScissor(Box(w.x - current_tile.x, w.y - current_tile.y, w.w, w.h)); }
-    void AddBoxArray(const BoxArray &box, point p);
+    void AddDrawableBoxArray(const DrawableBoxArray &box, point p);
 
     void ContextOpen() {
         TilesMatrixIter(&mat) { if (tile->cb.dirty) tile->dirty = 1; tile->cb.dirty = 0; }

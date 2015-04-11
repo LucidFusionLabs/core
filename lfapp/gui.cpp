@@ -148,7 +148,7 @@ void TextGUI::Line::InitFlow() {
 int TextGUI::Line::Erase(int x, int l) {
     if (!(l = max(0, min(Size() - x, l)))) return 0;
     bool token_processing = parent->token_processing;
-    String16 text = token_processing ? BoxRun(&data->glyphs[x], l).Text16() : String16();
+    String16 text = token_processing ? DrawableBoxRun(&data->glyphs[x], l).Text16() : String16();
     LineTokenProcessor<short> update(token_processing ? this : 0, x, String16Piece(text), l);
     if (token_processing) update.ProcessUpdate();
     data->glyphs.Erase(x, l, true);
@@ -165,7 +165,7 @@ template <class X> int TextGUI::Line::InsertTextAt(int x, const StringPieceT<X> 
     if (token_processing) update.ProcessResult();
     if (x == Size()) ret = data->flow.AppendText(v, attr);
     else {
-        BoxArray b;
+        DrawableBoxArray b;
         parent->font->Encode(v, Box(data->glyphs.Position(x),0,0), &b, Font::DrawFlag::AssignFlowX, attr);
         data->glyphs.InsertAt(x, b.data);
         if (update.nw) update.ni += (ret = b.Size());
@@ -178,15 +178,15 @@ template <class X> int TextGUI::Line::OverwriteTextAt(int x, const StringPieceT<
     int size = Size(), pad = max(0, x + v.len - size), grow = 0;
     if (pad) data->flow.AppendText(basic_string<X>(pad, ' '), attr);
 
-    BoxArray b;
+    DrawableBoxArray b;
     parent->font->Encode(v, Box(data->glyphs.Position(x),0,0), &b, Font::DrawFlag::AssignFlowX, attr);
     if ((size = b.Size()) && (grow = size - v.len) && (pad = max(0, x + size - Size())))
         data->flow.AppendText(basic_string<X>(pad, ' '), attr);
 
     // XXX use character BoxRun iterators
     bool token_processing = parent->token_processing;
-    basic_string<X> text = token_processing           ? BoxRun(&data->glyphs[x], size).Text<X>(0, size) : basic_string<X>();
-    basic_string<X> newt = (token_processing && grow) ? BoxRun(&b[0],            size).Text<X>(0, size) : basic_string<X>();
+    basic_string<X> text = token_processing           ? DrawableBoxRun(&data->glyphs[x], size).Text<X>(0, size) : basic_string<X>();
+    basic_string<X> newt = (token_processing && grow) ? DrawableBoxRun(&b[0],            size).Text<X>(0, size) : basic_string<X>();
     StringPieceT<X> newv(newt);
     LineTokenProcessor<X> update(token_processing ? this : 0, x, StringPieceT<X>(text), size);
     if (token_processing) {
@@ -227,7 +227,7 @@ void TextGUI::Line::Layout(Box win, bool flush) {
     if (data->box.w == win.w && !flush) return;
     data->box = win;
     ScopedDeltaTracker<int> SWLT(cont ? &cont->wrapped_lines : 0, bind(&Line::Lines, this));
-    BoxArray b;
+    DrawableBoxArray b;
     swap(b, data->glyphs);
     data->glyphs.attr.source = b.attr.source;
     Clear();
@@ -244,7 +244,7 @@ template <class X>
 TextGUI::LineTokenProcessor<X>::LineTokenProcessor(TextGUI::Line *l, int o, const StringPieceT<X> &V, int Erase)
     : L(l), x(o), size(L?L->Size():0), erase(Erase) {
     if (!L) return;
-    const BoxArray &glyphs = L->data->glyphs;
+    const DrawableBoxArray &glyphs = L->data->glyphs;
     const Drawable *p=0, *n=0;
     CHECK_LE(x, size);
     LoadV(V);
@@ -269,14 +269,14 @@ template <class X> void TextGUI::LineTokenProcessor<X>::ProcessUpdate() {
         else                           L->parent->UpdateToken(L, x+start_offset, end_offset-start_offset, erase ? -4 : 4);
     }
     if ((!tokens || overwrite) && v.len) {
-        const BoxArray &glyphs = L->data->glyphs;
+        const DrawableBoxArray &glyphs = L->data->glyphs;
         if (pw && !sw && osw) { FindPrev(glyphs); L->parent->UpdateToken(L, pi, x-pi,              erase ? -5 : 5); }
         if (nw && !ew && oew) { FindNext(glyphs); L->parent->UpdateToken(L, x+v.len, ni-x-v.len+1, erase ? -6 : 6); }
     }
 }
 
 template <class X> void TextGUI::LineTokenProcessor<X>::ProcessResult() {
-    const BoxArray &glyphs = L->data->glyphs;
+    const DrawableBoxArray &glyphs = L->data->glyphs;
     if      (pw && nw) L->parent->UpdateToken(L, pi, ni - pi + 1, erase ? 7 : -7);
     else if (pw && sw) L->parent->UpdateToken(L, pi, x  - pi,     erase ? 8 : -8);
     else if (nw && ew) L->parent->UpdateToken(L, x,  ni - x + 1,  erase ? 9 : -9);
@@ -370,9 +370,9 @@ void TextGUI::DrawCursor(point p) {
 
 void TextGUI::UpdateToken(Line *L, int word_offset, int word_len, int update_type) {
     int url_offset = -1, font_height = font->Height();
-    const BoxArray &glyphs = L->data->glyphs;
+    const DrawableBoxArray &glyphs = L->data->glyphs;
     CHECK_LE(word_offset + word_len, glyphs.Size());
-    string text = BoxRun(&glyphs[word_offset], word_len).Text();
+    string text = DrawableBoxRun(&glyphs[word_offset], word_len).Text();
     if      (PrefixMatch(text, "http://"))  url_offset = 7;
     else if (PrefixMatch(text, "https://")) url_offset = 8;
     if (url_offset >= 0) {
@@ -1594,8 +1594,8 @@ void Browser::DrawNode(Flow *flow, DOM::Node *n, const point &displacement_in) {
     if (render->overflow_hidden) render->PushScissor(render->content                           + displacement);
     if (!render->hidden) {
         if (render->tiles) {
-            render->tiles->AddBoxArray(render->child_bg,  displacement);
-            render->tiles->AddBoxArray(render->child_box, displacement);
+            render->tiles->AddDrawableBoxArray(render->child_bg,  displacement);
+            render->tiles->AddDrawableBoxArray(render->child_box, displacement);
         } else {
             render->child_bg .Draw(displacement);
             render->child_box.Draw(displacement);

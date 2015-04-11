@@ -116,7 +116,7 @@ int FloatContainer::Copy(const vector<Float> &s, vector<Float> *d, const point &
     return count;
 }
 
-Flow::State Flow::AppendChar(int c, int attr_id, Drawable::Box *box) {
+Flow::State Flow::AppendChar(int c, int attr_id, DrawableBox *box) {
     if (layout.char_tf) c = layout.char_tf(c);
     if (state == State::NEW_WORD && layout.word_start_char_tf) c = layout.word_start_char_tf(c);
     Max(&cur_line.height, cur_attr.font->Height());
@@ -126,7 +126,7 @@ Flow::State Flow::AppendChar(int c, int attr_id, Drawable::Box *box) {
     return AppendBoxOrChar(c, box, cur_attr.font->Height());
 }
 
-Flow::State Flow::AppendBoxOrChar(int c, Drawable::Box *box, int h) {
+Flow::State Flow::AppendBoxOrChar(int c, DrawableBox *box, int h) {
     bool space = isspace(c), drawable = box->drawable;
     if (space) cur_word.len = 0;
     int max_line_shifts = 1000;
@@ -159,8 +159,9 @@ Flow::State Flow::AppendBoxOrChar(int c, Drawable::Box *box, int h) {
     state = State::OK;
 
     if (layout.pad_wide_chars && drawable && box->drawable->Wide()) {
-        p.x -= advance / 2;
-        AppendChar(' ', out->attr.GetAttrId(cur_attr), &PushBack(out->data, Drawable::Box()));
+        int fw = advance / 2;
+        Glyph *nbsp = cur_attr.font->FindGlyph(Unicode::non_breaking_space);
+        out->data.emplace_back(Box(p.x - fw, p.y + cur_line.descent, fw, nbsp->tex.height), nbsp, box->attr_id, box->line_id);
     }
 
     return state;

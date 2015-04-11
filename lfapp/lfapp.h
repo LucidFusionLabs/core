@@ -256,7 +256,6 @@ namespace google {
 
 namespace LFL {
 struct Box;
-struct BoxArray;
 struct Atlas;
 struct Color;
 struct Entity;
@@ -266,6 +265,7 @@ struct MovieAsset;
 struct Shader;
 struct Texture;
 struct Geometry;
+struct DrawableBoxArray;
 struct Allocator;
 struct ProtoHeader;
 struct GraphicsDevice;
@@ -441,6 +441,7 @@ struct String {
 
 struct Unicode {
     static const unsigned char non_breaking_space = 0xA0;
+    static const unsigned short replacement_char = 0xFFFD;
 };
 
 struct UTF8 {

@@ -223,10 +223,10 @@ struct Font {
     /**/               int Width(const String16        &text) { return Width(String16Piece         (text)); }
     template <class X> int Width(const X               *text) { return Width(StringPiece::Unbounded(text)); }
 
-    template <class X> void Encode(const StringPieceT<X> &text, const Box &box, BoxArray *out, int draw_flag=0, int attr_id=0);
-    /**/               void Encode(const string          &text, const Box &box, BoxArray *out, int draw_flag=0, int attr_id=0) { return Encode(StringPiece           (text), box, out, draw_flag, attr_id); }
-    /**/               void Encode(const String16        &text, const Box &box, BoxArray *out, int draw_flag=0, int attr_id=0) { return Encode(String16Piece         (text), box, out, draw_flag, attr_id); }
-    template <class X> void Encode(const X               *text, const Box &box, BoxArray *out, int draw_flag=0, int attr_id=0) { return Encode(StringPiece::Unbounded(text), box, out, draw_flag, attr_id); }
+    template <class X> void Encode(const StringPieceT<X> &text, const Box &box, DrawableBoxArray *out, int draw_flag=0, int attr_id=0);
+    /**/               void Encode(const string          &text, const Box &box, DrawableBoxArray *out, int draw_flag=0, int attr_id=0) { return Encode(StringPiece           (text), box, out, draw_flag, attr_id); }
+    /**/               void Encode(const String16        &text, const Box &box, DrawableBoxArray *out, int draw_flag=0, int attr_id=0) { return Encode(String16Piece         (text), box, out, draw_flag, attr_id); }
+    template <class X> void Encode(const X               *text, const Box &box, DrawableBoxArray *out, int draw_flag=0, int attr_id=0) { return Encode(StringPiece::Unbounded(text), box, out, draw_flag, attr_id); }
 
     template <class X> int Draw(const StringPieceT<X> &text, point cp,       vector<Box> *lb=0, int draw_flag=0) { return Draw<X>    (                text,  Box(cp.x,cp.y+Height(),0,0), lb, draw_flag); }
     /**/               int Draw(const string          &text, point cp,       vector<Box> *lb=0, int draw_flag=0) { return Draw(StringPiece           (text), Box(cp.x,cp.y+Height(),0,0), lb, draw_flag); }

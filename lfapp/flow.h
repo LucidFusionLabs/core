@@ -67,7 +67,7 @@ struct Flow {
         int (*char_tf)(int)=0, (*word_start_char_tf)(int)=0;
     } layout;
     point p; 
-    BoxArray *out;
+    DrawableBoxArray *out;
     const Box *container;
     Drawable::Attr cur_attr;
     int adj_float_left=-1, adj_float_right=-1;
@@ -76,14 +76,14 @@ struct Flow {
     enum class State { OK=1, NEW_WORD=2, NEW_LINE=3 } state=State::OK;
     int max_line_width=0;
 
-    Flow(BoxArray *O) : Flow(0, 0, O) {}
-    Flow(const Box *W=0, Font *F=0, BoxArray *O=0, Layout *L=0) :
+    Flow(DrawableBoxArray *O) : Flow(0, 0, O) {}
+    Flow(const Box *W=0, Font *F=0, DrawableBoxArray *O=0, Layout *L=0) :
         layout(*(L?L:Singleton<Layout>::Get())), out(O), container(W?W:Singleton<Box>::Get())
         { memzero(cur_line); memzero(cur_word); SetFont(F); SetCurrentLineBounds(); cur_line.fresh=1; }
 
     struct RollbackState {
         point p; Drawable::Attr attr; CurrentLine line; CurrentWord word; State state; int max_line_width;
-        BoxArray::RollbackState out_state; 
+        DrawableBoxArray::RollbackState out_state; 
     };
     RollbackState GetRollbackState() { return { p, cur_attr, cur_line, cur_word, state, max_line_width, out->GetRollbackState() }; }
     void Rollback(const RollbackState &s) { p=s.p; cur_attr=s.attr; cur_line=s.line; cur_word=s.word; state=s.state; max_line_width=s.max_line_width; out->Rollback(s.out_state); }
@@ -132,12 +132,12 @@ struct Flow {
         *box_out = Box::DelBorder(*box_out, h ? b : b.LeftRight());
     }
     void AppendRow(float x=0, float w=0, Box *box_out=0) { AppendBox(x, container->w*w, cur_line.height, box_out); }
-    void AppendBoxArrayText(const BoxArray &in) {
+    void AppendBoxArrayText(const DrawableBoxArray &in) {
         bool attr_fwd = in.attr.source;
-        for (Drawable::Box::RawIterator iter(in.data); !iter.Done(); iter.Increment()) {
+        for (DrawableBox::RawIterator iter(in.data); !iter.Done(); iter.Increment()) {
             if (!attr_fwd) cur_attr      = *in.attr.GetAttr(iter.cur_attr);
             else           cur_attr.font =  in.attr.GetAttr(iter.cur_attr)->font;
-            AppendText(BoxRun(iter.Data(), iter.Length()).Text(), attr_fwd ? iter.cur_attr : 0);
+            AppendText(DrawableBoxRun(iter.Data(), iter.Length()).Text(), attr_fwd ? iter.cur_attr : 0);
         }
     }
 
@@ -149,7 +149,7 @@ struct Flow {
 
     void AppendBox(float x, int w, int h, Box *box_out) { p.x=container->w*x; AppendBox(w, h, box_out); }
     void AppendBox(/**/     int w, int h, Box *box_out) {
-        Drawable::Box box(Box(0,0,w,h), 0, out ? out->attr.GetAttrId(cur_attr) : 0, out ? out->line.size() : -1);
+        DrawableBox box(Box(0,0,w,h), 0, out ? out->attr.GetAttrId(cur_attr) : 0, out ? out->line.size() : -1);
         AppendBox(&box);
         if (box_out) *box_out = box.box;
     }
@@ -158,7 +158,7 @@ struct Flow {
         if (box_out) *box_out = Box::DelBorder(*box_out, h ? b : b.LeftRight());
     }
 
-    void AppendBox(Drawable::Box *box) {
+    void AppendBox(DrawableBox *box) {
         point bp = box->box.Position();
         SetMinimumAscent(box->box.h);
         if (!box->box.w) box->box.SetPosition(p);
@@ -186,7 +186,7 @@ struct Flow {
         int initial_out_lines = out->line.size(), line_start_ind = 0, c_bytes = 0, ci_bytes = 0, c, ci;
         for (const X *p = text.data(); !text.Done(p); p += c_bytes) {
             if (!(c = UTF<X>::ReadGlyph(text, p, &c_bytes, true))) FlowDebug("null glyph");
-            if (AppendChar(c, attr_id, &PushBack(out->data, Drawable::Box())) == State::NEW_WORD) {
+            if (AppendChar(c, attr_id, &PushBack(out->data, DrawableBox())) == State::NEW_WORD) {
                 for (const X *pi=p; !text.Done(pi) && notspace(*pi); pi += ci_bytes) {
                     if (!(ci = UTF<X>::ReadGlyph(text, pi, &ci_bytes, true))) FlowDebug("null glyph");
                     cur_word.len += cur_attr.font->GetGlyphWidth(ci);
@@ -197,8 +197,8 @@ struct Flow {
         return out->data.size() - start_size;
     }
 
-    State AppendChar(int c, int attr_id, Drawable::Box *box);
-    State AppendBoxOrChar(int c, Drawable::Box *box, int h);
+    State AppendChar(int c, int attr_id, DrawableBox *box);
+    State AppendBoxOrChar(int c, DrawableBox *box, int h);
 
     void AppendNewlines(int n) { for (int i=0; i<n; i++) AppendNewline(); }
     State AppendNewline(int need_height=0, bool next_glyph_preadded=1);

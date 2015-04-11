@@ -27,13 +27,13 @@ DECLARE_string(console_font);
 struct GUI : public MouseController {
     Box box;
     Window *parent;
-    BoxArray child_box;
+    DrawableBoxArray child_box;
     Toggler toggle_active;
     GUI(Window *W=0, const Box &B=Box()) : box(B), parent(W), toggle_active(&active)
     { if (parent) parent->mouse_gui.push_back(this); }
     virtual ~GUI() { if (parent) VectorEraseByValue(&parent->mouse_gui, this); }
 
-    BoxArray *Reset() { Clear(); return &child_box; }
+    DrawableBoxArray *Reset() { Clear(); return &child_box; }
     void Clear() { child_box.Clear(); MouseController::Clear(); }
     void UpdateBox(const Box &b, int draw_box_ind, int input_box_ind) {
         if (draw_box_ind  >= 0) child_box.data[draw_box_ind ].box = b;
@@ -81,7 +81,7 @@ struct Widget {
         void DelHitBox() { for (vector<int>::const_iterator i = hitbox.begin(); i != hitbox.end(); ++i) gui->hit.Erase(*i); hitbox.clear(); }
         MouseController::HitBox &GetHitBox(int i=0) const { return gui->hit[hitbox[i]]; }
         Box GetHitBoxBox(int i=0) const { return Box::Add(GetHitBox(i).box, gui->box.TopLeft()); }
-        Drawable::Box *GetDrawBox() const { return drawbox_ind >= 0 ? VectorGet(gui->child_box.data, drawbox_ind) : 0; }
+        DrawableBox *GetDrawBox() const { return drawbox_ind >= 0 ? VectorGet(gui->child_box.data, drawbox_ind) : 0; }
     };
     struct Vector : public vector<Interface*> {
         virtual ~Vector() {}
@@ -249,7 +249,7 @@ struct TextGUI : public KeyboardGUI {
     struct LineData {
         Box box;
         Flow flow;
-        BoxArray glyphs;
+        DrawableBoxArray glyphs;
         unordered_map<int, shared_ptr<Link> > links;
     };
     struct Line {
@@ -292,8 +292,8 @@ struct TextGUI : public KeyboardGUI {
         StringPieceT<X> v;
         LineTokenProcessor(Line *l, int o, const StringPieceT<X> &V, int Erase);
         void LoadV(const StringPieceT<X> &V) { FindBoundaryConditions((v=V), &sw, &ew); }
-        void FindPrev(const BoxArray &g) { const Drawable *p; while (pi > 0      && (p = g[pi-1].drawable) && !isspace(p->Id())) pi--; }
-        void FindNext(const BoxArray &g) { const Drawable *n; while (ni < size-1 && (n = g[ni+1].drawable) && !isspace(n->Id())) ni++; }
+        void FindPrev(const DrawableBoxArray &g) { const Drawable *p; while (pi > 0      && (p = g[pi-1].drawable) && !isspace(p->Id())) pi--; }
+        void FindNext(const DrawableBoxArray &g) { const Drawable *n; while (ni < size-1 && (n = g[ni+1].drawable) && !isspace(n->Id())) ni++; }
         void PrepareOverwrite(const StringPieceT<X> &V) { osw=sw; oew=ew; LoadV(V); erase=0; overwrite=1; }
         void ProcessUpdate();
         void ProcessResult();
@@ -752,7 +752,7 @@ struct Renderer : public Object {
     Flow *flow=0, *parent_flow=0, child_flow;
     DOM::Node *absolute_parent=0;
     Asset *background_image=0;
-    BoxArray child_box, child_bg;
+    DrawableBoxArray child_box, child_bg;
     Tiles *tiles=0;
 
     Box content, padding, border, margin, clip_rect;
