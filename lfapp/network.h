@@ -162,6 +162,8 @@ template <int S> struct EPollSocketSet : public SocketSet {
 #endif
 
 struct Network : public Module {
+    int select_time=0;
+    LFLSocketSet active;
     vector<Service*> service_table;
 #   define ServiceTableIter(t) for (int i=0, n=(t).size(); i<n; i++)
 
@@ -174,15 +176,17 @@ struct Network : public Module {
     int Shutdown(const vector<Service*> &svc);
     int Frame(unsigned);
     void AcceptFrame(Service *svc, Listener *listener);
-    void TCPConnectionFrame(Service *svc, Connection *c, vector<Socket> *removelist);
-    void UDPConnectionFrame(Service *svc, Connection *c, vector<string> *removelist, const string &epk);
+    void TCPConnectionFrame(Service *svc, Connection *c, ServiceEndpointEraseList *removelist);
+    void UDPConnectionFrame(Service *svc, Connection *c, ServiceEndpointEraseList *removelist, const string &epk);
 
-    void ConnClose(Service *svc, Connection *c, vector<Socket> *removelist);
+    void ConnClose(Service *svc, Connection *c, ServiceEndpointEraseList *removelist);
     void ConnCloseAll(Service *svc);
 
     void EndpointRead(Service *svc, const char *name, const char *buf, int len);
-    void EndpointClose(Service *svc, Connection *c, vector<string> *removelist, const string &epk);
+    void EndpointClose(Service *svc, Connection *c, ServiceEndpointEraseList *removelist, const string &epk);
     void EndpointCloseAll(Service *svc);
+
+    void UpdateActive(Connection *c);
 };
 
 struct SystemNetwork {
@@ -213,9 +217,10 @@ struct Query {
 
 struct Listener {
     BIO *ssl;
+    Service *svc;
     Socket socket;
     typed_ptr self_reference;
-    Listener(bool ssl=false) : ssl((BIO*)ssl), socket(-1), self_reference(TypePointer(this)) {}
+    Listener(Service *s, bool ssl=false) : svc(s), ssl((BIO*)ssl), socket(-1), self_reference(TypePointer(this)) {}
 };
 
 struct Connection {
@@ -265,8 +270,7 @@ struct Connection {
 
 struct Service {
     string name;
-    LFLSocketSet active;
-    int protocol, reconnect=0, select_time=0;
+    int protocol, reconnect=0;
     bool initialized=0, heartbeats=0, endpoint_read_autoconnect=0;
     void *game_network=0;
     Connection fake;
@@ -282,7 +286,7 @@ struct Service {
     typedef map<string, Connection*> EndpointMap;
     EndpointMap endpoint;
 
-    void QueueListen(IPV4::Addr addr, int port, bool SSL=false) { listen[IPV4Endpoint(addr,port).ToString()] = new Listener(SSL); }
+    void QueueListen(IPV4::Addr addr, int port, bool SSL=false) { listen[IPV4Endpoint(addr,port).ToString()] = new Listener(this, SSL); }
     int OpenSocket(Connection *c, int protocol, int blocking, IPV4EndpointSource*);
     Socket Listen(IPV4::Addr addr, int port, Listener*);
     Connection *Accept(int state, Socket socket, IPV4::Addr addr, int port);
@@ -295,13 +299,25 @@ struct Service {
     void EndpointReadCB(string *endpoint_name, string *packet);
     void EndpointRead(const string &endpoint_name, const char *buf, int len);
     void EndpointClose(const string &endpoint_name);
-    static void UpdateActive(Connection *c);
 
     Service(int prot=Protocol::TCP) : protocol(prot), fake(this, Connection::Connected, 0) {}
     virtual void Close(Connection *c);
     virtual int UDPFilter(Connection *e, const char *buf, int len) { return 0; }
     virtual int Connected(Connection *c) { return 0; }
     virtual int Frame() { return 0; }
+};
+
+struct ServiceEndpointEraseList {
+    vector<pair<Service*, Socket> > sockets;
+    vector<pair<Service*, string> > endpoints;
+    void AddSocket  (Service *s, Socket fd)        { sockets  .emplace_back(s, fd); }
+    void AddEndpoint(Service *s, const string &en) { endpoints.emplace_back(s, en); }
+    void Erase() {
+        for (auto &r : endpoints) r.first->endpoint.erase(r.second);
+        for (auto &r : sockets)   r.first->conn    .erase(r.second);
+        sockets  .clear();
+        endpoints.clear();
+    }
 };
 
 struct UDPClient : public Service {
