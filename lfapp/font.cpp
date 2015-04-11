@@ -284,22 +284,27 @@ Glyph *Font::FindGlyph(unsigned short gind) {
     if (ind < glyph->table.size()) return &glyph->table[ind];
     auto i = glyph->index.find(gind);
     if (i != glyph->index.end()) return &i->second;
-    if (!engine->HaveGlyph(this, gind)) {
+    bool nbsp = gind == Unicode::non_breaking_space;
+    if (!nbsp && !engine->HaveGlyph(this, gind)) {
         ind = missing_glyph - glyph->table_start;
         CHECK_LT(ind, glyph->table.size());
         return &glyph->table[ind];
     }
     Glyph *g = &glyph->index[gind];
-    g->id = gind;
+    g->id = nbsp ? ' ' : gind;
     engine->InitGlyphs(this, g, 1);
+    if (nbsp) g->id = gind;
     return g;
 }
 
 void Font::UpdateMetrics(Glyph *g) {
     if (fix_metrics) {
         if (int fixed_width = FixedWidth()) {
-            if (0 && (g->wide = g->advance > (fixed_width * 1.5))) g->advance = fixed_width * 2;
-            else                                              g->advance = fixed_width;
+            if (g->advance > (fixed_width)) {
+                if ((g->wide = g->advance > (fixed_width * 1.4) && g->id != Unicode::replacement_char))
+                    g->advance = fixed_width * 2;
+                else g->advance = fixed_width;
+            }
         }
         return;
     }
@@ -326,7 +331,7 @@ template <class X> void Font::Size(const StringPieceT<X> &text, Box *out, int ma
     for (int i=0; i<line_box.size(); i++) out->w = max(out->w, line_box[i].w);
 }
 
-template <class X> void Font::Encode(const StringPieceT<X> &text, const Box &box, BoxArray *out, int draw_flag, int attr_id) {
+template <class X> void Font::Encode(const StringPieceT<X> &text, const Box &box, DrawableBoxArray *out, int draw_flag, int attr_id) {
     Flow flow(&box, this, out);
     if (draw_flag & DrawFlag::AssignFlowX) flow.p.x = box.x;
     flow.layout.wrap_lines     = !(draw_flag & DrawFlag::NoWrap) && box.w;
@@ -348,7 +353,7 @@ template <class X> void Font::Encode(const StringPieceT<X> &text, const Box &box
 }
 
 template <class X> int Font::Draw(const StringPieceT<X> &text, const Box &box, vector<Box> *lb, int draw_flag) {
-    BoxArray out;
+    DrawableBoxArray out;
     Encode(text, box, &out, draw_flag);
     if (lb) *lb = out.line;
     if (!(draw_flag & DrawFlag::Clipped)) out.Draw(box.TopLeft());
@@ -357,8 +362,8 @@ template <class X> int Font::Draw(const StringPieceT<X> &text, const Box &box, v
 
 template void Font::Size  <char> (const StringPiece   &text, Box *out, int maxwidth, int *lines_out);
 template void Font::Size  <short>(const String16Piece &text, Box *out, int maxwidth, int *lines_out);
-template void Font::Encode<char> (const StringPiece   &text, const Box &box, BoxArray *out, int draw_flag, int attr_id);
-template void Font::Encode<short>(const String16Piece &text, const Box &box, BoxArray *out, int draw_flag, int attr_id);
+template void Font::Encode<char> (const StringPiece   &text, const Box &box, DrawableBoxArray *out, int draw_flag, int attr_id);
+template void Font::Encode<short>(const String16Piece &text, const Box &box, DrawableBoxArray *out, int draw_flag, int attr_id);
 template int  Font::Draw  <char> (const StringPiece   &text, const Box &box, vector<Box> *lb, int draw_flag);
 template int  Font::Draw  <short>(const String16Piece &text, const Box &box, vector<Box> *lb, int draw_flag);
 

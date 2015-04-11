@@ -333,19 +333,7 @@ struct Drawable {
         int GetAttrId(const Attr &v) { CHECK(!source); if (empty() || this->back() != v) Insert(v); return size(); }
         void Insert(const Attr &v);
     };
-    struct Box {
-        LFL::Box box;
-        const Drawable *drawable;
-        int attr_id, line_id;
-        Box(                   const Drawable *D=0, int A=0, int L=-1) :         drawable(D), attr_id(A), line_id(L) {}
-        Box(const LFL::Box &B, const Drawable *D=0, int A=0, int L=-1) : box(B), drawable(D), attr_id(A), line_id(L) {}
-        bool operator<(const Drawable::Box &x) const { return box < x.box; }
-        int LeftBound (const Attr *A) const { return box.x - (drawable ? drawable->LeftBearing(A) : 0); }
-        int RightBound(const Attr *A) const { return box.x + (drawable ? (drawable->Advance(&box, A) - drawable->LeftBearing(A)) : box.w); }
-        int TopBound  (const Attr *A) const { return box.y + (drawable ? drawable->Ascender(&box, A) : box.h); }
-        typedef ArrayMemberPairSegmentIter<Box, int, &Box::attr_id, &Box::line_id> Iterator;
-        typedef ArrayMemberSegmentIter    <Box, int, &Box::attr_id>             RawIterator;
-    };
+
     virtual int  Id()                                            const { return 0; }
     virtual bool Wide()                                          const { return 0; }
     virtual int  LeftBearing(                   const Attr *A=0) const { return 0; }
@@ -357,6 +345,20 @@ struct Drawable {
 
 struct DrawableNullOp : public Drawable { void Draw(const LFL::Box &B, const Drawable::Attr *A=0) const {} };
 #define DrawableNop() Singleton<DrawableNullOp>::Get()
+
+struct DrawableBox {
+    LFL::Box box;
+    const Drawable *drawable;
+    int attr_id, line_id;
+    DrawableBox(                   const Drawable *D=0, int A=0, int L=-1) :         drawable(D), attr_id(A), line_id(L) {}
+    DrawableBox(const LFL::Box &B, const Drawable *D=0, int A=0, int L=-1) : box(B), drawable(D), attr_id(A), line_id(L) {}
+    bool operator<(const DrawableBox &x) const { return box < x.box; }
+    int LeftBound (const Drawable::Attr *A) const { return box.x - (drawable ? drawable->LeftBearing(A) : 0); }
+    int RightBound(const Drawable::Attr *A) const { return box.x + (drawable ? (drawable->Advance(&box, A) - drawable->LeftBearing(A)) : box.w); }
+    int TopBound  (const Drawable::Attr *A) const { return box.y + (drawable ? drawable->Ascender(&box, A) : box.h); }
+    typedef ArrayMemberPairSegmentIter<DrawableBox, int, &DrawableBox::attr_id, &DrawableBox::line_id> Iterator;
+    typedef ArrayMemberSegmentIter    <DrawableBox, int, &DrawableBox::attr_id>                     RawIterator;
+};
 
 struct Texture : public Drawable {
     unsigned ID;
@@ -723,12 +725,12 @@ typedef FFMPEGVideoResampler VideoResampler;
 typedef SimpleVideoResampler VideoResampler;
 #endif
 
-struct BoxRun {
+struct DrawableBoxRun {
     const Drawable::Attr *attr;
-    ArrayPiece<Drawable::Box> data;
+    ArrayPiece<DrawableBox> data;
     const Box *line;
-    BoxRun(const Drawable::Box *buf=0, int len=0)                                        : attr(0), data(buf, len), line(0) {}
-    BoxRun(const Drawable::Box *buf,   int len, const Drawable::Attr *A, const Box *L=0) : attr(A), data(buf, len), line(L) {}
+    DrawableBoxRun(const DrawableBox *buf=0, int len=0)                                        : attr(0), data(buf, len), line(0) {}
+    DrawableBoxRun(const DrawableBox *buf,   int len, const Drawable::Attr *A, const Box *L=0) : attr(A), data(buf, len), line(L) {}
 
     template <class K> basic_string<K> Text(int i, int l) const {
         basic_string<K> t(l, 0);
@@ -753,57 +755,57 @@ struct BoxRun {
     void DrawBackground(point p, DrawBackgroundCB = &DefaultDrawBackgroundCB);
 };
 
-struct BoxArray {
-    vector<Drawable::Box> data;
+struct DrawableBoxArray {
+    vector<DrawableBox> data;
     Drawable::AttrVec attr;
     vector<Box> line;
     vector<int> line_ind;
     int height;
-    BoxArray() : height(0) { Clear(); }
+    DrawableBoxArray() : height(0) { Clear(); }
 
-    /**/  Drawable::Box& operator[](int i)       { return data[i]; }
-    const Drawable::Box& operator[](int i) const { return data[i]; }
-    const Drawable::Box& Back() const { return data.back(); }
+    /**/  DrawableBox& operator[](int i)       { return data[i]; }
+    const DrawableBox& operator[](int i) const { return data[i]; }
+    const DrawableBox& Back() const { return data.back(); }
     int Size() const { return data.size(); }
 
-    string   Text  ()             const { return data.size() ? BoxRun(&data[0], data.size()).Text  ()     : string();   }
-    String16 Text16()             const { return data.size() ? BoxRun(&data[0], data.size()).Text16()     : String16(); }
-    string   Text  (int i, int l) const { return data.size() ? BoxRun(&data[0], data.size()).Text  (i, l) : string();   }
-    String16 Text16(int i, int l) const { return data.size() ? BoxRun(&data[0], data.size()).Text16(i, l) : String16(); }
+    string   Text  ()             const { return data.size() ? DrawableBoxRun(&data[0], data.size()).Text  ()     : string();   }
+    String16 Text16()             const { return data.size() ? DrawableBoxRun(&data[0], data.size()).Text16()     : String16(); }
+    string   Text  (int i, int l) const { return data.size() ? DrawableBoxRun(&data[0], data.size()).Text  (i, l) : string();   }
+    String16 Text16(int i, int l) const { return data.size() ? DrawableBoxRun(&data[0], data.size()).Text16(i, l) : String16(); }
 
     point Position(int o) const {
         if (!Size()) return point();
         CHECK_GE(o, 0);
         bool last = o >= Size();
-        const Drawable::Box &b = last ? data.back() : data[o];
+        const DrawableBox &b = last ? data.back() : data[o];
         const Drawable::Attr *a = attr.GetAttr(b.attr_id);
         return point(last ? b.RightBound(a) : b.LeftBound(a), b.TopBound(a));
     }
 
-    int LeftBound (int o) const { const Drawable::Box &b = data[o]; return b.LeftBound (attr.GetAttr(b.attr_id)); }
-    int RightBound(int o) const { const Drawable::Box &b = data[o]; return b.RightBound(attr.GetAttr(b.attr_id)); }
-    int BoundingWidth(const Drawable::Box &b, const Drawable::Box &e) const {
+    int LeftBound (int o) const { const DrawableBox &b = data[o]; return b.LeftBound (attr.GetAttr(b.attr_id)); }
+    int RightBound(int o) const { const DrawableBox &b = data[o]; return b.RightBound(attr.GetAttr(b.attr_id)); }
+    int BoundingWidth(const DrawableBox &b, const DrawableBox &e) const {
         CHECK_LE(b.box.x, e.box.x);
         return e.RightBound(attr.GetAttr(e.attr_id)) - b.LeftBound(attr.GetAttr(b.attr_id));
     }
 
     void Clear() { data.clear(); attr.clear(); line.clear(); line_ind.clear(); height=0; }
-    BoxArray *Reset() { Clear(); return this; }
+    DrawableBoxArray *Reset() { Clear(); return this; }
 
-    Drawable::Box &PushBack(const Box &box, const Drawable::Attr &cur_attr, Drawable *drawable, int *ind_out=0) { return PushBack(box, attr.GetAttrId(cur_attr), drawable, ind_out); }
-    Drawable::Box &PushBack(const Box &box, int                   cur_attr, Drawable *drawable, int *ind_out=0) {
+    DrawableBox &PushBack(const Box &box, const Drawable::Attr &cur_attr, Drawable *drawable, int *ind_out=0) { return PushBack(box, attr.GetAttrId(cur_attr), drawable, ind_out); }
+    DrawableBox &PushBack(const Box &box, int                   cur_attr, Drawable *drawable, int *ind_out=0) {
         if (ind_out) *ind_out = data.size();
-        return LFL::PushBack(data, Drawable::Box(box, drawable, cur_attr, line.size()));
+        return LFL::PushBack(data, DrawableBox(box, drawable, cur_attr, line.size()));
     }
 
-    void InsertAt(int o, const BoxArray &x) { InsertAt(o, x.data); }
-    void InsertAt(int o, const vector<Drawable::Box> &x) {
+    void InsertAt(int o, const DrawableBoxArray &x) { InsertAt(o, x.data); }
+    void InsertAt(int o, const vector<DrawableBox> &x) {
         CHECK_EQ(0, line_ind.size());
         point p(x.size() ? BoundingWidth(x.front(), x.back()) : 0, 0);
         data.insert(data.begin() + o, x.begin(), x.end());
         for (auto i = data.begin() + o + x.size(); i != data.end(); ++i) i->box += p;
     }
-    void OverwriteAt(int o, const vector<Drawable::Box> &x) {
+    void OverwriteAt(int o, const vector<DrawableBox> &x) {
         if (!x.size()) return;
         CHECK_LE(o + x.size(), data.size());
         auto i = data.begin() + o, e = i + x.size();
@@ -814,7 +816,7 @@ struct BoxArray {
     void Erase(int o, size_t l=UINT_MAX, bool shift=false) { 
         if (!l || data.size() <= o) return;
         if (shift) CHECK_EQ(0, line_ind.size());
-        vector<Drawable::Box>::iterator b = data.begin() + o, e = data.begin() + min(o+l, data.size());
+        vector<DrawableBox>::iterator b = data.begin() + o, e = data.begin() + min(o+l, data.size());
         point p(shift ? BoundingWidth(*b, *(e-1)) : 0, 0);
         auto i = data.erase(b, e);
         if (shift) for (; i != data.end(); ++i) i->box -= p;
@@ -822,24 +824,24 @@ struct BoxArray {
 
     point Draw(point p, int glyph_start=0, int glyph_len=-1) {
         point e;
-        for (Drawable::Box::Iterator iter(&data[glyph_start], Xge0_or_Y(glyph_len, data.size())); !iter.Done(); iter.Increment())
-            e = BoxRun(iter.Data(), iter.Length(), attr.GetAttr(iter.cur_attr1), VectorGet(line, iter.cur_attr2)).Draw(p);
+        for (DrawableBox::Iterator iter(&data[glyph_start], Xge0_or_Y(glyph_len, data.size())); !iter.Done(); iter.Increment())
+            e = DrawableBoxRun(iter.Data(), iter.Length(), attr.GetAttr(iter.cur_attr1), VectorGet(line, iter.cur_attr2)).Draw(p);
         return e;
     }
     string DebugString() const {
         string ret = StrCat("BoxArray H=", height, " ");
-        for (Drawable::Box::Iterator iter(data); !iter.Done(); iter.Increment()) 
-            StrAppend(&ret, "R", iter.i, "(", BoxRun(iter.Data(), iter.Length()).DebugString(), "), ");
+        for (DrawableBox::Iterator iter(data); !iter.Done(); iter.Increment()) 
+            StrAppend(&ret, "R", iter.i, "(", DrawableBoxRun(iter.Data(), iter.Length()).DebugString(), "), ");
         return ret;
     }
 
     int   GetLineFromCoords(const point &p) { return 0; }
     bool GetGlyphFromCoords(const point &p, int *index_out, Box *box_out) { return GetGlyphFromCoords(p, index_out, box_out, GetLineFromCoords(p)); }
     bool GetGlyphFromCoords(const point &p, int *index_out, Box *box_out, int li) {
-        vector<Drawable::Box>::const_iterator gb, ge, it;
+        vector<DrawableBox>::const_iterator gb, ge, it;
         gb = data.begin() + (li < line_ind.size() ? line_ind[li] : 0);
         ge = (li+1) < line_ind.size() ? (data.begin() + line_ind[li+1]) : data.end();
-        it = LesserBound(gb, ge, Drawable::Box(Box(p,0,0)), true);
+        it = LesserBound(gb, ge, DrawableBox(Box(p,0,0)), true);
         if (it == data.end()) { *index_out = -1; *box_out = BackOrDefault(data).box; return false; }
         else                  { *index_out = it - data.begin(); *box_out = it->box;  return true; }
     }

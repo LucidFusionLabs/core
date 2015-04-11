@@ -1355,24 +1355,25 @@ void TextureArray::DrawSequence(Asset *out, Entity *e) {
     if (out->geometry) Scene::Draw(out->geometry, e);
 }
 
-void Tiles::AddBoxArray(const BoxArray &box, point p) {
-    for (Drawable::Box::Iterator iter(box.data); !iter.Done(); iter.Increment()) {
+void Tiles::AddDrawableBoxArray(const DrawableBoxArray &box, point p) {
+    for (DrawableBox::Iterator iter(box.data); !iter.Done(); iter.Increment()) {
         const Drawable::Attr *attr = box.attr.GetAttr(iter.cur_attr1);
         if (attr->bg) {
             ContextOpen();
-            TilesPreAdd(this, &BoxRun::DrawBackground, BoxRun(0,0,attr), p, &BoxRun::DefaultDrawBackgroundCB);
-            BoxRun(iter.Data(), iter.Length(), attr, VectorGet(box.line, iter.cur_attr2))
+            TilesPreAdd(this, &DrawableBoxRun::DrawBackground,
+                        DrawableBoxRun(0,0,attr), p, &DrawableBoxRun::DefaultDrawBackgroundCB);
+            DrawableBoxRun(iter.Data(), iter.Length(), attr, VectorGet(box.line, iter.cur_attr2))
                 .DrawBackground(p, [&] (const Box &w) { TilesAdd(this, &w, &Box::Draw, w, (float*)0); });
             ContextClose();
         }
         if (1) {
             ContextOpen();
-            TilesPreAdd(this, &BoxRun::draw, BoxRun(0,0,attr), p);
+            TilesPreAdd(this, &DrawableBoxRun::draw, DrawableBoxRun(0,0,attr), p);
             if (attr->scissor) {
                 TilesPreAdd (this, &Tiles::PushScissor, this, *attr->scissor + p);
                 TilesPostAdd(this, &GraphicsDevice::PopScissor, screen->gd);
             }
-            BoxRun(iter.Data(), iter.Length(), attr)
+            DrawableBoxRun(iter.Data(), iter.Length(), attr)
                 .Draw(p, [&] (const Drawable *d, const Box &w, const Drawable::Attr *a)
                       { TilesAdd(this, &w, &Drawable::Draw, d, w, a); });
             ContextClose();

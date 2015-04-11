@@ -1989,7 +1989,7 @@ void Shader::ActiveTexture(int n) {}
 
 /* BoxRun */
 
-point BoxRun::Draw(point p, DrawCB cb) {
+point DrawableBoxRun::Draw(point p, DrawCB cb) {
     Box w;
     DrawBackground(p);
     if (attr->tex) attr->tex->Bind();
@@ -2003,7 +2003,7 @@ point BoxRun::Draw(point p, DrawCB cb) {
     return point(w.x + w.w, w.y);
 }
 
-void BoxRun::DrawBackground(point p, DrawBackgroundCB cb) {
+void DrawableBoxRun::DrawBackground(point p, DrawBackgroundCB cb) {
     if (attr->bg) screen->gd->FillColor(*attr->bg);
     if (!attr->bg || !data.size()) return;
     int line_height = line ? line->h : (attr->font ? attr->font->Height() : 0);
