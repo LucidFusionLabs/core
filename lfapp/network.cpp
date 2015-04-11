@@ -31,6 +31,7 @@ extern "C" {
 };
 
 #include "lfapp/lfapp.h"
+#include "lfapp/resolver.h"
 
 #ifdef LFL_OPENSSL
 #include "openssl/bio.h"
@@ -56,8 +57,6 @@ extern "C" {
 #endif
 
 namespace LFL {
-const IPV4::Addr IPV4::ANY = INADDR_ANY;
-
 DEFINE_bool(dns_dump, 0, "Print DNS responses");
 DEFINE_bool(network_debug, 0, "Print send()/recv() bytes");
 DEFINE_int(udp_idle_sec, 15, "Timeout UDP connections idle for seconds");
@@ -66,45 +65,6 @@ DEFINE_string(ssl_certfile, "", "SSL server certificate file");
 DEFINE_string(ssl_keyfile, "", "SSL server key file");
 SSL_CTX *lfapp_ssl = 0;
 #endif
-
-const char *Protocol::Name(int p) {
-    if      (p == TCP)   return "TCP";
-    else if (p == UDP)   return "UDP";
-    else if (p == GPLUS) return "GPLUS";
-    else return "";
-}
-
-IPV4::Addr IPV4::Parse(const string &ip) { return inet_addr(ip.c_str()); }
-
-void IPV4::ParseCSV(const string &text, vector<IPV4::Addr> *out) {
-    vector<string> addrs; IPV4::Addr addr;
-    Split(text, iscomma, &addrs);
-    for (int i = 0; i < addrs.size(); i++) {
-        if ((addr = Parse(addrs[i])) == INADDR_NONE) FATAL("unknown addr ", addrs[i]);
-        out->push_back(addr);
-    }
-}
-
-void IPV4::ParseCSV(const string &text, set<IPV4::Addr> *out) {
-    vector<string> addrs; IPV4::Addr addr;
-    Split(text, iscomma, &addrs);
-    for (int i = 0; i < addrs.size(); i++) {
-        if ((addr = Parse(addrs[i])) == INADDR_NONE) FATAL("unknown addr ", addrs[i]);
-        out->insert(addr);
-    }
-}
-
-string IPV4::MakeCSV(const vector<IPV4::Addr> &in) {
-    string ret;
-    for (vector<Addr>::const_iterator i = in.begin(); i != in.end(); ++i) StrAppend(&ret, ret.size()?",":"", IPV4Endpoint::name(*i));
-    return ret;
-}
-
-string IPV4::MakeCSV(const set<IPV4::Addr> &in) {
-    string ret;
-    for (set<Addr>::const_iterator i = in.begin(); i != in.end(); ++i) StrAppend(&ret, ret.size()?",":"", IPV4Endpoint::name(*i));
-    return ret;
-}
 
 IPV4EndpointPool::IPV4EndpointPool(const string &ip_csv) {
     IPV4::ParseCSV(ip_csv, &source_addrs);
@@ -119,7 +79,7 @@ IPV4EndpointPool::IPV4EndpointPool(const string &ip_csv) {
 bool IPV4EndpointPool::Available() const {
     if (!source_addrs.size()) return true;
     for (int i=0; i<source_addrs.size(); i++)
-        if (BitField::LastClear((const unsigned char*)source_ports[i].data(), source_ports[i].size()) != -1) return true;
+        if (BitField::LastClear(source_ports[i].data(), source_ports[i].size()) != -1) return true;
     return false;
 }
 
@@ -127,20 +87,20 @@ void IPV4EndpointPool::Close(IPV4::Addr addr, int port) {
     if (!source_addrs.size()) return;
     int bit = port - 1024;
     for (int i=0; i<source_addrs.size(); i++) if (source_addrs[i] == addr) {
-        if (!BitField::Get((const unsigned char*)source_ports[i].data(), bit))
-            ERROR("IPV4EndpointPool: Close unopened endpoint: ", IPV4Endpoint::name(addr, port));
+        if (!BitField::Get(source_ports[i].data(), bit))
+            ERROR("IPV4EndpointPool: Close unopened endpoint: ", IPV4::Text(addr, port));
 
-        BitField::Clear((unsigned char*)source_ports[i].data(), bit);
+        BitField::Clear(&source_ports[i][0], bit);
         return;
     }
-    ERROR("IPV4EndpointPool: Close unknown endpoint: ", IPV4Endpoint::name(addr, port));
+    ERROR("IPV4EndpointPool: Close unknown endpoint: ", IPV4::Text(addr, port));
 }
 
 void IPV4EndpointPool::Get(IPV4::Addr addr, int *port) {
     *port=0;
     if (!source_addrs.size()) return;
     for (int i=0; i<source_addrs.size(); i++) if (source_addrs[i] == addr) { GetPort(i, port); return; }
-    ERROR("IPV4EndpointPool: address full: ", IPV4Endpoint::name(addr));
+    ERROR("IPV4EndpointPool: address full: ", IPV4::Text(addr));
 }
 
 void IPV4EndpointPool::Get(IPV4::Addr *addr, int *port) {
@@ -155,10 +115,10 @@ void IPV4EndpointPool::Get(IPV4::Addr *addr, int *port) {
 }
 
 bool IPV4EndpointPool::GetPort(int ind, int *port) {
-    int zero_bit = BitField::FirstClear((const unsigned char *)source_ports[ind].data(), source_ports[ind].size());
+    int zero_bit = BitField::FirstClear(source_ports[ind].data(), source_ports[ind].size());
     if (zero_bit == -1) return false;
     *port = 1025 + zero_bit;
-    BitField::Set((unsigned char*)source_ports[ind].data(), zero_bit);
+    BitField::Set(&source_ports[ind][0], zero_bit);
     return true;
 }
 
@@ -454,7 +414,7 @@ void Network::UDPConnectionFrame(Service *svc, Connection *c, vector<string> *re
     }
 }
 
-Socket Network::OpenSocket(int protocol) {
+Socket SystemNetwork::OpenSocket(int protocol) {
     if (protocol == Protocol::TCP) return socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
     else if (protocol == Protocol::UDP) {
         Socket ret;
@@ -472,7 +432,7 @@ Socket Network::OpenSocket(int protocol) {
     else return -1;
 }
 
-int Network::SetSocketBlocking(Socket fd, int blocking) {
+int SystemNetwork::SetSocketBlocking(Socket fd, int blocking) {
 #ifdef _WIN32
     u_long ioctlarg = !blocking ? 1 : 0;
     if (ioctlsocket(fd, FIONBIO, &ioctlarg) < 0) return -1;
@@ -482,26 +442,26 @@ int Network::SetSocketBlocking(Socket fd, int blocking) {
     return 0;
 }
 
-int Network::SetSocketBroadcastEnabled(Socket fd, int optval) {
+int SystemNetwork::SetSocketBroadcastEnabled(Socket fd, int optval) {
     if (setsockopt(fd, SOL_SOCKET, SO_BROADCAST, (const char*)&optval, sizeof(optval)))
     { ERROR("setsockopt: ", Connection::lasterror()); return -1; }
     return 0;
 }
 
-int Network::SetSocketReceiveBufferSize(Socket fd, int optval) {
+int SystemNetwork::SetSocketReceiveBufferSize(Socket fd, int optval) {
     if (setsockopt(fd, SOL_SOCKET, SO_RCVBUF, (const char *)&optval, sizeof(optval)))
     { ERROR("setsockopt: ", Connection::lasterror()); return -1; }
     return 0;
 }
 
-int Network::GetSocketReceiveBufferSize(Socket fd) {
+int SystemNetwork::GetSocketReceiveBufferSize(Socket fd) {
     int res=0, resSize=sizeof(res);
     if (getsockopt(fd, SOL_SOCKET, SO_RCVBUF, (char*)&res, (socklen_t*)&resSize))
     { ERROR("getsockopt: ", Connection::lasterror()); return -1; }
     return res;
 }
 
-int Network::Bind(int fd, IPV4::Addr addr, int port) {
+int SystemNetwork::Bind(int fd, IPV4::Addr addr, int port) {
     sockaddr_in sin; int optval = 1;
     if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (const char*)&optval, sizeof(optval)))
     { ERROR("setsockopt: ", Connection::lasterror()); return -1; }
@@ -511,49 +471,49 @@ int Network::Bind(int fd, IPV4::Addr addr, int port) {
     sin.sin_port = htons(port);
     sin.sin_addr.s_addr = addr ? addr : INADDR_ANY;
 
-    if (FLAGS_network_debug) INFO("bind(", fd, ", ", IPV4Endpoint::name(addr, port), ")");
+    if (FLAGS_network_debug) INFO("bind(", fd, ", ", IPV4::Text(addr, port), ")");
     if (SystemBind(fd, (const sockaddr *)&sin, (socklen_t)sizeof(sockaddr_in)) == -1)
     { ERROR("bind: ", Connection::lasterror()); return -1; }
 
     return 0;
 }
 
-Socket Network::Listen(int protocol, IPV4::Addr addr, int port) {
+Socket SystemNetwork::Listen(int protocol, IPV4::Addr addr, int port) {
     Socket fd;
-    if ((fd = Network::OpenSocket(protocol)) < 0) 
+    if ((fd = OpenSocket(protocol)) < 0) 
     { ERROR("network_socket_open: ", Connection::lasterror()); return -1; }
 
-    if (Network::Bind(fd, addr, port) == -1) { close(fd); return -1; }
+    if (Bind(fd, addr, port) == -1) { close(fd); return -1; }
 
     if (protocol == Protocol::TCP) {
         if (::listen(fd, 32) == -1)
         { ERROR("listen: ", Connection::lasterror()); close(fd); return -1; }
     }
 
-    if (Network::SetSocketBlocking(fd, 0))
+    if (SetSocketBlocking(fd, 0))
     { ERROR("Network::socket_blocking: ", Connection::lasterror()); close(fd); return -1; }
 
     INFO("listen(port=", port, ", protocol=", (protocol == Protocol::TCP) ? "TCP" : "UDP", ")");
     return fd;
 }
 
-int Network::Connect(Socket fd, IPV4::Addr addr, int port, int *connected) {
+int SystemNetwork::Connect(Socket fd, IPV4::Addr addr, int port, int *connected) {
     struct sockaddr_in sin;
     memset(&sin, 0, sizeof(struct sockaddr_in));
     sin.sin_family = AF_INET;
     sin.sin_port = htons(port);
     sin.sin_addr.s_addr = addr;
 
-    if (FLAGS_network_debug) INFO("connect(", fd, ", ", IPV4Endpoint::name(addr, port), ")");
+    if (FLAGS_network_debug) INFO("connect(", fd, ", ", IPV4::Text(addr, port), ")");
     int ret = ::connect(fd, (struct sockaddr *)&sin, sizeof(struct sockaddr_in));
     if (ret == -1 && !Connection::ewouldblock())
-    { ERROR("connect(", IPV4Endpoint::name(addr, port), "): ", Connection::lasterror()); return -1; }
+    { ERROR("connect(", IPV4::Text(addr, port), "): ", Connection::lasterror()); return -1; }
 
     if (connected) *connected = !ret;
     return 0;
 }
 
-int Network::SendTo(Socket fd, IPV4::Addr addr, int port, const char *buf, int len) {
+int SystemNetwork::SendTo(Socket fd, IPV4::Addr addr, int port, const char *buf, int len) {
     sockaddr_in sin; int sinSize=sizeof(sin);
     sin.sin_family = PF_INET;
     sin.sin_addr.s_addr = addr;
@@ -561,7 +521,7 @@ int Network::SendTo(Socket fd, IPV4::Addr addr, int port, const char *buf, int l
     return ::sendto(fd, buf, len, 0, (struct sockaddr*)&sin, sinSize);
 }
 
-int Network::GetPeerName(Socket fd, IPV4::Addr *addr_out, int *port_out) {
+int SystemNetwork::GetPeerName(Socket fd, IPV4::Addr *addr_out, int *port_out) {
     struct sockaddr_in sin; int sinSize=sizeof(sin);
     if (::getpeername(fd, (struct sockaddr *)&sin, (socklen_t*)&sinSize) < 0)
     { ERROR("getpeername: ", strerror(errno)); return -1; }
@@ -570,7 +530,7 @@ int Network::GetPeerName(Socket fd, IPV4::Addr *addr_out, int *port_out) {
     return 0;
 }
 
-int Network::GetSockName(Socket fd, IPV4::Addr *addr_out, int *port_out) {
+int SystemNetwork::GetSockName(Socket fd, IPV4::Addr *addr_out, int *port_out) {
     struct sockaddr_in sin; int sinSize=sizeof(sin);
     if (::getsockname(fd, (struct sockaddr *)&sin, (socklen_t*)&sinSize) < 0)
     { ERROR("getsockname: ", strerror(errno)); return -1; }
@@ -579,7 +539,7 @@ int Network::GetSockName(Socket fd, IPV4::Addr *addr_out, int *port_out) {
     return 0;
 }
 
-string Network::GetHostByAddr(IPV4::Addr addr) {
+string SystemNetwork::GetHostByAddr(IPV4::Addr addr) {
 #if defined(_WIN32) || defined(LFL_ANDROID)
     struct hostent *h = ::gethostbyaddr((const char *)&addr, sizeof(addr), PF_INET);
 #else
@@ -588,15 +548,24 @@ string Network::GetHostByAddr(IPV4::Addr addr) {
     return h ? h->h_name : "";
 }
 
-IPV4::Addr Network::GetHostByName(const string &host) {
+IPV4::Addr SystemNetwork::GetHostByName(const string &host) {
     in_addr a;
     if ((a.s_addr = IPV4::Parse(host)) != INADDR_NONE) return (int)a.s_addr;
 
     hostent *h = gethostbyname(host.c_str());
     if (h && h->h_length == 4) return *(int *)h->h_addr_list[0];
 
-    ERROR("Network::resolve ", host);
+    ERROR("SystemNetwork::GetHostByName ", host);
     return -1;
+}
+
+void SelectSocketThread::Start() {
+#ifndef _WIN32
+    CHECK_EQ(::pipe(pipe), 0);
+    SystemNetwork::SetSocketBlocking(pipe[0], 0);
+#endif
+    sockets.Add(pipe[0], SocketSet::READABLE, 0);
+    thread.Start();
 }
 
 void SelectSocketThread::ThreadProc() {
@@ -628,351 +597,6 @@ int SelectSocketSet::Select(int wait_time) {
     if ((select(maxfd+1, rc?&rfds:0, wc?&wfds:0, xc?&xfds:0, wait_time >= 0 ? &tv : 0)) == -1)
     { ERROR("select: ", Connection::lasterror()); return -1; }
     return 0;
-}
-
-int DNS::WriteRequest(unsigned short id, const string &querytext, unsigned short type, char *out, int len) {
-    Serializable::MutableStream os(out, len);
-    Header *hdr = (Header*)os.Get(Header::size);
-    memset(hdr, 0, Header::size);
-    hdr->rd = 1;
-    hdr->id = id;
-    hdr->qdcount = htons(1);
-
-    StringWordIter words(querytext, isdot);
-    for (string word = BlankNull(words.Next()); !word.empty(); word = BlankNull(words.Next())) {
-        CHECK_LT(word.size(), 64);
-        os.Write8((unsigned char)word.size());
-        os.String(word);
-    }
-    os.Write8((char)0);
-
-    os.Htons(type);                      // QueryTypeClass.Type
-    os.Htons((unsigned short)Class::IN); // QueryTypeClass.QClass
-    return os.error ? -1 : os.offset;
-}
-
-int DNS::ReadResponse(const char *buf, int bufsize, Response *res) {
-    Serializable::ConstStream is(buf, bufsize);
-    const Serializable::Stream *in = &is;
-    const Header *hdr = (Header*)in->Get(Header::size);
-
-    int qdcount = ntohs(hdr->qdcount);
-    int ancount = ntohs(hdr->ancount);
-    int nscount = ntohs(hdr->nscount);
-    int arcount = ntohs(hdr->arcount);
-
-    for (int i = 0; i < qdcount; i++) {
-        Record out; int len;
-        if ((len = DNS::ReadString(in->Start(), in->Get(), in->End(), &out.question)) < 0 || !in->Advance(len + 4)) return -1;
-        res->Q.push_back(out);
-    }
-
-    if (DNS::ReadResourceRecord(in, ancount, &res->A)  < 0) return -1;
-    if (DNS::ReadResourceRecord(in, nscount, &res->NS) < 0) return -1;
-    if (DNS::ReadResourceRecord(in, arcount, &res->E)  < 0) return -1;
-    return 0;
-}
-
-int DNS::ReadResourceRecord(const Serializable::Stream *in, int num, vector<Record> *out) {
-    for (int i = 0; i < num; i++) {
-        Record rec; int len; unsigned short rrlen;
-        if ((len = ReadString(in->Start(), in->Get(), in->End(), &rec.question)) < 0 || !in->Advance(len)) return -1;
-
-        in->Ntohs(&rec.type);
-        in->Ntohs(&rec._class);
-        in->Ntohs(&rec.ttl1);
-        in->Ntohs(&rec.ttl2);
-        in->Ntohs(&rrlen);
-
-        if (rec._class == Class::IN && rec.type == Type::A) {
-            if (rrlen != 4) return -1;
-            in->Read32(&rec.addr);
-        } else if (rec._class == Class::IN && (rec.type == Type::NS || rec.type == Type::CNAME)) {
-            if ((len = ReadString(in->Start(), in->Get(), in->End(), &rec.answer)) != rrlen   || !in->Advance(len)) return -1;
-        } else if (rec._class == Class::IN && rec.type == Type::MX) {
-            in->Ntohs(&rec.pref);
-            if ((len = ReadString(in->Start(), in->Get(), in->End(), &rec.answer)) != rrlen-2 || !in->Advance(len)) return -1;
-        } else {
-            ERROR("unhandled type=", rec.type, ", class=", rec._class);
-            in->Advance(rrlen);
-            continue;
-        }
-        out->push_back(rec);
-    }
-    return in->error ? -1 : 0;
-}
-
-int DNS::ReadString(const char *start, const char *cur, const char *end, string *out) {
-    if (!cur) { ERROR("DNS::ReadString null input"); return -1; }
-    if (out) out->clear();
-    const char *cur_start = cur, *final = 0;
-    for (unsigned char len = 1; len && cur < end; cur += len+1) {
-        len = *cur;
-        if (len >= 64) { // Pointer to elsewhere in packet
-            int offset = ntohs(*(unsigned short*)cur) & ~(3<<14);
-            if (!final) final = cur + 2;
-            cur = start + offset - 2;
-            if (cur < start || cur >= end) { ERROR("OOB cur ", (void*)start, " ", (void*)cur, " ", (void*)end); return -1; }
-            len = 1;
-            continue;
-        }
-        if (out) StrAppend(out, out->empty() ? "" : ".", string(cur+1, len));
-    }
-    if (out) *out = tolower(*out);
-    if (final) cur = final;
-    return (cur > end) ? -1 : (cur - cur_start);
-}
-
-void DNS::MakeAnswerMap(const vector<DNS::Record> &in, AnswerMap *out) {
-    for (int i = 0; i < in.size(); ++i) {
-        const DNS::Record &e = in[i];
-        if (e.question.empty() || !e.addr) continue;
-        (*out)[e.question].push_back(e.addr);
-    }
-    for (int i = 0; i < in.size(); ++i) {
-        const DNS::Record &e = in[i];
-        if (e.question.empty() || e.answer.empty() || e.type != DNS::Type::CNAME) continue;
-        AnswerMap::const_iterator a = out->find(e.answer);
-        if (a == out->end()) continue;
-        VectorAppend((*out)[e.question], a->second.begin(), a->second.end());
-    }
-}
-
-void DNS::MakeAnswerMap(const vector<DNS::Record> &in, const AnswerMap &qmap, int type, AnswerMap *out) {
-    for (int i = 0; i < in.size(); ++i) {
-        const DNS::Record &e = in[i];
-        if (e.type != type) continue;
-        AnswerMap::const_iterator q_iter = qmap.find(e.answer);
-        if (e.question.empty() || e.answer.empty() || q_iter == qmap.end())
-        { ERROR("DNS::MakeAnswerMap missing ", e.answer); continue; }
-        VectorAppend((*out)[e.question], q_iter->second.begin(), q_iter->second.end());
-    }
-}
-
-string DNS::Response::DebugString() const {
-    string ret;
-    StrAppend(&ret, "Question ",   Q .size(), "\n"); for (int i = 0; i < Q .size(); ++i) StrAppend(&ret, Q [i].DebugString(), "\n");
-    StrAppend(&ret, "Answer ",     A .size(), "\n"); for (int i = 0; i < A .size(); ++i) StrAppend(&ret, A [i].DebugString(), "\n");
-    StrAppend(&ret, "NS ",         NS.size(), "\n"); for (int i = 0; i < NS.size(); ++i) StrAppend(&ret, NS[i].DebugString(), "\n");
-    StrAppend(&ret, "Additional ", E .size(), "\n"); for (int i = 0; i < E .size(); ++i) StrAppend(&ret, E [i].DebugString(), "\n");
-    return ret;
-}
-
-/* HTTP */
-
-bool HTTP::ParseHost(const char *host, const char *host_end, string *hostO, string *portO) {
-    const char *colon = strstr(host, ":"), *port = 0;
-    if (!host_end) host_end = host + strlen(host);
-    if (colon && colon < host_end) port = colon+1;
-    if (hostO) hostO->assign(host, port ? port-host-1 : host_end-host);
-    if (portO) portO->assign(port ? port : "", port ? host_end-port : 0);
-    return 1;
-}
-
-bool HTTP::ResolveHost(const char *hostname, const char *host_end, IPV4::Addr *ipv4_addr, int *tcp_port, bool ssl) {
-    string h, p;
-    if (!ParseHost(hostname, host_end, &h, &p)) return 0;
-    return ResolveEndpoint(h, p, ipv4_addr, tcp_port, ssl);
-}
-
-bool HTTP::ResolveEndpoint(const string &host, const string &port, IPV4::Addr *ipv4_addr, int *tcp_port, bool ssl, int default_port) {
-    if (ipv4_addr) {
-        *ipv4_addr = Network::GetHostByName(host);
-        if (*ipv4_addr == -1) { ERROR("resolve"); return 0; }
-    }
-    if (tcp_port) {
-        *tcp_port = !port.empty() ? atoi(port.c_str()) : (default_port ? default_port : (ssl ? 443 : 80));
-        if (*tcp_port < 0 || *tcp_port >= 65536) { ERROR("oob port"); return 0; }
-    }
-    return 1;
-}
-
-bool HTTP::ParseURL(const char *url, string *protO, string *hostO, string *portO, string *pathO) {
-    const char *host = ParseProtocol(url, protO);
-    const char *host_end = strstr(host, "/");
-    HTTP::ParseHost(host, host_end, hostO, portO);
-    if (pathO) pathO->assign(host_end ? host_end+1 : "");
-    return 1;
-}
-
-bool HTTP::ResolveURL(const char *url, bool *ssl, IPV4::Addr *ipv4_addr, int *tcp_port, string *host, string *path, int default_port, string *prot) {
-    string my_prot, port, my_host, my_path; bool my_ssl;
-    if (!prot) prot = &my_prot;
-    if (!host) host = &my_host;
-    if (!path) path = &my_path;
-    if (!ssl) ssl = &my_ssl;
-
-    ParseURL(url, prot, host, &port, path);
-    *ssl = !prot->empty() && !strcasecmp(prot->c_str(), "https");
-    if (!prot->empty() && strcasecmp(prot->c_str(), "http") && !*ssl) return 0;
-    if (host->empty()) { ERROR("no host or path"); return 0; }
-    if (!HTTP::ResolveEndpoint(*host, port, ipv4_addr, tcp_port, *ssl, default_port)) { ERROR("HTTP::ResolveURL ", host); return 0; }
-    return 1;
-}
-
-string HTTP::HostURL(const char *url) {
-    string my_prot, my_port, my_host, my_path;
-    ParseURL(url, &my_prot, &my_host, &my_port, &my_path);
-    string ret = !my_prot.empty() ? StrCat(my_prot, "://") : "http://";
-    if (!my_host.empty()) ret += my_host;
-    if (!my_port.empty()) ret += string(":") + my_port;
-    return ret;
-}
-
-int HTTP::request(char *buf, char **methodO, char **urlO, char **argsO, char **verO) {
-    char *url, *ver, *args;
-    if (!(url = (char*)NextChar(buf, isspace)))    return -1;    *url = 0;
-    if (!(url = (char*)NextChar(url+1, notspace))) return -1;
-    if (!(ver = (char*)NextChar(url, isspace)))    return -1;    *ver = 0;
-    if (!(ver = (char*)NextChar(ver+1, notspace))) return -1;
-
-    if ((args = strchr(url, '?'))) *args++ = 0;
-
-    if (methodO) *methodO = buf;
-    if (urlO) *urlO = url;
-    if (argsO) *argsO = args;
-    if (verO) *verO = ver;
-    return 0;
-}
-
-char *HTTP::headersStart(char *buf) {
-    char *start = strstr(buf, "\r\n");
-    if (!start) return 0;
-    *start = 0;
-    return start + 2;
-}
-
-char *HTTP::headerEnd(char *buf) {
-    char *end = strstr(buf, "\r\n\r\n");
-    if (!end) return 0;
-    *(end+2) = 0;
-    return end + 2;
-}
-
-const char *HTTP::headerEnd(const char *buf) {
-    const char *end = strstr(buf, "\r\n\r\n");
-    if (!end) return 0;
-    return end + 2;
-}
-
-int HTTP::headerLen(const char *beg, const char *end) { return end - beg + 2; }
-
-int HTTP::headerNameLen(const char *beg) {
-    const char *n = beg;
-    while (*n && !isspace(*n) && *n != ':') n++;
-    return *n == ':' ? n - beg : 0;
-}
-
-int HTTP::argNameLen(const char *beg) {
-    const char *n = beg;
-    while (*n && !isspace(*n) && *n != '=' && *n != '&') n++;
-    return n - beg;
-}
-
-#define DefineGrepArgs(k, kl, v) \
-    va_list ap; va_start(ap, num); \
-    char **k = (char **)alloca(num*sizeof(char*)); \
-    int *kl = (int *)alloca(num*sizeof(int)); \
-    StringPiece **v = (StringPiece **)alloca(num*sizeof(char*)); \
-    for (int i=0; i<num; i++) { \
-        k[i] = va_arg(ap, char*); \
-        kl[i] = strlen(k[i]); \
-        v[i] = va_arg(ap, StringPiece*); \
-    } \
-    va_end(ap);
-
-int HTTP::argGrep(const char *args, const char *end, int num, ...) {
-    DefineGrepArgs(k, kl, v);
-    if (!end) end = args + strlen(args);
-
-    int alen=end-args, anlen;
-    StringWordIter words(StringPiece(args, alen), isand, 0, StringWordIter::Flag::InPlace);
-    for (const char *a = words.Next(); a; a = words.Next()) {
-        if (!(anlen = HTTP::argNameLen(a))) continue;
-        for (int i=0; i<num; i++) if (anlen == kl[i] && !strncasecmp(k[i], a, anlen)) {
-            if (*(a+anlen) && *(a+anlen) == '=') v[i]->assign(a+anlen+1, words.wordlen-anlen-1);
-            else v[i]->assign(a, words.wordlen);
-        }
-    }
-    return 0;
-}
-
-int HTTP::headerGrep(const char *headers, const char *end, int num, ...) {
-    DefineGrepArgs(k, kl, v);
-    if (!end) end = HTTP::headerEnd(headers);
-    if (!end) end = headers + strlen(headers);
-
-    int hlen=end-headers, hnlen;
-    StringLineIter lines(StringPiece(headers, hlen), StringLineIter::Flag::InPlace);
-    for (const char *h = lines.Next(); h; h = lines.Next()) {
-        if (!(hnlen = HTTP::headerNameLen(h))) continue;
-        for (int i=0; i<num; i++) if (hnlen == kl[i] && !strncasecmp(k[i], h, hnlen)) {
-            const char *hv = NextChar(h+hnlen+1, notspace, lines.linelen-hnlen-1);
-            if (!hv) v[i]->clear();
-            else     v[i]->assign(hv, lines.linelen-(hv-h));
-        }
-    }
-    return 0;
-}
-
-string HTTP::headerGrep(const char *headers, const char *end, const string &name) {
-    if (!end) end = HTTP::headerEnd(headers);
-    if (!end) end = headers + strlen(headers);
-
-    int hlen=end-headers, hnlen;
-    StringLineIter lines(StringPiece(headers, hlen), StringLineIter::Flag::InPlace);
-    for (const char *line = lines.Next(); line; line = lines.Next()) {
-        if (!(hnlen = HTTP::headerNameLen(line))) continue;
-        if (hnlen == name.size() && !strncasecmp(name.c_str(), line, hnlen)) return string(line+hnlen+2, lines.linelen-hnlen-2);
-    }
-    return "";
-}
-
-bool HTTP::connectionClose(const char *connectionHeaderValue) {
-    static const char close[] = "close\r\n";
-    static const int closelen = strlen(close);
-    return !strncmp(connectionHeaderValue, close, closelen);
-}
-
-string HTTP::encodeURL(const char *url) {
-    static const char encodeURIcomponentPass[] = "~!*()'";
-    static const char encodeURIPass[] = "./@#:?,;-_&";
-    string ret;
-    for (const unsigned char *p = (const unsigned char *)url; *p; p++) {
-        if      (*p >= '0' && *p <= '9') ret += *p;
-        else if (*p >= 'a' && *p <= 'z') ret += *p;
-        else if (*p >= 'A' && *p <= 'Z') ret += *p;
-        else if (strchr(encodeURIcomponentPass, *p)) ret += *p;
-        else if (strchr(encodeURIPass, *p)) ret += *p;
-        else StringAppendf(&ret, "%%%02x", *p);
-    }
-    return ret;
-}
-
-/* SMTP */
-
-void SMTP::HTMLMessage(const string& from, const string& to, const string& subject, const string& content, string *out) {
-    static const char seperator[] = "XzYzZy";
-    *out = StrCat("From: ", from, "\nTo: ", to, "\nSubject: ", subject,
-                  "\nMIME-Version: 1.0\nContent-Type: multipart/alternative; boundary=\"", seperator, "\"\n\n");
-    StrAppend(out, "--", seperator, "\nContent-type: text/html\n\n", content, "\n--", seperator, "--\n");
-}
-
-void SMTP::NativeSendmail(const string &message) {
-#ifdef __linux__
-    Process smtp;
-    const char *argv[] = { "/usr/bin/sendmail", "-i", "-t", 0 };
-    if (smtp.Open(argv)) return;
-    fwrite(message.c_str(), message.size(), 1, smtp.out);
-#endif
-}
-
-string SMTP::EmailFrom(const string &message) {
-    int lt, gt;
-    string mail_from = HTTP::headerGrep(message.c_str(), 0, "From");
-    if ((lt = mail_from.find("<"    )) == mail_from.npos ||
-        (gt = mail_from.find(">", lt)) == mail_from.npos) FATAL("parse template from ", mail_from);
-    return mail_from.substr(lt+1, gt-lt-1);
 }
 
 /* Connection */
@@ -1106,7 +730,7 @@ int Connection::writeflush() {
     return wrote;
 }
 
-int Connection::sendto(const char *buf, int len) { return Network::SendTo(socket, addr, port, buf, len); }
+int Connection::sendto(const char *buf, int len) { return SystemNetwork::SendTo(socket, addr, port, buf, len); }
 
 bool Connection::ewouldblock() {
 #ifdef _WIN32
@@ -1133,11 +757,11 @@ void Service::Close(Connection *c) {
 }
 
 int Service::OpenSocket(Connection *c, int protocol, int blocking, IPV4EndpointSource* src_pool) {
-    Socket fd = Network::OpenSocket(protocol);
+    Socket fd = SystemNetwork::OpenSocket(protocol);
     if (fd == -1) return -1;
 
     if (!blocking) {
-        if (Network::SetSocketBlocking(fd, 0))
+        if (SystemNetwork::SetSocketBlocking(fd, 0))
         { close(fd); return -1; }
     }
 
@@ -1146,9 +770,9 @@ int Service::OpenSocket(Connection *c, int protocol, int blocking, IPV4EndpointS
         for (int i=0, max_bind_attempts=10; /**/; i++) {
             src_pool->Get(&c->src_addr, &c->src_port);
             if (i >= max_bind_attempts || (i && c->src_addr == last_src.addr && c->src_port == last_src.port))
-            { ERROR("connect-bind ", IPV4Endpoint::name(c->src_addr, c->src_port), ": ", strerror(errno)); close(fd); return -1; }
+            { ERROR("connect-bind ", IPV4::Text(c->src_addr, c->src_port), ": ", strerror(errno)); close(fd); return -1; }
 
-            if (Network::Bind(fd, c->src_addr, c->src_port) != -1) break;
+            if (SystemNetwork::Bind(fd, c->src_addr, c->src_port) != -1) break;
             src_pool->BindFailed(c->src_addr, c->src_port);
             last_src = IPV4Endpoint(c->src_addr, c->src_port);
         }
@@ -1170,8 +794,8 @@ Socket Service::Listen(IPV4::Addr addr, int port, Listener *listener) {
         BIO_set_accept_bios(listener->ssl, BIO_new_ssl(lfapp_ssl, 0));
 #endif
     } else {
-        if ((listener->socket = Network::Listen(protocol, addr, port)) == -1)
-        { ERROR("Network::listen(", protocol, ", ", port, "): ", Connection::lasterror().c_str()); return -1; }
+        if ((listener->socket = SystemNetwork::Listen(protocol, addr, port)) == -1)
+        { ERROR("SystemNetwork::Listen(", protocol, ", ", port, "): ", Connection::lasterror().c_str()); return -1; }
     }
     active.Add(listener->socket, SocketSet::READABLE, &listener->self_reference);
     return listener->socket;
@@ -1195,7 +819,7 @@ Connection *Service::Connect(IPV4::Addr addr, int port, IPV4EndpointSource *src_
     { ERROR(c->name(), ": connecting: ", c->lasterror()); delete c; return 0; }
 
     int connected = 0;
-    if (Network::Connect(c->socket, c->addr, c->port, &connected) == -1) {
+    if (SystemNetwork::Connect(c->socket, c->addr, c->port, &connected) == -1) {
         ERROR(c->name(), ": connecting: ", c->lasterror());
         close(c->socket);
         delete c;
@@ -1363,308 +987,6 @@ Connection *UDPClient::PersistentConnection(const string &url, ResponseCB respon
     return c;
 }
 
-/* Resolver */
-
-void Resolver::Reset() {
-    for (NameserverMap::iterator i = conn.begin(); i != conn.end(); ++i) delete i->second;
-    conn.clear();
-}
-
-bool Resolver::Connected() {
-    for (NameserverMap::const_iterator i = conn.begin(); i != conn.end(); ++i)
-        if (i->second->c->state == Connection::Connected) return true;
-    return false;
-}
-
-Resolver::Nameserver *Resolver::Connect(IPV4::Addr addr) {
-    Nameserver *ns = new Nameserver(this, addr);
-    if (!ns->c) { delete ns; return 0; }
-    CHECK_EQ(addr, ns->c->addr);
-    conn[addr] = ns;
-    return ns;
-}
-
-Resolver::Nameserver *Resolver::Connect(const vector<IPV4::Addr> &addrs) {
-    static bool randomize = false;
-    int rand_connect_index = randomize ? (::rand() % addrs.size()) : 0, ri=0; Nameserver *ret=0;
-    for (vector<IPV4::Addr>::const_iterator i = addrs.begin(); i != addrs.end(); ++i, ++ri) {
-        if (ri == rand_connect_index) ret = Connect(*i);
-        else conn_available.push_back(*i);
-    } return ret;
-}
-
-bool Resolver::Resolve(const Request &req) {
-#if defined(LFL_ANDROID) || defined(LFL_IPHONE)
-    IPV4::Addr ipv4_addr = Network::resolve(req.query);
-    INFO("resolved ", req.query, " to ", IPV4Endpoint::name(ipv4_addr));
-    req.cb(ipv4_addr, NULL);
-    return true;
-#else
-    if (!conn.size() && !conn_available.size()) { ERROR("resolve called with no conns"); return false; } 
-
-    Nameserver *ns = 0; // Choose a nameserver
-    NameserverMap::iterator ni = conn.begin();
-    if (req.retrys || ni == conn.end() || ni->second->requestMap.size() >= max_outstanding_per_ns) {
-        NameserverMap::iterator i = ni;
-        if (i != conn.end()) ++i;
-        for (/**/; i != conn.end(); ++i) if (i->second->requestMap.size() < max_outstanding_per_ns) break;
-        if (i != conn.end()) ns = i->second;
-        else if (conn_available.size()) {
-            ns = Connect(conn_available.back());
-            conn_available.pop_back();
-        }
-    }
-    if (!ns && ni != conn.end() && ni->second->requestMap.size() < max_outstanding_per_ns) ns = ni->second;
-
-    // Resolve or queue
-    Request outreq(ns, req.query, req.type, req.cb, req.retrys);
-    if (ns) return ns->Resolve(outreq);
-    queue.push_back(outreq);
-    return true;
-#endif
-}
-
-void Resolver::DefaultNameserver(vector<IPV4::Addr> *nameservers) {
-    nameservers->clear();
-#ifdef LFL_ANDROID
-    return;
-#endif
-#ifdef _WIN32
-    IP4_ARRAY IP; DWORD size=sizeof(IP4_ARRAY);
-    if (DnsQueryConfig(DnsConfigDnsServerList, 0, 0, 0, &IP, &size) || !IP.AddrCount) return;
-    nameservers->push_back(IP.AddrArray[0]);
-#else
-    LocalFile file("/etc/resolv.conf", "r");
-    if (!file.Opened()) return;
-
-    for (const char *line = file.NextLine(); line; line = file.NextLine()) {
-        StringWordIter words(line);
-        if (strcmp(words.Next(), "nameserver")) continue;
-        nameservers->push_back(IPV4::Parse(words.Next()));
-    }
-#endif
-}
-
-/* Resolver::Nameserver */
-
-bool Resolver::Nameserver::Resolve(const Request &req) {
-    int len; unsigned short id = NextID();
-    if ((len = DNS::WriteRequest(id, req.query, req.type, c->wb, sizeof(c->wb))) < 0) return false;
-    if (c->writeflush(c->wb, len) != len) return false;
-    requestMap[id] = req;
-    return true;
-}
-
-void Resolver::Nameserver::Response(Connection *cin, DNS::Header *hdr, int len) {
-    CHECK_EQ(c, cin);
-    if (!hdr) {
-        ERROR(c->name(), ": nameserver closed, timedout=", timedout);
-        CHECK_EQ(parent->conn.erase(c->addr), 1);
-        if (timedout) parent->conn_available.push_back(c->addr);
-        if (requestMap.size()) {
-            bool alternatives = parent->conn.size() || parent->conn_available.size();
-            for (RequestMap::iterator i = requestMap.begin(); i != requestMap.end(); ++i) {
-                const Resolver::Request &req = i->second;
-                if (!alternatives || !parent->Resolve(req)) { if (req.cb) req.cb(-1, 0); }
-            }
-        }
-        delete this;
-        return;
-    }
-
-    RequestMap::iterator rmiter = requestMap.find(hdr->id);
-    if (rmiter == requestMap.end()) { ERROR(c->name(), ": unknown DNS reply id=", hdr->id, ", len=", len); return; }
-    Resolver::Request req = rmiter->second;
-    requestMap.erase(rmiter);
-
-    DNS::Response res;
-    if (DNS::ReadResponse((const char *)hdr, len, &res)) { ERROR(c->name(), ": parse "); return; }
-    if (FLAGS_dns_dump) INFO(c->name(), ": ", res.DebugString());
-
-    if (req.cb) {
-        vector<IPV4::Addr> results;
-        for (int i=0; i<res.A.size(); i++) if (res.A[i].type == DNS::Type::A) results.push_back(res.A[i].addr);
-        IPV4::Addr ipv4_addr = results.size() ? results[::rand() % results.size()] : -1;
-        INFO(c->name(), ": resolved ", req.query, " to ", IPV4Endpoint::name(ipv4_addr));
-        req.cb(ipv4_addr, &res);
-    }
-    Dequeue();
-}
-
-void Resolver::Nameserver::Heartbeat() {
-    Time now = Now();
-    if (parent->auto_disconnect_seconds && !requestMap.size() && !parent->queue.size() && (c->rt + Seconds(parent->auto_disconnect_seconds)) <= now)
-    { timedout=true; c->_error(); INFO(c->name(), ": nameserver timeout"); return; }
-
-    static const int retry_interval = 1000, retry_max = 5;
-    for (RequestMap::iterator rmiter = requestMap.begin(); rmiter != requestMap.end(); /**/) {
-        if ((*rmiter).second.stamp + retry_interval >= now) { rmiter++; continue; }
-        Resolver::Request req = (*rmiter).second;
-        requestMap.erase(rmiter++);
-
-        INFO(req.ns->c->name(), ": timeout resolving ", req.query, " (retrys=", req.retrys, ")");
-        if (req.retrys++ >= retry_max || !parent->Resolve(req)) { if (req.cb) req.cb(-1, 0); }
-    }
-    Dequeue();
-}
-
-void Resolver::Nameserver::Dequeue() {
-    while (parent->queue.size() && requestMap.size() < parent->max_outstanding_per_ns) {
-        Resolver::Request req = parent->queue.back();
-        parent->queue.pop_back();
-        if (!parent->Resolve(req)) { if (req.cb) req.cb(-1, 0); }
-    }
-}
-
-/* Recursive Resolver */
-
-RecursiveResolver::RecursiveResolver() : queries_requested(0), queries_completed(0) {
-    vector<IPV4::Addr> addrs;
-#   define XX(x)
-#   define YY(x) addrs.push_back(IPV4::Parse(x));
-#   include "lfapp/namedroot.h"
-    root.resolver.Connect(addrs);
-}
-
-bool RecursiveResolver::Resolve(Request *req) {
-    AuthorityTreeNode *node = GetAuthorityTreeNode(req->query, false);
-    req->seen_authority.insert((void*)node);
-    req->resolver = this;
-
-    DNS::Response *cached = 0;
-    AuthorityTreeNode::Cache::iterator ci;
-    if      (req->type == DNS::Type::A  && (ci = node->Acache .find(req->query)) != node->Acache .end()) cached = ci->second;
-    else if (req->type == DNS::Type::MX && (ci = node->MXcache.find(req->query)) != node->MXcache.end()) cached = ci->second;
-    if (cached) {
-        IPV4::Addr addr = cached->A.size() ? cached->A[::rand() % cached->A.size()].addr : -1;
-        INFO("RecursiveResolver found ", req->query, " = ", IPV4Endpoint::name(addr), " in cache=", node->authority_domain);
-        RunInMainThread(new Callback(bind(&Request::Complete, req, addr, cached)));
-        return true;
-    }
-
-    Resolver::Request nsreq(req->query, req->type, bind(&Request::ResponseCB, req, _1, _2));
-    bool ret = node->resolver.Resolve(nsreq);
-    if (ret) queries_requested++;
-    return ret;
-}
-
-int RecursiveResolver::ResolveMissing(Request *req, const vector<DNS::Record> &R, const DNS::AnswerMap *answer) {
-    int start_requests = req->child_request.size(), start_pending_requests = req->pending_child_request.size();
-    for (vector<DNS::Record>::const_iterator e = R.begin(); e != R.end(); ++e) {
-        if (e->answer.empty() || (answer && Contains(*answer, e->answer))) continue;
-        req->ChildResolve(new Request(e->answer, DNS::Type::A, Resolver::ResponseCB(), req));
-    }
-    int new_requests = req->child_request.size() - start_requests, new_pending_requests = req->pending_child_request.size() - start_pending_requests;
-    if (new_requests || new_pending_requests) INFO("RecursiveResolver ", req->query, " spawned ", new_requests, " subqueries, queued ", new_pending_requests);
-    return new_requests + new_pending_requests;
-}
-
-void RecursiveResolver::Response(Request *req, IPV4::Addr addr, DNS::Response *res, vector<DNS::Response> *subres) {
-    if (FLAGS_dns_dump) INFO("RecursiveResolver::Response ", (int)addr, " ", res, " " , subres);
-    if (addr != -1) {
-        if (addr == 0 && !req->parent_request && res) {
-            if (!req->missing_answer) {
-                req->missing_answer = 1;
-                req->answer.clear();
-                req->answer.push_back(*res);
-                DNS::AnswerMap extra;
-                DNS::MakeAnswerMap(res->E, &extra);
-                int new_child_requests = ResolveMissing(req, res->A, &extra);
-                if (new_child_requests) return;
-            } else if (subres) {
-                for (int i = 1; i < subres->size(); ++i)
-                    res->E.insert(res->E.end(), (*subres)[i].A.begin(), (*subres)[i].A.end());
-            }
-        }
-        AuthorityTreeNode *node=0;
-        if (res && (req->type == DNS::Type::A || req->type == DNS::Type::MX)) {
-            node = GetAuthorityTreeNode(req->query, false);
-            AuthorityTreeNode::Cache *cache = (req->type == DNS::Type::A) ? &node->Acache : &node->MXcache;
-            if (Contains(*cache, req->query)) { ERROR("cache collision ", (*cache)[req->query]->DebugString(), " versus ", res->DebugString()); node=0; }
-            else (*cache)[req->query] = new DNS::Response(*res);
-        }
-        INFO("RecursiveResolver resolved ", req->query, " to ", IPV4Endpoint::name(addr), " (cached=", node?node->authority_domain:"<NULL>", ")");
-        req->Complete(addr, res);
-        queries_completed++;
-        return;
-    }
-
-    bool ret = false;
-    DNS::AnswerMap extra, authority_zone;
-    if (res) {
-        DNS::MakeAnswerMap(res->E, &extra);
-        for (int i = 1; subres && i < subres->size(); ++i) DNS::MakeAnswerMap((*subres)[i].A, &extra);
-        DNS::MakeAnswerMap(res->NS, extra, DNS::Type::NS, &authority_zone);
-        if (!authority_zone.size() && req->Ancestors() < 5 && !subres) {
-            int new_child_requests = ResolveMissing(req, res->NS, 0);
-            if (new_child_requests) { req->answer.clear(); req->answer.push_back(*res); return; }
-        }
-    }
-    if (authority_zone.size() != 1) ERROR("authority_zone.size() ", authority_zone.size());
-    for (DNS::AnswerMap::const_iterator i = authority_zone.begin(); i != authority_zone.end(); ++i) {
-        AuthorityTreeNode *node = GetAuthorityTreeNode(i->first, true);
-        CHECK_EQ(i->first, node->authority_domain);
-        if (!node->authority.Q.size()) {
-            node->authority = *res;
-            node->resolver.Connect(i->second);
-        } else ERROR("AuthorityTreeNode collision ", node->authority.DebugString(), " versus ", res->DebugString());
-
-        if (Contains(req->seen_authority, (void*)node)) { ERROR("RecursiveResolver loop?"); continue; }
-        ret = node->resolver.Resolve(Resolver::Request(req->query, req->type, bind(&Request::ResponseCB, req, _1, _2)));
-        req->seen_authority.insert(node);
-        break;
-    }
-    if (!ret) {
-        INFO("RecursiveResolver failed to resolve ", req->query);
-        req->Complete(-1, res);
-        queries_completed++;
-    }
-}
-
-RecursiveResolver::AuthorityTreeNode *RecursiveResolver::GetAuthorityTreeNode(const string &query, bool create) {
-    AuthorityTreeNode *node = &root;
-    vector<string> q;
-    Split(query, isdot, &q);
-    for (int i = q.size()-1; i >= 0; --i) {
-        AuthorityTreeNode::Children::iterator it = node->child.find(q[i]);
-        if (it != node->child.end()) { node = it->second; continue; }
-        if (!create) break;
-
-        AuthorityTreeNode *ret = new AuthorityTreeNode();
-        ret->authority_domain = Join(q, ".", i, q.size()) + ".";
-        ret->depth = node->depth + 1;
-        node->child[q[i]] = ret;
-        node = ret;
-    }
-    if (FLAGS_dns_dump) INFO("GetAuthorityTreeNode(", query, ", ", create, ") = ", node->authority_domain);
-    return node;
-}
-
-void RecursiveResolver::Request::ChildResolve(Request *subreq) {
-    if (child_request.size()) { pending_child_request.insert(subreq); return; }
-    child_request.insert(subreq);
-    resolver->Resolve(subreq);
-}
-
-void RecursiveResolver::Request::ChildResponse(Request *subreq, DNS::Response *res) {
-    if (res) answer.push_back(*res);
-    child_request.erase(subreq);
-    if (child_request.size()) return;
-    if (!pending_child_request.size()) {
-        INFO(query, ": subrequests finished, ma=", missing_answer, ", as=", answer.size());
-        return resolver->Response(this, missing_answer ? 0 : -1, &answer[0], &answer);
-    }
-    subreq = *pending_child_request.begin();
-    pending_child_request.erase(pending_child_request.begin());
-    ChildResolve(subreq);
-}
-
-void RecursiveResolver::Request::Complete(IPV4::Addr addr, DNS::Response *res) {
-    if (parent_request) parent_request->ChildResponse(this, res);
-    if (cb) cb(addr, res);
-    delete this;
-}
-
 /* HTTPClient */
 
 struct HTTPClientQuery {
@@ -1680,11 +1002,11 @@ struct HTTPClientQuery {
             char *cur = c->rb;
             if (!readHeaderLength) {
                 StringPiece ct, cl, te;
-                char *headers = cur, *headersEnd = HTTP::headerEnd(headers);
+                char *headers = cur, *headersEnd = HTTP::FindHeadersEnd(headers);
                 if (!headersEnd) return 1;
 
-                readHeaderLength = HTTP::headerLen(headers, headersEnd);
-                HTTP::headerGrep(headers, headersEnd, 3, "Content-Type", &ct, "Content-Length", &cl, "Transfer-Encoding", &te);
+                readHeaderLength = HTTP::GetHeaderLen(headers, headersEnd);
+                HTTP::GrepHeaders(headers, headersEnd, 3, "Content-Type", &ct, "Content-Length", &cl, "Transfer-Encoding", &te);
                 currentChunkLength = readContentLength = atoi(BlankNull(cl.data()));
                 chunkedEncoding = te.str() == "chunked";
                 content_type = ct.str();
@@ -1885,18 +1207,18 @@ struct HTTPServerConnection : public Query {
         for (;;) {
             if (!dispatcher.empty()) return dispatcher.Thunk(this, c);
 
-            char *end = HTTP::headerEnd(c->rb);
+            char *end = HTTP::FindHeadersEnd(c->rb);
             if (!end) return 0;
 
-            char *start = HTTP::headersStart(c->rb);
+            char *start = HTTP::FindHeadersStart(c->rb);
             if (!start) return -1;
 
             char *headers = start;
-            int headersLen = HTTP::headerLen(headers, end);
+            int headersLen = HTTP::GetHeaderLen(headers, end);
             int cmdLen = start - c->rb;
 
             char *method, *url, *args, *ver;
-            if (HTTP::request(c->rb, &method, &url, &args, &ver) == -1) return -1;
+            if (HTTP::ParseRequest(c->rb, &method, &url, &args, &ver) == -1) return -1;
 
             int type;
             if      (!strcasecmp(method, "GET"))  type = HTTPServer::Method::GET;
@@ -1908,15 +1230,15 @@ struct HTTPServerConnection : public Query {
             StringPiece cnhv;
             if (type == HTTPServer::Method::POST) {
                 StringPiece ct, cl;
-                HTTP::headerGrep(headers, end, 3, "Connection", &cnhv, "Content-Type", &ct, "Content-Length", &cl);
+                HTTP::GrepHeaders(headers, end, 3, "Connection", &cnhv, "Content-Type", &ct, "Content-Length", &cl);
                 dispatcher.postlen = atoi(BlankNull(cl.data()));
                 dispatcher.reqlen += dispatcher.postlen;
                 if (dispatcher.postlen) dispatcher.postdata = headers + headersLen;
             }
             else {
-                HTTP::headerGrep(headers, end, 1, "Connection", &cnhv);
+                HTTP::GrepHeaders(headers, end, 1, "Connection", &cnhv);
             }
-            persistent = !HTTP::connectionClose(BlankNull(cnhv.data()));
+            persistent = PrefixMatch(BlankNull(cnhv.data()), "close\r\n");
 
             int ret = dispatcher.Thunk(this, c);
             if (ret < 0) return ret;
@@ -2020,7 +1342,7 @@ HTTPServer::Response HTTPServer::FileResource::Request(Connection *, int method,
 
 HTTPServer::Response HTTPServer::ConsoleResource::Request(Connection *c, int method, const char *url, const char *args, const char *headers, const char *postdata, int postlen) {
     StringPiece v;
-    if (args) HTTP::argGrep(args, 0, 1, "v", &v);
+    if (args) HTTP::GrepURLArgs(args, 0, 1, "v", &v);
     app->shell.Run(v.str());
     string response = StrCat("<html>Shell::run('", v.str(), "')<br/></html>\n");
     return HTTPServer::Response("text/html; charset=UTF-8", &response);

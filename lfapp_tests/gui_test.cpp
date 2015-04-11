@@ -64,7 +64,7 @@ struct TextAreaTest : public TextArea {
     TextAreaTest(Window *W, Font *F, int S=200) : TextArea(W,F,S) {}
     virtual LinesFrameBuffer *GetFrameBuffer() override { return &line_fb_test; }
     virtual void UpdateToken(Line *l, int wo, int wl, int t) override {
-        token.emplace_back(l, BoxRun(&l->data->glyphs[wo], wl).Text(), t);
+        token.emplace_back(l, DrawableBoxRun(&l->data->glyphs[wo], wl).Text(), t);
     }
 };
 struct EditorTest : public Editor {

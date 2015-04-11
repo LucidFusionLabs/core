@@ -1208,7 +1208,7 @@ struct WorkerThread {
 
 struct ModuleThread : public WorkerThread {
     Module *module;
-    ModuleThread(Module *M) : module(M) { queue->loop_wait_ms=5; Init(bind(&ModuleThread::HandleMessagesLoop, this)); }
+    ModuleThread(Module *M) : module(M) { Init(bind(&ModuleThread::HandleMessagesLoop, this)); }
     void HandleMessagesLoop() {
         while (GetLFApp()->run) { module->Frame(0); queue->HandleMessages(); Msleep(queue->loop_wait_ms); }
     }
