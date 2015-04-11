@@ -201,8 +201,6 @@ extern "C" int main(int argc, const char *argv[]) {
     FLAGS_font_engine = "freetype";
 #endif
 
-    app->scheduler.AddWaitForeverService(Singleton<HTTPClient>::Get());
-    app->scheduler.AddWaitForeverService(Singleton <UDPClient>::Get());
     if (app->Create(argc, argv, __FILE__)) { app->Free(); return -1; }
     if (!FLAGS_lfapp_network_.override) FLAGS_lfapp_network = 1;
 

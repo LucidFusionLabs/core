@@ -2388,9 +2388,6 @@ void FrameScheduler::DelWaitForeverKeyboard() {
     OSXDelWaitForeverKeyboard(screen->id);
 #endif
 }
-void FrameScheduler::AddWaitForeverService(Service *svc) {
-    if (wait_forever && wait_forever_thread) svc->active.mirror = &select_thread;
-}
 void FrameScheduler::AddWaitForeverSocket(Socket fd, int flag, void *val) {
     if (wait_forever && wait_forever_thread) select_thread.Add(fd, flag, val);
 #ifdef LFL_OSXINPUT

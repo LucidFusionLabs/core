@@ -272,6 +272,7 @@ struct GraphicsDevice;
 struct Connection;
 struct Listener;
 struct Service;
+struct ServiceEndpointEraseList;
 struct Glyph;
 struct Font;
 struct Flow;
@@ -1262,7 +1263,6 @@ struct FrameScheduler {
     void DelWaitForeverMouse();
     void AddWaitForeverKeyboard();
     void DelWaitForeverKeyboard();
-    void AddWaitForeverService(Service*);
     void AddWaitForeverSocket(Socket fd, int flag, void *val=0);
     void DelWaitForeverSocket(Socket fd);
 };
