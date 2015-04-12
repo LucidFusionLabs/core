@@ -107,7 +107,7 @@ void Resolver::DefaultNameserver(vector<IPV4::Addr> *nameservers) {
 bool Resolver::Nameserver::Resolve(const Request &req) {
     int len; unsigned short id = NextID();
     if ((len = DNS::WriteRequest(id, req.query, req.type, c->wb, sizeof(c->wb))) < 0) return false;
-    if (c->writeflush(c->wb, len) != len) return false;
+    if (c->WriteFlush(c->wb, len) != len) return false;
     requestMap[id] = req;
     return true;
 }
@@ -115,7 +115,7 @@ bool Resolver::Nameserver::Resolve(const Request &req) {
 void Resolver::Nameserver::Response(Connection *cin, DNS::Header *hdr, int len) {
     CHECK_EQ(c, cin);
     if (!hdr) {
-        ERROR(c->name(), ": nameserver closed, timedout=", timedout);
+        ERROR(c->Name(), ": nameserver closed, timedout=", timedout);
         CHECK_EQ(parent->conn.erase(c->addr), 1);
         if (timedout) parent->conn_available.push_back(c->addr);
         if (requestMap.size()) {
@@ -130,19 +130,19 @@ void Resolver::Nameserver::Response(Connection *cin, DNS::Header *hdr, int len) 
     }
 
     RequestMap::iterator rmiter = requestMap.find(hdr->id);
-    if (rmiter == requestMap.end()) { ERROR(c->name(), ": unknown DNS reply id=", hdr->id, ", len=", len); return; }
+    if (rmiter == requestMap.end()) { ERROR(c->Name(), ": unknown DNS reply id=", hdr->id, ", len=", len); return; }
     Resolver::Request req = rmiter->second;
     requestMap.erase(rmiter);
 
     DNS::Response res;
-    if (DNS::ReadResponse((const char *)hdr, len, &res)) { ERROR(c->name(), ": parse "); return; }
-    if (FLAGS_dns_dump) INFO(c->name(), ": ", res.DebugString());
+    if (DNS::ReadResponse((const char *)hdr, len, &res)) { ERROR(c->Name(), ": parse "); return; }
+    if (FLAGS_dns_dump) INFO(c->Name(), ": ", res.DebugString());
 
     if (req.cb) {
         vector<IPV4::Addr> results;
         for (int i=0; i<res.A.size(); i++) if (res.A[i].type == DNS::Type::A) results.push_back(res.A[i].addr);
         IPV4::Addr ipv4_addr = results.size() ? results[::rand() % results.size()] : -1;
-        INFO(c->name(), ": resolved ", req.query, " to ", IPV4::Text(ipv4_addr));
+        INFO(c->Name(), ": resolved ", req.query, " to ", IPV4::Text(ipv4_addr));
         req.cb(ipv4_addr, &res);
     }
     Dequeue();
@@ -151,7 +151,7 @@ void Resolver::Nameserver::Response(Connection *cin, DNS::Header *hdr, int len) 
 void Resolver::Nameserver::Heartbeat() {
     Time now = Now();
     if (parent->auto_disconnect_seconds && !requestMap.size() && !parent->queue.size() && (c->rt + Seconds(parent->auto_disconnect_seconds)) <= now)
-    { timedout=true; c->_error(); INFO(c->name(), ": nameserver timeout"); return; }
+    { timedout=true; c->SetError(); INFO(c->Name(), ": nameserver timeout"); return; }
 
     static const int retry_interval = 1000, retry_max = 5;
     for (RequestMap::iterator rmiter = requestMap.begin(); rmiter != requestMap.end(); /**/) {
@@ -159,7 +159,7 @@ void Resolver::Nameserver::Heartbeat() {
         Resolver::Request req = (*rmiter).second;
         requestMap.erase(rmiter++);
 
-        INFO(req.ns->c->name(), ": timeout resolving ", req.query, " (retrys=", req.retrys, ")");
+        INFO(req.ns->c->Name(), ": timeout resolving ", req.query, " (retrys=", req.retrys, ")");
         if (req.retrys++ >= retry_max || !parent->Resolve(req)) { if (req.cb) req.cb(-1, 0); }
     }
     Dequeue();

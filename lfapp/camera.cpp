@@ -967,6 +967,7 @@ extern "C" void UpdateFrame(const char *imageData, int width, int height, int im
 #endif /* LFL_QTKIT_CAMERA */
 
 int Camera::Init() {
+    INFO("Camera::Init()");
 #if defined(LFL_OPENCV_CAMERA)
     impl = new OpenCvCamera(this);
 #elif defined(LFL_FFMPEG_CAMERA)

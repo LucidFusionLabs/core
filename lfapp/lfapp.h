@@ -40,6 +40,7 @@
 #include <unordered_set>
 #include <thread>
 #include <mutex>
+#include <condition_variable>
 #define LFL_STL11_NAMESPACE std
 
 #ifdef _WIN32
@@ -91,8 +92,9 @@ using LFL_STL11_NAMESPACE::unordered_map;
 using LFL_STL11_NAMESPACE::unordered_set;
 using LFL_STL11_NAMESPACE::shared_ptr;
 using LFL_STL11_NAMESPACE::unique_ptr;
-using LFL_STL11_NAMESPACE::function;
+using LFL_STL11_NAMESPACE::move;
 using LFL_STL11_NAMESPACE::bind;
+using LFL_STL11_NAMESPACE::function;
 using LFL_STL11_NAMESPACE::placeholders::_1;
 using LFL_STL11_NAMESPACE::placeholders::_2;
 using LFL_STL11_NAMESPACE::placeholders::_3;
@@ -100,7 +102,9 @@ using LFL_STL11_NAMESPACE::placeholders::_4;
 using LFL_STL11_NAMESPACE::placeholders::_5;
 using LFL_STL11_NAMESPACE::placeholders::_6;
 using LFL_STL11_NAMESPACE::mutex;
-using LFL_STL11_NAMESPACE::move;
+using LFL_STL11_NAMESPACE::lock_guard;
+using LFL_STL11_NAMESPACE::unique_lock;
+using LFL_STL11_NAMESPACE::condition_variable;
 
 #include <errno.h>
 #include <math.h>
@@ -298,6 +302,7 @@ typedef long long Time;
 typedef google::protobuf::Message Proto;
 typedef basic_string<short> String16;
 typedef function<void()> Callback;
+typedef lock_guard<mutex> ScopedMutex;
 typedef int (*MainCB)(int argc, const char **argv);
 
 Time Now();
@@ -796,12 +801,6 @@ struct BlockChainAlloc : public Allocator {
     void Free(void *p) {}
 };
 
-struct ScopedMutex {
-    mutex &m;
-    ScopedMutex(mutex &M) : m(M) { m.lock(); }
-    ~ScopedMutex() { m.unlock(); }
-};
-
 struct ThreadLocalStorage {
     Allocator *alloc=0;
     virtual ~ThreadLocalStorage() { delete alloc; }
@@ -1182,22 +1181,35 @@ namespace LFL {
 ::std::ostream& operator<<(::std::ostream& os, const Box   &x);
 
 template <class X> struct MessageQueue {
+    condition_variable cv;
+    bool use_cv = 0;
     deque<X> queue;
     mutex lock;
-    void Write(const X &x) { ScopedMutex sm(lock); queue.push_back(x); }
-    bool Read(X* out) {
+
+    void Write(const X &x) {
+        ScopedMutex sm(lock);
+        queue.push_back(x);
+        if (use_cv) cv.notify_one(); 
+    }
+    bool NBRead(X* out) {
         if (queue.empty()) return false;
         ScopedMutex sm(lock);
         if (queue.empty()) return false;
         *out = PopBack(queue);
-        return 1;
+        return true;
+    }
+    X Read() {
+        unique_lock<mutex> ul(lock);
+        cv.wait(ul, [this](){ return !this->queue.empty(); } );
+        return PopBack(queue);
     }
 };
 
 struct CallbackQueue : public MessageQueue<Callback*> {
-    int loop_wait_ms = 30;
-    void HandleMessagesLoop() { while (GetLFApp()->run) { HandleMessages(); Msleep(loop_wait_ms); } }
-    void HandleMessages() { Callback *cb=0; while (Read(&cb)) { (*cb)(); delete cb; } }
+    void Shutdown() { Write(new Callback()); }
+    void HandleMessage(Callback *cb) { (*cb)(); delete cb; }
+    void HandleMessages() { Callback *cb=0; while (NBRead(&cb)) HandleMessage(cb); }
+    void HandleMessagesLoop() { for (use_cv=1; GetLFApp()->run; ) HandleMessage(Read()); }
 };
 
 struct WorkerThread {
@@ -1205,14 +1217,6 @@ struct WorkerThread {
     unique_ptr<Thread> thread;
     WorkerThread() : queue(new CallbackQueue()) {}
     void Init(const Callback &main_cb) { thread = unique_ptr<Thread>(new Thread(main_cb)); }
-};
-
-struct ModuleThread : public WorkerThread {
-    Module *module;
-    ModuleThread(Module *M) : module(M) { Init(bind(&ModuleThread::HandleMessagesLoop, this)); }
-    void HandleMessagesLoop() {
-        while (GetLFApp()->run) { module->Frame(0); queue->HandleMessages(); Msleep(queue->loop_wait_ms); }
-    }
 };
 
 struct ThreadPool {
@@ -1327,11 +1331,9 @@ struct Application : public ::LFApp, public Module {
     fill_mode(3, GraphicsDevice::Fill, GraphicsDevice::Line, GraphicsDevice::Point)
     { run=1; initialized=0; main_thread_id=0; frames_ran=pre_frames_ran=0; }
 
-    int LoadModule(Module *M) { modules.push_back(M); return M->Init(); }
-    ModuleThread *CreateModuleThread(Module *m);
-
     void Log(int level, const char *file, int line, const string &message);
     void CreateNewWindow(const function<void(Window*)> &start_cb = function<void(Window*)>());
+    int LoadModule(Module *M) { modules.push_back(M); return M->Init(); }
 
     int Create(int argc, const char **argv, const char *source_filename);
     int Init();

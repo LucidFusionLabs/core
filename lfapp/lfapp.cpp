@@ -1007,7 +1007,7 @@ int Process::Open(const char **argv) {
     CloseHandle(pipeinW);
     CloseHandle(pipeoutR);
 
-    in = fdopen(_open_osfhandle((long)pipeinR, O_TEXT), "r");
+    in = fdopen(_open_osfhandle((long)pipeinR, O_TEXT), "r"); // leaks ?
     out = fdopen(_open_osfhandle((long)pipeoutW, O_TEXT), "w");
     return 0;
 }
@@ -1968,15 +1968,6 @@ void FlagMap::Print(const char *source_filename) const {
     if (source_filename) INFO("fullhelp : Display full help"); 
 }
 
-ModuleThread *Application::CreateModuleThread(Module *m) {
-    auto i = find(modules.begin(), modules.end(), m);
-    if (i == modules.end()) return NULL;
-    ModuleThread *ret = new ModuleThread(*i);
-    modules.erase(i);
-    ret->thread->Start();
-    return ret;
-}
-
 void Application::Log(int level, const char *file, int line, const string &message) {
     if (level > FLAGS_loglevel || (level >= LFApp::Log::Debug && !FLAGS_lfapp_debug)) return;
     char tbuf[64];
@@ -2142,50 +2133,30 @@ int Application::Init() {
     }
 
     if (FLAGS_lfapp_audio) {
-        INFO("lfapp_open: audio_init()");
-        if (LoadModule(&audio)) { INFO("audio init failed"); return -1; }
+        if (LoadModule(&audio)) { ERROR("audio init failed"); return -1; }
     }
     else { FLAGS_chans_in=FLAGS_chans_out=1; }
 
     if (FLAGS_lfapp_camera) {
-        INFO("lfapp_open: camera_init()");
-        if (LoadModule(&camera)) { INFO("camera init failed"); return -1; }
+        if (LoadModule(&camera)) { ERROR("camera init failed"); return -1; }
     }
 
     if (FLAGS_lfapp_video) {
-        INFO("lfapp_open: video_init()");
-        if (video.Init()) { INFO("video init failed"); return -1; }
+        if (video.Init()) { ERROR("video init failed"); return -1; }
     } else {
         Window::active[screen->id] = screen;
     }
 
     if (FLAGS_lfapp_input) {
-        INFO("lfapp_open: input_init()");
-        if (LoadModule(&input)) { INFO("input init failed"); return -1; }
+        if (LoadModule(&input)) { ERROR("input init failed"); return -1; }
         input.Init(screen);
     }
 
     if (FLAGS_lfapp_network) {
-        INFO("lfapp_open: network_init()");
-        if (LoadModule(&network)) { INFO("service init failed"); return -1; }
-
-        network.Enable(Singleton<UDPClient>::Get());
-        vector<IPV4::Addr> nameservers;
-        if (FLAGS_nameserver.empty()) {
-            INFO("network_init(): service_enable(new Resolver(defaultNameserver()))");
-            Resolver::DefaultNameserver(&nameservers);
-        } else {
-            INFO("network_init(): service_enable(new Resolver(", FLAGS_nameserver, "))");
-            IPV4::ParseCSV(FLAGS_nameserver, &nameservers);
-        }
-        for (int i = 0; i < nameservers.size(); ++i) Singleton<Resolver>::Get()->Connect(nameservers[i]);
-
-        INFO("network_init(): service_enable(new HTTPClient)");
-        network.Enable(Singleton<HTTPClient>::Get());
+        if (LoadModule(&network)) { ERROR("network init failed"); return -1; }
     }
 
     if (FLAGS_lfapp_cuda) {
-        INFO("lfapp_open: cuda_init()");
         cuda.Init();
     }
 
@@ -2430,6 +2401,7 @@ void cuda_AM_begin(AcousticModel::StateCollection *model, AcousticModel::StateCo
 void cuda_AM_next(AcousticModel::StateCollection *model, AcousticModel::StateCollection::Iterator *iter) { return model->nextState(iter); }
 
 int CUDA::Init() {
+    INFO("CUDA::Init()");
     FLAGS_lfapp_cuda = 0;
 
     int cuda_devices=0; cudaError_t err;

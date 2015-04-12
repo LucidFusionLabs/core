@@ -165,7 +165,6 @@ struct Network : public Module {
     int select_time=0;
     LFLSocketSet active;
     vector<Service*> service_table;
-#   define ServiceTableIter(t) for (int i=0, n=(t).size(); i<n; i++)
 
     int Init();
     int Enable(Service *svc);
@@ -204,6 +203,8 @@ struct SystemNetwork {
     static int GetPeerName(Socket fd, IPV4::Addr *addr_out, int *port_out);
     static string GetHostByAddr(IPV4::Addr addr);
     static IPV4::Addr GetHostByName(const string &host);
+    static bool EWouldBlock();
+    static string LastError();
 };
 
 struct Query {  
@@ -237,7 +238,8 @@ struct Connection {
     char rb[BufSize], wb[BufSize];
     typed_ptr self_reference;
     vector<IOVec> packets;
-    SSL *ssl=0; BIO *bio=0;
+    SSL *ssl=0;
+    BIO *bio=0;
     Query *query;
 
     ~Connection() { delete query; }
@@ -246,47 +248,45 @@ struct Connection {
     Connection(Service *s, int State, IPV4::Addr Addr, int Port)           : svc(s), socket(-1),   ct(Now()), rt(Now()), wt(Now()), addr(Addr), state(State), port(Port), self_reference(TypePointer(this)), query(0) {}
     Connection(Service *s, int State, int Sock, IPV4::Addr Addr, int Port) : svc(s), socket(Sock), ct(Now()), rt(Now()), wt(Now()), addr(Addr), state(State), port(Port), self_reference(TypePointer(this)), query(0) {}
 
-    string name() { return !endpoint_name.empty() ? endpoint_name : IPV4::Text(addr, port); }
-    void _error() { state = Error; ct = Now(); }
-    void connected() { state = Connected; ct = Now(); }
-    void reconnect() { state = Reconnect; ct = Now(); }
-    void connecting() { state = Connecting; ct = Now(); }
-    int set_source_address() { return SystemNetwork::GetSockName(socket, &src_addr, &src_port); }
-    int write(const string &buf) { return write(buf.c_str(), buf.size()); }
-    int write(const char *buf, int len);
-    int writeflush();
-    int writeflush(const string &buf) { return writeflush(buf.c_str(), buf.size()); }
-    int writeflush(const char *buf, int len);
-    int sendto(const char *buf, int len);
-    int read();
-    int readpacket();
-    int readpackets();
-    int add(const char *buf, int len);
-    int addpacket(const char *buf, int len);
-    int readflush(int len);
-    static bool ewouldblock();
-    static string lasterror();
+    string Name() const { return !endpoint_name.empty() ? endpoint_name : IPV4::Text(addr, port); }
+    void SetError() { state = Error; ct = Now(); }
+    void SetConnected() { state = Connected; ct = Now(); }
+    void SetReconnect() { state = Reconnect; ct = Now(); }
+    void SetConnecting() { state = Connecting; ct = Now(); }
+    int SetSourceAddress() { return SystemNetwork::GetSockName(socket, &src_addr, &src_port); }
+    int Write(const string &buf) { return Write(buf.c_str(), buf.size()); }
+    int Write(const char *buf, int len);
+    int WriteFlush();
+    int WriteFlush(const string &buf) { return WriteFlush(buf.c_str(), buf.size()); }
+    int WriteFlush(const char *buf, int len);
+    int SendTo(const char *buf, int len);
+    int Read();
+    int ReadPacket();
+    int ReadPackets();
+    int Add(const char *buf, int len);
+    int AddPacket(const char *buf, int len);
+    int ReadFlush(int len);
 };
 
 struct Service {
+    typedef map<string, Listener*> ListenMap;
+    typedef map<Socket, Connection*> ConnMap;
+    typedef map<string, Connection*> EndpointMap;
+
     string name;
     int protocol, reconnect=0;
     bool initialized=0, heartbeats=0, endpoint_read_autoconnect=0;
     void *game_network=0;
-    Connection fake;
-
-    typedef map<string, Listener*> ListenMap;
     ListenMap listen;
-    Listener *listener() { return listen.size() ? listen.begin()->second : 0; }
-
-    typedef map<Socket, Connection*> ConnMap;
     ConnMap conn;
+    Connection fake;
     IPV4EndpointSource *connect_src_pool=0;
-
-    typedef map<string, Connection*> EndpointMap;
     EndpointMap endpoint;
+    Service(int prot=Protocol::TCP) : protocol(prot), fake(this, Connection::Connected, 0) {}
 
     void QueueListen(IPV4::Addr addr, int port, bool SSL=false) { listen[IPV4Endpoint(addr,port).ToString()] = new Listener(this, SSL); }
+    Listener *GetListener() { return listen.size() ? listen.begin()->second : 0; }
+
     int OpenSocket(Connection *c, int protocol, int blocking, IPV4EndpointSource*);
     Socket Listen(IPV4::Addr addr, int port, Listener*);
     Connection *Accept(int state, Socket socket, IPV4::Addr addr, int port);
@@ -300,7 +300,6 @@ struct Service {
     void EndpointRead(const string &endpoint_name, const char *buf, int len);
     void EndpointClose(const string &endpoint_name);
 
-    Service(int prot=Protocol::TCP) : protocol(prot), fake(this, Connection::Connected, 0) {}
     virtual void Close(Connection *c);
     virtual int UDPFilter(Connection *e, const char *buf, int len) { return 0; }
     virtual int Connected(Connection *c) { return 0; }

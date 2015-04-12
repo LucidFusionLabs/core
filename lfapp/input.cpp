@@ -540,6 +540,7 @@ void Mouse::GrabFocus   () { OSXGrabMouseFocus();    app->grab_mode.On();  scree
 #endif // LFL_OSXINPUT
 
 int Input::Init() {
+    INFO("Input::Init()");
 #if defined(LFL_QT)
     impl = new QTInputModule();
 #elif defined(LFL_GLFWINPUT)

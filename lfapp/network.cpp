@@ -57,6 +57,7 @@ extern "C" {
 #endif
 
 namespace LFL {
+DECLARE_string(nameserver);
 DEFINE_bool(dns_dump, 0, "Print DNS responses");
 DEFINE_bool(network_debug, 0, "Print send()/recv() bytes");
 DEFINE_int(udp_idle_sec, 15, "Timeout UDP connections idle for seconds");
@@ -132,6 +133,7 @@ void IPV4EndpointPoolFilter::Get(IPV4::Addr *addr, int *port) {
 }
 
 int Network::Init() {
+    INFO("Network::Init()");
 #ifdef LFL_OPENSSL
     SSL_load_error_strings();
     SSL_library_init(); 
@@ -148,6 +150,19 @@ int Network::Init() {
         if (!SSL_CTX_check_private_key(lfapp_ssl)) { ERROR("SSL_CTX_check_private_key ", ERR_reason_error_string(ERR_get_error())); return -1; }
     }
 #endif
+    Enable(Singleton<UDPClient>::Get());
+    vector<IPV4::Addr> nameservers;
+    if (FLAGS_nameserver.empty()) {
+        INFO("Network::Init(): Enable(new Resolver(defaultNameserver()))");
+        Resolver::DefaultNameserver(&nameservers);
+    } else {
+        INFO("Network::Init(): Enable(new Resolver(", FLAGS_nameserver, "))");
+        IPV4::ParseCSV(FLAGS_nameserver, &nameservers);
+    }
+    for (auto &n : nameservers) Singleton<Resolver>::Get()->Connect(n);
+
+    INFO("Network::Init(): service_enable(new HTTPClient)");
+    Enable(Singleton<HTTPClient>::Get());
     return 0;
 }
 
@@ -169,18 +184,17 @@ int Network::Enable(Service *s) {
     }
 
     /* insert */
-    ServiceTableIter(service_table) { if (service_table[i] == s) return 0; }
+    auto i = find(service_table.begin(), service_table.end(), s);
+    if (i != service_table.end()) return 0;
     service_table.push_back(s);
     return 0;
 }
 
 int Network::Disable(Service *s) {
-    ServiceTableIter(service_table) {
-        if (service_table[i] != s) continue;
-        service_table.erase(service_table.begin() + i);
-        return 0;
-    }
-    return -1;
+    auto i = find(service_table.begin(), service_table.end(), s);
+    if (i == service_table.end()) return -1;
+    service_table.erase(i);
+    return 0;
 }
 
 void Network::ConnClose(Service *svc, Connection *c, ServiceEndpointEraseList *removelist) {
@@ -190,8 +204,7 @@ void Network::ConnClose(Service *svc, Connection *c, ServiceEndpointEraseList *r
     delete c;
 }
 void Network::ConnCloseAll(Service *svc) {
-    for (Service::ConnMap::iterator i = svc->conn.begin(); i != svc->conn.end(); ++i)
-        ConnClose(svc, i->second, 0);
+    for (auto i = svc->conn.begin(), e = svc->conn.end(); i != e; ++i) ConnClose(svc, i->second, 0);
     svc->conn.clear();
 }
 
@@ -220,7 +233,7 @@ int Network::Frame(unsigned clicks) {
 
     /* select */
     if (active.Select(select_time))
-    { ERROR("SocketSet.select: ", Connection::lasterror()); return -1; }
+    { ERROR("SocketSet.select: ", SystemNetwork::LastError()); return -1; }
 
 #ifdef LFL_EPOLL_SOCKET_SET
     /* iterate events */
@@ -233,37 +246,35 @@ int Network::Frame(unsigned clicks) {
 #endif
 
     /* pre loop */
-    ServiceTableIter(service_table) {
-        Service *svc = service_table[i];
-        if (!svc) break;
+    for (auto svc : service_table) {
 
 #ifndef LFL_EPOLL_SOCKET_SET
         /* answer listening sockets & UDP server read */
-        for (Service::ListenMap::iterator iter = svc->listen.begin(); iter != svc->listen.end(); ++iter) 
-            if (active.GetReadable(iter->second->socket)) AcceptFrame(svc, iter->second);
+        for (auto i = svc->listen.begin(), e = svc->listen.end(); i != e; ++i) 
+            if (active.GetReadable(i->second->socket)) AcceptFrame(svc, i->second);
 
         /* iterate connections */
-        for (Service::ConnMap::iterator iter = svc->conn.begin(); iter != svc->conn.end(); ++iter)
-            TCPConnectionFrame(svc, (*iter).second, &removelist);
+        for (auto i = svc->conn.begin(), e = svc->conn.end(); i != e; ++i)
+            TCPConnectionFrame(svc, i->second, &removelist);
 #endif
 
         /* iterate endpoints */
-        for (Service::EndpointMap::iterator iter = svc->endpoint.begin(); iter != svc->endpoint.end(); iter++) {
-            UDPConnectionFrame(svc, (*iter).second, &removelist, (*iter).first);
+        for (auto i = svc->endpoint.begin(), e = svc->endpoint.end(); i != e; i++) {
+            UDPConnectionFrame(svc, (*i).second, &removelist, (*i).first);
         }
 
         /* remove closed */
         removelist.Erase();
 
         if (svc->heartbeats) { /* connection heartbeats */
-            for (Service::ConnMap::iterator i = svc->conn.begin(); i != svc->conn.end(); i++) {
-                Connection *c = (*i).second;
+            for (auto i = svc->conn.begin(), e = svc->conn.end(); i != e; ++i) {
+                Connection *c = i->second;
                 int ret = c->query ? c->query->Heartbeat(c) : 0;
                 if (c->state == Connection::Error || ret < 0) ConnClose(svc, c, &removelist);
             }
 
-            for (Service::EndpointMap::iterator i = svc->endpoint.begin(); i != svc->endpoint.end(); i++) {
-                Connection *c = (*i).second;
+            for (auto i = svc->endpoint.begin(), e = svc->endpoint.end(); i != e; ++i) {
+                Connection *c = i->second;
                 int ret = c->query ? c->query->Heartbeat(c) : 0;
                 if (c->state == Connection::Error || ret < 0) EndpointClose(svc, c, &removelist, c->endpoint_name);
             }
@@ -290,7 +301,7 @@ void Network::AcceptFrame(Service *svc, Listener *listener) {
             BIO_get_fd(bio, &socket);
 
             if (::getpeername(socket, (struct sockaddr *)&sin, (socklen_t*)&sinSize) < 0)
-            { if (!Connection::ewouldblock()) ERROR("getpeername: ", strerror(errno)); break; }
+            { if (!SystemNetwork::EWouldBlock()) ERROR("getpeername: ", strerror(errno)); break; }
 
             /* insert socket */
             c = svc->Accept(Connection::Connected, socket, sin.sin_addr.s_addr, ntohs(sin.sin_port));
@@ -306,8 +317,8 @@ void Network::AcceptFrame(Service *svc, Listener *listener) {
             char buf[2048];
             int len = recvfrom(listener->socket, buf, sizeof(buf)-1, 0, (struct sockaddr*)&sin, (socklen_t*)&sinSize);
             if (len <= 0) {
-                if (Connection::ewouldblock()) break;
-                else { ERROR("recvfrom: ", Connection::lasterror().c_str()); break; }
+                if (SystemNetwork::EWouldBlock()) break;
+                else { ERROR("recvfrom: ", SystemNetwork::LastError()); break; }
             }
             buf[len] = 0;
 
@@ -325,14 +336,14 @@ void Network::AcceptFrame(Service *svc, Listener *listener) {
                 inserted = true;
             }
 
-            if ((ret = c->addpacket(buf, len)) != len) 
-            { ERROR(c->name(), ": addpacket(", len, ")"); c->_error(); continue; }
+            if ((ret = c->AddPacket(buf, len)) != len) 
+            { ERROR(c->Name(), ": addpacket(", len, ")"); c->SetError(); continue; }
             if (!inserted) continue;
         }
         else { /* TCP accept */
             struct sockaddr_in sin; int sinSize=sizeof(sin); Socket socket;
             if ((int)(socket = ::accept(listener->socket, (struct sockaddr *)&sin, (socklen_t*)&sinSize)) < 0)
-            { if (!Connection::ewouldblock()) ERROR("accept: ", Connection::lasterror()); break; }
+            { if (!SystemNetwork::EWouldBlock()) ERROR("accept: ", SystemNetwork::LastError()); break; }
 
             /* insert socket */
             c = svc->Accept(Connection::Connected, socket, sin.sin_addr.s_addr, ntohs(sin.sin_port));
@@ -341,10 +352,10 @@ void Network::AcceptFrame(Service *svc, Listener *listener) {
         if (!c) continue;
 
         /* connected 1 */
-        c->set_source_address();
-        INFO(c->name(), ": incoming connection (socket=", c->socket, ")");
-        if (svc->Connected(c) < 0) c->_error();
-        if (c->query) { if (c->query->Connected(c) < 0) { ERROR(c->name(), ": query connected"); c->_error(); } }
+        c->SetSourceAddress();
+        INFO(c->Name(), ": incoming connection (socket=", c->socket, ")");
+        if (svc->Connected(c) < 0) c->SetError();
+        if (c->query) { if (c->query->Connected(c) < 0) { ERROR(c->Name(), ": query connected"); c->SetError(); } }
     }
 }
 
@@ -355,44 +366,44 @@ void Network::TCPConnectionFrame(Service *svc, Connection *c, ServiceEndpointEra
         if (!getsockopt(c->socket, SOL_SOCKET, SO_ERROR, (char*)&res, (socklen_t*)&resSize) && !res) {
 
             /* connected 2 */ 
-            c->connected();
-            c->set_source_address();
-            INFO(c->name(), ": connected");
-            if (svc->Connected(c) < 0) c->_error();
+            c->SetConnected();
+            c->SetSourceAddress();
+            INFO(c->Name(), ": connected");
+            if (svc->Connected(c) < 0) c->SetError();
             UpdateActive(c);
-            if (c->query) { if (c->query->Connected(c) < 0) { ERROR(c->name(), ": query connected"); c->_error(); } }
+            if (c->query) { if (c->query->Connected(c) < 0) { ERROR(c->Name(), ": query connected"); c->SetError(); } }
             return;
         }
 
         errno = res;
-        INFO(c->name(), ": connect failed: ", c->lasterror());
-        c->_error();
+        INFO(c->Name(), ": connect failed: ", SystemNetwork::LastError());
+        c->SetError();
     }
 
     /* IO communicate */
     else if (c->state == Connection::Connected) do {
         if (svc->protocol == Protocol::UDP) {
             if (svc->listen.empty() && active.GetReadable(c->socket)) { /* UDP Client Read */
-                if (c->readpackets()<0) { c->_error(); break; }
+                if (c->ReadPackets()<0) { c->SetError(); break; }
             }
             if (c->packets.size()) {
-                if (c->query) { if (c->query->Read(c) < 0) { ERROR(c->name(), ": query UDP read"); c->_error(); } }
+                if (c->query) { if (c->query->Read(c) < 0) { ERROR(c->Name(), ": query UDP read"); c->SetError(); } }
                 c->packets.clear();
-                c->readflush(c->rl);
+                c->ReadFlush(c->rl);
             }
         }
         else if (c->ssl || active.GetReadable(c->socket)) { /* TCP Read */
-            if (c->read()<0) { c->_error(); break; }
+            if (c->Read()<0) { c->SetError(); break; }
             if (c->rl) {
-                if (c->query) { if (c->query->Read(c) < 0) { ERROR(c->name(), ": query read"); c->_error(); } }
+                if (c->query) { if (c->query->Read(c) < 0) { ERROR(c->Name(), ": query read"); c->SetError(); } }
             }
         }
 
         if (c->wl && active.GetWritable(c->socket)) {
-            if (c->writeflush()<0) { c->_error(); break; }
+            if (c->WriteFlush()<0) { c->SetError(); break; }
             if (!c->wl) {
                 c->writable = 0;
-                if (c->query) { if (c->query->Flushed(c) < 0) { ERROR(c->name(), ": query flushed"); c->_error(); } }
+                if (c->query) { if (c->query->Flushed(c) < 0) { ERROR(c->Name(), ": query flushed"); c->SetError(); } }
                 UpdateActive(c);
             }
         }
@@ -404,20 +415,20 @@ void Network::TCPConnectionFrame(Service *svc, Connection *c, ServiceEndpointEra
 
 void Network::UDPConnectionFrame(Service *svc, Connection *c, ServiceEndpointEraseList *removelist, const string &epk) {
     if (c->state == Connection::Connected && c->packets.size()) {
-        if (c->query) { if (c->query->Read(c) < 0) { ERROR(c->name(), ": query UDP read"); c->_error(); } }
+        if (c->query) { if (c->query->Read(c) < 0) { ERROR(c->Name(), ": query UDP read"); c->SetError(); } }
         c->packets.clear();
-        c->readflush(c->rl);
+        c->ReadFlush(c->rl);
     }
 
     bool timeout; /* Timeout or error */
     if (c->state == Connection::Error || (timeout = (c->rt + Seconds(FLAGS_udp_idle_sec)) <= Now())) {
-        INFO(c->name(), ": ", timeout ? "timeout" : "error");
+        INFO(c->Name(), ": ", timeout ? "timeout" : "error");
         EndpointClose(svc, c, removelist, epk);
     }
 }
 
 void Network::UpdateActive(Connection *c) {
-    if (FLAGS_network_debug) INFO(c->name(), " active = { ", c->readable?"READABLE":"", " , ", c->writable?"WRITABLE":"", " }");
+    if (FLAGS_network_debug) INFO(c->Name(), " active = { ", c->readable?"READABLE":"", " , ", c->writable?"WRITABLE":"", " }");
     int flag = (c->readable?SocketSet::READABLE:0) | (c->writable?SocketSet::WRITABLE:0);
     active.Set(c->socket, flag, &c->self_reference);
 }
@@ -452,27 +463,27 @@ int SystemNetwork::SetSocketBlocking(Socket fd, int blocking) {
 
 int SystemNetwork::SetSocketBroadcastEnabled(Socket fd, int optval) {
     if (setsockopt(fd, SOL_SOCKET, SO_BROADCAST, (const char*)&optval, sizeof(optval)))
-    { ERROR("setsockopt: ", Connection::lasterror()); return -1; }
+    { ERROR("setsockopt: ", SystemNetwork::LastError()); return -1; }
     return 0;
 }
 
 int SystemNetwork::SetSocketReceiveBufferSize(Socket fd, int optval) {
     if (setsockopt(fd, SOL_SOCKET, SO_RCVBUF, (const char *)&optval, sizeof(optval)))
-    { ERROR("setsockopt: ", Connection::lasterror()); return -1; }
+    { ERROR("setsockopt: ", SystemNetwork::LastError()); return -1; }
     return 0;
 }
 
 int SystemNetwork::GetSocketReceiveBufferSize(Socket fd) {
     int res=0, resSize=sizeof(res);
     if (getsockopt(fd, SOL_SOCKET, SO_RCVBUF, (char*)&res, (socklen_t*)&resSize))
-    { ERROR("getsockopt: ", Connection::lasterror()); return -1; }
+    { ERROR("getsockopt: ", SystemNetwork::LastError()); return -1; }
     return res;
 }
 
 int SystemNetwork::Bind(int fd, IPV4::Addr addr, int port) {
     sockaddr_in sin; int optval = 1;
     if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (const char*)&optval, sizeof(optval)))
-    { ERROR("setsockopt: ", Connection::lasterror()); return -1; }
+    { ERROR("setsockopt: ", SystemNetwork::LastError()); return -1; }
 
     memset(&sin, 0, sizeof(sockaddr_in));
     sin.sin_family = PF_INET;
@@ -481,7 +492,7 @@ int SystemNetwork::Bind(int fd, IPV4::Addr addr, int port) {
 
     if (FLAGS_network_debug) INFO("bind(", fd, ", ", IPV4::Text(addr, port), ")");
     if (SystemBind(fd, (const sockaddr *)&sin, (socklen_t)sizeof(sockaddr_in)) == -1)
-    { ERROR("bind: ", Connection::lasterror()); return -1; }
+    { ERROR("bind: ", SystemNetwork::LastError()); return -1; }
 
     return 0;
 }
@@ -489,17 +500,17 @@ int SystemNetwork::Bind(int fd, IPV4::Addr addr, int port) {
 Socket SystemNetwork::Listen(int protocol, IPV4::Addr addr, int port) {
     Socket fd;
     if ((fd = OpenSocket(protocol)) < 0) 
-    { ERROR("network_socket_open: ", Connection::lasterror()); return -1; }
+    { ERROR("network_socket_open: ", SystemNetwork::LastError()); return -1; }
 
     if (Bind(fd, addr, port) == -1) { close(fd); return -1; }
 
     if (protocol == Protocol::TCP) {
         if (::listen(fd, 32) == -1)
-        { ERROR("listen: ", Connection::lasterror()); close(fd); return -1; }
+        { ERROR("listen: ", SystemNetwork::LastError()); close(fd); return -1; }
     }
 
     if (SetSocketBlocking(fd, 0))
-    { ERROR("Network::socket_blocking: ", Connection::lasterror()); close(fd); return -1; }
+    { ERROR("Network::socket_blocking: ", SystemNetwork::LastError()); close(fd); return -1; }
 
     INFO("listen(port=", port, ", protocol=", (protocol == Protocol::TCP) ? "TCP" : "UDP", ")");
     return fd;
@@ -514,8 +525,8 @@ int SystemNetwork::Connect(Socket fd, IPV4::Addr addr, int port, int *connected)
 
     if (FLAGS_network_debug) INFO("connect(", fd, ", ", IPV4::Text(addr, port), ")");
     int ret = ::connect(fd, (struct sockaddr *)&sin, sizeof(struct sockaddr_in));
-    if (ret == -1 && !Connection::ewouldblock())
-    { ERROR("connect(", IPV4::Text(addr, port), "): ", Connection::lasterror()); return -1; }
+    if (ret == -1 && !SystemNetwork::EWouldBlock())
+    { ERROR("connect(", IPV4::Text(addr, port), "): ", SystemNetwork::LastError()); return -1; }
 
     if (connected) *connected = !ret;
     return 0;
@@ -567,6 +578,22 @@ IPV4::Addr SystemNetwork::GetHostByName(const string &host) {
     return -1;
 }
 
+bool SystemNetwork::EWouldBlock() {
+#ifdef _WIN32
+    return WSAGetLastError() == WSAEWOULDBLOCK || WSAGetLastError() == WSAEINPROGRESS;
+#else
+    return errno == EAGAIN || errno == EINPROGRESS;
+#endif
+};
+
+string SystemNetwork::LastError() {
+#ifdef _WIN32
+    return StrCat(WSAGetLastError());
+#else
+    return strerror(errno);
+#endif
+}
+
 void SelectSocketThread::Start() {
 #ifndef _WIN32
     CHECK_EQ(::pipe(pipe), 0);
@@ -603,22 +630,22 @@ int SelectSocketSet::Select(int wait_time) {
     }
     if (!rc && !wc && !xc) { Msleep(ToMilliSeconds(wait_time)); return 0; }
     if ((select(maxfd+1, rc?&rfds:0, wc?&wfds:0, xc?&xfds:0, wait_time >= 0 ? &tv : 0)) == -1)
-    { ERROR("select: ", Connection::lasterror()); return -1; }
+    { ERROR("select: ", SystemNetwork::LastError()); return -1; }
     return 0;
 }
 
 /* Connection */
 
-int Connection::read() {
+int Connection::Read() {
     int readlen = sizeof(rb)-1-rl, len = 0;
-    if (readlen <= 0) { ERROR(name(), ": read queue full, rl=", rl); return -1; }
+    if (readlen <= 0) { ERROR(Name(), ": read queue full, rl=", rl); return -1; }
 
     if (ssl) {
 #ifdef LFL_OPENSSL
         if ((len = BIO_read(bio, rb+rl, readlen)) <= 0) {
             if (SSL_get_error(ssl, len) != SSL_ERROR_WANT_READ) {
                 const char *err_string = ERR_reason_error_string(ERR_get_error());
-                ERROR(name(), ": BIO_read: ", err_string ? err_string : "read() zero");
+                ERROR(Name(), ": BIO_read: ", err_string ? err_string : "read() zero");
                 return -1;
             }
             return 0;
@@ -627,8 +654,8 @@ int Connection::read() {
     }
     else { // XXX loop until read -1 with EAGAIN
         if ((len = recv(socket, rb+rl, readlen, 0)) <= 0) {
-            if      (!len)                      ERROR(name(), ": read() zero");
-            else if (len < 0 && !ewouldblock()) ERROR(name(), ": read(): ", Connection::lasterror());
+            if      (!len)                                     ERROR(Name(), ": read() zero");
+            else if (len < 0 && !SystemNetwork::EWouldBlock()) ERROR(Name(), ": read(): ", SystemNetwork::LastError());
             return -1;
         }
     }
@@ -640,8 +667,8 @@ int Connection::read() {
     return len;
 }
 
-int Connection::readpacket() {
-    int ret = read();
+int Connection::ReadPacket() {
+    int ret = Read();
     if (ret <= 0) return ret;
 
     IOVec pkt = { rb+rl-ret, ret };
@@ -650,18 +677,18 @@ int Connection::readpacket() {
     return ret;
 }
 
-int Connection::readpackets() {
+int Connection::ReadPackets() {
     int ret=1;
     while (ret > 0) {
-        ret = readpacket();
-        if (ret < 0 && !ewouldblock()) return ret;
+        ret = ReadPacket();
+        if (ret < 0 && !SystemNetwork::EWouldBlock()) return ret;
     }
     return 0;
 }
 
-int Connection::add(const char *buf, int len) {
+int Connection::Add(const char *buf, int len) {
     int readlen = sizeof(rb)-1-rl;
-    if (readlen < len) { ERROR(name(), ": read packet queue full"); return -1; }
+    if (readlen < len) { ERROR(Name(), ": read packet queue full"); return -1; }
 
     memcpy(rb+rl, buf, len);
     rl += len;
@@ -671,22 +698,22 @@ int Connection::add(const char *buf, int len) {
     return len;
 }
 
-int Connection::addpacket(const char *buf, int len) {
-    int ret = add(buf, len);
+int Connection::AddPacket(const char *buf, int len) {
+    int ret = Add(buf, len);
     if (ret <= 0) return ret;
 
     IOVec pkt = { rb+rl-ret, ret };
     packets.push_back(pkt);
     rl++;
     rt = Now();
-    if (FLAGS_network_debug) INFO("addpacket(", name(), ", ", len, ")");
+    if (FLAGS_network_debug) INFO("addpacket(", Name(), ", ", len, ")");
     return ret;
 }
 
-int Connection::write(const char *buf, int len) {
+int Connection::Write(const char *buf, int len) {
     if (!buf || len<0) return -1;
     if (!len) len = strlen(buf);
-    if (wl+len > sizeof(wb)-1) { ERROR(name(), ": write queue full"); return -1; }
+    if (wl+len > sizeof(wb)-1) { ERROR(Name(), ": write queue full"); return -1; }
 
     if (!wl && len) {
         writable = true;
@@ -699,10 +726,10 @@ int Connection::write(const char *buf, int len) {
     return len;
 }
 
-int Connection::readflush(int len) {
+int Connection::ReadFlush(int len) {
     if (len<0) return -1;
     if (!len) return rl;
-    if (rl-len < 0) { ERROR(name(), ": read queue underflow: ", len, " > ", rl); return -1; }
+    if (rl-len < 0) { ERROR(Name(), ": read queue underflow: ", len, " > ", rl); return -1; }
  
     if (rl!=len) memmove(rb, rb+len, rl-len);
     rl -= len;
@@ -710,19 +737,19 @@ int Connection::readflush(int len) {
     return rl;
 }
 
-int Connection::writeflush(const char *buf, int len) {
+int Connection::WriteFlush(const char *buf, int len) {
     int wrote = 0;
     if (ssl) {
 #ifdef LFL_OPENSSL
         if ((wrote = BIO_write(bio, buf, len)) < 0) {
-            if (!ewouldblock()) { ERROR(name(), ": send: ", strerror(errno)); return -1; }
+            if (!SystemNetwork::EWouldBlock()) { ERROR(Name(), ": send: ", strerror(errno)); return -1; }
             wrote = 0;
         }
 #endif
     }
     else {
         if ((wrote = send(socket, buf, len, 0)) < 0) {
-            if (!ewouldblock()) { ERROR(name(), ": send: ", strerror(errno)); return -1; }
+            if (!SystemNetwork::EWouldBlock()) { ERROR(Name(), ": send: ", strerror(errno)); return -1; }
             wrote = 0;
         }
     }
@@ -730,31 +757,15 @@ int Connection::writeflush(const char *buf, int len) {
     return wrote;
 }
 
-int Connection::writeflush() {
-    int wrote = writeflush(wb, wl);
+int Connection::WriteFlush() {
+    int wrote = WriteFlush(wb, wl);
     if (wrote && wrote!=wl) memmove(wb, wb+wrote, wl-wrote);
     wl -= wrote;
     wb[wl] = 0;
     return wrote;
 }
 
-int Connection::sendto(const char *buf, int len) { return SystemNetwork::SendTo(socket, addr, port, buf, len); }
-
-bool Connection::ewouldblock() {
-#ifdef _WIN32
-    return WSAGetLastError() == WSAEWOULDBLOCK || WSAGetLastError() == WSAEINPROGRESS;
-#else
-    return errno == EAGAIN || errno == EINPROGRESS;
-#endif
-};
-
-string Connection::lasterror() {
-#ifdef _WIN32
-    return StrCat(WSAGetLastError());
-#else
-    return strerror(errno);
-#endif
-}
+int Connection::SendTo(const char *buf, int len) { return SystemNetwork::SendTo(socket, addr, port, buf, len); }
 
 /* Service */
 
@@ -803,7 +814,7 @@ Socket Service::Listen(IPV4::Addr addr, int port, Listener *listener) {
 #endif
     } else {
         if ((listener->socket = SystemNetwork::Listen(protocol, addr, port)) == -1)
-        { ERROR("SystemNetwork::Listen(", protocol, ", ", port, "): ", Connection::lasterror().c_str()); return -1; }
+        { ERROR("SystemNetwork::Listen(", protocol, ", ", port, "): ", SystemNetwork::LastError()); return -1; }
     }
     app->network.active.Add(listener->socket, SocketSet::READABLE, &listener->self_reference);
     return listener->socket;
@@ -824,25 +835,25 @@ Connection *Service::Connect(IPV4::Addr addr, int port, IPV4::Addr src_addr, int
 Connection *Service::Connect(IPV4::Addr addr, int port, IPV4EndpointSource *src_pool) {
     Connection *c = new Connection(this, Connection::Connecting, addr, port);
     if (Service::OpenSocket(c, protocol, 0, src_pool ? src_pool : connect_src_pool))
-    { ERROR(c->name(), ": connecting: ", c->lasterror()); delete c; return 0; }
+    { ERROR(c->Name(), ": connecting: ", SystemNetwork::LastError()); delete c; return 0; }
 
     int connected = 0;
     if (SystemNetwork::Connect(c->socket, c->addr, c->port, &connected) == -1) {
-        ERROR(c->name(), ": connecting: ", c->lasterror());
+        ERROR(c->Name(), ": connecting: ", SystemNetwork::LastError());
         close(c->socket);
         delete c;
         return 0;
     }
-    INFO(c->name(), ": connecting");
+    INFO(c->Name(), ": connecting");
     conn[c->socket] = c;
 
     if (connected) {
         /* connected 3 */ 
-        c->connected();
-        c->set_source_address();
-        INFO(c->name(), ": connected");
-        if (this->Connected(c) < 0) c->_error();
-        if (c->query) { if (c->query->Connected(c) < 0) { ERROR(c->name(), ": query connected"); c->_error(); } }
+        c->SetConnected();
+        c->SetSourceAddress();
+        INFO(c->Name(), ": connected");
+        if (this->Connected(c) < 0) c->SetError();
+        if (c->query) { if (c->query->Connected(c) < 0) { ERROR(c->Name(), ": query connected"); c->SetError(); } }
         app->network.active.Add(c->socket, (c->readable ? SocketSet::READABLE : 0), &c->self_reference);
     } else {
         app->network.active.Add(c->socket, SocketSet::READABLE|SocketSet::WRITABLE, &c->self_reference);
@@ -878,7 +889,7 @@ Connection *Service::SSLConnect(SSL_CTX *sslctx, const char *hostport) {
    
     BIO_get_fd(c->bio, &c->socket);
 
-    INFO(c->name(), ": connecting (fd=", c->socket, ")");
+    INFO(c->Name(), ": connecting (fd=", c->socket, ")");
     conn[c->socket] = c;
     app->network.active.Add(c->socket, SocketSet::WRITABLE, &c->self_reference);
     return c;
@@ -901,14 +912,14 @@ Connection *Service::SSLConnect(SSL_CTX *sslctx, IPV4::Addr addr, int port) {
 
     int ret = BIO_do_connect(c->bio);
     if (ret < 0 && !BIO_should_retry(c->bio)) {
-        ERROR(c->name(), ": BIO_do_connect: ", ret);
+        ERROR(c->Name(), ": BIO_do_connect: ", ret);
         delete c;
         return 0;
     }
    
     BIO_get_fd(c->bio, &c->socket);
 
-    INFO(c->name(), ": connecting (fd=", c->socket, ")");
+    INFO(c->Name(), ": connecting (fd=", c->socket, ")");
     conn[c->socket] = c;
     app->network.active.Add(c->socket, SocketSet::WRITABLE, &c->self_reference);
     return c;
@@ -923,9 +934,9 @@ Connection *Service::EndpointConnect(const string &endpoint_name) {
     endpoint[endpoint_name] = c;
 
     /* connected 4 */
-    if (this->Connected(c) < 0) c->_error();
+    if (this->Connected(c) < 0) c->SetError();
     INFO(Protocol::Name(protocol), "(", (void*)this, ") endpoint connect: ", endpoint_name);
-    if (c->query) { if (c->query->Connected(c) < 0) { ERROR(c->name(), ": query connected"); c->_error(); } }
+    if (c->query) { if (c->query->Connected(c) < 0) { ERROR(c->Name(), ": query connected"); c->SetError(); } }
     return c;
 }
 
@@ -948,14 +959,14 @@ void Service::EndpointRead(const string &endpoint_name, const char *buf, int len
     }
 
     Connection *c = ep->second; int ret;
-    if ((ret = c->addpacket(buf, len)) != len) 
-    { ERROR(c->name(), ": addpacket(", len, ")"); c->_error(); return; }
+    if ((ret = c->AddPacket(buf, len)) != len) 
+    { ERROR(c->Name(), ": addpacket(", len, ")"); c->SetError(); return; }
 }
 
 void Service::EndpointClose(const string &endpoint_name) {
     INFO(Protocol::Name(protocol), "(", (void*)this, ") endpoint close: ", endpoint_name);
     Service::EndpointMap::iterator ep = endpoint.find(endpoint_name);
-    if (ep != endpoint.end()) ep->second->_error();
+    if (ep != endpoint.end()) ep->second->SetError();
 }
 
 /* UDP Client */
@@ -1038,7 +1049,7 @@ struct HTTPClientQuery {
                 currentChunkRead += rb_left;
                 if (currentChunkRead == currentChunkLength) currentChunkRead = currentChunkLength = 0;
             }
-            if (cur != c->rb) c->readflush(cur - c->rb);
+            if (cur != c->rb) c->ReadFlush(cur - c->rb);
             return 0;
         }
         virtual void Headers(Connection *c, const char *headers, int len) {}
@@ -1113,10 +1124,10 @@ int HTTPClient::request(Connection *c, int method, const char *host, const char 
     hdr = StringPrintf("%s /%s HTTP/1.1\r\nHost: %s\r\n%s%s\r\n",
                        HTTPServer::Method::name(method), path, host, persist?"":"Connection: close\r\n", posthdr.c_str());
 
-    int ret = c->write(hdr.data(), hdr.size());
+    int ret = c->Write(hdr.data(), hdr.size());
     if (posthdr.empty()) return ret;
     if (ret != hdr.size()) return -1;
-    return c->write(postdata, postlen);
+    return c->Write(postdata, postlen);
 }
 
 bool HTTPClient::WGet(const string &url, File *out, ResponseCB cb) {
@@ -1195,7 +1206,7 @@ struct HTTPServerConnection : public Query {
         int Thunk(HTTPServerConnection *httpserv, Connection *c) {
             if (c->rl < reqlen) return 0;
             int ret = httpserv->Dispatch(c, type, url, args, headers, postdata, postlen);
-            c->readflush(reqlen);
+            c->ReadFlush(reqlen);
             clear();
             return ret;
         }
@@ -1251,7 +1262,7 @@ struct HTTPServerConnection : public Query {
         /* process request */
         Timer timer;
         HTTPServer::Response response = server->Request(c, type, url, args, headers, postdata, postlen);
-        INFOf("%s %s %s %d cl=%d %f ms", c->name().c_str(), HTTPServer::Method::name(type), url, response.code, response.content_length, timer.GetTime()); 
+        INFOf("%s %s %s %d cl=%d %f ms", c->Name().c_str(), HTTPServer::Method::name(type), url, response.code, response.content_length, timer.GetTime()); 
         if (response.refill) c->readable = 0;
 
         /* write response/headers */
@@ -1261,7 +1272,7 @@ struct HTTPServerConnection : public Query {
 
         /* prepare/deliver content */
         if (response.content) {
-            if (c->write(response.content, response.content_length) < 0) return -1;
+            if (c->Write(response.content, response.content_length) < 0) return -1;
         }
         else if (response.refill) {
             if (refill) return -1;
@@ -1300,7 +1311,7 @@ struct HTTPServerConnection : public Query {
 
         hl += sprint(h+hl, sizeof(h)-hl, "Content-Type: %s\r\n\r\n", r->type);
 
-        return c->write(h, hl);
+        return c->Write(h, hl);
     }
 };
 
@@ -1398,7 +1409,7 @@ struct StreamResourceClient : public Query {
         char *buf=0; int len=0;
         if (!(len = avio_close_dyn_buf(fctx->pb, (uint8_t**)&buf))) return;
         if (len < 0) { ERROR("avio_close_dyn_buf"); return; }
-        if (conn->write(buf, len) < 0) conn->_error();
+        if (conn->Write(buf, len) < 0) conn->SetError();
         av_free(buf);
     }
 
@@ -1477,7 +1488,7 @@ video(0), picture(0), conv(0)
 HTTPServer::Response HTTPServer::StreamResource::Request(Connection *c, int method, const char *url, const char *args, const char *headers, const char *postdata, int postlen) {
     if (!open) return HTTPServer::Response::_400;
     Response response(fctx->oformat->mime_type, -1, new StreamResourceClient(c, this), false);
-    if (HTTPServerConnection::WriteHeaders(c, &response) < 0) { c->_error(); return response; }
+    if (HTTPServerConnection::WriteHeaders(c, &response) < 0) { c->SetError(); return response; }
     ((StreamResourceClient*)response.refill)->WriteHeader();
     return response;
 }
@@ -1695,12 +1706,12 @@ struct SMTPClientConnection : public Query {
                 if (DeliveringState(state)) delivered_cb(c, mail, code, response_lines);
                 response="RSET\r\n"; server->failed++; state=RESETING-1;
             }
-            if (!response.empty()) if (c->writeflush(response) != response.size()) return -1;
+            if (!response.empty()) if (c->WriteFlush(response) != response.size()) return -1;
 
             response_lines.clear();
             state++;
         }
-        c->readflush(processed);
+        c->ReadFlush(processed);
 
         if (state == READY) {
             mail.clear();
@@ -1714,7 +1725,7 @@ struct SMTPClientConnection : public Query {
         string response;
         if (!mail.mail_from.size() || !mail.rcpt_to.size() || !mail.content.size()) { response="QUIT\r\n"; state=QUITING; }
         else { response=StrCat("MAIL FROM: <", mail.mail_from, ">\r\n"); state++; }
-        if (c->writeflush(response) != response.size()) c->_error();
+        if (c->WriteFlush(response) != response.size()) c->SetError();
     }
 };
 
@@ -1742,7 +1753,7 @@ struct SMTPServerConnection : public Query {
     int Connected(Connection *c) {
         my_domain = server->HeloDomain(c->src_addr);
         string greeting = StrCat("220 ", my_domain, " Simple Mail Transfer Service Ready\r\n");
-        return (c->write(greeting) == greeting.size()) ? 0 : -1;
+        return (c->Write(greeting) == greeting.size()) ? 0 : -1;
     }
     int Read(Connection *c) {
         int offset = 0, processed;
@@ -1753,7 +1764,7 @@ struct SMTPServerConnection : public Query {
             offset += processed;
             if (last_in_data == in_data) break;
         }
-        if (offset) c->readflush(offset);
+        if (offset) c->ReadFlush(offset);
         return 0;
     }
 
@@ -1783,8 +1794,8 @@ struct SMTPServerConnection : public Query {
             else if (cmd == "RSET") { response="250 OK\r\n"; ClearStateTable(); }
             else if (cmd == "NOOP") { response="250 OK\r\n"; }
             else if (cmd == "VRFY") { response="250 OK\r\n"; }
-            else if (cmd == "QUIT") { c->writeflush(StrCat("221 ", server->domain, " closing connection\r\n")); c->_error(); }
-            if (!response.empty()) if (c->write(response) != response.size()) return -1;
+            else if (cmd == "QUIT") { c->WriteFlush(StrCat("221 ", server->domain, " closing connection\r\n")); c->SetError(); }
+            if (!response.empty()) if (c->Write(response) != response.size()) return -1;
         }
         return processed;
     }
@@ -1799,7 +1810,7 @@ struct SMTPServerConnection : public Query {
             message.content.append("\r\n");
         }
         if (!in_data) {
-            c->write("250 OK\r\n");
+            c->Write("250 OK\r\n");
             server->ReceiveMail(c, message); 
             ClearStateTable();
         }
