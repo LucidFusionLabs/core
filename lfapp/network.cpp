@@ -969,6 +969,40 @@ void Service::EndpointClose(const string &endpoint_name) {
     if (ep != endpoint.end()) ep->second->SetError();
 }
 
+/* NetworkThread */
+
+NetworkThread::NetworkThread(Network *N) : net(N),
+rd(new Connection(Singleton<Service>::Get(), Singleton<Query>::Get())),
+wr(new Connection(Singleton<Service>::Get(), Singleton<Query>::Get())),
+thread(new Thread(bind(&NetworkThread::HandleMessagesLoop, this))) {
+    net->select_time = -1;
+    net->Enable(rd->svc);
+#ifdef _WIN32
+    SECURITY_ATTRIBUTES sa;
+    memset(&sa, 0, sizeof(sa));
+    sa.nLength = sizeof(sa);
+    sa.bInheritHandle = 1;
+    CHECK(CreatePipe(&handle[0], &handle[1], &sa, 0));
+    // XXX use WFMO with HANDLE* instead of select with SOCKET
+#else
+    int fd[2];
+    CHECK(!socketpair(PF_LOCAL, SOCK_STREAM, 0, fd));
+    rd->state = wr->state = Connection::Connected;
+    rd->socket = fd[0];
+    wr->socket = fd[1];
+    SystemNetwork::SetSocketBlocking(rd->socket, 0);
+#endif
+    rd->svc->conn[rd->socket] = rd;
+    net->active.Add(rd->socket, SocketSet::READABLE, &rd->self_reference);
+}
+
+int NetworkThread::Query::Read(Connection *c) {
+    int consumed = 0, s = sizeof(Callback*);
+    for (; consumed + s <= c->rl; consumed += s) HandleMessage(*reinterpret_cast<Callback**>(c->rb + consumed));
+    if (consumed) c->ReadFlush(consumed);
+    return 0;
+}
+
 /* UDP Client */
 
 struct UDPClientQuery {

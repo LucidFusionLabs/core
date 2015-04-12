@@ -33,54 +33,6 @@ DEFINE_bool(draw_fps, false, "Draw FPS");
 extern FlagOfType<string> FLAGS_default_font_;
 extern FlagOfType<bool>   FLAGS_lfapp_network_;
 
-struct NetworkThread {
-    struct Service : public LFL::Service {};
-    struct Query : public LFL::Query {
-        int Read(Connection *c) {
-            int consumed = 0, s = sizeof(Callback*);
-            for (; consumed + s < c->rl; consumed += s) HandleMessage(*reinterpret_cast<Callback**>(c->rb + consumed));
-            if (consumed) c->ReadFlush(consumed);
-            return 0;
-        }
-        void HandleMessage(Callback *cb) { (*cb)(); delete cb; }
-    };
-
-    Network *net;
-    Connection *rd, *wr;
-    unique_ptr<Thread> thread;
-
-    NetworkThread(Network *N) : net(N),
-        rd(new Connection(Singleton<Service>::Get(), Singleton<Query>::Get())),
-        wr(new Connection(Singleton<Service>::Get(), Singleton<Query>::Get())),
-        thread(new Thread(bind(&NetworkThread::HandleMessagesLoop, this))) {
-#ifdef _WIN32
-        SECURITY_ATTRIBUTES sa;
-        memset(&sa, 0, sizeof(sa));
-        sa.nLength = sizeof(sa);
-        sa.bInheritHandle = 1;
-        CHECK(CreatePipe(&handle[0], &handle[1], &sa, 0));
-        // XXX use WFMO with HANDLE* instead of select with SOCKET
-#else
-        int fd[2];
-        CHECK(!socketpair(PF_LOCAL, SOCK_STREAM, 0, fd));
-        rd->state = wr->state = Connection::Connected;
-        rd->socket = fd[0];
-        wr->socket = fd[1];
-        SystemNetwork::SetSocketBlocking(rd->socket, 0);
-#endif
-    }
-    void Write(Callback *x) { CHECK_EQ(sizeof(x), wr->WriteFlush(reinterpret_cast<const char*>(&x), sizeof(x))); }
-    void Start() {
-        Service *svc = Singleton<Service>::Get();
-        net->select_time = -1;
-        net->Enable(svc);
-        svc->conn[rd->socket] = rd;
-        net->active.Add(rd->socket, SocketSet::READABLE, &rd->self_reference);
-        thread->Start();
-    }
-    void HandleMessagesLoop() { while (GetLFApp()->run) { net->Frame(0); } }
-};
-
 Scene scene;
 BindMap *binds;
 Shader warpershader;
@@ -99,7 +51,7 @@ void MyNewLinkCB(const shared_ptr<TextGUI::Link> &link) {
             return;
         }
     }
-    network_thread->Write(new Callback([=]() { link->image = image_browser->doc.parser->OpenImage(image_url); }));
+    if (network_thread) network_thread->Write(new Callback([=]() { link->image = image_browser->doc.parser->OpenImage(image_url); }));
 }
 
 void MyHoverLinkCB(TextGUI::Link *link) {
@@ -275,9 +227,7 @@ extern "C" int main(int argc, const char *argv[]) {
     app->shell.command.push_back(Shell::Command("colors", bind(&MyColorsCmd, _1)));
     app->shell.command.push_back(Shell::Command("shader", bind(&MyShaderCmd, _1)));
     if (FLAGS_lfapp_network) {
-        app->modules.erase(find(app->modules.begin(), app->modules.end(), &app->network));
-        network_thread = new NetworkThread(&app->network);
-        network_thread->Start();
+        CHECK((network_thread = app->CreateNetworkThread()));
         network_thread->Write(new Callback([&](){ Video::CreateGLContext(screen); }));
     }
 

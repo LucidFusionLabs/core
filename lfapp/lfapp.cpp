@@ -2006,6 +2006,13 @@ void Application::CreateNewWindow(const function<void(Window*)> &start_cb) {
     Window::MakeCurrent(orig_window);
 }
 
+NetworkThread *Application::CreateNetworkThread() {
+    VectorEraseByValue(&app->modules, static_cast<Module*>(&network));
+    NetworkThread *ret = new NetworkThread(&app->network);
+    ret->thread->Start();
+    return ret;
+}
+
 int Application::Create(int argc, const char **argv, const char *source_filename) {
 #ifdef LFL_GLOG
     google::InstallFailureSignalHandler();

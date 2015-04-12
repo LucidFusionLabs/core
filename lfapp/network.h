@@ -319,6 +319,22 @@ struct ServiceEndpointEraseList {
     }
 };
 
+struct NetworkThread {
+    struct Service : public LFL::Service {};
+    struct Query : public LFL::Query {
+        void HandleMessage(Callback *cb) { (*cb)(); delete cb; }
+        int Read(Connection *c);
+    };
+
+    Network *net;
+    Connection *rd, *wr;
+    unique_ptr<Thread> thread;
+    NetworkThread(Network *N);
+
+    void Write(Callback *x) { CHECK_EQ(sizeof(x), wr->WriteFlush(reinterpret_cast<const char*>(&x), sizeof(x))); }
+    void HandleMessagesLoop() { while (GetLFApp()->run) { net->Frame(0); } }
+};
+
 struct UDPClient : public Service {
     static const int MTU = 1500;
     enum { Write=1, Sendto=2 };

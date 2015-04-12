@@ -1333,6 +1333,7 @@ struct Application : public ::LFApp, public Module {
 
     void Log(int level, const char *file, int line, const string &message);
     void CreateNewWindow(const function<void(Window*)> &start_cb = function<void(Window*)>());
+    NetworkThread *CreateNetworkThread();
     int LoadModule(Module *M) { modules.push_back(M); return M->Init(); }
 
     int Create(int argc, const char **argv, const char *source_filename);
