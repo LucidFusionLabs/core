@@ -45,7 +45,7 @@ struct Resolver {
         typedef unordered_map<unsigned short, Request> RequestMap;
         RequestMap requestMap;
 
-        ~Nameserver() { if (c) c->_error(); }
+        ~Nameserver() { if (c) c->SetError(); }
         Nameserver() {}
         Nameserver(Resolver *P, IPV4::Addr addr) : parent(P),
         c(Singleton<UDPClient>::Get()->PersistentConnection

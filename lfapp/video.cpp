@@ -1130,6 +1130,7 @@ void Window::Close(Window *W) {
 #endif /* LFL_SDLVIDEO */
 
 int Video::Init() {
+    INFO("Video::Init()");
 #if defined(LFL_QT)
     impl = new QTVideoModule();
 #elif defined(LFL_GLFWVIDEO)

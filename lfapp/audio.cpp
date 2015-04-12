@@ -548,6 +548,7 @@ struct OpenSLAudioModule : public Module {
 #endif /* LFL_OPENSL */
 
 int Audio::Init() {
+    INFO("Audio::Init()");
     RL = RingBuf::Handle(IL);
     RR = RingBuf::Handle(IR);
 #if defined(LFL_PORTAUDIO)
