@@ -78,7 +78,7 @@ struct Widget {
         void AddClickBox(const Box &w, const MouseController::Callback &cb) { hitbox.push_back(gui->AddClickBox(w, cb)); }
         void AddHoverBox(const Box &w, const MouseController::Callback &cb) { hitbox.push_back(gui->AddHoverBox(w, cb)); }
         void AddDragBox (const Box &w, const MouseController::Callback &cb) { hitbox.push_back(gui->AddDragBox (w, cb)); }
-        void DelHitBox() { for (vector<int>::const_iterator i = hitbox.begin(); i != hitbox.end(); ++i) gui->hit.Erase(*i); hitbox.clear(); }
+        void DelHitBox() { for (auto i = hitbox.begin(), e = hitbox.end(); i != e; ++i) gui->hit.Erase(*i); hitbox.clear(); }
         MouseController::HitBox &GetHitBox(int i=0) const { return gui->hit[hitbox[i]]; }
         Box GetHitBoxBox(int i=0) const { return Box::Add(GetHitBox(i).box, gui->box.TopLeft()); }
         DrawableBox *GetDrawBox() const { return drawbox_ind >= 0 ? VectorGet(gui->child_box.data, drawbox_ind) : 0; }

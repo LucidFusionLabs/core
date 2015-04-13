@@ -23,6 +23,11 @@
 #include "lfapp/lfapp.h"
 
 namespace LFL {
+v3 v3::Rand() {     
+    float phi = LFL::Rand(0, M_TAU), costheta = LFL::Rand(-1, 1), rho = sqrt(1 - pow(costheta, 2));
+    return v3(rho*cos(phi), rho*sin(phi), costheta);
+}
+
 bool v4::operator<(const v4 &c) const { SortImpl4(x, c.x, y, c.y, z, c.z, w, c.w); }
 
 double Squared(double n) { return n*n; }
@@ -104,6 +109,20 @@ int NextPrime(int n) {
     for (/**/; !IsPrime(n); n++) {}
     return n;
 }
+
+int DoubleSort(double a, double b) {
+    bool na=isnan(a), nb=isnan(b);
+
+    if (na && nb) return 0;
+    else if (na) return 1;
+    else if (nb) return -1;
+
+    if      (a < b) return 1;
+    else if (a > b) return -1;
+    else return 0;
+}
+int DoubleSort (const void *a, const void *b) { return DoubleSort(*(double*)a, *(double*)b); }
+int DoubleSortR(const void *a, const void *b) { return DoubleSort(*(double*)b, *(double*)a); }
 
 double RadianToDegree(float rad) { return rad * 180 / M_PI; }
 double DegreeToRadian(float deg) { return deg * M_PI / 180; }

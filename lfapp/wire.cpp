@@ -24,14 +24,31 @@
 #include <netdb.h>
 
 namespace LFL {
-const IPV4::Addr IPV4::ANY = INADDR_ANY;
-
 const char *Protocol::Name(int p) {
     if      (p == TCP)   return "TCP";
     else if (p == UDP)   return "UDP";
     else if (p == GPLUS) return "GPLUS";
     else return "";
 }
+
+void Serializable::Header::Out(Stream *o) const { o->Htons( id); o->Htons( seq); }
+void Serializable::Header::In(const Stream *i)  { i->Ntohs(&id); i->Ntohs(&seq); }
+
+string Serializable::ToString(unsigned short seq) { string ret; ToString(&ret, seq); return ret; }
+
+void Serializable::ToString(string *out, unsigned short seq) {
+    out->resize(Header::size + Size());
+    return ToString((char*)out->data(), out->size(), seq);
+}
+
+void Serializable::ToString(char *buf, int len, unsigned short seq) {
+    MutableStream os(buf, len);
+    Header hdr = { (unsigned short)Type(), seq };
+    hdr.Out(&os);
+    Out(&os);
+}
+
+const IPV4::Addr IPV4::ANY = INADDR_ANY;
 
 IPV4::Addr IPV4::Parse(const string &ip) { return inet_addr(ip.c_str()); }
 

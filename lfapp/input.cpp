@@ -1084,7 +1084,7 @@ void Shell::Slider(const vector<string> &a) {
 }
 
 void Shell::Edit(const vector<string> &a) {
-    string s = LocalFile::FileContents(StrCat(ASSETS_DIR, "lfapp_vertex.glsl"));
+    string s = LocalFile::FileContents(StrCat(app->assetdir, "lfapp_vertex.glsl"));
     new EditorDialog(screen, Fonts::Default(), new BufferFile(s));
 }
 

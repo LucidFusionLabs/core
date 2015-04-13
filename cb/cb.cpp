@@ -49,7 +49,7 @@ void sniff(const char *packet, int avail, int size) {
     IPV4::Header *ip = (IPV4::Header*)(packet + Ethernet::Header::Size);
     int iphdrlen = ip->hdrlen() * 4;
     if (iphdrlen < IPV4::Header::MinSize || avail < Ethernet::Header::Size + iphdrlen) return;
-    string src_ip = IPV4Endpoint::name(ip->src), dst_ip = IPV4Endpoint::name(ip->dst), src_city, dst_city;
+    string src_ip = IPV4::Text(ip->src), dst_ip = IPV4::Text(ip->dst), src_city, dst_city;
     float src_lat, src_lng, dst_lat, dst_lng;
     geo->resolve(src_ip, 0, 0, &src_city, &src_lat, &src_lng);
     geo->resolve(dst_ip, 0, 0, &dst_city, &dst_lat, &dst_lng);
@@ -121,7 +121,7 @@ extern "C" int main(int argc, const char *argv[]) {
     Sniffer::PrintDevices(&devices);
     if (FLAGS_sniff_device < 0 || FLAGS_sniff_device >= devices.size()) FATAL(FLAGS_sniff_device, " oob ", devices.size(), ", are you running as root?");
     if (!(sniffer = Sniffer::Open(devices[FLAGS_sniff_device], "", 1024, sniff))) FATAL("sniffer Open failed");
-    if (!(geo = GeoResolution::Open(StrCat(ASSETS_DIR, "GeoLiteCity.dat").c_str()))) FATAL("geo Open failed");
+    if (!(geo = GeoResolution::Open(StrCat(app->assetdir, "GeoLiteCity.dat").c_str()))) FATAL("geo Open failed");
 
     // start our engine
     return app->Main();

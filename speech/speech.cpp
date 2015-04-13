@@ -55,8 +55,8 @@ PronunciationDict *PronunciationDict::instance() {
     if (inst) return inst;
     inst = new PronunciationDict();
 
-    LocalFileLineIter file(StrCat(ASSETS_DIR, "cmudict.txt"));
-    if (!file.f.Opened()) { ERROR("no ", ASSETS_DIR, "cmudict.txt"); return 0; }    
+    LocalFileLineIter file(StrCat(app->assetdir, "cmudict.txt"));
+    if (!file.f.Opened()) { ERROR("no ", app->assetdir, "cmudict.txt"); return 0; }    
 
     readDictionary(&file, inst);
     return inst;

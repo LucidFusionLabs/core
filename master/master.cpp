@@ -36,7 +36,7 @@ struct ServerList : public HTTPServer::Resource {
 
     HTTPServer::Response Request(Connection *c, int method, const char *url, const char *args, const char *headers, const char *postdata, int postlen) {
         if (method == HTTPServer::Method::POST) {
-            string cn = c->name();
+            string cn = c->Name();
             string url = cn.substr(0, cn.find(':')) + string(":") + postdata;
             Server server = { Now() };
             servers[url] = server;

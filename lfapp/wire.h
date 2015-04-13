@@ -19,10 +19,117 @@
 #ifndef __LFL_LFAPP_WIRE_H__
 #define __LFL_LFAPP_WIRE_H__
 namespace LFL {
-    
+
 struct Protocol { 
     enum { TCP, UDP, GPLUS }; int p;
     static const char *Name(int p);
+};
+    
+struct Serializable {
+    struct Stream;
+
+    virtual int Type() const = 0;
+    virtual int Size() const = 0;
+    virtual int HeaderSize() const = 0;
+    virtual int In(const Stream *i) = 0;
+    virtual void Out(Stream *o) const = 0;
+
+    string ToString(unsigned short seq=0);
+    void ToString(string *out, unsigned short seq=0);
+    void ToString(char *buf, int len, unsigned short seq=0);
+
+    struct Header {
+        static const int size = 4;
+        unsigned short id, seq;
+
+        void Out(Stream *o) const;
+        void In(const Stream *i);
+    };
+
+    bool HdrCheck(int content_len) { return content_len >= Header::size + HeaderSize(); }
+    bool    Check(int content_len) { return content_len >= Header::size +       Size(); }
+    bool HdrCheck(const Stream *is) { return HdrCheck(is->Len()); }
+    bool    Check(const Stream *is) { return    Check(is->Len()); }
+    int      Read(const Stream *is) { if (!HdrCheck(is)) return -1; return In(is); }
+
+    struct Stream {
+        char *buf; int size; mutable int offset; mutable bool error;
+        Stream(char *B, int S) : buf(B), size(S), offset(0), error(0) {}
+
+        virtual unsigned char  *N8()            = 0;
+        virtual unsigned short *N16()           = 0;
+        virtual unsigned       *N32()           = 0;
+        virtual char           *Get(int size=0) = 0;
+        virtual char           *End()           = 0;
+
+        int Len() const { return size; }
+        int Pos() const { return offset; };
+        int Remaining() const { return size - offset; }
+        const char *Start() const { return buf; }
+        const char *Advance(int n=0) const { return Get(n); }
+        const char           *End() const { return buf + size; }
+        const unsigned char  *N8()  const { unsigned char  *ret = (unsigned char *)(buf+offset); offset += 1;   if (offset > size) { error=1; return 0; } return ret; }
+        const unsigned short *N16() const { unsigned short *ret = (unsigned short*)(buf+offset); offset += 2;   if (offset > size) { error=1; return 0; } return ret; }
+        const unsigned       *N32() const { unsigned       *ret = (unsigned      *)(buf+offset); offset += 4;   if (offset > size) { error=1; return 0; } return ret; }
+        const char           *Get(int len=0) const { char  *ret = (char          *)(buf+offset); offset += len; if (offset > size) { error=1; return 0; } return ret; }
+
+        void String(const char *buf, int len) { char *v = (char*)Get(len); if (v) memcpy(v, buf, len); }
+        void String(const string &in) { char *v = (char*)Get(in.size()); if (v) memcpy(v, in.c_str(), in.size()); }
+
+        void Write8 (const unsigned char  &in) { unsigned char  *v =                 N8();  if (v) *v = in; }
+        void Write8 (const          char  &in) {          char  *v = (char*)         N8();  if (v) *v = in; }
+        void Write16(const unsigned short &in) { unsigned short *v =                 N16(); if (v) *v = in; }
+        void Write16(const          short &in) {          short *v = (short*)        N16(); if (v) *v = in; }
+        void Write32(const unsigned int   &in) { unsigned int   *v =                 N32(); if (v) *v = in; }
+        void Write32(const          int   &in) {          int   *v = (int*)          N32(); if (v) *v = in; }
+        void Write32(const unsigned long  &in) { unsigned long  *v = (unsigned long*)N32(); if (v) *v = in; }
+        void Write32(const          long  &in) {          long  *v = (long*)         N32(); if (v) *v = in; }
+
+        void Ntohs(const unsigned short &in) { unsigned short *v =         N16(); if (v) *v = ntohs(in); }
+        void Htons(const unsigned short &in) { unsigned short *v =         N16(); if (v) *v = htons(in); }
+        void Ntohs(const          short &in) {          short *v = (short*)N16(); if (v) *v = ntohs(in); }
+        void Htons(const          short &in) {          short *v = (short*)N16(); if (v) *v = htons(in); }
+        void Ntohl(const unsigned int   &in) { unsigned int   *v =         N32(); if (v) *v = ntohl(in); }
+        void Htonl(const unsigned int   &in) { unsigned int   *v =         N32(); if (v) *v = htonl(in); }
+        void Ntohl(const          int   &in) {          int   *v = (int*)  N32(); if (v) *v = ntohl(in); }
+        void Htonl(const          int   &in) {          int   *v = (int*)  N32(); if (v) *v = htonl(in); }
+
+        void Htons(unsigned short *out) const { const unsigned short *v =         N16(); *out = v ? htons(*v) : 0; }
+        void Ntohs(unsigned short *out) const { const unsigned short *v =         N16(); *out = v ? ntohs(*v) : 0; }
+        void Htons(         short *out) const { const          short *v = (short*)N16(); *out = v ? htons(*v) : 0; }
+        void Ntohs(         short *out) const { const          short *v = (short*)N16(); *out = v ? ntohs(*v) : 0; }
+        void Htonl(unsigned int   *out) const { const unsigned int   *v =         N32(); *out = v ? htonl(*v) : 0; }
+        void Ntohl(unsigned int   *out) const { const unsigned int   *v =         N32(); *out = v ? ntohl(*v) : 0; }
+        void Htonl(         int   *out) const { const          int   *v = (int*)  N32(); *out = v ? htonl(*v) : 0; }
+        void Ntohl(         int   *out) const { const          int   *v = (int*)  N32(); *out = v ? ntohl(*v) : 0; }
+
+        void Read8 (unsigned char  *out) const { const unsigned char  *v =                 N8();  *out = v ? *v : 0; }
+        void Read8 (         char  *out) const { const          char  *v = (char*)         N8();  *out = v ? *v : 0; }
+        void Read16(unsigned short *out) const { const unsigned short *v =                 N16(); *out = v ? *v : 0; }
+        void Read16(         short *out) const { const          short *v = (short*)        N16(); *out = v ? *v : 0; }
+        void Read32(unsigned int   *out) const { const unsigned int   *v =                 N32(); *out = v ? *v : 0; }
+        void Read32(         int   *out) const { const          int   *v = (int*)          N32(); *out = v ? *v : 0; }
+        void Read32(unsigned long  *out) const { const unsigned long  *v = (unsigned long*)N32(); *out = v ? *v : 0; }
+        void Read32(         long  *out) const { const          long  *v = (long*)         N32(); *out = v ? *v : 0; }
+    };
+
+    struct ConstStream : public Stream {
+        ConstStream(const char *B, int S) : Stream((char*)B, S) {}
+        char           *End()          { FATAL(this, ": ConstStream write"); return 0; }
+        unsigned char  *N8()           { FATAL(this, ": ConstStream write"); return 0; }
+        unsigned short *N16()          { FATAL(this, ": ConstStream write"); return 0; }
+        unsigned       *N32()          { FATAL(this, ": ConstStream write"); return 0; }
+        char           *Get(int len=0) { FATAL(this, ": ConstStream write"); return 0; }
+    };
+
+    struct MutableStream : public Stream {
+        MutableStream(char *B, int S) : Stream(B, S) {}
+        char           *End() { return buf + size; }
+        unsigned char  *N8()  { unsigned char  *ret = (unsigned char *)(buf+offset); offset += 1;   if (offset > size) { error=1; return 0; } return ret; }
+        unsigned short *N16() { unsigned short *ret = (unsigned short*)(buf+offset); offset += 2;   if (offset > size) { error=1; return 0; } return ret; }
+        unsigned       *N32() { unsigned       *ret = (unsigned      *)(buf+offset); offset += 4;   if (offset > size) { error=1; return 0; } return ret; }
+        char           *Get(int len=0) { char  *ret = (char          *)(buf+offset); offset += len; if (offset > size) { error=1; return 0; } return ret; }
+    };
 };
 
 struct Ethernet {

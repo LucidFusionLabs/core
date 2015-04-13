@@ -491,7 +491,7 @@ int SystemNetwork::Bind(int fd, IPV4::Addr addr, int port) {
     sin.sin_addr.s_addr = addr ? addr : INADDR_ANY;
 
     if (FLAGS_network_debug) INFO("bind(", fd, ", ", IPV4::Text(addr, port), ")");
-    if (SystemBind(fd, (const sockaddr *)&sin, (socklen_t)sizeof(sockaddr_in)) == -1)
+    if (bind(fd, (const sockaddr *)&sin, (socklen_t)sizeof(sockaddr_in)) == -1)
     { ERROR("bind: ", SystemNetwork::LastError()); return -1; }
 
     return 0;
@@ -594,7 +594,7 @@ string SystemNetwork::LastError() {
 #endif
 }
 
-void SelectSocketThread::Start() {
+void SocketWakeupThread::Start() {
 #ifndef _WIN32
     CHECK_EQ(::pipe(pipe), 0);
     SystemNetwork::SetSocketBlocking(pipe[0], 0);
@@ -603,7 +603,7 @@ void SelectSocketThread::Start() {
     thread.Start();
 }
 
-void SelectSocketThread::ThreadProc() {
+void SocketWakeupThread::ThreadProc() {
     while (app->run) {
         if (frame_mutex) { ScopedMutex sm(*frame_mutex); }
         if (app->run) {

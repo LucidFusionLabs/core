@@ -149,7 +149,7 @@ void SpaceballMap::Load(const string &home_name, const string &away_name) {
 }
 
 void ShipDraw(Asset *a, Entity *e) {
-    static Geometry *stripes = Geometry::LoadOBJ(StrCat(ASSETS_DIR, "ship_stripes.obj"));
+    static Geometry *stripes = Geometry::LoadOBJ(StrCat(app->assetdir, "ship_stripes.obj"));
     scene.Select(stripes);
     screen->gd->SetColor(e->color1);
     Scene::Draw(stripes, e);
@@ -174,7 +174,7 @@ void ShipDraw(Asset *a, Entity *e) {
         float lightning_glyph_texcoord[4];
         memcpy(lightning_glyph_texcoord, lightning_glyph->tex.coord, sizeof(lightning_glyph_texcoord));
         lightning_glyph_texcoord[Texture::CoordMaxX] *= .1;
-        lightning_obj = Geometry::LoadOBJ(StrCat(ASSETS_DIR, "ship_lightning.obj"), lightning_glyph_texcoord);
+        lightning_obj = Geometry::LoadOBJ(StrCat(app->assetdir, "ship_lightning.obj"), lightning_glyph_texcoord);
     }
     screen->gd->BindTexture(GraphicsDevice::Texture2D, lightning_glyph->tex.ID);
 
@@ -681,7 +681,7 @@ extern "C" int main(int argc, const char *argv[]) {
     soundasset.Load();
     app->shell.soundassets = &soundasset;
 
-    caust.Load("%s%02d.%s", StrCat(ASSETS_DIR, "caust"), "png", 32);
+    caust.Load("%s%02d.%s", StrCat(app->assetdir, "caust"), "png", 32);
     scene.Add(new Entity("field", asset("field")));
     asset("field")->blendt = GraphicsDevice::SrcAlpha;
 
@@ -690,14 +690,14 @@ extern "C" int main(int argc, const char *argv[]) {
     scene.Add(new Entity("lines", lines));
 
     if (screen->gd->ShaderSupport()) {
-        string lfapp_vertex_shader = LocalFile::FileContents(StrCat(ASSETS_DIR, "lfapp_vertex.glsl"));
-        string lfapp_pixel_shader = LocalFile::FileContents(StrCat(ASSETS_DIR, "lfapp_pixel.glsl"));
-        string vertex_shader = LocalFile::FileContents(StrCat(ASSETS_DIR, "vertex.glsl"));
-        string fader_shader  = LocalFile::FileContents(StrCat(ASSETS_DIR, "fader.glsl"));
-        string warper_shader = LocalFile::FileContents(StrCat(ASSETS_DIR, "warper.glsl"));
+        string lfapp_vertex_shader = LocalFile::FileContents(StrCat(app->assetdir, "lfapp_vertex.glsl"));
+        string lfapp_pixel_shader = LocalFile::FileContents(StrCat(app->assetdir, "lfapp_pixel.glsl"));
+        string vertex_shader = LocalFile::FileContents(StrCat(app->assetdir, "vertex.glsl"));
+        string fader_shader  = LocalFile::FileContents(StrCat(app->assetdir, "fader.glsl"));
+        string warper_shader = LocalFile::FileContents(StrCat(app->assetdir, "warper.glsl"));
         string explode_shader = lfapp_vertex_shader;
         CHECK(StringReplace(&explode_shader, "// LFLPositionShaderMarker",
-                                             LocalFile::FileContents(StrCat(ASSETS_DIR, "explode.glsl"))));
+                                             LocalFile::FileContents(StrCat(app->assetdir, "explode.glsl"))));
 
         Shader::Create("fadershader",         vertex_shader,       fader_shader, "",                     &fadershader);
         Shader::Create("warpershader",  lfapp_vertex_shader,      warper_shader, ShaderDefines(1,0,1,0), &warpershader);

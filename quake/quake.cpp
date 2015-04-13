@@ -92,7 +92,7 @@ extern "C" int main(int argc, const char *argv[]) {
     scene.Add(new Entity("room",  asset("room")));
     scene.Add(new Entity("arrow", asset("arrow"), v3(1, .24, 1)));
 
-    quake_map = Q3MapAsset::Load(StrCat(ASSETS_DIR, "map-20kdm2.pk3"));
+    quake_map = Q3MapAsset::Load(StrCat(app->assetdir, "map-20kdm2.pk3"));
     screen->cam->pos = v3(1910.18,443.64,410.21);
     screen->cam->ort = v3(-0.05,0.70,0.03);
     screen->cam->up = v3(0.00,-0.04,0.98);

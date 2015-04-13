@@ -117,7 +117,7 @@ endif(CMAKE_SYSTEM_NAME MATCHES "Darwin")
 # PROTOBUF_GENERATE_CPP(PROTO_SRC PROTO_HDR game.proto)
 
 # lfapp
-add_library(${LFL_PROJECT}_lfapp ${LFAPP_LIB_TYPE} gui.cpp font.cpp flow.cpp lfapp.cpp lftypes.cpp assets.cpp audio.cpp video.cpp input.cpp math.cpp network.cpp wire.cpp resolver.cpp camera.cpp scene.cpp ${PROTO_SRC})
+add_library(${LFL_PROJECT}_lfapp ${LFAPP_LIB_TYPE} gui.cpp font.cpp flow.cpp lfapp.cpp lftypes.cpp string.cpp "file.cpp" assets.cpp audio.cpp video.cpp input.cpp math.cpp network.cpp wire.cpp resolver.cpp camera.cpp scene.cpp ${PROTO_SRC})
 target_include_directories(${LFL_PROJECT}_lfapp PUBLIC ${LFAPP_INCLUDE} ${LFL_PROJECT_DIR}/lfapp_obj)
 target_compile_definitions(${LFL_PROJECT}_lfapp PUBLIC ${LFAPP_DEF})
 if(LFAPP_LIB_TYPE MATCHES "^SHARED$")

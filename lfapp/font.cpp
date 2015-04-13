@@ -420,11 +420,11 @@ Font *AtlasFontEngine::Open(const FontDesc &d) {
 Font *AtlasFontEngine::OpenAtlas(const FontDesc &d) {
     Texture tex;
     string fn = d.Filename();
-    Asset::LoadTexture(StrCat(ASSETS_DIR, fn, "00.png"), &tex);
+    Asset::LoadTexture(StrCat(app->assetdir, fn, "00.png"), &tex);
     if (!tex.ID) { ERROR("load ", d.name, "00.png failed"); return 0; }
 
     MatrixFile gm;
-    gm.ReadVersioned(VersionedFileName(ASSETS_DIR, fn.c_str(), "glyphs"), 0);
+    gm.ReadVersioned(VersionedFileName(app->assetdir.c_str(), fn.c_str(), "glyphs"), 0);
     if (!gm.F) { ERROR("load ", d.name, ".0000.glyphs.matrix failed"); return 0; }
 
     Resource *resource = new Resource();
@@ -460,7 +460,7 @@ Font *AtlasFontEngine::OpenAtlas(const FontDesc &d) {
 
 void AtlasFontEngine::WriteAtlas(const string &name, Font *f) { WriteAtlas(name, f, &f->glyph->cache->tex); }
 void AtlasFontEngine::WriteAtlas(const string &name, Font *f, Texture *t) {
-    LocalFile lf(ASSETS_DIR + name + "00.png", "w");
+    LocalFile lf(app->assetdir + name + "00.png", "w");
     PngWriter::Write(&lf, *t);
     INFO("wrote ", lf.Filename());
     WriteGlyphFile(name, f);
@@ -474,7 +474,7 @@ void AtlasFontEngine::WriteGlyphFile(const string &name, Font *f) {
     Matrix *gm = new Matrix(glyph_count, 10);
     GlyphTableIter(f) if (i->       advance) i->       ToArray(gm->row(glyph_out++), gm->N);
     GlyphIndexIter(f) if (i->second.advance) i->second.ToArray(gm->row(glyph_out++), gm->N);
-    MatrixFile(gm, "").WriteVersioned(VersionedFileName(ASSETS_DIR, name.c_str(), "glyphs"), 0);
+    MatrixFile(gm, "").WriteVersioned(VersionedFileName(app->assetdir.c_str(), name.c_str(), "glyphs"), 0);
 }
 
 void AtlasFontEngine::MakeFromPNGFiles(const string &name, const vector<string> &png, int atlas_dim, Font **glyphs_out) {
@@ -542,7 +542,7 @@ FreeTypeFontEngine::Resource::~Resource() {
 
 bool FreeTypeFontEngine::Init(const FontDesc &d) {
     if (Contains(resource, d.name)) return true;
-    string content = LocalFile::FileContents(StrCat(ASSETS_DIR, d.name));
+    string content = LocalFile::FileContents(StrCat(app->assetdir, d.name));
     if (Resource *r = OpenBuffer(d, &content)) {
         bool fixed_width = FT_IS_FIXED_WIDTH(r->face);
         resource[d.name] = shared_ptr<Resource>(r);

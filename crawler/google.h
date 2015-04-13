@@ -103,7 +103,7 @@ struct GoogleApi : public Crawler, public DebugHTMLParser {
         if (tag != "a") return;
 
         if (builder.url.substr(0,5) == "http:") {
-            builder.url = HTTP::encodeURL(builder.url.c_str());
+            builder.url = HTTP::EncodeURL(builder.url.c_str());
             results.push_back(builder);
         }
 

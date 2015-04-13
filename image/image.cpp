@@ -184,9 +184,9 @@ extern "C" int main(int argc, const char *argv[]) {
         map<int, v4> glyphs;
         for (map<v4, int>::const_iterator i = glyph_index.begin(); i != glyph_index.end(); ++i) glyphs[i->second] = i->first;
 
-        string outdir = StrCat(ASSETS_DIR, FLAGS_split_png_atlas);
+        string outdir = StrCat(app->assetdir, FLAGS_split_png_atlas);
         LocalFile::mkdir(outdir, 0755);
-        string atlas_png_fn = StrCat(ASSETS_DIR, FLAGS_split_png_atlas, "0,0,0,0,0", "00.png");
+        string atlas_png_fn = StrCat(app->assetdir, FLAGS_split_png_atlas, "0,0,0,0,0", "00.png");
         AtlasFontEngine::SplitIntoPNGFiles(atlas_png_fn, glyphs, outdir + LocalFile::Slash);
     }
 
@@ -201,7 +201,7 @@ extern "C" int main(int argc, const char *argv[]) {
     Asset *asset_input = asset("input");
 
     if (!FLAGS_shader.empty()) {
-        string vertex_shader = LocalFile::FileContents(StrCat(ASSETS_DIR, "vertex.glsl"));
+        string vertex_shader = LocalFile::FileContents(StrCat(app->assetdir, "vertex.glsl"));
         string fragment_shader = LocalFile::FileContents(FLAGS_shader);
         Shader::Create("my_shader", vertex_shader, fragment_shader, "", &MyShader);
     }
