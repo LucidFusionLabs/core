@@ -94,12 +94,12 @@ struct ReceiverConfig {
             }
         }
 
-        const char *headers_end = HTTP::headerEnd(mail.content.c_str());
+        const char *headers_end = HTTP::FindHeadersEnd(mail.content.c_str());
         if (!headers_end) return default_filter;
 
         int hlen = headers_end - mail.content.c_str(), hnlen;
         for (const char *h = mail.content.c_str(); h; h = NextLine(StringPiece(h, hlen-(h-mail.content.c_str())))) {
-            if (!(hnlen = HTTP::headerNameLen(h))) continue;
+            if (!(hnlen = HTTP::GetHeaderNameLen(h))) continue;
             string hn = string(h, hnlen);
             const char *hv = h+hnlen+2;
 
@@ -219,7 +219,7 @@ int main(int argc, const char **argv) {
         if (smtp_server.domain.empty()) {
             if (!listen_addrs.size()) Sniffer::GetDeviceAddressSet(&listen_addrs);
             for (set<IPV4::Addr>::const_iterator i = listen_addrs.begin(); i != listen_addrs.end(); ++i)
-                smtp_server.domains[*i] = Network::GetHostByAddr(*i); 
+                smtp_server.domains[*i] = SystemNetwork::GetHostByAddr(*i); 
             CHECK_GT(smtp_server.domains.size(), 0);
             smtp_server.domains[IPV4::Parse("0.0.0.0")  ] = "localhost";
             smtp_server.domains[IPV4::Parse("127.0.0.1")] = "localhost";

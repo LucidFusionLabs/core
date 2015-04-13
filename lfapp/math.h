@@ -78,10 +78,7 @@ struct v3 {
     static float Dist2(v3 q, v3 p) { v3 d = q - p; return Dot(d, d); }
     static v3 Cross(v3 q, v3 p) { return v3(q.y*p.z - q.z*p.y, q.z*p.x - q.x*p.z, q.x*p.y - q.y*p.x); }
     static v3 Normal(v3 a, v3 b, v3 c) { v3 q=c, p=c; q.Sub(a); p.Sub(b); q = v3::Cross(q, p); q.Norm(); return q; }
-    static v3 Rand() {
-        float phi = LFL::Rand(0, M_TAU), costheta = LFL::Rand(-1, 1), rho = sqrt(1 - pow(costheta, 2));
-        return v3(rho*cos(phi), rho*sin(phi), costheta);
-    }
+    static v3 Rand();
 };
 
 struct v4 {
@@ -212,24 +209,26 @@ struct Complex {
 double LogAdd(double *, double);
 float LogAdd(float *, float);
 unsigned LogAdd(unsigned *, unsigned);
+double Squared(double n);
 
 template <class X> struct Vec {
     virtual ~Vec() {}
     virtual int Len() const = 0;
     virtual X Read(int i) const = 0;
 
-    static string Str(const X *v1,              int D) { string line; for (int i=0; i<D; i++) line += (line.size() ? ", " : "") + ToString(v1[i]); return line; }
-    static void Print(const X *v1,              int D) { INFO(Str(v1, D)); }
-    static X    Dist2(const X *v1, const X *v2, int D) { X ret=0; for (int i=0; i<D; i++) ret += Squared(v1[i]-v2[i]); return ret; }
-    static X      Dot(const X *v1, const X *v2, int D) { X ret=0; for (int i=0; i<D; i++) ret += v1[i] * v2[i];        return ret; }
-    static void Add (const X *v1, const X *v2, X *vOut, int D) { for (int i=0; i<D; i++) vOut[i] = v1[i] + v2[i]; }
-    static void Add (const X *v1,       X  v2, X *vOut, int D) { for (int i=0; i<D; i++) vOut[i] = v1[i] + v2;    }
-    static void Sub (const X *v1, const X *v2, X *vOut, int D) { for (int i=0; i<D; i++) vOut[i] = v1[i] - v2[i]; }
-    static void Sub (const X *v1,       X  v2, X *vOut, int D) { for (int i=0; i<D; i++) vOut[i] = v1[i] - v2;    }
-    static void Mult(const X *v1, const X *v2, X *vOut, int D) { for (int i=0; i<D; i++) vOut[i] = v1[i] * v2[i]; }
-    static void Mult(const X *v1,       X  v2, X *vOut, int D) { for (int i=0; i<D; i++) vOut[i] = v1[i] * v2;    }
-    static void Div (const X *v1, const X *v2, X *vOut, int D) { for (int i=0; i<D; i++) vOut[i] = v1[i] / v2[i]; }
-    static void Div (const X *v1,       X  v2, X *vOut, int D) { for (int i=0; i<D; i++) vOut[i] = v1[i] / v2;    }
+    static string Str (const X *v1,              int D) { string line; for (int i=0; i<D; i++) line += (line.size() ? ", " : "") + ToString(v1[i]); return line; }
+    static void Print (const X *v1,              int D) { INFO(Str(v1, D)); }
+    static X    Dist2 (const X *v1, const X *v2, int D) { X ret=0; for (int i=0; i<D; i++) ret += Squared(v1[i]-v2[i]); return ret; }
+    static X    Dot   (const X *v1, const X *v2, int D) { X ret=0; for (int i=0; i<D; i++) ret += v1[i] * v2[i];        return ret; }
+    static bool Equals(const X *v1, const X *v2, int D) { for (int i=0; i<D; i++) if (v1[i] != v2[i]) return false; return true; }
+    static void Add   (const X *v1, const X *v2, X *vOut, int D) { for (int i=0; i<D; i++) vOut[i] = v1[i] + v2[i]; }
+    static void Add   (const X *v1,       X  v2, X *vOut, int D) { for (int i=0; i<D; i++) vOut[i] = v1[i] + v2;    }
+    static void Sub   (const X *v1, const X *v2, X *vOut, int D) { for (int i=0; i<D; i++) vOut[i] = v1[i] - v2[i]; }
+    static void Sub   (const X *v1,       X  v2, X *vOut, int D) { for (int i=0; i<D; i++) vOut[i] = v1[i] - v2;    }
+    static void Mult  (const X *v1, const X *v2, X *vOut, int D) { for (int i=0; i<D; i++) vOut[i] = v1[i] * v2[i]; }
+    static void Mult  (const X *v1,       X  v2, X *vOut, int D) { for (int i=0; i<D; i++) vOut[i] = v1[i] * v2;    }
+    static void Div   (const X *v1, const X *v2, X *vOut, int D) { for (int i=0; i<D; i++) vOut[i] = v1[i] / v2[i]; }
+    static void Div   (const X *v1,       X  v2, X *vOut, int D) { for (int i=0; i<D; i++) vOut[i] = v1[i] / v2;    }
     static void Add   (X *v1, const X *v2, int D) { return Add (v1,v2,v1,D); }
     static void Add   (X *v1,       X  v2, int D) { return Add (v1,v2,v1,D); }
     static void Sub   (X *v1, const X *v2, int D) { return Sub (v1,v2,v1,D); }
@@ -248,7 +247,7 @@ template <class X> struct Vec {
     static double Sum (const X *v1, int D) { X ret=0; for (int i=0; i<D; i++) ret += v1[i]; return ret; }
     static double Min (const X *v1, int D) { X ret=(X) INFINITY; for (int i=0; i<D; i++) if (v1[i] < ret) ret = v1[i]; return (double)ret; }
     static double Max (const X *v1, int D) { X ret=(X)-INFINITY; for (int i=0; i<D; i++) if (v1[i] > ret) ret = v1[i]; return (double)ret; }
-    static int  MaxInd(const X *v1, int D) { X mx =(X)-INFINITY; int ret=-1; for (int i=0; i<D; i++) if (v1[i] > mx) { mx = v1[i]; ret = i; } return ret; }
+    static int MaxInd (const X *v1, int D) { X mx =(X)-INFINITY; int ret=-1; for (int i=0; i<D; i++) if (v1[i] > mx) { mx = v1[i]; ret = i; } return ret; }
 };
 typedef Vec<double> Vector;
 
@@ -263,7 +262,7 @@ template <class T=double> struct matrix {
     Allocator *alloc;
     T *m;
 
-    matrix() : M(0), N(0), flag(0), bytes(0), alloc(Singleton<MallocAlloc>::Get()), m(0) {}
+    matrix() : M(0), N(0), flag(0), bytes(0), alloc(Allocator::Default()), m(0) {}
     matrix(int Mrows, int Ncols, T InitialVal=T(), int Flag=0, Allocator *Alloc=0) : m(0) { Open(Mrows, Ncols, InitialVal, Flag, Alloc); }
     matrix(const matrix<T> &copy) : m(0), alloc(0) { Open(copy.M, copy.N, T(), copy.flag); AssignL(&copy); }
     matrix(const char *bitmap, int Mrows, int Ncols, int Flag=0, int Chans=1, int ChanInd=0, Allocator *Alloc=0) : m(0) { Open(Mrows, Ncols, bitmap, Flag, Alloc); }
@@ -327,7 +326,7 @@ template <class T=double> struct matrix {
         if (m) { alloc->Free(m); m=0; }
         long long bytes = Mrows*Ncols*sizeof(T)*((Flag&Flag::Complex)?2:1);
         if (!Alloc) {
-            Alloc = Singleton<MallocAlloc>::Get();
+            Alloc = Allocator::Default();
 #if defined(__linux__) && !defined(LFL_ANDROID)
             if (bytes >= (1<<30)) Alloc = MMapAlloc::Open("/dev/zero", true, false, bytes);
 #endif
@@ -338,7 +337,7 @@ template <class T=double> struct matrix {
     }
     void Open(int Mrows, int Ncols, const char *bitmap, int Flag=0, Allocator *Alloc=0) {
         if (m) { alloc->Free(m); m=0; }
-        if (!Alloc) Alloc = Singleton<MallocAlloc>::Get();
+        if (!Alloc) Alloc = Allocator::Default();
         Assign(Mrows, Ncols, Mrows*Ncols*sizeof(T), Flag, Alloc);
         AddRows(0);
         MatrixIter(this) { row(i)[j] = (unsigned char)bitmap[i + j*M]; }
@@ -468,7 +467,6 @@ template <class X> struct RollingAvg {
 };
 
 /* util */
-double Squared(double n);
 float Decimals(float n);
 float Rand(float a, float b);
 unsigned long long Rand64();
@@ -491,6 +489,9 @@ int WhichLog2(int n);
 int FloorLog2(int n);
 int IsPrime(int n);
 int NextPrime(int n);
+int DoubleSort(double a, double b);
+int DoubleSort (const void *a, const void *b);
+int DoubleSortR(const void *a, const void *b);
 
 /* conversion */
 double RadianToDegree(float rad);

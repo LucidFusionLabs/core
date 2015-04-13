@@ -123,7 +123,7 @@ struct SpeechDecodeSession : public HTTPServer::Resource {
         float *featureData = (float*)(AEH+1);
 
         StringPiece flushArg;
-        if (args) HTTP::argGrep(args, 0, 1, "flush", &flushArg);
+        if (args) HTTP::GrepURLArgs(args, 0, 1, "flush", &flushArg);
 
         return Request<float>(featureData, AEH->m, AEH->n, AEH->timestamp, !AEH->m || flushArg.data());
     }

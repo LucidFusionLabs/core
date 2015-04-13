@@ -82,7 +82,7 @@ struct ForvoApi : public Crawler, public HTMLParser {
 
     virtual void CloseTag(const string &tag, const KV &attr, const TagStack &stack) {
         if (filter(stack)) return;
-        string url = HTTP::encodeURL(text.c_str());
+        string url = HTTP::EncodeURL(text.c_str());
         INFO("pathmp3='", url, "'");
         scraped.push_back(url.c_str());
         clear();

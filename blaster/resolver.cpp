@@ -4,6 +4,7 @@
 
 #include "lfapp/lfapp.h"
 #include "lfapp/network.h"
+#include "lfapp/resolver.h"
 #include "lfapp/dom.h"
 #include "crawler/html.h"
 

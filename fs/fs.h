@@ -35,7 +35,7 @@ struct SpeechDecodeClient : public FeatureSink {
     SpeechDecodeClient(ResetCB rcb=0, void *rarg=0) : resetCB(rcb), resetArg(rarg) {}
     ~SpeechDecodeClient() { reset(); }
 
-    void reset() { if (conn) conn->_error(); conn=0; host.clear(); path.clear(); flags.clear(); flagstate=0; }
+    void reset() { if (conn) conn->SetError(); conn=0; host.clear(); path.clear(); flags.clear(); flagstate=0; }
 
     int connect(const char *url) {
         reset();
@@ -50,7 +50,7 @@ struct SpeechDecodeClient : public FeatureSink {
 
         if (flagstate == 0) {
             flagstate = 1;
-            if (HTTPClient::request(conn, HTTPServer::Method::GET, host.c_str(), "flags", "application/octet-stream", 0, 0, true) < 0) conn->_error();
+            if (HTTPClient::request(conn, HTTPServer::Method::GET, host.c_str(), "flags", "application/octet-stream", 0, 0, true) < 0) conn->SetError();
             return 0;
         }
         if (flagstate == 1) return 0;
@@ -72,7 +72,7 @@ struct SpeechDecodeClient : public FeatureSink {
 
         int lbw = conn->wl;
         if (HTTPClient::request(conn, HTTPServer::Method::POST, host.c_str(), url.c_str(), "application/octet-stream", buf, len, true) < 0) {
-            conn->_error();
+            conn->SetError();
             return 0;
         }
         wrote += conn->wl - lbw;
@@ -94,7 +94,7 @@ struct SpeechDecodeClient : public FeatureSink {
 
         int lbw = conn->wl;
         if (HTTPClient::request(conn, HTTPServer::Method::POST, host.c_str(), path.c_str(), "application/octet-stream", buf, len, true) < 0) {
-            conn->_error();
+            conn->SetError();
             return;
         }
         wrote += conn->wl - lbw;

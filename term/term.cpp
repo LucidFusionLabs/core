@@ -236,8 +236,8 @@ extern "C" int main(int argc, const char *argv[]) {
     binds->Add(Bind('n', Key::Modifier::Cmd, Bind::CB(bind(&Application::CreateNewWindow, app, &MyWindowCloneCB))));
     binds->Add(Bind('6', Key::Modifier::Cmd, Bind::CB(bind([&](){ Window::Get()->console->Toggle(); }))));
 
-    string lfapp_vertex_shader = LocalFile::FileContents(StrCat(ASSETS_DIR, "lfapp_vertex.glsl"));
-    string warper_shader = LocalFile::FileContents(StrCat(ASSETS_DIR, "warper.glsl"));
+    string lfapp_vertex_shader = LocalFile::FileContents(StrCat(app->assetdir, "lfapp_vertex.glsl"));
+    string warper_shader = LocalFile::FileContents(StrCat(app->assetdir, "warper.glsl"));
     Shader::Create("warpershader", lfapp_vertex_shader.c_str(), warper_shader.c_str(),
                    "#define TEX2D\n#define VERTEXCOLOR\n", &warpershader);
 

@@ -108,15 +108,16 @@ struct SelectSocketSet : public SocketSet {
     }
 };
 
-struct SelectSocketThread : public SocketSet {
+/// SocketWakeupThread waits on SocketSet and simply calls app->scheduler.Wakeup() on event
+struct SocketWakeupThread : public SocketSet {
     mutex *frame_mutex, *wait_mutex;
     SelectSocketSet sockets;
     mutex sockets_mutex;
     Thread thread;
     int pipe[2];
-    SelectSocketThread(mutex *FM=0, mutex *WM=0) : frame_mutex(FM), wait_mutex(WM),
-        thread(bind(&SelectSocketThread::ThreadProc, this)) { pipe[0] = pipe[1] = -1; }
-    ~SelectSocketThread() { close(pipe[0]); close(pipe[1]); }
+    SocketWakeupThread(mutex *FM=0, mutex *WM=0) : frame_mutex(FM), wait_mutex(WM),
+        thread(bind(&SocketWakeupThread::ThreadProc, this)) { pipe[0] = pipe[1] = -1; }
+    ~SocketWakeupThread() { close(pipe[0]); close(pipe[1]); }
 
     void Add(Socket s, int f, void *v) { { ScopedMutex m(sockets_mutex); sockets.Add(s, f, v); } Wakeup(); }
     void Set(Socket s, int f, void *v) { { ScopedMutex m(sockets_mutex); sockets.Set(s, f, v); } Wakeup(); }
@@ -319,6 +320,7 @@ struct ServiceEndpointEraseList {
     }
 };
 
+/// NetworkThread runs the Network Module in a new thread with a multiplexed Callback queue
 struct NetworkThread {
     struct Service : public LFL::Service {};
     struct Query : public LFL::Query {

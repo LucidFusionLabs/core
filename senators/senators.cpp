@@ -73,13 +73,13 @@ struct Bot {
 
 struct IRCBotServer : public BotServer {
     void Join(Connection *c, const string &target) {
-        c->write(StrCat("JOIN ", target, "\r\n"));
+        c->Write(StrCat("JOIN ", target, "\r\n"));
     }
     void Part(Connection *c, const string &target) {
-        c->write(StrCat("PART ", target, "\r\n"));
+        c->Write(StrCat("PART ", target, "\r\n"));
     }
     void Say(Connection *c, const string &source, const string &target, const string &text) {
-        c->write(StrCat("PRIVMSG ", target, " :<", source, "> ", text, "\r\n"));
+        c->Write(StrCat("PRIVMSG ", target, " :<", source, "> ", text, "\r\n"));
     }
 };
 
@@ -97,7 +97,7 @@ struct Senator : public Query {
     int Heartbeat(Connection *c) { if (bot) bot->Heartbeat(Singleton<IRCBotServer>::Get(), c); return 0; }
 
     int Connected(Connection *c) {
-        c->write(StrCat("USER ", nick, " ", nick, " ", nick, " :Senator ", nick, "\r\nNICK ", nick, "\r\n"));
+        c->Write(StrCat("USER ", nick, " ", nick, " ", nick, " :Senator ", nick, "\r\nNICK ", nick, "\r\n"));
         INFO("Senator ", nick, " connected");
         ready = true;
         if (bot) bot->Connected(Singleton<IRCBotServer>::Get(), c, nick);
@@ -109,7 +109,7 @@ struct Senator : public Query {
             if (FLAGS_print) INFO("Senator ", nick, " read '", line, "'");
 
             if (!strncasecmp(line, "PING ", 5))
-                c->write(StrCat("PONG ", line+5, "\r\n"));
+                c->Write(StrCat("PONG ", line+5, "\r\n"));
 
             if (bot) do {
                 StringWordIter words(line);
@@ -123,7 +123,7 @@ struct Senator : public Query {
                 bot->Chat(Singleton<IRCBotServer>::Get(), c, source_nick, target, text);
             } while(0);
         }
-        c->readflush(c->rl);
+        c->ReadFlush(c->rl);
         return 0;
     }
     int Closed(Connection *c) {
@@ -157,7 +157,7 @@ void DoSendRandom(int times, const string &data, int len) {
             majority.push_back((*i).second);
 
     for (int i=0; i<times; i++)
-        majority[::rand() % majority.size()]->write(data.c_str(), len);
+        majority[::rand() % majority.size()]->Write(data.c_str(), len);
 
     INFO("sent * 1 * ", times, " '", data, "'");
 }
@@ -166,7 +166,7 @@ void DoSend(int times, const string &data, int len) {
     for (int i=0; i<times; i++) {
         for (Senators::iterator i = senators.begin(); i != senators.end(); i++)
             if ((*i).first->ready)
-                (*i).second->write(data.c_str(), len);
+                (*i).second->Write(data.c_str(), len);
     }
     INFO("sent * ", times, " * ", senators.size(), " '", data, "'");
 }

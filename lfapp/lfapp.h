@@ -51,23 +51,13 @@
 #include <io.h>
 #include <sstream>
 #include <typeinfo>
-#define LFL_EXPORT __declspec(dllexport)
-#define LFL_IMPORT __declspec(dllimport)
 #define _USE_MATH_DEFINES
-#define UNION struct
-#define thread_local __declspec(thread)
 typedef SOCKET Socket;
-inline int SystemBind(Socket s, const sockaddr *a, int al) { return bind(s, a, al); }
 #else /* _WIN32 */
 #include <unistd.h>
 #include <limits.h>
 #include <sys/time.h>
-#define LFL_EXPORT
-#define LFL_IMPORT
-#define UNION union
-#define thread_local __thread
 typedef int Socket;
-#define SystemBind(s, a, al) ::bind(s, a, al)
 #endif
 
 using LFL_STL_NAMESPACE::min;
@@ -152,50 +142,6 @@ extern "C" int isinf(double);
 #include <stdarg.h>
 #include <string.h>
 
-#include "lfapp/lfexport.h"
-
-#if _WIN32 || _WIN64
- #if _WIN64
-  #define LFL64
- #else
-  #define LFL32
- #endif
-#endif
-#if __GNUC__
- #if __x86_64__ || __ppc64__ || __amd64__
-  #define LFL64
- #else
-  #define LFL32
- #endif
-#endif
-
-#ifdef LFL_TEST
-#define tvirtual virtual
-#else
-#define tvirtual
-#endif
-
-#define LFL_MOBILE (defined(LFL_ANDROID) || defined(LFL_IPHONE))
-#define LFL_LINUX_SERVER (defined(__linux__) && !defined(LFL_MOBILE))
-
-#define ASSETS_DIR "assets/"
-#define M_TAU (M_PI + M_PI)
-#define Hours(x) ((x)*3600000)
-#define Minutes(x) ((x)*60000)
-#define Seconds(x) ((x)*1000)
-#define ToSeconds(x) ((x)/1000.0)
-#define MilliSeconds(x) (x)
-#define ToMilliSeconds(x) (x)
-#define ToMicroSeconds(x) ((x)*1000)
-#define Time2time_t(x) ((time_t)((x)/1000))
-#define X_or_1(x) ((x) ? (x) : 1)
-#define X_or_Y(x, y) ((x) ? (x) : (y))
-#define XY_or_Y(x, y) ((x) ? ((x)*(y)) : (y))
-#define Xge0_or_Y(x, y) ((x) >= 0 ? (x) : (y))
-#define RoundXY_or_Y(x, y) ((x) ? RoundF((x)*(y)) : (y))
-#define X_or_Y_or_Z(x, y, z) ((x) ? (x) : ((y) ? (y) : (z)))
-#define A_or_B(x, y) ((x.size()) ? (x) : (y))
-
 #define  INFO(...) ::LFL::Log(::LFApp::Log::Info,  __FILE__, __LINE__, ::LFL::StrCat(__VA_ARGS__))
 #define DEBUG(...) ::LFL::Log(::LFApp::Log::Debug, __FILE__, __LINE__, ::LFL::StrCat(__VA_ARGS__))
 #define ERROR(...) ::LFL::Log(::LFApp::Log::Error, __FILE__, __LINE__, ::LFL::StrCat(__VA_ARGS__))
@@ -218,296 +164,6 @@ extern "C" int isinf(double);
 #define CHECK_RANGE(x, y, z) { CHECK_GE(x, y); CHECK_LT(x, z); }
 #define CHECK(x) if (!(x)) FATAL(#x)
 
-#define memzero(x) memset(&x, 0, sizeof(x))
-#define memzeros(x) memset(x, 0, sizeof(x))
-#define memzerop(x) memset(x, 0, sizeof(*x))
-#define sizeofarray(x) (sizeof(x) / sizeof((x)[0]))
-
-struct FT_FaceRec_;
-struct CGRect;
-struct CGSize;
-typedef struct CGFont *CGFontRef;
-typedef struct CGContext *CGContextRef;
-typedef const struct __CTFont *CTFontRef;
-
-extern "C" {
-struct _IplImage;
-struct SwrContext;
-typedef struct bio_st BIO;
-typedef struct ssl_st SSL;
-typedef struct ssl_ctx_st SSL_CTX;
-#ifdef LFL_FFMPEG
-struct AVFormatContext;
-struct AVStream;
-struct AVPacket;
-struct AVFrame;
-struct SwsContext;
-#endif
-};
-
-namespace google {
-    namespace protobuf {
-#ifdef LFL_PROTOBUF
-        class Message;
-#else
-        class Message { int fake; };
-#endif
-    }; // namespace protobuf
-#ifdef LFL_GLOG
-    LFL_IMPORT void InstallFailureSignalHandler();
-#endif
-}; // namespace google
-
-namespace LFL {
-struct Box;
-struct Atlas;
-struct Color;
-struct Entity;
-struct Asset;
-struct SoundAsset;
-struct MovieAsset;
-struct Shader;
-struct Texture;
-struct Geometry;
-struct DrawableBoxArray;
-struct Allocator;
-struct ProtoHeader;
-struct GraphicsDevice;
-struct Connection;
-struct Listener;
-struct Service;
-struct ServiceEndpointEraseList;
-struct Glyph;
-struct Font;
-struct Flow;
-struct FloatContainer;
-struct BrowserInterface;
-struct DocumentParser;
-struct InputController;
-struct GUI;
-struct KeyboardGUI;
-struct TextGUI;
-struct Console;
-struct Dialog;
-struct Tiles;
-struct Bind;
-struct BindMap;
-struct StyleSheet;
-struct StyleContext;
-struct VideoAssetLoader;
-struct Window;
-namespace DOM { struct Node; };
-
-typedef long long Time;
-typedef google::protobuf::Message Proto;
-typedef basic_string<short> String16;
-typedef function<void()> Callback;
-typedef lock_guard<mutex> ScopedMutex;
-typedef int (*MainCB)(int argc, const char **argv);
-
-Time Now();
-void Msleep(int x);
-timeval Time2timeval(Time x);
-void Log(int level, const char *file, int line, const string &m);
-inline bool Equal(float a, float b, float eps=1e-6) { return fabs(a-b) < eps; }
-string StringPrintf(const char *fmt, ...);
-
-unsigned           fnv32(const void *buf, unsigned len=0, unsigned           hval=0);
-unsigned long long fnv64(const void *buf, unsigned len=0, unsigned long long hval=0);
-
-template <class X> struct Singleton { static X *Get() { static X instance; return &instance; } };
-
-struct Allocator {
-    virtual ~Allocator() {}
-    virtual const char *Name() = 0;
-    virtual void *Malloc(int size) = 0;
-    virtual void *Realloc(void *p, int size) = 0;
-    virtual void Free(void *p) = 0;
-    virtual void Reset();
-#define AllocatorNew(allocator, type, constructor_args) (new((allocator)->Malloc(sizeof type )) type constructor_args)
-};
-
-struct typed_ptr {
-    int type; void *value;
-    typed_ptr() : type(0), value(0) {}
-    typed_ptr(int T, void *P) : type(T), value(P) {}
-};
-
-template <class X> static int TypeId()   { static int ret = fnv32(typeid(X).name()); return ret; }
-template <class X> static int TypeId(X*) { static int ret = fnv32(typeid(X).name()); return ret; }
-template <class X> static typed_ptr TypePointer(X* v) { return typed_ptr(TypeId<X>(), v); }
-template <class X> static string ToString(const X& x) { std::stringstream in; in << x; return in.str(); }
-
-struct Scannable {
-    static bool     Scan(const bool&,     const char  *v) { return *v ? atoi(v) : true; }
-    static int      Scan(const int&,      const char  *v) { return atoi(v); }
-    static unsigned Scan(const unsigned&, const char  *v) { return atoi(v); }
-    static float    Scan(const float&,    const char  *v) { return atof(v); }
-    static double   Scan(const double&,   const char  *v) { return atof(v); }
-    static string   Scan(const string&,   const char  *v) { return string(v); }
-    static String16 Scan(const String16&, const short *v) { return String16(v); }
-};
-
-struct Printable : public string {
-    Printable(const void *x);
-    Printable(const basic_string<short> &x);
-    Printable(const string &x) : string(x) {}
-    Printable(const char *x) : string(x) {}
-    Printable(      char *x) : string(x) {}
-    Printable(const bool &x) : string(ToString(x)) {}
-    Printable(const int  &x) : string(ToString(x)) {}
-    Printable(const long &x) : string(ToString(x)) {}
-    Printable(const unsigned char *x) : string((char*)x) {}
-    Printable(const char &x) : string(ToString(x)) {}
-    Printable(const short &x) : string(ToString(x)) {}
-    Printable(const float &x) : string(ToString(x)) {}
-    Printable(const double &x) : string(ToString(x)) {}
-    Printable(const unsigned &x) : string(ToString(x)) {}
-    Printable(const long long &x) : string(ToString(x)) {}
-    Printable(const unsigned char &x) : string(ToString(x)) {}
-    Printable(const unsigned short &x) : string(ToString(x)) {}
-    Printable(const unsigned long &x) : string(ToString(x)) {}
-    Printable(const unsigned long long &x) : string(ToString(x)) {}
-    Printable(const pair<int, int> &x);
-    Printable(const vector<string> &x);
-    Printable(const vector<double> &x);
-    Printable(const vector<float> &x);
-    Printable(const vector<int> &x);
-    Printable(const Color &x);
-    template <size_t N> Printable(const char (&x)[N]) : string(x) {}
-    template <class X> Printable(const X& x) : string(StringPrintf("%s(%p)", typeid(X).name(), &x)) {}
-};
-inline string StrCat(const Printable &x1) { return x1; }
-
-template <class X> struct ArrayPiece {
-    typedef       X*       iterator;
-    typedef const X* const_iterator;
-    const X *buf; int len;
-    ArrayPiece()                  : buf(0), len(0) {}
-    ArrayPiece(const X *b, int l) : buf(b), len(l) {}
-    const X& operator[](int i) const { return buf[i]; }
-    const X& back() const { return buf[len-1]; }
-    void clear() { buf=0; len=0; }
-    bool null() const { return !buf; }
-    bool empty() const { return !buf || len <= 0; }
-    bool has_size() const { return len >= 0; }
-    int size() const { return max(0, len); }
-    void assign(const X *b, int l) { buf=b; len=l; }
-    const X *data() const { return buf; }
-    const_iterator begin() const { return buf; }
-    const_iterator end() const { return buf+len; }
-};
-
-template <class X> struct StringPieceT : public ArrayPiece<X> {
-    StringPieceT() {}
-    StringPieceT(const basic_string<X> &s) : ArrayPiece<X>(s.data(), s.size())  {}
-    StringPieceT(const X *b, int l)        : ArrayPiece<X>(b,        l)         {}
-    StringPieceT(const X *b)               : ArrayPiece<X>(b,        Length(b)) {}
-    basic_string<X> str() const {
-        if (this->buf && this->len < 0) return this->buf;
-        return this->buf ? basic_string<X>(this->buf, this->len) : basic_string<X>();
-    }
-    bool Done(const X* p) const { return (this->len >= 0 && p >= this->buf + this->len) || !*p; }
-    int Length() const { return this->len >= 0 ? this->len : Length(this->buf); }
-    static StringPieceT<X> Unbounded (const X *b) { return StringPieceT<X>(b, -1); }
-    static StringPieceT<X> FromString(const X *b) { return StringPieceT<X>(b, b?Length(b):0); }
-    static size_t Length(const X *b) { const X *p = b; while (*p) p++; return p - b; }
-    static const X *Blank() { static X x[1] = {0}; return x; }
-    static const X *Space() { static X x[2] = {' ',0}; return x; }
-    static const X *NullSpelled() { static X x[7] = {'<','N','U','L','L','>',0}; return x; }
-};
-typedef StringPieceT<char> StringPiece;
-typedef StringPieceT<short> String16Piece;
-
-struct String {
-    template          <class Y> static void Copy(const string          &in, basic_string<Y> *out, int offset=0) { return Copy<char, Y>(in, out, offset); }
-    template          <class Y> static void Copy(const String16        &in, basic_string<Y> *out, int offset=0) { return Copy<short,Y>(in, out, offset); }
-    template <class X, class Y> static void Copy(const StringPieceT<X> &in, basic_string<Y> *out, int offset=0) {
-        out->resize(offset + in.len);
-        Y* o = &(*out)[offset];
-        for (const X *i = in.buf; !in.Done(i); /**/) *o++ = *i++;
-    }
-    template          <class Y> static void Append(const string          &in, basic_string<Y> *out) { return Append<char, Y>(in, out); }
-    template          <class Y> static void Append(const String16        &in, basic_string<Y> *out) { return Append<short,Y>(in, out); }
-    template <class X, class Y> static void Append(const StringPieceT<X> &in, basic_string<Y> *out) {
-        Copy(in.data(), out, out->size());
-    }
-    template          <class Y> static int Convert(const string          &in, basic_string<Y> *out, const char *fe, const char *te) { return Convert<char,  Y>(in, out, fe, te); }
-    template          <class Y> static int Convert(const String16        &in, basic_string<Y> *out, const char *fe, const char *te) { return Convert<short, Y>(in, out, fe, te); }
-    template <class X, class Y> static int Convert(const StringPieceT<X> &in, basic_string<Y> *out,
-                                                   const char *from_encoding, const char *to_encoding);
-
-    static string   ToAscii(const StringPiece    &s, int *lo=0) { if (lo) *lo=s.size(); return s.str(); }
-    static string   ToAscii(const String16Piece  &s, int *lo=0) { string v; int l=Convert(s, &v, "UCS-16LE", "US-ASCII"); if (lo) *lo=l; return v; }
-    static string   ToUTF8 (const String16Piece  &s, int *lo=0) { string v; int l=Convert(s, &v, "UTF-16LE", "UTF-8");    if (lo) *lo=l; return v; }
-    static string   ToUTF8 (const StringPiece    &s, int *lo=0) { if (lo) *lo=s.size(); return s.str(); }
-    static String16 ToUTF16(const String16Piece  &s, int *lo=0) { if (lo) *lo=s.size(); return s.str(); }
-    static String16 ToUTF16(const StringPiece    &s, int *lo=0);
-};
-
-struct Unicode {
-    static const unsigned char non_breaking_space = 0xA0;
-    static const unsigned short replacement_char = 0xFFFD;
-};
-
-struct UTF8 {
-    static string WriteGlyph(int codepoint);
-    static int ReadGlyph(const StringPiece   &s, const char  *p, int *l, bool eof=0);
-};
-struct UTF16 {
-    static String16 WriteGlyph(int codepoint);
-    static int ReadGlyph(const String16Piece &s, const short *p, int *l, bool eof=0);
-};
-template <class X> struct UTF {};
-template <> struct UTF<char> {
-    static string WriteGlyph(int codepoint) { return UTF8::WriteGlyph(codepoint); }
-    static int ReadGlyph(const StringPiece   &s, const char  *p, int *l, bool eof=0) { return UTF8::ReadGlyph(s, p, l, eof); }
-    static int ReadGlyph(const String16Piece &s, const short *p, int *l, bool eof=0) { FATAL("no such thing as 16bit UTF-8"); }
-};
-template <> struct UTF<short> {
-    static String16 WriteGlyph(int codepoint) { return UTF16::WriteGlyph(codepoint); }
-    static int ReadGlyph(const String16Piece &s, const short *p, int *l, bool eof=0) { return UTF16::ReadGlyph(s, p, l, eof); }
-    static int ReadGlyph(const StringPiece   &s, const char  *p, int *l, bool eof=0) { FATAL("no such thing as 8bit UTF-16"); }
-};
-
-struct Flag {
-    const char *name, *desc, *file; int line; bool override;
-    Flag(const char *N, const char *D, const char *F, int L) : name(N), desc(D), file(F), line(L), override(0) {}
-    virtual ~Flag() {}
-
-    string GetString() const;
-    virtual string Get() const = 0;
-    virtual bool IsBool() const = 0;
-    virtual void Update(const char *text) = 0;
-};
-
-struct FlagMap {
-    typedef map<string, Flag*> AllFlags;
-    const char *optarg=0; int optind=0;
-    AllFlags flagmap;
-    bool dirty=0;
-    FlagMap() {}
-
-    int getopt(int argc, const char **argv, const char *source_filename);
-    void Add(Flag *f) { flagmap[f->name] = f; }
-    bool Set(const string &k, const string &v);
-    bool IsBool(const string &k) const;
-    string Get(const string &k) const;
-    string Match(const string &k, const char *source_filename=0) const;
-    void Print(const char *source_filename=0) const;
-};
-
-template <class X> struct FlagOfType : public Flag {
-    X *v;
-    virtual ~FlagOfType() {}
-    FlagOfType(const char *N, const char *D, const char *F, int L, X *V)
-        : Flag(N, D, F, L), v(V) { Singleton<FlagMap>::Get()->Add(this); } 
-
-    string Get() const { return ToString(*v); }
-    bool IsBool() const { return TypeId<X>() == TypeId<bool>(); }
-    void Update(const char *text) { if (text) *v = Scannable::Scan(*v, text); }
-};
-
 #define DEFINE_FLAG(name, type, initial, description) \
     type FLAGS_ ## name = initial; \
     FlagOfType<type> FLAGS_ ## name ## _(#name, description, __FILE__, __LINE__, &FLAGS_ ## name)
@@ -518,6 +174,56 @@ template <class X> struct FlagOfType : public Flag {
 #define DEFINE_double(name, initial, description) DEFINE_FLAG(name, double, initial, description)
 #define DEFINE_string(name, initial, description) DEFINE_FLAG(name, string, initial, description)
 
+#define Hours(x) ((x)*3600000)
+#define Minutes(x) ((x)*60000)
+#define Seconds(x) ((x)*1000)
+#define ToSeconds(x) ((x)/1000.0)
+#define MilliSeconds(x) (x)
+#define ToMilliSeconds(x) (x)
+#define ToMicroSeconds(x) ((x)*1000)
+#define Time2time_t(x) ((time_t)((x)/1000))
+
+namespace LFL {
+typedef long long Time;
+typedef function<void()> Callback;
+typedef lock_guard<mutex> ScopedMutex;
+template <class X> struct Singleton { static X *Get() { static X instance; return &instance; } };
+void Log(int level, const char *file, int line, const string &m);
+}; // namespace LFL
+
+#include "lfapp/lfexport.h"
+#include "lfapp/string.h"
+
+namespace LFL {
+Time Now();
+void Msleep(int x);
+inline bool Equal(float a, float b, float eps=1e-6) { return fabs(a-b) < eps; }
+
+struct Allocator {
+    virtual ~Allocator() {}
+    virtual const char *Name() = 0;
+    virtual void *Malloc(int size) = 0;
+    virtual void *Realloc(void *p, int size) = 0;
+    virtual void Free(void *p) = 0;
+    virtual void Reset();
+    static Allocator *Default();
+#define AllocatorNew(allocator, type, constructor_args) (new((allocator)->Malloc(sizeof type )) type constructor_args)
+};
+
+struct NullAlloc : public Allocator {
+    const char *Name() { return "NullAlloc"; }
+    void *Malloc(int size) { return 0; }
+    void *Realloc(void *p, int size) { return 0; }
+    void Free(void *p) {}
+};
+
+}; // namespace LFL
+
+#include "lfapp/math.h"
+#include "lfapp/lftypes.h"
+#include "lfapp/file.h"
+
+namespace LFL {
 bool Running();
 bool MainThread();
 void RunInMainThread(Callback *cb);
@@ -530,173 +236,7 @@ int NBRead(int fd, char *buf, int size);
 int NBRead(int fd, string *buf);
 string NBRead(int fd, int size);
 
-template <int V>          int                 isint (int N) { return N == V; }
-template <int V1, int V2> int                 isint2(int N) { return (N == V1) || (N == V2); }
-template <int V1, int V2, int V3>         int isint3(int N) { return (N == V1) || (N == V2) || (N == V3); }
-template <int V1, int V2, int V3, int V4> int isint4(int N) { return (N == V1) || (N == V2) || (N == V3) || (N == V4); }
-int isfileslash(int c);
-int isdot(int c);
-int iscomma(int c);
-int isand(int c);
-int isdquote(int c);
-int issquote(int c);
-int istick(int c);
-int isdig(int c);
-int isnum(int c);
-int isquote(int c);
-int notspace(int c);
-int notalpha(int c);
-int notalnum(int c);
-int notnum(int c);
-int notcomma(int c);
-int notdot(int c);
-float my_atof(const char *v);
-inline double atof(const string &v) { return ::atof(v.c_str()); }
-inline int    atoi(const string &v) { return ::atoi(v.c_str()); }
-
-int atoi(const char  *v);
-int atoi(const short *v);
-template <int F, int T>                 int tochar (int i) { return i == F ? T :  i; }
-template <int F, int T, int F2, int T2> int tochar2(int i) { return i == F ? T : (i == F2 ? T2 : i); }
-
-int DoubleSort(double a, double b);
-int DoubleSort (const void *a, const void *b);
-int DoubleSortR(const void *a, const void *b);
-int NextMultipleOfPowerOfTwo(int input, int align);
-double Squared(double n);
-float Rand(float a, float b);
-
-template <class X> const X *BlankNull(const X *x) { return x ? x : StringPieceT<X>::Blank(); }
-template <class X> const X *SpellNull(const X *x) { return x ? x : StringPieceT<X>::NullSpelled(); }
-const char *Default(const char *x, const char *default_x);
-string   ReplaceEmpty (const string   &in, const string   &replace_with);
-String16 ReplaceEmpty (const String16 &in, const string   &replace_with);
-String16 ReplaceEmpty (const String16 &in, const String16 &replace_with);
-string ReplaceNewlines(const string   &in, const string   &replace_with);
-string WStringPrintf(const wchar_t *fmt, ...);
-String16 String16Printf(const char *fmt, ...);
-void StringAppendf(string *out, const char *fmt, ...);
-void StringAppendf(String16 *out, const char *fmt, ...);
-int sprint(char *out, int len, const char *fmt, ...);
-string StrCat(const Printable &x1, const Printable &x2);
-string StrCat(const Printable &x1, const Printable &x2, const Printable &x3);
-string StrCat(const Printable &x1, const Printable &x2, const Printable &x3, const Printable &x4);
-string StrCat(const Printable &x1, const Printable &x2, const Printable &x3, const Printable &x4, const Printable &x5);
-string StrCat(const Printable &x1, const Printable &x2, const Printable &x3, const Printable &x4, const Printable &x5, const Printable &x6);
-string StrCat(const Printable &x1, const Printable &x2, const Printable &x3, const Printable &x4, const Printable &x5, const Printable &x6, const Printable &x7);
-string StrCat(const Printable &x1, const Printable &x2, const Printable &x3, const Printable &x4, const Printable &x5, const Printable &x6, const Printable &x7, const Printable &x8);
-string StrCat(const Printable &x1, const Printable &x2, const Printable &x3, const Printable &x4, const Printable &x5, const Printable &x6, const Printable &x7, const Printable &x8, const Printable &x9);
-string StrCat(const Printable &x1, const Printable &x2, const Printable &x3, const Printable &x4, const Printable &x5, const Printable &x6, const Printable &x7, const Printable &x8, const Printable &x9, const Printable &x10);
-string StrCat(const Printable &x1, const Printable &x2, const Printable &x3, const Printable &x4, const Printable &x5, const Printable &x6, const Printable &x7, const Printable &x8, const Printable &x9, const Printable &x10, const Printable &x11);
-string StrCat(const Printable &x1, const Printable &x2, const Printable &x3, const Printable &x4, const Printable &x5, const Printable &x6, const Printable &x7, const Printable &x8, const Printable &x9, const Printable &x10, const Printable &x11, const Printable &x12);
-string StrCat(const Printable &x1, const Printable &x2, const Printable &x3, const Printable &x4, const Printable &x5, const Printable &x6, const Printable &x7, const Printable &x8, const Printable &x9, const Printable &x10, const Printable &x11, const Printable &x12, const Printable &x13);
-string StrCat(const Printable &x1, const Printable &x2, const Printable &x3, const Printable &x4, const Printable &x5, const Printable &x6, const Printable &x7, const Printable &x8, const Printable &x9, const Printable &x10, const Printable &x11, const Printable &x12, const Printable &x13, const Printable &x14);
-string StrCat(const Printable &x1, const Printable &x2, const Printable &x3, const Printable &x4, const Printable &x5, const Printable &x6, const Printable &x7, const Printable &x8, const Printable &x9, const Printable &x10, const Printable &x11, const Printable &x12, const Printable &x13, const Printable &x14, const Printable &x15);
-
-void StrAppend(string *out, const Printable &x1);
-void StrAppend(string *out, const Printable &x1, const Printable &x2);
-void StrAppend(string *out, const Printable &x1, const Printable &x2, const Printable &x3);
-void StrAppend(string *out, const Printable &x1, const Printable &x2, const Printable &x3, const Printable &x4);
-void StrAppend(string *out, const Printable &x1, const Printable &x2, const Printable &x3, const Printable &x4, const Printable &x5);
-void StrAppend(string *out, const Printable &x1, const Printable &x2, const Printable &x3, const Printable &x4, const Printable &x5, const Printable &x6);
-void StrAppend(string *out, const Printable &x1, const Printable &x2, const Printable &x3, const Printable &x4, const Printable &x5, const Printable &x6, const Printable &x7);
-void StrAppend(string *out, const Printable &x1, const Printable &x2, const Printable &x3, const Printable &x4, const Printable &x5, const Printable &x6, const Printable &x7, const Printable &x8);
-void StrAppend(string *out, const Printable &x1, const Printable &x2, const Printable &x3, const Printable &x4, const Printable &x5, const Printable &x6, const Printable &x7, const Printable &x8, const Printable &x9);
-void StrAppend(string *out, const Printable &x1, const Printable &x2, const Printable &x3, const Printable &x4, const Printable &x5, const Printable &x6, const Printable &x7, const Printable &x8, const Printable &x9, const Printable &x10);
-void StrAppend(string *out, const Printable &x1, const Printable &x2, const Printable &x3, const Printable &x4, const Printable &x5, const Printable &x6, const Printable &x7, const Printable &x8, const Printable &x9, const Printable &x10, const Printable &x11);
-void StrAppend(string *out, const Printable &x1, const Printable &x2, const Printable &x3, const Printable &x4, const Printable &x5, const Printable &x6, const Printable &x7, const Printable &x8, const Printable &x9, const Printable &x10, const Printable &x11, const Printable &x12);
-void StrAppend(string *out, const Printable &x1, const Printable &x2, const Printable &x3, const Printable &x4, const Printable &x5, const Printable &x6, const Printable &x7, const Printable &x8, const Printable &x9, const Printable &x10, const Printable &x11, const Printable &x12, const Printable &x13);
-
-void StrAppend(String16 *out, const Printable &x1);
-void StrAppend(String16 *out, const Printable &x1, const Printable &x2);
-void StrAppend(String16 *out, const Printable &x1, const Printable &x2, const Printable &x3);
-void StrAppend(String16 *out, const Printable &x1, const Printable &x2, const Printable &x3, const Printable &x4);
-void StrAppend(String16 *out, const Printable &x1, const Printable &x2, const Printable &x3, const Printable &x4, const Printable &x5);
-void StrAppend(String16 *out, const Printable &x1, const Printable &x2, const Printable &x3, const Printable &x4, const Printable &x5, const Printable &x6);
-void StrAppend(String16 *out, const Printable &x1, const Printable &x2, const Printable &x3, const Printable &x4, const Printable &x5, const Printable &x6, const Printable &x7);
-void StrAppend(String16 *out, const Printable &x1, const Printable &x2, const Printable &x3, const Printable &x4, const Printable &x5, const Printable &x6, const Printable &x7, const Printable &x8);
-void StrAppend(String16 *out, const Printable &x1, const Printable &x2, const Printable &x3, const Printable &x4, const Printable &x5, const Printable &x6, const Printable &x7, const Printable &x8, const Printable &x9);
-void StrAppend(String16 *out, const Printable &x1, const Printable &x2, const Printable &x3, const Printable &x4, const Printable &x5, const Printable &x6, const Printable &x7, const Printable &x8, const Printable &x9, const Printable &x10);
-void StrAppend(String16 *out, const Printable &x1, const Printable &x2, const Printable &x3, const Printable &x4, const Printable &x5, const Printable &x6, const Printable &x7, const Printable &x8, const Printable &x9, const Printable &x10, const Printable &x11);
-void StrAppend(String16 *out, const Printable &x1, const Printable &x2, const Printable &x3, const Printable &x4, const Printable &x5, const Printable &x6, const Printable &x7, const Printable &x8, const Printable &x9, const Printable &x10, const Printable &x11, const Printable &x12);
-void StrAppend(String16 *out, const Printable &x1, const Printable &x2, const Printable &x3, const Printable &x4, const Printable &x5, const Printable &x6, const Printable &x7, const Printable &x8, const Printable &x9, const Printable &x10, const Printable &x11, const Printable &x12, const Printable &x13);
-
-bool PrefixMatch(const short    *in, const short    *pref, int case_sensitive=true);
-bool PrefixMatch(const char     *in, const char     *pref, int case_sensitive=true);
-bool PrefixMatch(const char     *in, const string   &pref, int case_sensitive=true);
-bool PrefixMatch(const string   &in, const char     *pref, int case_sensitive=true);
-bool PrefixMatch(const string   &in, const string   &pref, int case_sensitive=true);
-bool PrefixMatch(const String16 &in, const String16 &pref, int case_sensitive=true);
-bool PrefixMatch(const String16 &in, const char     *pref, int case_sensitive=true);
-
-bool SuffixMatch(const short    *in, const short    *pref, int case_sensitive=true);
-bool SuffixMatch(const char     *in, const char     *pref, int case_sensitive=true);
-bool SuffixMatch(const char     *in, const string   &pref, int case_sensitive=true);
-bool SuffixMatch(const string   &in, const char     *pref, int case_sensitive=true);
-bool SuffixMatch(const string   &in, const string   &pref, int case_sensitive=true);
-bool SuffixMatch(const String16 &in, const string   &pref, int case_sensitive=true);
-bool SuffixMatch(const String16 &in, const String16 &pref, int case_sensitive=true);
-
-bool StringEquals(const String16 &s1, const String16 &s2, int case_sensitive=false);
-bool StringEquals(const String16 &s1, const char     *s2, int case_sensitive=false);
-bool StringEquals(const string   &s1, const string   &s2, int case_sensitive=false);
-bool StringEquals(const char     *s1, const string   &s2, int case_sensitive=false);
-bool StringEquals(const string   &s1, const char     *s2, int case_sensitive=false);
-bool StringEquals(const char     *s1, const char     *s2, int case_sensitive=false);
-bool StringEquals(const short    *s1, const short    *s2, int case_sensitive=false);
-
-bool StringEmptyOrEquals(const string   &in, const string   &ref, int case_sensitive=false);
-bool StringEmptyOrEquals(const String16 &in, const String16 &ref, int case_sensitive=false);
-bool StringEmptyOrEquals(const String16 &in, const string   &ref, int case_sensitive=false);
-bool StringEmptyOrEquals(const string   &in, const string   &ref1, const string   &ref2, int case_sensitive=false);
-bool StringEmptyOrEquals(const String16 &in, const String16 &ref1, const String16 &ref2, int case_sensitive=false);
-bool StringEmptyOrEquals(const String16 &in, const string   &ref1, const string   &ref2, int case_sensitive=false);
-bool StringReplace(string *text, const string &needle, const string &replace);
-
-template <class X> void AccumulateAsciiDigit(X *v, unsigned char c) { *v = *v * 10 + (c - '0'); }
-template <class X> bool ArrayEquals(const X *x, const X *y, int l) { for (int i=0; i<l; i++) if (x[i] != y[i]) return false; return true; }
-template <class X> int IsNewline(const X *str);
-template <class X> int ChompNewline(X *str, int len);
-template <class X> int ChompNewlineLength(const X *str, int len);
-int DirNameLen(const StringPiece   &text, bool include_slash=false);
-int DirNameLen(const String16Piece &text, bool include_slash=false);
-int BaseDir(const char *path, const char *cmp);
-const char *ParseProtocol(const char *url, string *protO);
-const char  *BaseName   (const StringPiece   &text, int *outlen=0);
-const char  *NextLine   (const StringPiece   &text, bool final=0, int *outlen=0);
-const short *NextLine   (const String16Piece &text, bool final=0, int *outlen=0);
-const char  *NextLineRaw(const StringPiece   &text, bool final=0, int *outlen=0);
-const short *NextLineRaw(const String16Piece &text, bool final=0, int *outlen=0);
-const char  *NextProto  (const StringPiece   &text, bool final=0, int *outlen=0);
-template <class X>       X *NextChar(      X *text, int (*ischar)(int),                      int len=-1, int *outlen=0);
-template <class X> const X *NextChar(const X *text, int (*ischar)(int),                      int len=-1, int *outlen=0);
-template <class X>       X *NextChar(      X *text, int (*ischar)(int), int (*isquote)(int), int len=-1, int *outlen=0);
-template <class X> const X *NextChar(const X *text, int (*ischar)(int), int (*isquote)(int), int len=-1, int *outlen=0);
-template <class X> int  LengthChar(const StringPieceT<X> &text, int (*ischar)(int));
-template <class X> int RLengthChar(const StringPieceT<X> &text, int (*ischar)(int));
-
-int Split(const char   *in, int (*ischar)(int), string *left, string *right);
-int Split(const string &in, int (*ischar)(int), string *left, string *right);
-void Join(string *out, const vector<string> &in);
-void Join(string *out, const vector<string> &in, int inB, int inE);
-string Join(const vector<string> &strs, const string &separator);
-string Join(const vector<string> &strs, const string &separator, int beg_ind, int end_ind);
-string strip(const char *s, int (*stripchar)(int), int (*stripchar2)(int)=0);
-string togrep(const char *s, int (*grepchar)(int), int (*grepchar2)(int)=0);
-string   toconvert(const char     *text, int (*tochar)(int), int (*ischar)(int)=0);
-string   toconvert(const string   &text, int (*tochar)(int), int (*ischar)(int)=0);
-String16 toconvert(const short    *text, int (*tochar)(int), int (*ischar)(int)=0);
-String16 toconvert(const String16 &text, int (*tochar)(int), int (*ischar)(int)=0);
-string   toupper(const char     *text);
-string   toupper(const string   &text);
-String16 toupper(const short    *text);
-String16 toupper(const String16 &text);
-string   tolower(const char     *text);
-string   tolower(const string   &text);
-String16 tolower(const short    *text);
-String16 tolower(const String16 &text);
-string CHexEscape(const string &text);
-
+timeval Time2timeval(Time x);
 void localtm(time_t, struct tm *t);
 void GMTtm(time_t, struct tm *t);
 string logtime(Time t);
@@ -740,13 +280,6 @@ Time SinceDayBegan(Time, int gmt_offset_hrs);
 const char *LocalTimeZone(Time t=0);
 bool IsDaylightSavings(Time t=0);
 
-struct NullAlloc : public Allocator {
-    const char *Name() { return "NullAlloc"; }
-    void *Malloc(int size) { return 0; }
-    void *Realloc(void *p, int size) { return 0; }
-    void Free(void *p) {}
-};
-
 struct MallocAlloc : public Allocator {
     const char *Name() { return "MallocAlloc"; }
     void *Malloc(int size);
@@ -757,7 +290,7 @@ struct MallocAlloc : public Allocator {
 struct NewAlloc : public Allocator {
     const char *Name() { return "NewAlloc"; }
     void *Malloc(int size) { return new char[size]; }
-    void *Realloc(void *p, int size) { return !p ? malloc(size) : 0; }
+    void *Realloc(void *p, int size) { return !p ? Malloc(size) : 0; }
     void Free(void *p) { delete [] (char *)p; }
 };
 
@@ -799,6 +332,45 @@ struct BlockChainAlloc : public Allocator {
     void *Realloc(void *p, int n) { if (p) FATAL("BlockAlloc::realoc(", p, ", ", n, ")"); return this->Malloc(n); }
     void *Malloc(int n);
     void Free(void *p) {}
+};
+
+struct Flag {
+    const char *name, *desc, *file;
+    int line; bool override;
+    Flag(const char *N, const char *D, const char *F, int L) : name(N), desc(D), file(F), line(L), override(0) {}
+    virtual ~Flag() {}
+
+    string GetString() const;
+    virtual string Get() const = 0;
+    virtual bool IsBool() const = 0;
+    virtual void Update(const char *text) = 0;
+};
+
+struct FlagMap {
+    typedef map<string, Flag*> AllFlags;
+    const char *optarg=0; int optind=0;
+    AllFlags flagmap;
+    bool dirty=0;
+    FlagMap() {}
+
+    int getopt(int argc, const char **argv, const char *source_filename);
+    void Add(Flag *f) { flagmap[f->name] = f; }
+    bool Set(const string &k, const string &v);
+    bool IsBool(const string &k) const;
+    string Get(const string &k) const;
+    string Match(const string &k, const char *source_filename=0) const;
+    void Print(const char *source_filename=0) const;
+};
+
+template <class X> struct FlagOfType : public Flag {
+    X *v;
+    virtual ~FlagOfType() {}
+    FlagOfType(const char *N, const char *D, const char *F, int L, X *V)
+        : Flag(N, D, F, L), v(V) { Singleton<FlagMap>::Get()->Add(this); } 
+
+    string Get() const { return ToString(*v); }
+    bool IsBool() const { return TypeId<X>() == TypeId<bool>(); }
+    void Update(const char *text) { if (text) *v = Scannable::Scan(*v, text); }
 };
 
 struct ThreadLocalStorage {
@@ -857,229 +429,6 @@ struct NTService {
     static int WrapMain (const char *name, MainCB main_cb, int argc, const char **argv);
 };
 
-struct MIMEType {
-    static bool Jpg(const string &mt) { return mt == "image/jpg" || mt == "image/jpeg"; }
-    static bool Png(const string &mt) { return mt == "image/png"; }
-};
-
-struct FileSuffix {
-    static bool HTML (const string &url) { return SuffixMatch(url, ".html", 0) || SuffixMatch(url, ".txt", 0); }
-    static bool Image(const string &url) { return Jpg(url) || Png(url) || Gif(url) || Bmp(url); }
-    static bool Jpg  (const string &url) { return SuffixMatch(url, ".jpg", 0) || SuffixMatch(url, ".jpeg", 0); }
-    static bool Png  (const string &url) { return SuffixMatch(url, ".png", 0); }
-    static bool Gif  (const string &url) { return SuffixMatch(url, ".gif", 0); }
-    static bool Bmp  (const string &url) { return SuffixMatch(url, ".bmp", 0); }
-};
-
-struct File {
-    virtual ~File() {}
-    virtual bool Opened() = 0;
-    virtual void Close() = 0;
-    virtual bool Open(const string &path, const string &mode, bool pre_create=0) = 0;
-    virtual const char *Filename() const = 0;
-    virtual int Size() = 0;
-    virtual void Reset() = 0;
-
-    struct Whence { enum { SET=SEEK_SET, CUR=SEEK_CUR, END=SEEK_END }; int x; };
-    virtual long long Seek(long long offset, int whence) = 0;
-    virtual int Read(void *buf, size_t size) = 0;
-    virtual int Write(const void *buf, size_t size=-1) = 0;
-    virtual bool Flush() { return false; }
-
-    struct NextRecord { 
-        string buf;
-        bool buf_dirty;
-        int buf_offset, file_offset, record_offset, record_len;
-        NextRecord() { Reset(); }
-        void Reset() { buf.clear(); buf_dirty = 0; buf_offset = file_offset = record_offset = record_len = 0; }
-        void SetFileOffset(int v) { file_offset = v; buf_dirty = 1; }
-        typedef const char* (*NextRecordCB)(const StringPiece&, bool, int *);
-        const char *GetNextRecord(File *f, int *offset, int *nextoffset, NextRecordCB cb); 
-    } nr;
-
-    string Contents();
-    const char *NextLine   (int *offset=0, int *nextoffset=0);
-    const char *NextLineRaw(int *offset=0, int *nextoffset=0);
-    const char *NextChunk  (int *offset=0, int *nextoffset=0);
-    const char *NextProto  (int *offset=0, int *nextoffset=0, ProtoHeader *phout=0);
-
-    int Write(const string &b) { return Write(b.c_str(), b.size()); }
-    int WriteProto(ProtoHeader *hdr, const Proto *msg, bool flush=0);
-    int WriteProto(const ProtoHeader *hdr, const Proto *msg, bool flush=0);
-    int WriteProtoFlag(const ProtoHeader *hdr, bool flush=0);
-
-    static bool ReadSuccess(File *f, void *out, int len) { return f->Read(out, len) == len; }
-    static bool SeekSuccess(File *f, long long pos) { return f->Seek(pos, Whence::SET) == pos; }
-    static bool SeekReadSuccess(File *f, long long pos, void *out, int len) { return SeekSuccess(f, pos) ? ReadSuccess(f, out, len) : false; }
-};
-
-struct BufferFile : public File {
-    string buf, fn;
-    int rdo, wro;
-    BufferFile(const string &s, const char *FN=0) : buf(s), fn(FN?FN:""), rdo(0), wro(0) {}
-    ~BufferFile() { Close(); }
-
-    bool Opened() { return true; }
-    bool Open(const string &path, const string &mode, bool pre_create=0) { return false; }
-    const char *Filename() const { return fn.c_str(); }
-    int Size() { return buf.size(); }
-    void Reset() { rdo=wro=0; nr.Reset(); }
-    void Close() { buf.clear(); Reset(); }
-
-    long long Seek(long long pos, int whence);
-    int Read(void *out, size_t size);
-    int Write(const void *in, size_t size=-1);
-};
-
-struct LocalFile : public File {
-    void *impl;
-    string fn;
-    bool writable;
-    virtual ~LocalFile() { Close(); }
-    LocalFile() : impl(0), writable(0) {}
-    LocalFile(const string &path, const string &mode, bool pre_create=0) : impl(0) { Open(path, mode, pre_create); }
-    static int WhenceMap(int n);
-
-    static const char Slash;
-    static bool mkdir(const string &dir, int mode);
-    static int IsDirectory(const string &localfilename);
-    static string CurrentDirectory(int max_size=1024);
-    static string FileContents(const string &localfilename) { return LocalFile(localfilename, "r").Contents(); }
-    static int WriteFile(const string &path, const StringPiece &sp) {
-        LocalFile file(path, "w");
-        return file.Opened() ? file.Write(sp.data(), sp.size()) : -1;
-    }
-
-    bool Opened() { return impl; }
-    bool Open(const string &path, const string &mode, bool pre_create=0);
-    const char *Filename() const { return fn.c_str(); }
-    int Size();
-    void Reset();
-    void Close();
-
-    long long Seek(long long pos, int whence);
-    int Read(void *buf, size_t size);
-    int Write(const void *buf, size_t size=-1);
-    bool Flush();
-};
-
-template <class X> struct IterT {
-    virtual ~IterT() {}
-    virtual void Reset() {}
-    virtual const X *Next() = 0;
-    template <class Y> void ScanN(Y *out, int N)
-    { for (int i=0; i<N; i++) { const X *v=Next(); out[i] = v ? Scannable::Scan(Y(), v): 0; } }
-};
-typedef IterT<char> Iter;
-
-struct DirectoryIter : public Iter {
-    typedef map<string, int> Map;
-    string pathname;
-    Map filemap;
-    Map::iterator iter;
-    const char *P, *S;
-    bool init;
-    DirectoryIter() : P(0), S(0), init(0) {}
-    DirectoryIter(const string &path, int dirs=0, const char *FilePrefix=0, const char *FileSuffix=0);
-    const char *Next();
-    static void Add(void *self, const char *k, int v) { ((DirectoryIter*)self)->filemap[k] = v; }
-};
-
-struct FileLineIter : public Iter {
-    File *f;
-    FileLineIter(File *F) : f(F) {}
-    const char *Next() { return f->NextLine(); }
-    void Reset() { f->Reset(); }
-};
-
-struct LocalFileLineIter : public Iter {
-    LocalFile f;
-    LocalFileLineIter(const string &path) : f(path, "r") {};
-    const char *Next() { return f.NextLine(); }
-    void Reset() { f.Reset(); }
-};
-   
-struct BufferFileLineIter : public Iter {
-    BufferFile f;
-    BufferFileLineIter(const string &s) : f(s) {};
-    const char *Next() { return f.NextLine(); }
-    void Reset() { f.Reset(); }
-};
-
-template <class X> struct StringLineIterT : public IterT<X> {
-    struct Flag { enum { BlankLines=1, InPlace=2 }; };
-    const X *in;
-    basic_string<X> buf;
-    int len, linelen, offset, flag; bool first;
-    StringLineIterT(const StringPieceT<X> &B, int F=0) : in(B.buf), len(B.len), linelen(0), offset(0),  flag(F), first(1) {}
-    StringLineIterT()                                  : in(0),     len(0),     linelen(0), offset(-1), flag(0), first(0) {}
-    const X *Next();
-};
-typedef StringLineIterT<char>  StringLineIter;
-typedef StringLineIterT<short> StringLine16Iter;
-
-template <class X> struct StringWordIterT : public IterT<X> {
-    struct Flag { enum { BlankLines=1, InPlace=2 }; };
-    const X *in;
-    basic_string<X> buf;
-    int len, wordlen, offset, (*IsSpace)(int), (*IsQuote)(int), flag; 
-    StringWordIterT(const StringPieceT<X> &B, int (*IsSpace)(int)=0, int(*IsQuote)(int)=0, int Flag=0);
-    StringWordIterT() : in(0), len(0), wordlen(0), offset(0), IsSpace(0), flag(0) {};
-
-    const X *Next();
-    const X *Remaining();
-    void SkipSpace();
-};
-typedef StringWordIterT<char>  StringWordIter;
-typedef StringWordIterT<short> StringWord16Iter;
-
-struct IterWordIter : public Iter {
-    Iter *iter;
-    StringWordIter word;
-    int line_count;
-    bool own_iter;
-    ~IterWordIter() { if (own_iter) delete iter; }
-    IterWordIter(Iter *i, bool owner=false) : iter(i), line_count(0), own_iter(owner) {};
-    void Reset() { if (iter) iter->Reset(); line_count=0; }
-    const char *Next();
-};
-
-struct ArchiveIter : public Iter {
-    void *impl, *entry, *dat;
-    ArchiveIter(const char *path);
-    ArchiveIter(){};
-    ~ArchiveIter();
-    void Skip();
-    const char *Next();
-    long long Size();
-    const void *Data();
-};
-
-template <class X, class Y> int Split(const X *in, int (*ischar)(int), int (*isquote)(int), vector<Y> *out) {
-    out->clear(); if (!in) return 0;
-    StringWordIterT<X> words(in, ischar, isquote);
-    for (const X *word = words.Next(); word; word = words.Next()) out->push_back(Scannable::Scan(Y(), word));
-    return out->size();
-}
-template <class X> int Split(const string   &in, int (*ischar)(int), int (*isquote)(int), vector<X> *out) { return Split<char,  X>(in.c_str(), ischar, isquote, out); }
-template <class X> int Split(const string   &in, int (*ischar)(int),                      vector<X> *out) { return Split<char,  X>(in.c_str(), ischar, NULL,    out); }
-template <class X> int Split(const char     *in, int (*ischar)(int), int (*isquote)(int), vector<X> *out) { return Split<char,  X>(in, ischar, isquote, out); }
-template <class X> int Split(const char     *in, int (*ischar)(int),                      vector<X> *out) { return Split<char,  X>(in, ischar, NULL,    out); }
-template <class X> int Split(const String16 &in, int (*ischar)(int), int (*isquote)(int), vector<X> *out) { return Split<short, X>(in.c_str(), ischar, isquote, out); }
-template <class X> int Split(const String16 &in, int (*ischar)(int),                      vector<X> *out) { return Split<short, X>(in.c_str(), ischar, NULL,    out); }
-template <class X> int Split(const short    *in, int (*ischar)(int), int (*isquote)(int), vector<X> *out) { return Split<short, X>(in, ischar, isquote, out); }
-template <class X> int Split(const short    *in, int (*ischar)(int),                      vector<X> *out) { return Split<short, X>(in, ischar, NULL,    out); }
-
-template <class X> int Split(const char   *in, int (*ischar)(int), int (*isquote)(int), set<X> *out) {
-    out->clear(); if (!in) return 0;
-    StringWordIter words(in, ischar, isquote);
-    for (const char *word = words.Next(); word; word = words.Next()) out->insert(Scannable::Scan(X(), word));
-    return out->size();
-}
-template <class X> int Split(const char   *in, int (*ischar)(int),                      set<X> *out) { return Split(in, ischar, NULL, out); }
-template <class X> int Split(const string &in, int (*ischar)(int), int (*isquote)(int), set<X> *out) { return Split(in.c_str(), ischar, isquote, out); }
-template <class X> int Split(const string &in, int (*ischar)(int),                      set<X> *out) { return Split(in, ischar, NULL, out); }
-
 struct Timer {
     Time begin;
     Timer() { Reset(); }
@@ -1108,49 +457,9 @@ struct PerformanceTimers {
     string DebugString() const { string v; for (auto &t : timers) StrAppend(&v, t.name, " ", t.time / 1000.0, "\n"); return v; }
 };
 
-struct Regex {
-    struct Result {
-        int begin, end;
-        Result(int B=0, int E=0) : begin(B), end(E) {}
-        string Text(const string &t) const { return t.substr(begin, end - begin); }
-        float FloatVal(const string &t) const { return atof(Text(t).c_str()); }
-    };
-    void *impl=0;
-    ~Regex();
-    Regex() {}
-    Regex(const string &pattern);
-    int Match(const string &text, vector<Result> *out);
-};
-
-struct StreamRegex {
-    void *prog=0, *ctx=0, *ppool=0, *cpool=0;
-    int last_end=0, since_last_end=0;
-    vector<intptr_t> res;
-    ~StreamRegex();
-    StreamRegex(const string &pattern);
-    int Match(const string &text, vector<Regex::Result> *out, bool eof=0);
-};
-
-struct Base64 {
-    Base64();
-    string encoding_table, decoding_table; int mod_table[3];
-    string Encode(const char *in,   size_t input_length);
-    string Decode(const char *data, size_t input_length);
-};
-
 struct Crypto {
     string MD5(const string &in);
     string Blowfish(const string &passphrase, const string &in, bool encrypt_or_decrypt);
-};
-
-struct GraphViz {
-    static string DigraphHeader(const string &name);
-    static string NodeColor(const string &s);
-    static string NodeShape(const string &s);
-    static string NodeStyle(const string &s);
-    static string Footer();
-    static void AppendNode(string *out, const string &n1, const string &label=string());
-    static void AppendEdge(string *out, const string &n1, const string &n2, const string &label=string());
 };
 
 struct Module {
@@ -1165,8 +474,6 @@ typedef function<int (Window*, unsigned, unsigned, bool, int)> FrameCB;
 void DefaultLFAppWindowClosedCB(Window *);
 }; // namespace LFL
 
-#include "lfapp/math.h"
-#include "lfapp/lftypes.h"
 #include "lfapp/audio.h"
 #include "lfapp/video.h"
 #include "lfapp/font.h"
@@ -1252,7 +559,7 @@ struct FrameRateLimitter {
 struct FrameScheduler {
     FrameRateLimitter maxfps;
     mutex frame_mutex, wait_mutex;
-    SelectSocketThread select_thread;
+    SocketWakeupThread wakeup_thread;
     bool rate_limit = 1, wait_forever = 1, wait_forever_thread = 1, synchronize_waits = 1, monolithic_frame = 1;
     FrameScheduler();
 
@@ -1306,7 +613,7 @@ struct Advertising { static void ShowAds(); static void HideAds(); };
 struct CUDA : public Module { int Init(); };
 
 struct Application : public ::LFApp, public Module {
-    string progname, logfilename, startdir;
+    string progname, logfilename, startdir, dldir, assetdir;
     FILE *logfile=0;
     mutex log_mutex;
     Time time_started;
@@ -1348,11 +655,6 @@ struct Application : public ::LFApp, public Module {
     int Exiting();
 };
 extern Application *app;
-
-DECLARE_bool(open_console);
-DECLARE_bool(max_rlimit_core);
-DECLARE_bool(max_rlimit_open_files);
-
 }; // namespace LFL
 
 #if defined(LFL_QT)
@@ -1365,4 +667,4 @@ DECLARE_bool(max_rlimit_open_files);
 
 extern "C" int main(int argc, const char **argv);
 
-#endif
+#endif // __LFL_LFAPP_LFAPP_H__

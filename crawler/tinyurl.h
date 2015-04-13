@@ -30,7 +30,7 @@ struct URLShortener {
         Query(const string &N, const string &I, const string &O, const vector<string> &S)
             : name(N), in(I), out(O), subscribers(S), state(0), done(false)
         {
-            string url = "http://tinyurl.com/create.php?url=" + HTTP::encodeURL(in.c_str());
+            string url = "http://tinyurl.com/create.php?url=" + HTTP::EncodeURL(in.c_str());
             if (!Singleton<HTTPClient>::Get()->WGet
                 (url, 0, HTTPClient::ResponseCB(bind(&HTMLParser::WGetCB, this, _1, _2, _3, _4, _5))))
             { ERROR("wget ", 0); return; }

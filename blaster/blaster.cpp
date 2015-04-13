@@ -297,7 +297,7 @@ struct BulkMailer {
                 (addr, &src_pool,
                  SMTPClient::DeliverableCB(bind(&Target::DeliverableCB, tc->target, _1, tc, _2, _3)),
                  SMTPClient::DeliveredCB  (bind(&Target::DeliveredCB,   tc->target, _1, tc, _2, _3, _4)));
-            if (!c) { ERROR("DeliverTo ", IPV4Endpoint::name(addr), " failed"); LostConnection(0, tc); }
+            if (!c) { ERROR("DeliverTo ", IPV4::Text(addr), " failed"); LostConnection(0, tc); }
             else {
                 conns[c] = tc;
                 tc->Connected(c);
@@ -311,12 +311,12 @@ struct BulkMailer {
                 long long delivered = tc->NumDelivered(), rejected = tc->NumRejected(); 
                 if (!tc->FirstDelivery()) tc->target->deliverable_conns--;
 
-                INFO("Closing ", c->name(), " after ", intervaltime(interval), " delivered=", delivered,
+                INFO("Closing ", c->Name(), " after ", intervaltime(interval), " delivered=", delivered,
                      ", rejected=", rejected, ", QPS=", (delivered + rejected) / static_cast<float>(Time2time_t(interval)),
                      ", target_deliverable_conns=", tc->target->deliverable_conns);
 
-                if (!               conns.erase(c)) ERROR(tc->target->DebugString(),    " missing ", c->name());
-                if (!tc->target_mx->conns.erase(c)) ERROR(tc->target->DebugString(), " mx missing ", c->name());
+                if (!               conns.erase(c)) ERROR(tc->target->DebugString(),    " missing ", c->Name());
+                if (!tc->target_mx->conns.erase(c)) ERROR(tc->target->DebugString(), " mx missing ", c->Name());
             }
             if (!email.size())                    { delete tc; if (c && !conns.size()) parent->Done  (this); return; }
             if (tc->NextAddress() >= Addresses()) { delete tc; if (c && !conns.size()) parent->Failed(this); return; }
@@ -337,7 +337,7 @@ struct BulkMailer {
         static bool SortPointers(const Target *l, const Target *r) { return *l < *r; }
 
         bool DeliverableCB(Connection *c, TargetConnection *tc, const string &helo_domain, SMTP::Message *out) {
-            if (!out) { ERROR("lost connection to ", c->name()); LostConnection(c, tc); return true; }
+            if (!out) { ERROR("lost connection to ", c->Name()); LostConnection(c, tc); return true; }
 
             tc->retrying = (FLAGS_max_messages_per_connection && tc->NumDelivered() >= FLAGS_max_messages_per_connection);
             if (!email.size() || tc->retrying) return true;
@@ -379,8 +379,8 @@ struct BulkMailer {
             CHECK_EQ(mail.rcpt_to.size(), 1);
             CHECK_EQ(delivery_mx_ip, c->addr);
 
-            string line = StrCat(logtime(Now()), " ", mail.rcpt_to[0], " (", mail.mail_from, " ", IPV4Endpoint::name(c->src_addr, c->src_port), ") ");
-            StrAppend(&line, FLAGS_configuration, " ", parent->template_name,  " ", delivery_mx_host, "=", IPV4Endpoint::name(delivery_mx_ip));
+            string line = StrCat(logtime(Now()), " ", mail.rcpt_to[0], " (", mail.mail_from, " ", IPV4::Text(c->src_addr, c->src_port), ") ");
+            StrAppend(&line, FLAGS_configuration, " ", parent->template_name,  " ", delivery_mx_host, "=", IPV4::Text(delivery_mx_ip));
             StrAppend(&line, " response: ", msg.size()?ReplaceNewlines(msg, "<EOL>"):"<Lost Connection>", "\r\n");
             out->Write(line);
             out->Flush();
@@ -442,7 +442,7 @@ struct BulkMailer {
 
                     map<IPV4::Addr, MX*>::const_iterator l = MXIPs.find(*k);
                     if (l != MXIPs.end() && l->second != mx) {
-                        INFO(IPV4Endpoint::name(*k), " belongs to multiple MX-address-sets, (",
+                        INFO(IPV4::Text(*k), " belongs to multiple MX-address-sets, (",
                              l->second->DebugString(), ") and (", mx->DebugString(), "), ", 
                              i->second->user.size(), " targets affected");
                     }
@@ -668,7 +668,7 @@ int main(int argc, const char **argv) {
     else {
         set<IPV4::Addr> ips; IPV4::ParseCSV(FLAGS_ip_address, &ips);
         for (set<IPV4::Addr>::const_iterator i = ips.begin(); i != ips.end(); ++i)
-            smtp->domains[*i] = Network::GetHostByAddr(*i);
+            smtp->domains[*i] = SystemNetwork::GetHostByAddr(*i);
         CHECK_GT(smtp->domains.size(), 0);
         smtp->domains[IPV4::Parse("0.0.0.0")  ] = "localhost";
         smtp->domains[IPV4::Parse("127.0.0.1")] = "localhost";

@@ -108,7 +108,7 @@ struct Game {
 #endif
     struct UDPNetwork : public Network {
         virtual int Write(Connection *c, int method, const char *buf, int len) {
-            return method == UDPClient::Sendto ? c->sendto(buf, len) : c->writeflush(buf, len);
+            return method == UDPClient::Sendto ? c->SendTo(buf, len) : c->WriteFlush(buf, len);
         }
         virtual void WriteWithRetry(ReliableNetwork *reliable, Connection *c, Serializable *req, unsigned short seq) {
             return reliable->WriteWithRetry(c, req, seq);
@@ -451,7 +451,7 @@ struct GameServer : public Query {
         c->query = 0;
         if (!cd->team) return;
 
-        INFO(c->name(), ": ", cd->playerName.c_str(), " left");
+        INFO(c->Name(), ": ", cd->playerName.c_str(), " left");
         Game::Protocol::RconRequest print(StrCat("print *** ", cd->playerName, " left"));
         BroadcastWithRetry(&print, c);
     }
@@ -472,9 +472,9 @@ struct GameServer : public Query {
         // echo "ping" | nc -u 127.0.0.1 27640
         static string ping="ping\n";
         if (in.size == ping.size() && in.buf == ping) {
-            INFO(c->name(), ": ping");
+            INFO(c->Name(), ": ping");
             string pong = StrCat("map=default\nname=", local_game_name, "\nplayers=", last.num_send_WorldUpdate, "/24\n");
-            c->sendto(pong.data(), pong.size());
+            c->SendTo(pong.data(), pong.size());
         }
 #define game_protocol_request_type(Request) ((Game::Protocol::Request*)0)->Game::Protocol::Request::Type()
 #       define elif_parse(Request, in) \
@@ -486,7 +486,7 @@ struct GameServer : public Query {
         elif_parse(PlayerUpdate, in)
         elif_parse(RconRequest, in)
         elif_parse(RconResponse, in)
-        else ERROR(c->name(), ": parse failed: unknown type ", hdr.id);
+        else ERROR(c->Name(), ": parse failed: unknown type ", hdr.id);
         return 0;
     }
 
@@ -570,7 +570,7 @@ struct GameServer : public Query {
         Write(c, UDPClient::Sendto, hdr->seq, &response);
 
         Game::Protocol::RconRequest rcon_broadcast;
-        INFO(c->name(), ": ", cd->playerName, rejoin?" re":" ", "joins, entity_id=", e->name);
+        INFO(c->Name(), ": ", cd->playerName, rejoin?" re":" ", "joins, entity_id=", e->name);
         if (world->JoinedRcon(cd, e, &rcon_broadcast.Text)) BroadcastWithRetry(&rcon_broadcast);
     }
     void PlayerUpdateCB(Connection *c, Game::Protocol::Header *hdr, Game::Protocol::PlayerUpdate *pup) {
@@ -675,10 +675,10 @@ struct GameUDPServer : public UDPServer {
             response.token = Hash(c);
             string buf;
             response.ToString(&buf, hdr.seq);
-            c->sendto(buf.data(), buf.size());
+            c->SendTo(buf.data(), buf.size());
         } else if (hdr.id == game_protocol_request_type(JoinRequest) && !join.Read(&in)) {
             if (join.token == Hash(c)) return 0;
-        } else ERROR(c->name(), ": parse failed: unknown type ", hdr.id, " bytes ", in.size);
+        } else ERROR(c->Name(), ": parse failed: unknown type ", hdr.id, " bytes ", in.size);
         return 1;
     }
 };
@@ -761,7 +761,7 @@ struct GameClient {
         INFO("me = ", e ? e->name : "");
     }
 
-    void Reset() { if (conn) conn->_error(); conn=0; seq=0; entity_id=0; team=0; cam=1; reorienting=1; net=0; retry.Clear(); last.id_WorldUpdate=last.seq_WorldUpdate=0; replay.disable(); gameover.disable(); }
+    void Reset() { if (conn) conn->SetError(); conn=0; seq=0; entity_id=0; team=0; cam=1; reorienting=1; net=0; retry.Clear(); last.id_WorldUpdate=last.seq_WorldUpdate=0; replay.disable(); gameover.disable(); }
     bool Connected() { return conn && conn->state == Connection::Connected; }
     int Connect(const string &url, int default_port) {
         Reset();
@@ -794,7 +794,7 @@ struct GameClient {
     }
     void Read(Connection *c, const char *content, int content_length) {
         if (c != conn) return;
-        if (!content) { INFO(c->name(), ": close"); Reset(); return; }
+        if (!content) { INFO(c->Name(), ": close"); Reset(); return; }
 
         Serializable::ConstStream in(content, content_length);
         Game::Protocol::Header hdr;
@@ -1084,7 +1084,7 @@ struct GameMenuGUI : public GUI, public Query {
 #endif
         pinger.query = this;
         app->network.Enable(&pinger);
-        SystemNetwork::SetSocketBroadcastEnabled(pinger.listener()->socket, true);
+        SystemNetwork::SetSocketBroadcastEnabled(pinger.GetListener()->socket, true);
         Sniffer::GetIPAddress(&ip);
         Sniffer::GetBroadcastAddress(&broadcast_ip);
     }
@@ -1111,12 +1111,12 @@ struct GameMenuGUI : public GUI, public Query {
     }
     void MenuAddServer(const string &text) {
         int delim = text.find(':');
-        if (delim != string::npos) SystemNetwork::SendTo(pinger.listener()->socket, SystemNetwork::GetHostByName(text.substr(0, delim)),
+        if (delim != string::npos) SystemNetwork::SendTo(pinger.GetListener()->socket, SystemNetwork::GetHostByName(text.substr(0, delim)),
                                                          atoi(text.c_str()+delim+1), "ping\n", 5);
     }
 
     void Refresh() { 
-        if (broadcast_ip) SystemNetwork::SendTo(pinger.listener()->socket, broadcast_ip, default_port, "ping\n", 5);
+        if (broadcast_ip) SystemNetwork::SendTo(pinger.GetListener()->socket, broadcast_ip, default_port, "ping\n", 5);
         if (!master_get_url.empty()) Singleton<HTTPClient>::Get()->WGet(master_get_url.c_str(), 0, bind(&GameMenuGUI::MasterGetResponseCB, this, _1, _2, _3, _4, _5));
         master_server_list.clear(); master_server_selected=-1;
     }
@@ -1126,7 +1126,7 @@ struct GameMenuGUI : public GUI, public Query {
         StringLineIter lines(servers);
         for (const char *p, *l = lines.Next(); l; l = lines.Next()) {
             if (!(p = strchr(l, ':'))) continue;
-            SystemNetwork::SendTo(pinger.listener()->socket, IPV4::Parse(string(l, p-l)), atoi(p+1), "ping\n", 5);
+            SystemNetwork::SendTo(pinger.GetListener()->socket, IPV4::Parse(string(l, p-l)), atoi(p+1), "ping\n", 5);
         }
     }
     void Close(Connection *c) { c->query=0; }
@@ -1147,7 +1147,7 @@ struct GameMenuGUI : public GUI, public Query {
             if      (k == "name")    name    = v;
             else if (k == "players") players = v;
         }
-        Server s = { c->name(), StrCat(name, (c->addr & broadcast_ip) == c->addr ? " (local)" : ""), players };
+        Server s = { c->Name(), StrCat(name, (c->addr & broadcast_ip) == c->addr ? " (local)" : ""), players };
         master_server_list.push_back(s);
     }
 

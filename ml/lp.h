@@ -31,17 +31,17 @@ struct LinearProgram {
 
     LinearProgram(File *f) {
         IterWordIter words(new FileLineIter(f), true);
-        words.ScanN(&M, 1);
-        words.ScanN(&N, 1);
+        IterScanN(&words, &M, 1);
+        IterScanN(&words, &N, 1);
         basic    .resize(M);
         non_basic.resize(N);
-        if (1)            words.ScanN(&    basic[0],     basic.size());
-        if (1)            words.ScanN(&non_basic[0], non_basic.size());
+        if (1)            IterScanN(&words, &    basic[0],     basic.size());
+        if (1)            IterScanN(&words, &non_basic[0], non_basic.size());
         InitVars();
-        MatrixRowIter(&B) words.ScanN( B    .row(i), 1);
-        MatrixRowIter(&A) words.ScanN( A    .row(i), N);
-        if (1)            words.ScanN(&Z0,           1);
-        MatrixRowIter(&C) words.ScanN( C    .row(i), 1);
+        MatrixRowIter(&B) IterScanN(&words,  B    .row(i), 1);
+        MatrixRowIter(&A) IterScanN(&words,  A    .row(i), N);
+        if (1)            IterScanN(&words, &Z0,           1);
+        MatrixRowIter(&C) IterScanN(&words,  C    .row(i), 1);
         objective = Z0;
     }
     LinearProgram(const LinearProgram &lp, int flag=0) {

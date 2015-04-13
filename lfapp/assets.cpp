@@ -747,10 +747,10 @@ struct AliasWavefrontObjLoader {
                 MtlMap::iterator it = MaterialMap.find(word.Next());
                 if (it != MaterialMap.end()) { mat = (*it).second; material = 1; }
             }
-            else if (!strcmp(cmd, "v" )) { word.ScanN(&xyz[0], 3);             vert.push_back(xyz); }
-            else if (!strcmp(cmd, "vn")) { word.ScanN(&xyz[0], 3); xyz.Norm(); norm.push_back(xyz); }
+            else if (!strcmp(cmd, "v" )) { IterScanN(&word, &xyz[0], 3);             vert.push_back(xyz); }
+            else if (!strcmp(cmd, "vn")) { IterScanN(&word, &xyz[0], 3); xyz.Norm(); norm.push_back(xyz); }
             else if (!strcmp(cmd, "vt")) {
-                word.ScanN(&xy[0], 2);
+                IterScanN(&word, &xy[0], 2);
                 if (map_tex_coord) {
                     xy.x = map_tex_coord[Texture::CoordMinX] + xy.x * (map_tex_coord[Texture::CoordMaxX] - map_tex_coord[Texture::CoordMinX]);
                     xy.y = map_tex_coord[Texture::CoordMinY] + xy.y * (map_tex_coord[Texture::CoordMaxY] - map_tex_coord[Texture::CoordMinY]);
@@ -761,7 +761,7 @@ struct AliasWavefrontObjLoader {
                 vector<v3> face; 
                 for (const char *fi = word.Next(); fi; fi = word.Next()) {
                     StringWordIter indexword(fi, isint<'/'>);
-                    indexword.ScanN(ind, 3);
+                    IterScanN(&indexword, ind, 3);
 
                     int count = (ind[0]!=0) + (ind[1]!=0) + (ind[2]!=0);
                     if (!count) continue;
@@ -810,10 +810,10 @@ struct AliasWavefrontObjLoader {
             StringWordIter word(line);
             if (!(cmd = word.Next())) continue;
 
-            if      (!strcmp(cmd, "Ka")) word.ScanN(m.ambient .x, 4);
-            else if (!strcmp(cmd, "Kd")) word.ScanN(m.diffuse .x, 4);
-            else if (!strcmp(cmd, "Ks")) word.ScanN(m.specular.x, 4);
-            else if (!strcmp(cmd, "Ke")) word.ScanN(m.emissive.x, 4);
+            if      (!strcmp(cmd, "Ka")) IterScanN(&word, m.ambient .x, 4);
+            else if (!strcmp(cmd, "Kd")) IterScanN(&word, m.diffuse .x, 4);
+            else if (!strcmp(cmd, "Ks")) IterScanN(&word, m.specular.x, 4);
+            else if (!strcmp(cmd, "Ke")) IterScanN(&word, m.emissive.x, 4);
             else if (!strcmp(cmd, "newmtl")) {
                 if (name.size()) MaterialMap[name] = m;
                 name = word.Next();
@@ -863,7 +863,7 @@ string Geometry::ExportOBJ(const Geometry *geom, const set<int> *prim_filter, bo
 
 void Geometry::SetPosition(const float *v) {
     vector<float> delta(vd);
-    if (ArrayEquals(v, &last_position[0], vd)) return;
+    if (Vec<float>::Equals(v, &last_position[0], vd)) return;
     for (int j = 0; j<vd; j++) delta[j] = v[j] - last_position[j];
     for (int j = 0; j<vd; j++) last_position[j] = v[j];
     for (int i = 0; i<count; i++) for (int j = 0; j<vd; j++) vert[i*width+j] += delta[j];
@@ -917,8 +917,8 @@ void Asset::Unload() {
 void Asset::Load(void *h, VideoAssetLoader *l) {
     static int next_asset_type_id = 1, next_list_id = 1;
     if (!name.empty()) typeID = next_asset_type_id++;
-    if (!geom_fn.empty()) geometry = Geometry::LoadOBJ(StrCat(ASSETS_DIR, geom_fn));
-    if (!texture.empty() || h) LoadTexture(h, StrCat(ASSETS_DIR, texture), &tex, l);
+    if (!geom_fn.empty()) geometry = Geometry::LoadOBJ(StrCat(app->assetdir, geom_fn));
+    if (!texture.empty() || h) LoadTexture(h, StrCat(app->assetdir, texture), &tex, l);
 }
 
 void Asset::Load(const void *FromBuf, const char *filename, int size) {
@@ -967,7 +967,7 @@ void SoundAsset::Load(int Secs, bool unload) {
 
     if (!filename.empty()) {
         fn = filename;
-        if (fn.length() && isalpha(fn[0])) fn = ASSETS_DIR + fn;
+        if (fn.length() && isalpha(fn[0])) fn = app->assetdir + fn;
 
         handle = app->assets.default_audio_loader->LoadAudioFile(fn);
         if (!handle) ERROR("SoundAsset::Load ", fn);
@@ -986,7 +986,7 @@ void SoundAsset::Load(int Secs, bool unload) {
 int SoundAsset::Refill(int reset) { return app->assets.default_audio_loader->RefillAudio(this, reset); }
 
 void MovieAsset::Load(const char *fn) {
-    if (!fn || !(handle = app->assets.default_movie_loader->LoadMovieFile(StrCat(ASSETS_DIR, fn)))) return;
+    if (!fn || !(handle = app->assets.default_movie_loader->LoadMovieFile(StrCat(app->assetdir, fn)))) return;
     app->assets.default_movie_loader->LoadMovie(handle, this);
     audio.Load();
     video.Load();

@@ -395,8 +395,8 @@ struct OpenGLES2 : public GraphicsDevice {
     void Init() {
         // GetIntegerv(GL_FRAMEBUFFER_BINDING, &oldFBO);
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-        string vertex_shader = LocalFile::FileContents(StrCat(ASSETS_DIR, "lfapp_vertex.glsl"));
-        string pixel_shader  = LocalFile::FileContents(StrCat(ASSETS_DIR, "lfapp_pixel.glsl"));
+        string vertex_shader = LocalFile::FileContents(StrCat(app->assetdir, "lfapp_vertex.glsl"));
+        string pixel_shader  = LocalFile::FileContents(StrCat(app->assetdir, "lfapp_pixel.glsl"));
         Shader::Create("lfapp",          vertex_shader, pixel_shader, ShaderDefines(1,0,1,0), &app->video.shader_default);
         Shader::Create("lfapp_cubemap",  vertex_shader, pixel_shader, ShaderDefines(1,0,0,1), &app->video.shader_cubemap);
         Shader::Create("lfapp_normals",  vertex_shader, pixel_shader, ShaderDefines(0,1,1,0), &app->video.shader_normals);
@@ -1106,7 +1106,7 @@ bool Window::Create(Window *W) {
     else if (!(W->gl = SDL_GL_CreateContext((SDL_Window*)W->id)))
     { ERROR("SDL_GL_CreateContext: ", SDL_GetError()); return false; } 
 
-    SDL_Surface* icon = SDL_LoadBMP(StrCat(ASSETS_DIR, "icon.bmp").c_str());
+    SDL_Surface* icon = SDL_LoadBMP(StrCat(app->assetdir, "icon.bmp").c_str());
     SDL_SetWindowIcon((SDL_Window*)W->id, icon);
 
     Window::active[(void*)(long)SDL_GetWindowID((SDL_Window*)W->id)] = W;
