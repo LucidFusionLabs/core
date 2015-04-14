@@ -39,7 +39,7 @@ struct Phoneme {
 struct PronunciationDict {
     typedef map<string, int> Map;
     Map word_pronunciation;
-    ReallocHeap val;
+    StringAlloc val;
 
     static PronunciationDict *instance();
     static int readDictionary(Iter *in, PronunciationDict *out);

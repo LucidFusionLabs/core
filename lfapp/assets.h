@@ -64,6 +64,21 @@ struct Geometry {
     static string ExportOBJ(const Geometry *geometry, const set<int> *prim_filter=0, bool prim_filter_invert=0);
 };
 
+template <class X> struct AssetMapT {
+    bool loaded;
+    vector<X> vec;
+    map<string, X*> amap;
+    AssetMapT() : loaded(0) {}
+    void Add(const X &a) { CHECK(!loaded); vec.push_back(a); }
+    void Unloaded(X *a) { if (!a->name.empty()) amap.erase(a->name); }
+    void Load(X *a) { a->parent = this; if (!a->name.empty()) amap[a->name] = a; a->Load(); }
+    void Load() { CHECK(!loaded); for (int i=0; i<vec.size(); i++) Load(&vec[i]); loaded=1; }
+    X *operator()(const string &an) { return FindOrNull(amap, an); }
+};
+typedef AssetMapT<     Asset>      AssetMap;
+typedef AssetMapT<SoundAsset> SoundAssetMap;
+typedef AssetMapT<MovieAsset> MovieAssetMap;
+
 struct Asset {
     typedef function<void(Asset*, Entity*)> DrawCB;
 

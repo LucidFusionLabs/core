@@ -107,6 +107,7 @@ struct LocalFile : public File {
     static bool mkdir(const string &dir, int mode);
     static int IsDirectory(const string &localfilename);
     static string CurrentDirectory(int max_size=1024);
+    static string JoinPath(const string &x, const string &y);
     static string FileContents(const string &localfilename) { return LocalFile(localfilename, "r").Contents(); }
     static int WriteFile(const string &path, const StringPiece &sp) {
         LocalFile file(path, "w");

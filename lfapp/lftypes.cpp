@@ -32,25 +32,6 @@
 #endif
 
 namespace LFL {
-ReallocHeap::ReallocHeap(int startSize) : heap(0), size(startSize), len(0) {}
-ReallocHeap::~ReallocHeap() { free(heap); }
-
-int ReallocHeap::Alloc(int bytes) {
-    int ret=len, reallocB=!heap, newSize=len+bytes;
-    if (!size) {
-        if (!heap) size=65536;
-        else FATAL("corrupt heap %p %d %d", heap, len, size);
-    }
-    while (size < newSize) { size *= 2; reallocB=1; }
-    if (reallocB) {
-        char *h = (char*)realloc(heap, size);
-        if (!h) return -1;
-        heap = h;
-    }
-    len += bytes;
-    return ret;
-}
-
 void RingBuf::Resize(int SPS, int SPB, int Width) {
     if (SPS != samplesPerSec || SPB != ring.size || Width != width) { 
         ring.size = SPB;
@@ -99,5 +80,4 @@ void RingBuf::Handle::CopyFrom(const RingBuf::Handle *src) {
     for (int i=0; i<N; i++) Write(src->Read(-N+i));
     for (int i=0; i<B; i++) Write(0.0);
 }
-
 }; // namespace LFL

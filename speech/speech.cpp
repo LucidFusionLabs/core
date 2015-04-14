@@ -81,8 +81,8 @@ int PronunciationDict::readDictionary(Iter *in, PronunciationDict *out) {
         int offset = out->val.Alloc(phones*2+1);
         out->word_pronunciation[word] = offset;
 
-        memcpy(&out->val.heap[offset], phone, phones+1);
-        memcpy(&out->val.heap[offset+phones+1], accent, phones);
+        memcpy(&out->val.buf[offset], phone, phones+1);
+        memcpy(&out->val.buf[offset+phones+1], accent, phones);
     }
     return 0;
 }
@@ -108,7 +108,7 @@ const char *PronunciationDict::pronounce(const char *in) {
     Map::iterator i = word_pronunciation.find(toupper(in));
     if (i == word_pronunciation.end()) return 0;
     int pronunciationIndex = (*i).second;
-    return &val.heap[pronunciationIndex];
+    return &val.buf[pronunciationIndex];
 }
 
 int PronunciationDict::pronounce(const char *utterance, const char **w, const char **wa, int *phones, int max) {

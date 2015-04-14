@@ -27,9 +27,9 @@ struct SpaceballSettings : public GameSettings {
     static const int CONTROL_TEAM=0, CONTROL_PLAYER=1;
     static const int PLAYERS_SINGLE=0, PLAYERS_MULTIPLE=1;
     SpaceballSettings() {
-        vec.push_back(Setting("Game Type",    new ValueSet<const char *>(4, "Tournament", "Exhibition", "Practice Court", "Simulation")));
-        vec.push_back(Setting("Game Limit",   new ValueSet<const char *>(4, "5 Minutes", "10 Minutes", "3 Goals", "10 Goals")));
-        vec.push_back(Setting("Game Control", new ValueSet<const char *>(2, "Team", "Player")));
+        vec.push_back(Setting("Game Type",    new CategoricalVariable<const char *>(4, "Tournament", "Exhibition", "Practice Court", "Simulation")));
+        vec.push_back(Setting("Game Limit",   new CategoricalVariable<const char *>(4, "5 Minutes", "10 Minutes", "3 Goals", "10 Goals")));
+        vec.push_back(Setting("Game Control", new CategoricalVariable<const char *>(2, "Team", "Player")));
     }
 };
 
@@ -409,7 +409,7 @@ struct SpaceballGame : public Game {
             (*team_score)++;
 
             INFO(scoredby, " scores for ", red ? "red" : "blue");
-            Game::Protocol::RconRequest cmd(StrCat("goal ", goal, " ", scoredby));
+            GameProtocol::RconRequest cmd(StrCat("goal ", goal, " ", scoredby));
             server->BroadcastWithRetry(&cmd);
 
             ResetWorld(goal, 10, false);
@@ -436,7 +436,7 @@ struct SpaceballGame : public Game {
 
     void GameOver(GameServer *server) {
         INFO("game over ", red_score, " ", blue_score);
-        Game::Protocol::RconRequest cmd(StrCat("win ", red_score > blue_score ? Team::Home : Team::Away));
+        GameProtocol::RconRequest cmd(StrCat("win ", red_score > blue_score ? Team::Home : Team::Away));
         server->BroadcastWithRetry(&cmd);
         state = State::GAME_OVER;
         last_scored = Now();
@@ -447,7 +447,7 @@ struct SpaceballGame : public Game {
         Reset();
         RandomTeams();
         INFO("change map to ", home->name, " v ", away->name);
-        Game::Protocol::RconRequest cmd;
+        GameProtocol::RconRequest cmd;
         cmd.Text = MapRcon();
         server->BroadcastWithRetry(&cmd);
     }
@@ -779,7 +779,7 @@ struct SpaceballServer : public GameServer {
                 bots->bots[i].entity = old_player_entity;
                 cd->entityID = Game::GetID(nearest);
 
-                Game::Protocol::RconRequest cmd;
+                GameProtocol::RconRequest cmd;
                 cmd.Text = StrCat("player_entity ", cd->entityID);
                 WriteWithRetry(c, cd, &cmd);
                 break;

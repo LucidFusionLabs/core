@@ -118,7 +118,7 @@ endif(CMAKE_SYSTEM_NAME MATCHES "Darwin")
 
 # lfapp
 add_library(${LFL_PROJECT}_lfapp ${LFAPP_LIB_TYPE} gui.cpp font.cpp flow.cpp lfapp.cpp lftypes.cpp string.cpp "file.cpp" assets.cpp audio.cpp video.cpp input.cpp math.cpp network.cpp wire.cpp resolver.cpp camera.cpp scene.cpp ${PROTO_SRC})
-target_include_directories(${LFL_PROJECT}_lfapp PUBLIC ${LFAPP_INCLUDE} ${LFL_PROJECT_DIR}/lfapp_obj)
+target_include_directories(${LFL_PROJECT}_lfapp PUBLIC ${LFAPP_INCLUDE} ${LFL_PROJECT_DIR}/${LFL_PROJECT}_lfapp_obj)
 target_compile_definitions(${LFL_PROJECT}_lfapp PUBLIC ${LFAPP_DEF})
 if(LFAPP_LIB_TYPE MATCHES "^SHARED$")
 target_link_libraries(${LFL_PROJECT}_lfapp ${LFAPP_LIB})

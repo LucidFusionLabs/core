@@ -185,8 +185,8 @@ extern "C" int isinf(double);
 
 namespace LFL {
 typedef long long Time;
-typedef function<void()> Callback;
 typedef lock_guard<mutex> ScopedMutex;
+typedef function<void()> Callback;
 template <class X> struct Singleton { static X *Get() { static X instance; return &instance; } };
 void Log(int level, const char *file, int line, const string &m);
 }; // namespace LFL
@@ -217,6 +217,15 @@ struct NullAlloc : public Allocator {
     void Free(void *p) {}
 };
 
+struct Module {
+    virtual int Init ()         { return 0; }
+    virtual int Start()         { return 0; }
+    virtual int Frame(unsigned) { return 0; }
+    virtual int Free ()         { return 0; }
+};
+
+struct FrameFlag { enum { DontSkip=8 }; };
+typedef function<int(Window*, unsigned, unsigned, bool, int)> FrameCB;
 }; // namespace LFL
 
 #include "lfapp/math.h"
@@ -227,14 +236,15 @@ namespace LFL {
 bool Running();
 bool MainThread();
 void RunInMainThread(Callback *cb);
+void DefaultLFAppWindowClosedCB(Window *);
 double FPS();
 double CamFPS();
 void PressAnyKey();
 bool FGets(char *buf, int size);
-bool NBFGets(FILE*, char *buf, int size);
-int NBRead(int fd, char *buf, int size);
-int NBRead(int fd, string *buf);
-string NBRead(int fd, int size);
+bool NBFGets(FILE*, char *buf, int size, int timeout=0);
+int NBRead(int fd, char *buf, int size, int timeout=0);
+int NBRead(int fd, string *buf, int timeout=0);
+string NBRead(int fd, int size, int timeout=0);
 
 timeval Time2timeval(Time x);
 void localtm(time_t, struct tm *t);
@@ -314,29 +324,36 @@ struct MMapAlloc : public Allocator {
 template <int S> struct FixedAlloc : public Allocator {
     const char *Name() { return "FixedAlloc"; }
     static const int size = S;
-    char buf[S]; int len;
-    FixedAlloc() { Reset(); }
+    char buf[S];
+    int len=0;
     virtual void Reset() { len=0; }
-    virtual void *Malloc(int n) { if (len+n > size) FATALf("FixedAlloc::malloc(): %d > %d", len+n, size); char *ret = &buf[len]; len += NextMultipleOfPowerOfTwo(n, 16); return ret; }
-    virtual void *Realloc(void *p, int n) { if (p) FATALf("FixedAlloc::realoc(%p, %d)", p, size); return this->Malloc(n); }
+    virtual void *Malloc(int n) { CHECK_LE(len + n, S); char *ret = &buf[len]; len += NextMultipleOf16(n); return ret; }
+    virtual void *Realloc(void *p, int n) { CHECK_EQ(NULL, p); return this->Malloc(n); }
     virtual void Free(void *p) {}
 };
 
 struct BlockChainAlloc : public Allocator {
     const char *Name() { return "BlockChainAlloc"; }
-    struct Block { char *buf; int size, len; Block(char *B, int S) : buf(B), size(S), len(0) {} };
-    vector<Block> blocks; int block_size, cur_block_ind;
+    struct Block { string buf; int len=0; Block(int size=0) : buf(size, 0) {} };
+    vector<Block> blocks;
+    int block_size, cur_block_ind;
     BlockChainAlloc(int s=1024*1024) : block_size(s), cur_block_ind(-1) {}
-    ~BlockChainAlloc() { for (int i=0; i<blocks.size(); i++) delete [] blocks[i].buf; }
-    void Reset() { for (int i=0; i<blocks.size(); i++) blocks[i].len = 0; cur_block_ind = blocks.size() ? 0 : -1; }
-    void *Realloc(void *p, int n) { if (p) FATAL("BlockAlloc::realoc(", p, ", ", n, ")"); return this->Malloc(n); }
+    void Reset() { for (auto &b : blocks) b.len = 0; cur_block_ind = blocks.size() ? 0 : -1; }
+    void *Realloc(void *p, int n) { CHECK_EQ(NULL, p); return this->Malloc(n); }
     void *Malloc(int n);
     void Free(void *p) {}
 };
 
+struct StringAlloc {
+    string buf;
+    void Reset() { buf.clear(); }
+    int Alloc(int bytes) { int ret=buf.size(); buf.resize(ret + bytes); return ret; }
+};
+
 struct Flag {
     const char *name, *desc, *file;
-    int line; bool override;
+    int line;
+    bool override;
     Flag(const char *N, const char *D, const char *F, int L) : name(N), desc(D), file(F), line(L), override(0) {}
     virtual ~Flag() {}
 
@@ -348,7 +365,8 @@ struct Flag {
 
 struct FlagMap {
     typedef map<string, Flag*> AllFlags;
-    const char *optarg=0; int optind=0;
+    const char *optarg=0;
+    int optind=0;
     AllFlags flagmap;
     bool dirty=0;
     FlagMap() {}
@@ -412,15 +430,37 @@ struct Thread {
     static Id GetId() { return std::hash<std::thread::id>()(std::this_thread::get_id()); }
 };
 
-struct Process {
-    int pid; FILE *in, *out;
-    virtual ~Process() { Close(); }
-    Process() : pid(0), in(0), out(0) {}
+struct WorkerThread {
+    unique_ptr<CallbackQueue> queue;
+    unique_ptr<Thread> thread;
+    WorkerThread() : queue(new CallbackQueue()) {}
+    void Init(const Callback &main_cb) { thread = unique_ptr<Thread>(new Thread(main_cb)); }
+};
+
+struct ThreadPool {
+    vector<WorkerThread> worker;
+    int round_robin_next=0;
+
+    void Open(int num) {
+        CHECK(worker.empty());
+        worker.resize(num);
+        for (auto &w : worker) w.Init(bind(&CallbackQueue::HandleMessagesLoop, w.queue.get()));
+    }
+    void Start() { for (auto &w : worker) w.thread->Start(); }
+    void Stop()  { for (auto &w : worker) w.thread->Wait(); }
+    void Write(Callback *cb) {
+        worker[round_robin_next].queue->Write(cb);
+        round_robin_next = (round_robin_next + 1) % worker.size();
+    }
+};
+
+struct ProcessPipe {
+    int pid=0;
+    FILE *in=0, *out=0;
+    virtual ~ProcessPipe() { Close(); }
     int Open(const char **argv);
     int OpenPTY(const char **argv);
     int Close();
-    static void Daemonize(const char *dir="");
-    static void Daemonize(FILE *fout, FILE *ferr);
 };
 
 struct NTService {
@@ -461,87 +501,20 @@ struct Crypto {
     string MD5(const string &in);
     string Blowfish(const string &passphrase, const string &in, bool encrypt_or_decrypt);
 };
-
-struct Module {
-    virtual int Init ()         { return 0; }
-    virtual int Start()         { return 0; }
-    virtual int Frame(unsigned) { return 0; }
-    virtual int Free ()         { return 0; }
-};
-
-struct FrameFlag { enum { DontSkip=8 }; };
-typedef function<int (Window*, unsigned, unsigned, bool, int)> FrameCB;
-void DefaultLFAppWindowClosedCB(Window *);
 }; // namespace LFL
 
 #include "lfapp/audio.h"
 #include "lfapp/video.h"
 #include "lfapp/font.h"
-#include "lfapp/input.h"
 #include "lfapp/scene.h"
 #include "lfapp/assets.h"
+#include "lfapp/input.h"
 #include "lfapp/network.h"
 #include "lfapp/camera.h"
 
 namespace LFL {
 ::std::ostream& operator<<(::std::ostream& os, const point &x);
 ::std::ostream& operator<<(::std::ostream& os, const Box   &x);
-
-template <class X> struct MessageQueue {
-    condition_variable cv;
-    bool use_cv = 0;
-    deque<X> queue;
-    mutex lock;
-
-    void Write(const X &x) {
-        ScopedMutex sm(lock);
-        queue.push_back(x);
-        if (use_cv) cv.notify_one(); 
-    }
-    bool NBRead(X* out) {
-        if (queue.empty()) return false;
-        ScopedMutex sm(lock);
-        if (queue.empty()) return false;
-        *out = PopBack(queue);
-        return true;
-    }
-    X Read() {
-        unique_lock<mutex> ul(lock);
-        cv.wait(ul, [this](){ return !this->queue.empty(); } );
-        return PopBack(queue);
-    }
-};
-
-struct CallbackQueue : public MessageQueue<Callback*> {
-    void Shutdown() { Write(new Callback()); }
-    void HandleMessage(Callback *cb) { (*cb)(); delete cb; }
-    void HandleMessages() { Callback *cb=0; while (NBRead(&cb)) HandleMessage(cb); }
-    void HandleMessagesLoop() { for (use_cv=1; GetLFApp()->run; ) HandleMessage(Read()); }
-};
-
-struct WorkerThread {
-    unique_ptr<CallbackQueue> queue;
-    unique_ptr<Thread> thread;
-    WorkerThread() : queue(new CallbackQueue()) {}
-    void Init(const Callback &main_cb) { thread = unique_ptr<Thread>(new Thread(main_cb)); }
-};
-
-struct ThreadPool {
-    vector<WorkerThread> worker;
-    int round_robin_next=0;
-
-    void Open(int num) {
-        CHECK(worker.empty());
-        worker.resize(num);
-        for (auto &w : worker) w.Init(bind(&CallbackQueue::HandleMessagesLoop, w.queue.get()));
-    }
-    void Start() { for (auto &w : worker) w.thread->Start(); }
-    void Stop()  { for (auto &w : worker) w.thread->Wait(); }
-    void Write(Callback *cb) {
-        worker[round_robin_next].queue->Write(cb);
-        round_robin_next = (round_robin_next + 1) % worker.size();
-    }
-};
 
 struct FrameRateLimitter {
     int *target_hz;
@@ -578,18 +551,6 @@ struct FrameScheduler {
     void DelWaitForeverSocket(Socket fd);
 };
 
-struct LuaContext {
-    virtual ~LuaContext() {}
-    virtual string Execute(const string &s) = 0;
-};
-LuaContext *CreateLuaContext();
-
-struct JSContext {
-    virtual ~JSContext() {}
-    virtual string Execute(const string &s) = 0;
-};
-JSContext *CreateV8JSContext(Console *js_console=0, LFL::DOM::Node *document=0);
-
 struct BrowserInterface {
     virtual void Draw(Box *viewport) = 0;
     virtual void Open(const string &url) = 0;
@@ -606,6 +567,18 @@ struct BrowserInterface {
     virtual string GetURL() = 0;
 };
 
+struct JSContext {
+    virtual ~JSContext() {}
+    virtual string Execute(const string &s) = 0;
+};
+JSContext *CreateV8JSContext(Console *js_console=0, LFL::DOM::Node *document=0);
+
+struct LuaContext {
+    virtual ~LuaContext() {}
+    virtual string Execute(const string &s) = 0;
+};
+LuaContext *CreateLuaContext();
+
 struct SystemBrowser { static void Open(const char *url); };
 struct Clipboard { static string Get(); static void Set(const string &s); };
 struct TouchDevice { static void OpenKeyboard(); static void CloseKeyboard(); };
@@ -613,7 +586,7 @@ struct Advertising { static void ShowAds(); static void HideAds(); };
 struct CUDA : public Module { int Init(); };
 
 struct Application : public ::LFApp, public Module {
-    string progname, logfilename, startdir, dldir, assetdir;
+    string progname, logfilename, startdir, assetdir, dldir;
     FILE *logfile=0;
     mutex log_mutex;
     Time time_started;
@@ -632,7 +605,7 @@ struct Application : public ::LFApp, public Module {
     CUDA cuda;
     Shell shell;
     vector<Module*> modules;
-    ValueSet<int> tex_mode, grab_mode, fill_mode;
+    CategoricalVariable<int> tex_mode, grab_mode, fill_mode;
 
     Application() : window_closed_cb(DefaultLFAppWindowClosedCB), tex_mode(2, 1, 0), grab_mode(2, 0, 1),
     fill_mode(3, GraphicsDevice::Fill, GraphicsDevice::Line, GraphicsDevice::Point)
@@ -642,6 +615,7 @@ struct Application : public ::LFApp, public Module {
     void CreateNewWindow(const function<void(Window*)> &start_cb = function<void(Window*)>());
     NetworkThread *CreateNetworkThread();
     int LoadModule(Module *M) { modules.push_back(M); return M->Init(); }
+    string BinDir() const { return LocalFile::JoinPath(startdir, progname.substr(0, DirNameLen(progname, true))); }
 
     int Create(int argc, const char **argv, const char *source_filename);
     int Init();
@@ -653,6 +627,9 @@ struct Application : public ::LFApp, public Module {
     int MainLoop();
     int Free();
     int Exiting();
+
+    static void Daemonize(const char *dir="");
+    static void Daemonize(FILE *fout, FILE *ferr);
 };
 extern Application *app;
 }; // namespace LFL

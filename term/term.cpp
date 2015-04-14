@@ -38,6 +38,7 @@ BindMap *binds;
 Shader warpershader;
 Browser *image_browser;
 NetworkThread *network_thread;
+ProcessAPIServer *render_process;
 int new_win_width = 80*10, new_win_height = 25*17;
 
 void MyNewLinkCB(const shared_ptr<TextGUI::Link> &link) {
@@ -69,7 +70,7 @@ struct ReadBuffer {
 };
 
 struct MyTerminalWindow {
-    Process process;
+    ProcessPipe process;
     ReadBuffer read_buf;
     Terminal *terminal=0;
     Shader *activeshader;
@@ -205,6 +206,12 @@ extern "C" int main(int argc, const char *argv[]) {
 
     if (app->Create(argc, argv, __FILE__)) { app->Free(); return -1; }
     if (!FLAGS_lfapp_network_.override) FLAGS_lfapp_network = 1;
+    if (FLAGS_lfapp_network) {
+        string render_client = StrCat(app->BinDir(), "lterm-sandbox-render");
+        render_process = new ProcessAPIServer();
+        render_process->Start(render_client);
+        render_process->Write(39);
+    }
 
     if (FLAGS_font_engine != "atlas") app->video.init_fonts_cb = &MyInitFonts;
     if (FLAGS_default_font_.override) {

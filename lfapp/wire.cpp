@@ -25,10 +25,13 @@
 
 namespace LFL {
 const char *Protocol::Name(int p) {
-    if      (p == TCP)   return "TCP";
-    else if (p == UDP)   return "UDP";
-    else if (p == GPLUS) return "GPLUS";
-    else return "";
+    switch (p) {
+        case TCP:   return "TCP";
+        case UDP:   return "UDP";
+        case UNIX:  return "UNIX";
+        case GPLUS: return "GPLUS";
+        default:    return "";
+    }
 }
 
 void Serializable::Header::Out(Stream *o) const { o->Htons( id); o->Htons( seq); }
