@@ -751,8 +751,9 @@ int MouseController::Input(InputEvent::Id event, const point &p, int down, int f
 
     for (auto h = hover.begin(); h != hover.end(); /**/) {
         auto e = &hit.data[*h];
-        if (e->box.within(p)) { ++h; continue; }
+        if (!e->deleted && e->box.within(p)) { ++h; continue; }
         h = VectorEraseIterSwapBack(&hover, h);
+        if (e->deleted) continue;
         e->val = 0;
         e->CB.Run(p, event, 0);
         events.hover++;

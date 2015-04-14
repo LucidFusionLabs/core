@@ -153,7 +153,7 @@ DEFINE_bool(lfapp_audio, false, "Enable audio in/out");
 DEFINE_bool(lfapp_video, false, "Enable OpenGL");
 DEFINE_bool(lfapp_input, false, "Enable keyboard/mouse input");
 DEFINE_bool(lfapp_camera, false, "Enable camera capture");
-DEFINE_bool(lfapp_cuda, true, "Enable CUDA acceleration");
+DEFINE_bool(lfapp_cuda, false, "Enable CUDA acceleration");
 DEFINE_bool(lfapp_network, false, "Enable asynchronous network engine");
 DEFINE_bool(lfapp_debug, false, "Enable debug mode");
 DEFINE_bool(cursor_grabbed, false, "Center cursor every frame");
@@ -175,10 +175,10 @@ DEFINE_bool(open_console, 0, "Open console on win32");
 void Allocator::Reset() { FATAL(Name(), ": reset"); }
 Allocator *Allocator::Default() { return Singleton<MallocAlloc>::Get(); }
 
+void Log(int level, const char *file, int line, const string &m) { app->Log(level, file, line, m); }
 bool Running() { return app->run; }
 bool MainThread() { return Thread::GetId() == app->main_thread_id; }
 void RunInMainThread(Callback *cb) { app->message_queue.Write(cb); }
-void Log(int level, const char *file, int line, const string &m) { app->Log(level, file, line, m); }
 void DefaultLFAppWindowClosedCB(Window *W) { delete W; }
 double FPS() { return screen->fps.FPS(); }
 double CamFPS() { return app->camera.fps.FPS(); }
@@ -187,12 +187,12 @@ void PressAnyKey() {
     char buf[32]; fgets(buf, sizeof(buf), stdin);
 }
 bool FGets(char *buf, int len) { return NBFGets(stdin, buf, len); }
-bool NBFGets(FILE *f, char *buf, int len) {
+bool NBFGets(FILE *f, char *buf, int len, int timeout) {
 #ifndef WIN32
     int fd = fileno(f);
     SelectSocketSet ss;
     ss.Add(fd, SocketSet::READABLE, 0);
-    ss.Select(0);
+    ss.Select(timeout);
     if (!app->run || !ss.GetReadable(fd)) return 0;
     fgets(buf, len, f);
     return 1;
@@ -200,24 +200,24 @@ bool NBFGets(FILE *f, char *buf, int len) {
     return 0;
 #endif
 }
-int NBRead(int fd, char *buf, int len) {
+int NBRead(int fd, char *buf, int len, int timeout) {
     SelectSocketSet ss;
     ss.Add(fd, SocketSet::READABLE, 0);
-    ss.Select(0);
+    ss.Select(timeout);
     if (!app->run || !ss.GetReadable(fd)) return 0;
     int o = 0, s = 0;
     do if ((s = ::read(fd, buf+o, len-o)) > 0) o += s;
     while (s > 0 && len - o > 1024);
     return o;
 }
-int NBRead(int fd, string *buf) {
-    int l = NBRead(fd, (char*)buf->data(), buf->size());
+int NBRead(int fd, string *buf, int timeout) {
+    int l = NBRead(fd, (char*)buf->data(), buf->size(), timeout);
     buf->resize(max(0,l));
     return l;
 }
-string NBRead(int fd, int len) {
+string NBRead(int fd, int len, int timeout) {
     string ret(len, 0);
-    NBRead(fd, &ret);
+    NBRead(fd, &ret, timeout);
     return ret;
 }
 
@@ -494,14 +494,14 @@ MMapAlloc *MMapAlloc::Open(const char *path, bool logerror, bool readonly, long 
 void *BlockChainAlloc::Malloc(int n) { 
     n = NextMultipleOfPowerOfTwo(n, 16);
     CHECK_LT(n, block_size);
-    if (cur_block_ind == -1 || blocks[cur_block_ind].len + n > blocks[cur_block_ind].size) {
+    if (cur_block_ind == -1 || blocks[cur_block_ind].len + n > block_size) {
         cur_block_ind++;
-        if (cur_block_ind >= blocks.size()) blocks.push_back(Block(new char[block_size], block_size));
+        if (cur_block_ind >= blocks.size()) blocks.emplace_back(block_size);
         CHECK_EQ(blocks[cur_block_ind].len, 0);
         CHECK_LT(n, block_size);
     }
     Block *b = &blocks[cur_block_ind];
-    char *ret = b->buf + b->len;
+    char *ret = &b->buf[b->len];
     b->len += n;
     return ret;
 }
@@ -600,9 +600,9 @@ void CloseConsole() {
     FreeConsole();
 }
 
-void Process::Daemonize(const char *dir) {}
-int Process::OpenPTY(const char **argv) { return Open(argv); }
-int Process::Open(const char **argv) {
+void Application::Daemonize(const char *dir) {}
+int ProcessPipe::OpenPTY(const char **argv) { return Open(argv); }
+int ProcessPipe::Open(const char **argv) {
     SECURITY_ATTRIBUTES sa;
     memset(&sa, 0, sizeof(sa));
     sa.nLength = sizeof(sa);
@@ -736,7 +736,7 @@ void Msleep(int milliseconds) { usleep(milliseconds * 1000); }
 void HandleSigInt(int sig) { app->run=0; app->scheduler.Wakeup(); }
 Time Now() { struct timeval tv; gettimeofday(&tv, 0); return (Time)tv.tv_sec * 1000 + tv.tv_usec / 1000; }
 
-int Process::Open(const char **argv) {
+int ProcessPipe::Open(const char **argv) {
     int pipein[2], pipeout[2], ret;
     if (pipe(pipein) < 0) return -1;
     if (pipe(pipeout) < 0) { close(pipein[0]); close(pipein[1]); return -1; }
@@ -750,7 +750,9 @@ int Process::Open(const char **argv) {
     } else {
         close(pipein[0]);
         close(pipeout[1]);
-        close(0); close(1); close(2);
+        close(0);
+        close(1);
+        close(2);
         dup2(pipein[1], 2);
         dup2(pipein[1], 1);
         dup2(pipeout[0], 0);
@@ -760,7 +762,7 @@ int Process::Open(const char **argv) {
 }
 
 extern "C" pid_t forkpty(int *, char *, struct termios *, struct winsize *);
-int Process::OpenPTY(const char **argv) {
+int ProcessPipe::OpenPTY(const char **argv) {
     // struct termios term;
     // struct winsize win;
     char name[PATH_MAX];
@@ -776,14 +778,14 @@ int Process::OpenPTY(const char **argv) {
     return 0;
 }
 
-int Process::Close() {
+int ProcessPipe::Close() {
     if (pid) { kill(pid, SIGHUP); pid = 0; }
     if (in)  { fclose(in);        in  = 0; }
     if (out) { fclose(out);       out = 0; }
     return 0;
 }
 
-void Process::Daemonize(const char *dir) {
+void Application::Daemonize(const char *dir) {
     char fn1[256], fn2[256];
     snprintf(fn1, sizeof(fn1), "%s%s.stdout", dir, app->progname.c_str());
     snprintf(fn2, sizeof(fn2), "%s%s.stderr", dir, app->progname.c_str());
@@ -792,7 +794,7 @@ void Process::Daemonize(const char *dir) {
     Daemonize(fout, ferr);
 }
 
-void Process::Daemonize(FILE *fout, FILE *ferr) {
+void Application::Daemonize(FILE *fout, FILE *ferr) {
     int pid = fork();
     if (pid < 0) { fprintf(stderr, "fork: %d\n", pid); exit(-1); }
     if (pid > 0) { fprintf(stderr, "daemonized pid: %d\n", pid); exit(0); }
@@ -950,7 +952,10 @@ int Application::Create(int argc, const char **argv, const char *source_filename
 #endif
 
     srand(time(0));
-    if (logfilename.size()) logfile = fopen(logfilename.c_str(), "a");
+    if (logfilename.size()) {
+        logfile = fopen(logfilename.c_str(), "a");
+        SystemNetwork::SetSocketCloseOnExec(fileno(logfile), 1);
+    }
 
 #ifdef _WIN32
     if (argc > 1) OpenConsole();
@@ -1008,7 +1013,7 @@ int Application::Create(int argc, const char **argv, const char *source_filename
 #endif
 
     if (FLAGS_daemonize) {
-        Process::Daemonize();
+        Daemonize();
         SetLFAppMainThread();
     }
 

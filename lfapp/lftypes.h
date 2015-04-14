@@ -359,20 +359,6 @@ template <class X, class Alloc = std::allocator<X> > struct FreeListBlockAllocat
     void Erase(unsigned ind) { free_list.push_back(ind); }
 };
 
-template <class X> struct TopN {
-    const int num;
-    set<X> data;
-    TopN(int n) : num(n) {}
-
-    void Insert(const X &v) {
-        if (data.size() < num) data.insert(v);
-        else if (v < *data.rbegin()) {
-            data.erase(ForwardIteratorFromReverse(data.rbegin()));
-            data.insert(v);
-        }
-    }
-};
-
 template <typename X> struct ArraySegmentIter {
     const X *buf; int i, ind, len, cur_start; X cur_attr;
     ArraySegmentIter(const basic_string<X> &B) : buf(B.size() ? &B[0] : 0), i(-1), ind(0), len(B.size()) { Increment(); }
@@ -467,95 +453,62 @@ template <class X> struct FlattenedArrayValues {
     }
 };
 
-template <class X> struct ValueSet {
-    int ind;
-    vector<X> data;
-    ValueSet(int n, ...) : ind(0), data(n)
-    { va_list ap; va_start(ap, n); for (auto &di : data) di = va_arg(ap, X); va_end(ap); }
+template <class X> struct MessageQueue {
+    condition_variable cv;
+    bool use_cv = 0;
+    deque<X> queue;
+    mutex lock;
 
-    X Cur() const { return data[ind]; }
-    bool Enabled() const { return ind != 0; }
-    int Match(X x) const { for (int i=0, n=data.size(); i<n; i++) if (x == data[i]) return i; return -1; }
-    X Next() { return data[(ind = (ind+1) % data.size())]; }
-    void On()  { ind = 1; }
-    void Off() { ind = 0; }
-};
-
-struct Toggler {
-    enum { Default = 1, OneShot = 2 };
-    int mode;
-    bool *target;
-    Toggler(bool *T, int M=Default) : target(T), mode(M) {}
-    bool Toggle() {
-        if (*target && mode == OneShot) return false;
-        else { *target = !*target; return true; }
+    void Write(const X &x) {
+        ScopedMutex sm(lock);
+        queue.push_back(x);
+        if (use_cv) cv.notify_one();
+    }
+    bool NBRead(X* out) {
+        if (queue.empty()) return false;
+        ScopedMutex sm(lock);
+        if (queue.empty()) return false;
+        *out = PopBack(queue);
+        return true;
+    }
+    X Read() {
+        unique_lock<mutex> ul(lock);
+        cv.wait(ul, [this](){ return !this->queue.empty(); } );
+        return PopBack(queue);
     }
 };
 
-struct ReallocHeap {
-    char *heap;
-    int size, len;
-    ~ReallocHeap(); 
-    ReallocHeap(int startSize=65536);
-    void Reset() { len=0; }
-    int Alloc(int len);
+struct CallbackQueue : public MessageQueue<Callback*> {
+    void Shutdown() { Write(new Callback()); }
+    void HandleMessage(Callback *cb) { (*cb)(); delete cb; }
+    void HandleMessages() { Callback *cb=0; while (NBRead(&cb)) HandleMessage(cb); }
+    void HandleMessagesLoop() { for (use_cv=1; GetLFApp()->run; ) HandleMessage(Read()); }
 };
 
-struct Bit {
-    static int Count(unsigned long long n) { int c; for (c=0; n; c++) n &= (n-1); return c; }
-    static void Indices(unsigned long long in, int *o) { 
-        for (int b, n = in & 0xffffffff; n; /**/) { b = ffs(n)-1; n ^= (1<<b); *o++ = b;    }
-        for (int b, n = in >> 32       ; n; /**/) { b = ffs(n)-1; n ^= (1<<b); *o++ = b+32; }
-        *o++ = -1;
-    }
+struct CallbackList {
+    bool dirty;
+    vector<Callback> data;
+    CallbackList() : dirty(0) {}
+    int Size() const { return data.size(); }
+    void Clear() { dirty=0; data.clear(); }
+    void Run() { for (auto i = data.begin(); i != data.end(); ++i) (*i)(); Clear(); }
+    void Add(const Callback &cb) { data.push_back(cb); dirty=1; }
+    void Add(const CallbackList &cb) { data.insert(data.end(), cb.data.begin(), cb.data.end()); dirty=1; }
 };
+#define CallbackListAdd(cblist, ...) (cblist)->Add(bind(__VA_ARGS__))
+#define CallbackListsAdd(cblists, ...) for(CallbackList **cbl=(cblists); *cbl; cbl++) CallbackListAdd(*cbl, __VA_ARGS__)
 
-struct BitField {
-    static int Clear(      unsigned char *b, int bucket) {          b[bucket/8] &= ~(1 << (bucket % 8)); return 1; }
-    static int Set  (      unsigned char *b, int bucket) {          b[bucket/8] |=  (1 << (bucket % 8)); return 1; }
-    static int Get  (const unsigned char *b, int bucket) { return   b[bucket/8] &   (1 << (bucket % 8));           }
-    static int Not  (const unsigned char *b, int bucket) { return !(b[bucket/8] &   (1 << (bucket % 8)));          }
-    static int Get  (      unsigned char *b, int bucket) { return Get(reinterpret_cast<const unsigned char*>(b), bucket); }
-    static int Not  (      unsigned char *b, int bucket) { return Not(reinterpret_cast<const unsigned char*>(b), bucket); }
-    static int Set  (               char *b, int bucket) { return Set(reinterpret_cast<      unsigned char*>(b), bucket); }
-    static int Get  (const          char *b, int bucket) { return Get(reinterpret_cast<const unsigned char*>(b), bucket); }
-    static int Get  (               char *b, int bucket) { return Get(reinterpret_cast<      unsigned char*>(b), bucket); }
-    static int Clear(               char *b, int bucket) { return Clear(reinterpret_cast<    unsigned char*>(b), bucket); }
+template <class X> struct TopN {
+    const int num;
+    set<X> data;
+    TopN(int n) : num(n) {}
 
-    static int FirstSet  (const unsigned char *b, int l) { for (int i=0;   i<l;  i++) { unsigned char c=b[i]; if (c != 0)   return i*8 + ffs( c)-1; } return -1; }
-    static int FirstClear(const unsigned char *b, int l) { for (int i=0;   i<l;  i++) { unsigned char c=b[i]; if (c != 255) return i*8 + ffs(~c)-1; } return -1; }
-    static int LastClear (const unsigned char *b, int l) { for (int i=l-1; i>=0; i--) { unsigned char c=b[i]; if (c != 255) return i*8 + ffs(~c)-1; } return -1; }
-    static int LastClear (const          char *b, int l) { return LastClear (reinterpret_cast<const unsigned char*>(b), l); }
-    static int FirstClear(const          char *b, int l) { return FirstClear(reinterpret_cast<const unsigned char*>(b), l); }
-};
-
-struct BloomFilter {
-    int M, K;
-    unsigned char *buf;
-    ~BloomFilter() { free(buf); }
-    BloomFilter(int m, int k, unsigned char *B) : M(m), K(k), buf(B) {}
-    static BloomFilter *Empty(int M, int K) { int s=M/8+1; BloomFilter *bf = new BloomFilter(M, K, (unsigned char*)calloc(s, 1)); return bf; }
-    static BloomFilter *Full (int M, int K) { int s=M/8+1; BloomFilter *bf = new BloomFilter(M, K, (unsigned char*)malloc(s)); memset(bf->buf, ~0, s); return bf; }
-
-    void Set  (long long val) { return Set  ((      unsigned char *)&val, sizeof(long long)); }
-    void Clear(long long val) { return Clear((      unsigned char *)&val, sizeof(long long)); }
-    int  Get  (long long val) { return Get  ((const unsigned char *)&val, sizeof(long long)); }
-    int  Not  (long long val) { return Not  ((const unsigned char *)&val, sizeof(long long)); }
-
-    void Set  (      unsigned char *val, size_t len) {        ForEachBitBucketDo(BitField::Set,   val, len); }
-    void Clear(      unsigned char *val, size_t len) {        ForEachBitBucketDo(BitField::Clear, val, len); }
-    int  Get  (const unsigned char *val, size_t len) { return ForEachBitBucketDo(BitField::Get,   val, len); }
-    int  Not  (const unsigned char *val, size_t len) { return ForEachBitBucketDo(BitField::Not,   val, len); }
-
-    int ForEachBitBucketDo(int (*op)(unsigned char *b, int bucket), const unsigned char *val, size_t len) {
-        unsigned long long h = fnv64(val, len);
-        unsigned h1 = (h >> 32) % M, h2 = (h & 0xffffffff) % M;
-        for (int i = 1; i <= K; i++) {
-            h1 = (h1 + h2) % M;
-            h2 = (h2 +  i) % M;
-            if (!op(buf, h1)) return 0;
+    void Insert(const X &v) {
+        if (data.size() < num) data.insert(v);
+        else if (v < *data.rbegin()) {
+            data.erase(ForwardIteratorFromReverse(data.rbegin()));
+            data.insert(v);
         }
-        return 1;
     }
 };
 
@@ -712,34 +665,63 @@ struct ColMatPtrRingBuf : public RingBuf {
     virtual Time ReadTimestamp(int index, int Next=-1) const { return index; }
 };
 
-struct CallbackList {
-    bool dirty;
-    vector<Callback> data;
-    CallbackList() : dirty(0) {}
-    int Size() const { return data.size(); }
-    void Clear() { dirty=0; data.clear(); }
-    void Run() { for (auto i = data.begin(); i != data.end(); ++i) (*i)(); Clear(); }
-    void Add(const Callback &cb) { data.push_back(cb); dirty=1; }
-    void Add(const CallbackList &cb) { data.insert(data.end(), cb.data.begin(), cb.data.end()); dirty=1; }
-};
-#define CallbackListAdd(cblist, ...) (cblist)->Add(bind(__VA_ARGS__))
-#define CallbackListsAdd(cblists, ...) for(CallbackList **cbl=(cblists); *cbl; cbl++) CallbackListAdd(*cbl, __VA_ARGS__)
+struct BloomFilter {
+    int M, K;
+    unsigned char *buf;
+    ~BloomFilter() { free(buf); }
+    BloomFilter(int m, int k, unsigned char *B) : M(m), K(k), buf(B) {}
+    static BloomFilter *Empty(int M, int K) { int s=M/8+1; BloomFilter *bf = new BloomFilter(M, K, (unsigned char*)calloc(s, 1)); return bf; }
+    static BloomFilter *Full (int M, int K) { int s=M/8+1; BloomFilter *bf = new BloomFilter(M, K, (unsigned char*)malloc(s)); memset(bf->buf, ~0, s); return bf; }
 
-template <class X> struct AssetMapT {
-    bool loaded;
-    vector<X> vec;
-    map<string, X*> amap;
-    AssetMapT() : loaded(0) {}
-    void Add(const X &a) { CHECK(!loaded); vec.push_back(a); }
-    void Unloaded(X *a) { if (!a->name.empty()) amap.erase(a->name); }
-    void Load(X *a) { a->parent = this; if (!a->name.empty()) amap[a->name] = a; a->Load(); }
-    void Load() { CHECK(!loaded); for (int i=0; i<vec.size(); i++) Load(&vec[i]); loaded=1; }
-    X *operator()(const string &an) { return FindOrNull(amap, an); }
-};
-typedef AssetMapT<     Asset>      AssetMap;
-typedef AssetMapT<SoundAsset> SoundAssetMap;
-typedef AssetMapT<MovieAsset> MovieAssetMap;
+    void Set  (long long val) { return Set  ((      unsigned char *)&val, sizeof(long long)); }
+    void Clear(long long val) { return Clear((      unsigned char *)&val, sizeof(long long)); }
+    int  Get  (long long val) { return Get  ((const unsigned char *)&val, sizeof(long long)); }
+    int  Not  (long long val) { return Not  ((const unsigned char *)&val, sizeof(long long)); }
 
+    void Set  (      unsigned char *val, size_t len) {        ForEachBitBucketDo(BitField::Set,   val, len); }
+    void Clear(      unsigned char *val, size_t len) {        ForEachBitBucketDo(BitField::Clear, val, len); }
+    int  Get  (const unsigned char *val, size_t len) { return ForEachBitBucketDo(BitField::Get,   val, len); }
+    int  Not  (const unsigned char *val, size_t len) { return ForEachBitBucketDo(BitField::Not,   val, len); }
+
+    int ForEachBitBucketDo(int (*op)(unsigned char *b, int bucket), const unsigned char *val, size_t len) {
+        unsigned long long h = fnv64(val, len);
+        unsigned h1 = (h >> 32) % M, h2 = (h & 0xffffffff) % M;
+        for (int i = 1; i <= K; i++) {
+            h1 = (h1 + h2) % M;
+            h2 = (h2 +  i) % M;
+            if (!op(buf, h1)) return 0;
+        }
+        return 1;
+    }
+};
+
+struct Toggler {
+    enum { Default = 1, OneShot = 2 };
+    int mode;
+    bool *target;
+    Toggler(bool *T, int M=Default) : target(T), mode(M) {}
+    bool Toggle() {
+        if (*target && mode == OneShot) return false;
+        else { *target = !*target; return true; }
+    }
+};
+
+template <class X> struct CategoricalVariable {
+    int ind;
+    vector<X> data;
+    CategoricalVariable(int n, ...) : ind(0), data(n) {
+        va_list ap;
+        va_start(ap, n);
+        for (auto &di : data) di = va_arg(ap, X);
+        va_end(ap);
+    }
+    X Cur() const { return data[ind]; }
+    bool Enabled() const { return ind != 0; }
+    int Match(X x) const { for (int i=0, n=data.size(); i<n; i++) if (x == data[i]) return i; return -1; }
+    X Next() { return data[(ind = (ind+1) % data.size())]; }
+    void On()  { ind = 1; }
+    void Off() { ind = 0; }
+};
 }; // namespace LFL
 
 #include "lfapp/tree.h"

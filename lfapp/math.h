@@ -18,8 +18,14 @@
 
 #ifndef __LFL_LFAPP_MATH_H__
 #define __LFL_LFAPP_MATH_H__
-namespace LFL {
 
+#define NextMultipleOf4(n)  NextMultipleOfPowerOfTwo(n, 4);
+#define NextMultipleOf8(n)  NextMultipleOfPowerOfTwo(n, 8);
+#define NextMultipleOf16(n) NextMultipleOfPowerOfTwo(n, 16);
+#define NextMultipleOf32(n) NextMultipleOfPowerOfTwo(n, 32);
+#define NextMultipleOf64(n) NextMultipleOfPowerOfTwo(n, 64);
+
+namespace LFL {
 template <class X> static X Negate(X x) { return x ? -x : x; }
 template <class X> static bool Min(X *a, X b) { if (b >= *a) return 0; *a = b; return 1; }
 template <class X> static bool Max(X *a, X b) { if (b <= *a) return 0; *a = b; return 1; }

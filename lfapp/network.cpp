@@ -451,12 +451,36 @@ Socket SystemNetwork::OpenSocket(int protocol) {
     else return -1;
 }
 
+bool SystemNetwork::OpenSocketPair(int *fd) {
+#ifdef _WIN32
+    SECURITY_ATTRIBUTES sa;
+    memset(&sa, 0, sizeof(sa));
+    sa.nLength = sizeof(sa);
+    sa.bInheritHandle = 1;
+    CHECK(CreatePipe(&handle[0], &handle[1], &sa, 0));
+    // XXX use WFMO with HANDLE* instead of select with SOCKET
+#else
+    CHECK(!socketpair(PF_LOCAL, SOCK_STREAM, 0, fd));
+    SetSocketBlocking(fd[0], 0);
+    SetSocketBlocking(fd[1], 0);
+#endif
+    return true;
+}
+
 int SystemNetwork::SetSocketBlocking(Socket fd, int blocking) {
 #ifdef _WIN32
     u_long ioctlarg = !blocking ? 1 : 0;
     if (ioctlsocket(fd, FIONBIO, &ioctlarg) < 0) return -1;
 #else
     if (fcntl(fd, F_SETFL, !blocking ? O_NONBLOCK : 0) == -1) return -1;
+#endif
+    return 0;
+}
+
+int SystemNetwork::SetSocketCloseOnExec(Socket fd, int close) {
+#ifdef _WIN32
+#else
+    if (fcntl(fd, F_SETFD, !close ? FD_CLOEXEC : 0) == -1) return -1;
 #endif
     return 0;
 }
@@ -972,26 +996,17 @@ void Service::EndpointClose(const string &endpoint_name) {
 /* NetworkThread */
 
 NetworkThread::NetworkThread(Network *N) : net(N),
-rd(new Connection(Singleton<Service>::Get(), Singleton<Query>::Get())),
-wr(new Connection(Singleton<Service>::Get(), Singleton<Query>::Get())),
+rd(new Connection(Singleton<Service>::Get(), new Query())),
+wr(new Connection(Singleton<Service>::Get(), new Query())),
 thread(new Thread(bind(&NetworkThread::HandleMessagesLoop, this))) {
-    net->select_time = -1;
-    net->Enable(rd->svc);
-#ifdef _WIN32
-    SECURITY_ATTRIBUTES sa;
-    memset(&sa, 0, sizeof(sa));
-    sa.nLength = sizeof(sa);
-    sa.bInheritHandle = 1;
-    CHECK(CreatePipe(&handle[0], &handle[1], &sa, 0));
-    // XXX use WFMO with HANDLE* instead of select with SOCKET
-#else
     int fd[2];
-    CHECK(!socketpair(PF_LOCAL, SOCK_STREAM, 0, fd));
+    CHECK(SystemNetwork::OpenSocketPair(fd));
     rd->state = wr->state = Connection::Connected;
     rd->socket = fd[0];
     wr->socket = fd[1];
-    SystemNetwork::SetSocketBlocking(rd->socket, 0);
-#endif
+
+    net->select_time = -1;
+    net->Enable(rd->svc);
     rd->svc->conn[rd->socket] = rd;
     net->active.Add(rd->socket, SocketSet::READABLE, &rd->self_reference);
 }
@@ -1001,6 +1016,50 @@ int NetworkThread::Query::Read(Connection *c) {
     for (; consumed + s <= c->rl; consumed += s) HandleMessage(*reinterpret_cast<Callback**>(c->rb + consumed));
     if (consumed) c->ReadFlush(consumed);
     return 0;
+}
+
+/* ProcessAPI */
+
+void ProcessAPIServer::Start(const string &client_program) {
+    int fd[2];
+    CHECK(SystemNetwork::OpenSocketPair(fd));
+    INFO("ProcessAPIServer starting ", client_program);
+    if ((pid = fork())) {
+        CHECK_GT(pid, 0);
+        close(fd[0]);
+        conn = new Connection(Singleton<Service>::Get(), new Query());
+        conn->state = Connection::Connected;
+        conn->socket = fd[1];
+    } else {
+        close(fd[1]);
+        string arg0 = client_program, arg1 = StrCat("fd://", fd[0]);
+        vector<char* const> av = { &arg0[0], &arg1[0], 0 };
+        CHECK(!execvp(av[0], &av[0]));
+    }
+}
+
+void ProcessAPIServer::Write(int x) { 
+    CHECK(conn);
+    CHECK_EQ(sizeof(x), conn->WriteFlush(reinterpret_cast<const char*>(&x), sizeof(x)));
+}
+
+void ProcessAPIClient::Start(const string &socket_name) {
+    static string fd_url = "fd://";
+    if (PrefixMatch(socket_name, fd_url)) {
+        conn = new Connection(Singleton<Service>::Get(), Singleton<Query>::Get());
+        conn->state = Connection::Connected;
+        conn->socket = atoi(socket_name.substr(fd_url.size()));
+    } else return;
+    INFO("ProcessAPIClient opened ", socket_name);
+}
+
+void ProcessAPIClient::HandleMessagesLoop() {
+    int l;
+    while (app->run) {
+        if ((l = NBRead(conn->socket, conn->rb + conn->rl, Connection::BufSize - conn->rl, -1)) <= 0) break;
+        conn->rl += l;
+        if (conn->rl >= sizeof(int)) printf("got %d\n", *(int*)conn->rb);
+    }
 }
 
 /* UDP Client */

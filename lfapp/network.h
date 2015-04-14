@@ -26,6 +26,15 @@ namespace LFL {
 DECLARE_bool(dns_dump);
 DECLARE_bool(network_debug);
 
+struct Query {  
+    virtual ~Query() {}
+    virtual int Heartbeat(Connection *c) { return 0; }
+    virtual int Connected(Connection *c) { return 0; }
+    virtual int Read(Connection *c) { return 0; }    
+    virtual int Flushed(Connection *c) { return 0; }
+    virtual void Close(Connection *c) {}
+};
+
 struct IOVec { char *buf; int len; };
 
 struct IPV4Endpoint {
@@ -191,7 +200,9 @@ struct Network : public Module {
 
 struct SystemNetwork {
     static Socket OpenSocket(int protocol);
+    static bool OpenSocketPair(int *fd_out);
     static int SetSocketBlocking(Socket fd, int blocking);
+    static int SetSocketCloseOnExec(Socket fd, int close);
     static int SetSocketBroadcastEnabled(Socket fd, int enabled);
     static int SetSocketReceiveBufferSize(Socket fd, int size);
     static int GetSocketReceiveBufferSize(Socket fd);
@@ -206,15 +217,6 @@ struct SystemNetwork {
     static IPV4::Addr GetHostByName(const string &host);
     static bool EWouldBlock();
     static string LastError();
-};
-
-struct Query {  
-    virtual ~Query() {}
-    virtual int Heartbeat(Connection *c) { return 0; }
-    virtual int Connected(Connection *c) { return 0; }
-    virtual int Read(Connection *c) { return 0; }    
-    virtual int Flushed(Connection *c) { return 0; }
-    virtual void Close(Connection *c) {}
 };
 
 struct Listener {
@@ -285,7 +287,8 @@ struct Service {
     EndpointMap endpoint;
     Service(int prot=Protocol::TCP) : protocol(prot), fake(this, Connection::Connected, 0) {}
 
-    void QueueListen(IPV4::Addr addr, int port, bool SSL=false) { listen[IPV4Endpoint(addr,port).ToString()] = new Listener(this, SSL); }
+    void QueueListen(IPV4::Addr addr, int port, bool SSL=false) { QueueListen(IPV4Endpoint(addr,port).ToString(), SSL); }
+    void QueueListen(const string &n, bool SSL=false) { listen[n] = new Listener(this, SSL); }
     Listener *GetListener() { return listen.size() ? listen.begin()->second : 0; }
 
     int OpenSocket(Connection *c, int protocol, int blocking, IPV4EndpointSource*);
@@ -337,6 +340,23 @@ struct NetworkThread {
     void HandleMessagesLoop() { while (GetLFApp()->run) { net->Frame(0); } }
 };
 
+struct ProcessAPIServer {
+    struct Service : public LFL::Service {};
+    struct Query : public LFL::Query {};
+    int pid=0;
+    Connection *conn=0;
+    void Start(const string &client_program);
+    void Write(int x);
+};
+
+struct ProcessAPIClient {
+    struct Service : public LFL::Service {};
+    struct Query : public LFL::Query {};
+    Connection *conn=0;
+    void Start(const string &socket_name);
+    void HandleMessagesLoop();
+};
+
 struct UDPClient : public Service {
     static const int MTU = 1500;
     enum { Write=1, Sendto=2 };
@@ -356,6 +376,14 @@ struct UDPServer : public Service {
     virtual int Connected(Connection *c) { c->query = query; return 0; }
 };
 
+struct UnixClient : public Service {
+    UnixClient() : Service(Protocol::UNIX) {}
+};
+
+struct UnixServer : public Service {
+    UnixServer(const string &n) : Service(Protocol::UNIX) { QueueListen(n); }
+};
+
 struct HTTPClient : public Service {
     typedef function<void(Connection*, const char*, const string&, const char*, int)> ResponseCB;
     static int request(Connection *c, int method, const char *host, const char *path, const char *postmime, const char *postdata, int postlen, bool persist);
@@ -367,8 +395,8 @@ struct HTTPClient : public Service {
 
 struct HTTPServer : public Service {
     virtual ~HTTPServer() { ClearURL(); }
-    HTTPServer(IPV4::Addr addr, int port, bool SSL) { protocol=Protocol::TCP; QueueListen(addr, port, SSL); }
-    HTTPServer(                 int port, bool SSL) { protocol=Protocol::TCP; QueueListen(0,    port, SSL); }
+    HTTPServer(IPV4::Addr addr, int port, bool SSL) : Service(Protocol::TCP) { QueueListen(addr, port, SSL); }
+    HTTPServer(                 int port, bool SSL) : Service(Protocol::TCP) { QueueListen(0,    port, SSL); }
     int Connected(Connection *c);
 
     typedef function<void(Connection*)> ConnectionClosedCB;

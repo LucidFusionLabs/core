@@ -140,160 +140,6 @@ struct Game {
         }
     };
 
-    struct Protocol {
-        struct Header : public Serializable::Header {};
-        struct Position {
-            static const int size = 12, scale = 1000;
-            int x, y, z;
-
-            void From(const v3 &v) { x=(int)(v.x*scale); y=(int)(v.y*scale); z=(int)(v.z*scale); }
-            void To(v3 *v) { v->x=(float)x/scale; v->y=(float)y/scale; v->z=(float)z/scale; }
-            void Out(Serializable::Stream *o) const { o->Htonl( x); o->Htonl( y); o->Htonl( z); }
-            void In(const Serializable::Stream *i)  { i->Ntohl(&x); i->Ntohl(&y); i->Ntohl(&z); }
-        };
-        struct Orientation {
-            static const int size = 12, scale=16384;
-            short ort_x, ort_y, ort_z, up_x, up_y, up_z;
-
-            void From(const v3 &ort, const v3 &up) {
-                ort_x = (short)(ort.x*scale); ort_y = (short)(ort.y*scale); ort_z = (short)(ort.z*scale);
-                 up_x = (short)(up.x*scale);  up_y  = (short)(up.y*scale);  up_z =  (short)(up.z*scale);
-            }
-            void To(v3 *ort, v3 *up) {
-                ort->x = (float)ort_x/scale; ort->y = (float)ort_y/scale; ort->z = (float)ort_z/scale;
-                 up->x = (float) up_x/scale;  up->y = (float) up_y/scale;  up->z = (float) up_z/scale;
-            }
-            void Out(Serializable::Stream *o) const { o->Htons( ort_x); o->Htons( ort_y); o->Htons( ort_z); o->Htons( up_x); o->Htons( up_y); o->Htons( up_z); }
-            void In(const Serializable::Stream *i)  { i->Ntohs(&ort_x); i->Ntohs(&ort_y); i->Ntohs(&ort_z); i->Ntohs(&up_x); i->Ntohs(&up_y); i->Ntohs(&up_z); }
-        };
-        struct Velocity {
-            static const int size = 6, scale=1000;
-            unsigned short x, y, z;
-
-            void From(const v3 &v) { x=(unsigned short)(v.x*scale); y=(unsigned short)(v.y*scale); z=(unsigned short)(v.z*scale); }
-            void To(v3 *v) { v->x=(float)x/scale; v->y=(float)y/scale; v->z=(float)z/scale; }
-            void Out(Serializable::Stream *o) const { o->Htons( x); o->Htons( y); o->Htons( z); }
-            void In(const Serializable::Stream *i)  { i->Ntohs(&x); i->Ntohs(&y); i->Ntohs(&z); }
-        };
-        struct Entity {
-            static const int size = 8 + Position::size + Orientation::size + Velocity::size;
-            unsigned short id, type, anim_id, anim_len;
-            Position pos;
-            Orientation ort;
-            Velocity vel;
-
-            void From(const LFL::Entity *e) { id=atoi(e->name.c_str()); type=e->asset?e->asset->typeID:0; anim_id=e->animation.id; anim_len=e->animation.len; pos.From(e->pos); ort.From(e->ort, e->up); vel.From(e->vel); }
-            void Out(Serializable::Stream *o) const { o->Htons( id); o->Htons( type); o->Htons( anim_id); o->Htons( anim_len); pos.Out(o); ort.Out(o); vel.Out(o); }
-            void In(const Serializable::Stream *i)  { i->Ntohs(&id); i->Ntohs(&type); i->Ntohs(&anim_id); i->Ntohs(&anim_len); pos.In(i);  ort.In(i);  vel.In(i);  }
-        };
-        struct Collision {
-            static const int size = 8;
-            unsigned short fmt, id1, id2, time;
-
-            void Out(Serializable::Stream *o) const { o->Htons( fmt); o->Htons( id1); o->Htons( id2); o->Htons( time); }
-            void In(const Serializable::Stream *i)  { i->Ntohs(&fmt); i->Ntohs(&id1); i->Ntohs(&id2); i->Ntohs(&time); }
-        };
-        struct ChallengeRequest : public Serializable {
-            int Type() const { return 1; }
-            int Size() const { return HeaderSize(); }
-            int HeaderSize() const { return 0; }
-
-            void Out(Serializable::Stream *o) const {}
-            int   In(const Serializable::Stream *i) { return 0; }
-        };
-        struct ChallengeResponse : public Serializable {
-            int token;
-
-            int Type() const { return 2; }
-            int Size() const { return HeaderSize(); }
-            int HeaderSize() const { return 4; }
-
-            void Out(Serializable::Stream *o) const { o->Htonl( token); }
-            int   In(const Serializable::Stream *i) { i->Ntohl(&token); return 0; }
-        };
-        struct JoinRequest : public Serializable {
-            int token;
-            string PlayerName;
-
-            int Type() const { return 3; }
-            int Size() const { return HeaderSize() + PlayerName.size(); }
-            int HeaderSize() const { return 4; }
-
-            void Out(Serializable::Stream *o) const { o->Htonl( token); o->String(PlayerName); }
-            int   In(const Serializable::Stream *i) { i->Ntohl(&token); PlayerName = i->Get(); return 0; }
-        };
-        struct JoinResponse : public Serializable {
-            string rcon;
-
-            int Type() const { return 4; }
-            int Size() const { return rcon.size(); }
-            int HeaderSize() const { return 0; }
-
-            void Out(Serializable::Stream *o) const { o->String(rcon); }
-            int   In(const Serializable::Stream *i) { rcon = i->Get(); return 0; }
-        };
-        struct WorldUpdate : public Serializable {
-            unsigned short id;
-            vector<Protocol::Entity> entity;
-            vector<Protocol::Collision> collision;
-
-            int Type() const { return 5; }
-            int Size() const { return HeaderSize() + entity.size() * Entity::size + collision.size() * Collision::size; }
-            int HeaderSize() const { return 6; }
-
-            void Out(Serializable::Stream *o) const {
-                unsigned short entities=entity.size(), collisions=collision.size();
-                o->Htons(id); o->Htons(entities); o->Htons(collisions);
-                for (int i=0; i<entities;   i++) entity   [i].Out(o);
-                for (int i=0; i<collisions; i++) collision[i].Out(o);
-            }
-            int In(const Serializable::Stream *in) {
-                unsigned short entities, collisions;
-                in->Ntohs(&id); in->Ntohs(&entities); in->Ntohs(&collisions);
-                if (!Check(in)) return -1;
-
-                entity.resize(entities); collision.resize(collisions);
-                for (int i=0; i<entities;   i++) entity[i]   .In(in);
-                for (int i=0; i<collisions; i++) collision[i].In(in);
-                return 0;
-            }
-        };
-        struct PlayerUpdate : public Serializable {
-            unsigned short id_WorldUpdate, time_since_WorldUpdate;
-            unsigned buttons;
-            Orientation ort;
-
-            int Type() const { return 6; }
-            int Size() const { return HeaderSize(); }
-            int HeaderSize() const { return 8 + Orientation::size; }
-
-            void Out(Serializable::Stream *o) const { o->Htons( id_WorldUpdate); o->Htons( time_since_WorldUpdate); o->Htonl( buttons); ort.Out(o); }
-            int   In(const Serializable::Stream *i) { i->Ntohs(&id_WorldUpdate); i->Ntohs(&time_since_WorldUpdate); i->Ntohl(&buttons); ort.In(i); return 0; }
-        };
-        struct RconRequest : public Serializable {
-            string Text;
-            RconRequest(const string &t=string()) : Text(t) {}
-
-            int Type() const { return 7; }
-            int Size() const { return HeaderSize() + Text.size(); }
-            int HeaderSize() const { return 0; }
-
-            void Out(Serializable::Stream *o) const { o->String(Text); }
-            int   In(const Serializable::Stream *i) { Text = i->Get(); return 0; }
-        };
-        struct RconResponse : public Serializable {
-            int Type() const { return 8; }
-            int Size() const { return HeaderSize(); }
-            int HeaderSize() const { return 0; }
-
-            void Out(Serializable::Stream *o) const {}
-            int   In(const Serializable::Stream *i) { return 0; }
-        };
-        struct PlayerList : public RconRequest {
-            int Type() const { return 9; }
-        };
-    };
-
     struct ConnectionData {
         Game::EntityID entityID=0;
         string playerName;
@@ -427,7 +273,7 @@ struct GameBots {
 
 struct GameServer : public Query {
     struct History {
-        Game::Protocol::WorldUpdate WorldUpdate;
+        GameProtocol::WorldUpdate WorldUpdate;
         struct WorldUpdateHistory { unsigned short id; Time time; } send_WorldUpdate[3];
         int send_WorldUpdate_index=0, num_send_WorldUpdate=0;
         Time time_post_MasterUpdate=0;
@@ -452,7 +298,7 @@ struct GameServer : public Query {
         if (!cd->team) return;
 
         INFO(c->Name(), ": ", cd->playerName.c_str(), " left");
-        Game::Protocol::RconRequest print(StrCat("print *** ", cd->playerName, " left"));
+        GameProtocol::RconRequest print(StrCat("print *** ", cd->playerName, " left"));
         BroadcastWithRetry(&print, c);
     }
     int Read(Connection *c) {
@@ -463,10 +309,10 @@ struct GameServer : public Query {
         return 0;
     }
     int Read(Connection *c, const char *content, int content_len) {
-        if (content_len < Game::Protocol::Header::size) return -1;
+        if (content_len < GameProtocol::Header::size) return -1;
 
         Serializable::ConstStream in(content, content_len);
-        Game::Protocol::Header hdr;
+        GameProtocol::Header hdr;
         hdr.In(&in);
 
         // echo "ping" | nc -u 127.0.0.1 27640
@@ -476,10 +322,10 @@ struct GameServer : public Query {
             string pong = StrCat("map=default\nname=", local_game_name, "\nplayers=", last.num_send_WorldUpdate, "/24\n");
             c->SendTo(pong.data(), pong.size());
         }
-#define game_protocol_request_type(Request) ((Game::Protocol::Request*)0)->Game::Protocol::Request::Type()
+#define game_protocol_request_type(Request) ((GameProtocol::Request*)0)->GameProtocol::Request::Type()
 #       define elif_parse(Request, in) \
         else if (hdr.id == game_protocol_request_type(Request)) { \
-            Game::Protocol::Request req; \
+            GameProtocol::Request req; \
             if (!req.Read(&in)) Request ## CB(c, &hdr, &req); \
         }
         elif_parse(JoinRequest, in)
@@ -497,7 +343,7 @@ struct GameServer : public Query {
         ((Game::Network*)c->svc->game_network)->WriteWithRetry(&cd->retry, c, msg, cd->seq++);
     }
     void WritePrintWithRetry(Connection *c, Game::ConnectionData *cd, const string &text) {
-        Game::Protocol::RconRequest print(text);
+        GameProtocol::RconRequest print(text);
         WriteWithRetry(c, cd, &print);
     }
     int BroadcastWithRetry(Serializable *msg, Connection *skip=0) {
@@ -506,7 +352,7 @@ struct GameServer : public Query {
         return ret;
     }
     int BroadcastPrintWithRetry(const string &text, Connection *skip = 0) {
-        Game::Protocol::RconRequest print(text);
+        GameProtocol::RconRequest print(text);
         return BroadcastWithRetry(&print);
     }
 
@@ -547,10 +393,10 @@ struct GameServer : public Query {
         return 0;
     }
 
-    void RconResponseCB(Connection *c, Game::Protocol::Header *hdr, Game::Protocol::RconResponse *req) {
+    void RconResponseCB(Connection *c, GameProtocol::Header *hdr, GameProtocol::RconResponse *req) {
         Game::ConnectionData::Get(c)->retry.Acknowledged(hdr->seq);
     }
-    void JoinRequestCB(Connection *c, Game::Protocol::Header *hdr, Game::Protocol::JoinRequest *req) {
+    void JoinRequestCB(Connection *c, GameProtocol::Header *hdr, GameProtocol::JoinRequest *req) {
         Game::ConnectionData *cd = Game::ConnectionData::Get(c);
         cd->playerName = req->PlayerName;
 
@@ -561,7 +407,7 @@ struct GameServer : public Query {
         }
         Entity *e = world->Get(cd->entityID);
 
-        Game::Protocol::JoinResponse response;
+        GameProtocol::JoinResponse response;
         response.rcon = "set_asset";
         for (vector<Asset>::const_iterator a = assets->begin(); a != assets->end(); ++a)
             StrAppend(&response.rcon, " ", a->typeID, "=", a->name);
@@ -569,11 +415,11 @@ struct GameServer : public Query {
         world->JoinRcon(cd, e, &response.rcon);
         Write(c, UDPClient::Sendto, hdr->seq, &response);
 
-        Game::Protocol::RconRequest rcon_broadcast;
+        GameProtocol::RconRequest rcon_broadcast;
         INFO(c->Name(), ": ", cd->playerName, rejoin?" re":" ", "joins, entity_id=", e->name);
         if (world->JoinedRcon(cd, e, &rcon_broadcast.Text)) BroadcastWithRetry(&rcon_broadcast);
     }
-    void PlayerUpdateCB(Connection *c, Game::Protocol::Header *hdr, Game::Protocol::PlayerUpdate *pup) {
+    void PlayerUpdateCB(Connection *c, GameProtocol::Header *hdr, GameProtocol::PlayerUpdate *pup) {
         Game::ConnectionData *cd = Game::ConnectionData::Get(c);
         for (int i=0; i<sizeofarray(last.send_WorldUpdate); i++) {
             if (last.send_WorldUpdate[i].id != pup->id_WorldUpdate) continue;
@@ -587,7 +433,7 @@ struct GameServer : public Query {
         e->buttons = pup->buttons;
 
         if (!Game::Controller(e->buttons).GetPlayerList()) return;
-        Game::Protocol::PlayerList playerlist;
+        GameProtocol::PlayerList playerlist;
         playerlist.Text = StrCat(world->red_score, ",", world->blue_score, "\n");
         for (int i = 0; i < svc.size(); ++i)
             for (Service::EndpointMap::iterator iter = svc[i]->endpoint.begin(); iter != svc[i]->endpoint.end(); iter++)
@@ -596,8 +442,8 @@ struct GameServer : public Query {
             AppendSerializedPlayerData(i->player_data, &playerlist.Text);
         Write(c, UDPClient::Sendto, cd->seq++, &playerlist);
     }
-    void RconRequestCB(Connection *c, Game::Protocol::Header *hdr, Game::Protocol::RconRequest *rcon) {
-        Game::Protocol::RconResponse response;
+    void RconRequestCB(Connection *c, GameProtocol::Header *hdr, GameProtocol::RconRequest *rcon) {
+        GameProtocol::RconResponse response;
         Write(c, UDPClient::Sendto, hdr->seq, &response);
 
         Game::ConnectionData *cd = Game::ConnectionData::Get(c);
@@ -638,7 +484,7 @@ struct GameServer : public Query {
         }
     }
     virtual void RconRequestCB(Connection *c, Game::ConnectionData *cd, const string &cmd, const string &arg) {
-        Game::Protocol::RconRequest print(StrCat("print *** Unknown command: ", cmd));
+        GameProtocol::RconRequest print(StrCat("print *** Unknown command: ", cmd));
         WriteWithRetry(c, cd, &print);
     }
 
@@ -657,21 +503,21 @@ struct GameUDPServer : public UDPServer {
         return fnv32(conn_key, sizeof(conn_key), secret2);
     }
     int UDPFilter(Connection *c, const char *content, int content_len) {
-        if (content_len < Game::Protocol::Header::size) return -1;
+        if (content_len < GameProtocol::Header::size) return -1;
 
         Serializable::ConstStream in(content, content_len);
-        Game::Protocol::Header hdr;
+        GameProtocol::Header hdr;
         hdr.In(&in);
 
-        Game::Protocol::ChallengeRequest challenge;
-        Game::Protocol::JoinRequest join;
+        GameProtocol::ChallengeRequest challenge;
+        GameProtocol::JoinRequest join;
 
         // echo "ping" | nc -u 127.0.0.1 27640
         static string ping="ping\n";
         if (in.size == ping.size() && in.buf == ping) {
             ((GameServer*)query)->Read(c, content, content_len);
         } else if (hdr.id == game_protocol_request_type(ChallengeRequest) && !challenge.Read(&in)) {
-            Game::Protocol::ChallengeResponse response;
+            GameProtocol::ChallengeResponse response;
             response.token = Hash(c);
             string buf;
             response.ToString(&buf, hdr.seq);
@@ -690,7 +536,7 @@ struct GameClient {
         Time     time_send_PlayerUpdate=0;
         Time     time_recv_WorldUpdate[2];
         unsigned short id_WorldUpdate, seq_WorldUpdate;
-        deque<Game::Protocol::WorldUpdate> WorldUpdate;
+        deque<GameProtocol::WorldUpdate> WorldUpdate;
         History() { time_recv_WorldUpdate[0]=time_recv_WorldUpdate[1]=0; }
     };
     struct Replay {
@@ -737,7 +583,7 @@ struct GameClient {
     }
     void Rcon(const string &text) {
         if (!conn) return;
-        Game::Protocol::RconRequest req(text);
+        GameProtocol::RconRequest req(text);
         net->WriteWithRetry(&retry, conn, &req, seq++);
     }
     void MoveUp    (unsigned t) { control.SetUp();      }
@@ -770,7 +616,7 @@ struct GameClient {
                                                                       bind(&GameClient::Heartbeat, this, _1), default_port);
         if (!Connected()) return 0;
 
-        Game::Protocol::ChallengeRequest req;
+        GameProtocol::ChallengeRequest req;
         net->WriteWithRetry(&retry, conn, &req, seq++);
         last.time_send_PlayerUpdate = Now();
         return 0;
@@ -783,7 +629,7 @@ struct GameClient {
         net = Singleton<Game::GoogleMultiplayerNetwork>::Get();
         conn = gplus_client->persistentConnection(participant_name, bind(&GameClient::UDPClientResponseCB, this, _1, _2, _3), bind(&GameClient::UDPClientHeartbeatCB, this, _1));
 
-        Game::Protocol::JoinRequest req;
+        GameProtocol::JoinRequest req;
         req.PlayerName = playername;
         net->WriteWithRetry(&retry, conn, &req, seq++);
         last.time_send_PlayerUpdate = Now();
@@ -797,7 +643,7 @@ struct GameClient {
         if (!content) { INFO(c->Name(), ": close"); Reset(); return; }
 
         Serializable::ConstStream in(content, content_length);
-        Game::Protocol::Header hdr;
+        GameProtocol::Header hdr;
         hdr.In(&in);
         if (0) {}
         elif_parse(ChallengeResponse, in)
@@ -816,7 +662,7 @@ struct GameClient {
         Frame();
         if (reorienting || (CS.buttons == last.buttons && last.time_send_PlayerUpdate + 100 > Now())) return;
 
-        Game::Protocol::PlayerUpdate pup;
+        GameProtocol::PlayerUpdate pup;
         pup.id_WorldUpdate = last.id_WorldUpdate;
         pup.time_since_WorldUpdate = Now() - last.time_recv_WorldUpdate[0];
         pup.buttons = CS.buttons;
@@ -835,7 +681,7 @@ struct GameClient {
         unsigned updateLast = last.time_frame - last.time_recv_WorldUpdate[0];
 
         if (1) { /* interpolate */
-            Game::Protocol::WorldUpdate *wu1=0, *wu2=0;
+            GameProtocol::WorldUpdate *wu1=0, *wu2=0;
 
             /* replay */
             if (replay.enabled() && replay.while_seq != last.seq_WorldUpdate) replay.disable();
@@ -856,7 +702,7 @@ struct GameClient {
             }
 
             for (int i=0, j=0; i<wu1->entity.size() && j<wu2->entity.size(); /**/) {
-                Game::Protocol::Entity *e1 = &wu1->entity[i], *e2 = &wu2->entity[j];
+                GameProtocol::Entity *e1 = &wu1->entity[i], *e2 = &wu2->entity[j];
                 if      (e1->id < e2->id) { i++; continue; }
                 else if (e2->id < e1->id) { j++; continue; }
 
@@ -892,18 +738,18 @@ struct GameClient {
         }
     }
 
-    void ChallengeResponseCB(Connection *c, Game::Protocol::Header *hdr, Game::Protocol::ChallengeResponse *challenge) {
+    void ChallengeResponseCB(Connection *c, GameProtocol::Header *hdr, GameProtocol::ChallengeResponse *challenge) {
         retry.Acknowledged(hdr->seq);
-        Game::Protocol::JoinRequest req;
+        GameProtocol::JoinRequest req;
         req.token = challenge->token;
         req.PlayerName = playername;
         net->WriteWithRetry(&retry, c, &req, seq++);
     }
-    void JoinResponseCB(Connection *c, Game::Protocol::Header *hdr, Game::Protocol::JoinResponse *joined) {
+    void JoinResponseCB(Connection *c, GameProtocol::Header *hdr, GameProtocol::JoinResponse *joined) {
         retry.Acknowledged(hdr->seq);
         RconRequestCB(c, hdr, joined->rcon);
     }
-    void WorldUpdateCB(Connection *c, Game::Protocol::Header *hdr, Game::Protocol::WorldUpdate *wu) {       
+    void WorldUpdateCB(Connection *c, GameProtocol::Header *hdr, GameProtocol::WorldUpdate *wu) {       
         if (hdr->seq <= last.seq_WorldUpdate) {
             unsigned short cs = hdr->seq, ls = last.seq_WorldUpdate;
             cs += 16384; ls += 16384;
@@ -918,14 +764,14 @@ struct GameClient {
         if (last.WorldUpdate.size() > 200) last.WorldUpdate.pop_front();
         last.WorldUpdate.push_back(*wu);
     }
-    void PlayerListCB(Connection *c, Game::Protocol::Header *hdr, Game::Protocol::PlayerList *pl) { playerlist->HandleTextMessage(pl->Text); }
-    void RconResponseCB(Connection *c, Game::Protocol::Header *hdr, Game::Protocol::RconResponse*) { retry.Acknowledged(hdr->seq); }
-    void RconRequestCB(Connection *c, Game::Protocol::Header *hdr, Game::Protocol::RconRequest *rcon) {
-        Game::Protocol::RconResponse response;
+    void PlayerListCB(Connection *c, GameProtocol::Header *hdr, GameProtocol::PlayerList *pl) { playerlist->HandleTextMessage(pl->Text); }
+    void RconResponseCB(Connection *c, GameProtocol::Header *hdr, GameProtocol::RconResponse*) { retry.Acknowledged(hdr->seq); }
+    void RconRequestCB(Connection *c, GameProtocol::Header *hdr, GameProtocol::RconRequest *rcon) {
+        GameProtocol::RconResponse response;
         net->Write(c, UDPClient::Write, hdr->seq, &response);
         RconRequestCB(c, hdr, rcon->Text);
     }
-    void RconRequestCB(Connection *c, Game::Protocol::Header *hdr, const string &rcon) {
+    void RconRequestCB(Connection *c, GameProtocol::Header *hdr, const string &rcon) {
         StringLineIter lines(rcon);
         for (const char *line = lines.Next(); line; line = lines.Next()) {
             if (FLAGS_rcon_debug) INFO("rcon: ", line);
@@ -994,7 +840,7 @@ struct GameClient {
 };
 
 struct GameSettings {
-    typedef ValueSet<const char *> Value;
+    typedef CategoricalVariable<const char *> Value;
     struct Setting {
         string key; Value *value;
         Setting(const string &k, Value *v) : key(k), value(v) {}
