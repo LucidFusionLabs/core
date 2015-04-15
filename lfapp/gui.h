@@ -234,7 +234,7 @@ struct TextGUI : public KeyboardGUI {
     struct Link : public Widget::Interface {
         Box box;
         string link;
-        Asset *image=0;
+        Texture *image=0;
         TextGUI *parent=0;
         Link(TextGUI *P, GUI *G, const Box &b, const string &U)
             : Interface(G), box(b), link(U), parent(P) {
@@ -751,7 +751,7 @@ struct Renderer : public Object {
     bool style_dirty=1, layout_dirty=1;
     Flow *flow=0, *parent_flow=0, child_flow;
     DOM::Node *absolute_parent=0;
-    Asset *background_image=0;
+    Texture *background_image=0;
     DrawableBoxArray child_box, child_bg;
     Tiles *tiles=0;
 
@@ -825,7 +825,7 @@ struct Browser : public BrowserInterface {
     Layers layers;
     Document doc;
     RenderLog *render_log=0;
-    Asset missing_image;
+    Texture missing_image;
     point mouse, initial_displacement;
     Browser(Window *W=0, const Box &V=Box());
 

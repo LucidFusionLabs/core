@@ -142,35 +142,46 @@ struct DocumentParser {
     };
 
     struct ImageParser : public Parser {
+        Texture *target;
         string content;
-        Asset *target;
-        int content_length;
-        ImageParser(DocumentParser *p, const string &url, Asset *t) : Parser(p, url), target(t), content_length(0) {}
-        void Complete(const string &content_type) {
+        int content_length=0;
+        ProcessAPIServer::LoadResourceCompleteCB complete_cb;
+        ImageParser(DocumentParser *p, const string &url, Texture *t) :
+            Parser(p, url), target(t), complete_cb(bind(&ImageParser::LoadResourceComplete, this, _1)) {}
+
+        void WGetResponseCB(Connection *c, const char *h, const string &ct, const char *cb, int cl) {
+            if      (h)                  content_length = cl;
+            if      (!h && (!cb || !cl)) WGetComplete(ct);
+            else if (!h)                 content.append(cb, cl);
+        }
+        void WGetComplete(const string &content_type) {
             if (!content.empty() && content_length == content.size() && parent->Running(this)) {
                 string fn = BaseName(url);
                 if      (MIMEType::Jpg(content_type) && !FileSuffix::Jpg(fn)) fn += ".jpg";
                 else if (MIMEType::Png(content_type) && !FileSuffix::Png(fn)) fn += ".png";
+                else if (PrefixMatch(content_type, "text/html")) INFO("ImageParser content='", content, "'");
 
-                if (PrefixMatch(content_type, "text/html")) INFO("ImageParser content='", content, "'");
-
-                target->Load(content.data(), fn.c_str(), content.size());
-                INFO("ImageParser ", content_type, ": ", url, " ", fn, " ", content.size(), " ",
-                     target->tex.width, " ", target->tex.height);
+                if (parent->render_process) {
+                    parent->render_process->LoadResource(content, fn, complete_cb);
+                    return;
+                } else {
+                    Asset::LoadTexture(content.data(), fn.c_str(), content.size(), target);
+                    INFO("ImageParser ", content_type, ": ", url, " ", fn, " ", content.size(), " ", target->width, " ", target->height);
+                }
             }
             Parser::Complete(this);
         }
-        void WGetResponseCB(Connection *c, const char *h, const string &ct, const char *cb, int cl) {
-            if      (h)                  content_length = cl;
-            if      (!h && (!cb || !cl)) Complete(ct);
-            else if (!h)                 content.append(cb, cl);
+        void LoadResourceComplete(const InterProcessProtocol::TextureResource &res) {
+            target->LoadGL(reinterpret_cast<const unsigned char *>(res.buf.data()), point(res.width, res.height), res.pf, res.linesize);
+            Parser::Complete(this);
         }
     };
 
     Browser::Document *doc;
     set<void*> outstanding;
     int requested=0, completed=0;
-    unordered_map<string, Asset*> image_cache;
+    ProcessAPIServer *render_process=0;
+    unordered_map<string, Texture*> image_cache;
     DocumentParser(Browser::Document *D) : doc(D) {}
 
     bool Running(void *h) const { return outstanding.find(h) != outstanding.end(); }
@@ -212,33 +223,33 @@ struct DocumentParser {
         DOM::HTMLLinkElement  *link  = target->AsHTMLLinkElement();
         DOM::HTMLInputElement *input = target->AsHTMLInputElement();
         bool input_image = input && StringEquals(input->getAttribute("type"), "image");
-        Asset **image_asset = input_image ? &input->image_asset : (image ? &image->asset : 0);
+        Texture **image_tex = input_image ? &input->image_tex : (image ? &image->tex : 0);
 
-        if (image_asset) {
-            CHECK_EQ(*image_asset, 0);
-            if ((*image_asset = FindOrNull(image_cache, url))) return;
-            *image_asset = new Asset();
-            image_cache[url] = *image_asset;
+        if (image_tex) {
+            CHECK_EQ(*image_tex, 0);
+            if ((*image_tex = FindOrNull(image_cache, url))) return;
+            *image_tex = new Texture();
+            image_cache[url] = *image_tex;
         }
 
         if (data_url) {
             int semicolon=url.find(";"), comma=url.find(",");
             if (semicolon != string::npos && comma != string::npos && semicolon < comma) {
                 string mimetype=url.substr(5, semicolon-5), encoding=url.substr(semicolon+1, comma-semicolon-1);
-                if (PrefixMatch(mimetype, "image/") && image_asset) {
+                if (PrefixMatch(mimetype, "image/") && image_tex) {
                     string fn = toconvert(mimetype, tochar<'/', '.'>);
                     if (encoding == "base64") {
                         string content = Singleton<Base64>::Get()->Decode(url.c_str()+comma+1, url.size()-comma-1);
-                        (*image_asset)->Load(content.data(), fn.c_str(), content.size());
+                        Asset::LoadTexture(content.data(), fn.c_str(), content.size(), *image_tex);
                     } else INFO("unhandled: data:url encoding ", encoding);
                 } else INFO("unhandled data:url mimetype ", mimetype);
             } else INFO("unhandled data:url ", input_url);
             return;
         }
 
-        if      (html)        { handler = new HTMLParser (this, url, html);                          callback = bind(&HTMLParser::WGetCB,          (HTMLParser*) handler, _1, _2, _3, _4, _5); }
-        else if (image_asset) { handler = new ImageParser(this, url, *image_asset);                  callback = bind(&ImageParser::WGetResponseCB, (ImageParser*)handler, _1, _2, _3, _4, _5); }
-        else if (link)        { handler = new StyleParser(this, url, link->getAttribute("charset")); callback = bind(&StyleParser::WGetResponseCB, (StyleParser*)handler, _1, _2, _3, _4, _5); }
+        if      (html)      { handler = new HTMLParser (this, url, html);                          callback = bind(&HTMLParser::WGetCB,          (HTMLParser*) handler, _1, _2, _3, _4, _5); }
+        else if (image_tex) { handler = new ImageParser(this, url, *image_tex);                    callback = bind(&ImageParser::WGetResponseCB, (ImageParser*)handler, _1, _2, _3, _4, _5); }
+        else if (link)      { handler = new StyleParser(this, url, link->getAttribute("charset")); callback = bind(&StyleParser::WGetResponseCB, (StyleParser*)handler, _1, _2, _3, _4, _5); }
 
         if (handler) {
             INFO("Browser open '", url, "'");
@@ -250,10 +261,10 @@ struct DocumentParser {
         }
     }
 
-    Asset *OpenImage(const string &url) {
+    Texture *OpenImage(const string &url) {
         DOM::HTMLImageElement image(0);
         Open(url, &image);
-        return image.asset;
+        return image.tex;
     }
 
     void OpenStyleImport(const string &url) {

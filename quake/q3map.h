@@ -176,7 +176,7 @@ struct Q3MapAsset : public MapAsset {
             for (const char *afnp = iter.Next(); Running() && afnp; afnp = iter.Next()) {
                 string afn = afnp, afp = afn.substr(0, afn.rfind('.'));
                 for (int i=0, l=ret->num[kTextures]; i<l; i++) if (afp == ret->texture[i].strName) {
-                    ret->asset[i].Load(iter.Data(), afn.c_str(), iter.Size());
+                    Asset::LoadTexture(iter.Data(), afn.c_str(), iter.Size(), &ret->asset[i].tex);
                     INFO("load[", i, "] ", afn, " tex=", ret->asset[i].tex.ID);
                 }
             }

@@ -47,6 +47,7 @@ extern "C" {
 #else
 #include <signal.h>
 #include <pthread.h>
+#include <sys/shm.h>
 #include <sys/mman.h>
 #include <sys/types.h>
 #include <sys/resource.h>
@@ -785,6 +786,28 @@ int ProcessPipe::Close() {
     return 0;
 }
 
+static int ShmKeyFromInterProcessResourceURL(const string &u) {
+    static string shm_url = "shm://";
+    CHECK(PrefixMatch(u, shm_url));
+    return atoi(u.c_str() + shm_url.size());
+}
+
+InterProcessResource::~InterProcessResource() {
+    if (buf)     shmdt(buf);
+    if (id >= 0) shmctl(id, IPC_RMID, NULL);
+}
+
+InterProcessResource::InterProcessResource(int size, const string &u) : len(size), url(u) {
+    CHECK(len);
+    int key = url.empty() ? rand() : ShmKeyFromInterProcessResourceURL(url);
+    id = shmget(key, size, url.empty() ? (IPC_CREAT | 0600) : 0400);
+    CHECK_GE(id, 0);
+    buf = reinterpret_cast<char*>(shmat(id, NULL, 0));
+    CHECK(buf);
+    CHECK_NE((char*)-1, buf);
+    if (url.empty()) url = StrCat("shm://", key);
+}
+
 void Application::Daemonize(const char *dir) {
     char fn1[256], fn2[256];
     snprintf(fn1, sizeof(fn1), "%s%s.stdout", dir, app->progname.c_str());
@@ -1242,7 +1265,7 @@ void FrameScheduler::Wakeup() {
 #elif defined(LFL_OSXINPUT)
         OSXTriggerFrame(screen->id);
 #else
-        FATAL("not implemented");
+        // FATAL("not implemented");
 #endif
     }
 }

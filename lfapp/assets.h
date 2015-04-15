@@ -22,6 +22,54 @@ namespace LFL {
 
 DECLARE_int(soundasset_seconds);
 
+struct AudioAssetLoader {
+    virtual void *LoadAudioFile(const string &fn) = 0;
+    virtual void UnloadAudioFile(void *h) = 0;
+
+    virtual void *LoadAudioBuf(const char *buf, int len, const char *mimetype) = 0;
+    virtual void UnloadAudioBuf(void *h) = 0;
+
+    virtual void LoadAudio(void *h, SoundAsset *a, int seconds, int flag) = 0;
+    virtual int RefillAudio(SoundAsset *a, int reset) = 0;
+};
+
+struct VideoAssetLoader {
+    virtual void *LoadVideoFile(const string &fn) = 0;
+    virtual void UnloadVideoFile(void *h) = 0;
+
+    virtual void *LoadVideoBuf(const char *buf, int len, const char *mimetype) = 0;
+    virtual void UnloadVideoBuf(void *h) = 0;
+
+    struct Flag { enum { LoadGL=1, Clear=2, Default=LoadGL|Clear }; };
+    virtual void LoadVideo(void *h, Texture *out, int flag=Flag::Default) = 0;
+};
+
+struct MovieAssetLoader {
+    virtual void *LoadMovieFile(const string &fn) = 0;
+    virtual void UnloadMovieFile(void *h) = 0;
+
+    virtual void *LoadMovieBuf(const char *buf, int len, const char *mimetype) = 0;
+    virtual void UnloadMovieBuf(void *h) = 0;
+
+    virtual void LoadMovie(void *h, MovieAsset *a) = 0;
+    virtual int PlayMovie(MovieAsset *a, int seek) = 0;
+};
+
+template <class X> struct AssetMapT {
+    bool loaded;
+    vector<X> vec;
+    map<string, X*> amap;
+    AssetMapT() : loaded(0) {}
+    void Add(const X &a) { CHECK(!loaded); vec.push_back(a); }
+    void Unloaded(X *a) { if (!a->name.empty()) amap.erase(a->name); }
+    void Load(X *a) { a->parent = this; if (!a->name.empty()) amap[a->name] = a; a->Load(); }
+    void Load() { CHECK(!loaded); for (int i=0; i<vec.size(); i++) Load(&vec[i]); loaded=1; }
+    X *operator()(const string &an) { return FindOrNull(amap, an); }
+};
+typedef AssetMapT<     Asset>      AssetMap;
+typedef AssetMapT<SoundAsset> SoundAssetMap;
+typedef AssetMapT<MovieAsset> MovieAssetMap;
+
 struct Geometry {
     int vd, td, cd, primtype, count, material, color;
     Material mat;
@@ -64,21 +112,6 @@ struct Geometry {
     static string ExportOBJ(const Geometry *geometry, const set<int> *prim_filter=0, bool prim_filter_invert=0);
 };
 
-template <class X> struct AssetMapT {
-    bool loaded;
-    vector<X> vec;
-    map<string, X*> amap;
-    AssetMapT() : loaded(0) {}
-    void Add(const X &a) { CHECK(!loaded); vec.push_back(a); }
-    void Unloaded(X *a) { if (!a->name.empty()) amap.erase(a->name); }
-    void Load(X *a) { a->parent = this; if (!a->name.empty()) amap[a->name] = a; a->Load(); }
-    void Load() { CHECK(!loaded); for (int i=0; i<vec.size(); i++) Load(&vec[i]); loaded=1; }
-    X *operator()(const string &an) { return FindOrNull(amap, an); }
-};
-typedef AssetMapT<     Asset>      AssetMap;
-typedef AssetMapT<SoundAsset> SoundAssetMap;
-typedef AssetMapT<MovieAsset> MovieAssetMap;
-
 struct Asset {
     typedef function<void(Asset*, Entity*)> DrawCB;
 
@@ -104,12 +137,13 @@ struct Asset {
         typeID(0), particleTexID(0), blends(GraphicsDevice::SrcAlpha), blendt(GraphicsDevice::OneMinusSrcAlpha), color(0), zsort(0) { tex.cubemap=CM; }
 
     void Load(void *handle=0, VideoAssetLoader *l=0);
-    void Load(const void *FromBuf, const char *filename, int size);
     void Unload();
 
     static void Load(vector<Asset> *assets) { for (int i=0; i<assets->size(); ++i) (*assets)[i].Load(); }
-    static void LoadTexture(const string &fn, Texture *out, VideoAssetLoader *l=0) { LoadTexture(0, fn, out, l); }
+    static void LoadTexture(         const string &fn, Texture *out, VideoAssetLoader *l=0) { LoadTexture(0, fn, out, l); }
     static void LoadTexture(void *h, const string &fn, Texture *out, VideoAssetLoader *l=0);
+    static void LoadTexture(const void *from_buf, const char *fn, int size, Texture *out, int flag=VideoAssetLoader::Flag::Default);
+
     static void Copy(const Asset *in, Asset *out) {
         string name = out->name;
         unsigned typeID = out->typeID;
@@ -158,38 +192,6 @@ struct MovieAsset {
 
 struct MapAsset {
     virtual void Draw(const Entity &camera) = 0;
-};
-
-struct AudioAssetLoader {
-    virtual void *LoadAudioFile(const string &fn) = 0;
-    virtual void UnloadAudioFile(void *h) = 0;
-
-    virtual void *LoadAudioBuf(const char *buf, int len, const char *mimetype) = 0;
-    virtual void UnloadAudioBuf(void *h) = 0;
-
-    virtual void LoadAudio(void *h, SoundAsset *a, int seconds, int flag) = 0;
-    virtual int RefillAudio(SoundAsset *a, int reset) = 0;
-};
-
-struct VideoAssetLoader {
-    virtual void *LoadVideoFile(const string &fn) = 0;
-    virtual void UnloadVideoFile(void *h) = 0;
-
-    virtual void *LoadVideoBuf(const char *buf, int len, const char *mimetype) = 0;
-    virtual void UnloadVideoBuf(void *h) = 0;
-
-    virtual void LoadVideo(void *h, Texture *out, bool clear=true) = 0;
-};
-
-struct MovieAssetLoader {
-    virtual void *LoadMovieFile(const string &fn) = 0;
-    virtual void UnloadMovieFile(void *h) = 0;
-
-    virtual void *LoadMovieBuf(const char *buf, int len, const char *mimetype) = 0;
-    virtual void UnloadMovieBuf(void *h) = 0;
-
-    virtual void LoadMovie(void *h, MovieAsset *a) = 0;
-    virtual int PlayMovie(MovieAsset *a, int seek) = 0;
 };
 
 struct JpegReader {
