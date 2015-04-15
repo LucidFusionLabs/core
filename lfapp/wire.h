@@ -37,6 +37,7 @@ struct Serializable {
     string ToString(unsigned short seq=0);
     void ToString(string *out, unsigned short seq=0);
     void ToString(char *buf, int len, unsigned short seq=0);
+    template <class X> static int GetType() { return ((X*)NULL)->X::Type(); }
 
     struct Header {
         static const int size = 4;
@@ -53,8 +54,11 @@ struct Serializable {
     int      Read(const Stream *is) { if (!HdrCheck(is)) return -1; return In(is); }
 
     struct Stream {
-        char *buf; int size; mutable int offset; mutable bool error;
-        Stream(char *B, int S) : buf(B), size(S), offset(0), error(0) {}
+        char *buf;
+        int size;
+        mutable int offset=0;
+        mutable bool error=0;
+        Stream(char *B, int S) : buf(B), size(S) {}
 
         virtual unsigned char  *N8()            = 0;
         virtual unsigned short *N16()           = 0;
@@ -73,8 +77,8 @@ struct Serializable {
         const unsigned       *N32() const { unsigned       *ret = (unsigned      *)(buf+offset); offset += 4;   if (offset > size) { error=1; return 0; } return ret; }
         const char           *Get(int len=0) const { char  *ret = (char          *)(buf+offset); offset += len; if (offset > size) { error=1; return 0; } return ret; }
 
-        void String(const char *buf, int len) { char *v = (char*)Get(len); if (v) memcpy(v, buf, len); }
-        void String(const string &in) { char *v = (char*)Get(in.size()); if (v) memcpy(v, in.c_str(), in.size()); }
+        void String  (const StringPiece &in) { char *v = (char*)Get(in.size());   if (v) memcpy(v, in.data(), in.size()); }
+        void NTString(const StringPiece &in) { char *v = (char*)Get(in.size()+1); if (v) memcpy(v, in.data(), in.size()); v[in.size()]=0; }
 
         void Write8 (const unsigned char  &in) { unsigned char  *v =                 N8();  if (v) *v = in; }
         void Write8 (const          char  &in) {          char  *v = (char*)         N8();  if (v) *v = in; }
@@ -253,6 +257,77 @@ struct SMTP {
     static int RetryableCode(int code) {
         return !code || code == 221 || code == 421 || code == 450 || code == 451 || code == 500 || code == 501 || code == 502 || code == 503;
     }
+};
+
+struct InterProcessProtocol {
+    struct Header : public Serializable::Header {};
+    struct LoadResourceRequest : public Serializable {
+        unsigned short ipr_type;
+        int ipr_len;
+        string ipr_url;
+        LoadResourceRequest(int t=0, const string &u=string(), int l=0) : ipr_type(t), ipr_len(l), ipr_url(u) {}
+
+        int Type() const { return 1; }
+        int Size() const { return HeaderSize() + ipr_url.size(); }
+        int HeaderSize() const { return 8; }
+
+        void Out(Serializable::Stream *o) const { o->Htons(ipr_type); o->Htons((unsigned short)ipr_url.size()); o->Htonl(ipr_len); o->String(ipr_url); }
+        int   In(const Serializable::Stream *i) { unsigned short l; i->Ntohs(&ipr_type); i->Ntohs(&l); i->Ntohl(&ipr_len); ipr_url = i->Get(l); return 0; }
+    };
+    struct LoadResourceResponse : public Serializable {
+        unsigned short ipr_type;
+        int ipr_len;
+        string ipr_url;
+        LoadResourceResponse(int t=0, const string &u=string(), int l=0) : ipr_type(t), ipr_len(l), ipr_url(u) {}
+
+        int Type() const { return 2; }
+        int Size() const { return HeaderSize() + ipr_url.size(); }
+        int HeaderSize() const { return 8; }
+
+        void Out(Serializable::Stream *o) const { o->Htons(ipr_type); o->Htons((unsigned short)ipr_url.size()); o->Htonl(ipr_len); o->String(ipr_url); }
+        int   In(const Serializable::Stream *i) { unsigned short l; i->Ntohs(&ipr_type); i->Ntohs(&l); i->Ntohl(&ipr_len); ipr_url = i->Get(l); return 0; }
+    };
+    struct ContentResource : public Serializable {
+        StringPiece buf, name, type;
+        ContentResource() {}
+        ContentResource(const string &b, const string &n, const string &t) : buf(b), name(n), type(t) {}
+
+        int Type() const { return 1<<11 | 1; }
+        int Size() const { return HeaderSize() + 3 + buf.size() + name.size() + type.size(); }
+        int HeaderSize() const { return sizeof(int) * 3; }
+
+        void Out(Serializable::Stream *o) const {
+            o->Htonl   (buf.size()); o->Htonl   (name.size()); o->Htonl   (type.size());
+            o->NTString(buf);        o->NTString(name);        o->NTString(type);
+        }
+        int In(const Serializable::Stream *i) {
+            /**/      i->Ntohl(&buf.len); /**/         i->Ntohl(&name.len); /**/         i->Ntohl(&type.len);
+            buf.buf = i->Get  ( buf.len+1); name.buf = i->Get  ( name.len+1); type.buf = i->Get  ( type.len+1);
+            return 0;
+        }
+    };
+    struct TextureResource : public Serializable {
+        int width, height, pf, linesize;
+        StringPiece buf;
+        TextureResource() : width(0), height(0), pf(0), linesize(0) {}
+        TextureResource(const Texture &t) : width(t.width), height(t.height), pf(t.pf), linesize(t.LineSize()),
+            buf(reinterpret_cast<const char *>(t.buf), t.BufferSize()) {}
+
+        int Type() const { return 1<<11 | 2; }
+        int Size() const { return HeaderSize() + buf.size(); }
+        int HeaderSize() const { return sizeof(int) * 4; }
+
+        void Out(Serializable::Stream *o) const {
+            CHECK_EQ(linesize * height, buf.len);
+            o->Htonl(width); o->Htonl(height); o->Htonl(pf); o->Htonl(linesize);
+            o->String(buf);
+        }
+        int In(const Serializable::Stream *i) {
+            i->Ntohl(&width); i->Ntohl(&height); i->Ntohl(&pf); i->Ntohl(&linesize);
+            buf.buf = i->Get((buf.len = linesize * height));
+            return 0;
+        }
+    };
 };
 
 struct GameProtocol {

@@ -47,8 +47,8 @@ struct Game {
         struct Visitor {
             virtual void Visit(Connection *c, Game::ConnectionData *cd) = 0;
             static void Accept(Service *svc, Visitor *visitor) {
-                for (Service::EndpointMap::iterator iter = svc->endpoint.begin(); iter != svc->endpoint.end(); iter++) {
-                    Connection *c = (*iter).second;
+                for (auto iter = svc->endpoint.begin(), e = svc->endpoint.end(); iter != e; ++iter) {
+                    Connection *c = iter->second;
                     Game::ConnectionData *cd = Game::ConnectionData::Get(c);
                     if (!cd->team) continue;
                     visitor->Visit(c, cd);
@@ -56,7 +56,9 @@ struct Game {
             }
         };
         struct BroadcastVisitor : public Visitor {
-            Game::Network *net; Serializable *msg; int sent;
+            Game::Network *net;
+            Serializable *msg;
+            int sent;
             BroadcastVisitor(Game::Network *n, Serializable *m) : net(n), msg(m), sent(0) {}
             virtual void Visit(Connection *c, Game::ConnectionData *cd) {
                 net->Write(c, UDPClient::Sendto, cd->seq++, msg);
@@ -65,7 +67,10 @@ struct Game {
             }
         };
         struct BroadcastWithRetryVisitor : public Visitor {
-            Game::Network *net; Serializable *msg; Connection *skip; int sent;
+            Game::Network *net;
+            Serializable *msg;
+            Connection *skip;
+            int sent;
             BroadcastWithRetryVisitor(Game::Network *n, Serializable *m, Connection *Skip=0) : net(n), msg(m), skip(Skip), sent(0) {}
             virtual void Visit(Connection *c, Game::ConnectionData *cd) {
                 if (c == skip) return;
@@ -78,7 +83,8 @@ struct Game {
         virtual void WriteWithRetry(ReliableNetwork*, Connection*, Serializable*, unsigned short seq) = 0;
 
         int Write(Connection *c, int method, unsigned short seq, Serializable *msg) {
-            string buf; msg->ToString(&buf, seq);
+            string buf;
+            msg->ToString(&buf, seq);
             return Write(c, method, buf.data(), buf.size());
         }
         int Broadcast(Service *svc, Serializable *msg) {
@@ -115,7 +121,7 @@ struct Game {
         }
     };
     struct ReliableUDPNetwork : public ReliableNetwork {
-        typedef map<unsigned short, pair<Time, string> > RetryMap;
+        typedef unordered_map<unsigned short, pair<Time, string> > RetryMap;
         Game::Network *net;
         RetryMap retry;
         unsigned method, timeout;
@@ -131,11 +137,10 @@ struct Game {
             net->Write(c, method, msg.second.data(), msg.second.size());
         }
         void Heartbeat(Connection *c) {
-            for (RetryMap::iterator i = retry.begin(); i != retry.end(); i++) {
-                if ((*i).second.first + timeout > Now()) continue;
-
-                (*i).second.first = Now();
-                net->Write(c, method, (*i).second.second.data(), (*i).second.second.size());
+            for (auto i = retry.begin(), e = retry.end(); i != e; ++i) {
+                if (i->second.first + timeout > Now()) continue;
+                i->second.first = Now();
+                net->Write(c, method, i->second.second.data(), i->second.second.size());
             }
         }
     };
@@ -222,7 +227,7 @@ struct Game {
     Entity *Add(EntityID id, Entity *e) { e->SetName(StringPrintf("%05d", id)); return scene->Add(e); }
     Entity *Get(EntityID id) { return scene->Get(StringPrintf("%05d", id)); }
     virtual void Del(EntityID id) { scene->Del(StringPrintf("%05d", id)); }
-    static EntityID GetID(const Entity *e) { return atoi(e->name.c_str()); }
+    static EntityID GetID(const Entity *e) { return atoi(e->name); }
 };
 
 struct GameBots {
@@ -297,7 +302,7 @@ struct GameServer : public Query {
         c->query = 0;
         if (!cd->team) return;
 
-        INFO(c->Name(), ": ", cd->playerName.c_str(), " left");
+        INFO(c->Name(), ": ", cd->playerName, " left");
         GameProtocol::RconRequest print(StrCat("print *** ", cd->playerName, " left"));
         BroadcastWithRetry(&print, c);
     }
@@ -322,9 +327,8 @@ struct GameServer : public Query {
             string pong = StrCat("map=default\nname=", local_game_name, "\nplayers=", last.num_send_WorldUpdate, "/24\n");
             c->SendTo(pong.data(), pong.size());
         }
-#define game_protocol_request_type(Request) ((GameProtocol::Request*)0)->GameProtocol::Request::Type()
 #       define elif_parse(Request, in) \
-        else if (hdr.id == game_protocol_request_type(Request)) { \
+        else if (hdr.id == Serializable::GetType<GameProtocol::Request>()) { \
             GameProtocol::Request req; \
             if (!req.Read(&in)) Request ## CB(c, &hdr, &req); \
         }
@@ -362,7 +366,7 @@ struct GameServer : public Query {
         if (now > last.time_post_MasterUpdate + MasterUpdateInterval || !last.time_post_MasterUpdate) {
             last.time_post_MasterUpdate = now;
             if (!master_sink_url.empty())
-                Singleton<HTTPClient>::Get()->WPost(master_sink_url.c_str(), "application/octet-stream", (char*)local_game_url.c_str(), local_game_url.size());
+                Singleton<HTTPClient>::Get()->WPost(master_sink_url, "application/octet-stream", (char*)local_game_url.c_str(), local_game_url.size());
         }
 
         int updated = 0;
@@ -377,8 +381,8 @@ struct GameServer : public Query {
         last.WorldUpdate.entity.resize(scene->entityMap.size());
 
         int entity_type_index = 0, entity_index = 0;
-        for (Scene::EntityAssetMap::iterator i = scene->assetMap.begin(); i != scene->assetMap.end(); i++)
-            for (Scene::EntityVector::iterator j = (*i).second.begin(); j != (*i).second.end(); j++)
+        for (auto i = scene->assetMap.begin(), ie = scene->assetMap.end(); i != ie; ++i)
+            for (auto j = i->second.begin(), je = i->second.end(); j != je; ++j)
                 last.WorldUpdate.entity[entity_index++].From(*j);
 
         last.send_WorldUpdate[last.send_WorldUpdate_index].id = last.WorldUpdate.id;
@@ -436,7 +440,7 @@ struct GameServer : public Query {
         GameProtocol::PlayerList playerlist;
         playerlist.Text = StrCat(world->red_score, ",", world->blue_score, "\n");
         for (int i = 0; i < svc.size(); ++i)
-            for (Service::EndpointMap::iterator iter = svc[i]->endpoint.begin(); iter != svc[i]->endpoint.end(); iter++)
+            for (auto iter = svc[i]->endpoint.begin(), e = svc[i]->endpoint.end(); iter != e; ++iter)
                 AppendSerializedPlayerData(Game::ConnectionData::Get(iter->second), &playerlist.Text);
         if (bots) for (GameBots::BotVector::iterator i = bots->bots.begin(); i != bots->bots.end(); i++)
             AppendSerializedPlayerData(i->player_data, &playerlist.Text);
@@ -469,8 +473,8 @@ struct GameServer : public Query {
             } else if (cmd == "anim") {
                 string a1, a2;
                 Split(arg, isspace, &a1, &a2);
-                Entity *e = world->Get(atoi(a1.c_str()));
-                int anim_id = atoi(a2.c_str());
+                Entity *e = world->Get(atoi(a1));
+                int anim_id = atoi(a2);
                 if (!e || !anim_id) { WritePrintWithRetry(c, cd, "usage: anim <entity_id> <anim_id>"); continue; }
                 e->animation.Start(anim_id);
             } else if (cmd == "auth") {
@@ -516,13 +520,13 @@ struct GameUDPServer : public UDPServer {
         static string ping="ping\n";
         if (in.size == ping.size() && in.buf == ping) {
             ((GameServer*)query)->Read(c, content, content_len);
-        } else if (hdr.id == game_protocol_request_type(ChallengeRequest) && !challenge.Read(&in)) {
+        } else if (hdr.id == Serializable::GetType<GameProtocol::ChallengeRequest>() && !challenge.Read(&in)) {
             GameProtocol::ChallengeResponse response;
             response.token = Hash(c);
             string buf;
             response.ToString(&buf, hdr.seq);
             c->SendTo(buf.data(), buf.size());
-        } else if (hdr.id == game_protocol_request_type(JoinRequest) && !join.Read(&in)) {
+        } else if (hdr.id == Serializable::GetType<GameProtocol::JoinRequest>() && !join.Read(&in)) {
             if (join.token == Hash(c)) return 0;
         } else ERROR(c->Name(), ": parse failed: unknown type ", hdr.id, " bytes ", in.size);
         return 1;
@@ -592,7 +596,7 @@ struct GameClient {
     void MoveRev   (unsigned t) { control.SetBack();    }
     void MoveLeft  (unsigned t) { control.SetLeft();    }
     void MoveRight (unsigned t) { control.SetRight();   }
-    void SetCamera(const vector<string> &a) { cam = atoi(a.size() ? a[0].c_str() : ""); }
+    void SetCamera(const vector<string> &a) { cam = atoi(a.size() ? a[0] : ""); }
     void RconCmd  (const vector<string> &a) { if (a.size()) Rcon(a[0]); }
     void SetTeam  (const vector<string> &a) { if (a.size()) Rcon(StrCat("team ", a[0])); }
     void SetName  (const vector<string> &a) {
@@ -782,9 +786,9 @@ struct GameClient {
                 INFO(arg);
                 if (chat) chat->Write(arg);
             } else if (cmd == "player_team") {
-                team = atoi(arg.c_str());
+                team = atoi(arg);
             } else if (cmd == "player_entity") {
-                entity_id = atoi(arg.c_str());
+                entity_id = atoi(arg);
                 reorienting = true;
             } else if (cmd == "set_asset") {
                 vector<string> items;
@@ -792,7 +796,7 @@ struct GameClient {
                 for (vector<string>::const_iterator i = items.begin(); i != items.end(); ++i) {
                     string k, v;
                     Split(*i, isint<'='>, &k, &v);
-                    assets[atoi(k.c_str())] = v;
+                    assets[atoi(k)] = v;
                     INFO("GameAsset[", k, "] = ", v);
                 }
             } else if (cmd == "set_entity") {
@@ -802,7 +806,7 @@ struct GameClient {
                     vector<string> args;
                     Split(*i, isint2<'.', '='>, &args);
                     if (args.size() != 3) { ERROR("unknown arg ", *i); continue; }
-                    int id = atoi(args[0].c_str());
+                    int id = atoi(args[0]);
                     Entity *e = world->Get(id); 
                     if (!e) e = WorldAddEntity(id);
                     if      (args[1] == "color1") e->color1 = Color(args[2]);
@@ -963,7 +967,7 @@ struct GameMenuGUI : public GUI, public Query {
 
     void Refresh() { 
         if (broadcast_ip) SystemNetwork::SendTo(pinger.GetListener()->socket, broadcast_ip, default_port, "ping\n", 5);
-        if (!master_get_url.empty()) Singleton<HTTPClient>::Get()->WGet(master_get_url.c_str(), 0, bind(&GameMenuGUI::MasterGetResponseCB, this, _1, _2, _3, _4, _5));
+        if (!master_get_url.empty()) Singleton<HTTPClient>::Get()->WGet(master_get_url, 0, bind(&GameMenuGUI::MasterGetResponseCB, this, _1, _2, _3, _4, _5));
         master_server_list.clear(); master_server_selected=-1;
     }
     void MasterGetResponseCB(Connection *c, const char *h, const string &ct, const char *cb, int cl) {
@@ -1199,7 +1203,7 @@ struct GamePlayerListGUI : public GUI {
         const char *hdr = lines.Next();
         string red_score_text, blue_score_text;
         Split(hdr, iscomma, &red_score_text, &blue_score_text);
-        int red_score=atoi(red_score_text.c_str()), blue_score=atoi(blue_score_text.c_str());
+        int red_score=atoi(red_score_text), blue_score=atoi(blue_score_text);
         winning_team = blue_score > red_score ? Game::Team::Blue : Game::Team::Red;
         titletext = StrCat(titlename, " ", red_score, "-", blue_score);
 
@@ -1224,7 +1228,7 @@ struct GamePlayerListGUI : public GUI {
         Flow menuflow1(&out1, font, &outgeom1), menuflow2(&out2, font, &outgeom2);
         for (PlayerList::iterator it = playerlist.begin(); it != playerlist.end(); it++) {
             const Player &p = (*it);
-            int team = atoi(p[2].c_str());
+            int team = atoi(p[2]);
             bool winner = team == winning_team;
             LayoutLine(winner ? &menuflow1 : &menuflow2, PlayerName(p), PlayerScore(p), PlayerPing(p));
         }

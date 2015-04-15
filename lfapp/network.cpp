@@ -151,6 +151,9 @@ int Network::Init() {
     }
 #endif
     Enable(Singleton<UDPClient>::Get());
+    Enable(Singleton<HTTPClient>::Get());
+    Enable(Singleton<UnixClient>::Get());
+
     vector<IPV4::Addr> nameservers;
     if (FLAGS_nameserver.empty()) {
         INFO("Network::Init(): Enable(new Resolver(defaultNameserver()))");
@@ -161,8 +164,6 @@ int Network::Init() {
     }
     for (auto &n : nameservers) Singleton<Resolver>::Get()->Connect(n);
 
-    INFO("Network::Init(): service_enable(new HTTPClient)");
-    Enable(Singleton<HTTPClient>::Get());
     return 0;
 }
 
@@ -996,8 +997,8 @@ void Service::EndpointClose(const string &endpoint_name) {
 /* NetworkThread */
 
 NetworkThread::NetworkThread(Network *N) : net(N),
-rd(new Connection(Singleton<Service>::Get(), new Query())),
-wr(new Connection(Singleton<Service>::Get(), new Query())),
+rd(new Connection(Singleton<UnixClient>::Get(), new Query())),
+wr(new Connection(Singleton<UnixClient>::Get(), new Query())),
 thread(new Thread(bind(&NetworkThread::HandleMessagesLoop, this))) {
     int fd[2];
     CHECK(SystemNetwork::OpenSocketPair(fd));
@@ -1006,7 +1007,6 @@ thread(new Thread(bind(&NetworkThread::HandleMessagesLoop, this))) {
     wr->socket = fd[1];
 
     net->select_time = -1;
-    net->Enable(rd->svc);
     rd->svc->conn[rd->socket] = rd;
     net->active.Add(rd->socket, SocketSet::READABLE, &rd->self_reference);
 }
@@ -1020,6 +1020,12 @@ int NetworkThread::Query::Read(Connection *c) {
 
 /* ProcessAPI */
 
+#ifdef LFL_IPC_DEBUG
+#define IPCTrace(...) printf(__VA_ARGS__)
+#else
+#define IPCTrace(...)
+#endif
+
 void ProcessAPIServer::Start(const string &client_program) {
     int fd[2];
     CHECK(SystemNetwork::OpenSocketPair(fd));
@@ -1027,28 +1033,70 @@ void ProcessAPIServer::Start(const string &client_program) {
     if ((pid = fork())) {
         CHECK_GT(pid, 0);
         close(fd[0]);
-        conn = new Connection(Singleton<Service>::Get(), new Query());
+        conn = new Connection(Singleton<UnixClient>::Get(), new Query(this));
         conn->state = Connection::Connected;
         conn->socket = fd[1];
+        conn->svc->conn[conn->socket] = conn;
+        app->network.active.Add(conn->socket, SocketSet::READABLE, &conn->self_reference);
     } else {
         close(fd[1]);
+        // close(0); close(1); close(2);
         string arg0 = client_program, arg1 = StrCat("fd://", fd[0]);
         vector<char* const> av = { &arg0[0], &arg1[0], 0 };
         CHECK(!execvp(av[0], &av[0]));
     }
 }
 
-void ProcessAPIServer::Write(int x) { 
+void ProcessAPIServer::LoadResource(const string &content, const string &fn, const ProcessAPIServer::LoadResourceCompleteCB &cb) { 
     CHECK(conn);
-    CHECK_EQ(sizeof(x), conn->WriteFlush(reinterpret_cast<const char*>(&x), sizeof(x)));
+    InterProcessProtocol::ContentResource resource(content, fn, "");
+    InterProcessResource ipr(Serializable::Header::size + resource.Size());
+    resource.ToString(ipr.buf, ipr.len);
+    ipr.id = -1;
+
+    string msg;
+    reqmap[seq] = cb;
+    InterProcessProtocol::LoadResourceRequest(resource.Type(), ipr.url, ipr.len).ToString(&msg, seq++);
+    IPCTrace("ProcessAPIServer::LoadResource fn='%s' msg_size=%zd\n", fn.c_str(), msg.size());
+    CHECK_EQ(msg.size(), conn->WriteFlush(msg));
+}
+
+int ProcessAPIServer::Query::Read(Connection *c) {
+    while (c->rl >= Serializable::Header::size) {
+        IPCTrace("ProcessAPIServer::Query::Read begin parse %d bytes\n", c->rl);
+        Serializable::ConstStream in(c->rb, c->rl);
+        Serializable::Header hdr;
+        hdr.In(&in);
+        auto reply = parent->reqmap.find(hdr.seq);
+        CHECK_NE(parent->reqmap.end(), reply);
+        if (hdr.id == Serializable::GetType<InterProcessProtocol::LoadResourceResponse>()) {
+            InterProcessProtocol::LoadResourceResponse req;
+            if (req.Read(&in)) break;
+            InterProcessResource res(req.ipr_len, req.ipr_url);
+            if (req.ipr_type == Serializable::GetType<InterProcessProtocol::TextureResource>()) {
+                Serializable::ConstStream res_in(res.buf, res.len);
+                Serializable::Header res_hdr;
+                res_hdr.In(&res_in);
+                CHECK_EQ(req.ipr_type, res_hdr.id);
+                InterProcessProtocol::TextureResource tex_res;
+                CHECK(!tex_res.Read(&res_in));
+                IPCTrace("ProcessAPIServer::Query::Read TextureResource width=%d height=%d\n", tex_res.width, tex_res.height);
+                reply->second(tex_res);
+
+            } else FATAL("unknown ipr type", req.ipr_type);
+        } else FATAL("unknown id ", hdr.id);
+        IPCTrace("ProcessAPIServer::Query::Read flush %d bytes\n", in.offset);
+        c->ReadFlush(in.offset);
+    }
+    return 0;
 }
 
 void ProcessAPIClient::Start(const string &socket_name) {
     static string fd_url = "fd://";
     if (PrefixMatch(socket_name, fd_url)) {
-        conn = new Connection(Singleton<Service>::Get(), Singleton<Query>::Get());
+        conn = new Connection(Singleton<UnixClient>::Get(), Singleton<Query>::Get());
         conn->state = Connection::Connected;
-        conn->socket = atoi(socket_name.substr(fd_url.size()));
+        conn->socket = atoi(socket_name.c_str() + fd_url.size());
     } else return;
     INFO("ProcessAPIClient opened ", socket_name);
 }
@@ -1058,7 +1106,42 @@ void ProcessAPIClient::HandleMessagesLoop() {
     while (app->run) {
         if ((l = NBRead(conn->socket, conn->rb + conn->rl, Connection::BufSize - conn->rl, -1)) <= 0) break;
         conn->rl += l;
-        if (conn->rl >= sizeof(int)) printf("got %d\n", *(int*)conn->rb);
+        while (conn->rl >= Serializable::Header::size) {
+            IPCTrace("ProcessAPIClient:HandleMessagesLoop begin parse %d bytes\n", conn->rl);
+            Serializable::ConstStream in(conn->rb, conn->rl);
+            Serializable::Header hdr;
+            hdr.In(&in);
+            if (hdr.id == Serializable::GetType<InterProcessProtocol::LoadResourceRequest>()) {
+                InterProcessProtocol::LoadResourceRequest req;
+                if (req.Read(&in)) break;
+                InterProcessResource res(req.ipr_len, req.ipr_url);
+                if (req.ipr_type == Serializable::GetType<InterProcessProtocol::ContentResource>()) {
+                    Serializable::ConstStream res_in(res.buf, res.len);
+                    Serializable::Header res_hdr;
+                    res_hdr.In(&res_in);
+                    CHECK_EQ(req.ipr_type, res_hdr.id);
+                    InterProcessProtocol::ContentResource content_res;
+                    CHECK(!content_res.Read(&res_in));
+                    IPCTrace("ProcessAPIClient:HandleMessagesLoop LoadResourceRequest ContentResource fn='%s'\n", content_res.name.buf);
+
+                    Texture tex;
+                    Asset::LoadTexture(content_res.buf.data(), content_res.name.data(), content_res.buf.size(), &tex, 0);
+                    InterProcessProtocol::TextureResource tex_res(tex);
+                    InterProcessResource ipr(Serializable::Header::size + tex_res.Size());
+                    tex_res.ToString(ipr.buf, ipr.len);
+                    ipr.id = -1;
+
+                    string msg;
+                    InterProcessProtocol::LoadResourceResponse(tex_res.Type(), ipr.url, ipr.len).ToString(&msg, hdr.seq);
+                    IPCTrace("ProcessAPIClient:HandleMessagesLoop LoadResourceResponse TextureResource width=%d height=%d msg_size=%zd\n",
+                             tex_res.width, tex_res.height, msg.size());
+                    CHECK_EQ(msg.size(), conn->WriteFlush(msg));
+
+                } else FATAL("unknown ipr type", req.ipr_type);
+            } else FATAL("unknown id ", hdr.id);
+            IPCTrace("ProcessAPIClient:HandleMessagesLoop flush %d bytes\n", in.offset);
+            conn->ReadFlush(in.offset);
+        }
     }
 }
 

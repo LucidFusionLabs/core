@@ -325,7 +325,6 @@ struct ServiceEndpointEraseList {
 
 /// NetworkThread runs the Network Module in a new thread with a multiplexed Callback queue
 struct NetworkThread {
-    struct Service : public LFL::Service {};
     struct Query : public LFL::Query {
         void HandleMessage(Callback *cb) { (*cb)(); delete cb; }
         int Read(Connection *c);
@@ -341,16 +340,21 @@ struct NetworkThread {
 };
 
 struct ProcessAPIServer {
-    struct Service : public LFL::Service {};
-    struct Query : public LFL::Query {};
+    typedef function<void(const InterProcessProtocol::TextureResource&)> LoadResourceCompleteCB;
+    struct Query : public LFL::Query {
+        ProcessAPIServer *parent;
+        Query(ProcessAPIServer *P) : parent(P) {}
+        int Read(Connection *c);
+    };
     int pid=0;
     Connection *conn=0;
+    unsigned short seq=0;
+    unordered_map<unsigned short, LoadResourceCompleteCB> reqmap;
     void Start(const string &client_program);
-    void Write(int x);
+    void LoadResource(const string &content, const string &fn, const LoadResourceCompleteCB &cb);
 };
 
 struct ProcessAPIClient {
-    struct Service : public LFL::Service {};
     struct Query : public LFL::Query {};
     Connection *conn=0;
     void Start(const string &socket_name);

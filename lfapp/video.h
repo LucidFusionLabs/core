@@ -376,13 +376,14 @@ struct Texture : public Drawable {
     point Dimension() const { return point(width, height); }
     int PixelSize() const { return Pixel::size(pf); }
     int LineSize() const { return width * PixelSize(); }
+    int BufferSize() const { return height * LineSize(); }
     int GLPixelType() const { return Pixel::OpenGLID(pf); }
     int GLTexType() const { return CubeMap::OpenGLID(cubemap); }
     string DebugString() const { return StrCat("Texture(", width, ", ", height, ", ", Pixel::Name(pf), ")"); }
     void ClearGL();
     void RenewGL() { ClearGL(); Create(width, height); }
     void ClearBuffer() { if (buf_owner) delete [] buf; buf = 0; buf_owner = 1; }
-    unsigned char *NewBuffer() const { return new unsigned char [width * height * PixelSize()](); }
+    unsigned char *NewBuffer() const { return new unsigned char [BufferSize()](); }
     unsigned char *RenewBuffer() { ClearBuffer(); buf = NewBuffer(); return buf; }
 
     struct Flag { enum { CreateGL=1, CreateBuf=2, FlipY=4, Resample=8 }; };

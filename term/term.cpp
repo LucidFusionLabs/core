@@ -56,11 +56,11 @@ void MyNewLinkCB(const shared_ptr<TextGUI::Link> &link) {
 }
 
 void MyHoverLinkCB(TextGUI::Link *link) {
-    Asset *a = link ? link->image : 0;
-    if (!a) return;
-    a->tex.Bind();
+    Texture *tex = link ? link->image : 0;
+    if (!tex) return;
+    tex->Bind();
     screen->gd->SetColor(Color::white - Color::Alpha(0.2));
-    Box::DelBorder(screen->Box(), screen->width*.2, screen->height*.2).Draw(a->tex.coord);
+    Box::DelBorder(screen->Box(), screen->width*.2, screen->height*.2).Draw(tex->coord);
 }
 
 struct ReadBuffer {
@@ -210,7 +210,6 @@ extern "C" int main(int argc, const char *argv[]) {
         string render_client = StrCat(app->BinDir(), "lterm-sandbox-render");
         render_process = new ProcessAPIServer();
         render_process->Start(render_client);
-        render_process->Write(39);
     }
 
     if (FLAGS_font_engine != "atlas") app->video.init_fonts_cb = &MyInitFonts;
@@ -249,6 +248,7 @@ extern "C" int main(int argc, const char *argv[]) {
                    "#define TEX2D\n#define VERTEXCOLOR\n", &warpershader);
 
     image_browser = new Browser();
+    image_browser->doc.parser->render_process = render_process;
     MyTerminalWindow *tw = new MyTerminalWindow();
     screen->user1 = tw;
     MyWindowStartCB(screen);

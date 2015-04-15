@@ -463,6 +463,15 @@ struct ProcessPipe {
     int Close();
 };
 
+struct InterProcessResource {
+    int id=-1;
+    string url;
+    char *buf=0;
+    const int len=0;
+    InterProcessResource(int size, const string &ipr_url=string());
+    ~InterProcessResource();
+};
+
 struct NTService {
     static int Install  (const char *name, const char *path);
     static int Uninstall(const char *name);

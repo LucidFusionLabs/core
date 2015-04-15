@@ -359,12 +359,14 @@ struct SimpleAssetLoader : public AudioAssetLoader, public VideoAssetLoader, pub
     virtual void *LoadMovieBuf(const char *buf, int len, const char *mimetype) { return LoadBuf(buf, len, mimetype); }
     virtual void UnloadMovieBuf(void *h) { return UnloadBuf(h); }
 
-    virtual void LoadVideo(void *handle, Texture *out, bool clear=true) {
+    virtual void LoadVideo(void *handle, Texture *out, int load_flag=VideoAssetLoader::Flag::Default) {
         static char jpghdr[2] = { '\xff', '\xd8' }; // 0xff, 0xd8 };
         static char gifhdr[4] = { 'G', 'I', 'F', '8' };
         static char pnghdr[8] = { '\211', 'P', 'N', 'G', '\r', '\n', '\032', '\n' };
 
-        File *f = (File*)handle; string fn = f->Filename(); unsigned char hdr[8];
+        File *f = (File*)handle;
+        string fn = f->Filename();
+        unsigned char hdr[8];
         if (f->Read(hdr, 8) != 8) { ERROR("load ", fn, " : failed"); return; }
         f->Reset();
 
@@ -386,8 +388,8 @@ struct SimpleAssetLoader : public AudioAssetLoader, public VideoAssetLoader, pub
 #endif
         else { ERROR("load ", fn, " : failed"); return; }
 
-        out->LoadGL();
-        if (clear) out->ClearBuffer();
+        if (load_flag & Flag::LoadGL) out->LoadGL();
+        if (load_flag & Flag::Clear)  out->ClearBuffer();
     }
 
     virtual void LoadAudio(void *h, SoundAsset *a, int seconds, int flag) {}
@@ -429,7 +431,7 @@ struct FFBIOFile {
     static void Free(void *in) {
         AVIOContext *s = (AVIOContext*)in;
         delete (File*)s->opaque;
-        ::free(s->buffer);
+        free(s->buffer);
         av_free(s);
     }
     static int     Read(void *f, uint8_t *buf, int buf_size) { return ((File*)f)->Read (buf, buf_size); }
@@ -438,7 +440,8 @@ struct FFBIOFile {
 };
 
 struct FFBIOC {
-    void const *buf; int len, offset;
+    void const *buf;
+    int len, offset;
     FFBIOC(void const *b, int l) : buf(b), len(l), offset(0) {}
 
     static void *Alloc(void const *buf, int len) {
@@ -448,7 +451,7 @@ struct FFBIOC {
     static void Free(void *in) {
         AVIOContext *s = (AVIOContext*)in;
         delete (FFBIOC*)s->opaque;
-        ::free(s->buffer);
+        free(s->buffer);
         av_free(s);
     }
     static int Read(void *opaque, uint8_t *buf, int buf_size) {
@@ -559,7 +562,7 @@ struct FFMpegAssetLoader : public AudioAssetLoader, public VideoAssetLoader, pub
     virtual void *LoadMovieBuf(const char *buf, int len, const char *mimetype) { return LoadBuf(buf, len, mimetype); }
     virtual void UnloadMovieBuf(void *h) { return UnloadBuf(h); }
 
-    void LoadVideo(void *handle, Texture *out, bool clear=true) {
+    void LoadVideo(void *handle, Texture *out, int load_flag=VideoAssetLoader::Flag::Default) {
         AVFormatContext *fctx = (AVFormatContext*)handle;
         int video_index = -1, got=0;
         for (int i=0; i<fctx->nb_streams; i++) {
@@ -585,7 +588,7 @@ struct FFMpegAssetLoader : public AudioAssetLoader, public VideoAssetLoader, pub
             out->width  = avctx->width;
             out->height = avctx->height;
             out->LoadGL(*frame->data, point(out->width, out->height), pf, frame->linesize[0]);
-            if (!clear) out->LoadBuffer(frame->data[0], point(out->width, out->height), pf, frame->linesize[0]);
+            if (!(load_flag & Flag::Clear)) out->LoadBuffer(frame->data[0], point(out->width, out->height), pf, frame->linesize[0]);
             // av_frame_unref(frame);
         }
 
@@ -731,8 +734,8 @@ struct AliasWavefrontObjLoader {
         LocalFile file(filename, "r");
         if (!file.Opened()) { ERROR("LocalFile::open(", file.Filename(), ")"); return 0; }
 
-        vector<v3> vert, vertOut, norm, normOut;
-        vector<v2> tex, texOut;
+        vector<v3> vert, vert_out, norm, norm_out;
+        vector<v2> tex, tex_out;
         Material mat; v3 xyz; v2 xy;
         int format=0, material=0, ind[3];
 
@@ -780,9 +783,9 @@ struct AliasWavefrontObjLoader {
                     if (ind[1] > (int)  tex.size()) { ERROR("index error 2 ", ind[1], ", ", tex.size());  return 0; }
                     if (ind[2] > (int) norm.size()) { ERROR("index error 3 ", ind[2], ", ", norm.size()); return 0; }
 
-                    if (ind[0]) vertOut.push_back(vert[ind[0]-1]);
-                    if (ind[1])  texOut.push_back(tex [ind[1]-1]);
-                    if (ind[2]) normOut.push_back(norm[ind[2]-1]);
+                    if (ind[0]) vert_out.push_back(vert[ind[0]-1]);
+                    if (ind[1])  tex_out.push_back(tex [ind[1]-1]);
+                    if (ind[2]) norm_out.push_back(norm[ind[2]-1]);
 
                     if (i == face.size()-1) break;
                     if (!i) i = next-1;
@@ -791,7 +794,8 @@ struct AliasWavefrontObjLoader {
             }
         }
 
-        Geometry *ret = new Geometry(GraphicsDevice::Triangles, vertOut.size(), &vertOut[0], normOut.size() ? &normOut[0] : 0, texOut.size() ? &texOut[0] : 0);
+        Geometry *ret = new Geometry(GraphicsDevice::Triangles, vert_out.size(), &vert_out[0],
+                                     norm_out.size() ? &norm_out[0] : 0, tex_out.size() ? &tex_out[0] : 0);
         ret->material = material;
         ret->mat = mat;
 
@@ -803,7 +807,8 @@ struct AliasWavefrontObjLoader {
         LocalFile file(StrCat(dir, filename), "r");
         if (!file.Opened()) { ERROR("LocalFile::open(", file.Filename(), ")"); return -1; }
 
-        Material m; string name;
+        Material m;
+        string name;
         for (const char *cmd = 0, *line = file.NextLine(); line; line = file.NextLine()) {
             if (!line[0] || line[0] == '#') continue;
 
@@ -921,13 +926,13 @@ void Asset::Load(void *h, VideoAssetLoader *l) {
     if (!texture.empty() || h) LoadTexture(h, StrCat(app->assetdir, texture), &tex, l);
 }
 
-void Asset::Load(const void *FromBuf, const char *filename, int size) {
+void Asset::LoadTexture(const void *FromBuf, const char *filename, int size, Texture *out, int flag) {
     VideoAssetLoader *l = app->assets.default_video_loader;
     // work around ffmpeg image2 format being AVFMT_NO_FILE; ie doesnt work with custom AVIOContext
     if (FileSuffix::Image(filename)) l = Singleton<SimpleAssetLoader>::Get();
     void *handle = l->LoadVideoBuf((const char *)FromBuf, size, filename);
     if (!handle) return;
-    Load(handle, l);
+    l->LoadVideo(handle, out, flag);
     l->UnloadVideoBuf(handle);
 }
 

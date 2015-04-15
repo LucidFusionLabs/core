@@ -466,10 +466,10 @@ namespace DOM {
         PARSE_int(disabled); PARSE_bool(selected);
         PARSE_ATTR_END;
     };
-    struct HTMLInputElement : public HTMLElement { DERIVE_ELEMENT(HTMLInputElement, HTML_INPUT_ELEMENT), form(0), image_asset(0) {}
+    struct HTMLInputElement : public HTMLElement { DERIVE_ELEMENT(HTMLInputElement, HTML_INPUT_ELEMENT), form(0), image_tex(0) {}
         DECLARE_TAG_NAMES("input");
         HTMLFormElement *form;
-        Asset *image_asset;
+        Texture *image_tex;
 
         PARSE_ATTR_BEGIN(HTMLElement);
         PARSE_string(defaultvalue); PARSE_string(accept); PARSE_string(accesskey); PARSE_string(align);
@@ -519,9 +519,9 @@ namespace DOM {
         void focus();
         void blur();
     };
-    struct HTMLImageElement : public HTMLElement { DERIVE_ELEMENT(HTMLImageElement, HTML_IMAGE_ELEMENT), asset(0) {}
+    struct HTMLImageElement : public HTMLElement { DERIVE_ELEMENT(HTMLImageElement, HTML_IMAGE_ELEMENT), tex(0) {}
         DECLARE_TAG_NAMES("img", "image");
-        Asset *asset;
+        Texture *tex;
 
         PARSE_ATTR_BEGIN(HTMLElement);
         PARSE_string(lowsrc); PARSE_string(name); PARSE_string(align); PARSE_string(alt); PARSE_string(border);

@@ -18,6 +18,8 @@
 
 #include "lfapp/lfapp.h"
 
+#include <sandbox.h>
+
 namespace LFL {
 unique_ptr<ProcessAPIClient> process_api;
 }; // namespace LFL
@@ -34,6 +36,11 @@ extern "C" int main(int argc, const char *argv[]) {
     const string socket_name = StrCat(argv[optind]);
     process_api = unique_ptr<ProcessAPIClient>(new ProcessAPIClient());
     process_api->Start(StrCat(argv[optind]));
+
+    char *sandbox_error=0;
+    sandbox_init(kSBXProfileNoWriteExceptTemporary, SANDBOX_NAMED, &sandbox_error);
+    INFO("render: sandbox init: ", sandbox_error ? sandbox_error : "succses");
+
     process_api->HandleMessagesLoop();
     INFO("render: exiting");
     return 0;

@@ -1421,7 +1421,7 @@ int DOM::Renderer::ClampWidth(int w) {
 
 void DOM::Renderer::UpdateBackgroundImage(Flow *F) {
     int bgpercent_x = 0, bgpercent_y = 0; bool bgdone_x = 0, bgdone_y = 0;
-    int iw = background_image->tex.width, ih = background_image->tex.height; 
+    int iw = background_image->width, ih = background_image->height; 
     DOM::CSSNumericValuePair bgposition = style.BackgroundPosition();
     if (!bgposition.Null()) {
         if (bgposition.first .IsPercent()) bgpercent_x = bgposition.first .v; else { bgposition_x = bgposition.first .getPixelValue(F);      bgdone_x = 0; }
@@ -1482,8 +1482,8 @@ void Browser::Document::Clear() {
 
 Browser::Browser(Window *W, const Box &V) : doc(W, V) {
     if (Font *maf = Fonts::Get("MenuAtlas1", "", 0, Color::black)) {
-        missing_image.tex = maf->glyph->table[12].tex;
-        missing_image.tex.width = missing_image.tex.height = 16;
+        missing_image = maf->glyph->table[12].tex;
+        missing_image.width = missing_image.height = 16;
     }
     doc.Clear(); 
 }
@@ -1697,24 +1697,24 @@ DOM::Node *Browser::LayoutNode(Flow *flow, DOM::Node *n, bool reflow) {
         render->flow->AppendText(T->data);
     } else if ((n->htmlElementType == DOM::HTML_IMAGE_ELEMENT) ||
                (n->htmlElementType == DOM::HTML_INPUT_ELEMENT && StringEquals(n->AsElement()->getAttribute("type"), "image"))) {
-        Asset *asset = n->htmlElementType == DOM::HTML_IMAGE_ELEMENT ? n->AsHTMLImageElement()->asset : n->AsHTMLInputElement()->image_asset;
-        bool missing = !asset || !asset->tex.ID;
-        if (missing) asset = &missing_image;
+        Texture *tex = n->htmlElementType == DOM::HTML_IMAGE_ELEMENT ? n->AsHTMLImageElement()->tex : n->AsHTMLInputElement()->image_tex;
+        bool missing = !tex || !tex->ID;
+        if (missing) tex = &missing_image;
 
         point dim(n->render->width_px, n->render->height_px);
-        if      (!dim.x && !dim.y)                      dim   = point(asset->tex.width, asset->tex.height);
-        if      ( dim.x && !dim.y && asset->tex.width ) dim.y = RoundF((float)asset->tex.height/asset->tex.width *dim.x);
-        else if (!dim.x &&  dim.y && asset->tex.height) dim.x = RoundF((float)asset->tex.width /asset->tex.height*dim.y);
+        if      (!dim.x && !dim.y)                dim   = point(tex->width, tex->height);
+        if      ( dim.x && !dim.y && tex->width ) dim.y = RoundF((float)tex->height/tex->width *dim.x);
+        else if (!dim.x &&  dim.y && tex->height) dim.x = RoundF((float)tex->width /tex->height*dim.y);
 
         bool add_margin = !n->render->floating && !n->render->position_absolute && !n->render->position_fixed;
         Border margin = add_margin ? n->render->MarginOffset() : Border();
         if (missing) {
-            point d(max(0, dim.x - (int)asset->tex.width), max(0, dim.y - (int)asset->tex.height));
+            point d(max(0, dim.x - (int)tex->width), max(0, dim.y - (int)tex->height));
             margin += Border(d.y/2, d.x/2, d.y/2, d.x/2);
             dim -= d;
         }
         render->flow->SetFGColor(&Color::white);
-        render->flow->AppendBox(dim.x, dim.y, &asset->tex);
+        render->flow->AppendBox(dim.x, dim.y, tex);
         render->box = render->flow->out->data.back().box;
     } 
     else if (n->htmlElementType == DOM::HTML_BR_ELEMENT) render->flow->AppendNewlines(1);
@@ -1797,16 +1797,16 @@ void Browser::LayoutBackground(DOM::Node *n) {
         }
     } else if (is_body) screen->gd->ClearColor(Color(1.0, 1.0, 1.0, 0.0));
 
-    if (render->background_image && render->background_image->tex.width && 
-                                    render->background_image->tex.height) {
+    if (render->background_image && render->background_image->width && 
+                                    render->background_image->height) {
         Box bgi(box->x     + render->bgposition_x, 
                 box->top() - render->bgposition_y, 
-                render->background_image->tex.width,
-                render->background_image->tex.height);
+                render->background_image->width,
+                render->background_image->height);
 
         flow.cur_attr.Clear();
         flow.cur_attr.scissor = box;
-        // flow.cur_attr.tex = &render->background_image->tex;
+        // flow.cur_attr.tex = &render->background_image;
 
         int start_x = !n->render->bgrepeat_x ? bgi.x       : box->x - bgi.w + (n->render->bgposition_x % bgi.w);
         int start_y = !n->render->bgrepeat_y ? bgi.y       : box->y - bgi.h + (n->render->bgposition_y % bgi.h);
@@ -1814,7 +1814,7 @@ void Browser::LayoutBackground(DOM::Node *n) {
         int end_y   = !n->render->bgrepeat_y ? bgi.top  () : box->top  ();
         for     (int y = start_y; y < end_y; y += bgi.h) { bgi.y = y;
             for (int x = start_x; x < end_x; x += bgi.w) { bgi.x = x;
-                flow.out->PushBack(bgi, flow.cur_attr, &render->background_image->tex);
+                flow.out->PushBack(bgi, flow.cur_attr, render->background_image);
             }
         }
     }
