@@ -108,6 +108,7 @@ CV_IMPL int cvGetCaptureDomain( CvCapture* capture)
  */
 CV_IMPL CvCapture * cvCreateCameraCapture (int index)
 {
+#if 0
     int  domains[] =
     {
 #ifdef HAVE_VIDEOINPUT
@@ -241,6 +242,7 @@ CV_IMPL CvCapture * cvCreateCameraCapture (int index)
         
         }
     }
+#endif
 
     // failed open a camera
     return 0;
@@ -253,7 +255,7 @@ CV_IMPL CvCapture * cvCreateCameraCapture (int index)
 CV_IMPL CvCapture * cvCreateFileCapture (const char * filename)
 {
     CvCapture * result = 0;
-
+#if 0
     #ifdef WIN32
     if (! result)
         result = cvCreateFileCapture_Win32 (filename);
@@ -281,7 +283,7 @@ CV_IMPL CvCapture * cvCreateFileCapture (const char * filename)
     
     if (! result)
         result = cvCreateFileCapture_Images (filename);
-
+#endif
     return result;
 }
 
@@ -294,8 +296,8 @@ CV_IMPL CvVideoWriter* cvCreateVideoWriter( const char* filename, int fourcc,
 {
 	//CV_FUNCNAME( "cvCreateVideoWriter" );
 
-	CvVideoWriter *result = 0;
-
+    CvVideoWriter *result = 0;
+#if 0
 	if(!fourcc || !fps)
 		result = cvCreateVideoWriter_Images(filename);
 
@@ -304,11 +306,11 @@ CV_IMPL CvVideoWriter* cvCreateVideoWriter( const char* filename, int fourcc,
 		result = cvCreateVideoWriter_Win32(filename, fourcc, fps, frameSize, is_color);
 	#endif
 
-/*	#ifdef HAVE_XINE
+	#ifdef HAVE_XINE
 	if(!result)
 		result = cvCreateVideoWriter_XINE(filename, fourcc, fps, frameSize, is_color);
 	#endif
-*/
+
 	#ifdef HAVE_FFMPEG
 	if(!result)
 		result = cvCreateVideoWriter_FFMPEG(filename, fourcc, fps, frameSize, is_color);
@@ -323,7 +325,8 @@ CV_IMPL CvVideoWriter* cvCreateVideoWriter( const char* filename, int fourcc,
         result = cvCreateVideoWriter_GStreamer(filename, fourcc, fps, frameSize, is_color);
     #endif
 	if(!result)
-		result = cvCreateVideoWriter_Images(filename);
+        result = cvCreateVideoWriter_Images(filename);
+#endif
 
 	return result;
 }
