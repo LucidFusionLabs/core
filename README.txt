@@ -12,7 +12,7 @@ Projects include:
 
 - term:         LTerminal, a modern terminal
 - editor:       LEditor, a text editor and IDE
-- browser:      LBrowser, a full HTML4/CSS2 web browser with V8 javascript
+- browser:      LBrowser, a HTML4/CSS2 web browser with V8 javascript
 - image:        LImage, an image and 3D-model manipulation utility
 - fs:           Fusion Server, a speech and image recognition server
 - fv:           Fusion Viewer, a speech and image recognition client
@@ -34,7 +34,7 @@ svn co http://lucidfusionlabs.com/svn/lfl
 
 LFL builds easily for Windows, Linux, Mac OSX, iPhone and Android.
 
-* Replace "FusionViewer" and "fv" with "YourPackage" and "YourApp" to
+* Replace "LTerminal" and "lterm" with "YourPackage" and "YourApp" to
 build other apps.
 
 
@@ -43,10 +43,10 @@ BUILDING Windows
 
 * use CMake 3.0.2
 
-        select c:\lfl for source and binaries
-        Configure
-        uncheck USE_MSVC_RUNTIME_LIBRARY_DLL
-        Generate
+        [select c:\lfl for source and binaries]
+        [Configure]
+        [uncheck USE_MSVC_RUNTIME_LIBRARY_DLL]
+        [Generate]
 
         start Visual Studio Command Prompt
         cd lfl\imports\judy\src
@@ -56,18 +56,18 @@ BUILDING Windows
 * Tools > Options > Text Editor > All Languages > Tabs > Insert Spaces
 
         c:\lfl\Project.sln
-        Build FV
+        [Build LTerminal]
 
-        cd c:\lfl\fv
+        cd c:\lfl\term
         copy ..\debug\*.dll debug
         copy ..\lfapp\*.glsl assets
         copy ..\imports\berkelium\w32\bin\* Debug
         copy ..\imports\ffmpeg\w32\dll\*.dll Debug [overwrite:All]
         [Run]
 
-        [Right click] fv.nsi > Compile NSIS Script
+        [Right click] term.nsi > Compile NSIS Script
 
-* Windows installer fvinst.exe results
+* Windows installer lterminst.exe results
 
 
 BUILDING Linux
@@ -78,21 +78,36 @@ BUILDING Linux
         cd lfl
         ./imports/build.sh
         cmake .
-        cd fv && make -j4
 
+        cd term
+        make -j4
         ./pkg/lin.sh
-        export LD_LIBRARY_PATH=./FusionViewer
-        ./FusionViewer/fv
+        export LD_LIBRARY_PATH=./LTerminal
+        ./LTerminal/lterm
 
-        tar cvfz FusionViewer.tgz FusionViewer
+        tar cvfz LTerminal.tgz LTerminal
 
-* Linux package FusionViewer.tgz results
+* Linux package LTerminal.tgz results
 
 
 BUILDING Mac
 ------------
 
 * http://www.cmake.org/files/v3.0/cmake-3.0.2-Darwin64-universal.dmg
+* Minimum of XCode 6 required
+
+        cd lfl
+        ./imports/build.sh
+        cmake .
+
+        cd term
+        make -j4
+        ./pkg/macprep.sh
+        ./LTerminal.app/Contents/MacOS/lterm
+
+        ./pkg/macpkg.sh
+
+* OSX installer LTerminal.dmg results
 * For C++ Interpreter setup ~/cling following http://root.cern.ch/drupal/content/cling-build-instructions
 * For V8 Javascript setup ~/v8 following https://developers.google.com/v8/build then:
 
@@ -108,44 +123,29 @@ BUILDING Mac
         export GYP_DEFINES="clang=1 mac_deployment_target=10.8"
         make native; cp -R out ~/v8; cp -R include ~/v8
 
-* Minimum of XCode 6 required
-
-        cd lfl
-        ./imports/build.sh
-        cmake .
-        make -j4
-
-        cd lfl/fv
-        ./pkg/macprep.sh
-        ./FusionViewer.app/Contents/MacOS/fv
-
-        ./pkg/macpkg.sh
-
-* OSX installer FusionViewer.dmg results
-
 
 BUILDING iPhone Device
 ----------------------
 
         cd lfl
         cmake -D LFL_IPHONE=1 .
-        make -j4
 
-        cd fv
-        cp -R assets fv-iphone
-        cp lfapp/*.glsl fv-iphone/assets
+        cd term
+        make -j4
+        cp -R assets term-iphone
+        cp lfapp/*.glsl term-iphone/assets
         ./pkg/iphoneprep.sh
         ./pkg/iphonepkg.sh
 
-        open fv-iphone/fv-iphone.xcodeproj
+        open term-iphone/term-iphone.xcodeproj
 
         [Change configuration to Device]
         [Build and run]
-        cp fv fv-iphone/build/Debug-iphoneos/fv-iphone.app/fv-iphone
+        cp lterm term-iphone/build/Debug-iphoneos/term-iphone.app/term-iphone
         cp skorp ~/Library//Developer/Xcode/DerivedData/skorp-iphone-cwokylhxlztdqwhdhxqzpqiemvoz/Build/Products/Debug-iphoneos/skorp-iphone.app/skorp-iphone
         [Build and run]
 
-* iPhone Installer iFusionViewer.ipa results
+* iPhone Installer iLTerminal.ipa results
 
 
 BUILDING iPhone Simulator
@@ -153,20 +153,20 @@ BUILDING iPhone Simulator
 
         cd lfl
         cmake -D LFL_IPHONESIM=1 .
-        make -j4
 
-        cd fv
-        cp -R assets fv-iphone
+        cd term
+        make -j4
+        cp -R assets term-iphone
         ./pkg/iphoneprep.sh
         ./pkg/iphonepkg.sh
 
-        open fv-iphone/fv-iphone.xcodeproj
+        open term-iphone/term-iphone.xcodeproj
         [Change configuration to Simulator]
         [Build and run]
-        cp fv fv-iphone/build/Debug-iphonesimulator/fv-iphone.app/fv-iphone
+        cp lterm term-iphone/build/Debug-iphonesimulator/term-iphone.app/term-iphone
         [Build and run]
 
-* iPhone Installer iFusionViewer.ipa results
+* iPhone Installer iLTerminal.ipa results
 
 
 BUILDING Android
@@ -189,33 +189,34 @@ BUILDING Android
         cd lfl
         ** Modify ANDROIDROOT in CMakeLists.txt
         cmake -D LFL_ANDROID=1 .
-        make -j4
 
-        cd lfl/fv/fv-android/jni
+        cd term
+        make -j4
+        cd term-android/jni
         ../../pkg/androidprebuild.sh
         rm ~/lfl-android/lfl/lfapp/lfjava/lfjava
         cd src && ln -s ~/android-ndk-r9/sources/cxx-stl/gnu-libstdc++ && cd ..
         vim lfapp/Android.mk # Change to: libskorp_lfapp.a
         ndk-build
 
-        cd lfl/fv/fv-android/assets
+        cd lfl/term/term-android/assets
         cp -R ../../assets .
         cp ../../lfapp/*.glsl assets
 
-        cd lfl/fv/fv-android
+        cd lfl/term/term-android
         vi local.properties
         ant debug
 
         Eclipse > [Eclipse|Window] > Preferences > Android > SDK Location
-        Eclipse > File > New > Other > Android Project > From Existing Source > fv-android (Name: FusionViwer, Target 2.2)
-        FusionViewer > Refresh
-        FusionViewer > Debug as Android Application
+        Eclipse > File > New > Other > Android Project > From Existing Source > term-android (Name: LTerminal, Target 2.2)
+        LTerminal > Refresh
+        LTerminal > Debug as Android Application
 
-* Android Installer bin/FusionViewer.apk results
+* Android Installer bin/LTerminal.apk results
 
 * Setup eclipse_keystore
 
-        FusionViewer > Android Tools > Export Signed Application Package
+        LTerminal > Android Tools > Export Signed Application Package
 
 * Signed Android Installer results
 
