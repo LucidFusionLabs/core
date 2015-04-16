@@ -199,7 +199,7 @@ struct BulkMailer {
         table.push_back(&delivered); labels.push_back("delivered");
         table.push_back(&rejected);  labels.push_back("rejected");
         table.push_back(&aborted);   labels.push_back("aborted");
-        stat_log = new DeltaSampler(Seconds(60), table, labels);
+        stat_log = new DeltaSampler(Seconds(60).count(), table, labels);
     }
 
     typedef vector<IPV4::Addr> MXAddrs;

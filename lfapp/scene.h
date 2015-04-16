@@ -21,15 +21,15 @@
 namespace LFL {
 
 struct Animation {
-    Time start=0;
+    Time start;
     Shader *shader=0;
     unsigned short id=0, seq=0, len=0;
     void Reset() { shader = 0; id = seq = len = 0; }
-    void Increment() { if (!id) return; seq=Now()-start; if (seq >= len) Reset(); }
-    void Start(Shader *Shader=0) { start=Now()-seq; shader=Shader; }
-    void Start(unsigned short Id, unsigned short Seq=0, unsigned short Len=MilliSeconds(500), Shader *Shader=0)
-    { start=Now()-Seq; shader=Shader; id=Id; seq=Seq; len=Len; }
-    float Percent() const { return id ? (float)(Now() - start) / len : 0; }
+    void Increment() { if (!id) return; seq=(Now()-start).count(); if (seq >= len) Reset(); }
+    void Start(Shader *Shader=0) { start=Now()-milliseconds(seq); shader=Shader; }
+    void Start(unsigned short Id, unsigned short Seq=0, unsigned short Len=500, Shader *Shader=0)
+    { start=Now()-Time(Seq); shader=Shader; id=Id; seq=Seq; len=Len; }
+    float Percent() const { return id ? duration_cast<FTime>(Now() - start).count() / len : 0; }
     bool ShaderActive() const { return id && shader; }
 };
 

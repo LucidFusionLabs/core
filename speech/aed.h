@@ -58,7 +58,7 @@ struct AcousticEventDetector {
 
     static const int szcr_shift=3, d2jump_left=3, d2jump_right=7;
     double percent(long long n) const { return 1 - (double) (total - n) / pe.ring.size; }
-    double seconds(long long n) const { return (double) (total - n) / pe.samplesPerSec; }
+    double seconds(long long n) const { return (double) (total - n) / pe.samples_per_sec; }
 
     double SNR(int t=8) {
         if      (t == 1) return sl/nl;

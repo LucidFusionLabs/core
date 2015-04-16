@@ -199,7 +199,7 @@ struct ViterbiTrain {
     }
     static void add_features(const char *fn, Matrix *MFCC, Matrix *features, const char *transcript, void *arg) { return ((ViterbiTrain*)arg)->add_features(fn, MFCC, features, transcript); }
 
-    void add_path(AcousticModel::Compiled *hmm, Matrix *viterbi, double vprob, double vtime, Matrix *MFCC, Matrix *features, const char *transcript) {
+    void add_path(AcousticModel::Compiled *hmm, Matrix *viterbi, double vprob, Time vtime, Matrix *MFCC, Matrix *features, const char *transcript) {
         if (viterbi->M != features->M) { ERROR("viterbi length mismatch ", viterbi->M, " != ", features->M); }
 
         /* optionally build utterance model from transcript */
@@ -226,7 +226,7 @@ struct ViterbiTrain {
         if (mode == Mode::Means) { totalprob += vprob; totalcount++; }
         delete myhmm;
     }
-    static void add_path(AcousticModel::Compiled *hmm, Matrix *viterbi, double vprob, double vtime, Matrix *MFCC, Matrix *features, const char *transcript, void *arg) { return ((ViterbiTrain*)arg)->add_path(hmm, viterbi, vprob, vtime, MFCC, features, transcript); }
+    static void add_path(AcousticModel::Compiled *hmm, Matrix *viterbi, double vprob, Time vtime, Matrix *MFCC, Matrix *features, const char *transcript, void *arg) { return ((ViterbiTrain*)arg)->add_path(hmm, viterbi, vprob, vtime, MFCC, features, transcript); }
 
     void complete() {
         if (mode == Mode::Means) { accumprob=0; accumcount=0; }

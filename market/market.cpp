@@ -55,7 +55,7 @@ struct QuoteLogger {
         if (next.info().symbol().empty()) return false;
         Quote *last = &quotes[next.info().symbol().c_str()];
         if (!out.Opened() || next.value().time() <= last->value().time()) return false;
-        if (next.value().response_time() - next.value().time() >= Minutes(60)) return false;
+        if (next.value().response_time() - next.value().time() >= Minutes(60).count()) return false;
         out.Add(&next, 0);
         *last = next;
         return true;
@@ -166,8 +166,8 @@ extern "C" int main(int argc, const char *argv[]) {
 
     if (!FLAGS_quote_dump.empty()) {
         ProtoFile pf(FLAGS_quote_dump.c_str()); Quote entry;
-        while (pf.Next(&entry)) printf("%s %s %s", localhttptime(entry.value().response_time()).c_str(),
-                                                   localhttptime(entry.value().time()).c_str(), entry.DebugString().c_str());
+        while (pf.Next(&entry)) printf("%s %s %s", localhttptime(Time(entry.value().response_time())).c_str(),
+                                                   localhttptime(Time(entry.value().time())).c_str(), entry.DebugString().c_str());
     }
 
     if (!FLAGS_quote_clear_response_text.empty()) {

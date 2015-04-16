@@ -1047,9 +1047,9 @@ void Terminal::NewTopline() {
 bool Console::Toggle() {
     if (!TextGUI::Toggle()) return false;
     bool last_animating = animating;
-    Time now = Now(), elapsed = now - animBegin;
-    animBegin = now - (elapsed < animTime ? animTime - elapsed : 0);
-    animating = (elapsed = now - animBegin) < animTime;
+    Time now = Now(), elapsed = now - anim_begin;
+    anim_begin = now - (elapsed < anim_time ? anim_time - elapsed : Time(0));
+    animating = (elapsed = now - anim_begin) < anim_time;
     if (animating && !last_animating && animating_cb) animating_cb();
     return true;
 }
@@ -1060,10 +1060,10 @@ void Console::Draw() {
     drawing = 1;
     Time now=Now(), elapsed;
     bool last_animating = animating;
-    int h = active ? (int)(screen->height*screenPercent) : 0;
-    if ((animating = (elapsed = now - animBegin) < animTime)) {
-        if (active) h = (int)(screen->height*(  (double)elapsed/animTime)*screenPercent);
-        else        h = (int)(screen->height*(1-(double)elapsed/animTime)*screenPercent);
+    int h = active ? (int)(screen->height*screen_percent) : 0;
+    if ((animating = (elapsed = now - anim_begin) < anim_time)) {
+        if (active) h = (int)(screen->height*(  (double)elapsed.count()/anim_time.count())*screen_percent);
+        else        h = (int)(screen->height*(1-(double)elapsed.count()/anim_time.count())*screen_percent);
     }
     if (!animating) {
         if (last_animating && animating_cb) animating_cb();

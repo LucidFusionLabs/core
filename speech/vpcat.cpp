@@ -32,7 +32,7 @@ DEFINE_int   (WantIter,    -1,          "Model iteration");
 DEFINE_bool  (vp,          false,       "Print viterbi paths");
 DEFINE_bool  (amtx,        false,       "Print acoustic model transit");
 
-void path(AcousticModel::Compiled *, Matrix *viterbi, double vprob, double vtime, Matrix *MFCC, Matrix *features, const char *transcript, void *arg) {}
+void path(AcousticModel::Compiled *, Matrix *viterbi, double vprob, Time vtime, Matrix *MFCC, Matrix *features, const char *transcript, void *arg) {}
 
 }; // namespace LFL
 using namespace LFL;

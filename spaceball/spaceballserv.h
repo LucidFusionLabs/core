@@ -134,14 +134,15 @@ struct SpaceballGame : public Game {
     };
 
     struct Ship : public Entity {
-        Time boost; float Ysnapped;
+        Time boost;
+        float Ysnapped;
         static float mass() { return 32.0; }
         static v3 radius() { return v3(.6, .6, Ball::radius()); }
         static bool get_boost(Game::Controller *c) { return c->Get(19); }
         static void set_boost(Game::Controller *c) { return c->Set(19); }
         float val_boost(Game::Controller *c) {
-            if (!boost) { if (get_boost(c)) boost = Now(); return 0; }
-            if (!get_boost(c)) { float ret = (Now() - boost); boost = 0; return ret; }
+            if (boost == Time(0)) { if (get_boost(c)) boost = Now(); return 0; }
+            if (!get_boost(c)) { float ret = (Now() - boost).count(); boost = Time(0); return ret; }
             return 0;
         }
         Ship(Asset *a, void *b, const v3 &p, const v3 &o, const v3 &u, float YSnapped=0) : Entity("", a, p, o, u), boost(0), Ysnapped(YSnapped)
@@ -228,7 +229,7 @@ struct SpaceballGame : public Game {
     }
 
     void Init() { NewBall(NewID()); }
-    void Reset() { last_scored=0; red_score=blue_score=0; started=ranlast=Now(); state=State::GAME_ON; ResetWorld(); }
+    void Reset() { last_scored=Time(0); red_score=blue_score=0; started=ranlast=Now(); state=State::GAME_ON; ResetWorld(); }
     void RandomTeams() { home = SpaceballTeam::GetRandom(); away = SpaceballTeam::GetRandom(home); }
     void AssignShipColor(Ship *ship, SpaceballTeam *team) {
         const Scene::EntityVector &other_ships = scene->assetMap[ship->asset->name];
@@ -322,11 +323,10 @@ struct SpaceballGame : public Game {
         }
     }
 
-    void Update(GameServer *server, unsigned timestep) {
+    void Update(GameServer *server, Time timestep) {
         if (!broadcast_enabled) {
-            int wait_seconds = ReplaySeconds;
-            if (state == State::GAME_OVER) wait_seconds = GameOverSeconds;
-            if (Now() < last_scored + wait_seconds * 1000) return;
+            Time wait = Seconds(state == State::GAME_OVER ? GameOverSeconds : ReplaySeconds);
+            if (Now() < last_scored + wait) return;
 
             if (state == State::GAME_ON && 
                 ((game_limit == SpaceballSettings::LIMIT_3G  && (red_score >=  3 || blue_score >=  3)) ||
@@ -386,7 +386,7 @@ struct SpaceballGame : public Game {
                     else {
                         v3 gravity(0, -0.01f, 0);
                         e->vel.Scale(0.98);
-                        e->vel += gravity * timestep;
+                        e->vel += gravity * timestep.count();
                     }
 
                     physics->Input(e, timestep, true);
@@ -427,7 +427,7 @@ struct SpaceballGame : public Game {
                 physics->Output(e, timestep);
             }
 
-        unsigned game_length = Now() - started;
+        Time game_length = Now() - started;
         if (state == State::GAME_ON &&
             ((game_limit == SpaceballSettings::LIMIT_5M  && game_length >= Minutes(5)) ||
              (game_limit == SpaceballSettings::LIMIT_10M && game_length >= Minutes(10))))
@@ -587,7 +587,7 @@ struct SpaceballBots : public GameBots {
         blueteam.goal_center.x = fabs(fd->F.x - fd->G.x);
     }
 
-    void Update(unsigned dt) {
+    void Update(Time dt) {
         redteam.Reset();
         blueteam.Reset();
         Time now = Now();

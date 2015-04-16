@@ -229,11 +229,11 @@ struct PortaudioAudioModule : public Module {
     int IO(const void *input, void *output, unsigned long samplesPerFrame,
            const PaStreamCallbackTimeInfo *timeInfo, PaStreamCallbackFlags flags) {
         float *in = (float*)input, *out = (float *)output;
-        double step = Seconds(1)*1000/FLAGS_sample_rate;
-        Time stamp = AudioResampler::MonotonouslyIncreasingTimestamp(audio->IL->ReadTimestamp(-1), Now()*1000, &step, samplesPerFrame);
+        microseconds step(1000000/FLAGS_sample_rate), stamp =
+            AudioResampler::MonotonouslyIncreasingTimestamp(audio->IL->ReadTimestamp(-1), ToMicroseconds(Now()), &step, samplesPerFrame);
         RingBuf::WriteAheadHandle IL(audio->IL), IR(audio->IR);
         for (unsigned i=0; i<samplesPerFrame; i++) {
-            Time timestamp = stamp + i*step;
+            microseconds timestamp = stamp + i * step;
             IL.Write(in[i*FLAGS_chans_in+0], RingBuf::Stamp, timestamp);
             if (FLAGS_chans_in == 1) continue;
             IR.Write(in[i*FLAGS_chans_in+1], RingBuf::Stamp, timestamp);
@@ -791,7 +791,7 @@ int AudioResampler::Update(int samples, const short *in) {
     const short *input[SWR_CH_MAX] = { in, 0 }; 
     Allocator *tlsalloc = ThreadLocalStorage::GetAllocator();
     short *rsout = (short*)tlsalloc->Malloc(AVCODEC_MAX_AUDIO_FRAME_SIZE + FF_INPUT_BUFFER_PADDING_SIZE);
-    return Update(samples, input, rsout, -1, AVCODEC_MAX_AUDIO_FRAME_SIZE/output_chans/2);
+    return Update(samples, input, rsout, microseconds(-1), AVCODEC_MAX_AUDIO_FRAME_SIZE/output_chans/2);
 }
 
 int AudioResampler::Update(int samples, RingBuf::Handle *L, RingBuf::Handle *R) {
@@ -811,18 +811,18 @@ int AudioResampler::Update(int samples, RingBuf::Handle *L, RingBuf::Handle *R) 
     return Update(samples, input, rsout, chan[0]->ReadTimestamp(0), AVCODEC_MAX_AUDIO_FRAME_SIZE/output_chans/2);
 }
 
-int AudioResampler::Update(int samples, const short **in, short *rsout, Time timestamp, int max_samples_out) {
+int AudioResampler::Update(int samples, const short **in, short *rsout, microseconds timestamp, int max_samples_out) {
     CHECK(swr);
     uint8_t *aout[SWR_CH_MAX] = { (uint8_t*)rsout, 0 };
     int resampled = swr_convert(swr, aout, max_samples_out, (const uint8_t**)in, samples);
     if (resampled < 0) { ERROR("av_resample return ", resampled); return -1; }
     if (!resampled) return 0;
 
-    double step = Seconds(1)*1000/output_rate;
+    microseconds step(1000000/output_rate);
     int output = resampled * output_chans;
-    Time stamp = MonotonouslyIncreasingTimestamp(out->ReadTimestamp(-1), timestamp, &step, output);
+    microseconds stamp = MonotonouslyIncreasingTimestamp(out->ReadTimestamp(-1), timestamp, &step, output);
     for (int i=0; i<output; i++) {
-        if (timestamp != -1) out->stamp[out->ring.back] = stamp + i/output_chans*step;
+        if (timestamp != microseconds(-1)) out->stamp[out->ring.back] = stamp + i/output_chans*step;
         *(float*)out->Write() = rsout[i] / 32768.0;
     }
 
@@ -833,18 +833,17 @@ int AudioResampler::Update(int samples, const short **in, short *rsout, Time tim
 #else
 void AudioResampler::Close() {}
 int AudioResampler::Open(RingBuf *rb, int in_channels,  int in_sample_rate,  int in_sample_type,
-                                      int out_channels, int out_sample_rate, int out_sample_type)            { FATAL("not implemented"); }
-int AudioResampler::Update(int samples, const short **in, short *rsout, Time timestamp, int max_samples_out) { FATAL("not implemented"); }
-int AudioResampler::Update(int samples, const short *in)                                                     { FATAL("not implemented"); }
-int AudioResampler::Update(int samples, RingBuf::Handle *L, RingBuf::Handle *R)                              { FATAL("not implemented"); }
+                                      int out_channels, int out_sample_rate, int out_sample_type)             { FATAL("not implemented"); }
+int AudioResampler::Update(int samples, const short **in, short *rsout, microseconds ts, int max_samples_out) { FATAL("not implemented"); }
+int AudioResampler::Update(int samples, const short *in)                                                      { FATAL("not implemented"); }
+int AudioResampler::Update(int samples, RingBuf::Handle *L, RingBuf::Handle *R)                               { FATAL("not implemented"); }
 #endif /* LFL_FFMPEG */
 
-long long AudioResampler::MonotonouslyIncreasingTimestamp(Time laststamp, Time stamp, double *step, int steps) {
+microseconds AudioResampler::MonotonouslyIncreasingTimestamp(microseconds laststamp, microseconds stamp, microseconds *step, int steps) {
     if (laststamp > stamp) {
-        Time end = (Time)(stamp + (steps-1) * (*step));
-        *step = (double)(end - laststamp) / steps;
-        if (*step < 1) *step = 1;
-        stamp = (Time)(laststamp + *step);
+        microseconds end = stamp + (steps-1) * (*step);
+        *step = max(microseconds(1), (end - laststamp) / steps);
+        stamp = laststamp + *step;
     }
     return stamp;
 }

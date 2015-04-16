@@ -350,7 +350,7 @@ struct FeatureSink {
 struct Decoder {
     static Matrix *decodeFile(AcousticModel::Compiled *model, const char *filename, double beamWidth);
     static Matrix *decodeFeatures(AcousticModel::Compiled *model, Matrix *features, double beamWidth, int flag=0);
-    static void visualizeFeatures(AcousticModel::Compiled *model, Matrix *features, Matrix *viterbi, double vprob, double time, bool interactive);
+    static void visualizeFeatures(AcousticModel::Compiled *model, Matrix *features, Matrix *viterbi, double vprob, Time time, bool interactive);
 
     struct PhoneIter {
         const AcousticModel::Compiled *model;

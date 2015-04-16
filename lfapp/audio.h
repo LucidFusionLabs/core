@@ -107,9 +107,9 @@ struct AudioResampler {
                            int out_channels, int out_sample_rate, int out_sample_type);
     int Update(int samples, const short *in);
     int Update(int samples, RingBuf::Handle *L, RingBuf::Handle *R);
-    int Update(int samples, const short **in, short *tmp, Time timestamp, int maxSamplesOut);
+    int Update(int samples, const short **in, short *tmp, microseconds timestamp, int max_samples_out);
 
-    static Time MonotonouslyIncreasingTimestamp(Time laststamp, Time stamp, double *step, int steps);
+    static microseconds MonotonouslyIncreasingTimestamp(microseconds laststamp, microseconds stamp, microseconds *step, int steps);
 };
 
 struct StatefulFilter {

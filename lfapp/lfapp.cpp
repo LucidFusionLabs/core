@@ -222,218 +222,6 @@ string NBRead(int fd, int len, int timeout) {
     return ret;
 }
 
-timeval Time2timeval(Time x) {
-    struct timeval ret = { (long)ToSeconds(x), 0 };
-    ret.tv_usec = ToMicroSeconds(x - Seconds(ret.tv_sec));
-    return ret;
-}
-
-#if defined (WIN32) || defined(LFL_ANDROID)
-int is_leap(unsigned y) { y += 1900; return (y % 4) == 0 && ((y % 100) != 0 || (y % 400) == 0); }
-
-time_t timegm(struct tm *tm) {
-    static const unsigned ndays[2][12] = {
-        {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31},
-        {31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}
-    };
-
-    time_t res = 0;
-    for (int i = 70; i < tm->tm_year; ++i) res += is_leap(i) ? 366 : 365;
-    for (int i = 0; i < tm->tm_mon; ++i) res += ndays[is_leap(tm->tm_year)][i];
-
-    res += tm->tm_mday - 1;
-    res *= 24;
-    res += tm->tm_hour;
-    res *= 60;
-    res += tm->tm_min;
-    res *= 60;
-    res += tm->tm_sec;
-    return res;
-}
-#endif
-
-const char *dayname(int wday) {
-    static const char *dn[] = { "Sun", "Mon", "Tue", "Wed", "Thr", "Fri", "Sat" };
-    if (wday < 0 || wday >= 7) return 0;
-    return dn[wday];
-}
-
-int RFC822Day(const char *text) {
-    static const char *dn[] = { "Sun", "Mon", "Tue", "Wed", "Thr", "Fri", "Sat" };
-    for (int i=0, l=sizeofarray(dn); i<l; i++) if (!strcmp(text, dn[i])) return i;
-    return 0;
-}
-
-const char *monthname(int mon) {
-    static const char *mn[] = { "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
-    if (mon < 0 || mon >= 12) return 0;
-    return mn[mon];
-}
-
-int RFC822Month(const char *text) {
-    static const char *mn[] = { "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
-    for (int i=0, l=sizeofarray(mn); i<l; i++) if (!strcmp(text, mn[i])) return i;
-    return 0;
-}
-
-int RFC822TimeZone(const char *text) {
-    static const char *tzname[] = { "GMT", "EST", "EDT", "CST", "CDT", "MST", "MDT", "PST", "PDT", };
-    static const int tzoffset[] = { 0,     -5,    -4,    -6,    -5,    -7,    -6,    -8,    -7     };
-    for (int i=0, l=sizeofarray(tzname); i<l; i++) if (!strcmp(text, tzname[i])) return tzoffset[i];
-    return 0;
-}
-
-void GMTtm(time_t in, struct tm *t) { gmtime_r(&in, t); }
-void GMTtm(struct tm *t) { return GMTtm(time(0), t); }
-
-void localtm(time_t in, struct tm *t) { localtime_r(&in, t);}
-void localtm(struct tm *t) { return localtm(time(0), t); }
-
-string logtime(Time t) { char buf[128] = {0}; logtime(t, buf, sizeof(buf)); return buf; }
-int logtime(char *buf, int size) { return logtime(Now(), buf, size); }
-int logtime(Time t, char *buf, int size) { time_t tt=t/1000; return logtime(tt, t-tt*1000, buf, size); }
-int logtime(time_t secs, int ms, char *buf, int size) { struct tm tm; localtm(secs, &tm); return logtime(&tm, ms, buf, size); }
-int logtime(struct tm *tm, int ms, char *buf, int size) {
-    return snprintf(buf, size, "%02d:%02d:%02d.%03d", tm->tm_hour, tm->tm_min, tm->tm_sec, ms);
-}
-
-string logfileday(Time t) { char buf[128] = {0}; logfileday(Time2time_t(t), buf, sizeof(buf)); return buf; }
-int logfileday(char *buf, int size) { return logfileday(time(0), buf, size); }
-int logfileday(time_t t, char *buf, int size) { struct tm tm; localtm(t, &tm); return logfileday(&tm, buf, size); }
-int logfileday(struct tm *tm, char *buf, int size) {
-    return snprintf(buf, size, "%04d-%02d-%02d", 1900+tm->tm_year, tm->tm_mon+1, tm->tm_mday);
-}
-
-string logfiledaytime(Time t) { char buf[128] = {0}; logfiledaytime(Time2time_t(t), buf, sizeof(buf)); return buf; }
-int logfiledaytime(char *buf, int size) { return logfiledaytime(time(0), buf, size); }
-int logfiledaytime(time_t t, char *buf, int size) { struct tm tm; localtm(t, &tm); return logfiledaytime(&tm, buf, size); }
-int logfiledaytime(struct tm *tm, char *buf, int size) {
-    return snprintf(buf, size, "%04d-%02d-%02d_%02d:%02d", 1900+tm->tm_year, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min);
-}
-
-int httptime(char *buf, int size) { return httptime(time(0), buf, size); }
-int httptime(time_t t, char *buf, int size) { struct tm tm; GMTtm(t, &tm); return httptime(&tm, buf, size); }
-int httptime(struct tm *tm, char *buf, int size) {
-    return snprintf(buf, size, "%s, %d %s %d %02d:%02d:%02d GMT",
-        dayname(tm->tm_wday), tm->tm_mday, monthname(tm->tm_mon), 1900+tm->tm_year,
-        tm->tm_hour, tm->tm_min, tm->tm_sec);
-}
-
-string localhttptime(Time t) { char buf[128] = {0}; localhttptime(Time2time_t(t), buf, sizeof(buf)); return buf; }
-int localhttptime(char *buf, int size) { return localhttptime(time(0), buf, size); }
-int localhttptime(time_t t, char *buf, int size) { struct tm tm; localtm(t, &tm); return localhttptime(&tm, buf, size); }
-int localhttptime(struct tm *tm, char *buf, int size) {
-    return snprintf(buf, size, "%s, %d %s %d %02d:%02d:%02d %s",
-        dayname(tm->tm_wday), tm->tm_mday, monthname(tm->tm_mon), 1900+tm->tm_year,
-        tm->tm_hour, tm->tm_min, tm->tm_sec,
-#ifdef WIN32
-        "");
-#else
-        tm->tm_zone);
-#endif
-}
-
-string localsmtptime(Time t) { char buf[128] = {0}; localsmtptime(Time2time_t(t), buf, sizeof(buf)); return buf; }
-int localsmtptime(char *buf, int size) { return localsmtptime(time(0), buf, size); }
-int localsmtptime(time_t t, char *buf, int size) { struct tm tm; localtm(t, &tm); return localsmtptime(&tm, buf, size); }
-int localsmtptime(struct tm *tm, char *buf, int size) {
-    int tzo = 
-#ifdef WIN32
-        0;
-#else
-        RFC822TimeZone(tm->tm_zone)*100;
-#endif
-    return snprintf(buf, size, "%s, %02d %s %d %02d:%02d:%02d %s%04d",
-        dayname(tm->tm_wday), tm->tm_mday, monthname(tm->tm_mon), 1900+tm->tm_year,
-        tm->tm_hour, tm->tm_min, tm->tm_sec, tzo<0?"-":"", abs(tzo));
-}
-
-string localmboxtime(Time t) { char buf[128] = {0}; localmboxtime(Time2time_t(t), buf, sizeof(buf)); return buf; }
-int localmboxtime(char *buf, int size) { return localmboxtime(time(0), buf, size); }
-int localmboxtime(time_t t, char *buf, int size) { struct tm tm; localtm(t, &tm); return localmboxtime(&tm, buf, size); }
-int localmboxtime(struct tm *tm, char *buf, int size) {
-    return snprintf(buf, size, "%s %s%s%d %02d:%02d:%02d %d",
-        dayname(tm->tm_wday), monthname(tm->tm_mon), tm->tm_mday < 10 ? "  " : " ",
-        tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec, 1900+tm->tm_year);
-}
-
-string intervaltime(Time t) { time_t tt=t/1000; char buf[64] = {0}; intervaltime(tt, t-tt*1000, buf, sizeof(buf)); return buf; }
-int intervaltime(time_t t, int ms, char *buf, int size) {
-    int hours = t/3600;
-    t -= hours*3600;
-    int minutes = t/60;
-    int seconds = t - minutes*60;
-    return snprintf(buf, size, "%02d:%02d:%02d.%03d", hours, minutes, seconds, ms);
-}
-
-string intervalminutes(Time t) { time_t tt=t/1000; char buf[64] = {0}; intervalminutes(tt, t-tt*1000, buf, sizeof(buf)); return buf; }
-int intervalminutes(time_t t, int ms, char *buf, int size) {
-    int minutes = t/60;
-    int seconds = t - minutes*60;
-    return snprintf(buf, size, "%02d:%02d", minutes, seconds);
-}
-
-bool RFC822Time(const char *text, int *hour, int *min, int *sec) {
-    int textlen = strlen(text);
-    if (textlen < 5 || text[2] != ':') return false;
-    if (hour) *hour = atoi(text);
-    if (min) *min = atoi(&text[3]);
-    if (textlen == 5) { 
-        if (sec) *sec = 0;
-        return true;
-    }
-    if (textlen != 8 || text[5] != ':') return false;
-    if (sec) *sec = atoi(&text[6]);
-    return true;
-}
-
-Time RFC822Date(const char *text) {
-    struct tm tm; memset(&tm, 0, sizeof(tm));
-    const char *comma = strchr(text, ','), *start = comma ? comma + 1 : text, *parsetext;
-    StringWordIter words(start);
-    tm.tm_mday = atoi(BlankNull(words.Next()));
-    tm.tm_mon = RFC822Month(BlankNull(words.Next()));
-    tm.tm_year = atoi(BlankNull(words.Next())) - 1900;
-    const char *timetext = BlankNull(words.Next());
-    if (!RFC822Time(timetext, &tm.tm_hour, &tm.tm_min, &tm.tm_sec))
-        { ERROR("RFC822Date('", text, "') RFC822Time('", timetext, "') failed"); return 0; }
-    int hours_from_gmt = RFC822TimeZone(BlankNull(words.Next()));
-    return (timegm(&tm) - hours_from_gmt * 3600) * 1000;
-}
-
-bool NumericTime(const char *text, int *hour, int *min, int *sec) {
-    int textlen = strlen(text);
-    StringWordIter words(StringPiece(text, textlen), isint<':'>);
-    *hour = atoi(BlankNull(words.Next()));
-    *min = atoi(BlankNull(words.Next()));
-    *sec = atoi(BlankNull(words.Next()));
-    if (textlen >= 2 && !strcmp(text+textlen-2, "pm") && *hour != 12) *hour += 12;
-    return true;
-}
-
-Time NumericDate(const char *datetext, const char *timetext, const char *timezone) {
-    struct tm tm; memset(&tm, 0, sizeof(tm));
-    StringWordIter words(datetext, isint<'/'>);
-    tm.tm_mon = atoi(BlankNull(words.Next())) - 1;
-    tm.tm_mday = atoi(BlankNull(words.Next()));
-    tm.tm_year = atoi(BlankNull(words.Next())) - 1900;
-    NumericTime(timetext, &tm.tm_hour, &tm.tm_min, &tm.tm_sec);
-    int hours_from_gmt = RFC822TimeZone(BlankNull(timezone));
-    return (timegm(&tm) - hours_from_gmt * 3600) * 1000;
-}
-
-Time SinceDayBegan(Time t, int gmt_offset_hrs) {
-    Time ret = (t % Hours(24)) + Hours(gmt_offset_hrs);
-    return ret < 0 ? ret + Hours(24) : ret;
-}
-
-bool    IsDaylightSavings(Time t) { struct tm tm; localtm(t ? Time2time_t(t) : time(0), &tm); return tm.tm_isdst; }
-#ifndef WIN32
-const char *LocalTimeZone(Time t) { struct tm tm; localtm(t ? Time2time_t(t) : time(0), &tm); return tm.tm_zone; }
-#else
-const char *LocalTimeZone(Time t) { return _tzname[_daylight]; }
-#endif
-
 void *MallocAlloc::Malloc(int size) { return ::malloc(size); }
 void *MallocAlloc::Realloc(void *p, int size) { 
     if (!p) return ::malloc(size);
@@ -581,8 +369,6 @@ const char *nt_service_name = 0;
 SERVICE_STATUS_HANDLE nt_service_status_handle = 0;
 
 void WIN32_Init() { timeBeginPeriod(1); }
-Time Now() { return timeGetTime(); }
-void Msleep(int milliseconds) { Sleep(milliseconds); }
 int close(int socket) { return closesocket(socket); }
 BOOL WINAPI CtrlHandler(DWORD sig) { INFO("interrupt"); app->run=0; return 1; }
 
@@ -733,9 +519,7 @@ int NTService::Install(const char *name, const char *path) { FATAL("not implemen
 int NTService::Uninstall(const char *name) { FATAL("not implemented"); }
 int NTService::WrapMain(const char *name, MainCB main_cb, int argc, const char **argv) { return main_cb(argc, argv); }
 
-void Msleep(int milliseconds) { usleep(milliseconds * 1000); }
 void HandleSigInt(int sig) { app->run=0; app->scheduler.Wakeup(); }
-Time Now() { struct timeval tv; gettimeofday(&tv, 0); return (Time)tv.tv_sec * 1000 + tv.tv_usec / 1000; }
 
 int ProcessPipe::Open(const char **argv) {
     int pipein[2], pipeout[2], ret;
@@ -800,7 +584,9 @@ InterProcessResource::~InterProcessResource() {
 InterProcessResource::InterProcessResource(int size, const string &u) : len(size), url(u) {
     CHECK(len);
     int key = url.empty() ? rand() : ShmKeyFromInterProcessResourceURL(url);
-    id = shmget(key, size, url.empty() ? (IPC_CREAT | 0600) : 0400);
+    if ((id = shmget(key, size, url.empty() ? (IPC_CREAT | 0600) : 0400)) < 0)
+        FATAL("id=", id, ", size=", size, ", url=", url, ": ", strerror(errno));
+
     CHECK_GE(id, 0);
     buf = reinterpret_cast<char*>(shmat(id, NULL, 0));
     CHECK(buf);
@@ -1143,7 +929,7 @@ int Application::Frame() {
     if (!MainThread()) ERROR("Frame() called from thread ", Thread::GetId());
 
     scheduler.FrameWait();
-    unsigned clicks = scheduler.monolithic_frame ? frame_time.GetTime(true) : screen->frame_time.GetTime(true);
+    unsigned clicks = (scheduler.monolithic_frame ? frame_time.GetTime(true) : screen->frame_time.GetTime(true)).count();
 
     int flag = 0;
     PreFrame(clicks);
@@ -1180,7 +966,7 @@ int Application::MainLoop() {
 #ifdef LFL_IPHONE
         // if (minimized) run = 0;
 #endif
-        Msleep(1);
+        MSleep(1);
     }
 
     return Free();

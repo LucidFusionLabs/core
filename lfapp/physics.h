@@ -34,13 +34,13 @@ struct Physics {
     virtual void *AddPlane(const v3 &normal, const v3 &pos, const CollidesWith &cw) = 0;
     virtual void Free(void *body) = 0;
 
-    virtual void Input(const Entity *e, unsigned timestep, bool angular) = 0;
-    virtual void Output(Entity *e, unsigned timestep) = 0;
+    virtual void Input(const Entity *e, Time timestep, bool angular) = 0;
+    virtual void Output(Entity *e, Time timestep) = 0;
     virtual void SetPosition(Entity *e, const v3 &pos, const v3 &ort) = 0;
     virtual void SetContinuous(Entity *e, float threshhold, float sweepradius) {}
 
     virtual void Collided(bool contact_pts, CollidedCB cb) = 0;
-    virtual void Update(unsigned timestep) = 0;
+    virtual void Update(Time timestep) = 0;
 };
 
 struct SimplePhysics : public Physics {
@@ -53,16 +53,16 @@ struct SimplePhysics : public Physics {
     virtual void *AddPlane(const v3 &normal, const v3 &pos, const CollidesWith &cw) { return 0; }
     virtual void Free(void *) {}
 
-    virtual void Input(const Entity *e, unsigned timestep, bool angular) {}
-    virtual void Output(Entity *e, unsigned timestep) {}
+    virtual void Input(const Entity *e, Time timestep, bool angular) {}
+    virtual void Output(Entity *e, Time timestep) {}
     virtual void SetPosition(Entity *e, const v3 &pos, const v3 &ort) {}
     virtual void Collided(bool contact_pts, CollidedCB cb) {}
  
-    virtual void Update(unsigned timestep) {
+    virtual void Update(Time timestep) {
         for (Scene::EntityAssetMap::iterator i = scene->assetMap.begin(); i != scene->assetMap.end(); i++)
             for (Scene::EntityVector::iterator j = (*i).second.begin(); j != (*i).second.end(); j++) Update(*j, timestep);
     }
-    static void Update(Entity *e, unsigned timestep) { e->pos.Add(e->vel * (timestep / 1000.0)); }
+    static void Update(Entity *e, Time timestep) { e->pos.Add(e->vel * (timestep.count() / 1000.0)); }
 };
 }; // namespace LFL
 
@@ -107,7 +107,7 @@ struct Box2DScene : public Physics {
         return body;
     }
     virtual void *AddPlane(const v3 &normal, const v3 &pos, const CollidesWith &cw) { groundY = pos.y; return 0; }
-    virtual void Input(const Entity *e, unsigned timestep, bool angular) {
+    virtual void Input(const Entity *e, Time timestep, bool angular) {
         if (!e || !e->body) return;
         b2Body *body = (b2Body*)e->body;
         body->SetUserData((void*)e);
@@ -122,16 +122,16 @@ struct Box2DScene : public Physics {
             float delta = angle - body->GetAngle();
             while (delta < -M_PI) delta += M_TAU;
             while (delta >  M_PI) delta -= M_TAU;
-            body->SetAngularVelocity(delta * 1000.0 / timestep);
+            body->SetAngularVelocity(delta * 1000.0 / timestep.count());
         }
     }
-    virtual void Output(Entity *e, unsigned timestep) {
+    virtual void Output(Entity *e, Time timestep) {
         if (!e || !e->body) return;
         b2Body *body = (b2Body*)e->body;
         b2Vec2 position = body->GetPosition(), velocity = body->GetLinearVelocity(), orientation = body->GetWorldVector(b2Vec2(0,1));;
         e->vel = v3(velocity.x, e->vel.y, velocity.y);
         if (e->vel.y) {
-            e->pos.y += e->vel.y / timestep;
+            e->pos.y += e->vel.y / timestep.count();
             if (e->pos.y < groundY) {
                 e->pos.y = groundY;
                 e->vel.y = 0;
@@ -155,9 +155,9 @@ struct Box2DScene : public Physics {
             if (1) /*(!contact_pts)*/ { cb(eA, eB, 0, 0); continue; }
         }
     }
-    virtual void Update(unsigned timestep) {
+    virtual void Update(Time timestep) {
         static int velocityIterations = 6, positionIterations = 2;
-        world.Step(timestep/1000.0, velocityIterations, positionIterations);
+        world.Step(timestep.count()/1000.0, velocityIterations, positionIterations);
     }
 
     static float GetAngle(const v3 &ort) { return atan2(ort.z, ort.x) - M_PI/2; }
@@ -206,7 +206,7 @@ struct BulletScene : public Physics {
     void *AddBox(const v3 &half_ext, const v3 &pos, const v3 &ort, float mass, const CollidesWith &cw) { return Add(new btBoxShape(Vector(half_ext)), pos, mass, cw); }
     void *AddPlane(const v3 &normal, const v3 &pos, const CollidesWith &cw) { return Add(new btStaticPlaneShape(Vector(normal), -Plane(pos, normal).d), v3(0,0,0), 0, cw); }
 
-    void Input(const Entity *e, unsigned timestep, bool angular) {
+    void Input(const Entity *e, Time timestep, bool angular) {
         btRigidBody *body = (btRigidBody*)e->body;
         body->setUserPointer((void*)e);
 
@@ -230,11 +230,11 @@ struct BulletScene : public Physics {
         dst.setBasis(basis);
 
         btVector3 vel, avel;
-        btTransformUtil::calculateVelocity(src, dst, timestep/1000.0, vel, avel);
+        btTransformUtil::calculateVelocity(src, dst, timestep.count()/1000.0, vel, avel);
 
         body->setAngularVelocity(avel);
     }
-    void Output(Entity *e, unsigned timestep) {
+    void Output(Entity *e, Time timestep) {
         btRigidBody *body = (btRigidBody*)e->body;
         btVector3 vel = body->getLinearVelocity();
         e->vel = v3(vel.getX(), vel.getY(), vel.getZ());
@@ -261,7 +261,7 @@ struct BulletScene : public Physics {
         body->setCcdSweptSphereRadius(sweepradius);
     }
 
-    void Update(unsigned timestep) { dynamicsWorld->stepSimulation(timestep/1000.0, 1000, 1/180.0); }
+    void Update(Time timestep) { dynamicsWorld->stepSimulation(timestep.count()/1000.0, 1000, 1/180.0); }
     void Collided(bool contact_pts, CollidedCB cb) {
         int numManifolds = dynamicsWorld->getDispatcher()->getNumManifolds();
         for (int i=0;i<numManifolds;i++) {
@@ -337,7 +337,7 @@ struct ODEScene : public Physics {
     virtual void *AddSphere(float radius, const v3 &pos, const v3 &ort, float mass, const CollidesWith &cw) {
         return NewObject(dBodyCreate(world), pos, cw, dCreateSphere(space, radius), MassSphere(mass, 1, radius));
     }
-    virtual void Input(const Entity *e, unsigned timestep, bool angular) {
+    virtual void Input(const Entity *e, Time timestep, bool angular) {
         if (!e->body) return;
         dGeomID geom = (dGeomID)e->body;
         dBodyID body = dGeomGetBody(geom);
@@ -358,7 +358,7 @@ struct ODEScene : public Physics {
         };
         dGeomSetRotation(geom, r);
     }
-    virtual void Output(Entity *e, unsigned timestep) {
+    virtual void Output(Entity *e, Time timestep) {
         if (!e->body) return;
         dGeomID geom = (dGeomID)e->body;
         dBodyID body = dGeomGetBody(geom);
@@ -379,11 +379,11 @@ struct ODEScene : public Physics {
         dGeomSetPosition(geom, pos.x, pos.y, pos.z);
     }
 
-    virtual void Update(unsigned timestep) {
+    virtual void Update(Time timestep) {
         dSpaceCollide(space, this, nearCallback);
 
-        dWorldStep(world, timestep/1000.0);
-        // dWorldQuickStep(world, timestep/1000.0);
+        dWorldStep(world, timestep.count()/1000.0);
+        // dWorldQuickStep(world, timestep.count()/1000.0);
 
         dJointGroupEmpty(contactgroup);
     }

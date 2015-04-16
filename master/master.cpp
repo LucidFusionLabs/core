@@ -32,7 +32,7 @@ struct ServerList : public HTTPServer::Resource {
     struct Server { Time last_updated; };
     map<string, Server> servers;
     string serialized;
-    static const int Timeout = (5*60+5)*1000;
+    Time timeout = Seconds(5*60+5);
 
     HTTPServer::Response Request(Connection *c, int method, const char *url, const char *args, const char *headers, const char *postdata, int postlen) {
         if (method == HTTPServer::Method::POST) {
@@ -45,7 +45,7 @@ struct ServerList : public HTTPServer::Resource {
         else {
             serialized.clear();
             for (map<string, Server>::iterator i = servers.begin(); i != servers.end(); /**/) {
-                if (i->second.last_updated + Timeout < Now()) { servers.erase(i++); continue; }
+                if (i->second.last_updated + timeout < Now()) { servers.erase(i++); continue; }
                 serialized += (*i).first + "\r\n";
                 i++;
             }

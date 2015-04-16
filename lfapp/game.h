@@ -124,7 +124,8 @@ struct Game {
         typedef unordered_map<unsigned short, pair<Time, string> > RetryMap;
         Game::Network *net;
         RetryMap retry;
-        unsigned method, timeout;
+        unsigned method;
+        Time timeout;
         ReliableUDPNetwork(unsigned m, unsigned t=500) : net(Singleton<UDPNetwork>::Get()), method(m), timeout(t) {}
 
         void Clear() { retry.clear(); }
@@ -216,7 +217,7 @@ struct Game {
     int state=State::GAME_ON, teamcount[4], red_score=0, blue_score=0; 
     Game(Scene *s) : scene(s), started(Now()), ranlast(started) { memzeros(teamcount); }
 
-    virtual void Update(GameServer *server, unsigned timestep) {};
+    virtual void Update(GameServer *server, Time timestep) {};
     virtual Entity *JoinEntity(ConnectionData *cd, EntityID, TeamType *team) { int *tc = TeamCount(*team); if (tc) (*tc)++; return 0; }
     virtual void    PartEntity(ConnectionData *cd, Entity *e, TeamType team) { int *tc = TeamCount(team);  if (tc) (*tc)--; }
     virtual bool      JoinRcon(ConnectionData *cd, Entity *e, string *out) { StrAppend(out, "player_entity ", cd->entityID, "\nplayer_team ", cd->team, "\n"); return true; }
@@ -234,7 +235,7 @@ struct GameBots {
     struct Bot {
         Entity *entity;
         Game::ConnectionData *player_data;
-        Time last_shot=0;
+        Time last_shot=Time(0);
         Bot(Entity *e=0, Game::ConnectionData *pd=0) : entity(e), player_data(pd) {}
         static bool ComparePlayerEntityID(const Bot &l, const Bot &r) { return l.player_data->entityID < r.player_data->entityID; }
     };
@@ -273,7 +274,7 @@ struct GameBots {
         for (int i=0; i<bots.size(); i++) Delete(&bots[i]);
         bots.clear();
     }
-    virtual void Update(unsigned dt) {}
+    virtual void Update(Time dt) {}
 };
 
 struct GameServer : public Query {
@@ -281,13 +282,13 @@ struct GameServer : public Query {
         GameProtocol::WorldUpdate WorldUpdate;
         struct WorldUpdateHistory { unsigned short id; Time time; } send_WorldUpdate[3];
         int send_WorldUpdate_index=0, num_send_WorldUpdate=0;
-        Time time_post_MasterUpdate=0;
+        Time time_post_MasterUpdate=Time(0);
         History() { WorldUpdate.id=0; memzeros(send_WorldUpdate); }
     };
 
     Game *world;
     GameBots *bots;
-    unsigned timestep;
+    Time timestep;
     vector<Service*> svc;
     string rcon_auth_passwd, master_sink_url, local_game_name, local_game_url;
     const vector<Asset> *assets;
@@ -362,8 +363,8 @@ struct GameServer : public Query {
 
     int Frame() {
         Time now = Now();
-        static const int MasterUpdateInterval = Minutes(5);
-        if (now > last.time_post_MasterUpdate + MasterUpdateInterval || !last.time_post_MasterUpdate) {
+        static const Time MasterUpdateInterval = Minutes(5);
+        if (now > last.time_post_MasterUpdate + MasterUpdateInterval || last.time_post_MasterUpdate == Time(0)) {
             last.time_post_MasterUpdate = now;
             if (!master_sink_url.empty())
                 Singleton<HTTPClient>::Get()->WPost(master_sink_url, "application/octet-stream", (char*)local_game_url.c_str(), local_game_url.size());
@@ -393,7 +394,7 @@ struct GameServer : public Query {
         for (int i = 0; i < svc.size(); ++i) {
             last.num_send_WorldUpdate += ((Game::Network*)svc[i]->game_network)->Broadcast(svc[i], &last.WorldUpdate);
         }
-        if (bots) bots->Update(timestep * updated); 
+        if (bots) bots->Update(timestep); 
         return 0;
     }
 
@@ -427,7 +428,7 @@ struct GameServer : public Query {
         Game::ConnectionData *cd = Game::ConnectionData::Get(c);
         for (int i=0; i<sizeofarray(last.send_WorldUpdate); i++) {
             if (last.send_WorldUpdate[i].id != pup->id_WorldUpdate) continue;
-            cd->ping = Now() - last.send_WorldUpdate[i].time - pup->time_since_WorldUpdate;
+            cd->ping = (Now() - last.send_WorldUpdate[i].time - Time(pup->time_since_WorldUpdate)).count();
             break;
         }
 
@@ -536,15 +537,15 @@ struct GameUDPServer : public UDPServer {
 struct GameClient {
     struct History {
         unsigned buttons=0;
-        Time     time_frame=0;
-        Time     time_send_PlayerUpdate=0;
+        Time     time_frame=Time(0);
+        Time     time_send_PlayerUpdate=Time(0);
         Time     time_recv_WorldUpdate[2];
         unsigned short id_WorldUpdate, seq_WorldUpdate;
         deque<GameProtocol::WorldUpdate> WorldUpdate;
-        History() { time_recv_WorldUpdate[0]=time_recv_WorldUpdate[1]=0; }
+        History() { time_recv_WorldUpdate[0]=time_recv_WorldUpdate[1]=Time(0); }
     };
     struct Replay {
-        Time start=0;
+        Time start=Time(0);
         unsigned short start_ind=0, while_seq=0;
         bool just_ended=0;
         bool enabled() { return start_ind; }
@@ -664,11 +665,11 @@ struct GameClient {
         Game::Controller CS = control;
         control.Reset();
         Frame();
-        if (reorienting || (CS.buttons == last.buttons && last.time_send_PlayerUpdate + 100 > Now())) return;
+        if (reorienting || (CS.buttons == last.buttons && last.time_send_PlayerUpdate + Time(100) > Now())) return;
 
         GameProtocol::PlayerUpdate pup;
         pup.id_WorldUpdate = last.id_WorldUpdate;
-        pup.time_since_WorldUpdate = Now() - last.time_recv_WorldUpdate[0];
+        pup.time_since_WorldUpdate = (Now() - last.time_recv_WorldUpdate[0]).count();
         pup.buttons = CS.buttons;
         pup.ort.From(screen->cam->ort, screen->cam->up);
         net->Write(conn, UDPClient::Write, seq++, &pup);
@@ -681,8 +682,8 @@ struct GameClient {
         if (WorldUpdates < 2) return;
 
         last.time_frame = Now();
-        unsigned updateInterval = last.time_recv_WorldUpdate[0] - last.time_recv_WorldUpdate[1];
-        unsigned updateLast = last.time_frame - last.time_recv_WorldUpdate[0];
+        unsigned updateInterval = (last.time_recv_WorldUpdate[0] - last.time_recv_WorldUpdate[1]).count();
+        unsigned updateLast = (last.time_frame - last.time_recv_WorldUpdate[0]).count();
 
         if (1) { /* interpolate */
             GameProtocol::WorldUpdate *wu1=0, *wu2=0;
@@ -690,7 +691,7 @@ struct GameClient {
             /* replay */
             if (replay.enabled() && replay.while_seq != last.seq_WorldUpdate) replay.disable();
             if (replay.enabled()) {
-                float frames = min(WorldUpdates - replay.start_ind - 2.0f, (Now() - replay.start) / (float)updateInterval);
+                float frames = min(WorldUpdates - replay.start_ind - 2.0f, (Now() - replay.start).count() / (float)updateInterval);
                 int ind = (int)(replay.start_ind + frames);
                 wu1 = &last.WorldUpdate[ind+1];
                 wu2 = &last.WorldUpdate[ind];
