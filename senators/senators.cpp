@@ -92,7 +92,7 @@ struct Senator : public Query {
 
     Senator() : ready(0), bot(new NLPBot(FLAGS_print_parse)) {
         if (senatornames.size()) { nick = senatornames[senatornames_index]; senatornames_index = (senatornames_index+1) % senatornames.size(); }
-        else { for (int i=0; i<9; i++) nick.append(1, 'a' + ::rand() % 26); }
+        else { for (int i=0; i<9; i++) nick.append(1, 'a' + rand() % 26); }
     }
     int Heartbeat(Connection *c) { if (bot) bot->Heartbeat(Singleton<IRCBotServer>::Get(), c); return 0; }
 
@@ -157,7 +157,7 @@ void DoSendRandom(int times, const string &data, int len) {
             majority.push_back((*i).second);
 
     for (int i=0; i<times; i++)
-        majority[::rand() % majority.size()]->Write(data.c_str(), len);
+        majority[rand() % majority.size()]->Write(data.c_str(), len);
 
     INFO("sent * 1 * ", times, " '", data, "'");
 }
@@ -198,7 +198,7 @@ void MySay(const vector<string> &args) {
 
 void MyColorSay(const vector<string> &args) {
     string in = args.size() ? Join(args, " ") : FLAGS_message, send = MyPrefix();
-    for (int i=0, len=in.size(); i<len; i++) StringAppendf(&send, "%02d%c", 1+::rand()%14, in[i]);
+    for (int i=0, len=in.size(); i<len; i++) StringAppendf(&send, "%02d%c", 1+rand()%14, in[i]);
     send += "\r\n";
     DoSendRandom(1, send, send.size());
 }

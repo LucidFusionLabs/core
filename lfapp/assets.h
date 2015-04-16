@@ -385,7 +385,7 @@ template <int MP, int MH, bool PerParticleColor> struct Particles : public Parti
         void Init() {
             InitColor();
             radius = Rand(config->radius_min, config->radius_max);
-            history_len = Trails ? (int)Rand(max(3.0f, config->radius_min), MaxHistory) : 1;
+            history_len = Trails ? (int)Rand(max(3.0f, config->radius_min), static_cast<float>(MaxHistory)) : 1;
 
             v3 start;
             if (!config->move_with_pos) start = config->pos;
@@ -395,15 +395,15 @@ template <int MP, int MH, bool PerParticleColor> struct Particles : public Parti
                 start.Add(right * tf.x + config->updir * tf.y + config->ort * tf.z);
                 if (config->pos_transform_index >= config->pos_transform->size()) config->pos_transform_index = 0;
             }
-            start.Add(v3::Rand() * Rand(0, config->rand_initpos));
+            start.Add(v3::Rand() * Rand(0.0f, config->rand_initpos));
 
             for (int i=0; i<history_len; i++) history[i] = start;
 
             if (config->emitter_type & Emitter::Sprinkler) {
-                if (1) vel  = v3(2.0*cos(config->emitter_angle), 2.0,               2.0*sin(config->emitter_angle));
-                if (0) vel += v3(0.5*Rand(1,2)-.25,              0.5*Rand(1,2)-.25, 0.5*Rand(1,2)-.25);
+                if (1) vel  = v3(2.0*cos(config->emitter_angle), 2.0,                   2.0*sin(config->emitter_angle));
+                if (0) vel += v3(0.5*Rand(1.0,2.0)-.25,          0.5*Rand(1.0,2.0)-.25, 0.5*Rand(1.0,2.0)-.25);
             } else { 
-                vel = config->vel*25.0 + v3::Rand()*Rand(0, config->rand_initvel);
+                vel = config->vel*25.0 + v3::Rand()*Rand(0.0f, config->rand_initvel);
             }
 
             remaining = 1;

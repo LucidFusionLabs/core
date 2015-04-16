@@ -18,8 +18,19 @@
 
 #ifndef __LFL_LFAPP_STRING_H__
 #define __LFL_LFAPP_STRING_H__
-namespace LFL {
 
+#ifdef WIN32
+#include <intrin.h>
+#pragma intrinsic(_BitScanForward)
+static __forceinline int ffsl(long x) {
+    unsigned long i;
+    if (_BitScanForward(&i, x)) return (i + 1);
+    return (0);
+}
+static __forceinline int ffs(int x) { return ffsl(x); }
+#endif
+
+namespace LFL {
 struct Unicode {
     static const unsigned char non_breaking_space = 0xA0;
     static const unsigned short replacement_char = 0xFFFD;
@@ -444,7 +455,7 @@ struct Bit {
     }
 };
 
-struct BitField {
+struct BitString {
     static int Clear(      unsigned char *b, int bucket) {          b[bucket/8] &= ~(1 << (bucket % 8)); return 1; }
     static int Set  (      unsigned char *b, int bucket) {          b[bucket/8] |=  (1 << (bucket % 8)); return 1; }
     static int Get  (const unsigned char *b, int bucket) { return   b[bucket/8] &   (1 << (bucket % 8));           }
@@ -461,16 +472,6 @@ struct BitField {
     static int LastClear (const unsigned char *b, int l) { for (int i=l-1; i>=0; i--) { unsigned char c=b[i]; if (c != 255) return i*8 + ffs(~c)-1; } return -1; }
     static int LastClear (const          char *b, int l) { return LastClear (reinterpret_cast<const unsigned char*>(b), l); }
     static int FirstClear(const          char *b, int l) { return FirstClear(reinterpret_cast<const unsigned char*>(b), l); }
-};
-
-struct GraphViz {
-    static string DigraphHeader(const string &name);
-    static string NodeColor(const string &s);
-    static string NodeShape(const string &s);
-    static string NodeStyle(const string &s);
-    static string Footer();
-    static void AppendNode(string *out, const string &n1, const string &label=string());
-    static void AppendEdge(string *out, const string &n1, const string &n2, const string &label=string());
 };
 
 }; // namespace LFL

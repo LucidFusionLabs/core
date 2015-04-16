@@ -23,17 +23,6 @@
 #include "judymap.h"
 #endif
 
-#ifdef WIN32
-#include <intrin.h>
-#pragma intrinsic(_BitScanForward)
-static __forceinline int ffsl(long x) {
-	unsigned long i;
-	if (_BitScanForward(&i, x)) return (i + 1);
-	return (0);
-}
-static __forceinline int ffs(int x) { return ffsl(x); }
-#endif
-
 #define SortImpl1(x1, y2) return x1 < y2;
 #define SortImpl2(x1, y1, x2, y2)  \
     if      (x1 < y1) return true;  \
@@ -681,10 +670,10 @@ struct BloomFilter {
     int  Get  (long long val) { return Get  ((const unsigned char *)&val, sizeof(long long)); }
     int  Not  (long long val) { return Not  ((const unsigned char *)&val, sizeof(long long)); }
 
-    void Set  (      unsigned char *val, size_t len) {        ForEachBitBucketDo(BitField::Set,   val, len); }
-    void Clear(      unsigned char *val, size_t len) {        ForEachBitBucketDo(BitField::Clear, val, len); }
-    int  Get  (const unsigned char *val, size_t len) { return ForEachBitBucketDo(BitField::Get,   val, len); }
-    int  Not  (const unsigned char *val, size_t len) { return ForEachBitBucketDo(BitField::Not,   val, len); }
+    void Set  (      unsigned char *val, size_t len) {        ForEachBitBucketDo(BitString::Set,   val, len); }
+    void Clear(      unsigned char *val, size_t len) {        ForEachBitBucketDo(BitString::Clear, val, len); }
+    int  Get  (const unsigned char *val, size_t len) { return ForEachBitBucketDo(BitString::Get,   val, len); }
+    int  Not  (const unsigned char *val, size_t len) { return ForEachBitBucketDo(BitString::Not,   val, len); }
 
     int ForEachBitBucketDo(int (*op)(unsigned char *b, int bucket), const unsigned char *val, size_t len) {
         unsigned long long h = fnv64(val, len);

@@ -24,7 +24,7 @@
 
 namespace LFL {
 v3 v3::Rand() {     
-    float phi = LFL::Rand(0, M_TAU), costheta = LFL::Rand(-1, 1), rho = sqrt(1 - pow(costheta, 2));
+    float phi = LFL::Rand(0.0, M_TAU), costheta = LFL::Rand(-1.0, 1.0), rho = sqrt(1 - pow(costheta, 2));
     return v3(rho*cos(phi), rho*sin(phi), costheta);
 }
 
@@ -32,8 +32,6 @@ bool v4::operator<(const v4 &c) const { SortImpl4(x, c.x, y, c.y, z, c.z, w, c.w
 
 double Squared(double n) { return n*n; }
 float Decimals(float n) { return n - (int)n; }
-float Rand(float a, float b) { return ((b-a)*((float)::rand()/RAND_MAX))+a; }
-unsigned long long Rand64() { return (unsigned long long)::rand()<<32 | ::rand(); }
 
 void Clamp(float *x, float floor, float ceil) { *x = Clamp(*x, floor, ceil); }
 float Clamp(float x, float floor, float ceil) {

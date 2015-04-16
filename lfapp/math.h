@@ -26,6 +26,20 @@
 #define NextMultipleOf64(n) NextMultipleOfPowerOfTwo(n, 64);
 
 namespace LFL {
+template <class X> typename enable_if<is_integral<X>::value, X>::type
+Rand(X rmin = 0, X rmax = numeric_limits<X>::max()) {
+    return std::uniform_int_distribution<X>(rmin, rmax)(ThreadLocalStorage::Get()->rand_eng);
+}
+
+template <class X> typename enable_if<is_floating_point<X>::value, X>::type
+Rand(X rmin = 0, X rmax = numeric_limits<X>::max()) {
+    return std::uniform_real_distribution<X>(rmin, rmax)(ThreadLocalStorage::Get()->rand_eng);
+}
+
+inline int rand() { return Rand<int>(); }
+inline unsigned long long Rand64() { return Rand<unsigned long long>(); }
+inline bool Equal(float a, float b, float eps=1e-6) { return fabs(a-b) < eps; }
+
 template <class X> static X Negate(X x) { return x ? -x : x; }
 template <class X> static bool Min(X *a, X b) { if (b >= *a) return 0; *a = b; return 1; }
 template <class X> static bool Max(X *a, X b) { if (b <= *a) return 0; *a = b; return 1; }
@@ -474,8 +488,6 @@ template <class X> struct RollingAvg {
 
 /* util */
 float Decimals(float n);
-float Rand(float a, float b);
-unsigned long long Rand64();
 float Clamp(float x, float floor, float ceil);
 void Clamp(float *x, float floor, float ceil);
 v3 Clamp(const v3& x, float floor, float ceil);
@@ -670,7 +682,7 @@ struct DiscreteDistribution {
     void Prepare() { table[sum] = lastval; }
     void *Sample() {
         samples++;
-        float rv = Rand(0, sum);
+        float rv = Rand(0.0, sum);
         Table::const_iterator i = table.lower_bound(rv);
         if (i == table.end()) FATAL("lower_bound ", rv, " ", sum);
         return i->second;

@@ -43,7 +43,8 @@ Resolver::Nameserver *Resolver::Connect(IPV4::Addr addr) {
 
 Resolver::Nameserver *Resolver::Connect(const vector<IPV4::Addr> &addrs) {
     static bool randomize = false;
-    int rand_connect_index = randomize ? (::rand() % addrs.size()) : 0, ri=0; Nameserver *ret=0;
+    Nameserver *ret = 0;
+    int rand_connect_index = randomize ? Rand<int>(0, addrs.size()-1) : 0, ri = 0;
     for (vector<IPV4::Addr>::const_iterator i = addrs.begin(); i != addrs.end(); ++i, ++ri) {
         if (ri == rand_connect_index) ret = Connect(*i);
         else conn_available.push_back(*i);
@@ -141,7 +142,7 @@ void Resolver::Nameserver::Response(Connection *cin, DNS::Header *hdr, int len) 
     if (req.cb) {
         vector<IPV4::Addr> results;
         for (int i=0; i<res.A.size(); i++) if (res.A[i].type == DNS::Type::A) results.push_back(res.A[i].addr);
-        IPV4::Addr ipv4_addr = results.size() ? results[::rand() % results.size()] : -1;
+        IPV4::Addr ipv4_addr = results.size() ? results[Rand<int>(0, results.size()-1)] : -1;
         INFO(c->Name(), ": resolved ", req.query, " to ", IPV4::Text(ipv4_addr));
         req.cb(ipv4_addr, &res);
     }
@@ -194,7 +195,7 @@ bool RecursiveResolver::Resolve(Request *req) {
     if      (req->type == DNS::Type::A  && (ci = node->Acache .find(req->query)) != node->Acache .end()) cached = ci->second;
     else if (req->type == DNS::Type::MX && (ci = node->MXcache.find(req->query)) != node->MXcache.end()) cached = ci->second;
     if (cached) {
-        IPV4::Addr addr = cached->A.size() ? cached->A[::rand() % cached->A.size()].addr : -1;
+        IPV4::Addr addr = cached->A.size() ? cached->A[Rand<int>(0, cached->A.size()-1)].addr : -1;
         INFO("RecursiveResolver found ", req->query, " = ", IPV4::Text(addr), " in cache=", node->authority_domain);
         RunInMainThread(new Callback(bind(&Request::Complete, req, addr, cached)));
         return true;

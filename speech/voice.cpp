@@ -112,7 +112,7 @@ RingBuf *VoiceModel::synth(const char *text, int start) {
 }
 
 int VoiceModel::nextPhone(int phone, int lastphone, int lastphoneindex) {
-    return ::rand() % unit[phone].samples;
+    return rand() % unit[phone].samples;
 }
 
 }; // namespace LFL

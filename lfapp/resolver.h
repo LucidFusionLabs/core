@@ -53,7 +53,7 @@ struct Resolver {
            [&](Connection *c, const char *cb, int cl) { Response(c, (DNS::Header*)cb, cl); },
            [&](Connection *c)                         { Heartbeat(); }, 53)) {}
 
-        unsigned short NextID() const { unsigned short id; for (id = ::rand(); Contains(requestMap, id); id = ::rand()) { /**/ } return id; }
+        unsigned short NextID() const { unsigned short id; for (id = rand(); Contains(requestMap, id); id = rand()) { /**/ } return id; }
         bool Resolve(const Request &req);
         void Response(Connection *c, DNS::Header *hdr, int len);
         void Heartbeat();

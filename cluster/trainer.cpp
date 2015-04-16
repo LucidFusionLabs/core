@@ -159,7 +159,7 @@ int main(int argc, const char *argv[]) {
         Matrix chosen(in->M / FLAGS_choosen, in->N);
         vector<string> label;
         MatrixRowIter(in) {
-           if (rand() % FLAGS_choosen) continue;
+           if (Rand<int>() % FLAGS_choosen) continue;
            int ind = label.size();
            if (ind >= chosen.M) break;
 

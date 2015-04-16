@@ -54,7 +54,7 @@ struct SpaceballTeam {
     static SpaceballTeam *GetRandom(SpaceballTeam *filter = 0) {
         static vector<SpaceballTeam> *teams = GetList();
         for (int i=0; i<1000; i++) {
-            SpaceballTeam *ret = &(*teams)[::rand() % teams->size()];
+            SpaceballTeam *ret = &(*teams)[rand() % teams->size()];
             if (ret != filter) return ret;
         }
         FATAL("no team found ", teams->size(), " ", filter?filter->name:"");
@@ -146,7 +146,7 @@ struct SpaceballGame : public Game {
             return 0;
         }
         Ship(Asset *a, void *b, const v3 &p, const v3 &o, const v3 &u, float YSnapped=0) : Entity("", a, p, o, u), boost(0), Ysnapped(YSnapped)
-        { body = b; color1 = Color::fade(Rand(0,1)); }
+        { body = b; color1 = Color::fade(Rand(0.0, 1.0)); }
     };
 
     struct StartPositions {
@@ -200,7 +200,7 @@ struct SpaceballGame : public Game {
     Time last_scored; int red_startindex, blue_startindex, game_players, game_type, game_limit, game_control;
     Callback game_finished_cb;
 
-    SpaceballGame(Scene *s) : Game(s), last_scored(0), red_startindex(::rand() % PlayersPerTeam), blue_startindex(::rand() % PlayersPerTeam), game_players(0), game_type(0), game_limit(0), game_control(0) {
+    SpaceballGame(Scene *s) : Game(s), last_scored(0), red_startindex(rand() % PlayersPerTeam), blue_startindex(rand() % PlayersPerTeam), game_players(0), game_type(0), game_limit(0), game_control(0) {
         FieldDefinition *fd = FieldDefinition::get();
         planes.push_back(Plane(fd->C, fd->B, fd->A)); // way back
         planes.push_back(Plane(fd->A, fd->B, fd->E)); // left
@@ -239,7 +239,7 @@ struct SpaceballGame : public Game {
         set_difference(&team->stripe_colors[0], &team->stripe_colors[sizeofarray(team->stripe_colors)],
                        other_ship_colors.begin(), other_ship_colors.end(), inserter(remaining_colors, remaining_colors.begin()));
         if (!remaining_colors.size()) ERROR("no remaining colors");
-        else ship->color1 = remaining_colors[::rand() % remaining_colors.size()];
+        else ship->color1 = remaining_colors[rand() % remaining_colors.size()];
     }
 
     string MapRcon() { return StrCat("map ", home->name, " ", away->name, " ", Now()-started, "\n"); }
@@ -307,8 +307,8 @@ struct SpaceballGame : public Game {
     }
 
     void ResetWorld(int goal=0, int points=0, bool reset_balls=true) {
-        red_startindex  = ::rand() % PlayersPerTeam;
-        blue_startindex = ::rand() % PlayersPerTeam;
+        red_startindex  = rand() % PlayersPerTeam;
+        blue_startindex = rand() % PlayersPerTeam;
         for (Scene::EntityAssetMap::iterator i = scene->assetMap.begin(); i != scene->assetMap.end(); i++) {
             bool ball = reset_balls && i->first == "ball";
             if (!ball && i->first != "shipred" && i->first != "shipblue") continue;

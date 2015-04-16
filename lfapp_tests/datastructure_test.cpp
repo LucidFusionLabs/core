@@ -124,7 +124,7 @@ template <class K, class V> struct SkipList {
                 StrAppend(&v, " ", node[pi].val_ind < 0 ? "-1" : StrCat(val[node[pi].val_ind]));
         } return v;
     }
-    static int RandomLevel() { static float logP = log(.5); return 1 + (int)(log(Rand(0,1)) / logP); }
+    static int RandomLevel() { static float logP = log(.5); return 1 + (int)(log(Rand(0.0, 1.0)) / logP); }
 };
 
 struct AVLTreeZipper {

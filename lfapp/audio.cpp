@@ -1399,7 +1399,7 @@ RingBuf *InvMFCC(const Matrix *in, int samplerate, const Matrix *f0) {
         RingBuf::Handle out(outbuf);
         { 
             double f = (2 * M_PI * 440) / out.Rate();
-            for (int i=0; i<out.Len(); i++) out.Write(sin(f*i)/16 + Rand(-1,1)/2);
+            for (int i=0; i<out.Len(); i++) out.Write(sin(f*i)/16 + Rand(-1.0,1.0)/2);
         }
         Matrix *spec = Spectogram(&out, 0, FLAGS_feat_window, FLAGS_feat_hop, FLAGS_feat_window, 0, PowerDomain::complex);
         delete outbuf;
