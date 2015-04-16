@@ -791,4 +791,31 @@ int MatrixArchiveIn::Skip() { index++; return MatrixFile().Read(file, 1); }
 string MatrixArchiveIn::Filename() { if (!file) return ""; return ""; } // file->file->f.filename(); }
 int MatrixArchiveIn::Count(const string &name) { MatrixArchiveIn a(name); int ret=0; while (a.Skip() != -1) ret++; return ret; }
 
+/* GraphVizFileFile */
+
+string GraphVizFile::Footer() { return "}\r\n"; }
+string GraphVizFile::DigraphHeader(const string &name) {
+    return StrCat("digraph ", name, " {\r\n"
+                  "rankdir=LR;\r\n"
+                  "size=\"8,5\"\r\n"
+                  "node [style = solid];\r\n"
+                  "node [shape = circle];\r\n");
+}
+
+string GraphVizFile::NodeColor(const string &s) { return StrCat("node [color = ", s, "];\r\n"); }
+string GraphVizFile::NodeShape(const string &s) { return StrCat("node [shape = ", s, "];\r\n"); }
+string GraphVizFile::NodeStyle(const string &s) { return StrCat("node [style = ", s, "];\r\n"); }
+
+void GraphVizFile::AppendNode(string *out, const string &n1, const string &label) {
+    StrAppend(out, "\"", n1, "\"",
+              (label.size() ? StrCat(" [ label = \"", label, "\" ] ") : ""),
+              ";\r\n");
+}
+
+void GraphVizFile::AppendEdge(string *out, const string &n1, const string &n2, const string &label) {
+    StrAppend(out, "\"", n1, "\" -> \"", n2, "\"",
+              (label.size() ? StrCat(" [ label = \"", label, "\" ] ") : ""),
+              ";\r\n");
+}
+
 }; // namespace LFL

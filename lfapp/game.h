@@ -29,7 +29,7 @@ struct Game {
     struct ConnectionData;
     struct Team {
         enum { Spectator=1, Home=2, Red=2, Away=3, Blue=3 }; 
-        static int Random() { return 2 + ::rand() % 2; }
+        static int Random() { return 2 + Rand<int>(0, 1); }
         static int FromString(const string &s) {
             if      (s == "home")      return Home;
             else if (s == "away")      return Away;
@@ -501,7 +501,7 @@ struct GameServer : public Query {
 
 struct GameUDPServer : public UDPServer {
     int secret1, secret2;
-    GameUDPServer(int port) : UDPServer(port), secret1(::rand()), secret2(::rand()) {}
+    GameUDPServer(int port) : UDPServer(port), secret1(rand()), secret2(rand()) {}
 
     int Hash(Connection *c) {
         int conn_key[3] = { (int)c->addr, secret1, c->port }; 

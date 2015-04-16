@@ -80,7 +80,7 @@ IPV4EndpointPool::IPV4EndpointPool(const string &ip_csv) {
 bool IPV4EndpointPool::Available() const {
     if (!source_addrs.size()) return true;
     for (int i=0; i<source_addrs.size(); i++)
-        if (BitField::LastClear(source_ports[i].data(), source_ports[i].size()) != -1) return true;
+        if (BitString::LastClear(source_ports[i].data(), source_ports[i].size()) != -1) return true;
     return false;
 }
 
@@ -88,10 +88,10 @@ void IPV4EndpointPool::Close(IPV4::Addr addr, int port) {
     if (!source_addrs.size()) return;
     int bit = port - 1024;
     for (int i=0; i<source_addrs.size(); i++) if (source_addrs[i] == addr) {
-        if (!BitField::Get(source_ports[i].data(), bit))
+        if (!BitString::Get(source_ports[i].data(), bit))
             ERROR("IPV4EndpointPool: Close unopened endpoint: ", IPV4::Text(addr, port));
 
-        BitField::Clear(&source_ports[i][0], bit);
+        BitString::Clear(&source_ports[i][0], bit);
         return;
     }
     ERROR("IPV4EndpointPool: Close unknown endpoint: ", IPV4::Text(addr, port));
@@ -108,7 +108,7 @@ void IPV4EndpointPool::Get(IPV4::Addr *addr, int *port) {
     *addr=0; *port=0;
     if (!source_addrs.size()) return;
     for (int i=0, max_retries=10; i<max_retries; i++) {
-        int ind = ::rand() % source_addrs.size();
+        int ind = Rand<int>(0, source_addrs.size()-1);
         *addr = source_addrs[ind];
         if (GetPort(ind, port)) return;
     }
@@ -116,10 +116,10 @@ void IPV4EndpointPool::Get(IPV4::Addr *addr, int *port) {
 }
 
 bool IPV4EndpointPool::GetPort(int ind, int *port) {
-    int zero_bit = BitField::FirstClear(source_ports[ind].data(), source_ports[ind].size());
+    int zero_bit = BitString::FirstClear(source_ports[ind].data(), source_ports[ind].size());
     if (zero_bit == -1) return false;
     *port = 1025 + zero_bit;
-    BitField::Set(&source_ports[ind][0], zero_bit);
+    BitString::Set(&source_ports[ind][0], zero_bit);
     return true;
 }
 

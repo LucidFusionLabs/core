@@ -57,6 +57,8 @@ inline Time FMilliseconds(float x) { return duration_cast<Time>(fmilliseconds(x)
 inline Time  Microseconds(int   x) { return duration_cast<Time>( microseconds(x)); }
 inline Time FMicroseconds(float x) { return duration_cast<Time>(fmicroseconds(x)); }
 
+Time Now();
+void MSleep(int x);
 time_t Time2time_t(Time x);
 timeval Time2timeval(Time x);
 void localtm(time_t, struct tm *t);

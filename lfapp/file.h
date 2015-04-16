@@ -405,5 +405,15 @@ struct HashMatrix64F {
 struct HashMatrix64     : public HashMatrixT    <unsigned long long, &HashMatrix64F::Assign, &HashMatrix64F::Equals> {};
 struct HashMatrix64File : public HashMatrixFileT<unsigned long long, &HashMatrix64F::Assign, &HashMatrix64F::Equals> {};
 
+struct GraphVizFile {
+    static string DigraphHeader(const string &name);
+    static string NodeColor(const string &s);
+    static string NodeShape(const string &s);
+    static string NodeStyle(const string &s);
+    static string Footer();
+    static void AppendNode(string *out, const string &n1, const string &label=string());
+    static void AppendEdge(string *out, const string &n1, const string &n2, const string &label=string());
+};
+
 }; // namespace LFL
 #endif // __LFL_LFAPP_FILE_H__

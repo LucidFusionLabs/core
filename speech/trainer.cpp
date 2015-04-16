@@ -105,7 +105,7 @@ struct Wav2Features {
 
     Wav2Features(const string &Dir, Target Targ) : dir(Dir), targ(Targ) {
         if (targ == Archive) {
-            string outfile = dir + StringPrintf("%lx.featlist", ::rand());
+            string outfile = dir + StringPrintf("%lx.featlist", rand());
             INFO("selected output file: ", outfile);
             out.Open(outfile);
         }

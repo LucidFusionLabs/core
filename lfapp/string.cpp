@@ -717,29 +717,4 @@ string Base64::Decode(const char *data, size_t input_length) {
     return decoded_data;
 }
 
-string GraphViz::Footer() { return "}\r\n"; }
-string GraphViz::DigraphHeader(const string &name) {
-    return StrCat("digraph ", name, " {\r\n"
-                  "rankdir=LR;\r\n"
-                  "size=\"8,5\"\r\n"
-                  "node [style = solid];\r\n"
-                  "node [shape = circle];\r\n");
-}
-
-string GraphViz::NodeColor(const string &s) { return StrCat("node [color = ", s, "];\r\n"); }
-string GraphViz::NodeShape(const string &s) { return StrCat("node [shape = ", s, "];\r\n"); }
-string GraphViz::NodeStyle(const string &s) { return StrCat("node [style = ", s, "];\r\n"); }
-
-void GraphViz::AppendNode(string *out, const string &n1, const string &label) {
-    StrAppend(out, "\"", n1, "\"",
-              (label.size() ? StrCat(" [ label = \"", label, "\" ] ") : ""),
-              ";\r\n");
-}
-
-void GraphViz::AppendEdge(string *out, const string &n1, const string &n2, const string &label) {
-    StrAppend(out, "\"", n1, "\" -> \"", n2, "\"",
-              (label.size() ? StrCat(" [ label = \"", label, "\" ] ") : ""),
-              ";\r\n");
-}
-
 }; // namespace LFL

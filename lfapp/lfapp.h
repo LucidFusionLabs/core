@@ -31,17 +31,19 @@
 #include <queue>
 #include <deque>
 #include <algorithm>
-#define LFL_STL_NAMESPACE std
-
 #include <memory>
 #include <numeric>
-#include <functional>
+#include <limits>
+#define LFL_STL_NAMESPACE std
+
 #include <unordered_map>
 #include <unordered_set>
+#include <functional>
 #include <thread>
 #include <mutex>
 #include <condition_variable>
 #include <chrono>
+#include <random>
 #define LFL_STL11_NAMESPACE std
 
 #ifdef _WIN32
@@ -79,6 +81,7 @@ using LFL_STL_NAMESPACE::reverse;
 using LFL_STL_NAMESPACE::equal_to;
 using LFL_STL_NAMESPACE::lower_bound;
 using LFL_STL_NAMESPACE::set_difference;
+using LFL_STL_NAMESPACE::numeric_limits;
 using LFL_STL11_NAMESPACE::unordered_map;
 using LFL_STL11_NAMESPACE::unordered_set;
 using LFL_STL11_NAMESPACE::shared_ptr;
@@ -104,6 +107,9 @@ using LFL_STL11_NAMESPACE::chrono::microseconds;
 using LFL_STL11_NAMESPACE::chrono::duration;
 using LFL_STL11_NAMESPACE::chrono::duration_cast;
 using LFL_STL11_NAMESPACE::chrono::high_resolution_clock;
+using LFL_STL11_NAMESPACE::enable_if;
+using LFL_STL11_NAMESPACE::is_integral;
+using LFL_STL11_NAMESPACE::is_floating_point;
 
 #include <errno.h>
 #include <math.h>
@@ -184,8 +190,8 @@ extern "C" int isinf(double);
 #define DEFINE_string(name, initial, description) DEFINE_FLAG(name, string, initial, description)
 
 namespace LFL {
-typedef lock_guard<mutex> ScopedMutex;
 typedef function<void()> Callback;
+typedef lock_guard<mutex> ScopedMutex;
 template <class X> struct Singleton { static X *Get() { static X instance; return &instance; } };
 void Log(int level, const char *file, int line, const string &m);
 }; // namespace LFL
@@ -195,10 +201,6 @@ void Log(int level, const char *file, int line, const string &m);
 #include "lfapp/time.h"
 
 namespace LFL {
-Time Now();
-void MSleep(int x);
-inline bool Equal(float a, float b, float eps=1e-6) { return fabs(a-b) < eps; }
-
 struct Allocator {
     virtual ~Allocator() {}
     virtual const char *Name() = 0;
@@ -217,6 +219,16 @@ struct NullAlloc : public Allocator {
     void Free(void *p) {}
 };
 
+struct ThreadLocalStorage {
+    Allocator *alloc=0;
+    std::default_random_engine rand_eng;
+    ThreadLocalStorage() : rand_eng(std::random_device{}()) {}
+    virtual ~ThreadLocalStorage() { delete alloc; }
+    static thread_local ThreadLocalStorage *instance;
+    static ThreadLocalStorage *Get();
+    static Allocator *GetAllocator(bool reset_allocator=true);
+};
+
 struct Module {
     virtual int Init ()         { return 0; }
     virtual int Start()         { return 0; }
@@ -229,8 +241,8 @@ typedef function<int(Window*, unsigned, unsigned, bool, int)> FrameCB;
 }; // namespace LFL
 
 #include "lfapp/math.h"
-#include "lfapp/lftypes.h"
 #include "lfapp/file.h"
+#include "lfapp/lftypes.h"
 
 namespace LFL {
 bool Running();
@@ -260,6 +272,17 @@ struct NewAlloc : public Allocator {
     void Free(void *p) { delete [] (char *)p; }
 };
 
+template <int S> struct FixedAlloc : public Allocator {
+    const char *Name() { return "FixedAlloc"; }
+    static const int size = S;
+    char buf[S];
+    int len=0;
+    virtual void Reset() { len=0; }
+    virtual void *Malloc(int n) { CHECK_LE(len + n, S); char *ret = &buf[len]; len += NextMultipleOf16(n); return ret; }
+    virtual void *Realloc(void *p, int n) { CHECK_EQ(NULL, p); return this->Malloc(n); }
+    virtual void Free(void *p) {}
+};
+
 struct MMapAlloc : public Allocator {
 #ifdef _WIN32
     HANDLE file, map; void *addr; long long size;
@@ -275,17 +298,6 @@ struct MMapAlloc : public Allocator {
     void *Malloc(int size) { return 0; }
     void *Realloc(void *p, int size) { return 0; }
     void Free(void *p) { delete this; }
-};
-
-template <int S> struct FixedAlloc : public Allocator {
-    const char *Name() { return "FixedAlloc"; }
-    static const int size = S;
-    char buf[S];
-    int len=0;
-    virtual void Reset() { len=0; }
-    virtual void *Malloc(int n) { CHECK_LE(len + n, S); char *ret = &buf[len]; len += NextMultipleOf16(n); return ret; }
-    virtual void *Realloc(void *p, int n) { CHECK_EQ(NULL, p); return this->Malloc(n); }
-    virtual void Free(void *p) {}
 };
 
 struct BlockChainAlloc : public Allocator {
@@ -345,22 +357,6 @@ template <class X> struct FlagOfType : public Flag {
     string Get() const { return ToString(*v); }
     bool IsBool() const { return TypeId<X>() == TypeId<bool>(); }
     void Update(const char *text) { if (text) *v = Scannable::Scan(*v, text); }
-};
-
-struct ThreadLocalStorage {
-    Allocator *alloc=0;
-    virtual ~ThreadLocalStorage() { delete alloc; }
-    static thread_local ThreadLocalStorage *instance;
-    static ThreadLocalStorage *Get() {
-        if (!instance) instance = new ThreadLocalStorage();
-        return instance;
-    }
-    static Allocator *GetAllocator(bool reset_allocator=true) {
-        ThreadLocalStorage *tls = Get();
-        if (!tls->alloc) tls->alloc = new FixedAlloc<1024*1024>;
-        if (reset_allocator) tls->alloc->Reset();
-        return tls->alloc;
-    }
 };
 
 struct Thread {
@@ -552,6 +548,7 @@ struct CUDA : public Module { int Init(); };
 
 struct Application : public ::LFApp, public Module {
     string progname, logfilename, startdir, assetdir, dldir;
+    int pid=0;
     FILE *logfile=0;
     mutex log_mutex;
     Time time_started;

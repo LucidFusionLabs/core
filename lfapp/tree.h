@@ -342,24 +342,24 @@ struct RedBlackTree {
     }
 
     virtual string DebugString(const string &name=string()) const {
-        string ret = GraphViz::DigraphHeader(StrCat("RedBlackTree", name.size()?"_":"", name));
-        ret += GraphViz::NodeColor("black"); PrintNodes(head, Black, &ret);
-        ret += GraphViz::NodeColor("red");   PrintNodes(head, Red,   &ret);
+        string ret = GraphVizFile::DigraphHeader(StrCat("RedBlackTree", name.size()?"_":"", name));
+        ret += GraphVizFile::NodeColor("black"); PrintNodes(head, Black, &ret);
+        ret += GraphVizFile::NodeColor("red");   PrintNodes(head, Red,   &ret);
         PrintEdges(head, &ret);
-        return ret + GraphViz::Footer();
+        return ret + GraphVizFile::Footer();
     }
     virtual void PrintNodes(int ind, int color, string *out) const {
         if (!ind) return;
         const Node *n = &node[ind-1];
         PrintNodes(n->left, color, out);
-        if (n->color == color) GraphViz::AppendNode(out, StrCat(n->key));
+        if (n->color == color) GraphVizFile::AppendNode(out, StrCat(n->key));
         PrintNodes(n->right, color, out);
     }
     virtual void PrintEdges(int ind, string *out) const {
         if (!ind) return;
         const Node *n = &node[ind-1], *l=n->left?&node[n->left-1]:0, *r=n->right?&node[n->right-1]:0;
-        if (l) { PrintEdges(n->left, out);  GraphViz::AppendEdge(out, StrCat(n->key), StrCat(l->key), "left" ); }
-        if (r) { PrintEdges(n->right, out); GraphViz::AppendEdge(out, StrCat(n->key), StrCat(r->key), "right"); }
+        if (l) { PrintEdges(n->left, out);  GraphVizFile::AppendEdge(out, StrCat(n->key), StrCat(l->key), "left" ); }
+        if (r) { PrintEdges(n->right, out); GraphVizFile::AppendEdge(out, StrCat(n->key), StrCat(r->key), "right"); }
     }
 
     static int GetSibling(const Node *parent, int ind) { return ind == parent->left ? parent->right : parent->left; }

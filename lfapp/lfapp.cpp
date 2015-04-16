@@ -176,6 +176,17 @@ DEFINE_bool(open_console, 0, "Open console on win32");
 void Allocator::Reset() { FATAL(Name(), ": reset"); }
 Allocator *Allocator::Default() { return Singleton<MallocAlloc>::Get(); }
 
+ThreadLocalStorage *ThreadLocalStorage::Get() {
+    if (!instance) instance = new ThreadLocalStorage();
+    return instance;
+}
+Allocator *ThreadLocalStorage::GetAllocator(bool reset_allocator) {
+    ThreadLocalStorage *tls = Get();
+    if (!tls->alloc) tls->alloc = new FixedAlloc<1024*1024>;
+    if (reset_allocator) tls->alloc->Reset();
+    return tls->alloc;
+}
+
 void Log(int level, const char *file, int line, const string &m) { app->Log(level, file, line, m); }
 bool Running() { return app->run; }
 bool MainThread() { return Thread::GetId() == app->main_thread_id; }
@@ -747,6 +758,8 @@ int Application::Create(int argc, const char **argv, const char *source_filename
         WSAStartup(MAKEWORD(2,2), &wsadata);
     }
 #else
+    pid = getpid();
+
     /* handle SIGINT */
     signal(SIGINT, HandleSigInt);
 
@@ -760,7 +773,7 @@ int Application::Create(int argc, const char **argv, const char *source_filename
     }
 #endif
 
-    srand(time(0));
+    srand(fnv32(&pid, sizeof(int), time(0)));
     if (logfilename.size()) {
         logfile = fopen(logfilename.c_str(), "a");
         SystemNetwork::SetSocketCloseOnExec(fileno(logfile), 1);
