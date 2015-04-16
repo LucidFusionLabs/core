@@ -550,12 +550,12 @@ template <class X> struct RingVector {
 
 struct RingBuf {
     RingIndex ring;
-    int samplesPerSec, width, bytes;
+    int samples_per_sec, width, bytes;
     Allocator *alloc;
     char *buf;
-    Time *stamp;
+    microseconds *stamp;
     ~RingBuf() { alloc->Free((void*)buf); alloc->Free((void*)stamp); }
-    RingBuf(int SPS=0, int SPB=0, int Width=0, Allocator *Alloc=0) : samplesPerSec(0), width(0), bytes(0),
+    RingBuf(int SPS=0, int SPB=0, int Width=0, Allocator *Alloc=0) : samples_per_sec(0), width(0), bytes(0),
     alloc(Alloc?Alloc:Allocator::Default()), buf(0), stamp(0) { if (SPS) Resize(SPS, X_or_Y(SPB, SPS), Width); }
 
     int Bucket(int n) const { return ring.AbsoluteIndex(n); }
@@ -563,26 +563,26 @@ struct RingBuf {
 
     void Resize(int SPS, int SPB, int Width=0);
     enum WriteFlag { Peek=1, Stamp=2 };
-    virtual void *Write(int writeFlag=0, Time timestamp=-1);
+    virtual void *Write(int writeFlag=0, microseconds timestamp=microseconds(-1));
 
     int Dist(int indexB, int indexE) const;
     int Since(int index, int Next=-1) const;
     virtual void *Read(int index, int Next=-1) const;
-    virtual Time ReadTimestamp(int index, int Next=-1) const;
+    virtual microseconds ReadTimestamp(int index, int Next=-1) const;
 
     struct Handle : public Vec<float> {
         RingBuf *sb; int next, nlen;
         Handle() : sb(0), next(-1), nlen(-1) {}
         Handle(RingBuf *SB, int Next=-1, int Len=-1) : sb(SB), next((sb && Next != -1)?sb->Bucket(Next):-1), nlen(Len) {}
-        virtual int Rate() const { return sb->samplesPerSec; }
+        virtual int Rate() const { return sb->samples_per_sec; }
         virtual int Len() const { return nlen >= 0 ? nlen : sb->ring.size; }
         virtual float *Index(int index) { return (float *)sb->Ind(index); }
         virtual float Ind(int index) const { return *(float *)sb->Ind(index); }
-        virtual void Write(float v, int flag=0, Time ts=-1) { *(float *)(sb->Write(flag, ts)) = v; }
-        virtual void Write(float *v, int flag=0, Time ts=-1) { *(float *)(sb->Write(flag, ts)) = *v; }
+        virtual void Write(float v, int flag=0, microseconds ts=microseconds(-1)) { *(float *)(sb->Write(flag, ts)) = v; }
+        virtual void Write(float *v, int flag=0, microseconds ts=microseconds(-1)) { *(float *)(sb->Write(flag, ts)) = *v; }
         virtual float Read(int index) const { return *(float *)sb->Read(index, next); }
         virtual float *ReadAddr(int index) const { return (float *)sb->Read(index, next); } 
-        virtual Time ReadTimestamp(int index) const { return sb->ReadTimestamp(index, next); }
+        virtual microseconds ReadTimestamp(int index) const { return sb->ReadTimestamp(index, next); }
         void CopyFrom(const RingBuf::Handle *src);
     };
 
@@ -591,8 +591,8 @@ struct RingBuf {
         HandleT(RingBuf *SB, int Next=-1, int Len=-1) : Handle(SB, Next, Len) {}
         virtual float Ind(int index) const { return *(X *)sb->Ind(index); }
         virtual float Read(int index) const { return *(X *)sb->Read(index, next); }
-        virtual void Write(float  v, int flag=0, Time ts=-1) { *(X *)(sb->Write(flag, ts)) =  v; }
-        virtual void Write(float *v, int flag=0, Time ts=-1) { *(X *)(sb->Write(flag, ts)) = *v; }
+        virtual void Write(float  v, int flag=0, microseconds ts=microseconds(-1)) { *(X *)(sb->Write(flag, ts)) =  v; }
+        virtual void Write(float *v, int flag=0, microseconds ts=microseconds(-1)) { *(X *)(sb->Write(flag, ts)) = *v; }
     };
 
     struct DelayHandle : public Handle {
@@ -606,10 +606,10 @@ struct RingBuf {
 
     struct WriteAheadHandle : public Handle {
         WriteAheadHandle(RingBuf *SB) : Handle(SB, SB->ring.back) {}
-        virtual void Write(float v, int flag=0, Time ts=-1) { *(float*)Write(flag, ts) = v; }
-        virtual void *Write(int flag=0, Time ts=-1) {
+        virtual void Write(float v, int flag=0, microseconds ts=microseconds(-1)) { *(float*)Write(flag, ts) = v; }
+        virtual void *Write(int flag=0, microseconds ts=microseconds(-1)) {
             void *ret = sb->Ind(next);
-            if (flag & Stamp) sb->stamp[next] = ts ? ts : Now() * 1000;
+            if (flag & Stamp) sb->stamp[next] = (ts != microseconds(-1)) ? ts : Now();
             if (!(flag & Peek)) next = (next+1) % sb->ring.size;
             return ret;
         }
@@ -617,7 +617,8 @@ struct RingBuf {
     };
 
     template <class T=double> struct MatrixHandleT : public matrix<T> {
-        RingBuf *sb; int next;
+        RingBuf *sb;
+        int next;
         MatrixHandleT(RingBuf *SB, int Next, int Rows) : sb(SB), next((sb && Next != -1)?sb->Bucket(Next):-1) { 
             matrix<T>::bytes = sb->width;
             matrix<T>::M = Rows?Rows:sb->ring.size;
@@ -632,7 +633,8 @@ struct RingBuf {
     typedef MatrixHandleT<double> MatrixHandle;
 
     template <class T=double> struct RowMatHandleT {
-        RingBuf *sb; int next;
+        RingBuf *sb;
+        int next;
         matrix<T> wrap;
         void Init() { wrap.M=1; wrap.bytes=sb->width; wrap.N=wrap.bytes/sizeof(T); }
 
@@ -644,16 +646,17 @@ struct RingBuf {
         matrix<T> *Ind(int index) { wrap.m = (double *)sb->Ind(index); return &wrap; }
         matrix<T> *Read(int index) { wrap.m = (double *)sb->Read(index, next); return &wrap; }
         double *ReadRow(int index) { wrap.m = (double *)sb->Read(index, next); return wrap.row(0); }
-        matrix<T> *Write(int flag=0, Time ts=-1) { wrap.m = (double *)sb->Write(flag, ts); return &wrap; }
-        Time ReadTimestamp(int index) const { return sb->ReadTimestamp(index, next); }
+        matrix<T> *Write(int flag=0, microseconds ts=microseconds(-1)) { wrap.m = (double *)sb->Write(flag, ts); return &wrap; }
+        microseconds ReadTimestamp(int index) const { return sb->ReadTimestamp(index, next); }
     };
     typedef RowMatHandleT<double> RowMatHandle;
 };
 
 struct ColMatPtrRingBuf : public RingBuf {
-    Matrix *wrap; int col;
+    Matrix *wrap;
+    int col;
     ColMatPtrRingBuf(Matrix *m, int ci, int SPS=0) : wrap(m), col(ci)  {
-        samplesPerSec = SPS;
+        samples_per_sec = SPS;
         ring.size = m->M;
         width = sizeof(double);
         bytes = width * ring.size;
@@ -661,8 +664,8 @@ struct ColMatPtrRingBuf : public RingBuf {
     }
     virtual void *Ind(int index) const { return &wrap->row(index)[col]; }
     virtual void *Read(int index, int Next=-1) const { return &wrap->row(index)[col]; }
-    virtual void *Write(int writeFlag=0, Time timestamp=-1) { return &wrap->row(ring.back++)[col]; } 
-    virtual Time ReadTimestamp(int index, int Next=-1) const { return index; }
+    virtual void *Write(int writeFlag=0, microseconds timestamp=microseconds(-1)) { return &wrap->row(ring.back++)[col]; } 
+    virtual microseconds ReadTimestamp(int index, int Next=-1) const { return microseconds(index); }
 };
 
 struct BloomFilter {

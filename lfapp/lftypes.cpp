@@ -33,24 +33,24 @@
 
 namespace LFL {
 void RingBuf::Resize(int SPS, int SPB, int Width) {
-    if (SPS != samplesPerSec || SPB != ring.size || Width != width) { 
+    if (SPS != samples_per_sec || SPB != ring.size || Width != width) { 
         ring.size = SPB;
-        samplesPerSec = SPS;
+        samples_per_sec = SPS;
         width = Width ? Width : sizeof(float);
         bytes = ring.size * width;
         if (buf) alloc->Free(buf);
         buf = (char*)alloc->Malloc(bytes);
         memset(buf, 0, bytes);
         if (stamp) alloc->Free(stamp);
-        stamp = (Time*)alloc->Malloc(ring.size * sizeof(Time));
-        memset(stamp, 0, ring.size * sizeof(Time));
+        stamp = (microseconds*)alloc->Malloc(ring.size * sizeof(microseconds));
+        memset(stamp, 0, ring.size * sizeof(microseconds));
     }
     ring.back = 0;
 }
 
-void *RingBuf::Write(int writeFlag, Time timestamp) {
+void *RingBuf::Write(int writeFlag, microseconds timestamp) {
     void *ret = (void*)(buf + ring.back*width);
-    if (writeFlag & Stamp) stamp[ring.back] = timestamp != -1 ? timestamp : Now() * 1000;
+    if (writeFlag & Stamp) stamp[ring.back] = timestamp != microseconds(-1) ? timestamp : Now();
     if (!(writeFlag & Peek)) ring.back = ring.Index(1);
     return ret;
 }
@@ -68,7 +68,7 @@ void *RingBuf::Read(int index, int Next) const {
     return (void *)(buf + ind * width);
 }
 
-Time RingBuf::ReadTimestamp(int index, int Next) const { 
+microseconds RingBuf::ReadTimestamp(int index, int Next) const { 
     Next = Next>=0 ? Next : ring.back;
     int ind = Bucket(Next+index);
     return stamp[ind];

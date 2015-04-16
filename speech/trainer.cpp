@@ -150,7 +150,7 @@ struct Features2Pronunciation {
     }
     static void add_features(const char *fn, Matrix *MFCC, Matrix *F, const char *T, void *a) { return ((Features2Pronunciation*)a)->add_features(fn, MFCC, F, T); }
 
-    void add_path(AcousticModel::Compiled *hmm, Matrix *viterbi, double vprob, double vtime, Matrix *MFCC, Matrix *features, const char *transcript) {
+    void add_path(AcousticModel::Compiled *hmm, Matrix *viterbi, double vprob, Time vtime, Matrix *MFCC, Matrix *features, const char *transcript) {
         PronunciationDict *dict = PronunciationDict::instance();
 
         StringWordIter worditer(transcript);
@@ -173,7 +173,7 @@ struct Features2Pronunciation {
 
         delete hmm;
     }
-    static void add_path(AcousticModel::Compiled *hmm, Matrix *viterbi, double vprob, double vtime, Matrix *MFCC, Matrix *features, const char *transcript, void *arg) { return ((Features2Pronunciation*)arg)->add_path(hmm, viterbi, vprob, vtime, MFCC, features, transcript); }
+    static void add_path(AcousticModel::Compiled *hmm, Matrix *viterbi, double vprob, Time vtime, Matrix *MFCC, Matrix *features, const char *transcript, void *arg) { return ((Features2Pronunciation*)arg)->add_path(hmm, viterbi, vprob, vtime, MFCC, features, transcript); }
 
     void iter(const char *featdir) { FeatCorpus::feat_iter(featdir, add_features, this); }
 
@@ -822,13 +822,14 @@ struct RecognizeCorpus {
         Timer vtime; double vprob = 0;
         matrix<HMM::Token> *viterbi = Recognizer::decodeFeatures(recognize, features, FLAGS_BeamWidth, FLAGS_UseTransition, &vprob, FLAGS_lfapp_debug ? &recognize->nameCB : 0);
         string decodescript = Recognizer::transcript(recognize, viterbi);
-        double time = vtime.GetTime(), wer = Recognizer::wordErrorRate(recognize, transcript, decodescript);
+        Time time = vtime.GetTime();
+        double wer = Recognizer::wordErrorRate(recognize, transcript, decodescript);
         WER += wer; total++;
         INFO("OUT = '", decodescript, "' WER=", wer, " (total ", WER/total, ")");
         if (FLAGS_lfapp_video) visualize(recognize, MFCC, viterbi, vprob, time);
         delete viterbi;
     }
-    static void visualize(RecognitionModel *recognize, Matrix *MFCC, matrix<HMM::Token> *viterbi, double vprob, double time) {
+    static void visualize(RecognitionModel *recognize, Matrix *MFCC, matrix<HMM::Token> *viterbi, double vprob, Time time) {
         Matrix path(viterbi->M, 1);
         AcousticModel::Compiled *hmm = Recognizer::decodedAcousticModel(recognize, viterbi, &path);
         Decoder::visualizeFeatures(hmm, MFCC, &path, vprob, time, FLAGS_interactive);

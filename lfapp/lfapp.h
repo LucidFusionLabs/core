@@ -41,6 +41,7 @@
 #include <thread>
 #include <mutex>
 #include <condition_variable>
+#include <chrono>
 #define LFL_STL11_NAMESPACE std
 
 #ifdef _WIN32
@@ -95,6 +96,14 @@ using LFL_STL11_NAMESPACE::mutex;
 using LFL_STL11_NAMESPACE::lock_guard;
 using LFL_STL11_NAMESPACE::unique_lock;
 using LFL_STL11_NAMESPACE::condition_variable;
+using LFL_STL11_NAMESPACE::chrono::hours;
+using LFL_STL11_NAMESPACE::chrono::minutes;
+using LFL_STL11_NAMESPACE::chrono::seconds;
+using LFL_STL11_NAMESPACE::chrono::milliseconds;
+using LFL_STL11_NAMESPACE::chrono::microseconds;
+using LFL_STL11_NAMESPACE::chrono::duration;
+using LFL_STL11_NAMESPACE::chrono::duration_cast;
+using LFL_STL11_NAMESPACE::chrono::high_resolution_clock;
 
 #include <errno.h>
 #include <math.h>
@@ -174,17 +183,7 @@ extern "C" int isinf(double);
 #define DEFINE_double(name, initial, description) DEFINE_FLAG(name, double, initial, description)
 #define DEFINE_string(name, initial, description) DEFINE_FLAG(name, string, initial, description)
 
-#define Hours(x) ((x)*3600000)
-#define Minutes(x) ((x)*60000)
-#define Seconds(x) ((x)*1000)
-#define ToSeconds(x) ((x)/1000.0)
-#define MilliSeconds(x) (x)
-#define ToMilliSeconds(x) (x)
-#define ToMicroSeconds(x) ((x)*1000)
-#define Time2time_t(x) ((time_t)((x)/1000))
-
 namespace LFL {
-typedef long long Time;
 typedef lock_guard<mutex> ScopedMutex;
 typedef function<void()> Callback;
 template <class X> struct Singleton { static X *Get() { static X instance; return &instance; } };
@@ -193,10 +192,11 @@ void Log(int level, const char *file, int line, const string &m);
 
 #include "lfapp/lfexport.h"
 #include "lfapp/string.h"
+#include "lfapp/time.h"
 
 namespace LFL {
 Time Now();
-void Msleep(int x);
+void MSleep(int x);
 inline bool Equal(float a, float b, float eps=1e-6) { return fabs(a-b) < eps; }
 
 struct Allocator {
@@ -245,50 +245,6 @@ bool NBFGets(FILE*, char *buf, int size, int timeout=0);
 int NBRead(int fd, char *buf, int size, int timeout=0);
 int NBRead(int fd, string *buf, int timeout=0);
 string NBRead(int fd, int size, int timeout=0);
-
-timeval Time2timeval(Time x);
-void localtm(time_t, struct tm *t);
-void GMTtm(time_t, struct tm *t);
-string logtime(Time t);
-int logtime(char *buf, int size);
-int logtime(Time time, char *buf, int size);
-int logtime(time_t secs, int ms, char *buf, int size);
-int logtime(struct tm*, int ms, char *buf, int size);
-string logfileday(Time t);
-int logfileday(char *buf, int size);
-int logfileday(time_t t, char *buf, int size);
-int logfileday(struct tm *tm, char *buf, int size);
-string logfiledaytime(Time t);
-int logfiledaytime(char *buf, int size);
-int logfiledaytime(time_t t, char *buf, int size);
-int logfiledaytime(struct tm *tm, char *buf, int size);
-int httptime(char *buf, int size);
-int httptime(time_t time, char *buf, int size);
-int httptime(struct tm*, char *buf, int size);
-int localhttptime(char *buf, int size);
-int localhttptime(time_t time, char *buf, int size);
-int localhttptime(struct tm*, char *buf, int size);
-string localhttptime(Time t);
-int localsmtptime(char *buf, int size);
-int localsmtptime(time_t time, char *buf, int size);
-int localsmtptime(struct tm*, char *buf, int size);
-string localsmtptime(Time t);
-int localmboxtime(char *buf, int size);
-int localmboxtime(time_t time, char *buf, int size);
-int localmboxtime(struct tm*, char *buf, int size);
-string localmboxtime(Time t);
-int intervaltime(time_t t, int ms, char *buf, int size);
-string intervaltime(Time t);
-int intervalminutes(time_t t, int ms, char *buf, int size);
-string intervalminutes(Time t);
-
-int RFC822TimeZone(const char *text);
-Time RFC822Date(const char *text);
-Time NumericDate(const char *datetext, const char *timetext, const char *timezone);
-
-Time SinceDayBegan(Time, int gmt_offset_hrs);
-const char *LocalTimeZone(Time t=0);
-bool IsDaylightSavings(Time t=0);
 
 struct MallocAlloc : public Allocator {
     const char *Name() { return "MallocAlloc"; }
@@ -486,7 +442,7 @@ struct Timer {
     Time GetTime(bool do_reset) {
         if (!do_reset) return GetTime();
         Time last_begin = Reset();
-        return max(0LL, begin - last_begin);
+        return max(Time(0), begin - last_begin);
     }
 };
 
@@ -532,9 +488,9 @@ struct FrameRateLimitter {
     RollingAvg<unsigned> sleep_bias;
     FrameRateLimitter(int *HZ) : target_hz(HZ), avgframe(0), sleep_bias(32) {}
     void Limit() {
-        int since = timer.GetTime(true);
-        int targetframe = (int)(1000.0 / *target_hz), sleep = (int)max(0.0, targetframe - since - sleep_bias.Avg());
-        if (sleep) { Msleep(sleep); sleep_bias.Add(timer.GetTime(true) - sleep); }
+        Time since = timer.GetTime(true), targetframe(1000 / *target_hz);
+        Time sleep = max(Time(0), targetframe - since - FMilliseconds(sleep_bias.Avg()));
+        if (sleep != Time(0)) { MSleep(sleep.count()); sleep_bias.Add((timer.GetTime(true) - sleep).count()); }
     }
 };
 

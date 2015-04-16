@@ -130,7 +130,7 @@ struct MySMTPServer : public SMTPServer {
         for (map<string, long long>::const_iterator i = mbox_wrote.begin(); i != mbox_wrote.end(); ++i) {
             table.push_back(&i->second); labels.push_back(i->first); 
         }
-        stat_log = new DeltaSampler(Seconds(60), table, labels);
+        stat_log = new DeltaSampler(Seconds(60).count(), table, labels);
     }
     virtual void ReceiveMail(Connection *c, const SMTP::Message &mail) {
         if (FLAGS_lfapp_debug) DEBUG("ReceiveMail FROM=", mail.mail_from, ", TO=", mail.rcpt_to, ", content=", mail.content);

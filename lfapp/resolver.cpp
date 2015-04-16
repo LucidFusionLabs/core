@@ -153,7 +153,8 @@ void Resolver::Nameserver::Heartbeat() {
     if (parent->auto_disconnect_seconds && !requestMap.size() && !parent->queue.size() && (c->rt + Seconds(parent->auto_disconnect_seconds)) <= now)
     { timedout=true; c->SetError(); INFO(c->Name(), ": nameserver timeout"); return; }
 
-    static const int retry_interval = 1000, retry_max = 5;
+    static const Time retry_interval(1000);
+    static const int retry_max = 5;
     for (RequestMap::iterator rmiter = requestMap.begin(); rmiter != requestMap.end(); /**/) {
         if ((*rmiter).second.stamp + retry_interval >= now) { rmiter++; continue; }
         Resolver::Request req = (*rmiter).second;

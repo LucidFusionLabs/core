@@ -132,7 +132,7 @@ struct SpeechDecodeSession : public HTTPServer::Resource {
         alloc.Reset();
 
         for (int i=0; i<M; i++) {
-            double *feat = (double*)featB.Write(RingBuf::Stamp, timestamp+i);
+            double *feat = (double*)featB.Write(RingBuf::Stamp, microseconds(timestamp+i));
             double *in = (double*)inB.Write();
             double *var = (double*)varB.Write();
             int rollingMeanSamples = FeatureRollingMeanSamples();
@@ -180,8 +180,8 @@ struct SpeechDecodeSession : public HTTPServer::Resource {
             if (feats_available + flush < feats_processed + DeltaWindow - ls) break;
 
             int behind = feats_available - feats_processed, frame=-behind + DeltaWindow/2 - ls, D=feats_dim, lc=0, rc=0;
-            for (int i=0; i<DeltaWindow/2+1 && featB.ReadTimestamp(frame-i) == featB.ReadTimestamp(frame-i-1) + 1; i++) lc++;
-            for (int i=0; i<DeltaWindow/2   && featB.ReadTimestamp(frame+i) == featB.ReadTimestamp(frame+i+1) - 1; i++) rc++;
+            for (int i=0; i<DeltaWindow/2+1 && featB.ReadTimestamp(frame-i) == featB.ReadTimestamp(frame-i-1) + microseconds(1); i++) lc++;
+            for (int i=0; i<DeltaWindow/2   && featB.ReadTimestamp(frame+i) == featB.ReadTimestamp(frame+i+1) - microseconds(1); i++) rc++;
 
             if (lc < ls) { feats_seqL = lc; continue; }
 
@@ -233,7 +233,7 @@ struct SpeechDecodeSession : public HTTPServer::Resource {
         string transcript;
         if (feats_processed > prior_feats_processed) {
             int seql = min(feats_seqL, featB.ring.size+decode_end+1);
-            response->timestamp = featB.ReadTimestamp(decode_end-seql+1);
+            response->timestamp = featB.ReadTimestamp(decode_end-seql+1).count();
             RingBuf::MatrixHandleT<HMM::Token> backtraceM(&backtraceB, backtraceB.ring.back+decode_end-seql+1, seql);
             RingBuf::MatrixHandleT<HMM::Token> viterbiM  (&  viterbiB,   viterbiB.ring.back+decode_end-seql+1, seql);
             int mergeind = HMM::Token::tracePath(&viterbiM, &backtraceM, endindex, seql, true);

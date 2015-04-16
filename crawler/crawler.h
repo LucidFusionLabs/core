@@ -38,7 +38,7 @@ struct Crawler {
             entry.set_flag(0);
             entry.set_mimetype(0);
             entry.set_offset(0);
-            entry.set_created(Now());
+            entry.set_created(Now().count());
             return in->Add(&entry, QueueFileEntry::QUEUED);
         }
     }; 

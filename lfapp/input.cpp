@@ -993,7 +993,7 @@ void shell_filter(const vector<string> &arg, bool FFTfilter, int taps, int hop=0
         return;
     }
 
-    RingBuf filtered(sa->wav->samplesPerSec, sa->wav->ring.size);
+    RingBuf filtered(sa->wav->samples_per_sec, sa->wav->ring.size);
     RingBuf::Handle I(sa->wav), O(&filtered);
     
     if (FFTfilter) {

@@ -251,7 +251,7 @@ int Frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample
         else MySay(vector<string>());
     } 
 
-    static int lastConnect = Now();
+    static Time lastConnect = Now();
     if (senators.size() < FLAGS_num && lastConnect + Seconds(FLAGS_secs) < Now()) {
         MyNewSenator(vector<string>());
         lastConnect = Now();

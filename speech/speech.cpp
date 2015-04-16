@@ -1032,7 +1032,7 @@ string Decoder::transcript(const AcousticModel::Compiled *model, const Matrix *v
     return ret;
 }
 
-void Decoder::visualizeFeatures(AcousticModel::Compiled *model, Matrix *MFCC, Matrix *viterbi, double vprob, double vtime, bool interactive) {
+void Decoder::visualizeFeatures(AcousticModel::Compiled *model, Matrix *MFCC, Matrix *viterbi, double vprob, Time vtime, bool interactive) {
     static PhoneticSegmentationGUI *segments = 0;
     static bool interactive_done;
 
@@ -1053,19 +1053,19 @@ void Decoder::visualizeFeatures(AcousticModel::Compiled *model, Matrix *MFCC, Ma
     delete spect;
 
     if (FLAGS_lfapp_audio) app->audio.QueueMixBuf(&B);
-    INFO("vprob=", vprob, " vtime=", vtime);
+    INFO("vprob=", vprob, " vtime=", vtime.count());
     Font *font = Fonts::Default();
 
     Box wcc = Box(5,345, 400,100);
     while (Running() && (app->audio.Out.size() || (interactive && !interactive_done))) {
-        app->PreFrame(app->frame_time.GetTime(true));
+        app->PreFrame(app->frame_time.GetTime(true).count());
 
         screen->gd->DrawMode(DrawMode::_2D);
         app->shell.asset("snap")->tex.Draw(wcc); // 4);
 
         int levels=10;
         float percent = 1-(float)app->audio.Out.size()/app->audio.outlast;
-        font->Draw(StringPrintf("time=%f vprob=%f percent=%f next=%d", vtime*1000, vprob, percent, interactive_done), point(10, 440));
+        font->Draw(StringPrintf("time=%d vprob=%f percent=%f next=%d", vtime.count(), vprob, percent, interactive_done), point(10, 440));
 
         percent -= feat_progressbar_c*FLAGS_sample_rate*FLAGS_chans_out/app->audio.outlast;
         if (percent >= 0 && percent <= 1) {
@@ -1092,7 +1092,7 @@ void Decoder::visualizeFeatures(AcousticModel::Compiled *model, Matrix *MFCC, Ma
         }
 
         app->PostFrame();
-        Msleep(1);
+        MSleep(1);
     }
 
     sa.Unload();

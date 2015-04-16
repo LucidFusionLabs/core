@@ -644,7 +644,7 @@ void SocketWakeupThread::ThreadProc() {
 
 int SelectSocketSet::Select(int wait_time) {
     int maxfd=-1, rc=0, wc=0, xc=0;
-    struct timeval tv = Time2timeval(wait_time);
+    struct timeval tv = Time2timeval(Time(wait_time));
     FD_ZERO(&rfds); FD_ZERO(&wfds); FD_ZERO(&xfds);
     for (unordered_map<Socket, int>::iterator i = socket.begin(); i != socket.end(); ++i) {
         bool added = 0;
@@ -653,7 +653,7 @@ int SelectSocketSet::Select(int wait_time) {
         if (i->second & EXCEPTION) { xc++; FD_SET(i->first, &xfds); added = 1; }
         if (added && i->first > maxfd) maxfd = i->first;
     }
-    if (!rc && !wc && !xc) { Msleep(ToMilliSeconds(wait_time)); return 0; }
+    if (!rc && !wc && !xc) { MSleep(wait_time); return 0; }
     if ((select(maxfd+1, rc?&rfds:0, wc?&wfds:0, xc?&xfds:0, wait_time >= 0 ? &tv : 0)) == -1)
     { ERROR("select: ", SystemNetwork::LastError()); return -1; }
     return 0;
@@ -1544,7 +1544,7 @@ struct StreamResourceClient : public Query {
     Connection *conn;
     HTTPServer::StreamResource *resource;
     AVFormatContext *fctx;
-    unsigned long long start;
+    microseconds start;
 
     StreamResourceClient(Connection *c, HTTPServer::StreamResource *r) : conn(c), resource(r), start(0) {
         resource->subscribers[this] = conn;
@@ -1560,13 +1560,13 @@ struct StreamResourceClient : public Query {
     int Flushed(Connection *c) { return 1; }
     void Open() { if (avio_open_dyn_buf(&fctx->pb)) ERROR("avio_open_dyn_buf"); }
 
-    void Write(AVPacket *pkt, unsigned long long timestamp) {        
+    void Write(AVPacket *pkt, microseconds timestamp) {        
         Open();
-        if (!start) start = timestamp;
-        if (timestamp) {
+        if (start == microseconds(0)) start = timestamp;
+        if (timestamp != microseconds(0)) {
             AVStream *st = fctx->streams[pkt->stream_index];
             AVRational r = {1, 1000000};
-            unsigned t = timestamp - start;
+            unsigned t = (timestamp - start).count();
             pkt->pts = av_rescale_q(t, r, st->time_base);
         }
         int ret;
@@ -1761,7 +1761,7 @@ void HTTPServer::StreamResource::update(int audio_samples, bool video_sample) {
         if (!asa) { sendVideo(); video_sample=0; continue; }
 
         int audio_behind = resampler.output_available - resamples_processed;
-        unsigned long long audio_timestamp = resampler.out->ReadTimestamp(0, resampler.out->ring.back - audio_behind);
+        microseconds audio_timestamp = resampler.out->ReadTimestamp(0, resampler.out->ring.back - audio_behind);
 
         if (audio_timestamp < app->camera.image_timestamp) sendAudio();
         else { sendVideo(); video_sample=0; }
@@ -1815,7 +1815,7 @@ void HTTPServer::StreamResource::sendVideo() {
     av_free_packet(&pkt);
 }
 
-void HTTPServer::StreamResource::broadcast(AVPacket *pkt, unsigned long long timestamp) {
+void HTTPServer::StreamResource::broadcast(AVPacket *pkt, microseconds timestamp) {
     for (SubscriberMap::iterator i = subscribers.begin(); i != subscribers.end(); i++) {
         StreamResourceClient *client = (StreamResourceClient*)(*i).first;
         client->Write(pkt, timestamp);

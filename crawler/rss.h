@@ -64,10 +64,10 @@ struct RSSMonitor {
             if (tag == "item" && !parse_item.title.empty() && !parse_item.link.empty()) items.push_back(parse_item);
         }
         virtual void WGetContentEnd(Connection *) {
-            lastpubdate=0;
+            lastpubdate=Time(0);
             sort(items.begin(), items.end());
-            if (!lastpubdate && items.size()) {
-                if (!(lastpubdate = items.front().Date())) {
+            if (lastpubdate == Time(0) && items.size()) {
+                if ((lastpubdate = items.front().Date()) == Time(0)) {
                     for (int i=0; i<items.size(); i++) {
                         Item &item = items[i];
                         ERROR("parse error: { '", item.title, "', '", item.link, "', '", item.date, "', ", item.Date(), " } clearing");

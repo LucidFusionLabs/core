@@ -68,7 +68,7 @@ struct YahooFinanceApi : public Crawler {
             result.mutable_info()->set_name  (strip(field[ind++].c_str(), isdquote).c_str()); // n
             string datetext = strip(field[ind++].c_str(), isdquote); // d1
             string timetext = strip(field[ind++].c_str(), isdquote); // t1
-            result.mutable_value()->set_time(NumericDate(datetext.c_str(), timetext.c_str(), WallStTimeZone()));
+            result.mutable_value()->set_time(NumericDate(datetext.c_str(), timetext.c_str(), WallStTimeZone()).count());
             result.mutable_value()->set_price   (atof(field[ind++].c_str())); // l1
             result.mutable_value()->set_ask     (atof(field[ind++].c_str())); // a
             result.mutable_value()->set_bid     (atof(field[ind++].c_str())); // b
@@ -91,7 +91,7 @@ struct YahooFinanceApi : public Crawler {
             result.mutable_value()->set_price_earnings_ratio(atof(field[ind++].c_str())); // r
 
             // result.mutable_value()->set_response_text(entry->content().data(), entry->content().size());
-            result.mutable_value()->set_response_time(now);
+            result.mutable_value()->set_response_time(now.count());
             out->push_back(result);
 
             // INFO("line ", line, " ", localhttptime(result.value().time()));

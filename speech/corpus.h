@@ -144,7 +144,7 @@ struct FeatCorpus {
 };
 
 struct PathCorpus {
-    typedef void (*PathCB)(AcousticModel::Compiled *, Matrix *viterbi, double vprob, double vtime, Matrix *MFCC, Matrix *features, const char *transcript, void *arg);
+    typedef void (*PathCB)(AcousticModel::Compiled *, Matrix *viterbi, double vprob, Time vtime, Matrix *MFCC, Matrix *features, const char *transcript, void *arg);
 
     static void add_path(MatrixArchiveOut *out, Matrix *viterbi, const char *uttfilename) {
         MatrixFile f(viterbi, BaseName(uttfilename));

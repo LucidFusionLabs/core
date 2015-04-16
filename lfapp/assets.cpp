@@ -698,7 +698,7 @@ struct FFMpegAssetLoader : public AudioAssetLoader, public VideoAssetLoader, pub
                     int sampsIn  = frame->nb_samples;
                     int sampsOut = max(0, SoundAssetSize(sa) - wrote) / sa->channels;
 
-                    sa->resampler.Update(sampsIn, (const short**)frame->extended_data, rsout, -1, sampsOut);
+                    sa->resampler.Update(sampsIn, (const short**)frame->extended_data, rsout, Time(-1), sampsOut);
                     wrote = sa->resampler.output_available - begin_resamples_available;
                     av_frame_unref(frame);
                 }
@@ -1090,7 +1090,7 @@ void glIntersect(int x, int y, Color *c) {
 
 void glTimeResolutionShader(Shader *shader) {
     screen->gd->UseShader(shader);
-    shader->SetUniform1f("time", ToSeconds(Now() - app->time_started));
+    shader->SetUniform1f("time", ToFSeconds(Now() - app->time_started).count());
     shader->SetUniform2f("resolution", screen->width, screen->height);
 }
 void glTimeResolutionShaderWindows(Shader *shader, const Color &backup_color, const Box &w,             const Texture *tex) { Box wc=w; vector<Box*> wv; wv.push_back(&wc); glTimeResolutionShaderWindows(shader, backup_color, wv, tex); }

@@ -30,7 +30,8 @@ struct Camera : public Module {
     bool have_sample=0;
     unsigned char *image=0;
     int image_format=0, image_linesize=0, since_last_frame=0;
-    unsigned long long image_timestamp=0, frames_read=0, last_frames_read=0;
+    unsigned long long frames_read=0, last_frames_read=0;
+    microseconds image_timestamp=microseconds(0);
     Camera() : fps(64) {}
 
     int Init ();

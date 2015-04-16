@@ -506,7 +506,7 @@ struct HTTPServer : public Service {
         void resampleAudio(int audio_samples);
         void sendAudio();
         void sendVideo();        
-        void broadcast(AVPacket *, unsigned long long timestamp);
+        void broadcast(AVPacket *, microseconds timestamp);
     };
 #endif
 

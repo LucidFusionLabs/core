@@ -179,7 +179,7 @@ void ShipDraw(Asset *a, Entity *e) {
     screen->gd->BindTexture(GraphicsDevice::Texture2D, lightning_glyph->tex.ID);
 
     float lightning_offset = (e->namehash % 11) / 10.0;
-    lightning_obj->ScrollTexCoord(-.4 * ToSeconds(lightning_timer.GetTime(true)),
+    lightning_obj->ScrollTexCoord(-.4 * ToFSeconds(lightning_timer.GetTime(true)).count(),
                                   lightning_offset - last_lightning_offset,
                                   &lightning_texcoord_min_int_x);
     last_lightning_offset = lightning_offset;
@@ -245,12 +245,12 @@ struct SpaceballClient : public GameClient {
     void RconRequestCB(const string &cmd, const string &arg, int seq) { 
         // INFO("cmd: ", cmd, " ", arg);
         if (cmd == "goal") {
-            last_scored_team = ::atoi(arg.c_str()); 
+            last_scored_team = atoi(arg); 
             const char *scoredby = strchr(arg.c_str(), ' ');
             last_scored_PlayerName = scoredby ? scoredby+1 : "";
             INFO(last_scored_PlayerName, " scores for ", last_scored_team == Game::Team::Red ? "red" : "blue");
 
-            unsigned updateInterval = last.time_recv_WorldUpdate[0] - last.time_recv_WorldUpdate[1];
+            unsigned updateInterval = (last.time_recv_WorldUpdate[0] - last.time_recv_WorldUpdate[1]).count();
             replay.start_ind = max(1, (int)(last.WorldUpdate.size() - (SpaceballGame::ReplaySeconds-1) * 1000.0 / updateInterval));
             replay.while_seq = last.seq_WorldUpdate = seq;
             replay.start = Now();
@@ -268,7 +268,7 @@ struct SpaceballClient : public GameClient {
             screen->cam->up.Norm();
         }
         else if (cmd == "win") {
-            gameover.start_ind = ::atoi(arg.c_str());
+            gameover.start_ind = atoi(arg);
             gameover.while_seq = last.seq_WorldUpdate = seq;
             gameover.start = Now();
         } else if (cmd == "map") {
@@ -280,8 +280,8 @@ struct SpaceballClient : public GameClient {
             sbmap->Load(args[0], args[1]);
             framebuffer.Attach(fb_tex2);
             framebuffer.Render(LFL::Frame);
-            map_started = Now() - ::atoi(args[2].c_str());
-            map_transition = Seconds(3);
+            map_started = Now() - Time(atoi(args[2]));
+            map_transition = Seconds(3).count();
         } else {
             ERROR("unknown rcon: ", cmd, " ", arg); return;
         }

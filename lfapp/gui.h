@@ -361,8 +361,8 @@ struct TextGUI : public KeyboardGUI {
     };
     struct Cursor {
         enum { Underline=1, Block=2 };
-        int type=Underline, blink_time=333, attr=0;
-        Time blink_begin=0;
+        int type=Underline, attr=0;
+        Time blink_time=Time(333), blink_begin=Time(0);
         point i, p;
     };
     struct Selection {
@@ -425,7 +425,7 @@ struct TextGUI : public KeyboardGUI {
 struct TextArea : public TextGUI {
     Lines line;
     LinesFrameBuffer line_fb;
-    Time write_last=0;
+    Time write_last=Time(0);
     const Border *clip=0;
     bool wrap_lines=1, write_timestamp=0, write_newline=1, reverse_line_fb=0;
     int line_left=0, end_line_adjust=0, start_line_cutoff=0, end_line_cutoff=0;
@@ -610,9 +610,9 @@ struct Terminal : public TextArea, public Drawable::AttrSource {
 
 struct Console : public TextArea {
     string startcmd;
-    double screenPercent=.4;
+    double screen_percent=.4;
     Callback animating_cb;
-    int animTime=333; Time animBegin=0;
+    Time anim_time=Time(333), anim_begin=Time(0);
     bool animating=0, drawing=0, bottom_or_top=0, blend=1, ran_startcmd=0;
     Color color=Color(25,60,130,120);
 

@@ -120,7 +120,7 @@ struct ForvoApi : public Crawler, public HTMLParser {
                     sa.Unload();
                     continue;
                 }
-                totaltime += (float)sa.wav->ring.size / sa.wav->samplesPerSec;
+                totaltime += (float)sa.wav->ring.size / sa.wav->samples_per_sec;
                 
                 if (FLAGS_forvo_dumpmp3) {
                     string fn = StrCat(dir, word, "_", i+1, ".mp3");

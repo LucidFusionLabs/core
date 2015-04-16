@@ -39,8 +39,8 @@ struct DeltaSampler {
         interval(I), label(l), input(in) { cur.Assign(input); }
 
     void Update() {
-        if (timer.GetTime() < interval) return;
-        float buckets = (float)timer.GetTime(true) / interval;
+        if (timer.GetTime() < Time(interval)) return;
+        float buckets = (float)timer.GetTime(true).count() / interval;
         if (fabs(buckets - 1.0) > .5) ERROR("buckets = ", buckets);
         Entry last = cur;
         cur.Assign(input);
