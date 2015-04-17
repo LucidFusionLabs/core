@@ -679,8 +679,7 @@ struct ScopedDrawMode {
 };
 
 struct VideoResamplerInterface {
-    int s_fmt, d_fmt, s_width, d_width, s_height, d_height;
-    VideoResamplerInterface() : s_fmt(0), d_fmt(0), s_width(0), d_width(0), s_height(0), d_height(0) {}
+    int s_fmt=0, d_fmt=0, s_width=0, d_width=0, s_height=0, d_height=0;
     virtual ~VideoResamplerInterface() {}
     virtual bool Opened()                                                                                           = 0;
     virtual void Open(int sw, int sh, int sf, int dw, int dh, int df)                                               = 0;
@@ -706,10 +705,10 @@ struct SimpleVideoResampler : public VideoResamplerInterface {
     static void Filter(unsigned char *dst, int w, int h,
                        int pf, int ls, int x, int y, Matrix *kernel, int channel, int flag=0);
 
-    static void ColorChannelToMatrix(const unsigned char *buf, int w, int h,
-                                     int pw, int ls, int x, int y, Matrix *out, int po);
-    static void MatrixToColorChannel(const Matrix *M, int w, int h,
-                                     int pw, int ls, int x, int y, unsigned char *out, int po);
+    static void CopyColorChannelsToMatrix(const unsigned char *buf, int w, int h,
+                                          int pw, int ls, int x, int y, Matrix *out, int po);
+    static void CopyMatrixToColorChannels(const Matrix *M, int w, int h,
+                                          int pw, int ls, int x, int y, unsigned char *out, int po);
 };
 
 #ifdef LFL_FFMPEG
