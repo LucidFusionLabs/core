@@ -1057,7 +1057,7 @@ void ProcessAPIServer::LoadResource(const string &content, const string &fn, con
     string msg;
     reqmap[seq] = cb;
     InterProcessProtocol::LoadResourceRequest(resource.Type(), ipr.url, ipr.len).ToString(&msg, seq++);
-    IPCTrace("ProcessAPIServer::LoadResource fn='%s' msg_size=%zd\n", fn.c_str(), msg.size());
+    IPCTrace("ProcessAPIServer::LoadResource fn='%s' url='%s' msg_size=%zd\n", fn.c_str(), ipr.url.c_str(), msg.size());
     CHECK_EQ(msg.size(), conn->WriteFlush(msg));
 }
 
@@ -1073,6 +1073,7 @@ int ProcessAPIServer::Query::Read(Connection *c) {
             InterProcessProtocol::LoadResourceResponse req;
             if (req.Read(&in)) break;
             InterProcessResource res(req.ipr_len, req.ipr_url);
+            IPCTrace("ProcessAPIServer::Query::Read LoadResourceResponse url='%s' ", res.url.c_str());
             if (req.ipr_type == Serializable::GetType<InterProcessProtocol::TextureResource>()) {
                 Serializable::ConstStream res_in(res.buf, res.len);
                 Serializable::Header res_hdr;
@@ -1080,7 +1081,7 @@ int ProcessAPIServer::Query::Read(Connection *c) {
                 CHECK_EQ(req.ipr_type, res_hdr.id);
                 InterProcessProtocol::TextureResource tex_res;
                 CHECK(!tex_res.Read(&res_in));
-                IPCTrace("ProcessAPIServer::Query::Read TextureResource width=%d height=%d\n", tex_res.width, tex_res.height);
+                IPCTrace("TextureResource width=%d height=%d\n", tex_res.width, tex_res.height);
                 reply->second(tex_res);
 
             } else FATAL("unknown ipr type", req.ipr_type);
@@ -1114,6 +1115,7 @@ void ProcessAPIClient::HandleMessagesLoop() {
             if (hdr.id == Serializable::GetType<InterProcessProtocol::LoadResourceRequest>()) {
                 InterProcessProtocol::LoadResourceRequest req;
                 if (req.Read(&in)) break;
+                IPCTrace("ProcessAPIClient:HandleMessagesLoop LoadResourceRequest url='%s' ", req.ipr_url.c_str());
                 InterProcessResource res(req.ipr_len, req.ipr_url);
                 if (req.ipr_type == Serializable::GetType<InterProcessProtocol::ContentResource>()) {
                     Serializable::ConstStream res_in(res.buf, res.len);
@@ -1122,19 +1124,29 @@ void ProcessAPIClient::HandleMessagesLoop() {
                     CHECK_EQ(req.ipr_type, res_hdr.id);
                     InterProcessProtocol::ContentResource content_res;
                     CHECK(!content_res.Read(&res_in));
-                    IPCTrace("ProcessAPIClient:HandleMessagesLoop LoadResourceRequest ContentResource fn='%s'\n", content_res.name.buf);
+                    IPCTrace("ContentResource fn='%s'\n", content_res.name.buf);
 
-                    Texture tex;
-                    Asset::LoadTexture(content_res.buf.data(), content_res.name.data(), content_res.buf.size(), &tex, 0);
-                    InterProcessProtocol::TextureResource tex_res(tex);
+                    const int max_image_size = 4000000;
+                    Texture orig_tex, scaled_tex, *tex = &orig_tex;
+                    Asset::LoadTexture(content_res.buf.data(), content_res.name.data(), content_res.buf.size(), &orig_tex, 0);
+                    if (orig_tex.BufferSize() >= max_image_size) {
+                        tex = &scaled_tex;
+                        float scale_factor = sqrt((float)max_image_size/orig_tex.BufferSize());
+                        scaled_tex.Resize(orig_tex.width*scale_factor, orig_tex.height*scale_factor, Pixel::RGB24, Texture::Flag::CreateBuf);
+                        VideoResampler resampler;
+                        resampler.Open(orig_tex.width, orig_tex.height, orig_tex.pf, scaled_tex.width, scaled_tex.height, scaled_tex.pf);
+                        resampler.Resample(orig_tex.buf, orig_tex.LineSize(), scaled_tex.buf, scaled_tex.LineSize());
+                    }
+
+                    InterProcessProtocol::TextureResource tex_res(*tex);
                     InterProcessResource ipr(Serializable::Header::size + tex_res.Size());
                     tex_res.ToString(ipr.buf, ipr.len);
                     ipr.id = -1;
+                    IPCTrace("ProcessAPIClient:HandleMessagesLoop LoadResourceResponse url='%s' ", ipr.url.c_str());
 
                     string msg;
                     InterProcessProtocol::LoadResourceResponse(tex_res.Type(), ipr.url, ipr.len).ToString(&msg, hdr.seq);
-                    IPCTrace("ProcessAPIClient:HandleMessagesLoop LoadResourceResponse TextureResource width=%d height=%d msg_size=%zd\n",
-                             tex_res.width, tex_res.height, msg.size());
+                    IPCTrace("TextureResource width=%d height=%d msg_size=%zd\n", tex_res.width, tex_res.height, msg.size());
                     CHECK_EQ(msg.size(), conn->WriteFlush(msg));
 
                 } else FATAL("unknown ipr type", req.ipr_type);

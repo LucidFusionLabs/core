@@ -272,7 +272,7 @@ struct InterProcessProtocol {
         int HeaderSize() const { return 8; }
 
         void Out(Serializable::Stream *o) const { o->Htons(ipr_type); o->Htons((unsigned short)ipr_url.size()); o->Htonl(ipr_len); o->String(ipr_url); }
-        int   In(const Serializable::Stream *i) { unsigned short l; i->Ntohs(&ipr_type); i->Ntohs(&l); i->Ntohl(&ipr_len); ipr_url = i->Get(l); return 0; }
+        int   In(const Serializable::Stream *i) { unsigned short l; i->Ntohs(&ipr_type); i->Ntohs(&l); i->Ntohl(&ipr_len); ipr_url.assign(i->Get(l), l); return 0; }
     };
     struct LoadResourceResponse : public Serializable {
         unsigned short ipr_type;
@@ -285,7 +285,7 @@ struct InterProcessProtocol {
         int HeaderSize() const { return 8; }
 
         void Out(Serializable::Stream *o) const { o->Htons(ipr_type); o->Htons((unsigned short)ipr_url.size()); o->Htonl(ipr_len); o->String(ipr_url); }
-        int   In(const Serializable::Stream *i) { unsigned short l; i->Ntohs(&ipr_type); i->Ntohs(&l); i->Ntohl(&ipr_len); ipr_url = i->Get(l); return 0; }
+        int   In(const Serializable::Stream *i) { unsigned short l; i->Ntohs(&ipr_type); i->Ntohs(&l); i->Ntohl(&ipr_len); ipr_url.assign(i->Get(l), l); return 0; }
     };
     struct ContentResource : public Serializable {
         StringPiece buf, name, type;

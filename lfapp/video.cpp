@@ -1531,25 +1531,25 @@ void SimpleVideoResampler::Open(int sw, int sh, int sf, int dw, int dh, int df) 
 void SimpleVideoResampler::Resample(const unsigned char *sb, int sls, unsigned char *db, int dls, bool flip_x, bool flip_y) {
     if (!Opened()) { ERROR("resample not opened()"); return; }
 
-    int sw = Pixel::size(s_fmt), dw = Pixel::size(d_fmt);
-    if (sw * s_width > sls) { ERROR(sw * s_width, " > ", sls); return; }
-    if (dw * d_width > dls) { ERROR(dw * d_width, " > ", dls); return; }
+    int spw = Pixel::size(s_fmt), dpw = Pixel::size(d_fmt);
+    if (spw * s_width > sls) { ERROR(spw * s_width, " > ", sls); return; }
+    if (dpw * d_width > dls) { ERROR(dpw * d_width, " > ", dls); return; }
     
     if (s_width == d_width && s_height == d_height) {
         for (int y=0; y<d_height; y++) {
             for (int x=0; x<d_width; x++) {
-                const unsigned char *sp = (sb + sls * y                           + x                          * sw);
-                /**/  unsigned char *dp = (db + dls * (flip_y ? d_height-1-y : y) + (flip_x ? d_width-1-x : x) * dw);
+                const unsigned char *sp = (sb + sls * y                           + x                          * spw);
+                /**/  unsigned char *dp = (db + dls * (flip_y ? d_height-1-y : y) + (flip_x ? d_width-1-x : x) * dpw);
                 CopyPixel(s_fmt, d_fmt, sp, dp, x == 0, x == d_width-1);
             }
         }
     } else {
-        for (int po=0; po<sw && po<dw; po++) {
+        for (int po=0; po<spw && po<dpw; po++) {
             Matrix M(s_height, s_width);
-            ColorChannelToMatrix(sb, s_width, s_height, sw, sls, 0, 0, &M, po);
+            CopyColorChannelsToMatrix(sb, s_width, s_height, spw, sls, 0, 0, &M, po);
             for (int y=0; y<d_height; y++) {
                 for (int x=0; x<d_width; x++) {
-                    unsigned char *dp = (db + dls * (flip_y ? d_height-1-y : y) + (flip_x ? d_width-1-x : x) * dw);
+                    unsigned char *dp = (db + dls * (flip_y ? d_height-1-y : y) + (flip_x ? d_width-1-x : x) * dpw);
                     *(dp + po) = MatrixAsFunc(&M, x?(float)x/(d_width-1):0, y?(float)y/(d_height-1):0) * 255;
                 }
             }
@@ -1605,23 +1605,23 @@ void SimpleVideoResampler::Filter(unsigned char *buf, int w, int h,
                                   Matrix *kernel, int channel, int flag) {
     Matrix M(h, w), out(h, w);
     int pw = Pixel::size(pf);
-    ColorChannelToMatrix(buf, w, h, pw, ls, x, y, &M, ColorChannel::PixelOffset(channel));
+    CopyColorChannelsToMatrix(buf, w, h, pw, ls, x, y, &M, ColorChannel::PixelOffset(channel));
     Matrix::Convolve(&M, kernel, &out, (flag & Flag::ZeroOnly) ? mZeroOnly : 0);
-    MatrixToColorChannel(&out, w, h, pw, ls, x, y, buf, ColorChannel::PixelOffset(channel));
+    CopyMatrixToColorChannels(&out, w, h, pw, ls, x, y, buf, ColorChannel::PixelOffset(channel));
 }
 
-void SimpleVideoResampler::ColorChannelToMatrix(const unsigned char *buf, int w, int h,
-                                                int pw, int ls, int x, int y,
-                                                Matrix *out, int po) {
+void SimpleVideoResampler::CopyColorChannelsToMatrix(const unsigned char *buf, int w, int h,
+                                                     int pw, int ls, int x, int y,
+                                                     Matrix *out, int po) {
     MatrixIter(out) { 
         const unsigned char *p = buf + (ls*(y + i) + (x + j)*pw);
         out->row(i)[j] = *(p + po) / 255.0;
     }
 }
 
-void SimpleVideoResampler::MatrixToColorChannel(const Matrix *M, int w, int h,
-                                                int pw, int ls, int x, int y,
-                                                unsigned char *out, int po) {
+void SimpleVideoResampler::CopyMatrixToColorChannels(const Matrix *M, int w, int h,
+                                                     int pw, int ls, int x, int y,
+                                                     unsigned char *out, int po) {
     MatrixIter(M) { 
         unsigned char *p = out + (ls*(y + i) + (x + j)*pw);
         *(p + po) = M->row(i)[j] * 255.0;

@@ -33,6 +33,7 @@ extern "C" int main(int argc, const char *argv[]) {
     if (optind >= argc) { fprintf(stderr, "Usage: %s [-flags] <socket-name>\n", argv[0]); return -1; }
     // if (app->Init()) { app->Free(); return -1; }
 
+    // to cleanup crash leaked shm: for i in $( ipcs -m | grep "^m " | awk '{print $2}' ); do ipcrm -m $i; done
     const string socket_name = StrCat(argv[optind]);
     process_api = unique_ptr<ProcessAPIClient>(new ProcessAPIClient());
     process_api->Start(StrCat(argv[optind]));
