@@ -402,6 +402,38 @@ template <typename X, typename Y, Y (X::*Z)() const> struct ArrayMethodSegmentIt
     void Increment() { Update(); while (ind != len && cmp(cur_attr, (buf[ind].*Z)())) { if (cb) cb(buf[ind]); ind++; } i++; }
 };
 
+template <typename K, typename V, template <typename...> class Map = unordered_map>
+struct LRUCache {
+    typedef list<pair<K,V> > list_type;
+    typedef Map<K, typename list_type::iterator> map_type;
+
+    int capacity;
+    map_type data;
+    list_type used;
+    LRUCache(int C) : capacity(C) { CHECK(capacity); }
+
+    V *Insert(const K &k, const V &v) {
+        auto it = used.insert(used.end(), make_pair(k, v));
+        CHECK(data.insert(make_pair(k, it)).second);
+        return &it->second;
+    }
+    V *Get(const K& k) { 
+        auto it = data.find(k);
+        if (it == data.end()) return NULL;
+        used.splice(used.end(), used, it->second); 
+        return &it->second->second; 
+    }
+
+    void Reserve() { used.reserve(capacity); data.reserve(capacity); }
+    void Evict() { while (used.size() > capacity) data.erase(PopFront(used).first); } 
+    void EvictUnique() {
+        for (auto i = used.begin(), e = used.end(); i != e && used.size() > capacity; /**/) {
+            if (!i->second.unique()) ++i;
+            else { data.erase(i->first); i = used.erase(i); }
+        }
+    }
+}; 
+
 template <class X> struct FlattenedArrayValues {
     typedef pair<int, int> Iter;
     typedef function<int(X*, int)> GetValCB;

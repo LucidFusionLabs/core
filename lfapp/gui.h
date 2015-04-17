@@ -234,8 +234,8 @@ struct TextGUI : public KeyboardGUI {
     struct Link : public Widget::Interface {
         Box box;
         string link;
-        Texture *image=0;
         TextGUI *parent=0;
+        shared_ptr<Texture> image;
         Link(TextGUI *P, GUI *G, const Box &b, const string &U)
             : Interface(G), box(b), link(U), parent(P) {
             AddClickBox(b, MouseController::CB(bind(&Link::Visit, this)));
@@ -751,7 +751,7 @@ struct Renderer : public Object {
     bool style_dirty=1, layout_dirty=1;
     Flow *flow=0, *parent_flow=0, child_flow;
     DOM::Node *absolute_parent=0;
-    Texture *background_image=0;
+    shared_ptr<Texture> background_image;
     DrawableBoxArray child_box, child_bg;
     Tiles *tiles=0;
 

@@ -56,7 +56,7 @@ void MyNewLinkCB(const shared_ptr<TextGUI::Link> &link) {
 }
 
 void MyHoverLinkCB(TextGUI::Link *link) {
-    Texture *tex = link ? link->image : 0;
+    Texture *tex = link ? link->image.get() : 0;
     if (!tex) return;
     tex->Bind();
     screen->gd->SetColor(Color::white - Color::Alpha(0.2));

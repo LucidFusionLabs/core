@@ -1403,8 +1403,8 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR lpCmdLine, int nC
     vector<const char *> av;
     vector<string> a(1);
     a[0].resize(1024);
-	GetModuleFileName(hInst, (char*)a.data(), a.size());
-	LFL::StringWordIter word_iter(lpCmdLine);
+    GetModuleFileName(hInst, (char*)a.data(), a.size());
+    LFL::StringWordIter word_iter(lpCmdLine);
     for (auto word = word_iter.next(); word; word = word_iter.next()) a.push_back(word);
     for (auto i : a) av.push_back(i->c_str()); 
     av.push_back(0);
