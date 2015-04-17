@@ -142,11 +142,11 @@ struct DocumentParser {
     };
 
     struct ImageParser : public Parser {
-        Texture *target;
+        shared_ptr<Texture> target;
         string content;
         int content_length=0;
         ProcessAPIServer::LoadResourceCompleteCB complete_cb;
-        ImageParser(DocumentParser *p, const string &url, Texture *t) :
+        ImageParser(DocumentParser *p, const string &url, const shared_ptr<Texture> &t) :
             Parser(p, url), target(t), complete_cb(bind(&ImageParser::LoadResourceComplete, this, _1)) {}
 
         void WGetResponseCB(Connection *c, const char *h, const string &ct, const char *cb, int cl) {
@@ -165,7 +165,7 @@ struct DocumentParser {
                     parent->render_process->LoadResource(content, fn, complete_cb);
                     return;
                 } else {
-                    Asset::LoadTexture(content.data(), fn.c_str(), content.size(), target);
+                    Asset::LoadTexture(content.data(), fn.c_str(), content.size(), target.get());
                     INFO("ImageParser ", content_type, ": ", url, " ", fn, " ", content.size(), " ", target->width, " ", target->height);
                 }
             }
@@ -181,8 +181,8 @@ struct DocumentParser {
     set<void*> outstanding;
     int requested=0, completed=0;
     ProcessAPIServer *render_process=0;
-    unordered_map<string, Texture*> image_cache;
-    DocumentParser(Browser::Document *D) : doc(D) {}
+    LRUCache<string, shared_ptr<Texture> > image_cache;
+    DocumentParser(Browser::Document *D) : doc(D), image_cache(64) {}
 
     bool Running(void *h) const { return outstanding.find(h) != outstanding.end(); }
     void Clear() { requested=completed=0; outstanding.clear(); doc->Clear(); }
@@ -223,13 +223,14 @@ struct DocumentParser {
         DOM::HTMLLinkElement  *link  = target->AsHTMLLinkElement();
         DOM::HTMLInputElement *input = target->AsHTMLInputElement();
         bool input_image = input && StringEquals(input->getAttribute("type"), "image");
-        Texture **image_tex = input_image ? &input->image_tex : (image ? &image->tex : 0);
+        shared_ptr<Texture> *image_tex = input_image ? &input->image_tex : (image ? &image->tex : 0);
 
         if (image_tex) {
-            CHECK_EQ(*image_tex, 0);
-            if ((*image_tex = FindOrNull(image_cache, url))) return;
-            *image_tex = new Texture();
-            image_cache[url] = *image_tex;
+            CHECK_EQ(image_tex->get(), 0);
+            if (shared_ptr<Texture> *cached = image_cache.Get(url)) { *image_tex = *cached; return; }
+            *image_tex = shared_ptr<Texture>(new Texture());
+            image_cache.Insert(url, *image_tex);
+            image_cache.EvictUnique();
         }
 
         if (data_url) {
@@ -240,7 +241,7 @@ struct DocumentParser {
                     string fn = toconvert(mimetype, tochar<'/', '.'>);
                     if (encoding == "base64") {
                         string content = Singleton<Base64>::Get()->Decode(url.c_str()+comma+1, url.size()-comma-1);
-                        Asset::LoadTexture(content.data(), fn.c_str(), content.size(), *image_tex);
+                        Asset::LoadTexture(content.data(), fn.c_str(), content.size(), image_tex->get());
                     } else INFO("unhandled: data:url encoding ", encoding);
                 } else INFO("unhandled data:url mimetype ", mimetype);
             } else INFO("unhandled data:url ", input_url);
@@ -261,7 +262,7 @@ struct DocumentParser {
         }
     }
 
-    Texture *OpenImage(const string &url) {
+    shared_ptr<Texture> OpenImage(const string &url) {
         DOM::HTMLImageElement image(0);
         Open(url, &image);
         return image.tex;

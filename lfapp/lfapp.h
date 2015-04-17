@@ -28,6 +28,7 @@
 #include <string>
 #include <map>
 #include <set>
+#include <list>
 #include <queue>
 #include <deque>
 #include <algorithm>
@@ -72,6 +73,7 @@ using LFL_STL_NAMESPACE::string;
 using LFL_STL_NAMESPACE::basic_string;
 using LFL_STL_NAMESPACE::map;
 using LFL_STL_NAMESPACE::set;
+using LFL_STL_NAMESPACE::list;
 using LFL_STL_NAMESPACE::deque;
 using LFL_STL_NAMESPACE::inserter;
 using LFL_STL_NAMESPACE::binary_search;

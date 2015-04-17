@@ -8,6 +8,10 @@ The "lfapp" API primarly consists of the: Application, Window, and Scene
 classes, plus the 7 Modules: Audio, Video, Input, Assets, Network, Camera,
 and CUDA.
 
+The key implementation files are 
+[lfapp/lfapp.h](http://lucidfusionlabs.com/websvn/filedetails.php?repname=lfl&path=%2Flfapp%2Flfapp.h) and
+[lfapp/lfapp.cpp](http://lucidfusionlabs.com/websvn/filedetails.php?repname=lfl&path=%2Flfapp%2Flfapp.cpp).
+
 Projects include:
 
 - term:         LTerminal, a modern terminal
@@ -23,7 +27,7 @@ Projects include:
 - quake:        LQuake, a quake clone
 - senators:     IRC bots with NLP capabilties
 
-The following applies to any app derived from lfl/new_app_template.
+The following build procedures apply to any app cloned from lfl/new_app_template.
 See lfl/new_app_template/README to quick start your next app.
 
 

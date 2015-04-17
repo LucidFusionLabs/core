@@ -1697,7 +1697,7 @@ DOM::Node *Browser::LayoutNode(Flow *flow, DOM::Node *n, bool reflow) {
         render->flow->AppendText(T->data);
     } else if ((n->htmlElementType == DOM::HTML_IMAGE_ELEMENT) ||
                (n->htmlElementType == DOM::HTML_INPUT_ELEMENT && StringEquals(n->AsElement()->getAttribute("type"), "image"))) {
-        Texture *tex = n->htmlElementType == DOM::HTML_IMAGE_ELEMENT ? n->AsHTMLImageElement()->tex : n->AsHTMLInputElement()->image_tex;
+        Texture *tex = n->htmlElementType == DOM::HTML_IMAGE_ELEMENT ? n->AsHTMLImageElement()->tex.get() : n->AsHTMLInputElement()->image_tex.get();
         bool missing = !tex || !tex->ID;
         if (missing) tex = &missing_image;
 
@@ -1814,7 +1814,7 @@ void Browser::LayoutBackground(DOM::Node *n) {
         int end_y   = !n->render->bgrepeat_y ? bgi.top  () : box->top  ();
         for     (int y = start_y; y < end_y; y += bgi.h) { bgi.y = y;
             for (int x = start_x; x < end_x; x += bgi.w) { bgi.x = x;
-                flow.out->PushBack(bgi, flow.cur_attr, render->background_image);
+                flow.out->PushBack(bgi, flow.cur_attr, render->background_image.get());
             }
         }
     }
