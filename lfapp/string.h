@@ -31,6 +31,34 @@ static __forceinline int ffs(int x) { return ffsl(x); }
 #endif
 
 namespace LFL {
+struct Bit {
+    static int Count(unsigned long long n) { int c=0; for (; n; c++) n &= (n-1); return c; }
+    static void Indices(unsigned long long in, int *o) { 
+        for (int b, n = in & 0xffffffff; n; /**/) { b = ffs(n)-1; n ^= (1<<b); *o++ = b;    }
+        for (int b, n = in >> 32       ; n; /**/) { b = ffs(n)-1; n ^= (1<<b); *o++ = b+32; }
+        *o++ = -1;
+    }
+};
+
+struct BitString {
+    static int Clear(      unsigned char *b, int bucket) {          b[bucket/8] &= ~(1 << (bucket % 8)); return 1; }
+    static int Set  (      unsigned char *b, int bucket) {          b[bucket/8] |=  (1 << (bucket % 8)); return 1; }
+    static int Get  (const unsigned char *b, int bucket) { return   b[bucket/8] &   (1 << (bucket % 8));           }
+    static int Not  (const unsigned char *b, int bucket) { return !(b[bucket/8] &   (1 << (bucket % 8)));          }
+    static int Get  (      unsigned char *b, int bucket) { return Get(reinterpret_cast<const unsigned char*>(b), bucket); }
+    static int Not  (      unsigned char *b, int bucket) { return Not(reinterpret_cast<const unsigned char*>(b), bucket); }
+    static int Set  (               char *b, int bucket) { return Set(reinterpret_cast<      unsigned char*>(b), bucket); }
+    static int Get  (const          char *b, int bucket) { return Get(reinterpret_cast<const unsigned char*>(b), bucket); }
+    static int Get  (               char *b, int bucket) { return Get(reinterpret_cast<      unsigned char*>(b), bucket); }
+    static int Clear(               char *b, int bucket) { return Clear(reinterpret_cast<    unsigned char*>(b), bucket); }
+
+    static int FirstSet  (const unsigned char *b, int l) { for (auto i=b, e=b+l; i != e; ++i) { auto c = *i;     if (c != 0)   return (i-b)  *8 + ffs( c)-1; } return -1; }
+    static int FirstClear(const unsigned char *b, int l) { for (auto i=b, e=b+l; i != e; ++i) { auto c = *i;     if (c != 255) return (i-b)  *8 + ffs(~c)-1; } return -1; }
+    static int LastClear (const unsigned char *b, int l) { for (auto i=b+l;      i != b; --i) { auto c = *(i-1); if (c != 255) return (i-b-1)*8 + ffs(~c)-1; } return -1; }
+    static int LastClear (const          char *b, int l) { return LastClear (reinterpret_cast<const unsigned char*>(b), l); }
+    static int FirstClear(const          char *b, int l) { return FirstClear(reinterpret_cast<const unsigned char*>(b), l); }
+};
+
 struct Unicode {
     static const unsigned char non_breaking_space = 0xA0;
     static const unsigned short replacement_char = 0xFFFD;
@@ -224,6 +252,7 @@ template <int V>          int                 isint (int N) { return N == V; }
 template <int V1, int V2> int                 isint2(int N) { return (N == V1) || (N == V2); }
 template <int V1, int V2, int V3>         int isint3(int N) { return (N == V1) || (N == V2) || (N == V3); }
 template <int V1, int V2, int V3, int V4> int isint4(int N) { return (N == V1) || (N == V2) || (N == V3) || (N == V4); }
+int IsAscii(int c);
 int isfileslash(int c);
 int isdot(int c);
 int iscomma(int c);
@@ -249,18 +278,12 @@ int atoi(const short *v);
 template <int F, int T>                 int tochar (int i) { return i == F ? T :  i; }
 template <int F, int T, int F2, int T2> int tochar2(int i) { return i == F ? T : (i == F2 ? T2 : i); }
 
-template <class X> const X *BlankNull(const X *x) { return x ? x : StringPieceT<X>::Blank(); }
-template <class X> const X *SpellNull(const X *x) { return x ? x : StringPieceT<X>::NullSpelled(); }
-const char *Default(const char *x, const char *default_x);
-string   ReplaceEmpty (const string   &in, const string   &replace_with);
-String16 ReplaceEmpty (const String16 &in, const string   &replace_with);
-String16 ReplaceEmpty (const String16 &in, const String16 &replace_with);
-string ReplaceNewlines(const string   &in, const string   &replace_with);
 string WStringPrintf(const wchar_t *fmt, ...);
 String16 String16Printf(const char *fmt, ...);
 void StringAppendf(string *out, const char *fmt, ...);
 void StringAppendf(String16 *out, const char *fmt, ...);
 int sprint(char *out, int len, const char *fmt, ...);
+
 inline string StrCat(const Printable &x1) { return x1; }
 string StrCat(const Printable &x1, const Printable &x2);
 string StrCat(const Printable &x1, const Printable &x2, const Printable &x3);
@@ -337,33 +360,6 @@ bool StringEmptyOrEquals(const String16 &in, const String16 &ref1, const String1
 bool StringEmptyOrEquals(const String16 &in, const string   &ref1, const string   &ref2, int case_sensitive=false);
 bool StringReplace(string *text, const string &needle, const string &replace);
 
-template <class X> void AccumulateAsciiDigit(X *v, unsigned char c) { *v = *v * 10 + (c - '0'); }
-template <class X> int IsNewline(const X *str);
-template <class X> int ChompNewline(X *str, int len);
-template <class X> int ChompNewlineLength(const X *str, int len);
-int DirNameLen(const StringPiece   &text, bool include_slash=false);
-int DirNameLen(const String16Piece &text, bool include_slash=false);
-int BaseDir(const char *path, const char *cmp);
-const char *ParseProtocol(const char *url, string *protO);
-const char  *BaseName   (const StringPiece   &text, int *outlen=0);
-const char  *NextLine   (const StringPiece   &text, bool final=0, int *outlen=0);
-const short *NextLine   (const String16Piece &text, bool final=0, int *outlen=0);
-const char  *NextLineRaw(const StringPiece   &text, bool final=0, int *outlen=0);
-const short *NextLineRaw(const String16Piece &text, bool final=0, int *outlen=0);
-const char  *NextProto  (const StringPiece   &text, bool final=0, int *outlen=0);
-template <int S> const char *NextChunk(const StringPiece &text, bool final=0, int *outlen=0) {
-    int add = final ? max(text.len, 0) : S;
-    if (text.len < add) return 0;
-    *outlen = add;
-    return text.buf + add;
-}
-template <class X>       X *NextChar(      X *text, int (*ischar)(int),                      int len=-1, int *outlen=0);
-template <class X> const X *NextChar(const X *text, int (*ischar)(int),                      int len=-1, int *outlen=0);
-template <class X>       X *NextChar(      X *text, int (*ischar)(int), int (*isquote)(int), int len=-1, int *outlen=0);
-template <class X> const X *NextChar(const X *text, int (*ischar)(int), int (*isquote)(int), int len=-1, int *outlen=0);
-template <class X> int  LengthChar(const StringPieceT<X> &text, int (*ischar)(int));
-template <class X> int RLengthChar(const StringPieceT<X> &text, int (*ischar)(int));
-
 template <class X, class Y> int Split(const X *in, int (*ischar)(int), int (*isquote)(int), vector<Y> *out) {
     out->clear(); if (!in) return 0;
     StringWordIterT<X> words(in, ischar, isquote);
@@ -409,10 +405,46 @@ string   tolower(const char     *text);
 string   tolower(const string   &text);
 String16 tolower(const short    *text);
 String16 tolower(const String16 &text);
+string   ReplaceEmpty (const string   &in, const string   &replace_with);
+String16 ReplaceEmpty (const String16 &in, const string   &replace_with);
+String16 ReplaceEmpty (const String16 &in, const String16 &replace_with);
+string ReplaceNewlines(const string   &in, const string   &replace_with);
 string CHexEscape(const string &text);
+string CHexEscapeNonAscii(const string &text);
+
+const char  *NextLine   (const StringPiece   &text, bool final=0, int *outlen=0);
+const short *NextLine   (const String16Piece &text, bool final=0, int *outlen=0);
+const char  *NextLineRaw(const StringPiece   &text, bool final=0, int *outlen=0);
+const short *NextLineRaw(const String16Piece &text, bool final=0, int *outlen=0);
+const char  *NextProto  (const StringPiece   &text, bool final=0, int *outlen=0);
+template <int S> const char *NextChunk(const StringPiece &text, bool final=0, int *outlen=0) {
+    int add = final ? max(text.len, 0) : S;
+    if (text.len < add) return 0;
+    *outlen = add;
+    return text.buf + add;
+}
+template <class X>       X *NextChar(      X *text, int (*ischar)(int),                      int len=-1, int *outlen=0);
+template <class X> const X *NextChar(const X *text, int (*ischar)(int),                      int len=-1, int *outlen=0);
+template <class X>       X *NextChar(      X *text, int (*ischar)(int), int (*isquote)(int), int len=-1, int *outlen=0);
+template <class X> const X *NextChar(const X *text, int (*ischar)(int), int (*isquote)(int), int len=-1, int *outlen=0);
+template <class X> int  LengthChar(const StringPieceT<X> &text, int (*ischar)(int));
+template <class X> int RLengthChar(const StringPieceT<X> &text, int (*ischar)(int));
 
 unsigned           fnv32(const void *buf, unsigned len=0, unsigned           hval=0);
 unsigned long long fnv64(const void *buf, unsigned len=0, unsigned long long hval=0);
+
+template <class X> const X *BlankNull(const X *x) { return x ? x : StringPieceT<X>::Blank(); }
+template <class X> const X *SpellNull(const X *x) { return x ? x : StringPieceT<X>::NullSpelled(); }
+template <class X> void AccumulateAsciiDigit(X *v, unsigned char c) { *v = *v * 10 + (c - '0'); }
+template <class X> int IsNewline(const X *str);
+template <class X> int ChompNewline(X *str, int len);
+template <class X> int ChompNewlineLength(const X *str, int len);
+const char *Default(const char *x, const char *default_x);
+const char *ParseProtocol(const char *url, string *protO);
+const char *BaseName(const StringPiece   &text, int *outlen=0);
+int BaseDir(const char *path, const char *cmp);
+int DirNameLen(const StringPiece   &text, bool include_slash=false);
+int DirNameLen(const String16Piece &text, bool include_slash=false);
 
 struct Regex {
     struct Result {
@@ -444,34 +476,6 @@ struct Base64 {
 
     string Encode(const char *in,   size_t input_length);
     string Decode(const char *data, size_t input_length);
-};
-
-struct Bit {
-    static int Count(unsigned long long n) { int c; for (c=0; n; c++) n &= (n-1); return c; }
-    static void Indices(unsigned long long in, int *o) { 
-        for (int b, n = in & 0xffffffff; n; /**/) { b = ffs(n)-1; n ^= (1<<b); *o++ = b;    }
-        for (int b, n = in >> 32       ; n; /**/) { b = ffs(n)-1; n ^= (1<<b); *o++ = b+32; }
-        *o++ = -1;
-    }
-};
-
-struct BitString {
-    static int Clear(      unsigned char *b, int bucket) {          b[bucket/8] &= ~(1 << (bucket % 8)); return 1; }
-    static int Set  (      unsigned char *b, int bucket) {          b[bucket/8] |=  (1 << (bucket % 8)); return 1; }
-    static int Get  (const unsigned char *b, int bucket) { return   b[bucket/8] &   (1 << (bucket % 8));           }
-    static int Not  (const unsigned char *b, int bucket) { return !(b[bucket/8] &   (1 << (bucket % 8)));          }
-    static int Get  (      unsigned char *b, int bucket) { return Get(reinterpret_cast<const unsigned char*>(b), bucket); }
-    static int Not  (      unsigned char *b, int bucket) { return Not(reinterpret_cast<const unsigned char*>(b), bucket); }
-    static int Set  (               char *b, int bucket) { return Set(reinterpret_cast<      unsigned char*>(b), bucket); }
-    static int Get  (const          char *b, int bucket) { return Get(reinterpret_cast<const unsigned char*>(b), bucket); }
-    static int Get  (               char *b, int bucket) { return Get(reinterpret_cast<      unsigned char*>(b), bucket); }
-    static int Clear(               char *b, int bucket) { return Clear(reinterpret_cast<    unsigned char*>(b), bucket); }
-
-    static int FirstSet  (const unsigned char *b, int l) { for (int i=0;   i<l;  i++) { unsigned char c=b[i]; if (c != 0)   return i*8 + ffs( c)-1; } return -1; }
-    static int FirstClear(const unsigned char *b, int l) { for (int i=0;   i<l;  i++) { unsigned char c=b[i]; if (c != 255) return i*8 + ffs(~c)-1; } return -1; }
-    static int LastClear (const unsigned char *b, int l) { for (int i=l-1; i>=0; i--) { unsigned char c=b[i]; if (c != 255) return i*8 + ffs(~c)-1; } return -1; }
-    static int LastClear (const          char *b, int l) { return LastClear (reinterpret_cast<const unsigned char*>(b), l); }
-    static int FirstClear(const          char *b, int l) { return FirstClear(reinterpret_cast<const unsigned char*>(b), l); }
 };
 
 }; // namespace LFL

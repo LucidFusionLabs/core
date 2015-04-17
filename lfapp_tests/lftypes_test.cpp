@@ -111,44 +111,4 @@ TEST(ArrayTest, FlattenedArrayVals) {
     }
 }
 
-TEST(BitTest, Bit) {
-    EXPECT_EQ(0, Bit::Count(0));
-    EXPECT_EQ(1, Bit::Count(1));
-    EXPECT_EQ(1, Bit::Count(2));
-    EXPECT_EQ(8, Bit::Count(255));
-
-    int bit_indices[65];
-    Bit::Indices(1LL<<34 | 1<<30 | 1<<14, bit_indices);
-    EXPECT_EQ(14, bit_indices[0]);
-    EXPECT_EQ(30, bit_indices[1]);
-    EXPECT_EQ(34, bit_indices[2]);
-    EXPECT_EQ(-1, bit_indices[3]);
-}
-
-TEST(BitTest, BitField) {
-    { unsigned char bitfield[] = { 0,   0,   0,   0,   0,   0   }; EXPECT_EQ(-1, BitField::FirstSet(bitfield, sizeof(bitfield))); }
-    { unsigned char bitfield[] = { 0,   0,   0,   0,   0,   1   }; EXPECT_EQ(40, BitField::FirstSet(bitfield, sizeof(bitfield))); }
-    { unsigned char bitfield[] = { 0,   0,   0,   0,   0,   2   }; EXPECT_EQ(41, BitField::FirstSet(bitfield, sizeof(bitfield))); }
-
-    { unsigned char bitfield[] = { 255, 255, 255, 255, 255, 255 }; EXPECT_EQ(-1, BitField::LastClear (bitfield, sizeof(bitfield))); }
-    { unsigned char bitfield[] = { 255, 255, 255, 255, 255, 255 }; EXPECT_EQ(-1, BitField::FirstClear(bitfield, sizeof(bitfield))); }
-    { unsigned char bitfield[] = { 255, 255, 255, 255, 255, 254 }; EXPECT_EQ(40, BitField::FirstClear(bitfield, sizeof(bitfield))); }
-    { unsigned char bitfield[] = { 255, 255, 255, 255, 255, 253 }; EXPECT_EQ(41, BitField::FirstClear(bitfield, sizeof(bitfield))); }
-
-    {
-        unsigned char bitfield[] = { 255, 255, 255, 255, 255, 0 };
-        EXPECT_EQ(40, BitField::FirstClear(bitfield, sizeof(bitfield)));
-        BitField::Set(bitfield, 40);
-        EXPECT_EQ(41, BitField::FirstClear(bitfield, sizeof(bitfield)));
-        BitField::Set(bitfield, 41);
-        EXPECT_EQ(42, BitField::FirstClear(bitfield, sizeof(bitfield)));
-        BitField::Clear(bitfield, 41);
-        EXPECT_EQ(41, BitField::FirstClear(bitfield, sizeof(bitfield)));
-        BitField::Clear(bitfield, 11);
-        EXPECT_EQ(11, BitField::FirstClear(bitfield, sizeof(bitfield)));
-        BitField::Clear(bitfield, 7);
-        EXPECT_EQ(7,  BitField::FirstClear(bitfield, sizeof(bitfield)));
-        EXPECT_EQ(127, bitfield[0]);
-    }
-}
 }; // namespace LFL

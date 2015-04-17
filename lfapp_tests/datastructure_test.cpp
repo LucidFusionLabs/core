@@ -258,23 +258,23 @@ template <class K, class V, class Node = AVLTreeNode<K,V> > struct AVLTree {
     }
 
     virtual string DebugString(const string &name=string()) const {
-        string ret = GraphViz::DigraphHeader(StrCat("AVLTree", name.size()?"_":"", name));
+        string ret = GraphVizFile::DigraphHeader(StrCat("AVLTree", name.size()?"_":"", name));
         PrintNodes(head, &ret);
         PrintEdges(head, &ret);
-        return ret + GraphViz::Footer();
+        return ret + GraphVizFile::Footer();
     }
     virtual void PrintNodes(int ind, string *out) const {
         if (!ind) return;
         const Node *n = &node[ind-1];
         PrintNodes(n->left, out);
-        GraphViz::AppendNode(out, StrCat(n->key), StrCat(n->key, " ", n->val));
+        GraphVizFile::AppendNode(out, StrCat(n->key), StrCat(n->key, " ", n->val));
         PrintNodes(n->right, out);
     }
     virtual void PrintEdges(int ind, string *out) const {
         if (!ind) return;
         const Node *n = &node[ind-1], *l=n->left?&node[n->left-1]:0, *r=n->right?&node[n->right-1]:0;
-        if (l) { PrintEdges(n->left, out);  GraphViz::AppendEdge(out, StrCat(n->key), StrCat(l->key), "left" ); }
-        if (r) { PrintEdges(n->right, out); GraphViz::AppendEdge(out, StrCat(n->key), StrCat(r->key), "right"); }
+        if (l) { PrintEdges(n->left, out);  GraphVizFile::AppendEdge(out, StrCat(n->key), StrCat(l->key), "left" ); }
+        if (r) { PrintEdges(n->right, out); GraphVizFile::AppendEdge(out, StrCat(n->key), StrCat(r->key), "right"); }
     }
 };
 

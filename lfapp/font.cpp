@@ -367,6 +367,27 @@ template void Font::Encode<short>(const String16Piece &text, const Box &box, Dra
 template int  Font::Draw  <char> (const StringPiece   &text, const Box &box, vector<Box> *lb, int draw_flag);
 template int  Font::Draw  <short>(const String16Piece &text, const Box &box, vector<Box> *lb, int draw_flag);
 
+FakeFontEngine::FakeFontEngine() : fake_font(this, fake_font_desc, shared_ptr<FontEngine::Resource>()) {
+    fake_font_desc.size = size;
+    fake_font.fixed_width = fake_font.max_width = fixed_width;
+    fake_font.ascender = ascender;
+    fake_font.descender = descender;
+    fake_font.glyph = shared_ptr<GlyphMap>(new GlyphMap(shared_ptr<GlyphCache>(new GlyphCache(0, 0))));
+    InitGlyphs(&fake_font, &fake_font.glyph->table[0], fake_font.glyph->table.size());
+    for (unsigned short wide_glyph_id = wide_glyph_begin, e = wide_glyph_end + 1; wide_glyph_id != e; ++wide_glyph_id) {
+        Glyph *wg = fake_font.FindGlyph(wide_glyph_id);
+        wg->wide = 1;
+        wg->advance *= 2;
+    }
+}
+
+int FakeFontEngine::InitGlyphs(Font *f,       Glyph *g, int n) {
+    for (Glyph *e = g + n; g != e; ++g) {
+        g->tex.height = g->bearing_y = fake_font.Height();
+        g->tex.width  = g->advance   = fake_font.fixed_width;
+    } return n;
+}
+
 bool AtlasFontEngine::Init(const FontDesc &d) {
     if (Font *f = OpenAtlas(d)) {
         FontDesc de = d;

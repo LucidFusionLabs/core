@@ -219,6 +219,7 @@ template struct StringLineIterT<char>;
 template struct StringWordIterT<short>;
 template struct StringLineIterT<short>;
 
+int IsAscii(int c) { return c >= 32 && c < 128; }
 int isfileslash(int c) { return c == LocalFile::Slash; }
 int isdot(int c) { return c == '.'; }
 int iscomma(int c) { return c == ','; }
@@ -245,17 +246,12 @@ int atoi(const short *v) {
     return neg ? -ret : ret;
 }
 
-const char *Default(const char *in, const char *default_in) { return (in && in[0]) ? in : default_in; }
-string   ReplaceEmpty (const string   &in, const string   &replace_with) { return in.empty() ? replace_with : in; }
-String16 ReplaceEmpty (const String16 &in, const String16 &replace_with) { return in.empty() ? replace_with : in; }
-String16 ReplaceEmpty (const String16 &in, const string   &replace_with) { return in.empty() ? String::ToUTF16(replace_with) : in; }
-string ReplaceNewlines(const string   &in, const string   &replace_with) {
-    string ret;
-    for (const char *p = in.data(); p-in.data() < in.size(); p++) {
-        if (*p == '\r' && *(p+1) == '\n') { ret += replace_with; p++; }
-        else if (*p == '\n') ret += replace_with;
-        else ret += string(p, 1);
-    }
+int sprint(char *out, int len, const char *fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
+    int ret = vsnprintf(out,len,fmt,ap);
+    if (ret > len) ret = len;
+    va_end(ap);
     return ret;
 }
 
@@ -395,146 +391,6 @@ bool StringReplace(string *text, const string &needle, const string &replace) {
     return true;
 }
 
-int sprint(char *out, int len, const char *fmt, ...) {
-    va_list ap;
-    va_start(ap, fmt);
-    int ret = vsnprintf(out,len,fmt,ap);
-    if (ret > len) ret = len;
-    va_end(ap);
-    return ret;
-}
-
-template <class X> int IsNewline(const X *line) {
-    if (!*line) return 0;
-    if (*line == '\n') return 1;
-    if (*line == '\r' && *(line+1) == '\n') return 2;
-    return 0;
-}
-template int IsNewline(const char *line);
-
-template <class X> int ChompNewline(X *line, int len) {
-    int ret = 0;
-    if (line[len-1] == '\n') { line[len-1] = 0; ret++; }
-    if (line[len-2] == '\r') { line[len-2] = 0; ret++; }
-    return ret;
-}
-template int ChompNewline(char *line, int len);
-
-template <class X> int ChompNewlineLength(const X *line, int len) {
-    int ret = 0;
-    if (line[len-1] == '\n') ret++;
-    if (line[len-2] == '\r') ret++;
-    return ret;
-}
-
-template <class X> int DirNameLen(const StringPieceT<X> &path, bool include_slash) {
-    int len = path.Length();
-    const X *start = path.buf + len - 1, *slash = 0;
-    for (const X *p = start; p > path.buf; --p) if (isfileslash(*p)) { slash=p; break; }
-    return !slash ? 0 : len - (start - slash + !include_slash);
-}
-int DirNameLen(const StringPiece   &text, bool include_slash) { return DirNameLen<char> (text, include_slash); }
-int DirNameLen(const String16Piece &text, bool include_slash) { return DirNameLen<short>(text, include_slash); }
-
-int BaseDir(const char *path, const char *cmp) {
-    int l1=strlen(path), l2=strlen(cmp), slash=0, s1=-1, s2=0;
-    if (!l1 || l2 > l1) return 0;
-    if (*(path+l1-1) == '/') return 0;
-    for (const char *p=path+l1-1; p>=path; p--) if (isfileslash(*p)) {
-        slash++; /* count bacwards */
-        if (slash == 1) s2 = p-path;
-        if (slash == 2) { s1 = p-path; break; }
-    }
-    if (slash < 1 || s2-s1-1 != l2) return 0;
-    return !strncasecmp(&path[s1]+1, cmp, l2);
-}
-
-const char *ParseProtocol(const char *url, string *protO) {
-    static const int hdr_size = 3;
-    static const char hdr[] = "://";
-    const char *prot_end = strstr(url, hdr), *prot, *host;
-    if (prot_end) { prot = url; host = prot_end + hdr_size; }
-    else          { prot = 0;   host = url;                 }
-    while (prot && *prot && isspace(*prot)) prot++;
-    while (host && *host && isspace(*host)) host++;
-    if (protO) protO->assign(prot ? prot : "", prot ? prot_end-prot : 0);
-    return host;
-}
-
-const char *BaseName(const StringPiece &path, int *outlen) {
-    const char *ret = path.buf;
-    int len = path.Length();
-    for (const char *p = path.buf+len-1; p > path.buf; --p) if (isfileslash(*p)) { ret=p+1; break;}
-    if (outlen) {
-        int namelen = len - (ret-path.buf), baselen;
-        NextChar(ret, isdot, namelen, &baselen);
-        *outlen = baselen ? baselen : namelen;
-    }
-    return ret;
-}
-
-const char *NextProto(const StringPiece &text, bool final, int *outlen) {
-    if (text.len < ProtoHeader::size) return 0;
-    ProtoHeader hdr(text.buf);
-    if (ProtoHeader::size + hdr.len > text.len) return 0;
-    *outlen = hdr.len;
-    return text.buf + ProtoHeader::size + hdr.len;
-}
-
-template <class X, bool chomp> const X *NextLine(const StringPieceT<X> &text, bool final, int *outlen) {
-    const X *ret=0, *p = text.buf;
-    for (/**/; !text.Done(p); ++p) { 
-        if (*p == '\n') { ret = p+1; break; }
-    }
-    if (!ret) { if (outlen) *outlen = p - text.buf; return final ? text.buf : 0; }
-    if (outlen) {
-        int ol = ret-text.buf-1;
-        if (chomp && ret-2 >= text.buf && *(ret-2) == '\r') ol--;
-        *outlen = ol;
-    }
-    return ret;
-}
-const char  *NextLine   (const StringPiece   &text, bool final, int *outlen) { return NextLine<char,  true >(text, final, outlen); }
-const short *NextLine   (const String16Piece &text, bool final, int *outlen) { return NextLine<short, true >(text, final, outlen); }
-const char  *NextLineRaw(const StringPiece   &text, bool final, int *outlen) { return NextLine<char,  false>(text, final, outlen); }
-const short *NextLineRaw(const String16Piece &text, bool final, int *outlen) { return NextLine<short, false>(text, final, outlen); }
-
-template <class X>       X *NextChar(      X *text, int (*ischar)(int), int len, int *outlen) { return (X*)NextChar((const X *)text, ischar, len, outlen); }
-template <class X> const X *NextChar(const X *text, int (*ischar)(int), int len, int *outlen) { return NextChar(text, ischar, 0, len, outlen); }
-template <class X>       X *NextChar(      X *text, int (*ischar)(int), int (*isquotec)(int), int len, int *outlen) { return (X*)NextChar((const X *)text, ischar, isquotec, len, outlen); }
-template <class X> const X *NextChar(const X *text, int (*ischar)(int), int (*isquotec)(int), int len, int *outlen) {
-    const X *ret=0, *p;
-    bool have_len = len >= 0, in_quote = false;
-    for (p=text; (have_len ? p-text<len : *p); p++) {
-        if (!in_quote && ischar(*p)) { ret=p; break; }
-        if (isquotec && isquotec(*p)) in_quote = !in_quote;
-    }
-    if (outlen) *outlen = ret ? ret-text : p-text;
-    return ret;
-}
-template       char*  NextChar<char >(      char*,  int (*)(int), int, int*);
-template const char*  NextChar<char >(const char*,  int (*)(int), int, int*);
-template       short* NextChar<short>(      short*, int (*)(int), int, int*);
-template const short* NextChar<short>(const short*, int (*)(int), int, int*);
-
-template <class X> int LengthChar(const StringPieceT<X> &text, int (*ischar)(int)) {
-    const X *p;
-    for (p = text.buf; !text.Done(p); ++p) if (!ischar(*p)) break;
-    return p - text.buf;
-}
-template int LengthChar(const StringPiece  &, int (*)(int));
-template int LengthChar(const String16Piece&, int (*)(int));
-
-template <class X> int RLengthChar(const StringPieceT<X> &text, int (*ischar)(int)) {
-    int len = text.Length();
-    if (len <= 0) return 0;
-    const X *p;
-    for (p = text.buf; text.buf - p < len; --p) if (!ischar(*p)) break;
-    return text.buf - p;
-}
-template int RLengthChar(const StringPiece  &, int (*)(int));
-template int RLengthChar(const String16Piece&, int (*)(int));
-
 int Split(const string &in, int (*ischar)(int), string *left, string *right) { return Split(in.c_str(), ischar, left, right); }
 int Split(const char   *in, int (*ischar)(int), string *left, string *right) {
     const char *p = in;
@@ -600,11 +456,97 @@ string   tolower(const string   &s) { return toconvert(s.c_str(), ::tolower, isa
 String16 tolower(const short    *s) { return toconvert(s        , ::tolower, isalpha); }
 String16 tolower(const String16 &s) { return toconvert(s.c_str(), ::tolower, isalpha); }
 
-string CHexEscape(const string &text) {
+string   ReplaceEmpty (const string   &in, const string   &replace_with) { return in.empty() ? replace_with : in; }
+String16 ReplaceEmpty (const String16 &in, const String16 &replace_with) { return in.empty() ? replace_with : in; }
+String16 ReplaceEmpty (const String16 &in, const string   &replace_with) { return in.empty() ? String::ToUTF16(replace_with) : in; }
+
+string ReplaceNewlines(const string   &in, const string   &replace_with) {
     string ret;
-    for (int i=0; i<text.size(); ++i) StringAppendf(&ret, "\\x%02x", (unsigned char)text[i]);
+    for (const char *p = in.data(); p-in.data() < in.size(); p++) {
+        if (*p == '\r' && *(p+1) == '\n') { ret += replace_with; p++; }
+        else if (*p == '\n') ret += replace_with;
+        else ret += string(p, 1);
+    }
     return ret;
 }
+
+string CHexEscape(const string &text) {
+    string ret;
+    ret.reserve(text.size()*4);
+    for (unsigned char c : text) StringAppendf(&ret, "\\x%02x", c);
+    return ret;
+}
+
+string CHexEscapeNonAscii(const string &text) {
+    string ret;
+    ret.reserve(text.size()*4);
+    for (unsigned char c : text)
+        if (IsAscii(c)) ret += c;
+        else StringAppendf(&ret, "\\x%02x", c);
+    return ret;
+}
+
+const char *NextProto(const StringPiece &text, bool final, int *outlen) {
+    if (text.len < ProtoHeader::size) return 0;
+    ProtoHeader hdr(text.buf);
+    if (ProtoHeader::size + hdr.len > text.len) return 0;
+    *outlen = hdr.len;
+    return text.buf + ProtoHeader::size + hdr.len;
+}
+
+template <class X, bool chomp> const X *NextLine(const StringPieceT<X> &text, bool final, int *outlen) {
+    const X *ret=0, *p = text.buf;
+    for (/**/; !text.Done(p); ++p) { 
+        if (*p == '\n') { ret = p+1; break; }
+    }
+    if (!ret) { if (outlen) *outlen = p - text.buf; return final ? text.buf : 0; }
+    if (outlen) {
+        int ol = ret-text.buf-1;
+        if (chomp && ret-2 >= text.buf && *(ret-2) == '\r') ol--;
+        *outlen = ol;
+    }
+    return ret;
+}
+const char  *NextLine   (const StringPiece   &text, bool final, int *outlen) { return NextLine<char,  true >(text, final, outlen); }
+const short *NextLine   (const String16Piece &text, bool final, int *outlen) { return NextLine<short, true >(text, final, outlen); }
+const char  *NextLineRaw(const StringPiece   &text, bool final, int *outlen) { return NextLine<char,  false>(text, final, outlen); }
+const short *NextLineRaw(const String16Piece &text, bool final, int *outlen) { return NextLine<short, false>(text, final, outlen); }
+
+template <class X>       X *NextChar(      X *text, int (*ischar)(int), int len, int *outlen) { return (X*)NextChar((const X *)text, ischar, len, outlen); }
+template <class X> const X *NextChar(const X *text, int (*ischar)(int), int len, int *outlen) { return NextChar(text, ischar, 0, len, outlen); }
+template <class X>       X *NextChar(      X *text, int (*ischar)(int), int (*isquotec)(int), int len, int *outlen) { return (X*)NextChar((const X *)text, ischar, isquotec, len, outlen); }
+template <class X> const X *NextChar(const X *text, int (*ischar)(int), int (*isquotec)(int), int len, int *outlen) {
+    const X *ret=0, *p;
+    bool have_len = len >= 0, in_quote = false;
+    for (p=text; (have_len ? p-text<len : *p); p++) {
+        if (!in_quote && ischar(*p)) { ret=p; break; }
+        if (isquotec && isquotec(*p)) in_quote = !in_quote;
+    }
+    if (outlen) *outlen = ret ? ret-text : p-text;
+    return ret;
+}
+template       char*  NextChar<char >(      char*,  int (*)(int), int, int*);
+template const char*  NextChar<char >(const char*,  int (*)(int), int, int*);
+template       short* NextChar<short>(      short*, int (*)(int), int, int*);
+template const short* NextChar<short>(const short*, int (*)(int), int, int*);
+
+template <class X> int LengthChar(const StringPieceT<X> &text, int (*ischar)(int)) {
+    const X *p;
+    for (p = text.buf; !text.Done(p); ++p) if (!ischar(*p)) break;
+    return p - text.buf;
+}
+template int LengthChar(const StringPiece  &, int (*)(int));
+template int LengthChar(const String16Piece&, int (*)(int));
+
+template <class X> int RLengthChar(const StringPieceT<X> &text, int (*ischar)(int)) {
+    int len = text.Length();
+    if (len <= 0) return 0;
+    const X *p;
+    for (p = text.buf; text.buf - p < len; --p) if (!ischar(*p)) break;
+    return text.buf - p;
+}
+template int RLengthChar(const StringPiece  &, int (*)(int));
+template int RLengthChar(const String16Piece&, int (*)(int));
 
 unsigned fnv32(const void *buf, unsigned len, unsigned hval) {
     if (!len) len = strlen((const char *)buf);
@@ -625,6 +567,77 @@ unsigned long long fnv64(const void *buf, unsigned len, unsigned long long hval)
     }
     return hval;
 }
+
+template <class X> int IsNewline(const X *line) {
+    if (!*line) return 0;
+    if (*line == '\n') return 1;
+    if (*line == '\r' && *(line+1) == '\n') return 2;
+    return 0;
+}
+template int IsNewline(const char *line);
+
+template <class X> int ChompNewline(X *line, int len) {
+    int ret = 0;
+    if (line[len-1] == '\n') { line[len-1] = 0; ret++; }
+    if (line[len-2] == '\r') { line[len-2] = 0; ret++; }
+    return ret;
+}
+template int ChompNewline(char *line, int len);
+
+template <class X> int ChompNewlineLength(const X *line, int len) {
+    int ret = 0;
+    if (line[len-1] == '\n') ret++;
+    if (line[len-2] == '\r') ret++;
+    return ret;
+}
+
+const char *Default(const char *in, const char *default_in) { return (in && in[0]) ? in : default_in; }
+
+const char *ParseProtocol(const char *url, string *protO) {
+    static const int hdr_size = 3;
+    static const char hdr[] = "://";
+    const char *prot_end = strstr(url, hdr), *prot, *host;
+    if (prot_end) { prot = url; host = prot_end + hdr_size; }
+    else          { prot = 0;   host = url;                 }
+    while (prot && *prot && isspace(*prot)) prot++;
+    while (host && *host && isspace(*host)) host++;
+    if (protO) protO->assign(prot ? prot : "", prot ? prot_end-prot : 0);
+    return host;
+}
+
+const char *BaseName(const StringPiece &path, int *outlen) {
+    const char *ret = path.buf;
+    int len = path.Length();
+    for (const char *p = path.buf+len-1; p > path.buf; --p) if (isfileslash(*p)) { ret=p+1; break;}
+    if (outlen) {
+        int namelen = len - (ret-path.buf), baselen;
+        NextChar(ret, isdot, namelen, &baselen);
+        *outlen = baselen ? baselen : namelen;
+    }
+    return ret;
+}
+
+int BaseDir(const char *path, const char *cmp) {
+    int l1=strlen(path), l2=strlen(cmp), slash=0, s1=-1, s2=0;
+    if (!l1 || l2 > l1) return 0;
+    if (*(path+l1-1) == '/') return 0;
+    for (const char *p=path+l1-1; p>=path; p--) if (isfileslash(*p)) {
+        slash++; /* count bacwards */
+        if (slash == 1) s2 = p-path;
+        if (slash == 2) { s1 = p-path; break; }
+    }
+    if (slash < 1 || s2-s1-1 != l2) return 0;
+    return !strncasecmp(&path[s1]+1, cmp, l2);
+}
+
+template <class X> int DirNameLen(const StringPieceT<X> &path, bool include_slash) {
+    int len = path.Length();
+    const X *start = path.buf + len - 1, *slash = 0;
+    for (const X *p = start; p > path.buf; --p) if (isfileslash(*p)) { slash=p; break; }
+    return !slash ? 0 : len - (start - slash + !include_slash);
+}
+int DirNameLen(const StringPiece   &text, bool include_slash) { return DirNameLen<char> (text, include_slash); }
+int DirNameLen(const String16Piece &text, bool include_slash) { return DirNameLen<short>(text, include_slash); }
 
 #ifdef LFL_REGEX
 Regex::~Regex() { re_free((regexp*)impl); }

@@ -240,25 +240,15 @@ struct Font {
 };
 
 struct FakeFontEngine : public FontEngine {
+    static const int size = 10, fixed_width = 8, ascender = 9, descender = 5;
+    static const unsigned char wide_glyph_begin = 0xf0, wide_glyph_end = 0xff;
     FontDesc fake_font_desc;
     Font fake_font;
-    FakeFontEngine() : fake_font(this, fake_font_desc, shared_ptr<FontEngine::Resource>()) {
-        fake_font_desc.size = 10;
-        fake_font.fixed_width = fake_font.max_width = 8;
-        fake_font.ascender = 9;
-        fake_font.descender = 5;
-        fake_font.glyph = shared_ptr<GlyphMap>(new GlyphMap(shared_ptr<GlyphCache>(new GlyphCache(0, 0))));
-        InitGlyphs(&fake_font, &fake_font.glyph->table[0], fake_font.glyph->table.size());
-    }
+    FakeFontEngine();
     virtual const char *Name() { return "FakeFontEngine"; }
     virtual Font *Open(const FontDesc&) { return &fake_font; }
     virtual int  LoadGlyphs(Font *f, const Glyph *g, int n) { return n; }
-    virtual int  InitGlyphs(Font *f,       Glyph *g, int n) {
-        for (Glyph *e = g + n; g != e; ++g) {
-            g->tex.height = g->bearing_y = fake_font.Height();
-            g->tex.width  = g->advance   = fake_font.fixed_width;
-        } return n;
-    }
+    virtual int  InitGlyphs(Font *f,       Glyph *g, int n);
     static const char *Filename() { return "__FakeFontFilename__"; }
 };
 
