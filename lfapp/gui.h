@@ -262,13 +262,13 @@ struct TextGUI : public KeyboardGUI {
         static void Move (Line &t, Line &s) { swap(t.data, s.data); }
         static void MoveP(Line &t, Line &s) { swap(t.data, s.data); t.p=s.p; }
 
-        void InitFlow();
-        void Init(TextGUI *P, TextGUI::Lines *C) { parent=P; cont=C; InitFlow(); }
+        void Init(TextGUI *P, TextGUI::Lines *C) { parent=P; cont=C; data->flow=InitFlow(&data->glyphs); }
+        Flow InitFlow(DrawableBoxArray *out) { return Flow(&data->box, parent->font, out, &parent->layout); }
         int GetAttrId(const Drawable::Attr &a) { return data->glyphs.attr.GetAttrId(a); }
         int Size () const { return data->glyphs.Size(); }
         int Lines() const { return 1+data->glyphs.line.size(); }
         string Text() const { return data->glyphs.Text(); }
-        void Clear() { data->links.clear(); data->glyphs.Clear(); InitFlow(); }
+        void Clear() { data->links.clear(); data->glyphs.Clear(); data->flow=InitFlow(&data->glyphs); }
         int Erase(int o, int l=INT_MAX);
         int AssignText(const StringPiece   &s, int a=0) { Clear(); return AppendText(s, a); }
         int AssignText(const String16Piece &s, int a=0) { Clear(); return AppendText(s, a); }
@@ -281,25 +281,27 @@ struct TextGUI : public KeyboardGUI {
         int InsertTextAt(int o, const String16 &s, int a=0) { return InsertTextAt<short>(o, s, a); }
         int UpdateText(int o, const string   &s, int attr, int max_width=0, bool *append=0) { return UpdateText<char> (o, s, attr, max_width, append); }
         int UpdateText(int o, const String16 &s, int attr, int max_width=0, bool *append=0) { return UpdateText<short>(o, s, attr, max_width, append); }
+        void EncodeText(DrawableBoxArray *o, int x, const StringPiece   &s, int a=0) { Flow f=InitFlow(o); f.p.x=x; f.AppendText(s,a); }
+        void EncodeText(DrawableBoxArray *o, int x, const String16Piece &s, int a=0) { Flow f=InitFlow(o); f.p.x=x; f.AppendText(s,a); }
         int Layout(int width=0, bool flush=0) { Layout(Box(0,0,width,0), flush); return Lines(); }
         void Layout(Box win, bool flush=0);
         point Draw(point pos, int relayout_width=-1, int g_offset=0, int g_len=-1);
     };
-    template <class X> struct LineTokenProcessor {
+    struct LineTokenProcessor {
         Line *L;
         bool sw=0, ew=0, pw=0, nw=0, overwrite=0, osw=1, oew=1;
         int x, size, erase, pi=0, ni=0;
-        StringPieceT<X> v;
-        LineTokenProcessor(Line *l, int o, const StringPieceT<X> &V, int Erase);
-        void LoadV(const StringPieceT<X> &V) { FindBoundaryConditions((v=V), &sw, &ew); }
+        DrawableBoxRun v;
+        LineTokenProcessor(Line *l, int o, const DrawableBoxRun &V, int Erase);
+        void LoadV(const DrawableBoxRun &V) { FindBoundaryConditions((v=V), &sw, &ew); }
         void FindPrev(const DrawableBoxArray &g) { const Drawable *p; while (pi > 0      && (p = g[pi-1].drawable) && !isspace(p->Id())) pi--; }
         void FindNext(const DrawableBoxArray &g) { const Drawable *n; while (ni < size-1 && (n = g[ni+1].drawable) && !isspace(n->Id())) ni++; }
-        void PrepareOverwrite(const StringPieceT<X> &V) { osw=sw; oew=ew; LoadV(V); erase=0; overwrite=1; }
+        void PrepareOverwrite(const DrawableBoxRun &V) { osw=sw; oew=ew; LoadV(V); erase=0; overwrite=1; }
         void ProcessUpdate();
         void ProcessResult();
-        static void FindBoundaryConditions(const StringPieceT<X> &v, bool *sw, bool *ew) {
-            *sw = v.len && !isspace(v.buf[0]);
-            *ew = v.len && !isspace(v.buf[v.len-1]);
+        static void FindBoundaryConditions(const DrawableBoxRun &v, bool *sw, bool *ew) {
+            *sw = v.Size() && !isspace(v.First().Id());
+            *ew = v.Size() && !isspace(v.Last ().Id());
         }
     };
     struct Lines : public RingVector<Line> {
@@ -392,7 +394,7 @@ struct TextGUI : public KeyboardGUI {
     Link *hover_link=0;
 
     TextGUI(Window *W, Font *F) : KeyboardGUI(W, F), mouse_gui(W), font(F)
-    { cmd_line.Init(this,0); cmd_line.GetAttrId(Drawable::Attr(F)); }
+    { layout.pad_wide_chars=1; cmd_line.Init(this,0); cmd_line.GetAttrId(Drawable::Attr(F)); }
 
     virtual ~TextGUI() {}
     virtual int CommandLines() const { return 0; }

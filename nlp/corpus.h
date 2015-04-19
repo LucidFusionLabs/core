@@ -29,7 +29,7 @@ struct SentenceCorpus : public Corpus {
     struct Sentence : public vector<Word> {
         Sentence(const char *s) {
             StringWordIter words(s);
-            for (const char *word = words.Next(); word; word = words.Next()) push_back(Word(word));
+            for (string word = IterNextString(&words); !words.Done(); word = IterNextString(&words)) push_back(Word(word));
         }
         string DebugString() const {
             int ind = 0;

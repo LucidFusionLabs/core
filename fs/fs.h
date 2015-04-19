@@ -135,12 +135,12 @@ struct SpeechDecodeClient : public FeatureSink {
         string tsa;
         StringWordIter ts(transcript);
         for (int i=0; i<AEH->m; i++) {
-            const char *w = ts.Next();
-            if (!w) continue;
+            string word = IterNextString(&ts);
+            if (ts.Done()) continue;
 
             long long ts = AEH->timestamp + timestamp[i*2], ts2 = AEH->timestamp + timestamp[i*2+1];
-            tsa += string(w) + StringPrintf("-%lld(%lld, %f, %f) ", ts, AEH->timestamp, timestamp[i*2], timestamp[i*2+1]);
-            decode.push_back(DecodedWord(w, ts, ts2));
+            tsa += word + StringPrintf("-%lld(%lld, %f, %f) ", ts, AEH->timestamp, timestamp[i*2], timestamp[i*2+1]);
+            decode.push_back(DecodedWord(word.c_str(), ts, ts2));
         }
         int len = (FLAGS_sample_rate/FLAGS_feat_hop)*FLAGS_sample_secs;
         INFOf("-- %s (range = %lld - %lld = %d) ds = %d", tsa.c_str(), lastTimestamp-len, lastTimestamp, len, decode.size());

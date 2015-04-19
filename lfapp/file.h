@@ -127,7 +127,46 @@ struct LocalFile : public File {
     bool Flush();
 };
 
-struct DirectoryIter : public Iter {
+struct FileLineIter : public StringIter {
+    File *f;
+    FileLineIter(File *F) : f(F) {}
+    const char *Next() { return f->NextLine(); }
+    void Reset() { f->Reset(); }
+    bool Done() const { return f->nr.buf_offset < 0; }
+    const char *Begin() const { return 0; }
+    const char *Current() const { return f->nr.buf.c_str() + f->nr.record_offset; }
+    int CurrentOffset() const { return f->nr.file_offset; }
+    int CurrentLength() const { return f->nr.record_len; }
+    int TotalLength() const { return 0; }
+};
+
+struct LocalFileLineIter : public StringIter {
+    LocalFile f;
+    LocalFileLineIter(const string &path) : f(path, "r") {};
+    const char *Next() { return f.NextLine(); }
+    void Reset() { f.Reset(); }
+    bool Done() const { return f.nr.buf_offset < 0; }
+    const char *Begin() const { return 0; }
+    const char *Current() const { return f.nr.buf.c_str() + f.nr.record_offset; }
+    int CurrentOffset() const { return f.nr.file_offset; }
+    int CurrentLength() const { return f.nr.record_len; }
+    int TotalLength() const { return 0; }
+};
+   
+struct BufferFileLineIter : public StringIter {
+    BufferFile f;
+    BufferFileLineIter(const string &s) : f(s) {};
+    const char *Next() { return f.NextLine(); }
+    void Reset() { f.Reset(); }
+    bool Done() const { return f.nr.buf_offset < 0; }
+    const char *Begin() const { return 0; }
+    const char *Current() const { return f.nr.buf.c_str() + f.nr.record_offset; }
+    int CurrentOffset() const { return f.nr.file_offset; }
+    int CurrentLength() const { return f.nr.record_len; }
+    int TotalLength() const { return 0; }
+};
+
+struct DirectoryIter {
     typedef map<string, int> Map;
     string pathname;
     Map filemap;
@@ -140,28 +179,7 @@ struct DirectoryIter : public Iter {
     static void Add(void *self, const char *k, int v) { ((DirectoryIter*)self)->filemap[k] = v; }
 };
 
-struct FileLineIter : public Iter {
-    File *f;
-    FileLineIter(File *F) : f(F) {}
-    const char *Next() { return f->NextLine(); }
-    void Reset() { f->Reset(); }
-};
-
-struct LocalFileLineIter : public Iter {
-    LocalFile f;
-    LocalFileLineIter(const string &path) : f(path, "r") {};
-    const char *Next() { return f.NextLine(); }
-    void Reset() { f.Reset(); }
-};
-   
-struct BufferFileLineIter : public Iter {
-    BufferFile f;
-    BufferFileLineIter(const string &s) : f(s) {};
-    const char *Next() { return f.NextLine(); }
-    void Reset() { f.Reset(); }
-};
-
-struct ArchiveIter : public Iter {
+struct ArchiveIter {
     void *impl, *entry, *dat;
     ArchiveIter(const char *path);
     ArchiveIter(){};
@@ -208,7 +226,8 @@ struct ProtoFile {
 };
 
 struct StringFile {
-    vector<string> *F; string H;
+    vector<string> *F;
+    string H;
     StringFile() { Clear(); }
     StringFile(vector<string> *f, const string &h=string()) : F(f), H(h) {}
     ~StringFile() { delete F; }

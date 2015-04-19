@@ -73,30 +73,30 @@ TEST(IterTest, WordIter) {
     string b = "aaaaaaaa bbbbbb ccccc  dd         eeeee ffffff          ggggggg     hhhhhhhhhhhh  kkkk";
     const char *word;
     {
-        StringWordIter words(StringPiece(b.data(), 40), isspace, 0, StringWordIter::Flag::InPlace);
-        EXPECT_NE(nullptr, ((word = words.Next()))); EXPECT_EQ(0, strncmp(word, "aaaaaaaa", words.wordlen));
-        EXPECT_NE(nullptr, ((word = words.Next()))); EXPECT_EQ(0, strncmp(word, "bbbbbb",   words.wordlen));
-        EXPECT_NE(nullptr, ((word = words.Next()))); EXPECT_EQ(0, strncmp(word, "ccccc",    words.wordlen));
-        EXPECT_NE(nullptr, ((word = words.Next()))); EXPECT_EQ(0, strncmp(word, "dd",       words.wordlen));
-        EXPECT_NE(nullptr, ((word = words.Next()))); EXPECT_EQ(0, strncmp(word, "eeeee",    words.wordlen));
+        StringWordIter words(StringPiece(b.data(), 40), isspace, 0);
+        EXPECT_NE(nullptr, ((word = words.Next()))); EXPECT_EQ(0, strncmp(word, "aaaaaaaa", words.cur_len));
+        EXPECT_NE(nullptr, ((word = words.Next()))); EXPECT_EQ(0, strncmp(word, "bbbbbb",   words.cur_len));
+        EXPECT_NE(nullptr, ((word = words.Next()))); EXPECT_EQ(0, strncmp(word, "ccccc",    words.cur_len));
+        EXPECT_NE(nullptr, ((word = words.Next()))); EXPECT_EQ(0, strncmp(word, "dd",       words.cur_len));
+        EXPECT_NE(nullptr, ((word = words.Next()))); EXPECT_EQ(0, strncmp(word, "eeeee",    words.cur_len));
         EXPECT_EQ(nullptr, ((word = words.Next())));
     }
     {
-        StringWordIter words(StringPiece(b.data(), 39), isspace, 0, StringWordIter::Flag::InPlace);
-        EXPECT_NE(nullptr, ((word = words.Next()))); EXPECT_EQ(0, strncmp(word, "aaaaaaaa", words.wordlen));
-        EXPECT_NE(nullptr, ((word = words.Next()))); EXPECT_EQ(0, strncmp(word, "bbbbbb",   words.wordlen));
-        EXPECT_NE(nullptr, ((word = words.Next()))); EXPECT_EQ(0, strncmp(word, "ccccc",    words.wordlen));
-        EXPECT_NE(nullptr, ((word = words.Next()))); EXPECT_EQ(0, strncmp(word, "dd",       words.wordlen));
-        EXPECT_NE(nullptr, ((word = words.Next()))); EXPECT_EQ(0, strncmp(word, "eeeee",    words.wordlen));
+        StringWordIter words(StringPiece(b.data(), 39), isspace, 0);
+        EXPECT_NE(nullptr, ((word = words.Next()))); EXPECT_EQ(0, strncmp(word, "aaaaaaaa", words.cur_len));
+        EXPECT_NE(nullptr, ((word = words.Next()))); EXPECT_EQ(0, strncmp(word, "bbbbbb",   words.cur_len));
+        EXPECT_NE(nullptr, ((word = words.Next()))); EXPECT_EQ(0, strncmp(word, "ccccc",    words.cur_len));
+        EXPECT_NE(nullptr, ((word = words.Next()))); EXPECT_EQ(0, strncmp(word, "dd",       words.cur_len));
+        EXPECT_NE(nullptr, ((word = words.Next()))); EXPECT_EQ(0, strncmp(word, "eeeee",    words.cur_len));
         EXPECT_EQ(nullptr, ((word = words.Next())));
     }
     {
-        StringWordIter words(StringPiece(b.data(), 38), isspace, 0, StringWordIter::Flag::InPlace);
-        EXPECT_NE(nullptr, ((word = words.Next()))); EXPECT_EQ(0, strncmp(word, "aaaaaaaa", words.wordlen));
-        EXPECT_NE(nullptr, ((word = words.Next()))); EXPECT_EQ(0, strncmp(word, "bbbbbb",   words.wordlen));
-        EXPECT_NE(nullptr, ((word = words.Next()))); EXPECT_EQ(0, strncmp(word, "ccccc",    words.wordlen));
-        EXPECT_NE(nullptr, ((word = words.Next()))); EXPECT_EQ(0, strncmp(word, "dd",       words.wordlen));
-        EXPECT_NE(nullptr, ((word = words.Next()))); EXPECT_EQ(0, strncmp(word, "eeee",     words.wordlen));
+        StringWordIter words(StringPiece(b.data(), 38), isspace, 0);
+        EXPECT_NE(nullptr, ((word = words.Next()))); EXPECT_EQ(0, strncmp(word, "aaaaaaaa", words.cur_len));
+        EXPECT_NE(nullptr, ((word = words.Next()))); EXPECT_EQ(0, strncmp(word, "bbbbbb",   words.cur_len));
+        EXPECT_NE(nullptr, ((word = words.Next()))); EXPECT_EQ(0, strncmp(word, "ccccc",    words.cur_len));
+        EXPECT_NE(nullptr, ((word = words.Next()))); EXPECT_EQ(0, strncmp(word, "dd",       words.cur_len));
+        EXPECT_NE(nullptr, ((word = words.Next()))); EXPECT_EQ(0, strncmp(word, "eeee",     words.cur_len));
         EXPECT_EQ(nullptr, ((word = words.Next())));
     }
 }
@@ -104,8 +104,8 @@ TEST(IterTest, WordIter) {
 TEST(IterTest, LineIter) {
     string b = "1 2 3\n4 5 6";
     StringLineIter line(b);
-    EXPECT_EQ(0, strcmp(BlankNull(line.Next()), "1 2 3"));
-    EXPECT_EQ(0, strcmp(BlankNull(line.Next()), "4 5 6"));
+    EXPECT_EQ("1 2 3", IterNextString(&line));
+    EXPECT_EQ("4 5 6", IterNextString(&line));
 }
 
 TEST(StringTest, StringAppendf) {
@@ -311,7 +311,7 @@ TEST(StringTest, Split) {
 }
 
 TEST(StringTest, CHexEscape) {
-    EXPECT_EQ("a\\x08a", CHexEscapeNonAscii("a\x08""a"));
+    EXPECT_EQ("a\\x08a", CHexEscapeNonAscii(string("a\x08""a")));
 }
 
 TEST(StringTest, RLengthChar) {

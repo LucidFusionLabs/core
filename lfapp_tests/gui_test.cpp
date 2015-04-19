@@ -800,13 +800,14 @@ TEST(GUITest, LineTokenProcessor) {
     if (ta.token.size()>1) { EXPECT_EQ(ta.token[1].type,  2); EXPECT_EQ("ccdeA",      ta.token[1].word); }
     ta.token.clear();
 
+    // test wide chars
     L->Clear();
+    ta.insert_mode = 1;
     L->UpdateText(0, "\xff", 0);
     EXPECT_EQ("\xff\xa0", L->Text()); EXPECT_EQ(1, ta.token.size());
     if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type, 4); EXPECT_EQ("\xff\xa0", ta.token[0].word); }
     ta.token.clear();
 
-#if 0
     L->UpdateText(2, "y", 0);
     EXPECT_EQ("\xff\xa0y", L->Text()); EXPECT_EQ(2, ta.token.size());
     if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type, -8); EXPECT_EQ("\xff\xa0",  ta.token[0].word); }
@@ -818,7 +819,12 @@ TEST(GUITest, LineTokenProcessor) {
     if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type, -7); EXPECT_EQ("\xff\xa0y",  ta.token[0].word); }
     if (ta.token.size()>1) { EXPECT_EQ(ta.token[1].type,  1); EXPECT_EQ("\xff\xa0xy", ta.token[1].word); }
     ta.token.clear();
-#endif
+
+    L->UpdateText(0, "0", 0);
+    EXPECT_EQ("0\xff\xa0xy", L->Text()); EXPECT_EQ(2, ta.token.size());
+    if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type, -9); EXPECT_EQ("\xff\xa0xy",  ta.token[0].word); }
+    if (ta.token.size()>1) { EXPECT_EQ(ta.token[1].type,  3); EXPECT_EQ("0\xff\xa0xy", ta.token[1].word); }
+    ta.token.clear();
 }
 
 }; // namespace LFL

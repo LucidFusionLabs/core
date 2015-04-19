@@ -44,27 +44,29 @@ struct ReceiverConfig {
     }
 
     void OpenFilters(File *f) {
-        for (const char *word, *line = f->NextLine(); line; line = f->NextLine()) {
+        for (const char *line = f->NextLine(); line; line = f->NextLine()) {
             MailFilter filter;
 
             StringWordIter words(StringPiece(line, f->nr.record_len), isspace, isint<'/'>);
-            if (!(word = words.Next()) || !word[0] || word[0] == '#') continue;
-            if      (!strcasecmp(word, "Catch-all")) { filter.type=MailFilter::DEFAULT; }
-            else if (!strcasecmp(word, "mail-from")) { filter.type=MailFilter::MAIL_FROM; }
-            else if (!strcasecmp(word, "rcpt-to"))   { filter.type=MailFilter::RCPT_TO; }
-            else if (!strcasecmp(word, "header"))    { filter.type=MailFilter::HEADER; filter.header=BlankNull(words.Next()); }
-            else if (!strcasecmp(word, "content"))   { filter.type=MailFilter::CONTENT; }
+            string word = IterNextString(&words);
+            if (words.Done() || !word[0] || word[0] == '#') continue;
+
+            if      (StringEquals(word, "Catch-all")) { filter.type=MailFilter::DEFAULT; }
+            else if (StringEquals(word, "mail-from")) { filter.type=MailFilter::MAIL_FROM; }
+            else if (StringEquals(word, "rcpt-to"))   { filter.type=MailFilter::RCPT_TO; }
+            else if (StringEquals(word, "header"))    { filter.type=MailFilter::HEADER; filter.header=IterNextString(&words); }
+            else if (StringEquals(word, "content"))   { filter.type=MailFilter::CONTENT; }
             else FATAL("Parse failed '", line, "'");
 
             if (filter.type != MailFilter::DEFAULT) {
-                string regex = BlankNull(words.Next());
+                string regex = IterNextString(&words);
                 CHECK(!regex.empty());
                 CHECK_EQ(regex[0],              '/');
                 CHECK_EQ(regex[regex.size()-1], '/');
                 filter.regex = Regex((filter.regex_pattern = regex.substr(1, regex.size()-2)));
             }
 
-            string filename = BlankNull(words.Next());
+            string filename = IterNextString(&words);
             CHECK(!filename.empty());
 
             map<string, File*>::const_iterator out_i = outputs.find(filename);

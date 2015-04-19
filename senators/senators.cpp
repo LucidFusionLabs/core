@@ -105,21 +105,21 @@ struct Senator : public Query {
     }
     int Read(Connection *c) {
         StringLineIter iter(StringPiece(c->rb, c->rl));
-        for (const char *line = iter.Next(); line; line = iter.Next()) {
+        for (string line = IterNextString(&iter); !iter.Done(); line = IterNextString(&iter)) {
             if (FLAGS_print) INFO("Senator ", nick, " read '", line, "'");
 
-            if (!strncasecmp(line, "PING ", 5))
-                c->Write(StrCat("PONG ", line+5, "\r\n"));
+            if (!StringEquals(line, "PING ", 5))
+                c->Write(StrCat("PONG ", line.c_str()+5, "\r\n"));
 
             if (bot) do {
                 StringWordIter words(line);
-                string source = StripColon(BlankNull(words.Next()));
-                string server_cmd = BlankNull(words.Next());
+                string source = StripColon(IterNextString(&words));
+                string server_cmd = IterNextString(&words);
                 if (server_cmd != "PRIVMSG") break;
 
                 string source_nick = source.substr(0, source.find("!")); 
-                string target = BlankNull(words.Next());
-                string text = StripColon(words.offset >= 0 ? &line[words.offset] : "");
+                string target = IterNextString(&words);
+                string text = StripColon(words.next_offset >= 0 ? &line[words.next_offset] : "");
                 bot->Chat(Singleton<IRCBotServer>::Get(), c, source_nick, target, text);
             } while(0);
         }

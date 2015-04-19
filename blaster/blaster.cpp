@@ -64,9 +64,9 @@ struct BlasterConfig : public HTMLParser {
             if (i == policies.end()) FATAL("missing policy ", name);
             StringLineIter lines(i->second);
             for (const char *line = lines.Next(); line; line = lines.Next()) {
-                StringWordIter words(StringPiece(line, lines.linelen));
-                string k = toconvert(tolower(BlankNull(words.Next())), tochar<'-','_'>);
-                string v = BlankNull(words.Next());
+                StringWordIter words(StringPiece(line, lines.cur_len));
+                string k = toconvert(tolower(IterNextString(&words)), tochar<'-','_'>);
+                string v = IterNextString(&words);
                 if (SuffixMatch(k, ":")) k.erase(k.size()-1);
                 if (k == "ip_address") StrAppend(&ip_addresses, ip_addresses.size()?",":"", v);
                 else if (!fm->Set(k, v)) FATAL("Unknown var '", k, "', Did you mean -", fm->Match(k, __FILE__), "?");
@@ -94,7 +94,7 @@ struct BulkMailEncoding {
     static string EncodeUserID(const string &passphrase, const string &in) {
         string padded_input = in;
         if (padded_input.size() < 6) padded_input.resize(6, '|');
-        string salted_input = StrCat(padded_input.substr(0, 6), StringPrintf("%c%c", rand()%256, rand()%256), padded_input.substr(6));
+        string salted_input = StrCat(padded_input.substr(0, 6), StringPrintf("%c%c", Rand<int>(0, 255), Rand<int>(0, 255)), padded_input.substr(6));
         while (salted_input.size() % 8) salted_input += "|";
         string key = PerlCBCKeyFromPassphrase(passphrase, 56);
         string out = Singleton<Crypto>::Get()->Blowfish(key, salted_input, true);
@@ -124,12 +124,12 @@ struct BulkMailTemplate {
         if (text.empty()) return false;
         string current_textblock;
         StringLineIter lines(text, StringLineIter::Flag::BlankLines);
-        for (const char *line = lines.Next(); line; line = lines.Next()) {
-            if (!*line) current_textblock += "\r\n";
-            for (const char *li = line; *li; /**/) {
+        for (string line = IterNextString(&lines); !lines.Done(); line = IterNextString(&lines)) {
+            if (line.empty()) current_textblock += "\r\n";
+            for (const char *li = line.c_str(); *li; /**/) {
                 const char *template_var_begin = strchr(li, '['), *template_var_end = 0;
                 if (!template_var_begin) {
-                    current_textblock.append(li, lines.linelen-(li-line));
+                    current_textblock.append(li, line.size()-(li-line.c_str()));
                     current_textblock += "\r\n";
                     break;
                 }
@@ -165,7 +165,7 @@ struct BulkMailTemplate {
                 if (i != rands.end()) result = i->second;
                 else {
                     result.resize(10);
-                    for (int j=0; j<result.size(); j++) { int v=rand()%36; result[j] = (v < 10) ? ('0' + v) : ('a' + v-10); }
+                    for (int j=0; j<result.size(); j++) { int v=Rand<int>(0, 35); result[j] = (v < 10) ? ('0' + v) : ('a' + v-10); }
                     rands[f.name] = result;
                 }
             }

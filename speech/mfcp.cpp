@@ -69,7 +69,7 @@ int main(int argc, const char *argv[]) {
 
         string hdr;
         if (MatrixFile::ReadHeader(&word, &hdr) < 0) { ERROR("readHeader: ", -1); return -1; }
-        int M=atof(word.Next()), N=atof(word.Next()), ret;
+        int M=atof(IterNextString(&word)), N=atof(IterNextString(&word)), ret;
 
         /* open output */
         INFO("output = ", out);
@@ -80,7 +80,7 @@ int main(int argc, const char *argv[]) {
         /* read & write */
         double *row = (double *)alloca(N*sizeof(double));
         for (int i=0; i<M; i++) {
-            for (int j=0; j<N; j++) row[j] = atof(word.Next()); 
+            for (int j=0; j<N; j++) row[j] = atof(IterNextString(&word)); 
             if ((ret = file.Write(row, N*sizeof(double))) != N*sizeof(double)) FATAL("file write ret: ", ret);
         }
     }

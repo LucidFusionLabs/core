@@ -719,26 +719,26 @@ struct WFST {
     string tostrGraphViz(State::LabelSet *label=0) {
         State::LabelSet defaultLabel;
         if (!label) label = &defaultLabel;
-        string v = GraphViz::DigraphHeader("WFST");
+        string v = GraphVizFile::DigraphHeader("WFST");
 
-        for (int i=0, l=I->states(); i<l; i++) GraphViz::AppendNode(&v, label->name(I->state(i)));
+        for (int i=0, l=I->states(); i<l; i++) GraphVizFile::AppendNode(&v, label->name(I->state(i)));
 
-        v += GraphViz::NodeStyle("solid");
-        v += GraphViz::NodeShape("doublecircle");
+        v += GraphVizFile::NodeStyle("solid");
+        v += GraphVizFile::NodeShape("doublecircle");
 
-        for (int i=0, l=F->states(); i<l; i++) GraphViz::AppendNode(&v, label->name(F->state(i)));
+        for (int i=0, l=F->states(); i<l; i++) GraphVizFile::AppendNode(&v, label->name(F->state(i)));
 
-        v += GraphViz::NodeShape("circle");
+        v += GraphVizFile::NodeShape("circle");
 
         for (int i=0, l=E->states(); i<l; i++) {
             TransitMap::Iterator edge;
             for (E->begin(&edge, i); !edge.done; E->next(&edge)) 
-                GraphViz::AppendEdge(&v, label->name(edge.prevState), label->name(edge.nextState),
+                GraphVizFile::AppendEdge(&v, label->name(edge.prevState), label->name(edge.nextState),
                                      StrCat(A->name(edge.in), " : ", B->name(edge.out), " / ",
                                             StringPrintf("%.2f", edge.weight)));
         }
 
-        return v + GraphViz::Footer();
+        return v + GraphVizFile::Footer();
     }
 
     void printGraphViz() { string v = tostrGraphViz(); printf("%s", v.c_str()); fflush(stdout); }
@@ -1569,7 +1569,7 @@ struct WFST {
     static void shiftFinalTransitions(WFST *t, int from, int to) { Edge::ShiftInputFilter sf(t->F, from, to); edgeFilter(t, &sf); }
 
     /* G = grammar */
-    static WFST *grammar(Semiring *K, IOAlphabet *A, LanguageModel *LM, Iter *vocab) {
+    static WFST *grammar(Semiring *K, IOAlphabet *A, LanguageModel *LM, StringIter *vocab) {
         TransitMapBuilder *E = new TransitMapBuilder();
         Statevec *I = new Statevec(), *F = new Statevec();
         map<unsigned, int> idmap;
@@ -1610,7 +1610,7 @@ struct WFST {
     }
     
     /* L = pronunciation lexicon */
-    static WFST *pronunciationLexicon(Semiring *K, IOAlphabet *A, AlphabetBuilder *B, AlphabetBuilder *aux, PronunciationDict *dict, Iter *vocab, LanguageModel *LM=0) {
+    static WFST *pronunciationLexicon(Semiring *K, IOAlphabet *A, AlphabetBuilder *B, AlphabetBuilder *aux, PronunciationDict *dict, StringIter *vocab, LanguageModel *LM=0) {
         TransitMapBuilder *E = new TransitMapBuilder();
         Statevec *I = new Statevec(), *F = new Statevec();
         map<string, int> homophone;

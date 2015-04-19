@@ -349,7 +349,7 @@ template <class X> void Font::Encode(const StringPieceT<X> &text, const Box &box
     else if (draw_flag & DrawFlag::Lowercase)  flow.layout.char_tf = ::tolower;
     if      (draw_flag & DrawFlag::Capitalize) flow.layout.word_start_char_tf = ::toupper;
     flow.AppendText(text, attr_id);
-    flow.Complete();
+    if (!(draw_flag & DrawFlag::DontCompleteFlow)) flow.Complete();
 }
 
 template <class X> int Font::Draw(const StringPieceT<X> &text, const Box &box, vector<Box> *lb, int draw_flag) {
