@@ -13,17 +13,18 @@ struct ResolvedMX {
 };
 
 static void ParseResolverOutput(const char *line, int linelen, vector<ResolvedMX> *A, vector<ResolvedMX> *mx) {
-    StringWordIter hosts(StringPiece(line, linelen)); int host_i = 0;
-    for (const char *h = hosts.Next(); h; h = hosts.Next(), host_i++) {
+    int host_i = 0;
+    StringWordIter hosts(line, linelen);
+    for (string h = hosts.Next(); !hosts.Done(); h = hosts.Next(), host_i++) {
         StringWordIter args(h, isint4<'=', ':', ',', ';'>);
-        string type = BlankNull(args.Next());
-        string host = BlankNull(args.Next());
+        string type = IterNextString(&args);
+        string host = IterNextString(&args);
         if (!host_i) {
             CHECK_EQ(type, "A");
-            A->push_back(ResolvedMX(0, host, BlankNull(args.Next())));
+            A->push_back(ResolvedMX(0, host, IterNextString(&args)));
         } else {
             CHECK(PrefixMatch(type, "MX"));
-            mx->push_back(ResolvedMX(atoi(type.c_str()+2), host, BlankNull(args.Next())));
+            mx->push_back(ResolvedMX(atoi(type.c_str()+2), host, IterNextString(&args)));
         }
     }
 }

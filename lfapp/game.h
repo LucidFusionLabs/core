@@ -453,7 +453,7 @@ struct GameServer : public Query {
 
         Game::ConnectionData *cd = Game::ConnectionData::Get(c);
         StringLineIter lines(rcon->Text);
-        for (const char *line = lines.Next(); line; line = lines.Next()) {
+        for (string line = IterNextString(&lines); !lines.Done(); line = IterNextString(&lines)) {
             if (FLAGS_rcon_debug) INFO("rcon: ", line);
             string cmd, arg;
             Split(line, isspace, &cmd, &arg);
@@ -778,7 +778,7 @@ struct GameClient {
     }
     void RconRequestCB(Connection *c, GameProtocol::Header *hdr, const string &rcon) {
         StringLineIter lines(rcon);
-        for (const char *line = lines.Next(); line; line = lines.Next()) {
+        for (string line = IterNextString(&lines); !lines.Done(); line = IterNextString(&lines)) {
             if (FLAGS_rcon_debug) INFO("rcon: ", line);
             string cmd, arg;
             Split(line, isspace, &cmd, &arg);
@@ -973,11 +973,12 @@ struct GameMenuGUI : public GUI, public Query {
     }
     void MasterGetResponseCB(Connection *c, const char *h, const string &ct, const char *cb, int cl) {
         if (!cb || !cl) return;
+        const char *p;
         string servers(cb, cl);
         StringLineIter lines(servers);
-        for (const char *p, *l = lines.Next(); l; l = lines.Next()) {
-            if (!(p = strchr(l, ':'))) continue;
-            SystemNetwork::SendTo(pinger.GetListener()->socket, IPV4::Parse(string(l, p-l)), atoi(p+1), "ping\n", 5);
+        for (string l = IterNextString(&lines); !lines.Done(); l = IterNextString(&lines)) {
+            if (!(p = strchr(l.c_str(), ':'))) continue;
+            SystemNetwork::SendTo(pinger.GetListener()->socket, IPV4::Parse(string(l.c_str(), p-l.c_str())), atoi(p+1), "ping\n", 5);
         }
     }
     void Close(Connection *c) { c->query=0; }
@@ -990,11 +991,12 @@ struct GameMenuGUI : public GUI, public Query {
     }
     void PingResponseCB(Connection *c, const string &reply) {
         if (ip && ip == c->addr) return;
+        const char *p;
         string name, players;
         StringLineIter lines(reply);
-        for (const char *p, *l = lines.Next(); l; l = lines.Next()) {
-            if (!(p = strchr(l, '='))) continue;
-            string k(l, p-l), v(p+1);
+        for (string l = IterNextString(&lines); !lines.Done(); l = IterNextString(&lines)) {
+            if (!(p = strchr(l.c_str(), '='))) continue;
+            string k(l, p-l.c_str()), v(p+1);
             if      (k == "name")    name    = v;
             else if (k == "players") players = v;
         }
@@ -1209,9 +1211,9 @@ struct GamePlayerListGUI : public GUI {
         titletext = StrCat(titlename, " ", red_score, "-", blue_score);
 
         for (const char *line = lines.Next(); line; line = lines.Next()) {
-            StringWordIter words(line, iscomma);
+            StringWordIter words(line, lines.cur_len, iscomma);
             Player player;
-            for (const char *word = words.Next(); word; word = words.Next()) player.push_back(word);
+            for (string word = IterNextString(&words); !words.Done(); word = IterNextString(&words)) player.push_back(word);
             if (player.size() < 5) continue;
             playerlist.push_back(player);
         }

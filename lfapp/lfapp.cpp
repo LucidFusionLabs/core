@@ -1405,7 +1405,7 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR lpCmdLine, int nC
     a[0].resize(1024);
     GetModuleFileName(hInst, (char*)a.data(), a.size());
     LFL::StringWordIter word_iter(lpCmdLine);
-    for (auto word = word_iter.next(); word; word = word_iter.next()) a.push_back(word);
+    for (string word = IterNextString(&word_iter); !word_iter.Done(); word = IterNextString(&word_iter)) a.push_back(word):
     for (auto i : a) av.push_back(i->c_str()); 
     av.push_back(0);
 	return main(av.size()-1, &av[0]);

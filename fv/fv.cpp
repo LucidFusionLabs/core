@@ -130,13 +130,13 @@ struct LiveSpectogram {
 
     void Draw(Box win, bool onoff, bool fullscreen) {
         int orientation = fullscreen ? 3 : 5;
-        StringWordIter plotIter(FLAGS_plot);
-        for (const char *ploti = plotIter.Next(); ploti; ploti = plotIter.Next()) { 
-            if (!strcmp(ploti, "sg")) {
+        StringWordIter plot_iter(FLAGS_plot);
+        for (string ploti = IterNextString(&plot_iter); !plot_iter.Done(); ploti = IterNextString(&plot_iter)) { 
+            if (ploti == "sg") {
                 if (onoff) asset("live")->tex.DrawCrimped(win, orientation, 0, -scroll);
                 else       asset("snap")->tex.DrawCrimped(win, orientation, 0, 0);
             }
-            else if (!strcmp(ploti, "wf")) {
+            else if (ploti == "wf") {
                 static int decimate = 10;
                 int delay = Behind(), samples = feature_rate*FLAGS_feat_hop*FLAGS_sample_secs;
                 if (onoff) {
@@ -149,15 +149,15 @@ struct LiveSpectogram {
                     Waveform::Decimated(win.Dimension(), &Color::white, &B, decimate).Draw(win); 
                 }
             }
-            else if (!strcmp(ploti, "pe") && onoff && AED) {
+            else if (ploti == "pe" && onoff && AED) {
                 RingBuf::Handle B(&AED->pe, AED->pe.ring.back);
                 Waveform(win.Dimension(), &Color::white, &B).Draw(win);
             }
-            else if (!strcmp(ploti, "zcr") && onoff && AED) {
+            else if (ploti == "zcr" && onoff && AED) {
                 RingBuf::Handle B(&AED->zcr, AED->zcr.ring.back);
                 Waveform(win.Dimension(), &Color::white, &B).Draw(win);
             }
-            else if (!strcmp(ploti, "szcr") && onoff && AED) {
+            else if (ploti == "szcr" && onoff && AED) {
                 RingBuf::DelayHandle B(&AED->szcr, AED->szcr.ring.back, AcousticEventDetector::szcr_shift);
                 Waveform(win.Dimension(), &Color::white, &B).Draw(win);
             }

@@ -134,8 +134,8 @@ struct Features2Pronunciation {
         PronunciationDict *dict = PronunciationDict::instance();
 
         StringWordIter worditer(transcript);
-        for (const char *word = worditer.Next(); word; word = worditer.Next()) {
-            if (!dict->pronounce(word)) ERROR("no pronunciation dictionary for '", word, "'");
+        for (string word = IterNextString(&worditer); !worditer.Done(); word = IterNextString(&worditer)) {
+            if (!dict->pronounce(word.c_str())) ERROR("no pronunciation dictionary for '", word, "'");
             words.incr(word);
         }
         if (!model) return;
@@ -154,8 +154,8 @@ struct Features2Pronunciation {
         PronunciationDict *dict = PronunciationDict::instance();
 
         StringWordIter worditer(transcript);
-        for (const char *word = worditer.Next(); word; word = worditer.Next()) {
-            if (!dict->pronounce(word)) ERROR("no pronunciation dictionary for '", word, "'");
+        for (string word = IterNextString(&worditer); !worditer.Done(); word = IterNextString(&worditer)) {
+            if (!dict->pronounce(word.c_str())) ERROR("no pronunciation dictionary for '", word, "'");
             words.incr(word);
         }
         if (!model) return;
@@ -754,8 +754,8 @@ int recognizeQuery(RecognitionModel *model, const char *input) {
     vector<int> query, query2;
     int pp = 0;
 
-    for (string nextword, word = words.Next(); word.size(); word = nextword) {
-        nextword = BlankNull(words.Next());
+    for (string nextword, word = IterNextString(&words); word.size(); word = nextword) {
+        nextword = IterNextString(&words);
         const char *pronunciation = dict->pronounce(word.c_str());
         query2.push_back(model->recognitionNetworkOut.id(word.c_str()));
 

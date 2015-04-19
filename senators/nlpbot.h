@@ -70,11 +70,11 @@ struct NLPBot : public Bot {
     virtual void Connected(BotServer *server, Connection *c, const string& nick) { name = nick; }
     virtual void Chat(BotServer *server, Connection *c, const string &source, const string &target, const string &text) {
         StringWordIter words(text);
-        string cmd = BlankNull(words.Next());
-        string arg1star = words.offset >= 0 ? text.substr(words.offset) : "";
-        string arg1 = BlankNull(words.Next());
-        string arg2star = words.offset >= 0 ? text.substr(words.offset) : "";
-        string arg2 = BlankNull(words.Next());
+        string cmd = IterNextString(&words);
+        string arg1star = words.next_offset >= 0 ? text.substr(words.next_offset) : "";
+        string arg1 = IterNextString(&words);
+        string arg2star = words.next_offset >= 0 ? text.substr(words.next_offset) : "";
+        string arg2 = IterNextString(&words);
         int a2 = atoi(arg2.c_str());
         // const ::Parse &parse = parser.parse;
         UserSaid said;
@@ -168,7 +168,8 @@ struct NLPBot : public Bot {
 
     void SayLines(BotServer *server, Connection *c, const string &source, const string &target, const string &text) {
         StringLineIter parse_lines(text);
-        for (const char *line = parse_lines.Next(); line; line = parse_lines.Next()) server->Say(c, source, target, line);
+        for (string line = IterNextString(&parse_lines); !parse_lines.Done(); line = IterNextString(&parse_lines))
+            server->Say(c, source, target, line);
     }
 };
 

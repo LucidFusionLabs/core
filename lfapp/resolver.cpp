@@ -97,8 +97,8 @@ void Resolver::DefaultNameserver(vector<IPV4::Addr> *nameservers) {
 
     for (const char *line = file.NextLine(); line; line = file.NextLine()) {
         StringWordIter words(line);
-        if (strcmp(words.Next(), "nameserver")) continue;
-        nameservers->push_back(IPV4::Parse(words.Next()));
+        if (IterNextString(&words) != "nameserver") continue;
+        nameservers->push_back(IPV4::Parse(IterNextString(&words)));
     }
 #endif
 }

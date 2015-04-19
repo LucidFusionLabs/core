@@ -739,20 +739,20 @@ struct AliasWavefrontObjLoader {
         Material mat; v3 xyz; v2 xy;
         int format=0, material=0, ind[3];
 
-        for (const char *cmd = 0, *line = file.NextLine(); line; line = file.NextLine()) {
+        for (const char *line = file.NextLine(); line; line = file.NextLine()) {
             if (!line[0] || line[0] == '#') continue;
-
             StringWordIter word(line);
-            if (!(cmd = word.Next())) continue;
+            string cmd = IterNextString(&word);
+            if (word.Done()) continue;
 
-            if      (!strcmp(cmd, "mtllib")) LoadMaterial(word.Next());
-            else if (!strcmp(cmd, "usemtl")) {
-                MtlMap::iterator it = MaterialMap.find(word.Next());
+            if      (cmd == "mtllib") LoadMaterial(IterNextString(&word));
+            else if (cmd == "usemtl") {
+                MtlMap::iterator it = MaterialMap.find(IterNextString(&word));
                 if (it != MaterialMap.end()) { mat = (*it).second; material = 1; }
             }
-            else if (!strcmp(cmd, "v" )) { IterScanN(&word, &xyz[0], 3);             vert.push_back(xyz); }
-            else if (!strcmp(cmd, "vn")) { IterScanN(&word, &xyz[0], 3); xyz.Norm(); norm.push_back(xyz); }
-            else if (!strcmp(cmd, "vt")) {
+            else if (cmd == "v" ) { IterScanN(&word, &xyz[0], 3);             vert.push_back(xyz); }
+            else if (cmd == "vn") { IterScanN(&word, &xyz[0], 3); xyz.Norm(); norm.push_back(xyz); }
+            else if (cmd == "vt") {
                 IterScanN(&word, &xy[0], 2);
                 if (map_tex_coord) {
                     xy.x = map_tex_coord[Texture::CoordMinX] + xy.x * (map_tex_coord[Texture::CoordMaxX] - map_tex_coord[Texture::CoordMinX]);
@@ -760,10 +760,10 @@ struct AliasWavefrontObjLoader {
                 }
                 tex.push_back(xy);
             }
-            else if (!strcmp(cmd, "f")) {
+            else if (cmd == "f") {
                 vector<v3> face; 
                 for (const char *fi = word.Next(); fi; fi = word.Next()) {
-                    StringWordIter indexword(fi, isint<'/'>);
+                    StringWordIter indexword(fi, word.cur_len, isint<'/'>);
                     IterScanN(&indexword, ind, 3);
 
                     int count = (ind[0]!=0) + (ind[1]!=0) + (ind[2]!=0);
@@ -809,17 +809,17 @@ struct AliasWavefrontObjLoader {
 
         Material m;
         string name;
-        for (const char *cmd = 0, *line = file.NextLine(); line; line = file.NextLine()) {
+        for (const char *line = file.NextLine(); line; line = file.NextLine()) {
             if (!line[0] || line[0] == '#') continue;
-
             StringWordIter word(line);
-            if (!(cmd = word.Next())) continue;
+            string cmd = IterNextString(&word);
+            if (word.Done()) continue;
 
-            if      (!strcmp(cmd, "Ka")) IterScanN(&word, m.ambient .x, 4);
-            else if (!strcmp(cmd, "Kd")) IterScanN(&word, m.diffuse .x, 4);
-            else if (!strcmp(cmd, "Ks")) IterScanN(&word, m.specular.x, 4);
-            else if (!strcmp(cmd, "Ke")) IterScanN(&word, m.emissive.x, 4);
-            else if (!strcmp(cmd, "newmtl")) {
+            if      (cmd == "Ka") IterScanN(&word, m.ambient .x, 4);
+            else if (cmd == "Kd") IterScanN(&word, m.diffuse .x, 4);
+            else if (cmd == "Ks") IterScanN(&word, m.specular.x, 4);
+            else if (cmd == "Ke") IterScanN(&word, m.emissive.x, 4);
+            else if (cmd == "newmtl") {
                 if (name.size()) MaterialMap[name] = m;
                 name = word.Next();
             }

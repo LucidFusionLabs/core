@@ -42,7 +42,7 @@ struct PronunciationDict {
     StringAlloc val;
 
     static PronunciationDict *instance();
-    static int readDictionary(Iter *in, PronunciationDict *out);
+    static int readDictionary(StringIter *in, PronunciationDict *out);
     static int readPronunciation(const char *in, int len, char *phoneIdOut, char *accentOut, int outlen);
 
     const char *pronounce(const char *word);

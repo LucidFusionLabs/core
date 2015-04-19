@@ -112,6 +112,7 @@ using LFL_STL11_NAMESPACE::chrono::high_resolution_clock;
 using LFL_STL11_NAMESPACE::enable_if;
 using LFL_STL11_NAMESPACE::is_integral;
 using LFL_STL11_NAMESPACE::is_floating_point;
+using LFL_STL11_NAMESPACE::make_unsigned;
 
 #include <errno.h>
 #include <math.h>

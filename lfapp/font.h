@@ -176,7 +176,7 @@ struct Font {
             NoWrap=1<<6, GlyphBreak=1<<7, AlignCenter=1<<8, AlignRight=1<<9, 
             Underline=1<<10, Overline=1<<11, Midline=1<<12, Blink=1<<13,
             Uppercase=1<<14, Lowercase=1<<15, Capitalize=1<<16, Clipped=1<<17,
-            AssignFlowX=1<<18
+            AssignFlowX=1<<18, DontCompleteFlow=1<<19
         };
         static int Orientation(int f) { return f & 0xf; };
     };

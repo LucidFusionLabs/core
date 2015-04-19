@@ -58,7 +58,7 @@ struct YahooFinanceApi : public Crawler {
     static void ScrapeCSV(const CrawlFileEntry *entry, vector<Quote> *out) {
         Time now = Now();
         StringLineIter lines(entry->content());
-        for (const char *line = lines.Next(); line; line = lines.Next()) {
+        for (string line = IterNextString(&lines); !lines.Done(); line = IterNextString(&lines)) {
             vector<string> field;
             Split(line, iscomma, isdquote, &field);
             if (field.size() != 17) { ERROR(field.size(), " != 17, skipping line ", line); continue; }

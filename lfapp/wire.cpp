@@ -94,7 +94,7 @@ int DNS::WriteRequest(unsigned short id, const string &querytext, unsigned short
     hdr->qdcount = htons(1);
 
     StringWordIter words(querytext, isdot);
-    for (string word = BlankNull(words.Next()); !word.empty(); word = BlankNull(words.Next())) {
+    for (string word = IterNextString(&words); !word.empty(); word = IterNextString(&words)) {
         CHECK_LT(word.size(), 64);
         os.Write8((unsigned char)word.size());
         os.String(word);
@@ -329,10 +329,10 @@ string HTTP::GrepHeaders(const char *headers, const char *end, const string &nam
     if (!end) end = headers + strlen(headers);
 
     int hlen=end-headers, hnlen;
-    StringLineIter lines(StringPiece(headers, hlen), StringLineIter::Flag::InPlace);
+    StringLineIter lines(StringPiece(headers, hlen));
     for (const char *line = lines.Next(); line; line = lines.Next()) {
         if (!(hnlen = HTTP::GetHeaderNameLen(line))) continue;
-        if (hnlen == name.size() && !strncasecmp(name.c_str(), line, hnlen)) return string(line+hnlen+2, lines.linelen-hnlen-2);
+        if (hnlen == name.size() && !strncasecmp(name.c_str(), line, hnlen)) return string(line+hnlen+2, lines.cur_len-hnlen-2);
     }
     return "";
 }
@@ -356,13 +356,13 @@ int HTTP::GrepHeaders(const char *headers, const char *end, int num, ...) {
     if (!end) end = headers + strlen(headers);
 
     int hlen=end-headers, hnlen;
-    StringLineIter lines(StringPiece(headers, hlen), StringLineIter::Flag::InPlace);
+    StringLineIter lines(StringPiece(headers, hlen));
     for (const char *h = lines.Next(); h; h = lines.Next()) {
         if (!(hnlen = HTTP::GetHeaderNameLen(h))) continue;
         for (int i=0; i<num; i++) if (hnlen == kl[i] && !strncasecmp(k[i], h, hnlen)) {
-            const char *hv = NextChar(h+hnlen+1, notspace, lines.linelen-hnlen-1);
+            const char *hv = NextChar(h+hnlen+1, notspace, lines.cur_len-hnlen-1);
             if (!hv) v[i]->clear();
-            else     v[i]->assign(hv, lines.linelen-(hv-h));
+            else     v[i]->assign(hv, lines.cur_len-(hv-h));
         }
     }
     return 0;
@@ -373,12 +373,12 @@ int HTTP::GrepURLArgs(const char *args, const char *end, int num, ...) {
     if (!end) end = args + strlen(args);
 
     int alen=end-args, anlen;
-    StringWordIter words(StringPiece(args, alen), isand, 0, StringWordIter::Flag::InPlace);
+    StringWordIter words(StringPiece(args, alen), isand, 0);
     for (const char *a = words.Next(); a; a = words.Next()) {
         if (!(anlen = HTTP::GetURLArgNameLen(a))) continue;
         for (int i=0; i<num; i++) if (anlen == kl[i] && !strncasecmp(k[i], a, anlen)) {
-            if (*(a+anlen) && *(a+anlen) == '=') v[i]->assign(a+anlen+1, words.wordlen-anlen-1);
-            else v[i]->assign(a, words.wordlen);
+            if (*(a+anlen) && *(a+anlen) == '=') v[i]->assign(a+anlen+1, words.cur_len-anlen-1);
+            else v[i]->assign(a, words.cur_len);
         }
     }
     return 0;

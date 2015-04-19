@@ -195,58 +195,92 @@ template <> struct UTF<short> {
     static int ReadGlyph(const StringPiece   &s, const char  *p, int *l, bool eof=0) { FATALf("%s", "no such thing as 8bit UTF-16"); }
 };
 
-template <class X> struct IterT {
-    virtual ~IterT() {}
+template <class X> struct StringIterT {
+    typedef X type;
+    virtual ~StringIterT() {}
     virtual void Reset() {}
+    virtual bool Done() const = 0;
     virtual const X *Next() = 0;
+    virtual const X *Begin() const = 0;
+    virtual const X *Current() const = 0;
+    virtual int CurrentOffset() const = 0;
+    virtual int CurrentLength() const = 0;
+    virtual int TotalLength() const = 0;
 };
-typedef IterT<char> Iter;
+typedef StringIterT<char> StringIter;
 
-template <class X> struct StringWordIterT : public IterT<X> {
-    struct Flag { enum { BlankLines=1, InPlace=2 }; };
-    const X *in;
-    basic_string<X> buf;
-    int len, wordlen, offset, (*IsSpace)(int), (*IsQuote)(int), flag; 
-    StringWordIterT(const StringPieceT<X> &B, int (*IsSpace)(int)=0, int(*IsQuote)(int)=0, int Flag=0);
-    StringWordIterT() : in(0), len(0), wordlen(0), offset(0), IsSpace(0), flag(0) {};
+template <class X> basic_string<typename X::type> IterNextString(X *iter) {
+    const typename X::type *w = iter->Next();
+    return w ? basic_string<typename X::type>(w, iter->CurrentLength()) : basic_string<typename X::type>();
+}
 
-    const X *Next();
-    const X *Remaining();
-    void SkipSpace();
-};
-typedef StringWordIterT<char>  StringWordIter;
-typedef StringWordIterT<short> StringWord16Iter;
-
-template <class X> struct StringLineIterT : public IterT<X> {
-    struct Flag { enum { BlankLines=1, InPlace=2 }; };
-    const X *in;
-    basic_string<X> buf;
-    int len, linelen, offset, flag;
-    bool first;
-    StringLineIterT(const StringPieceT<X> &B, int F=0) : in(B.buf), len(B.len), linelen(0), offset(0),  flag(F), first(1) {}
-    StringLineIterT()                                  : in(0),     len(0),     linelen(0), offset(-1), flag(0), first(0) {}
-    const X *Next();
-};
-typedef StringLineIterT<char>  StringLineIter;
-typedef StringLineIterT<short> StringLine16Iter;
-
-struct IterWordIter : public Iter {
-    Iter *iter;
-    StringWordIter word;
-    int line_count;
-    bool own_iter;
-    ~IterWordIter() { if (own_iter) delete iter; }
-    IterWordIter(Iter *i, bool owner=false) : iter(i), line_count(0), own_iter(owner) {};
-    void Reset() { if (iter) iter->Reset(); line_count=0; }
-    const char *Next();
-};
+template <class X> basic_string<typename X::type> IterRemainingString(X *iter) {
+    basic_string<typename X::type> ret;
+    int total = iter->TotalLength(), offset = iter->CurrentOffset();
+    if (total >= 0) ret.assign(iter->Begin() + offset, total - offset);
+    else            ret.assign(iter->Begin() + offset);
+    return ret;
+}
 
 template <class X, class Y> void IterScanN(X *iter, Y *out, int N) {
     for (int i=0; i<N; ++i) {
         auto v = iter->Next(); 
-        out[i] = v ? Scannable::Scan(Y(), v): 0;
+        out[i] = v ? Scannable::Scan(Y(), string(v, iter->CurrentLength()).c_str()) : 0;
     }
 }
+
+template <class X> struct StringWordIterT : public StringIterT<X> {
+    const X *in=0;
+    int size=0, cur_len=0, cur_offset=0, next_offset=0, (*IsSpace)(int)=0, (*IsQuote)(int)=0, flag=0; 
+    StringWordIterT() {}
+    StringWordIterT(const X *buf, int len,    int (*IsSpace)(int)=0, int(*IsQuote)(int)=0, int Flag=0);
+    StringWordIterT(const StringPieceT<X> &b, int (*IsSpace)(int)=0, int(*IsQuote)(int)=0, int Flag=0) :
+        StringWordIterT(b.buf, b.len, IsSpace, IsQuote, Flag) {}
+    bool Done() const { return cur_offset < 0; }
+    const X *Next();
+    const X *Begin() const { return in; }
+    const X *Current() const { return in + cur_offset; }
+    int CurrentOffset() const { return cur_offset; }
+    int CurrentLength() const { return cur_len; }
+    int TotalLength() const { return size; }
+};
+typedef StringWordIterT<char>  StringWordIter;
+typedef StringWordIterT<short> StringWord16Iter;
+
+template <class X> struct StringLineIterT : public StringIterT<X> {
+    struct Flag { enum { BlankLines=1 }; };
+    const X *in;
+    basic_string<X> buf;
+    int size=0, cur_len=0, cur_offset=0, next_offset=0, flag=0; bool first=0;
+    StringLineIterT(const StringPieceT<X> &B, int F=0) : in(B.buf), size(B.len), flag(F), first(1) {}
+    StringLineIterT() : cur_offset(-1) {}
+    bool Done() const { return cur_offset < 0; }
+    const X *Next();
+    const X *Begin() const { return in; }
+    const X *Current() const { return in + cur_offset; }
+    int CurrentOffset() const { return cur_offset; }
+    int CurrentLength() const { return cur_len; }
+    int TotalLength() const { return size; }
+};
+typedef StringLineIterT<char>  StringLineIter;
+typedef StringLineIterT<short> StringLine16Iter;
+
+struct IterWordIter : public StringIter {
+    StringIter *iter;
+    StringWordIter word;
+    int first_count=0;
+    bool own_iter=0;
+    ~IterWordIter() { if (own_iter) delete iter; }
+    IterWordIter(StringIter *i, bool owner=0) : iter(i), own_iter(owner) {};
+    void Reset() { if (iter) iter->Reset(); first_count=0; }
+    bool Done() const { return iter->Done(); }
+    const char *Next();
+    const char *Begin() const { return iter->Begin(); }
+    const char *Current() const { return word.Current(); }
+    int CurrentOffset() const { return iter->CurrentOffset() + word.CurrentOffset(); }
+    int CurrentLength() const { return word.CurrentLength(); }
+    int TotalLength() const { return iter->TotalLength(); }
+};
 
 template <int V>          int                 isint (int N) { return N == V; }
 template <int V1, int V2> int                 isint2(int N) { return (N == V1) || (N == V2); }
@@ -361,9 +395,11 @@ bool StringEmptyOrEquals(const String16 &in, const string   &ref1, const string 
 bool StringReplace(string *text, const string &needle, const string &replace);
 
 template <class X, class Y> int Split(const X *in, int (*ischar)(int), int (*isquote)(int), vector<Y> *out) {
-    out->clear(); if (!in) return 0;
+    out->clear();
+    if (!in) return 0;
     StringWordIterT<X> words(in, ischar, isquote);
-    for (const X *word = words.Next(); word; word = words.Next()) out->push_back(Scannable::Scan(Y(), word));
+    for (string word = IterNextString(&words); !words.Done(); word = IterNextString(&words))
+        out->push_back(Scannable::Scan(Y(), word.c_str()));
     return out->size();
 }
 template <class X> int Split(const string   &in, int (*ischar)(int), int (*isquote)(int), vector<X> *out) { return Split<char,  X>(in.c_str(), ischar, isquote, out); }
@@ -378,7 +414,8 @@ template <class X> int Split(const short    *in, int (*ischar)(int),            
 template <class X> int Split(const char   *in, int (*ischar)(int), int (*isquote)(int), set<X> *out) {
     out->clear(); if (!in) return 0;
     StringWordIter words(in, ischar, isquote);
-    for (const char *word = words.Next(); word; word = words.Next()) out->insert(Scannable::Scan(X(), word));
+    for (string word = IterNextString(&words); !words.Done(); word = IterNextString(&words))
+        out->insert(Scannable::Scan(X(), word.c_str()));
     return out->size();
 }
 template <class X> int Split(const char   *in, int (*ischar)(int),                      set<X> *out) { return Split(in, ischar, NULL, out); }
@@ -409,8 +446,8 @@ string   ReplaceEmpty (const string   &in, const string   &replace_with);
 String16 ReplaceEmpty (const String16 &in, const string   &replace_with);
 String16 ReplaceEmpty (const String16 &in, const String16 &replace_with);
 string ReplaceNewlines(const string   &in, const string   &replace_with);
-string CHexEscape(const string &text);
-string CHexEscapeNonAscii(const string &text);
+template <class X> string CHexEscape        (const basic_string<X> &text);
+template <class X> string CHexEscapeNonAscii(const basic_string<X> &text);
 
 const char  *NextLine   (const StringPiece   &text, bool final=0, int *outlen=0);
 const short *NextLine   (const String16Piece &text, bool final=0, int *outlen=0);
@@ -429,6 +466,7 @@ template <class X>       X *NextChar(      X *text, int (*ischar)(int), int (*is
 template <class X> const X *NextChar(const X *text, int (*ischar)(int), int (*isquote)(int), int len=-1, int *outlen=0);
 template <class X> int  LengthChar(const StringPieceT<X> &text, int (*ischar)(int));
 template <class X> int RLengthChar(const StringPieceT<X> &text, int (*ischar)(int));
+template <class X> int SkipChar(int (*ischar)(int), const X* in, int len=0);
 
 unsigned           fnv32(const void *buf, unsigned len=0, unsigned           hval=0);
 unsigned long long fnv64(const void *buf, unsigned len=0, unsigned long long hval=0);

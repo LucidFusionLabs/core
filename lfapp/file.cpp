@@ -88,7 +88,10 @@ const char *File::NextRecord::GetNextRecord(File *f, int *offsetOut, int *nextof
             buf_offset = next-buf.data();
             return text;
         }
-        if (read_short) return 0;
+        if (read_short) {
+            buf_offset = -1;
+            return 0;
+        }
 
         buf.erase(0, buf_offset);
         int buf_filled = buf.size();
@@ -514,21 +517,21 @@ int StringFile::Read(IterWordIter *word, int header) {
         
         const char *transcript=word->iter->Next();
         if (!transcript) return -1;
-        H = transcript;
+        H.assign(transcript, word->iter->CurrentLength());
 
         const char *format=word->iter->Next();
         if (!format) return -1;
     }
     if (header != MatrixFile::Header::NONE) {
-        M = (int)atof(word->Next());
-        N = (int)atof(word->Next());
+        M = (int)atof(IterNextString(word));
+        N = (int)atof(IterNextString(word));
     } else {
         if (MatrixFile::ReadDimensions(word, &M, &N)) return -1;
     }
 
     if (!F) F = new vector<string>;
     else F->clear(); 
-    for (const char *line=word->iter->Next(); line; line=word->iter->Next()) F->push_back(line);
+    for (string line = IterNextString(word->iter); !word->iter->Done(); line = IterNextString(word->iter)) F->push_back(line);
     return 0;
 }
 
@@ -591,8 +594,8 @@ int MatrixFile::Read(IterWordIter *word, int header) {
     int M, N;
     if (header == Header::DIM_PLUS) { if (ReadHeader(word, &H) < 0) return -1; }
     if (header != Header::NONE) {
-        M = (int)atof(word->Next());
-        N = (int)atof(word->Next());
+        M = (int)atof(IterNextString(word));
+        N = (int)atof(IterNextString(word));
     } else {
         if (ReadDimensions(word, &M, &N)) return -1;
     }
@@ -602,9 +605,9 @@ int MatrixFile::Read(IterWordIter *word, int header) {
 
     MatrixIter(F) {
         double *ov = &F->row(i)[j];
-        const char *w = word->Next();
-        if (!w) FATAL("%s", "MatrixFile: unexpected EOF");
-        if (!strcmp(w, "-1.#INF00") || !strcmp(w, "-inf")) { *ov = -INFINITY; continue; }
+        string w = IterNextString(word);
+        if (word->Done()) FATAL("%s", "MatrixFile: unexpected EOF");
+        if (w == "-1.#INF00" || w == "-inf") { *ov = -INFINITY; continue; }
         *ov = atof(w);
     }
     return 0;
@@ -692,7 +695,7 @@ int MatrixFile::ReadHeader(IterWordIter *word, string *hdrout) {
 
     const char *transcript=word->iter->Next();
     if (!transcript) return -1;
-    *hdrout = transcript;
+    hdrout->assign(transcript, word->iter->CurrentLength());
 
     const char *format=word->iter->Next();
     if (!format) return -1;
@@ -703,11 +706,11 @@ int MatrixFile::ReadHeader(IterWordIter *word, string *hdrout) {
 int MatrixFile::ReadDimensions(IterWordIter *word, int *M, int *N) {
     int last_line_count = 1, rows = 0, cols = 0;
     for (const char *w = word->Next(); /**/; w = word->Next()) {
-        if (last_line_count != word->line_count) {
-            if (word->line_count == 2) *N = cols;
+        if (last_line_count != word->first_count) {
+            if (word->first_count == 2) *N = cols;
             else if (*N != cols) FATAL(*N, " != ", cols);
 
-            last_line_count = word->line_count;
+            last_line_count = word->first_count;
             cols = 0;
             rows++;
         }

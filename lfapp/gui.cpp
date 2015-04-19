@@ -140,16 +140,10 @@ int KeyboardGUI::ReadHistory(const string &dir, const string &name) {
     return 0;
 }
 
-void TextGUI::Line::InitFlow() {
-    data->flow = Flow(&data->box, parent->font, &data->glyphs, &parent->layout);
-    data->flow.layout.pad_wide_chars = 1;
-}
-
 int TextGUI::Line::Erase(int x, int l) {
     if (!(l = max(0, min(Size() - x, l)))) return 0;
     bool token_processing = parent->token_processing;
-    String16 text = token_processing ? DrawableBoxRun(&data->glyphs[x], l).Text16() : String16();
-    LineTokenProcessor<short> update(token_processing ? this : 0, x, String16Piece(text), l);
+    LineTokenProcessor update(token_processing ? this : 0, x, DrawableBoxRun(&data->glyphs[x], l), l);
     if (token_processing) update.ProcessUpdate();
     data->glyphs.Erase(x, l, true);
     data->flow.p.x = data->glyphs.Position(data->glyphs.Size()).x;
@@ -159,18 +153,19 @@ int TextGUI::Line::Erase(int x, int l) {
 }
 
 template <class X> int TextGUI::Line::InsertTextAt(int x, const StringPieceT<X> &v, int attr) {
-    int ret = 0;
-    bool token_processing = parent->token_processing;
-    LineTokenProcessor<X> update(token_processing ? this : 0, x, v, 0);
+    DrawableBoxArray b;
+    b.attr.source = data->glyphs.attr.source;
+    EncodeText(&b, data->glyphs.Position(x).x, v, attr);
+    int ret = b.Size();
+
+    bool token_processing = parent->token_processing, append = x == Size();
+    LineTokenProcessor update(token_processing ? this : 0, x, DrawableBoxRun(&b[0], ret), 0);
     if (token_processing) update.ProcessResult();
-    if (x == Size()) ret = data->flow.AppendText(v, attr);
-    else {
-        DrawableBoxArray b;
-        parent->font->Encode(v, Box(data->glyphs.Position(x),0,0), &b, Font::DrawFlag::AssignFlowX, attr);
-        ret = b.Size();
-        data->glyphs.InsertAt(x, b.data);
-        if (update.nw) update.ni += ret;
-    }
+
+    data->glyphs.InsertAt(x, b);
+    data->flow.p.x = data->glyphs.Position(data->glyphs.Size()).x;
+    if (!append && update.nw) update.ni += ret;
+    
     if (token_processing) update.ProcessUpdate();
     return ret;
 }
@@ -180,24 +175,22 @@ template <class X> int TextGUI::Line::OverwriteTextAt(int x, const StringPieceT<
     if (pad) data->flow.AppendText(basic_string<X>(pad, ' '), attr);
 
     DrawableBoxArray b;
-    parent->font->Encode(v, Box(data->glyphs.Position(x),0,0), &b, Font::DrawFlag::AssignFlowX, attr);
-    if ((size = b.Size()) && (grow = size - v.len) && (pad = max(0, x + size - Size())))
-        data->flow.AppendText(basic_string<X>(pad, ' '), attr);
+    b.attr.source = data->glyphs.attr.source;
+    EncodeText(&b, data->glyphs.Position(x).x, v, attr);
+    if ((size = b.Size()) && size - v.len > 0 && (grow = max(0, x + size - Size())))
+        data->flow.AppendText(basic_string<X>(grow, ' '), attr);
+    DrawableBoxRun orun(&data->glyphs[x], size), nrun(&b[0], size);
 
-    // XXX use character BoxRun iterators
     bool token_processing = parent->token_processing;
-    basic_string<X> text = token_processing           ? DrawableBoxRun(&data->glyphs[x], size).Text<X>(0, size) : basic_string<X>();
-    basic_string<X> newt = (token_processing && grow) ? DrawableBoxRun(&b[0],            size).Text<X>(0, size) : basic_string<X>();
-    StringPieceT<X> newv(newt);
-    LineTokenProcessor<X> update(token_processing ? this : 0, x, StringPieceT<X>(text), size);
+    LineTokenProcessor update(token_processing ? this : 0, x, orun, size);
     if (token_processing) {
-        update.FindBoundaryConditions(grow ? newv : v, &update.osw, &update.oew);
+        update.FindBoundaryConditions(nrun, &update.osw, &update.oew);
         update.ProcessUpdate();
     }
     data->glyphs.OverwriteAt(x, b.data);
     data->flow.p.x = data->glyphs.Position(data->glyphs.Size()).x;
     if (token_processing) {
-        update.PrepareOverwrite(grow ? newv : v);
+        update.PrepareOverwrite(nrun);
         update.ProcessUpdate();
     }
     return size;
@@ -241,8 +234,7 @@ point TextGUI::Line::Draw(point pos, int relayout_width, int g_offset, int g_len
     return p - point(0, parent->font->Height() + data->glyphs.height);
 }
 
-template <class X>
-TextGUI::LineTokenProcessor<X>::LineTokenProcessor(TextGUI::Line *l, int o, const StringPieceT<X> &V, int Erase)
+TextGUI::LineTokenProcessor::LineTokenProcessor(TextGUI::Line *l, int o, const DrawableBoxRun &V, int Erase)
     : L(l), x(o), size(L?L->Size():0), erase(Erase) {
     if (!L) return;
     const DrawableBoxArray &glyphs = L->data->glyphs;
@@ -257,26 +249,27 @@ TextGUI::LineTokenProcessor<X>::LineTokenProcessor(TextGUI::Line *l, int o, cons
     if ((pw && nw) || (nw && ew)) FindNext(glyphs);
 }
 
-template <class X> void TextGUI::LineTokenProcessor<X>::ProcessUpdate() {
-    int tokens = 0;
-    if (!v.len) return;
-    StringWordIterT<X> word(v, isspace, 0, StringWordIter::Flag::InPlace);
-    for (const X *w = word.Next(); w; w = word.Next(), tokens++) {
-        int start_offset = w - v.buf, end_offset = start_offset + word.wordlen;
-        bool first = start_offset == 0, last = end_offset == v.len;
+void TextGUI::LineTokenProcessor::ProcessUpdate() {
+    int tokens = 0, vl = v.Size();
+    if (!vl) return;
+
+    StringWordIterT<DrawableBox> word(v.data.buf, v.data.len, isspace, 0);
+    for (const DrawableBox *w = word.Next(); w; w = word.Next(), tokens++) {
+        int start_offset = w - v.data.buf, end_offset = start_offset + word.cur_len;
+        bool first = start_offset == 0, last = end_offset == v.data.len;
         if (first && last && pw && nw) L->parent->UpdateToken(L, pi, ni-pi+1,                             erase ? -1 : 1);
         else if (first && pw)          L->parent->UpdateToken(L, pi, x+end_offset-pi,                     erase ? -2 : 2);
         else if (last && nw)           L->parent->UpdateToken(L, x+start_offset, ni-x-start_offset+1,     erase ? -3 : 3);
         else                           L->parent->UpdateToken(L, x+start_offset, end_offset-start_offset, erase ? -4 : 4);
     }
-    if ((!tokens || overwrite) && v.len) {
+    if ((!tokens || overwrite) && vl) {
         const DrawableBoxArray &glyphs = L->data->glyphs;
-        if (pw && !sw && osw) { FindPrev(glyphs); L->parent->UpdateToken(L, pi, x-pi,              erase ? -5 : 5); }
-        if (nw && !ew && oew) { FindNext(glyphs); L->parent->UpdateToken(L, x+v.len, ni-x-v.len+1, erase ? -6 : 6); }
+        if (pw && !sw && osw) { FindPrev(glyphs); L->parent->UpdateToken(L, pi, x-pi,        erase ? -5 : 5); }
+        if (nw && !ew && oew) { FindNext(glyphs); L->parent->UpdateToken(L, x+vl, ni-x-vl+1, erase ? -6 : 6); }
     }
 }
 
-template <class X> void TextGUI::LineTokenProcessor<X>::ProcessResult() {
+void TextGUI::LineTokenProcessor::ProcessResult() {
     const DrawableBoxArray &glyphs = L->data->glyphs;
     if      (pw && nw) L->parent->UpdateToken(L, pi, ni - pi + 1, erase ? 7 : -7);
     else if (pw && sw) L->parent->UpdateToken(L, pi, x  - pi,     erase ? 8 : -8);
@@ -399,11 +392,11 @@ void TextArea::Write(const string &s, bool update_fb, bool release_fb) {
     ScopedDrawMode drawmode(update_fb ? DrawMode::_2D : DrawMode::NullOp);
     StringLineIter add_lines(s, StringLineIter::Flag::BlankLines);
     for (const char *add_line = add_lines.Next(); add_line; add_line = add_lines.Next()) {
-        bool append = !write_newline && add_lines.first && *add_line && line.ring.count;
+        bool append = !write_newline && add_lines.first && add_lines.CurrentLength() && line.ring.count;
         Line *l = append ? &line[-1] : line.InsertAt(-1);
         if (!append) { l->Clear(); if (start_line) { start_line++; end_line++; } }
         if (write_timestamp) l->AppendText(StrCat(logtime(Now()), " "), cursor.attr);
-        l->AppendText(add_line, cursor.attr);
+        l->AppendText(StringPiece(add_line, add_lines.CurrentLength()), cursor.attr);
         l->Layout(wrap ? fb->w : 0);
         if (scrolled_lines) v_scrolled = (float)++scrolled_lines / (WrappedLines()-1);
         if (!update_fb || start_line) continue;
@@ -1009,7 +1002,8 @@ void Terminal::FlushParseText() {
     font = GetAttr(cursor.attr)->font;
     CHECK_RANGE(term_cursor.x-1, 0, term_width);
     String16 input_text = String::ToUTF16(parse_text, &consumed);
-    TerminalTrace("Terminal: FlushParseText('%s')\n", StringPiece(parse_text.data(), consumed).str().c_str());
+    TerminalTrace("Terminal: FlushParseText('%s').size = [%zd, %d]\n",
+                  StringPiece(parse_text.data(), consumed).str().c_str(), input_text.size(), consumed);
     for (int wrote = 0; wrote < input_text.size(); wrote += write_size) {
         if (wrote) Newline(true);
         Line *l = GetCursorLine();

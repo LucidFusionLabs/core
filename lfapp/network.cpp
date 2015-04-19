@@ -1864,12 +1864,12 @@ struct SMTPClientConnection : public Query {
     int Read(Connection *c) {
         int processed = 0;
         StringLineIter lines(StringPiece(c->rb, c->rl), StringLineIter::Flag::BlankLines);
-        for (const char *line = lines.Next(); line; line = lines.Next()) {
-            processed = lines.offset;
+        for (string line = IterNextString(&lines); !lines.Done(); line = IterNextString(&lines)) {
+            processed = lines.next_offset;
             if (!response_lines.empty()) response_lines.append("\r\n");
-            response_lines.append(line, lines.linelen);
+            response_lines.append(line, lines.cur_len);
 
-            const char *dash = NextChar(line, notnum);
+            const char *dash = NextChar(line.c_str(), notnum);
             bool multiline = dash && *dash == '-';
             if (multiline) continue;
 
@@ -1958,20 +1958,22 @@ struct SMTPServerConnection : public Query {
 
     int ReadCommands(Connection *c, const char *in, int len) {
         int processed = 0;
-        StringLineIter lines(StringPiece(in, len), StringLineIter::Flag::BlankLines | StringLineIter::Flag::InPlace);
-        for (const char *line = lines.Next(); line && lines.offset>=0 && !in_data; line = lines.Next()) {
-            processed = lines.offset;
-            StringWordIter words(StringPiece(line, lines.linelen), isint3<' ', '\t', ':'>);
-            string cmd = toupper(BlankNull(words.Next()));
-            string a1_orig = BlankNull(words.Next());
+        StringLineIter lines(StringPiece(in, len), StringLineIter::Flag::BlankLines);
+        for (const char *line = lines.Next(); line && lines.next_offset>=0 && !in_data; line = lines.Next()) {
+            processed = lines.next_offset;
+            StringWordIter words(line, lines.cur_len, isint3<' ', '\t', ':'>);
+            string cmd = toupper(IterNextString(&words));
+            string a1_orig = IterNextString(&words);
             string a1 = toupper(a1_orig), response="500 unrecognized command\r\n";
 
             if (cmd == "MAIL" && a1 == "FROM") {
                 ClearStateTable();
-                message.mail_from = words.Remaining();
+                message.mail_from = IterRemainingString(&words);
                 response = "250 OK\r\n";
             }
-            else if (cmd == "RCPT" && a1 == "TO") { message.rcpt_to.push_back(words.Remaining()); response="250 OK\r\n"; }
+            else if (cmd == "RCPT" && a1 == "TO") {
+                message.rcpt_to.push_back(IterRemainingString(&words));
+                response="250 OK\r\n"; }
             else if (cmd == "DATA") {
                 if      (!message.rcpt_to.size())   response = "503 valid RCPT command must precede DATA\r\n";
                 else if (!message.mail_from.size()) response = "503 valid FROM command must precede DATA\r\n";
@@ -1990,11 +1992,11 @@ struct SMTPServerConnection : public Query {
 
     int ReadData(Connection *c, const char *in, int len) {
         int processed = 0;
-        StringLineIter lines(StringPiece(in, len), StringLineIter::Flag::BlankLines | StringLineIter::Flag::InPlace);
-        for (const char *line = lines.Next(); line && lines.offset>=0; line = lines.Next()) {
-            processed = lines.offset;
-            if (lines.linelen == 1 && *line == '.') { in_data=0; break; }
-            message.content.append(line, lines.linelen);
+        StringLineIter lines(StringPiece(in, len), StringLineIter::Flag::BlankLines);
+        for (const char *line = lines.Next(); line && lines.next_offset>=0; line = lines.Next()) {
+            processed = lines.next_offset;
+            if (lines.cur_len == 1 && *line == '.') { in_data=0; break; }
+            message.content.append(line, lines.cur_len);
             message.content.append("\r\n");
         }
         if (!in_data) {

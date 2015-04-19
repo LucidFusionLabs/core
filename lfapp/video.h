@@ -356,6 +356,7 @@ struct DrawableBox {
     int LeftBound (const Drawable::Attr *A) const { return box.x - (drawable ? drawable->LeftBearing(A) : 0); }
     int RightBound(const Drawable::Attr *A) const { return box.x + (drawable ? (drawable->Advance(&box, A) - drawable->LeftBearing(A)) : box.w); }
     int TopBound  (const Drawable::Attr *A) const { return box.y + (drawable ? drawable->Ascender(&box, A) : box.h); }
+    int Id() const { return drawable ? drawable->Id() : 0; }
     typedef ArrayMemberPairSegmentIter<DrawableBox, int, &DrawableBox::attr_id, &DrawableBox::line_id> Iterator;
     typedef ArrayMemberSegmentIter    <DrawableBox, int, &DrawableBox::attr_id>                     RawIterator;
 };
@@ -732,11 +733,14 @@ struct DrawableBoxRun {
     DrawableBoxRun(const DrawableBox *buf=0, int len=0)                                        : attr(0), data(buf, len), line(0) {}
     DrawableBoxRun(const DrawableBox *buf,   int len, const Drawable::Attr *A, const Box *L=0) : attr(A), data(buf, len), line(L) {}
 
+    int                Size () const { return data.size(); }
+    const DrawableBox &First() const { return data[0]; }
+    const DrawableBox &Last () const { return data[Size()-1]; }
+
     template <class K> basic_string<K> Text(int i, int l) const {
         basic_string<K> t(l, 0);
         auto bi = &data.buf[i];
-        for (auto ti = t.begin(), te = t.end(); ti != te; ++ti, ++bi)
-            *ti = bi->drawable ? bi->drawable->Id() : 0;
+        for (auto ti = t.begin(), te = t.end(); ti != te; ++ti, ++bi) *ti = bi->Id();
         return t;
     }
     string   Text  ()             const { return Text<char> (0, data.size()); }
@@ -798,7 +802,10 @@ struct DrawableBoxArray {
         return LFL::PushBack(data, DrawableBox(box, drawable, cur_attr, line.size()));
     }
 
-    void InsertAt(int o, const DrawableBoxArray &x) { InsertAt(o, x.data); }
+    void InsertAt(int o, const DrawableBoxArray &x) {
+        if (!Size() && !o) *this = x;
+        else InsertAt(o, x.data);
+    }
     void InsertAt(int o, const vector<DrawableBox> &x) {
         CHECK_EQ(0, line_ind.size());
         point p(x.size() ? BoundingWidth(x.front(), x.back()) : 0, 0);

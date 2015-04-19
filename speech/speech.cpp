@@ -62,7 +62,7 @@ PronunciationDict *PronunciationDict::instance() {
     return inst;
 }
 
-int PronunciationDict::readDictionary(Iter *in, PronunciationDict *out) {
+int PronunciationDict::readDictionary(StringIter *in, PronunciationDict *out) {
     for (const char *line = in->Next(); line; line = in->Next()) {
         const char *c=line; if ((*c) == ';') continue; /* skip comments */
 
@@ -89,15 +89,16 @@ int PronunciationDict::readDictionary(Iter *in, PronunciationDict *out) {
 
 int PronunciationDict::readPronunciation(const char *in, int len, char *phonesOut, char *accentOut, int outlen) {
     StringWordIter phones(StringPiece(in, len)); int outi=0;
-    for (const char *phone=phones.Next(); phone; phone=phones.Next()) {
+    for (const char *phone_text=phones.Next(); phone_text; phone_text=phones.Next()) {
         if (outi >= outlen) return -1;
+        string phone(phone_text, phones.cur_len);
 
         int accent = LengthChar(StringPiece(phone), isalpha);
         char stress = phone[accent];
-        ((char *)phone)[accent]=0;
+        ((char *)phone_text)[accent]=0;
         accent = isdigit(stress) ? stress - '0' : 0;
 
-        if (!(phonesOut[outi] = Phoneme::id(phone, 0))) return -1;
+        if (!(phonesOut[outi] = Phoneme::id(phone.c_str(), 0))) return -1;
         accentOut[outi] = accent;
         outi++;
     }
@@ -112,10 +113,12 @@ const char *PronunciationDict::pronounce(const char *in) {
 }
 
 int PronunciationDict::pronounce(const char *utterance, const char **w, const char **wa, int *phones, int max) {
-    StringWordIter script(utterance); int words=0; *phones=0;
-    for (const char *word=script.Next(); word; word=script.Next()) {
-        const char *pronunciation = pronounce(word);
-        if (!pronunciation || words+1 >= max) { DEBUG("pronunciation %s count=%d", word, words); return -1; }
+    *phones=0;
+    int words=0;
+    StringWordIter script(utterance);
+    for (string word = IterNextString(&script); !script.Done(); word = IterNextString(&script)) {
+        const char *pronunciation = pronounce(word.c_str());
+        if (!pronunciation || words+1 >= max) { DEBUG("pronunciation %s count=%d", word.c_str(), words); return -1; }
 
         int len = strlen(pronunciation);
         (*phones) += len;
@@ -411,26 +414,25 @@ string AcousticModel::flags() {
 
 void AcousticModel::loadflags(const char *flags) {
     StringWordIter iter(flags, iscomma);
-    for (const char *k = iter.Next(); k; k = iter.Next()) {
-
+    for (string k = IterNextString(&iter); !iter.Done(); k = IterNextString(&iter)) {
         char *v; double val;
-        if ((v = (char*)strchr(k, '='))) { *v++=0; val=atof(v); }
+        if ((v = (char*)strchr(k.c_str(), '='))) { *v++=0; val=atof(v); }
 
-        if      (!strcmp(k, "sr"))         FLAGS_sample_rate = val;
-        else if (!strcmp(k, "type"))       FLAGS_feat_type   = v;
-        else if (!strcmp(k, "minfreq"))    FLAGS_feat_minfreq  = val;
-        else if (!strcmp(k, "maxfreq"))    FLAGS_feat_maxfreq  = val;
-        else if (!strcmp(k, "ffthop"))     FLAGS_feat_hop      = val;
-        else if (!strcmp(k, "fftwin"))     FLAGS_feat_window   = val;
-        else if (!strcmp(k, "mels"))       FLAGS_feat_melbands = val;
-        else if (!strcmp(k, "ceps"))       FLAGS_feat_cepcoefs = val;
-        else if (!strcmp(k, "filterzeroth")) Features::FilterZeroth          = 1;
-        else if (!strcmp(k, "cmn"))          Features::MeanNormalization     = 1;
-        else if (!strcmp(k, "cvn"))          Features::VarianceNormalization = 1;
-        else if (!strcmp(k, "delta"))        Features::Deltas                = 1;
-        else if (!strcmp(k, "deltadelta"))   Features::DeltaDeltas           = 1;
-        else if (!strcmp(k, "preemph")) { FLAGS_feat_preemphasis_filter = val; FLAGS_feat_preemphasis = 1; }
-        else if (!strcmp(k, "triphone")) { FLAGS_TriphoneModel = 1; }
+        if      (k == "sr")         FLAGS_sample_rate = val;
+        else if (k == "type")       FLAGS_feat_type   = v;
+        else if (k == "minfreq")    FLAGS_feat_minfreq  = val;
+        else if (k == "maxfreq")    FLAGS_feat_maxfreq  = val;
+        else if (k == "ffthop")     FLAGS_feat_hop      = val;
+        else if (k == "fftwin")     FLAGS_feat_window   = val;
+        else if (k == "mels")       FLAGS_feat_melbands = val;
+        else if (k == "ceps")       FLAGS_feat_cepcoefs = val;
+        else if (k == "filterzeroth") Features::FilterZeroth          = 1;
+        else if (k == "cmn")          Features::MeanNormalization     = 1;
+        else if (k == "cvn")          Features::VarianceNormalization = 1;
+        else if (k == "delta")        Features::Deltas                = 1;
+        else if (k == "deltadelta")   Features::DeltaDeltas           = 1;
+        else if (k == "preemph") { FLAGS_feat_preemphasis_filter = val; FLAGS_feat_preemphasis = 1; }
+        else if (k == "triphone") { FLAGS_TriphoneModel = 1; }
     }
     INFO("loaded flags: ", flags);
 }

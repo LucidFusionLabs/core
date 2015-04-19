@@ -193,22 +193,22 @@ Time RFC822Date(const char *text) {
     struct tm tm; memset(&tm, 0, sizeof(tm));
     const char *comma = strchr(text, ','), *start = comma ? comma + 1 : text, *parsetext;
     StringWordIter words(start);
-    tm.tm_mday = atoi(BlankNull(words.Next()));
-    tm.tm_mon = RFC822Month(BlankNull(words.Next()));
-    tm.tm_year = atoi(BlankNull(words.Next())) - 1900;
-    const char *timetext = BlankNull(words.Next());
-    if (!RFC822Time(timetext, &tm.tm_hour, &tm.tm_min, &tm.tm_sec))
+    tm.tm_mday = atoi(IterNextString(&words));
+    tm.tm_mon = RFC822Month(IterNextString(&words).c_str());
+    tm.tm_year = atoi(IterNextString(&words)) - 1900;
+    string timetext = IterNextString(&words);
+    if (!RFC822Time(timetext.c_str(), &tm.tm_hour, &tm.tm_min, &tm.tm_sec))
         { ERROR("RFC822Date('", text, "') RFC822Time('", timetext, "') failed"); return Time(0); }
-    int hours_from_gmt = RFC822TimeZone(BlankNull(words.Next()));
+    int hours_from_gmt = RFC822TimeZone(IterNextString(&words).c_str());
     return Seconds(timegm(&tm) - hours_from_gmt * 3600);
 }
 
 bool NumericTime(const char *text, int *hour, int *min, int *sec) {
     int textlen = strlen(text);
     StringWordIter words(StringPiece(text, textlen), isint<':'>);
-    *hour = atoi(BlankNull(words.Next()));
-    *min = atoi(BlankNull(words.Next()));
-    *sec = atoi(BlankNull(words.Next()));
+    *hour = atoi(IterNextString(&words));
+    *min = atoi(IterNextString(&words));
+    *sec = atoi(IterNextString(&words));
     if (textlen >= 2 && !strcmp(text+textlen-2, "pm") && *hour != 12) *hour += 12;
     return true;
 }
@@ -216,9 +216,9 @@ bool NumericTime(const char *text, int *hour, int *min, int *sec) {
 Time NumericDate(const char *datetext, const char *timetext, const char *timezone) {
     struct tm tm; memset(&tm, 0, sizeof(tm));
     StringWordIter words(datetext, isint<'/'>);
-    tm.tm_mon = atoi(BlankNull(words.Next())) - 1;
-    tm.tm_mday = atoi(BlankNull(words.Next()));
-    tm.tm_year = atoi(BlankNull(words.Next())) - 1900;
+    tm.tm_mon = atoi(IterNextString(&words)) - 1;
+    tm.tm_mday = atoi(IterNextString(&words));
+    tm.tm_year = atoi(IterNextString(&words)) - 1900;
     NumericTime(timetext, &tm.tm_hour, &tm.tm_min, &tm.tm_sec);
     int hours_from_gmt = RFC822TimeZone(BlankNull(timezone));
     return Seconds(timegm(&tm) - hours_from_gmt * 3600);
