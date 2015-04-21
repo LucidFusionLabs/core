@@ -1126,7 +1126,7 @@ void ProcessAPIClient::HandleMessagesLoop() {
                     CHECK(!content_res.Read(&res_in));
                     IPCTrace("ContentResource fn='%s'\n", content_res.name.buf);
 
-                    const int max_image_size = 4000000;
+                    const int max_image_size = 1000000;
                     Texture orig_tex, scaled_tex, *tex = &orig_tex;
                     Asset::LoadTexture(content_res.buf.data(), content_res.name.data(), content_res.buf.size(), &orig_tex, 0);
                     if (orig_tex.BufferSize() >= max_image_size) {

@@ -144,7 +144,10 @@ int TextGUI::Line::Erase(int x, int l) {
     if (!(l = max(0, min(Size() - x, l)))) return 0;
     bool token_processing = parent->token_processing;
     LineTokenProcessor update(token_processing ? this : 0, x, DrawableBoxRun(&data->glyphs[x], l), l);
-    if (token_processing) update.ProcessUpdate();
+    if (token_processing) {
+        update.SetNewLineBoundaryConditions(!x ? update.nw : update.lbw, x + l == update.line_size ? update.pw : update.lew);
+        update.ProcessUpdate();
+    }
     data->glyphs.Erase(x, l, true);
     data->flow.p.x = data->glyphs.Position(data->glyphs.Size()).x;
     if (update.nw) update.ni -= l;
@@ -160,7 +163,10 @@ template <class X> int TextGUI::Line::InsertTextAt(int x, const StringPieceT<X> 
 
     bool token_processing = parent->token_processing, append = x == Size();
     LineTokenProcessor update(token_processing ? this : 0, x, DrawableBoxRun(&b[0], ret), 0);
-    if (token_processing) update.ProcessResult();
+    if (token_processing) {
+        update.SetNewLineBoundaryConditions(!x ? update.sw : update.lbw, x == update.line_size-1 ? update.ew : update.lew);
+        update.ProcessResult();
+    }
 
     data->glyphs.InsertAt(x, b);
     data->flow.p.x = data->glyphs.Position(data->glyphs.Size()).x;
@@ -185,6 +191,7 @@ template <class X> int TextGUI::Line::OverwriteTextAt(int x, const StringPieceT<
     LineTokenProcessor update(token_processing ? this : 0, x, orun, size);
     if (token_processing) {
         update.FindBoundaryConditions(nrun, &update.osw, &update.oew);
+        update.SetNewLineBoundaryConditions(!x ? update.osw : update.lbw, x + size == update.line_size ? update.oew : update.lew);
         update.ProcessUpdate();
     }
     data->glyphs.OverwriteAt(x, b.data);
@@ -196,10 +203,10 @@ template <class X> int TextGUI::Line::OverwriteTextAt(int x, const StringPieceT<
     return size;
 }
 
-template <class X> int TextGUI::Line::UpdateText(int x, const StringPieceT<X> &v, int attr, int max_width, bool *append_out) {
-    bool append = 0;
+template <class X> int TextGUI::Line::UpdateText(int x, const StringPieceT<X> &v, int attr, int max_width, bool *append_out, int mode) {
+    bool append = 0, insert_mode = mode == -1 ? parent->insert_mode : mode;
     int size = Size(), ret = 0;
-    if (parent->insert_mode) {
+    if (insert_mode) {
         if (size < x)                 data->flow.AppendText(basic_string<X>(x - size, ' '), attr);
         if ((append = (Size() == x))) ret  = AppendText  (   v, attr);
         else                          ret  = InsertTextAt(x, v, attr);
@@ -212,8 +219,8 @@ template <class X> int TextGUI::Line::UpdateText(int x, const StringPieceT<X> &v
     return ret;
 }
 
-template int TextGUI::Line::UpdateText<char>   (int x, const StringPiece   &v, int attr, int max_width, bool *append);
-template int TextGUI::Line::UpdateText<short>  (int x, const String16Piece &v, int attr, int max_width, bool *append);
+template int TextGUI::Line::UpdateText<char>   (int x, const StringPiece   &v, int attr, int max_width, bool *append, int);
+template int TextGUI::Line::UpdateText<short>  (int x, const String16Piece &v, int attr, int max_width, bool *append, int);
 template int TextGUI::Line::InsertTextAt<char> (int x, const StringPiece   &v, int attr);
 template int TextGUI::Line::InsertTextAt<short>(int x, const String16Piece &v, int attr);
 
@@ -235,18 +242,19 @@ point TextGUI::Line::Draw(point pos, int relayout_width, int g_offset, int g_len
 }
 
 TextGUI::LineTokenProcessor::LineTokenProcessor(TextGUI::Line *l, int o, const DrawableBoxRun &V, int Erase)
-    : L(l), x(o), size(L?L->Size():0), erase(Erase) {
+    : L(l), x(o), line_size(L?L->Size():0), erase(Erase) {
     if (!L) return;
     const DrawableBoxArray &glyphs = L->data->glyphs;
     const Drawable *p=0, *n=0;
-    CHECK_LE(x, size);
+    CHECK_LE(x, line_size);
     LoadV(V);
     ni = x + (Erase ? Erase : 0);
-    nw = ni<size && (n=glyphs[ni ].drawable) && !isspace(n->Id());
-    pw = x >0    && (p=glyphs[x-1].drawable) && !isspace(p->Id());
+    nw = ni<line_size && (n=glyphs[ni ].drawable) && !isspace(n->Id());
+    pw = x >0         && (p=glyphs[x-1].drawable) && !isspace(p->Id());
     pi = x - pw;
     if ((pw && nw) || (pw && sw)) FindPrev(glyphs);
     if ((pw && nw) || (nw && ew)) FindNext(glyphs);
+    FindBoundaryConditions(DrawableBoxRun(&glyphs[0], line_size), &lbw, &lew);
 }
 
 void TextGUI::LineTokenProcessor::ProcessUpdate() {
@@ -257,23 +265,23 @@ void TextGUI::LineTokenProcessor::ProcessUpdate() {
     for (const DrawableBox *w = word.Next(); w; w = word.Next(), tokens++) {
         int start_offset = w - v.data.buf, end_offset = start_offset + word.cur_len;
         bool first = start_offset == 0, last = end_offset == v.data.len;
-        if (first && last && pw && nw) L->parent->UpdateToken(L, pi, ni-pi+1,                             erase ? -1 : 1);
-        else if (first && pw)          L->parent->UpdateToken(L, pi, x+end_offset-pi,                     erase ? -2 : 2);
-        else if (last && nw)           L->parent->UpdateToken(L, x+start_offset, ni-x-start_offset+1,     erase ? -3 : 3);
-        else                           L->parent->UpdateToken(L, x+start_offset, end_offset-start_offset, erase ? -4 : 4);
+        if (first && last && pw && nw) L->parent->UpdateToken(L, pi, ni-pi+1,                             erase ? -1 : 1, this);
+        else if (first && pw)          L->parent->UpdateToken(L, pi, x+end_offset-pi,                     erase ? -2 : 2, this);
+        else if (last && nw)           L->parent->UpdateToken(L, x+start_offset, ni-x-start_offset+1,     erase ? -3 : 3, this);
+        else                           L->parent->UpdateToken(L, x+start_offset, end_offset-start_offset, erase ? -4 : 4, this);
     }
     if ((!tokens || overwrite) && vl) {
         const DrawableBoxArray &glyphs = L->data->glyphs;
-        if (pw && !sw && osw) { FindPrev(glyphs); L->parent->UpdateToken(L, pi, x-pi,        erase ? -5 : 5); }
-        if (nw && !ew && oew) { FindNext(glyphs); L->parent->UpdateToken(L, x+vl, ni-x-vl+1, erase ? -6 : 6); }
+        if (pw && !sw && osw) { FindPrev(glyphs); L->parent->UpdateToken(L, pi, x-pi,        erase ? -5 : 5, this); }
+        if (nw && !ew && oew) { FindNext(glyphs); L->parent->UpdateToken(L, x+vl, ni-x-vl+1, erase ? -6 : 6, this); }
     }
 }
 
 void TextGUI::LineTokenProcessor::ProcessResult() {
     const DrawableBoxArray &glyphs = L->data->glyphs;
-    if      (pw && nw) L->parent->UpdateToken(L, pi, ni - pi + 1, erase ? 7 : -7);
-    else if (pw && sw) L->parent->UpdateToken(L, pi, x  - pi,     erase ? 8 : -8);
-    else if (nw && ew) L->parent->UpdateToken(L, x,  ni - x + 1,  erase ? 9 : -9);
+    if      (pw && nw) L->parent->UpdateToken(L, pi, ni - pi + 1, erase ? 7 : -7, this);
+    else if (pw && sw) L->parent->UpdateToken(L, pi, x  - pi,     erase ? 8 : -8, this);
+    else if (nw && ew) L->parent->UpdateToken(L, x,  ni - x + 1,  erase ? 9 : -9, this);
 }
 
 TextGUI::LinesFrameBuffer *TextGUI::LinesFrameBuffer::Attach(TextGUI::LinesFrameBuffer **last_fb) {
@@ -362,19 +370,25 @@ void TextGUI::DrawCursor(point p) {
     }
 }
 
-void TextGUI::UpdateToken(Line *L, int word_offset, int word_len, int update_type) {
-    int url_offset = -1, font_height = font->Height();
+void TextGUI::UpdateToken(Line *L, int word_offset, int word_len, int update_type, const LineTokenProcessor*) {
     const DrawableBoxArray &glyphs = L->data->glyphs;
     CHECK_LE(word_offset + word_len, glyphs.Size());
     string text = DrawableBoxRun(&glyphs[word_offset], word_len).Text();
+    UpdateLongToken(L, word_offset, L, word_offset+word_len-1, text, update_type);
+}
+
+void TextGUI::UpdateLongToken(Line *BL, int beg_offset, Line *EL, int end_offset, const string &text, int update_type) {
+    int url_offset = -1, fh = font->Height();
     if      (PrefixMatch(text, "http://"))  url_offset = 7;
     else if (PrefixMatch(text, "https://")) url_offset = 8;
     if (url_offset >= 0) {
-        int lx = glyphs[word_offset].box.x, rx = glyphs[word_offset+word_len-1].box.right();
-        Box box(lx, L->p.y - font_height, rx - lx, font_height);
-        if (update_type < 0) L->data->links.erase(word_offset);
+        if (update_type < 0) BL->data->links.erase(beg_offset);
         else {
-            auto i = Insert(L->data->links, word_offset, shared_ptr<Link>(new Link(this, &mouse_gui, box, text)));
+            LinesFrameBuffer *fb = GetFrameBuffer();
+            Box gb = Box(BL->data->glyphs[beg_offset].box).SetY(BL->p.y - fh);
+            Box ge = Box(EL->data->glyphs[end_offset].box).SetY(EL->p.y - fh);
+            Box3 box(Box(fb->Width(), fb->Height()), gb.Position(), ge.Position() + point(ge.w, 0), fh, fh);
+            auto i = Insert(BL->data->links, beg_offset, shared_ptr<Link>(new Link(this, &mouse_gui, box, text)));
             if (new_link_cb) new_link_cb(i->second);
         }
     }
@@ -501,9 +515,10 @@ void TextArea::Draw(const Box &b, bool draw_cursor) {
     if (selection.changing) DrawSelection();
     if (hover_link) {
         int fb_h = line_fb.Height();
-        point p = hover_link->box.BottomLeft();
+        // XXX-Z multi-line underline
+        point p = hover_link->box.v[0].BottomLeft();
         p.y = RingIndex::Wrap(p.y + line_fb.scroll.y * fb_h, fb_h);
-        glLine(p, point(hover_link->box.BottomRight().x, p.y), &Color::white);
+        glLine(p, point(hover_link->box.v[0].BottomRight().x, p.y), &Color::white);
         if (hover_link_cb) hover_link_cb(hover_link);
     }
 }
@@ -539,7 +554,7 @@ void TextArea::DragCB(int button, int, int, int down) {
     Box gb = swap ? s->end.glyph : s->beg.glyph;
     Box ge = swap ? s->beg.glyph : s->end.glyph;
     if (reverse_line_fb) { gb.y=h-gb.y-gb.h; ge.y=h-ge.y-ge.h; }
-    s->box = Box3(Box(fb->Width(), fb->Height()), gb.Position(), ge.Position(), fh, fh, ge.w);
+    s->box = Box3(Box(fb->Width(), fb->Height()), gb.Position(), ge.Position() + point(ge.w, 0), fh, fh);
     s->changing_previously = s->changing;
 }
 
@@ -560,27 +575,32 @@ bool TextArea::GetGlyphFromCoords(const point &p, Selection::Point *out) {
 }
 
 void TextArea::CopyText(const Selection::Point &beg, const Selection::Point &end) {
+    string copy_text = CopyText(beg.line_ind, beg.char_ind, end.line_ind, end.char_ind, true);
+    if (!copy_text.empty()) Clipboard::Set(copy_text);
+}
+
+string TextArea::CopyText(int beg_line_ind, int beg_char_ind, int end_line_ind, int end_char_ind, bool add_nl) {
     string copy_text;
     int d = reverse_line_fb ? 1 : -1;
-    int b = reverse_line_fb ? end.line_ind : beg.line_ind;
-    int e = reverse_line_fb ? beg.line_ind : end.line_ind;
+    int b = reverse_line_fb ? end_line_ind : beg_line_ind;
+    int e = reverse_line_fb ? beg_line_ind : end_line_ind;
     for (int i = b; /**/; i += d) {
         Line *l = &line[-i-1];
         int len = l->Size();
-        if (i == beg.line_ind) {
-            if (!l->Size() || beg.char_ind < 0) len = -1;
+        if (i == beg_line_ind) {
+            if (!l->Size() || beg_char_ind < 0) len = -1;
             else {
-                len = (beg.line_ind == end.line_ind && end.char_ind >= 0) ? end.char_ind+1 : l->Size();
-                copy_text += Substr(l->Text(), beg.char_ind, max(0, len - beg.char_ind));
+                len = (beg_line_ind == end_line_ind && end_char_ind >= 0) ? end_char_ind+1 : l->Size();
+                copy_text += Substr(l->Text(), beg_char_ind, max(0, len - beg_char_ind));
             }
-        } else if (i == end.line_ind) {
-            len = (end.char_ind >= 0) ? end.char_ind+1 : l->Size();
+        } else if (i == end_line_ind) {
+            len = (end_char_ind >= 0) ? end_char_ind+1 : l->Size();
             copy_text += Substr(l->Text(), 0, len);
         } else copy_text += l->Text();
-        if (len == l->Size()) copy_text += "\n";
+        if (add_nl && len == l->Size()) copy_text += "\n";
         if (i == e) break;
     }
-    if (!copy_text.empty()) Clipboard::Set(copy_text);
+    return copy_text;
 }
 
 /* Editor */
@@ -777,6 +797,34 @@ void Terminal::SetDimension(int w, int h) {
     if (!line.Size()) TextArea::Write(string(term_height, '\n'), 0);
 }
 
+void Terminal::UpdateToken(Line *L, int word_offset, int word_len, int update_type, const LineTokenProcessor *token) {
+    CHECK_LE(word_offset + word_len, L->data->glyphs.Size());
+    Line *BL = L, *EL = L, *NL;
+    int in_line_ind = -line.IndexOf(L)-1, beg_line_ind = in_line_ind, end_line_ind = in_line_ind;
+    int beg_offset = word_offset, end_offset = word_offset + word_len - 1, new_offset, gs;
+
+    for (; !beg_offset && beg_line_ind < term_height; beg_line_ind++, beg_offset = term_width - new_offset, BL = NL) {
+        const DrawableBoxArray &glyphs = (NL = &line[-beg_line_ind-1-1])->data->glyphs;
+        if ((gs = glyphs.Size()) != term_width || !(new_offset = RLengthChar(&glyphs[gs-1], notspace, gs))) break;
+    }
+    for (; end_offset == term_width-1 && end_line_ind >= 0; end_line_ind--, end_offset = new_offset - 1, EL = NL) {
+        const DrawableBoxArray &glyphs = (NL = &line[-beg_line_ind-1+1])->data->glyphs;
+        if (!(new_offset = LengthChar(&glyphs[0], notspace, glyphs.Size()))) break;
+    }
+
+    string text = CopyText(beg_line_ind, beg_offset, end_line_ind, end_offset, 0);
+    if (update_type < 0) UpdateLongToken(BL, beg_offset, EL, end_offset, text, update_type);
+    
+    if (BL != L && !word_offset && token->lbw != token->nlbw)
+        UpdateLongToken(BL, beg_offset, &line[-in_line_ind-1-1], term_width-1,
+                        CopyText(beg_line_ind, beg_offset, in_line_ind+1, term_width-1, 0), update_type * -10);
+    if (EL != L && word_offset + word_len == term_width && token->lew != token->nlew)
+        UpdateLongToken(&line[-in_line_ind-1+1], 0, EL, end_offset,
+                        CopyText(in_line_ind-1, 0, end_line_ind, end_offset, 0), update_type * -11);
+
+    if (update_type > 0) UpdateLongToken(BL, beg_offset, EL, end_offset, text, update_type);
+}
+
 const Drawable::Attr *Terminal::GetAttr(int attr) const {
     static thread_local Drawable::Attr ret;
     Color *fg = colors ? &colors->c[Attr::GetFGColorIndex(attr)] : 0;
@@ -872,8 +920,7 @@ void Terminal::Write(const string &s, bool update_fb, bool release_fb) {
             switch (c) {
                 case '@': {
                     LineUpdate l(GetCursorLine(), fb_cb);
-                    l->InsertTextAt(term_cursor.x-1, string(X_or_1(parse_csi_argv[0]), ' '), cursor.attr);
-                    l->Erase(term_width);
+                    l->UpdateText(term_cursor.x-1, StringPiece(string(X_or_1(parse_csi_argv[0]), ' ')), cursor.attr, term_width, 0, 1);
                 } break;
                 case 'A': term_cursor.y = max(term_cursor.y - X_or_1(parse_csi_argv[0]), 1);           break;
                 case 'B': term_cursor.y = min(term_cursor.y + X_or_1(parse_csi_argv[0]), term_height); break;
@@ -999,13 +1046,13 @@ void Terminal::FlushParseText() {
     if (parse_text.empty()) return;
     bool append = 0;
     int consumed = 0, write_size = 0, update_size = 0;
+    CHECK_GT(term_cursor.x, 0);
     font = GetAttr(cursor.attr)->font;
-    CHECK_RANGE(term_cursor.x-1, 0, term_width);
     String16 input_text = String::ToUTF16(parse_text, &consumed);
     TerminalTrace("Terminal: FlushParseText('%s').size = [%zd, %d]\n",
                   StringPiece(parse_text.data(), consumed).str().c_str(), input_text.size(), consumed);
     for (int wrote = 0; wrote < input_text.size(); wrote += write_size) {
-        if (wrote) Newline(true);
+        if (wrote || term_cursor.x > term_width) Newline(true);
         Line *l = GetCursorLine();
         LinesFrameBuffer *fb = GetFrameBuffer(l);
         int remaining = input_text.size() - wrote, o = term_cursor.x-1;
@@ -1021,7 +1068,7 @@ void Terminal::FlushParseText() {
         if (append) l->Draw(l->p, -1, o, ol);
         else LinesFrameBuffer::Paint(l, point(sx, l->p.y), Box(-sx, 0, ex - sx, fb->font_height), o, ol);
     }
-    term_cursor.x = min(term_width, term_cursor.x + update_size);
+    term_cursor.x += update_size;
     parse_text.erase(0, consumed);
 }
 

@@ -75,9 +75,12 @@ struct Widget {
         virtual ~Interface() { if (del_hitbox) DelHitBox(); }
         Interface(GUI *g) : gui(g) {}
 
-        void AddClickBox(const Box &w, const MouseController::Callback &cb) { hitbox.push_back(gui->AddClickBox(w, cb)); }
-        void AddHoverBox(const Box &w, const MouseController::Callback &cb) { hitbox.push_back(gui->AddHoverBox(w, cb)); }
-        void AddDragBox (const Box &w, const MouseController::Callback &cb) { hitbox.push_back(gui->AddDragBox (w, cb)); }
+        void AddClickBox(const Box  &b, const MouseController::Callback &cb) {                   hitbox.push_back(gui->AddClickBox(b, cb)); }
+        void AddHoverBox(const Box  &b, const MouseController::Callback &cb) {                   hitbox.push_back(gui->AddHoverBox(b, cb)); }
+        void AddDragBox (const Box  &b, const MouseController::Callback &cb) {                   hitbox.push_back(gui->AddDragBox (b, cb)); }
+        void AddClickBox(const Box3 &t, const MouseController::Callback &cb) { for (auto &b : t) hitbox.push_back(gui->AddClickBox(b, cb)); }
+        void AddHoverBox(const Box3 &t, const MouseController::Callback &cb) { for (auto &b : t) hitbox.push_back(gui->AddHoverBox(b, cb)); }
+        void AddDragBox (const Box3 &t, const MouseController::Callback &cb) { for (auto &b : t) hitbox.push_back(gui->AddDragBox (b, cb)); }
         void DelHitBox() { for (auto i = hitbox.begin(), e = hitbox.end(); i != e; ++i) gui->hit.Erase(*i); hitbox.clear(); }
         MouseController::HitBox &GetHitBox(int i=0) const { return gui->hit[hitbox[i]]; }
         Box GetHitBoxBox(int i=0) const { return Box::Add(GetHitBox(i).box, gui->box.TopLeft()); }
@@ -232,11 +235,11 @@ struct KeyboardGUI : public KeyboardController {
 struct TextGUI : public KeyboardGUI {
     struct Lines;
     struct Link : public Widget::Interface {
-        Box box;
+        Box3 box;
         string link;
         TextGUI *parent=0;
         shared_ptr<Texture> image;
-        Link(TextGUI *P, GUI *G, const Box &b, const string &U)
+        Link(TextGUI *P, GUI *G, const Box3 &b, const string &U)
             : Interface(G), box(b), link(U), parent(P) {
             AddClickBox(b, MouseController::CB(bind(&Link::Visit, this)));
             AddHoverBox(b, MouseController::CoordCB(bind(&Link::Hover, this, _1, _2, _3, _4)));
@@ -274,9 +277,9 @@ struct TextGUI : public KeyboardGUI {
         int AssignText(const String16Piece &s, int a=0) { Clear(); return AppendText(s, a); }
         int AppendText(const StringPiece   &s, int a=0) { return InsertTextAt(Size(), s, a); }
         int AppendText(const String16Piece &s, int a=0) { return InsertTextAt(Size(), s, a); }
-        template <class X> int OverwriteTextAt(int o, const StringPieceT<X> &s, int attr=0);
-        template <class X> int InsertTextAt   (int o, const StringPieceT<X> &s, int attr=0);
-        template <class X> int UpdateText     (int o, const StringPieceT<X> &s, int attr, int max_width=0, bool *append=0);
+        template <class X> int OverwriteTextAt(int o, const StringPieceT<X> &s, int a=0);
+        template <class X> int InsertTextAt   (int o, const StringPieceT<X> &s, int a=0);
+        template <class X> int UpdateText     (int o, const StringPieceT<X> &s, int a, int max_width=0, bool *append=0, int insert_mode=-1);
         int InsertTextAt(int o, const string   &s, int a=0) { return InsertTextAt<char> (o, s, a); }
         int InsertTextAt(int o, const String16 &s, int a=0) { return InsertTextAt<short>(o, s, a); }
         int UpdateText(int o, const string   &s, int attr, int max_width=0, bool *append=0) { return UpdateText<char> (o, s, attr, max_width, append); }
@@ -288,17 +291,19 @@ struct TextGUI : public KeyboardGUI {
         point Draw(point pos, int relayout_width=-1, int g_offset=0, int g_len=-1);
     };
     struct LineTokenProcessor {
-        Line *L;
+        Line *const L;
         bool sw=0, ew=0, pw=0, nw=0, overwrite=0, osw=1, oew=1;
-        int x, size, erase, pi=0, ni=0;
+        bool lbw=0, lew=0, nlbw=0, nlew=0;
+        int x, line_size, erase, pi=0, ni=0;
         DrawableBoxRun v;
         LineTokenProcessor(Line *l, int o, const DrawableBoxRun &V, int Erase);
         void LoadV(const DrawableBoxRun &V) { FindBoundaryConditions((v=V), &sw, &ew); }
-        void FindPrev(const DrawableBoxArray &g) { const Drawable *p; while (pi > 0      && (p = g[pi-1].drawable) && !isspace(p->Id())) pi--; }
-        void FindNext(const DrawableBoxArray &g) { const Drawable *n; while (ni < size-1 && (n = g[ni+1].drawable) && !isspace(n->Id())) ni++; }
+        void FindPrev(const DrawableBoxArray &g) { const Drawable *p; while (pi > 0           && (p = g[pi-1].drawable) && !isspace(p->Id())) pi--; }
+        void FindNext(const DrawableBoxArray &g) { const Drawable *n; while (ni < line_size-1 && (n = g[ni+1].drawable) && !isspace(n->Id())) ni++; }
         void PrepareOverwrite(const DrawableBoxRun &V) { osw=sw; oew=ew; LoadV(V); erase=0; overwrite=1; }
         void ProcessUpdate();
         void ProcessResult();
+        void SetNewLineBoundaryConditions(bool sw, bool ew) { nlbw=sw; nlew=ew; }
         static void FindBoundaryConditions(const DrawableBoxRun &v, bool *sw, bool *ew) {
             *sw = v.Size() && !isspace(v.First().Id());
             *ew = v.Size() && !isspace(v.Last ().Id());
@@ -412,6 +417,7 @@ struct TextGUI : public KeyboardGUI {
     virtual void AssignInput(const string &text)
     { cmd_line.AssignText(text); cursor.i.x=cmd_line.Size(); UpdateCommandFB(); UpdateCursor(); }
 
+    virtual LinesFrameBuffer *GetFrameBuffer() { return &cmd_fb; }
     virtual void UpdateCursor() { cursor.p = cmd_line.data->glyphs.Position(cursor.i.x); }
     virtual void UpdateCommandFB() { 
         cmd_fb.fb.Attach();
@@ -421,7 +427,8 @@ struct TextGUI : public KeyboardGUI {
     }
     virtual void Draw(const Box &b);
     virtual void DrawCursor(point p);
-    virtual void UpdateToken(Line*, int word_offset, int word_len, int update_type);
+    virtual void UpdateToken(Line*, int word_offset, int word_len, int update_type, const LineTokenProcessor*);
+    virtual void UpdateLongToken(Line *BL, int beg_offset, Line *EL, int end_offset, const string &text, int update_type);
 };
 
 struct TextArea : public TextGUI {
@@ -466,6 +473,7 @@ struct TextArea : public TextGUI {
     void DragCB(int button, int x, int y, int down);
     bool GetGlyphFromCoords(const point &p, Selection::Point *out);
     void CopyText(const Selection::Point &beg, const Selection::Point &end);
+    string CopyText(int beg_line_ind, int beg_char_ind, int end_line_end, int end_char_ind, bool add_nl);
 };
 
 struct Editor : public TextArea {
@@ -577,6 +585,7 @@ struct Terminal : public TextArea, public Drawable::AttrSource {
     virtual void Home       () { char k = 'A' - 0x40;  write(fd, &k, 1); }
     virtual void End        () { char k = 'E' - 0x40;  write(fd, &k, 1);  }
     virtual void UpdateCursor() { cursor.p = point(GetCursorX(term_cursor.x, term_cursor.y), GetCursorY(term_cursor.y)); }
+    virtual void UpdateToken(Line*, int word_offset, int word_len, int update_type, const LineTokenProcessor*);
     virtual const Drawable::Attr *GetAttr(int attr) const;
     int GetCursorX(int x, int y) const {
         const Line *l = GetTermLine(y);

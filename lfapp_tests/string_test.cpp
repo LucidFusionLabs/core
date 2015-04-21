@@ -316,10 +316,10 @@ TEST(StringTest, CHexEscape) {
 
 TEST(StringTest, RLengthChar) {
     char b1[] = " ", b2[] = "  ", b3[] = "aaa   ";
-    EXPECT_EQ(strlen(b1), RLengthChar(StringPiece(b1+strlen(b1)-1, strlen(b1)), isspace));
-    EXPECT_EQ(strlen(b2), RLengthChar(StringPiece(b2+strlen(b2)-1, strlen(b2)), isspace));
-    EXPECT_EQ(3,          RLengthChar(StringPiece(b3+strlen(b3)-1, strlen(b3)), isspace));
-    EXPECT_EQ(2,          RLengthChar(StringPiece(b3+strlen(b3)-1, 2         ), isspace));
+    EXPECT_EQ(strlen(b1), RLengthChar(b1+strlen(b1)-1, isspace, strlen(b1)));
+    EXPECT_EQ(strlen(b2), RLengthChar(b2+strlen(b2)-1, isspace, strlen(b2)));
+    EXPECT_EQ(3,          RLengthChar(b3+strlen(b3)-1, isspace, strlen(b3)));
+    EXPECT_EQ(2,          RLengthChar(b3+strlen(b3)-1, isspace, 2         ));
 }
 
 TEST(StringTest, FNVHash) {
