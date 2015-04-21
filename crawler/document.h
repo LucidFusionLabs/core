@@ -172,7 +172,8 @@ struct DocumentParser {
             Parser::Complete(this);
         }
         void LoadResourceComplete(const InterProcessProtocol::TextureResource &res) {
-            target->LoadGL(reinterpret_cast<const unsigned char *>(res.buf.data()), point(res.width, res.height), res.pf, res.linesize);
+            if (res.width && res.height)
+                target->LoadGL(reinterpret_cast<const unsigned char *>(res.buf.data()), point(res.width, res.height), res.pf, res.linesize);
             Parser::Complete(this);
         }
     };

@@ -53,6 +53,7 @@ void MyNewLinkCB(const shared_ptr<TextGUI::Link> &link) {
             return;
         }
     }
+    image_url += BlankNull(args);
     if (network_thread) network_thread->Write(new Callback([=]() { link->image = image_browser->doc.parser->OpenImage(image_url); }));
 }
 

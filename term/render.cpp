@@ -32,6 +32,7 @@ extern "C" int main(int argc, const char *argv[]) {
     int optind = Singleton<FlagMap>::Get()->optind;
     if (optind >= argc) { fprintf(stderr, "Usage: %s [-flags] <socket-name>\n", argv[0]); return -1; }
     // if (app->Init()) { app->Free(); return -1; }
+    app->assets.Init();
 
     // to cleanup crash leaked shm: for i in $( ipcs -m | grep "^m " | awk '{print $2}' ); do ipcrm -m $i; done
     const string socket_name = StrCat(argv[optind]);
