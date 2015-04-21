@@ -892,6 +892,8 @@ Font *Fonts::GetByDesc(FontDesc d) {
 }
 
 Font *Fonts::Change(Font *in, int new_size, const Color &new_fg, const Color &new_bg, int new_flag) {
+    static Font *fake_font = Fonts::Fake();
+    if (in == fake_font) return fake_font;
     if (!in->desc) return 0;
     FontDesc d = *in->desc;
     d.size = new_size;

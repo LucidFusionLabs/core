@@ -227,14 +227,17 @@ struct Box {
     virtual string DebugString() const;
     point Position () const { return point(x, y); }
     point Dimension() const { return point(w, h); }
-    void SetPosition (const v2 &p)    { x=p.x; y=p.y; }
-    void SetPosition (const point &p) { x=p.x; y=p.y; }
-    void SetDimension(const v2 &p)    { w=p.x; h=p.y; }
-    void SetDimension(const point &p) { w=p.x; h=p.y; }
-    Box operator+(const point &p) const { return Box(x+p.x, y+p.y, w, h); }
-    Box operator-(const point &p) const { return Box(x-p.x, y-p.y, w, h); }
+
+    Box &SetX        (int nx)         { x=nx;         return *this; }
+    Box &SetY        (int ny)         { y=ny;         return *this; }
+    Box &SetPosition (const v2 &p)    { x=p.x; y=p.y; return *this; }
+    Box &SetPosition (const point &p) { x=p.x; y=p.y; return *this; }
+    Box &SetDimension(const v2 &p)    { w=p.x; h=p.y; return *this; }
+    Box &SetDimension(const point &p) { w=p.x; h=p.y; return *this; }
     Box &operator+=(const point &p) { x+=p.x; y+=p.y; return *this; }
     Box &operator-=(const point &p) { x-=p.x; y-=p.y; return *this; }
+    Box  operator+ (const point &p) const { return Box(x+p.x, y+p.y, w, h); }
+    Box  operator- (const point &p) const { return Box(x-p.x, y-p.y, w, h); }
     int top    () const { return y+h; }
     int right  () const { return x+w; }
     int centerX() const { return x+w/2; }
@@ -282,18 +285,20 @@ struct Box3 {
     Box v[3];
     Box3() {}
     Box3(const Box &cont, const point &pb, const point &pe,
-         int first_line_height, int last_line_height, int last_glyph_width) {
+         int first_line_height, int last_line_height) {
         if (pb.y == pe.y) {
-            v[0] = Box(pb.x, pb.y, pe.x + last_glyph_width - pb.x, first_line_height);
+            v[0] = Box(pb.x, pb.y, pe.x - pb.x, first_line_height);
             v[1] = v[2] = Box();
         } else {
             v[0] = Box(pb.x, pb.y, cont.w - pb.x, first_line_height);
             v[1] = Box(0, pe.y + last_line_height, cont.w, pb.y - pe.y - first_line_height);
-            v[2] = Box(0, pe.y, pe.x + last_glyph_width, last_line_height);
+            v[2] = Box(0, pe.y, pe.x, last_line_height);
         }
     }
-    Box       &operator[](int i)       { return v[i]; }
+    const Box *begin() const { return &v[0]; }
+    const Box *end()   const { return &v[0] + 3; }
     const Box &operator[](int i) const { return v[i]; }
+    Box       &operator[](int i)       { return v[i]; }
     bool Null() const { return !v[0].h; }
     void Clear() { for (int i=0; i<3; i++) v[i].clear(); }
     string DebugString() const { string ret = "Box3{"; for (int i=0; i<3; i++) if (!i || v[i].h) StrAppend(&ret, v[i].DebugString(), ", "); return ret + "}"; }

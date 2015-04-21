@@ -55,15 +55,15 @@ vector<LinesFrameBufferTest::LineOp> LinesFrameBufferTest::back;
 vector<LinesFrameBufferTest::PaintOp> LinesFrameBufferTest::paint;
 
 struct TextAreaTest : public TextArea {
-    LinesFrameBufferTest line_fb_test;
     struct UpdateTokenOp {
         Line *l; string word; int type;
         UpdateTokenOp(Line *L, const string &W, int T) : l(L), word(W), type(T) {}
     };
     vector<UpdateTokenOp> token;
+    LinesFrameBufferTest line_fb_test;
     TextAreaTest(Window *W, Font *F, int S=200) : TextArea(W,F,S) {}
     virtual LinesFrameBuffer *GetFrameBuffer() override { return &line_fb_test; }
-    virtual void UpdateToken(Line *l, int wo, int wl, int t) override {
+    virtual void UpdateToken(Line *l, int wo, int wl, int t, const LineTokenProcessor*) override {
         token.emplace_back(l, DrawableBoxRun(&l->data->glyphs[wo], wl).Text(), t);
     }
 };
@@ -71,6 +71,19 @@ struct EditorTest : public Editor {
     LinesFrameBufferTest line_fb_test;
     EditorTest(Window *W, Font *F, File *I, bool Wrap=0) : Editor(W,F,I,Wrap) { line_fb_test.wrap=Wrap; }
     virtual LinesFrameBuffer *GetFrameBuffer() override { return &line_fb_test; }
+};
+struct TerminalTest : public Terminal {
+    struct UpdateTokenOp {
+        Line *bl, *el; int bo, eo, type; string text;
+        UpdateTokenOp(Line *BL, int BO, Line *EL, int EO, const string &X, int T) : bl(BL), el(EL), bo(BO), eo(EO), type(T), text(X) {}
+    };
+    vector<UpdateTokenOp> token;
+    LinesFrameBufferTest line_fb_test;
+    TerminalTest(int FD, Window *W, Font *F) : Terminal(FD,W,F) {}
+    virtual LinesFrameBuffer *GetFrameBuffer() override { return &line_fb_test; }
+    void UpdateLongToken(Line *BL, int BO, Line *EL, int EO, const string &text, int T) {
+        token.emplace_back(BL, BO, EL, EO, text, T);
+    }
 };
 
 TEST(GUITest, TextArea) { 
@@ -824,6 +837,63 @@ TEST(GUITest, LineTokenProcessor) {
     EXPECT_EQ("0\xff\xa0xy", L->Text()); EXPECT_EQ(2, ta.token.size());
     if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type, -9); EXPECT_EQ("\xff\xa0xy",  ta.token[0].word); }
     if (ta.token.size()>1) { EXPECT_EQ(ta.token[1].type,  3); EXPECT_EQ("0\xff\xa0xy", ta.token[1].word); }
+    ta.token.clear();
+}
+
+TEST(GUITest, TerminalTokenProcessor) {
+    TerminalTest ta(-1, screen, Fonts::Fake());
+    ta.SetDimension(80, 25);
+    EXPECT_EQ(80, ta.term_width);
+    EXPECT_EQ(25, ta.line.Size());
+
+    ta.Write(string(80, 'a'), 0, 0);
+    EXPECT_EQ(1, ta.token.size());
+    if (ta.token.size()>0) { EXPECT_EQ(4,   ta.token[0].type); EXPECT_EQ(string(80, 'a'), ta.token[0].text); }
+    ta.token.clear();
+
+    ta.Write("b", 0, 0);
+    EXPECT_EQ(2, ta.token.size());
+    if (ta.token.size()>0) { EXPECT_EQ(-40, ta.token[0].type); EXPECT_EQ(string(80, 'a'),       ta.token[0].text); }
+    if (ta.token.size()>1) { EXPECT_EQ(  4, ta.token[1].type); EXPECT_EQ(string(80, 'a') + "b", ta.token[1].text); }
+    ta.token.clear();                       
+                                            
+    ta.Write("c", 0, 0);                    
+    EXPECT_EQ(2, ta.token.size());          
+    if (ta.token.size()>0) { EXPECT_EQ( -5, ta.token[0].type); EXPECT_EQ(string(80, 'a') + "b",  ta.token[0].text); }
+    if (ta.token.size()>1) { EXPECT_EQ(  2, ta.token[1].type); EXPECT_EQ(string(80, 'a') + "bc", ta.token[1].text); }
+    ta.token.clear();
+
+    ta.term_cursor.x = 1;
+    ta.Write(" ", 0, 0);
+    EXPECT_EQ(3, ta.token.size());
+    if (ta.token.size()>0) { EXPECT_EQ(-3, ta.token[0].type); EXPECT_EQ(string(80, 'a') + "bc", ta.token[0].text); }
+    if (ta.token.size()>1) { EXPECT_EQ(30, ta.token[1].type); EXPECT_EQ(string(80, 'a') + "",   ta.token[1].text); }
+    if (ta.token.size()>2) { EXPECT_EQ( 6, ta.token[2].type); EXPECT_EQ(                  "c",  ta.token[2].text); }
+    ta.token.clear();
+
+    ta.term_cursor.x = 1;
+    ta.Write("z", 0, 0);
+    EXPECT_EQ(3, ta.token.size());
+    if (ta.token.size()>0) { EXPECT_EQ(-6,  ta.token[0].type); EXPECT_EQ(                  "c",  ta.token[0].text); }
+    if (ta.token.size()>1) { EXPECT_EQ(-30, ta.token[1].type); EXPECT_EQ(string(80, 'a') + "",   ta.token[1].text); }
+    if (ta.token.size()>2) { EXPECT_EQ( 3,  ta.token[2].type); EXPECT_EQ(string(80, 'a') + "zc", ta.token[2].text); }
+    ta.token.clear();
+
+    ta.term_cursor.y--;
+    ta.term_cursor.x = 80;
+    ta.Write(" ", 0, 0);
+    EXPECT_EQ(3, ta.token.size());
+    if (ta.token.size()>0) { EXPECT_EQ(-2,  ta.token[0].type); EXPECT_EQ(string(80, 'a') + "zc", ta.token[0].text); }
+    if (ta.token.size()>1) { EXPECT_EQ(22,  ta.token[1].type); EXPECT_EQ(                  "zc", ta.token[1].text); }
+    if (ta.token.size()>2) { EXPECT_EQ( 5,  ta.token[2].type); EXPECT_EQ(string(79, 'a') + "",   ta.token[2].text); }
+    ta.token.clear();
+
+    ta.term_cursor.x = 80;
+    ta.Write("w", 0, 0);
+    EXPECT_EQ(3, ta.token.size());
+    if (ta.token.size()>0) { EXPECT_EQ(-5,  ta.token[0].type); EXPECT_EQ(string(79, 'a') + "",    ta.token[0].text); }
+    if (ta.token.size()>1) { EXPECT_EQ(-22, ta.token[1].type); EXPECT_EQ(                  "zc",  ta.token[1].text); }
+    if (ta.token.size()>2) { EXPECT_EQ( 2,  ta.token[2].type); EXPECT_EQ(string(79, 'a') + "wzc", ta.token[2].text); }
     ta.token.clear();
 }
 

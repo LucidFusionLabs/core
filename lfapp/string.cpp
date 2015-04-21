@@ -453,13 +453,15 @@ const short *NextLine   (const String16Piece &text, bool final, int *outlen) { r
 const char  *NextLineRaw(const StringPiece   &text, bool final, int *outlen) { return NextLine<char,  false>(text, final, outlen); }
 const short *NextLineRaw(const String16Piece &text, bool final, int *outlen) { return NextLine<short, false>(text, final, outlen); }
 
+#define NextCharLoopImpl(deref_p) \
+    if (!in_quote && ischar(deref_p)) { ret=p; break; } \
+    if (isquotec && isquotec(deref_p)) in_quote = !in_quote;
+
 #define NextCharImpl(type, deref_p, check_p) \
-    const type *ret=0, *p; \
+    const type *ret=0, *p=text; \
     bool have_len = len >= 0, in_quote = false; \
-    for (p=text; (have_len ? p-text<len : check_p); p++) { \
-        if (!in_quote && ischar(deref_p)) { ret=p; break; } \
-        if (isquotec && isquotec(deref_p)) in_quote = !in_quote; \
-    } \
+    if (have_len) { for (const type *e = p+len; p != e;  ++p) { NextCharLoopImpl(deref_p); } } \
+    else          { for (;                      check_p; ++p) { NextCharLoopImpl(deref_p); } } \
     if (outlen) *outlen = ret ? ret-text : p-text; \
     return ret;
 
@@ -484,40 +486,80 @@ template const short*       NextChar<short>      (const short*,       int (*)(in
 template       DrawableBox* NextChar<DrawableBox>(      DrawableBox*, int (*)(int), int, int*);
 template const DrawableBox* NextChar<DrawableBox>(const DrawableBox*, int (*)(int), int, int*);
 
-template <class X> int LengthChar(const StringPieceT<X> &text, int (*ischar)(int)) {
-    const X *p;
-    for (p = text.buf; !text.Done(p); ++p) if (!ischar(*p)) break;
-    return p - text.buf;
-}
-template int LengthChar(const StringPiece  &, int (*)(int));
-template int LengthChar(const String16Piece&, int (*)(int));
-
-template <class X> int RLengthChar(const StringPieceT<X> &text, int (*ischar)(int)) {
-    int len = text.Length();
-    if (len <= 0) return 0;
-    const X *p;
-    for (p = text.buf; text.buf - p < len; --p) if (!ischar(*p)) break;
-    return text.buf - p;
-}
-template int RLengthChar(const StringPiece  &, int (*)(int));
-template int RLengthChar(const String16Piece&, int (*)(int));
-
-#define SkipCharImpl(type, deref_p, check_p) \
+#define LengthCharImpl(type, deref_p, check_p) \
     const type *p = in; \
     if (len >= 0) while (p-in < len && ischar(deref_p)) p++; \
     else          while (check_p    && ischar(deref_p)) p++; \
     return p - in;
 
-template <class X> int SkipChar(int (*ischar)(int), const X *in, int len) {
-    SkipCharImpl(X, *p, *p);
+template <class X> int LengthChar(const X *in, int (*ischar)(int), int len) {
+    LengthCharImpl(X, *p, *p);
 }
-template <> int SkipChar(int (*ischar)(int), const DrawableBox *in, int len) {
-    SkipCharImpl(DrawableBox, p->Id(), 1);
+template <> int LengthChar(const DrawableBox *in, int (*ischar)(int), int len) {
+    LengthCharImpl(DrawableBox, p->Id(), 1);
+}
+template int LengthChar(const char*,        int(*)(int), int);
+template int LengthChar(const short*,       int(*)(int), int);
+template int LengthChar(const DrawableBox*, int(*)(int), int);
+
+#define RLengthCharImpl(type, deref_p) \
+    if (len <= 0) return 0; \
+    const type *p = in, *e = in - len; \
+    for (; p != e; --p) if (!ischar(deref_p)) break; \
+    return in - p;
+
+template <class X> int RLengthChar(const X *in, int (*ischar)(int), int len) {
+    RLengthCharImpl(X, *p);
+}
+template <> int RLengthChar(const DrawableBox *in, int (*ischar)(int), int len) {
+    RLengthCharImpl(DrawableBox, p->Id());
+}
+template int RLengthChar(const char*,        int(*)(int), int);
+template int RLengthChar(const short*,       int(*)(int), int);
+template int RLengthChar(const DrawableBox*, int(*)(int), int);
+
+template <class X> 
+StringWordIterT<X>::StringWordIterT(const X *B, int S, int (*delim)(int), int (*quote)(int), int F)
+    : in(B), size(S), IsSpace(delim ? delim : isspace), IsQuote(quote), flag(F) {
+    if (in) next_offset += LengthChar(in+cur_offset, IsSpace, size >= 0 ? size-cur_offset : -1);
 }
 
-template int SkipChar(int(*)(int), const char*,        int);
-template int SkipChar(int(*)(int), const short*,       int);
-template int SkipChar(int(*)(int), const DrawableBox*, int);
+template <class X> const X *StringWordIterT<X>::Next() {
+    cur_offset = next_offset;
+    if (cur_offset < 0) return 0;
+    const X *word = in + cur_offset, *next = NextChar(word, IsSpace, IsQuote, (size >= 0 ? size-cur_offset : -1), &cur_len);
+    if ((next_offset = next ? next-in : -1) >= 0) next_offset += LengthChar(in+next_offset, IsSpace, size >= 0 ? size-next_offset : -1);
+    return cur_len ? word : 0;
+}
+
+template <class X> const X *StringLineIterT<X>::Next() {
+    first = false;
+    cur_offset = next_offset;
+    if (cur_offset < 0) return 0;
+    const X *line = in + cur_offset, *next = NextLine(StringPieceT<X>(line, (size >= 0 ? size-cur_offset : -1)), false, &cur_len);
+    next_offset = next ? next-in : -1;
+    if (cur_len) cur_len -= ChompNewlineLength(line, cur_len);
+    return (cur_len || ((flag & Flag::BlankLines) && next)) ? line : 0;
+}
+
+template struct StringWordIterT<char>;
+template struct StringLineIterT<char>;
+template struct StringWordIterT<short>;
+template struct StringLineIterT<short>;
+template struct StringWordIterT<DrawableBox>;
+
+const char *IterWordIter::Next() {
+    if (!iter) return 0;
+    const char *w = word.in ? word.Next() : 0;
+    while (!w) {
+        first_count++;
+        const char *line = iter->Next();
+        if (!line) return 0;
+        word = StringWordIter(line, iter->CurrentLength(), word.IsSpace);
+        w = word.Next();
+    }
+    return w;
+}    
 
 unsigned fnv32(const void *buf, unsigned len, unsigned hval) {
     if (!len) len = strlen((const char *)buf);
@@ -609,49 +651,6 @@ template <class X> int DirNameLen(const StringPieceT<X> &path, bool include_slas
 }
 int DirNameLen(const StringPiece   &text, bool include_slash) { return DirNameLen<char> (text, include_slash); }
 int DirNameLen(const String16Piece &text, bool include_slash) { return DirNameLen<short>(text, include_slash); }
-
-template <class X> 
-StringWordIterT<X>::StringWordIterT(const X *B, int S, int (*delim)(int), int (*quote)(int), int F)
-    : in(B), size(S), IsSpace(delim ? delim : isspace), IsQuote(quote), flag(F) {
-    if (in) next_offset += SkipChar(IsSpace, in+cur_offset, size >= 0 ? size-cur_offset : -1);
-}
-
-template <class X> const X *StringWordIterT<X>::Next() {
-    cur_offset = next_offset;
-    if (cur_offset < 0) return 0;
-    const X *word = in + cur_offset, *next = NextChar(word, IsSpace, IsQuote, (size >= 0 ? size-cur_offset : -1), &cur_len);
-    if ((next_offset = next ? next-in : -1) >= 0) next_offset += SkipChar(IsSpace, in+next_offset, size >= 0 ? size-next_offset : -1);
-    return cur_len ? word : 0;
-}
-
-template <class X> const X *StringLineIterT<X>::Next() {
-    first = false;
-    cur_offset = next_offset;
-    if (cur_offset < 0) return 0;
-    const X *line = in + cur_offset, *next = NextLine(StringPieceT<X>(line, (size >= 0 ? size-cur_offset : -1)), false, &cur_len);
-    next_offset = next ? next-in : -1;
-    if (cur_len) cur_len -= ChompNewlineLength(line, cur_len);
-    return (cur_len || ((flag & Flag::BlankLines) && next)) ? line : 0;
-}
-
-template struct StringWordIterT<char>;
-template struct StringLineIterT<char>;
-template struct StringWordIterT<short>;
-template struct StringLineIterT<short>;
-template struct StringWordIterT<DrawableBox>;
-
-const char *IterWordIter::Next() {
-    if (!iter) return 0;
-    const char *w = word.in ? word.Next() : 0;
-    while (!w) {
-        first_count++;
-        const char *line = iter->Next();
-        if (!line) return 0;
-        word = StringWordIter(line, iter->CurrentLength(), word.IsSpace);
-        w = word.Next();
-    }
-    return w;
-}    
 
 #ifdef LFL_REGEX
 Regex::~Regex() { re_free((regexp*)impl); }

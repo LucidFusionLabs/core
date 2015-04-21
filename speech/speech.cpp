@@ -67,7 +67,7 @@ int PronunciationDict::readDictionary(StringIter *in, PronunciationDict *out) {
         const char *c=line; if ((*c) == ';') continue; /* skip comments */
 
         /* Format: word <two spaces> pronunciation */
-        c += LengthChar(StringPiece(c), notspace);
+        c += LengthChar(c.c_str(), notspace);
         if (!*c || !isspace(*(c+1))) continue;
         *(char *)c = 0;
 
@@ -93,7 +93,7 @@ int PronunciationDict::readPronunciation(const char *in, int len, char *phonesOu
         if (outi >= outlen) return -1;
         string phone(phone_text, phones.cur_len);
 
-        int accent = LengthChar(StringPiece(phone), isalpha);
+        int accent = LengthChar(phone.c_str(), isalpha);
         char stress = phone[accent];
         ((char *)phone_text)[accent]=0;
         accent = isdigit(stress) ? stress - '0' : 0;

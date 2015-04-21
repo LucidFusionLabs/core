@@ -282,10 +282,14 @@ struct IterWordIter : public StringIter {
     int TotalLength() const { return iter->TotalLength(); }
 };
 
+template <int F, int T>                 int tochar (int i) { return i == F ? T :  i; }
+template <int F, int T, int F2, int T2> int tochar2(int i) { return i == F ? T : (i == F2 ? T2 : i); }
+
 template <int V>          int                 isint (int N) { return N == V; }
 template <int V1, int V2> int                 isint2(int N) { return (N == V1) || (N == V2); }
 template <int V1, int V2, int V3>         int isint3(int N) { return (N == V1) || (N == V2) || (N == V3); }
 template <int V1, int V2, int V3, int V4> int isint4(int N) { return (N == V1) || (N == V2) || (N == V3) || (N == V4); }
+
 int IsAscii(int c);
 int isfileslash(int c);
 int isdot(int c);
@@ -303,14 +307,11 @@ int notalnum(int c);
 int notnum(int c);
 int notcomma(int c);
 int notdot(int c);
+int atoi(const char  *v);
+int atoi(const short *v);
 float my_atof(const char *v);
 inline double atof(const string &v) { return ::atof(v.c_str()); }
 inline int    atoi(const string &v) { return ::atoi(v.c_str()); }
-
-int atoi(const char  *v);
-int atoi(const short *v);
-template <int F, int T>                 int tochar (int i) { return i == F ? T :  i; }
-template <int F, int T, int F2, int T2> int tochar2(int i) { return i == F ? T : (i == F2 ? T2 : i); }
 
 string WStringPrintf(const wchar_t *fmt, ...);
 String16 String16Printf(const char *fmt, ...);
@@ -412,7 +413,8 @@ template <class X> int Split(const short    *in, int (*ischar)(int), int (*isquo
 template <class X> int Split(const short    *in, int (*ischar)(int),                      vector<X> *out) { return Split<short, X>(in, ischar, NULL,    out); }
 
 template <class X> int Split(const char   *in, int (*ischar)(int), int (*isquote)(int), set<X> *out) {
-    out->clear(); if (!in) return 0;
+    out->clear();
+    if (!in) return 0;
     StringWordIter words(in, ischar, isquote);
     for (string word = IterNextString(&words); !words.Done(); word = IterNextString(&words))
         out->insert(Scannable::Scan(X(), word.c_str()));
@@ -464,9 +466,8 @@ template <class X>       X *NextChar(      X *text, int (*ischar)(int),         
 template <class X> const X *NextChar(const X *text, int (*ischar)(int),                      int len=-1, int *outlen=0);
 template <class X>       X *NextChar(      X *text, int (*ischar)(int), int (*isquote)(int), int len=-1, int *outlen=0);
 template <class X> const X *NextChar(const X *text, int (*ischar)(int), int (*isquote)(int), int len=-1, int *outlen=0);
-template <class X> int  LengthChar(const StringPieceT<X> &text, int (*ischar)(int));
-template <class X> int RLengthChar(const StringPieceT<X> &text, int (*ischar)(int));
-template <class X> int SkipChar(int (*ischar)(int), const X* in, int len=0);
+template <class X> int    LengthChar(const X* text, int (*ischar)(int), int len=-1);
+template <class X> int   RLengthChar(const X* text, int (*ischar)(int), int len);
 
 unsigned           fnv32(const void *buf, unsigned len=0, unsigned           hval=0);
 unsigned long long fnv64(const void *buf, unsigned len=0, unsigned long long hval=0);
