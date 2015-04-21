@@ -172,14 +172,35 @@ int notalnum(int c) { return !isalnum(c); }
 int notnum(int c) { return !isnum(c); }
 int notcomma(int c) { return !iscomma(c); }
 int notdot(int c) { return !isdot(c); }
+int MatchingParens(int c1, int c2) { return (c1 == '(' && c2 == ')') || (c1 == '[' && c2 == ']'); }
 float my_atof(const char *v) { return v ? ::atof(v) : 0; }
 int atoi(const char *v) { return v ? ::atoi(v) : 0; }
 int atoi(const short *v) {
     if (!v) return 0; int ret = 0; const short *p;
-    if (!(p = NextChar(v, notspace))) return 0;
+    if (!(p = FindChar(v, notspace))) return 0;
     bool neg = *p == '-';
     for (p += neg; *p >= '0' && *p <= '9'; p++) ret = ret*10 + *p - '0';
     return neg ? -ret : ret;
+}
+
+unsigned fnv32(const void *buf, unsigned len, unsigned hval) {
+    if (!len) len = strlen((const char *)buf);
+    unsigned char *bp = (unsigned char *)buf, *be = bp + len;
+    while (bp < be) {
+        hval += (hval<<1) + (hval<<4) + (hval<<7) + (hval<<8) + (hval<<24);
+        hval ^= (unsigned)*bp++;
+    }
+    return hval;
+}
+
+unsigned long long fnv64(const void *buf, unsigned len, unsigned long long hval) {
+    if (!len) len = strlen((const char *)buf);
+    unsigned char *bp = (unsigned char *)buf, *be = bp + len;
+    while (bp < be) {
+        hval += (hval<<1) + (hval<<4) + (hval<<5) + (hval<<7) + (hval<<8) + (hval<<40);
+        hval ^= (unsigned long long)*bp++;
+    }
+    return hval;
 }
 
 int sprint(char *out, int len, const char *fmt, ...) {
@@ -319,13 +340,70 @@ bool StringEmptyOrEquals(const string   &cmp, const string   &ref1, const string
 bool StringEmptyOrEquals(const String16 &cmp, const String16 &ref1, const String16 &ref2, int cs) { return cmp.empty() || StringEquals<short, short>(cmp.c_str(), ref1.c_str(), cs) || StringEquals<short, short>(cmp.c_str(), ref2.c_str(), cs); }
 bool StringEmptyOrEquals(const String16 &cmp, const string   &ref1, const string   &ref2, int cs) { return cmp.empty() || StringEquals<short, char >(cmp.c_str(), ref1.c_str(), cs) || StringEquals<short, char >(cmp.c_str(), ref2.c_str(), cs); }
 
-bool StringReplace(string *text, const string &needle, const string &replace) {
-    int pos = text->find(needle);
-    if (pos == string::npos) return false;
-    text->erase(pos, needle.size());
-    text->insert(pos, replace);
-    return true;
+#define FindCharLoopImpl(deref_p) \
+    if (!in_quote && ischar(deref_p)) { ret=p; break; } \
+    if (isquotec && isquotec(deref_p)) in_quote = !in_quote;
+
+#define FindCharImpl(type, deref_p, check_p) \
+    const type *ret=0, *p=text; \
+    bool have_len = len >= 0, in_quote = false; \
+    if (have_len) { for (const type *e = p+len; p != e;  ++p) { FindCharLoopImpl(deref_p); } } \
+    else          { for (;                      check_p; ++p) { FindCharLoopImpl(deref_p); } } \
+    if (outlen) *outlen = ret ? ret-text : p-text; \
+    return ret;
+
+template <class X> const X *FindChar(const X *text, int (*ischar)(int), int (*isquotec)(int), int len, int *outlen) {
+    FindCharImpl(X, *p, *p);
 }
+template <class X>       X *FindChar(      X *text, int (*ischar)(int), int (*isquotec)(int), int len, int *outlen) { return (X*)FindChar((const X *)text, ischar, isquotec, len, outlen); }
+template <class X> const X *FindChar(const X *text, int (*ischar)(int), int len, int *outlen) { return FindChar(text, ischar, 0, len, outlen); }
+template <class X>       X *FindChar(      X *text, int (*ischar)(int), int len, int *outlen) { return (X*)FindChar((const X *)text, ischar, len, outlen); }
+
+template <> const DrawableBox *FindChar(const DrawableBox *text, int (*ischar)(int), int (*isquotec)(int), int len, int *outlen) {
+    FindCharImpl(DrawableBox, p->Id(), 1);
+}
+template <>       DrawableBox *FindChar(      DrawableBox *text, int (*ischar)(int), int (*isquotec)(int), int len, int *outlen) { return (DrawableBox*)FindChar((const DrawableBox *)text, ischar, isquotec, len, outlen); }
+template <> const DrawableBox *FindChar(const DrawableBox *text, int (*ischar)(int), int len, int *outlen) { return FindChar(text, ischar, 0, len, outlen); }
+template <>       DrawableBox *FindChar(      DrawableBox *text, int (*ischar)(int), int len, int *outlen) { return (DrawableBox*)FindChar((const DrawableBox *)text, ischar, len, outlen); }
+
+template       char*        FindChar<char >      (      char*,        int (*)(int), int, int*);
+template const char*        FindChar<char >      (const char*,        int (*)(int), int, int*);
+template       short*       FindChar<short>      (      short*,       int (*)(int), int, int*);
+template const short*       FindChar<short>      (const short*,       int (*)(int), int, int*);
+template       DrawableBox* FindChar<DrawableBox>(      DrawableBox*, int (*)(int), int, int*);
+template const DrawableBox* FindChar<DrawableBox>(const DrawableBox*, int (*)(int), int, int*);
+
+#define LengthCharImpl(type, deref_p, check_p) \
+    const type *p = in; \
+    if (len >= 0) while (p-in < len && ischar(deref_p)) p++; \
+    else          while (check_p    && ischar(deref_p)) p++; \
+    return p - in;
+
+template <class X> int LengthChar(const X *in, int (*ischar)(int), int len) {
+    LengthCharImpl(X, *p, *p);
+}
+template <> int LengthChar(const DrawableBox *in, int (*ischar)(int), int len) {
+    LengthCharImpl(DrawableBox, p->Id(), 1);
+}
+template int LengthChar(const char*,        int(*)(int), int);
+template int LengthChar(const short*,       int(*)(int), int);
+template int LengthChar(const DrawableBox*, int(*)(int), int);
+
+#define RLengthCharImpl(type, deref_p) \
+    if (len <= 0) return 0; \
+    const type *p = in, *e = in - len; \
+    for (; p != e; --p) if (!ischar(deref_p)) break; \
+    return in - p;
+
+template <class X> int RLengthChar(const X *in, int (*ischar)(int), int len) {
+    RLengthCharImpl(X, *p);
+}
+template <> int RLengthChar(const DrawableBox *in, int (*ischar)(int), int len) {
+    RLengthCharImpl(DrawableBox, p->Id());
+}
+template int RLengthChar(const char*,        int(*)(int), int);
+template int RLengthChar(const short*,       int(*)(int), int);
+template int RLengthChar(const DrawableBox*, int(*)(int), int);
 
 int Split(const string &in, int (*ischar)(int), string *left, string *right) { return Split(in.c_str(), ischar, left, right); }
 int Split(const char   *in, int (*ischar)(int), string *left, string *right) {
@@ -406,6 +484,14 @@ string ReplaceNewlines(const string   &in, const string   &replace_with) {
     return ret;
 }
 
+bool ReplaceString(string *text, const string &needle, const string &replace) {
+    int pos = text->find(needle);
+    if (pos == string::npos) return false;
+    text->erase(pos, needle.size());
+    text->insert(pos, replace);
+    return true;
+}
+
 template <class X> string CHexEscape(const basic_string<X> &text) {
     string ret;
     ret.reserve(text.size()*4);
@@ -427,14 +513,6 @@ template string CHexEscape        (const String16 &);
 template string CHexEscapeNonAscii(const string   &);
 template string CHexEscapeNonAscii(const String16 &);
 
-const char *NextProto(const StringPiece &text, bool final, int *outlen) {
-    if (text.len < ProtoHeader::size) return 0;
-    ProtoHeader hdr(text.buf);
-    if (ProtoHeader::size + hdr.len > text.len) return 0;
-    *outlen = hdr.len;
-    return text.buf + ProtoHeader::size + hdr.len;
-}
-
 template <class X, bool chomp> const X *NextLine(const StringPieceT<X> &text, bool final, int *outlen) {
     const X *ret=0, *p = text.buf;
     for (/**/; !text.Done(p); ++p) { 
@@ -453,70 +531,13 @@ const short *NextLine   (const String16Piece &text, bool final, int *outlen) { r
 const char  *NextLineRaw(const StringPiece   &text, bool final, int *outlen) { return NextLine<char,  false>(text, final, outlen); }
 const short *NextLineRaw(const String16Piece &text, bool final, int *outlen) { return NextLine<short, false>(text, final, outlen); }
 
-#define NextCharLoopImpl(deref_p) \
-    if (!in_quote && ischar(deref_p)) { ret=p; break; } \
-    if (isquotec && isquotec(deref_p)) in_quote = !in_quote;
-
-#define NextCharImpl(type, deref_p, check_p) \
-    const type *ret=0, *p=text; \
-    bool have_len = len >= 0, in_quote = false; \
-    if (have_len) { for (const type *e = p+len; p != e;  ++p) { NextCharLoopImpl(deref_p); } } \
-    else          { for (;                      check_p; ++p) { NextCharLoopImpl(deref_p); } } \
-    if (outlen) *outlen = ret ? ret-text : p-text; \
-    return ret;
-
-template <class X> const X *NextChar(const X *text, int (*ischar)(int), int (*isquotec)(int), int len, int *outlen) {
-    NextCharImpl(X, *p, *p);
+const char *NextProto(const StringPiece &text, bool final, int *outlen) {
+    if (text.len < ProtoHeader::size) return 0;
+    ProtoHeader hdr(text.buf);
+    if (ProtoHeader::size + hdr.len > text.len) return 0;
+    *outlen = hdr.len;
+    return text.buf + ProtoHeader::size + hdr.len;
 }
-template <class X>       X *NextChar(      X *text, int (*ischar)(int), int (*isquotec)(int), int len, int *outlen) { return (X*)NextChar((const X *)text, ischar, isquotec, len, outlen); }
-template <class X> const X *NextChar(const X *text, int (*ischar)(int), int len, int *outlen) { return NextChar(text, ischar, 0, len, outlen); }
-template <class X>       X *NextChar(      X *text, int (*ischar)(int), int len, int *outlen) { return (X*)NextChar((const X *)text, ischar, len, outlen); }
-
-template <> const DrawableBox *NextChar(const DrawableBox *text, int (*ischar)(int), int (*isquotec)(int), int len, int *outlen) {
-    NextCharImpl(DrawableBox, p->Id(), 1);
-}
-template <>       DrawableBox *NextChar(      DrawableBox *text, int (*ischar)(int), int (*isquotec)(int), int len, int *outlen) { return (DrawableBox*)NextChar((const DrawableBox *)text, ischar, isquotec, len, outlen); }
-template <> const DrawableBox *NextChar(const DrawableBox *text, int (*ischar)(int), int len, int *outlen) { return NextChar(text, ischar, 0, len, outlen); }
-template <>       DrawableBox *NextChar(      DrawableBox *text, int (*ischar)(int), int len, int *outlen) { return (DrawableBox*)NextChar((const DrawableBox *)text, ischar, len, outlen); }
-
-template       char*        NextChar<char >      (      char*,        int (*)(int), int, int*);
-template const char*        NextChar<char >      (const char*,        int (*)(int), int, int*);
-template       short*       NextChar<short>      (      short*,       int (*)(int), int, int*);
-template const short*       NextChar<short>      (const short*,       int (*)(int), int, int*);
-template       DrawableBox* NextChar<DrawableBox>(      DrawableBox*, int (*)(int), int, int*);
-template const DrawableBox* NextChar<DrawableBox>(const DrawableBox*, int (*)(int), int, int*);
-
-#define LengthCharImpl(type, deref_p, check_p) \
-    const type *p = in; \
-    if (len >= 0) while (p-in < len && ischar(deref_p)) p++; \
-    else          while (check_p    && ischar(deref_p)) p++; \
-    return p - in;
-
-template <class X> int LengthChar(const X *in, int (*ischar)(int), int len) {
-    LengthCharImpl(X, *p, *p);
-}
-template <> int LengthChar(const DrawableBox *in, int (*ischar)(int), int len) {
-    LengthCharImpl(DrawableBox, p->Id(), 1);
-}
-template int LengthChar(const char*,        int(*)(int), int);
-template int LengthChar(const short*,       int(*)(int), int);
-template int LengthChar(const DrawableBox*, int(*)(int), int);
-
-#define RLengthCharImpl(type, deref_p) \
-    if (len <= 0) return 0; \
-    const type *p = in, *e = in - len; \
-    for (; p != e; --p) if (!ischar(deref_p)) break; \
-    return in - p;
-
-template <class X> int RLengthChar(const X *in, int (*ischar)(int), int len) {
-    RLengthCharImpl(X, *p);
-}
-template <> int RLengthChar(const DrawableBox *in, int (*ischar)(int), int len) {
-    RLengthCharImpl(DrawableBox, p->Id());
-}
-template int RLengthChar(const char*,        int(*)(int), int);
-template int RLengthChar(const short*,       int(*)(int), int);
-template int RLengthChar(const DrawableBox*, int(*)(int), int);
 
 template <class X> 
 StringWordIterT<X>::StringWordIterT(const X *B, int S, int (*delim)(int), int (*quote)(int), int F)
@@ -527,7 +548,7 @@ StringWordIterT<X>::StringWordIterT(const X *B, int S, int (*delim)(int), int (*
 template <class X> const X *StringWordIterT<X>::Next() {
     cur_offset = next_offset;
     if (cur_offset < 0) return 0;
-    const X *word = in + cur_offset, *next = NextChar(word, IsSpace, IsQuote, (size >= 0 ? size-cur_offset : -1), &cur_len);
+    const X *word = in + cur_offset, *next = FindChar(word, IsSpace, IsQuote, (size >= 0 ? size-cur_offset : -1), &cur_len);
     if ((next_offset = next ? next-in : -1) >= 0) next_offset += LengthChar(in+next_offset, IsSpace, size >= 0 ? size-next_offset : -1);
     return cur_len ? word : 0;
 }
@@ -560,26 +581,6 @@ const char *IterWordIter::Next() {
     }
     return w;
 }    
-
-unsigned fnv32(const void *buf, unsigned len, unsigned hval) {
-    if (!len) len = strlen((const char *)buf);
-    unsigned char *bp = (unsigned char *)buf, *be = bp + len;
-    while (bp < be) {
-        hval += (hval<<1) + (hval<<4) + (hval<<7) + (hval<<8) + (hval<<24);
-        hval ^= (unsigned)*bp++;
-    }
-    return hval;
-}
-
-unsigned long long fnv64(const void *buf, unsigned len, unsigned long long hval) {
-    if (!len) len = strlen((const char *)buf);
-    unsigned char *bp = (unsigned char *)buf, *be = bp + len;
-    while (bp < be) {
-        hval += (hval<<1) + (hval<<4) + (hval<<5) + (hval<<7) + (hval<<8) + (hval<<40);
-        hval ^= (unsigned long long)*bp++;
-    }
-    return hval;
-}
 
 template <class X> int IsNewline(const X *line) {
     if (!*line) return 0;
@@ -624,7 +625,7 @@ const char *BaseName(const StringPiece &path, int *outlen) {
     for (const char *p = path.buf+len-1; p > path.buf; --p) if (isfileslash(*p)) { ret=p+1; break;}
     if (outlen) {
         int namelen = len - (ret-path.buf), baselen;
-        NextChar(ret, isdot, namelen, &baselen);
+        FindChar(ret, isdot, namelen, &baselen);
         *outlen = baselen ? baselen : namelen;
     }
     return ret;

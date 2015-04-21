@@ -101,13 +101,13 @@ struct HTMLParser {
     }
 
     void Text(String &text) {
-        if (!inpre && !NextChar(text.c_str(), notspace, text.size())) return;
+        if (!inpre && !FindChar(text.c_str(), notspace, text.size())) return;
         Text(text, stack);
     }
 
     void TagText(const String &tag) {
         String tagname; KV attr;
-        Char *base=(Char*)tag.c_str(), *space=NextChar(base, isspace);
+        Char *base=(Char*)tag.c_str(), *space=FindChar(base, isspace);
         bool selfclose = tag.size() && tag[tag.size()-1] == '/';
         if (!space) tagname = tag.substr(0, tag.size()-selfclose);
         else {
@@ -116,21 +116,21 @@ struct HTMLParser {
             len = tag.size()-len-1;
             Char *key, *val; bool done=0, dquote=0;
             for (Char *b=space+1, *e=b+len, *p=b; p && p<e; /**/) {
-                if (!(key = NextChar(p, notspace, len-(p-b), 0))) break;
-                if (!(p = NextChar(key, notalnum, len-(key-b), 0))) break;
+                if (!(key = FindChar(p, notspace, len-(p-b)))) break;
+                if (!(p = FindChar(key, notalnum, len-(key-b)))) break;
                 if (isspace(*p)) *p++ = 0;
-                if (!(p = NextChar(p, notspace, len-(p-b), 0))) break;
+                if (!(p = FindChar(p, notspace, len-(p-b)))) break;
                 if (*p != '=') break;
                 else *p++ = 0;
-                if (!(val = NextChar(p, notspace, len-(p-b), 0))) break;
+                if (!(val = FindChar(p, notspace, len-(p-b)))) break;
                 if ((dquote = *val == '"') || *val == '\'') {
                     val++;
-                    if (!(p = NextChar(val, dquote ? isdquote : issquote, len-(val-b), 0))) break;
+                    if (!(p = FindChar(val, dquote ? isdquote : issquote, len-(val-b)))) break;
                     *p++ = 0;
                     if (*p && !isspace(*p)) done=1;
                 }
                 else {
-                    if ((p = NextChar(val, isspace, len-(val-b), 0))) *p++ = 0;
+                    if ((p = FindChar(val, isspace, len-(val-b)))) *p++ = 0;
                 }
                 attr[lower_attrs ? tolower(key) : key] = val;
                 if (done) break;

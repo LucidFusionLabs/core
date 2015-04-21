@@ -276,10 +276,10 @@ string HTTP::HostURL(const char *url) {
 
 int HTTP::ParseRequest(char *buf, char **methodO, char **urlO, char **argsO, char **verO) {
     char *url, *ver, *args;
-    if (!(url = (char*)NextChar(buf, isspace)))    return -1;    *url = 0;
-    if (!(url = (char*)NextChar(url+1, notspace))) return -1;
-    if (!(ver = (char*)NextChar(url, isspace)))    return -1;    *ver = 0;
-    if (!(ver = (char*)NextChar(ver+1, notspace))) return -1;
+    if (!(url = (char*)FindChar(buf, isspace)))    return -1;    *url = 0;
+    if (!(url = (char*)FindChar(url+1, notspace))) return -1;
+    if (!(ver = (char*)FindChar(url, isspace)))    return -1;    *ver = 0;
+    if (!(ver = (char*)FindChar(ver+1, notspace))) return -1;
 
     if ((args = strchr(url, '?'))) *args++ = 0;
 
@@ -360,7 +360,7 @@ int HTTP::GrepHeaders(const char *headers, const char *end, int num, ...) {
     for (const char *h = lines.Next(); h; h = lines.Next()) {
         if (!(hnlen = HTTP::GetHeaderNameLen(h))) continue;
         for (int i=0; i<num; i++) if (hnlen == kl[i] && !strncasecmp(k[i], h, hnlen)) {
-            const char *hv = NextChar(h+hnlen+1, notspace, lines.cur_len-hnlen-1);
+            const char *hv = FindChar(h+hnlen+1, notspace, lines.cur_len-hnlen-1);
             if (!hv) v[i]->clear();
             else     v[i]->assign(hv, lines.cur_len-(hv-h));
         }

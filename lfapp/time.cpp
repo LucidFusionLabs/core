@@ -20,7 +20,7 @@
 #include "lfapp/time.h"
 
 namespace LFL {
-Time Now() { return duration_cast<milliseconds>(high_resolution_clock::now().time_since_epoch()); }
+Time Now() { return duration_cast<milliseconds>(system_clock::now().time_since_epoch()); }
 void MSleep(int ms) { std::this_thread::sleep_for(milliseconds(ms)); }
 
 time_t Time2time_t(Time x) { return ToSeconds(x).count(); }

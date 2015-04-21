@@ -42,7 +42,8 @@ ProcessAPIServer *render_process;
 int new_win_width = 80*10, new_win_height = 25*17;
 
 void MyNewLinkCB(const shared_ptr<TextGUI::Link> &link) {
-    string image_url = link->link;
+    const char *args = FindChar(link->link.c_str() + 6, isint2<'?', ':'>);
+    string image_url(link->link, 0, args ? args - link->link.c_str() : string::npos);
     if (!FileSuffix::Image(image_url)) {
         string prot, host, port, path;
         if (HTTP::ParseURL(image_url.c_str(), &prot, &host, &port, &path) &&

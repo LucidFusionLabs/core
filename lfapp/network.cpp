@@ -1869,7 +1869,7 @@ struct SMTPClientConnection : public Query {
             if (!response_lines.empty()) response_lines.append("\r\n");
             response_lines.append(line, lines.cur_len);
 
-            const char *dash = NextChar(line.c_str(), notnum);
+            const char *dash = FindChar(line.c_str(), notnum);
             bool multiline = dash && *dash == '-';
             if (multiline) continue;
 

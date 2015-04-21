@@ -277,8 +277,8 @@ TEST(StringTest, StringMatch) {
     EXPECT_FALSE(StringEquals(ToUTF16("g0G0z"), ToUTF16("g0G0"), true));
 
     string a1 = "foo bar baz bat";
-    EXPECT_TRUE (StringReplace(&a1, "bar baz", "raz"));
-    EXPECT_FALSE(StringReplace(&a1, "bar baz", "raz"));
+    EXPECT_TRUE (ReplaceString(&a1, "bar baz", "raz"));
+    EXPECT_FALSE(ReplaceString(&a1, "bar baz", "raz"));
     EXPECT_EQ(a1, "foo raz bat");
 }
 

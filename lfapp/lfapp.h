@@ -108,6 +108,8 @@ using LFL_STL11_NAMESPACE::chrono::milliseconds;
 using LFL_STL11_NAMESPACE::chrono::microseconds;
 using LFL_STL11_NAMESPACE::chrono::duration;
 using LFL_STL11_NAMESPACE::chrono::duration_cast;
+using LFL_STL11_NAMESPACE::chrono::system_clock;
+using LFL_STL11_NAMESPACE::chrono::steady_clock;
 using LFL_STL11_NAMESPACE::chrono::high_resolution_clock;
 using LFL_STL11_NAMESPACE::enable_if;
 using LFL_STL11_NAMESPACE::is_integral;
