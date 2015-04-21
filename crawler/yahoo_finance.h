@@ -39,7 +39,7 @@ struct YahooFinanceApi : public Crawler {
 
     static float ParseMBValue(const char *text) {
         float val = atof(text);
-        const char *denomination = NextChar(text, notnum);
+        const char *denomination = FindChar(text, notnum);
         if (denomination) {
             if (*denomination == 'M') val *=    1000000;
             if (*denomination == 'B') val *= 1000000000;

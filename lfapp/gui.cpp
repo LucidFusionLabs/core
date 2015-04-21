@@ -378,9 +378,12 @@ void TextGUI::UpdateToken(Line *L, int word_offset, int word_len, int update_typ
 }
 
 void TextGUI::UpdateLongToken(Line *BL, int beg_offset, Line *EL, int end_offset, const string &text, int update_type) {
-    int url_offset = -1, fh = font->Height();
-    if      (PrefixMatch(text, "http://"))  url_offset = 7;
-    else if (PrefixMatch(text, "https://")) url_offset = 8;
+    StringPiece textp(text);
+    int offset = 0, url_offset = -1, fh = font->Height();
+    for (; textp.len>1 && MatchingParens(*textp.buf, *textp.rbegin()); offset++, textp.buf++, textp.len -= 2) {}
+    if (int punct = LengthChar(textp.buf, ispunct, textp.len)) { offset += punct; textp.buf += punct; }
+    if      (textp.len > 7 && PrefixMatch(textp.buf, "http://"))  url_offset = offset + 7;
+    else if (textp.len > 8 && PrefixMatch(textp.buf, "https://")) url_offset = offset + 8;
     if (url_offset >= 0) {
         if (update_type < 0) BL->data->links.erase(beg_offset);
         else {
@@ -388,7 +391,7 @@ void TextGUI::UpdateLongToken(Line *BL, int beg_offset, Line *EL, int end_offset
             Box gb = Box(BL->data->glyphs[beg_offset].box).SetY(BL->p.y - fh);
             Box ge = Box(EL->data->glyphs[end_offset].box).SetY(EL->p.y - fh);
             Box3 box(Box(fb->Width(), fb->Height()), gb.Position(), ge.Position() + point(ge.w, 0), fh, fh);
-            auto i = Insert(BL->data->links, beg_offset, shared_ptr<Link>(new Link(this, &mouse_gui, box, text)));
+            auto i = Insert(BL->data->links, beg_offset, shared_ptr<Link>(new Link(this, &mouse_gui, box, offset ? textp.str() : text)));
             if (new_link_cb) new_link_cb(i->second);
         }
     }
@@ -515,10 +518,12 @@ void TextArea::Draw(const Box &b, bool draw_cursor) {
     if (selection.changing) DrawSelection();
     if (hover_link) {
         int fb_h = line_fb.Height();
-        // XXX-Z multi-line underline
-        point p = hover_link->box.v[0].BottomLeft();
-        p.y = RingIndex::Wrap(p.y + line_fb.scroll.y * fb_h, fb_h);
-        glLine(p, point(hover_link->box.v[0].BottomRight().x, p.y), &Color::white);
+        for (const auto &b : hover_link->box) {
+            if (!b.w || !b.h) continue;
+            point p = b.BottomLeft();
+            p.y = RingIndex::Wrap(p.y + line_fb.scroll.y * fb_h, fb_h);
+            glLine(p, point(b.BottomRight().x, p.y), &Color::white);
+        }
         if (hover_link_cb) hover_link_cb(hover_link);
     }
 }

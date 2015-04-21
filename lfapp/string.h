@@ -124,6 +124,7 @@ template <class X> struct ArrayPiece {
     void assign(const X *b, int l) { buf=b; len=l; }
     const X *data() const { return buf; }
     const_iterator begin() const { return buf; }
+    const_iterator rbegin() const { return buf+len-1; }
     const_iterator end() const { return buf+len; }
 };
 
@@ -307,11 +308,14 @@ int notalnum(int c);
 int notnum(int c);
 int notcomma(int c);
 int notdot(int c);
+int MatchingParens(int c1, int c2);
 int atoi(const char  *v);
 int atoi(const short *v);
 float my_atof(const char *v);
 inline double atof(const string &v) { return ::atof(v.c_str()); }
 inline int    atoi(const string &v) { return ::atoi(v.c_str()); }
+unsigned           fnv32(const void *buf, unsigned len=0, unsigned           hval=0);
+unsigned long long fnv64(const void *buf, unsigned len=0, unsigned long long hval=0);
 
 string WStringPrintf(const wchar_t *fmt, ...);
 String16 String16Printf(const char *fmt, ...);
@@ -393,7 +397,13 @@ bool StringEmptyOrEquals(const String16 &in, const string   &ref, int case_sensi
 bool StringEmptyOrEquals(const string   &in, const string   &ref1, const string   &ref2, int case_sensitive=false);
 bool StringEmptyOrEquals(const String16 &in, const String16 &ref1, const String16 &ref2, int case_sensitive=false);
 bool StringEmptyOrEquals(const String16 &in, const string   &ref1, const string   &ref2, int case_sensitive=false);
-bool StringReplace(string *text, const string &needle, const string &replace);
+
+template <class X>       X *FindChar(      X *text, int (*ischar)(int),                      int len=-1, int *outlen=0);
+template <class X> const X *FindChar(const X *text, int (*ischar)(int),                      int len=-1, int *outlen=0);
+template <class X>       X *FindChar(      X *text, int (*ischar)(int), int (*isquote)(int), int len=-1, int *outlen=0);
+template <class X> const X *FindChar(const X *text, int (*ischar)(int), int (*isquote)(int), int len=-1, int *outlen=0);
+template <class X> int    LengthChar(const X* text, int (*ischar)(int), int len=-1);
+template <class X> int   RLengthChar(const X* text, int (*ischar)(int), int len);
 
 template <class X, class Y> int Split(const X *in, int (*ischar)(int), int (*isquote)(int), vector<Y> *out) {
     out->clear();
@@ -448,6 +458,7 @@ string   ReplaceEmpty (const string   &in, const string   &replace_with);
 String16 ReplaceEmpty (const String16 &in, const string   &replace_with);
 String16 ReplaceEmpty (const String16 &in, const String16 &replace_with);
 string ReplaceNewlines(const string   &in, const string   &replace_with);
+bool ReplaceString(string *text, const string &needle, const string &replace);
 template <class X> string CHexEscape        (const basic_string<X> &text);
 template <class X> string CHexEscapeNonAscii(const basic_string<X> &text);
 
@@ -462,15 +473,6 @@ template <int S> const char *NextChunk(const StringPiece &text, bool final=0, in
     *outlen = add;
     return text.buf + add;
 }
-template <class X>       X *NextChar(      X *text, int (*ischar)(int),                      int len=-1, int *outlen=0);
-template <class X> const X *NextChar(const X *text, int (*ischar)(int),                      int len=-1, int *outlen=0);
-template <class X>       X *NextChar(      X *text, int (*ischar)(int), int (*isquote)(int), int len=-1, int *outlen=0);
-template <class X> const X *NextChar(const X *text, int (*ischar)(int), int (*isquote)(int), int len=-1, int *outlen=0);
-template <class X> int    LengthChar(const X* text, int (*ischar)(int), int len=-1);
-template <class X> int   RLengthChar(const X* text, int (*ischar)(int), int len);
-
-unsigned           fnv32(const void *buf, unsigned len=0, unsigned           hval=0);
-unsigned long long fnv64(const void *buf, unsigned len=0, unsigned long long hval=0);
 
 template <class X> const X *BlankNull(const X *x) { return x ? x : StringPieceT<X>::Blank(); }
 template <class X> const X *SpellNull(const X *x) { return x ? x : StringPieceT<X>::NullSpelled(); }

@@ -696,7 +696,7 @@ extern "C" int main(int argc, const char *argv[]) {
         string fader_shader  = LocalFile::FileContents(StrCat(app->assetdir, "fader.glsl"));
         string warper_shader = LocalFile::FileContents(StrCat(app->assetdir, "warper.glsl"));
         string explode_shader = lfapp_vertex_shader;
-        CHECK(StringReplace(&explode_shader, "// LFLPositionShaderMarker",
+        CHECK(ReplaceString(&explode_shader, "// LFLPositionShaderMarker",
                                              LocalFile::FileContents(StrCat(app->assetdir, "explode.glsl"))));
 
         Shader::Create("fadershader",         vertex_shader,       fader_shader, "",                     &fadershader);
