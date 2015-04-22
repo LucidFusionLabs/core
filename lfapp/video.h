@@ -531,6 +531,7 @@ struct Window : public NativeWindow {
     void ClearGesture();
     void Reshape(int w, int h);
     void Reshaped(int w, int h);
+    void Closed() { Window::Close(this); }
     void Minimized() {}
     void UnMinimized() {}
     void SwapAxis();

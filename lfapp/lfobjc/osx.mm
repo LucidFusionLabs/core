@@ -29,7 +29,7 @@ static int osx_argc = 0, osx_evcount = 0;
 static const char **osx_argv = 0;
 
 // GameView
-@interface GameView : NSView
+@interface GameView : NSView<NSWindowDelegate>
     + (NSOpenGLPixelFormat *)defaultPixelFormat;
     - (void)update;
 @end
@@ -51,10 +51,12 @@ static const char **osx_argv = 0;
         BOOL initialized, needs_reshape;
         BOOL use_timer, use_display_link, video_thread_init;
         BOOL cmd_down, ctrl_down, shift_down;
-        BOOL frame_on_keyboard_input, frame_on_mouse_input;
+        BOOL frame_on_keyboard_input, frame_on_mouse_input, should_close;
     };
 
     - (void)dealloc {
+        if (timer)           FATALf("%s", "timer");
+        if (wait_forever_fh) FATALf("%s", wait_forever_fh);
         CVDisplayLinkRelease(displayLink);
         [pixel_format release];
         [context release];
@@ -64,7 +66,7 @@ static const char **osx_argv = 0;
         [super initWithFrame:frame];
         pixel_format = [format retain];
         app = GetLFApp();
-        use_timer = 1;
+        use_timer = should_close = 1;
         return self;
     }
     + (NSOpenGLPixelFormat *)defaultPixelFormat {
@@ -157,7 +159,14 @@ static const char **osx_argv = 0;
         [context update];
         SetNativeWindow(screen);
         float screen_w = [self frame].size.width, screen_h = [self frame].size.height;
-        Reshaped((int)screen_w, (int)screen_h);
+        WindowReshaped((int)screen_w, (int)screen_h);
+    }
+    - (BOOL)windowShouldClose:(id)sender { return should_close; }
+    - (void)windowWillClose:(NSNotification *)notification { 
+        SetNativeWindow(screen);
+        WindowClosed();
+        [self stopThread];
+        [self autorelease];
     }
     - (void)setWaitForeverSocket: (int)fd {
         if (wait_forever_fh) FATALf("wait_forever_fh already set: %p", wait_forever_fh);
@@ -302,9 +311,11 @@ static const char **osx_argv = 0;
         [view setWindow:window];
         [[view openGLContext] setView:view];
         [window setContentView:view];
+        [window setDelegate:view];
         [window center];
         [window makeKeyAndOrderFront:nil];
         [window setMinSize:NSMakeSize(256, 256)];
+        [window setReleasedWhenClosed: YES];
         if (1) {
             window.acceptsMouseMovedEvents = YES;
             [window makeFirstResponder:view];
@@ -312,6 +323,10 @@ static const char **osx_argv = 0;
         [NSApp activateIgnoringOtherApps:YES];
         INFOf("OSXVideoModule: AppDelegate::createWindow(%d, %d).id = %p", w, h, view);
         return view;
+    }
+    - (void)destroyWindow: (NSWindow*)window {
+        [window setContentView:nil];
+        [window close];
     }
     - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication *)theApplication {
         GetLFApp()->run = false;
@@ -328,6 +343,10 @@ extern "C" void *OSXCreateWindow(int w, int h, struct NativeWindow *nw) {
     [(GameView*)GetNativeWindow()->id clearKeyModifiers];
     return [(AppDelegate*)[NSApp delegate] createWindow:w height:h nativeWindow:nw];
 }
+extern "C" void OSXDestroyWindow(void *O) {
+    [(AppDelegate*)[NSApp delegate] destroyWindow: [(GameView*)O window] ];
+}
+
 extern "C" void *OSXCreateGLContext(void *O) {
     return [(GameView*)O createGLContext];
 }

@@ -38,6 +38,7 @@ inline string FromCFStr(CFStringRef in) {
 }
 inline CFAttributedStringRef ToCFAStr(CTFontRef ctfont, unsigned short glyph_id, const LFL::Color &c) {
     CGColorSpaceRef colors = CGColorSpaceCreateDeviceRGB();
+    // CGColorSpaceRef colors = CGColorSpaceCreateWithName(kCGColorSpaceGenericRGB);
     CGFloat fg_comp[4] = { c.r(), c.g(), c.b(), c.a() };
     CGColorRef fg_color = CGColorCreate(colors, fg_comp);
     const CFStringRef attr_key[] = { kCTFontAttributeName, kCTForegroundColorAttributeName };

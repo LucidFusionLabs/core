@@ -120,9 +120,10 @@ extern "C" int LFAppMain()                 { return LFL::app->Main(); }
 extern "C" int LFAppMainLoop()             { return LFL::app->MainLoop(); }
 extern "C" int LFAppFrame()                { return LFL::app->Frame(); }
 extern "C" const char *LFAppDownloadDir()  { return LFL::app->dldir.c_str(); }
-extern "C" void Reshaped(int w, int h)     { LFL::screen->Reshaped(w, h); }
-extern "C" void Minimized()                { LFL::screen->Minimized(); }
-extern "C" void UnMinimized()              { LFL::screen->UnMinimized(); }
+extern "C" void WindowReshaped(int w, int h) { LFL::screen->Reshaped(w, h); }
+extern "C" void WindowMinimized()            { LFL::screen->Minimized(); }
+extern "C" void WindowUnMinimized()          { LFL::screen->UnMinimized(); }
+extern "C" void WindowClosed()               { LFL::screen->Closed(); }
 extern "C" int  KeyPress  (int b, int d)                 { return LFL::app->input.KeyPress  (b, d); }
 extern "C" int  MouseClick(int b, int d, int x,  int y)  { return LFL::app->input.MouseClick(b, d, LFL::point(x, y)); }
 extern "C" int  MouseMove (int x, int y, int dx, int dy) { return LFL::app->input.MouseMove (LFL::point(x, y), LFL::point(dx, dy)); }

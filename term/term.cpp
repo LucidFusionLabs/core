@@ -188,6 +188,7 @@ void MyWindowCloneCB(Window *W) {
 }
 void MyWindowClosedCB(Window *W) {
     delete (MyTerminalWindow*)W->user1;
+    delete W;
 }
 
 }; // naemspace LFL
