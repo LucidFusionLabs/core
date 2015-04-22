@@ -969,6 +969,7 @@ struct IPhoneVideoModule : public Module {
 #ifdef LFL_OSXVIDEO
 extern "C" void OSXVideoSwap(void*);
 extern "C" void *OSXCreateWindow(int W, int H, struct NativeWindow *nw);
+extern "C" void OSXDestroyWindow(void *O);
 extern "C" void OSXMakeWindowCurrent(void *O);
 extern "C" void OSXSetWindowSize(void*, int W, int H);
 extern "C" void *OSXCreateGLContext(void *O);
@@ -992,6 +993,9 @@ void Window::MakeCurrent(Window *W) {
 void Window::Close(Window *W) {
     Window::active.erase(W->id);
     if (Window::active.empty()) app->run = false;
+    if (app->window_closed_cb) app->window_closed_cb(W);
+    // OSXDestroyWindow(W->id);
+    screen = 0;
 }
 #endif
 
@@ -1025,6 +1029,7 @@ bool Window::Create(Window *W) {
 void Window::Close(Window *W) {
     Window::active.erase(W->id);
     if (Window::active.empty()) app->run = false;
+    if (app->window_closed_cb) app->window_closed_cb(W);
     screen = 0;
 }
 void Window::MakeCurrent(Window *W) {

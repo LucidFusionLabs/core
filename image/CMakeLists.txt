@@ -29,3 +29,6 @@ add_executable(image image.cpp ${SDL_MAIN})
 target_link_libraries(image ${LFAPP_LIB})
 endif(LFL_ANDROID)
 
+include_directories(${GTEST_INCLUDE})
+add_executable(gl_tests gl_tests.cpp)
+target_link_libraries(gl_tests ${LFAPP_LIB} ${GTEST_LIB})
