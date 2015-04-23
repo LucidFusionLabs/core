@@ -98,21 +98,21 @@ struct SocketSet {
 };
 
 struct SelectSocketSet : public SocketSet {
-    unordered_map<Socket, int> socket;
+    unordered_map<Socket, pair<int, void*> > socket;
     fd_set rfds, wfds, xfds;
     SocketSet *mirror=0;
 
     int Select(int wait_time);
-    void Del(Socket fd)                    { socket.erase(fd);  if (mirror) mirror->Del(fd); }
-    void Add(Socket fd, int flag, void *v) { socket[fd] = flag; if (mirror) mirror->Add(fd, flag, v); }
-    void Set(Socket fd, int flag, void *v) { socket[fd] = flag; if (mirror) mirror->Set(fd, flag, v); }
+    void Del(Socket fd)                    { socket.erase(fd);                if (mirror) mirror->Del(fd); }
+    void Add(Socket fd, int flag, void *v) { socket[fd] = make_pair(flag, v); if (mirror) mirror->Add(fd, flag, v); }
+    void Set(Socket fd, int flag, void *v) { socket[fd] = make_pair(flag, v); if (mirror) mirror->Set(fd, flag, v); }
     int Get(Socket fd, fd_set *set) { return FD_ISSET(fd, set); } 
     int GetReadable(Socket fd) { return Get(fd, &rfds); }
     int GetWritable(Socket fd) { return Get(fd, &wfds); }
     int GetException(Socket fd) { return Get(fd, &xfds); }
     string DebugString() const {
         string ret="SelectSocketSet={";
-        for (unordered_map<Socket, int>::const_iterator i = socket.begin(); i != socket.end(); ++i) StrAppend(&ret, i->first, ", ");
+        for (auto &s : socket) StrAppend(&ret, s.first, ", ");
         return StrCat(ret.substr(0, ret.size()-2), "}");
     }
 };
@@ -124,6 +124,7 @@ struct SocketWakeupThread : public SocketSet {
     mutex sockets_mutex;
     Thread thread;
     int pipe[2];
+    bool wakeup_each=0;
     SocketWakeupThread(mutex *FM=0, mutex *WM=0) : frame_mutex(FM), wait_mutex(WM),
         thread(bind(&SocketWakeupThread::ThreadProc, this)) { pipe[0] = pipe[1] = -1; }
     ~SocketWakeupThread() { close(pipe[0]); close(pipe[1]); }

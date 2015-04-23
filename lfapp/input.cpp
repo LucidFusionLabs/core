@@ -26,6 +26,10 @@
 #include <QtOpenGL>
 #endif
 
+#ifdef LFL_WXWIDGETS
+#include <wx/wx.h>
+#endif
+
 #ifdef LFL_ANDROID
 #include <android/log.h>
 #endif
@@ -101,7 +105,7 @@ struct KeyRepeater {
 };
 #endif
 
-#if !defined(LFL_ANDROIDINPUT) && !defined(LFL_IPHONEINPUT) && !defined(LFL_GLFWINPUT) && !defined(LFL_SDLINPUT) && !defined(LFL_QT) && !defined(LFL_OSXINPUT)
+#if !defined(LFL_OSXINPUT) && !defined(LFL_ANDROIDINPUT) && !defined(LFL_IPHONEINPUT) && !defined(LFL_QT) && !defined(LFL_WXWIDGETS) && !defined(LFL_GLFWINPUT) && !defined(LFL_SDLINPUT)
 const int Key::Escape     = -1;
 const int Key::Return     = -2;
 const int Key::Up         = -3;
@@ -295,6 +299,56 @@ void Clipboard::Set(const string &s) {}
 void TouchDevice::OpenKeyboard() {}
 void TouchDevice::CloseKeyboard() {}
 #endif /* LFL_QT */
+
+#ifdef LFL_WXWIDGETS
+struct QTInputModule : public InputModule {
+    bool grabbed = 0;
+    int Frame(unsigned clicks) {
+        app->input.DispatchQueuedInput();
+        return 0;
+    }
+};
+
+const int Key::Escape     = WXK_ESCAPE;
+const int Key::Return     = WXK_RETURN;
+const int Key::Up         = WXK_UP;
+const int Key::Down       = WXK_DOWN;
+const int Key::Left       = WXK_LEFT;
+const int Key::Right      = WXK_RIGHT;
+const int Key::LeftShift  = WXK_SHIFT;
+const int Key::RightShift = -8;
+const int Key::LeftCtrl   = WXK_ALT;
+const int Key::RightCtrl  = -10;
+const int Key::LeftCmd    = WXK_CONTROL;
+const int Key::RightCmd   = -12;
+const int Key::Tab        = WXK_TAB;
+const int Key::Space      = WXK_SPACE;
+const int Key::Backspace  = WXK_BACK;
+const int Key::Delete     = WXK_DELETE;
+const int Key::Quote      = '\'';
+const int Key::Backquote  = '`';
+const int Key::PageUp     = WXK_PAGEUP;
+const int Key::PageDown   = WXK_PAGEDOWN;
+const int Key::F1         = WXK_F1;
+const int Key::F2         = WXK_F2;
+const int Key::F3         = WXK_F3;
+const int Key::F4         = WXK_F4;
+const int Key::F5         = WXK_F5;
+const int Key::F6         = WXK_F6;
+const int Key::F7         = WXK_F7;
+const int Key::F8         = WXK_F8;
+const int Key::F9         = WXK_F9;
+const int Key::F10        = WXK_F10;
+const int Key::F11        = WXK_F11;
+const int Key::F12        = WXK_F12;
+const int Key::Home       = WXK_HOME;
+const int Key::End        = WXK_END;
+
+string Clipboard::Get() { return ""; }
+void Clipboard::Set(const string &s) {}
+void TouchDevice::OpenKeyboard() {}
+void TouchDevice::CloseKeyboard() {}
+#endif /* LFL_WXWIDGETS */
 
 #ifdef LFL_GLFWINPUT
 struct GLFWInputModule : public InputModule {

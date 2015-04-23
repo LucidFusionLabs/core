@@ -1049,31 +1049,67 @@ void Mouse::ReleaseFocus() { ((OpenGLES2*)screen->gd)->QT_grabbed=0; ((QWindow*)
 }; // namespace LFL
 struct LFLWxWidgetCanvas : public wxGLCanvas {
     wxGLContext *context=0;
+    NativeWindow *screen=0;
+    bool frame_on_keyboard_input=0, frame_on_mouse_input=0;
     virtual ~LFLWxWidgetCanvas() { delete context; }
-    LFLWxWidgetCanvas(wxFrame *parent, int *args) :
-        wxGLCanvas(parent, wxID_ANY, args, wxDefaultPosition, wxDefaultSize, wxFULL_REPAINT_ON_RESIZE), context(new wxGLContext(this)) {}
+    LFLWxWidgetCanvas(NativeWindow *s, wxFrame *parent, int *args) :
+        wxGLCanvas(parent, wxID_ANY, args, wxDefaultPosition, wxDefaultSize, wxFULL_REPAINT_ON_RESIZE),
+        context((wxGLContext*)s->gl), screen(s) {}
     void OnPaint(wxPaintEvent& event) {
         wxPaintDC(this);
         SetCurrent(*context);
         if (LFL::app->run) LFAppFrame();
         else exit(0);
     }
+    void OnMouseMove(wxMouseEvent& event) {
+        SetNativeWindow(screen);
+        LFL::point p = GetMousePosition(event);
+        int fired = LFL::app->input.MouseMove(p, p - LFL::screen->mouse);
+        if (fired && frame_on_mouse_input) Refresh();
+    }
+    void OnMouseDown(wxMouseEvent& event) { OnMouseClick(1, true,  GetMousePosition(event)); }
+    void OnMouseUp  (wxMouseEvent& event) { OnMouseClick(1, false, GetMousePosition(event)); }
+    void OnMouseClick(int button, bool down, const LFL::point &p) {
+        SetNativeWindow(screen);
+        int fired = LFL::app->input.MouseClick(button, down, p);
+        if (fired && frame_on_mouse_input) Refresh();
+    }
+    void OnKeyDown(wxKeyEvent& event) { OnKeyEvent(GetKeyCode(event), true); }
+    void OnKeyUp  (wxKeyEvent& event) { OnKeyEvent(GetKeyCode(event), false); }
+    void OnKeyEvent(int key, bool down) {
+        SetNativeWindow(screen);
+        int fired = key ? KeyPress(key, down) : 0;
+        if (fired && frame_on_keyboard_input) Refresh();
+    }
+    static int GetKeyCode(wxKeyEvent& event) {
+        int key = event.GetUnicodeKey();
+        if (key == WXK_NONE) key = event.GetKeyCode();
+        return key < 256 && isalpha(key) ? ::tolower(key) : key;
+    }
+    static LFL::point GetMousePosition(wxMouseEvent& event) {
+        return LFL::Input::TransformMouseCoordinate(LFL::point(event.GetX(), event.GetY()));
+    }
     DECLARE_EVENT_TABLE()
 };
 BEGIN_EVENT_TABLE(LFLWxWidgetCanvas, wxGLCanvas)
     EVT_PAINT    (LFLWxWidgetCanvas::OnPaint)
+    EVT_KEY_DOWN (LFLWxWidgetCanvas::OnKeyDown)
+    EVT_KEY_UP   (LFLWxWidgetCanvas::OnKeyUp)
+    EVT_LEFT_DOWN(LFLWxWidgetCanvas::OnMouseDown)
+    EVT_LEFT_UP  (LFLWxWidgetCanvas::OnMouseUp)
+    EVT_MOTION   (LFLWxWidgetCanvas::OnMouseMove)
 END_EVENT_TABLE()
 
 struct LFLWxWidgetFrame : public wxFrame {
     LFLWxWidgetCanvas *canvas=0;
-    LFLWxWidgetFrame(int w, int h, const string &caption, bool show) : wxFrame(NULL, wxID_ANY, wxString::FromUTF8(caption.c_str())) {
+    LFLWxWidgetFrame(LFL::Window *w) : wxFrame(NULL, wxID_ANY, wxString::FromUTF8(w->caption.c_str())) {
         int args[] = { WX_GL_RGBA, WX_GL_DOUBLEBUFFER, WX_GL_DEPTH_SIZE, 16, 0 };
-        canvas = new LFLWxWidgetCanvas(this, args);
-        SetClientSize(w, h);
-        if (show) Show();
+        canvas = new LFLWxWidgetCanvas(w, this, args);
+        SetClientSize(w->width, w->height);
+        if (w->gl) Show();
     }
     void OnClose(wxCommandEvent& event) { Close(true); }
-    void OnNewWindow(wxCommandEvent& event) { new LFLWxWidgetFrame(LFL::screen->width, LFL::screen->height, LFL::screen->caption, true); }
+    void OnNewWindow(wxCommandEvent& event) { LFL::app->create_win_f(); }
     wxDECLARE_EVENT_TABLE();
 };
 wxBEGIN_EVENT_TABLE(LFLWxWidgetFrame, wxFrame)
@@ -1095,7 +1131,7 @@ struct LFLWxWidgetApp : public wxApp {
         int ret = LFLWxWidgetsMain(argc, &av[0]);
         if (ret) exit(ret);
         INFOf("%s", "WxWidgetsModule::Main done");
-        ((LFLWxWidgetFrame*)LFL::screen->id)->Show();
+        ((wxGLCanvas*)LFL::screen->id)->GetParent()->Show();
         return TRUE;
     }
     int OnExit() override {
@@ -1113,14 +1149,16 @@ struct WxWidgetsVideoModule : public Module {
         return 0;
     }
 };
-bool Window::Create(Window *W) { 
-    W->id = new LFLWxWidgetFrame(W->width, W->height, W->caption, W->gl != 0);
-    if (W->id) Window::active[W->id] = W;
+bool Window::Create(Window *W) {
+    if (!Window::active.empty()) W->gl = Window::active.begin()->second->gl;
+    LFLWxWidgetCanvas *canvas = (new LFLWxWidgetFrame(W))->canvas;
+    if ((W->id = canvas)) Window::active[W->id] = W;
+    if (!W->gl) W->gl = canvas->context = new wxGLContext(canvas);
     MakeCurrent(W);
     return true; 
 }
 void Window::MakeCurrent(Window *W) { 
-    LFLWxWidgetCanvas *canvas = ((LFLWxWidgetFrame*)W->id)->canvas;
+    LFLWxWidgetCanvas *canvas = (LFLWxWidgetCanvas*)W->id;
     canvas->SetCurrent(*canvas->context);
 }
 void Window::Close(Window *W) {
@@ -1129,6 +1167,8 @@ void Window::Close(Window *W) {
     if (app->window_closed_cb) app->window_closed_cb(W);
     screen = 0;
 }
+void Mouse::GrabFocus()    {}
+void Mouse::ReleaseFocus() {}
 #endif
 
 #ifdef LFL_GLFWVIDEO
@@ -1334,7 +1374,7 @@ int Video::Swap() {
 #if defined(LFL_QT)
     ((QOpenGLContext*)screen->gl)->swapBuffers((QWindow*)screen->id);
 #elif defined(LFL_WXWIDGETS)
-    ((LFLWxWidgetFrame*)screen->id)->canvas->SwapBuffers();
+    ((wxGLCanvas*)screen->id)->SwapBuffers();
 #elif defined(LFL_ANDROIDVIDEO)
     AndroidVideoSwap();
 #elif defined(LFL_GLFWVIDEO)
@@ -1361,7 +1401,7 @@ void Window::Reshape(int w, int h) {
     ((QWindow*)id)->resize(w, h);
     Window::MakeCurrent(screen);
 #elif defined(LFL_WXWIDGETS)
-    ((LFLWxWidgetFrame*)screen->id)->SetSize(w, h);
+    ((wxGLCanvas*)screen->id)->SetSize(w, h);
 #elif defined(LFL_GLFWVIDEO)
     glfwSetWindowSize((GLFWwindow*)id, w, h);
 #elif defined(LFL_SDLVIDEO)

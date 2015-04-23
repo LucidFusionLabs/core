@@ -82,6 +82,7 @@ using LFL_STL_NAMESPACE::unique;
 using LFL_STL_NAMESPACE::reverse;
 using LFL_STL_NAMESPACE::equal_to;
 using LFL_STL_NAMESPACE::lower_bound;
+using LFL_STL_NAMESPACE::make_pair;
 using LFL_STL_NAMESPACE::set_difference;
 using LFL_STL_NAMESPACE::numeric_limits;
 using LFL_STL11_NAMESPACE::unordered_map;
@@ -507,7 +508,7 @@ struct FrameScheduler {
     void Start();
     void FrameWait();
     void FrameDone();
-    void Wakeup();
+    void Wakeup(void*);
     void UpdateTargetFPS(int fps);
     void AddWaitForeverMouse();
     void DelWaitForeverMouse();
@@ -561,7 +562,7 @@ struct Application : public ::LFApp, public Module {
     ThreadPool thread_pool;
     CallbackQueue message_queue;
     FrameScheduler scheduler;
-    Callback reshaped_cb;
+    Callback reshaped_cb, create_win_f;
     function<void(Window*)> window_init_cb, window_closed_cb;
     Audio audio;
     Video video;
@@ -574,7 +575,8 @@ struct Application : public ::LFApp, public Module {
     vector<Module*> modules;
     CategoricalVariable<int> tex_mode, grab_mode, fill_mode;
 
-    Application() : window_closed_cb(DefaultLFAppWindowClosedCB), tex_mode(2, 1, 0), grab_mode(2, 0, 1),
+    Application() : create_win_f(bind(&Application::CreateNewWindow, this, function<void(Window*)>())),
+    window_closed_cb(DefaultLFAppWindowClosedCB), tex_mode(2, 1, 0), grab_mode(2, 0, 1),
     fill_mode(3, GraphicsDevice::Fill, GraphicsDevice::Line, GraphicsDevice::Point)
     { run=1; initialized=0; main_thread_id=0; frames_ran=pre_frames_ran=0; }
 

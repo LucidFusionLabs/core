@@ -67,6 +67,11 @@ extern "C" {
 #endif
 #endif
 
+#ifdef LFL_WXWIDGETS
+#include <wx/wx.h>
+#include <wx/glcanvas.h>
+#endif
+
 #if defined(LFL_GLFWVIDEO) || defined(LFL_GLFWINPUT)
 #include "GLFW/glfw3.h"
 #endif
@@ -531,7 +536,7 @@ int NTService::Install(const char *name, const char *path) { FATAL("not implemen
 int NTService::Uninstall(const char *name) { FATAL("not implemented"); }
 int NTService::WrapMain(const char *name, MainCB main_cb, int argc, const char **argv) { return main_cb(argc, argv); }
 
-void HandleSigInt(int sig) { app->run=0; app->scheduler.Wakeup(); }
+void HandleSigInt(int sig) { app->run=0; app->scheduler.Wakeup(0); }
 
 int ProcessPipe::Open(const char **argv) {
     int pipein[2], pipeout[2], ret;
@@ -1012,6 +1017,9 @@ FrameScheduler::FrameScheduler() : maxfps(&FLAGS_target_fps), wakeup_thread(&fra
 #if defined(LFL_QT) || defined(LFL_WXWIDGETS) || defined(LFL_OSXINPUT)
     rate_limit = synchronize_waits = wait_forever_thread = monolithic_frame = 0;
 #endif
+#if defined(LFL_WXWIDGETS)
+    wait_forever_thread = true;
+#endif
 }
 void FrameScheduler::Init() { 
     screen->target_fps = FLAGS_target_fps;
@@ -1033,12 +1041,11 @@ void FrameScheduler::FrameWait() {
             wait_mutex.lock();
             frame_mutex.unlock();
         }
-#if defined(LFL_QT) || defined(LFL_WXWIDGETS)
+#if defined(LFL_OSXINPUT) || defined(LFL_QT) || defined(LFL_WXWIDGETS)
 #elif defined(LFL_GLFWINPUT)
         glfwWaitEvents();
 #elif defined(LFL_SDLINPUT)
         SDL_WaitEvent(NULL);
-#elif defined(LFL_OSXINPUT)
 #else
         FATAL("not implemented");
 #endif
@@ -1048,9 +1055,11 @@ void FrameScheduler::FrameWait() {
         }
     }
 }
-void FrameScheduler::Wakeup() {
+void FrameScheduler::Wakeup(void *opaque) {
     if (wait_forever) {
-#if defined(LFL_QT) || defined(LFL_WXWIDGETS)
+#if defined(LFL_QT)
+#elif defined(LFL_WXWIDGETS)
+        if (wait_forever_thread) ((wxGLCanvas*)screen->id)->Refresh();
 #elif defined(LFL_GLFWINPUT)
         if (wait_forever_thread) glfwPostEmptyEvent();
 #elif defined(LFL_SDLINPUT)
@@ -1076,32 +1085,32 @@ void FrameScheduler::UpdateTargetFPS(int fps) {
         for (const auto &w : Window::active) Max(&next_target_fps, w.second->target_fps);
         FLAGS_target_fps = next_target_fps;
     }
-#if defined(LFL_OSXINPUT)
     CHECK(screen->id);
+#if defined(LFL_OSXINPUT)
     OSXUpdateTargetFPS(screen->id);
 #endif
 }
 void FrameScheduler::AddWaitForeverMouse() {
-#if defined(LFL_OSXINPUT)
     CHECK(screen->id);
+#if defined(LFL_OSXINPUT)
     OSXAddWaitForeverMouse(screen->id);
 #endif
 }
 void FrameScheduler::DelWaitForeverMouse() {
-#if defined(LFL_OSXINPUT)
     CHECK(screen->id);
+#if defined(LFL_OSXINPUT)
     OSXDelWaitForeverMouse(screen->id);
 #endif
 }
 void FrameScheduler::AddWaitForeverKeyboard() {
-#if defined(LFL_OSXINPUT)
     CHECK(screen->id);
+#if defined(LFL_OSXINPUT)
     OSXAddWaitForeverKeyboard(screen->id);
 #endif
 }
 void FrameScheduler::DelWaitForeverKeyboard() {
-#if defined(LFL_OSXINPUT)
     CHECK(screen->id);
+#if defined(LFL_OSXINPUT)
     OSXDelWaitForeverKeyboard(screen->id);
 #endif
 }
