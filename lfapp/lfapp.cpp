@@ -967,7 +967,7 @@ int Application::Frame() {
 
 int Application::Main() {
     if (Start()) return Exiting();
-#if defined(LFL_QT) || defined(LFL_OSXVIDEO)
+#if defined(LFL_QT) || defined(LFL_WXWIDGETS) || defined(LFL_OSXVIDEO)
     return 0;
 #endif
     return MainLoop();
@@ -1009,7 +1009,7 @@ int Application::Exiting() {
 /* FrameScheduler */
 
 FrameScheduler::FrameScheduler() : maxfps(&FLAGS_target_fps), wakeup_thread(&frame_mutex, &wait_mutex) {
-#ifdef LFL_OSXINPUT
+#if defined(LFL_QT) || defined(LFL_WXWIDGETS) || defined(LFL_OSXINPUT)
     rate_limit = synchronize_waits = wait_forever_thread = monolithic_frame = 0;
 #endif
 }
@@ -1033,7 +1033,7 @@ void FrameScheduler::FrameWait() {
             wait_mutex.lock();
             frame_mutex.unlock();
         }
-#if defined(LFL_QT)
+#if defined(LFL_QT) || defined(LFL_WXWIDGETS)
 #elif defined(LFL_GLFWINPUT)
         glfwWaitEvents();
 #elif defined(LFL_SDLINPUT)
@@ -1050,7 +1050,7 @@ void FrameScheduler::FrameWait() {
 }
 void FrameScheduler::Wakeup() {
     if (wait_forever) {
-#if defined(LFL_QT)
+#if defined(LFL_QT) || defined(LFL_WXWIDGETS)
 #elif defined(LFL_GLFWINPUT)
         if (wait_forever_thread) glfwPostEmptyEvent();
 #elif defined(LFL_SDLINPUT)

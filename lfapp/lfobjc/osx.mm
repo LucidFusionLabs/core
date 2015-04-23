@@ -217,6 +217,7 @@ static const char **osx_argv = 0;
     - (void)keyPress:(NSEvent *)theEvent down:(bool)d {
         SetNativeWindow(screen);
         int c = getKeyCode([theEvent keyCode]);
+        if (c == 0x30 && cmd_down) /* cmd + tab */ { [self clearKeyModifiers]; return; }
         int fired = c ? KeyPress(c, d) : 0;
         if (fired && frame_on_keyboard_input) [self setNeedsDisplay:YES]; 
     }

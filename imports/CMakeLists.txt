@@ -148,6 +148,22 @@ set(SDL_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/SDL/include PARENT_SCOPE)
 set(SDL_LIB ${CMAKE_CURRENT_SOURCE_DIR}/SDL/build/.libs/libSDL2.a PARENT_SCOPE)
 endif(LFL_SDLINPUT)
 
+# wxWidgets
+# ./configure --disable-shared --enable-unicode --with-cocoa --with-macosx-version-min=10.7 --with-macosx-sdk=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.10.sdk CXXFLAGS="-std=c++0x -stdlib=libc++" CPPFLAGS="-stdlib=libc++" LIBS=-lc++
+if(LFL_WXWIDGETS)
+set(ENV{wxWidgets_ROOT_DIR} "${CMAKE_CURRENT_SOURCE_DIR}/wxWidgets")
+set(wxWidgets_CONFIG_EXECUTABLE ${CMAKE_CURRENT_SOURCE_DIR}/wxWidgets/wx-config)
+find_package(wxWidgets COMPONENTS core base gl REQUIRED)
+include(${wxWidgets_USE_FILE})
+set(WXWIDGETS_DEF "")
+foreach(d ${wxWidgets_DEFINITIONS})
+    list(APPEND WXWIDGETS_DEF "-D${d}")
+endforeach(d)
+set(WXWIDGETS_DEF "${WXWIDGETS_DEF}" PARENT_SCOPE)
+set(WXWIDGETS_INCLUDE "${wxWidgets_INCLUDE_DIRS}" PARENT_SCOPE)
+set(WXWIDGETS_LIB "${wxWidgets_LIBRARIES}" PARENT_SCOPE)
+endif(LFL_WXWIDGETS)
+
 # Windows
 if(WIN32)
 INCLUDE_EXTERNAL_MSPROJECT(zlib ${CMAKE_CURRENT_SOURCE_DIR}/OpenCV/3rdparty/zlib/zlib.vcxproj)
