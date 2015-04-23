@@ -240,9 +240,10 @@ extern "C" int main(int argc, const char *argv[]) {
         network_thread->Write(new Callback([&](){ Video::CreateGLContext(screen); }));
     }
 
+    app->create_win_f = bind(&Application::CreateNewWindow, app, &MyWindowCloneCB);
+    binds->Add(Bind('n', Key::Modifier::Cmd, Bind::CB(app->create_win_f)));
     binds->Add(Bind('=', Key::Modifier::Cmd, Bind::CB(bind(&MyIncreaseFontCmd, vector<string>()))));
     binds->Add(Bind('-', Key::Modifier::Cmd, Bind::CB(bind(&MyDecreaseFontCmd, vector<string>()))));
-    binds->Add(Bind('n', Key::Modifier::Cmd, Bind::CB(bind(&Application::CreateNewWindow, app, &MyWindowCloneCB))));
     binds->Add(Bind('6', Key::Modifier::Cmd, Bind::CB(bind([&](){ Window::Get()->console->Toggle(); }))));
 
     string lfapp_vertex_shader = LocalFile::FileContents(StrCat(app->assetdir, "lfapp_vertex.glsl"));

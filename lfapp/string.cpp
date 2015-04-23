@@ -172,7 +172,7 @@ int notalnum(int c) { return !isalnum(c); }
 int notnum(int c) { return !isnum(c); }
 int notcomma(int c) { return !iscomma(c); }
 int notdot(int c) { return !isdot(c); }
-int MatchingParens(int c1, int c2) { return (c1 == '(' && c2 == ')') || (c1 == '[' && c2 == ']'); }
+int MatchingParens(int c1, int c2) { return (c1 == '(' && c2 == ')') || (c1 == '[' && c2 == ']') || (c1 == '<' && c2 == '>'); }
 float my_atof(const char *v) { return v ? ::atof(v) : 0; }
 int atoi(const char *v) { return v ? ::atoi(v) : 0; }
 int atoi(const short *v) {

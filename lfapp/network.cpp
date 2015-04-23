@@ -636,8 +636,11 @@ void SocketWakeupThread::ThreadProc() {
             { ScopedMutex sm(sockets_mutex); my_sockets = sockets; }
             my_sockets.Select(-1);
             if (my_sockets.GetReadable(pipe[0])) NBRead(pipe[0], 4096);
+            if (app->run) {
+                if (!wakeup_each) app->scheduler.Wakeup(0);
+                else for (auto &s : my_sockets.socket) if (my_sockets.GetReadable(s.first)) app->scheduler.Wakeup(s.second.second);
+            }
         }
-        if (app->run) app->scheduler.Wakeup();
         if (wait_mutex) { ScopedMutex sm(*wait_mutex); }
     }
 }
@@ -646,12 +649,12 @@ int SelectSocketSet::Select(int wait_time) {
     int maxfd=-1, rc=0, wc=0, xc=0;
     struct timeval tv = Time2timeval(Time(wait_time));
     FD_ZERO(&rfds); FD_ZERO(&wfds); FD_ZERO(&xfds);
-    for (unordered_map<Socket, int>::iterator i = socket.begin(); i != socket.end(); ++i) {
+    for (auto &s : socket) {
         bool added = 0;
-        if (i->second & READABLE)  { rc++; FD_SET(i->first, &rfds); added = 1; }
-        if (i->second & WRITABLE)  { wc++; FD_SET(i->first, &wfds); added = 1; }
-        if (i->second & EXCEPTION) { xc++; FD_SET(i->first, &xfds); added = 1; }
-        if (added && i->first > maxfd) maxfd = i->first;
+        if (s.second.first & READABLE)  { rc++; FD_SET(s.first, &rfds); added = 1; }
+        if (s.second.first & WRITABLE)  { wc++; FD_SET(s.first, &wfds); added = 1; }
+        if (s.second.first & EXCEPTION) { xc++; FD_SET(s.first, &xfds); added = 1; }
+        if (added && s.first > maxfd) maxfd = s.first;
     }
     if (!rc && !wc && !xc) { MSleep(wait_time); return 0; }
     if ((select(maxfd+1, rc?&rfds:0, wc?&wfds:0, xc?&xfds:0, wait_time >= 0 ? &tv : 0)) == -1)
