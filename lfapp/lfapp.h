@@ -603,6 +603,8 @@ extern Application *app;
 
 #if defined(LFL_QT)
 #define main LFLQTMain
+#elif defined(LFL_WXWIDGETS)
+#define main LFLWxWidgetsMain
 #elif defined(LFL_IPHONE)
 #define main iPhoneMain
 #elif defined(LFL_OSXVIDEO)

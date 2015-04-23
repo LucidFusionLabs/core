@@ -130,6 +130,11 @@ extern "C" int      main(int argc, const char *argv[]) {
 }
 #endif // LFL_QT
 
+#ifdef LFL_WXWIDGETS
+#include <wx/wx.h>
+#include <wx/glcanvas.h>
+#endif // LFL_WXWIDGETS
+
 #ifdef LFL_GLFWVIDEO
 #include "GLFW/glfw3.h"
 #endif
@@ -1040,6 +1045,92 @@ void Mouse::GrabFocus()    { ((OpenGLES2*)screen->gd)->QT_grabbed=1; ((QWindow*)
 void Mouse::ReleaseFocus() { ((OpenGLES2*)screen->gd)->QT_grabbed=0; ((QWindow*)screen->id)->unsetCursor();              app->grab_mode.Off(); screen->cursor_grabbed=false; }
 #endif
 
+#ifdef LFL_WXWIDGETS
+}; // namespace LFL
+struct LFLWxWidgetCanvas : public wxGLCanvas {
+    wxGLContext *context=0;
+    virtual ~LFLWxWidgetCanvas() { delete context; }
+    LFLWxWidgetCanvas(wxFrame *parent, int *args) :
+        wxGLCanvas(parent, wxID_ANY, args, wxDefaultPosition, wxDefaultSize, wxFULL_REPAINT_ON_RESIZE), context(new wxGLContext(this)) {}
+    void OnPaint(wxPaintEvent& event) {
+        wxPaintDC(this);
+        SetCurrent(*context);
+        if (LFL::app->run) LFAppFrame();
+        else exit(0);
+    }
+    DECLARE_EVENT_TABLE()
+};
+BEGIN_EVENT_TABLE(LFLWxWidgetCanvas, wxGLCanvas)
+    EVT_PAINT    (LFLWxWidgetCanvas::OnPaint)
+END_EVENT_TABLE()
+
+struct LFLWxWidgetFrame : public wxFrame {
+    LFLWxWidgetCanvas *canvas=0;
+    LFLWxWidgetFrame(int w, int h, const string &caption, bool show) : wxFrame(NULL, wxID_ANY, wxString::FromUTF8(caption.c_str())) {
+        int args[] = { WX_GL_RGBA, WX_GL_DOUBLEBUFFER, WX_GL_DEPTH_SIZE, 16, 0 };
+        canvas = new LFLWxWidgetCanvas(this, args);
+        SetClientSize(w, h);
+        if (show) Show();
+    }
+    void OnClose(wxCommandEvent& event) { Close(true); }
+    void OnNewWindow(wxCommandEvent& event) { new LFLWxWidgetFrame(LFL::screen->width, LFL::screen->height, LFL::screen->caption, true); }
+    wxDECLARE_EVENT_TABLE();
+};
+wxBEGIN_EVENT_TABLE(LFLWxWidgetFrame, wxFrame)
+    EVT_MENU(wxID_NEW, LFLWxWidgetFrame::OnNewWindow)
+    EVT_MENU(wxID_CLOSE, LFLWxWidgetFrame::OnClose)
+wxEND_EVENT_TABLE()
+
+struct LFLWxWidgetApp : public wxApp {
+    virtual bool OnInit() override {
+        if (!wxApp::OnInit()) return false;
+        vector<string> ab;
+        vector<const char *> av;
+        for (int i=0; i<argc; i++) {
+            ab.push_back(argv[i].utf8_str().data());
+            av.push_back(ab.back().c_str());
+        }
+        av.push_back(0);
+        INFOf("WxWidgetsModule::Main argc=%d\n", argc);
+        int ret = LFLWxWidgetsMain(argc, &av[0]);
+        if (ret) exit(ret);
+        INFOf("%s", "WxWidgetsModule::Main done");
+        ((LFLWxWidgetFrame*)LFL::screen->id)->Show();
+        return TRUE;
+    }
+    int OnExit() override {
+        return wxApp::OnExit();
+    }
+};
+#undef main
+IMPLEMENT_APP(LFLWxWidgetApp)
+
+namespace LFL {
+struct WxWidgetsVideoModule : public Module {
+    int Init() {
+        INFOf("WxWidgetsVideoModule::Init() %p", screen);
+        CHECK(Window::Create(screen));
+        return 0;
+    }
+};
+bool Window::Create(Window *W) { 
+    W->id = new LFLWxWidgetFrame(W->width, W->height, W->caption, W->gl != 0);
+    if (W->id) Window::active[W->id] = W;
+    MakeCurrent(W);
+    return true; 
+}
+void Window::MakeCurrent(Window *W) { 
+    LFLWxWidgetCanvas *canvas = ((LFLWxWidgetFrame*)W->id)->canvas;
+    canvas->SetCurrent(*canvas->context);
+}
+void Window::Close(Window *W) {
+    Window::active.erase(W->id);
+    if (Window::active.empty()) app->run = false;
+    if (app->window_closed_cb) app->window_closed_cb(W);
+    screen = 0;
+}
+#endif
+
 #ifdef LFL_GLFWVIDEO
 /* struct NativeWindow { GLFWwindow *id; }; */
 struct GLFWVideoModule : public Module {
@@ -1138,6 +1229,8 @@ int Video::Init() {
     INFO("Video::Init()");
 #if defined(LFL_QT)
     impl = new QTVideoModule();
+#elif defined(LFL_WXWIDGETS)
+    impl = new WxWidgetsVideoModule();
 #elif defined(LFL_GLFWVIDEO)
     impl = new GLFWVideoModule();
 #elif defined(LFL_SDLVIDEO)
@@ -1240,6 +1333,8 @@ int Video::Swap() {
 
 #if defined(LFL_QT)
     ((QOpenGLContext*)screen->gl)->swapBuffers((QWindow*)screen->id);
+#elif defined(LFL_WXWIDGETS)
+    ((LFLWxWidgetFrame*)screen->id)->canvas->SwapBuffers();
 #elif defined(LFL_ANDROIDVIDEO)
     AndroidVideoSwap();
 #elif defined(LFL_GLFWVIDEO)
@@ -1265,6 +1360,8 @@ void Window::Reshape(int w, int h) {
 #if defined(LFL_QT)
     ((QWindow*)id)->resize(w, h);
     Window::MakeCurrent(screen);
+#elif defined(LFL_WXWIDGETS)
+    ((LFLWxWidgetFrame*)screen->id)->SetSize(w, h);
 #elif defined(LFL_GLFWVIDEO)
     glfwSetWindowSize((GLFWwindow*)id, w, h);
 #elif defined(LFL_SDLVIDEO)
