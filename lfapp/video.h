@@ -416,6 +416,7 @@ struct Texture : public Drawable {
     virtual void DrawCrimped(const LFL::Box &B, int ort, float sx, float sy) const { Bind(); B.DrawCrimped(coord, ort, sx, sy); }
 
     void Screenshot();
+    void ScreenshotBox(const Box &b, int flag);
     void ToIplImage(_IplImage *out);
 #ifdef __APPLE__
     CGContextRef CGBitMap();

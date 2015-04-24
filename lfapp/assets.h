@@ -656,7 +656,6 @@ template <class Line> struct RingFrameBuffer {
     virtual void Draw(point pos, point adjust, bool scissor=true) {
         Box box(pos.x, pos.y, w, Height());
         if (scissor) screen->gd->PushScissor(box);
-        screen->gd->EnableLayering();
         fb.tex.Bind();
         (box + adjust).DrawCrimped(fb.tex.coord, 0, 0, scroll.y);
         if (scissor) screen->gd->PopScissor();

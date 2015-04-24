@@ -125,6 +125,7 @@ int Frame(Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample, int
     if (tw->process.in && NBRead(fileno(tw->process.in), &tw->read_buf.data)) tw->terminal->Write(tw->read_buf.data);
 
     W->gd->DrawMode(DrawMode::_2D);
+    W->gd->DisableBlend();
     tw->terminal->DrawWithShader(W->Box(), true, tw->activeshader);
     W->DrawDialogs();
     if (FLAGS_draw_fps) Fonts::Default()->Draw(StringPrintf("FPS = %.2f", FPS()), point(W->width*.85, 0));
