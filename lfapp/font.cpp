@@ -180,7 +180,7 @@ void Glyph::Draw(const LFL::Box &b, const Drawable::Attr *a) const {
 }
 
 GlyphCache::~GlyphCache() { delete flow; }
-GlyphCache::GlyphCache(unsigned T, int W, int H) : dim(W, H?H:W), tex(dim.w, dim.h, Pixel::RGBA, T), flow(new Flow(&dim)) {}
+GlyphCache::GlyphCache(unsigned T, int W, int H) : dim(W, H?H:W), tex(dim.w, dim.h, Texture::preferred_pf, T), flow(new Flow(&dim)) {}
 
 void GlyphCache::Clear() {
     delete flow;
@@ -546,7 +546,7 @@ void AtlasFontEngine::SplitIntoPNGFiles(const string &input_png_fn, const map<in
         CHECK(gw > 0 && gh > 0);
 
         Texture glyph;
-        glyph.Resize(gw, gh, Pixel::RGBA, Texture::Flag::CreateBuf);
+        glyph.Resize(gw, gh, Texture::preferred_pf, Texture::Flag::CreateBuf);
         SimpleVideoResampler::Blit(png.buf, glyph.buf, glyph.width, glyph.height,
                                    png  .pf, png  .LineSize(), gx1, gy2,
                                    glyph.pf, glyph.LineSize(), 0,   0);

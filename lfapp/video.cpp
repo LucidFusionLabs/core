@@ -60,7 +60,9 @@
 #define GL_LUMINANCE 0
 #define GL_LUMINANCE_ALPHA 0
 #define GL_RGB 0
+#define GL_BGR 0
 #define GL_RGBA 0
+#define GL_BGRA 0
 #define GL_TEXTURE_2D 0
 #define GL_TEXTURE_WIDTH 0
 #define GL_TEXTURE_CUBE_MAP 0
@@ -213,6 +215,16 @@ const int GraphicsDevice::OneMinusDstColor = GL_ONE_MINUS_DST_COLOR;
 const int GraphicsDevice::Fill             = GL_FILL;
 const int GraphicsDevice::Line             = GL_LINE;
 const int GraphicsDevice::Point            = GL_POINT;
+
+#if LFL_MOBILE
+const int Texture::preferred_pf             = Pixel::RGBA;
+const int GraphicsDevice::GLPreferredBuffer = GL_UNSIGNED_BYTE;
+const int GraphicsDevice::GLInternalFormat  = GL_RGBA;
+#else
+const int Texture::preferred_pf             = Pixel::BGRA;
+const int GraphicsDevice::GLPreferredBuffer = GL_UNSIGNED_INT_8_8_8_8_REV;
+const int GraphicsDevice::GLInternalFormat  = GL_RGBA;
+#endif
 
 struct OpenGLES1 : public GraphicsDevice {
     int target_matrix;
@@ -900,6 +912,9 @@ const int GraphicsDevice::OneMinusDstColor = 0;
 const int GraphicsDevice::Fill = 0;
 const int GraphicsDevice::Line = 0;
 const int GraphicsDevice::Point = 0;
+const int GraphicsDevice::GLPreferredBuffer = 0;
+const int GraphicsDevice::GLInternalFormat = 0;
+const int Texture::preferred_pf = 0;
 
 int GraphicsDevice::CreateProgram() { return 0; }
 int GraphicsDevice::CreateShader(int t) { return 0; }
@@ -1474,19 +1489,20 @@ int ColorChannel::PixelOffset(int c) {
 
 const char *Pixel::Name(int p) {
     switch (p) {
-        case RGB32: return "RGB32";    case RGB555:  return "RGB555";
-        case BGR32: return "BGR32";    case BGR555:  return "BGR555";
-        case RGB24: return "RGB24";    case RGB565:  return "RGB565";
-        case BGR24: return "BGR24";    case BGR565:  return "BGR565";
-        case RGBA:  return "RGBA";     case YUYV422: return "YUYV422";
-        case GRAY8: return "GRAY8";    case GRAYA8:  return "GRAYA8";
-        case LCD:   return "LCD";
+        case RGB32:   return "RGB32";      case RGB555:  return "RGB555";
+        case BGR32:   return "BGR32";      case BGR555:  return "BGR555";
+        case RGB24:   return "RGB24";      case RGB565:  return "RGB565";
+        case BGR24:   return "BGR24";      case BGR565:  return "BGR565";
+        case RGBA:    return "RGBA";       case BGRA:    return "BGRA";
+        case YUV420P: return "YUV420P";    case YUYV422: return "YUYV422";
+        case GRAY8:   return "GRAY8";      case GRAYA8:  return "GRAYA8";
+        case LCD:     return "LCD";
     }; return 0; 
 }
 
 int Pixel::size(int p) {
     switch (p) {
-        case RGB32:   case BGR32:  case RGBA:                             return 4;
+        case RGB32:   case BGR32:  case RGBA:   case BGRA:                return 4;
         case RGB24:   case BGR24:  case LCD:                              return 3;
         case RGB555:  case BGR555: case RGB565: case BGR565: case GRAYA8: return 2;
         case YUYV422: case GRAY8:                                         return 1;
@@ -1496,11 +1512,13 @@ int Pixel::size(int p) {
 
 int Pixel::OpenGLID(int p) {
     switch (p) {
-        case RGBA:   case RGB32: case BGR32: return GL_RGBA;
-        case RGB24:  case BGR24:             return GL_RGB;
-        case GRAYA8:                         return GL_LUMINANCE_ALPHA;
-        case GRAY8:                          return GL_LUMINANCE;
-        default:                             return -1;
+        case RGBA:   case RGB32: return GL_RGBA;
+        case BGRA:   case BGR32: return GL_BGRA;
+        case RGB24:              return GL_RGB;
+        case BGR24:              return GL_BGR;
+        case GRAYA8:             return GL_LUMINANCE_ALPHA;
+        case GRAY8:              return GL_LUMINANCE;
+        default:                 return -1;
     }
 }
 
@@ -1703,10 +1721,11 @@ void SimpleVideoResampler::CopyPixel(int s_fmt, int d_fmt, const unsigned char *
     unsigned char r, g, b, a;
     switch (s_fmt) {
         case Pixel::RGB24: r = *sp++; g = *sp++; b = *sp++; a = ((f & Flag::TransparentBlack) && !r && !g && !b) ? 0 : 255; break;
-        case Pixel::BGR24: r = *sp++; g = *sp++; b = *sp++; a = ((f & Flag::TransparentBlack) && !r && !g && !b) ? 0 : 255; break;
+        case Pixel::BGR24: b = *sp++; g = *sp++; r = *sp++; a = ((f & Flag::TransparentBlack) && !r && !g && !b) ? 0 : 255; break;
         case Pixel::RGB32: r = *sp++; g = *sp++; b = *sp++; a=*sp++; break;
-        case Pixel::BGR32: r = *sp++; g = *sp++; b = *sp++; a=*sp++; break;
+        case Pixel::BGR32: b = *sp++; g = *sp++; r = *sp++; a=*sp++; break;
         case Pixel::RGBA:  r = *sp++; g = *sp++; b = *sp++; a=*sp++; break;
+        case Pixel::BGRA:  b = *sp++; g = *sp++; r = *sp++; a=*sp++; break;
         case Pixel::GRAY8: r = 255;   g = 255;   b = 255;   a=*sp++; break;
         // case Pixel::GRAY8: r = g = b = a = *sp++; break;
         case Pixel::LCD: 
@@ -1719,10 +1738,11 @@ void SimpleVideoResampler::CopyPixel(int s_fmt, int d_fmt, const unsigned char *
     }
     switch (d_fmt) {
         case Pixel::RGB24: *dp++ = r; *dp++ = g; *dp++ = b; break;
-        case Pixel::BGR24: *dp++ = r; *dp++ = g; *dp++ = b; break;
+        case Pixel::BGR24: *dp++ = b; *dp++ = g; *dp++ = r; break;
         case Pixel::RGB32: *dp++ = r; *dp++ = g; *dp++ = b; *dp++ = a; break;
-        case Pixel::BGR32: *dp++ = r; *dp++ = g; *dp++ = b; *dp++ = a; break;
+        case Pixel::BGR32: *dp++ = b; *dp++ = g; *dp++ = r; *dp++ = a; break;
         case Pixel::RGBA:  *dp++ = r; *dp++ = g; *dp++ = b; *dp++ = a; break;
+        case Pixel::BGRA:  *dp++ = b; *dp++ = g; *dp++ = r; *dp++ = a; break;
         default: ERROR("d_fmt ", d_fmt, " not supported"); return;
     }
 }
@@ -1823,6 +1843,7 @@ int Pixel::ToFFMpegId(int fmt) {
         case Pixel::RGB24:    return AV_PIX_FMT_RGB24;
         case Pixel::BGR24:    return AV_PIX_FMT_BGR24;
         case Pixel::RGBA:     return AV_PIX_FMT_RGBA;
+        case Pixel::BGRA:     return AV_PIX_FMT_BGRA;
         case Pixel::GRAY8:    return AV_PIX_FMT_GRAY8;
         case Pixel::YUV410P:  return AV_PIX_FMT_YUV410P;
         case Pixel::YUV420P:  return AV_PIX_FMT_YUV420P;
@@ -1837,6 +1858,7 @@ int Pixel::ToFFMpegId(int fmt) {
 
 /* Texture */
 
+int Texture::GLBufferType() const { return PixelSize() == 4 ? GraphicsDevice::GLPreferredBuffer : GL_UNSIGNED_BYTE; }
 void Texture::Coordinates(float *texcoord, int w, int h, int wd, int hd) {
     texcoord[CoordMinX] = texcoord[CoordMinY] = 0;
     texcoord[CoordMaxX] = (float)w / wd;
@@ -1859,9 +1881,9 @@ void Texture::Resize(int W, int H, int PF, int flag) {
     }
     if (ID || cubemap) {
         int opengl_width = NextPowerOfTwo(width), opengl_height = NextPowerOfTwo(height);
-        int gl_tt = GLTexType(), gl_pt = GLPixelType();
+        int gl_tt = GLTexType(), gl_pt = GLPixelType(), gl_bt = GLBufferType();
         if (ID) screen->gd->BindTexture(gl_tt, ID);
-        glTexImage2D(gl_tt, 0, gl_pt, opengl_width, opengl_height, 0, gl_pt, GL_UNSIGNED_BYTE, 0);
+        glTexImage2D(gl_tt, 0, GraphicsDevice::GLInternalFormat, opengl_width, opengl_height, 0, gl_pt, gl_bt, 0);
         Coordinates(coord, width, height, opengl_width, opengl_height);
     }
 }
@@ -1889,16 +1911,16 @@ void Texture::ClearGL() { if (ID) screen->gd->DelTextures(1, &ID); ID=0; }
 
 void Texture::LoadGL(const unsigned char *B, const point &dim, int PF, int linesize, int flag) {
     Texture temp;
-    temp .Resize(dim.x, dim.y, Pixel::RGBA, Flag::CreateBuf);
+    temp .Resize(dim.x, dim.y, preferred_pf, Flag::CreateBuf);
     temp .UpdateBuffer(B, dim, PF, linesize, Flag::FlipY);
-    this->Resize(dim.x, dim.y, Pixel::RGBA, Flag::CreateGL);
+    this->Resize(dim.x, dim.y, preferred_pf, Flag::CreateGL);
     this->UpdateGL(temp.buf, LFL::Box(dim), flag);
 }
 
 void Texture::UpdateGL(const unsigned char *B, const ::LFL::Box &box, int flag) {
     int gl_tt = GLTexType(), gl_y = (flag & Flag::FlipY) ? (height - box.y - box.h) : box.y;
     screen->gd->BindTexture(gl_tt, ID);
-    glTexSubImage2D(gl_tt, 0, box.x, gl_y, box.w, box.h, GLPixelType(), GL_UNSIGNED_BYTE, B);
+    glTexSubImage2D(gl_tt, 0, box.x, gl_y, box.w, box.h, GLPixelType(), GLBufferType(), B);
 }
 
 void Texture::DumpGL(unsigned tex_id) {
@@ -1911,7 +1933,7 @@ void Texture::DumpGL(unsigned tex_id) {
         CHECK_GT((height = tex_h), 0);
     }
     RenewBuffer();
-    glGetTexImage(GLTexType(), 0, GLPixelType(), GL_UNSIGNED_BYTE, buf);
+    glGetTexImage(GLTexType(), 0, GLPixelType(), GLBufferType(), buf);
 }
 
 void Texture::ToIplImage(_IplImage *out) {
@@ -1936,11 +1958,14 @@ void Texture::ToIplImage(_IplImage *out) {
 #import <CoreGraphics/CGBitmapContext.h> 
 CGContextRef Texture::CGBitMap() { return CGBitMap(0, 0, width, height); }
 CGContextRef Texture::CGBitMap(int X, int Y, int W, int H) {
-    int linesize = LineSize(); CGImageAlphaInfo alpha_info;
-    if      (pf == Pixel::RGBA)                        alpha_info = kCGImageAlphaPremultipliedLast;
-    else if (pf == Pixel::RGB32 || pf == Pixel::BGR32) alpha_info = kCGImageAlphaNoneSkipLast;
+    int linesize = LineSize(), alpha_info = 0;
+    if      (pf == Pixel::RGBA)  alpha_info = kCGImageAlphaPremultipliedLast;
+    if      (pf == Pixel::BGRA)  alpha_info = kCGBitmapByteOrder32Host | kCGImageAlphaPremultipliedFirst;
+    else if (pf == Pixel::RGB32) alpha_info = kCGImageAlphaNoneSkipLast;
+    else if (pf == Pixel::BGR32) alpha_info = kCGBitmapByteOrder32Host | kCGImageAlphaNoneSkipFirst;
     else { ERROR("unsupported pixel format: ", Pixel::Name(pf)); return 0; }
     CGColorSpaceRef colors = CGColorSpaceCreateDeviceRGB();
+    // CGColorSpaceRef colors = CGColorSpaceCreateWithName(kCGColorSpaceGenericRGB);
     CGContextRef ret = CGBitmapContextCreate(buf + Y*linesize + X*PixelSize(), W, H, 8, linesize, colors, alpha_info);
     CGColorSpaceRelease(colors);
     return ret;
@@ -1949,10 +1974,10 @@ CGContextRef Texture::CGBitMap(int X, int Y, int W, int H) {
 
 void Texture::Screenshot() { ScreenshotBox(Box(screen->width, screen->height), Flag::FlipY); }
 void Texture::ScreenshotBox(const Box &b, int flag) {
-    Resize(b.w, b.h, Pixel::RGBA, Flag::CreateBuf);
+    Resize(b.w, b.h, preferred_pf, Flag::CreateBuf);
     unsigned char *pixels = NewBuffer();
-    glReadPixels(b.x, b.y, b.w, b.h, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
-    UpdateBuffer(pixels, point(b.w, b.h), Pixel::RGBA, b.w*4, flag);
+    glReadPixels(b.x, b.y, b.w, b.h, GLPixelType(), GLBufferType(), pixels);
+    UpdateBuffer(pixels, point(b.w, b.h), pf, b.w*4, flag);
     delete [] pixels;
 }
 

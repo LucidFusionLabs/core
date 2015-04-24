@@ -44,49 +44,37 @@ TEST(ImageFormatTest, PNG) {
 }
 #endif
 
-int tile_test_a=0; void TileTestA() { tile_test_a++; }
-int tile_test_b=0; void TileTestB() { tile_test_b++; }
-int tile_test_c=0; void TileTestC() { tile_test_c++; }
-int tile_test_d=0; void TileTestD() { tile_test_d++; }
-int tile_test_e=0; void TileTestE() { tile_test_e++; }
-int tile_test_f=0; void TileTestF() { tile_test_f++; }
-int tile_test_g=0; void TileTestG() { tile_test_g++; }
-int tile_test_h=0; void TileTestH() { tile_test_h++; }
-int tile_test_i=0; void TileTestI() { tile_test_i++; }
-int tile_test_j=0; void TileTestJ() { tile_test_j++; }
-int tile_test_k=0; void TileTestK() { tile_test_k++; }
-int tile_test_l=0; void TileTestL() { tile_test_l++; }
-int tile_test_m=0; void TileTestM() { tile_test_m++; }
-
-TEST(GUITest, Tiles) {
+TEST(AssetTest, Tiles) {
+    int tile_test_a=0, tile_test_b=0, tile_test_c=0, tile_test_d=0, tile_test_e=0, tile_test_f=0, tile_test_g=0;
+    int tile_test_h=0, tile_test_i=0, tile_test_j=0, tile_test_k=0, tile_test_l=0, tile_test_m=0;
     Tiles tiles, *T = &tiles;
     T->Run();
     T->ContextOpen();
-    TilesPreAdd (T, TileTestA);
-    TilesPostAdd(T, TileTestI);
+    TilesPreAdd (T, [&](){ tile_test_a++; });
+    TilesPostAdd(T, [&](){ tile_test_i++; });
     T->ContextOpen();
-    TilesPreAdd (T, TileTestB);
-    TilesPostAdd(T, TileTestJ);
+    TilesPreAdd (T, [&](){ tile_test_b++; });
+    TilesPostAdd(T, [&](){ tile_test_j++; });
 
     T->ContextOpen();
-    TilesPreAdd (T, TileTestE);
-    TilesPostAdd(T, TileTestK);
+    TilesPreAdd (T, [&](){ tile_test_e++; });
+    TilesPostAdd(T, [&](){ tile_test_k++; });
     Box b(10, 10, 400, 400);
-    TilesAdd(T, &b, TileTestC);
+    TilesAdd(T, &b, [&](){ tile_test_c++; });
     T->ContextClose();
 
     T->ContextOpen();
-    TilesPreAdd (T, TileTestF);
-    TilesPostAdd(T, TileTestL);
+    TilesPreAdd (T, [&](){ tile_test_f++; });
+    TilesPostAdd(T, [&](){ tile_test_l++; });
     b = Box(10, 520, 400, 400);
-    TilesAdd(T, &b, TileTestD);
+    TilesAdd(T, &b, [&](){ tile_test_d++; });
     T->ContextClose();
 
     T->ContextOpen();
-    TilesPreAdd (T, TileTestG);
-    TilesPostAdd(T, TileTestM);
+    TilesPreAdd (T, [&](){ tile_test_g++; });
+    TilesPostAdd(T, [&](){ tile_test_m++; });
     b = Box(10, 260, 400, 400);
-    TilesAdd(T, &b, TileTestH);
+    TilesAdd(T, &b, [&](){ tile_test_h++; });
     T->ContextClose();
 
     T->ContextClose();

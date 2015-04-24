@@ -81,7 +81,7 @@ TEST(DOMTest, DOMNode) {
     EXPECT_EQ(&B,  doc->firstChild());   EXPECT_EQ(&C, doc->lastChild());
 }
 
-TEST(BrowserTest, DOM) {
+TEST(DOMTest, DOMTree) {
     Browser sb(screen, screen->Box());
     sb.doc.parser->OpenHTML("<html>\n"
                             "<head><style> h1 { background-color: #111111; } </style></head>\n"

@@ -21,7 +21,7 @@
 
 namespace LFL {
 
-TEST(BufferFileTest, Read) {
+TEST(FileTest, BufferFile) {
     string b = "1 2 3\n4 5 6", z = "7 8 9\n9 8 7\n7 8 9";
     BufferFile bf(b);
     EXPECT_EQ(b.size(), bf.Size());
@@ -33,7 +33,7 @@ TEST(BufferFileTest, Read) {
     EXPECT_EQ(z, bf.Contents());
 }
 
-TEST(LocalFileTest, Read) {
+TEST(FileTest, LocalFileRead) {
     {
         string fn = "../fv/assets/MenuAtlas1,0,0,0,0,000.png", contents = LocalFile::FileContents(fn), buf;
         INFO("Read ", fn, " ", contents.size(), " bytes");
