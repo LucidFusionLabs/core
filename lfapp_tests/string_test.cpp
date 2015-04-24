@@ -21,7 +21,7 @@
 
 namespace LFL {
 
-TEST(BitTest, Bit) {
+TEST(StringTest, Bit) {
     EXPECT_EQ(0, Bit::Count(0));
     EXPECT_EQ(1, Bit::Count(1));
     EXPECT_EQ(1, Bit::Count(2));
@@ -35,7 +35,7 @@ TEST(BitTest, Bit) {
     EXPECT_EQ(-1, bit_indices[3]);
 }
 
-TEST(BitTest, BitString) {
+TEST(StringTest, BitString) {
     { unsigned char bits[] = { 0,   0,   0,   0,   0,   0   }; EXPECT_EQ(-1, BitString::FirstSet(bits, sizeof(bits))); }
     { unsigned char bits[] = { 0,   0,   0,   0,   0,   1   }; EXPECT_EQ(40, BitString::FirstSet(bits, sizeof(bits))); }
     { unsigned char bits[] = { 0,   0,   0,   0,   0,   2   }; EXPECT_EQ(41, BitString::FirstSet(bits, sizeof(bits))); }
@@ -68,7 +68,7 @@ TEST(StringTest, UTF) {
     EXPECT_EQ(3,      gl);
 }
 
-TEST(IterTest, WordIter) {
+TEST(StringTest, WordIter) {
     //          01234567890123456789012345678901234567890
     string b = "aaaaaaaa bbbbbb ccccc  dd         eeeee ffffff          ggggggg     hhhhhhhhhhhh  kkkk";
     const char *word;

@@ -46,11 +46,11 @@ struct ColorChannel {
 };
 
 struct Pixel {
-    enum { RGB32=1, BGR32=2, RGBA=3,
-           RGB24=4, BGR24=5, 
-           RGB555=6, BGR555=7, RGB565=8, BGR565=9,
-           YUV410P=10, YUV420P=11, YUYV422=12, YUVJ420P=13, YUVJ422P=14, YUVJ444P=15,
-           GRAY8=16, GRAYA8=17, LCD=18 };
+    enum { RGB32=1, BGR32=2, RGBA=3, BGRA=4,
+           RGB24=5, BGR24=6, 
+           RGB555=7, BGR555=8, RGB565=9, BGR565=10,
+           YUV410P=11, YUV420P=12, YUYV422=13, YUVJ420P=14, YUVJ422P=15, YUVJ444P=16,
+           GRAY8=17, GRAYA8=18, LCD=19 };
 
     static const char *Name(int id);
     static int size(int p);
@@ -367,25 +367,27 @@ struct DrawableBox {
 };
 
 struct Texture : public Drawable {
+    static const int preferred_pf;
     unsigned ID;
     int width, height, pf, cubemap;
     unsigned char *buf;
     bool buf_owner;
     float coord[4];
 
-    Texture(int w=0, int h=0, int PF=Pixel::RGBA, unsigned id=0) : ID(id), width(w), height(h), cubemap(0), pf(PF), buf(0), buf_owner(1) { Coordinates(coord,1,1,1,1); }
-    Texture(int w,   int h,   int PF,          unsigned char *B) : ID(0),  width(w), height(h), cubemap(0), pf(PF), buf(B), buf_owner(0) { Coordinates(coord,1,1,1,1); }
+    Texture(int w=0, int h=0, int PF=preferred_pf, unsigned id=0) : ID(id), width(w), height(h), cubemap(0), pf(PF), buf(0), buf_owner(1) { Coordinates(coord,1,1,1,1); }
+    Texture(int w,   int h,   int PF,           unsigned char *B) : ID(0),  width(w), height(h), cubemap(0), pf(PF), buf(B), buf_owner(0) { Coordinates(coord,1,1,1,1); }
     Texture(const Texture &t) : ID(t.ID), width(t.width), height(t.height), pf(t.pf), cubemap(t.cubemap), buf(t.buf), buf_owner(buf?0:1) { memcpy(&coord, t.coord, sizeof(coord)); }
     virtual ~Texture() { ClearBuffer(); }
 
     void Bind() const;
+    string DebugString() const { return StrCat("Texture(", width, ", ", height, ", ", Pixel::Name(pf), ")"); }
     point Dimension() const { return point(width, height); }
     int PixelSize() const { return Pixel::size(pf); }
     int LineSize() const { return width * PixelSize(); }
     int BufferSize() const { return height * LineSize(); }
     int GLPixelType() const { return Pixel::OpenGLID(pf); }
     int GLTexType() const { return CubeMap::OpenGLID(cubemap); }
-    string DebugString() const { return StrCat("Texture(", width, ", ", height, ", ", Pixel::Name(pf), ")"); }
+    int GLBufferType() const;
     void ClearGL();
     void RenewGL() { ClearGL(); Create(width, height); }
     void ClearBuffer() { if (buf_owner) delete [] buf; buf = 0; buf_owner = 1; }
@@ -567,7 +569,7 @@ struct GraphicsDevice {
     static const int Float, Points, Lines, LineLoop, Triangles, TriangleStrip, Texture2D, UnsignedInt;
     static const int Ambient, Diffuse, Specular, Emission, Position;
     static const int One, SrcAlpha, OneMinusSrcAlpha, OneMinusDstColor;
-    static const int Fill, Line, Point;
+    static const int Fill, Line, Point, GLPreferredBuffer, GLInternalFormat;
 
     int default_draw_mode = DrawMode::_2D, draw_mode = 0;
     vector<Color> default_color;

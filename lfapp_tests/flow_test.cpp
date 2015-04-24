@@ -23,7 +23,7 @@
 
 namespace LFL {
 
-TEST(VideoTest, FloatContainer) {
+TEST(FlowTest, FloatContainer) {
     FloatContainer container;
     LFL::DOM::Text A(0), B(0), C(0), D(0);
     Box ab, bb, cb, db;
@@ -104,7 +104,7 @@ TEST(VideoTest, FloatContainer) {
     EXPECT_EQ(container.float_left [1], child.float_left [1]);
 }
 
-TEST(VideoTest, FlowLayout) {
+TEST(FlowTest, Layout) {
     Box dim(128, 128), box;
     Flow flow(&dim);
     int bw=20, bh=20;
