@@ -1947,11 +1947,12 @@ CGContextRef Texture::CGBitMap(int X, int Y, int W, int H) {
 }
 #endif
 
-void Texture::Screenshot() {
-    Resize(screen->width, screen->height, Pixel::RGBA, Flag::CreateBuf);
+void Texture::Screenshot() { ScreenshotBox(Box(screen->width, screen->height), Flag::FlipY); }
+void Texture::ScreenshotBox(const Box &b, int flag) {
+    Resize(b.w, b.h, Pixel::RGBA, Flag::CreateBuf);
     unsigned char *pixels = NewBuffer();
-    glReadPixels(0, 0, screen->width, screen->height, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
-    UpdateBuffer(pixels, point(screen->width, screen->height), Pixel::RGBA, screen->width*4, Flag::FlipY);
+    glReadPixels(b.x, b.y, b.w, b.h, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+    UpdateBuffer(pixels, point(b.w, b.h), Pixel::RGBA, b.w*4, flag);
     delete [] pixels;
 }
 
