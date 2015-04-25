@@ -56,11 +56,6 @@ struct Pixel {
     static int size(int p);
     static int OpenGLID(int p);
 
-#ifdef LFL_PNG
-    static int FromPngId(int fmt);
-    static int ToPngId(int fmt);
-#endif
-
 #ifdef LFL_FFMPEG
     static int FromFFMpegId(int fmt);
     static int ToFFMpegId(int fmt);

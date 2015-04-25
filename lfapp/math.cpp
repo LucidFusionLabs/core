@@ -50,8 +50,10 @@ int Sign(float f) {
     else            return  0;
 }
 
-int RoundDown(float f) { return f; }
-int RoundUp  (float f) { if (!(f - (int)f)) return f; return f > 0 ? ((int)f + 1) : ((int)f - 1); }
+int RoundDown  (float f) { return f; }
+int RoundUp    (float f) { if (!(f - (int)f)) return f; return f > 0 ? ((int)f + 1) : ((int)f - 1); }
+int RoundHigher(float f) { return f < 0 ? RoundDown(f) : RoundUp  (f); }
+int RoundLower (float f) { return f < 0 ? RoundUp  (f) : RoundDown(f); }
 
 int RoundF(float f, bool round_point_five_up) {
     if (round_point_five_up) return (int)(fabs(f - (int)f) >= 0.5 ? (f + Sign(f)) : f); 

@@ -35,6 +35,13 @@ set(FREETYPE_LIB ${CMAKE_CURRENT_SOURCE_DIR}/freetype/objs/.libs/libfreetype.a P
 endif(WIN32)
 endif(LFL_FREETYPE)
 
+# harfbuzz
+# ./configure --enable-static --with-coretext=yes --prefix=`pwd`/bin
+if(LFL_HARFBUZZ)
+set(HARFBUZZ_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/harfbuzz/bin/include PARENT_SCOPE)
+set(HARFBUZZ_LIB ${CMAKE_CURRENT_SOURCE_DIR}/harfbuzz/src/.libs/libharfbuzz.a PARENT_SCOPE)
+endif(LFL_HARFBUZZ)
+
 # libcss
 if(LFL_LIBCSS)
 add_subdirectory(libcss)

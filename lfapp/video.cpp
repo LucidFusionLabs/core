@@ -914,7 +914,7 @@ const int GraphicsDevice::Line = 0;
 const int GraphicsDevice::Point = 0;
 const int GraphicsDevice::GLPreferredBuffer = 0;
 const int GraphicsDevice::GLInternalFormat = 0;
-const int Texture::preferred_pf = 0;
+const int Texture::preferred_pf = Pixel::RGBA;
 
 int GraphicsDevice::CreateProgram() { return 0; }
 int GraphicsDevice::CreateShader(int t) { return 0; }
