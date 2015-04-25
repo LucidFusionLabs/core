@@ -55,27 +55,6 @@ const int SoundAsset::FromBufPad = 0;
 #endif
 
 #ifdef LFL_PNG
-int Pixel::FromPngId(int fmt) {
-    switch (fmt) {
-        case PNG_COLOR_TYPE_RGB:        return Pixel::RGB24;
-        case PNG_COLOR_TYPE_RGBA:       return Pixel::RGBA;
-        case PNG_COLOR_TYPE_GRAY:       return Pixel::GRAY8;
-        case PNG_COLOR_TYPE_GRAY_ALPHA: return Pixel::GRAYA8;
-        case PNG_COLOR_TYPE_PALETTE:    ERROR("not supported: ",     fmt); return 0;
-        default:                        ERROR("unknown pixel fmt: ", fmt); return 0;
-    }
-}
-
-int Pixel::ToPngId(int fmt) {
-    switch (fmt) {
-        case Pixel::RGB24:  return PNG_COLOR_TYPE_RGB; 
-        case Pixel::RGBA:   return PNG_COLOR_TYPE_RGBA;
-        case Pixel::GRAY8:  return PNG_COLOR_TYPE_GRAY; 
-        case Pixel::GRAYA8: return PNG_COLOR_TYPE_GRAY_ALPHA;
-        default:            ERROR("unknown pixel fmt: ", fmt); return 0;
-    }
-}
-
 static void PngRead (png_structp png_ptr, png_bytep data, png_size_t length) { ((File*)png_get_io_ptr(png_ptr))->Read (data, length); }
 static void PngWrite(png_structp png_ptr, png_bytep data, png_size_t length) { ((File*)png_get_io_ptr(png_ptr))->Write(data, length); }
 static void PngFlush(png_structp png_ptr) {}
@@ -100,14 +79,19 @@ int PngReader::Read(File *lf, Texture *out) {
 
     png_byte color_type = png_get_color_type(png_ptr, info_ptr);
     png_byte bit_depth = png_get_bit_depth(png_ptr, info_ptr);
-    int number_of_passes = png_set_interlace_handling(png_ptr), pf;
+    int number_of_passes = png_set_interlace_handling(png_ptr), opf = Texture::preferred_pf;
     png_read_update_info(png_ptr, info_ptr);
+    
+    if      (color_type == PNG_COLOR_TYPE_GRAY)       opf = Pixel::GRAY8;
+    else if (color_type == PNG_COLOR_TYPE_GRAY_ALPHA) opf = Pixel::GRAYA8;
+    else if (color_type == PNG_COLOR_TYPE_PALETTE)    png_set_palette_to_rgb(png_ptr);
+    else if (color_type == PNG_COLOR_TYPE_RGB || color_type == PNG_COLOR_TYPE_RGBA) {}
+    else FATAL("unknown png_get_color_type ", color_type);
 
-    if (color_type == PNG_COLOR_TYPE_PALETTE) {
-        png_set_palette_to_rgb(png_ptr);
-        pf = Pixel::RGB24;
-    } else if (!(pf = Pixel::FromPngId(color_type))) { png_destroy_read_struct(&png_ptr, &info_ptr, 0); return -1; }
-    out->Resize(png_get_image_width(png_ptr, info_ptr), png_get_image_height(png_ptr, info_ptr), pf, Texture::Flag::CreateBuf);
+    if (opf == Pixel::BGRA || opf == Pixel::BGR24) png_set_bgr(png_ptr);
+    if (opf == Pixel::RGBA || opf == Pixel::BGRA)  png_set_filler(png_ptr, 0xff, PNG_FILLER_BEFORE);
+
+    out->Resize(png_get_image_width(png_ptr, info_ptr), png_get_image_height(png_ptr, info_ptr), opf, Texture::Flag::CreateBuf);
 
     int linesize = out->LineSize();
     CHECK_LE(png_get_rowbytes(png_ptr, info_ptr), linesize);
@@ -132,8 +116,18 @@ int PngWriter::Write(File *lf, const Texture &tex) {
 
     png_set_write_fn(png_ptr, lf, PngWrite, PngFlush);
 
-    png_set_IHDR(png_ptr, info_ptr, tex.width, tex.height,
-                 8, Pixel::ToPngId(tex.pf), PNG_INTERLACE_NONE,
+    int color_type = 0;
+    switch (tex.pf) {
+        case Pixel::BGRA:   png_set_bgr(png_ptr);
+        case Pixel::RGBA:   color_type = PNG_COLOR_TYPE_RGBA;       break;
+        case Pixel::BGR24:  png_set_bgr(png_ptr);
+        case Pixel::RGB24:  color_type = PNG_COLOR_TYPE_RGB;        break;
+        case Pixel::GRAY8:  color_type = PNG_COLOR_TYPE_GRAY;       break;
+        case Pixel::GRAYA8: color_type = PNG_COLOR_TYPE_GRAY_ALPHA; break;
+        default:            FATAL("unknown color_type: ", tex.pf);
+    }
+
+    png_set_IHDR(png_ptr, info_ptr, tex.width, tex.height, 8, color_type, PNG_INTERLACE_NONE,
                  PNG_COMPRESSION_TYPE_BASE, PNG_FILTER_TYPE_BASE);
 
     png_write_info(png_ptr, info_ptr);

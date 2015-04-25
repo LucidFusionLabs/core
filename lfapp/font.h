@@ -306,6 +306,7 @@ struct CoreTextFontEngine : public FontEngine {
     struct Resource : public FontEngine::Resource {
         string name;
         CGFontRef cgfont;
+        hb_face_t *hb_face=0;
         int flag;
         virtual ~Resource();
         Resource(const char *N=0, CGFontRef CGF=0, int F=0) : name(BlankNull(N)), cgfont(CGF), flag(F) {}

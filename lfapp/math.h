@@ -497,6 +497,8 @@ int Sign(float f);
 int RoundF(float f, bool round_point_five_up=false);
 int RoundUp(float f);
 int RoundDown(float f);
+int RoundHigher(float f);
+int RoundLower(float f);
 int DimCheck(const char *log, int d1, int d2);
 int NextMultipleOfPowerOfTwo(int input, int align);
 void *NextMultipleOfPowerOfTwo(void *input, int align);

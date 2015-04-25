@@ -22,6 +22,10 @@
 #include "lfapp/flow.h"
 #include "lfapp/gui.h"
 
+#ifdef LFL_HARFBUZZ
+#include "harfbuzz/hb-coretext.h"
+#endif
+
 #ifdef __APPLE__
 #import <CoreText/CTFont.h>
 #import <CoreText/CTLine.h>
@@ -258,7 +262,7 @@ void GlyphCache::Load(const Font *f, const Glyph *g, CGFontRef cgfont, int size)
         g->tex.RenewBuffer();
         CGContextRef context = g->tex.CGBitMap();
         CGContextSetTextMatrix(context, CGAffineTransformMakeScale(1.0f, -1.0f));
-        CGPoint point = CGPointMake(-RoundDown(origin_x), -RoundUp(bearing_y));
+        CGPoint point = CGPointMake(-g->bearing_x, -g->bearing_y);
         CGContextSetRGBFillColor(context, f->bg.r(), f->bg.g(), f->bg.b(), f->bg.a());
         CGContextFillRect(context, CGRectMake(0, 0, g->tex.width, g->tex.height));
         CGContextSetRGBFillColor(context, f->fg.r(), f->fg.g(), f->fg.b(), f->fg.a());
@@ -270,7 +274,7 @@ void GlyphCache::Load(const Font *f, const Glyph *g, CGFontRef cgfont, int size)
             tex.UpdateGL(g->tex.buf, Box(p, g->tex.Dimension()), Texture::Flag::FlipY); 
             g->tex.ClearBuffer();
         }
-        // INFOf("LoadGlyph U+%06x '%c' texID=%d %s", g->id, g->id, tex.ID, f->desc->DebugString().c_str());
+        // INFOf("LoadGlyph U+%06x '%c' texID=%d %s point(%f,%f)", g->id, g->id, tex.ID, f->desc->DebugString().c_str(), point.x, point.y);
     }
 }
 #endif
@@ -745,6 +749,9 @@ Font *CoreTextFontEngine::Open(const FontDesc &d) {
         ri->second = shared_ptr<Resource>(new Resource());
         // if (!(ri->second->cgfont = CGFontCreateWithAttributes(d.name.c_str(), 16))) { resource.erase(d.name); return 0; }
         if (!(ri->second->cgfont = CGFontCreateWithFontName(cfname))) { CFRelease(cfname); resource.erase(d.name); return 0; }
+#ifdef LFL_HARFBUZZ
+        ri->second->hb_face = hb_coretext_face_create(ri->second->cgfont);
+#endif
         CFRelease(cfname);
     }
 
@@ -799,11 +806,14 @@ void CoreTextFontEngine::GetSubstitutedFont(Font *f, CTFontRef ctfont, unsigned 
 }
 
 void CoreTextFontEngine::AssignGlyph(Glyph *g, const CGRect &bounds, struct CGSize &advance) {
-    g->tex.width  = RoundUp(bounds.size.width);
-    g->tex.height = RoundUp(bounds.size.height);
-    g->bearing_x  = RoundUp(bounds.origin.x);
-    g->bearing_y  = RoundUp(bounds.origin.y + bounds.size.height);
+    float x_extent = bounds.origin.x + bounds.size.width, y_extent = bounds.origin.y + bounds.size.height;
+    g->bearing_x  = RoundDown(bounds.origin.x);
+    g->bearing_y  = RoundHigher(y_extent);
+    g->tex.width  = RoundUp(x_extent - g->bearing_x);
+    g->tex.height = g->bearing_y - RoundLower(bounds.origin.y);
     g->advance    = RoundUp(advance.width);
+    // printf("g '%c' origin %f, %f, bounds %f, %f advance %f\n", g->Id(), bounds.origin.x, bounds.origin.y, bounds.size.width, bounds.size.height, advance.width);
+    // printf("g '%c' to w/h %d, %d and bearings %d %d\n", g->Id(), g->tex.width, g->tex.height, g->bearing_x, g->bearing_y);
     g->internal.coretext.origin_x = bounds.origin.x;
     g->internal.coretext.origin_y = bounds.origin.y;
     g->internal.coretext.width    = bounds.size.width;

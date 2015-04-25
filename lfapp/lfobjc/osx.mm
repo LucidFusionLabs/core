@@ -96,6 +96,7 @@ static const char **osx_argv = 0;
     }
     - (void)prepareOpenGL {
         GLint swapInt = 1, opaque = 0;
+        // [self setWantsBestResolutionOpenGLSurface:YES];
         [[self openGLContext] setValues:&swapInt forParameter:NSOpenGLCPSwapInterval];
         // [[self openGLContext] setValues:&opaque forParameter:NSOpenGLCPSurfaceOpacity];
         if (use_display_link) {
@@ -139,6 +140,11 @@ static const char **osx_argv = 0;
             [[NSRunLoop currentRunLoop] addTimer:timer forMode:NSDefaultRunLoopMode];
             // [[NSRunLoop currentRunLoop] addTimer:timer forMode:NSEventTrackingRunLoopMode];
         }
+    }
+    - (void)viewDidChangeBackingProperties {
+        float ms = [[NSScreen mainScreen] backingScaleFactor];
+        self.layer.contentsScale = [[self window] backingScaleFactor];
+        printf("view did change backing %f main window %f\n", self.layer.contentsScale, ms);
     }
     - (void)stopThread {
         if (displayLink) { CVDisplayLinkStop(displayLink); displayLink = nil; }

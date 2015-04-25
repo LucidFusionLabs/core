@@ -30,6 +30,10 @@ TEST(MathTest, Util) {
     EXPECT_EQ(10,    WhichLog2(1024));
     EXPECT_EQ(2048,  NextPowerOfTwo(1026));
     { short str[] = { ' ', ' ', '-', '3', '7', '4', 'a', 0 }; EXPECT_EQ(-374, atoi(str)); }
+    EXPECT_EQ( 1,  RoundDown( 1.2));
+    EXPECT_EQ( 2,  RoundUp  ( 1.2));
+    EXPECT_EQ(-2,  RoundUp  (-1.2));
+    EXPECT_EQ(-1,  RoundDown(-1.2));
 }
 
 TEST(MatrixTest, ChangeDimensions) {
