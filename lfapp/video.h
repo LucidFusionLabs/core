@@ -388,6 +388,7 @@ struct Texture : public Drawable {
     void ClearBuffer() { if (buf_owner) delete [] buf; buf = 0; buf_owner = 1; }
     unsigned char *NewBuffer() const { return new unsigned char [BufferSize()](); }
     unsigned char *RenewBuffer() { ClearBuffer(); buf = NewBuffer(); return buf; }
+    unsigned char *ReleaseBuffer() { unsigned char *ret=0; swap(ret, buf); ClearBuffer(); return ret; }
 
     struct Flag { enum { CreateGL=1, CreateBuf=2, FlipY=4, Resample=8 }; };
     void Create      (int W, int H, int PF=0) { Resize(W, H, PF, Flag::CreateGL); }
@@ -399,6 +400,7 @@ struct Texture : public Drawable {
     void LoadBuffer  (const unsigned char *B, const point &dim, int PF, int linesize, int flag=0);
     void UpdateBuffer(const unsigned char *B, const point &dim, int PF, int linesize, int flag=0);
     void UpdateBuffer(const unsigned char *B, const ::LFL::Box &box, int PF, int linesize, int blit_flag=0);
+    void FlipBufferY() { Texture t; t.LoadBuffer(buf, Dimension(), pf, LineSize(), Flag::FlipY); swap(buf, t.buf); }
 
     void LoadGL  (const unsigned char *B, const point &dim, int PF, int linesize, int flag=0);
     void UpdateGL(const unsigned char *B, const ::LFL::Box &box, int flag=0);

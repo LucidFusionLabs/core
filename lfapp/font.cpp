@@ -33,6 +33,9 @@
 #import <CoreText/CTStringAttributes.h>
 #import <CoreFoundation/CFAttributedString.h>
 #import <CoreGraphics/CGBitmapContext.h> 
+inline void PrintCGAffineTransform(const CGAffineTransform &x) {
+    printf("affine transform:\n|\t%f\t%f\t0\t|\n|\t%f\t%f\t0\t|\n|\t%f\t%f\t1\t|\n", x.a, x.b, x.c, x.d, x.tx, x.ty);
+}
 inline CFStringRef ToCFStr(const string &n) { return CFStringCreateWithCString(0, n.data(), kCFStringEncodingUTF8); }
 inline string FromCFStr(CFStringRef in) {
     string ret(CFStringGetMaximumSizeForEncoding(CFStringGetLength(in), kCFStringEncodingUTF8), 0);
@@ -248,9 +251,8 @@ void GlyphCache::Load(const Font *f, const Glyph *g, CGFontRef cgfont, int size)
         glyph.push_back(g);
     }
     CGGlyph cg = g->internal.coretext.id;
-    float origin_x = g->internal.coretext.origin_x, bearing_y = g->internal.coretext.height + g->internal.coretext.origin_y;
     if (tex.buf && cache_glyph) {
-        CGPoint point = CGPointMake(p.x - origin_x, tex.height - p.y - g->bearing_y);
+        CGPoint point = CGPointMake(p.x - g->bearing_x, tex.height - p.y - g->bearing_y);
         CGContextSetRGBFillColor(cgcontext, f->bg.r(), f->bg.g(), f->bg.b(), f->bg.a());
         CGContextFillRect(cgcontext, CGRectMake(p.x, tex.height - p.y - g->tex.height, g->tex.width, g->tex.height));
         CGContextSetRGBFillColor(cgcontext, f->fg.r(), f->fg.g(), f->fg.b(), f->fg.a());
@@ -261,15 +263,19 @@ void GlyphCache::Load(const Font *f, const Glyph *g, CGFontRef cgfont, int size)
         g->tex.pf = tex.pf;
         g->tex.RenewBuffer();
         CGContextRef context = g->tex.CGBitMap();
-        CGContextSetTextMatrix(context, CGAffineTransformMakeScale(1.0f, -1.0f));
-        CGPoint point = CGPointMake(-g->bearing_x, -g->bearing_y);
+        // CGContextSetTextMatrix(context, CGAffineTransformMakeScale(1.0f, -1.0f));
+        // CGContextConcatCTM(context, CGAffineTransformMakeScale(1.0f, -1.0f));
+        CGPoint point = CGPointMake(-g->bearing_x, -RoundLower(g->internal.coretext.origin_y));
         CGContextSetRGBFillColor(context, f->bg.r(), f->bg.g(), f->bg.b(), f->bg.a());
         CGContextFillRect(context, CGRectMake(0, 0, g->tex.width, g->tex.height));
         CGContextSetRGBFillColor(context, f->fg.r(), f->fg.g(), f->fg.b(), f->fg.a());
         CGContextSetFont(context, cgfont);
         CGContextSetFontSize(context, size);
         CGContextShowGlyphsAtPositions(context, &cg, &point, 1);
+        // PrintCGAffineTransform(CGContextGetCTM(context));
+        // printf("tp %f, %f\n", CGContextGetTextPosition(context).x, CGContextGetTextPosition(context).y);
         CGContextRelease(context);
+        g->tex.FlipBufferY();
         if (cache_glyph) {
             tex.UpdateGL(g->tex.buf, Box(p, g->tex.Dimension()), Texture::Flag::FlipY); 
             g->tex.ClearBuffer();
@@ -755,8 +761,14 @@ Font *CoreTextFontEngine::Open(const FontDesc &d) {
         CFRelease(cfname);
     }
 
+    CTFontRef ctfont = CTFontCreateWithCGFontAndAttr(ri->second->cgfont, d.size, 0);
+    CGFloat ascent = CTFontGetAscent(ctfont), descent = CTFontGetDescent(ctfont), leading = CTFontGetLeading(ctfont);
+    CFRelease(ctfont);
+
     Font *ret = new Font(this, d, ri->second);
     ret->glyph = shared_ptr<GlyphMap>(new GlyphMap());
+    ret->ascender = RoundUp(ascent);
+    ret->descender = RoundUp(descent) + RoundDown(leading);
     int count = InitGlyphs(ret, &ret->glyph->table[0], ret->glyph->table.size());
     ret->fix_metrics = true;
     ret->has_bg = true;
@@ -818,6 +830,7 @@ void CoreTextFontEngine::AssignGlyph(Glyph *g, const CGRect &bounds, struct CGSi
     g->internal.coretext.origin_y = bounds.origin.y;
     g->internal.coretext.width    = bounds.size.width;
     g->internal.coretext.height   = bounds.size.height;
+    g->internal.coretext.advance  = advance.width;
 }
 #endif /* __APPLE__ */
 
