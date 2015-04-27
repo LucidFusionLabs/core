@@ -1859,6 +1859,7 @@ int Pixel::ToFFMpegId(int fmt) {
 /* Texture */
 
 int Texture::GLBufferType() const { return PixelSize() == 4 ? GraphicsDevice::GLPreferredBuffer : GL_UNSIGNED_BYTE; }
+
 void Texture::Coordinates(float *texcoord, int w, int h, int wd, int hd) {
     texcoord[CoordMinX] = texcoord[CoordMinY] = 0;
     texcoord[CoordMaxX] = (float)w / wd;
@@ -1890,9 +1891,10 @@ void Texture::Resize(int W, int H, int PF, int flag) {
 
 void Texture::LoadBuffer(const unsigned char *B, const point &dim, int PF, int linesize, int flag) {
     Resize(dim.x, dim.y, pf, Flag::CreateBuf);
+    int resample_flag = 0 | ((flag & Flag::FlipY) ? SimpleVideoResampler::Flag::FlipY : 0);
     SimpleVideoResampler::Blit(B, buf, width, height,
                                PF, linesize,   0, 0,
-                               pf, LineSize(), 0, 0, flag);
+                               pf, LineSize(), 0, 0, resample_flag);
 }
 
 void Texture::UpdateBuffer(const unsigned char *B, const point &dim, int PF, int linesize, int flag) {

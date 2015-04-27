@@ -106,8 +106,8 @@ struct Glyph : public Drawable {
     short bearing_x=0, bearing_y=0, advance=0;
     bool wide=0;
     union Internal {
-        struct FreeType { int id; }                                          freetype;
-        struct CoreText { int id; float origin_x, origin_y, width, height; } coretext;
+        struct FreeType { int id; }                                                   freetype;
+        struct CoreText { int id; float origin_x, origin_y, width, height, advance; } coretext;
     } internal;
     mutable Texture tex;
     mutable bool ready=0;
