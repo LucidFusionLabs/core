@@ -77,6 +77,10 @@ static const char **osx_argv = 0;
     - (BOOL)isOpaque { return YES; }
     - (BOOL)acceptsFirstResponder { return YES; }
     - (BOOL)isInitialized { return initialized; }
+    // - (void)windowDidBecomeKey:(NSNotification *)notification {}
+    // - (void)windowDidResignKey:(NSNotification *)notification {}
+    // - (void)windowDidBecomeMain:(NSNotification *)notification {}
+    - (void)windowDidResignMain:(NSNotification *)notification { [self clearKeyModifiers]; }
     - (void)setWindow:(NSWindow*)w { window = w; }
     - (void)setScreen:(NativeWindow*)s { screen = s; }
     - (void)setFrame:(NSRect)frame { [super setFrame:frame]; needs_reshape=YES; [self update]; }
@@ -223,7 +227,6 @@ static const char **osx_argv = 0;
     - (void)keyPress:(NSEvent *)theEvent down:(bool)d {
         SetNativeWindow(screen);
         int c = getKeyCode([theEvent keyCode]);
-        if (c == 0x30 && cmd_down) /* cmd + tab */ { [self clearKeyModifiers]; return; }
         int fired = c ? KeyPress(c, d) : 0;
         if (fired && frame_on_keyboard_input) [self setNeedsDisplay:YES]; 
     }
@@ -416,33 +419,45 @@ extern "C" void OSXAddWaitForeverSocket(void *O, int fd) { [(GameView*)O setWait
 extern "C" void OSXDelWaitForeverSocket(void *O, int fd) { [(GameView*)O delWaitForeverSocket: fd]; }
 
 extern "C" void OSXCreateApplicationMenus() {
-    NSString *appName = [[NSRunningApplication currentApplication] localizedName];
-    NSMenu *appleMenu = [[NSMenu alloc] initWithTitle:@""];
+    NSMenuItem *item; 
+    NSMenu *menu = [[NSMenu alloc] initWithTitle:@""];
+    NSString *app_name = [[NSRunningApplication currentApplication] localizedName];
+    item = [menu addItemWithTitle:[@"About " stringByAppendingString:app_name]
+                 action:@selector(orderFrontStandardAboutPanel:) keyEquivalent:@""];
+    [menu addItem:[NSMenuItem separatorItem]];
+    item = [menu addItemWithTitle:@"New Window" action:nil keyEquivalent:@"n"];
+    item = [menu addItemWithTitle:[@"Hide " stringByAppendingString:app_name]
+                 action:@selector(hide:) keyEquivalent:@"h"];
+    item = [menu addItemWithTitle:@"Hide Others"
+                 action:@selector(hideOtherApplications:) keyEquivalent:@"h"];
+    [item setKeyEquivalentModifierMask:(NSAlternateKeyMask|NSCommandKeyMask)];
+    item = [menu addItemWithTitle:@"Show All" action:@selector(unhideAllApplications:) keyEquivalent:@""];
+    [menu addItem:[NSMenuItem separatorItem]];
+    item = [menu addItemWithTitle: [@"Quit " stringByAppendingString:app_name]
+                 action:@selector(terminate:) keyEquivalent:@"q"];
+    item = [[NSMenuItem alloc] initWithTitle:@"" action:nil keyEquivalent:@""];
+    [item setSubmenu: menu];
+    [[NSApp mainMenu] addItem: item];
+    [menu release];
+    [item release];
 
-    NSString *title = [@"About " stringByAppendingString:appName];
-    [appleMenu addItemWithTitle:title action:@selector(orderFrontStandardAboutPanel:) keyEquivalent:@""];
-    [appleMenu addItem:[NSMenuItem separatorItem]];
+    menu = [[NSMenu alloc] initWithTitle:@"Edit"];
+    item = [menu addItemWithTitle:@"Copy"  action:@selector(copy:)  keyEquivalent:@"c"];
+    item = [menu addItemWithTitle:@"Paste" action:@selector(paste:) keyEquivalent:@"v"];
+    item = [[NSMenuItem alloc] initWithTitle:@"Edit" action:nil keyEquivalent:@""];
+    [item setSubmenu: menu];
+    [[NSApp mainMenu] addItem: item];
+    [menu release];
+    [item release];
 
-    title = [@"Hide " stringByAppendingString:appName];
-    [appleMenu addItemWithTitle:title action:@selector(hide:) keyEquivalent:@"h"];
-
-    NSMenuItem *menuItem = (NSMenuItem *)[appleMenu addItemWithTitle:@"Hide Others" action:@selector(hideOtherApplications:) keyEquivalent:@"h"];
-    [menuItem setKeyEquivalentModifierMask:(NSAlternateKeyMask|NSCommandKeyMask)];
-
-    [appleMenu addItemWithTitle:@"Show All" action:@selector(unhideAllApplications:) keyEquivalent:@""];
-    [appleMenu addItem:[NSMenuItem separatorItem]];
-
-    title = [@"Quit " stringByAppendingString:appName];
-    [appleMenu addItemWithTitle:title action:@selector(terminate:) keyEquivalent:@"q"];
-
-    menuItem = [[NSMenuItem alloc] initWithTitle:@"" action:nil keyEquivalent:@""];
-    [menuItem setSubmenu: appleMenu];
-    [[NSApp mainMenu] addItem: menuItem];
-
-    // [NSApp setAppleMenu: appleMenu];
-    [NSApp performSelector:NSSelectorFromString(@"setAppleMenu:") withObject:appleMenu];
-    [appleMenu release];
-    [menuItem release];
+    menu = [[NSMenu alloc] initWithTitle:@"View"];
+    item = [menu addItemWithTitle:@"Zoom In"  action:nil keyEquivalent:@"+"];
+    item = [menu addItemWithTitle:@"Zoom Out" action:nil keyEquivalent:@"-"];
+    item = [[NSMenuItem alloc] initWithTitle:@"View" action:nil keyEquivalent:@""];
+    [item setSubmenu: menu];
+    [[NSApp mainMenu] addItem: item];
+    [menu release];
+    [item release];
 }
 
 extern "C" int main(int argc, const char **argv) {
