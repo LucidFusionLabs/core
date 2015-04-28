@@ -27,8 +27,10 @@
 #include <sys/socket.h>
 
 namespace LFL {
-DEFINE_int(peak_fps,  50,    "Peak FPS");
-DEFINE_bool(draw_fps, false, "Draw FPS");
+DEFINE_int   (peak_fps,    50,    "Peak FPS");
+DEFINE_bool  (draw_fps,   false,  "Draw FPS");
+DEFINE_string(command,    "",     "Execute initial command");
+DEFINE_string(screenshot, "",     "Screenshot and exit");
 
 extern FlagOfType<string> FLAGS_default_font_;
 extern FlagOfType<bool>   FLAGS_lfapp_network_;
@@ -92,6 +94,7 @@ struct MyTerminalWindow {
         CHECK_EQ(process.OpenPTY(av), 0);
         fd = fileno(process.out);
         app->scheduler.AddWaitForeverSocket(fd, SocketSet::READABLE, 0);
+        if (int len = FLAGS_command.size()) CHECK_EQ(len+1, write(fd, StrCat(FLAGS_command, "\n").data(), len+1));
 #endif
 
         terminal = new Terminal(fd, screen, Fonts::Get(FLAGS_default_font, "", font_size));
@@ -129,6 +132,7 @@ int Frame(Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample, int
     tw->terminal->DrawWithShader(W->Box(), true, tw->activeshader);
     W->DrawDialogs();
     if (FLAGS_draw_fps) Fonts::Default()->Draw(StringPrintf("FPS = %.2f", FPS()), point(W->width*.85, 0));
+    if (FLAGS_screenshot.size()) ONCE(app->shell.screenshot(vector<string>(1, FLAGS_screenshot)); app->run=0;);
     return 0;
 }
 
