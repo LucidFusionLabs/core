@@ -415,10 +415,42 @@ extern "C" void OSXDelWaitForeverKeyboard(void *O) { [(GameView*)O setFrameOnKey
 extern "C" void OSXAddWaitForeverSocket(void *O, int fd) { [(GameView*)O setWaitForeverSocket: fd]; }
 extern "C" void OSXDelWaitForeverSocket(void *O, int fd) { [(GameView*)O delWaitForeverSocket: fd]; }
 
+extern "C" void OSXCreateApplicationMenus() {
+    NSString *appName = [[NSRunningApplication currentApplication] localizedName];
+    NSMenu *appleMenu = [[NSMenu alloc] initWithTitle:@""];
+
+    NSString *title = [@"About " stringByAppendingString:appName];
+    [appleMenu addItemWithTitle:title action:@selector(orderFrontStandardAboutPanel:) keyEquivalent:@""];
+    [appleMenu addItem:[NSMenuItem separatorItem]];
+
+    title = [@"Hide " stringByAppendingString:appName];
+    [appleMenu addItemWithTitle:title action:@selector(hide:) keyEquivalent:@"h"];
+
+    NSMenuItem *menuItem = (NSMenuItem *)[appleMenu addItemWithTitle:@"Hide Others" action:@selector(hideOtherApplications:) keyEquivalent:@"h"];
+    [menuItem setKeyEquivalentModifierMask:(NSAlternateKeyMask|NSCommandKeyMask)];
+
+    [appleMenu addItemWithTitle:@"Show All" action:@selector(unhideAllApplications:) keyEquivalent:@""];
+    [appleMenu addItem:[NSMenuItem separatorItem]];
+
+    title = [@"Quit " stringByAppendingString:appName];
+    [appleMenu addItemWithTitle:title action:@selector(terminate:) keyEquivalent:@"q"];
+
+    menuItem = [[NSMenuItem alloc] initWithTitle:@"" action:nil keyEquivalent:@""];
+    [menuItem setSubmenu: appleMenu];
+    [[NSApp mainMenu] addItem: menuItem];
+
+    // [NSApp setAppleMenu: appleMenu];
+    [NSApp performSelector:NSSelectorFromString(@"setAppleMenu:") withObject:appleMenu];
+    [appleMenu release];
+    [menuItem release];
+}
+
 extern "C" int main(int argc, const char **argv) {
     osx_argc = argc; osx_argv = argv;
     AppDelegate *app_delegate = [[AppDelegate alloc] init];
     [[NSApplication sharedApplication] setDelegate: app_delegate];
+    [NSApp setMainMenu:[[NSMenu alloc] init]];
+    OSXCreateApplicationMenus();
     return NSApplicationMain(argc, argv);
 }
 #endif // LFL_OSXVIDEO

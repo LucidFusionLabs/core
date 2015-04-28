@@ -67,6 +67,10 @@ extern "C" {
 #endif
 #endif
 
+#ifdef LFL_QT
+extern "C" void QTTriggerFrame();
+#endif
+
 #ifdef LFL_WXWIDGETS
 #include <wx/wx.h>
 #include <wx/glcanvas.h>
@@ -972,7 +976,7 @@ int Application::Frame() {
 
 int Application::Main() {
     if (Start()) return Exiting();
-#if defined(LFL_QT) || defined(LFL_WXWIDGETS) || defined(LFL_OSXVIDEO)
+#if defined(LFL_OSXVIDEO) || defined(LFL_QT) || defined(LFL_WXWIDGETS)
     return 0;
 #endif
     return MainLoop();
@@ -1014,27 +1018,32 @@ int Application::Exiting() {
 /* FrameScheduler */
 
 FrameScheduler::FrameScheduler() : maxfps(&FLAGS_target_fps), wakeup_thread(&frame_mutex, &wait_mutex) {
-#if defined(LFL_QT) || defined(LFL_WXWIDGETS) || defined(LFL_OSXINPUT)
+#if defined(LFL_OSXINPUT) || defined(LFL_QT) || defined(LFL_WXWIDGETS)
     rate_limit = synchronize_waits = wait_forever_thread = monolithic_frame = 0;
 #endif
-#if defined(LFL_WXWIDGETS)
+#if defined(LFL_QT) || defined(LFL_WXWIDGETS)
     wait_forever_thread = true;
 #endif
 }
+
 void FrameScheduler::Init() { 
     screen->target_fps = FLAGS_target_fps;
     wait_forever = !FLAGS_target_fps;
     maxfps.timer.GetTime(true);
     if (wait_forever && synchronize_waits) frame_mutex.lock();
 }
+
 void FrameScheduler::Free() { 
     if (wait_forever && synchronize_waits) frame_mutex.unlock();
     if (wait_forever && wait_forever_thread) wakeup_thread.Wait();
 }
+
 void FrameScheduler::Start() {
     if (wait_forever && wait_forever_thread) wakeup_thread.Start();
 }
+
 void FrameScheduler::FrameDone() { if (rate_limit && app->run && FLAGS_target_fps) maxfps.Limit(); }
+
 void FrameScheduler::FrameWait() {
     if (wait_forever && !FLAGS_target_fps) {
         if (synchronize_waits) {
@@ -1055,9 +1064,11 @@ void FrameScheduler::FrameWait() {
         }
     }
 }
+
 void FrameScheduler::Wakeup(void *opaque) {
     if (wait_forever) {
 #if defined(LFL_QT)
+        if (wait_forever_thread) QTTriggerFrame();
 #elif defined(LFL_WXWIDGETS)
         if (wait_forever_thread) ((wxGLCanvas*)screen->id)->Refresh();
 #elif defined(LFL_GLFWINPUT)
@@ -1078,6 +1089,7 @@ void FrameScheduler::Wakeup(void *opaque) {
 #endif
     }
 }
+
 void FrameScheduler::UpdateTargetFPS(int fps) {
     screen->target_fps = fps;
     if (monolithic_frame) {
@@ -1090,36 +1102,42 @@ void FrameScheduler::UpdateTargetFPS(int fps) {
     OSXUpdateTargetFPS(screen->id);
 #endif
 }
+
 void FrameScheduler::AddWaitForeverMouse() {
     CHECK(screen->id);
 #if defined(LFL_OSXINPUT)
     OSXAddWaitForeverMouse(screen->id);
 #endif
 }
+
 void FrameScheduler::DelWaitForeverMouse() {
     CHECK(screen->id);
 #if defined(LFL_OSXINPUT)
     OSXDelWaitForeverMouse(screen->id);
 #endif
 }
+
 void FrameScheduler::AddWaitForeverKeyboard() {
     CHECK(screen->id);
 #if defined(LFL_OSXINPUT)
     OSXAddWaitForeverKeyboard(screen->id);
 #endif
 }
+
 void FrameScheduler::DelWaitForeverKeyboard() {
     CHECK(screen->id);
 #if defined(LFL_OSXINPUT)
     OSXDelWaitForeverKeyboard(screen->id);
 #endif
 }
+
 void FrameScheduler::AddWaitForeverSocket(Socket fd, int flag, void *val) {
     if (wait_forever && wait_forever_thread) wakeup_thread.Add(fd, flag, val);
 #ifdef LFL_OSXINPUT
     if (!wait_forever_thread) { CHECK_EQ(SocketSet::READABLE, flag); OSXAddWaitForeverSocket(screen->id, fd); }
 #endif
 }
+
 void FrameScheduler::DelWaitForeverSocket(Socket fd) {
     if (wait_forever && wait_forever_thread) wakeup_thread.Del(fd);
 #if defined(LFL_OSXINPUT)
