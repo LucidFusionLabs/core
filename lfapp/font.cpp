@@ -33,9 +33,7 @@
 #import <CoreText/CTStringAttributes.h>
 #import <CoreFoundation/CFAttributedString.h>
 #import <CoreGraphics/CGBitmapContext.h> 
-inline void PrintCGAffineTransform(const CGAffineTransform &x) {
-    printf("affine transform:\n|\t%f\t%f\t0\t|\n|\t%f\t%f\t0\t|\n|\t%f\t%f\t1\t|\n", x.a, x.b, x.c, x.d, x.tx, x.ty);
-}
+extern "C" void ConvertColorFromGenericToDeviceRGB(const float *i, float *o);
 inline CFStringRef ToCFStr(const string &n) { return CFStringCreateWithCString(0, n.data(), kCFStringEncodingUTF8); }
 inline string FromCFStr(CFStringRef in) {
     string ret(CFStringGetMaximumSizeForEncoding(CFStringGetLength(in), kCFStringEncodingUTF8), 0);
@@ -43,13 +41,9 @@ inline string FromCFStr(CFStringRef in) {
     ret.resize(strlen(ret.data()));
     return ret;
 }
-inline CFAttributedStringRef ToCFAStr(CTFontRef ctfont, unsigned short glyph_id, const LFL::Color &c) {
-    CGColorSpaceRef colors = CGColorSpaceCreateDeviceRGB();
-    // CGColorSpaceRef colors = CGColorSpaceCreateWithName(kCGColorSpaceGenericRGB);
-    CGFloat fg_comp[4] = { c.r(), c.g(), c.b(), c.a() };
-    CGColorRef fg_color = CGColorCreate(colors, fg_comp);
-    const CFStringRef attr_key[] = { kCTFontAttributeName, kCTForegroundColorAttributeName };
-    const CFTypeRef attr_val[] = { ctfont, fg_color };
+inline CFAttributedStringRef ToCFAStr(CTFontRef ctfont, unsigned short glyph_id) {
+    const CFStringRef attr_key[] = { kCTFontAttributeName };
+    const CFTypeRef attr_val[] = { ctfont };
     CFDictionaryRef attr = CFDictionaryCreate
         (kCFAllocatorDefault, (const void**)&attr_key, (const void**)&attr_val, sizeofarray(attr_key),
          &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
@@ -57,74 +51,7 @@ inline CFAttributedStringRef ToCFAStr(CTFontRef ctfont, unsigned short glyph_id,
     CFAttributedStringRef astr = CFAttributedStringCreate(kCFAllocatorDefault, str, attr);
     CFRelease(attr);
     CFRelease(str);
-    CGColorRelease(fg_color);
-    CGColorSpaceRelease(colors);
     return astr;
-}
-inline CTFontRef CTFontCreateWithCGFontAndAttr(CGFontRef cgfont, int size, int font_attr) {
-    if (!font_attr) return CTFontCreateWithGraphicsFont(cgfont, size, 0, 0);
-    CTFontSymbolicTraits traits = kCTFontBoldTrait; //  | kCTFontMonoSpaceTrait;
-    CTFontRef ctfont = CTFontCreateWithGraphicsFont(cgfont, size, 0, 0);
-    CTFontRef ctfont_w_attr = CTFontCreateCopyWithSymbolicTraits(ctfont, 0, 0, traits, traits);
-    if (!ctfont_w_attr) {
-        ERROR("failzzz");
-        return ctfont;
-    }
-    CFRelease(ctfont);
-    return ctfont_w_attr;
-}
-
-float GetCTFontDescWeight(CTFontDescriptorRef desc) {
-    CGFloat value = 0;
-    CFDictionaryRef dict = (CFDictionaryRef)CTFontDescriptorCopyAttribute(desc, kCTFontTraitsAttribute);
-    CFNumberRef number = (CFNumberRef)CFDictionaryGetValue(dict, kCTFontWeightTrait);
-    CFNumberGetValue(number, kCFNumberCGFloatType, &value);
-    return value;
-}
-
-inline CTFontRef CTFontCreateWithAttributes(const char *name, int size) {
-    CFStringRef cfname = ToCFStr(name);
-#if 0
-    float cfsize = size;
-    const CFStringRef attr_key[] = { kCTFontAttributeName }; //, kCTFontSizeAttribute };
-    const CFTypeRef attr_val[] = { cfname }; // , &cfsize };
-    CFDictionaryRef attr = CFDictionaryCreate
-        (kCFAllocatorDefault, (const void**)&attr_key, (const void**)&attr_val, sizeofarray(attr_key),
-         &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
-    CTFontDescriptorRef descriptor = CTFontDescriptorCreateWithAttributes(attr);
-#else 
-    CTFontDescriptorRef desc = CTFontDescriptorCreateWithNameAndSize(cfname, size);
-    printf("first weight %f\n", GetCTFontDescWeight(desc));
-
-    CGFloat value = 1.0;
-    CFNumberRef number = CFNumberCreate(NULL, kCFNumberCGFloatType, &value);
-    const CFStringRef dict_key[] = { kCTFontWeightTrait };
-    const CFTypeRef dict_val[] = { number };
-    CFDictionaryRef dict = CFDictionaryCreate
-        (kCFAllocatorDefault, (const void**)&dict_key, (const void**)&dict_val, sizeofarray(dict_key),
-         &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
-    
-    const CFStringRef attr_key[] = { kCTFontTraitsAttribute };
-    const CFTypeRef attr_val[] = { dict };
-    CFDictionaryRef attr = CFDictionaryCreate
-        (kCFAllocatorDefault, (const void**)&attr_key, (const void**)&attr_val, sizeofarray(attr_key),
-         &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
-
-    CTFontDescriptorRef descriptor = CTFontDescriptorCreateCopyWithAttributes(desc, attr);
-    CFRelease(desc);
-    printf("second weight %f\n", GetCTFontDescWeight(descriptor));
-#endif
-    CTFontRef font = CTFontCreateWithFontDescriptor(descriptor, 0, NULL);
-    CFRelease(descriptor);
-    CFRelease(cfname);
-    return font;
-}
-inline CGFontRef CGFontCreateWithAttributes(const char *name, int size) {
-    CTFontRef ctfont = CTFontCreateWithAttributes(name, size);
-    if (!ctfont) return NULL;
-    CGFontRef cgfont = CTFontCopyGraphicsFont(ctfont, NULL);
-    CFRelease(ctfont);
-    return cgfont;
 }
 #endif
 
@@ -251,11 +178,12 @@ void GlyphCache::Load(const Font *f, const Glyph *g, CGFontRef cgfont, int size)
         glyph.push_back(g);
     }
     CGGlyph cg = g->internal.coretext.id;
+    const Color &fg = f->fg, &bg = f->bg;
     if (tex.buf && cache_glyph) {
         CGPoint point = CGPointMake(p.x - g->bearing_x, tex.height - p.y - g->bearing_y);
-        CGContextSetRGBFillColor(cgcontext, f->bg.r(), f->bg.g(), f->bg.b(), f->bg.a());
+        CGContextSetRGBFillColor(cgcontext, bg.r(), bg.g(), bg.b(), bg.a());
         CGContextFillRect(cgcontext, CGRectMake(p.x, tex.height - p.y - g->tex.height, g->tex.width, g->tex.height));
-        CGContextSetRGBFillColor(cgcontext, f->fg.r(), f->fg.g(), f->fg.b(), f->fg.a());
+        CGContextSetRGBFillColor(cgcontext, fg.r(), fg.g(), fg.b(), fg.a());
         CGContextSetFont(cgcontext, cgfont);
         CGContextSetFontSize(cgcontext, size);
         CGContextShowGlyphsAtPositions(cgcontext, &cg, &point, 1);
@@ -263,17 +191,13 @@ void GlyphCache::Load(const Font *f, const Glyph *g, CGFontRef cgfont, int size)
         g->tex.pf = tex.pf;
         g->tex.RenewBuffer();
         CGContextRef context = g->tex.CGBitMap();
-        // CGContextSetTextMatrix(context, CGAffineTransformMakeScale(1.0f, -1.0f));
-        // CGContextConcatCTM(context, CGAffineTransformMakeScale(1.0f, -1.0f));
         CGPoint point = CGPointMake(-g->bearing_x, -RoundLower(g->internal.coretext.origin_y));
-        CGContextSetRGBFillColor(context, f->bg.r(), f->bg.g(), f->bg.b(), f->bg.a());
+        CGContextSetRGBFillColor(context, bg.r(), bg.g(), bg.b(), bg.a());
         CGContextFillRect(context, CGRectMake(0, 0, g->tex.width, g->tex.height));
-        CGContextSetRGBFillColor(context, f->fg.r(), f->fg.g(), f->fg.b(), f->fg.a());
+        CGContextSetRGBFillColor(context, fg.r(), fg.g(), fg.b(), fg.a());
         CGContextSetFont(context, cgfont);
         CGContextSetFontSize(context, size);
         CGContextShowGlyphsAtPositions(context, &cg, &point, 1);
-        // PrintCGAffineTransform(CGContextGetCTM(context));
-        // printf("tp %f, %f\n", CGContextGetTextPosition(context).x, CGContextGetTextPosition(context).y);
         CGContextRelease(context);
         g->tex.FlipBufferY();
         if (cache_glyph) {
@@ -700,7 +624,7 @@ CoreTextFontEngine::Resource::~Resource() {
 int CoreTextFontEngine::InitGlyphs(Font *f, Glyph *g, int n) {
     CGSize advance;
     Resource *resource = static_cast<Resource*>(f->resource.get());
-    CTFontRef ctfont = CTFontCreateWithCGFontAndAttr(resource->cgfont, f->size, 0);
+    CTFontRef ctfont = CTFontCreateWithGraphicsFont(resource->cgfont, f->size, 0, 0);
     if (bool no_substitution = false) {
         vector<UniChar> ascii (n);
         vector<CGGlyph> glyphs(n);
@@ -736,7 +660,7 @@ int CoreTextFontEngine::InitGlyphs(Font *f, Glyph *g, int n) {
 int CoreTextFontEngine::LoadGlyphs(Font *f, const Glyph *g, int n) {
     GlyphCache *cache = f->glyph->cache.get();
     Resource *resource = static_cast<Resource*>(f->resource.get());
-    CTFontRef ctfont = CTFontCreateWithCGFontAndAttr(resource->cgfont, f->size, 0);
+    CTFontRef ctfont = CTFontCreateWithGraphicsFont(resource->cgfont, f->size, 0, 0);
     for (const Glyph *e = g + n; g != e; ++g) {
         g->ready = true;
         Resource substituted;
@@ -753,7 +677,6 @@ Font *CoreTextFontEngine::Open(const FontDesc &d) {
     if (inserted) {
         CFStringRef cfname = ToCFStr(d.name);
         ri->second = shared_ptr<Resource>(new Resource());
-        // if (!(ri->second->cgfont = CGFontCreateWithAttributes(d.name.c_str(), 16))) { resource.erase(d.name); return 0; }
         if (!(ri->second->cgfont = CGFontCreateWithFontName(cfname))) { CFRelease(cfname); resource.erase(d.name); return 0; }
 #ifdef LFL_HARFBUZZ
         ri->second->hb_face = hb_coretext_face_create(ri->second->cgfont);
@@ -761,7 +684,7 @@ Font *CoreTextFontEngine::Open(const FontDesc &d) {
         CFRelease(cfname);
     }
 
-    CTFontRef ctfont = CTFontCreateWithCGFontAndAttr(ri->second->cgfont, d.size, 0);
+    CTFontRef ctfont = CTFontCreateWithGraphicsFont(ri->second->cgfont, d.size, 0, 0);
     CGFloat ascent = CTFontGetAscent(ctfont), descent = CTFontGetDescent(ctfont), leading = CTFontGetLeading(ctfont);
     CFRelease(ctfont);
 
@@ -772,6 +695,8 @@ Font *CoreTextFontEngine::Open(const FontDesc &d) {
     int count = InitGlyphs(ret, &ret->glyph->table[0], ret->glyph->table.size());
     ret->fix_metrics = true;
     ret->has_bg = true;
+    ConvertColorFromGenericToDeviceRGB(d.fg.x, ret->fg.x);
+    ConvertColorFromGenericToDeviceRGB(d.bg.x, ret->bg.x);
 
     bool new_cache = false, pre_load = false;
     GlyphCache *cache =
@@ -796,7 +721,7 @@ Font *CoreTextFontEngine::Open(const FontDesc &d) {
 
 void CoreTextFontEngine::GetSubstitutedFont(Font *f, CTFontRef ctfont, unsigned short glyph_id,
                                             CGFontRef *cgout, CTFontRef *ctout, int *id_out) {
-    CFAttributedStringRef astr = ToCFAStr(ctfont, glyph_id, f->fg);
+    CFAttributedStringRef astr = ToCFAStr(ctfont, glyph_id);
     CTLineRef line = CTLineCreateWithAttributedString(astr);
     CFArrayRef runs = CTLineGetGlyphRuns(line);
     CHECK_EQ(1, CFArrayGetCount(runs));
@@ -824,8 +749,6 @@ void CoreTextFontEngine::AssignGlyph(Glyph *g, const CGRect &bounds, struct CGSi
     g->tex.width  = RoundUp(x_extent - g->bearing_x);
     g->tex.height = g->bearing_y - RoundLower(bounds.origin.y);
     g->advance    = RoundUp(advance.width);
-    // printf("g '%c' origin %f, %f, bounds %f, %f advance %f\n", g->Id(), bounds.origin.x, bounds.origin.y, bounds.size.width, bounds.size.height, advance.width);
-    // printf("g '%c' to w/h %d, %d and bearings %d %d\n", g->Id(), g->tex.width, g->tex.height, g->bearing_x, g->bearing_y);
     g->internal.coretext.origin_x = bounds.origin.x;
     g->internal.coretext.origin_y = bounds.origin.y;
     g->internal.coretext.width    = bounds.size.width;
