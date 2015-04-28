@@ -208,6 +208,7 @@ int LFAppMainLoop();
 int LFAppFrame();
 void LFAppLog(int level, const char *file, int line, const char *fmt, ...);
 void LFAppFatal();
+void LFAppShutdown();
 void SetLFAppMainThread();
 void WindowReshaped(int w, int h);
 void WindowMinimized(); 

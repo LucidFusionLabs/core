@@ -586,6 +586,7 @@ struct Terminal : public TextArea, public Drawable::AttrSource {
     virtual void End        () { char k = 'E' - 0x40;  write(fd, &k, 1);  }
     virtual void UpdateCursor() { cursor.p = point(GetCursorX(term_cursor.x, term_cursor.y), GetCursorY(term_cursor.y)); }
     virtual void UpdateToken(Line*, int word_offset, int word_len, int update_type, const LineTokenProcessor*);
+    virtual int UpdateLines(float v_scrolled, int *first_ind, int *first_offset, int *first_len) { return 0; }
     virtual const Drawable::Attr *GetAttr(int attr) const;
     int GetCursorX(int x, int y) const {
         const Line *l = GetTermLine(y);
@@ -600,7 +601,7 @@ struct Terminal : public TextArea, public Drawable::AttrSource {
     LinesFrameBuffer *GetSecondaryFrameBuffer() { return cmd_fb .Attach(&last_fb); }
     LinesFrameBuffer *GetFrameBuffer(const Line *l) {
         int i = line.IndexOf(l);
-        return ((-i-1 < start_line || term_height-i < skip_last_lines) ? cmd_fb : line_fb).Attach(&last_fb);
+        return ((-i-1 < start_line || term_height+i < skip_last_lines) ? cmd_fb : line_fb).Attach(&last_fb);
     }
     void SetColors(Colors *C) {
         colors = C;

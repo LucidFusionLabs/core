@@ -17,6 +17,7 @@
  */
 
 #include "lfapp/lfapp.h"
+#include "lfapp/ipc.h"
 
 #include <sandbox.h>
 

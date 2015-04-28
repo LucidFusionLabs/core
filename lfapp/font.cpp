@@ -695,8 +695,8 @@ Font *CoreTextFontEngine::Open(const FontDesc &d) {
     int count = InitGlyphs(ret, &ret->glyph->table[0], ret->glyph->table.size());
     ret->fix_metrics = true;
     ret->has_bg = true;
-    ConvertColorFromGenericToDeviceRGB(d.fg.x, ret->fg.x);
-    ConvertColorFromGenericToDeviceRGB(d.bg.x, ret->bg.x);
+    // ConvertColorFromGenericToDeviceRGB(d.fg.x, ret->fg.x);
+    // ConvertColorFromGenericToDeviceRGB(d.bg.x, ret->bg.x);
 
     bool new_cache = false, pre_load = false;
     GlyphCache *cache =
