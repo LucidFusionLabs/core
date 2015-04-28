@@ -47,7 +47,6 @@ extern "C" {
 #else
 #include <signal.h>
 #include <pthread.h>
-#include <sys/shm.h>
 #include <sys/mman.h>
 #include <sys/types.h>
 #include <sys/resource.h>
@@ -129,6 +128,7 @@ extern "C" int LFAppMain()                 { return LFL::app->Main(); }
 extern "C" int LFAppMainLoop()             { return LFL::app->MainLoop(); }
 extern "C" int LFAppFrame()                { return LFL::app->Frame(); }
 extern "C" const char *LFAppDownloadDir()  { return LFL::app->dldir.c_str(); }
+extern "C" void LFAppShutdown() { LFL::app->run=0; LFL::app->scheduler.Wakeup(0); }
 extern "C" void WindowReshaped(int w, int h) { LFL::screen->Reshaped(w, h); }
 extern "C" void WindowMinimized()            { LFL::screen->Minimized(); }
 extern "C" void WindowUnMinimized()          { LFL::screen->UnMinimized(); }
@@ -385,14 +385,7 @@ void FlagMap::Print(const char *source_filename) const {
 }
 
 #ifdef WIN32
-MainCB nt_service_main = 0;
-const char *nt_service_name = 0;
-SERVICE_STATUS_HANDLE nt_service_status_handle = 0;
-
-void WIN32_Init() { timeBeginPeriod(1); }
-int close(int socket) { return closesocket(socket); }
-BOOL WINAPI CtrlHandler(DWORD sig) { INFO("interrupt"); app->run=0; return 1; }
-
+BOOL WINAPI CtrlHandler(DWORD sig) { INFO("interrupt"); LFAppShutdown(); }
 void OpenConsole() {
     FLAGS_open_console=1;
     AllocConsole();
@@ -401,220 +394,16 @@ void OpenConsole() {
     freopen("CONIN$", "rb", stdin);
     SetConsoleCtrlHandler(CtrlHandler ,1);
 }
-
 void CloseConsole() {
     fclose(stdin);
     fclose(stdout);
     FreeConsole();
 }
-
 void Application::Daemonize(const char *dir) {}
-int ProcessPipe::OpenPTY(const char **argv) { return Open(argv); }
-int ProcessPipe::Open(const char **argv) {
-    SECURITY_ATTRIBUTES sa;
-    memset(&sa, 0, sizeof(sa));
-    sa.nLength = sizeof(sa);
-    sa.bInheritHandle = 1;
-    HANDLE pipeinR, pipeinW, pipeoutR, pipeoutW, h;
-    if (!CreatePipe(&pipeinR, &pipeinW, &sa, 0)) return -1;
-    if (!CreatePipe(&pipeoutR, &pipeoutW, &sa, 0)) { CloseHandle(pipeinR); CloseHandle(pipeinW); return -1; }
-
-    STARTUPINFO si;
-    memset(&si, 0, sizeof(si));
-    si.dwFlags = STARTF_USESHOWWINDOW | STARTF_USESTDHANDLES;
-    si.wShowWindow = SW_HIDE;
-    si.hStdInput = pipeoutR;
-    si.hStdOutput = pipeinW;
-    si.hStdError = pipeinW;
-
-    PROCESS_INFORMATION pi;
-    if (!CreateProcess(0, (LPSTR)argv[0], 0, 0, 1, CREATE_NEW_PROCESS_GROUP, 0, 0, &si, &pi)) return -1;
-    CloseHandle(pi.hThread);
-    CloseHandle(pipeinW);
-    CloseHandle(pipeoutR);
-
-    in = fdopen(_open_osfhandle((long)pipeinR, O_TEXT), "r"); // leaks ?
-    out = fdopen(_open_osfhandle((long)pipeoutW, O_TEXT), "w");
-    return 0;
-}
-
-BOOL UpdateSCMStatus(DWORD dwCurrentState, DWORD dwWin32ExitCode,
-                     DWORD dwServiceSpecificExitCode, DWORD dwCheckPoint,
-                     DWORD dwWaitHint) {
-    SERVICE_STATUS serviceStatus;
-    serviceStatus.dwServiceType = SERVICE_WIN32_OWN_PROCESS;
-    serviceStatus.dwCurrentState = dwCurrentState;
-    serviceStatus.dwServiceSpecificExitCode = dwServiceSpecificExitCode;
-    serviceStatus.dwCheckPoint = dwCheckPoint;
-    serviceStatus.dwWaitHint = dwWaitHint;
-
-    if (dwCurrentState == SERVICE_START_PENDING) serviceStatus.dwControlsAccepted = 0;
-    else serviceStatus.dwControlsAccepted = SERVICE_ACCEPT_STOP |SERVICE_ACCEPT_SHUTDOWN;
-
-    if (dwServiceSpecificExitCode == 0) serviceStatus.dwWin32ExitCode = dwWin32ExitCode;
-    else serviceStatus.dwWin32ExitCode = ERROR_SERVICE_SPECIFIC_ERROR;
-
-    return SetServiceStatus(nt_service_status_handle, &serviceStatus);
-}
-
-void HandleNTServiceControl(DWORD controlCode) {
-    if (controlCode == SERVICE_CONTROL_SHUTDOWN || controlCode == SERVICE_CONTROL_STOP) {
-        UpdateSCMStatus(SERVICE_STOPPED, NO_ERROR, 0, 0, 0);
-        app->run = 0;
-    } else {
-        UpdateSCMStatus(SERVICE_RUNNING, NO_ERROR, 0, 0, 0);
-    }
-}
-
-int DispatchNTServiceMain(int argc, char **argv) {
-    nt_service_status_handle = RegisterServiceCtrlHandler(nt_service_name, (LPHANDLER_FUNCTION)HandleNTServiceControl);
-    if (!nt_service_status_handle) { ERROR("RegisterServiceCtrlHandler: ", GetLastError()); return -1; }
-
-    if (!UpdateSCMStatus(SERVICE_RUNNING, NO_ERROR, 0, 0, 0)) {
-        ERROR("UpdateSCMStatus: ", GetLastError()); return -1;
-    }
-    
-    return nt_service_main(argc, (const char **)argv);
-}
-
-int NTService::Install(const char *name, const char *path) {
-    SC_HANDLE schSCManager = OpenSCManager(0, 0, SC_MANAGER_CREATE_SERVICE);
-    if (!schSCManager) { ERROR("OpenSCManager: ", GetLastError()); return -1; }
-
-    SC_HANDLE schService = CreateService( 
-        schSCManager,    	  /* SCManager database      */ 
-        name,			      /* name of service         */ 
-        name,                 /* service name to display */ 
-        SERVICE_ALL_ACCESS,   /* desired access          */ 
-        SERVICE_WIN32_SHARE_PROCESS|SERVICE_INTERACTIVE_PROCESS, 
-        SERVICE_DEMAND_START, /* start type              */ 
-        SERVICE_ERROR_NORMAL, /* error control type      */ 
-        path,			      /* service's binary        */ 
-        0,                    /* no load ordering group  */ 
-        0,                    /* no tag identifier       */ 
-        0,                    /* no dependencies         */ 
-        0,                    /* LocalSystem account     */ 
-        0);                   /* no password             */
-    if (!schService) { ERROR("CreateService: ", GetLastError()); return -1; }
-
-    INFO("service ", name, " installed - see Control Panel > Services");
-    CloseServiceHandle(schSCManager);
-    return 0;
-}
-
-int NTService::Uninstall(const char *name) {
-    SC_HANDLE schSCManager = OpenSCManager(0, 0, SC_MANAGER_CREATE_SERVICE);
-    if (!schSCManager) { ERROR("OpenSCManager: ", GetLastError()); return -1; }
-
-    SC_HANDLE schService = OpenService(schSCManager, name, SERVICE_ALL_ACCESS);
-    if (!schService) { ERROR("OpenService: ", GetLastError()); return -1; }
-
-    if (!DeleteService(schService)) { ERROR("DeleteService: ", GetLastError()); return -1; }
-
-    INFO("service ", name, " uninstalled");
-    CloseServiceHandle(schService);
-    CloseServiceHandle(schSCManager);
-    return 0;
-}
-
-int NTService::WrapMain(const char *name, MainCB main_cb, int argc, const char **argv) {
-    nt_service_name = name;
-    nt_service_main = main_cb;
-
-    SERVICE_TABLE_ENTRY serviceTable[] = {
-        { (LPSTR)name, (LPSERVICE_MAIN_FUNCTION)DispatchNTServiceMain},
-        { 0, 0 }
-    };
-
-    if (!StartServiceCtrlDispatcher(serviceTable)) {
-        ERROR("StartServiceCtrlDispatcher ", GetLastError());
-        return -1;
-    }
-    return 0;
-}
-
 #else /* WIN32 */
+void HandleSigInt(int sig) { INFO("interrupt"); LFAppShutdown(); }
 void OpenConsole() {}
 void CloseConsole() {}
-int NTService::Install(const char *name, const char *path) { FATAL("not implemented"); }
-int NTService::Uninstall(const char *name) { FATAL("not implemented"); }
-int NTService::WrapMain(const char *name, MainCB main_cb, int argc, const char **argv) { return main_cb(argc, argv); }
-
-void HandleSigInt(int sig) { app->run=0; app->scheduler.Wakeup(0); }
-
-int ProcessPipe::Open(const char **argv) {
-    int pipein[2], pipeout[2], ret;
-    if (pipe(pipein) < 0) return -1;
-    if (pipe(pipeout) < 0) { close(pipein[0]); close(pipein[1]); return -1; }
-
-    if ((ret = fork())) { 
-        close(pipein[1]);
-        close(pipeout[0]);
-        if (ret < 0) { close(pipein[0]); close(pipeout[1]); return -1; }
-        in = fdopen(pipein[0], "r");
-        out = fdopen(pipeout[1], "w");
-    } else {
-        close(pipein[0]);
-        close(pipeout[1]);
-        close(0);
-        close(1);
-        close(2);
-        dup2(pipein[1], 2);
-        dup2(pipein[1], 1);
-        dup2(pipeout[0], 0);
-        execvp(argv[0], (char*const*)argv);
-    }
-    return 0;
-}
-
-extern "C" pid_t forkpty(int *, char *, struct termios *, struct winsize *);
-int ProcessPipe::OpenPTY(const char **argv) {
-    // struct termios term;
-    // struct winsize win;
-    char name[PATH_MAX];
-    int fd = -1;
-    if ((pid = forkpty(&fd, name, 0, 0))) {
-        if (pid < 0) { close(fd); return -1; }
-        fcntl(fd, F_SETFL, O_NONBLOCK);
-        in = fdopen(fd, "r");
-        out = fdopen(fd, "w");
-    } else {
-        execvp(argv[0], (char*const*)argv);
-    }
-    return 0;
-}
-
-int ProcessPipe::Close() {
-    if (pid) { kill(pid, SIGHUP); pid = 0; }
-    if (in)  { fclose(in);        in  = 0; }
-    if (out) { fclose(out);       out = 0; }
-    return 0;
-}
-
-static int ShmKeyFromInterProcessResourceURL(const string &u) {
-    static string shm_url = "shm://";
-    CHECK(PrefixMatch(u, shm_url));
-    return atoi(u.c_str() + shm_url.size());
-}
-
-InterProcessResource::~InterProcessResource() {
-    if (buf)     shmdt(buf);
-    if (id >= 0) shmctl(id, IPC_RMID, NULL);
-}
-
-InterProcessResource::InterProcessResource(int size, const string &u) : len(size), url(u) {
-    CHECK(len);
-    int key = url.empty() ? rand() : ShmKeyFromInterProcessResourceURL(url);
-    if ((id = shmget(key, size, url.empty() ? (IPC_CREAT | 0600) : 0400)) < 0)
-        FATAL("id=", id, ", size=", size, ", url=", url, ": ", strerror(errno));
-
-    CHECK_GE(id, 0);
-    buf = reinterpret_cast<char*>(shmat(id, NULL, 0));
-    CHECK(buf);
-    CHECK_NE((char*)-1, buf);
-    if (url.empty()) url = StrCat("shm://", key);
-}
-
 void Application::Daemonize(const char *dir) {
     char fn1[256], fn2[256];
     snprintf(fn1, sizeof(fn1), "%s%s.stdout", dir, app->progname.c_str());
@@ -623,7 +412,6 @@ void Application::Daemonize(const char *dir) {
     FILE *ferr = fopen(fn2, "a"); fprintf(stderr, "open %s %s\n", fn2, ferr ? "OK" : strerror(errno));
     Daemonize(fout, ferr);
 }
-
 void Application::Daemonize(FILE *fout, FILE *ferr) {
     int pid = fork();
     if (pid < 0) { fprintf(stderr, "fork: %d\n", pid); exit(-1); }
@@ -1426,8 +1214,9 @@ JSContext *CreateV8JSContext(Console *js_console, DOM::Node *doc) { return 0; }
 }; // namespace LFL
 
 #ifdef _WIN32
+int close(Socket socket) { return closesocket(socket); }
 int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR lpCmdLine, int nCmdShow) {
-    LFL::WIN32_Init();
+    timeBeginPeriod(1);
     vector<const char *> av;
     vector<string> a(1);
     a[0].resize(1024);

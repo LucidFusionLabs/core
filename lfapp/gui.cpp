@@ -21,6 +21,7 @@
 #include "lfapp/css.h"
 #include "lfapp/flow.h"
 #include "lfapp/gui.h"
+#include "lfapp/ipc.h"
 #include "../crawler/html.h"
 #include "../crawler/document.h"
 
@@ -761,8 +762,8 @@ void Terminal::Resized(const Box &b) {
 void Terminal::ResizedLeftoverRegion(int w, int h, bool update_fb) {
     if (!cmd_fb.SizeChanged(w, h, font)) return;
     if (update_fb) {
-        for (int i=0; i<start_line;      i++) cmd_fb.Update(&line[-i-1],             GetCursorY(term_height-i));
-        for (int i=0; i<skip_last_lines; i++) cmd_fb.Update(&line[-line_fb.lines+i], GetCursorY(i+1));
+        for (int i=0; i<start_line;      i++) cmd_fb.Update(&line[-i-1],             point(0,GetCursorY(term_height-i)), LinesFrameBuffer::Flag::Flush);
+        for (int i=0; i<skip_last_lines; i++) cmd_fb.Update(&line[-line_fb.lines+i], point(0,GetCursorY(i+1)),           LinesFrameBuffer::Flag::Flush);
     }
     cmd_fb.SizeChangedDone();
     last_fb = 0;
@@ -835,8 +836,8 @@ const Drawable::Attr *Terminal::GetAttr(int attr) const {
     Color *fg = colors ? &colors->c[Attr::GetFGColorIndex(attr)] : 0;
     Color *bg = colors ? &colors->c[Attr::GetBGColorIndex(attr)] : 0;
     if (attr & Attr::Reverse) swap(fg, bg);
-    ret.bg = bg;
     ret.font = Fonts::Change(font, font->size, *fg, *bg, font->flag);
+    ret.bg = bg; // &font->bg;
     ret.underline = attr & Attr::Underline;
     return &ret;
 }
@@ -1054,7 +1055,7 @@ void Terminal::FlushParseText() {
     CHECK_GT(term_cursor.x, 0);
     font = GetAttr(cursor.attr)->font;
     String16 input_text = String::ToUTF16(parse_text, &consumed);
-    TerminalTrace("Terminal: FlushParseText('%s').size = [%zd, %d]\n",
+    TerminalTrace("Terminal: (cur=%d,%d) FlushParseText('%s').size = [%zd, %d]\n", term_cursor.x, term_cursor.y,
                   StringPiece(parse_text.data(), consumed).str().c_str(), input_text.size(), consumed);
     for (int wrote = 0; wrote < input_text.size(); wrote += write_size) {
         if (wrote || term_cursor.x > term_width) Newline(true);

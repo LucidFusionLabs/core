@@ -340,28 +340,6 @@ struct NetworkThread {
     void HandleMessagesLoop() { while (GetLFApp()->run) { net->Frame(0); } }
 };
 
-struct ProcessAPIServer {
-    typedef function<void(const InterProcessProtocol::TextureResource&)> LoadResourceCompleteCB;
-    struct Query : public LFL::Query {
-        ProcessAPIServer *parent;
-        Query(ProcessAPIServer *P) : parent(P) {}
-        int Read(Connection *c);
-    };
-    int pid=0;
-    Connection *conn=0;
-    unsigned short seq=0;
-    unordered_map<unsigned short, LoadResourceCompleteCB> reqmap;
-    void Start(const string &client_program);
-    void LoadResource(const string &content, const string &fn, const LoadResourceCompleteCB &cb);
-};
-
-struct ProcessAPIClient {
-    struct Query : public LFL::Query {};
-    Connection *conn=0;
-    void Start(const string &socket_name);
-    void HandleMessagesLoop();
-};
-
 struct UDPClient : public Service {
     static const int MTU = 1500;
     enum { Write=1, Sendto=2 };

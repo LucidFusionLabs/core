@@ -135,7 +135,7 @@ using LFL_STL11_NAMESPACE::make_unsigned;
 #define snprintf _snprintf
 #define S_IFDIR _S_IFDIR
 #define socklen_t int
-int close(int socket);
+int close(Socket socket);
 extern char *optarg;
 extern int optind;
 #endif
@@ -410,30 +410,6 @@ struct ThreadPool {
         worker[round_robin_next].queue->Write(cb);
         round_robin_next = (round_robin_next + 1) % worker.size();
     }
-};
-
-struct ProcessPipe {
-    int pid=0;
-    FILE *in=0, *out=0;
-    virtual ~ProcessPipe() { Close(); }
-    int Open(const char **argv);
-    int OpenPTY(const char **argv);
-    int Close();
-};
-
-struct InterProcessResource {
-    int id=-1;
-    string url;
-    char *buf=0;
-    const int len=0;
-    InterProcessResource(int size, const string &ipr_url=string());
-    ~InterProcessResource();
-};
-
-struct NTService {
-    static int Install  (const char *name, const char *path);
-    static int Uninstall(const char *name);
-    static int WrapMain (const char *name, MainCB main_cb, int argc, const char **argv);
 };
 
 struct Timer {
