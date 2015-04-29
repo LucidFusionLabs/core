@@ -127,6 +127,9 @@ int Frame(Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample, int
     MyTerminalWindow *tw = (MyTerminalWindow*)W->user1;
     tw->read_buf.Reset();
     if (tw->process.in && NBRead(fileno(tw->process.in), &tw->read_buf.data)) tw->terminal->Write(tw->read_buf.data);
+    static const int join_read_size = 1024;
+    static const Time join_read_interval(100);
+    if (1 && tw->read_buf.data.size() == join_read_size && app->scheduler.WakeupIn(0, join_read_interval)) return -1;
 
     W->gd->DrawMode(DrawMode::_2D);
     W->gd->DisableBlend();
