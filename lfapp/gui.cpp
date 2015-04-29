@@ -756,6 +756,7 @@ void Terminal::Resized(const Box &b) {
     term_cursor.y = min(term_cursor.y, term_height);
     UpdateCursor();
     TextArea::Resized(b);
+    if (clip) clip = UpdateClipBorder();
     ResizedLeftoverRegion(b.w, b.h);
 }
 
@@ -778,9 +779,7 @@ void Terminal::SetScrollRegion(int b, int e, bool release_fb) {
         (scroll_region_beg == 1 && scroll_region_end == term_height);
     skip_last_lines = no_region ? 0 : scroll_region_beg - 1;
     start_line_adjust = start_line = no_region ? 0 : term_height - scroll_region_end;
-    clip_border.top    = font_height * skip_last_lines;
-    clip_border.bottom = font_height * start_line_adjust;
-    clip = no_region ? 0 : &clip_border;
+    clip = no_region ? 0 : UpdateClipBorder();
     ResizedLeftoverRegion(line_fb.w, line_fb.h, false);
 
     if (release_fb) { last_fb=0; screen->gd->DrawMode(DrawMode::_2D, 0); }

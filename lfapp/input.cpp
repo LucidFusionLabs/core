@@ -666,6 +666,10 @@ int Input::KeyEventDispatch(InputEvent::Id event, bool down) {
     if (!down) return 0;
     int key = InputEvent::GetKey(event);
     bool shift_down = ShiftKeyDown(), ctrl_down = CtrlKeyDown(), cmd_down = CmdKeyDown();
+
+    if (FLAGS_input_debug && down)
+        INFO("KeyEvent ", InputEvent::Name(event), " ", key, " ", shift_down, " ", ctrl_down, " ", cmd_down);
+
     for (auto it = screen->keyboard_gui.begin(); it != screen->keyboard_gui.end(); ++it) {
         KeyboardGUI *g = *it;
         if (!g->active) continue;

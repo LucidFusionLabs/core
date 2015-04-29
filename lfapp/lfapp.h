@@ -485,6 +485,7 @@ struct FrameScheduler {
     void FrameWait();
     void FrameDone();
     void Wakeup(void*);
+    bool WakeupIn(void*, Time interval);
     void UpdateTargetFPS(int fps);
     void AddWaitForeverMouse();
     void DelWaitForeverMouse();

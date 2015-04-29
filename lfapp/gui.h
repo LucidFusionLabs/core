@@ -609,6 +609,12 @@ struct Terminal : public TextArea, public Drawable::AttrSource {
         Attr::SetBGColorIndex(&default_cursor_attr, colors->bg_index);
         bg_color = &colors->c[colors->bg_index];
     }
+    Border *UpdateClipBorder() {
+        int font_height = font->Height();
+        clip_border.top    = font_height * skip_last_lines;
+        clip_border.bottom = font_height * start_line_adjust;
+        return &clip_border;
+    }
     void Scroll(int sy, int ey, int dy, bool move_fb_p) {
         CHECK_LT(sy, ey);
         int line_ind = GetTermLineIndex(sy), scroll_lines = ey - sy + 1, ady = abs(dy), sdy = (dy > 0 ? 1 : -1);

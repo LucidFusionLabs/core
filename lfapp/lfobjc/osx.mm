@@ -406,6 +406,9 @@ extern "C" void OSXTriggerFrame(void *O) {
     [(GameView*)O performSelectorOnMainThread:@selector(setNeedsDisplay:) withObject:@YES waitUntilDone:NO];
 }
 
+extern "C" void OSXTriggerFrameIn(void *O, int ms) {
+}
+
 extern "C" void OSXUpdateTargetFPS(void *O) {
     [(GameView*)O stopThread];
     [(GameView*)O startThread:false];
@@ -451,8 +454,8 @@ extern "C" void OSXCreateApplicationMenus() {
     [item release];
 
     menu = [[NSMenu alloc] initWithTitle:@"View"];
-    item = [menu addItemWithTitle:@"Zoom In"  action:nil keyEquivalent:@"+"];
-    item = [menu addItemWithTitle:@"Zoom Out" action:nil keyEquivalent:@"-"];
+    item = [menu addItemWithTitle:@"Zoom In"  action:@selector(zoomIn:)  keyEquivalent:@"="];
+    item = [menu addItemWithTitle:@"Zoom Out" action:@selector(zoomOut:) keyEquivalent:@"-"];
     item = [[NSMenuItem alloc] initWithTitle:@"View" action:nil keyEquivalent:@""];
     [item setSubmenu: menu];
     [[NSApp mainMenu] addItem: item];
