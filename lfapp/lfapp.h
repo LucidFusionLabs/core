@@ -241,9 +241,6 @@ struct Module {
     virtual int Frame(unsigned) { return 0; }
     virtual int Free ()         { return 0; }
 };
-
-struct FrameFlag { enum { DontSkip=8 }; };
-typedef function<int(Window*, unsigned, unsigned, bool, int)> FrameCB;
 }; // namespace LFL
 
 #include "lfapp/math.h"

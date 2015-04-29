@@ -276,10 +276,10 @@ struct SpaceballClient : public GameClient {
             Split(arg, isspace, &args);
             if (args.size() != 3) { ERROR("map ", arg); return; }
             framebuffer.Attach(fb_tex1);
-            framebuffer.Render(LFL::Frame);
+            screen->RenderToFrameBuffer(&framebuffer);
             sbmap->Load(args[0], args[1]);
             framebuffer.Attach(fb_tex2);
-            framebuffer.Render(LFL::Frame);
+            screen->RenderToFrameBuffer(&framebuffer);
             map_started = Now() - Time(atoi(args[2]));
             map_transition = Seconds(3).count();
         } else {

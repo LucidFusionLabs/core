@@ -18,6 +18,7 @@
 
 #include "lfapp/lfapp.h"
 #include "lfapp/network.h"
+#include "lfapp/ipc.h"
 #include "ml/hmm.h"
 #include "speech/speech.h"
 #include "fs.h"

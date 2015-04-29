@@ -119,7 +119,7 @@ struct MyBrowserWindow : public GUI {
 
 int Frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample, int flag) {
     MyBrowserWindow *bw = (MyBrowserWindow*)W->user1;
-    bool dont_skip = flag & FrameFlag::DontSkip;
+    bool dont_skip = flag & LFApp::Frame::DontSkip;
     if (!bw->Dirty() && !W->events.bind && !W->events.input && !dont_skip) return -1;
     screen->gd->DrawMode(DrawMode::_2D);
     bw->Draw();

@@ -1025,7 +1025,7 @@ void Terminal::Write(const string &s, bool update_fb, bool release_fb) {
                 FlushParseText();
             }
             if (C0_control) switch(c) {
-                case '\a':   INFO("bell");                                     break; // bell
+                case '\a':   TerminalDebug("%s", "bell");                      break; // bell
                 case '\b':   term_cursor.x = max(term_cursor.x-1, 1);          break; // backspace
                 case '\t':   term_cursor.x = min(term_cursor.x+8, term_width); break; // tab 
                 case '\r':   term_cursor.x = 1;                                break; // carriage return

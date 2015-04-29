@@ -110,7 +110,7 @@ extern "C" void iPhoneOpenBrowser(const char *url_text);
 #elif defined(__APPLE__)
 extern "C" void OSXStartWindow(void*);
 extern "C" void OSXTriggerFrame(void*);
-extern "C" void OSXTriggerFrameIn(void*, int ms);
+extern "C" bool OSXTriggerFrameIn(void*, int ms);
 extern "C" void OSXUpdateTargetFPS(void*);
 extern "C" void OSXAddWaitForeverMouse(void*);
 extern "C" void OSXDelWaitForeverMouse(void*);
@@ -882,7 +882,7 @@ void FrameScheduler::Wakeup(void *opaque) {
 bool FrameScheduler::WakeupIn(void *opaque, Time interval) {
     CHECK(!screen->target_fps);
 #if defined(LFL_OSXINPUT)
-    OSXTriggerFrameIn(screen->id, interval.count());
+    return OSXTriggerFrameIn(screen->id, interval.count());
 #endif
     return 0;
 }

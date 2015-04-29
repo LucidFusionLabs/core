@@ -176,6 +176,7 @@ typedef struct hb_face_t hb_face_t;
 
 struct LFApp {
     struct Log { enum { Fatal=-1, Error=0, Info=3, Debug=7 }; int v; };
+    struct Frame { enum { DontSkip=8 }; int v; };
     struct Events {
         int input, mouse_click, mouse_wheel, mouse_move, mouse_hover, key, gui, bind;
     };

@@ -21,6 +21,7 @@
 #include "lfapp/css.h"
 #include "lfapp/flow.h"
 #include "lfapp/gui.h"
+#include "lfapp/ipc.h"
 #include "lfapp/game.h"
 
 using namespace LFL;
