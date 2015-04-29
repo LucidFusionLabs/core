@@ -18,6 +18,7 @@
 
 #include "lfapp/lfapp.h"
 #include "lfapp/network.h"
+#include "lfapp/ipc.h"
 
 namespace LFL {
 #ifdef _WIN32

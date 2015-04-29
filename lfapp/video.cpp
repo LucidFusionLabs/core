@@ -1473,6 +1473,16 @@ void Window::Frame(unsigned clicks, unsigned mic_samples, bool cam_sample, int f
     }
 }
 
+void Window::RenderToFrameBuffer(FrameBuffer *fb) {
+    int dm = screen->gd->draw_mode;
+    fb->Attach();
+    screen->gd->ViewPort(Box(0, 0, fb->tex.width, fb->tex.height));
+    screen->gd->Clear();
+    frame_cb(0, 0, 0, 0, 0);
+    fb->Release();
+    screen->gd->RestoreViewport(dm);
+}
+
 int Depth::OpenGLID(int id) {
     switch(id) {
         case _16: return GL_DEPTH_COMPONENT16;
@@ -2039,16 +2049,6 @@ void FrameBuffer::Attach(int ct, int dt) {
         depth.ID = dt;
         glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depth.ID);
     }
-}
-
-void FrameBuffer::Render(FrameCB cb) {
-    int dm = screen->gd->draw_mode;
-    Attach();
-    screen->gd->ViewPort(Box(0, 0, tex.width, tex.height));
-    screen->gd->Clear();
-    cb(0, 0, 0, 0, 0);
-    Release();
-    screen->gd->RestoreViewport(dm);
 }
 
 /* Shader */

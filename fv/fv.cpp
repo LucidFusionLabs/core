@@ -379,7 +379,7 @@ struct AudioGUI : public GUI {
         if (!myMonitor && !W->events.gui && !app->audio.Out.size() && !last_audio_count && !decode && !screen->console->active) skip = 1;
 
         last_audio_count = app->audio.Out.size();
-        if (0 && skip && !(flag & FrameFlag::DontSkip)) {
+        if (0 && skip && !(flag & LFApp::Frame::DontSkip)) {
             if (segments) segments->Activate();
             Activate();
             return -1;

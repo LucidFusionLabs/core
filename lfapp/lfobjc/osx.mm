@@ -44,18 +44,20 @@ static const char **osx_argv = 0;
         NSOpenGLPixelFormat *pixel_format;
         NSFileHandle *wait_forever_fh;
 
-        NSTimer *timer;
+        NSTimer *runloop_timer, *trigger_timer;
+        NSTimeInterval trigger_timer_start;
         CVDisplayLinkRef displayLink;
 
         NSPoint prev_mouse_pos;
-        BOOL initialized, needs_reshape;
+        BOOL initialized, needs_reshape, needs_frame;
         BOOL use_timer, use_display_link, video_thread_init;
         BOOL cmd_down, ctrl_down, shift_down;
         BOOL frame_on_keyboard_input, frame_on_mouse_input, should_close;
     };
 
     - (void)dealloc {
-        if (timer)           FATALf("%s", "timer");
+        if (trigger_timer) [self clearTriggerTimer];
+        if (runloop_timer)   FATALf("%s", "timer");
         if (wait_forever_fh) FATALf("%s", wait_forever_fh);
         CVDisplayLinkRelease(displayLink);
         [pixel_format release];
@@ -86,6 +88,11 @@ static const char **osx_argv = 0;
     - (void)setFrame:(NSRect)frame { [super setFrame:frame]; needs_reshape=YES; [self update]; }
     - (void)setFrameOnMouseInput:(bool)v { frame_on_mouse_input = v; }
     - (void)setFrameOnKeyboardInput:(bool)v { frame_on_keyboard_input = v; }
+    - (void)viewDidChangeBackingProperties {
+        float ms = [[NSScreen mainScreen] backingScaleFactor];
+        self.layer.contentsScale = [[self window] backingScaleFactor];
+        INFOf("viewDidChangeBackingProperties %f %f\n", self.layer.contentsScale, ms);
+    }
     - (void)update { [context update]; }
     - (void)lockFocus {
         [super lockFocus];
@@ -139,23 +146,35 @@ static const char **osx_argv = 0;
             CVDisplayLinkStart(displayLink);
         } else if (use_timer) {
             if (first) INFOf("OSXModule impl = %s", "NSTimer");
-            timer = [NSTimer timerWithTimeInterval: 1.0/screen->target_fps
-                target:self selector:@selector(timerFired:) userInfo:nil repeats:YES];
-            [[NSRunLoop currentRunLoop] addTimer:timer forMode:NSDefaultRunLoopMode];
-            // [[NSRunLoop currentRunLoop] addTimer:timer forMode:NSEventTrackingRunLoopMode];
+            runloop_timer = [NSTimer timerWithTimeInterval: 1.0/screen->target_fps
+                target:self selector:@selector(runloopTimerFired:) userInfo:nil repeats:YES];
+            [[NSRunLoop currentRunLoop] addTimer:runloop_timer forMode:NSDefaultRunLoopMode];
+            // [[NSRunLoop currentRunLoop] addTimer:runloop_timer forMode:NSEventTrackingRunLoopMode];
         }
-    }
-    - (void)viewDidChangeBackingProperties {
-        float ms = [[NSScreen mainScreen] backingScaleFactor];
-        self.layer.contentsScale = [[self window] backingScaleFactor];
-        printf("view did change backing %f main window %f\n", self.layer.contentsScale, ms);
     }
     - (void)stopThread {
         if (displayLink) { CVDisplayLinkStop(displayLink); displayLink = nil; }
-        if (timer) { [timer invalidate]; timer = nil; }
+        if (runloop_timer) { [runloop_timer invalidate]; runloop_timer = nil; }
     }
     - (void)stopThreadAndExit { [self stopThread]; exit(0); }
-    - (void)timerFired:(id)sender { [self setNeedsDisplay:YES]; }
+    - (void)runloopTimerFired:(id)sender { [self setNeedsDisplay:YES]; }
+    - (void)triggerTimerFired:(id)sender { needs_frame=1; [self clearTriggerTimer]; [self setNeedsDisplay:YES]; }
+    - (void)clearTriggerTimer { [trigger_timer invalidate]; trigger_timer = nil; }
+    - (bool)triggerFrameIn:(int)ms {
+        if (needs_frame && !(needs_frame=0)) { [self clearTriggerTimer]; return false; }
+        NSTimeInterval now = [NSDate timeIntervalSinceReferenceDate];
+        if (trigger_timer) {
+            int remaining = [[trigger_timer userInfo] intValue] - (now - trigger_timer_start)*1000.0;
+            if (remaining <= ms) return true;
+            [self clearTriggerTimer]; 
+        }
+        trigger_timer = [NSTimer timerWithTimeInterval: ms/1000.0
+            target:self selector:@selector(triggerTimerFired:) userInfo:[NSNumber numberWithInt:ms] repeats:NO];
+        [[NSRunLoop currentRunLoop] addTimer:trigger_timer forMode:NSDefaultRunLoopMode];
+        [trigger_timer retain];
+        trigger_timer_start = now;
+        return true;
+    }
     - (void)drawRect:(NSRect)dirtyRect { if (use_timer) [self getFrameForTime:0]; }
     - (void)getFrameForTime:(const CVTimeStamp*)outputTime {
         static bool first_callback = 1;
@@ -406,7 +425,8 @@ extern "C" void OSXTriggerFrame(void *O) {
     [(GameView*)O performSelectorOnMainThread:@selector(setNeedsDisplay:) withObject:@YES waitUntilDone:NO];
 }
 
-extern "C" void OSXTriggerFrameIn(void *O, int ms) {
+extern "C" bool OSXTriggerFrameIn(void *O, int ms) {
+    return [(GameView*)O triggerFrameIn:ms];
 }
 
 extern "C" void OSXUpdateTargetFPS(void *O) {

@@ -67,7 +67,7 @@ int PronunciationDict::readDictionary(StringIter *in, PronunciationDict *out) {
         const char *c=line; if ((*c) == ';') continue; /* skip comments */
 
         /* Format: word <two spaces> pronunciation */
-        c += LengthChar(c.c_str(), notspace);
+        c += LengthChar(c, notspace);
         if (!*c || !isspace(*(c+1))) continue;
         *(char *)c = 0;
 

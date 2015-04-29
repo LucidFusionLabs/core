@@ -452,7 +452,6 @@ struct FrameBuffer {
 
     void Attach(int ct=0, int dt=0);
     void Release();
-    void Render(FrameCB cb);
 };
 
 struct ShaderDefines {
@@ -508,6 +507,7 @@ struct Video : public Module {
 
 extern Window *screen;
 struct Window : public NativeWindow {
+    typedef function<int(Window*, unsigned, unsigned, bool, int)> FrameCB;
     GraphicsDevice *gd=0;
     point mouse, mouse_wheel;
     string caption;
@@ -536,6 +536,7 @@ struct Window : public NativeWindow {
     void UnMinimized() {}
     void SwapAxis();
     void Frame(unsigned clicks, unsigned mic_samples, bool cam_sample, int flag);
+    void RenderToFrameBuffer(FrameBuffer *fb);
 
     void ClearMouseGUIEvents();
     void ClearKeyboardGUIEvents();
