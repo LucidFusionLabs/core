@@ -80,7 +80,7 @@ struct MyTerminalWindow {
     Terminal *terminal=0;
     Shader *activeshader;
     int font_size;
-    bool effects_mode=0;
+    bool effects_mode=0, join_read_pending=0;
 
     MyTerminalWindow() : read_buf(65536), activeshader(&app->video.shader_default), font_size(FLAGS_default_font_size) {}
     ~MyTerminalWindow() { if (process.in) app->scheduler.DelWaitForeverSocket(fileno(process.in)); }
@@ -130,9 +130,12 @@ int Frame(Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample, int
     tw->read_buf.Reset();
     if (tw->process.in && NBRead(fileno(tw->process.in), &tw->read_buf.data)) tw->terminal->Write(tw->read_buf.data);
     if (tw->read_buf.data.size() && !(flag & LFApp::Frame::DontSkip)) {
-        if (tw->read_buf.data.size() == join_read_size) { if (app->scheduler.WakeupIn(0, join_read_interval)) return -1; }
-        else                                            { if (app->scheduler.WakeupIn(0,   refresh_interval)) return -1; }
+        bool join_read = tw->read_buf.data.size() == join_read_size;
+        if (join_read) { tw->join_read_pending=1; if (app->scheduler.WakeupIn(0, join_read_interval)) return -1; }
+        else        if (!tw->join_read_pending) { if (app->scheduler.WakeupIn(0,   refresh_interval)) return -1; }
     }
+    tw->join_read_pending = 0;
+    app->scheduler.ClearWakeupIn();
     W->gd->DrawMode(DrawMode::_2D);
     W->gd->DisableBlend();
     tw->terminal->DrawWithShader(W->Box(), true, tw->activeshader);
