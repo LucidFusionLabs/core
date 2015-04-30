@@ -91,7 +91,7 @@ static const char **osx_argv = 0;
     - (void)viewDidChangeBackingProperties {
         float ms = [[NSScreen mainScreen] backingScaleFactor];
         self.layer.contentsScale = [[self window] backingScaleFactor];
-        INFOf("viewDidChangeBackingProperties %f %f\n", self.layer.contentsScale, ms);
+        INFOf("viewDidChangeBackingProperties %f %f", self.layer.contentsScale, ms);
     }
     - (void)update { [context update]; }
     - (void)lockFocus {
@@ -158,14 +158,14 @@ static const char **osx_argv = 0;
     }
     - (void)stopThreadAndExit { [self stopThread]; exit(0); }
     - (void)runloopTimerFired:(id)sender { [self setNeedsDisplay:YES]; }
-    - (void)triggerTimerFired:(id)sender { needs_frame=1; [self clearTriggerTimer]; [self setNeedsDisplay:YES]; }
-    - (void)clearTriggerTimer { [trigger_timer invalidate]; trigger_timer = nil; }
-    - (bool)triggerFrameIn:(int)ms {
+    - (void)triggerTimerFired:(id)sender { [self clearTriggerTimer]; needs_frame=1; [self setNeedsDisplay:YES]; }
+    - (void)clearTriggerTimer { needs_frame=0; [trigger_timer invalidate]; trigger_timer = nil; }
+    - (bool)triggerFrameIn:(int)ms force:(bool)force {
         if (needs_frame && !(needs_frame=0)) { [self clearTriggerTimer]; return false; }
         NSTimeInterval now = [NSDate timeIntervalSinceReferenceDate];
         if (trigger_timer) {
             int remaining = [[trigger_timer userInfo] intValue] - (now - trigger_timer_start)*1000.0;
-            if (remaining <= ms) return true;
+            if (remaining <= ms && !force) return true;
             [self clearTriggerTimer]; 
         }
         trigger_timer = [NSTimer timerWithTimeInterval: ms/1000.0
@@ -425,8 +425,12 @@ extern "C" void OSXTriggerFrame(void *O) {
     [(GameView*)O performSelectorOnMainThread:@selector(setNeedsDisplay:) withObject:@YES waitUntilDone:NO];
 }
 
-extern "C" bool OSXTriggerFrameIn(void *O, int ms) {
-    return [(GameView*)O triggerFrameIn:ms];
+extern "C" bool OSXTriggerFrameIn(void *O, int ms, bool force) {
+    return [(GameView*)O triggerFrameIn:ms force:force];
+}
+
+extern "C" void OSXClearTriggerFrameIn(void *O) {
+    [(GameView*)O clearTriggerTimer];
 }
 
 extern "C" void OSXUpdateTargetFPS(void *O) {
