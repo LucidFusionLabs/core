@@ -529,6 +529,20 @@ void TextArea::Draw(const Box &b, bool draw_cursor) {
     }
 }
 
+bool TextArea::GetGlyphFromCoordsOffset(const point &p, Selection::Point *out, int sl, int sla) {
+    LinesFrameBuffer *fb = GetFrameBuffer();
+    int h = fb->Height(), fh = font->Height(), targ = reverse_line_fb ? ((h - p.y) / fh - sla) : (p.y / fh + sla);
+    for (int i=sl, lines=0, ll; i<line.ring.count && lines<line_fb.lines; i++, lines += ll) {
+        Line *L = &line[-i-1];
+        if (lines + (ll = L->Lines()) <= targ) continue;
+        L->data->glyphs.GetGlyphFromCoords(p, &out->char_ind, &out->glyph, targ - lines);
+        out->glyph.y = lines * fh;
+        out->line_ind = i;
+        return true;
+    }
+    return false;
+}
+
 void TextArea::InitSelection() {
     mouse_gui.Activate();
     selection.gui_ind = mouse_gui.AddDragBox
@@ -562,22 +576,6 @@ void TextArea::DragCB(int button, int, int, int down) {
     if (reverse_line_fb) { gb.y=h-gb.y-gb.h; ge.y=h-ge.y-ge.h; }
     s->box = Box3(Box(fb->Width(), fb->Height()), gb.Position(), ge.Position() + point(ge.w, 0), fh, fh);
     s->changing_previously = s->changing;
-}
-
-bool TextArea::GetGlyphFromCoords(const point &p, Selection::Point *out) {
-    LinesFrameBuffer *fb = GetFrameBuffer();
-    int h = fb->Height(), fh = font->Height();
-    int targ = reverse_line_fb ? ((h - p.y) / fh - start_line_adjust) 
-                               : ((    p.y) / fh + start_line_adjust);
-    for (int i=start_line, lines=0, ll; i<line.ring.count && lines<line_fb.lines; i++, lines += ll) {
-        Line *L = &line[-i-1];
-        if (lines + (ll = L->Lines()) <= targ) continue;
-        L->data->glyphs.GetGlyphFromCoords(p, &out->char_ind, &out->glyph, targ - lines);
-        out->glyph.y = lines * fh;
-        out->line_ind = i;
-        return true;
-    }
-    return false;
 }
 
 void TextArea::CopyText(const Selection::Point &beg, const Selection::Point &end) {

@@ -376,6 +376,7 @@ struct Texture : public Drawable {
 
     void Bind() const;
     string DebugString() const { return StrCat("Texture(", width, ", ", height, ", ", Pixel::Name(pf), ")"); }
+    string HexDump() const { string v; for (int ls=LineSize(), i=0; i<height; i++) StrAppend(&v, Vec<unsigned char>::Str(buf+i*ls, ls, "%02x"), "\n"); return v; }
     point Dimension() const { return point(width, height); }
     int PixelSize() const { return Pixel::size(pf); }
     int LineSize() const { return width * PixelSize(); }

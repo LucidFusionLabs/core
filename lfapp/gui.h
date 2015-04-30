@@ -463,6 +463,9 @@ struct TextArea : public TextGUI {
     virtual void DrawWithShader(const Box &w, bool cursor, Shader *shader)
     { glTimeResolutionShader(shader); Draw(w, cursor); screen->gd->UseShader(0); }
 
+    virtual bool GetGlyphFromCoords(const point &p, Selection::Point *out) { return GetGlyphFromCoordsOffset(p, out, start_line, start_line_adjust); }
+    bool GetGlyphFromCoordsOffset(const point &p, Selection::Point *out, int sl, int sla);
+
     bool Wrap() const { return line_fb.wrap; }
     int LineFBPushBack () const { return reverse_line_fb ? LineUpdate::PushFront : LineUpdate::PushBack;  }
     int LineFBPushFront() const { return reverse_line_fb ? LineUpdate::PushBack  : LineUpdate::PushFront; }
@@ -471,7 +474,6 @@ struct TextArea : public TextGUI {
     void InitSelection();
     void DrawSelection();
     void DragCB(int button, int x, int y, int down);
-    bool GetGlyphFromCoords(const point &p, Selection::Point *out);
     void CopyText(const Selection::Point &beg, const Selection::Point &end);
     string CopyText(int beg_line_ind, int beg_char_ind, int end_line_end, int end_char_ind, bool add_nl);
 };
@@ -587,6 +589,7 @@ struct Terminal : public TextArea, public Drawable::AttrSource {
     virtual void UpdateCursor() { cursor.p = point(GetCursorX(term_cursor.x, term_cursor.y), GetCursorY(term_cursor.y)); }
     virtual void UpdateToken(Line*, int word_offset, int word_len, int update_type, const LineTokenProcessor*);
     virtual int UpdateLines(float v_scrolled, int *first_ind, int *first_offset, int *first_len) { return 0; }
+    virtual bool GetGlyphFromCoords(const point &p, Selection::Point *out) { return GetGlyphFromCoordsOffset(p, out, 0, 0); }
     virtual const Drawable::Attr *GetAttr(int attr) const;
     int GetCursorX(int x, int y) const {
         const Line *l = GetTermLine(y);
