@@ -729,10 +729,45 @@ int Editor::UpdateLines(float v_scrolled, int *first_ind, int *first_offset, int
 #define TerminalDebug(...)
 #endif
 
+Terminal::StandardVGAColors::StandardVGAColors() { 
+    c[0] = Color(  0,   0,   0); c[ 8] = Color( 85,  85,  85);
+    c[1] = Color(170,   0,   0); c[ 9] = Color(255,  85,  85);
+    c[2] = Color(  0, 170,   0); c[10] = Color( 85, 255,  85);
+    c[3] = Color(170,  85,   0); c[11] = Color(255, 255,  85);
+    c[4] = Color(  0,   0, 170); c[12] = Color( 85,  85, 255);
+    c[5] = Color(170,   0, 170); c[13] = Color(255,  85, 255);
+    c[6] = Color(  0, 170, 170); c[14] = Color( 85, 255, 255);
+    c[7] = Color(170, 170, 170); c[15] = Color(255, 255, 255);
+    bg_index = 0; normal_index = 7; bold_index = 15;
+}
+
+/// Solarized palette by Ethan Schoonover
+Terminal::SolarizedColors::SolarizedColors() { 
+    c[0] = Color(  7,  54,  66); c[ 8] = Color(  0,  43,  54);
+    c[1] = Color(220,  50,  47); c[ 9] = Color(203,  75,  22);
+    c[2] = Color(133, 153,   0); c[10] = Color( 88, 110, 117);
+    c[3] = Color(181, 137,   0); c[11] = Color(101, 123, 131);
+    c[4] = Color( 38, 139, 210); c[12] = Color(131, 148, 150);
+    c[5] = Color(211,  54, 130); c[13] = Color(108, 113, 196);
+    c[6] = Color( 42, 161, 152); c[14] = Color(147, 161, 161);
+    c[7] = Color(238, 232, 213); c[15] = Color(253, 246, 227);
+    bg_index = 8; normal_index = 12; bold_index = 12;
+}
+
+Terminal::Terminal(int FD, Window *W, Font *F) :TextArea(W, F), fd(FD), fb_cb(bind(&Terminal::GetFrameBuffer, this, _1)) {
+    CHECK(F->fixed_width || (F->flag & FontDesc::Mono));
+    wrap_lines = write_newline = insert_mode = 0;
+    for (int i=0; i<line.ring.size; i++) line[i].data->glyphs.attr.source = this;
+    SetColors(Singleton<SolarizedColors>::Get());
+    cursor.attr = default_cursor_attr;
+    cursor.type = Cursor::Block;
+    token_processing = 1;
+    cmd_prefix = "";
+}
+
 void Terminal::Resized(const Box &b) {
     int old_term_width = term_width, old_term_height = term_height;
-    SetDimension(b.w / font->FixedWidth(),
-                 b.h / font->Height());
+    SetDimension(b.w / font->FixedWidth(), b.h / font->Height());
     TerminalDebug("Resized %d, %d <- %d, %d\n", term_width, term_height, old_term_width, old_term_height);
     bool grid_changed = term_width != old_term_width || term_height != old_term_height;
 
@@ -797,6 +832,7 @@ void Terminal::SetScrollRegion(int b, int e, bool release_fb) {
 void Terminal::SetDimension(int w, int h) {
     term_width  = w;
     term_height = h;
+    if (bg_color) screen->gd->ClearColor(*bg_color);
     if (!line.Size()) TextArea::Write(string(term_height, '\n'), 0);
 }
 
@@ -992,18 +1028,18 @@ void Terminal::Write(const string &s, bool update_fb, bool release_fb) {
                         if      (sgr >= 30 && sgr <= 37) Attr::SetFGColorIndex(&cursor.attr, sgr-30);
                         else if (sgr >= 40 && sgr <= 47) Attr::SetBGColorIndex(&cursor.attr, sgr-40);
                         else switch(sgr) {
-                            case 0:         cursor.attr  =  default_cursor_attr;    break;
-                            case 1:         cursor.attr |=  Attr::Bold;             break;
-                            case 3:         cursor.attr |=  Attr::Italic;           break;
-                            case 4:         cursor.attr |=  Attr::Underline;        break;
-                            case 5: case 6: cursor.attr |=  Attr::Blink;            break;
-                            case 7:         cursor.attr |=  Attr::Reverse;          break;
-                            case 22:        cursor.attr &= ~Attr::Bold;             break;
-                            case 23:        cursor.attr &= ~Attr::Italic;           break;
-                            case 24:        cursor.attr &= ~Attr::Underline;        break;
-                            case 25:        cursor.attr &= ~Attr::Blink;            break;
-                            case 39:        Attr::SetFGColorIndex(&cursor.attr, 7); break;
-                            case 49:        Attr::SetBGColorIndex(&cursor.attr, 0); break;
+                            case 0:         cursor.attr  =  default_cursor_attr;                       break;
+                            case 1:         cursor.attr |=  Attr::Bold;                                break;
+                            case 3:         cursor.attr |=  Attr::Italic;                              break;
+                            case 4:         cursor.attr |=  Attr::Underline;                           break;
+                            case 5: case 6: cursor.attr |=  Attr::Blink;                               break;
+                            case 7:         cursor.attr |=  Attr::Reverse;                             break;
+                            case 22:        cursor.attr &= ~Attr::Bold;                                break;
+                            case 23:        cursor.attr &= ~Attr::Italic;                              break;
+                            case 24:        cursor.attr &= ~Attr::Underline;                           break;
+                            case 25:        cursor.attr &= ~Attr::Blink;                               break;
+                            case 39:        Attr::SetFGColorIndex(&cursor.attr, colors->normal_index); break;
+                            case 49:        Attr::SetBGColorIndex(&cursor.attr, colors->bg_index);     break;
                             default:        TerminalDebug("unhandled SGR %d\n", sgr);
                         }
                     } break;
@@ -1062,8 +1098,8 @@ void Terminal::FlushParseText() {
         write_size = min(remaining, term_width - o);
         String16Piece input_piece(input_text.data() + wrote, write_size);
         update_size = l->UpdateText(o, input_piece, cursor.attr, term_width, &append);
-        TerminalTrace("Terminal: FlushParseText: UpdateText(%d, %d, '%s').size = [%d, %d]\n", term_cursor.x, term_cursor.y,
-                      String::ToUTF8(input_piece).c_str(), write_size, update_size);
+        TerminalTrace("Terminal: FlushParseText: UpdateText(%d, %d, '%s').size = [%d, %d] attr=%d\n",
+                      term_cursor.x, term_cursor.y, String::ToUTF8(input_piece).c_str(), write_size, update_size, cursor.attr);
         CHECK_GE(update_size, write_size);
         l->Layout();
         if (!fb->lines) continue;

@@ -87,89 +87,30 @@ struct Flow {
     };
     RollbackState GetRollbackState() { return { p, cur_attr, cur_line, cur_word, state, max_line_width, out->GetRollbackState() }; }
     void Rollback(const RollbackState &s) { p=s.p; cur_attr=s.attr; cur_line=s.line; cur_word=s.word; state=s.state; max_line_width=s.max_line_width; out->Rollback(s.out_state); }
-    string DebugString() const {
-        return StrCat("Flow{ p=", p.DebugString(), ", container=", container->DebugString(), "}");
-    }
+    string DebugString() const { return StrCat("Flow{ p=", p.DebugString(), ", container=", container->DebugString(), "}"); }
 
     void SetFGColor(const Color *C) { cur_attr.fg = C; }
     void SetBGColor(const Color *C) { cur_attr.bg = C; }
     void SetAtlas(Font *F) { cur_attr.font = F; }
-    void SetFont(Font *F) {
-        if (!(cur_attr.font = F)) return;
-        int prev_height = cur_line.height, prev_ascent = cur_line.ascent, prev_descent = cur_line.descent;
-        Max(&cur_line.height,  F->Height());
-        Max(&cur_line.ascent,  F->ascender);
-        Max(&cur_line.descent, F->descender);
-        UpdateCurrentLine(cur_line.height-prev_height, cur_line.ascent-prev_ascent, cur_line.descent-prev_descent);
-    }
-    void SetMinimumAscent(short line_ascent) {
-        int prev_height = cur_line.height, prev_ascent = cur_line.ascent;
-        Max(&cur_line.ascent, line_ascent);
-        Max(&cur_line.height, (short)(cur_line.ascent + cur_line.descent));
-        UpdateCurrentLine(cur_line.height-prev_height, cur_line.ascent-prev_ascent, 0);
-    }
-    void UpdateCurrentLine(int height_delta, int ascent_delta, int descent_delta) {
-        p.y -= height_delta;
-        if (out) MoveCurrentLine(point(0, -ascent_delta));
-    }
+    void SetFont(Font *F);
+    void SetMinimumAscent(short line_ascent);
+    void UpdateCurrentLine(int height_delta, int ascent_delta, int descent_delta);
 
     int Height() const { return -p.y - (cur_line.fresh ? cur_line.height : 0); }
     Box CurrentLineBox() const { return Box(cur_line.beg, p.y, p.x - cur_line.beg, cur_line.height); }
     int LayoutLineHeight() const { return X_or_Y(layout.line_height, cur_attr.font ? cur_attr.font->Height() : 0); }
 
-    void AppendVerticalSpace(int h) {
-        if (h <= 0) return;
-        if (!cur_line.fresh) AppendNewline();
-        p.y -= h;
-        SetCurrentLineBounds();
-    }
-    void AppendBlock(int w, int h, Box *box_out) {
-        AppendVerticalSpace(h);
-        *box_out = Box(0, p.y + cur_line.height, w, h);
-    }
-    void AppendBlock(int w, int h, const Border &b, Box *box_out) {
-        AppendBlock(w + b.Width(), h + (h ? b.Height() : 0), box_out);
-        *box_out = Box::DelBorder(*box_out, h ? b : b.LeftRight());
-    }
+    void AppendVerticalSpace(int h);
+    void AppendBlock(int w, int h, Box *box_out);
+    void AppendBlock(int w, int h, const Border &b, Box *box_out);
     void AppendRow(float x=0, float w=0, Box *box_out=0) { AppendBox(x, container->w*w, cur_line.height, box_out); }
-    void AppendBoxArrayText(const DrawableBoxArray &in) {
-        bool attr_fwd = in.attr.source;
-        for (DrawableBox::RawIterator iter(in.data); !iter.Done(); iter.Increment()) {
-            if (!attr_fwd) cur_attr      = *in.attr.GetAttr(iter.cur_attr);
-            else           cur_attr.font =  in.attr.GetAttr(iter.cur_attr)->font;
-            AppendText(DrawableBoxRun(iter.Data(), iter.Length()).Text(), attr_fwd ? iter.cur_attr : 0);
-        }
-    }
-
+    void AppendBoxArrayText(const DrawableBoxArray &in);
     int AppendBox(float x, int w, int h, Drawable *drawable) { p.x=container->w*x; return AppendBox(w, h, drawable); }
-    int AppendBox(/**/     int w, int h, Drawable *drawable) { 
-        AppendBox(&out->PushBack(Box(0,0,w,h), cur_attr, drawable));
-        return out->data.size()-1;
-    }
-
+    int AppendBox(/**/     int w, int h, Drawable *drawable);
     void AppendBox(float x, int w, int h, Box *box_out) { p.x=container->w*x; AppendBox(w, h, box_out); }
-    void AppendBox(/**/     int w, int h, Box *box_out) {
-        DrawableBox box(Box(0,0,w,h), 0, out ? out->attr.GetAttrId(cur_attr) : 0, out ? out->line.size() : -1);
-        AppendBox(&box);
-        if (box_out) *box_out = box.box;
-    }
-    void AppendBox(int w, int h, const Border &b, Box *box_out) {
-        AppendBox(w + b.Width(), h + (h ? b.Height() : 0), box_out);
-        if (box_out) *box_out = Box::DelBorder(*box_out, h ? b : b.LeftRight());
-    }
-
-    void AppendBox(DrawableBox *box) {
-        point bp = box->box.Position();
-        SetMinimumAscent(box->box.h);
-        if (!box->box.w) box->box.SetPosition(p);
-        else {
-            box->box.SetPosition(bp);
-            cur_word.len = box->box.w;
-            cur_word.fresh = 1;
-            AppendBoxOrChar(0, box, box->box.h);
-        }
-        cur_word.len = 0;
-    }
+    void AppendBox(/**/     int w, int h, Box *box_out);
+    void AppendBox(int w, int h, const Border &b, Box *box_out);
+    void AppendBox(DrawableBox *box);
 
     /**/               int AppendText(float x, const string          &text) { p.x=container->w*x; return AppendText(StringPiece           (text), 0); }
     /**/               int AppendText(float x, const String16        &text) { p.x=container->w*x; return AppendText(String16Piece         (text), 0); }
