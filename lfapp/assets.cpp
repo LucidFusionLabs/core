@@ -72,33 +72,32 @@ int PngReader::Read(File *lf, Texture *out) {
 
     if (setjmp(png_jmpbuf(png_ptr)))
     { ERROR("png error: ", lf->Filename()); png_destroy_read_struct(&png_ptr, &info_ptr, 0); return -1; }
-    png_set_read_fn(png_ptr, lf, PngRead);
 
+    png_set_read_fn(png_ptr, lf, PngRead);
     png_set_sig_bytes(png_ptr, sizeof(header));
     png_read_info(png_ptr, info_ptr);
-
-    png_byte color_type = png_get_color_type(png_ptr, info_ptr);
-    png_byte bit_depth = png_get_bit_depth(png_ptr, info_ptr);
+    png_byte color_type = png_get_color_type(png_ptr, info_ptr), bit_depth = png_get_bit_depth(png_ptr, info_ptr);
     int number_of_passes = png_set_interlace_handling(png_ptr), opf = Texture::preferred_pf;
-    png_read_update_info(png_ptr, info_ptr);
-    
-    if      (color_type == PNG_COLOR_TYPE_GRAY)       opf = Pixel::GRAY8;
-    else if (color_type == PNG_COLOR_TYPE_GRAY_ALPHA) opf = Pixel::GRAYA8;
-    else if (color_type == PNG_COLOR_TYPE_PALETTE)    png_set_palette_to_rgb(png_ptr);
-    else if (color_type == PNG_COLOR_TYPE_RGB || color_type == PNG_COLOR_TYPE_RGBA) {}
-    else FATAL("unknown png_get_color_type ", color_type);
+    // png_read_update_info(png_ptr, info_ptr);
 
-    if (opf == Pixel::BGRA || opf == Pixel::BGR24) png_set_bgr(png_ptr);
-    if (opf == Pixel::RGBA || opf == Pixel::BGRA)  png_set_filler(png_ptr, 0xff, PNG_FILLER_BEFORE);
+    switch (color_type) {
+        case PNG_COLOR_TYPE_GRAY:       opf = Pixel::GRAY8;              break;
+        case PNG_COLOR_TYPE_GRAY_ALPHA: opf = Pixel::GRAYA8;             break;
+        case PNG_COLOR_TYPE_PALETTE:    png_set_palette_to_rgb(png_ptr); // fall thru
+        case PNG_COLOR_TYPE_RGB:
+            if (opf == Pixel::RGBA || opf == Pixel::BGRA) png_set_filler(png_ptr, 0xff, PNG_FILLER_AFTER);
+        case PNG_COLOR_TYPE_RGBA: 
+            if (opf == Pixel::BGRA || opf == Pixel::BGR24) png_set_bgr(png_ptr);
+            break;
+        default: FATAL("unknown png_get_color_type ", color_type);
+    }
+    png_read_update_info(png_ptr, info_ptr);
 
     out->Resize(png_get_image_width(png_ptr, info_ptr), png_get_image_height(png_ptr, info_ptr), opf, Texture::Flag::CreateBuf);
-
     int linesize = out->LineSize();
-    CHECK_LE(png_get_rowbytes(png_ptr, info_ptr), linesize);
-
     vector<png_bytep> row_pointers;
-    for (int y=0; y<out->height; y++) row_pointers.push_back((png_bytep)(out->buf + linesize * y));
-
+    CHECK_LE(png_get_rowbytes(png_ptr, info_ptr), linesize);
+    for (int y=0; y<out->height; y++) row_pointers.push_back(static_cast<png_bytep>(out->buf + linesize * y));
     png_read_image(png_ptr, &row_pointers[0]);
     png_destroy_read_struct(&png_ptr, &info_ptr, 0);
     return 0;
@@ -114,8 +113,6 @@ int PngWriter::Write(File *lf, const Texture &tex) {
     if (setjmp(png_jmpbuf(png_ptr)))
     { ERROR("setjmp: ", lf->Filename()); png_destroy_write_struct(&png_ptr, &info_ptr); return -1; }
 
-    png_set_write_fn(png_ptr, lf, PngWrite, PngFlush);
-
     int color_type = 0;
     switch (tex.pf) {
         case Pixel::BGRA:   png_set_bgr(png_ptr);
@@ -129,13 +126,11 @@ int PngWriter::Write(File *lf, const Texture &tex) {
 
     png_set_IHDR(png_ptr, info_ptr, tex.width, tex.height, 8, color_type, PNG_INTERLACE_NONE,
                  PNG_COMPRESSION_TYPE_BASE, PNG_FILTER_TYPE_BASE);
-
+    png_set_write_fn(png_ptr, lf, PngWrite, PngFlush);
     png_write_info(png_ptr, info_ptr);
 
     vector<png_bytep> row_pointers;
-    for (int linesize=tex.LineSize(), y=0; y<tex.height; y++)
-        row_pointers.push_back((png_bytep)(tex.buf + y*linesize));
-
+    for (int ls=tex.LineSize(), y=0; y<tex.height; y++) row_pointers.push_back(static_cast<png_bytep>(tex.buf + y*ls));
     png_write_image(png_ptr, &row_pointers[0]);
     png_write_end(png_ptr, 0);
     png_destroy_write_struct(&png_ptr, &info_ptr);
@@ -201,22 +196,25 @@ int JpegReader::Read(const string &data, Texture *out) {
 
     jpeg_create_decompress(&jds);
     JpegMemSrc(&jds, data.data(), data.size());
-    if (jpeg_read_header(&jds, 1) != 1) 
-    { INFO("jpeg decompress failed "); jpeg_destroy_decompress(&jds); return -1; }
-
+    if (jpeg_read_header(&jds, 1) != 1) { INFO("jpeg decompress failed "); jpeg_destroy_decompress(&jds); return -1; }
     jpeg_start_decompress(&jds);
-    if      (jds.output_components == 1) out->pf = Pixel::GRAY8;
-    else if (jds.output_components == 3) out->pf = Pixel::RGB24;
-    else if (jds.output_components == 4) out->pf = Pixel::RGBA;
-    else { ERROR("unsupported jpeg components ", jds.output_components); jpeg_destroy_decompress(&jds); return -1; }
-    out->Resize(jds.output_width, jds.output_height, out->pf, Texture::Flag::CreateBuf);
 
-    int linesize = out->LineSize();
-    while (jds.output_scanline < jds.output_height) {
+    if      (jds.output_components == 1) out->pf = Pixel::GRAY8;
+    else if (jds.output_components == 3) {
+        if      (out->pf == Pixel::RGBA)  jds.out_color_space = JCS_EXT_BGRX;
+        else if (out->pf == Pixel::BGRA)  jds.out_color_space = JCS_EXT_RGBX;
+        else if (out->pf == Pixel::RGB24) jds.out_color_space = JCS_EXT_BGR;
+    } else if (jds.output_components == 4) {
+        if      (out->pf == Pixel::RGBA)  jds.out_color_space = JCS_EXT_BGRA;
+        else if (out->pf == Pixel::RGB24) jds.out_color_space = JCS_EXT_BGR;
+        else if (out->pf == Pixel::BGR24) jds.out_color_space = JCS_EXT_RGB;
+    } else { ERROR("unsupported jpeg components ", jds.output_components); jpeg_destroy_decompress(&jds); return -1; }
+
+    out->Resize(jds.output_width, jds.output_height, out->pf, Texture::Flag::CreateBuf);
+    for (int linesize = out->LineSize(); jds.output_scanline < jds.output_height;) {
         unsigned char *offset = out->buf + jds.output_scanline * linesize;
         jpeg_read_scanlines(&jds, &offset, 1);
     }
-
     jpeg_finish_decompress(&jds);
     jpeg_destroy_decompress(&jds);
     return 0;

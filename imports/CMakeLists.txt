@@ -5,16 +5,16 @@ set(BOOST_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/boost PARENT_SCOPE)
 
 # png
 if(LFL_PNG)
-add_subdirectory(OpenCV/3rdparty/libpng)
-set(PNG_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/OpenCV/3rdparty/include PARENT_SCOPE)
-set(PNG_LIB libpng PARENT_SCOPE)
+add_subdirectory(libpng)
+set(PNG_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/libpng PARENT_SCOPE)
+set(PNG_LIB ${CMAKE_CURRENT_SOURCE_DIR}/libpng/.libs/libpng16.a PARENT_SCOPE)
 endif(LFL_PNG)
 
 # jpeg
 if(LFL_JPEG)
-add_subdirectory(OpenCV/3rdparty/libjpeg)
-set(JPEG_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/OpenCV/3rdparty/include PARENT_SCOPE)
-set(JPEG_LIB libjpeg PARENT_SCOPE)
+add_subdirectory(libjpeg-turbo)
+set(JPEG_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/libjpeg-turbo PARENT_SCOPE)
+set(JPEG_LIB ${CMAKE_CURRENT_SOURCE_DIR}/libjpeg-turbo/.libs/libturbojpeg.a PARENT_SCOPE)
 endif(LFL_JPEG)
 
 # gif
