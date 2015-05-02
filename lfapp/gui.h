@@ -515,33 +515,8 @@ struct Terminal : public TextArea, public Drawable::AttrSource {
         static int GetBGColorIndex(int a) { return (a>>4) & 0xf; }
     };
     struct Colors { Color c[16]; int normal_index, bold_index, bg_index; };
-    struct StandardVGAColors : public Colors {
-        StandardVGAColors() { 
-            c[0] = Color(  0,   0,   0); c[ 8] = Color( 85,  85,  85);
-            c[1] = Color(170,   0,   0); c[ 9] = Color(255,  85,  85);
-            c[2] = Color(  0, 170,   0); c[10] = Color( 85, 255,  85);
-            c[3] = Color(170,  85,   0); c[11] = Color(255, 255,  85);
-            c[4] = Color(  0,   0, 170); c[12] = Color( 85,  85, 255);
-            c[5] = Color(170,   0, 170); c[13] = Color(255,  85, 255);
-            c[6] = Color(  0, 170, 170); c[14] = Color( 85, 255, 255);
-            c[7] = Color(170, 170, 170); c[15] = Color(255, 255, 255);
-            bg_index = 0; normal_index = 7; bold_index = 15;
-        }
-    };
-    /// Solarized palette by Ethan Schoonover
-    struct SolarizedColors : public Colors {
-        SolarizedColors() { 
-            c[0] = Color(  7,  54,  66); c[ 8] = Color(  0,  43,  54);
-            c[1] = Color(220,  50,  47); c[ 9] = Color(203,  75,  22);
-            c[2] = Color(133, 153,   0); c[10] = Color( 88, 110, 117);
-            c[3] = Color(181, 137,   0); c[11] = Color(101, 123, 131);
-            c[4] = Color( 38, 139, 210); c[12] = Color(131, 148, 150);
-            c[5] = Color(211,  54, 130); c[13] = Color(108, 113, 196);
-            c[6] = Color( 42, 161, 152); c[14] = Color(147, 161, 161);
-            c[7] = Color(238, 232, 213); c[15] = Color(253, 246, 227);
-            bg_index = 8; normal_index = 12; bold_index = 12;
-        }
-    };
+    struct StandardVGAColors : public Colors { StandardVGAColors(); };
+    struct SolarizedColors : public Colors { SolarizedColors(); };
 
     int fd, term_width=0, term_height=0, parse_state=State::TEXT, default_cursor_attr=0;
     int scroll_region_beg=0, scroll_region_end=0;
@@ -555,17 +530,7 @@ struct Terminal : public TextArea, public Drawable::AttrSource {
     Colors *colors=0;
     Color *bg_color=0;
 
-    Terminal(int FD, Window *W, Font *F) :
-        TextArea(W, F), fd(FD), fb_cb(bind(&Terminal::GetFrameBuffer, this, _1)) {
-        CHECK(F->fixed_width || (F->flag & FontDesc::Mono));
-        wrap_lines = write_newline = insert_mode = 0;
-        for (int i=0; i<line.ring.size; i++) line[i].data->glyphs.attr.source = this;
-        SetColors(Singleton<StandardVGAColors>::Get());
-        cursor.attr = default_cursor_attr;
-        cursor.type = Cursor::Block;
-        token_processing = 1;
-        cmd_prefix = "";
-    }
+    Terminal(int FD, Window *W, Font *F);
     virtual ~Terminal() {}
     virtual void Resized(const Box &b);
     virtual void ResizedLeftoverRegion(int w, int h, bool update_fb=true);

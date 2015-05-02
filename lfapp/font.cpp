@@ -748,7 +748,7 @@ void CoreTextFontEngine::AssignGlyph(Glyph *g, const CGRect &bounds, struct CGSi
     g->bearing_y  = RoundHigher(y_extent);
     g->tex.width  = RoundUp(x_extent - g->bearing_x);
     g->tex.height = g->bearing_y - RoundLower(bounds.origin.y);
-    g->advance    = RoundUp(advance.width);
+    g->advance    = RoundF(advance.width);
     g->internal.coretext.origin_x = bounds.origin.x;
     g->internal.coretext.origin_y = bounds.origin.y;
     g->internal.coretext.width    = bounds.size.width;

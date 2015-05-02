@@ -71,6 +71,10 @@ TEST(VideoTest, Box) {
     EXPECT_TRUE(box.h != 0);
     EXPECT_EQ(box, screen->Box(1.0, 1.0));
     EXPECT_EQ(box, screen->Box().center(screen->Box(1.0, 1.0)));
+
+    box = Box(640, 480);               EXPECT_EQ(Box(0,  0,  640, 480), box);
+    box = Box::DelBorder(box, 40, 80); EXPECT_EQ(Box(20, 40, 600, 400), box);
+    box = Box::AddBorder(box, 40, 80); EXPECT_EQ(Box(0,  0,  640, 480), box);
 }
 
 }; // namespace LFL

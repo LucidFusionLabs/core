@@ -94,6 +94,7 @@ struct MyTerminalWindow {
         const char *av[] = { shell.c_str(), 0 };
         CHECK_EQ(process.OpenPTY(av), 0);
         fd = fileno(process.out);
+        app->scheduler.AddWaitForeverMouse();
         app->scheduler.AddWaitForeverSocket(fd, SocketSet::READABLE, 0);
         if (int len = FLAGS_command.size()) CHECK_EQ(len+1, write(fd, StrCat(FLAGS_command, "\n").data(), len+1));
 #endif
@@ -233,6 +234,7 @@ extern "C" int main(int argc, const char *argv[]) {
     if (FLAGS_default_font_.override) {
     } else if (FLAGS_font_engine == "coretext") {
         FLAGS_default_font = "Monaco";
+        FLAGS_default_font_size = 15;
     } else if (FLAGS_font_engine == "freetype") { 
         FLAGS_default_font = "VeraMoBd.ttf"; // "DejaVuSansMono-Bold.ttf";
         FLAGS_default_missing_glyph = 42;
@@ -244,7 +246,6 @@ extern "C" int main(int argc, const char *argv[]) {
     FLAGS_atlas_font_sizes = "32";
 
     if (app->Init()) { app->Free(); return -1; }
-    app->scheduler.AddWaitForeverMouse();
     app->window_init_cb = MyWindowInitCB;
     app->window_closed_cb = MyWindowClosedCB;
     app->shell.command.push_back(Shell::Command("colors", bind(&MyColorsCmd, _1)));

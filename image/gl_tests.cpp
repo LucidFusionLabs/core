@@ -72,7 +72,8 @@ TEST(GLTest, Font) {
 #import <CoreText/CTFont.h>
 #import <CoreGraphics/CGBitmapContext.h>
 TEST(GLTest, CoreText) {
-    Font *font = Fonts::Get("coretext://Monaco", "", 12, Color::red, Color::blue);
+    Color fg = Color(0xfd, 0x00, 0x00), bg = Color(0x00, 0x00, 0xfc);
+    Font *font = Fonts::Get("coretext://Monaco", "", 12, fg, bg);
     CHECK_NE(nullptr, font);
     CoreTextFontEngine::Resource *resource = static_cast<CoreTextFontEngine::Resource*>(font->resource.get());
     CHECK_NE(nullptr, resource);

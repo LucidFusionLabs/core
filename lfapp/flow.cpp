@@ -117,6 +117,82 @@ int FloatContainer::Copy(const vector<Float> &s, vector<Float> *d, const point &
     return count;
 }
 
+void Flow::SetFont(Font *F) {
+    if (!(cur_attr.font = F)) return;
+    int prev_height = cur_line.height, prev_ascent = cur_line.ascent, prev_descent = cur_line.descent;
+    Max(&cur_line.height,  F->Height());
+    Max(&cur_line.ascent,  F->ascender);
+    Max(&cur_line.descent, F->descender);
+    UpdateCurrentLine(cur_line.height-prev_height, cur_line.ascent-prev_ascent, cur_line.descent-prev_descent);
+}
+
+void Flow::SetMinimumAscent(short line_ascent) {
+    int prev_height = cur_line.height, prev_ascent = cur_line.ascent;
+    Max(&cur_line.ascent, line_ascent);
+    Max(&cur_line.height, (short)(cur_line.ascent + cur_line.descent));
+    UpdateCurrentLine(cur_line.height-prev_height, cur_line.ascent-prev_ascent, 0);
+}
+
+void Flow::UpdateCurrentLine(int height_delta, int ascent_delta, int descent_delta) {
+    p.y -= height_delta;
+    if (out) MoveCurrentLine(point(0, -ascent_delta));
+}
+
+void Flow::AppendVerticalSpace(int h) {
+    if (h <= 0) return;
+    if (!cur_line.fresh) AppendNewline();
+    p.y -= h;
+    SetCurrentLineBounds();
+}
+
+void Flow::AppendBlock(int w, int h, Box *box_out) {
+    AppendVerticalSpace(h);
+    *box_out = Box(0, p.y + cur_line.height, w, h);
+}
+
+void Flow::AppendBlock(int w, int h, const Border &b, Box *box_out) {
+    AppendBlock(w + b.Width(), h + (h ? b.Height() : 0), box_out);
+    *box_out = Box::DelBorder(*box_out, h ? b : b.LeftRight());
+}
+
+void Flow::AppendBoxArrayText(const DrawableBoxArray &in) {
+    bool attr_fwd = in.attr.source;
+    for (DrawableBox::RawIterator iter(in.data); !iter.Done(); iter.Increment()) {
+        if (!attr_fwd) cur_attr      = *in.attr.GetAttr(iter.cur_attr);
+        else           cur_attr.font =  in.attr.GetAttr(iter.cur_attr)->font;
+        AppendText(DrawableBoxRun(iter.Data(), iter.Length()).Text(), attr_fwd ? iter.cur_attr : 0);
+    }
+}
+
+int Flow::AppendBox(int w, int h, Drawable *drawable) { 
+    AppendBox(&out->PushBack(Box(0,0,w,h), cur_attr, drawable));
+    return out->data.size()-1;
+}
+
+void Flow::AppendBox(int w, int h, Box *box_out) {
+    DrawableBox box(Box(0,0,w,h), 0, out ? out->attr.GetAttrId(cur_attr) : 0, out ? out->line.size() : -1);
+    AppendBox(&box);
+    if (box_out) *box_out = box.box;
+}
+
+void Flow::AppendBox(int w, int h, const Border &b, Box *box_out) {
+    AppendBox(w + b.Width(), h + (h ? b.Height() : 0), box_out);
+    if (box_out) *box_out = Box::DelBorder(*box_out, h ? b : b.LeftRight());
+}
+
+void Flow::AppendBox(DrawableBox *box) {
+    point bp = box->box.Position();
+    SetMinimumAscent(box->box.h);
+    if (!box->box.w) box->box.SetPosition(p);
+    else {
+        box->box.SetPosition(bp);
+        cur_word.len = box->box.w;
+        cur_word.fresh = 1;
+        AppendBoxOrChar(0, box, box->box.h);
+    }
+    cur_word.len = 0;
+}
+
 Flow::State Flow::AppendChar(int c, int attr_id, DrawableBox *box) {
     if (layout.char_tf) c = layout.char_tf(c);
     if (state == State::NEW_WORD && layout.word_start_char_tf) c = layout.word_start_char_tf(c);
