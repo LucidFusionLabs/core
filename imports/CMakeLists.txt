@@ -7,7 +7,7 @@ set(BOOST_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/boost PARENT_SCOPE)
 if(LFL_PNG)
 add_subdirectory(libpng)
 set(PNG_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/libpng PARENT_SCOPE)
-set(PNG_LIB ${CMAKE_CURRENT_SOURCE_DIR}/libpng/.libs/libpng16.a PARENT_SCOPE)
+set(PNG_LIB png PARENT_SCOPE)
 endif(LFL_PNG)
 
 # jpeg
