@@ -182,6 +182,12 @@ DEFINE_float(far_plane, 100, "Far clipping plane");
 DEFINE_int(dots_per_inch, 75, "Screen DPI");
 DEFINE_bool(swap_axis, false," Swap x,y axis");
 
+#if LFL_MOBILE
+const int Texture::preferred_pf = Pixel::RGBA;
+#else
+const int Texture::preferred_pf = Pixel::BGRA;
+#endif
+
 #ifndef LFL_HEADLESS
 #ifdef LFL_GDDEBUG
 #define GDDebug(...) { screen->gd->CheckForError(__FILE__, __LINE__); if (FLAGS_gd_debug) INFO(__VA_ARGS__); }
@@ -210,11 +216,9 @@ const int GraphicsDevice::Line             = GL_LINE;
 const int GraphicsDevice::Point            = GL_POINT;
 
 #if LFL_MOBILE
-const int Texture::preferred_pf             = Pixel::RGBA;
 const int GraphicsDevice::GLPreferredBuffer = GL_UNSIGNED_BYTE;
 const int GraphicsDevice::GLInternalFormat  = GL_RGBA;
 #else
-const int Texture::preferred_pf             = Pixel::BGRA;
 const int GraphicsDevice::GLPreferredBuffer = GL_UNSIGNED_INT_8_8_8_8_REV;
 const int GraphicsDevice::GLInternalFormat  = GL_RGBA;
 #endif
@@ -916,7 +920,6 @@ const int GraphicsDevice::Line = 0;
 const int GraphicsDevice::Point = 0;
 const int GraphicsDevice::GLPreferredBuffer = 0;
 const int GraphicsDevice::GLInternalFormat = 0;
-const int Texture::preferred_pf = Pixel::RGBA;
 
 int GraphicsDevice::CreateProgram() { return 0; }
 int GraphicsDevice::CreateShader(int t) { return 0; }
