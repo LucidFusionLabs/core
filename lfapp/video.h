@@ -480,6 +480,7 @@ struct Shader {
     Shader() { memzeros(dirty_light_pos); memzeros(dirty_light_color); }
 
     static int Create(const string &name, const string &vertex_shader, const string &fragment_shader, const ShaderDefines&, Shader *out);
+    static int CreateShaderToy(const string &name, const string &fragment_shader, Shader *out);
     int GetUniformIndex(const string &name);
     void SetUniform1i(const string &name, float v);
     void SetUniform1f(const string &name, float v);
@@ -572,6 +573,7 @@ struct GraphicsDevice {
     static const int Fill, Line, Point, GLPreferredBuffer, GLInternalFormat;
 
     int default_draw_mode = DrawMode::_2D, draw_mode = 0;
+    string vertex_shader, pixel_shader;
     vector<Color> default_color;
     vector<vector<Box> > scissor_stack;
     GraphicsDevice() : scissor_stack(1) {}
