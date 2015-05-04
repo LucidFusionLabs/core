@@ -484,6 +484,7 @@ struct Shader {
     void SetUniform1i(const string &name, float v);
     void SetUniform1f(const string &name, float v);
     void SetUniform2f(const string &name, float v1, float v2);
+    void SetUniform3f(const string &name, float v1, float v2, float v3);
     void SetUniform3fv(const string &name, const float *v);
     void SetUniform3fv(const string &name, int n, const float *v);
 
@@ -633,6 +634,7 @@ struct GraphicsDevice {
     void Uniform1i(int u, int v);
     void Uniform1f(int u, float v);
     void Uniform2f(int u, float v1, float v2);
+    void Uniform3f(int u, float v1, float v2, float v3);
     void Uniform3fv(int u, int n, const float *v);
 
     // Common layer

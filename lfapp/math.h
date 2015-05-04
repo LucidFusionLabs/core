@@ -107,6 +107,12 @@ struct v4 {
     v4(const v3& xyz, float W) : x(xyz.x), y(xyz.y), z(xyz.z), w(W) {}
     v4(float X, float Y, float Z, float W) : x(X), y(Y), z(Z), w(W) {}
     v4(const float *v) : x(v[0]), y(v[1]), z(v[2]), w(v[3]) {}
+    operator float *() { return &x; }
+    operator const float *() const { return &x; }
+    bool operator == (const v4 &r) const { return x == r.x && y == r.y && z == r.z && w == r.w; }
+    bool operator != (const v4 &r) const { return !(*this == r); }
+    bool operator<(const v4 &c) const;
+    string DebugString() const { return StrCat("(", x, ",", y, ",", z, ",", w, ")"); }
     v4 operator * (float r) { v4 ret=*this; ret.Scale(r); return ret; }
     v4 operator * (const v4 &dm) { v4 ret=*this; ret.x*=dm.x; ret.y*=dm.y; ret.z*=dm.z; ret.w*=dm.w; return ret; }
     v4 operator / (float r) { v4 ret=*this; ret.Scale(1/r); return ret; }
@@ -118,9 +124,6 @@ struct v4 {
     float Len() { return sqrt(x*x + y*y + z*z + w*w); }
     void Norm() { float l=Len(); if (!l) return; Scale(1/l); }
     v3 XYZ() const { return v3(x, y, z); }
-    operator float *() { return &x; }
-    operator const float *() const { return &x; }
-    bool operator<(const v4 &c) const;
 };
 
 struct m33 {

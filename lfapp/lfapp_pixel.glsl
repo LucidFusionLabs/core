@@ -8,7 +8,7 @@ varying lowp vec4 DestinationColor;
 #ifdef TEX2D
 uniform bool TexCoordEnabled;
 varying lowp vec2 TexCoordOut;
-uniform sampler2D Texture;
+uniform sampler2D iChannel0;
 #endif
 
 #ifdef TEXCUBE
@@ -25,7 +25,7 @@ void main(void) {
 #endif
     {
 #ifdef TEX2D
-	    gl_FragColor = TexCoordEnabled ? DestinationColor * texture2D(Texture, TexCoordOut) : DestinationColor; 
+	    gl_FragColor = TexCoordEnabled ? DestinationColor * texture2D(iChannel0, TexCoordOut) : DestinationColor; 
 #else
 	    gl_FragColor = DestinationColor; 
 #endif

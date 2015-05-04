@@ -23,9 +23,9 @@
 #include "lfapp/gui.h"
 
 namespace LFL {
-bool input_3D = false;
 DEFINE_string(output, "", "Output");
 DEFINE_string(input, "", "Input");
+DEFINE_bool(input_3D, false, "3d input");
 DEFINE_float(input_scale, 0, "Input scale");
 DEFINE_string(input_prims, "", "Comma separated list of .obj primitives to highlight");
 DEFINE_string(input_filter, "", "Filter type [dark2alpha]");
@@ -59,21 +59,15 @@ void DrawInput3D(Asset *a, Entity *e) {
 }
 
 void Frame3D(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample, int flag) {
-    screen->cam->Look();
-    scene.Draw(&asset.vec);
-}
-
-void Frame2D(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample, int flag) {
     Asset *a = asset("input");
-
     if (MyShader.ID) {
         screen->gd->ActiveTexture(0);
         screen->gd->BindTexture(GraphicsDevice::Texture2D, a->tex.ID);
         screen->gd->UseShader(&MyShader);
-        MyShader.SetUniform1f("xres", screen->width);
 
         // mandelbox params
         float par[20][3] = { 0.25, -1.77 };
+        MyShader.SetUniform1f("xres", screen->width);
         MyShader.SetUniform3fv("par", sizeofarray(par), &par[0][0]);
         MyShader.SetUniform1f("fov_x", FLAGS_field_of_view);
         MyShader.SetUniform1f("fov_y", FLAGS_field_of_view);
@@ -99,8 +93,21 @@ void Frame2D(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sam
         screen->gd->LoadIdentity();
         screen->gd->Mult(m);
 
-        glTimeResolutionShaderWindows
-            (&MyShader, Color::black, Box(-screen->width/2, -screen->height/2, screen->width, screen->height));
+        glTimeResolutionShaderWindows(&MyShader, Color::black,
+                                      Box(-screen->width/2, -screen->height/2, screen->width, screen->height));
+    } else {
+        screen->cam->Look();
+        scene.Draw(&asset.vec);
+    }
+}
+
+void Frame2D(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample, int flag) {
+    Asset *a = asset("input");
+    if (MyShader.ID) {
+        screen->gd->ActiveTexture(0);
+        screen->gd->BindTexture(GraphicsDevice::Texture2D, a->tex.ID);
+        screen->gd->UseShader(&MyShader);
+        glTimeResolutionShaderWindows(&MyShader, Color::black, Box(screen->width, screen->height));
     } else {
         screen->gd->EnableLayering();
         a->tex.Draw(screen->Box());
@@ -108,16 +115,10 @@ void Frame2D(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sam
 }
 
 int Frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample, int flag) {
-
-    if (input_3D)  Frame3D(W, clicks, mic_samples, cam_sample, flag);
-
+    if (FLAGS_input_3D) Frame3D(W, clicks, mic_samples, cam_sample, flag);
     screen->gd->DrawMode(DrawMode::_2D);
-
-    if (!input_3D) Frame2D(W, clicks, mic_samples, cam_sample, flag);
-
-    // Press tick for console
+    if (!FLAGS_input_3D) Frame2D(W, clicks, mic_samples, cam_sample, flag);
     screen->DrawDialogs();
-
     return 0;
 }
 
@@ -201,13 +202,13 @@ extern "C" int main(int argc, const char *argv[]) {
     Asset *asset_input = asset("input");
 
     if (!FLAGS_shader.empty()) {
-        string vertex_shader = LocalFile::FileContents(StrCat(app->assetdir, "vertex.glsl"));
+        string vertex_shader = LocalFile::FileContents(StrCat(app->assetdir, FLAGS_input_3D ? "" : "lfapp_", "vertex.glsl"));
         string fragment_shader = LocalFile::FileContents(FLAGS_shader);
-        Shader::Create("my_shader", vertex_shader, fragment_shader, "", &MyShader);
+        Shader::Create("my_shader", vertex_shader, fragment_shader, ShaderDefines(0,0,1,0), &MyShader);
     }
 
     if (SuffixMatch(FLAGS_input, ".obj", false)) {
-        input_3D = true;
+        FLAGS_input_3D = true;
         asset_input->cb = bind(&DrawInput3D, _1, _2);
         asset_input->scale = FLAGS_input_scale;
         asset_input->geometry = Geometry::LoadOBJ(FLAGS_input);
@@ -225,7 +226,6 @@ extern "C" int main(int argc, const char *argv[]) {
             INFO("write ", FLAGS_output, " = ", ret);
         }
     } else {
-        input_3D = false;
         FLAGS_draw_grid = true;
         Texture pb;
         app->assets.default_video_loader->LoadVideo

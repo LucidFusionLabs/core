@@ -38,7 +38,7 @@ extern FlagOfType<bool>   FLAGS_lfapp_network_;
 
 Scene scene;
 BindMap *binds;
-Shader warpershader;
+Shader warpershader, watershader;
 Browser *image_browser;
 NetworkThread *network_thread;
 ProcessAPIServer *render_process;
@@ -47,15 +47,14 @@ int new_win_width = 80*10, new_win_height = 25*17;
 void MyNewLinkCB(const shared_ptr<TextGUI::Link> &link) {
     const char *args = FindChar(link->link.c_str() + 6, isint2<'?', ':'>);
     string image_url(link->link, 0, args ? args - link->link.c_str() : string::npos);
-    if (SuffixMatch(image_url, ".gifv")) return;
+    // if (SuffixMatch(image_url, ".gifv")) return;
     if (!FileSuffix::Image(image_url)) {
+        return;
         string prot, host, port, path;
         if (HTTP::ParseURL(image_url.c_str(), &prot, &host, &port, &path) &&
             SuffixMatch(host, "imgur.com") && !FileSuffix::Image(path)) {
             image_url += ".jpg";
-        } else { 
-            return;
-        }
+        } else return;
     }
     image_url += BlankNull(args);
     if (network_thread) network_thread->Write(new Callback([=]() { link->image = image_browser->doc.parser->OpenImage(image_url); }));
@@ -173,8 +172,9 @@ void MyColorsCmd(const vector<string> &arg) {
 void MyShaderCmd(const vector<string> &arg) {
     string shader_name = arg.size() ? arg[0] : "";
     MyTerminalWindow *tw = (MyTerminalWindow*)screen->user1;
-    if (shader_name == "warper") tw->activeshader = &warpershader;
-    else                         tw->activeshader = &app->video.shader_default;
+    if      (shader_name == "warper") tw->activeshader = &warpershader;
+    else if (shader_name == "water")  tw->activeshader = &watershader;
+    else                              tw->activeshader = &app->video.shader_default;
     tw->UpdateTargetFPS();
 }
 
@@ -266,6 +266,9 @@ extern "C" int main(int argc, const char *argv[]) {
     string warper_shader = LocalFile::FileContents(StrCat(app->assetdir, "warper.glsl"));
     Shader::Create("warpershader", lfapp_vertex_shader.c_str(), warper_shader.c_str(),
                    "#define TEX2D\n#define VERTEXCOLOR\n", &warpershader);
+    string water_shader = LocalFile::FileContents(StrCat(app->assetdir, "water.glsl"));
+    Shader::Create("watershader", lfapp_vertex_shader.c_str(), water_shader.c_str(),
+                   "#define TEX2D\n#define VERTEXCOLOR\n", &watershader);
 
     image_browser = new Browser();
     image_browser->doc.parser->render_process = render_process;

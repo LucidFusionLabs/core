@@ -65,4 +65,4 @@ endif(MSVC)
 # NOW BUILD OUR TARGET
 # include_directories(${CMAKE_CURRENT_SOURCE_DIR} ${ZLIB_INCLUDE_DIR})
 add_library(png STATIC ${libpng_sources})
-//target_link_libraries(png zlib ${M_LIBRARY})
+# target_link_libraries(png zlib ${M_LIBRARY})
