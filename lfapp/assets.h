@@ -143,6 +143,7 @@ struct Asset {
     static void LoadTexture(         const string &fn, Texture *out, VideoAssetLoader *l=0) { LoadTexture(0, fn, out, l); }
     static void LoadTexture(void *h, const string &fn, Texture *out, VideoAssetLoader *l=0);
     static void LoadTexture(const void *from_buf, const char *fn, int size, Texture *out, int flag=VideoAssetLoader::Flag::Default);
+    static string FileContents(const string &asset_fn);
 
     static void Copy(const Asset *in, Asset *out) {
         string name = out->name;

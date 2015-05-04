@@ -220,6 +220,7 @@ static const char **osx_argv = 0;
         [fh waitForDataInBackgroundAndNotify];
     }
     - (void)fileReadCompleted: (NSNotification *)notification {}
+    - (void)shellRun: (id)sender { ShellRun([[sender representedObject] UTF8String]); }
     - (void)mouseDown:(NSEvent*)e { [self mouseClick:e down:1]; }
     - (void)mouseUp  :(NSEvent*)e { [self mouseClick:e down:0]; }
     - (void)mouseClick:(NSEvent*)e down:(bool)d {
@@ -481,6 +482,21 @@ extern "C" void OSXCreateApplicationMenus() {
     item = [menu addItemWithTitle:@"Zoom In"  action:@selector(zoomIn:)  keyEquivalent:@"="];
     item = [menu addItemWithTitle:@"Zoom Out" action:@selector(zoomOut:) keyEquivalent:@"-"];
     item = [[NSMenuItem alloc] initWithTitle:@"View" action:nil keyEquivalent:@""];
+    [item setSubmenu: menu];
+    [[NSApp mainMenu] addItem: item];
+    [menu release];
+    [item release];
+}
+
+extern "C" void OSXCreateNativeMenu(const char *title_text, int n, const char **name, const char **val) {
+    NSMenuItem *item;
+    NSString *title = [NSString stringWithUTF8String: title_text];
+    NSMenu *menu = [[NSMenu alloc] initWithTitle: title];
+    for (int i=0; i<n; i++) {
+        item = [menu addItemWithTitle: [NSString stringWithUTF8String: name[i]] action:@selector(shellRun:) keyEquivalent:@""];
+        [item setRepresentedObject: [NSString stringWithUTF8String: val[i]]];
+    }
+    item = [[NSMenuItem alloc] initWithTitle:title action:nil keyEquivalent:@""];
     [item setSubmenu: menu];
     [[NSApp mainMenu] addItem: item];
     [menu release];

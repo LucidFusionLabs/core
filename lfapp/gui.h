@@ -460,9 +460,6 @@ struct TextArea : public TextGUI {
     virtual LinesFrameBuffer *GetFrameBuffer() { return &line_fb; }
 
     virtual void Draw(const Box &w, bool cursor);
-    virtual void DrawWithShader(const Box &w, bool cursor, Shader *shader)
-    { glTimeResolutionShader(shader); Draw(w, cursor); screen->gd->UseShader(0); }
-
     virtual bool GetGlyphFromCoords(const point &p, Selection::Point *out) { return GetGlyphFromCoordsOffset(p, out, start_line, start_line_adjust); }
     bool GetGlyphFromCoordsOffset(const point &p, Selection::Point *out, int sl, int sla);
 
