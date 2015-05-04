@@ -78,8 +78,6 @@ int PngReader::Read(File *lf, Texture *out) {
     png_read_info(png_ptr, info_ptr);
     png_byte color_type = png_get_color_type(png_ptr, info_ptr), bit_depth = png_get_bit_depth(png_ptr, info_ptr);
     int number_of_passes = png_set_interlace_handling(png_ptr), opf = Texture::preferred_pf;
-    // png_read_update_info(png_ptr, info_ptr);
-
     switch (color_type) {
         case PNG_COLOR_TYPE_GRAY:       opf = Pixel::GRAY8;              break;
         case PNG_COLOR_TYPE_GRAY_ALPHA: opf = Pixel::GRAYA8;             break;
@@ -87,7 +85,7 @@ int PngReader::Read(File *lf, Texture *out) {
         case PNG_COLOR_TYPE_RGB:
             if (opf == Pixel::RGBA || opf == Pixel::BGRA) png_set_filler(png_ptr, 0xff, PNG_FILLER_AFTER);
         case PNG_COLOR_TYPE_RGBA: 
-            if (opf == Pixel::BGRA || opf == Pixel::BGR24) png_set_bgr(png_ptr);
+            // if (opf == Pixel::BGRA || opf == Pixel::BGR24) png_set_bgr(png_ptr);
             break;
         default: FATAL("unknown png_get_color_type ", color_type);
     }
@@ -112,6 +110,7 @@ int PngWriter::Write(File *lf, const Texture &tex) {
 
     if (setjmp(png_jmpbuf(png_ptr)))
     { ERROR("setjmp: ", lf->Filename()); png_destroy_write_struct(&png_ptr, &info_ptr); return -1; }
+    png_set_write_fn(png_ptr, lf, PngWrite, PngFlush);
 
     int color_type = 0;
     switch (tex.pf) {
@@ -126,7 +125,6 @@ int PngWriter::Write(File *lf, const Texture &tex) {
 
     png_set_IHDR(png_ptr, info_ptr, tex.width, tex.height, 8, color_type, PNG_INTERLACE_NONE,
                  PNG_COMPRESSION_TYPE_BASE, PNG_FILTER_TYPE_BASE);
-    png_set_write_fn(png_ptr, lf, PngWrite, PngFlush);
     png_write_info(png_ptr, info_ptr);
 
     vector<png_bytep> row_pointers;
@@ -200,15 +198,14 @@ int JpegReader::Read(const string &data, Texture *out) {
     jpeg_start_decompress(&jds);
 
     if      (jds.output_components == 1) out->pf = Pixel::GRAY8;
-    else if (jds.output_components == 3) {
-        if      (out->pf == Pixel::RGBA)  jds.out_color_space = JCS_EXT_BGRX;
-        else if (out->pf == Pixel::BGRA)  jds.out_color_space = JCS_EXT_RGBX;
-        else if (out->pf == Pixel::RGB24) jds.out_color_space = JCS_EXT_BGR;
-    } else if (jds.output_components == 4) {
-        if      (out->pf == Pixel::RGBA)  jds.out_color_space = JCS_EXT_BGRA;
-        else if (out->pf == Pixel::RGB24) jds.out_color_space = JCS_EXT_BGR;
-        else if (out->pf == Pixel::BGR24) jds.out_color_space = JCS_EXT_RGB;
-    } else { ERROR("unsupported jpeg components ", jds.output_components); jpeg_destroy_decompress(&jds); return -1; }
+    else if (jds.output_components == 3) out->pf = Pixel::RGBA;
+    else if (jds.output_components == 4) out->pf = Pixel::RGBA;
+    else { ERROR("unsupported jpeg components ", jds.output_components); jpeg_destroy_decompress(&jds); return -1; }
+
+    if      (out->pf == Pixel::RGBA)  jds.out_color_space = JCS_EXT_RGBA;
+    else if (out->pf == Pixel::BGRA)  jds.out_color_space = JCS_EXT_BGRA;
+    else if (out->pf == Pixel::RGB24) jds.out_color_space = JCS_EXT_RGB;
+    else if (out->pf == Pixel::BGR24) jds.out_color_space = JCS_EXT_BGR;
 
     out->Resize(jds.output_width, jds.output_height, out->pf, Texture::Flag::CreateBuf);
     for (int linesize = out->LineSize(); jds.output_scanline < jds.output_height;) {
@@ -1082,8 +1079,8 @@ void glIntersect(int x, int y, Color *c) {
 
 void glTimeResolutionShader(Shader *shader) {
     screen->gd->UseShader(shader);
-    shader->SetUniform1f("time", ToFSeconds(Now() - app->time_started).count());
-    shader->SetUniform2f("resolution", screen->width, screen->height);
+    shader->SetUniform1f("iGlobalTime", ToFSeconds(Now() - app->time_started).count());
+    shader->SetUniform3f("iResolution", screen->width, screen->height, 0);
 }
 void glTimeResolutionShaderWindows(Shader *shader, const Color &backup_color, const Box &w,             const Texture *tex) { Box wc=w; vector<Box*> wv; wv.push_back(&wc); glTimeResolutionShaderWindows(shader, backup_color, wv, tex); }
 void glTimeResolutionShaderWindows(Shader *shader, const Color &backup_color, const vector<Box*> &wins, const Texture *tex) {

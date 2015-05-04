@@ -1,1 +1,1 @@
-position = position + Normal * time * 20.0;
+position = position + Normal * iGlobalTime * 20.0;

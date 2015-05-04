@@ -124,4 +124,12 @@ TEST(MatrixTest, Invert) {
     { double *r = Ainv.row(1); EXPECT_NEAR(-0.2, r[0], 1e-6); EXPECT_NEAR( 0.4, r[1], 1e-6); }
 }
 
+TEST(MatrixTest, Ortho) {
+    int w=640, h=480;
+    m44 ortho = m44::Ortho(0, w, 0, h, 0, 100);
+    v4 a(0,0,0,1), b(w, h, 0, 1), aa=ortho.Transform(a), bb=ortho.Transform(b);
+    EXPECT_EQ(v4(-1,-1,-1,1), aa);
+    EXPECT_EQ(v4( 1, 1,-1,1), bb);
+}
+
 }; // namespace LFL

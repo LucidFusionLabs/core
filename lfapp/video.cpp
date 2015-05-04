@@ -711,6 +711,7 @@ int GraphicsDevice::GetUniformLocation(int prog, const string &name) { return gl
 void GraphicsDevice::Uniform1i(int u, int v) { glUniform1i(u, v); }
 void GraphicsDevice::Uniform1f(int u, float v) { glUniform1f(u, v); }
 void GraphicsDevice::Uniform2f(int u, float v1, float v2) { glUniform2f(u, v1, v2); }
+void GraphicsDevice::Uniform3f(int u, float v1, float v2, float v3) { glUniform3f(u, v1, v2, v3); }
 void GraphicsDevice::Uniform3fv(int u, int n, const float *v) { glUniform3fv(u, n, v); }
 
 // Common layer
@@ -935,6 +936,7 @@ void GraphicsDevice::GetIntegerv(int t, int *out) {}
 void GraphicsDevice::Uniform1i(int u, int v) {}
 void GraphicsDevice::Uniform1f(int u, float v) {}
 void GraphicsDevice::Uniform2f(int u, float v1, float v2) {}
+void GraphicsDevice::Uniform3f(int u, float v1, float v2, float v3) {}
 void GraphicsDevice::Uniform3fv(int u, int n, const float *v) {}
 void GraphicsDevice::Flush() {}
 void GraphicsDevice::Clear() {}
@@ -1879,7 +1881,7 @@ int Pixel::ToFFMpegId(int fmt) {
 
 /* Texture */
 
-int Texture::GLBufferType() const { return PixelSize() == 4 ? GraphicsDevice::GLPreferredBuffer : GL_UNSIGNED_BYTE; }
+int Texture::GLBufferType() const { return pf == preferred_pf ? GraphicsDevice::GLPreferredBuffer : GL_UNSIGNED_BYTE; }
 
 void Texture::Coordinates(float *texcoord, int w, int h, int wd, int hd) {
     texcoord[CoordMinX] = texcoord[CoordMinY] = 0;
@@ -2123,7 +2125,7 @@ int Shader::Create(const string &name, const string &vertex_shader, const string
         if ((out->slot_tex                  = screen->gd->GetAttribLocation (p, "TexCoordIn"))          < 0 && log_missing_attrib) INFO("shader ", name, " missing TexCoordIn");
         if ((out->uniform_modelview         = screen->gd->GetUniformLocation(p, "Modelview"))           < 0 && log_missing_attrib) INFO("shader ", name, " missing Modelview");
         if ((out->uniform_modelviewproj     = screen->gd->GetUniformLocation(p, "ModelviewProjection")) < 0 && log_missing_attrib) INFO("shader ", name, " missing ModelviewProjection");
-        if ((out->uniform_tex               = screen->gd->GetUniformLocation(p, "Texture"))             < 0 && log_missing_attrib) INFO("shader ", name, " missing Texture");
+        if ((out->uniform_tex               = screen->gd->GetUniformLocation(p, "iChannel0"))           < 0 && log_missing_attrib) INFO("shader ", name, " missing Texture");
         if ((out->uniform_cubetex           = screen->gd->GetUniformLocation(p, "CubeTexture"))         < 0 && log_missing_attrib) INFO("shader ", name, " missing CubeTexture");
         if ((out->uniform_normalon          = screen->gd->GetUniformLocation(p, "NormalEnabled"))       < 0 && log_missing_attrib) INFO("shader ", name, " missing NormalEnabled");
         if ((out->uniform_texon             = screen->gd->GetUniformLocation(p, "TexCoordEnabled"))     < 0 && log_missing_attrib) INFO("shader ", name, " missing TexCoordEnabled");
@@ -2151,11 +2153,12 @@ int Shader::Create(const string &name, const string &vertex_shader, const string
 }
 
 int Shader::GetUniformIndex(const string &name) { return screen->gd->GetUniformLocation(ID, name); }
-void Shader::SetUniform1i(const string &name, float v) { screen->gd->Uniform1i(GetUniformIndex(name), v); }
-void Shader::SetUniform1f(const string &name, float v) { screen->gd->Uniform1f(GetUniformIndex(name), v); }
-void Shader::SetUniform2f(const string &name, float v1, float v2) { screen->gd->Uniform2f(GetUniformIndex(name), v1, v2); }
-void Shader::SetUniform3fv(const string &name, const float *v) { screen->gd->Uniform3fv(GetUniformIndex(name), 1, v); }
-void Shader::SetUniform3fv(const string &name, int n, const float *v) { screen->gd->Uniform3fv(GetUniformIndex(name), n, v); }
+void Shader::SetUniform1i(const string &name, float v)                      { screen->gd->Uniform1i (GetUniformIndex(name), v); }
+void Shader::SetUniform1f(const string &name, float v)                      { screen->gd->Uniform1f (GetUniformIndex(name), v); }
+void Shader::SetUniform2f(const string &name, float v1, float v2)           { screen->gd->Uniform2f (GetUniformIndex(name), v1, v2); }
+void Shader::SetUniform3f(const string &name, float v1, float v2, float v3) { screen->gd->Uniform3f (GetUniformIndex(name), v1, v2, v3); }
+void Shader::SetUniform3fv(const string &name, const float *v)              { screen->gd->Uniform3fv(GetUniformIndex(name), 1, v); }
+void Shader::SetUniform3fv(const string &name, int n, const float *v)       { screen->gd->Uniform3fv(GetUniformIndex(name), n, v); }
 
 #else /* LFL_GLSL_SHADERS */
 
@@ -2164,6 +2167,7 @@ int Shader::GetUniformIndex(const string &name) { return -1; }
 void Shader::SetUniform1i(const string &name, float v) {}
 void Shader::SetUniform1f(const string &name, float v) {}
 void Shader::SetUniform2f(const string &name, float v1, float v2) {}
+void Shader::SetUniform3f(const string &name, float v1, float v2, float v3) {}
 void Shader::SetUniform3fv(const string &name, const float *v) {}
 void Shader::SetUniform3fv(const string &name, int n, const float *v) {}
 void Shader::ActiveTexture(int n) {}

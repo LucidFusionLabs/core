@@ -2,17 +2,17 @@
 #define highp
 #endif
 
-varying highp float TimeOut;
-varying highp vec2 ResolutionOut;
+uniform float iGlobalTime;
+uniform vec3 iResolution;
 
 void main() {
-    highp vec2 position = gl_FragCoord.xy / ResolutionOut.xy;
+    highp vec2 position = gl_FragCoord.xy / iResolution.xy;
 
     highp float color = 0.0;
-    color += sin(position.x * cos(TimeOut / 15.0) * 80.0) + cos(position.y * cos(TimeOut / 15.0) * 10.0);
-    color += sin(position.y * sin(TimeOut / 10.0) * 40.0) + cos(position.x * sin(TimeOut / 25.0) * 40.0);
-    color += sin(position.x * sin(TimeOut / 5.0)  * 10.0) + sin(position.y * sin(TimeOut / 35.0) * 80.0);
-    color *= sin(TimeOut / 10.0) * 0.5;
+    color += sin(position.x * cos(iGlobalTime / 15.0) * 80.0) + cos(position.y * cos(iGlobalTime / 15.0) * 10.0);
+    color += sin(position.y * sin(iGlobalTime / 10.0) * 40.0) + cos(position.x * sin(iGlobalTime / 25.0) * 40.0);
+    color += sin(position.x * sin(iGlobalTime / 5.0)  * 10.0) + sin(position.y * sin(iGlobalTime / 35.0) * 80.0);
+    color *= sin(iGlobalTime / 10.0) * 0.5;
 
-    gl_FragColor = vec4(vec3(color, color * 0.5, sin(color + TimeOut / 3.0) * 0.75), 0.6);
+    gl_FragColor = vec4(vec3(color, color * 0.5, sin(color + iGlobalTime / 3.0) * 0.75), 0.6);
 }
