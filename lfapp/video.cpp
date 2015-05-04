@@ -2159,7 +2159,8 @@ int Shader::CreateShaderToy(const string &name, const string &pixel_shader, Shad
         "uniform float iGlobalTime;\r\n"
         "uniform vec3 iResolution;\r\n"
         "uniform vec4 iMouse;\r\n"
-        "uniform sampler2D iChannel0;\r\n";
+        "uniform sampler2D iChannel0;\r\n"
+        "uniform vec3 iChannelResolution[1];\r\n";
     static string footer =
         "void main(void) { mainImage(gl_FragColor, gl_FragCoord.xy); }\r\n";
     return Shader::Create(name, screen->gd->vertex_shader, StrCat(header, pixel_shader, footer), ShaderDefines(1,0,1,0), out);

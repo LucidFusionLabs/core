@@ -1079,11 +1079,12 @@ void glIntersect(int x, int y, Color *c) {
     Scene::Draw(geom.get(), 0);
 }
 
-void glTimeResolutionShader(Shader *shader) {
+void glTimeResolutionShader(Shader *shader, const Texture *tex) {
     screen->gd->UseShader(shader);
     shader->SetUniform1f("iGlobalTime", ToFSeconds(Now() - app->time_started).count());
     shader->SetUniform3f("iResolution", screen->width, screen->height, 0);
     shader->SetUniform4f("iMouse", screen->mouse.x, screen->mouse.y, app->input.MouseButton1Down(), 0);
+    if (tex) shader->SetUniform3f("iChannelResolution", screen->width, screen->height, 0);
 }
 
 void glTimeResolutionShaderWindows(Shader *shader, const Color &backup_color, const Box &w,             const Texture *tex) { Box wc=w; vector<Box*> wv; wv.push_back(&wc); glTimeResolutionShaderWindows(shader, backup_color, wv, tex); }

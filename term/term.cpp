@@ -155,7 +155,7 @@ int Frame(Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample, int
     if (effects) {
         if (draw) tw->effects_buffer->Release();
         tw->effects_buffer->tex.Bind();
-        glTimeResolutionShader(tw->activeshader);
+        glTimeResolutionShader(tw->activeshader, &tw->effects_buffer->tex);
         screen->Box().Draw(tw->effects_buffer->tex.coord);
         screen->gd->UseShader(0);
     }
@@ -287,7 +287,8 @@ extern "C" int main(int argc, const char *argv[]) {
 
     vector<pair<string,string>> effects_menu = { {"None", "shader none"}, {"Warper", "shader warper"},
         { "Water", "shader water" }, { "Twistery", "shader twistery" }, { "Fire", "shader fire" },
-        { "Waves", "shader waves" } };
+        { "Waves", "shader waves" }, { "Emboss", "shader emboss" }, { "Stormy", "shader stormy" },
+        { "Alien", "shader alien" }, { "Fractal", "shader fractal" }, { "Shrooms", "shader shrooms" } };
     app->AddNativeMenu("Effects", effects_menu);
 
     Shader::Create("warper", screen->gd->vertex_shader, Asset::FileContents("warper.glsl"), ShaderDefines(1,0,1,0), &shader_map["warper"]);
@@ -295,6 +296,11 @@ extern "C" int main(int argc, const char *argv[]) {
     Shader::CreateShaderToy("twistery", Asset::FileContents("twistery.glsl"), &shader_map["twistery"]);
     Shader::CreateShaderToy("fire", Asset::FileContents("fire.glsl"), &shader_map["fire"]);
     Shader::CreateShaderToy("waves", Asset::FileContents("waves.glsl"), &shader_map["waves"]);
+    Shader::CreateShaderToy("emboss", Asset::FileContents("emboss.glsl"), &shader_map["emboss"]);
+    Shader::CreateShaderToy("stormy", Asset::FileContents("stormy.glsl"), &shader_map["stormy"]);
+    Shader::CreateShaderToy("alien", Asset::FileContents("alien.glsl"), &shader_map["alien"]);
+    Shader::CreateShaderToy("fractal", Asset::FileContents("fractal.glsl"), &shader_map["fractal"]);
+    Shader::CreateShaderToy("shrooms", Asset::FileContents("shrooms.glsl"), &shader_map["shrooms"]);
 
     image_browser = new Browser();
     image_browser->doc.parser->render_process = render_process;
