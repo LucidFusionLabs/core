@@ -1,49 +1,42 @@
-http://lucidfusionlabs.com/svn/lfl/README.txt
-=============================================
+![lfl](assets/lfl.png)
 
-OVERVIEW
---------
+## Overview
 
-The "lfapp" API primarly consists of the: Application, Window, and Scene
-classes, plus the 7 Modules: Audio, Video, Input, Assets, Network, Camera,
-and CUDA.
+The API primarly consists of the: `Application`, `Window`, and `Scene` classes,
+plus the 7 modules: `Audio`, `Video`, `Input`, `Assets`, `Network`, `Camera`,
+and `CUDA`.
 
-The key implementation files are 
-[lfapp/lfapp.h](http://lucidfusionlabs.com/websvn/filedetails.php?repname=lfl&path=%2Flfapp%2Flfapp.h) and
-[lfapp/lfapp.cpp](http://lucidfusionlabs.com/websvn/filedetails.php?repname=lfl&path=%2Flfapp%2Flfapp.cpp).
+The key implementation files are:
+[lfapp/lfapp.h](lfapp/lfapp.h)
+[lfapp/lfapp.cpp](lfapp/lfapp.cpp)
 
-Projects include:
+## Projects
 
-- term:         LTerminal, a modern terminal
-- editor:       LEditor, a text editor and IDE
-- browser:      LBrowser, a HTML4/CSS2 web browser with V8 javascript
-- image:        LImage, an image and 3D-model manipulation utility
-- fs:           Fusion Server, a speech and image recognition server
-- fv:           Fusion Viewer, a speech and image recognition client
-- market:       Financial data visualization and automated trading code
-- spaceball:    Spaceball Future, a multiplayer 3d game
-- cb:           Crystal Bawl, a geopacket visualization screensaver
-- chess:        LChess, a magic bitboard chess engine and FICS client
-- quake:        LQuake, a quake clone
-- senators:     IRC bots with NLP capabilties
+* **term**:         LTerminal, a modern terminal
+* **editor**:       LEditor, a text editor and IDE
+* **browser**:      LBrowser, a HTML4/CSS2 web browser with V8 javascript
+* **image**:        LImage, an image and 3D-model manipulation utility
+* **fs**:           Fusion Server, a speech and image recognition server
+* **fv**:           Fusion Viewer, a speech and image recognition client
+* **market**:       Financial data visualization and automated trading code
+* **spaceball**:    Spaceball Future, a multiplayer 3d game
+* **cb**:           Crystal Bawl, a geopacket visualization screensaver
+* **chess**:        LChess, a magic bitboard chess engine and FICS client
+* **quake**:        LQuake, a quake clone
+* **senators**:     IRC bots with NLP capabilties
 
-The following build procedures apply to any app cloned from lfl/new_app_template.
-See lfl/new_app_template/README to quick start your next app.
+The following build procedures apply to any app cloned from [new_app_template](new_app_template).
+See [new_app_template/README.txt](new_app_template/README.txt) to quick start your next app.
 
+## Building
 
-BUILDING
---------
-
-svn co http://lucidfusionlabs.com/svn/lfl
+`git clone https://github.com/koldfuzor/lfl.git`
 
 LFL builds easily for Windows, Linux, Mac OSX, iPhone and Android.
 
-* Replace "LTerminal" and "lterm" with "YourPackage" and "YourApp" to
-build other apps.
+* Replace "LTerminal" and "lterm" with "YourPackage" and "YourApp" to build other apps.
 
-
-BUILDING Windows
-----------------
+### Windows
 
 * use CMake 3.0.2
 
@@ -73,9 +66,7 @@ BUILDING Windows
 
 * Windows installer lterminst.exe results
 
-
-BUILDING Linux
---------------
+### Linux
 
 * if yasm < 1 install http://www.tortall.net/projects/yasm/releases/yasm-1.2.0.tar.gz
 
@@ -93,9 +84,7 @@ BUILDING Linux
 
 * Linux package LTerminal.tgz results
 
-
-BUILDING Mac
-------------
+### OSX
 
 * http://www.cmake.org/files/v3.0/cmake-3.0.2-Darwin64-universal.dmg
 * Minimum of XCode 6 required
@@ -127,9 +116,7 @@ BUILDING Mac
         export GYP_DEFINES="clang=1 mac_deployment_target=10.8"
         make native; cp -R out ~/v8; cp -R include ~/v8
 
-
-BUILDING iPhone Device
-----------------------
+### iOS Device
 
         cd lfl
         cmake -D LFL_IPHONE=1 .
@@ -151,9 +138,7 @@ BUILDING iPhone Device
 
 * iPhone Installer iLTerminal.ipa results
 
-
-BUILDING iPhone Simulator
--------------------------
+### iOS Simulator
 
         cd lfl
         cmake -D LFL_IPHONESIM=1 .
@@ -172,9 +157,7 @@ BUILDING iPhone Simulator
 
 * iPhone Installer iLTerminal.ipa results
 
-
-BUILDING Android
-----------------
+### Android
 
 * http://www.oracle.com/technetwork/java/javase/downloads/java-se-jdk-7-download-432154.html
 * http://www.eclipse.org/downloads/packages/eclipse-classic-37/indigor
@@ -224,4 +207,9 @@ BUILDING Android
 
 * Signed Android Installer results
 
+## Contributing
+
+1. Fork this repo and make changes in your own fork.
+2. Commit your changes and push to your fork `git push origin master`
+3. Create a new pull request and submit it back to the project.
 
