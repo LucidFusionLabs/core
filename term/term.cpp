@@ -69,9 +69,9 @@ void MyHoverLinkCB(TextGUI::Link *link) {
 }
 
 struct ReadBuffer {
-    string data; int size;
-    ReadBuffer(int S=0) : size(S), data(S, 0) {}
-    void Reset() { data.resize(size); }
+    string data; int size; Time stamp;
+    ReadBuffer(int S=0) : size(S), data(S, 0), stamp(Now()) {}
+    void Reset() { data.resize(size); stamp=Now(); }
 };
 
 struct MyTerminalWindow {
@@ -80,7 +80,8 @@ struct MyTerminalWindow {
     Terminal *terminal=0;
     Shader *activeshader;
     int font_size;
-    bool effects_mode=0, join_read_pending=0;
+    bool effects_mode=0, read_pending=0, join_read_pending=0, effects_init=0;
+    FrameBuffer *effects_buffer=0;
 
     MyTerminalWindow() : read_buf(65536), activeshader(&app->video.shader_default), font_size(FLAGS_default_font_size) {}
     ~MyTerminalWindow() { if (process.in) app->scheduler.DelWaitForeverSocket(fileno(process.in)); }
@@ -129,20 +130,39 @@ int Frame(Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample, int
     static const Time join_read_interval(100), refresh_interval(33);
     MyTerminalWindow *tw = (MyTerminalWindow*)W->user1;
     tw->read_buf.Reset();
-    if (tw->process.in && NBRead(fileno(tw->process.in), &tw->read_buf.data)) tw->terminal->Write(tw->read_buf.data);
+    if (tw->process.in && NBRead(fileno(tw->process.in), &tw->read_buf.data)) {
+        tw->terminal->Write(tw->read_buf.data);
+        tw->read_pending = 1;
+    }
     if (tw->read_buf.data.size() && !(flag & LFApp::Frame::DontSkip)) {
         bool join_read = tw->read_buf.data.size() == join_read_size;
         if (join_read) { tw->join_read_pending=1; if (app->scheduler.WakeupIn(0, join_read_interval)) return -1; }
         else        if (!tw->join_read_pending) { if (app->scheduler.WakeupIn(0,   refresh_interval)) return -1; }
     }
-    tw->join_read_pending = 0;
     app->scheduler.ClearWakeupIn();
     W->gd->DrawMode(DrawMode::_2D);
     W->gd->DisableBlend();
-    tw->terminal->DrawWithShader(W->Box(), true, tw->activeshader);
+    bool effects = tw->CustomShader(), draw = true;
+    if (effects) {
+        if (!tw->effects_buffer) {
+            tw->effects_buffer = new FrameBuffer();
+            tw->effects_buffer->Create(512, 512);
+            tw->effects_buffer->tex.Create(tw->effects_buffer->width, tw->effects_buffer->height);
+            tw->effects_buffer->Attach(tw->effects_buffer->tex.ID);
+        } else if ((draw = tw->read_pending)) tw->effects_buffer->Attach();
+    }
+    if (draw) tw->terminal->Draw(W->Box(), true);
+    if (effects) {
+        if (draw) tw->effects_buffer->Release();
+        tw->effects_buffer->tex.Bind();
+        glTimeResolutionShader(tw->activeshader);
+        screen->Box().Draw(tw->effects_buffer->tex.coord);
+        screen->gd->UseShader(0);
+    }
     W->DrawDialogs();
     if (FLAGS_draw_fps) Fonts::Default()->Draw(StringPrintf("FPS = %.2f", FPS()), point(W->width*.85, 0));
     if (FLAGS_screenshot.size()) ONCE(app->shell.screenshot(vector<string>(1, FLAGS_screenshot)); app->run=0;);
+    tw->read_pending = tw->join_read_pending = 0;
     return 0;
 }
 
@@ -172,6 +192,10 @@ void MyColorsCmd(const vector<string> &arg) {
 void MyShaderCmd(const vector<string> &arg) {
     string shader_name = arg.size() ? arg[0] : "";
     MyTerminalWindow *tw = (MyTerminalWindow*)screen->user1;
+    if (tw->effects_buffer) {
+        tw->effects_buffer->tex.ClearGL();
+        Replace(&tw->effects_buffer, (FrameBuffer*)0);
+    }
     if      (shader_name == "warper") tw->activeshader = &warpershader;
     else if (shader_name == "water")  tw->activeshader = &watershader;
     else                              tw->activeshader = &app->video.shader_default;
@@ -262,13 +286,10 @@ extern "C" int main(int argc, const char *argv[]) {
     binds->Add(Bind('-', Key::Modifier::Cmd, Bind::CB(bind(&MyDecreaseFontCmd, vector<string>()))));
     binds->Add(Bind('6', Key::Modifier::Cmd, Bind::CB(bind([&](){ Window::Get()->console->Toggle(); }))));
 
-    string lfapp_vertex_shader = LocalFile::FileContents(StrCat(app->assetdir, "lfapp_vertex.glsl"));
     string warper_shader = LocalFile::FileContents(StrCat(app->assetdir, "warper.glsl"));
-    Shader::Create("warpershader", lfapp_vertex_shader.c_str(), warper_shader.c_str(),
-                   "#define TEX2D\n#define VERTEXCOLOR\n", &warpershader);
+    Shader::Create("warpershader", screen->gd->vertex_shader, warper_shader, ShaderDefines(1,0,1,0), &warpershader);
     string water_shader = LocalFile::FileContents(StrCat(app->assetdir, "water.glsl"));
-    Shader::Create("watershader", lfapp_vertex_shader.c_str(), water_shader.c_str(),
-                   "#define TEX2D\n#define VERTEXCOLOR\n", &watershader);
+    Shader::CreateShaderToy("watershader", water_shader, &watershader);
 
     image_browser = new Browser();
     image_browser->doc.parser->render_process = render_process;

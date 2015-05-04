@@ -418,8 +418,8 @@ struct OpenGLES2 : public GraphicsDevice {
     void Init() {
         // GetIntegerv(GL_FRAMEBUFFER_BINDING, &oldFBO);
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-        string vertex_shader = LocalFile::FileContents(StrCat(app->assetdir, "lfapp_vertex.glsl"));
-        string pixel_shader  = LocalFile::FileContents(StrCat(app->assetdir, "lfapp_pixel.glsl"));
+        vertex_shader = LocalFile::FileContents(StrCat(app->assetdir, "lfapp_vertex.glsl"));
+        pixel_shader  = LocalFile::FileContents(StrCat(app->assetdir, "lfapp_pixel.glsl"));
         Shader::Create("lfapp",          vertex_shader, pixel_shader, ShaderDefines(1,0,1,0), &app->video.shader_default);
         Shader::Create("lfapp_cubemap",  vertex_shader, pixel_shader, ShaderDefines(1,0,0,1), &app->video.shader_cubemap);
         Shader::Create("lfapp_normals",  vertex_shader, pixel_shader, ShaderDefines(0,1,1,0), &app->video.shader_normals);
@@ -2150,6 +2150,16 @@ int Shader::Create(const string &name, const string &vertex_shader, const string
     }
 
     return p;
+}
+
+int Shader::CreateShaderToy(const string &name, const string &pixel_shader, Shader *out) {
+    static string header =
+        "uniform float iGlobalTime;\r\n"
+        "uniform vec3 iResolution;\r\n"
+        "uniform sampler2D iChannel0;\r\n";
+    static string footer =
+        "void main(void) { mainImage(gl_FragColor, gl_FragCoord.xy); }\r\n";
+    return Shader::Create(name, screen->gd->vertex_shader, StrCat(header, pixel_shader, footer), ShaderDefines(1,0,1,0), out);
 }
 
 int Shader::GetUniformIndex(const string &name) { return screen->gd->GetUniformLocation(ID, name); }
