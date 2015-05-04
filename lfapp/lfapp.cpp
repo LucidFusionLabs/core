@@ -109,6 +109,7 @@ extern "C" {
 extern "C" void iPhoneOpenBrowser(const char *url_text);
 #elif defined(__APPLE__)
 extern "C" void OSXStartWindow(void*);
+extern "C" void OSXCreateNativeMenu(const char*, int, const char**, const char**);
 extern "C" void OSXTriggerFrame(void*);
 extern "C" bool OSXTriggerFrameIn(void*, int ms, bool force);
 extern "C" void OSXClearTriggerFrameIn(void *O);
@@ -530,6 +531,14 @@ NetworkThread *Application::CreateNetworkThread() {
     NetworkThread *ret = new NetworkThread(&app->network);
     ret->thread->Start();
     return ret;
+}
+
+void Application::AddNativeMenu(const string &title, const vector<pair<string, string>>&items) {
+    vector<const char *> k, v;
+    for (auto &i : items) { k.push_back(i.first.c_str()); v.push_back(i.second.c_str()); }
+#ifdef LFL_OSXVIDEO
+    OSXCreateNativeMenu(title.c_str(), items.size(), &k[0], &v[0]);
+#endif
 }
 
 int Application::Create(int argc, const char **argv, const char *source_filename) {

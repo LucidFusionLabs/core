@@ -38,7 +38,7 @@ extern FlagOfType<bool>   FLAGS_lfapp_network_;
 
 Scene scene;
 BindMap *binds;
-Shader warpershader, watershader;
+unordered_map<string, Shader> shader_map;
 Browser *image_browser;
 NetworkThread *network_thread;
 ProcessAPIServer *render_process;
@@ -151,7 +151,7 @@ int Frame(Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample, int
             tw->effects_buffer->Attach(tw->effects_buffer->tex.ID);
         } else if ((draw = tw->read_pending)) tw->effects_buffer->Attach();
     }
-    if (draw) tw->terminal->Draw(W->Box(), true);
+    if (draw) tw->terminal->Draw(effects ? tw->effects_buffer->tex.Dimension() : W->Box(), true);
     if (effects) {
         if (draw) tw->effects_buffer->Release();
         tw->effects_buffer->tex.Bind();
@@ -196,9 +196,8 @@ void MyShaderCmd(const vector<string> &arg) {
         tw->effects_buffer->tex.ClearGL();
         Replace(&tw->effects_buffer, (FrameBuffer*)0);
     }
-    if      (shader_name == "warper") tw->activeshader = &warpershader;
-    else if (shader_name == "water")  tw->activeshader = &watershader;
-    else                              tw->activeshader = &app->video.shader_default;
+    auto shader = shader_map.find(shader_name);
+    tw->activeshader = shader != shader_map.end() ? &shader->second : &app->video.shader_default;
     tw->UpdateTargetFPS();
 }
 
@@ -286,10 +285,16 @@ extern "C" int main(int argc, const char *argv[]) {
     binds->Add(Bind('-', Key::Modifier::Cmd, Bind::CB(bind(&MyDecreaseFontCmd, vector<string>()))));
     binds->Add(Bind('6', Key::Modifier::Cmd, Bind::CB(bind([&](){ Window::Get()->console->Toggle(); }))));
 
-    string warper_shader = LocalFile::FileContents(StrCat(app->assetdir, "warper.glsl"));
-    Shader::Create("warpershader", screen->gd->vertex_shader, warper_shader, ShaderDefines(1,0,1,0), &warpershader);
-    string water_shader = LocalFile::FileContents(StrCat(app->assetdir, "water.glsl"));
-    Shader::CreateShaderToy("watershader", water_shader, &watershader);
+    vector<pair<string,string>> effects_menu = { {"None", "shader none"}, {"Warper", "shader warper"},
+        { "Water", "shader water" }, { "Twistery", "shader twistery" }, { "Fire", "shader fire" },
+        { "Waves", "shader waves" } };
+    app->AddNativeMenu("Effects", effects_menu);
+
+    Shader::Create("warper", screen->gd->vertex_shader, Asset::FileContents("warper.glsl"), ShaderDefines(1,0,1,0), &shader_map["warper"]);
+    Shader::CreateShaderToy("water", Asset::FileContents("water.glsl"), &shader_map["water"]);
+    Shader::CreateShaderToy("twistery", Asset::FileContents("twistery.glsl"), &shader_map["twistery"]);
+    Shader::CreateShaderToy("fire", Asset::FileContents("fire.glsl"), &shader_map["fire"]);
+    Shader::CreateShaderToy("waves", Asset::FileContents("waves.glsl"), &shader_map["waves"]);
 
     image_browser = new Browser();
     image_browser->doc.parser->render_process = render_process;

@@ -712,6 +712,7 @@ void GraphicsDevice::Uniform1i(int u, int v) { glUniform1i(u, v); }
 void GraphicsDevice::Uniform1f(int u, float v) { glUniform1f(u, v); }
 void GraphicsDevice::Uniform2f(int u, float v1, float v2) { glUniform2f(u, v1, v2); }
 void GraphicsDevice::Uniform3f(int u, float v1, float v2, float v3) { glUniform3f(u, v1, v2, v3); }
+void GraphicsDevice::Uniform4f(int u, float v1, float v2, float v3, float v4) { glUniform4f(u, v1, v2, v3, v4); }
 void GraphicsDevice::Uniform3fv(int u, int n, const float *v) { glUniform3fv(u, n, v); }
 
 // Common layer
@@ -937,6 +938,7 @@ void GraphicsDevice::Uniform1i(int u, int v) {}
 void GraphicsDevice::Uniform1f(int u, float v) {}
 void GraphicsDevice::Uniform2f(int u, float v1, float v2) {}
 void GraphicsDevice::Uniform3f(int u, float v1, float v2, float v3) {}
+void GraphicsDevice::Uniform4f(int u, float v1, float v2, float v3, float v4) {}
 void GraphicsDevice::Uniform3fv(int u, int n, const float *v) {}
 void GraphicsDevice::Flush() {}
 void GraphicsDevice::Clear() {}
@@ -2156,6 +2158,7 @@ int Shader::CreateShaderToy(const string &name, const string &pixel_shader, Shad
     static string header =
         "uniform float iGlobalTime;\r\n"
         "uniform vec3 iResolution;\r\n"
+        "uniform vec4 iMouse;\r\n"
         "uniform sampler2D iChannel0;\r\n";
     static string footer =
         "void main(void) { mainImage(gl_FragColor, gl_FragCoord.xy); }\r\n";
@@ -2163,12 +2166,13 @@ int Shader::CreateShaderToy(const string &name, const string &pixel_shader, Shad
 }
 
 int Shader::GetUniformIndex(const string &name) { return screen->gd->GetUniformLocation(ID, name); }
-void Shader::SetUniform1i(const string &name, float v)                      { screen->gd->Uniform1i (GetUniformIndex(name), v); }
-void Shader::SetUniform1f(const string &name, float v)                      { screen->gd->Uniform1f (GetUniformIndex(name), v); }
-void Shader::SetUniform2f(const string &name, float v1, float v2)           { screen->gd->Uniform2f (GetUniformIndex(name), v1, v2); }
-void Shader::SetUniform3f(const string &name, float v1, float v2, float v3) { screen->gd->Uniform3f (GetUniformIndex(name), v1, v2, v3); }
-void Shader::SetUniform3fv(const string &name, const float *v)              { screen->gd->Uniform3fv(GetUniformIndex(name), 1, v); }
-void Shader::SetUniform3fv(const string &name, int n, const float *v)       { screen->gd->Uniform3fv(GetUniformIndex(name), n, v); }
+void Shader::SetUniform1i(const string &name, float v)                                { screen->gd->Uniform1i (GetUniformIndex(name), v); }
+void Shader::SetUniform1f(const string &name, float v)                                { screen->gd->Uniform1f (GetUniformIndex(name), v); }
+void Shader::SetUniform2f(const string &name, float v1, float v2)                     { screen->gd->Uniform2f (GetUniformIndex(name), v1, v2); }
+void Shader::SetUniform3f(const string &name, float v1, float v2, float v3)           { screen->gd->Uniform3f (GetUniformIndex(name), v1, v2, v3); }
+void Shader::SetUniform4f(const string &name, float v1, float v2, float v3, float v4) { screen->gd->Uniform4f (GetUniformIndex(name), v1, v2, v3, v4); }
+void Shader::SetUniform3fv(const string &name, const float *v)                        { screen->gd->Uniform3fv(GetUniformIndex(name), 1, v); }
+void Shader::SetUniform3fv(const string &name, int n, const float *v)                 { screen->gd->Uniform3fv(GetUniformIndex(name), n, v); }
 
 #else /* LFL_GLSL_SHADERS */
 
@@ -2178,6 +2182,7 @@ void Shader::SetUniform1i(const string &name, float v) {}
 void Shader::SetUniform1f(const string &name, float v) {}
 void Shader::SetUniform2f(const string &name, float v1, float v2) {}
 void Shader::SetUniform3f(const string &name, float v1, float v2, float v3) {}
+void Shader::SetUniform4f(const string &name, float v1, float v2, float v3, float v4) {}
 void Shader::SetUniform3fv(const string &name, const float *v) {}
 void Shader::SetUniform3fv(const string &name, int n, const float *v) {}
 void Shader::ActiveTexture(int n) {}

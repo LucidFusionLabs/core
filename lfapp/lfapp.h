@@ -558,6 +558,7 @@ struct Application : public ::LFApp, public Module {
     void Log(int level, const char *file, int line, const string &message);
     void CreateNewWindow(const function<void(Window*)> &start_cb = function<void(Window*)>());
     NetworkThread *CreateNetworkThread();
+    void AddNativeMenu(const string &title, const vector<pair<string, string>>&items);
     int LoadModule(Module *M) { modules.push_back(M); return M->Init(); }
     string BinDir() const { return LocalFile::JoinPath(startdir, progname.substr(0, DirNameLen(progname, true))); }
 
