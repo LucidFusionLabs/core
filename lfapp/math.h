@@ -351,7 +351,7 @@ template <class T=double> struct matrix {
         long long bytes = Mrows*Ncols*sizeof(T)*((Flag&Flag::Complex)?2:1);
         if (!Alloc) {
             Alloc = Allocator::Default();
-#if defined(__linux__) && !defined(LFL_ANDROID)
+#if 0 && defined(__linux__) && !defined(LFL_ANDROID)
             if (bytes >= (1<<30)) Alloc = MMapAlloc::Open("/dev/zero", true, false, bytes);
 #endif
         }
