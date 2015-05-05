@@ -24,7 +24,7 @@ script:
   - if [ $TRAVIS_OS_NAME == osx ]; then ./pkg/macprep.sh && ./pkg/macpkg.sh; fi
 
 after_success:
-  - echo "done"
+  - echo "success"
 
 os:
   - linux
