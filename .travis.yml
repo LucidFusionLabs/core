@@ -8,6 +8,7 @@ before_install:
   - echo $LANG
   - echo $LC_ALL
   - if [ $TRAVIS_OS_NAME == linux ]; then sudo apt-get update && sudo apt-get install -y llvm-3.4 llvm-3.4-dev && sudo apt-get install -y cmake; fi
+  - if [ $TRAVIS_OS_NAME == linux ]; then sudo apt-get install libglu1-mesa-dev xorg-dev; fi
   - if [ $TRAVIS_OS_NAME == linux ]; then wget https://s3.amazonaws.com/biibinaries/thirdparty/cmake-3.0.2-Linux-64.tar.gz; fi
   - if [ $TRAVIS_OS_NAME == linux ]; then tar -xzf cmake-3.0.2-Linux-64.tar.gz; fi
   - if [ $TRAVIS_OS_NAME == linux ]; then sudo cp -fR cmake-3.0.2-Linux-64/* /usr; fi
