@@ -32,6 +32,10 @@
 #include "libarchive/archive_entry.h"
 #endif
 
+#ifdef LFL_IPHONE
+extern "C" int iPhoneReadDir(const char *path, int dirs, void *DirectoryIter, void (*DirectoryIterAdd)(void *di, const char *k, int));
+#endif
+
 namespace LFL {
 string File::Contents() {
     if (!Opened()) return "";
@@ -177,13 +181,15 @@ int LocalFile::IsDirectory(const string &filename) {
     struct stat buf;
     if (stat(filename.c_str(), &buf)) { ERROR("stat(", filename, ") failed: ", strerror(errno)); return 0; }
     return buf.st_mode & S_IFDIR;
+#else
+    return 0;
 #endif
 }
 #endif // WIN32
 
 #ifdef LFL_ANDROID
 #if 0
-bool LocalFile::open(const char *path, const char *mode, bool pre_create) {
+bool LocalFile::Open(const char *path, const char *mode, bool pre_create) {
     char *b=0; int l=0, ret;
     FILE *f = fopen(path, mode);
     if (!f) return -1;
@@ -198,29 +204,28 @@ bool LocalFile::open(const char *path, const char *mode, bool pre_create) {
     return true;
 }
 #endif
-bool LocalFile::open(const string &path, const string &mode, bool pre_create) {
+bool LocalFile::Open(const string &path, const string &mode, bool pre_create) {
     if ((writable = strchr(mode.c_str(), 'w'))) {
-        impl = android_internal_open_writer(path.c_str());
+        impl = AndroidInternalOpenWriter(path.c_str());
         return impl;
     }
 
     char *b=0; int l=0, ret;
     bool internal_path = !strchr(path.c_str(), '/');
-    if (internal_path) { if ((ret = android_internal_read(path.c_str(), &b, &l))) return false; }
-    else               { if ((ret = android_file_read    (path.c_str(), &b, &l))) return false; }
+    if (internal_path) { if ((ret = AndroidInternalRead(path.c_str(), &b, &l))) return false; }
+    else               { if ((ret = AndroidFileRead    (path.c_str(), &b, &l))) return false; }
 
     impl = new BufferFile(string(b, l));
-    ((BufferFile*)impl)->free = true;
     return true;
 }
 
-void LocalFile::reset() { if (impl && !writable) ((BufferFile*)impl)->reset(); }
-int LocalFile::size() { return (impl && !writable) ? ((BufferFile*)impl)->size() : -1; }
-void LocalFile::close() { if (impl) { if (writable) android_internal_close_writer(impl); else delete ((BufferFile*)impl); impl=0; } }
-long long LocalFile::seek(long long offset, int whence) { return (impl && !writable) ? ((BufferFile*)impl)->seek(offset, whence) : -1; }
-int LocalFile::read(void *buf, int size) { return (impl && !writable) ? ((BufferFile*)impl)->read(buf, size) : -1; }
-int LocalFile::write(const void *buf, int size) { return impl ? (writable ? android_internal_write(impl, (const char*)buf, size) : ((BufferFile*)impl)->write(buf, size)) : -1; }
-bool LocalFile::flush() { return false; }
+void LocalFile::Reset() { if (impl && !writable) ((BufferFile*)impl)->Reset(); }
+int LocalFile::Size() { return (impl && !writable) ? ((BufferFile*)impl)->Size() : -1; }
+void LocalFile::Close() { if (impl) { if (writable) AndroidInternalCloseWriter(impl); else delete ((BufferFile*)impl); impl=0; } }
+long long LocalFile::Seek(long long offset, int whence) { return (impl && !writable) ? ((BufferFile*)impl)->Seek(offset, whence) : -1; }
+int LocalFile::Read(void *buf, size_t size) { return (impl && !writable) ? ((BufferFile*)impl)->Read(buf, size) : -1; }
+int LocalFile::Write(const void *buf, size_t size) { return impl ? (writable ? AndroidInternalWrite(impl, (const char*)buf, size) : ((BufferFile*)impl)->Write(buf, size)) : -1; }
+bool LocalFile::Flush() { return false; }
 
 #else /* LFL_ANDROID */
 bool LocalFile::mkdir(const string &dir, int mode) {
@@ -347,7 +352,7 @@ DirectoryIter::DirectoryIter(const string &path, int dirs, const char *Pref, con
 #else /* _WIN32 */
 #ifdef LFL_IPHONE
 
-    NSFMreaddir(path, dirs, (void**)this, add);
+    iPhoneReadDir(path.c_str(), dirs, (void**)this, Add);
 
 #else /* LFL_IPHONE */
     DIR *dir; dirent *dent; string dirname=path;

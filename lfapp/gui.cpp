@@ -865,14 +865,13 @@ void Terminal::UpdateToken(Line *L, int word_offset, int word_len, int update_ty
 }
 
 const Drawable::Attr *Terminal::GetAttr(int attr) const {
-    static thread_local Drawable::Attr ret;
     Color *fg = colors ? &colors->c[Attr::GetFGColorIndex(attr)] : 0;
     Color *bg = colors ? &colors->c[Attr::GetBGColorIndex(attr)] : 0;
     if (attr & Attr::Reverse) swap(fg, bg);
-    ret.font = Fonts::Change(font, font->size, *fg, *bg, font->flag);
-    ret.bg = bg; // &font->bg;
-    ret.underline = attr & Attr::Underline;
-    return &ret;
+    last_attr.font = Fonts::Change(font, font->size, *fg, *bg, font->flag);
+    last_attr.bg = bg; // &font->bg;
+    last_attr.underline = attr & Attr::Underline;
+    return &last_attr;
 }
 
 void Terminal::Draw(const Box &b, bool draw_cursor) {

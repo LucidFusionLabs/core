@@ -256,16 +256,16 @@ endif()
 # allow fine grained control over which libraries not to link, even if
 # they are available on the system
 # ====================================================================
-set(WITH_PNG ON CACHE BOOL "Include PNG support")
-set(WITH_JPEG ON CACHE BOOL "Include JPEG support")
-set(WITH_JASPER ON CACHE BOOL "Include JPEG2K support")
-set(WITH_TIFF ON CACHE BOOL "Include TIFF support")
+set(WITH_PNG OFF CACHE BOOL "Include PNG support")
+set(WITH_JPEG OFF CACHE BOOL "Include JPEG support")
+set(WITH_JASPER OFF CACHE BOOL "Include JPEG2K support")
+set(WITH_TIFF OFF CACHE BOOL "Include TIFF support")
 
 if(UNIX)
     set(WITH_FFMPEG ON CACHE BOOL "Include FFMPEG support")
     if(NOT APPLE)
         set(WITH_UNICAP OFF CACHE BOOL "Include Unicap support (GPL)")
-        set(WITH_GTK ON CACHE BOOL "Include GTK support")
+        set(WITH_GTK OFF CACHE BOOL "Include GTK support")
         set(WITH_GSTREAMER ON CACHE BOOL "Include Gstreamer support")
         set(WITH_V4L ON CACHE BOOL "Include Video 4 Linux support")
         set(WITH_XINE OFF CACHE BOOL "Include Xine support (GPL)")
@@ -448,7 +448,7 @@ if(UNIX)
     endif()
 endif()
 
-set(BUILD_NEW_PYTHON_SUPPORT ON CACHE BOOL "Build with Python support")
+set(BUILD_NEW_PYTHON_SUPPORT OFF CACHE BOOL "Build with Python support")
 set(BUILD_SWIG_PYTHON_SUPPORT OFF CACHE BOOL "Build with older SWIG-based Python support")
 set(BUILD_OCTAVE_SUPPORT OFF CACHE BOOL "Build with Octave support")
 

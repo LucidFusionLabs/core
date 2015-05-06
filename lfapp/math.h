@@ -352,7 +352,7 @@ template <class T=double> struct matrix {
         if (!Alloc) {
             Alloc = Allocator::Default();
 #if defined(__linux__) && !defined(LFL_ANDROID)
-            if (bytes >= (1<<30)) Alloc = MMapAlloc::Open("/dev/zero", true, false, bytes);
+            // if (bytes >= (1<<30)) Alloc = MMapAlloc::Open("/dev/zero", true, false, bytes);
 #endif
         }
         Assign(Mrows, Ncols, bytes, Flag, Alloc);

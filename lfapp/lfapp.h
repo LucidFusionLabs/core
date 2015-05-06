@@ -142,8 +142,8 @@ extern int optind;
 
 #ifdef __APPLE__
 #include <cmath>
-extern "C" int isnan(double);
-extern "C" int isinf(double);
+// extern "C" int isnan(double);
+// extern "C" int isinf(double);
 #define isfinite(x) (!isnan(x) && !isinf(x))
 #else
 #define isfinite(x) finite(x)
@@ -196,6 +196,8 @@ extern "C" int isinf(double);
 #define DEFINE_string(name, initial, description) DEFINE_FLAG(name, string, initial, description)
 
 namespace LFL {
+using LFL_STL11_NAMESPACE::isinf;
+using LFL_STL11_NAMESPACE::isnan;
 typedef function<void()> Callback;
 typedef lock_guard<mutex> ScopedMutex;
 template <class X> struct Singleton { static X *Get() { static X instance; return &instance; } };
@@ -228,9 +230,12 @@ struct NullAlloc : public Allocator {
 struct ThreadLocalStorage {
     Allocator *alloc=0;
     std::default_random_engine rand_eng;
-    ThreadLocalStorage() : rand_eng(std::random_device{}()) {}
     virtual ~ThreadLocalStorage() { delete alloc; }
-    static thread_local ThreadLocalStorage *instance;
+    ThreadLocalStorage() : rand_eng(std::random_device{}()) {}
+    static void Init();
+    static void Free();
+    static void ThreadInit();
+    static void ThreadFree();
     static ThreadLocalStorage *Get();
     static Allocator *GetAllocator(bool reset_allocator=true);
 };
@@ -282,7 +287,7 @@ template <int S> struct FixedAlloc : public Allocator {
     int len=0;
     virtual void Reset() { len=0; }
     virtual void *Malloc(int n) { CHECK_LE(len + n, S); char *ret = &buf[len]; len += NextMultipleOf16(n); return ret; }
-    virtual void *Realloc(void *p, int n) { CHECK_EQ(NULL, p); return this->Malloc(n); }
+    virtual void *Realloc(void *p, int n) { CHECK_EQ(nullptr, p); return this->Malloc(n); }
     virtual void Free(void *p) {}
 };
 
@@ -310,7 +315,7 @@ struct BlockChainAlloc : public Allocator {
     int block_size, cur_block_ind;
     BlockChainAlloc(int s=1024*1024) : block_size(s), cur_block_ind(-1) {}
     void Reset() { for (auto &b : blocks) b.len = 0; cur_block_ind = blocks.size() ? 0 : -1; }
-    void *Realloc(void *p, int n) { CHECK_EQ(NULL, p); return this->Malloc(n); }
+    void *Realloc(void *p, int n) { CHECK_EQ(nullptr, p); return this->Malloc(n); }
     void *Malloc(int n);
     void Free(void *p) {}
 };
@@ -379,8 +384,9 @@ struct Thread {
     void ThreadProc() {
         { ScopedMutex sm(start_mutex); }
         INFOf("Started thread(%llx)", id);
+        ThreadLocalStorage::ThreadInit();
         cb();
-        delete ThreadLocalStorage::instance;
+        ThreadLocalStorage::ThreadFree();
     }
     static Id GetId() { return std::hash<std::thread::id>()(std::this_thread::get_id()); }
 };

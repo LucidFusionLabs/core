@@ -1,30 +1,11 @@
 # $Id: CMakeLists.txt 1004 2011-08-27 19:09:26Z justin $
 
 if(LFL_ANDROID)
-set(ENV{CC} "${ANDROIDROOT}/bin/arm-linux-androideabi-gcc")
-set(ENV{CFLAGS} "-isysroot ${ANDROIDROOT}/sysroot")
-set(ENV{CPP} "${ANDROIDROOT}/bin/arm-linux-androideabi-cpp")
-set(ENV{AR} "${ANDROIDROOT}/bin/arm-linux-androideabi-ar")
-set(ENV{LDFLAGS} "-isysroot ${ANDROIDROOT}/sysroot")
-set(ENV{RANLIB} "${ANDROIDROOT}/bin/arm-linux-androideabi-ranlib")
-set(CONFIGURE_OPTIONS ${CONFIGURE_OPTIONS} -host arm --enable-static=yes --enable-shared=no)
-
+ lfl_export_toolchain()
 elseif(LFL_IPHONE)
-set(ENV{CC} "${IPHONEROOT}/usr/bin/gcc")
-set(ENV{CPP} "${IPHONEROOT}/usr/bin/cpp")
-set(ENV{AR} "${IPHONEROOT}/usr/bin/ar")
-if(IPHONESIM)
-set(CONFIGURE_OPTIONS ${CONFIGURE_OPTIONS} --enable-static=yes --enable-shared=no)
-set(ENV{CFLAGS} "-arch i686 -pipe -mdynamic-no-pic -std=c99 -Wno-trigraphs -fpascal-strings -fasm-blocks -O0 -Wreturn-type -Wunused-variable -fmessage-length=0 -fvisibility=hidden -mmacosx-version-min=10.5 -I${IPHONESDK}/usr/include/ -isysroot ${IPHONESDK}")
-set(ENV{LDFLAGS} "-arch i686 -isysroot ${IPHONESDK} -Wl,-dead_strip -mmacosx-version-min=10.5")
-else(IPHONESIM)
-set(CONFIGURE_OPTIONS ${CONFIGURE_OPTIONS} --host=arm-apple-darwin --enable-static=yes --enable-shared=no)
-set(ENV{CFLAGS} "-arch armv7 -pipe -mdynamic-no-pic -std=c99 -Wno-trigraphs -fpascal-strings -O0 -Wreturn-type -Wunused-variable -fmessage-length=0 -fvisibility=hidden -miphoneos-version-min=2.0 -gdwarf-2 -mthumb -I${IPHONESDK}/usr/include/libxml2 -isysroot ${IPHONESDK}")
-set(ENV{LDFLAGS} "-arch armv7 -isysroot ${IPHONESDK} -Wl,-dead_strip -miphoneos-version-min=2.0")
-endif(IPHONESIM)
-
+ lfl_export_toolchain()
 else(LFL_ANDROID)
-set(CONFIGURE_OPTIONS ${CONFIGURE_OPTIONS})
+ set(CONFIGURE_OPTIONS ${CONFIGURE_OPTIONS})
 endif(LFL_ANDROID)
 
 autoconf(./configure "${CONFIGURE_OPTIONS}" make)

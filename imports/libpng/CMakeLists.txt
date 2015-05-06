@@ -62,6 +62,10 @@ if(MSVC)
   add_definitions(-D_CRT_SECURE_NO_DEPRECATE)
 endif(MSVC)
 
+if(LFL_IPHONE)
+  add_definitions(-DLFL_IPHONE)
+endif()
+
 # NOW BUILD OUR TARGET
 # include_directories(${CMAKE_CURRENT_SOURCE_DIR} ${ZLIB_INCLUDE_DIR})
 add_library(png STATIC ${libpng_sources})

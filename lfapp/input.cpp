@@ -151,10 +151,8 @@ void Mouse::ReleaseFocus() {}
 
 #ifdef LFL_ANDROIDINPUT
 struct AndroidInputModule : public InputModule {
-    int Frame(unsigned clicks) { return android_input(clicks); }
+    int Frame(unsigned clicks) { return 0; }
 };
-
-static bool android_keyboard_toggled = false;
 
 const int Key::Escape     = -1;
 const int Key::Return     = 10;
@@ -190,6 +188,8 @@ const int Key::F11        = -31;
 const int Key::F12        = -32;
 const int Key::Home       = -33;
 const int Key::End        = -34;
+
+static bool android_keyboard_toggled = false;
 
 string Clipboard::Get() { return ""; }
 void Clipboard::Set(const string &s) {}

@@ -49,8 +49,13 @@
 #define tvirtual
 #endif
 
-#define LFL_MOBILE (defined(LFL_ANDROID) || defined(LFL_IPHONE))
-#define LFL_LINUX_SERVER (defined(__linux__) && !defined(LFL_MOBILE))
+#if defined(LFL_ANDROID) || defined(LFL_IPHONE)
+#define LFL_MOBILE
+#endif
+
+#if defined(__linux__) && !defined(LFL_MOBILE)
+#define LFL_LINUX_SERVER 
+#endif
 
 #define memzero(x) memset(&x, 0, sizeof(x))
 #define memzeros(x) memset(x, 0, sizeof(x))
@@ -218,9 +223,11 @@ void WindowClosed();
 int KeyPress(int button, int down);
 int MouseClick(int button, int down, int x, int y);
 int MouseMove(int x, int y, int dx, int dy);
+void EndpointRead(void*, const char *name, const char *buf, int len);
 void ShellRun(const char *text);
 const char *LFAppDownloadDir();
 void BreakHook();
+void NotImplemented();
 
 #ifdef __cplusplus
 };

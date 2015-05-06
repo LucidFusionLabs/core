@@ -3,6 +3,7 @@
 macro (autoconf_make _dir _make _makefile _target)
     set(autoconf_built ${CMAKE_CURRENT_SOURCE_DIR}/.built)
     if(NOT EXISTS ${autoconf_built})
+        MESSAGE(STATUS "run ${_make} -f ${_makefile} ${_target} in ${CMAKE_CURRENT_SOURCE_DIR}")
         execute_process(
                 COMMAND
                         ${_make} -f ${_makefile} ${_target}
@@ -25,12 +26,14 @@ endmacro (autoconf_make)
 macro (autoconf _configure _options _make)
     set(autoconf_built ${CMAKE_CURRENT_SOURCE_DIR}/.built)
     if(NOT EXISTS ${autoconf_built})
+        MESSAGE(STATUS "run ${_configure} ${CMAKE_CONFIGURE_OPTIONS} ${_options} in ${CMAKE_CURRENT_SOURCE_DIR}")
         execute_process(
                 COMMAND
                         ${_configure} ${CMAKE_CONFIGURE_OPTIONS} ${_options}
                 WORKING_DIRECTORY
                         ${CMAKE_CURRENT_SOURCE_DIR}
         )
+        MESSAGE(STATUS "run ${_make} in ${CMAKE_CURRENT_SOURCE_DIR}")
         execute_process(
                 COMMAND
                         ${_make} 
@@ -53,6 +56,7 @@ endmacro (autoconf)
 macro (autoconf_exec _cmd)
     set(autoconf_built ${CMAKE_CURRENT_SOURCE_DIR}/.built)
     if(NOT EXISTS ${autoconf_built})
+    MESSAGE(STATUS "run ${_cmd} in ${CMAKE_CURRENT_SOURCE_DIR}")
     execute_process(COMMAND ${_cmd}
                     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
     endif(NOT EXISTS ${autoconf_built})

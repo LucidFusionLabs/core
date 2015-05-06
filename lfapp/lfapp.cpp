@@ -106,6 +106,7 @@ extern "C" {
 #endif
 
 #if defined(LFL_IPHONE)
+extern "C" char *iPhoneDocumentPath();
 extern "C" void iPhoneOpenBrowser(const char *url_text);
 #elif defined(__APPLE__)
 extern "C" void OSXStartWindow(void*);
@@ -139,6 +140,7 @@ extern "C" void WindowClosed()               { LFL::screen->Closed(); }
 extern "C" int  KeyPress  (int b, int d)                 { return LFL::app->input.KeyPress  (b, d); }
 extern "C" int  MouseClick(int b, int d, int x,  int y)  { return LFL::app->input.MouseClick(b, d, LFL::point(x, y)); }
 extern "C" int  MouseMove (int x, int y, int dx, int dy) { return LFL::app->input.MouseMove (LFL::point(x, y), LFL::point(dx, dy)); }
+extern "C" void EndpointRead(void *svc, const char *name, const char *buf, int len) { LFL::app->network.EndpointRead((LFL::Service*)svc, name, buf, len); }
 extern "C" NativeWindow *SetNativeWindowByID(void *id) { return SetNativeWindow(LFL::FindOrNull(LFL::Window::active, id)); }
 extern "C" NativeWindow *SetNativeWindow(NativeWindow *W) {
     CHECK(W);
@@ -161,7 +163,6 @@ extern "C" void LFAppFatal() {
 namespace LFL {
 Application *app = new Application();
 Window *screen = new Window();
-thread_local ThreadLocalStorage *ThreadLocalStorage::instance = 0;
 
 DEFINE_bool(lfapp_audio, false, "Enable audio in/out");
 DEFINE_bool(lfapp_video, false, "Enable OpenGL");
@@ -189,10 +190,21 @@ DEFINE_bool(open_console, 0, "Open console on win32");
 void Allocator::Reset() { FATAL(Name(), ": reset"); }
 Allocator *Allocator::Default() { return Singleton<MallocAlloc>::Get(); }
 
-ThreadLocalStorage *ThreadLocalStorage::Get() {
-    if (!instance) instance = new ThreadLocalStorage();
-    return instance;
-}
+#ifdef LFL_IPHONE
+static pthread_key_t tls_key;
+void ThreadLocalStorage::Init() { pthread_key_create(&tls_key, 0); ThreadInit(); }
+void ThreadLocalStorage::Free() { ThreadFree(); pthread_key_delete(tls_key); }
+void ThreadLocalStorage::ThreadInit() { pthread_setspecific(tls_key, new ThreadLocalStorage()); }
+void ThreadLocalStorage::ThreadFree() { delete ThreadLocalStorage::Get(); }
+ThreadLocalStorage *ThreadLocalStorage::Get() { return (ThreadLocalStorage*)pthread_getspecific(tls_key); }
+#else
+thread_local ThreadLocalStorage *tls_instance = 0;
+void ThreadLocalStorage::Init() {}
+void ThreadLocalStorage::Free() {}
+void ThreadLocalStorage::ThreadInit() {}
+void ThreadLocalStorage::ThreadFree() { Replace(&tls_instance, static_cast<ThreadLocalStorage*>(nullptr)); }
+ThreadLocalStorage *ThreadLocalStorage::Get() { return tls_instance ? tls_instance : (tls_instance = new ThreadLocalStorage()); }
+#endif
 Allocator *ThreadLocalStorage::GetAllocator(bool reset_allocator) {
     ThreadLocalStorage *tls = Get();
     if (!tls->alloc) tls->alloc = new FixedAlloc<1024*1024>;
@@ -503,7 +515,7 @@ void Application::Log(int level, const char *file, int line, const string &messa
             fflush(app->logfile);
         }
 #ifdef LFL_ANDROID
-        __android_log_print(ANDROID_LOG_INFO, caption.c_str(), "%s (%s:%d)", message.c_str(), file, line);
+        __android_log_print(ANDROID_LOG_INFO, screen->caption.c_str(), "%s (%s:%d)", message.c_str(), file, line);
 #endif
     }
     if (level == LFApp::Log::Fatal) LFAppFatal();
@@ -588,6 +600,8 @@ int Application::Create(int argc, const char **argv, const char *source_filename
         SystemNetwork::SetSocketCloseOnExec(fileno(logfile), 1);
     }
 
+    ThreadLocalStorage::Init();
+
 #ifdef _WIN32
     if (argc > 1) OpenConsole();
 #endif
@@ -628,14 +642,14 @@ int Application::Create(int argc, const char **argv, const char *source_filename
 
     {
 #ifdef LFL_IPHONE
-        char *path = NSFMDocumentPath();
-        dldir = string(path) + "/";
+        char *path = iPhoneDocumentPath();
+        dldir = StrCat(path, "/");
         free(path);
 #endif
 #ifdef _WIN32
         char path[MAX_PATH];
         if (!SUCCEEDED(SHGetFolderPath(NULL, CSIDL_PERSONAL|CSIDL_FLAG_CREATE, NULL, 0, path))) return;
-        dldir = string(path) + "/";
+        dldir = StrCat(path, "/");
 #endif
     }
 

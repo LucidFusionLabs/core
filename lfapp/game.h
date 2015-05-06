@@ -101,14 +101,14 @@ struct Game {
 #ifdef LFL_ANDROID
     struct GoogleMultiplayerNetwork : public Network {
         virtual int Write(Connection *c, int method, const char *data, int len) {
-            if (c->endpoint_name.empty()) { ERROR(c->name(), " blank send"); return -1; }
-            android_gplus_send_unreliable(c->endpoint_name.c_str(), data, len);
+            if (c->endpoint_name.empty()) { ERROR(c->Name(), " blank send"); return -1; }
+            AndroidGPlusSendUnreliable(c->endpoint_name.c_str(), data, len);
             return 0;
         }
         virtual void WriteWithRetry(ReliableNetwork *n, Connection *c, Serializable *req, unsigned short seq) {
-            if (c->endpoint_name.empty()) { ERROR(c->name(), " blank send"); return; }
+            if (c->endpoint_name.empty()) { ERROR(c->Name(), " blank send"); return; }
             string buf = req->ToString(); int ret;
-            if ((ret = android_gplus_send_reliable(c->endpoint_name.c_str(), buf.c_str(), buf.size())) < 0) ERROR("WriteWithRetry ", ret);
+            if ((ret = AndroidGPlusSendReliable(c->endpoint_name.c_str(), buf.c_str(), buf.size())) < 0) ERROR("WriteWithRetry ", ret);
         }
     };
 #endif
@@ -629,10 +629,11 @@ struct GameClient {
     int ConnectGPlus(const string &participant_name) {
 #ifdef LFL_ANDROID
         GPlusClient *gplus_client = Singleton<GPlusClient>::Get();
-        service_enable(gplus_client);
-        reset();
+        app->network.Enable(gplus_client);
+        Reset();
         net = Singleton<Game::GoogleMultiplayerNetwork>::Get();
-        conn = gplus_client->persistentConnection(participant_name, bind(&GameClient::UDPClientResponseCB, this, _1, _2, _3), bind(&GameClient::UDPClientHeartbeatCB, this, _1));
+        conn = gplus_client->PersistentConnection(participant_name, bind(&GameClient::Read, this, _1, _2, _3),
+                                                                    bind(&GameClient::Heartbeat, this, _1));
 
         GameProtocol::JoinRequest req;
         req.PlayerName = playername;
@@ -901,11 +902,11 @@ struct GameMenuGUI : public GUI, public Query {
     tab3_sensitivity(this, Box(), Widget::Scrollbar::Flag::Horizontal),
     tab3_volume     (this, Box(), Widget::Scrollbar::Flag::Horizontal), current_scrollbar(0),
 #ifdef LFL_ANDROID
-    gplus_signin_button (this, 0, 0,    0,            MouseController::CB([&](){ android_gplus_signin(); gplus_signin_button.decay = 10; })),
-    gplus_signout_button(this, 0, font, "g+ Signout", MouseController::CB([&](){ android_gplus_signout(); })),
-    gplus_quick         (this, 0, font, "match" ,     MouseController::CB([&](){ android_gplus_quick_game(); })),
-    gplus_invite        (this, 0, font, "invite",     MouseController::CB([&](){ android_gplus_invite(); })),
-    gplus_accept        (this, 0, font, "accept",     MouseController::CB([&](){ android_gplus_accept(); })),
+    gplus_signin_button (this, 0, 0,    0,            MouseController::CB([&](){ AndroidGPlusSignin(); gplus_signin_button.decay = 10; })),
+    gplus_signout_button(this, 0, font, "g+ Signout", MouseController::CB([&](){ AndroidGPlusSignout(); })),
+    gplus_quick         (this, 0, font, "match" ,     MouseController::CB([&](){ AndroidGPlusQuickGame(); })),
+    gplus_invite        (this, 0, font, "invite",     MouseController::CB([&](){ AndroidGPlusInvite(); })),
+    gplus_accept        (this, 0, font, "accept",     MouseController::CB([&](){ AndroidGPlusAccept(); })),
 #endif
     browser(W, box), particles("GameMenuParticles") {
         tab1.outline = tab2.outline = tab3.outline = tab4.outline = tab1_server_start.outline = tab2_server_join.outline = sub_tab1.outline = sub_tab2.outline = sub_tab3.outline = &font->fg;
@@ -930,7 +931,7 @@ struct GameMenuGUI : public GUI, public Query {
             particles.texture = parts->tex.ID;
         }
 #ifdef LFL_ANDROID
-        mobile_font = Fonts::Get("MobileAtlas", 0, Color::black);
+        mobile_font = Fonts::Get("MobileAtlas", "", 0, Color::black);
         gplus_signin_button.EnableHover();
 #endif
         pinger.query = this;
@@ -1043,13 +1044,13 @@ struct GameMenuGUI : public GUI, public Query {
             if (sub_selected == 1) {
 #ifdef LFL_ANDROID
                 Scissor s(*menuflow.container);
-                bool gplus_signedin = android_gplus_signedin();
+                bool gplus_signedin = AndroidGPlusSignedin();
                 if (!gplus_signedin) LayoutGPlusSigninButton(&menuflow, gplus_signedin);
                 else {
-                    int fw = menuflow.container->w, bh = font->height;
-                    if (menuflow.AppendBox(fw/3.0, bh, 0/3.0, &gplus_quick.win))  gplus_quick. Draw(true);
-                    if (menuflow.AppendBox(fw/3.0, bh, 1/3.0, &gplus_invite.win)) gplus_invite.Draw(true);
-                    if (menuflow.AppendBox(fw/3.0, bh, 2/3.0, &gplus_accept.win)) gplus_accept.Draw(true);
+                    int fw = menuflow.container->w, bh = font->Height();
+                    menuflow.AppendBox(fw/3.0, bh, 0/3.0, &gplus_quick.box);  gplus_quick. LayoutBox(&menuflow, gplus_quick.box);
+                    menuflow.AppendBox(fw/3.0, bh, 1/3.0, &gplus_invite.box); gplus_invite.LayoutBox(&menuflow, gplus_invite.box);
+                    menuflow.AppendBox(fw/3.0, bh, 2/3.0, &gplus_accept.box); gplus_accept.LayoutBox(&menuflow, gplus_accept.box);
                     menuflow.AppendNewlines(1);
                 }
 #endif
@@ -1100,7 +1101,7 @@ struct GameMenuGUI : public GUI, public Query {
         if (my_selected == 3) {
             Scissor s(*menuflow.container);
 #ifdef LFL_ANDROID
-            LayoutGPlusSigninButton(&menuflow, android_gplus_signedin());
+            LayoutGPlusSigninButton(&menuflow, AndroidGPlusSignedin());
 #endif
             menuflow.AppendText("\nPlayer Name:");
             if (DecayBoxIfMatch(line_clicked, menuflow.out->line.size())) {
@@ -1133,15 +1134,14 @@ struct GameMenuGUI : public GUI, public Query {
     }
     void LayoutGPlusSigninButton(Flow *menuflow, bool signedin) {
 #ifdef LFL_ANDROID
-        int bh = menuflow->font->height*2, bw = bh * 41/9.0;
-        if (menuflow->AppendBox(bw, bh, (.95 - (float)bw/menuflow->frame.w)/2, &gplus_signin_button.win)) {
-            if (!signedin) { 
-                mobile_font->Select();
-                gplus_signin_button.Draw(mobile_font, gplus_signin_button.decay ? 2 : (gplus_signin_button.hover ? 1 : 0));
-            } else {
-                gplus_signout_button.win = gplus_signin_button.win;
-                gplus_signout_button.Draw(true);
-            }
+        int bh = menuflow->cur_attr.font->Height()*2, bw = bh * 41/9.0;
+        menuflow->AppendBox(bw, bh, (.95 - (float)bw/menuflow->container->w)/2, &gplus_signin_button.box);
+        if (!signedin) { 
+            mobile_font->Select();
+            // gplus_signin_button.Draw(mobile_font, gplus_signin_button.decay ? 2 : (gplus_signin_button.hover ? 1 : 0));
+        } else {
+            gplus_signout_button.box = gplus_signin_button.box;
+            // gplus_signout_button.Draw(true);
         }
         menuflow->AppendNewlines(1);
 #endif

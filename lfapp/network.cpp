@@ -1731,7 +1731,7 @@ struct SMTPClientConnection : public Query {
         for (string line = IterNextString(&lines); !lines.Done(); line = IterNextString(&lines)) {
             processed = lines.next_offset;
             if (!response_lines.empty()) response_lines.append("\r\n");
-            response_lines.append(line, lines.cur_len);
+            response_lines.append(line);
 
             const char *dash = FindChar(line.c_str(), notnum);
             bool multiline = dash && *dash == '-';
@@ -1964,7 +1964,7 @@ void Sniffer::GetIPAddress(IPV4::Addr *out) {
     *out = 0;
 #if defined(_WIN32)
 #elif defined(LFL_ANDROID)
-    *out = ntohl(android_ipv4_address());
+    *out = ntohl(AndroidIPV4Address());
 #else
     ifaddrs* ifap = NULL;
     int r = getifaddrs(&ifap);
@@ -1983,7 +1983,7 @@ void Sniffer::GetBroadcastAddress(IPV4::Addr *out) {
     *out = 0;
 #if defined(_WIN32)
 #elif defined(LFL_ANDROID)
-    *out = ntohl(android_ipv4_broadcast_address());
+    *out = ntohl(AndroidIPV4BroadcastAddress());
 #else
     ifaddrs* ifap = NULL;
     int r = getifaddrs(&ifap);
