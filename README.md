@@ -1,8 +1,8 @@
 ![lfl](assets/lfl.png)
 
-[![Build Status](https://travis-ci.org/koldfuzor/lfl.svg?branch=master)](https://travis-ci.org/koldfuzor/lfl.svg?branch=master)
-
 ## Overview
+
+[![Build Status](https://travis-ci.org/koldfuzor/lfl.svg?branch=master)](https://travis-ci.org/koldfuzor/lfl)
 
 The API primarly consists of the: `Application`, `Window`, and `Scene` classes,
 plus the 7 modules: `Audio`, `Video`, `Input`, `Assets`, `Network`, `Camera`,
@@ -73,7 +73,6 @@ LFL builds easily for Windows, Linux, Mac OSX, iPhone and Android.
 * See [.travis.yml](.travis.yml) for package dependencies
 
         cd lfl
-        ./imports/build.sh
         cmake .
 
         cd term
@@ -92,7 +91,6 @@ LFL builds easily for Windows, Linux, Mac OSX, iPhone and Android.
 * Minimum of XCode 6 required, nasm & yasm from macports
 
         cd lfl
-        ./imports/build.sh
         cmake .
 
         cd term

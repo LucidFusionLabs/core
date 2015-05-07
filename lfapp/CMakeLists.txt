@@ -132,6 +132,9 @@ if(LFAPP_LIB_TYPE MATCHES "^SHARED$")
 target_link_libraries(${LFL_PROJECT}_lfapp ${LFAPP_LIB})
 set(LFAPP_LIB ${LFL_PROJECT}_lfapp)
 endif(LFAPP_LIB_TYPE MATCHES "^SHARED$")
+if(LFL_OPENCV)
+add_dependencies(${LFL_PROJECT}_lfapp OpenCV)
+endif(LFL_OPENCV)
 
 # post build step
 if(CMAKE_SYSTEM_NAME MATCHES "Darwin")

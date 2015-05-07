@@ -7,7 +7,7 @@ elseif(LFL_IPHONE)
   lfl_export_toolchain()
 
 elseif(CMAKE_SYSTEM_NAME MATCHES "Darwin")
- set(CONFIGURE_OPTIONS "${CONFIGURE_OPTIONS} --host x86_64-apple-darwin")
+ set(CONFIGURE_OPTIONS ${CONFIGURE_OPTIONS} --host x86_64-apple-darwin)
 endif()
 
 autoconf(./configure "${CONFIGURE_OPTIONS}" make)

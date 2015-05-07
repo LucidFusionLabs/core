@@ -11,6 +11,7 @@ endif(NOT CMAKE_BUILD_TYPE)
 
 # http://www.cmake.org/cmake/resources/software.html
 # http://atrpms.net/dist/el5/cmake/
+include(ExternalProject)
 include(${CMAKE_CURRENT_SOURCE_DIR}/CMake/Autoconf.cmake)
 include(${CMAKE_CURRENT_SOURCE_DIR}/CMake/util.cmake)
 set(LFL_ROOT ${CMAKE_CURRENT_SOURCE_DIR})

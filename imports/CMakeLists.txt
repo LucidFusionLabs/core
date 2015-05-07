@@ -228,15 +228,8 @@ INCLUDE_EXTERNAL_MSPROJECT(flann ${CMAKE_CURRENT_SOURCE_DIR}/OpenCV/3rdparty/fla
 INCLUDE_EXTERNAL_MSPROJECT(opencv_lapack ${CMAKE_CURRENT_SOURCE_DIR}/OpenCV/3rdparty/lapack/opencv_lapack.vcxproj)
 set(OPENCV_LIB cv.lib cxcore.lib flannd.lib opencv_lapackd.lib PARENT_SCOPE)
 else(WIN32)
-# no add_subdirectory()
-# cd OpenCV ; cmake . ; make
-set(MY_OPENCV_LIBS -lcv -lcxcore)
-if(CMAKE_SYSTEM_NAME MATCHES "Darwin")
-if(LFL_OPENCV_CAMERA)
-set(MY_OPENCV_LIBS ${MY_OPENCV_LIBS} -lhighgui)
-endif(LFL_OPENCV_CAMERA)
-endif(CMAKE_SYSTEM_NAME MATCHES "Darwin")
-set(OPENCV_LIB -L${CMAKE_CURRENT_SOURCE_DIR}/OpenCV/lib ${MY_OPENCV_LIBS} PARENT_SCOPE)
+ExternalProject_Add(OpenCV SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/OpenCV INSTALL_DIR ${CMAKE_CURRENT_SOURCE_DIR}/OpenCV)
+set(OPENCV_LIB -L${CMAKE_CURRENT_SOURCE_DIR}/OpenCV/lib -lcv -lcxcore PARENT_SCOPE)
 endif(WIN32)
 endif(LFL_OPENCV)
 
