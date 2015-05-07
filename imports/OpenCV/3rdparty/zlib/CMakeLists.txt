@@ -24,9 +24,9 @@ if(MSVC)
 endif()
 
 if(UNIX)
-  if(CMAKE_COMPILER_IS_GNUCXX OR CV_ICC)
+  #if(CMAKE_COMPILER_IS_GNUCXX OR CV_ICC)
      set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fPIC")
-  endif()
+  #endif()
 endif()
 
 set_target_properties(${the_target}

@@ -44,6 +44,10 @@ extern "C" {
 #include "gif_lib.h"
 #endif
 
+#ifdef LFL_IPHONE
+extern "C" void *iPhoneLoadMusicAsset(const char *filename);
+#endif
+
 namespace LFL {
 DEFINE_int(soundasset_seconds, 10, "Soundasset buffer seconds");
 
@@ -390,7 +394,7 @@ struct SimpleAssetLoader : public AudioAssetLoader, public VideoAssetLoader, pub
 
 #ifdef LFL_ANDROID
 struct AndroidAudioAssetLoader : public AudioAssetLoader {
-    virtual void *LoadAudioFile(const string &filename) { return android_load_music_asset(filename.c_str()); }
+    virtual void *LoadAudioFile(const string &filename) { return AndroidLoadMusicAsset(filename.c_str()); }
     virtual void UnloadAudioFile(void *h) {}
     virtual void *LoadAudioBuf(const char *buf, int len, const char *mimetype) { return 0; }
     virtual void UnloadAudioBuf(void *h) {}
@@ -400,9 +404,8 @@ struct AndroidAudioAssetLoader : public AudioAssetLoader {
 #endif
 
 #ifdef LFL_IPHONE
-extern void *iphone_load_music_asset(const char *filename);
 struct IPhoneAudioAssetLoader : public AudioAssetLoader {
-    virtual void *LoadAudioFile(const string &filename) { return iphone_load_music_asset(filename.c_str()); }
+    virtual void *LoadAudioFile(const string &filename) { return iPhoneLoadMusicAsset(filename.c_str()); }
     virtual void UnloadAudioFile(void *h) {}
     virtual void *LoadAudioBuf(const char *buf, int len, const char *mimetype) { return 0; }
     virtual void UnloadAudioBuf(void *h) {}

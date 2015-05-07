@@ -1,5 +1,7 @@
 ![lfl](assets/lfl.png)
 
+[![Build Status](https://travis-ci.org/koldfuzor/lfl.svg?branch=master)](https://travis-ci.org/koldfuzor/lfl.svg?branch=master)
+
 ## Overview
 
 The API primarly consists of the: `Application`, `Window`, and `Scene` classes,
@@ -68,7 +70,7 @@ LFL builds easily for Windows, Linux, Mac OSX, iPhone and Android.
 
 ### Linux
 
-* if yasm < 1 install http://www.tortall.net/projects/yasm/releases/yasm-1.2.0.tar.gz
+* See [.travis.yml](.travis.yml) for package dependencies
 
         cd lfl
         ./imports/build.sh
@@ -87,7 +89,7 @@ LFL builds easily for Windows, Linux, Mac OSX, iPhone and Android.
 ### OSX
 
 * http://www.cmake.org/files/v3.0/cmake-3.0.2-Darwin64-universal.dmg
-* Minimum of XCode 6 required
+* Minimum of XCode 6 required, nasm & yasm from macports
 
         cd lfl
         ./imports/build.sh
@@ -104,7 +106,6 @@ LFL builds easily for Windows, Linux, Mac OSX, iPhone and Android.
 * For C++ Interpreter setup ~/cling following http://root.cern.ch/drupal/content/cling-build-instructions
 * For V8 Javascript setup ~/v8 following https://developers.google.com/v8/build then:
 
-        sudo port install yasm
         export CXX="clang++ -std=c++11 -stdlib=libc++"
         export CC=clang
         export CPP="clang -E"
@@ -119,7 +120,7 @@ LFL builds easily for Windows, Linux, Mac OSX, iPhone and Android.
 ### iOS Device
 
         cd lfl
-        cmake -D LFL_IPHONE=1 .
+        cmake -DCMAKE_TOOLCHAIN_FILE=CMake/iPhoneToolchain.cmake .
 
         cd term
         make -j4
@@ -141,7 +142,7 @@ LFL builds easily for Windows, Linux, Mac OSX, iPhone and Android.
 ### iOS Simulator
 
         cd lfl
-        cmake -D LFL_IPHONESIM=1 .
+        cmake -DCMAKE_TOOLCHAIN_FILE=CMake/iPhoneToolchain.cmake -DLFL_IPHONESIM=1 .
 
         cd term
         make -j4
@@ -170,25 +171,22 @@ LFL builds easily for Windows, Linux, Mac OSX, iPhone and Android.
         [Install Platform android-13 + Google Play Services]
         [New Virtual Device]
 
-        $HOME/android-ndk-r8b/build/tools/make-standalone-toolchain.sh \
-        --platform=android-8 --install-dir=$HOME/android-toolchain
+        $HOME/android-ndk-r10d/build/tools/make-standalone-toolchain.sh \
+        --platform=android-8 --toolchain=arm-linux-androideabi-4.8 --install-dir=$HOME/android-toolchain
 
         cd lfl
-        ** Modify ANDROIDROOT in CMakeLists.txt
-        cmake -D LFL_ANDROID=1 .
+        ** Modify ANDROIDROOT in CMake/AndroidToolchain.cmake
+        cmake -DCMAKE_TOOLCHAIN_FILE=CMake/AndroidToolchain.cmake .
 
         cd term
         make -j4
         cd term-android/jni
-        ../../pkg/androidprebuild.sh
-        rm ~/lfl-android/lfl/lfapp/lfjava/lfjava
-        cd src && ln -s ~/android-ndk-r9/sources/cxx-stl/gnu-libstdc++ && cd ..
-        vim lfapp/Android.mk # Change to: libskorp_lfapp.a
         ndk-build
 
         cd lfl/term/term-android/assets
         cp -R ../../assets .
         cp ../../lfapp/*.glsl assets
+        cp ../../assets/*.wav ../../assets/*.mp3 ../res/raw/
 
         cd lfl/term/term-android
         vi local.properties

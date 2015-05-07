@@ -1,20 +1,17 @@
 #include <vector>
 #include <string>
-using namespace std;
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <libgen.h>
+
+#include "../../lfapp/lfexport.h"
 
 #include <jni.h>
-JNIEnv *jni_env;
-jobject jni_activity,       jni_view,       jni_gplus;
-jclass  jni_activity_class, jni_view_class, jni_gplus_class, jni_throwable_class, jni_frame_class;
-jmethodID jni_view_method_swap, jni_activity_method_toggle_keyboard, jni_activity_method_write_internal_file, jni_activity_method_play_music, jni_activity_method_play_background_music, jni_gplus_method_write, jni_gplus_method_write_with_retry, jni_throwable_method_get_cause, jni_throwable_method_get_stack_trace, jni_throwable_method_tostring, jni_frame_method_tostring;
-
-int jni_activity_width=0, jni_activity_height=0;
-
 #include <android/log.h>
-#define INFOf(fmt, ...) __android_log_print(ANDROID_LOG_INFO, "lfjni", fmt, __VA_ARGS__)
+
+using std::string;
+
 #define CHECK(x) if (!(x)) { __android_log_print(ANDROID_LOG_ERROR, "lfjni", "%s", #x); *((int*)0)=0; }
 
 #define ACTION_DOWN         0
@@ -25,30 +22,22 @@ int jni_activity_width=0, jni_activity_height=0;
 #define ACTION_POINTER_DOWN 5
 #define ACTION_POINTER_UP   6
 
-struct Connection;
-struct Service;
-static Service *gplus_service = 0;
+JNIEnv *jni_env;
+jobject jni_activity,       jni_view,       jni_gplus;
+jclass  jni_activity_class, jni_view_class, jni_gplus_class, jni_throwable_class, jni_frame_class;
+jmethodID jni_view_method_swap, jni_activity_method_toggle_keyboard, jni_activity_method_write_internal_file, jni_activity_method_play_music, jni_activity_method_play_background_music, jni_gplus_method_write, jni_gplus_method_write_with_retry, jni_throwable_method_get_cause, jni_throwable_method_get_stack_trace, jni_throwable_method_tostring, jni_frame_method_tostring;
 
-extern bool run, FLAGS_swap_axis;
-extern int width, height, lfapp_opengles_version;
-extern void queue_key(int button, int down);
-extern void queue_mouse_click(int button, int down, int x, int y);
-extern int dispatch_queued_input();
-extern const char *basename(const char *text, int len=0, int *outlen=0);
-extern void CmdRun(const char *name, const char *arg);
-extern Connection *service_endpoint_connect(Service *svc, const char *name);
-extern void service_endpoint_read(Service *svc, const char *name, const char *buf, int len);
-extern void service_endpoint_close(Service *svc, const char *name);
+int jni_activity_width=0, jni_activity_height=0;
 
-extern int gui_gesture_swipe_up, gui_gesture_swipe_down, gui_gesture_tap[2], gui_gesture_dpad_stop[2];
-extern float gui_gesture_dpad_x[2], gui_gesture_dpad_y[2], gui_gesture_dpad_dx[2], gui_gesture_dpad_dy[2];
+static NativeWindow *screen;
+static void *gplus_service;
 
 extern "C" int main(int argc, const char **argv);
 
 extern "C" jint JNI_OnLoad(JavaVM* vm, void* reserved) { INFOf("%s", "OnLoad"); return JNI_VERSION_1_4; }
 extern "C" void Java_com_lucidfusionlabs_lfjava_Activity_shutdown(JNIEnv* env, jclass c) {
     INFOf("%s", "shutdown");
-    run = false;
+    LFAppShutdown();
 }
 extern "C" void Java_com_lucidfusionlabs_lfjava_Activity_main(JNIEnv *e, jclass c, jobject a) {
     CHECK(jni_env = e); jfieldID fid;
@@ -79,65 +68,68 @@ extern "C" void Java_com_lucidfusionlabs_lfjava_Activity_main(JNIEnv *e, jclass 
 
     CHECK(jni_frame_class = jni_env->FindClass("java/lang/StackTraceElement"));
     CHECK(jni_frame_method_tostring = jni_env->GetMethodID(jni_frame_class, "toString", "()Ljava/lang/String;"));
+    CHECK(screen = GetNativeWindow());
 
     int argc=1; const char *argv[2] = { "lfjni", 0 };
     int ret = main(argc, argv);
     INFOf("main: env=%p ret=%d", jni_env, ret);
 }
 extern "C" void Java_com_lucidfusionlabs_lfjava_Activity_resize(JNIEnv *e, jclass c, jint w, jint h) { jni_activity_width = w; jni_activity_height = h; }
-extern "C" void Java_com_lucidfusionlabs_lfjava_Activity_key(JNIEnv *e, jclass c, jint down, jint keycode) { queue_key(keycode, down); }
+extern "C" void Java_com_lucidfusionlabs_lfjava_Activity_key(JNIEnv *e, jclass c, jint down, jint keycode) { KeyPress(keycode, down); }
 extern "C" void Java_com_lucidfusionlabs_lfjava_Activity_touch(JNIEnv *e, jclass c, jint action, jfloat x, jfloat y, jfloat p) {
     static float lx[2]={0,0}, ly[2]={0,0};
-    int dpind = FLAGS_swap_axis ? y < width/2 : x < width/2;
+    int dpind = (/*FLAGS_swap_axis*/ 0) ? y < screen->width/2 : x < screen->width/2;
     if (action == ACTION_DOWN || action == ACTION_POINTER_DOWN) {
         // INFOf("%d down %f, %f", dpind, x, y);
-        queue_mouse_click(1, 1, (int)x, (int)y);
-        gui_gesture_tap[dpind] = 1;
-        gui_gesture_dpad_x[dpind] = x;
-        gui_gesture_dpad_y[dpind] = y;
+        MouseClick(1, 1, (int)x, (int)y);
+        screen->gesture_tap[dpind] = 1;
+        screen->gesture_dpad_x[dpind] = x;
+        screen->gesture_dpad_y[dpind] = y;
         lx[dpind] = x;
         ly[dpind] = y;
     } else if (action == ACTION_UP || action == ACTION_POINTER_UP) {
         // INFOf("%d up %f, %f", dpind, x, y);
-        queue_mouse_click(1, 0, (int)x, (int)y);
-        gui_gesture_dpad_stop[dpind] = 1;
-        gui_gesture_dpad_x[dpind] = 0;
-        gui_gesture_dpad_y[dpind] = 0;
+        MouseClick(1, 0, (int)x, (int)y);
+        screen->gesture_dpad_stop[dpind] = 1;
+        screen->gesture_dpad_x[dpind] = 0;
+        screen->gesture_dpad_y[dpind] = 0;
     } else if (action == ACTION_MOVE) {
         float vx = x - lx[dpind]; lx[dpind] = x;
         float vy = y - ly[dpind]; ly[dpind] = y;
         // INFOf("%d move %f, %f vel = %f, %f", dpind, x, y, vx, vy);
         if (vx > 1.5 || vx < -1.5 || vy > 1.5 || vy < -1.5) {
-            gui_gesture_dpad_dx[dpind] = vx;
-            gui_gesture_dpad_dy[dpind] = vy;
+            screen->gesture_dpad_dx[dpind] = vx;
+            screen->gesture_dpad_dy[dpind] = vy;
         }
-        gui_gesture_dpad_x[dpind] = x;
-        gui_gesture_dpad_y[dpind] = y;
+        screen->gesture_dpad_x[dpind] = x;
+        screen->gesture_dpad_y[dpind] = y;
     } else INFOf("unhandled action %d", action);
 } 
 extern "C" void Java_com_lucidfusionlabs_lfjava_Activity_fling(JNIEnv *e, jclass c, jfloat x, jfloat y, jfloat vx, jfloat vy) {
-    int dpind = y < width/2;
-    gui_gesture_dpad_dx[dpind] = vx;
-    gui_gesture_dpad_dy[dpind] = vy;
-    INFOf("fling(%f, %f) = %d of (%d, %d) and vel = (%f, %f)", x, y, dpind, width, height, vx, vy);
+    int dpind = y < screen->width/2;
+    screen->gesture_dpad_dx[dpind] = vx;
+    screen->gesture_dpad_dy[dpind] = vy;
+    INFOf("fling(%f, %f) = %d of (%d, %d) and vel = (%f, %f)", x, y, dpind, screen->width, screen->height, vx, vy);
 }
 extern "C" void Java_com_lucidfusionlabs_lfjava_Activity_scroll(JNIEnv *e, jclass c, jfloat x, jfloat y, jfloat vx, jfloat vy) {
-    gui_gesture_swipe_up = gui_gesture_swipe_down = 0;
+    screen->gesture_swipe_up = screen->gesture_swipe_down = 0;
 }
 extern "C" void Java_com_lucidfusionlabs_lfjava_Activity_accel(JNIEnv *e, jclass c, jfloat x, jfloat y, jfloat z) {}
 
 extern "C" void Java_com_lucidfusionlabs_lfjava_GPlusClient_startGame(JNIEnv *e, jclass c, jboolean server, jstring pid) {
+    char buf[128];
     const char *participant_id = e->GetStringUTFChars(pid, 0);
-    CmdRun(server ? "gplus_server" : "gplus_client", participant_id);
+    snprintf(buf, sizeof(buf), "%s %s", server ? "gplus_server" : "gplus_client", participant_id);
+    ShellRun(buf);
     e->ReleaseStringUTFChars(pid, participant_id);
 }
 extern "C" void Java_com_lucidfusionlabs_lfjava_GPlusClient_read(JNIEnv *e, jclass c, jstring pid, jobject bb, jint len) {
     const char *participant_id = e->GetStringUTFChars(pid, 0);
-    if (gplus_service) service_endpoint_read(gplus_service, participant_id, (const char*)e->GetDirectBufferAddress(bb), len);
+    if (gplus_service) EndpointRead(gplus_service, participant_id, (const char*)e->GetDirectBufferAddress(bb), len);
     e->ReleaseStringUTFChars(pid, participant_id);
 }
 
-void android_exception_log(jthrowable &exception) {
+void AndroidExceptionLog(jthrowable &exception) {
     jobjectArray frames = (jobjectArray)jni_env->CallObjectMethod(exception, jni_throwable_method_get_stack_trace);
     jsize frames_length = jni_env->GetArrayLength(frames);
     string out;
@@ -161,50 +153,44 @@ void android_exception_log(jthrowable &exception) {
     }
     if (frames > 0) {
         jthrowable cause = (jthrowable)jni_env->CallObjectMethod(exception, jni_throwable_method_get_cause);
-        if (cause) android_exception_log(cause);
+        if (cause) AndroidExceptionLog(cause);
     }  
 #endif
-    INFOf("android_exception: %s", out.c_str());
+    INFOf("AndroidException: %s", out.c_str());
 }
 
-int android_exception() {
+int AndroidException() {
     jthrowable exception = jni_env->ExceptionOccurred();
     if (!exception) return 0;
     jni_env->ExceptionClear();
-    android_exception_log(exception);
+    AndroidExceptionLog(exception);
     return -1;
 }
 
-int android_video_init(int gles_version) {
+extern "C" int AndroidVideoInit(int gles_version) {
     INFOf("%s", "android_video_init");
-    width = jni_activity_width;
-    height = jni_activity_height;
+    screen->width = jni_activity_width;
+    screen->height = jni_activity_height;
     const char *method_name = (gles_version == 2 ? "initEGL2" : "initEGL1");
     jmethodID mid; CHECK(mid = jni_env->GetMethodID(jni_view_class, method_name, "()I"));
     int ret = jni_env->CallIntMethod(jni_view, mid);
     if (ret < 0) return ret;
 
-    lfapp_opengles_version = ret;
+    screen->opengles_version = ret;
     return 0;
 }
 
-int android_video_swap() {
+extern "C" int AndroidVideoSwap() {
     jni_env->CallVoidMethod(jni_view, jni_view_method_swap);
     return 0;
 }
 
-int android_input(unsigned clicks, unsigned *events) {
-    int ret = dispatch_queued_input();
-    if (events) *events = ret;
-    return 0;
-}
-
-int android_toggle_keyboard() {
+extern "C" int AndroidToggleKeyboard() {
     jni_env->CallVoidMethod(jni_activity, jni_activity_method_toggle_keyboard);
     return 0;
 }
 
-int android_internal_read(const char *fn, char **out, int *size) {
+extern "C" int AndroidInternalRead(const char *fn, char **out, int *size) {
     jmethodID mid; jobject bytes;
     CHECK(mid = jni_env->GetMethodID(jni_activity_class, "sizeInternalFile", "(Ljava/lang/String;)I"));
     jstring jfn = jni_env->NewStringUTF(fn);
@@ -217,7 +203,7 @@ int android_internal_read(const char *fn, char **out, int *size) {
     return 0;
 }
 
-void *android_internal_open_writer(const char *fn) {
+extern "C" void *AndroidInternalOpenWriter(const char *fn) {
     jmethodID mid; jstring jfn = jni_env->NewStringUTF(fn);
     CHECK(mid = jni_env->GetMethodID(jni_activity_class, "openInternalFileWriter", "(Ljava/lang/String;)Ljava/io/FileOutputStream;"));
     jobject handle = jni_env->CallObjectMethod(jni_activity, mid, jfn);
@@ -225,7 +211,7 @@ void *android_internal_open_writer(const char *fn) {
     return handle;
 }
 
-int android_internal_write(void *ifw, const char *b, int l) {
+extern "C" int AndroidInternalWrite(void *ifw, const char *b, int l) {
     jobject handle = (jobject)ifw;
     jobject bytes = jni_env->NewDirectByteBuffer((void*)b, l);
     jni_env->CallVoidMethod(jni_activity, jni_activity_method_write_internal_file, handle, bytes, l);
@@ -233,13 +219,13 @@ int android_internal_write(void *ifw, const char *b, int l) {
     return 0;
 }
 
-void android_internal_close_writer(void *ifw) {
+extern "C" void AndroidInternalCloseWriter(void *ifw) {
     jmethodID mid; jobject handle = (jobject)ifw;
     CHECK(mid = jni_env->GetMethodID(jni_activity_class, "closeInternalFileWriter", "(Ljava/io/FileOutputStream;)V"));
     jni_env->CallVoidMethod(jni_activity, mid, handle);
 }
 
-int android_file_read(const char *fn, char **out, int *size) {
+extern "C" int AndroidFileRead(const char *fn, char **out, int *size) {
     jmethodID mid; jstring jfn = jni_env->NewStringUTF(fn);
     CHECK(mid = jni_env->GetMethodID(jni_activity_class, "getAssets", "()Landroid/content/res/AssetManager;"));
     jobject assets = jni_env->CallObjectMethod(jni_activity, mid);
@@ -250,13 +236,13 @@ int android_file_read(const char *fn, char **out, int *size) {
     jni_env->DeleteLocalRef(jfn);
     jni_env->DeleteLocalRef(assets);
     jni_env->DeleteLocalRef(assets_class);
-    if (!input || android_exception()) return -1;
+    if (!input || AndroidException()) return -1;
     jclass input_class = jni_env->GetObjectClass(input);
 
     CHECK(mid = jni_env->GetMethodID(input_class, "available", "()I"));
     *size = jni_env->CallIntMethod(input, mid);
     jni_env->DeleteLocalRef(input_class);
-    if (android_exception()) { jni_env->DeleteLocalRef(input); return -1; }
+    if (AndroidException()) { jni_env->DeleteLocalRef(input); return -1; }
     if (!*size) { jni_env->DeleteLocalRef(input); *out=(char*)""; return 0; }
 
     jclass channels = jni_env->FindClass("java/nio/channels/Channels");
@@ -274,13 +260,13 @@ int android_file_read(const char *fn, char **out, int *size) {
     jni_env->DeleteLocalRef(readable_class);
     jni_env->DeleteLocalRef(bytes);
 
-    if (ret != *size || android_exception()) return -1;
+    if (ret != *size || AndroidException()) return -1;
     return 0;
 }
 
-void *android_load_music_asset(const char *fp) {
+extern "C" void *AndroidLoadMusicAsset(const char *fp) {
     char fn[1024];
-    snprintf(fn, sizeof(fn), "%s", basename(fp,0,0));
+    snprintf(fn, sizeof(fn), "%s", basename(fp));
     char *suffix = strchr(fn, '.');
     if (suffix) *suffix = 0;
     jmethodID mid; jstring jfn = jni_env->NewStringUTF(fn);
@@ -290,33 +276,33 @@ void *android_load_music_asset(const char *fp) {
     return handle;
 }
 
-void android_play_music(void *h) {
+extern "C" void AndroidPlayMusic(void *h) {
     jobject handle = (jobject)h;
     jni_env->CallVoidMethod(jni_activity, jni_activity_method_play_music, handle);
 }  
 
-void android_play_background_music(void *h) {
+extern "C" void AndroidPlayBackgroundMusic(void *h) {
     jobject handle = (jobject)h;
     jni_env->CallVoidMethod(jni_activity, jni_activity_method_play_background_music, handle);
 }
 
-void android_set_volume(int v) {
+extern "C" void AndroidSetVolume(int v) {
     jmethodID mid; jint jv = v;
     CHECK(mid = jni_env->GetMethodID(jni_activity_class, "setVolume", "(I)V"));
     return jni_env->CallVoidMethod(jni_activity, mid, jv);
 }
 
-int android_get_volume() {
+extern "C" int AndroidGetVolume() {
     jmethodID mid; CHECK(mid = jni_env->GetMethodID(jni_activity_class, "getVolume", "()I"));
     return jni_env->CallIntMethod(jni_activity, mid);
 }
 
-int android_get_max_volume() {
+extern "C" int AndroidGetMaxVolume() {
     jmethodID mid; CHECK(mid = jni_env->GetMethodID(jni_activity_class, "maxVolume", "()I"));
     return jni_env->CallIntMethod(jni_activity, mid);
 }
 
-int android_device_name(char *out, int size) {
+extern "C" int AndroidDeviceName(char *out, int size) {
     out[0] = 0;
     jmethodID mid;
     CHECK(mid = jni_env->GetMethodID(jni_activity_class, "getModelName", "()Ljava/lang/String;"));
@@ -327,72 +313,72 @@ int android_device_name(char *out, int size) {
     return strlen(out);
 }
 
-int android_ipv4_address() {
+extern "C" int AndroidIPV4Address() {
     jmethodID mid;
     CHECK(mid = jni_env->GetMethodID(jni_activity_class, "getAddress", "()I"));
     return jni_env->CallIntMethod(jni_activity, mid);
 }
 
-int android_ipv4_broadcast_address() {
+extern "C" int AndroidIPV4BroadcastAddress() {
     jmethodID mid;
     CHECK(mid = jni_env->GetMethodID(jni_activity_class, "getBroadcastAddress", "()I"));
     return jni_env->CallIntMethod(jni_activity, mid);
 }
 
-void android_open_browser(const char *url) {
+extern "C" void AndroidOpenBrowser(const char *url) {
     jmethodID mid; jstring jurl = jni_env->NewStringUTF(url);
     CHECK(mid = jni_env->GetMethodID(jni_activity_class, "openBrowser", "(Ljava/lang/String;)V"));
     jni_env->CallVoidMethod(jni_activity, mid, jurl);
     jni_env->DeleteLocalRef(jurl);
 }
 
-void android_show_ads() {
+extern "C" void AndroidShowAds() {
     jmethodID mid; CHECK(mid = jni_env->GetMethodID(jni_activity_class, "showAds", "()V"));
     jni_env->CallVoidMethod(jni_activity, mid);
 }
 
-void android_hide_ads() {
+extern "C" void AndroidHideAds() {
     jmethodID mid; CHECK(mid = jni_env->GetMethodID(jni_activity_class, "hideAds", "()V"));
     jni_env->CallVoidMethod(jni_activity, mid);
 }
 
-void android_gplus_signin() {
+extern "C" void AndroidGPlusSignin() {
     jmethodID mid; CHECK(mid = jni_env->GetMethodID(jni_gplus_class, "signIn", "()V"));
     jni_env->CallVoidMethod(jni_gplus, mid);
 }
 
-void android_gplus_signout() {
+extern "C" void AndroidGPlusSignout() {
     jmethodID mid; CHECK(mid = jni_env->GetMethodID(jni_gplus_class, "signOut", "()V"));
     jni_env->CallVoidMethod(jni_gplus, mid);
 }
 
-int android_gplus_signedin() {
+extern "C" int AndroidGPlusSignedin() {
     jmethodID mid; CHECK(mid = jni_env->GetMethodID(jni_gplus_class, "signedIn", "()Z"));
     return jni_env->CallBooleanMethod(jni_gplus, mid);
 }
 
-int android_gplus_quick_game() {
+extern "C" int AndroidGPlusQuickGame() {
     jmethodID mid; CHECK(mid = jni_env->GetMethodID(jni_gplus_class, "quickGame", "()V"));
     jni_env->CallVoidMethod(jni_gplus, mid);
     return 0;
 }
 
-int android_gplus_invite() {
+extern "C" int AndroidGPlusInvite() {
     jmethodID mid; CHECK(mid = jni_env->GetMethodID(jni_gplus_class, "inviteGUI", "()V"));
     jni_env->CallVoidMethod(jni_gplus, mid);
     return 0;
 }
 
-int android_gplus_accept() {
+extern "C" int AndroidGPlusAccept() {
     jmethodID mid; CHECK(mid = jni_env->GetMethodID(jni_gplus_class, "acceptGUI", "()V"));
     jni_env->CallVoidMethod(jni_gplus, mid);
     return 0;
 }
 
-void android_gplus_service(Service *s) { gplus_service = s; }
+extern "C" void AndroidGPlusService(void *s) { gplus_service = s; }
 
-int android_gplus_send_unreliable(const char *participantName, const char *buf, int len) {
-    jstring pn = jni_env->NewStringUTF(participantName);
+extern "C" int AndroidGPlusSendUnreliable(const char *participant_name, const char *buf, int len) {
+    jstring pn = jni_env->NewStringUTF(participant_name);
     jobject bytes = jni_env->NewDirectByteBuffer((void*)buf, len);
     jni_env->CallVoidMethod(jni_gplus, jni_gplus_method_write, pn, bytes);
     jni_env->DeleteLocalRef(bytes);
@@ -400,8 +386,8 @@ int android_gplus_send_unreliable(const char *participantName, const char *buf, 
     return 0;
 }
 
-int android_gplus_send_reliable(const char *participantName, const char *buf, int len) {
-    jstring pn = jni_env->NewStringUTF(participantName);
+extern "C" int AndroidGPlusSendReliable(const char *participant_name, const char *buf, int len) {
+    jstring pn = jni_env->NewStringUTF(participant_name);
     jobject bytes = jni_env->NewDirectByteBuffer((void*)buf, len);
     jni_env->CallVoidMethod(jni_gplus, jni_gplus_method_write_with_retry, pn, bytes);
     jni_env->DeleteLocalRef(bytes);

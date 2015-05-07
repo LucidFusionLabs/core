@@ -182,7 +182,7 @@ DEFINE_float(far_plane, 100, "Far clipping plane");
 DEFINE_int(dots_per_inch, 75, "Screen DPI");
 DEFINE_bool(swap_axis, false," Swap x,y axis");
 
-#if LFL_MOBILE
+#ifdef LFL_MOBILE
 const int Texture::preferred_pf = Pixel::RGBA;
 #else
 const int Texture::preferred_pf = Pixel::BGRA;
@@ -211,14 +211,17 @@ const int GraphicsDevice::One              = GL_ONE;
 const int GraphicsDevice::SrcAlpha         = GL_SRC_ALPHA;
 const int GraphicsDevice::OneMinusSrcAlpha = GL_ONE_MINUS_SRC_ALPHA;
 const int GraphicsDevice::OneMinusDstColor = GL_ONE_MINUS_DST_COLOR;
-const int GraphicsDevice::Fill             = GL_FILL;
-const int GraphicsDevice::Line             = GL_LINE;
-const int GraphicsDevice::Point            = GL_POINT;
 
-#if LFL_MOBILE
+#ifdef LFL_MOBILE
+const int GraphicsDevice::Fill              = 0;
+const int GraphicsDevice::Line              = 0;
+const int GraphicsDevice::Point             = 0;
 const int GraphicsDevice::GLPreferredBuffer = GL_UNSIGNED_BYTE;
 const int GraphicsDevice::GLInternalFormat  = GL_RGBA;
 #else
+const int GraphicsDevice::Fill              = GL_FILL;
+const int GraphicsDevice::Line              = GL_LINE;
+const int GraphicsDevice::Point             = GL_POINT;
 const int GraphicsDevice::GLPreferredBuffer = GL_UNSIGNED_INT_8_8_8_8_REV;
 const int GraphicsDevice::GLInternalFormat  = GL_RGBA;
 #endif
@@ -981,6 +984,9 @@ struct AndroidVideoModule : public Module {
         return 0;
     }
 };
+bool Window::Create(Window *W) { return true; }
+void Window::Close(Window *W) {}
+void Window::MakeCurrent(Window *W) {}
 #endif
 
 #ifdef LFL_IPHONEVIDEO
@@ -993,6 +999,9 @@ struct IPhoneVideoModule : public Module {
         return 0;
     }
 };
+bool Window::Create(Window *W) { return true; }
+void Window::Close(Window *W) {}
+void Window::MakeCurrent(Window *W) {}
 #endif
 
 #ifdef LFL_OSXVIDEO
@@ -1026,6 +1035,20 @@ void Window::Close(Window *W) {
     // OSXDestroyWindow(W->id);
     screen = 0;
 }
+#endif
+
+#ifdef LFL_LINUXVIDEO
+struct LinuxVideoModule : public Module {
+    int Init() {
+        INFO("LinuxVideoModule::Init()");
+        // NativeWindowInit();
+        // NativeWindowSize(&screen->width, &screen->height);
+        return 0;
+    }
+};
+bool Window::Create(Window *W) { return true; }
+void Window::Close(Window *W) {}
+void Window::MakeCurrent(Window *W) {}
 #endif
 
 #ifdef LFL_QT
@@ -1311,6 +1334,8 @@ int Video::Init() {
     impl = new IPhoneVideoModule();
 #elif defined(LFL_OSXVIDEO)
     impl = new OSXVideoModule();
+#elif defined(LFL_LINUXVIDEO)
+    impl = new LinuxVideoModule();
 #endif
     if (impl) if (impl->Init()) return -1;
 
@@ -1538,9 +1563,11 @@ int Pixel::size(int p) {
 int Pixel::OpenGLID(int p) {
     switch (p) {
         case RGBA:   case RGB32: return GL_RGBA;
-        case BGRA:   case BGR32: return GL_BGRA;
         case RGB24:              return GL_RGB;
+#ifndef LFL_MOBILE
+        case BGRA:   case BGR32: return GL_BGRA;
         case BGR24:              return GL_BGR;
+#endif
         case GRAYA8:             return GL_LUMINANCE_ALPHA;
         case GRAY8:              return GL_LUMINANCE;
         default:                 return -1;
@@ -1951,6 +1978,7 @@ void Texture::UpdateGL(const unsigned char *B, const ::LFL::Box &box, int flag) 
 }
 
 void Texture::DumpGL(unsigned tex_id) {
+#ifndef LFL_MOBILE
     if (tex_id) {
         GLint gl_tt = GLTexType(), tex_w = 0, tex_h = 0;
         screen->gd->BindTexture(gl_tt, tex_id);
@@ -1961,6 +1989,7 @@ void Texture::DumpGL(unsigned tex_id) {
     }
     RenewBuffer();
     glGetTexImage(GLTexType(), 0, GLPixelType(), GLBufferType(), buf);
+#endif
 }
 
 void Texture::ToIplImage(_IplImage *out) {
@@ -2045,9 +2074,9 @@ void FrameBuffer::AllocTexture     (     Texture *out) { CHECK_EQ(out->ID, 0); o
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 }
 
-void FrameBuffer::Release() { glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0); }
+void FrameBuffer::Release() { glBindFramebuffer(GL_FRAMEBUFFER, 0); }
 void FrameBuffer::Attach(int ct, int dt) {
-    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, ID);
+    glBindFramebuffer(GL_FRAMEBUFFER, ID);
     if (ct) {
         tex.ID = ct;
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tex.ID, 0);

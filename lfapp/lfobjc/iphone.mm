@@ -32,24 +32,24 @@
 #import <OpenGLES/ES1/glext.h>
 #import <QuartzCore/QuartzCore.h>
 #import "EAGLView.h"
-
 #ifndef LFL_IPHONESIM 
-#import <AVFoundation/AVFoundation.h>  /* IOS4+ only */
-/* AVFoundation Class Reference: http://developer.apple.com/library/ios/#documentation/AVFoundation/Reference/AVCaptureSession_Class/Reference/Reference.html */
+#import <AVFoundation/AVFoundation.h>
 #endif // LFL_IPHONESIM
 
 struct IPhoneKeyCode { enum { Backspace = 8, Return = 10 }; };
-extern "C" int iPhoneMain(int argc, const char **argv);
-
-static int iphone_argc = 0, iphone_evcount = 0;
 static const char **iphone_argv = 0;
-static NSString *documentsDirectory = nil;
+static int iphone_argc = 0, iphone_evcount = 0;
+static NSString *iphone_documents_directory = nil;
+extern "C" int iPhoneMain(int argc, const char **argv);
 
 // LFUIView
 @interface LFUIView : UIView {}
 @end
 
 @implementation LFUIView
+    {
+        NativeWindow *screen;
+    }
     - (void)touchesBegan:(NSSet *)touches withEvent:(UIEvent *)event {
         UITouch *touch = [touches anyObject];
         UIView *view = [touch view];
@@ -59,9 +59,9 @@ static NSString *documentsDirectory = nil;
             position.x += view.frame.origin.x;
             position.y += view.frame.origin.y;
         }
-        gui_gesture_dpad_x[dpind] = position.x;
-        gui_gesture_dpad_y[dpind] = position.y;
-        click(1, 1, (int)position.x, (int)position.y);
+        screen->gesture_dpad_x[dpind] = position.x;
+        screen->gesture_dpad_y[dpind] = position.y;
+        MouseClick(1, 1, (int)position.x, (int)position.y);
     }
     - (void)touchesCancelled:(NSSet *)touches withEvent:(UIEvent *)event {}
     - (void)touchesEnded:(NSSet *)touches withEvent:(UIEvent *)event {
@@ -73,10 +73,10 @@ static NSString *documentsDirectory = nil;
             position.x += view.frame.origin.x;
             position.y += view.frame.origin.y;
         }
-        gui_gesture_dpad_stop[dpind] = 1;
-        gui_gesture_dpad_x[dpind] = 0;
-        gui_gesture_dpad_y[dpind] = 0;
-        click(1, 0, (int)position.x, (int)position.y);
+        screen->gesture_dpad_stop[dpind] = 1;
+        screen->gesture_dpad_x[dpind] = 0;
+        screen->gesture_dpad_y[dpind] = 0;
+        MouseClick(1, 0, (int)position.x, (int)position.y);
     }
     - (void)touchesMoved:(NSSet *)touches withEvent:(UIEvent *)event {
         UITouch *touch = [touches anyObject];
@@ -87,8 +87,8 @@ static NSString *documentsDirectory = nil;
             position.x += view.frame.origin.x;
             position.y += view.frame.origin.y;
         }
-        gui_gesture_dpad_x[dpind] = position.x;
-        gui_gesture_dpad_y[dpind] = position.y;
+        screen->gesture_dpad_x[dpind] = position.x;
+        screen->gesture_dpad_y[dpind] = position.y;
     }
 @end
 
@@ -99,18 +99,19 @@ static NSString *documentsDirectory = nil;
 @implementation LFViewController
     - (BOOL)textField: (UITextField *)textField shouldChangeCharactersInRange:(NSRange)range replacementString:(NSString *)string {
         int l = [string length];
-        if (!l) handleKey(IPhoneKeyCode::Backspace);
+        if (!l) [self handleKey:IPhoneKeyCode::Backspace];
         for (int i = 0, l = [string length]; i < l; i++) {
             unichar k = [string characterAtIndex: i];
-            handleKey(k);
+            [self handleKey: k];
         }
+        return YES;
     }
     - (BOOL)textFieldShouldReturn: (UITextField *)textField {
-        handleKey(IPhoneKeyCode::Return);
+        [self handleKey:IPhoneKeyCode::Return];
         [textField resignFirstResponder];
         return YES;
     }
-    - (void)handleKey: (int)k { key(k, 1, 0, 0); key(k, 0, 0, 0); iphone_evcount++; }
+    - (void)handleKey: (int)k { KeyPress(k, 1); KeyPress(k, 0); iphone_evcount++; }
 @end
 
 // LFUIApplication
@@ -185,24 +186,27 @@ static NSString *documentsDirectory = nil;
     - (void)showKeyboard { [self.textField becomeFirstResponder]; }
 @end
 
-@interface LFApp : NSObject { }
+@interface LFApplication : NSObject { }
     - (int) orientation;
     - (id) init;
-    + (LFApp *) sharedApp;
+    + (LFApplication *) sharedApp;
     - (void) initNotifications;
     - (void) shutdownNotifications;
     - (void) initGestureRecognizers;
     - (void) shutdownGestureRecognizers;
 @end
 
-@implementation LFApp
-    static LFApp *gLFapp = nil;
-    static int currentOrientation = 0;
-
+@implementation LFApplication
+    {
+        int current_orientation;
+        NativeWindow *screen;
+    }
+    static LFApplication *gLFapp = 0;
     - (id) init {
         fprintf(stderr, "LFApp init\n");
         self = [super init];
         if (!self) return nil;
+        screen = GetNativeWindow();
         [self initNotifications];
         [self initGestureRecognizers];
         return self;
@@ -217,10 +221,10 @@ static NSString *documentsDirectory = nil;
         fprintf(stderr, "shutdown LFApp\n");
         if (gLFapp != nil) { [gLFapp release]; gLFapp = nil; }
     }
-    + (LFApp*) sharedApp {
+    + (LFApplication*) sharedApp {
         if (gLFapp == nil) {
             fprintf(stderr, "sharedApp alloc/init LFApp\n");
-            gLFapp = [[[LFApp alloc] init] retain];
+            gLFapp = [[[LFApplication alloc] init] retain];
         }
         return gLFapp;
     }
@@ -230,14 +234,15 @@ static NSString *documentsDirectory = nil;
         [[NSNotificationCenter defaultCenter] removeObserver:self name:@"UIDeviceOrientationDidChangeNotification" object:nil]; 
     }
     - (void) orientationChanged: (id)sender {
-        fprintf(stderr, "notification of new orientation: %d -> %d \n", currentOrientation, [[UIDevice currentDevice] orientation]);
-        currentOrientation = [[UIDevice currentDevice] orientation];
+        fprintf(stderr, "notification of new orientation: %d -> %d \n", current_orientation, [[UIDevice currentDevice] orientation]);
+        current_orientation = [[UIDevice currentDevice] orientation];
     }
     - (int) orientation {
-        fprintf(stderr, "status bar orientation: %d -> %d\n", currentOrientation, [[UIApplication sharedApplication] statusBarOrientation]);
-        currentOrientation = [[UIApplication sharedApplication] statusBarOrientation];
-        return currentOrientation;
+        fprintf(stderr, "status bar orientation: %d -> %d\n", current_orientation, [[UIApplication sharedApplication] statusBarOrientation]);
+        current_orientation = [[UIApplication sharedApplication] statusBarOrientation];
+        return current_orientation;
     }
+    - (int) getOrientation { return current_orientation; }
     - (void) initNotifications {
         fprintf(stderr, "init notifications\n");
         [[UIDevice currentDevice] beginGeneratingDeviceOrientationNotifications]; 
@@ -286,17 +291,17 @@ static NSString *documentsDirectory = nil;
         for (int i = 0; i < [gestures count]; i++)
             [window removeGestureRecognizer:[gestures objectAtIndex:i]];
     }
-    - (void) doubleSwipeUp:   (id)sender { gui_gesture_swipe_up   = 1; }
-    - (void) doubleSwipeDown: (id)sender { gui_gesture_swipe_down = 1; }
+    - (void) doubleSwipeUp:   (id)sender { screen->gesture_swipe_up   = 1; }
+    - (void) doubleSwipeDown: (id)sender { screen->gesture_swipe_down = 1; }
     - (void) tapGesture: (UITapGestureRecognizer *)tapGestureRecognizer {
         UIView *view = [tapGestureRecognizer view];
         CGPoint position = [tapGestureRecognizer locationInView:view];
         int dpind = view.frame.origin.y == 0;
 
-        click(1, 1, (int)position.x, (int)position.y);
-        gui_gesture_tap[dpind] = 1;
-        gui_gesture_dpad_x[dpind] = position.x;
-        gui_gesture_dpad_y[dpind] = position.y;
+        MouseClick(1, 1, (int)position.x, (int)position.y);
+        screen->gesture_tap[dpind] = 1;
+        screen->gesture_dpad_x[dpind] = position.x;
+        screen->gesture_dpad_y[dpind] = position.y;
     }
     - (void) panGesture: (UIPanGestureRecognizer *)panGestureRecognizer {
         UIView *view = [panGestureRecognizer view];
@@ -306,8 +311,8 @@ static NSString *documentsDirectory = nil;
             // CGPoint velocity = [panGestureRecognizer translationInView:view];
             CGPoint velocity = [panGestureRecognizer velocityInView:view];
             if (fabs(velocity.x) > 15 || fabs(velocity.y) > 15) {
-                gui_gesture_dpad_dx[dpind] = velocity.x;
-                gui_gesture_dpad_dy[dpind] = velocity.y;
+                screen->gesture_dpad_dx[dpind] = velocity.x;
+                screen->gesture_dpad_dy[dpind] = velocity.y;
             }
             // CGPoint position = [panGestureRecognizer locationInView:view];
             CGPoint position = [panGestureRecognizer locationOfTouch:0 inView:view];
@@ -315,15 +320,15 @@ static NSString *documentsDirectory = nil;
                 position.x += view.frame.origin.x;
                 position.y += view.frame.origin.y;
             }
-            gui_gesture_dpad_x[dpind] = position.x;
-            gui_gesture_dpad_y[dpind] = position.y;
+            screen->gesture_dpad_x[dpind] = position.x;
+            screen->gesture_dpad_y[dpind] = position.y;
             // fprintf(stderr, "gest %f %f %f %f\n", position.x, position.y, velocity.x, velocity.y);
             // fprintf(stderr, "origin %f %f \n", view.frame.origin.x, view.frame.origin.y);
         }
         else if (panGestureRecognizer.state == UIGestureRecognizerStateEnded) {
-            gui_gesture_dpad_stop[dpind] = 1;
-            gui_gesture_dpad_x[dpind] = 0;
-            gui_gesture_dpad_y[dpind] = 0;
+            screen->gesture_dpad_stop[dpind] = 1;
+            screen->gesture_dpad_x[dpind] = 0;
+            screen->gesture_dpad_y[dpind] = 0;
             // CGPoint position = [panGestureRecognizer locationInView:view];
             // fprintf(stderr, "gest %f %f stop\n", position.x, position.y);
         }
@@ -331,11 +336,11 @@ static NSString *documentsDirectory = nil;
 @end
 
 extern "C" void NativeWindowInit() {
-    LFApp *lfApp = [LFApp sharedApp];
+    LFApplication *lfApp = [LFApplication sharedApp];
 }
 
 extern "C" void NativeWindowQuit() {
-    if (documentsDirectory != nil) { [documentsDirectory release]; documentsDirectory = nil; }
+    if (iphone_documents_directory != nil) { [iphone_documents_directory release]; iphone_documents_directory = nil; }
 }
 
 extern "C" void NativeWindowSize(int *width, int *height) {
@@ -345,7 +350,7 @@ extern "C" void NativeWindowSize(int *width, int *height) {
     *height = rect.size.height;
 }
 
-extern "C" int NativeWindowOrientation() { return currentOrientation; }
+extern "C" int NativeWindowOrientation() { return [[LFApplication sharedApp] getOrientation]; }
 
 extern "C" int iPhoneVideoSwap() {
     [[LFUIApplication sharedAppDelegate] swapBuffers];
@@ -382,9 +387,9 @@ extern "C" void *iPhoneLoadMusicAsset(const char *filename) {
     NSError *error;
     NSString *fn = [NSString stringWithCString:filename encoding:NSASCIIStringEncoding];
     NSURL *url = [NSURL fileURLWithPath:[NSString stringWithFormat:@"%@/%@", [[NSBundle mainBundle] resourcePath], fn]];
-    AVAudioPlayer *audioPlayer = [[AVAudioPlayer alloc] initWithContentsOfURL:url error:&error];
-    if (audioPlayer == nil) NSLog([error description]);
-    return audioPlayer;
+    AVAudioPlayer *audio_player = [[AVAudioPlayer alloc] initWithContentsOfURL:url error:&error];
+    if (audio_player == nil) NSLog(@"%@", [error description]);
+    return audio_player;
 #endif // LFL_IPHONESIM
 }
 
@@ -400,11 +405,11 @@ extern "C" void iPhonePlayBackgroundMusic(void *handle) {
 }
 
 extern "C" char *iPhoneDocumentPath() {
-    if (documentsDirectory == nil) {
+    if (iphone_documents_directory == nil) {
         NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
-        documentsDirectory = [[paths objectAtIndex:0] copy];
+        iphone_documents_directory = [[paths objectAtIndex:0] copy];
     }
-    return strdup([documentsDirectory UTF8String]);
+    return strdup([iphone_documents_directory UTF8String]);
 }
 
 extern "C" int iPhoneReadDir(const char *path, int dirs,
@@ -427,9 +432,10 @@ extern "C" int iPhoneReadDir(const char *path, int dirs,
 }
 
 extern "C" int main(int ac, const char **av) {
-    iphone_argc = ac; iphone_argv = av;
+    iphone_argc = ac;
+    iphone_argv = av;
     NSAutoreleasePool * pool = [[NSAutoreleasePool alloc] init];
-    int ret = UIApplicationMain(iphone_argc, iphone_argv, nil, @"LFUIApplication");
+    int ret = UIApplicationMain(iphone_argc, (char**)iphone_argv, nil, @"LFUIApplication");
     [pool release];
     return ret;
 }

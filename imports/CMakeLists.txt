@@ -1,5 +1,49 @@
 # $Id: CMakeLists.txt 1325 2014-10-29 06:08:31Z justin $
 
+# Windows
+if(WIN32)
+INCLUDE_EXTERNAL_MSPROJECT(zlib ${CMAKE_CURRENT_SOURCE_DIR}/OpenCV/3rdparty/zlib/zlib.vcxproj)
+set(PLATFORM_LIB Ws2_32.lib Winmm.lib Dnsapi.lib opengl32.lib glu32.lib strmiids.lib zlib.lib)
+set(PLATFORM_DEF "-DGLEW_STATIC")
+endif(WIN32)
+
+# Mac
+if(CMAKE_SYSTEM_NAME MATCHES "Darwin")
+set(OPENGL_INCLUDE ${OPENGL_INCLUDE_DIR}/Headers ${CMAKE_CURRENT_SOURCE_DIR}/GL PARENT_SCOPE)
+set(PLATFORM_LIB "-framework Cocoa -framework CoreVideo -framework QTKit -lz -lbz2 -liconv")
+if(LFL_SDLINPUT)
+set(PLATFORM_LIB "${PLATFORM_LIB} -framework Carbon -framework IOKit -framework forcefeedback -framework CoreAudio -framework AudioUnit")
+endif(LFL_SDLINPUT)
+if(LFL_GLFWINPUT)
+set(PLATFORM_LIB "${PLATFORM_LIB} -framework IOKit")
+endif(LFL_GLFWINPUT)
+endif(CMAKE_SYSTEM_NAME MATCHES "Darwin")
+
+# Linux
+if(CMAKE_SYSTEM_NAME MATCHES "Linux")
+set(HAVE_SDLCONFIG 1)
+set(CUDA_LIB /usr/local/cuda/lib64/libcudart.so PARENT_SCOPE)
+set(PLATFORM_LIB "-lutil -lz -lpng -lpthread")
+if(NOT LFL_HEADLESS)
+set(PLATFORM_LIB "${PLATFORM_LIB} -lbz2") # -lasound")
+endif(NOT LFL_HEADLESS)
+if(LFL_GLFWINPUT)
+set(PLATFORM_LIB "${PLATFORM_LIB} -lXi -lXv -lXext -lX11 -lXxf86vm -lXrandr -lXcursor")
+endif(LFL_GLFWINPUT)
+endif(CMAKE_SYSTEM_NAME MATCHES "Linux")
+
+# iPhone 
+if(LFL_IPHONE)
+set(PLATFORM_LIB "-lz -framework Foundation -framework CoreText -framework CoreAudio -framework CoreGraphics -framework OpenGLES -framework UIKit -framework QuartzCore -framework AVFoundation")
+if(NOT LFL_IPHONESIM)
+set(PLATFORM_LIB "${PLATFORM_LIB} -framework CoreVideo -framework CoreMedia")
+endif()
+endif(LFL_IPHONE)
+
+# export platform
+set(PLATFORM_DEF ${PLATFORM_DEF} PARENT_SCOPE)
+set(PLATFORM_LIB ${PLATFORM_LIB} PARENT_SCOPE)
+
 # boost
 set(BOOST_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/boost PARENT_SCOPE)
 
@@ -110,16 +154,6 @@ set(FFMPEG_LIB ${CMAKE_CURRENT_SOURCE_DIR}/ffmpeg/libavdevice/libavdevice.a ${CM
 endif(WIN32)
 endif(LFL_FFMPEG)
 
-# iPhone imports
-if(LFL_IPHONE)
- return()
-endif(LFL_IPHONE)
-
-# Android imports
-if(LFL_ANDROID)
- return()
-endif(LFL_ANDROID)
-
 # CUDA
 if(LFL_CUDA)
 INCLUDE(${CMAKE_CURRENT_SOURCE_DIR}/../CMake/cuda/FindCUDA.cmake)
@@ -128,11 +162,13 @@ set(CUDA_LIB ${CUDA_LIBRARIES} PARENT_SCOPE)
 endif(LFL_CUDA)
 
 # OpenGL
-if(NOT LFL_HEADLESS)
+if(LFL_ANDROID)
+elseif(LFL_IPHONE)
+elseif(NOT LFL_HEADLESS)
 INCLUDE(${CMAKE_ROOT}/Modules/FindOpenGL.cmake)
 set(OPENGL_INCLUDE ${OPENGL_INCLUDE_DIR} PARENT_SCOPE)
 set(OPENGL_LIB ${OPENGL_gl_LIBRARY} ${OPENGL_glu_LIBRARY} PARENT_SCOPE)
-endif(NOT LFL_HEADLESS)
+endif()
 
 # GLEW
 if(LFL_GLEW)
@@ -170,42 +206,6 @@ set(WXWIDGETS_DEF "${WXWIDGETS_DEF}" PARENT_SCOPE)
 set(WXWIDGETS_INCLUDE "${wxWidgets_INCLUDE_DIRS}" PARENT_SCOPE)
 set(WXWIDGETS_LIB "${wxWidgets_LIBRARIES}" PARENT_SCOPE)
 endif(LFL_WXWIDGETS)
-
-# Windows
-if(WIN32)
-INCLUDE_EXTERNAL_MSPROJECT(zlib ${CMAKE_CURRENT_SOURCE_DIR}/OpenCV/3rdparty/zlib/zlib.vcxproj)
-set(PLATFORM_LIB Ws2_32.lib Winmm.lib Dnsapi.lib opengl32.lib glu32.lib strmiids.lib zlib.lib)
-set(PLATFORM_DEF "-DGLEW_STATIC")
-endif(WIN32)
-
-# Mac
-if(CMAKE_SYSTEM_NAME MATCHES "Darwin")
-set(OPENGL_INCLUDE ${OPENGL_INCLUDE_DIR}/Headers ${CMAKE_CURRENT_SOURCE_DIR}/GL PARENT_SCOPE)
-set(PLATFORM_LIB "-framework Cocoa -framework CoreVideo -framework QTKit -lz -lbz2 -liconv")
-if(LFL_SDLINPUT)
-set(PLATFORM_LIB "${PLATFORM_LIB} -framework Carbon -framework IOKit -framework forcefeedback -framework CoreAudio -framework AudioUnit")
-endif(LFL_SDLINPUT)
-if(LFL_GLFWINPUT)
-set(PLATFORM_LIB "${PLATFORM_LIB} -framework IOKit")
-endif(LFL_GLFWINPUT)
-endif(CMAKE_SYSTEM_NAME MATCHES "Darwin")
-
-# Linux
-if(CMAKE_SYSTEM_NAME MATCHES "Linux")
-set(HAVE_SDLCONFIG 1)
-set(CUDA_LIB /usr/local/cuda/lib64/libcudart.so PARENT_SCOPE)
-set(PLATFORM_LIB "-lutil -lz -lpng -lpthread")
-if(NOT LFL_HEADLESS)
-set(PLATFORM_LIB "${PLATFORM_LIB} -lbz2 -lasound")
-endif(NOT LFL_HEADLESS)
-if(LFL_GLFWINPUT)
-set(PLATFORM_LIB "${PLATFORM_LIB} -lXi -lXv -lXext -lX11 -lXxf86vm -lXrandr -lXcursor")
-endif(LFL_GLFWINPUT)
-endif(CMAKE_SYSTEM_NAME MATCHES "Linux")
-
-# export platform
-set(PLATFORM_DEF ${PLATFORM_DEF} PARENT_SCOPE)
-set(PLATFORM_LIB ${PLATFORM_LIB} PARENT_SCOPE)
 
 # portaudio
 if(LFL_PORTAUDIO)

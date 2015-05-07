@@ -19,7 +19,9 @@
 #include "lfapp/lfapp.h"
 #include "lfapp/ipc.h"
 
+#ifdef __APPLE__
 #include <sandbox.h>
+#endif
 
 namespace LFL {
 unique_ptr<ProcessAPIClient> process_api;
@@ -40,9 +42,11 @@ extern "C" int main(int argc, const char *argv[]) {
     process_api = unique_ptr<ProcessAPIClient>(new ProcessAPIClient());
     process_api->Start(StrCat(argv[optind]));
 
+#ifdef __APPLE__
     char *sandbox_error=0;
     sandbox_init(kSBXProfileNoWriteExceptTemporary, SANDBOX_NAMED, &sandbox_error);
     INFO("render: sandbox init: ", sandbox_error ? sandbox_error : "succses");
+#endif
 
     process_api->HandleMessagesLoop();
     INFO("render: exiting");

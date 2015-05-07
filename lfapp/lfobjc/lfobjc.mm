@@ -20,8 +20,11 @@
 #include "../lfexport.h"
 
 #include <Foundation/NSThread.h>
+
+#ifndef LFL_IPHONE
 #include <AppKit/NSColor.h>
 #include <AppKit/NSColorSpace.h>
+#endif
 
 @interface MyThread : NSObject {}
 @property int (*CB)(void*);
@@ -39,11 +42,13 @@ extern "C" void NativeThreadStart(int (*CB)(void *), void *arg) {
 }
 
 extern "C" void ConvertColorFromGenericToDeviceRGB(const float *i, float *o) {
+#ifdef LFL_IPHONE
+#else
     double ib[4], ob[4], *ii = ib, *oi = ob;
     for (auto e = i + 4; i != e; ) *ii++ = *i++;
     NSColor *gen_color = [NSColor colorWithColorSpace:[NSColorSpace genericRGBColorSpace] components:ib count:4];
     NSColor *dev_color = [gen_color colorUsingColorSpaceName:NSDeviceRGBColorSpace];
     [dev_color getComponents: ob];
     for (auto e = o + 4; o != e; ) *o++ = *oi++;
+#endif
 }
-

@@ -21,7 +21,8 @@
 
 #include <fcntl.h>
 
-#ifdef WIN32
+#if defined(LFL_MOBILE)
+#elif defined(WIN32)
 #else
 #include <signal.h>
 #include <sys/types.h>
@@ -29,7 +30,16 @@
 #endif
 
 namespace LFL {
-#ifdef WIN32
+#ifndef WIN32
+int NTService::Install(const char *name, const char *path) { NotImplemented(); }
+int NTService::Uninstall(const char *name) { NotImplemented(); }
+int NTService::WrapMain(const char *name, MainCB main_cb, int argc, const char **argv) { return main_cb(argc, argv); }
+#endif
+#if defined(LFL_MOBILE)
+int ProcessPipe::OpenPTY(const char **argv) { NotImplemented(); }
+int ProcessPipe::Open(const char **argv) { NotImplemented(); }
+int ProcessPipe::Close() { NotImplemented(); }
+#elif defined(WIN32)
 MainCB nt_service_main = 0;
 const char *nt_service_name = 0;
 SERVICE_STATUS_HANDLE nt_service_status_handle = 0;
@@ -158,10 +168,6 @@ int ProcessPipe::Open(const char **argv) {
     return 0;
 }
 #else /* WIN32 */
-int NTService::Install(const char *name, const char *path) { FATAL("not implemented"); }
-int NTService::Uninstall(const char *name) { FATAL("not implemented"); }
-int NTService::WrapMain(const char *name, MainCB main_cb, int argc, const char **argv) { return main_cb(argc, argv); }
-
 int ProcessPipe::Open(const char **argv) {
     int pipein[2], pipeout[2], ret;
     if (pipe(pipein) < 0) return -1;
@@ -242,6 +248,7 @@ InterProcessResource::InterProcessResource(int size, const string &u) : len(size
 #define IPCTrace(...)
 #endif
 
+#ifndef LFL_MOBILE
 void ProcessAPIServer::Start(const string &client_program) {
     int fd[2];
     CHECK(SystemNetwork::OpenSocketPair(fd));
@@ -258,7 +265,7 @@ void ProcessAPIServer::Start(const string &client_program) {
         close(fd[1]);
         // close(0); close(1); close(2);
         string arg0 = client_program, arg1 = StrCat("fd://", fd[0]);
-        vector<char* const> av = { &arg0[0], &arg1[0], 0 };
+        vector<char*> av = { &arg0[0], &arg1[0], 0 };
         CHECK(!execvp(av[0], &av[0]));
     }
 }
@@ -381,5 +388,6 @@ void ProcessAPIClient::HandleMessagesLoop() {
         }
     }
 }
+#endif
 
 }; // namespace LFL

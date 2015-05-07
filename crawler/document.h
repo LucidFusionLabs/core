@@ -161,10 +161,13 @@ struct DocumentParser {
                 else if (MIMEType::Png(content_type) && !FileSuffix::Png(fn)) fn += ".png";
                 else if (PrefixMatch(content_type, "text/html")) INFO("ImageParser content='", content, "'");
 
+#ifdef LFL_IPC
                 if (parent->render_process) {
                     parent->render_process->LoadResource(content, fn, complete_cb);
                     return;
-                } else {
+                } else
+#endif
+                {
                     Asset::LoadTexture(content.data(), fn.c_str(), content.size(), target.get());
                     INFO("ImageParser ", content_type, ": ", url, " ", fn, " ", content.size(), " ", target->width, " ", target->height);
                 }

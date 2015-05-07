@@ -416,23 +416,23 @@ void MyServerCmd(const vector<string> &arg) {
 
 void MyGPlusClientCmd(const vector<string> &arg) {
 #ifdef LFL_ANDROID
-    menubar->ToggleDisplay();
+    menubar->ToggleActive();
     MyLocalServerDisable();
     if (arg.empty()) { INFO("eg: gplus_client participant_id"); return; }
     INFO("GPlusClient ", arg[0]);
-    android_gplus_service(Singleton<GPlusClient>::Get());
-    server->connectGPlus(arg[0]);
+    // android_gplus_service(Singleton<GPlusClient>::Get());
+    // server->connectGPlus(arg[0]);
 #endif
 }
 
 void MyGPlusServerCmd(const vector<string> &arg) {
 #ifdef LFL_ANDROID
-    menubar->ToggleDisplay();
+    menubar->ToggleActive();
     MyLocalServerEnable(SpaceballSettings::TYPE_EMPTYCOURT);
     if (arg.empty()) { INFO("eg: gplus_server participant_id"); return; }
     INFO("GPlusServer ", arg[0]);
-    android_gplus_service(builtin_server->gplus_transport);
-    server->connect("127.0.0.1", FLAGS_default_port);
+    // android_gplus_service(builtin_server->gplus_transport);
+    // server->connect("127.0.0.1", FLAGS_default_port);
 #endif
 }
 
@@ -650,7 +650,7 @@ extern "C" int main(int argc, const char *argv[]) {
     if (FLAGS_player_name.empty()) {
 #if defined(LFL_ANDROID)
         char buf[40];
-        if (android_device_name(buf, sizeof(buf))) FLAGS_player_name = buf;
+        if (AndroidDeviceName(buf, sizeof(buf))) FLAGS_player_name = buf;
 #endif
         if (FLAGS_player_name.empty()) FLAGS_player_name = "n00by";
     }

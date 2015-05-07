@@ -114,11 +114,13 @@
     * unconditionally on NEON instructions not crashing, otherwise we must
     * disable use of NEON instructions:
     */
+#ifndef LFL_IPHONE
 #  ifdef __ARM_NEON__
 #     define PNG_ARM_NEON_OPT 2
 #  else
 #     define PNG_ARM_NEON_OPT 0
 #  endif
+#endif // LFL_IPHONE
 #endif
 
 #if PNG_ARM_NEON_OPT > 0

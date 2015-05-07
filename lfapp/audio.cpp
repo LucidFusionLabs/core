@@ -49,12 +49,12 @@ extern "C" {
 #include <SLES/OpenSLES_Android.h>
 #endif
 
-namespace LFL {
 #ifdef LFL_IPHONE
-extern void iphone_play_music(void *handle);
-extern void iphone_play_background_music(void *handle);
+extern "C" void iPhonePlayMusic(void *handle);
+extern "C" void iPhonePlayBackgroundMusic(void *handle);
 #endif
 
+namespace LFL {
 const int feat_lpccoefs  = 12;
 const int feat_barkbands = 21;
 
@@ -128,9 +128,9 @@ int Sample::ToFFMpegId(int fmt) {
 
 void SystemAudio::PlaySoundEffect(SoundAsset *sa) {
 #if defined(LFL_ANDROID)
-    android_play_music(sa->handle);
+    AndroidPlayMusic(sa->handle);
 #elif defined(LFL_IPHONE)
-    iphone_play_music(sa->handle);
+    iPhonePlayMusic(sa->handle);
 #else
     app->audio.QueueMix(sa, MixFlag::Reset | MixFlag::Mix | (app->audio.loop ? MixFlag::DontQueue : 0), -1, -1);
 #endif
@@ -138,9 +138,9 @@ void SystemAudio::PlaySoundEffect(SoundAsset *sa) {
 
 void SystemAudio::PlayBackgroundMusic(SoundAsset *music) {
 #if defined(LFL_ANDROID)
-    android_play_background_music(music->handle);
+    AndroidPlayBackgroundMusic(music->handle);
 #elif defined(LFL_IPHONE)
-    iphone_play_background_music(music->handle);
+    iPhonePlayBackgroundMusic(music->handle);
 #else
     app->audio.QueueMix(music);
     app->audio.loop = music;
@@ -149,13 +149,13 @@ void SystemAudio::PlayBackgroundMusic(SoundAsset *music) {
 
 void SystemAudio::SetVolume(int v) { 
 #if defined(LFL_ANDROID)
-    android_set_volume(v);
+    AndroidSetVolume(v);
 #endif
 }
 
 int SystemAudio::GetVolume() { 
 #if defined(LFL_ANDROID)
-    return android_get_volume();
+    return AndroidGetVolume();
 #else
     return 0;
 #endif
@@ -163,7 +163,7 @@ int SystemAudio::GetVolume() {
 
 int SystemAudio::GetMaxVolume() { 
 #if defined(LFL_ANDROID)
-    return android_get_max_volume();
+    return AndroidGetMaxVolume();
 #else
     return 10;
 #endif

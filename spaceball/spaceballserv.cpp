@@ -23,11 +23,9 @@
 #include "lfapp/gui.h"
 #include "lfapp/ipc.h"
 #include "lfapp/game.h"
-
-using namespace LFL;
-
 #include "spaceballserv.h"
 
+namespace LFL {
 #ifdef _WIN32
 DEFINE_bool(install,    false,                                 "Win32 Register Server");
 DEFINE_bool(uninstall,  false,                                 "Win32 Unregister Server");
@@ -72,7 +70,7 @@ int SpaceballServer(int argc, const char **argv) {
     httpd.AddURL("/favicon.ico", new HTTPServer::FileResource("./assets/icon.ico", "image/x-icon"));
     httpd.AddURL("/", new SpaceballStatusServer());
 
-    server = new LFL::SpaceballServer(FLAGS_name, FLAGS_port, FLAGS_framerate, &assets);
+    // server = new SpaceballServer(FLAGS_name, FLAGS_port, FLAGS_framerate, &assets);
     if (!FLAGS_rconpw.empty()) server->rcon_auth_passwd = FLAGS_rconpw;
     if (!FLAGS_master.empty()) server->master_sink_url = FLAGS_master;
     if (app->network.Enable(server->udp_transport)) return -1;
@@ -80,6 +78,9 @@ int SpaceballServer(int argc, const char **argv) {
     INFO("Spaceball 6006 server initialized");
     return app->Main();
 }
+
+}; // namespace LFL;
+using namespace LFL;
 
 extern "C" int main(int argc, const char **argv) {
     static const char *service_name = "Spaceball 6006 Server";

@@ -53,7 +53,7 @@ Resolver::Nameserver *Resolver::Connect(const vector<IPV4::Addr> &addrs) {
 
 bool Resolver::Resolve(const Request &req) {
 #if defined(LFL_ANDROID) || defined(LFL_IPHONE)
-    IPV4::Addr ipv4_addr = Network::resolve(req.query);
+    IPV4::Addr ipv4_addr = SystemNetwork::GetHostByName(req.query);
     INFO("resolved ", req.query, " to ", IPV4::Text(ipv4_addr));
     req.cb(ipv4_addr, NULL);
     return true;

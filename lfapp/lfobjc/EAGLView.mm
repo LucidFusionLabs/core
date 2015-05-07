@@ -66,7 +66,7 @@ Copyright (C) 2008 Apple Inc. All Rights Reserved.
 
 #import "EAGLView.h"
 
-extern int lfapp_opengles_version;
+#include "../lfexport.h"
 
 //CLASS IMPLEMENTATIONS:
 
@@ -180,16 +180,17 @@ extern int lfapp_opengles_version;
 		[eaglLayer setDrawableProperties:[NSDictionary dictionaryWithObjectsAndKeys:[NSNumber numberWithBool:retained], kEAGLDrawablePropertyRetainedBacking, format, kEAGLDrawablePropertyColorFormat, nil]];
 		_format = format;
 		_depthFormat = depth;
-		
+
+        NativeWindow *lfl_screen = GetNativeWindow();
 #ifdef LFL_GLES2
-        lfapp_opengles_version = 2;
+        lfl_screen->opengles_version = 2;
         _context = [[EAGLContext alloc] initWithAPI:kEAGLRenderingAPIOpenGLES2];
         if (_context == nil) {
-            lfapp_opengles_version = 1;
+            lfl_screen->opengles_version = 1;
             _context = [[EAGLContext alloc] initWithAPI:kEAGLRenderingAPIOpenGLES1];
         }
 #else
-        lfapp_opengles_version = 1;
+        lfl_screen->opengles_version = 1;
         _context = [[EAGLContext alloc] initWithAPI:kEAGLRenderingAPIOpenGLES1];
 #endif
 		if(_context == nil) {

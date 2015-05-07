@@ -1,5 +1,0 @@
-LOCAL_PATH:= $(call my-dir)
-include $(CLEAR_VARS)
-LOCAL_MODULE:= $BINNAME
-LOCAL_SRC_FILES:= lib$BINNAME.a
-include $(PREBUILT_STATIC_LIBRARY)

@@ -19,38 +19,43 @@
 #ifndef __LFL_LFJNI_LFJNI_H__
 #define __LFL_LFJNI_LFJNI_H__
 
-struct Service;
-struct Connection;
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-int android_video_init(int gles_version);
-int android_video_swap();
-int android_input(unsigned clicks, unsigned *events);
-int android_toggle_keyboard();
-int android_file_read(const char *filename, char **mallocOut, int *sizeOut);
-int android_internal_read(const char *fn, char **mallocOut, int *sizeOut);
-void *android_internal_open_writer(const char *fn);
-int android_internal_write(void *ifw, const char *b, int l);
-void android_internal_close_writer(void *ifw);
-void *android_load_music_asset(const char *filename);
-void android_play_music(void *handle);
-void android_play_background_music(void *handle);
-void android_set_volume(int v);
-int android_get_volume();
-int android_get_max_volume();
-int android_device_name(char *out, int len);
-int android_ipv4_address();
-int android_ipv4_broadcast_address();
-void android_open_browser(const char *url);
-void android_show_ads();
-void android_hide_ads();
-void android_gplus_signin();
-void android_gplus_signout();
-int android_gplus_signedin();
-int android_gplus_invite();
-int android_gplus_accept();
-int android_gplus_quick_game();
-void android_gplus_service(Service *s);
-int android_gplus_send_unreliable(const char *participantName, const char *buf, int len);
-int android_gplus_send_reliable(const char *participantName, const char *buf, int len);
+int   AndroidVideoInit(int gles_version);
+int   AndroidVideoSwap();
+int   AndroidInput(unsigned clicks, unsigned *events);
+int   AndroidToggleKeyboard();
+int   AndroidFileRead(const char *filename, char **malloc_out, int *size_out);
+int   AndroidInternalRead(const char *fn, char **malloc_out, int *size_out);
+void *AndroidInternalOpenWriter(const char *fn);
+int   AndroidInternalWrite(void *ifw, const char *b, int l);
+void  AndroidInternalCloseWriter(void *ifw);
+void *AndroidLoadMusicAsset(const char *filename);
+void  AndroidPlayMusic(void *handle);
+void  AndroidPlayBackgroundMusic(void *handle);
+void  AndroidSetVolume(int v);
+int   AndroidGetVolume();
+int   AndroidGetMaxVolume();
+int   AndroidDeviceName(char *out, int len);
+int   AndroidIPV4Address();
+int   AndroidIPV4BroadcastAddress();
+void  AndroidOpenBrowser(const char *url);
+void  AndroidShowAds();
+void  AndroidHideAds();
+void  AndroidGPlusSignin();
+void  AndroidGPlusSignout();
+int   AndroidGPlusSignedin();
+int   AndroidGPlusInvite();
+int   AndroidGPlusAccept();
+int   AndroidGPlusQuickGame();
+void  AndroidGPlusService(void *s);
+int   AndroidGPlusSendUnreliable(const char *participant_name, const char *buf, int len);
+int   AndroidGPlusSendReliable(const char *participant_name, const char *buf, int len);
+
+#ifdef __cplusplus
+};
+#endif
 
 #endif

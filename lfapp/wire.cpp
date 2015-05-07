@@ -18,6 +18,7 @@
 
 #include "lfapp/lfapp.h"
 #include "lfapp/wire.h"
+#include "lfapp/ipc.h"
 
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -410,7 +411,7 @@ void SMTP::HTMLMessage(const string& from, const string& to, const string& subje
 
 void SMTP::NativeSendmail(const string &message) {
 #ifdef __linux__
-    Process smtp;
+    ProcessPipe smtp;
     const char *argv[] = { "/usr/bin/sendmail", "-i", "-t", 0 };
     if (smtp.Open(argv)) return;
     fwrite(message.c_str(), message.size(), 1, smtp.out);

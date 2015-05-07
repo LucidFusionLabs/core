@@ -526,6 +526,7 @@ struct Terminal : public TextArea, public Drawable::AttrSource {
     Border clip_border;
     Colors *colors=0;
     Color *bg_color=0;
+    mutable Drawable::Attr last_attr;
 
     Terminal(int FD, Window *W, Font *F);
     virtual ~Terminal() {}

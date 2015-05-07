@@ -138,7 +138,7 @@ struct SocketWakeupThread : public SocketSet {
     void ThreadProc();
 };
 
-#if defined(LFL_EPOLL) && LFL_LINUX_SERVER
+#if defined(LFL_EPOLL) && defined(LFL_LINUX_SERVER)
 #include <sys/epoll.h>
 template <int S> struct EPollSocketSet : public SocketSet {
     Socket epollfd, cur_fd; int cur_event=-1, num_events=0; struct epoll_event events[S];
