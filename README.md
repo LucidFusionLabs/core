@@ -73,7 +73,8 @@ LFL builds easily for Windows, Linux, Mac OSX, iPhone and Android.
 * See [.travis.yml](.travis.yml) for package dependencies
 
         cd lfl
-        cmake .
+        mkdir linux && cd linux
+        cmake ..
 
         cd term
         make -j4
@@ -91,7 +92,8 @@ LFL builds easily for Windows, Linux, Mac OSX, iPhone and Android.
 * Minimum of XCode 6 required, nasm & yasm from macports
 
         cd lfl
-        cmake .
+        mkdir osx && cd osx
+        cmake ..
 
         cd term
         make -j4
@@ -118,7 +120,8 @@ LFL builds easily for Windows, Linux, Mac OSX, iPhone and Android.
 ### iOS Device
 
         cd lfl
-        cmake -DCMAKE_TOOLCHAIN_FILE=CMake/iPhoneToolchain.cmake .
+        mkdir iphone && cd iphone
+        cmake -DCMAKE_TOOLCHAIN_FILE=../CMake/iPhoneToolchain.cmake ..
 
         cd term
         make -j4
@@ -132,7 +135,7 @@ LFL builds easily for Windows, Linux, Mac OSX, iPhone and Android.
         [Change configuration to Device]
         [Build and run]
         cp lterm term-iphone/build/Debug-iphoneos/term-iphone.app/term-iphone
-        cp skorp ~/Library//Developer/Xcode/DerivedData/skorp-iphone-cwokylhxlztdqwhdhxqzpqiemvoz/Build/Products/Debug-iphoneos/skorp-iphone.app/skorp-iphone
+        cp skorp ~/Library/Developer/Xcode/DerivedData/skorp-iphone-cwokylhxlztdqwhdhxqzpqiemvoz/Build/Products/Debug-iphoneos/skorp-iphone.app/skorp-iphone
         [Build and run]
 
 * iPhone Installer iLTerminal.ipa results
@@ -140,7 +143,8 @@ LFL builds easily for Windows, Linux, Mac OSX, iPhone and Android.
 ### iOS Simulator
 
         cd lfl
-        cmake -DCMAKE_TOOLCHAIN_FILE=CMake/iPhoneToolchain.cmake -DLFL_IPHONESIM=1 .
+        mkdir iphonesim && cd iphonesim
+        cmake -DCMAKE_TOOLCHAIN_FILE=../CMake/iPhoneToolchain.cmake -DLFL_IPHONESIM=1 ..
 
         cd term
         make -j4
@@ -173,8 +177,9 @@ LFL builds easily for Windows, Linux, Mac OSX, iPhone and Android.
         --platform=android-8 --toolchain=arm-linux-androideabi-4.8 --install-dir=$HOME/android-toolchain
 
         cd lfl
-        ** Modify ANDROIDROOT in CMake/AndroidToolchain.cmake
-        cmake -DCMAKE_TOOLCHAIN_FILE=CMake/AndroidToolchain.cmake .
+        mkdir android && cd android
+        ** Modify ANDROIDROOT in ../CMake/AndroidToolchain.cmake
+        cmake -DCMAKE_TOOLCHAIN_FILE=../CMake/AndroidToolchain.cmake ..
 
         cd term
         make -j4

@@ -227,7 +227,6 @@ void EndpointRead(void*, const char *name, const char *buf, int len);
 void ShellRun(const char *text);
 const char *LFAppDownloadDir();
 void BreakHook();
-void NotImplemented();
 
 #ifdef __cplusplus
 };

@@ -2,27 +2,27 @@ LOCAL_PATH := $(call my-dir)
 
 include $(CLEAR_VARS)
 LOCAL_MODULE := spaceball
-LOCAL_SRC_FILES := $(LOCAL_PATH)/../../libspaceball.a
+LOCAL_SRC_FILES := $(LOCAL_PATH)/../../../android/spaceball/libspaceball.a
 include $(PREBUILT_STATIC_LIBRARY)
 
 include $(CLEAR_VARS)
 LOCAL_MODULE := lfapp
-LOCAL_SRC_FILES := $(LOCAL_PATH)/../../spaceball_lfapp_obj/libspaceball_lfapp.a
+LOCAL_SRC_FILES := $(LOCAL_PATH)/../../../android/spaceball/spaceball_lfapp_obj/libspaceball_lfapp.a
 include $(PREBUILT_STATIC_LIBRARY)
 
 include $(CLEAR_VARS)
 LOCAL_MODULE := Box2D
-LOCAL_SRC_FILES := $(LOCAL_PATH)/../../../imports/Box2D/Box2D/libBox2D.a
+LOCAL_SRC_FILES := $(LOCAL_PATH)/../../../android/imports/Box2D/Box2D/libBox2D.a
 include $(PREBUILT_STATIC_LIBRARY)
 
 include $(CLEAR_VARS)
 LOCAL_MODULE := libpng
-LOCAL_SRC_FILES := $(LOCAL_PATH)/../../../imports/libpng/libpng.a
+LOCAL_SRC_FILES := $(LOCAL_PATH)/../../../android/imports/libpng/libpng.a
 include $(PREBUILT_STATIC_LIBRARY)
 
 include $(CLEAR_VARS)
 LOCAL_MODULE := libjpeg-turbo
-LOCAL_SRC_FILES := $(LOCAL_PATH)/../../../imports/libjpeg-turbo/.libs/libturbojpeg.a
+LOCAL_SRC_FILES := $(LOCAL_PATH)/../../../android/imports/libjpeg-turbo/.libs/libturbojpeg.a
 include $(PREBUILT_STATIC_LIBRARY)
 
 include $(CLEAR_VARS)

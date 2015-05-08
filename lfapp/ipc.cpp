@@ -31,14 +31,14 @@
 
 namespace LFL {
 #ifndef WIN32
-int NTService::Install(const char *name, const char *path) { NotImplemented(); }
-int NTService::Uninstall(const char *name) { NotImplemented(); }
-int NTService::WrapMain(const char *name, MainCB main_cb, int argc, const char **argv) { return main_cb(argc, argv); }
+int NTService::Install  (const char *name, const char *path) { FATAL("%s", "not implemented"); }
+int NTService::Uninstall(const char *name)                   { FATAL("%s", "not implemented"); }
+int NTService::WrapMain (const char *name, MainCB main_cb, int argc, const char **argv) { return main_cb(argc, argv); }
 #endif
 #if defined(LFL_MOBILE)
-int ProcessPipe::OpenPTY(const char **argv) { NotImplemented(); }
-int ProcessPipe::Open(const char **argv) { NotImplemented(); }
-int ProcessPipe::Close() { NotImplemented(); }
+int ProcessPipe::OpenPTY(const char **argv) { FATAL("%s", "not implemented"); }
+int ProcessPipe::Open   (const char **argv) { FATAL("%s", "not implemented"); }
+int ProcessPipe::Close()                    { FATAL("%s", "not implemented"); }
 #elif defined(WIN32)
 MainCB nt_service_main = 0;
 const char *nt_service_name = 0;

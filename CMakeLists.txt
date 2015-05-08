@@ -9,8 +9,6 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE "Debug")
 endif(NOT CMAKE_BUILD_TYPE)
 
-# http://www.cmake.org/cmake/resources/software.html
-# http://atrpms.net/dist/el5/cmake/
 include(ExternalProject)
 include(${CMAKE_CURRENT_SOURCE_DIR}/CMake/Autoconf.cmake)
 include(${CMAKE_CURRENT_SOURCE_DIR}/CMake/util.cmake)
@@ -54,6 +52,7 @@ if(LFL_IPHONE)
 elseif(LFL_ANDROID)
  set(LFL_GLES2 1)
  set(LFL_FREETYPE 1)
+ set(LFL_OPENCV 1)
  set(LFL_BOX2D 1)
  set(LFL_PNG 1)
  set(LFL_JPEG 1)

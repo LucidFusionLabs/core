@@ -124,7 +124,6 @@ extern "C" void OSXDelWaitForeverSocket(void*, int fd);
 #endif
 
 extern "C" void BreakHook() {}
-extern "C" void NotImplemented() { FATAL("not implemented"); }
 extern "C" void ShellRun(const char *text) { return LFL::app->shell.Run(text); }
 extern "C" NativeWindow *GetNativeWindow() { return LFL::screen; }
 extern "C" LFApp        *GetLFApp()        { return LFL::app; }
