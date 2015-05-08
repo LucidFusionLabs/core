@@ -1,3 +1,6 @@
 [submodule "imports/libarchive"]
 	path = imports/libarchive
 	url = https://github.com/libarchive/libarchive
+[submodule "imports/assimp"]
+	path = imports/assimp
+	url = https://github.com/assimp/assimp

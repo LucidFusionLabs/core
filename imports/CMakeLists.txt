@@ -58,14 +58,14 @@ endif(LFL_PNG)
 if(LFL_JPEG)
 add_subdirectory(libjpeg-turbo)
 set(JPEG_INCLUDE ${CMAKE_CURRENT_BINARY_DIR}/libjpeg-turbo ${CMAKE_CURRENT_SOURCE_DIR}/libjpeg-turbo PARENT_SCOPE)
-set(JPEG_LIB ${CMAKE_CURRENT_SOURCE_DIR}/libjpeg-turbo/.libs/libturbojpeg.a PARENT_SCOPE)
+set(JPEG_LIB ${CMAKE_CURRENT_BINARY_DIR}/libjpeg-turbo/.libs/libturbojpeg.a PARENT_SCOPE)
 endif(LFL_JPEG)
 
 # gif
 if(LFL_GIF)
 add_subdirectory(giflib)
 set(GIF_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/giflib/lib PARENT_SCOPE)
-set(GIF_LIB ${CMAKE_CURRENT_SOURCE_DIR}/giflib/lib/.libs/libgif.a PARENT_SCOPE)
+set(GIF_LIB ${CMAKE_CURRENT_BINARY_DIR}/giflib/lib/.libs/libgif.a PARENT_SCOPE)
 endif(LFL_GIF)
 
 # freetype
@@ -75,7 +75,7 @@ set(FREETYPE_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/freetype/include PARENT_SCOPE)
 if(WIN32)
 set(FREETYPE_LIB freetype239_D.lib PARENT_SCOPE)
 else(WIN32)
-set(FREETYPE_LIB ${CMAKE_CURRENT_SOURCE_DIR}/freetype/objs/.libs/libfreetype.a PARENT_SCOPE)
+set(FREETYPE_LIB ${CMAKE_CURRENT_BINARY_DIR}/freetype/.libs/libfreetype.a PARENT_SCOPE)
 endif(WIN32)
 endif(LFL_FREETYPE)
 
@@ -83,7 +83,7 @@ endif(LFL_FREETYPE)
 # ./configure --enable-static --with-coretext=yes --prefix=`pwd`/bin
 if(LFL_HARFBUZZ)
 set(HARFBUZZ_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/harfbuzz/bin/include PARENT_SCOPE)
-set(HARFBUZZ_LIB ${CMAKE_CURRENT_SOURCE_DIR}/harfbuzz/src/.libs/libharfbuzz.a PARENT_SCOPE)
+set(HARFBUZZ_LIB ${CMAKE_CURRENT_BINARY_DIR}/harfbuzz/src/.libs/libharfbuzz.a PARENT_SCOPE)
 endif(LFL_HARFBUZZ)
 
 # libcss
@@ -99,30 +99,30 @@ add_subdirectory(protobuf)
 if(WIN32)
 set(PROTOBUF_LIBRARY libprotobuf-lite.lib PARENT_SCOPE)
 else(WIN32)
-set(PROTOBUF_LIBRARY ${CMAKE_CURRENT_SOURCE_DIR}/protobuf/src/.libs/libprotobuf.a PARENT_SCOPE)
+set(PROTOBUF_LIBRARY ${CMAKE_CURRENT_BINARY_DIR}/protobuf/src/.libs/libprotobuf.a PARENT_SCOPE)
 endif(WIN32)
 set(PROTOBUF_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/protobuf/src PARENT_SCOPE)
-set(PROTOBUF_PROTOC_EXECUTABLE ${CMAKE_CURRENT_SOURCE_DIR}/protobuf/src/protoc PARENT_SCOPE)
+set(PROTOBUF_PROTOC_EXECUTABLE ${CMAKE_CURRENT_BINARY_DIR}/protobuf/src/protoc PARENT_SCOPE)
 endif(LFL_PROTOBUF)
 
 # glog
 if(LFL_GLOG)
 add_subdirectory(glog)
 set(GLOG_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/glog/src/glog PARENT_SCOPE)
-set(GLOG_LIB ${CMAKE_CURRENT_SOURCE_DIR}/glog/.libs/libglog.a PARENT_SCOPE)
+set(GLOG_LIB ${CMAKE_CURRENT_BINARY_DIR}/glog/.libs/libglog.a PARENT_SCOPE)
 endif(LFL_GLOG)
 
 # gtest
 if(LFL_GTEST)
 add_subdirectory(protobuf/gtest)
 set(GTEST_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/protobuf/gtest/include PARENT_SCOPE)
-set(GTEST_LIB ${CMAKE_CURRENT_SOURCE_DIR}/protobuf/gtest/lib/.libs/libgtest.a PARENT_SCOPE)
+set(GTEST_LIB ${CMAKE_CURRENT_BINARY_DIR}/protobuf/gtest/lib/.libs/libgtest.a PARENT_SCOPE)
 endif(LFL_GTEST)
 
 # tcmalloc
 if(LFL_TCMALLOC)
 add_subdirectory(gperftools)
-set(TCMALLOC_LIB ${CMAKE_CURRENT_SOURCE_DIR}/gperftools/.libs/libtcmalloc_minimal.a -fno-builtin-malloc -fno-builtin-calloc -fno-builtin-realloc -fno-builtin-free PARENT_SCOPE)
+set(TCMALLOC_LIB ${CMAKE_CURRENT_BINARY_DIR}/gperftools/.libs/libtcmalloc_minimal.a -fno-builtin-malloc -fno-builtin-calloc -fno-builtin-realloc -fno-builtin-free PARENT_SCOPE)
 endif(LFL_TCMALLOC)
 
 # box2d
@@ -132,16 +132,21 @@ set(BOX2D_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/Box2D PARENT_SCOPE)
 set(BOX2D_LIB Box2D PARENT_SCOPE)
 endif(LFL_BOX2D)
 
+# assimp
+if(LFL_ASSIMP)
+add_subdirectory(assimp)
+endif(LFL_ASSIMP)
+
 # ffmpeg
 if(LFL_FFMPEG)
 if(NOT LFL_ANDROID AND NOT WIN32)
 # lame
 add_subdirectory(lame)
-set(LAME_LIB -L${CMAKE_CURRENT_SOURCE_DIR}/lame/libmp3lame/.libs -lmp3lame PARENT_SCOPE)
+set(LAME_LIB -L${CMAKE_CURRENT_BINARY_DIR}/lame/libmp3lame/.libs -lmp3lame PARENT_SCOPE)
 
 # x264
 add_subdirectory(x264)
-set(X264_LIB -L${CMAKE_CURRENT_SOURCE_DIR}/x264 -lx264 PARENT_SCOPE)
+set(X264_LIB -L${CMAKE_CURRENT_BINARY_DIR}/x264 -lx264 PARENT_SCOPE)
 endif(NOT LFL_ANDROID AND NOT WIN32)
 
 add_subdirectory(ffmpeg)
@@ -149,8 +154,8 @@ if(WIN32)
 set(FFMPEG_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/ffmpeg/w32/include PARENT_SCOPE)
 set(FFMPEG_LIB ${CMAKE_CURRENT_SOURCE_DIR}/ffmpeg/w32/lib/avformat.lib ${CMAKE_CURRENT_SOURCE_DIR}/ffmpeg/w32/lib/avcodec.lib ${CMAKE_CURRENT_SOURCE_DIR}/ffmpeg/w32/lib/avutil.lib ${CMAKE_CURRENT_SOURCE_DIR}/ffmpeg/w32/lib/swscale.lib ${CMAKE_CURRENT_SOURCE_DIR}/ffmpeg/w32/lib/swresample.lib PARENT_SCOPE)
 else(WIN32)
-set(FFMPEG_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/ffmpeg PARENT_SCOPE)
-set(FFMPEG_LIB ${CMAKE_CURRENT_SOURCE_DIR}/ffmpeg/libavdevice/libavdevice.a ${CMAKE_CURRENT_SOURCE_DIR}/ffmpeg/libavfilter/libavfilter.a ${CMAKE_CURRENT_SOURCE_DIR}/ffmpeg/libavformat/libavformat.a ${CMAKE_CURRENT_SOURCE_DIR}/ffmpeg/libavcodec/libavcodec.a ${CMAKE_CURRENT_SOURCE_DIR}/ffmpeg/libavutil/libavutil.a ${CMAKE_CURRENT_SOURCE_DIR}/ffmpeg/libswscale/libswscale.a ${CMAKE_CURRENT_SOURCE_DIR}/ffmpeg/libswresample/libswresample.a ${CMAKE_CURRENT_SOURCE_DIR}/ffmpeg/libpostproc/libpostproc.a PARENT_SCOPE)
+set(FFMPEG_INCLUDE ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg ${CMAKE_CURRENT_SOURCE_DIR}/ffmpeg PARENT_SCOPE)
+set(FFMPEG_LIB ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/libavdevice/libavdevice.a ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/libavfilter/libavfilter.a ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/libavformat/libavformat.a ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/libavcodec/libavcodec.a ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/libavutil/libavutil.a ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/libswscale/libswscale.a ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/libswresample/libswresample.a ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/libpostproc/libpostproc.a PARENT_SCOPE)
 endif(WIN32)
 endif(LFL_FFMPEG)
 
@@ -188,7 +193,7 @@ endif(LFL_GLFWINPUT)
 if(LFL_SDLINPUT)
 add_subdirectory(SDL)
 set(SDL_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/SDL/include PARENT_SCOPE)
-set(SDL_LIB ${CMAKE_CURRENT_SOURCE_DIR}/SDL/build/.libs/libSDL2.a PARENT_SCOPE)
+set(SDL_LIB ${CMAKE_CURRENT_BINARY_DIR}/SDL/build/.libs/libSDL2.a PARENT_SCOPE)
 endif(LFL_SDLINPUT)
 
 # wxWidgets
@@ -214,7 +219,7 @@ set(PORTAUDIO_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/portaudio/include PARENT_SCOPE
 if(WIN32)
 set(PORTAUDIO_LIB portaudio_x86.lib PARENT_SCOPE)
 else(WIN32)
-set(PORTAUDIO_LIB -lportaudio -L${CMAKE_CURRENT_SOURCE_DIR}/portaudio/lib/.libs PARENT_SCOPE)
+set(PORTAUDIO_LIB -lportaudio -L${CMAKE_CURRENT_BINARY_DIR}/portaudio/lib/.libs PARENT_SCOPE)
 endif(WIN32)
 endif(LFL_PORTAUDIO)
 
@@ -228,8 +233,8 @@ INCLUDE_EXTERNAL_MSPROJECT(flann ${CMAKE_CURRENT_SOURCE_DIR}/OpenCV/3rdparty/fla
 INCLUDE_EXTERNAL_MSPROJECT(opencv_lapack ${CMAKE_CURRENT_SOURCE_DIR}/OpenCV/3rdparty/lapack/opencv_lapack.vcxproj)
 set(OPENCV_LIB cv.lib cxcore.lib flannd.lib opencv_lapackd.lib PARENT_SCOPE)
 else(WIN32)
-ExternalProject_Add(OpenCV SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/OpenCV INSTALL_DIR ${CMAKE_CURRENT_SOURCE_DIR}/OpenCV)
-set(OPENCV_LIB -L${CMAKE_CURRENT_SOURCE_DIR}/OpenCV/lib -lcv -lcxcore PARENT_SCOPE)
+ExternalProject_Add(OpenCV SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/OpenCV INSTALL_DIR ${CMAKE_CURRENT_BINARY_DIR}/OpenCV)
+set(OPENCV_LIB -L${CMAKE_CURRENT_BINARY_DIR}/OpenCV/lib -lcv -lcxcore PARENT_SCOPE)
 endif(WIN32)
 endif(LFL_OPENCV)
 
@@ -239,7 +244,7 @@ set(ARCHIVE_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/libarchive PARENT_SCOPE)
 if(WIN32)
 set(ARCHIVE_LIB libarchive.lib PARENT_SCOPE)
 else(WIN32)
-set(ARCHIVE_LIB ${CMAKE_CURRENT_SOURCE_DIR}/libarchive/.libs/libarchive.a PARENT_SCOPE)
+set(ARCHIVE_LIB ${CMAKE_CURRENT_BINARY_DIR}/libarchive/.libs/libarchive.a PARENT_SCOPE)
 endif(WIN32)
 
 # regex
@@ -260,7 +265,7 @@ endif(LFL_SREGEX)
 if(LFL_JUDY)
 add_subdirectory(judy)
 set(JUDY_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/judy/src PARENT_SCOPE)
-set(JUDY_LIB ${CMAKE_CURRENT_SOURCE_DIR}/judy/src/JudyL/.libs/libJudyL.a ${CMAKE_CURRENT_SOURCE_DIR}/judy/src/JudyL/.libs/libprev.a ${CMAKE_CURRENT_SOURCE_DIR}/judy/src/JudyL/.libs/libnext.a ${CMAKE_CURRENT_SOURCE_DIR}/judy/src/JudySL/.libs/libJudySL.a ${CMAKE_CURRENT_SOURCE_DIR}/judy/src/JudyCommon/.libs/libJudyMalloc.a PARENT_SCOPE)
+set(JUDY_LIB ${CMAKE_CURRENT_BINARY_DIR}/judy/src/JudyL/.libs/libJudyL.a ${CMAKE_CURRENT_BINARY_DIR}/judy/src/JudyL/.libs/libprev.a ${CMAKE_CURRENT_BINARY_DIR}/judy/src/JudyL/.libs/libnext.a ${CMAKE_CURRENT_BINARY_DIR}/judy/src/JudySL/.libs/libJudySL.a ${CMAKE_CURRENT_BINARY_DIR}/judy/src/JudyCommon/.libs/libJudyMalloc.a PARENT_SCOPE)
 endif(LFL_JUDY)
 
 # cling
@@ -280,20 +285,20 @@ endif(LFL_BULLET)
 if(LFL_ODE)
 add_subdirectory(ode)
 set(ODE_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/ode/include PARENT_SCOPE)
-set(ODE_LIB ${CMAKE_CURRENT_SOURCE_DIR}/ode/ode/src/.libs/libode.a PARENT_SCOPE)
+set(ODE_LIB ${CMAKE_CURRENT_BINARY_DIR}/ode/ode/src/.libs/libode.a PARENT_SCOPE)
 endif(LFL_ODE)
 
 # berkelium
 if(LFL_BERKELIUM)
 set(BERKELIUM_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/berkelium/osx/include PARENT_SCOPE)
-set(BERKELIUM_LIB ${CMAKE_CURRENT_SOURCE_DIR}/berkelium/osx/lib/liblibberkelium.dylib PARENT_SCOPE)
+set(BERKELIUM_LIB ${CMAKE_CURRENT_BINARY_DIR}/berkelium/osx/lib/liblibberkelium.dylib PARENT_SCOPE)
 endif(LFL_BERKELIUM)
 
 # lua
 if(LFL_LUA)
 add_subdirectory(lua)
 set(LUA_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/lua/src PARENT_SCOPE)
-set(LUA_LIB ${CMAKE_CURRENT_SOURCE_DIR}/lua/src/liblua.a PARENT_SCOPE)
+set(LUA_LIB ${CMAKE_CURRENT_BINARY_DIR}/lua/src/liblua.a PARENT_SCOPE)
 endif(LFL_LUA)
 
 # v8 js
@@ -311,12 +316,12 @@ endif(LFL_TINYJS)
 if(LFL_PCAP)
 add_subdirectory(libpcap)
 set(PCAP_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/libpcap PARENT_SCOPE)
-set(PCAP_LIB ${CMAKE_CURRENT_SOURCE_DIR}/libpcap/libpcap.a PARENT_SCOPE)
+set(PCAP_LIB ${CMAKE_CURRENT_BINARY_DIR}/libpcap/libpcap.a PARENT_SCOPE)
 endif(LFL_PCAP)
 
 # GeoIP
 if(LFL_GEOIP)
 add_subdirectory(libGeoIP)
 set(GEOIP_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/libGeoIP/libGeoIP PARENT_SCOPE)
-set(GEOIP_LIB ${CMAKE_CURRENT_SOURCE_DIR}/libGeoIP/libGeoIP/.libs/libGeoIP.a PARENT_SCOPE)
+set(GEOIP_LIB ${CMAKE_CURRENT_BINARY_DIR}/libGeoIP/libGeoIP/.libs/libGeoIP.a PARENT_SCOPE)
 endif(LFL_GEOIP)
