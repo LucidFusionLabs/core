@@ -19,13 +19,7 @@ echo "Directory/Binary: $BINNAME"
 
 mkdir $BINNAME || { echo "CLONE FAILED: mkdir $BINNAME"; exit 1; }
 
-cp -R $TEMPLATEDIR/pkg $BINNAME
 cp -R $TEMPLATEDIR/assets $BINNAME
-find $BINNAME -name .svn | xargs rm -rf
-
-echo "$ORGNAME" > $BINNAME/pkg/OrgName.txt
-echo "$PKGNAME" > $BINNAME/pkg/PkgName.txt
-echo "$BINNAME" > $BINNAME/pkg/BinName.txt
 
 for f in $TEMPLATEFILES; do
     t=`echo $f | sed -e s,"$TEMPLATEDIR","$BINNAME", -e s,"new_app_template","$BINNAME",g`
@@ -33,12 +27,14 @@ for f in $TEMPLATEFILES; do
     let len=${#f}-4
     suffix=${f:$len}
 
-    if [ -d $f ]; then
+    if [ `basename $f` = "assets" ]; then
+        true
+    elif [ -d $f ]; then
         mkdir $t
     elif [ "$suffix" = ".png" ] || [ "$suffix" = ".dll" ]; then
         cp $f $t
     else
-        cat $f | $BINNAME/pkg/pkgsedpipe.sh $BINNAME/pkg > $t
+        cat $f | sed -e "s/\$PKGNAME/$PKGNAME/g" -e "s/\$BINNAME/$BINNAME/g" -e "s/\$ORGNAME/$ORGNAME/g" > $t
     fi
 done
 

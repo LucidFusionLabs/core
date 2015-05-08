@@ -4,5 +4,6 @@ if(CMAKE_SYSTEM_NAME MATCHES "Darwin" AND NOT LFL_IPHONE)
  set(CONFIGURE_OPTIONS ${CONFIGURE_OPTIONS} --host x86_64-apple-darwin)
 endif()
 
+set(CONFIGURE_OPTIONS ${CONFIGURE_OPTIONS} --enable-static=yes --enable-shared=no)
 autoconf(./configure "${CONFIGURE_OPTIONS}" make)
 

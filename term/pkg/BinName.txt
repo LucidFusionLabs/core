@@ -1,2 +1,0 @@
-lterm
-lterm-sandbox-render
