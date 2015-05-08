@@ -57,7 +57,7 @@ endif(LFL_PNG)
 # jpeg
 if(LFL_JPEG)
 add_subdirectory(libjpeg-turbo)
-set(JPEG_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/libjpeg-turbo PARENT_SCOPE)
+set(JPEG_INCLUDE ${CMAKE_CURRENT_BINARY_DIR}/libjpeg-turbo ${CMAKE_CURRENT_SOURCE_DIR}/libjpeg-turbo PARENT_SCOPE)
 set(JPEG_LIB ${CMAKE_CURRENT_SOURCE_DIR}/libjpeg-turbo/.libs/libturbojpeg.a PARENT_SCOPE)
 endif(LFL_JPEG)
 

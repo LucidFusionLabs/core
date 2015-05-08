@@ -133,13 +133,15 @@ target_link_libraries(${LFL_PROJECT}_lfapp ${LFAPP_LIB})
 set(LFAPP_LIB ${LFL_PROJECT}_lfapp)
 endif(LFAPP_LIB_TYPE MATCHES "^SHARED$")
 
-# lfapp ExternalProject_Add deps
+# lfapp deps
 macro(lfapp_dep _def _lib)
 if(${_def})
 add_dependencies(${LFL_PROJECT}_lfapp ${_lib})
 endif(${_def})
 endmacro(lfapp_dep)
+lfapp_dep(LFL_BOX2D Box2D)
 lfapp_dep(LFL_OPENCV OpenCV)
+lfapp_dep(LFL_PNG png)
 
 # post build step
 if(CMAKE_SYSTEM_NAME MATCHES "Darwin")
