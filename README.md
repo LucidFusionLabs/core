@@ -1,8 +1,8 @@
 ![lfl](assets/lfl.png)
 
-[![Build Status](https://travis-ci.org/koldfuzor/lfl.svg?branch=master)](https://travis-ci.org/koldfuzor/lfl.svg?branch=master)
-
 ## Overview
+
+[![Build Status](https://travis-ci.org/koldfuzor/lfl.svg?branch=master)](https://travis-ci.org/koldfuzor/lfl)
 
 The API primarly consists of the: `Application`, `Window`, and `Scene` classes,
 plus the 7 modules: `Audio`, `Video`, `Input`, `Assets`, `Network`, `Camera`,
@@ -60,7 +60,6 @@ LFL builds easily for Windows, Linux, Mac OSX, iPhone and Android.
         cd c:\lfl\term
         copy ..\debug\*.dll debug
         copy ..\lfapp\*.glsl assets
-        copy ..\imports\berkelium\w32\bin\* Debug
         copy ..\imports\ffmpeg\w32\dll\*.dll Debug [overwrite:All]
         [Run]
 
@@ -73,16 +72,15 @@ LFL builds easily for Windows, Linux, Mac OSX, iPhone and Android.
 * See [.travis.yml](.travis.yml) for package dependencies
 
         cd lfl
-        ./imports/build.sh
-        cmake .
+        mkdir linux && cd linux
+        cmake ..
 
         cd term
         make -j4
-        ./pkg/lin.sh
         export LD_LIBRARY_PATH=./LTerminal
         ./LTerminal/lterm
 
-        tar cvfz LTerminal.tgz LTerminal
+        make lterm_pkg
 
 * Linux package LTerminal.tgz results
 
@@ -92,15 +90,14 @@ LFL builds easily for Windows, Linux, Mac OSX, iPhone and Android.
 * Minimum of XCode 6 required, nasm & yasm from macports
 
         cd lfl
-        ./imports/build.sh
-        cmake .
+        mkdir osx && cd osx
+        cmake ..
 
         cd term
         make -j4
-        ./pkg/macprep.sh
         ./LTerminal.app/Contents/MacOS/lterm
 
-        ./pkg/macpkg.sh
+        make lterm_pkg
 
 * OSX installer LTerminal.dmg results
 * For C++ Interpreter setup ~/cling following http://root.cern.ch/drupal/content/cling-build-instructions
@@ -120,40 +117,20 @@ LFL builds easily for Windows, Linux, Mac OSX, iPhone and Android.
 ### iOS Device
 
         cd lfl
-        cmake -DCMAKE_TOOLCHAIN_FILE=CMake/iPhoneToolchain.cmake .
+        mkdir iphone && cd iphone
+        ** Modify IPHONEROOT in ../CMake/iPhoneToolchain.cmake
+        cmake -DCMAKE_TOOLCHAIN_FILE=../CMake/iPhoneToolchain.cmake ..
 
         cd term
         make -j4
-        cp -R assets term-iphone
-        cp lfapp/*.glsl term-iphone/assets
-        ./pkg/iphoneprep.sh
-        ./pkg/iphonepkg.sh
+        make lterm_pkg
 
         open term-iphone/term-iphone.xcodeproj
 
         [Change configuration to Device]
         [Build and run]
         cp lterm term-iphone/build/Debug-iphoneos/term-iphone.app/term-iphone
-        cp skorp ~/Library//Developer/Xcode/DerivedData/skorp-iphone-cwokylhxlztdqwhdhxqzpqiemvoz/Build/Products/Debug-iphoneos/skorp-iphone.app/skorp-iphone
-        [Build and run]
-
-* iPhone Installer iLTerminal.ipa results
-
-### iOS Simulator
-
-        cd lfl
-        cmake -DCMAKE_TOOLCHAIN_FILE=CMake/iPhoneToolchain.cmake -DLFL_IPHONESIM=1 .
-
-        cd term
-        make -j4
-        cp -R assets term-iphone
-        ./pkg/iphoneprep.sh
-        ./pkg/iphonepkg.sh
-
-        open term-iphone/term-iphone.xcodeproj
-        [Change configuration to Simulator]
-        [Build and run]
-        cp lterm term-iphone/build/Debug-iphonesimulator/term-iphone.app/term-iphone
+        cp skorp ~/Library/Developer/Xcode/DerivedData/skorp-iphone-cwokylhxlztdqwhdhxqzpqiemvoz/Build/Products/Debug-iphoneos/skorp-iphone.app/skorp-iphone
         [Build and run]
 
 * iPhone Installer iLTerminal.ipa results
@@ -175,8 +152,9 @@ LFL builds easily for Windows, Linux, Mac OSX, iPhone and Android.
         --platform=android-8 --toolchain=arm-linux-androideabi-4.8 --install-dir=$HOME/android-toolchain
 
         cd lfl
-        ** Modify ANDROIDROOT in CMake/AndroidToolchain.cmake
-        cmake -DCMAKE_TOOLCHAIN_FILE=CMake/AndroidToolchain.cmake .
+        mkdir android && cd android
+        ** Modify ANDROIDROOT in ../CMake/AndroidToolchain.cmake
+        cmake -DCMAKE_TOOLCHAIN_FILE=../CMake/AndroidToolchain.cmake ..
 
         cd term
         make -j4

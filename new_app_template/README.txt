@@ -15,6 +15,7 @@ Append "add_subdiretory(spaceball)" to lfl/CMakeLists.txt.
 MANIFEST
 --------
 
+- CMakeLists.txt:                         Build rules
 - new_app_template.cpp:                   App source code
 - assets/:                                All models, multimedia, databases, etc here  
 
@@ -41,23 +42,11 @@ MANIFEST
         cp ../spaceball-iphone/Images/Default.png res/drawable-ldpi/splash.png
         cp ../spaceball-iphone/Images/Default.png res/drawable-mdpi/splash.png
 
-- CMakeLists.txt:                         Build rules
 
-- resource.h:                             
 - new_app_template.nsi:                   Windows Nullsoft Installer config
-
-- pkg/lin.sh:                             Linux package directory prepare
-                                       
-- pkg/macprep.sh:                         OSX package directory prepare
-- pkg/macpkg.sh:                          OSX installer builder
-- pkg/mac-Info.plist:                     OSX properties list template
-
-- pkg/iphoneprep.sh:                      iPhone package directory prepare
-- pkg/iphonpkg.sh:                        iPhone installer builder
-- pkg/mac-Info.plist:                     iPhone properties list template
-
+- new_app_template-android/*:             Android Eclipse linker and installer config
 - new_app_template-iphone/*:              iPhone XCode binary signer config
 
-- new_app_template-android/*:             Android Eclipse linker and installer config
-- Android.mk:                             
+- iphone-Info.plist:                      iPhone properties list
+- mac-Info.plist:                         OSX properties list
 

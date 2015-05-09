@@ -1,1 +1,0 @@
-new_app_template

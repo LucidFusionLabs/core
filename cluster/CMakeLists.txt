@@ -18,5 +18,5 @@ include_directories(${LFAPP_INCLUDE})
 add_executable(cluster-trainer trainer.cpp ${SDL_MAIN})
 set_target_properties(cluster-trainer PROPERTIES OUTPUT_NAME trainer)
 target_link_libraries(cluster-trainer ${LFAPP_LIB})
-lfapp_post_build(cluster-trainer trainer)
+lfapp_post_build_start(cluster-trainer ClusterTrainer)
 

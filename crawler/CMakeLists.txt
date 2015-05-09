@@ -19,5 +19,5 @@ PROTOBUF_GENERATE_CPP(PROTO_SRC PROTO_HDR crawler.proto)
 # crawler
 add_executable(crawler crawler.cpp ${SDL_MAIN} ${PROTO_SRC})
 target_link_libraries(crawler ${LFAPP_LIB})
-lfapp_post_build(crawler crawler)
+lfapp_post_build_start(crawler crawler)
 

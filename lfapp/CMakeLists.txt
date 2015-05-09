@@ -133,18 +133,121 @@ target_link_libraries(${LFL_PROJECT}_lfapp ${LFAPP_LIB})
 set(LFAPP_LIB ${LFL_PROJECT}_lfapp)
 endif(LFAPP_LIB_TYPE MATCHES "^SHARED$")
 
+# lfapp deps
+macro(lfapp_dep _def _lib)
+if(${_def})
+add_dependencies(${LFL_PROJECT}_lfapp ${_lib})
+endif(${_def})
+endmacro(lfapp_dep)
+lfapp_dep(LFL_BOX2D Box2D)
+lfapp_dep(LFL_OPENCV OpenCV)
+lfapp_dep(LFL_PNG png)
+
 # post build step
-if(CMAKE_SYSTEM_NAME MATCHES "Darwin")
-macro(lfapp_post_build target filename)
-add_custom_command(TARGET ${target} POST_BUILD
-COMMAND install_name_tool -change /usr/local/lib/libSDL-1.3.0.dylib ./libSDL-1.3.0.dylib ${filename}
-COMMAND install_name_tool -change /usr/local/lib/libmp3lame.0.dylib ./libmp3lame.0.dylib ${filename}
-COMMAND install_name_tool -change /usr/local/lib/libportaudio.2.dylib ./libportaudio.2.dylib ${filename})
-endmacro(lfapp_post_build)
-else(CMAKE_SYSTEM_NAME MATCHES "Darwin")
-macro(lfapp_post_build target)
-endmacro(lfapp_post_build)
-endif(CMAKE_SYSTEM_NAME MATCHES "Darwin")
+if(LFL_IPHONE)
+    macro(lfapp_post_build_start target pkgname)
+        set(bin i${pkgname}.app/Contents/MacOS/${target}) 
+        set(info_plist ${CMAKE_CURRENT_SOURCE_DIR}/iphone-Info.plist)
+        add_custom_command(TARGET ${target} POST_BUILD WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+            COMMAND rm -rf   i${pkgname}.app
+            COMMAND mkdir -p i${pkgname}.app/Contents
+            COMMAND cp  ${info_plist} i${pkgname}.app/Contents/Info.plist
+            COMMAND cat ${info_plist} | grep -A1 CFBundlePackageType | tail -1 | cut -f2 -d\\> | cut -f1 -d \\< | tr -d '\\n' | tee    i${pkgname}.app/Contents/PkgInfo
+            COMMAND cat ${info_plist} | grep -A1 CFBundleSignature   | tail -1 | cut -f2 -d\\> | cut -f1 -d \\< | tr -d '\\n' | tee -a i${pkgname}.app/Contents/PkgInfo
+            COMMAND cp -r ${CMAKE_CURRENT_SOURCE_DIR}/assets i${pkgname}.app
+            COMMAND cp ${CMAKE_CURRENT_SOURCE_DIR}/../lfapp/*.glsl i${pkgname}.app/assets
+            COMMAND cp ${target} i${pkgname}.app
+            COMMAND chmod +x ${target} i${pkgname}.app/${target}
+            COMMAND mkdir -p i${pkgname}.app/_CodeSignature
+            COMMAND touch i${pkgname}.app/_CodeSignature/CodeResources
+            COMMAND ln -s _CodeSignature/CodeResources i${pkgname}.app/CodeResources
+            COMMAND codesign -f -s "iPhone Developer" i${pkgname}.app)
+        add_custom_target(${target}_pkg WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+            COMMAND rm -rf   Payload
+            COMMAND mkdir -p Payload
+            COMMAND cp -rp i${pkgname}.app Payload
+            COMMAND zip -r i${pkgname}.ipa Payload)
+    endmacro(lfapp_post_build_start)
+    macro(lfapp_post_build_copy_bin target pkgname)
+    endmacro(lfapp_post_build_copy_bin)
+elseif(LFL_ANDROID)
+    macro(lfapp_post_build_start target pkgname)
+    endmacro(lfapp_post_build_start)
+    macro(lfapp_post_build_copy_bin target pkgname)
+    endmacro(lfapp_post_build_copy_bin)
+elseif(CMAKE_SYSTEM_NAME MATCHES "Linux")
+    macro(lfapp_post_build_start target pkgname)
+        set(pa_lib ../imports/portaudio/lib/.libs/libportaudio.so.2)
+        set(mp3_lib ../imports/lame/libmp3lame/.libs/libmp3lame.so.0)
+        set(x264_lib ../imports/x264/libx264.so.142)
+        set(cv_lib ../imports/OpenCV/lib/libcv.so.2.1)
+        set(cx_lib ../imports/OpenCV/lib/libcxcore.so.2.1)
+        add_custom_command(TARGET ${target} POST_BUILD WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+            COMMAND rm -rf   ${pkgname}
+            COMMAND mkdir -p ${pkgname}
+            COMMAND cp -r ${CMAKE_CURRENT_SOURCE_DIR}/assets ${pkgname}
+            COMMAND cp ${CMAKE_CURRENT_SOURCE_DIR}/../lfapp/*.glsl ${pkgname}/assets
+            COMMAND cp ${target} ${pkgname}
+            COMMAND if [ -f ${pa_lib}   ]; then cp ${pa_lib}   ${pkgname}\; fi
+            COMMAND if [ -f ${mp3_lib}  ]; then cp ${mp3_lib}  ${pkgname}\; fi
+            COMMAND if [ -f ${x264_lib} ]; then cp ${x264_lib} ${pkgname}\; fi
+            COMMAND if [ -f ${cv_lib}   ]; then cp ${cv_lib}   ${pkgname}\; fi
+            COMMAND if [ -f ${cx_lib}   ]; then cp ${cx_lib}   ${pkgname}\; fi)
+    endmacro(lfapp_post_build_start)
+    macro(lfapp_post_build_copy_bin target pkgname)
+    endmacro(lfapp_post_build_copy_bin)
+elseif(CMAKE_SYSTEM_NAME MATCHES "Darwin")
+    macro(lfapp_post_build_start target pkgname)
+        set(bin ${pkgname}.app/Contents/MacOS/${target}) 
+        set(lib ${pkgname}.app/Contents/Libraries) 
+        set(res ${pkgname}.app/Contents/Resources) 
+        set(info_plist ${CMAKE_CURRENT_SOURCE_DIR}/mac-Info.plist)
+        set(pa_lib ../imports/portaudio/lib/.libs/libportaudio.2.dylib)
+        set(mp3_lib ../imports/lame/libmp3lame/.libs/libmp3lame.0.dylib)
+        set(cx_lib ../imports/OpenCV/lib/libcxcore.2.1.dylib)
+        set(cv_lib ../imports/OpenCV/lib/libcv.2.1.dylib)
+        add_custom_command(TARGET ${target} POST_BUILD WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+            COMMAND rm -rf   ${pkgname}.app
+            COMMAND mkdir -p ${pkgname}.app/Contents/MacOS
+            COMMAND mkdir -p ${pkgname}.app/Contents/Resources
+            COMMAND mkdir -p ${pkgname}.app/Contents/Frameworks
+            COMMAND mkdir -p ${pkgname}.app/Contents/Libraries
+            COMMAND cp  ${info_plist} ${pkgname}.app/Contents/Info.plist
+            COMMAND cat ${info_plist} | grep -A1 CFBundlePackageType | tail -1 | cut -f2 -d\\> | cut -f1 -d \\< | tr -d '\\n' | tee    ${pkgname}.app/Contents/PkgInfo
+            COMMAND cat ${info_plist} | grep -A1 CFBundleSignature   | tail -1 | cut -f2 -d\\> | cut -f1 -d \\< | tr -d '\\n' | tee -a ${pkgname}.app/Contents/PkgInfo
+            COMMAND cp  ${CMAKE_CURRENT_SOURCE_DIR}/assets/icon.icns ${res}
+            COMMAND cp -r ${CMAKE_CURRENT_SOURCE_DIR}/assets ${res}
+            COMMAND cp ${CMAKE_CURRENT_SOURCE_DIR}/../lfapp/*.glsl ${res}/assets
+            COMMAND cp ${target} ${pkgname}.app/Contents/MacOS
+            COMMAND if [ -f ${pa_lib}  ]; then cp ${pa_lib}  ${lib}\; fi
+            COMMAND if [ -f ${mp3_lib} ]; then cp ${mp3_lib} ${lib}\; fi
+            COMMAND if [ -f ${cx_lib}  ]; then cp ${cx_lib}  ${lib}\; fi
+            COMMAND if [ -f ${cv_lib}  ]; then cp ${cv_lib}  ${lib}\; fi
+            COMMAND if [ -f ${pa_lib}  ]; then install_name_tool -change /usr/local/lib/libportaudio.2.dylib @loader_path/../Libraries/libportaudio.2.dylib ${bin}\; fi
+            COMMAND if [ -f ${mp3_lib} ]; then install_name_tool -change /usr/local/lib/libmp3lame.0.dylib @loader_path/../Libraries/libmp3lame.0.dylib ${bin}\; fi
+            COMMAND if [ -f ${cv_lib}  ]; then install_name_tool -change libcxcore.2.1.dylib @loader_path/../Libraries/libcxcore.2.1.dylib ${lib}/libcv.2.1.dylib\; fi
+            COMMAND if [ -f ${cx_lib}  ]; then install_name_tool -change libcxcore.2.1.dylib @loader_path/../Libraries/libcxcore.2.1.dylib ${bin}\; fi
+            COMMAND if [ -f ${cv_lib}  ]; then install_name_tool -change libcv.2.1.dylib @loader_path/../Libraries/libcv.2.1.dylib ${bin}\; fi)
+        add_custom_target(${target}_pkg WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+            COMMAND if [ -d /Volumes/${pkgname} ]; then umount /Volumes/${pkgname}\; fi
+            COMMAND rm -rf ${pkgname}.dmg ${pkgname}.sparseimage
+            COMMAND hdiutil create -size 60m -type SPARSE -fs HFS+ -volname ${pkgname} -attach ${pkgname}.sparseimage
+            COMMAND bless --folder /Volumes/${pkgname} --openfolder /Volumes/${pkgname}
+            COMMAND cp -r ${pkgname}.app /Volumes/${pkgname}/
+            COMMAND ln -s /Applications /Volumes/${pkgname}/.
+            COMMAND hdiutil eject /Volumes/${pkgname}
+            COMMAND hdiutil convert ${pkgname}.sparseimage -format UDBZ -o ${pkgname}.dmg)
+    endmacro(lfapp_post_build_start)
+    macro(lfapp_post_build_copy_bin target pkgname)
+        add_custom_command(TARGET ${target} POST_BUILD WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+                           COMMAND cp ${target} ${pkgname}.app/Contents/MacOS)
+    endmacro(lfapp_post_build_copy_bin)
+else()
+    macro(lfapp_post_build_start target pkgname)
+    endmacro(lfapp_post_build_start)
+    macro(lfapp_post_build_copy_bin target pkgname)
+    endmacro(lfapp_post_build_copy_bin)
+endif()
 
 # export
 set(LFAPP_INCLUDE ${LFAPP_INCLUDE} PARENT_SCOPE)

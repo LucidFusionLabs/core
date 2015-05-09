@@ -17,5 +17,5 @@ include_directories(${LFAPP_INCLUDE})
 
 add_executable(senators senators.cpp ${SDL_MAIN})
 target_link_libraries(senators ${LFAPP_LIB})
-lfapp_post_build(senators senators)
+lfapp_post_build_start(senators Senators)
 
