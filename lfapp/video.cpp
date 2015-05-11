@@ -216,12 +216,14 @@ const int GraphicsDevice::OneMinusDstColor = GL_ONE_MINUS_DST_COLOR;
 const int GraphicsDevice::Fill              = 0;
 const int GraphicsDevice::Line              = 0;
 const int GraphicsDevice::Point             = 0;
+const int GraphicsDevice::Polygon           = 0;
 const int GraphicsDevice::GLPreferredBuffer = GL_UNSIGNED_BYTE;
 const int GraphicsDevice::GLInternalFormat  = GL_RGBA;
 #else
 const int GraphicsDevice::Fill              = GL_FILL;
 const int GraphicsDevice::Line              = GL_LINE;
 const int GraphicsDevice::Point             = GL_POINT;
+const int GraphicsDevice::Polygon           = GL_POLYGON;
 const int GraphicsDevice::GLPreferredBuffer = GL_UNSIGNED_INT_8_8_8_8_REV;
 const int GraphicsDevice::GLInternalFormat  = GL_RGBA;
 #endif
@@ -908,6 +910,7 @@ const int GraphicsDevice::Points = 0;
 const int GraphicsDevice::Lines = 0;
 const int GraphicsDevice::LineLoop = 0;
 const int GraphicsDevice::Triangles = 0;
+const int GraphicsDevice::Polygon = 0;
 const int GraphicsDevice::TriangleStrip = 0;
 const int GraphicsDevice::Texture2D = 0;
 const int GraphicsDevice::UnsignedInt = 0;

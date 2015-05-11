@@ -72,6 +72,7 @@ lfapp_lib(LFL_GLFWINPUT "${GLFW_INCLUDE}" "${GLFW_LIB}")
 lfapp_lib(LFL_SDLINPUT "${SDL_INCLUDE}" "${SDL_LIB}")
 lfapp_lib(LFL_LIBARCHIVE "${ARCHIVE_INCLUDE}" "${ARCHIVE_LIB}")
 lfapp_lib(LFL_FREETYPE "${FREETYPE_INCLUDE}" "${FREETYPE_LIB}")
+lfapp_lib(LFL_ASSIMP "${ASSIMP_INCLUDE}" "${ASSIMP_LIB}")
 lfapp_lib(LFL_HARFBUZZ "${HARFBUZZ_INCLUDE}" "${HARFBUZZ_LIB}")
 lfapp_lib(LFL_LIBCSS "${LIBCSS_INCLUDE}" "${LIBCSS_LIB}")
 lfapp_lib(LFL_FFMPEG "${FFMPEG_INCLUDE}" "${FFMPEG_LIB}")
@@ -197,15 +198,24 @@ elseif(CMAKE_SYSTEM_NAME MATCHES "Linux")
     macro(lfapp_post_build_copy_bin target pkgname)
     endmacro(lfapp_post_build_copy_bin)
 elseif(CMAKE_SYSTEM_NAME MATCHES "Darwin")
+    macro(osx_lib defname varname filename)
+        set(${varname} ${filename})
+        if(${${defname}})
+            set(if_${varname} 1)
+        endif(${${defname}})
+    endmacro(osx_lib)
+    macro(osx_libs)
+        osx_lib(LFL_PORTAUDIO pa_lib ../imports/portaudio/lib/.libs/libportaudio.2.dylib)
+        osx_lib(LFL_FFMPEG mp3_lib ../imports/lame/libmp3lame/.libs/libmp3lame.0.dylib)
+        osx_lib(LFL_OPENCV cx_lib ../imports/OpenCV/lib/libcxcore.2.1.dylib)
+        osx_lib(LFL_OPENCV cv_lib ../imports/OpenCV/lib/libcv.2.1.dylib)
+    endmacro(osx_libs)
     macro(lfapp_post_build_start target pkgname)
+        osx_libs()
         set(bin ${pkgname}.app/Contents/MacOS/${target}) 
         set(lib ${pkgname}.app/Contents/Libraries) 
         set(res ${pkgname}.app/Contents/Resources) 
         set(info_plist ${CMAKE_CURRENT_SOURCE_DIR}/mac-Info.plist)
-        set(pa_lib ../imports/portaudio/lib/.libs/libportaudio.2.dylib)
-        set(mp3_lib ../imports/lame/libmp3lame/.libs/libmp3lame.0.dylib)
-        set(cx_lib ../imports/OpenCV/lib/libcxcore.2.1.dylib)
-        set(cv_lib ../imports/OpenCV/lib/libcv.2.1.dylib)
         add_custom_command(TARGET ${target} POST_BUILD WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
             COMMAND rm -rf   ${pkgname}.app
             COMMAND mkdir -p ${pkgname}.app/Contents/MacOS
@@ -219,15 +229,15 @@ elseif(CMAKE_SYSTEM_NAME MATCHES "Darwin")
             COMMAND cp -r ${CMAKE_CURRENT_SOURCE_DIR}/assets ${res}
             COMMAND cp ${CMAKE_CURRENT_SOURCE_DIR}/../lfapp/*.glsl ${res}/assets
             COMMAND cp ${target} ${pkgname}.app/Contents/MacOS
-            COMMAND if [ -f ${pa_lib}  ]; then cp ${pa_lib}  ${lib}\; fi
-            COMMAND if [ -f ${mp3_lib} ]; then cp ${mp3_lib} ${lib}\; fi
-            COMMAND if [ -f ${cx_lib}  ]; then cp ${cx_lib}  ${lib}\; fi
-            COMMAND if [ -f ${cv_lib}  ]; then cp ${cv_lib}  ${lib}\; fi
-            COMMAND if [ -f ${pa_lib}  ]; then install_name_tool -change /usr/local/lib/libportaudio.2.dylib @loader_path/../Libraries/libportaudio.2.dylib ${bin}\; fi
-            COMMAND if [ -f ${mp3_lib} ]; then install_name_tool -change /usr/local/lib/libmp3lame.0.dylib @loader_path/../Libraries/libmp3lame.0.dylib ${bin}\; fi
-            COMMAND if [ -f ${cv_lib}  ]; then install_name_tool -change libcxcore.2.1.dylib @loader_path/../Libraries/libcxcore.2.1.dylib ${lib}/libcv.2.1.dylib\; fi
-            COMMAND if [ -f ${cx_lib}  ]; then install_name_tool -change libcxcore.2.1.dylib @loader_path/../Libraries/libcxcore.2.1.dylib ${bin}\; fi
-            COMMAND if [ -f ${cv_lib}  ]; then install_name_tool -change libcv.2.1.dylib @loader_path/../Libraries/libcv.2.1.dylib ${bin}\; fi)
+            COMMAND if [ ${if_pa_lib}  ]; then cp ${pa_lib}  ${lib}\; fi
+            COMMAND if [ ${if_mp3_lib} ]; then cp ${mp3_lib} ${lib}\; fi
+            COMMAND if [ ${if_cx_lib}  ]; then cp ${cx_lib}  ${lib}\; fi
+            COMMAND if [ ${if_cv_lib}  ]; then cp ${cv_lib}  ${lib}\; fi
+            COMMAND if [ ${if_pa_lib}  ]; then install_name_tool -change /usr/local/lib/libportaudio.2.dylib @loader_path/../Libraries/libportaudio.2.dylib ${bin}\; fi
+            COMMAND if [ ${if_mp3_lib} ]; then install_name_tool -change /usr/local/lib/libmp3lame.0.dylib @loader_path/../Libraries/libmp3lame.0.dylib ${bin}\; fi
+            COMMAND if [ ${if_cv_lib}  ]; then install_name_tool -change libcxcore.2.1.dylib @loader_path/../Libraries/libcxcore.2.1.dylib ${lib}/libcv.2.1.dylib\; fi
+            COMMAND if [ ${if_cx_lib}  ]; then install_name_tool -change libcxcore.2.1.dylib @loader_path/../Libraries/libcxcore.2.1.dylib ${bin}\; fi
+            COMMAND if [ ${if_cv_lib}  ]; then install_name_tool -change libcv.2.1.dylib @loader_path/../Libraries/libcv.2.1.dylib ${bin}\; fi)
         add_custom_target(${target}_pkg WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
             COMMAND if [ -d /Volumes/${pkgname} ]; then umount /Volumes/${pkgname}\; fi
             COMMAND rm -rf ${pkgname}.dmg ${pkgname}.sparseimage
@@ -237,10 +247,20 @@ elseif(CMAKE_SYSTEM_NAME MATCHES "Darwin")
             COMMAND ln -s /Applications /Volumes/${pkgname}/.
             COMMAND hdiutil eject /Volumes/${pkgname}
             COMMAND hdiutil convert ${pkgname}.sparseimage -format UDBZ -o ${pkgname}.dmg)
+        add_custom_target(${target}_run WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} DEPENDS ${target}
+            COMMAND ${pkgname}.app/Contents/MacOS/${target})
+        add_custom_target(${target}_debug WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} DEPENDS ${target}
+            COMMAND lldb -f ${pkgname}.app/Contents/MacOS/${target} -o run)
     endmacro(lfapp_post_build_start)
     macro(lfapp_post_build_copy_bin target pkgname)
+        osx_libs()
+        set(bin ${pkgname}.app/Contents/MacOS/${target})
         add_custom_command(TARGET ${target} POST_BUILD WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-                           COMMAND cp ${target} ${pkgname}.app/Contents/MacOS)
+            COMMAND cp ${target} ${pkgname}.app/Contents/MacOS
+            COMMAND if [ ${if_pa_lib}  ]; then install_name_tool -change /usr/local/lib/libportaudio.2.dylib @loader_path/../Libraries/libportaudio.2.dylib ${bin}\; fi
+            COMMAND if [ ${if_mp3_lib} ]; then install_name_tool -change /usr/local/lib/libmp3lame.0.dylib @loader_path/../Libraries/libmp3lame.0.dylib ${bin}\; fi
+            COMMAND if [ ${if_cx_lib}  ]; then install_name_tool -change libcxcore.2.1.dylib @loader_path/../Libraries/libcxcore.2.1.dylib ${bin}\; fi
+            COMMAND if [ ${if_cv_lib}  ]; then install_name_tool -change libcv.2.1.dylib @loader_path/../Libraries/libcv.2.1.dylib ${bin}\; fi)
     endmacro(lfapp_post_build_copy_bin)
 else()
     macro(lfapp_post_build_start target pkgname)

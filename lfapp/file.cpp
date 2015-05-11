@@ -391,38 +391,39 @@ const char *DirectoryIter::Next() {
 }
 
 #ifdef LFL_LIBARCHIVE
-ArchiveIter::~ArchiveIter() { free(dat); if (impl) archive_read_finish((archive*)impl); }
+ArchiveIter::~ArchiveIter() { if (impl) archive_read_finish((archive*)impl); }
 ArchiveIter::ArchiveIter(const char *path) {
-    entry=0; dat=0; impl=0;
-
     if (!(impl = archive_read_new())) return;
     if (archive_read_support_format_zip          ((archive*)impl) != 0) INFO("no zip support");
     if (archive_read_support_format_tar          ((archive*)impl) != 0) INFO("no tar support");
     if (archive_read_support_compression_gzip    ((archive*)impl) != 0) INFO("no gzip support");
     if (archive_read_support_compression_none    ((archive*)impl) != 0) INFO("no none support");
     if (archive_read_support_compression_compress((archive*)impl) != 0) INFO("no compress support");
-
     if (archive_read_open_filename((archive*)impl, path, 65536) != 0) {
-        archive_read_finish((archive*)impl); impl=0; return;
+        archive_read_finish((archive*)impl);
+        impl = nullptr;
     }
 }
 const char *ArchiveIter::Next() {
-    int ret;
     if (!impl) return 0;
-    if ((ret = archive_read_next_header((archive*)impl, (archive_entry**)&entry))) { ERROR("read_next: ", ret, " ", archive_error_string((archive*)impl)); return 0; }
+    int ret = archive_read_next_header((archive*)impl, (archive_entry**)&entry);
+    if (ret) {
+        if (const char *errstr = archive_error_string((archive*)impl)) ERROR("read_next: ", ret, " ", errstr);
+        return 0;
+    }
     return archive_entry_pathname((archive_entry*)entry);
 }
 const void *ArchiveIter::Data() {
-    int l=Size(); free(dat); dat=malloc(l);
-    if (archive_read_data_into_buffer((archive*)impl, dat, l)) { free(dat); dat=0; }
-    return dat;
+    buf.resize(Size());
+    CHECK_EQ(buf.size(), archive_read_data((archive*)impl, &buf[0], buf.size()));
+    return buf.c_str();
 }
 void ArchiveIter::Skip() { archive_read_data_skip((archive*)impl); }
 long long ArchiveIter::Size() { return archive_entry_size((archive_entry*)entry); }
 
 #else /* LFL_LIBARCHIVE */
-ArchiveIter::~ArchiveIter() { free(dat); }
-ArchiveIter::ArchiveIter(const char *path) { entry=0; dat=0; impl=0; }
+ArchiveIter::~ArchiveIter() {}
+ArchiveIter::ArchiveIter(const char *path) {}
 const char *ArchiveIter::Next() { return 0; }
 long long ArchiveIter::Size() { return 0; }
 const void *ArchiveIter::Data() { return 0; }

@@ -118,7 +118,8 @@ struct Asset {
     AssetMap *parent;
     string name, texture, geom_fn;
     DrawCB cb;
-    float scale; int translate, rotate;
+    float scale;
+    int translate, rotate;
     Geometry *geometry, *hull;
     Texture tex;
     unsigned texgen, typeID, particleTexID, blends, blendt;
