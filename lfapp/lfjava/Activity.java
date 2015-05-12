@@ -76,7 +76,7 @@ class GPlusClient implements GameHelper.GameHelperListener, OnInvitationReceived
             if (response != Activity.RESULT_OK) { return; }
             RoomConfig.Builder roomConfigBuilder = makeBasicRoomConfigBuilder();
 
-            final ArrayList<String> invitees = data.getStringArrayListExtra(Multiplayer.EXTRA_PLAYERS);
+            final ArrayList<String> invitees = data.getStringArrayListExtra(Games.EXTRA_PLAYER_IDS);
             roomConfigBuilder.addPlayersToInvite(invitees);
 
             int minAutoMatchPlayers = data.getIntExtra(Multiplayer.EXTRA_MIN_AUTOMATCH_PLAYERS, 0);

@@ -210,12 +210,14 @@ bool LocalFile::Open(const string &path, const string &mode, bool pre_create) {
         return impl;
     }
 
-    char *b=0; int l=0, ret;
-    bool internal_path = !strchr(path.c_str(), '/');
-    if (internal_path) { if ((ret = AndroidInternalRead(path.c_str(), &b, &l))) return false; }
-    else               { if ((ret = AndroidFileRead    (path.c_str(), &b, &l))) return false; }
+    char *b=0;
+    int l=0, ret=0;
+    bool internal_path = 0; // !strchr(path.c_str(), '/');
+    if (internal_path) { if ((ret = AndroidInternalRead(path.c_str(), &b, &l))) { ERROR("AndroidInternalRead ", path); return false; } }
+    else               { if ((ret = AndroidFileRead    (path.c_str(), &b, &l))) { ERROR("AndroidFileRead ",     path); return false; } }
 
     impl = new BufferFile(string(b, l));
+    free(b);
     return true;
 }
 

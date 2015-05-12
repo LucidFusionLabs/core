@@ -133,7 +133,7 @@ void AndroidExceptionLog(jthrowable &exception) {
     jobjectArray frames = (jobjectArray)jni_env->CallObjectMethod(exception, jni_throwable_method_get_stack_trace);
     jsize frames_length = jni_env->GetArrayLength(frames);
     string out;
-#if 0
+#if 1
     if (frames > 0) {
         jstring msg = (jstring)jni_env->CallObjectMethod(exception, jni_throwable_method_tostring);
         const char *m = jni_env->GetStringUTFChars(msg, 0);
@@ -168,7 +168,7 @@ int AndroidException() {
 }
 
 extern "C" int AndroidVideoInit(int gles_version) {
-    INFOf("%s", "android_video_init");
+    INFOf("%s", "AndroidVideoInit");
     screen->width = jni_activity_width;
     screen->height = jni_activity_height;
     const char *method_name = (gles_version == 2 ? "initEGL2" : "initEGL1");
