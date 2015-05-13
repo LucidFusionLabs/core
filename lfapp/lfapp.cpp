@@ -560,7 +560,9 @@ int Application::Create(int argc, const char **argv, const char *source_filename
     time_started = Now();
     progname = argv[0];
     startdir = LocalFile::CurrentDirectory();
+#ifndef LFL_ANDROID
     assetdir = "assets/";
+#endif
 
 #ifdef __APPLE__
     char rpath[1024];
@@ -596,7 +598,7 @@ int Application::Create(int argc, const char **argv, const char *source_filename
     srand(fnv32(&pid, sizeof(int), time(0)));
     if (logfilename.size()) {
         logfile = fopen(logfilename.c_str(), "a");
-        SystemNetwork::SetSocketCloseOnExec(fileno(logfile), 1);
+        if (logfile) SystemNetwork::SetSocketCloseOnExec(fileno(logfile), 1);
     }
 
     ThreadLocalStorage::Init();
@@ -736,7 +738,7 @@ int Application::Init() {
 }
 
 int Application::Start() {
-    if (FLAGS_lfapp_audio && audio.Start()) return -1;
+    if (FLAGS_lfapp_audio && audio.Start()) { ERROR("lfapp audio start failed"); return -1; }
     return 0;
 }
 
@@ -795,6 +797,7 @@ int Application::Main() {
 }
     
 int Application::MainLoop() {
+    INFO("MainLoop: Begin, run=", run);
     while (run) {
         // if (!minimized)
         Frame();
@@ -803,7 +806,7 @@ int Application::MainLoop() {
 #endif
         MSleep(1);
     }
-
+    INFO("MainLoop: End, run=", run);
     return Free();
 }
 
@@ -868,7 +871,7 @@ void FrameScheduler::FrameWait() {
 #elif defined(LFL_SDLINPUT)
         SDL_WaitEvent(NULL);
 #else
-        FATAL("not implemented");
+        // FATAL("not implemented");
 #endif
         if (synchronize_waits) {
             frame_mutex.lock();

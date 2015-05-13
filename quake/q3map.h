@@ -284,7 +284,7 @@ struct Q3MapAsset : public MapAsset {
         screen->gd->EnableDepthTest();
 
         vector<int> visible_faces;
-        set<int> seen_faces;
+        unordered_set<int> seen_faces;
         for (int i=0, l=num[kLeafs]; i<l; i++) {
             tBSPLeaf *leaf_i = &leaf[i];
             if (!IsClusterVisible(visdata, cam_leaf->cluster, leaf_i->cluster)) continue;
@@ -328,7 +328,7 @@ struct Q3MapAsset : public MapAsset {
         return pPVS->pBitsets[(current*pPVS->bytesPerCluster) + (test/8)] & (1 << (test & 7));
     }
 
-    static void AddFaces(tBSPLeaf *leaf_i, int *leaffaces, set<int> *seen_faces, vector<int> *visible_faces) {
+    static void AddFaces(tBSPLeaf *leaf_i, int *leaffaces, unordered_set<int> *seen_faces, vector<int> *visible_faces) {
         for (int i=0, l=leaf_i->numOfLeafFaces, faceind=leaf_i->leafface; i<l; i++) {
             int face_ind = leaffaces[faceind+i];
             if (!seen_faces->insert(face_ind).second) continue;

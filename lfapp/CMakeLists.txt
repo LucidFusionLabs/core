@@ -1,17 +1,17 @@
 # $Id: CMakeLists.txt 1327 2014-11-03 23:26:43Z justin $
 
 macro(lfapp_def _def)
-if(${_def})
-set(LFAPP_DEF ${LFAPP_DEF} -D${_def})
-endif(${_def})
+    if(${_def})
+    set(LFAPP_DEF ${LFAPP_DEF} -D${_def})
+    endif(${_def})
 endmacro(lfapp_def)
 
 macro(lfapp_lib _def _inc _lib)
-if(${_def})
-set(LFAPP_DEF ${LFAPP_DEF} -D${_def})
-set(LFAPP_LIB ${LFAPP_LIB} ${_lib})
-set(LFAPP_INCLUDE ${LFAPP_INCLUDE} ${_inc})
-endif(${_def})
+    if(${_def})
+        set(LFAPP_DEF ${LFAPP_DEF} -D${_def})
+        set(LFAPP_LIB ${LFAPP_LIB} ${_lib})
+        set(LFAPP_INCLUDE ${LFAPP_INCLUDE} ${_inc})
+    endif(${_def})
 endmacro(lfapp_lib)
 
 # init
@@ -21,23 +21,25 @@ set(LFAPP_DEF -DLFL_BUILD ${PLATFORM_DEF} ${WXWIDGETS_DEF})
 
 if(LFL_LFLINPUT)
 if(LFL_IPHONE)
- set(LFL_IPHONEINPUT 1)
+    set(LFL_IPHONEINPUT 1)
 elseif(LFL_ANDROID)
- set(LFL_ANDROIDINPUT 1)
+    set(LFL_ANDROIDINPUT 1)
 elseif(CMAKE_SYSTEM_NAME MATCHES "Darwin")
- set(LFL_OSXINPUT 1)
+    set(LFL_OSXINPUT 1)
 endif(LFL_IPHONE)
 endif(LFL_LFLINPUT)
 
 if(LFL_LFLVIDEO)
 if(LFL_IPHONE)
- set(LFL_IPHONEVIDEO 1)
+    set(LFL_IPHONEVIDEO 1)
+    set(LFL_IPHONEINPUT 1)
 elseif(LFL_ANDROID)
- set(LFL_ANDROIDVIDEO 1)
+    set(LFL_ANDROIDVIDEO 1)
+    set(LFL_ANDROIDINPUT 1)
 elseif(CMAKE_SYSTEM_NAME MATCHES "Darwin")
- set(LFL_OSXVIDEO 1)
+    set(LFL_OSXVIDEO 1)
 elseif(CMAKE_SYSTEM_NAME MATCHES "Linux")
- set(LFL_LINUXVIDEO 1)
+    set(LFL_LINUXVIDEO 1)
 endif(LFL_IPHONE)
 endif(LFL_LFLVIDEO)
 
@@ -53,15 +55,17 @@ lfapp_def(LFL_OSXINPUT)
 lfapp_def(LFL_IPHONE)
 lfapp_def(LFL_IPHONESIM)
 lfapp_def(LFL_IPHONEVIDEO)
+lfapp_def(LFL_IPHONEINPUT)
 lfapp_def(LFL_ANDROID)
 lfapp_def(LFL_ANDROIDVIDEO)
+lfapp_def(LFL_ANDROIDINPUT)
 lfapp_def(LFL_LINUXVIDEO)
 lfapp_def(LFL_OPENSL)
 lfapp_def(LFL_EPOLL)
 lfapp_def(LFL_IPC)
 
 if(LFL_QT)
-set(LFAPP_DEF ${LFAPP_DEF} ${QT_DEF})
+    set(LFAPP_DEF ${LFAPP_DEF} ${QT_DEF})
 endif(LFL_QT)
 
 lfapp_lib(LFL_BOOST "${BOOST_INCLUDE}" "${BOOST_LIB}")
@@ -72,6 +76,7 @@ lfapp_lib(LFL_GLFWINPUT "${GLFW_INCLUDE}" "${GLFW_LIB}")
 lfapp_lib(LFL_SDLINPUT "${SDL_INCLUDE}" "${SDL_LIB}")
 lfapp_lib(LFL_LIBARCHIVE "${ARCHIVE_INCLUDE}" "${ARCHIVE_LIB}")
 lfapp_lib(LFL_FREETYPE "${FREETYPE_INCLUDE}" "${FREETYPE_LIB}")
+lfapp_lib(LFL_ASSIMP "${ASSIMP_INCLUDE}" "${ASSIMP_LIB}")
 lfapp_lib(LFL_HARFBUZZ "${HARFBUZZ_INCLUDE}" "${HARFBUZZ_LIB}")
 lfapp_lib(LFL_LIBCSS "${LIBCSS_INCLUDE}" "${LIBCSS_LIB}")
 lfapp_lib(LFL_FFMPEG "${FFMPEG_INCLUDE}" "${FFMPEG_LIB}")
@@ -107,18 +112,18 @@ lfapp_lib(LFL_CLING "${CLING_INCLUDE}" "${CLING_LIB}")
 set(LFAPP_LIB ${LFAPP_LIB} ${PLATFORM_LIB})
 
 foreach(_current ${LFAPP_INCLUDE})
-set(LFAPP_INC ${LFAPP_INC} "-I${_current}")
+    set(LFAPP_INC ${LFAPP_INC} "-I${_current}")
 endforeach()
 
 # mac
 if(CMAKE_SYSTEM_NAME MATCHES "Darwin")
-if(NOT LFL_ANDROID)
-add_subdirectory(lfobjc)
-set(LFAPP_LIB ${LFAPP_LIB} ${LFL_PROJECT}_lfobjc)
-endif(NOT LFL_ANDROID)
-if(LFL_CAMERA AND CMAKE_SIZEOF_VOID_P EQUAL 8)
-set(LFAPP_LIB ${LFAPP_LIB} ${LFL_PROJECT}_lfobjc "-framework QTKit -framework CoreVideo")
-endif(LFL_CAMERA AND CMAKE_SIZEOF_VOID_P EQUAL 8)
+    if(NOT LFL_ANDROID)
+        add_subdirectory(lfobjc)
+        set(LFAPP_LIB ${LFAPP_LIB} ${LFL_PROJECT}_lfobjc)
+    endif(NOT LFL_ANDROID)
+    if(LFL_CAMERA AND CMAKE_SIZEOF_VOID_P EQUAL 8)
+        set(LFAPP_LIB ${LFAPP_LIB} ${LFL_PROJECT}_lfobjc "-framework QTKit -framework CoreVideo")
+    endif(LFL_CAMERA AND CMAKE_SIZEOF_VOID_P EQUAL 8)
 endif(CMAKE_SYSTEM_NAME MATCHES "Darwin")
 
 # proto
@@ -129,15 +134,15 @@ add_library(${LFL_PROJECT}_lfapp ${LFAPP_LIB_TYPE} gui.cpp font.cpp flow.cpp lfa
 target_include_directories(${LFL_PROJECT}_lfapp PUBLIC ${LFAPP_INCLUDE} ${LFL_PROJECT_DIR}/${LFL_PROJECT}_lfapp_obj)
 target_compile_definitions(${LFL_PROJECT}_lfapp PUBLIC ${LFAPP_DEF})
 if(LFAPP_LIB_TYPE MATCHES "^SHARED$")
-target_link_libraries(${LFL_PROJECT}_lfapp ${LFAPP_LIB})
-set(LFAPP_LIB ${LFL_PROJECT}_lfapp)
+    target_link_libraries(${LFL_PROJECT}_lfapp ${LFAPP_LIB})
+    set(LFAPP_LIB ${LFL_PROJECT}_lfapp)
 endif(LFAPP_LIB_TYPE MATCHES "^SHARED$")
 
 # lfapp deps
 macro(lfapp_dep _def _lib)
-if(${_def})
-add_dependencies(${LFL_PROJECT}_lfapp ${_lib})
-endif(${_def})
+    if(${_def})
+        add_dependencies(${LFL_PROJECT}_lfapp ${_lib})
+    endif(${_def})
 endmacro(lfapp_dep)
 lfapp_dep(LFL_BOX2D Box2D)
 lfapp_dep(LFL_OPENCV OpenCV)
@@ -145,6 +150,10 @@ lfapp_dep(LFL_PNG png)
 
 # post build step
 if(LFL_IPHONE)
+    macro(lfapp_add_target target)
+        add_executable(${target} ${ARGN})
+        target_link_libraries(${target} ${LFAPP_LIB})
+    endmacro(lfapp_add_target)
     macro(lfapp_post_build_start target pkgname)
         set(bin i${pkgname}.app/Contents/MacOS/${target}) 
         set(info_plist ${CMAKE_CURRENT_SOURCE_DIR}/iphone-Info.plist)
@@ -171,11 +180,40 @@ if(LFL_IPHONE)
     macro(lfapp_post_build_copy_bin target pkgname)
     endmacro(lfapp_post_build_copy_bin)
 elseif(LFL_ANDROID)
+    macro(lfapp_add_target target)
+        add_library(${target} ${ARGN})
+        target_link_libraries(${target} ${LFL_PROJECT}_lfapp)
+        set(${target}_lfapp_obj ${CMAKE_CURRENT_BINARY_DIR}/${LFL_PROJECT}_lfapp_obj/lib${LFL_PROJECT}_lfapp.a)
+        set(${target}_deps ${CMAKE_CURRENT_SOURCE_DIR}/../lfapp/lfjni/lfjni.cpp ${${target}_lfapp_obj})
+        set_source_files_properties(${${target}_lfapp_obj} PROPERTIES HEADER_FILE_ONLY TRUE)
+        set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/../lfapp/lfjni/lfjni.cpp PROPERTIES HEADER_FILE_ONLY TRUE)
+        set_source_files_properties(${ARGV1} PROPERTIES OBJECT_DEPENDS "${${target}_deps}")
+    endmacro(lfapp_add_target)
     macro(lfapp_post_build_start target pkgname)
+        add_custom_command(TARGET ${target} POST_BUILD WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/${target}-android/jni
+            COMMAND ${ANDROIDNDK}/ndk-build
+            COMMAND mkdir -p ${CMAKE_CURRENT_SOURCE_DIR}/${target}-android/res/raw
+            COMMAND cp ${CMAKE_CURRENT_SOURCE_DIR}/../lfapp/*.glsl ${CMAKE_CURRENT_SOURCE_DIR}/assets
+            COMMAND if [ -f ${CMAKE_CURRENT_SOURCE_DIR}/assets/*.wav ]; then cp ${CMAKE_CURRENT_SOURCE_DIR}/assets/*.wav ../res/raw\; fi
+            COMMAND if [ -f ${CMAKE_CURRENT_SOURCE_DIR}/assets/*.mp3 ]; then cp ${CMAKE_CURRENT_SOURCE_DIR}/assets/*.mp3 ../res/raw\; fi)
+        add_custom_target(${target}_pkg_debug WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/${target}-android DEPENDS ${target}
+            COMMAND "ANDROID_HOME=${ANDROIDSDK}" ${GRADLEBIN} assembleDebug)
+        add_custom_target(${target}_debug WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/${target}-android DEPENDS ${target}
+            COMMAND "ANDROID_HOME=${ANDROIDSDK}" ${GRADLEBIN} uninstallDebug
+            COMMAND "ANDROID_HOME=${ANDROIDSDK}" ${GRADLEBIN}   installDebug
+            COMMAND ${ANDROIDSDK}/platform-tools/adb shell am start -n `${ANDROIDSDK}/build-tools/19.1.0/aapt dump badging ./build/outputs/apk/${target}-android-debug.apk | grep package | cut -d\\' -f2`/`${ANDROIDSDK}/build-tools/19.1.0/aapt dump badging ./build/outputs/apk/${target}-android-debug.apk | grep launchable-activity | cut -d\\' -f2`
+            COMMAND ${ANDROIDSDK}/platform-tools/adb logcat | tee ${CMAKE_CURRENT_BINARY_DIR}/debug.txt)
+        add_custom_target(${target}_debug_start WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/${target}-android DEPENDS ${target}
+            COMMAND ${ANDROIDSDK}/platform-tools/adb shell am start -n `${ANDROIDSDK}/build-tools/19.1.0/aapt dump badging ./build/outputs/apk/${target}-android-debug.apk | grep package | cut -d\\' -f2`/`${ANDROIDSDK}/build-tools/19.1.0/aapt dump badging ./build/outputs/apk/${target}-android-debug.apk | grep launchable-activity | cut -d\\' -f2`
+            COMMAND ${ANDROIDSDK}/platform-tools/adb logcat | tee ${CMAKE_CURRENT_BINARY_DIR}/debug.txt)
     endmacro(lfapp_post_build_start)
     macro(lfapp_post_build_copy_bin target pkgname)
     endmacro(lfapp_post_build_copy_bin)
 elseif(CMAKE_SYSTEM_NAME MATCHES "Linux")
+    macro(lfapp_add_target target)
+        add_executable(${target} ${ARGN})
+        target_link_libraries(${target} ${LFAPP_LIB})
+    endmacro(lfapp_add_target)
     macro(lfapp_post_build_start target pkgname)
         set(pa_lib ../imports/portaudio/lib/.libs/libportaudio.so.2)
         set(mp3_lib ../imports/lame/libmp3lame/.libs/libmp3lame.so.0)
@@ -197,15 +235,28 @@ elseif(CMAKE_SYSTEM_NAME MATCHES "Linux")
     macro(lfapp_post_build_copy_bin target pkgname)
     endmacro(lfapp_post_build_copy_bin)
 elseif(CMAKE_SYSTEM_NAME MATCHES "Darwin")
+    macro(lfapp_add_target target)
+        add_executable(${target} ${ARGN})
+        target_link_libraries(${target} ${LFAPP_LIB})
+    endmacro(lfapp_add_target)
+    macro(osx_lib defname varname filename)
+        set(${varname} ${filename})
+        if(${${defname}})
+            set(if_${varname} 1)
+        endif(${${defname}})
+    endmacro(osx_lib)
+    macro(osx_libs)
+        osx_lib(LFL_PORTAUDIO pa_lib ../imports/portaudio/lib/.libs/libportaudio.2.dylib)
+        osx_lib(LFL_FFMPEG mp3_lib ../imports/lame/libmp3lame/.libs/libmp3lame.0.dylib)
+        osx_lib(LFL_OPENCV cx_lib ../imports/OpenCV/lib/libcxcore.2.1.dylib)
+        osx_lib(LFL_OPENCV cv_lib ../imports/OpenCV/lib/libcv.2.1.dylib)
+    endmacro(osx_libs)
     macro(lfapp_post_build_start target pkgname)
+        osx_libs()
         set(bin ${pkgname}.app/Contents/MacOS/${target}) 
         set(lib ${pkgname}.app/Contents/Libraries) 
         set(res ${pkgname}.app/Contents/Resources) 
         set(info_plist ${CMAKE_CURRENT_SOURCE_DIR}/mac-Info.plist)
-        set(pa_lib ../imports/portaudio/lib/.libs/libportaudio.2.dylib)
-        set(mp3_lib ../imports/lame/libmp3lame/.libs/libmp3lame.0.dylib)
-        set(cx_lib ../imports/OpenCV/lib/libcxcore.2.1.dylib)
-        set(cv_lib ../imports/OpenCV/lib/libcv.2.1.dylib)
         add_custom_command(TARGET ${target} POST_BUILD WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
             COMMAND rm -rf   ${pkgname}.app
             COMMAND mkdir -p ${pkgname}.app/Contents/MacOS
@@ -219,15 +270,15 @@ elseif(CMAKE_SYSTEM_NAME MATCHES "Darwin")
             COMMAND cp -r ${CMAKE_CURRENT_SOURCE_DIR}/assets ${res}
             COMMAND cp ${CMAKE_CURRENT_SOURCE_DIR}/../lfapp/*.glsl ${res}/assets
             COMMAND cp ${target} ${pkgname}.app/Contents/MacOS
-            COMMAND if [ -f ${pa_lib}  ]; then cp ${pa_lib}  ${lib}\; fi
-            COMMAND if [ -f ${mp3_lib} ]; then cp ${mp3_lib} ${lib}\; fi
-            COMMAND if [ -f ${cx_lib}  ]; then cp ${cx_lib}  ${lib}\; fi
-            COMMAND if [ -f ${cv_lib}  ]; then cp ${cv_lib}  ${lib}\; fi
-            COMMAND if [ -f ${pa_lib}  ]; then install_name_tool -change /usr/local/lib/libportaudio.2.dylib @loader_path/../Libraries/libportaudio.2.dylib ${bin}\; fi
-            COMMAND if [ -f ${mp3_lib} ]; then install_name_tool -change /usr/local/lib/libmp3lame.0.dylib @loader_path/../Libraries/libmp3lame.0.dylib ${bin}\; fi
-            COMMAND if [ -f ${cv_lib}  ]; then install_name_tool -change libcxcore.2.1.dylib @loader_path/../Libraries/libcxcore.2.1.dylib ${lib}/libcv.2.1.dylib\; fi
-            COMMAND if [ -f ${cx_lib}  ]; then install_name_tool -change libcxcore.2.1.dylib @loader_path/../Libraries/libcxcore.2.1.dylib ${bin}\; fi
-            COMMAND if [ -f ${cv_lib}  ]; then install_name_tool -change libcv.2.1.dylib @loader_path/../Libraries/libcv.2.1.dylib ${bin}\; fi)
+            COMMAND if [ ${if_pa_lib}  ]; then cp ${pa_lib}  ${lib}\; fi
+            COMMAND if [ ${if_mp3_lib} ]; then cp ${mp3_lib} ${lib}\; fi
+            COMMAND if [ ${if_cx_lib}  ]; then cp ${cx_lib}  ${lib}\; fi
+            COMMAND if [ ${if_cv_lib}  ]; then cp ${cv_lib}  ${lib}\; fi
+            COMMAND if [ ${if_pa_lib}  ]; then install_name_tool -change /usr/local/lib/libportaudio.2.dylib @loader_path/../Libraries/libportaudio.2.dylib ${bin}\; fi
+            COMMAND if [ ${if_mp3_lib} ]; then install_name_tool -change /usr/local/lib/libmp3lame.0.dylib @loader_path/../Libraries/libmp3lame.0.dylib ${bin}\; fi
+            COMMAND if [ ${if_cv_lib}  ]; then install_name_tool -change libcxcore.2.1.dylib @loader_path/../Libraries/libcxcore.2.1.dylib ${lib}/libcv.2.1.dylib\; fi
+            COMMAND if [ ${if_cx_lib}  ]; then install_name_tool -change libcxcore.2.1.dylib @loader_path/../Libraries/libcxcore.2.1.dylib ${bin}\; fi
+            COMMAND if [ ${if_cv_lib}  ]; then install_name_tool -change libcv.2.1.dylib @loader_path/../Libraries/libcv.2.1.dylib ${bin}\; fi)
         add_custom_target(${target}_pkg WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
             COMMAND if [ -d /Volumes/${pkgname} ]; then umount /Volumes/${pkgname}\; fi
             COMMAND rm -rf ${pkgname}.dmg ${pkgname}.sparseimage
@@ -237,10 +288,20 @@ elseif(CMAKE_SYSTEM_NAME MATCHES "Darwin")
             COMMAND ln -s /Applications /Volumes/${pkgname}/.
             COMMAND hdiutil eject /Volumes/${pkgname}
             COMMAND hdiutil convert ${pkgname}.sparseimage -format UDBZ -o ${pkgname}.dmg)
+        add_custom_target(${target}_run WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} DEPENDS ${target}
+            COMMAND ${pkgname}.app/Contents/MacOS/${target})
+        add_custom_target(${target}_debug WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} DEPENDS ${target}
+            COMMAND lldb -f ${pkgname}.app/Contents/MacOS/${target} -o run)
     endmacro(lfapp_post_build_start)
     macro(lfapp_post_build_copy_bin target pkgname)
+        osx_libs()
+        set(bin ${pkgname}.app/Contents/MacOS/${target})
         add_custom_command(TARGET ${target} POST_BUILD WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-                           COMMAND cp ${target} ${pkgname}.app/Contents/MacOS)
+            COMMAND cp ${target} ${pkgname}.app/Contents/MacOS
+            COMMAND if [ ${if_pa_lib}  ]; then install_name_tool -change /usr/local/lib/libportaudio.2.dylib @loader_path/../Libraries/libportaudio.2.dylib ${bin}\; fi
+            COMMAND if [ ${if_mp3_lib} ]; then install_name_tool -change /usr/local/lib/libmp3lame.0.dylib @loader_path/../Libraries/libmp3lame.0.dylib ${bin}\; fi
+            COMMAND if [ ${if_cx_lib}  ]; then install_name_tool -change libcxcore.2.1.dylib @loader_path/../Libraries/libcxcore.2.1.dylib ${bin}\; fi
+            COMMAND if [ ${if_cv_lib}  ]; then install_name_tool -change libcv.2.1.dylib @loader_path/../Libraries/libcv.2.1.dylib ${bin}\; fi)
     endmacro(lfapp_post_build_copy_bin)
 else()
     macro(lfapp_post_build_start target pkgname)

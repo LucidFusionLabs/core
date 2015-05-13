@@ -95,8 +95,7 @@ LFL builds easily for Windows, Linux, Mac OSX, iPhone and Android.
 
         cd term
         make -j4
-        ./LTerminal.app/Contents/MacOS/lterm
-
+        make lterm_run
         make lterm_pkg
 
 * OSX installer LTerminal.dmg results
@@ -145,9 +144,8 @@ LFL builds easily for Windows, Linux, Mac OSX, iPhone and Android.
 * ADT Plugin http://developer.android.com/sdk/eclipse-adt.html#installing
 
         $HOME/android-sdk-linux_x86/tools/android
-        [Install Platform android-13 + Google Play Services]
+        [Install Platform android-20 + Google Play Services]
         [New Virtual Device]
-
         $HOME/android-ndk-r10d/build/tools/make-standalone-toolchain.sh \
         --platform=android-8 --toolchain=arm-linux-androideabi-4.8 --install-dir=$HOME/android-toolchain
 
@@ -158,24 +156,10 @@ LFL builds easily for Windows, Linux, Mac OSX, iPhone and Android.
 
         cd term
         make -j4
-        cd term-android/jni
-        ndk-build
+        make lterm_debug
+        make lterm_pkg
 
-        cd lfl/term/term-android/assets
-        cp -R ../../assets .
-        cp ../../lfapp/*.glsl assets
-        cp ../../assets/*.wav ../../assets/*.mp3 ../res/raw/
-
-        cd lfl/term/term-android
-        vi local.properties
-        ant debug
-
-        Eclipse > [Eclipse|Window] > Preferences > Android > SDK Location
-        Eclipse > File > New > Other > Android Project > From Existing Source > term-android (Name: LTerminal, Target 2.2)
-        LTerminal > Refresh
-        LTerminal > Debug as Android Application
-
-* Android Installer bin/LTerminal.apk results
+* Android Installer build/bin/LTerminal.apk results
 
 * Setup eclipse_keystore
 

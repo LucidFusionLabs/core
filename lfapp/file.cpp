@@ -206,25 +206,27 @@ bool LocalFile::Open(const char *path, const char *mode, bool pre_create) {
 #endif
 bool LocalFile::Open(const string &path, const string &mode, bool pre_create) {
     if ((writable = strchr(mode.c_str(), 'w'))) {
-        impl = AndroidInternalOpenWriter(path.c_str());
+        impl = AndroidFileOpenWriter(path.c_str());
         return impl;
     }
 
-    char *b=0; int l=0, ret;
-    bool internal_path = !strchr(path.c_str(), '/');
-    if (internal_path) { if ((ret = AndroidInternalRead(path.c_str(), &b, &l))) return false; }
-    else               { if ((ret = AndroidFileRead    (path.c_str(), &b, &l))) return false; }
+    char *b=0;
+    int l=0, ret=0;
+    bool internal_path = 0; // !strchr(path.c_str(), '/');
+    if (internal_path) { if ((ret = AndroidFileRead (path.c_str(), &b, &l))) { ERROR("AndroidFileRead ",  path); return false; } }
+    else               { if ((ret = AndroidAssetRead(path.c_str(), &b, &l))) { ERROR("AndroidAssetRead ", path); return false; } }
 
     impl = new BufferFile(string(b, l));
+    free(b);
     return true;
 }
 
 void LocalFile::Reset() { if (impl && !writable) ((BufferFile*)impl)->Reset(); }
 int LocalFile::Size() { return (impl && !writable) ? ((BufferFile*)impl)->Size() : -1; }
-void LocalFile::Close() { if (impl) { if (writable) AndroidInternalCloseWriter(impl); else delete ((BufferFile*)impl); impl=0; } }
+void LocalFile::Close() { if (impl) { if (writable) AndroidFileCloseWriter(impl); else delete ((BufferFile*)impl); impl=0; } }
 long long LocalFile::Seek(long long offset, int whence) { return (impl && !writable) ? ((BufferFile*)impl)->Seek(offset, whence) : -1; }
 int LocalFile::Read(void *buf, size_t size) { return (impl && !writable) ? ((BufferFile*)impl)->Read(buf, size) : -1; }
-int LocalFile::Write(const void *buf, size_t size) { return impl ? (writable ? AndroidInternalWrite(impl, (const char*)buf, size) : ((BufferFile*)impl)->Write(buf, size)) : -1; }
+int LocalFile::Write(const void *buf, size_t size) { return impl ? (writable ? AndroidFileWrite(impl, (const char*)buf, size) : ((BufferFile*)impl)->Write(buf, size)) : -1; }
 bool LocalFile::Flush() { return false; }
 
 #else /* LFL_ANDROID */
@@ -391,38 +393,39 @@ const char *DirectoryIter::Next() {
 }
 
 #ifdef LFL_LIBARCHIVE
-ArchiveIter::~ArchiveIter() { free(dat); if (impl) archive_read_finish((archive*)impl); }
+ArchiveIter::~ArchiveIter() { if (impl) archive_read_finish((archive*)impl); }
 ArchiveIter::ArchiveIter(const char *path) {
-    entry=0; dat=0; impl=0;
-
     if (!(impl = archive_read_new())) return;
     if (archive_read_support_format_zip          ((archive*)impl) != 0) INFO("no zip support");
     if (archive_read_support_format_tar          ((archive*)impl) != 0) INFO("no tar support");
     if (archive_read_support_compression_gzip    ((archive*)impl) != 0) INFO("no gzip support");
     if (archive_read_support_compression_none    ((archive*)impl) != 0) INFO("no none support");
     if (archive_read_support_compression_compress((archive*)impl) != 0) INFO("no compress support");
-
     if (archive_read_open_filename((archive*)impl, path, 65536) != 0) {
-        archive_read_finish((archive*)impl); impl=0; return;
+        archive_read_finish((archive*)impl);
+        impl = nullptr;
     }
 }
 const char *ArchiveIter::Next() {
-    int ret;
     if (!impl) return 0;
-    if ((ret = archive_read_next_header((archive*)impl, (archive_entry**)&entry))) { ERROR("read_next: ", ret, " ", archive_error_string((archive*)impl)); return 0; }
+    int ret = archive_read_next_header((archive*)impl, (archive_entry**)&entry);
+    if (ret) {
+        if (const char *errstr = archive_error_string((archive*)impl)) ERROR("read_next: ", ret, " ", errstr);
+        return 0;
+    }
     return archive_entry_pathname((archive_entry*)entry);
 }
 const void *ArchiveIter::Data() {
-    int l=Size(); free(dat); dat=malloc(l);
-    if (archive_read_data_into_buffer((archive*)impl, dat, l)) { free(dat); dat=0; }
-    return dat;
+    buf.resize(Size());
+    CHECK_EQ(buf.size(), archive_read_data((archive*)impl, &buf[0], buf.size()));
+    return buf.c_str();
 }
 void ArchiveIter::Skip() { archive_read_data_skip((archive*)impl); }
 long long ArchiveIter::Size() { return archive_entry_size((archive_entry*)entry); }
 
 #else /* LFL_LIBARCHIVE */
-ArchiveIter::~ArchiveIter() { free(dat); }
-ArchiveIter::ArchiveIter(const char *path) { entry=0; dat=0; impl=0; }
+ArchiveIter::~ArchiveIter() {}
+ArchiveIter::ArchiveIter(const char *path) {}
 const char *ArchiveIter::Next() { return 0; }
 long long ArchiveIter::Size() { return 0; }
 const void *ArchiveIter::Data() { return 0; }

@@ -1,14 +1,15 @@
 #ifndef GL_ES
 #define highp
+#define lowp
 #endif
 
-uniform float iGlobalTime;
-uniform vec3 iResolution;
+uniform lowp float iGlobalTime;
+uniform lowp vec3 iResolution;
 
 void main() {
-    highp vec2 position = gl_FragCoord.xy / iResolution.xy;
+    lowp vec2 position = gl_FragCoord.xy / iResolution.xy;
 
-    highp float color = 0.0;
+    lowp float color = 0.0;
     color += sin(position.x * cos(iGlobalTime / 15.0) * 80.0) + cos(position.y * cos(iGlobalTime / 15.0) * 10.0);
     color += sin(position.y * sin(iGlobalTime / 10.0) * 40.0) + cos(position.x * sin(iGlobalTime / 25.0) * 40.0);
     color += sin(position.x * sin(iGlobalTime / 5.0)  * 10.0) + sin(position.y * sin(iGlobalTime / 35.0) * 80.0);

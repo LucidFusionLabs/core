@@ -690,17 +690,15 @@ extern "C" int main(int argc, const char *argv[]) {
     scene.Add(new Entity("lines", lines));
 
     if (screen->gd->ShaderSupport()) {
-        string lfapp_vertex_shader = LocalFile::FileContents(StrCat(app->assetdir, "lfapp_vertex.glsl"));
-        string lfapp_pixel_shader = LocalFile::FileContents(StrCat(app->assetdir, "lfapp_pixel.glsl"));
         string fader_shader  = LocalFile::FileContents(StrCat(app->assetdir, "fader.glsl"));
         string warper_shader = LocalFile::FileContents(StrCat(app->assetdir, "warper.glsl"));
-        string explode_shader = lfapp_vertex_shader;
+        string explode_shader = screen->gd->vertex_shader;
         CHECK(ReplaceString(&explode_shader, "// LFLPositionShaderMarker",
                                              LocalFile::FileContents(StrCat(app->assetdir, "explode.glsl"))));
 
-        Shader::Create("fadershader",   lfapp_vertex_shader,       fader_shader, "",                     &fadershader);
-        Shader::Create("warpershader",  lfapp_vertex_shader,      warper_shader, ShaderDefines(1,0,1,0), &warpershader);
-        Shader::Create("explodeshader",      explode_shader, lfapp_pixel_shader, ShaderDefines(0,1,1,0), &explodeshader);
+        Shader::Create("fadershader",   screen->gd->vertex_shader, fader_shader,             "",                     &fadershader);
+        Shader::Create("warpershader",  screen->gd->vertex_shader, warper_shader,            ShaderDefines(1,0,1,0), &warpershader);
+        Shader::Create("explodeshader", explode_shader,            screen->gd->pixel_shader, ShaderDefines(0,1,1,0), &explodeshader);
     }
 
     // ball trail

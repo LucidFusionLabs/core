@@ -394,7 +394,7 @@ struct SimpleAssetLoader : public AudioAssetLoader, public VideoAssetLoader, pub
 
 #ifdef LFL_ANDROID
 struct AndroidAudioAssetLoader : public AudioAssetLoader {
-    virtual void *LoadAudioFile(const string &filename) { return AndroidLoadMusicAsset(filename.c_str()); }
+    virtual void *LoadAudioFile(const string &filename) { return AndroidLoadMusicResource(filename.c_str()); }
     virtual void UnloadAudioFile(void *h) {}
     virtual void *LoadAudioBuf(const char *buf, int len, const char *mimetype) { return 0; }
     virtual void UnloadAudioBuf(void *h) {}

@@ -216,12 +216,14 @@ const int GraphicsDevice::OneMinusDstColor = GL_ONE_MINUS_DST_COLOR;
 const int GraphicsDevice::Fill              = 0;
 const int GraphicsDevice::Line              = 0;
 const int GraphicsDevice::Point             = 0;
+const int GraphicsDevice::Polygon           = 0;
 const int GraphicsDevice::GLPreferredBuffer = GL_UNSIGNED_BYTE;
 const int GraphicsDevice::GLInternalFormat  = GL_RGBA;
 #else
 const int GraphicsDevice::Fill              = GL_FILL;
 const int GraphicsDevice::Line              = GL_LINE;
 const int GraphicsDevice::Point             = GL_POINT;
+const int GraphicsDevice::Polygon           = GL_POLYGON;
 const int GraphicsDevice::GLPreferredBuffer = GL_UNSIGNED_INT_8_8_8_8_REV;
 const int GraphicsDevice::GLInternalFormat  = GL_RGBA;
 #endif
@@ -908,6 +910,7 @@ const int GraphicsDevice::Points = 0;
 const int GraphicsDevice::Lines = 0;
 const int GraphicsDevice::LineLoop = 0;
 const int GraphicsDevice::Triangles = 0;
+const int GraphicsDevice::Polygon = 0;
 const int GraphicsDevice::TriangleStrip = 0;
 const int GraphicsDevice::Texture2D = 0;
 const int GraphicsDevice::UnsignedInt = 0;
@@ -977,10 +980,14 @@ void Window::MakeCurrent(Window *W) {}
 #endif // LFL_HEADLESS
 
 #ifdef LFL_ANDROIDVIDEO
+static void *android_screen_id = (void*)0x900df00d;
 struct AndroidVideoModule : public Module {
     int Init() {
         INFO("AndroidVideoModule::Init()");
         if (AndroidVideoInit(FLAGS_request_gles_version)) return -1;
+        CHECK(!screen->id);
+        screen->id = android_screen_id;
+        Window::active[screen->id] = screen;
         return 0;
     }
 };
@@ -996,6 +1003,9 @@ struct IPhoneVideoModule : public Module {
         INFO("IPhoneVideoModule::Init()");
         NativeWindowInit();
         NativeWindowSize(&screen->width, &screen->height);
+        CHECK(!screen->id);
+        screen->id = 1;
+        Window::active[screen->id] = screen;
         return 0;
     }
 };
@@ -2105,6 +2115,7 @@ void Shader::SetGlobalUniform2f(const string &name, float v1, float v2){
 
 #ifdef LFL_GLSL_SHADERS
 int Shader::Create(const string &name, const string &vertex_shader, const string &fragment_shader, const ShaderDefines &defines, Shader *out) {
+    INFO("Shader::Create ", name);
     GLuint p = screen->gd->CreateProgram();
 
     string hdr; 
@@ -2143,7 +2154,7 @@ int Shader::Create(const string &name, const string &vertex_shader, const string
     screen->gd->GetIntegerv(GL_MAX_VERTEX_UNIFORM_COMPONENTS, &max_uniform_components);
 #endif
     screen->gd->GetIntegerv(GL_MAX_VERTEX_ATTRIBS, &max_attributes);
-    INFO("shader mu=", active_uniforms, " avg_comps/", max_uniform_components, ", ma=", active_attributes, "/", max_attributes);
+    INFO("shader=", name, ", mu=", active_uniforms, " avg_comps/", max_uniform_components, ", ma=", active_attributes, "/", max_attributes);
 
     bool log_missing_attrib = false;
     if (out) {

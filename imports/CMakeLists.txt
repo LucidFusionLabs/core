@@ -134,7 +134,10 @@ endif(LFL_BOX2D)
 
 # assimp
 if(LFL_ASSIMP)
+    set(BUILD_SHARED_LIBS OFF)
     add_subdirectory(assimp)
+    set(ASSIMP_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/assimp/include PARENT_SCOPE)
+    set(ASSIMP_LIB assimp PARENT_SCOPE)
 endif(LFL_ASSIMP)
 
 # ffmpeg
@@ -241,15 +244,15 @@ if(LFL_OPENCV)
 endif(LFL_OPENCV)
 
 # libarchive
-if(LFL_ARCHIVE)
+if(LFL_LIBARCHIVE)
     add_subdirectory(libarchive)
     set(ARCHIVE_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/libarchive PARENT_SCOPE)
     if(WIN32)
         set(ARCHIVE_LIB libarchive.lib PARENT_SCOPE)
     else(WIN32)
-        set(ARCHIVE_LIB ${CMAKE_CURRENT_BINARY_DIR}/libarchive/.libs/libarchive.a PARENT_SCOPE)
+        set(ARCHIVE_LIB archive_static PARENT_SCOPE)
     endif(WIN32)
-endif(LFL_ARCHIVE)
+endif(LFL_LIBARCHIVE)
 
 # regex
 if(LFL_REGEX)

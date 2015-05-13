@@ -1,0 +1,56 @@
+apply plugin: 'com.android.application'
+
+buildscript {
+    repositories {
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:1.1.3'
+    }
+}
+
+android {
+    compileSdkVersion 20
+    buildToolsVersion "20"
+
+    defaultConfig {
+        minSdkVersion 9
+        targetSdkVersion 20
+        versionCode 1
+        versionName "1.0"
+    }
+    buildTypes {
+        release {
+            minifyEnabled true
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+    sourceSets {
+        main {
+            manifest.srcFile 'AndroidManifest.xml'
+            java.srcDirs         = ['../../lfapp/lfjava', 'src']
+            // java.excludes        = ['**/GPlusClient.java', '**/Advertising.java']
+            resources.srcDirs    = []
+            aidl.srcDirs         = []
+            renderscript.srcDirs = []
+            res.srcDirs          = ['res']
+            assets.srcDirs       = ['../assets']
+            jniLibs.srcDirs      = ['libs']
+        }
+    }
+    dexOptions {
+        preDexLibraries = false
+    }
+}
+
+dependencies {
+    compile project(':BaseGameUtils')
+}
+
+allprojects {
+    gradle.projectsEvaluated {
+        tasks.withType(JavaCompile) {
+            options.compilerArgs << "-Xlint:unchecked" << "-Xlint:deprecation"
+        }
+    }
+}

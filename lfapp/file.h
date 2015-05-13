@@ -180,9 +180,10 @@ struct DirectoryIter {
 };
 
 struct ArchiveIter {
-    void *impl, *entry, *dat;
+    string buf;
+    void *impl=0, *entry=0;
     ArchiveIter(const char *path);
-    ArchiveIter(){};
+    ArchiveIter() {}
     ~ArchiveIter();
     void Skip();
     const char *Next();

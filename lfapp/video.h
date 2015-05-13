@@ -568,7 +568,7 @@ struct Window : public NativeWindow {
 };
 
 struct GraphicsDevice {
-    static const int Float, Points, Lines, LineLoop, Triangles, TriangleStrip, Texture2D, UnsignedInt;
+    static const int Float, Points, Lines, LineLoop, Triangles, TriangleStrip, Polygon, Texture2D, UnsignedInt;
     static const int Ambient, Diffuse, Specular, Emission, Position;
     static const int One, SrcAlpha, OneMinusSrcAlpha, OneMinusDstColor;
     static const int Fill, Line, Point, GLPreferredBuffer, GLInternalFormat;
