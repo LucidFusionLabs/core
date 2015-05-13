@@ -193,8 +193,8 @@ static bool android_keyboard_toggled = false;
 
 string Clipboard::Get() { return ""; }
 void Clipboard::Set(const string &s) {}
-void TouchDevice::OpenKeyboard()  { if ( android_keyboard_toggled) return; android_toggle_keyboard(); android_keyboard_toggled=1; }
-void TouchDevice::CloseKeyboard() { if (!android_keyboard_toggled) return; android_toggle_keyboard(); android_keyboard_toggled=0; }
+void TouchDevice::OpenKeyboard()  { if ( android_keyboard_toggled) return; AndroidToggleKeyboard(); android_keyboard_toggled=1; }
+void TouchDevice::CloseKeyboard() { if (!android_keyboard_toggled) return; AndroidToggleKeyboard(); android_keyboard_toggled=0; }
 void Mouse::GrabFocus() {}
 void Mouse::ReleaseFocus() {}
 #endif

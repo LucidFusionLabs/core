@@ -738,7 +738,7 @@ int Application::Init() {
 }
 
 int Application::Start() {
-    if (FLAGS_lfapp_audio && audio.Start()) return -1;
+    if (FLAGS_lfapp_audio && audio.Start()) { ERROR("lfapp audio start failed"); return -1; }
     return 0;
 }
 
@@ -797,6 +797,7 @@ int Application::Main() {
 }
     
 int Application::MainLoop() {
+    INFO("MainLoop: Begin, run=", run);
     while (run) {
         // if (!minimized)
         Frame();
@@ -805,7 +806,7 @@ int Application::MainLoop() {
 #endif
         MSleep(1);
     }
-
+    INFO("MainLoop: End, run=", run);
     return Free();
 }
 

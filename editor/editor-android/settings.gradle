@@ -1,0 +1,2 @@
+include 'BaseGameUtils'
+project(':BaseGameUtils').projectDir = new File('../../imports/java/BaseGameUtils')

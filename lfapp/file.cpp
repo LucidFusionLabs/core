@@ -206,15 +206,15 @@ bool LocalFile::Open(const char *path, const char *mode, bool pre_create) {
 #endif
 bool LocalFile::Open(const string &path, const string &mode, bool pre_create) {
     if ((writable = strchr(mode.c_str(), 'w'))) {
-        impl = AndroidInternalOpenWriter(path.c_str());
+        impl = AndroidFileOpenWriter(path.c_str());
         return impl;
     }
 
     char *b=0;
     int l=0, ret=0;
     bool internal_path = 0; // !strchr(path.c_str(), '/');
-    if (internal_path) { if ((ret = AndroidInternalRead(path.c_str(), &b, &l))) { ERROR("AndroidInternalRead ", path); return false; } }
-    else               { if ((ret = AndroidFileRead    (path.c_str(), &b, &l))) { ERROR("AndroidFileRead ",     path); return false; } }
+    if (internal_path) { if ((ret = AndroidFileRead (path.c_str(), &b, &l))) { ERROR("AndroidFileRead ",  path); return false; } }
+    else               { if ((ret = AndroidAssetRead(path.c_str(), &b, &l))) { ERROR("AndroidAssetRead ", path); return false; } }
 
     impl = new BufferFile(string(b, l));
     free(b);
@@ -223,10 +223,10 @@ bool LocalFile::Open(const string &path, const string &mode, bool pre_create) {
 
 void LocalFile::Reset() { if (impl && !writable) ((BufferFile*)impl)->Reset(); }
 int LocalFile::Size() { return (impl && !writable) ? ((BufferFile*)impl)->Size() : -1; }
-void LocalFile::Close() { if (impl) { if (writable) AndroidInternalCloseWriter(impl); else delete ((BufferFile*)impl); impl=0; } }
+void LocalFile::Close() { if (impl) { if (writable) AndroidFileCloseWriter(impl); else delete ((BufferFile*)impl); impl=0; } }
 long long LocalFile::Seek(long long offset, int whence) { return (impl && !writable) ? ((BufferFile*)impl)->Seek(offset, whence) : -1; }
 int LocalFile::Read(void *buf, size_t size) { return (impl && !writable) ? ((BufferFile*)impl)->Read(buf, size) : -1; }
-int LocalFile::Write(const void *buf, size_t size) { return impl ? (writable ? AndroidInternalWrite(impl, (const char*)buf, size) : ((BufferFile*)impl)->Write(buf, size)) : -1; }
+int LocalFile::Write(const void *buf, size_t size) { return impl ? (writable ? AndroidFileWrite(impl, (const char*)buf, size) : ((BufferFile*)impl)->Write(buf, size)) : -1; }
 bool LocalFile::Flush() { return false; }
 
 #else /* LFL_ANDROID */

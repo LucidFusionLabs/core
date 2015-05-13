@@ -902,7 +902,7 @@ struct GameMenuGUI : public GUI, public Query {
     tab3_sensitivity(this, Box(), Widget::Scrollbar::Flag::Horizontal),
     tab3_volume     (this, Box(), Widget::Scrollbar::Flag::Horizontal), current_scrollbar(0),
 #ifdef LFL_ANDROID
-    gplus_signin_button (this, 0, 0,    0,            MouseController::CB([&](){ AndroidGPlusSignin(); gplus_signin_button.decay = 10; })),
+    gplus_signin_button (this, 0, 0,    "",           MouseController::CB([&](){ AndroidGPlusSignin(); gplus_signin_button.decay = 10; })),
     gplus_signout_button(this, 0, font, "g+ Signout", MouseController::CB([&](){ AndroidGPlusSignout(); })),
     gplus_quick         (this, 0, font, "match" ,     MouseController::CB([&](){ AndroidGPlusQuickGame(); })),
     gplus_invite        (this, 0, font, "invite",     MouseController::CB([&](){ AndroidGPlusInvite(); })),
