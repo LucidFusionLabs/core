@@ -1,2 +1,0 @@
-nmake -f Makefile.vc
-copy libGeoIP\GeoIP.lib w32

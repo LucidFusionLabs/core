@@ -15,7 +15,7 @@ macro(lfapp_lib _def _inc _lib)
 endmacro(lfapp_lib)
 
 # init
-set(LFAPP_INCLUDE ${LFL_ROOT} ${LFAPP_INCLUDE} ${PLATFORM_INCLUDE} ${OPENGL_INCLUDE})
+set(LFAPP_INCLUDE ${LFL_CORE} ${LFAPP_INCLUDE} ${PLATFORM_INCLUDE} ${OPENGL_INCLUDE})
 set(LFAPP_LIB ${LFL_PROJECT}_lfapp ${OPENGL_LIB})
 set(LFAPP_DEF -DLFL_BUILD ${PLATFORM_DEF} ${WXWIDGETS_DEF})
 
@@ -129,7 +129,6 @@ endif(CMAKE_SYSTEM_NAME MATCHES "Darwin")
 # proto
 # PROTOBUF_GENERATE_CPP(PROTO_SRC PROTO_HDR game.proto)
 
-# lfapp
 add_library(${LFL_PROJECT}_lfapp ${LFAPP_LIB_TYPE} gui.cpp font.cpp flow.cpp lfapp.cpp lftypes.cpp string.cpp time.cpp "file.cpp" assets.cpp audio.cpp video.cpp input.cpp math.cpp ipc.cpp network.cpp wire.cpp resolver.cpp camera.cpp scene.cpp ${PROTO_SRC})
 target_include_directories(${LFL_PROJECT}_lfapp PUBLIC ${LFAPP_INCLUDE} ${LFL_PROJECT_DIR}/${LFL_PROJECT}_lfapp_obj)
 target_compile_definitions(${LFL_PROJECT}_lfapp PUBLIC ${LFAPP_DEF})
@@ -164,7 +163,7 @@ if(LFL_IPHONE)
             COMMAND cat ${info_plist} | grep -A1 CFBundlePackageType | tail -1 | cut -f2 -d\\> | cut -f1 -d \\< | tr -d '\\n' | tee    i${pkgname}.app/Contents/PkgInfo
             COMMAND cat ${info_plist} | grep -A1 CFBundleSignature   | tail -1 | cut -f2 -d\\> | cut -f1 -d \\< | tr -d '\\n' | tee -a i${pkgname}.app/Contents/PkgInfo
             COMMAND cp -r ${CMAKE_CURRENT_SOURCE_DIR}/assets i${pkgname}.app
-            COMMAND cp ${CMAKE_CURRENT_SOURCE_DIR}/../lfapp/*.glsl i${pkgname}.app/assets
+            COMMAND cp ${LFL_CORE}/lfapp/*.glsl i${pkgname}.app/assets
             COMMAND cp ${target} i${pkgname}.app
             COMMAND chmod +x ${target} i${pkgname}.app/${target}
             COMMAND mkdir -p i${pkgname}.app/_CodeSignature
@@ -184,16 +183,16 @@ elseif(LFL_ANDROID)
         add_library(${target} ${ARGN})
         target_link_libraries(${target} ${LFL_PROJECT}_lfapp)
         set(${target}_lfapp_obj ${CMAKE_CURRENT_BINARY_DIR}/${LFL_PROJECT}_lfapp_obj/lib${LFL_PROJECT}_lfapp.a)
-        set(${target}_deps ${CMAKE_CURRENT_SOURCE_DIR}/../lfapp/lfjni/lfjni.cpp ${${target}_lfapp_obj})
+        set(${target}_deps ${LFL_CORE}/lfapp/lfjni/lfjni.cpp ${${target}_lfapp_obj})
         set_source_files_properties(${${target}_lfapp_obj} PROPERTIES HEADER_FILE_ONLY TRUE)
-        set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/../lfapp/lfjni/lfjni.cpp PROPERTIES HEADER_FILE_ONLY TRUE)
+        set_source_files_properties(${LFL_CORE}/lfapp/lfjni/lfjni.cpp PROPERTIES HEADER_FILE_ONLY TRUE)
         set_source_files_properties(${ARGV1} PROPERTIES OBJECT_DEPENDS "${${target}_deps}")
     endmacro(lfapp_add_target)
     macro(lfapp_post_build_start target pkgname)
         add_custom_command(TARGET ${target} POST_BUILD WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/${target}-android/jni
             COMMAND ${ANDROIDNDK}/ndk-build
             COMMAND mkdir -p ${CMAKE_CURRENT_SOURCE_DIR}/${target}-android/res/raw
-            COMMAND cp ${CMAKE_CURRENT_SOURCE_DIR}/../lfapp/*.glsl ${CMAKE_CURRENT_SOURCE_DIR}/assets
+            COMMAND cp ${LFL_CORE}/lfapp/*.glsl ${CMAKE_CURRENT_SOURCE_DIR}/assets
             COMMAND if [ -f ${CMAKE_CURRENT_SOURCE_DIR}/assets/*.wav ]; then cp ${CMAKE_CURRENT_SOURCE_DIR}/assets/*.wav ../res/raw\; fi
             COMMAND if [ -f ${CMAKE_CURRENT_SOURCE_DIR}/assets/*.mp3 ]; then cp ${CMAKE_CURRENT_SOURCE_DIR}/assets/*.mp3 ../res/raw\; fi)
         add_custom_target(${target}_pkg_debug WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/${target}-android DEPENDS ${target}
@@ -224,7 +223,7 @@ elseif(CMAKE_SYSTEM_NAME MATCHES "Linux")
             COMMAND rm -rf   ${pkgname}
             COMMAND mkdir -p ${pkgname}
             COMMAND cp -r ${CMAKE_CURRENT_SOURCE_DIR}/assets ${pkgname}
-            COMMAND cp ${CMAKE_CURRENT_SOURCE_DIR}/../lfapp/*.glsl ${pkgname}/assets
+            COMMAND cp ${LFL_CORE}/lfapp/*.glsl ${pkgname}/assets
             COMMAND cp ${target} ${pkgname}
             COMMAND if [ -f ${pa_lib}   ]; then cp ${pa_lib}   ${pkgname}\; fi
             COMMAND if [ -f ${mp3_lib}  ]; then cp ${mp3_lib}  ${pkgname}\; fi
@@ -268,7 +267,7 @@ elseif(CMAKE_SYSTEM_NAME MATCHES "Darwin")
             COMMAND cat ${info_plist} | grep -A1 CFBundleSignature   | tail -1 | cut -f2 -d\\> | cut -f1 -d \\< | tr -d '\\n' | tee -a ${pkgname}.app/Contents/PkgInfo
             COMMAND cp  ${CMAKE_CURRENT_SOURCE_DIR}/assets/icon.icns ${res}
             COMMAND cp -r ${CMAKE_CURRENT_SOURCE_DIR}/assets ${res}
-            COMMAND cp ${CMAKE_CURRENT_SOURCE_DIR}/../lfapp/*.glsl ${res}/assets
+            COMMAND cp ${LFL_CORE}/lfapp/*.glsl ${res}/assets
             COMMAND cp ${target} ${pkgname}.app/Contents/MacOS
             COMMAND if [ ${if_pa_lib}  ]; then cp ${pa_lib}  ${lib}\; fi
             COMMAND if [ ${if_mp3_lib} ]; then cp ${mp3_lib} ${lib}\; fi
