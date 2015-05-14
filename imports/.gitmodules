@@ -1,0 +1,9 @@
+[submodule "imports/libarchive"]
+    path = libarchive
+    url = https://github.com/libarchive/libarchive
+[submodule "imports/assimp"]
+    path = assimp
+    url = https://github.com/assimp/assimp
+[submodule "imports/lua"]
+    path = lua
+    url = https://github.com/LuaDist/lua

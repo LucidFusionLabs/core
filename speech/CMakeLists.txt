@@ -10,7 +10,7 @@ add_definitions(${LFAPP_DEF})
 include_directories(${LFAPP_INCLUDE})
 
 # speech
-set(LFL_RECOGNITION_SOURCE ../speech/speech.cpp ../speech/recognition.cpp ../speech/voice.cpp)
+set(LFL_RECOGNITION_SOURCE ${LFL_CORE}/speech/speech.cpp ${LFL_CORE}/speech/recognition.cpp ${LFL_CORE}/speech/voice.cpp)
 set(LFL_RECOGNITION_SOURCE ${LFL_RECOGNITION_SOURCE} PARENT_SCOPE)
 add_library(recognition ${LFL_RECOGNITION_SOURCE})
 
@@ -18,7 +18,7 @@ add_library(recognition ${LFL_RECOGNITION_SOURCE})
 add_executable(speech-trainer trainer.cpp)
 set_target_properties(speech-trainer PROPERTIES OUTPUT_NAME trainer)
 target_link_libraries(speech-trainer ${LFAPP_LIB} recognition)
-lfapp_post_build_start(speech-trainer SpeechTrainer)
+lfapp_post_build_start(speech-trainer trainer SpeechTrainer)
 
 # mfcp
 add_executable(mfcp mfcp.cpp)

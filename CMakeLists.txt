@@ -1,17 +1,16 @@
 # $Id: CMakeLists.txt 1318 2014-10-23 06:13:52Z justin $
 
-if(LFL_CUDA)
-    add_subdirectory(lfcuda)
-endif(LFL_CUDA)
-
-# lfapp unit tests
-add_subdirectory(lfapp_tests)
-
-# crawler
-add_subdirectory(crawler)
-
-# nlp
-add_subdirectory(nlp)
-
-# speech
-add_subdirectory(speech)
+if(LFL_CORE_ONLY)
+    cmake_minimum_required(VERSION 3.0)
+    set(LFL_GLOG 1)
+    set(LFL_GTEST 1)
+    set(LFL_PROTOBUF 1)
+    set(LFL_OPENCV 1)
+    set(LFL_LIBCSS 1)
+    set(LFL_REGEX 1)
+    set(LFL_SREGEX 1)
+    set(LFL_ICONV 1)
+    set(LFL_PNG 1)
+    set(LFL_JUDY 1)
+    include(CMake/LFLRoot.cmake)
+endif(LFL_CORE_ONLY)
