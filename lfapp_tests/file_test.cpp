@@ -35,14 +35,14 @@ TEST(FileTest, BufferFile) {
 
 TEST(FileTest, LocalFileRead) {
     {
-        string fn = "../../fv/assets/MenuAtlas1,0,0,0,0,000.png", contents = LocalFile::FileContents(fn), buf;
+        string fn = "../../../core/assets/lfl.png", contents = LocalFile::FileContents(fn), buf;
         INFO("Read ", fn, " ", contents.size(), " bytes");
         LocalFile f(fn, "r");
         for (const char *line = f.NextChunk(); line; line = f.NextChunk()) buf.append(line, f.nr.record_len);
         EXPECT_EQ(contents, buf);
     }
     {
-        string fn = "../../lfapp/lfapp.cpp", contents = LocalFile::FileContents(fn), buf;
+        string fn = "../../../core/lfapp/lfapp.cpp", contents = LocalFile::FileContents(fn), buf;
         INFO("Read ", fn, " ", contents.size(), " bytes");
         if (contents.back() != '\n') contents.append("\n");
         LocalFile f(fn, "r");
