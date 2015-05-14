@@ -30,12 +30,13 @@ Scene scene;
 // engine callback driven by LFL::Application
 int Frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample, int flag) {
     screen->cam->Look();
-    scene.Get("arrow")->YawRight((double)clicks/500);
+    scene.Get("arrow")->YawRight((double)clicks);
     scene.Draw(&asset.vec);
 
-    // Press tick for console
     screen->gd->DrawMode(DrawMode::_2D);
     screen->DrawDialogs();
+    Fonts::Default()->Draw(StringPrintf("Hello warld, my FPS is %.2f", FPS()), point(screen->width*.05, screen->height*.15));
+    Fonts::Default()->Draw("press tick for console",                           point(screen->width*.05, screen->height*.05));
     return 0;
 }
 
@@ -45,13 +46,16 @@ using namespace LFL;
 extern "C" int main(int argc, const char *argv[]) {
 
     app->logfilename = StrCat(LFAppDownloadDir(), "$BINNAME.txt");
+    screen->caption = "$PKGNAME";
     screen->frame_cb = Frame;
     screen->width = 420;
     screen->height = 380;
-    screen->caption = "$PKGNAME";
+    FLAGS_target_fps = 30;
+    FLAGS_lfapp_audio = FLAGS_lfapp_video = FLAGS_lfapp_input = 1;
 
     if (app->Create(argc, argv, __FILE__)) { app->Free(); return -1; }
     if (app->Init()) { app->Free(); return -1; }
+    screen->gd->default_draw_mode = DrawMode::_3D;
 
     // asset.Add(Asset(name, texture,  scale, translate, rotate, geometry              0, 0, 0, callback));
     asset.Add(Asset("axis",  "",       0,     0,         0,      0,                    0, 0, 0, glAxis  ));
@@ -62,8 +66,6 @@ extern "C" int main(int argc, const char *argv[]) {
     app->shell.assets = &asset;
 
     // soundasset.Add(SoundAsset(name, filename,   ringbuf, channels, sample_rate, seconds ));
-    soundasset.Add(SoundAsset("draw",  "Draw.wav", 0,       0,        0,           0       ));
-    soundasset.Load();
     app->shell.soundassets = &soundasset;
 
     BindMap *binds = screen->binds = new BindMap();

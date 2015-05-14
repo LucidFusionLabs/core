@@ -1,2 +1,2 @@
 include 'BaseGameUtils'
-project(':BaseGameUtils').projectDir = new File('../../imports/java/BaseGameUtils')
+project(':BaseGameUtils').projectDir = new File('../../core/imports/java/BaseGameUtils')

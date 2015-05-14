@@ -12,7 +12,7 @@ if [ "$TEMPLATEDIR" = "" -o "$TEMPLATEDIR" = "." ]; then echo "Can't run from ne
 
 TEMPLATEFILES=`find $TEMPLATEDIR/* | grep -v "/\." | grep -v "/clone.sh" | grep -v "/pkg/" | grep -v "/assets/" | grep -v "README.txt"`
 
-echo "lflpub/new_app_template/clone.sh: Cloning new app"
+echo "core/new_app_template/clone.sh: Cloning new app"
 echo "Domain: $ORGNAME"
 echo "Package: $PKGNAME"
 echo "Directory/Binary: $BINNAME"
@@ -38,5 +38,5 @@ for f in $TEMPLATEFILES; do
     fi
 done
 
-echo "lflpub/new_app_template/clone.sh: Successfully cloned new_app_template $BINNAME"
+echo "core/new_app_template/clone.sh: Successfully cloned new_app_template $BINNAME"
 

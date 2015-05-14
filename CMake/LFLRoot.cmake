@@ -6,11 +6,18 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE "Debug")
 endif(NOT CMAKE_BUILD_TYPE)
 
+if(LFL_CORE_ONLY)
+   set(CORE_SUBDIR .)
+else(LFL_CORE_ONLY)
+   set(CORE_SUBDIR core)
+endif(LFL_CORE_ONLY)
+
 include(ExternalProject)
 include(BundleUtilities)
-include(${CMAKE_CURRENT_SOURCE_DIR}/core/CMake/Autoconf.cmake)
-include(${CMAKE_CURRENT_SOURCE_DIR}/core/CMake/util.cmake)
-set(LFL_CORE ${CMAKE_CURRENT_SOURCE_DIR}/core)
+include(${CMAKE_CURRENT_SOURCE_DIR}/${CORE_SUBDIR}/CMake/Autoconf.cmake)
+include(${CMAKE_CURRENT_SOURCE_DIR}/${CORE_SUBDIR}/CMake/util.cmake)
+set(LFL_CORE ${CMAKE_CURRENT_SOURCE_DIR}/${CORE_SUBDIR})
+set(LFL_COREBIN ${CMAKE_CURRENT_BINARY_DIR}/${CORE_SUBDIR})
 
 if(WIN32)
     link_directories("")
@@ -37,11 +44,11 @@ if(LFL_IPHONESIM)
 endif(LFL_IPHONESIM)
 
 # imports
-add_subdirectory(imports)
+add_subdirectory(${CORE_SUBDIR}/imports)
 
 # macro includes
 if(LFL_PROTOBUF)
-    include(${CMAKE_CURRENT_SOURCE_DIR}/core/CMake/FindProtoBuf.cmake)
+    include(${CMAKE_CURRENT_SOURCE_DIR}/${CORE_SUBDIR}/CMake/FindProtoBuf.cmake)
 endif(LFL_PROTOBUF)
 
 # macros
@@ -72,6 +79,7 @@ macro(lfl_clear_projects)
     set(LFAPP_DEF)
     set(LFAPP_INCLUDE)
     set(LFAPP_LIB)
+    set(LFL_ASSIMP)
     set(LFL_AUDIOUNIT)
     set(LFL_BERKELIUM)
     set(LFL_BOX2D)
@@ -116,5 +124,19 @@ macro(lfl_clear_projects)
 endmacro(lfl_clear_projects)
 lfl_clear_projects()
 
-# core
-add_subdirectory(core)
+# cuda
+if(LFL_CUDA)
+    add_subdirectory(${CORE_SUBDIR}/lfcuda)
+endif(LFL_CUDA)
+
+# lfapp unit tests
+add_subdirectory(${CORE_SUBDIR}/lfapp_tests)
+
+# crawler
+add_subdirectory(${CORE_SUBDIR}/crawler)
+
+# nlp
+add_subdirectory(${CORE_SUBDIR}/nlp)
+
+# speech
+add_subdirectory(${CORE_SUBDIR}/speech)

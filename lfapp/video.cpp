@@ -1497,6 +1497,7 @@ void Window::Frame(unsigned clicks, unsigned mic_samples, bool cam_sample, int f
     if (screen != this) Window::MakeCurrent(this);
 
     if (FLAGS_lfapp_video) {
+        gd->DrawMode(gd->default_draw_mode);
         gd->Clear();
         gd->LoadIdentity();
     }
@@ -1511,7 +1512,6 @@ void Window::Frame(unsigned clicks, unsigned mic_samples, bool cam_sample, int f
 
     if (FLAGS_lfapp_video) {
         app->video.Swap();
-        gd->DrawMode(gd->default_draw_mode);
     }
 }
 
