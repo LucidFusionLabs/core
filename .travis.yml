@@ -27,7 +27,7 @@ install:
 script:
   - if [ $TRAVIS_OS_NAME == linux ]; then mkdir linux; cd linux; fi
   - cmake -DLFL_CORE_ONLY=1 ..
-  - cd ../lfapp_tests
+  - cd lfapp_tests
   - make -j4
   - LD_LIBRARY_PATH=../imports/OpenCV/lib ./tests
 
