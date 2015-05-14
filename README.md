@@ -2,7 +2,7 @@
 
 ## Overview
 
-[![Build Status](https://travis-ci.org/lucidfusionlabs/core.svg?branch=master)](https://travis-ci.org/lucidfusionlabs/core)
+[![Build Status](https://travis-ci.org/LucidFusionLabs/core.svg?branch=master)](https://travis-ci.org/LucidFusionLabs/core)
 
 The API primarly consists of the: `Application`, `Window`, and `Scene` classes,
 plus the 7 modules: `Audio`, `Video`, `Input`, `Assets`, `Network`, `Camera`,
