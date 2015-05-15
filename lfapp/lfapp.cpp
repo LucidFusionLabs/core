@@ -789,6 +789,9 @@ int Application::Frame() {
 }
 
 int Application::Main() {
+#ifdef LFL_IPHONE
+    ONCE({ return 0; });
+#endif
     if (Start()) return Exiting();
 #if defined(LFL_OSXVIDEO) || defined(LFL_QT) || defined(LFL_WXWIDGETS)
     return 0;

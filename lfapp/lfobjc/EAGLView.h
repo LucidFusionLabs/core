@@ -110,8 +110,6 @@ Copyright (C) 2008 Apple Inc. All Rights Reserved.
 	id<EAGLViewDelegate>	_delegate;
 	id<EAGLTouchDelegate>   touchDelegate;
 }
-- (id) initWithFrame:(CGRect)frame; //These also set the current context
-- (id) initWithFrame:(CGRect)frame pixelFormat:(NSString*)format;
 - (id) initWithFrame:(CGRect)frame pixelFormat:(NSString*)format depthFormat:(GLuint)depth preserveBackbuffer:(BOOL)retained;
 
 /** frame buffer id */

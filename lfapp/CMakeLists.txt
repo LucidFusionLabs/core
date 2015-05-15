@@ -157,15 +157,12 @@ if(LFL_IPHONE)
         set(bin i${pkgname}.app/Contents/MacOS/${target}) 
         set(info_plist ${CMAKE_CURRENT_SOURCE_DIR}/iphone-Info.plist)
         add_custom_command(TARGET ${target} POST_BUILD WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-            COMMAND rm -rf   i${pkgname}.app
-            COMMAND mkdir -p i${pkgname}.app/Contents
-            COMMAND cp  ${info_plist} i${pkgname}.app/Contents/Info.plist
-            COMMAND cat ${info_plist} | grep -A1 CFBundlePackageType | tail -1 | cut -f2 -d\\> | cut -f1 -d \\< | tr -d '\\n' | tee    i${pkgname}.app/Contents/PkgInfo
-            COMMAND cat ${info_plist} | grep -A1 CFBundleSignature   | tail -1 | cut -f2 -d\\> | cut -f1 -d \\< | tr -d '\\n' | tee -a i${pkgname}.app/Contents/PkgInfo
+            COMMAND rm -rf i${pkgname}.app
+            COMMAND mkdir  i${pkgname}.app
+            COMMAND cp  ${info_plist} i${pkgname}.app/Info.plist
             COMMAND cp -r ${CMAKE_CURRENT_SOURCE_DIR}/assets i${pkgname}.app
             COMMAND cp ${LFL_CORE}/lfapp/*.glsl i${pkgname}.app/assets
             COMMAND cp ${target} i${pkgname}.app
-            COMMAND chmod +x ${target} i${pkgname}.app/${target}
             COMMAND mkdir -p i${pkgname}.app/_CodeSignature
             COMMAND touch i${pkgname}.app/_CodeSignature/CodeResources
             COMMAND ln -s _CodeSignature/CodeResources i${pkgname}.app/CodeResources
@@ -175,6 +172,20 @@ if(LFL_IPHONE)
             COMMAND mkdir -p Payload
             COMMAND cp -rp i${pkgname}.app Payload
             COMMAND zip -r i${pkgname}.ipa Payload)
+        if(LFL_IPHONESIM)
+            add_custom_target(${target}_run WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} DEPENDS ${target}
+                COMMAND if pgrep iOS\ Simulator\; then echo\; else nohup /Applications/Xcode.app/Contents/Developer/Applications/iOS\ Simulator.app/Contents/MacOS/iOS\ Simulator & sleep 5\; fi
+                COMMAND xcrun simctl install booted i${pkgname}.app || { tail -1 $ENV{HOME}/Library/Logs/CoreSimulator/CoreSimulator.log && false\; }
+                COMMAND find $ENV{HOME}/Library/Developer/CoreSimulator/Devices/`xcrun simctl list | grep Booted | head -1 | cut -f2 -d\\\( -f2 | cut -f1 -d\\\)`/data/Containers/Bundle/Application -name i${pkgname}.app
+                COMMAND xcrun simctl launch booted `cat ${CMAKE_CURRENT_SOURCE_DIR}/iphone-Info.plist | grep BundleIdentifier -A1 | tail -1 | cut -f2 -d\\> | cut -f1 -d \\<`)
+            add_custom_target(${target}_debug WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} DEPENDS ${target}
+                COMMAND if pgrep iOS\ Simulator\; then echo\; else nohup /Applications/Xcode.app/Contents/Developer/Applications/iOS\ Simulator.app/Contents/MacOS/iOS\ Simulator & sleep 5\; fi
+                COMMAND xcrun simctl install booted i${pkgname}.app || { tail -1 $ENV{HOME}/Library/Logs/CoreSimulator/CoreSimulator.log && false\; }
+                COMMAND find $ENV{HOME}/Library/Developer/CoreSimulator/Devices/`xcrun simctl list | grep Booted | head -1 | cut -f2 -d\\\( -f2 | cut -f1 -d\\\)`/data/Containers/Bundle/Application -name i${pkgname}.app
+                COMMAND xcrun simctl launch booted `cat ${CMAKE_CURRENT_SOURCE_DIR}/iphone-Info.plist | grep BundleIdentifier -A1 | tail -1 | cut -f2 -d\\> | cut -f1 -d \\<`
+                COMMAND lldb -n ${target} -o cont)
+        else(LFL_IPHONESIM)
+        endif(LFL_IPHONESIM)
     endmacro(lfapp_post_build_start)
     macro(lfapp_post_build_copy_bin target binname pkgname)
     endmacro(lfapp_post_build_copy_bin)
