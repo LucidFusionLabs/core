@@ -421,7 +421,9 @@ struct OpenGLES2 : public GraphicsDevice {
     }
 
     void Init() {
-        // GetIntegerv(GL_FRAMEBUFFER_BINDING, &oldFBO);
+#ifdef LFL_IPHONE
+        GetIntegerv(GL_FRAMEBUFFER_BINDING, &default_framebuffer);
+#endif
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
         vertex_shader = LocalFile::FileContents(StrCat(app->assetdir, "lfapp_vertex.glsl"));
         pixel_shader  = LocalFile::FileContents(StrCat(app->assetdir, "lfapp_pixel.glsl"));
@@ -1004,7 +1006,7 @@ struct IPhoneVideoModule : public Module {
         NativeWindowInit();
         NativeWindowSize(&screen->width, &screen->height);
         CHECK(!screen->id);
-        screen->id = 1;
+        screen->id = (void*)1;
         Window::active[screen->id] = screen;
         return 0;
     }
@@ -2084,7 +2086,7 @@ void FrameBuffer::AllocTexture     (     Texture *out) { CHECK_EQ(out->ID, 0); o
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 }
 
-void FrameBuffer::Release() { glBindFramebuffer(GL_FRAMEBUFFER, 0); }
+void FrameBuffer::Release() { glBindFramebuffer(GL_FRAMEBUFFER, screen->gd->default_framebuffer); }
 void FrameBuffer::Attach(int ct, int dt) {
     glBindFramebuffer(GL_FRAMEBUFFER, ID);
     if (ct) {

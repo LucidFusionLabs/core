@@ -50,6 +50,11 @@ extern "C" int iPhoneMain(int argc, const char **argv);
     {
         NativeWindow *screen;
     }
+    - (id)initWithFrame:(CGRect)aRect {
+        if (!(self = [super initWithFrame:aRect])) return self;
+        screen = GetNativeWindow();
+        return self;
+    }
     - (void)touchesBegan:(NSSet *)touches withEvent:(UIEvent *)event {
         UITouch *touch = [touches anyObject];
         UIView *view = [touch view];
@@ -61,7 +66,7 @@ extern "C" int iPhoneMain(int argc, const char **argv);
         }
         screen->gesture_dpad_x[dpind] = position.x;
         screen->gesture_dpad_y[dpind] = position.y;
-        MouseClick(1, 1, (int)position.x, (int)position.y);
+        MouseClick(1, 1, (int)position.x, screen->height - (int)position.y);
     }
     - (void)touchesCancelled:(NSSet *)touches withEvent:(UIEvent *)event {}
     - (void)touchesEnded:(NSSet *)touches withEvent:(UIEvent *)event {
@@ -76,7 +81,7 @@ extern "C" int iPhoneMain(int argc, const char **argv);
         screen->gesture_dpad_stop[dpind] = 1;
         screen->gesture_dpad_x[dpind] = 0;
         screen->gesture_dpad_y[dpind] = 0;
-        MouseClick(1, 0, (int)position.x, (int)position.y);
+        MouseClick(1, 0, (int)position.x, screen->height - (int)position.y);
     }
     - (void)touchesMoved:(NSSet *)touches withEvent:(UIEvent *)event {
         UITouch *touch = [touches anyObject];
@@ -141,8 +146,8 @@ extern "C" int iPhoneMain(int argc, const char **argv);
         
         CGRect wbounds = [self.window bounds];
         self.view = [[EAGLView alloc] initWithFrame:wbounds
-            pixelFormat:kEAGLColorFormatRGB565	// kEAGLColorFormatRGBA8
-            depthFormat:0                       // GL_DEPTH_COMPONENT16_OES
+            pixelFormat:kEAGLColorFormatRGBA8
+            depthFormat:0
             preserveBackbuffer:false];
 
         // left view  
@@ -171,11 +176,15 @@ extern "C" int iPhoneMain(int argc, const char **argv);
 
         [[NSFileManager defaultManager] changeCurrentDirectoryPath: [[NSBundle mainBundle] resourcePath]];
         iPhoneMain(iphone_argc, iphone_argv);
+        INFOf("didFinishLaunchingWithOptions, views: %p, %p, %p", self.view, self.lview, self.rview);
 
         [self performSelector:@selector(postFinishLaunch) withObject:nil afterDelay:0.0];
         return YES;
     }
-    - (void)postFinishLaunch { LFAppMain(); }
+    - (void)postFinishLaunch {
+        INFOf("%s", "postFinishLaunch");
+        LFAppMain();
+    }
     - (void)applicationWillTerminate:(UIApplication *)application {}
     - (void)applicationWillResignActive:(UIApplication*)application {}
     - (void)applicationDidBecomeActive:(UIApplication*)application {}
@@ -298,7 +307,7 @@ extern "C" int iPhoneMain(int argc, const char **argv);
         CGPoint position = [tapGestureRecognizer locationInView:view];
         int dpind = view.frame.origin.y == 0;
 
-        MouseClick(1, 1, (int)position.x, (int)position.y);
+        MouseClick(1, 1, (int)position.x, screen->height - (int)position.y);
         screen->gesture_tap[dpind] = 1;
         screen->gesture_dpad_x[dpind] = position.x;
         screen->gesture_dpad_y[dpind] = position.y;
@@ -348,6 +357,7 @@ extern "C" void NativeWindowSize(int *width, int *height) {
     [UIApplication sharedApplication].statusBarHidden = YES;
     *width = rect.size.width;
     *height = rect.size.height;
+    INFOf("NativeWindowSize %d %d", *width, *height);
 }
 
 extern "C" int NativeWindowOrientation() { return [[LFApplication sharedApp] getOrientation]; }
@@ -394,14 +404,18 @@ extern "C" void *iPhoneLoadMusicAsset(const char *filename) {
 }
 
 extern "C" void iPhonePlayMusic(void *handle) {
+#ifndef LFL_IPHONESIM
     AVAudioPlayer *audioPlayer = (AVAudioPlayer*)handle;
     [audioPlayer play];
+#endif
 }
 
 extern "C" void iPhonePlayBackgroundMusic(void *handle) {
+#ifndef LFL_IPHONESIM
     AVAudioPlayer *audioPlayer = (AVAudioPlayer*)handle;
     audioPlayer.numberOfLoops = -1;
     [audioPlayer play];
+#endif
 }
 
 extern "C" char *iPhoneDocumentPath() {

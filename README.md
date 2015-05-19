@@ -124,18 +124,11 @@ LFL builds easily for Windows, Linux, Mac OSX, iPhone and Android.
 
 ### Android
 
-* http://www.oracle.com/technetwork/java/javase/downloads/java-se-jdk-7-download-432154.html
-* http://www.eclipse.org/downloads/packages/eclipse-classic-37/indigor
+* Install Android Developer Console, Android SDK (android-20 + PlayServices),
+  Android NDK, and Gradle
 
-* Android SDK http://developer.android.com/sdk/index.html
-* Android NDK http://developer.android.com/sdk/ndk/index.html
-* ADT Plugin http://developer.android.com/sdk/eclipse-adt.html#installing
-
-        $HOME/android-sdk-linux_x86/tools/android
-        [Install Platform android-20 + Google Play Services]
-        [New Virtual Device]
-        $HOME/android-ndk-r10d/build/tools/make-standalone-toolchain.sh \
-        --platform=android-8 --toolchain=arm-linux-androideabi-4.8 --install-dir=$HOME/android-toolchain
+* $HOME/android-ndk-r10d/build/tools/make-standalone-toolchain.sh \
+  --platform=android-9 --toolchain=arm-linux-androideabi-4.8 --install-dir=$HOME/android-toolchain
 
         cd lfl
         mkdir android && cd android
@@ -146,17 +139,14 @@ LFL builds easily for Windows, Linux, Mac OSX, iPhone and Android.
         make lterm_debug
         make lterm_pkg
 
-* Android Installer build/bin/LTerminal.apk results
-
-* Setup eclipse_keystore
-
-        LTerminal > Android Tools > Export Signed Application Package
-
-* Signed Android Installer results
-
 ## Contributing
 
 1. Fork this repo and make changes in your own fork.
 2. Commit your changes and push to your fork `git push origin master`
 3. Create a new pull request and submit it back to the project.
+
+## License
+
+* GPL
+* Unlimited commercial license available for 5$/year.
 

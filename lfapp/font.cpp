@@ -153,12 +153,11 @@ void GlyphCache::Load(const Font *f, const Glyph *g, const unsigned char *buf, i
         glyph.push_back(g);
     }
     if (tex.buf && cache_glyph) {
-        tex.UpdateBuffer(buf, Box(p, g->tex.width, g->tex.height), spf, linesize, SimpleVideoResampler::Flag::TransparentBlack);
+        tex.UpdateBuffer(buf, Box(p, g->tex.width, g->tex.height), spf, linesize);
         if (filter) filter(Box(p, g->tex.Dimension()), tex.buf, tex.LineSize(), tex.pf);
     } else {
         g->tex.pf = tex.pf;
-        g->tex.LoadBuffer(buf, g->tex.Dimension(), spf, linesize,
-                          SimpleVideoResampler::Flag::TransparentBlack | SimpleVideoResampler::Flag::FlipY);
+        g->tex.LoadBuffer(buf, g->tex.Dimension(), spf, linesize, Texture::Flag::FlipY);
         if (filter) filter(Box(g->tex.Dimension()), g->tex.buf, g->tex.LineSize(), g->tex.pf);
         // PngWriter::Write(StringPrintf("glyph%06x.png", g->id), g->tex);
         if (cache_glyph) {

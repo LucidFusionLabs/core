@@ -573,7 +573,7 @@ struct GraphicsDevice {
     static const int One, SrcAlpha, OneMinusSrcAlpha, OneMinusDstColor;
     static const int Fill, Line, Point, GLPreferredBuffer, GLInternalFormat;
 
-    int default_draw_mode = DrawMode::_2D, draw_mode = 0;
+    int default_draw_mode = DrawMode::_2D, draw_mode = 0, default_framebuffer = 0;
     string vertex_shader, pixel_shader;
     vector<Color> default_color;
     vector<vector<Box> > scissor_stack;

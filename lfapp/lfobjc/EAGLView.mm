@@ -127,9 +127,8 @@ Copyright (C) 2008 Apple Inc. All Rights Reserved.
 	}
 	glBindRenderbufferOES(GL_RENDERBUFFER_OES, oldRenderbuffer);
 
-#if COCOS2D_DEBUG
-	CHECK_GL_ERROR();
-#endif
+    NSLog(@"lfobjc FrameBuffer status %d == %d, GLerror %d",
+          glCheckFramebufferStatus(GL_FRAMEBUFFER), GL_FRAMEBUFFER_COMPLETE, glGetError());
 
 	[_delegate didResizeEAGLSurfaceForView:self];
 	
@@ -160,24 +159,15 @@ Copyright (C) 2008 Apple Inc. All Rights Reserved.
 		[EAGLContext setCurrentContext:nil];
 }
 
-- (id) initWithFrame:(CGRect)frame
-{
-	return [self initWithFrame:frame pixelFormat:kEAGLColorFormatRGB565 depthFormat:0 preserveBackbuffer:NO];
-}
-
-- (id) initWithFrame:(CGRect)frame pixelFormat:(NSString*)format 
-{
-	return [self initWithFrame:frame pixelFormat:format depthFormat:0 preserveBackbuffer:NO];
-}
-
-- (id) initWithFrame:(CGRect)frame pixelFormat:(NSString*)format depthFormat:(GLuint)depth preserveBackbuffer:(BOOL)retained
-{
-	if((self = [super initWithFrame:frame]))
-	{
+- (id) initWithFrame:(CGRect)frame pixelFormat:(NSString*)format depthFormat:(GLuint)depth preserveBackbuffer:(BOOL)retained {
+	if ((self = [super initWithFrame:frame])) {
 		[self setOpaque:YES];
 		CAEAGLLayer* eaglLayer = (CAEAGLLayer*)[self layer];
 
-		[eaglLayer setDrawableProperties:[NSDictionary dictionaryWithObjectsAndKeys:[NSNumber numberWithBool:retained], kEAGLDrawablePropertyRetainedBacking, format, kEAGLDrawablePropertyColorFormat, nil]];
+		[eaglLayer setDrawableProperties:
+            [NSDictionary dictionaryWithObjectsAndKeys: [NSNumber numberWithBool:retained], 
+                                                        kEAGLDrawablePropertyRetainedBacking, format,
+                                                        kEAGLDrawablePropertyColorFormat, nil]];
 		_format = format;
 		_depthFormat = depth;
 
@@ -209,7 +199,7 @@ Copyright (C) 2008 Apple Inc. All Rights Reserved.
 
 - (void) dealloc
 {
-	fprintf(stderr, "cocos2d: deallocing %@", self);
+	fprintf(stderr, "cocos2d: deallocing %p", self);
 
 	[self _destroySurface];
 	
@@ -263,10 +253,6 @@ Copyright (C) 2008 Apple Inc. All Rights Reserved.
 	if(oldContext != _context)
 		[EAGLContext setCurrentContext:_context];
 
-#if COCOS2D_DEBUG
-	CHECK_GL_ERROR();
-#endif
-	
 	//glGetIntegerv(GL_RENDERBUFFER_BINDING_OES, (GLint *) &oldRenderbuffer);
 	glBindRenderbufferOES(GL_RENDERBUFFER_OES, _renderbuffer);
 	//glBindRenderbufferOES(GL_RENDERBUFFER_OES, _framebuffer);
