@@ -243,6 +243,8 @@ elseif(CMAKE_SYSTEM_NAME MATCHES "Linux")
             COMMAND if [ -f ${cx_lib}   ]; then cp ${cx_lib}   ${pkgname}\; fi)
     endmacro(lfapp_post_build_start)
     macro(lfapp_post_build_copy_bin target binname pkgname)
+        add_custom_command(TARGET ${target} POST_BUILD WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+            COMMAND cp ${biname} ${pkgname})
     endmacro(lfapp_post_build_copy_bin)
 elseif(CMAKE_SYSTEM_NAME MATCHES "Darwin")
     macro(lfapp_add_target target)

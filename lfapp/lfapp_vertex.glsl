@@ -35,7 +35,7 @@ varying vec3 CubeCoordOut;
 #endif
 
 uniform float iGlobalTime;
-uniform vec2  iResolution;
+uniform vec3  iResolution;
 
 void main(void) {
     vec4 position = Position;
