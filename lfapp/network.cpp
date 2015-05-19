@@ -39,9 +39,7 @@ extern "C" {
 #include "openssl/err.h"
 #endif
 
-#ifdef WIN32
-#include <WinDNS.h>
-#else
+#ifndef WIN32
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -458,6 +456,7 @@ bool SystemNetwork::OpenSocketPair(int *fd) {
     memset(&sa, 0, sizeof(sa));
     sa.nLength = sizeof(sa);
     sa.bInheritHandle = 1;
+    HANDLE handle[2];
     CHECK(CreatePipe(&handle[0], &handle[1], &sa, 0));
     // XXX use WFMO with HANDLE* instead of select with SOCKET
 #else
@@ -516,7 +515,11 @@ int SystemNetwork::Bind(int fd, IPV4::Addr addr, int port) {
     sin.sin_addr.s_addr = addr ? addr : INADDR_ANY;
 
     if (FLAGS_network_debug) INFO("bind(", fd, ", ", IPV4::Text(addr, port), ")");
-    if (bind(fd, (const sockaddr *)&sin, (socklen_t)sizeof(sockaddr_in)) == -1)
+#ifdef WIN32
+    if (SystemBind(fd, (const sockaddr *)&sin, (socklen_t)sizeof(sockaddr_in)) == -1)
+#else
+    if (::bind)(fd, (const sockaddr *)&sin, (socklen_t)sizeof(sockaddr_in)) == -1)
+#endif
     { ERROR("bind: ", SystemNetwork::LastError()); return -1; }
 
     return 0;

@@ -20,6 +20,10 @@
 #include "lfapp/network.h"
 #include "lfapp/resolver.h"
 
+#ifdef WIN32
+#include <WinDNS.h>
+#endif
+
 namespace LFL {
 
 void Resolver::Reset() {

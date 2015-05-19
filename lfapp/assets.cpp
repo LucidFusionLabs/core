@@ -206,10 +206,13 @@ int JpegReader::Read(const string &data, Texture *out) {
     else if (jds.output_components == 4) out->pf = Pixel::RGBA;
     else { ERROR("unsupported jpeg components ", jds.output_components); jpeg_destroy_decompress(&jds); return -1; }
 
+#ifdef WIN32
+#else
     if      (out->pf == Pixel::RGBA)  jds.out_color_space = JCS_EXT_RGBA;
     else if (out->pf == Pixel::BGRA)  jds.out_color_space = JCS_EXT_BGRA;
     else if (out->pf == Pixel::RGB24) jds.out_color_space = JCS_EXT_RGB;
     else if (out->pf == Pixel::BGR24) jds.out_color_space = JCS_EXT_BGR;
+#endif
 
     out->Resize(jds.output_width, jds.output_height, out->pf, Texture::Flag::CreateBuf);
     for (int linesize = out->LineSize(); jds.output_scanline < jds.output_height;) {
@@ -1358,7 +1361,7 @@ void TextureArray::DrawSequence(Asset *out, Entity *e) {
 }
 
 void Tiles::AddDrawableBoxArray(const DrawableBoxArray &box, point p) {
-    for (DrawableBox::Iterator iter(box.data); !iter.Done(); iter.Increment()) {
+    for (DrawableBoxIterator iter(box.data); !iter.Done(); iter.Increment()) {
         const Drawable::Attr *attr = box.attr.GetAttr(iter.cur_attr1);
         if (attr->bg) {
             ContextOpen();

@@ -52,7 +52,7 @@ LFL builds easily for Windows, Linux, Mac OSX, iPhone and Android.
         cd lfl\core\imports\judy\src
         build.bat
 
-* use Visual Studio C++ 2013 Express
+* use Visual Studio C++ 2015
 * Tools > Options > Text Editor > All Languages > Tabs > Insert Spaces
 
         c:\lfl\term\Project.sln

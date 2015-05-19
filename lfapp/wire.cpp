@@ -20,9 +20,11 @@
 #include "lfapp/wire.h"
 #include "lfapp/ipc.h"
 
+#ifndef WIN32
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
+#endif
 
 namespace LFL {
 const char *Protocol::Name(int p) {

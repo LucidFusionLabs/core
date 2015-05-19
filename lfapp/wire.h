@@ -480,6 +480,7 @@ struct GameProtocol {
         int   In(const Serializable::Stream *i) { return 0; }
     };
     struct PlayerList : public RconRequest {
+        PlayerList() {}
         int Type() const { return 9; }
     };
 };

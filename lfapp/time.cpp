@@ -85,10 +85,22 @@ int RFC822TimeZone(const char *text) {
     return 0;
 }
 
-void GMTtm(time_t in, struct tm *t) { gmtime_r(&in, t); }
+void GMTtm(time_t in, struct tm *t) {
+#ifdef WIN32
+	*t = *gmtime(&in);
+#else
+	gmtime_r(&in, t);
+#endif
+}
 void GMTtm(struct tm *t) { return GMTtm(time(0), t); }
 
-void localtm(time_t in, struct tm *t) { localtime_r(&in, t);}
+void localtm(time_t in, struct tm *t) {
+#ifdef WIN32
+	*t = *localtime(&in);
+#else
+	localtime_r(&in, t);
+#endif
+}
 void localtm(struct tm *t) { return localtm(time(0), t); }
 
 string logtime(Time t) { char buf[128] = {0}; logtime(t, buf, sizeof(buf)); return buf; }

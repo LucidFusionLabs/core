@@ -399,7 +399,7 @@ void FlagMap::Print(const char *source_filename) const {
 }
 
 #ifdef WIN32
-BOOL WINAPI CtrlHandler(DWORD sig) { INFO("interrupt"); LFAppShutdown(); }
+BOOL WINAPI CtrlHandler(DWORD sig) { INFO("interrupt"); LFAppShutdown(); return TRUE; }
 void OpenConsole() {
     FLAGS_open_console=1;
     AllocConsole();
@@ -649,7 +649,7 @@ int Application::Create(int argc, const char **argv, const char *source_filename
 #endif
 #ifdef _WIN32
         char path[MAX_PATH];
-        if (!SUCCEEDED(SHGetFolderPath(NULL, CSIDL_PERSONAL|CSIDL_FLAG_CREATE, NULL, 0, path))) return;
+        if (!SUCCEEDED(SHGetFolderPath(NULL, CSIDL_PERSONAL|CSIDL_FLAG_CREATE, NULL, 0, path))) return -1;
         dldir = StrCat(path, "/");
 #endif
     }
@@ -828,7 +828,7 @@ int Application::Exiting() {
     INFO("exiting");
     scheduler.Free();
 #ifdef _WIN32
-    if (FLAGS_open_console) press_any_key();
+    if (FLAGS_open_console) PressAnyKey();
 #endif
     return 0;
 }
@@ -1266,9 +1266,9 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR lpCmdLine, int nC
     a[0].resize(1024);
     GetModuleFileName(hInst, (char*)a.data(), a.size());
     LFL::StringWordIter word_iter(lpCmdLine);
-    for (string word = IterNextString(&word_iter); !word_iter.Done(); word = IterNextString(&word_iter)) a.push_back(word):
-    for (auto i : a) av.push_back(i->c_str()); 
+    for (string word = IterNextString(&word_iter); !word_iter.Done(); word = IterNextString(&word_iter)) a.push_back(word);
+    for (auto &i : a) av.push_back(i.c_str());
     av.push_back(0);
-	return main(av.size()-1, &av[0]);
+    return main(av.size() - 1, &av[0]);
 }
 #endif

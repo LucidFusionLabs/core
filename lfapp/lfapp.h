@@ -19,11 +19,8 @@
 #ifndef __LFL_LFAPP_LFAPP_H__
 #define __LFL_LFAPP_LFAPP_H__
 
-#ifndef _WIN32
 #include <sstream>
 #include <typeinfo>
-#endif
-
 #include <vector>
 #include <string>
 #include <map>
@@ -31,6 +28,7 @@
 #include <list>
 #include <queue>
 #include <deque>
+#include <iterator>
 #include <algorithm>
 #include <memory>
 #include <numeric>
@@ -45,9 +43,11 @@
 #include <condition_variable>
 #include <chrono>
 #include <random>
+#include <type_traits>
 #define LFL_STL11_NAMESPACE std
 
 #ifdef _WIN32
+#define NOMINMAX
 #include <winsock2.h>
 #include <windows.h>
 #include <process.h>
@@ -56,6 +56,7 @@
 #include <sstream>
 #include <typeinfo>
 #define _USE_MATH_DEFINES
+inline int SystemBind(SOCKET s, const sockaddr *sa, int l) { return bind(s, sa, l); }
 typedef SOCKET Socket;
 #else /* _WIN32 */
 #include <unistd.h>
@@ -124,29 +125,18 @@ using LFL_STL11_NAMESPACE::make_unsigned;
 #ifdef _WIN32
 #include <float.h>
 #include <direct.h>
+#undef ERROR
 #undef CALLBACK
-#define isinf(x) (x <= -INFINITY || x >= INFINITY)
-#define isnan _isnan
-#define isfinite _finite
 #define getcwd _getcwd
 #define chdir _chdir
 #define strcasecmp _stricmp
 #define strncasecmp _strnicmp
 #define snprintf _snprintf
 #define S_IFDIR _S_IFDIR
-#define socklen_t int
+typedef int socklen_t;
 int close(Socket socket);
 extern char *optarg;
 extern int optind;
-#endif
-
-#ifdef __APPLE__
-#include <cmath>
-// extern "C" int isnan(double);
-// extern "C" int isinf(double);
-#define isfinite(x) (!isnan(x) && !isinf(x))
-#else
-#define isfinite(x) finite(x)
 #endif
 
 #ifdef LFL_ANDROID

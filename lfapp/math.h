@@ -26,12 +26,12 @@
 #define NextMultipleOf64(n) NextMultipleOfPowerOfTwo(n, 64);
 
 namespace LFL {
-template <class X> typename enable_if<is_integral<X>::value, X>::type
+template <typename X> typename enable_if<is_integral<X>::value, X>::type
 Rand(X rmin = 0, X rmax = numeric_limits<X>::max()) {
     return std::uniform_int_distribution<X>(rmin, rmax)(ThreadLocalStorage::Get()->rand_eng);
 }
 
-template <class X> typename enable_if<is_floating_point<X>::value, X>::type
+template <typename X> typename enable_if<is_floating_point<X>::value, X>::type
 Rand(X rmin = 0, X rmax = numeric_limits<X>::max()) {
     return std::uniform_real_distribution<X>(rmin, rmax)(ThreadLocalStorage::Get()->rand_eng);
 }
