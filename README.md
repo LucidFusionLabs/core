@@ -18,8 +18,7 @@ The key implementation files are:
 * **editor**:       LEditor, a text editor and IDE
 * **browser**:      LBrowser, a HTML4/CSS2 web browser with V8 javascript
 * **image**:        LImage, an image and 3D-model manipulation utility
-* **fs**:           Fusion Server, a speech and image recognition server
-* **fv**:           Fusion Viewer, a speech and image recognition client
+* **fs**:           Fusion Sensor, a speech and image recognition client/server
 * **market**:       Financial data visualization and automated trading code
 * **spaceball**:    Spaceball Future, a multiplayer 3d game
 * **cb**:           Crystal Bawl, a geopacket visualization screensaver

@@ -59,6 +59,11 @@ struct BitString {
     static int FirstClear(const          char *b, int l) { return FirstClear(reinterpret_cast<const unsigned char*>(b), l); }
 };
 
+struct ByteSink {
+    virtual int Write(const char *b, int l) = 0;
+    virtual void IOCtlWindowSize(int w, int h) {}
+};
+
 struct Unicode {
     static const unsigned char non_breaking_space = 0xA0;
     static const unsigned short replacement_char = 0xFFFD;
@@ -112,6 +117,7 @@ template <class X> struct ArrayPiece {
     typedef       X*       iterator;
     typedef const X* const_iterator;
     const X *buf; int len;
+    virtual ~ArrayPiece() {}
     ArrayPiece()                  : buf(0), len(0) {}
     ArrayPiece(const X *b, int l) : buf(b), len(l) {}
     const X& operator[](int i) const { return buf[i]; }
@@ -129,6 +135,7 @@ template <class X> struct ArrayPiece {
 };
 
 template <class X> struct StringPieceT : public ArrayPiece<X> {
+    virtual ~StringPieceT() {}
     StringPieceT() {}
     StringPieceT(const basic_string<X> &s) : ArrayPiece<X>(s.data(), s.size())  {}
     StringPieceT(const X *b, int l)        : ArrayPiece<X>(b,        l)         {}

@@ -446,7 +446,8 @@ struct TextArea : public TextGUI {
     virtual ~TextArea() {}
 
     /// Write() is thread-safe.
-    virtual void Write(const string &s, bool update_fb=true, bool release_fb=true);
+    virtual void Write(const StringPiece &s, bool update_fb=true, bool release_fb=true);
+    virtual void WriteCB(const string &s, bool update_fb, bool release_fb) { return Write(s, update_fb, release_fb); }
     virtual void PageUp  () { v_scrolled = Clamp(v_scrolled - (float)scroll_inc/(WrappedLines()-1), 0, 1); UpdateScrolled(); }
     virtual void PageDown() { v_scrolled = Clamp(v_scrolled + (float)scroll_inc/(WrappedLines()-1), 0, 1); UpdateScrolled(); }
     virtual void Resized(const Box &b);
@@ -515,7 +516,8 @@ struct Terminal : public TextArea, public Drawable::AttrSource {
     struct StandardVGAColors : public Colors { StandardVGAColors(); };
     struct SolarizedColors : public Colors { SolarizedColors(); };
 
-    int fd, term_width=0, term_height=0, parse_state=State::TEXT, default_cursor_attr=0;
+    ByteSink *sink=0;
+    int term_width=0, term_height=0, parse_state=State::TEXT, default_cursor_attr=0;
     int scroll_region_beg=0, scroll_region_end=0;
     string parse_text, parse_csi, parse_osc;
     unsigned char parse_charset=0;
@@ -528,27 +530,27 @@ struct Terminal : public TextArea, public Drawable::AttrSource {
     Color *bg_color=0;
     mutable Drawable::Attr last_attr;
 
-    Terminal(int FD, Window *W, Font *F);
+    Terminal(ByteSink *O, Window *W, Font *F);
     virtual ~Terminal() {}
     virtual void Resized(const Box &b);
     virtual void ResizedLeftoverRegion(int w, int h, bool update_fb=true);
     virtual void SetScrollRegion(int b, int e, bool release_fb=false);
     virtual void SetDimension(int w, int h);
     virtual void Draw(const Box &b, bool draw_cursor);
-    virtual void Write(const string &s, bool update_fb=true, bool release_fb=true);
-    virtual void Input(char k) {                       write(fd, &k, 1); }
-    virtual void Erase      () { char k = 0x7f;        write(fd, &k, 1); }
-    virtual void Enter      () { char k = '\r';        write(fd, &k, 1); }
-    virtual void Tab        () { char k = '\t';        write(fd, &k, 1); }
-    virtual void Escape     () { char k = 0x1b;        write(fd, &k, 1); }
-    virtual void HistUp     () { char k[] = "\x1bOA";  write(fd,  k, 3); }
-    virtual void HistDown   () { char k[] = "\x1bOB";  write(fd,  k, 3); }
-    virtual void CursorRight() { char k[] = "\x1bOC";  write(fd,  k, 3); }
-    virtual void CursorLeft () { char k[] = "\x1bOD";  write(fd,  k, 3); }
-    virtual void PageUp     () { char k[] = "\x1b[5~"; write(fd,  k, 4); }
-    virtual void PageDown   () { char k[] = "\x1b[6~"; write(fd,  k, 4); }
-    virtual void Home       () { char k = 'A' - 0x40;  write(fd, &k, 1); }
-    virtual void End        () { char k = 'E' - 0x40;  write(fd, &k, 1);  }
+    virtual void Write(const StringPiece &s, bool update_fb=true, bool release_fb=true);
+    virtual void Input(char k) {                       sink->Write(&k, 1); }
+    virtual void Erase      () { char k = 0x7f;        sink->Write(&k, 1); }
+    virtual void Enter      () { char k = '\r';        sink->Write(&k, 1); }
+    virtual void Tab        () { char k = '\t';        sink->Write(&k, 1); }
+    virtual void Escape     () { char k = 0x1b;        sink->Write(&k, 1); }
+    virtual void HistUp     () { char k[] = "\x1bOA";  sink->Write( k, 3); }
+    virtual void HistDown   () { char k[] = "\x1bOB";  sink->Write( k, 3); }
+    virtual void CursorRight() { char k[] = "\x1bOC";  sink->Write( k, 3); }
+    virtual void CursorLeft () { char k[] = "\x1bOD";  sink->Write( k, 3); }
+    virtual void PageUp     () { char k[] = "\x1b[5~"; sink->Write( k, 4); }
+    virtual void PageDown   () { char k[] = "\x1b[6~"; sink->Write( k, 4); }
+    virtual void Home       () { char k = 'A' - 0x40;  sink->Write(&k, 1); }
+    virtual void End        () { char k = 'E' - 0x40;  sink->Write(&k, 1);  }
     virtual void UpdateCursor() { cursor.p = point(GetCursorX(term_cursor.x, term_cursor.y), GetCursorY(term_cursor.y)); }
     virtual void UpdateToken(Line*, int word_offset, int word_len, int update_type, const LineTokenProcessor*);
     virtual int UpdateLines(float v_scrolled, int *first_ind, int *first_offset, int *first_len) { return 0; }

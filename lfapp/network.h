@@ -220,6 +220,14 @@ struct SystemNetwork {
     static string LastError();
 };
 
+struct ReadBuffer {
+    int size;
+    Time stamp;
+    string data;
+    ReadBuffer(int S=0) : size(S), stamp(Now()), data(S, 0) {}
+    void Reset() { stamp=Now(); data.resize(size); }
+};
+
 struct Listener {
     BIO *ssl;
     Service *svc;
@@ -236,8 +244,8 @@ struct Connection {
     Socket socket;
     Time ct, rt, wt;
     string endpoint_name;
-    bool readable=1, writable=0;
     IPV4::Addr addr, src_addr=0;
+    bool readable=1, writable=0;
     int state, port, src_port=0, rl=0, wl=0;
     char rb[BufSize], wb[BufSize];
     typed_ptr self_reference;
@@ -245,12 +253,13 @@ struct Connection {
     SSL *ssl=0;
     BIO *bio=0;
     Query *query;
+    Callback *detach;
 
     ~Connection() { delete query; }
-    Connection(Service *s, Query *q)                                       : svc(s), socket(-1),   ct(Now()), rt(Now()), wt(Now()), addr(0),    state(Error), port(0),    self_reference(TypePointer(this)), query(q) {}
-    Connection(Service *s, int State, int Sock)                            : svc(s), socket(Sock), ct(Now()), rt(Now()), wt(Now()), addr(0),    state(State), port(0),    self_reference(TypePointer(this)), query(0) {}
-    Connection(Service *s, int State, IPV4::Addr Addr, int Port)           : svc(s), socket(-1),   ct(Now()), rt(Now()), wt(Now()), addr(Addr), state(State), port(Port), self_reference(TypePointer(this)), query(0) {}
-    Connection(Service *s, int State, int Sock, IPV4::Addr Addr, int Port) : svc(s), socket(Sock), ct(Now()), rt(Now()), wt(Now()), addr(Addr), state(State), port(Port), self_reference(TypePointer(this)), query(0) {}
+    Connection(Service *s, Query *q,                                       Callback *Detach=0) : svc(s), socket(-1),   ct(Now()), rt(Now()), wt(Now()), addr(0),    detach(Detach), state(Error), port(0),    self_reference(TypePointer(this)), query(q) {}
+    Connection(Service *s, int State, int Sock,                            Callback *Detach=0) : svc(s), socket(Sock), ct(Now()), rt(Now()), wt(Now()), addr(0),    detach(Detach), state(State), port(0),    self_reference(TypePointer(this)), query(0) {}
+    Connection(Service *s, int State, int Sock, IPV4::Addr Addr, int Port, Callback *Detach=0) : svc(s), socket(Sock), ct(Now()), rt(Now()), wt(Now()), addr(Addr), detach(Detach), state(State), port(Port), self_reference(TypePointer(this)), query(0) {}
+    Connection(Service *s, int State,           IPV4::Addr Addr, int Port, Callback *Detach=0) : svc(s), socket(-1),   ct(Now()), rt(Now()), wt(Now()), addr(Addr), detach(Detach), state(State), port(Port), self_reference(TypePointer(this)), query(0) {}
 
     string Name() const { return !endpoint_name.empty() ? endpoint_name : IPV4::Text(addr, port); }
     void SetError() { state = Error; ct = Now(); }
@@ -295,15 +304,16 @@ struct Service {
     int OpenSocket(Connection *c, int protocol, int blocking, IPV4EndpointSource*);
     Socket Listen(IPV4::Addr addr, int port, Listener*);
     Connection *Accept(int state, Socket socket, IPV4::Addr addr, int port);
-    Connection *Connect(IPV4::Addr addr, int port, IPV4EndpointSource *src_addr=0);
-    Connection *Connect(IPV4::Addr addr, int port, IPV4::Addr src_addr, int src_port);
-    Connection *Connect(const char *hostport);
-    Connection *SSLConnect(SSL_CTX *sslctx, IPV4::Addr addr, int port);
-    Connection *SSLConnect(SSL_CTX *sslctx, const char *hostport);
+    Connection *Connect(IPV4::Addr addr, int port, IPV4EndpointSource *src_addr=0, Callback *detach=0);
+    Connection *Connect(IPV4::Addr addr, int port, IPV4::Addr src_addr, int src_port, Callback *detach=0);
+    Connection *Connect(const string &hostport, int default_port=0, Callback *detach=0);
+    Connection *SSLConnect(SSL_CTX *sslctx, IPV4::Addr addr, int port, Callback *detach=0);
+    Connection *SSLConnect(SSL_CTX *sslctx, const string &hostport, int default_port=0, Callback *detach=0);
     Connection *EndpointConnect(const string &endpoint_name);
     void EndpointReadCB(string *endpoint_name, string *packet);
     void EndpointRead(const string &endpoint_name, const char *buf, int len);
     void EndpointClose(const string &endpoint_name);
+    void Detach(Connection *c);
 
     virtual void Close(Connection *c);
     virtual int UDPFilter(Connection *e, const char *buf, int len) { return 0; }
@@ -480,26 +490,25 @@ struct HTTPServer : public Service {
         virtual ~StreamResource();
         StreamResource(const char *outputFileType, int audioBitRate, int videoBitRate);        
         Response Request(Connection *, int method, const char *url, const char *args, const char *headers, const char *postdata, int postlen);
-        void openStreams(bool audio, bool video);
-        void update(int audio_samples, bool video_sample);
-        void resampleAudio(int audio_samples);
-        void sendAudio();
-        void sendVideo();        
-        void broadcast(AVPacket *, microseconds timestamp);
+        void OpenStreams(bool audio, bool video);
+        void Update(int audio_samples, bool video_sample);
+        void ResampleAudio(int audio_samples);
+        void SendAudio();
+        void SendVideo();        
+        void Broadcast(AVPacket *, microseconds timestamp);
     };
 #endif
 
     struct SessionResource : public Resource {
-        virtual ~SessionResource() { clear_connmap(); }
-
         typedef map<Connection*, Resource*> ConnMap;
         ConnMap connmap;
-        void clear_connmap() { for (ConnMap::iterator i = connmap.begin(); i != connmap.end(); i++) delete (*i).second; }
+        virtual ~SessionResource() { ClearConnections(); }
+        void ClearConnections() { for (ConnMap::iterator i = connmap.begin(); i != connmap.end(); i++) delete (*i).second; }
 
         Response Request(Connection *c, int method, const char *url, const char *args, const char *headers, const char *postdata, int postlen) {
             Resource *resource;
             if (!(resource = FindOrNull(connmap, c))) {
-                resource = open();
+                resource = Open();
                 connmap[c] = resource;
                 connectionClosedCB(c, bind(&SessionResource::ConnectionClosedCB, this, _1));
             }
@@ -510,35 +519,45 @@ struct HTTPServer : public Service {
             if (i == connmap.end()) return;
             Resource *resource = (*i).second;
             connmap.erase(i);
-            close(resource);
+            Close(resource);
         }
 
-        virtual Resource *open() = 0;
-        virtual void close(Resource *) = 0;
+        virtual Resource *Open() = 0;
+        virtual void Close(Resource *) = 0;
     };
 };
 
+struct SSHClient : public Service {
+    typedef function<void(Connection*, const StringPiece&)> ResponseCB;
+    Connection *Open(const string &hostport, const ResponseCB &cb, Callback *detach=0);
+
+    static void SetUser(Connection *c, const string &user);
+    static int SetTerminalWindowSize(Connection *c, int w, int h);
+    static int WriteChannelData(Connection *c, const StringPiece &b);
+};
+
 struct SMTPClient : public Service {
-    long long total_connected=0, total_disconnected=0, delivered=0, failed=0;
-    map<IPV4::Addr, string> domains; string domain;
-    string HeloDomain(IPV4::Addr addr) const { return domain.empty() ? FindOrDie(domains, addr) : domain; }
-
-    virtual int Connected(Connection *c) { total_connected++; return 0; }
-
-    static void DeliverDeferred(Connection *c);
     typedef function<bool(Connection*, const string&, SMTP::Message*)> DeliverableCB;
     typedef function<void(Connection*, const SMTP::Message &, int, const string&)> DeliveredCB;
+
+    long long total_connected=0, total_disconnected=0, delivered=0, failed=0;
+    map<IPV4::Addr, string> domains; string domain;
+
+    virtual int Connected(Connection *c) { total_connected++; return 0; }
+    string HeloDomain(IPV4::Addr addr) const { return domain.empty() ? FindOrDie(domains, addr) : domain; }
     Connection *DeliverTo(IPV4::Addr mx, IPV4EndpointSource*, DeliverableCB deliverableCB, DeliveredCB deliveredCB);
+
+    static void DeliverDeferred(Connection *c);
 };
 
 struct SMTPServer : public Service {
     long long total_connected=0;
     map<IPV4::Addr, string> domains; string domain;
-    string HeloDomain(IPV4::Addr addr) const { return domain.empty() ? FindOrDie(domains, addr) : domain; }
 
     SMTPServer(const string &n) : domain(n) {}
     virtual int Connected(Connection *c);
     virtual void ReceiveMail(Connection *c, const SMTP::Message &message);
+    string HeloDomain(IPV4::Addr addr) const { return domain.empty() ? FindOrDie(domains, addr) : domain; }
 };
 
 struct GPlusClient : public Service {

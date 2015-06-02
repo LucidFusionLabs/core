@@ -19,13 +19,16 @@
 #ifndef __LFL_LFAPP_MATH_H__
 #define __LFL_LFAPP_MATH_H__
 
-#define NextMultipleOf4(n)  NextMultipleOfPowerOfTwo(n, 4);
-#define NextMultipleOf8(n)  NextMultipleOfPowerOfTwo(n, 8);
-#define NextMultipleOf16(n) NextMultipleOfPowerOfTwo(n, 16);
-#define NextMultipleOf32(n) NextMultipleOfPowerOfTwo(n, 32);
-#define NextMultipleOf64(n) NextMultipleOfPowerOfTwo(n, 64);
+#define NextMultipleOf4(n)  NextMultipleOfPowerOfTwo(n, 4)
+#define NextMultipleOf8(n)  NextMultipleOfPowerOfTwo(n, 8)
+#define NextMultipleOf16(n) NextMultipleOfPowerOfTwo(n, 16)
+#define NextMultipleOf32(n) NextMultipleOfPowerOfTwo(n, 32)
+#define NextMultipleOf64(n) NextMultipleOfPowerOfTwo(n, 64)
 
 namespace LFL {
+int NextMultipleOfPowerOfTwo(int input, int align);
+void *NextMultipleOfPowerOfTwo(void *input, int align);
+
 template <typename X> typename enable_if<is_integral<X>::value, X>::type
 Rand(X rmin = 0, X rmax = numeric_limits<X>::max()) {
     return std::uniform_int_distribution<X>(rmin, rmax)(ThreadLocalStorage::Get()->rand_eng);
@@ -34,6 +37,14 @@ Rand(X rmin = 0, X rmax = numeric_limits<X>::max()) {
 template <typename X> typename enable_if<is_floating_point<X>::value, X>::type
 Rand(X rmin = 0, X rmax = numeric_limits<X>::max()) {
     return std::uniform_real_distribution<X>(rmin, rmax)(ThreadLocalStorage::Get()->rand_eng);
+}
+
+template <class Generator> string RandBytes(int n, Generator &g) {
+    string ret(NextMultipleOfPowerOfTwo(n, sizeof(int)), 0);
+    std::uniform_int_distribution<unsigned int> dist(0, numeric_limits<unsigned int>::max());
+    for (int *p = (int*)ret.data(), *e = p + ret.size()/sizeof(int); p != e; ++p) *p = dist(g);
+    ret.resize(n);
+    return ret;
 }
 
 inline int rand() { return Rand<int>(); }
@@ -503,8 +514,6 @@ int RoundDown(float f);
 int RoundHigher(float f);
 int RoundLower(float f);
 int DimCheck(const char *log, int d1, int d2);
-int NextMultipleOfPowerOfTwo(int input, int align);
-void *NextMultipleOfPowerOfTwo(void *input, int align);
 int PrevMultipleOfN(int input, int N);
 int NextMultipleOfN(int input, int N);
 int NextPowerOfTwo(int n, bool strict=false);

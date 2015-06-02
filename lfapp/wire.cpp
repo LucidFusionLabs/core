@@ -26,6 +26,10 @@
 #include <netdb.h>
 #endif
 
+#ifdef LFL_OPENSSL
+#include "openssl/bn.h"
+#endif
+
 namespace LFL {
 const char *Protocol::Name(int p) {
     switch (p) {
@@ -40,13 +44,22 @@ const char *Protocol::Name(int p) {
 void Serializable::Header::Out(Stream *o) const { o->Htons( id); o->Htons( seq); }
 void Serializable::Header::In(const Stream *i)  { i->Ntohs(&id); i->Ntohs(&seq); }
 
+string Serializable::ToString()                   { string ret; ToString(&ret);      return ret; }
 string Serializable::ToString(unsigned short seq) { string ret; ToString(&ret, seq); return ret; }
 
+void Serializable::ToString(string *out) {
+    out->resize(Size());
+    return ToString((char*)out->data(), out->size());
+}
 void Serializable::ToString(string *out, unsigned short seq) {
     out->resize(Header::size + Size());
     return ToString((char*)out->data(), out->size(), seq);
 }
 
+void Serializable::ToString(char *buf, int len) {
+    MutableStream os(buf, len);
+    Out(&os);
+}
 void Serializable::ToString(char *buf, int len, unsigned short seq) {
     MutableStream os(buf, len);
     Header hdr = { (unsigned short)Type(), seq };
@@ -227,10 +240,10 @@ bool HTTP::ParseHost(const char *host, const char *host_end, string *hostO, stri
     return 1;
 }
 
-bool HTTP::ResolveHost(const char *hostname, const char *host_end, IPV4::Addr *ipv4_addr, int *tcp_port, bool ssl) {
+bool HTTP::ResolveHost(const char *hostname, const char *host_end, IPV4::Addr *ipv4_addr, int *tcp_port, bool ssl, int default_port) {
     string h, p;
     if (!ParseHost(hostname, host_end, &h, &p)) return 0;
-    return ResolveEndpoint(h, p, ipv4_addr, tcp_port, ssl);
+    return ResolveEndpoint(h, p, ipv4_addr, tcp_port, ssl, default_port);
 }
 
 bool HTTP::ResolveEndpoint(const string &host, const string &port, IPV4::Addr *ipv4_addr, int *tcp_port, bool ssl, int default_port) {
@@ -400,6 +413,201 @@ string HTTP::EncodeURL(const char *url) {
         else StringAppendf(&ret, "%%%02x", *p);
     }
     return ret;
+}
+
+/* SSH */
+
+int SSH::BinaryPacketLength(const char *b, unsigned char *padding, unsigned char *id) {
+    if (padding) *padding = *(reinterpret_cast<const unsigned char *>(b + 4));
+    if (id)      *id      = *(reinterpret_cast<const unsigned char *>(b + 5));
+    return ntohl(*(int*)b);
+}
+
+#ifdef LFL_OPENSSL
+int SSH::BigNumSize(const BIGNUM *n) { return BN_num_bytes(n) + !(BN_num_bits(n) % 8); }
+void SSH::ReadBigNum(BIGNUM *n, const Serializable::Stream *i) {
+    int n_len = 0;
+    i->Ntohl(&n_len);
+    const char *b = i->Get(n_len);
+    BN_bin2bn(reinterpret_cast<const unsigned char *>(b), n_len, n);
+}
+void SSH::WriteBigNum(const BIGNUM *n, Serializable::Stream *o) {
+    int n_len = BN_num_bytes(n);
+    bool prepend_zero = !(BN_num_bits(n) % 8);
+    o->Htonl(n_len + prepend_zero);
+    if (prepend_zero) o->Write8(char(0));
+    char *b = o->Get(n_len);
+    BN_bn2bin(n, reinterpret_cast<unsigned char *>(b));
+}
+#else // LFL_OPENSSL
+int SSH::BigNumSize(const BIGNUM *n) { return 0; }
+void SSH::ReadBigNum(BIGNUM *n, const Serializable::Stream *i) {}
+void SSH::WriteBigNum(const BIGNUM *n, Serializable::Stream *o) {}
+#endif // LFL_OPENSSL
+
+string SSH::Serializable::ToString(std::mt19937 &g, unsigned *sequence_number) {
+    if (sequence_number) (*sequence_number)++;
+    string ret;
+    ToString(&ret, g);
+    return ret;
+}
+
+void SSH::Serializable::ToString(string *out, std::mt19937 &g) {
+    out->resize(NextMultipleOf8(4 + SSH::BinaryPacketHeaderSize + Size()));
+    return ToString(&(*out)[0], out->size(), g);
+}
+
+void SSH::Serializable::ToString(char *buf, int len, std::mt19937 &g) {
+    unsigned char type = Type(), padding = len - SSH::BinaryPacketHeaderSize - Size();
+    MutableStream os(buf, len);
+    os.Htonl(len - 4);
+    os.Write8(padding);
+    os.Write8(type);
+    Out(&os);
+    memcpy(buf + len - padding, RandBytes(padding, g).data(), padding);
+}
+
+int SSH::MSG_KEXINIT::Size() const {
+    return HeaderSize() + kex_algorithms.size() + server_host_key_algorithms.size() +
+        encryption_algorithms_client_to_server.size() + encryption_algorithms_server_to_client.size() +
+        mac_algorithms_client_to_server.size() + mac_algorithms_server_to_client.size() + 
+        compression_algorithms_client_to_server.size() + compression_algorithms_server_to_client.size() +
+        languages_client_to_server.size() + languages_server_to_client.size();
+}
+
+string SSH::MSG_KEXINIT::DebugString() const {
+    string ret;
+    StrAppend(&ret, "kex_algorithms: ",                          kex_algorithms.str(),                          "\n");
+    StrAppend(&ret, "server_host_key_algorithms: ",              server_host_key_algorithms.str(),              "\n");
+    StrAppend(&ret, "encryption_algorithms_client_to_server: ",  encryption_algorithms_client_to_server.str(),  "\n");
+    StrAppend(&ret, "encryption_algorithms_server_to_client: ",  encryption_algorithms_server_to_client.str(),  "\n");
+    StrAppend(&ret, "mac_algorithms_client_to_server: ",         mac_algorithms_client_to_server.str(),         "\n");
+    StrAppend(&ret, "mac_algorithms_server_to_client: ",         mac_algorithms_server_to_client.str(),         "\n");
+    StrAppend(&ret, "compression_algorithms_client_to_server: ", compression_algorithms_client_to_server.str(), "\n");
+    StrAppend(&ret, "compression_algorithms_server_to_client: ", compression_algorithms_server_to_client.str(), "\n");
+    StrAppend(&ret, "languages_client_to_server: ",              languages_client_to_server.str(),              "\n");
+    StrAppend(&ret, "languages_server_to_client: ",              languages_server_to_client.str(),              "\n");
+    StrAppend(&ret, "first_kex_packet_follows: ",                (int)first_kex_packet_follows,                 "\n");
+    return ret;
+}
+
+void SSH::MSG_KEXINIT::Out(Serializable::Stream *o) const {
+    o->String(cookie);
+    o->BString(kex_algorithms);                             o->BString(server_host_key_algorithms);
+    o->BString(encryption_algorithms_client_to_server);     o->BString(encryption_algorithms_server_to_client);
+    o->BString(mac_algorithms_client_to_server);            o->BString(mac_algorithms_server_to_client);
+    o->BString(compression_algorithms_client_to_server);    o->BString(compression_algorithms_server_to_client);
+    o->BString(languages_client_to_server);                 o->BString(languages_server_to_client);
+    o->Write8(first_kex_packet_follows);
+    o->Write32(0);
+}
+
+int SSH::MSG_KEXINIT::In(const Serializable::Stream *i) {
+    cookie = StringPiece(i->Get(16), 16);
+    i->ReadString(&kex_algorithms);                             i->ReadString(&server_host_key_algorithms);
+    i->ReadString(&encryption_algorithms_client_to_server);     i->ReadString(&encryption_algorithms_server_to_client);
+    i->ReadString(&mac_algorithms_client_to_server);            i->ReadString(&mac_algorithms_server_to_client);
+    i->ReadString(&compression_algorithms_client_to_server);    i->ReadString(&compression_algorithms_server_to_client);
+    i->ReadString(&languages_client_to_server);                 i->ReadString(&languages_server_to_client);
+    i->Read8(&first_kex_packet_follows);
+    return i->Result();
+}
+
+int SSH::MSG_USERAUTH_REQUEST::Size() const {
+    string mn = method_name.str();
+    int ret = HeaderSize() + user_name.size() + service_name.size() + method_name.size();
+    if      (mn == "publickey")            ret += 4*3 + 1 + algo_name.size() + secret.size() + sig.size();
+    else if (mn == "password")             ret += 4*1 + 1 + secret.size();
+    else if (mn == "keyboard-interactive") ret += 4*2;
+    return ret;
+};
+
+void SSH::MSG_USERAUTH_REQUEST::Out(Serializable::Stream *o) const {
+    o->BString(user_name);
+    o->BString(service_name);
+    o->BString(method_name);
+    string mn = method_name.str();
+    if      (mn == "publickey")            { o->Write8(static_cast<unsigned char>(1)); o->BString(algo_name); o->BString(secret); o->BString(sig); }
+    else if (mn == "password")             { o->Write8(static_cast<unsigned char>(0)); o->BString(secret); }
+    else if (mn == "keyboard-interactive") { o->BString(""); o->BString(""); }
+}
+
+int SSH::MSG_USERAUTH_INFO_REQUEST::Size() const {
+    int ret = HeaderSize() + name.size() + instruction.size() + language.size();
+    for (auto &p : prompt) ret += 4 + 1 + p.text.size();
+    return ret;
+}
+
+int SSH::MSG_USERAUTH_INFO_REQUEST::In(const Serializable::Stream *i) {
+    int num_prompts = 0;
+    i->ReadString(&name);
+    i->ReadString(&instruction);
+    i->ReadString(&language);
+    i->Htonl(&num_prompts);
+    prompt.resize(num_prompts);
+    for (auto &p : prompt) {
+        i->ReadString(&p.text);
+        i->Read8(&p.echo);
+    }
+    return i->Result();
+}
+
+int SSH::MSG_USERAUTH_INFO_RESPONSE::Size() const {
+    int ret = HeaderSize();
+    for (auto &r : response) ret += 4 + r.size();
+    return ret;
+}
+
+void SSH::MSG_USERAUTH_INFO_RESPONSE::Out(Serializable::Stream *o) const {
+    o->Htonl(static_cast<unsigned>(response.size()));
+    for (auto &r : response) o->BString(r);
+}
+
+int SSH::MSG_CHANNEL_REQUEST::Size() const {
+    int ret = HeaderSize() + request_type.size();
+    string rt = request_type.str();
+    if (rt == "pty-req") ret += 4*6 + term.size() + term_mode.size();
+    else if (rt == "exec") ret += 4*1 + term.size();
+    return ret;
+}
+
+void SSH::MSG_CHANNEL_REQUEST::Out(Serializable::Stream *o) const {
+    o->Htonl(recipient_channel);
+    o->BString(request_type);
+    o->Write8(want_reply);
+    string rt = request_type.str();
+    if (rt == "pty-req") {
+        o->BString(term);
+        o->Htonl(width);
+        o->Htonl(height);
+        o->Htonl(pixel_width);
+        o->Htonl(pixel_height);
+        o->BString(term_mode);
+    } else if (rt == "exec") {
+        o->BString(term);
+    }
+}
+
+int SSH::DSSKey::In(const Serializable::Stream *i) {
+    i->ReadString(&format_id);
+    if (format_id.str() != "ssh-dss") { i->error = true; return -1; }
+    ReadBigNum(p, i); 
+    ReadBigNum(q, i); 
+    ReadBigNum(g, i); 
+    ReadBigNum(y, i); 
+    return i->Result();
+}
+
+int SSH::DSSSignature::In(const Serializable::Stream *i) {
+    StringPiece blob;
+    i->ReadString(&format_id);
+    i->ReadString(&blob);
+    if (format_id.str() != "ssh-dss" || blob.size() != 40) { i->error = true; return -1; }
+#ifdef LFL_OPENSSL
+    BN_bin2bn(reinterpret_cast<const unsigned char *>(blob.data()),      20, r);
+    BN_bin2bn(reinterpret_cast<const unsigned char *>(blob.data() + 20), 20, r);
+#endif
+    return i->Result();
 }
 
 /* SMTP */

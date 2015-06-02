@@ -156,6 +156,7 @@ struct StyleSheet;
 struct StyleContext;
 struct TextGUI;
 struct Texture;
+struct Terminal;
 struct Tiles;
 struct VideoAssetLoader;
 struct Window;
@@ -177,6 +178,7 @@ struct _IplImage;
 typedef struct bio_st BIO;
 typedef struct ssl_st SSL;
 typedef struct ssl_ctx_st SSL_CTX;
+typedef struct bignum_st BIGNUM;
 typedef struct hb_face_t hb_face_t;
 
 struct LFApp {

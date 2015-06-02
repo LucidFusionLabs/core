@@ -88,9 +88,11 @@ extern "C" void QTTriggerFrame();
 #endif
 
 #ifdef LFL_OPENSSL
-#include <openssl/evp.h>
-#include <openssl/md5.h>
-#include <openssl/err.h>
+#include "openssl/evp.h"
+#include "openssl/md5.h"
+#include "openssl/err.h"
+#include "openssl/dh.h"
+#include "openssl/bn.h"
 #endif
 
 extern "C" {
@@ -236,11 +238,14 @@ bool NBFGets(FILE *f, char *buf, int len, int timeout) {
     return 0;
 #endif
 }
-int NBRead(int fd, char *buf, int len, int timeout) {
+bool NBReadable(int fd, int timeout) {
     SelectSocketSet ss;
     ss.Add(fd, SocketSet::READABLE, 0);
     ss.Select(timeout);
-    if (!app->run || !ss.GetReadable(fd)) return 0;
+    return app->run && ss.GetReadable(fd);
+}
+int NBRead(int fd, char *buf, int len, int timeout) {
+    if (!NBReadable(fd)) return 0;
     int o = 0, s = 0;
     do if ((s = ::read(fd, buf+o, len-o)) > 0) o += s;
     while (s > 0 && len - o > 1024);
@@ -450,6 +455,27 @@ string Crypto::MD5(const string &in) {
     return out;
 }
 
+string Crypto::SHA1(const string &in) {
+    void *ctx = NewSHA1();
+    UpdateSHA1(ctx, in);
+    return FinishSHA1(ctx);
+}
+
+void *Crypto::NewSHA1() {
+    EVP_MD_CTX *ctx = (EVP_MD_CTX*)calloc(sizeof(EVP_MD_CTX), 1);
+    EVP_DigestInit(ctx, EVP_get_digestbyname("sha1"));
+    return ctx;
+}
+void Crypto::UpdateSHA1(void *ctx, const StringPiece &in) { EVP_DigestUpdate((EVP_MD_CTX*)ctx, in.data(), in.size()); }
+string Crypto::FinishSHA1(void *ctx) {
+    unsigned len = 0;
+    string ret(EVP_MAX_MD_SIZE, 0);
+    EVP_DigestFinal((EVP_MD_CTX*)ctx, reinterpret_cast<unsigned char *>(&ret[0]), &len);
+    ret.resize(len);
+    free(ctx);
+    return ret;
+}
+
 string Crypto::Blowfish(const string &passphrase, const string &in, bool encrypt_or_decrypt) {
     unsigned char iv[8] = {0,0,0,0,0,0,0,0};
     EVP_CIPHER_CTX ctx; 
@@ -471,9 +497,20 @@ string Crypto::Blowfish(const string &passphrase, const string &in, bool encrypt
     }
     return out;
 }
+
+string Crypto::DiffieHellmanModulus(int generator, int bits) {
+    DH *dh = DH_new();
+    DH_generate_parameters_ex(dh, bits, generator, NULL);
+    string ret(BN_num_bytes(dh->p), 0);
+    BN_bn2bin(dh->p, (unsigned char*)&ret[0]);
+    DH_free(dh);
+    return ret;
+}
+
 #else
 string Crypto::MD5(const string &in) { FATAL("not implemented"); }
 string Crypto::Blowfish(const string &passphrase, const string &in, bool encrypt_or_decrypt) { FATAL("not implemented"); }
+string Crypto::DiffieHellmanModulus(int generator, int bits) { FATAL("not implemented"); }
 #endif
 
 void SystemBrowser::Open(const char *url_text) {

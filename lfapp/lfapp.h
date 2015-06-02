@@ -56,14 +56,15 @@
 #include <sstream>
 #include <typeinfo>
 #define _USE_MATH_DEFINES
-inline int SystemBind(SOCKET s, const sockaddr *sa, int l) { return bind(s, sa, l); }
 typedef SOCKET Socket;
 #else /* _WIN32 */
 #include <unistd.h>
 #include <limits.h>
 #include <sys/time.h>
+#include <sys/socket.h>
 typedef int Socket;
 #endif
+inline int SystemBind(Socket s, const sockaddr *sa, int l) { return bind(s, sa, l); }
 
 using LFL_STL_NAMESPACE::min;
 using LFL_STL_NAMESPACE::max;
@@ -255,6 +256,7 @@ bool NBFGets(FILE*, char *buf, int size, int timeout=0);
 int NBRead(int fd, char *buf, int size, int timeout=0);
 int NBRead(int fd, string *buf, int timeout=0);
 string NBRead(int fd, int size, int timeout=0);
+bool NBReadable(int fd, int timeout=0);
 
 struct MallocAlloc : public Allocator {
     const char *Name() { return "MallocAlloc"; }
@@ -434,8 +436,13 @@ struct PerformanceTimers {
 };
 
 struct Crypto {
-    string MD5(const string &in);
-    string Blowfish(const string &passphrase, const string &in, bool encrypt_or_decrypt);
+    static string MD5(const string &in);
+    static string SHA1(const string &in);
+    static void *NewSHA1();
+    static void UpdateSHA1(void*, const StringPiece &in);
+    static string FinishSHA1(void*);
+    static string Blowfish(const string &passphrase, const string &in, bool encrypt_or_decrypt);
+    static string DiffieHellmanModulus(int generator, int bits);
 };
 }; // namespace LFL
 

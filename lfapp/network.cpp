@@ -355,6 +355,7 @@ void Network::AcceptFrame(Service *svc, Listener *listener) {
         INFO(c->Name(), ": incoming connection (socket=", c->socket, ")");
         if (svc->Connected(c) < 0) c->SetError();
         if (c->query) { if (c->query->Connected(c) < 0) { ERROR(c->Name(), ": query connected"); c->SetError(); } }
+        if (c->detach) { svc->conn.erase(c->socket); svc->Detach(c); }
     }
 }
 
@@ -369,8 +370,9 @@ void Network::TCPConnectionFrame(Service *svc, Connection *c, ServiceEndpointEra
             c->SetSourceAddress();
             INFO(c->Name(), ": connected");
             if (svc->Connected(c) < 0) c->SetError();
-            UpdateActive(c);
             if (c->query) { if (c->query->Connected(c) < 0) { ERROR(c->Name(), ": query connected"); c->SetError(); } }
+            if (c->detach) { removelist->AddSocket(svc, c->socket); svc->Detach(c); }
+            UpdateActive(c);
             return;
         }
 
@@ -515,11 +517,7 @@ int SystemNetwork::Bind(int fd, IPV4::Addr addr, int port) {
     sin.sin_addr.s_addr = addr ? addr : INADDR_ANY;
 
     if (FLAGS_network_debug) INFO("bind(", fd, ", ", IPV4::Text(addr, port), ")");
-#ifdef WIN32
     if (SystemBind(fd, (const sockaddr *)&sin, (socklen_t)sizeof(sockaddr_in)) == -1)
-#else
-    if (::bind)(fd, (const sockaddr *)&sin, (socklen_t)sizeof(sockaddr_in)) == -1)
-#endif
     { ERROR("bind: ", SystemNetwork::LastError()); return -1; }
 
     return 0;
@@ -802,7 +800,7 @@ int Connection::SendTo(const char *buf, int len) { return SystemNetwork::SendTo(
 
 void Service::Close(Connection *c) {
     app->network.active.Del(c->socket);
-    close(c->socket);
+    if (!c->detach) close(c->socket);
     if (connect_src_pool && (c->src_addr || c->src_port)) connect_src_pool->Close(c->src_addr, c->src_port);
 }
 
@@ -858,13 +856,13 @@ Connection *Service::Accept(int state, Socket socket, IPV4::Addr addr, int port)
     return c;
 }
 
-Connection *Service::Connect(IPV4::Addr addr, int port, IPV4::Addr src_addr, int src_port) {
+Connection *Service::Connect(IPV4::Addr addr, int port, IPV4::Addr src_addr, int src_port, Callback *detach) {
     SingleIPV4Endpoint src_pool(src_addr, src_port);
-    return Connect(addr, port, &src_pool);
+    return Connect(addr, port, &src_pool, detach);
 }
 
-Connection *Service::Connect(IPV4::Addr addr, int port, IPV4EndpointSource *src_pool) {
-    Connection *c = new Connection(this, Connection::Connecting, addr, port);
+Connection *Service::Connect(IPV4::Addr addr, int port, IPV4EndpointSource *src_pool, Callback *detach) {
+    Connection *c = new Connection(this, Connection::Connecting, addr, port, detach);
     if (Service::OpenSocket(c, protocol, 0, src_pool ? src_pool : connect_src_pool))
     { ERROR(c->Name(), ": connecting: ", SystemNetwork::LastError()); delete c; return 0; }
 
@@ -885,29 +883,30 @@ Connection *Service::Connect(IPV4::Addr addr, int port, IPV4EndpointSource *src_
         INFO(c->Name(), ": connected");
         if (this->Connected(c) < 0) c->SetError();
         if (c->query) { if (c->query->Connected(c) < 0) { ERROR(c->Name(), ": query connected"); c->SetError(); } }
-        app->network.active.Add(c->socket, (c->readable ? SocketSet::READABLE : 0), &c->self_reference);
+        if (c->detach) { conn.erase(c->socket); Detach(c); }
+        app->network.UpdateActive(c);
     } else {
         app->network.active.Add(c->socket, SocketSet::READABLE|SocketSet::WRITABLE, &c->self_reference);
     }
     return c;
 }
 
-Connection *Service::Connect(const char *hostport) {
+Connection *Service::Connect(const string &hostport, int default_port, Callback *detach) {
     IPV4::Addr addr; int port;
-    if (!HTTP::ResolveHost(hostport, 0, &addr, &port, 0)) { ERROR("resolve ", hostport, " failed"); return 0; }
-    return Connect(addr, port);
+    if (!HTTP::ResolveHost(hostport.c_str(), 0, &addr, &port, 0, default_port)) { ERROR("resolve ", hostport, " failed"); return 0; }
+    return Connect(addr, port, NULL, detach);
 }
 
-Connection *Service::SSLConnect(SSL_CTX *sslctx, const char *hostport) {
+Connection *Service::SSLConnect(SSL_CTX *sslctx, const string &hostport, int default_port, Callback *detach) {
 #ifdef LFL_OPENSSL
     if (!sslctx) sslctx = lfapp_ssl;
     if (!sslctx) { ERROR("no ssl: ", -1); return 0; }
 
-    Connection *c = new Connection(this, Connection::Connecting, 0, 0);
-    if (!HTTP::ResolveHost(hostport, 0, &c->addr, &c->port, true)) { ERROR("resolve: ", hostport); return 0; }
+    Connection *c = new Connection(this, Connection::Connecting, 0, 0, detach);
+    if (!HTTP::ResolveHost(hostport.c_str(), 0, &c->addr, &c->port, true, default_port)) { ERROR("resolve: ", hostport); return 0; }
 
     c->bio = BIO_new_ssl_connect(sslctx);
-    BIO_set_conn_hostname(c->bio, hostport);
+    BIO_set_conn_hostname(c->bio, hostport.c_str());
     BIO_get_ssl(c->bio, &c->ssl);
     BIO_set_nbio(c->bio, 1);
 
@@ -929,12 +928,12 @@ Connection *Service::SSLConnect(SSL_CTX *sslctx, const char *hostport) {
 #endif
 }
 
-Connection *Service::SSLConnect(SSL_CTX *sslctx, IPV4::Addr addr, int port) {
+Connection *Service::SSLConnect(SSL_CTX *sslctx, IPV4::Addr addr, int port, Callback *detach) {
 #ifdef LFL_OPENSSL
     if (!sslctx) sslctx = lfapp_ssl;
     if (!sslctx) { ERROR("no ssl: ", -1); return 0; }
 
-    Connection *c = new Connection(this, Connection::Connecting, addr, port);
+    Connection *c = new Connection(this, Connection::Connecting, addr, port, detach);
     c->bio = BIO_new_ssl_connect(sslctx);
     BIO_set_conn_ip(c->bio, (char*)&addr);
     BIO_set_conn_int_port(c->bio, (char*)&port);
@@ -960,7 +959,7 @@ Connection *Service::SSLConnect(SSL_CTX *sslctx, IPV4::Addr addr, int port) {
 }
 
 Connection *Service::EndpointConnect(const string &endpoint_name) {
-    Connection *c = new Connection(this, Connection::Connected, -1);
+    Connection *c = new Connection(this, Connection::Connected, -1, false);
     c->endpoint_name = endpoint_name;
     endpoint[endpoint_name] = c;
 
@@ -998,6 +997,13 @@ void Service::EndpointClose(const string &endpoint_name) {
     INFO(Protocol::Name(protocol), "(", (void*)this, ") endpoint close: ", endpoint_name);
     Service::EndpointMap::iterator ep = endpoint.find(endpoint_name);
     if (ep != endpoint.end()) ep->second->SetError();
+}
+
+void Service::Detach(Connection *c) {
+    Service::Close(c);
+    c->readable = c->writable = 0;
+    RunInMainThread(new Callback([=]() { (*c->detach)(); }));
+    app->scheduler.Wakeup(0);
 }
 
 /* NetworkThread */
@@ -1428,12 +1434,12 @@ struct StreamResourceClient : public Query {
     StreamResourceClient(Connection *c, HTTPServer::StreamResource *r) : conn(c), resource(r), start(0) {
         resource->subscribers[this] = conn;
         fctx = avformat_alloc_context();
-        fctx_copy_streams(fctx, resource->fctx);
+        CopyAVFormatContextStreams(fctx, resource->fctx);
         fctx->max_delay = (int)(0.7*AV_TIME_BASE);
     }
     virtual ~StreamResourceClient() {
         resource->subscribers.erase(this);
-        fctx_free(fctx);
+        FreeAVFormatContext(fctx);
     }
 
     int Flushed(Connection *c) { return 1; }
@@ -1468,12 +1474,12 @@ struct StreamResourceClient : public Query {
         av_free(buf);
     }
 
-    static void fctx_free(AVFormatContext *fctx) {
+    static void FreeAVFormatContext(AVFormatContext *fctx) {
         for (int i=0; i<fctx->nb_streams; i++) av_freep(&fctx->streams[i]);
         av_free(fctx);
     }
 
-    static void fctx_copy_streams(AVFormatContext *dst, AVFormatContext *src) {
+    static void CopyAVFormatContextStreams(AVFormatContext *dst, AVFormatContext *src) {
         if (!dst->streams) {
             dst->nb_streams = src->nb_streams;
             dst->streams = (AVStream**)av_mallocz(sizeof(AVStream*) * src->nb_streams);
@@ -1491,30 +1497,33 @@ struct StreamResourceClient : public Query {
         dst->nb_streams = src->nb_streams;
     }
 
-    static AVFrame *picture_alloc(enum PixelFormat pix_fmt, int width, int height) {
-        AVFrame *picture; uint8_t *picture_buf; int size;
-        if (!(picture = avcodec_alloc_frame())) return 0;
-        size = avpicture_get_size(pix_fmt, width, height);
-        if (!(picture_buf = (uint8_t*)av_malloc(size))) { av_free(picture); return 0; }
+    static AVFrame *AllocPicture(enum PixelFormat pix_fmt, int width, int height) {
+        AVFrame *picture = avcodec_alloc_frame();
+        if (!picture) return 0;
+        int size = avpicture_get_size(pix_fmt, width, height);
+        uint8_t *picture_buf = (uint8_t*)av_malloc(size);
+        if (!picture_buf) { av_free(picture); return 0; }
         avpicture_fill((AVPicture *)picture, picture_buf, pix_fmt, width, height);
         return picture;
     } 
-    static void picture_free(AVFrame *picture) {
+    static void FreePicture(AVFrame *picture) {
         av_free(picture->data[0]);
         av_free(picture);
     }
 
-    static AVFrame *samples_alloc(int num_samples, int num_channels, short **samples_out) {
-        AVFrame *samples; uint8_t *samples_buf; int size = 2 * num_samples * num_channels;
-        if (!(samples = avcodec_alloc_frame())) return 0;
+    static AVFrame *AllocSamples(int num_samples, int num_channels, short **samples_out) {
+        AVFrame *samples = avcodec_alloc_frame();
+        if (!samples) return 0;
         samples->nb_samples = num_samples;
-        if (!(samples_buf = (uint8_t*)av_malloc(size + FF_INPUT_BUFFER_PADDING_SIZE))) { av_free(samples); return 0; }
+        int size = 2 * num_samples * num_channels;
+        uint8_t *samples_buf = (uint8_t*)av_malloc(size + FF_INPUT_BUFFER_PADDING_SIZE);
+        if (!samples_buf) { av_free(samples); return 0; }
         avcodec_fill_audio_frame(samples, num_channels, AV_SAMPLE_FMT_S16, samples_buf, size, 1);
         memset(samples_buf+size, 0, FF_INPUT_BUFFER_PADDING_SIZE);
         if (samples_out) *samples_out = (short*)samples_buf;
         return samples;
     }
-    static void samples_free(AVFrame *picture) {
+    static void FreeSamples(AVFrame *picture) {
         av_free(picture->data[0]);
         av_free(picture);
     }
@@ -1524,9 +1533,9 @@ HTTPServer::StreamResource::~StreamResource() {
     delete resampler.out;
     if (audio && audio->codec) avcodec_close(audio->codec);
     if (video && video->codec) avcodec_close(video->codec);
-    if (picture) StreamResourceClient::picture_free(picture);
-    if (samples) StreamResourceClient::samples_free(picture);
-    StreamResourceClient::fctx_free(fctx);
+    if (picture) StreamResourceClient::FreePicture(picture);
+    if (samples) StreamResourceClient::FreeSamples(picture);
+    StreamResourceClient::FreeAVFormatContext(fctx);
 }
 
 HTTPServer::StreamResource::StreamResource(const char *oft, int Abr, int Vbr) : fctx(0), open(0), abr(Abr), vbr(Vbr), 
@@ -1537,7 +1546,7 @@ video(0), picture(0), conv(0)
     fctx->oformat = av_guess_format(oft, 0, 0);
     if (!fctx->oformat) { ERROR("guess_format '", oft, "' failed"); return; }
     INFO("StreamResource: format ", fctx->oformat->mime_type);
-    openStreams(FLAGS_lfapp_audio, FLAGS_lfapp_camera);
+    OpenStreams(FLAGS_lfapp_audio, FLAGS_lfapp_camera);
 }
 
 HTTPServer::Response HTTPServer::StreamResource::Request(Connection *c, int method, const char *url, const char *args, const char *headers, const char *postdata, int postlen) {
@@ -1548,7 +1557,7 @@ HTTPServer::Response HTTPServer::StreamResource::Request(Connection *c, int meth
     return response;
 }
 
-void HTTPServer::StreamResource::openStreams(bool A, bool V) {
+void HTTPServer::StreamResource::OpenStreams(bool A, bool V) {
     if (V) {
         CHECK(!video);
         video = avformat_new_stream(fctx, 0);
@@ -1580,7 +1589,7 @@ void HTTPServer::StreamResource::openStreams(bool A, bool V) {
         if (!vc->codec) { ERROR("no video codec"); return; }
 
         if (vc->pix_fmt != PIX_FMT_YUV420P) { ERROR("pix_fmt ", vc->pix_fmt, " != ", PIX_FMT_YUV420P); return; }
-        if (!(picture = StreamResourceClient::picture_alloc(vc->pix_fmt, vc->width, vc->height))) { ERROR("picture_alloc"); return; }
+        if (!(picture = StreamResourceClient::AllocPicture(vc->pix_fmt, vc->width, vc->height))) { ERROR("AllocPicture"); return; }
     }
 
     if (0 && A) {
@@ -1607,13 +1616,13 @@ void HTTPServer::StreamResource::openStreams(bool A, bool V) {
         if (!(frame = ac->frame_size)) { ERROR("empty frame size"); return; }
         channels = ac->channels;
 
-        if (!(samples = StreamResourceClient::samples_alloc(frame, channels, &sample_data))) { ERROR("picture_alloc"); return; }
+        if (!(samples = StreamResourceClient::AllocSamples(frame, channels, &sample_data))) { ERROR("AllocPicture"); return; }
     }
 
     open = 1;
 }
 
-void HTTPServer::StreamResource::update(int audio_samples, bool video_sample) {
+void HTTPServer::StreamResource::Update(int audio_samples, bool video_sample) {
     if (!open || !subscribers.size()) return;
 
     AVCodecContext *vc = video ? video->codec : 0;
@@ -1636,19 +1645,19 @@ void HTTPServer::StreamResource::update(int audio_samples, bool video_sample) {
         if (!asa && !vsa) break;
         if (vc && !vsa) break;
 
-        if (!vsa) { sendAudio(); continue; }       
-        if (!asa) { sendVideo(); video_sample=0; continue; }
+        if (!vsa) { SendAudio(); continue; }       
+        if (!asa) { SendVideo(); video_sample=0; continue; }
 
         int audio_behind = resampler.output_available - resamples_processed;
         microseconds audio_timestamp = resampler.out->ReadTimestamp(0, resampler.out->ring.back - audio_behind);
 
-        if (audio_timestamp < app->camera.image_timestamp) sendAudio();
-        else { sendVideo(); video_sample=0; }
+        if (audio_timestamp < app->camera.image_timestamp) SendAudio();
+        else { SendVideo(); video_sample=0; }
     }
 }
 
-void HTTPServer::StreamResource::sendAudio() {
-    int behind = resampler.output_available - resamples_processed;
+void HTTPServer::StreamResource::SendAudio() {
+    int behind = resampler.output_available - resamples_processed, got = 0;
     resamples_processed += frame * channels;
 
     AVCodecContext *ac = audio->codec;
@@ -1660,18 +1669,18 @@ void HTTPServer::StreamResource::sendAudio() {
             sample_data[i*channels + c] = H.Read(i*channels + c) * 32768.0;
 
     /* broadcast */
-    AVPacket pkt; int got=0;
+    AVPacket pkt;
     av_init_packet(&pkt);
     pkt.data = NULL;
     pkt.size = 0;
 
     avcodec_encode_audio2(ac, &pkt, samples, &got);
-    if (got) broadcast(&pkt, H.ReadTimestamp(0));
+    if (got) Broadcast(&pkt, H.ReadTimestamp(0));
 
     av_free_packet(&pkt);
 }
 
-void HTTPServer::StreamResource::sendVideo() {
+void HTTPServer::StreamResource::SendVideo() {
     AVCodecContext *vc = video->codec;
 
     /* convert video */
@@ -1679,22 +1688,22 @@ void HTTPServer::StreamResource::sendVideo() {
         conv = sws_getContext(FLAGS_camera_image_width, FLAGS_camera_image_height, (PixelFormat)Pixel::ToFFMpegId(app->camera.image_format),
                               vc->width, vc->height, vc->pix_fmt, SWS_BICUBIC, 0, 0, 0);
 
-    int camera_linesize[4] = { app->camera.image_linesize, 0, 0, 0 };
+    int camera_linesize[4] = { app->camera.image_linesize, 0, 0, 0 }, got = 0;
     sws_scale(conv, (uint8_t**)&app->camera.image, camera_linesize, 0, FLAGS_camera_image_height, picture->data, picture->linesize);
 
     /* broadcast */
-    AVPacket pkt; int got=0;
+    AVPacket pkt;
     av_init_packet(&pkt);
     pkt.data = NULL;
     pkt.size = 0;
 
     avcodec_encode_video2(vc, &pkt, picture, &got);
-    if (got) broadcast(&pkt, app->camera.image_timestamp);
+    if (got) Broadcast(&pkt, app->camera.image_timestamp);
 
     av_free_packet(&pkt);
 }
 
-void HTTPServer::StreamResource::broadcast(AVPacket *pkt, microseconds timestamp) {
+void HTTPServer::StreamResource::Broadcast(AVPacket *pkt, microseconds timestamp) {
     for (SubscriberMap::iterator i = subscribers.begin(); i != subscribers.end(); i++) {
         StreamResourceClient *client = (StreamResourceClient*)(*i).first;
         client->Write(pkt, timestamp);
@@ -1702,23 +1711,345 @@ void HTTPServer::StreamResource::broadcast(AVPacket *pkt, microseconds timestamp
 }
 #endif /* LFL_FFMPEG */
 
+#ifdef LFL_OPENSSL
+#ifdef LFL_SSH_DEBUG
+#define SSHTrace(...) INFO(__VA_ARGS__)
+#else
+#define SSHTrace(...)
+#endif
+
+struct SSHClientConnection : public Query {
+    enum { INIT=0, FIRST_KEXINIT=1, FIRST_KEXREPLY=2, FIRST_NEWKEYS=3, KEXINIT=4, KEXREPLY=5, NEWKEYS=6 };
+
+    SSHClient::ResponseCB cb;
+    int state=0, packet_len=0, MAC_len=0, encrypt_block_size=0, decrypt_block_size=0, term_width=80, term_height=25;
+    unsigned char padding=0, packet_id=0;
+    unsigned sequence_number_c2s=0, sequence_number_s2c=0, password_prompts=0;
+    pair<int, int> pty_channel;
+    std::mt19937 rand_eng;
+    BN_CTX *ctx;
+    BIGNUM *g, *p, *x, *e, *f, *K;
+    void *H;
+    string V_C, V_S, H_text, session_id, integrity_c2s, integrity_s2c, decrypt_buf, user, pw;
+    EVP_CIPHER_CTX encrypt, decrypt;
+
+    SSHClientConnection(const SSHClient::ResponseCB &CB) : cb(CB), rand_eng(std::random_device{}()), pty_channel(1,0), ctx(BN_CTX_new()), g(BN_new()),
+        p(BN_new()), x(BN_new()), e(BN_new()), f(BN_new()), K(BN_new()), H(Crypto::NewSHA1()), V_C("SSH-2.0-LFL_1.0") { EVP_CIPHER_CTX_init(&encrypt); EVP_CIPHER_CTX_init(&decrypt); }
+    virtual ~SSHClientConnection() { BN_CTX_free(ctx); BN_free(g); BN_free(p); BN_free(x); BN_free(e); BN_free(f); BN_free(K); }
+
+    void Close(Connection *c) {}
+    int Connected(Connection *c) {
+        if (state != INIT) return -1;
+        string msg = StrCat(V_C, "\r\n");
+        if (c->WriteFlush(msg) != msg.size()) { ERROR(c->Name(), ": write"); return -1; }
+        return 0;
+    }
+    int Read(Connection *c) {
+        if (state == INIT) {
+            int processed = 0;
+            StringLineIter lines(StringPiece(c->rb, c->rl), StringLineIter::Flag::BlankLines);
+            for (string line = IterNextString(&lines); !lines.Done(); line = IterNextString(&lines)) {
+                SSHTrace(c->Name(), ": SSH_INIT: ", line);
+                processed = lines.next_offset;
+                if (PrefixMatch(line, "SSH-")) { V_S=line; state++; break; }
+            }
+            c->ReadFlush(processed);
+            if (state == INIT) return 0;
+        }
+        for (;;) {
+            bool encrypted = state > FIRST_NEWKEYS;
+            if (!packet_len) {
+                if (c->rl < SSH::BinaryPacketHeaderSize || (encrypted && c->rl < decrypt_block_size)) return 0;
+                if (encrypted) decrypt_buf = ReadCipher(c, &decrypt, StringPiece(c->rb, decrypt_block_size));
+                packet_len = 4 + SSH::BinaryPacketLength(encrypted ? decrypt_buf.data() : c->rb, &padding, &packet_id) + MAC_len;
+            }
+            if (c->rl < packet_len) return 0;
+            if (encrypted) decrypt_buf += ReadCipher(c, &decrypt, StringPiece(c->rb + decrypt_block_size, packet_len - decrypt_block_size - MAC_len));
+            Serializable::ConstStream s((encrypted ? decrypt_buf.data() : c->rb) + SSH::BinaryPacketHeaderSize, packet_len - SSH::BinaryPacketHeaderSize - MAC_len);
+            sequence_number_s2c++;
+            if (encrypted && MAC_len) {
+                string check_mac = MAC(StringPiece(decrypt_buf.data(), packet_len - MAC_len), sequence_number_s2c-1, integrity_s2c);
+                if (check_mac != string(c->rb + packet_len - MAC_len, MAC_len)) { ERROR(c->Name(), ": verify MAC failed"); return -1; }
+            }
+
+            if (packet_id == Serializable::GetType<SSH::MSG_DISCONNECT>()) {
+                SSH::MSG_DISCONNECT msg;
+                if (msg.In(&s)) { ERROR(c->Name(), ": read MSG_DISCONNECT"); return -1; }
+                SSHTrace(c->Name(), ": MSG_DISCONNECT ", msg.reason_code, " ", msg.description.str());
+
+            } else if (packet_id == Serializable::GetType<SSH::MSG_DEBUG>()) {
+                SSH::MSG_DEBUG msg;
+                if (msg.In(&s)) { ERROR(c->Name(), ": read MSG_DEBUG"); return -1; }
+                SSHTrace(c->Name(), ": MSG_DEBUG ", msg.message.str());
+
+            } else if (packet_id == Serializable::GetType<SSH::MSG_KEXINIT>()) {
+                state = state == FIRST_KEXINIT ? FIRST_KEXREPLY : KEXREPLY;
+                SSH::MSG_KEXINIT msg;
+                if (msg.In(&s)) { ERROR(c->Name(), ": read MSG_KEXINIT"); return -1; }
+                SSHTrace(c->Name(), ": MSG_KEXINIT ", msg.DebugString());
+                if (msg.first_kex_packet_follows) { ERROR("first_kex_packet_follows never tested"); return -1; }
+
+                string kex_init_text =
+                    SSH::MSG_KEXINIT(RandBytes(16, rand_eng), // "diffie-hellman-group14-sha1,"
+                                     "diffie-hellman-group1-sha1", "ssh-dss", "3des-cbc", "3des-cbc",
+                                     "hmac-sha1", "hmac-sha1", "none", "none", "", "").ToString(rand_eng, &sequence_number_c2s);
+                if (c->WriteFlush(kex_init_text) != kex_init_text.size()) { ERROR(c->Name(), ": write"); return -1; }
+
+                DiffieHellmanGroup1Modulus(g, p);
+                BN_rand(x, 128, 0, -1);
+                BN_mod_exp(e, g, x, p, ctx);
+                string dh_init_text = SSH::MSG_KEXDH_INIT(e).ToString(rand_eng, &sequence_number_c2s);
+                if (c->WriteFlush(dh_init_text) != dh_init_text.size()) { ERROR(c->Name(), ": write"); return -1; }
+
+                unsigned char response_padding = 0;
+                int response_packet_len = 4 + SSH::BinaryPacketLength(kex_init_text.data(), &response_padding, NULL);
+                UpdateSHA1(H, V_C);
+                UpdateSHA1(H, V_S);
+                UpdateSHA1(H, StringPiece(kex_init_text.data() + 5, response_packet_len - 5 - response_padding));
+                UpdateSHA1(H, StringPiece(c->rb                + 5,          packet_len - 5 - padding - MAC_len));
+            
+            } else if (packet_id == Serializable::GetType<SSH::MSG_KEXDH_REPLY>()) {
+                if (state != FIRST_KEXREPLY && state != KEXREPLY) { ERROR(c->Name(), ": unexpected state ", state); return -1; }
+                SSH::MSG_KEXDH_REPLY msg(f);
+                if (msg.In(&s)) { ERROR(c->Name(), ": read MSG_KEXDH_REPLY"); return -1; }
+                SSHTrace(c->Name(), ": MSG_KEXDH_REPLY");
+
+                BN_mod_exp(K, f, x, p, ctx);
+                UpdateSHA1(H, msg.k_s); 
+                UpdateSHA1(H, e);
+                UpdateSHA1(H, f);
+                UpdateSHA1(H, K);
+                H_text = Crypto::FinishSHA1(H);
+                H = Crypto::NewSHA1();
+                SSHTrace(c->Name(), ": H = \"", CHexEscape(H_text), "\"");
+                if (state == FIRST_KEXREPLY) session_id = H_text;
+                state = state == FIRST_KEXREPLY ? FIRST_NEWKEYS : NEWKEYS;
+
+                DSA *dsa = DSA_new();
+                Serializable::ConstStream dsakey_stream(msg.k_s.data(), msg.k_s.size());
+                if (SSH::DSSKey(dsa->p, dsa->q, dsa->g, dsa->pub_key).In(&dsakey_stream)) { ERROR(c->Name(), ": parse ssh-dss key"); return -1; }
+
+                DSA_SIG *dsa_sig = DSA_SIG_new();
+                Serializable::ConstStream dsasig_stream(msg.h_sig.data(), msg.h_sig.size());
+                if (SSH::DSSSignature(dsa_sig->r, dsa_sig->s).In(&dsasig_stream)) { ERROR(c->Name(), ": parse ssh-dss sig"); return -1; }
+
+                int verified = DSA_do_verify(reinterpret_cast<const unsigned char *>(H_text.data()), H_text.size(), dsa_sig, dsa);
+                DSA_free(dsa);
+                DSA_SIG_free(dsa_sig);
+                if (!verified) { ERROR(c->Name(), ": verify hostkey failed"); return -1; }
+
+            } else if (packet_id == Serializable::GetType<SSH::MSG_NEWKEYS>()) {
+                if (state != FIRST_NEWKEYS && state != NEWKEYS) { ERROR(c->Name(), ": unexpected state ", state); return -1; }
+                SSHTrace(c->Name(), ": MSG_NEWKEYS");
+                string newkeys_text = SSH::MSG_NEWKEYS().ToString(rand_eng, &sequence_number_c2s);
+                if (c->WriteFlush(newkeys_text) != newkeys_text.size()) { ERROR(c->Name(), ": write"); return -1; }
+                if (InitCipher(c, &encrypt, EVP_des_ede3_cbc(), DeriveSHA1Key('A', 24), DeriveSHA1Key('C', 24), true)  != 1) { ERROR(c->Name(), ": init c->s cipher"); return -1; }
+                if (InitCipher(c, &decrypt, EVP_des_ede3_cbc(), DeriveSHA1Key('B', 24), DeriveSHA1Key('D', 24), false) != 1) { ERROR(c->Name(), ": init s->c cipher"); return -1; }
+                encrypt_block_size = EVP_CIPHER_CTX_block_size(&encrypt);
+                decrypt_block_size = EVP_CIPHER_CTX_block_size(&decrypt);
+                integrity_c2s = DeriveSHA1Key('E', 20);
+                integrity_s2c = DeriveSHA1Key('F', 20);
+                state = NEWKEYS;
+                MAC_len = 20;
+
+                string svcreq_text = SSH::MSG_SERVICE_REQUEST("ssh-userauth").ToString(rand_eng, &sequence_number_c2s);
+                if (WriteCipher(c, &encrypt, svcreq_text) != svcreq_text.size() + MAC_len) { ERROR(c->Name(), ": write"); return -1; }
+
+            } else if (packet_id == Serializable::GetType<SSH::MSG_SERVICE_ACCEPT>()) {
+                SSHTrace(c->Name(), ": MSG_SERVICE_ACCEPT");
+                string authreq_text = SSH::MSG_USERAUTH_REQUEST(user, "ssh-connection", "keyboard-interactive", "", "", "").ToString(rand_eng, &sequence_number_c2s);
+                if (WriteCipher(c, &encrypt, authreq_text) != authreq_text.size() + MAC_len) { ERROR(c->Name(), ": write"); return -1; }
+            
+            } else if (packet_id == Serializable::GetType<SSH::MSG_USERAUTH_FAILURE>()) {
+                SSH::MSG_USERAUTH_FAILURE msg;
+                if (msg.In(&s)) { ERROR(c->Name(), ": read MSG_USERAUTH_FAILURE"); return -1; }
+                ERROR(c->Name(), ": MSG_USERAUTH_FAILURE: auth_left='", msg.auth_left.str(), "'");
+                return -1;
+
+            } else if (packet_id == Serializable::GetType<SSH::MSG_USERAUTH_SUCCESS>()) {
+                SSHTrace(c->Name(), ": MSG_USERAUTH_SUCCESS");
+                string chanopen_text = SSH::MSG_CHANNEL_OPEN("session", pty_channel.first, 32768, 16384).ToString(rand_eng, &sequence_number_c2s);
+                if (WriteCipher(c, &encrypt, chanopen_text) != chanopen_text.size() + MAC_len) { ERROR(c->Name(), ": write"); return -1; }
+
+            } else if (packet_id == Serializable::GetType<SSH::MSG_USERAUTH_INFO_REQUEST>()) {
+                SSH::MSG_USERAUTH_INFO_REQUEST msg;
+                if (msg.In(&s)) { ERROR(c->Name(), ": read MSG_USERAUTH_INFO_REQUEST"); return -1; }
+                SSHTrace(c->Name(), ": MSG_USERAUTH_INFO_REQUEST");
+                if (!msg.instruction.empty()) cb(c, msg.instruction);
+                for (auto &i : msg.prompt) cb(c, i.text);
+
+                string authresp_text;
+                if (msg.prompt.size() == 0) authresp_text = SSH::MSG_USERAUTH_INFO_RESPONSE().ToString(rand_eng, &sequence_number_c2s);
+                else password_prompts = msg.prompt.size();
+                if (authresp_text.size())
+                    if (WriteCipher(c, &encrypt, authresp_text) != authresp_text.size() + MAC_len) { ERROR(c->Name(), ": write"); return -1; }
+
+            } else if (packet_id == Serializable::GetType<SSH::MSG_CHANNEL_OPEN_CONFIRMATION>()) {
+                SSH::MSG_CHANNEL_OPEN_CONFIRMATION msg;
+                if (msg.In(&s)) { ERROR(c->Name(), ": read MSG_CHANNEL_OPEN_CONFIRMATION"); return -1; }
+                SSHTrace(c->Name(), ": MSG_CHANNEL_OPEN_CONFIRMATION");
+                pty_channel.second = msg.sender_channel;
+
+                string ptyopen_text = SSH::MSG_CHANNEL_REQUEST
+                    (pty_channel.second, "pty-req", point(term_width, term_height),
+                     point(term_width*8, term_height*12), "screen", "", true).ToString(rand_eng, &sequence_number_c2s);
+                if (WriteCipher(c, &encrypt, ptyopen_text) != ptyopen_text.size() + MAC_len) { ERROR(c->Name(), ": write"); return -1; }
+
+                string shellopen_text = SSH::MSG_CHANNEL_REQUEST(pty_channel.second, "shell", "", true).ToString(rand_eng, &sequence_number_c2s);
+                if (WriteCipher(c, &encrypt, shellopen_text) != shellopen_text.size() + MAC_len) { ERROR(c->Name(), ": write"); return -1; }
+
+            } else if (packet_id == Serializable::GetType<SSH::MSG_CHANNEL_WINDOW_ADJUST>()) {
+                SSH::MSG_CHANNEL_WINDOW_ADJUST msg;
+                if (msg.In(&s)) { ERROR(c->Name(), ": read MSG_CHANNEL_WINDOW_ADJUST"); return -1; }
+                SSHTrace(c->Name(), ": MSG_CHANNEL_WINDOW_ADJUST");
+
+            } else if (packet_id == Serializable::GetType<SSH::MSG_CHANNEL_DATA>()) {
+                SSH::MSG_CHANNEL_DATA msg;
+                if (msg.In(&s)) { ERROR(c->Name(), ": read MSG_CHANNEL_DATA"); return -1; }
+                SSHTrace(c->Name(), ": MSG_CHANNEL_DATA");
+                cb(c, msg.data);
+
+            } else if (packet_id == Serializable::GetType<SSH::MSG_CHANNEL_SUCCESS>()) {
+                SSHTrace(c->Name(), ": MSG_CHANNEL_SUCCESS");
+
+            } else if (packet_id == Serializable::GetType<SSH::MSG_CHANNEL_FAILURE>()) {
+                SSHTrace(c->Name(), ": MSG_CHANNEL_FAILURE");
+
+            } else ERROR(c->Name(), " unknown packet number ", (int)packet_id, " len ", packet_len);
+
+            c->ReadFlush(packet_len);
+            packet_len = 0;
+        }
+        return 0;
+    }
+    
+    int WriteChannelData(Connection *c, const StringPiece &b) {
+        if (password_prompts) {
+            pw.append(b.data(), b.size());
+            if (pw.size() && pw.back() == '\r') {
+                vector<StringPiece> prompt(password_prompts);
+                prompt.back() = StringPiece(pw.data(), pw.size()-1);
+                string text = SSH::MSG_USERAUTH_INFO_RESPONSE(prompt).ToString(rand_eng, &sequence_number_c2s);
+                if (WriteCipher(c, &encrypt, text) != text.size() + MAC_len) { ERROR(c->Name(), ": write"); return -1; }
+                pw.assign(RandBytes(pw.size(), rand_eng));
+                pw.clear();
+                password_prompts = 0;
+                cb(c, "\r\n");
+            }
+        } else {
+            string text = SSH::MSG_CHANNEL_DATA(pty_channel.second, b).ToString(rand_eng, &sequence_number_c2s);
+            if (WriteCipher(c, &encrypt, text) != text.size() + MAC_len) { ERROR(c->Name(), ": write"); return -1; }
+        }
+        return b.size();
+    }
+    int SetTerminalWindowSize(Connection *c, int w, int h) {
+        term_width = w;
+        term_height = h;
+        return 0;
+    }
+    int InitCipher(Connection *c, EVP_CIPHER_CTX *cipher, const EVP_CIPHER *type, const string &IV, const string &key, bool dir) {
+        SSHTrace(c->Name(), ": ", dir ? "C->S" : "S->C", " IV  = \"", CHexEscape(IV),  "\"");
+        SSHTrace(c->Name(), ": ", dir ? "C->S" : "S->C", " key = \"", CHexEscape(key), "\"");
+        EVP_CIPHER_CTX_cleanup(cipher);
+        EVP_CIPHER_CTX_init(cipher);
+        return EVP_CipherInit(cipher, type, reinterpret_cast<const unsigned char *>(key.data()),
+                              reinterpret_cast<const unsigned char *>(IV.data()), dir);
+    }
+    int WriteCipher(Connection *c, EVP_CIPHER_CTX *cipher, const string &m) {
+        string enc_text(m.size(), 0);
+        if (EVP_Cipher(cipher, reinterpret_cast<unsigned char*>(&enc_text[0]),
+                       reinterpret_cast<const unsigned char*>(m.data()), m.size()) != 1) { ERROR(c->Name(), ": encrypt failed"); return -1; }
+        enc_text += MAC(m, sequence_number_c2s-1, integrity_c2s);
+        return c->WriteFlush(enc_text);
+    }
+    string ReadCipher(Connection *c, EVP_CIPHER_CTX *cipher, const StringPiece &m) {
+        string dec_text(m.size(), 0);
+        if (EVP_Cipher(cipher, reinterpret_cast<unsigned char*>(&dec_text[0]),
+                       reinterpret_cast<const unsigned char*>(m.data()), m.size()) != 1) { ERROR(c->Name(), ": decrypt failed"); return ""; }
+        return dec_text;
+    }
+    string DeriveSHA1Key(char ID, int bytes) {
+        string ret;
+        while (ret.size() < bytes) {
+            void *key = Crypto::NewSHA1();
+            UpdateSHA1(key, K);
+            Crypto::UpdateSHA1(key, H_text);
+            if (!ret.size()) {
+                Crypto::UpdateSHA1(key, StringPiece(&ID, 1));
+                Crypto::UpdateSHA1(key, session_id);
+            } else Crypto::UpdateSHA1(key, ret);
+            ret.append(Crypto::FinishSHA1(key));
+        }
+        ret.resize(bytes);
+        return ret;
+    }
+    string MAC(const StringPiece &m, int seq, const string &k) {
+        char buf[4];
+        Serializable::MutableStream(buf, 4).Htonl(seq);
+        string ret(MAC_len, 0);
+        unsigned ret_len = ret.size();
+        HMAC_CTX hmac;
+        HMAC_Init(&hmac, k.data(), k.size(), EVP_sha1());
+        HMAC_Update(&hmac, reinterpret_cast<const unsigned char *>(buf), 4);
+        HMAC_Update(&hmac, reinterpret_cast<const unsigned char *>(m.data()), m.size());
+        HMAC_Final(&hmac, reinterpret_cast<unsigned char *>(&ret[0]), &ret_len);
+        if (ret_len != ret.size()) return "";
+        return ret;
+    }
+
+    static void UpdateSHA1(void *ctx, const StringPiece &s) {
+        char buf[4];
+        Serializable::MutableStream(buf, 4).Htonl(s.size());
+        Crypto::UpdateSHA1(ctx, StringPiece(buf, 4));
+        Crypto::UpdateSHA1(ctx, s);
+    }
+    static void UpdateSHA1(void *ctx, BIGNUM *n) {
+        string buf(4 + SSH::BigNumSize(n), 0);
+        Serializable::MutableStream o(&buf[0], buf.size());
+        SSH::WriteBigNum(n, &o);
+        Crypto::UpdateSHA1(ctx, buf);
+    }
+    static void DiffieHellmanGroup1Modulus(BIGNUM *g, BIGNUM *p) {
+        // https://tools.ietf.org/html/rfc2409 Second Oakley Group
+        unsigned char buf[] =
+            "\xff\xff\xff\xff\xff\xff\xff\xff\xc9\x0f\xda\xa2\x21\x68\xc2\x34\xc4\xc6\x62\x8b\x80\xdc\x1c\xd1"
+            "\x29\x02\x4e\x08\x8a\x67\xcc\x74\x02\x0b\xbe\xa6\x3b\x13\x9b\x22\x51\x4a\x08\x79\x8e\x34\x04\xdd"
+            "\xef\x95\x19\xb3\xcd\x3a\x43\x1b\x30\x2b\x0a\x6d\xf2\x5f\x14\x37\x4f\xe1\x35\x6d\x6d\x51\xc2\x45"
+            "\xe4\x85\xb5\x76\x62\x5e\x7e\xc6\xf4\x4c\x42\xe9\xa6\x37\xed\x6b\x0b\xff\x5c\xb6\xf4\x06\xb7\xed"
+            "\xee\x38\x6b\xfb\x5a\x89\x9f\xa5\xae\x9f\x24\x11\x7c\x4b\x1f\xe6\x49\x28\x66\x51\xec\xe6\x53\x81"
+            "\xff\xff\xff\xff\xff\xff\xff\xff";
+        BN_set_word(g, 2);
+        BN_bin2bn(buf, sizeof(buf)-1, p);
+    }
+};
+
+Connection *SSHClient::Open(const string &hostport, const SSHClient::ResponseCB &cb, Callback *detach) { 
+    Connection *c = Connect(hostport, 22, detach);
+    if (!c) return 0;
+    c->query = new SSHClientConnection(cb);
+    return c;
+}
+void SSHClient::SetUser(Connection *c, const string &user)            {        dynamic_cast<SSHClientConnection*>(c->query)->user = user; }
+int  SSHClient::SetTerminalWindowSize(Connection *c, int w, int h)    { return dynamic_cast<SSHClientConnection*>(c->query)->SetTerminalWindowSize(c, w, h); }
+int  SSHClient::WriteChannelData(Connection *c, const StringPiece &b) { return dynamic_cast<SSHClientConnection*>(c->query)->WriteChannelData(c, b); }
+#else // LFL_OPENSSL
+Connection *SSHClient::Open(const string&, const SSHClient::ResponseCB&, Callback*) { FATAL("not implemented"); }
+void        SSHClient::SetUser(Connection*, const string&)                          { FATAL("not implemented"); }
+int         SSHClient::SetTerminalWindowSize(Connection*, int, int)                 { FATAL("not implemented"); }
+int         SSHClient::WriteChannelData(Connection*, const StringPiece&)            { FATAL("not implemented"); }
+#endif // LFL_OPENSSL
+
 struct SMTPClientConnection : public Query {
     enum { INIT=0, SENT_HELO=1, READY=2, MAIL_FROM=3, RCPT_TO=4, SENT_DATA=5, SENDING=6, RESETING=7, QUITING=8 };
-    static const char *StateString(int n) {
-        static const char *s[] = { "INIT", "SENT_HELO", "READY", "MAIL_FROM", "RCPT_TO", "SENT_DATA", "SENDING", "RESETING", "QUITTING" };
-        return (n >= 0 && n < sizeofarray(s)) ? s[n] : "";
-    }
-    static bool DeliveringState(int state) { return (state >= MAIL_FROM && state <= SENDING); }
-
     SMTPClient *server;
     SMTPClient::DeliverableCB deliverable_cb;
     SMTPClient::DeliveredCB delivered_cb;
-    int state, rcpt_index; string greeting, helo_domain, ehlo_response, response_lines;
+    int state=0, rcpt_index=0;
+    string greeting, helo_domain, ehlo_response, response_lines;
     SMTP::Message mail;
     string RcptTo(int index) const { return StrCat("RCPT TO: <", mail.rcpt_to[index], ">\r\n"); }
-
     SMTPClientConnection(SMTPClient *S, SMTPClient::DeliverableCB CB1, SMTPClient::DeliveredCB CB2)
-        : server(S), deliverable_cb(CB1), delivered_cb(CB2), state(0) {}
+        : server(S), deliverable_cb(CB1), delivered_cb(CB2) {}
 
     int Connected(Connection *c) { helo_domain = server->HeloDomain(c->src_addr); return 0; }
 
@@ -1782,6 +2113,12 @@ struct SMTPClientConnection : public Query {
         else { response=StrCat("MAIL FROM: <", mail.mail_from, ">\r\n"); state++; }
         if (c->WriteFlush(response) != response.size()) c->SetError();
     }
+
+    static const char *StateString(int n) {
+        static const char *s[] = { "INIT", "SENT_HELO", "READY", "MAIL_FROM", "RCPT_TO", "SENT_DATA", "SENDING", "RESETING", "QUITTING" };
+        return (n >= 0 && n < sizeofarray(s)) ? s[n] : "";
+    }
+    static bool DeliveringState(int state) { return (state >= MAIL_FROM && state <= SENDING); }
 };
 
 Connection *SMTPClient::DeliverTo(IPV4::Addr ipv4_addr, IPV4EndpointSource *src_pool,
