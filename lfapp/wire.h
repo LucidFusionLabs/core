@@ -252,9 +252,9 @@ struct HTTP {
 struct SSH {
     static const int BinaryPacketHeaderSize = 6;
     static int BinaryPacketLength(const char *b, unsigned char *padding, unsigned char *id);
-    static int BigNumSize(const BIGNUM *n);
-    static void ReadBigNum(BIGNUM *n, const Serializable::Stream *i);
-    static void WriteBigNum(const BIGNUM *n, Serializable::Stream *o);
+    static int BigNumSize(const BigNum n);
+    static BigNum ReadBigNum(BigNum n, const Serializable::Stream *i);
+    static void WriteBigNum(const BigNum n, Serializable::Stream *o);
 
     struct Serializable : public LFL::Serializable {
         string ToString(std::mt19937&, unsigned *sequence_number);
@@ -336,8 +336,8 @@ struct SSH {
         int In(const Serializable::Stream *i) { return 0; }
     };
     struct MSG_KEXDH_INIT : public Serializable {
-        BIGNUM *e;
-        MSG_KEXDH_INIT(BIGNUM *E=0) : e(E) {}
+        BigNum e;
+        MSG_KEXDH_INIT(BigNum E=0) : e(E) {}
 
         int HeaderSize() const { return 4; }
         int Type() const { return 30; }
@@ -348,15 +348,15 @@ struct SSH {
     };
     struct MSG_KEXDH_REPLY : public Serializable {
         StringPiece k_s, h_sig;
-        BIGNUM *f;
-        MSG_KEXDH_REPLY(BIGNUM *F=0) : f(F) {}
+        BigNum f;
+        MSG_KEXDH_REPLY(BigNum F=0) : f(F) {}
 
         int HeaderSize() const { return 4*3; }
         int Type() const { return 31; }
         int Size() const { return HeaderSize() + BigNumSize(f) + k_s.size() + h_sig.size(); }
 
         void Out(Serializable::Stream *o) const {}
-        int In(const Serializable::Stream *i) { i->ReadString(&k_s); ReadBigNum(f, i); i->ReadString(&h_sig); return i->Result(); }
+        int In(const Serializable::Stream *i) { i->ReadString(&k_s); f=ReadBigNum(f,i); i->ReadString(&h_sig); return i->Result(); }
     };
     struct MSG_USERAUTH_REQUEST : public Serializable {
         StringPiece user_name, service_name, method_name, algo_name, secret, sig;
@@ -490,8 +490,8 @@ struct SSH {
     };
     struct DSSKey {
         StringPiece format_id;
-        BIGNUM *p, *q, *g, *y;
-        DSSKey(BIGNUM *P, BIGNUM *Q, BIGNUM *G, BIGNUM *Y) : p(P), q(Q), g(G), y(Y) {}
+        BigNum p, q, g, y;
+        DSSKey(BigNum P, BigNum Q, BigNum G, BigNum Y) : p(P), q(Q), g(G), y(Y) {}
 
         int HeaderSize() const { return 4*4; }
         int Size() const { return HeaderSize() + format_id.size() + BigNumSize(p) + BigNumSize(q) + BigNumSize(g) + BigNumSize(y); }
@@ -502,8 +502,8 @@ struct SSH {
     };
     struct DSSSignature {
         StringPiece format_id;
-        BIGNUM *r, *s;
-        DSSSignature(BIGNUM *R, BIGNUM *S) : r(R), s(S) {}
+        BigNum r, s;
+        DSSSignature(BigNum R, BigNum S) : r(R), s(S) {}
 
         int HeaderSize() const { return 4*2 + 7 + 20*2; }
         int Size() const { return HeaderSize(); }

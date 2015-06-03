@@ -154,6 +154,14 @@ extern int optind;
 #include <stdarg.h>
 #include <string.h>
 
+#if defined(LFL_OPENSSL)
+#include "openssl/evp.h"
+#include "openssl/hmac.h"
+#elif defined(LFL_COMMONCRYPTO)
+#include <CommonCrypto/CommonCrypto.h>
+#include <CommonCrypto/CommonHMAC.h>
+#endif
+
 #define  INFO(...) ::LFL::Log(::LFApp::Log::Info,  __FILE__, __LINE__, ::LFL::StrCat(__VA_ARGS__))
 #define DEBUG(...) ::LFL::Log(::LFApp::Log::Debug, __FILE__, __LINE__, ::LFL::StrCat(__VA_ARGS__))
 #define ERROR(...) ::LFL::Log(::LFApp::Log::Error, __FILE__, __LINE__, ::LFL::StrCat(__VA_ARGS__))
@@ -443,6 +451,36 @@ struct Crypto {
     static string FinishSHA1(void*);
     static string Blowfish(const string &passphrase, const string &in, bool encrypt_or_decrypt);
     static string DiffieHellmanModulus(int generator, int bits);
+#if defined(LFL_OPENSSL)
+    typedef HMAC_CTX MAC;
+    typedef EVP_CIPHER_CTX Cipher;
+    typedef const EVP_CIPHER* CipherAlgo;
+    typedef const EVP_MD* MACAlgo;
+#elif defined(LFL_COMMONCRYPTO)
+    typedef CCCryptorRef Cipher;
+    typedef CCAlgorithm CipherAlgo;
+    typedef CCHmacContext MAC;
+    typedef CCHmacAlgorithm MACAlgo;
+#else
+    typedef void* Cipher;
+    typedef void* CipherAlgo;
+    typedef void* MAC;
+    typedef void* MACAlgo;
+#endif
+    struct CipherAlgos {
+        static CipherAlgo DES3();
+    };
+    struct MACAlgos {
+        static MACAlgo SHA1();
+    };
+    static void CipherInit(Cipher*);
+    static void CipherFree(Cipher*);
+    static int  CipherGetBlockSize(Cipher*);
+    static int  CipherOpen(Cipher*, CipherAlgo, bool dir, const StringPiece &key, const StringPiece &iv);
+    static int  CipherUpdate(Cipher*, const StringPiece &in, char *out, int outlen);
+    static void MACOpen(MAC*, MACAlgo, const StringPiece &key);
+    static void MACUpdate(MAC*, const StringPiece &in);
+    static int  MACFinish(MAC*, char *out, int outlen);
 };
 }; // namespace LFL
 

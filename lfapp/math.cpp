@@ -23,6 +23,44 @@
 #include "lfapp/lfapp.h"
 
 namespace LFL {
+#if defined(LFL_OPENSSL)
+BigNum        NewBigNum       () { return BN_new(); }
+BigNumContext NewBigNumContext() { return BN_CTX_new(); }
+void FreeBigNumContext(BigNumContext c) { return BN_CTX_free(c); }
+void FreeBigNum(BigNum n) { return BN_free(n); }
+void BigNumModExp(BigNum v, const BigNum a, const BigNum e, const BigNum m, BigNumContext c) { BN_mod_exp(v, a, e, m, c); }
+void BigNumSetValue(BigNum v, int val) { BN_set_word(v, val); }
+void BigNumGetData(const BigNum v, char *out) { BN_bn2bin(v, reinterpret_cast<unsigned char *>(out)); }
+BigNum BigNumSetData(BigNum v, const StringPiece &data) { BN_bin2bn(reinterpret_cast<const unsigned char *>(data.data()), data.size(), v); return v; }
+BigNum BigNumRand(BigNum v, int bits, int top, int bottom) { BN_rand(v, bits, top, bottom); return v; }
+int BigNumDataSize(const BigNum v) { return BN_num_bytes(v); }
+int BigNumSignificantBits(const BigNum v) { return BN_num_bits(v); }
+#elif defined(LFL_COMMONCRYPTO)
+BigNum        NewBigNum       () { return CCCreateBigNum(NULL); }
+BigNumContext NewBigNumContext() { return 0; }
+void FreeBigNumContext(BigNumContext c) {}
+void FreeBigNum(BigNum n) { CCBigNumFree(n); }
+void BigNumModExp(BigNum v, const BigNum a, const BigNum e, const BigNum m, BigNumContext) { CCBigNumModExp(v, a, e, m); }
+void BigNumSetValue(BigNum v, int val) { CCBigNumSetI(v, val); }
+void BigNumGetData(const BigNum v, char *out) { CCBigNumToData(NULL, v, out); }
+BigNum BigNumSetData(BigNum v, const StringPiece &data) { FreeBigNum(v); return CCBigNumFromData(NULL, data.data(), data.size()); }
+BigNum BigNumRand(BigNum v, int bits, int top, int bottom) { FreeBigNum(v); return CCBigNumCreateRandom(NULL, bits, top, bottom); }
+int BigNumDataSize(const BigNum v) { return CCBigNumByteCount(v); }
+int BigNumSignificantBits(const BigNum v) { return CCBigNumBitCount(v); }
+#else
+BigNum        NewBigNum        ()                { FATAL("not implemented"); }
+BigNumContext NewBigNumContext ()                { FATAL("not implemented"); }
+void          FreeBigNumContext(BigNumContext c) { FATAL("not implemented"); }
+void          FreeBigNum       (BigNum        n) { FATAL("not implemented"); }
+void BigNumSetValue(BigNum v, int val)        { FATAL("not implemented"); }
+void BigNumGetData(const BigNum v, char *out) { FATAL("not implemented"); }
+int  BigNumDataSize       (const BigNum v)    { FATAL("not implemented"); }
+int  BigNumSignificantBits(const BigNum v)    { FATAL("not implemented"); }
+void BigNumModExp(BigNum v, const BigNum a, const BigNum e, const BigNum m, BigNumContext) { FATAL("not implemented"); }
+BigNum BigNumSetData(BigNum v, const StringPiece &data)       { FATAL("not implemented"); }
+BigNum BigNumRand   (BigNum v, int bits, int top, int bottom) { FATAL("not implemented"); }
+#endif
+
 v3 v3::Rand() {     
     float phi = LFL::Rand(0.0, M_TAU), costheta = LFL::Rand(-1.0, 1.0), rho = sqrt(1 - pow(costheta, 2));
     return v3(rho*cos(phi), rho*sin(phi), costheta);

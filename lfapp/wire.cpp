@@ -26,10 +26,6 @@
 #include <netdb.h>
 #endif
 
-#ifdef LFL_OPENSSL
-#include "openssl/bn.h"
-#endif
-
 namespace LFL {
 const char *Protocol::Name(int p) {
     switch (p) {
@@ -423,27 +419,21 @@ int SSH::BinaryPacketLength(const char *b, unsigned char *padding, unsigned char
     return ntohl(*(int*)b);
 }
 
-#ifdef LFL_OPENSSL
-int SSH::BigNumSize(const BIGNUM *n) { return BN_num_bytes(n) + !(BN_num_bits(n) % 8); }
-void SSH::ReadBigNum(BIGNUM *n, const Serializable::Stream *i) {
+int SSH::BigNumSize(const BigNum n) { return BigNumDataSize(n) + !(BigNumSignificantBits(n) % 8); }
+
+BigNum SSH::ReadBigNum(BigNum n, const Serializable::Stream *i) {
     int n_len = 0;
     i->Ntohl(&n_len);
-    const char *b = i->Get(n_len);
-    BN_bin2bn(reinterpret_cast<const unsigned char *>(b), n_len, n);
+    return BigNumSetData(n, StringPiece(i->Get(n_len), n_len));
 }
-void SSH::WriteBigNum(const BIGNUM *n, Serializable::Stream *o) {
-    int n_len = BN_num_bytes(n);
-    bool prepend_zero = !(BN_num_bits(n) % 8);
+
+void SSH::WriteBigNum(const BigNum n, Serializable::Stream *o) {
+    int n_len = BigNumDataSize(n);
+    bool prepend_zero = !(BigNumSignificantBits(n) % 8);
     o->Htonl(n_len + prepend_zero);
     if (prepend_zero) o->Write8(char(0));
-    char *b = o->Get(n_len);
-    BN_bn2bin(n, reinterpret_cast<unsigned char *>(b));
+    BigNumGetData(n, o->Get(n_len));
 }
-#else // LFL_OPENSSL
-int SSH::BigNumSize(const BIGNUM *n) { return 0; }
-void SSH::ReadBigNum(BIGNUM *n, const Serializable::Stream *i) {}
-void SSH::WriteBigNum(const BIGNUM *n, Serializable::Stream *o) {}
-#endif // LFL_OPENSSL
 
 string SSH::Serializable::ToString(std::mt19937 &g, unsigned *sequence_number) {
     if (sequence_number) (*sequence_number)++;
@@ -591,10 +581,10 @@ void SSH::MSG_CHANNEL_REQUEST::Out(Serializable::Stream *o) const {
 int SSH::DSSKey::In(const Serializable::Stream *i) {
     i->ReadString(&format_id);
     if (format_id.str() != "ssh-dss") { i->error = true; return -1; }
-    ReadBigNum(p, i); 
-    ReadBigNum(q, i); 
-    ReadBigNum(g, i); 
-    ReadBigNum(y, i); 
+    p = ReadBigNum(p, i); 
+    q = ReadBigNum(q, i); 
+    g = ReadBigNum(g, i); 
+    y = ReadBigNum(y, i); 
     return i->Result();
 }
 
@@ -603,10 +593,8 @@ int SSH::DSSSignature::In(const Serializable::Stream *i) {
     i->ReadString(&format_id);
     i->ReadString(&blob);
     if (format_id.str() != "ssh-dss" || blob.size() != 40) { i->error = true; return -1; }
-#ifdef LFL_OPENSSL
-    BN_bin2bn(reinterpret_cast<const unsigned char *>(blob.data()),      20, r);
-    BN_bin2bn(reinterpret_cast<const unsigned char *>(blob.data() + 20), 20, r);
-#endif
+    r = BigNumSetData(r, StringPiece(blob.data(),      20));
+    s = BigNumSetData(s, StringPiece(blob.data() + 20, 20));
     return i->Result();
 }
 

@@ -250,7 +250,10 @@ InterProcessResource::InterProcessResource(int size, const string &u) : len(size
 #define IPCTrace(...)
 #endif
 
-#ifndef LFL_MOBILE
+#ifdef LFL_MOBILE
+void ProcessAPIServer::Start(const string &client_program) {}
+void ProcessAPIServer::LoadResource(const string &content, const string &fn, const ProcessAPIServer::LoadResourceCompleteCB &cb) {}
+#else
 void ProcessAPIServer::Start(const string &client_program) {
     int fd[2];
     CHECK(SystemNetwork::OpenSocketPair(fd));

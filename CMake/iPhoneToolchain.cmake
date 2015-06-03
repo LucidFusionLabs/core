@@ -6,6 +6,8 @@ else(LFL_IPHONESIM)
  set(IPHONEROOT "/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer")
  set(IPHONESDK "${IPHONEROOT}/SDKs/iPhoneOS8.3.sdk")
 endif()
+set(IPHONECERT iPhone Developer \(FFFFFFFFFF\))
+set(IPHONEPROVISION /Users/developer/Downloads/developer.mobileprovision)
 
 include(CMakeForceCompiler)
 CMAKE_FORCE_C_COMPILER(/usr/bin/clang Apple)

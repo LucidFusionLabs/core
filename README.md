@@ -110,6 +110,9 @@ LFL builds easily for Windows, Linux, Mac OSX, iPhone and Android.
 
 ### iOS Device
 
+* Install node from brew or macports and: npm install -g ios-deploy
+* Check logs with: idevicesyslog
+
         cd lfl
         mkdir iphone && cd iphone
         ** Modify IPHONEROOT in ../core/CMake/iPhoneToolchain.cmake

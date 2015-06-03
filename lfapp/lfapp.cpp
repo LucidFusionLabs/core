@@ -88,7 +88,6 @@ extern "C" void QTTriggerFrame();
 #endif
 
 #ifdef LFL_OPENSSL
-#include "openssl/evp.h"
 #include "openssl/md5.h"
 #include "openssl/err.h"
 #include "openssl/dh.h"
@@ -109,6 +108,7 @@ extern "C" {
 
 #if defined(LFL_IPHONE)
 extern "C" char *iPhoneDocumentPath();
+extern "C" void iPhoneLog(const char *text);
 extern "C" void iPhoneOpenBrowser(const char *url_text);
 #elif defined(__APPLE__)
 extern "C" void OSXStartWindow(void*);
@@ -507,10 +507,40 @@ string Crypto::DiffieHellmanModulus(int generator, int bits) {
     return ret;
 }
 
+Crypto::CipherAlgo Crypto::CipherAlgos::DES3() { return EVP_des_ede3_cbc(); }
+Crypto::MACAlgo Crypto::MACAlgos::SHA1() { return EVP_sha1(); }
+void Crypto::CipherInit(Cipher *c) { EVP_CIPHER_CTX_init(c); }
+void Crypto::CipherFree(Cipher *c) { EVP_CIPHER_CTX_cleanup(c); }
+int Crypto::CipherGetBlockSize(Cipher *c) { return EVP_CIPHER_CTX_block_size(c); }
+int Crypto::CipherOpen(Cipher *c, CipherAlgo algo, bool dir, const StringPiece &key, const StringPiece &IV) { 
+    return EVP_CipherInit(c, algo, reinterpret_cast<const unsigned char *>(key.data()),
+                          reinterpret_cast<const unsigned char *>(IV.data()), dir);
+}
+int Crypto::CipherUpdate(Cipher *c, const StringPiece &in, char *out, int outlen) {
+    return EVP_Cipher(c, reinterpret_cast<unsigned char*>(out),
+                      reinterpret_cast<const unsigned char*>(in.data()), in.size());
+}
+void Crypto::MACOpen(MAC *m, MACAlgo algo, const StringPiece &k) { HMAC_Init(m, k.data(), k.size(), algo); }
+void Crypto::MACUpdate(MAC *m, const StringPiece &in) { HMAC_Update(m, reinterpret_cast<const unsigned char *>(in.data()), in.size()); }
+int Crypto::MACFinish(MAC *m, char *out, int outlen) { unsigned len=outlen; HMAC_Final(m, reinterpret_cast<unsigned char *>(out), &len); return len; }
 #else
 string Crypto::MD5(const string &in) { FATAL("not implemented"); }
+string Crypto::SHA1(const string &in) { FATAL("not implemented"); }
+void *Crypto::NewSHA1() { FATAL("not implemented"); }
+void Crypto::UpdateSHA1(void *ctx, const StringPiece &in) { FATAL("not implemented"); }
+string Crypto::FinishSHA1(void *ctx) { FATAL("not implemented"); }
 string Crypto::Blowfish(const string &passphrase, const string &in, bool encrypt_or_decrypt) { FATAL("not implemented"); }
 string Crypto::DiffieHellmanModulus(int generator, int bits) { FATAL("not implemented"); }
+Crypto::CipherAlgo Crypto::CipherAlgos::DES3() { FATAL("not implemented"); }
+Crypto::MACAlgo Crypto::MACAlgos::SHA1() { FATAL("not implemented"); }
+void Crypto::CipherInit(Cipher *c) { FATAL("not implemented"); }
+void Crypto::CipherFree(Cipher *c) { FATAL("not implemented"); }
+int Crypto::CipherGetBlockSize(Cipher *c) { FATAL("not implemented"); }
+int Crypto::CipherOpen(Cipher *c, CipherAlgo algo, bool dir, const StringPiece &key, const StringPiece &IV) {  FATAL("not implemented"); }
+int Crypto::CipherUpdate(Cipher *c, const StringPiece &in, char *out, int outlen) { FATAL("not implemented"); }
+void Crypto::MACOpen(MAC *m, MACAlgo algo, const StringPiece &k) { FATAL("not implemented"); }
+void Crypto::MACUpdate(MAC *m, const StringPiece &in) { FATAL("not implemented"); }
+int Crypto::MACFinish(MAC *m, char *out, int outlen) { FATAL("not implemented"); }
 #endif
 
 void SystemBrowser::Open(const char *url_text) {
@@ -550,6 +580,9 @@ void Application::Log(int level, const char *file, int line, const string &messa
             fprintf(app->logfile, "%s %s (%s:%d)\r\n", tbuf, message.c_str(), file, line);
             fflush(app->logfile);
         }
+#ifdef LFL_IPHONE
+        iPhoneLog(StringPrintf("%s (%s:%d)", message.c_str(), file, line).c_str());
+#endif
 #ifdef LFL_ANDROID
         __android_log_print(ANDROID_LOG_INFO, screen->caption.c_str(), "%s (%s:%d)", message.c_str(), file, line);
 #endif

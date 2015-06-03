@@ -26,6 +26,28 @@
 #define NextMultipleOf64(n) NextMultipleOfPowerOfTwo(n, 64)
 
 namespace LFL {
+#if defined(LFL_OPENSSL)
+typedef BIGNUM* BigNum;
+typedef BN_CTX* BigNumContext;
+#elif defined(LFL_COMMONCRYPTO)
+typedef CCBigNumRef BigNum;
+typedef void* BigNumContext;
+#else
+typedef void* BigNum;
+typedef void* BigNumContext;
+#endif
+BigNum        NewBigNum();
+BigNumContext NewBigNumContext();
+void FreeBigNumContext(BigNumContext c);
+void FreeBigNum(BigNum n);
+void BigNumModExp(BigNum v, const BigNum a, const BigNum e, const BigNum m, BigNumContext);
+void BigNumSetValue(BigNum v, int val);
+void BigNumGetData(const BigNum v, char *out);
+BigNum BigNumSetData(BigNum v, const StringPiece &data);
+BigNum BigNumRand(BigNum v, int bits, int top, int bottom);
+int BigNumDataSize(const BigNum v);
+int BigNumSignificantBits(const BigNum v);
+
 int NextMultipleOfPowerOfTwo(int input, int align);
 void *NextMultipleOfPowerOfTwo(void *input, int align);
 

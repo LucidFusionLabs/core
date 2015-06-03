@@ -179,7 +179,9 @@ typedef struct bio_st BIO;
 typedef struct ssl_st SSL;
 typedef struct ssl_ctx_st SSL_CTX;
 typedef struct bignum_st BIGNUM;
+typedef struct bignum_ctx BN_CTX;
 typedef struct hb_face_t hb_face_t;
+typedef struct _CCBigNumRef *CCBigNumRef;
 
 struct LFApp {
     struct Log { enum { Fatal=-1, Error=0, Info=3, Debug=7 }; int v; };

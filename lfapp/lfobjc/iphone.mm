@@ -113,10 +113,14 @@ extern "C" int iPhoneMain(int argc, const char **argv);
     }
     - (BOOL)textFieldShouldReturn: (UITextField *)textField {
         [self handleKey:IPhoneKeyCode::Return];
-        [textField resignFirstResponder];
+        // [textField resignFirstResponder];
         return YES;
     }
-    - (void)handleKey: (int)k { KeyPress(k, 1); KeyPress(k, 0); iphone_evcount++; }
+    - (void)handleKey: (int)k {
+        KeyPress(k, 1);
+        KeyPress(k, 0);
+        iphone_evcount++;
+    }
 @end
 
 // LFUIApplication
@@ -212,7 +216,7 @@ extern "C" int iPhoneMain(int argc, const char **argv);
     }
     static LFApplication *gLFapp = 0;
     - (id) init {
-        fprintf(stderr, "LFApp init\n");
+        INFOf("%s", "LFApp init");
         self = [super init];
         if (!self) return nil;
         screen = GetNativeWindow();
@@ -221,39 +225,39 @@ extern "C" int iPhoneMain(int argc, const char **argv);
         return self;
     }
     - (void) dealloc {
-        fprintf(stderr, "dealloc LFApp\n");
+        INFOf("%s", "dealloc LFApp");
         [self shutdownNotifications];
         [self shutdownGestureRecognizers];
         [super dealloc];
     }
     + (void) shutdown {
-        fprintf(stderr, "shutdown LFApp\n");
+        INFOf("%s", "shutdown LFApp");
         if (gLFapp != nil) { [gLFapp release]; gLFapp = nil; }
     }
     + (LFApplication*) sharedApp {
         if (gLFapp == nil) {
-            fprintf(stderr, "sharedApp alloc/init LFApp\n");
+            INFOf("%s", "sharedApp alloc/init LFApp");
             gLFapp = [[[LFApplication alloc] init] retain];
         }
         return gLFapp;
     }
     - (void) shutdownNotifications {
-        fprintf(stderr, "shutdown notifications\n");
+        INFOf("%s", "shutdown notifications");
         [[UIDevice currentDevice] endGeneratingDeviceOrientationNotifications];
         [[NSNotificationCenter defaultCenter] removeObserver:self name:@"UIDeviceOrientationDidChangeNotification" object:nil]; 
     }
     - (void) orientationChanged: (id)sender {
-        fprintf(stderr, "notification of new orientation: %d -> %d \n", current_orientation, [[UIDevice currentDevice] orientation]);
+        INFOf("notification of new orientation: %d -> %d \n", current_orientation, [[UIDevice currentDevice] orientation]);
         current_orientation = [[UIDevice currentDevice] orientation];
     }
     - (int) orientation {
-        fprintf(stderr, "status bar orientation: %d -> %d\n", current_orientation, [[UIApplication sharedApplication] statusBarOrientation]);
+        INFOf("status bar orientation: %d -> %d", current_orientation, [[UIApplication sharedApplication] statusBarOrientation]);
         current_orientation = [[UIApplication sharedApplication] statusBarOrientation];
         return current_orientation;
     }
     - (int) getOrientation { return current_orientation; }
     - (void) initNotifications {
-        fprintf(stderr, "init notifications\n");
+        INFOf("%s", "init notifications");
         [[UIDevice currentDevice] beginGeneratingDeviceOrientationNotifications]; 
         [[NSNotificationCenter defaultCenter] addObserver:self
             selector:@selector(orientationChanged:)
@@ -261,7 +265,7 @@ extern "C" int iPhoneMain(int argc, const char **argv);
     }
     - (void) initGestureRecognizers {
         UIWindow *window = [[[UIApplication sharedApplication] windows] objectAtIndex:0];
-        fprintf(stderr, "UIWindow frame: %s", [NSStringFromCGRect(window.frame) cString]);
+        INFOf("UIWindow frame: %s", [NSStringFromCGRect(window.frame) cString]);
 
         UISwipeGestureRecognizer *up = [[UISwipeGestureRecognizer alloc] initWithTarget:self action:@selector(doubleSwipeUp:)];
         up.direction = UISwipeGestureRecognizerDirectionUp;
@@ -331,15 +335,15 @@ extern "C" int iPhoneMain(int argc, const char **argv);
             }
             screen->gesture_dpad_x[dpind] = position.x;
             screen->gesture_dpad_y[dpind] = position.y;
-            // fprintf(stderr, "gest %f %f %f %f\n", position.x, position.y, velocity.x, velocity.y);
-            // fprintf(stderr, "origin %f %f \n", view.frame.origin.x, view.frame.origin.y);
+            // INFOf("gest %f %f %f %f", position.x, position.y, velocity.x, velocity.y);
+            // INFOf("origin %f %f", view.frame.origin.x, view.frame.origin.y);
         }
         else if (panGestureRecognizer.state == UIGestureRecognizerStateEnded) {
             screen->gesture_dpad_stop[dpind] = 1;
             screen->gesture_dpad_x[dpind] = 0;
             screen->gesture_dpad_y[dpind] = 0;
             // CGPoint position = [panGestureRecognizer locationInView:view];
-            // fprintf(stderr, "gest %f %f stop\n", position.x, position.y);
+            // INFOf("gest %f %f stop", position.x, position.y);
         }
     }
 @end
@@ -445,9 +449,15 @@ extern "C" int iPhoneReadDir(const char *path, int dirs,
     return 0;
 }
 
+extern "C" void iPhoneLog(const char *text) {
+    NSString *t = [[NSString alloc] initWithUTF8String: text];
+    NSLog(@"%@", t);
+}
+
 extern "C" int main(int ac, const char **av) {
     iphone_argc = ac;
     iphone_argv = av;
+    NSLog(@"%@", @"lfapp_lfobjc_iphone_main");
     NSAutoreleasePool * pool = [[NSAutoreleasePool alloc] init];
     int ret = UIApplicationMain(iphone_argc, (char**)iphone_argv, nil, @"LFUIApplication");
     [pool release];

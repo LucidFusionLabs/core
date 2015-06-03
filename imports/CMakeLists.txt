@@ -34,7 +34,7 @@ endif(CMAKE_SYSTEM_NAME MATCHES "Linux")
 
 # iPhone 
 if(LFL_IPHONE)
-    set(PLATFORM_LIB "-lz -framework Foundation -framework CoreText -framework CoreAudio -framework CoreGraphics -framework OpenGLES -framework UIKit -framework QuartzCore -framework AVFoundation")
+    set(PLATFORM_LIB "-liconv -lz -framework Foundation -framework CoreText -framework CoreAudio -framework CoreGraphics -framework OpenGLES -framework UIKit -framework QuartzCore -framework AVFoundation")
     if(NOT LFL_IPHONESIM)
         set(PLATFORM_LIB "${PLATFORM_LIB} -framework CoreVideo -framework CoreMedia")
     endif()
@@ -130,6 +130,16 @@ if(LFL_TCMALLOC)
     add_subdirectory(gperftools)
     set(TCMALLOC_LIB ${CMAKE_CURRENT_BINARY_DIR}/gperftools/.libs/libtcmalloc_minimal.a -fno-builtin-malloc -fno-builtin-calloc -fno-builtin-realloc -fno-builtin-free PARENT_SCOPE)
 endif(LFL_TCMALLOC)
+
+# openssl
+if(LFL_OPENSSL)
+    if(LFL_IPHONE)
+        set(OPENSSL_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/ios-openssl/include PARENT_SCOPE)
+        set(OPENSSL_LIB ${CMAKE_CURRENT_SOURCE_DIR}/ios-openssl/lib/libssl.a ${CMAKE_CURRENT_SOURCE_DIR}/ios-openssl/lib/libcrypto.a PARENT_SCOPE)
+    else(LFL_IPHONE)
+        set(OPENSSL_LIB "-lssl -lcrypto" PARENT_SCOPE)
+    endif(LFL_IPHONE)
+endif(LFL_OPENSSL)
 
 # box2d
 if(LFL_BOX2D)
