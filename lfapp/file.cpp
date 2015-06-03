@@ -169,7 +169,7 @@ int BufferFile::Write(const void *In, size_t size) {
 
 #ifdef WIN32
 const char LocalFile::Slash = '\\';
-int LocalFile::isdirectory(const string &filename) {
+int LocalFile::IsDirectory(const string &filename) {
     DWORD attr = ::GetFileAttributes(filename.c_str());
     if (attr == INVALID_FILE_ATTRIBUTES) { ERROR("GetFileAttributes(", filename, ") failed: ", strerror(errno)); return 0; }
     return attr & FILE_ATTRIBUTE_DIRECTORY;

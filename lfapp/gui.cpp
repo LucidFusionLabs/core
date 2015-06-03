@@ -25,11 +25,6 @@
 #include "../crawler/html.h"
 #include "../crawler/document.h"
 
-#ifndef _WIN32
-#include <sys/ioctl.h>
-#include <termios.h>
-#endif
-
 #ifdef LFL_QT
 #include <QWindow>
 #include <QWebView>
@@ -400,8 +395,8 @@ void TextGUI::UpdateLongToken(Line *BL, int beg_offset, Line *EL, int end_offset
 
 /* TextArea */
 
-void TextArea::Write(const string &s, bool update_fb, bool release_fb) {
-    if (!MainThread()) return RunInMainThread(new Callback(bind(&TextArea::Write, this, s, update_fb, release_fb)));
+void TextArea::Write(const StringPiece &s, bool update_fb, bool release_fb) {
+    if (!MainThread()) return RunInMainThread(new Callback(bind(&TextArea::WriteCB, this, s.str(), update_fb, release_fb)));
     write_last = Now();
     bool wrap = Wrap();
     int update_flag = LineFBPushBack();
@@ -754,7 +749,7 @@ Terminal::SolarizedColors::SolarizedColors() {
     bg_index = 8; normal_index = 12; bold_index = 12;
 }
 
-Terminal::Terminal(int FD, Window *W, Font *F) :TextArea(W, F), fd(FD), fb_cb(bind(&Terminal::GetFrameBuffer, this, _1)) {
+Terminal::Terminal(ByteSink *O, Window *W, Font *F) : TextArea(W, F), sink(O), fb_cb(bind(&Terminal::GetFrameBuffer, this, _1)) {
     CHECK(F->fixed_width || (F->flag & FontDesc::Mono));
     wrap_lines = write_newline = insert_mode = 0;
     for (int i=0; i<line.ring.size; i++) line[i].data->glyphs.attr.source = this;
@@ -770,16 +765,7 @@ void Terminal::Resized(const Box &b) {
     SetDimension(b.w / font->FixedWidth(), b.h / font->Height());
     TerminalDebug("Resized %d, %d <- %d, %d\n", term_width, term_height, old_term_width, old_term_height);
     bool grid_changed = term_width != old_term_width || term_height != old_term_height;
-
-#ifndef _WIN32
-    if (grid_changed || first_resize) {
-        struct winsize ws;
-        memzero(ws);
-        ws.ws_row = term_height;
-        ws.ws_col = term_width;
-        ioctl(fd, TIOCSWINSZ, &ws);
-    }
-#endif
+    if (grid_changed || first_resize) sink->IOCtlWindowSize(term_width, term_height); 
 
     int height_dy = term_height - old_term_height;
     if      (height_dy > 0) TextArea::Write(string(height_dy, '\n'), 0);
@@ -884,14 +870,14 @@ void Terminal::Draw(const Box &b, bool draw_cursor) {
     if (selection.changing) DrawSelection();
 }
 
-void Terminal::Write(const string &s, bool update_fb, bool release_fb) {
-    if (!MainThread()) return RunInMainThread(new Callback(bind(&Terminal::Write, this, s, update_fb, release_fb)));
+void Terminal::Write(const StringPiece &s, bool update_fb, bool release_fb) {
+    if (!MainThread()) return RunInMainThread(new Callback(bind(&Terminal::WriteCB, this, s.str(), update_fb, release_fb)));
     TerminalTrace("Terminal: Write('%s', %zd)\n", CHexEscapeNonAscii(s).c_str(), s.size());
     screen->gd->DrawMode(DrawMode::_2D, 0);
     if (bg_color) screen->gd->ClearColor(*bg_color);
     last_fb = 0;
-    for (int i = 0; i < s.size(); i++) {
-        const unsigned char &c = s[i];
+    for (int i = 0; i < s.len; i++) {
+        const unsigned char c = *(s.begin() + i);
         if (c == 0x18 || c == 0x1a) { /* CAN or SUB */ parse_state = State::TEXT; continue; }
         if (parse_state == State::ESC) {
             parse_state = State::TEXT; // default next state

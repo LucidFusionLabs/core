@@ -329,6 +329,7 @@ struct Drawable {
         Attr current;
         AttrSource *source=0;
         RefSet font_refs;
+        AttrVec() {}
         const Attr *GetAttr(int attr_id) const { return source ? source->GetAttr(attr_id) : &(*this)[attr_id-1]; }
         int GetAttrId(const Attr &v) { CHECK(!source); if (empty() || this->back() != v) Insert(v); return size(); }
         void Insert(const Attr &v);
@@ -350,16 +351,16 @@ struct DrawableBox {
     LFL::Box box;
     const Drawable *drawable;
     int attr_id, line_id;
-    DrawableBox(                   const Drawable *D=0, int A=0, int L=-1) :         drawable(D), attr_id(A), line_id(L) {}
-    DrawableBox(const LFL::Box &B, const Drawable *D=0, int A=0, int L=-1) : box(B), drawable(D), attr_id(A), line_id(L) {}
+    DrawableBox(                   const Drawable *D = 0, int A = 0, int L = -1) :         drawable(D), attr_id(A), line_id(L) {}
+    DrawableBox(const LFL::Box &B, const Drawable *D = 0, int A = 0, int L = -1) : box(B), drawable(D), attr_id(A), line_id(L) {}
     bool operator<(const DrawableBox &x) const { return box < x.box; }
     int LeftBound (const Drawable::Attr *A) const { return box.x - (drawable ? drawable->LeftBearing(A) : 0); }
     int RightBound(const Drawable::Attr *A) const { return box.x + (drawable ? (drawable->Advance(&box, A) - drawable->LeftBearing(A)) : box.w); }
     int TopBound  (const Drawable::Attr *A) const { return box.y + (drawable ? drawable->Ascender(&box, A) : box.h); }
     int Id() const { return drawable ? drawable->Id() : 0; }
-    typedef ArrayMemberPairSegmentIter<DrawableBox, int, &DrawableBox::attr_id, &DrawableBox::line_id> Iterator;
-    typedef ArrayMemberSegmentIter    <DrawableBox, int, &DrawableBox::attr_id>                     RawIterator;
 };
+typedef ArrayMemberPairSegmentIter<DrawableBox, int, &DrawableBox::attr_id, &DrawableBox::line_id> DrawableBoxIterator;
+typedef ArrayMemberSegmentIter    <DrawableBox, int, &DrawableBox::attr_id>                        DrawableBoxRawIterator;
 
 struct Texture : public Drawable {
     static const int preferred_pf;
@@ -845,13 +846,14 @@ struct DrawableBoxArray {
 
     point Draw(point p, int glyph_start=0, int glyph_len=-1) {
         point e;
-        for (DrawableBox::Iterator iter(&data[glyph_start], Xge0_or_Y(glyph_len, data.size())); !iter.Done(); iter.Increment())
+        if (!data.size()) return e;
+        for (DrawableBoxIterator iter(&data[glyph_start], Xge0_or_Y(glyph_len, data.size())); !iter.Done(); iter.Increment())
             e = DrawableBoxRun(iter.Data(), iter.Length(), attr.GetAttr(iter.cur_attr1), VectorGet(line, iter.cur_attr2)).Draw(p);
         return e;
     }
     string DebugString() const {
         string ret = StrCat("BoxArray H=", height, " ");
-        for (DrawableBox::Iterator iter(data); !iter.Done(); iter.Increment()) 
+        for (DrawableBoxIterator iter(data); !iter.Done(); iter.Increment()) 
             StrAppend(&ret, "R", iter.i, "(", DrawableBoxRun(iter.Data(), iter.Length()).DebugString(), "), ");
         return ret;
     }

@@ -35,7 +35,7 @@ else(WIN32)
         set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -stdlib=libc++")
     endif(LFL_IPHONE)
 endif(WIN32)
-add_definitions("-D__STDC_CONSTANT_MACROS")
+add_definitions(-D__STDC_CONSTANT_MACROS -D__STDC_LIMIT_MACROS)
 
 # args
 if(LFL_IPHONESIM)

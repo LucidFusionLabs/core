@@ -88,9 +88,10 @@ extern "C" void QTTriggerFrame();
 #endif
 
 #ifdef LFL_OPENSSL
-#include <openssl/evp.h>
-#include <openssl/md5.h>
-#include <openssl/err.h>
+#include "openssl/md5.h"
+#include "openssl/err.h"
+#include "openssl/dh.h"
+#include "openssl/bn.h"
 #endif
 
 extern "C" {
@@ -107,6 +108,7 @@ extern "C" {
 
 #if defined(LFL_IPHONE)
 extern "C" char *iPhoneDocumentPath();
+extern "C" void iPhoneLog(const char *text);
 extern "C" void iPhoneOpenBrowser(const char *url_text);
 #elif defined(__APPLE__)
 extern "C" void OSXStartWindow(void*);
@@ -236,11 +238,14 @@ bool NBFGets(FILE *f, char *buf, int len, int timeout) {
     return 0;
 #endif
 }
-int NBRead(int fd, char *buf, int len, int timeout) {
+bool NBReadable(int fd, int timeout) {
     SelectSocketSet ss;
     ss.Add(fd, SocketSet::READABLE, 0);
     ss.Select(timeout);
-    if (!app->run || !ss.GetReadable(fd)) return 0;
+    return app->run && ss.GetReadable(fd);
+}
+int NBRead(int fd, char *buf, int len, int timeout) {
+    if (!NBReadable(fd)) return 0;
     int o = 0, s = 0;
     do if ((s = ::read(fd, buf+o, len-o)) > 0) o += s;
     while (s > 0 && len - o > 1024);
@@ -399,7 +404,7 @@ void FlagMap::Print(const char *source_filename) const {
 }
 
 #ifdef WIN32
-BOOL WINAPI CtrlHandler(DWORD sig) { INFO("interrupt"); LFAppShutdown(); }
+BOOL WINAPI CtrlHandler(DWORD sig) { INFO("interrupt"); LFAppShutdown(); return TRUE; }
 void OpenConsole() {
     FLAGS_open_console=1;
     AllocConsole();
@@ -450,6 +455,27 @@ string Crypto::MD5(const string &in) {
     return out;
 }
 
+string Crypto::SHA1(const string &in) {
+    void *ctx = NewSHA1();
+    UpdateSHA1(ctx, in);
+    return FinishSHA1(ctx);
+}
+
+void *Crypto::NewSHA1() {
+    EVP_MD_CTX *ctx = (EVP_MD_CTX*)calloc(sizeof(EVP_MD_CTX), 1);
+    EVP_DigestInit(ctx, EVP_get_digestbyname("sha1"));
+    return ctx;
+}
+void Crypto::UpdateSHA1(void *ctx, const StringPiece &in) { EVP_DigestUpdate((EVP_MD_CTX*)ctx, in.data(), in.size()); }
+string Crypto::FinishSHA1(void *ctx) {
+    unsigned len = 0;
+    string ret(EVP_MAX_MD_SIZE, 0);
+    EVP_DigestFinal((EVP_MD_CTX*)ctx, reinterpret_cast<unsigned char *>(&ret[0]), &len);
+    ret.resize(len);
+    free(ctx);
+    return ret;
+}
+
 string Crypto::Blowfish(const string &passphrase, const string &in, bool encrypt_or_decrypt) {
     unsigned char iv[8] = {0,0,0,0,0,0,0,0};
     EVP_CIPHER_CTX ctx; 
@@ -471,9 +497,50 @@ string Crypto::Blowfish(const string &passphrase, const string &in, bool encrypt
     }
     return out;
 }
+
+string Crypto::DiffieHellmanModulus(int generator, int bits) {
+    DH *dh = DH_new();
+    DH_generate_parameters_ex(dh, bits, generator, NULL);
+    string ret(BN_num_bytes(dh->p), 0);
+    BN_bn2bin(dh->p, (unsigned char*)&ret[0]);
+    DH_free(dh);
+    return ret;
+}
+
+Crypto::CipherAlgo Crypto::CipherAlgos::DES3() { return EVP_des_ede3_cbc(); }
+Crypto::MACAlgo Crypto::MACAlgos::SHA1() { return EVP_sha1(); }
+void Crypto::CipherInit(Cipher *c) { EVP_CIPHER_CTX_init(c); }
+void Crypto::CipherFree(Cipher *c) { EVP_CIPHER_CTX_cleanup(c); }
+int Crypto::CipherGetBlockSize(Cipher *c) { return EVP_CIPHER_CTX_block_size(c); }
+int Crypto::CipherOpen(Cipher *c, CipherAlgo algo, bool dir, const StringPiece &key, const StringPiece &IV) { 
+    return EVP_CipherInit(c, algo, reinterpret_cast<const unsigned char *>(key.data()),
+                          reinterpret_cast<const unsigned char *>(IV.data()), dir);
+}
+int Crypto::CipherUpdate(Cipher *c, const StringPiece &in, char *out, int outlen) {
+    return EVP_Cipher(c, reinterpret_cast<unsigned char*>(out),
+                      reinterpret_cast<const unsigned char*>(in.data()), in.size());
+}
+void Crypto::MACOpen(MAC *m, MACAlgo algo, const StringPiece &k) { HMAC_Init(m, k.data(), k.size(), algo); }
+void Crypto::MACUpdate(MAC *m, const StringPiece &in) { HMAC_Update(m, reinterpret_cast<const unsigned char *>(in.data()), in.size()); }
+int Crypto::MACFinish(MAC *m, char *out, int outlen) { unsigned len=outlen; HMAC_Final(m, reinterpret_cast<unsigned char *>(out), &len); return len; }
 #else
 string Crypto::MD5(const string &in) { FATAL("not implemented"); }
+string Crypto::SHA1(const string &in) { FATAL("not implemented"); }
+void *Crypto::NewSHA1() { FATAL("not implemented"); }
+void Crypto::UpdateSHA1(void *ctx, const StringPiece &in) { FATAL("not implemented"); }
+string Crypto::FinishSHA1(void *ctx) { FATAL("not implemented"); }
 string Crypto::Blowfish(const string &passphrase, const string &in, bool encrypt_or_decrypt) { FATAL("not implemented"); }
+string Crypto::DiffieHellmanModulus(int generator, int bits) { FATAL("not implemented"); }
+Crypto::CipherAlgo Crypto::CipherAlgos::DES3() { FATAL("not implemented"); }
+Crypto::MACAlgo Crypto::MACAlgos::SHA1() { FATAL("not implemented"); }
+void Crypto::CipherInit(Cipher *c) { FATAL("not implemented"); }
+void Crypto::CipherFree(Cipher *c) { FATAL("not implemented"); }
+int Crypto::CipherGetBlockSize(Cipher *c) { FATAL("not implemented"); }
+int Crypto::CipherOpen(Cipher *c, CipherAlgo algo, bool dir, const StringPiece &key, const StringPiece &IV) {  FATAL("not implemented"); }
+int Crypto::CipherUpdate(Cipher *c, const StringPiece &in, char *out, int outlen) { FATAL("not implemented"); }
+void Crypto::MACOpen(MAC *m, MACAlgo algo, const StringPiece &k) { FATAL("not implemented"); }
+void Crypto::MACUpdate(MAC *m, const StringPiece &in) { FATAL("not implemented"); }
+int Crypto::MACFinish(MAC *m, char *out, int outlen) { FATAL("not implemented"); }
 #endif
 
 void SystemBrowser::Open(const char *url_text) {
@@ -513,6 +580,9 @@ void Application::Log(int level, const char *file, int line, const string &messa
             fprintf(app->logfile, "%s %s (%s:%d)\r\n", tbuf, message.c_str(), file, line);
             fflush(app->logfile);
         }
+#ifdef LFL_IPHONE
+        iPhoneLog(StringPrintf("%s (%s:%d)", message.c_str(), file, line).c_str());
+#endif
 #ifdef LFL_ANDROID
         __android_log_print(ANDROID_LOG_INFO, screen->caption.c_str(), "%s (%s:%d)", message.c_str(), file, line);
 #endif
@@ -649,7 +719,7 @@ int Application::Create(int argc, const char **argv, const char *source_filename
 #endif
 #ifdef _WIN32
         char path[MAX_PATH];
-        if (!SUCCEEDED(SHGetFolderPath(NULL, CSIDL_PERSONAL|CSIDL_FLAG_CREATE, NULL, 0, path))) return;
+        if (!SUCCEEDED(SHGetFolderPath(NULL, CSIDL_PERSONAL|CSIDL_FLAG_CREATE, NULL, 0, path))) return -1;
         dldir = StrCat(path, "/");
 #endif
     }
@@ -828,7 +898,7 @@ int Application::Exiting() {
     INFO("exiting");
     scheduler.Free();
 #ifdef _WIN32
-    if (FLAGS_open_console) press_any_key();
+    if (FLAGS_open_console) PressAnyKey();
 #endif
     return 0;
 }
@@ -1266,9 +1336,9 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR lpCmdLine, int nC
     a[0].resize(1024);
     GetModuleFileName(hInst, (char*)a.data(), a.size());
     LFL::StringWordIter word_iter(lpCmdLine);
-    for (string word = IterNextString(&word_iter); !word_iter.Done(); word = IterNextString(&word_iter)) a.push_back(word):
-    for (auto i : a) av.push_back(i->c_str()); 
+    for (string word = IterNextString(&word_iter); !word_iter.Done(); word = IterNextString(&word_iter)) a.push_back(word);
+    for (auto &i : a) av.push_back(i.c_str());
     av.push_back(0);
-	return main(av.size()-1, &av[0]);
+    return main(av.size() - 1, &av[0]);
 }
 #endif

@@ -167,6 +167,8 @@ int ProcessPipe::Open(const char **argv) {
     out = fdopen(_open_osfhandle((long)pipeoutW, O_TEXT), "w");
     return 0;
 }
+InterProcessResource::InterProcessResource(int size, const string &u) : len(size), url(u) {}
+InterProcessResource::~InterProcessResource() {}
 #else /* WIN32 */
 int ProcessPipe::Open(const char **argv) {
     int pipein[2], pipeout[2], ret;
@@ -248,11 +250,17 @@ InterProcessResource::InterProcessResource(int size, const string &u) : len(size
 #define IPCTrace(...)
 #endif
 
-#ifndef LFL_MOBILE
+#ifdef LFL_MOBILE
+void ProcessAPIServer::Start(const string &client_program) {}
+void ProcessAPIServer::LoadResource(const string &content, const string &fn, const ProcessAPIServer::LoadResourceCompleteCB &cb) {}
+#else
 void ProcessAPIServer::Start(const string &client_program) {
     int fd[2];
     CHECK(SystemNetwork::OpenSocketPair(fd));
     INFO("ProcessAPIServer starting ", client_program);
+#ifdef WIN32
+	FATAL("not implemented")
+#else
     if ((pid = fork())) {
         CHECK_GT(pid, 0);
         close(fd[0]);
@@ -268,6 +276,7 @@ void ProcessAPIServer::Start(const string &client_program) {
         vector<char*> av = { &arg0[0], &arg1[0], 0 };
         CHECK(!execvp(av[0], &av[0]));
     }
+#endif
 }
 
 void ProcessAPIServer::LoadResource(const string &content, const string &fn, const ProcessAPIServer::LoadResourceCompleteCB &cb) { 

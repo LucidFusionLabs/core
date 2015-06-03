@@ -80,7 +80,7 @@ struct TerminalTest : public Terminal {
     };
     vector<UpdateTokenOp> token;
     LinesFrameBufferTest line_fb_test;
-    TerminalTest(int FD, Window *W, Font *F) : Terminal(FD,W,F) {}
+    TerminalTest(ByteSink *S, Window *W, Font *F) : Terminal(S,W,F) {}
     virtual LinesFrameBuffer *GetFrameBuffer() override { return &line_fb_test; }
     void UpdateLongToken(Line *BL, int BO, Line *EL, int EO, const string &text, int T) {
         token.emplace_back(BL, BO, EL, EO, text, T);
@@ -842,7 +842,7 @@ TEST(GUITest, LineTokenProcessor) {
 }
 
 TEST(GUITest, TerminalTokenProcessor) {
-    TerminalTest ta(-1, screen, Fonts::Fake());
+    TerminalTest ta(NULL, screen, Fonts::Fake());
     ta.SetDimension(80, 25);
     EXPECT_EQ(80, ta.term_width);
     EXPECT_EQ(25, ta.line.Size());

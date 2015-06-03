@@ -164,7 +164,7 @@ struct GlyphMap {
     shared_ptr<GlyphCache>    cache;
     GlyphMap(const shared_ptr<GlyphCache> &C = shared_ptr<GlyphCache>()) :
         table_start(FLAGS_glyph_table_start), table(FLAGS_glyph_table_size), cache(C) {
-        for (auto b = table.begin(), g = b, e = table.end(); g != e; ++g) g->id = table_start + g - b;
+        for (auto b = table.begin(), g = b, e = table.end(); g != e; ++g) g->id = table_start + (g - b);
     }
 };
 #define GlyphTableIter(f) for (auto i = (f)->glyph->table.begin(); i != (f)->glyph->table.end(); ++i)

@@ -19,11 +19,8 @@
 #ifndef __LFL_LFAPP_LFAPP_H__
 #define __LFL_LFAPP_LFAPP_H__
 
-#ifndef _WIN32
 #include <sstream>
 #include <typeinfo>
-#endif
-
 #include <vector>
 #include <string>
 #include <map>
@@ -31,6 +28,7 @@
 #include <list>
 #include <queue>
 #include <deque>
+#include <iterator>
 #include <algorithm>
 #include <memory>
 #include <numeric>
@@ -45,9 +43,11 @@
 #include <condition_variable>
 #include <chrono>
 #include <random>
+#include <type_traits>
 #define LFL_STL11_NAMESPACE std
 
 #ifdef _WIN32
+#define NOMINMAX
 #include <winsock2.h>
 #include <windows.h>
 #include <process.h>
@@ -61,8 +61,10 @@ typedef SOCKET Socket;
 #include <unistd.h>
 #include <limits.h>
 #include <sys/time.h>
+#include <sys/socket.h>
 typedef int Socket;
 #endif
+inline int SystemBind(Socket s, const sockaddr *sa, int l) { return bind(s, sa, l); }
 
 using LFL_STL_NAMESPACE::min;
 using LFL_STL_NAMESPACE::max;
@@ -124,29 +126,18 @@ using LFL_STL11_NAMESPACE::make_unsigned;
 #ifdef _WIN32
 #include <float.h>
 #include <direct.h>
+#undef ERROR
 #undef CALLBACK
-#define isinf(x) (x <= -INFINITY || x >= INFINITY)
-#define isnan _isnan
-#define isfinite _finite
 #define getcwd _getcwd
 #define chdir _chdir
 #define strcasecmp _stricmp
 #define strncasecmp _strnicmp
 #define snprintf _snprintf
 #define S_IFDIR _S_IFDIR
-#define socklen_t int
+typedef int socklen_t;
 int close(Socket socket);
 extern char *optarg;
 extern int optind;
-#endif
-
-#ifdef __APPLE__
-#include <cmath>
-// extern "C" int isnan(double);
-// extern "C" int isinf(double);
-#define isfinite(x) (!isnan(x) && !isinf(x))
-#else
-#define isfinite(x) finite(x)
 #endif
 
 #ifdef LFL_ANDROID
@@ -162,6 +153,14 @@ extern int optind;
 #include <stdlib.h>
 #include <stdarg.h>
 #include <string.h>
+
+#if defined(LFL_OPENSSL)
+#include "openssl/evp.h"
+#include "openssl/hmac.h"
+#elif defined(LFL_COMMONCRYPTO)
+#include <CommonCrypto/CommonCrypto.h>
+#include <CommonCrypto/CommonHMAC.h>
+#endif
 
 #define  INFO(...) ::LFL::Log(::LFApp::Log::Info,  __FILE__, __LINE__, ::LFL::StrCat(__VA_ARGS__))
 #define DEBUG(...) ::LFL::Log(::LFApp::Log::Debug, __FILE__, __LINE__, ::LFL::StrCat(__VA_ARGS__))
@@ -265,6 +264,7 @@ bool NBFGets(FILE*, char *buf, int size, int timeout=0);
 int NBRead(int fd, char *buf, int size, int timeout=0);
 int NBRead(int fd, string *buf, int timeout=0);
 string NBRead(int fd, int size, int timeout=0);
+bool NBReadable(int fd, int timeout=0);
 
 struct MallocAlloc : public Allocator {
     const char *Name() { return "MallocAlloc"; }
@@ -444,8 +444,43 @@ struct PerformanceTimers {
 };
 
 struct Crypto {
-    string MD5(const string &in);
-    string Blowfish(const string &passphrase, const string &in, bool encrypt_or_decrypt);
+    static string MD5(const string &in);
+    static string SHA1(const string &in);
+    static void *NewSHA1();
+    static void UpdateSHA1(void*, const StringPiece &in);
+    static string FinishSHA1(void*);
+    static string Blowfish(const string &passphrase, const string &in, bool encrypt_or_decrypt);
+    static string DiffieHellmanModulus(int generator, int bits);
+#if defined(LFL_OPENSSL)
+    typedef HMAC_CTX MAC;
+    typedef EVP_CIPHER_CTX Cipher;
+    typedef const EVP_CIPHER* CipherAlgo;
+    typedef const EVP_MD* MACAlgo;
+#elif defined(LFL_COMMONCRYPTO)
+    typedef CCCryptorRef Cipher;
+    typedef CCAlgorithm CipherAlgo;
+    typedef CCHmacContext MAC;
+    typedef CCHmacAlgorithm MACAlgo;
+#else
+    typedef void* Cipher;
+    typedef void* CipherAlgo;
+    typedef void* MAC;
+    typedef void* MACAlgo;
+#endif
+    struct CipherAlgos {
+        static CipherAlgo DES3();
+    };
+    struct MACAlgos {
+        static MACAlgo SHA1();
+    };
+    static void CipherInit(Cipher*);
+    static void CipherFree(Cipher*);
+    static int  CipherGetBlockSize(Cipher*);
+    static int  CipherOpen(Cipher*, CipherAlgo, bool dir, const StringPiece &key, const StringPiece &iv);
+    static int  CipherUpdate(Cipher*, const StringPiece &in, char *out, int outlen);
+    static void MACOpen(MAC*, MACAlgo, const StringPiece &key);
+    static void MACUpdate(MAC*, const StringPiece &in);
+    static int  MACFinish(MAC*, char *out, int outlen);
 };
 }; // namespace LFL
 

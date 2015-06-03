@@ -34,7 +34,7 @@ endif(CMAKE_SYSTEM_NAME MATCHES "Linux")
 
 # iPhone 
 if(LFL_IPHONE)
-    set(PLATFORM_LIB "-lz -framework Foundation -framework CoreText -framework CoreAudio -framework CoreGraphics -framework OpenGLES -framework UIKit -framework QuartzCore -framework AVFoundation")
+    set(PLATFORM_LIB "-liconv -lz -framework Foundation -framework CoreText -framework CoreAudio -framework CoreGraphics -framework OpenGLES -framework UIKit -framework QuartzCore -framework AVFoundation")
     if(NOT LFL_IPHONESIM)
         set(PLATFORM_LIB "${PLATFORM_LIB} -framework CoreVideo -framework CoreMedia")
     endif()
@@ -56,9 +56,15 @@ endif(LFL_PNG)
 
 # jpeg
 if(LFL_JPEG)
-    add_subdirectory(libjpeg-turbo)
-    set(JPEG_INCLUDE ${CMAKE_CURRENT_BINARY_DIR}/libjpeg-turbo ${CMAKE_CURRENT_SOURCE_DIR}/libjpeg-turbo PARENT_SCOPE)
-    set(JPEG_LIB ${CMAKE_CURRENT_BINARY_DIR}/libjpeg-turbo/.libs/libturbojpeg.a PARENT_SCOPE)
+    if(WIN32)
+        INCLUDE_EXTERNAL_MSPROJECT(libjpeg ${CMAKE_CURRENT_SOURCE_DIR}/OpenCV/3rdparty/libjpeg/libjpeg.vcproj)
+        set(JPEG_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/OpenCV/3rdparty/include PARENT_SCOPE)
+        set(JPEG_LIB libjpeg.lib PARENT_SCOPE)
+    else(WIN32)
+        add_subdirectory(libjpeg-turbo)
+        set(JPEG_INCLUDE ${CMAKE_CURRENT_BINARY_DIR}/libjpeg-turbo ${CMAKE_CURRENT_SOURCE_DIR}/libjpeg-turbo PARENT_SCOPE)
+        set(JPEG_LIB ${CMAKE_CURRENT_BINARY_DIR}/libjpeg-turbo/.libs/libturbojpeg.a PARENT_SCOPE)
+    endif(WIN32)
 endif(LFL_JPEG)
 
 # gif
@@ -124,6 +130,16 @@ if(LFL_TCMALLOC)
     add_subdirectory(gperftools)
     set(TCMALLOC_LIB ${CMAKE_CURRENT_BINARY_DIR}/gperftools/.libs/libtcmalloc_minimal.a -fno-builtin-malloc -fno-builtin-calloc -fno-builtin-realloc -fno-builtin-free PARENT_SCOPE)
 endif(LFL_TCMALLOC)
+
+# openssl
+if(LFL_OPENSSL)
+    if(LFL_IPHONE)
+        set(OPENSSL_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/ios-openssl/include PARENT_SCOPE)
+        set(OPENSSL_LIB ${CMAKE_CURRENT_SOURCE_DIR}/ios-openssl/lib/libssl.a ${CMAKE_CURRENT_SOURCE_DIR}/ios-openssl/lib/libcrypto.a PARENT_SCOPE)
+    else(LFL_IPHONE)
+        set(OPENSSL_LIB "-lssl -lcrypto" PARENT_SCOPE)
+    endif(LFL_IPHONE)
+endif(LFL_OPENSSL)
 
 # box2d
 if(LFL_BOX2D)
@@ -230,7 +246,7 @@ endif(LFL_PORTAUDIO)
 if(LFL_OPENCV)
     set(OPENCV_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/OpenCV/include PARENT_SCOPE)
     if(WIN32)
-        INCLUDE_EXTERNAL_MSPROJECT(cv ${CMAKE_CURRENT_SOURCE_DIR}/OpenCV/src/cv/cv.vcxproj)
+        INCLUDE_EXTERNAL_MSPROJECT(OpenCV ${CMAKE_CURRENT_SOURCE_DIR}/OpenCV/src/cv/cv.vcxproj)
         INCLUDE_EXTERNAL_MSPROJECT(cxcore ${CMAKE_CURRENT_SOURCE_DIR}/OpenCV/src/cxcore/cxcore.vcxproj)
         INCLUDE_EXTERNAL_MSPROJECT(flann ${CMAKE_CURRENT_SOURCE_DIR}/OpenCV/3rdparty/flann/flann.vcxproj)
         INCLUDE_EXTERNAL_MSPROJECT(opencv_lapack ${CMAKE_CURRENT_SOURCE_DIR}/OpenCV/3rdparty/lapack/opencv_lapack.vcxproj)

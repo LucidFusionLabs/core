@@ -21,11 +21,12 @@ if(NOT WIN32)
 else()
   # not needed on windows
   set(M_LIBRARY "")
+  set(Z_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/../OpenCV/3rdparty/include)
 endif()
 
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/scripts/pnglibconf.h.prebuilt
                ${CMAKE_CURRENT_BINARY_DIR}/pnglibconf.h)
-include_directories(${CMAKE_CURRENT_BINARY_DIR})
+include_directories(${CMAKE_CURRENT_BINARY_DIR} ${Z_INCLUDE})
 
 # OUR SOURCES
 set(libpng_public_hdrs

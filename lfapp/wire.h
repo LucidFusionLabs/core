@@ -24,35 +24,8 @@ struct Protocol {
     enum { TCP=1, UDP=2, UNIX=3, GPLUS=4 }; int p;
     static const char *Name(int p);
 };
-    
+
 struct Serializable {
-    struct Stream;
-
-    virtual int Type() const = 0;
-    virtual int Size() const = 0;
-    virtual int HeaderSize() const = 0;
-    virtual int In(const Stream *i) = 0;
-    virtual void Out(Stream *o) const = 0;
-
-    string ToString(unsigned short seq=0);
-    void ToString(string *out, unsigned short seq=0);
-    void ToString(char *buf, int len, unsigned short seq=0);
-    template <class X> static int GetType() { return ((X*)NULL)->X::Type(); }
-
-    struct Header {
-        static const int size = 4;
-        unsigned short id, seq;
-
-        void Out(Stream *o) const;
-        void In(const Stream *i);
-    };
-
-    bool HdrCheck(int content_len) { return content_len >= Header::size + HeaderSize(); }
-    bool    Check(int content_len) { return content_len >= Header::size +       Size(); }
-    bool HdrCheck(const Stream *is) { return HdrCheck(is->Len()); }
-    bool    Check(const Stream *is) { return    Check(is->Len()); }
-    int      Read(const Stream *is) { if (!HdrCheck(is)) return -1; return In(is); }
-
     struct Stream {
         char *buf;
         int size;
@@ -69,6 +42,7 @@ struct Serializable {
         int Len() const { return size; }
         int Pos() const { return offset; };
         int Remaining() const { return size - offset; }
+        int Result() const { return error ? -1 : 0; }
         const char *Start() const { return buf; }
         const char *Advance(int n=0) const { return Get(n); }
         const char           *End() const { return buf + size; }
@@ -77,8 +51,9 @@ struct Serializable {
         const unsigned       *N32() const { unsigned       *ret = (unsigned      *)(buf+offset); offset += 4;   if (offset > size) { error=1; return 0; } return ret; }
         const char           *Get(int len=0) const { char  *ret = (char          *)(buf+offset); offset += len; if (offset > size) { error=1; return 0; } return ret; }
 
-        void String  (const StringPiece &in) { char *v = (char*)Get(in.size());   if (v) memcpy(v, in.data(), in.size()); }
-        void NTString(const StringPiece &in) { char *v = (char*)Get(in.size()+1); if (v) memcpy(v, in.data(), in.size()); v[in.size()]=0; }
+        void String  (const StringPiece &in) { char *v = (char*)Get(in.size());   if (v) { memcpy(v,   in.data(), in.size()); } }
+        void BString (const StringPiece &in) { char *v = (char*)Get(in.size()+4); if (v) { memcpy(v+4, in.data(), in.size()); *((int*)v) = htonl(in.size()); } }
+        void NTString(const StringPiece &in) { char *v = (char*)Get(in.size()+1); if (v) { memcpy(v,   in.data(), in.size()); v[in.size()]=0; } }
 
         void Write8 (const unsigned char  &in) { unsigned char  *v =                 N8();  if (v) *v = in; }
         void Write8 (const          char  &in) {          char  *v = (char*)         N8();  if (v) *v = in; }
@@ -115,15 +90,16 @@ struct Serializable {
         void Read32(         int   *out) const { const          int   *v = (int*)          N32(); *out = v ? *v : 0; }
         void Read32(unsigned long  *out) const { const unsigned long  *v = (unsigned long*)N32(); *out = v ? *v : 0; }
         void Read32(         long  *out) const { const          long  *v = (long*)         N32(); *out = v ? *v : 0; }
+        void ReadString(StringPiece *out) const { Ntohl(&out->len); out->buf = Get(out->len); }
     };
 
     struct ConstStream : public Stream {
         ConstStream(const char *B, int S) : Stream((char*)B, S) {}
-        char           *End()          { FATAL(this, ": ConstStream write"); return 0; }
-        unsigned char  *N8()           { FATAL(this, ": ConstStream write"); return 0; }
-        unsigned short *N16()          { FATAL(this, ": ConstStream write"); return 0; }
-        unsigned       *N32()          { FATAL(this, ": ConstStream write"); return 0; }
-        char           *Get(int len=0) { FATAL(this, ": ConstStream write"); return 0; }
+        char           *End()          { FATAL((void*)this, ": ConstStream write"); return 0; }
+        unsigned char  *N8()           { FATAL((void*)this, ": ConstStream write"); return 0; }
+        unsigned short *N16()          { FATAL((void*)this, ": ConstStream write"); return 0; }
+        unsigned       *N32()          { FATAL((void*)this, ": ConstStream write"); return 0; }
+        char           *Get(int len=0) { FATAL((void*)this, ": ConstStream write"); return 0; }
     };
 
     struct MutableStream : public Stream {
@@ -134,6 +110,35 @@ struct Serializable {
         unsigned       *N32() { unsigned       *ret = (unsigned      *)(buf+offset); offset += 4;   if (offset > size) { error=1; return 0; } return ret; }
         char           *Get(int len=0) { char  *ret = (char          *)(buf+offset); offset += len; if (offset > size) { error=1; return 0; } return ret; }
     };
+
+    struct Header {
+        static const int size = 4;
+        unsigned short id, seq;
+
+        void Out(Stream *o) const;
+        void In(const Stream *i);
+    };
+
+    virtual int Type() const = 0;
+    virtual int Size() const = 0;
+    virtual int HeaderSize() const = 0;
+    virtual int In(const Stream *i) = 0;
+    virtual void Out(Stream *o) const = 0;
+
+    virtual string ToString();
+    virtual string ToString(unsigned short seq);
+    virtual void ToString(string *out);
+    virtual void ToString(string *out, unsigned short seq);
+    virtual void ToString(char *buf, int len);
+    virtual void ToString(char *buf, int len, unsigned short seq);
+
+    bool HdrCheck(int content_len) { return content_len >= Header::size + HeaderSize(); }
+    bool    Check(int content_len) { return content_len >= Header::size +       Size(); }
+    bool HdrCheck(const Stream *is) { return HdrCheck(is->Len()); }
+    bool    Check(const Stream *is) { return    Check(is->Len()); }
+    int      Read(const Stream *is) { if (!HdrCheck(is)) return -1; return In(is); }
+
+    template <class X> static int GetType() { return ((X*)NULL)->X::Type(); }
 };
 
 struct Ethernet {
@@ -225,7 +230,7 @@ struct DNS {
 
 struct HTTP {
     static bool ParseHost(const char *host, const char *host_end, string *hostO, string *portO);
-    static bool ResolveHost(const char *host, const char *host_end, IPV4::Addr *ipv4_addr, int *tcp_port, bool ssl);
+    static bool ResolveHost(const char *host, const char *host_end, IPV4::Addr *ipv4_addr, int *tcp_port, bool ssl, int defport=0);
     static bool ResolveEndpoint(const string &host, const string &port, IPV4::Addr *ipv4_addr, int *tcp_port, bool ssl, int defport=0);
     static bool ParseURL(const char *url, string *protO, string *hostO, string *portO, string *pathO);
     static bool ResolveURL(const char *url, bool *ssl, IPV4::Addr *ipv4_addr, int *tcp_port, string *host, string *path, int defport=0, string *prot=0);
@@ -242,6 +247,271 @@ struct HTTP {
     static int    GrepHeaders(const char *headers, const char *headers_end, int num, ...);
     static int    GrepURLArgs(const char *urlargs, const char *urlargs_end, int num, ...);
     static string EncodeURL(const char *url);
+};
+
+struct SSH {
+    static const int BinaryPacketHeaderSize = 6;
+    static int BinaryPacketLength(const char *b, unsigned char *padding, unsigned char *id);
+    static int BigNumSize(const BigNum n);
+    static BigNum ReadBigNum(BigNum n, const Serializable::Stream *i);
+    static void WriteBigNum(const BigNum n, Serializable::Stream *o);
+
+    struct Serializable : public LFL::Serializable {
+        string ToString(std::mt19937&, unsigned *sequence_number);
+        void ToString(string *out, std::mt19937&);
+        void ToString(char *buf, int len, std::mt19937&);
+    };
+    struct MSG_DISCONNECT : public Serializable {
+        int reason_code=0;
+        StringPiece description, language;
+
+        int HeaderSize() const { return 4 + 2*4; }
+        int Type() const { return 1; }
+        int Size() const { return HeaderSize() + description.size() + language.size(); }
+
+        int In(const Serializable::Stream *i) { i->Ntohl(&reason_code); i->ReadString(&description); i->ReadString(&language); return i->Result(); }
+        void Out(Serializable::Stream *o) const {}
+    };
+    struct MSG_DEBUG : public Serializable {
+        unsigned char always_display=0;
+        StringPiece message, language;
+
+        int HeaderSize() const { return 1 + 2*4; }
+        int Type() const { return 4; }
+        int Size() const { return HeaderSize() + message.size() + language.size(); }
+
+        int In(const Serializable::Stream *i) { i->Read8(&always_display); i->ReadString(&message); i->ReadString(&language); return i->Result(); }
+        void Out(Serializable::Stream *o) const {}
+    };
+    struct MSG_SERVICE_REQUEST : public Serializable {
+        StringPiece service_name;
+        MSG_SERVICE_REQUEST(const string &SN) : service_name(SN) {}
+
+        int HeaderSize() const { return 4; }
+        int Type() const { return 5; }
+        int Size() const { return HeaderSize() + service_name.size(); }
+
+        int In(const Serializable::Stream *i) { i->ReadString(&service_name); return i->Result(); }
+        void Out(Serializable::Stream *o) const { o->BString(service_name); }
+    };
+    struct MSG_SERVICE_ACCEPT : public Serializable {
+        StringPiece service_name;
+        MSG_SERVICE_ACCEPT(const string &SN) : service_name(SN) {}
+
+        int HeaderSize() const { return 4; }
+        int Type() const { return 6; }
+        int Size() const { return HeaderSize() + service_name.size(); }
+
+        int In(const Serializable::Stream *i) { i->ReadString(&service_name); return i->Result(); }
+        void Out(Serializable::Stream *o) const { o->BString(service_name); }
+    };
+    struct MSG_KEXINIT : public Serializable {
+        StringPiece cookie, kex_algorithms, server_host_key_algorithms, encryption_algorithms_client_to_server,
+            encryption_algorithms_server_to_client, mac_algorithms_client_to_server, mac_algorithms_server_to_client,
+            compression_algorithms_client_to_server, compression_algorithms_server_to_client, languages_client_to_server,
+            languages_server_to_client;
+        unsigned char first_kex_packet_follows=0;
+        MSG_KEXINIT() {}
+        MSG_KEXINIT(const string &C, const string &KEXA, const string &KA, const string &EC, const string &ES, const string &MC,
+                    const string &MS, const string &CC, const string &CS, const string &LC, const string &LS) :
+            cookie(C), kex_algorithms(KEXA), server_host_key_algorithms(KA), encryption_algorithms_client_to_server(EC),
+            encryption_algorithms_server_to_client(ES), mac_algorithms_client_to_server(MC), mac_algorithms_server_to_client(MS),
+            compression_algorithms_client_to_server(CC), compression_algorithms_server_to_client(CS), languages_client_to_server(LC),
+            languages_server_to_client(LS) {}
+
+        int HeaderSize() const { return 21 + 10*4; }
+        int Type() const { return 20; }
+        int Size() const;
+        string DebugString() const;
+
+        void Out(Serializable::Stream *o) const;
+        int In(const Serializable::Stream *i);
+    };
+    struct MSG_NEWKEYS : public Serializable {
+        int HeaderSize() const { return 0; }
+        int Type() const { return 21; }
+        int Size() const { return HeaderSize(); }
+
+        void Out(Serializable::Stream *o) const {}
+        int In(const Serializable::Stream *i) { return 0; }
+    };
+    struct MSG_KEXDH_INIT : public Serializable {
+        BigNum e;
+        MSG_KEXDH_INIT(BigNum E=0) : e(E) {}
+
+        int HeaderSize() const { return 4; }
+        int Type() const { return 30; }
+        int Size() const { return HeaderSize() + BigNumSize(e); }
+
+        void Out(Serializable::Stream *o) const { WriteBigNum(e, o); }
+        int In(const Serializable::Stream *i) { return 0; }
+    };
+    struct MSG_KEXDH_REPLY : public Serializable {
+        StringPiece k_s, h_sig;
+        BigNum f;
+        MSG_KEXDH_REPLY(BigNum F=0) : f(F) {}
+
+        int HeaderSize() const { return 4*3; }
+        int Type() const { return 31; }
+        int Size() const { return HeaderSize() + BigNumSize(f) + k_s.size() + h_sig.size(); }
+
+        void Out(Serializable::Stream *o) const {}
+        int In(const Serializable::Stream *i) { i->ReadString(&k_s); f=ReadBigNum(f,i); i->ReadString(&h_sig); return i->Result(); }
+    };
+    struct MSG_USERAUTH_REQUEST : public Serializable {
+        StringPiece user_name, service_name, method_name, algo_name, secret, sig;
+        MSG_USERAUTH_REQUEST(const string &UN, const string &SN, const string &MN, const string &AN, const string &P, const string &S)
+            : user_name(UN), service_name(SN), method_name(MN), algo_name(AN), secret(P), sig(S) {}
+
+        int HeaderSize() const { return 4*3; }
+        int Type() const { return 50; }
+        int Size() const;
+
+        void Out(Serializable::Stream *o) const;
+        int In(const Serializable::Stream *i) { return 0; }
+    };
+    struct MSG_USERAUTH_FAILURE : public Serializable {
+        StringPiece auth_left;
+        unsigned char partial_success=0;
+
+        int HeaderSize() const { return 4; }
+        int Type() const { return 51; }
+        int Size() const { return HeaderSize() + auth_left.size(); }
+
+        void Out(Serializable::Stream *o) const {}
+        int In(const Serializable::Stream *i) { i->ReadString(&auth_left); i->Read8(&partial_success); return i->Result(); }
+    };
+    struct MSG_USERAUTH_SUCCESS : public Serializable {
+        int HeaderSize() const { return 0; }
+        int Type() const { return 52; }
+        int Size() const { return HeaderSize(); }
+        void Out(Serializable::Stream *o) const {}
+        int In(const Serializable::Stream *i) { return i->Result(); }
+    };
+    struct MSG_USERAUTH_INFO_REQUEST : public Serializable {
+        StringPiece name, instruction, language;
+        struct Prompt { StringPiece text; unsigned char echo=0; };
+        vector<Prompt> prompt;
+
+        int HeaderSize() const { return 4*3; }
+        int Type() const { return 60; }
+        int Size() const;
+
+        void Out(Serializable::Stream *o) const {}
+        int In(const Serializable::Stream *i);
+    };
+    struct MSG_USERAUTH_INFO_RESPONSE : public Serializable {
+        vector<StringPiece> response;
+        MSG_USERAUTH_INFO_RESPONSE() {}
+        MSG_USERAUTH_INFO_RESPONSE(const vector<StringPiece> &s) : response(s) {}
+
+        int HeaderSize() const { return 4; }
+        int Type() const { return 61; }
+        int Size() const;
+
+        void Out(Serializable::Stream *o) const;
+        int In(const Serializable::Stream *i) { return i->Result(); }
+    };
+    struct MSG_CHANNEL_OPEN : public Serializable {
+        StringPiece channel_type;
+        int sender_channel, initial_win_size, maximum_packet_size;
+        MSG_CHANNEL_OPEN(const string &CT, int SC, int IWS, int MPS) : channel_type(CT), sender_channel(SC), initial_win_size(IWS), maximum_packet_size(MPS) {}
+
+        int HeaderSize() const { return 4*4; }
+        int Type() const { return 90; }
+        int Size() const { return HeaderSize() + channel_type.size(); }
+
+        void Out(Serializable::Stream *o) const { o->BString(channel_type); o->Htonl(sender_channel); o->Htonl(initial_win_size); o->Htonl(maximum_packet_size); }
+        int In(const Serializable::Stream *i) { return i->Result(); }
+    };
+    struct MSG_CHANNEL_OPEN_CONFIRMATION : public Serializable {
+        int recipient_channel, sender_channel, initial_win_size, maximum_packet_size;
+
+        int HeaderSize() const { return 4*4; }
+        int Type() const { return 91; }
+        int Size() const { return HeaderSize(); }
+
+        void Out(Serializable::Stream *o) const {}
+        int In(const Serializable::Stream *i) { i->Ntohl(&recipient_channel); i->Ntohl(&sender_channel); i->Ntohl(&initial_win_size); i->Ntohl(&maximum_packet_size); return i->Result(); }
+    };
+    struct MSG_CHANNEL_WINDOW_ADJUST : public Serializable {
+        int recipient_channel, bytes_to_add;
+
+        int HeaderSize() const { return 4*2; }
+        int Type() const { return 93; }
+        int Size() const { return HeaderSize(); }
+
+        void Out(Serializable::Stream *o) const { o->Htonl(recipient_channel); o->Htonl(bytes_to_add); }
+        int In(const Serializable::Stream *i) { i->Ntohl(&recipient_channel); i->Ntohl(&bytes_to_add); return i->Result(); }
+    };
+    struct MSG_CHANNEL_DATA : public Serializable {
+        int recipient_channel;
+        StringPiece data;
+        MSG_CHANNEL_DATA() {}
+        MSG_CHANNEL_DATA(int RC, const StringPiece &D) : recipient_channel(RC), data(D) {}
+
+        int HeaderSize() const { return 4*2; }
+        int Type() const { return 94; }
+        int Size() const { return HeaderSize() + data.size(); }
+
+        void Out(Serializable::Stream *o) const { o->Htonl(recipient_channel); o->BString(data); }
+        int In(const Serializable::Stream *i) { i->Ntohl(&recipient_channel); i->ReadString(&data); return i->Result(); }
+    };
+    struct MSG_CHANNEL_REQUEST : public Serializable {
+        int recipient_channel=0, width=0, height=0, pixel_width=0, pixel_height=0;
+        StringPiece request_type, term, term_mode;
+        unsigned char want_reply=0;
+        MSG_CHANNEL_REQUEST(int RC, const string &RT, const string &V, bool WR) : recipient_channel(RC), request_type(RT), term(V), want_reply(WR) {}
+        MSG_CHANNEL_REQUEST(int RC, const string &RT, const point &D, const point &PD, const string &T, const string &TM, bool WR) :
+            recipient_channel(RC), width(D.x), height(D.y), pixel_width(PD.x), pixel_height(PD.y), request_type(RT), term(T), term_mode(TM), want_reply(WR) {}
+
+        int HeaderSize() const { return 4*2 + 1; }
+        int Type() const { return 98; }
+        int Size() const;
+
+        void Out(Serializable::Stream *o) const;
+        int In(const Serializable::Stream *i) { return i->Result(); }
+    };
+    struct MSG_CHANNEL_SUCCESS : public Serializable {
+        int HeaderSize() const { return 0; }
+        int Type() const { return 99; }
+        int Size() const { return HeaderSize(); }
+
+        void Out(Serializable::Stream *o) const {}
+        int In(const Serializable::Stream *i) { return 0; }
+    };
+    struct MSG_CHANNEL_FAILURE : public Serializable {
+        int HeaderSize() const { return 0; }
+        int Type() const { return 100; }
+        int Size() const { return HeaderSize(); }
+
+        void Out(Serializable::Stream *o) const {}
+        int In(const Serializable::Stream *i) { return 0; }
+    };
+    struct DSSKey {
+        StringPiece format_id;
+        BigNum p, q, g, y;
+        DSSKey(BigNum P, BigNum Q, BigNum G, BigNum Y) : p(P), q(Q), g(G), y(Y) {}
+
+        int HeaderSize() const { return 4*4; }
+        int Size() const { return HeaderSize() + format_id.size() + BigNumSize(p) + BigNumSize(q) + BigNumSize(g) + BigNumSize(y); }
+        int Type() const { return 0; }
+
+        void Out(Serializable::Stream *o) const {}
+        int In(const Serializable::Stream *i);
+    };
+    struct DSSSignature {
+        StringPiece format_id;
+        BigNum r, s;
+        DSSSignature(BigNum R, BigNum S) : r(R), s(S) {}
+
+        int HeaderSize() const { return 4*2 + 7 + 20*2; }
+        int Size() const { return HeaderSize(); }
+        int Type() const { return 0; }
+
+        void Out(Serializable::Stream *o) const {}
+        int In(const Serializable::Stream *i);
+    };
 };
 
 struct SMTP {
@@ -480,6 +750,7 @@ struct GameProtocol {
         int   In(const Serializable::Stream *i) { return 0; }
     };
     struct PlayerList : public RconRequest {
+        PlayerList() {}
         int Type() const { return 9; }
     };
 };

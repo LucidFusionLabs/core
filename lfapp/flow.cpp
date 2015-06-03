@@ -157,7 +157,7 @@ void Flow::AppendBlock(int w, int h, const Border &b, Box *box_out) {
 
 void Flow::AppendBoxArrayText(const DrawableBoxArray &in) {
     bool attr_fwd = in.attr.source;
-    for (DrawableBox::RawIterator iter(in.data); !iter.Done(); iter.Increment()) {
+    for (DrawableBoxRawIterator iter(in.data); !iter.Done(); iter.Increment()) {
         if (!attr_fwd) cur_attr      = *in.attr.GetAttr(iter.cur_attr);
         else           cur_attr.font =  in.attr.GetAttr(iter.cur_attr)->font;
         AppendText(DrawableBoxRun(iter.Data(), iter.Length()).Text(), attr_fwd ? iter.cur_attr : 0);

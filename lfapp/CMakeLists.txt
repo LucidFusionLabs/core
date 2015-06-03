@@ -93,7 +93,7 @@ lfapp_lib(LFL_BULLET "${BULLET_INCLUDE}" "${BULLET_LIB}")
 lfapp_lib(LFL_BOX2D "${BOX2D_INCLUDE}" "${BOX2D_LIB}")
 lfapp_lib(LFL_ODE "${ODE_INCLUDE}" "${ODE_LIB}")
 lfapp_lib(LFL_BERKELIUM "${BERKELIUM_INCLUDE}" "${BERKELIUM_LIB}")
-lfapp_lib(LFL_OPENSSL "" "-lssl -lcrypto")
+lfapp_lib(LFL_OPENSSL "${OPENSSL_INCLUDE}" "${OPENSSL_LIB}")
 lfapp_lib(LFL_CUDA "${CUDA_INCLUDE}" "${CUDA_LIB} lfcuda")
 lfapp_lib(LFL_PNG "${PNG_INCLUDE}" "${PNG_LIB}")
 lfapp_lib(LFL_JPEG "${JPEG_INCLUDE}" "${JPEG_LIB}")
@@ -138,17 +138,31 @@ if(LFAPP_LIB_TYPE MATCHES "^SHARED$")
 endif(LFAPP_LIB_TYPE MATCHES "^SHARED$")
 
 # lfapp deps
-macro(lfapp_dep _def _lib)
-    if(${_def})
-        add_dependencies(${LFL_PROJECT}_lfapp ${_lib})
-    endif(${_def})
-endmacro(lfapp_dep)
+if(WIN32)
+    macro(lfapp_dep _def _lib)
+    endmacro(lfapp_dep)
+else(WIN32)
+    macro(lfapp_dep _def _lib)
+        if(${_def})
+            add_dependencies(${LFL_PROJECT}_lfapp ${_lib})
+        endif(${_def})
+    endmacro(lfapp_dep)
+endif(WIN32)
 lfapp_dep(LFL_BOX2D Box2D)
 lfapp_dep(LFL_OPENCV OpenCV)
 lfapp_dep(LFL_PNG png)
 
 # post build step
-if(LFL_IPHONE)
+if(WIN32)
+    macro(lfapp_add_target target)
+        add_executable(${target} ${ARGN})
+        target_link_libraries(${target} ${LFAPP_LIB})
+    endmacro(lfapp_add_target)
+    macro(lfapp_post_build_start target binname pkgname)
+    endmacro(lfapp_post_build_start)
+    macro(lfapp_post_build_copy_bin target binname pkgname)
+    endmacro(lfapp_post_build_copy_bin)
+elseif(LFL_IPHONE)
     macro(lfapp_add_target target)
         add_executable(${target} ${ARGN})
         target_link_libraries(${target} ${LFAPP_LIB})
@@ -156,6 +170,7 @@ if(LFL_IPHONE)
     macro(lfapp_post_build_start target binname pkgname)
         set(bin i${pkgname}.app/Contents/MacOS/${target}) 
         set(info_plist ${CMAKE_CURRENT_SOURCE_DIR}/iphone-Info.plist)
+        set(entitlements_plist ${CMAKE_CURRENT_SOURCE_DIR}/iphone-Entitlements.plist)
         add_custom_command(TARGET ${target} POST_BUILD WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
             COMMAND rm -rf i${pkgname}.app
             COMMAND mkdir  i${pkgname}.app
@@ -163,10 +178,7 @@ if(LFL_IPHONE)
             COMMAND cp -r ${CMAKE_CURRENT_SOURCE_DIR}/assets i${pkgname}.app
             COMMAND cp ${LFL_CORE}/lfapp/*.glsl i${pkgname}.app/assets
             COMMAND cp ${target} i${pkgname}.app
-            COMMAND mkdir -p i${pkgname}.app/_CodeSignature
-            COMMAND touch i${pkgname}.app/_CodeSignature/CodeResources
-            COMMAND ln -s _CodeSignature/CodeResources i${pkgname}.app/CodeResources
-            COMMAND codesign -f -s "iPhone Developer" i${pkgname}.app)
+            COMMAND if ! [ ${LFL_IPHONESIM} ]\; then codesign -f -s \"${IPHONECERT}\" --entitlements ${entitlements_plist} i${pkgname}.app\; fi)
         add_custom_target(${target}_pkg WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
             COMMAND rm -rf   Payload
             COMMAND mkdir -p Payload
@@ -185,6 +197,10 @@ if(LFL_IPHONE)
                 COMMAND xcrun simctl launch booted `cat ${CMAKE_CURRENT_SOURCE_DIR}/iphone-Info.plist | grep BundleIdentifier -A1 | tail -1 | cut -f2 -d\\> | cut -f1 -d \\<`
                 COMMAND lldb -n ${target} -o cont)
         else(LFL_IPHONESIM)
+            add_custom_target(${target}_run WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} DEPENDS ${target}
+                COMMAND ios-deploy --bundle i${pkgname}.app)
+            add_custom_target(${target}_debug WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} DEPENDS ${target}
+                COMMAND ios-deploy --debug --bundle i${pkgname}.app)
         endif(LFL_IPHONESIM)
     endmacro(lfapp_post_build_start)
     macro(lfapp_post_build_copy_bin target binname pkgname)

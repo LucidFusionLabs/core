@@ -18,8 +18,7 @@ The key implementation files are:
 * **editor**:       LEditor, a text editor and IDE
 * **browser**:      LBrowser, a HTML4/CSS2 web browser with V8 javascript
 * **image**:        LImage, an image and 3D-model manipulation utility
-* **fs**:           Fusion Server, a speech and image recognition server
-* **fv**:           Fusion Viewer, a speech and image recognition client
+* **fs**:           Fusion Sensor, a speech and image recognition client/server
 * **market**:       Financial data visualization and automated trading code
 * **spaceball**:    Spaceball Future, a multiplayer 3d game
 * **cb**:           Crystal Bawl, a geopacket visualization screensaver
@@ -52,7 +51,7 @@ LFL builds easily for Windows, Linux, Mac OSX, iPhone and Android.
         cd lfl\core\imports\judy\src
         build.bat
 
-* use Visual Studio C++ 2013 Express
+* use Visual Studio C++ 2015
 * Tools > Options > Text Editor > All Languages > Tabs > Insert Spaces
 
         c:\lfl\term\Project.sln
@@ -110,6 +109,9 @@ LFL builds easily for Windows, Linux, Mac OSX, iPhone and Android.
         make native; cp -R out ~/v8; cp -R include ~/v8
 
 ### iOS Device
+
+* Install node from brew or macports and: npm install -g ios-deploy
+* Check logs with: idevicesyslog
 
         cd lfl
         mkdir iphone && cd iphone

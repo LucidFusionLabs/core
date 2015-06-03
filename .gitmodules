@@ -7,3 +7,6 @@
 [submodule "imports/lua"]
 	path = imports/lua
 	url = https://github.com/LuaDist/lua
+[submodule "imports/ios-openssl"]
+	path = imports/ios-openssl
+	url = https://github.com/st3fan/ios-openssl
