@@ -185,8 +185,8 @@ extern int optind;
 #define CHECK(x) if (!(x)) FATAL(#x)
 
 #define DEFINE_FLAG(name, type, initial, description) \
-    type FLAGS_ ## name = initial; \
-    FlagOfType<type> FLAGS_ ## name ## _(#name, description, __FILE__, __LINE__, &FLAGS_ ## name)
+  type FLAGS_ ## name = initial; \
+  FlagOfType<type> FLAGS_ ## name ## _(#name, description, __FILE__, __LINE__, &FLAGS_ ## name)
 
 #define DEFINE_int(name, initial, description) DEFINE_FLAG(name, int, initial, description)
 #define DEFINE_bool(name, initial, description) DEFINE_FLAG(name, bool, initial, description)
@@ -209,41 +209,41 @@ void Log(int level, const char *file, int line, const string &m);
 
 namespace LFL {
 struct Allocator {
-    virtual ~Allocator() {}
-    virtual const char *Name() = 0;
-    virtual void *Malloc(int size) = 0;
-    virtual void *Realloc(void *p, int size) = 0;
-    virtual void Free(void *p) = 0;
-    virtual void Reset();
-    static Allocator *Default();
+  virtual ~Allocator() {}
+  virtual const char *Name() = 0;
+  virtual void *Malloc(int size) = 0;
+  virtual void *Realloc(void *p, int size) = 0;
+  virtual void Free(void *p) = 0;
+  virtual void Reset();
+  static Allocator *Default();
 #define AllocatorNew(allocator, type, constructor_args) (new((allocator)->Malloc(sizeof type )) type constructor_args)
 };
 
 struct NullAlloc : public Allocator {
-    const char *Name() { return "NullAlloc"; }
-    void *Malloc(int size) { return 0; }
-    void *Realloc(void *p, int size) { return 0; }
-    void Free(void *p) {}
+  const char *Name() { return "NullAlloc"; }
+  void *Malloc(int size) { return 0; }
+  void *Realloc(void *p, int size) { return 0; }
+  void Free(void *p) {}
 };
 
 struct ThreadLocalStorage {
-    Allocator *alloc=0;
-    std::default_random_engine rand_eng;
-    virtual ~ThreadLocalStorage() { delete alloc; }
-    ThreadLocalStorage() : rand_eng(std::random_device{}()) {}
-    static void Init();
-    static void Free();
-    static void ThreadInit();
-    static void ThreadFree();
-    static ThreadLocalStorage *Get();
-    static Allocator *GetAllocator(bool reset_allocator=true);
+  Allocator *alloc=0;
+  std::default_random_engine rand_eng;
+  virtual ~ThreadLocalStorage() { delete alloc; }
+  ThreadLocalStorage() : rand_eng(std::random_device{}()) {}
+  static void Init();
+  static void Free();
+  static void ThreadInit();
+  static void ThreadFree();
+  static ThreadLocalStorage *Get();
+  static Allocator *GetAllocator(bool reset_allocator=true);
 };
 
 struct Module {
-    virtual int Init ()         { return 0; }
-    virtual int Start()         { return 0; }
-    virtual int Frame(unsigned) { return 0; }
-    virtual int Free ()         { return 0; }
+  virtual int Init ()         { return 0; }
+  virtual int Start()         { return 0; }
+  virtual int Frame(unsigned) { return 0; }
+  virtual int Free ()         { return 0; }
 };
 }; // namespace LFL
 
@@ -267,220 +267,220 @@ string NBRead(int fd, int size, int timeout=0);
 bool NBReadable(int fd, int timeout=0);
 
 struct MallocAlloc : public Allocator {
-    const char *Name() { return "MallocAlloc"; }
-    void *Malloc(int size);
-    void *Realloc(void *p, int size);
-    void Free(void *p);
+  const char *Name() { return "MallocAlloc"; }
+  void *Malloc(int size);
+  void *Realloc(void *p, int size);
+  void Free(void *p);
 };
 
 struct NewAlloc : public Allocator {
-    const char *Name() { return "NewAlloc"; }
-    void *Malloc(int size) { return new char[size]; }
-    void *Realloc(void *p, int size) { return !p ? Malloc(size) : 0; }
-    void Free(void *p) { delete [] (char *)p; }
+  const char *Name() { return "NewAlloc"; }
+  void *Malloc(int size) { return new char[size]; }
+  void *Realloc(void *p, int size) { return !p ? Malloc(size) : 0; }
+  void Free(void *p) { delete [] (char *)p; }
 };
 
 template <int S> struct FixedAlloc : public Allocator {
-    const char *Name() { return "FixedAlloc"; }
-    static const int size = S;
-    char buf[S];
-    int len=0;
-    virtual void Reset() { len=0; }
-    virtual void *Malloc(int n) { CHECK_LE(len + n, S); char *ret = &buf[len]; len += NextMultipleOf16(n); return ret; }
-    virtual void *Realloc(void *p, int n) { CHECK_EQ(nullptr, p); return this->Malloc(n); }
-    virtual void Free(void *p) {}
+  const char *Name() { return "FixedAlloc"; }
+  static const int size = S;
+  char buf[S];
+  int len=0;
+  virtual void Reset() { len=0; }
+  virtual void *Malloc(int n) { CHECK_LE(len + n, S); char *ret = &buf[len]; len += NextMultipleOf16(n); return ret; }
+  virtual void *Realloc(void *p, int n) { CHECK_EQ(nullptr, p); return this->Malloc(n); }
+  virtual void Free(void *p) {}
 };
 
 struct MMapAlloc : public Allocator {
 #ifdef _WIN32
-    HANDLE file, map; void *addr; long long size;
-    MMapAlloc(HANDLE File, HANDLE Map, void *Addr, int Size) : file(File), map(Map), addr(Addr), size(Size) {}
+  HANDLE file, map; void *addr; long long size;
+  MMapAlloc(HANDLE File, HANDLE Map, void *Addr, int Size) : file(File), map(Map), addr(Addr), size(Size) {}
 #else
-    void *addr; long long size;
-    MMapAlloc(void *Addr, long long Size) : addr(Addr), size(Size) {}
+  void *addr; long long size;
+  MMapAlloc(void *Addr, long long Size) : addr(Addr), size(Size) {}
 #endif
-    virtual ~MMapAlloc();
-    static MMapAlloc *Open(const char *fn, const bool logerror=true, const bool readonly=true, long long size=0);
-    
-    const char *Name() { return "MMapAlloc"; }
-    void *Malloc(int size) { return 0; }
-    void *Realloc(void *p, int size) { return 0; }
-    void Free(void *p) { delete this; }
+  virtual ~MMapAlloc();
+  static MMapAlloc *Open(const char *fn, const bool logerror=true, const bool readonly=true, long long size=0);
+
+  const char *Name() { return "MMapAlloc"; }
+  void *Malloc(int size) { return 0; }
+  void *Realloc(void *p, int size) { return 0; }
+  void Free(void *p) { delete this; }
 };
 
 struct BlockChainAlloc : public Allocator {
-    const char *Name() { return "BlockChainAlloc"; }
-    struct Block { string buf; int len=0; Block(int size=0) : buf(size, 0) {} };
-    vector<Block> blocks;
-    int block_size, cur_block_ind;
-    BlockChainAlloc(int s=1024*1024) : block_size(s), cur_block_ind(-1) {}
-    void Reset() { for (auto &b : blocks) b.len = 0; cur_block_ind = blocks.size() ? 0 : -1; }
-    void *Realloc(void *p, int n) { CHECK_EQ(nullptr, p); return this->Malloc(n); }
-    void *Malloc(int n);
-    void Free(void *p) {}
+  const char *Name() { return "BlockChainAlloc"; }
+  struct Block { string buf; int len=0; Block(int size=0) : buf(size, 0) {} };
+  vector<Block> blocks;
+  int block_size, cur_block_ind;
+  BlockChainAlloc(int s=1024*1024) : block_size(s), cur_block_ind(-1) {}
+  void Reset() { for (auto &b : blocks) b.len = 0; cur_block_ind = blocks.size() ? 0 : -1; }
+  void *Realloc(void *p, int n) { CHECK_EQ(nullptr, p); return this->Malloc(n); }
+  void *Malloc(int n);
+  void Free(void *p) {}
 };
 
 struct StringAlloc {
-    string buf;
-    void Reset() { buf.clear(); }
-    int Alloc(int bytes) { int ret=buf.size(); buf.resize(ret + bytes); return ret; }
+  string buf;
+  void Reset() { buf.clear(); }
+  int Alloc(int bytes) { int ret=buf.size(); buf.resize(ret + bytes); return ret; }
 };
 
 struct Flag {
-    const char *name, *desc, *file;
-    int line;
-    bool override;
-    Flag(const char *N, const char *D, const char *F, int L) : name(N), desc(D), file(F), line(L), override(0) {}
-    virtual ~Flag() {}
+  const char *name, *desc, *file;
+  int line;
+  bool override;
+  Flag(const char *N, const char *D, const char *F, int L) : name(N), desc(D), file(F), line(L), override(0) {}
+  virtual ~Flag() {}
 
-    string GetString() const;
-    virtual string Get() const = 0;
-    virtual bool IsBool() const = 0;
-    virtual void Update(const char *text) = 0;
+  string GetString() const;
+  virtual string Get() const = 0;
+  virtual bool IsBool() const = 0;
+  virtual void Update(const char *text) = 0;
 };
 
 struct FlagMap {
-    typedef map<string, Flag*> AllFlags;
-    const char *optarg=0;
-    int optind=0;
-    AllFlags flagmap;
-    bool dirty=0;
-    FlagMap() {}
+  typedef map<string, Flag*> AllFlags;
+  const char *optarg=0;
+  int optind=0;
+  AllFlags flagmap;
+  bool dirty=0;
+  FlagMap() {}
 
-    int getopt(int argc, const char **argv, const char *source_filename);
-    void Add(Flag *f) { flagmap[f->name] = f; }
-    bool Set(const string &k, const string &v);
-    bool IsBool(const string &k) const;
-    string Get(const string &k) const;
-    string Match(const string &k, const char *source_filename=0) const;
-    void Print(const char *source_filename=0) const;
+  int getopt(int argc, const char **argv, const char *source_filename);
+  void Add(Flag *f) { flagmap[f->name] = f; }
+  bool Set(const string &k, const string &v);
+  bool IsBool(const string &k) const;
+  string Get(const string &k) const;
+  string Match(const string &k, const char *source_filename=0) const;
+  void Print(const char *source_filename=0) const;
 };
 
 template <class X> struct FlagOfType : public Flag {
-    X *v;
-    virtual ~FlagOfType() {}
-    FlagOfType(const char *N, const char *D, const char *F, int L, X *V)
-        : Flag(N, D, F, L), v(V) { Singleton<FlagMap>::Get()->Add(this); } 
+  X *v;
+  virtual ~FlagOfType() {}
+  FlagOfType(const char *N, const char *D, const char *F, int L, X *V)
+    : Flag(N, D, F, L), v(V) { Singleton<FlagMap>::Get()->Add(this); } 
 
-    string Get() const { return ToString(*v); }
-    bool IsBool() const { return TypeId<X>() == TypeId<bool>(); }
-    void Update(const char *text) { if (text) *v = Scannable::Scan(*v, text); }
+  string Get() const { return ToString(*v); }
+  bool IsBool() const { return TypeId<X>() == TypeId<bool>(); }
+  void Update(const char *text) { if (text) *v = Scannable::Scan(*v, text); }
 };
 
 struct Thread {
-    typedef unsigned long long Id;
-    Id id=0;
-    Callback cb;
-    mutex start_mutex;
-    unique_ptr<std::thread> impl;
-    Thread(const Callback &CB=Callback()) : cb(CB) {}
-    void Open(const Callback &CB) { cb=CB; }
-    void Wait() { if (impl) impl->join(); }
-    void Start() {
-        ScopedMutex sm(start_mutex);
-        impl = move(unique_ptr<std::thread>(new std::thread(bind(&Thread::ThreadProc, this))));
-        id = std::hash<std::thread::id>()(impl->get_id());
-    }
-    void ThreadProc() {
-        { ScopedMutex sm(start_mutex); }
-        INFOf("Started thread(%llx)", id);
-        ThreadLocalStorage::ThreadInit();
-        cb();
-        ThreadLocalStorage::ThreadFree();
-    }
-    static Id GetId() { return std::hash<std::thread::id>()(std::this_thread::get_id()); }
+  typedef unsigned long long Id;
+  Id id=0;
+  Callback cb;
+  mutex start_mutex;
+  unique_ptr<std::thread> impl;
+  Thread(const Callback &CB=Callback()) : cb(CB) {}
+  void Open(const Callback &CB) { cb=CB; }
+  void Wait() { if (impl) impl->join(); }
+  void Start() {
+    ScopedMutex sm(start_mutex);
+    impl = move(unique_ptr<std::thread>(new std::thread(bind(&Thread::ThreadProc, this))));
+    id = std::hash<std::thread::id>()(impl->get_id());
+  }
+  void ThreadProc() {
+    { ScopedMutex sm(start_mutex); }
+    INFOf("Started thread(%llx)", id);
+    ThreadLocalStorage::ThreadInit();
+    cb();
+    ThreadLocalStorage::ThreadFree();
+  }
+  static Id GetId() { return std::hash<std::thread::id>()(std::this_thread::get_id()); }
 };
 
 struct WorkerThread {
-    unique_ptr<CallbackQueue> queue;
-    unique_ptr<Thread> thread;
-    WorkerThread() : queue(new CallbackQueue()) {}
-    void Init(const Callback &main_cb) { thread = unique_ptr<Thread>(new Thread(main_cb)); }
+  unique_ptr<CallbackQueue> queue;
+  unique_ptr<Thread> thread;
+  WorkerThread() : queue(new CallbackQueue()) {}
+  void Init(const Callback &main_cb) { thread = unique_ptr<Thread>(new Thread(main_cb)); }
 };
 
 struct ThreadPool {
-    vector<WorkerThread> worker;
-    int round_robin_next=0;
+  vector<WorkerThread> worker;
+  int round_robin_next=0;
 
-    void Open(int num) {
-        CHECK(worker.empty());
-        worker.resize(num);
-        for (auto &w : worker) w.Init(bind(&CallbackQueue::HandleMessagesLoop, w.queue.get()));
-    }
-    void Start() { for (auto &w : worker) w.thread->Start(); }
-    void Stop()  { for (auto &w : worker) w.thread->Wait(); }
-    void Write(Callback *cb) {
-        worker[round_robin_next].queue->Write(cb);
-        round_robin_next = (round_robin_next + 1) % worker.size();
-    }
+  void Open(int num) {
+    CHECK(worker.empty());
+    worker.resize(num);
+    for (auto &w : worker) w.Init(bind(&CallbackQueue::HandleMessagesLoop, w.queue.get()));
+  }
+  void Start() { for (auto &w : worker) w.thread->Start(); }
+  void Stop()  { for (auto &w : worker) w.thread->Wait(); }
+  void Write(Callback *cb) {
+    worker[round_robin_next].queue->Write(cb);
+    round_robin_next = (round_robin_next + 1) % worker.size();
+  }
 };
 
 struct Timer {
-    Time begin;
-    Timer() { Reset(); }
-    Time Reset() { Time last_begin=begin; begin=Now(); return last_begin; }
-    Time GetTime() const { return Now() - begin; }
-    Time GetTime(bool do_reset) {
-        if (!do_reset) return GetTime();
-        Time last_begin = Reset();
-        return max(Time(0), begin - last_begin);
-    }
+  Time begin;
+  Timer() { Reset(); }
+  Time Reset() { Time last_begin=begin; begin=Now(); return last_begin; }
+  Time GetTime() const { return Now() - begin; }
+  Time GetTime(bool do_reset) {
+    if (!do_reset) return GetTime();
+    Time last_begin = Reset();
+    return max(Time(0), begin - last_begin);
+  }
 };
 
 struct PerformanceTimers {
-    struct Accumulator {
-        string name;
-        Time time;
-        Accumulator(const string &n="") : name(n), time(0) {}
-    };
-    vector<Accumulator> timers;
-    Timer cur_timer;
-    int cur_timer_id;
-    PerformanceTimers() { cur_timer_id = Create("Default"); }
+  struct Accumulator {
+    string name;
+    Time time;
+    Accumulator(const string &n="") : name(n), time(0) {}
+  };
+  vector<Accumulator> timers;
+  Timer cur_timer;
+  int cur_timer_id;
+  PerformanceTimers() { cur_timer_id = Create("Default"); }
 
-    int Create(const string &n) { timers.push_back(Accumulator(n)); return timers.size()-1; }
-    void AccumulateTo(int timer_id) { timers[cur_timer_id].time += cur_timer.GetTime(true); cur_timer_id = timer_id; }
-    string DebugString() const { string v; for (auto &t : timers) StrAppend(&v, t.name, " ", t.time / 1000.0, "\n"); return v; }
+  int Create(const string &n) { timers.push_back(Accumulator(n)); return timers.size()-1; }
+  void AccumulateTo(int timer_id) { timers[cur_timer_id].time += cur_timer.GetTime(true); cur_timer_id = timer_id; }
+  string DebugString() const { string v; for (auto &t : timers) StrAppend(&v, t.name, " ", t.time / 1000.0, "\n"); return v; }
 };
 
 struct Crypto {
-    static string MD5(const string &in);
-    static string SHA1(const string &in);
-    static void *NewSHA1();
-    static void UpdateSHA1(void*, const StringPiece &in);
-    static string FinishSHA1(void*);
-    static string Blowfish(const string &passphrase, const string &in, bool encrypt_or_decrypt);
-    static string DiffieHellmanModulus(int generator, int bits);
+  static string MD5(const string &in);
+  static string SHA1(const string &in);
+  static void *NewSHA1();
+  static void UpdateSHA1(void*, const StringPiece &in);
+  static string FinishSHA1(void*);
+  static string Blowfish(const string &passphrase, const string &in, bool encrypt_or_decrypt);
+  static string DiffieHellmanModulus(int generator, int bits);
 #if defined(LFL_OPENSSL)
-    typedef HMAC_CTX MAC;
-    typedef EVP_CIPHER_CTX Cipher;
-    typedef const EVP_CIPHER* CipherAlgo;
-    typedef const EVP_MD* MACAlgo;
+  typedef HMAC_CTX MAC;
+  typedef EVP_CIPHER_CTX Cipher;
+  typedef const EVP_CIPHER* CipherAlgo;
+  typedef const EVP_MD* MACAlgo;
 #elif defined(LFL_COMMONCRYPTO)
-    typedef CCCryptorRef Cipher;
-    typedef CCAlgorithm CipherAlgo;
-    typedef CCHmacContext MAC;
-    typedef CCHmacAlgorithm MACAlgo;
+  typedef CCCryptorRef Cipher;
+  typedef CCAlgorithm CipherAlgo;
+  typedef CCHmacContext MAC;
+  typedef CCHmacAlgorithm MACAlgo;
 #else
-    typedef void* Cipher;
-    typedef void* CipherAlgo;
-    typedef void* MAC;
-    typedef void* MACAlgo;
+  typedef void* Cipher;
+  typedef void* CipherAlgo;
+  typedef void* MAC;
+  typedef void* MACAlgo;
 #endif
-    struct CipherAlgos {
-        static CipherAlgo DES3();
-    };
-    struct MACAlgos {
-        static MACAlgo SHA1();
-    };
-    static void CipherInit(Cipher*);
-    static void CipherFree(Cipher*);
-    static int  CipherGetBlockSize(Cipher*);
-    static int  CipherOpen(Cipher*, CipherAlgo, bool dir, const StringPiece &key, const StringPiece &iv);
-    static int  CipherUpdate(Cipher*, const StringPiece &in, char *out, int outlen);
-    static void MACOpen(MAC*, MACAlgo, const StringPiece &key);
-    static void MACUpdate(MAC*, const StringPiece &in);
-    static int  MACFinish(MAC*, char *out, int outlen);
+  struct CipherAlgos {
+    static CipherAlgo DES3();
+  };
+  struct MACAlgos {
+    static MACAlgo SHA1();
+  };
+  static void CipherInit(Cipher*);
+  static void CipherFree(Cipher*);
+  static int  CipherGetBlockSize(Cipher*);
+  static int  CipherOpen(Cipher*, CipherAlgo, bool dir, const StringPiece &key, const StringPiece &iv);
+  static int  CipherUpdate(Cipher*, const StringPiece &in, char *out, int outlen);
+  static void MACOpen(MAC*, MACAlgo, const StringPiece &key);
+  static void MACUpdate(MAC*, const StringPiece &in);
+  static int  MACFinish(MAC*, char *out, int outlen);
 };
 }; // namespace LFL
 
@@ -498,124 +498,133 @@ namespace LFL {
 ::std::ostream& operator<<(::std::ostream& os, const Box   &x);
 
 struct FrameRateLimitter {
-    int *target_hz;
-    float avgframe;
-    Timer timer;
-    RollingAvg<unsigned> sleep_bias;
-    FrameRateLimitter(int *HZ) : target_hz(HZ), avgframe(0), sleep_bias(32) {}
-    void Limit() {
-        Time since = timer.GetTime(true), targetframe(1000 / *target_hz);
-        Time sleep = max(Time(0), targetframe - since - FMilliseconds(sleep_bias.Avg()));
-        if (sleep != Time(0)) { MSleep(sleep.count()); sleep_bias.Add((timer.GetTime(true) - sleep).count()); }
-    }
+  int *target_hz;
+  float avgframe;
+  Timer timer;
+  RollingAvg<unsigned> sleep_bias;
+  FrameRateLimitter(int *HZ) : target_hz(HZ), avgframe(0), sleep_bias(32) {}
+  void Limit() {
+    Time since = timer.GetTime(true), targetframe(1000 / *target_hz);
+    Time sleep = max(Time(0), targetframe - since - FMilliseconds(sleep_bias.Avg()));
+    if (sleep != Time(0)) { MSleep(sleep.count()); sleep_bias.Add((timer.GetTime(true) - sleep).count()); }
+  }
 };
 
 struct FrameScheduler {
-    FrameRateLimitter maxfps;
-    mutex frame_mutex, wait_mutex;
-    SocketWakeupThread wakeup_thread;
-    bool rate_limit = 1, wait_forever = 1, wait_forever_thread = 1, synchronize_waits = 1, monolithic_frame = 1;
-    FrameScheduler();
+  FrameRateLimitter maxfps;
+  mutex frame_mutex, wait_mutex;
+  SocketWakeupThread wakeup_thread;
+  bool rate_limit = 1, wait_forever = 1, wait_forever_thread = 1, synchronize_waits = 1, monolithic_frame = 1;
+  FrameScheduler();
 
-    void Init();
-    void Free();
-    void Start();
-    void FrameWait();
-    void FrameDone();
-    void Wakeup(void*);
-    bool WakeupIn(void*, Time interval, bool force=0);
-    void ClearWakeupIn();
-    void UpdateTargetFPS(int fps);
-    void AddWaitForeverMouse();
-    void DelWaitForeverMouse();
-    void AddWaitForeverKeyboard();
-    void DelWaitForeverKeyboard();
-    void AddWaitForeverSocket(Socket fd, int flag, void *val=0);
-    void DelWaitForeverSocket(Socket fd);
+  void Init();
+  void Free();
+  void Start();
+  void FrameWait();
+  void FrameDone();
+  void Wakeup(void*);
+  bool WakeupIn(void*, Time interval, bool force=0);
+  void ClearWakeupIn();
+  void UpdateTargetFPS(int fps);
+  void AddWaitForeverMouse();
+  void DelWaitForeverMouse();
+  void AddWaitForeverKeyboard();
+  void DelWaitForeverKeyboard();
+  void AddWaitForeverSocket(Socket fd, int flag, void *val=0);
+  void DelWaitForeverSocket(Socket fd);
 };
 
 struct BrowserInterface {
-    virtual void Draw(Box *viewport) = 0;
-    virtual void Open(const string &url) = 0;
-    virtual void Navigate(const string &url) { Open(url); }
-    virtual Asset *OpenImage(const string &url) { return 0; }
-    virtual void OpenStyleImport(const string &url) {}
-    virtual void MouseMoved(int x, int y) = 0;
-    virtual void MouseButton(int b, bool d) = 0;
-    virtual void MouseWheel(int xs, int ys) = 0;
-    virtual void KeyEvent(int key, bool down) = 0;
-    virtual void BackButton() = 0;
-    virtual void ForwardButton() = 0;
-    virtual void RefreshButton() = 0;
-    virtual string GetURL() = 0;
+  virtual void Draw(Box *viewport) = 0;
+  virtual void Open(const string &url) = 0;
+  virtual void Navigate(const string &url) { Open(url); }
+  virtual Asset *OpenImage(const string &url) { return 0; }
+  virtual void OpenStyleImport(const string &url) {}
+  virtual void MouseMoved(int x, int y) = 0;
+  virtual void MouseButton(int b, bool d) = 0;
+  virtual void MouseWheel(int xs, int ys) = 0;
+  virtual void KeyEvent(int key, bool down) = 0;
+  virtual void BackButton() = 0;
+  virtual void ForwardButton() = 0;
+  virtual void RefreshButton() = 0;
+  virtual string GetURL() = 0;
 };
 
 struct JSContext {
-    virtual ~JSContext() {}
-    virtual string Execute(const string &s) = 0;
+  virtual ~JSContext() {}
+  virtual string Execute(const string &s) = 0;
 };
 JSContext *CreateV8JSContext(Console *js_console=0, LFL::DOM::Node *document=0);
 
 struct LuaContext {
-    virtual ~LuaContext() {}
-    virtual string Execute(const string &s) = 0;
+  virtual ~LuaContext() {}
+  virtual string Execute(const string &s) = 0;
 };
 LuaContext *CreateLuaContext();
 
 struct SystemBrowser { static void Open(const char *url); };
 struct Clipboard { static string Get(); static void Set(const string &s); };
-struct TouchDevice { static void OpenKeyboard(); static void CloseKeyboard(); };
-struct Advertising { static void ShowAds(); static void HideAds(); };
+struct Advertising {
+  static void ShowAds();
+  static void HideAds();
+};
+struct TouchDevice {
+  static void OpenKeyboard();
+  static void CloseKeyboard();
+  static void CloseKeyboardAfterReturn(bool);
+  static Box GetKeyboardBox();
+};
+
 struct CUDA : public Module { int Init(); };
 
 struct Application : public ::LFApp, public Module {
-    string progname, logfilename, startdir, assetdir, dldir;
-    int pid=0;
-    FILE *logfile=0;
-    mutex log_mutex;
-    Time time_started;
-    Timer frame_time;
-    ThreadPool thread_pool;
-    CallbackQueue message_queue;
-    FrameScheduler scheduler;
-    Callback reshaped_cb, create_win_f;
-    function<void(Window*)> window_init_cb, window_closed_cb;
-    Audio audio;
-    Video video;
-    Input input;
-    Assets assets;
-    Network network;
-    Camera camera;
-    CUDA cuda;
-    Shell shell;
-    vector<Module*> modules;
-    CategoricalVariable<int> tex_mode, grab_mode, fill_mode;
+  string progname, logfilename, startdir, assetdir, dldir;
+  int pid=0;
+  FILE *logfile=0;
+  mutex log_mutex;
+  Time time_started;
+  Timer frame_time;
+  ThreadPool thread_pool;
+  CallbackQueue message_queue;
+  FrameScheduler scheduler;
+  Callback reshaped_cb, create_win_f;
+  function<void(Window*)> window_init_cb, window_closed_cb;
+  Audio audio;
+  Video video;
+  Input input;
+  Assets assets;
+  Network network;
+  Camera camera;
+  CUDA cuda;
+  Shell shell;
+  vector<Module*> modules;
+  CategoricalVariable<int> tex_mode, grab_mode, fill_mode;
 
-    Application() : create_win_f(bind(&Application::CreateNewWindow, this, function<void(Window*)>())),
-    window_closed_cb(DefaultLFAppWindowClosedCB), tex_mode(2, 1, 0), grab_mode(2, 0, 1),
-    fill_mode(3, GraphicsDevice::Fill, GraphicsDevice::Line, GraphicsDevice::Point)
-    { run=1; initialized=0; main_thread_id=0; frames_ran=pre_frames_ran=0; }
+  Application() : create_win_f(bind(&Application::CreateNewWindow, this, function<void(Window*)>())),
+  window_closed_cb(DefaultLFAppWindowClosedCB), tex_mode(2, 1, 0), grab_mode(2, 0, 1),
+  fill_mode(3, GraphicsDevice::Fill, GraphicsDevice::Line, GraphicsDevice::Point)
+  { run=1; initialized=0; main_thread_id=0; frames_ran=pre_frames_ran=0; }
 
-    void Log(int level, const char *file, int line, const string &message);
-    void CreateNewWindow(const function<void(Window*)> &start_cb = function<void(Window*)>());
-    NetworkThread *CreateNetworkThread();
-    void AddNativeMenu(const string &title, const vector<pair<string, string>>&items);
-    int LoadModule(Module *M) { modules.push_back(M); return M->Init(); }
-    string BinDir() const { return LocalFile::JoinPath(startdir, progname.substr(0, DirNameLen(progname, true))); }
+  void Log(int level, const char *file, int line, const string &message);
+  void CreateNewWindow(const function<void(Window*)> &start_cb = function<void(Window*)>());
+  NetworkThread *CreateNetworkThread();
+  void AddNativeMenu(const string &title, const vector<pair<string, string>>&items);
+  int LoadModule(Module *M) { modules.push_back(M); return M->Init(); }
+  string BinDir() const { return LocalFile::JoinPath(startdir, progname.substr(0, DirNameLen(progname, true))); }
 
-    int Create(int argc, const char **argv, const char *source_filename);
-    int Init();
-    int Start();
-    int PreFrame(unsigned clicks);
-    int PostFrame();
-    int Frame();
-    int Main();
-    int MainLoop();
-    int Free();
-    int Exiting();
+  int Create(int argc, const char **argv, const char *source_filename);
+  int Init();
+  int Start();
+  int PreFrame(unsigned clicks);
+  int PostFrame();
+  int Frame();
+  int Main();
+  int MainLoop();
+  int Free();
+  int Exiting();
 
-    static void Daemonize(const char *dir="");
-    static void Daemonize(FILE *fout, FILE *ferr);
+  static void Daemonize(const char *dir="");
+  static void Daemonize(FILE *fout, FILE *ferr);
 };
 extern Application *app;
 }; // namespace LFL

@@ -22,6 +22,7 @@
 #ifdef LFL_IPHONE
 #import <UIKit/UIKit.h>
 #import <UIKit/UIScreen.h>
+#import <GLKit/GLKit.h>
 #import <OpenGLES/EAGL.h>
 #import <OpenGLES/EAGLDrawable.h>
 #ifdef LFL_GLES2
@@ -31,77 +32,139 @@
 #import <OpenGLES/ES1/gl.h>
 #import <OpenGLES/ES1/glext.h>
 #import <QuartzCore/QuartzCore.h>
-#import "EAGLView.h"
 #ifndef LFL_IPHONESIM 
 #import <AVFoundation/AVFoundation.h>
 #endif // LFL_IPHONESIM
 
-struct IPhoneKeyCode { enum { Backspace = 8, Return = 10 }; };
-static const char **iphone_argv = 0;
-static int iphone_argc = 0, iphone_evcount = 0;
-static NSString *iphone_documents_directory = nil;
 extern "C" int iPhoneMain(int argc, const char **argv);
 
-// LFUIView
-@interface LFUIView : UIView {}
+struct IPhoneKeyCode { enum { Backspace = 8, Return = 10 }; };
+static NSString *iphone_documents_directory = nil;
+static const char **iphone_argv = 0;
+static int iphone_argc = 0;
+
+@interface MyTouchView : UIView {}
 @end
 
-@implementation LFUIView
-    {
-        NativeWindow *screen;
-    }
-    - (id)initWithFrame:(CGRect)aRect {
-        if (!(self = [super initWithFrame:aRect])) return self;
-        screen = GetNativeWindow();
-        return self;
-    }
-    - (void)touchesBegan:(NSSet *)touches withEvent:(UIEvent *)event {
-        UITouch *touch = [touches anyObject];
-        UIView *view = [touch view];
-        int dpind = view.frame.origin.y == 0;
-        CGPoint position = [touch locationInView:view];
-        if (!dpind) {
-            position.x += view.frame.origin.x;
-            position.y += view.frame.origin.y;
-        }
-        screen->gesture_dpad_x[dpind] = position.x;
-        screen->gesture_dpad_y[dpind] = position.y;
-        MouseClick(1, 1, (int)position.x, screen->height - (int)position.y);
-    }
-    - (void)touchesCancelled:(NSSet *)touches withEvent:(UIEvent *)event {}
-    - (void)touchesEnded:(NSSet *)touches withEvent:(UIEvent *)event {
-        UITouch *touch = [touches anyObject];
-        UIView *view = [touch view];
-        int dpind = view.frame.origin.y == 0;
-        CGPoint position = [touch locationInView:view];
-        if (!dpind) {
-            position.x += view.frame.origin.x;
-            position.y += view.frame.origin.y;
-        }
-        screen->gesture_dpad_stop[dpind] = 1;
-        screen->gesture_dpad_x[dpind] = 0;
-        screen->gesture_dpad_y[dpind] = 0;
-        MouseClick(1, 0, (int)position.x, screen->height - (int)position.y);
-    }
-    - (void)touchesMoved:(NSSet *)touches withEvent:(UIEvent *)event {
-        UITouch *touch = [touches anyObject];
-        UIView *view = [touch view];
-        int dpind = view.frame.origin.y == 0;
-        CGPoint position = [touch locationInView:view];
-        if (!dpind) {
-            position.x += view.frame.origin.x;
-            position.y += view.frame.origin.y;
-        }
-        screen->gesture_dpad_x[dpind] = position.x;
-        screen->gesture_dpad_y[dpind] = position.y;
-    }
-@end
-
-// LFViewController
-@interface LFViewController : UIViewController<UITextFieldDelegate> {}
+@interface LFViewController : GLKViewController {}
 @end
 
 @implementation LFViewController
+    - (void)viewWillAppear:(BOOL)animated { 
+        [super viewWillAppear:animated];
+        [self setPaused:YES];
+    }
+@end
+
+@interface LFUIApplication : NSObject <UIApplicationDelegate, GLKViewDelegate, GLKViewControllerDelegate, UITextFieldDelegate> {}
+    @property (nonatomic, retain) UIWindow *window;
+    @property (nonatomic, retain) LFViewController *controller;
+    @property (nonatomic, retain) GLKView *view;
+    @property (nonatomic, retain) UIView *lview, *rview;
+    @property (nonatomic, retain) UITextField *textField;
+    @property BOOL resign_textfield_on_return, frame_on_keyboard_input, frame_on_mouse_input;
+    + (LFUIApplication *) sharedAppDelegate;
+@end
+
+@implementation LFUIApplication
+    {
+        NativeWindow *screen;
+        int current_orientation;
+        CGRect keyboard_frame;
+    }
+    @synthesize window, controller, view, lview, rview, textField;
+
+    + (LFUIApplication *)sharedAppDelegate { return (LFUIApplication *)[[UIApplication sharedApplication] delegate]; }
+    - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
+        CGRect wbounds = [[UIScreen mainScreen] bounds];
+        self.window = [[UIWindow alloc] initWithFrame:wbounds];
+
+        EAGLContext *context = [[EAGLContext alloc] initWithAPI:kEAGLRenderingAPIOpenGLES2];
+        [EAGLContext setCurrentContext:context];
+        self.view = [[GLKView alloc] initWithFrame:wbounds];
+        self.view.context = context;
+        self.view.delegate = self;
+
+        self.controller = [[LFViewController alloc] initWithNibName:nil bundle:nil];
+        self.controller.wantsFullScreenLayout = YES;
+        self.controller.delegate = self;
+        self.controller.resumeOnDidBecomeActive = NO;
+        [self.controller setView:self.view]; 
+
+        // left touch view
+        CGRect lrect = CGRectMake(0, 0, wbounds.size.width, wbounds.size.height/2);
+        self.lview = [[MyTouchView alloc] initWithFrame:lrect];
+        // self.lview.backgroundColor = [UIColor greenColor];
+        // self.lview.alpha = 0.3f;
+        [self.view addSubview:self.lview];
+        
+        // right touch view
+        CGRect rrect = CGRectMake(0, wbounds.size.height/2, wbounds.size.width, wbounds.size.height/2);
+        self.rview = [[MyTouchView alloc] initWithFrame:rrect];
+        // self.rview.backgroundColor = [UIColor blueColor];
+        // self.rview.alpha = 0.3f;
+        [self.view addSubview:self.rview];
+
+        // text view for keyboard display
+        _resign_textfield_on_return = YES;
+        _frame_on_keyboard_input = _frame_on_mouse_input = YES;
+        self.textField = [[UITextField alloc] initWithFrame: CGRectZero];
+        self.textField.delegate = self;
+        self.textField.text = [NSString stringWithFormat:@"default"];
+        self.textField.autocorrectionType = UITextAutocorrectionTypeNo;
+        self.textField.autocapitalizationType = UITextAutocapitalizationTypeNone;
+        [self.view addSubview:self.textField];
+
+        [UIApplication sharedApplication].statusBarHidden = YES;
+        [UIApplication sharedApplication].idleTimerDisabled = YES;
+        self.view.enableSetNeedsDisplay = TRUE;
+        self.window.rootViewController = self.controller;
+        [self.window addSubview:self.view];
+        [self.window makeKeyAndVisible];
+
+        [[NSFileManager defaultManager] changeCurrentDirectoryPath: [[NSBundle mainBundle] resourcePath]];
+        NSLog(@"iPhoneMain argc=%d", iphone_argc);
+        iPhoneMain(iphone_argc, iphone_argv);
+        INFOf("didFinishLaunchingWithOptions, views: %p, %p, %p", self.view, self.lview, self.rview);
+
+        screen = GetNativeWindow();
+        [self initNotifications];
+        [self initGestureRecognizers];
+        return YES;
+    }
+    - (void)applicationWillTerminate:(UIApplication *)application {
+        [self shutdownNotifications];
+        [self shutdownGestureRecognizers];
+    }
+    - (void)applicationWillResignActive:(UIApplication*)application {}
+    - (void)applicationDidBecomeActive:(UIApplication*)application {}
+    - (void)glkView:(GLKView *)view drawInRect:(CGRect)rect { LFAppFrame(); }
+    - (void)glkViewControllerUpdate:(GLKViewController *)controller {}
+
+    - (void)initNotifications {
+        [[UIDevice currentDevice] beginGeneratingDeviceOrientationNotifications]; 
+        NSNotificationCenter *center = [NSNotificationCenter defaultCenter];
+        INFOf("init notifications %p", center);
+        [center addObserver:self selector:@selector(orientationChanged:) name:@"UIDeviceOrientationDidChangeNotification" object:nil];
+        [center addObserver:self selector:@selector(keyboardDidShow:)    name:@"UIKeyboardDidShowNotification"            object:nil];
+        [center addObserver:self selector:@selector(keyboardWillHide:)   name:@"UIKeyboardWillHideNotification"           object:nil];
+    }
+    - (void)shutdownNotifications {
+        INFOf("%s", "shutdown notifications");
+        [[UIDevice currentDevice] endGeneratingDeviceOrientationNotifications];
+        [[NSNotificationCenter defaultCenter] removeObserver:self]; 
+    }
+
+    - (void)showKeyboard { [self.textField becomeFirstResponder]; }
+    - (void)hideKeyboard { [self.textField resignFirstResponder]; }
+    - (CGRect) getKeyboardFrame { return keyboard_frame; }
+    - (void)keyboardWillHide:(NSNotification *)notification {}
+    - (void)keyboardDidShow:(NSNotification *)notification {
+        NSDictionary *userInfo = [notification userInfo];
+        CGRect rect = [[userInfo objectForKey:UIKeyboardFrameEndUserInfoKey] CGRectValue];
+        keyboard_frame = [self.window convertRect:rect toView:nil];
+    }
+
     - (BOOL)textField: (UITextField *)textField shouldChangeCharactersInRange:(NSRange)range replacementString:(NSString *)string {
         int l = [string length];
         if (!l) [self handleKey:IPhoneKeyCode::Backspace];
@@ -111,172 +174,43 @@ extern "C" int iPhoneMain(int argc, const char **argv);
         }
         return YES;
     }
-    - (BOOL)textFieldShouldReturn: (UITextField *)textField {
+    - (BOOL)textFieldShouldReturn: (UITextField *)tf {
         [self handleKey:IPhoneKeyCode::Return];
-        // [textField resignFirstResponder];
+        if (_resign_textfield_on_return) [tf resignFirstResponder];
         return YES;
     }
     - (void)handleKey: (int)k {
-        KeyPress(k, 1);
-        KeyPress(k, 0);
-        iphone_evcount++;
+        int fired = 0;
+        fired += KeyPress(k, 1);
+        fired += KeyPress(k, 0);
+        if (fired && _frame_on_keyboard_input) [self.view setNeedsDisplay];
     }
-@end
 
-// LFUIApplication
-@interface LFUIApplication : NSObject <UIApplicationDelegate> {}
-    @property (nonatomic, retain) UIWindow *window;
-    @property (nonatomic, retain) EAGLView *view;
-    @property (nonatomic, retain) LFViewController *viewController;
-    @property (nonatomic, retain) UIView *lview, *rview;
-    @property (nonatomic, retain) UITextField *textField;
-    + (LFUIApplication *) sharedAppDelegate;
-    - (void) swapBuffers;
-@end
-
-@implementation LFUIApplication
-    @synthesize window, viewController, view, lview, rview, textField;
-    + (LFUIApplication *)sharedAppDelegate {
-        return (LFUIApplication *)[[UIApplication sharedApplication] delegate];
-    }
-    - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
-        self.window = [[UIWindow alloc] initWithFrame:[[UIScreen mainScreen] bounds]];
-        
-        [UIApplication sharedApplication].statusBarHidden = YES;
-        [UIApplication sharedApplication].idleTimerDisabled = YES;
-        
-        self.viewController = [[LFViewController alloc] init];
-        self.viewController.wantsFullScreenLayout = YES;
-        
-        CGRect wbounds = [self.window bounds];
-        self.view = [[EAGLView alloc] initWithFrame:wbounds
-            pixelFormat:kEAGLColorFormatRGBA8
-            depthFormat:0
-            preserveBackbuffer:false];
-
-        // left view  
-        CGRect lrect = CGRectMake(0, 0, wbounds.size.width, wbounds.size.height/2);
-        self.lview = [[LFUIView alloc] initWithFrame:lrect];
-        // self.lview.backgroundColor = [UIColor greenColor];
-        // self.lview.alpha = 0.3f;
-        [self.view addSubview:self.lview];
-        
-        // right view  
-        CGRect rrect = CGRectMake(0, wbounds.size.height/2, wbounds.size.width, wbounds.size.height/2);
-        self.rview = [[LFUIView alloc] initWithFrame:rrect];
-        // self.rview.backgroundColor = [UIColor blueColor];
-        // self.rview.alpha = 0.3f;
-        [self.view addSubview:self.rview];
-
-        // text view for keyboard display
-        self.textField = [[UITextField alloc] initWithFrame: CGRectZero];
-        self.textField.delegate = self.viewController;
-        self.textField.text = [NSString stringWithFormat:@"default"];
-        [self.view addSubview:self.textField];
-
-        [self.viewController setView:self.view]; 
-        [self.window addSubview:self.view];
-        [self.view setCurrentContext];
-
-        [[NSFileManager defaultManager] changeCurrentDirectoryPath: [[NSBundle mainBundle] resourcePath]];
-        iPhoneMain(iphone_argc, iphone_argv);
-        INFOf("didFinishLaunchingWithOptions, views: %p, %p, %p", self.view, self.lview, self.rview);
-
-        [self performSelector:@selector(postFinishLaunch) withObject:nil afterDelay:0.0];
-        return YES;
-    }
-    - (void)postFinishLaunch {
-        INFOf("%s", "postFinishLaunch");
-        LFAppMain();
-    }
-    - (void)applicationWillTerminate:(UIApplication *)application {}
-    - (void)applicationWillResignActive:(UIApplication*)application {}
-    - (void)applicationDidBecomeActive:(UIApplication*)application {}
-    - (void)swapBuffers {
-        [self.view swapBuffers];
-        [self.window makeKeyAndVisible];
-    }
-    - (void)showKeyboard { [self.textField becomeFirstResponder]; }
-@end
-
-@interface LFApplication : NSObject { }
-    - (int) orientation;
-    - (id) init;
-    + (LFApplication *) sharedApp;
-    - (void) initNotifications;
-    - (void) shutdownNotifications;
-    - (void) initGestureRecognizers;
-    - (void) shutdownGestureRecognizers;
-@end
-
-@implementation LFApplication
-    {
-        int current_orientation;
-        NativeWindow *screen;
-    }
-    static LFApplication *gLFapp = 0;
-    - (id) init {
-        INFOf("%s", "LFApp init");
-        self = [super init];
-        if (!self) return nil;
-        screen = GetNativeWindow();
-        [self initNotifications];
-        [self initGestureRecognizers];
-        return self;
-    }
-    - (void) dealloc {
-        INFOf("%s", "dealloc LFApp");
-        [self shutdownNotifications];
-        [self shutdownGestureRecognizers];
-        [super dealloc];
-    }
-    + (void) shutdown {
-        INFOf("%s", "shutdown LFApp");
-        if (gLFapp != nil) { [gLFapp release]; gLFapp = nil; }
-    }
-    + (LFApplication*) sharedApp {
-        if (gLFapp == nil) {
-            INFOf("%s", "sharedApp alloc/init LFApp");
-            gLFapp = [[[LFApplication alloc] init] retain];
-        }
-        return gLFapp;
-    }
-    - (void) shutdownNotifications {
-        INFOf("%s", "shutdown notifications");
-        [[UIDevice currentDevice] endGeneratingDeviceOrientationNotifications];
-        [[NSNotificationCenter defaultCenter] removeObserver:self name:@"UIDeviceOrientationDidChangeNotification" object:nil]; 
-    }
-    - (void) orientationChanged: (id)sender {
-        INFOf("notification of new orientation: %d -> %d \n", current_orientation, [[UIDevice currentDevice] orientation]);
+    - (int)getOrientation { return current_orientation; }
+    - (void)orientationChanged: (id)sender {
+        INFOf("notification of new orientation: %d -> %d", current_orientation, [[UIDevice currentDevice] orientation]);
         current_orientation = [[UIDevice currentDevice] orientation];
     }
-    - (int) orientation {
+    - (int)orientation {
         INFOf("status bar orientation: %d -> %d", current_orientation, [[UIApplication sharedApplication] statusBarOrientation]);
         current_orientation = [[UIApplication sharedApplication] statusBarOrientation];
         return current_orientation;
     }
-    - (int) getOrientation { return current_orientation; }
-    - (void) initNotifications {
-        INFOf("%s", "init notifications");
-        [[UIDevice currentDevice] beginGeneratingDeviceOrientationNotifications]; 
-        [[NSNotificationCenter defaultCenter] addObserver:self
-            selector:@selector(orientationChanged:)
-            name:@"UIDeviceOrientationDidChangeNotification" object:nil];
-    }
-    - (void) initGestureRecognizers {
-        UIWindow *window = [[[UIApplication sharedApplication] windows] objectAtIndex:0];
-        INFOf("UIWindow frame: %s", [NSStringFromCGRect(window.frame) cString]);
+
+    - (void)initGestureRecognizers {
+        UIWindow *win = [[[UIApplication sharedApplication] windows] objectAtIndex:0];
+        INFOf("UIWindow frame: %s", [NSStringFromCGRect(win.frame) cString]);
 
         UISwipeGestureRecognizer *up = [[UISwipeGestureRecognizer alloc] initWithTarget:self action:@selector(doubleSwipeUp:)];
         up.direction = UISwipeGestureRecognizerDirectionUp;
         up.numberOfTouchesRequired = 2;
-        [window addGestureRecognizer:up];
+        [win addGestureRecognizer:up];
         [up release];
 
         UISwipeGestureRecognizer *down = [[UISwipeGestureRecognizer alloc] initWithTarget:self action:@selector(doubleSwipeDown:)];
         down.direction = UISwipeGestureRecognizerDirectionDown;
         down.numberOfTouchesRequired = 2;
-        [window addGestureRecognizer:down];
+        [win addGestureRecognizer:down];
         [down release];
 #if 0
         // one-finger press and drag sends control stick movements- up, down, left, right
@@ -298,64 +232,111 @@ extern "C" int iPhoneMain(int argc, const char **argv);
         [tap release];
 #endif
     }
-    - (void) shutdownGestureRecognizers {
-        UIWindow *window = [[[UIApplication sharedApplication] windows] objectAtIndex:0];
-        NSArray *gestures = [window gestureRecognizers];
+    - (void)shutdownGestureRecognizers {
+        UIWindow *win = [[[UIApplication sharedApplication] windows] objectAtIndex:0];
+        NSArray *gestures = [win gestureRecognizers];
         for (int i = 0; i < [gestures count]; i++)
-            [window removeGestureRecognizer:[gestures objectAtIndex:i]];
+            [win removeGestureRecognizer:[gestures objectAtIndex:i]];
     }
-    - (void) doubleSwipeUp:   (id)sender { screen->gesture_swipe_up   = 1; }
-    - (void) doubleSwipeDown: (id)sender { screen->gesture_swipe_down = 1; }
-    - (void) tapGesture: (UITapGestureRecognizer *)tapGestureRecognizer {
-        UIView *view = [tapGestureRecognizer view];
-        CGPoint position = [tapGestureRecognizer locationInView:view];
-        int dpind = view.frame.origin.y == 0;
-
-        MouseClick(1, 1, (int)position.x, screen->height - (int)position.y);
+    - (void)doubleSwipeUp:   (id)sender { screen->gesture_swipe_up   = 1; }
+    - (void)doubleSwipeDown: (id)sender { screen->gesture_swipe_down = 1; }
+    - (void)tapGesture: (UITapGestureRecognizer *)tapGestureRecognizer {
+        UIView *v = [tapGestureRecognizer view];
+        CGPoint position = [tapGestureRecognizer locationInView:v];
+        int dpind = v.frame.origin.y == 0;
         screen->gesture_tap[dpind] = 1;
         screen->gesture_dpad_x[dpind] = position.x;
         screen->gesture_dpad_y[dpind] = position.y;
+        int fired = MouseClick(1, 1, (int)position.x, screen->height - (int)position.y);
+        if (fired && _frame_on_mouse_input) [self.view setNeedsDisplay];
     }
-    - (void) panGesture: (UIPanGestureRecognizer *)panGestureRecognizer {
-        UIView *view = [panGestureRecognizer view];
-        int dpind = view.frame.origin.y == 0;
+    - (void)panGesture: (UIPanGestureRecognizer *)panGestureRecognizer {
+        UIView *v = [panGestureRecognizer view];
+        int dpind = v.frame.origin.y == 0;
 
         if (panGestureRecognizer.state == UIGestureRecognizerStateChanged) {
-            // CGPoint velocity = [panGestureRecognizer translationInView:view];
-            CGPoint velocity = [panGestureRecognizer velocityInView:view];
+            // CGPoint velocity = [panGestureRecognizer translationInView:v];
+            CGPoint velocity = [panGestureRecognizer velocityInView:v];
             if (fabs(velocity.x) > 15 || fabs(velocity.y) > 15) {
                 screen->gesture_dpad_dx[dpind] = velocity.x;
                 screen->gesture_dpad_dy[dpind] = velocity.y;
             }
-            // CGPoint position = [panGestureRecognizer locationInView:view];
-            CGPoint position = [panGestureRecognizer locationOfTouch:0 inView:view];
+            // CGPoint position = [panGestureRecognizer locationInView:v];
+            CGPoint position = [panGestureRecognizer locationOfTouch:0 inView:v];
             if (!dpind) {
-                position.x += view.frame.origin.x;
-                position.y += view.frame.origin.y;
+                position.x += v.frame.origin.x;
+                position.y += v.frame.origin.y;
             }
             screen->gesture_dpad_x[dpind] = position.x;
             screen->gesture_dpad_y[dpind] = position.y;
             // INFOf("gest %f %f %f %f", position.x, position.y, velocity.x, velocity.y);
-            // INFOf("origin %f %f", view.frame.origin.x, view.frame.origin.y);
+            // INFOf("origin %f %f", v.frame.origin.x, v.frame.origin.y);
         }
         else if (panGestureRecognizer.state == UIGestureRecognizerStateEnded) {
             screen->gesture_dpad_stop[dpind] = 1;
             screen->gesture_dpad_x[dpind] = 0;
             screen->gesture_dpad_y[dpind] = 0;
-            // CGPoint position = [panGestureRecognizer locationInView:view];
+            // CGPoint position = [panGestureRecognizer locationInView:v];
             // INFOf("gest %f %f stop", position.x, position.y);
         }
     }
 @end
 
-extern "C" void NativeWindowInit() {
-    LFApplication *lfApp = [LFApplication sharedApp];
-}
+@implementation MyTouchView
+    {
+        NativeWindow *screen;
+        LFUIApplication *app;
+    }
+    - (id)initWithFrame:(CGRect)aRect {
+        if (!(self = [super initWithFrame:aRect])) return self;
+        screen = GetNativeWindow();
+        app = [LFUIApplication sharedAppDelegate];
+        return self;
+    }
+    - (void)touchesBegan:(NSSet *)touches withEvent:(UIEvent *)event {
+        UITouch *touch = [touches anyObject];
+        UIView *v = [touch view];
+        CGPoint position = [touch locationInView:v];
+        int dpind = v.frame.origin.y == 0;
+        if (!dpind) position = CGPointMake(position.x + v.frame.origin.x, position.y + v.frame.origin.y);
+        screen->gesture_dpad_x[dpind] = position.x;
+        screen->gesture_dpad_y[dpind] = position.y;
+        int fired = MouseClick(1, 1, (int)position.x, screen->height - (int)position.y);
+        if (fired && app.frame_on_mouse_input) [self.superview setNeedsDisplay];
+    }
+    - (void)touchesCancelled:(NSSet *)touches withEvent:(UIEvent *)event {}
+    - (void)touchesEnded:(NSSet *)touches withEvent:(UIEvent *)event {
+        UITouch *touch = [touches anyObject];
+        UIView *v = [touch view];
+        CGPoint position = [touch locationInView:v];
+        int dpind = v.frame.origin.y == 0;
+        if (!dpind) position = CGPointMake(position.x + v.frame.origin.x, position.y + v.frame.origin.y);
+        screen->gesture_dpad_stop[dpind] = 1;
+        screen->gesture_dpad_x[dpind] = 0;
+        screen->gesture_dpad_y[dpind] = 0;
+        int fired = MouseClick(1, 0, (int)position.x, screen->height - (int)position.y);
+        if (fired && app.frame_on_mouse_input) [self.superview setNeedsDisplay];
+    }
+    - (void)touchesMoved:(NSSet *)touches withEvent:(UIEvent *)event {
+        UITouch *touch = [touches anyObject];
+        UIView *v = [touch view];
+        CGPoint position = [touch locationInView:v];
+        int dpind = v.frame.origin.y == 0;
+        if (!dpind) position = CGPointMake(position.x + v.frame.origin.x, position.y + v.frame.origin.y);
+        screen->gesture_dpad_x[dpind] = position.x;
+        screen->gesture_dpad_y[dpind] = position.y;
+    }
+@end
 
+extern "C" void NativeWindowInit() { 
+    NativeWindow *screen = GetNativeWindow();
+    screen->opengles_version = 2;
+    screen->id = [[LFUIApplication sharedAppDelegate] view];
+}
+extern "C" int NativeWindowOrientation() { return [[LFUIApplication sharedAppDelegate] getOrientation]; }
 extern "C" void NativeWindowQuit() {
     if (iphone_documents_directory != nil) { [iphone_documents_directory release]; iphone_documents_directory = nil; }
 }
-
 extern "C" void NativeWindowSize(int *width, int *height) {
     CGRect rect = [[UIScreen mainScreen] bounds];
     [UIApplication sharedApplication].statusBarHidden = YES;
@@ -364,27 +345,21 @@ extern "C" void NativeWindowSize(int *width, int *height) {
     INFOf("NativeWindowSize %d %d", *width, *height);
 }
 
-extern "C" int NativeWindowOrientation() { return [[LFApplication sharedApp] getOrientation]; }
-
-extern "C" int iPhoneVideoSwap() {
-    [[LFUIApplication sharedAppDelegate] swapBuffers];
-    return 0;
+extern "C" int iPhoneVideoSwap() { return 0; }
+extern "C" void iPhoneShowKeyboard() { [[LFUIApplication sharedAppDelegate] showKeyboard]; }
+extern "C" void iPhoneHideKeyboard() { [[LFUIApplication sharedAppDelegate] hideKeyboard]; }
+extern "C" void iPhoneHideKeyboardAfterReturn(bool v) { [LFUIApplication sharedAppDelegate].resign_textfield_on_return = v; }
+extern "C" void iPhoneGetKeyboardBox(int *x, int *y, int *w, int *h) {
+    NativeWindow *screen = GetNativeWindow();
+    CGRect rect = [[LFUIApplication sharedAppDelegate] getKeyboardFrame];
+    *x = rect.origin.x;
+    *y = rect.origin.y + rect.size.height - screen->height;
+    *w = rect.size.width;
+    *h = rect.size.height;
 }
 
-extern "C" int iPhoneShowKeyboard() {
-    [[LFUIApplication sharedAppDelegate] showKeyboard];
-    return 0;
-}
-
-extern "C" int iPhoneInput(unsigned clicks, unsigned *events) {
-    SInt32 result;
-    do {
-        result = CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0, TRUE);
-    } while (result == kCFRunLoopRunHandledSource);
-
-    if (events) *events = iphone_evcount = 0;
-    iphone_evcount = 0;
-    return 0;
+extern "C" void iPhoneTriggerFrame(void *O) {
+    dispatch_async(dispatch_get_main_queue(), ^{ [(GLKView*)O setNeedsDisplay]; });
 }
 
 extern "C" int iPhoneOpenBrowser(const char *url_text) {
@@ -443,7 +418,6 @@ extern "C" int iPhoneReadDir(const char *path, int dirs,
         if (dirs >= 0 && isDir != dirs) continue;
 
         if (isDir) fileName = [NSString stringWithFormat:@"%@%@", fileName, @"/"];
-
         DirectoryIterAdd(DirectoryIter, [fileName UTF8String], 1);
     }
     return 0;
@@ -459,7 +433,7 @@ extern "C" int main(int ac, const char **av) {
     iphone_argv = av;
     NSLog(@"%@", @"lfapp_lfobjc_iphone_main");
     NSAutoreleasePool * pool = [[NSAutoreleasePool alloc] init];
-    int ret = UIApplicationMain(iphone_argc, (char**)iphone_argv, nil, @"LFUIApplication");
+    int ret = UIApplicationMain(ac, (char**)av, nil, @"LFUIApplication");
     [pool release];
     return ret;
 }

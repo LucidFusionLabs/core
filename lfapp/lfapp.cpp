@@ -110,6 +110,7 @@ extern "C" {
 extern "C" char *iPhoneDocumentPath();
 extern "C" void iPhoneLog(const char *text);
 extern "C" void iPhoneOpenBrowser(const char *url_text);
+extern "C" void iPhoneTriggerFrame(void*);
 #elif defined(__APPLE__)
 extern "C" void OSXStartWindow(void*);
 extern "C" void OSXCreateNativeMenu(const char*, int, const char**, const char**);
@@ -245,7 +246,7 @@ bool NBReadable(int fd, int timeout) {
     return app->run && ss.GetReadable(fd);
 }
 int NBRead(int fd, char *buf, int len, int timeout) {
-    if (!NBReadable(fd)) return 0;
+    if (!NBReadable(fd, timeout)) return 0;
     int o = 0, s = 0;
     do if ((s = ::read(fd, buf+o, len-o)) > 0) o += s;
     while (s > 0 && len - o > 1024);
@@ -844,13 +845,13 @@ int Application::Frame() {
     if (scheduler.monolithic_frame) {
         Window *previous_screen = screen;
         for (auto i = Window::active.begin(); run && i != Window::active.end(); ++i) {
-            i->second->Frame(clicks, audio.mic_samples, camera.have_sample, flag);
-            if (FLAGS_frame_debug) INFO("frame_debug Application::Frame Window ", i->second->id);
+            int ret = i->second->Frame(clicks, audio.mic_samples, camera.have_sample, flag);
+            if (FLAGS_frame_debug) INFO("frame_debug Application::Frame Window ", i->second->id, " = ", ret);
         }
         if (previous_screen && previous_screen != screen) Window::MakeCurrent(previous_screen);
     } else {
-        screen->Frame(clicks, audio.mic_samples, camera.have_sample, flag);
-        if (FLAGS_frame_debug) INFO("frame_debug Application::Frame Window ", screen->id);
+        int ret = screen->Frame(clicks, audio.mic_samples, camera.have_sample, flag);
+        if (FLAGS_frame_debug) INFO("frame_debug Application::Frame Window ", screen->id, " = ", ret);
     }
 
     PostFrame();
@@ -906,7 +907,7 @@ int Application::Exiting() {
 /* FrameScheduler */
 
 FrameScheduler::FrameScheduler() : maxfps(&FLAGS_target_fps), wakeup_thread(&frame_mutex, &wait_mutex) {
-#if defined(LFL_OSXINPUT) || defined(LFL_QT) || defined(LFL_WXWIDGETS)
+#if defined(LFL_OSXINPUT) || defined(LFL_IPHONEINPUT) || defined(LFL_QT) || defined(LFL_WXWIDGETS)
     rate_limit = synchronize_waits = wait_forever_thread = monolithic_frame = 0;
 #endif
 #if defined(LFL_QT) || defined(LFL_WXWIDGETS)
@@ -938,7 +939,7 @@ void FrameScheduler::FrameWait() {
             wait_mutex.lock();
             frame_mutex.unlock();
         }
-#if defined(LFL_OSXINPUT) || defined(LFL_QT) || defined(LFL_WXWIDGETS)
+#if defined(LFL_OSXINPUT) || defined(LFL_IPHONEINPUT) || defined(LFL_QT) || defined(LFL_WXWIDGETS)
 #elif defined(LFL_GLFWINPUT)
         glfwWaitEvents();
 #elif defined(LFL_SDLINPUT)
@@ -972,6 +973,8 @@ void FrameScheduler::Wakeup(void *opaque) {
         }
 #elif defined(LFL_OSXINPUT)
         OSXTriggerFrame(screen->id);
+#elif defined(LFL_IPHONEINPUT)
+        iPhoneTriggerFrame(screen->id);
 #else
         // FATAL("not implemented");
 #endif

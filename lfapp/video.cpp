@@ -421,9 +421,6 @@ struct OpenGLES2 : public GraphicsDevice {
     }
 
     void Init() {
-#ifdef LFL_IPHONE
-        GetIntegerv(GL_FRAMEBUFFER_BINDING, &default_framebuffer);
-#endif
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
         vertex_shader = LocalFile::FileContents(StrCat(app->assetdir, "lfapp_vertex.glsl"));
         pixel_shader  = LocalFile::FileContents(StrCat(app->assetdir, "lfapp_pixel.glsl"));
@@ -1003,15 +1000,15 @@ extern "C" void iPhoneVideoSwap();
 struct IPhoneVideoModule : public Module {
     int Init() {
         INFO("IPhoneVideoModule::Init()");
+        CHECK(!screen->id);
         NativeWindowInit();
         NativeWindowSize(&screen->width, &screen->height);
-        CHECK(!screen->id);
-        screen->id = (void*)1;
+        CHECK(screen->id);
         Window::active[screen->id] = screen;
         return 0;
     }
 };
-bool Window::Create(Window *W) { return true; }
+bool Window::Create(Window *W) { return false; }
 void Window::Close(Window *W) {}
 void Window::MakeCurrent(Window *W) {}
 #endif
@@ -1494,8 +1491,8 @@ void Window::SwapAxis() {
     Reshaped(height, width);
 }
 
-void Window::Frame(unsigned clicks, unsigned mic_samples, bool cam_sample, int flag) {
-    if (minimized) return;
+int Window::Frame(unsigned clicks, unsigned mic_samples, bool cam_sample, int flag) {
+    if (minimized) return -1;
     if (screen != this) Window::MakeCurrent(this);
 
     if (FLAGS_lfapp_video) {
@@ -1509,12 +1506,13 @@ void Window::Frame(unsigned clicks, unsigned mic_samples, bool cam_sample, int f
     ClearEvents();
 
     /* allow app to skip frame */
-    if (ret < 0) return;
+    if (ret < 0) return ret;
     fps.Add(clicks);
 
     if (FLAGS_lfapp_video) {
         app->video.Swap();
     }
+    return ret;
 }
 
 void Window::RenderToFrameBuffer(FrameBuffer *fb) {
@@ -2028,10 +2026,10 @@ CGContextRef Texture::CGBitMap() { return CGBitMap(0, 0, width, height); }
 CGContextRef Texture::CGBitMap(int X, int Y, int W, int H) {
     int linesize = LineSize(), alpha_info = 0;
     if      (pf == Pixel::RGBA)  alpha_info = kCGImageAlphaPremultipliedLast;
-    if      (pf == Pixel::BGRA)  alpha_info = kCGBitmapByteOrder32Host | kCGImageAlphaPremultipliedFirst;
+    else if (pf == Pixel::BGRA)  alpha_info = kCGBitmapByteOrder32Host | kCGImageAlphaPremultipliedFirst;
     else if (pf == Pixel::RGB32) alpha_info = kCGImageAlphaNoneSkipLast;
     else if (pf == Pixel::BGR32) alpha_info = kCGBitmapByteOrder32Host | kCGImageAlphaNoneSkipFirst;
-    else { ERROR("unsupported pixel format: ", Pixel::Name(pf)); return 0; }
+    else { ERROR("unsupported pixel format: ", pf, " = ", Pixel::Name(pf)); return 0; }
     CGColorSpaceRef colors = CGColorSpaceCreateDeviceRGB();
     // CGColorSpaceRef colors = CGColorSpaceCreateWithName(kCGColorSpaceGenericRGB);
     CGContextRef ret = CGBitmapContextCreate(buf + Y*linesize + X*PixelSize(), W, H, 8, linesize, colors, alpha_info);
@@ -2219,7 +2217,7 @@ void Shader::SetUniform3fv(const string &name, int n, const float *v)           
 
 #else /* LFL_GLSL_SHADERS */
 
-int Shader::Create(const string &vertex_shader, const string &fragment_shader, const string &defines, Shader *out) { return -1; }
+int Shader::Create(const string &name, const string &vert, const string &frag, const ShaderDefines &defines, Shader *out) { return -1; }
 int Shader::GetUniformIndex(const string &name) { return -1; }
 void Shader::SetUniform1i(const string &name, float v) {}
 void Shader::SetUniform1f(const string &name, float v) {}
@@ -2228,7 +2226,6 @@ void Shader::SetUniform3f(const string &name, float v1, float v2, float v3) {}
 void Shader::SetUniform4f(const string &name, float v1, float v2, float v3, float v4) {}
 void Shader::SetUniform3fv(const string &name, const float *v) {}
 void Shader::SetUniform3fv(const string &name, int n, const float *v) {}
-void Shader::ActiveTexture(int n) {}
 #endif /* LFL_GLSL_SHADERS */
 
 /* BoxRun */

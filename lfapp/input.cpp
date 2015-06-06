@@ -200,11 +200,13 @@ void Mouse::ReleaseFocus() {}
 #endif
 
 #ifdef LFL_IPHONEINPUT
-extern "C" int iPhoneInput(unsigned clicks, unsigned *events);
-extern "C" int iPhoneShowKeyboard();
+extern "C" void iPhoneShowKeyboard();
+extern "C" void iPhoneHideKeyboard();
+extern "C" void iPhoneHideKeyboardAfterReturn(bool v);
+extern "C" void iPhoneGetKeyboardBox(int *x, int *y, int *w, int *h);
 
 struct IPhoneInputModule : public InputModule {
-    int Frame(unsigned clicks) { unsigned events=0; return iPhoneInput(clicks, &events); }
+  int Frame(unsigned clicks) { return 0; }
 };
 
 const int Key::Escape     = -1;
@@ -245,7 +247,9 @@ const int Key::End        = -34;
 string Clipboard::Get() { return ""; }
 void Clipboard::Set(const string &s) {}
 void TouchDevice::OpenKeyboard() { iPhoneShowKeyboard(); }
-void TouchDevice::CloseKeyboard() {}
+void TouchDevice::CloseKeyboard() { iPhoneHideKeyboard(); }
+void TouchDevice::CloseKeyboardAfterReturn(bool v) { iPhoneHideKeyboardAfterReturn(v); } 
+Box  TouchDevice::GetKeyboardBox() { Box ret; iPhoneGetKeyboardBox(&ret.x, &ret.y, &ret.w, &ret.h); return ret; }
 void Mouse::GrabFocus() {}
 void Mouse::ReleaseFocus() {}
 #endif

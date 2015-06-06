@@ -322,8 +322,9 @@ string LocalFile::CurrentDirectory(int max_size) {
 }
 
 string LocalFile::JoinPath(const string &x, const string &y) {
-    return StrCat(x, x.empty() ? "" : (x.back() == LocalFile::Slash ? "" : StrCat(LocalFile::Slash)),
-                  x.size() && PrefixMatch(y, "./") ? y.substr(2) : y);
+    string p = (y.size() && y[0] == '/') ? "" : x;
+    return StrCat(p, p.empty() ? "" : (p.back() == LocalFile::Slash ? "" : StrCat(LocalFile::Slash)),
+                  p.size() && PrefixMatch(y, "./") ? y.substr(2) : y);
 }
 
 DirectoryIter::DirectoryIter(const string &path, int dirs, const char *Pref, const char *Suf) : P(Pref), S(Suf), init(0) {

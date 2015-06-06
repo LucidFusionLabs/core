@@ -540,7 +540,7 @@ struct Window : public NativeWindow {
     void Minimized() {}
     void UnMinimized() {}
     void SwapAxis();
-    void Frame(unsigned clicks, unsigned mic_samples, bool cam_sample, int flag);
+    int  Frame(unsigned clicks, unsigned mic_samples, bool cam_sample, int flag);
     void RenderToFrameBuffer(FrameBuffer *fb);
 
     void ClearMouseGUIEvents();

@@ -253,13 +253,15 @@ InterProcessResource::InterProcessResource(int size, const string &u) : len(size
 #ifdef LFL_MOBILE
 void ProcessAPIServer::Start(const string &client_program) {}
 void ProcessAPIServer::LoadResource(const string &content, const string &fn, const ProcessAPIServer::LoadResourceCompleteCB &cb) {}
+void ProcessAPIClient::Start(const string &socket_name) {}
+void ProcessAPIClient::HandleMessagesLoop() {}
 #else
 void ProcessAPIServer::Start(const string &client_program) {
     int fd[2];
     CHECK(SystemNetwork::OpenSocketPair(fd));
     INFO("ProcessAPIServer starting ", client_program);
 #ifdef WIN32
-	FATAL("not implemented")
+  	FATAL("not implemented")
 #else
     if ((pid = fork())) {
         CHECK_GT(pid, 0);
@@ -283,7 +285,7 @@ void ProcessAPIServer::LoadResource(const string &content, const string &fn, con
     CHECK(conn);
     InterProcessProtocol::ContentResource resource(content, fn, "");
     InterProcessResource ipr(Serializable::Header::size + resource.Size());
-    resource.ToString(ipr.buf, ipr.len);
+    resource.ToString(ipr.buf, ipr.len, 0);
     ipr.id = -1;
 
     string msg;
@@ -341,7 +343,7 @@ void ProcessAPIClient::Start(const string &socket_name) {
 void ProcessAPIClient::HandleMessagesLoop() {
     int l;
     while (app->run) {
-        if ((l = NBRead(conn->socket, conn->rb + conn->rl, Connection::BufSize - conn->rl, -1)) <= 0) break;
+        if ((l = NBRead(conn->socket, conn->rb + conn->rl, Connection::BufSize - conn->rl, -1)) <= 0) { ERROR(conn->Name(), ": read ", l); break; }
         conn->rl += l;
         while (conn->rl >= Serializable::Header::size) {
             IPCTrace("ProcessAPIClient:HandleMessagesLoop begin parse %d bytes\n", conn->rl);
@@ -378,7 +380,7 @@ void ProcessAPIClient::HandleMessagesLoop() {
                     if (tex->buf) {
                         InterProcessProtocol::TextureResource tex_res(*tex);
                         InterProcessResource ipr(Serializable::Header::size + tex_res.Size());
-                        tex_res.ToString(ipr.buf, ipr.len);
+                        tex_res.ToString(ipr.buf, ipr.len, 0);
                         ipr.id = -1;
                         IPCTrace("ProcessAPIClient:HandleMessagesLoop LoadResourceResponse url='%s' width=%d height=%d ", ipr.url.c_str(), tex_res.width, tex_res.height);
                         InterProcessProtocol::LoadResourceResponse(tex_res.Type(), ipr.url, ipr.len).ToString(&msg, hdr.seq);
@@ -397,6 +399,6 @@ void ProcessAPIClient::HandleMessagesLoop() {
         }
     }
 }
-#endif
+#endif // LFL_MOBILE
 
 }; // namespace LFL
