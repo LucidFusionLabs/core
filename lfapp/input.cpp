@@ -105,6 +105,12 @@ struct KeyRepeater {
 };
 #endif
 
+#if !defined(LFL_ANDROIDINPUT) && !defined(LFL_IPHONEINPUT)
+void TouchDevice::OpenKeyboard() {}
+void TouchDevice::CloseKeyboard() {}
+Box TouchDevice::GetKeyboardBox() { return Box(); }
+#endif
+
 #if !defined(LFL_OSXINPUT) && !defined(LFL_ANDROIDINPUT) && !defined(LFL_IPHONEINPUT) && !defined(LFL_QT) && !defined(LFL_WXWIDGETS) && !defined(LFL_GLFWINPUT) && !defined(LFL_SDLINPUT)
 const int Key::Escape     = -1;
 const int Key::Return     = -2;
@@ -143,8 +149,6 @@ const int Key::End        = -34;
 
 string Clipboard::Get() { return ""; }
 void Clipboard::Set(const string &s) {}
-void TouchDevice::OpenKeyboard() {}
-void TouchDevice::CloseKeyboard() {}
 void Mouse::GrabFocus() {}
 void Mouse::ReleaseFocus() {}
 #endif
@@ -204,6 +208,7 @@ extern "C" void iPhoneShowKeyboard();
 extern "C" void iPhoneHideKeyboard();
 extern "C" void iPhoneHideKeyboardAfterReturn(bool v);
 extern "C" void iPhoneGetKeyboardBox(int *x, int *y, int *w, int *h);
+extern "C" void iPhoneCreateToolbar(int n, const char **name, const char **val);
 
 struct IPhoneInputModule : public InputModule {
   int Frame(unsigned clicks) { return 0; }
@@ -300,8 +305,6 @@ const int Key::End        = Qt::Key_End;
 
 string Clipboard::Get() { return ""; }
 void Clipboard::Set(const string &s) {}
-void TouchDevice::OpenKeyboard() {}
-void TouchDevice::CloseKeyboard() {}
 #endif /* LFL_QT */
 
 #ifdef LFL_WXWIDGETS
@@ -350,8 +353,6 @@ const int Key::End        = WXK_END;
 
 string Clipboard::Get() { return ""; }
 void Clipboard::Set(const string &s) {}
-void TouchDevice::OpenKeyboard() {}
-void TouchDevice::CloseKeyboard() {}
 #endif /* LFL_WXWIDGETS */
 
 #ifdef LFL_GLFWINPUT
@@ -444,8 +445,6 @@ const int Key::F12        = GLFW_KEY_F12;
 const int Key::Home       = GLFW_KEY_HOME;
 const int Key::End        = GLFW_KEY_END;
 
-void TouchDevice::OpenKeyboard() {}
-void TouchDevice::CloseKeyboard() {}
 string Clipboard::Get()                { return glfwGetClipboardString((GLFWwindow*)screen->id); }
 void   Clipboard::Set(const string &s) {        glfwSetClipboardString((GLFWwindow*)screen->id, s.c_str()); }
 void Mouse::GrabFocus()    { glfwSetInputMode((GLFWwindow*)screen->id, GLFW_CURSOR, GLFW_CURSOR_DISABLED); app->grab_mode.On();  screen->cursor_grabbed=true;  }
@@ -587,8 +586,6 @@ const int Key::F12        = 0xB0;
 const int Key::Home       = 0xB3;
 const int Key::End        = 0xB7;
 
-void TouchDevice::OpenKeyboard() {}
-void TouchDevice::CloseKeyboard() {}
 void Clipboard::Set(const string &s) { OSXClipboardSet(s.c_str()); }
 string Clipboard::Get() { const char *v=OSXClipboardGet(); string ret=v; free((void*)v); return ret; }
 void Mouse::ReleaseFocus() { OSXReleaseMouseFocus(); app->grab_mode.Off(); screen->cursor_grabbed=0; }
@@ -596,6 +593,14 @@ void Mouse::GrabFocus   () { OSXGrabMouseFocus();    app->grab_mode.On();  scree
     OSXSetMousePosition(screen->id, screen->width/2, screen->height/2);
 }
 #endif // LFL_OSXINPUT
+
+void TouchDevice::AddToolbar(const vector<pair<string, string>>&items) {
+    vector<const char *> k, v;
+    for (auto &i : items) { k.push_back(i.first.c_str()); v.push_back(i.second.c_str()); }
+#ifdef LFL_IPHONEINPUT
+    iPhoneCreateToolbar(items.size(), &k[0], &v[0]);
+#endif
+}
 
 int Input::Init() {
     INFO("Input::Init()");

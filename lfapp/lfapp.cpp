@@ -111,6 +111,15 @@ extern "C" char *iPhoneDocumentPath();
 extern "C" void iPhoneLog(const char *text);
 extern "C" void iPhoneOpenBrowser(const char *url_text);
 extern "C" void iPhoneTriggerFrame(void*);
+extern "C" bool iPhoneTriggerFrameIn(void*, int ms, bool force);
+extern "C" void iPhoneClearTriggerFrameIn(void *O);
+extern "C" void iPhoneUpdateTargetFPS(void*);
+extern "C" void iPhoneAddWaitForeverMouse(void*);
+extern "C" void iPhoneDelWaitForeverMouse(void*);
+extern "C" void iPhoneAddWaitForeverKeyboard(void*);
+extern "C" void iPhoneDelWaitForeverKeyboard(void*);
+extern "C" void iPhoneAddWaitForeverSocket(void*, int fd);
+extern "C" void iPhoneDelWaitForeverSocket(void*, int fd);
 #elif defined(__APPLE__)
 extern "C" void OSXStartWindow(void*);
 extern "C" void OSXCreateNativeMenu(const char*, int, const char**, const char**);
@@ -983,14 +992,18 @@ void FrameScheduler::Wakeup(void *opaque) {
 
 bool FrameScheduler::WakeupIn(void *opaque, Time interval, bool force) {
     // CHECK(!screen->target_fps);
-#if defined(LFL_OSXINPUT)
+#if defined(LFL_IPHONEINPUT)
+    return iPhoneTriggerFrameIn(screen->id, interval.count(), force);
+#elif defined(LFL_OSXINPUT)
     return OSXTriggerFrameIn(screen->id, interval.count(), force);
 #endif
     return 0;
 }
 
 void FrameScheduler::ClearWakeupIn() {
-#if defined(LFL_OSXINPUT)
+#if defined(LFL_IPHONEINPUT)
+    iPhoneClearTriggerFrameIn(screen->id);
+#elif defined(LFL_OSXINPUT)
     OSXClearTriggerFrameIn(screen->id);
 #endif
 }
@@ -1003,49 +1016,64 @@ void FrameScheduler::UpdateTargetFPS(int fps) {
         FLAGS_target_fps = next_target_fps;
     }
     CHECK(screen->id);
-#if defined(LFL_OSXINPUT)
+#if defined(LFL_IPHONEINPUT)
+    iPhoneUpdateTargetFPS(screen->id);
+#elif defined(LFL_OSXINPUT)
     OSXUpdateTargetFPS(screen->id);
 #endif
 }
 
 void FrameScheduler::AddWaitForeverMouse() {
     CHECK(screen->id);
-#if defined(LFL_OSXINPUT)
+#if defined(LFL_IPHONEINPUT)
+    iPhoneAddWaitForeverMouse(screen->id);
+#elif defined(LFL_OSXINPUT)
     OSXAddWaitForeverMouse(screen->id);
 #endif
 }
 
 void FrameScheduler::DelWaitForeverMouse() {
     CHECK(screen->id);
-#if defined(LFL_OSXINPUT)
+#if defined(LFL_IPHONEINPUT)
+    iPhoneDelWaitForeverMouse(screen->id);
+#elif defined(LFL_OSXINPUT)
     OSXDelWaitForeverMouse(screen->id);
 #endif
 }
 
 void FrameScheduler::AddWaitForeverKeyboard() {
     CHECK(screen->id);
-#if defined(LFL_OSXINPUT)
+#if defined(LFL_IPHONEINPUT)
+    iPhoneAddWaitForeverKeyboard(screen->id);
+#elif defined(LFL_OSXINPUT)
     OSXAddWaitForeverKeyboard(screen->id);
 #endif
 }
 
 void FrameScheduler::DelWaitForeverKeyboard() {
     CHECK(screen->id);
-#if defined(LFL_OSXINPUT)
+#if defined(LFL_IPHONEINPUT)
+    iPhoneDelWaitForeverKeyboard(screen->id);
+#elif defined(LFL_OSXINPUT)
     OSXDelWaitForeverKeyboard(screen->id);
 #endif
 }
 
 void FrameScheduler::AddWaitForeverSocket(Socket fd, int flag, void *val) {
     if (wait_forever && wait_forever_thread) wakeup_thread.Add(fd, flag, val);
-#ifdef LFL_OSXINPUT
+#if defined(LFL_IPHONEINPUT)
+    if (!wait_forever_thread) { CHECK_EQ(SocketSet::READABLE, flag); iPhoneAddWaitForeverSocket(screen->id, fd); }
+#elif defined(LFL_OSXINPUT)
     if (!wait_forever_thread) { CHECK_EQ(SocketSet::READABLE, flag); OSXAddWaitForeverSocket(screen->id, fd); }
 #endif
 }
 
 void FrameScheduler::DelWaitForeverSocket(Socket fd) {
     if (wait_forever && wait_forever_thread) wakeup_thread.Del(fd);
-#if defined(LFL_OSXINPUT)
+#if defined(LFL_IPHONEINPUT)
+    CHECK(screen->id);
+    iPhoneDelWaitForeverSocket(screen->id, fd);
+#elif defined(LFL_OSXINPUT)
     CHECK(screen->id);
     OSXDelWaitForeverSocket(screen->id, fd);
 #endif

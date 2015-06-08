@@ -42,6 +42,7 @@
 #define glFlush(x)
 #define glGetError() 0
 #define glGetString(a) ""
+#define glGetIntegerv(a,b)
 #define glReadPixels(a,b,c,d,e,f,g)
 #define glTexImage2D(a,b,c,d,e,f,g,h,i)
 #define glTexSubImage2D(a,b,c,d,e,f,g,h,i)
@@ -57,6 +58,7 @@
 #define glFramebufferTexture2D(a,b,c,d,e)
 #define glCheckFramebufferStatus(a) 0
 #define GL_FRAMEBUFFER 0
+#define GL_FRAMEBUFFER_BINDING_OES 0
 #define GL_LUMINANCE 0
 #define GL_LUMINANCE_ALPHA 0
 #define GL_RGB 0
@@ -1496,6 +1498,12 @@ int Window::Frame(unsigned clicks, unsigned mic_samples, bool cam_sample, int fl
     if (screen != this) Window::MakeCurrent(this);
 
     if (FLAGS_lfapp_video) {
+        if (!frame_init && (frame_init = true))  {
+#ifdef LFL_IPHONE
+            glGetIntegerv(GL_FRAMEBUFFER_BINDING_OES, &screen->gd->default_framebuffer);
+            INFO("default_framebuffer = ", screen->gd->default_framebuffer);
+#endif
+        }
         gd->DrawMode(gd->default_draw_mode);
         gd->Clear();
         gd->LoadIdentity();
@@ -2118,7 +2126,13 @@ int Shader::Create(const string &name, const string &vertex_shader, const string
     INFO("Shader::Create ", name);
     GLuint p = screen->gd->CreateProgram();
 
-    string hdr; 
+    string hdr =
+        "#ifdef GL_ES\r\n"
+        "precision highp float;\r\n"
+        "#else\r\n"
+        "#define lowp\r\n"
+        "#define highp\r\n"
+        "#endif\r\n";
 #ifdef LFL_GLES2
     if (screen->opengles_version == 2) hdr += "#define LFL_GLES2\r\n";
 #endif

@@ -1879,9 +1879,9 @@ struct SSHClientConnection : public Query {
       } else if (packet_id == Serializable::GetType<SSH::MSG_USERAUTH_INFO_REQUEST>()) {
         SSH::MSG_USERAUTH_INFO_REQUEST msg;
         if (msg.In(&s)) { ERROR(c->Name(), ": read MSG_USERAUTH_INFO_REQUEST"); return -1; }
-        SSHTrace(c->Name(), ": MSG_USERAUTH_INFO_REQUEST");
-        if (!msg.instruction.empty()) cb(c, msg.instruction);
-        for (auto &i : msg.prompt) cb(c, i.text);
+        SSHTrace(c->Name(), ": MSG_USERAUTH_INFO_REQUEST prompts=", msg.prompt.size());
+        if (!msg.instruction.empty()) { SSHTrace(c->Name(), ": instruction: ", msg.instruction.str()); cb(c, msg.instruction); }
+        for (auto &i : msg.prompt)    { SSHTrace(c->Name(), ": prompt: ",      i.text.str());          cb(c, i.text); }
 
         string authresp_text;
         if (msg.prompt.size() == 0) authresp_text = SSH::MSG_USERAUTH_INFO_RESPONSE().ToString(rand_eng, &sequence_number_c2s);

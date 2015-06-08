@@ -573,6 +573,7 @@ struct TouchDevice {
   static void CloseKeyboard();
   static void CloseKeyboardAfterReturn(bool);
   static Box GetKeyboardBox();
+  static void AddToolbar(const vector<pair<string, string>>&items);
 };
 
 struct CUDA : public Module { int Init(); };

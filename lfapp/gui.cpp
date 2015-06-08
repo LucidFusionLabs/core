@@ -56,11 +56,12 @@ Window *Window::Get(void *id) { return FindOrNull(Window::active, id); }
 
 Window::Window() : caption("lfapp"), fps(128) {
     id = gl = surface = glew_context = user1 = user2 = user3 = 0;
-    minimized = cursor_grabbed = 0;
+    minimized = cursor_grabbed = frame_init = 0;
     target_fps = FLAGS_target_fps;
     opengles_version = 1;
     opengles_cubemap = 0;
-    width = 640; height = 480;
+    width = 640;
+    height = 480;
     multitouch_keyboard_x = .93; 
     cam = new Entity(v3(5.54, 1.70, 4.39), v3(-.51, -.03, -.49), v3(-.03, 1, -.03));
     ClearEvents();
