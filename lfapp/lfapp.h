@@ -154,12 +154,12 @@ extern int optind;
 #include <stdarg.h>
 #include <string.h>
 
-#if defined(LFL_OPENSSL)
-#include "openssl/evp.h"
-#include "openssl/hmac.h"
-#elif defined(LFL_COMMONCRYPTO)
+#if defined(LFL_COMMONCRYPTO)
 #include <CommonCrypto/CommonCrypto.h>
 #include <CommonCrypto/CommonHMAC.h>
+#elif defined(LFL_OPENSSL)
+#include "openssl/evp.h"
+#include "openssl/hmac.h"
 #endif
 
 #define  INFO(...) ::LFL::Log(::LFApp::Log::Info,  __FILE__, __LINE__, ::LFL::StrCat(__VA_ARGS__))
@@ -451,16 +451,16 @@ struct Crypto {
   static string FinishSHA1(void*);
   static string Blowfish(const string &passphrase, const string &in, bool encrypt_or_decrypt);
   static string DiffieHellmanModulus(int generator, int bits);
-#if defined(LFL_OPENSSL)
-  typedef HMAC_CTX MAC;
-  typedef EVP_CIPHER_CTX Cipher;
-  typedef const EVP_CIPHER* CipherAlgo;
-  typedef const EVP_MD* MACAlgo;
-#elif defined(LFL_COMMONCRYPTO)
+#if defined(LFL_COMMONCRYPTO)
   typedef CCCryptorRef Cipher;
   typedef CCAlgorithm CipherAlgo;
   typedef CCHmacContext MAC;
   typedef CCHmacAlgorithm MACAlgo;
+#elif defined(LFL_OPENSSL)
+  typedef HMAC_CTX MAC;
+  typedef EVP_CIPHER_CTX Cipher;
+  typedef const EVP_CIPHER* CipherAlgo;
+  typedef const EVP_MD* MACAlgo;
 #else
   typedef void* Cipher;
   typedef void* CipherAlgo;
@@ -573,7 +573,9 @@ struct TouchDevice {
   static void CloseKeyboard();
   static void CloseKeyboardAfterReturn(bool);
   static Box GetKeyboardBox();
+  /// AddToolbar item values with prefix "toggle" stay depressed
   static void AddToolbar(const vector<pair<string, string>>&items);
+  static void ToggleToolbarButton(const string &n);
 };
 
 struct CUDA : public Module { int Init(); };
@@ -609,6 +611,7 @@ struct Application : public ::LFApp, public Module {
   void Log(int level, const char *file, int line, const string &message);
   void CreateNewWindow(const function<void(Window*)> &start_cb = function<void(Window*)>());
   NetworkThread *CreateNetworkThread();
+  void LaunchNativeMenu(const string &title);
   void AddNativeMenu(const string &title, const vector<pair<string, string>>&items);
   int LoadModule(Module *M) { modules.push_back(M); return M->Init(); }
   string BinDir() const { return LocalFile::JoinPath(startdir, progname.substr(0, DirNameLen(progname, true))); }

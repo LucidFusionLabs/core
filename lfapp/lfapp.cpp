@@ -110,6 +110,8 @@ extern "C" {
 extern "C" char *iPhoneDocumentPath();
 extern "C" void iPhoneLog(const char *text);
 extern "C" void iPhoneOpenBrowser(const char *url_text);
+extern "C" void iPhoneLaunchNativeMenu(const char*);
+extern "C" void iPhoneCreateNativeMenu(const char*, int, const char**, const char**);
 extern "C" void iPhoneTriggerFrame(void*);
 extern "C" bool iPhoneTriggerFrameIn(void*, int ms, bool force);
 extern "C" void iPhoneClearTriggerFrameIn(void *O);
@@ -624,10 +626,18 @@ NetworkThread *Application::CreateNetworkThread() {
     return ret;
 }
 
+void Application::LaunchNativeMenu(const string &title) {
+#if defined(LFL_IPHONE)
+    iPhoneLaunchNativeMenu(title.c_str());
+#endif
+}
+
 void Application::AddNativeMenu(const string &title, const vector<pair<string, string>>&items) {
     vector<const char *> k, v;
     for (auto &i : items) { k.push_back(i.first.c_str()); v.push_back(i.second.c_str()); }
-#ifdef LFL_OSXVIDEO
+#if defined(LFL_IPHONE)
+    iPhoneCreateNativeMenu(title.c_str(), items.size(), &k[0], &v[0]);
+#elif defined(LFL_OSXVIDEO)
     OSXCreateNativeMenu(title.c_str(), items.size(), &k[0], &v[0]);
 #endif
 }

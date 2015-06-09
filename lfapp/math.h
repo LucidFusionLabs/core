@@ -26,12 +26,12 @@
 #define NextMultipleOf64(n) NextMultipleOfPowerOfTwo(n, 64)
 
 namespace LFL {
-#if defined(LFL_OPENSSL)
-typedef BIGNUM* BigNum;
-typedef BN_CTX* BigNumContext;
-#elif defined(LFL_COMMONCRYPTO)
+#if defined(LFL_COMMONCRYPTO) && 0
 typedef CCBigNumRef BigNum;
 typedef void* BigNumContext;
+#elif defined(LFL_OPENSSL)
+typedef BIGNUM* BigNum;
+typedef BN_CTX* BigNumContext;
 #else
 typedef void* BigNum;
 typedef void* BigNumContext;

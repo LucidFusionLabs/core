@@ -16,8 +16,9 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <map>
+#include <vector>
 #include <string>
+#include <unordered_map>
 #include <stdlib.h>
 #include "../lfexport.h"
 
@@ -49,7 +50,7 @@ static int iphone_argc = 0;
 @interface MyTouchView : UIView {}
 @end
 
-@interface LFViewController : GLKViewController<GLKViewControllerDelegate> {}
+@interface LFViewController : GLKViewController<GLKViewControllerDelegate, UIActionSheetDelegate> {}
   - (void)updateToolbarFrame;
 @end
 
@@ -66,6 +67,7 @@ static int iphone_argc = 0;
 @implementation LFUIApplication
   {
     CGFloat scale;
+    LFApp *lfapp;
     NativeWindow *screen;
     int current_orientation;
     CGRect keyboard_frame;
@@ -130,6 +132,7 @@ static int iphone_argc = 0;
     iPhoneMain(iphone_argc, iphone_argv);
     INFOf("didFinishLaunchingWithOptions, views: %p, %p, %p, csf=%f", self.view, self.lview, self.rview, scale);
 
+    lfapp = GetLFApp();
     screen = GetNativeWindow();
     [self initNotifications];
     [self initGestureRecognizers];
@@ -318,8 +321,11 @@ static int iphone_argc = 0;
 @implementation LFViewController
   {
     UIToolbar *toolbar;
-    std::map<void*, std::string> toolbar_cmds;
     int toolbar_height;
+    std::unordered_map<std::string, void*> toolbar_titles;
+    std::unordered_map<void*, std::string> toolbar_cmds;
+    std::unordered_map<int, std::string> menu_tags;
+    std::unordered_map<std::string, std::vector<std::pair<std::string, std::string>>> menus;
   }
   - (void)viewWillAppear:(BOOL)animated { 
     [super viewWillAppear:animated];
@@ -352,10 +358,12 @@ static int iphone_argc = 0;
         [[UIBarButtonItem alloc] initWithTitle:[NSString stringWithFormat:@"%@\U0000FE0E", K]
         style:UIBarButtonItemStyleBordered target:self action:@selector(onClick:)];
       [items addObject:item];
+      toolbar_titles[k[i]] = item;
       toolbar_cmds[item] = v[i];
     }
     toolbar_height = 30;
     toolbar = [[UIToolbar alloc]initWithFrame: [self getToolbarFrame]];
+    // [toolbar setBarStyle:UIBarStyleBlackTranslucent];
     [toolbar setItems:items];
     [self.view addSubview:toolbar];
   }
@@ -368,10 +376,48 @@ static int iphone_argc = 0;
     CGRect kbd = [[LFUIApplication sharedAppDelegate] getKeyboardFrame];
     return CGRectMake(kbd.origin.x, kbd.origin.y, kbd.size.width, kbd.size.height + toolbar_height);
   }
+  - (void)toggleToolbarButton:(id)sender {
+    if (![sender isKindOfClass:[UIBarButtonItem class]]) FATALf("unknown sender: %p", sender);
+    UIBarButtonItem *item = (UIBarButtonItem*)sender;
+    if (item.style != UIBarButtonItemStyleDone) { item.style = UIBarButtonItemStyleDone;     item.tintColor = [UIColor colorWithRed:0.8 green:0.8 blue:0.8 alpha:.8]; }
+    else                                        { item.style = UIBarButtonItemStyleBordered; item.tintColor = nil; }
+  }
+  - (void)toggleToolbarButtonWithTitle:(const char *)k {
+    auto it = toolbar_titles.find(k);
+    if (it != toolbar_titles.end()) [self toggleToolbarButton: (id)(UIBarButtonItem*)it->second];
+  }
   - (void)onClick:(id)sender {
     auto it = toolbar_cmds.find(sender);
-    if (it != toolbar_cmds.end()) ShellRun(it->second.c_str());
+    if (it != toolbar_cmds.end()) {
+      ShellRun(it->second.c_str());
+      if (it->second.substr(0,6) == "toggle") [self toggleToolbarButton:sender];
+    }
     [self resignFirstResponder];
+  }
+
+  - (void)addMenu:(const char*)title_text num:(int)n key:(const char**)k val:(const char**)v {
+    NSString *title = [NSString stringWithUTF8String: title_text];
+    menu_tags[[title hash]] = title_text;
+    auto menu = &menus[title_text];
+    for (int i=0; i<n; i++) menu->emplace_back(k[i], v[i]);
+  }
+  - (void)launchMenu:(const char*)title_text {
+    auto it = menus.find(title_text);
+    if (it == menus.end()) { ERRORf("unknown menu: %s", title_text); return; }
+    NSString *title = [NSString stringWithUTF8String: title_text];
+    UIActionSheet *actions = [[UIActionSheet alloc] initWithTitle:title delegate:self
+      cancelButtonTitle:@"Cancel" destructiveButtonTitle:nil otherButtonTitles:nil];
+    for (auto &i : it->second) [actions addButtonWithTitle:[NSString stringWithUTF8String: i.first.c_str()]];
+    actions.tag = [title hash];
+    [actions showInView:[UIApplication sharedApplication].keyWindow];
+  }
+  - (void)actionSheet:(UIActionSheet *)actions clickedButtonAtIndex:(NSInteger)buttonIndex {
+    auto tag_it = menu_tags.find(actions.tag);
+    if (tag_it == menu_tags.end()) { ERRORf("unknown tag: %d", actions.tag); return; }
+    auto it = menus.find(tag_it->second);
+    if (it == menus.end()) { ERRORf("unknown menu: %s", tag_it->second.c_str()); return; }
+    if (buttonIndex < 1 || buttonIndex > it->second.size()) { ERRORf("invalud buttonIndex %d size=%d", buttonIndex, it->second.size()); return; }
+    ShellRun(it->second[buttonIndex-1].second.c_str());
   }
 @end
 
@@ -481,6 +527,15 @@ extern "C" void iPhoneAddWaitForeverSocket(void*, int fd) { [[LFUIApplication sh
 extern "C" void iPhoneDelWaitForeverSocket(void*, int fd) { [[LFUIApplication sharedAppDelegate] delWaitForeverSocket: fd]; }
 extern "C" void iPhoneCreateToolbar(int n, const char **name, const char **val) {
   [[LFUIApplication sharedAppDelegate].controller addToolbar: n key:name val:val];
+}
+extern "C" void iPhoneToggleToolbarButton(const char *n) {
+  [[LFUIApplication sharedAppDelegate].controller toggleToolbarButtonWithTitle:n];
+}
+extern "C" void iPhoneCreateNativeMenu(const char *title, int n, const char **name, const char **val) {
+  [[LFUIApplication sharedAppDelegate].controller addMenu:title num:n key:name val:val];
+}
+extern "C" void iPhoneLaunchNativeMenu(const char *title) {
+  [[LFUIApplication sharedAppDelegate].controller launchMenu:title];
 }
 
 extern "C" void *iPhoneLoadMusicAsset(const char *filename) {

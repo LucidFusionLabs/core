@@ -1737,7 +1737,7 @@ struct SSHClientConnection : public Query {
   virtual ~SSHClientConnection() { FreeBigNumContext(ctx); FreeBigNum(g); FreeBigNum(p); FreeBigNum(x); FreeBigNum(e);
     FreeBigNum(f); FreeBigNum(K); Crypto::CipherFree(&encrypt); Crypto::CipherFree(&decrypt); }
 
-  void Close(Connection *c) {}
+  void Close(Connection *c) { cb(c, StringPiece()); }
   int Connected(Connection *c) {
     if (state != INIT) return -1;
     string msg = StrCat(V_C, "\r\n");
