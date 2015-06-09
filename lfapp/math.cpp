@@ -22,6 +22,10 @@
 
 #include "lfapp/lfapp.h"
 
+#ifdef LFL_OPENSSL
+#include "openssl/bn.h"
+#endif
+
 namespace LFL {
 #if defined(LFL_COMMONCRYPTO) && 0
 BigNum        NewBigNum       () { return CCCreateBigNum(NULL); }

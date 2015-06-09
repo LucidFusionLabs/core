@@ -446,29 +446,36 @@ struct PerformanceTimers {
 struct Crypto {
   static string MD5(const string &in);
   static string SHA1(const string &in);
-  static void *NewSHA1();
-  static void UpdateSHA1(void*, const StringPiece &in);
-  static string FinishSHA1(void*);
   static string Blowfish(const string &passphrase, const string &in, bool encrypt_or_decrypt);
   static string DiffieHellmanModulus(int generator, int bits);
 #if defined(LFL_COMMONCRYPTO)
-  typedef CCCryptorRef Cipher;
+  struct Cipher { CCAlgorithm algo; CCCryptorRef ctx; };
+  struct Digest { int algo=0; void *v=0; };
+  struct MAC { CCHmacAlgorithm algo; CCHmacContext ctx; };
   typedef CCAlgorithm CipherAlgo;
-  typedef CCHmacContext MAC;
+  typedef int DigestAlgo;
   typedef CCHmacAlgorithm MACAlgo;
 #elif defined(LFL_OPENSSL)
-  typedef HMAC_CTX MAC;
   typedef EVP_CIPHER_CTX Cipher;
+  typedef EVP_MD_CTX Digest;
+  typedef HMAC_CTX MAC;
   typedef const EVP_CIPHER* CipherAlgo;
+  typedef const EVP_MD* DigestAlgo;
   typedef const EVP_MD* MACAlgo;
 #else
   typedef void* Cipher;
-  typedef void* CipherAlgo;
+  typedef void* Digest;
   typedef void* MAC;
+  typedef void* CipherAlgo;
+  typedef void* DigestAlgo;
   typedef void* MACAlgo;
 #endif
   struct CipherAlgos {
     static CipherAlgo DES3();
+  };
+  struct DigestAlgos {
+    static DigestAlgo MD5();
+    static DigestAlgo SHA1();
   };
   struct MACAlgos {
     static MACAlgo SHA1();
@@ -478,6 +485,9 @@ struct Crypto {
   static int  CipherGetBlockSize(Cipher*);
   static int  CipherOpen(Cipher*, CipherAlgo, bool dir, const StringPiece &key, const StringPiece &iv);
   static int  CipherUpdate(Cipher*, const StringPiece &in, char *out, int outlen);
+  static void DigestOpen(Digest*, DigestAlgo);
+  static void DigestUpdate(Digest*, const StringPiece &in);
+  static string DigestFinish(Digest*);
   static void MACOpen(MAC*, MACAlgo, const StringPiece &key);
   static void MACUpdate(MAC*, const StringPiece &in);
   static int  MACFinish(MAC*, char *out, int outlen);

@@ -58,4 +58,11 @@ TEST(CPlusPlusTest, MethodResolution) {
     t.F(String16Piece()); EXPECT_EQ(5, t.A); EXPECT_EQ(1, t.B); EXPECT_EQ(1, t.C); EXPECT_EQ(1, t.D);
 }
 
+#if defined(LFL_OPENSSL) || defined(LFL_COMMONCRYPTO)
+TEST(CryptoTest, MethodResolution) {
+    EXPECT_EQ(string("\x68\xd2\x45\x2f\x71\x3a\x0b\x7f\xbf\x0f\xd0\xfb\x89\x05\x97\xad", 16),
+              Crypto::MD5("the quick brown fox jumped over the lazy dog"));
+}
+#endif
+
 }; // namespace LFL

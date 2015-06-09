@@ -556,8 +556,9 @@ void SSH::MSG_USERAUTH_INFO_RESPONSE::Out(Serializable::Stream *o) const {
 int SSH::MSG_CHANNEL_REQUEST::Size() const {
     int ret = HeaderSize() + request_type.size();
     string rt = request_type.str();
-    if (rt == "pty-req") ret += 4*6 + term.size() + term_mode.size();
-    else if (rt == "exec") ret += 4*1 + term.size();
+    if      (rt == "pty-req")       ret += 4*6 + term.size() + term_mode.size();
+    else if (rt == "exec")          ret += 4*1 + term.size();
+    else if (rt == "window-change") ret += 4*4;
     return ret;
 }
 
@@ -575,6 +576,11 @@ void SSH::MSG_CHANNEL_REQUEST::Out(Serializable::Stream *o) const {
         o->BString(term_mode);
     } else if (rt == "exec") {
         o->BString(term);
+    } else if (rt == "window-change") {
+        o->Htonl(width);
+        o->Htonl(height);
+        o->Htonl(pixel_width);
+        o->Htonl(pixel_height);
     }
 }
 

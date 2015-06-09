@@ -63,6 +63,7 @@ lfapp_def(LFL_LINUXVIDEO)
 lfapp_def(LFL_OPENSL)
 lfapp_def(LFL_EPOLL)
 lfapp_def(LFL_IPC)
+lfapp_def(LFL_COMMONCRYPTO)
 
 if(LFL_QT)
     set(LFAPP_DEF ${LFAPP_DEF} ${QT_DEF})

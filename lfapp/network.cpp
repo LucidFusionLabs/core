@@ -1727,13 +1727,16 @@ struct SSHClientConnection : public Query {
   std::mt19937 rand_eng;
   BigNumContext ctx;
   BigNum g, p, x, e, f, K;
-  void *H;
   string V_C, V_S, H_text, session_id, integrity_c2s, integrity_s2c, decrypt_buf, user, pw;
+  Crypto::Digest H;
   Crypto::Cipher encrypt, decrypt;
+  Crypto::CipherAlgo cipher_algo = Crypto::CipherAlgos::DES3();
+  Crypto::DigestAlgo kex_hash = Crypto::DigestAlgos::SHA1();
+  Crypto::MACAlgo mac_hash = Crypto::MACAlgos::SHA1();
 
-  SSHClientConnection(const SSHClient::ResponseCB &CB) : cb(CB), rand_eng(std::random_device{}()), pty_channel(1,0),
+  SSHClientConnection(const SSHClient::ResponseCB &CB) : cb(CB), rand_eng(std::random_device{}()), pty_channel(1,-1),
     ctx(NewBigNumContext()), g(NewBigNum()), p(NewBigNum()), x(NewBigNum()), e(NewBigNum()), f(NewBigNum()), K(NewBigNum()),
-    H(Crypto::NewSHA1()), V_C("SSH-2.0-LFL_1.0") { Crypto::CipherInit(&encrypt); Crypto::CipherInit(&decrypt); }
+    V_C("SSH-2.0-LFL_1.0") { Crypto::DigestOpen(&H, kex_hash), Crypto::CipherInit(&encrypt); Crypto::CipherInit(&decrypt); }
   virtual ~SSHClientConnection() { FreeBigNumContext(ctx); FreeBigNum(g); FreeBigNum(p); FreeBigNum(x); FreeBigNum(e);
     FreeBigNum(f); FreeBigNum(K); Crypto::CipherFree(&encrypt); Crypto::CipherFree(&decrypt); }
 
@@ -1770,7 +1773,7 @@ struct SSHClientConnection : public Query {
                                   packet_len - SSH::BinaryPacketHeaderSize - MAC_len);
       sequence_number_s2c++;
       if (encrypted && MAC_len) {
-        string check_mac = MAC(StringPiece(decrypt_buf.data(), packet_len - MAC_len), sequence_number_s2c-1, integrity_s2c);
+        string check_mac = MAC(mac_hash, StringPiece(decrypt_buf.data(), packet_len - MAC_len), sequence_number_s2c-1, integrity_s2c);
         if (check_mac != string(c->rb + packet_len - MAC_len, MAC_len)) { ERROR(c->Name(), ": verify MAC failed"); return -1; }
       }
 
@@ -1805,10 +1808,12 @@ struct SSHClientConnection : public Query {
 
         unsigned char response_padding = 0;
         int response_packet_len = 4 + SSH::BinaryPacketLength(kex_init_text.data(), &response_padding, NULL);
-        UpdateSHA1(H, V_C);
-        UpdateSHA1(H, V_S);
-        UpdateSHA1(H, StringPiece(kex_init_text.data() + 5, response_packet_len - 5 - response_padding));
-        UpdateSHA1(H, StringPiece(c->rb                + 5,          packet_len - 5 - padding - MAC_len));
+        Crypto::DigestFinish(&H);
+        Crypto::DigestOpen(&H, kex_hash);
+        UpdateDigest(&H, V_C);
+        UpdateDigest(&H, V_S);
+        UpdateDigest(&H, StringPiece(kex_init_text.data() + 5, response_packet_len - 5 - response_padding));
+        UpdateDigest(&H, StringPiece(c->rb                + 5,          packet_len - 5 - padding - MAC_len));
 
       } else if (packet_id == Serializable::GetType<SSH::MSG_KEXDH_REPLY>()) {
         if (state != FIRST_KEXREPLY && state != KEXREPLY) { ERROR(c->Name(), ": unexpected state ", state); return -1; }
@@ -1817,12 +1822,12 @@ struct SSHClientConnection : public Query {
         SSHTrace(c->Name(), ": MSG_KEXDH_REPLY");
 
         BigNumModExp(K, f, x, p, ctx);
-        UpdateSHA1(H, msg.k_s); 
-        UpdateSHA1(H, e);
-        UpdateSHA1(H, f);
-        UpdateSHA1(H, K);
-        H_text = Crypto::FinishSHA1(H);
-        H = Crypto::NewSHA1();
+        UpdateDigest(&H, msg.k_s); 
+        UpdateDigest(&H, e);
+        UpdateDigest(&H, f);
+        UpdateDigest(&H, K);
+        H_text = Crypto::DigestFinish(&H);
+        Crypto::DigestOpen(&H, kex_hash);
         SSHTrace(c->Name(), ": H = \"", CHexEscape(H_text), "\"");
         if (state == FIRST_KEXREPLY) session_id = H_text;
         state = state == FIRST_KEXREPLY ? FIRST_NEWKEYS : NEWKEYS;
@@ -1847,12 +1852,12 @@ struct SSHClientConnection : public Query {
         SSHTrace(c->Name(), ": MSG_NEWKEYS");
         string newkeys_text = SSH::MSG_NEWKEYS().ToString(rand_eng, &sequence_number_c2s);
         if (c->WriteFlush(newkeys_text) != newkeys_text.size()) { ERROR(c->Name(), ": write"); return -1; }
-        if (InitCipher(c, &encrypt, Crypto::CipherAlgos::DES3(), DeriveSHA1Key('A', 24), DeriveSHA1Key('C', 24), true)  != 1) { ERROR(c->Name(), ": init c->s cipher"); return -1; }
-        if (InitCipher(c, &decrypt, Crypto::CipherAlgos::DES3(), DeriveSHA1Key('B', 24), DeriveSHA1Key('D', 24), false) != 1) { ERROR(c->Name(), ": init s->c cipher"); return -1; }
+        if (InitCipher(c, &encrypt, cipher_algo, DeriveKey(kex_hash, 'A', 24), DeriveKey(kex_hash, 'C', 24), true)  != 1) { ERROR(c->Name(), ": init c->s cipher"); return -1; }
+        if (InitCipher(c, &decrypt, cipher_algo, DeriveKey(kex_hash, 'B', 24), DeriveKey(kex_hash, 'D', 24), false) != 1) { ERROR(c->Name(), ": init s->c cipher"); return -1; }
         encrypt_block_size = Crypto::CipherGetBlockSize(&encrypt);
         decrypt_block_size = Crypto::CipherGetBlockSize(&decrypt);
-        integrity_c2s = DeriveSHA1Key('E', 20);
-        integrity_s2c = DeriveSHA1Key('F', 20);
+        integrity_c2s = DeriveKey(kex_hash, 'E', 20);
+        integrity_s2c = DeriveKey(kex_hash, 'F', 20);
         state = NEWKEYS;
         MAC_len = 20;
 
@@ -1956,6 +1961,11 @@ struct SSHClientConnection : public Query {
   int SetTerminalWindowSize(Connection *c, int w, int h) {
     term_width = w;
     term_height = h;
+    if (!c || c->state != Connection::Connected || state <= FIRST_NEWKEYS || pty_channel.second < 0) return 0;
+    string text = SSH::MSG_CHANNEL_REQUEST
+      (pty_channel.second, "window-change", point(term_width, term_height), point(term_width*8, term_height*12),
+       "", "", false).ToString(rand_eng, &sequence_number_c2s);
+    if (WriteCipher(c, &encrypt, text) != text.size() + MAC_len) { ERROR(c->Name(), ": write"); return -1; }
     return 0;
   }
   int InitCipher(Connection *c, Crypto::Cipher *cipher, Crypto::CipherAlgo algo, const string &IV, const string &key, bool dir) {
@@ -1968,7 +1978,7 @@ struct SSHClientConnection : public Query {
   int WriteCipher(Connection *c, Crypto::Cipher *cipher, const string &m) {
     string enc_text(m.size(), 0);
     if (Crypto::CipherUpdate(cipher, m, &enc_text[0], enc_text.size()) != 1) { ERROR(c->Name(), ": encrypt failed"); return -1; }
-    enc_text += MAC(m, sequence_number_c2s-1, integrity_c2s);
+    enc_text += MAC(mac_hash, m, sequence_number_c2s-1, integrity_c2s);
     return c->WriteFlush(enc_text);
   }
   string ReadCipher(Connection *c, Crypto::Cipher *cipher, const StringPiece &m) {
@@ -1976,27 +1986,28 @@ struct SSHClientConnection : public Query {
     if (Crypto::CipherUpdate(cipher, m, &dec_text[0], dec_text.size()) != 1) { ERROR(c->Name(), ": decrypt failed"); return ""; }
     return dec_text;
   }
-  string DeriveSHA1Key(char ID, int bytes) {
+  string DeriveKey(Crypto::DigestAlgo algo, char ID, int bytes) {
     string ret;
     while (ret.size() < bytes) {
-      void *key = Crypto::NewSHA1();
-      UpdateSHA1(key, K);
-      Crypto::UpdateSHA1(key, H_text);
+      Crypto::Digest key;
+      Crypto::DigestOpen(&key, algo);
+      UpdateDigest(&key, K);
+      Crypto::DigestUpdate(&key, H_text);
       if (!ret.size()) {
-        Crypto::UpdateSHA1(key, StringPiece(&ID, 1));
-        Crypto::UpdateSHA1(key, session_id);
-      } else Crypto::UpdateSHA1(key, ret);
-      ret.append(Crypto::FinishSHA1(key));
+        Crypto::DigestUpdate(&key, StringPiece(&ID, 1));
+        Crypto::DigestUpdate(&key, session_id);
+      } else Crypto::DigestUpdate(&key, ret);
+      ret.append(Crypto::DigestFinish(&key));
     }
     ret.resize(bytes);
     return ret;
   }
-  string MAC(const StringPiece &m, int seq, const string &k) {
+  string MAC(Crypto::MACAlgo algo, const StringPiece &m, int seq, const string &k) {
     char buf[4];
     Serializable::MutableStream(buf, 4).Htonl(seq);
     string ret(MAC_len, 0);
     Crypto::MAC mac;
-    Crypto::MACOpen(&mac, Crypto::MACAlgos::SHA1(), k);
+    Crypto::MACOpen(&mac, algo, k);
     Crypto::MACUpdate(&mac, StringPiece(buf, 4));
     Crypto::MACUpdate(&mac, m);
     int ret_len = Crypto::MACFinish(&mac, &ret[0], ret.size());
@@ -2004,17 +2015,17 @@ struct SSHClientConnection : public Query {
     return ret;
   }
 
-  static void UpdateSHA1(void *ctx, const StringPiece &s) {
+  static void UpdateDigest(Crypto::Digest *d, const StringPiece &s) {
     char buf[4];
     Serializable::MutableStream(buf, 4).Htonl(s.size());
-    Crypto::UpdateSHA1(ctx, StringPiece(buf, 4));
-    Crypto::UpdateSHA1(ctx, s);
+    Crypto::DigestUpdate(d, StringPiece(buf, 4));
+    Crypto::DigestUpdate(d, s);
   }
-  static void UpdateSHA1(void *ctx, BigNum n) {
+  static void UpdateDigest(Crypto::Digest *d, BigNum n) {
     string buf(4 + SSH::BigNumSize(n), 0);
     Serializable::MutableStream o(&buf[0], buf.size());
     SSH::WriteBigNum(n, &o);
-    Crypto::UpdateSHA1(ctx, buf);
+    Crypto::DigestUpdate(d, buf);
   }
   static BigNum DiffieHellmanGroup1Modulus(BigNum g, BigNum p) {
     // https://tools.ietf.org/html/rfc2409 Second Oakley Group

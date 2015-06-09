@@ -45,7 +45,7 @@ extern "C" {
 #endif
 
 #ifdef LFL_IPHONE
-extern "C" void *iPhoneLoadMusicAsset(const char *filename);
+extern "C" void *iPhoneMusicCreate(const char *filename);
 #endif
 
 namespace LFL {
@@ -408,7 +408,7 @@ struct AndroidAudioAssetLoader : public AudioAssetLoader {
 
 #ifdef LFL_IPHONE
 struct IPhoneAudioAssetLoader : public AudioAssetLoader {
-    virtual void *LoadAudioFile(const string &filename) { return iPhoneLoadMusicAsset(filename.c_str()); }
+    virtual void *LoadAudioFile(const string &filename) { return iPhoneMusicCreate(filename.c_str()); }
     virtual void UnloadAudioFile(void *h) {}
     virtual void *LoadAudioBuf(const char *buf, int len, const char *mimetype) { return 0; }
     virtual void UnloadAudioBuf(void *h) {}

@@ -80,11 +80,11 @@ static int iphone_argc = 0;
   - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
     CGRect wbounds = [[UIScreen mainScreen] bounds];
     scale = [[UIScreen mainScreen] scale];
-    self.window = [[UIWindow alloc] initWithFrame:wbounds];
+    self.window = [[[UIWindow alloc] initWithFrame:wbounds] autorelease];
 
     EAGLContext *context = [[EAGLContext alloc] initWithAPI:kEAGLRenderingAPIOpenGLES2];
     [EAGLContext setCurrentContext:context];
-    self.view = [[GLKView alloc] initWithFrame:wbounds];
+    self.view = [[[GLKView alloc] initWithFrame:wbounds] autorelease];
     self.view.context = context;
     self.view.delegate = self;
     self.view.contentScaleFactor = scale;
@@ -93,7 +93,7 @@ static int iphone_argc = 0;
       UIViewAutoresizingFlexibleBottomMargin | UIViewAutoresizingFlexibleLeftMargin | UIViewAutoresizingFlexibleRightMargin | 
       UIViewAutoresizingFlexibleTopMargin | UIViewAutoresizingFlexibleBottomMargin;
 
-    self.controller = [[LFViewController alloc] initWithNibName:nil bundle:nil];
+    self.controller = [[[LFViewController alloc] initWithNibName:nil bundle:nil] autorelease];
     self.controller.delegate = self.controller;
     [self.controller setView:self.view]; 
     self.controller.resumeOnDidBecomeActive = NO;
@@ -101,21 +101,21 @@ static int iphone_argc = 0;
 
     // left touch view
     CGRect lrect = CGRectMake(0, 0, wbounds.size.width, wbounds.size.height/2);
-    self.lview = [[MyTouchView alloc] initWithFrame:lrect];
+    self.lview = [[[MyTouchView alloc] initWithFrame:lrect] autorelease];
     // self.lview.backgroundColor = [UIColor greenColor];
     // self.lview.alpha = 0.3f;
     [self.view addSubview:self.lview];
     
     // right touch view
     CGRect rrect = CGRectMake(0, wbounds.size.height/2, wbounds.size.width, wbounds.size.height/2);
-    self.rview = [[MyTouchView alloc] initWithFrame:rrect];
+    self.rview = [[[MyTouchView alloc] initWithFrame:rrect] autorelease];
     // self.rview.backgroundColor = [UIColor blueColor];
     // self.rview.alpha = 0.3f;
     [self.view addSubview:self.rview];
 
     // text view for keyboard display
     _resign_textfield_on_return = YES;
-    self.textField = [[UITextField alloc] initWithFrame: CGRectZero];
+    self.textField = [[[UITextField alloc] initWithFrame: CGRectZero] autorelease];
     self.textField.delegate = self;
     self.textField.text = [NSString stringWithFormat:@"default"];
     self.textField.autocorrectionType = UITextAutocorrectionTypeNo;
@@ -365,6 +365,7 @@ static int iphone_argc = 0;
     toolbar = [[UIToolbar alloc]initWithFrame: [self getToolbarFrame]];
     // [toolbar setBarStyle:UIBarStyleBlackTranslucent];
     [toolbar setItems:items];
+    [items release];
     [self.view addSubview:toolbar];
   }
   - (void)updateToolbarFrame { if (toolbar) toolbar.frame = [self getToolbarFrame]; }
@@ -410,6 +411,7 @@ static int iphone_argc = 0;
     for (auto &i : it->second) [actions addButtonWithTitle:[NSString stringWithUTF8String: i.first.c_str()]];
     actions.tag = [title hash];
     [actions showInView:[UIApplication sharedApplication].keyWindow];
+    [actions release];
   }
   - (void)actionSheet:(UIActionSheet *)actions clickedButtonAtIndex:(NSInteger)buttonIndex {
     auto tag_it = menu_tags.find(actions.tag);
@@ -506,12 +508,14 @@ extern "C" void iPhoneGetKeyboardBox(int *x, int *y, int *w, int *h) {
 extern "C" void iPhoneLog(const char *text) {
   NSString *t = [[NSString alloc] initWithUTF8String: text];
   NSLog(@"%@", t);
+  [t release];
 }
 
 extern "C" int iPhoneOpenBrowser(const char *url_text) {
   NSString *url_string = [[NSString alloc] initWithUTF8String: url_text];
   NSURL *url = [NSURL URLWithString: url_string];  
   [[UIApplication sharedApplication] openURL:url];
+  [url_string release];
   return 0;
 }
 
@@ -538,7 +542,7 @@ extern "C" void iPhoneLaunchNativeMenu(const char *title) {
   [[LFUIApplication sharedAppDelegate].controller launchMenu:title];
 }
 
-extern "C" void *iPhoneLoadMusicAsset(const char *filename) {
+extern "C" void *iPhoneMusicCreate(const char *filename) {
 #ifdef LFL_IPHONESIM
   return 0;
 #else // LFL_IPHONESIM
@@ -566,7 +570,7 @@ extern "C" void iPhonePlayBackgroundMusic(void *handle) {
 #endif
 }
 
-extern "C" char *iPhoneDocumentPath() {
+extern "C" char *iPhoneDocumentPathCopy() {
   if (iphone_documents_directory == nil) {
     NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
     iphone_documents_directory = [[paths objectAtIndex:0] copy];
@@ -589,6 +593,8 @@ extern "C" int iPhoneReadDir(const char *path, int dirs,
     if (isDir) fileName = [NSString stringWithFormat:@"%@%@", fileName, @"/"];
     DirectoryIterAdd(DirectoryIter, [fileName UTF8String], 1);
   }
+
+  [dirName release];
   return 0;
 }
 
