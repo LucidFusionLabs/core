@@ -166,6 +166,7 @@ extern int optind;
 #define DEBUG(...) ::LFL::Log(::LFApp::Log::Debug, __FILE__, __LINE__, ::LFL::StrCat(__VA_ARGS__))
 #define ERROR(...) ::LFL::Log(::LFApp::Log::Error, __FILE__, __LINE__, ::LFL::StrCat(__VA_ARGS__))
 #define FATAL(...) { ::LFL::Log(::LFApp::Log::Fatal, __FILE__, __LINE__, ::LFL::StrCat(__VA_ARGS__)); throw(0); }
+#define ERRORv(v, ...) LFL::Log(::LFApp::Log::Error, __FILE__, __LINE__, ::LFL::StrCat(__VA_ARGS__)), v
 
 #define ONCE(x) { static bool once=0; if (!once && (once=1)) { x; } }
 #define EVERY_N(x, y) { static int every_N=0; if (every_N++ % (x) == 0) { y; } }
@@ -471,20 +472,29 @@ struct Crypto {
   typedef void* MACAlgo;
 #endif
   struct CipherAlgos {
-    static CipherAlgo DES3();
+    static CipherAlgo DES3_CBC();
+    static CipherAlgo AES128_CBC();
+    static const char *Name(CipherAlgo);
+    static int KeySize(CipherAlgo);
   };
   struct DigestAlgos {
     static DigestAlgo MD5();
     static DigestAlgo SHA1();
+    static const char *Name(DigestAlgo);
+    static int HashSize(DigestAlgo);
   };
   struct MACAlgos {
+    static MACAlgo MD5();
     static MACAlgo SHA1();
+    static const char *Name(MACAlgo);
+    static int HashSize(MACAlgo);
   };
   static void CipherInit(Cipher*);
   static void CipherFree(Cipher*);
   static int  CipherGetBlockSize(Cipher*);
   static int  CipherOpen(Cipher*, CipherAlgo, bool dir, const StringPiece &key, const StringPiece &iv);
   static int  CipherUpdate(Cipher*, const StringPiece &in, char *out, int outlen);
+  static int  DigestGetHashSize(Digest*);
   static void DigestOpen(Digest*, DigestAlgo);
   static void DigestUpdate(Digest*, const StringPiece &in);
   static string DigestFinish(Digest*);

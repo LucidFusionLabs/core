@@ -474,19 +474,64 @@ string Crypto::SHA1(const string &in) {
 }
 
 #if defined(LFL_COMMONCRYPTO)
-struct CCDigestAlgo { enum { MD5, SHA1 }; };
+struct CCDigestAlgo { enum { MD5=1, SHA1=2 }; };
 string Crypto::Blowfish(const string &passphrase, const string &in, bool encrypt_or_decrypt) { FATAL("not implemented"); }
 string Crypto::DiffieHellmanModulus(int generator, int bits) { FATAL("not implemented"); }
-Crypto::CipherAlgo Crypto::CipherAlgos::DES3() { return kCCAlgorithm3DES; }
-Crypto::DigestAlgo Crypto::DigestAlgos::MD5()  { return CCDigestAlgo::MD5; }
-Crypto::DigestAlgo Crypto::DigestAlgos::SHA1() { return CCDigestAlgo::SHA1; }
-Crypto::MACAlgo    Crypto::MACAlgos::SHA1()    { return kCCHmacAlgSHA1; }
+Crypto::CipherAlgo Crypto::CipherAlgos::DES3_CBC()   { return kCCAlgorithm3DES; }
+Crypto::CipherAlgo Crypto::CipherAlgos::AES128_CBC() { return kCCAlgorithmAES128; }
+Crypto::DigestAlgo Crypto::DigestAlgos::MD5()        { return CCDigestAlgo::MD5; }
+Crypto::DigestAlgo Crypto::DigestAlgos::SHA1()       { return CCDigestAlgo::SHA1; }
+Crypto::MACAlgo    Crypto::   MACAlgos::MD5()        { return kCCHmacAlgMD5; }
+Crypto::MACAlgo    Crypto::   MACAlgos::SHA1()       { return kCCHmacAlgSHA1; }
+const char *Crypto::CipherAlgos::Name(CipherAlgo v) {
+  switch (v) {
+    case kCCAlgorithm3DES:   return "3des-cbc";
+    case kCCAlgorithmAES128: return "aes128-cbc";
+    default:                 return "none";
+  }
+}
+int Crypto::CipherAlgos::KeySize(CipherAlgo v) {
+  switch (v) {
+    case kCCAlgorithm3DES:   return kCCKeySize3DES;
+    case kCCAlgorithmAES128: return kCCKeySizeAES128;
+    default:                 return 0;
+  }
+}
+const char *Crypto::DigestAlgos::Name(DigestAlgo v) {
+  switch (v) {
+    case CCDigestAlgo::MD5:  return "md5";
+    case CCDigestAlgo::SHA1: return "sha1";
+    default:                 return "none";
+  }
+}
+int Crypto::DigestAlgos::HashSize(DigestAlgo v) {
+  switch (v) {
+    case CCDigestAlgo::MD5:  return CC_MD5_DIGEST_LENGTH;
+    case CCDigestAlgo::SHA1: return CC_SHA1_DIGEST_LENGTH;
+    default:                 return 0;
+  }
+}
+const char *Crypto::MACAlgos::Name(MACAlgo v) {
+  switch (v) {
+    case kCCHmacAlgMD5:  return "md5";
+    case kCCHmacAlgSHA1: return "sha1";
+    default:             return "none";
+  }
+}
+int Crypto::MACAlgos::HashSize(MACAlgo v) {
+  switch (v) {
+    case kCCHmacAlgMD5:  return CC_MD5_DIGEST_LENGTH;
+    case kCCHmacAlgSHA1: return CC_SHA1_DIGEST_LENGTH;
+    default:             return 0;
+  }
+}
 void Crypto::CipherInit(Cipher *c) { c->algo=0; c->ctx=0; }
 void Crypto::CipherFree(Cipher *c) { CCCryptorRelease(c->ctx); }
 int Crypto::CipherGetBlockSize(Cipher *c) {
   switch(c->algo) {
-    case kCCAlgorithm3DES: return kCCBlockSize3DES;
-    default:               return -1;
+    case kCCAlgorithmAES128:  return kCCBlockSizeAES128;
+    case kCCAlgorithm3DES:    return kCCBlockSize3DES;
+    default:                  return -1;
   }
 }
 int Crypto::CipherOpen(Cipher *c, CipherAlgo algo, bool dir, const StringPiece &key, const StringPiece &IV) {
@@ -496,6 +541,7 @@ int Crypto::CipherUpdate(Cipher *c, const StringPiece &in, char *out, int outlen
   size_t wrote = 0;
   return CCCryptorUpdate(c->ctx, in.data(), in.size(), out, outlen, &wrote) == kCCSuccess;
 }
+int Crypto::DigestGetHashSize(Digest *d) { return DigestAlgos::HashSize(d->algo); }
 void Crypto::DigestOpen(Digest *d, DigestAlgo algo) {
   d->algo = algo;
   switch(algo) {
@@ -562,10 +608,18 @@ string Crypto::DiffieHellmanModulus(int generator, int bits) {
   return ret;
 }
 
-Crypto::CipherAlgo Crypto::CipherAlgos::DES3() { return EVP_des_ede3_cbc(); }
-Crypto::DigestAlgo Crypto::DigestAlgos::SHA1() { return EVP_get_digestbyname("sha1"); }
-Crypto::DigestAlgo Crypto::DigestAlgos::MD5()  { return EVP_md5(); }
-Crypto::MACAlgo    Crypto::MACAlgos::SHA1()    { return EVP_sha1(); }
+Crypto::CipherAlgo Crypto::CipherAlgos::DES3_CBC()   { return EVP_des_ede3_cbc(); }
+Crypto::CipherAlgo Crypto::CipherAlgos::AES128_CBC() { return EVP_aes_128_cbc(); }
+Crypto::DigestAlgo Crypto::DigestAlgos::SHA1()       { return EVP_get_digestbyname("sha1"); }
+Crypto::DigestAlgo Crypto::DigestAlgos::MD5()        { return EVP_md5(); }
+Crypto::MACAlgo    Crypto::MACAlgos   ::SHA1()       { return EVP_sha1(); }
+Crypto::MACAlgo    Crypto::MACAlgos   ::MD5()        { return EVP_md5(); }
+int         Crypto::CipherAlgos::KeySize (CipherAlgo v) { return EVP_CIPHER_key_length(v); }
+int         Crypto::DigestAlgos::HashSize(DigestAlgo v) { return EVP_MD_size(v); }
+int         Crypto::MACAlgos   ::HashSize(DMACAlgo   v) { return EVP_MD_size(v); }
+const char *Crypto::DigestAlgos::Name(DigestAlgo v) { return EVP_MD_name(v); }
+const char *Crypto::CipherAlgos::Name(CipherAlgo v) { return EVP_CIPHER_name(v); }
+const char *Crypto::MACAlgos   ::Name(MACAlgo    v) { return EVP_MD_name(v); }
 void Crypto::CipherInit(Cipher *c) { EVP_CIPHER_CTX_init(c); }
 void Crypto::CipherFree(Cipher *c) { EVP_CIPHER_CTX_cleanup(c); }
 int Crypto::CipherGetBlockSize(Cipher *c) { return EVP_CIPHER_CTX_block_size(c); }
@@ -577,6 +631,7 @@ int Crypto::CipherUpdate(Cipher *c, const StringPiece &in, char *out, int outlen
   return EVP_Cipher(c, reinterpret_cast<unsigned char*>(out),
                     reinterpret_cast<const unsigned char*>(in.data()), in.size());
 }
+int Crypto::DigestGetHashSize(Digest *d) { return EVP_MD_CTX_size(d); }
 void Crypto::DigestOpen(Digest *d, DigestAlgo algo) { CHECK(algo); EVP_DigestInit(d, algo); }
 void Crypto::DigestUpdate(Digest *d, const StringPiece &in) { EVP_DigestUpdate(d, in.data(), in.size()); }
 string Crypto::DigestFinish(Digest *d) {
@@ -592,15 +647,24 @@ int Crypto::MACFinish(MAC *m, char *out, int outlen) { unsigned len=outlen; HMAC
 #else
 string Crypto::Blowfish(const string &passphrase, const string &in, bool encrypt_or_decrypt) { FATAL("not implemented"); }
 string Crypto::DiffieHellmanModulus(int generator, int bits) { FATAL("not implemented"); }
-Crypto::CipherAlgo Crypto::CipherAlgos::DES3() { FATAL("not implemented"); }
-Crypto::DigestAlgo Crypto::DigestAlgos::SHA1() { FATAL("not implemented"); }
-Crypto::DigestAlgo Crypto::DigestAlgos::MD5()  { FATAL("not implemented"); }
-Crypto::MACAlgo Crypto::MACAlgos::SHA1() { FATAL("not implemented"); }
+Crypto::CipherAlgo Crypto::CipherAlgos::DES3_CBC()   { FATAL("not implemented"); }
+Crypto::CipherAlgo Crypto::CipherAlgos::AES128_CBC() { FATAL("not implemented"); }
+Crypto::DigestAlgo Crypto::DigestAlgos::SHA1()       { FATAL("not implemented"); }
+Crypto::DigestAlgo Crypto::DigestAlgos::MD5()        { FATAL("not implemented"); }
+Crypto::MACAlgo    Crypto::   MACAlgos::SHA1()       { FATAL("not implemented"); }
+Crypto::MACAlgo    Crypto::   MACAlgos::MD5()        { FATAL("not implemented"); }
+int         Crypto::CipherAlgos::KeySize (CipherAlgo v) { return 0; }
+int         Crypto::DigestAlgos::HashSize(DigestAlgo v) { return 0; }
+int         Crypto::   MACAlgos::HashSize(DigestAlgo v) { return 0; }
+const char *Crypto::DigestAlgos::Name(DigestAlgo v) { return "none"; }
+const char *Crypto::CipherAlgos::Name(CipherAlgo v) { return "none"; }
+const char *Crypto::MACAlgos   ::Name(MACAlgo    v) { return "none"; }
 void Crypto::CipherInit(Cipher *c) { FATAL("not implemented"); }
 void Crypto::CipherFree(Cipher *c) { FATAL("not implemented"); }
 int Crypto::CipherGetBlockSize(Cipher *c) { FATAL("not implemented"); }
 int Crypto::CipherOpen(Cipher *c, CipherAlgo algo, bool dir, const StringPiece &key, const StringPiece &IV) {  FATAL("not implemented"); }
 int Crypto::CipherUpdate(Cipher *c, const StringPiece &in, char *out, int outlen) { FATAL("not implemented"); }
+int Crypto::DigestGetHashSize(Digest *d) { FATAL("not implemented"); }
 void Crypto::DigestOpen(Digest *d, DigestAlgo algo) { FATAL("not implemented"); }
 void Crypto::DigestUpdate(Digest *d, const StringPiece &in) { FATAL("not implemented"); }
 string Crypto::DigestFinish(Digest *d) { FATAL("not implemented"); }

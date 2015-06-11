@@ -40,23 +40,23 @@ const char *Protocol::Name(int p) {
 void Serializable::Header::Out(Stream *o) const { o->Htons( id); o->Htons( seq); }
 void Serializable::Header::In(const Stream *i)  { i->Ntohs(&id); i->Ntohs(&seq); }
 
-string Serializable::ToString()                   { string ret; ToString(&ret);      return ret; }
-string Serializable::ToString(unsigned short seq) { string ret; ToString(&ret, seq); return ret; }
+string Serializable::ToString()                   const { string ret; ToString(&ret);      return ret; }
+string Serializable::ToString(unsigned short seq) const { string ret; ToString(&ret, seq); return ret; }
 
-void Serializable::ToString(string *out) {
+void Serializable::ToString(string *out) const {
     out->resize(Size());
-    return ToString((char*)out->data(), out->size());
+    return ToString(&(*out)[0], out->size());
 }
-void Serializable::ToString(string *out, unsigned short seq) {
+void Serializable::ToString(string *out, unsigned short seq) const {
     out->resize(Header::size + Size());
-    return ToString((char*)out->data(), out->size(), seq);
+    return ToString(&(*out)[0], out->size(), seq);
 }
 
-void Serializable::ToString(char *buf, int len) {
+void Serializable::ToString(char *buf, int len) const {
     MutableStream os(buf, len);
     Out(&os);
 }
-void Serializable::ToString(char *buf, int len, unsigned short seq) {
+void Serializable::ToString(char *buf, int len, unsigned short seq) const {
     MutableStream os(buf, len);
     Header hdr = { (unsigned short)Type(), seq };
     hdr.Out(&os);
@@ -435,19 +435,78 @@ void SSH::WriteBigNum(const BigNum n, Serializable::Stream *o) {
     BigNumGetData(n, o->Get(n_len));
 }
 
-string SSH::Serializable::ToString(std::mt19937 &g, unsigned *sequence_number) {
+const char *SSH::Key::Name(int id) {
+  switch(id) {
+    case RSA: return "ssh-rsa";
+    case DSS: return "ssh-dss";
+    default:  return "";
+  }
+};
+const char *SSH::KEX::Name(int id) {
+  switch(id) {
+    case DH14_SHA1: return "diffie-hellman-group14-sha1";
+    case DH1_SHA1:  return "diffie-hellman-group1-sha1";
+    default:        return "";
+  }
+};
+const char *SSH::Cipher::Name(int id) {
+  switch(id) {
+    case AES128_CBC:  return "aes128-cbc";
+    case TripDES_CBC: return "3des-cbc";
+    default:          return "";
+  }
+};
+const char *SSH::MAC::Name(int id) {
+  switch(id) {
+    case MD5:  return "hmac-md5";
+    case SHA1: return "hmac-sha1";
+    default:   return "";
+  }
+};
+
+Crypto::CipherAlgo SSH::Cipher::Algo(int id) {
+  switch(id) {
+    case AES128_CBC:  return Crypto::CipherAlgos::AES128_CBC();
+    case TripDES_CBC: return Crypto::CipherAlgos::DES3_CBC();
+    default:          return 0;
+  }
+};
+Crypto::MACAlgo SSH::MAC::Algo(int id) {
+  switch(id) {
+    case MD5:  return Crypto::MACAlgos::MD5();
+    case SHA1: return Crypto::MACAlgos::SHA1();
+    default:   return 0;
+  }
+};
+
+bool SSH::Key::PreferenceIntersect(const StringPiece &v, int *out) { return (*out = Id(FirstMatchCSV(PreferenceCSV(), v))); }
+bool SSH::KEX::PreferenceIntersect(const StringPiece &v, int *out) { return (*out = Id(FirstMatchCSV(PreferenceCSV(), v))); }
+bool SSH::Cipher::PreferenceIntersect(const StringPiece &v, Crypto::CipherAlgo *out) { int id = Id(FirstMatchCSV(PreferenceCSV(), v)); if (id) *out = Algo(id); return id; }
+bool SSH::MAC   ::PreferenceIntersect(const StringPiece &v, Crypto::   MACAlgo *out) { int id = Id(FirstMatchCSV(PreferenceCSV(), v)); if (id) *out = Algo(id); return id; }
+
+string SSH::Key   ::PreferenceCSV() { static string v; ONCE({ for (int i=1; i<=End; ++i) StrAppendCSV(&v, Name(i)); }); return v; }
+string SSH::KEX   ::PreferenceCSV() { static string v; ONCE({ for (int i=1; i<=End; ++i) StrAppendCSV(&v, Name(i)); }); return v; }
+string SSH::Cipher::PreferenceCSV() { static string v; ONCE({ for (int i=1; i<=End; ++i) StrAppendCSV(&v, Name(i)); }); return v; }
+string SSH::MAC   ::PreferenceCSV() { static string v; ONCE({ for (int i=1; i<=End; ++i) StrAppendCSV(&v, Name(i)); }); return v; }
+
+int SSH::Key   ::Id(const string &n) { static unordered_map<string, int> m; ONCE({ for (int i=1; i<=End; ++i) m[Name(i)] = i; }); return FindOrDefault(m, n, 0); }
+int SSH::KEX   ::Id(const string &n) { static unordered_map<string, int> m; ONCE({ for (int i=1; i<=End; ++i) m[Name(i)] = i; }); return FindOrDefault(m, n, 0); }
+int SSH::Cipher::Id(const string &n) { static unordered_map<string, int> m; ONCE({ for (int i=1; i<=End; ++i) m[Name(i)] = i; }); return FindOrDefault(m, n, 0); }
+int SSH::MAC   ::Id(const string &n) { static unordered_map<string, int> m; ONCE({ for (int i=1; i<=End; ++i) m[Name(i)] = i; }); return FindOrDefault(m, n, 0); }
+
+string SSH::Serializable::ToString(std::mt19937 &g, int block_size, unsigned *sequence_number) const {
     if (sequence_number) (*sequence_number)++;
     string ret;
-    ToString(&ret, g);
+    ToString(&ret, g, block_size);
     return ret;
 }
 
-void SSH::Serializable::ToString(string *out, std::mt19937 &g) {
-    out->resize(NextMultipleOf8(4 + SSH::BinaryPacketHeaderSize + Size()));
+void SSH::Serializable::ToString(string *out, std::mt19937 &g, int block_size) const {
+    out->resize(NextMultipleOfN(4 + SSH::BinaryPacketHeaderSize + Size(), max(8, block_size)));
     return ToString(&(*out)[0], out->size(), g);
 }
 
-void SSH::Serializable::ToString(char *buf, int len, std::mt19937 &g) {
+void SSH::Serializable::ToString(char *buf, int len, std::mt19937 &g) const {
     unsigned char type = Type(), padding = len - SSH::BinaryPacketHeaderSize - Size();
     MutableStream os(buf, len);
     os.Htonl(len - 4);
@@ -601,6 +660,22 @@ int SSH::DSSSignature::In(const Serializable::Stream *i) {
     if (format_id.str() != "ssh-dss" || blob.size() != 40) { i->error = true; return -1; }
     r = BigNumSetData(r, StringPiece(blob.data(),      20));
     s = BigNumSetData(s, StringPiece(blob.data() + 20, 20));
+    return i->Result();
+}
+
+int SSH::RSAKey::In(const Serializable::Stream *i) {
+    i->ReadString(&format_id);
+    if (format_id.str() != Key::Name(Key::RSA)) { i->error = true; return -1; }
+    e = ReadBigNum(e, i); 
+    n = ReadBigNum(n, i); 
+    return i->Result();
+}
+
+int SSH::RSASignature::In(const Serializable::Stream *i) {
+    StringPiece blob;
+    i->ReadString(&format_id);
+    i->ReadString(&sig);
+    if (format_id.str() != "ssh-rsa") { i->error = true; return -1; }
     return i->Result();
 }
 

@@ -373,47 +373,60 @@ template const short*       FindChar<short>      (const short*,       int (*)(in
 template       DrawableBox* FindChar<DrawableBox>(      DrawableBox*, int (*)(int), int, int*);
 template const DrawableBox* FindChar<DrawableBox>(const DrawableBox*, int (*)(int), int, int*);
 
-#define LengthCharImpl(type, deref_p, check_p) \
+#define LengthCharImpl(in, len, p, deref_p, check_p) \
+    if (len >= 0) while (p-in < len &&  ischar(deref_p)) p++; \
+    else          while (check_p    &&  ischar(deref_p)) p++;
+
+#define LengthNotCharImpl(in, len, p, deref_p, check_p) \
+    if (len >= 0) while (p-in < len && !ischar(deref_p)) p++; \
+    else          while (check_p    && !ischar(deref_p)) p++;
+
+#define LengthCharFunctionImpl(type, deref_p, check_p) \
     const type *p = in; \
-    if (len >= 0) while (p-in < len && ischar(deref_p)) p++; \
-    else          while (check_p    && ischar(deref_p)) p++; \
+    LengthCharImpl(in, len, p, deref_p, check_p); \
     return p - in;
 
 template <class X> int LengthChar(const X *in, int (*ischar)(int), int len) {
-    LengthCharImpl(X, *p, *p);
+    LengthCharFunctionImpl(X, *p, *p);
 }
 template <> int LengthChar(const DrawableBox *in, int (*ischar)(int), int len) {
-    LengthCharImpl(DrawableBox, p->Id(), 1);
+    LengthCharFunctionImpl(DrawableBox, p->Id(), 1);
 }
 template int LengthChar(const char*,        int(*)(int), int);
 template int LengthChar(const short*,       int(*)(int), int);
 template int LengthChar(const DrawableBox*, int(*)(int), int);
 
-#define RLengthCharImpl(type, deref_p) \
+#define RLengthCharFunctionImpl(type, deref_p) \
     if (len <= 0) return 0; \
     const type *p = in, *e = in - len; \
     for (; p != e; --p) if (!ischar(deref_p)) break; \
     return in - p;
 
 template <class X> int RLengthChar(const X *in, int (*ischar)(int), int len) {
-    RLengthCharImpl(X, *p);
+    RLengthCharFunctionImpl(X, *p);
 }
 template <> int RLengthChar(const DrawableBox *in, int (*ischar)(int), int len) {
-    RLengthCharImpl(DrawableBox, p->Id());
+    RLengthCharFunctionImpl(DrawableBox, p->Id());
 }
 template int RLengthChar(const char*,        int(*)(int), int);
 template int RLengthChar(const short*,       int(*)(int), int);
 template int RLengthChar(const DrawableBox*, int(*)(int), int);
 
-int Split(const string &in, int (*ischar)(int), string *left, string *right) { return Split(in.c_str(), ischar, left, right); }
-int Split(const char   *in, int (*ischar)(int), string *left, string *right) {
-    const char *p = in;
-    for (/**/; *p && !ischar(*p); p++);
-    if (!*p) { *left=in; *right=""; return 1; }
-    left->assign(in, p-in);
+int Split(const StringPiece &in, int (*ischar)(int), string *left) {
+    const char *p = in.buf;
+    LengthNotCharImpl(in.buf, in.len, p, *p, *p);
+    left->assign(in.buf, p-in.buf);
+    return 1;
+}
 
-    for (/**/; *p && ischar(*p); p++);
-    if (!*p) { *right=""; return 1; }
+int Split(const StringPiece &in, int (*ischar)(int), string *left, string *right) {
+    const char *p = in.buf;
+    LengthNotCharImpl(in.buf, in.len, p, *p, *p);
+    left->assign(in.buf, p-in.buf);
+    if (in.Done(p)) { *right=""; return 1; }
+
+    LengthCharImpl(in.buf, in.len, p, *p, *p);
+    if (in.Done(p)) { *right=""; return 1; }
     right->assign(p);
     return 2;
 }
@@ -512,6 +525,15 @@ template string CHexEscape        (const string   &);
 template string CHexEscape        (const String16 &);
 template string CHexEscapeNonAscii(const string   &);
 template string CHexEscapeNonAscii(const String16 &);
+
+string FirstMatchCSV(const StringPiece &haystack, const StringPiece &needle, int (*ischar)(int)) {
+    unordered_set<string> h_map;
+    StringWordIter h_words(haystack, ischar);
+    StringWordIter i_words(needle,   ischar);
+    for (string w = IterNextString(&h_words); !h_words.Done(); w = IterNextString(&h_words)) h_map.insert(w);
+    for (string w = IterNextString(&i_words); !i_words.Done(); w = IterNextString(&i_words)) if (Contains(h_map, w)) return w;
+    return "";
+}
 
 template <class X, bool chomp> const X *NextLine(const StringPieceT<X> &text, bool final, int *outlen) {
     const X *ret=0, *p = text.buf;

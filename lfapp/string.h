@@ -412,37 +412,41 @@ template <class X> const X *FindChar(const X *text, int (*ischar)(int), int (*is
 template <class X> int    LengthChar(const X* text, int (*ischar)(int), int len=-1);
 template <class X> int   RLengthChar(const X* text, int (*ischar)(int), int len);
 
-template <class X, class Y> int Split(const X *in, int (*ischar)(int), int (*isquote)(int), vector<Y> *out) {
+template <class X, class Y> int Split(const StringPieceT<X> &in, int (*ischar)(int), int (*isquote)(int), vector<Y> *out) {
     out->clear();
-    if (!in) return 0;
+    if (!in.buf) return 0;
     StringWordIterT<X> words(in, ischar, isquote);
     for (string word = IterNextString(&words); !words.Done(); word = IterNextString(&words))
         out->push_back(Scannable::Scan(Y(), word.c_str()));
     return out->size();
 }
-template <class X> int Split(const string   &in, int (*ischar)(int), int (*isquote)(int), vector<X> *out) { return Split<char,  X>(in.c_str(), ischar, isquote, out); }
-template <class X> int Split(const string   &in, int (*ischar)(int),                      vector<X> *out) { return Split<char,  X>(in.c_str(), ischar, NULL,    out); }
-template <class X> int Split(const char     *in, int (*ischar)(int), int (*isquote)(int), vector<X> *out) { return Split<char,  X>(in, ischar, isquote, out); }
-template <class X> int Split(const char     *in, int (*ischar)(int),                      vector<X> *out) { return Split<char,  X>(in, ischar, NULL,    out); }
-template <class X> int Split(const String16 &in, int (*ischar)(int), int (*isquote)(int), vector<X> *out) { return Split<short, X>(in.c_str(), ischar, isquote, out); }
-template <class X> int Split(const String16 &in, int (*ischar)(int),                      vector<X> *out) { return Split<short, X>(in.c_str(), ischar, NULL,    out); }
-template <class X> int Split(const short    *in, int (*ischar)(int), int (*isquote)(int), vector<X> *out) { return Split<short, X>(in, ischar, isquote, out); }
-template <class X> int Split(const short    *in, int (*ischar)(int),                      vector<X> *out) { return Split<short, X>(in, ischar, NULL,    out); }
+template <class X> int Split(const string   &in, int (*ischar)(int), int (*isquote)(int), vector<X> *out) { return Split<char,  X>(StringPiece(in),              ischar, isquote, out); }
+template <class X> int Split(const string   &in, int (*ischar)(int),                      vector<X> *out) { return Split<char,  X>(StringPiece(in),              ischar, NULL,    out); }
+template <class X> int Split(const char     *in, int (*ischar)(int), int (*isquote)(int), vector<X> *out) { return Split<char,  X>(StringPiece::Unbounded(in),   ischar, isquote, out); }
+template <class X> int Split(const char     *in, int (*ischar)(int),                      vector<X> *out) { return Split<char,  X>(StringPiece::Unbounded(in),   ischar, NULL,    out); }
+template <class X> int Split(const String16 &in, int (*ischar)(int), int (*isquote)(int), vector<X> *out) { return Split<short, X>(String16Piece(in),            ischar, isquote, out); }
+template <class X> int Split(const String16 &in, int (*ischar)(int),                      vector<X> *out) { return Split<short, X>(String16Piece(in),            ischar, NULL,    out); }
+template <class X> int Split(const short    *in, int (*ischar)(int), int (*isquote)(int), vector<X> *out) { return Split<short, X>(String16Piece::Unbounded(in), ischar, isquote, out); }
+template <class X> int Split(const short    *in, int (*ischar)(int),                      vector<X> *out) { return Split<short, X>(String16Piece::Unbounded(in), ischar, NULL,    out); }
 
-template <class X> int Split(const char   *in, int (*ischar)(int), int (*isquote)(int), set<X> *out) {
+template <class X> int Split(const StringPiece &in, int (*ischar)(int), int (*isquote)(int), set<X> *out) {
     out->clear();
-    if (!in) return 0;
+    if (!in.buf) return 0;
     StringWordIter words(in, ischar, isquote);
     for (string word = IterNextString(&words); !words.Done(); word = IterNextString(&words))
         out->insert(Scannable::Scan(X(), word.c_str()));
     return out->size();
 }
-template <class X> int Split(const char   *in, int (*ischar)(int),                      set<X> *out) { return Split(in, ischar, NULL, out); }
-template <class X> int Split(const string &in, int (*ischar)(int), int (*isquote)(int), set<X> *out) { return Split(in.c_str(), ischar, isquote, out); }
-template <class X> int Split(const string &in, int (*ischar)(int),                      set<X> *out) { return Split(in, ischar, NULL, out); }
+template <class X> int Split(const char   *in, int (*ischar)(int),                      set<X> *out) { return Split(StringPiece::Unbounded(in), in, ischar, NULL,    out); }
+template <class X> int Split(const string &in, int (*ischar)(int), int (*isquote)(int), set<X> *out) { return Split(StringPiece(in),                ischar, isquote, out); }
+template <class X> int Split(const string &in, int (*ischar)(int),                      set<X> *out) { return Split(StringPiece(in),                ischar, NULL,    out); }
 
-int Split(const char   *in, int (*ischar)(int), string *left, string *right);
-int Split(const string &in, int (*ischar)(int), string *left, string *right);
+int           Split(const StringPiece &in, int (*ischar)(int), string *left);
+int           Split(const StringPiece &in, int (*ischar)(int), string *left, string *right);
+inline int    Split(const char        *in, int (*ischar)(int), string *left, string *right) { return Split(StringPiece::Unbounded(in), ischar, left, right); }
+inline int    Split(const string      &in, int (*ischar)(int), string *left, string *right) { return Split(StringPiece(in),            ischar, left, right); }
+inline string Split(const StringPiece &in, int (*ischar)(int)) { string ret; Split(in, ischar, &ret); return ret; }
+
 void Join(string *out, const vector<string> &in);
 void Join(string *out, const vector<string> &in, int inB, int inE);
 string Join(const vector<string> &strs, const string &separator);
@@ -466,8 +470,12 @@ String16 ReplaceEmpty (const String16 &in, const string   &replace_with);
 String16 ReplaceEmpty (const String16 &in, const String16 &replace_with);
 string ReplaceNewlines(const string   &in, const string   &replace_with);
 bool ReplaceString(string *text, const string &needle, const string &replace);
+
 template <class X> string CHexEscape        (const basic_string<X> &text);
 template <class X> string CHexEscapeNonAscii(const basic_string<X> &text);
+
+#define StrAppendCSV(out, ...) StrAppend((out), (out)->size() ? "," : "", __VA_ARGS__)
+string FirstMatchCSV(const StringPiece &haystack, const StringPiece &needle, int (*ischar)(int) = iscomma);
 
 const char  *NextLine   (const StringPiece   &text, bool final=0, int *outlen=0);
 const short *NextLine   (const String16Piece &text, bool final=0, int *outlen=0);

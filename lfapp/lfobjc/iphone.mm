@@ -92,6 +92,7 @@ static int iphone_argc = 0;
     self.view.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight |
       UIViewAutoresizingFlexibleBottomMargin | UIViewAutoresizingFlexibleLeftMargin | UIViewAutoresizingFlexibleRightMargin | 
       UIViewAutoresizingFlexibleTopMargin | UIViewAutoresizingFlexibleBottomMargin;
+    [context release];
 
     self.controller = [[[LFViewController alloc] initWithNibName:nil bundle:nil] autorelease];
     self.controller.delegate = self.controller;
@@ -307,6 +308,7 @@ static int iphone_argc = 0;
     if (!wait_forever_fh || [wait_forever_fh fileDescriptor] != fd) FATALf("del mismatching wait_forever_fh %o", wait_forever_fh);
     [[NSNotificationCenter defaultCenter] removeObserver:self name:NSFileHandleDataAvailableNotification object:wait_forever_fh];
     // [wait_forever_fh closeFile];
+    [wait_forever_fh release];
     wait_forever_fh = nil;
     restart_wait_forever_fh = false;
   }
@@ -360,12 +362,14 @@ static int iphone_argc = 0;
       [items addObject:item];
       toolbar_titles[k[i]] = item;
       toolbar_cmds[item] = v[i];
+      [item release];
     }
     toolbar_height = 30;
     toolbar = [[UIToolbar alloc]initWithFrame: [self getToolbarFrame]];
     // [toolbar setBarStyle:UIBarStyleBlackTranslucent];
     [toolbar setItems:items];
     [items release];
+    [spacer release];
     [self.view addSubview:toolbar];
   }
   - (void)updateToolbarFrame { if (toolbar) toolbar.frame = [self getToolbarFrame]; }
@@ -418,7 +422,7 @@ static int iphone_argc = 0;
     if (tag_it == menu_tags.end()) { ERRORf("unknown tag: %d", actions.tag); return; }
     auto it = menus.find(tag_it->second);
     if (it == menus.end()) { ERRORf("unknown menu: %s", tag_it->second.c_str()); return; }
-    if (buttonIndex < 1 || buttonIndex > it->second.size()) { ERRORf("invalud buttonIndex %d size=%d", buttonIndex, it->second.size()); return; }
+    if (buttonIndex < 1 || buttonIndex > it->second.size()) { ERRORf("invalid buttonIndex %d size=%d", buttonIndex, it->second.size()); return; }
     ShellRun(it->second[buttonIndex-1].second.c_str());
   }
 @end

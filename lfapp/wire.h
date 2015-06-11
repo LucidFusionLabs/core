@@ -125,12 +125,12 @@ struct Serializable {
   virtual int In(const Stream *i) = 0;
   virtual void Out(Stream *o) const = 0;
 
-  virtual string ToString();
-  virtual string ToString(unsigned short seq);
-  virtual void ToString(string *out);
-  virtual void ToString(string *out, unsigned short seq);
-  virtual void ToString(char *buf, int len);
-  virtual void ToString(char *buf, int len, unsigned short seq);
+  virtual string ToString() const;
+  virtual string ToString(unsigned short seq) const;
+  virtual void ToString(string *out) const;
+  virtual void ToString(string *out, unsigned short seq) const;
+  virtual void ToString(char *buf, int len) const;
+  virtual void ToString(char *buf, int len, unsigned short seq) const;
 
   bool HdrCheck(int content_len) { return content_len >= Header::size + HeaderSize(); }
   bool    Check(int content_len) { return content_len >= Header::size +       Size(); }
@@ -256,10 +256,41 @@ struct SSH {
   static BigNum ReadBigNum(BigNum n, const Serializable::Stream *i);
   static void WriteBigNum(const BigNum n, Serializable::Stream *o);
 
+  struct Key {
+    enum { RSA=1, DSS=2, End=2 };
+    static int Id(const string &n);
+    static const char *Name(int id);
+    static string PreferenceCSV();
+    static bool PreferenceIntersect(const StringPiece &pref_csv, int *out);
+  };
+  struct KEX {
+    enum { DH14_SHA1=1, DH1_SHA1=2, End=2 /* DHG_SHA256, DHG_SHA1 */ };
+    static int Id(const string &n);
+    static const char *Name(int id);
+    static string PreferenceCSV();
+    static bool PreferenceIntersect(const StringPiece &pref_csv, int *out);
+  };
+  struct Cipher {
+    enum { AES128_CBC=1, TripDES_CBC=2, End=2 };
+    static int Id(const string &n);
+    static const char *Name(int id);
+    static Crypto::CipherAlgo Algo(int id);
+    static string PreferenceCSV();
+    static bool PreferenceIntersect(const StringPiece &pref_csv, Crypto::CipherAlgo *out);
+  };
+  struct MAC {
+    enum { MD5=1, SHA1=2, End=1 };
+    static int Id(const string &n);
+    static const char *Name(int id);
+    static Crypto::MACAlgo Algo(int id);
+    static string PreferenceCSV();
+    static bool PreferenceIntersect(const StringPiece &pref_csv, Crypto::MACAlgo *out);
+  };
+
   struct Serializable : public LFL::Serializable {
-    string ToString(std::mt19937&, unsigned *sequence_number);
-    void ToString(string *out, std::mt19937&);
-    void ToString(char *buf, int len, std::mt19937&);
+    string ToString(std::mt19937&, int block_size, unsigned *sequence_number) const;
+    void ToString(string *out, std::mt19937&, int block_size) const;
+    void ToString(char *buf, int len, std::mt19937&) const;
   };
   struct MSG_DISCONNECT : public Serializable {
     int reason_code=0;
@@ -507,6 +538,28 @@ struct SSH {
 
     int HeaderSize() const { return 4*2 + 7 + 20*2; }
     int Size() const { return HeaderSize(); }
+    int Type() const { return 0; }
+
+    void Out(Serializable::Stream *o) const {}
+    int In(const Serializable::Stream *i);
+  };
+  struct RSAKey {
+    StringPiece format_id;
+    BigNum e, n;
+    RSAKey(BigNum E, BigNum N) : e(E), n(N) {}
+
+    int HeaderSize() const { return 2*4; }
+    int Size() const { return HeaderSize() + format_id.size() + BigNumSize(e) + BigNumSize(n); }
+    int Type() const { return 0; }
+
+    void Out(Serializable::Stream *o) const {}
+    int In(const Serializable::Stream *i);
+  };
+  struct RSASignature {
+    StringPiece format_id, sig;
+
+    int HeaderSize() const { return 4*2 + 7; }
+    int Size() const { return HeaderSize() + sig.size(); }
     int Type() const { return 0; }
 
     void Out(Serializable::Stream *o) const {}
