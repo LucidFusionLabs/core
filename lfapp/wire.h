@@ -119,7 +119,9 @@ struct Serializable {
     void In(const Stream *i);
   };
 
-  virtual int Type() const = 0;
+  int Id;
+  Serializable(int ID) : Id(ID) {}
+
   virtual int Size() const = 0;
   virtual int HeaderSize() const = 0;
   virtual int In(const Stream *i) = 0;
@@ -137,8 +139,6 @@ struct Serializable {
   bool HdrCheck(const Stream *is) { return HdrCheck(is->Len()); }
   bool    Check(const Stream *is) { return    Check(is->Len()); }
   int      Read(const Stream *is) { if (!HdrCheck(is)) return -1; return In(is); }
-
-  template <class X> static int GetType() { return ((X*)NULL)->X::Type(); }
 };
 
 struct Ethernet {
@@ -264,14 +264,16 @@ struct SSH {
     static bool PreferenceIntersect(const StringPiece &pref_csv, int *out);
   };
   struct KEX {
-    enum { DH14_SHA1=1, DH1_SHA1=2, End=2 /* DHG_SHA256, DHG_SHA1 */ };
+    enum { DHGEX_SHA256=1, DHGEX_SHA1=2, DH14_SHA1=3, DH1_SHA1=4, End=4 };
     static int Id(const string &n);
     static const char *Name(int id);
     static string PreferenceCSV();
     static bool PreferenceIntersect(const StringPiece &pref_csv, int *out);
+    static bool DiffieHellmanGroupExchange(int id) { return id==DHGEX_SHA256 || id==DHGEX_SHA1; }
+    static bool DiffieHellmanIntegerGroup(int id) { return id==DHGEX_SHA256 || id==DHGEX_SHA1 || id==DH14_SHA1 || id==DH1_SHA1; }
   };
   struct Cipher {
-    enum { AES128_CBC=1, TripDES_CBC=2, End=2 };
+    enum { AES128_CTR=1, AES128_CBC=2, TripDES_CBC=3, End=3 };
     static int Id(const string &n);
     static const char *Name(int id);
     static Crypto::CipherAlgo Algo(int id);
@@ -288,70 +290,69 @@ struct SSH {
   };
 
   struct Serializable : public LFL::Serializable {
+    Serializable(int type) : LFL::Serializable(type) {}
     string ToString(std::mt19937&, int block_size, unsigned *sequence_number) const;
     void ToString(string *out, std::mt19937&, int block_size) const;
     void ToString(char *buf, int len, std::mt19937&) const;
   };
   struct MSG_DISCONNECT : public Serializable {
+    static const int ID = 1;
     int reason_code=0;
     StringPiece description, language;
+    MSG_DISCONNECT() : Serializable(ID) {}
 
     int HeaderSize() const { return 4 + 2*4; }
-    int Type() const { return 1; }
     int Size() const { return HeaderSize() + description.size() + language.size(); }
-
     int In(const Serializable::Stream *i) { i->Ntohl(&reason_code); i->ReadString(&description); i->ReadString(&language); return i->Result(); }
     void Out(Serializable::Stream *o) const {}
   };
   struct MSG_DEBUG : public Serializable {
+    static const int ID = 4;
     unsigned char always_display=0;
     StringPiece message, language;
+    MSG_DEBUG() : Serializable(ID) {}
 
     int HeaderSize() const { return 1 + 2*4; }
-    int Type() const { return 4; }
     int Size() const { return HeaderSize() + message.size() + language.size(); }
-
     int In(const Serializable::Stream *i) { i->Read8(&always_display); i->ReadString(&message); i->ReadString(&language); return i->Result(); }
     void Out(Serializable::Stream *o) const {}
   };
   struct MSG_SERVICE_REQUEST : public Serializable {
+    static const int ID = 5;
     StringPiece service_name;
-    MSG_SERVICE_REQUEST(const string &SN) : service_name(SN) {}
+    MSG_SERVICE_REQUEST(const string &SN) : Serializable(ID), service_name(SN) {}
 
     int HeaderSize() const { return 4; }
-    int Type() const { return 5; }
     int Size() const { return HeaderSize() + service_name.size(); }
-
     int In(const Serializable::Stream *i) { i->ReadString(&service_name); return i->Result(); }
     void Out(Serializable::Stream *o) const { o->BString(service_name); }
   };
   struct MSG_SERVICE_ACCEPT : public Serializable {
+    static const int ID = 6;
     StringPiece service_name;
-    MSG_SERVICE_ACCEPT(const string &SN) : service_name(SN) {}
+    MSG_SERVICE_ACCEPT(const string &SN) : Serializable(ID), service_name(SN) {}
 
     int HeaderSize() const { return 4; }
-    int Type() const { return 6; }
     int Size() const { return HeaderSize() + service_name.size(); }
-
     int In(const Serializable::Stream *i) { i->ReadString(&service_name); return i->Result(); }
     void Out(Serializable::Stream *o) const { o->BString(service_name); }
   };
   struct MSG_KEXINIT : public Serializable {
+    static const int ID = 20;
     StringPiece cookie, kex_algorithms, server_host_key_algorithms, encryption_algorithms_client_to_server,
                 encryption_algorithms_server_to_client, mac_algorithms_client_to_server, mac_algorithms_server_to_client,
                 compression_algorithms_client_to_server, compression_algorithms_server_to_client, languages_client_to_server,
                 languages_server_to_client;
     unsigned char first_kex_packet_follows=0;
-    MSG_KEXINIT() {}
+    MSG_KEXINIT() : Serializable(ID) {}
     MSG_KEXINIT(const string &C, const string &KEXA, const string &KA, const string &EC, const string &ES, const string &MC,
-                const string &MS, const string &CC, const string &CS, const string &LC, const string &LS) :
-      cookie(C), kex_algorithms(KEXA), server_host_key_algorithms(KA), encryption_algorithms_client_to_server(EC),
+                const string &MS, const string &CC, const string &CS, const string &LC, const string &LS, bool guess) :
+      Serializable(ID), cookie(C), kex_algorithms(KEXA), server_host_key_algorithms(KA), encryption_algorithms_client_to_server(EC),
       encryption_algorithms_server_to_client(ES), mac_algorithms_client_to_server(MC), mac_algorithms_server_to_client(MS),
       compression_algorithms_client_to_server(CC), compression_algorithms_server_to_client(CS), languages_client_to_server(LC),
-      languages_server_to_client(LS) {}
+      languages_server_to_client(LS), first_kex_packet_follows(guess) {}
 
     int HeaderSize() const { return 21 + 10*4; }
-    int Type() const { return 20; }
     int Size() const;
     string DebugString() const;
 
@@ -359,163 +360,189 @@ struct SSH {
     int In(const Serializable::Stream *i);
   };
   struct MSG_NEWKEYS : public Serializable {
-    int HeaderSize() const { return 0; }
-    int Type() const { return 21; }
-    int Size() const { return HeaderSize(); }
+    static const int ID = 21;
+    MSG_NEWKEYS() : Serializable(ID) {}
 
+    int HeaderSize() const { return 0; }
+    int Size() const { return HeaderSize(); }
     void Out(Serializable::Stream *o) const {}
     int In(const Serializable::Stream *i) { return 0; }
   };
   struct MSG_KEXDH_INIT : public Serializable {
+    static const int ID = 30;
     BigNum e;
-    MSG_KEXDH_INIT(BigNum E=0) : e(E) {}
+    MSG_KEXDH_INIT(BigNum E=0) : Serializable(ID), e(E) {}
 
     int HeaderSize() const { return 4; }
-    int Type() const { return 30; }
     int Size() const { return HeaderSize() + BigNumSize(e); }
-
     void Out(Serializable::Stream *o) const { WriteBigNum(e, o); }
     int In(const Serializable::Stream *i) { return 0; }
   };
   struct MSG_KEXDH_REPLY : public Serializable {
+    static const int ID = 31;
     StringPiece k_s, h_sig;
     BigNum f;
-    MSG_KEXDH_REPLY(BigNum F=0) : f(F) {}
+    MSG_KEXDH_REPLY(BigNum F=0) : Serializable(ID), f(F) {}
 
     int HeaderSize() const { return 4*3; }
-    int Type() const { return 31; }
     int Size() const { return HeaderSize() + BigNumSize(f) + k_s.size() + h_sig.size(); }
-
     void Out(Serializable::Stream *o) const {}
     int In(const Serializable::Stream *i) { i->ReadString(&k_s); f=ReadBigNum(f,i); i->ReadString(&h_sig); return i->Result(); }
   };
-  struct MSG_USERAUTH_REQUEST : public Serializable {
-    StringPiece user_name, service_name, method_name, algo_name, secret, sig;
-    MSG_USERAUTH_REQUEST(const string &UN, const string &SN, const string &MN, const string &AN, const string &P, const string &S)
-      : user_name(UN), service_name(SN), method_name(MN), algo_name(AN), secret(P), sig(S) {}
+  struct MSG_KEX_DH_GEX_REQUEST : public Serializable {
+    static const int ID = 34;
+    int min_n, max_n, n;
+    MSG_KEX_DH_GEX_REQUEST(int Min, int Max, int N) : Serializable(ID), min_n(Min), max_n(Max), n(N) {}
 
     int HeaderSize() const { return 4*3; }
-    int Type() const { return 50; }
-    int Size() const;
+    int Size() const { return HeaderSize(); }
+    void Out(Serializable::Stream *o) const { o->Htonl( min_n); o->Htonl( n); o->Htonl( max_n); }
+    int In(const Serializable::Stream *i)   { i->Ntohl(&min_n); i->Ntohl(&n); i->Ntohl(&max_n); return i->Result(); }
+  };
+  struct MSG_KEX_DH_GEX_GROUP : public Serializable {
+    static const int ID = 31;
+    BigNum p, g;
+    MSG_KEX_DH_GEX_GROUP(BigNum P, BigNum G) : Serializable(ID), p(P), g(G) {}
 
+    int HeaderSize() const { return 4*2; }
+    int Size() const { return HeaderSize() + BigNumSize(p) + BigNumSize(g); }
+    void Out(Serializable::Stream *o) const {}
+    int In(const Serializable::Stream *i) { p=ReadBigNum(p,i); g=ReadBigNum(g,i); return i->Result(); }
+  };
+  struct MSG_KEX_DH_GEX_INIT : public MSG_KEXDH_INIT {
+    static const int ID = 32;
+    MSG_KEX_DH_GEX_INIT(BigNum E=0) : MSG_KEXDH_INIT(E) { Id=ID; }
+  };
+  struct MSG_KEX_DH_GEX_REPLY : public MSG_KEXDH_REPLY {
+    static const int ID = 33;
+    MSG_KEX_DH_GEX_REPLY(BigNum F=0) : MSG_KEXDH_REPLY(F) { Id=ID; }
+  };
+  struct MSG_USERAUTH_REQUEST : public Serializable {
+    static const int ID = 50;
+    StringPiece user_name, service_name, method_name, algo_name, secret, sig;
+    MSG_USERAUTH_REQUEST(const string &UN, const string &SN, const string &MN, const string &AN, const string &P, const string &S)
+      : Serializable(ID), user_name(UN), service_name(SN), method_name(MN), algo_name(AN), secret(P), sig(S) {}
+
+    int HeaderSize() const { return 4*3; }
+    int Size() const;
     void Out(Serializable::Stream *o) const;
     int In(const Serializable::Stream *i) { return 0; }
   };
   struct MSG_USERAUTH_FAILURE : public Serializable {
+    static const int ID = 51;
     StringPiece auth_left;
     unsigned char partial_success=0;
+    MSG_USERAUTH_FAILURE() : Serializable(ID) {}
 
     int HeaderSize() const { return 4; }
-    int Type() const { return 51; }
     int Size() const { return HeaderSize() + auth_left.size(); }
-
     void Out(Serializable::Stream *o) const {}
     int In(const Serializable::Stream *i) { i->ReadString(&auth_left); i->Read8(&partial_success); return i->Result(); }
   };
   struct MSG_USERAUTH_SUCCESS : public Serializable {
+    static const int ID = 52;
+    MSG_USERAUTH_SUCCESS() : Serializable(ID) {}
+
     int HeaderSize() const { return 0; }
-    int Type() const { return 52; }
     int Size() const { return HeaderSize(); }
     void Out(Serializable::Stream *o) const {}
     int In(const Serializable::Stream *i) { return i->Result(); }
   };
   struct MSG_USERAUTH_INFO_REQUEST : public Serializable {
+    static const int ID = 60;
     StringPiece name, instruction, language;
     struct Prompt { StringPiece text; unsigned char echo=0; };
     vector<Prompt> prompt;
+    MSG_USERAUTH_INFO_REQUEST() : Serializable(ID) {}
 
     int HeaderSize() const { return 4*3; }
-    int Type() const { return 60; }
     int Size() const;
-
     void Out(Serializable::Stream *o) const {}
     int In(const Serializable::Stream *i);
   };
   struct MSG_USERAUTH_INFO_RESPONSE : public Serializable {
+    static const int ID = 61;
     vector<StringPiece> response;
-    MSG_USERAUTH_INFO_RESPONSE() {}
-    MSG_USERAUTH_INFO_RESPONSE(const vector<StringPiece> &s) : response(s) {}
+    MSG_USERAUTH_INFO_RESPONSE() : Serializable(ID) {}
+    MSG_USERAUTH_INFO_RESPONSE(const vector<StringPiece> &s) : Serializable(ID), response(s) {}
 
     int HeaderSize() const { return 4; }
-    int Type() const { return 61; }
     int Size() const;
-
     void Out(Serializable::Stream *o) const;
     int In(const Serializable::Stream *i) { return i->Result(); }
   };
   struct MSG_CHANNEL_OPEN : public Serializable {
+    static const int ID = 90;
     StringPiece channel_type;
     int sender_channel, initial_win_size, maximum_packet_size;
-    MSG_CHANNEL_OPEN(const string &CT, int SC, int IWS, int MPS) : channel_type(CT), sender_channel(SC), initial_win_size(IWS), maximum_packet_size(MPS) {}
+    MSG_CHANNEL_OPEN(const string &CT, int SC, int IWS, int MPS) : Serializable(ID), channel_type(CT), sender_channel(SC), initial_win_size(IWS), maximum_packet_size(MPS) {}
 
     int HeaderSize() const { return 4*4; }
-    int Type() const { return 90; }
     int Size() const { return HeaderSize() + channel_type.size(); }
-
     void Out(Serializable::Stream *o) const { o->BString(channel_type); o->Htonl(sender_channel); o->Htonl(initial_win_size); o->Htonl(maximum_packet_size); }
     int In(const Serializable::Stream *i) { return i->Result(); }
   };
   struct MSG_CHANNEL_OPEN_CONFIRMATION : public Serializable {
+    static const int ID = 91;
     int recipient_channel, sender_channel, initial_win_size, maximum_packet_size;
+    MSG_CHANNEL_OPEN_CONFIRMATION() : Serializable(ID) {}
 
     int HeaderSize() const { return 4*4; }
-    int Type() const { return 91; }
     int Size() const { return HeaderSize(); }
-
     void Out(Serializable::Stream *o) const {}
     int In(const Serializable::Stream *i) { i->Ntohl(&recipient_channel); i->Ntohl(&sender_channel); i->Ntohl(&initial_win_size); i->Ntohl(&maximum_packet_size); return i->Result(); }
   };
   struct MSG_CHANNEL_WINDOW_ADJUST : public Serializable {
+    static const int ID = 93;
     int recipient_channel, bytes_to_add;
+    MSG_CHANNEL_WINDOW_ADJUST() : Serializable(ID) {}
 
     int HeaderSize() const { return 4*2; }
-    int Type() const { return 93; }
     int Size() const { return HeaderSize(); }
-
     void Out(Serializable::Stream *o) const { o->Htonl(recipient_channel); o->Htonl(bytes_to_add); }
     int In(const Serializable::Stream *i) { i->Ntohl(&recipient_channel); i->Ntohl(&bytes_to_add); return i->Result(); }
   };
   struct MSG_CHANNEL_DATA : public Serializable {
+    static const int ID = 94;
     int recipient_channel;
     StringPiece data;
-    MSG_CHANNEL_DATA() {}
-    MSG_CHANNEL_DATA(int RC, const StringPiece &D) : recipient_channel(RC), data(D) {}
+    MSG_CHANNEL_DATA() : Serializable(ID) {}
+    MSG_CHANNEL_DATA(int RC, const StringPiece &D) : Serializable(ID), recipient_channel(RC), data(D) {}
 
     int HeaderSize() const { return 4*2; }
-    int Type() const { return 94; }
     int Size() const { return HeaderSize() + data.size(); }
-
     void Out(Serializable::Stream *o) const { o->Htonl(recipient_channel); o->BString(data); }
     int In(const Serializable::Stream *i) { i->Ntohl(&recipient_channel); i->ReadString(&data); return i->Result(); }
   };
   struct MSG_CHANNEL_REQUEST : public Serializable {
+    static const int ID = 98;
     int recipient_channel=0, width=0, height=0, pixel_width=0, pixel_height=0;
     StringPiece request_type, term, term_mode;
     unsigned char want_reply=0;
-    MSG_CHANNEL_REQUEST(int RC, const string &RT, const string &V, bool WR) : recipient_channel(RC), request_type(RT), term(V), want_reply(WR) {}
-    MSG_CHANNEL_REQUEST(int RC, const string &RT, const point &D, const point &PD, const string &T, const string &TM, bool WR) :
+    MSG_CHANNEL_REQUEST(int RC, const string &RT, const string &V, bool WR) : Serializable(ID), recipient_channel(RC), request_type(RT), term(V), want_reply(WR) {}
+    MSG_CHANNEL_REQUEST(int RC, const string &RT, const point &D, const point &PD, const string &T, const string &TM, bool WR) : Serializable(ID),
       recipient_channel(RC), width(D.x), height(D.y), pixel_width(PD.x), pixel_height(PD.y), request_type(RT), term(T), term_mode(TM), want_reply(WR) {}
 
     int HeaderSize() const { return 4*2 + 1; }
-    int Type() const { return 98; }
     int Size() const;
-
     void Out(Serializable::Stream *o) const;
     int In(const Serializable::Stream *i) { return i->Result(); }
   };
   struct MSG_CHANNEL_SUCCESS : public Serializable {
-    int HeaderSize() const { return 0; }
-    int Type() const { return 99; }
-    int Size() const { return HeaderSize(); }
+    static const int ID = 99;
+    MSG_CHANNEL_SUCCESS() : Serializable(ID) {}
 
+    int HeaderSize() const { return 0; }
+    int Size() const { return HeaderSize(); }
     void Out(Serializable::Stream *o) const {}
     int In(const Serializable::Stream *i) { return 0; }
   };
   struct MSG_CHANNEL_FAILURE : public Serializable {
-    int HeaderSize() const { return 0; }
-    int Type() const { return 100; }
-    int Size() const { return HeaderSize(); }
+    static const int ID = 100;
+    MSG_CHANNEL_FAILURE() : Serializable(ID) {}
 
+    int HeaderSize() const { return 0; }
+    int Size() const { return HeaderSize(); }
     void Out(Serializable::Stream *o) const {}
     int In(const Serializable::Stream *i) { return 0; }
   };
@@ -585,39 +612,37 @@ struct SMTP {
 struct InterProcessProtocol {
   struct Header : public Serializable::Header {};
   struct LoadResourceRequest : public Serializable {
+    static const int ID = 1;
     unsigned short ipr_type;
     int ipr_len;
     string ipr_url;
-    LoadResourceRequest(int t=0, const string &u=string(), int l=0) : ipr_type(t), ipr_len(l), ipr_url(u) {}
+    LoadResourceRequest(int t=0, const string &u=string(), int l=0) : Serializable(ID), ipr_type(t), ipr_len(l), ipr_url(u) {}
 
-    int Type() const { return 1; }
-    int Size() const { return HeaderSize() + ipr_url.size(); }
     int HeaderSize() const { return 8; }
-
+    int Size() const { return HeaderSize() + ipr_url.size(); }
     void Out(Serializable::Stream *o) const { o->Htons(ipr_type); o->Htons((unsigned short)ipr_url.size()); o->Htonl(ipr_len); o->String(ipr_url); }
     int   In(const Serializable::Stream *i) { unsigned short l; i->Ntohs(&ipr_type); i->Ntohs(&l); i->Ntohl(&ipr_len); ipr_url.assign(i->Get(l), l); return 0; }
   };
   struct LoadResourceResponse : public Serializable {
+    static const int ID = 2;
     unsigned short ipr_type;
     int ipr_len;
     string ipr_url;
-    LoadResourceResponse(int t=0, const string &u=string(), int l=0) : ipr_type(t), ipr_len(l), ipr_url(u) {}
+    LoadResourceResponse(int t=0, const string &u=string(), int l=0) : Serializable(ID), ipr_type(t), ipr_len(l), ipr_url(u) {}
 
-    int Type() const { return 2; }
-    int Size() const { return HeaderSize() + ipr_url.size(); }
     int HeaderSize() const { return 8; }
-
+    int Size() const { return HeaderSize() + ipr_url.size(); }
     void Out(Serializable::Stream *o) const { o->Htons(ipr_type); o->Htons((unsigned short)ipr_url.size()); o->Htonl(ipr_len); o->String(ipr_url); }
     int   In(const Serializable::Stream *i) { unsigned short l; i->Ntohs(&ipr_type); i->Ntohs(&l); i->Ntohl(&ipr_len); ipr_url.assign(i->Get(l), l); return 0; }
   };
   struct ContentResource : public Serializable {
+    static const int ID = 1<<11 | 1;
     StringPiece buf, name, type;
-    ContentResource() {}
-    ContentResource(const string &b, const string &n, const string &t) : buf(b), name(n), type(t) {}
+    ContentResource() : Serializable(ID) {}
+    ContentResource(const string &b, const string &n, const string &t) : Serializable(ID), buf(b), name(n), type(t) {}
 
-    int Type() const { return 1<<11 | 1; }
-    int Size() const { return HeaderSize() + 3 + buf.size() + name.size() + type.size(); }
     int HeaderSize() const { return sizeof(int) * 3; }
+    int Size() const { return HeaderSize() + 3 + buf.size() + name.size() + type.size(); }
 
     void Out(Serializable::Stream *o) const {
       o->Htonl   (buf.size()); o->Htonl   (name.size()); o->Htonl   (type.size());
@@ -630,15 +655,15 @@ struct InterProcessProtocol {
     }
   };
   struct TextureResource : public Serializable {
+    static const int ID = 1<<11 | 2;
     int width, height, pf, linesize;
     StringPiece buf;
-    TextureResource() : width(0), height(0), pf(0), linesize(0) {}
-    TextureResource(const Texture &t) : width(t.width), height(t.height), pf(t.pf), linesize(t.LineSize()),
+    TextureResource() : Serializable(ID), width(0), height(0), pf(0), linesize(0) {}
+    TextureResource(const Texture &t) : Serializable(ID), width(t.width), height(t.height), pf(t.pf), linesize(t.LineSize()),
     buf(reinterpret_cast<const char *>(t.buf), t.BufferSize()) {}
 
-    int Type() const { return 1<<11 | 2; }
-    int Size() const { return HeaderSize() + buf.size(); }
     int HeaderSize() const { return sizeof(int) * 4; }
+    int Size() const { return HeaderSize() + buf.size(); }
 
     void Out(Serializable::Stream *o) const {
       CHECK_EQ(linesize * height, buf.len);
@@ -707,52 +732,54 @@ struct GameProtocol {
     void In(const Serializable::Stream *i)  { i->Ntohs(&fmt); i->Ntohs(&id1); i->Ntohs(&id2); i->Ntohs(&time); }
   };
   struct ChallengeRequest : public Serializable {
-    int Type() const { return 1; }
-    int Size() const { return HeaderSize(); }
-    int HeaderSize() const { return 0; }
+    static const int ID = 1;
+    ChallengeRequest() : Serializable(ID) {}
 
+    int HeaderSize() const { return 0; }
+    int Size() const { return HeaderSize(); }
     void Out(Serializable::Stream *o) const {}
     int   In(const Serializable::Stream *i) { return 0; }
   };
   struct ChallengeResponse : public Serializable {
+    static const int ID = 2;
     int token;
+    ChallengeResponse() : Serializable(ID) {}
 
-    int Type() const { return 2; }
-    int Size() const { return HeaderSize(); }
     int HeaderSize() const { return 4; }
-
+    int Size() const { return HeaderSize(); }
     void Out(Serializable::Stream *o) const { o->Htonl( token); }
     int   In(const Serializable::Stream *i) { i->Ntohl(&token); return 0; }
   };
   struct JoinRequest : public Serializable {
+    static const int ID = 3;
     int token;
     string PlayerName;
+    JoinRequest() : Serializable(ID) {}
 
-    int Type() const { return 3; }
-    int Size() const { return HeaderSize() + PlayerName.size(); }
     int HeaderSize() const { return 4; }
-
+    int Size() const { return HeaderSize() + PlayerName.size(); }
     void Out(Serializable::Stream *o) const { o->Htonl( token); o->String(PlayerName); }
     int   In(const Serializable::Stream *i) { i->Ntohl(&token); PlayerName = i->Get(); return 0; }
   };
   struct JoinResponse : public Serializable {
+    static const int ID = 4;
     string rcon;
+    JoinResponse() : Serializable(ID) {}
 
-    int Type() const { return 4; }
-    int Size() const { return rcon.size(); }
     int HeaderSize() const { return 0; }
-
+    int Size() const { return rcon.size(); }
     void Out(Serializable::Stream *o) const { o->String(rcon); }
     int   In(const Serializable::Stream *i) { rcon = i->Get(); return 0; }
   };
   struct WorldUpdate : public Serializable {
+    static const int ID = 5;
     unsigned short id;
     vector<Entity> entity;
     vector<Collision> collision;
+    WorldUpdate() : Serializable(ID) {}
 
-    int Type() const { return 5; }
-    int Size() const { return HeaderSize() + entity.size() * Entity::size + collision.size() * Collision::size; }
     int HeaderSize() const { return 6; }
+    int Size() const { return HeaderSize() + entity.size() * Entity::size + collision.size() * Collision::size; }
 
     void Out(Serializable::Stream *o) const {
       unsigned short entities=entity.size(), collisions=collision.size();
@@ -772,39 +799,39 @@ struct GameProtocol {
     }
   };
   struct PlayerUpdate : public Serializable {
+    static const int ID = 6;
     unsigned short id_WorldUpdate, time_since_WorldUpdate;
     unsigned buttons;
     Orientation ort;
+    PlayerUpdate() : Serializable(ID) {}
 
-    int Type() const { return 6; }
-    int Size() const { return HeaderSize(); }
     int HeaderSize() const { return 8 + Orientation::size; }
-
+    int Size() const { return HeaderSize(); }
     void Out(Serializable::Stream *o) const { o->Htons( id_WorldUpdate); o->Htons( time_since_WorldUpdate); o->Htonl( buttons); ort.Out(o); }
     int   In(const Serializable::Stream *i) { i->Ntohs(&id_WorldUpdate); i->Ntohs(&time_since_WorldUpdate); i->Ntohl(&buttons); ort.In(i); return 0; }
   };
   struct RconRequest : public Serializable {
+    static const int ID = 7;
     string Text;
-    RconRequest(const string &t=string()) : Text(t) {}
+    RconRequest(const string &t=string()) : Serializable(ID), Text(t) {}
 
-    int Type() const { return 7; }
-    int Size() const { return HeaderSize() + Text.size(); }
     int HeaderSize() const { return 0; }
-
+    int Size() const { return HeaderSize() + Text.size(); }
     void Out(Serializable::Stream *o) const { o->String(Text); }
     int   In(const Serializable::Stream *i) { Text = i->Get(); return 0; }
   };
   struct RconResponse : public Serializable {
-    int Type() const { return 8; }
-    int Size() const { return HeaderSize(); }
-    int HeaderSize() const { return 0; }
+    static const int ID = 8;
+    RconResponse() : Serializable(ID) {}
 
+    int HeaderSize() const { return 0; }
+    int Size() const { return HeaderSize(); }
     void Out(Serializable::Stream *o) const {}
     int   In(const Serializable::Stream *i) { return 0; }
   };
   struct PlayerList : public RconRequest {
-    PlayerList() {}
-    int Type() const { return 9; }
+    static const int ID = 9;
+    PlayerList() { Id=ID; }
   };
 };
 

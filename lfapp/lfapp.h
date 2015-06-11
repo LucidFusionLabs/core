@@ -450,10 +450,10 @@ struct Crypto {
   static string Blowfish(const string &passphrase, const string &in, bool encrypt_or_decrypt);
   static string DiffieHellmanModulus(int generator, int bits);
 #if defined(LFL_COMMONCRYPTO)
-  struct Cipher { CCAlgorithm algo; CCCryptorRef ctx; };
+  struct Cipher { int algo=0; CCAlgorithm ccalgo; CCCryptorRef ctx; };
   struct Digest { int algo=0; void *v=0; };
   struct MAC { CCHmacAlgorithm algo; CCHmacContext ctx; };
-  typedef CCAlgorithm CipherAlgo;
+  typedef int CipherAlgo;
   typedef int DigestAlgo;
   typedef CCHmacAlgorithm MACAlgo;
 #elif defined(LFL_OPENSSL)
@@ -472,14 +472,16 @@ struct Crypto {
   typedef void* MACAlgo;
 #endif
   struct CipherAlgos {
-    static CipherAlgo DES3_CBC();
+    static CipherAlgo TripDES_CBC();
     static CipherAlgo AES128_CBC();
+    static CipherAlgo AES128_CTR();
     static const char *Name(CipherAlgo);
     static int KeySize(CipherAlgo);
   };
   struct DigestAlgos {
     static DigestAlgo MD5();
     static DigestAlgo SHA1();
+    static DigestAlgo SHA256();
     static const char *Name(DigestAlgo);
     static int HashSize(DigestAlgo);
   };

@@ -290,7 +290,7 @@ void ProcessAPIServer::LoadResource(const string &content, const string &fn, con
 
     string msg;
     reqmap[seq] = cb;
-    InterProcessProtocol::LoadResourceRequest(resource.Type(), ipr.url, ipr.len).ToString(&msg, seq++);
+    InterProcessProtocol::LoadResourceRequest(resource.Id, ipr.url, ipr.len).ToString(&msg, seq++);
     IPCTrace("ProcessAPIServer::LoadResource fn='%s' url='%s' msg_size=%zd\n", fn.c_str(), ipr.url.c_str(), msg.size());
     if (conn->state != Connection::Connected) { ERROR("no process api client"); cb(InterProcessProtocol::TextureResource()); }
     else CHECK_EQ(msg.size(), conn->WriteFlush(msg));
@@ -304,7 +304,7 @@ int ProcessAPIServer::Query::Read(Connection *c) {
         hdr.In(&in);
         auto reply = parent->reqmap.find(hdr.seq);
         CHECK_NE(parent->reqmap.end(), reply);
-        if (hdr.id == Serializable::GetType<InterProcessProtocol::LoadResourceResponse>()) {
+        if (hdr.id == InterProcessProtocol::LoadResourceResponse::ID) {
             InterProcessProtocol::LoadResourceResponse req;
             if (req.Read(&in)) break;
             parent->reqmap.erase(hdr.seq);
@@ -312,7 +312,7 @@ int ProcessAPIServer::Query::Read(Connection *c) {
             else {
                 InterProcessResource res(req.ipr_len, req.ipr_url);
                 IPCTrace("ProcessAPIServer::Query::Read LoadResourceResponse url='%s' ", res.url.c_str());
-                if (req.ipr_type == Serializable::GetType<InterProcessProtocol::TextureResource>()) {
+                if (req.ipr_type == InterProcessProtocol::TextureResource::ID) {
                     Serializable::ConstStream res_in(res.buf, res.len);
                     Serializable::Header res_hdr;
                     res_hdr.In(&res_in);
@@ -350,12 +350,12 @@ void ProcessAPIClient::HandleMessagesLoop() {
             Serializable::ConstStream in(conn->rb, conn->rl);
             Serializable::Header hdr;
             hdr.In(&in);
-            if (hdr.id == Serializable::GetType<InterProcessProtocol::LoadResourceRequest>()) {
+            if (hdr.id == InterProcessProtocol::LoadResourceRequest::ID) {
                 InterProcessProtocol::LoadResourceRequest req;
                 if (req.Read(&in)) break;
                 IPCTrace("ProcessAPIClient:HandleMessagesLoop LoadResourceRequest url='%s' ", req.ipr_url.c_str());
                 InterProcessResource res(req.ipr_len, req.ipr_url);
-                if (req.ipr_type == Serializable::GetType<InterProcessProtocol::ContentResource>()) {
+                if (req.ipr_type == InterProcessProtocol::ContentResource::ID) {
                     Serializable::ConstStream res_in(res.buf, res.len);
                     Serializable::Header res_hdr;
                     res_hdr.In(&res_in);
@@ -383,7 +383,7 @@ void ProcessAPIClient::HandleMessagesLoop() {
                         tex_res.ToString(ipr.buf, ipr.len, 0);
                         ipr.id = -1;
                         IPCTrace("ProcessAPIClient:HandleMessagesLoop LoadResourceResponse url='%s' width=%d height=%d ", ipr.url.c_str(), tex_res.width, tex_res.height);
-                        InterProcessProtocol::LoadResourceResponse(tex_res.Type(), ipr.url, ipr.len).ToString(&msg, hdr.seq);
+                        InterProcessProtocol::LoadResourceResponse(tex_res.Id, ipr.url, ipr.len).ToString(&msg, hdr.seq);
                     } else {
                         IPCTrace("ProcessAPIClient:HandleMessagesLoop LoadResourceResponse failed ");
                         InterProcessProtocol::LoadResourceResponse(0, "", 0).ToString(&msg, hdr.seq);

@@ -58,7 +58,7 @@ void Serializable::ToString(char *buf, int len) const {
 }
 void Serializable::ToString(char *buf, int len, unsigned short seq) const {
     MutableStream os(buf, len);
-    Header hdr = { (unsigned short)Type(), seq };
+    Header hdr = { (unsigned short)Id, seq };
     hdr.Out(&os);
     Out(&os);
 }
@@ -444,13 +444,16 @@ const char *SSH::Key::Name(int id) {
 };
 const char *SSH::KEX::Name(int id) {
   switch(id) {
-    case DH14_SHA1: return "diffie-hellman-group14-sha1";
-    case DH1_SHA1:  return "diffie-hellman-group1-sha1";
-    default:        return "";
+    case DHGEX_SHA256: return "diffie-hellman-group-exchange-sha256";
+    case DHGEX_SHA1:   return "diffie-hellman-group-exchange-sha1";
+    case DH14_SHA1:    return "diffie-hellman-group14-sha1";
+    case DH1_SHA1:     return "diffie-hellman-group1-sha1";
+    default:           return "";
   }
 };
 const char *SSH::Cipher::Name(int id) {
   switch(id) {
+    case AES128_CTR:  return "aes128-ctr";
     case AES128_CBC:  return "aes128-cbc";
     case TripDES_CBC: return "3des-cbc";
     default:          return "";
@@ -466,8 +469,9 @@ const char *SSH::MAC::Name(int id) {
 
 Crypto::CipherAlgo SSH::Cipher::Algo(int id) {
   switch(id) {
+    case AES128_CTR:  return Crypto::CipherAlgos::AES128_CTR();
     case AES128_CBC:  return Crypto::CipherAlgos::AES128_CBC();
-    case TripDES_CBC: return Crypto::CipherAlgos::DES3_CBC();
+    case TripDES_CBC: return Crypto::CipherAlgos::TripDES_CBC();
     default:          return 0;
   }
 };
@@ -507,7 +511,7 @@ void SSH::Serializable::ToString(string *out, std::mt19937 &g, int block_size) c
 }
 
 void SSH::Serializable::ToString(char *buf, int len, std::mt19937 &g) const {
-    unsigned char type = Type(), padding = len - SSH::BinaryPacketHeaderSize - Size();
+    unsigned char type = Id, padding = len - SSH::BinaryPacketHeaderSize - Size();
     MutableStream os(buf, len);
     os.Htonl(len - 4);
     os.Write8(padding);

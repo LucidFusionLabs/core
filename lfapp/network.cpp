@@ -1710,7 +1710,6 @@ void HTTPServer::StreamResource::Broadcast(AVPacket *pkt, microseconds timestamp
 }
 #endif /* LFL_FFMPEG */
 
-#define LFL_SSH_DEBUG
 #ifdef LFL_SSH_DEBUG
 #define SSHTrace(...) INFO(__VA_ARGS__)
 #else
@@ -1734,7 +1733,7 @@ struct SSHClientConnection : public Query {
   Crypto::Cipher encrypt, decrypt;
   Crypto::CipherAlgo cipher_algo_c2s=0, cipher_algo_s2c=0;
   Crypto::MACAlgo mac_algo_c2s=0, mac_algo_s2c=0;
-  int kex_method=0, hostkey_type=0;
+  int kex_method=0, hostkey_type=0, dh_gex_min=1024, dh_gex_max=8192, dh_gex_pref=2048;
   int term_width=80, term_height=25;
 
   SSHClientConnection(const SSHClient::ResponseCB &CB) : cb(CB), rand_eng(std::random_device{}()), pty_channel(1,-1),
@@ -1748,12 +1747,7 @@ struct SSHClientConnection : public Query {
     if (state != INIT) return -1;
     string version_text = StrCat(V_C, "\r\n");
     if (c->WriteFlush(version_text) != version_text.size()) return ERRORv(-1, c->Name(), ": write");
-
-    string cipher_pref = SSH::Cipher::PreferenceCSV(), mac_pref = SSH::MAC::PreferenceCSV();
-    KEXINIT_C = SSH::MSG_KEXINIT(RandBytes(16, rand_eng), SSH::KEX::PreferenceCSV(), SSH::Key::PreferenceCSV(),
-                                 cipher_pref, cipher_pref, mac_pref, mac_pref, "none", "none",
-                                 "", "").ToString(rand_eng, 8, &sequence_number_c2s);
-    if (c->WriteFlush(KEXINIT_C) != KEXINIT_C.size()) return ERRORv(-1, c->Name(), ": write");
+    if (!WriteKeyExchangeInit(c, false)) return ERRORv(-1, c->Name(), ": write");
     return 0;
   }
   int Read(Connection *c) {
@@ -1786,140 +1780,184 @@ struct SSHClientConnection : public Query {
         if (check_mac != string(c->rb + packet_len - MAC_len_s, MAC_len_s)) return ERRORv(-1, c->Name(), ": verify MAC failed");
       }
 
-      if (packet_id == Serializable::GetType<SSH::MSG_DISCONNECT>()) {
-        SSH::MSG_DISCONNECT msg;
-        if (msg.In(&s)) return ERRORv(-1, c->Name(), ": read MSG_DISCONNECT");
-        SSHTrace(c->Name(), ": MSG_DISCONNECT ", msg.reason_code, " ", msg.description.str());
+      int v;
+      switch (packet_id) {
+        case SSH::MSG_DISCONNECT::ID: {
+          SSH::MSG_DISCONNECT msg;
+          if (msg.In(&s)) return ERRORv(-1, c->Name(), ": read MSG_DISCONNECT");
+          SSHTrace(c->Name(), ": MSG_DISCONNECT ", msg.reason_code, " ", msg.description.str());
+        } break;
 
-      } else if (packet_id == Serializable::GetType<SSH::MSG_DEBUG>()) {
-        SSH::MSG_DEBUG msg;
-        if (msg.In(&s)) return ERRORv(-1, c->Name(), ": read MSG_DEBUG");
-        SSHTrace(c->Name(), ": MSG_DEBUG ", msg.message.str());
+        case SSH::MSG_DEBUG::ID: {
+          SSH::MSG_DEBUG msg;
+          if (msg.In(&s)) return ERRORv(-1, c->Name(), ": read MSG_DEBUG");
+          SSHTrace(c->Name(), ": MSG_DEBUG ", msg.message.str());
+        } break;
 
-      } else if (packet_id == Serializable::GetType<SSH::MSG_KEXINIT>()) {
-        state = state == FIRST_KEXINIT ? FIRST_KEXREPLY : KEXREPLY;
-        SSH::MSG_KEXINIT msg;
-        if (msg.In(&s)) return ERRORv(-1, c->Name(), ": read MSG_KEXINIT");
-        SSHTrace(c->Name(), ": MSG_KEXINIT ", msg.DebugString());
-        guessed_s = msg.first_kex_packet_follows;
-        KEXINIT_S.assign(packet_text, packet_len - MAC_len_s);
-        if (!SSH::KEX   ::PreferenceIntersect(msg.kex_algorithms,                         &kex_method))      return ERRORv(-1, c->Name(), ": negotiate kex");
-        if (!SSH::Key   ::PreferenceIntersect(msg.server_host_key_algorithms,             &hostkey_type))    return ERRORv(-1, c->Name(), ": negotiate hostkey");
-        if (!SSH::Cipher::PreferenceIntersect(msg.encryption_algorithms_client_to_server, &cipher_algo_c2s)) return ERRORv(-1, c->Name(), ": negotiate c2s cipher");
-        if (!SSH::Cipher::PreferenceIntersect(msg.encryption_algorithms_server_to_client, &cipher_algo_s2c)) return ERRORv(-1, c->Name(), ": negotiate s2c cipher");
-        if (!SSH::MAC   ::PreferenceIntersect(msg.mac_algorithms_client_to_server,        &mac_algo_c2s))    return ERRORv(-1, c->Name(), ": negotiate c2s mac");
-        if (!SSH::MAC   ::PreferenceIntersect(msg.mac_algorithms_server_to_client,        &mac_algo_s2c))    return ERRORv(-1, c->Name(), ": negotiate s2c mac");
-        guessed_right_s = kex_method == SSH::KEX::Id(Split(msg.kex_algorithms, iscomma)) && hostkey_type == SSH::Key::Id(Split(msg.server_host_key_algorithms, iscomma));
-        guessed_right_c = kex_method == 1                                                && hostkey_type == 1;
-        INFO(c->Name(), ": ssh negotiated { kex=", SSH::KEX::Name(kex_method), ", hostkey=", SSH::Key::Name(hostkey_type),
-             cipher_algo_c2s == cipher_algo_s2c ? StrCat(", cipher=", Crypto::CipherAlgos::Name(cipher_algo_c2s)) : StrCat(", cipher_c2s=", Crypto::CipherAlgos::Name(cipher_algo_c2s), ", cipher_s2c=", Crypto::CipherAlgos::Name(cipher_algo_s2c)),
-             mac_algo_c2s    == mac_algo_s2c    ? StrCat(", mac=",    Crypto::   MACAlgos::Name(mac_algo_c2s))    : StrCat(", mac_c2s=",    Crypto::   MACAlgos::Name(mac_algo_c2s),    ", mac_s2c=",    Crypto::   MACAlgos::Name(mac_algo_s2c)),
-             " }");
+        case SSH::MSG_KEXINIT::ID: {
+          state = state == FIRST_KEXINIT ? FIRST_KEXREPLY : KEXREPLY;
+          SSH::MSG_KEXINIT msg;
+          if (msg.In(&s)) return ERRORv(-1, c->Name(), ": read MSG_KEXINIT");
+          SSHTrace(c->Name(), ": MSG_KEXINIT ", msg.DebugString());
+          guessed_s = msg.first_kex_packet_follows;
+          KEXINIT_S.assign(packet_text, packet_len - MAC_len_s);
+          if (!SSH::KEX   ::PreferenceIntersect(msg.kex_algorithms,                         &kex_method))      return ERRORv(-1, c->Name(), ": negotiate kex");
+          if (!SSH::Key   ::PreferenceIntersect(msg.server_host_key_algorithms,             &hostkey_type))    return ERRORv(-1, c->Name(), ": negotiate hostkey");
+          if (!SSH::Cipher::PreferenceIntersect(msg.encryption_algorithms_client_to_server, &cipher_algo_c2s)) return ERRORv(-1, c->Name(), ": negotiate c2s cipher");
+          if (!SSH::Cipher::PreferenceIntersect(msg.encryption_algorithms_server_to_client, &cipher_algo_s2c)) return ERRORv(-1, c->Name(), ": negotiate s2c cipher");
+          if (!SSH::MAC   ::PreferenceIntersect(msg.mac_algorithms_client_to_server,        &mac_algo_c2s))    return ERRORv(-1, c->Name(), ": negotiate c2s mac");
+          if (!SSH::MAC   ::PreferenceIntersect(msg.mac_algorithms_server_to_client,        &mac_algo_s2c))    return ERRORv(-1, c->Name(), ": negotiate s2c mac");
+          guessed_right_s = kex_method == SSH::KEX::Id(Split(msg.kex_algorithms, iscomma)) && hostkey_type == SSH::Key::Id(Split(msg.server_host_key_algorithms, iscomma));
+          guessed_right_c = kex_method == 1                                                && hostkey_type == 1;
+          INFO(c->Name(), ": ssh negotiated { kex=", SSH::KEX::Name(kex_method), ", hostkey=", SSH::Key::Name(hostkey_type),
+               cipher_algo_c2s == cipher_algo_s2c ? StrCat(", cipher=", Crypto::CipherAlgos::Name(cipher_algo_c2s)) : StrCat(", cipher_c2s=", Crypto::CipherAlgos::Name(cipher_algo_c2s), ", cipher_s2c=", Crypto::CipherAlgos::Name(cipher_algo_s2c)),
+               mac_algo_c2s    == mac_algo_s2c    ? StrCat(", mac=",    Crypto::   MACAlgos::Name(mac_algo_c2s))    : StrCat(", mac_c2s=",    Crypto::   MACAlgos::Name(mac_algo_c2s),    ", mac_s2c=",    Crypto::   MACAlgos::Name(mac_algo_s2c)),
+               " }");
 
-        if (kex_method == SSH::KEX::DH14_SHA1 || kex_method == SSH::KEX::DH1_SHA1) {
-          int secret_bits=0;
-          if      (kex_method == SSH::KEX::DH14_SHA1) p = DiffieHellmanGroup14Modulus(g, p, &secret_bits);
-          else if (kex_method == SSH::KEX::DH1_SHA1)  p = DiffieHellmanGroup1Modulus (g, p, &secret_bits);
-          x = BigNumRand(x, secret_bits, 0, -1);
-          BigNumModExp(e, g, x, p, ctx);
-          kex_hash = Crypto::DigestAlgos::SHA1();
-        } else return ERRORv(-1, c->Name(), "unkown kex method: ", kex_method);
+          if (SSH::KEX::DiffieHellmanGroupExchange(kex_method)) {
+            if      (kex_method == SSH::KEX::DHGEX_SHA1)   kex_hash = Crypto::DigestAlgos::SHA1();
+            else if (kex_method == SSH::KEX::DHGEX_SHA256) kex_hash = Crypto::DigestAlgos::SHA256();
+            if (!WriteClearOrEncrypted(c, SSH::MSG_KEX_DH_GEX_REQUEST(dh_gex_min, dh_gex_max, dh_gex_pref)))
+              return ERRORv(-1, c->Name(), ": write");
 
-        if (!WriteClearOrEncrypted(c, SSH::MSG_KEXDH_INIT(e))) return ERRORv(-1, c->Name(), ": write");
+          } else if (SSH::KEX::DiffieHellmanIntegerGroup(kex_method)) {
+            int secret_bits=0;
+            if      (kex_method == SSH::KEX::DH14_SHA1) p = DiffieHellmanGroup14Modulus(g, p, &secret_bits);
+            else if (kex_method == SSH::KEX::DH1_SHA1)  p = DiffieHellmanGroup1Modulus (g, p, &secret_bits);
+            kex_hash = Crypto::DigestAlgos::SHA1();
+            ComputeDiffieHellmanIntegers(secret_bits);
+            if (!WriteClearOrEncrypted(c, SSH::MSG_KEXDH_INIT(e))) return ERRORv(-1, c->Name(), ": write");
 
-      } else if (packet_id == Serializable::GetType<SSH::MSG_KEXDH_REPLY>()) {
-        if (state != FIRST_KEXREPLY && state != KEXREPLY) return ERRORv(-1, c->Name(), ": unexpected state ", state);
-        SSH::MSG_KEXDH_REPLY msg(f);
-        if (msg.In(&s)) return ERRORv(-1, c->Name(), ": read MSG_KEXDH_REPLY");
-        SSHTrace(c->Name(), ": MSG_KEXDH_REPLY");
+          } else return ERRORv(-1, c->Name(), "unkown kex method: ", kex_method);
+        } break;
 
-        int v;
-        BigNumModExp(K, f, x, p, ctx);
-        H_text = ComputeExchangeHash(kex_hash, msg.k_s);
-        SSHTrace(c->Name(), ": H = \"", CHexEscape(H_text), "\"");
-        state = state == FIRST_KEXREPLY ? FIRST_NEWKEYS : NEWKEYS;
-        if ((v = VerifyHostKey(msg.k_s, msg.h_sig)) != 1) return ERRORv(-1, c->Name(), ": verify hostkey failed: ", v);
-        if (!WriteClearOrEncrypted(c, SSH::MSG_NEWKEYS())) return ERRORv(-1, c->Name(), ": write");
+        case SSH::MSG_KEXDH_REPLY::ID:
+        case SSH::MSG_KEX_DH_GEX_REPLY::ID: {
+          if (state != FIRST_KEXREPLY && state != KEXREPLY) return ERRORv(-1, c->Name(), ": unexpected state ", state);
+          if (packet_id == SSH::MSG_KEXDH_REPLY::ID && SSH::KEX::DiffieHellmanGroupExchange(kex_method)) {
+            SSH::MSG_KEX_DH_GEX_GROUP msg(p, g); // MSG_KEX_DH_GEX_GROUP and MSG_KEXDH_REPLY share same ID
+            if (msg.In(&s)) return ERRORv(-1, c->Name(), ": read MSG_KEX_DH_GEX_GROUP");
+            SSHTrace(c->Name(), ": MSG_KEX_DH_GEX_GROUP");
 
-      } else if (packet_id == Serializable::GetType<SSH::MSG_NEWKEYS>()) {
-        if (state != FIRST_NEWKEYS && state != NEWKEYS) return ERRORv(-1, c->Name(), ": unexpected state ", state);
-        SSHTrace(c->Name(), ": MSG_NEWKEYS");
-        int key_len_c = Crypto::CipherAlgos::KeySize(cipher_algo_c2s), key_len_s = Crypto::CipherAlgos::KeySize(cipher_algo_s2c);
-        if (InitCipher(c, &encrypt, cipher_algo_c2s, DeriveKey(kex_hash, 'A', 24), DeriveKey(kex_hash, 'C', key_len_c), true)  != 1) return ERRORv(-1, c->Name(), ": init c->s cipher");
-        if (InitCipher(c, &decrypt, cipher_algo_s2c, DeriveKey(kex_hash, 'B', 24), DeriveKey(kex_hash, 'D', key_len_s), false) != 1) return ERRORv(-1, c->Name(), ": init s->c cipher");
-        encrypt_block_size = Crypto::CipherGetBlockSize(&encrypt);
-        decrypt_block_size = Crypto::CipherGetBlockSize(&decrypt);
-        MAC_len_c = Crypto::MACAlgos::HashSize(mac_algo_c2s);
-        MAC_len_s = Crypto::MACAlgos::HashSize(mac_algo_s2c);
-        integrity_c2s = DeriveKey(kex_hash, 'E', MAC_len_c);
-        integrity_s2c = DeriveKey(kex_hash, 'F', MAC_len_s);
-        state = NEWKEYS;
-        if (!WriteCipher(c, SSH::MSG_SERVICE_REQUEST("ssh-userauth"))) return ERRORv(-1, c->Name(), ": write");
+            ComputeDiffieHellmanIntegers(256);
+            if (!WriteClearOrEncrypted(c, SSH::MSG_KEX_DH_GEX_INIT(e))) return ERRORv(-1, c->Name(), ": write");
 
-      } else if (packet_id == Serializable::GetType<SSH::MSG_SERVICE_ACCEPT>()) {
-        SSHTrace(c->Name(), ": MSG_SERVICE_ACCEPT");
-        if (!WriteCipher(c, SSH::MSG_USERAUTH_REQUEST(user, "ssh-connection", "keyboard-interactive", "", "", "")))
-          return ERRORv(-1, c->Name(), ": write");
+          } else {
+            SSH::MSG_KEXDH_REPLY msg(f);
+            if (msg.In(&s)) return ERRORv(-1, c->Name(), ": read MSG_KEXDH_REPLY");
+            SSHTrace(c->Name(), ": MSG_KEXDH_REPLY");
 
-      } else if (packet_id == Serializable::GetType<SSH::MSG_USERAUTH_FAILURE>()) {
-        SSH::MSG_USERAUTH_FAILURE msg;
-        if (msg.In(&s)) return ERRORv(-1, c->Name(), ": read MSG_USERAUTH_FAILURE");
-        SSHTrace(c->Name(), ": MSG_USERAUTH_FAILURE: auth_left='", msg.auth_left.str(), "'");
-        if (!userauth_fail++) { cb(c, "Password:"); password_prompts = 1; }
-        else return ERRORv(-1, c->Name(), ": authorization failed");
+            BigNumModExp(K, f, x, p, ctx);
+            H_text = ComputeExchangeHash(kex_hash, msg.k_s);
+            SSHTrace(c->Name(), ": H = \"", CHexEscape(H_text), "\"");
+            state = state == FIRST_KEXREPLY ? FIRST_NEWKEYS : NEWKEYS;
+            if ((v = VerifyHostKey(msg.k_s, msg.h_sig)) != 1) return ERRORv(-1, c->Name(), ": verify hostkey failed: ", v);
+            if (!WriteClearOrEncrypted(c, SSH::MSG_NEWKEYS())) return ERRORv(-1, c->Name(), ": write");
+          }
+        } break;
 
-      } else if (packet_id == Serializable::GetType<SSH::MSG_USERAUTH_SUCCESS>()) {
-        SSHTrace(c->Name(), ": MSG_USERAUTH_SUCCESS");
-        if (!WriteCipher(c, SSH::MSG_CHANNEL_OPEN("session", pty_channel.first, 32768, 16384)))
-          return ERRORv(-1, c->Name(), ": write");
+        case SSH::MSG_NEWKEYS::ID: {
+          if (state != FIRST_NEWKEYS && state != NEWKEYS) return ERRORv(-1, c->Name(), ": unexpected state ", state);
+          SSHTrace(c->Name(), ": MSG_NEWKEYS");
+          int key_len_c = Crypto::CipherAlgos::KeySize(cipher_algo_c2s), key_len_s = Crypto::CipherAlgos::KeySize(cipher_algo_s2c);
+          if ((v = InitCipher(c, &encrypt, cipher_algo_c2s, DeriveKey(kex_hash, 'A', 24), DeriveKey(kex_hash, 'C', key_len_c), true))  != 1) return ERRORv(-1, c->Name(), ": init c->s cipher ", v, " keylen=", key_len_c);
+          if ((v = InitCipher(c, &decrypt, cipher_algo_s2c, DeriveKey(kex_hash, 'B', 24), DeriveKey(kex_hash, 'D', key_len_s), false)) != 1) return ERRORv(-1, c->Name(), ": init s->c cipher ", v, " keylen=", key_len_s);
+          encrypt_block_size = Crypto::CipherGetBlockSize(&encrypt);
+          decrypt_block_size = Crypto::CipherGetBlockSize(&decrypt);
+          MAC_len_c = Crypto::MACAlgos::HashSize(mac_algo_c2s);
+          MAC_len_s = Crypto::MACAlgos::HashSize(mac_algo_s2c);
+          integrity_c2s = DeriveKey(kex_hash, 'E', MAC_len_c);
+          integrity_s2c = DeriveKey(kex_hash, 'F', MAC_len_s);
+          state = NEWKEYS;
+          if (!WriteCipher(c, SSH::MSG_SERVICE_REQUEST("ssh-userauth"))) return ERRORv(-1, c->Name(), ": write");
+        } break;
 
-      } else if (packet_id == Serializable::GetType<SSH::MSG_USERAUTH_INFO_REQUEST>()) {
-        SSH::MSG_USERAUTH_INFO_REQUEST msg;
-        if (msg.In(&s)) return ERRORv(-1, c->Name(), ": read MSG_USERAUTH_INFO_REQUEST");
-        SSHTrace(c->Name(), ": MSG_USERAUTH_INFO_REQUEST prompts=", msg.prompt.size());
-        if (!msg.instruction.empty()) { SSHTrace(c->Name(), ": instruction: ", msg.instruction.str()); cb(c, msg.instruction); }
-        for (auto &i : msg.prompt)    { SSHTrace(c->Name(), ": prompt: ",      i.text.str());          cb(c, i.text); }
+        case SSH::MSG_SERVICE_ACCEPT::ID: {
+          SSHTrace(c->Name(), ": MSG_SERVICE_ACCEPT");
+          if (!WriteCipher(c, SSH::MSG_USERAUTH_REQUEST(user, "ssh-connection", "keyboard-interactive", "", "", "")))
+            return ERRORv(-1, c->Name(), ": write");
+        } break;
 
-        if (!(password_prompts = msg.prompt.size()))
-          if (!WriteCipher(c, SSH::MSG_USERAUTH_INFO_RESPONSE())) return ERRORv(-1, c->Name(), ": write");
+        case SSH::MSG_USERAUTH_FAILURE::ID: {
+          SSH::MSG_USERAUTH_FAILURE msg;
+          if (msg.In(&s)) return ERRORv(-1, c->Name(), ": read MSG_USERAUTH_FAILURE");
+          SSHTrace(c->Name(), ": MSG_USERAUTH_FAILURE: auth_left='", msg.auth_left.str(), "'");
+          if (!userauth_fail++) { cb(c, "Password:"); password_prompts = 1; }
+          else return ERRORv(-1, c->Name(), ": authorization failed");
+        } break;
 
-      } else if (packet_id == Serializable::GetType<SSH::MSG_CHANNEL_OPEN_CONFIRMATION>()) {
-        SSH::MSG_CHANNEL_OPEN_CONFIRMATION msg;
-        if (msg.In(&s)) return ERRORv(-1, c->Name(), ": read MSG_CHANNEL_OPEN_CONFIRMATION");
-        SSHTrace(c->Name(), ": MSG_CHANNEL_OPEN_CONFIRMATION");
-        pty_channel.second = msg.sender_channel;
+        case SSH::MSG_USERAUTH_SUCCESS::ID: {
+          SSHTrace(c->Name(), ": MSG_USERAUTH_SUCCESS");
+          if (!WriteCipher(c, SSH::MSG_CHANNEL_OPEN("session", pty_channel.first, 32768, 16384)))
+            return ERRORv(-1, c->Name(), ": write");
+        } break;
 
-        if (!WriteCipher(c, SSH::MSG_CHANNEL_REQUEST
-                         (pty_channel.second, "pty-req", point(term_width, term_height),
-                          point(term_width*8, term_height*12), "screen", "", true))) return ERRORv(-1, c->Name(), ": write");
+        case SSH::MSG_USERAUTH_INFO_REQUEST::ID: {
+          SSH::MSG_USERAUTH_INFO_REQUEST msg;
+          if (msg.In(&s)) return ERRORv(-1, c->Name(), ": read MSG_USERAUTH_INFO_REQUEST");
+          SSHTrace(c->Name(), ": MSG_USERAUTH_INFO_REQUEST prompts=", msg.prompt.size());
+          if (!msg.instruction.empty()) { SSHTrace(c->Name(), ": instruction: ", msg.instruction.str()); cb(c, msg.instruction); }
+          for (auto &i : msg.prompt)    { SSHTrace(c->Name(), ": prompt: ",      i.text.str());          cb(c, i.text); }
 
-        if (!WriteCipher(c, SSH::MSG_CHANNEL_REQUEST(pty_channel.second, "shell", "", true))) return ERRORv(-1, c->Name(), ": write");
+          if (!(password_prompts = msg.prompt.size()))
+            if (!WriteCipher(c, SSH::MSG_USERAUTH_INFO_RESPONSE())) return ERRORv(-1, c->Name(), ": write");
+        } break;
 
-      } else if (packet_id == Serializable::GetType<SSH::MSG_CHANNEL_WINDOW_ADJUST>()) {
-        SSH::MSG_CHANNEL_WINDOW_ADJUST msg;
-        if (msg.In(&s)) return ERRORv(-1, c->Name(), ": read MSG_CHANNEL_WINDOW_ADJUST");
-        SSHTrace(c->Name(), ": MSG_CHANNEL_WINDOW_ADJUST");
+        case SSH::MSG_CHANNEL_OPEN_CONFIRMATION::ID: {
+          SSH::MSG_CHANNEL_OPEN_CONFIRMATION msg;
+          if (msg.In(&s)) return ERRORv(-1, c->Name(), ": read MSG_CHANNEL_OPEN_CONFIRMATION");
+          SSHTrace(c->Name(), ": MSG_CHANNEL_OPEN_CONFIRMATION");
+          pty_channel.second = msg.sender_channel;
 
-      } else if (packet_id == Serializable::GetType<SSH::MSG_CHANNEL_DATA>()) {
-        SSH::MSG_CHANNEL_DATA msg;
-        if (msg.In(&s)) return ERRORv(-1, c->Name(), ": read MSG_CHANNEL_DATA");
-        SSHTrace(c->Name(), ": MSG_CHANNEL_DATA");
-        cb(c, msg.data);
+          if (!WriteCipher(c, SSH::MSG_CHANNEL_REQUEST
+                           (pty_channel.second, "pty-req", point(term_width, term_height),
+                            point(term_width*8, term_height*12), "screen", "", true))) return ERRORv(-1, c->Name(), ": write");
 
-      } else if (packet_id == Serializable::GetType<SSH::MSG_CHANNEL_SUCCESS>()) {
-        SSHTrace(c->Name(), ": MSG_CHANNEL_SUCCESS");
+          if (!WriteCipher(c, SSH::MSG_CHANNEL_REQUEST(pty_channel.second, "shell", "", true))) return ERRORv(-1, c->Name(), ": write");
+        } break;
 
-      } else if (packet_id == Serializable::GetType<SSH::MSG_CHANNEL_FAILURE>()) {
-        SSHTrace(c->Name(), ": MSG_CHANNEL_FAILURE");
+        case SSH::MSG_CHANNEL_WINDOW_ADJUST::ID: {
+          SSH::MSG_CHANNEL_WINDOW_ADJUST msg;
+          if (msg.In(&s)) return ERRORv(-1, c->Name(), ": read MSG_CHANNEL_WINDOW_ADJUST");
+          SSHTrace(c->Name(), ": MSG_CHANNEL_WINDOW_ADJUST");
+        } break;
 
-      } else ERROR(c->Name(), " unknown packet number ", (int)packet_id, " len ", packet_len);
+        case SSH::MSG_CHANNEL_DATA::ID: {
+          SSH::MSG_CHANNEL_DATA msg;
+          if (msg.In(&s)) return ERRORv(-1, c->Name(), ": read MSG_CHANNEL_DATA");
+          SSHTrace(c->Name(), ": MSG_CHANNEL_DATA");
+          cb(c, msg.data);
+        } break;
 
+        case SSH::MSG_CHANNEL_SUCCESS::ID: {
+          SSHTrace(c->Name(), ": MSG_CHANNEL_SUCCESS");
+        } break;
+
+        case SSH::MSG_CHANNEL_FAILURE::ID: {
+          SSHTrace(c->Name(), ": MSG_CHANNEL_FAILURE");
+        } break;
+
+        default: {
+          ERROR(c->Name(), " unknown packet number ", (int)packet_id, " len ", packet_len);
+        } break;
+      }
       c->ReadFlush(packet_len);
       packet_len = 0;
     }
     return 0;
   }
 
+  bool WriteKeyExchangeInit(Connection *c, bool guess) {
+    string cipher_pref = SSH::Cipher::PreferenceCSV(), mac_pref = SSH::MAC::PreferenceCSV();
+    KEXINIT_C = SSH::MSG_KEXINIT(RandBytes(16, rand_eng), SSH::KEX::PreferenceCSV(), SSH::Key::PreferenceCSV(),
+                                 cipher_pref, cipher_pref, mac_pref, mac_pref, "none", "none",
+                                 "", "", guess).ToString(rand_eng, 8, &sequence_number_c2s);
+    return c->WriteFlush(KEXINIT_C) == KEXINIT_C.size();
+  }
+  void ComputeDiffieHellmanIntegers(int secret_bits) {
+    x = BigNumRand(x, secret_bits, 0, -1);
+    BigNumModExp(e, g, x, p, ctx);
+  }
   string ComputeExchangeHash(Crypto::DigestAlgo algo, const StringPiece &k_s) {
     string ret;
     unsigned char kex_c_padding = 0, kex_s_padding = 0;
@@ -1932,6 +1970,13 @@ struct SSHClientConnection : public Query {
     UpdateDigest(&H, StringPiece(KEXINIT_C.data() + 5, kex_c_packet_len - 5 - kex_c_padding));
     UpdateDigest(&H, StringPiece(KEXINIT_S.data() + 5, kex_s_packet_len - 5 - kex_s_padding));
     UpdateDigest(&H, k_s); 
+    if (SSH::KEX::DiffieHellmanGroupExchange(kex_method)) {
+      UpdateDigest(&H, dh_gex_min);
+      UpdateDigest(&H, dh_gex_pref);
+      UpdateDigest(&H, dh_gex_max);
+      UpdateDigest(&H, p);
+      UpdateDigest(&H, g);
+    }
     UpdateDigest(&H, e);
     UpdateDigest(&H, f);
     UpdateDigest(&H, K);
@@ -2060,10 +2105,13 @@ struct SSHClientConnection : public Query {
   }
 
   static void UpdateDigest(Crypto::Digest *d, const StringPiece &s) {
-    char buf[4];
-    Serializable::MutableStream(buf, 4).Htonl(s.size());
-    Crypto::DigestUpdate(d, StringPiece(buf, 4));
+    UpdateDigest(d, s.size());
     Crypto::DigestUpdate(d, s);
+  }
+  static void UpdateDigest(Crypto::Digest *d, int n) {
+    char buf[4];
+    Serializable::MutableStream(buf, 4).Htonl(n);
+    Crypto::DigestUpdate(d, StringPiece(buf, 4));
   }
   static void UpdateDigest(Crypto::Digest *d, BigNum n) {
     string buf(4 + SSH::BigNumSize(n), 0);
