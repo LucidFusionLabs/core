@@ -448,7 +448,6 @@ struct Crypto {
   static string MD5(const string &in);
   static string SHA1(const string &in);
   static string Blowfish(const string &passphrase, const string &in, bool encrypt_or_decrypt);
-  static string DiffieHellmanModulus(int generator, int bits);
 #if defined(LFL_COMMONCRYPTO)
   struct Cipher { int algo=0; CCAlgorithm ccalgo; CCCryptorRef ctx; };
   struct Digest { int algo=0; void *v=0; };
@@ -482,6 +481,8 @@ struct Crypto {
     static DigestAlgo MD5();
     static DigestAlgo SHA1();
     static DigestAlgo SHA256();
+    static DigestAlgo SHA384();
+    static DigestAlgo SHA512();
     static const char *Name(DigestAlgo);
     static int HashSize(DigestAlgo);
   };
@@ -490,6 +491,31 @@ struct Crypto {
     static MACAlgo SHA1();
     static const char *Name(MACAlgo);
     static int HashSize(MACAlgo);
+  };
+  struct DiffieHellman {
+    BigNum g, p, x, e, f;
+    DiffieHellman() : g(NewBigNum()), p(NewBigNum()), x(NewBigNum()), e(NewBigNum()), f(NewBigNum()) {}
+    virtual ~DiffieHellman() { FreeBigNum(g); FreeBigNum(p); FreeBigNum(x); FreeBigNum(e); FreeBigNum(f); }
+    bool GeneratePair(int secret_bits, BigNumContext ctx);
+    bool ComputeSecret(BigNum *K, BigNumContext ctx) { BigNumModExp(*K, f, x, p, ctx); return true; }
+    static string GenerateModulus(int generator, int bits);
+    static BigNum Group1Modulus (BigNum g, BigNum p, int *rand_num_bits);
+    static BigNum Group14Modulus(BigNum g, BigNum p, int *rand_num_bits);
+  };
+  struct EllipticCurve {
+    static ECDef NISTP256();
+    static ECDef NISTP384();
+    static ECDef NISTP521();
+    static ECPair NewPair(ECDef);
+  };
+  struct EllipticCurveDiffieHellman {
+    ECPair pair=0;
+    ECGroup g=0;
+    ECPoint c=0, s=0;
+    string c_text, s_text;
+    virtual ~EllipticCurveDiffieHellman() { FreeECPair(pair); FreeECPoint(s); }
+    bool GeneratePair(ECDef curve, BigNumContext ctx);
+    bool ComputeSecret(BigNum *K, BigNumContext ctx);
   };
   static void CipherInit(Cipher*);
   static void CipherFree(Cipher*);

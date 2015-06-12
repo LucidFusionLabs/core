@@ -88,10 +88,13 @@ extern "C" void QTTriggerFrame();
 #endif
 
 #ifdef LFL_OPENSSL
-#include "openssl/md5.h"
+#include "openssl/evp.h"
 #include "openssl/err.h"
-#include "openssl/dh.h"
 #include "openssl/bn.h"
+#include "openssl/dh.h"
+#include "openssl/ec.h"
+#include "openssl/ecdh.h"
+#include "openssl/md5.h"
 #endif
 
 extern "C" {
@@ -473,17 +476,91 @@ string Crypto::SHA1(const string &in) {
   return DigestFinish(&d);
 }
 
+#ifdef LFL_OPENSSL
+bool Crypto::DiffieHellman::GeneratePair(int secret_bits, BigNumContext ctx) {
+  x = BigNumRand(x, secret_bits, 0, -1);
+  BigNumModExp(e, g, x, p, ctx);
+  return true;
+}
+string Crypto::DiffieHellman::GenerateModulus(int generator, int bits) {
+  DH *dh = DH_new();
+  DH_generate_parameters_ex(dh, bits, generator, NULL);
+  string ret(BN_num_bytes(dh->p), 0);
+  BN_bn2bin(dh->p, (unsigned char*)&ret[0]);
+  DH_free(dh);
+  return ret;
+}
+BigNum Crypto::DiffieHellman::Group1Modulus(BigNum g, BigNum p, int *rand_num_bits) {
+  // https://tools.ietf.org/html/rfc2409 Second Oakley Group
+  char buf[] =
+    "\xff\xff\xff\xff\xff\xff\xff\xff\xc9\x0f\xda\xa2\x21\x68\xc2\x34\xc4\xc6\x62\x8b\x80\xdc\x1c\xd1"
+    "\x29\x02\x4e\x08\x8a\x67\xcc\x74\x02\x0b\xbe\xa6\x3b\x13\x9b\x22\x51\x4a\x08\x79\x8e\x34\x04\xdd"
+    "\xef\x95\x19\xb3\xcd\x3a\x43\x1b\x30\x2b\x0a\x6d\xf2\x5f\x14\x37\x4f\xe1\x35\x6d\x6d\x51\xc2\x45"
+    "\xe4\x85\xb5\x76\x62\x5e\x7e\xc6\xf4\x4c\x42\xe9\xa6\x37\xed\x6b\x0b\xff\x5c\xb6\xf4\x06\xb7\xed"
+    "\xee\x38\x6b\xfb\x5a\x89\x9f\xa5\xae\x9f\x24\x11\x7c\x4b\x1f\xe6\x49\x28\x66\x51\xec\xe6\x53\x81"
+    "\xff\xff\xff\xff\xff\xff\xff\xff";
+  BigNumSetValue(g, 2);
+  *rand_num_bits = 160;
+  return BigNumSetData(p, StringPiece(buf, sizeof(buf)-1));
+}
+BigNum Crypto::DiffieHellman::Group14Modulus(BigNum g, BigNum p, int *rand_num_bits) {
+  // https://tools.ietf.org/html/rfc3526 Oakley Group 14
+  char buf[] =
+    "\xff\xff\xff\xff\xff\xff\xff\xff\xc9\x0f\xda\xa2\x21\x68\xc2\x34\xc4\xc6\x62\x8b\x80\xdc\x1c\xd1"
+    "\x29\x02\x4e\x08\x8a\x67\xcc\x74\x02\x0b\xbe\xa6\x3b\x13\x9b\x22\x51\x4a\x08\x79\x8e\x34\x04\xdd"
+    "\xef\x95\x19\xb3\xcd\x3a\x43\x1b\x30\x2b\x0a\x6d\xf2\x5f\x14\x37\x4f\xe1\x35\x6d\x6d\x51\xc2\x45"
+    "\xe4\x85\xb5\x76\x62\x5e\x7e\xc6\xf4\x4c\x42\xe9\xa6\x37\xed\x6b\x0b\xff\x5c\xb6\xf4\x06\xb7\xed"
+    "\xee\x38\x6b\xfb\x5a\x89\x9f\xa5\xae\x9f\x24\x11\x7c\x4b\x1f\xe6\x49\x28\x66\x51\xec\xe4\x5b\x3d"
+    "\xc2\x00\x7c\xb8\xa1\x63\xbf\x05\x98\xda\x48\x36\x1c\x55\xd3\x9a\x69\x16\x3f\xa8\xfd\x24\xcf\x5f"
+    "\x83\x65\x5d\x23\xdc\xa3\xad\x96\x1c\x62\xf3\x56\x20\x85\x52\xbb\x9e\xd5\x29\x07\x70\x96\x96\x6d"
+    "\x67\x0c\x35\x4e\x4a\xbc\x98\x04\xf1\x74\x6c\x08\xca\x18\x21\x7c\x32\x90\x5e\x46\x2e\x36\xce\x3b"
+    "\xe3\x9e\x77\x2c\x18\x0e\x86\x03\x9b\x27\x83\xa2\xec\x07\xa2\x8f\xb5\xc5\x5d\xf0\x6f\x4c\x52\xc9"
+    "\xde\x2b\xcb\xf6\x95\x58\x17\x18\x39\x95\x49\x7c\xea\x95\x6a\xe5\x15\xd2\x26\x18\x98\xfa\x05\x10"
+    "\x15\x72\x8e\x5a\x8a\xac\xaa\x68\xff\xff\xff\xff\xff\xff\xff\xff";
+  BigNumSetValue(g, 2);
+  *rand_num_bits = 224;
+  return BigNumSetData(p, StringPiece(buf, sizeof(buf)-1));
+}
+ECDef Crypto::EllipticCurve::NISTP256() { return NID_X9_62_prime256v1; };
+ECDef Crypto::EllipticCurve::NISTP384() { return NID_secp384r1; };
+ECDef Crypto::EllipticCurve::NISTP521() { return NID_secp521r1; };
+ECPair Crypto::EllipticCurve::NewPair(int id) {
+  ECPair pair = EC_KEY_new_by_curve_name(id);
+  if (pair && EC_KEY_generate_key(pair) != 1) { EC_KEY_free(pair); return NULL; }
+  return pair;
+}
+bool Crypto::EllipticCurveDiffieHellman::GeneratePair(ECDef curve, BigNumContext ctx) {
+  FreeECPair(pair);
+  if (!(pair = Crypto::EllipticCurve::NewPair(curve))) return false;
+  g = GetECPairGroup(pair);
+  c = GetECPairPubKey(pair);
+  c_text.resize(ECPointDataSize(g, c, ctx), 0);
+  ECPointGetData(g, c, &c_text[0], c_text.size(), ctx);
+  FreeECPoint(s);
+  s = NewECPoint(g);
+  return true;
+}
+bool Crypto::EllipticCurveDiffieHellman::ComputeSecret(BigNum *K, BigNumContext ctx) {
+  string k_text((EC_GROUP_get_degree(g) + 7) / 8, 0);
+#undef ECDH_compute_key
+  if (ECDH_compute_key(&k_text[0], k_text.size(), s, pair, 0) != k_text.size()) return false;
+  *K = BigNumSetData(*K, k_text);
+  return true;
+}
+#endif
+
 #if defined(LFL_COMMONCRYPTO)
 struct CCCipherAlgo { enum { TripDES_CBC=1, AES128_CBC=2, AES128_CTR=3 }; };
-struct CCDigestAlgo { enum { MD5=1, SHA1=2, SHA256=3 }; };
+struct CCDigestAlgo { enum { MD5=1, SHA1=2, SHA256=3, SHA384=4, SHA512=5 }; };
 string Crypto::Blowfish(const string &passphrase, const string &in, bool encrypt_or_decrypt) { FATAL("not implemented"); }
-string Crypto::DiffieHellmanModulus(int generator, int bits) { FATAL("not implemented"); }
 Crypto::CipherAlgo Crypto::CipherAlgos::TripDES_CBC() { return CCCipherAlgo::TripDES_CBC; }
 Crypto::CipherAlgo Crypto::CipherAlgos::AES128_CBC()  { return CCCipherAlgo::AES128_CBC; }
 Crypto::CipherAlgo Crypto::CipherAlgos::AES128_CTR()  { return CCCipherAlgo::AES128_CTR; }
 Crypto::DigestAlgo Crypto::DigestAlgos::MD5()         { return CCDigestAlgo::MD5; }
 Crypto::DigestAlgo Crypto::DigestAlgos::SHA1()        { return CCDigestAlgo::SHA1; }
 Crypto::DigestAlgo Crypto::DigestAlgos::SHA256()      { return CCDigestAlgo::SHA256; }
+Crypto::DigestAlgo Crypto::DigestAlgos::SHA384()      { return CCDigestAlgo::SHA384; }
+Crypto::DigestAlgo Crypto::DigestAlgos::SHA512()      { return CCDigestAlgo::SHA512; }
 Crypto::MACAlgo    Crypto::   MACAlgos::MD5()         { return kCCHmacAlgMD5; }
 Crypto::MACAlgo    Crypto::   MACAlgos::SHA1()        { return kCCHmacAlgSHA1; }
 const char *Crypto::CipherAlgos::Name(CipherAlgo v) {
@@ -507,6 +584,8 @@ const char *Crypto::DigestAlgos::Name(DigestAlgo v) {
     case CCDigestAlgo::MD5:    return "md5";
     case CCDigestAlgo::SHA1:   return "sha1";
     case CCDigestAlgo::SHA256: return "sha256";
+    case CCDigestAlgo::SHA384: return "sha384";
+    case CCDigestAlgo::SHA512: return "sha512";
     default:                   return "none";
   }
 }
@@ -515,6 +594,8 @@ int Crypto::DigestAlgos::HashSize(DigestAlgo v) {
     case CCDigestAlgo::MD5:    return CC_MD5_DIGEST_LENGTH;
     case CCDigestAlgo::SHA1:   return CC_SHA1_DIGEST_LENGTH;
     case CCDigestAlgo::SHA256: return CC_SHA256_DIGEST_LENGTH;
+    case CCDigestAlgo::SHA384: return CC_SHA384_DIGEST_LENGTH;
+    case CCDigestAlgo::SHA512: return CC_SHA512_DIGEST_LENGTH;
     default:                   return 0;
   }
 }
@@ -563,6 +644,8 @@ void Crypto::DigestOpen(Digest *d, DigestAlgo algo) {
     case CCDigestAlgo::MD5:    d->v=calloc(sizeof(CC_MD5_CTX),   1); CC_MD5_Init   ((CC_MD5_CTX*)   d->v); break;
     case CCDigestAlgo::SHA1:   d->v=calloc(sizeof(CC_SHA1_CTX),  1); CC_SHA1_Init  ((CC_SHA1_CTX*)  d->v); break;
     case CCDigestAlgo::SHA256: d->v=calloc(sizeof(CC_SHA256_CTX),1); CC_SHA256_Init((CC_SHA256_CTX*)d->v); break;
+    case CCDigestAlgo::SHA384: d->v=calloc(sizeof(CC_SHA512_CTX),1); CC_SHA384_Init((CC_SHA512_CTX*)d->v); break;
+    case CCDigestAlgo::SHA512: d->v=calloc(sizeof(CC_SHA512_CTX),1); CC_SHA512_Init((CC_SHA512_CTX*)d->v); break;
     default:                   d->v=0; break;
   }
 }
@@ -571,6 +654,8 @@ void Crypto::DigestUpdate(Digest *d, const StringPiece &in) {
     case CCDigestAlgo::MD5:    CC_MD5_Update   ((CC_MD5_CTX*)   d->v, in.data(), in.size()); break;
     case CCDigestAlgo::SHA1:   CC_SHA1_Update  ((CC_SHA1_CTX*)  d->v, in.data(), in.size()); break;
     case CCDigestAlgo::SHA256: CC_SHA256_Update((CC_SHA256_CTX*)d->v, in.data(), in.size()); break;
+    case CCDigestAlgo::SHA384: CC_SHA384_Update((CC_SHA512_CTX*)d->v, in.data(), in.size()); break;
+    case CCDigestAlgo::SHA512: CC_SHA512_Update((CC_SHA512_CTX*)d->v, in.data(), in.size()); break;
     default: break;
   }
 } 
@@ -580,6 +665,8 @@ string Crypto::DigestFinish(Digest *d) {
     case CCDigestAlgo::MD5:    ret.resize(CC_MD5_DIGEST_LENGTH);    CC_MD5_Final   (reinterpret_cast<unsigned char *>(&ret[0]), (CC_MD5_CTX*)   d->v); free(d->v); d->v=0; break;
     case CCDigestAlgo::SHA1:   ret.resize(CC_SHA1_DIGEST_LENGTH);   CC_SHA1_Final  (reinterpret_cast<unsigned char *>(&ret[0]), (CC_SHA1_CTX*)  d->v); free(d->v); d->v=0; break;
     case CCDigestAlgo::SHA256: ret.resize(CC_SHA256_DIGEST_LENGTH); CC_SHA256_Final(reinterpret_cast<unsigned char *>(&ret[0]), (CC_SHA256_CTX*)d->v); free(d->v); d->v=0; break;
+    case CCDigestAlgo::SHA384: ret.resize(CC_SHA384_DIGEST_LENGTH); CC_SHA384_Final(reinterpret_cast<unsigned char *>(&ret[0]), (CC_SHA512_CTX*)d->v); free(d->v); d->v=0; break;
+    case CCDigestAlgo::SHA512: ret.resize(CC_SHA512_DIGEST_LENGTH); CC_SHA512_Final(reinterpret_cast<unsigned char *>(&ret[0]), (CC_SHA512_CTX*)d->v); free(d->v); d->v=0; break;
     default: break;
   }
   return ret;
@@ -617,20 +704,13 @@ string Crypto::Blowfish(const string &passphrase, const string &in, bool encrypt
   return out;
 }
 
-string Crypto::DiffieHellmanModulus(int generator, int bits) {
-  DH *dh = DH_new();
-  DH_generate_parameters_ex(dh, bits, generator, NULL);
-  string ret(BN_num_bytes(dh->p), 0);
-  BN_bn2bin(dh->p, (unsigned char*)&ret[0]);
-  DH_free(dh);
-  return ret;
-}
-
 Crypto::CipherAlgo Crypto::CipherAlgos::TripDES_CBC() { return EVP_des_ede3_cbc(); }
 Crypto::CipherAlgo Crypto::CipherAlgos::AES128_CBC()  { return EVP_aes_128_cbc(); }
 Crypto::CipherAlgo Crypto::CipherAlgos::AES128_CTR()  { return EVP_aes_128_ctr(); }
 Crypto::DigestAlgo Crypto::DigestAlgos::SHA1()        { return EVP_get_digestbyname("sha1"); }
 Crypto::DigestAlgo Crypto::DigestAlgos::SHA256()      { return EVP_get_digestbyname("sha256"); }
+Crypto::DigestAlgo Crypto::DigestAlgos::SHA384()      { return EVP_get_digestbyname("sha384"); }
+Crypto::DigestAlgo Crypto::DigestAlgos::SHA512()      { return EVP_get_digestbyname("sha512"); }
 Crypto::DigestAlgo Crypto::DigestAlgos::MD5()         { return EVP_md5(); }
 Crypto::MACAlgo    Crypto::MACAlgos   ::SHA1()        { return EVP_sha1(); }
 Crypto::MACAlgo    Crypto::MACAlgos   ::MD5()         { return EVP_md5(); }
@@ -672,6 +752,8 @@ Crypto::CipherAlgo Crypto::CipherAlgos::AES128_CBC()  { FATAL("not implemented")
 Crypto::CipherAlgo Crypto::CipherAlgos::AES128_CTR()  { FATAL("not implemented"); }
 Crypto::DigestAlgo Crypto::DigestAlgos::SHA1()        { FATAL("not implemented"); }
 Crypto::DigestAlgo Crypto::DigestAlgos::SHA256()      { FATAL("not implemented"); }
+Crypto::DigestAlgo Crypto::DigestAlgos::SHA384()      { FATAL("not implemented"); }
+Crypto::DigestAlgo Crypto::DigestAlgos::SHA512()      { FATAL("not implemented"); }
 Crypto::DigestAlgo Crypto::DigestAlgos::MD5()         { FATAL("not implemented"); }
 Crypto::MACAlgo    Crypto::   MACAlgos::SHA1()        { FATAL("not implemented"); }
 Crypto::MACAlgo    Crypto::   MACAlgos::MD5()         { FATAL("not implemented"); }

@@ -1727,20 +1727,20 @@ struct SSHClientConnection : public Query {
   pair<int, int> pty_channel;
   std::mt19937 rand_eng;
   BigNumContext ctx;
-  BigNum g, p, x, e, f, K;
+  Crypto::DiffieHellman dh;
+  Crypto::EllipticCurveDiffieHellman ecdh;
+  BigNum K;
   string V_C, V_S, KEXINIT_C, KEXINIT_S, H_text, session_id, integrity_c2s, integrity_s2c, decrypt_buf, user, pw;
   Crypto::DigestAlgo kex_hash;
   Crypto::Cipher encrypt, decrypt;
   Crypto::CipherAlgo cipher_algo_c2s=0, cipher_algo_s2c=0;
   Crypto::MACAlgo mac_algo_c2s=0, mac_algo_s2c=0;
-  int kex_method=0, hostkey_type=0, dh_gex_min=1024, dh_gex_max=8192, dh_gex_pref=2048;
-  int term_width=80, term_height=25;
+  int kex_method=0, hostkey_type=0, dh_gex_min=1024, dh_gex_max=8192, dh_gex_pref=2048, curve_id=0;
+  int initial_window_size=32768, max_packet_size=16384, term_width=80, term_height=25;
 
   SSHClientConnection(const SSHClient::ResponseCB &CB) : cb(CB), rand_eng(std::random_device{}()), pty_channel(1,-1),
-    ctx(NewBigNumContext()), g(NewBigNum()), p(NewBigNum()), x(NewBigNum()), e(NewBigNum()), f(NewBigNum()), K(NewBigNum()),
-    V_C("SSH-2.0-LFL_1.0") { Crypto::CipherInit(&encrypt); Crypto::CipherInit(&decrypt); }
-  virtual ~SSHClientConnection() { FreeBigNumContext(ctx); FreeBigNum(g); FreeBigNum(p); FreeBigNum(x); FreeBigNum(e);
-    FreeBigNum(f); FreeBigNum(K); Crypto::CipherFree(&encrypt); Crypto::CipherFree(&decrypt); }
+    ctx(NewBigNumContext()), K(NewBigNum()), V_C("SSH-2.0-LFL_1.0") { Crypto::CipherInit(&encrypt); Crypto::CipherInit(&decrypt); }
+  virtual ~SSHClientConnection() { FreeBigNumContext(ctx); FreeBigNum(K); Crypto::CipherFree(&encrypt); Crypto::CipherFree(&decrypt); }
 
   void Close(Connection *c) { cb(c, StringPiece()); }
   int Connected(Connection *c) {
@@ -1814,19 +1814,29 @@ struct SSHClientConnection : public Query {
                mac_algo_c2s    == mac_algo_s2c    ? StrCat(", mac=",    Crypto::   MACAlgos::Name(mac_algo_c2s))    : StrCat(", mac_c2s=",    Crypto::   MACAlgos::Name(mac_algo_c2s),    ", mac_s2c=",    Crypto::   MACAlgos::Name(mac_algo_s2c)),
                " }");
 
-          if (SSH::KEX::DiffieHellmanGroupExchange(kex_method)) {
+          if (SSH::KEX::EllipticCurveDiffieHellman(kex_method)) {
+            switch (kex_method) {
+              case SSH::KEX::ECDH_SHA2_NISTP256: curve_id=Crypto::EllipticCurve::NISTP256(); kex_hash=Crypto::DigestAlgos::SHA256(); break;
+              case SSH::KEX::ECDH_SHA2_NISTP384: curve_id=Crypto::EllipticCurve::NISTP384(); kex_hash=Crypto::DigestAlgos::SHA384(); break;
+              case SSH::KEX::ECDH_SHA2_NISTP521: curve_id=Crypto::EllipticCurve::NISTP521(); kex_hash=Crypto::DigestAlgos::SHA512(); break;
+              default:                           return ERRORv(-1, c->Name(), ": ecdh curve");
+            }
+            if (!ecdh.GeneratePair(curve_id, ctx)) return ERRORv(-1, c->Name(), ": generate ecdh key");
+            if (!WriteClearOrEncrypted(c, SSH::MSG_KEX_ECDH_INIT(ecdh.c_text))) return ERRORv(-1, c->Name(), ": write");
+
+          } else if (SSH::KEX::DiffieHellmanGroupExchange(kex_method)) {
             if      (kex_method == SSH::KEX::DHGEX_SHA1)   kex_hash = Crypto::DigestAlgos::SHA1();
             else if (kex_method == SSH::KEX::DHGEX_SHA256) kex_hash = Crypto::DigestAlgos::SHA256();
             if (!WriteClearOrEncrypted(c, SSH::MSG_KEX_DH_GEX_REQUEST(dh_gex_min, dh_gex_max, dh_gex_pref)))
               return ERRORv(-1, c->Name(), ": write");
 
-          } else if (SSH::KEX::DiffieHellmanIntegerGroup(kex_method)) {
+          } else if (SSH::KEX::DiffieHellman(kex_method)) {
             int secret_bits=0;
-            if      (kex_method == SSH::KEX::DH14_SHA1) p = DiffieHellmanGroup14Modulus(g, p, &secret_bits);
-            else if (kex_method == SSH::KEX::DH1_SHA1)  p = DiffieHellmanGroup1Modulus (g, p, &secret_bits);
+            if      (kex_method == SSH::KEX::DH14_SHA1) dh.p = Crypto::DiffieHellman::Group14Modulus(dh.g, dh.p, &secret_bits);
+            else if (kex_method == SSH::KEX::DH1_SHA1)  dh.p = Crypto::DiffieHellman::Group1Modulus (dh.g, dh.p, &secret_bits);
             kex_hash = Crypto::DigestAlgos::SHA1();
-            ComputeDiffieHellmanIntegers(secret_bits);
-            if (!WriteClearOrEncrypted(c, SSH::MSG_KEXDH_INIT(e))) return ERRORv(-1, c->Name(), ": write");
+            if (!dh.GeneratePair(secret_bits, ctx)) return ERRORv(-1, c->Name(), ": generate dh key");
+            if (!WriteClearOrEncrypted(c, SSH::MSG_KEXDH_INIT(dh.e))) return ERRORv(-1, c->Name(), ": write");
 
           } else return ERRORv(-1, c->Name(), "unkown kex method: ", kex_method);
         } break;
@@ -1834,26 +1844,38 @@ struct SSHClientConnection : public Query {
         case SSH::MSG_KEXDH_REPLY::ID:
         case SSH::MSG_KEX_DH_GEX_REPLY::ID: {
           if (state != FIRST_KEXREPLY && state != KEXREPLY) return ERRORv(-1, c->Name(), ": unexpected state ", state);
-          if (packet_id == SSH::MSG_KEXDH_REPLY::ID && SSH::KEX::DiffieHellmanGroupExchange(kex_method)) {
-            SSH::MSG_KEX_DH_GEX_GROUP msg(p, g); // MSG_KEX_DH_GEX_GROUP and MSG_KEXDH_REPLY share same ID
+          if (guessed_s && !guessed_right_s && !(guessed_s=0)) { INFO(c->Name(), ": server guessed wrong, ignoring"); break; }
+          if (packet_id == SSH::MSG_KEXDH_REPLY::ID && SSH::KEX::EllipticCurveDiffieHellman(kex_method)) {
+            SSH::MSG_KEX_ECDH_REPLY msg; // MSG_KEX_ECDH_REPLY and MSG_KEXDH_REPLY share ID 31
+            if (msg.In(&s)) return ERRORv(-1, c->Name(), ": read MSG_KEX_ECDH_REPLY");
+            SSHTrace(c->Name(), ": MSG_KEX_ECDH_REPLY");
+
+            ecdh.s_text = msg.q_s.str();
+            ECPointSetData(ecdh.g, ecdh.s, ecdh.s_text);
+            if (!ecdh.ComputeSecret(&K, ctx)) return ERRORv(-1, c->Name(), ": ecdh");
+            if ((v = ComputeExchangeHashAndVerifyHostKey(c, msg.k_s, msg.h_sig)) != 1) return ERRORv(-1, c->Name(), ": verify hostkey failed: ", v);
+            // fall forward
+
+          } else if (packet_id == SSH::MSG_KEXDH_REPLY::ID && SSH::KEX::DiffieHellmanGroupExchange(kex_method)) {
+            SSH::MSG_KEX_DH_GEX_GROUP msg(dh.p, dh.g); // MSG_KEX_DH_GEX_GROUP and MSG_KEXDH_REPLY share ID 31
             if (msg.In(&s)) return ERRORv(-1, c->Name(), ": read MSG_KEX_DH_GEX_GROUP");
             SSHTrace(c->Name(), ": MSG_KEX_DH_GEX_GROUP");
 
-            ComputeDiffieHellmanIntegers(256);
-            if (!WriteClearOrEncrypted(c, SSH::MSG_KEX_DH_GEX_INIT(e))) return ERRORv(-1, c->Name(), ": write");
+            if (!dh.GeneratePair(256, ctx)) return ERRORv(-1, c->Name(), ": generate dh_gex key");
+            if (!WriteClearOrEncrypted(c, SSH::MSG_KEX_DH_GEX_INIT(dh.e))) return ERRORv(-1, c->Name(), ": write");
+            break;
 
           } else {
-            SSH::MSG_KEXDH_REPLY msg(f);
+            SSH::MSG_KEXDH_REPLY msg(dh.f);
             if (msg.In(&s)) return ERRORv(-1, c->Name(), ": read MSG_KEXDH_REPLY");
             SSHTrace(c->Name(), ": MSG_KEXDH_REPLY");
-
-            BigNumModExp(K, f, x, p, ctx);
-            H_text = ComputeExchangeHash(kex_hash, msg.k_s);
-            SSHTrace(c->Name(), ": H = \"", CHexEscape(H_text), "\"");
-            state = state == FIRST_KEXREPLY ? FIRST_NEWKEYS : NEWKEYS;
-            if ((v = VerifyHostKey(msg.k_s, msg.h_sig)) != 1) return ERRORv(-1, c->Name(), ": verify hostkey failed: ", v);
-            if (!WriteClearOrEncrypted(c, SSH::MSG_NEWKEYS())) return ERRORv(-1, c->Name(), ": write");
+            if (!dh.ComputeSecret(&K, ctx)) return ERRORv(-1, c->Name(), ": dh");
+            if ((v = ComputeExchangeHashAndVerifyHostKey(c, msg.k_s, msg.h_sig)) != 1) return ERRORv(-1, c->Name(), ": verify hostkey failed: ", v);
+            // fall forward
           }
+
+          state = state == FIRST_KEXREPLY ? FIRST_NEWKEYS : NEWKEYS;
+          if (!WriteClearOrEncrypted(c, SSH::MSG_NEWKEYS())) return ERRORv(-1, c->Name(), ": write");
         } break;
 
         case SSH::MSG_NEWKEYS::ID: {
@@ -1888,7 +1910,7 @@ struct SSHClientConnection : public Query {
 
         case SSH::MSG_USERAUTH_SUCCESS::ID: {
           SSHTrace(c->Name(), ": MSG_USERAUTH_SUCCESS");
-          if (!WriteCipher(c, SSH::MSG_CHANNEL_OPEN("session", pty_channel.first, 32768, 16384)))
+          if (!WriteCipher(c, SSH::MSG_CHANNEL_OPEN("session", pty_channel.first, initial_window_size, max_packet_size)))
             return ERRORv(-1, c->Name(), ": write");
         } break;
 
@@ -1954,9 +1976,10 @@ struct SSHClientConnection : public Query {
                                  "", "", guess).ToString(rand_eng, 8, &sequence_number_c2s);
     return c->WriteFlush(KEXINIT_C) == KEXINIT_C.size();
   }
-  void ComputeDiffieHellmanIntegers(int secret_bits) {
-    x = BigNumRand(x, secret_bits, 0, -1);
-    BigNumModExp(e, g, x, p, ctx);
+  int ComputeExchangeHashAndVerifyHostKey(Connection *c, const StringPiece &k_s, const StringPiece &h_sig) {
+    H_text = ComputeExchangeHash(kex_hash, k_s);
+    SSHTrace(c->Name(), ": H = \"", CHexEscape(H_text), "\"");
+    return VerifyHostKey(k_s, h_sig);
   }
   string ComputeExchangeHash(Crypto::DigestAlgo algo, const StringPiece &k_s) {
     string ret;
@@ -1974,11 +1997,16 @@ struct SSHClientConnection : public Query {
       UpdateDigest(&H, dh_gex_min);
       UpdateDigest(&H, dh_gex_pref);
       UpdateDigest(&H, dh_gex_max);
-      UpdateDigest(&H, p);
-      UpdateDigest(&H, g);
+      UpdateDigest(&H, dh.p);
+      UpdateDigest(&H, dh.g);
     }
-    UpdateDigest(&H, e);
-    UpdateDigest(&H, f);
+    if (SSH::KEX::EllipticCurveDiffieHellman(kex_method)) {
+      UpdateDigest(&H, ecdh.c_text);
+      UpdateDigest(&H, ecdh.s_text);
+    } else {
+      UpdateDigest(&H, dh.e);
+      UpdateDigest(&H, dh.f);
+    }
     UpdateDigest(&H, K);
     ret = Crypto::DigestFinish(&H);
     if (state == FIRST_KEXREPLY) session_id = ret;
@@ -2118,37 +2146,6 @@ struct SSHClientConnection : public Query {
     Serializable::MutableStream o(&buf[0], buf.size());
     SSH::WriteBigNum(n, &o);
     Crypto::DigestUpdate(d, buf);
-  }
-  static BigNum DiffieHellmanGroup1Modulus(BigNum g, BigNum p, int *rand_num_bits) {
-    // https://tools.ietf.org/html/rfc2409 Second Oakley Group
-    char buf[] =
-      "\xff\xff\xff\xff\xff\xff\xff\xff\xc9\x0f\xda\xa2\x21\x68\xc2\x34\xc4\xc6\x62\x8b\x80\xdc\x1c\xd1"
-      "\x29\x02\x4e\x08\x8a\x67\xcc\x74\x02\x0b\xbe\xa6\x3b\x13\x9b\x22\x51\x4a\x08\x79\x8e\x34\x04\xdd"
-      "\xef\x95\x19\xb3\xcd\x3a\x43\x1b\x30\x2b\x0a\x6d\xf2\x5f\x14\x37\x4f\xe1\x35\x6d\x6d\x51\xc2\x45"
-      "\xe4\x85\xb5\x76\x62\x5e\x7e\xc6\xf4\x4c\x42\xe9\xa6\x37\xed\x6b\x0b\xff\x5c\xb6\xf4\x06\xb7\xed"
-      "\xee\x38\x6b\xfb\x5a\x89\x9f\xa5\xae\x9f\x24\x11\x7c\x4b\x1f\xe6\x49\x28\x66\x51\xec\xe6\x53\x81"
-      "\xff\xff\xff\xff\xff\xff\xff\xff";
-    BigNumSetValue(g, 2);
-    *rand_num_bits = 160;
-    return BigNumSetData(p, StringPiece(buf, sizeof(buf)-1));
-  }
-  static BigNum DiffieHellmanGroup14Modulus(BigNum g, BigNum p, int *rand_num_bits) {
-    // https://tools.ietf.org/html/rfc3526 Oakley Group 14
-    char buf[] =
-      "\xff\xff\xff\xff\xff\xff\xff\xff\xc9\x0f\xda\xa2\x21\x68\xc2\x34\xc4\xc6\x62\x8b\x80\xdc\x1c\xd1"
-      "\x29\x02\x4e\x08\x8a\x67\xcc\x74\x02\x0b\xbe\xa6\x3b\x13\x9b\x22\x51\x4a\x08\x79\x8e\x34\x04\xdd"
-      "\xef\x95\x19\xb3\xcd\x3a\x43\x1b\x30\x2b\x0a\x6d\xf2\x5f\x14\x37\x4f\xe1\x35\x6d\x6d\x51\xc2\x45"
-      "\xe4\x85\xb5\x76\x62\x5e\x7e\xc6\xf4\x4c\x42\xe9\xa6\x37\xed\x6b\x0b\xff\x5c\xb6\xf4\x06\xb7\xed"
-      "\xee\x38\x6b\xfb\x5a\x89\x9f\xa5\xae\x9f\x24\x11\x7c\x4b\x1f\xe6\x49\x28\x66\x51\xec\xe4\x5b\x3d"
-      "\xc2\x00\x7c\xb8\xa1\x63\xbf\x05\x98\xda\x48\x36\x1c\x55\xd3\x9a\x69\x16\x3f\xa8\xfd\x24\xcf\x5f"
-      "\x83\x65\x5d\x23\xdc\xa3\xad\x96\x1c\x62\xf3\x56\x20\x85\x52\xbb\x9e\xd5\x29\x07\x70\x96\x96\x6d"
-      "\x67\x0c\x35\x4e\x4a\xbc\x98\x04\xf1\x74\x6c\x08\xca\x18\x21\x7c\x32\x90\x5e\x46\x2e\x36\xce\x3b"
-      "\xe3\x9e\x77\x2c\x18\x0e\x86\x03\x9b\x27\x83\xa2\xec\x07\xa2\x8f\xb5\xc5\x5d\xf0\x6f\x4c\x52\xc9"
-      "\xde\x2b\xcb\xf6\x95\x58\x17\x18\x39\x95\x49\x7c\xea\x95\x6a\xe5\x15\xd2\x26\x18\x98\xfa\x05\x10"
-      "\x15\x72\x8e\x5a\x8a\xac\xaa\x68\xff\xff\xff\xff\xff\xff\xff\xff";
-    BigNumSetValue(g, 2);
-    *rand_num_bits = 224;
-    return BigNumSetData(p, StringPiece(buf, sizeof(buf)-1));
   }
 #ifdef LFL_OPENSSL
   static RSA *NewRSAPubKey() { RSA *v=RSA_new(); v->e=NewBigNum(); v->n=NewBigNum(); return v; }

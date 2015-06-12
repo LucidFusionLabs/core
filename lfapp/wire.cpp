@@ -444,11 +444,14 @@ const char *SSH::Key::Name(int id) {
 };
 const char *SSH::KEX::Name(int id) {
   switch(id) {
-    case DHGEX_SHA256: return "diffie-hellman-group-exchange-sha256";
-    case DHGEX_SHA1:   return "diffie-hellman-group-exchange-sha1";
-    case DH14_SHA1:    return "diffie-hellman-group14-sha1";
-    case DH1_SHA1:     return "diffie-hellman-group1-sha1";
-    default:           return "";
+    case ECDH_SHA2_NISTP256: return "ecdh-sha2-nistp256";
+    case ECDH_SHA2_NISTP384: return "ecdh-sha2-nistp384";
+    case ECDH_SHA2_NISTP521: return "ecdh-sha2-nistp521";
+    case DHGEX_SHA256:       return "diffie-hellman-group-exchange-sha256";
+    case DHGEX_SHA1:         return "diffie-hellman-group-exchange-sha1";
+    case DH14_SHA1:          return "diffie-hellman-group14-sha1";
+    case DH1_SHA1:           return "diffie-hellman-group1-sha1";
+    default:                 return "";
   }
 };
 const char *SSH::Cipher::Name(int id) {

@@ -264,13 +264,14 @@ struct SSH {
     static bool PreferenceIntersect(const StringPiece &pref_csv, int *out);
   };
   struct KEX {
-    enum { DHGEX_SHA256=1, DHGEX_SHA1=2, DH14_SHA1=3, DH1_SHA1=4, End=4 };
+    enum { ECDH_SHA2_NISTP256=1, ECDH_SHA2_NISTP384=2, ECDH_SHA2_NISTP521=3, DHGEX_SHA256=4, DHGEX_SHA1=5, DH14_SHA1=6, DH1_SHA1=7, End=7 };
     static int Id(const string &n);
     static const char *Name(int id);
     static string PreferenceCSV();
     static bool PreferenceIntersect(const StringPiece &pref_csv, int *out);
+    static bool EllipticCurveDiffieHellman(int id) { return id==ECDH_SHA2_NISTP256 || id==ECDH_SHA2_NISTP384 || id==ECDH_SHA2_NISTP521; }
     static bool DiffieHellmanGroupExchange(int id) { return id==DHGEX_SHA256 || id==DHGEX_SHA1; }
-    static bool DiffieHellmanIntegerGroup(int id) { return id==DHGEX_SHA256 || id==DHGEX_SHA1 || id==DH14_SHA1 || id==DH1_SHA1; }
+    static bool DiffieHellman(int id) { return id==DHGEX_SHA256 || id==DHGEX_SHA1 || id==DH14_SHA1 || id==DH1_SHA1; }
   };
   struct Cipher {
     enum { AES128_CTR=1, AES128_CBC=2, TripDES_CBC=3, End=3 };
@@ -281,7 +282,7 @@ struct SSH {
     static bool PreferenceIntersect(const StringPiece &pref_csv, Crypto::CipherAlgo *out);
   };
   struct MAC {
-    enum { MD5=1, SHA1=2, End=1 };
+    enum { MD5=1, SHA1=2, End=2 };
     static int Id(const string &n);
     static const char *Name(int id);
     static Crypto::MACAlgo Algo(int id);
@@ -320,7 +321,7 @@ struct SSH {
   struct MSG_SERVICE_REQUEST : public Serializable {
     static const int ID = 5;
     StringPiece service_name;
-    MSG_SERVICE_REQUEST(const string &SN) : Serializable(ID), service_name(SN) {}
+    MSG_SERVICE_REQUEST(const StringPiece &SN) : Serializable(ID), service_name(SN) {}
 
     int HeaderSize() const { return 4; }
     int Size() const { return HeaderSize() + service_name.size(); }
@@ -330,7 +331,7 @@ struct SSH {
   struct MSG_SERVICE_ACCEPT : public Serializable {
     static const int ID = 6;
     StringPiece service_name;
-    MSG_SERVICE_ACCEPT(const string &SN) : Serializable(ID), service_name(SN) {}
+    MSG_SERVICE_ACCEPT(const StringPiece &SN) : Serializable(ID), service_name(SN) {}
 
     int HeaderSize() const { return 4; }
     int Size() const { return HeaderSize() + service_name.size(); }
@@ -345,8 +346,8 @@ struct SSH {
                 languages_server_to_client;
     unsigned char first_kex_packet_follows=0;
     MSG_KEXINIT() : Serializable(ID) {}
-    MSG_KEXINIT(const string &C, const string &KEXA, const string &KA, const string &EC, const string &ES, const string &MC,
-                const string &MS, const string &CC, const string &CS, const string &LC, const string &LS, bool guess) :
+    MSG_KEXINIT(const StringPiece &C, const StringPiece &KEXA, const StringPiece &KA, const StringPiece &EC, const StringPiece &ES, const StringPiece &MC,
+                const StringPiece &MS, const StringPiece &CC, const StringPiece &CS, const StringPiece &LC, const StringPiece &LS, bool guess) :
       Serializable(ID), cookie(C), kex_algorithms(KEXA), server_host_key_algorithms(KA), encryption_algorithms_client_to_server(EC),
       encryption_algorithms_server_to_client(ES), mac_algorithms_client_to_server(MC), mac_algorithms_server_to_client(MS),
       compression_algorithms_client_to_server(CC), compression_algorithms_server_to_client(CS), languages_client_to_server(LC),
@@ -417,10 +418,30 @@ struct SSH {
     static const int ID = 33;
     MSG_KEX_DH_GEX_REPLY(BigNum F=0) : MSG_KEXDH_REPLY(F) { Id=ID; }
   };
+  struct MSG_KEX_ECDH_INIT : public Serializable {
+    static const int ID = 30;
+    StringPiece q_c;
+    MSG_KEX_ECDH_INIT(const StringPiece &Q_C) : Serializable(ID), q_c(Q_C) {}
+
+    int HeaderSize() const { return 4; }
+    int Size() const { return HeaderSize() + q_c.size(); }
+    void Out(Serializable::Stream *o) const { o->BString(q_c); }
+    int In(const Serializable::Stream *i) { i->ReadString(&q_c); return i->Result(); }
+  };
+  struct MSG_KEX_ECDH_REPLY : public Serializable {
+    static const int ID = 31;
+    StringPiece k_s, q_s, h_sig;
+    MSG_KEX_ECDH_REPLY() : Serializable(ID) {}
+
+    int HeaderSize() const { return 4*3; }
+    int Size() const { return HeaderSize() + k_s.size() + q_s.size() + h_sig.size(); }
+    void Out(Serializable::Stream *o) const { o->BString(k_s); o->BString(q_s); o->BString(h_sig); }
+    int In(const Serializable::Stream *i) { i->ReadString(&k_s); i->ReadString(&q_s); i->ReadString(&h_sig); return i->Result(); }
+  };
   struct MSG_USERAUTH_REQUEST : public Serializable {
     static const int ID = 50;
     StringPiece user_name, service_name, method_name, algo_name, secret, sig;
-    MSG_USERAUTH_REQUEST(const string &UN, const string &SN, const string &MN, const string &AN, const string &P, const string &S)
+    MSG_USERAUTH_REQUEST(const StringPiece &UN, const StringPiece &SN, const StringPiece &MN, const StringPiece &AN, const StringPiece &P, const StringPiece &S)
       : Serializable(ID), user_name(UN), service_name(SN), method_name(MN), algo_name(AN), secret(P), sig(S) {}
 
     int HeaderSize() const { return 4*3; }
@@ -475,7 +496,7 @@ struct SSH {
     static const int ID = 90;
     StringPiece channel_type;
     int sender_channel, initial_win_size, maximum_packet_size;
-    MSG_CHANNEL_OPEN(const string &CT, int SC, int IWS, int MPS) : Serializable(ID), channel_type(CT), sender_channel(SC), initial_win_size(IWS), maximum_packet_size(MPS) {}
+    MSG_CHANNEL_OPEN(const StringPiece &CT, int SC, int IWS, int MPS) : Serializable(ID), channel_type(CT), sender_channel(SC), initial_win_size(IWS), maximum_packet_size(MPS) {}
 
     int HeaderSize() const { return 4*4; }
     int Size() const { return HeaderSize() + channel_type.size(); }
@@ -519,8 +540,8 @@ struct SSH {
     int recipient_channel=0, width=0, height=0, pixel_width=0, pixel_height=0;
     StringPiece request_type, term, term_mode;
     unsigned char want_reply=0;
-    MSG_CHANNEL_REQUEST(int RC, const string &RT, const string &V, bool WR) : Serializable(ID), recipient_channel(RC), request_type(RT), term(V), want_reply(WR) {}
-    MSG_CHANNEL_REQUEST(int RC, const string &RT, const point &D, const point &PD, const string &T, const string &TM, bool WR) : Serializable(ID),
+    MSG_CHANNEL_REQUEST(int RC, const StringPiece &RT, const StringPiece &V, bool WR) : Serializable(ID), recipient_channel(RC), request_type(RT), term(V), want_reply(WR) {}
+    MSG_CHANNEL_REQUEST(int RC, const StringPiece &RT, const point &D, const point &PD, const StringPiece &T, const StringPiece &TM, bool WR) : Serializable(ID),
       recipient_channel(RC), width(D.x), height(D.y), pixel_width(PD.x), pixel_height(PD.y), request_type(RT), term(T), term_mode(TM), want_reply(WR) {}
 
     int HeaderSize() const { return 4*2 + 1; }
