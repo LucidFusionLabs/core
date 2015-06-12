@@ -57,6 +57,7 @@ void FreeECPoint(ECPoint p) { if (p) EC_POINT_free(p); }
 void FreeECPair(ECPair p) { if (p) EC_KEY_free(p); }
 ECGroup GetECPairGroup (ECPair p) { return const_cast<ECGroup>(EC_KEY_get0_group(p)); }
 ECPoint GetECPairPubKey(ECPair p) { return const_cast<ECPoint>(EC_KEY_get0_public_key(p)); }
+bool SetECPairPubKey(ECPair p, ECPoint k) { return EC_KEY_set_public_key(p, k); }
 int ECPointDataSize(ECGroup g, ECPoint p, BigNumContext x) { return EC_POINT_point2oct(g, p, POINT_CONVERSION_UNCOMPRESSED, 0, 0, x); }
 void ECPointGetData(ECGroup g, ECPoint p, char *out, int len, BigNumContext x) { EC_POINT_point2oct(g, p, POINT_CONVERSION_UNCOMPRESSED, reinterpret_cast<unsigned char *>(out), len, x); }
 void ECPointSetData(ECGroup g, ECPoint v, const StringPiece &data) { EC_POINT_oct2point(g, v, reinterpret_cast<const unsigned char *>(data.buf), data.len, 0); }
@@ -76,6 +77,12 @@ int ECPointDataSize(const ECGroup g, const ECPoint p, BigNumContext x) { FATAL("
 void ECPointGetData(const ECGroup g, const ECPoint p, char *out, int len, BigNumContext x) { FATAL("not implemented") }
 void ECPointSetData(const ECGroup g, ECPoint v, const StringPiece &data) { FATAL("not implemented"); }
 #endif
+
+string ECPointGetData(ECGroup g, ECPoint p, BigNumContext ctx) {
+  string ret(ECPointDataSize(g, p, ctx), 0);
+  ECPointGetData(g, p, &ret[0], ret.size(), ctx);
+  return ret;
+}
 
 v3 v3::Rand() {     
     float phi = LFL::Rand(0.0, M_TAU), costheta = LFL::Rand(-1.0, 1.0), rho = sqrt(1 - pow(costheta, 2));

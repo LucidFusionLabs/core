@@ -255,39 +255,48 @@ struct SSH {
   static int BigNumSize(const BigNum n);
   static BigNum ReadBigNum(BigNum n, const Serializable::Stream *i);
   static void WriteBigNum(const BigNum n, Serializable::Stream *o);
+  static void UpdateDigest(Crypto::Digest *d, const StringPiece &s);
+  static void UpdateDigest(Crypto::Digest *d, int n);
+  static void UpdateDigest(Crypto::Digest *d, BigNum n);
+  static string ComputeExchangeHash(int kex_method, Crypto::DigestAlgo algo, const string &V_C, const string &V_S,
+                                    const string &KI_C, const string &KI_S, const StringPiece &k_s, BigNum K,
+                                    Crypto::DiffieHellman*, Crypto::EllipticCurveDiffieHellman*);
+  static int VerifyHostKey(const string &H_text, int hostkey_type, const StringPiece &key, const StringPiece &sig);
+  static string DeriveKey(Crypto::DigestAlgo algo, const string &session_id, const string &H_text, BigNum K, char ID, int bytes);
+  static string MAC(Crypto::MACAlgo algo, int MAC_len, const StringPiece &m, int seq, const string &k, int prefix=0);
 
   struct Key {
-    enum { RSA=1, DSS=2, End=2 };
+    enum { ECDSA_SHA2_NISTP256=1, RSA=2, DSS=3, End=3 };
     static int Id(const string &n);
     static const char *Name(int id);
-    static string PreferenceCSV();
-    static bool PreferenceIntersect(const StringPiece &pref_csv, int *out);
+    static string PreferenceCSV(int start_after=0);
+    static bool PreferenceIntersect(const StringPiece &pref_csv, int *out, int start_after=0);
   };
   struct KEX {
     enum { ECDH_SHA2_NISTP256=1, ECDH_SHA2_NISTP384=2, ECDH_SHA2_NISTP521=3, DHGEX_SHA256=4, DHGEX_SHA1=5, DH14_SHA1=6, DH1_SHA1=7, End=7 };
     static int Id(const string &n);
     static const char *Name(int id);
-    static string PreferenceCSV();
-    static bool PreferenceIntersect(const StringPiece &pref_csv, int *out);
+    static string PreferenceCSV(int start_after=0);
+    static bool PreferenceIntersect(const StringPiece &pref_csv, int *out, int start_after=0);
     static bool EllipticCurveDiffieHellman(int id) { return id==ECDH_SHA2_NISTP256 || id==ECDH_SHA2_NISTP384 || id==ECDH_SHA2_NISTP521; }
     static bool DiffieHellmanGroupExchange(int id) { return id==DHGEX_SHA256 || id==DHGEX_SHA1; }
     static bool DiffieHellman(int id) { return id==DHGEX_SHA256 || id==DHGEX_SHA1 || id==DH14_SHA1 || id==DH1_SHA1; }
   };
   struct Cipher {
-    enum { AES128_CTR=1, AES128_CBC=2, TripDES_CBC=3, End=3 };
+    enum { AES128_CTR=1, AES128_CBC=2, TripDES_CBC=3, Blowfish_CBC=4, RC4=5, End=5 };
     static int Id(const string &n);
     static const char *Name(int id);
     static Crypto::CipherAlgo Algo(int id);
-    static string PreferenceCSV();
-    static bool PreferenceIntersect(const StringPiece &pref_csv, Crypto::CipherAlgo *out);
+    static string PreferenceCSV(int start_after=0);
+    static bool PreferenceIntersect(const StringPiece &pref_csv, Crypto::CipherAlgo *out, int start_after=0);
   };
   struct MAC {
-    enum { MD5=1, SHA1=2, End=2 };
+    enum { MD5=1, SHA1=2, SHA1_96=3, MD5_96=4, SHA256=5, SHA256_96=6, SHA512=7, SHA512_96=8, End=8 };
     static int Id(const string &n);
     static const char *Name(int id);
-    static Crypto::MACAlgo Algo(int id);
-    static string PreferenceCSV();
-    static bool PreferenceIntersect(const StringPiece &pref_csv, Crypto::MACAlgo *out);
+    static Crypto::MACAlgo Algo(int id, int *prefix_bytes=0);
+    static string PreferenceCSV(int start_after=0);
+    static bool PreferenceIntersect(const StringPiece &pref_csv, int *out, int start_after=0);
   };
 
   struct Serializable : public LFL::Serializable {
@@ -574,8 +583,6 @@ struct SSH {
 
     int HeaderSize() const { return 4*4; }
     int Size() const { return HeaderSize() + format_id.size() + BigNumSize(p) + BigNumSize(q) + BigNumSize(g) + BigNumSize(y); }
-    int Type() const { return 0; }
-
     void Out(Serializable::Stream *o) const {}
     int In(const Serializable::Stream *i);
   };
@@ -586,8 +593,6 @@ struct SSH {
 
     int HeaderSize() const { return 4*2 + 7 + 20*2; }
     int Size() const { return HeaderSize(); }
-    int Type() const { return 0; }
-
     void Out(Serializable::Stream *o) const {}
     int In(const Serializable::Stream *i);
   };
@@ -598,8 +603,6 @@ struct SSH {
 
     int HeaderSize() const { return 2*4; }
     int Size() const { return HeaderSize() + format_id.size() + BigNumSize(e) + BigNumSize(n); }
-    int Type() const { return 0; }
-
     void Out(Serializable::Stream *o) const {}
     int In(const Serializable::Stream *i);
   };
@@ -608,8 +611,24 @@ struct SSH {
 
     int HeaderSize() const { return 4*2 + 7; }
     int Size() const { return HeaderSize() + sig.size(); }
-    int Type() const { return 0; }
+    void Out(Serializable::Stream *o) const {}
+    int In(const Serializable::Stream *i);
+  };
+  struct ECDSAKey {
+    StringPiece format_id, curve_id, q;
 
+    int HeaderSize() const { return 3*4; }
+    int Size() const { return HeaderSize() + format_id.size() + curve_id.size() + q.size(); }
+    void Out(Serializable::Stream *o) const {}
+    int In(const Serializable::Stream *i);
+  };
+  struct ECDSASignature {
+    StringPiece format_id;
+    BigNum r, s;
+    ECDSASignature(BigNum R, BigNum S) : r(R), s(S) {}
+
+    int HeaderSize() const { return 4*4; }
+    int Size() const { return HeaderSize() + format_id.size() + BigNumSize(r) + BigNumSize(s); }
     void Out(Serializable::Stream *o) const {}
     int In(const Serializable::Stream *i);
   };

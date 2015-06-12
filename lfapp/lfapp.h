@@ -445,9 +445,6 @@ struct PerformanceTimers {
 };
 
 struct Crypto {
-  static string MD5(const string &in);
-  static string SHA1(const string &in);
-  static string Blowfish(const string &passphrase, const string &in, bool encrypt_or_decrypt);
 #if defined(LFL_COMMONCRYPTO)
   struct Cipher { int algo=0; CCAlgorithm ccalgo; CCCryptorRef ctx; };
   struct Digest { int algo=0; void *v=0; };
@@ -471,9 +468,11 @@ struct Crypto {
   typedef void* MACAlgo;
 #endif
   struct CipherAlgos {
-    static CipherAlgo TripDES_CBC();
-    static CipherAlgo AES128_CBC();
     static CipherAlgo AES128_CTR();
+    static CipherAlgo AES128_CBC();
+    static CipherAlgo TripDES_CBC();
+    static CipherAlgo Blowfish_CBC();
+    static CipherAlgo RC4();
     static const char *Name(CipherAlgo);
     static int KeySize(CipherAlgo);
   };
@@ -489,10 +488,13 @@ struct Crypto {
   struct MACAlgos {
     static MACAlgo MD5();
     static MACAlgo SHA1();
+    static MACAlgo SHA256();
+    static MACAlgo SHA512();
     static const char *Name(MACAlgo);
     static int HashSize(MACAlgo);
   };
   struct DiffieHellman {
+    int gex_min=1024, gex_max=8192, gex_pref=2048;
     BigNum g, p, x, e, f;
     DiffieHellman() : g(NewBigNum()), p(NewBigNum()), x(NewBigNum()), e(NewBigNum()), f(NewBigNum()) {}
     virtual ~DiffieHellman() { FreeBigNum(g); FreeBigNum(p); FreeBigNum(x); FreeBigNum(e); FreeBigNum(f); }
@@ -506,7 +508,7 @@ struct Crypto {
     static ECDef NISTP256();
     static ECDef NISTP384();
     static ECDef NISTP521();
-    static ECPair NewPair(ECDef);
+    static ECPair NewPair(ECDef, bool generate);
   };
   struct EllipticCurveDiffieHellman {
     ECPair pair=0;
@@ -517,15 +519,24 @@ struct Crypto {
     bool GeneratePair(ECDef curve, BigNumContext ctx);
     bool ComputeSecret(BigNum *K, BigNumContext ctx);
   };
+
+  static string MD5(const string &in);
+  static string SHA1(const string &in);
+  static string SHA256(const string &in);
+  static string Blowfish(const string &passphrase, const string &in, bool encrypt_or_decrypt);
+  static string ComputeDigest(DigestAlgo algo, const string &in);
+
   static void CipherInit(Cipher*);
   static void CipherFree(Cipher*);
   static int  CipherGetBlockSize(Cipher*);
   static int  CipherOpen(Cipher*, CipherAlgo, bool dir, const StringPiece &key, const StringPiece &iv);
   static int  CipherUpdate(Cipher*, const StringPiece &in, char *out, int outlen);
+
   static int  DigestGetHashSize(Digest*);
   static void DigestOpen(Digest*, DigestAlgo);
   static void DigestUpdate(Digest*, const StringPiece &in);
   static string DigestFinish(Digest*);
+
   static void MACOpen(MAC*, MACAlgo, const StringPiece &key);
   static void MACUpdate(MAC*, const StringPiece &in);
   static int  MACFinish(MAC*, char *out, int outlen);

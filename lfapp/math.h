@@ -60,6 +60,8 @@ void FreeECPoint(ECPoint);
 void FreeECPair(ECPair);
 ECGroup GetECPairGroup(ECPair);
 ECPoint GetECPairPubKey(ECPair);
+bool SetECPairPubKey(ECPair, ECPoint);
+string ECPointGetData(ECGroup, ECPoint, BigNumContext);
 int ECPointDataSize(ECGroup, ECPoint, BigNumContext);
 void ECPointGetData(ECGroup, ECPoint, char *out, int len, BigNumContext);
 void ECPointSetData(ECGroup, ECPoint out, const StringPiece &data);
