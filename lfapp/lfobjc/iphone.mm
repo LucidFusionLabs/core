@@ -69,10 +69,10 @@ static int iphone_argc = 0;
     CGFloat scale;
     LFApp *lfapp;
     NativeWindow *screen;
-    int current_orientation;
+    int current_orientation, target_fps;
     CGRect keyboard_frame;
     NSFileHandle *wait_forever_fh;
-    bool restart_wait_forever_fh;
+    bool restart_wait_forever_fh, want_extra_scale;
   }
   @synthesize window, controller, view, lview, rview, textField;
 
@@ -87,7 +87,6 @@ static int iphone_argc = 0;
     self.view = [[[GLKView alloc] initWithFrame:wbounds] autorelease];
     self.view.context = context;
     self.view.delegate = self;
-    self.view.contentScaleFactor = scale;
     self.view.enableSetNeedsDisplay = TRUE;
     self.view.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight |
       UIViewAutoresizingFlexibleBottomMargin | UIViewAutoresizingFlexibleLeftMargin | UIViewAutoresizingFlexibleRightMargin | 
@@ -99,6 +98,10 @@ static int iphone_argc = 0;
     [self.controller setView:self.view]; 
     self.controller.resumeOnDidBecomeActive = NO;
     // self.controller.wantsFullScreenLayout = YES;
+
+    [UIApplication sharedApplication].idleTimerDisabled = YES;
+    self.window.rootViewController = self.controller;
+    [self.window addSubview:self.view];
 
     // left touch view
     CGRect lrect = CGRectMake(0, 0, wbounds.size.width, wbounds.size.height/2);
@@ -123,11 +126,6 @@ static int iphone_argc = 0;
     self.textField.autocapitalizationType = UITextAutocapitalizationTypeNone;
     [self.view addSubview:self.textField];
 
-    [UIApplication sharedApplication].idleTimerDisabled = YES;
-    self.window.rootViewController = self.controller;
-    [self.window addSubview:self.view];
-    [self.window makeKeyAndVisible];
-
     [[NSFileManager defaultManager] changeCurrentDirectoryPath: [[NSBundle mainBundle] resourcePath]];
     NSLog(@"iPhoneMain argc=%d", iphone_argc);
     iPhoneMain(iphone_argc, iphone_argv);
@@ -135,6 +133,7 @@ static int iphone_argc = 0;
 
     lfapp = GetLFApp();
     screen = GetNativeWindow();
+    [self.window makeKeyAndVisible];
     [self initNotifications];
     [self initGestureRecognizers];
     return YES;
@@ -151,9 +150,18 @@ static int iphone_argc = 0;
         [wait_forever_fh waitForDataInBackgroundAndNotify];
   }
   - (void)updateTargetFPS: (int)fps {
-    INFOf("updateTargetFPS: %d", fps);
-    [self.controller setPaused:(!fps)];
-    if (fps) self.controller.preferredFramesPerSecond = fps;
+    target_fps = fps;
+    INFOf("updateTargetFPS: %d", target_fps);
+    [self.controller setPaused:(!target_fps)];
+    [self updateGLKViewScale];
+  }
+
+  - (CGFloat)getScale { return (want_extra_scale ? scale : 1); }
+  - (int)updateScale: (bool)v { want_extra_scale=v; [self updateGLKViewScale]; return v ? scale : 1; }
+  - (void)updateGLKViewScale { self.view.contentScaleFactor = target_fps ? 1 : [self getScale]; }
+  - (int)updateGLKMultisample: (bool)v { 
+    self.view.drawableMultisample = v ? GLKViewDrawableMultisample4X : GLKViewDrawableMultisampleNone;
+    return v ? 4 : 0;
   }
 
   - (void)initNotifications {
@@ -429,13 +437,11 @@ static int iphone_argc = 0;
 
 @implementation MyTouchView
   {
-    CGFloat scale;
     NativeWindow *screen;
     LFUIApplication *app;
   }
   - (id)initWithFrame:(CGRect)aRect {
     if (!(self = [super initWithFrame:aRect])) return self;
-    scale = [[UIScreen mainScreen] scale];
     screen = GetNativeWindow();
     app = [LFUIApplication sharedAppDelegate];
     return self;
@@ -444,7 +450,7 @@ static int iphone_argc = 0;
     UITouch *touch = [touches anyObject];
     UIView *v = [touch view];
     CGPoint position = [touch locationInView:v];
-    int dpind = v.frame.origin.y == 0;
+    int dpind = v.frame.origin.y == 0, scale = [app getScale];
     if (!dpind) position = CGPointMake(scale * (position.x + v.frame.origin.x), scale * (position.y + v.frame.origin.y));
     else        position = CGPointMake(scale * position.x, scale * position.y);
     screen->gesture_dpad_x[dpind] = position.x;
@@ -457,7 +463,7 @@ static int iphone_argc = 0;
     UITouch *touch = [touches anyObject];
     UIView *v = [touch view];
     CGPoint position = [touch locationInView:v];
-    int dpind = v.frame.origin.y == 0;
+    int dpind = v.frame.origin.y == 0, scale = [app getScale];
     if (!dpind) position = CGPointMake(scale * (position.x + v.frame.origin.x), scale * (position.y + v.frame.origin.y));
     else        position = CGPointMake(scale * position.x, scale * position.y);
     screen->gesture_dpad_stop[dpind] = 1;
@@ -470,7 +476,7 @@ static int iphone_argc = 0;
     UITouch *touch = [touches anyObject];
     UIView *v = [touch view];
     CGPoint position = [touch locationInView:v];
-    int dpind = v.frame.origin.y == 0;
+    int dpind = v.frame.origin.y == 0, scale = [app getScale];
     if (!dpind) position = CGPointMake(scale * (position.x + v.frame.origin.x), scale * (position.y + v.frame.origin.y));
     else        position = CGPointMake(scale * position.x, scale * position.y);
     screen->gesture_dpad_x[dpind] = position.x;
@@ -488,21 +494,24 @@ extern "C" void NativeWindowQuit() {
   if (iphone_documents_directory != nil) { [iphone_documents_directory release]; iphone_documents_directory = nil; }
 }
 extern "C" void NativeWindowSize(int *width, int *height) {
-  CGFloat scale = [[UIScreen mainScreen] scale];
-  CGRect  rect  = [[UIScreen mainScreen] bounds];
+  CGFloat scale = [[LFUIApplication sharedAppDelegate] getScale];
+  CGRect rect = [[UIScreen mainScreen] bounds];
   *width = rect.size.width * scale;
   *height = rect.size.height * scale;
   INFOf("NativeWindowSize %d %d", *width, *height);
 }
 
 extern "C" int iPhoneVideoSwap() { return 0; }
+extern "C" int iPhoneSetExtraScale(bool on) { return [[LFUIApplication sharedAppDelegate] updateScale:on]; }
+extern "C" int iPhoneSetMultisample(bool on) { return [[LFUIApplication sharedAppDelegate] updateGLKMultisample:on]; }
 extern "C" void iPhoneShowKeyboard() { [[LFUIApplication sharedAppDelegate] showKeyboard]; }
 extern "C" void iPhoneHideKeyboard() { [[LFUIApplication sharedAppDelegate] hideKeyboard]; }
 extern "C" void iPhoneHideKeyboardAfterReturn(bool v) { [LFUIApplication sharedAppDelegate].resign_textfield_on_return = v; }
 extern "C" void iPhoneGetKeyboardBox(int *x, int *y, int *w, int *h) {
   NativeWindow *screen = GetNativeWindow();
-  CGFloat scale = [[UIScreen mainScreen] scale];
-  CGRect rect = [[LFUIApplication sharedAppDelegate].controller getKeyboardToolbarFrame];
+  LFUIApplication *app = [LFUIApplication sharedAppDelegate];
+  CGRect rect = [app.controller getKeyboardToolbarFrame];
+  CGFloat scale = [app getScale];
   *x = scale * rect.origin.x;
   *y = scale * (rect.origin.y + rect.size.height) - screen->height;
   *w = scale * rect.size.width;

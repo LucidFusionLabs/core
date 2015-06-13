@@ -635,6 +635,8 @@ struct TouchDevice {
   /// AddToolbar item values with prefix "toggle" stay depressed
   static void AddToolbar(const vector<pair<string, string>>&items);
   static void ToggleToolbarButton(const string &n);
+  static int SetExtraScale(bool on); /// e.g. Retina display
+  static int SetMultisample(bool on);
 };
 
 struct CUDA : public Module { int Init(); };

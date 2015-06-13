@@ -60,8 +60,8 @@ Window::Window() : caption("lfapp"), fps(128) {
     target_fps = FLAGS_target_fps;
     opengles_version = 1;
     opengles_cubemap = 0;
-    width = 640;
-    height = 480;
+    pow2_width = NextPowerOfTwo((width = 640));
+    pow2_height = NextPowerOfTwo((height = 480));
     multitouch_keyboard_x = .93; 
     cam = new Entity(v3(5.54, 1.70, 4.39), v3(-.51, -.03, -.49), v3(-.03, 1, -.03));
     ClearEvents();
@@ -503,7 +503,12 @@ void TextArea::UpdateVScrolled(int dist, bool up, int ind, int first_offset, int
     }
 }
 
-void TextArea::Draw(const Box &b, bool draw_cursor) {
+void TextArea::Draw(const Box &b, bool draw_cursor, Shader *shader) {
+    if (shader) {
+        glTimeResolutionShader(shader);
+        shader->SetUniform3f("iChannelResolution", b.w, b.h, 0);
+        shader->SetUniform2f("iScroll", -line_fb.scroll.x * line_fb.w, -line_fb.scroll.y * line_fb.h - b.y);
+    }
     int font_height = font->Height();
     LinesFrameBuffer *fb = GetFrameBuffer();
     if (fb->SizeChanged(b.w, b.h, font)) { Resized(b); fb->SizeChangedDone(); }
@@ -861,8 +866,9 @@ const Drawable::Attr *Terminal::GetAttr(int attr) const {
     return &last_attr;
 }
 
-void Terminal::Draw(const Box &b, bool draw_cursor) {
-    TextArea::Draw(b, false);
+void Terminal::Draw(const Box &b, bool draw_cursor, Shader *shader) {
+    TextArea::Draw(b, false, shader);
+    if (shader) shader->SetUniform2f("iScroll", 0, -b.y);
     if (clip) {
         { Scissor s(Box::TopBorder(b, *clip)); cmd_fb.Draw(b.Position(), point(), false); }
         { Scissor s(Box::BotBorder(b, *clip)); cmd_fb.Draw(b.Position(), point(), false); }
@@ -873,7 +879,7 @@ void Terminal::Draw(const Box &b, bool draw_cursor) {
 
 void Terminal::Write(const StringPiece &s, bool update_fb, bool release_fb) {
     if (!MainThread()) return RunInMainThread(new Callback(bind(&Terminal::WriteCB, this, s.str(), update_fb, release_fb)));
-    TerminalTrace("Terminal: Write('%s', %zd)\n", CHexEscapeNonAscii(s).c_str(), s.size());
+    TerminalTrace("Terminal: Write('%s', %zd)\n", CHexEscapeNonAscii(s.str()).c_str(), s.size());
     screen->gd->DrawMode(DrawMode::_2D, 0);
     if (bg_color) screen->gd->ClearColor(*bg_color);
     last_fb = 0;

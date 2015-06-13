@@ -237,6 +237,8 @@ void Mouse::ReleaseFocus() {}
 #endif
 
 #ifdef LFL_IPHONEINPUT
+extern "C" int iPhoneSetExtraScale(bool);
+extern "C" int iPhoneSetMultisample(bool);
 extern "C" void iPhoneShowKeyboard();
 extern "C" void iPhoneHideKeyboard();
 extern "C" void iPhoneHideKeyboardAfterReturn(bool v);
@@ -285,6 +287,8 @@ const int Key::End        = -34;
 
 string Clipboard::Get() { return ""; }
 void Clipboard::Set(const string &s) {}
+int TouchDevice::SetExtraScale(bool v) { return iPhoneSetExtraScale(v); }
+int TouchDevice::SetMultisample(bool v) { return iPhoneSetMultisample(v); }
 void TouchDevice::OpenKeyboard() { iPhoneShowKeyboard(); }
 void TouchDevice::CloseKeyboard() { iPhoneHideKeyboard(); }
 void TouchDevice::CloseKeyboardAfterReturn(bool v) { iPhoneHideKeyboardAfterReturn(v); } 

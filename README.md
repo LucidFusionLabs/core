@@ -116,7 +116,7 @@ LFL builds easily for Windows, Linux, Mac OSX, iPhone and Android.
         cd lfl
         mkdir iphone && cd iphone
         ** Modify IPHONEROOT in ../core/CMake/iPhoneToolchain.cmake
-        cmake -DCMAKE_TOOLCHAIN_FILE=../core/CMake/iPhoneToolchain.cmake ..
+        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=../core/CMake/iPhoneToolchain.cmake ..
 
         cd term
         make lterm_run

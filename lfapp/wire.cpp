@@ -358,16 +358,15 @@ string HTTP::GrepHeaders(const char *headers, const char *end, const string &nam
 
 #define HTTPGrepImpl(k, kl, v) \
   va_list ap; va_start(ap, num); \
-char **k = (char **)alloca(num*sizeof(char*)); \
-int *kl = (int *)alloca(num*sizeof(int)); \
-StringPiece **v = (StringPiece **)alloca(num*sizeof(char*)); \
-for (int i=0; i<num; i++) { \
-  k[i] = va_arg(ap, char*); \
-  kl[i] = strlen(k[i]); \
-  v[i] = va_arg(ap, StringPiece*); \
-} \
+  char **k = (char **)alloca(num*sizeof(char*)); \
+  int *kl = (int *)alloca(num*sizeof(int)); \
+  StringPiece **v = (StringPiece **)alloca(num*sizeof(char*)); \
+  for (int i=0; i<num; i++) { \
+    k[i] = va_arg(ap, char*); \
+    kl[i] = strlen(k[i]); \
+    v[i] = va_arg(ap, StringPiece*); \
+  } \
 va_end(ap);
-
 
 int HTTP::GrepHeaders(const char *headers, const char *end, int num, ...) {
   HTTPGrepImpl(k, kl, v);

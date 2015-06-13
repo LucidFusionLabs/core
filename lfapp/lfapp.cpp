@@ -522,7 +522,7 @@ BigNum Crypto::DiffieHellman::Group14Modulus(BigNum g, BigNum p, int *rand_num_b
 ECDef Crypto::EllipticCurve::NISTP256() { return NID_X9_62_prime256v1; };
 ECDef Crypto::EllipticCurve::NISTP384() { return NID_secp384r1; };
 ECDef Crypto::EllipticCurve::NISTP521() { return NID_secp521r1; };
-ECPair Crypto::EllipticCurve::NewPair(int id, bool generate) {
+ECPair Crypto::EllipticCurve::NewPair(ECDef id, bool generate) {
   ECPair pair = EC_KEY_new_by_curve_name(id);
   if (generate && pair && EC_KEY_generate_key(pair) != 1) { EC_KEY_free(pair); return NULL; }
   return pair;
@@ -539,11 +539,20 @@ bool Crypto::EllipticCurveDiffieHellman::GeneratePair(ECDef curve, BigNumContext
 }
 bool Crypto::EllipticCurveDiffieHellman::ComputeSecret(BigNum *K, BigNumContext ctx) {
   string k_text((EC_GROUP_get_degree(g) + 7) / 8, 0);
-#undef ECDH_compute_key
   if (ECDH_compute_key(&k_text[0], k_text.size(), s, pair, 0) != k_text.size()) return false;
   *K = BigNumSetData(*K, k_text);
   return true;
 }
+#else
+bool Crypto::DiffieHellman::GeneratePair(int secret_bits, BigNumContext ctx) { FATAL("not implemented"); }
+BigNum Crypto::DiffieHellman::Group1Modulus(BigNum g, BigNum p, int *rand_num_bits) { FATAL("not implemented"); }
+BigNum Crypto::DiffieHellman::Group14Modulus(BigNum g, BigNum p, int *rand_num_bits) { FATAL("not implemented"); }
+ECDef Crypto::EllipticCurve::NISTP256() { FATAL("not implemented"); }
+ECDef Crypto::EllipticCurve::NISTP384() { FATAL("not implemented"); }
+ECDef Crypto::EllipticCurve::NISTP521() { FATAL("not implemented"); }
+ECPair Crypto::EllipticCurve::NewPair(ECDef id, bool generate) { FATAL("not implemented"); }
+bool Crypto::EllipticCurveDiffieHellman::GeneratePair(ECDef curve, BigNumContext ctx) { FATAL("not implemented"); }
+bool Crypto::EllipticCurveDiffieHellman::ComputeSecret(BigNum *K, BigNumContext ctx) { FATAL("not implemented"); }
 #endif
 
 #if defined(LFL_COMMONCRYPTO)
@@ -766,7 +775,6 @@ void Crypto::MACUpdate(MAC *m, const StringPiece &in) { HMAC_Update(m, reinterpr
 int Crypto::MACFinish(MAC *m, char *out, int outlen) { unsigned len=outlen; HMAC_Final(m, reinterpret_cast<unsigned char *>(out), &len); return len; }
 #else
 string Crypto::Blowfish(const string &passphrase, const string &in, bool encrypt_or_decrypt) { FATAL("not implemented"); }
-string Crypto::DiffieHellmanModulus(int generator, int bits) { FATAL("not implemented"); }
 Crypto::CipherAlgo Crypto::CipherAlgos::AES128_CTR()   { FATAL("not implemented"); }
 Crypto::CipherAlgo Crypto::CipherAlgos::AES128_CBC()   { FATAL("not implemented"); }
 Crypto::CipherAlgo Crypto::CipherAlgos::TripDES_CBC()  { FATAL("not implemented"); }

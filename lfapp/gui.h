@@ -460,7 +460,7 @@ struct TextArea : public TextGUI {
     virtual int WrappedLines() const { return line.wrapped_lines; }
     virtual LinesFrameBuffer *GetFrameBuffer() { return &line_fb; }
 
-    virtual void Draw(const Box &w, bool cursor);
+    virtual void Draw(const Box &w, bool cursor, Shader *shader=0);
     virtual bool GetGlyphFromCoords(const point &p, Selection::Point *out) { return GetGlyphFromCoordsOffset(p, out, start_line, start_line_adjust); }
     bool GetGlyphFromCoordsOffset(const point &p, Selection::Point *out, int sl, int sla);
 
@@ -536,7 +536,7 @@ struct Terminal : public TextArea, public Drawable::AttrSource {
     virtual void ResizedLeftoverRegion(int w, int h, bool update_fb=true);
     virtual void SetScrollRegion(int b, int e, bool release_fb=false);
     virtual void SetDimension(int w, int h);
-    virtual void Draw(const Box &b, bool draw_cursor);
+    virtual void Draw(const Box &b, bool draw_cursor, Shader *shader=0);
     virtual void Write(const StringPiece &s, bool update_fb=true, bool release_fb=true);
     virtual void Input(char k) {                       sink->Write(&k, 1); }
     virtual void Erase      () { char k = 0x7f;        sink->Write(&k, 1); }

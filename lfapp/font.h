@@ -183,7 +183,7 @@ struct Font {
 
     short size=0, ascender=0, descender=0, max_width=0, fixed_width=-1, missing_glyph=0;
     bool mono=0, mix_fg=0, has_bg=0, fix_metrics=0;
-    float scale=0;
+    float scale=0, min_advance=0, max_advance=0;
     int flag=0;
     Color fg, bg;
     RefCounter ref;
@@ -322,6 +322,7 @@ struct CoreTextFontEngine : public FontEngine {
     static Font *Open(const shared_ptr<Resource> &R, int size, Color c, int flag);
     static void GetSubstitutedFont(Font*, CTFontRef, unsigned short gid, CGFontRef *cgout, CTFontRef *ctout, int *id_out);
     static void AssignGlyph(Glyph *out, const CGRect &bounds, struct CGSize &advance);
+    static v2 GetAdvanceBounds(Font*);
 };
 #endif
 

@@ -1710,7 +1710,6 @@ void HTTPServer::StreamResource::Broadcast(AVPacket *pkt, microseconds timestamp
 }
 #endif /* LFL_FFMPEG */
 
-#define LFL_SSH_DEBUG
 #ifdef LFL_SSH_DEBUG
 #define SSHTrace(...) INFO(__VA_ARGS__)
 #else
@@ -1736,7 +1735,8 @@ struct SSHClientConnection : public Query {
   Crypto::Cipher encrypt, decrypt;
   Crypto::CipherAlgo cipher_algo_c2s=0, cipher_algo_s2c=0;
   Crypto::MACAlgo mac_algo_c2s=0, mac_algo_s2c=0;
-  int kex_method=0, hostkey_type=0, curve_id=0, mac_prefix_c2s=0, mac_prefix_s2c=0;
+  ECDef curve_id;
+  int kex_method=0, hostkey_type=0, mac_prefix_c2s=0, mac_prefix_s2c=0;
   int initial_window_size=32768, max_packet_size=16384, term_width=80, term_height=25;
 
   SSHClientConnection(const SSHClient::ResponseCB &CB) : cb(CB), V_C("SSH-2.0-LFL_1.0"), rand_eng(std::random_device{}()),

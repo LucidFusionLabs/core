@@ -73,6 +73,8 @@ int  BigNumSignificantBits(const BigNum v)    { FATAL("not implemented"); }
 void BigNumModExp(BigNum v, const BigNum a, const BigNum e, const BigNum m, BigNumContext) { FATAL("not implemented"); }
 BigNum BigNumSetData(BigNum v, const StringPiece &data)       { FATAL("not implemented"); }
 BigNum BigNumRand   (BigNum v, int bits, int top, int bottom) { FATAL("not implemented"); }
+void FreeECPoint(ECPoint p) { FATAL("not implemented"); }
+void FreeECPair(ECPair p) { FATAL("not implemented"); }
 int ECPointDataSize(const ECGroup g, const ECPoint p, BigNumContext x) { FATAL("not implemented"); }
 void ECPointGetData(const ECGroup g, const ECPoint p, char *out, int len, BigNumContext x) { FATAL("not implemented") }
 void ECPointSetData(const ECGroup g, ECPoint v, const StringPiece &data) { FATAL("not implemented"); }
