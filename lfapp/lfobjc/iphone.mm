@@ -124,7 +124,7 @@ static int iphone_argc = 0;
     self.textField.text = [NSString stringWithFormat:@"default"];
     self.textField.autocorrectionType = UITextAutocorrectionTypeNo;
     self.textField.autocapitalizationType = UITextAutocapitalizationTypeNone;
-    [self.view addSubview:self.textField];
+    [self.window addSubview:self.textField];
 
     [[NSFileManager defaultManager] changeCurrentDirectoryPath: [[NSBundle mainBundle] resourcePath]];
     NSLog(@"iPhoneMain argc=%d", iphone_argc);
@@ -156,6 +156,7 @@ static int iphone_argc = 0;
     [self updateGLKViewScale];
   }
 
+  - (CGRect)getFrame { return self.view.frame; }
   - (CGFloat)getScale { return (want_extra_scale ? scale : 1); }
   - (int)updateScale: (bool)v { want_extra_scale=v; [self updateGLKViewScale]; return v ? scale : 1; }
   - (void)updateGLKViewScale { self.view.contentScaleFactor = target_fps ? 1 : [self getScale]; }
@@ -330,8 +331,10 @@ static int iphone_argc = 0;
 
 @implementation LFViewController
   {
+    LFUIApplication *app;
     UIToolbar *toolbar;
     int toolbar_height;
+    bool overlap_keyboard;
     std::unordered_map<std::string, void*> toolbar_titles;
     std::unordered_map<void*, std::string> toolbar_cmds;
     std::unordered_map<int, std::string> menu_tags;
@@ -340,6 +343,7 @@ static int iphone_argc = 0;
   - (void)viewWillAppear:(BOOL)animated { 
     [super viewWillAppear:animated];
     [self setPaused:YES];
+    app = [LFUIApplication sharedAppDelegate];
   }
   - (void)viewDidAppear:(BOOL)animated {
     [super viewDidAppear:animated];
@@ -347,10 +351,15 @@ static int iphone_argc = 0;
   - (void)viewDidLayoutSubviews {}
   - (void)viewWillLayoutSubviews {
     [super viewWillLayoutSubviews];
+    GLKView *view = [LFUIApplication sharedAppDelegate].view;
+    if (!overlap_keyboard) {
+      CGRect b = [self getKeyboardToolbarFrame];
+      CGRect bounds = [[UIScreen mainScreen] bounds];
+      [view setFrame: CGRectMake(0, 0, bounds.size.width, bounds.size.height - b.size.height)];
+    }
     int w=0, h=0;
     NativeWindowSize(&w, &h);
     WindowReshaped(w, h);
-    GLKView *view = [LFUIApplication sharedAppDelegate].view;
     INFOf("viewWillLayoutSubviews %d %d vs %d %d", w, h, view.drawableWidth, view.drawableHeight);
   }
 
@@ -378,9 +387,12 @@ static int iphone_argc = 0;
     [toolbar setItems:items];
     [items release];
     [spacer release];
-    [self.view addSubview:toolbar];
+    [app.window addSubview:toolbar];
   }
-  - (void)updateToolbarFrame { if (toolbar) toolbar.frame = [self getToolbarFrame]; }
+  - (void)updateToolbarFrame {
+    if (toolbar) toolbar.frame = [self getToolbarFrame];
+    [self.view setNeedsLayout];
+  }
   - (CGRect)getToolbarFrame {
     CGRect bounds = [[UIScreen mainScreen] bounds], kbd = [[LFUIApplication sharedAppDelegate] getKeyboardFrame];
     return CGRectMake(0, bounds.size.height - kbd.size.height - toolbar_height, bounds.size.width, toolbar_height);
@@ -494,8 +506,9 @@ extern "C" void NativeWindowQuit() {
   if (iphone_documents_directory != nil) { [iphone_documents_directory release]; iphone_documents_directory = nil; }
 }
 extern "C" void NativeWindowSize(int *width, int *height) {
-  CGFloat scale = [[LFUIApplication sharedAppDelegate] getScale];
-  CGRect rect = [[UIScreen mainScreen] bounds];
+  LFUIApplication *app = [LFUIApplication sharedAppDelegate];
+  CGFloat scale = [app getScale];
+  CGRect rect = [app getFrame];
   *width = rect.size.width * scale;
   *height = rect.size.height * scale;
   INFOf("NativeWindowSize %d %d", *width, *height);

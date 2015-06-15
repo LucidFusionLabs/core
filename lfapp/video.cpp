@@ -778,13 +778,12 @@ void GraphicsDevice::RestoreViewport(int dm) { ViewPort(screen->Box()); DrawMode
 void GraphicsDevice::DrawMode(int dm, bool flush) { return DrawMode(dm, screen->width, screen->height, flush); }
 void GraphicsDevice::DrawMode(int dm, int W, int H, bool flush) {
   if (draw_mode == dm && !flush) return;
-  draw_mode = dm;
+  bool _2D = (draw_mode = dm) == DrawMode::_2D;
   Color4f(1,1,1,1);
   MatrixProjection();
   LoadIdentity();
   if (FLAGS_rotate_view) Rotatef(FLAGS_rotate_view,0,0,1);
 
-  bool _2D = draw_mode == DrawMode::_2D;
   if (_2D) Ortho(0, W, 0, H, 0, 100);
   else {
     float aspect=(float)W/H;

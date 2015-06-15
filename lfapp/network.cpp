@@ -1736,8 +1736,8 @@ struct SSHClientConnection : public Query {
   Crypto::CipherAlgo cipher_algo_c2s=0, cipher_algo_s2c=0;
   Crypto::MACAlgo mac_algo_c2s=0, mac_algo_s2c=0;
   ECDef curve_id;
-  int kex_method=0, hostkey_type=0, mac_prefix_c2s=0, mac_prefix_s2c=0;
-  int initial_window_size=32768, max_packet_size=16384, term_width=80, term_height=25;
+  int kex_method=0, hostkey_type=0, mac_prefix_c2s=0, mac_prefix_s2c=0, window_c=0, window_s=0;
+  int initial_window_size=1048576, max_packet_size=32768, term_width=80, term_height=25;
 
   SSHClientConnection(const SSHClient::ResponseCB &CB) : cb(CB), V_C("SSH-2.0-LFL_1.0"), rand_eng(std::random_device{}()),
     pty_channel(1,-1), ctx(NewBigNumContext()), K(NewBigNum()) { Crypto::CipherInit(&encrypt); Crypto::CipherInit(&decrypt); }
@@ -1921,6 +1921,7 @@ struct SSHClientConnection : public Query {
 
         case SSH::MSG_USERAUTH_SUCCESS::ID: {
           SSHTrace(c->Name(), ": MSG_USERAUTH_SUCCESS");
+          window_s = initial_window_size;
           if (!WriteCipher(c, SSH::MSG_CHANNEL_OPEN("session", pty_channel.first, initial_window_size, max_packet_size)))
             return ERRORv(-1, c->Name(), ": write");
         } break;
@@ -1941,6 +1942,7 @@ struct SSHClientConnection : public Query {
           if (msg.In(&s)) return ERRORv(-1, c->Name(), ": read MSG_CHANNEL_OPEN_CONFIRMATION");
           SSHTrace(c->Name(), ": MSG_CHANNEL_OPEN_CONFIRMATION");
           pty_channel.second = msg.sender_channel;
+          window_c = msg.initial_win_size;
 
           if (!WriteCipher(c, SSH::MSG_CHANNEL_REQUEST
                            (pty_channel.second, "pty-req", point(term_width, term_height),
@@ -1952,13 +1954,22 @@ struct SSHClientConnection : public Query {
         case SSH::MSG_CHANNEL_WINDOW_ADJUST::ID: {
           SSH::MSG_CHANNEL_WINDOW_ADJUST msg;
           if (msg.In(&s)) return ERRORv(-1, c->Name(), ": read MSG_CHANNEL_WINDOW_ADJUST");
-          SSHTrace(c->Name(), ": MSG_CHANNEL_WINDOW_ADJUST");
+          SSHTrace(c->Name(), ": MSG_CHANNEL_WINDOW_ADJUST add ", msg.bytes_to_add, " to channel ", msg.recipient_channel);
+          window_c += msg.bytes_to_add;
         } break;
 
         case SSH::MSG_CHANNEL_DATA::ID: {
           SSH::MSG_CHANNEL_DATA msg;
           if (msg.In(&s)) return ERRORv(-1, c->Name(), ": read MSG_CHANNEL_DATA");
-          SSHTrace(c->Name(), ": MSG_CHANNEL_DATA");
+          SSHTrace(c->Name(), ": MSG_CHANNEL_DATA: channel ", msg.recipient_channel, ": ", msg.data.size(), " bytes");
+
+          window_s -= (packet_len - packet_MAC_len - 4);
+          if (window_s < initial_window_size / 2) {
+            if (!WriteClearOrEncrypted(c, SSH::MSG_CHANNEL_WINDOW_ADJUST(pty_channel.second, initial_window_size)))
+              return ERRORv(-1, c->Name(), ": write");
+            window_s += initial_window_size;
+          }
+
           cb(c, msg.data);
         } break;
 
@@ -2028,6 +2039,7 @@ struct SSHClientConnection : public Query {
   int WriteChannelData(Connection *c, const StringPiece &b) {
     if (!password_prompts) {
       if (!WriteCipher(c, SSH::MSG_CHANNEL_DATA(pty_channel.second, b))) return ERRORv(-1, c->Name(), ": write");
+      window_c -= (b.size() - 4);
     } else {
       pw.append(b.data(), b.size());
       if (pw.size() && pw.back() == '\r') {

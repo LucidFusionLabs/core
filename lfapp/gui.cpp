@@ -503,19 +503,21 @@ void TextArea::UpdateVScrolled(int dist, bool up, int ind, int first_offset, int
     }
 }
 
-void TextArea::Draw(const Box &b, bool draw_cursor, Shader *shader) {
+void TextArea::Draw(const Box &b, int flag, Shader *shader) {
     if (shader) {
+        float scale = shader->scale;
         glTimeResolutionShader(shader);
-        shader->SetUniform3f("iChannelResolution", b.w, b.h, 0);
-        shader->SetUniform2f("iScroll", -line_fb.scroll.x * line_fb.w, -line_fb.scroll.y * line_fb.h - b.y);
+        shader->SetUniform3f("iChannelResolution", XY_or_Y(scale, b.w), XY_or_Y(scale, b.h), 1);
+        shader->SetUniform2f("iScroll", XY_or_Y(scale, -line_fb.scroll.x * line_fb.w),
+                                        XY_or_Y(scale, -line_fb.scroll.y * line_fb.h - b.y));
     }
     int font_height = font->Height();
     LinesFrameBuffer *fb = GetFrameBuffer();
-    if (fb->SizeChanged(b.w, b.h, font)) { Resized(b); fb->SizeChangedDone(); }
+    if (flag & DrawFlag::CheckResized) CheckResized(b);
     if (clip) screen->gd->PushScissor(Box::DelBorder(b, *clip));
     fb->Draw(b.Position(), point(0, CommandLines() * font_height));
     if (clip) screen->gd->PopScissor();
-    if (draw_cursor) TextGUI::Draw(Box(b.x, b.y, b.w, font_height));
+    if (flag & DrawFlag::DrawCursor) TextGUI::Draw(Box(b.x, b.y, b.w, font_height));
     if (selection.enabled) mouse_gui.box.SetPosition(b.Position());
     if (selection.changing) DrawSelection();
     if (hover_link) {
@@ -866,14 +868,14 @@ const Drawable::Attr *Terminal::GetAttr(int attr) const {
     return &last_attr;
 }
 
-void Terminal::Draw(const Box &b, bool draw_cursor, Shader *shader) {
+void Terminal::Draw(const Box &b, int flag, Shader *shader) {
     TextArea::Draw(b, false, shader);
-    if (shader) shader->SetUniform2f("iScroll", 0, -b.y);
+    if (shader) shader->SetUniform2f("iScroll", 0, XY_or_Y(shader->scale, -b.y));
     if (clip) {
         { Scissor s(Box::TopBorder(b, *clip)); cmd_fb.Draw(b.Position(), point(), false); }
         { Scissor s(Box::BotBorder(b, *clip)); cmd_fb.Draw(b.Position(), point(), false); }
     }
-    if (draw_cursor) TextGUI::DrawCursor(b.Position() + cursor.p);
+    if (flag & DrawFlag::DrawCursor) TextGUI::DrawCursor(b.Position() + cursor.p);
     if (selection.changing) DrawSelection();
 }
 
@@ -1160,7 +1162,7 @@ void Console::Draw() {
 
     screen->gd->ClearColor(Color::clear);
     screen->gd->SetColor(Color::white);
-    TextArea::Draw(Box(0, y, screen->width, h), true);
+    TextArea::Draw(Box(0, y, screen->width, h), DrawFlag::DrawCursor | DrawFlag::CheckResized);
 }
 
 /* Dialog */

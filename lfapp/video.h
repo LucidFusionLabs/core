@@ -471,6 +471,7 @@ struct ShaderDefines {
 struct Shader {
     static const int MaxVertexAttrib = 4;
     string name;
+    float scale=0;
     int unused_attrib_slot[MaxVertexAttrib];
     bool dirty_material=0, dirty_light_pos[4], dirty_light_color[4];
     int ID=0, slot_position=-1, slot_normal=-1, slot_tex=-1, slot_color=-1, uniform_modelview=-1, uniform_modelviewproj=-1,

@@ -328,7 +328,8 @@ elseif(CMAKE_SYSTEM_NAME MATCHES "Darwin")
             COMMAND cp -r ${pkgname}.app /Volumes/${pkgname}/
             COMMAND ln -s /Applications /Volumes/${pkgname}/.
             COMMAND hdiutil eject /Volumes/${pkgname}
-            COMMAND hdiutil convert ${pkgname}.sparseimage -format UDBZ -o ${pkgname}.dmg)
+            COMMAND hdiutil convert ${pkgname}.sparseimage -format UDBZ -o ${pkgname}.dmg
+            COMMAND codesign -f -s \"${OSXCERT}\" ${pkgname}.dmg)
         add_custom_target(${target}_run WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} DEPENDS ${target}
             COMMAND ${pkgname}.app/Contents/MacOS/${target})
         add_custom_target(${target}_debug WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} DEPENDS ${target}

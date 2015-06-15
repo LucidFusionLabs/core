@@ -525,7 +525,7 @@ struct SSH {
   struct MSG_CHANNEL_WINDOW_ADJUST : public Serializable {
     static const int ID = 93;
     int recipient_channel, bytes_to_add;
-    MSG_CHANNEL_WINDOW_ADJUST() : Serializable(ID) {}
+    MSG_CHANNEL_WINDOW_ADJUST(int C=0, int bytes=0) : Serializable(ID), recipient_channel(C), bytes_to_add(bytes) {}
 
     int HeaderSize() const { return 4*2; }
     int Size() const { return HeaderSize(); }
