@@ -329,7 +329,7 @@ struct GameServer : public Query {
             c->SendTo(pong.data(), pong.size());
         }
 #       define elif_parse(Request, in) \
-        else if (hdr.id == Serializable::GetType<GameProtocol::Request>()) { \
+        else if (hdr.id == GameProtocol::Request::ID) { \
             GameProtocol::Request req; \
             if (!req.Read(&in)) Request ## CB(c, &hdr, &req); \
         }
@@ -521,13 +521,13 @@ struct GameUDPServer : public UDPServer {
         static string ping="ping\n";
         if (in.size == ping.size() && in.buf == ping) {
             ((GameServer*)query)->Read(c, content, content_len);
-        } else if (hdr.id == Serializable::GetType<GameProtocol::ChallengeRequest>() && !challenge.Read(&in)) {
+        } else if (hdr.id == GameProtocol::ChallengeRequest::ID && !challenge.Read(&in)) {
             GameProtocol::ChallengeResponse response;
             response.token = Hash(c);
             string buf;
             response.ToString(&buf, hdr.seq);
             c->SendTo(buf.data(), buf.size());
-        } else if (hdr.id == Serializable::GetType<GameProtocol::JoinRequest>() && !join.Read(&in)) {
+        } else if (hdr.id == GameProtocol::JoinRequest::ID && !join.Read(&in)) {
             if (join.token == Hash(c)) return 0;
         } else ERROR(c->Name(), ": parse failed: unknown type ", hdr.id, " bytes ", in.size);
         return 1;

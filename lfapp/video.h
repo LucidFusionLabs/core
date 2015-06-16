@@ -444,12 +444,12 @@ struct FrameBuffer {
     DepthTexture depth;
     FrameBuffer(int w=0, int h=0, unsigned id=0) : ID(id), width(w), height(h) {}
 
-    struct Flag { enum { CreateGL=1, CreateTexture=2, CreateDepthTexture=4, ReleaseFB=8 }; };
+    struct Flag { enum { CreateGL=1, CreateTexture=2, CreateDepthTexture=4, ReleaseFB=8, NoClampToEdge=16 }; };
     void Create(int W, int H, int flag=0) { Resize(W, H, Flag::CreateGL | flag); }
     void Resize(int W, int H, int flag=0);
 
-    void AllocTexture(Texture *out);
-    void AllocTexture(unsigned *out) { Texture tex; AllocTexture(&tex); *out = tex.ID; } 
+    void AllocTexture(Texture *out, bool clamp_to_edge=true);
+    void AllocTexture(unsigned *out, bool clamp_to_edge=true) { Texture tex; AllocTexture(&tex, clamp_to_edge); *out = tex.ID; } 
     void AllocDepthTexture(DepthTexture *out);
 
     void Attach(int ct=0, int dt=0);
@@ -471,6 +471,7 @@ struct ShaderDefines {
 struct Shader {
     static const int MaxVertexAttrib = 4;
     string name;
+    float scale=0;
     int unused_attrib_slot[MaxVertexAttrib];
     bool dirty_material=0, dirty_light_pos[4], dirty_light_color[4];
     int ID=0, slot_position=-1, slot_normal=-1, slot_tex=-1, slot_color=-1, uniform_modelview=-1, uniform_modelviewproj=-1,
@@ -540,7 +541,7 @@ struct Window : public NativeWindow {
     void Minimized() {}
     void UnMinimized() {}
     void SwapAxis();
-    void Frame(unsigned clicks, unsigned mic_samples, bool cam_sample, int flag);
+    int  Frame(unsigned clicks, unsigned mic_samples, bool cam_sample, int flag);
     void RenderToFrameBuffer(FrameBuffer *fb);
 
     void ClearMouseGUIEvents();
@@ -576,6 +577,7 @@ struct GraphicsDevice {
 
     int default_draw_mode = DrawMode::_2D, draw_mode = 0, default_framebuffer = 0;
     string vertex_shader, pixel_shader;
+    Shader *shader = 0;
     vector<Color> default_color;
     vector<vector<Box> > scissor_stack;
     GraphicsDevice() : scissor_stack(1) {}

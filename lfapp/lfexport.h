@@ -112,6 +112,7 @@ DECLARE_bool(lfapp_network);
 DECLARE_bool(lfapp_camera);
 DECLARE_bool(lfapp_cuda);
 DECLARE_bool(lfapp_debug);
+DECLARE_bool(swap_axis);
 DECLARE_int(target_fps);
 DECLARE_int(threadpool_size);
 DECLARE_int(invert);
@@ -120,6 +121,7 @@ DECLARE_float(msens);
 DECLARE_bool(open_console);
 DECLARE_bool(max_rlimit_core);
 DECLARE_bool(max_rlimit_open_files);
+DECLARE_float(rotate_view);
 
 struct Allocator;
 struct Asset;
@@ -182,6 +184,9 @@ typedef struct bignum_st BIGNUM;
 typedef struct bignum_ctx BN_CTX;
 typedef struct hb_face_t hb_face_t;
 typedef struct _CCBigNumRef *CCBigNumRef;
+typedef struct ec_group_st EC_GROUP;
+typedef struct ec_point_st EC_POINT;
+typedef struct ec_key_st EC_KEY;
 
 struct LFApp {
     struct Log { enum { Fatal=-1, Error=0, Info=3, Debug=7 }; int v; };
@@ -196,8 +201,8 @@ struct LFApp {
 
 struct NativeWindow {
     void *id, *gl, *surface, *glew_context, *user1, *user2, *user3;
-    int width, height, target_fps;
-    bool minimized, cursor_grabbed;
+    int width, height, pow2_width, pow2_height, target_fps;
+    bool minimized, cursor_grabbed, frame_init;
     int opengles_version, opengles_cubemap;
     int gesture_swipe_up, gesture_swipe_down, gesture_tap[2], gesture_dpad_stop[2];
     float gesture_dpad_x[2], gesture_dpad_y[2], gesture_dpad_dx[2], gesture_dpad_dy[2], multitouch_keyboard_x;

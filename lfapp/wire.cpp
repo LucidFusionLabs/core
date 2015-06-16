@@ -26,41 +26,48 @@
 #include <netdb.h>
 #endif
 
+#ifdef LFL_OPENSSL
+#include "openssl/evp.h"
+#include "openssl/rsa.h"
+#include "openssl/dsa.h"
+#include "openssl/ecdsa.h"
+#endif
+
 namespace LFL {
 const char *Protocol::Name(int p) {
-    switch (p) {
-        case TCP:   return "TCP";
-        case UDP:   return "UDP";
-        case UNIX:  return "UNIX";
-        case GPLUS: return "GPLUS";
-        default:    return "";
-    }
+  switch (p) {
+    case TCP:   return "TCP";
+    case UDP:   return "UDP";
+    case UNIX:  return "UNIX";
+    case GPLUS: return "GPLUS";
+    default:    return "";
+  }
 }
 
 void Serializable::Header::Out(Stream *o) const { o->Htons( id); o->Htons( seq); }
 void Serializable::Header::In(const Stream *i)  { i->Ntohs(&id); i->Ntohs(&seq); }
 
-string Serializable::ToString()                   { string ret; ToString(&ret);      return ret; }
-string Serializable::ToString(unsigned short seq) { string ret; ToString(&ret, seq); return ret; }
+string Serializable::ToString()                   const { string ret; ToString(&ret);      return ret; }
+string Serializable::ToString(unsigned short seq) const { string ret; ToString(&ret, seq); return ret; }
 
-void Serializable::ToString(string *out) {
-    out->resize(Size());
-    return ToString((char*)out->data(), out->size());
+void Serializable::ToString(string *out) const {
+  out->resize(Size());
+  return ToString(&(*out)[0], out->size());
 }
-void Serializable::ToString(string *out, unsigned short seq) {
-    out->resize(Header::size + Size());
-    return ToString((char*)out->data(), out->size(), seq);
+void Serializable::ToString(string *out, unsigned short seq) const {
+  out->resize(Header::size + Size());
+  return ToString(&(*out)[0], out->size(), seq);
 }
 
-void Serializable::ToString(char *buf, int len) {
-    MutableStream os(buf, len);
-    Out(&os);
+void Serializable::ToString(char *buf, int len) const {
+  MutableStream os(buf, len);
+  Out(&os);
 }
-void Serializable::ToString(char *buf, int len, unsigned short seq) {
-    MutableStream os(buf, len);
-    Header hdr = { (unsigned short)Type(), seq };
-    hdr.Out(&os);
-    Out(&os);
+void Serializable::ToString(char *buf, int len, unsigned short seq) const {
+  MutableStream os(buf, len);
+  Header hdr = { (unsigned short)Id, seq };
+  hdr.Out(&os);
+  Out(&os);
 }
 
 const IPV4::Addr IPV4::ANY = INADDR_ANY;
@@ -68,560 +75,827 @@ const IPV4::Addr IPV4::ANY = INADDR_ANY;
 IPV4::Addr IPV4::Parse(const string &ip) { return inet_addr(ip.c_str()); }
 
 void IPV4::ParseCSV(const string &text, vector<IPV4::Addr> *out) {
-    vector<string> addrs; IPV4::Addr addr;
-    Split(text, iscomma, &addrs);
-    for (int i = 0; i < addrs.size(); i++) {
-        if ((addr = Parse(addrs[i])) == INADDR_NONE) FATAL("unknown addr ", addrs[i]);
-        out->push_back(addr);
-    }
+  vector<string> addrs; IPV4::Addr addr;
+  Split(text, iscomma, &addrs);
+  for (int i = 0; i < addrs.size(); i++) {
+    if ((addr = Parse(addrs[i])) == INADDR_NONE) FATAL("unknown addr ", addrs[i]);
+    out->push_back(addr);
+  }
 }
 
 void IPV4::ParseCSV(const string &text, set<IPV4::Addr> *out) {
-    vector<string> addrs; IPV4::Addr addr;
-    Split(text, iscomma, &addrs);
-    for (int i = 0; i < addrs.size(); i++) {
-        if ((addr = Parse(addrs[i])) == INADDR_NONE) FATAL("unknown addr ", addrs[i]);
-        out->insert(addr);
-    }
+  vector<string> addrs; IPV4::Addr addr;
+  Split(text, iscomma, &addrs);
+  for (int i = 0; i < addrs.size(); i++) {
+    if ((addr = Parse(addrs[i])) == INADDR_NONE) FATAL("unknown addr ", addrs[i]);
+    out->insert(addr);
+  }
 }
 
 string IPV4::MakeCSV(const vector<IPV4::Addr> &in) {
-    string ret;
-    for (vector<Addr>::const_iterator i = in.begin(); i != in.end(); ++i) StrAppend(&ret, ret.size()?",":"", IPV4::Text(*i));
-    return ret;
+  string ret;
+  for (vector<Addr>::const_iterator i = in.begin(); i != in.end(); ++i) StrAppend(&ret, ret.size()?",":"", IPV4::Text(*i));
+  return ret;
 }
 
 string IPV4::MakeCSV(const set<IPV4::Addr> &in) {
-    string ret;
-    for (set<Addr>::const_iterator i = in.begin(); i != in.end(); ++i) StrAppend(&ret, ret.size()?",":"", IPV4::Text(*i));
-    return ret;
+  string ret;
+  for (set<Addr>::const_iterator i = in.begin(); i != in.end(); ++i) StrAppend(&ret, ret.size()?",":"", IPV4::Text(*i));
+  return ret;
 }
 
 int DNS::WriteRequest(unsigned short id, const string &querytext, unsigned short type, char *out, int len) {
-    Serializable::MutableStream os(out, len);
-    Header *hdr = (Header*)os.Get(Header::size);
-    memset(hdr, 0, Header::size);
-    hdr->rd = 1;
-    hdr->id = id;
-    hdr->qdcount = htons(1);
+  Serializable::MutableStream os(out, len);
+  Header *hdr = (Header*)os.Get(Header::size);
+  memset(hdr, 0, Header::size);
+  hdr->rd = 1;
+  hdr->id = id;
+  hdr->qdcount = htons(1);
 
-    StringWordIter words(querytext, isdot);
-    for (string word = IterNextString(&words); !word.empty(); word = IterNextString(&words)) {
-        CHECK_LT(word.size(), 64);
-        os.Write8((unsigned char)word.size());
-        os.String(word);
-    }
-    os.Write8((char)0);
+  StringWordIter words(querytext, isdot);
+  for (string word = IterNextString(&words); !word.empty(); word = IterNextString(&words)) {
+    CHECK_LT(word.size(), 64);
+    os.Write8((unsigned char)word.size());
+    os.String(word);
+  }
+  os.Write8((char)0);
 
-    os.Htons(type);                      // QueryTypeClass.Type
-    os.Htons((unsigned short)Class::IN); // QueryTypeClass.QClass
-    return os.error ? -1 : os.offset;
+  os.Htons(type);                      // QueryTypeClass.Type
+  os.Htons((unsigned short)Class::IN); // QueryTypeClass.QClass
+  return os.error ? -1 : os.offset;
 }
 
 int DNS::ReadResponse(const char *buf, int bufsize, Response *res) {
-    Serializable::ConstStream is(buf, bufsize);
-    const Serializable::Stream *in = &is;
-    const Header *hdr = (Header*)in->Get(Header::size);
+  Serializable::ConstStream is(buf, bufsize);
+  const Serializable::Stream *in = &is;
+  const Header *hdr = (Header*)in->Get(Header::size);
 
-    int qdcount = ntohs(hdr->qdcount);
-    int ancount = ntohs(hdr->ancount);
-    int nscount = ntohs(hdr->nscount);
-    int arcount = ntohs(hdr->arcount);
+  int qdcount = ntohs(hdr->qdcount);
+  int ancount = ntohs(hdr->ancount);
+  int nscount = ntohs(hdr->nscount);
+  int arcount = ntohs(hdr->arcount);
 
-    for (int i = 0; i < qdcount; i++) {
-        Record out; int len;
-        if ((len = DNS::ReadString(in->Start(), in->Get(), in->End(), &out.question)) < 0 || !in->Advance(len + 4)) return -1;
-        res->Q.push_back(out);
-    }
+  for (int i = 0; i < qdcount; i++) {
+    Record out; int len;
+    if ((len = DNS::ReadString(in->Start(), in->Get(), in->End(), &out.question)) < 0 || !in->Advance(len + 4)) return -1;
+    res->Q.push_back(out);
+  }
 
-    if (DNS::ReadResourceRecord(in, ancount, &res->A)  < 0) return -1;
-    if (DNS::ReadResourceRecord(in, nscount, &res->NS) < 0) return -1;
-    if (DNS::ReadResourceRecord(in, arcount, &res->E)  < 0) return -1;
-    return 0;
+  if (DNS::ReadResourceRecord(in, ancount, &res->A)  < 0) return -1;
+  if (DNS::ReadResourceRecord(in, nscount, &res->NS) < 0) return -1;
+  if (DNS::ReadResourceRecord(in, arcount, &res->E)  < 0) return -1;
+  return 0;
 }
 
 int DNS::ReadResourceRecord(const Serializable::Stream *in, int num, vector<Record> *out) {
-    for (int i = 0; i < num; i++) {
-        Record rec; int len; unsigned short rrlen;
-        if ((len = ReadString(in->Start(), in->Get(), in->End(), &rec.question)) < 0 || !in->Advance(len)) return -1;
+  for (int i = 0; i < num; i++) {
+    Record rec; int len; unsigned short rrlen;
+    if ((len = ReadString(in->Start(), in->Get(), in->End(), &rec.question)) < 0 || !in->Advance(len)) return -1;
 
-        in->Ntohs(&rec.type);
-        in->Ntohs(&rec._class);
-        in->Ntohs(&rec.ttl1);
-        in->Ntohs(&rec.ttl2);
-        in->Ntohs(&rrlen);
+    in->Ntohs(&rec.type);
+    in->Ntohs(&rec._class);
+    in->Ntohs(&rec.ttl1);
+    in->Ntohs(&rec.ttl2);
+    in->Ntohs(&rrlen);
 
-        if (rec._class == Class::IN && rec.type == Type::A) {
-            if (rrlen != 4) return -1;
-            in->Read32(&rec.addr);
-        } else if (rec._class == Class::IN && (rec.type == Type::NS || rec.type == Type::CNAME)) {
-            if ((len = ReadString(in->Start(), in->Get(), in->End(), &rec.answer)) != rrlen   || !in->Advance(len)) return -1;
-        } else if (rec._class == Class::IN && rec.type == Type::MX) {
-            in->Ntohs(&rec.pref);
-            if ((len = ReadString(in->Start(), in->Get(), in->End(), &rec.answer)) != rrlen-2 || !in->Advance(len)) return -1;
-        } else {
-            ERROR("unhandled type=", rec.type, ", class=", rec._class);
-            in->Advance(rrlen);
-            continue;
-        }
-        out->push_back(rec);
+    if (rec._class == Class::IN && rec.type == Type::A) {
+      if (rrlen != 4) return -1;
+      in->Read32(&rec.addr);
+    } else if (rec._class == Class::IN && (rec.type == Type::NS || rec.type == Type::CNAME)) {
+      if ((len = ReadString(in->Start(), in->Get(), in->End(), &rec.answer)) != rrlen   || !in->Advance(len)) return -1;
+    } else if (rec._class == Class::IN && rec.type == Type::MX) {
+      in->Ntohs(&rec.pref);
+      if ((len = ReadString(in->Start(), in->Get(), in->End(), &rec.answer)) != rrlen-2 || !in->Advance(len)) return -1;
+    } else {
+      ERROR("unhandled type=", rec.type, ", class=", rec._class);
+      in->Advance(rrlen);
+      continue;
     }
-    return in->error ? -1 : 0;
+    out->push_back(rec);
+  }
+  return in->error ? -1 : 0;
 }
 
 int DNS::ReadString(const char *start, const char *cur, const char *end, string *out) {
-    if (!cur) { ERROR("DNS::ReadString null input"); return -1; }
-    if (out) out->clear();
-    const char *cur_start = cur, *final = 0;
-    for (unsigned char len = 1; len && cur < end; cur += len+1) {
-        len = *cur;
-        if (len >= 64) { // Pointer to elsewhere in packet
-            int offset = ntohs(*(unsigned short*)cur) & ~(3<<14);
-            if (!final) final = cur + 2;
-            cur = start + offset - 2;
-            if (cur < start || cur >= end) { ERROR("OOB cur ", (void*)start, " ", (void*)cur, " ", (void*)end); return -1; }
-            len = 1;
-            continue;
-        }
-        if (out) StrAppend(out, out->empty() ? "" : ".", string(cur+1, len));
+  if (!cur) { ERROR("DNS::ReadString null input"); return -1; }
+  if (out) out->clear();
+  const char *cur_start = cur, *final = 0;
+  for (unsigned char len = 1; len && cur < end; cur += len+1) {
+    len = *cur;
+    if (len >= 64) { // Pointer to elsewhere in packet
+      int offset = ntohs(*(unsigned short*)cur) & ~(3<<14);
+      if (!final) final = cur + 2;
+      cur = start + offset - 2;
+      if (cur < start || cur >= end) { ERROR("OOB cur ", (void*)start, " ", (void*)cur, " ", (void*)end); return -1; }
+      len = 1;
+      continue;
     }
-    if (out) *out = tolower(*out);
-    if (final) cur = final;
-    return (cur > end) ? -1 : (cur - cur_start);
+    if (out) StrAppend(out, out->empty() ? "" : ".", string(cur+1, len));
+  }
+  if (out) *out = tolower(*out);
+  if (final) cur = final;
+  return (cur > end) ? -1 : (cur - cur_start);
 }
 
 void DNS::MakeAnswerMap(const vector<DNS::Record> &in, AnswerMap *out) {
-    for (int i = 0; i < in.size(); ++i) {
-        const DNS::Record &e = in[i];
-        if (e.question.empty() || !e.addr) continue;
-        (*out)[e.question].push_back(e.addr);
-    }
-    for (int i = 0; i < in.size(); ++i) {
-        const DNS::Record &e = in[i];
-        if (e.question.empty() || e.answer.empty() || e.type != DNS::Type::CNAME) continue;
-        AnswerMap::const_iterator a = out->find(e.answer);
-        if (a == out->end()) continue;
-        VectorAppend((*out)[e.question], a->second.begin(), a->second.end());
-    }
+  for (int i = 0; i < in.size(); ++i) {
+    const DNS::Record &e = in[i];
+    if (e.question.empty() || !e.addr) continue;
+    (*out)[e.question].push_back(e.addr);
+  }
+  for (int i = 0; i < in.size(); ++i) {
+    const DNS::Record &e = in[i];
+    if (e.question.empty() || e.answer.empty() || e.type != DNS::Type::CNAME) continue;
+    AnswerMap::const_iterator a = out->find(e.answer);
+    if (a == out->end()) continue;
+    VectorAppend((*out)[e.question], a->second.begin(), a->second.end());
+  }
 }
 
 void DNS::MakeAnswerMap(const vector<DNS::Record> &in, const AnswerMap &qmap, int type, AnswerMap *out) {
-    for (int i = 0; i < in.size(); ++i) {
-        const DNS::Record &e = in[i];
-        if (e.type != type) continue;
-        AnswerMap::const_iterator q_iter = qmap.find(e.answer);
-        if (e.question.empty() || e.answer.empty() || q_iter == qmap.end())
-        { ERROR("DNS::MakeAnswerMap missing ", e.answer); continue; }
-        VectorAppend((*out)[e.question], q_iter->second.begin(), q_iter->second.end());
-    }
+  for (int i = 0; i < in.size(); ++i) {
+    const DNS::Record &e = in[i];
+    if (e.type != type) continue;
+    AnswerMap::const_iterator q_iter = qmap.find(e.answer);
+    if (e.question.empty() || e.answer.empty() || q_iter == qmap.end())
+    { ERROR("DNS::MakeAnswerMap missing ", e.answer); continue; }
+    VectorAppend((*out)[e.question], q_iter->second.begin(), q_iter->second.end());
+  }
 }
 
 string DNS::Response::DebugString() const {
-    string ret;
-    StrAppend(&ret, "Question ",   Q .size(), "\n"); for (int i = 0; i < Q .size(); ++i) StrAppend(&ret, Q [i].DebugString(), "\n");
-    StrAppend(&ret, "Answer ",     A .size(), "\n"); for (int i = 0; i < A .size(); ++i) StrAppend(&ret, A [i].DebugString(), "\n");
-    StrAppend(&ret, "NS ",         NS.size(), "\n"); for (int i = 0; i < NS.size(); ++i) StrAppend(&ret, NS[i].DebugString(), "\n");
-    StrAppend(&ret, "Additional ", E .size(), "\n"); for (int i = 0; i < E .size(); ++i) StrAppend(&ret, E [i].DebugString(), "\n");
-    return ret;
+  string ret;
+  StrAppend(&ret, "Question ",   Q .size(), "\n"); for (int i = 0; i < Q .size(); ++i) StrAppend(&ret, Q [i].DebugString(), "\n");
+  StrAppend(&ret, "Answer ",     A .size(), "\n"); for (int i = 0; i < A .size(); ++i) StrAppend(&ret, A [i].DebugString(), "\n");
+  StrAppend(&ret, "NS ",         NS.size(), "\n"); for (int i = 0; i < NS.size(); ++i) StrAppend(&ret, NS[i].DebugString(), "\n");
+  StrAppend(&ret, "Additional ", E .size(), "\n"); for (int i = 0; i < E .size(); ++i) StrAppend(&ret, E [i].DebugString(), "\n");
+  return ret;
 }
 
 /* HTTP */
 
 bool HTTP::ParseHost(const char *host, const char *host_end, string *hostO, string *portO) {
-    const char *colon = strstr(host, ":"), *port = 0;
-    if (!host_end) host_end = host + strlen(host);
-    if (colon && colon < host_end) port = colon+1;
-    if (hostO) hostO->assign(host, port ? port-host-1 : host_end-host);
-    if (portO) portO->assign(port ? port : "", port ? host_end-port : 0);
-    return 1;
+  const char *colon = strstr(host, ":"), *port = 0;
+  if (!host_end) host_end = host + strlen(host);
+  if (colon && colon < host_end) port = colon+1;
+  if (hostO) hostO->assign(host, port ? port-host-1 : host_end-host);
+  if (portO) portO->assign(port ? port : "", port ? host_end-port : 0);
+  return 1;
 }
 
 bool HTTP::ResolveHost(const char *hostname, const char *host_end, IPV4::Addr *ipv4_addr, int *tcp_port, bool ssl, int default_port) {
-    string h, p;
-    if (!ParseHost(hostname, host_end, &h, &p)) return 0;
-    return ResolveEndpoint(h, p, ipv4_addr, tcp_port, ssl, default_port);
+  string h, p;
+  if (!ParseHost(hostname, host_end, &h, &p)) return 0;
+  return ResolveEndpoint(h, p, ipv4_addr, tcp_port, ssl, default_port);
 }
 
 bool HTTP::ResolveEndpoint(const string &host, const string &port, IPV4::Addr *ipv4_addr, int *tcp_port, bool ssl, int default_port) {
-    if (ipv4_addr) {
-        *ipv4_addr = SystemNetwork::GetHostByName(host);
-        if (*ipv4_addr == -1) { ERROR("resolve"); return 0; }
-    }
-    if (tcp_port) {
-        *tcp_port = !port.empty() ? atoi(port.c_str()) : (default_port ? default_port : (ssl ? 443 : 80));
-        if (*tcp_port < 0 || *tcp_port >= 65536) { ERROR("oob port"); return 0; }
-    }
-    return 1;
+  if (ipv4_addr) {
+    *ipv4_addr = SystemNetwork::GetHostByName(host);
+    if (*ipv4_addr == -1) { ERROR("resolve"); return 0; }
+  }
+  if (tcp_port) {
+    *tcp_port = !port.empty() ? atoi(port.c_str()) : (default_port ? default_port : (ssl ? 443 : 80));
+    if (*tcp_port < 0 || *tcp_port >= 65536) { ERROR("oob port"); return 0; }
+  }
+  return 1;
 }
 
 bool HTTP::ParseURL(const char *url, string *protO, string *hostO, string *portO, string *pathO) {
-    const char *host = ParseProtocol(url, protO);
-    const char *host_end = strstr(host, "/");
-    HTTP::ParseHost(host, host_end, hostO, portO);
-    if (pathO) pathO->assign(host_end ? host_end+1 : "");
-    return 1;
+  const char *host = ParseProtocol(url, protO);
+  const char *host_end = strstr(host, "/");
+  HTTP::ParseHost(host, host_end, hostO, portO);
+  if (pathO) pathO->assign(host_end ? host_end+1 : "");
+  return 1;
 }
 
 bool HTTP::ResolveURL(const char *url, bool *ssl, IPV4::Addr *ipv4_addr, int *tcp_port, string *host, string *path, int default_port, string *prot) {
-    string my_prot, port, my_host, my_path; bool my_ssl;
-    if (!prot) prot = &my_prot;
-    if (!host) host = &my_host;
-    if (!path) path = &my_path;
-    if (!ssl) ssl = &my_ssl;
+  string my_prot, port, my_host, my_path; bool my_ssl;
+  if (!prot) prot = &my_prot;
+  if (!host) host = &my_host;
+  if (!path) path = &my_path;
+  if (!ssl) ssl = &my_ssl;
 
-    ParseURL(url, prot, host, &port, path);
-    *ssl = !prot->empty() && !strcasecmp(prot->c_str(), "https");
-    if (!prot->empty() && strcasecmp(prot->c_str(), "http") && !*ssl) return 0;
-    if (host->empty()) { ERROR("no host or path"); return 0; }
-    if (!HTTP::ResolveEndpoint(*host, port, ipv4_addr, tcp_port, *ssl, default_port)) { ERROR("HTTP::ResolveURL ", host); return 0; }
-    return 1;
+  ParseURL(url, prot, host, &port, path);
+  *ssl = !prot->empty() && !strcasecmp(prot->c_str(), "https");
+  if (!prot->empty() && strcasecmp(prot->c_str(), "http") && !*ssl) return 0;
+  if (host->empty()) { ERROR("no host or path"); return 0; }
+  if (!HTTP::ResolveEndpoint(*host, port, ipv4_addr, tcp_port, *ssl, default_port)) { ERROR("HTTP::ResolveURL ", host); return 0; }
+  return 1;
 }
 
 string HTTP::HostURL(const char *url) {
-    string my_prot, my_port, my_host, my_path;
-    ParseURL(url, &my_prot, &my_host, &my_port, &my_path);
-    string ret = !my_prot.empty() ? StrCat(my_prot, "://") : "http://";
-    if (!my_host.empty()) ret += my_host;
-    if (!my_port.empty()) ret += string(":") + my_port;
-    return ret;
+  string my_prot, my_port, my_host, my_path;
+  ParseURL(url, &my_prot, &my_host, &my_port, &my_path);
+  string ret = !my_prot.empty() ? StrCat(my_prot, "://") : "http://";
+  if (!my_host.empty()) ret += my_host;
+  if (!my_port.empty()) ret += string(":") + my_port;
+  return ret;
 }
 
 int HTTP::ParseRequest(char *buf, char **methodO, char **urlO, char **argsO, char **verO) {
-    char *url, *ver, *args;
-    if (!(url = (char*)FindChar(buf, isspace)))    return -1;    *url = 0;
-    if (!(url = (char*)FindChar(url+1, notspace))) return -1;
-    if (!(ver = (char*)FindChar(url, isspace)))    return -1;    *ver = 0;
-    if (!(ver = (char*)FindChar(ver+1, notspace))) return -1;
+  char *url, *ver, *args;
+  if (!(url = (char*)FindChar(buf, isspace)))    return -1;    *url = 0;
+  if (!(url = (char*)FindChar(url+1, notspace))) return -1;
+  if (!(ver = (char*)FindChar(url, isspace)))    return -1;    *ver = 0;
+  if (!(ver = (char*)FindChar(ver+1, notspace))) return -1;
 
-    if ((args = strchr(url, '?'))) *args++ = 0;
+  if ((args = strchr(url, '?'))) *args++ = 0;
 
-    if (methodO) *methodO = buf;
-    if (urlO) *urlO = url;
-    if (argsO) *argsO = args;
-    if (verO) *verO = ver;
-    return 0;
+  if (methodO) *methodO = buf;
+  if (urlO) *urlO = url;
+  if (argsO) *argsO = args;
+  if (verO) *verO = ver;
+  return 0;
 }
 
 char *HTTP::FindHeadersStart(char *buf) {
-    char *start = strstr(buf, "\r\n");
-    if (!start) return 0;
-    *start = 0;
-    return start + 2;
+  char *start = strstr(buf, "\r\n");
+  if (!start) return 0;
+  *start = 0;
+  return start + 2;
 }
 
 char *HTTP::FindHeadersEnd(char *buf) {
-    char *end = strstr(buf, "\r\n\r\n");
-    if (!end) return 0;
-    *(end+2) = 0;
-    return end + 2;
+  char *end = strstr(buf, "\r\n\r\n");
+  if (!end) return 0;
+  *(end+2) = 0;
+  return end + 2;
 }
 
 const char *HTTP::FindHeadersEnd(const char *buf) {
-    const char *end = strstr(buf, "\r\n\r\n");
-    if (!end) return 0;
-    return end + 2;
+  const char *end = strstr(buf, "\r\n\r\n");
+  if (!end) return 0;
+  return end + 2;
 }
 
 int HTTP::GetHeaderLen(const char *beg, const char *end) { return end - beg + 2; }
 
 int HTTP::GetHeaderNameLen(const char *beg) {
-    const char *n = beg;
-    while (*n && !isspace(*n) && *n != ':') n++;
-    return *n == ':' ? n - beg : 0;
+  const char *n = beg;
+  while (*n && !isspace(*n) && *n != ':') n++;
+  return *n == ':' ? n - beg : 0;
 }
 
 int HTTP::GetURLArgNameLen(const char *beg) {
-    const char *n = beg;
-    while (*n && !isspace(*n) && *n != '=' && *n != '&') n++;
-    return n - beg;
+  const char *n = beg;
+  while (*n && !isspace(*n) && *n != '=' && *n != '&') n++;
+  return n - beg;
 }
 
 string HTTP::GrepHeaders(const char *headers, const char *end, const string &name) {
-    if (!end) end = HTTP::FindHeadersEnd(headers);
-    if (!end) end = headers + strlen(headers);
+  if (!end) end = HTTP::FindHeadersEnd(headers);
+  if (!end) end = headers + strlen(headers);
 
-    int hlen=end-headers, hnlen;
-    StringLineIter lines(StringPiece(headers, hlen));
-    for (const char *line = lines.Next(); line; line = lines.Next()) {
-        if (!(hnlen = HTTP::GetHeaderNameLen(line))) continue;
-        if (hnlen == name.size() && !strncasecmp(name.c_str(), line, hnlen)) return string(line+hnlen+2, lines.cur_len-hnlen-2);
-    }
-    return "";
+  int hlen=end-headers, hnlen;
+  StringLineIter lines(StringPiece(headers, hlen));
+  for (const char *line = lines.Next(); line; line = lines.Next()) {
+    if (!(hnlen = HTTP::GetHeaderNameLen(line))) continue;
+    if (hnlen == name.size() && !strncasecmp(name.c_str(), line, hnlen)) return string(line+hnlen+2, lines.cur_len-hnlen-2);
+  }
+  return "";
 }
 
 #define HTTPGrepImpl(k, kl, v) \
-    va_list ap; va_start(ap, num); \
-    char **k = (char **)alloca(num*sizeof(char*)); \
-    int *kl = (int *)alloca(num*sizeof(int)); \
-    StringPiece **v = (StringPiece **)alloca(num*sizeof(char*)); \
-    for (int i=0; i<num; i++) { \
-        k[i] = va_arg(ap, char*); \
-        kl[i] = strlen(k[i]); \
-        v[i] = va_arg(ap, StringPiece*); \
-    } \
-    va_end(ap);
-
+  va_list ap; va_start(ap, num); \
+  char **k = (char **)alloca(num*sizeof(char*)); \
+  int *kl = (int *)alloca(num*sizeof(int)); \
+  StringPiece **v = (StringPiece **)alloca(num*sizeof(char*)); \
+  for (int i=0; i<num; i++) { \
+    k[i] = va_arg(ap, char*); \
+    kl[i] = strlen(k[i]); \
+    v[i] = va_arg(ap, StringPiece*); \
+  } \
+va_end(ap);
 
 int HTTP::GrepHeaders(const char *headers, const char *end, int num, ...) {
-    HTTPGrepImpl(k, kl, v);
-    if (!end) end = HTTP::FindHeadersEnd(headers);
-    if (!end) end = headers + strlen(headers);
+  HTTPGrepImpl(k, kl, v);
+  if (!end) end = HTTP::FindHeadersEnd(headers);
+  if (!end) end = headers + strlen(headers);
 
-    int hlen=end-headers, hnlen;
-    StringLineIter lines(StringPiece(headers, hlen));
-    for (const char *h = lines.Next(); h; h = lines.Next()) {
-        if (!(hnlen = HTTP::GetHeaderNameLen(h))) continue;
-        for (int i=0; i<num; i++) if (hnlen == kl[i] && !strncasecmp(k[i], h, hnlen)) {
-            const char *hv = FindChar(h+hnlen+1, notspace, lines.cur_len-hnlen-1);
-            if (!hv) v[i]->clear();
-            else     v[i]->assign(hv, lines.cur_len-(hv-h));
-        }
+  int hlen=end-headers, hnlen;
+  StringLineIter lines(StringPiece(headers, hlen));
+  for (const char *h = lines.Next(); h; h = lines.Next()) {
+    if (!(hnlen = HTTP::GetHeaderNameLen(h))) continue;
+    for (int i=0; i<num; i++) if (hnlen == kl[i] && !strncasecmp(k[i], h, hnlen)) {
+      const char *hv = FindChar(h+hnlen+1, notspace, lines.cur_len-hnlen-1);
+      if (!hv) v[i]->clear();
+      else     v[i]->assign(hv, lines.cur_len-(hv-h));
     }
-    return 0;
+  }
+  return 0;
 }
 
 int HTTP::GrepURLArgs(const char *args, const char *end, int num, ...) {
-    HTTPGrepImpl(k, kl, v);
-    if (!end) end = args + strlen(args);
+  HTTPGrepImpl(k, kl, v);
+  if (!end) end = args + strlen(args);
 
-    int alen=end-args, anlen;
-    StringWordIter words(StringPiece(args, alen), isand, 0);
-    for (const char *a = words.Next(); a; a = words.Next()) {
-        if (!(anlen = HTTP::GetURLArgNameLen(a))) continue;
-        for (int i=0; i<num; i++) if (anlen == kl[i] && !strncasecmp(k[i], a, anlen)) {
-            if (*(a+anlen) && *(a+anlen) == '=') v[i]->assign(a+anlen+1, words.cur_len-anlen-1);
-            else v[i]->assign(a, words.cur_len);
-        }
+  int alen=end-args, anlen;
+  StringWordIter words(StringPiece(args, alen), isand, 0);
+  for (const char *a = words.Next(); a; a = words.Next()) {
+    if (!(anlen = HTTP::GetURLArgNameLen(a))) continue;
+    for (int i=0; i<num; i++) if (anlen == kl[i] && !strncasecmp(k[i], a, anlen)) {
+      if (*(a+anlen) && *(a+anlen) == '=') v[i]->assign(a+anlen+1, words.cur_len-anlen-1);
+      else v[i]->assign(a, words.cur_len);
     }
-    return 0;
+  }
+  return 0;
 }
 
 string HTTP::EncodeURL(const char *url) {
-    static const char encodeURIcomponentPass[] = "~!*()'";
-    static const char encodeURIPass[] = "./@#:?,;-_&";
-    string ret;
-    for (const unsigned char *p = (const unsigned char *)url; *p; p++) {
-        if      (*p >= '0' && *p <= '9') ret += *p;
-        else if (*p >= 'a' && *p <= 'z') ret += *p;
-        else if (*p >= 'A' && *p <= 'Z') ret += *p;
-        else if (strchr(encodeURIcomponentPass, *p)) ret += *p;
-        else if (strchr(encodeURIPass, *p)) ret += *p;
-        else StringAppendf(&ret, "%%%02x", *p);
-    }
-    return ret;
+  static const char encodeURIcomponentPass[] = "~!*()'";
+  static const char encodeURIPass[] = "./@#:?,;-_&";
+  string ret;
+  for (const unsigned char *p = (const unsigned char *)url; *p; p++) {
+    if      (*p >= '0' && *p <= '9') ret += *p;
+    else if (*p >= 'a' && *p <= 'z') ret += *p;
+    else if (*p >= 'A' && *p <= 'Z') ret += *p;
+    else if (strchr(encodeURIcomponentPass, *p)) ret += *p;
+    else if (strchr(encodeURIPass, *p)) ret += *p;
+    else StringAppendf(&ret, "%%%02x", *p);
+  }
+  return ret;
 }
 
 /* SSH */
 
 int SSH::BinaryPacketLength(const char *b, unsigned char *padding, unsigned char *id) {
-    if (padding) *padding = *(reinterpret_cast<const unsigned char *>(b + 4));
-    if (id)      *id      = *(reinterpret_cast<const unsigned char *>(b + 5));
-    return ntohl(*(int*)b);
+  if (padding) *padding = *(reinterpret_cast<const unsigned char *>(b + 4));
+  if (id)      *id      = *(reinterpret_cast<const unsigned char *>(b + 5));
+  return ntohl(*(int*)b);
 }
 
 int SSH::BigNumSize(const BigNum n) { return BigNumDataSize(n) + !(BigNumSignificantBits(n) % 8); }
 
 BigNum SSH::ReadBigNum(BigNum n, const Serializable::Stream *i) {
-    int n_len = 0;
-    i->Ntohl(&n_len);
-    return BigNumSetData(n, StringPiece(i->Get(n_len), n_len));
+  int n_len = 0;
+  i->Ntohl(&n_len);
+  return BigNumSetData(n, StringPiece(i->Get(n_len), n_len));
 }
 
 void SSH::WriteBigNum(const BigNum n, Serializable::Stream *o) {
-    int n_len = BigNumDataSize(n);
-    bool prepend_zero = !(BigNumSignificantBits(n) % 8);
-    o->Htonl(n_len + prepend_zero);
-    if (prepend_zero) o->Write8(char(0));
-    BigNumGetData(n, o->Get(n_len));
+  int n_len = BigNumDataSize(n);
+  bool prepend_zero = !(BigNumSignificantBits(n) % 8);
+  o->Htonl(n_len + prepend_zero);
+  if (prepend_zero) o->Write8(char(0));
+  BigNumGetData(n, o->Get(n_len));
 }
 
-string SSH::Serializable::ToString(std::mt19937 &g, unsigned *sequence_number) {
-    if (sequence_number) (*sequence_number)++;
-    string ret;
-    ToString(&ret, g);
-    return ret;
+void SSH::UpdateDigest(Crypto::Digest *d, const StringPiece &s) {
+  UpdateDigest(d, s.size());
+  Crypto::DigestUpdate(d, s);
 }
 
-void SSH::Serializable::ToString(string *out, std::mt19937 &g) {
-    out->resize(NextMultipleOf8(4 + SSH::BinaryPacketHeaderSize + Size()));
-    return ToString(&(*out)[0], out->size(), g);
+void SSH::UpdateDigest(Crypto::Digest *d, int n) {
+  char buf[4];
+  Serializable::MutableStream(buf, 4).Htonl(n);
+  Crypto::DigestUpdate(d, StringPiece(buf, 4));
 }
 
-void SSH::Serializable::ToString(char *buf, int len, std::mt19937 &g) {
-    unsigned char type = Type(), padding = len - SSH::BinaryPacketHeaderSize - Size();
-    MutableStream os(buf, len);
-    os.Htonl(len - 4);
-    os.Write8(padding);
-    os.Write8(type);
-    Out(&os);
-    memcpy(buf + len - padding, RandBytes(padding, g).data(), padding);
+void SSH::UpdateDigest(Crypto::Digest *d, BigNum n) {
+  string buf(4 + SSH::BigNumSize(n), 0);
+  Serializable::MutableStream o(&buf[0], buf.size());
+  SSH::WriteBigNum(n, &o);
+  Crypto::DigestUpdate(d, buf);
+}
+
+#ifdef LFL_OPENSSL
+static RSA *NewRSAPubKey() { RSA *v=RSA_new(); v->e=NewBigNum(); v->n=NewBigNum(); return v; }
+static DSA *NewDSAPubKey() { DSA *v=DSA_new(); v->p=NewBigNum(); v->q=NewBigNum(); v->g=NewBigNum(); v->pub_key=NewBigNum(); return v; }
+static DSA_SIG *NewDSASig() { DSA_SIG *v=DSA_SIG_new(); v->r=NewBigNum(); v->s=NewBigNum(); return v; }
+#endif
+
+int SSH::VerifyHostKey(const string &H_text, int hostkey_type, const StringPiece &key, const StringPiece &sig) {
+#ifdef LFL_OPENSSL
+  if (hostkey_type == SSH::Key::RSA) {
+    string H_hash = Crypto::SHA1(H_text);
+    RSA *rsa_key = NewRSAPubKey();
+    SSH::RSASignature rsa_sig;
+    Serializable::ConstStream rsakey_stream(key.data(), key.size());
+    Serializable::ConstStream rsasig_stream(sig.data(), sig.size());
+    if (rsa_sig.In(&rsasig_stream)) { RSA_free(rsa_key); return -3; }
+    string rsa_sigbuf(rsa_sig.sig.data(), rsa_sig.sig.size());
+    if (SSH::RSAKey(rsa_key->e, rsa_key->n).In(&rsakey_stream)) { RSA_free(rsa_key); return -2; }
+    int verified = RSA_verify(NID_sha1, reinterpret_cast<const unsigned char *>(H_hash.data()), H_hash.size(),
+                              reinterpret_cast<unsigned char *>(&rsa_sigbuf[0]), rsa_sigbuf.size(), rsa_key);
+    RSA_free(rsa_key);
+    return verified;
+
+  } else if (hostkey_type == SSH::Key::DSS) {
+    string H_hash = Crypto::SHA1(H_text);
+    DSA *dsa_key = NewDSAPubKey();
+    DSA_SIG *dsa_sig = NewDSASig();
+    Serializable::ConstStream dsakey_stream(key.data(), key.size());
+    Serializable::ConstStream dsasig_stream(sig.data(), sig.size());
+    if (SSH::DSSKey(dsa_key->p, dsa_key->q, dsa_key->g, dsa_key->pub_key).In(&dsakey_stream)) { DSA_free(dsa_key); return -4; }
+    if (SSH::DSSSignature(dsa_sig->r, dsa_sig->s).In(&dsasig_stream)) { DSA_free(dsa_key); DSA_SIG_free(dsa_sig); return -5; }
+    int verified = DSA_do_verify(reinterpret_cast<const unsigned char *>(H_hash.data()), H_hash.size(), dsa_sig, dsa_key);
+    DSA_free(dsa_key);
+    DSA_SIG_free(dsa_sig);
+    return verified;
+    
+  } else if (hostkey_type == SSH::Key::ECDSA_SHA2_NISTP256) {
+    string H_hash = Crypto::SHA256(H_text);
+    SSH::ECDSAKey key_msg;
+    ECDSA_SIG *ecdsa_sig = ECDSA_SIG_new();
+    Serializable::ConstStream ecdsakey_stream(key.data(), key.size());
+    Serializable::ConstStream ecdsasig_stream(sig.data(), sig.size());
+    if (key_msg.In(&ecdsakey_stream)) { ECDSA_SIG_free(ecdsa_sig); return -6; }
+    if (SSH::ECDSASignature(ecdsa_sig->r, ecdsa_sig->s).In(&ecdsasig_stream)) { ECDSA_SIG_free(ecdsa_sig); return -7; }
+    ECPair ecdsa_keypair = Crypto::EllipticCurve::NewPair(Crypto::EllipticCurve::NISTP256(), false);
+    ECPoint ecdsa_key = NewECPoint(GetECPairGroup(ecdsa_keypair));
+    ECPointSetData(GetECPairGroup(ecdsa_keypair), ecdsa_key, key_msg.q);
+    if (!SetECPairPubKey(ecdsa_keypair, ecdsa_key)) { FreeECPair(ecdsa_keypair); ECDSA_SIG_free(ecdsa_sig); return -8; }
+    int verified = ECDSA_do_verify(reinterpret_cast<const unsigned char *>(H_hash.data()), H_hash.size(), ecdsa_sig, ecdsa_keypair);
+    FreeECPair(ecdsa_keypair);
+    ECDSA_SIG_free(ecdsa_sig);
+    return verified;
+
+  } else return -9;
+#else
+  return -10;
+#endif
+}
+
+string SSH::ComputeExchangeHash(int kex_method, Crypto::DigestAlgo algo, const string &V_C, const string &V_S,
+                                const string &KI_C, const string &KI_S, const StringPiece &k_s, BigNum K,
+                                Crypto::DiffieHellman *dh, Crypto::EllipticCurveDiffieHellman *ecdh) {
+  string ret;
+  unsigned char kex_c_padding = 0, kex_s_padding = 0;
+  int kex_c_packet_len = 4 + SSH::BinaryPacketLength(KI_C.data(), &kex_c_padding, NULL);
+  int kex_s_packet_len = 4 + SSH::BinaryPacketLength(KI_S.data(), &kex_s_padding, NULL);
+  Crypto::Digest H;
+  Crypto::DigestOpen(&H, algo);
+  UpdateDigest(&H, V_C);
+  UpdateDigest(&H, V_S);
+  UpdateDigest(&H, StringPiece(KI_C.data() + 5, kex_c_packet_len - 5 - kex_c_padding));
+  UpdateDigest(&H, StringPiece(KI_S.data() + 5, kex_s_packet_len - 5 - kex_s_padding));
+  UpdateDigest(&H, k_s); 
+  if (KEX::DiffieHellmanGroupExchange(kex_method)) {
+    UpdateDigest(&H, dh->gex_min);
+    UpdateDigest(&H, dh->gex_pref);
+    UpdateDigest(&H, dh->gex_max);
+    UpdateDigest(&H, dh->p);
+    UpdateDigest(&H, dh->g);
+  }
+  if (KEX::EllipticCurveDiffieHellman(kex_method)) {
+    UpdateDigest(&H, ecdh->c_text);
+    UpdateDigest(&H, ecdh->s_text);
+  } else {
+    UpdateDigest(&H, dh->e);
+    UpdateDigest(&H, dh->f);
+  }
+  UpdateDigest(&H, K);
+  ret = Crypto::DigestFinish(&H);
+  return ret;
+}
+
+string SSH::DeriveKey(Crypto::DigestAlgo algo, const string &session_id, const string &H_text, BigNum K, char ID, int bytes) {
+  string ret;
+  while (ret.size() < bytes) {
+    Crypto::Digest key;
+    Crypto::DigestOpen(&key, algo);
+    UpdateDigest(&key, K);
+    Crypto::DigestUpdate(&key, H_text);
+    if (!ret.size()) {
+      Crypto::DigestUpdate(&key, StringPiece(&ID, 1));
+      Crypto::DigestUpdate(&key, session_id);
+    } else Crypto::DigestUpdate(&key, ret);
+    ret.append(Crypto::DigestFinish(&key));
+  }
+  ret.resize(bytes);
+  return ret;
+}
+
+string SSH::MAC(Crypto::MACAlgo algo, int MAC_len, const StringPiece &m, int seq, const string &k, int prefix) {
+  char buf[4];
+  Serializable::MutableStream(buf, 4).Htonl(seq);
+  string ret(MAC_len, 0);
+  Crypto::MAC mac;
+  Crypto::MACOpen(&mac, algo, k);
+  Crypto::MACUpdate(&mac, StringPiece(buf, 4));
+  Crypto::MACUpdate(&mac, m);
+  int ret_len = Crypto::MACFinish(&mac, &ret[0], ret.size());
+  CHECK_EQ(ret.size(), ret_len);
+  return prefix ? ret.substr(0, prefix) : ret;
+}
+
+bool SSH::Key   ::PreferenceIntersect(const StringPiece &v, int                *out, int po) { return (*out = Id(FirstMatchCSV(v, PreferenceCSV(po)))); }
+bool SSH::KEX   ::PreferenceIntersect(const StringPiece &v, int                *out, int po) { return (*out = Id(FirstMatchCSV(v, PreferenceCSV(po)))); }
+bool SSH::MAC   ::PreferenceIntersect(const StringPiece &v, int                *out, int po) { return (*out = Id(FirstMatchCSV(v, PreferenceCSV(po)))); }
+bool SSH::Cipher::PreferenceIntersect(const StringPiece &v, Crypto::CipherAlgo *out, int po) { int      id  = Id(FirstMatchCSV(v, PreferenceCSV(po))); if (id) *out = Algo(id); return id; }
+
+string SSH::Key   ::PreferenceCSV(int o) { static string v; ONCE({ for (int i=1+o; i<=End; ++i) StrAppendCSV(&v, Name(i)); }); return v; }
+string SSH::KEX   ::PreferenceCSV(int o) { static string v; ONCE({ for (int i=1+o; i<=End; ++i) StrAppendCSV(&v, Name(i)); }); return v; }
+string SSH::Cipher::PreferenceCSV(int o) { static string v; ONCE({ for (int i=1+o; i<=End; ++i) StrAppendCSV(&v, Name(i)); }); return v; }
+string SSH::MAC   ::PreferenceCSV(int o) { static string v; ONCE({ for (int i=1+o; i<=End; ++i) StrAppendCSV(&v, Name(i)); }); return v; }
+
+int SSH::Key   ::Id(const string &n) { static unordered_map<string, int> m; ONCE({ for (int i=1; i<=End; ++i) m[Name(i)] = i; }); return FindOrDefault(m, n, 0); }
+int SSH::KEX   ::Id(const string &n) { static unordered_map<string, int> m; ONCE({ for (int i=1; i<=End; ++i) m[Name(i)] = i; }); return FindOrDefault(m, n, 0); }
+int SSH::Cipher::Id(const string &n) { static unordered_map<string, int> m; ONCE({ for (int i=1; i<=End; ++i) m[Name(i)] = i; }); return FindOrDefault(m, n, 0); }
+int SSH::MAC   ::Id(const string &n) { static unordered_map<string, int> m; ONCE({ for (int i=1; i<=End; ++i) m[Name(i)] = i; }); return FindOrDefault(m, n, 0); }
+
+const char *SSH::Key::Name(int id) {
+  switch(id) {
+    case RSA:                 return "ssh-rsa";
+    case DSS:                 return "ssh-dss";
+    case ECDSA_SHA2_NISTP256: return "ecdsa-sha2-nistp256";
+    default:                  return "";
+  }
+};
+
+const char *SSH::KEX::Name(int id) {
+  switch(id) {
+    case ECDH_SHA2_NISTP256: return "ecdh-sha2-nistp256";
+    case ECDH_SHA2_NISTP384: return "ecdh-sha2-nistp384";
+    case ECDH_SHA2_NISTP521: return "ecdh-sha2-nistp521";
+    case DHGEX_SHA256:       return "diffie-hellman-group-exchange-sha256";
+    case DHGEX_SHA1:         return "diffie-hellman-group-exchange-sha1";
+    case DH14_SHA1:          return "diffie-hellman-group14-sha1";
+    case DH1_SHA1:           return "diffie-hellman-group1-sha1";
+    default:                 return "";
+  }
+};
+
+const char *SSH::Cipher::Name(int id) {
+  switch(id) {
+    case AES128_CTR:   return "aes128-ctr";
+    case AES128_CBC:   return "aes128-cbc";
+    case TripDES_CBC:  return "3des-cbc";
+    case Blowfish_CBC: return "blowfish-cbc";
+    case RC4:          return "arcfour";
+    default:           return "";
+  }
+};
+
+const char *SSH::MAC::Name(int id) {
+  switch(id) {
+    case MD5:       return "hmac-md5";
+    case MD5_96:    return "hmac-md5-96";
+    case SHA1:      return "hmac-sha1";
+    case SHA1_96:   return "hmac-sha1-96";
+    case SHA256:    return "hmac-sha2-256";
+    case SHA256_96: return "hmac-sha2-256-96";
+    case SHA512:    return "hmac-sha2-512";
+    case SHA512_96: return "hmac-sha2-512-96";
+    default:        return "";
+  }
+};
+
+Crypto::CipherAlgo SSH::Cipher::Algo(int id) {
+  switch(id) {
+    case AES128_CTR:   return Crypto::CipherAlgos::AES128_CTR();
+    case AES128_CBC:   return Crypto::CipherAlgos::AES128_CBC();
+    case TripDES_CBC:  return Crypto::CipherAlgos::TripDES_CBC();
+    case Blowfish_CBC: return Crypto::CipherAlgos::Blowfish_CBC();
+    case RC4:          return Crypto::CipherAlgos::RC4();
+    default:           return 0;
+  }
+};
+
+Crypto::MACAlgo SSH::MAC::Algo(int id, int *prefix_bytes) {
+  switch(id) {
+    case MD5:       if (prefix_bytes) *prefix_bytes = 0;    return Crypto::MACAlgos::MD5();
+    case MD5_96:    if (prefix_bytes) *prefix_bytes = 12;   return Crypto::MACAlgos::MD5();
+    case SHA1:      if (prefix_bytes) *prefix_bytes = 0;    return Crypto::MACAlgos::SHA1();
+    case SHA1_96:   if (prefix_bytes) *prefix_bytes = 12;   return Crypto::MACAlgos::SHA1();
+    case SHA256:    if (prefix_bytes) *prefix_bytes = 0;    return Crypto::MACAlgos::SHA256();
+    case SHA256_96: if (prefix_bytes) *prefix_bytes = 12;   return Crypto::MACAlgos::SHA256();
+    case SHA512:    if (prefix_bytes) *prefix_bytes = 0;    return Crypto::MACAlgos::SHA512();
+    case SHA512_96: if (prefix_bytes) *prefix_bytes = 12;   return Crypto::MACAlgos::SHA512();
+    default:      return 0;
+  }
+};
+
+string SSH::Serializable::ToString(std::mt19937 &g, int block_size, unsigned *sequence_number) const {
+  if (sequence_number) (*sequence_number)++;
+  string ret;
+  ToString(&ret, g, block_size);
+  return ret;
+}
+
+void SSH::Serializable::ToString(string *out, std::mt19937 &g, int block_size) const {
+  out->resize(NextMultipleOfN(4 + SSH::BinaryPacketHeaderSize + Size(), max(8, block_size)));
+  return ToString(&(*out)[0], out->size(), g);
+}
+
+void SSH::Serializable::ToString(char *buf, int len, std::mt19937 &g) const {
+  unsigned char type = Id, padding = len - SSH::BinaryPacketHeaderSize - Size();
+  MutableStream os(buf, len);
+  os.Htonl(len - 4);
+  os.Write8(padding);
+  os.Write8(type);
+  Out(&os);
+  memcpy(buf + len - padding, RandBytes(padding, g).data(), padding);
 }
 
 int SSH::MSG_KEXINIT::Size() const {
-    return HeaderSize() + kex_algorithms.size() + server_host_key_algorithms.size() +
-        encryption_algorithms_client_to_server.size() + encryption_algorithms_server_to_client.size() +
-        mac_algorithms_client_to_server.size() + mac_algorithms_server_to_client.size() + 
-        compression_algorithms_client_to_server.size() + compression_algorithms_server_to_client.size() +
-        languages_client_to_server.size() + languages_server_to_client.size();
+  return HeaderSize() + kex_algorithms.size() + server_host_key_algorithms.size() +
+    encryption_algorithms_client_to_server.size() + encryption_algorithms_server_to_client.size() +
+    mac_algorithms_client_to_server.size() + mac_algorithms_server_to_client.size() + 
+    compression_algorithms_client_to_server.size() + compression_algorithms_server_to_client.size() +
+    languages_client_to_server.size() + languages_server_to_client.size();
 }
 
 string SSH::MSG_KEXINIT::DebugString() const {
-    string ret;
-    StrAppend(&ret, "kex_algorithms: ",                          kex_algorithms.str(),                          "\n");
-    StrAppend(&ret, "server_host_key_algorithms: ",              server_host_key_algorithms.str(),              "\n");
-    StrAppend(&ret, "encryption_algorithms_client_to_server: ",  encryption_algorithms_client_to_server.str(),  "\n");
-    StrAppend(&ret, "encryption_algorithms_server_to_client: ",  encryption_algorithms_server_to_client.str(),  "\n");
-    StrAppend(&ret, "mac_algorithms_client_to_server: ",         mac_algorithms_client_to_server.str(),         "\n");
-    StrAppend(&ret, "mac_algorithms_server_to_client: ",         mac_algorithms_server_to_client.str(),         "\n");
-    StrAppend(&ret, "compression_algorithms_client_to_server: ", compression_algorithms_client_to_server.str(), "\n");
-    StrAppend(&ret, "compression_algorithms_server_to_client: ", compression_algorithms_server_to_client.str(), "\n");
-    StrAppend(&ret, "languages_client_to_server: ",              languages_client_to_server.str(),              "\n");
-    StrAppend(&ret, "languages_server_to_client: ",              languages_server_to_client.str(),              "\n");
-    StrAppend(&ret, "first_kex_packet_follows: ",                (int)first_kex_packet_follows,                 "\n");
-    return ret;
+  string ret;
+  StrAppend(&ret, "kex_algorithms: ",                          kex_algorithms.str(),                          "\n");
+  StrAppend(&ret, "server_host_key_algorithms: ",              server_host_key_algorithms.str(),              "\n");
+  StrAppend(&ret, "encryption_algorithms_client_to_server: ",  encryption_algorithms_client_to_server.str(),  "\n");
+  StrAppend(&ret, "encryption_algorithms_server_to_client: ",  encryption_algorithms_server_to_client.str(),  "\n");
+  StrAppend(&ret, "mac_algorithms_client_to_server: ",         mac_algorithms_client_to_server.str(),         "\n");
+  StrAppend(&ret, "mac_algorithms_server_to_client: ",         mac_algorithms_server_to_client.str(),         "\n");
+  StrAppend(&ret, "compression_algorithms_client_to_server: ", compression_algorithms_client_to_server.str(), "\n");
+  StrAppend(&ret, "compression_algorithms_server_to_client: ", compression_algorithms_server_to_client.str(), "\n");
+  StrAppend(&ret, "languages_client_to_server: ",              languages_client_to_server.str(),              "\n");
+  StrAppend(&ret, "languages_server_to_client: ",              languages_server_to_client.str(),              "\n");
+  StrAppend(&ret, "first_kex_packet_follows: ",                (int)first_kex_packet_follows,                 "\n");
+  return ret;
 }
 
 void SSH::MSG_KEXINIT::Out(Serializable::Stream *o) const {
-    o->String(cookie);
-    o->BString(kex_algorithms);                             o->BString(server_host_key_algorithms);
-    o->BString(encryption_algorithms_client_to_server);     o->BString(encryption_algorithms_server_to_client);
-    o->BString(mac_algorithms_client_to_server);            o->BString(mac_algorithms_server_to_client);
-    o->BString(compression_algorithms_client_to_server);    o->BString(compression_algorithms_server_to_client);
-    o->BString(languages_client_to_server);                 o->BString(languages_server_to_client);
-    o->Write8(first_kex_packet_follows);
-    o->Write32(0);
+  o->String(cookie);
+  o->BString(kex_algorithms);                             o->BString(server_host_key_algorithms);
+  o->BString(encryption_algorithms_client_to_server);     o->BString(encryption_algorithms_server_to_client);
+  o->BString(mac_algorithms_client_to_server);            o->BString(mac_algorithms_server_to_client);
+  o->BString(compression_algorithms_client_to_server);    o->BString(compression_algorithms_server_to_client);
+  o->BString(languages_client_to_server);                 o->BString(languages_server_to_client);
+  o->Write8(first_kex_packet_follows);
+  o->Write32(0);
 }
 
 int SSH::MSG_KEXINIT::In(const Serializable::Stream *i) {
-    cookie = StringPiece(i->Get(16), 16);
-    i->ReadString(&kex_algorithms);                             i->ReadString(&server_host_key_algorithms);
-    i->ReadString(&encryption_algorithms_client_to_server);     i->ReadString(&encryption_algorithms_server_to_client);
-    i->ReadString(&mac_algorithms_client_to_server);            i->ReadString(&mac_algorithms_server_to_client);
-    i->ReadString(&compression_algorithms_client_to_server);    i->ReadString(&compression_algorithms_server_to_client);
-    i->ReadString(&languages_client_to_server);                 i->ReadString(&languages_server_to_client);
-    i->Read8(&first_kex_packet_follows);
-    return i->Result();
+  cookie = StringPiece(i->Get(16), 16);
+  i->ReadString(&kex_algorithms);                             i->ReadString(&server_host_key_algorithms);
+  i->ReadString(&encryption_algorithms_client_to_server);     i->ReadString(&encryption_algorithms_server_to_client);
+  i->ReadString(&mac_algorithms_client_to_server);            i->ReadString(&mac_algorithms_server_to_client);
+  i->ReadString(&compression_algorithms_client_to_server);    i->ReadString(&compression_algorithms_server_to_client);
+  i->ReadString(&languages_client_to_server);                 i->ReadString(&languages_server_to_client);
+  i->Read8(&first_kex_packet_follows);
+  return i->Result();
 }
 
 int SSH::MSG_USERAUTH_REQUEST::Size() const {
-    string mn = method_name.str();
-    int ret = HeaderSize() + user_name.size() + service_name.size() + method_name.size();
-    if      (mn == "publickey")            ret += 4*3 + 1 + algo_name.size() + secret.size() + sig.size();
-    else if (mn == "password")             ret += 4*1 + 1 + secret.size();
-    else if (mn == "keyboard-interactive") ret += 4*2;
-    return ret;
+  string mn = method_name.str();
+  int ret = HeaderSize() + user_name.size() + service_name.size() + method_name.size();
+  if      (mn == "publickey")            ret += 4*3 + 1 + algo_name.size() + secret.size() + sig.size();
+  else if (mn == "password")             ret += 4*1 + 1 + secret.size();
+  else if (mn == "keyboard-interactive") ret += 4*2;
+  return ret;
 };
 
 void SSH::MSG_USERAUTH_REQUEST::Out(Serializable::Stream *o) const {
-    o->BString(user_name);
-    o->BString(service_name);
-    o->BString(method_name);
-    string mn = method_name.str();
-    if      (mn == "publickey")            { o->Write8(static_cast<unsigned char>(1)); o->BString(algo_name); o->BString(secret); o->BString(sig); }
-    else if (mn == "password")             { o->Write8(static_cast<unsigned char>(0)); o->BString(secret); }
-    else if (mn == "keyboard-interactive") { o->BString(""); o->BString(""); }
+  o->BString(user_name);
+  o->BString(service_name);
+  o->BString(method_name);
+  string mn = method_name.str();
+  if      (mn == "publickey")            { o->Write8(static_cast<unsigned char>(1)); o->BString(algo_name); o->BString(secret); o->BString(sig); }
+  else if (mn == "password")             { o->Write8(static_cast<unsigned char>(0)); o->BString(secret); }
+  else if (mn == "keyboard-interactive") { o->BString(""); o->BString(""); }
 }
 
 int SSH::MSG_USERAUTH_INFO_REQUEST::Size() const {
-    int ret = HeaderSize() + name.size() + instruction.size() + language.size();
-    for (auto &p : prompt) ret += 4 + 1 + p.text.size();
-    return ret;
+  int ret = HeaderSize() + name.size() + instruction.size() + language.size();
+  for (auto &p : prompt) ret += 4 + 1 + p.text.size();
+  return ret;
 }
 
 int SSH::MSG_USERAUTH_INFO_REQUEST::In(const Serializable::Stream *i) {
-    int num_prompts = 0;
-    i->ReadString(&name);
-    i->ReadString(&instruction);
-    i->ReadString(&language);
-    i->Htonl(&num_prompts);
-    prompt.resize(num_prompts);
-    for (auto &p : prompt) {
-        i->ReadString(&p.text);
-        i->Read8(&p.echo);
-    }
-    return i->Result();
+  int num_prompts = 0;
+  i->ReadString(&name);
+  i->ReadString(&instruction);
+  i->ReadString(&language);
+  i->Htonl(&num_prompts);
+  prompt.resize(num_prompts);
+  for (auto &p : prompt) {
+    i->ReadString(&p.text);
+    i->Read8(&p.echo);
+  }
+  return i->Result();
 }
 
 int SSH::MSG_USERAUTH_INFO_RESPONSE::Size() const {
-    int ret = HeaderSize();
-    for (auto &r : response) ret += 4 + r.size();
-    return ret;
+  int ret = HeaderSize();
+  for (auto &r : response) ret += 4 + r.size();
+  return ret;
 }
 
 void SSH::MSG_USERAUTH_INFO_RESPONSE::Out(Serializable::Stream *o) const {
-    o->Htonl(static_cast<unsigned>(response.size()));
-    for (auto &r : response) o->BString(r);
+  o->Htonl(static_cast<unsigned>(response.size()));
+  for (auto &r : response) o->BString(r);
 }
 
 int SSH::MSG_CHANNEL_REQUEST::Size() const {
-    int ret = HeaderSize() + request_type.size();
-    string rt = request_type.str();
-    if (rt == "pty-req") ret += 4*6 + term.size() + term_mode.size();
-    else if (rt == "exec") ret += 4*1 + term.size();
-    return ret;
+  int ret = HeaderSize() + request_type.size();
+  string rt = request_type.str();
+  if      (rt == "pty-req")       ret += 4*6 + term.size() + term_mode.size();
+  else if (rt == "exec")          ret += 4*1 + term.size();
+  else if (rt == "window-change") ret += 4*4;
+  return ret;
 }
 
 void SSH::MSG_CHANNEL_REQUEST::Out(Serializable::Stream *o) const {
-    o->Htonl(recipient_channel);
-    o->BString(request_type);
-    o->Write8(want_reply);
-    string rt = request_type.str();
-    if (rt == "pty-req") {
-        o->BString(term);
-        o->Htonl(width);
-        o->Htonl(height);
-        o->Htonl(pixel_width);
-        o->Htonl(pixel_height);
-        o->BString(term_mode);
-    } else if (rt == "exec") {
-        o->BString(term);
-    }
+  o->Htonl(recipient_channel);
+  o->BString(request_type);
+  o->Write8(want_reply);
+  string rt = request_type.str();
+  if (rt == "pty-req") {
+    o->BString(term);
+    o->Htonl(width);
+    o->Htonl(height);
+    o->Htonl(pixel_width);
+    o->Htonl(pixel_height);
+    o->BString(term_mode);
+  } else if (rt == "exec") {
+    o->BString(term);
+  } else if (rt == "window-change") {
+    o->Htonl(width);
+    o->Htonl(height);
+    o->Htonl(pixel_width);
+    o->Htonl(pixel_height);
+  }
 }
 
 int SSH::DSSKey::In(const Serializable::Stream *i) {
-    i->ReadString(&format_id);
-    if (format_id.str() != "ssh-dss") { i->error = true; return -1; }
-    p = ReadBigNum(p, i); 
-    q = ReadBigNum(q, i); 
-    g = ReadBigNum(g, i); 
-    y = ReadBigNum(y, i); 
-    return i->Result();
+  i->ReadString(&format_id);
+  if (format_id.str() != "ssh-dss") { i->error = true; return -1; }
+  p = ReadBigNum(p, i); 
+  q = ReadBigNum(q, i); 
+  g = ReadBigNum(g, i); 
+  y = ReadBigNum(y, i); 
+  return i->Result();
 }
 
 int SSH::DSSSignature::In(const Serializable::Stream *i) {
-    StringPiece blob;
-    i->ReadString(&format_id);
-    i->ReadString(&blob);
-    if (format_id.str() != "ssh-dss" || blob.size() != 40) { i->error = true; return -1; }
-    r = BigNumSetData(r, StringPiece(blob.data(),      20));
-    s = BigNumSetData(s, StringPiece(blob.data() + 20, 20));
-    return i->Result();
+  StringPiece blob;
+  i->ReadString(&format_id);
+  i->ReadString(&blob);
+  if (format_id.str() != "ssh-dss" || blob.size() != 40) { i->error = true; return -1; }
+  r = BigNumSetData(r, StringPiece(blob.data(),      20));
+  s = BigNumSetData(s, StringPiece(blob.data() + 20, 20));
+  return i->Result();
+}
+
+int SSH::RSAKey::In(const Serializable::Stream *i) {
+  i->ReadString(&format_id);
+  if (format_id.str() != Key::Name(Key::RSA)) { i->error = true; return -1; }
+  e = ReadBigNum(e, i); 
+  n = ReadBigNum(n, i); 
+  return i->Result();
+}
+
+int SSH::RSASignature::In(const Serializable::Stream *i) {
+  StringPiece blob;
+  i->ReadString(&format_id);
+  i->ReadString(&sig);
+  if (format_id.str() != "ssh-rsa") { i->error = true; return -1; }
+  return i->Result();
+}
+
+int SSH::ECDSAKey::In(const Serializable::Stream *i) {
+  i->ReadString(&format_id);
+  if (!PrefixMatch(format_id.str(), "ecdsa-sha2-")) { i->error = true; return -1; }
+  i->ReadString(&curve_id);
+  i->ReadString(&q);
+  return i->Result();
+}
+
+int SSH::ECDSASignature::In(const Serializable::Stream *i) {
+  StringPiece blob;
+  i->ReadString(&format_id);
+  i->ReadString(&blob);
+  if (!PrefixMatch(format_id.str(), "ecdsa-sha2-")) { i->error = true; return -1; }
+  Serializable::ConstStream bs(blob.data(), blob.size());
+  r = ReadBigNum(r, &bs); 
+  s = ReadBigNum(s, &bs); 
+  if (bs.error) i->error = true;
+  return i->Result();
 }
 
 /* SMTP */
 
 void SMTP::HTMLMessage(const string& from, const string& to, const string& subject, const string& content, string *out) {
-    static const char seperator[] = "XzYzZy";
-    *out = StrCat("From: ", from, "\nTo: ", to, "\nSubject: ", subject,
-                  "\nMIME-Version: 1.0\nContent-Type: multipart/alternative; boundary=\"", seperator, "\"\n\n");
-    StrAppend(out, "--", seperator, "\nContent-type: text/html\n\n", content, "\n--", seperator, "--\n");
+  static const char seperator[] = "XzYzZy";
+  *out = StrCat("From: ", from, "\nTo: ", to, "\nSubject: ", subject,
+                "\nMIME-Version: 1.0\nContent-Type: multipart/alternative; boundary=\"", seperator, "\"\n\n");
+  StrAppend(out, "--", seperator, "\nContent-type: text/html\n\n", content, "\n--", seperator, "--\n");
 }
 
 void SMTP::NativeSendmail(const string &message) {
 #ifdef __linux__
-    ProcessPipe smtp;
-    const char *argv[] = { "/usr/bin/sendmail", "-i", "-t", 0 };
-    if (smtp.Open(argv)) return;
-    fwrite(message.c_str(), message.size(), 1, smtp.out);
+  ProcessPipe smtp;
+  const char *argv[] = { "/usr/bin/sendmail", "-i", "-t", 0 };
+  if (smtp.Open(argv)) return;
+  fwrite(message.c_str(), message.size(), 1, smtp.out);
 #endif
 }
 
 string SMTP::EmailFrom(const string &message) {
-    int lt, gt;
-    string mail_from = HTTP::GrepHeaders(message.c_str(), 0, "From");
-    if ((lt = mail_from.find("<"    )) == mail_from.npos ||
-        (gt = mail_from.find(">", lt)) == mail_from.npos) FATAL("parse template from ", mail_from);
-    return mail_from.substr(lt+1, gt-lt-1);
+  int lt, gt;
+  string mail_from = HTTP::GrepHeaders(message.c_str(), 0, "From");
+  if ((lt = mail_from.find("<"    )) == mail_from.npos ||
+      (gt = mail_from.find(">", lt)) == mail_from.npos) FATAL("parse template from ", mail_from);
+  return mail_from.substr(lt+1, gt-lt-1);
 }
 
 }; // namespace LFL

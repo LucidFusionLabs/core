@@ -8,13 +8,13 @@ varying lowp vec4 DestinationColor;
 #ifdef TEX2D
 uniform bool TexCoordEnabled;
 varying lowp vec2 TexCoordOut;
-uniform sampler2D iChannel0;
+uniform lowp sampler2D iChannel0;
 #endif
 
 #ifdef TEXCUBE
 uniform bool CubeMapEnabled;
-varying highp vec3 CubeCoordOut;
-uniform samplerCube CubeTexture;
+varying lowp vec3 CubeCoordOut;
+uniform lowp samplerCube CubeTexture;
 #endif
 
 void main(void) {

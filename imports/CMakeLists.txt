@@ -34,7 +34,7 @@ endif(CMAKE_SYSTEM_NAME MATCHES "Linux")
 
 # iPhone 
 if(LFL_IPHONE)
-    set(PLATFORM_LIB "-liconv -lz -framework Foundation -framework CoreText -framework CoreAudio -framework CoreGraphics -framework OpenGLES -framework UIKit -framework QuartzCore -framework AVFoundation")
+    set(PLATFORM_LIB "-liconv -lz -framework Foundation -framework CoreText -framework CoreAudio -framework CoreGraphics -framework OpenGLES -framework UIKit -framework QuartzCore -framework AVFoundation -framework GLKit -framework Security")
     if(NOT LFL_IPHONESIM)
         set(PLATFORM_LIB "${PLATFORM_LIB} -framework CoreVideo -framework CoreMedia")
     endif()
@@ -43,6 +43,7 @@ endif(LFL_IPHONE)
 # export platform
 set(PLATFORM_DEF ${PLATFORM_DEF} PARENT_SCOPE)
 set(PLATFORM_LIB ${PLATFORM_LIB} PARENT_SCOPE)
+set(PLATFORM_INCLUDE ${PLATFORM_INCLUDE} PARENT_SCOPE)
 
 # boost
 set(BOOST_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/boost PARENT_SCOPE)
@@ -137,7 +138,7 @@ if(LFL_OPENSSL)
         set(OPENSSL_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/ios-openssl/include PARENT_SCOPE)
         set(OPENSSL_LIB ${CMAKE_CURRENT_SOURCE_DIR}/ios-openssl/lib/libssl.a ${CMAKE_CURRENT_SOURCE_DIR}/ios-openssl/lib/libcrypto.a PARENT_SCOPE)
     else(LFL_IPHONE)
-        set(OPENSSL_LIB "-lssl -lcrypto" PARENT_SCOPE)
+        set(OPENSSL_LIB -lssl -lcrypto PARENT_SCOPE)
     endif(LFL_IPHONE)
 endif(LFL_OPENSSL)
 

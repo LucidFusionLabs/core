@@ -714,7 +714,7 @@ Font *CoreTextFontEngine::Open(const FontDesc &d) {
         cache->tex.ClearBuffer();
     }
 
-    // INFO("CoreTextFont(", d.DebugString(), "), texID=", cache->tex.ID, " fixed_width=", ret->fixed_width, " mono=", ret->mono?ret->max_width:0);
+    // INFO("CoreTextFont(", d.DebugString(), "), texID=", cache->tex.ID, " fixed_width=", ret->fixed_width, " mono=", ret->mono?ret->max_width:0, " advance_bounds = ", GetAdvanceBounds(ret).DebugString());
     return ret;
 }
 
@@ -753,6 +753,15 @@ void CoreTextFontEngine::AssignGlyph(Glyph *g, const CGRect &bounds, struct CGSi
     g->internal.coretext.width    = bounds.size.width;
     g->internal.coretext.height   = bounds.size.height;
     g->internal.coretext.advance  = advance.width;
+}
+
+v2 CoreTextFontEngine::GetAdvanceBounds(Font *f) {
+  v2 ret(INFINITY, -INFINITY);
+  for (auto b = f->glyph->table.begin(), e = f->glyph->table.end(), g = b; g != e; ++g) {
+    if (g->internal.coretext.advance) Min(&ret.x, static_cast<float>(g->internal.coretext.advance));
+    if (1)                            Max(&ret.y, static_cast<float>(g->internal.coretext.advance));
+  }
+  return ret;
 }
 #endif /* __APPLE__ */
 

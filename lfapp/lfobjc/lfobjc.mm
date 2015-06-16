@@ -27,11 +27,12 @@
 #endif
 
 @interface MyThread : NSObject {}
-@property int (*CB)(void*);
-@property void *arg;
+    @property int (*CB)(void*);
+    @property void *arg;
 @end
+
 @implementation MyThread
-- (void) myMain { _CB(_arg); }
+    - (void) myMain { _CB(_arg); }
 @end
 
 extern "C" void NativeThreadStart(int (*CB)(void *), void *arg) {

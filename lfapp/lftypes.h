@@ -132,6 +132,12 @@ template <typename X> typename X::mapped_type FindOrDie(const char *file, int li
 }
 #define FindOrDie(m, k) FindOrDie(__FILE__, __LINE__, m, k)
 
+template <typename X> bool FindAndDispatch(const X &m, const typename X::key_type &k) {
+  auto it = m.find(k);
+  if (it != m.end()) { it->second(); return true; }
+  return false;
+}
+
 template <class I, class T> I LesserBound(I first, I last, const T& v, bool strict=false) {
     I i = lower_bound(first, last, v);
     if (i == last || i == first) return last;

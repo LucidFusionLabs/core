@@ -56,11 +56,12 @@ Window *Window::Get(void *id) { return FindOrNull(Window::active, id); }
 
 Window::Window() : caption("lfapp"), fps(128) {
     id = gl = surface = glew_context = user1 = user2 = user3 = 0;
-    minimized = cursor_grabbed = 0;
+    minimized = cursor_grabbed = frame_init = 0;
     target_fps = FLAGS_target_fps;
     opengles_version = 1;
     opengles_cubemap = 0;
-    width = 640; height = 480;
+    pow2_width = NextPowerOfTwo((width = 640));
+    pow2_height = NextPowerOfTwo((height = 480));
     multitouch_keyboard_x = .93; 
     cam = new Entity(v3(5.54, 1.70, 4.39), v3(-.51, -.03, -.49), v3(-.03, 1, -.03));
     ClearEvents();
@@ -330,7 +331,6 @@ void TextGUI::Enter() {
     string cmd = Text();
     AssignInput("");
     if (!cmd.empty()) { AddHistory(cmd); Run(cmd); }
-    TouchDevice::CloseKeyboard();
     if (deactivate_on_enter) active = false;
 }
 
@@ -502,14 +502,21 @@ void TextArea::UpdateVScrolled(int dist, bool up, int ind, int first_offset, int
     }
 }
 
-void TextArea::Draw(const Box &b, bool draw_cursor) {
+void TextArea::Draw(const Box &b, int flag, Shader *shader) {
+    if (shader) {
+        float scale = shader->scale;
+        glTimeResolutionShader(shader);
+        shader->SetUniform3f("iChannelResolution", XY_or_Y(scale, b.w), XY_or_Y(scale, b.h), 1);
+        shader->SetUniform2f("iScroll", XY_or_Y(scale, -line_fb.scroll.x * line_fb.w),
+                                        XY_or_Y(scale, -line_fb.scroll.y * line_fb.h - b.y));
+    }
     int font_height = font->Height();
     LinesFrameBuffer *fb = GetFrameBuffer();
-    if (fb->SizeChanged(b.w, b.h, font)) { Resized(b); fb->SizeChangedDone(); }
+    if (flag & DrawFlag::CheckResized) CheckResized(b);
     if (clip) screen->gd->PushScissor(Box::DelBorder(b, *clip));
     fb->Draw(b.Position(), point(0, CommandLines() * font_height));
     if (clip) screen->gd->PopScissor();
-    if (draw_cursor) TextGUI::Draw(Box(b.x, b.y, b.w, font_height));
+    if (flag & DrawFlag::DrawCursor) TextGUI::Draw(Box(b.x, b.y, b.w, font_height));
     if (selection.enabled) mouse_gui.box.SetPosition(b.Position());
     if (selection.changing) DrawSelection();
     if (hover_link) {
@@ -860,19 +867,20 @@ const Drawable::Attr *Terminal::GetAttr(int attr) const {
     return &last_attr;
 }
 
-void Terminal::Draw(const Box &b, bool draw_cursor) {
-    TextArea::Draw(b, false);
+void Terminal::Draw(const Box &b, int flag, Shader *shader) {
+    TextArea::Draw(b, false, shader);
+    if (shader) shader->SetUniform2f("iScroll", 0, XY_or_Y(shader->scale, -b.y));
     if (clip) {
         { Scissor s(Box::TopBorder(b, *clip)); cmd_fb.Draw(b.Position(), point(), false); }
         { Scissor s(Box::BotBorder(b, *clip)); cmd_fb.Draw(b.Position(), point(), false); }
     }
-    if (draw_cursor) TextGUI::DrawCursor(b.Position() + cursor.p);
+    if (flag & DrawFlag::DrawCursor) TextGUI::DrawCursor(b.Position() + cursor.p);
     if (selection.changing) DrawSelection();
 }
 
 void Terminal::Write(const StringPiece &s, bool update_fb, bool release_fb) {
     if (!MainThread()) return RunInMainThread(new Callback(bind(&Terminal::WriteCB, this, s.str(), update_fb, release_fb)));
-    TerminalTrace("Terminal: Write('%s', %zd)\n", CHexEscapeNonAscii(s).c_str(), s.size());
+    TerminalTrace("Terminal: Write('%s', %zd)\n", CHexEscapeNonAscii(s.str()).c_str(), s.size());
     screen->gd->DrawMode(DrawMode::_2D, 0);
     if (bg_color) screen->gd->ClearColor(*bg_color);
     last_fb = 0;
@@ -1153,7 +1161,7 @@ void Console::Draw() {
 
     screen->gd->ClearColor(Color::clear);
     screen->gd->SetColor(Color::white);
-    TextArea::Draw(Box(0, y, screen->width, h), true);
+    TextArea::Draw(Box(0, y, screen->width, h), DrawFlag::DrawCursor | DrawFlag::CheckResized);
 }
 
 /* Dialog */

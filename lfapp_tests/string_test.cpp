@@ -284,6 +284,10 @@ TEST(StringTest, StringMatch) {
 
 TEST(StringTest, Split) {
     string l, r, l1="aaaaa", r1="bbbb", x1="zzqrrrz", z1=", enzoop";
+
+    Split(StrCat(x1, " "), isspace, &l);
+    EXPECT_EQ(x1, l);
+
     Split(StrCat(l1, " \t\r\n", r1).c_str(), isspace, &l, &r);
     EXPECT_EQ(l1, l); EXPECT_EQ(r1, r);
 

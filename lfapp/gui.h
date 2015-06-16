@@ -220,11 +220,11 @@ struct KeyboardGUI : public KeyboardController {
     RingVector<string> lastcmd;
     int lastcmd_ind=-1;
     KeyboardGUI(Window *W, Font *F, int LastCommands=50)
-        : parent(W), toggle_active(&active), lastcmd(LastCommands) { parent->keyboard_gui.push_back(this); }
+        : parent(W), toggle_active(&active), lastcmd(LastCommands) { if (parent) parent->keyboard_gui.push_back(this); }
     virtual ~KeyboardGUI() { if (parent) VectorEraseByValue(&parent->keyboard_gui, this); }
     virtual void Enable() { active = true; }
     virtual bool Toggle() { return toggle_active.Toggle(); }
-    virtual void Run(string cmd) { if (runcb) runcb(cmd); }
+    virtual void Run(const string &cmd) { if (runcb) runcb(cmd); }
     virtual void SetToggleKey(int TK, int TM=Toggler::Default) { toggle_bind.key=TK; toggle_active.mode=TM; }
 
     void AddHistory  (const string &cmd);
@@ -262,6 +262,7 @@ struct TextGUI : public KeyboardGUI {
         shared_ptr<LineData> data;
         Line() : data(new LineData()) {}
         Line &operator=(const Line &s) { data=s.data; return *this; }
+        const DrawableBox& operator[](int i) const { return data->glyphs[i]; }
         static void Move (Line &t, Line &s) { swap(t.data, s.data); }
         static void MoveP(Line &t, Line &s) { swap(t.data, s.data); t.p=s.p; }
 
@@ -431,6 +432,11 @@ struct TextGUI : public KeyboardGUI {
     virtual void UpdateLongToken(Line *BL, int beg_offset, Line *EL, int end_offset, const string &text, int update_type);
 };
 
+struct UnbackedTextGUI : public TextGUI {
+    UnbackedTextGUI(Font *F=0) : TextGUI(0, F) {}
+    virtual void UpdateCommandFB() {}
+};
+
 struct TextArea : public TextGUI {
     Lines line;
     LinesFrameBuffer line_fb;
@@ -451,6 +457,10 @@ struct TextArea : public TextGUI {
     virtual void PageUp  () { v_scrolled = Clamp(v_scrolled - (float)scroll_inc/(WrappedLines()-1), 0, 1); UpdateScrolled(); }
     virtual void PageDown() { v_scrolled = Clamp(v_scrolled + (float)scroll_inc/(WrappedLines()-1), 0, 1); UpdateScrolled(); }
     virtual void Resized(const Box &b);
+    virtual void CheckResized(const Box &b) {
+      LinesFrameBuffer *fb = GetFrameBuffer();
+      if (fb->SizeChanged(b.w, b.h, font)) { Resized(b); fb->SizeChangedDone(); }
+    }
 
     virtual void Redraw(bool attach=true);
     virtual void UpdateScrolled();
@@ -460,7 +470,8 @@ struct TextArea : public TextGUI {
     virtual int WrappedLines() const { return line.wrapped_lines; }
     virtual LinesFrameBuffer *GetFrameBuffer() { return &line_fb; }
 
-    virtual void Draw(const Box &w, bool cursor);
+    struct DrawFlag { enum { DrawCursor=1, CheckResized=2 }; };
+    virtual void Draw(const Box &w, int flag, Shader *shader=0);
     virtual bool GetGlyphFromCoords(const point &p, Selection::Point *out) { return GetGlyphFromCoordsOffset(p, out, start_line, start_line_adjust); }
     bool GetGlyphFromCoordsOffset(const point &p, Selection::Point *out, int sl, int sla);
 
@@ -536,7 +547,7 @@ struct Terminal : public TextArea, public Drawable::AttrSource {
     virtual void ResizedLeftoverRegion(int w, int h, bool update_fb=true);
     virtual void SetScrollRegion(int b, int e, bool release_fb=false);
     virtual void SetDimension(int w, int h);
-    virtual void Draw(const Box &b, bool draw_cursor);
+    virtual void Draw(const Box &b, int flag, Shader *shader=0);
     virtual void Write(const StringPiece &s, bool update_fb=true, bool release_fb=true);
     virtual void Input(char k) {                       sink->Write(&k, 1); }
     virtual void Erase      () { char k = 0x7f;        sink->Write(&k, 1); }
@@ -607,7 +618,7 @@ struct Console : public TextArea {
 
     virtual ~Console() {}
     virtual int CommandLines() const { return cmd_line.Lines(); }
-    virtual void Run(string in) { app->shell.Run(in); }
+    virtual void Run(const string &in) { app->shell.Run(in); }
     virtual void PageUp  () { TextArea::PageDown(); }
     virtual void PageDown() { TextArea::PageUp(); }
     virtual bool Toggle();

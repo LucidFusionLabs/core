@@ -45,7 +45,7 @@ extern "C" {
 #endif
 
 #ifdef LFL_IPHONE
-extern "C" void *iPhoneLoadMusicAsset(const char *filename);
+extern "C" void *iPhoneMusicCreate(const char *filename);
 #endif
 
 namespace LFL {
@@ -408,7 +408,7 @@ struct AndroidAudioAssetLoader : public AudioAssetLoader {
 
 #ifdef LFL_IPHONE
 struct IPhoneAudioAssetLoader : public AudioAssetLoader {
-    virtual void *LoadAudioFile(const string &filename) { return iPhoneLoadMusicAsset(filename.c_str()); }
+    virtual void *LoadAudioFile(const string &filename) { return iPhoneMusicCreate(filename.c_str()); }
     virtual void UnloadAudioFile(void *h) {}
     virtual void *LoadAudioBuf(const char *buf, int len, const char *mimetype) { return 0; }
     virtual void UnloadAudioBuf(void *h) {}
@@ -1086,11 +1086,12 @@ void glIntersect(int x, int y, Color *c) {
 }
 
 void glTimeResolutionShader(Shader *shader, const Texture *tex) {
+    float scale = shader->scale;
     screen->gd->UseShader(shader);
     shader->SetUniform1f("iGlobalTime", ToFSeconds(Now() - app->time_started).count());
-    shader->SetUniform3f("iResolution", screen->width, screen->height, 0);
     shader->SetUniform4f("iMouse", screen->mouse.x, screen->mouse.y, app->input.MouseButton1Down(), 0);
-    if (tex) shader->SetUniform3f("iChannelResolution", screen->width, screen->height, 0);
+    shader->SetUniform3f("iResolution", XY_or_Y(scale, screen->pow2_width), XY_or_Y(scale, screen->pow2_height), 0);
+    if (tex) shader->SetUniform3f("iChannelResolution", tex->width, tex->height, 0);
 }
 
 void glTimeResolutionShaderWindows(Shader *shader, const Color &backup_color, const Box &w,             const Texture *tex) { Box wc=w; vector<Box*> wv; wv.push_back(&wc); glTimeResolutionShaderWindows(shader, backup_color, wv, tex); }

@@ -157,7 +157,7 @@ TEST(GUITest, TextArea) {
         LinesFrameBufferTest *test_fb = &ta.line_fb_test;
         int fh = font->Height();
         Box b(128, 3*fh);
-        ta.Draw(b, false);
+        ta.Draw(b, TextArea::DrawFlag::CheckResized);
         int w = test_fb->w;
 
         // 0: 122 : 1=1:0, 2=2:2, 3=2:1
@@ -380,7 +380,7 @@ TEST(GUITest, Editor) {
     EditorTest e(screen, font, new BufferFile("1\n2 2 2\n3\n4 4\n5\n"), true);
     LinesFrameBufferTest *test_fb = &e.line_fb_test;
     Box b(w, 3*fh);
-    e.Draw(b, false);
+    e.Draw(b, TextArea::DrawFlag::CheckResized);
 
     // 0: 122 : 3=1:0, 2=2:0, 1=2:1
     EXPECT_EQ(0, e.start_line_adjust);
