@@ -220,11 +220,11 @@ struct KeyboardGUI : public KeyboardController {
     RingVector<string> lastcmd;
     int lastcmd_ind=-1;
     KeyboardGUI(Window *W, Font *F, int LastCommands=50)
-        : parent(W), toggle_active(&active), lastcmd(LastCommands) { parent->keyboard_gui.push_back(this); }
+        : parent(W), toggle_active(&active), lastcmd(LastCommands) { if (parent) parent->keyboard_gui.push_back(this); }
     virtual ~KeyboardGUI() { if (parent) VectorEraseByValue(&parent->keyboard_gui, this); }
     virtual void Enable() { active = true; }
     virtual bool Toggle() { return toggle_active.Toggle(); }
-    virtual void Run(string cmd) { if (runcb) runcb(cmd); }
+    virtual void Run(const string &cmd) { if (runcb) runcb(cmd); }
     virtual void SetToggleKey(int TK, int TM=Toggler::Default) { toggle_bind.key=TK; toggle_active.mode=TM; }
 
     void AddHistory  (const string &cmd);
@@ -262,6 +262,7 @@ struct TextGUI : public KeyboardGUI {
         shared_ptr<LineData> data;
         Line() : data(new LineData()) {}
         Line &operator=(const Line &s) { data=s.data; return *this; }
+        const DrawableBox& operator[](int i) const { return data->glyphs[i]; }
         static void Move (Line &t, Line &s) { swap(t.data, s.data); }
         static void MoveP(Line &t, Line &s) { swap(t.data, s.data); t.p=s.p; }
 
@@ -429,6 +430,11 @@ struct TextGUI : public KeyboardGUI {
     virtual void DrawCursor(point p);
     virtual void UpdateToken(Line*, int word_offset, int word_len, int update_type, const LineTokenProcessor*);
     virtual void UpdateLongToken(Line *BL, int beg_offset, Line *EL, int end_offset, const string &text, int update_type);
+};
+
+struct UnbackedTextGUI : public TextGUI {
+    UnbackedTextGUI(Font *F=0) : TextGUI(0, F) {}
+    virtual void UpdateCommandFB() {}
 };
 
 struct TextArea : public TextGUI {
@@ -612,7 +618,7 @@ struct Console : public TextArea {
 
     virtual ~Console() {}
     virtual int CommandLines() const { return cmd_line.Lines(); }
-    virtual void Run(string in) { app->shell.Run(in); }
+    virtual void Run(const string &in) { app->shell.Run(in); }
     virtual void PageUp  () { TextArea::PageDown(); }
     virtual void PageDown() { TextArea::PageUp(); }
     virtual bool Toggle();

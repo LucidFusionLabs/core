@@ -444,6 +444,13 @@ struct PerformanceTimers {
   string DebugString() const { string v; for (auto &t : timers) StrAppend(&v, t.name, " ", t.time / 1000.0, "\n"); return v; }
 };
 
+struct Vault {
+  typedef function<bool(const string&, const string&,       string*)> LoadPasswordCB;
+  typedef function<void(const string&, const string&, const string&)> SavePasswordCB;
+  static bool LoadPassword(const string &host, const string &user,       string *pw_out);
+  static void SavePassword(const string &host, const string &user, const string &pw);
+};
+
 struct Crypto {
 #if defined(LFL_COMMONCRYPTO)
   struct Cipher { int algo=0; CCAlgorithm ccalgo; CCCryptorRef ctx; };
@@ -642,7 +649,7 @@ struct TouchDevice {
 struct CUDA : public Module { int Init(); };
 
 struct Application : public ::LFApp, public Module {
-  string progname, logfilename, startdir, assetdir, dldir;
+  string name, progname, logfilename, startdir, assetdir, dldir;
   int pid=0;
   FILE *logfile=0;
   mutex log_mutex;

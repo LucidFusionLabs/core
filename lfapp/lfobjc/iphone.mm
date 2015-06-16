@@ -50,6 +50,11 @@ static int iphone_argc = 0;
 @interface MyTouchView : UIView {}
 @end
 
+@interface SimpleKeychain : NSObject
+  + (void)save:(NSString *)service data:(id)data;
+  + (id)load:(NSString *)service;
+@end
+
 @interface LFViewController : GLKViewController<GLKViewControllerDelegate, UIActionSheetDelegate> {}
   - (void)updateToolbarFrame;
 @end
@@ -348,7 +353,7 @@ static int iphone_argc = 0;
   - (void)viewDidAppear:(BOOL)animated {
     [super viewDidAppear:animated];
   }
-  - (void)viewDidLayoutSubviews {}
+  - (void)viewDidLayoutSubviews { [app.view setNeedsDisplay]; }
   - (void)viewWillLayoutSubviews {
     [super viewWillLayoutSubviews];
     GLKView *view = [LFUIApplication sharedAppDelegate].view;
@@ -496,6 +501,33 @@ static int iphone_argc = 0;
   }
 @end
 
+@implementation SimpleKeychain
+  + (NSMutableDictionary *)getKeychainQuery:(NSString *)service {
+    return [NSMutableDictionary dictionaryWithObjectsAndKeys:(id)kSecClassGenericPassword, (id)kSecClass, service,
+           (id)kSecAttrService, service, (id)kSecAttrAccount, (id)kSecAttrAccessibleAfterFirstUnlock, (id)kSecAttrAccessible, nil];
+  }
+  + (void)save:(NSString *)service data:(id)data {
+    NSMutableDictionary *keychainQuery = [self getKeychainQuery:service];
+    SecItemDelete((CFDictionaryRef)keychainQuery);
+    [keychainQuery setObject:[NSKeyedArchiver archivedDataWithRootObject:data] forKey:(id)kSecValueData];
+    SecItemAdd((CFDictionaryRef)keychainQuery, NULL);
+  }
+  + (id)load:(NSString *)service {
+    id ret = nil;
+    NSMutableDictionary *keychainQuery = [self getKeychainQuery:service];
+    [keychainQuery setObject:(id)kCFBooleanTrue forKey:(id)kSecReturnData];
+    [keychainQuery setObject:(id)kSecMatchLimitOne forKey:(id)kSecMatchLimit];
+    CFDataRef keyData = NULL;
+    if (SecItemCopyMatching((CFDictionaryRef)keychainQuery, (CFTypeRef *)&keyData) == noErr) {
+      @try { ret = [NSKeyedUnarchiver unarchiveObjectWithData:(NSData *)keyData]; }
+      @catch (NSException *e) { NSLog(@"Unarchive of %@ failed: %@", service, e); }
+      @finally {}
+    }
+    if (keyData) CFRelease(keyData);
+    return ret;
+  }
+@end
+
 extern "C" void NativeWindowInit() { 
   NativeWindow *screen = GetNativeWindow();
   screen->opengles_version = 2;
@@ -604,24 +636,29 @@ extern "C" char *iPhoneDocumentPathCopy() {
   return strdup([iphone_documents_directory UTF8String]);
 }
 
-extern "C" int iPhoneReadDir(const char *path, int dirs,
-                             void *DirectoryIter, void (*DirectoryIterAdd)(void *di, const char *k, int)) {
-  NSString *dirName = [[NSString alloc] initWithUTF8String:path];
-  NSArray *dirContents = [[NSFileManager defaultManager] directoryContentsAtPath:dirName];
-
-  for (NSString *fileName in dirContents) {
-    NSString *fullPath = [dirName stringByAppendingPathComponent:fileName];
-
-    BOOL isDir;
-    if (![[NSFileManager defaultManager] fileExistsAtPath:fullPath isDirectory:&isDir]) continue;
-    if (dirs >= 0 && isDir != dirs) continue;
-
-    if (isDir) fileName = [NSString stringWithFormat:@"%@%@", fileName, @"/"];
-    DirectoryIterAdd(DirectoryIter, [fileName UTF8String], 1);
-  }
-
-  [dirName release];
+extern "C" int iPhonePasswordCopy(const char *a, const char *h, const char *u, char *pw_out, int pwlen) {
+  NSString *k = [NSString stringWithFormat:@"%s://%s@%s", a, u, h], *pw = [SimpleKeychain load: k];
+  if (pw) if (const char *text = [pw UTF8String]) if (int l = strlen(text)) if (l < pwlen) { memcpy(pw_out, text, l); return l; }
   return 0;
+}
+
+extern "C" bool iPhonePasswordSave(const char *a, const char *h, const char *u, const char *pw_in, int pwlen) {
+  NSString *k = [[NSString stringWithFormat:@"%s://%s@%s", a, u, h] retain];
+  NSMutableString *pw = [[NSMutableString stringWithUTF8String: pw_in] retain];
+  UIAlertController *alertController = [UIAlertController alertControllerWithTitle:@"LTerminal Keychain"
+    message:[NSString stringWithFormat:@"Save password for %s@%s?", u, h] preferredStyle:UIAlertControllerStyleAlert];
+  UIAlertAction *actionNo  = [UIAlertAction actionWithTitle:@"No"  style:UIAlertActionStyleDefault handler: nil];
+  UIAlertAction *actionYes = [UIAlertAction actionWithTitle:@"Yes" style:UIAlertActionStyleDefault
+    handler:^(UIAlertAction *){
+      [SimpleKeychain save:k data:pw];
+      [pw replaceCharactersInRange:NSMakeRange(0, [pw length]) withString:[NSString stringWithFormat:@"%*s", [pw length], ""]];
+      [pw release];
+      [k release];
+    }];
+  [alertController addAction:actionYes];
+  [alertController addAction:actionNo];
+  [[LFUIApplication sharedAppDelegate].controller presentViewController:alertController animated:YES completion:nil];
+  return true;
 }
 
 extern "C" int main(int ac, const char **av) {

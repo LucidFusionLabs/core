@@ -194,6 +194,7 @@ struct ArchiveIter {
 struct VersionedFileName {
     const char *dir, *_class, *var;
     VersionedFileName(const char *D=0, const char *C=0, const char *V=0) : dir(D), _class(C), var(V) {}
+    string DebugString() const { return StrCat(BlankNull(dir), BlankNull(_class), BlankNull(var)); }
 };
 
 struct ProtoHeader {

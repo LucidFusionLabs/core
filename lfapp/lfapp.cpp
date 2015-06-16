@@ -125,6 +125,8 @@ extern "C" void iPhoneAddWaitForeverKeyboard(void*);
 extern "C" void iPhoneDelWaitForeverKeyboard(void*);
 extern "C" void iPhoneAddWaitForeverSocket(void*, int fd);
 extern "C" void iPhoneDelWaitForeverSocket(void*, int fd);
+extern "C" int  iPhonePasswordCopy(const char *, const char*, const char*,       char*, int);
+extern "C" bool iPhonePasswordSave(const char *, const char*, const char*, const char*, int);
 #elif defined(__APPLE__)
 extern "C" void OSXStartWindow(void*);
 extern "C" void OSXCreateNativeMenu(const char*, int, const char**, const char**);
@@ -462,6 +464,17 @@ void Application::Daemonize(FILE *fout, FILE *ferr) {
   if (ferr) dup2(fileno(ferr), 2);
 }
 #endif /* WIN32 */
+
+#ifdef LFL_IPHONE
+void Vault::SavePassword(const string &h, const string &u, const string &pw) {
+  iPhonePasswordSave(app->name.c_str(), h.c_str(), u.c_str(), pw.c_str(), pw.size());
+}
+bool Vault::LoadPassword(const string &h, const string &u, string *pw) {
+  pw->resize(1024);
+  pw->resize(iPhonePasswordCopy(app->name.c_str(), h.c_str(), u.c_str(), &(*pw)[0], pw->size()));
+  return pw->size();
+}
+#endif
 
 string Crypto::MD5   (const string &in) { return ComputeDigest(DigestAlgos::MD5   (), in); }
 string Crypto::SHA1  (const string &in) { return ComputeDigest(DigestAlgos::SHA1  (), in); }
@@ -960,6 +973,18 @@ int Application::Create(int argc, const char **argv, const char *source_filename
   else if (FLAGS_open_console) OpenConsole();
 #endif
 
+  {
+#if defined(LFL_IPHONE)
+    char *path = iPhoneDocumentPathCopy();
+    dldir = StrCat(path, "/");
+    free(path);
+#elif defined(_WIN32)
+    char path[MAX_PATH];
+    if (!SUCCEEDED(SHGetFolderPath(NULL, CSIDL_PERSONAL|CSIDL_FLAG_CREATE, NULL, 0, path))) return -1;
+    dldir = StrCat(path, "/");
+#endif
+  }
+
   const char *LFLHOME=getenv("LFLHOME");
   if (LFLHOME && *LFLHOME) chdir(LFLHOME);
   INFO(screen->caption, ": lfapp init: LFLHOME=", LocalFile::CurrentDirectory(), " DLDIR=", LFAppDownloadDir());
@@ -984,19 +1009,6 @@ int Application::Create(int argc, const char **argv, const char *source_filename
     if (setrlimit(RLIMIT_NOFILE, &rl) == -1) { ERROR("files setrlimit ", strerror(errno)); return -1; }
   }
 #endif
-
-  {
-#ifdef LFL_IPHONE
-    char *path = iPhoneDocumentPathCopy();
-    dldir = StrCat(path, "/");
-    free(path);
-#endif
-#ifdef _WIN32
-    char path[MAX_PATH];
-    if (!SUCCEEDED(SHGetFolderPath(NULL, CSIDL_PERSONAL|CSIDL_FLAG_CREATE, NULL, 0, path))) return -1;
-    dldir = StrCat(path, "/");
-#endif
-  }
 
 #ifdef LFL_HEADLESS
   Window::Create(screen);

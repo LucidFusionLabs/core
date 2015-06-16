@@ -32,10 +32,6 @@
 #include "libarchive/archive_entry.h"
 #endif
 
-#ifdef LFL_IPHONE
-extern "C" int iPhoneReadDir(const char *path, int dirs, void *DirectoryIter, void (*DirectoryIterAdd)(void *di, const char *k, int));
-#endif
-
 namespace LFL {
 string File::Contents() {
     if (!Opened()) return "";
@@ -170,6 +166,7 @@ int BufferFile::Write(const void *In, size_t size) {
 #ifdef WIN32
 const char LocalFile::Slash = '\\';
 int LocalFile::IsDirectory(const string &filename) {
+    if (filename.empty()) return true;
     DWORD attr = ::GetFileAttributes(filename.c_str());
     if (attr == INVALID_FILE_ATTRIBUTES) { ERROR("GetFileAttributes(", filename, ") failed: ", strerror(errno)); return 0; }
     return attr & FILE_ATTRIBUTE_DIRECTORY;
@@ -177,12 +174,14 @@ int LocalFile::IsDirectory(const string &filename) {
 #else // WIN32
 const char LocalFile::Slash = '/';
 int LocalFile::IsDirectory(const string &filename) {
-#if !defined(LFL_IPHONE) && !defined(LFL_ANDROID) /* XXX */
+    if (filename.empty()) return true;
+#ifdef LFL_ANDROID
+    ERROR("XXX Android IsDirectory");
+    return 0;
+#else
     struct stat buf;
     if (stat(filename.c_str(), &buf)) { ERROR("stat(", filename, ") failed: ", strerror(errno)); return 0; }
     return buf.st_mode & S_IFDIR;
-#else
-    return 0;
 #endif
 }
 #endif // WIN32
@@ -330,6 +329,7 @@ string LocalFile::JoinPath(const string &x, const string &y) {
 DirectoryIter::DirectoryIter(const string &path, int dirs, const char *Pref, const char *Suf) : P(Pref), S(Suf), init(0) {
     if (LocalFile::IsDirectory(path)) pathname = path;
     else {
+        INFO("DirectoryIter: \"", path, "\" not a directory");
         if (LocalFile(path, "r").Opened()) {
             pathname = string(path, DirNameLen(path)) + LocalFile::Slash;
             filemap[BaseName(path)] = 1;
@@ -353,11 +353,6 @@ DirectoryIter::DirectoryIter(const string &path, int dirs, const char *Pref, con
 
     _findclose(h);
 #else /* _WIN32 */
-#ifdef LFL_IPHONE
-
-    iPhoneReadDir(path.c_str(), dirs, (void**)this, Add);
-
-#else /* LFL_IPHONE */
     DIR *dir; dirent *dent; string dirname=path;
     if (dirname.empty()) dirname = ".";
     if (dirname.size() > 1 && dirname[dirname.size()-1] == '/') dirname.erase(dirname.size()-1);
@@ -374,7 +369,6 @@ DirectoryIter::DirectoryIter(const string &path, int dirs, const char *Pref, con
     }
 
     closedir(dir);
-#endif /* __APPLE__ */
 #endif /* _WIN32 */
 }
 

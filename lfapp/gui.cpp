@@ -331,7 +331,6 @@ void TextGUI::Enter() {
     string cmd = Text();
     AssignInput("");
     if (!cmd.empty()) { AddHistory(cmd); Run(cmd); }
-    TouchDevice::CloseKeyboard();
     if (deactivate_on_enter) active = false;
 }
 

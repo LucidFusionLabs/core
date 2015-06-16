@@ -532,6 +532,7 @@ struct SSHClient : public Service {
     Connection *Open(const string &hostport, const ResponseCB &cb, Callback *detach=0);
 
     static void SetUser(Connection *c, const string &user);
+    static void SetPasswordCB(Connection *c, const Vault::LoadPasswordCB&, const Vault::SavePasswordCB&);
     static int SetTerminalWindowSize(Connection *c, int w, int h);
     static int WriteChannelData(Connection *c, const StringPiece &b);
 };

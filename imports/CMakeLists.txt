@@ -34,7 +34,7 @@ endif(CMAKE_SYSTEM_NAME MATCHES "Linux")
 
 # iPhone 
 if(LFL_IPHONE)
-    set(PLATFORM_LIB "-liconv -lz -framework Foundation -framework CoreText -framework CoreAudio -framework CoreGraphics -framework OpenGLES -framework UIKit -framework QuartzCore -framework AVFoundation -framework GLKit")
+    set(PLATFORM_LIB "-liconv -lz -framework Foundation -framework CoreText -framework CoreAudio -framework CoreGraphics -framework OpenGLES -framework UIKit -framework QuartzCore -framework AVFoundation -framework GLKit -framework Security")
     if(NOT LFL_IPHONESIM)
         set(PLATFORM_LIB "${PLATFORM_LIB} -framework CoreVideo -framework CoreMedia")
     endif()

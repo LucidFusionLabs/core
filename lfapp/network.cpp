@@ -1720,10 +1720,12 @@ struct SSHClientConnection : public Query {
   enum { INIT=0, FIRST_KEXINIT=1, FIRST_KEXREPLY=2, FIRST_NEWKEYS=3, KEXINIT=4, KEXREPLY=5, NEWKEYS=6 };
 
   SSHClient::ResponseCB cb;
-  string V_C, V_S, KEXINIT_C, KEXINIT_S, H_text, session_id, integrity_c2s, integrity_s2c, decrypt_buf, user, pw;
+  Vault::LoadPasswordCB load_password_cb;
+  Vault::SavePasswordCB save_password_cb;
+  string V_C, V_S, KEXINIT_C, KEXINIT_S, H_text, session_id, integrity_c2s, integrity_s2c, decrypt_buf, host, user, pw;
   int state=0, packet_len=0, packet_MAC_len=0, MAC_len_c=0, MAC_len_s=0, encrypt_block_size=0, decrypt_block_size=0;
   unsigned sequence_number_c2s=0, sequence_number_s2c=0, password_prompts=0, userauth_fail=0;
-  bool guessed_c=0, guessed_s=0, guessed_right_c=0, guessed_right_s=0;
+  bool guessed_c=0, guessed_s=0, guessed_right_c=0, guessed_right_s=0, loaded_pw=0;
   unsigned char padding=0, packet_id=0;
   pair<int, int> pty_channel;
   std::mt19937 rand_eng;
@@ -1739,9 +1741,9 @@ struct SSHClientConnection : public Query {
   int kex_method=0, hostkey_type=0, mac_prefix_c2s=0, mac_prefix_s2c=0, window_c=0, window_s=0;
   int initial_window_size=1048576, max_packet_size=32768, term_width=80, term_height=25;
 
-  SSHClientConnection(const SSHClient::ResponseCB &CB) : cb(CB), V_C("SSH-2.0-LFL_1.0"), rand_eng(std::random_device{}()),
+  SSHClientConnection(const SSHClient::ResponseCB &CB, const string &H) : cb(CB), V_C("SSH-2.0-LFL_1.0"), host(H), rand_eng(std::random_device{}()),
     pty_channel(1,-1), ctx(NewBigNumContext()), K(NewBigNum()) { Crypto::CipherInit(&encrypt); Crypto::CipherInit(&decrypt); }
-  virtual ~SSHClientConnection() { FreeBigNumContext(ctx); FreeBigNum(K); Crypto::CipherFree(&encrypt); Crypto::CipherFree(&decrypt); }
+  virtual ~SSHClientConnection() { ClearPassword(); FreeBigNumContext(ctx); FreeBigNum(K); Crypto::CipherFree(&encrypt); Crypto::CipherFree(&decrypt); }
 
   void Close(Connection *c) { cb(c, StringPiece()); }
   int Connected(Connection *c) {
@@ -1915,13 +1917,16 @@ struct SSHClientConnection : public Query {
           SSH::MSG_USERAUTH_FAILURE msg;
           if (msg.In(&s)) return ERRORv(-1, c->Name(), ": read MSG_USERAUTH_FAILURE");
           SSHTrace(c->Name(), ": MSG_USERAUTH_FAILURE: auth_left='", msg.auth_left.str(), "'");
-          if (!userauth_fail++) { cb(c, "Password:"); password_prompts = 1; }
+
+          if (!loaded_pw) ClearPassword();
+          if (!userauth_fail++) { cb(c, "Password:"); if ((password_prompts=1)) LoadPassword(c); }
           else return ERRORv(-1, c->Name(), ": authorization failed");
         } break;
 
         case SSH::MSG_USERAUTH_SUCCESS::ID: {
           SSHTrace(c->Name(), ": MSG_USERAUTH_SUCCESS");
           window_s = initial_window_size;
+          if (!loaded_pw) { if (save_password_cb) save_password_cb(host, user, pw); ClearPassword(); }
           if (!WriteCipher(c, SSH::MSG_CHANNEL_OPEN("session", pty_channel.first, initial_window_size, max_packet_size)))
             return ERRORv(-1, c->Name(), ": write");
         } break;
@@ -1933,8 +1938,8 @@ struct SSHClientConnection : public Query {
           if (!msg.instruction.empty()) { SSHTrace(c->Name(), ": instruction: ", msg.instruction.str()); cb(c, msg.instruction); }
           for (auto &i : msg.prompt)    { SSHTrace(c->Name(), ": prompt: ",      i.text.str());          cb(c, i.text); }
 
-          if (!(password_prompts = msg.prompt.size()))
-            if (!WriteCipher(c, SSH::MSG_USERAUTH_INFO_RESPONSE())) return ERRORv(-1, c->Name(), ": write");
+          if ((password_prompts = msg.prompt.size())) LoadPassword(c);
+          else if (!WriteCipher(c, SSH::MSG_USERAUTH_INFO_RESPONSE())) return ERRORv(-1, c->Name(), ": write");
         } break;
 
         case SSH::MSG_CHANNEL_OPEN_CONFIRMATION::ID: {
@@ -2041,25 +2046,31 @@ struct SSHClientConnection : public Query {
       if (!WriteCipher(c, SSH::MSG_CHANNEL_DATA(pty_channel.second, b))) return ERRORv(-1, c->Name(), ": write");
       window_c -= (b.size() - 4);
     } else {
-      pw.append(b.data(), b.size());
-      if (pw.size() && pw.back() == '\r') {
-        bool success = false;
-        if (userauth_fail) {
-          success = WriteCipher(c, SSH::MSG_USERAUTH_REQUEST(user, "ssh-connection", "password", "", pw.substr(0, pw.size()-1), ""));
-        } else {
-          vector<StringPiece> prompt(password_prompts);
-          prompt.back() = StringPiece(pw.data(), pw.size()-1);
-          success = WriteCipher(c, SSH::MSG_USERAUTH_INFO_RESPONSE(prompt));
-        }
-        pw.assign(RandBytes(pw.size(), rand_eng));
-        pw.clear();
-        password_prompts = 0;
-        cb(c, "\r\n");
-        if (!success) return ERRORv(-1, c->Name(), ": write");
-      }
+      bool cr = b.len && b.back() == '\r';
+      pw.append(b.data(), b.size() - cr);
+      if (cr && !WritePassword(c)) return ERRORv(-1, c->Name(), ": write");
     }
     return b.size();
   }
+  bool WritePassword(Connection *c) {
+    cb(c, "\r\n");
+    bool success = false;
+    if (userauth_fail) {
+      success = WriteCipher(c, SSH::MSG_USERAUTH_REQUEST(user, "ssh-connection", "password", "", pw, ""));
+    } else {
+      vector<StringPiece> prompt(password_prompts);
+      prompt.back() = StringPiece(pw.data(), pw.size());
+      success = WriteCipher(c, SSH::MSG_USERAUTH_INFO_RESPONSE(prompt));
+    }
+    password_prompts = 0;
+    return success;
+  }
+  void LoadPassword(Connection *c) {
+    if ((loaded_pw = load_password_cb && load_password_cb(host, user, &pw))) WritePassword(c);
+    if (loaded_pw) ClearPassword();
+  }
+  void ClearPassword() { pw.assign(pw.size(), ' '); pw.clear(); }
+  void SetPasswordCB(const Vault::LoadPasswordCB &L, const Vault::SavePasswordCB &S) { load_password_cb=L; save_password_cb=S; }
   int SetTerminalWindowSize(Connection *c, int w, int h) {
     term_width = w;
     term_height = h;
@@ -2074,12 +2085,13 @@ struct SSHClientConnection : public Query {
 Connection *SSHClient::Open(const string &hostport, const SSHClient::ResponseCB &cb, Callback *detach) { 
   Connection *c = Connect(hostport, 22, detach);
   if (!c) return 0;
-  c->query = new SSHClientConnection(cb);
+  c->query = new SSHClientConnection(cb, hostport);
   return c;
 }
-void SSHClient::SetUser              (Connection *c, const string &user)   {        dynamic_cast<SSHClientConnection*>(c->query)->user = user; }
-int  SSHClient::SetTerminalWindowSize(Connection *c, int w, int h)         { return dynamic_cast<SSHClientConnection*>(c->query)->SetTerminalWindowSize(c, w, h); }
-int  SSHClient::WriteChannelData     (Connection *c, const StringPiece &b) { return dynamic_cast<SSHClientConnection*>(c->query)->WriteChannelData(c, b); }
+int  SSHClient::WriteChannelData     (Connection *c, const StringPiece &b)                            { return dynamic_cast<SSHClientConnection*>(c->query)->WriteChannelData(c, b); }
+int  SSHClient::SetTerminalWindowSize(Connection *c, int w, int h)                                    { return dynamic_cast<SSHClientConnection*>(c->query)->SetTerminalWindowSize(c, w, h); }
+void SSHClient::SetUser              (Connection *c, const string &user)                                     { dynamic_cast<SSHClientConnection*>(c->query)->user = user; }
+void SSHClient::SetPasswordCB(Connection *c, const Vault::LoadPasswordCB &L, const Vault::SavePasswordCB &S) { dynamic_cast<SSHClientConnection*>(c->query)->SetPasswordCB(L, S); }
 
 struct SMTPClientConnection : public Query {
   enum { INIT=0, SENT_HELO=1, READY=2, MAIL_FROM=3, RCPT_TO=4, SENT_DATA=5, SENDING=6, RESETING=7, QUITING=8 };

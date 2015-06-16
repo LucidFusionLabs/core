@@ -259,7 +259,9 @@ void ProcessAPIClient::HandleMessagesLoop() {}
 void ProcessAPIServer::Start(const string &client_program) {
     int fd[2];
     CHECK(SystemNetwork::OpenSocketPair(fd));
+    if (!LocalFile(client_program, "r").Opened()) { ERROR("ProcessAPIServer: \"", client_program, "\" doesnt exist"); return; }
     INFO("ProcessAPIServer starting ", client_program);
+
 #ifdef WIN32
   	FATAL("not implemented")
 #else
