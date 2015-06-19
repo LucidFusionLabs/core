@@ -255,25 +255,25 @@ bool NBFGets(FILE *f, char *buf, int len, int timeout) {
   return 0;
 #endif
 }
-bool NBReadable(int fd, int timeout) {
+bool NBReadable(Socket fd, int timeout) {
   SelectSocketSet ss;
   ss.Add(fd, SocketSet::READABLE, 0);
   ss.Select(timeout);
   return app->run && ss.GetReadable(fd);
 }
-int NBRead(int fd, char *buf, int len, int timeout) {
+int NBRead(Socket fd, char *buf, int len, int timeout) {
   if (!NBReadable(fd, timeout)) return 0;
   int o = 0, s = 0;
-  do if ((s = ::read(fd, buf+o, len-o)) > 0) o += s;
+  do if ((s = recv(fd, buf+o, len-o, 0)) > 0) o += s;
   while (s > 0 && len - o > 1024);
   return o;
 }
-int NBRead(int fd, string *buf, int timeout) {
+int NBRead(Socket fd, string *buf, int timeout) {
   int l = NBRead(fd, (char*)buf->data(), buf->size(), timeout);
   buf->resize(max(0,l));
   return l;
 }
-string NBRead(int fd, int len, int timeout) {
+string NBRead(Socket fd, int len, int timeout) {
   string ret(len, 0);
   NBRead(fd, &ret, timeout);
   return ret;

@@ -286,9 +286,9 @@ struct SSH {
     enum { AES128_CTR=1, AES128_CBC=2, TripDES_CBC=3, Blowfish_CBC=4, RC4=5, End=5 };
     static int Id(const string &n);
     static const char *Name(int id);
-    static Crypto::CipherAlgo Algo(int id);
+    static Crypto::CipherAlgo Algo(int id, int *blocksize=0);
     static string PreferenceCSV(int start_after=0);
-    static bool PreferenceIntersect(const StringPiece &pref_csv, Crypto::CipherAlgo *out, int start_after=0);
+    static bool PreferenceIntersect(const StringPiece &pref_csv, int *out, int start_after=0);
   };
   struct MAC {
     enum { MD5=1, SHA1=2, SHA1_96=3, MD5_96=4, SHA256=5, SHA256_96=6, SHA512=7, SHA512_96=8, End=8 };

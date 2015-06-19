@@ -33,6 +33,7 @@
 #include <memory>
 #include <numeric>
 #include <limits>
+#include <cwctype>
 #define LFL_STL_NAMESPACE std
 
 #include <unordered_map>
@@ -262,10 +263,10 @@ double CamFPS();
 void PressAnyKey();
 bool FGets(char *buf, int size);
 bool NBFGets(FILE*, char *buf, int size, int timeout=0);
-int NBRead(int fd, char *buf, int size, int timeout=0);
-int NBRead(int fd, string *buf, int timeout=0);
-string NBRead(int fd, int size, int timeout=0);
-bool NBReadable(int fd, int timeout=0);
+int NBRead(Socket fd, char *buf, int size, int timeout=0);
+int NBRead(Socket fd, string *buf, int timeout=0);
+string NBRead(Socket fd, int size, int timeout=0);
+bool NBReadable(Socket fd, int timeout=0);
 
 struct MallocAlloc : public Allocator {
   const char *Name() { return "MallocAlloc"; }

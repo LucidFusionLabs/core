@@ -298,23 +298,37 @@ template <int V1, int V2> int                 isint2(int N) { return (N == V1) |
 template <int V1, int V2, int V3>         int isint3(int N) { return (N == V1) || (N == V2) || (N == V3); }
 template <int V1, int V2, int V3, int V4> int isint4(int N) { return (N == V1) || (N == V2) || (N == V3) || (N == V4); }
 
-int IsAscii(int c);
+#undef isspace
+#undef isascii
+#undef isalpha
+#undef isalnum
+#undef isupper
+#undef islower
+#undef isdigit
+#undef isnumber
+inline int isspace(int c) { return std::iswspace(c); }
+inline int isascii(int c) { return c >= 32 && c < 128; }
+inline int isalpha(int c) { return std::iswalpha(c); }
+inline int isalnum(int c) { return std::iswalnum(c); }
+inline int isupper(int c) { return std::iswupper(c); }
+inline int islower(int c) { return std::iswlower(c); }
+inline int isdot(int c) { return c == '.'; }
+inline int iscomma(int c) { return c == ','; }
+inline int isand(int c) { return c == '&'; }
+inline int isdquote(int c) { return c == '"'; }
+inline int issquote(int c) { return c == '\''; }
+inline int istick(int c) { return c == '`'; }
+inline int isdigit(int c) { return (c >= '0' && c <= '9'); }
+inline int isnumber(int c) { return isdigit(c) || c == '.'; }
+inline int isquote(int c) { return isdquote(c) || issquote(c) || istick(c); }
+inline int notspace(int c) { return !isspace(c); }
+inline int notalpha(int c) { return !isalpha(c); }
+inline int notalnum(int c) { return !isalnum(c); }
+inline int notnum(int c) { return !isnumber(c); }
+inline int notcomma(int c) { return !iscomma(c); }
+inline int notdot(int c) { return !isdot(c); }
+
 int isfileslash(int c);
-int isdot(int c);
-int iscomma(int c);
-int isand(int c);
-int isdquote(int c);
-int issquote(int c);
-int istick(int c);
-int isdig(int c);
-int isnum(int c);
-int isquote(int c);
-int notspace(int c);
-int notalpha(int c);
-int notalnum(int c);
-int notnum(int c);
-int notcomma(int c);
-int notdot(int c);
 int MatchingParens(int c1, int c2);
 int atoi(const char  *v);
 int atoi(const short *v);

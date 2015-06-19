@@ -383,7 +383,7 @@ struct HTMLParser {
         while (p < end) {
             if (*p != '&') { p++; continue; }
             const X *s = p + 1, *max_entity = s + 8; bool num = *s == '#';
-            for (p = s + num; p < max_entity && (num ? isnum(*p) : isalnum(*p)); p++) {}
+            for (p = s + num; p < max_entity && (num ? isnumber(*p) : isalnum(*p)); p++) {}
             if (*p != ';') continue;
 
             ret.append(chunk_start, s-1-chunk_start);

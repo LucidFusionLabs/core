@@ -1840,23 +1840,26 @@ struct SSHClientConnection : public Query {
           if (msg.In(&s)) return ERRORv(-1, c->Name(), ": read MSG_KEXINIT");
           SSHTrace(c->Name(), ": MSG_KEXINIT ", msg.DebugString());
 
-          int mac_id_c2s=0, mac_id_s2c=0;
+          int cipher_id_c2s=0, cipher_id_s2c=0, mac_id_c2s=0, mac_id_s2c=0;
           guessed_s = msg.first_kex_packet_follows;
           KEXINIT_S.assign(packet_text, packet_len - packet_MAC_len);
-          if (!SSH::KEX   ::PreferenceIntersect(msg.kex_algorithms,                         &kex_method))      return ERRORv(-1, c->Name(), ": negotiate kex");
-          if (!SSH::Key   ::PreferenceIntersect(msg.server_host_key_algorithms,             &hostkey_type))    return ERRORv(-1, c->Name(), ": negotiate hostkey");
-          if (!SSH::Cipher::PreferenceIntersect(msg.encryption_algorithms_client_to_server, &cipher_algo_c2s)) return ERRORv(-1, c->Name(), ": negotiate c2s cipher");
-          if (!SSH::Cipher::PreferenceIntersect(msg.encryption_algorithms_server_to_client, &cipher_algo_s2c)) return ERRORv(-1, c->Name(), ": negotiate s2c cipher");
-          if (!SSH::MAC   ::PreferenceIntersect(msg.mac_algorithms_client_to_server,        &mac_id_c2s))      return ERRORv(-1, c->Name(), ": negotiate c2s mac");
-          if (!SSH::MAC   ::PreferenceIntersect(msg.mac_algorithms_server_to_client,        &mac_id_s2c))      return ERRORv(-1, c->Name(), ": negotiate s2c mac");
+          if (!SSH::KEX   ::PreferenceIntersect(msg.kex_algorithms,                         &kex_method))    return ERRORv(-1, c->Name(), ": negotiate kex");
+          if (!SSH::Key   ::PreferenceIntersect(msg.server_host_key_algorithms,             &hostkey_type))  return ERRORv(-1, c->Name(), ": negotiate hostkey");
+          if (!SSH::Cipher::PreferenceIntersect(msg.encryption_algorithms_client_to_server, &cipher_id_c2s)) return ERRORv(-1, c->Name(), ": negotiate c2s cipher");
+          if (!SSH::Cipher::PreferenceIntersect(msg.encryption_algorithms_server_to_client, &cipher_id_s2c)) return ERRORv(-1, c->Name(), ": negotiate s2c cipher");
+          if (!SSH::MAC   ::PreferenceIntersect(msg.mac_algorithms_client_to_server,        &mac_id_c2s))    return ERRORv(-1, c->Name(), ": negotiate c2s mac");
+          if (!SSH::MAC   ::PreferenceIntersect(msg.mac_algorithms_server_to_client,        &mac_id_s2c))    return ERRORv(-1, c->Name(), ": negotiate s2c mac");
           guessed_right_s = kex_method == SSH::KEX::Id(Split(msg.kex_algorithms, iscomma)) && hostkey_type == SSH::Key::Id(Split(msg.server_host_key_algorithms, iscomma));
           guessed_right_c = kex_method == 1                                                && hostkey_type == 1;
+          cipher_algo_c2s = SSH::Cipher::Algo(cipher_id_c2s, &encrypt_block_size);
+          cipher_algo_s2c = SSH::Cipher::Algo(cipher_id_s2c, &decrypt_block_size);
           mac_algo_c2s = SSH::MAC::Algo(mac_id_c2s, &mac_prefix_c2s);
           mac_algo_s2c = SSH::MAC::Algo(mac_id_s2c, &mac_prefix_s2c);
           INFO(c->Name(), ": ssh negotiated { kex=", SSH::KEX::Name(kex_method), ", hostkey=", SSH::Key::Name(hostkey_type),
                cipher_algo_c2s == cipher_algo_s2c ? StrCat(", cipher=", Crypto::CipherAlgos::Name(cipher_algo_c2s)) : StrCat(", cipher_c2s=", Crypto::CipherAlgos::Name(cipher_algo_c2s), ", cipher_s2c=", Crypto::CipherAlgos::Name(cipher_algo_s2c)),
                mac_id_c2s      == mac_id_s2c      ? StrCat(", mac=",               SSH::MAC::Name(mac_id_c2s))      : StrCat(", mac_c2s=",               SSH::MAC::Name(mac_id_c2s),      ", mac_s2c=",               SSH::MAC::Name(mac_id_s2c)),
                " }");
+          SSHTrace(c->Name(), ": block_size=", encrypt_block_size, ",", decrypt_block_size, " mac_len=", MAC_len_c, ",", MAC_len_s);
 
           if (SSH::KEX::EllipticCurveDiffieHellman(kex_method)) {
             switch (kex_method) {
@@ -1928,8 +1931,6 @@ struct SSHClientConnection : public Query {
           int key_len_c = Crypto::CipherAlgos::KeySize(cipher_algo_c2s), key_len_s = Crypto::CipherAlgos::KeySize(cipher_algo_s2c);
           if ((v = InitCipher(c, &encrypt, cipher_algo_c2s, DeriveKey(kex_hash, 'A', 24), DeriveKey(kex_hash, 'C', key_len_c), true))  != 1) return ERRORv(-1, c->Name(), ": init c->s cipher ", v, " keylen=", key_len_c);
           if ((v = InitCipher(c, &decrypt, cipher_algo_s2c, DeriveKey(kex_hash, 'B', 24), DeriveKey(kex_hash, 'D', key_len_s), false)) != 1) return ERRORv(-1, c->Name(), ": init s->c cipher ", v, " keylen=", key_len_s);
-          if ((encrypt_block_size = Crypto::CipherGetBlockSize(&encrypt)) < 0) return ERRORv(-1, c->Name(), ": invalid blocksize ", encrypt_block_size);
-          if ((decrypt_block_size = Crypto::CipherGetBlockSize(&decrypt)) < 0) return ERRORv(-1, c->Name(), ": invalid blocksize ", decrypt_block_size);
           if ((MAC_len_c = Crypto::MACAlgos::HashSize(mac_algo_c2s)) <= 0) return ERRORv(-1, c->Name(), ": invalid maclen ", encrypt_block_size);
           if ((MAC_len_s = Crypto::MACAlgos::HashSize(mac_algo_s2c)) <= 0) return ERRORv(-1, c->Name(), ": invalid maclen ", encrypt_block_size);
           integrity_c2s = DeriveKey(kex_hash, 'E', MAC_len_c);

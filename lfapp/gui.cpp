@@ -842,7 +842,7 @@ void Terminal::UpdateToken(Line *L, int word_offset, int word_len, int update_ty
     }
     for (; end_offset == term_width-1 && end_line_ind >= 0; end_line_ind--, end_offset = new_offset - 1, EL = NL) {
         const DrawableBoxArray &glyphs = (NL = &line[-beg_line_ind-1+1])->data->glyphs;
-        if (!(new_offset = LengthChar(&glyphs[0], notspace, glyphs.Size()))) break;
+        if (!(new_offset = LengthChar(glyphs.data.data(), notspace, glyphs.Size()))) break;
     }
 
     string text = CopyText(beg_line_ind, beg_offset, end_line_ind, end_offset, 0);
@@ -932,7 +932,7 @@ void Terminal::Write(const StringPiece &s, bool update_fb, bool release_fb) {
             parse_state = State::TEXT;
 
             int parsed_csi=0, parse_csi_argc=0, parse_csi_argv[16];
-            unsigned char parse_csi_argv00 = parse_csi.empty() ? 0 : (isdig(parse_csi[0]) ? 0 : parse_csi[0]);
+            unsigned char parse_csi_argv00 = parse_csi.empty() ? 0 : (isdigit(parse_csi[0]) ? 0 : parse_csi[0]);
             for (/**/; Within<int>(parse_csi[parsed_csi], 0x20, 0x2f); parsed_csi++) {}
             StringPiece intermed(parse_csi.data(), parsed_csi);
 

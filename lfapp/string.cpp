@@ -155,23 +155,7 @@ string UTF8::WriteGlyph(int codepoint) {
 #endif
 }
 
-int IsAscii(int c) { return c >= 32 && c < 128; }
 int isfileslash(int c) { return c == LocalFile::Slash; }
-int isdot(int c) { return c == '.'; }
-int iscomma(int c) { return c == ','; }
-int isand(int c) { return c == '&'; }
-int isdquote(int c) { return c == '"'; }
-int issquote(int c) { return c == '\''; }
-int istick(int c) { return c == '`'; }
-int isdig(int c) { return (c >= '0' && c <= '9'); }
-int isnum(int c) { return isdig(c) || c == '.'; }
-int isquote(int c) { return isdquote(c) || issquote(c) || istick(c); }
-int notspace(int c) { return !isspace(c); }
-int notalpha(int c) { return !isalpha(c); }
-int notalnum(int c) { return !isalnum(c); }
-int notnum(int c) { return !isnum(c); }
-int notcomma(int c) { return !iscomma(c); }
-int notdot(int c) { return !isdot(c); }
 int MatchingParens(int c1, int c2) { return (c1 == '(' && c2 == ')') || (c1 == '[' && c2 == ']') || (c1 == '<' && c2 == '>'); }
 float my_atof(const char *v) { return v ? ::atof(v) : 0; }
 int atoi(const char *v) { return v ? ::atoi(v) : 0; }
@@ -516,7 +500,7 @@ template <class X> string CHexEscapeNonAscii(const basic_string<X> &text) {
     string ret;
     ret.reserve(text.size()*4);
     for (typename make_unsigned<X>::type c : text)
-        if (IsAscii(c)) ret += c;
+        if (isascii(c)) ret += c;
         else StringAppendf(&ret, "\\x%02x", c);
     return ret;
 }
