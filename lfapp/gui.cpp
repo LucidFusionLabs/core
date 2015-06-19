@@ -153,6 +153,7 @@ int TextGUI::Line::Erase(int x, int l) {
 }
 
 template <class X> int TextGUI::Line::InsertTextAt(int x, const StringPieceT<X> &v, int attr) {
+    if (!v.size()) return 0;
     DrawableBoxArray b;
     b.attr.source = data->glyphs.attr.source;
     EncodeText(&b, data->glyphs.Position(x).x, v, attr);

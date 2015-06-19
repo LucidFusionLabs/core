@@ -234,12 +234,12 @@ int Network::Frame(unsigned clicks) {
   if (active.Select(select_time))
   { ERROR("SocketSet.select: ", SystemNetwork::LastError()); return -1; }
 
-#ifdef LFL_EPOLL_SOCKET_SET
+#ifndef LFL_NETWORK_MONOLITHIC_FRAME
   /* iterate events */
   for (active.cur_event = 0; active.cur_event < active.num_events; active.cur_event++) {
     typed_ptr *tp = (typed_ptr*)active.events[active.cur_event].data.ptr;
     if      (tp->type == connection_type) { Connection *c=(Connection*)tp->value; active.cur_fd = c->socket; TCPConnectionFrame(c->svc, c, &removelist); }
-    else if (tp->type == listener_type)   { Listener   *l=(Listener*)  tp->value; active.cur_fd = l->socket; AcceptFramet(l->svc, l); }
+    else if (tp->type == listener_type)   { Listener   *l=(Listener*)  tp->value; active.cur_fd = l->socket; AcceptFrame(l->svc, l); }
     else FATAL("unknown type", tp->type);
   }
 #endif
@@ -247,7 +247,7 @@ int Network::Frame(unsigned clicks) {
   /* pre loop */
   for (auto svc : service_table) {
 
-#ifndef LFL_EPOLL_SOCKET_SET
+#ifdef LFL_NETWORK_MONOLITHIC_FRAME
     /* answer listening sockets & UDP server read */
     for (auto i = svc->listen.begin(), e = svc->listen.end(); i != e; ++i) 
       if (active.GetReadable(i->second->socket)) AcceptFrame(svc, i->second);
@@ -304,7 +304,7 @@ void Network::AcceptFrame(Service *svc, Listener *listener) {
 
       /* insert socket */
       c = svc->Accept(Connection::Connected, socket, sin.sin_addr.s_addr, ntohs(sin.sin_port));
-      if (!c) { close(socket); continue; }
+      if (!c) { SystemNetwork::CloseSocket(socket); continue; }
       c->bio = bio;
       BIO_set_nbio(c->bio, 1);
       BIO_get_ssl(c->bio, &listener->ssl);
@@ -340,13 +340,14 @@ void Network::AcceptFrame(Service *svc, Listener *listener) {
       if (!inserted) continue;
     }
     else { /* TCP accept */
-      struct sockaddr_in sin; int sinSize=sizeof(sin); Socket socket;
-      if ((int)(socket = ::accept(listener->socket, (struct sockaddr *)&sin, (socklen_t*)&sinSize)) < 0)
-      { if (!SystemNetwork::EWouldBlock()) ERROR("accept: ", SystemNetwork::LastError()); break; }
+      IPV4::Addr accept_addr = 0; 
+      int accept_port = 0;
+      Socket socket = SystemNetwork::Accept(listener->socket, &accept_addr, &accept_port);
+      if (socket == -1) break;
 
       /* insert socket */
-      c = svc->Accept(Connection::Connected, socket, sin.sin_addr.s_addr, ntohs(sin.sin_port));
-      if (!c) { close(socket); continue; }
+      c = svc->Accept(Connection::Connected, socket, accept_addr, accept_port);
+      if (!c) { SystemNetwork::CloseSocket(socket); continue; }
     }
     if (!c) continue;
 
@@ -434,6 +435,14 @@ void Network::UpdateActive(Connection *c) {
   active.Set(c->socket, flag, &c->self_reference);
 }
 
+void SystemNetwork::CloseSocket(Socket fd) {
+#ifdef WIN32
+  closesocket(fd);
+#else
+  close(fd);
+#endif
+}
+
 Socket SystemNetwork::OpenSocket(int protocol) {
   if (protocol == Protocol::TCP) return socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
   else if (protocol == Protocol::UDP) {
@@ -452,8 +461,21 @@ Socket SystemNetwork::OpenSocket(int protocol) {
   else return -1;
 }
 
-bool SystemNetwork::OpenSocketPair(int *fd) {
-#ifdef _WIN32
+bool SystemNetwork::OpenSocketPair(Socket *fd) {
+#ifdef WIN32
+#ifdef LFL_NETWORK_MONOLITHIC_FRAME
+  Socket l = -1;
+  int listen_port = 0, connect_port = 0;
+  IPV4::Addr listen_addr = 0, connect_addr = 0;
+  if ((l = SystemNetwork::Listen(Protocol::TCP, IPV4::Parse("127.0.0.1"), 0, 1, true)) == -1) return -1;
+  if ((fd[1] = SystemNetwork::OpenSocket(Protocol::TCP)) == -1) { SystemNetwork::CloseSocket(l); return ERRORv(-1, "OSP.OpenSocket ", SystemNetwork::LastError()); }
+  if (SystemNetwork::GetSockName(l, &listen_addr, &listen_port)) { SystemNetwork::CloseSocket(l); SystemNetwork::CloseSocket(fd[1]); return -1; }
+  if (SystemNetwork::Connect(fd[1], listen_addr, listen_port, 0)) { SystemNetwork::CloseSocket(l); SystemNetwork::CloseSocket(fd[1]); return -1; }
+  if ((fd[0] = SystemNetwork::Accept(l, &connect_addr, &connect_port)) == -1) { SystemNetwork::CloseSocket(l); SystemNetwork::CloseSocket(fd[1]); return -1; }
+  SystemNetwork::CloseSocket(l);
+  SetSocketBlocking(fd[0], 0);
+  SetSocketBlocking(fd[1], 0);
+#else // LFL_NETWORK_MONOLITHIC_FRAME
   SECURITY_ATTRIBUTES sa;
   memset(&sa, 0, sizeof(sa));
   sa.nLength = sizeof(sa);
@@ -461,7 +483,8 @@ bool SystemNetwork::OpenSocketPair(int *fd) {
   HANDLE handle[2];
   CHECK(CreatePipe(&handle[0], &handle[1], &sa, 0));
   // XXX use WFMO with HANDLE* instead of select with SOCKET
-#else
+#endif // LFL_NETWORK_MONOLITHIC_FRAME
+#else // WIN32
   CHECK(!socketpair(PF_LOCAL, SOCK_STREAM, 0, fd));
   SetSocketBlocking(fd[0], 0);
   SetSocketBlocking(fd[1], 0);
@@ -523,20 +546,30 @@ int SystemNetwork::Bind(int fd, IPV4::Addr addr, int port) {
   return 0;
 }
 
-Socket SystemNetwork::Listen(int protocol, IPV4::Addr addr, int port) {
+Socket SystemNetwork::Accept(Socket listener, IPV4::Addr *addr, int *port) {
+  struct sockaddr_in sin;
+  int sinSize = sizeof(sin);
+  Socket socket = ::accept(listener, (struct sockaddr *)&sin, (socklen_t*)&sinSize);
+  if (socket == -1 && !SystemNetwork::EWouldBlock()) return ERRORv(-1, "accept: ", SystemNetwork::LastError());
+  if (addr) *addr = sin.sin_addr.s_addr;
+  if (port) *port = ntohs(sin.sin_port);
+  return socket;
+}
+
+Socket SystemNetwork::Listen(int protocol, IPV4::Addr addr, int port, int backlog, bool blocking) {
   Socket fd;
   if ((fd = OpenSocket(protocol)) < 0) 
   { ERROR("network_socket_open: ", SystemNetwork::LastError()); return -1; }
 
-  if (Bind(fd, addr, port) == -1) { close(fd); return -1; }
+  if (Bind(fd, addr, port) == -1) { CloseSocket(fd); return -1; }
 
   if (protocol == Protocol::TCP) {
-    if (::listen(fd, 32) == -1)
-    { ERROR("listen: ", SystemNetwork::LastError()); close(fd); return -1; }
+    if (::listen(fd, backlog) == -1)
+    { ERROR("listen: ", SystemNetwork::LastError()); CloseSocket(fd); return -1; }
   }
 
-  if (SetSocketBlocking(fd, 0))
-  { ERROR("Network::socket_blocking: ", SystemNetwork::LastError()); close(fd); return -1; }
+  if (!blocking && SetSocketBlocking(fd, 0))
+  { ERROR("Network::socket_blocking: ", SystemNetwork::LastError()); CloseSocket(fd); return -1; }
 
   INFO("listen(port=", port, ", protocol=", (protocol == Protocol::TCP) ? "TCP" : "UDP", ")");
   return fd;
@@ -620,15 +653,13 @@ string SystemNetwork::LastError() {
 #endif
 }
 
+SocketWakeupThread::~SocketWakeupThread() { SystemNetwork::CloseSocket(pipe[0]); SystemNetwork::CloseSocket(pipe[1]); }
 void SocketWakeupThread::Start() {
-#ifndef _WIN32
-  CHECK_EQ(::pipe(pipe), 0);
-  SystemNetwork::SetSocketBlocking(pipe[0], 0);
-#endif
+  CHECK(SystemNetwork::OpenSocketPair(pipe));
   sockets.Add(pipe[0], SocketSet::READABLE, 0);
   thread.Start();
 }
-
+void SocketWakeupThread::Wakeup() { char c=0; if (pipe[1] >= 0) CHECK_EQ(send(pipe[1], &c, 1, 0), 1); }
 void SocketWakeupThread::ThreadProc() {
   while (app->run) {
     if (frame_mutex) { ScopedMutex sm(*frame_mutex); }
@@ -636,7 +667,7 @@ void SocketWakeupThread::ThreadProc() {
       SelectSocketSet my_sockets;
       { ScopedMutex sm(sockets_mutex); my_sockets = sockets; }
       my_sockets.Select(-1);
-      if (my_sockets.GetReadable(pipe[0])) NBRead(pipe[0], 4096);
+      if (my_sockets.GetReadable(pipe[0])) { char buf[128]; recv(pipe[0], buf, sizeof(buf), 0); }
       if (app->run) {
         if (!wakeup_each) app->scheduler.Wakeup(0);
         else for (auto &s : my_sockets.socket) if (my_sockets.GetReadable(s.first)) app->scheduler.Wakeup(s.second.second);
@@ -800,7 +831,7 @@ int Connection::SendTo(const char *buf, int len) { return SystemNetwork::SendTo(
 
 void Service::Close(Connection *c) {
   app->network.active.Del(c->socket);
-  if (!c->detach) close(c->socket);
+  if (!c->detach) SystemNetwork::CloseSocket(c->socket);
   if (connect_src_pool && (c->src_addr || c->src_port)) connect_src_pool->Close(c->src_addr, c->src_port);
 }
 
@@ -810,7 +841,7 @@ int Service::OpenSocket(Connection *c, int protocol, int blocking, IPV4EndpointS
 
   if (!blocking) {
     if (SystemNetwork::SetSocketBlocking(fd, 0))
-    { close(fd); return -1; }
+    { SystemNetwork::CloseSocket(fd); return -1; }
   }
 
   if (src_pool) {
@@ -818,7 +849,7 @@ int Service::OpenSocket(Connection *c, int protocol, int blocking, IPV4EndpointS
     for (int i=0, max_bind_attempts=10; /**/; i++) {
       src_pool->Get(&c->src_addr, &c->src_port);
       if (i >= max_bind_attempts || (i && c->src_addr == last_src.addr && c->src_port == last_src.port))
-      { ERROR("connect-bind ", IPV4::Text(c->src_addr, c->src_port), ": ", strerror(errno)); close(fd); return -1; }
+      { ERROR("connect-bind ", IPV4::Text(c->src_addr, c->src_port), ": ", strerror(errno)); SystemNetwork::CloseSocket(fd); return -1; }
 
       if (SystemNetwork::Bind(fd, c->src_addr, c->src_port) != -1) break;
       src_pool->BindFailed(c->src_addr, c->src_port);
@@ -869,7 +900,7 @@ Connection *Service::Connect(IPV4::Addr addr, int port, IPV4EndpointSource *src_
   int connected = 0;
   if (SystemNetwork::Connect(c->socket, c->addr, c->port, &connected) == -1) {
     ERROR(c->Name(), ": connecting: ", SystemNetwork::LastError());
-    close(c->socket);
+    SystemNetwork::CloseSocket(c->socket);
     delete c;
     return 0;
   }
@@ -959,7 +990,7 @@ Connection *Service::SSLConnect(SSL_CTX *sslctx, IPV4::Addr addr, int port, Call
 }
 
 Connection *Service::EndpointConnect(const string &endpoint_name) {
-  Connection *c = new Connection(this, Connection::Connected, -1, false);
+  Connection *c = new Connection(this, Connection::Connected, -1);
   c->endpoint_name = endpoint_name;
   endpoint[endpoint_name] = c;
 
@@ -1012,16 +1043,16 @@ NetworkThread::NetworkThread(Network *N) : net(N),
   rd(new Connection(Singleton<UnixClient>::Get(), new Query())),
   wr(new Connection(Singleton<UnixClient>::Get(), new Query())),
   thread(new Thread(bind(&NetworkThread::HandleMessagesLoop, this))) {
-    int fd[2];
-    CHECK(SystemNetwork::OpenSocketPair(fd));
-    rd->state = wr->state = Connection::Connected;
-    rd->socket = fd[0];
-    wr->socket = fd[1];
+  Socket fd[2];
+  CHECK(SystemNetwork::OpenSocketPair(fd));
+  rd->state = wr->state = Connection::Connected;
+  rd->socket = fd[0];
+  wr->socket = fd[1];
 
-    net->select_time = -1;
-    rd->svc->conn[rd->socket] = rd;
-    net->active.Add(rd->socket, SocketSet::READABLE, &rd->self_reference);
-  }
+  net->select_time = -1;
+  rd->svc->conn[rd->socket] = rd;
+  net->active.Add(rd->socket, SocketSet::READABLE, &rd->self_reference);
+}
 
 int NetworkThread::Query::Read(Connection *c) {
   int consumed = 0, s = sizeof(Callback*);

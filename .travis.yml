@@ -13,11 +13,11 @@ before_install:
   - if [ $TRAVIS_OS_NAME == linux ]; then sudo apt-get update -qq && sudo apt-get install -y llvm-3.4 llvm-3.4-dev && sudo apt-get install -y cmake; fi
   - if [ $TRAVIS_OS_NAME == linux ]; then sudo apt-get install libglu1-mesa-dev xorg-dev autotools-dev; fi
   - if [ $TRAVIS_OS_NAME == linux ]; then sudo apt-get install -qq yasm automake; fi
-  - if [ $TRAVIS_OS_NAME == linux ]; then wget https://s3.amazonaws.com/biibinaries/thirdparty/cmake-3.0.2-Linux-64.tar.gz; fi
-  - if [ $TRAVIS_OS_NAME == linux ]; then tar -xzf cmake-3.0.2-Linux-64.tar.gz; fi
-  - if [ $TRAVIS_OS_NAME == linux ]; then sudo cp -fR cmake-3.0.2-Linux-64/* /usr; fi
-  - if [ $TRAVIS_OS_NAME == linux ]; then rm -rf cmake-3.0.2-Linux-64; fi
-  - if [ $TRAVIS_OS_NAME == linux ]; then rm cmake-3.0.2-Linux-64.tar.gz; fi
+  - if [ $TRAVIS_OS_NAME == linux ]; then wget http://www.cmake.org/files/v3.2/cmake-3.2.3-Linux-x86_64.tar.gz; fi
+  - if [ $TRAVIS_OS_NAME == linux ]; then tar -xzf cmake-3.2.3-Linux-x86_64.tar.gz; fi
+  - if [ $TRAVIS_OS_NAME == linux ]; then sudo cp -fR cmake-3.2.3-Linux-x86_64/* /usr; fi
+  - if [ $TRAVIS_OS_NAME == linux ]; then rm -rf cmake-3.2.3-Linux-x86_64; fi
+  - if [ $TRAVIS_OS_NAME == linux ]; then rm cmake-3.2.3-Linux-x86_64.tar.gz; fi
   - if [ $TRAVIS_OS_NAME == osx ]; then brew update && brew install llvm && brew install homebrew/versions/cmake30 && brew link --force llvm; fi
 
 install:

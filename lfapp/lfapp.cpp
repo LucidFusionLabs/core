@@ -203,7 +203,7 @@ DEFINE_int(sample_secs, 3, "Seconds of RingBuf audio");
 DEFINE_int(chans_in, -1, "Audio input channels");
 DEFINE_int(chans_out, -1, "Audio output channels");
 DEFINE_int(target_fps, 0, "Max frames per second");
-DEFINE_bool(open_console, 0, "Open console on win32");
+DEFINE_bool(open_console, 1, "Open console on win32");
 
 void Allocator::Reset() { FATAL(Name(), ": reset"); }
 Allocator *Allocator::Default() { return Singleton<MallocAlloc>::Get(); }
@@ -1641,7 +1641,7 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR lpCmdLine, int nC
   vector<const char *> av;
   vector<string> a(1);
   a[0].resize(1024);
-  GetModuleFileName(hInst, (char*)a.data(), a.size());
+  GetModuleFileName(hInst, &(a[0])[0], a.size());
   LFL::StringWordIter word_iter(lpCmdLine);
   for (string word = IterNextString(&word_iter); !word_iter.Done(); word = IterNextString(&word_iter)) a.push_back(word);
   for (auto &i : a) av.push_back(i.c_str());

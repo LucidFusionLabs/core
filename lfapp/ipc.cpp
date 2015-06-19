@@ -139,6 +139,7 @@ int NTService::WrapMain(const char *name, MainCB main_cb, int argc, const char *
     return 0;
 }
 
+int ProcessPipe::Close() { return 0; }
 int ProcessPipe::OpenPTY(const char **argv) { return Open(argv); }
 int ProcessPipe::Open(const char **argv) {
     SECURITY_ATTRIBUTES sa;
@@ -257,7 +258,7 @@ void ProcessAPIClient::Start(const string &socket_name) {}
 void ProcessAPIClient::HandleMessagesLoop() {}
 #else
 void ProcessAPIServer::Start(const string &client_program) {
-    int fd[2];
+    Socket fd[2];
     CHECK(SystemNetwork::OpenSocketPair(fd));
     if (!LocalFile(client_program, "r").Opened()) { ERROR("ProcessAPIServer: \"", client_program, "\" doesnt exist"); return; }
     INFO("ProcessAPIServer starting ", client_program);

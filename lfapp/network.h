@@ -123,22 +123,45 @@ struct SocketWakeupThread : public SocketSet {
     SelectSocketSet sockets;
     mutex sockets_mutex;
     Thread thread;
-    int pipe[2];
+    Socket pipe[2];
     bool wakeup_each=0;
+    ~SocketWakeupThread();
     SocketWakeupThread(mutex *FM=0, mutex *WM=0) : frame_mutex(FM), wait_mutex(WM),
         thread(bind(&SocketWakeupThread::ThreadProc, this)) { pipe[0] = pipe[1] = -1; }
-    ~SocketWakeupThread() { close(pipe[0]); close(pipe[1]); }
 
     void Add(Socket s, int f, void *v) { { ScopedMutex m(sockets_mutex); sockets.Add(s, f, v); } Wakeup(); }
     void Set(Socket s, int f, void *v) { { ScopedMutex m(sockets_mutex); sockets.Set(s, f, v); } Wakeup(); }
     void Del(Socket s)                 { { ScopedMutex m(sockets_mutex); sockets.Del(s);       } Wakeup(); }
     void Start();
     void Wait() { Wakeup(); thread.Wait(); }
-    void Wakeup() { char c=0; if (pipe[1] >= 0) CHECK_EQ((int)write(pipe[1], &c, 1), 1); }
+    void Wakeup();
     void ThreadProc();
 };
 
-#if defined(LFL_EPOLL) && defined(LFL_LINUX_SERVER)
+#if defined(LFL_WFMO) && defined(WIN32)
+struct WFMOSocketSet : public SocketSet {
+  static const int max_sockets = MAXIMUM_WAIT_OBJECTS;
+  struct Event { struct Data { void *ptr=0; } data; } events[1];
+  SortedArray<HANDLE> sockets;
+  int num_events=0, cur_event=0;
+  Socket cur_fd=-1;
+  WFMOSocketSet() { sockets.reserve(max_sockets); }
+
+  int Select(int wait_time) {
+    int ret = WaitForMultipleObjects(sockets.size(), sockets.data(), FALSE, ToMilliseconds(wait_time));
+    if (ret == WAIT_FAILED) return ERRORv(-1, "WFMO ", GetLastError());
+    num_events = ret != WAIT_TIMEOUT;
+    return 0;
+  }
+  void Del(Socket fd) {}
+  void Add(Socket fd, int flag, void *val) {}
+  void Set(Socket fd, int flag, void *val) {}
+  int GetReadable(Socket fd) { return 0; }
+  int GetWritable(Socket fd) { return 0; }
+  int GetException(Socket fd) { return 0; }
+};
+typedef WFMOSocketSet LFLSocketSet;
+#elif defined(LFL_EPOLL) && defined(LFL_LINUX_SERVER)
 #include <sys/epoll.h>
 template <int S> struct EPollSocketSet : public SocketSet {
     Socket epollfd, cur_fd; int cur_event=-1, num_events=0; struct epoll_event events[S];
@@ -146,7 +169,7 @@ template <int S> struct EPollSocketSet : public SocketSet {
     virtual ~EPollSocketSet() { close(epollfd); }
 
     int Select(int wait_time) {
-        if ((num_events = epoll_wait(epollfd, events, S, ToMilliSeconds(wait_time))) == -1) ERROR("epoll_wait() ", strerror(errno));
+        if ((num_events = epoll_wait(epollfd, events, S, ToMilliseconds(wait_time))) == -1) ERROR("epoll_wait() ", strerror(errno));
         return 0;
     }
     void Change(Socket fd, int op, int flag, void *val) {
@@ -166,10 +189,10 @@ template <int S> struct EPollSocketSet : public SocketSet {
         return &events[cur_event];
     }
 };
-#define LFL_EPOLL_SOCKET_SET
-#define LFLSocketSet EPollSocketSet<65536*6>
+typedef EPollSocketSet<65536 * 6> LFLSocketSet;
 #else
-#define LFLSocketSet SelectSocketSet
+#define LFL_NETWORK_MONOLITHIC_FRAME
+typedef SelectSocketSet LFLSocketSet;
 #endif
 
 struct Network : public Module {
@@ -200,8 +223,9 @@ struct Network : public Module {
 };
 
 struct SystemNetwork {
+    static void CloseSocket(Socket);
     static Socket OpenSocket(int protocol);
-    static bool OpenSocketPair(int *fd_out);
+    static bool OpenSocketPair(Socket *fd_out);
     static int SetSocketBlocking(Socket fd, int blocking);
     static int SetSocketCloseOnExec(Socket fd, int close);
     static int SetSocketBroadcastEnabled(Socket fd, int enabled);
@@ -209,7 +233,8 @@ struct SystemNetwork {
     static int GetSocketReceiveBufferSize(Socket fd);
 
     static int Bind(int fd, IPV4::Addr addr, int port);
-    static Socket Listen(int protocol, IPV4::Addr addr, int port);
+    static Socket Accept(Socket listener, IPV4::Addr *addr, int *port);
+    static Socket Listen(int protocol, IPV4::Addr addr, int port, int backlog=32, bool blocking=false);
     static int Connect(Socket fd, IPV4::Addr addr, int port, int *connected);
     static int SendTo(Socket fd, IPV4::Addr addr, int port, const char *buf, int len);
     static int GetSockName(Socket fd, IPV4::Addr *addr_out, int *port_out);

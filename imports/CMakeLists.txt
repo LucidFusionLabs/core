@@ -134,12 +134,15 @@ endif(LFL_TCMALLOC)
 
 # openssl
 if(LFL_OPENSSL)
-    if(LFL_IPHONE)
+    if(WIN32)
+        set(OPENSSL_INCLUDE ${CMAKE_CURRENT_BINARY_DIR}/openssl/include PARENT_SCOPE)
+        set(OPENSSL_LIB ${CMAKE_CURRENT_BINARY_DIR}/openssl/lib/ssleay32.lib ${CMAKE_CURRENT_BINARY_DIR}/openssl/lib/libeay32.lib PARENT_SCOPE)
+    elseif(LFL_IPHONE)
         set(OPENSSL_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/ios-openssl/include PARENT_SCOPE)
         set(OPENSSL_LIB ${CMAKE_CURRENT_SOURCE_DIR}/ios-openssl/lib/libssl.a ${CMAKE_CURRENT_SOURCE_DIR}/ios-openssl/lib/libcrypto.a PARENT_SCOPE)
-    else(LFL_IPHONE)
+    else()
         set(OPENSSL_LIB -lssl -lcrypto PARENT_SCOPE)
-    endif(LFL_IPHONE)
+    endif()
 endif(LFL_OPENSSL)
 
 # box2d
