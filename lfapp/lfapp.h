@@ -136,7 +136,6 @@ using LFL_STL11_NAMESPACE::make_unsigned;
 #define snprintf _snprintf
 #define S_IFDIR _S_IFDIR
 typedef int socklen_t;
-int close(Socket socket);
 extern char *optarg;
 extern int optind;
 #endif

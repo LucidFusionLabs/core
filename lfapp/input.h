@@ -217,6 +217,21 @@ struct Input : public InputModule {
     }
 };
 
+#ifdef LFL_WININPUT
+struct WinApp {
+  HINSTANCE hInst = 0;
+  int nCmdShow = 0;
+  void Setup(HINSTANCE hI, int nCS) { hInst = hI; nCmdShow = nCS; }
+  void CreateClass();
+  int MessageLoop();
+  static LRESULT APIENTRY WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
+};
+struct WinWindow {
+  bool frame_on_keyboard_input = 0, frame_on_mouse_input = 0;
+  point prev_mouse_pos;
+};
+#endif
+
 struct Bind {
     typedef function<void()> CB;
     typedef function<void(unsigned)> TimeCB;

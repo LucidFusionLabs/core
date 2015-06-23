@@ -192,7 +192,7 @@ DEFINE_bool(lfapp_debug, false, "Enable debug mode");
 DEFINE_bool(cursor_grabbed, false, "Center cursor every frame");
 DEFINE_bool(daemonize, false, "Daemonize server");
 DEFINE_bool(rcon_debug, false, "Print rcon commands");
-DEFINE_bool(frame_debug, false, "Print each frame");
+DEFINE_bool(frame_debug, true, "Print each frame");
 DEFINE_string(nameserver, "", "Default namesver");
 DEFINE_bool(max_rlimit_core, true, "Max core dump rlimit");
 DEFINE_bool(max_rlimit_open_files, false, "Max number of open files rlimit");
@@ -264,7 +264,7 @@ bool NBReadable(Socket fd, int timeout) {
 int NBRead(Socket fd, char *buf, int len, int timeout) {
   if (!NBReadable(fd, timeout)) return 0;
   int o = 0, s = 0;
-  do if ((s = recv(fd, buf+o, len-o, 0)) > 0) o += s;
+  do if ((s = read(fd, buf+o, len-o)) > 0) o += s;
   while (s > 0 && len - o > 1024);
   return o;
 }
@@ -830,6 +830,8 @@ void SystemBrowser::Open(const char *url_text) {
 #elif defined(__APPLE__)
   CFURLRef url = CFURLCreateWithBytes(0, (UInt8*)url_text, strlen(url_text), kCFStringEncodingASCII, 0);
   if (url) { LSOpenCFURLRef(url, 0); CFRelease(url); }
+#elif defined(LFL_WINVIDEO)
+  ShellExecute(NULL, "open", url_text, NULL, NULL, SW_SHOWNORMAL);
 #endif
 }
 
@@ -1149,7 +1151,7 @@ int Application::Main() {
   ONCE({ return 0; });
 #endif
   if (Start()) return Exiting();
-#if defined(LFL_OSXVIDEO) || defined(LFL_QT) || defined(LFL_WXWIDGETS)
+#if defined(LFL_OSXVIDEO) || defined(LFL_WINVIDEO) || defined(LFL_QT) || defined(LFL_WXWIDGETS)
   return 0;
 #endif
   return MainLoop();
@@ -1192,11 +1194,12 @@ int Application::Exiting() {
 /* FrameScheduler */
 
 FrameScheduler::FrameScheduler() : maxfps(&FLAGS_target_fps), wakeup_thread(&frame_mutex, &wait_mutex) {
-#if defined(LFL_OSXINPUT) || defined(LFL_IPHONEINPUT) || defined(LFL_QT) || defined(LFL_WXWIDGETS)
+#if defined(LFL_OSXINPUT) || defined(LFL_IPHONEINPUT)
   rate_limit = synchronize_waits = wait_forever_thread = monolithic_frame = 0;
-#endif
-#if defined(LFL_QT) || defined(LFL_WXWIDGETS)
-  wait_forever_thread = true;
+#elif defined(LFL_QT) || defined(LFL_WXWIDGETS)
+  rate_limit = synchronize_waits = monolithic_frame = 0;
+#elif defined(LFL_WININPUT)
+  synchronize_waits = wait_forever_thread = 0;
 #endif
 }
 
@@ -1224,7 +1227,7 @@ void FrameScheduler::FrameWait() {
       wait_mutex.lock();
       frame_mutex.unlock();
     }
-#if defined(LFL_OSXINPUT) || defined(LFL_IPHONEINPUT) || defined(LFL_QT) || defined(LFL_WXWIDGETS)
+#if defined(LFL_OSXINPUT) || defined(LFL_WININPUT) || defined(LFL_IPHONEINPUT) || defined(LFL_QT) || defined(LFL_WXWIDGETS)
 #elif defined(LFL_GLFWINPUT)
     glfwWaitEvents();
 #elif defined(LFL_SDLINPUT)
@@ -1245,6 +1248,12 @@ void FrameScheduler::Wakeup(void *opaque) {
     if (wait_forever_thread) QTTriggerFrame();
 #elif defined(LFL_WXWIDGETS)
     if (wait_forever_thread) ((wxGLCanvas*)screen->id)->Refresh();
+#elif defined(LFL_OSXINPUT)
+    OSXTriggerFrame(screen->id);
+#elif defined(LFL_WININPUT)
+    InvalidateRect((HWND)screen->id, NULL, 0);
+#elif defined(LFL_IPHONEINPUT)
+    iPhoneTriggerFrame(screen->id);
 #elif defined(LFL_GLFWINPUT)
     if (wait_forever_thread) glfwPostEmptyEvent();
 #elif defined(LFL_SDLINPUT)
@@ -1256,10 +1265,6 @@ void FrameScheduler::Wakeup(void *opaque) {
       event.type = my_event_type;
       SDL_PushEvent(&event);
     }
-#elif defined(LFL_OSXINPUT)
-    OSXTriggerFrame(screen->id);
-#elif defined(LFL_IPHONEINPUT)
-    iPhoneTriggerFrame(screen->id);
 #else
     // FATAL("not implemented");
 #endif
@@ -1305,6 +1310,8 @@ void FrameScheduler::AddWaitForeverMouse() {
   iPhoneAddWaitForeverMouse(screen->id);
 #elif defined(LFL_OSXINPUT)
   OSXAddWaitForeverMouse(screen->id);
+#elif defined(LFL_WINVIDEO)
+  static_cast<WinWindow*>(screen->impl)->frame_on_mouse_input = true;
 #endif
 }
 
@@ -1314,6 +1321,8 @@ void FrameScheduler::DelWaitForeverMouse() {
   iPhoneDelWaitForeverMouse(screen->id);
 #elif defined(LFL_OSXINPUT)
   OSXDelWaitForeverMouse(screen->id);
+#elif defined(LFL_WINVIDEO)
+  static_cast<WinWindow*>(screen->impl)->frame_on_mouse_input = false;
 #endif
 }
 
@@ -1323,6 +1332,8 @@ void FrameScheduler::AddWaitForeverKeyboard() {
   iPhoneAddWaitForeverKeyboard(screen->id);
 #elif defined(LFL_OSXINPUT)
   OSXAddWaitForeverKeyboard(screen->id);
+#elif defined(LFL_WINVIDEO)
+  static_cast<WinWindow*>(screen->impl)->frame_on_keyboard_input = true;
 #endif
 }
 
@@ -1332,6 +1343,8 @@ void FrameScheduler::DelWaitForeverKeyboard() {
   iPhoneDelWaitForeverKeyboard(screen->id);
 #elif defined(LFL_OSXINPUT)
   OSXDelWaitForeverKeyboard(screen->id);
+#elif defined(LFL_WINVIDEO)
+  static_cast<WinWindow*>(screen->impl)->frame_on_keyboard_input = false;
 #endif
 }
 
@@ -1341,6 +1354,8 @@ void FrameScheduler::AddWaitForeverSocket(Socket fd, int flag, void *val) {
   if (!wait_forever_thread) { CHECK_EQ(SocketSet::READABLE, flag); iPhoneAddWaitForeverSocket(screen->id, fd); }
 #elif defined(LFL_OSXINPUT)
   if (!wait_forever_thread) { CHECK_EQ(SocketSet::READABLE, flag); OSXAddWaitForeverSocket(screen->id, fd); }
+#elif defined(LFL_WINVIDEO)
+  WSAAsyncSelect(fd, (HWND)screen->id, WM_USER, FD_READ | FD_CLOSE);
 #endif
 }
 
@@ -1352,6 +1367,8 @@ void FrameScheduler::DelWaitForeverSocket(Socket fd) {
 #elif defined(LFL_OSXINPUT)
   CHECK(screen->id);
   OSXDelWaitForeverSocket(screen->id, fd);
+#elif defined(LFL_WINVIDEO)
+  WSAAsyncSelect(fd, (HWND)screen->id, WM_USER, 0);
 #endif
 }
 
@@ -1633,19 +1650,3 @@ JSContext *CreateV8JSContext(Console *js_console, DOM::Node *doc) { Singleton<My
 JSContext *CreateV8JSContext(Console *js_console, DOM::Node *doc) { return 0; }
 #endif /* LFL_V8JS */
 }; // namespace LFL
-
-#ifdef _WIN32
-int close(Socket socket) { return closesocket(socket); }
-int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR lpCmdLine, int nCmdShow) {
-  timeBeginPeriod(1);
-  vector<const char *> av;
-  vector<string> a(1);
-  a[0].resize(1024);
-  GetModuleFileName(hInst, &(a[0])[0], a.size());
-  LFL::StringWordIter word_iter(lpCmdLine);
-  for (string word = IterNextString(&word_iter); !word_iter.Done(); word = IterNextString(&word_iter)) a.push_back(word);
-  for (auto &i : a) av.push_back(i.c_str());
-  av.push_back(0);
-  return main(av.size() - 1, &av[0]);
-}
-#endif

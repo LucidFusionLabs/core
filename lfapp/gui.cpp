@@ -55,7 +55,7 @@ Window::WindowMap Window::active;
 Window *Window::Get(void *id) { return FindOrNull(Window::active, id); }
 
 Window::Window() : caption("lfapp"), fps(128) {
-    id = gl = surface = glew_context = user1 = user2 = user3 = 0;
+    id = gl = surface = glew_context = impl = user1 = user2 = user3 = 0;
     minimized = cursor_grabbed = frame_init = 0;
     target_fps = FLAGS_target_fps;
     opengles_version = 1;

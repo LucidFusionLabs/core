@@ -200,7 +200,7 @@ struct LFApp {
 };
 
 struct NativeWindow {
-    void *id, *gl, *surface, *glew_context, *user1, *user2, *user3;
+    void *id, *gl, *surface, *glew_context, *impl, *user1, *user2, *user3;
     int width, height, pow2_width, pow2_height, target_fps;
     bool minimized, cursor_grabbed, frame_init;
     int opengles_version, opengles_cubemap;

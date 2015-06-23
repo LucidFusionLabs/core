@@ -1051,6 +1051,47 @@ void Window::Close(Window *W) {
 }
 #endif
 
+#ifdef LFL_WINVIDEO
+struct WinVideoModule : public Module {
+  int Init() {
+    INFO("WinVideoModule::Init()");
+    CHECK(Window::Create(screen));
+    return 0;
+  }
+};
+
+bool Window::Create(Window *W) {
+  static WinApp *winapp = Singleton<WinApp>::Get();
+  ONCE({ winapp->CreateClass(); });
+  HWND hWnd = CreateWindow(app->name.c_str(), W->caption.c_str(), WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN | WS_CLIPSIBLINGS,
+    0, 0, W->width, W->height, NULL, NULL, winapp->hInst, NULL);
+  if (!hWnd) return ERRORv(false, "CreateWindow: ", GetLastError());
+  ShowWindow(hWnd, winapp->nCmdShow);
+  UpdateWindow(hWnd);
+  HDC hDC = GetDC(hWnd);
+  PIXELFORMATDESCRIPTOR pfd = { sizeof(PIXELFORMATDESCRIPTOR), 1, PFD_SUPPORT_OPENGL | PFD_DRAW_TO_WINDOW | PFD_DOUBLEBUFFER,
+    PFD_TYPE_RGBA, 32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 16, 0, 0, PFD_MAIN_PLANE, 0, 0, 0, 0, };
+  int pf = ChoosePixelFormat(hDC, &pfd);
+  if (!pf) return ERRORv(false, "ChoosePixelFormat: ", GetLastError());
+  if (SetPixelFormat(hDC, pf, &pfd) != TRUE) return ERRORv(false, "SetPixelFormat: ", GetLastError());
+  if (!(W->gl = wglCreateContext(hDC))) return ERRORv(false, "wglCreateContext: ", GetLastError());
+  W->surface = hDC;
+  W->impl = new WinWindow();
+  Window::active[(W->id = hWnd)] = W;
+  INFOf("Window::Create %p %p %p (%p)", W->id, W->surface, W->gl, W);
+  MakeCurrent(W);
+  return true;
+}
+void Window::MakeCurrent(Window *W) { if (W) wglMakeCurrent((HDC)W->surface, (HGLRC)W->gl); }
+void Window::Close(Window *W) {
+  delete (WinWindow*)W->impl;
+  Window::active.erase(W->id);
+  if (Window::active.empty()) app->run = false;
+  if (app->window_closed_cb) app->window_closed_cb(W);
+  screen = 0;
+}
+#endif
+
 #ifdef LFL_LINUXVIDEO
 struct LinuxVideoModule : public Module {
   int Init() {
@@ -1338,18 +1379,20 @@ int Video::Init() {
   impl = new QTVideoModule();
 #elif defined(LFL_WXWIDGETS)
   impl = new WxWidgetsVideoModule();
-#elif defined(LFL_GLFWVIDEO)
-  impl = new GLFWVideoModule();
-#elif defined(LFL_SDLVIDEO)
-  impl = new SDLVideoModule();
 #elif defined(LFL_ANDROIDVIDEO)
   impl = new AndroidVideoModule();
 #elif defined(LFL_IPHONEVIDEO)
   impl = new IPhoneVideoModule();
 #elif defined(LFL_OSXVIDEO)
   impl = new OSXVideoModule();
+#elif defined(LFL_WINVIDEO)
+  impl = new WinVideoModule();
 #elif defined(LFL_LINUXVIDEO)
   impl = new LinuxVideoModule();
+#elif defined(LFL_GLFWVIDEO)
+  impl = new GLFWVideoModule();
+#elif defined(LFL_SDLVIDEO)
+  impl = new SDLVideoModule();
 #endif
   if (impl) if (impl->Init()) return -1;
 
@@ -1446,14 +1489,16 @@ int Video::Swap() {
   ((wxGLCanvas*)screen->id)->SwapBuffers();
 #elif defined(LFL_ANDROIDVIDEO)
   AndroidVideoSwap();
-#elif defined(LFL_GLFWVIDEO)
-  glfwSwapBuffers((GLFWwindow*)screen->id);
-#elif defined(LFL_SDLVIDEO)
-  SDL_GL_SwapWindow((SDL_Window*)screen->id);
 #elif defined(LFL_IPHONEVIDEO)
   iPhoneVideoSwap();
 #elif defined(LFL_OSXVIDEO)
   OSXVideoSwap(screen->id);
+#elif defined(LFL_WINVIDEO)
+  SwapBuffers((HDC)screen->surface);
+#elif defined(LFL_GLFWVIDEO)
+  glfwSwapBuffers((GLFWwindow*)screen->id);
+#elif defined(LFL_SDLVIDEO)
+  SDL_GL_SwapWindow((SDL_Window*)screen->id);
 #endif
 
   screen->gd->CheckForError(__FILE__, __LINE__);
@@ -2282,6 +2327,30 @@ void DrawableBoxRun::DrawBackground(point p, DrawBackgroundCB cb) {
 }
 
 }; // namespace LFL
+
+#ifdef _WIN32
+int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR lpCmdLine, int nCmdShow) {
+  timeBeginPeriod(1);
+  vector<const char *> av;
+  vector<string> a(1);
+  a[0].resize(1024);
+  GetModuleFileName(hInst, &(a[0])[0], a.size());
+  LFL::StringWordIter word_iter(lpCmdLine);
+  for (string word = IterNextString(&word_iter); !word_iter.Done(); word = IterNextString(&word_iter)) a.push_back(word);
+  for (auto &i : a) av.push_back(i.c_str());
+  av.push_back(0);
+#ifdef LFL_WINVIDEO
+  LFL::WinApp *winapp = LFL::Singleton<LFL::WinApp>::Get();
+  winapp->Setup(hInst, nCmdShow);
+#endif
+  int ret = main(av.size() - 1, &av[0]);
+#ifdef LFL_WINVIDEO
+  return ret ? ret : winapp->MessageLoop();
+#else
+  return ret;
+#endif
+}
+#endif
 
 #ifdef LFL_QT
 extern "C" void QTTriggerFrame() { ((LFL::OpenGLES2*)LFL::screen->gd)->RequestRender(); }
