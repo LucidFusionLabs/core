@@ -439,9 +439,9 @@ void WinApp::CreateClass() {
   wndClass.cbClsExtra = 0;
   wndClass.cbWndExtra = 0;
   wndClass.hInstance = hInst;
-  wndClass.hIcon = LoadIcon(NULL, IDI_APPLICATION);
+  wndClass.hIcon = LoadIcon(hInst, "IDI_APP_ICON");
   wndClass.hCursor = LoadCursor(NULL, IDC_ARROW);
-  wndClass.hbrBackground = (HBRUSH)GetStockObject(BLACK_BRUSH);
+  wndClass.hbrBackground = (HBRUSH)GetStockObject(NULL_BRUSH);
   wndClass.lpszMenuName = NULL;
   wndClass.lpszClassName = app->name.c_str();
   if (!RegisterClass(&wndClass)) ERROR("RegisterClass: ", GetLastError());
@@ -461,7 +461,9 @@ int WinApp::MessageLoop() {
 LRESULT APIENTRY WinApp::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
   WinWindow *win = static_cast<WinWindow*>(screen->impl);
   PAINTSTRUCT ps;
+  POINT cursor;
   point p, d;
+  int ind;
   switch (message) {
   case WM_CREATE:                      return 0;
   case WM_DESTROY:                     LFAppShutdown(); PostQuitMessage(0); return 0;
@@ -470,9 +472,14 @@ LRESULT APIENTRY WinApp::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
   case WM_KEYDOWN: case WM_SYSKEYDOWN: if (KeyPress(WinInputModule::GetKeyCode(wParam), 1) && win->frame_on_keyboard_input) app->scheduler.Wakeup(0); return 0;
   case WM_LBUTTONDOWN:                 if (MouseClick(1, 1, win->prev_mouse_pos.x, win->prev_mouse_pos.y) && win->frame_on_mouse_input) app->scheduler.Wakeup(0); return 0;
   case WM_LBUTTONUP:                   if (MouseClick(1, 0, win->prev_mouse_pos.x, win->prev_mouse_pos.y) && win->frame_on_mouse_input) app->scheduler.Wakeup(0); return 0;
+  case WM_RBUTTONDOWN:                 if (MouseClick(2, 1, win->prev_mouse_pos.x, win->prev_mouse_pos.y) && win->frame_on_mouse_input) app->scheduler.Wakeup(0); return 0;
+  case WM_RBUTTONUP:                   if (MouseClick(2, 0, win->prev_mouse_pos.x, win->prev_mouse_pos.y) && win->frame_on_mouse_input) app->scheduler.Wakeup(0); return 0;
   case WM_MOUSEMOVE:                   WinInputModule::UpdateMousePosition(lParam, &p, &d); if (MouseMove(p.x, p.y, d.x, d.y) && win->frame_on_mouse_input) app->scheduler.Wakeup(0); return 0;
+  case WM_COMMAND:                     if ((ind = wParam - win->start_msg_id) >= 0) if (ind < win->menu_cmds.size()) ShellRun(win->menu_cmds[ind].c_str()); return 0;
+  case WM_CONTEXTMENU:                 if (win->menu) { GetCursorPos(&cursor); TrackPopupMenu(win->context_menu, TPM_LEFTALIGN|TPM_TOPALIGN, cursor.x, cursor.y, 0, hWnd, NULL); } return 0;
   case WM_PAINT:                       BeginPaint((HWND)screen->id, &ps); if (!FLAGS_target_fps) LFAppFrame(); EndPaint((HWND)screen->id, &ps); return 0;
   case WM_USER:                        if (!FLAGS_target_fps) LFAppFrame(); return 0;
+  case WM_KILLFOCUS:                   app->input.ClearButtonsDown(); return 0;
   default:                             break;
   }
   return DefWindowProc(hWnd, message, wParam, lParam);
@@ -831,8 +838,25 @@ void TouchDevice::AddToolbar(const vector<pair<string, string>>&items) {
 #endif
 }
 
+void Input::ClearButtonsDown() {
+  if (left_shift_down)  { KeyPress(Key::LeftShift,  0);    left_shift_down = 0; }
+  if (right_shift_down) { KeyPress(Key::RightShift, 0);    left_shift_down = 0; }
+  if (left_ctrl_down)   { KeyPress(Key::LeftCtrl,   0);    left_ctrl_down  = 0; }
+  if (right_ctrl_down)  { KeyPress(Key::RightCtrl,  0);    right_ctrl_down = 0; }
+  if (left_cmd_down)    { KeyPress(Key::LeftCmd,    0);    left_cmd_down   = 0; }
+  if (right_cmd_down)   { KeyPress(Key::RightCmd,   0);    right_cmd_down  = 0; }
+  if (mouse_but1_down)  { MouseClick(1, 0, screen->mouse); mouse_but1_down = 0; }
+  if (mouse_but2_down)  { MouseClick(2, 0, screen->mouse); mouse_but2_down = 0; }
+}
+
 int Input::Init() {
   INFO("Input::Init()");
+#ifdef __APPLE__
+  paste_bind = Bind('v', Key::Modifier::Cmd).key);
+#else
+  paste_bind = Bind('v', Key::Modifier::Ctrl);
+#endif
+
 #if defined(LFL_QT)
   impl = new QTInputModule();
 #elif defined(LFL_GLFWINPUT)
@@ -914,11 +938,7 @@ int Input::KeyEventDispatch(InputEvent::Id event, bool down) {
     if (g->toggle_bind.key == event && g->toggle_active.mode != Toggler::OneShot) return 0;
 
     g->events.total++;
-#ifdef __APPLE__
-    if      (event == Bind('v', Key::Modifier::Cmd).key)  { g->Input(Clipboard::Get()); return 1; }
-#else
-    if      (event == Bind('v', Key::Modifier::Ctrl).key) { g->Input(Clipboard::Get()); return 1; }
-#endif
+    if (event == paste_bind.key) { g->Input(Clipboard::Get()); return 1; }
     switch (event) {
       case Key::Backspace: g->Erase();       return 1;
       case Key::Delete:    g->Erase();       return 1;
@@ -981,8 +1001,9 @@ int Input::MouseClick(int button, bool down, const point &p) {
 }
 
 int Input::MouseEventDispatch(InputEvent::Id event, const point &p, int down) {
-  if (event == Mouse::Event::Wheel) screen->mouse_wheel = p;
-  else                              screen->mouse       = p;
+  if      (event == paste_bind.key)      return KeyEventDispatch(event, down);
+  else if (event == Mouse::Event::Wheel) screen->mouse_wheel = p;
+  else                                   screen->mouse       = p;
 
   if (FLAGS_input_debug && down)
     INFO("MouseEvent ", InputEvent::Name(event), " ", screen->mouse.DebugString());

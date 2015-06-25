@@ -164,74 +164,6 @@ struct MouseController {
     virtual int Input(InputEvent::Id, const point &p, int down, int flag);
 };
 
-struct InputModule : public Module {
-    virtual int Init(Window *w) { return 0; }
-};
-
-struct Input : public InputModule {
-    bool left_shift_down=0, right_shift_down=0, left_ctrl_down=0, right_ctrl_down=0;
-    bool left_cmd_down=0, right_cmd_down=0, mouse_but1_down=0, mouse_but2_down=0;
-    vector<Callback> queued_input;
-    mutex queued_input_mutex;
-    InputModule *impl=0;
-
-    void QueueKey(int key, bool down) {
-        ScopedMutex sm(queued_input_mutex);
-        queued_input.push_back(bind([&](){ KeyPress(key, down); }));
-    }
-    void QueueMouseClick(int button, bool down, const point &p) {
-        ScopedMutex sm(queued_input_mutex);
-        queued_input.push_back(bind([&](){ MouseClick(button, down, p); }));
-    }
-    void QueueMouseMovement(const point &p, const point &d) {
-        ScopedMutex sm(queued_input_mutex);
-        queued_input.push_back(bind([&](){ MouseMove(p, d); }));
-    }
-    void QueueMouseWheel(const point &p, const point &d) {
-        ScopedMutex sm(queued_input_mutex);
-        queued_input.push_back(bind([&](){ MouseWheel(p, d); }));
-    }
-    
-    bool ShiftKeyDown() const { return left_shift_down || right_shift_down; }
-    bool CtrlKeyDown() const { return left_ctrl_down || right_ctrl_down; }
-    bool CmdKeyDown() const { return left_cmd_down || right_cmd_down; }
-    bool MouseButton1Down() const { return mouse_but1_down; }
-    bool MouseButton2Down() const { return mouse_but2_down; }
-
-    int Init();
-    int Init(Window*);
-    int Frame(unsigned time);
-    int DispatchQueuedInput();
-
-    int  KeyPress(int key, bool down);
-    int  KeyEventDispatch(InputEvent::Id event, bool down);
-
-    int  MouseMove(const point &p, const point &d);
-    int  MouseWheel(const point &p, const point &d);
-    int  MouseClick(int button, bool down, const point &p);
-    int  MouseEventDispatch(InputEvent::Id event, const point &p, int down);
-
-    static point TransformMouseCoordinate(point p) {
-        if (FLAGS_swap_axis) p = point(screen->width - p.y, p.x);
-        return point(p.x, screen->height - p.y);
-    }
-};
-
-#ifdef LFL_WININPUT
-struct WinApp {
-  HINSTANCE hInst = 0;
-  int nCmdShow = 0;
-  void Setup(HINSTANCE hI, int nCS) { hInst = hI; nCmdShow = nCS; }
-  void CreateClass();
-  int MessageLoop();
-  static LRESULT APIENTRY WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
-};
-struct WinWindow {
-  bool frame_on_keyboard_input = 0, frame_on_mouse_input = 0;
-  point prev_mouse_pos;
-};
-#endif
-
 struct Bind {
     typedef function<void()> CB;
     typedef function<void(unsigned)> TimeCB;
@@ -299,6 +231,79 @@ struct BindMap : public InputController {
     }
     string DebugString() const { string v="{ "; for (auto b : data) StrAppend(&v, b.key, " "); return v + "}"; }
 };
+
+struct InputModule : public Module {
+  virtual int Init(Window *w) { return 0; }
+};
+
+struct Input : public InputModule {
+  bool left_shift_down = 0, right_shift_down = 0, left_ctrl_down = 0, right_ctrl_down = 0;
+  bool left_cmd_down = 0, right_cmd_down = 0, mouse_but1_down = 0, mouse_but2_down = 0;
+  vector<Callback> queued_input;
+  mutex queued_input_mutex;
+  InputModule *impl = 0;
+  Bind paste_bind;
+
+  void QueueKey(int key, bool down) {
+    ScopedMutex sm(queued_input_mutex);
+    queued_input.push_back(bind([&]() { KeyPress(key, down); }));
+  }
+  void QueueMouseClick(int button, bool down, const point &p) {
+    ScopedMutex sm(queued_input_mutex);
+    queued_input.push_back(bind([&]() { MouseClick(button, down, p); }));
+  }
+  void QueueMouseMovement(const point &p, const point &d) {
+    ScopedMutex sm(queued_input_mutex);
+    queued_input.push_back(bind([&]() { MouseMove(p, d); }));
+  }
+  void QueueMouseWheel(const point &p, const point &d) {
+    ScopedMutex sm(queued_input_mutex);
+    queued_input.push_back(bind([&]() { MouseWheel(p, d); }));
+  }
+
+  bool ShiftKeyDown() const { return left_shift_down || right_shift_down; }
+  bool CtrlKeyDown() const { return left_ctrl_down || right_ctrl_down; }
+  bool CmdKeyDown() const { return left_cmd_down || right_cmd_down; }
+  bool MouseButton1Down() const { return mouse_but1_down; }
+  bool MouseButton2Down() const { return mouse_but2_down; }
+  void ClearButtonsDown();
+
+  int Init();
+  int Init(Window*);
+  int Frame(unsigned time);
+  int DispatchQueuedInput();
+
+  int  KeyPress(int key, bool down);
+  int  KeyEventDispatch(InputEvent::Id event, bool down);
+
+  int  MouseMove(const point &p, const point &d);
+  int  MouseWheel(const point &p, const point &d);
+  int  MouseClick(int button, bool down, const point &p);
+  int  MouseEventDispatch(InputEvent::Id event, const point &p, int down);
+
+  static point TransformMouseCoordinate(point p) {
+    if (FLAGS_swap_axis) p = point(screen->width - p.y, p.x);
+    return point(p.x, screen->height - p.y);
+  }
+};
+
+#ifdef LFL_WININPUT
+struct WinApp {
+  HINSTANCE hInst = 0;
+  int nCmdShow = 0;
+  void Setup(HINSTANCE hI, int nCS) { hInst = hI; nCmdShow = nCS; }
+  void CreateClass();
+  int MessageLoop();
+  static LRESULT APIENTRY WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
+};
+struct WinWindow {
+  bool menubar = 0, frame_on_keyboard_input = 0, frame_on_mouse_input = 0;
+  point prev_mouse_pos;
+  int start_msg_id = WM_USER + 100;
+  HMENU menu = 0, context_menu = 0;
+  vector<string> menu_cmds;
+};
+#endif
 
 struct Shell {
     typedef function<void(const vector<string>&)> CB;

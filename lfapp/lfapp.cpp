@@ -192,7 +192,7 @@ DEFINE_bool(lfapp_debug, false, "Enable debug mode");
 DEFINE_bool(cursor_grabbed, false, "Center cursor every frame");
 DEFINE_bool(daemonize, false, "Daemonize server");
 DEFINE_bool(rcon_debug, false, "Print rcon commands");
-DEFINE_bool(frame_debug, true, "Print each frame");
+DEFINE_bool(frame_debug, false, "Print each frame");
 DEFINE_string(nameserver, "", "Default namesver");
 DEFINE_bool(max_rlimit_core, true, "Max core dump rlimit");
 DEFINE_bool(max_rlimit_open_files, false, "Max number of open files rlimit");
@@ -902,12 +902,25 @@ void Application::LaunchNativeMenu(const string &title) {
 }
 
 void Application::AddNativeMenu(const string &title, const vector<pair<string, string>>&items) {
+#if defined(LFL_IPHONE)
   vector<const char *> k, v;
   for (auto &i : items) { k.push_back(i.first.c_str()); v.push_back(i.second.c_str()); }
-#if defined(LFL_IPHONE)
   iPhoneCreateNativeMenu(title.c_str(), items.size(), &k[0], &v[0]);
 #elif defined(LFL_OSXVIDEO)
+  vector<const char *> k, v;
+  for (auto &i : items) { k.push_back(i.first.c_str()); v.push_back(i.second.c_str()); }
   OSXCreateNativeMenu(title.c_str(), items.size(), &k[0], &v[0]);
+#elif defined(LFL_WINVIDEO)
+  WinWindow *win = static_cast<WinWindow*>(screen->impl);
+  if (!win->menu) { win->menu = CreateMenu(); win->context_menu = CreatePopupMenu(); }
+  HMENU hAddMenu = CreatePopupMenu();
+  for (auto &i : items) {
+    AppendMenu(hAddMenu, MF_STRING, win->start_msg_id + win->menu_cmds.size(), i.first.c_str());
+    win->menu_cmds.push_back(i.second);
+  }
+  AppendMenu(win->menu,         MF_STRING | MF_POPUP, (UINT)hAddMenu, title.c_str());
+  AppendMenu(win->context_menu, MF_STRING | MF_POPUP, (UINT)hAddMenu, title.c_str());
+  if (win->menubar) SetMenu((HWND)screen->id, win->menu);
 #endif
 }
 
@@ -1252,6 +1265,7 @@ void FrameScheduler::Wakeup(void *opaque) {
     OSXTriggerFrame(screen->id);
 #elif defined(LFL_WININPUT)
     InvalidateRect((HWND)screen->id, NULL, 0);
+    // PostMessage((HWND)screen->id, WM_USER, 0, 0);
 #elif defined(LFL_IPHONEINPUT)
     iPhoneTriggerFrame(screen->id);
 #elif defined(LFL_GLFWINPUT)

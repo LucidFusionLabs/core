@@ -226,7 +226,11 @@ const int GraphicsDevice::Fill              = GL_FILL;
 const int GraphicsDevice::Line              = GL_LINE;
 const int GraphicsDevice::Point             = GL_POINT;
 const int GraphicsDevice::Polygon           = GL_POLYGON;
+#ifdef __APPLE__
 const int GraphicsDevice::GLPreferredBuffer = GL_UNSIGNED_INT_8_8_8_8_REV;
+#else
+const int GraphicsDevice::GLPreferredBuffer = GL_UNSIGNED_BYTE;
+#endif
 const int GraphicsDevice::GLInternalFormat  = GL_RGBA;
 #endif
 
@@ -1516,12 +1520,18 @@ void Window::Reshape(int w, int h) {
   Window::MakeCurrent(screen);
 #elif defined(LFL_WXWIDGETS)
   ((wxGLCanvas*)screen->id)->SetSize(w, h);
+#elif defined(LFL_OSXVIDEO)
+  OSXSetWindowSize(id, w, h);
+#elif defined(LFL_WINVIDEO)
+  WinWindow *win = static_cast<WinWindow*>(screen->impl);
+  long lStyle = GetWindowLong((HWND)screen->id, GWL_STYLE);
+  RECT r = { 0, 0, w, h };
+  AdjustWindowRect(&r, lStyle, win->menubar);
+  SetWindowPos((HWND)screen->id, 0, 0, 0, r.right-r.left, r.bottom-r.top, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
 #elif defined(LFL_GLFWVIDEO)
   glfwSetWindowSize((GLFWwindow*)id, w, h);
 #elif defined(LFL_SDLVIDEO)
   SDL_SetWindowSize((SDL_Window*)id, w, h);
-#elif defined(LFL_OSXVIDEO)
-  OSXSetWindowSize(id, w, h);
 #endif
 }
 
