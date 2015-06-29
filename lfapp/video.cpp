@@ -2131,7 +2131,7 @@ void DepthTexture::Resize(int W, int H, int DF, int flag) {
 void FrameBuffer::Resize(int W, int H, int flag) {
   width=W; height=H;
   if (!ID && (flag & Flag::CreateGL)) {
-    glGenFramebuffers(1, &ID);
+    glGenFramebuffersEXT(1, &ID);
     if (flag & Flag::CreateTexture)      AllocTexture(&tex, !(flag & Flag::NoClampToEdge));
     if (flag & Flag::CreateDepthTexture) AllocDepthTexture(&depth);
   } else {
@@ -2139,7 +2139,7 @@ void FrameBuffer::Resize(int W, int H, int flag) {
     depth.Resize(width, height);
   }
   Attach(tex.ID, depth.ID);
-  int status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+  int status = glCheckFramebufferStatusEXT(GL_FRAMEBUFFER);
   if (status != GL_FRAMEBUFFER_COMPLETE) ERROR("FrameBuffer status ", status);
   if (flag & Flag::ReleaseFB) Release();
 }
@@ -2154,16 +2154,16 @@ void FrameBuffer::AllocTexture(Texture *out, bool clamp_to_edge) {
   }
 }
 
-void FrameBuffer::Release() { glBindFramebuffer(GL_FRAMEBUFFER, screen->gd->default_framebuffer); }
+void FrameBuffer::Release() { glBindFramebufferEXT(GL_FRAMEBUFFER, screen->gd->default_framebuffer); }
 void FrameBuffer::Attach(int ct, int dt) {
-  glBindFramebuffer(GL_FRAMEBUFFER, ID);
+  glBindFramebufferEXT(GL_FRAMEBUFFER, ID);
   if (ct) {
     tex.ID = ct;
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tex.ID, 0);
+    glFramebufferTexture2DEXT(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tex.ID, 0);
   }
   if (dt) {
     depth.ID = dt;
-    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depth.ID);
+    glFramebufferRenderbufferEXT(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depth.ID);
   }
 }
 
@@ -2344,7 +2344,7 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR lpCmdLine, int nC
   vector<const char *> av;
   vector<string> a(1);
   a[0].resize(1024);
-  GetModuleFileName(hInst, &(a[0])[0], a.size());
+  GetModuleFileName(hInst, &(a[0])[0], a[0].size());
   LFL::StringWordIter word_iter(lpCmdLine);
   for (string word = IterNextString(&word_iter); !word_iter.Done(); word = IterNextString(&word_iter)) a.push_back(word);
   for (auto &i : a) av.push_back(i.c_str());

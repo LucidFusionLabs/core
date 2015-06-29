@@ -203,7 +203,7 @@ DEFINE_int(sample_secs, 3, "Seconds of RingBuf audio");
 DEFINE_int(chans_in, -1, "Audio input channels");
 DEFINE_int(chans_out, -1, "Audio output channels");
 DEFINE_int(target_fps, 0, "Max frames per second");
-DEFINE_bool(open_console, 1, "Open console on win32");
+DEFINE_bool(open_console, 0, "Open console on win32");
 
 void Allocator::Reset() { FATAL(Name(), ": reset"); }
 Allocator *Allocator::Default() { return Singleton<MallocAlloc>::Get(); }

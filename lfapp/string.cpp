@@ -548,7 +548,8 @@ const char *NextProto(const StringPiece &text, bool final, int *outlen) {
 template <class X> 
 StringWordIterT<X>::StringWordIterT(const X *B, int S, int (*delim)(int), int (*quote)(int), int F)
     : in(B), size(S), IsSpace(delim ? delim : isspace), IsQuote(quote), flag(F) {
-    if (in) next_offset += LengthChar(in+cur_offset, IsSpace, size >= 0 ? size-cur_offset : -1);
+    if (!in || !size) next_offset = -1;
+    else              next_offset += LengthChar(in + cur_offset, IsSpace, size >= 0 ? size - cur_offset : -1);
 }
 
 template <class X> const X *StringWordIterT<X>::Next() {

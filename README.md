@@ -48,6 +48,7 @@ LFL builds easily for Windows, Linux, Mac OSX, iPhone and Android.
         [Configure]
         [select Visual Studio 2015 generator]
         [uncheck USE_MSVC_RUNTIME_LIBRARY_DLL]
+        [set CMAKE_GENERATOR_TOOLSET v140_xp]
         [Generate]
 
 * Install ActivePerl
