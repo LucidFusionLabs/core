@@ -46,17 +46,17 @@
 #define glReadPixels(a,b,c,d,e,f,g)
 #define glTexImage2D(a,b,c,d,e,f,g,h,i)
 #define glTexSubImage2D(a,b,c,d,e,f,g,h,i)
+#define glTexParameteri(a,b,c)
 #define glGetTexImage(a,b,c,d,e)
 #define glGetTexLevelParameteriv(a,b,c,d)
-#define glTexParameteri(a,b,c)
-#define glGenRenderbuffers(a,b)
-#define glGenFramebuffers(a,b)
-#define glBindRenderbuffer(a,b)
-#define glBindFramebuffer(a,b)
-#define glRenderbufferStorage(a,b,c,d)
-#define glFramebufferRenderbuffer(a,b,c,d)
-#define glFramebufferTexture2D(a,b,c,d,e)
-#define glCheckFramebufferStatus(a) 0
+#define glGenRenderbuffersEXT(a,b)
+#define glGenFramebuffersEXT(a,b)
+#define glBindRenderbufferEXT(a,b)
+#define glBindFramebufferEXT(a,b)
+#define glRenderbufferStorageEXT(a,b,c,d)
+#define glFramebufferRenderbufferEXT(a,b,c,d)
+#define glFramebufferTexture2DEXT(a,b,c,d,e)
+#define glCheckFramebufferStatusEXT(a) 0
 #define GL_FRAMEBUFFER 0
 #define GL_FRAMEBUFFER_BINDING_OES 0
 #define GL_LUMINANCE 0
@@ -2118,11 +2118,11 @@ void Texture::ScreenshotBox(const Box &b, int flag) {
 void DepthTexture::Resize(int W, int H, int DF, int flag) {
   if (DF) df = DF;
   width=W; height=H;
-  if (!ID && (flag & Flag::CreateGL)) glGenRenderbuffers(1, &ID);
+  if (!ID && (flag & Flag::CreateGL)) glGenRenderbuffersEXT(1, &ID);
   int opengl_width = NextPowerOfTwo(width), opengl_height = NextPowerOfTwo(height);
   if (ID) {
-    glBindRenderbuffer(GL_RENDERBUFFER, ID);
-    glRenderbufferStorage(GL_RENDERBUFFER, Depth::OpenGLID(df), opengl_width, opengl_height);
+    glBindRenderbufferEXT(GL_RENDERBUFFER, ID);
+    glRenderbufferStorageEXT(GL_RENDERBUFFER, Depth::OpenGLID(df), opengl_width, opengl_height);
   }
 }
 

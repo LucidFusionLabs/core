@@ -898,4 +898,16 @@ string SMTP::EmailFrom(const string &message) {
   return mail_from.substr(lt+1, gt-lt-1);
 }
 
+/* MultiProcessResource */
+
+bool MultiProcessResource::Read(const MultiProcessBuffer &mpb, int type, Serializable *out) {
+  CHECK(mpb.buf);
+  Serializable::ConstStream in(mpb.buf, mpb.len);
+  Serializable::Header hdr;
+  hdr.In(&in);
+  CHECK_EQ(type, hdr.id);
+  MultiProcessResource::File content_res;
+  return out->Read(&in) == 0;
+}
+
 }; // namespace LFL

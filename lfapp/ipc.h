@@ -35,35 +35,44 @@ struct ProcessPipe {
     int Close();
 };
 
-struct InterProcessResource {
-    int id=-1;
+struct MultiProcessBuffer {
     string url;
     char *buf=0;
-    const int len=0;
-    InterProcessResource(int size, const string &ipr_url=string());
-    ~InterProcessResource();
+    int len=0, impl=-1, transfer_socket=-1;
+    MultiProcessBuffer() {}
+    MultiProcessBuffer(Connection *c, const InterProcessProtocol::ResourceHandle &h);
+    virtual ~MultiProcessBuffer();
+    virtual void Close();
+    virtual bool Open();
+    bool Create(const Serializable &s) { 
+        len = Serializable::Header::size + s.Size();
+        if (Open()) { s.ToString(buf, len, 0); return true; }
+        return false;
+    }
 };
 
-struct ProcessAPIServer {
-    typedef function<void(const InterProcessProtocol::TextureResource&)> LoadResourceCompleteCB;
-    struct Query : public LFL::Query {
-        ProcessAPIServer *parent;
-        Query(ProcessAPIServer *P) : parent(P) {}
+struct ProcessAPIClient {
+    typedef function<void(const MultiProcessResource::Texture&)> LoadResourceCompleteCB;
+    struct ConnectionHandler : public Connection::Handler {
+        ProcessAPIClient *parent;
+        ConnectionHandler(ProcessAPIClient *P) : parent(P) {}
         int Read(Connection *c);
+        bool ReadTexture(const InterProcessProtocol::LoadResourceResponse&, const MultiProcessBuffer&, MultiProcessResource::Texture *out);
     };
     int pid=0;
     Connection *conn=0;
     unsigned short seq=0;
     unordered_map<unsigned short, LoadResourceCompleteCB> reqmap;
-    void Start(const string &client_program);
+
+    void StartServer(const string &server_program);
     void LoadResource(const string &content, const string &fn, const LoadResourceCompleteCB &cb);
 };
 
-struct ProcessAPIClient {
-    struct Query : public LFL::Query {};
+struct ProcessAPIServer {
     Connection *conn=0;
     void Start(const string &socket_name);
     void HandleMessagesLoop();
+    Texture *LoadTexture(const InterProcessProtocol::LoadResourceRequest&, const MultiProcessBuffer&, Texture *orig, Texture *scaled);
 };
 
 }; // namespace LFL

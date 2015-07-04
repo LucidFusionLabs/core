@@ -27,19 +27,21 @@
 #include <signal.h>
 #include <sys/types.h>
 #include <sys/shm.h>
+#include <sys/mman.h>
 #endif
 
 namespace LFL {
 #ifndef WIN32
-int NTService::Install  (const char *name, const char *path) { FATAL("%s", "not implemented"); }
-int NTService::Uninstall(const char *name)                   { FATAL("%s", "not implemented"); }
+int NTService::Install  (const char *name, const char *path) { FATAL("not implemented"); }
+int NTService::Uninstall(const char *name)                   { FATAL("not implemented"); }
 int NTService::WrapMain (const char *name, MainCB main_cb, int argc, const char **argv) { return main_cb(argc, argv); }
 #endif
 #if defined(LFL_MOBILE)
-int ProcessPipe::OpenPTY(const char **argv) { FATAL("%s", "not implemented"); }
-int ProcessPipe::Open   (const char **argv) { FATAL("%s", "not implemented"); }
-int ProcessPipe::Close()                    { FATAL("%s", "not implemented"); }
+int ProcessPipe::OpenPTY(const char **argv) { FATAL("not implemented"); }
+int ProcessPipe::Open   (const char **argv) { FATAL("not implemented"); }
+int ProcessPipe::Close()                    { FATAL("not implemented"); }
 #elif defined(WIN32)
+
 MainCB nt_service_main = 0;
 const char *nt_service_name = 0;
 SERVICE_STATUS_HANDLE nt_service_status_handle = 0;
@@ -47,202 +49,237 @@ SERVICE_STATUS_HANDLE nt_service_status_handle = 0;
 BOOL UpdateSCMStatus(DWORD dwCurrentState, DWORD dwWin32ExitCode,
                      DWORD dwServiceSpecificExitCode, DWORD dwCheckPoint,
                      DWORD dwWaitHint) {
-    SERVICE_STATUS serviceStatus;
-    serviceStatus.dwServiceType = SERVICE_WIN32_OWN_PROCESS;
-    serviceStatus.dwCurrentState = dwCurrentState;
-    serviceStatus.dwServiceSpecificExitCode = dwServiceSpecificExitCode;
-    serviceStatus.dwCheckPoint = dwCheckPoint;
-    serviceStatus.dwWaitHint = dwWaitHint;
+  SERVICE_STATUS serviceStatus;
+  serviceStatus.dwServiceType = SERVICE_WIN32_OWN_PROCESS;
+  serviceStatus.dwCurrentState = dwCurrentState;
+  serviceStatus.dwServiceSpecificExitCode = dwServiceSpecificExitCode;
+  serviceStatus.dwCheckPoint = dwCheckPoint;
+  serviceStatus.dwWaitHint = dwWaitHint;
 
-    if (dwCurrentState == SERVICE_START_PENDING) serviceStatus.dwControlsAccepted = 0;
-    else serviceStatus.dwControlsAccepted = SERVICE_ACCEPT_STOP |SERVICE_ACCEPT_SHUTDOWN;
+  if (dwCurrentState == SERVICE_START_PENDING) serviceStatus.dwControlsAccepted = 0;
+  else serviceStatus.dwControlsAccepted = SERVICE_ACCEPT_STOP |SERVICE_ACCEPT_SHUTDOWN;
 
-    if (dwServiceSpecificExitCode == 0) serviceStatus.dwWin32ExitCode = dwWin32ExitCode;
-    else serviceStatus.dwWin32ExitCode = ERROR_SERVICE_SPECIFIC_ERROR;
+  if (dwServiceSpecificExitCode == 0) serviceStatus.dwWin32ExitCode = dwWin32ExitCode;
+  else serviceStatus.dwWin32ExitCode = ERROR_SERVICE_SPECIFIC_ERROR;
 
-    return SetServiceStatus(nt_service_status_handle, &serviceStatus);
+  return SetServiceStatus(nt_service_status_handle, &serviceStatus);
 }
 
 void HandleNTServiceControl(DWORD controlCode) {
-    if (controlCode == SERVICE_CONTROL_SHUTDOWN || controlCode == SERVICE_CONTROL_STOP) {
-        UpdateSCMStatus(SERVICE_STOPPED, NO_ERROR, 0, 0, 0);
-        app->run = 0;
-    } else {
-        UpdateSCMStatus(SERVICE_RUNNING, NO_ERROR, 0, 0, 0);
-    }
+  if (controlCode == SERVICE_CONTROL_SHUTDOWN || controlCode == SERVICE_CONTROL_STOP) {
+    UpdateSCMStatus(SERVICE_STOPPED, NO_ERROR, 0, 0, 0);
+    app->run = 0;
+  } else {
+    UpdateSCMStatus(SERVICE_RUNNING, NO_ERROR, 0, 0, 0);
+  }
 }
 
 int DispatchNTServiceMain(int argc, char **argv) {
-    nt_service_status_handle = RegisterServiceCtrlHandler(nt_service_name, (LPHANDLER_FUNCTION)HandleNTServiceControl);
-    if (!nt_service_status_handle) { ERROR("RegisterServiceCtrlHandler: ", GetLastError()); return -1; }
+  nt_service_status_handle = RegisterServiceCtrlHandler(nt_service_name, (LPHANDLER_FUNCTION)HandleNTServiceControl);
+  if (!nt_service_status_handle) { ERROR("RegisterServiceCtrlHandler: ", GetLastError()); return -1; }
 
-    if (!UpdateSCMStatus(SERVICE_RUNNING, NO_ERROR, 0, 0, 0)) {
-        ERROR("UpdateSCMStatus: ", GetLastError()); return -1;
-    }
-    
-    return nt_service_main(argc, (const char **)argv);
+  if (!UpdateSCMStatus(SERVICE_RUNNING, NO_ERROR, 0, 0, 0)) {
+    ERROR("UpdateSCMStatus: ", GetLastError()); return -1;
+  }
+
+  return nt_service_main(argc, (const char **)argv);
 }
 
 int NTService::Install(const char *name, const char *path) {
-    SC_HANDLE schSCManager = OpenSCManager(0, 0, SC_MANAGER_CREATE_SERVICE);
-    if (!schSCManager) { ERROR("OpenSCManager: ", GetLastError()); return -1; }
+  SC_HANDLE schSCManager = OpenSCManager(0, 0, SC_MANAGER_CREATE_SERVICE);
+  if (!schSCManager) { ERROR("OpenSCManager: ", GetLastError()); return -1; }
 
-    SC_HANDLE schService = CreateService( 
-        schSCManager,    	  /* SCManager database      */ 
-        name,			      /* name of service         */ 
-        name,                 /* service name to display */ 
-        SERVICE_ALL_ACCESS,   /* desired access          */ 
-        SERVICE_WIN32_SHARE_PROCESS|SERVICE_INTERACTIVE_PROCESS, 
-        SERVICE_DEMAND_START, /* start type              */ 
-        SERVICE_ERROR_NORMAL, /* error control type      */ 
-        path,			      /* service's binary        */ 
-        0,                    /* no load ordering group  */ 
-        0,                    /* no tag identifier       */ 
-        0,                    /* no dependencies         */ 
-        0,                    /* LocalSystem account     */ 
-        0);                   /* no password             */
-    if (!schService) { ERROR("CreateService: ", GetLastError()); return -1; }
+  SC_HANDLE schService = CreateService(schSCManager,         /* SCManager database      */ 
+                                       name,			           /* name of service         */ 
+                                       name,                 /* service name to display */ 
+                                       SERVICE_ALL_ACCESS,   /* desired access          */ 
+                                       SERVICE_WIN32_SHARE_PROCESS|SERVICE_INTERACTIVE_PROCESS, 
+                                       SERVICE_DEMAND_START, /* start type              */ 
+                                       SERVICE_ERROR_NORMAL, /* error control type      */ 
+                                       path,			           /* service's binary        */ 
+                                       0,                    /* no load ordering group  */ 
+                                       0,                    /* no tag identifier       */ 
+                                       0,                    /* no dependencies         */ 
+                                       0,                    /* LocalSystem account     */ 
+                                       0);                   /* no password             */
+  if (!schService) { ERROR("CreateService: ", GetLastError()); return -1; }
 
-    INFO("service ", name, " installed - see Control Panel > Services");
-    CloseServiceHandle(schSCManager);
-    return 0;
+  INFO("service ", name, " installed - see Control Panel > Services");
+  CloseServiceHandle(schSCManager);
+  return 0;
 }
 
 int NTService::Uninstall(const char *name) {
-    SC_HANDLE schSCManager = OpenSCManager(0, 0, SC_MANAGER_CREATE_SERVICE);
-    if (!schSCManager) { ERROR("OpenSCManager: ", GetLastError()); return -1; }
+  SC_HANDLE schSCManager = OpenSCManager(0, 0, SC_MANAGER_CREATE_SERVICE);
+  if (!schSCManager) { ERROR("OpenSCManager: ", GetLastError()); return -1; }
 
-    SC_HANDLE schService = OpenService(schSCManager, name, SERVICE_ALL_ACCESS);
-    if (!schService) { ERROR("OpenService: ", GetLastError()); return -1; }
+  SC_HANDLE schService = OpenService(schSCManager, name, SERVICE_ALL_ACCESS);
+  if (!schService) { ERROR("OpenService: ", GetLastError()); return -1; }
 
-    if (!DeleteService(schService)) { ERROR("DeleteService: ", GetLastError()); return -1; }
+  if (!DeleteService(schService)) { ERROR("DeleteService: ", GetLastError()); return -1; }
 
-    INFO("service ", name, " uninstalled");
-    CloseServiceHandle(schService);
-    CloseServiceHandle(schSCManager);
-    return 0;
+  INFO("service ", name, " uninstalled");
+  CloseServiceHandle(schService);
+  CloseServiceHandle(schSCManager);
+  return 0;
 }
 
 int NTService::WrapMain(const char *name, MainCB main_cb, int argc, const char **argv) {
-    nt_service_name = name;
-    nt_service_main = main_cb;
+  nt_service_name = name;
+  nt_service_main = main_cb;
 
-    SERVICE_TABLE_ENTRY serviceTable[] = {
-        { (LPSTR)name, (LPSERVICE_MAIN_FUNCTION)DispatchNTServiceMain},
-        { 0, 0 }
-    };
+  SERVICE_TABLE_ENTRY serviceTable[] = {
+    { (LPSTR)name, (LPSERVICE_MAIN_FUNCTION)DispatchNTServiceMain},
+    { 0, 0 }
+  };
 
-    if (!StartServiceCtrlDispatcher(serviceTable)) {
-        ERROR("StartServiceCtrlDispatcher ", GetLastError());
-        return -1;
-    }
-    return 0;
+  if (!StartServiceCtrlDispatcher(serviceTable)) {
+    ERROR("StartServiceCtrlDispatcher ", GetLastError());
+    return -1;
+  }
+  return 0;
 }
 
 int ProcessPipe::Close() { return 0; }
 int ProcessPipe::OpenPTY(const char **argv) { return Open(argv); }
 int ProcessPipe::Open(const char **argv) {
-    SECURITY_ATTRIBUTES sa;
-    memset(&sa, 0, sizeof(sa));
-    sa.nLength = sizeof(sa);
-    sa.bInheritHandle = 1;
-    HANDLE pipeinR, pipeinW, pipeoutR, pipeoutW, h;
-    if (!CreatePipe(&pipeinR, &pipeinW, &sa, 0)) return -1;
-    if (!CreatePipe(&pipeoutR, &pipeoutW, &sa, 0)) { CloseHandle(pipeinR); CloseHandle(pipeinW); return -1; }
+  SECURITY_ATTRIBUTES sa;
+  memset(&sa, 0, sizeof(sa));
+  sa.nLength = sizeof(sa);
+  sa.bInheritHandle = 1;
+  HANDLE pipeinR, pipeinW, pipeoutR, pipeoutW, h;
+  if (!CreatePipe(&pipeinR, &pipeinW, &sa, 0)) return -1;
+  if (!CreatePipe(&pipeoutR, &pipeoutW, &sa, 0)) { CloseHandle(pipeinR); CloseHandle(pipeinW); return -1; }
 
-    STARTUPINFO si;
-    memset(&si, 0, sizeof(si));
-    si.dwFlags = STARTF_USESHOWWINDOW | STARTF_USESTDHANDLES;
-    si.wShowWindow = SW_HIDE;
-    si.hStdInput = pipeoutR;
-    si.hStdOutput = pipeinW;
-    si.hStdError = pipeinW;
+  STARTUPINFO si;
+  memset(&si, 0, sizeof(si));
+  si.dwFlags = STARTF_USESHOWWINDOW | STARTF_USESTDHANDLES;
+  si.wShowWindow = SW_HIDE;
+  si.hStdInput = pipeoutR;
+  si.hStdOutput = pipeinW;
+  si.hStdError = pipeinW;
 
-    PROCESS_INFORMATION pi;
-    if (!CreateProcess(0, (LPSTR)argv[0], 0, 0, 1, CREATE_NEW_PROCESS_GROUP, 0, 0, &si, &pi)) return -1;
-    CloseHandle(pi.hThread);
-    CloseHandle(pipeinW);
-    CloseHandle(pipeoutR);
+  PROCESS_INFORMATION pi;
+  if (!CreateProcess(0, (LPSTR)argv[0], 0, 0, 1, CREATE_NEW_PROCESS_GROUP, 0, 0, &si, &pi)) return -1;
+  CloseHandle(pi.hThread);
+  CloseHandle(pipeinW);
+  CloseHandle(pipeoutR);
 
-    in = fdopen(_open_osfhandle((long)pipeinR, O_TEXT), "r"); // leaks ?
-    out = fdopen(_open_osfhandle((long)pipeoutW, O_TEXT), "w");
-    return 0;
+  in = fdopen(_open_osfhandle((long)pipeinR, O_TEXT), "r"); // leaks ?
+  out = fdopen(_open_osfhandle((long)pipeoutW, O_TEXT), "w");
+  return 0;
 }
-InterProcessResource::InterProcessResource(int size, const string &u) : len(size), url(u) {}
-InterProcessResource::~InterProcessResource() {}
-#else /* WIN32 */
-int ProcessPipe::Open(const char **argv) {
-    int pipein[2], pipeout[2], ret;
-    if (pipe(pipein) < 0) return -1;
-    if (pipe(pipeout) < 0) { close(pipein[0]); close(pipein[1]); return -1; }
 
-    if ((ret = fork())) { 
-        close(pipein[1]);
-        close(pipeout[0]);
-        if (ret < 0) { close(pipein[0]); close(pipeout[1]); return -1; }
-        in = fdopen(pipein[0], "r");
-        out = fdopen(pipeout[1], "w");
-    } else {
-        close(pipein[0]);
-        close(pipeout[1]);
-        close(0);
-        close(1);
-        close(2);
-        dup2(pipein[1], 2);
-        dup2(pipein[1], 1);
-        dup2(pipeout[0], 0);
-        execvp(argv[0], (char*const*)argv);
-    }
-    return 0;
+MultiProcessBuffer::MultiProcessBuffer(Connection *c, const InterProcessProtocol::ResourceHandle &h) : url(h.url), len(h.len) {}
+MultiProcessBuffer::~MultiProcessBuffer() {}
+bool MultiProcessBuffer::Open() { return 0; }
+void MultiProcessBuffer::Close() {}
+
+#else /* WIN32 */
+
+int ProcessPipe::Open(const char **argv) {
+  int pipein[2], pipeout[2], ret;
+  if (pipe(pipein) < 0) return -1;
+  if (pipe(pipeout) < 0) { close(pipein[0]); close(pipein[1]); return -1; }
+
+  if ((ret = fork())) { 
+    close(pipein[1]);
+    close(pipeout[0]);
+    if (ret < 0) { close(pipein[0]); close(pipeout[1]); return -1; }
+    in = fdopen(pipein[0], "r");
+    out = fdopen(pipeout[1], "w");
+  } else {
+    close(pipein[0]);
+    close(pipeout[1]);
+    close(0);
+    close(1);
+    close(2);
+    dup2(pipein[1], 2);
+    dup2(pipein[1], 1);
+    dup2(pipeout[0], 0);
+    execvp(argv[0], (char*const*)argv);
+  }
+  return 0;
 }
 
 extern "C" pid_t forkpty(int *, char *, struct termios *, struct winsize *);
 int ProcessPipe::OpenPTY(const char **argv) {
-    // struct termios term;
-    // struct winsize win;
-    char name[PATH_MAX];
-    int fd = -1;
-    if ((pid = forkpty(&fd, name, 0, 0))) {
-        if (pid < 0) { close(fd); return -1; }
-        fcntl(fd, F_SETFL, O_NONBLOCK);
-        in = fdopen(fd, "r");
-        out = fdopen(fd, "w");
-    } else {
-        execvp(argv[0], (char*const*)argv);
-    }
-    return 0;
+  // struct termios term;
+  // struct winsize win;
+  char name[PATH_MAX];
+  int fd = -1;
+  if ((pid = forkpty(&fd, name, 0, 0))) {
+    if (pid < 0) { close(fd); return -1; }
+    fcntl(fd, F_SETFL, O_NONBLOCK);
+    in = fdopen(fd, "r");
+    out = fdopen(fd, "w");
+  } else {
+    execvp(argv[0], (char*const*)argv);
+  }
+  return 0;
 }
 
 int ProcessPipe::Close() {
-    if (pid) { kill(pid, SIGHUP); pid = 0; }
-    if (in)  { fclose(in);        in  = 0; }
-    if (out) { fclose(out);       out = 0; }
-    return 0;
+  if (pid) { kill(pid, SIGHUP); pid = 0; }
+  if (in)  { fclose(in);        in  = 0; }
+  if (out) { fclose(out);       out = 0; }
+  return 0;
 }
 
-static int ShmKeyFromInterProcessResourceURL(const string &u) {
-    static string shm_url = "shm://";
-    CHECK(PrefixMatch(u, shm_url));
-    return atoi(u.c_str() + shm_url.size());
+#if 1
+static string MultiProcessBufferURL = "fd://transferred";
+MultiProcessBuffer::MultiProcessBuffer(Connection *c, const InterProcessProtocol::ResourceHandle &h) : url(h.url), len(h.len) {
+  if (url == MultiProcessBufferURL) swap(impl, c->transferred_socket);
 }
-
-InterProcessResource::~InterProcessResource() {
-    if (buf)     shmdt(buf);
-    if (id >= 0) shmctl(id, IPC_RMID, NULL);
+MultiProcessBuffer::~MultiProcessBuffer() {
+  if (buf && buf != MAP_FAILED) munmap(buf, len);
+  if (impl >= 0) close(impl);
 }
-
-InterProcessResource::InterProcessResource(int size, const string &u) : len(size), url(u) {
-    CHECK(len);
-    int key = url.empty() ? rand() : ShmKeyFromInterProcessResourceURL(url);
-    if ((id = shmget(key, size, url.empty() ? (IPC_CREAT | 0600) : 0400)) < 0)
-        FATAL("id=", id, ", size=", size, ", url=", url, ": ", strerror(errno));
-
-    CHECK_GE(id, 0);
-    buf = reinterpret_cast<char*>(shmat(id, NULL, 0));
-    CHECK(buf);
-    CHECK_NE((char*)-1, buf);
-    if (url.empty()) url = StrCat("shm://", key);
+void MultiProcessBuffer::Close() {}
+bool MultiProcessBuffer::Open() {
+  bool read_only = url.size();
+  if (!len || (url.size() && impl < 0)) return ERRORv("mpb open url=", url, " len=", len, " fd=", impl);
+  if (url.empty()) {
+    CHECK_EQ(-1, impl);
+#ifdef __APPLE__
+    string dir = "/var/tmp/";
+#else
+    string dir = app->dldir;
+#endif
+    string path = StrCat(dir, app->name, "_mpb.XXXXXXXX");
+    if ((impl = open(mktemp(&path[0]), O_RDWR|O_CREAT|O_EXCL, 0600)) < 0) return ERRORv(false, "open ", path);
+    if (unlink(path.c_str())) return ERRORv(false, "unlink ", path);
+    if (ftruncate(impl, len)) return ERRORv(false, "ftruncate ", path, " ", len);
+    url = MultiProcessBufferURL;
+    transfer_socket = impl;
+  }
+  if ((buf = (char*)mmap(0, len, PROT_READ | (read_only ? 0 : PROT_WRITE), MAP_SHARED, impl, 0)) == MAP_FAILED) return ERRORv(false, "mmap ", impl); 
+  return true;
 }
+#else
+static int ShmKeyFromMultiProcessBufferURL(const string &u) {
+  static string shm_url = "shm://";
+  CHECK(PrefixMatch(u, shm_url));
+  return atoi(u.c_str() + shm_url.size());
+}
+MultiProcessBuffer::MultiProcessBuffer(Connection*, const InterProcessProtocol::ResourceHandle &h) : url(h.url), len(h.len) {}
+MultiProcessBuffer::~MultiProcessBuffer() { if (buf) shmdt(buf); }
+void MultiProcessBuffer::Close() { if (impl >= 0) shmctl(impl, IPC_RMID, NULL); }
+bool MultiProcessBuffer::Open() {
+  if (!len) return false;
+  int key = url.empty() ? rand() : ShmKeyFromMultiProcessBufferURL(url);
+  if ((impl = shmget(key, len, url.empty() ? (IPC_CREAT | 0600) : 0400)) < 0)
+    return ERRORv(false, "MultiProcessBuffer Open id=", impl, ", size=", len, ", url=", url, ": ", strerror(errno));
+
+  CHECK_GE(impl, 0);
+  buf = reinterpret_cast<char*>(shmat(impl, NULL, 0));
+  CHECK(buf);
+  CHECK_NE((char*)-1, buf);
+  if (url.empty()) url = StrCat("shm://", key);
+  return true;
+}
+#endif
+
 #endif /* WIN32 */
 
 #ifdef LFL_IPC_DEBUG
@@ -252,155 +289,165 @@ InterProcessResource::InterProcessResource(int size, const string &u) : len(size
 #endif
 
 #ifdef LFL_MOBILE
-void ProcessAPIServer::Start(const string &client_program) {}
-void ProcessAPIServer::LoadResource(const string &content, const string &fn, const ProcessAPIServer::LoadResourceCompleteCB &cb) {}
-void ProcessAPIClient::Start(const string &socket_name) {}
-void ProcessAPIClient::HandleMessagesLoop() {}
+void ProcessAPIClient::StartServer(const string &server_program) {}
+void ProcessAPIClient::LoadResource(const string &content, const string &fn, const ProcessAPIClient::LoadResourceCompleteCB &cb) {}
+void ProcessAPIServer::Start(const string &socket_name) {}
+void ProcessAPIServer::HandleMessagesLoop() {}
 #else
-void ProcessAPIServer::Start(const string &client_program) {
-    Socket fd[2];
-    CHECK(SystemNetwork::OpenSocketPair(fd));
-    if (!LocalFile(client_program, "r").Opened()) { ERROR("ProcessAPIServer: \"", client_program, "\" doesnt exist"); return; }
-    INFO("ProcessAPIServer starting ", client_program);
+static int ProcessAPIWrite(Connection *conn, const Serializable &req, int seq, int transfer_socket=-1) {
+  if (conn->state != Connection::Connected) return 0;
+  string msg;
+  req.ToString(&msg, seq);
+  if (transfer_socket >= 0) return conn->WriteFlush(msg.data(), msg.size(), transfer_socket) == msg.size() ? msg.size() : 0;
+  else                      return conn->WriteFlush(msg)                                     == msg.size() ? msg.size() : 0;
+}
+
+void ProcessAPIClient::StartServer(const string &server_program) {
+  Socket fd[2];
+  CHECK(SystemNetwork::OpenSocketPair(fd));
+  if (!LocalFile(server_program, "r").Opened()) return ERROR("ProcessAPIClient: \"", server_program, "\" doesnt exist");
+  INFO("ProcessAPIClient starting server ", server_program);
 
 #ifdef WIN32
-  	FATAL("not implemented")
+  FATAL("not implemented")
 #else
-    if ((pid = fork())) {
-        CHECK_GT(pid, 0);
-        close(fd[0]);
-        conn = new Connection(Singleton<UnixClient>::Get(), new Query(this));
-        conn->state = Connection::Connected;
-        conn->socket = fd[1];
-        conn->svc->conn[conn->socket] = conn;
-        app->network.active.Add(conn->socket, SocketSet::READABLE, &conn->self_reference);
-    } else {
-        close(fd[1]);
-        // close(0); close(1); close(2);
-        string arg0 = client_program, arg1 = StrCat("fd://", fd[0]);
-        vector<char*> av = { &arg0[0], &arg1[0], 0 };
-        CHECK(!execvp(av[0], &av[0]));
-    }
+  if ((pid = fork())) {
+    CHECK_GT(pid, 0);
+    close(fd[0]);
+    conn = new Connection(Singleton<UnixClient>::Get(), new ConnectionHandler(this));
+    conn->state = Connection::Connected;
+    conn->control_messages = true;
+    conn->socket = fd[1];
+    conn->svc->conn[conn->socket] = conn;
+    app->network.active.Add(conn->socket, SocketSet::READABLE, &conn->self_reference);
+  } else {
+    close(fd[1]);
+    // close(0); close(1); close(2);
+    string arg0 = server_program, arg1 = StrCat("fd://", fd[0]);
+    vector<char*> av = { &arg0[0], &arg1[0], 0 };
+    CHECK(!execvp(av[0], &av[0]));
+  }
 #endif
 }
 
-void ProcessAPIServer::LoadResource(const string &content, const string &fn, const ProcessAPIServer::LoadResourceCompleteCB &cb) { 
-    CHECK(conn);
-    InterProcessProtocol::ContentResource resource(content, fn, "");
-    InterProcessResource ipr(Serializable::Header::size + resource.Size());
-    resource.ToString(ipr.buf, ipr.len, 0);
-    ipr.id = -1;
+void ProcessAPIClient::LoadResource(const string &content, const string &fn, const ProcessAPIClient::LoadResourceCompleteCB &cb) { 
+  CHECK(conn);
+  MultiProcessBuffer mpb;
+  if (!mpb.Create(MultiProcessResource::File(content, fn, ""))) return cb(MultiProcessResource::Texture());
 
-    string msg;
-    reqmap[seq] = cb;
-    InterProcessProtocol::LoadResourceRequest(resource.Id, ipr.url, ipr.len).ToString(&msg, seq++);
-    IPCTrace("ProcessAPIServer::LoadResource fn='%s' url='%s' msg_size=%zd\n", fn.c_str(), ipr.url.c_str(), msg.size());
-    if (conn->state != Connection::Connected) { ERROR("no process api client"); cb(InterProcessProtocol::TextureResource()); }
-    else CHECK_EQ(msg.size(), conn->WriteFlush(msg));
+  reqmap[seq] = cb;
+  int wrote = ProcessAPIWrite(conn, InterProcessProtocol::LoadResourceRequest(MultiProcessResource::File::Type, mpb.url, mpb.len),
+                              seq++, mpb.transfer_socket);
+  IPCTrace("ProcessAPIClient LoadResource fn='%s' url='%s' response=%zd\n", fn.c_str(), mpb.url.c_str(), wrote);
+  if (!wrote) cb(MultiProcessResource::Texture());
 }
 
-int ProcessAPIServer::Query::Read(Connection *c) {
-    while (c->rl >= Serializable::Header::size) {
-        IPCTrace("ProcessAPIServer::Query::Read begin parse %d bytes\n", c->rl);
-        Serializable::ConstStream in(c->rb, c->rl);
-        Serializable::Header hdr;
-        hdr.In(&in);
-        auto reply = parent->reqmap.find(hdr.seq);
-        CHECK_NE(parent->reqmap.end(), reply);
-        if (hdr.id == InterProcessProtocol::LoadResourceResponse::ID) {
-            InterProcessProtocol::LoadResourceResponse req;
-            if (req.Read(&in)) break;
-            parent->reqmap.erase(hdr.seq);
-            if (!req.ipr_len) { IPCTrace("TextureResource failed\n"); reply->second(InterProcessProtocol::TextureResource()); }
-            else {
-                InterProcessResource res(req.ipr_len, req.ipr_url);
-                IPCTrace("ProcessAPIServer::Query::Read LoadResourceResponse url='%s' ", res.url.c_str());
-                if (req.ipr_type == InterProcessProtocol::TextureResource::ID) {
-                    Serializable::ConstStream res_in(res.buf, res.len);
-                    Serializable::Header res_hdr;
-                    res_hdr.In(&res_in);
-                    CHECK_EQ(req.ipr_type, res_hdr.id);
-                    InterProcessProtocol::TextureResource tex_res;
-                    CHECK(!tex_res.Read(&res_in));
-                    IPCTrace("TextureResource width=%d height=%d\n", tex_res.width, tex_res.height);
-                    reply->second(tex_res);
-                } else FATAL("unknown ipr type", req.ipr_type);
-            }
-        } else FATAL("unknown id ", hdr.id);
-        IPCTrace("ProcessAPIServer::Query::Read flush %d bytes\n", in.offset);
-        c->ReadFlush(in.offset);
-    }
-    return 0;
+int ProcessAPIClient::ConnectionHandler::Read(Connection *c) {
+  while (c->rl >= Serializable::Header::size) {
+    IPCTrace("ProcessAPIClient begin parse %d bytes\n", c->rl);
+    Serializable::ConstStream in(c->rb, c->rl);
+    Serializable::Header hdr;
+    hdr.In(&in);
+
+    auto reply = parent->reqmap.find(hdr.seq);
+    CHECK_NE(parent->reqmap.end(), reply);
+
+    if (hdr.id == InterProcessProtocol::LoadResourceResponse::Type) {
+      InterProcessProtocol::LoadResourceResponse res;
+      if (res.Read(&in)) break;
+      IPCTrace("ProcessAPIClient LoadResourceResponse url='%s'\n", res.mpb.url.c_str());
+
+      MultiProcessResource::Texture tex;
+      MultiProcessBuffer res_mpb(c, res.mpb);
+      if (res.mpb.type == MultiProcessResource::Texture::Type && res_mpb.Open() && ReadTexture(res, res_mpb, &tex)) reply->second(tex);
+      else { ERROR("ProcessAPIClient res_mpb.Open: ", res.mpb.url); reply->second(MultiProcessResource::Texture()); }
+      res_mpb.Close();
+
+    } else FATAL("ProcessAPIClient unknown hdr id ", hdr.id);
+
+    parent->reqmap.erase(hdr.seq);
+    c->ReadFlush(in.offset);
+    IPCTrace("ProcessAPIClient flushed %d bytes\n", in.offset);
+  }
+  return 0;
 }
 
-void ProcessAPIClient::Start(const string &socket_name) {
-    static string fd_url = "fd://";
-    if (PrefixMatch(socket_name, fd_url)) {
-        conn = new Connection(Singleton<UnixClient>::Get(), Singleton<Query>::Get());
-        conn->state = Connection::Connected;
-        conn->socket = atoi(socket_name.c_str() + fd_url.size());
-    } else return;
-    INFO("ProcessAPIClient opened ", socket_name);
+bool ProcessAPIClient::ConnectionHandler::ReadTexture(const InterProcessProtocol::LoadResourceResponse &res, const MultiProcessBuffer &res_mpb,
+                                                      MultiProcessResource::Texture *tex) {
+  if (!MultiProcessResource::Read(res_mpb, res.mpb.type, tex)) { ERROR("mpb read"); return false; }
+  IPCTrace("ProcessAPIClient Texture width=%d height=%d\n", tex->width, tex->height);
+  return true;
 }
 
-void ProcessAPIClient::HandleMessagesLoop() {
-    int l;
-    while (app->run) {
-        if ((l = NBRead(conn->socket, conn->rb + conn->rl, Connection::BufSize - conn->rl, -1)) <= 0) { ERROR(conn->Name(), ": read ", l); break; }
-        conn->rl += l;
-        while (conn->rl >= Serializable::Header::size) {
-            IPCTrace("ProcessAPIClient:HandleMessagesLoop begin parse %d bytes\n", conn->rl);
-            Serializable::ConstStream in(conn->rb, conn->rl);
-            Serializable::Header hdr;
-            hdr.In(&in);
-            if (hdr.id == InterProcessProtocol::LoadResourceRequest::ID) {
-                InterProcessProtocol::LoadResourceRequest req;
-                if (req.Read(&in)) break;
-                IPCTrace("ProcessAPIClient:HandleMessagesLoop LoadResourceRequest url='%s' ", req.ipr_url.c_str());
-                InterProcessResource res(req.ipr_len, req.ipr_url);
-                if (req.ipr_type == InterProcessProtocol::ContentResource::ID) {
-                    Serializable::ConstStream res_in(res.buf, res.len);
-                    Serializable::Header res_hdr;
-                    res_hdr.In(&res_in);
-                    CHECK_EQ(req.ipr_type, res_hdr.id);
-                    InterProcessProtocol::ContentResource content_res;
-                    CHECK(!content_res.Read(&res_in));
-                    IPCTrace("ContentResource fn='%s' %p %d\n", content_res.name.buf, content_res.buf.buf, content_res.buf.len);
+void ProcessAPIServer::Start(const string &socket_name) {
+  static string fd_url = "fd://";
+  if (PrefixMatch(socket_name, fd_url)) {
+    conn = new Connection(Singleton<UnixClient>::Get(), static_cast<Connection::Handler*>(nullptr));
+    conn->state = Connection::Connected;
+    conn->socket = atoi(socket_name.c_str() + fd_url.size());
+    conn->control_messages = true;
+  } else return;
+  INFO("ProcessAPIServer opened ", socket_name);
+}
 
-                    const int max_image_size = 1000000;
-                    Texture orig_tex, scaled_tex, *tex = &orig_tex;
-                    Asset::LoadTexture(content_res.buf.data(), content_res.name.data(), content_res.buf.size(), &orig_tex, 0);
-                    if (orig_tex.BufferSize() >= max_image_size) {
-                        tex = &scaled_tex;
-                        float scale_factor = sqrt((float)max_image_size/orig_tex.BufferSize());
-                        scaled_tex.Resize(orig_tex.width*scale_factor, orig_tex.height*scale_factor, Pixel::RGB24, Texture::Flag::CreateBuf);
-                        VideoResampler resampler;
-                        resampler.Open(orig_tex.width, orig_tex.height, orig_tex.pf, scaled_tex.width, scaled_tex.height, scaled_tex.pf);
-                        resampler.Resample(orig_tex.buf, orig_tex.LineSize(), scaled_tex.buf, scaled_tex.LineSize());
-                    }
+void ProcessAPIServer::HandleMessagesLoop() {
+  while (app->run) {
+    if (!NBReadable(conn->socket, -1)) continue;
+    if (conn->Read() <= 0) { ERROR(conn->Name(), ": read "); break; }
 
-                    string msg;
-                    if (tex->buf) {
-                        InterProcessProtocol::TextureResource tex_res(*tex);
-                        InterProcessResource ipr(Serializable::Header::size + tex_res.Size());
-                        tex_res.ToString(ipr.buf, ipr.len, 0);
-                        ipr.id = -1;
-                        IPCTrace("ProcessAPIClient:HandleMessagesLoop LoadResourceResponse url='%s' width=%d height=%d ", ipr.url.c_str(), tex_res.width, tex_res.height);
-                        InterProcessProtocol::LoadResourceResponse(tex_res.Id, ipr.url, ipr.len).ToString(&msg, hdr.seq);
-                    } else {
-                        IPCTrace("ProcessAPIClient:HandleMessagesLoop LoadResourceResponse failed ");
-                        InterProcessProtocol::LoadResourceResponse(0, "", 0).ToString(&msg, hdr.seq);
-                    }
+    while (conn->rl >= Serializable::Header::size) {
+      IPCTrace("ProcessAPIServer begin parse %d bytes\n", conn->rl);
+      Serializable::ConstStream in(conn->rb, conn->rl);
+      Serializable::Header hdr;
+      hdr.In(&in);
 
-                    IPCTrace("TextureResource msg_size=%zd\n", msg.size());
-                    CHECK_EQ(msg.size(), conn->WriteFlush(msg));
+      if (hdr.id == InterProcessProtocol::LoadResourceRequest::Type) {
+        InterProcessProtocol::LoadResourceRequest req;
+        if (req.Read(&in)) break;
+        IPCTrace("ProcessAPIServer LoadResourceRequest url='%s'\n", req.mpb.url.c_str());
 
-                } else FATAL("unknown ipr type", req.ipr_type);
-            } else FATAL("unknown id ", hdr.id);
-            IPCTrace("ProcessAPIClient:HandleMessagesLoop flush %d bytes\n", in.offset);
-            conn->ReadFlush(in.offset);
+        Texture orig_tex, scaled_tex, *input_tex = 0;
+        MultiProcessBuffer req_mpb(conn, req.mpb), res_mpb;
+        if (req.mpb.type == MultiProcessResource::File::Type && req_mpb.Open() &&
+            (input_tex = LoadTexture(req, req_mpb, &orig_tex, &scaled_tex)) &&
+            res_mpb.Create(MultiProcessResource::Texture(*input_tex))) {
+          IPCTrace("ProcessAPIServer LoadResourceResponse url='%s'\n", res_mpb.url.c_str());
+          if (!ProcessAPIWrite(conn, InterProcessProtocol::LoadResourceResponse(MultiProcessResource::Texture::Type, res_mpb.url, res_mpb.len),
+                               hdr.seq, res_mpb.transfer_socket)) ERROR("ProcessAPIServer write");
+        } else {
+          IPCTrace("ProcessAPIServer LoadResourceResponse failed\n");
+          if (!ProcessAPIWrite(conn, InterProcessProtocol::LoadResourceResponse(0, "", 0), hdr.seq)) ERROR("ProcessAPIServer write");
         }
+        req_mpb.Close();
+
+      } else FATAL("unknown id ", hdr.id);
+
+      IPCTrace("ProcessAPIServer flush %d bytes\n", in.offset);
+      conn->ReadFlush(in.offset);
     }
+  }
+}
+
+Texture *ProcessAPIServer::LoadTexture(const InterProcessProtocol::LoadResourceRequest &req, const MultiProcessBuffer &req_mpb,
+                                       Texture *orig_tex, Texture *scaled_tex) {
+  MultiProcessResource::File file;
+  if (!MultiProcessResource::Read(req_mpb, req.mpb.type, &file)) { ERROR("mpb read"); return 0; }
+  IPCTrace("ProcessAPIServer File fn='%s' %p %d\n", file.name.buf, file.buf.buf, file.buf.len);
+
+  Asset::LoadTexture(file.buf.data(), file.name.data(), file.buf.size(), orig_tex, 0);
+  Texture *tex = orig_tex;
+
+  const int max_image_size = 1000000;
+  if (orig_tex->BufferSize() >= max_image_size) {
+    tex = scaled_tex;
+    float scale_factor = sqrt((float)max_image_size/orig_tex->BufferSize());
+    scaled_tex->Resize(orig_tex->width*scale_factor, orig_tex->height*scale_factor, Pixel::RGB24, Texture::Flag::CreateBuf);
+
+    VideoResampler resampler;
+    resampler.Open(orig_tex->width, orig_tex->height, orig_tex->pf, scaled_tex->width, scaled_tex->height, scaled_tex->pf);
+    resampler.Resample(orig_tex->buf, orig_tex->LineSize(), scaled_tex->buf, scaled_tex->LineSize());
+  }
+  return tex->buf ? tex : 0;
 }
 #endif // LFL_MOBILE
 

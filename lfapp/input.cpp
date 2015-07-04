@@ -852,7 +852,7 @@ void Input::ClearButtonsDown() {
 int Input::Init() {
   INFO("Input::Init()");
 #ifdef __APPLE__
-  paste_bind = Bind('v', Key::Modifier::Cmd).key);
+  paste_bind = Bind('v', Key::Modifier::Cmd);
 #else
   paste_bind = Bind('v', Key::Modifier::Ctrl);
 #endif

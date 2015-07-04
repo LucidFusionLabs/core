@@ -26,16 +26,15 @@ namespace LFL {
 DECLARE_bool(dns_dump);
 DECLARE_bool(network_debug);
 
-struct Query {  
-    virtual ~Query() {}
-    virtual int Heartbeat(Connection *c) { return 0; }
-    virtual int Connected(Connection *c) { return 0; }
-    virtual int Read(Connection *c) { return 0; }    
-    virtual int Flushed(Connection *c) { return 0; }
-    virtual void Close(Connection *c) {}
-};
-
 struct IOVec { char *buf; int len; };
+
+struct ReadBuffer {
+    int size;
+    Time stamp;
+    string data;
+    ReadBuffer(int S=0) : size(S), stamp(Now()), data(S, 0) {}
+    void Reset() { stamp=Now(); data.resize(size); }
+};
 
 struct IPV4Endpoint {
     IPV4::Addr addr=0; int port=0;
@@ -85,6 +84,29 @@ struct IPV4EndpointPoolFilter : public IPV4EndpointSource {
     void Get(IPV4::Addr *addr, int *port);
 };
 
+struct SystemNetwork {
+    static void CloseSocket(Socket);
+    static Socket OpenSocket(int protocol);
+    static bool OpenSocketPair(Socket *fd_out);
+    static int SetSocketBlocking(Socket fd, int blocking);
+    static int SetSocketCloseOnExec(Socket fd, int close);
+    static int SetSocketBroadcastEnabled(Socket fd, int enabled);
+    static int SetSocketReceiveBufferSize(Socket fd, int size);
+    static int GetSocketReceiveBufferSize(Socket fd);
+
+    static int Bind(int fd, IPV4::Addr addr, int port);
+    static Socket Accept(Socket listener, IPV4::Addr *addr, int *port);
+    static Socket Listen(int protocol, IPV4::Addr addr, int port, int backlog=32, bool blocking=false);
+    static int Connect(Socket fd, IPV4::Addr addr, int port, int *connected);
+    static int SendTo(Socket fd, IPV4::Addr addr, int port, const char *buf, int len);
+    static int GetSockName(Socket fd, IPV4::Addr *addr_out, int *port_out);
+    static int GetPeerName(Socket fd, IPV4::Addr *addr_out, int *port_out);
+    static string GetHostByAddr(IPV4::Addr addr);
+    static IPV4::Addr GetHostByName(const string &host);
+    static bool EWouldBlock();
+    static string LastError();
+};
+
 struct SocketSet {
     enum { READABLE=1, WRITABLE=2, EXCEPTION=4 };
     virtual ~SocketSet() {}
@@ -115,27 +137,6 @@ struct SelectSocketSet : public SocketSet {
         for (auto &s : socket) StrAppend(&ret, s.first, ", ");
         return StrCat(ret.substr(0, ret.size()-2), "}");
     }
-};
-
-/// SocketWakeupThread waits on SocketSet and simply calls app->scheduler.Wakeup() on event
-struct SocketWakeupThread : public SocketSet {
-    mutex *frame_mutex, *wait_mutex;
-    SelectSocketSet sockets;
-    mutex sockets_mutex;
-    Thread thread;
-    Socket pipe[2];
-    bool wakeup_each=0;
-    ~SocketWakeupThread();
-    SocketWakeupThread(mutex *FM=0, mutex *WM=0) : frame_mutex(FM), wait_mutex(WM),
-        thread(bind(&SocketWakeupThread::ThreadProc, this)) { pipe[0] = pipe[1] = -1; }
-
-    void Add(Socket s, int f, void *v) { { ScopedMutex m(sockets_mutex); sockets.Add(s, f, v); } Wakeup(); }
-    void Set(Socket s, int f, void *v) { { ScopedMutex m(sockets_mutex); sockets.Set(s, f, v); } Wakeup(); }
-    void Del(Socket s)                 { { ScopedMutex m(sockets_mutex); sockets.Del(s);       } Wakeup(); }
-    void Start();
-    void Wait() { Wakeup(); thread.Wait(); }
-    void Wakeup();
-    void ThreadProc();
 };
 
 #if defined(LFL_WFMO) && defined(WIN32)
@@ -195,62 +196,25 @@ typedef EPollSocketSet<65536 * 6> LFLSocketSet;
 typedef SelectSocketSet LFLSocketSet;
 #endif
 
-struct Network : public Module {
-    int select_time=0;
-    LFLSocketSet active;
-    vector<Service*> service_table;
+/// SocketWakeupThread waits on SocketSet and simply calls app->scheduler.Wakeup() on event
+struct SocketWakeupThread : public SocketSet {
+    mutex *frame_mutex, *wait_mutex;
+    SelectSocketSet sockets;
+    mutex sockets_mutex;
+    Thread thread;
+    Socket pipe[2];
+    bool wakeup_each=0;
+    ~SocketWakeupThread();
+    SocketWakeupThread(mutex *FM=0, mutex *WM=0) : frame_mutex(FM), wait_mutex(WM),
+        thread(bind(&SocketWakeupThread::ThreadProc, this)) { pipe[0] = pipe[1] = -1; }
 
-    int Init();
-    int Enable(Service *svc);
-    int Disable(Service *svc);
-    int Shutdown(Service *svc);
-    int Enable(const vector<Service*> &svc);
-    int Disable(const vector<Service*> &svc);
-    int Shutdown(const vector<Service*> &svc);
-    int Frame(unsigned);
-    void AcceptFrame(Service *svc, Listener *listener);
-    void TCPConnectionFrame(Service *svc, Connection *c, ServiceEndpointEraseList *removelist);
-    void UDPConnectionFrame(Service *svc, Connection *c, ServiceEndpointEraseList *removelist, const string &epk);
-
-    void ConnClose(Service *svc, Connection *c, ServiceEndpointEraseList *removelist);
-    void ConnCloseAll(Service *svc);
-
-    void EndpointRead(Service *svc, const char *name, const char *buf, int len);
-    void EndpointClose(Service *svc, Connection *c, ServiceEndpointEraseList *removelist, const string &epk);
-    void EndpointCloseAll(Service *svc);
-
-    void UpdateActive(Connection *c);
-};
-
-struct SystemNetwork {
-    static void CloseSocket(Socket);
-    static Socket OpenSocket(int protocol);
-    static bool OpenSocketPair(Socket *fd_out);
-    static int SetSocketBlocking(Socket fd, int blocking);
-    static int SetSocketCloseOnExec(Socket fd, int close);
-    static int SetSocketBroadcastEnabled(Socket fd, int enabled);
-    static int SetSocketReceiveBufferSize(Socket fd, int size);
-    static int GetSocketReceiveBufferSize(Socket fd);
-
-    static int Bind(int fd, IPV4::Addr addr, int port);
-    static Socket Accept(Socket listener, IPV4::Addr *addr, int *port);
-    static Socket Listen(int protocol, IPV4::Addr addr, int port, int backlog=32, bool blocking=false);
-    static int Connect(Socket fd, IPV4::Addr addr, int port, int *connected);
-    static int SendTo(Socket fd, IPV4::Addr addr, int port, const char *buf, int len);
-    static int GetSockName(Socket fd, IPV4::Addr *addr_out, int *port_out);
-    static int GetPeerName(Socket fd, IPV4::Addr *addr_out, int *port_out);
-    static string GetHostByAddr(IPV4::Addr addr);
-    static IPV4::Addr GetHostByName(const string &host);
-    static bool EWouldBlock();
-    static string LastError();
-};
-
-struct ReadBuffer {
-    int size;
-    Time stamp;
-    string data;
-    ReadBuffer(int S=0) : size(S), stamp(Now()), data(S, 0) {}
-    void Reset() { stamp=Now(); data.resize(size); }
+    void Add(Socket s, int f, void *v) { { ScopedMutex m(sockets_mutex); sockets.Add(s, f, v); } Wakeup(); }
+    void Set(Socket s, int f, void *v) { { ScopedMutex m(sockets_mutex); sockets.Set(s, f, v); } Wakeup(); }
+    void Del(Socket s)                 { { ScopedMutex m(sockets_mutex); sockets.Del(s);       } Wakeup(); }
+    void Start();
+    void Wait() { Wakeup(); thread.Wait(); }
+    void Wakeup();
+    void ThreadProc();
 };
 
 struct Listener {
@@ -264,27 +228,35 @@ struct Listener {
 struct Connection {
     const static int BufSize = 16384;
     enum { Connected=1, Connecting=2, Reconnect=3, Error=5 };
+    struct Handler {  
+      virtual ~Handler() {}
+      virtual int Heartbeat(Connection *c) { return 0; }
+      virtual int Connected(Connection *c) { return 0; }
+      virtual int Read(Connection *c) { return 0; }    
+      virtual int Flushed(Connection *c) { return 0; }
+      virtual void Close(Connection *c) {}
+    };
 
     Service *svc;
     Socket socket;
     Time ct, rt, wt;
     string endpoint_name;
     IPV4::Addr addr, src_addr=0;
-    bool readable=1, writable=0;
-    int state, port, src_port=0, rl=0, wl=0;
+    bool readable=1, writable=0, control_messages=0;
+    int state, port, src_port=0, rl=0, wl=0, transferred_socket=-1;
     char rb[BufSize], wb[BufSize];
     typed_ptr self_reference;
     vector<IOVec> packets;
     SSL *ssl=0;
     BIO *bio=0;
-    Query *query;
+    Handler *handler;
     Callback *detach;
 
-    ~Connection() { delete query; }
-    Connection(Service *s, Query *q,                                       Callback *Detach=0) : svc(s), socket(-1),   ct(Now()), rt(Now()), wt(Now()), addr(0),    detach(Detach), state(Error), port(0),    self_reference(TypePointer(this)), query(q) {}
-    Connection(Service *s, int State, int Sock,                            Callback *Detach=0) : svc(s), socket(Sock), ct(Now()), rt(Now()), wt(Now()), addr(0),    detach(Detach), state(State), port(0),    self_reference(TypePointer(this)), query(0) {}
-    Connection(Service *s, int State, int Sock, IPV4::Addr Addr, int Port, Callback *Detach=0) : svc(s), socket(Sock), ct(Now()), rt(Now()), wt(Now()), addr(Addr), detach(Detach), state(State), port(Port), self_reference(TypePointer(this)), query(0) {}
-    Connection(Service *s, int State,           IPV4::Addr Addr, int Port, Callback *Detach=0) : svc(s), socket(-1),   ct(Now()), rt(Now()), wt(Now()), addr(Addr), detach(Detach), state(State), port(Port), self_reference(TypePointer(this)), query(0) {}
+    ~Connection() { delete handler; }
+    Connection(Service *s, Handler *h,                                     Callback *Detach=0) : svc(s), socket(-1),   ct(Now()), rt(Now()), wt(Now()), addr(0),    detach(Detach), state(Error), port(0),    self_reference(TypePointer(this)), handler(h) {}
+    Connection(Service *s, int State, int Sock,                            Callback *Detach=0) : svc(s), socket(Sock), ct(Now()), rt(Now()), wt(Now()), addr(0),    detach(Detach), state(State), port(0),    self_reference(TypePointer(this)), handler(0) {}
+    Connection(Service *s, int State, int Sock, IPV4::Addr Addr, int Port, Callback *Detach=0) : svc(s), socket(Sock), ct(Now()), rt(Now()), wt(Now()), addr(Addr), detach(Detach), state(State), port(Port), self_reference(TypePointer(this)), handler(0) {}
+    Connection(Service *s, int State,           IPV4::Addr Addr, int Port, Callback *Detach=0) : svc(s), socket(-1),   ct(Now()), rt(Now()), wt(Now()), addr(Addr), detach(Detach), state(State), port(Port), self_reference(TypePointer(this)), handler(0) {}
 
     string Name() const { return !endpoint_name.empty() ? endpoint_name : IPV4::Text(addr, port); }
     void SetError() { state = Error; ct = Now(); }
@@ -297,6 +269,7 @@ struct Connection {
     int WriteFlush();
     int WriteFlush(const string &buf) { return WriteFlush(buf.c_str(), buf.size()); }
     int WriteFlush(const char *buf, int len);
+    int WriteFlush(const char *buf, int len, int transfer_socket);
     int SendTo(const char *buf, int len);
     int Read();
     int ReadPacket();
@@ -359,9 +332,37 @@ struct ServiceEndpointEraseList {
     }
 };
 
+struct Network : public Module {
+    int select_time=0;
+    LFLSocketSet active;
+    vector<Service*> service_table;
+
+    int Init();
+    int Enable(Service *svc);
+    int Disable(Service *svc);
+    int Shutdown(Service *svc);
+    int Enable(const vector<Service*> &svc);
+    int Disable(const vector<Service*> &svc);
+    int Shutdown(const vector<Service*> &svc);
+    int Frame(unsigned);
+    void AcceptFrame(Service *svc, Listener *listener);
+    void TCPConnectionFrame(Service *svc, Connection *c, ServiceEndpointEraseList *removelist);
+    void UDPConnectionFrame(Service *svc, Connection *c, ServiceEndpointEraseList *removelist, const string &epk);
+
+    void ConnClose(Service *svc, Connection *c, ServiceEndpointEraseList *removelist);
+    void ConnCloseAll(Service *svc);
+
+    void EndpointRead(Service *svc, const char *name, const char *buf, int len);
+    void EndpointClose(Service *svc, Connection *c, ServiceEndpointEraseList *removelist, const string &epk);
+    void EndpointCloseAll(Service *svc);
+
+    void UpdateActive(Connection *c);
+};
+
+
 /// NetworkThread runs the Network Module in a new thread with a multiplexed Callback queue
 struct NetworkThread {
-    struct Query : public LFL::Query {
+    struct ConnectionHandler : public Connection::Handler {
         void HandleMessage(Callback *cb) { (*cb)(); delete cb; }
         int Read(Connection *c);
     };
@@ -389,9 +390,9 @@ struct UDPClient : public Service {
 
 struct UDPServer : public Service {
     virtual ~UDPServer() {}
-    Query *query=0;
+    Connection::Handler *handler=0;
     UDPServer(int port) { protocol=Protocol::UDP; QueueListen(0, port); }
-    virtual int Connected(Connection *c) { c->query = query; return 0; }
+    virtual int Connected(Connection *c) { c->handler = handler; return 0; }
 };
 
 struct UnixClient : public Service {
@@ -433,15 +434,16 @@ struct HTTPServer : public Service {
         int code, content_length;
         const char *type, *content;
         string type_buf, content_buf;
-        Query *refill; bool write_headers;
+        Connection::Handler *refill;
+        bool write_headers;
 
-        Response(     const string *T, const string      *C) : code(200), content_length(C->size()), type_buf(*T), content_buf(*C), refill(0), write_headers(1)  { content=content_buf.c_str(); type=type_buf.c_str(); }
-        Response(       const char *T, const string      *C) : code(200), content_length(C->size()), type(T),      content_buf(*C), refill(0), write_headers(1)  { content=content_buf.c_str(); }
-        Response(       const char *T, const char        *C) : code(200), content_length(strlen(C)), type(T),      content(C),      refill(0), write_headers(1)  {}
-        Response(       const char *T, const StringPiece &C) : code(200), content_length(C.len),     type(T),      content(C.buf),  refill(0), write_headers(1)  {}
-        Response(int K, const char *T, const StringPiece &C) : code(K),   content_length(C.len),     type(T),      content(C.buf),  refill(0), write_headers(1)  {}
-        Response(int K, const char *T, const char        *C) : code(K),   content_length(strlen(C)), type(T),      content(C),      refill(0), write_headers(1)  {}
-        Response(const char *T, int L, Query *R, bool WH=1)  : code(200), content_length(L),         type(T),      content(0),      refill(R), write_headers(WH) {}
+        Response(     const string *T, const string        *C) : code(200), content_length(C->size()), type_buf(*T), content_buf(*C), refill(0), write_headers(1)  { content=content_buf.c_str(); type=type_buf.c_str(); }
+        Response(       const char *T, const string        *C) : code(200), content_length(C->size()), type(T),      content_buf(*C), refill(0), write_headers(1)  { content=content_buf.c_str(); }
+        Response(       const char *T, const char          *C) : code(200), content_length(strlen(C)), type(T),      content(C),      refill(0), write_headers(1)  {}
+        Response(       const char *T, const StringPiece   &C) : code(200), content_length(C.len),     type(T),      content(C.buf),  refill(0), write_headers(1)  {}
+        Response(int K, const char *T, const StringPiece   &C) : code(K),   content_length(C.len),     type(T),      content(C.buf),  refill(0), write_headers(1)  {}
+        Response(int K, const char *T, const char          *C) : code(K),   content_length(strlen(C)), type(T),      content(C),      refill(0), write_headers(1)  {}
+        Response(const char *T, int L, Connection::Handler *C) : code(200), content_length(L),         type(T),      content(0),      refill(C), write_headers(1) {}
 
         static Response _400;
     };
@@ -578,7 +580,8 @@ struct SMTPClient : public Service {
 
 struct SMTPServer : public Service {
     long long total_connected=0;
-    map<IPV4::Addr, string> domains; string domain;
+    map<IPV4::Addr, string> domains;
+    string domain;
 
     SMTPServer(const string &n) : domain(n) {}
     virtual int Connected(Connection *c);
@@ -595,9 +598,9 @@ struct GPlusClient : public Service {
 
 struct GPlusServer : public Service {
     virtual ~GPlusServer() {}
-    Query *query=0;
+    Connection::Handler *handler=0;
     GPlusServer() : Service(Protocol::GPLUS) { endpoint_read_autoconnect=1; }
-    virtual int Connected(Connection *c) { c->query = query; return 0; }
+    virtual int Connected(Connection *c) { c->handler = handler; return 0; }
 };
 
 struct Sniffer {

@@ -149,6 +149,7 @@ struct InputController;
 struct KeyboardGUI;
 struct Listener;
 struct MovieAsset;
+struct MultiProcessBuffer;
 struct ProtoHeader;
 struct Service;
 struct ServiceEndpointEraseList;

@@ -130,311 +130,6 @@ void IPV4EndpointPoolFilter::Get(IPV4::Addr *addr, int *port) {
   }
 }
 
-int Network::Init() {
-  INFO("Network::Init()");
-#ifdef LFL_OPENSSL
-  SSL_load_error_strings();
-  SSL_library_init(); 
-
-  if (bool client_only=0) lfapp_ssl = SSL_CTX_new(SSLv23_client_method());
-  else                    lfapp_ssl = SSL_CTX_new(SSLv23_method());
-
-  if (!lfapp_ssl) FATAL("no SSL_CTX: ", ERR_reason_error_string(ERR_get_error()));
-  SSL_CTX_set_verify(lfapp_ssl, SSL_VERIFY_NONE, 0);
-
-  if (FLAGS_ssl_certfile.size() && FLAGS_ssl_keyfile.size()) {
-    if (!SSL_CTX_use_certificate_file(lfapp_ssl, FLAGS_ssl_certfile.c_str(), SSL_FILETYPE_PEM)) { ERROR("SSL_CTX_use_certificate_file ", ERR_reason_error_string(ERR_get_error())); return -1; }
-    if (!SSL_CTX_use_PrivateKey_file(lfapp_ssl, FLAGS_ssl_keyfile.c_str(), SSL_FILETYPE_PEM)) { ERROR("SSL_CTX_use_PrivateKey_file ",  ERR_reason_error_string(ERR_get_error())); return -1; }
-    if (!SSL_CTX_check_private_key(lfapp_ssl)) { ERROR("SSL_CTX_check_private_key ", ERR_reason_error_string(ERR_get_error())); return -1; }
-  }
-#endif
-  Enable(Singleton<UDPClient>::Get());
-  Enable(Singleton<HTTPClient>::Get());
-  Enable(Singleton<UnixClient>::Get());
-
-  vector<IPV4::Addr> nameservers;
-  if (FLAGS_nameserver.empty()) {
-    INFO("Network::Init(): Enable(new Resolver(defaultNameserver()))");
-    Resolver::DefaultNameserver(&nameservers);
-  } else {
-    INFO("Network::Init(): Enable(new Resolver(", FLAGS_nameserver, "))");
-    IPV4::ParseCSV(FLAGS_nameserver, &nameservers);
-  }
-  for (auto &n : nameservers) Singleton<Resolver>::Get()->Connect(n);
-
-  return 0;
-}
-
-int Network::Shutdown(const vector<Service*> &s) { int ret = 0; for (int i = 0; i < s.size(); i++) if (Shutdown(s[i]) < 0) ret = -1; return ret; }
-int Network::Disable (const vector<Service*> &s) { int ret = 0; for (int i = 0; i < s.size(); i++) if (Disable (s[i]) < 0) ret = -1; return ret; }
-int Network::Enable  (const vector<Service*> &s) { int ret = 0; for (int i = 0; i < s.size(); i++) if (Enable  (s[i]) < 0) ret = -1; return ret; }
-int Network::Enable(Service *s) {
-
-  /* listen */
-  if (s->listen.size() && !s->initialized) {
-    s->initialized = true;
-    vector<string> removelist;
-    for (Service::ListenMap::iterator i = s->listen.begin(); i != s->listen.end(); ++i) {
-      const IPV4Endpoint *listen_addr = IPV4Endpoint::FromString(i->first.c_str());
-      if (s->Listen(listen_addr->addr, listen_addr->port, i->second) == -1)
-      { delete i->second; removelist.push_back(i->first); }
-    }
-    for (vector<string>::const_iterator i = removelist.begin(); i != removelist.end(); ++i) s->listen.erase(*i);
-  }
-
-  /* insert */
-  auto i = find(service_table.begin(), service_table.end(), s);
-  if (i != service_table.end()) return 0;
-  service_table.push_back(s);
-  return 0;
-}
-
-int Network::Disable(Service *s) {
-  auto i = find(service_table.begin(), service_table.end(), s);
-  if (i == service_table.end()) return -1;
-  service_table.erase(i);
-  return 0;
-}
-
-void Network::ConnClose(Service *svc, Connection *c, ServiceEndpointEraseList *removelist) {
-  if (c->query) c->query->Close(c);
-  svc->Close(c);
-  if (removelist) removelist->AddSocket(svc, c->socket);
-  delete c;
-}
-void Network::ConnCloseAll(Service *svc) {
-  for (auto i = svc->conn.begin(), e = svc->conn.end(); i != e; ++i) ConnClose(svc, i->second, 0);
-  svc->conn.clear();
-}
-
-void Network::EndpointRead(Service *svc, const char *name, const char *buf, int len) { return svc->EndpointRead(name, buf, len); }
-void Network::EndpointClose(Service *svc, Connection *c, ServiceEndpointEraseList *removelist, const string &epk) {
-  if (c->query) c->query->Close(c);
-  if (svc->listen.empty()) svc->Close(c);
-  if (removelist) removelist->AddEndpoint(svc, epk);
-  delete c;
-}
-void Network::EndpointCloseAll(Service *svc) {
-  for (Service::EndpointMap::iterator i = svc->endpoint.begin(); i != svc->endpoint.end(); ++i)
-    EndpointClose(svc, i->second, 0, "");
-  svc->endpoint.clear();
-}
-
-int Network::Shutdown(Service *svc) {
-  ConnCloseAll(svc);
-  EndpointCloseAll(svc);
-  return 0;
-}
-
-int Network::Frame(unsigned clicks) {
-  static const int listener_type = TypeId<Listener>(), connection_type = TypeId<Connection>();
-  ServiceEndpointEraseList removelist;
-
-  /* select */
-  if (active.Select(select_time))
-  { ERROR("SocketSet.select: ", SystemNetwork::LastError()); return -1; }
-
-#ifndef LFL_NETWORK_MONOLITHIC_FRAME
-  /* iterate events */
-  for (active.cur_event = 0; active.cur_event < active.num_events; active.cur_event++) {
-    typed_ptr *tp = (typed_ptr*)active.events[active.cur_event].data.ptr;
-    if      (tp->type == connection_type) { Connection *c=(Connection*)tp->value; active.cur_fd = c->socket; TCPConnectionFrame(c->svc, c, &removelist); }
-    else if (tp->type == listener_type)   { Listener   *l=(Listener*)  tp->value; active.cur_fd = l->socket; AcceptFrame(l->svc, l); }
-    else FATAL("unknown type", tp->type);
-  }
-#endif
-
-  /* pre loop */
-  for (auto svc : service_table) {
-
-#ifdef LFL_NETWORK_MONOLITHIC_FRAME
-    /* answer listening sockets & UDP server read */
-    for (auto i = svc->listen.begin(), e = svc->listen.end(); i != e; ++i) 
-      if (active.GetReadable(i->second->socket)) AcceptFrame(svc, i->second);
-
-    /* iterate connections */
-    for (auto i = svc->conn.begin(), e = svc->conn.end(); i != e; ++i)
-      TCPConnectionFrame(svc, i->second, &removelist);
-#endif
-
-    /* iterate endpoints */
-    for (auto i = svc->endpoint.begin(), e = svc->endpoint.end(); i != e; i++) {
-      UDPConnectionFrame(svc, (*i).second, &removelist, (*i).first);
-    }
-
-    /* remove closed */
-    removelist.Erase();
-
-    if (svc->heartbeats) { /* connection heartbeats */
-      for (auto i = svc->conn.begin(), e = svc->conn.end(); i != e; ++i) {
-        Connection *c = i->second;
-        int ret = c->query ? c->query->Heartbeat(c) : 0;
-        if (c->state == Connection::Error || ret < 0) ConnClose(svc, c, &removelist);
-      }
-
-      for (auto i = svc->endpoint.begin(), e = svc->endpoint.end(); i != e; ++i) {
-        Connection *c = i->second;
-        int ret = c->query ? c->query->Heartbeat(c) : 0;
-        if (c->state == Connection::Error || ret < 0) EndpointClose(svc, c, &removelist, c->endpoint_name);
-      }
-
-      removelist.Erase();
-    }
-
-    /* svc specific frame */
-    svc->Frame();
-  }
-  return 0;
-}
-
-void Network::AcceptFrame(Service *svc, Listener *listener) {
-  for (;;) {
-    Connection *c = 0; bool inserted = false;
-    if (listener->ssl) { /* SSL accept */
-#ifdef LFL_OPENSSL
-      struct sockaddr_in sin;
-      int sinSize = sizeof(sin);
-      Socket socket;
-      if (BIO_do_accept(listener->ssl) <= 0) continue;
-      BIO *bio = BIO_pop(listener->ssl);
-      BIO_get_fd(bio, &socket);
-
-      if (::getpeername(socket, (struct sockaddr *)&sin, (socklen_t*)&sinSize) < 0)
-      { if (!SystemNetwork::EWouldBlock()) ERROR("getpeername: ", strerror(errno)); break; }
-
-      /* insert socket */
-      c = svc->Accept(Connection::Connected, socket, sin.sin_addr.s_addr, ntohs(sin.sin_port));
-      if (!c) { SystemNetwork::CloseSocket(socket); continue; }
-      c->bio = bio;
-      BIO_set_nbio(c->bio, 1);
-      BIO_get_ssl(c->bio, &listener->ssl);
-#endif
-    }
-    else if (svc->protocol == Protocol::UDP) { /* UDP server read */
-      struct sockaddr_in sin;
-      int sinSize = sizeof(sin), inserted = 0, ret;
-      char buf[2048];
-      int len = recvfrom(listener->socket, buf, sizeof(buf)-1, 0, (struct sockaddr*)&sin, (socklen_t*)&sinSize);
-      if (len <= 0) {
-        if (SystemNetwork::EWouldBlock()) break;
-        else { ERROR("recvfrom: ", SystemNetwork::LastError()); break; }
-      }
-      buf[len] = 0;
-
-      IPV4Endpoint epk(sin.sin_addr.s_addr, ntohs(sin.sin_port));
-      string epkstr = epk.ToString();
-      Service::EndpointMap::iterator ep = svc->endpoint.find(epkstr);
-      if (ep != svc->endpoint.end()) c = ep->second;
-      else {
-        svc->fake.addr = epk.addr;
-        svc->fake.port = epk.port;
-        svc->fake.socket = listener->socket;
-        if (svc->UDPFilter(&svc->fake, buf, len)) continue;
-        c = new Connection(svc, Connection::Connected, listener->socket, epk.addr, epk.port);
-        svc->endpoint[epkstr] = c;
-        inserted = true;
-      }
-
-      if ((ret = c->AddPacket(buf, len)) != len) 
-      { ERROR(c->Name(), ": addpacket(", len, ")"); c->SetError(); continue; }
-      if (!inserted) continue;
-    }
-    else { /* TCP accept */
-      IPV4::Addr accept_addr = 0; 
-      int accept_port = 0;
-      Socket socket = SystemNetwork::Accept(listener->socket, &accept_addr, &accept_port);
-      if (socket == -1) break;
-
-      /* insert socket */
-      c = svc->Accept(Connection::Connected, socket, accept_addr, accept_port);
-      if (!c) { SystemNetwork::CloseSocket(socket); continue; }
-    }
-    if (!c) continue;
-
-    /* connected 1 */
-    c->SetSourceAddress();
-    INFO(c->Name(), ": incoming connection (socket=", c->socket, ")");
-    if (svc->Connected(c) < 0) c->SetError();
-    if (c->query) { if (c->query->Connected(c) < 0) { ERROR(c->Name(), ": query connected"); c->SetError(); } }
-    if (c->detach) { svc->conn.erase(c->socket); svc->Detach(c); }
-  }
-}
-
-void Network::TCPConnectionFrame(Service *svc, Connection *c, ServiceEndpointEraseList *removelist) {
-  /* complete connecting sockets */
-  if (c->state == Connection::Connecting && active.GetWritable(c->socket)) {
-    int res=0, resSize=sizeof(res);
-    if (!getsockopt(c->socket, SOL_SOCKET, SO_ERROR, (char*)&res, (socklen_t*)&resSize) && !res) {
-
-      /* connected 2 */ 
-      c->SetConnected();
-      c->SetSourceAddress();
-      INFO(c->Name(), ": connected");
-      if (svc->Connected(c) < 0) c->SetError();
-      if (c->query) { if (c->query->Connected(c) < 0) { ERROR(c->Name(), ": query connected"); c->SetError(); } }
-      if (c->detach) { removelist->AddSocket(svc, c->socket); svc->Detach(c); }
-      UpdateActive(c);
-      return;
-    }
-
-    errno = res;
-    INFO(c->Name(), ": connect failed: ", SystemNetwork::LastError());
-    c->SetError();
-  }
-
-  /* IO communicate */
-  else if (c->state == Connection::Connected) do {
-    if (svc->protocol == Protocol::UDP) {
-      if (svc->listen.empty() && active.GetReadable(c->socket)) { /* UDP Client Read */
-        if (c->ReadPackets()<0) { c->SetError(); break; }
-      }
-      if (c->packets.size()) {
-        if (c->query) { if (c->query->Read(c) < 0) { ERROR(c->Name(), ": query UDP read"); c->SetError(); } }
-        c->packets.clear();
-        c->ReadFlush(c->rl);
-      }
-    }
-    else if (c->ssl || active.GetReadable(c->socket)) { /* TCP Read */
-      if (c->Read()<0) { c->SetError(); break; }
-      if (c->rl) {
-        if (c->query) { if (c->query->Read(c) < 0) { ERROR(c->Name(), ": query read"); c->SetError(); } }
-      }
-    }
-
-    if (c->wl && active.GetWritable(c->socket)) {
-      if (c->WriteFlush()<0) { c->SetError(); break; }
-      if (!c->wl) {
-        c->writable = 0;
-        if (c->query) { if (c->query->Flushed(c) < 0) { ERROR(c->Name(), ": query flushed"); c->SetError(); } }
-        UpdateActive(c);
-      }
-    }
-  } while(0);
-
-  /* error */
-  if (c->state == Connection::Error) ConnClose(svc, c, removelist);
-}
-
-void Network::UDPConnectionFrame(Service *svc, Connection *c, ServiceEndpointEraseList *removelist, const string &epk) {
-  if (c->state == Connection::Connected && c->packets.size()) {
-    if (c->query) { if (c->query->Read(c) < 0) { ERROR(c->Name(), ": query UDP read"); c->SetError(); } }
-    c->packets.clear();
-    c->ReadFlush(c->rl);
-  }
-
-  bool timeout; /* Timeout or error */
-  if (c->state == Connection::Error || (timeout = (c->rt + Seconds(FLAGS_udp_idle_sec)) <= Now())) {
-    INFO(c->Name(), ": ", timeout ? "timeout" : "error");
-    EndpointClose(svc, c, removelist, epk);
-  }
-}
-
-void Network::UpdateActive(Connection *c) {
-  if (FLAGS_network_debug) INFO(c->Name(), " active = { ", c->readable?"READABLE":"", " , ", c->writable?"WRITABLE":"", " }");
-  int flag = (c->readable?SocketSet::READABLE:0) | (c->writable?SocketSet::WRITABLE:0);
-  active.Set(c->socket, flag, &c->self_reference);
-}
-
 void SystemNetwork::CloseSocket(Socket fd) {
 #ifdef WIN32
   closesocket(fd);
@@ -653,6 +348,23 @@ string SystemNetwork::LastError() {
 #endif
 }
 
+int SelectSocketSet::Select(int wait_time) {
+  int maxfd=-1, rc=0, wc=0, xc=0;
+  struct timeval tv = Time2timeval(Time(wait_time));
+  FD_ZERO(&rfds); FD_ZERO(&wfds); FD_ZERO(&xfds);
+  for (auto &s : socket) {
+    bool added = 0;
+    if (s.second.first & READABLE)  { rc++; FD_SET(s.first, &rfds); added = 1; }
+    if (s.second.first & WRITABLE)  { wc++; FD_SET(s.first, &wfds); added = 1; }
+    if (s.second.first & EXCEPTION) { xc++; FD_SET(s.first, &xfds); added = 1; }
+    if (added && s.first > maxfd) maxfd = s.first;
+  }
+  if (!rc && !wc && !xc) { MSleep(wait_time); return 0; }
+  if ((select(maxfd+1, rc?&rfds:0, wc?&wfds:0, xc?&xfds:0, wait_time >= 0 ? &tv : 0)) == -1)
+  { ERROR("select: ", SystemNetwork::LastError()); return -1; }
+  return 0;
+}
+
 SocketWakeupThread::~SocketWakeupThread() { SystemNetwork::CloseSocket(pipe[0]); SystemNetwork::CloseSocket(pipe[1]); }
 void SocketWakeupThread::Start() {
   CHECK(SystemNetwork::OpenSocketPair(pipe));
@@ -677,23 +389,6 @@ void SocketWakeupThread::ThreadProc() {
   }
 }
 
-int SelectSocketSet::Select(int wait_time) {
-  int maxfd=-1, rc=0, wc=0, xc=0;
-  struct timeval tv = Time2timeval(Time(wait_time));
-  FD_ZERO(&rfds); FD_ZERO(&wfds); FD_ZERO(&xfds);
-  for (auto &s : socket) {
-    bool added = 0;
-    if (s.second.first & READABLE)  { rc++; FD_SET(s.first, &rfds); added = 1; }
-    if (s.second.first & WRITABLE)  { wc++; FD_SET(s.first, &wfds); added = 1; }
-    if (s.second.first & EXCEPTION) { xc++; FD_SET(s.first, &xfds); added = 1; }
-    if (added && s.first > maxfd) maxfd = s.first;
-  }
-  if (!rc && !wc && !xc) { MSleep(wait_time); return 0; }
-  if ((select(maxfd+1, rc?&rfds:0, wc?&wfds:0, xc?&xfds:0, wait_time >= 0 ? &tv : 0)) == -1)
-  { ERROR("select: ", SystemNetwork::LastError()); return -1; }
-  return 0;
-}
-
 /* Connection */
 
 int Connection::Read() {
@@ -711,9 +406,39 @@ int Connection::Read() {
       return 0;
     }
 #endif
-  }
-  else { // XXX loop until read -1 with EAGAIN
+
+#ifndef WIN32
+  } else if (control_messages) {
+    struct iovec iov;
+    memzero(iov);
+    iov.iov_base = rb+rl;
+    iov.iov_len = readlen;
+
+    char control[CMSG_SPACE(sizeof (int))];
+    struct msghdr msg;
+    memzero(msg);
+    msg.msg_iov = &iov;
+    msg.msg_iovlen = 1;
+    msg.msg_control = control;
+    msg.msg_controllen = sizeof(control);
+
+    if ((len = recvmsg(socket, &msg, 0)) <= 0) {
+      if      (!len)                                     ERROR(Name(), ": read() zero");
+      else if (len < 0 && !SystemNetwork::EWouldBlock()) ERROR(Name(), ": read(): ", SystemNetwork::LastError());
+      return -1;
+    }
+
+    struct cmsghdr *cmsg = CMSG_FIRSTHDR(&msg);
+    if (cmsg && cmsg->cmsg_len == sizeof(control) && cmsg->cmsg_level == SOL_SOCKET && cmsg->cmsg_type == SCM_RIGHTS)
+    { CHECK_EQ(-1, transferred_socket); memcpy(&transferred_socket, CMSG_DATA(cmsg), sizeof(int)); }
+#endif
+
+  } else { // XXX loop until read -1 with EAGAIN
+#ifdef WIN32
     if ((len = recv(socket, rb+rl, readlen, 0)) <= 0) {
+#else
+    if ((len = read(socket, rb+rl, readlen)) <= 0) {
+#endif
       if      (!len)                                     ERROR(Name(), ": read() zero");
       else if (len < 0 && !SystemNetwork::EWouldBlock()) ERROR(Name(), ": read(): ", SystemNetwork::LastError());
       return -1;
@@ -817,6 +542,38 @@ int Connection::WriteFlush(const char *buf, int len) {
   return wrote;
 }
 
+int Connection::WriteFlush(const char *buf, int len, int transfer_socket) {
+  int wrote = 0;
+#if defined(WIN32) || defined(LFL_MOBILE)
+  return -1;
+#else
+  struct iovec iov;
+  memzero(iov);
+  iov.iov_base = (void*)buf;
+  iov.iov_len = len;
+
+  char control[CMSG_SPACE(sizeof (int))];
+  struct msghdr msg;
+  memzero(msg);
+  msg.msg_iov = &iov;
+  msg.msg_iovlen = 1;
+  msg.msg_control = control;
+  msg.msg_controllen = sizeof(control);
+  struct cmsghdr *cmsg = CMSG_FIRSTHDR(&msg);
+  cmsg->cmsg_len = CMSG_LEN(sizeof(int));
+  cmsg->cmsg_level = SOL_SOCKET;
+  cmsg->cmsg_type = SCM_RIGHTS;
+  memcpy(CMSG_DATA(cmsg), &transfer_socket, sizeof(int));
+  
+  if ((wrote = sendmsg(socket, &msg, 0)) < 0) {
+    if (!SystemNetwork::EWouldBlock()) { ERROR(Name(), ": sendmsg: ", strerror(errno)); return -1; }
+    wrote = 0;
+  }
+#endif
+  if (FLAGS_network_debug) INFO("write(", socket, ", ", wrote, ", '", buf, "')");
+  return wrote;
+}
+
 int Connection::WriteFlush() {
   int wrote = WriteFlush(wb, wl);
   if (wrote && wrote!=wl) memmove(wb, wb+wrote, wl-wrote);
@@ -913,7 +670,7 @@ Connection *Service::Connect(IPV4::Addr addr, int port, IPV4EndpointSource *src_
     c->SetSourceAddress();
     INFO(c->Name(), ": connected");
     if (this->Connected(c) < 0) c->SetError();
-    if (c->query) { if (c->query->Connected(c) < 0) { ERROR(c->Name(), ": query connected"); c->SetError(); } }
+    if (c->handler) { if (c->handler->Connected(c) < 0) { ERROR(c->Name(), ": handler connected"); c->SetError(); } }
     if (c->detach) { conn.erase(c->socket); Detach(c); }
     app->network.UpdateActive(c);
   } else {
@@ -997,7 +754,7 @@ Connection *Service::EndpointConnect(const string &endpoint_name) {
   /* connected 4 */
   if (this->Connected(c) < 0) c->SetError();
   INFO(Protocol::Name(protocol), "(", (void*)this, ") endpoint connect: ", endpoint_name);
-  if (c->query) { if (c->query->Connected(c) < 0) { ERROR(c->Name(), ": query connected"); c->SetError(); } }
+  if (c->handler) { if (c->handler->Connected(c) < 0) { ERROR(c->Name(), ": handler connected"); c->SetError(); } }
   return c;
 }
 
@@ -1037,11 +794,319 @@ void Service::Detach(Connection *c) {
   app->scheduler.Wakeup(0);
 }
 
+/* Network */
+
+int Network::Init() {
+  INFO("Network::Init()");
+#ifdef LFL_OPENSSL
+  SSL_load_error_strings();
+  SSL_library_init(); 
+
+  if (bool client_only=0) lfapp_ssl = SSL_CTX_new(SSLv23_client_method());
+  else                    lfapp_ssl = SSL_CTX_new(SSLv23_method());
+
+  if (!lfapp_ssl) FATAL("no SSL_CTX: ", ERR_reason_error_string(ERR_get_error()));
+  SSL_CTX_set_verify(lfapp_ssl, SSL_VERIFY_NONE, 0);
+
+  if (FLAGS_ssl_certfile.size() && FLAGS_ssl_keyfile.size()) {
+    if (!SSL_CTX_use_certificate_file(lfapp_ssl, FLAGS_ssl_certfile.c_str(), SSL_FILETYPE_PEM)) { ERROR("SSL_CTX_use_certificate_file ", ERR_reason_error_string(ERR_get_error())); return -1; }
+    if (!SSL_CTX_use_PrivateKey_file(lfapp_ssl, FLAGS_ssl_keyfile.c_str(), SSL_FILETYPE_PEM)) { ERROR("SSL_CTX_use_PrivateKey_file ",  ERR_reason_error_string(ERR_get_error())); return -1; }
+    if (!SSL_CTX_check_private_key(lfapp_ssl)) { ERROR("SSL_CTX_check_private_key ", ERR_reason_error_string(ERR_get_error())); return -1; }
+  }
+#endif
+  Enable(Singleton<UDPClient>::Get());
+  Enable(Singleton<HTTPClient>::Get());
+  Enable(Singleton<UnixClient>::Get());
+
+  vector<IPV4::Addr> nameservers;
+  if (FLAGS_nameserver.empty()) {
+    INFO("Network::Init(): Enable(new Resolver(defaultNameserver()))");
+    Resolver::DefaultNameserver(&nameservers);
+  } else {
+    INFO("Network::Init(): Enable(new Resolver(", FLAGS_nameserver, "))");
+    IPV4::ParseCSV(FLAGS_nameserver, &nameservers);
+  }
+  for (auto &n : nameservers) Singleton<Resolver>::Get()->Connect(n);
+
+  return 0;
+}
+
+int Network::Shutdown(const vector<Service*> &st) { int ret = 0; for (auto s : st) if (Shutdown(s) < 0) ret = -1; return ret; }
+int Network::Disable (const vector<Service*> &st) { int ret = 0; for (auto s : st) if (Disable (s) < 0) ret = -1; return ret; }
+int Network::Enable  (const vector<Service*> &st) { int ret = 0; for (auto s : st) if (Enable  (s) < 0) ret = -1; return ret; }
+
+int Network::Enable(Service *s) {
+
+  /* listen */
+  if (s->listen.size() && !s->initialized) {
+    s->initialized = true;
+    vector<string> removelist;
+    for (Service::ListenMap::iterator i = s->listen.begin(); i != s->listen.end(); ++i) {
+      const IPV4Endpoint *listen_addr = IPV4Endpoint::FromString(i->first.c_str());
+      if (s->Listen(listen_addr->addr, listen_addr->port, i->second) == -1)
+      { delete i->second; removelist.push_back(i->first); }
+    }
+    for (vector<string>::const_iterator i = removelist.begin(); i != removelist.end(); ++i) s->listen.erase(*i);
+  }
+
+  /* insert */
+  auto i = find(service_table.begin(), service_table.end(), s);
+  if (i != service_table.end()) return 0;
+  service_table.push_back(s);
+  return 0;
+}
+
+int Network::Disable(Service *s) {
+  auto i = find(service_table.begin(), service_table.end(), s);
+  if (i == service_table.end()) return -1;
+  service_table.erase(i);
+  return 0;
+}
+
+void Network::ConnClose(Service *svc, Connection *c, ServiceEndpointEraseList *removelist) {
+  if (c->handler) c->handler->Close(c);
+  svc->Close(c);
+  if (removelist) removelist->AddSocket(svc, c->socket);
+  delete c;
+}
+void Network::ConnCloseAll(Service *svc) {
+  for (auto i = svc->conn.begin(), e = svc->conn.end(); i != e; ++i) ConnClose(svc, i->second, 0);
+  svc->conn.clear();
+}
+
+void Network::EndpointRead(Service *svc, const char *name, const char *buf, int len) { return svc->EndpointRead(name, buf, len); }
+void Network::EndpointClose(Service *svc, Connection *c, ServiceEndpointEraseList *removelist, const string &epk) {
+  if (c->handler) c->handler->Close(c);
+  if (svc->listen.empty()) svc->Close(c);
+  if (removelist) removelist->AddEndpoint(svc, epk);
+  delete c;
+}
+void Network::EndpointCloseAll(Service *svc) {
+  for (Service::EndpointMap::iterator i = svc->endpoint.begin(); i != svc->endpoint.end(); ++i)
+    EndpointClose(svc, i->second, 0, "");
+  svc->endpoint.clear();
+}
+
+int Network::Shutdown(Service *svc) {
+  ConnCloseAll(svc);
+  EndpointCloseAll(svc);
+  return 0;
+}
+
+int Network::Frame(unsigned clicks) {
+  static const int listener_type = TypeId<Listener>(), connection_type = TypeId<Connection>();
+  ServiceEndpointEraseList removelist;
+
+  /* select */
+  if (active.Select(select_time))
+  { ERROR("SocketSet.select: ", SystemNetwork::LastError()); return -1; }
+
+#ifndef LFL_NETWORK_MONOLITHIC_FRAME
+  /* iterate events */
+  for (active.cur_event = 0; active.cur_event < active.num_events; active.cur_event++) {
+    typed_ptr *tp = (typed_ptr*)active.events[active.cur_event].data.ptr;
+    if      (tp->type == connection_type) { Connection *c=(Connection*)tp->value; active.cur_fd = c->socket; TCPConnectionFrame(c->svc, c, &removelist); }
+    else if (tp->type == listener_type)   { Listener   *l=(Listener*)  tp->value; active.cur_fd = l->socket; AcceptFrame(l->svc, l); }
+    else FATAL("unknown type", tp->type);
+  }
+#endif
+
+  /* pre loop */
+  for (auto svc : service_table) {
+
+#ifdef LFL_NETWORK_MONOLITHIC_FRAME
+    /* answer listening sockets & UDP server read */
+    for (auto i = svc->listen.begin(), e = svc->listen.end(); i != e; ++i) 
+      if (active.GetReadable(i->second->socket)) AcceptFrame(svc, i->second);
+
+    /* iterate connections */
+    for (auto i = svc->conn.begin(), e = svc->conn.end(); i != e; ++i)
+      TCPConnectionFrame(svc, i->second, &removelist);
+#endif
+
+    /* iterate endpoints */
+    for (auto i = svc->endpoint.begin(), e = svc->endpoint.end(); i != e; i++) {
+      UDPConnectionFrame(svc, (*i).second, &removelist, (*i).first);
+    }
+
+    /* remove closed */
+    removelist.Erase();
+
+    if (svc->heartbeats) { /* connection heartbeats */
+      for (auto i = svc->conn.begin(), e = svc->conn.end(); i != e; ++i) {
+        Connection *c = i->second;
+        int ret = c->handler ? c->handler->Heartbeat(c) : 0;
+        if (c->state == Connection::Error || ret < 0) ConnClose(svc, c, &removelist);
+      }
+
+      for (auto i = svc->endpoint.begin(), e = svc->endpoint.end(); i != e; ++i) {
+        Connection *c = i->second;
+        int ret = c->handler ? c->handler->Heartbeat(c) : 0;
+        if (c->state == Connection::Error || ret < 0) EndpointClose(svc, c, &removelist, c->endpoint_name);
+      }
+
+      removelist.Erase();
+    }
+
+    /* svc specific frame */
+    svc->Frame();
+  }
+  return 0;
+}
+
+void Network::AcceptFrame(Service *svc, Listener *listener) {
+  for (;;) {
+    Connection *c = 0; bool inserted = false;
+    if (listener->ssl) { /* SSL accept */
+#ifdef LFL_OPENSSL
+      struct sockaddr_in sin;
+      int sinSize = sizeof(sin);
+      Socket socket;
+      if (BIO_do_accept(listener->ssl) <= 0) continue;
+      BIO *bio = BIO_pop(listener->ssl);
+      BIO_get_fd(bio, &socket);
+
+      if (::getpeername(socket, (struct sockaddr *)&sin, (socklen_t*)&sinSize) < 0)
+      { if (!SystemNetwork::EWouldBlock()) ERROR("getpeername: ", strerror(errno)); break; }
+
+      /* insert socket */
+      c = svc->Accept(Connection::Connected, socket, sin.sin_addr.s_addr, ntohs(sin.sin_port));
+      if (!c) { SystemNetwork::CloseSocket(socket); continue; }
+      c->bio = bio;
+      BIO_set_nbio(c->bio, 1);
+      BIO_get_ssl(c->bio, &listener->ssl);
+#endif
+    }
+    else if (svc->protocol == Protocol::UDP) { /* UDP server read */
+      struct sockaddr_in sin;
+      int sinSize = sizeof(sin), inserted = 0, ret;
+      char buf[2048];
+      int len = recvfrom(listener->socket, buf, sizeof(buf)-1, 0, (struct sockaddr*)&sin, (socklen_t*)&sinSize);
+      if (len <= 0) {
+        if (SystemNetwork::EWouldBlock()) break;
+        else { ERROR("recvfrom: ", SystemNetwork::LastError()); break; }
+      }
+      buf[len] = 0;
+
+      IPV4Endpoint epk(sin.sin_addr.s_addr, ntohs(sin.sin_port));
+      string epkstr = epk.ToString();
+      Service::EndpointMap::iterator ep = svc->endpoint.find(epkstr);
+      if (ep != svc->endpoint.end()) c = ep->second;
+      else {
+        svc->fake.addr = epk.addr;
+        svc->fake.port = epk.port;
+        svc->fake.socket = listener->socket;
+        if (svc->UDPFilter(&svc->fake, buf, len)) continue;
+        c = new Connection(svc, Connection::Connected, listener->socket, epk.addr, epk.port);
+        svc->endpoint[epkstr] = c;
+        inserted = true;
+      }
+
+      if ((ret = c->AddPacket(buf, len)) != len) 
+      { ERROR(c->Name(), ": addpacket(", len, ")"); c->SetError(); continue; }
+      if (!inserted) continue;
+    }
+    else { /* TCP accept */
+      IPV4::Addr accept_addr = 0; 
+      int accept_port = 0;
+      Socket socket = SystemNetwork::Accept(listener->socket, &accept_addr, &accept_port);
+      if (socket == -1) break;
+
+      /* insert socket */
+      c = svc->Accept(Connection::Connected, socket, accept_addr, accept_port);
+      if (!c) { SystemNetwork::CloseSocket(socket); continue; }
+    }
+    if (!c) continue;
+
+    /* connected 1 */
+    c->SetSourceAddress();
+    INFO(c->Name(), ": incoming connection (socket=", c->socket, ")");
+    if (svc->Connected(c) < 0) c->SetError();
+    if (c->handler) { if (c->handler->Connected(c) < 0) { ERROR(c->Name(), ": handler connected"); c->SetError(); } }
+    if (c->detach) { svc->conn.erase(c->socket); svc->Detach(c); }
+  }
+}
+
+void Network::TCPConnectionFrame(Service *svc, Connection *c, ServiceEndpointEraseList *removelist) {
+  /* complete connecting sockets */
+  if (c->state == Connection::Connecting && active.GetWritable(c->socket)) {
+    int res=0, resSize=sizeof(res);
+    if (!getsockopt(c->socket, SOL_SOCKET, SO_ERROR, (char*)&res, (socklen_t*)&resSize) && !res) {
+
+      /* connected 2 */ 
+      c->SetConnected();
+      c->SetSourceAddress();
+      INFO(c->Name(), ": connected");
+      if (svc->Connected(c) < 0) c->SetError();
+      if (c->handler) { if (c->handler->Connected(c) < 0) { ERROR(c->Name(), ": handler connected"); c->SetError(); } }
+      if (c->detach) { removelist->AddSocket(svc, c->socket); svc->Detach(c); }
+      UpdateActive(c);
+      return;
+    }
+
+    errno = res;
+    INFO(c->Name(), ": connect failed: ", SystemNetwork::LastError());
+    c->SetError();
+  }
+
+  /* IO communicate */
+  else if (c->state == Connection::Connected) do {
+    if (svc->protocol == Protocol::UDP) {
+      if (svc->listen.empty() && active.GetReadable(c->socket)) { /* UDP Client Read */
+        if (c->ReadPackets()<0) { c->SetError(); break; }
+      }
+      if (c->packets.size()) {
+        if (c->handler) { if (c->handler->Read(c) < 0) { ERROR(c->Name(), ": handler UDP read"); c->SetError(); } }
+        c->packets.clear();
+        c->ReadFlush(c->rl);
+      }
+    }
+    else if (c->ssl || active.GetReadable(c->socket)) { /* TCP Read */
+      if (c->Read()<0) { c->SetError(); break; }
+      if (c->rl) {
+        if (c->handler) { if (c->handler->Read(c) < 0) { ERROR(c->Name(), ": handler read"); c->SetError(); } }
+      }
+    }
+
+    if (c->wl && active.GetWritable(c->socket)) {
+      if (c->WriteFlush()<0) { c->SetError(); break; }
+      if (!c->wl) {
+        c->writable = 0;
+        if (c->handler) { if (c->handler->Flushed(c) < 0) { ERROR(c->Name(), ": handler flushed"); c->SetError(); } }
+        UpdateActive(c);
+      }
+    }
+  } while(0);
+
+  /* error */
+  if (c->state == Connection::Error) ConnClose(svc, c, removelist);
+}
+
+void Network::UDPConnectionFrame(Service *svc, Connection *c, ServiceEndpointEraseList *removelist, const string &epk) {
+  if (c->state == Connection::Connected && c->packets.size()) {
+    if (c->handler) { if (c->handler->Read(c) < 0) { ERROR(c->Name(), ": handler UDP read"); c->SetError(); } }
+    c->packets.clear();
+    c->ReadFlush(c->rl);
+  }
+
+  bool timeout; /* Timeout or error */
+  if (c->state == Connection::Error || (timeout = (c->rt + Seconds(FLAGS_udp_idle_sec)) <= Now())) {
+    INFO(c->Name(), ": ", timeout ? "timeout" : "error");
+    EndpointClose(svc, c, removelist, epk);
+  }
+}
+
+void Network::UpdateActive(Connection *c) {
+  if (FLAGS_network_debug) INFO(c->Name(), " active = { ", c->readable?"READABLE":"", " , ", c->writable?"WRITABLE":"", " }");
+  int flag = (c->readable?SocketSet::READABLE:0) | (c->writable?SocketSet::WRITABLE:0);
+  active.Set(c->socket, flag, &c->self_reference);
+}
+
 /* NetworkThread */
 
 NetworkThread::NetworkThread(Network *N) : net(N),
-  rd(new Connection(Singleton<UnixClient>::Get(), new Query())),
-  wr(new Connection(Singleton<UnixClient>::Get(), new Query())),
+  rd(new Connection(Singleton<UnixClient>::Get(), new NetworkThread::ConnectionHandler())),
+  wr(new Connection(Singleton<UnixClient>::Get(), new NetworkThread::ConnectionHandler())),
   thread(new Thread(bind(&NetworkThread::HandleMessagesLoop, this))) {
   Socket fd[2];
   CHECK(SystemNetwork::OpenSocketPair(fd));
@@ -1054,7 +1119,7 @@ NetworkThread::NetworkThread(Network *N) : net(N),
   net->active.Add(rd->socket, SocketSet::READABLE, &rd->self_reference);
 }
 
-int NetworkThread::Query::Read(Connection *c) {
+int NetworkThread::ConnectionHandler::Read(Connection *c) {
   int consumed = 0, s = sizeof(Callback*);
   for (; consumed + s <= c->rl; consumed += s) HandleMessage(*reinterpret_cast<Callback**>(c->rb + consumed));
   if (consumed) c->ReadFlush(consumed);
@@ -1063,8 +1128,8 @@ int NetworkThread::Query::Read(Connection *c) {
 
 /* UDP Client */
 
-struct UDPClientQuery {
-  struct PersistentConnection : public Query {
+struct UDPClientHandler {
+  struct PersistentConnection : public Connection::Handler {
     UDPClient::ResponseCB responseCB; UDPClient::HeartbeatCB heartbeatCB;
     PersistentConnection(UDPClient::ResponseCB RCB, UDPClient::HeartbeatCB HCB) : responseCB(RCB), heartbeatCB(HCB) {}
 
@@ -1088,14 +1153,14 @@ Connection *UDPClient::PersistentConnection(const string &url, ResponseCB respon
   Connection *c = Connect(ipv4_addr, udp_port);
   if (!c) { INFO(url, ": connect failed"); return 0; }
 
-  c->query = new UDPClientQuery::PersistentConnection(responseCB, heartbeatCB);
+  c->handler = new UDPClientHandler::PersistentConnection(responseCB, heartbeatCB);
   return c;
 }
 
 /* HTTPClient */
 
-struct HTTPClientQuery {
-  struct Protocol : public Query {
+struct HTTPClientHandler {
+  struct Protocol : public Connection::Handler {
     int readHeaderLength, readContentLength, currentChunkLength, currentChunkRead;
     bool chunkedEncoding, fullChunkCBs;
     string content_type;
@@ -1182,7 +1247,7 @@ struct HTTPClientQuery {
           svc->Connect(ipv4_addr, port);
       }
       if (!c) { if (cb) cb(0, 0, string(), 0, 0); delete this; }
-      else c->query = this;
+      else c->handler = this;
     }
   };
 
@@ -1240,10 +1305,10 @@ bool HTTPClient::WGet(const string &url, File *out, ResponseCB cb) {
   }
 
   IPV4::Addr addr;
-  HTTPClientQuery::WGet *query = new HTTPClientQuery::WGet(this, ssl, host, tcp_port, path, out, cb);
-  if ((addr = IPV4::Parse(host)) != INADDR_NONE) query->ResolverResponseCB(addr, 0);
-  else if (!Singleton<Resolver>::Get()->Resolve(Resolver::Request(host, DNS::Type::A, bind(&HTTPClientQuery::WGet::ResolverResponseCB, query, _1, _2))))
-  { ERROR("resolver: ", url); delete query; return 0; }
+  HTTPClientHandler::WGet *handler = new HTTPClientHandler::WGet(this, ssl, host, tcp_port, path, out, cb);
+  if ((addr = IPV4::Parse(host)) != INADDR_NONE) handler->ResolverResponseCB(addr, 0);
+  else if (!Singleton<Resolver>::Get()->Resolve(Resolver::Request(host, DNS::Type::A, bind(&HTTPClientHandler::WGet::ResolverResponseCB, handler, _1, _2))))
+  { ERROR("resolver: ", url); delete handler; return 0; }
   return true;
 }
 
@@ -1251,9 +1316,9 @@ bool HTTPClient::WPost(const string &url, const string &mimetype, const char *po
   bool ssl; int tcp_port; string host, path;
   if (!HTTP::ResolveURL(url.c_str(), &ssl, 0, &tcp_port, &host, &path)) return 0;
 
-  HTTPClientQuery::WPost *query = new HTTPClientQuery::WPost(this, ssl, host, tcp_port, path, mimetype, postdata, postlen, cb);
-  if (!Singleton<Resolver>::Get()->Resolve(Resolver::Request(host, DNS::Type::A, bind(&HTTPClientQuery::WGet::ResolverResponseCB, query, _1, _2))))
-  { ERROR("resolver: ", url); delete query; return 0; }
+  HTTPClientHandler::WPost *handler = new HTTPClientHandler::WPost(this, ssl, host, tcp_port, path, mimetype, postdata, postlen, cb);
+  if (!Singleton<Resolver>::Get()->Resolve(Resolver::Request(host, DNS::Type::A, bind(&HTTPClientHandler::WGet::ResolverResponseCB, handler, _1, _2))))
+  { ERROR("resolver: ", url); delete handler; return 0; }
 
   return true;
 }
@@ -1270,16 +1335,16 @@ Connection *HTTPClient::PersistentConnection(const string &url, string *host, st
 
   if (!c) return 0;
 
-  c->query = new HTTPClientQuery::PersistentConnection(responseCB);
+  c->handler = new HTTPClientHandler::PersistentConnection(responseCB);
   return c;
 }
 
 /* HTTPServer */
 
-struct HTTPServerConnection : public Query {
+struct HTTPServerConnection : public Connection::Handler {
   HTTPServer *server;
   bool persistent;
-  Query *refill;
+  Connection::Handler *refill;
 
   struct ClosedCallback {
     HTTPServer::ConnectionClosedCB cb;
@@ -1379,7 +1444,7 @@ struct HTTPServerConnection : public Query {
     if (refill) {
       int ret;
       if ((ret = refill->Flushed(c))) return ret;
-      Replace<Query>(&refill, 0);
+      Replace<Connection::Handler>(&refill, 0);
       c->readable = 1;
       return 0;
     }
@@ -1407,10 +1472,10 @@ struct HTTPServerConnection : public Query {
   }
 };
 
-int HTTPServer::Connected(Connection *c) { c->query = new HTTPServerConnection(this); return 0; }
+int HTTPServer::Connected(Connection *c) { c->handler = new HTTPServerConnection(this); return 0; }
 
 void HTTPServer::connectionClosedCB(Connection *c, ConnectionClosedCB cb) {
-  ((HTTPServerConnection*)c->query)->closedCB.push_back(HTTPServerConnection::ClosedCallback(cb));
+  ((HTTPServerConnection*)c->handler)->closedCB.push_back(HTTPServerConnection::ClosedCallback(cb));
 } 
 
 HTTPServer::Response HTTPServer::Response::_400
@@ -1427,9 +1492,9 @@ HTTPServer::Response HTTPServer::Response::_400
 
 /* FileResource */
 
-struct FileResourceQuery : public Query {
+struct HTTPServerFileResourceHandler : public Connection::Handler {
   LocalFile f;
-  FileResourceQuery(const string &fn) : f(fn, "r") {}
+  HTTPServerFileResourceHandler(const string &fn) : f(fn, "r") {}
   int Flushed(Connection *c) {
     if (!f.Opened()) return 0;
     c->writable = 1;
@@ -1441,7 +1506,7 @@ struct FileResourceQuery : public Query {
 
 HTTPServer::Response HTTPServer::FileResource::Request(Connection *, int method, const char *url, const char *args, const char *headers, const char *postdata, int postlen) {
   if (!size) return HTTPServer::Response::_400;
-  return Response(type, size, new FileResourceQuery(filename));
+  return Response(type, size, new HTTPServerFileResourceHandler(filename));
 }
 
 /* ConsoleResource */
@@ -1457,7 +1522,7 @@ HTTPServer::Response HTTPServer::ConsoleResource::Request(Connection *c, int met
 /* StreamResource */
 
 #ifdef LFL_FFMPEG
-struct StreamResourceClient : public Query {
+struct StreamResourceClient : public Connection::Handler {
   Connection *conn;
   HTTPServer::StreamResource *resource;
   AVFormatContext *fctx;
@@ -1747,7 +1812,7 @@ void HTTPServer::StreamResource::Broadcast(AVPacket *pkt, microseconds timestamp
 #define SSHTrace(...)
 #endif
 
-struct SSHClientConnection : public Query {
+struct SSHClientConnection : public Connection::Handler {
   enum { INIT=0, FIRST_KEXINIT=1, FIRST_KEXREPLY=2, FIRST_NEWKEYS=3, KEXINIT=4, KEXREPLY=5, NEWKEYS=6 };
 
   SSHClient::ResponseCB cb;
@@ -2117,15 +2182,15 @@ struct SSHClientConnection : public Query {
 Connection *SSHClient::Open(const string &hostport, const SSHClient::ResponseCB &cb, Callback *detach) { 
   Connection *c = Connect(hostport, 22, detach);
   if (!c) return 0;
-  c->query = new SSHClientConnection(cb, hostport);
+  c->handler = new SSHClientConnection(cb, hostport);
   return c;
 }
-int  SSHClient::WriteChannelData     (Connection *c, const StringPiece &b)                            { return dynamic_cast<SSHClientConnection*>(c->query)->WriteChannelData(c, b); }
-int  SSHClient::SetTerminalWindowSize(Connection *c, int w, int h)                                    { return dynamic_cast<SSHClientConnection*>(c->query)->SetTerminalWindowSize(c, w, h); }
-void SSHClient::SetUser              (Connection *c, const string &user)                                     { dynamic_cast<SSHClientConnection*>(c->query)->user = user; }
-void SSHClient::SetPasswordCB(Connection *c, const Vault::LoadPasswordCB &L, const Vault::SavePasswordCB &S) { dynamic_cast<SSHClientConnection*>(c->query)->SetPasswordCB(L, S); }
+int  SSHClient::WriteChannelData     (Connection *c, const StringPiece &b)                            { return dynamic_cast<SSHClientConnection*>(c->handler)->WriteChannelData(c, b); }
+int  SSHClient::SetTerminalWindowSize(Connection *c, int w, int h)                                    { return dynamic_cast<SSHClientConnection*>(c->handler)->SetTerminalWindowSize(c, w, h); }
+void SSHClient::SetUser              (Connection *c, const string &user)                                     { dynamic_cast<SSHClientConnection*>(c->handler)->user = user; }
+void SSHClient::SetPasswordCB(Connection *c, const Vault::LoadPasswordCB &L, const Vault::SavePasswordCB &S) { dynamic_cast<SSHClientConnection*>(c->handler)->SetPasswordCB(L, S); }
 
-struct SMTPClientConnection : public Query {
+struct SMTPClientConnection : public Connection::Handler {
   enum { INIT=0, SENT_HELO=1, READY=2, MAIL_FROM=3, RCPT_TO=4, SENT_DATA=5, SENDING=6, RESETING=7, QUITING=8 };
   SMTPClient *server;
   SMTPClient::DeliverableCB deliverable_cb;
@@ -2213,13 +2278,13 @@ Connection *SMTPClient::DeliverTo(IPV4::Addr ipv4_addr, IPV4EndpointSource *src_
   Connection *c = Connect(ipv4_addr, tcp_port, src_pool);
   if (!c) return 0;
 
-  c->query = new SMTPClientConnection(this, deliverable_cb, delivered_cb);
+  c->handler = new SMTPClientConnection(this, deliverable_cb, delivered_cb);
   return c;
 }
 
-void SMTPClient::DeliverDeferred(Connection *c) { ((SMTPClientConnection*)c->query)->Deliver(c); }
+void SMTPClient::DeliverDeferred(Connection *c) { ((SMTPClientConnection*)c->handler)->Deliver(c); }
 
-struct SMTPServerConnection : public Query {
+struct SMTPServerConnection : public Connection::Handler {
   SMTPServer *server;
   string my_domain, client_domain;
   SMTP::Message message;
@@ -2298,7 +2363,7 @@ struct SMTPServerConnection : public Query {
   }
 };
 
-int SMTPServer::Connected(Connection *c) { total_connected++; c->query = new SMTPServerConnection(this); return 0; }
+int SMTPServer::Connected(Connection *c) { total_connected++; c->handler = new SMTPServerConnection(this); return 0; }
 
 void SMTPServer::ReceiveMail(Connection *c, const SMTP::Message &mail) {
   INFO("SMTPServer::ReceiveMail FROM=", mail.mail_from, ", TO=", mail.rcpt_to, ", content=", mail.content);
@@ -2306,8 +2371,8 @@ void SMTPServer::ReceiveMail(Connection *c, const SMTP::Message &mail) {
 
 /* GPlusClient */
 
-struct GPlusClientQuery {
-  struct PersistentConnection : public Query {
+struct GPlusClientHandler {
+  struct PersistentConnection : public Connection::Handler {
     UDPClient::ResponseCB responseCB;
     UDPClient::HeartbeatCB heartbeatCB;
     PersistentConnection(UDPClient::ResponseCB RCB, UDPClient::HeartbeatCB HCB) : responseCB(RCB), heartbeatCB(HCB) {}
@@ -2326,7 +2391,7 @@ struct GPlusClientQuery {
 
 Connection *GPlusClient::PersistentConnection(const string &name, UDPClient::ResponseCB responseCB, UDPClient::HeartbeatCB HCB) {
   Connection *c = EndpointConnect(name);
-  c->query = new GPlusClientQuery::PersistentConnection(responseCB, HCB);
+  c->handler = new GPlusClientHandler::PersistentConnection(responseCB, HCB);
   return c;
 }
 

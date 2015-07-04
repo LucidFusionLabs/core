@@ -45,6 +45,31 @@ TEST(UtilTest, TopN) {
     for (auto i : top.data) EXPECT_EQ(expect[ind++], i);
 }
 
+TEST(ArrayTest, SortedArray) {
+    SortedArray<int> top;
+    top.Insert(87);
+    top.Insert(99);
+    top.Insert(1003);
+    top.Insert(1009);
+    top.Insert(41);
+    int expect[] = { 41, 87, 99, 1003, 1009 }, ind = 0;
+    for (auto i : top) EXPECT_EQ(expect[ind++], i);
+}
+
+TEST(ArrayTest, SortedArrayMap) {
+    SortedArrayMap<int, int> top;
+    top.Insert(87, 87);
+    top.Insert(99, 99);
+    top.Insert(1003, 1003);
+    top.Insert(1009, 1009);
+    top.Insert(41, 41);
+    int expect[] = { 41, 87, 99, 1003, 1009 }, ind = 0;
+    for (auto &i : top) {
+      EXPECT_EQ(expect[ind  ], i.first);
+      EXPECT_EQ(expect[ind++], i.second);
+    }
+}
+
 TEST(ArrayTest, Segment) {
     {
         struct ZZSeg1 { int x, y; ZZSeg1(int X=0, int Y=0) : x(X), y(Y) {} };

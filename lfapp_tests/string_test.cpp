@@ -99,6 +99,11 @@ TEST(StringTest, WordIter) {
         EXPECT_NE(nullptr, ((word = words.Next()))); EXPECT_EQ(0, strncmp(word, "eeee",     words.cur_len));
         EXPECT_EQ(nullptr, ((word = words.Next())));
     }
+    {
+        StringWordIter words("");
+        EXPECT_EQ("", IterNextString(&words));
+        EXPECT_EQ(true, words.Done());
+    }
 }
 
 TEST(IterTest, LineIter) {
