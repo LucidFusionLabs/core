@@ -331,9 +331,8 @@ void ProcessAPIClient::StartServer(const string &server_program) {
 }
 
 void ProcessAPIClient::LoadResource(const string &content, const string &fn, const ProcessAPIClient::LoadResourceCompleteCB &cb) { 
-  CHECK(conn);
   MultiProcessBuffer mpb;
-  if (!mpb.Create(MultiProcessResource::File(content, fn, ""))) return cb(MultiProcessResource::Texture());
+  if (!conn || !mpb.Create(MultiProcessResource::File(content, fn, ""))) return cb(MultiProcessResource::Texture());
 
   reqmap[seq] = cb;
   int wrote = ProcessAPIWrite(conn, InterProcessProtocol::LoadResourceRequest(MultiProcessResource::File::Type, mpb.url, mpb.len),
