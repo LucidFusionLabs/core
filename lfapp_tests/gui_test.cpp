@@ -653,6 +653,19 @@ TEST(GUITest, Terminal) {
     EXPECT_EQ(0,  Terminal::Attr::GetBGColorIndex(cursor_attr));
     cursor_attr &= ~Terminal::Attr::Bold;
     EXPECT_EQ(4,  Terminal::Attr::GetFGColorIndex(cursor_attr));
+
+    TerminalTest ta(NULL, screen, Fonts::Fake());
+    ta.SetDimension(80, 25);
+    EXPECT_EQ(80, ta.term_width);
+    EXPECT_EQ(25, ta.term_height);
+    EXPECT_EQ(25, ta.line.Size());
+    EXPECT_EQ(1, ta.term_cursor.x);
+    EXPECT_EQ(1, ta.term_cursor.y);
+    ta.Write("\x1b[13;33H"); EXPECT_EQ(33, ta.term_cursor.x); EXPECT_EQ(13, ta.term_cursor.y);
+    ta.Write("\x1b[Z");      EXPECT_EQ(25, ta.term_cursor.x); EXPECT_EQ(13, ta.term_cursor.y);
+    ta.Write("\x1b[Z");      EXPECT_EQ(17, ta.term_cursor.x); EXPECT_EQ(13, ta.term_cursor.y);
+    ta.Write("\x1b[Z");      EXPECT_EQ(9,  ta.term_cursor.x); EXPECT_EQ(13, ta.term_cursor.y);
+    ta.Write("\x1b[Z");      EXPECT_EQ(1,  ta.term_cursor.x); EXPECT_EQ(13, ta.term_cursor.y);
 }
 
 TEST(GUITest, LineTokenProcessor) {

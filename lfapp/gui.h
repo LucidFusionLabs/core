@@ -37,6 +37,7 @@ struct GUI : public MouseController {
   void UpdateBox(const Box &b, int draw_box_ind, int input_box_ind);
   void UpdateBoxX(int x, int draw_box_ind, int input_box_ind);
   void UpdateBoxY(int y, int draw_box_ind, int input_box_ind);
+  void IncrementBoxY(int y, int draw_box_ind, int input_box_ind);
 
   virtual point MousePosition() const { return screen->mouse - box.TopLeft(); }
   virtual void SetLayoutDirty() { child_box.Clear(); }
@@ -152,14 +153,15 @@ struct KeyboardGUI : public KeyboardController {
 
 struct TextGUI : public KeyboardGUI {
   struct Lines;
+  struct Line;
   struct Link : public Widget::Interface {
     Box3 box;
     string link;
-    TextGUI *parent=0;
+    Line *line=0;
     shared_ptr<Texture> image;
-    Link(TextGUI *P, GUI *G, const Box3 &b, const string &U);
-    ~Link() { if (parent->hover_link == this) parent->hover_link = 0; }
-    void Hover(int, int, int, int down) { parent->hover_link = down ? this : 0; }
+    Link(Line *P, GUI *G, const Box3 &b, const string &U);
+    virtual ~Link() { if (line->parent->hover_link == this) line->parent->hover_link = 0; }
+    void Hover(int, int, int, int down) { line->parent->hover_link = down ? this : 0; }
     void Visit() { SystemBrowser::Open(link.c_str()); }
   };
 
@@ -167,6 +169,7 @@ struct TextGUI : public KeyboardGUI {
     Box box;
     Flow flow;
     DrawableBoxArray glyphs;
+    bool outside_scroll_region=0;
     unordered_map<int, shared_ptr<Link> > links;
   };
 
@@ -225,6 +228,7 @@ struct TextGUI : public KeyboardGUI {
   };
 
   struct Lines : public RingVector<Line> {
+    TextGUI *parent;
     int wrapped_lines;
     function<void(Line&, Line&)> move_cb, movep_cb;
     Lines(TextGUI *P, int N);
@@ -255,10 +259,10 @@ struct TextGUI : public KeyboardGUI {
   };
 
   struct LinesGUI : public GUI {
-    LinesFrameBuffer *fb;
-    LinesGUI(Window *W=0, const Box &B=Box(), LinesFrameBuffer *FB=0) : GUI(W, B), fb(FB) {}
+    TextGUI *parent;
+    LinesGUI(TextGUI *P, Window *W=0, const Box &B=Box()) : GUI(W, B), parent(P) {}
     bool NotActive() const { return !box.within(screen->mouse); }
-    point MousePosition() const { return fb->BackPlus(screen->mouse - box.BottomLeft()); }
+    point MousePosition() const;
   };
 
   struct LineUpdate {
@@ -302,8 +306,9 @@ struct TextGUI : public KeyboardGUI {
   function<void(const shared_ptr<Link>&)> new_link_cb;
   function<void(Link*)> hover_link_cb;
   Link *hover_link=0;
+  const Border *clip=0;
 
-  TextGUI(Window *W, Font *F) : KeyboardGUI(W, F), mouse_gui(W), font(F)
+  TextGUI(Window *W, Font *F) : KeyboardGUI(W, F), mouse_gui(this, W), font(F)
   { layout.pad_wide_chars=1; cmd_line.Init(this,0); cmd_line.GetAttrId(Drawable::Attr(F)); }
 
   virtual ~TextGUI() {}
@@ -340,13 +345,12 @@ struct TextArea : public TextGUI {
   Lines line;
   LinesFrameBuffer line_fb;
   Time write_last=Time(0);
-  const Border *clip=0;
   bool wrap_lines=1, write_timestamp=0, write_newline=1, reverse_line_fb=0;
   int line_left=0, end_line_adjust=0, start_line_cutoff=0, end_line_cutoff=0;
   int scroll_inc=10, scrolled_lines=0;
   float v_scrolled=0, h_scrolled=0, last_v_scrolled=0, last_h_scrolled=0;
 
-  TextArea(Window *W, Font *F, int S=200) : TextGUI(W, F), line(this, S) { mouse_gui.fb = &line_fb; if (selection.enabled) InitSelection(); }
+  TextArea(Window *W, Font *F, int S=200) : TextGUI(W, F), line(this, S) { if (selection.enabled) InitSelection(); }
   virtual ~TextArea() {}
 
   /// Write() is thread-safe.
@@ -367,6 +371,7 @@ struct TextArea : public TextGUI {
 
   struct DrawFlag { enum { DrawCursor=1, CheckResized=2 }; };
   virtual void Draw(const Box &w, int flag, Shader *shader=0);
+  virtual void DrawHoverLink(const Box &w);
   virtual bool GetGlyphFromCoords(const point &p, Selection::Point *out) { return GetGlyphFromCoordsOffset(p, out, start_line, start_line_adjust); }
   bool GetGlyphFromCoordsOffset(const point &p, Selection::Point *out, int sl, int sla);
 
@@ -418,7 +423,7 @@ struct Terminal : public TextArea, public Drawable::AttrSource {
 
   ByteSink *sink=0;
   int term_width=0, term_height=0, parse_state=State::TEXT, default_cursor_attr=0;
-  int scroll_region_beg=0, scroll_region_end=0;
+  int scroll_region_beg=0, scroll_region_end=0, tab_width=8;
   string parse_text, parse_csi, parse_osc;
   unsigned char parse_charset=0;
   bool parse_osc_escape=0, cursor_enabled=1, first_resize=1;
@@ -429,6 +434,7 @@ struct Terminal : public TextArea, public Drawable::AttrSource {
   Colors *colors=0;
   Color *bg_color=0;
   mutable Drawable::Attr last_attr;
+  set<int> tab_stop;
 
   Terminal(ByteSink *O, Window *W, Font *F);
   virtual ~Terminal() {}
@@ -451,6 +457,7 @@ struct Terminal : public TextArea, public Drawable::AttrSource {
   virtual void PageDown   () { char k[] = "\x1b[6~"; sink->Write( k, 4); }
   virtual void Home       () { char k = 'A' - 0x40;  sink->Write(&k, 1); }
   virtual void End        () { char k = 'E' - 0x40;  sink->Write(&k, 1);  }
+  virtual void MoveToOrFromScrollRegion(LinesFrameBuffer *fb, Line *l, const point &p, int flag);
   virtual void UpdateCursor() { cursor.p = point(GetCursorX(term_cursor.x, term_cursor.y), GetCursorY(term_cursor.y)); }
   virtual void UpdateToken(Line*, int word_offset, int word_len, int update_type, const LineTokenProcessor*);
   virtual int UpdateLines(float v_scrolled, int *first_ind, int *first_offset, int *first_len) { return 0; }
@@ -492,6 +499,10 @@ struct Terminal : public TextArea, public Drawable::AttrSource {
   void FlushParseText();
   void Newline(bool carriage_return=false);
   void NewTopline();
+  void TabNext(int n);
+  void TabPrev(int n);
+  void Clear();
+  void Reset();
 };
 
 struct Console : public TextArea {

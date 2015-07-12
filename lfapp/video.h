@@ -296,6 +296,8 @@ struct Box3 {
     Box       &operator[](int i)       { return v[i]; }
     bool Null() const { return !v[0].h; }
     void Clear() { for (int i=0; i<3; i++) v[i].clear(); }
+    Box3 &operator+=(const point &p) { for (int i=0; i<3; i++) if (!i || v[i].h) v[i] += p; return *this; }
+    Box3 &operator-=(const point &p) { for (int i=0; i<3; i++) if (!i || v[i].h) v[i] -= p; return *this; }
     string DebugString() const { string ret = "Box3{"; for (int i=0; i<3; i++) if (!i || v[i].h) StrAppend(&ret, v[i].DebugString(), ", "); return ret + "}"; }
     void AddBorder(const Border &b, Box3 *out) const { for (int i=0; i<3; i++) if (!i || v[i].h) out->v[i] = Box::AddBorder(v[i], b); }
     void DelBorder(const Border &b, Box3 *out) const { for (int i=0; i<3; i++) if (!i || v[i].h) out->v[i] = Box::DelBorder(v[i], b); }
@@ -535,6 +537,7 @@ struct Window : public NativeWindow {
     void InitConsole();
     void ClearEvents();
     void ClearGesture();
+    void SetCaption(const string &c);
     void Reshape(int w, int h);
     void Reshaped(int w, int h);
     void Closed() { Window::Close(this); }

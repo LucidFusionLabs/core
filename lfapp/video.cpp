@@ -1028,6 +1028,7 @@ extern "C" void *OSXCreateWindow(int W, int H, struct NativeWindow *nw);
 extern "C" void OSXDestroyWindow(void *O);
 extern "C" void OSXMakeWindowCurrent(void *O);
 extern "C" void OSXSetWindowSize(void*, int W, int H);
+extern "C" void OSXSetWindowTitle(void *O, const char *v);
 extern "C" void *OSXCreateGLContext(void *O);
 struct OSXVideoModule : public Module {
   int Init() {
@@ -1041,6 +1042,7 @@ struct OSXVideoModule : public Module {
 bool Window::Create(Window *W) { 
   W->id = OSXCreateWindow(W->width, W->height, W);
   if (W->id) Window::active[W->id] = W;
+  OSXSetWindowTitle(W->id, W->caption.c_str());
   return true; 
 }
 void Window::MakeCurrent(Window *W) { 
@@ -1512,6 +1514,12 @@ int Video::Swap() {
 int Video::Free() {
   if (impl) impl->Free();
   return 0;
+}
+
+void Window::SetCaption(const string &v) {
+#if defined(LFL_OSXVIDEO)
+  OSXSetWindowTitle(id, v.c_str());
+#endif
 }
 
 void Window::Reshape(int w, int h) {

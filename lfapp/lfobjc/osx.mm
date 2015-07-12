@@ -392,6 +392,9 @@ extern "C" void OSXMakeWindowCurrent(void *O) {
 extern "C" void OSXSetWindowSize(void *O, int W, int H) {
     [[(GameView*)O window] setContentSize:NSMakeSize(W, H)];
 }
+extern "C" void OSXSetWindowTitle(void *O, const char *v) {
+    [(GameView*)O window].title = [NSString stringWithUTF8String:v];
+}
 extern "C" void OSXVideoSwap(void *O) {
     // [[(GameView*)O openGLContext] flushBuffer];
     CGLFlushDrawable([[(GameView*)O openGLContext] CGLContextObj]);
