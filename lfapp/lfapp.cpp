@@ -129,7 +129,7 @@ extern "C" int  iPhonePasswordCopy(const char *, const char*, const char*,      
 extern "C" bool iPhonePasswordSave(const char *, const char*, const char*, const char*, int);
 #elif defined(__APPLE__)
 extern "C" void OSXStartWindow(void*);
-extern "C" void OSXCreateNativeMenu(const char*, int, const char**, const char**);
+extern "C" void OSXCreateNativeMenu(const char*, int, const char**, const char**, const char**);
 extern "C" void OSXTriggerFrame(void*);
 extern "C" bool OSXTriggerFrameIn(void*, int ms, bool force);
 extern "C" void OSXClearTriggerFrameIn(void *O);
@@ -901,22 +901,22 @@ void Application::LaunchNativeMenu(const string &title) {
 #endif
 }
 
-void Application::AddNativeMenu(const string &title, const vector<pair<string, string>>&items) {
+void Application::AddNativeMenu(const string &title, const vector<tuple<string, string, string>>&items) {
 #if defined(LFL_IPHONE)
-  vector<const char *> k, v;
-  for (auto &i : items) { k.push_back(i.first.c_str()); v.push_back(i.second.c_str()); }
-  iPhoneCreateNativeMenu(title.c_str(), items.size(), &k[0], &v[0]);
+  vector<const char *> n, v;
+  for (auto &i : items) { n.push_back(tuple_get<1>(i).c_str()); v.push_back(tuple_get<2>(i).c_str()); }
+  iPhoneCreateNativeMenu(title.c_str(), items.size(), &n[0], &v[0]);
 #elif defined(LFL_OSXVIDEO)
-  vector<const char *> k, v;
-  for (auto &i : items) { k.push_back(i.first.c_str()); v.push_back(i.second.c_str()); }
-  OSXCreateNativeMenu(title.c_str(), items.size(), &k[0], &v[0]);
+  vector<const char *> k, n, v;
+  for (auto &i : items) { k.push_back(tuple_get<0>(i).c_str()); n.push_back(tuple_get<1>(i).c_str()); v.push_back(tuple_get<2>(i).c_str()); }
+  OSXCreateNativeMenu(title.c_str(), items.size(), &k[0], &n[0], &v[0]);
 #elif defined(LFL_WINVIDEO)
   WinWindow *win = static_cast<WinWindow*>(screen->impl);
   if (!win->menu) { win->menu = CreateMenu(); win->context_menu = CreatePopupMenu(); }
   HMENU hAddMenu = CreatePopupMenu();
   for (auto &i : items) {
-    AppendMenu(hAddMenu, MF_STRING, win->start_msg_id + win->menu_cmds.size(), i.first.c_str());
-    win->menu_cmds.push_back(i.second);
+    AppendMenu(hAddMenu, MF_STRING, win->start_msg_id + win->menu_cmds.size(), tuple_get<1>(i).c_str());
+    win->menu_cmds.push_back(tuple_get<2>(i));
   }
   AppendMenu(win->menu,         MF_STRING | MF_POPUP, (UINT)hAddMenu, title.c_str());
   AppendMenu(win->context_menu, MF_STRING | MF_POPUP, (UINT)hAddMenu, title.c_str());

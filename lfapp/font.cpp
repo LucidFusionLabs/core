@@ -106,7 +106,7 @@ int Glyph::Layout(LFL::Box *out, const Drawable::Attr *attr) const {
 }
 
 void Glyph::Draw(const LFL::Box &b, const Drawable::Attr *a) const {
-    if (isspace(id) || id == Unicode::non_breaking_space) return;
+    if (space) return;
     if (!a || !a->font) return tex.Draw(b, a);
     if (!ready) a->font->engine->LoadGlyphs(a->font, this, 1);
     if (tex.buf) screen->gd->DrawPixels(b, tex);
@@ -265,9 +265,9 @@ template <class X> void Font::Size(const StringPieceT<X> &text, Box *out, int ma
     for (int i=0; i<line_box.size(); i++) out->w = max(out->w, line_box[i].w);
 }
 
-template <class X> void Font::Encode(const StringPieceT<X> &text, const Box &box, DrawableBoxArray *out, int draw_flag, int attr_id) {
+template <class X> void Font::Shape(const StringPieceT<X> &text, const Box &box, DrawableBoxArray *out, int draw_flag, int attr_id) {
     Flow flow(&box, this, out);
-    if (draw_flag & DrawFlag::AssignFlowX) flow.p.x = box.x;
+    if (!(draw_flag & DrawFlag::DontAssignFlowP)) flow.p = box.Position();
     flow.layout.wrap_lines     = !(draw_flag & DrawFlag::NoWrap) && box.w;
     flow.layout.word_break     = !(draw_flag & DrawFlag::GlyphBreak);
     flow.layout.align_center   =  (draw_flag & DrawFlag::AlignCenter);
@@ -288,7 +288,7 @@ template <class X> void Font::Encode(const StringPieceT<X> &text, const Box &box
 
 template <class X> int Font::Draw(const StringPieceT<X> &text, const Box &box, vector<Box> *lb, int draw_flag) {
     DrawableBoxArray out;
-    Encode(text, box, &out, draw_flag);
+    Shape(text, box, &out, draw_flag | DrawFlag::DontAssignFlowP);
     if (lb) *lb = out.line;
     if (!(draw_flag & DrawFlag::Clipped)) out.Draw(box.TopLeft());
     return out.line.size();
@@ -296,8 +296,8 @@ template <class X> int Font::Draw(const StringPieceT<X> &text, const Box &box, v
 
 template void Font::Size  <char> (const StringPiece   &text, Box *out, int maxwidth, int *lines_out);
 template void Font::Size  <short>(const String16Piece &text, Box *out, int maxwidth, int *lines_out);
-template void Font::Encode<char> (const StringPiece   &text, const Box &box, DrawableBoxArray *out, int draw_flag, int attr_id);
-template void Font::Encode<short>(const String16Piece &text, const Box &box, DrawableBoxArray *out, int draw_flag, int attr_id);
+template void Font::Shape <char> (const StringPiece   &text, const Box &box, DrawableBoxArray *out, int draw_flag, int attr_id);
+template void Font::Shape <short>(const String16Piece &text, const Box &box, DrawableBoxArray *out, int draw_flag, int attr_id);
 template int  Font::Draw  <char> (const StringPiece   &text, const Box &box, vector<Box> *lb, int draw_flag);
 template int  Font::Draw  <short>(const String16Piece &text, const Box &box, vector<Box> *lb, int draw_flag);
 
@@ -394,6 +394,7 @@ Font *AtlasFontEngine::OpenAtlas(const FontDesc &d) {
         Glyph *g = ret->FindOrInsertGlyph(glyph_ind);
         g->FromArray(gm.F->row(i), gm.F->N);
         g->tex.ID = tex.ID;
+        if (d.unicode) g->space = isspace(g->id) || g->id == Unicode::non_breaking_space;
         if (!g->advance) {
             g->advance = g->tex.width;
             g->bearing_y = g->tex.height;
@@ -557,6 +558,7 @@ int FreeTypeFontEngine::InitGlyphs(Font *f, Glyph *g, int n) {
         g->bearing_x  = face->glyph->bitmap_left;
         g->bearing_y  = face->glyph->bitmap_top;
         g->advance    = RoundF(face->glyph->advance.x/64.0);
+        g->space      = isspace(g->id) || g->id == Unicode::non_breaking_space;
         f->UpdateMetrics(g);
     }
     return count;
@@ -748,6 +750,7 @@ void CoreTextFontEngine::AssignGlyph(Glyph *g, const CGRect &bounds, struct CGSi
     g->tex.width  = RoundUp(x_extent - g->bearing_x);
     g->tex.height = g->bearing_y - RoundLower(bounds.origin.y);
     g->advance    = RoundF(advance.width);
+    g->space      = isspace(g->id) || g->id == Unicode::non_breaking_space;
     g->internal.coretext.origin_x = bounds.origin.x;
     g->internal.coretext.origin_y = bounds.origin.y;
     g->internal.coretext.width    = bounds.size.width;

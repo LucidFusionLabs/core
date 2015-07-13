@@ -1480,8 +1480,8 @@ void Video::InitFonts() {
   }
 
   FontEngine *atlas_engine = Singleton<AtlasFontEngine>::Get();
-  atlas_engine->Init(FontDesc("MenuAtlas1", "", 0, Color::black));
-  atlas_engine->Init(FontDesc("MenuAtlas2", "", 0, Color::black));
+  atlas_engine->Init(FontDesc("MenuAtlas1", "", 0, Color::black, Color::clear, -1, 0));
+  atlas_engine->Init(FontDesc("MenuAtlas2", "", 0, Color::black, Color::clear, -1, 0));
 }
 
 int Video::Swap() {
@@ -1544,6 +1544,7 @@ void Window::Reshape(int w, int h) {
 }
 
 void Window::Reshaped(int w, int h) {
+  INFO("Window::Reshaped(", w, ", ", h, ")");
   pow2_width = NextPowerOfTwo((width = w));
   pow2_height = NextPowerOfTwo((height = h));
   if (!gd) return;
@@ -2280,7 +2281,7 @@ int Shader::Create(const string &name, const string &vertex_shader, const string
 
 int Shader::CreateShaderToy(const string &name, const string &pixel_shader, Shader *out) {
   static string header =
-    "uniform float iGlobalTime;\r\n"
+    "uniform float iGlobalTime, iBlend;\r\n"
     "uniform vec3 iResolution;\r\n"
     "uniform vec2 iScroll;\r\n"
     "uniform vec4 iMouse;\r\n"
@@ -2290,8 +2291,13 @@ int Shader::CreateShaderToy(const string &name, const string &pixel_shader, Shad
     "#define SampleChannelAtPoint(c, p) SampleChannelAtPointAndModulus(c, p, iChannelResolution[0].xy/iResolution.xy)\r\n"
     "#define SamplePoint() ((fragCoord.xy + iScroll)/iResolution.xy)\r\n"
     "#define SamplePointFlipY() vec2((fragCoord.x+iScroll.x)/iResolution.x, (iResolution.y-fragCoord.y-iScroll.y)/iResolution.y)\r\n"
-    "#define SampleChannel(c) SampleChannelAtPoint(c, SamplePoint())\r\n";
-    
+    "#define SampleChannel(c) SampleChannelAtPoint(c, SamplePoint())\r\n"
+#ifdef LFL_MOBILE
+    "#define BlendChannels(c1,c2) (((c1) + (c2))/2.0)\r\n";
+#else
+    "#define BlendChannels(c1,c2) ((c1)*iBlend + (c2)*(1.0-iBlend))\r\n";
+#endif
+
   static string footer =
     "void main(void) { mainImage(gl_FragColor, gl_FragCoord.xy); }\r\n";
   return Shader::Create(name, screen->gd->vertex_shader, StrCat(header, pixel_shader, footer), ShaderDefines(1,0,1,0), out);

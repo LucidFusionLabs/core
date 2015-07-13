@@ -85,7 +85,7 @@ static const char **osx_argv = 0;
     - (void)windowDidResignMain:(NSNotification *)notification { [self clearKeyModifiers]; }
     - (void)setWindow:(NSWindow*)w { window = w; }
     - (void)setScreen:(NativeWindow*)s { screen = s; }
-    - (void)setFrame:(NSRect)frame { [super setFrame:frame]; needs_reshape=YES; [self update]; }
+    - (void)setFrameSize:(NSSize)s { [super setFrameSize:s]; needs_reshape=YES; [self update]; }
     - (void)setFrameOnMouseInput:(bool)v { frame_on_mouse_input = v; }
     - (void)setFrameOnKeyboardInput:(bool)v { frame_on_keyboard_input = v; }
     - (void)viewDidChangeBackingProperties {
@@ -97,7 +97,7 @@ static const char **osx_argv = 0;
     - (void)lockFocus {
         [super lockFocus];
         CGLLockContext([context CGLContextObj]);
-        [context setView:self];
+        if ([context view] != self) [context setView:self];
         SetNativeWindow(screen);
         if (needs_reshape) { [self reshape]; needs_reshape=NO; }
     }
@@ -480,23 +480,16 @@ extern "C" void OSXCreateApplicationMenus() {
     [[NSApp mainMenu] addItem: item];
     [menu release];
     [item release];
-
-    menu = [[NSMenu alloc] initWithTitle:@"View"];
-    item = [menu addItemWithTitle:@"Zoom In"  action:@selector(zoomIn:)  keyEquivalent:@"="];
-    item = [menu addItemWithTitle:@"Zoom Out" action:@selector(zoomOut:) keyEquivalent:@"-"];
-    item = [[NSMenuItem alloc] initWithTitle:@"View" action:nil keyEquivalent:@""];
-    [item setSubmenu: menu];
-    [[NSApp mainMenu] addItem: item];
-    [menu release];
-    [item release];
 }
 
-extern "C" void OSXCreateNativeMenu(const char *title_text, int n, const char **name, const char **val) {
+extern "C" void OSXCreateNativeMenu(const char *title_text, int n, const char **key, const char **name, const char **val) {
     NSMenuItem *item;
     NSString *title = [NSString stringWithUTF8String: title_text];
     NSMenu *menu = [[NSMenu alloc] initWithTitle: title];
     for (int i=0; i<n; i++) {
-        item = [menu addItemWithTitle: [NSString stringWithUTF8String: name[i]] action:@selector(shellRun:) keyEquivalent:@""];
+        if (!strcmp(name[i], "<seperator>")) { [menu addItem:[NSMenuItem separatorItem]]; continue; }
+        item = [menu addItemWithTitle: [NSString stringWithUTF8String: name[i]] action:(val[i][0] ? @selector(shellRun:) : nil)
+                     keyEquivalent:    [NSString stringWithUTF8String: key[i]]];
         [item setRepresentedObject: [NSString stringWithUTF8String: val[i]]];
     }
     item = [[NSMenuItem alloc] initWithTitle:title action:nil keyEquivalent:@""];

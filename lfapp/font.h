@@ -73,10 +73,12 @@ struct FontDesc {
     string name, family;
     int size, flag, engine;
     Color fg, bg;
+    bool unicode;
+
     FontDesc(const string &n="", const string &fam="", int s=0,
              const Color &fgc=Color::white,
-             const Color &bgc=Color::clear, int f=-1) :
-        family(fam), size(s), fg(fgc), bg(bgc), flag(f == -1 ? FLAGS_default_font_flag : f), engine(0)
+             const Color &bgc=Color::clear, int f=-1, bool U=1) :
+        family(fam), size(s), flag(f == -1 ? FLAGS_default_font_flag : f), engine(0), fg(fgc), bg(bgc), unicode(U)
     {
         string engine_proto;
         name = ParseProtocol(n.data(), &engine_proto);
@@ -104,7 +106,7 @@ struct FontEngine {
 struct Glyph : public Drawable {
     unsigned short id=0;
     short bearing_x=0, bearing_y=0, advance=0;
-    bool wide=0;
+    bool wide=0, space=0;
     union Internal {
         struct FreeType { int id; }                                                   freetype;
         struct CoreText { int id; float origin_x, origin_y, width, height, advance; } coretext;
@@ -176,7 +178,7 @@ struct Font {
             NoWrap=1<<6, GlyphBreak=1<<7, AlignCenter=1<<8, AlignRight=1<<9, 
             Underline=1<<10, Overline=1<<11, Midline=1<<12, Blink=1<<13,
             Uppercase=1<<14, Lowercase=1<<15, Capitalize=1<<16, Clipped=1<<17,
-            AssignFlowX=1<<18, DontCompleteFlow=1<<19
+            DontAssignFlowP=1<<18, DontCompleteFlow=1<<19
         };
         static int Orientation(int f) { return f & 0xf; };
     };
@@ -223,10 +225,10 @@ struct Font {
     /**/               int Width(const String16        &text) { return Width(String16Piece         (text)); }
     template <class X> int Width(const X               *text) { return Width(StringPiece::Unbounded(text)); }
 
-    template <class X> void Encode(const StringPieceT<X> &text, const Box &box, DrawableBoxArray *out, int draw_flag=0, int attr_id=0);
-    /**/               void Encode(const string          &text, const Box &box, DrawableBoxArray *out, int draw_flag=0, int attr_id=0) { return Encode(StringPiece           (text), box, out, draw_flag, attr_id); }
-    /**/               void Encode(const String16        &text, const Box &box, DrawableBoxArray *out, int draw_flag=0, int attr_id=0) { return Encode(String16Piece         (text), box, out, draw_flag, attr_id); }
-    template <class X> void Encode(const X               *text, const Box &box, DrawableBoxArray *out, int draw_flag=0, int attr_id=0) { return Encode(StringPiece::Unbounded(text), box, out, draw_flag, attr_id); }
+    template <class X> void Shape(const StringPieceT<X> &text, const Box &box, DrawableBoxArray *out, int draw_flag=0, int attr_id=0);
+    /**/               void Shape(const string          &text, const Box &box, DrawableBoxArray *out, int draw_flag=0, int attr_id=0) { return Shape(StringPiece           (text), box, out, draw_flag, attr_id); }
+    /**/               void Shape(const String16        &text, const Box &box, DrawableBoxArray *out, int draw_flag=0, int attr_id=0) { return Shape(String16Piece         (text), box, out, draw_flag, attr_id); }
+    template <class X> void Shape(const X               *text, const Box &box, DrawableBoxArray *out, int draw_flag=0, int attr_id=0) { return Shape(StringPiece::Unbounded(text), box, out, draw_flag, attr_id); }
 
     template <class X> int Draw(const StringPieceT<X> &text, point cp,       vector<Box> *lb=0, int draw_flag=0) { return Draw<X>    (                text,  Box(cp.x,cp.y+Height(),0,0), lb, draw_flag); }
     /**/               int Draw(const string          &text, point cp,       vector<Box> *lb=0, int draw_flag=0) { return Draw(StringPiece           (text), Box(cp.x,cp.y+Height(),0,0), lb, draw_flag); }

@@ -676,7 +676,7 @@ void TextArea::UpdateVScrolled(int dist, bool up, int ind, int first_offset, int
 void TextArea::Draw(const Box &b, int flag, Shader *shader) {
   if (shader) {
     float scale = shader->scale;
-    glTimeResolutionShader(shader);
+    glShadertoyShader(shader);
     shader->SetUniform3f("iChannelResolution", XY_or_Y(scale, b.w), XY_or_Y(scale, b.h), 1);
     shader->SetUniform2f("iScroll", XY_or_Y(scale, -line_fb.scroll.x * line_fb.w),
                          XY_or_Y(scale, -line_fb.scroll.y * line_fb.h - b.y));
@@ -921,7 +921,9 @@ Terminal::StandardVGAColors::StandardVGAColors() {
   c[5] = Color(170,   0, 170); c[13] = Color(255,  85, 255);
   c[6] = Color(  0, 170, 170); c[14] = Color( 85, 255, 255);
   c[7] = Color(170, 170, 170); c[15] = Color(255, 255, 255);
-  bg_index = 0; normal_index = 7; bold_index = 15;
+  c[normal_index] = c[7];
+  c[bold_index]   = c[15];
+  c[bg_index]     = c[0];
 }
 
 /// Solarized palette by Ethan Schoonover
@@ -934,7 +936,9 @@ Terminal::SolarizedColors::SolarizedColors() {
   c[5] = Color(211,  54, 130); c[13] = Color(108, 113, 196);
   c[6] = Color( 42, 161, 152); c[14] = Color(147, 161, 161);
   c[7] = Color(238, 232, 213); c[15] = Color(253, 246, 227);
-  bg_index = 8; normal_index = 12; bold_index = 14;
+  c[normal_index] = c[12];
+  c[bold_index]   = c[14];
+  c[bg_index]     = c[8];
 }
 
 Terminal::Terminal(ByteSink *O, Window *W, Font *F) : TextArea(W, F), sink(O), fb_cb(bind(&Terminal::GetFrameBuffer, this, _1)) {
@@ -977,6 +981,17 @@ void Terminal::ResizedLeftoverRegion(int w, int h, bool update_fb) {
   last_fb = 0;
 }
 
+void Terminal::MoveToOrFromScrollRegion(TextGUI::LinesFrameBuffer *fb, TextGUI::Line *l, const point &p, int flag) {
+  int plpy = l->p.y;
+  fb->Update(l, p, flag);
+  l->data->outside_scroll_region = fb != &line_fb;
+  int delta_y = plpy - l->p.y + line_fb.Height() * (l->data->outside_scroll_region ? -1 : 1);
+  for (auto &i : l->data->links) {
+    i.second->box += point(0, delta_y);
+    for (auto &j : i.second->hitbox) i.second->gui->IncrementBoxY(delta_y, -1, j);
+  }
+}
+
 void Terminal::SetScrollRegion(int b, int e, bool release_fb) {
   if (b<0 || e<0 || e>term_height || b>e) { TerminalDebug("%d-%d outside 1-%d\n", b, e, term_height); return; }
   int prev_region_beg = scroll_region_beg, prev_region_end = scroll_region_end, font_height = font->Height();
@@ -1009,15 +1024,18 @@ void Terminal::SetDimension(int w, int h) {
   if (!line.Size()) TextArea::Write(string(term_height, '\n'), 0);
 }
 
-void Terminal::MoveToOrFromScrollRegion(TextGUI::LinesFrameBuffer *fb, TextGUI::Line *l, const point &p, int flag) {
-  int plpy = l->p.y;
-  fb->Update(l, p, flag);
-  l->data->outside_scroll_region = fb != &line_fb;
-  int delta_y = plpy - l->p.y + line_fb.Height() * (l->data->outside_scroll_region ? -1 : 1);
-  for (auto &i : l->data->links) {
-    i.second->box += point(0, delta_y);
-    for (auto &j : i.second->hitbox) i.second->gui->IncrementBoxY(delta_y, -1, j);
-  }
+void Terminal::SetColors(Colors *C) {
+  colors = C;
+  Attr::SetFGColorIndex(&default_cursor_attr, colors->normal_index);
+  Attr::SetBGColorIndex(&default_cursor_attr, colors->bg_index);
+  bg_color = &colors->c[colors->bg_index];
+}
+
+void Terminal::ChangeColors(Colors *C) {
+  SetColors(C);
+  if (bg_color) screen->gd->ClearColor(*bg_color);
+  for (int i=1; i<=term_height; ++i) if (Line *L = GetTermLine(i)) L->Layout(L->data->box, true);
+  Redraw();
 }
 
 void Terminal::UpdateToken(Line *L, int word_offset, int word_len, int update_type, const LineTokenProcessor *token) {
@@ -1334,11 +1352,15 @@ void Terminal::TabPrev(int n) {
 }
 
 void Terminal::Clear() {
+  for (int i=1; i<=term_height; ++i) GetTermLine(i)->Clear();
+  Redraw(true);
+}
+
+void Terminal::Redraw(bool attach) {
   bool prev_clip = clip;
   int prev_scroll_beg = scroll_region_beg, prev_scroll_end = scroll_region_end;
   SetScrollRegion(1, term_height, true);
-  for (int i=1; i<=term_height; ++i) GetTermLine(i)->Clear();
-  Redraw(true);
+  TextArea::Redraw(true);
   last_fb = 0;
   if (clip) SetScrollRegion(prev_scroll_beg, prev_scroll_end, false);
 }
@@ -1391,12 +1413,11 @@ void Console::Draw() {
 
 /* Dialog */
 
-Dialog::Dialog(float w, float h, int flag) : GUI(screen), font(Fonts::Get(FLAGS_default_font, "", 14, Color::white)) {
+Dialog::Dialog(float w, float h, int flag) : GUI(screen), font(Fonts::Get(FLAGS_default_font, "", 14, Color::white)), menuicon1(Fonts::Get("MenuAtlas1", "", 0, Color::black)) {
   screen->dialogs.push_back(this);
   box = screen->Box().center(screen->Box(w, h));
   fullscreen = flag & Flag::Fullscreen;
   Activate();
-  Layout();
 }
 
 void Dialog::Layout() {
@@ -1413,10 +1434,14 @@ void Dialog::Layout() {
   AddClickBox(resize_bottom, MouseController::CB(bind(&Dialog::Reshape,     this, &resizing_bottom)));
   AddClickBox(title,         MouseController::CB(bind(&Dialog::Reshape,     this, &moving)));
   AddClickBox(close,         MouseController::CB(bind(&Dialog::MarkDeleted, this)));
+
+  int attr_id = child_box.attr.GetAttrId(Drawable::Attr(menuicon1));
+  child_box.PushBack(close, attr_id, menuicon1 ? menuicon1->FindGlyph(11) : 0);
 }
 
 void Dialog::Draw() {
-  if (child_box.data.empty()) Layout();
+  bool resizing = resizing_left || resizing_right || resizing_top || resizing_bottom;
+  if (child_box.data.empty() && !resizing) Layout();
   if (moving) box.SetPosition(win_start + screen->mouse - mouse_start);
 
   Box outline = BoxAndTitle();
@@ -1426,11 +1451,10 @@ void Dialog::Draw() {
   if (resizing_right)  outline.w += max(-outline.w + min_width, (int)(screen->mouse.x - mouse_start.x));
 
   if (!app->input.MouseButton1Down()) {
-    if (resizing_left || resizing_right || resizing_top || resizing_bottom) {
+    if (resizing) {
       box = Box(outline.x, outline.y, outline.w, outline.h - title.h);
-      moving = true;
+      Layout();
     }
-    if (moving) Layout();
     moving = resizing_left = resizing_right = resizing_top = resizing_bottom = 0;
   }
 
@@ -1465,17 +1489,22 @@ SliderTweakDialog::SliderTweakDialog(const string &fn, float total, float inc) :
   slider.increment = inc;
   slider.doc_height = total;
   slider.scrolled = atof(flag_map->Get(flag_name).c_str()) / total;
+}
+
+void SliderTweakDialog::Layout() {
+  Dialog::Layout();
+  Box flag_name_size;
   font->Size(flag_name, &flag_name_size);
+  font->Shape(flag_name, Box(title.centerX(flag_name_size.w), title.centerY(flag_name_size.h), 0, 0), &child_box);
+  slider.LayoutFixed(Box(0, -box.h, box.w, box.h));
 }
 
 void SliderTweakDialog::Draw() {
   Dialog::Draw();
-  // slider.Draw(win);
   if (slider.dirty) {
-    slider.dirty = 0;
+    slider.Update();
     flag_map->Set(flag_name, StrCat(slider.scrolled * slider.doc_height));
   }
-  font->Draw(flag_name, point(title.centerX(flag_name_size.w), title.centerY(flag_name_size.h)));
 }
 
 EditorDialog::EditorDialog(Window *W, Font *F, File *I, float w, float h, int flag) :

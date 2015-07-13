@@ -71,15 +71,15 @@ struct Flow {
     const Box *container;
     Drawable::Attr cur_attr;
     int adj_float_left=-1, adj_float_right=-1;
-    struct CurrentLine { int out_ind, beg, end; short height, ascent, descent, base; bool fresh; } cur_line;
-    struct CurrentWord { int out_ind, len;                                           bool fresh; } cur_word;
+    struct CurrentLine { int out_ind=0, beg=0, end=0; short height=0, ascent=0, descent=0, base=0; bool fresh=0; } cur_line;
+    struct CurrentWord { int len=0;                                                                bool fresh=0; } cur_word;
     enum class State { OK=1, NEW_WORD=2, NEW_LINE=3 } state=State::OK;
     int max_line_width=0;
 
     Flow(DrawableBoxArray *O) : Flow(0, 0, O) {}
     Flow(const Box *W=0, Font *F=0, DrawableBoxArray *O=0, Layout *L=0) :
         layout(*(L?L:Singleton<Layout>::Get())), out(O), container(W?W:Singleton<Box>::Get())
-        { memzero(cur_line); memzero(cur_word); SetFont(F); SetCurrentLineBounds(); cur_line.fresh=1; }
+        { cur_line.out_ind=O?O->Size():0; SetFont(F); SetCurrentLineBounds(); cur_line.fresh=1; }
 
     struct RollbackState {
         point p; Drawable::Attr attr; CurrentLine line; CurrentWord word; State state; int max_line_width;

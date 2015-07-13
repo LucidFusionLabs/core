@@ -411,13 +411,16 @@ struct Editor : public TextArea {
 struct Terminal : public TextArea, public Drawable::AttrSource {
   struct State { enum { TEXT=0, ESC=1, CSI=2, OSC=3, CHARSET=4 }; };
   struct Attr {
-    enum { Bold=1<<8, Underline=1<<9, Blink=1<<10, Reverse=1<<11, Italic=1<<12, Link=1<<13 };
-    static void SetFGColorIndex(int *a, int c) { *a = (*a & ~0x0f) | ((c & 0xf)     ); }
-    static void SetBGColorIndex(int *a, int c) { *a = (*a & ~0xf0) | ((c & 0xf) << 4); }
-    static int GetFGColorIndex(int a) { return (a & 0xf) | ((a & Bold) ? (1<<3) : 0); }
-    static int GetBGColorIndex(int a) { return (a>>4) & 0xf; }
+    enum { Bold=1<<16, Underline=1<<17, Blink=1<<18, Reverse=1<<19, Italic=1<<20, Link=1<<21 };
+    static void SetFGColorIndex(int *a, int c) { *a = (*a & ~0x00ff) | ((c & 0xff)     ); }
+    static void SetBGColorIndex(int *a, int c) { *a = (*a & ~0xff00) | ((c & 0xff) << 8); }
+    static int GetFGColorIndex(int a) { int c = a & 0xff; return c | ((a & Bold) ? (1<<3) : 0); }
+    static int GetBGColorIndex(int a) { return (a>>8) & 0xff; }
   };
-  struct Colors { Color c[16]; int normal_index, bold_index, bg_index; };
+  struct Colors {
+    static const int normal_index=16, bold_index=17, bg_index=18;
+    Color c[16 + 3];
+  };
   struct StandardVGAColors : public Colors { StandardVGAColors(); };
   struct SolarizedColors : public Colors { SolarizedColors(); };
 
@@ -478,12 +481,8 @@ struct Terminal : public TextArea, public Drawable::AttrSource {
     int i = line.IndexOf(l);
     return ((-i-1 < start_line || term_height+i < skip_last_lines) ? cmd_fb : line_fb).Attach(&last_fb);
   }
-  void SetColors(Colors *C) {
-    colors = C;
-    Attr::SetFGColorIndex(&default_cursor_attr, colors->normal_index);
-    Attr::SetBGColorIndex(&default_cursor_attr, colors->bg_index);
-    bg_color = &colors->c[colors->bg_index];
-  }
+  void SetColors(Colors *C);
+  void ChangeColors(Colors *C);
   Border *UpdateClipBorder() {
     int font_height = font->Height();
     clip_border.top    = font_height * skip_last_lines;
@@ -502,6 +501,7 @@ struct Terminal : public TextArea, public Drawable::AttrSource {
   void TabNext(int n);
   void TabPrev(int n);
   void Clear();
+  void Redraw(bool attach=true);
   void Reset();
 };
 
@@ -527,7 +527,7 @@ struct Console : public TextArea {
 
 struct Dialog : public GUI {
   struct Flag { enum { None=0, Fullscreen=1, Next=2 }; };
-  Font *font=0;
+  Font *font=0, *menuicon1=0;
   Color color=Color(25,60,130,220);
   Box title, resize_left, resize_right, resize_bottom, close;
   bool deleted=0, moving=0, resizing_left=0, resizing_right=0, resizing_top=0, resizing_bottom=0, fullscreen=0;
@@ -563,9 +563,9 @@ struct TextureBoxDialog : public Dialog {
 struct SliderTweakDialog : public Dialog {
   string flag_name;
   FlagMap *flag_map;
-  Box flag_name_size;
   Widget::Scrollbar slider;
   SliderTweakDialog(const string &fn, float total=100, float inc=1);
+  void Layout();
   void Draw();
 };
 

@@ -49,6 +49,7 @@ extern "C" void *iPhoneMusicCreate(const char *filename);
 #endif
 
 namespace LFL {
+DEFINE_float(shadertoy_blend, 0.5, "Shader blend factor");
 DEFINE_int(soundasset_seconds, 10, "Soundasset buffer seconds");
 
 const int SoundAsset::FlagNoRefill = 1;
@@ -1085,18 +1086,19 @@ void glIntersect(int x, int y, Color *c) {
     Scene::Draw(geom.get(), 0);
 }
 
-void glTimeResolutionShader(Shader *shader, const Texture *tex) {
+void glShadertoyShader(Shader *shader, const Texture *tex) {
     float scale = shader->scale;
     screen->gd->UseShader(shader);
     shader->SetUniform1f("iGlobalTime", ToFSeconds(Now() - app->time_started).count());
+    shader->SetUniform1f("iBlend", FLAGS_shadertoy_blend);
     shader->SetUniform4f("iMouse", screen->mouse.x, screen->mouse.y, app->input.MouseButton1Down(), 0);
     shader->SetUniform3f("iResolution", XY_or_Y(scale, screen->pow2_width), XY_or_Y(scale, screen->pow2_height), 0);
     if (tex) shader->SetUniform3f("iChannelResolution", tex->width, tex->height, 0);
 }
 
-void glTimeResolutionShaderWindows(Shader *shader, const Color &backup_color, const Box &w,             const Texture *tex) { Box wc=w; vector<Box*> wv; wv.push_back(&wc); glTimeResolutionShaderWindows(shader, backup_color, wv, tex); }
-void glTimeResolutionShaderWindows(Shader *shader, const Color &backup_color, const vector<Box*> &wins, const Texture *tex) {
-    if (shader) glTimeResolutionShader(shader);
+void glShadertoyShaderWindows(Shader *shader, const Color &backup_color, const Box &w,             const Texture *tex) { Box wc=w; vector<Box*> wv; wv.push_back(&wc); glShadertoyShaderWindows(shader, backup_color, wv, tex); }
+void glShadertoyShaderWindows(Shader *shader, const Color &backup_color, const vector<Box*> &wins, const Texture *tex) {
+    if (shader) glShadertoyShader(shader);
     else screen->gd->SetColor(backup_color);
     if (tex) { screen->gd->EnableLayering(); tex->Bind(); }
     else screen->gd->DisableTexture();

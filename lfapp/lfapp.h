@@ -92,6 +92,7 @@ using LFL_STL11_NAMESPACE::unordered_map;
 using LFL_STL11_NAMESPACE::unordered_set;
 using LFL_STL11_NAMESPACE::shared_ptr;
 using LFL_STL11_NAMESPACE::unique_ptr;
+using LFL_STL11_NAMESPACE::tuple;
 using LFL_STL11_NAMESPACE::move;
 using LFL_STL11_NAMESPACE::bind;
 using LFL_STL11_NAMESPACE::function;
@@ -119,6 +120,7 @@ using LFL_STL11_NAMESPACE::enable_if;
 using LFL_STL11_NAMESPACE::is_integral;
 using LFL_STL11_NAMESPACE::is_floating_point;
 using LFL_STL11_NAMESPACE::make_unsigned;
+#define tuple_get LFL_STL11_NAMESPACE::get
 
 #include <errno.h>
 #include <math.h>
@@ -680,7 +682,7 @@ struct Application : public ::LFApp, public Module {
   void CreateNewWindow(const function<void(Window*)> &start_cb = function<void(Window*)>());
   NetworkThread *CreateNetworkThread();
   void LaunchNativeMenu(const string &title);
-  void AddNativeMenu(const string &title, const vector<pair<string, string>>&items);
+  void AddNativeMenu(const string &title, const vector<tuple<string, string, string>>&items);
   int LoadModule(Module *M) { modules.push_back(M); return M->Init(); }
   string BinDir() const { return LocalFile::JoinPath(startdir, progname.substr(0, DirNameLen(progname, true))); }
 
