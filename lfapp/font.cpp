@@ -322,6 +322,10 @@ int FakeFontEngine::InitGlyphs(Font *f,       Glyph *g, int n) {
     } return n;
 }
 
+string AtlasFontEngine::DebugString(Font *f) const {
+    return StrCat("AtlasFont(", f->desc->DebugString(), "), H=", f->Height(), ", FW=", f->fixed_width);
+}
+
 bool AtlasFontEngine::Init(const FontDesc &d) {
     if (Font *f = OpenAtlas(d)) {
         FontDesc de = d;
@@ -496,6 +500,10 @@ FreeTypeFontEngine::Resource::~Resource() {
     if (face) FT_Done_Face(face);
 }
 
+string FreeTypeFontEngine::DebugString(Font *f) const {
+    return StrCat("TTTFont(", f->desc->DebugString(), "), H=", f->Height(), ", FW=", f->fixed_width);
+}
+
 bool FreeTypeFontEngine::Init(const FontDesc &d) {
     if (Contains(resource, d.name)) return true;
     string content = LocalFile::FileContents(StrCat(app->assetdir, d.name));
@@ -611,7 +619,6 @@ Font *FreeTypeFontEngine::Open(const FontDesc &d) {
         cache->tex.ClearBuffer();
     }
 
-    // INFO("TTTFont(", d.DebugString(), "), H=", ret->Height(), ", FW=", ret->fixed_width, ", texID=", cache->tex.ID);
     font_map[d] = ret;
     return ret;
 }
@@ -620,6 +627,10 @@ Font *FreeTypeFontEngine::Open(const FontDesc &d) {
 #ifdef __APPLE__
 CoreTextFontEngine::Resource::~Resource() {
     if (cgfont) CFRelease(cgfont);
+}
+
+string CoreTextFontEngine::DebugString(Font *f) const {
+    return StrCat("CoreTextFont(", f->desc->DebugString(), "), fixed_width=", f->fixed_width, " mono=", f->mono?f->max_width:0, " advance_bounds = ", GetAdvanceBounds(f).DebugString());
 }
 
 int CoreTextFontEngine::InitGlyphs(Font *f, Glyph *g, int n) {
@@ -715,8 +726,6 @@ Font *CoreTextFontEngine::Open(const FontDesc &d) {
         cache->cgcontext = 0;
         cache->tex.ClearBuffer();
     }
-
-    // INFO("CoreTextFont(", d.DebugString(), "), texID=", cache->tex.ID, " fixed_width=", ret->fixed_width, " mono=", ret->mono?ret->max_width:0, " advance_bounds = ", GetAdvanceBounds(ret).DebugString());
     return ret;
 }
 

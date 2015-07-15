@@ -414,7 +414,7 @@ struct Terminal : public TextArea, public Drawable::AttrSource {
     enum { Bold=1<<16, Underline=1<<17, Blink=1<<18, Reverse=1<<19, Italic=1<<20, Link=1<<21 };
     static void SetFGColorIndex(int *a, int c) { *a = (*a & ~0x00ff) | ((c & 0xff)     ); }
     static void SetBGColorIndex(int *a, int c) { *a = (*a & ~0xff00) | ((c & 0xff) << 8); }
-    static int GetFGColorIndex(int a) { int c = a & 0xff; return c | ((a & Bold) ? (1<<3) : 0); }
+    static int GetFGColorIndex(int a) { int c = a & 0xff; return c | (((a & Bold) && c<16) ? (1<<3) : 0); }
     static int GetBGColorIndex(int a) { return (a>>8) & 0xff; }
   };
   struct Colors {

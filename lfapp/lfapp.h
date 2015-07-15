@@ -681,6 +681,7 @@ struct Application : public ::LFApp, public Module {
   void Log(int level, const char *file, int line, const string &message);
   void CreateNewWindow(const function<void(Window*)> &start_cb = function<void(Window*)>());
   NetworkThread *CreateNetworkThread();
+  void LaunchNativeFontChooser(const FontDesc &cur_font, const string &choose_cmd);
   void LaunchNativeMenu(const string &title);
   void AddNativeMenu(const string &title, const vector<tuple<string, string, string>>&items);
   int LoadModule(Module *M) { modules.push_back(M); return M->Init(); }

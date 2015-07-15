@@ -130,6 +130,7 @@ extern "C" bool iPhonePasswordSave(const char *, const char*, const char*, const
 #elif defined(__APPLE__)
 extern "C" void OSXStartWindow(void*);
 extern "C" void OSXCreateNativeMenu(const char*, int, const char**, const char**, const char**);
+extern "C" void OSXLaunchNativeFontChooser(const char *, int, const char *);
 extern "C" void OSXTriggerFrame(void*);
 extern "C" bool OSXTriggerFrameIn(void*, int ms, bool force);
 extern "C" void OSXClearTriggerFrameIn(void *O);
@@ -893,6 +894,12 @@ NetworkThread *Application::CreateNetworkThread() {
   NetworkThread *ret = new NetworkThread(&app->network);
   ret->thread->Start();
   return ret;
+}
+
+void Application::LaunchNativeFontChooser(const FontDesc &cur_font, const string &choose_cmd) {
+#if defined(LFL_OSXVIDEO)
+  OSXLaunchNativeFontChooser(cur_font.name.c_str(), cur_font.size, choose_cmd.c_str());
+#endif
 }
 
 void Application::LaunchNativeMenu(const string &title) {

@@ -101,6 +101,7 @@ struct FontEngine {
     virtual bool  HaveGlyph (Font *f, unsigned short) { return true; }
     virtual int   InitGlyphs(Font *f,       Glyph *g, int n) = 0;
     virtual int   LoadGlyphs(Font *f, const Glyph *g, int n) = 0;
+    virtual string DebugString(Font *f) const = 0;
 };
 
 struct Glyph : public Drawable {
@@ -249,8 +250,9 @@ struct FakeFontEngine : public FontEngine {
     FakeFontEngine();
     virtual const char *Name() { return "FakeFontEngine"; }
     virtual Font *Open(const FontDesc&) { return &fake_font; }
-    virtual int  LoadGlyphs(Font *f, const Glyph *g, int n) { return n; }
-    virtual int  InitGlyphs(Font *f,       Glyph *g, int n);
+    virtual int LoadGlyphs(Font *f, const Glyph *g, int n) { return n; }
+    virtual int InitGlyphs(Font *f,       Glyph *g, int n);
+    virtual string DebugString(Font *f) const { return "FakeFontEngineFont"; }
     static const char *Filename() { return "__FakeFontFilename__"; }
 };
 
@@ -268,6 +270,7 @@ struct AtlasFontEngine : public FontEngine {
     virtual bool  HaveGlyph (Font *f, unsigned short) { return false; }
     virtual int   InitGlyphs(Font *f,       Glyph *g, int n) { return n; }
     virtual int   LoadGlyphs(Font *f, const Glyph *g, int n) { return n; }
+    virtual string DebugString(Font *f) const;
 
     static Font *OpenAtlas(const FontDesc&);
     static void WriteAtlas(const string &name, Font *glyphs, Texture *t);
@@ -295,6 +298,7 @@ struct FreeTypeFontEngine : public FontEngine {
     virtual Font *Open(const FontDesc&);
     virtual int   InitGlyphs(Font *f,       Glyph *g, int n);
     virtual int   LoadGlyphs(Font *f, const Glyph *g, int n);
+    virtual string DebugString(Font *f) const;
 
     static void Init();
     static void SubPixelFilter(const Box &b, unsigned char *buf, int linesize, int pf);
@@ -318,6 +322,7 @@ struct CoreTextFontEngine : public FontEngine {
     virtual Font *Open(const FontDesc&);
     virtual int   InitGlyphs(Font *f,       Glyph *g, int n);
     virtual int   LoadGlyphs(Font *f, const Glyph *g, int n);
+    virtual string DebugString(Font *f) const;
 
     struct Flag { enum { WriteAtlas=1 }; };
     static Font *Open(const string &name,            int size, Color c, int flag, int ct_flag);

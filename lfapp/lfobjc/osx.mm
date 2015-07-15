@@ -323,6 +323,10 @@ static const char **osx_argv = 0;
 @end
 
 @implementation AppDelegate
+    {
+        NSFont *font;
+        NSString *font_change_cmd;
+    }
     - (void)applicationWillTerminate: (NSNotification *)aNotification {}
     - (void)applicationDidFinishLaunching: (NSNotification *)aNotification {
         INFOf("OSXModule::Main argc=%d\n", osx_argc);
@@ -361,6 +365,20 @@ static const char **osx_argv = 0;
     - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication *)theApplication {
         GetLFApp()->run = false;
         return YES;
+    }
+    - (void)selectFont: (const char *)name size:(int)s cmd:(const char*)v {
+        font = [NSFont fontWithName:[NSString stringWithUTF8String:name] size:s];
+        font_change_cmd = [NSString stringWithUTF8String:v];
+        NSFontManager *fontManager = [NSFontManager sharedFontManager];
+        [fontManager setSelectedFont:font isMultiple:NO];
+        [fontManager setDelegate:self];
+        [fontManager setTarget:self];
+        [fontManager orderFrontFontPanel:self];
+    }
+    - (void)changeFont:(id)sender {
+        font = [sender convertFont:font];
+        float size = [[[font fontDescriptor] objectForKey:NSFontSizeAttribute] floatValue];
+        ShellRun([[NSString stringWithFormat:@"%@ %@ %f", font_change_cmd, [font fontName], size] UTF8String]);
     }
 @end
 
@@ -497,6 +515,10 @@ extern "C" void OSXCreateNativeMenu(const char *title_text, int n, const char **
     [[NSApp mainMenu] addItem: item];
     [menu release];
     [item release];
+}
+
+extern "C" void OSXLaunchNativeFontChooser(const char *cur_font, int size, const char *change_font_cmd) {
+    [(AppDelegate*)[NSApp delegate] selectFont:cur_font size:size cmd:change_font_cmd];
 }
 
 extern "C" int main(int argc, const char **argv) {
