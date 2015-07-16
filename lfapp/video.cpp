@@ -1029,6 +1029,7 @@ extern "C" void OSXDestroyWindow(void *O);
 extern "C" void OSXMakeWindowCurrent(void *O);
 extern "C" void OSXSetWindowSize(void*, int W, int H);
 extern "C" void OSXSetWindowTitle(void *O, const char *v);
+extern "C" void OSXSetWindowResizeIncrements(void *O, float x, float y);
 extern "C" void *OSXCreateGLContext(void *O);
 struct OSXVideoModule : public Module {
   int Init() {
@@ -1519,6 +1520,12 @@ int Video::Free() {
 void Window::SetCaption(const string &v) {
 #if defined(LFL_OSXVIDEO)
   OSXSetWindowTitle(id, v.c_str());
+#endif
+}
+
+void Window::SetResizeIncrements(float x, float y) {
+#if defined(LFL_OSXVIDEO)
+  OSXSetWindowResizeIncrements(id, x, y);
 #endif
 }
 

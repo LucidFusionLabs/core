@@ -395,6 +395,10 @@ extern "C" void OSXDestroyWindow(void *O) {
     [(AppDelegate*)[NSApp delegate] destroyWindow: [(GameView*)O window] ];
 }
 
+extern "C" void OSXSetWindowResizeIncrements(void *O, float x, float y) {
+  [[(GameView*)O window] setContentResizeIncrements: NSMakeSize(x, y)];
+}
+
 extern "C" void *OSXCreateGLContext(void *O) {
     return [(GameView*)O createGLContext];
 }

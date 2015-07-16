@@ -22,8 +22,6 @@
 #include "lfapp/flow.h"
 #include "lfapp/gui.h"
 #include "lfapp/ipc.h"
-#include "../crawler/html.h"
-#include "../crawler/document.h"
 
 namespace LFL {
 float FloatContainer::baseleft(float py, float ph, int *adjacent_out) const {

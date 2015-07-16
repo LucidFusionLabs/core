@@ -23,8 +23,6 @@
 #include "lfapp/flow.h"
 #include "lfapp/gui.h"
 #include "lfapp/ipc.h"
-#include "crawler/html.h"
-#include "crawler/document.h"
 
 namespace LFL {
 struct LinesFrameBufferTest : public TextGUI::LinesFrameBuffer {
@@ -79,12 +77,18 @@ struct TerminalTest : public Terminal {
         UpdateTokenOp(Line *BL, int BO, Line *EL, int EO, const string &X, int T) : bl(BL), el(EL), bo(BO), eo(EO), type(T), text(X) {}
     };
     vector<UpdateTokenOp> token;
-    LinesFrameBufferTest line_fb_test;
     TerminalTest(ByteSink *S, Window *W, Font *F) : Terminal(S,W,F) {}
-    virtual LinesFrameBuffer *GetFrameBuffer() override { return &line_fb_test; }
     void UpdateLongToken(Line *BL, int BO, Line *EL, int EO, const string &text, int T) {
         token.emplace_back(BL, BO, EL, EO, text, T);
     }
+    void PrintLines(const char *header) {
+      if (header) printf("%s\n", header);
+      for (int i=1; i<=term_height; ++i) {
+        Line *L = GetTermLine(i);
+        printf("%s (%s)\n", L->Text().c_str(), L->p.DebugString().c_str());
+      }
+    }
+    void AssignLineTextToLineNumber() { for (int i=1; i<=term_height; ++i) Write(StrCat("\x1b[", i, "H", i, "\x1b[K")); }
 };
 
 TEST(GUITest, TextArea) { 
@@ -656,9 +660,12 @@ TEST(GUITest, Terminal) {
 
     TerminalTest ta(NULL, screen, Fonts::Fake());
     ta.SetDimension(80, 25);
+    int tw = ta.term_width, th = ta.term_height, fw = ta.font->FixedWidth(), fh = ta.font->Height();
+    ta.CheckResized(Box(tw*fw, th*fh));
     EXPECT_EQ(80, ta.term_width);
     EXPECT_EQ(25, ta.term_height);
     EXPECT_EQ(25, ta.line.Size());
+    EXPECT_EQ(25, ta.GetPrimaryFrameBuffer()->lines);
     EXPECT_EQ(1, ta.term_cursor.x);
     EXPECT_EQ(1, ta.term_cursor.y);
     ta.Write("\x1b[13;33H"); EXPECT_EQ(33, ta.term_cursor.x); EXPECT_EQ(13, ta.term_cursor.y);
@@ -666,6 +673,42 @@ TEST(GUITest, Terminal) {
     ta.Write("\x1b[Z");      EXPECT_EQ(17, ta.term_cursor.x); EXPECT_EQ(13, ta.term_cursor.y);
     ta.Write("\x1b[Z");      EXPECT_EQ(9,  ta.term_cursor.x); EXPECT_EQ(13, ta.term_cursor.y);
     ta.Write("\x1b[Z");      EXPECT_EQ(1,  ta.term_cursor.x); EXPECT_EQ(13, ta.term_cursor.y);
+
+    ta.AssignLineTextToLineNumber();
+    for (int i=1; i<=th; ++i) EXPECT_EQ(&ta.line[-th + i-1], ta.GetTermLine(i));
+    for (int i=1; i<=th; ++i) EXPECT_EQ(StrCat(i), ta.GetTermLine(i)->Text());
+    for (int i=1; i<=th; ++i) EXPECT_EQ(point(0,fh*(th-i+1)), ta.GetTermLine(i)->p);
+
+    ta.Write("\x1b[1;23r"); EXPECT_EQ(1, ta.scroll_region_beg); EXPECT_EQ(23, ta.scroll_region_end);
+    ta.Write("\x1b[7;1H");  EXPECT_EQ(1, ta.term_cursor.x);     EXPECT_EQ(7,  ta.term_cursor.y);
+    ta.Write("\x1b[M");
+    for (int i=1;  i<=23; ++i) EXPECT_EQ(i<23 ? StrCat(i+(i>=7)) : "", ta.GetTermLine(i)->Text());
+    for (int i=24; i<=th; ++i) EXPECT_EQ(StrCat(i),                    ta.GetTermLine(i)->Text());
+    for (int i=1;  i<=th; ++i) EXPECT_EQ(point(0,fh*(th-i+1)),         ta.GetTermLine(i)->p);
+
+    ta.Write("\x1b[13;1H");  EXPECT_EQ(1, ta.term_cursor.x);    EXPECT_EQ(13, ta.term_cursor.y);
+    ta.Write("\x1b[M");
+    for (int i=1;  i<=23; ++i) EXPECT_EQ(i<22 ? StrCat(i+(i>=7)+(i>=13)) : "", ta.GetTermLine(i)->Text());
+    for (int i=24; i<=th; ++i) EXPECT_EQ(StrCat(i),                            ta.GetTermLine(i)->Text());
+    for (int i=1;  i<=th; ++i) EXPECT_EQ(point(0,fh*(th-i+1)),                 ta.GetTermLine(i)->p);
+
+    ta.AssignLineTextToLineNumber();
+    for (int i=1; i<=th; ++i) EXPECT_EQ(StrCat(i), ta.GetTermLine(i)->Text());
+    for (int i=1; i<=th; ++i) EXPECT_EQ(point(0,fh*(th-i+1)), ta.GetTermLine(i)->p);
+
+    ta.Write("\x1b[7;23r"); EXPECT_EQ(7, ta.scroll_region_beg); EXPECT_EQ(23, ta.scroll_region_end);
+    ta.Write("\x1b[23;1H"); EXPECT_EQ(1, ta.term_cursor.x);     EXPECT_EQ(23, ta.term_cursor.y);
+
+    ta.Write("\n");
+    for (int i=1;  i<=23; ++i) EXPECT_EQ(i<23 ? StrCat(i+(i>=7)) : "",      ta.GetTermLine(i)->Text());
+    for (int i=24; i<=th; ++i) EXPECT_EQ(StrCat(i),                         ta.GetTermLine(i)->Text());
+    for (int i=1;  i<=th; ++i) EXPECT_EQ(point(0,fh*(th-i+((i<7)||i>=24))), ta.GetTermLine(i)->p);
+
+    ta.Write("\x1b[13;1H");  EXPECT_EQ(1, ta.term_cursor.x);    EXPECT_EQ(13, ta.term_cursor.y);
+    ta.Write("\x1b[M");
+    for (int i=1;  i<=23; ++i) EXPECT_EQ(i<22 ? StrCat(i+(i>=7)+(i>=13)) : "", ta.GetTermLine(i)->Text());
+    for (int i=24; i<=th; ++i) EXPECT_EQ(StrCat(i),                            ta.GetTermLine(i)->Text());
+    for (int i=1;  i<=th; ++i) EXPECT_EQ(point(0,fh*(th-i+((i<7)||i>=24))),    ta.GetTermLine(i)->p);
 }
 
 TEST(GUITest, LineTokenProcessor) {

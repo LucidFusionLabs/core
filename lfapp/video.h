@@ -538,6 +538,7 @@ struct Window : public NativeWindow {
     void ClearEvents();
     void ClearGesture();
     void SetCaption(const string &c);
+    void SetResizeIncrements(float x, float y);
     void Reshape(int w, int h);
     void Reshaped(int w, int h);
     void Closed() { Window::Close(this); }
