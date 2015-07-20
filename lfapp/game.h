@@ -277,7 +277,7 @@ struct GameBots {
     virtual void Update(Time dt) {}
 };
 
-struct GameServer : public Query {
+struct GameServer : public Connection::Handler {
     struct History {
         GameProtocol::WorldUpdate WorldUpdate;
         struct WorldUpdateHistory { unsigned short id; Time time; } send_WorldUpdate[3];
@@ -300,7 +300,7 @@ struct GameServer : public Query {
     void Close(Connection *c) {
         Game::ConnectionData *cd = Game::ConnectionData::Get(c);
         world->PartEntity(cd, world->Get(cd->entityID), cd->team);
-        c->query = 0;
+        c->handler = 0;
         if (!cd->team) return;
 
         INFO(c->Name(), ": ", cd->playerName, " left");
@@ -520,7 +520,7 @@ struct GameUDPServer : public UDPServer {
         // echo "ping" | nc -u 127.0.0.1 27640
         static string ping="ping\n";
         if (in.size == ping.size() && in.buf == ping) {
-            ((GameServer*)query)->Read(c, content, content_len);
+            ((GameServer*)handler)->Read(c, content, content_len);
         } else if (hdr.id == GameProtocol::ChallengeRequest::ID && !challenge.Read(&in)) {
             GameProtocol::ChallengeResponse response;
             response.token = Hash(c);
@@ -858,7 +858,7 @@ struct GameSettings {
     const char *Get(int n) const { CHECK(n < vec.size()); return vec[n].value->Cur(); }
 };
 
-struct GameMenuGUI : public GUI, public Query {
+struct GameMenuGUI : public GUI, public Connection::Handler {
     struct Server { string addr, name, players; };
     typedef Particles<1024, 1, true> MenuParticles;
 
@@ -934,7 +934,7 @@ struct GameMenuGUI : public GUI, public Query {
         mobile_font = Fonts::Get("MobileAtlas", "", 0, Color::black);
         gplus_signin_button.EnableHover();
 #endif
-        pinger.query = this;
+        pinger.handler = this;
         app->network.Enable(&pinger);
         SystemNetwork::SetSocketBroadcastEnabled(pinger.GetListener()->socket, true);
         Sniffer::GetIPAddress(&ip);
@@ -982,7 +982,7 @@ struct GameMenuGUI : public GUI, public Query {
             SystemNetwork::SendTo(pinger.GetListener()->socket, IPV4::Parse(string(l.c_str(), p-l.c_str())), atoi(p+1), "ping\n", 5);
         }
     }
-    void Close(Connection *c) { c->query=0; }
+    void Close(Connection *c) { c->handler=0; }
     int Read(Connection *c) {
         for (int i=0; i<c->packets.size(); i++) {
             string reply(c->packets[i].buf, c->packets[i].len);
@@ -1152,7 +1152,7 @@ struct GameMenuGUI : public GUI, public Query {
         vector<Box*> bgwins;
         bgwins.push_back(&topbar.box);
         if (selected) bgwins.push_back(&box);
-        glTimeResolutionShaderWindows(MyShader, Color(25, 60, 130, 120), bgwins);
+        glShadertoyShaderWindows(MyShader, Color(25, 60, 130, 120), bgwins);
 
         if (title && selected) {
             screen->gd->DisableBlend();
@@ -1223,7 +1223,7 @@ struct GamePlayerListGUI : public GUI {
         if (!toggled) Deactivate();
         screen->gd->EnableBlend();
         Box win = screen->Box(.1, .1, .8, .8, false);
-        glTimeResolutionShaderWindows(MyShader, Color(255, 255, 255, 120), win);
+        glShadertoyShaderWindows(MyShader, Color(255, 255, 255, 120), win);
 
         int fh = win.h/2-font->Height()*2;
         DrawableBoxArray outgeom1, outgeom2;

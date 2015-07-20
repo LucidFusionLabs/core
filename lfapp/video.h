@@ -500,7 +500,6 @@ struct Shader {
 
 struct Video : public Module {
     Shader shader_default, shader_normals, shader_cubemap, shader_cubenorm;
-    Callback init_fonts_cb = &Video::InitFonts;
     Module *impl = 0;
 
     int Init();
@@ -539,6 +538,7 @@ struct Window : public NativeWindow {
     void ClearGesture();
     void SetCaption(const string &c);
     void SetResizeIncrements(float x, float y);
+    void SetTransparency(float v);
     void Reshape(int w, int h);
     void Reshaped(int w, int h);
     void Closed() { Window::Close(this); }

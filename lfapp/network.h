@@ -437,13 +437,13 @@ struct HTTPServer : public Service {
         Connection::Handler *refill;
         bool write_headers;
 
-        Response(     const string *T, const string        *C) : code(200), content_length(C->size()), type_buf(*T), content_buf(*C), refill(0), write_headers(1)  { content=content_buf.c_str(); type=type_buf.c_str(); }
-        Response(       const char *T, const string        *C) : code(200), content_length(C->size()), type(T),      content_buf(*C), refill(0), write_headers(1)  { content=content_buf.c_str(); }
-        Response(       const char *T, const char          *C) : code(200), content_length(strlen(C)), type(T),      content(C),      refill(0), write_headers(1)  {}
-        Response(       const char *T, const StringPiece   &C) : code(200), content_length(C.len),     type(T),      content(C.buf),  refill(0), write_headers(1)  {}
-        Response(int K, const char *T, const StringPiece   &C) : code(K),   content_length(C.len),     type(T),      content(C.buf),  refill(0), write_headers(1)  {}
-        Response(int K, const char *T, const char          *C) : code(K),   content_length(strlen(C)), type(T),      content(C),      refill(0), write_headers(1)  {}
-        Response(const char *T, int L, Connection::Handler *C) : code(200), content_length(L),         type(T),      content(0),      refill(C), write_headers(1) {}
+        Response(     const string *T, const string        *C)            : code(200), content_length(C->size()), type_buf(*T), content_buf(*C), refill(0), write_headers(1)  { content=content_buf.c_str(); type=type_buf.c_str(); }
+        Response(       const char *T, const string        *C)            : code(200), content_length(C->size()), type(T),      content_buf(*C), refill(0), write_headers(1)  { content=content_buf.c_str(); }
+        Response(       const char *T, const char          *C)            : code(200), content_length(strlen(C)), type(T),      content(C),      refill(0), write_headers(1)  {}
+        Response(       const char *T, const StringPiece   &C)            : code(200), content_length(C.len),     type(T),      content(C.buf),  refill(0), write_headers(1)  {}
+        Response(int K, const char *T, const StringPiece   &C)            : code(K),   content_length(C.len),     type(T),      content(C.buf),  refill(0), write_headers(1)  {}
+        Response(int K, const char *T, const char          *C)            : code(K),   content_length(strlen(C)), type(T),      content(C),      refill(0), write_headers(1)  {}
+        Response(const char *T, int L, Connection::Handler *C, bool WH=1) : code(200), content_length(L),         type(T),      content(0),      refill(C), write_headers(WH) {}
 
         static Response _400;
     };

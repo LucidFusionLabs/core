@@ -1049,7 +1049,7 @@ int MouseController::Input(InputEvent::Id event, const point &p, int down, int f
     bool thunk = 0, e_hover = e->evtype == Event::Hover;
 
     if (e->deleted || !e->active || (e_hover && e->val) || 
-        (!down && e->evtype == Event::Click && e->CB.type != Callback::CB_COORD)) continue;
+        (!down && e->evtype == Event::Click && e->CB.type != MouseControllerCallback::CB_COORD)) continue;
 
     if (e->box.within(p)) {
       if (e->run_only_if_first && fired) continue;
@@ -1366,7 +1366,7 @@ void Shell::Slider(const vector<string> &a) {
   string flag_name = a[0];
   float total = a.size() >= 1 ? atof(a[1]) : 0;
   float inc   = a.size() >= 2 ? atof(a[2]) : 0;
-  new SliderTweakDialog(flag_name, total ? total : 100, inc ? inc : 1);
+  new SliderFlagDialog(flag_name, total ? total : 100, inc ? inc : 1);
 }
 
 void Shell::Edit(const vector<string> &a) {

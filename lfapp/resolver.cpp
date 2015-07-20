@@ -22,6 +22,8 @@
 
 #ifdef WIN32
 #include <WinDNS.h>
+#else
+#include <netinet/in.h>
 #endif
 
 namespace LFL {
@@ -84,6 +86,12 @@ bool Resolver::Resolve(const Request &req) {
     queue.push_back(outreq);
     return true;
 #endif
+}
+
+void Resolver::NSLookup(const string &host, const ResponseCB &cb) {
+    IPV4::Addr addr;
+    if ((addr = IPV4::Parse(host)) != INADDR_NONE) cb(addr, 0);
+    else if (!Resolve(Request(host, DNS::Type::A, cb))) cb(-1, 0);
 }
 
 void Resolver::DefaultNameserver(vector<IPV4::Addr> *nameservers) {

@@ -59,12 +59,12 @@ struct Widget {
     virtual ~Interface() { if (del_hitbox) DelHitBox(); }
     Interface(GUI *g) : gui(g) {}
 
-    void AddClickBox(const Box  &b, const MouseController::Callback &cb) {                   hitbox.push_back(gui->AddClickBox(b, cb)); }
-    void AddHoverBox(const Box  &b, const MouseController::Callback &cb) {                   hitbox.push_back(gui->AddHoverBox(b, cb)); }
-    void AddDragBox (const Box  &b, const MouseController::Callback &cb) {                   hitbox.push_back(gui->AddDragBox (b, cb)); }
-    void AddClickBox(const Box3 &t, const MouseController::Callback &cb) { for (auto &b : t) hitbox.push_back(gui->AddClickBox(b, cb)); }
-    void AddHoverBox(const Box3 &t, const MouseController::Callback &cb) { for (auto &b : t) hitbox.push_back(gui->AddHoverBox(b, cb)); }
-    void AddDragBox (const Box3 &t, const MouseController::Callback &cb) { for (auto &b : t) hitbox.push_back(gui->AddDragBox (b, cb)); }
+    void AddClickBox(const Box  &b, const MouseControllerCallback &cb) {                   hitbox.push_back(gui->AddClickBox(b, cb)); }
+    void AddHoverBox(const Box  &b, const MouseControllerCallback &cb) {                   hitbox.push_back(gui->AddHoverBox(b, cb)); }
+    void AddDragBox (const Box  &b, const MouseControllerCallback &cb) {                   hitbox.push_back(gui->AddDragBox (b, cb)); }
+    void AddClickBox(const Box3 &t, const MouseControllerCallback &cb) { for (auto &b : t) hitbox.push_back(gui->AddClickBox(b, cb)); }
+    void AddHoverBox(const Box3 &t, const MouseControllerCallback &cb) { for (auto &b : t) hitbox.push_back(gui->AddHoverBox(b, cb)); }
+    void AddDragBox (const Box3 &t, const MouseControllerCallback &cb) { for (auto &b : t) hitbox.push_back(gui->AddDragBox (b, cb)); }
     void DelHitBox() { for (auto i = hitbox.begin(), e = hitbox.end(); i != e; ++i) gui->hit.Erase(*i); hitbox.clear(); }
     MouseController::HitBox &GetHitBox(int i=0) const { return gui->hit[hitbox[i]]; }
     Box GetHitBoxBox(int i=0) const { return Box::Add(GetHitBox(i).box, gui->box.TopLeft()); }
@@ -88,11 +88,11 @@ struct Widget {
     point textsize;
     Color *outline=0;
     Drawable *drawable=0;
-    MouseController::Callback cb;
+    MouseControllerCallback cb;
     bool init=0, hover=0;
     int decay=0;
     Button() : Interface(0) {}
-    Button(GUI *G, Drawable *D, Font *F, const string &T, const MouseController::Callback &CB)
+    Button(GUI *G, Drawable *D, Font *F, const string &T, const MouseControllerCallback &CB)
       : Interface(G), font(F), text(T), drawable(D), cb(CB), init(1) { if (F && T.size()) SetText(T); }
 
     void SetBox(const Box &b) { box=b; hitbox.clear(); AddClickBox(box, cb); init=0; }
@@ -117,6 +117,7 @@ struct Widget {
     virtual ~Scrollbar() {}
     Scrollbar(GUI *Gui, Box window=Box(), int f=Flag::Attached);
 
+    float Percent() const { return scrolled * doc_height; }
     void LayoutFixed(const Box &w) { win = w; Layout(dot_size, dot_size, flag & Flag::Horizontal); }
     void LayoutAttached(const Box &w);
     void Layout(int aw, int ah, bool flip);
@@ -458,14 +459,15 @@ struct Terminal : public TextArea, public Drawable::AttrSource {
   virtual void CursorLeft () { char k[] = "\x1bOD";  sink->Write( k, 3); }
   virtual void PageUp     () { char k[] = "\x1b[5~"; sink->Write( k, 4); }
   virtual void PageDown   () { char k[] = "\x1b[6~"; sink->Write( k, 4); }
-  virtual void Home       () { char k = 'A' - 0x40;  sink->Write(&k, 1); }
-  virtual void End        () { char k = 'E' - 0x40;  sink->Write(&k, 1);  }
+  virtual void Home       () { char k[] = "\x1bOH";  sink->Write( k, 3); }
+  virtual void End        () { char k[] = "\x1bOF";  sink->Write( k, 3); }
   virtual void MoveToOrFromScrollRegion(LinesFrameBuffer *fb, Line *l, const point &p, int flag);
   virtual void UpdateCursor() { cursor.p = point(GetCursorX(term_cursor.x, term_cursor.y), GetCursorY(term_cursor.y)); }
   virtual void UpdateToken(Line*, int word_offset, int word_len, int update_type, const LineTokenProcessor*);
-  virtual int UpdateLines(float v_scrolled, int *first_ind, int *first_offset, int *first_len) { return 0; }
   virtual bool GetGlyphFromCoords(const point &p, Selection::Point *out) { return GetGlyphFromCoordsOffset(p, out, 0, 0); }
   virtual const Drawable::Attr *GetAttr(int attr) const;
+  void ScrollUp  () { TextArea::PageDown(); }
+  void ScrollDown() { TextArea::PageUp(); }
   int GetCursorX(int x, int y) const {
     const Line *l = GetTermLine(y);
     return x <= l->Size() ? l->data->glyphs.Position(x-1).x : ((x-1) * font->FixedWidth());
@@ -527,6 +529,7 @@ struct Dialog : public GUI {
   Box title, resize_left, resize_right, resize_bottom, close;
   bool deleted=0, moving=0, resizing_left=0, resizing_right=0, resizing_top=0, resizing_bottom=0, fullscreen=0;
   point mouse_start, win_start;
+  string title_text;
   int zsort=0;
   Dialog(float w, float h, int flag=0);
   virtual ~Dialog() {}
@@ -555,13 +558,21 @@ struct TextureBoxDialog : public Dialog {
   void Draw() { Dialog::Draw(); tex.Draw(box); }
 };
 
-struct SliderTweakDialog : public Dialog {
+struct SliderDialog : public Dialog {
+  typedef function<void(Widget::Scrollbar*)> UpdatedCB;
+  string title;
+  UpdatedCB updated;
+  Widget::Scrollbar slider;
+  SliderDialog(const string &title="", const UpdatedCB &cb=UpdatedCB(), float scrolled=0, float total=100, float inc=1);
+  void Layout() { Dialog::Layout(); slider.LayoutFixed(Box(0, -box.h, box.w, box.h)); }
+  void Draw() { Dialog::Draw(); if (slider.dirty) { slider.Update(); if (updated) updated(&slider); } }
+};
+
+struct SliderFlagDialog : public SliderDialog {
   string flag_name;
   FlagMap *flag_map;
-  Widget::Scrollbar slider;
-  SliderTweakDialog(const string &fn, float total=100, float inc=1);
-  void Layout();
-  void Draw();
+  SliderFlagDialog(const string &fn, float total=100, float inc=1);
+  virtual void Updated(Widget::Scrollbar *s) { flag_map->Set(flag_name, StrCat(s->Percent())); }
 };
 
 struct EditorDialog : public Dialog {

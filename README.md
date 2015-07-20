@@ -39,8 +39,6 @@ LFL builds easily for Windows, Linux, Mac OSX, iPhone and Android.
 
 * Replace "LTerminal" and "lterm" with "YourPackage" and "YourApp" to build other apps.
 
-* To build release binaries add -DCMAKE_BUILD_TYPE=Release (Doesn't apply to Windows).
-
 ### Windows
 
 * Use CMake 3.2.3
@@ -85,7 +83,7 @@ LFL builds easily for Windows, Linux, Mac OSX, iPhone and Android.
 
         cd lfl
         mkdir linux && cd linux
-        cmake ..
+        cmake -DCMAKE_BUILD_TYPE=Release ..
 
         cd term
         make lterm_run
@@ -100,7 +98,7 @@ LFL builds easily for Windows, Linux, Mac OSX, iPhone and Android.
 
         cd lfl
         mkdir osx && cd osx
-        cmake -DCMAKE_TOOLCHAIN_FILE=../core/CMake/OSXToolchain.cmake ..
+        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=../core/CMake/OSXToolchain.cmake ..
 
         cd term
         make lterm_run
@@ -129,7 +127,7 @@ LFL builds easily for Windows, Linux, Mac OSX, iPhone and Android.
         cd lfl
         mkdir iphone && cd iphone
         ** Modify IPHONEROOT in ../core/CMake/iPhoneToolchain.cmake
-        cmake -DCMAKE_TOOLCHAIN_FILE=../core/CMake/iPhoneToolchain.cmake ..
+        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=../core/CMake/iPhoneToolchain.cmake ..
 
         cd term
         make lterm_run
@@ -148,7 +146,7 @@ LFL builds easily for Windows, Linux, Mac OSX, iPhone and Android.
         cd lfl
         mkdir android && cd android
         ** Modify ANDROIDROOT in ../core/CMake/AndroidToolchain.cmake
-        cmake -DCMAKE_TOOLCHAIN_FILE=../core/CMake/AndroidToolchain.cmake ..
+        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=../core/CMake/AndroidToolchain.cmake ..
 
         cd term
         make lterm_debug

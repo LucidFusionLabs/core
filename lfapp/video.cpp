@@ -1030,6 +1030,7 @@ extern "C" void OSXMakeWindowCurrent(void *O);
 extern "C" void OSXSetWindowSize(void*, int W, int H);
 extern "C" void OSXSetWindowTitle(void *O, const char *v);
 extern "C" void OSXSetWindowResizeIncrements(void *O, float x, float y);
+extern "C" void OSXSetWindowTransparency(void *O, float v);
 extern "C" void *OSXCreateGLContext(void *O);
 struct OSXVideoModule : public Module {
   int Init() {
@@ -1428,7 +1429,7 @@ int Video::Init() {
 #endif
   INFO("lfapp_opengles_cubemap = ", screen->opengles_cubemap ? "true" : "false");
 
-  init_fonts_cb();
+  InitFonts();
   if (!screen->console) screen->InitConsole();
   return 0;
 }
@@ -1472,6 +1473,24 @@ void Video::InitGraphicsDevice(Window *W) {
 }
 
 void Video::InitFonts() {
+  if (FLAGS_default_font.size()) {}
+  else if (FLAGS_font_engine == "coretext") {
+#ifdef LFL_IPHONE
+    FLAGS_default_font = "Menlo-Bold";
+    FLAGS_default_font_size = 12;
+#else
+    FLAGS_default_font = "Monaco";
+    FLAGS_default_font_size = 15;
+#endif
+  } else if (FLAGS_font_engine == "freetype") {
+    FLAGS_default_font = "VeraMoBd.ttf"; // "DejaVuSansMono-Bold.ttf";
+    FLAGS_default_missing_glyph = 42;
+  } else if (FLAGS_font_engine == "atlas") {
+    FLAGS_default_font = "VeraMoBd.ttf";
+    FLAGS_default_missing_glyph = 42;
+    // FLAGS_default_font_size = 32;
+  }
+
   vector<string> atlas_font_size;
   Split(FLAGS_atlas_font_sizes, iscomma, &atlas_font_size);
   FontEngine *font_engine = Fonts::DefaultFontEngine();
@@ -1483,6 +1502,13 @@ void Video::InitFonts() {
   FontEngine *atlas_engine = Singleton<AtlasFontEngine>::Get();
   atlas_engine->Init(FontDesc("MenuAtlas1", "", 0, Color::black, Color::clear, -1, 0));
   atlas_engine->Init(FontDesc("MenuAtlas2", "", 0, Color::black, Color::clear, -1, 0));
+
+  if (FLAGS_font_engine == "coretext") {
+    FLAGS_atlas_font_sizes = "32";
+    string console_font = "VeraMoBd.ttf";
+    Singleton<AtlasFontEngine>::Get()->Init(FontDesc(console_font, "", 32));
+    FLAGS_console_font = StrCat("atlas://", console_font);
+  }
 }
 
 int Video::Swap() {
@@ -1526,6 +1552,12 @@ void Window::SetCaption(const string &v) {
 void Window::SetResizeIncrements(float x, float y) {
 #if defined(LFL_OSXVIDEO)
   OSXSetWindowResizeIncrements(id, x, y);
+#endif
+}
+
+void Window::SetTransparency(float v) {
+#if defined(LFL_OSXVIDEO)
+  OSXSetWindowTransparency(id, v);
 #endif
 }
 

@@ -70,9 +70,9 @@ struct Resolver {
     Nameserver *Connect(IPV4::Addr addr);
     Nameserver *Connect(const vector<IPV4::Addr> &addrs);
     bool Resolve(const Request &req);
+    void NSLookup(const string &host, const ResponseCB &cb);
 
     static void DefaultNameserver(vector<IPV4::Addr> *nameservers);
-    static void UDPClientHeartbeatCB(Connection *c, void *a) { ((Nameserver*)a)->Heartbeat(); }
 };
 
 struct RecursiveResolver {

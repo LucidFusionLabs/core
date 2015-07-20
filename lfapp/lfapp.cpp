@@ -31,6 +31,7 @@ extern "C" {
 #include "lfapp/css.h"
 #include "lfapp/flow.h"
 #include "lfapp/gui.h"
+#include "lfapp/browser.h"
 #include "lfapp/resolver.h"
 
 #include <time.h>
@@ -234,10 +235,13 @@ Allocator *ThreadLocalStorage::GetAllocator(bool reset_allocator) {
 void Log(int level, const char *file, int line, const string &m) { app->Log(level, file, line, m); }
 bool Running() { return app->run; }
 bool MainThread() { return Thread::GetId() == app->main_thread_id; }
-void RunInMainThread(Callback *cb) { app->message_queue.Write(cb); }
 void DefaultLFAppWindowClosedCB(Window *W) { delete W; }
 double FPS() { return screen->fps.FPS(); }
 double CamFPS() { return app->camera.fps.FPS(); }
+void RunInMainThread(Callback *cb) {
+  app->message_queue.Write(cb);
+  if (!FLAGS_target_fps) app->scheduler.Wakeup(0);
+}
 void PressAnyKey() {
   printf("Press [enter] to continue..."); fflush(stdout);
   char buf[32]; fgets(buf, sizeof(buf), stdin);

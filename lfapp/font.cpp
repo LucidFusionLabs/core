@@ -63,8 +63,14 @@ FT_Library ft_library;
 #endif
 
 namespace LFL {
-DEFINE_string(font_engine, "atlas", "[atlas,freetype,coretext]");
-DEFINE_string(default_font, "Nobile.ttf", "Default font");
+#if defined(__APPLE__)
+DEFINE_string(font_engine, "coretext", "[atlas,freetype,coretext]");
+#elif defined(WIN32)
+DEFINE_string(font_engine, "atlas",    "[atlas,freetype,coretext]");
+#else
+DEFINE_string(font_engine, "freetype", "[atlas,freetype,coretext]");
+#endif
+DEFINE_string(default_font, "", "Default font");
 DEFINE_string(default_font_family, "sans-serif", "Default font family");
 DEFINE_int(default_font_size, 16, "Default font size");
 DEFINE_int(default_font_flag, 0, "Default font flag");
@@ -630,7 +636,7 @@ CoreTextFontEngine::Resource::~Resource() {
 }
 
 string CoreTextFontEngine::DebugString(Font *f) const {
-    return StrCat("CoreTextFont(", f->desc->DebugString(), "), fixed_width=", f->fixed_width, " mono=", f->mono?f->max_width:0, " advance_bounds = ", GetAdvanceBounds(f).DebugString());
+    return StrCat("CoreTextFont(", f->desc->DebugString(), "), H=", f->Height(), " fixed_width=", f->fixed_width, " mono=", f->mono?f->max_width:0, " advance_bounds = ", GetAdvanceBounds(f).DebugString());
 }
 
 int CoreTextFontEngine::InitGlyphs(Font *f, Glyph *g, int n) {

@@ -1304,11 +1304,8 @@ bool HTTPClient::WGet(const string &url, File *out, ResponseCB cb) {
     if (!out->Opened()) { ERROR("open file"); delete out; return 0; }
   }
 
-  IPV4::Addr addr;
   HTTPClientHandler::WGet *handler = new HTTPClientHandler::WGet(this, ssl, host, tcp_port, path, out, cb);
-  if ((addr = IPV4::Parse(host)) != INADDR_NONE) handler->ResolverResponseCB(addr, 0);
-  else if (!Singleton<Resolver>::Get()->Resolve(Resolver::Request(host, DNS::Type::A, bind(&HTTPClientHandler::WGet::ResolverResponseCB, handler, _1, _2))))
-  { ERROR("resolver: ", url); delete handler; return 0; }
+  Singleton<Resolver>::Get()->NSLookup(host, bind(&HTTPClientHandler::WGet::ResolverResponseCB, handler, _1, _2));
   return true;
 }
 

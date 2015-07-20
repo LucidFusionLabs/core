@@ -690,7 +690,7 @@ template <class Line> struct RingFrameBuffer {
     void SetDimensions(int W, int H, Font *f) { w = W; h = H; font_size = f->size; font_height = f->Height(); }
     void ScrollPercent(float y) { scroll.y = fmod(scroll.y + y, 1.0); }
     void ScrollPixels(int y) { ScrollPercent((float)y / Height()); }
-    void AdvancePixels(int y) { ScrollPixels(y); p.y = RingIndex::Wrap(p.y - y, Height());  }
+    void AdvancePixels(int y) { ScrollPixels(y); p.y = RingIndex::WrapOver(p.y - y, Height()); }
     point BackPlus(const point &o) { return point(RingIndex::WrapOver(p.x + o.x, Width()),
                                                   RingIndex::WrapOver(p.y + o.y, Height())); }
 };

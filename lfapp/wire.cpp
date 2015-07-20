@@ -280,7 +280,7 @@ bool HTTP::ResolveURL(const char *url, bool *ssl, IPV4::Addr *ipv4_addr, int *tc
   *ssl = !prot->empty() && !strcasecmp(prot->c_str(), "https");
   if (!prot->empty() && strcasecmp(prot->c_str(), "http") && !*ssl) return 0;
   if (host->empty()) { ERROR("no host or path"); return 0; }
-  if (!HTTP::ResolveEndpoint(*host, port, ipv4_addr, tcp_port, *ssl, default_port)) { ERROR("HTTP::ResolveURL ", host); return 0; }
+  if (!HTTP::ResolveEndpoint(*host, port, ipv4_addr, tcp_port, *ssl, default_port)) { ERROR("HTTP::ResolveURL ", *host); return 0; }
   return 1;
 }
 

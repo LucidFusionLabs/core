@@ -572,7 +572,7 @@ void TextArea::Write(const StringPiece &s, bool update_fb, bool release_fb) {
 void TextArea::Resized(const Box &b) {
   if (selection.enabled) {
     mouse_gui.box.SetDimension(b.Dimension());
-    mouse_gui.UpdateBox(Box(b.Dimension()), -1, selection.gui_ind);
+    mouse_gui.UpdateBox(Box(0,-b.h,b.w,b.h*2), -1, selection.gui_ind);
   }
   UpdateLines(last_v_scrolled, 0, 0, 0);
   Redraw(false);
@@ -813,7 +813,7 @@ int Editor::UpdateLines(float v_scrolled, int *first_ind, int *first_offset, int
   if (dist < fb->lines) {
     if (up) read_lines = pair<int, int>(new_first_line, dist);
     else    read_lines = pair<int, int>(new_first_line + fb->lines - dist, dist);
-  } else      read_lines = pair<int, int>(new_first_line, fb->lines);
+  } else    read_lines = pair<int, int>(new_first_line, fb->lines);
 
   bool head_read = new_first_line == read_lines.first;
   bool tail_read = new_last_line  == read_lines.first + read_lines.second;
@@ -1267,7 +1267,10 @@ void Terminal::Write(const StringPiece &s, bool update_fb, bool release_fb) {
           }
         } break;
         case 'p':
-          if (parse_csi_argv00 == '!') { insert_mode = false; /* soft reset http://vt100.net/docs/vt510-rm/DECSTR */ }
+          if (parse_csi_argv00 == '!') { /* soft reset http://vt100.net/docs/vt510-rm/DECSTR */
+            insert_mode = false;
+            SetScrollRegion(1, term_height);
+          }
           else TerminalDebug("Unhandled CSI-p %c\n", parse_csi_argv00);
           break;
         case 'r':
@@ -1442,6 +1445,12 @@ void Dialog::Layout() {
 
   int attr_id = child_box.attr.GetAttrId(Drawable::Attr(menuicon1));
   child_box.PushBack(close, attr_id, menuicon1 ? menuicon1->FindGlyph(11) : 0);
+
+  if (title_text.size()) {
+    Box title_text_size;
+    font->Size(title_text, &title_text_size);
+    font->Shape(title_text, Box(title.centerX(title_text_size.w), title.centerY(title_text_size.h), 0, 0), &child_box);
+  }
 }
 
 void Dialog::Draw() {
@@ -1488,29 +1497,17 @@ void MessageBoxDialog::Draw() {
   { Scissor scissor(box); font->Draw(message, point(box.centerX(messagesize.w), box.centerY(messagesize.h)));  }
 }
 
-SliderTweakDialog::SliderTweakDialog(const string &fn, float total, float inc) :
-  Dialog(.3, .05), flag_name(fn), flag_map(Singleton<FlagMap>::Get()), slider(this, Box(), Widget::Scrollbar::Flag::Horizontal)
-{
-  slider.increment = inc;
+SliderDialog::SliderDialog(const string &t, const SliderDialog::UpdatedCB &cb, float scrolled, float total, float inc) :
+  Dialog(.3, .05), updated(cb), slider(this, Box(), Widget::Scrollbar::Flag::Horizontal) {
+  title_text = t;
+  slider.scrolled = scrolled;
   slider.doc_height = total;
-  slider.scrolled = atof(flag_map->Get(flag_name).c_str()) / total;
+  slider.increment = inc;
 }
 
-void SliderTweakDialog::Layout() {
-  Dialog::Layout();
-  Box flag_name_size;
-  font->Size(flag_name, &flag_name_size);
-  font->Shape(flag_name, Box(title.centerX(flag_name_size.w), title.centerY(flag_name_size.h), 0, 0), &child_box);
-  slider.LayoutFixed(Box(0, -box.h, box.w, box.h));
-}
-
-void SliderTweakDialog::Draw() {
-  Dialog::Draw();
-  if (slider.dirty) {
-    slider.Update();
-    flag_map->Set(flag_name, StrCat(slider.scrolled * slider.doc_height));
-  }
-}
+SliderFlagDialog::SliderFlagDialog(const string &fn, float total, float inc) :
+  SliderDialog(fn, bind(&SliderFlagDialog::Updated, this, _1), atof(Singleton<FlagMap>::Get()->Get(fn)) / total, total, inc),
+  flag_name(fn), flag_map(Singleton<FlagMap>::Get()) {}
 
 EditorDialog::EditorDialog(Window *W, Font *F, File *I, float w, float h, int flag) :
   Dialog(w, h, flag), editor(W, F, I, flag & Flag::Wrap), v_scrollbar(this),
@@ -1530,7 +1527,7 @@ void EditorDialog::Draw() {
   if (!wrap) editor.h_scrolled = h_scrollbar.AddScrollDelta(editor.h_scrolled);
   if (1)     editor.UpdateScrolled();
   if (1)     Dialog::Draw();
-  if (1)     editor.Draw(content_box, true);
+  if (1)     editor.Draw(content_box, Editor::DrawFlag::CheckResized);
   if (1)     v_scrollbar.Update();
   if (!wrap) h_scrollbar.Update();
 }

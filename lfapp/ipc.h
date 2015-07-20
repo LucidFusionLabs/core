@@ -30,8 +30,8 @@ struct ProcessPipe {
     int pid=0;
     FILE *in=0, *out=0;
     virtual ~ProcessPipe() { Close(); }
-    int Open(const char **argv);
-    int OpenPTY(const char **argv);
+    int Open(const char **argv, const char *startdir=0);
+    int OpenPTY(const char **argv, const char *startdir=0);
     int Close();
 };
 

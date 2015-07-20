@@ -37,9 +37,9 @@ int NTService::Uninstall(const char *name)                   { FATAL("not implem
 int NTService::WrapMain (const char *name, MainCB main_cb, int argc, const char **argv) { return main_cb(argc, argv); }
 #endif
 #if defined(LFL_MOBILE)
-int ProcessPipe::OpenPTY(const char **argv) { FATAL("not implemented"); }
-int ProcessPipe::Open   (const char **argv) { FATAL("not implemented"); }
-int ProcessPipe::Close()                    { FATAL("not implemented"); }
+int ProcessPipe::OpenPTY(const char **argv, const char *startdir) { FATAL("not implemented"); }
+int ProcessPipe::Open   (const char **argv, const char *startdir) { FATAL("not implemented"); }
+int ProcessPipe::Close()                                          { FATAL("not implemented"); }
 #elif defined(WIN32)
 
 MainCB nt_service_main = 0;
@@ -141,8 +141,8 @@ int NTService::WrapMain(const char *name, MainCB main_cb, int argc, const char *
 }
 
 int ProcessPipe::Close() { return 0; }
-int ProcessPipe::OpenPTY(const char **argv) { return Open(argv); }
-int ProcessPipe::Open(const char **argv) {
+int ProcessPipe::OpenPTY(const char **argv, const char *startdir) { return Open(argv); }
+int ProcessPipe::Open(const char **argv, const char *startdir) {
   SECURITY_ATTRIBUTES sa;
   memset(&sa, 0, sizeof(sa));
   sa.nLength = sizeof(sa);
@@ -177,7 +177,7 @@ void MultiProcessBuffer::Close() {}
 
 #else /* WIN32 */
 
-int ProcessPipe::Open(const char **argv) {
+int ProcessPipe::Open(const char **argv, const char *startdir) {
   int pipein[2], pipeout[2], ret;
   if (pipe(pipein) < 0) return -1;
   if (pipe(pipeout) < 0) { close(pipein[0]); close(pipein[1]); return -1; }
@@ -197,13 +197,14 @@ int ProcessPipe::Open(const char **argv) {
     dup2(pipein[1], 2);
     dup2(pipein[1], 1);
     dup2(pipeout[0], 0);
+    if (startdir) chdir(startdir);
     execvp(argv[0], (char*const*)argv);
   }
   return 0;
 }
 
 extern "C" pid_t forkpty(int *, char *, struct termios *, struct winsize *);
-int ProcessPipe::OpenPTY(const char **argv) {
+int ProcessPipe::OpenPTY(const char **argv, const char *startdir) {
   // struct termios term;
   // struct winsize win;
   char name[PATH_MAX];
@@ -214,6 +215,7 @@ int ProcessPipe::OpenPTY(const char **argv) {
     in = fdopen(fd, "r");
     out = fdopen(fd, "w");
   } else {
+    if (startdir) chdir(startdir);
     execvp(argv[0], (char*const*)argv);
   }
   return 0;
