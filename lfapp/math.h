@@ -118,6 +118,7 @@ template <class X> struct V2 {
     void operator *= (X f)            { x *= f;   y *= f;   }
     void Norm() { float l=Len(); if (!l) return; x /= l; y /= l; }
     float Len() const { return sqrt(x*x + y*y); }
+    bool Zero() const { return !x && !y; }
     string DebugString() const { return StrCat("v(", x, ", ", y, ")"); }
 };
 typedef V2<float> v2;

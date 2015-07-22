@@ -36,11 +36,12 @@ DECLARE_int(glyph_table_start);
 struct FontDesc {
     enum { Bold=1, Italic=2, Mono=4, Outline=8 };
     struct Engine {
-        enum { Default=0, Atlas=1, FreeType=2, CoreText=3 };
+        enum { Default=0, Atlas=1, FreeType=2, CoreText=3, GDI=4 };
         static int Parse(const string &s) {
             if      (s == "atlas")    return Atlas;
             else if (s == "freetype") return FreeType;
             else if (s == "coretext") return CoreText;
+            else if (s == "gdi")      return GDI;
             return Default;
         };
     };
@@ -86,7 +87,7 @@ struct FontDesc {
     }
 
     string Filename() const {
-        return StrCat(name, ",", size, ",", fg.R(), ",", fg.G(), ",", fg.B(), ",0"); // fg.A());
+        return StrCat(name, ",", size, ",", fg.R(), ",", fg.G(), ",", fg.B(), ",", flag);
     }
     string DebugString() const {
         return StrCat(name, " (", family, ") ", size, " ", fg.DebugString(), " ", bg.DebugString(), " ", flag);
@@ -134,7 +135,12 @@ struct GlyphCache {
     Box dim;
     Texture tex;
     Flow *flow=0;
+#ifdef __APPLE__
     CGContextRef cgcontext=0;
+#endif
+#ifdef WIN32
+    HDC hdc=0;
+#endif
     vector<const Glyph*> glyph;
     int max_width=128, max_height=128;
     GlyphCache(unsigned T, int W, int H=0);
@@ -151,6 +157,9 @@ struct GlyphCache {
     void Load(const Font*, const Glyph*, const unsigned char *buf, int linesize, int pf, const FilterCB &f=FilterCB());
 #ifdef __APPLE__
     void Load(const Font*, const Glyph*, CGFontRef cgfont, int size);
+#endif
+#ifdef WIN32
+    void Load(const Font*, const Glyph*, HFONT hfont, int size);
 #endif
 
     static GlyphCache *Get() {
@@ -330,6 +339,29 @@ struct CoreTextFontEngine : public FontEngine {
     static void GetSubstitutedFont(Font*, CTFontRef, unsigned short gid, CGFontRef *cgout, CTFontRef *ctout, int *id_out);
     static void AssignGlyph(Glyph *out, const CGRect &bounds, struct CGSize &advance);
     static v2 GetAdvanceBounds(Font*);
+};
+#endif
+
+#ifdef WIN32
+struct GDIFontEngine : public FontEngine {
+  struct Resource : public FontEngine::Resource {
+    string name;
+    HFONT hfont;
+    int flag;
+    virtual ~Resource();
+    Resource(const char *N = 0, HFONT H = 0, int F = 0) : name(BlankNull(N)), hfont(H), flag(F) {}
+  };
+  unordered_map<string, shared_ptr<Resource> > resource;
+  virtual const char *Name() { return "GDIFontEngine"; }
+  virtual Font *Open(const FontDesc&);
+  virtual int   InitGlyphs(Font *f, Glyph *g, int n);
+  virtual int   LoadGlyphs(Font *f, const Glyph *g, int n);
+  virtual string DebugString(Font *f) const;
+
+  struct Flag { enum { WriteAtlas = 1 }; };
+  static Font *Open(const string &name, int size, Color c, int flag, int ct_flag);
+  static Font *Open(const shared_ptr<Resource> &R, int size, Color c, int flag);
+  static void AssignGlyph(Glyph *out, const ::SIZE &bounds, const ::SIZE &advance);
 };
 #endif
 

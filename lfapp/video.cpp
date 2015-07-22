@@ -1482,6 +1482,9 @@ void Video::InitFonts() {
     FLAGS_default_font = "Monaco";
     FLAGS_default_font_size = 15;
 #endif
+  } else if (FLAGS_font_engine == "gdi") {
+    FLAGS_default_font = "Consolas";
+    FLAGS_default_font_size = 16;
   } else if (FLAGS_font_engine == "freetype") {
     FLAGS_default_font = "VeraMoBd.ttf"; // "DejaVuSansMono-Bold.ttf";
     FLAGS_default_missing_glyph = 42;
@@ -1500,10 +1503,10 @@ void Video::InitFonts() {
   }
 
   FontEngine *atlas_engine = Singleton<AtlasFontEngine>::Get();
-  atlas_engine->Init(FontDesc("MenuAtlas1", "", 0, Color::black, Color::clear, -1, 0));
-  atlas_engine->Init(FontDesc("MenuAtlas2", "", 0, Color::black, Color::clear, -1, 0));
+  atlas_engine->Init(FontDesc("MenuAtlas1", "", 0, Color::black, Color::clear, 0, 0));
+  atlas_engine->Init(FontDesc("MenuAtlas2", "", 0, Color::black, Color::clear, 0, 0));
 
-  if (FLAGS_font_engine == "coretext") {
+  if (FLAGS_font_engine != "atlas") {
     FLAGS_atlas_font_sizes = "32";
     string console_font = "VeraMoBd.ttf";
     Singleton<AtlasFontEngine>::Get()->Init(FontDesc(console_font, "", 32));
@@ -1546,18 +1549,28 @@ int Video::Free() {
 void Window::SetCaption(const string &v) {
 #if defined(LFL_OSXVIDEO)
   OSXSetWindowTitle(id, v.c_str());
+#elif defined(LFL_WINVIDEO)
+  SetWindowText((HWND)screen->id, v.c_str());
 #endif
 }
 
 void Window::SetResizeIncrements(float x, float y) {
 #if defined(LFL_OSXVIDEO)
   OSXSetWindowResizeIncrements(id, x, y);
+#elif defined(LFL_WINVIDEO)
+  WinWindow *win = static_cast<WinWindow*>(screen->impl);
+  win->resize_increment = point(x, y);
 #endif
 }
 
 void Window::SetTransparency(float v) {
 #if defined(LFL_OSXVIDEO)
   OSXSetWindowTransparency(id, v);
+#elif defined(LFL_WINVIDEO)
+  if (v <= 0) SetWindowLong((HWND)screen->id, GWL_EXSTYLE, GetWindowLong((HWND)screen->id, GWL_EXSTYLE) & (~WS_EX_LAYERED));
+  else {      SetWindowLong((HWND)screen->id, GWL_EXSTYLE, GetWindowLong((HWND)screen->id, GWL_EXSTYLE) | ( WS_EX_LAYERED));
+    SetLayeredWindowAttributes((HWND)screen->id, 0, static_cast<BYTE>(max(1.0, (1-v)*255.0)), LWA_ALPHA);
+  }
 #endif
 }
 
@@ -1898,18 +1911,18 @@ void SimpleVideoResampler::CopyPixel(int s_fmt, int d_fmt, const unsigned char *
   switch (s_fmt) {
     case Pixel::RGB24: r = *sp++; g = *sp++; b = *sp++; a = ((f & Flag::TransparentBlack) && !r && !g && !b) ? 0 : 255; break;
     case Pixel::BGR24: b = *sp++; g = *sp++; r = *sp++; a = ((f & Flag::TransparentBlack) && !r && !g && !b) ? 0 : 255; break;
-    case Pixel::RGB32: r = *sp++; g = *sp++; b = *sp++; a=*sp++; break;
-    case Pixel::BGR32: b = *sp++; g = *sp++; r = *sp++; a=*sp++; break;
+    case Pixel::RGB32: r = *sp++; g = *sp++; b = *sp++; a=255; sp++; break;
+    case Pixel::BGR32: b = *sp++; g = *sp++; r = *sp++; a=255; sp++; break;
     case Pixel::RGBA:  r = *sp++; g = *sp++; b = *sp++; a=*sp++; break;
     case Pixel::BGRA:  b = *sp++; g = *sp++; r = *sp++; a=*sp++; break;
     case Pixel::GRAY8: r = 255;   g = 255;   b = 255;   a=*sp++; break;
-                       // case Pixel::GRAY8: r = g = b = a = *sp++; break;
+    // case Pixel::GRAY8: r = g = b = a = *sp++; break;
     case Pixel::LCD: 
-                       r = (sxb ? 0 : *(sp-1)) / 3.0 + *sp / 3.0 + (          *(sp+1)) / 3.0; sp++; 
-                       g = (          *(sp-1)) / 3.0 + *sp / 3.0 + (          *(sp+1)) / 3.0; sp++; 
-                       b = (          *(sp-1)) / 3.0 + *sp / 3.0 + (sxe ? 0 : *(sp+1)) / 3.0; sp++;
-                       a = ((f & Flag::TransparentBlack) && !r && !g && !b) ? 0 : 255;
-                       break;
+      r = (sxb ? 0 : *(sp-1)) / 3.0 + *sp / 3.0 + (          *(sp+1)) / 3.0; sp++; 
+      g = (          *(sp-1)) / 3.0 + *sp / 3.0 + (          *(sp+1)) / 3.0; sp++; 
+      b = (          *(sp-1)) / 3.0 + *sp / 3.0 + (sxe ? 0 : *(sp+1)) / 3.0; sp++;
+      a = ((f & Flag::TransparentBlack) && !r && !g && !b) ? 0 : 255;
+      break;
     default: ERROR("s_fmt ", s_fmt, " not supported"); return;
   }
   switch (d_fmt) {
@@ -2148,6 +2161,24 @@ CGContextRef Texture::CGBitMap(int X, int Y, int W, int H) {
   // CGColorSpaceRef colors = CGColorSpaceCreateWithName(kCGColorSpaceGenericRGB);
   CGContextRef ret = CGBitmapContextCreate(buf + Y*linesize + X*PixelSize(), W, H, 8, linesize, colors, alpha_info);
   CGColorSpaceRelease(colors);
+  return ret;
+}
+#endif
+
+#ifdef WIN32
+HBITMAP Texture::CreateGDIBitMap(HDC dc) {
+  ClearBuffer();
+  buf_owner = false;
+  pf = Pixel::BGR32;
+  BITMAPINFO bmi;
+  memzero(bmi.bmiHeader);
+  bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+  bmi.bmiHeader.biWidth = width;
+  bmi.bmiHeader.biHeight = -height;
+  bmi.bmiHeader.biPlanes = 1;
+  bmi.bmiHeader.biCompression = BI_RGB;
+  bmi.bmiHeader.biBitCount = 32;
+  HBITMAP ret = CreateDIBSection(dc, &bmi, DIB_RGB_COLORS, (void**)&buf, NULL, 0);
   return ret;
 }
 #endif

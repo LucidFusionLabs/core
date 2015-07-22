@@ -160,7 +160,7 @@ void Widget::Button::LayoutComplete(Flow *flow, const Box &b) {
   flow->p = save_p;
 }
 
-Widget::Scrollbar::Scrollbar(GUI *Gui, Box window, int f) : Interface(Gui), win(window), flag(f), menuicon2(Fonts::Get("MenuAtlas2", "", 0, Color::black)) {
+Widget::Scrollbar::Scrollbar(GUI *Gui, Box window, int f) : Interface(Gui), win(window), flag(f), menuicon2(Fonts::Get("MenuAtlas2", "", 0, Color::black, Color::clear, 0)) {
   if (win.w && win.h) { if (f & Flag::Attached) LayoutAttached(win); else LayoutFixed(win); }
 }
 
@@ -1421,7 +1421,7 @@ void Console::Draw() {
 
 /* Dialog */
 
-Dialog::Dialog(float w, float h, int flag) : GUI(screen), font(Fonts::Get(FLAGS_default_font, "", 14, Color::white)), menuicon1(Fonts::Get("MenuAtlas1", "", 0, Color::black)) {
+Dialog::Dialog(float w, float h, int flag) : GUI(screen), font(Fonts::Get(FLAGS_default_font, "", 14, Color::white)), menuicon1(Fonts::Get("MenuAtlas1", "", 0, Color::black, Color::clear, 0)) {
   screen->dialogs.push_back(this);
   box = screen->Box().center(screen->Box(w, h));
   fullscreen = flag & Flag::Fullscreen;

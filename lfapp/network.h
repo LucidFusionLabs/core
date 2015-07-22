@@ -359,7 +359,6 @@ struct Network : public Module {
     void UpdateActive(Connection *c);
 };
 
-
 /// NetworkThread runs the Network Module in a new thread with a multiplexed Callback queue
 struct NetworkThread {
     struct ConnectionHandler : public Connection::Handler {

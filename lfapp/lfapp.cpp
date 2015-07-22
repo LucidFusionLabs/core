@@ -912,7 +912,7 @@ void Application::LaunchNativeMenu(const string &title) {
 #endif
 }
 
-void Application::AddNativeMenu(const string &title, const vector<tuple<string, string, string>>&items) {
+void Application::AddNativeMenu(const string &title, const vector<MenuItem>&items) {
 #if defined(LFL_IPHONE)
   vector<const char *> n, v;
   for (auto &i : items) { n.push_back(tuple_get<1>(i).c_str()); v.push_back(tuple_get<2>(i).c_str()); }

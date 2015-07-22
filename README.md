@@ -70,7 +70,7 @@ LFL builds easily for Windows, Linux, Mac OSX, iPhone and Android.
         mkdir assets
         copy ..\..\term\assets\* assets
         copy ..\..\core\lfapp\*.glsl assets
-        Optionally copy ..\..\core\imports\ffmpeg\w32\dll\*.dll Debug [overwrite:All]
+        If using ffmpeg, copy ..\..\core\imports\ffmpeg\w32\dll\*.dll Debug [overwrite:All]
         [Run]
 
         [Right click] term.nsi > Compile NSIS Script

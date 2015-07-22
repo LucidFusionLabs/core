@@ -649,6 +649,7 @@ struct TouchDevice {
 };
 
 struct CUDA : public Module { int Init(); };
+typedef tuple<string, string, string> MenuItem;
 
 struct Application : public ::LFApp, public Module {
   string name, progname, logfilename, startdir, assetdir, dldir;
@@ -683,7 +684,7 @@ struct Application : public ::LFApp, public Module {
   NetworkThread *CreateNetworkThread();
   void LaunchNativeFontChooser(const FontDesc &cur_font, const string &choose_cmd);
   void LaunchNativeMenu(const string &title);
-  void AddNativeMenu(const string &title, const vector<tuple<string, string, string>>&items);
+  void AddNativeMenu(const string &title, const vector<MenuItem>&items);
   int LoadModule(Module *M) { modules.push_back(M); return M->Init(); }
   string BinDir() const { return LocalFile::JoinPath(startdir, progname.substr(0, DirNameLen(progname, true))); }
 

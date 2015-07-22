@@ -478,11 +478,34 @@ LRESULT APIENTRY WinApp::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
   case WM_COMMAND:                     if ((ind = wParam - win->start_msg_id) >= 0) if (ind < win->menu_cmds.size()) ShellRun(win->menu_cmds[ind].c_str()); return 0;
   case WM_CONTEXTMENU:                 if (win->menu) { GetCursorPos(&cursor); TrackPopupMenu(win->context_menu, TPM_LEFTALIGN|TPM_TOPALIGN, cursor.x, cursor.y, 0, hWnd, NULL); } return 0;
   case WM_PAINT:                       BeginPaint((HWND)screen->id, &ps); if (!FLAGS_target_fps) LFAppFrame(); EndPaint((HWND)screen->id, &ps); return 0;
+  case WM_SIZING:                      return win->resize_increment.Zero() ? 0 : win->RestrictResize(wParam, reinterpret_cast<LPRECT>(lParam));
   case WM_USER:                        if (!FLAGS_target_fps) LFAppFrame(); return 0;
   case WM_KILLFOCUS:                   app->input.ClearButtonsDown(); return 0;
   default:                             break;
   }
   return DefWindowProc(hWnd, message, wParam, lParam);
+}
+
+bool WinWindow::RestrictResize(int m, RECT *r) {
+  point in(r->right - r->left, r->bottom - r->top);
+  RECT w = { 0, 0, in.x, in.y };
+  AdjustWindowRect(&w, GetWindowLong((HWND)screen->id, GWL_STYLE), menubar);
+  point extra((w.right - w.left) - in.x, (w.bottom - w.top) - in.y), content = in - extra;
+  switch (m) {
+    case WMSZ_TOP:         r->top    -= (NextMultipleOfN(content.y, resize_increment.y) - content.y); break;
+    case WMSZ_BOTTOM:      r->bottom += (NextMultipleOfN(content.y, resize_increment.y) - content.y); break;
+    case WMSZ_LEFT:        r->left   -= (NextMultipleOfN(content.x, resize_increment.x) - content.x); break;
+    case WMSZ_RIGHT:       r->right  += (NextMultipleOfN(content.x, resize_increment.x) - content.x); break;
+    case WMSZ_BOTTOMLEFT:  r->bottom += (NextMultipleOfN(content.y, resize_increment.y) - content.y); 
+                           r->left   -= (NextMultipleOfN(content.x, resize_increment.x) - content.x); break;
+    case WMSZ_BOTTOMRIGHT: r->right  += (NextMultipleOfN(content.x, resize_increment.x) - content.x);
+                           r->bottom += (NextMultipleOfN(content.y, resize_increment.y) - content.y); break;
+    case WMSZ_TOPLEFT:     r->top    -= (NextMultipleOfN(content.y, resize_increment.y) - content.y);
+                           r->left   -= (NextMultipleOfN(content.x, resize_increment.x) - content.x); break;
+    case WMSZ_TOPRIGHT:    r->right  += (NextMultipleOfN(content.x, resize_increment.x) - content.x);
+                           r->top    -= (NextMultipleOfN(content.y, resize_increment.y) - content.y); break;
+  }
+  return true;
 }
 
 const int Key::Escape     = '\x1b';

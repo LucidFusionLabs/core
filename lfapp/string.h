@@ -306,12 +306,14 @@ template <int V1, int V2, int V3, int V4> int isint4(int N) { return (N == V1) |
 #undef islower
 #undef isdigit
 #undef isnumber
+#undef ispunct
 inline int isspace(int c) { return std::iswspace(c); }
 inline int isascii(int c) { return c >= 32 && c < 128; }
 inline int isalpha(int c) { return std::iswalpha(c); }
 inline int isalnum(int c) { return std::iswalnum(c); }
 inline int isupper(int c) { return std::iswupper(c); }
 inline int islower(int c) { return std::iswlower(c); }
+inline int ispunct(int c) { return std::iswpunct(c); }
 inline int isdot(int c) { return c == '.'; }
 inline int iscomma(int c) { return c == ','; }
 inline int isand(int c) { return c == '&'; }

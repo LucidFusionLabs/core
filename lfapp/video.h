@@ -395,6 +395,7 @@ struct Texture : public Drawable {
     unsigned char *ReleaseBuffer() { unsigned char *ret=0; swap(ret, buf); ClearBuffer(); return ret; }
 
     struct Flag { enum { CreateGL=1, CreateBuf=2, FlipY=4, Resample=8 }; };
+    void Create      (int PF=0)               { Create(width, height, PF); }
     void Create      (int W, int H, int PF=0) { Resize(W, H, PF, Flag::CreateGL); }
     void CreateBacked(int W, int H, int PF=0) { Resize(W, H, PF, Flag::CreateGL | Flag::CreateBuf); }
     void Resize(int W, int H, int PF=0, int flag=0);
@@ -404,7 +405,7 @@ struct Texture : public Drawable {
     void LoadBuffer  (const unsigned char *B, const point &dim, int PF, int linesize, int flag=0);
     void UpdateBuffer(const unsigned char *B, const point &dim, int PF, int linesize, int flag=0);
     void UpdateBuffer(const unsigned char *B, const ::LFL::Box &box, int PF, int linesize, int blit_flag=0);
-    void FlipBufferY() { Texture t; t.LoadBuffer(buf, Dimension(), pf, LineSize(), Flag::FlipY); swap(buf, t.buf); }
+    void FlipBufferY() { Texture t; t.LoadBuffer(buf, Dimension(), pf, LineSize(), Flag::FlipY); ClearBuffer(); swap(buf, t.buf); }
 
     void LoadGL  (const unsigned char *B, const point &dim, int PF, int linesize, int flag=0);
     void UpdateGL(const unsigned char *B, const ::LFL::Box &box, int flag=0);
@@ -424,6 +425,9 @@ struct Texture : public Drawable {
 #ifdef __APPLE__
     CGContextRef CGBitMap();
     CGContextRef CGBitMap(int X, int Y, int W, int H);
+#endif
+#ifdef WIN32
+    HBITMAP CreateGDIBitMap(HDC dc);
 #endif
     static void Coordinates(float *texcoord, int w, int h, int wd, int hd);
     static const int CoordMinX, CoordMinY, CoordMaxX, CoordMaxY;

@@ -301,10 +301,11 @@ struct WinApp {
 };
 struct WinWindow {
   bool menubar = 0, frame_on_keyboard_input = 0, frame_on_mouse_input = 0;
-  point prev_mouse_pos;
+  point prev_mouse_pos, resize_increment;
   int start_msg_id = WM_USER + 100;
   HMENU menu = 0, context_menu = 0;
   vector<string> menu_cmds;
+  bool RestrictResize(int m, RECT*);
 };
 #endif
 

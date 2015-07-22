@@ -64,19 +64,19 @@ FT_Library ft_library;
 
 namespace LFL {
 #if defined(__APPLE__)
-DEFINE_string(font_engine, "coretext", "[atlas,freetype,coretext]");
+DEFINE_string(font_engine, "coretext", "[atlas,freetype,coretext,gdi]");
 #elif defined(WIN32)
-DEFINE_string(font_engine, "atlas",    "[atlas,freetype,coretext]");
+DEFINE_string(font_engine, "gdi",      "[atlas,freetype,coretext,gdi]");
 #else
-DEFINE_string(font_engine, "freetype", "[atlas,freetype,coretext]");
+DEFINE_string(font_engine, "freetype", "[atlas,freetype,coretext,gdi]");
 #endif
 DEFINE_string(default_font, "", "Default font");
 DEFINE_string(default_font_family, "sans-serif", "Default font family");
 DEFINE_int(default_font_size, 16, "Default font size");
-DEFINE_int(default_font_flag, 0, "Default font flag");
+DEFINE_int(default_font_flag, FontDesc::Mono, "Default font flag");
 DEFINE_int(default_missing_glyph, 127, "Default glyph returned for missing requested glyph");
 DEFINE_bool(atlas_dump, false, "Dump .png files for every font");
-DEFINE_string(atlas_font_sizes, "8,16,32,64", "Load font atlas CSV sizes");
+DEFINE_string(atlas_font_sizes, "32", "Load font atlas CSV sizes");
 DEFINE_int(glyph_table_start, 32, "Glyph table start value");
 DEFINE_int(glyph_table_size, 96, "Use array for glyphs [x=glyph_stable_start, x+glyph_table_size]");
 DEFINE_bool(subpixel_fonts, false, "Treat RGB components as subpixels, tripling width");
@@ -119,8 +119,8 @@ void Glyph::Draw(const LFL::Box &b, const Drawable::Attr *a) const {
     else         b.Draw(tex.coord);
 }
 
+GlyphCache::GlyphCache(unsigned T, int W, int H) : dim(W, H ? H : W), tex(dim.w, dim.h, Texture::preferred_pf, T), flow(new Flow(&dim)) {}
 GlyphCache::~GlyphCache() { delete flow; }
-GlyphCache::GlyphCache(unsigned T, int W, int H) : dim(W, H?H:W), tex(dim.w, dim.h, Texture::preferred_pf, T), flow(new Flow(&dim)) {}
 
 void GlyphCache::Clear() {
     delete flow;
@@ -211,6 +211,48 @@ void GlyphCache::Load(const Font *f, const Glyph *g, CGFontRef cgfont, int size)
         }
         // INFOf("LoadGlyph U+%06x '%c' texID=%d %s point(%f,%f)", g->id, g->id, tex.ID, f->desc->DebugString().c_str(), point.x, point.y);
     }
+}
+#endif
+
+#ifdef WIN32
+void GlyphCache::Load(const Font *f, const Glyph *g, HFONT hfont, int size) {
+  if (!g->id || !g->tex.width || !g->tex.height) return;
+  point p;
+  wchar_t b[] = { g->Id(), 0 };
+  bool cache_glyph = ShouldCacheGlyph(g->tex);
+  if (cache_glyph) {
+    CHECK(Add(&p, g->tex.coord, g->tex.width, g->tex.height, f->Height()));
+    glyph.push_back(g);
+  }
+  const Color &fg = f->fg, &bg = f->bg;
+  if (tex.buf && cache_glyph) {
+    SetTextColor(hdc, RGB(f->fg.R(), f->fg.G(), f->fg.B()));
+    SetBkColor(hdc, RGB(f->bg.R(), f->bg.G(), f->bg.B()));
+    SetTextAlign(hdc, TA_TOP);
+    HGDIOBJ pf = SelectObject(hdc, hfont);
+    CHECK(ExtTextOutW(hdc, p.x - g->bearing_x, p.y - g->bearing_y, ETO_OPAQUE, NULL, b, 1, NULL));
+    SelectObject(hdc, pf);
+  } else {
+    g->tex.pf = tex.pf;
+    HDC dc = CreateCompatibleDC(NULL);
+    HBITMAP hbitmap = g->tex.CreateGDIBitMap(dc);
+    HGDIOBJ pf = SelectObject(dc, hfont), pbm = SelectObject(dc, hbitmap);
+    SetTextColor(dc, RGB(f->fg.R(), f->fg.G(), f->fg.B()));
+    SetBkColor(dc, RGB(f->bg.R(), f->bg.G(), f->bg.B()));
+    SetTextAlign(dc, TA_TOP);
+    CHECK(ExtTextOutW(dc, 0, 0, ETO_OPAQUE, NULL, b, 1, NULL));
+    GdiFlush();
+    g->tex.FlipBufferY();
+    if (cache_glyph) {
+      tex.UpdateGL(g->tex.buf, Box(p, g->tex.Dimension()), Texture::Flag::FlipY);
+      g->tex.ClearBuffer();
+    }
+    SelectObject(dc, pf);
+    SelectObject(dc, pbm);
+    DeleteObject(hbitmap);
+    DeleteDC(dc);
+    // INFOf("LoadGlyph U+%06x '%c' texID=%d %s point(%f,%f)", g->id, g->id, tex.ID, f->desc->DebugString().c_str(), point.x, point.y);
+  }
 }
 #endif
 
@@ -344,7 +386,7 @@ bool AtlasFontEngine::Init(const FontDesc &d) {
 
 Font *AtlasFontEngine::Open(const FontDesc &d) {
     FontMap::iterator fi = font_map.find(d.name);
-    if (fi == font_map.end() || !fi->second.size()) return NULL;
+    if (fi == font_map.end() || !fi->second.size()) return ERRORv(NULL, "AtlasFont ", d.DebugString(), " not found");
 
     bool is_fg_white = d.fg == Color::white;
     int max_ci = 2 - is_fg_white;
@@ -379,18 +421,18 @@ Font *AtlasFontEngine::Open(const FontDesc &d) {
         ret->fixed_width   = RoundF(primary->fixed_width * ret->scale);
         return ret;
     }
-    return NULL;
+    return ERRORv(NULL, "AtlasFont ", d.DebugString(), " clone failed");
 }
 
 Font *AtlasFontEngine::OpenAtlas(const FontDesc &d) {
     Texture tex;
     string fn = d.Filename();
-    Asset::LoadTexture(StrCat(app->assetdir, fn, "00.png"), &tex);
-    if (!tex.ID) { ERROR("load ", d.name, "00.png failed"); return 0; }
+    Asset::LoadTexture(StrCat(app->assetdir, fn, ".0000.png"), &tex);
+    if (!tex.ID) return ERRORv(0, "load ", fn, ".0000.png failed");
 
     MatrixFile gm;
     gm.ReadVersioned(VersionedFileName(app->assetdir.c_str(), fn.c_str(), "glyphs"), 0);
-    if (!gm.F) { ERROR("load ", d.name, ".0000.glyphs.matrix failed"); return 0; }
+    if (!gm.F) return ERRORv(0, "load ", d.name, ".0000.glyphs.matrix failed");
 
     Resource *resource = new Resource();
     Font *ret = new Font(Singleton<AtlasFontEngine>::Get(), d, shared_ptr<FontEngine::Resource>(resource));
@@ -478,10 +520,10 @@ void AtlasFontEngine::MakeFromPNGFiles(const string &name, const vector<string> 
 
 void AtlasFontEngine::SplitIntoPNGFiles(const string &input_png_fn, const map<int, v4> &glyphs, const string &dir_out) {
     LocalFile in(input_png_fn, "r");
-    if (!in.Opened()) { ERROR("open: ", input_png_fn); return; }
+    if (!in.Opened()) return ERROR("open: ", input_png_fn);
 
     Texture png;
-    if (PngReader::Read(&in, &png)) { ERROR("read: ", input_png_fn); return; }
+    if (PngReader::Read(&in, &png)) return ERROR("read: ", input_png_fn);
 
     for (map<int, v4>::const_iterator i = glyphs.begin(); i != glyphs.end(); ++i) {
         unsigned gx1 = RoundF(i->second.x * png.width), gy1 = RoundF((1 - i->second.y) * png.height);
@@ -783,6 +825,101 @@ v2 CoreTextFontEngine::GetAdvanceBounds(Font *f) {
 }
 #endif /* __APPLE__ */
 
+#ifdef WIN32
+GDIFontEngine::Resource::~Resource() {
+  if (hfont) DeleteObject(hfont);
+}
+
+string GDIFontEngine::DebugString(Font *f) const {
+  return StrCat("GDIFont(", f->desc->DebugString(), "), H=", f->Height(), " fixed_width=", f->fixed_width, " mono=", f->mono ? f->max_width : 0);
+}
+
+int GDIFontEngine::InitGlyphs(Font *f, Glyph *g, int n) {
+  GlyphCache *cache = f->glyph->cache.get();
+  Resource *resource = static_cast<Resource*>(f->resource.get());
+  HDC hdc = CreateCompatibleDC(NULL);
+  HGDIOBJ pf = SelectObject(hdc, resource->hfont);
+  
+  for (Glyph *e = g + n; g != e; ++g) {
+    SIZE s, advance;
+    wchar_t b[] = { g->Id(), 0 };
+    CHECK(GetTextExtentPoint32W(hdc, b, 1, &s));
+    AssignGlyph(g, s, advance);
+    f->UpdateMetrics(g);
+  }
+
+  SelectObject(hdc, pf);
+  DeleteDC(hdc);
+  return n;
+}
+
+int GDIFontEngine::LoadGlyphs(Font *f, const Glyph *g, int n) {
+  GlyphCache *cache = f->glyph->cache.get();
+  Resource *resource = static_cast<Resource*>(f->resource.get());
+  for (const Glyph *e = g + n; g != e; ++g) {
+    g->ready = true;
+    cache->Load(f, g, resource->hfont, f->size);
+  }
+  return n;
+}
+
+Font *GDIFontEngine::Open(const FontDesc &d) {
+  bool inserted = 0;
+  auto ri = FindOrInsert(resource, d.name, &inserted);
+  if (inserted) {
+    ri->second = shared_ptr<Resource>(new Resource());
+    if (!(ri->second->hfont = CreateFont(d.size, 0, 0, 0, (d.flag & FontDesc::Bold) ? FW_BOLD : FW_NORMAL, d.flag & FontDesc::Italic, 0, 0,
+                                         DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, ANTIALIASED_QUALITY, VARIABLE_PITCH,
+                                         d.name.c_str()))) { resource.erase(d.name); return 0; }
+  }
+
+  TEXTMETRIC tm;
+  HBITMAP hbitmap = 0;
+  HDC hdc = CreateCompatibleDC(NULL);
+  HGDIOBJ pf = SelectObject(hdc, ri->second->hfont), pbm=0;
+  GetTextMetrics(NULL, &tm);
+
+  Font *ret = new Font(this, d, ri->second);
+  ret->glyph = shared_ptr<GlyphMap>(new GlyphMap());
+  ret->ascender = tm.tmAscent;
+  ret->descender = tm.tmDescent;
+  int count = InitGlyphs(ret, &ret->glyph->table[0], ret->glyph->table.size()); 
+  ret->fix_metrics = true;
+  ret->has_bg = true;
+
+  bool new_cache = false, pre_load = false;
+  GlyphCache *cache =
+    new_cache ? new GlyphCache(0, AtlasFontEngine::Dimension(ret->max_width, ret->Height(), count)) : GlyphCache::Get();
+  ret->glyph->cache = shared_ptr<GlyphCache>(cache);
+  if (new_cache) {
+    pbm = SelectObject((cache->hdc = hdc), (hbitmap = cache->tex.CreateGDIBitMap(hdc)));
+  }
+  if (pre_load) LoadGlyphs(ret, &ret->glyph->table[0], ret->glyph->table.size());
+  if (FLAGS_atlas_dump) AtlasFontEngine::WriteAtlas(d.Filename(), ret, &cache->tex);
+  if (new_cache) {
+    GdiFlush();
+    cache->tex.LoadGL();
+    cache->tex.ClearBuffer();
+    SelectObject(hdc, pbm);
+    DeleteObject(hbitmap);
+    cache->hdc = 0;
+  }
+
+  SelectObject(hdc, pf);
+  DeleteDC(hdc);
+  return ret;
+}
+
+void GDIFontEngine::AssignGlyph(Glyph *g, const ::SIZE &bounds, const ::SIZE &advance) {
+  g->bearing_x = 0;
+  g->bearing_y = 0;
+  g->tex.width = bounds.cx;
+  g->tex.height = bounds.cy;
+  g->advance = bounds.cx;
+  g->space = isspace(g->id) || g->id == Unicode::non_breaking_space;
+}
+#endif /* WIN32 */
+
 FontEngine *Fonts::GetFontEngine(int engine_type) {
     switch (engine_type) {
         case FontDesc::Engine::Atlas:    return Singleton<AtlasFontEngine>   ::Get();
@@ -791,6 +928,9 @@ FontEngine *Fonts::GetFontEngine(int engine_type) {
 #endif
 #ifdef __APPLE__
         case FontDesc::Engine::CoreText: return Singleton<CoreTextFontEngine>::Get();
+#endif
+#ifdef WIN32
+        case FontDesc::Engine::GDI:      return Singleton<GDIFontEngine>::Get();
 #endif
         case FontDesc::Engine::Default:  return DefaultFontEngine();
     } return DefaultFontEngine();
@@ -805,6 +945,9 @@ FontEngine *Fonts::DefaultFontEngine() {
 #endif
 #ifdef __APPLE__
         else if (FLAGS_font_engine == "coretext") default_font_engine = Singleton<CoreTextFontEngine>::Get();
+#endif
+#ifdef WIN32
+        else if (FLAGS_font_engine == "gdi")      default_font_engine = Singleton<GDIFontEngine>     ::Get();
 #endif
         else                                      default_font_engine = Singleton<FakeFontEngine>    ::Get();
     }
