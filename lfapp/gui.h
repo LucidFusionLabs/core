@@ -190,7 +190,7 @@ struct TextGUI : public KeyboardGUI {
     int GetAttrId(const Drawable::Attr &a) { return data->glyphs.attr.GetAttrId(a); }
     int Size () const { return data->glyphs.Size(); }
     int Lines() const { return 1+data->glyphs.line.size(); }
-    string Text() const { return data->glyphs.Text(); }
+    String16 Text16() const { return data->glyphs.Text16(); }
     void Clear() { data->links.clear(); data->glyphs.Clear(); data->flow=InitFlow(&data->glyphs); }
     int Erase(int o, int l=INT_MAX);
     int AssignText(const StringPiece   &s, int a=0) { Clear(); return AppendText(s, a); }
@@ -314,8 +314,8 @@ struct TextGUI : public KeyboardGUI {
 
   virtual ~TextGUI() {}
   virtual int CommandLines() const { return 0; }
-  virtual void Input(char k) { cmd_line.UpdateText(cursor.i.x++, String16(1, k), cursor.attr); UpdateCommandFB(); UpdateCursor(); }
-  virtual void Erase()       { if (!cursor.i.x) return;       cmd_line.Erase(--cursor.i.x, 1); UpdateCommandFB(); UpdateCursor(); }
+  virtual void Input(char k) { cmd_line.UpdateText(cursor.i.x++, String16(1, *Unsigned<char>(&k)), cursor.attr); UpdateCommandFB(); UpdateCursor(); }
+  virtual void Erase()       { if (!cursor.i.x) return; cmd_line.Erase(--cursor.i.x, 1); UpdateCommandFB(); UpdateCursor(); }
   virtual void CursorRight() { cursor.i.x = min(cursor.i.x+1, cmd_line.Size()); UpdateCursor(); }
   virtual void CursorLeft()  { cursor.i.x = max(cursor.i.x-1, 0);               UpdateCursor(); }
   virtual void Home()        { cursor.i.x = 0;                                  UpdateCursor(); }
@@ -324,7 +324,7 @@ struct TextGUI : public KeyboardGUI {
   virtual void HistDown()    { if (int c=lastcmd.ring.count) { AssignInput(lastcmd[lastcmd_ind]); lastcmd_ind=min(lastcmd_ind+1, -1); } }
   virtual void Enter();
 
-  virtual string Text() const { return cmd_line.Text(); }
+  virtual String16 Text16() const { return cmd_line.Text16(); }
   virtual void AssignInput(const string &text)
   { cmd_line.AssignText(text); cursor.i.x=cmd_line.Size(); UpdateCommandFB(); UpdateCursor(); }
 

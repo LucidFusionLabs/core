@@ -66,7 +66,7 @@ struct ByteSink {
 
 struct Unicode {
     static const unsigned char non_breaking_space = 0xA0;
-    static const unsigned short replacement_char = 0xFFFD;
+    static const unsigned short zero_width_non_breaking_space = 0xFEFF, replacement_char = 0xFFFD;
 };
     
 typedef basic_string<short> String16;

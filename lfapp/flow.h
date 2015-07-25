@@ -127,6 +127,7 @@ struct Flow {
         int initial_out_lines = out->line.size(), line_start_ind = 0, c_bytes = 0, ci_bytes = 0, c, ci;
         for (const X *p = text.data(); !text.Done(p); p += c_bytes) {
             if (!(c = UTF<X>::ReadGlyph(text, p, &c_bytes, true))) FlowDebug("null glyph");
+            if (c == Unicode::zero_width_non_breaking_space) continue;
             if (AppendChar(c, attr_id, &PushBack(out->data, DrawableBox())) == State::NEW_WORD) {
                 for (const X *pi=p; !text.Done(pi) && notspace(*pi); pi += ci_bytes) {
                     if (!(ci = UTF<X>::ReadGlyph(text, pi, &ci_bytes, true))) FlowDebug("null glyph");

@@ -264,6 +264,7 @@ template <class X> int TextGUI::Line::InsertTextAt(int x, const StringPieceT<X> 
   b.attr.source = data->glyphs.attr.source;
   EncodeText(&b, data->glyphs.Position(x).x, v, attr);
   int ret = b.Size();
+  if (!ret) return 0;
 
   bool token_processing = parent->token_processing, append = x == Size();
   LineTokenProcessor update(token_processing ? this : 0, x, DrawableBoxRun(&b[0], ret), 0);
@@ -287,7 +288,8 @@ template <class X> int TextGUI::Line::OverwriteTextAt(int x, const StringPieceT<
   DrawableBoxArray b;
   b.attr.source = data->glyphs.attr.source;
   EncodeText(&b, data->glyphs.Position(x).x, v, attr);
-  if ((size = b.Size()) && size - v.len > 0 && (grow = max(0, x + size - Size())))
+  if (!(size = b.Size())) return 0;
+  if (size - v.len > 0 && (grow = max(0, x + size - Size())))
     data->flow.AppendText(basic_string<X>(grow, ' '), attr);
   DrawableBoxRun orun(&data->glyphs[x], size), nrun(&b[0], size);
 
@@ -471,7 +473,7 @@ TextGUI::LineUpdate::~LineUpdate() {
 }
 
 void TextGUI::Enter() {
-  string cmd = Text();
+  string cmd = String::ToUTF8(Text16());
   AssignInput("");
   if (!cmd.empty()) { AddHistory(cmd); Run(cmd); }
   if (deactivate_on_enter) active = false;
@@ -745,7 +747,7 @@ void TextArea::CopyText(const Selection::Point &beg, const Selection::Point &end
 }
 
 string TextArea::CopyText(int beg_line_ind, int beg_char_ind, int end_line_ind, int end_char_ind, bool add_nl) {
-  string copy_text;
+  String16 copy_text;
   int d = reverse_line_fb ? 1 : -1;
   int b = reverse_line_fb ? end_line_ind : beg_line_ind;
   int e = reverse_line_fb ? beg_line_ind : end_line_ind;
@@ -756,16 +758,16 @@ string TextArea::CopyText(int beg_line_ind, int beg_char_ind, int end_line_ind, 
       if (!l->Size() || beg_char_ind < 0) len = -1;
       else {
         len = (beg_line_ind == end_line_ind && end_char_ind >= 0) ? end_char_ind+1 : l->Size();
-        copy_text += Substr(l->Text(), beg_char_ind, max(0, len - beg_char_ind));
+        copy_text += Substr(l->Text16(), beg_char_ind, max(0, len - beg_char_ind));
       }
     } else if (i == end_line_ind) {
       len = (end_char_ind >= 0) ? end_char_ind+1 : l->Size();
-      copy_text += Substr(l->Text(), 0, len);
-    } else copy_text += l->Text();
-    if (add_nl && len == l->Size()) copy_text += "\n";
+      copy_text += Substr(l->Text16(), 0, len);
+    } else copy_text += l->Text16();
+    if (add_nl && len == l->Size()) copy_text += String16(1, '\n');
     if (i == e) break;
   }
-  return copy_text;
+  return String::ToUTF8(copy_text);
 }
 
 /* Editor */
@@ -1330,7 +1332,7 @@ void Terminal::FlushParseText() {
     update_size = l->UpdateText(o, input_piece, cursor.attr, term_width, &append);
     TerminalTrace("Terminal: FlushParseText: UpdateText(%d, %d, '%s').size = [%d, %d] attr=%d\n",
                   term_cursor.x, term_cursor.y, String::ToUTF8(input_piece).c_str(), write_size, update_size, cursor.attr);
-    CHECK_GE(update_size, write_size);
+    if (!update_size) continue;
     l->Layout();
     if (!fb->lines) continue;
     int s = l->Size(), ol = s - o, sx = l->data->glyphs.LeftBound(o), ex = l->data->glyphs.RightBound(s-1);

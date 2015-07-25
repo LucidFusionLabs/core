@@ -777,7 +777,7 @@ struct DrawableBoxRun {
     typedef function<void    (const Drawable *,  const Box &,  const Drawable::Attr *)> DrawCB;
     static void DefaultDrawCB(const Drawable *d, const Box &w, const Drawable::Attr *a) { d->Draw(w, a); }
     point Draw(point p, DrawCB = &DefaultDrawCB);
-	void draw(point p) { Draw(p); }
+    void draw(point p) { Draw(p); }
 
     typedef function<void              (const Box &)> DrawBackgroundCB;
     static void DefaultDrawBackgroundCB(const Box &w) { w.Draw(); }

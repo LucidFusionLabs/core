@@ -205,7 +205,7 @@ DEFINE_int(sample_secs, 3, "Seconds of RingBuf audio");
 DEFINE_int(chans_in, -1, "Audio input channels");
 DEFINE_int(chans_out, -1, "Audio output channels");
 DEFINE_int(target_fps, 0, "Max frames per second");
-DEFINE_bool(open_console, 0, "Open console on win32");
+DEFINE_bool(open_console, 1, "Open console on win32");
 
 void Allocator::Reset() { FATAL(Name(), ": reset"); }
 Allocator *Allocator::Default() { return Singleton<MallocAlloc>::Get(); }
@@ -903,6 +903,22 @@ NetworkThread *Application::CreateNetworkThread() {
 void Application::LaunchNativeFontChooser(const FontDesc &cur_font, const string &choose_cmd) {
 #if defined(LFL_OSXVIDEO)
   OSXLaunchNativeFontChooser(cur_font.name.c_str(), cur_font.size, choose_cmd.c_str());
+#elif defined(LFL_WINVIDEO)
+  LOGFONT lf;
+  memzero(lf);
+  lf.lfHeight = cur_font.size;
+  lf.lfWeight = (cur_font.flag & FontDesc::Bold) ? FW_BOLD : FW_NORMAL;
+  lf.lfItalic = cur_font.flag & FontDesc::Italic;
+  strncpy(lf.lfFaceName, cur_font.name.c_str(), sizeof(lf.lfFaceName)-1);
+  CHOOSEFONT cf;
+  memzero(cf); 
+  cf.lpLogFont = &lf;
+  cf.lStructSize = sizeof(cf);
+  cf.hwndOwner = (HWND)screen->id;
+  cf.Flags = CF_SCREENFONTS | CF_INITTOLOGFONTSTRUCT;
+  if (!ChooseFont(&cf)) return;
+  int flag = FontDesc::Mono | (lf.lfWeight > FW_NORMAL ? FontDesc::Bold : 0) | (lf.lfItalic ? FontDesc::Italic : 0);
+  app->shell.Run(StrCat(choose_cmd, " ", lf.lfFaceName, " ", lf.lfHeight, " ", flag));
 #endif
 }
 
@@ -926,7 +942,8 @@ void Application::AddNativeMenu(const string &title, const vector<MenuItem>&item
   if (!win->menu) { win->menu = CreateMenu(); win->context_menu = CreatePopupMenu(); }
   HMENU hAddMenu = CreatePopupMenu();
   for (auto &i : items) {
-    AppendMenu(hAddMenu, MF_STRING, win->start_msg_id + win->menu_cmds.size(), tuple_get<1>(i).c_str());
+    if (tuple_get<1>(i) == "<seperator>") AppendMenu(hAddMenu, MF_MENUBARBREAK, 0, NULL);
+    else AppendMenu(hAddMenu, MF_STRING, win->start_msg_id + win->menu_cmds.size(), tuple_get<1>(i).c_str());
     win->menu_cmds.push_back(tuple_get<2>(i));
   }
   AppendMenu(win->menu,         MF_STRING | MF_POPUP, (UINT)hAddMenu, title.c_str());

@@ -449,12 +449,15 @@ void WinApp::CreateClass() {
 
 int WinApp::MessageLoop() {
   INFOf("WinApp::MessageLoop %p", screen);
+  CoInitialize(NULL);
   MSG msg;
   while (app->run) {
     if (app->run && FLAGS_target_fps) LFAppFrame();
     while (app->run && PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))         { TranslateMessage(&msg); DispatchMessage(&msg); }
     if (app->run && !FLAGS_target_fps) if (GetMessage(&msg, NULL, 0, 0)) { TranslateMessage(&msg); DispatchMessage(&msg); }
   }
+  app->Free();
+  CoUninitialize();
   return msg.wParam;
 }
 
@@ -545,23 +548,24 @@ const int Key::End        = 0xf00 | VK_END;
 
 void Mouse::ReleaseFocus() {}
 void Mouse::GrabFocus() {}
-void Clipboard::Set(const string &s) {
+void Clipboard::Set(const string &in) {
+  String16 s = String::ToUTF16(in);
   if (!OpenClipboard(NULL)) return;
   EmptyClipboard();
-  HGLOBAL hg = GlobalAlloc(GMEM_MOVEABLE, s.size()+1);
+  HGLOBAL hg = GlobalAlloc(GMEM_MOVEABLE, (s.size()+1)*2);
   if (!hg) { CloseClipboard(); return; }
-  memcpy(GlobalLock(hg), s.c_str(), s.size()+1);
+  memcpy(GlobalLock(hg), s.c_str(), (s.size()+1)*2);
   GlobalUnlock(hg);
-  SetClipboardData(CF_TEXT, hg);
+  SetClipboardData(CF_UNICODETEXT, hg);
   CloseClipboard();
   GlobalFree(hg);
 }
 string Clipboard::Get() {
   string ret;
   if (!OpenClipboard(NULL)) return "";
-  const HANDLE hg = GetClipboardData(CF_TEXT);
+  const HANDLE hg = GetClipboardData(CF_UNICODETEXT);
   if (!hg) { CloseClipboard(); return ""; }
-  ret = static_cast<const char *>(GlobalLock(hg));
+  ret = String::ToUTF8(reinterpret_cast<short*>(GlobalLock(hg)));
   GlobalUnlock(hg);
   CloseClipboard();
   return ret;

@@ -53,6 +53,7 @@ struct typed_ptr {
 template <class X> int TypeId()   { static int ret = fnv32(typeid(X).name()); return ret; }
 template <class X> int TypeId(X*) { static int ret = fnv32(typeid(X).name()); return ret; }
 template <class X> typed_ptr TypePointer(X* v) { return typed_ptr(TypeId<X>(), v); }
+template <class X> typename make_unsigned<X>::type *Unsigned(X *x) { return reinterpret_cast<typename make_unsigned<X>::type*>(x); }
 
 struct RefCounter {
     int count=0;

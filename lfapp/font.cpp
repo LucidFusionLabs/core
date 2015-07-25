@@ -22,8 +22,9 @@
 #include "lfapp/flow.h"
 #include "lfapp/gui.h"
 
-#ifdef LFL_HARFBUZZ
-#include "harfbuzz/hb-coretext.h"
+#ifdef WIN32
+#include <mlang.h>
+IMLangFontLink2 *fontlink=0;
 #endif
 
 #ifdef __APPLE__
@@ -33,6 +34,9 @@
 #import <CoreText/CTStringAttributes.h>
 #import <CoreFoundation/CFAttributedString.h>
 #import <CoreGraphics/CGBitmapContext.h> 
+#ifdef LFL_HARFBUZZ
+#include "harfbuzz/hb-coretext.h"
+#endif
 extern "C" void ConvertColorFromGenericToDeviceRGB(const float *i, float *o);
 inline CFStringRef ToCFStr(const string &n) { return CFStringCreateWithCString(0, n.data(), kCFStringEncodingUTF8); }
 inline string FromCFStr(CFStringRef in) {
@@ -215,7 +219,7 @@ void GlyphCache::Load(const Font *f, const Glyph *g, CGFontRef cgfont, int size)
 #endif
 
 #ifdef WIN32
-void GlyphCache::Load(const Font *f, const Glyph *g, HFONT hfont, int size) {
+void GlyphCache::Load(const Font *f, const Glyph *g, HFONT hfont, int size, HDC dc) {
   if (!g->id || !g->tex.width || !g->tex.height) return;
   point p;
   wchar_t b[] = { g->Id(), 0 };
@@ -234,7 +238,6 @@ void GlyphCache::Load(const Font *f, const Glyph *g, HFONT hfont, int size) {
     SelectObject(hdc, pf);
   } else {
     g->tex.pf = tex.pf;
-    HDC dc = CreateCompatibleDC(NULL);
     HBITMAP hbitmap = g->tex.CreateGDIBitMap(dc);
     HGDIOBJ pf = SelectObject(dc, hfont), pbm = SelectObject(dc, hbitmap);
     SetTextColor(dc, RGB(f->fg.R(), f->fg.G(), f->fg.B()));
@@ -250,7 +253,6 @@ void GlyphCache::Load(const Font *f, const Glyph *g, HFONT hfont, int size) {
     SelectObject(dc, pf);
     SelectObject(dc, pbm);
     DeleteObject(hbitmap);
-    DeleteDC(dc);
     // INFOf("LoadGlyph U+%06x '%c' texID=%d %s point(%f,%f)", g->id, g->id, tex.ID, f->desc->DebugString().c_str(), point.x, point.y);
   }
 }
@@ -266,7 +268,7 @@ Glyph *Font::FindGlyph(unsigned short gind) {
     if (ind < glyph->table.size()) return &glyph->table[ind];
     auto i = glyph->index.find(gind);
     if (i != glyph->index.end()) return &i->second;
-    bool nbsp = gind == Unicode::non_breaking_space;
+    bool zwnbsp = gind == Unicode::zero_width_non_breaking_space, nbsp = zwnbsp || gind == Unicode::non_breaking_space;
     if (!nbsp && !engine->HaveGlyph(this, gind)) {
         ind = missing_glyph - glyph->table_start;
         CHECK_LT(ind, glyph->table.size());
@@ -276,6 +278,7 @@ Glyph *Font::FindGlyph(unsigned short gind) {
     g->id = nbsp ? ' ' : gind;
     engine->InitGlyphs(this, g, 1);
     if (nbsp) g->id = gind;
+    if (zwnbsp) g->advance = g->tex.width = g->tex.height = 0;
     return g;
 }
 
@@ -446,7 +449,7 @@ Font *AtlasFontEngine::OpenAtlas(const FontDesc &d) {
         Glyph *g = ret->FindOrInsertGlyph(glyph_ind);
         g->FromArray(gm.F->row(i), gm.F->N);
         g->tex.ID = tex.ID;
-        if (d.unicode) g->space = isspace(g->id) || g->id == Unicode::non_breaking_space;
+        if (d.unicode) g->space = isspace(g->id) || g->id == Unicode::non_breaking_space || g->id == Unicode::zero_width_non_breaking_space;
         if (!g->advance) {
             g->advance = g->tex.width;
             g->bearing_y = g->tex.height;
@@ -614,7 +617,7 @@ int FreeTypeFontEngine::InitGlyphs(Font *f, Glyph *g, int n) {
         g->bearing_x  = face->glyph->bitmap_left;
         g->bearing_y  = face->glyph->bitmap_top;
         g->advance    = RoundF(face->glyph->advance.x/64.0);
-        g->space      = isspace(g->id) || g->id == Unicode::non_breaking_space;
+        g->space      = isspace(g->id) || g->id == Unicode::non_breaking_space || g->id == Unicode::zero_width_non_breaking_space;
         f->UpdateMetrics(g);
     }
     return count;
@@ -807,7 +810,7 @@ void CoreTextFontEngine::AssignGlyph(Glyph *g, const CGRect &bounds, struct CGSi
     g->tex.width  = RoundUp(x_extent - g->bearing_x);
     g->tex.height = g->bearing_y - RoundLower(bounds.origin.y);
     g->advance    = RoundF(advance.width);
-    g->space      = isspace(g->id) || g->id == Unicode::non_breaking_space;
+    g->space      = isspace(g->id) || g->id == Unicode::non_breaking_space || g->id == Unicode::zero_width_non_breaking_space;
     g->internal.coretext.origin_x = bounds.origin.x;
     g->internal.coretext.origin_y = bounds.origin.y;
     g->internal.coretext.width    = bounds.size.width;
@@ -830,6 +833,16 @@ GDIFontEngine::Resource::~Resource() {
   if (hfont) DeleteObject(hfont);
 }
 
+GDIFontEngine::~GDIFontEngine() { DeleteDC(hdc);}
+GDIFontEngine::GDIFontEngine() : hdc(CreateCompatibleDC(NULL)) {
+  CHECK(!fontlink)
+  CHECK(!FAILED(CoCreateInstance(CLSID_CMultiLanguage, NULL, CLSCTX_ALL, IID_IMLangFontLink2, (void**)&fontlink)));
+}
+
+void GDIFontEngine::Shutdown() {
+  if (fontlink) fontlink->Release();
+}
+
 string GDIFontEngine::DebugString(Font *f) const {
   return StrCat("GDIFont(", f->desc->DebugString(), "), H=", f->Height(), " fixed_width=", f->fixed_width, " mono=", f->mono ? f->max_width : 0);
 }
@@ -837,29 +850,35 @@ string GDIFontEngine::DebugString(Font *f) const {
 int GDIFontEngine::InitGlyphs(Font *f, Glyph *g, int n) {
   GlyphCache *cache = f->glyph->cache.get();
   Resource *resource = static_cast<Resource*>(f->resource.get());
-  HDC hdc = CreateCompatibleDC(NULL);
   HGDIOBJ pf = SelectObject(hdc, resource->hfont);
+  SIZE s, advance;
   
   for (Glyph *e = g + n; g != e; ++g) {
-    SIZE s, advance;
-    wchar_t b[] = { g->Id(), 0 };
-    CHECK(GetTextExtentPoint32W(hdc, b, 1, &s));
+    wchar_t c = g->Id();
+    HFONT substituted_font = 0;
+    if (GetSubstitutedFont(f, resource->hfont, g->Id(), hdc, &substituted_font)) SelectObject(hdc, substituted_font);
+    CHECK(GetTextExtentPoint32W(hdc, &c, 1, &s));
+    if (substituted_font) { SelectObject(hdc, resource->hfont); fontlink->ReleaseFont(substituted_font); }
     AssignGlyph(g, s, advance);
     f->UpdateMetrics(g);
   }
 
   SelectObject(hdc, pf);
-  DeleteDC(hdc);
   return n;
 }
 
 int GDIFontEngine::LoadGlyphs(Font *f, const Glyph *g, int n) {
   GlyphCache *cache = f->glyph->cache.get();
   Resource *resource = static_cast<Resource*>(f->resource.get());
+  HGDIOBJ pf = SelectObject(hdc, resource->hfont);
   for (const Glyph *e = g + n; g != e; ++g) {
     g->ready = true;
-    cache->Load(f, g, resource->hfont, f->size);
+    HFONT substituted_font = 0;
+    GetSubstitutedFont(f, resource->hfont, g->Id(), hdc, &substituted_font);
+    cache->Load(f, g, X_or_Y(substituted_font, resource->hfont), f->size, hdc);
+    if (substituted_font) fontlink->ReleaseFont(substituted_font);
   }
+  SelectObject(hdc, pf);
   return n;
 }
 
@@ -875,7 +894,6 @@ Font *GDIFontEngine::Open(const FontDesc &d) {
 
   TEXTMETRIC tm;
   HBITMAP hbitmap = 0;
-  HDC hdc = CreateCompatibleDC(NULL);
   HGDIOBJ pf = SelectObject(hdc, ri->second->hfont), pbm=0;
   GetTextMetrics(NULL, &tm);
 
@@ -906,7 +924,18 @@ Font *GDIFontEngine::Open(const FontDesc &d) {
   }
 
   SelectObject(hdc, pf);
-  DeleteDC(hdc);
+  return ret;
+}
+
+bool GDIFontEngine::GetSubstitutedFont(Font *f, HFONT hfont, unsigned short glyph_id, HDC hdc, HFONT *hfontout) {
+  *hfontout = 0;
+  long processed = 0;
+  WCHAR c = glyph_id;
+  DWORD orig_code_pages = 0, replaced_code_pages = 0;
+  if (FAILED(fontlink->GetFontCodePages(hdc, hfont, &orig_code_pages))) return false;
+  if (FAILED(fontlink->GetStrCodePages(&c, 1, orig_code_pages, &replaced_code_pages, &processed))) return false;
+  if (replaced_code_pages & orig_code_pages) return false;
+  bool ret = !FAILED(fontlink->MapFont(hdc, replaced_code_pages, replaced_code_pages ? 0 : c, hfontout));
   return ret;
 }
 
@@ -916,7 +945,7 @@ void GDIFontEngine::AssignGlyph(Glyph *g, const ::SIZE &bounds, const ::SIZE &ad
   g->tex.width = bounds.cx;
   g->tex.height = bounds.cy;
   g->advance = bounds.cx;
-  g->space = isspace(g->id) || g->id == Unicode::non_breaking_space;
+  g->space = isspace(g->id) || g->id == Unicode::non_breaking_space || g->id == Unicode::zero_width_non_breaking_space;
 }
 #endif /* WIN32 */
 

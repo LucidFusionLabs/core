@@ -94,9 +94,17 @@ int String::Convert(const StringPieceT<X> &in, basic_string<Y> *out, const char 
 #else /* LFL_ICONV */
 template <class X, class Y>
 int String::Convert(const StringPieceT<X> &in, basic_string<Y> *out, const char *from, const char *to) {
-    if (strcmp(from, to)) ONCE(ERROR("conversion not supported.  copying.  #define LFL_ICONV"));
-    String::Copy(in, out);
+  if (!strcmp(from, to)) { String::Copy(in, out); return in.len; }
+#ifdef WIN32
+  if (!strcmp(from, "UTF-16LE") && !strcmp(to, "UTF-8")) {
+    out->resize(WideCharToMultiByte(CP_UTF8, 0, (wchar_t*)in.data(), in.size(), NULL, 0, NULL, NULL));
+    WideCharToMultiByte(CP_UTF8, 0, (wchar_t*)in.data(), in.size(), (char*)&(*out)[0], out->size(), NULL, NULL);
     return in.len;
+  }
+#endif
+  ONCE(ERROR("conversion from ", from, " to ", to, " not supported.  copying.  #define LFL_ICONV"));
+  String::Copy(in, out);
+  return in.len;    
 }
 #endif /* LFL_ICONV */
 

@@ -97,6 +97,7 @@ struct FontDesc {
 struct FontEngine {
     struct Resource { virtual ~Resource() {} };
     virtual const char *Name() = 0;
+    virtual void  Shutdown() {}
     virtual bool  Init(const FontDesc&) { return true; }
     virtual Font *Open(const FontDesc&) = 0;
     virtual bool  HaveGlyph (Font *f, unsigned short) { return true; }
@@ -159,7 +160,7 @@ struct GlyphCache {
     void Load(const Font*, const Glyph*, CGFontRef cgfont, int size);
 #endif
 #ifdef WIN32
-    void Load(const Font*, const Glyph*, HFONT hfont, int size);
+    void Load(const Font*, const Glyph*, HFONT hfont, int size, HDC dc);
 #endif
 
     static GlyphCache *Get() {
@@ -352,7 +353,11 @@ struct GDIFontEngine : public FontEngine {
     Resource(const char *N = 0, HFONT H = 0, int F = 0) : name(BlankNull(N)), hfont(H), flag(F) {}
   };
   unordered_map<string, shared_ptr<Resource> > resource;
+  HDC hdc=0;
+  GDIFontEngine();
+  ~GDIFontEngine();
   virtual const char *Name() { return "GDIFontEngine"; }
+  virtual void  Shutdown();
   virtual Font *Open(const FontDesc&);
   virtual int   InitGlyphs(Font *f, Glyph *g, int n);
   virtual int   LoadGlyphs(Font *f, const Glyph *g, int n);
@@ -361,6 +366,7 @@ struct GDIFontEngine : public FontEngine {
   struct Flag { enum { WriteAtlas = 1 }; };
   static Font *Open(const string &name, int size, Color c, int flag, int ct_flag);
   static Font *Open(const shared_ptr<Resource> &R, int size, Color c, int flag);
+  static bool GetSubstitutedFont(Font *f, HFONT hfont, unsigned short glyph_id, HDC hdc, HFONT *hfontout);
   static void AssignGlyph(Glyph *out, const ::SIZE &bounds, const ::SIZE &advance);
 };
 #endif

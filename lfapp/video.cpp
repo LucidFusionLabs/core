@@ -1543,6 +1543,7 @@ int Video::Swap() {
 
 int Video::Free() {
   if (impl) impl->Free();
+  Fonts::DefaultFontEngine()->Shutdown();
   return 0;
 }
 

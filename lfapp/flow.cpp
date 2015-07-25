@@ -158,7 +158,7 @@ void Flow::AppendBoxArrayText(const DrawableBoxArray &in) {
     for (DrawableBoxRawIterator iter(in.data); !iter.Done(); iter.Increment()) {
         if (!attr_fwd) cur_attr      = *in.attr.GetAttr(iter.cur_attr);
         else           cur_attr.font =  in.attr.GetAttr(iter.cur_attr)->font;
-        AppendText(DrawableBoxRun(iter.Data(), iter.Length()).Text(), attr_fwd ? iter.cur_attr : 0);
+        AppendText(DrawableBoxRun(iter.Data(), iter.Length()).Text16(), attr_fwd ? iter.cur_attr : 0);
     }
 }
 
@@ -234,9 +234,8 @@ Flow::State Flow::AppendBoxOrChar(int c, DrawableBox *box, int h) {
     state = State::OK;
 
     if (layout.pad_wide_chars && drawable && box->drawable->Wide()) {
-        int fw = advance / 2;
-        Glyph *nbsp = cur_attr.font->FindGlyph(Unicode::non_breaking_space);
-        out->data.emplace_back(Box(p.x - fw, p.y + cur_line.descent, fw, nbsp->tex.height), nbsp, box->attr_id, box->line_id);
+        Glyph *nbsp = cur_attr.font->FindGlyph(Unicode::zero_width_non_breaking_space);
+        out->data.emplace_back(Box(p.x, p.y + cur_line.descent, 0, nbsp->tex.height), nbsp, box->attr_id, box->line_id);
     }
 
     return state;
