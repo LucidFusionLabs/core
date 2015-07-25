@@ -100,14 +100,14 @@ struct FontEngine {
     virtual void  Shutdown() {}
     virtual bool  Init(const FontDesc&) { return true; }
     virtual Font *Open(const FontDesc&) = 0;
-    virtual bool  HaveGlyph (Font *f, unsigned short) { return true; }
+    virtual bool  HaveGlyph (Font *f, char16_t) { return true; }
     virtual int   InitGlyphs(Font *f,       Glyph *g, int n) = 0;
     virtual int   LoadGlyphs(Font *f, const Glyph *g, int n) = 0;
     virtual string DebugString(Font *f) const = 0;
 };
 
 struct Glyph : public Drawable {
-    unsigned short id=0;
+    char16_t id=0;
     short bearing_x=0, bearing_y=0, advance=0;
     bool wide=0, space=0;
     union Internal {
@@ -213,8 +213,8 @@ struct Font {
     short Height() const { return ascender + descender; }
     short FixedWidth() const { return X_or_Y(fixed_width, mono ? max_width : 0); }
 
-    Glyph *FindGlyph        (unsigned short gind);
-    Glyph *FindOrInsertGlyph(unsigned short gind);
+    Glyph *FindGlyph        (char16_t gind);
+    Glyph *FindOrInsertGlyph(char16_t gind);
 
     void Select();
     void UpdateMetrics(Glyph *g);
@@ -277,7 +277,7 @@ struct AtlasFontEngine : public FontEngine {
     virtual const char *Name() { return "AtlasFontEngine"; }
     virtual bool  Init(const FontDesc&);
     virtual Font *Open(const FontDesc&);
-    virtual bool  HaveGlyph (Font *f, unsigned short) { return false; }
+    virtual bool  HaveGlyph (Font *f, char16_t) { return false; }
     virtual int   InitGlyphs(Font *f,       Glyph *g, int n) { return n; }
     virtual int   LoadGlyphs(Font *f, const Glyph *g, int n) { return n; }
     virtual string DebugString(Font *f) const;
@@ -337,7 +337,7 @@ struct CoreTextFontEngine : public FontEngine {
     struct Flag { enum { WriteAtlas=1 }; };
     static Font *Open(const string &name,            int size, Color c, int flag, int ct_flag);
     static Font *Open(const shared_ptr<Resource> &R, int size, Color c, int flag);
-    static void GetSubstitutedFont(Font*, CTFontRef, unsigned short gid, CGFontRef *cgout, CTFontRef *ctout, int *id_out);
+    static void GetSubstitutedFont(Font*, CTFontRef, char16_t gid, CGFontRef *cgout, CTFontRef *ctout, int *id_out);
     static void AssignGlyph(Glyph *out, const CGRect &bounds, struct CGSize &advance);
     static v2 GetAdvanceBounds(Font*);
 };
@@ -366,7 +366,7 @@ struct GDIFontEngine : public FontEngine {
   struct Flag { enum { WriteAtlas = 1 }; };
   static Font *Open(const string &name, int size, Color c, int flag, int ct_flag);
   static Font *Open(const shared_ptr<Resource> &R, int size, Color c, int flag);
-  static bool GetSubstitutedFont(Font *f, HFONT hfont, unsigned short glyph_id, HDC hdc, HFONT *hfontout);
+  static bool GetSubstitutedFont(Font *f, HFONT hfont, char16_t glyph_id, HDC hdc, HFONT *hfontout);
   static void AssignGlyph(Glyph *out, const ::SIZE &bounds, const ::SIZE &advance);
 };
 #endif

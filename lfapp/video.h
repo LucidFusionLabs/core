@@ -768,10 +768,10 @@ struct DrawableBoxRun {
         for (auto ti = t.begin(), te = t.end(); ti != te; ++ti, ++bi) *ti = bi->Id();
         return t;
     }
-    string   Text  ()             const { return Text<char> (0, data.size()); }
-    String16 Text16()             const { return Text<short>(0, data.size()); }
-    string   Text  (int i, int l) const { return Text<char> (i, l); }
-    String16 Text16(int i, int l) const { return Text<short>(i, l); }
+    string   Text  ()             const { return Text<char>    (0, data.size()); }
+    String16 Text16()             const { return Text<char16_t>(0, data.size()); }
+    string   Text  (int i, int l) const { return Text<char>    (i, l); }
+    String16 Text16(int i, int l) const { return Text<char16_t>(i, l); }
     string   DebugString()        const { return StrCat("BoxRun='", Text(), "'"); }
 
     typedef function<void    (const Drawable *,  const Box &,  const Drawable::Attr *)> DrawCB;

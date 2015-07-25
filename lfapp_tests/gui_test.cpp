@@ -27,13 +27,13 @@
 namespace LFL {
 struct LinesFrameBufferTest : public TextGUI::LinesFrameBuffer {
     struct LineOp {
-        point p; string text; int xo, wlo, wll;
-        LineOp(TextGUI::Line *L, int X, int O, int S) : p(L->p), text(L->Text()), xo(X), wlo(O), wll(S) {}
+        point p; String16 text; int xo, wlo, wll;
+        LineOp(TextGUI::Line *L, int X, int O, int S) : p(L->p), text(L->Text16()), xo(X), wlo(O), wll(S) {}
         string DebugString() const { return StrCat("LineOp text(", text, ") ", xo, " ", wlo, " ", wll); }
     };
     struct PaintOp {
-        string text; int lines; point p; Box b;
-        PaintOp(TextGUI::Line *L, const point &P, const Box &B) : text(L->Text()), lines(L->Lines()), p(P), b(B) {}
+        String16 text; int lines; point p; Box b;
+        PaintOp(TextGUI::Line *L, const point &P, const Box &B) : text(L->Text16()), lines(L->Lines()), p(P), b(B) {}
         string DebugString() const { return StrCat("PaintOp text(", text, ") ", p, " ", b); }
     };
     static vector<LineOp> front, back;
@@ -55,15 +55,15 @@ vector<LinesFrameBufferTest::PaintOp> LinesFrameBufferTest::paint;
 
 struct TextAreaTest : public TextArea {
     struct UpdateTokenOp {
-        Line *l; string word; int type;
-        UpdateTokenOp(Line *L, const string &W, int T) : l(L), word(W), type(T) {}
+        Line *l; String16 word; int type;
+        UpdateTokenOp(Line *L, const String16 &W, int T) : l(L), word(W), type(T) {}
     };
     vector<UpdateTokenOp> token;
     LinesFrameBufferTest line_fb_test;
     TextAreaTest(Window *W, Font *F, int S=200) : TextArea(W,F,S) {}
     virtual LinesFrameBuffer *GetFrameBuffer() override { return &line_fb_test; }
     virtual void UpdateToken(Line *l, int wo, int wl, int t, const LineTokenProcessor*) override {
-        token.emplace_back(l, DrawableBoxRun(&l->data->glyphs[wo], wl).Text(), t);
+        token.emplace_back(l, DrawableBoxRun(&l->data->glyphs[wo], wl).Text16(), t);
     }
 };
 struct EditorTest : public Editor {
@@ -85,7 +85,7 @@ struct TerminalTest : public Terminal {
       if (header) printf("%s\n", header);
       for (int i=1; i<=term_height; ++i) {
         Line *L = GetTermLine(i);
-        printf("%s (%s)\n", L->Text().c_str(), L->p.DebugString().c_str());
+        printf("%s (%s)\n", String::ToUTF8(L->Text16()).c_str(), L->p.DebugString().c_str());
       }
     }
     void AssignLineTextToLineNumber() { for (int i=1; i<=term_height; ++i) Write(StrCat("\x1b[", i, "H", i, "\x1b[K")); }
@@ -95,34 +95,34 @@ TEST(GUITest, TextArea) {
     {
         TextAreaTest ta(screen, Fonts::Fake(), 10);
         ta.line.InsertAt(-1)->AssignText("a");
-        EXPECT_EQ("a", ta.line[-1].Text());
+        EXPECT_EQ(String16(u"a"), ta.line[-1].Text16());
 
         ta.line.InsertAt(-1)->AssignText("b");
         ta.line.InsertAt(-1)->AssignText("c");
         ta.line.InsertAt(-1)->AssignText("d");
-        EXPECT_EQ("a", ta.line[-4].Text()); EXPECT_EQ(-4, ta.line.IndexOf(&ta.line[-4]));
-        EXPECT_EQ("b", ta.line[-3].Text()); EXPECT_EQ(-3, ta.line.IndexOf(&ta.line[-3]));
-        EXPECT_EQ("c", ta.line[-2].Text()); EXPECT_EQ(-2, ta.line.IndexOf(&ta.line[-2]));
-        EXPECT_EQ("d", ta.line[-1].Text()); EXPECT_EQ(-1, ta.line.IndexOf(&ta.line[-1]));
+        EXPECT_EQ(u"a", ta.line[-4].Text16()); EXPECT_EQ(-4, ta.line.IndexOf(&ta.line[-4]));
+        EXPECT_EQ(u"b", ta.line[-3].Text16()); EXPECT_EQ(-3, ta.line.IndexOf(&ta.line[-3]));
+        EXPECT_EQ(u"c", ta.line[-2].Text16()); EXPECT_EQ(-2, ta.line.IndexOf(&ta.line[-2]));
+        EXPECT_EQ(u"d", ta.line[-1].Text16()); EXPECT_EQ(-1, ta.line.IndexOf(&ta.line[-1]));
         ta.line.InsertAt(-4)->AssignText("z");
-        EXPECT_EQ("z", ta.line[-4].Text());
-        EXPECT_EQ("a", ta.line[-3].Text());
-        EXPECT_EQ("b", ta.line[-2].Text());
-        EXPECT_EQ("c", ta.line[-1].Text());
+        EXPECT_EQ(u"z", ta.line[-4].Text16());
+        EXPECT_EQ(u"a", ta.line[-3].Text16());
+        EXPECT_EQ(u"b", ta.line[-2].Text16());
+        EXPECT_EQ(u"c", ta.line[-1].Text16());
         ta.line.InsertAt(-2)->AssignText("y");
-        EXPECT_EQ("z", ta.line[-4].Text());
-        EXPECT_EQ("a", ta.line[-3].Text());
-        EXPECT_EQ("y", ta.line[-2].Text());
-        EXPECT_EQ("b", ta.line[-1].Text());
+        EXPECT_EQ(u"z", ta.line[-4].Text16());
+        EXPECT_EQ(u"a", ta.line[-3].Text16());
+        EXPECT_EQ(u"y", ta.line[-2].Text16());
+        EXPECT_EQ(u"b", ta.line[-1].Text16());
         ta.line.PopBack(2);
-        EXPECT_EQ("z", ta.line[-2].Text());
-        EXPECT_EQ("a", ta.line[-1].Text());
+        EXPECT_EQ(u"z", ta.line[-2].Text16());
+        EXPECT_EQ(u"a", ta.line[-1].Text16());
         ta.line.PushFront()->AssignText("w");
         ta.line.PushFront()->AssignText("u");
-        EXPECT_EQ("u", ta.line[-4].Text());
-        EXPECT_EQ("w", ta.line[-3].Text());
-        EXPECT_EQ("z", ta.line[-2].Text());
-        EXPECT_EQ("a", ta.line[-1].Text());
+        EXPECT_EQ(u"u", ta.line[-4].Text16());
+        EXPECT_EQ(u"w", ta.line[-3].Text16());
+        EXPECT_EQ(u"z", ta.line[-2].Text16());
+        EXPECT_EQ(u"a", ta.line[-1].Text16());
         ta.line.PushFront()->AssignText("1");
         ta.line.PushFront()->AssignText("2");
         ta.line.PushFront()->AssignText("3");
@@ -130,16 +130,16 @@ TEST(GUITest, TextArea) {
         ta.line.PushFront()->AssignText("5");
         ta.line.PushFront()->AssignText("6");
         ta.line.PushFront()->AssignText("7");
-        EXPECT_EQ("7", ta.line[-10].Text()); EXPECT_EQ(-10, ta.line.IndexOf(&ta.line[-10]));
-        EXPECT_EQ("6", ta.line[-9] .Text()); EXPECT_EQ(-9,  ta.line.IndexOf(&ta.line[-9]));
-        EXPECT_EQ("5", ta.line[-8] .Text()); EXPECT_EQ(-8,  ta.line.IndexOf(&ta.line[-8]));
-        EXPECT_EQ("4", ta.line[-7] .Text()); EXPECT_EQ(-7,  ta.line.IndexOf(&ta.line[-7]));
-        EXPECT_EQ("3", ta.line[-6] .Text()); EXPECT_EQ(-6,  ta.line.IndexOf(&ta.line[-6]));
-        EXPECT_EQ("2", ta.line[-5] .Text()); EXPECT_EQ(-5,  ta.line.IndexOf(&ta.line[-5]));
-        EXPECT_EQ("1", ta.line[-4] .Text()); EXPECT_EQ(-4,  ta.line.IndexOf(&ta.line[-4]));
-        EXPECT_EQ("u", ta.line[-3] .Text()); EXPECT_EQ(-3,  ta.line.IndexOf(&ta.line[-3]));
-        EXPECT_EQ("w", ta.line[-2] .Text()); EXPECT_EQ(-2,  ta.line.IndexOf(&ta.line[-2]));
-        EXPECT_EQ("z", ta.line[-1] .Text()); EXPECT_EQ(-1,  ta.line.IndexOf(&ta.line[-1]));
+        EXPECT_EQ(u"7", ta.line[-10].Text16()); EXPECT_EQ(-10, ta.line.IndexOf(&ta.line[-10]));
+        EXPECT_EQ(u"6", ta.line[-9] .Text16()); EXPECT_EQ(-9,  ta.line.IndexOf(&ta.line[-9]));
+        EXPECT_EQ(u"5", ta.line[-8] .Text16()); EXPECT_EQ(-8,  ta.line.IndexOf(&ta.line[-8]));
+        EXPECT_EQ(u"4", ta.line[-7] .Text16()); EXPECT_EQ(-7,  ta.line.IndexOf(&ta.line[-7]));
+        EXPECT_EQ(u"3", ta.line[-6] .Text16()); EXPECT_EQ(-6,  ta.line.IndexOf(&ta.line[-6]));
+        EXPECT_EQ(u"2", ta.line[-5] .Text16()); EXPECT_EQ(-5,  ta.line.IndexOf(&ta.line[-5]));
+        EXPECT_EQ(u"1", ta.line[-4] .Text16()); EXPECT_EQ(-4,  ta.line.IndexOf(&ta.line[-4]));
+        EXPECT_EQ(u"u", ta.line[-3] .Text16()); EXPECT_EQ(-3,  ta.line.IndexOf(&ta.line[-3]));
+        EXPECT_EQ(u"w", ta.line[-2] .Text16()); EXPECT_EQ(-2,  ta.line.IndexOf(&ta.line[-2]));
+        EXPECT_EQ(u"z", ta.line[-1] .Text16()); EXPECT_EQ(-1,  ta.line.IndexOf(&ta.line[-1]));
     }
 
     { // 0: 122, 1: 222, 2: 223, 3: 234, 4: 344, 5: 445
@@ -172,20 +172,20 @@ TEST(GUITest, TextArea) {
         EXPECT_EQ(2, test_fb->front.size());
         EXPECT_NEAR(0, test_fb->scroll.y, 1e-6);
         EXPECT_EQ(point(0,0), test_fb->p);
-        if (test_fb->front.size() > 0) EXPECT_EQ("1",           test_fb->front[0].text);
+        if (test_fb->front.size() > 0) EXPECT_EQ(u"1",          test_fb->front[0].text);
         if (test_fb->front.size() > 0) EXPECT_EQ(0,             test_fb->front[0].wlo);
         if (test_fb->front.size() > 0) EXPECT_EQ(3,             test_fb->front[0].wll);
         if (test_fb->front.size() > 0) EXPECT_EQ(point(0,fh),   test_fb->front[0].p);
-        if (test_fb->front.size() > 1) EXPECT_EQ("2\n2\n2",     test_fb->front[1].text);
+        if (test_fb->front.size() > 1) EXPECT_EQ(u"2\n2\n2",    test_fb->front[1].text);
         if (test_fb->front.size() > 1) EXPECT_EQ(0,             test_fb->front[1].wlo);
         if (test_fb->front.size() > 1) EXPECT_EQ(2,             test_fb->front[1].wll);
         if (test_fb->front.size() > 1) EXPECT_EQ(point(0,4*fh), test_fb->front[1].p);
         test_fb->front.clear();
         EXPECT_EQ(2, test_fb->paint.size());
-        if (test_fb->paint.size() > 0) EXPECT_EQ("1",              test_fb->paint[0].text);
+        if (test_fb->paint.size() > 0) EXPECT_EQ(u"1",             test_fb->paint[0].text);
         if (test_fb->paint.size() > 0) EXPECT_EQ(point(0,fh),      test_fb->paint[0].p);
         if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,0,w,fh),    test_fb->paint[0].b);
-        if (test_fb->paint.size() > 1) EXPECT_EQ("2\n2\n2",        test_fb->paint[1].text);
+        if (test_fb->paint.size() > 1) EXPECT_EQ(u"2\n2\n2",       test_fb->paint[1].text);
         if (test_fb->paint.size() > 1) EXPECT_EQ(point(0,3*fh),    test_fb->paint[1].p);
         if (test_fb->paint.size() > 1) EXPECT_EQ(Box(0,fh,w,2*fh), test_fb->paint[1].b);
         test_fb->paint.clear();
@@ -198,13 +198,13 @@ TEST(GUITest, TextArea) {
         EXPECT_EQ(1, test_fb->front.size());
         EXPECT_NEAR(-1/3.0, test_fb->scroll.y, 1e-6);
         EXPECT_EQ(point(0,fh), test_fb->p);
-        if (test_fb->front.size() > 0) EXPECT_EQ("2\n2\n2",   test_fb->front[0].text);
+        if (test_fb->front.size() > 0) EXPECT_EQ(u"2\n2\n2",  test_fb->front[0].text);
         if (test_fb->front.size() > 0) EXPECT_EQ(2,           test_fb->front[0].wlo);
         if (test_fb->front.size() > 0) EXPECT_EQ(1,           test_fb->front[0].wll);
         if (test_fb->front.size() > 0) EXPECT_EQ(point(0,fh), test_fb->front[0].p);
         test_fb->front.clear();
         EXPECT_EQ(1, test_fb->paint.size());
-        if (test_fb->paint.size() > 0) EXPECT_EQ("2\n2\n2",        test_fb->paint[0].text);
+        if (test_fb->paint.size() > 0) EXPECT_EQ(u"2\n2\n2",       test_fb->paint[0].text);
         if (test_fb->paint.size() > 0) EXPECT_EQ(point(0,fh),      test_fb->paint[0].p);
         if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,0,w,fh),    test_fb->paint[0].b);
         test_fb->paint.clear();
@@ -217,13 +217,13 @@ TEST(GUITest, TextArea) {
         EXPECT_EQ(1, test_fb->front.size());
         EXPECT_NEAR(-2/3.0, test_fb->scroll.y, 1e-6);
         EXPECT_EQ(point(0,2*fh), test_fb->p);
-        if (test_fb->front.size() > 0) EXPECT_EQ("3",           test_fb->front[0].text);
+        if (test_fb->front.size() > 0) EXPECT_EQ(u"3",          test_fb->front[0].text);
         if (test_fb->front.size() > 0) EXPECT_EQ(0,             test_fb->front[0].wlo);
         if (test_fb->front.size() > 0) EXPECT_EQ(1,             test_fb->front[0].wll);
         if (test_fb->front.size() > 0) EXPECT_EQ(point(0,fh*2), test_fb->front[0].p);
         test_fb->front.clear();
         EXPECT_EQ(1, test_fb->paint.size());
-        if (test_fb->paint.size() > 0) EXPECT_EQ("3",           test_fb->paint[0].text);
+        if (test_fb->paint.size() > 0) EXPECT_EQ(u"3",          test_fb->paint[0].text);
         if (test_fb->paint.size() > 0) EXPECT_EQ(point(0,fh*2), test_fb->paint[0].p);
         if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,0,w,fh), test_fb->paint[0].b);
         test_fb->paint.clear();
@@ -236,13 +236,13 @@ TEST(GUITest, TextArea) {
         EXPECT_EQ(1, test_fb->back.size());
         EXPECT_NEAR(-1/3.0, test_fb->scroll.y, 1e-6);
         EXPECT_EQ(point(0,fh), test_fb->p);
-        if (test_fb->back.size() > 0) EXPECT_EQ("2\n2\n2",     test_fb->back[0].text);
+        if (test_fb->back.size() > 0) EXPECT_EQ(u"2\n2\n2",    test_fb->back[0].text);
         if (test_fb->back.size() > 0) EXPECT_EQ(2,             test_fb->back[0].wlo);
         if (test_fb->back.size() > 0) EXPECT_EQ(1,             test_fb->back[0].wll);
         if (test_fb->back.size() > 0) EXPECT_EQ(point(0,fh*4), test_fb->back[0].p);
         test_fb->back.clear();
         EXPECT_EQ(1, test_fb->paint.size());
-        if (test_fb->paint.size() > 0) EXPECT_EQ("2\n2\n2",        test_fb->paint[0].text);
+        if (test_fb->paint.size() > 0) EXPECT_EQ(u"2\n2\n2",       test_fb->paint[0].text);
         if (test_fb->paint.size() > 0) EXPECT_EQ(point(0,fh*2),    test_fb->paint[0].p);
         if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,fh*2,w,fh), test_fb->paint[0].b);
         test_fb->paint.clear();
@@ -255,12 +255,12 @@ TEST(GUITest, TextArea) {
         EXPECT_EQ(1, test_fb->back.size());
         EXPECT_NEAR(0, test_fb->scroll.y, 1e-6);
         EXPECT_EQ(point(0,0), test_fb->p);
-        if (test_fb->back.size() > 0) EXPECT_EQ("1",         test_fb->back[0].text);
+        if (test_fb->back.size() > 0) EXPECT_EQ(u"1",        test_fb->back[0].text);
         if (test_fb->back.size() > 0) EXPECT_EQ(0,           test_fb->back[0].wlo);
         if (test_fb->back.size() > 0) EXPECT_EQ(point(0,fh), test_fb->back[0].p);
         test_fb->back.clear();
         EXPECT_EQ(1, test_fb->paint.size());
-        if (test_fb->paint.size() > 0) EXPECT_EQ("1",           test_fb->paint[0].text);
+        if (test_fb->paint.size() > 0) EXPECT_EQ(u"1",          test_fb->paint[0].text);
         if (test_fb->paint.size() > 0) EXPECT_EQ(point(0,fh),   test_fb->paint[0].p);
         if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,0,w,fh), test_fb->paint[0].b);
         test_fb->paint.clear();
@@ -273,20 +273,20 @@ TEST(GUITest, TextArea) {
         EXPECT_EQ(2, test_fb->front.size());
         EXPECT_NEAR(-2/3.0, test_fb->scroll.y, 1e-6);
         EXPECT_EQ(point(0,2*fh), test_fb->p);
-        if (test_fb->front.size() > 0) EXPECT_EQ("2\n2\n2",     test_fb->front[0].text);
+        if (test_fb->front.size() > 0) EXPECT_EQ(u"2\n2\n2",    test_fb->front[0].text);
         if (test_fb->front.size() > 0) EXPECT_EQ(2,             test_fb->front[0].wlo);
         if (test_fb->front.size() > 0) EXPECT_EQ(1,             test_fb->front[0].wll);
         if (test_fb->front.size() > 0) EXPECT_EQ(point(0,fh),   test_fb->front[0].p);
-        if (test_fb->front.size() > 1) EXPECT_EQ("3",           test_fb->front[1].text);
+        if (test_fb->front.size() > 1) EXPECT_EQ(u"3",          test_fb->front[1].text);
         if (test_fb->front.size() > 1) EXPECT_EQ(0,             test_fb->front[1].wlo);
         if (test_fb->front.size() > 1) EXPECT_EQ(1,             test_fb->front[1].wll);
         if (test_fb->front.size() > 1) EXPECT_EQ(point(0,fh*2), test_fb->front[1].p);
         test_fb->front.clear();
         EXPECT_EQ(2, test_fb->paint.size());
-        if (test_fb->paint.size() > 0) EXPECT_EQ("2\n2\n2",     test_fb->paint[0].text);
+        if (test_fb->paint.size() > 0) EXPECT_EQ(u"2\n2\n2",    test_fb->paint[0].text);
         if (test_fb->paint.size() > 0) EXPECT_EQ(point(0,fh),   test_fb->paint[0].p);
         if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,0,w,fh), test_fb->paint[0].b);
-        if (test_fb->paint.size() > 1) EXPECT_EQ("3",           test_fb->paint[1].text);
+        if (test_fb->paint.size() > 1) EXPECT_EQ(u"3",          test_fb->paint[1].text);
         if (test_fb->paint.size() > 1) EXPECT_EQ(point(0,2*fh), test_fb->paint[1].p);
         if (test_fb->paint.size() > 1) EXPECT_EQ(Box(0,0,w,fh), test_fb->paint[1].b);
         test_fb->paint.clear();
@@ -299,16 +299,16 @@ TEST(GUITest, TextArea) {
         EXPECT_EQ(1, test_fb->front.size());
         EXPECT_NEAR(-1/3.0, test_fb->scroll.y, 1e-6);
         EXPECT_EQ(point(0,fh), test_fb->p);
-        if (test_fb->front.size() > 0) EXPECT_EQ("4\n4",      test_fb->front[0].text);
+        if (test_fb->front.size() > 0) EXPECT_EQ(u"4\n4",     test_fb->front[0].text);
         if (test_fb->front.size() > 0) EXPECT_EQ(0,           test_fb->front[0].wlo);
         if (test_fb->front.size() > 0) EXPECT_EQ(2,           test_fb->front[0].wll);
         if (test_fb->front.size() > 0) EXPECT_EQ(point(0,fh), test_fb->front[0].p);
         test_fb->front.clear();
         EXPECT_EQ(2, test_fb->paint.size());
-        if (test_fb->paint.size() > 0) EXPECT_EQ("4\n4",          test_fb->paint[0].text);
+        if (test_fb->paint.size() > 0) EXPECT_EQ(u"4\n4",         test_fb->paint[0].text);
         if (test_fb->paint.size() > 0) EXPECT_EQ(point(0,4*fh),   test_fb->paint[0].p);
         if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,0,w,2*fh), test_fb->paint[0].b);
-        if (test_fb->paint.size() > 1) EXPECT_EQ("4\n4",          test_fb->paint[1].text);
+        if (test_fb->paint.size() > 1) EXPECT_EQ(u"4\n4",         test_fb->paint[1].text);
         if (test_fb->paint.size() > 1) EXPECT_EQ(point(0,fh),     test_fb->paint[1].p);
         if (test_fb->paint.size() > 1) EXPECT_EQ(Box(0,0,w,2*fh), test_fb->paint[1].b);
         test_fb->paint.clear();
@@ -321,13 +321,13 @@ TEST(GUITest, TextArea) {
         EXPECT_EQ(1, test_fb->front.size());
         EXPECT_NEAR(-2/3.0, test_fb->scroll.y, 1e-6);
         EXPECT_EQ(point(0,2*fh), test_fb->p);
-        if (test_fb->front.size() > 0) EXPECT_EQ("5",           test_fb->front[0].text);
+        if (test_fb->front.size() > 0) EXPECT_EQ(u"5",          test_fb->front[0].text);
         if (test_fb->front.size() > 0) EXPECT_EQ(0,             test_fb->front[0].wlo);
         if (test_fb->front.size() > 0) EXPECT_EQ(1,             test_fb->front[0].wll);
         if (test_fb->front.size() > 0) EXPECT_EQ(point(0,2*fh), test_fb->front[0].p);
         test_fb->front.clear();
         EXPECT_EQ(1, test_fb->paint.size());
-        if (test_fb->paint.size() > 0) EXPECT_EQ("5",           test_fb->paint[0].text);
+        if (test_fb->paint.size() > 0) EXPECT_EQ(u"5",          test_fb->paint[0].text);
         if (test_fb->paint.size() > 0) EXPECT_EQ(point(0,2*fh), test_fb->paint[0].p);
         if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,0,w,fh), test_fb->paint[0].b);
         test_fb->paint.clear();
@@ -340,18 +340,18 @@ TEST(GUITest, TextArea) {
         EXPECT_EQ(2, test_fb->back.size());
         EXPECT_NEAR(0, test_fb->scroll.y, 1e-6);
         EXPECT_EQ(point(0,0), test_fb->p);
-        if (test_fb->back.size() > 0) EXPECT_EQ("3",           test_fb->back[0].text);
+        if (test_fb->back.size() > 0) EXPECT_EQ(u"3",          test_fb->back[0].text);
         if (test_fb->back.size() > 0) EXPECT_EQ(0,             test_fb->back[0].wlo);
         if (test_fb->back.size() > 0) EXPECT_EQ(point(0,2*fh), test_fb->back[0].p);
-        if (test_fb->back.size() > 1) EXPECT_EQ("2\n2\n2",     test_fb->back[1].text);
+        if (test_fb->back.size() > 1) EXPECT_EQ(u"2\n2\n2",    test_fb->back[1].text);
         if (test_fb->back.size() > 1) EXPECT_EQ(0,             test_fb->back[1].wlo);
         if (test_fb->back.size() > 1) EXPECT_EQ(point(0,fh),   test_fb->back[1].p);
         test_fb->back.clear();
         EXPECT_EQ(2, test_fb->paint.size());
-        if (test_fb->paint.size() > 0) EXPECT_EQ("3",           test_fb->paint[0].text);
+        if (test_fb->paint.size() > 0) EXPECT_EQ(u"3",          test_fb->paint[0].text);
         if (test_fb->paint.size() > 0) EXPECT_EQ(point(0,2*fh), test_fb->paint[0].p);
         if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,0,w,fh), test_fb->paint[0].b);
-        if (test_fb->paint.size() > 0) EXPECT_EQ("2\n2\n2",     test_fb->paint[1].text);
+        if (test_fb->paint.size() > 0) EXPECT_EQ(u"2\n2\n2",    test_fb->paint[1].text);
         if (test_fb->paint.size() > 0) EXPECT_EQ(point(0,fh),   test_fb->paint[1].p);
         if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,0,w,fh), test_fb->paint[1].b);
         test_fb->paint.clear();
@@ -364,13 +364,13 @@ TEST(GUITest, TextArea) {
         EXPECT_EQ(1, test_fb->back.size());
         EXPECT_NEAR(2/3.0, test_fb->scroll.y, 1e-6);
         EXPECT_EQ(point(0,fh), test_fb->p);
-        if (test_fb->back.size() > 0) EXPECT_EQ("2\n2\n2",     test_fb->back[0].text);
+        if (test_fb->back.size() > 0) EXPECT_EQ(u"2\n2\n2",    test_fb->back[0].text);
         if (test_fb->back.size() > 0) EXPECT_EQ(1,             test_fb->back[0].wlo);
         if (test_fb->back.size() > 0) EXPECT_EQ(2,             test_fb->back[0].wll);
         if (test_fb->back.size() > 0) EXPECT_EQ(point(0,fh*4), test_fb->back[0].p);
         test_fb->back.clear();
         EXPECT_EQ(1, test_fb->paint.size());
-        if (test_fb->paint.size() > 0) EXPECT_EQ("2\n2\n2",        test_fb->paint[0].text);
+        if (test_fb->paint.size() > 0) EXPECT_EQ(u"2\n2\n2",       test_fb->paint[0].text);
         if (test_fb->paint.size() > 0) EXPECT_EQ(point(0,fh*3),    test_fb->paint[0].p);
         if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,fh,w,fh*2), test_fb->paint[0].b);
         test_fb->paint.clear();
@@ -394,20 +394,20 @@ TEST(GUITest, Editor) {
     EXPECT_EQ(2, e.line.Size());
     EXPECT_EQ(4, e.fb_wrapped_lines);
     EXPECT_EQ(2, test_fb->back.size());
-    if (test_fb->back.size() > 0) EXPECT_EQ("1",           test_fb->back[0].text);
+    if (test_fb->back.size() > 0) EXPECT_EQ(u"1",          test_fb->back[0].text);
     if (test_fb->back.size() > 0) EXPECT_EQ(0,             test_fb->back[0].wlo);
     if (test_fb->back.size() > 0) EXPECT_EQ(3,             test_fb->back[0].wll);
     if (test_fb->back.size() > 0) EXPECT_EQ(point(0,3*fh), test_fb->back[0].p);
-    if (test_fb->back.size() > 1) EXPECT_EQ("2 2 2",       test_fb->back[1].text);
+    if (test_fb->back.size() > 1) EXPECT_EQ(u"2 2 2",      test_fb->back[1].text);
     if (test_fb->back.size() > 1) EXPECT_EQ(0,             test_fb->back[1].wlo);
     if (test_fb->back.size() > 1) EXPECT_EQ(2,             test_fb->back[1].wll);
     if (test_fb->back.size() > 1) EXPECT_EQ(point(0,2*fh), test_fb->back[1].p);
     test_fb->back.clear();
     EXPECT_EQ(2, test_fb->paint.size());
-    if (test_fb->paint.size() > 0) EXPECT_EQ("1",             test_fb->paint[0].text);
+    if (test_fb->paint.size() > 0) EXPECT_EQ(u"1",            test_fb->paint[0].text);
     if (test_fb->paint.size() > 0) EXPECT_EQ(point(0,3*fh),   test_fb->paint[0].p);
     if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,0,w,fh),   test_fb->paint[0].b);
-    if (test_fb->paint.size() > 1) EXPECT_EQ("2 2 2",         test_fb->paint[1].text);
+    if (test_fb->paint.size() > 1) EXPECT_EQ(u"2 2 2",        test_fb->paint[1].text);
     if (test_fb->paint.size() > 1) EXPECT_EQ(3,               test_fb->paint[1].lines);
     if (test_fb->paint.size() > 1) EXPECT_EQ(point(0,2*fh),   test_fb->paint[1].p);
     if (test_fb->paint.size() > 1) EXPECT_EQ(Box(0,0,w,2*fh), test_fb->paint[1].b);
@@ -425,13 +425,13 @@ TEST(GUITest, Editor) {
     EXPECT_EQ(1, test_fb->back.size());
     EXPECT_NEAR(1/3.0, test_fb->scroll.y, 1e-6);
     EXPECT_EQ(point(0,2*fh), test_fb->p);
-    if (test_fb->back.size() > 0) EXPECT_EQ("2 2 2",       test_fb->back[0].text);
+    if (test_fb->back.size() > 0) EXPECT_EQ(u"2 2 2",      test_fb->back[0].text);
     if (test_fb->back.size() > 0) EXPECT_EQ(2,             test_fb->back[0].wlo);
     if (test_fb->back.size() > 0) EXPECT_EQ(1,             test_fb->back[0].wll);
     if (test_fb->back.size() > 0) EXPECT_EQ(point(0,5*fh), test_fb->back[0].p);
     test_fb->back.clear();
     EXPECT_EQ(1, test_fb->paint.size());
-    if (test_fb->paint.size() > 0) EXPECT_EQ("2 2 2",          test_fb->paint[0].text);
+    if (test_fb->paint.size() > 0) EXPECT_EQ(u"2 2 2",         test_fb->paint[0].text);
     if (test_fb->paint.size() > 0) EXPECT_EQ(point(0,3*fh),    test_fb->paint[0].p);
     if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,2*fh,w,fh), test_fb->paint[0].b);
     test_fb->paint.clear();
@@ -448,13 +448,13 @@ TEST(GUITest, Editor) {
     EXPECT_EQ( 1, test_fb->back.size());
     EXPECT_NEAR(2/3.0, test_fb->scroll.y, 1e-6);
     EXPECT_EQ(point(0,fh), test_fb->p);
-    if (test_fb->back.size() > 0) EXPECT_EQ("3",           test_fb->back[0].text);
+    if (test_fb->back.size() > 0) EXPECT_EQ(u"3",          test_fb->back[0].text);
     if (test_fb->back.size() > 0) EXPECT_EQ(0,             test_fb->back[0].wlo);
     if (test_fb->back.size() > 0) EXPECT_EQ(1,             test_fb->back[0].wll);
     if (test_fb->back.size() > 0) EXPECT_EQ(point(0,2*fh), test_fb->back[0].p);
     test_fb->back.clear();
     EXPECT_EQ(1, test_fb->paint.size());
-    if (test_fb->paint.size() > 0) EXPECT_EQ("3",           test_fb->paint[0].text);
+    if (test_fb->paint.size() > 0) EXPECT_EQ(u"3",          test_fb->paint[0].text);
     if (test_fb->paint.size() > 0) EXPECT_EQ(point(0,2*fh), test_fb->paint[0].p);
     if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,0,w,fh), test_fb->paint[0].b);
     test_fb->paint.clear();
@@ -471,13 +471,13 @@ TEST(GUITest, Editor) {
     EXPECT_EQ(1, test_fb->front.size());
     EXPECT_NEAR(1/3.0, test_fb->scroll.y, 1e-6);
     EXPECT_EQ(point(0,2*fh), test_fb->p);
-    if (test_fb->front.size() > 0) EXPECT_EQ("2 2 2",       test_fb->front[0].text);
+    if (test_fb->front.size() > 0) EXPECT_EQ(u"2 2 2",      test_fb->front[0].text);
     if (test_fb->front.size() > 0) EXPECT_EQ(2,             test_fb->front[0].wlo);
     if (test_fb->front.size() > 0) EXPECT_EQ(1,             test_fb->front[0].wll);
     if (test_fb->front.size() > 0) EXPECT_EQ(point(0,2*fh), test_fb->front[0].p);
     test_fb->front.clear();
     EXPECT_EQ(1, test_fb->paint.size());
-    if (test_fb->paint.size() > 0) EXPECT_EQ("2 2 2",       test_fb->paint[0].text);
+    if (test_fb->paint.size() > 0) EXPECT_EQ(u"2 2 2",      test_fb->paint[0].text);
     if (test_fb->paint.size() > 0) EXPECT_EQ(point(0,2*fh), test_fb->paint[0].p);
     if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,0,w,fh), test_fb->paint[0].b);
     test_fb->paint.clear();
@@ -492,13 +492,13 @@ TEST(GUITest, Editor) {
     EXPECT_EQ(2, e.line.Size());
     EXPECT_EQ(4, e.fb_wrapped_lines);
     EXPECT_EQ(1, test_fb->front.size());
-    if (test_fb->front.size() > 0) EXPECT_EQ("1",           test_fb->front[0].text);
+    if (test_fb->front.size() > 0) EXPECT_EQ(u"1",          test_fb->front[0].text);
     if (test_fb->front.size() > 0) EXPECT_EQ(0,             test_fb->front[0].wlo);
     if (test_fb->front.size() > 0) EXPECT_EQ(1,             test_fb->front[0].wll);
     if (test_fb->front.size() > 0) EXPECT_EQ(point(0,3*fh), test_fb->front[0].p);
     test_fb->front.clear();
     EXPECT_EQ(1, test_fb->paint.size());
-    if (test_fb->paint.size() > 0) EXPECT_EQ("1",           test_fb->paint[0].text);
+    if (test_fb->paint.size() > 0) EXPECT_EQ(u"1",          test_fb->paint[0].text);
     if (test_fb->paint.size() > 0) EXPECT_EQ(point(0,3*fh), test_fb->paint[0].p);
     if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,0,w,fh), test_fb->paint[0].b);
     test_fb->paint.clear();
@@ -515,20 +515,20 @@ TEST(GUITest, Editor) {
     EXPECT_EQ( 2, test_fb->back.size());
     EXPECT_NEAR(2/3.0, test_fb->scroll.y, 1e-6);
     EXPECT_EQ(point(0,fh), test_fb->p);
-    if (test_fb->back.size() > 0) EXPECT_EQ("2 2 2",       test_fb->back[0].text);
+    if (test_fb->back.size() > 0) EXPECT_EQ(u"2 2 2",      test_fb->back[0].text);
     if (test_fb->back.size() > 0) EXPECT_EQ(2,             test_fb->back[0].wlo);
     if (test_fb->back.size() > 0) EXPECT_EQ(1,             test_fb->back[0].wll);
     if (test_fb->back.size() > 0) EXPECT_EQ(point(0,5*fh), test_fb->back[0].p);
-    if (test_fb->back.size() > 1) EXPECT_EQ("3",           test_fb->back[1].text);
+    if (test_fb->back.size() > 1) EXPECT_EQ(u"3",          test_fb->back[1].text);
     if (test_fb->back.size() > 1) EXPECT_EQ(0,             test_fb->back[1].wlo);
     if (test_fb->back.size() > 1) EXPECT_EQ(1,             test_fb->back[1].wll);
     if (test_fb->back.size() > 1) EXPECT_EQ(point(0,2*fh), test_fb->back[1].p);
     test_fb->back.clear();
     EXPECT_EQ(2, test_fb->paint.size());
-    if (test_fb->paint.size() > 0) EXPECT_EQ("2 2 2",          test_fb->paint[0].text);
+    if (test_fb->paint.size() > 0) EXPECT_EQ(u"2 2 2",         test_fb->paint[0].text);
     if (test_fb->paint.size() > 0) EXPECT_EQ(point(0,3*fh),    test_fb->paint[0].p);
     if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,2*fh,w,fh), test_fb->paint[0].b);
-    if (test_fb->paint.size() > 1) EXPECT_EQ("3",              test_fb->paint[1].text);
+    if (test_fb->paint.size() > 1) EXPECT_EQ(u"3",             test_fb->paint[1].text);
     if (test_fb->paint.size() > 1) EXPECT_EQ(point(0,2*fh),    test_fb->paint[1].p);
     if (test_fb->paint.size() > 1) EXPECT_EQ(Box(0,0,w,fh),    test_fb->paint[1].b);
     test_fb->paint.clear();
@@ -545,16 +545,16 @@ TEST(GUITest, Editor) {
     EXPECT_EQ( 1, test_fb->back.size());
     EXPECT_NEAR(1/3.0, test_fb->scroll.y, 1e-6);
     EXPECT_EQ(point(0,2*fh), test_fb->p);
-    if (test_fb->back.size() > 0) EXPECT_EQ("4 4",         test_fb->back[0].text);
+    if (test_fb->back.size() > 0) EXPECT_EQ(u"4 4",        test_fb->back[0].text);
     if (test_fb->back.size() > 0) EXPECT_EQ(0,             test_fb->back[0].wlo);
     if (test_fb->back.size() > 0) EXPECT_EQ(2,             test_fb->back[0].wll);
     if (test_fb->back.size() > 0) EXPECT_EQ(point(0,4*fh), test_fb->back[0].p);
     test_fb->back.clear();
     EXPECT_EQ(2, test_fb->paint.size());
-    if (test_fb->paint.size() > 0) EXPECT_EQ("4 4",           test_fb->paint[0].text);
+    if (test_fb->paint.size() > 0) EXPECT_EQ(u"4 4",          test_fb->paint[0].text);
     if (test_fb->paint.size() > 0) EXPECT_EQ(point(0,fh),     test_fb->paint[0].p);
     if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,0,w,2*fh), test_fb->paint[0].b);
-    if (test_fb->paint.size() > 1) EXPECT_EQ("4 4",           test_fb->paint[1].text);
+    if (test_fb->paint.size() > 1) EXPECT_EQ(u"4 4",          test_fb->paint[1].text);
     if (test_fb->paint.size() > 1) EXPECT_EQ(point(0,4*fh),   test_fb->paint[1].p);
     if (test_fb->paint.size() > 1) EXPECT_EQ(Box(0,0,w,2*fh), test_fb->paint[1].b);
     test_fb->paint.clear();
@@ -571,13 +571,13 @@ TEST(GUITest, Editor) {
     EXPECT_EQ( 1, test_fb->back.size());
     EXPECT_NEAR(2/3.0, test_fb->scroll.y, 1e-6);
     EXPECT_EQ(point(0,1*fh), test_fb->p);
-    if (test_fb->back.size() > 0) EXPECT_EQ("5",           test_fb->back[0].text);
+    if (test_fb->back.size() > 0) EXPECT_EQ(u"5",          test_fb->back[0].text);
     if (test_fb->back.size() > 0) EXPECT_EQ(0,             test_fb->back[0].wlo);
     if (test_fb->back.size() > 0) EXPECT_EQ(1,             test_fb->back[0].wll);
     if (test_fb->back.size() > 0) EXPECT_EQ(point(0,2*fh), test_fb->back[0].p);
     test_fb->back.clear();
     EXPECT_EQ(1, test_fb->paint.size());
-    if (test_fb->paint.size() > 0) EXPECT_EQ("5",           test_fb->paint[0].text);
+    if (test_fb->paint.size() > 0) EXPECT_EQ(u"5",          test_fb->paint[0].text);
     if (test_fb->paint.size() > 0) EXPECT_EQ(point(0,2*fh), test_fb->paint[0].p);
     if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,0,w,fh), test_fb->paint[0].b);
     test_fb->paint.clear();
@@ -594,20 +594,20 @@ TEST(GUITest, Editor) {
     EXPECT_EQ( 2, test_fb->front.size());
     EXPECT_NEAR(0, test_fb->scroll.y, 1e-6);
     EXPECT_EQ(point(0,3*fh), test_fb->p);
-    if (test_fb->front.size() > 0) EXPECT_EQ("3",           test_fb->front[0].text);
+    if (test_fb->front.size() > 0) EXPECT_EQ(u"3",          test_fb->front[0].text);
     if (test_fb->front.size() > 0) EXPECT_EQ(0,             test_fb->front[0].wlo);
     if (test_fb->front.size() > 0) EXPECT_EQ(2,             test_fb->front[0].wll);
     if (test_fb->front.size() > 0) EXPECT_EQ(point(0,2*fh), test_fb->front[0].p);
-    if (test_fb->front.size() > 1) EXPECT_EQ("2 2 2",       test_fb->front[1].text);
+    if (test_fb->front.size() > 1) EXPECT_EQ(u"2 2 2",      test_fb->front[1].text);
     if (test_fb->front.size() > 1) EXPECT_EQ(0,             test_fb->front[1].wlo);
     if (test_fb->front.size() > 1) EXPECT_EQ(1,             test_fb->front[1].wll);
     if (test_fb->front.size() > 1) EXPECT_EQ(point(0,5*fh), test_fb->front[1].p);
     test_fb->front.clear();
     EXPECT_EQ(2, test_fb->paint.size());
-    if (test_fb->paint.size() > 0) EXPECT_EQ("3",              test_fb->paint[0].text);
+    if (test_fb->paint.size() > 0) EXPECT_EQ(u"3",             test_fb->paint[0].text);
     if (test_fb->paint.size() > 0) EXPECT_EQ(point(0,2*fh),    test_fb->paint[0].p);
     if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,0,w,fh),    test_fb->paint[0].b);
-    if (test_fb->paint.size() > 1) EXPECT_EQ("2 2 2",          test_fb->paint[1].text);
+    if (test_fb->paint.size() > 1) EXPECT_EQ(u"2 2 2",         test_fb->paint[1].text);
     if (test_fb->paint.size() > 1) EXPECT_EQ(point(0,3*fh),    test_fb->paint[1].p);
     if (test_fb->paint.size() > 1) EXPECT_EQ(Box(0,2*fh,w,fh), test_fb->paint[1].b);
     test_fb->paint.clear();
@@ -624,16 +624,16 @@ TEST(GUITest, Editor) {
     EXPECT_EQ(1, test_fb->front.size());
     EXPECT_NEAR(-2/3.0, test_fb->scroll.y, 1e-6);
     EXPECT_EQ(point(0,2*fh), test_fb->p);
-    if (test_fb->front.size() > 0) EXPECT_EQ("2 2 2",       test_fb->front[0].text);
+    if (test_fb->front.size() > 0) EXPECT_EQ(u"2 2 2",      test_fb->front[0].text);
     if (test_fb->front.size() > 0) EXPECT_EQ(1,             test_fb->front[0].wlo);
     if (test_fb->front.size() > 0) EXPECT_EQ(2,             test_fb->front[0].wll);
     if (test_fb->front.size() > 0) EXPECT_EQ(point(0,2*fh), test_fb->front[0].p);
     test_fb->back.clear();
     EXPECT_EQ(2, test_fb->paint.size());
-    if (test_fb->paint.size() > 0) EXPECT_EQ("2 2 2",         test_fb->paint[0].text);
+    if (test_fb->paint.size() > 0) EXPECT_EQ(u"2 2 2",        test_fb->paint[0].text);
     if (test_fb->paint.size() > 0) EXPECT_EQ(point(0,5*fh),   test_fb->paint[0].p);
     if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,0,w,2*fh), test_fb->paint[0].b);
-    if (test_fb->paint.size() > 1) EXPECT_EQ("2 2 2",         test_fb->paint[1].text);
+    if (test_fb->paint.size() > 1) EXPECT_EQ(u"2 2 2",        test_fb->paint[1].text);
     if (test_fb->paint.size() > 1) EXPECT_EQ(point(0,2*fh),   test_fb->paint[1].p);
     if (test_fb->paint.size() > 1) EXPECT_EQ(Box(0,0,w,2*fh), test_fb->paint[1].b);
     test_fb->paint.clear();
@@ -676,39 +676,39 @@ TEST(GUITest, Terminal) {
 
     ta.AssignLineTextToLineNumber();
     for (int i=1; i<=th; ++i) EXPECT_EQ(&ta.line[-th + i-1], ta.GetTermLine(i));
-    for (int i=1; i<=th; ++i) EXPECT_EQ(StrCat(i), ta.GetTermLine(i)->Text());
+    for (int i=1; i<=th; ++i) EXPECT_EQ(Str16Cat(i), ta.GetTermLine(i)->Text16());
     for (int i=1; i<=th; ++i) EXPECT_EQ(point(0,fh*(th-i+1)), ta.GetTermLine(i)->p);
 
     ta.Write("\x1b[1;23r"); EXPECT_EQ(1, ta.scroll_region_beg); EXPECT_EQ(23, ta.scroll_region_end);
     ta.Write("\x1b[7;1H");  EXPECT_EQ(1, ta.term_cursor.x);     EXPECT_EQ(7,  ta.term_cursor.y);
     ta.Write("\x1b[M");
-    for (int i=1;  i<=23; ++i) EXPECT_EQ(i<23 ? StrCat(i+(i>=7)) : "", ta.GetTermLine(i)->Text());
-    for (int i=24; i<=th; ++i) EXPECT_EQ(StrCat(i),                    ta.GetTermLine(i)->Text());
-    for (int i=1;  i<=th; ++i) EXPECT_EQ(point(0,fh*(th-i+1)),         ta.GetTermLine(i)->p);
+    for (int i=1;  i<=23; ++i) EXPECT_EQ(i<23 ? Str16Cat(i+(i>=7)) : u"", ta.GetTermLine(i)->Text16());
+    for (int i=24; i<=th; ++i) EXPECT_EQ(Str16Cat(i),                     ta.GetTermLine(i)->Text16());
+    for (int i=1;  i<=th; ++i) EXPECT_EQ(point(0,fh*(th-i+1)),            ta.GetTermLine(i)->p);
 
     ta.Write("\x1b[13;1H");  EXPECT_EQ(1, ta.term_cursor.x);    EXPECT_EQ(13, ta.term_cursor.y);
     ta.Write("\x1b[M");
-    for (int i=1;  i<=23; ++i) EXPECT_EQ(i<22 ? StrCat(i+(i>=7)+(i>=13)) : "", ta.GetTermLine(i)->Text());
-    for (int i=24; i<=th; ++i) EXPECT_EQ(StrCat(i),                            ta.GetTermLine(i)->Text());
-    for (int i=1;  i<=th; ++i) EXPECT_EQ(point(0,fh*(th-i+1)),                 ta.GetTermLine(i)->p);
+    for (int i=1;  i<=23; ++i) EXPECT_EQ(i<22 ? Str16Cat(i+(i>=7)+(i>=13)) : u"", ta.GetTermLine(i)->Text16());
+    for (int i=24; i<=th; ++i) EXPECT_EQ(Str16Cat(i),                             ta.GetTermLine(i)->Text16());
+    for (int i=1;  i<=th; ++i) EXPECT_EQ(point(0,fh*(th-i+1)),                    ta.GetTermLine(i)->p);
 
     ta.AssignLineTextToLineNumber();
-    for (int i=1; i<=th; ++i) EXPECT_EQ(StrCat(i), ta.GetTermLine(i)->Text());
+    for (int i=1; i<=th; ++i) EXPECT_EQ(Str16Cat(i), ta.GetTermLine(i)->Text16());
     for (int i=1; i<=th; ++i) EXPECT_EQ(point(0,fh*(th-i+1)), ta.GetTermLine(i)->p);
 
     ta.Write("\x1b[7;23r"); EXPECT_EQ(7, ta.scroll_region_beg); EXPECT_EQ(23, ta.scroll_region_end);
     ta.Write("\x1b[23;1H"); EXPECT_EQ(1, ta.term_cursor.x);     EXPECT_EQ(23, ta.term_cursor.y);
 
     ta.Write("\n");
-    for (int i=1;  i<=23; ++i) EXPECT_EQ(i<23 ? StrCat(i+(i>=7)) : "",      ta.GetTermLine(i)->Text());
-    for (int i=24; i<=th; ++i) EXPECT_EQ(StrCat(i),                         ta.GetTermLine(i)->Text());
-    for (int i=1;  i<=th; ++i) EXPECT_EQ(point(0,fh*(th-i+((i<7)||i>=24))), ta.GetTermLine(i)->p);
+    for (int i=1;  i<=23; ++i) EXPECT_EQ(i<23 ? Str16Cat(i+(i>=7)) : u"",    ta.GetTermLine(i)->Text16());
+    for (int i=24; i<=th; ++i) EXPECT_EQ(Str16Cat(i),                        ta.GetTermLine(i)->Text16());
+    for (int i=1;  i<=th; ++i) EXPECT_EQ(point(0,fh*(th-i+((i<7)||i>=24))),  ta.GetTermLine(i)->p);
 
     ta.Write("\x1b[13;1H");  EXPECT_EQ(1, ta.term_cursor.x);    EXPECT_EQ(13, ta.term_cursor.y);
     ta.Write("\x1b[M");
-    for (int i=1;  i<=23; ++i) EXPECT_EQ(i<22 ? StrCat(i+(i>=7)+(i>=13)) : "", ta.GetTermLine(i)->Text());
-    for (int i=24; i<=th; ++i) EXPECT_EQ(StrCat(i),                            ta.GetTermLine(i)->Text());
-    for (int i=1;  i<=th; ++i) EXPECT_EQ(point(0,fh*(th-i+((i<7)||i>=24))),    ta.GetTermLine(i)->p);
+    for (int i=1;  i<=23; ++i) EXPECT_EQ(i<22 ? Str16Cat(i+(i>=7)+(i>=13)) : u"", ta.GetTermLine(i)->Text16());
+    for (int i=24; i<=th; ++i) EXPECT_EQ(Str16Cat(i),                             ta.GetTermLine(i)->Text16());
+    for (int i=1;  i<=th; ++i) EXPECT_EQ(point(0,fh*(th-i+((i<7)||i>=24))),       ta.GetTermLine(i)->p);
 }
 
 TEST(GUITest, LineTokenProcessor) {
@@ -717,183 +717,183 @@ TEST(GUITest, LineTokenProcessor) {
     TextGUI::Line *L = ta.line.InsertAt(-1);
 
     L->UpdateText(0, "a", 0);
-    EXPECT_EQ("a", L->Text()); EXPECT_EQ(1, ta.token.size());
-    if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type, 4); EXPECT_EQ("a", ta.token[0].word); }
+    EXPECT_EQ(u"a", L->Text16()); EXPECT_EQ(1, ta.token.size());
+    if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type, 4); EXPECT_EQ(u"a", ta.token[0].word); }
     ta.token.clear();
 
     L->UpdateText(1, "c", 0);
-    EXPECT_EQ("ac", L->Text()); EXPECT_EQ(2, ta.token.size());
-    if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type, -8); EXPECT_EQ("a",  ta.token[0].word); }
-    if (ta.token.size()>1) { EXPECT_EQ(ta.token[1].type,  2); EXPECT_EQ("ac", ta.token[1].word); }
+    EXPECT_EQ(u"ac", L->Text16()); EXPECT_EQ(2, ta.token.size());
+    if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type, -8); EXPECT_EQ(u"a",  ta.token[0].word); }
+    if (ta.token.size()>1) { EXPECT_EQ(ta.token[1].type,  2); EXPECT_EQ(u"ac", ta.token[1].word); }
     ta.token.clear();
 
     L->UpdateText(1, "b", 0);
-    EXPECT_EQ("abc", L->Text()); EXPECT_EQ(2, ta.token.size());
-    if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type, -7); EXPECT_EQ("ac",  ta.token[0].word); }
-    if (ta.token.size()>1) { EXPECT_EQ(ta.token[1].type,  1); EXPECT_EQ("abc", ta.token[1].word); }
+    EXPECT_EQ(u"abc", L->Text16()); EXPECT_EQ(2, ta.token.size());
+    if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type, -7); EXPECT_EQ(u"ac",  ta.token[0].word); }
+    if (ta.token.size()>1) { EXPECT_EQ(ta.token[1].type,  1); EXPECT_EQ(u"abc", ta.token[1].word); }
     ta.token.clear();
 
     L->UpdateText(0, "0", 0);
-    EXPECT_EQ("0abc", L->Text()); EXPECT_EQ(2, ta.token.size());
-    if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type, -9); EXPECT_EQ("abc",  ta.token[0].word); }
-    if (ta.token.size()>1) { EXPECT_EQ(ta.token[1].type,  3); EXPECT_EQ("0abc", ta.token[1].word); }
+    EXPECT_EQ(u"0abc", L->Text16()); EXPECT_EQ(2, ta.token.size());
+    if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type, -9); EXPECT_EQ(u"abc",  ta.token[0].word); }
+    if (ta.token.size()>1) { EXPECT_EQ(ta.token[1].type,  3); EXPECT_EQ(u"0abc", ta.token[1].word); }
     ta.token.clear();
 
     L->Erase(0, 1);
-    EXPECT_EQ("abc", L->Text()); EXPECT_EQ(2, ta.token.size());
-    if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type,  -3); EXPECT_EQ("0abc", ta.token[0].word); }
-    if (ta.token.size()>1) { EXPECT_EQ(ta.token[1].type,   9); EXPECT_EQ("abc",  ta.token[1].word); }
+    EXPECT_EQ(u"abc", L->Text16()); EXPECT_EQ(2, ta.token.size());
+    if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type,  -3); EXPECT_EQ(u"0abc", ta.token[0].word); }
+    if (ta.token.size()>1) { EXPECT_EQ(ta.token[1].type,   9); EXPECT_EQ(u"abc",  ta.token[1].word); }
     ta.token.clear();
 
     L->Erase(1, 1);
-    EXPECT_EQ("ac", L->Text()); EXPECT_EQ(2, ta.token.size());
-    if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type,  -1); EXPECT_EQ("abc", ta.token[0].word); }
-    if (ta.token.size()>1) { EXPECT_EQ(ta.token[1].type,   7); EXPECT_EQ("ac",  ta.token[1].word); }
+    EXPECT_EQ(u"ac", L->Text16()); EXPECT_EQ(2, ta.token.size());
+    if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type,  -1); EXPECT_EQ(u"abc", ta.token[0].word); }
+    if (ta.token.size()>1) { EXPECT_EQ(ta.token[1].type,   7); EXPECT_EQ(u"ac",  ta.token[1].word); }
     ta.token.clear();
 
     L->Erase(1, 1);
-    EXPECT_EQ("a", L->Text()); EXPECT_EQ(2, ta.token.size());
-    if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type,  -2); EXPECT_EQ("ac", ta.token[0].word); }
-    if (ta.token.size()>1) { EXPECT_EQ(ta.token[1].type,   8); EXPECT_EQ("a",  ta.token[1].word); }
+    EXPECT_EQ(u"a", L->Text16()); EXPECT_EQ(2, ta.token.size());
+    if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type,  -2); EXPECT_EQ(u"ac", ta.token[0].word); }
+    if (ta.token.size()>1) { EXPECT_EQ(ta.token[1].type,   8); EXPECT_EQ(u"a",  ta.token[1].word); }
     ta.token.clear();
 
     L->Erase(0, 1);
-    EXPECT_EQ("", L->Text()); EXPECT_EQ(1, ta.token.size());
-    if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type,  -4); EXPECT_EQ("a", ta.token[0].word); }
+    EXPECT_EQ(u"", L->Text16()); EXPECT_EQ(1, ta.token.size());
+    if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type,  -4); EXPECT_EQ(u"a", ta.token[0].word); }
     ta.token.clear();
     
     L->UpdateText(0, "aabb", 0);
-    EXPECT_EQ("aabb", L->Text()); EXPECT_EQ(1, ta.token.size());
-    if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type, 4); EXPECT_EQ("aabb", ta.token[0].word); }
+    EXPECT_EQ(u"aabb", L->Text16()); EXPECT_EQ(1, ta.token.size());
+    if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type, 4); EXPECT_EQ(u"aabb", ta.token[0].word); }
     ta.token.clear();
 
     L->UpdateText(2, " ", 0);
-    EXPECT_EQ("aa bb", L->Text()); EXPECT_EQ(3, ta.token.size());
-    if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type, -7); EXPECT_EQ("aabb", ta.token[0].word); }
-    if (ta.token.size()>1) { EXPECT_EQ(ta.token[1].type,  5); EXPECT_EQ("aa",   ta.token[1].word); }
-    if (ta.token.size()>2) { EXPECT_EQ(ta.token[2].type,  6); EXPECT_EQ("bb",   ta.token[2].word); }
+    EXPECT_EQ(u"aa bb", L->Text16()); EXPECT_EQ(3, ta.token.size());
+    if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type, -7); EXPECT_EQ(u"aabb", ta.token[0].word); }
+    if (ta.token.size()>1) { EXPECT_EQ(ta.token[1].type,  5); EXPECT_EQ(u"aa",   ta.token[1].word); }
+    if (ta.token.size()>2) { EXPECT_EQ(ta.token[2].type,  6); EXPECT_EQ(u"bb",   ta.token[2].word); }
     ta.token.clear();
 
     L->Erase(2, 1);
-    EXPECT_EQ("aabb", L->Text()); EXPECT_EQ(3, ta.token.size());
-    if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type, -5); EXPECT_EQ("aa",   ta.token[0].word); }
-    if (ta.token.size()>1) { EXPECT_EQ(ta.token[1].type, -6); EXPECT_EQ("bb",   ta.token[1].word); }
-    if (ta.token.size()>2) { EXPECT_EQ(ta.token[2].type,  7); EXPECT_EQ("aabb", ta.token[2].word); }
+    EXPECT_EQ(u"aabb", L->Text16()); EXPECT_EQ(3, ta.token.size());
+    if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type, -5); EXPECT_EQ(u"aa",   ta.token[0].word); }
+    if (ta.token.size()>1) { EXPECT_EQ(ta.token[1].type, -6); EXPECT_EQ(u"bb",   ta.token[1].word); }
+    if (ta.token.size()>2) { EXPECT_EQ(ta.token[2].type,  7); EXPECT_EQ(u"aabb", ta.token[2].word); }
     ta.token.clear();
 
     L->Clear();
     ta.insert_mode = 0;
     L->UpdateText(0, "a", 0);
-    EXPECT_EQ("a", L->Text()); EXPECT_EQ(1, ta.token.size());
-    if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type, 4); EXPECT_EQ("a", ta.token[0].word); }
+    EXPECT_EQ(u"a", L->Text16()); EXPECT_EQ(1, ta.token.size());
+    if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type, 4); EXPECT_EQ(u"a", ta.token[0].word); }
     ta.token.clear();
 
     L->UpdateText(1, "cc", 0);
-    EXPECT_EQ("acc", L->Text()); EXPECT_EQ(2, ta.token.size());
-    if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type, -5); EXPECT_EQ("a",   ta.token[0].word); }
-    if (ta.token.size()>1) { EXPECT_EQ(ta.token[1].type,  2); EXPECT_EQ("acc", ta.token[1].word); }
+    EXPECT_EQ(u"acc", L->Text16()); EXPECT_EQ(2, ta.token.size());
+    if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type, -5); EXPECT_EQ(u"a",   ta.token[0].word); }
+    if (ta.token.size()>1) { EXPECT_EQ(ta.token[1].type,  2); EXPECT_EQ(u"acc", ta.token[1].word); }
     ta.token.clear();
 
     L->UpdateText(1, "b", 0);
-    EXPECT_EQ("abc", L->Text()); EXPECT_EQ(2, ta.token.size());
-    if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type, -1); EXPECT_EQ("acc", ta.token[0].word); }
-    if (ta.token.size()>1) { EXPECT_EQ(ta.token[1].type,  1); EXPECT_EQ("abc", ta.token[1].word); }
+    EXPECT_EQ(u"abc", L->Text16()); EXPECT_EQ(2, ta.token.size());
+    if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type, -1); EXPECT_EQ(u"acc", ta.token[0].word); }
+    if (ta.token.size()>1) { EXPECT_EQ(ta.token[1].type,  1); EXPECT_EQ(u"abc", ta.token[1].word); }
     ta.token.clear();
 
     L->UpdateText(3, "bb", 0);
-    EXPECT_EQ("abcbb", L->Text()); EXPECT_EQ(2, ta.token.size());
-    if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type, -5); EXPECT_EQ("abc",   ta.token[0].word); }
-    if (ta.token.size()>1) { EXPECT_EQ(ta.token[1].type,  2); EXPECT_EQ("abcbb", ta.token[1].word); }
+    EXPECT_EQ(u"abcbb", L->Text16()); EXPECT_EQ(2, ta.token.size());
+    if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type, -5); EXPECT_EQ(u"abc",   ta.token[0].word); }
+    if (ta.token.size()>1) { EXPECT_EQ(ta.token[1].type,  2); EXPECT_EQ(u"abcbb", ta.token[1].word); }
     ta.token.clear();
 
     L->UpdateText(0, "aab", 0);
-    EXPECT_EQ("aabbb", L->Text()); EXPECT_EQ(2, ta.token.size());
-    if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type, -3); EXPECT_EQ("abcbb", ta.token[0].word); }
-    if (ta.token.size()>1) { EXPECT_EQ(ta.token[1].type,  3); EXPECT_EQ("aabbb", ta.token[1].word); }
+    EXPECT_EQ(u"aabbb", L->Text16()); EXPECT_EQ(2, ta.token.size());
+    if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type, -3); EXPECT_EQ(u"abcbb", ta.token[0].word); }
+    if (ta.token.size()>1) { EXPECT_EQ(ta.token[1].type,  3); EXPECT_EQ(u"aabbb", ta.token[1].word); }
     ta.token.clear();
 
     L->UpdateText(2, " ", 0);
-    EXPECT_EQ("aa bb", L->Text()); EXPECT_EQ(3, ta.token.size());
-    if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type, -1); EXPECT_EQ("aabbb", ta.token[0].word); }
-    if (ta.token.size()>1) { EXPECT_EQ(ta.token[1].type,  5); EXPECT_EQ("aa",    ta.token[1].word); }
-    if (ta.token.size()>2) { EXPECT_EQ(ta.token[2].type,  6); EXPECT_EQ("bb",    ta.token[2].word); }
+    EXPECT_EQ(u"aa bb", L->Text16()); EXPECT_EQ(3, ta.token.size());
+    if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type, -1); EXPECT_EQ(u"aabbb", ta.token[0].word); }
+    if (ta.token.size()>1) { EXPECT_EQ(ta.token[1].type,  5); EXPECT_EQ(u"aa",    ta.token[1].word); }
+    if (ta.token.size()>2) { EXPECT_EQ(ta.token[2].type,  6); EXPECT_EQ(u"bb",    ta.token[2].word); }
     ta.token.clear();
 
     L->UpdateText(2, "c", 0);
-    EXPECT_EQ("aacbb", L->Text()); EXPECT_EQ(3, ta.token.size());
-    if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type, -5); EXPECT_EQ("aa",    ta.token[0].word); }
-    if (ta.token.size()>1) { EXPECT_EQ(ta.token[1].type, -6); EXPECT_EQ("bb",    ta.token[1].word); }
-    if (ta.token.size()>2) { EXPECT_EQ(ta.token[2].type,  1); EXPECT_EQ("aacbb", ta.token[2].word); }
+    EXPECT_EQ(u"aacbb", L->Text16()); EXPECT_EQ(3, ta.token.size());
+    if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type, -5); EXPECT_EQ(u"aa",    ta.token[0].word); }
+    if (ta.token.size()>1) { EXPECT_EQ(ta.token[1].type, -6); EXPECT_EQ(u"bb",    ta.token[1].word); }
+    if (ta.token.size()>2) { EXPECT_EQ(ta.token[2].type,  1); EXPECT_EQ(u"aacbb", ta.token[2].word); }
     ta.token.clear();
 
     L->UpdateText(5, "ccdee", 0);
-    EXPECT_EQ("aacbbccdee", L->Text()); EXPECT_EQ(2, ta.token.size());
-    if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type, -5); EXPECT_EQ("aacbb",      ta.token[0].word); }
-    if (ta.token.size()>1) { EXPECT_EQ(ta.token[1].type,  2); EXPECT_EQ("aacbbccdee", ta.token[1].word); }
+    EXPECT_EQ(u"aacbbccdee", L->Text16()); EXPECT_EQ(2, ta.token.size());
+    if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type, -5); EXPECT_EQ(u"aacbb",      ta.token[0].word); }
+    if (ta.token.size()>1) { EXPECT_EQ(ta.token[1].type,  2); EXPECT_EQ(u"aacbbccdee", ta.token[1].word); }
     ta.token.clear();
 
     L->UpdateText(5, " ccdee", 0);
-    EXPECT_EQ("aacbb ccdee", L->Text()); EXPECT_EQ(3, ta.token.size());
-    if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type, -2); EXPECT_EQ("aacbbccdee", ta.token[0].word); }
-    if (ta.token.size()>1) { EXPECT_EQ(ta.token[1].type,  4); EXPECT_EQ("ccdee",      ta.token[1].word); }
-    if (ta.token.size()>2) { EXPECT_EQ(ta.token[2].type,  5); EXPECT_EQ("aacbb",      ta.token[2].word); }
+    EXPECT_EQ(u"aacbb ccdee", L->Text16()); EXPECT_EQ(3, ta.token.size());
+    if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type, -2); EXPECT_EQ(u"aacbbccdee", ta.token[0].word); }
+    if (ta.token.size()>1) { EXPECT_EQ(ta.token[1].type,  4); EXPECT_EQ(u"ccdee",      ta.token[1].word); }
+    if (ta.token.size()>2) { EXPECT_EQ(ta.token[2].type,  5); EXPECT_EQ(u"aacbb",      ta.token[2].word); }
     ta.token.clear();
 
     L->UpdateText(5, " ccdee", 0);
-    EXPECT_EQ("aacbb ccdee", L->Text()); EXPECT_EQ(2, ta.token.size());
-    if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type, -4); EXPECT_EQ("ccdee",      ta.token[0].word); }
-    if (ta.token.size()>1) { EXPECT_EQ(ta.token[1].type,  4); EXPECT_EQ("ccdee",      ta.token[1].word); }
+    EXPECT_EQ(u"aacbb ccdee", L->Text16()); EXPECT_EQ(2, ta.token.size());
+    if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type, -4); EXPECT_EQ(u"ccdee",      ta.token[0].word); }
+    if (ta.token.size()>1) { EXPECT_EQ(ta.token[1].type,  4); EXPECT_EQ(u"ccdee",      ta.token[1].word); }
     ta.token.clear();
 
     L->UpdateText(5, " ", 0);
-    EXPECT_EQ("aacbb ccdee", L->Text()); EXPECT_EQ(0, ta.token.size());
+    EXPECT_EQ(u"aacbb ccdee", L->Text16()); EXPECT_EQ(0, ta.token.size());
 
     L->OverwriteTextAt(10, StringPiece(string("Z")), 0);
-    EXPECT_EQ("aacbb ccdeZ", L->Text()); EXPECT_EQ(2, ta.token.size());
-    if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type, -2); EXPECT_EQ("ccdee",      ta.token[0].word); }
-    if (ta.token.size()>1) { EXPECT_EQ(ta.token[1].type,  2); EXPECT_EQ("ccdeZ",      ta.token[1].word); }
+    EXPECT_EQ(u"aacbb ccdeZ", L->Text16()); EXPECT_EQ(2, ta.token.size());
+    if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type, -2); EXPECT_EQ(u"ccdee",      ta.token[0].word); }
+    if (ta.token.size()>1) { EXPECT_EQ(ta.token[1].type,  2); EXPECT_EQ(u"ccdeZ",      ta.token[1].word); }
     ta.token.clear();
 
     L->OverwriteTextAt(10, StringPiece(string(" ")), 0);
-    EXPECT_EQ("aacbb ccde ", L->Text()); EXPECT_EQ(2, ta.token.size());
-    if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type, -2); EXPECT_EQ("ccdeZ",      ta.token[0].word); }
-    if (ta.token.size()>1) { EXPECT_EQ(ta.token[1].type,  5); EXPECT_EQ("ccde",       ta.token[1].word); }
+    EXPECT_EQ(u"aacbb ccde ", L->Text16()); EXPECT_EQ(2, ta.token.size());
+    if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type, -2); EXPECT_EQ(u"ccdeZ",      ta.token[0].word); }
+    if (ta.token.size()>1) { EXPECT_EQ(ta.token[1].type,  5); EXPECT_EQ(u"ccde",       ta.token[1].word); }
     ta.token.clear();
 
     L->OverwriteTextAt(10, StringPiece(string(" ")), 0);
-    EXPECT_EQ("aacbb ccde ", L->Text()); EXPECT_EQ(0, ta.token.size());
+    EXPECT_EQ(u"aacbb ccde ", L->Text16()); EXPECT_EQ(0, ta.token.size());
     ta.token.clear();
 
     L->OverwriteTextAt(10, StringPiece(string("A")), 0);
-    EXPECT_EQ("aacbb ccdeA", L->Text()); EXPECT_EQ(2, ta.token.size());
-    if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type, -5); EXPECT_EQ("ccde",       ta.token[0].word); }
-    if (ta.token.size()>1) { EXPECT_EQ(ta.token[1].type,  2); EXPECT_EQ("ccdeA",      ta.token[1].word); }
+    EXPECT_EQ(u"aacbb ccdeA", L->Text16()); EXPECT_EQ(2, ta.token.size());
+    if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type, -5); EXPECT_EQ(u"ccde",       ta.token[0].word); }
+    if (ta.token.size()>1) { EXPECT_EQ(ta.token[1].type,  2); EXPECT_EQ(u"ccdeA",      ta.token[1].word); }
     ta.token.clear();
 
     // test wide chars
     L->Clear();
     ta.insert_mode = 1;
     L->UpdateText(0, "\xff", 0);
-    EXPECT_EQ("\xff\xa0", L->Text()); EXPECT_EQ(1, ta.token.size());
-    if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type, 4); EXPECT_EQ("\xff\xa0", ta.token[0].word); }
+    EXPECT_EQ(u"\xff\ufeff", L->Text16()); EXPECT_EQ(1, ta.token.size());
+    if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type, 4); EXPECT_EQ(u"\xff\ufeff", ta.token[0].word); }
     ta.token.clear();
 
     L->UpdateText(2, "y", 0);
-    EXPECT_EQ("\xff\xa0y", L->Text()); EXPECT_EQ(2, ta.token.size());
-    if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type, -8); EXPECT_EQ("\xff\xa0",  ta.token[0].word); }
-    if (ta.token.size()>1) { EXPECT_EQ(ta.token[1].type,  2); EXPECT_EQ("\xff\xa0y", ta.token[1].word); }
+    EXPECT_EQ(u"\xff\ufeffy", L->Text16()); EXPECT_EQ(2, ta.token.size());
+    if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type, -8); EXPECT_EQ(u"\xff\ufeff",  ta.token[0].word); }
+    if (ta.token.size()>1) { EXPECT_EQ(ta.token[1].type,  2); EXPECT_EQ(u"\xff\ufeffy", ta.token[1].word); }
     ta.token.clear();
 
     L->UpdateText(2, "x", 0);
-    EXPECT_EQ("\xff\xa0xy", L->Text()); EXPECT_EQ(2, ta.token.size());
-    if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type, -7); EXPECT_EQ("\xff\xa0y",  ta.token[0].word); }
-    if (ta.token.size()>1) { EXPECT_EQ(ta.token[1].type,  1); EXPECT_EQ("\xff\xa0xy", ta.token[1].word); }
+    EXPECT_EQ(u"\xff\ufeffxy", L->Text16()); EXPECT_EQ(2, ta.token.size());
+    if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type, -7); EXPECT_EQ(u"\xff\ufeffy",  ta.token[0].word); }
+    if (ta.token.size()>1) { EXPECT_EQ(ta.token[1].type,  1); EXPECT_EQ(u"\xff\ufeffxy", ta.token[1].word); }
     ta.token.clear();
 
     L->UpdateText(0, "0", 0);
-    EXPECT_EQ("0\xff\xa0xy", L->Text()); EXPECT_EQ(2, ta.token.size());
-    if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type, -9); EXPECT_EQ("\xff\xa0xy",  ta.token[0].word); }
-    if (ta.token.size()>1) { EXPECT_EQ(ta.token[1].type,  3); EXPECT_EQ("0\xff\xa0xy", ta.token[1].word); }
+    EXPECT_EQ(u"0\xff\ufeffxy", L->Text16()); EXPECT_EQ(2, ta.token.size());
+    if (ta.token.size()>0) { EXPECT_EQ(ta.token[0].type, -9); EXPECT_EQ(u"\xff\ufeffxy",  ta.token[0].word); }
+    if (ta.token.size()>1) { EXPECT_EQ(ta.token[1].type,  3); EXPECT_EQ(u"0\xff\ufeffxy", ta.token[1].word); }
     ta.token.clear();
 }
 

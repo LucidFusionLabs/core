@@ -45,13 +45,13 @@ inline string FromCFStr(CFStringRef in) {
     ret.resize(strlen(ret.data()));
     return ret;
 }
-inline CFAttributedStringRef ToCFAStr(CTFontRef ctfont, unsigned short glyph_id) {
+inline CFAttributedStringRef ToCFAStr(CTFontRef ctfont, char16_t glyph_id) {
     const CFStringRef attr_key[] = { kCTFontAttributeName };
     const CFTypeRef attr_val[] = { ctfont };
     CFDictionaryRef attr = CFDictionaryCreate
         (kCFAllocatorDefault, (const void**)&attr_key, (const void**)&attr_val, sizeofarray(attr_key),
          &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
-    CFStringRef str = CFStringCreateWithCharacters(kCFAllocatorDefault, &glyph_id, 1);
+    CFStringRef str = CFStringCreateWithCharacters(kCFAllocatorDefault, reinterpret_cast<unsigned short*>(&glyph_id), 1);
     CFAttributedStringRef astr = CFAttributedStringCreate(kCFAllocatorDefault, str, attr);
     CFRelease(attr);
     CFRelease(str);
@@ -258,12 +258,12 @@ void GlyphCache::Load(const Font *f, const Glyph *g, HFONT hfont, int size, HDC 
 }
 #endif
 
-Glyph *Font::FindOrInsertGlyph(unsigned short gind) {
+Glyph *Font::FindOrInsertGlyph(char16_t gind) {
     unsigned ind = gind - glyph->table_start;
     return ind < glyph->table.size() ? &glyph->table[ind] : &glyph->index[gind];
 }
 
-Glyph *Font::FindGlyph(unsigned short gind) {
+Glyph *Font::FindGlyph(char16_t gind) {
     unsigned ind = gind - glyph->table_start;
     if (ind < glyph->table.size()) return &glyph->table[ind];
     auto i = glyph->index.find(gind);
@@ -345,12 +345,12 @@ template <class X> int Font::Draw(const StringPieceT<X> &text, const Box &box, v
     return out.line.size();
 }
 
-template void Font::Size  <char> (const StringPiece   &text, Box *out, int maxwidth, int *lines_out);
-template void Font::Size  <short>(const String16Piece &text, Box *out, int maxwidth, int *lines_out);
-template void Font::Shape <char> (const StringPiece   &text, const Box &box, DrawableBoxArray *out, int draw_flag, int attr_id);
-template void Font::Shape <short>(const String16Piece &text, const Box &box, DrawableBoxArray *out, int draw_flag, int attr_id);
-template int  Font::Draw  <char> (const StringPiece   &text, const Box &box, vector<Box> *lb, int draw_flag);
-template int  Font::Draw  <short>(const String16Piece &text, const Box &box, vector<Box> *lb, int draw_flag);
+template void Font::Size  <char>    (const StringPiece   &text, Box *out, int maxwidth, int *lines_out);
+template void Font::Size  <char16_t>(const String16Piece &text, Box *out, int maxwidth, int *lines_out);
+template void Font::Shape <char>    (const StringPiece   &text, const Box &box, DrawableBoxArray *out, int draw_flag, int attr_id);
+template void Font::Shape <char16_t>(const String16Piece &text, const Box &box, DrawableBoxArray *out, int draw_flag, int attr_id);
+template int  Font::Draw  <char>    (const StringPiece   &text, const Box &box, vector<Box> *lb, int draw_flag);
+template int  Font::Draw  <char16_t>(const String16Piece &text, const Box &box, vector<Box> *lb, int draw_flag);
 
 FakeFontEngine::FakeFontEngine() : fake_font(this, fake_font_desc, shared_ptr<FontEngine::Resource>()) {
     fake_font_desc.size = size;
@@ -359,7 +359,7 @@ FakeFontEngine::FakeFontEngine() : fake_font(this, fake_font_desc, shared_ptr<Fo
     fake_font.descender = descender;
     fake_font.glyph = shared_ptr<GlyphMap>(new GlyphMap(shared_ptr<GlyphCache>(new GlyphCache(0, 0))));
     InitGlyphs(&fake_font, &fake_font.glyph->table[0], fake_font.glyph->table.size());
-    for (unsigned short wide_glyph_id = wide_glyph_begin, e = wide_glyph_end + 1; wide_glyph_id != e; ++wide_glyph_id) {
+    for (char16_t wide_glyph_id = wide_glyph_begin, e = wide_glyph_end + 1; wide_glyph_id != e; ++wide_glyph_id) {
         Glyph *wg = fake_font.FindGlyph(wide_glyph_id);
         wg->wide = 1;
         wg->advance *= 2;
@@ -389,7 +389,7 @@ bool AtlasFontEngine::Init(const FontDesc &d) {
 
 Font *AtlasFontEngine::Open(const FontDesc &d) {
     FontMap::iterator fi = font_map.find(d.name);
-    if (fi == font_map.end() || !fi->second.size()) return ERRORv(NULL, "AtlasFont ", d.DebugString(), " not found");
+    if (fi == font_map.end() || !fi->second.size()) return ERRORv(nullptr, "AtlasFont ", d.DebugString(), " not found");
 
     bool is_fg_white = d.fg == Color::white;
     int max_ci = 2 - is_fg_white;
@@ -424,18 +424,18 @@ Font *AtlasFontEngine::Open(const FontDesc &d) {
         ret->fixed_width   = RoundF(primary->fixed_width * ret->scale);
         return ret;
     }
-    return ERRORv(NULL, "AtlasFont ", d.DebugString(), " clone failed");
+    return ERRORv(nullptr, "AtlasFont ", d.DebugString(), " clone failed");
 }
 
 Font *AtlasFontEngine::OpenAtlas(const FontDesc &d) {
     Texture tex;
     string fn = d.Filename();
     Asset::LoadTexture(StrCat(app->assetdir, fn, ".0000.png"), &tex);
-    if (!tex.ID) return ERRORv(0, "load ", fn, ".0000.png failed");
+    if (!tex.ID) return ERRORv(nullptr, "load ", fn, ".0000.png failed");
 
     MatrixFile gm;
     gm.ReadVersioned(VersionedFileName(app->assetdir.c_str(), fn.c_str(), "glyphs"), 0);
-    if (!gm.F) return ERRORv(0, "load ", d.name, ".0000.glyphs.matrix failed");
+    if (!gm.F) return ERRORv(nullptr, "load ", d.name, ".0000.glyphs.matrix failed");
 
     Resource *resource = new Resource();
     Font *ret = new Font(Singleton<AtlasFontEngine>::Get(), d, shared_ptr<FontEngine::Resource>(resource));
@@ -780,7 +780,7 @@ Font *CoreTextFontEngine::Open(const FontDesc &d) {
     return ret;
 }
 
-void CoreTextFontEngine::GetSubstitutedFont(Font *f, CTFontRef ctfont, unsigned short glyph_id,
+void CoreTextFontEngine::GetSubstitutedFont(Font *f, CTFontRef ctfont, char16_t glyph_id,
                                             CGFontRef *cgout, CTFontRef *ctout, int *id_out) {
     CFAttributedStringRef astr = ToCFAStr(ctfont, glyph_id);
     CTLineRef line = CTLineCreateWithAttributedString(astr);
@@ -927,7 +927,7 @@ Font *GDIFontEngine::Open(const FontDesc &d) {
   return ret;
 }
 
-bool GDIFontEngine::GetSubstitutedFont(Font *f, HFONT hfont, unsigned short glyph_id, HDC hdc, HFONT *hfontout) {
+bool GDIFontEngine::GetSubstitutedFont(Font *f, HFONT hfont, char16_t glyph_id, HDC hdc, HFONT *hfontout) {
   *hfontout = 0;
   long processed = 0;
   WCHAR c = glyph_id;

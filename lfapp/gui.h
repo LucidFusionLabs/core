@@ -200,10 +200,10 @@ struct TextGUI : public KeyboardGUI {
     template <class X> int OverwriteTextAt(int o, const StringPieceT<X> &s, int a=0);
     template <class X> int InsertTextAt   (int o, const StringPieceT<X> &s, int a=0);
     template <class X> int UpdateText     (int o, const StringPieceT<X> &s, int a, int max_width=0, bool *append=0, int insert_mode=-1);
-    int InsertTextAt(int o, const string   &s, int a=0) { return InsertTextAt<char> (o, s, a); }
-    int InsertTextAt(int o, const String16 &s, int a=0) { return InsertTextAt<short>(o, s, a); }
-    int UpdateText(int o, const string   &s, int attr, int max_width=0, bool *append=0) { return UpdateText<char> (o, s, attr, max_width, append); }
-    int UpdateText(int o, const String16 &s, int attr, int max_width=0, bool *append=0) { return UpdateText<short>(o, s, attr, max_width, append); }
+    int InsertTextAt(int o, const string   &s, int a=0) { return InsertTextAt<char>    (o, s, a); }
+    int InsertTextAt(int o, const String16 &s, int a=0) { return InsertTextAt<char16_t>(o, s, a); }
+    int UpdateText(int o, const string   &s, int attr, int max_width=0, bool *append=0) { return UpdateText<char>    (o, s, attr, max_width, append); }
+    int UpdateText(int o, const String16 &s, int attr, int max_width=0, bool *append=0) { return UpdateText<char16_t>(o, s, attr, max_width, append); }
     void EncodeText(DrawableBoxArray *o, int x, const StringPiece   &s, int a=0) { Flow f=InitFlow(o); f.p.x=x; f.AppendText(s,a); }
     void EncodeText(DrawableBoxArray *o, int x, const String16Piece &s, int a=0) { Flow f=InitFlow(o); f.p.x=x; f.AppendText(s,a); }
     int Layout(int width=0, bool flush=0) { Layout(Box(0,0,width,0), flush); return Lines(); }

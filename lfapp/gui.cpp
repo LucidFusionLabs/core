@@ -325,10 +325,10 @@ template <class X> int TextGUI::Line::UpdateText(int x, const StringPieceT<X> &v
   return ret;
 }
 
-template int TextGUI::Line::UpdateText<char>   (int x, const StringPiece   &v, int attr, int max_width, bool *append, int);
-template int TextGUI::Line::UpdateText<short>  (int x, const String16Piece &v, int attr, int max_width, bool *append, int);
-template int TextGUI::Line::InsertTextAt<char> (int x, const StringPiece   &v, int attr);
-template int TextGUI::Line::InsertTextAt<short>(int x, const String16Piece &v, int attr);
+template int TextGUI::Line::UpdateText<char>      (int x, const StringPiece   &v, int attr, int max_width, bool *append, int);
+template int TextGUI::Line::UpdateText<char16_t>  (int x, const String16Piece &v, int attr, int max_width, bool *append, int);
+template int TextGUI::Line::InsertTextAt<char>    (int x, const StringPiece   &v, int attr);
+template int TextGUI::Line::InsertTextAt<char16_t>(int x, const String16Piece &v, int attr);
 
 void TextGUI::Line::Layout(Box win, bool flush) {
   if (data->box.w == win.w && !flush) return;

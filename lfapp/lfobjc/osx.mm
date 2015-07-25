@@ -195,7 +195,6 @@ static const char **osx_argv = 0;
         SetNativeWindow(screen);
         WindowClosed();
         [self stopThread];
-        [self autorelease];
     }
     - (void)setWaitForeverSocket: (int)fd {
         if (wait_forever_fh) FATALf("wait_forever_fh already set: %p", wait_forever_fh);
@@ -340,7 +339,7 @@ static const char **osx_argv = 0;
         NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, w, h)
                                              styleMask:NSClosableWindowMask|NSMiniaturizableWindowMask|NSResizableWindowMask|NSTitledWindowMask
                                              backing:NSBackingStoreBuffered defer:NO];
-        GameView *view = [[GameView alloc] initWithFrame:window.frame pixelFormat:GameView.defaultPixelFormat];
+        GameView *view = [[[GameView alloc] initWithFrame:window.frame pixelFormat:GameView.defaultPixelFormat] autorelease];
         [view setScreen:s];
         [view setWindow:window];
         [[view openGLContext] setView:view];

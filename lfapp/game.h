@@ -945,7 +945,7 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
     void Deactivate() { active=0; topbar.active=0; UpdateSettings(); tab3_player_name.active=false; Advertising::ShowAds(); }
     bool DecayBoxIfMatch(int l1, int l2) { if (l1 != l2) return 0; decay_box_line = l1; decay_box_left = 10; return 1; }
     void UpdateSettings() {
-        app->shell.Run(StrCat("name ", tab3_player_name.Text()));
+        app->shell.Run(StrCat("name ", String::ToUTF8(tab3_player_name.Text16())));
         app->shell.Run(StrCat("msens ", StrCat(tab3_sensitivity.scrolled * tab3_sensitivity.doc_height)));
     }
 
