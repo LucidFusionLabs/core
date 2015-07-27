@@ -430,12 +430,12 @@ Font *AtlasFontEngine::Open(const FontDesc &d) {
 Font *AtlasFontEngine::OpenAtlas(const FontDesc &d) {
     Texture tex;
     string fn = d.Filename();
-    Asset::LoadTexture(StrCat(app->assetdir, fn, ".0000.png"), &tex);
+    Asset::LoadTexture(StrCat(fn, ".0000.png"), &tex);
     if (!tex.ID) return ERRORv(nullptr, "load ", fn, ".0000.png failed");
 
     MatrixFile gm;
-    gm.ReadVersioned(VersionedFileName(app->assetdir.c_str(), fn.c_str(), "glyphs"), 0);
-    if (!gm.F) return ERRORv(nullptr, "load ", d.name, ".0000.glyphs.matrix failed");
+    unique_ptr<File> gmfile(Asset::OpenFile(MatrixFile::Filename(VersionedFileName(app->assetdir.c_str(), fn.c_str(), "glyphs"), "matrix", 0)));
+    if (gmfile && gm.Read(gmfile.get())) return ERRORv(nullptr, "load ", d.name, ".0000.glyphs.matrix failed");
 
     Resource *resource = new Resource();
     Font *ret = new Font(Singleton<AtlasFontEngine>::Get(), d, shared_ptr<FontEngine::Resource>(resource));
@@ -471,7 +471,7 @@ Font *AtlasFontEngine::OpenAtlas(const FontDesc &d) {
 
 void AtlasFontEngine::WriteAtlas(const string &name, Font *f) { WriteAtlas(name, f, &f->glyph->cache->tex); }
 void AtlasFontEngine::WriteAtlas(const string &name, Font *f, Texture *t) {
-    LocalFile lf(app->assetdir + name + "00.png", "w");
+    LocalFile lf(app->assetdir + name + ".0000.png", "w");
     PngWriter::Write(&lf, *t);
     INFO("wrote ", lf.Filename());
     WriteGlyphFile(name, f);
@@ -557,7 +557,7 @@ string FreeTypeFontEngine::DebugString(Font *f) const {
 
 bool FreeTypeFontEngine::Init(const FontDesc &d) {
     if (Contains(resource, d.name)) return true;
-    string content = LocalFile::FileContents(StrCat(app->assetdir, d.name));
+    string content = Asset::FileContents(d.name);
     if (Resource *r = OpenBuffer(d, &content)) {
         bool fixed_width = FT_IS_FIXED_WIDTH(r->face);
         resource[d.name] = shared_ptr<Resource>(r);
@@ -884,23 +884,23 @@ int GDIFontEngine::LoadGlyphs(Font *f, const Glyph *g, int n) {
 
 Font *GDIFontEngine::Open(const FontDesc &d) {
   bool inserted = 0;
-  auto ri = FindOrInsert(resource, d.name, &inserted);
+  auto ri = FindOrInsert(resource, StrCat(d.name,",",d.size,",",d.flag), &inserted);
   if (inserted) {
     ri->second = shared_ptr<Resource>(new Resource());
     if (!(ri->second->hfont = CreateFont(d.size, 0, 0, 0, (d.flag & FontDesc::Bold) ? FW_BOLD : FW_NORMAL, d.flag & FontDesc::Italic, 0, 0,
-                                         DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, ANTIALIASED_QUALITY, VARIABLE_PITCH,
+                                         DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, VARIABLE_PITCH,
                                          d.name.c_str()))) { resource.erase(d.name); return 0; }
   }
 
   TEXTMETRIC tm;
   HBITMAP hbitmap = 0;
   HGDIOBJ pf = SelectObject(hdc, ri->second->hfont), pbm=0;
-  GetTextMetrics(NULL, &tm);
+  GetTextMetrics(hdc, &tm);
 
   Font *ret = new Font(this, d, ri->second);
   ret->glyph = shared_ptr<GlyphMap>(new GlyphMap());
-  ret->ascender = tm.tmAscent;
-  ret->descender = tm.tmDescent;
+  ret->ascender = tm.tmAscent + tm.tmDescent;
+  ret->descender = 0;
   int count = InitGlyphs(ret, &ret->glyph->table[0], ret->glyph->table.size()); 
   ret->fix_metrics = true;
   ret->has_bg = true;
@@ -941,7 +941,7 @@ bool GDIFontEngine::GetSubstitutedFont(Font *f, HFONT hfont, char16_t glyph_id, 
 
 void GDIFontEngine::AssignGlyph(Glyph *g, const ::SIZE &bounds, const ::SIZE &advance) {
   g->bearing_x = 0;
-  g->bearing_y = 0;
+  g->bearing_y = bounds.cy;
   g->tex.width = bounds.cx;
   g->tex.height = bounds.cy;
   g->advance = bounds.cx;

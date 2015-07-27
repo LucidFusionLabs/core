@@ -686,6 +686,7 @@ struct Application : public ::LFApp, public Module {
   void LaunchNativeMenu(const string &title);
   void AddNativeMenu(const string &title, const vector<MenuItem>&items);
   int LoadModule(Module *M) { modules.push_back(M); return M->Init(); }
+  StringPiece LoadResource(int id);
   string BinDir() const { return LocalFile::JoinPath(startdir, progname.substr(0, DirNameLen(progname, true))); }
 
   int Create(int argc, const char **argv, const char *source_filename);

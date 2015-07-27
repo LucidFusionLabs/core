@@ -89,19 +89,8 @@ int NTService::Install(const char *name, const char *path) {
   SC_HANDLE schSCManager = OpenSCManager(0, 0, SC_MANAGER_CREATE_SERVICE);
   if (!schSCManager) { ERROR("OpenSCManager: ", GetLastError()); return -1; }
 
-  SC_HANDLE schService = CreateService(schSCManager,         /* SCManager database      */ 
-                                       name,			           /* name of service         */ 
-                                       name,                 /* service name to display */ 
-                                       SERVICE_ALL_ACCESS,   /* desired access          */ 
-                                       SERVICE_WIN32_SHARE_PROCESS|SERVICE_INTERACTIVE_PROCESS, 
-                                       SERVICE_DEMAND_START, /* start type              */ 
-                                       SERVICE_ERROR_NORMAL, /* error control type      */ 
-                                       path,			           /* service's binary        */ 
-                                       0,                    /* no load ordering group  */ 
-                                       0,                    /* no tag identifier       */ 
-                                       0,                    /* no dependencies         */ 
-                                       0,                    /* LocalSystem account     */ 
-                                       0);                   /* no password             */
+  SC_HANDLE schService = CreateService(schSCManager, name, name, SERVICE_ALL_ACCESS, SERVICE_WIN32_SHARE_PROCESS|SERVICE_INTERACTIVE_PROCESS, 
+                                       SERVICE_DEMAND_START, SERVICE_ERROR_NORMAL, path, 0, 0, 0, 0, 0);
   if (!schService) { ERROR("CreateService: ", GetLastError()); return -1; }
 
   INFO("service ", name, " installed - see Control Panel > Services");
@@ -170,10 +159,25 @@ int ProcessPipe::Open(const char **argv, const char *startdir) {
   return 0;
 }
 
-MultiProcessBuffer::MultiProcessBuffer(Connection *c, const InterProcessProtocol::ResourceHandle &h) : url(h.url), len(h.len) {}
-MultiProcessBuffer::~MultiProcessBuffer() {}
-bool MultiProcessBuffer::Open() { return 0; }
+static string MultiProcessHandleURL = "handle://";
+MultiProcessBuffer::MultiProcessBuffer(Connection *c, const InterProcessProtocol::ResourceHandle &h) : url(h.url), len(h.len) {
+  if (PrefixMatch(url, MultiProcessHandleURL)) impl = (void*)atol(url.c_str() + MultiProcessHandleURL.size());
+}
+MultiProcessBuffer::~MultiProcessBuffer() {
+  if (buf) UnmapViewOfFile(buf);
+  if (impl) CloseHandle(impl);
+}
 void MultiProcessBuffer::Close() {}
+bool MultiProcessBuffer::Open() {
+  bool read_only = url.size();
+  if (!len || (url.size() && !impl)) return ERRORv("mpb open url=", url, " len=", len);
+  if (url.empty()) {
+    if (!(impl = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, len, NULL))) return ERRORv(false, "CreateFileMapping");
+    url = MultiProcessHandleURL;
+  }
+  if (!(buf = (char*)MapViewOfFile((HANDLE*)impl, FILE_MAP_ALL_ACCESS, 0, 0, len))) return ERRORv(false, "MapViewOfFile ", impl);
+  return true;
+}
 
 #else /* WIN32 */
 
@@ -296,23 +300,59 @@ void ProcessAPIClient::LoadResource(const string &content, const string &fn, con
 void ProcessAPIServer::Start(const string &socket_name) {}
 void ProcessAPIServer::HandleMessagesLoop() {}
 #else
-static int ProcessAPIWrite(Connection *conn, const Serializable &req, int seq, int transfer_socket=-1) {
+
+#ifdef WIN32
+static int ProcessAPIWrite(Connection *conn, const Serializable &req, int seq, void *transfer_handle=0) {
+  if (transfer_handle) {
+    HANDLE rfh = 0;
+    // XXX DuplicateHandle(fh, &rfh);
+  }
+  return 0;
+}
+#else
+static int ProcessAPIWrite(Connection *conn, const Serializable &req, int seq, int transfer_handle=-1) {
   if (conn->state != Connection::Connected) return 0;
   string msg;
   req.ToString(&msg, seq);
-  if (transfer_socket >= 0) return conn->WriteFlush(msg.data(), msg.size(), transfer_socket) == msg.size() ? msg.size() : 0;
+  if (transfer_handle >= 0) return conn->WriteFlush(msg.data(), msg.size(), transfer_handle) == msg.size() ? msg.size() : 0;
   else                      return conn->WriteFlush(msg)                                     == msg.size() ? msg.size() : 0;
 }
+#endif
 
 void ProcessAPIClient::StartServer(const string &server_program) {
+#ifdef WIN32
+#if 1
+  Socket l = -1;
+  IPV4Endpoint listen;
+  CHECK_NE(-1, (l = SystemNetwork::Listen(Protocol::TCP, IPV4::Parse("127.0.0.1"), 0, 1, true)))
+  CHECK_EQ(0, SystemNetwork::GetSockName(l, &listen.addr, &listen.port));
+  string arg0 = server_program, arg1 = StrCat("tcp://", listen.ToString());
+#else
+  string named_pipe = StrCat("\\\\.\\pipe\\", server_program, ".", getpid()), arg0 = server_program, arg1 = StrCat("np://", named_pipe);
+  HANDLE hpipe = CreateNamedPipe(named_pipe.c_str(), PIPE_ACCESS_DUPLEX, PIPE_TYPE_MESSAGE | PIPE_READMODE_MESSAGE | PIPE_WAIT, 1, 65536, 65536, 0, NULL);
+  CHECK_NE(INVALID_HANDLE_VALUE, hpipe);
+  if (!ConnectNamedPipe(hpipe, NULL)) CHECK_EQ(ERROR_PIPE_CONNECTED, GetLastError());
+#endif
+  vector<char*> av = { &arg0[0], &arg1[0], 0 };
+  PROCESS_INFORMATION pi;
+  STARTUPINFO si;
+  memset(&si, 0, sizeof(si));
+  si.dwFlags = STARTF_USESHOWWINDOW | STARTF_USESTDHANDLES;
+  CHECK(CreateProcess(0, (LPSTR)av[0], 0, 0, 1, CREATE_NEW_PROCESS_GROUP, 0, 0, &si, &pi));
+#if 1
+  conn = new Connection(Singleton<UnixClient>::Get(), new ConnectionHandler(this));
+  CHECK_NE(-1, (conn->socket = SystemNetwork::Accept(l, 0, 0)));
+  SystemNetwork::CloseSocket(l);
+  SystemNetwork::SetSocketBlocking(conn->socket, 0);
+  conn->state = Connection::Connected;
+  conn->svc->conn[conn->socket] = conn;
+  app->network.active.Add(conn->socket, SocketSet::READABLE, &conn->self_reference);
+#endif
+#else
   Socket fd[2];
   CHECK(SystemNetwork::OpenSocketPair(fd));
   if (!LocalFile(server_program, "r").Opened()) return ERROR("ProcessAPIClient: \"", server_program, "\" doesnt exist");
   INFO("ProcessAPIClient starting server ", server_program);
-
-#ifdef WIN32
-  FATAL("not implemented")
-#else
   if ((pid = fork())) {
     CHECK_GT(pid, 0);
     close(fd[0]);
@@ -338,7 +378,7 @@ void ProcessAPIClient::LoadResource(const string &content, const string &fn, con
 
   reqmap[seq] = cb;
   int wrote = ProcessAPIWrite(conn, InterProcessProtocol::LoadResourceRequest(MultiProcessResource::File::Type, mpb.url, mpb.len),
-                              seq++, mpb.transfer_socket);
+                              seq++, mpb.transfer_handle);
   IPCTrace("ProcessAPIClient LoadResource fn='%s' url='%s' response=%zd\n", fn.c_str(), mpb.url.c_str(), wrote);
   if (!wrote) cb(MultiProcessResource::Texture());
 }
@@ -381,12 +421,20 @@ bool ProcessAPIClient::ConnectionHandler::ReadTexture(const InterProcessProtocol
 }
 
 void ProcessAPIServer::Start(const string &socket_name) {
-  static string fd_url = "fd://";
+  static string fd_url = "fd://", np_url = "np://", tcp_url = "tcp://";
   if (PrefixMatch(socket_name, fd_url)) {
     conn = new Connection(Singleton<UnixClient>::Get(), static_cast<Connection::Handler*>(nullptr));
     conn->state = Connection::Connected;
     conn->socket = atoi(socket_name.c_str() + fd_url.size());
     conn->control_messages = true;
+  } else if (PrefixMatch(socket_name, tcp_url)) {
+    conn = new Connection(Singleton<UnixClient>::Get(), static_cast<Connection::Handler*>(nullptr));
+    string host, port;
+    HTTP::ParseHost(socket_name.c_str() + tcp_url.size(), socket_name.c_str() + socket_name.size(), &host, &port);
+    CHECK_NE(-1, (conn->socket = SystemNetwork::OpenSocket(Protocol::TCP)));
+    CHECK_EQ(0, SystemNetwork::Connect(conn->socket, IPV4::Parse(host), atoi(port), 0));
+    SystemNetwork::SetSocketBlocking(conn->socket, 0);
+    conn->state = Connection::Connected;
   } else return;
   INFO("ProcessAPIServer opened ", socket_name);
 }
@@ -414,7 +462,7 @@ void ProcessAPIServer::HandleMessagesLoop() {
             res_mpb.Create(MultiProcessResource::Texture(*input_tex))) {
           IPCTrace("ProcessAPIServer LoadResourceResponse url='%s'\n", res_mpb.url.c_str());
           if (!ProcessAPIWrite(conn, InterProcessProtocol::LoadResourceResponse(MultiProcessResource::Texture::Type, res_mpb.url, res_mpb.len),
-                               hdr.seq, res_mpb.transfer_socket)) ERROR("ProcessAPIServer write");
+                               hdr.seq, res_mpb.transfer_handle)) ERROR("ProcessAPIServer write");
         } else {
           IPCTrace("ProcessAPIServer LoadResourceResponse failed\n");
           if (!ProcessAPIWrite(conn, InterProcessProtocol::LoadResourceResponse(0, "", 0), hdr.seq)) ERROR("ProcessAPIServer write");

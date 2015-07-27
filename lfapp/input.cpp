@@ -565,7 +565,7 @@ string Clipboard::Get() {
   if (!OpenClipboard(NULL)) return "";
   const HANDLE hg = GetClipboardData(CF_UNICODETEXT);
   if (!hg) { CloseClipboard(); return ""; }
-  ret = String::ToUTF8(reinterpret_cast<short*>(GlobalLock(hg)));
+  ret = String::ToUTF8(reinterpret_cast<char16_t*>(GlobalLock(hg)));
   GlobalUnlock(hg);
   CloseClipboard();
   return ret;
@@ -1397,7 +1397,7 @@ void Shell::Slider(const vector<string> &a) {
 }
 
 void Shell::Edit(const vector<string> &a) {
-  string s = LocalFile::FileContents(StrCat(app->assetdir, "lfapp_vertex.glsl"));
+  string s = Asset::FileContents("lfapp_vertex.glsl");
   new EditorDialog(screen, Fonts::Default(), new BufferFile(s));
 }
 

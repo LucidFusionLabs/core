@@ -908,7 +908,21 @@ int Assets::Init() {
     return 0;
 }
 
-string Asset::FileContents(const string &asset_fn) { return LocalFile::FileContents(StrCat(app->assetdir, asset_fn)); }
+unordered_map<string, StringPiece> Asset::cache;
+
+string Asset::FileContents(const string &asset_fn) {
+  auto i = cache.find(asset_fn);
+  if (i != cache.end()) {
+    INFO("return from cache len ", i->second.size());
+    return string(i->second.data(), i->second.size());
+  }
+  else                  return LocalFile::FileContents(StrCat(app->assetdir, asset_fn)); }
+
+File *Asset::OpenFile(const string &asset_fn) {
+  auto i = cache.find(asset_fn);
+  if (i != cache.end()) return new BufferFile(i->second);
+  else                  return new LocalFile(StrCat(app->assetdir, asset_fn), "r");
+}
 
 void Asset::Unload() {
     if (parent) parent->Unloaded(this);
@@ -921,7 +935,19 @@ void Asset::Load(void *h, VideoAssetLoader *l) {
     static int next_asset_type_id = 1, next_list_id = 1;
     if (!name.empty()) typeID = next_asset_type_id++;
     if (!geom_fn.empty()) geometry = Geometry::LoadOBJ(StrCat(app->assetdir, geom_fn));
-    if (!texture.empty() || h) LoadTexture(h, StrCat(app->assetdir, texture), &tex, l);
+    if (!texture.empty() || h) LoadTexture(h, texture, &tex, l);
+}
+
+void Asset::LoadTexture(void *h, const string &asset_fn, Texture *out, VideoAssetLoader *l) {
+  if (!FLAGS_lfapp_video) return;
+  auto i = cache.find(asset_fn);
+  INFO("search cache for ", asset_fn, " and found = ", i != cache.end());
+  if (i != cache.end()) return LoadTexture(i->second.data(), asset_fn.c_str(), i->second.size(), out);
+  if (!l) l = app->assets.default_video_loader;
+  void *handle = h ? h : l->LoadVideoFile(asset_fn[0] == '/' ? asset_fn : StrCat(app->assetdir, asset_fn).c_str());
+  if (!handle) { ERROR("load: ", asset_fn); return; }
+  l->LoadVideo(handle, out);
+  if (!h) l->UnloadVideoFile(handle);
 }
 
 void Asset::LoadTexture(const void *FromBuf, const char *filename, int size, Texture *out, int flag) {
@@ -932,15 +958,6 @@ void Asset::LoadTexture(const void *FromBuf, const char *filename, int size, Tex
     if (!handle) return;
     l->LoadVideo(handle, out, flag);
     l->UnloadVideoBuf(handle);
-}
-
-void Asset::LoadTexture(void *h, const string &fn, Texture *out, VideoAssetLoader *l) {
-    if (!FLAGS_lfapp_video) return;
-    if (!l) l = app->assets.default_video_loader;
-    void *handle = h ? h : l->LoadVideoFile(fn);
-    if (!handle) { ERROR("load: ", fn); return; }
-    l->LoadVideo(handle, out);
-    if (!h) l->UnloadVideoFile(handle);
 }
 
 void SoundAsset::Unload() {

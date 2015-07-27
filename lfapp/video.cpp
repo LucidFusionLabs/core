@@ -432,8 +432,8 @@ struct OpenGLES2 : public GraphicsDevice {
 
   void Init() {
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    vertex_shader = LocalFile::FileContents(StrCat(app->assetdir, "lfapp_vertex.glsl"));
-    pixel_shader  = LocalFile::FileContents(StrCat(app->assetdir, "lfapp_pixel.glsl"));
+    vertex_shader = Asset::FileContents("lfapp_vertex.glsl");
+    pixel_shader  = Asset::FileContents("lfapp_pixel.glsl");
     Shader::Create("lfapp",          vertex_shader, pixel_shader, ShaderDefines(1,0,1,0), &app->video.shader_default);
     Shader::Create("lfapp_cubemap",  vertex_shader, pixel_shader, ShaderDefines(1,0,0,1), &app->video.shader_cubemap);
     Shader::Create("lfapp_normals",  vertex_shader, pixel_shader, ShaderDefines(0,1,1,0), &app->video.shader_normals);
@@ -1485,6 +1485,7 @@ void Video::InitFonts() {
   } else if (FLAGS_font_engine == "gdi") {
     FLAGS_default_font = "Consolas";
     FLAGS_default_font_size = 16;
+    FLAGS_default_font_flag = FontDesc::Bold | FontDesc::Mono;
   } else if (FLAGS_font_engine == "freetype") {
     FLAGS_default_font = "VeraMoBd.ttf"; // "DejaVuSansMono-Bold.ttf";
     FLAGS_default_missing_glyph = 42;
@@ -1509,7 +1510,7 @@ void Video::InitFonts() {
   if (FLAGS_font_engine != "atlas" && FLAGS_font_engine != "freetype") {
     FLAGS_atlas_font_sizes = "32";
     string console_font = "VeraMoBd.ttf";
-    Singleton<AtlasFontEngine>::Get()->Init(FontDesc(console_font, "", 32));
+    Singleton<AtlasFontEngine>::Get()->Init(FontDesc(console_font, "", 32, Color::white, Color::clear, FLAGS_console_font_flag));
     FLAGS_console_font = StrCat("atlas://", console_font);
   }
 }

@@ -23,6 +23,7 @@ namespace LFL {
 DECLARE_bool(multitouch);
 DECLARE_bool(draw_grid);
 DECLARE_string(console_font);
+DECLARE_int(console_font_flag);
 
 struct GUI : public MouseController {
   Box box;

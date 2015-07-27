@@ -34,6 +34,7 @@ DEFINE_bool(multitouch, true, "Touchscreen controls");
 DEFINE_bool(multitouch, false, "Touchscreen controls");
 #endif
 DEFINE_string(console_font, "", "Console font, blank for default_font");
+DEFINE_int(console_font_flag, FontDesc::Mono, "Console font flag");
 DEFINE_bool(draw_grid, false, "Draw lines intersecting mouse x,y");
 
 Window::WindowMap Window::active;
@@ -85,7 +86,7 @@ void Window::ClearGesture() {
 }
 
 void Window::InitConsole() {
-  console = new Console(screen, Fonts::Get(A_or_B(FLAGS_console_font, FLAGS_default_font), "", 9));
+  console = new Console(screen, Fonts::Get(A_or_B(FLAGS_console_font, FLAGS_default_font), "", 9, Color::white, Color::clear, FLAGS_console_font_flag));
   console->ReadHistory(LFAppDownloadDir(), "console");
   console->Write(StrCat(screen->caption, " started"));
   console->Write("Try console commands 'cmds' and 'flags'");

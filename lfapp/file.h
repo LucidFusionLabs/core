@@ -77,17 +77,20 @@ struct File {
 };
 
 struct BufferFile : public File {
+    StringPiece ptr;
     string buf, fn;
     int rdo, wro;
-    BufferFile(const string &s, const char *FN=0) : buf(s), fn(FN?FN:""), rdo(0), wro(0) {}
+    bool owner;
+    BufferFile(const string      &s, const char *FN=0) : buf(s), fn(FN?FN:""), rdo(0), wro(0), owner(1) {}
+    BufferFile(const StringPiece &s, const char *FN=0) : ptr(s), fn(FN?FN:""), rdo(0), wro(0), owner(0) {}
     ~BufferFile() { Close(); }
 
     bool Opened() { return true; }
     bool Open(const string &path, const string &mode, bool pre_create=0) { return false; }
     const char *Filename() const { return fn.c_str(); }
-    int Size() { return buf.size(); }
+    int Size() { return owner ? buf.size() : ptr.len; }
     void Reset() { rdo=wro=0; nr.Reset(); }
-    void Close() { buf.clear(); Reset(); }
+    void Close() { ptr.assign(0,0); buf.clear(); Reset(); }
 
     long long Seek(long long pos, int whence);
     int Read(void *out, size_t size);
@@ -291,7 +294,8 @@ struct MatrixFile {
     { return WriteVersionedBinary(VersionedFileName(D, C, V), iter); }
 
     int Read(IterWordIter *word, int header=1);
-    int Read(const string &path, int header=1, int (*IsSpace)(int)=0);
+    int Read(File         *file, int header=1, int(*IsSpace)(int)=0);
+    int Read(const string &path, int header=1, int(*IsSpace)(int)=0);
     int ReadBinary(const string &path);
 
     int Write      (File         *file, const string &name);

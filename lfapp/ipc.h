@@ -38,7 +38,12 @@ struct ProcessPipe {
 struct MultiProcessBuffer {
     string url;
     char *buf=0;
-    int len=0, impl=-1, transfer_socket=-1;
+    int len=0;
+#ifdef WIN32
+    void *impl=0, *transfer_handle=0;
+#else
+    int impl = -1, transfer_handle = -1;
+#endif
     MultiProcessBuffer() {}
     MultiProcessBuffer(Connection *c, const InterProcessProtocol::ResourceHandle &h);
     virtual ~MultiProcessBuffer();
