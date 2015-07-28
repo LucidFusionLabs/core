@@ -38,36 +38,41 @@ struct ProcessPipe {
 struct MultiProcessBuffer {
     string url;
     char *buf=0;
-    int len=0;
+    int len=0, transfer_handle=-1;
 #ifdef WIN32
-    void *impl=0, *transfer_handle=0;
+    HANDLE impl = INVALID_HANDLE_VALUE, share_process = INVALID_HANDLE_VALUE;
 #else
-    int impl = -1, transfer_handle = -1;
+    int impl = -1; void *share_process = 0;
 #endif
-    MultiProcessBuffer() {}
+    MultiProcessBuffer(void *share_with) : share_process(share_with) {}
     MultiProcessBuffer(Connection *c, const InterProcessProtocol::ResourceHandle &h);
     virtual ~MultiProcessBuffer();
     virtual void Close();
     virtual bool Open();
-    bool Create(const Serializable &s) { 
-        len = Serializable::Header::size + s.Size();
-        if (Open()) { s.ToString(buf, len, 0); return true; }
-        return false;
-    }
+    bool Create(int s) { len=s; return Open(); }
+    bool Create(const Serializable &s) { bool ret; if ((ret = Create(Size(s)))) s.ToString(buf, len, 0); return ret; }
+    bool Copy(const Serializable &s) { bool ret; if ((ret = len >= Size(s))) s.ToString(buf, len, 0); return ret; }
+    static int Size(const Serializable &s) { return Serializable::Header::size + s.Size(); }
 };
 
 struct ProcessAPIClient {
     typedef function<void(const MultiProcessResource::Texture&)> LoadResourceCompleteCB;
+    struct LoadResourceQuery {
+        LoadResourceCompleteCB cb;
+        MultiProcessBuffer response;
+        LoadResourceQuery(void *share_with, const LoadResourceCompleteCB &c) : response(share_with), cb(c) {}
+    };
     struct ConnectionHandler : public Connection::Handler {
         ProcessAPIClient *parent;
         ConnectionHandler(ProcessAPIClient *P) : parent(P) {}
         int Read(Connection *c);
-        bool ReadTexture(const InterProcessProtocol::LoadResourceResponse&, const MultiProcessBuffer&, MultiProcessResource::Texture *out);
+        bool ReadTexture(const MultiProcessBuffer&, MultiProcessResource::Texture *out);
     };
     int pid=0;
     Connection *conn=0;
     unsigned short seq=0;
-    unordered_map<unsigned short, LoadResourceCompleteCB> reqmap;
+    void *server_process=0;
+    unordered_map<unsigned short, LoadResourceQuery*> reqmap;
 
     void StartServer(const string &server_program);
     void LoadResource(const string &content, const string &fn, const LoadResourceCompleteCB &cb);
@@ -75,9 +80,11 @@ struct ProcessAPIClient {
 
 struct ProcessAPIServer {
     Connection *conn=0;
+    unordered_map<unsigned short, Texture*> resmap;
+
     void Start(const string &socket_name);
     void HandleMessagesLoop();
-    Texture *LoadTexture(const InterProcessProtocol::LoadResourceRequest&, const MultiProcessBuffer&, Texture *orig, Texture *scaled);
+    Texture *LoadTexture(const InterProcessProtocol::LoadResourceRequest&, const MultiProcessBuffer&);
 };
 
 }; // namespace LFL

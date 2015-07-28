@@ -106,7 +106,7 @@ struct LocalFile : public File {
     LocalFile(const string &path, const string &mode, bool pre_create=0) : impl(0) { Open(path, mode, pre_create); }
     static int WhenceMap(int n);
 
-    static const char Slash;
+    static const char Slash, ExecutableSuffix[];
     static bool mkdir(const string &dir, int mode);
     static int IsDirectory(const string &localfilename);
     static string CurrentDirectory(int max_size=1024);

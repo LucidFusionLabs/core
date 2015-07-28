@@ -100,9 +100,11 @@ void Resolver::DefaultNameserver(vector<IPV4::Addr> *nameservers) {
     return;
 #endif
 #ifdef _WIN32
-    IP4_ARRAY IP; DWORD size=sizeof(IP4_ARRAY);
-    if (DnsQueryConfig(DnsConfigDnsServerList, 0, 0, 0, &IP, &size) || !IP.AddrCount) return;
-    nameservers->push_back(IP.AddrArray[0]);
+    char buf[512];
+    DWORD size=sizeof(buf);
+    IP4_ARRAY *IP = (IP4_ARRAY*)buf;
+    if (DnsQueryConfig(DnsConfigDnsServerList, 0, 0, 0, IP, &size) || !IP->AddrCount) return ERROR("no default nameserver ", GetLastError());
+    nameservers->push_back(IP->AddrArray[0]);
 #else
     LocalFile file("/etc/resolv.conf", "r");
     if (!file.Opened()) return;

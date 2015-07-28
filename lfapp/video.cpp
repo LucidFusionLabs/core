@@ -29,6 +29,9 @@
 #if defined(LFL_GLEW) && !defined(LFL_HEADLESS)
 #define glewGetContext() ((GLEWContext*)screen->glew_context)
 #include <GL/glew.h>
+#ifdef WIN32
+#include <GL/wglew.h>
+#endif
 #endif
 
 #define LFL_GLSL_SHADERS
@@ -1434,9 +1437,17 @@ int Video::Init() {
   return 0;
 }
 
+void Video::MakeGLContextCurrent(void *gl_context) {
+#if defined(LFL_WINVIDEO)
+  wglMakeCurrent((HDC)screen->surface, (HGLRC)gl_context);
+#endif
+}
+
 void *Video::CreateGLContext(Window *W) {
 #if defined(LFL_OSXVIDEO)
   return OSXCreateGLContext(screen->id);
+#elif defined(LFL_WINVIDEO)
+  return wglCreateContextAttribsARB((HDC)screen->surface, (HGLRC)screen->gl, 0);
 #else
   return 0;
 #endif
@@ -1484,8 +1495,8 @@ void Video::InitFonts() {
 #endif
   } else if (FLAGS_font_engine == "gdi") {
     FLAGS_default_font = "Consolas";
-    FLAGS_default_font_size = 16;
-    FLAGS_default_font_flag = FontDesc::Bold | FontDesc::Mono;
+    FLAGS_default_font_size = 17;
+    // FLAGS_default_font_flag = FontDesc::Bold | FontDesc::Mono;
   } else if (FLAGS_font_engine == "freetype") {
     FLAGS_default_font = "VeraMoBd.ttf"; // "DejaVuSansMono-Bold.ttf";
     FLAGS_default_missing_glyph = 42;

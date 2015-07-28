@@ -652,31 +652,49 @@ struct SMTP {
 struct InterProcessProtocol {
   struct Header : public Serializable::Header {};
   struct ResourceHandle {
-    unsigned short type=0;
-    int len=0;
-    string url;
+    unsigned short type=0; int len=0; string url;
     ResourceHandle() {}
     ResourceHandle(unsigned short T, int L, const string &U) : type(T), len(L), url(U) {}
   };
   struct LoadResourceRequest : public Serializable {
     static const int Type = 1;
     ResourceHandle mpb;
-    LoadResourceRequest(int t=0, const string &u=string(), int l=0) : Serializable(Type), mpb(t, l, u) {}
+    LoadResourceRequest(unsigned short t=0, const string &u=string(), int l=0) : Serializable(Type), mpb(t, l, u) {}
 
     int HeaderSize() const { return 8; }
     int Size() const { return HeaderSize() + mpb.url.size(); }
     void Out(Serializable::Stream *o) const { o->Htons(mpb.type); o->Htons((unsigned short)mpb.url.size()); o->Htonl(mpb.len); o->String(mpb.url); }
-    int   In(const Serializable::Stream *i) { unsigned short l; i->Ntohs(&mpb.type); i->Ntohs(&l); i->Ntohl(&mpb.len); mpb.url.assign(i->Get(l), l); return 0; }
+    int   In(const Serializable::Stream *i) { unsigned short l; i->Ntohs(&mpb.type); i->Ntohs(&l); i->Ntohl(&mpb.len); mpb.url.assign(i->Get(l), l); return i->Result(); }
   };
   struct LoadResourceResponse : public Serializable {
     static const int Type = 2;
+    unsigned char success;
+    LoadResourceResponse(bool s=0) : Serializable(Type), success(s) {}
+
+    int HeaderSize() const { return 1; }
+    int Size() const { return HeaderSize(); }
+    void Out(Serializable::Stream *o) const { o->Write8(success); }
+    int   In(const Serializable::Stream *i) { i->Read8(&success); return i->Result(); }
+  };
+  struct AllocateResponseRequest : public Serializable { 
+    static const int Type = 3;
+    int bytes; unsigned short type;
+    AllocateResponseRequest(unsigned short t=0, int b=0) : Serializable(Type), bytes(b), type(t) {}
+
+    int HeaderSize() const { return 4; }
+    int Size() const { return HeaderSize(); }
+    void Out(Serializable::Stream *o) const { o->Htonl( bytes); }
+    int   In(const Serializable::Stream *i) { i->Ntohl(&bytes); return i->Result(); }
+  };
+  struct AllocateResponseResponse : public Serializable {
+    static const int Type = 4;
     ResourceHandle mpb;
-    LoadResourceResponse(int t=0, const string &u=string(), int l=0) : Serializable(Type), mpb(t, l, u) {}
+    AllocateResponseResponse(unsigned short t=0, const string &u=string(), int l=0) : Serializable(Type), mpb(t, l, u) {}
 
     int HeaderSize() const { return 8; }
     int Size() const { return HeaderSize() + mpb.url.size(); }
     void Out(Serializable::Stream *o) const { o->Htons(mpb.type); o->Htons((unsigned short)mpb.url.size()); o->Htonl(mpb.len); o->String(mpb.url); }
-    int   In(const Serializable::Stream *i) { unsigned short l; i->Ntohs(&mpb.type); i->Ntohs(&l); i->Ntohl(&mpb.len); mpb.url.assign(i->Get(l), l); return 0; }
+    int   In(const Serializable::Stream *i) { unsigned short l; i->Ntohs(&mpb.type); i->Ntohs(&l); i->Ntohl(&mpb.len); mpb.url.assign(i->Get(l), l); return i->Result(); }
   };
 };
 
@@ -697,7 +715,7 @@ struct MultiProcessResource {
     int In(const Serializable::Stream *i) {
       /**/      i->Ntohl(&buf.len); /**/         i->Ntohl(&name.len); /**/         i->Ntohl(&type.len);
       buf.buf = i->Get  ( buf.len+1); name.buf = i->Get  ( name.len+1); type.buf = i->Get  ( type.len+1);
-      return 0;
+      return i->Result();
     }
   };
   struct Texture : public Serializable {
@@ -719,7 +737,7 @@ struct MultiProcessResource {
     int In(const Serializable::Stream *i) {
       i->Ntohl(&width); i->Ntohl(&height); i->Ntohl(&pf); i->Ntohl(&linesize);
       buf.buf = i->Get((buf.len = linesize * height));
-      return 0;
+      return i->Result();
     }
   };
   static bool Read(const MultiProcessBuffer &mpb, int type, Serializable *out);

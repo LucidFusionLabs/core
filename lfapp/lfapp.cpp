@@ -964,6 +964,14 @@ StringPiece Application::LoadResource(int id) {
 #endif
 }
 
+string Application::BinDir() const {
+#ifdef WIN32
+  return progname.substr(0, DirNameLen(progname, true));
+#else
+  return LocalFile::JoinPath(startdir, progname.substr(0, DirNameLen(progname, true)));
+#endif
+}
+
 int Application::Create(int argc, const char **argv, const char *source_filename) {
 #ifdef LFL_GLOG
   google::InstallFailureSignalHandler();

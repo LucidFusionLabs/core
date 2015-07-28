@@ -161,11 +161,11 @@ int ProcessPipe::Open(const char **argv, const char *startdir) {
 
 static string MultiProcessHandleURL = "handle://";
 MultiProcessBuffer::MultiProcessBuffer(Connection *c, const InterProcessProtocol::ResourceHandle &h) : url(h.url), len(h.len) {
-  if (PrefixMatch(url, MultiProcessHandleURL)) impl = (void*)atol(url.c_str() + MultiProcessHandleURL.size());
+  if (PrefixMatch(url, MultiProcessHandleURL)) impl = (void*)strtoul(url.c_str() + MultiProcessHandleURL.size(), 0, 16);
 }
 MultiProcessBuffer::~MultiProcessBuffer() {
   if (buf) UnmapViewOfFile(buf);
-  if (impl) CloseHandle(impl);
+  if (impl != INVALID_HANDLE_VALUE) CloseHandle(impl);
 }
 void MultiProcessBuffer::Close() {}
 bool MultiProcessBuffer::Open() {
@@ -173,9 +173,12 @@ bool MultiProcessBuffer::Open() {
   if (!len || (url.size() && !impl)) return ERRORv("mpb open url=", url, " len=", len);
   if (url.empty()) {
     if (!(impl = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, len, NULL))) return ERRORv(false, "CreateFileMapping");
-    url = MultiProcessHandleURL;
+    CHECK(share_process);
+    HANDLE rfh = INVALID_HANDLE_VALUE;
+    if (FAILED(DuplicateHandle(GetCurrentProcess(), impl, (HANDLE)share_process, &rfh, 0, FALSE, DUPLICATE_SAME_ACCESS))) return ERRORv(false, "DuplicateHandle");
+    url = StringPrintf("%s%p", MultiProcessHandleURL.c_str(), rfh);
   }
-  if (!(buf = (char*)MapViewOfFile((HANDLE*)impl, FILE_MAP_ALL_ACCESS, 0, 0, len))) return ERRORv(false, "MapViewOfFile ", impl);
+  if (!(buf = (char*)MapViewOfFile(impl, FILE_MAP_ALL_ACCESS, 0, 0, len))) return ERRORv(false, "MapViewOfFile ", impl);
   return true;
 }
 
@@ -243,7 +246,7 @@ MultiProcessBuffer::~MultiProcessBuffer() {
 }
 void MultiProcessBuffer::Close() {}
 bool MultiProcessBuffer::Open() {
-  bool read_only = url.size();
+  bool read_only = 0 && url.size();
   if (!len || (url.size() && impl < 0)) return ERRORv("mpb open url=", url, " len=", len, " fd=", impl);
   if (url.empty()) {
     CHECK_EQ(-1, impl);
@@ -257,7 +260,7 @@ bool MultiProcessBuffer::Open() {
     if (unlink(path.c_str())) return ERRORv(false, "unlink ", path);
     if (ftruncate(impl, len)) return ERRORv(false, "ftruncate ", path, " ", len);
     url = MultiProcessBufferURL;
-    transfer_socket = impl;
+    transfer_handle = impl;
   }
   if ((buf = (char*)mmap(0, len, PROT_READ | (read_only ? 0 : PROT_WRITE), MAP_SHARED, impl, 0)) == MAP_FAILED) return ERRORv(false, "mmap ", impl); 
   return true;
@@ -288,6 +291,7 @@ bool MultiProcessBuffer::Open() {
 
 #endif /* WIN32 */
 
+#define LFL_IPC_DEBUG
 #ifdef LFL_IPC_DEBUG
 #define IPCTrace(...) printf(__VA_ARGS__)
 #else
@@ -301,23 +305,13 @@ void ProcessAPIServer::Start(const string &socket_name) {}
 void ProcessAPIServer::HandleMessagesLoop() {}
 #else
 
-#ifdef WIN32
-static int ProcessAPIWrite(Connection *conn, const Serializable &req, int seq, void *transfer_handle=0) {
-  if (transfer_handle) {
-    HANDLE rfh = 0;
-    // XXX DuplicateHandle(fh, &rfh);
-  }
-  return 0;
-}
-#else
-static int ProcessAPIWrite(Connection *conn, const Serializable &req, int seq, int transfer_handle=-1) {
+static bool ProcessAPIWrite(Connection *conn, const Serializable &req, int seq, int transfer_handle=-1) {
   if (conn->state != Connection::Connected) return 0;
   string msg;
   req.ToString(&msg, seq);
   if (transfer_handle >= 0) return conn->WriteFlush(msg.data(), msg.size(), transfer_handle) == msg.size() ? msg.size() : 0;
   else                      return conn->WriteFlush(msg)                                     == msg.size() ? msg.size() : 0;
 }
-#endif
 
 void ProcessAPIClient::StartServer(const string &server_program) {
 #ifdef WIN32
@@ -326,19 +320,21 @@ void ProcessAPIClient::StartServer(const string &server_program) {
   IPV4Endpoint listen;
   CHECK_NE(-1, (l = SystemNetwork::Listen(Protocol::TCP, IPV4::Parse("127.0.0.1"), 0, 1, true)))
   CHECK_EQ(0, SystemNetwork::GetSockName(l, &listen.addr, &listen.port));
-  string arg0 = server_program, arg1 = StrCat("tcp://", listen.ToString());
+  string arg0 = server_program, arg1 = StrCat("tcp://", listen.name());
 #else
   string named_pipe = StrCat("\\\\.\\pipe\\", server_program, ".", getpid()), arg0 = server_program, arg1 = StrCat("np://", named_pipe);
   HANDLE hpipe = CreateNamedPipe(named_pipe.c_str(), PIPE_ACCESS_DUPLEX, PIPE_TYPE_MESSAGE | PIPE_READMODE_MESSAGE | PIPE_WAIT, 1, 65536, 65536, 0, NULL);
   CHECK_NE(INVALID_HANDLE_VALUE, hpipe);
   if (!ConnectNamedPipe(hpipe, NULL)) CHECK_EQ(ERROR_PIPE_CONNECTED, GetLastError());
 #endif
-  vector<char*> av = { &arg0[0], &arg1[0], 0 };
+  string av = StrCat(arg0, " ", arg1);
   PROCESS_INFORMATION pi;
   STARTUPINFO si;
   memset(&si, 0, sizeof(si));
   si.dwFlags = STARTF_USESHOWWINDOW | STARTF_USESTDHANDLES;
-  CHECK(CreateProcess(0, (LPSTR)av[0], 0, 0, 1, CREATE_NEW_PROCESS_GROUP, 0, 0, &si, &pi));
+  if (!CreateProcess(0, &av[0], 0, 0, 1, CREATE_NEW_PROCESS_GROUP, 0, 0, &si, &pi)) FATAL("CreateProcess", av, ": ", GetLastError());
+  server_process = pi.hProcess;
+  CloseHandle(pi.hThread);
 #if 1
   conn = new Connection(Singleton<UnixClient>::Get(), new ConnectionHandler(this));
   CHECK_NE(-1, (conn->socket = SystemNetwork::Accept(l, 0, 0)));
@@ -373,14 +369,15 @@ void ProcessAPIClient::StartServer(const string &server_program) {
 }
 
 void ProcessAPIClient::LoadResource(const string &content, const string &fn, const ProcessAPIClient::LoadResourceCompleteCB &cb) { 
-  MultiProcessBuffer mpb;
+  MultiProcessBuffer mpb(server_process);
   if (!conn || !mpb.Create(MultiProcessResource::File(content, fn, ""))) return cb(MultiProcessResource::Texture());
 
-  reqmap[seq] = cb;
-  int wrote = ProcessAPIWrite(conn, InterProcessProtocol::LoadResourceRequest(MultiProcessResource::File::Type, mpb.url, mpb.len),
-                              seq++, mpb.transfer_handle);
-  IPCTrace("ProcessAPIClient LoadResource fn='%s' url='%s' response=%zd\n", fn.c_str(), mpb.url.c_str(), wrote);
-  if (!wrote) cb(MultiProcessResource::Texture());
+  bool ok = ProcessAPIWrite(conn, InterProcessProtocol::LoadResourceRequest(MultiProcessResource::File::Type, mpb.url, mpb.len),
+                            seq++, mpb.transfer_handle);
+  IPCTrace("ProcessAPIClient LoadResource fn='%s' url='%s' sent=%d\n", fn.c_str(), mpb.url.c_str(), ok);
+
+  if (ok) reqmap[seq-1] = new LoadResourceQuery(server_process, cb);
+  else cb(MultiProcessResource::Texture());
 }
 
 int ProcessAPIClient::ConnectionHandler::Read(Connection *c) {
@@ -390,34 +387,45 @@ int ProcessAPIClient::ConnectionHandler::Read(Connection *c) {
     Serializable::Header hdr;
     hdr.In(&in);
 
+    bool erase = true;
     auto reply = parent->reqmap.find(hdr.seq);
-    CHECK_NE(parent->reqmap.end(), reply);
+    if (reply == parent->reqmap.end()) { ERROR("unknown seq ", hdr.seq); continue; }
 
     if (hdr.id == InterProcessProtocol::LoadResourceResponse::Type) {
       InterProcessProtocol::LoadResourceResponse res;
       if (res.Read(&in)) break;
-      IPCTrace("ProcessAPIClient LoadResourceResponse url='%s'\n", res.mpb.url.c_str());
+      MultiProcessBuffer *res_mpb = &reply->second->response;
+      IPCTrace("ProcessAPIClient LoadResourceResponse url='%s'\n", res_mpb->url.c_str());
 
       MultiProcessResource::Texture tex;
-      MultiProcessBuffer res_mpb(c, res.mpb);
-      if (res.mpb.type == MultiProcessResource::Texture::Type && res_mpb.Open() && ReadTexture(res, res_mpb, &tex)) reply->second(tex);
-      else { ERROR("ProcessAPIClient res_mpb.Open: ", res.mpb.url); reply->second(MultiProcessResource::Texture()); }
-      res_mpb.Close();
+      if (res_mpb->buf && ReadTexture(*res_mpb, &tex)) reply->second->cb(tex);
+      else { ERROR("ProcessAPIClient res_mpb.Open: ", res_mpb->url); reply->second->cb(MultiProcessResource::Texture()); }
+      res_mpb->Close();
+
+    } else if (hdr.id == InterProcessProtocol::AllocateResponseRequest::Type) {
+      InterProcessProtocol::AllocateResponseRequest req;
+      if (req.Read(&in)) break;
+      IPCTrace("ProcessAPIClient AllocateResponseRequest bytes=%d\n", req.bytes);
+
+      MultiProcessBuffer *res_mpb = &reply->second->response;
+      if (!res_mpb->Create(req.bytes)) { ERROR("ProcessAPIClient ResposneMPB Create"); break; }
+      if (!ProcessAPIWrite(c, InterProcessProtocol::AllocateResponseResponse(req.type, res_mpb->url, res_mpb->len),
+                           hdr.seq, res_mpb->transfer_handle)) { ERROR("ProcessAPIClient ResponseMPB Write"); break; }
+      erase = false;
 
     } else FATAL("ProcessAPIClient unknown hdr id ", hdr.id);
 
-    parent->reqmap.erase(hdr.seq);
+    if (erase) { delete reply->second; parent->reqmap.erase(hdr.seq); }
     c->ReadFlush(in.offset);
     IPCTrace("ProcessAPIClient flushed %d bytes\n", in.offset);
   }
   return 0;
 }
 
-bool ProcessAPIClient::ConnectionHandler::ReadTexture(const InterProcessProtocol::LoadResourceResponse &res, const MultiProcessBuffer &res_mpb,
-                                                      MultiProcessResource::Texture *tex) {
-  if (!MultiProcessResource::Read(res_mpb, res.mpb.type, tex)) { ERROR("mpb read"); return false; }
-  IPCTrace("ProcessAPIClient Texture width=%d height=%d\n", tex->width, tex->height);
-  return true;
+bool ProcessAPIClient::ConnectionHandler::ReadTexture(const MultiProcessBuffer &res_mpb, MultiProcessResource::Texture *tex) {
+  bool ret = MultiProcessResource::Read(res_mpb, MultiProcessResource::Texture::Type, tex);
+  IPCTrace("ProcessAPIClient Texture width=%d height=%d ret=%d\n", tex->width, tex->height, ret);
+  return ret;
 }
 
 void ProcessAPIServer::Start(const string &socket_name) {
@@ -455,18 +463,34 @@ void ProcessAPIServer::HandleMessagesLoop() {
         if (req.Read(&in)) break;
         IPCTrace("ProcessAPIServer LoadResourceRequest url='%s'\n", req.mpb.url.c_str());
 
-        Texture orig_tex, scaled_tex, *input_tex = 0;
-        MultiProcessBuffer req_mpb(conn, req.mpb), res_mpb;
-        if (req.mpb.type == MultiProcessResource::File::Type && req_mpb.Open() &&
-            (input_tex = LoadTexture(req, req_mpb, &orig_tex, &scaled_tex)) &&
-            res_mpb.Create(MultiProcessResource::Texture(*input_tex))) {
-          IPCTrace("ProcessAPIServer LoadResourceResponse url='%s'\n", res_mpb.url.c_str());
-          if (!ProcessAPIWrite(conn, InterProcessProtocol::LoadResourceResponse(MultiProcessResource::Texture::Type, res_mpb.url, res_mpb.len),
-                               hdr.seq, res_mpb.transfer_handle)) ERROR("ProcessAPIServer write");
+        Texture *tex=0;
+        MultiProcessBuffer req_mpb(conn, req.mpb);
+        if (req.mpb.type == MultiProcessResource::File::Type && req_mpb.Open() && (tex = LoadTexture(req, req_mpb))) {
+          IPCTrace("ProcessAPIServer AllocateResponseBufferRequest %d\n", tex->BufferSize());
+          if (!ProcessAPIWrite(conn, InterProcessProtocol::AllocateResponseRequest
+                               (MultiProcessResource::Texture::Type, MultiProcessBuffer::Size(MultiProcessResource::Texture(*tex))),
+                               hdr.seq)) ERROR("ProcessAPIServer write");
+          else swap(resmap[hdr.seq], tex);
         } else {
           IPCTrace("ProcessAPIServer LoadResourceResponse failed\n");
-          if (!ProcessAPIWrite(conn, InterProcessProtocol::LoadResourceResponse(0, "", 0), hdr.seq)) ERROR("ProcessAPIServer write");
+          if (!ProcessAPIWrite(conn, InterProcessProtocol::LoadResourceResponse(0), hdr.seq)) ERROR("ProcessAPIServer write");
         }
+        delete tex;
+        req_mpb.Close();
+
+      } else if (hdr.id == InterProcessProtocol::AllocateResponseResponse::Type) {
+        InterProcessProtocol::AllocateResponseResponse res;
+        if (res.Read(&in)) break;
+        IPCTrace("ProcessAPIServer AlocateResponseResponse url='%s'\n", res.mpb.url.c_str());
+
+        MultiProcessBuffer req_mpb(conn, res.mpb);
+        auto reply = resmap.find(hdr.seq);
+        if (reply != resmap.end()) {
+          bool success = req_mpb.Open() && req_mpb.Copy(MultiProcessResource::Texture(*reply->second));
+          delete reply->second;
+          resmap.erase(hdr.seq);
+          if (!ProcessAPIWrite(conn, InterProcessProtocol::LoadResourceResponse(success), hdr.seq)) ERROR("ProcessAPIServer write");
+        } else ERROR("missing seq ", hdr.seq);
         req_mpb.Close();
 
       } else FATAL("unknown id ", hdr.id);
@@ -477,26 +501,28 @@ void ProcessAPIServer::HandleMessagesLoop() {
   }
 }
 
-Texture *ProcessAPIServer::LoadTexture(const InterProcessProtocol::LoadResourceRequest &req, const MultiProcessBuffer &req_mpb,
-                                       Texture *orig_tex, Texture *scaled_tex) {
+Texture *ProcessAPIServer::LoadTexture(const InterProcessProtocol::LoadResourceRequest &req, const MultiProcessBuffer &req_mpb) {
   MultiProcessResource::File file;
   if (!MultiProcessResource::Read(req_mpb, req.mpb.type, &file)) { ERROR("mpb read"); return 0; }
   IPCTrace("ProcessAPIServer File fn='%s' %p %d\n", file.name.buf, file.buf.buf, file.buf.len);
 
-  Asset::LoadTexture(file.buf.data(), file.name.data(), file.buf.size(), orig_tex, 0);
-  Texture *tex = orig_tex;
+  Texture *tex = new Texture();
+  Asset::LoadTexture(file.buf.data(), file.name.data(), file.buf.size(), tex, 0);
 
   const int max_image_size = 1000000;
-  if (orig_tex->BufferSize() >= max_image_size) {
-    tex = scaled_tex;
+  if (tex->BufferSize() >= max_image_size) {
+    unique_ptr<Texture> orig_tex(tex);
+    tex = new Texture();
     float scale_factor = sqrt((float)max_image_size/orig_tex->BufferSize());
-    scaled_tex->Resize(orig_tex->width*scale_factor, orig_tex->height*scale_factor, Pixel::RGB24, Texture::Flag::CreateBuf);
+    tex->Resize(orig_tex->width*scale_factor, orig_tex->height*scale_factor, Pixel::RGB24, Texture::Flag::CreateBuf);
 
     VideoResampler resampler;
-    resampler.Open(orig_tex->width, orig_tex->height, orig_tex->pf, scaled_tex->width, scaled_tex->height, scaled_tex->pf);
-    resampler.Resample(orig_tex->buf, orig_tex->LineSize(), scaled_tex->buf, scaled_tex->LineSize());
+    resampler.Open(orig_tex->width, orig_tex->height, orig_tex->pf, tex->width, tex->height, tex->pf);
+    resampler.Resample(orig_tex->buf, orig_tex->LineSize(), tex->buf, tex->LineSize());
   }
-  return tex->buf ? tex : 0;
+
+  if (!tex->buf || !tex->width || !tex->height) { delete tex; return 0; }
+  return tex;
 }
 #endif // LFL_MOBILE
 

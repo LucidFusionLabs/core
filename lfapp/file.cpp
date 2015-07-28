@@ -166,6 +166,7 @@ int BufferFile::Write(const void *In, size_t size) {
 
 #ifdef WIN32
 const char LocalFile::Slash = '\\';
+const char LocalFile::ExecutableSuffix[] = ".exe";
 int LocalFile::IsDirectory(const string &filename) {
     if (filename.empty()) return true;
     DWORD attr = ::GetFileAttributes(filename.c_str());
@@ -174,6 +175,7 @@ int LocalFile::IsDirectory(const string &filename) {
 }
 #else // WIN32
 const char LocalFile::Slash = '/';
+const char LocalFile::ExecutableSuffix[] = "";
 int LocalFile::IsDirectory(const string &filename) {
     if (filename.empty()) return true;
 #ifdef LFL_ANDROID
