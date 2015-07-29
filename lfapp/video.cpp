@@ -1437,17 +1437,21 @@ int Video::Init() {
   return 0;
 }
 
-void Video::MakeGLContextCurrent(void *gl_context) {
+
+void *Video::BeginGLContextCreate(Window *W) {
 #if defined(LFL_WINVIDEO)
-  wglMakeCurrent((HDC)screen->surface, (HGLRC)gl_context);
+  return wglCreateContextAttribsARB((HDC)W->surface, (HGLRC)W->gl, 0);
+#else
+  return 0;
 #endif
 }
 
-void *Video::CreateGLContext(Window *W) {
+void *Video::CompleteGLContextCreate(Window *W, void *gl_context) {
 #if defined(LFL_OSXVIDEO)
-  return OSXCreateGLContext(screen->id);
+  return OSXCreateGLContext(W->id);
 #elif defined(LFL_WINVIDEO)
-  return wglCreateContextAttribsARB((HDC)screen->surface, (HGLRC)screen->gl, 0);
+  wglMakeCurrent((HDC)W->surface, (HGLRC)gl_context);
+  return gl_context;
 #else
   return 0;
 #endif

@@ -381,7 +381,7 @@ TEST(GUITest, Editor) {
     Font *font = Fonts::Fake();
     int fh = font->Height(), w = font->fixed_width;
     EXPECT_NE(0, fh); EXPECT_NE(0, w);
-    EditorTest e(screen, font, new BufferFile("1\n2 2 2\n3\n4 4\n5\n"), true);
+    EditorTest e(screen, font, new BufferFile(string("1\n2 2 2\n3\n4 4\n5\n")), true);
     LinesFrameBufferTest *test_fb = &e.line_fb_test;
     Box b(w, 3*fh);
     e.Draw(b, TextArea::DrawFlag::CheckResized);

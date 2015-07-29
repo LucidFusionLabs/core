@@ -291,7 +291,6 @@ bool MultiProcessBuffer::Open() {
 
 #endif /* WIN32 */
 
-#define LFL_IPC_DEBUG
 #ifdef LFL_IPC_DEBUG
 #define IPCTrace(...) printf(__VA_ARGS__)
 #else
@@ -304,6 +303,22 @@ void ProcessAPIClient::LoadResource(const string &content, const string &fn, con
 void ProcessAPIServer::Start(const string &socket_name) {}
 void ProcessAPIServer::HandleMessagesLoop() {}
 #else
+
+#ifdef WIN32
+static bool EqualLuid(const LUID &l, const LUID &r) { return l.HighPart == r.HighPart && l.LowPart == r.LowPart; }
+static HANDLE MakeUninheritableHandle(HANDLE in) {
+  HANDLE uninheritable_handle = INVALID_HANDLE_VALUE;
+  CHECK(DuplicateHandle(GetCurrentProcess(), in, GetCurrentProcess(), &uninheritable_handle, TOKEN_ALL_ACCESS, 0, 0));
+  CloseHandle(in);
+  return uninheritable_handle;
+}
+static HANDLE MakeImpersonationToken(HANDLE in) {
+  HANDLE impersonation_token = INVALID_HANDLE_VALUE;
+  CHECK(DuplicateToken(in, SecurityImpersonation, &impersonation_token));
+  CloseHandle(in);
+  return impersonation_token;
+}
+#endif
 
 static bool ProcessAPIWrite(Connection *conn, const Serializable &req, int seq, int transfer_handle=-1) {
   if (conn->state != Connection::Connected) return 0;
@@ -327,14 +342,59 @@ void ProcessAPIClient::StartServer(const string &server_program) {
   CHECK_NE(INVALID_HANDLE_VALUE, hpipe);
   if (!ConnectNamedPipe(hpipe, NULL)) CHECK_EQ(ERROR_PIPE_CONNECTED, GetLastError());
 #endif
+  LUID change_notify_name_luid;
+  BYTE WinWorldSid_buf[SECURITY_MAX_SID_SIZE];
+  SID *WinWorldSID = reinterpret_cast<SID*>(WinWorldSid_buf);
+  DWORD user_tokeninfo_size = sizeof(TOKEN_USER) + SECURITY_MAX_SID_SIZE, group_tokeninfo_size, priv_tokeninfo_size = 0, WinWorldSid_size = sizeof(WinWorldSid_buf);
+  HANDLE process_token = INVALID_HANDLE_VALUE, restricted_token = INVALID_HANDLE_VALUE, impersonation_token = INVALID_HANDLE_VALUE;
+  CHECK(OpenProcessToken(GetCurrentProcess(), TOKEN_DUPLICATE | TOKEN_ASSIGN_PRIMARY | TOKEN_QUERY, &process_token));
+  GetTokenInformation(process_token, TokenGroups,     NULL, 0, &group_tokeninfo_size);
+  GetTokenInformation(process_token, TokenPrivileges, NULL, 0, & priv_tokeninfo_size);
+  CHECK(user_tokeninfo_size && group_tokeninfo_size && priv_tokeninfo_size);
+  unique_ptr<BYTE> group_tokeninfo_buf(new BYTE[group_tokeninfo_size]), user_tokeninfo_buf(new BYTE[user_tokeninfo_size]), priv_tokeninfo_buf(new BYTE[priv_tokeninfo_size]);
+  CHECK(GetTokenInformation(process_token, TokenUser,        user_tokeninfo_buf.get(),  user_tokeninfo_size, & user_tokeninfo_size));
+  CHECK(GetTokenInformation(process_token, TokenGroups,     group_tokeninfo_buf.get(), group_tokeninfo_size, &group_tokeninfo_size));
+  CHECK(GetTokenInformation(process_token, TokenPrivileges,  priv_tokeninfo_buf.get(),  priv_tokeninfo_size, & priv_tokeninfo_size));
+  TOKEN_USER       *token_user   = reinterpret_cast<TOKEN_USER      *>( user_tokeninfo_buf.get());
+  TOKEN_GROUPS     *token_groups = reinterpret_cast<TOKEN_GROUPS    *>(group_tokeninfo_buf.get());
+  TOKEN_PRIVILEGES *token_privs  = reinterpret_cast<TOKEN_PRIVILEGES*>(priv_tokeninfo_buf.get());
+  CHECK(LookupPrivilegeValue(NULL, SE_CHANGE_NOTIFY_NAME, &change_notify_name_luid));
+  CHECK(CreateWellKnownSid(WinWorldSid, NULL, WinWorldSid_buf, &WinWorldSid_size));
+  vector<SID_AND_ATTRIBUTES> deny_sid, restrict_sid;
+  vector<LUID_AND_ATTRIBUTES> deny_priv;
+  deny_sid.push_back({ token_user->User.Sid, SE_GROUP_USE_FOR_DENY_ONLY });
+  for (int i = 0, l = token_groups->GroupCount; i < l; ++i) {
+    PSID sid = token_groups->Groups[i].Sid;
+    DWORD a = token_groups->Groups[i].Attributes;
+    if (EqualSid(sid, WinWorldSID) || (a & SE_GROUP_INTEGRITY) || (a & SE_GROUP_LOGON_ID)) continue;
+    deny_sid.push_back({ token_groups->Groups[i].Sid, SE_GROUP_USE_FOR_DENY_ONLY });
+  }
+  for (int i = 0, l = token_privs->PrivilegeCount; i < l; ++i) {
+    const LUID &luid = token_privs->Privileges[i].Luid;
+    if (EqualLuid(change_notify_name_luid, luid)) continue;
+    deny_priv.push_back({ luid, 0 });
+  }
+  CHECK(CreateRestrictedToken(process_token, SANDBOX_INERT, deny_sid.size(), deny_sid.data(), deny_priv.size(), deny_priv.data(),
+                              restrict_sid.size(), restrict_sid.data(), &restricted_token));
+  CHECK(CreateRestrictedToken(process_token, SANDBOX_INERT, 0,               NULL,            deny_priv.size(), deny_priv.data(),
+                              restrict_sid.size(), restrict_sid.data(), &impersonation_token));
+  CHECK((impersonation_token = MakeImpersonationToken (impersonation_token)));
+  CHECK((impersonation_token = MakeUninheritableHandle(impersonation_token)));
+  CHECK((   restricted_token = MakeUninheritableHandle(   restricted_token)));
   string av = StrCat(arg0, " ", arg1);
   PROCESS_INFORMATION pi;
   STARTUPINFO si;
-  memset(&si, 0, sizeof(si));
+  memzero(pi);
+  memzero(si);
   si.dwFlags = STARTF_USESHOWWINDOW | STARTF_USESTDHANDLES;
-  if (!CreateProcess(0, &av[0], 0, 0, 1, CREATE_NEW_PROCESS_GROUP, 0, 0, &si, &pi)) FATAL("CreateProcess", av, ": ", GetLastError());
+  if (!CreateProcessAsUser(restricted_token, 0, &av[0], 0, 0, 0, CREATE_SUSPENDED | DETACHED_PROCESS, 0, 0, &si, &pi)) FATAL("CreateProcess", av, ": ", GetLastError());
   server_process = pi.hProcess;
+  CHECK(SetThreadToken(&pi.hThread, impersonation_token));
+  CHECK(ResumeThread(pi.hThread));
   CloseHandle(pi.hThread);
+  CloseHandle(impersonation_token);
+  CloseHandle(restricted_token);
+  CloseHandle(process_token);
 #if 1
   conn = new Connection(Singleton<UnixClient>::Get(), new ConnectionHandler(this));
   CHECK_NE(-1, (conn->socket = SystemNetwork::Accept(l, 0, 0)));

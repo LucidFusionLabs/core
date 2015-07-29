@@ -510,8 +510,8 @@ struct Video : public Module {
     int Free();
     int Swap();
     
-    static void MakeGLContextCurrent(void *gl_context);
-    static void *CreateGLContext(Window *);
+    static void *BeginGLContextCreate(Window *);
+    static void *CompleteGLContextCreate(Window *, void *gl_context);
     static void CreateGraphicsDevice(Window *);
     static void InitGraphicsDevice(Window *);
     static void InitFonts();
