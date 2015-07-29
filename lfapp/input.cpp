@@ -34,6 +34,10 @@
 #include <android/log.h>
 #endif
 
+#ifdef LFL_WININPUT
+#include <windowsx.h>
+#endif
+
 #ifdef LFL_GLFWINPUT
 #include "GLFW/glfw3.h"
 #endif
@@ -144,7 +148,7 @@ void TouchDevice::CloseKeyboard() {}
 Box TouchDevice::GetKeyboardBox() { return Box(); }
 #endif
 
-#if !defined(LFL_OSXINPUT) && !defined(LFL_ANDROIDINPUT) && !defined(LFL_IPHONEINPUT) && !defined(LFL_QT) && !defined(LFL_WXWIDGETS) && !defined(LFL_GLFWINPUT) && !defined(LFL_SDLINPUT)
+#if !defined(LFL_OSXINPUT) && !defined(LFL_WININPUT) && !defined(LFL_ANDROIDINPUT) && !defined(LFL_IPHONEINPUT) && !defined(LFL_QT) && !defined(LFL_WXWIDGETS) && !defined(LFL_GLFWINPUT) && !defined(LFL_SDLINPUT)
 const int Key::Escape     = -1;
 const int Key::Return     = -2;
 const int Key::Up         = -3;
@@ -297,6 +301,276 @@ void TouchDevice::ToggleToolbarButton(const string &n) { iPhoneToggleToolbarButt
 void Mouse::GrabFocus() {}
 void Mouse::ReleaseFocus() {}
 #endif
+
+#ifdef LFL_OSXINPUT
+extern "C" void OSXGrabMouseFocus();
+extern "C" void OSXReleaseMouseFocus();
+extern "C" void OSXSetMousePosition(void*, int x, int y);
+extern "C" void OSXClipboardSet(const char *v);
+extern "C" const char *OSXClipboardGet();
+
+const int Key::Escape = 0x81;
+const int Key::Return = '\r';
+const int Key::Up = 0xBE;
+const int Key::Down = 0xBD;
+const int Key::Left = 0xBB;
+const int Key::Right = 0xBC;
+const int Key::LeftShift = 0x83;
+const int Key::RightShift = 0x87;
+const int Key::LeftCtrl = 0x86;
+const int Key::RightCtrl = 0x89;
+const int Key::LeftCmd = 0x82;
+const int Key::RightCmd = -12;
+const int Key::Tab = '\t';
+const int Key::Space = ' ';
+const int Key::Backspace = 0x80;
+const int Key::Delete = -16;
+const int Key::Quote = '\'';
+const int Key::Backquote = '`';
+const int Key::PageUp = 0xB4;
+const int Key::PageDown = 0xB9;
+const int Key::F1 = 0xBA;
+const int Key::F2 = 0xB8;
+const int Key::F3 = 0xA8;
+const int Key::F4 = 0xB6;
+const int Key::F5 = 0xA5;
+const int Key::F6 = 0xA6;
+const int Key::F7 = 0xA7;
+const int Key::F8 = 0xA9;
+const int Key::F9 = 0xAA;
+const int Key::F10 = 0xAF;
+const int Key::F11 = 0xAB;
+const int Key::F12 = 0xB0;
+const int Key::Home = 0xB3;
+const int Key::End = 0xB7;
+
+void Clipboard::Set(const string &s) { OSXClipboardSet(s.c_str()); }
+string Clipboard::Get() { const char *v = OSXClipboardGet(); string ret = v; free((void*)v); return ret; }
+void Mouse::ReleaseFocus() { OSXReleaseMouseFocus(); app->grab_mode.Off(); screen->cursor_grabbed = 0; }
+void Mouse::GrabFocus() {
+  OSXGrabMouseFocus();    app->grab_mode.On();  screen->cursor_grabbed = 1;
+  OSXSetMousePosition(screen->id, screen->width / 2, screen->height / 2);
+}
+#endif // LFL_OSXINPUT
+
+#ifdef LFL_WININPUT
+struct WinInputModule {
+  static int GetKeyCode(unsigned char k) {
+    const unsigned short key_code[] = {
+      0xF00, /*null*/              0xF01, /*Left mouse*/     0xF02, /*Right mouse*/     0xF03, /*Control-break*/
+      0xF04, /*Middle mouse*/      0xF05, /*X1 mouse*/       0xF06, /*X2 mouse*/        0xF07, /*Undefined*/
+      '\b',  /*BACKSPACE key*/     '\t',  /*TAB key*/        0xF0A, /*Reserved*/        0xF0B, /*Reserved*/
+      0xF0C, /*CLEAR key*/         '\r',  /*ENTER key*/      0xF0E, /*Undefined*/       0xF0F, /*Undefined*/
+      0xF10, /*SHIFT key*/         0xF11, /*CTRL key*/       0xF12, /*ALT key*/         0xF13, /*PAUSE key*/
+      0xF14, /*CAPS LOCK key*/     0xF15, /*IME Kana mode*/  0xF16, /*Undefined*/       0xF17, /*IME Junja mode*/
+      0xF18, /*IME final mode*/    0xF19, /*IME Hanja mode*/ 0xF1A, /*Undefined*/       '\x1b',/*ESC key*/
+      0xF1C, /*IME convert*/       0xF1D, /*IME nonconvert*/ 0xF1E, /*IME accept*/      0xF1F, /*IME mode change*/
+      ' ',   /*SPACEBAR*/          0xF21, /*PAGE UP key*/    0xF22, /*PAGE DOWN key*/   0xF23, /*END key*/
+      0xF24, /*HOME key*/          0xF25, /*LEFT ARROW key*/ 0xF26, /*UP ARROW key*/    0xF27, /*RIGHT ARROW key*/
+      0xF28, /*DOWN ARROW key*/    0xF29, /*SELECT key*/     0xF2A, /*PRINT key*/       0xF2B, /*EXECUTE key*/
+      0xF2C, /*PRINT SCREEN key*/  0xF2D, /*INS key*/        0xF2E, /*DEL key*/         0xF2F, /*HELP key*/
+      '0',   /*0 key*/             '1',   /*1 key*/          '2',   /*2 key*/           '3',   /*3 key*/
+      '4',   /*4 key*/             '5',   /*5 key*/          '6',   /*6 key*/           '7',   /*7 key*/
+      '8',   /*8 key*/             '9',   /*9 key*/          0xF3A, /*undefined*/       0xF3B, /*undefined*/
+      0xF3C, /*undefined*/         0xF3D, /*undefined*/      0xF3E, /*undefined*/       0xF3F, /*undefined*/
+      0xF40, /*undefined*/         'a',   /*A key*/          'b',   /*B key*/           'c',   /*C key*/
+      'd',   /*D key*/             'e',   /*E key*/          'f',   /*F key*/           'g',   /*G key*/
+      'h',   /*H key*/             'i',   /*I key*/          'j',   /*J key*/           'k',   /*K key*/
+      'l',   /*L key*/             'm',   /*M key*/          'n',   /*N key*/           'o',   /*O key*/
+      'p',   /*P key*/             'q',   /*Q key*/          'r',   /*R key*/           's',   /*S key*/
+      't',   /*T key*/             'u',   /*U key*/          'v',   /*V key*/           'w',   /*W key*/
+      'x',   /*X key*/             'y',   /*Y key*/          'z',   /*Z key*/           0xF5B, /*Left Windows key*/
+      0xF5C, /*Right Windows key*/ 0xF5D, /*Apps-key*/       0xF5E, /*Reserved*/        0xF5F, /*Computer Sleep*/
+      0xF60, /*keypad 0 key*/      0xF61, /*keypad 1 key*/   0xF62, /*keypad 2 key*/    0xF63, /*keypad 3 key*/
+      0xF64, /*keypad 4 key*/      0xF65, /*keypad 5 key*/   0xF66, /*keypad 6 key*/    0xF67, /*keypad 7 key*/
+      0xF68, /*keypad 8 key*/      0xF69, /*keypad 9 key*/   0xF6A, /*Multiply key*/    0xF6B, /*Add key*/
+      0xF6C, /*Separator key*/     0xF6D, /*Subtract key*/   0xF6E, /*Decimal key*/     0xF6F, /*Divide key*/
+      0xF70, /*F1 key*/            0xF71, /*F2 key*/         0xF72, /*F3 key*/          0xF73, /*F4 key*/
+      0xF74, /*F5 key*/            0xF75, /*F6 key*/         0xF76, /*F7 key*/          0xF77, /*F8 key*/
+      0xF78, /*F9 key*/            0xF79, /*F10 key*/        0xF7A, /*F11 key*/         0xF7B, /*F12 key*/
+      0xF7C, /*F13 key*/           0xF7D, /*F14 key*/        0xF7E, /*F15 key*/         0xF7F, /*F16 key*/
+      0xF80, /*F17 key*/           0xF81, /*F18 key*/        0xF82, /*F19 key*/         0xF83, /*F20 key*/
+      0xF84, /*F21 key*/           0xF85, /*F22 key*/        0xF86, /*F23 key*/         0xF87, /*F24 key*/
+      0xF88, /*Unassigned*/        0xF89, /*Unassigned*/     0xF8A, /*Unassigned*/      0xF8B, /*Unassigned*/
+      0xF8C, /*Unassigned*/        0xF8D, /*Unassigned*/     0xF8E, /*Unassigned*/      0xF8F, /*Unassigned*/
+      0xF90, /*NUM LOCK key*/      0xF91, /*SCROLL LOCK*/    0xF92, /*OEM specific*/    0xF93, /*OEM specific*/
+      0xF94, /*OEM specific*/      0xF95, /*OEM specific*/   0xF96, /*OEM specific*/    0xF97, /*Unassigned*/
+      0xF98, /*Unassigned*/        0xF99, /*Unassigned*/     0xF9A, /*Unassigned*/      0xF9B, /*Unassigned*/
+      0xF9C, /*Unassigned*/        0xF9D, /*Unassigned*/     0xF9E, /*Unassigned*/      0xF9F, /*Unassigned*/
+      0xFA0, /*Left SHIFT key*/    0xFA1, /*Right SHIFT*/    0xFA2, /*Left CONTROL*/    0xFA3, /*Right CONTROL*/
+      0xFA4, /*Left MENU key*/     0xFA5, /*Right MENU*/     0xFA6, /*Browser Back*/    0xFA7, /*Browser Forward*/
+      0xFA8, /*Browser Refresh*/   0xFA9, /*Browser Stop*/   0xFAA, /*Browser Search*/  0xFAB, /*Browser Favorites*/
+      0xFAC, /*Browser Home*/      0xFAD, /*Volume Mute*/    0xFAE, /*Volume Down*/     0xFAF, /*Volume Up*/
+      0xFB0, /*Next Track key*/    0xFB1, /*Previous Track*/ 0xFB2, /*Stop Media*/      0xFB3, /*Play/Pause Media*/
+      0xFB4, /*Start Mail key*/    0xFB5, /*Select Media*/   0xFB6, /*Start App-1 key*/ 0xFB7, /*Start Application 2*/
+      0xFB8, /*Reserved*/          0xFB9, /*Reserved*/       ';',   /*the ';:' key*/    '=',  /*the '+' key*/
+      ',',   /*the ',' key*/       '-',   /*the '-' key*/    '.',   /*the '.' key*/     '/',  /*the '/?' key*/
+      '\`',  /*the '`~' key*/      0xFC1, /*Reserved*/       0xFC2, /*Reserved*/        0xFC3, /*Reserved*/
+      0xFC4, /*Reserved*/          0xFC5, /*Reserved*/       0xFC6, /*Reserved*/        0xFC7, /*Reserved*/
+      0xFC8, /*Reserved*/          0xFC9, /*Reserved*/       0xFCA, /*Reserved*/        0xFCB, /*Reserved*/
+      0xFCC, /*Reserved*/          0xFCD, /*Reserved*/       0xFCE, /*Reserved*/        0xFCF, /*Reserved*/
+      0xFD0, /*Reserved*/          0xFD1, /*Reserved*/       0xFD2, /*Reserved*/        0xFD3, /*Reserved*/
+      0xFD4, /*Reserved*/          0xFD5, /*Reserved*/       0xFD6, /*Reserved*/        0xFD7, /*Reserved*/
+      0xFD8, /*Unassigned*/        0xFD9, /*Unassigned*/     0xFDA, /*Unassigned*/      '[',  /*the '[{' key*/
+      '\\',  /*the '\|' key*/      ']',  /*the ']}' key*/    '\'',  /*'quote' key*/     0xFDF, /*misc*/
+      0xFE0, /*Reserved*/          0xFE1, /*OEM specific*/   0xFE2, /*RT 102 bracket*/  0xFE3, /*OEM specific*/
+      0xFE4, /*OEM specific*/      0xFE5, /*IME PROCESS*/    0xFE6, /*OEM specific*/    0xFE7, /*Used for Unicode*/
+      0xFE8, /*Unassigned*/        0xFE9, /*OEM specific*/   0xFEA, /*OEM specific*/    0xFEB, /*OEM specific*/
+      0xFEC, /*OEM specific*/      0xFED, /*OEM specific*/   0xFEE, /*OEM specific*/    0xFEF, /*OEM specific*/
+      0xFF0, /*OEM specific*/      0xFF1, /*OEM specific*/   0xFF2, /*OEM specific*/    0xFF3, /*OEM specific*/
+      0xFF4, /*OEM specific*/      0xFF5, /*OEM specific*/   0xFF6, /*Attn key*/        0xFF7, /*CrSel key*/
+      0xFF8, /*ExSel key*/         0xFF9, /*Erase EOF key*/  0xFFA, /*Play key*/        0xFFB, /*Zoom key*/
+      0xFFC, /*Reserved*/          0xFFD, /*PA1 key*/        0xFFE, /*Clear key*/       0xFFF, /*Unused*/
+    };
+    return key_code[k];
+  }
+  static void UpdateMousePosition(const LPARAM &lParam, point *p, point *d) {
+    WinWindow *win = static_cast<WinWindow*>(screen->impl);
+    *p = point(GET_X_LPARAM(lParam), screen->height - GET_Y_LPARAM(lParam));
+    *d = *p - win->prev_mouse_pos;
+    win->prev_mouse_pos = *p;
+  }
+};
+
+void WinApp::CreateClass() {
+  WNDCLASS wndClass;
+  wndClass.style = CS_OWNDC | CS_HREDRAW | CS_VREDRAW;
+  wndClass.lpfnWndProc = &WinApp::WndProc;
+  wndClass.cbClsExtra = 0;
+  wndClass.cbWndExtra = 0;
+  wndClass.hInstance = hInst;
+  wndClass.hIcon = LoadIcon(hInst, "IDI_APP_ICON");
+  wndClass.hCursor = LoadCursor(NULL, IDC_ARROW);
+  wndClass.hbrBackground = (HBRUSH)GetStockObject(NULL_BRUSH);
+  wndClass.lpszMenuName = NULL;
+  wndClass.lpszClassName = app->name.c_str();
+  if (!RegisterClass(&wndClass)) ERROR("RegisterClass: ", GetLastError());
+}
+
+int WinApp::MessageLoop() {
+  INFOf("WinApp::MessageLoop %p", screen);
+  CoInitialize(NULL);
+  MSG msg;
+  while (app->run) {
+    if (app->run && FLAGS_target_fps) LFAppFrame();
+    while (app->run && PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))         { TranslateMessage(&msg); DispatchMessage(&msg); }
+    if (app->run && !FLAGS_target_fps) if (GetMessage(&msg, NULL, 0, 0)) { TranslateMessage(&msg); DispatchMessage(&msg); }
+  }
+  app->Free();
+  CoUninitialize();
+  return msg.wParam;
+}
+
+LRESULT APIENTRY WinApp::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
+  WinWindow *win = static_cast<WinWindow*>(screen->impl);
+  PAINTSTRUCT ps;
+  POINT cursor;
+  point p, d;
+  int ind;
+  switch (message) {
+  case WM_CREATE:                      return 0;
+  case WM_DESTROY:                     LFAppShutdown(); PostQuitMessage(0); return 0;
+  case WM_SIZE:                        WindowReshaped(LOWORD(lParam), HIWORD(lParam)); app->scheduler.Wakeup(0); return 0;
+  case WM_KEYUP:   case WM_SYSKEYUP:   if (KeyPress(WinInputModule::GetKeyCode(wParam), 0) && win->frame_on_keyboard_input) app->scheduler.Wakeup(0); return 0;
+  case WM_KEYDOWN: case WM_SYSKEYDOWN: if (KeyPress(WinInputModule::GetKeyCode(wParam), 1) && win->frame_on_keyboard_input) app->scheduler.Wakeup(0); return 0;
+  case WM_LBUTTONDOWN:                 if (MouseClick(1, 1, win->prev_mouse_pos.x, win->prev_mouse_pos.y) && win->frame_on_mouse_input) app->scheduler.Wakeup(0); return 0;
+  case WM_LBUTTONUP:                   if (MouseClick(1, 0, win->prev_mouse_pos.x, win->prev_mouse_pos.y) && win->frame_on_mouse_input) app->scheduler.Wakeup(0); return 0;
+  case WM_RBUTTONDOWN:                 if (MouseClick(2, 1, win->prev_mouse_pos.x, win->prev_mouse_pos.y) && win->frame_on_mouse_input) app->scheduler.Wakeup(0); return 0;
+  case WM_RBUTTONUP:                   if (MouseClick(2, 0, win->prev_mouse_pos.x, win->prev_mouse_pos.y) && win->frame_on_mouse_input) app->scheduler.Wakeup(0); return 0;
+  case WM_MOUSEMOVE:                   WinInputModule::UpdateMousePosition(lParam, &p, &d); if (MouseMove(p.x, p.y, d.x, d.y) && win->frame_on_mouse_input) app->scheduler.Wakeup(0); return 0;
+  case WM_COMMAND:                     if ((ind = wParam - win->start_msg_id) >= 0) if (ind < win->menu_cmds.size()) ShellRun(win->menu_cmds[ind].c_str()); return 0;
+  case WM_CONTEXTMENU:                 if (win->menu) { GetCursorPos(&cursor); TrackPopupMenu(win->context_menu, TPM_LEFTALIGN|TPM_TOPALIGN, cursor.x, cursor.y, 0, hWnd, NULL); } return 0;
+  case WM_PAINT:                       BeginPaint((HWND)screen->id, &ps); if (!FLAGS_target_fps) LFAppFrame(); EndPaint((HWND)screen->id, &ps); return 0;
+  case WM_SIZING:                      return win->resize_increment.Zero() ? 0 : win->RestrictResize(wParam, reinterpret_cast<LPRECT>(lParam));
+  case WM_USER:                        if (!FLAGS_target_fps) LFAppFrame(); return 0;
+  case WM_KILLFOCUS:                   app->input.ClearButtonsDown(); return 0;
+  default:                             break;
+  }
+  return DefWindowProc(hWnd, message, wParam, lParam);
+}
+
+bool WinWindow::RestrictResize(int m, RECT *r) {
+  point in(r->right - r->left, r->bottom - r->top);
+  RECT w = { 0, 0, in.x, in.y };
+  AdjustWindowRect(&w, GetWindowLong((HWND)screen->id, GWL_STYLE), menubar);
+  point extra((w.right - w.left) - in.x, (w.bottom - w.top) - in.y), content = in - extra;
+  switch (m) {
+    case WMSZ_TOP:         r->top    -= (NextMultipleOfN(content.y, resize_increment.y) - content.y); break;
+    case WMSZ_BOTTOM:      r->bottom += (NextMultipleOfN(content.y, resize_increment.y) - content.y); break;
+    case WMSZ_LEFT:        r->left   -= (NextMultipleOfN(content.x, resize_increment.x) - content.x); break;
+    case WMSZ_RIGHT:       r->right  += (NextMultipleOfN(content.x, resize_increment.x) - content.x); break;
+    case WMSZ_BOTTOMLEFT:  r->bottom += (NextMultipleOfN(content.y, resize_increment.y) - content.y); 
+                           r->left   -= (NextMultipleOfN(content.x, resize_increment.x) - content.x); break;
+    case WMSZ_BOTTOMRIGHT: r->right  += (NextMultipleOfN(content.x, resize_increment.x) - content.x);
+                           r->bottom += (NextMultipleOfN(content.y, resize_increment.y) - content.y); break;
+    case WMSZ_TOPLEFT:     r->top    -= (NextMultipleOfN(content.y, resize_increment.y) - content.y);
+                           r->left   -= (NextMultipleOfN(content.x, resize_increment.x) - content.x); break;
+    case WMSZ_TOPRIGHT:    r->right  += (NextMultipleOfN(content.x, resize_increment.x) - content.x);
+                           r->top    -= (NextMultipleOfN(content.y, resize_increment.y) - content.y); break;
+  }
+  return true;
+}
+
+const int Key::Escape     = '\x1b';
+const int Key::Return     = '\r';
+const int Key::Up         = 0xf00 | VK_UP;
+const int Key::Down       = 0xf00 | VK_DOWN;
+const int Key::Left       = 0xf00 | VK_LEFT;
+const int Key::Right      = 0xf00 | VK_RIGHT;
+const int Key::LeftShift  = 0xf00 | VK_SHIFT; // VK_LSHIFT;
+const int Key::RightShift = 0xf00 | VK_RSHIFT;
+const int Key::LeftCtrl   = 0xf00 | VK_CONTROL; // VK_LCONTROL;
+const int Key::RightCtrl  = 0xf00 | VK_RCONTROL;
+const int Key::LeftCmd    = 0xf00 | VK_MENU;
+const int Key::RightCmd   = -12;
+const int Key::Tab        = 0xf00 | VK_TAB;
+const int Key::Space      = 0xf00 | VK_SPACE;
+const int Key::Backspace  = '\b';
+const int Key::Delete     = 0xf00 | VK_DELETE;
+const int Key::Quote      = '\'';
+const int Key::Backquote  = '`';
+const int Key::PageUp     = 0xf00 | VK_PRIOR;
+const int Key::PageDown   = 0xf00 | VK_NEXT;
+const int Key::F1         = 0xf00 | VK_F1;
+const int Key::F2         = 0xf00 | VK_F2;
+const int Key::F3         = 0xf00 | VK_F3;
+const int Key::F4         = 0xf00 | VK_F4;
+const int Key::F5         = 0xf00 | VK_F5;
+const int Key::F6         = 0xf00 | VK_F6;
+const int Key::F7         = 0xf00 | VK_F7;
+const int Key::F8         = 0xf00 | VK_F8;
+const int Key::F9         = 0xf00 | VK_F9;
+const int Key::F10        = 0xf00 | VK_F10;
+const int Key::F11        = 0xf00 | VK_F11;
+const int Key::F12        = 0xf00 | VK_F12;
+const int Key::Home       = 0xf00 | VK_HOME;
+const int Key::End        = 0xf00 | VK_END;
+
+void Mouse::ReleaseFocus() {}
+void Mouse::GrabFocus() {}
+void Clipboard::Set(const string &in) {
+  String16 s = String::ToUTF16(in);
+  if (!OpenClipboard(NULL)) return;
+  EmptyClipboard();
+  HGLOBAL hg = GlobalAlloc(GMEM_MOVEABLE, (s.size()+1)*2);
+  if (!hg) { CloseClipboard(); return; }
+  memcpy(GlobalLock(hg), s.c_str(), (s.size()+1)*2);
+  GlobalUnlock(hg);
+  SetClipboardData(CF_UNICODETEXT, hg);
+  CloseClipboard();
+  GlobalFree(hg);
+}
+string Clipboard::Get() {
+  string ret;
+  if (!OpenClipboard(NULL)) return "";
+  const HANDLE hg = GetClipboardData(CF_UNICODETEXT);
+  if (!hg) { CloseClipboard(); return ""; }
+  ret = String::ToUTF8(reinterpret_cast<char16_t*>(GlobalLock(hg)));
+  GlobalUnlock(hg);
+  CloseClipboard();
+  return ret;
+}
+#endif // LFL_WININPUT
 
 #ifdef LFL_QT
 struct QTInputModule : public InputModule {
@@ -583,56 +857,6 @@ void Mouse::GrabFocus()    { SDL_ShowCursor(0); SDL_SetWindowGrab((SDL_Window*)s
 void Mouse::ReleaseFocus() { SDL_ShowCursor(1); SDL_SetWindowGrab((SDL_Window*)screen->id, SDL_FALSE); SDL_SetRelativeMouseMode(SDL_FALSE); app->grab_mode.Off(); screen->cursor_grabbed=false; }
 #endif /* LFL_SDLINPUT */
 
-#ifdef LFL_OSXINPUT
-extern "C" void OSXGrabMouseFocus();
-extern "C" void OSXReleaseMouseFocus();
-extern "C" void OSXSetMousePosition(void*, int x, int y);
-extern "C" void OSXClipboardSet(const char *v);
-extern "C" const char *OSXClipboardGet();
-
-const int Key::Escape     = 0x81;
-const int Key::Return     = '\r';
-const int Key::Up         = 0xBE;
-const int Key::Down       = 0xBD;
-const int Key::Left       = 0xBB;
-const int Key::Right      = 0xBC;
-const int Key::LeftShift  = 0x83;
-const int Key::RightShift = 0x87;
-const int Key::LeftCtrl   = 0x86;
-const int Key::RightCtrl  = 0x89;
-const int Key::LeftCmd    = 0x82;
-const int Key::RightCmd   = -12;
-const int Key::Tab        = '\t';
-const int Key::Space      = ' ';
-const int Key::Backspace  = 0x80;
-const int Key::Delete     = -16;
-const int Key::Quote      = '\'';
-const int Key::Backquote  = '`';
-const int Key::PageUp     = 0xB4;
-const int Key::PageDown   = 0xB9;
-const int Key::F1         = 0xBA;
-const int Key::F2         = 0xB8;
-const int Key::F3         = 0xA8;
-const int Key::F4         = 0xB6;
-const int Key::F5         = 0xA5;
-const int Key::F6         = 0xA6;
-const int Key::F7         = 0xA7;
-const int Key::F8         = 0xA9;
-const int Key::F9         = 0xAA;
-const int Key::F10        = 0xAF;
-const int Key::F11        = 0xAB;
-const int Key::F12        = 0xB0;
-const int Key::Home       = 0xB3;
-const int Key::End        = 0xB7;
-
-void Clipboard::Set(const string &s) { OSXClipboardSet(s.c_str()); }
-string Clipboard::Get() { const char *v=OSXClipboardGet(); string ret=v; free((void*)v); return ret; }
-void Mouse::ReleaseFocus() { OSXReleaseMouseFocus(); app->grab_mode.Off(); screen->cursor_grabbed=0; }
-void Mouse::GrabFocus   () { OSXGrabMouseFocus();    app->grab_mode.On();  screen->cursor_grabbed=1;
-  OSXSetMousePosition(screen->id, screen->width/2, screen->height/2);
-}
-#endif // LFL_OSXINPUT
-
 void TouchDevice::AddToolbar(const vector<pair<string, string>>&items) {
   vector<const char *> k, v;
   for (auto &i : items) { k.push_back(i.first.c_str()); v.push_back(i.second.c_str()); }
@@ -641,8 +865,25 @@ void TouchDevice::AddToolbar(const vector<pair<string, string>>&items) {
 #endif
 }
 
+void Input::ClearButtonsDown() {
+  if (left_shift_down)  { KeyPress(Key::LeftShift,  0);    left_shift_down = 0; }
+  if (right_shift_down) { KeyPress(Key::RightShift, 0);    left_shift_down = 0; }
+  if (left_ctrl_down)   { KeyPress(Key::LeftCtrl,   0);    left_ctrl_down  = 0; }
+  if (right_ctrl_down)  { KeyPress(Key::RightCtrl,  0);    right_ctrl_down = 0; }
+  if (left_cmd_down)    { KeyPress(Key::LeftCmd,    0);    left_cmd_down   = 0; }
+  if (right_cmd_down)   { KeyPress(Key::RightCmd,   0);    right_cmd_down  = 0; }
+  if (mouse_but1_down)  { MouseClick(1, 0, screen->mouse); mouse_but1_down = 0; }
+  if (mouse_but2_down)  { MouseClick(2, 0, screen->mouse); mouse_but2_down = 0; }
+}
+
 int Input::Init() {
   INFO("Input::Init()");
+#ifdef __APPLE__
+  paste_bind = Bind('v', Key::Modifier::Cmd);
+#else
+  paste_bind = Bind('v', Key::Modifier::Ctrl);
+#endif
+
 #if defined(LFL_QT)
   impl = new QTInputModule();
 #elif defined(LFL_GLFWINPUT)
@@ -724,14 +965,7 @@ int Input::KeyEventDispatch(InputEvent::Id event, bool down) {
     if (g->toggle_bind.key == event && g->toggle_active.mode != Toggler::OneShot) return 0;
 
     g->events.total++;
-#ifdef __APPLE__
-    if      (event == Bind('v', Key::Modifier::Cmd).key)  { g->Input(Clipboard::Get()); return 1; }
-#else
-    if      (event == Bind('v', Key::Modifier::Ctrl).key) { g->Input(Clipboard::Get()); return 1; }
-#endif
-#ifdef LFL_IPHONE
-    else if (event == '6' && shift_down) { g->HistUp(); return 1; }
-#endif
+    if (event == paste_bind.key) { g->Input(Clipboard::Get()); return 1; }
     switch (event) {
       case Key::Backspace: g->Erase();       return 1;
       case Key::Delete:    g->Erase();       return 1;
@@ -794,8 +1028,9 @@ int Input::MouseClick(int button, bool down, const point &p) {
 }
 
 int Input::MouseEventDispatch(InputEvent::Id event, const point &p, int down) {
-  if (event == Mouse::Event::Wheel) screen->mouse_wheel = p;
-  else                              screen->mouse       = p;
+  if      (event == paste_bind.key)      return KeyEventDispatch(event, down);
+  else if (event == Mouse::Event::Wheel) screen->mouse_wheel = p;
+  else                                   screen->mouse       = p;
 
   if (FLAGS_input_debug && down)
     INFO("MouseEvent ", InputEvent::Name(event), " ", screen->mouse.DebugString());
@@ -841,7 +1076,7 @@ int MouseController::Input(InputEvent::Id event, const point &p, int down, int f
     bool thunk = 0, e_hover = e->evtype == Event::Hover;
 
     if (e->deleted || !e->active || (e_hover && e->val) || 
-        (!down && e->evtype == Event::Click && e->CB.type != Callback::CB_COORD)) continue;
+        (!down && e->evtype == Event::Click && e->CB.type != MouseControllerCallback::CB_COORD)) continue;
 
     if (e->box.within(p)) {
       if (e->run_only_if_first && fired) continue;
@@ -1158,11 +1393,11 @@ void Shell::Slider(const vector<string> &a) {
   string flag_name = a[0];
   float total = a.size() >= 1 ? atof(a[1]) : 0;
   float inc   = a.size() >= 2 ? atof(a[2]) : 0;
-  new SliderTweakDialog(flag_name, total ? total : 100, inc ? inc : 1);
+  new SliderFlagDialog(flag_name, total ? total : 100, inc ? inc : 1);
 }
 
 void Shell::Edit(const vector<string> &a) {
-  string s = LocalFile::FileContents(StrCat(app->assetdir, "lfapp_vertex.glsl"));
+  string s = Asset::FileContents("lfapp_vertex.glsl");
   new EditorDialog(screen, Fonts::Default(), new BufferFile(s));
 }
 

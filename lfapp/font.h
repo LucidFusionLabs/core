@@ -36,11 +36,12 @@ DECLARE_int(glyph_table_start);
 struct FontDesc {
     enum { Bold=1, Italic=2, Mono=4, Outline=8 };
     struct Engine {
-        enum { Default=0, Atlas=1, FreeType=2, CoreText=3 };
+        enum { Default=0, Atlas=1, FreeType=2, CoreText=3, GDI=4 };
         static int Parse(const string &s) {
             if      (s == "atlas")    return Atlas;
             else if (s == "freetype") return FreeType;
             else if (s == "coretext") return CoreText;
+            else if (s == "gdi")      return GDI;
             return Default;
         };
     };
@@ -73,10 +74,12 @@ struct FontDesc {
     string name, family;
     int size, flag, engine;
     Color fg, bg;
+    bool unicode;
+
     FontDesc(const string &n="", const string &fam="", int s=0,
              const Color &fgc=Color::white,
-             const Color &bgc=Color::clear, int f=-1) :
-        family(fam), size(s), fg(fgc), bg(bgc), flag(f == -1 ? FLAGS_default_font_flag : f), engine(0)
+             const Color &bgc=Color::clear, int f=-1, bool U=1) :
+        family(fam), size(s), flag(f == -1 ? FLAGS_default_font_flag : f), engine(0), fg(fgc), bg(bgc), unicode(U)
     {
         string engine_proto;
         name = ParseProtocol(n.data(), &engine_proto);
@@ -84,7 +87,7 @@ struct FontDesc {
     }
 
     string Filename() const {
-        return StrCat(name, ",", size, ",", fg.R(), ",", fg.G(), ",", fg.B(), ",0"); // fg.A());
+        return StrCat(name, ",", size, ",", fg.R(), ",", fg.G(), ",", fg.B(), ",", flag);
     }
     string DebugString() const {
         return StrCat(name, " (", family, ") ", size, " ", fg.DebugString(), " ", bg.DebugString(), " ", flag);
@@ -94,17 +97,19 @@ struct FontDesc {
 struct FontEngine {
     struct Resource { virtual ~Resource() {} };
     virtual const char *Name() = 0;
+    virtual void  Shutdown() {}
     virtual bool  Init(const FontDesc&) { return true; }
     virtual Font *Open(const FontDesc&) = 0;
-    virtual bool  HaveGlyph (Font *f, unsigned short) { return true; }
+    virtual bool  HaveGlyph (Font *f, char16_t) { return true; }
     virtual int   InitGlyphs(Font *f,       Glyph *g, int n) = 0;
     virtual int   LoadGlyphs(Font *f, const Glyph *g, int n) = 0;
+    virtual string DebugString(Font *f) const = 0;
 };
 
 struct Glyph : public Drawable {
-    unsigned short id=0;
+    char16_t id=0;
     short bearing_x=0, bearing_y=0, advance=0;
-    bool wide=0;
+    bool wide=0, space=0;
     union Internal {
         struct FreeType { int id; }                                                   freetype;
         struct CoreText { int id; float origin_x, origin_y, width, height, advance; } coretext;
@@ -131,7 +136,12 @@ struct GlyphCache {
     Box dim;
     Texture tex;
     Flow *flow=0;
+#ifdef __APPLE__
     CGContextRef cgcontext=0;
+#endif
+#ifdef WIN32
+    HDC hdc=0;
+#endif
     vector<const Glyph*> glyph;
     int max_width=128, max_height=128;
     GlyphCache(unsigned T, int W, int H=0);
@@ -148,6 +158,9 @@ struct GlyphCache {
     void Load(const Font*, const Glyph*, const unsigned char *buf, int linesize, int pf, const FilterCB &f=FilterCB());
 #ifdef __APPLE__
     void Load(const Font*, const Glyph*, CGFontRef cgfont, int size);
+#endif
+#ifdef WIN32
+    void Load(const Font*, const Glyph*, HFONT hfont, int size, HDC dc);
 #endif
 
     static GlyphCache *Get() {
@@ -176,7 +189,7 @@ struct Font {
             NoWrap=1<<6, GlyphBreak=1<<7, AlignCenter=1<<8, AlignRight=1<<9, 
             Underline=1<<10, Overline=1<<11, Midline=1<<12, Blink=1<<13,
             Uppercase=1<<14, Lowercase=1<<15, Capitalize=1<<16, Clipped=1<<17,
-            AssignFlowX=1<<18, DontCompleteFlow=1<<19
+            DontAssignFlowP=1<<18, DontCompleteFlow=1<<19
         };
         static int Orientation(int f) { return f & 0xf; };
     };
@@ -200,8 +213,8 @@ struct Font {
     short Height() const { return ascender + descender; }
     short FixedWidth() const { return X_or_Y(fixed_width, mono ? max_width : 0); }
 
-    Glyph *FindGlyph        (unsigned short gind);
-    Glyph *FindOrInsertGlyph(unsigned short gind);
+    Glyph *FindGlyph        (char16_t gind);
+    Glyph *FindOrInsertGlyph(char16_t gind);
 
     void Select();
     void UpdateMetrics(Glyph *g);
@@ -223,10 +236,10 @@ struct Font {
     /**/               int Width(const String16        &text) { return Width(String16Piece         (text)); }
     template <class X> int Width(const X               *text) { return Width(StringPiece::Unbounded(text)); }
 
-    template <class X> void Encode(const StringPieceT<X> &text, const Box &box, DrawableBoxArray *out, int draw_flag=0, int attr_id=0);
-    /**/               void Encode(const string          &text, const Box &box, DrawableBoxArray *out, int draw_flag=0, int attr_id=0) { return Encode(StringPiece           (text), box, out, draw_flag, attr_id); }
-    /**/               void Encode(const String16        &text, const Box &box, DrawableBoxArray *out, int draw_flag=0, int attr_id=0) { return Encode(String16Piece         (text), box, out, draw_flag, attr_id); }
-    template <class X> void Encode(const X               *text, const Box &box, DrawableBoxArray *out, int draw_flag=0, int attr_id=0) { return Encode(StringPiece::Unbounded(text), box, out, draw_flag, attr_id); }
+    template <class X> void Shape(const StringPieceT<X> &text, const Box &box, DrawableBoxArray *out, int draw_flag=0, int attr_id=0);
+    /**/               void Shape(const string          &text, const Box &box, DrawableBoxArray *out, int draw_flag=0, int attr_id=0) { return Shape(StringPiece           (text), box, out, draw_flag, attr_id); }
+    /**/               void Shape(const String16        &text, const Box &box, DrawableBoxArray *out, int draw_flag=0, int attr_id=0) { return Shape(String16Piece         (text), box, out, draw_flag, attr_id); }
+    template <class X> void Shape(const X               *text, const Box &box, DrawableBoxArray *out, int draw_flag=0, int attr_id=0) { return Shape(StringPiece::Unbounded(text), box, out, draw_flag, attr_id); }
 
     template <class X> int Draw(const StringPieceT<X> &text, point cp,       vector<Box> *lb=0, int draw_flag=0) { return Draw<X>    (                text,  Box(cp.x,cp.y+Height(),0,0), lb, draw_flag); }
     /**/               int Draw(const string          &text, point cp,       vector<Box> *lb=0, int draw_flag=0) { return Draw(StringPiece           (text), Box(cp.x,cp.y+Height(),0,0), lb, draw_flag); }
@@ -247,8 +260,9 @@ struct FakeFontEngine : public FontEngine {
     FakeFontEngine();
     virtual const char *Name() { return "FakeFontEngine"; }
     virtual Font *Open(const FontDesc&) { return &fake_font; }
-    virtual int  LoadGlyphs(Font *f, const Glyph *g, int n) { return n; }
-    virtual int  InitGlyphs(Font *f,       Glyph *g, int n);
+    virtual int LoadGlyphs(Font *f, const Glyph *g, int n) { return n; }
+    virtual int InitGlyphs(Font *f,       Glyph *g, int n);
+    virtual string DebugString(Font *f) const { return "FakeFontEngineFont"; }
     static const char *Filename() { return "__FakeFontFilename__"; }
 };
 
@@ -263,9 +277,10 @@ struct AtlasFontEngine : public FontEngine {
     virtual const char *Name() { return "AtlasFontEngine"; }
     virtual bool  Init(const FontDesc&);
     virtual Font *Open(const FontDesc&);
-    virtual bool  HaveGlyph (Font *f, unsigned short) { return false; }
+    virtual bool  HaveGlyph (Font *f, char16_t) { return false; }
     virtual int   InitGlyphs(Font *f,       Glyph *g, int n) { return n; }
     virtual int   LoadGlyphs(Font *f, const Glyph *g, int n) { return n; }
+    virtual string DebugString(Font *f) const;
 
     static Font *OpenAtlas(const FontDesc&);
     static void WriteAtlas(const string &name, Font *glyphs, Texture *t);
@@ -293,6 +308,7 @@ struct FreeTypeFontEngine : public FontEngine {
     virtual Font *Open(const FontDesc&);
     virtual int   InitGlyphs(Font *f,       Glyph *g, int n);
     virtual int   LoadGlyphs(Font *f, const Glyph *g, int n);
+    virtual string DebugString(Font *f) const;
 
     static void Init();
     static void SubPixelFilter(const Box &b, unsigned char *buf, int linesize, int pf);
@@ -316,13 +332,42 @@ struct CoreTextFontEngine : public FontEngine {
     virtual Font *Open(const FontDesc&);
     virtual int   InitGlyphs(Font *f,       Glyph *g, int n);
     virtual int   LoadGlyphs(Font *f, const Glyph *g, int n);
+    virtual string DebugString(Font *f) const;
 
     struct Flag { enum { WriteAtlas=1 }; };
     static Font *Open(const string &name,            int size, Color c, int flag, int ct_flag);
     static Font *Open(const shared_ptr<Resource> &R, int size, Color c, int flag);
-    static void GetSubstitutedFont(Font*, CTFontRef, unsigned short gid, CGFontRef *cgout, CTFontRef *ctout, int *id_out);
+    static void GetSubstitutedFont(Font*, CTFontRef, char16_t gid, CGFontRef *cgout, CTFontRef *ctout, int *id_out);
     static void AssignGlyph(Glyph *out, const CGRect &bounds, struct CGSize &advance);
     static v2 GetAdvanceBounds(Font*);
+};
+#endif
+
+#ifdef WIN32
+struct GDIFontEngine : public FontEngine {
+  struct Resource : public FontEngine::Resource {
+    string name;
+    HFONT hfont;
+    int flag;
+    virtual ~Resource();
+    Resource(const char *N = 0, HFONT H = 0, int F = 0) : name(BlankNull(N)), hfont(H), flag(F) {}
+  };
+  unordered_map<string, shared_ptr<Resource> > resource;
+  HDC hdc=0;
+  GDIFontEngine();
+  ~GDIFontEngine();
+  virtual const char *Name() { return "GDIFontEngine"; }
+  virtual void  Shutdown();
+  virtual Font *Open(const FontDesc&);
+  virtual int   InitGlyphs(Font *f, Glyph *g, int n);
+  virtual int   LoadGlyphs(Font *f, const Glyph *g, int n);
+  virtual string DebugString(Font *f) const;
+
+  struct Flag { enum { WriteAtlas = 1 }; };
+  static Font *Open(const string &name, int size, Color c, int flag, int ct_flag);
+  static Font *Open(const shared_ptr<Resource> &R, int size, Color c, int flag);
+  static bool GetSubstitutedFont(Font *f, HFONT hfont, char16_t glyph_id, HDC hdc, HFONT *hfontout);
+  static void AssignGlyph(Glyph *out, const ::SIZE &bounds, const ::SIZE &advance);
 };
 #endif
 

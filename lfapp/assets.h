@@ -141,10 +141,12 @@ struct Asset {
     void Unload();
 
     static void Load(vector<Asset> *assets) { for (int i=0; i<assets->size(); ++i) (*assets)[i].Load(); }
-    static void LoadTexture(         const string &fn, Texture *out, VideoAssetLoader *l=0) { LoadTexture(0, fn, out, l); }
-    static void LoadTexture(void *h, const string &fn, Texture *out, VideoAssetLoader *l=0);
+    static void LoadTexture(         const string &asset_fn, Texture *out, VideoAssetLoader *l=0) { LoadTexture(0, asset_fn, out, l); }
+    static void LoadTexture(void *h, const string &asset_fn, Texture *out, VideoAssetLoader *l=0);
     static void LoadTexture(const void *from_buf, const char *fn, int size, Texture *out, int flag=VideoAssetLoader::Flag::Default);
     static string FileContents(const string &asset_fn);
+    static File *OpenFile(const string &asset_fn);
+    static unordered_map<string, StringPiece> cache;
 
     static void Copy(const Asset *in, Asset *out) {
         string name = out->name;
@@ -246,9 +248,9 @@ void glLine(const point &p1, const point &p2, const Color *color);
 void glAxis(Asset*, Entity*);
 void glRoom(Asset*, Entity*);
 void glIntersect(int x, int y, Color *c);
-void glTimeResolutionShader(Shader *shader, const Texture *tex=0);
-void glTimeResolutionShaderWindows(Shader *shader, const Color &backup_color, const Box          &win, const Texture *tex=0);
-void glTimeResolutionShaderWindows(Shader *shader, const Color &backup_color, const vector<Box*> &win, const Texture *tex=0);
+void glShadertoyShader(Shader *shader, const Texture *tex=0);
+void glShadertoyShaderWindows(Shader *shader, const Color &backup_color, const Box          &win, const Texture *tex=0);
+void glShadertoyShaderWindows(Shader *shader, const Color &backup_color, const vector<Box*> &win, const Texture *tex=0);
 void glSpectogram(Matrix *m, unsigned char *data, int width, int height, int hjump, float max, float clip, bool interpolate, int pd=PowerDomain::dB);
 void glSpectogram(Matrix *m, Asset *a, float *max=0, float clip=-INFINITY, int pd=PowerDomain::dB);
 void glSpectogram(SoundAsset *sa, Asset *a, Matrix *transform=0, float *max=0, float clip=-INFINITY);
@@ -690,7 +692,7 @@ template <class Line> struct RingFrameBuffer {
     void SetDimensions(int W, int H, Font *f) { w = W; h = H; font_size = f->size; font_height = f->Height(); }
     void ScrollPercent(float y) { scroll.y = fmod(scroll.y + y, 1.0); }
     void ScrollPixels(int y) { ScrollPercent((float)y / Height()); }
-    void AdvancePixels(int y) { ScrollPixels(y); p.y = RingIndex::Wrap(p.y - y, Height());  }
+    void AdvancePixels(int y) { ScrollPixels(y); p.y = RingIndex::WrapOver(p.y - y, Height()); }
     point BackPlus(const point &o) { return point(RingIndex::WrapOver(p.x + o.x, Width()),
                                                   RingIndex::WrapOver(p.y + o.y, Height())); }
 };

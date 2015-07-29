@@ -85,7 +85,7 @@ static const char **osx_argv = 0;
     - (void)windowDidResignMain:(NSNotification *)notification { [self clearKeyModifiers]; }
     - (void)setWindow:(NSWindow*)w { window = w; }
     - (void)setScreen:(NativeWindow*)s { screen = s; }
-    - (void)setFrame:(NSRect)frame { [super setFrame:frame]; needs_reshape=YES; [self update]; }
+    - (void)setFrameSize:(NSSize)s { [super setFrameSize:s]; needs_reshape=YES; [self update]; }
     - (void)setFrameOnMouseInput:(bool)v { frame_on_mouse_input = v; }
     - (void)setFrameOnKeyboardInput:(bool)v { frame_on_keyboard_input = v; }
     - (void)viewDidChangeBackingProperties {
@@ -97,7 +97,7 @@ static const char **osx_argv = 0;
     - (void)lockFocus {
         [super lockFocus];
         CGLLockContext([context CGLContextObj]);
-        [context setView:self];
+        if ([context view] != self) [context setView:self];
         SetNativeWindow(screen);
         if (needs_reshape) { [self reshape]; needs_reshape=NO; }
     }
@@ -195,7 +195,6 @@ static const char **osx_argv = 0;
         SetNativeWindow(screen);
         WindowClosed();
         [self stopThread];
-        [self autorelease];
     }
     - (void)setWaitForeverSocket: (int)fd {
         if (wait_forever_fh) FATALf("wait_forever_fh already set: %p", wait_forever_fh);
@@ -323,6 +322,10 @@ static const char **osx_argv = 0;
 @end
 
 @implementation AppDelegate
+    {
+        NSFont *font;
+        NSString *font_change_cmd;
+    }
     - (void)applicationWillTerminate: (NSNotification *)aNotification {}
     - (void)applicationDidFinishLaunching: (NSNotification *)aNotification {
         INFOf("OSXModule::Main argc=%d\n", osx_argc);
@@ -336,7 +339,7 @@ static const char **osx_argv = 0;
         NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, w, h)
                                              styleMask:NSClosableWindowMask|NSMiniaturizableWindowMask|NSResizableWindowMask|NSTitledWindowMask
                                              backing:NSBackingStoreBuffered defer:NO];
-        GameView *view = [[GameView alloc] initWithFrame:window.frame pixelFormat:GameView.defaultPixelFormat];
+        GameView *view = [[[GameView alloc] initWithFrame:window.frame pixelFormat:GameView.defaultPixelFormat] autorelease];
         [view setScreen:s];
         [view setWindow:window];
         [[view openGLContext] setView:view];
@@ -362,6 +365,20 @@ static const char **osx_argv = 0;
         GetLFApp()->run = false;
         return YES;
     }
+    - (void)selectFont: (const char *)name size:(int)s cmd:(const char*)v {
+        font = [NSFont fontWithName:[NSString stringWithUTF8String:name] size:s];
+        font_change_cmd = [NSString stringWithUTF8String:v];
+        NSFontManager *fontManager = [NSFontManager sharedFontManager];
+        [fontManager setSelectedFont:font isMultiple:NO];
+        [fontManager setDelegate:self];
+        [fontManager setTarget:self];
+        [fontManager orderFrontFontPanel:self];
+    }
+    - (void)changeFont:(id)sender {
+        font = [sender convertFont:font];
+        float size = [[[font fontDescriptor] objectForKey:NSFontSizeAttribute] floatValue];
+        ShellRun([[NSString stringWithFormat:@"%@ %@ %f", font_change_cmd, [font fontName], size] UTF8String]);
+    }
 @end
 
 extern "C" void NativeWindowInit() {}
@@ -375,6 +392,13 @@ extern "C" void *OSXCreateWindow(int w, int h, struct NativeWindow *nw) {
 }
 extern "C" void OSXDestroyWindow(void *O) {
     [(AppDelegate*)[NSApp delegate] destroyWindow: [(GameView*)O window] ];
+}
+
+extern "C" void OSXSetWindowResizeIncrements(void *O, float x, float y) {
+  [[(GameView*)O window] setContentResizeIncrements: NSMakeSize(x, y)];
+}
+extern "C" void OSXSetWindowTransparency(void *O, float v) {
+  [[(GameView*)O window] setAlphaValue: 1.0 - v];
 }
 
 extern "C" void *OSXCreateGLContext(void *O) {
@@ -391,6 +415,9 @@ extern "C" void OSXMakeWindowCurrent(void *O) {
 }
 extern "C" void OSXSetWindowSize(void *O, int W, int H) {
     [[(GameView*)O window] setContentSize:NSMakeSize(W, H)];
+}
+extern "C" void OSXSetWindowTitle(void *O, const char *v) {
+    [(GameView*)O window].title = [NSString stringWithUTF8String:v];
 }
 extern "C" void OSXVideoSwap(void *O) {
     // [[(GameView*)O openGLContext] flushBuffer];
@@ -477,23 +504,16 @@ extern "C" void OSXCreateApplicationMenus() {
     [[NSApp mainMenu] addItem: item];
     [menu release];
     [item release];
-
-    menu = [[NSMenu alloc] initWithTitle:@"View"];
-    item = [menu addItemWithTitle:@"Zoom In"  action:@selector(zoomIn:)  keyEquivalent:@"="];
-    item = [menu addItemWithTitle:@"Zoom Out" action:@selector(zoomOut:) keyEquivalent:@"-"];
-    item = [[NSMenuItem alloc] initWithTitle:@"View" action:nil keyEquivalent:@""];
-    [item setSubmenu: menu];
-    [[NSApp mainMenu] addItem: item];
-    [menu release];
-    [item release];
 }
 
-extern "C" void OSXCreateNativeMenu(const char *title_text, int n, const char **name, const char **val) {
+extern "C" void OSXCreateNativeMenu(const char *title_text, int n, const char **key, const char **name, const char **val) {
     NSMenuItem *item;
     NSString *title = [NSString stringWithUTF8String: title_text];
     NSMenu *menu = [[NSMenu alloc] initWithTitle: title];
     for (int i=0; i<n; i++) {
-        item = [menu addItemWithTitle: [NSString stringWithUTF8String: name[i]] action:@selector(shellRun:) keyEquivalent:@""];
+        if (!strcmp(name[i], "<seperator>")) { [menu addItem:[NSMenuItem separatorItem]]; continue; }
+        item = [menu addItemWithTitle: [NSString stringWithUTF8String: name[i]] action:(val[i][0] ? @selector(shellRun:) : nil)
+                     keyEquivalent:    [NSString stringWithUTF8String: key[i]]];
         [item setRepresentedObject: [NSString stringWithUTF8String: val[i]]];
     }
     item = [[NSMenuItem alloc] initWithTitle:title action:nil keyEquivalent:@""];
@@ -501,6 +521,10 @@ extern "C" void OSXCreateNativeMenu(const char *title_text, int n, const char **
     [[NSApp mainMenu] addItem: item];
     [menu release];
     [item release];
+}
+
+extern "C" void OSXLaunchNativeFontChooser(const char *cur_font, int size, const char *change_font_cmd) {
+    [(AppDelegate*)[NSApp delegate] selectFont:cur_font size:size cmd:change_font_cmd];
 }
 
 extern "C" int main(int argc, const char **argv) {

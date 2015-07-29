@@ -87,63 +87,66 @@ struct KeyboardController {
     virtual void Escape     () {}
 };
 
+struct MouseControllerCallback {
+  typedef function<void()> CB;
+  typedef function<bool()> BoolCB;
+  typedef function<void(int, int, int, int)> CoordCB;
+  enum { NONE=0, CB_VOID=1, CB_BOOL=2, CB_COORD=3 } type;
+  UNION FunctionPointer {
+    CB      cb_void;
+    BoolCB  cb_bool;
+    CoordCB cb_coord;
+    FunctionPointer() {}
+    ~FunctionPointer() {}
+  } cb;
+  ~MouseControllerCallback() { Destruct(); }
+  MouseControllerCallback()                  : type(NONE) {}
+  MouseControllerCallback(const CB       &c) : type(CB_VOID)  { new (&cb.cb_void)  CB     (c); }
+  MouseControllerCallback(const BoolCB   &c) : type(CB_BOOL)  { new (&cb.cb_bool)  BoolCB (c); }
+  MouseControllerCallback(const CoordCB  &c) : type(CB_COORD) { new (&cb.cb_coord) CoordCB(c); }
+  MouseControllerCallback(const MouseControllerCallback &c) { Assign(c); }
+  MouseControllerCallback &operator=(const MouseControllerCallback &c) { Destruct(); Assign(c); return *this; }
+  void Destruct() {
+    switch(type) {
+      case CB_VOID:  cb.cb_void .~CB();      break;
+      case CB_BOOL:  cb.cb_bool .~BoolCB();  break;
+      case CB_COORD: cb.cb_coord.~CoordCB(); break;
+      default:                               break;
+    }
+  }
+  void Assign(const MouseControllerCallback &c) {
+    switch ((type = c.type)) {
+      case CB_VOID:  new (&cb.cb_void)  CB     (c.cb.cb_void);  break;
+      case CB_BOOL:  new (&cb.cb_bool)  BoolCB (c.cb.cb_bool);  break;
+      case CB_COORD: new (&cb.cb_coord) CoordCB(c.cb.cb_coord); break;
+      default:                                                  break;
+    }
+  }
+  bool Run(const point &p, int button, int down) {
+    bool ret = 1;
+    switch (type) {
+      case CB_VOID:  cb.cb_void();                        break;
+      case CB_BOOL:  ret = cb.cb_bool();                  break;
+      case CB_COORD: cb.cb_coord(button, p.x, p.y, down); break;
+      default:                                            break;
+    } return ret;
+  }
+};
+
 struct MouseController {
-    typedef function<void()> CB;
-    typedef function<bool()> BoolCB;
-    typedef function<void(int, int, int, int)> CoordCB;
+    typedef MouseControllerCallback::CB CB;
+    typedef MouseControllerCallback::BoolCB BoolCB;
+    typedef MouseControllerCallback::CoordCB CoordCB;
 
     struct Event { enum { Click=1, Hover=2, Drag=3 }; };
     struct Events { int total, click, hover; };
-
-    struct Callback {
-        enum { NONE=0, CB_VOID=1, CB_BOOL=2, CB_COORD=3 } type;
-        UNION FunctionPointer {
-            CB      cb_void;
-            BoolCB  cb_bool;
-            CoordCB cb_coord;
-            FunctionPointer() {}
-            ~FunctionPointer() {}
-        } cb;
-        ~Callback() { Destruct(); }
-        Callback()                  : type(NONE) {}
-        Callback(const CB       &c) : type(CB_VOID)  { new (&cb.cb_void)  CB     (c); }
-        Callback(const BoolCB   &c) : type(CB_BOOL)  { new (&cb.cb_bool)  BoolCB (c); }
-        Callback(const CoordCB  &c) : type(CB_COORD) { new (&cb.cb_coord) CoordCB(c); }
-        Callback(const Callback &c) { Assign(c); }
-        Callback &operator=(const Callback &c) { Destruct(); Assign(c); return *this; }
-        void Destruct() {
-            switch(type) {
-                case CB_VOID:  cb.cb_void .~CB();      break;
-                case CB_BOOL:  cb.cb_bool .~BoolCB();  break;
-                case CB_COORD: cb.cb_coord.~CoordCB(); break;
-                default:                               break;
-            }
-        }
-        void Assign(const Callback &c) {
-            switch ((type = c.type)) {
-                case CB_VOID:  new (&cb.cb_void)  CB     (c.cb.cb_void);  break;
-                case CB_BOOL:  new (&cb.cb_bool)  BoolCB (c.cb.cb_bool);  break;
-                case CB_COORD: new (&cb.cb_coord) CoordCB(c.cb.cb_coord); break;
-                default:                                                  break;
-            }
-        }
-        bool Run(const point &p, int button, int down) {
-            bool ret = 1;
-            switch (type) {
-                case CB_VOID:  cb.cb_void();                        break;
-                case CB_BOOL:  ret = cb.cb_bool();                  break;
-                case CB_COORD: cb.cb_coord(button, p.x, p.y, down); break;
-                default:                                            break;
-            } return ret;
-        }
-    };
 
     struct HitBox {
         Box box;
         int evtype, val=0;
         bool active=1, deleted=0, run_only_if_first=0;
-        Callback CB;
-        HitBox(int ET=0, const Box &b=Box(), const Callback &cb=Callback()) : box(b), evtype(ET), CB(cb) {}
+        MouseControllerCallback CB;
+        HitBox(int ET=0, const Box &b=Box(), const MouseControllerCallback &cb=MouseControllerCallback()) : box(b), evtype(ET), CB(cb) {}
     };
 
     IterableFreeListVector<HitBox> hit;
@@ -158,63 +161,10 @@ struct MouseController {
     virtual void Activate() { active = 1; }
     virtual void Deactivate() { active = 0; }
     virtual bool NotActive() const { return !active; }
-    virtual int AddClickBox(const Box &w, const Callback &cb) { return hit.Insert(HitBox(Event::Click, w, cb)); }
-    virtual int AddHoverBox(const Box &w, const Callback &cb) { return hit.Insert(HitBox(Event::Hover, w, cb)); }
-    virtual int AddDragBox (const Box &w, const Callback &cb) { return hit.Insert(HitBox(Event::Drag,  w, cb)); }
+    virtual int AddClickBox(const Box &w, const MouseControllerCallback &cb) { return hit.Insert(HitBox(Event::Click, w, cb)); }
+    virtual int AddHoverBox(const Box &w, const MouseControllerCallback &cb) { return hit.Insert(HitBox(Event::Hover, w, cb)); }
+    virtual int AddDragBox (const Box &w, const MouseControllerCallback &cb) { return hit.Insert(HitBox(Event::Drag,  w, cb)); }
     virtual int Input(InputEvent::Id, const point &p, int down, int flag);
-};
-
-struct InputModule : public Module {
-    virtual int Init(Window *w) { return 0; }
-};
-
-struct Input : public InputModule {
-    bool left_shift_down=0, right_shift_down=0, left_ctrl_down=0, right_ctrl_down=0;
-    bool left_cmd_down=0, right_cmd_down=0, mouse_but1_down=0, mouse_but2_down=0;
-    vector<Callback> queued_input;
-    mutex queued_input_mutex;
-    InputModule *impl=0;
-
-    void QueueKey(int key, bool down) {
-        ScopedMutex sm(queued_input_mutex);
-        queued_input.push_back(bind([&](){ KeyPress(key, down); }));
-    }
-    void QueueMouseClick(int button, bool down, const point &p) {
-        ScopedMutex sm(queued_input_mutex);
-        queued_input.push_back(bind([&](){ MouseClick(button, down, p); }));
-    }
-    void QueueMouseMovement(const point &p, const point &d) {
-        ScopedMutex sm(queued_input_mutex);
-        queued_input.push_back(bind([&](){ MouseMove(p, d); }));
-    }
-    void QueueMouseWheel(const point &p, const point &d) {
-        ScopedMutex sm(queued_input_mutex);
-        queued_input.push_back(bind([&](){ MouseWheel(p, d); }));
-    }
-    
-    bool ShiftKeyDown() const { return left_shift_down || right_shift_down; }
-    bool CtrlKeyDown() const { return left_ctrl_down || right_ctrl_down; }
-    bool CmdKeyDown() const { return left_cmd_down || right_cmd_down; }
-    bool MouseButton1Down() const { return mouse_but1_down; }
-    bool MouseButton2Down() const { return mouse_but2_down; }
-
-    int Init();
-    int Init(Window*);
-    int Frame(unsigned time);
-    int DispatchQueuedInput();
-
-    int  KeyPress(int key, bool down);
-    int  KeyEventDispatch(InputEvent::Id event, bool down);
-
-    int  MouseMove(const point &p, const point &d);
-    int  MouseWheel(const point &p, const point &d);
-    int  MouseClick(int button, bool down, const point &p);
-    int  MouseEventDispatch(InputEvent::Id event, const point &p, int down);
-
-    static point TransformMouseCoordinate(point p) {
-        if (FLAGS_swap_axis) p = point(screen->width - p.y, p.x);
-        return point(p.x, screen->height - p.y);
-    }
 };
 
 struct Bind {
@@ -284,6 +234,80 @@ struct BindMap : public InputController {
     }
     string DebugString() const { string v="{ "; for (auto b : data) StrAppend(&v, b.key, " "); return v + "}"; }
 };
+
+struct InputModule : public Module {
+  virtual int Init(Window *w) { return 0; }
+};
+
+struct Input : public InputModule {
+  bool left_shift_down = 0, right_shift_down = 0, left_ctrl_down = 0, right_ctrl_down = 0;
+  bool left_cmd_down = 0, right_cmd_down = 0, mouse_but1_down = 0, mouse_but2_down = 0;
+  vector<Callback> queued_input;
+  mutex queued_input_mutex;
+  InputModule *impl = 0;
+  Bind paste_bind;
+
+  void QueueKey(int key, bool down) {
+    ScopedMutex sm(queued_input_mutex);
+    queued_input.push_back(bind([&]() { KeyPress(key, down); }));
+  }
+  void QueueMouseClick(int button, bool down, const point &p) {
+    ScopedMutex sm(queued_input_mutex);
+    queued_input.push_back(bind([&]() { MouseClick(button, down, p); }));
+  }
+  void QueueMouseMovement(const point &p, const point &d) {
+    ScopedMutex sm(queued_input_mutex);
+    queued_input.push_back(bind([&]() { MouseMove(p, d); }));
+  }
+  void QueueMouseWheel(const point &p, const point &d) {
+    ScopedMutex sm(queued_input_mutex);
+    queued_input.push_back(bind([&]() { MouseWheel(p, d); }));
+  }
+
+  bool ShiftKeyDown() const { return left_shift_down || right_shift_down; }
+  bool CtrlKeyDown() const { return left_ctrl_down || right_ctrl_down; }
+  bool CmdKeyDown() const { return left_cmd_down || right_cmd_down; }
+  bool MouseButton1Down() const { return mouse_but1_down; }
+  bool MouseButton2Down() const { return mouse_but2_down; }
+  void ClearButtonsDown();
+
+  int Init();
+  int Init(Window*);
+  int Frame(unsigned time);
+  int DispatchQueuedInput();
+
+  int  KeyPress(int key, bool down);
+  int  KeyEventDispatch(InputEvent::Id event, bool down);
+
+  int  MouseMove(const point &p, const point &d);
+  int  MouseWheel(const point &p, const point &d);
+  int  MouseClick(int button, bool down, const point &p);
+  int  MouseEventDispatch(InputEvent::Id event, const point &p, int down);
+
+  static point TransformMouseCoordinate(point p) {
+    if (FLAGS_swap_axis) p = point(screen->width - p.y, p.x);
+    return point(p.x, screen->height - p.y);
+  }
+};
+
+#ifdef LFL_WININPUT
+struct WinApp {
+  HINSTANCE hInst = 0;
+  int nCmdShow = 0;
+  void Setup(HINSTANCE hI, int nCS) { hInst = hI; nCmdShow = nCS; }
+  void CreateClass();
+  int MessageLoop();
+  static LRESULT APIENTRY WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
+};
+struct WinWindow {
+  bool menubar = 0, frame_on_keyboard_input = 0, frame_on_mouse_input = 0;
+  point prev_mouse_pos, resize_increment;
+  int start_msg_id = WM_USER + 100;
+  HMENU menu = 0, context_menu = 0;
+  vector<string> menu_cmds;
+  bool RestrictResize(int m, RECT*);
+};
+#endif
 
 struct Shell {
     typedef function<void(const vector<string>&)> CB;

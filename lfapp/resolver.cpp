@@ -22,6 +22,8 @@
 
 #ifdef WIN32
 #include <WinDNS.h>
+#else
+#include <netinet/in.h>
 #endif
 
 namespace LFL {
@@ -86,15 +88,23 @@ bool Resolver::Resolve(const Request &req) {
 #endif
 }
 
+void Resolver::NSLookup(const string &host, const ResponseCB &cb) {
+    IPV4::Addr addr;
+    if ((addr = IPV4::Parse(host)) != INADDR_NONE) cb(addr, 0);
+    else if (!Resolve(Request(host, DNS::Type::A, cb))) cb(-1, 0);
+}
+
 void Resolver::DefaultNameserver(vector<IPV4::Addr> *nameservers) {
     nameservers->clear();
 #ifdef LFL_ANDROID
     return;
 #endif
 #ifdef _WIN32
-    IP4_ARRAY IP; DWORD size=sizeof(IP4_ARRAY);
-    if (DnsQueryConfig(DnsConfigDnsServerList, 0, 0, 0, &IP, &size) || !IP.AddrCount) return;
-    nameservers->push_back(IP.AddrArray[0]);
+    char buf[512];
+    DWORD size=sizeof(buf);
+    IP4_ARRAY *IP = (IP4_ARRAY*)buf;
+    if (DnsQueryConfig(DnsConfigDnsServerList, 0, 0, 0, IP, &size) || !IP->AddrCount) return ERROR("no default nameserver ", GetLastError());
+    nameservers->push_back(IP->AddrArray[0]);
 #else
     LocalFile file("/etc/resolv.conf", "r");
     if (!file.Opened()) return;

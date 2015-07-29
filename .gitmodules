@@ -10,3 +10,7 @@
 [submodule "imports/ios-openssl"]
 	path = imports/ios-openssl
 	url = https://github.com/st3fan/ios-openssl
+[submodule "imports/openssl"]
+	path = imports/openssl
+	url = https://github.com/LucidFusionLabs/openssl
+	branch = OpenSSL_1_0_1-stable

@@ -29,11 +29,15 @@ TEST(MathTest, Util) {
     EXPECT_FALSE(IsPowerOfTwo(3));
     EXPECT_EQ(10,    WhichLog2(1024));
     EXPECT_EQ(2048,  NextPowerOfTwo(1026));
-    { short str[] = { ' ', ' ', '-', '3', '7', '4', 'a', 0 }; EXPECT_EQ(-374, atoi(str)); }
+    { char16_t str[] = { ' ', ' ', '-', '3', '7', '4', 'a', 0 }; EXPECT_EQ(-374, atoi(str)); }
     EXPECT_EQ( 1,  RoundDown( 1.2));
     EXPECT_EQ( 2,  RoundUp  ( 1.2));
     EXPECT_EQ(-2,  RoundUp  (-1.2));
     EXPECT_EQ(-1,  RoundDown(-1.2));
+    EXPECT_EQ(0,  PrevMultipleOfN(15, 16));
+    EXPECT_EQ(16, PrevMultipleOfN(16, 16));
+    EXPECT_EQ(16, NextMultipleOfN(16, 16));
+    EXPECT_EQ(32, NextMultipleOfN(17, 16));
 }
 
 TEST(MatrixTest, ChangeDimensions) {

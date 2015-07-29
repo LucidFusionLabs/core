@@ -94,16 +94,24 @@ int String::Convert(const StringPieceT<X> &in, basic_string<Y> *out, const char 
 #else /* LFL_ICONV */
 template <class X, class Y>
 int String::Convert(const StringPieceT<X> &in, basic_string<Y> *out, const char *from, const char *to) {
-    if (strcmp(from, to)) ONCE(ERROR("conversion not supported.  copying.  #define LFL_ICONV"));
-    String::Copy(in, out);
+  if (!strcmp(from, to)) { String::Copy(in, out); return in.len; }
+#ifdef WIN32
+  if (!strcmp(from, "UTF-16LE") && !strcmp(to, "UTF-8")) {
+    out->resize(WideCharToMultiByte(CP_UTF8, 0, (wchar_t*)in.data(), in.size(), NULL, 0, NULL, NULL));
+    WideCharToMultiByte(CP_UTF8, 0, (wchar_t*)in.data(), in.size(), (char*)&(*out)[0], out->size(), NULL, NULL);
     return in.len;
+  }
+#endif
+  ONCE(ERROR("conversion from ", from, " to ", to, " not supported.  copying.  #define LFL_ICONV"));
+  String::Copy(in, out);
+  return in.len;    
 }
 #endif /* LFL_ICONV */
 
-template int String::Convert<char,  char >(const StringPiece  &, string  *, const char*, const char*);
-template int String::Convert<char,  short>(const StringPiece  &, String16*, const char*, const char*);
-template int String::Convert<short, char >(const String16Piece&, string  *, const char*, const char*);
-template int String::Convert<short, short>(const String16Piece&, String16*, const char*, const char*);
+template int String::Convert<char,     char    >(const StringPiece  &, string  *, const char*, const char*);
+template int String::Convert<char,     char16_t>(const StringPiece  &, String16*, const char*, const char*);
+template int String::Convert<char16_t, char    >(const String16Piece&, string  *, const char*, const char*);
+template int String::Convert<char16_t, char16_t>(const String16Piece&, String16*, const char*, const char*);
 
 String16 String::ToUTF16(const StringPiece &text, int *consumed) {
     int input = text.Length(), output = 0, c_bytes, c;
@@ -121,8 +129,8 @@ String16 String::ToUTF16(const StringPiece &text, int *consumed) {
 }
 
 String16 UTF16::WriteGlyph(int codepoint) { return String16(1, codepoint); }
-int UTF16::ReadGlyph(const String16Piece &s, const short *p, int *len, bool eof) { *len=1; return *(const unsigned short *)p; }
-int UTF8 ::ReadGlyph(const StringPiece   &s, const char  *p, int *len, bool eof) {
+int UTF16::ReadGlyph(const String16Piece &s, const char16_t *p, int *len, bool eof) { *len=1; return *p; }
+int UTF8 ::ReadGlyph(const StringPiece   &s, const char     *p, int *len, bool eof) {
     *len = 1;
     unsigned char c0 = *(const unsigned char *)p;
     if ((c0 & (1<<7)) == 0) return c0; // ascii
@@ -148,35 +156,20 @@ int UTF8 ::ReadGlyph(const StringPiece   &s, const char  *p, int *len, bool eof)
 string UTF8::WriteGlyph(int codepoint) {
 #if 1
     string out;
-    short in[] = { (short)codepoint, 0 };
+    char16_t in[] = { (char16_t)codepoint, 0 };
     String::Convert(String16Piece(in, 1), &out, "UTF-16LE", "UTF-8");
     return out;
 #else
 #endif
 }
 
-int IsAscii(int c) { return c >= 32 && c < 128; }
 int isfileslash(int c) { return c == LocalFile::Slash; }
-int isdot(int c) { return c == '.'; }
-int iscomma(int c) { return c == ','; }
-int isand(int c) { return c == '&'; }
-int isdquote(int c) { return c == '"'; }
-int issquote(int c) { return c == '\''; }
-int istick(int c) { return c == '`'; }
-int isdig(int c) { return (c >= '0' && c <= '9'); }
-int isnum(int c) { return isdig(c) || c == '.'; }
-int isquote(int c) { return isdquote(c) || issquote(c) || istick(c); }
-int notspace(int c) { return !isspace(c); }
-int notalpha(int c) { return !isalpha(c); }
-int notalnum(int c) { return !isalnum(c); }
-int notnum(int c) { return !isnum(c); }
-int notcomma(int c) { return !iscomma(c); }
-int notdot(int c) { return !isdot(c); }
 int MatchingParens(int c1, int c2) { return (c1 == '(' && c2 == ')') || (c1 == '[' && c2 == ']') || (c1 == '<' && c2 == '>'); }
 float my_atof(const char *v) { return v ? ::atof(v) : 0; }
 int atoi(const char *v) { return v ? ::atoi(v) : 0; }
-int atoi(const short *v) {
-    if (!v) return 0; int ret = 0; const short *p;
+int atoi(const char16_t *v) {
+    const char16_t *p;
+    if (!v) return 0; int ret = 0;
     if (!(p = FindChar(v, notspace))) return 0;
     bool neg = *p == '-';
     for (p += neg; *p >= '0' && *p <= '9'; p++) ret = ret*10 + *p - '0';
@@ -292,13 +285,13 @@ template <class X, class Y> bool PrefixMatch(const X* in, const Y* pref, int cs)
             (!cs && ::tolower(*in) == ::tolower(*pref)))) { in++; pref++; }
     return !*pref;
 }
-bool PrefixMatch(const char     *in, const string   &pref, int cs) { return PrefixMatch<char,  char> (in,         pref.c_str(), cs); }
-bool PrefixMatch(const string   &in, const char     *pref, int cs) { return PrefixMatch<char,  char> (in.c_str(), pref,         cs); }
-bool PrefixMatch(const string   &in, const string   &pref, int cs) { return PrefixMatch<char,  char> (in.c_str(), pref.c_str(), cs); }
-bool PrefixMatch(const String16 &in, const String16 &pref, int cs) { return PrefixMatch<short, short>(in.c_str(), pref.c_str(), cs); }
-bool PrefixMatch(const String16 &in, const char     *pref, int cs) { return PrefixMatch<short, char> (in.c_str(), pref, cs); }
-bool PrefixMatch(const char     *in, const char     *pref, int cs) { return PrefixMatch<char,  char> (in, pref, cs); }
-bool PrefixMatch(const short    *in, const short    *pref, int cs) { return PrefixMatch<short, short>(in, pref, cs); }
+bool PrefixMatch(const char     *in, const string   &pref, int cs) { return PrefixMatch<char,     char>    (in,         pref.c_str(), cs); }
+bool PrefixMatch(const string   &in, const char     *pref, int cs) { return PrefixMatch<char,     char>    (in.c_str(), pref,         cs); }
+bool PrefixMatch(const string   &in, const string   &pref, int cs) { return PrefixMatch<char,     char>    (in.c_str(), pref.c_str(), cs); }
+bool PrefixMatch(const String16 &in, const String16 &pref, int cs) { return PrefixMatch<char16_t, char16_t>(in.c_str(), pref.c_str(), cs); }
+bool PrefixMatch(const String16 &in, const char     *pref, int cs) { return PrefixMatch<char16_t, char>    (in.c_str(), pref, cs); }
+bool PrefixMatch(const char     *in, const char     *pref, int cs) { return PrefixMatch<char,     char>    (in, pref, cs); }
+bool PrefixMatch(const char16_t *in, const char16_t *pref, int cs) { return PrefixMatch<char16_t, char16_t>(in, pref, cs); }
 
 template <class X, class Y>
 bool SuffixMatch(const X *in, int inlen, const Y *pref, int preflen, int cs) {
@@ -310,13 +303,13 @@ bool SuffixMatch(const X *in, int inlen, const Y *pref, int preflen, int cs) {
           (!cs && ::tolower(*in) == ::tolower(*pref))); in--, pref--) {}
     return in < in_suffix;
 }
-bool SuffixMatch(const short    *in, const short    *pref, int cs) { return SuffixMatch(String16(in), String16(pref), cs); }
+bool SuffixMatch(const char16_t *in, const char16_t *pref, int cs) { return SuffixMatch(String16(in), String16(pref), cs); }
 bool SuffixMatch(const char     *in, const char     *pref, int cs) { return SuffixMatch(string(in),   string(pref),   cs); }
 bool SuffixMatch(const char     *in, const string   &pref, int cs) { return SuffixMatch(string(in),   pref,           cs); }
 bool SuffixMatch(const string   &in, const char     *pref, int cs) { return SuffixMatch(in,           string(pref),   cs); }
-bool SuffixMatch(const string   &in, const string   &pref, int cs) { return SuffixMatch<char,  char> (in.data(), in.size(), pref.data(), pref.size(), cs); }
-bool SuffixMatch(const String16 &in, const String16 &pref, int cs) { return SuffixMatch<short, short>(in.data(), in.size(), pref.data(), pref.size(), cs); }
-bool SuffixMatch(const String16 &in, const string   &pref, int cs) { return SuffixMatch<short, char> (in.data(), in.size(), pref.data(), pref.size(), cs); }
+bool SuffixMatch(const string   &in, const string   &pref, int cs) { return SuffixMatch<char,     char    >(in.data(), in.size(), pref.data(), pref.size(), cs); }
+bool SuffixMatch(const String16 &in, const String16 &pref, int cs) { return SuffixMatch<char16_t, char16_t>(in.data(), in.size(), pref.data(), pref.size(), cs); }
+bool SuffixMatch(const String16 &in, const string   &pref, int cs) { return SuffixMatch<char16_t, char    >(in.data(), in.size(), pref.data(), pref.size(), cs); }
 
 template <class X, class Y>
 bool StringEquals(const X *s1, const Y *s2, int cs) {
@@ -330,15 +323,15 @@ bool StringEquals(const string   &s1, const string   &s2, int cs) { return s1.si
 bool StringEquals(const string   &s1, const char     *s2, int cs) { return                           StringEquals(s1.c_str(), s2,         cs); }
 bool StringEquals(const char     *s1, const string   &s2, int cs) { return                           StringEquals(s1,         s2.c_str(), cs); }
 bool StringEquals(const char     *s1, const char     *s2, int cs) { return cs ? !strcmp(s1, s2) : !strcasecmp(s1, s2); }
-bool StringEquals(const short    *s1, const short    *s2, int cs) { return StringEquals<short, short>(s1, s2, cs); }
-bool StringEquals(const String16 &s1, const char     *s2, int cs) { return StringEquals<short, char>(s1.c_str(), s2, cs); }
+bool StringEquals(const char16_t *s1, const char16_t *s2, int cs) { return StringEquals<char16_t, char16_t>(s1, s2, cs); }
+bool StringEquals(const String16 &s1, const char     *s2, int cs) { return StringEquals<char16_t, char    >(s1.c_str(), s2, cs); }
 
 bool StringEmptyOrEquals(const string   &cmp, const string   &ref, int cs) { return cmp.empty() || StringEquals(cmp, ref, cs); }
-bool StringEmptyOrEquals(const String16 &cmp, const String16 &ref, int cs) { return cmp.empty() || StringEquals<short, short>(cmp.c_str(), ref.c_str(), cs); }
-bool StringEmptyOrEquals(const String16 &cmp, const string   &ref, int cs) { return cmp.empty() || StringEquals<short, char >(cmp.c_str(), ref.c_str(), cs); }
-bool StringEmptyOrEquals(const string   &cmp, const string   &ref1, const string   &ref2, int cs) { return cmp.empty() || StringEquals              (cmp,         ref1,         cs) || StringEquals              (cmp,         ref2,         cs); }
-bool StringEmptyOrEquals(const String16 &cmp, const String16 &ref1, const String16 &ref2, int cs) { return cmp.empty() || StringEquals<short, short>(cmp.c_str(), ref1.c_str(), cs) || StringEquals<short, short>(cmp.c_str(), ref2.c_str(), cs); }
-bool StringEmptyOrEquals(const String16 &cmp, const string   &ref1, const string   &ref2, int cs) { return cmp.empty() || StringEquals<short, char >(cmp.c_str(), ref1.c_str(), cs) || StringEquals<short, char >(cmp.c_str(), ref2.c_str(), cs); }
+bool StringEmptyOrEquals(const String16 &cmp, const String16 &ref, int cs) { return cmp.empty() || StringEquals<char16_t, char16_t>(cmp.c_str(), ref.c_str(), cs); }
+bool StringEmptyOrEquals(const String16 &cmp, const string   &ref, int cs) { return cmp.empty() || StringEquals<char16_t, char    >(cmp.c_str(), ref.c_str(), cs); }
+bool StringEmptyOrEquals(const string   &cmp, const string   &ref1, const string   &ref2, int cs) { return cmp.empty() || StringEquals                    (cmp,         ref1,         cs) || StringEquals                    (cmp,         ref2,         cs); }
+bool StringEmptyOrEquals(const String16 &cmp, const String16 &ref1, const String16 &ref2, int cs) { return cmp.empty() || StringEquals<char16_t, char16_t>(cmp.c_str(), ref1.c_str(), cs) || StringEquals<char16_t, char16_t>(cmp.c_str(), ref2.c_str(), cs); }
+bool StringEmptyOrEquals(const String16 &cmp, const string   &ref1, const string   &ref2, int cs) { return cmp.empty() || StringEquals<char16_t, char    >(cmp.c_str(), ref1.c_str(), cs) || StringEquals<char16_t, char    >(cmp.c_str(), ref2.c_str(), cs); }
 
 #define FindCharLoopImpl(deref_p) \
     if (!in_quote && ischar(deref_p)) { ret=p; break; } \
@@ -366,10 +359,10 @@ template <>       DrawableBox *FindChar(      DrawableBox *text, int (*ischar)(i
 template <> const DrawableBox *FindChar(const DrawableBox *text, int (*ischar)(int), int len, int *outlen) { return FindChar(text, ischar, 0, len, outlen); }
 template <>       DrawableBox *FindChar(      DrawableBox *text, int (*ischar)(int), int len, int *outlen) { return (DrawableBox*)FindChar((const DrawableBox *)text, ischar, len, outlen); }
 
-template       char*        FindChar<char >      (      char*,        int (*)(int), int, int*);
-template const char*        FindChar<char >      (const char*,        int (*)(int), int, int*);
-template       short*       FindChar<short>      (      short*,       int (*)(int), int, int*);
-template const short*       FindChar<short>      (const short*,       int (*)(int), int, int*);
+template       char*        FindChar<char    >   (      char*,        int (*)(int), int, int*);
+template const char*        FindChar<char    >   (const char*,        int (*)(int), int, int*);
+template       char16_t*    FindChar<char16_t>   (      char16_t*,    int (*)(int), int, int*);
+template const char16_t*    FindChar<char16_t>   (const char16_t*,    int (*)(int), int, int*);
 template       DrawableBox* FindChar<DrawableBox>(      DrawableBox*, int (*)(int), int, int*);
 template const DrawableBox* FindChar<DrawableBox>(const DrawableBox*, int (*)(int), int, int*);
 
@@ -393,7 +386,7 @@ template <> int LengthChar(const DrawableBox *in, int (*ischar)(int), int len) {
     LengthCharFunctionImpl(DrawableBox, p->Id(), 1);
 }
 template int LengthChar(const char*,        int(*)(int), int);
-template int LengthChar(const short*,       int(*)(int), int);
+template int LengthChar(const char16_t*,    int(*)(int), int);
 template int LengthChar(const DrawableBox*, int(*)(int), int);
 
 #define RLengthCharFunctionImpl(type, deref_p) \
@@ -409,7 +402,7 @@ template <> int RLengthChar(const DrawableBox *in, int (*ischar)(int), int len) 
     RLengthCharFunctionImpl(DrawableBox, p->Id());
 }
 template int RLengthChar(const char*,        int(*)(int), int);
-template int RLengthChar(const short*,       int(*)(int), int);
+template int RLengthChar(const char16_t*,    int(*)(int), int);
 template int RLengthChar(const DrawableBox*, int(*)(int), int);
 
 int Split(const StringPiece &in, int (*ischar)(int), string *left) {
@@ -468,19 +461,19 @@ basic_string<X> toconvert(const X *s, int (*tochar)(int), int (*ischar)(int)) {
 
     return input;
 }
-string toconvert  (const string   &s, int (*tochar)(int), int (*ischar)(int)) { return toconvert<char> (s.c_str(), tochar, ischar); }
-string toconvert  (const char     *s, int (*tochar)(int), int (*ischar)(int)) { return toconvert<char> (s,         tochar, ischar); }
-String16 toconvert(const String16 &s, int (*tochar)(int), int (*ischar)(int)) { return toconvert<short>(s.c_str(), tochar, ischar); }
-String16 toconvert(const short    *s, int (*tochar)(int), int (*ischar)(int)) { return toconvert<short>(s,         tochar, ischar); }
+string toconvert  (const string   &s, int (*tochar)(int), int (*ischar)(int)) { return toconvert<char>    (s.c_str(), tochar, ischar); }
+string toconvert  (const char     *s, int (*tochar)(int), int (*ischar)(int)) { return toconvert<char>    (s,         tochar, ischar); }
+String16 toconvert(const String16 &s, int (*tochar)(int), int (*ischar)(int)) { return toconvert<char16_t>(s.c_str(), tochar, ischar); }
+String16 toconvert(const char16_t *s, int (*tochar)(int), int (*ischar)(int)) { return toconvert<char16_t>(s,         tochar, ischar); }
 
 string   toupper(const char     *s) { return toconvert(s        , ::toupper, isalpha); }
 string   toupper(const string   &s) { return toconvert(s.c_str(), ::toupper, isalpha); }
-String16 toupper(const short    *s) { return toconvert(s        , ::toupper, isalpha); }
+String16 toupper(const char16_t *s) { return toconvert(s        , ::toupper, isalpha); }
 String16 toupper(const String16 &s) { return toconvert(s.c_str(), ::toupper, isalpha); }
 
 string   tolower(const char     *s) { return toconvert(s        , ::tolower, isalpha); }
 string   tolower(const string   &s) { return toconvert(s.c_str(), ::tolower, isalpha); }
-String16 tolower(const short    *s) { return toconvert(s        , ::tolower, isalpha); }
+String16 tolower(const char16_t *s) { return toconvert(s        , ::tolower, isalpha); }
 String16 tolower(const String16 &s) { return toconvert(s.c_str(), ::tolower, isalpha); }
 
 string   ReplaceEmpty (const string   &in, const string   &replace_with) { return in.empty() ? replace_with : in; }
@@ -516,7 +509,7 @@ template <class X> string CHexEscapeNonAscii(const basic_string<X> &text) {
     string ret;
     ret.reserve(text.size()*4);
     for (typename make_unsigned<X>::type c : text)
-        if (IsAscii(c)) ret += c;
+        if (isascii(c)) ret += c;
         else StringAppendf(&ret, "\\x%02x", c);
     return ret;
 }
@@ -548,10 +541,10 @@ template <class X, bool chomp> const X *NextLine(const StringPieceT<X> &text, bo
     }
     return ret;
 }
-const char  *NextLine   (const StringPiece   &text, bool final, int *outlen) { return NextLine<char,  true >(text, final, outlen); }
-const short *NextLine   (const String16Piece &text, bool final, int *outlen) { return NextLine<short, true >(text, final, outlen); }
-const char  *NextLineRaw(const StringPiece   &text, bool final, int *outlen) { return NextLine<char,  false>(text, final, outlen); }
-const short *NextLineRaw(const String16Piece &text, bool final, int *outlen) { return NextLine<short, false>(text, final, outlen); }
+const char     *NextLine   (const StringPiece   &text, bool final, int *outlen) { return NextLine<char,     true >(text, final, outlen); }
+const char16_t *NextLine   (const String16Piece &text, bool final, int *outlen) { return NextLine<char16_t, true >(text, final, outlen); }
+const char     *NextLineRaw(const StringPiece   &text, bool final, int *outlen) { return NextLine<char,     false>(text, final, outlen); }
+const char16_t *NextLineRaw(const String16Piece &text, bool final, int *outlen) { return NextLine<char16_t, false>(text, final, outlen); }
 
 const char *NextProto(const StringPiece &text, bool final, int *outlen) {
     if (text.len < ProtoHeader::size) return 0;
@@ -564,7 +557,8 @@ const char *NextProto(const StringPiece &text, bool final, int *outlen) {
 template <class X> 
 StringWordIterT<X>::StringWordIterT(const X *B, int S, int (*delim)(int), int (*quote)(int), int F)
     : in(B), size(S), IsSpace(delim ? delim : isspace), IsQuote(quote), flag(F) {
-    if (in) next_offset += LengthChar(in+cur_offset, IsSpace, size >= 0 ? size-cur_offset : -1);
+    if (!in || !size) next_offset = -1;
+    else              next_offset += LengthChar(in + cur_offset, IsSpace, size >= 0 ? size - cur_offset : -1);
 }
 
 template <class X> const X *StringWordIterT<X>::Next() {
@@ -587,8 +581,8 @@ template <class X> const X *StringLineIterT<X>::Next() {
 
 template struct StringWordIterT<char>;
 template struct StringLineIterT<char>;
-template struct StringWordIterT<short>;
-template struct StringLineIterT<short>;
+template struct StringWordIterT<char16_t>;
+template struct StringLineIterT<char16_t>;
 template struct StringWordIterT<DrawableBox>;
 
 const char *IterWordIter::Next() {
@@ -672,8 +666,8 @@ template <class X> int DirNameLen(const StringPieceT<X> &path, bool include_slas
     for (const X *p = start; p > path.buf; --p) if (isfileslash(*p)) { slash=p; break; }
     return !slash ? 0 : len - (start - slash + !include_slash);
 }
-int DirNameLen(const StringPiece   &text, bool include_slash) { return DirNameLen<char> (text, include_slash); }
-int DirNameLen(const String16Piece &text, bool include_slash) { return DirNameLen<short>(text, include_slash); }
+int DirNameLen(const StringPiece   &text, bool include_slash) { return DirNameLen<char>    (text, include_slash); }
+int DirNameLen(const String16Piece &text, bool include_slash) { return DirNameLen<char16_t>(text, include_slash); }
 
 #ifdef LFL_REGEX
 Regex::~Regex() { re_free((regexp*)impl); }

@@ -280,7 +280,7 @@ bool HTTP::ResolveURL(const char *url, bool *ssl, IPV4::Addr *ipv4_addr, int *tc
   *ssl = !prot->empty() && !strcasecmp(prot->c_str(), "https");
   if (!prot->empty() && strcasecmp(prot->c_str(), "http") && !*ssl) return 0;
   if (host->empty()) { ERROR("no host or path"); return 0; }
-  if (!HTTP::ResolveEndpoint(*host, port, ipv4_addr, tcp_port, *ssl, default_port)) { ERROR("HTTP::ResolveURL ", host); return 0; }
+  if (!HTTP::ResolveEndpoint(*host, port, ipv4_addr, tcp_port, *ssl, default_port)) { ERROR("HTTP::ResolveURL ", *host); return 0; }
   return 1;
 }
 
@@ -580,10 +580,10 @@ string SSH::MAC(Crypto::MACAlgo algo, int MAC_len, const StringPiece &m, int seq
   return prefix ? ret.substr(0, prefix) : ret;
 }
 
-bool SSH::Key   ::PreferenceIntersect(const StringPiece &v, int                *out, int po) { return (*out = Id(FirstMatchCSV(v, PreferenceCSV(po)))); }
-bool SSH::KEX   ::PreferenceIntersect(const StringPiece &v, int                *out, int po) { return (*out = Id(FirstMatchCSV(v, PreferenceCSV(po)))); }
-bool SSH::MAC   ::PreferenceIntersect(const StringPiece &v, int                *out, int po) { return (*out = Id(FirstMatchCSV(v, PreferenceCSV(po)))); }
-bool SSH::Cipher::PreferenceIntersect(const StringPiece &v, Crypto::CipherAlgo *out, int po) { int      id  = Id(FirstMatchCSV(v, PreferenceCSV(po))); if (id) *out = Algo(id); return id; }
+bool SSH::Key   ::PreferenceIntersect(const StringPiece &v, int *out, int po) { return (*out = Id(FirstMatchCSV(v, PreferenceCSV(po)))); }
+bool SSH::KEX   ::PreferenceIntersect(const StringPiece &v, int *out, int po) { return (*out = Id(FirstMatchCSV(v, PreferenceCSV(po)))); }
+bool SSH::MAC   ::PreferenceIntersect(const StringPiece &v, int *out, int po) { return (*out = Id(FirstMatchCSV(v, PreferenceCSV(po)))); }
+bool SSH::Cipher::PreferenceIntersect(const StringPiece &v, int *out, int po) { return (*out = Id(FirstMatchCSV(v, PreferenceCSV(po)))); }
 
 string SSH::Key   ::PreferenceCSV(int o) { static string v; ONCE({ for (int i=1+o; i<=End; ++i) StrAppendCSV(&v, Name(i)); }); return v; }
 string SSH::KEX   ::PreferenceCSV(int o) { static string v; ONCE({ for (int i=1+o; i<=End; ++i) StrAppendCSV(&v, Name(i)); }); return v; }
@@ -642,13 +642,13 @@ const char *SSH::MAC::Name(int id) {
   }
 };
 
-Crypto::CipherAlgo SSH::Cipher::Algo(int id) {
+Crypto::CipherAlgo SSH::Cipher::Algo(int id, int *blocksize) {
   switch(id) {
-    case AES128_CTR:   return Crypto::CipherAlgos::AES128_CTR();
-    case AES128_CBC:   return Crypto::CipherAlgos::AES128_CBC();
-    case TripDES_CBC:  return Crypto::CipherAlgos::TripDES_CBC();
-    case Blowfish_CBC: return Crypto::CipherAlgos::Blowfish_CBC();
-    case RC4:          return Crypto::CipherAlgos::RC4();
+    case AES128_CTR:   if (blocksize) *blocksize = 16;    return Crypto::CipherAlgos::AES128_CTR();
+    case AES128_CBC:   if (blocksize) *blocksize = 16;    return Crypto::CipherAlgos::AES128_CBC();
+    case TripDES_CBC:  if (blocksize) *blocksize = 8;     return Crypto::CipherAlgos::TripDES_CBC();
+    case Blowfish_CBC: if (blocksize) *blocksize = 8;     return Crypto::CipherAlgos::Blowfish_CBC();
+    case RC4:          if (blocksize) *blocksize = 16;    return Crypto::CipherAlgos::RC4();
     default:           return 0;
   }
 };
@@ -896,6 +896,18 @@ string SMTP::EmailFrom(const string &message) {
   if ((lt = mail_from.find("<"    )) == mail_from.npos ||
       (gt = mail_from.find(">", lt)) == mail_from.npos) FATAL("parse template from ", mail_from);
   return mail_from.substr(lt+1, gt-lt-1);
+}
+
+/* MultiProcessResource */
+
+bool MultiProcessResource::Read(const MultiProcessBuffer &mpb, int type, Serializable *out) {
+  CHECK(mpb.buf);
+  Serializable::ConstStream in(mpb.buf, mpb.len);
+  Serializable::Header hdr;
+  hdr.In(&in);
+  CHECK_EQ(type, hdr.id);
+  MultiProcessResource::File content_res;
+  return out->Read(&in) == 0;
 }
 
 }; // namespace LFL

@@ -58,7 +58,7 @@ endif(LFL_PNG)
 # jpeg
 if(LFL_JPEG)
     if(WIN32)
-        INCLUDE_EXTERNAL_MSPROJECT(libjpeg ${CMAKE_CURRENT_SOURCE_DIR}/OpenCV/3rdparty/libjpeg/libjpeg.vcproj)
+        INCLUDE_EXTERNAL_MSPROJECT(libjpeg ${CMAKE_CURRENT_SOURCE_DIR}/OpenCV/3rdparty/libjpeg/libjpeg.vcxproj)
         set(JPEG_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/OpenCV/3rdparty/include PARENT_SCOPE)
         set(JPEG_LIB libjpeg.lib PARENT_SCOPE)
     else(WIN32)
@@ -72,7 +72,7 @@ endif(LFL_JPEG)
 if(LFL_GIF)
     add_subdirectory(giflib)
     set(GIF_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/giflib/lib PARENT_SCOPE)
-    set(GIF_LIB ${CMAKE_CURRENT_BINARY_DIR}/giflib/lib/.libs/libgif.a PARENT_SCOPE)
+    set(GIF_LIB libgif PARENT_SCOPE)
 endif(LFL_GIF)
 
 # freetype
@@ -134,12 +134,15 @@ endif(LFL_TCMALLOC)
 
 # openssl
 if(LFL_OPENSSL)
-    if(LFL_IPHONE)
+    if(WIN32)
+        set(OPENSSL_INCLUDE ${CMAKE_CURRENT_BINARY_DIR}/openssl/include PARENT_SCOPE)
+        set(OPENSSL_LIB ${CMAKE_CURRENT_BINARY_DIR}/openssl/lib/ssleay32.lib ${CMAKE_CURRENT_BINARY_DIR}/openssl/lib/libeay32.lib PARENT_SCOPE)
+    elseif(LFL_IPHONE)
         set(OPENSSL_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/ios-openssl/include PARENT_SCOPE)
         set(OPENSSL_LIB ${CMAKE_CURRENT_SOURCE_DIR}/ios-openssl/lib/libssl.a ${CMAKE_CURRENT_SOURCE_DIR}/ios-openssl/lib/libcrypto.a PARENT_SCOPE)
-    else(LFL_IPHONE)
+    else()
         set(OPENSSL_LIB -lssl -lcrypto PARENT_SCOPE)
-    endif(LFL_IPHONE)
+    endif()
 endif(LFL_OPENSSL)
 
 # box2d

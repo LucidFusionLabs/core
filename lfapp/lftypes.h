@@ -53,6 +53,7 @@ struct typed_ptr {
 template <class X> int TypeId()   { static int ret = fnv32(typeid(X).name()); return ret; }
 template <class X> int TypeId(X*) { static int ret = fnv32(typeid(X).name()); return ret; }
 template <class X> typed_ptr TypePointer(X* v) { return typed_ptr(TypeId<X>(), v); }
+template <class X> typename make_unsigned<X>::type *Unsigned(X *x) { return reinterpret_cast<typename make_unsigned<X>::type*>(x); }
 
 struct RefCounter {
     int count=0;
@@ -352,6 +353,28 @@ template <class X, class Alloc = std::allocator<X> > struct FreeListBlockAllocat
     }
 
     void Erase(unsigned ind) { free_list.push_back(ind); }
+};
+
+template <typename X> struct SortedArray : public vector<X> {
+    SortedArray(int n = 0, const X &x = X()) : vector<X>(n, x) { sort(this->begin(), this->end()); }
+    typename vector<X>::iterator       Erase(const X& x) { return this->erase(Find(x)); }
+    typename vector<X>::iterator       Insert(const X& x) { return this->insert(LowerBound(x), x); }
+    typename vector<X>::iterator       LowerBound(const X& x) { return lower_bound(this->begin(), this->end(), x); }
+    typename vector<X>::iterator       Find(const X& x) { return find(this->begin(), this->end(), x); }
+    typename vector<X>::const_iterator Find(const X& x) const { return find(this->begin(), this->end(), x); }
+};
+
+template <typename K, typename V> struct SortedArrayMap : public vector<pair<K, V>> {
+    typedef typename vector<pair<K, V>>::iterator       iter;
+    typedef typename vector<pair<K, V>>::iterator const_iter;
+    struct Compare { bool operator()(const pair<K, V> &a, const pair<K, V> &b) { return a.first < b.first; } };
+    SortedArrayMap(int n = 0, const pair<K, V> &x = pair<K, V>()) : vector<pair<K, V>>(n, x) { sort(this->begin(), this->end(), Compare()); }
+
+    iter       Erase(const K& k) { return this->erase(Find(k)); }
+    iter       Insert(const K& k, const V &v) { return this->insert(LowerBound(k), pair<K, V>(k, v)); }
+    iter       LowerBound(const K& k) { return lower_bound(this->begin(), this->end(), pair<K, V>(k, V()), Compare()); }
+    iter       Find(const K& k) { return find(this->begin(), this->end(), pair<K, V>(k, V()), Compare()); }
+    const_iter Find(const K& k) const { return find(this->begin(), this->end(), pair<K, V>(k, V()), Compare()); }
 };
 
 template <typename X> struct ArraySegmentIter {

@@ -32,6 +32,7 @@ See [new_app_template/README.txt](new_app_template/README.txt) to quick start yo
 ## Building
 
 `git clone https://github.com/lucidfusionlabs/lfl.git`
+
 `git submodule update --init --recursive`
 
 LFL builds easily for Windows, Linux, Mac OSX, iPhone and Android.
@@ -40,26 +41,36 @@ LFL builds easily for Windows, Linux, Mac OSX, iPhone and Android.
 
 ### Windows
 
-* use CMake 3.0.2
+* Use CMake 3.2.3
 
-        [select c:\lfl for source and binaries]
+        [select c:\lfl for source code]
+        [select c:\lfl\win32 for binaries]
         [Configure]
+        [select Visual Studio 2015 generator]
         [uncheck USE_MSVC_RUNTIME_LIBRARY_DLL]
+        [set CMAKE_GENERATOR_TOOLSET v140_xp]
         [Generate]
 
-        start Visual Studio Command Prompt
-        cd lfl\core\imports\judy\src
-        build.bat
+* Install ActivePerl
 
-* use Visual Studio C++ 2015
+        From Visual Studio Command Prompt:
+        cd lfl\core\imports\openssl
+        perl Configure VC-WIN32 --prefix=C:\lfl\win32\core\imports\openssl
+        ms\do_ms
+        nmake -f ms\nt.mak 
+        nmake -f ms\nt.mak install
+
+* Use Visual Studio C++ 2015
 * Tools > Options > Text Editor > All Languages > Tabs > Insert Spaces
 
-        c:\lfl\term\Project.sln
-        [Build LTerminal]
+        c:\lfl\win32\term\lterm.sln
+        [Build lterm]
 
-        cd c:\lfl\term
-        copy ..\core\lfapp\*.glsl assets
-        copy ..\core\imports\ffmpeg\w32\dll\*.dll Debug [overwrite:All]
+        cd c:\lfl\win32\term
+        mkdir assets
+        copy ..\..\term\assets\* assets
+        copy ..\..\core\lfapp\*.glsl assets
+        If using ffmpeg, copy ..\..\core\imports\ffmpeg\w32\dll\*.dll Debug [overwrite:All]
         [Run]
 
         [Right click] term.nsi > Compile NSIS Script
@@ -72,7 +83,7 @@ LFL builds easily for Windows, Linux, Mac OSX, iPhone and Android.
 
         cd lfl
         mkdir linux && cd linux
-        cmake ..
+        cmake -DCMAKE_BUILD_TYPE=Release ..
 
         cd term
         make lterm_run
@@ -82,12 +93,12 @@ LFL builds easily for Windows, Linux, Mac OSX, iPhone and Android.
 
 ### OSX
 
-* http://www.cmake.org/files/v3.0/cmake-3.0.2-Darwin64-universal.dmg
-* Minimum of XCode 6 required, nasm & yasm from macports
+* http://www.cmake.org/files/v3.2/cmake-3.2.3-Darwin-universal.dmg
+* Minimum of XCode 6 required, nasm & yasm (from macports or brew)
 
         cd lfl
         mkdir osx && cd osx
-        cmake ..
+        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=../core/CMake/OSXToolchain.cmake ..
 
         cd term
         make lterm_run
@@ -135,7 +146,7 @@ LFL builds easily for Windows, Linux, Mac OSX, iPhone and Android.
         cd lfl
         mkdir android && cd android
         ** Modify ANDROIDROOT in ../core/CMake/AndroidToolchain.cmake
-        cmake -DCMAKE_TOOLCHAIN_FILE=../core/CMake/AndroidToolchain.cmake ..
+        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=../core/CMake/AndroidToolchain.cmake ..
 
         cd term
         make lterm_debug

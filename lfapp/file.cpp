@@ -137,14 +137,14 @@ int File::WriteProtoFlag(const ProtoHeader *hdr, bool doflush) {
 }
 
 long long BufferFile::Seek(long long offset, int whence) {
-    if (offset < 0 || offset >= buf.size()) return -1;
+    if (offset < 0 || offset >= (owner ? buf.size() : ptr.len)) return -1;
     nr.buf_dirty = true;
     return rdo = wro = nr.file_offset = offset;
 }
 
 int BufferFile::Read(void *out, size_t size) {
-    size_t l = min(size, buf.size() - rdo);
-    memcpy(out, buf.data() + rdo, l);
+    size_t l = min(size, (owner ? buf.size() : ptr.len) - rdo);
+    memcpy(out, (owner ? buf.data() : ptr.buf) + rdo, l);
     rdo += l;
     nr.file_offset += l;
     nr.buf_dirty = true;
@@ -152,6 +152,7 @@ int BufferFile::Read(void *out, size_t size) {
 }
 
 int BufferFile::Write(const void *In, size_t size) {
+    CHECK(owner);
     const char *in = (const char *)In;
     if (size == -1) size = strlen(in);
     size_t l = min(size, buf.size() - wro);
@@ -165,6 +166,7 @@ int BufferFile::Write(const void *In, size_t size) {
 
 #ifdef WIN32
 const char LocalFile::Slash = '\\';
+const char LocalFile::ExecutableSuffix[] = ".exe";
 int LocalFile::IsDirectory(const string &filename) {
     if (filename.empty()) return true;
     DWORD attr = ::GetFileAttributes(filename.c_str());
@@ -173,6 +175,7 @@ int LocalFile::IsDirectory(const string &filename) {
 }
 #else // WIN32
 const char LocalFile::Slash = '/';
+const char LocalFile::ExecutableSuffix[] = "";
 int LocalFile::IsDirectory(const string &filename) {
     if (filename.empty()) return true;
 #ifdef LFL_ANDROID
@@ -564,14 +567,8 @@ int MatrixFile::ReadVersioned(const VersionedFileName &fn, int iteration) {
     if (iteration == -1) if ((iteration = FindHighestIteration(fn, fileext[0], fileext[1])) == -1) return -1;
 
     bool found = 0;
-    if (!found) {
-        string pn = string(fn.dir) + Filename(fn, fileext[0], iteration);
-        if (!ReadBinary(pn.c_str())) found=1;
-    }
-    if (!found) {
-        string pn = string(fn.dir) + Filename(fn, fileext[1], iteration);
-        if (!Read(pn.c_str())) found=1;
-    }
+    if (!found) if (!ReadBinary(string(fn.dir) + Filename(fn, fileext[0], iteration))) found=1;
+    if (!found) if (!Read      (string(fn.dir) + Filename(fn, fileext[1], iteration))) found=1;
     return found ? iteration : -1;
 }
 
@@ -585,10 +582,15 @@ int MatrixFile::WriteVersionedBinary(const VersionedFileName &fn, int iter) {
     return WriteBinary(pn.c_str(), name.c_str());
 }
 
-int MatrixFile::Read(const string &path, int header, int (*IsSpace)(int)) {      
-    LocalFileLineIter lfi(path);
-    if (!lfi.f.Opened()) return -1;
-    IterWordIter word(&lfi);
+int MatrixFile::Read(const string &path, int header, int(*IsSpace)(int)) {
+    LocalFile lf(path, "r");
+    if (!lf.Opened()) return -1;
+    return Read(&lf, header, IsSpace);
+}
+
+int MatrixFile::Read(File *f, int header, int(*IsSpace)(int)) {
+    FileLineIter fli(f);
+    IterWordIter word(&fli);
     if (IsSpace) word.word.IsSpace = IsSpace;
     return Read(&word, header);
 }

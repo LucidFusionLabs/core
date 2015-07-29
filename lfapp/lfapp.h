@@ -33,6 +33,7 @@
 #include <memory>
 #include <numeric>
 #include <limits>
+#include <cwctype>
 #define LFL_STL_NAMESPACE std
 
 #include <unordered_map>
@@ -91,6 +92,7 @@ using LFL_STL11_NAMESPACE::unordered_map;
 using LFL_STL11_NAMESPACE::unordered_set;
 using LFL_STL11_NAMESPACE::shared_ptr;
 using LFL_STL11_NAMESPACE::unique_ptr;
+using LFL_STL11_NAMESPACE::tuple;
 using LFL_STL11_NAMESPACE::move;
 using LFL_STL11_NAMESPACE::bind;
 using LFL_STL11_NAMESPACE::function;
@@ -118,6 +120,7 @@ using LFL_STL11_NAMESPACE::enable_if;
 using LFL_STL11_NAMESPACE::is_integral;
 using LFL_STL11_NAMESPACE::is_floating_point;
 using LFL_STL11_NAMESPACE::make_unsigned;
+#define tuple_get LFL_STL11_NAMESPACE::get
 
 #include <errno.h>
 #include <math.h>
@@ -135,7 +138,6 @@ using LFL_STL11_NAMESPACE::make_unsigned;
 #define snprintf _snprintf
 #define S_IFDIR _S_IFDIR
 typedef int socklen_t;
-int close(Socket socket);
 extern char *optarg;
 extern int optind;
 #endif
@@ -262,10 +264,10 @@ double CamFPS();
 void PressAnyKey();
 bool FGets(char *buf, int size);
 bool NBFGets(FILE*, char *buf, int size, int timeout=0);
-int NBRead(int fd, char *buf, int size, int timeout=0);
-int NBRead(int fd, string *buf, int timeout=0);
-string NBRead(int fd, int size, int timeout=0);
-bool NBReadable(int fd, int timeout=0);
+int NBRead(Socket fd, char *buf, int size, int timeout=0);
+int NBRead(Socket fd, string *buf, int timeout=0);
+string NBRead(Socket fd, int size, int timeout=0);
+bool NBReadable(Socket fd, int timeout=0);
 
 struct MallocAlloc : public Allocator {
   const char *Name() { return "MallocAlloc"; }
@@ -647,6 +649,7 @@ struct TouchDevice {
 };
 
 struct CUDA : public Module { int Init(); };
+typedef tuple<string, string, string> MenuItem;
 
 struct Application : public ::LFApp, public Module {
   string name, progname, logfilename, startdir, assetdir, dldir;
@@ -679,10 +682,12 @@ struct Application : public ::LFApp, public Module {
   void Log(int level, const char *file, int line, const string &message);
   void CreateNewWindow(const function<void(Window*)> &start_cb = function<void(Window*)>());
   NetworkThread *CreateNetworkThread();
+  void LaunchNativeFontChooser(const FontDesc &cur_font, const string &choose_cmd);
   void LaunchNativeMenu(const string &title);
-  void AddNativeMenu(const string &title, const vector<pair<string, string>>&items);
+  void AddNativeMenu(const string &title, const vector<MenuItem>&items);
   int LoadModule(Module *M) { modules.push_back(M); return M->Init(); }
-  string BinDir() const { return LocalFile::JoinPath(startdir, progname.substr(0, DirNameLen(progname, true))); }
+  StringPiece LoadResource(int id);
+  string BinDir() const;
 
   int Create(int argc, const char **argv, const char *source_filename);
   int Init();

@@ -29,6 +29,9 @@
 #if defined(LFL_GLEW) && !defined(LFL_HEADLESS)
 #define glewGetContext() ((GLEWContext*)screen->glew_context)
 #include <GL/glew.h>
+#ifdef WIN32
+#include <GL/wglew.h>
+#endif
 #endif
 
 #define LFL_GLSL_SHADERS
@@ -46,17 +49,17 @@
 #define glReadPixels(a,b,c,d,e,f,g)
 #define glTexImage2D(a,b,c,d,e,f,g,h,i)
 #define glTexSubImage2D(a,b,c,d,e,f,g,h,i)
+#define glTexParameteri(a,b,c)
 #define glGetTexImage(a,b,c,d,e)
 #define glGetTexLevelParameteriv(a,b,c,d)
-#define glTexParameteri(a,b,c)
-#define glGenRenderbuffers(a,b)
-#define glGenFramebuffers(a,b)
-#define glBindRenderbuffer(a,b)
-#define glBindFramebuffer(a,b)
-#define glRenderbufferStorage(a,b,c,d)
-#define glFramebufferRenderbuffer(a,b,c,d)
-#define glFramebufferTexture2D(a,b,c,d,e)
-#define glCheckFramebufferStatus(a) 0
+#define glGenRenderbuffersEXT(a,b)
+#define glGenFramebuffersEXT(a,b)
+#define glBindRenderbufferEXT(a,b)
+#define glBindFramebufferEXT(a,b)
+#define glRenderbufferStorageEXT(a,b,c,d)
+#define glFramebufferRenderbufferEXT(a,b,c,d)
+#define glFramebufferTexture2DEXT(a,b,c,d,e)
+#define glCheckFramebufferStatusEXT(a) 0
 #define GL_FRAMEBUFFER 0
 #define GL_FRAMEBUFFER_BINDING_OES 0
 #define GL_LUMINANCE 0
@@ -226,7 +229,11 @@ const int GraphicsDevice::Fill              = GL_FILL;
 const int GraphicsDevice::Line              = GL_LINE;
 const int GraphicsDevice::Point             = GL_POINT;
 const int GraphicsDevice::Polygon           = GL_POLYGON;
+#ifdef __APPLE__
 const int GraphicsDevice::GLPreferredBuffer = GL_UNSIGNED_INT_8_8_8_8_REV;
+#else
+const int GraphicsDevice::GLPreferredBuffer = GL_UNSIGNED_BYTE;
+#endif
 const int GraphicsDevice::GLInternalFormat  = GL_RGBA;
 #endif
 
@@ -428,8 +435,8 @@ struct OpenGLES2 : public GraphicsDevice {
 
   void Init() {
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    vertex_shader = LocalFile::FileContents(StrCat(app->assetdir, "lfapp_vertex.glsl"));
-    pixel_shader  = LocalFile::FileContents(StrCat(app->assetdir, "lfapp_pixel.glsl"));
+    vertex_shader = Asset::FileContents("lfapp_vertex.glsl");
+    pixel_shader  = Asset::FileContents("lfapp_pixel.glsl");
     Shader::Create("lfapp",          vertex_shader, pixel_shader, ShaderDefines(1,0,1,0), &app->video.shader_default);
     Shader::Create("lfapp_cubemap",  vertex_shader, pixel_shader, ShaderDefines(1,0,0,1), &app->video.shader_cubemap);
     Shader::Create("lfapp_normals",  vertex_shader, pixel_shader, ShaderDefines(0,1,1,0), &app->video.shader_normals);
@@ -1024,6 +1031,9 @@ extern "C" void *OSXCreateWindow(int W, int H, struct NativeWindow *nw);
 extern "C" void OSXDestroyWindow(void *O);
 extern "C" void OSXMakeWindowCurrent(void *O);
 extern "C" void OSXSetWindowSize(void*, int W, int H);
+extern "C" void OSXSetWindowTitle(void *O, const char *v);
+extern "C" void OSXSetWindowResizeIncrements(void *O, float x, float y);
+extern "C" void OSXSetWindowTransparency(void *O, float v);
 extern "C" void *OSXCreateGLContext(void *O);
 struct OSXVideoModule : public Module {
   int Init() {
@@ -1037,6 +1047,7 @@ struct OSXVideoModule : public Module {
 bool Window::Create(Window *W) { 
   W->id = OSXCreateWindow(W->width, W->height, W);
   if (W->id) Window::active[W->id] = W;
+  OSXSetWindowTitle(W->id, W->caption.c_str());
   return true; 
 }
 void Window::MakeCurrent(Window *W) { 
@@ -1047,6 +1058,47 @@ void Window::Close(Window *W) {
   if (Window::active.empty()) app->run = false;
   if (app->window_closed_cb) app->window_closed_cb(W);
   // OSXDestroyWindow(W->id);
+  screen = 0;
+}
+#endif
+
+#ifdef LFL_WINVIDEO
+struct WinVideoModule : public Module {
+  int Init() {
+    INFO("WinVideoModule::Init()");
+    CHECK(Window::Create(screen));
+    return 0;
+  }
+};
+
+bool Window::Create(Window *W) {
+  static WinApp *winapp = Singleton<WinApp>::Get();
+  ONCE({ winapp->CreateClass(); });
+  HWND hWnd = CreateWindow(app->name.c_str(), W->caption.c_str(), WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN | WS_CLIPSIBLINGS,
+    0, 0, W->width, W->height, NULL, NULL, winapp->hInst, NULL);
+  if (!hWnd) return ERRORv(false, "CreateWindow: ", GetLastError());
+  ShowWindow(hWnd, winapp->nCmdShow);
+  UpdateWindow(hWnd);
+  HDC hDC = GetDC(hWnd);
+  PIXELFORMATDESCRIPTOR pfd = { sizeof(PIXELFORMATDESCRIPTOR), 1, PFD_SUPPORT_OPENGL | PFD_DRAW_TO_WINDOW | PFD_DOUBLEBUFFER,
+    PFD_TYPE_RGBA, 32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 16, 0, 0, PFD_MAIN_PLANE, 0, 0, 0, 0, };
+  int pf = ChoosePixelFormat(hDC, &pfd);
+  if (!pf) return ERRORv(false, "ChoosePixelFormat: ", GetLastError());
+  if (SetPixelFormat(hDC, pf, &pfd) != TRUE) return ERRORv(false, "SetPixelFormat: ", GetLastError());
+  if (!(W->gl = wglCreateContext(hDC))) return ERRORv(false, "wglCreateContext: ", GetLastError());
+  W->surface = hDC;
+  W->impl = new WinWindow();
+  Window::active[(W->id = hWnd)] = W;
+  INFOf("Window::Create %p %p %p (%p)", W->id, W->surface, W->gl, W);
+  MakeCurrent(W);
+  return true;
+}
+void Window::MakeCurrent(Window *W) { if (W) wglMakeCurrent((HDC)W->surface, (HGLRC)W->gl); }
+void Window::Close(Window *W) {
+  delete (WinWindow*)W->impl;
+  Window::active.erase(W->id);
+  if (Window::active.empty()) app->run = false;
+  if (app->window_closed_cb) app->window_closed_cb(W);
   screen = 0;
 }
 #endif
@@ -1338,18 +1390,20 @@ int Video::Init() {
   impl = new QTVideoModule();
 #elif defined(LFL_WXWIDGETS)
   impl = new WxWidgetsVideoModule();
-#elif defined(LFL_GLFWVIDEO)
-  impl = new GLFWVideoModule();
-#elif defined(LFL_SDLVIDEO)
-  impl = new SDLVideoModule();
 #elif defined(LFL_ANDROIDVIDEO)
   impl = new AndroidVideoModule();
 #elif defined(LFL_IPHONEVIDEO)
   impl = new IPhoneVideoModule();
 #elif defined(LFL_OSXVIDEO)
   impl = new OSXVideoModule();
+#elif defined(LFL_WINVIDEO)
+  impl = new WinVideoModule();
 #elif defined(LFL_LINUXVIDEO)
   impl = new LinuxVideoModule();
+#elif defined(LFL_GLFWVIDEO)
+  impl = new GLFWVideoModule();
+#elif defined(LFL_SDLVIDEO)
+  impl = new SDLVideoModule();
 #endif
   if (impl) if (impl->Init()) return -1;
 
@@ -1378,14 +1432,26 @@ int Video::Init() {
 #endif
   INFO("lfapp_opengles_cubemap = ", screen->opengles_cubemap ? "true" : "false");
 
-  init_fonts_cb();
+  InitFonts();
   if (!screen->console) screen->InitConsole();
   return 0;
 }
 
-void *Video::CreateGLContext(Window *W) {
+
+void *Video::BeginGLContextCreate(Window *W) {
+#if defined(LFL_WINVIDEO)
+  return wglCreateContextAttribsARB((HDC)W->surface, (HGLRC)W->gl, 0);
+#else
+  return 0;
+#endif
+}
+
+void *Video::CompleteGLContextCreate(Window *W, void *gl_context) {
 #if defined(LFL_OSXVIDEO)
-  return OSXCreateGLContext(screen->id);
+  return OSXCreateGLContext(W->id);
+#elif defined(LFL_WINVIDEO)
+  wglMakeCurrent((HDC)W->surface, (HGLRC)gl_context);
+  return gl_context;
 #else
   return 0;
 #endif
@@ -1422,6 +1488,28 @@ void Video::InitGraphicsDevice(Window *W) {
 }
 
 void Video::InitFonts() {
+  if (FLAGS_default_font.size()) {}
+  else if (FLAGS_font_engine == "coretext") {
+#ifdef LFL_IPHONE
+    FLAGS_default_font = "Menlo-Bold";
+    FLAGS_default_font_size = 12;
+#else
+    FLAGS_default_font = "Monaco";
+    FLAGS_default_font_size = 15;
+#endif
+  } else if (FLAGS_font_engine == "gdi") {
+    FLAGS_default_font = "Consolas";
+    FLAGS_default_font_size = 17;
+    // FLAGS_default_font_flag = FontDesc::Bold | FontDesc::Mono;
+  } else if (FLAGS_font_engine == "freetype") {
+    FLAGS_default_font = "VeraMoBd.ttf"; // "DejaVuSansMono-Bold.ttf";
+    FLAGS_default_missing_glyph = 42;
+  } else if (FLAGS_font_engine == "atlas") {
+    FLAGS_default_font = "VeraMoBd.ttf";
+    FLAGS_default_missing_glyph = 42;
+    // FLAGS_default_font_size = 32;
+  }
+
   vector<string> atlas_font_size;
   Split(FLAGS_atlas_font_sizes, iscomma, &atlas_font_size);
   FontEngine *font_engine = Fonts::DefaultFontEngine();
@@ -1431,8 +1519,15 @@ void Video::InitFonts() {
   }
 
   FontEngine *atlas_engine = Singleton<AtlasFontEngine>::Get();
-  atlas_engine->Init(FontDesc("MenuAtlas1", "", 0, Color::black));
-  atlas_engine->Init(FontDesc("MenuAtlas2", "", 0, Color::black));
+  atlas_engine->Init(FontDesc("MenuAtlas1", "", 0, Color::black, Color::clear, 0, 0));
+  atlas_engine->Init(FontDesc("MenuAtlas2", "", 0, Color::black, Color::clear, 0, 0));
+
+  if (FLAGS_font_engine != "atlas" && FLAGS_font_engine != "freetype") {
+    FLAGS_atlas_font_sizes = "32";
+    string console_font = "VeraMoBd.ttf";
+    Singleton<AtlasFontEngine>::Get()->Init(FontDesc(console_font, "", 32, Color::white, Color::clear, FLAGS_console_font_flag));
+    FLAGS_console_font = StrCat("atlas://", console_font);
+  }
 }
 
 int Video::Swap() {
@@ -1446,14 +1541,16 @@ int Video::Swap() {
   ((wxGLCanvas*)screen->id)->SwapBuffers();
 #elif defined(LFL_ANDROIDVIDEO)
   AndroidVideoSwap();
-#elif defined(LFL_GLFWVIDEO)
-  glfwSwapBuffers((GLFWwindow*)screen->id);
-#elif defined(LFL_SDLVIDEO)
-  SDL_GL_SwapWindow((SDL_Window*)screen->id);
 #elif defined(LFL_IPHONEVIDEO)
   iPhoneVideoSwap();
 #elif defined(LFL_OSXVIDEO)
   OSXVideoSwap(screen->id);
+#elif defined(LFL_WINVIDEO)
+  SwapBuffers((HDC)screen->surface);
+#elif defined(LFL_GLFWVIDEO)
+  glfwSwapBuffers((GLFWwindow*)screen->id);
+#elif defined(LFL_SDLVIDEO)
+  SDL_GL_SwapWindow((SDL_Window*)screen->id);
 #endif
 
   screen->gd->CheckForError(__FILE__, __LINE__);
@@ -1462,7 +1559,36 @@ int Video::Swap() {
 
 int Video::Free() {
   if (impl) impl->Free();
+  Fonts::DefaultFontEngine()->Shutdown();
   return 0;
+}
+
+void Window::SetCaption(const string &v) {
+#if defined(LFL_OSXVIDEO)
+  OSXSetWindowTitle(id, v.c_str());
+#elif defined(LFL_WINVIDEO)
+  SetWindowText((HWND)screen->id, v.c_str());
+#endif
+}
+
+void Window::SetResizeIncrements(float x, float y) {
+#if defined(LFL_OSXVIDEO)
+  OSXSetWindowResizeIncrements(id, x, y);
+#elif defined(LFL_WINVIDEO)
+  WinWindow *win = static_cast<WinWindow*>(screen->impl);
+  win->resize_increment = point(x, y);
+#endif
+}
+
+void Window::SetTransparency(float v) {
+#if defined(LFL_OSXVIDEO)
+  OSXSetWindowTransparency(id, v);
+#elif defined(LFL_WINVIDEO)
+  if (v <= 0) SetWindowLong((HWND)screen->id, GWL_EXSTYLE, GetWindowLong((HWND)screen->id, GWL_EXSTYLE) & (~WS_EX_LAYERED));
+  else {      SetWindowLong((HWND)screen->id, GWL_EXSTYLE, GetWindowLong((HWND)screen->id, GWL_EXSTYLE) | ( WS_EX_LAYERED));
+    SetLayeredWindowAttributes((HWND)screen->id, 0, static_cast<BYTE>(max(1.0, (1-v)*255.0)), LWA_ALPHA);
+  }
+#endif
 }
 
 void Window::Reshape(int w, int h) {
@@ -1471,16 +1597,23 @@ void Window::Reshape(int w, int h) {
   Window::MakeCurrent(screen);
 #elif defined(LFL_WXWIDGETS)
   ((wxGLCanvas*)screen->id)->SetSize(w, h);
+#elif defined(LFL_OSXVIDEO)
+  OSXSetWindowSize(id, w, h);
+#elif defined(LFL_WINVIDEO)
+  WinWindow *win = static_cast<WinWindow*>(screen->impl);
+  long lStyle = GetWindowLong((HWND)screen->id, GWL_STYLE);
+  RECT r = { 0, 0, w, h };
+  AdjustWindowRect(&r, lStyle, win->menubar);
+  SetWindowPos((HWND)screen->id, 0, 0, 0, r.right-r.left, r.bottom-r.top, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
 #elif defined(LFL_GLFWVIDEO)
   glfwSetWindowSize((GLFWwindow*)id, w, h);
 #elif defined(LFL_SDLVIDEO)
   SDL_SetWindowSize((SDL_Window*)id, w, h);
-#elif defined(LFL_OSXVIDEO)
-  OSXSetWindowSize(id, w, h);
 #endif
 }
 
 void Window::Reshaped(int w, int h) {
+  INFO("Window::Reshaped(", w, ", ", h, ")");
   pow2_width = NextPowerOfTwo((width = w));
   pow2_height = NextPowerOfTwo((height = h));
   if (!gd) return;
@@ -1795,18 +1928,18 @@ void SimpleVideoResampler::CopyPixel(int s_fmt, int d_fmt, const unsigned char *
   switch (s_fmt) {
     case Pixel::RGB24: r = *sp++; g = *sp++; b = *sp++; a = ((f & Flag::TransparentBlack) && !r && !g && !b) ? 0 : 255; break;
     case Pixel::BGR24: b = *sp++; g = *sp++; r = *sp++; a = ((f & Flag::TransparentBlack) && !r && !g && !b) ? 0 : 255; break;
-    case Pixel::RGB32: r = *sp++; g = *sp++; b = *sp++; a=*sp++; break;
-    case Pixel::BGR32: b = *sp++; g = *sp++; r = *sp++; a=*sp++; break;
+    case Pixel::RGB32: r = *sp++; g = *sp++; b = *sp++; a=255; sp++; break;
+    case Pixel::BGR32: b = *sp++; g = *sp++; r = *sp++; a=255; sp++; break;
     case Pixel::RGBA:  r = *sp++; g = *sp++; b = *sp++; a=*sp++; break;
     case Pixel::BGRA:  b = *sp++; g = *sp++; r = *sp++; a=*sp++; break;
     case Pixel::GRAY8: r = 255;   g = 255;   b = 255;   a=*sp++; break;
-                       // case Pixel::GRAY8: r = g = b = a = *sp++; break;
+    // case Pixel::GRAY8: r = g = b = a = *sp++; break;
     case Pixel::LCD: 
-                       r = (sxb ? 0 : *(sp-1)) / 3.0 + *sp / 3.0 + (          *(sp+1)) / 3.0; sp++; 
-                       g = (          *(sp-1)) / 3.0 + *sp / 3.0 + (          *(sp+1)) / 3.0; sp++; 
-                       b = (          *(sp-1)) / 3.0 + *sp / 3.0 + (sxe ? 0 : *(sp+1)) / 3.0; sp++;
-                       a = ((f & Flag::TransparentBlack) && !r && !g && !b) ? 0 : 255;
-                       break;
+      r = (sxb ? 0 : *(sp-1)) / 3.0 + *sp / 3.0 + (          *(sp+1)) / 3.0; sp++; 
+      g = (          *(sp-1)) / 3.0 + *sp / 3.0 + (          *(sp+1)) / 3.0; sp++; 
+      b = (          *(sp-1)) / 3.0 + *sp / 3.0 + (sxe ? 0 : *(sp+1)) / 3.0; sp++;
+      a = ((f & Flag::TransparentBlack) && !r && !g && !b) ? 0 : 255;
+      break;
     default: ERROR("s_fmt ", s_fmt, " not supported"); return;
   }
   switch (d_fmt) {
@@ -2049,6 +2182,24 @@ CGContextRef Texture::CGBitMap(int X, int Y, int W, int H) {
 }
 #endif
 
+#ifdef WIN32
+HBITMAP Texture::CreateGDIBitMap(HDC dc) {
+  ClearBuffer();
+  buf_owner = false;
+  pf = Pixel::BGR32;
+  BITMAPINFO bmi;
+  memzero(bmi.bmiHeader);
+  bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+  bmi.bmiHeader.biWidth = width;
+  bmi.bmiHeader.biHeight = -height;
+  bmi.bmiHeader.biPlanes = 1;
+  bmi.bmiHeader.biCompression = BI_RGB;
+  bmi.bmiHeader.biBitCount = 32;
+  HBITMAP ret = CreateDIBSection(dc, &bmi, DIB_RGB_COLORS, (void**)&buf, NULL, 0);
+  return ret;
+}
+#endif
+
 void Texture::Screenshot() { ScreenshotBox(Box(screen->width, screen->height), Flag::FlipY); }
 void Texture::ScreenshotBox(const Box &b, int flag) {
   Resize(b.w, b.h, preferred_pf, Flag::CreateBuf);
@@ -2063,11 +2214,11 @@ void Texture::ScreenshotBox(const Box &b, int flag) {
 void DepthTexture::Resize(int W, int H, int DF, int flag) {
   if (DF) df = DF;
   width=W; height=H;
-  if (!ID && (flag & Flag::CreateGL)) glGenRenderbuffers(1, &ID);
+  if (!ID && (flag & Flag::CreateGL)) glGenRenderbuffersEXT(1, &ID);
   int opengl_width = NextPowerOfTwo(width), opengl_height = NextPowerOfTwo(height);
   if (ID) {
-    glBindRenderbuffer(GL_RENDERBUFFER, ID);
-    glRenderbufferStorage(GL_RENDERBUFFER, Depth::OpenGLID(df), opengl_width, opengl_height);
+    glBindRenderbufferEXT(GL_RENDERBUFFER, ID);
+    glRenderbufferStorageEXT(GL_RENDERBUFFER, Depth::OpenGLID(df), opengl_width, opengl_height);
   }
 }
 
@@ -2076,7 +2227,7 @@ void DepthTexture::Resize(int W, int H, int DF, int flag) {
 void FrameBuffer::Resize(int W, int H, int flag) {
   width=W; height=H;
   if (!ID && (flag & Flag::CreateGL)) {
-    glGenFramebuffers(1, &ID);
+    glGenFramebuffersEXT(1, &ID);
     if (flag & Flag::CreateTexture)      AllocTexture(&tex, !(flag & Flag::NoClampToEdge));
     if (flag & Flag::CreateDepthTexture) AllocDepthTexture(&depth);
   } else {
@@ -2084,7 +2235,7 @@ void FrameBuffer::Resize(int W, int H, int flag) {
     depth.Resize(width, height);
   }
   Attach(tex.ID, depth.ID);
-  int status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+  int status = glCheckFramebufferStatusEXT(GL_FRAMEBUFFER);
   if (status != GL_FRAMEBUFFER_COMPLETE) ERROR("FrameBuffer status ", status);
   if (flag & Flag::ReleaseFB) Release();
 }
@@ -2099,16 +2250,16 @@ void FrameBuffer::AllocTexture(Texture *out, bool clamp_to_edge) {
   }
 }
 
-void FrameBuffer::Release() { glBindFramebuffer(GL_FRAMEBUFFER, screen->gd->default_framebuffer); }
+void FrameBuffer::Release() { glBindFramebufferEXT(GL_FRAMEBUFFER, screen->gd->default_framebuffer); }
 void FrameBuffer::Attach(int ct, int dt) {
-  glBindFramebuffer(GL_FRAMEBUFFER, ID);
+  glBindFramebufferEXT(GL_FRAMEBUFFER, ID);
   if (ct) {
     tex.ID = ct;
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tex.ID, 0);
+    glFramebufferTexture2DEXT(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tex.ID, 0);
   }
   if (dt) {
     depth.ID = dt;
-    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depth.ID);
+    glFramebufferRenderbufferEXT(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depth.ID);
   }
 }
 
@@ -2217,7 +2368,7 @@ int Shader::Create(const string &name, const string &vertex_shader, const string
 
 int Shader::CreateShaderToy(const string &name, const string &pixel_shader, Shader *out) {
   static string header =
-    "uniform float iGlobalTime;\r\n"
+    "uniform float iGlobalTime, iBlend;\r\n"
     "uniform vec3 iResolution;\r\n"
     "uniform vec2 iScroll;\r\n"
     "uniform vec4 iMouse;\r\n"
@@ -2227,8 +2378,13 @@ int Shader::CreateShaderToy(const string &name, const string &pixel_shader, Shad
     "#define SampleChannelAtPoint(c, p) SampleChannelAtPointAndModulus(c, p, iChannelResolution[0].xy/iResolution.xy)\r\n"
     "#define SamplePoint() ((fragCoord.xy + iScroll)/iResolution.xy)\r\n"
     "#define SamplePointFlipY() vec2((fragCoord.x+iScroll.x)/iResolution.x, (iResolution.y-fragCoord.y-iScroll.y)/iResolution.y)\r\n"
-    "#define SampleChannel(c) SampleChannelAtPoint(c, SamplePoint())\r\n";
-    
+    "#define SampleChannel(c) SampleChannelAtPoint(c, SamplePoint())\r\n"
+#ifdef LFL_MOBILE
+    "#define BlendChannels(c1,c2) (((c1) + (c2))/2.0)\r\n";
+#else
+    "#define BlendChannels(c1,c2) ((c1)*iBlend + (c2)*(1.0-iBlend))\r\n";
+#endif
+
   static string footer =
     "void main(void) { mainImage(gl_FragColor, gl_FragCoord.xy); }\r\n";
   return Shader::Create(name, screen->gd->vertex_shader, StrCat(header, pixel_shader, footer), ShaderDefines(1,0,1,0), out);
@@ -2282,6 +2438,30 @@ void DrawableBoxRun::DrawBackground(point p, DrawBackgroundCB cb) {
 }
 
 }; // namespace LFL
+
+#ifdef _WIN32
+int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR lpCmdLine, int nCmdShow) {
+  timeBeginPeriod(1);
+  vector<const char *> av;
+  vector<string> a(1);
+  a[0].resize(1024);
+  GetModuleFileName(hInst, &(a[0])[0], a[0].size());
+  LFL::StringWordIter word_iter(lpCmdLine);
+  for (string word = IterNextString(&word_iter); !word_iter.Done(); word = IterNextString(&word_iter)) a.push_back(word);
+  for (auto &i : a) av.push_back(i.c_str());
+  av.push_back(0);
+#ifdef LFL_WINVIDEO
+  LFL::WinApp *winapp = LFL::Singleton<LFL::WinApp>::Get();
+  winapp->Setup(hInst, nCmdShow);
+#endif
+  int ret = main(av.size() - 1, &av[0]);
+#ifdef LFL_WINVIDEO
+  return ret ? ret : winapp->MessageLoop();
+#else
+  return ret;
+#endif
+}
+#endif
 
 #ifdef LFL_QT
 extern "C" void QTTriggerFrame() { ((LFL::OpenGLES2*)LFL::screen->gd)->RequestRender(); }

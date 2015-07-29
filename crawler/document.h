@@ -145,7 +145,7 @@ struct DocumentParser {
         shared_ptr<Texture> target;
         string content;
         int content_length=0;
-        ProcessAPIServer::LoadResourceCompleteCB complete_cb;
+        ProcessAPIClient::LoadResourceCompleteCB complete_cb;
         ImageParser(DocumentParser *p, const string &url, const shared_ptr<Texture> &t) :
             Parser(p, url), target(t), complete_cb(bind(&ImageParser::LoadResourceComplete, this, _1)) {}
 
@@ -174,9 +174,9 @@ struct DocumentParser {
             }
             Parser::Complete(this);
         }
-        void LoadResourceComplete(const InterProcessProtocol::TextureResource &res) {
-            if (res.width && res.height)
-                target->LoadGL(reinterpret_cast<const unsigned char *>(res.buf.data()), point(res.width, res.height), res.pf, res.linesize);
+        void LoadResourceComplete(const MultiProcessResource::Texture &tex) {
+            if (tex.width && tex.height)
+                target->LoadGL(reinterpret_cast<const unsigned char *>(tex.buf.data()), point(tex.width, tex.height), tex.pf, tex.linesize);
             Parser::Complete(this);
         }
     };
@@ -184,7 +184,7 @@ struct DocumentParser {
     Browser::Document *doc;
     set<void*> outstanding;
     int requested=0, completed=0;
-    ProcessAPIServer *render_process=0;
+    ProcessAPIClient *render_process=0;
     LRUCache<string, shared_ptr<Texture> > image_cache;
     DocumentParser(Browser::Document *D) : doc(D), image_cache(64) {}
 

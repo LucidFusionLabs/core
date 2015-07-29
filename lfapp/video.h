@@ -296,6 +296,8 @@ struct Box3 {
     Box       &operator[](int i)       { return v[i]; }
     bool Null() const { return !v[0].h; }
     void Clear() { for (int i=0; i<3; i++) v[i].clear(); }
+    Box3 &operator+=(const point &p) { for (int i=0; i<3; i++) if (!i || v[i].h) v[i] += p; return *this; }
+    Box3 &operator-=(const point &p) { for (int i=0; i<3; i++) if (!i || v[i].h) v[i] -= p; return *this; }
     string DebugString() const { string ret = "Box3{"; for (int i=0; i<3; i++) if (!i || v[i].h) StrAppend(&ret, v[i].DebugString(), ", "); return ret + "}"; }
     void AddBorder(const Border &b, Box3 *out) const { for (int i=0; i<3; i++) if (!i || v[i].h) out->v[i] = Box::AddBorder(v[i], b); }
     void DelBorder(const Border &b, Box3 *out) const { for (int i=0; i<3; i++) if (!i || v[i].h) out->v[i] = Box::DelBorder(v[i], b); }
@@ -393,6 +395,7 @@ struct Texture : public Drawable {
     unsigned char *ReleaseBuffer() { unsigned char *ret=0; swap(ret, buf); ClearBuffer(); return ret; }
 
     struct Flag { enum { CreateGL=1, CreateBuf=2, FlipY=4, Resample=8 }; };
+    void Create      (int PF=0)               { Create(width, height, PF); }
     void Create      (int W, int H, int PF=0) { Resize(W, H, PF, Flag::CreateGL); }
     void CreateBacked(int W, int H, int PF=0) { Resize(W, H, PF, Flag::CreateGL | Flag::CreateBuf); }
     void Resize(int W, int H, int PF=0, int flag=0);
@@ -402,7 +405,7 @@ struct Texture : public Drawable {
     void LoadBuffer  (const unsigned char *B, const point &dim, int PF, int linesize, int flag=0);
     void UpdateBuffer(const unsigned char *B, const point &dim, int PF, int linesize, int flag=0);
     void UpdateBuffer(const unsigned char *B, const ::LFL::Box &box, int PF, int linesize, int blit_flag=0);
-    void FlipBufferY() { Texture t; t.LoadBuffer(buf, Dimension(), pf, LineSize(), Flag::FlipY); swap(buf, t.buf); }
+    void FlipBufferY() { Texture t; t.LoadBuffer(buf, Dimension(), pf, LineSize(), Flag::FlipY); ClearBuffer(); swap(buf, t.buf); }
 
     void LoadGL  (const unsigned char *B, const point &dim, int PF, int linesize, int flag=0);
     void UpdateGL(const unsigned char *B, const ::LFL::Box &box, int flag=0);
@@ -422,6 +425,9 @@ struct Texture : public Drawable {
 #ifdef __APPLE__
     CGContextRef CGBitMap();
     CGContextRef CGBitMap(int X, int Y, int W, int H);
+#endif
+#ifdef WIN32
+    HBITMAP CreateGDIBitMap(HDC dc);
 #endif
     static void Coordinates(float *texcoord, int w, int h, int wd, int hd);
     static const int CoordMinX, CoordMinY, CoordMaxX, CoordMaxY;
@@ -498,14 +504,14 @@ struct Shader {
 
 struct Video : public Module {
     Shader shader_default, shader_normals, shader_cubemap, shader_cubenorm;
-    Callback init_fonts_cb = &Video::InitFonts;
     Module *impl = 0;
 
     int Init();
     int Free();
     int Swap();
-
-    static void *CreateGLContext(Window *);
+    
+    static void *BeginGLContextCreate(Window *);
+    static void *CompleteGLContextCreate(Window *, void *gl_context);
     static void CreateGraphicsDevice(Window *);
     static void InitGraphicsDevice(Window *);
     static void InitFonts();
@@ -535,6 +541,9 @@ struct Window : public NativeWindow {
     void InitConsole();
     void ClearEvents();
     void ClearGesture();
+    void SetCaption(const string &c);
+    void SetResizeIncrements(float x, float y);
+    void SetTransparency(float v);
     void Reshape(int w, int h);
     void Reshaped(int w, int h);
     void Closed() { Window::Close(this); }
@@ -760,16 +769,16 @@ struct DrawableBoxRun {
         for (auto ti = t.begin(), te = t.end(); ti != te; ++ti, ++bi) *ti = bi->Id();
         return t;
     }
-    string   Text  ()             const { return Text<char> (0, data.size()); }
-    String16 Text16()             const { return Text<short>(0, data.size()); }
-    string   Text  (int i, int l) const { return Text<char> (i, l); }
-    String16 Text16(int i, int l) const { return Text<short>(i, l); }
+    string   Text  ()             const { return Text<char>    (0, data.size()); }
+    String16 Text16()             const { return Text<char16_t>(0, data.size()); }
+    string   Text  (int i, int l) const { return Text<char>    (i, l); }
+    String16 Text16(int i, int l) const { return Text<char16_t>(i, l); }
     string   DebugString()        const { return StrCat("BoxRun='", Text(), "'"); }
 
     typedef function<void    (const Drawable *,  const Box &,  const Drawable::Attr *)> DrawCB;
     static void DefaultDrawCB(const Drawable *d, const Box &w, const Drawable::Attr *a) { d->Draw(w, a); }
     point Draw(point p, DrawCB = &DefaultDrawCB);
-	void draw(point p) { Draw(p); }
+    void draw(point p) { Draw(p); }
 
     typedef function<void              (const Box &)> DrawBackgroundCB;
     static void DefaultDrawBackgroundCB(const Box &w) { w.Draw(); }

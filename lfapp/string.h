@@ -66,24 +66,25 @@ struct ByteSink {
 
 struct Unicode {
     static const unsigned char non_breaking_space = 0xA0;
-    static const unsigned short replacement_char = 0xFFFD;
+    static const unsigned short zero_width_non_breaking_space = 0xFEFF, replacement_char = 0xFFFD;
 };
     
-typedef basic_string<short> String16;
+typedef basic_string<char16_t> String16;
 template <class X> string ToString(const X& x) { std::stringstream in; in << x; return in.str(); }
 string StringPrintf(const char *fmt, ...);
 
 struct Printable : public string {
     Printable(const void *x);
-    Printable(const basic_string<short> &x);
+    Printable(const basic_string<char16_t> &x);
     Printable(const string &x) : string(x) {}
     Printable(const char *x) : string(x) {}
     Printable(      char *x) : string(x) {}
     Printable(const bool &x) : string(ToString(x)) {}
     Printable(const int  &x) : string(ToString(x)) {}
     Printable(const long &x) : string(ToString(x)) {}
-    Printable(const unsigned char *x) : string((char*)x) {}
+    Printable(const unsigned char *x) : string(reinterpret_cast<const char*>(x)) {}
     Printable(const char &x) : string(ToString(x)) {}
+    Printable(const char16_t &x) : string(ToString(x)) {}
     Printable(const short &x) : string(ToString(x)) {}
     Printable(const float &x) : string(ToString(x)) {}
     Printable(const double &x) : string(ToString(x)) {}
@@ -104,13 +105,13 @@ struct Printable : public string {
 };
 
 struct Scannable {
-    static bool     Scan(const bool&,     const char  *v) { return *v ? atoi(v) : true; }
-    static int      Scan(const int&,      const char  *v) { return atoi(v); }
-    static unsigned Scan(const unsigned&, const char  *v) { return atoi(v); }
-    static float    Scan(const float&,    const char  *v) { return atof(v); }
-    static double   Scan(const double&,   const char  *v) { return atof(v); }
-    static string   Scan(const string&,   const char  *v) { return string(v); }
-    static String16 Scan(const String16&, const short *v) { return String16(v); }
+    static bool     Scan(const bool&,     const char     *v) { return *v ? atoi(v) : true; }
+    static int      Scan(const int&,      const char     *v) { return atoi(v); }
+    static unsigned Scan(const unsigned&, const char     *v) { return atoi(v); }
+    static float    Scan(const float&,    const char     *v) { return atof(v); }
+    static double   Scan(const double&,   const char     *v) { return atof(v); }
+    static string   Scan(const string&,   const char     *v) { return string(v); }
+    static String16 Scan(const String16&, const char16_t *v) { return String16(v); }
 };
 
 template <class X> struct ArrayPiece {
@@ -154,23 +155,23 @@ template <class X> struct StringPieceT : public ArrayPiece<X> {
     static const X *NullSpelled() { static X x[7] = {'<','N','U','L','L','>',0}; return x; }
 };
 typedef StringPieceT<char> StringPiece;
-typedef StringPieceT<short> String16Piece;
+typedef StringPieceT<char16_t> String16Piece;
 
 struct String {
-    template          <class Y> static void Copy(const string          &in, basic_string<Y> *out, int offset=0) { return Copy<char, Y>(in, out, offset); }
-    template          <class Y> static void Copy(const String16        &in, basic_string<Y> *out, int offset=0) { return Copy<short,Y>(in, out, offset); }
+    template          <class Y> static void Copy(const string          &in, basic_string<Y> *out, int offset=0) { return Copy<char,    Y>(in, out, offset); }
+    template          <class Y> static void Copy(const String16        &in, basic_string<Y> *out, int offset=0) { return Copy<char16_t,Y>(in, out, offset); }
     template <class X, class Y> static void Copy(const StringPieceT<X> &in, basic_string<Y> *out, int offset=0) {
         out->resize(offset + in.len);
         Y* o = &(*out)[offset];
         for (const X *i = in.buf; !in.Done(i); /**/) *o++ = *i++;
     }
-    template          <class Y> static void Append(const string          &in, basic_string<Y> *out) { return Append<char, Y>(in, out); }
-    template          <class Y> static void Append(const String16        &in, basic_string<Y> *out) { return Append<short,Y>(in, out); }
+    template          <class Y> static void Append(const string          &in, basic_string<Y> *out) { return Append<char,    Y>(in, out); }
+    template          <class Y> static void Append(const String16        &in, basic_string<Y> *out) { return Append<char16_t,Y>(in, out); }
     template <class X, class Y> static void Append(const StringPieceT<X> &in, basic_string<Y> *out) {
         Copy(in.data(), out, out->size());
     }
-    template          <class Y> static int Convert(const string          &in, basic_string<Y> *out, const char *fe, const char *te) { return Convert<char,  Y>(in, out, fe, te); }
-    template          <class Y> static int Convert(const String16        &in, basic_string<Y> *out, const char *fe, const char *te) { return Convert<short, Y>(in, out, fe, te); }
+    template          <class Y> static int Convert(const string          &in, basic_string<Y> *out, const char *fe, const char *te) { return Convert<char,     Y>(in, out, fe, te); }
+    template          <class Y> static int Convert(const String16        &in, basic_string<Y> *out, const char *fe, const char *te) { return Convert<char16_t, Y>(in, out, fe, te); }
     template <class X, class Y> static int Convert(const StringPieceT<X> &in, basic_string<Y> *out,
                                                    const char *from_encoding, const char *to_encoding);
 
@@ -188,19 +189,19 @@ struct UTF8 {
 };
 struct UTF16 {
     static String16 WriteGlyph(int codepoint);
-    static int ReadGlyph(const String16Piece &s, const short *p, int *l, bool eof=0);
+    static int ReadGlyph(const String16Piece &s, const char16_t *p, int *l, bool eof=0);
 };
 
 template <class X> struct UTF {};
 template <> struct UTF<char> {
     static string WriteGlyph(int codepoint) { return UTF8::WriteGlyph(codepoint); }
-    static int ReadGlyph(const StringPiece   &s, const char  *p, int *l, bool eof=0) { return UTF8::ReadGlyph(s, p, l, eof); }
-    static int ReadGlyph(const String16Piece &s, const short *p, int *l, bool eof=0) { FATALf("%s", "no such thing as 16bit UTF-8"); }
+    static int ReadGlyph(const StringPiece   &s, const char     *p, int *l, bool eof=0) { return UTF8::ReadGlyph(s, p, l, eof); }
+    static int ReadGlyph(const String16Piece &s, const char16_t *p, int *l, bool eof=0) { FATALf("%s", "no such thing as 16bit UTF-8"); }
 };
-template <> struct UTF<short> {
+template <> struct UTF<char16_t> {
     static String16 WriteGlyph(int codepoint) { return UTF16::WriteGlyph(codepoint); }
-    static int ReadGlyph(const String16Piece &s, const short *p, int *l, bool eof=0) { return UTF16::ReadGlyph(s, p, l, eof); }
-    static int ReadGlyph(const StringPiece   &s, const char  *p, int *l, bool eof=0) { FATALf("%s", "no such thing as 8bit UTF-16"); }
+    static int ReadGlyph(const String16Piece &s, const char16_t *p, int *l, bool eof=0) { return UTF16::ReadGlyph(s, p, l, eof); }
+    static int ReadGlyph(const StringPiece   &s, const char     *p, int *l, bool eof=0) { FATALf("%s", "no such thing as 8bit UTF-16"); }
 };
 
 template <class X> struct StringIterT {
@@ -252,8 +253,8 @@ template <class X> struct StringWordIterT : public StringIterT<X> {
     int CurrentLength() const { return cur_len; }
     int TotalLength() const { return size; }
 };
-typedef StringWordIterT<char>  StringWordIter;
-typedef StringWordIterT<short> StringWord16Iter;
+typedef StringWordIterT<char>     StringWordIter;
+typedef StringWordIterT<char16_t> StringWord16Iter;
 
 template <class X> struct StringLineIterT : public StringIterT<X> {
     struct Flag { enum { BlankLines=1 }; };
@@ -270,8 +271,8 @@ template <class X> struct StringLineIterT : public StringIterT<X> {
     int CurrentLength() const { return cur_len; }
     int TotalLength() const { return size; }
 };
-typedef StringLineIterT<char>  StringLineIter;
-typedef StringLineIterT<short> StringLine16Iter;
+typedef StringLineIterT<char>     StringLineIter;
+typedef StringLineIterT<char16_t> StringLine16Iter;
 
 struct IterWordIter : public StringIter {
     StringIter *iter;
@@ -298,26 +299,42 @@ template <int V1, int V2> int                 isint2(int N) { return (N == V1) |
 template <int V1, int V2, int V3>         int isint3(int N) { return (N == V1) || (N == V2) || (N == V3); }
 template <int V1, int V2, int V3, int V4> int isint4(int N) { return (N == V1) || (N == V2) || (N == V3) || (N == V4); }
 
-int IsAscii(int c);
+#undef isspace
+#undef isascii
+#undef isalpha
+#undef isalnum
+#undef isupper
+#undef islower
+#undef isdigit
+#undef isnumber
+#undef ispunct
+inline int isspace(int c) { return std::iswspace(c); }
+inline int isascii(int c) { return c >= 32 && c < 128; }
+inline int isalpha(int c) { return std::iswalpha(c); }
+inline int isalnum(int c) { return std::iswalnum(c); }
+inline int isupper(int c) { return std::iswupper(c); }
+inline int islower(int c) { return std::iswlower(c); }
+inline int ispunct(int c) { return std::iswpunct(c); }
+inline int isdot(int c) { return c == '.'; }
+inline int iscomma(int c) { return c == ','; }
+inline int isand(int c) { return c == '&'; }
+inline int isdquote(int c) { return c == '"'; }
+inline int issquote(int c) { return c == '\''; }
+inline int istick(int c) { return c == '`'; }
+inline int isdigit(int c) { return (c >= '0' && c <= '9'); }
+inline int isnumber(int c) { return isdigit(c) || c == '.'; }
+inline int isquote(int c) { return isdquote(c) || issquote(c) || istick(c); }
+inline int notspace(int c) { return !isspace(c); }
+inline int notalpha(int c) { return !isalpha(c); }
+inline int notalnum(int c) { return !isalnum(c); }
+inline int notnum(int c) { return !isnumber(c); }
+inline int notcomma(int c) { return !iscomma(c); }
+inline int notdot(int c) { return !isdot(c); }
+
 int isfileslash(int c);
-int isdot(int c);
-int iscomma(int c);
-int isand(int c);
-int isdquote(int c);
-int issquote(int c);
-int istick(int c);
-int isdig(int c);
-int isnum(int c);
-int isquote(int c);
-int notspace(int c);
-int notalpha(int c);
-int notalnum(int c);
-int notnum(int c);
-int notcomma(int c);
-int notdot(int c);
 int MatchingParens(int c1, int c2);
-int atoi(const char  *v);
-int atoi(const short *v);
+int atoi(const char     *v);
+int atoi(const char16_t *v);
 float my_atof(const char *v);
 inline double atof(const string &v) { return ::atof(v.c_str()); }
 inline int    atoi(const string &v) { return ::atoi(v.c_str()); }
@@ -331,6 +348,7 @@ void StringAppendf(String16 *out, const char *fmt, ...);
 int sprint(char *out, int len, const char *fmt, ...);
 
 inline string StrCat(const Printable &x1) { return x1; }
+inline String16 Str16Cat(const Printable &x1) { return String::ToUTF16(x1); }
 string StrCat(const Printable &x1, const Printable &x2);
 string StrCat(const Printable &x1, const Printable &x2, const Printable &x3);
 string StrCat(const Printable &x1, const Printable &x2, const Printable &x3, const Printable &x4);
@@ -374,7 +392,7 @@ void StrAppend(String16 *out, const Printable &x1, const Printable &x2, const Pr
 void StrAppend(String16 *out, const Printable &x1, const Printable &x2, const Printable &x3, const Printable &x4, const Printable &x5, const Printable &x6, const Printable &x7, const Printable &x8, const Printable &x9, const Printable &x10, const Printable &x11, const Printable &x12);
 void StrAppend(String16 *out, const Printable &x1, const Printable &x2, const Printable &x3, const Printable &x4, const Printable &x5, const Printable &x6, const Printable &x7, const Printable &x8, const Printable &x9, const Printable &x10, const Printable &x11, const Printable &x12, const Printable &x13);
 
-bool PrefixMatch(const short    *in, const short    *pref, int case_sensitive=true);
+bool PrefixMatch(const char16_t *in, const char16_t *pref, int case_sensitive=true);
 bool PrefixMatch(const char     *in, const char     *pref, int case_sensitive=true);
 bool PrefixMatch(const char     *in, const string   &pref, int case_sensitive=true);
 bool PrefixMatch(const string   &in, const char     *pref, int case_sensitive=true);
@@ -382,7 +400,7 @@ bool PrefixMatch(const string   &in, const string   &pref, int case_sensitive=tr
 bool PrefixMatch(const String16 &in, const String16 &pref, int case_sensitive=true);
 bool PrefixMatch(const String16 &in, const char     *pref, int case_sensitive=true);
 
-bool SuffixMatch(const short    *in, const short    *pref, int case_sensitive=true);
+bool SuffixMatch(const char16_t *in, const char16_t *pref, int case_sensitive=true);
 bool SuffixMatch(const char     *in, const char     *pref, int case_sensitive=true);
 bool SuffixMatch(const char     *in, const string   &pref, int case_sensitive=true);
 bool SuffixMatch(const string   &in, const char     *pref, int case_sensitive=true);
@@ -396,7 +414,7 @@ bool StringEquals(const string   &s1, const string   &s2, int case_sensitive=fal
 bool StringEquals(const char     *s1, const string   &s2, int case_sensitive=false);
 bool StringEquals(const string   &s1, const char     *s2, int case_sensitive=false);
 bool StringEquals(const char     *s1, const char     *s2, int case_sensitive=false);
-bool StringEquals(const short    *s1, const short    *s2, int case_sensitive=false);
+bool StringEquals(const char16_t *s1, const char16_t *s2, int case_sensitive=false);
 
 bool StringEmptyOrEquals(const string   &in, const string   &ref, int case_sensitive=false);
 bool StringEmptyOrEquals(const String16 &in, const String16 &ref, int case_sensitive=false);
@@ -420,14 +438,14 @@ template <class X, class Y> int Split(const StringPieceT<X> &in, int (*ischar)(i
         out->push_back(Scannable::Scan(Y(), word.c_str()));
     return out->size();
 }
-template <class X> int Split(const string   &in, int (*ischar)(int), int (*isquote)(int), vector<X> *out) { return Split<char,  X>(StringPiece(in),              ischar, isquote, out); }
-template <class X> int Split(const string   &in, int (*ischar)(int),                      vector<X> *out) { return Split<char,  X>(StringPiece(in),              ischar, NULL,    out); }
-template <class X> int Split(const char     *in, int (*ischar)(int), int (*isquote)(int), vector<X> *out) { return Split<char,  X>(StringPiece::Unbounded(in),   ischar, isquote, out); }
-template <class X> int Split(const char     *in, int (*ischar)(int),                      vector<X> *out) { return Split<char,  X>(StringPiece::Unbounded(in),   ischar, NULL,    out); }
-template <class X> int Split(const String16 &in, int (*ischar)(int), int (*isquote)(int), vector<X> *out) { return Split<short, X>(String16Piece(in),            ischar, isquote, out); }
-template <class X> int Split(const String16 &in, int (*ischar)(int),                      vector<X> *out) { return Split<short, X>(String16Piece(in),            ischar, NULL,    out); }
-template <class X> int Split(const short    *in, int (*ischar)(int), int (*isquote)(int), vector<X> *out) { return Split<short, X>(String16Piece::Unbounded(in), ischar, isquote, out); }
-template <class X> int Split(const short    *in, int (*ischar)(int),                      vector<X> *out) { return Split<short, X>(String16Piece::Unbounded(in), ischar, NULL,    out); }
+template <class X> int Split(const string   &in, int (*ischar)(int), int (*isquote)(int), vector<X> *out) { return Split<char,     X>(StringPiece(in),              ischar, isquote, out); }
+template <class X> int Split(const string   &in, int (*ischar)(int),                      vector<X> *out) { return Split<char,     X>(StringPiece(in),              ischar, NULL,    out); }
+template <class X> int Split(const char     *in, int (*ischar)(int), int (*isquote)(int), vector<X> *out) { return Split<char,     X>(StringPiece::Unbounded(in),   ischar, isquote, out); }
+template <class X> int Split(const char     *in, int (*ischar)(int),                      vector<X> *out) { return Split<char,     X>(StringPiece::Unbounded(in),   ischar, NULL,    out); }
+template <class X> int Split(const String16 &in, int (*ischar)(int), int (*isquote)(int), vector<X> *out) { return Split<char16_t, X>(String16Piece(in),            ischar, isquote, out); }
+template <class X> int Split(const String16 &in, int (*ischar)(int),                      vector<X> *out) { return Split<char16_t, X>(String16Piece(in),            ischar, NULL,    out); }
+template <class X> int Split(const char16_t *in, int (*ischar)(int), int (*isquote)(int), vector<X> *out) { return Split<char16_t, X>(String16Piece::Unbounded(in), ischar, isquote, out); }
+template <class X> int Split(const char16_t *in, int (*ischar)(int),                      vector<X> *out) { return Split<char16_t, X>(String16Piece::Unbounded(in), ischar, NULL,    out); }
 
 template <class X> int Split(const StringPiece &in, int (*ischar)(int), int (*isquote)(int), set<X> *out) {
     out->clear();
@@ -455,15 +473,15 @@ string strip(const char *s, int (*stripchar)(int), int (*stripchar2)(int)=0);
 string togrep(const char *s, int (*grepchar)(int), int (*grepchar2)(int)=0);
 string   toconvert(const char     *text, int (*tochar)(int), int (*ischar)(int)=0);
 string   toconvert(const string   &text, int (*tochar)(int), int (*ischar)(int)=0);
-String16 toconvert(const short    *text, int (*tochar)(int), int (*ischar)(int)=0);
+String16 toconvert(const char16_t *text, int (*tochar)(int), int (*ischar)(int)=0);
 String16 toconvert(const String16 &text, int (*tochar)(int), int (*ischar)(int)=0);
 string   toupper(const char     *text);
 string   toupper(const string   &text);
-String16 toupper(const short    *text);
+String16 toupper(const char16_t *text);
 String16 toupper(const String16 &text);
 string   tolower(const char     *text);
 string   tolower(const string   &text);
-String16 tolower(const short    *text);
+String16 tolower(const char16_t *text);
 String16 tolower(const String16 &text);
 string   ReplaceEmpty (const string   &in, const string   &replace_with);
 String16 ReplaceEmpty (const String16 &in, const string   &replace_with);
@@ -477,11 +495,11 @@ template <class X> string CHexEscapeNonAscii(const basic_string<X> &text);
 #define StrAppendCSV(out, ...) StrAppend((out), (out)->size() ? "," : "", __VA_ARGS__)
 string FirstMatchCSV(const StringPiece &haystack, const StringPiece &needle, int (*ischar)(int) = iscomma);
 
-const char  *NextLine   (const StringPiece   &text, bool final=0, int *outlen=0);
-const short *NextLine   (const String16Piece &text, bool final=0, int *outlen=0);
-const char  *NextLineRaw(const StringPiece   &text, bool final=0, int *outlen=0);
-const short *NextLineRaw(const String16Piece &text, bool final=0, int *outlen=0);
-const char  *NextProto  (const StringPiece   &text, bool final=0, int *outlen=0);
+const char     *NextLine   (const StringPiece   &text, bool final=0, int *outlen=0);
+const char16_t *NextLine   (const String16Piece &text, bool final=0, int *outlen=0);
+const char     *NextLineRaw(const StringPiece   &text, bool final=0, int *outlen=0);
+const char16_t *NextLineRaw(const String16Piece &text, bool final=0, int *outlen=0);
+const char     *NextProto  (const StringPiece   &text, bool final=0, int *outlen=0);
 template <int S> const char *NextChunk(const StringPiece &text, bool final=0, int *outlen=0) {
     int add = final ? max(text.len, 0) : S;
     if (text.len < add) return 0;

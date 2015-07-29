@@ -383,7 +383,7 @@ struct HTMLParser {
         while (p < end) {
             if (*p != '&') { p++; continue; }
             const X *s = p + 1, *max_entity = s + 8; bool num = *s == '#';
-            for (p = s + num; p < max_entity && (num ? isnum(*p) : isalnum(*p)); p++) {}
+            for (p = s + num; p < max_entity && (num ? isnumber(*p) : isalnum(*p)); p++) {}
             if (*p != ';') continue;
 
             ret.append(chunk_start, s-1-chunk_start);
@@ -394,10 +394,10 @@ struct HTMLParser {
         ret.append(chunk_start, end);
         return ret;
     }
-    string   ReplaceEntitySymbols(const string   &word) { return ReplaceEntitySymbols<char> (word); }
-    String16 ReplaceEntitySymbols(const String16 &word) { return ReplaceEntitySymbols<short>(word); }
+    string   ReplaceEntitySymbols(const string   &word) { return ReplaceEntitySymbols<char>    (word); }
+    String16 ReplaceEntitySymbols(const String16 &word) { return ReplaceEntitySymbols<char16_t>(word); }
 
-    struct Entity : public unordered_map<string, short> {
+    struct Entity : public unordered_map<string, char16_t> {
         enum {
 #undef      XX
 #define     XX(x, y) x = y,
@@ -413,11 +413,11 @@ struct HTMLParser {
             (*this)["or"]  = 8744;
             (*this)["int"] = 8747;
         }
-        static short Lookup(const string   &n) { return FindOrDefault(*Singleton<Entity>::Get(), n,                      ' '); }
-        static short Lookup(const String16 &n) { return FindOrDefault(*Singleton<Entity>::Get(), ::LFL::String::ToAscii(n), ' '); }
+        static char16_t Lookup(const string   &n) { return FindOrDefault(*Singleton<Entity>::Get(), n,                         ' '); }
+        static char16_t Lookup(const String16 &n) { return FindOrDefault(*Singleton<Entity>::Get(), ::LFL::String::ToAscii(n), ' '); }
     };
 
-    struct Tags : public unordered_map<string, short> {
+    struct Tags : public unordered_map<string, char16_t> {
         Tags() {
 #undef      XX
 #define     XX(x) (*this)[#x] = Tag::x;
@@ -426,8 +426,8 @@ struct HTMLParser {
             (*this)["!doctype"] = Tag::doctype;
 			(*this)["small"]    = Tag::_small;
         }
-        static short Lookup(const string   &n) { return FindOrDefault(*Singleton<Tags>::Get(), n,                       0); }
-        static short Lookup(const String16 &n) { return FindOrDefault(*Singleton<Tags>::Get(), ::LFL::String::ToAscii(n), 0); }
+        static char16_t Lookup(const string   &n) { return FindOrDefault(*Singleton<Tags>::Get(), n,                         0); }
+        static char16_t Lookup(const String16 &n) { return FindOrDefault(*Singleton<Tags>::Get(), ::LFL::String::ToAscii(n), 0); }
     };
 };
 
