@@ -964,14 +964,6 @@ StringPiece Application::LoadResource(int id) {
 #endif
 }
 
-string Application::BinDir() const {
-#ifdef WIN32
-  return progname.substr(0, DirNameLen(progname, true));
-#else
-  return LocalFile::JoinPath(startdir, progname.substr(0, DirNameLen(progname, true)));
-#endif
-}
-
 int Application::Create(int argc, const char **argv, const char *source_filename) {
 #ifdef LFL_GLOG
   google::InstallFailureSignalHandler();
@@ -980,8 +972,11 @@ int Application::Create(int argc, const char **argv, const char *source_filename
   time_started = Now();
   progname = argv[0];
   startdir = LocalFile::CurrentDirectory();
-#ifndef LFL_ANDROID
-  assetdir = "assets/";
+
+#ifdef WIN32
+  bindir = progname.substr(0, DirNameLen(progname, true));
+#else
+  bindir = LocalFile::JoinPath(startdir, progname.substr(0, DirNameLen(progname, true)));
 #endif
 
 #ifdef __APPLE__
@@ -992,6 +987,13 @@ int Application::Create(int argc, const char **argv, const char *source_filename
   CFRelease(respath);
   INFO("chdir(", rpath, ")");
   chdir(rpath);
+#else
+  INFO("chdir(", bindir, ")");
+  chdir(bindir.c_str());
+#endif
+
+#ifndef LFL_ANDROID
+  assetdir = "assets/";
 #endif
 
 #ifdef _WIN32
@@ -1107,33 +1109,32 @@ int Application::Init() {
 #endif
   }
 
+  if (FLAGS_lfapp_video) {
+    if (video.Init()) { ERROR("video init failed"); return -1; }
+  } else {
+    Window::active[screen->id] = screen;
+  }
+
+  thread_pool.Open(X_or_1(FLAGS_threadpool_size));
+  if (FLAGS_threadpool_size) thread_pool.Start();
+
 #ifdef LFL_FFMPEG
   INFO("lfapp_open: ffmpeg_init()");
   //av_log_set_level(AV_LOG_DEBUG);
   av_register_all();
 #endif /* LFL_FFMPEG */
 
-  thread_pool.Open(X_or_1(FLAGS_threadpool_size));
-  if (FLAGS_threadpool_size) thread_pool.Start();
-
-  if (FLAGS_lfapp_audio || FLAGS_lfapp_video) {
-    if (assets.Init()) { ERROR("assets init failed"); return -1; }
-  }
-
   if (FLAGS_lfapp_audio) {
     if (LoadModule(&audio)) { ERROR("audio init failed"); return -1; }
   }
   else { FLAGS_chans_in=FLAGS_chans_out=1; }
 
-  if (FLAGS_lfapp_camera) {
-    if (LoadModule(&camera)) { ERROR("camera init failed"); return -1; }
+  if (FLAGS_lfapp_audio || FLAGS_lfapp_video) {
+    if (assets.Init()) { ERROR("assets init failed"); return -1; }
   }
 
-  if (FLAGS_lfapp_video) {
-    if (video.Init()) { ERROR("video init failed"); return -1; }
-  } else {
-    Window::active[screen->id] = screen;
-  }
+  app->video.InitFonts();
+  if (!screen->console) screen->InitConsole();
 
   if (FLAGS_lfapp_input) {
     if (LoadModule(&input)) { ERROR("input init failed"); return -1; }
@@ -1142,6 +1143,10 @@ int Application::Init() {
 
   if (FLAGS_lfapp_network) {
     if (LoadModule(&network)) { ERROR("network init failed"); return -1; }
+  }
+
+  if (FLAGS_lfapp_camera) {
+    if (LoadModule(&camera)) { ERROR("camera init failed"); return -1; }
   }
 
   if (FLAGS_lfapp_cuda) {
@@ -1257,10 +1262,10 @@ int Application::Exiting() {
 FrameScheduler::FrameScheduler() : maxfps(&FLAGS_target_fps), wakeup_thread(&frame_mutex, &wait_mutex) {
 #if defined(LFL_OSXINPUT) || defined(LFL_IPHONEINPUT)
   rate_limit = synchronize_waits = wait_forever_thread = monolithic_frame = 0;
+#elif defined(LFL_WININPUT) || defined(LFL_LINUXINPUT)
+  synchronize_waits = wait_forever_thread = 0;
 #elif defined(LFL_QT) || defined(LFL_WXWIDGETS)
   rate_limit = synchronize_waits = monolithic_frame = 0;
-#elif defined(LFL_WININPUT)
-  synchronize_waits = wait_forever_thread = 0;
 #endif
 }
 

@@ -27,19 +27,25 @@ The key implementation files are:
 * **senators**:     IRC bots with NLP capabilties
 
 The following build procedures apply to any app cloned from [new_app_template](new_app_template).
+Replace "LTerminal" and "lterm" with "YourPackage" and "YourApp" to build other apps.
 See [new_app_template/README.txt](new_app_template/README.txt) to quick start your next app.
 
-## Building
+
+## Checkout
 
 `git clone https://github.com/lucidfusionlabs/lfl.git`
 
 `git submodule update --init --recursive`
 
-LFL builds easily for Windows, Linux, Mac OSX, iPhone and Android.
 
-* Replace "LTerminal" and "lterm" with "YourPackage" and "YourApp" to build other apps.
+## Get bleeding edge
 
-### Windows
+`cd core; git checkout master; git pull origin master; cd ..`
+
+`cd term; git checkout master; git pull origin master; cd ..`
+
+
+### Build Windows
 
 * Use CMake 3.2.3
 
@@ -77,9 +83,14 @@ LFL builds easily for Windows, Linux, Mac OSX, iPhone and Android.
 
 * Windows installer lterminst.exe results
 
-### Linux
+### Build Linux
 
-* See [.travis.yml](.travis.yml) for package dependencies
+* Using Ubuntu 15.04 [http://virtualboxes.org/images/ubuntu](VirtualBox Image)
+
+        sudo apt-get install screen vim git cmake yasm xorg-dev autotools-dev \
+        automake flex bison libssl-dev libbz2-dev
+
+* Also see [.travis.yml](.travis.yml) for package dependencies
 
         cd lfl
         mkdir linux && cd linux
@@ -91,7 +102,7 @@ LFL builds easily for Windows, Linux, Mac OSX, iPhone and Android.
 
 * Linux package LTerminal.tgz results
 
-### OSX
+### Build OSX
 
 * http://www.cmake.org/files/v3.2/cmake-3.2.3-Darwin-universal.dmg
 * Minimum of XCode 6 required, nasm & yasm (from macports or brew)
@@ -119,7 +130,7 @@ LFL builds easily for Windows, Linux, Mac OSX, iPhone and Android.
         export GYP_DEFINES="clang=1 mac_deployment_target=10.8"
         make native; cp -R out ~/v8; cp -R include ~/v8
 
-### iOS Device
+### Build iOS
 
 * Install node from brew or macports and: npm install -g ios-deploy
 * Check logs with: idevicesyslog
@@ -135,7 +146,7 @@ LFL builds easily for Windows, Linux, Mac OSX, iPhone and Android.
 
 * iPhone Installer iLTerminal.ipa results
 
-### Android
+### Build Android
 
 * Install Android Developer Console, Android SDK (android-20 + PlayServices),
   Android NDK, and Gradle
@@ -152,7 +163,7 @@ LFL builds easily for Windows, Linux, Mac OSX, iPhone and Android.
         make lterm_debug
         make lterm_pkg
 
-## Contributing
+## Contribute
 
 1. Fork this repo and make changes in your own fork.
 2. Commit your changes and push to your fork `git push origin master`

@@ -329,6 +329,8 @@ static bool ProcessAPIWrite(Connection *conn, const Serializable &req, int seq, 
 }
 
 void ProcessAPIClient::StartServer(const string &server_program) {
+  if (!LocalFile(server_program, "r").Opened()) return ERROR("ProcessAPIClient: \"", server_program, "\" doesnt exist");
+  INFO("ProcessAPIClient starting server ", server_program);
 #ifdef WIN32
 #if 1
   Socket l = -1;
@@ -407,8 +409,6 @@ void ProcessAPIClient::StartServer(const string &server_program) {
 #else
   Socket fd[2];
   CHECK(SystemNetwork::OpenSocketPair(fd));
-  if (!LocalFile(server_program, "r").Opened()) return ERROR("ProcessAPIClient: \"", server_program, "\" doesnt exist");
-  INFO("ProcessAPIClient starting server ", server_program);
   if ((pid = fork())) {
     CHECK_GT(pid, 0);
     close(fd[0]);

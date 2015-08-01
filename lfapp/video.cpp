@@ -114,6 +114,11 @@
 #include <GL/glu.h>
 #endif
 
+#ifdef LFL_LINUXVIDEO
+#include <X11/Xlib.h>
+#include <GL/glx.h>
+#endif
+
 extern "C" {
 #ifdef LFL_FFMPEG
 #include <libavcodec/avcodec.h>
@@ -1106,15 +1111,42 @@ void Window::Close(Window *W) {
 #ifdef LFL_LINUXVIDEO
 struct LinuxVideoModule : public Module {
   int Init() {
+    app->video.primary_display = XOpenDisplay(NULL);
     INFO("LinuxVideoModule::Init()");
-    // NativeWindowInit();
-    // NativeWindowSize(&screen->width, &screen->height);
+    CHECK(Window::Create(screen));
     return 0;
   }
 };
-bool Window::Create(Window *W) { return true; }
-void Window::Close(Window *W) {}
-void Window::MakeCurrent(Window *W) {}
+bool Window::Create(Window *W) {
+  Display *display = static_cast<Display*>(app->video.primary_display);
+  if (!(W->surface = display)) return ERRORv(false, "XOpenDisplay");
+  GLint att[] = { GLX_RGBA, GLX_DEPTH_SIZE, 16, GLX_DOUBLEBUFFER, 1 };
+  XVisualInfo *vi = glXChooseVisual(display, 0, att);
+  if (!vi) return ERRORv(false, "glxChooseVisual");
+  ::Window root = DefaultRootWindow(display);
+  XSetWindowAttributes swa;
+  swa.colormap = XCreateColormap(display, root, vi->visual, AllocNone);
+  swa.event_mask = ExposureMask | KeyPressMask;
+  ::Window win = XCreateWindow(display, root, 0, 0, W->width, W->height, 0, vi->depth, InputOutput,
+                               vi->visual, CWColormap | CWEventMask, &swa);
+  if (!(W->id = (void*)(win))) return ERRORv(false, "XCreateWindow");
+  XMapWindow(display, win);
+  XStoreName(display, win, W->caption.c_str());
+  if (!(W->gl = glXCreateContext(display, vi, NULL, GL_TRUE))) return ERRORv(false, "glXCreateContext");
+  Window::active[W->id] = W;
+  MakeCurrent(W);
+  return true;
+}
+void Window::Close(Window *W) {
+  Display *display = static_cast<Display*>(W->surface);
+  glXMakeCurrent(display, None, NULL);
+  glXDestroyContext(display, static_cast<GLXContext>(W->gl));
+  XDestroyWindow(display, reinterpret_cast<::Window>(W->id));
+  XCloseDisplay(display);
+}
+void Window::MakeCurrent(Window *W) {
+  glXMakeCurrent(static_cast<Display*>(W->surface), (::Window)(W->id), static_cast<GLXContext>(W->gl));
+}
 #endif
 
 #ifdef LFL_QT
@@ -1386,11 +1418,7 @@ void Window::Close(Window *W) {
 
 int Video::Init() {
   INFO("Video::Init()");
-#if defined(LFL_QT)
-  impl = new QTVideoModule();
-#elif defined(LFL_WXWIDGETS)
-  impl = new WxWidgetsVideoModule();
-#elif defined(LFL_ANDROIDVIDEO)
+#if defined(LFL_ANDROIDVIDEO)
   impl = new AndroidVideoModule();
 #elif defined(LFL_IPHONEVIDEO)
   impl = new IPhoneVideoModule();
@@ -1400,6 +1428,10 @@ int Video::Init() {
   impl = new WinVideoModule();
 #elif defined(LFL_LINUXVIDEO)
   impl = new LinuxVideoModule();
+#elif defined(LFL_QT)
+  impl = new QTVideoModule();
+#elif defined(LFL_WXWIDGETS)
+  impl = new WxWidgetsVideoModule();
 #elif defined(LFL_GLFWVIDEO)
   impl = new GLFWVideoModule();
 #elif defined(LFL_SDLVIDEO)
@@ -1418,6 +1450,14 @@ int Video::Init() {
   if (!screen->gd) CreateGraphicsDevice(screen);
   InitGraphicsDevice(screen);
 
+  if (splash_color) {
+    screen->gd->ClearColor(*splash_color);
+    screen->gd->Clear();
+    screen->gd->Flush();
+    Swap();
+    screen->gd->ClearColor(Color::black);
+  }
+
   INFO("OpenGL Version: ", SpellNull((const char *)glGetString(GL_VERSION)));
   INFO("OpenGL Vendor: ",  SpellNull((const char *)glGetString(GL_VENDOR)));
 #ifdef LFL_GLSL_SHADERS
@@ -1432,8 +1472,6 @@ int Video::Init() {
 #endif
   INFO("lfapp_opengles_cubemap = ", screen->opengles_cubemap ? "true" : "false");
 
-  InitFonts();
-  if (!screen->console) screen->InitConsole();
   return 0;
 }
 
@@ -1535,11 +1573,7 @@ int Video::Swap() {
   screen->gd->Flush();
 #endif
 
-#if defined(LFL_QT)
-  ((QOpenGLContext*)screen->gl)->swapBuffers((QWindow*)screen->id);
-#elif defined(LFL_WXWIDGETS)
-  ((wxGLCanvas*)screen->id)->SwapBuffers();
-#elif defined(LFL_ANDROIDVIDEO)
+#if defined(LFL_ANDROIDVIDEO)
   AndroidVideoSwap();
 #elif defined(LFL_IPHONEVIDEO)
   iPhoneVideoSwap();
@@ -1547,6 +1581,12 @@ int Video::Swap() {
   OSXVideoSwap(screen->id);
 #elif defined(LFL_WINVIDEO)
   SwapBuffers((HDC)screen->surface);
+#elif defined(LFL_LINUXVIDEO)
+  glXSwapBuffers((Display*)screen->surface, (::Window)screen->id);
+#elif defined(LFL_QT)
+  ((QOpenGLContext*)screen->gl)->swapBuffers((QWindow*)screen->id);
+#elif defined(LFL_WXWIDGETS)
+  ((wxGLCanvas*)screen->id)->SwapBuffers();
 #elif defined(LFL_GLFWVIDEO)
   glfwSwapBuffers((GLFWwindow*)screen->id);
 #elif defined(LFL_SDLVIDEO)
@@ -1592,12 +1632,7 @@ void Window::SetTransparency(float v) {
 }
 
 void Window::Reshape(int w, int h) {
-#if defined(LFL_QT)
-  ((QWindow*)id)->resize(w, h);
-  Window::MakeCurrent(screen);
-#elif defined(LFL_WXWIDGETS)
-  ((wxGLCanvas*)screen->id)->SetSize(w, h);
-#elif defined(LFL_OSXVIDEO)
+#if defined(LFL_OSXVIDEO)
   OSXSetWindowSize(id, w, h);
 #elif defined(LFL_WINVIDEO)
   WinWindow *win = static_cast<WinWindow*>(screen->impl);
@@ -1605,6 +1640,11 @@ void Window::Reshape(int w, int h) {
   RECT r = { 0, 0, w, h };
   AdjustWindowRect(&r, lStyle, win->menubar);
   SetWindowPos((HWND)screen->id, 0, 0, 0, r.right-r.left, r.bottom-r.top, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+#elif defined(LFL_QT)
+  ((QWindow*)id)->resize(w, h);
+  Window::MakeCurrent(screen);
+#elif defined(LFL_WXWIDGETS)
+  ((wxGLCanvas*)screen->id)->SetSize(w, h);
 #elif defined(LFL_GLFWVIDEO)
   glfwSetWindowSize((GLFWwindow*)id, w, h);
 #elif defined(LFL_SDLVIDEO)

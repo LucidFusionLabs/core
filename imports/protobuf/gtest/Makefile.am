@@ -265,8 +265,7 @@ FUSED_GTEST_SRC = \
 if HAVE_PYTHON
 TESTS += test/fused_gtest_test
 check_PROGRAMS += test/fused_gtest_test
-test_fused_gtest_test_SOURCES = $(FUSED_GTEST_SRC) \
-                                samples/sample1.cc samples/sample1_unittest.cc
+test_fused_gtest_test_SOURCES = $(FUSED_GTEST_SRC)
 test_fused_gtest_test_CPPFLAGS = -I"$(srcdir)/fused-src"
 
 # Build rules for putting fused Google Test files into the distribution

@@ -22,20 +22,20 @@
 #include "lfapp/flow.h"
 #include "lfapp/gui.h"
 
-#ifdef LFL_QT
-#include <QtOpenGL>
-#endif
-
-#ifdef LFL_WXWIDGETS
-#include <wx/wx.h>
-#endif
-
 #ifdef LFL_ANDROID
 #include <android/log.h>
 #endif
 
 #ifdef LFL_WININPUT
 #include <windowsx.h>
+#endif
+
+#ifdef LFL_QT
+#include <QtOpenGL>
+#endif
+
+#ifdef LFL_WXWIDGETS
+#include <wx/wx.h>
 #endif
 
 #ifdef LFL_GLFWINPUT
@@ -148,7 +148,7 @@ void TouchDevice::CloseKeyboard() {}
 Box TouchDevice::GetKeyboardBox() { return Box(); }
 #endif
 
-#if !defined(LFL_OSXINPUT) && !defined(LFL_WININPUT) && !defined(LFL_ANDROIDINPUT) && !defined(LFL_IPHONEINPUT) && !defined(LFL_QT) && !defined(LFL_WXWIDGETS) && !defined(LFL_GLFWINPUT) && !defined(LFL_SDLINPUT)
+#if !defined(LFL_ANDROIDINPUT) && !defined(LFL_IPHONEINPUT) && !defined(LFL_OSXINPUT) && !defined(LFL_WININPUT) && !defined(LFL_LINUXINPUT) && !defined(LFL_QT) && !defined(LFL_WXWIDGETS) && !defined(LFL_GLFWINPUT) && !defined(LFL_SDLINPUT)
 const int Key::Escape     = -1;
 const int Key::Return     = -2;
 const int Key::Up         = -3;
@@ -347,8 +347,7 @@ const int Key::End = 0xB7;
 void Clipboard::Set(const string &s) { OSXClipboardSet(s.c_str()); }
 string Clipboard::Get() { const char *v = OSXClipboardGet(); string ret = v; free((void*)v); return ret; }
 void Mouse::ReleaseFocus() { OSXReleaseMouseFocus(); app->grab_mode.Off(); screen->cursor_grabbed = 0; }
-void Mouse::GrabFocus() {
-  OSXGrabMouseFocus();    app->grab_mode.On();  screen->cursor_grabbed = 1;
+void Mouse::GrabFocus()    { OSXGrabMouseFocus();    app->grab_mode.On();  screen->cursor_grabbed = 1;
   OSXSetMousePosition(screen->id, screen->width / 2, screen->height / 2);
 }
 #endif // LFL_OSXINPUT
@@ -571,6 +570,75 @@ string Clipboard::Get() {
   return ret;
 }
 #endif // LFL_WININPUT
+
+#ifdef LFL_LINUXINPUT
+}; // namespace LFL
+#include <X11/Xlib.h>
+#include <X11/keysym.h>
+namespace LFL {
+static const int XKeyPress = KeyPress, XButton1 = Button1;
+#undef KeyPress
+#undef Button1
+
+struct LinuxInputModule : public InputModule {
+  int Frame(unsigned clicks) {
+    Display *display = static_cast<Display*>(app->video.primary_display);
+    XEvent xev;
+    while (XPending(display)) {
+      XNextEvent(display, &xev);
+      switch (xev.type) {
+        case XKeyPress:  KeyPress(GetKeyCode(display, xev), 1); break;
+        case KeyRelease: KeyPress(GetKeyCode(display, xev), 0); break;
+        default:         continue;
+      }
+    }
+    return 0;
+  }
+  static int GetKeyCode(Display *display, const XEvent &xev) {
+    return XKeycodeToKeysym(display, xev.xkey.keycode, xev.xkey.state & ShiftMask);
+  }
+};
+
+const int Key::Escape = XK_Escape;
+const int Key::Return = XK_Return;
+const int Key::Up = XK_Up;
+const int Key::Down = XK_Down;
+const int Key::Left = XK_Left;
+const int Key::Right = XK_Right;
+const int Key::LeftShift = XK_Shift_L;
+const int Key::RightShift = XK_Shift_R;
+const int Key::LeftCtrl = XK_Control_L;
+const int Key::RightCtrl = XK_Control_R;
+const int Key::LeftCmd = XK_Alt_L;
+const int Key::RightCmd = XK_Alt_R;
+const int Key::Tab = XK_Tab;
+const int Key::Space = ' ';
+const int Key::Backspace = XK_BackSpace;
+const int Key::Delete = XK_Delete;
+const int Key::Quote = '\'';
+const int Key::Backquote = '`';
+const int Key::PageUp = XK_Page_Up;
+const int Key::PageDown = XK_Page_Down;
+const int Key::F1 = XK_F1;
+const int Key::F2 = XK_F2;
+const int Key::F3 = XK_F3;
+const int Key::F4 = XK_F4;
+const int Key::F5 = XK_F5;
+const int Key::F6 = XK_F6;
+const int Key::F7 = XK_F7;
+const int Key::F8 = XK_F8;
+const int Key::F9 = XK_F9;
+const int Key::F10 = XK_F10;
+const int Key::F11 = XK_F11;
+const int Key::F12 = XK_F12;
+const int Key::Home = XK_Home;
+const int Key::End = XK_End;
+
+void Clipboard::Set(const string &s) {}
+string Clipboard::Get() {}
+void Mouse::ReleaseFocus() {}
+void Mouse::GrabFocus() {}
+#endif // LFL_LINUXINPUT
 
 #ifdef LFL_QT
 struct QTInputModule : public InputModule {
@@ -884,16 +952,18 @@ int Input::Init() {
   paste_bind = Bind('v', Key::Modifier::Ctrl);
 #endif
 
-#if defined(LFL_QT)
+#if defined(LFL_ANDROIDINPUT)
+  impl = new AndroidInputModule();
+#elif defined(LFL_IPHONEINPUT)
+  impl = new IPhoneInputModule();
+#elif defined(LFL_LINUXINPUT)
+  impl = new LinuxInputModule();
+#elif defined(LFL_QT)
   impl = new QTInputModule();
 #elif defined(LFL_GLFWINPUT)
   impl = new GLFWInputModule();
 #elif defined(LFL_SDLINPUT)
   impl = new SDLInputModule();
-#elif defined(LFL_ANDROIDINPUT)
-  impl = new AndroidInputModule();
-#elif defined(LFL_IPHONEINPUT)
-  impl = new IPhoneInputModule();
 #endif
   return 0;
 }

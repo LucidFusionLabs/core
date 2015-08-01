@@ -500,7 +500,6 @@ FUSED_GTEST_SRC = \
   fused-src/gtest/gtest_main.cc
 
 @HAVE_PYTHON_TRUE@test_fused_gtest_test_SOURCES = $(FUSED_GTEST_SRC) \
-@HAVE_PYTHON_TRUE@                                samples/sample1.cc samples/sample1_unittest.cc
 
 @HAVE_PYTHON_TRUE@test_fused_gtest_test_CPPFLAGS = -I"$(srcdir)/fused-src"
 

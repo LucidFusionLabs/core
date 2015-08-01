@@ -652,7 +652,7 @@ struct CUDA : public Module { int Init(); };
 typedef tuple<string, string, string> MenuItem;
 
 struct Application : public ::LFApp, public Module {
-  string name, progname, logfilename, startdir, assetdir, dldir;
+  string name, progname, logfilename, startdir, bindir, assetdir, dldir;
   int pid=0;
   FILE *logfile=0;
   mutex log_mutex;
@@ -687,7 +687,6 @@ struct Application : public ::LFApp, public Module {
   void AddNativeMenu(const string &title, const vector<MenuItem>&items);
   int LoadModule(Module *M) { modules.push_back(M); return M->Init(); }
   StringPiece LoadResource(int id);
-  string BinDir() const;
 
   int Create(int argc, const char **argv, const char *source_filename);
   int Init();
