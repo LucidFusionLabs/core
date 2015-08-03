@@ -122,7 +122,7 @@ struct Flow {
     template <class X> int AppendText(const X               *text, int attr_id=0) { return AppendText(StringPiece::Unbounded(text), attr_id); }
     template <class X> int AppendText(const StringPieceT<X> &text, int attr_id=0) {
         int start_size = out->data.size();
-        if (!attr_id) attr_id = out->attr.GetAttrId(cur_attr);
+        if (!attr_id && !out->attr.source) attr_id = out->attr.GetAttrId(cur_attr);
         out->data.reserve(start_size + text.size());
         int initial_out_lines = out->line.size(), line_start_ind = 0, c_bytes = 0, ci_bytes = 0, c, ci;
         for (const X *p = text.data(); !text.Done(p); p += c_bytes) {

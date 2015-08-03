@@ -191,10 +191,6 @@ void Mouse::ReleaseFocus() {}
 #endif
 
 #ifdef LFL_ANDROIDINPUT
-struct AndroidInputModule : public InputModule {
-  int Frame(unsigned clicks) { return 0; }
-};
-
 const int Key::Escape     = -1;
 const int Key::Return     = 10;
 const int Key::Up         = -3;
@@ -249,10 +245,6 @@ extern "C" void iPhoneHideKeyboardAfterReturn(bool v);
 extern "C" void iPhoneGetKeyboardBox(int *x, int *y, int *w, int *h);
 extern "C" void iPhoneCreateToolbar(int n, const char **name, const char **val);
 extern "C" void iPhoneToggleToolbarButton(const char *n);
-
-struct IPhoneInputModule : public InputModule {
-  int Frame(unsigned clicks) { return 0; }
-};
 
 const int Key::Escape     = -1;
 const int Key::Return     = 10;
@@ -582,14 +574,20 @@ static const int XKeyPress = KeyPress, XButton1 = Button1;
 
 struct LinuxInputModule : public InputModule {
   int Frame(unsigned clicks) {
-    Display *display = static_cast<Display*>(app->video.primary_display);
+    Display *display = static_cast<Display*>(screen->surface);
+    static const Atom delete_win = XInternAtom(display, "WM_DELETE_WINDOW", 0);
     XEvent xev;
     while (XPending(display)) {
       XNextEvent(display, &xev);
       switch (xev.type) {
-        case XKeyPress:  KeyPress(GetKeyCode(display, xev), 1); break;
-        case KeyRelease: KeyPress(GetKeyCode(display, xev), 0); break;
-        default:         continue;
+        case XKeyPress:       KeyPress(GetKeyCode(display, xev), 1); break;
+        case KeyRelease:      KeyPress(GetKeyCode(display, xev), 0); break;
+        case ButtonPress:     MouseClick(xev.xbutton.button, 1, xev.xbutton.x, screen->height-xev.xbutton.y); break;
+        case ButtonRelease:   MouseClick(xev.xbutton.button, 0, xev.xbutton.x, screen->height-xev.xbutton.y); break;
+        case MotionNotify:    { point p(xev.xmotion.x, screen->height-xev.xmotion.y); app->input.MouseMove(p, p - screen->mouse); } break;
+        case ConfigureNotify: if (xev.xconfigure.width != screen->width || xev.xconfigure.height != screen->height) screen->Reshaped(xev.xconfigure.width, xev.xconfigure.height); break;
+        case ClientMessage:   if (xev.xclient.data.l[0] == delete_win) WindowClosed(); break;
+        default:              continue;
       }
     }
     return 0;
@@ -641,14 +639,6 @@ void Mouse::GrabFocus() {}
 #endif // LFL_LINUXINPUT
 
 #ifdef LFL_QT
-struct QTInputModule : public InputModule {
-  bool grabbed = 0;
-  int Frame(unsigned clicks) {
-    app->input.DispatchQueuedInput();
-    return 0;
-  }
-};
-
 const int Key::Escape     = Qt::Key_Escape;
 const int Key::Return     = Qt::Key_Return;
 const int Key::Up         = Qt::Key_Up;
@@ -689,14 +679,6 @@ void Clipboard::Set(const string &s) {}
 #endif /* LFL_QT */
 
 #ifdef LFL_WXWIDGETS
-struct QTInputModule : public InputModule {
-  bool grabbed = 0;
-  int Frame(unsigned clicks) {
-    app->input.DispatchQueuedInput();
-    return 0;
-  }
-};
-
 const int Key::Escape     = WXK_ESCAPE;
 const int Key::Return     = WXK_RETURN;
 const int Key::Up         = WXK_UP;
@@ -952,14 +934,8 @@ int Input::Init() {
   paste_bind = Bind('v', Key::Modifier::Ctrl);
 #endif
 
-#if defined(LFL_ANDROIDINPUT)
-  impl = new AndroidInputModule();
-#elif defined(LFL_IPHONEINPUT)
-  impl = new IPhoneInputModule();
-#elif defined(LFL_LINUXINPUT)
+#if defined(LFL_LINUXINPUT)
   impl = new LinuxInputModule();
-#elif defined(LFL_QT)
-  impl = new QTInputModule();
 #elif defined(LFL_GLFWINPUT)
   impl = new GLFWInputModule();
 #elif defined(LFL_SDLINPUT)
@@ -974,14 +950,18 @@ int Input::Init(Window *W) {
 
 int Input::Frame(unsigned clicks) {
   if (impl) impl->Frame(clicks);
+  return 0;
+}
+
+#if 0
+int Input::GestureFrame(unsinged clicks) {
   if (screen) { // XXX support multiple windows
-    if (screen->binds) screen->binds->Repeat(clicks);
     if (screen->gesture_swipe_up)   { if (screen->console && screen->console->active) screen->console->PageUp();   }
     if (screen->gesture_swipe_down) { if (screen->console && screen->console->active) screen->console->PageDown(); }
     screen->ClearGesture();
   }
-  return 0;
 }
+#endif
 
 int Input::DispatchQueuedInput() {
   vector<Callback> icb;

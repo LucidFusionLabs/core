@@ -53,13 +53,6 @@ extern "C" {
 #include <sys/resource.h>
 #endif
 
-#ifdef LFL_CUDA
-#include <cuda_runtime.h>
-#include "lfcuda/lfcuda.h"
-#include "speech/hmm.h"
-#include "speech/speech.h"
-#endif
-
 #ifdef __APPLE__
 #include <CoreFoundation/CoreFoundation.h>
 #ifndef LFL_IPHONE
@@ -67,7 +60,16 @@ extern "C" {
 #endif
 #endif
 
+#ifdef LFL_LINUXINPUT
+#include "X11/Xlib.h"
+#undef KeyPress
+#endif
+
+#ifdef LFL_ANDROID
+#include <android/log.h>
+#endif
 #ifdef LFL_QT
+
 extern "C" void QTTriggerFrame();
 #endif
 
@@ -82,10 +84,6 @@ extern "C" void QTTriggerFrame();
 
 #if defined(LFL_SDLAUDIO) || defined(LFL_SDLVIDEO) || defined(LFL_SDLINPUT)
 #include "SDL.h"
-#endif
-
-#ifdef LFL_ANDROID
-#include <android/log.h>
 #endif
 
 #ifdef LFL_OPENSSL
@@ -108,6 +106,13 @@ extern "C" {
 
 #ifdef LFL_V8JS
 #include <v8.h>
+#endif
+
+#ifdef LFL_CUDA
+#include <cuda_runtime.h>
+#include "lfcuda/lfcuda.h"
+#include "speech/hmm.h"
+#include "speech/speech.h"
 #endif
 
 #if defined(LFL_IPHONE)
@@ -1182,17 +1187,12 @@ int Application::PreFrame(unsigned clicks) {
 
 int Application::PostFrame() {
   frames_ran++;
-  scheduler.FrameDone();
   return 0;
 }
 
 int Application::Frame() {
   if (!MainThread()) ERROR("Frame() called from thread ", Thread::GetId());
-
-  scheduler.FrameWait();
-  unsigned clicks = (scheduler.monolithic_frame ? frame_time.GetTime(true) : screen->frame_time.GetTime(true)).count();
-
-  int flag = 0;
+  unsigned clicks = (scheduler.monolithic_frame ? frame_time.GetTime(true) : screen->frame_time.GetTime(true)).count(), flag = 0;
   PreFrame(clicks);
 
   if (scheduler.monolithic_frame) {
@@ -1208,7 +1208,6 @@ int Application::Frame() {
   }
 
   PostFrame();
-
   return clicks;
 }
 
@@ -1227,7 +1226,9 @@ int Application::MainLoop() {
   INFO("MainLoop: Begin, run=", run);
   while (run) {
     // if (!minimized)
+    scheduler.FrameWait();
     Frame();
+    scheduler.FrameDone();
 #ifdef LFL_IPHONE
     // if (minimized) run = 0;
 #endif
@@ -1264,6 +1265,7 @@ FrameScheduler::FrameScheduler() : maxfps(&FLAGS_target_fps), wakeup_thread(&fra
   rate_limit = synchronize_waits = wait_forever_thread = monolithic_frame = 0;
 #elif defined(LFL_WININPUT) || defined(LFL_LINUXINPUT)
   synchronize_waits = wait_forever_thread = 0;
+  rate_limit = FLAGS_target_fps;
 #elif defined(LFL_QT) || defined(LFL_WXWIDGETS)
   rate_limit = synchronize_waits = monolithic_frame = 0;
 #endif
@@ -1294,6 +1296,8 @@ void FrameScheduler::FrameWait() {
       frame_mutex.unlock();
     }
 #if defined(LFL_OSXINPUT) || defined(LFL_WININPUT) || defined(LFL_IPHONEINPUT) || defined(LFL_QT) || defined(LFL_WXWIDGETS)
+#elif defined(LFL_LINUXINPUT)
+    wait_forever_sockets.Select(-1);
 #elif defined(LFL_GLFWINPUT)
     glfwWaitEvents();
 #elif defined(LFL_SDLINPUT)
@@ -1310,17 +1314,22 @@ void FrameScheduler::FrameWait() {
 
 void FrameScheduler::Wakeup(void *opaque) {
   if (wait_forever && screen) {
-#if defined(LFL_QT)
-    if (wait_forever_thread) QTTriggerFrame();
-#elif defined(LFL_WXWIDGETS)
-    if (wait_forever_thread) ((wxGLCanvas*)screen->id)->Refresh();
-#elif defined(LFL_OSXINPUT)
+#if defined(LFL_OSXINPUT)
     OSXTriggerFrame(screen->id);
 #elif defined(LFL_WININPUT)
     InvalidateRect((HWND)screen->id, NULL, 0);
     // PostMessage((HWND)screen->id, WM_USER, 0, 0);
+#elif defined(LFL_LINUXINPUT)
+    XEvent exp;
+    exp.type = Expose;
+    exp.xexpose.window = (::Window)screen->id;
+    XSendEvent((Display*)screen->surface, exp.xexpose.window, 0, ExposureMask, &exp);
 #elif defined(LFL_IPHONEINPUT)
     iPhoneTriggerFrame(screen->id);
+#elif defined(LFL_QT)
+    if (wait_forever_thread) QTTriggerFrame();
+#elif defined(LFL_WXWIDGETS)
+    if (wait_forever_thread) ((wxGLCanvas*)screen->id)->Refresh();
 #elif defined(LFL_GLFWINPUT)
     if (wait_forever_thread) glfwPostEmptyEvent();
 #elif defined(LFL_SDLINPUT)
@@ -1417,25 +1426,29 @@ void FrameScheduler::DelWaitForeverKeyboard() {
 
 void FrameScheduler::AddWaitForeverSocket(Socket fd, int flag, void *val) {
   if (wait_forever && wait_forever_thread) wakeup_thread.Add(fd, flag, val);
-#if defined(LFL_IPHONEINPUT)
-  if (!wait_forever_thread) { CHECK_EQ(SocketSet::READABLE, flag); iPhoneAddWaitForeverSocket(screen->id, fd); }
-#elif defined(LFL_OSXINPUT)
+#if defined(LFL_OSXINPUT)
   if (!wait_forever_thread) { CHECK_EQ(SocketSet::READABLE, flag); OSXAddWaitForeverSocket(screen->id, fd); }
 #elif defined(LFL_WINVIDEO)
   WSAAsyncSelect(fd, (HWND)screen->id, WM_USER, FD_READ | FD_CLOSE);
+#elif defined(LFL_LINUXINPUT)
+  wait_forever_sockets.Add(fd, flag, val);  
+#elif defined(LFL_IPHONEINPUT)
+  if (!wait_forever_thread) { CHECK_EQ(SocketSet::READABLE, flag); iPhoneAddWaitForeverSocket(screen->id, fd); }
 #endif
 }
 
 void FrameScheduler::DelWaitForeverSocket(Socket fd) {
   if (wait_forever && wait_forever_thread) wakeup_thread.Del(fd);
-#if defined(LFL_IPHONEINPUT)
-  CHECK(screen->id);
-  iPhoneDelWaitForeverSocket(screen->id, fd);
-#elif defined(LFL_OSXINPUT)
+#if defined(LFL_OSXINPUT)
   CHECK(screen->id);
   OSXDelWaitForeverSocket(screen->id, fd);
+#elif defined(LFL_LINUXINPUT)
+  wait_forever_sockets.Del(fd);
 #elif defined(LFL_WINVIDEO)
   WSAAsyncSelect(fd, (HWND)screen->id, WM_USER, 0);
+#elif defined(LFL_IPHONEINPUT)
+  CHECK(screen->id);
+  iPhoneDelWaitForeverSocket(screen->id, fd);
 #endif
 }
 

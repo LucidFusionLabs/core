@@ -256,7 +256,7 @@ bool MultiProcessBuffer::Open() {
     string dir = app->dldir;
 #endif
     string path = StrCat(dir, app->name, "_mpb.XXXXXXXX");
-    if ((impl = open(mktemp(&path[0]), O_RDWR|O_CREAT|O_EXCL, 0600)) < 0) return ERRORv(false, "open ", path);
+    if ((impl = mkstemp(&path[0])) < 0) return ERRORv(false, "mkstemp ", path);
     if (unlink(path.c_str())) return ERRORv(false, "unlink ", path);
     if (ftruncate(impl, len)) return ERRORv(false, "ftruncate ", path, " ", len);
     url = MultiProcessBufferURL;

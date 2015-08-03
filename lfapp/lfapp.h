@@ -582,6 +582,7 @@ struct FrameScheduler {
   FrameRateLimitter maxfps;
   mutex frame_mutex, wait_mutex;
   SocketWakeupThread wakeup_thread;
+  SelectSocketSet wait_forever_sockets;
   bool rate_limit = 1, wait_forever = 1, wait_forever_thread = 1, synchronize_waits = 1, monolithic_frame = 1;
   FrameScheduler();
 

@@ -1110,29 +1110,38 @@ void Window::Close(Window *W) {
 
 #ifdef LFL_LINUXVIDEO
 struct LinuxVideoModule : public Module {
+  Display *display = 0;
+  XVisualInfo *vi = 0;
   int Init() {
-    app->video.primary_display = XOpenDisplay(NULL);
+    GLint att[] = { GLX_RGBA, GLX_DEPTH_SIZE, 16, GLX_DOUBLEBUFFER, None };
+    if (!(display = XOpenDisplay(NULL))) return ERRORv(-1, "XOpenDisplay");
+    if (!(vi = glXChooseVisual(display, 0, att))) return ERRORv(-1, "glXChooseVisual");
+    app->scheduler.AddWaitForeverSocket(ConnectionNumber(display), SocketSet::READABLE, 0);
     INFO("LinuxVideoModule::Init()");
     CHECK(Window::Create(screen));
     return 0;
   }
+  int Free() {
+    XCloseDisplay(display);
+    return 0;
+  }
 };
 bool Window::Create(Window *W) {
-  Display *display = static_cast<Display*>(app->video.primary_display);
-  if (!(W->surface = display)) return ERRORv(false, "XOpenDisplay");
-  GLint att[] = { GLX_RGBA, GLX_DEPTH_SIZE, 16, GLX_DOUBLEBUFFER, 1 };
-  XVisualInfo *vi = glXChooseVisual(display, 0, att);
-  if (!vi) return ERRORv(false, "glxChooseVisual");
-  ::Window root = DefaultRootWindow(display);
+  LinuxVideoModule *video = dynamic_cast<LinuxVideoModule*>(app->video.impl);
+  ::Window root = DefaultRootWindow(video->display);
   XSetWindowAttributes swa;
-  swa.colormap = XCreateColormap(display, root, vi->visual, AllocNone);
-  swa.event_mask = ExposureMask | KeyPressMask;
-  ::Window win = XCreateWindow(display, root, 0, 0, W->width, W->height, 0, vi->depth, InputOutput,
-                               vi->visual, CWColormap | CWEventMask, &swa);
+  swa.colormap = XCreateColormap(video->display, root, video->vi->visual, AllocNone);
+  swa.event_mask = ExposureMask | KeyPressMask | KeyReleaseMask | PointerMotionMask |
+    ButtonPressMask | ButtonReleaseMask | StructureNotifyMask;
+  ::Window win = XCreateWindow(video->display, root, 0, 0, W->width, W->height, 0, video->vi->depth,
+                               InputOutput, video->vi->visual, CWColormap | CWEventMask, &swa);
+  Atom protocols[] = { XInternAtom(video->display, "WM_DELETE_WINDOW", 0) };
+  XSetWMProtocols(video->display, win, protocols, sizeofarray(protocols));
   if (!(W->id = (void*)(win))) return ERRORv(false, "XCreateWindow");
-  XMapWindow(display, win);
-  XStoreName(display, win, W->caption.c_str());
-  if (!(W->gl = glXCreateContext(display, vi, NULL, GL_TRUE))) return ERRORv(false, "glXCreateContext");
+  XMapWindow(video->display, win);
+  XStoreName(video->display, win, W->caption.c_str());
+  if (!(W->gl = glXCreateContext(video->display, video->vi, NULL, GL_TRUE))) return ERRORv(false, "glXCreateContext");
+  W->surface = video->display;
   Window::active[W->id] = W;
   MakeCurrent(W);
   return true;
@@ -1142,7 +1151,10 @@ void Window::Close(Window *W) {
   glXMakeCurrent(display, None, NULL);
   glXDestroyContext(display, static_cast<GLXContext>(W->gl));
   XDestroyWindow(display, reinterpret_cast<::Window>(W->id));
-  XCloseDisplay(display);
+  Window::active.erase(W->id);
+  if (Window::active.empty()) app->run = false;
+  if (app->window_closed_cb) app->window_closed_cb(W);
+  screen = 0;
 }
 void Window::MakeCurrent(Window *W) {
   glXMakeCurrent(static_cast<Display*>(W->surface), (::Window)(W->id), static_cast<GLXContext>(W->gl));
@@ -1490,6 +1502,11 @@ void *Video::CompleteGLContextCreate(Window *W, void *gl_context) {
 #elif defined(LFL_WINVIDEO)
   wglMakeCurrent((HDC)W->surface, (HGLRC)gl_context);
   return gl_context;
+#elif defined(LFL_LINUXVIDEO)
+  LinuxVideoModule *video = dynamic_cast<LinuxVideoModule*>(app->video.impl);
+  GLXContext glc = glXCreateContext(video->display, video->vi, static_cast<GLXContext>(W->gl), GL_TRUE);
+  glXMakeCurrent(video->display, (::Window)(W->id), glc);
+  return glc;
 #else
   return 0;
 #endif
@@ -1640,6 +1657,12 @@ void Window::Reshape(int w, int h) {
   RECT r = { 0, 0, w, h };
   AdjustWindowRect(&r, lStyle, win->menubar);
   SetWindowPos((HWND)screen->id, 0, 0, 0, r.right-r.left, r.bottom-r.top, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+#elif defined(LFL_LINUXVIDEO)
+  LinuxVideoModule *video = dynamic_cast<LinuxVideoModule*>(app->video.impl);
+  XWindowChanges resize;
+  resize.width = w;
+  resize.height = h;
+  XConfigureWindow(video->display, (::Window)screen->id, CWWidth|CWHeight, &resize);
 #elif defined(LFL_QT)
   ((QWindow*)id)->resize(w, h);
   Window::MakeCurrent(screen);

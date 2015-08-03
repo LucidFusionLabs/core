@@ -429,7 +429,7 @@ int Connection::Read() {
     }
 
     struct cmsghdr *cmsg = CMSG_FIRSTHDR(&msg);
-    if (cmsg && cmsg->cmsg_len == sizeof(control) && cmsg->cmsg_level == SOL_SOCKET && cmsg->cmsg_type == SCM_RIGHTS)
+    if (cmsg && cmsg->cmsg_len == CMSG_LEN(sizeof(int)) && cmsg->cmsg_level == SOL_SOCKET && cmsg->cmsg_type == SCM_RIGHTS)
     { CHECK_EQ(-1, transferred_socket); memcpy(&transferred_socket, CMSG_DATA(cmsg), sizeof(int)); }
 #endif
 
@@ -553,6 +553,7 @@ int Connection::WriteFlush(const char *buf, int len, int transfer_socket) {
   iov.iov_len = len;
 
   char control[CMSG_SPACE(sizeof (int))];
+  memzero(control);
   struct msghdr msg;
   memzero(msg);
   msg.msg_iov = &iov;
@@ -564,7 +565,7 @@ int Connection::WriteFlush(const char *buf, int len, int transfer_socket) {
   cmsg->cmsg_level = SOL_SOCKET;
   cmsg->cmsg_type = SCM_RIGHTS;
   memcpy(CMSG_DATA(cmsg), &transfer_socket, sizeof(int));
-  
+
   if ((wrote = sendmsg(socket, &msg, 0)) < 0) {
     if (!SystemNetwork::EWouldBlock()) { ERROR(Name(), ": sendmsg: ", strerror(errno)); return -1; }
     wrote = 0;
