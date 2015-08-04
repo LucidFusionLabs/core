@@ -27,12 +27,8 @@ extern "C" {
 #endif
 
 #include "lfapp/lfapp.h"
-#include "lfapp/dom.h"
-#include "lfapp/css.h"
 #include "lfapp/flow.h"
 #include "lfapp/gui.h"
-#include "lfapp/browser.h"
-#include "lfapp/resolver.h"
 
 #include <time.h>
 #include <fcntl.h>
@@ -68,8 +64,8 @@ extern "C" {
 #ifdef LFL_ANDROID
 #include <android/log.h>
 #endif
-#ifdef LFL_QT
 
+#ifdef LFL_QT
 extern "C" void QTTriggerFrame();
 #endif
 
@@ -84,35 +80,6 @@ extern "C" void QTTriggerFrame();
 
 #if defined(LFL_SDLAUDIO) || defined(LFL_SDLVIDEO) || defined(LFL_SDLINPUT)
 #include "SDL.h"
-#endif
-
-#ifdef LFL_OPENSSL
-#include "openssl/evp.h"
-#include "openssl/err.h"
-#include "openssl/bn.h"
-#include "openssl/dh.h"
-#include "openssl/ec.h"
-#include "openssl/ecdh.h"
-#include "openssl/md5.h"
-#endif
-
-extern "C" {
-#ifdef LFL_LUA
-#include "lua.h"
-#include "lualib.h"
-#include "lauxlib.h"
-#endif
-};
-
-#ifdef LFL_V8JS
-#include <v8.h>
-#endif
-
-#ifdef LFL_CUDA
-#include <cuda_runtime.h>
-#include "lfcuda/lfcuda.h"
-#include "speech/hmm.h"
-#include "speech/speech.h"
 #endif
 
 #if defined(LFL_IPHONE)
@@ -155,7 +122,7 @@ extern "C" NativeWindow *GetNativeWindow() { return LFL::screen; }
 extern "C" LFApp        *GetLFApp()        { return LFL::app; }
 extern "C" int LFAppMain()                 { return LFL::app->Main(); }
 extern "C" int LFAppMainLoop()             { return LFL::app->MainLoop(); }
-extern "C" int LFAppFrame()                { return LFL::app->Frame(); }
+extern "C" int LFAppFrame(bool handle_ev)  { return LFL::app->EventDrivenFrame(handle_ev); }
 extern "C" const char *LFAppDownloadDir()  { return LFL::app->dldir.c_str(); }
 extern "C" void LFAppShutdown() { LFL::app->run=0; LFL::app->scheduler.Wakeup(0); }
 extern "C" void WindowReshaped(int w, int h) { LFL::screen->Reshaped(w, h); }
@@ -203,7 +170,7 @@ DEFINE_bool(frame_debug, false, "Print each frame");
 DEFINE_string(nameserver, "", "Default namesver");
 DEFINE_bool(max_rlimit_core, true, "Max core dump rlimit");
 DEFINE_bool(max_rlimit_open_files, false, "Max number of open files rlimit");
-DEFINE_int(loglevel, 7, "Log level: [Fatal=-1, Error=0, Info=3, Debug=7]");
+DEFINE_int(loglevel, -1, "Log level: [Fatal=-1, Error=0, Info=3, Debug=7]");
 DEFINE_int(threadpool_size, 0, "Threadpool size");
 DEFINE_int(sample_rate, 16000, "Audio sample rate");
 DEFINE_int(sample_secs, 3, "Seconds of RingBuf audio");
@@ -486,352 +453,6 @@ bool Vault::LoadPassword(const string &h, const string &u, string *pw) {
 }
 #endif
 
-string Crypto::MD5   (const string &in) { return ComputeDigest(DigestAlgos::MD5   (), in); }
-string Crypto::SHA1  (const string &in) { return ComputeDigest(DigestAlgos::SHA1  (), in); }
-string Crypto::SHA256(const string &in) { return ComputeDigest(DigestAlgos::SHA256(), in); }
-
-string Crypto::ComputeDigest(DigestAlgo algo, const string &in) {
-  Digest d;
-  DigestOpen(&d, algo);
-  DigestUpdate(&d, in);
-  return DigestFinish(&d);
-}
-
-#ifdef LFL_OPENSSL
-bool Crypto::DiffieHellman::GeneratePair(int secret_bits, BigNumContext ctx) {
-  x = BigNumRand(x, secret_bits, 0, -1);
-  BigNumModExp(e, g, x, p, ctx);
-  return true;
-}
-string Crypto::DiffieHellman::GenerateModulus(int generator, int bits) {
-  DH *dh = DH_new();
-  DH_generate_parameters_ex(dh, bits, generator, NULL);
-  string ret(BN_num_bytes(dh->p), 0);
-  BN_bn2bin(dh->p, (unsigned char*)&ret[0]);
-  DH_free(dh);
-  return ret;
-}
-BigNum Crypto::DiffieHellman::Group1Modulus(BigNum g, BigNum p, int *rand_num_bits) {
-  // https://tools.ietf.org/html/rfc2409 Second Oakley Group
-  char buf[] =
-    "\xff\xff\xff\xff\xff\xff\xff\xff\xc9\x0f\xda\xa2\x21\x68\xc2\x34\xc4\xc6\x62\x8b\x80\xdc\x1c\xd1"
-    "\x29\x02\x4e\x08\x8a\x67\xcc\x74\x02\x0b\xbe\xa6\x3b\x13\x9b\x22\x51\x4a\x08\x79\x8e\x34\x04\xdd"
-    "\xef\x95\x19\xb3\xcd\x3a\x43\x1b\x30\x2b\x0a\x6d\xf2\x5f\x14\x37\x4f\xe1\x35\x6d\x6d\x51\xc2\x45"
-    "\xe4\x85\xb5\x76\x62\x5e\x7e\xc6\xf4\x4c\x42\xe9\xa6\x37\xed\x6b\x0b\xff\x5c\xb6\xf4\x06\xb7\xed"
-    "\xee\x38\x6b\xfb\x5a\x89\x9f\xa5\xae\x9f\x24\x11\x7c\x4b\x1f\xe6\x49\x28\x66\x51\xec\xe6\x53\x81"
-    "\xff\xff\xff\xff\xff\xff\xff\xff";
-  BigNumSetValue(g, 2);
-  *rand_num_bits = 160;
-  return BigNumSetData(p, StringPiece(buf, sizeof(buf)-1));
-}
-BigNum Crypto::DiffieHellman::Group14Modulus(BigNum g, BigNum p, int *rand_num_bits) {
-  // https://tools.ietf.org/html/rfc3526 Oakley Group 14
-  char buf[] =
-    "\xff\xff\xff\xff\xff\xff\xff\xff\xc9\x0f\xda\xa2\x21\x68\xc2\x34\xc4\xc6\x62\x8b\x80\xdc\x1c\xd1"
-    "\x29\x02\x4e\x08\x8a\x67\xcc\x74\x02\x0b\xbe\xa6\x3b\x13\x9b\x22\x51\x4a\x08\x79\x8e\x34\x04\xdd"
-    "\xef\x95\x19\xb3\xcd\x3a\x43\x1b\x30\x2b\x0a\x6d\xf2\x5f\x14\x37\x4f\xe1\x35\x6d\x6d\x51\xc2\x45"
-    "\xe4\x85\xb5\x76\x62\x5e\x7e\xc6\xf4\x4c\x42\xe9\xa6\x37\xed\x6b\x0b\xff\x5c\xb6\xf4\x06\xb7\xed"
-    "\xee\x38\x6b\xfb\x5a\x89\x9f\xa5\xae\x9f\x24\x11\x7c\x4b\x1f\xe6\x49\x28\x66\x51\xec\xe4\x5b\x3d"
-    "\xc2\x00\x7c\xb8\xa1\x63\xbf\x05\x98\xda\x48\x36\x1c\x55\xd3\x9a\x69\x16\x3f\xa8\xfd\x24\xcf\x5f"
-    "\x83\x65\x5d\x23\xdc\xa3\xad\x96\x1c\x62\xf3\x56\x20\x85\x52\xbb\x9e\xd5\x29\x07\x70\x96\x96\x6d"
-    "\x67\x0c\x35\x4e\x4a\xbc\x98\x04\xf1\x74\x6c\x08\xca\x18\x21\x7c\x32\x90\x5e\x46\x2e\x36\xce\x3b"
-    "\xe3\x9e\x77\x2c\x18\x0e\x86\x03\x9b\x27\x83\xa2\xec\x07\xa2\x8f\xb5\xc5\x5d\xf0\x6f\x4c\x52\xc9"
-    "\xde\x2b\xcb\xf6\x95\x58\x17\x18\x39\x95\x49\x7c\xea\x95\x6a\xe5\x15\xd2\x26\x18\x98\xfa\x05\x10"
-    "\x15\x72\x8e\x5a\x8a\xac\xaa\x68\xff\xff\xff\xff\xff\xff\xff\xff";
-  BigNumSetValue(g, 2);
-  *rand_num_bits = 224;
-  return BigNumSetData(p, StringPiece(buf, sizeof(buf)-1));
-}
-ECDef Crypto::EllipticCurve::NISTP256() { return NID_X9_62_prime256v1; };
-ECDef Crypto::EllipticCurve::NISTP384() { return NID_secp384r1; };
-ECDef Crypto::EllipticCurve::NISTP521() { return NID_secp521r1; };
-ECPair Crypto::EllipticCurve::NewPair(ECDef id, bool generate) {
-  ECPair pair = EC_KEY_new_by_curve_name(id);
-  if (generate && pair && EC_KEY_generate_key(pair) != 1) { EC_KEY_free(pair); return NULL; }
-  return pair;
-}
-bool Crypto::EllipticCurveDiffieHellman::GeneratePair(ECDef curve, BigNumContext ctx) {
-  FreeECPair(pair);
-  if (!(pair = Crypto::EllipticCurve::NewPair(curve, true))) return false;
-  g = GetECPairGroup(pair);
-  c = GetECPairPubKey(pair);
-  c_text = ECPointGetData(g, c, ctx);
-  FreeECPoint(s);
-  s = NewECPoint(g);
-  return true;
-}
-bool Crypto::EllipticCurveDiffieHellman::ComputeSecret(BigNum *K, BigNumContext ctx) {
-  string k_text((EC_GROUP_get_degree(g) + 7) / 8, 0);
-  if (ECDH_compute_key(&k_text[0], k_text.size(), s, pair, 0) != k_text.size()) return false;
-  *K = BigNumSetData(*K, k_text);
-  return true;
-}
-#else
-bool Crypto::DiffieHellman::GeneratePair(int secret_bits, BigNumContext ctx) { FATAL("not implemented"); }
-BigNum Crypto::DiffieHellman::Group1Modulus(BigNum g, BigNum p, int *rand_num_bits) { FATAL("not implemented"); }
-BigNum Crypto::DiffieHellman::Group14Modulus(BigNum g, BigNum p, int *rand_num_bits) { FATAL("not implemented"); }
-ECDef Crypto::EllipticCurve::NISTP256() { FATAL("not implemented"); }
-ECDef Crypto::EllipticCurve::NISTP384() { FATAL("not implemented"); }
-ECDef Crypto::EllipticCurve::NISTP521() { FATAL("not implemented"); }
-ECPair Crypto::EllipticCurve::NewPair(ECDef id, bool generate) { FATAL("not implemented"); }
-bool Crypto::EllipticCurveDiffieHellman::GeneratePair(ECDef curve, BigNumContext ctx) { FATAL("not implemented"); }
-bool Crypto::EllipticCurveDiffieHellman::ComputeSecret(BigNum *K, BigNumContext ctx) { FATAL("not implemented"); }
-#endif
-
-#if defined(LFL_COMMONCRYPTO)
-struct CCCipherAlgo { enum { AES128_CTR=1, AES128_CBC=2, TripDES_CBC=3, Blowfish_CBC=4, RC4=5 }; };
-struct CCDigestAlgo { enum { MD5=1, SHA1=2, SHA256=3, SHA384=4, SHA512=5 }; };
-string Crypto::Blowfish(const string &passphrase, const string &in, bool encrypt_or_decrypt) { FATAL("not implemented"); }
-Crypto::CipherAlgo Crypto::CipherAlgos::AES128_CTR()   { return CCCipherAlgo::AES128_CTR; }
-Crypto::CipherAlgo Crypto::CipherAlgos::AES128_CBC()   { return CCCipherAlgo::AES128_CBC; }
-Crypto::CipherAlgo Crypto::CipherAlgos::TripDES_CBC()  { return CCCipherAlgo::TripDES_CBC; }
-Crypto::CipherAlgo Crypto::CipherAlgos::Blowfish_CBC() { return CCCipherAlgo::Blowfish_CBC; }
-Crypto::CipherAlgo Crypto::CipherAlgos::RC4()          { return CCCipherAlgo::RC4; }
-Crypto::DigestAlgo Crypto::DigestAlgos::MD5()          { return CCDigestAlgo::MD5; }
-Crypto::DigestAlgo Crypto::DigestAlgos::SHA1()         { return CCDigestAlgo::SHA1; }
-Crypto::DigestAlgo Crypto::DigestAlgos::SHA256()       { return CCDigestAlgo::SHA256; }
-Crypto::DigestAlgo Crypto::DigestAlgos::SHA384()       { return CCDigestAlgo::SHA384; }
-Crypto::DigestAlgo Crypto::DigestAlgos::SHA512()       { return CCDigestAlgo::SHA512; }
-Crypto::MACAlgo    Crypto::   MACAlgos::MD5()          { return kCCHmacAlgMD5; }
-Crypto::MACAlgo    Crypto::   MACAlgos::SHA1()         { return kCCHmacAlgSHA1; }
-Crypto::MACAlgo    Crypto::   MACAlgos::SHA256()       { return kCCHmacAlgSHA256; }
-Crypto::MACAlgo    Crypto::   MACAlgos::SHA512()       { return kCCHmacAlgSHA512; }
-const char *Crypto::CipherAlgos::Name(CipherAlgo v) {
-  switch (v) {
-    case CCCipherAlgo::AES128_CTR:   return "aes128-ctr";
-    case CCCipherAlgo::AES128_CBC:   return "aes128-cbc";
-    case CCCipherAlgo::TripDES_CBC:  return "3des-cbc";
-    case CCCipherAlgo::Blowfish_CBC: return "blowfish-cbc";
-    case CCCipherAlgo::RC4:          return "rc4";
-    default:                         return "none";
-  }
-}
-int Crypto::CipherAlgos::KeySize(CipherAlgo v) {
-  switch (v) {
-    case CCCipherAlgo::AES128_CTR:   return kCCKeySizeAES128;
-    case CCCipherAlgo::AES128_CBC:   return kCCKeySizeAES128;
-    case CCCipherAlgo::TripDES_CBC:  return kCCKeySize3DES;
-    case CCCipherAlgo::Blowfish_CBC: return 16;
-    case CCCipherAlgo::RC4:          return 16;
-    default:                         return 0;
-  }
-}
-const char *Crypto::DigestAlgos::Name(DigestAlgo v) {
-  switch (v) {
-    case CCDigestAlgo::MD5:    return "md5";
-    case CCDigestAlgo::SHA1:   return "sha1";
-    case CCDigestAlgo::SHA256: return "sha256";
-    case CCDigestAlgo::SHA384: return "sha384";
-    case CCDigestAlgo::SHA512: return "sha512";
-    default:                   return "none";
-  }
-}
-int Crypto::DigestAlgos::HashSize(DigestAlgo v) {
-  switch (v) {
-    case CCDigestAlgo::MD5:    return CC_MD5_DIGEST_LENGTH;
-    case CCDigestAlgo::SHA1:   return CC_SHA1_DIGEST_LENGTH;
-    case CCDigestAlgo::SHA256: return CC_SHA256_DIGEST_LENGTH;
-    case CCDigestAlgo::SHA384: return CC_SHA384_DIGEST_LENGTH;
-    case CCDigestAlgo::SHA512: return CC_SHA512_DIGEST_LENGTH;
-    default:                   return 0;
-  }
-}
-const char *Crypto::MACAlgos::Name(MACAlgo v) {
-  switch (v) {
-    case kCCHmacAlgMD5:    return "md5";
-    case kCCHmacAlgSHA1:   return "sha1";
-    case kCCHmacAlgSHA256: return "sha256";
-    case kCCHmacAlgSHA512: return "sha512";
-    default:               return "none";
-  }
-}
-int Crypto::MACAlgos::HashSize(MACAlgo v) {
-  switch (v) {
-    case kCCHmacAlgMD5:    return CC_MD5_DIGEST_LENGTH;
-    case kCCHmacAlgSHA1:   return CC_SHA1_DIGEST_LENGTH;
-    case kCCHmacAlgSHA256: return CC_SHA256_DIGEST_LENGTH;
-    case kCCHmacAlgSHA512: return CC_SHA512_DIGEST_LENGTH;
-    default:               return 0;
-  }
-}
-void Crypto::CipherInit(Cipher *c) { c->algo=0; c->ctx=0; }
-void Crypto::CipherFree(Cipher *c) { CCCryptorRelease(c->ctx); }
-int Crypto::CipherGetBlockSize(Cipher *c) {
-  switch(c->ccalgo) {
-    case kCCAlgorithmAES128:   return kCCBlockSizeAES128;
-    case kCCAlgorithm3DES:     return kCCBlockSize3DES;
-    case kCCAlgorithmBlowfish: return kCCBlockSizeBlowfish;
-    case kCCAlgorithmRC4:      return 16;
-    default:                   return -1;
-  }
-}
-int Crypto::CipherOpen(Cipher *c, CipherAlgo algo, bool dir, const StringPiece &key, const StringPiece &IV) {
-  bool ctr = false;
-  switch((c->algo = algo)) {
-    case CCCipherAlgo::AES128_CTR:   c->ccalgo = kCCAlgorithmAES128; ctr = true; break;
-    case CCCipherAlgo::AES128_CBC:   c->ccalgo = kCCAlgorithmAES128;             break;
-    case CCCipherAlgo::TripDES_CBC:  c->ccalgo = kCCAlgorithm3DES;               break;
-    case CCCipherAlgo::Blowfish_CBC: c->ccalgo = kCCAlgorithmBlowfish;           break;
-    case CCCipherAlgo::RC4:          c->ccalgo = kCCAlgorithmRC4;                break;
-    default:                         return -1;
-  }
-  int mode = (algo == CCCipherAlgo::RC4) ? kCCModeRC4 : (ctr ? kCCModeCTR : kCCModeCBC);
-  return CCCryptorCreateWithMode(dir ? kCCEncrypt : kCCDecrypt, mode, c->ccalgo, 0, IV.data(), key.data(), key.size(),
-                                 0, 0, 0, ctr ? kCCModeOptionCTR_BE : 0, &c->ctx) == kCCSuccess;
-}
-int Crypto::CipherUpdate(Cipher *c, const StringPiece &in, char *out, int outlen) {
-  size_t wrote = 0;
-  return CCCryptorUpdate(c->ctx, in.data(), in.size(), out, outlen, &wrote) == kCCSuccess;
-}
-int Crypto::DigestGetHashSize(Digest *d) { return DigestAlgos::HashSize(d->algo); }
-void Crypto::DigestOpen(Digest *d, DigestAlgo algo) {
-  d->algo = algo;
-  switch(algo) {
-    case CCDigestAlgo::MD5:    d->v=calloc(sizeof(CC_MD5_CTX),   1); CC_MD5_Init   ((CC_MD5_CTX*)   d->v); break;
-    case CCDigestAlgo::SHA1:   d->v=calloc(sizeof(CC_SHA1_CTX),  1); CC_SHA1_Init  ((CC_SHA1_CTX*)  d->v); break;
-    case CCDigestAlgo::SHA256: d->v=calloc(sizeof(CC_SHA256_CTX),1); CC_SHA256_Init((CC_SHA256_CTX*)d->v); break;
-    case CCDigestAlgo::SHA384: d->v=calloc(sizeof(CC_SHA512_CTX),1); CC_SHA384_Init((CC_SHA512_CTX*)d->v); break;
-    case CCDigestAlgo::SHA512: d->v=calloc(sizeof(CC_SHA512_CTX),1); CC_SHA512_Init((CC_SHA512_CTX*)d->v); break;
-    default:                   d->v=0; break;
-  }
-}
-void Crypto::DigestUpdate(Digest *d, const StringPiece &in) {
-  switch(d->algo) {
-    case CCDigestAlgo::MD5:    CC_MD5_Update   ((CC_MD5_CTX*)   d->v, in.data(), in.size()); break;
-    case CCDigestAlgo::SHA1:   CC_SHA1_Update  ((CC_SHA1_CTX*)  d->v, in.data(), in.size()); break;
-    case CCDigestAlgo::SHA256: CC_SHA256_Update((CC_SHA256_CTX*)d->v, in.data(), in.size()); break;
-    case CCDigestAlgo::SHA384: CC_SHA384_Update((CC_SHA512_CTX*)d->v, in.data(), in.size()); break;
-    case CCDigestAlgo::SHA512: CC_SHA512_Update((CC_SHA512_CTX*)d->v, in.data(), in.size()); break;
-    default: break;
-  }
-} 
-string Crypto::DigestFinish(Digest *d) {
-  string ret;
-  switch(d->algo) {
-    case CCDigestAlgo::MD5:    ret.resize(CC_MD5_DIGEST_LENGTH);    CC_MD5_Final   (reinterpret_cast<unsigned char *>(&ret[0]), (CC_MD5_CTX*)   d->v); free(d->v); d->v=0; break;
-    case CCDigestAlgo::SHA1:   ret.resize(CC_SHA1_DIGEST_LENGTH);   CC_SHA1_Final  (reinterpret_cast<unsigned char *>(&ret[0]), (CC_SHA1_CTX*)  d->v); free(d->v); d->v=0; break;
-    case CCDigestAlgo::SHA256: ret.resize(CC_SHA256_DIGEST_LENGTH); CC_SHA256_Final(reinterpret_cast<unsigned char *>(&ret[0]), (CC_SHA256_CTX*)d->v); free(d->v); d->v=0; break;
-    case CCDigestAlgo::SHA384: ret.resize(CC_SHA384_DIGEST_LENGTH); CC_SHA384_Final(reinterpret_cast<unsigned char *>(&ret[0]), (CC_SHA512_CTX*)d->v); free(d->v); d->v=0; break;
-    case CCDigestAlgo::SHA512: ret.resize(CC_SHA512_DIGEST_LENGTH); CC_SHA512_Final(reinterpret_cast<unsigned char *>(&ret[0]), (CC_SHA512_CTX*)d->v); free(d->v); d->v=0; break;
-    default: break;
-  }
-  return ret;
-}
-void Crypto::MACOpen(MAC *m, MACAlgo algo, const StringPiece &k) { CCHmacInit(&m->ctx, (m->algo=algo), k.data(), k.size()); }
-void Crypto::MACUpdate(MAC *m, const StringPiece &in) { CCHmacUpdate(&m->ctx, in.data(), in.size()); }
-int Crypto::MACFinish(MAC *m, char *out, int outlen) {
-  CCHmacFinal(&m->ctx, out); 
-  switch(m->algo) {
-    case kCCHmacAlgMD5:    return CC_MD5_DIGEST_LENGTH;
-    case kCCHmacAlgSHA1:   return CC_SHA1_DIGEST_LENGTH;
-    case kCCHmacAlgSHA256: return CC_SHA256_DIGEST_LENGTH;
-    case kCCHmacAlgSHA512: return CC_SHA512_DIGEST_LENGTH;
-    default:               return -1;
-  }
-}
-#elif defined(LFL_OPENSSL)
-string Crypto::Blowfish(const string &passphrase, const string &in, bool encrypt_or_decrypt) {
-  unsigned char iv[8] = {0,0,0,0,0,0,0,0};
-  EVP_CIPHER_CTX ctx; 
-  EVP_CIPHER_CTX_init(&ctx); 
-  EVP_CipherInit_ex(&ctx, EVP_bf_cbc(), NULL, NULL, NULL, encrypt_or_decrypt);
-  EVP_CIPHER_CTX_set_key_length(&ctx, passphrase.size());
-  EVP_CipherInit_ex(&ctx, NULL, NULL, (const unsigned char *)passphrase.c_str(), iv, encrypt_or_decrypt); 
-
-  int outlen = 0, tmplen = 0;
-  string out(in.size()+encrypt_or_decrypt*EVP_MAX_BLOCK_LENGTH, 0);
-  EVP_CipherUpdate(&ctx, (unsigned char*)out.data(), &outlen, (const unsigned char *)in.c_str(), in.size());
-  EVP_CipherFinal_ex(&ctx, (unsigned char*)out.data() + outlen, &tmplen); 
-  if (in.size() % 8) outlen += tmplen;
-
-  EVP_CIPHER_CTX_cleanup(&ctx); 
-  if (encrypt_or_decrypt) {
-    CHECK_LE(outlen, out.size());
-    out.resize(outlen);
-  }
-  return out;
-}
-
-Crypto::CipherAlgo Crypto::CipherAlgos::AES128_CTR()   { return EVP_aes_128_ctr(); }
-Crypto::CipherAlgo Crypto::CipherAlgos::AES128_CBC()   { return EVP_aes_128_cbc(); }
-Crypto::CipherAlgo Crypto::CipherAlgos::TripDES_CBC()  { return EVP_des_ede3_cbc(); }
-Crypto::CipherAlgo Crypto::CipherAlgos::Blowfish_CBC() { return EVP_bf_cbc(); }
-Crypto::CipherAlgo Crypto::CipherAlgos::RC4()          { return EVP_rc4(); }
-Crypto::DigestAlgo Crypto::DigestAlgos::SHA1()         { return EVP_get_digestbyname("sha1"); }
-Crypto::DigestAlgo Crypto::DigestAlgos::SHA256()       { return EVP_get_digestbyname("sha256"); }
-Crypto::DigestAlgo Crypto::DigestAlgos::SHA384()       { return EVP_get_digestbyname("sha384"); }
-Crypto::DigestAlgo Crypto::DigestAlgos::SHA512()       { return EVP_get_digestbyname("sha512"); }
-Crypto::DigestAlgo Crypto::DigestAlgos::MD5()          { return EVP_md5(); }
-Crypto::MACAlgo    Crypto::MACAlgos   ::MD5()          { return EVP_md5(); }
-Crypto::MACAlgo    Crypto::MACAlgos   ::SHA1()         { return EVP_sha1(); }
-Crypto::MACAlgo    Crypto::MACAlgos   ::SHA256()       { return EVP_sha256(); }
-Crypto::MACAlgo    Crypto::MACAlgos   ::SHA512()       { return EVP_sha512(); }
-int         Crypto::CipherAlgos::KeySize (CipherAlgo v) { return EVP_CIPHER_key_length(v); }
-int         Crypto::DigestAlgos::HashSize(DigestAlgo v) { return EVP_MD_size(v); }
-int         Crypto::MACAlgos   ::HashSize(MACAlgo    v) { return EVP_MD_size(v); }
-const char *Crypto::DigestAlgos::Name(DigestAlgo v) { return EVP_MD_name(v); }
-const char *Crypto::CipherAlgos::Name(CipherAlgo v) { return EVP_CIPHER_name(v); }
-const char *Crypto::MACAlgos   ::Name(MACAlgo    v) { return EVP_MD_name(v); }
-void Crypto::CipherInit(Cipher *c) { EVP_CIPHER_CTX_init(c); }
-void Crypto::CipherFree(Cipher *c) { EVP_CIPHER_CTX_cleanup(c); }
-int Crypto::CipherGetBlockSize(Cipher *c) { return EVP_CIPHER_CTX_block_size(c); }
-int Crypto::CipherOpen(Cipher *c, CipherAlgo algo, bool dir, const StringPiece &key, const StringPiece &IV) { 
-  return EVP_CipherInit(c, algo, reinterpret_cast<const unsigned char *>(key.data()),
-                        reinterpret_cast<const unsigned char *>(IV.data()), dir);
-}
-int Crypto::CipherUpdate(Cipher *c, const StringPiece &in, char *out, int outlen) {
-  return EVP_Cipher(c, reinterpret_cast<unsigned char*>(out),
-                    reinterpret_cast<const unsigned char*>(in.data()), in.size());
-}
-int Crypto::DigestGetHashSize(Digest *d) { return EVP_MD_CTX_size(d); }
-void Crypto::DigestOpen(Digest *d, DigestAlgo algo) { CHECK(algo); EVP_DigestInit(d, algo); }
-void Crypto::DigestUpdate(Digest *d, const StringPiece &in) { EVP_DigestUpdate(d, in.data(), in.size()); }
-string Crypto::DigestFinish(Digest *d) {
-  unsigned len = 0;
-  string ret(EVP_MAX_MD_SIZE, 0);
-  EVP_DigestFinal(d, reinterpret_cast<unsigned char *>(&ret[0]), &len);
-  ret.resize(len);
-  return ret;
-}
-void Crypto::MACOpen(MAC *m, MACAlgo algo, const StringPiece &k) { HMAC_Init(m, k.data(), k.size(), algo); }
-void Crypto::MACUpdate(MAC *m, const StringPiece &in) { HMAC_Update(m, reinterpret_cast<const unsigned char *>(in.data()), in.size()); }
-int Crypto::MACFinish(MAC *m, char *out, int outlen) { unsigned len=outlen; HMAC_Final(m, reinterpret_cast<unsigned char *>(out), &len); return len; }
-#else
-string Crypto::Blowfish(const string &passphrase, const string &in, bool encrypt_or_decrypt) { FATAL("not implemented"); }
-Crypto::CipherAlgo Crypto::CipherAlgos::AES128_CTR()   { FATAL("not implemented"); }
-Crypto::CipherAlgo Crypto::CipherAlgos::AES128_CBC()   { FATAL("not implemented"); }
-Crypto::CipherAlgo Crypto::CipherAlgos::TripDES_CBC()  { FATAL("not implemented"); }
-Crypto::CipherAlgo Crypto::CipherAlgos::Blowfish_CBC() { FATAL("not implemented"); }
-Crypto::CipherAlgo Crypto::CipherAlgos::RC4()          { FATAL("not implemented"); }
-Crypto::DigestAlgo Crypto::DigestAlgos::SHA1()         { FATAL("not implemented"); }
-Crypto::DigestAlgo Crypto::DigestAlgos::SHA256()       { FATAL("not implemented"); }
-Crypto::DigestAlgo Crypto::DigestAlgos::SHA384()       { FATAL("not implemented"); }
-Crypto::DigestAlgo Crypto::DigestAlgos::SHA512()       { FATAL("not implemented"); }
-Crypto::DigestAlgo Crypto::DigestAlgos::MD5()          { FATAL("not implemented"); }
-Crypto::MACAlgo    Crypto::   MACAlgos::MD5()          { FATAL("not implemented"); }
-Crypto::MACAlgo    Crypto::   MACAlgos::SHA1()         { FATAL("not implemented"); }
-Crypto::MACAlgo    Crypto::   MACAlgos::SHA256()       { FATAL("not implemented"); }
-Crypto::MACAlgo    Crypto::   MACAlgos::SHA512()       { FATAL("not implemented"); }
-int         Crypto::CipherAlgos::KeySize (CipherAlgo v) { return 0; }
-int         Crypto::DigestAlgos::HashSize(DigestAlgo v) { return 0; }
-int         Crypto::   MACAlgos::HashSize(DigestAlgo v) { return 0; }
-const char *Crypto::DigestAlgos::Name(DigestAlgo v) { return "none"; }
-const char *Crypto::CipherAlgos::Name(CipherAlgo v) { return "none"; }
-const char *Crypto::MACAlgos   ::Name(MACAlgo    v) { return "none"; }
-void Crypto::CipherInit(Cipher *c) { FATAL("not implemented"); }
-void Crypto::CipherFree(Cipher *c) { FATAL("not implemented"); }
-int Crypto::CipherGetBlockSize(Cipher *c) { FATAL("not implemented"); }
-int Crypto::CipherOpen(Cipher *c, CipherAlgo algo, bool dir, const StringPiece &key, const StringPiece &IV) {  FATAL("not implemented"); }
-int Crypto::CipherUpdate(Cipher *c, const StringPiece &in, char *out, int outlen) { FATAL("not implemented"); }
-int Crypto::DigestGetHashSize(Digest *d) { FATAL("not implemented"); }
-void Crypto::DigestOpen(Digest *d, DigestAlgo algo) { FATAL("not implemented"); }
-void Crypto::DigestUpdate(Digest *d, const StringPiece &in) { FATAL("not implemented"); }
-string Crypto::DigestFinish(Digest *d) { FATAL("not implemented"); }
-void Crypto::MACOpen(MAC *m, MACAlgo algo, const StringPiece &k) { FATAL("not implemented"); }
-void Crypto::MACUpdate(MAC *m, const StringPiece &in) { FATAL("not implemented"); }
-int Crypto::MACFinish(MAC *m, char *out, int outlen) { FATAL("not implemented"); }
-#endif
-
 void SystemBrowser::Open(const char *url_text) {
 #if defined(LFL_ANDROID)
   AndroidOpenBrowser(url_text);
@@ -858,7 +479,6 @@ void Advertising::HideAds() {
 }
 
 void Application::Log(int level, const char *file, int line, const string &message) {
-  if (level > FLAGS_loglevel || (level >= LFApp::Log::Debug && !FLAGS_lfapp_debug)) return;
   char tbuf[64];
   logtime(tbuf, sizeof(tbuf));
   {
@@ -879,7 +499,7 @@ void Application::Log(int level, const char *file, int line, const string &messa
 #endif
   }
   if (level == LFApp::Log::Fatal) LFAppFatal();
-  if (FLAGS_lfapp_video && screen && screen->console) screen->console->Write(message);
+  if (FLAGS_lfapp_video && screen && screen->lfapp_console) screen->lfapp_console->Write(message);
 }
 
 void Application::CreateNewWindow(const function<void(Window*)> &start_cb) {
@@ -1139,7 +759,7 @@ int Application::Init() {
   }
 
   app->video.InitFonts();
-  if (!screen->console) screen->InitConsole();
+  if (FLAGS_lfapp_console && !screen->lfapp_console) screen->InitLFAppConsole();
 
   if (FLAGS_lfapp_input) {
     if (LoadModule(&input)) { ERROR("input init failed"); return -1; }
@@ -1171,9 +791,7 @@ int Application::Start() {
   return 0;
 }
 
-int Application::PreFrame(unsigned clicks) {
-  pre_frames_ran++;
-
+int Application::HandleEvents(unsigned clicks) {
   for (auto i = modules.begin(); i != modules.end() && run; ++i) (*i)->Frame(clicks);
 
   // handle messages sent to main thread
@@ -1185,29 +803,30 @@ int Application::PreFrame(unsigned clicks) {
   return 0;
 }
 
-int Application::PostFrame() {
+int Application::EventDrivenFrame(bool handle_events) {
+  if (!MainThread()) ERROR("Frame() called from thread ", Thread::GetId());
+  unsigned clicks = screen->frame_time.GetTime(true).count(), flag = 0;
+  if (handle_events) HandleEvents(clicks);
+
+  int ret = screen->Frame(clicks, audio.mic_samples, camera.have_sample, flag);
+  if (FLAGS_frame_debug) INFO("frame_debug Application::Frame Window ", screen->id, " = ", ret);
+
   frames_ran++;
-  return 0;
+  return clicks;
 }
 
-int Application::Frame() {
-  if (!MainThread()) ERROR("Frame() called from thread ", Thread::GetId());
-  unsigned clicks = (scheduler.monolithic_frame ? frame_time.GetTime(true) : screen->frame_time.GetTime(true)).count(), flag = 0;
-  PreFrame(clicks);
+int Application::TimerDrivenFrame() {
+  if (!MainThread()) ERROR("MonolithicFrame() called from thread ", Thread::GetId());
+  unsigned clicks = frame_time.GetTime(true).count(), flag = 0;
+  HandleEvents(clicks);
 
-  if (scheduler.monolithic_frame) {
-    Window *previous_screen = screen;
-    for (auto i = Window::active.begin(); run && i != Window::active.end(); ++i) {
-      int ret = i->second->Frame(clicks, audio.mic_samples, camera.have_sample, flag);
-      if (FLAGS_frame_debug) INFO("frame_debug Application::Frame Window ", i->second->id, " = ", ret);
-    }
-    if (previous_screen && previous_screen != screen) Window::MakeCurrent(previous_screen);
-  } else {
-    int ret = screen->Frame(clicks, audio.mic_samples, camera.have_sample, flag);
-    if (FLAGS_frame_debug) INFO("frame_debug Application::Frame Window ", screen->id, " = ", ret);
+  for (auto i = Window::active.begin(); run && i != Window::active.end(); ++i) {
+    if (!i->second->target_fps) continue;
+    int ret = i->second->Frame(clicks, audio.mic_samples, camera.have_sample, flag);
+    if (FLAGS_frame_debug) INFO("frame_debug Application::Frame Window ", i->second->id, " = ", ret);
   }
 
-  PostFrame();
+  frames_ran++;
   return clicks;
 }
 
@@ -1227,7 +846,7 @@ int Application::MainLoop() {
   while (run) {
     // if (!minimized)
     scheduler.FrameWait();
-    Frame();
+    TimerDrivenFrame();
     scheduler.FrameDone();
 #ifdef LFL_IPHONE
     // if (minimized) run = 0;
@@ -1451,282 +1070,4 @@ void FrameScheduler::DelWaitForeverSocket(Socket fd) {
   iPhoneDelWaitForeverSocket(screen->id, fd);
 #endif
 }
-
-/* CUDA */
-
-#ifdef LFL_CUDA
-void PrintCUDAProperties(cudaDeviceProp *prop) {
-  DEBUGf("Major revision number:         %d", prop->major);
-  DEBUGf("Minor revision number:         %d", prop->minor);
-  DEBUGf("Name:                          %s", prop->name);
-  DEBUGf("Total global memory:           %u", prop->totalGlobalMem);
-  DEBUGf("Total shared memory per block: %u", prop->sharedMemPerBlock);
-  DEBUGf("Total registers per block:     %d", prop->regsPerBlock);
-  DEBUGf("Warp size:                     %d", prop->warpSize);
-  DEBUGf("Maximum memory pitch:          %u", prop->memPitch);
-  DEBUGf("Maximum threads per block:     %d", prop->maxThreadsPerBlock);
-  for (int i = 0; i < 3; ++i) DEBUGf("Maximum dimension %d of block: %d", i, prop->maxThreadsDim[i]);
-  for (int i = 0; i < 3; ++i) DEBUGf("Maximum dimension %d of grid:  %d", i, prop->maxGridSize[i]);
-  DEBUGf("Clock rate:                    %d", prop->clockRate);
-  DEBUGf("Total constant memory:         %u", prop->totalConstMem);
-  DEBUGf("Texture alignment:             %u", prop->textureAlignment);
-  DEBUGf("Concurrent copy and execution: %s", (prop->deviceOverlap ? "Yes" : "No"));
-  DEBUGf("Number of multiprocessors:     %d", prop->multiProcessorCount);
-  DEBUGf("Kernel execution timeout:      %s", (prop->kernelExecTimeoutEnabled ? "Yes" : "No"));
-}
-
-int CUDA::Init() {
-  INFO("CUDA::Init()");
-  FLAGS_lfapp_cuda = 0;
-
-  int cuda_devices = 0;
-  cudaError_t err;
-  if ((err = cudaGetDeviceCount(&cuda_devices)) != cudaSuccess)
-  { ERROR("cudaGetDeviceCount error ", cudaGetErrorString(err)); return 0; }
-
-  cudaDeviceProp prop;
-  for (int i=0; i<cuda_devices; i++) {
-    if ((err = cudaGetDeviceProperties(&prop, i)) != cudaSuccess) { ERROR("cudaGetDeviceProperties error ", err); return 0; }
-    if (FLAGS_lfapp_debug) PrintCUDAProperties(&prop);
-    if (strstr(prop.name, "Emulation")) continue;
-    FLAGS_lfapp_cuda=1;
-  }
-
-  if (FLAGS_lfapp_cuda) {
-    INFO("CUDA device detected, enabling acceleration: lfapp_cuda(", FLAGS_lfapp_cuda, ") devices ", cuda_devices);
-    cudaSetDeviceFlags(cudaDeviceBlockingSync);
-    cuda_init_hook();
-  }
-  else INFO("no CUDA devices detected ", cuda_devices);
-  return 0;
-}
-#else
-int CUDA::Init() { FLAGS_lfapp_cuda=0; INFO("CUDA not supported lfapp_cuda(", FLAGS_lfapp_cuda, ")"); return 0; }
-#endif /* LFL_CUDA */
-
-/* Script engines */
-
-#ifdef LFL_LUA
-struct MyLuaContext : public LuaContext {
-  lua_State *L;
-  ~MyLuaContext() { lua_close(L); }
-  MyLuaContext() : L(luaL_newstate()) {
-    luaopen_base(L);
-    luaopen_table(L);
-    luaopen_io(L);
-    luaopen_string(L);
-    luaopen_math(L);
-  }
-  string Execute(const string &s) {
-    if (luaL_loadbuffer(L, s.data(), s.size(), "MyLuaExec")) { ERROR("luaL_loadstring ", lua_tostring(L, -1)); return ""; }
-    if (lua_pcall(L, 0, LUA_MULTRET, 0))                     { ERROR("lua_pcall ",       lua_tostring(L, -1)); return ""; }
-    return "";
-  }
-};
-LuaContext *CreateLuaContext() { return new MyLuaContext(); }
-#else /* LFL_LUA */
-LuaContext *CreateLuaContext() { return 0; }
-#endif /* LFL_LUA */
-
-#ifdef LFL_V8JS
-v8::Local<v8::String> NewV8String(v8::Isolate *I, const char  *s) { return v8::String::NewFromUtf8(I, s); }
-v8::Local<v8::String> NewV8String(v8::Isolate *I, const short *s) { return v8::String::NewFromTwoByte(I, (const uint16_t *)s); }
-template <class X> inline X CastV8InternalFieldTo(v8::Local<v8::Object> &self, int field_index) {
-  return static_cast<X>(v8::Local<v8::External>::Cast(self->GetInternalField(field_index))->Value());
-}
-#define V8_SimpleMemberReturn(X, type, ret) \
-  v8::Local<v8::Object> self = args.Holder(); \
-  X *inst = CastV8InternalFieldTo<X*>(self, 1); \
-  args.GetReturnValue().Set(type(args.GetIsolate(), (ret)));
-
-#define V8_ObjectMemberReturn(X, Y, OT, ret) \
-  v8::Local<v8::Object> self = args.Holder(); \
-  X *impl = CastV8InternalFieldTo<X*>(self, 1); \
-  Y *val = (ret); \
-  if (!val) { args.GetReturnValue().Set(v8::Null(args.GetIsolate())); return; } \
-  MyV8JSContext *js_context = CastV8InternalFieldTo<MyV8JSContext*>(self, 0); \
-  v8::Local<v8::Object> impl_obj = (js_context->*OT)->NewInstance(); \
-  impl_obj->SetInternalField(0, v8::External::New(args.GetIsolate(), js_context)); \
-  impl_obj->SetInternalField(1, v8::External::New(args.GetIsolate(), val)); \
-  impl_obj->SetInternalField(2, v8::Integer ::New(args.GetIsolate(), TypeId(val))); \
-  args.GetReturnValue().Set(impl_obj);
-
-template <typename X, int (X::*Y)() const> void MemberIntFunc(const v8::FunctionCallbackInfo<v8::Value> &args) {
-  V8_SimpleMemberReturn(X, v8::Integer::New, (inst->*Y)());
-}
-template <typename X, int (X::*Y)() /***/> void MemberIntGetter(v8::Local<v8::String> property, const v8::PropertyCallbackInfo<v8::Value>& args) {
-  V8_SimpleMemberReturn(X, v8::Integer::New, (inst->*Y)());
-}
-template <typename X, int (X::*Y)() const> void MemberIntGetter(v8::Local<v8::String> property, const v8::PropertyCallbackInfo<v8::Value>& args) {
-  V8_SimpleMemberReturn(X, v8::Integer::New, (inst->*Y)());
-}
-template <typename X, DOM::DOMString (X::*Y)() const> void MemberStringFunc(const v8::FunctionCallbackInfo<v8::Value> &args) {
-  V8_SimpleMemberReturn(X, NewV8String, (inst->*Y)().c_str());
-}
-template <typename X, DOM::DOMString (X::*Y)() const> void MemberStringFuncGetter(v8::Local<v8::String> property, const v8::PropertyCallbackInfo<v8::Value>& args) {
-  V8_SimpleMemberReturn(X, NewV8String, (inst->*Y)().c_str());
-}
-template <typename X, DOM::DOMString (X::*Y)(int)> void MemberStringFuncInt(const v8::FunctionCallbackInfo<v8::Value> &args) {
-  if (!args.Length()) { args.GetReturnValue().Set(v8::Null(args.GetIsolate())); return; }
-  V8_SimpleMemberReturn(X, NewV8String, (inst->*Y)(args[0]->Int32Value()).c_str());
-}
-template <typename X, DOM::DOMString (X::*Y)(int)> void IndexedMemberStringProperty(uint32_t index, const v8::PropertyCallbackInfo<v8::Value>& args) {
-  V8_SimpleMemberReturn(X, NewV8String, (inst->*Y)(index).c_str());
-}
-template <typename X, DOM::DOMString (X::*Y)(const DOM::DOMString &)> void NamedMemberStringProperty(v8::Local<v8::String> name, const v8::PropertyCallbackInfo<v8::Value>& args) {
-  string v = BlankNull(*v8::String::Utf8Value(name));
-  if (v == "toString" || v == "valueOf" || v == "length" || v == "item") return;
-  V8_SimpleMemberReturn(X, NewV8String, (inst->*Y)(DOM::DOMString(v)).c_str());
-}
-
-struct MyV8JSInit { MyV8JSInit() { v8::V8::Initialize(); } };
-
-struct MyV8JSContext : public JSContext {
-  v8::Isolate*                   isolate;
-  v8::Isolate::Scope             isolate_scope;
-  v8::HandleScope                handle_scope;
-  v8::Handle<v8::Context>        context;
-  v8::Context::Scope             context_scope;
-  v8::Handle<v8::ObjectTemplate> global, console, window, node, node_list, named_node_map, css_style_declaration;
-  Console*                       js_console;
-
-  virtual ~MyV8JSContext() {}
-  MyV8JSContext(Console *C, DOM::Node *D) : isolate(v8::Isolate::New()), isolate_scope(isolate),
-  handle_scope(isolate), context(v8::Context::New(isolate)), context_scope(context), global(v8::ObjectTemplate::New()),
-  console(v8::ObjectTemplate::New()), window(v8::ObjectTemplate::New()), node(v8::ObjectTemplate::New()),
-  node_list(v8::ObjectTemplate::New()), named_node_map(v8::ObjectTemplate::New()), css_style_declaration(v8::ObjectTemplate::New()),
-  js_console(C) {
-    console->SetInternalFieldCount(1);
-    console->Set(v8::String::NewFromUtf8(isolate, "log"), v8::FunctionTemplate::New(isolate, consoleLog));
-    v8::Local<v8::Object> console_obj = console->NewInstance();
-    console_obj->SetInternalField(0, v8::External::New(isolate, this));
-    context->Global()->Set(v8::String::NewFromUtf8(isolate, "console"), console_obj);
-
-    window->SetInternalFieldCount(1);
-    window->Set(v8::String::NewFromUtf8(isolate, "getComputedStyle"), v8::FunctionTemplate::New(isolate, windowGetComputedStyle));
-    v8::Local<v8::Object> window_obj = window->NewInstance();
-    window_obj->SetInternalField(0, v8::External::New(isolate, this));
-    window_obj->Set(v8::String::NewFromUtf8(isolate, "console"), console_obj);
-    context->Global()->Set(v8::String::NewFromUtf8(isolate, "window"), window_obj);
-
-    node->SetInternalFieldCount(3);
-    node->SetAccessor(v8::String::NewFromUtf8(isolate, "nodeName"),
-                      MemberStringFuncGetter<DOM::Node, &DOM::Node::nodeName>, donothingSetter);
-    node->SetAccessor(v8::String::NewFromUtf8(isolate, "nodeValue"),
-                      MemberStringFuncGetter<DOM::Node, &DOM::Node::nodeValue>, donothingSetter);
-    node->SetAccessor(v8::String::NewFromUtf8(isolate, "childNodes"), 
-                      MemberObjectGetter<DOM::Node, DOM::NodeList,
-                      &DOM::Node::childNodes, &MyV8JSContext::node_list>, donothingSetter);
-    node->SetAccessor(v8::String::NewFromUtf8(isolate, "attributes"), 
-                      ElementObjectGetter<DOM::Node, DOM::NamedNodeMap,
-                      &DOM::Element::attributes, &MyV8JSContext::named_node_map>, donothingSetter);
-
-    node_list->SetInternalFieldCount(3);
-    node_list->SetAccessor(v8::String::NewFromUtf8(isolate, "length"),
-                           MemberIntGetter<DOM::NodeList, &DOM::NodeList::length>, donothingSetter);
-    node_list->Set(v8::String::NewFromUtf8(isolate, "item"),
-                   v8::FunctionTemplate::New(isolate, MemberObjectFuncInt<DOM::NodeList, DOM::Node, 
-                                             &DOM::NodeList::item, &MyV8JSContext::node>));
-    node_list->SetIndexedPropertyHandler(IndexedMemberObjectProperty<DOM::NodeList, DOM::Node,
-                                         &DOM::NodeList::item, &MyV8JSContext::node>);
-
-    named_node_map->SetInternalFieldCount(3);
-    named_node_map->SetAccessor(v8::String::NewFromUtf8(isolate, "length"),
-                                MemberIntGetter<DOM::NamedNodeMap, &DOM::NamedNodeMap::length>, donothingSetter);
-    named_node_map->Set(v8::String::NewFromUtf8(isolate, "item"),
-                        v8::FunctionTemplate::New(isolate, MemberObjectFuncInt<DOM::NamedNodeMap, DOM::Node, 
-                                                  &DOM::NamedNodeMap::item, &MyV8JSContext::node>));
-    named_node_map->SetIndexedPropertyHandler(IndexedMemberObjectProperty<DOM::NamedNodeMap, DOM::Node,
-                                              &DOM::NamedNodeMap::item, &MyV8JSContext::node>);
-    named_node_map->SetNamedPropertyHandler(NamedMemberObjectProperty<DOM::NamedNodeMap, DOM::Node,
-                                            &DOM::NamedNodeMap::getNamedItem, &MyV8JSContext::node>);
-
-    css_style_declaration->SetInternalFieldCount(3);
-    css_style_declaration->SetAccessor(v8::String::NewFromUtf8(isolate, "length"),
-                                       MemberIntGetter<DOM::CSSStyleDeclaration, &DOM::CSSStyleDeclaration::length>, donothingSetter);
-    css_style_declaration->Set(v8::String::NewFromUtf8(isolate, "item"),
-                               v8::FunctionTemplate::New(isolate, MemberStringFuncInt<DOM::CSSStyleDeclaration, &DOM::CSSStyleDeclaration::item>));
-    css_style_declaration->SetIndexedPropertyHandler(IndexedMemberStringProperty<DOM::CSSStyleDeclaration, &DOM::CSSStyleDeclaration::item>);
-    css_style_declaration->SetNamedPropertyHandler(NamedMemberStringProperty<DOM::CSSStyleDeclaration, &DOM::CSSStyleDeclaration::getPropertyValue>);
-
-    if (D) {
-      v8::Local<v8::Object> node_obj = node->NewInstance();
-      node_obj->SetInternalField(0, v8::External::New(isolate, this));
-      node_obj->SetInternalField(1, v8::External::New(isolate, D));
-      node_obj->SetInternalField(2, v8::Integer::New(isolate, TypeId(D)));
-      context->Global()->Set(v8::String::NewFromUtf8(isolate, "document"), node_obj);
-    }
-  }
-  string Execute(const string &s) {
-    v8::Handle<v8::String> source = v8::String::NewFromUtf8(isolate, s.c_str());
-    v8::Handle<v8::Script> script = v8::Script::Compile(source);
-    { v8::TryCatch trycatch;
-      v8::Handle<v8::Value> result = script->Run();
-      if (!result.IsEmpty()) {
-        if (result->IsObject() && js_console) {
-          v8::Local<v8::Object> obj = result->ToObject();
-          if (obj->InternalFieldCount() >= 3) {
-            if (obj->GetInternalField(2)->Int32Value() == TypeId<DOM::Node>()) {
-              js_console->Write(CastV8InternalFieldTo<DOM::Node*>(obj, 1)->DebugString());
-            }
-          }
-        }
-      } else result = trycatch.Exception();
-      return BlankNull(*v8::String::Utf8Value(result));
-    }
-  }
-  static void donothingSetter(v8::Local<v8::String> property, v8::Local<v8::Value> value, const v8::PropertyCallbackInfo<void>& args) {}
-  static void windowGetter(v8::Local<v8::String> property, const v8::PropertyCallbackInfo<v8::Value>& args) {
-    args.GetReturnValue().Set(args.Holder());
-  }
-  static void consoleLog(const v8::FunctionCallbackInfo<v8::Value> &args) {
-    v8::Local<v8::Object> self = args.Holder(); string msg;
-    MyV8JSContext *js_context = CastV8InternalFieldTo<MyV8JSContext*>(self, 0);
-    for (int i=0; i < args.Length(); i++) StrAppend(&msg, BlankNull(*v8::String::Utf8Value(args[i]->ToString())));
-    if (js_context->js_console) js_context->js_console->Write(msg);
-    else INFO("VSJ8(", (void*)js_context, ") console.log: ", msg);
-    args.GetReturnValue().Set(v8::Null(args.GetIsolate()));
-  };
-  static void windowGetComputedStyle(const v8::FunctionCallbackInfo<v8::Value> &args) {
-    v8::Local<v8::Object> self = args.Holder();
-    if (args.Length() < 1 || !args[0]->IsObject()) { args.GetReturnValue().Set(v8::Null(args.GetIsolate())); return; }
-    v8::Local<v8::Object> arg_obj = args[0]->ToObject();
-    DOM::Node *impl = CastV8InternalFieldTo<DOM::Node*>(arg_obj, 1);
-    DOM::CSSStyleDeclaration *val = impl->render ? &impl->render->style : 0;
-    if (!val) { args.GetReturnValue().Set(v8::Null(args.GetIsolate())); return; }
-    MyV8JSContext *js_context = CastV8InternalFieldTo<MyV8JSContext*>(self, 0);
-    v8::Local<v8::Object> impl_obj = js_context->css_style_declaration->NewInstance();
-    impl_obj->SetInternalField(0, v8::External::New(args.GetIsolate(), js_context));
-    impl_obj->SetInternalField(1, v8::External::New(args.GetIsolate(), val));
-    impl_obj->SetInternalField(2, v8::Integer ::New(args.GetIsolate(), TypeId(val)));
-    args.GetReturnValue().Set(impl_obj);
-  }
-  template <typename X, typename Y, Y (X::*Z), v8::Handle<v8::ObjectTemplate> (MyV8JSContext::*OT)>
-    static void MemberObjectGetter(v8::Local<v8::String> property, const v8::PropertyCallbackInfo<v8::Value>& args) {
-      V8_ObjectMemberReturn(X, Y, OT, &(impl->*Z));
-    }
-  template <typename X, typename Y, Y (DOM::Element::*Z), v8::Handle<v8::ObjectTemplate> (MyV8JSContext::*OT)>
-    static void ElementObjectGetter(v8::Local<v8::String> property, const v8::PropertyCallbackInfo<v8::Value>& args) {
-      V8_ObjectMemberReturn(X, Y, OT, impl->AsElement() ? &(impl->AsElement()->*Z) : 0);
-    }
-  template <typename X, typename Y, Y *(X::*Z)(int), v8::Handle<v8::ObjectTemplate> (MyV8JSContext::*OT)>
-    static void MemberObjectFuncInt(const v8::FunctionCallbackInfo<v8::Value> &args) {
-      if (!args.Length()) { args.GetReturnValue().Set(v8::Null(args.GetIsolate())); return; }
-      V8_ObjectMemberReturn(X, Y, OT, (impl->*Z)(args[0]->Int32Value()));
-    }
-  template <typename X, typename Y, Y *(X::*Z)(int), v8::Handle<v8::ObjectTemplate> (MyV8JSContext::*OT)>
-    static void IndexedMemberObjectProperty(uint32_t index, const v8::PropertyCallbackInfo<v8::Value>& args) {
-      V8_ObjectMemberReturn(X, Y, OT, (impl->*Z)(index));
-    }
-  template <typename X, typename Y, Y *(X::*Z)(const DOM::DOMString &), v8::Handle<v8::ObjectTemplate> (MyV8JSContext::*OT)>
-    static void NamedMemberObjectProperty(v8::Local<v8::String> name, const v8::PropertyCallbackInfo<v8::Value>& args) {
-      string v = BlankNull(*v8::String::Utf8Value(name));
-      if (v == "toString" || v == "valueOf" || v == "length" || v == "item") return;
-      V8_ObjectMemberReturn(X, Y, OT, (impl->*Z)(DOM::DOMString(v)));
-    }
-};
-JSContext *CreateV8JSContext(Console *js_console, DOM::Node *doc) { Singleton<MyV8JSInit>::Get(); return new MyV8JSContext(js_console, doc); }
-#else /* LFL_V8JS */
-JSContext *CreateV8JSContext(Console *js_console, DOM::Node *doc) { return 0; }
-#endif /* LFL_V8JS */
 }; // namespace LFL

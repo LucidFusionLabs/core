@@ -33,8 +33,9 @@ DEFINE_bool(multitouch, true, "Touchscreen controls");
 #else
 DEFINE_bool(multitouch, false, "Touchscreen controls");
 #endif
-DEFINE_string(console_font, "", "Console font, blank for default_font");
-DEFINE_int(console_font_flag, FontDesc::Mono, "Console font flag");
+DEFINE_bool(lfapp_console, false, "Enable dropdown lfapp console");
+DEFINE_string(lfapp_console_font, "", "Console font, blank for default_font");
+DEFINE_int(lfapp_console_font_flag, FontDesc::Mono, "Console font flag");
 DEFINE_bool(draw_grid, false, "Draw lines intersecting mouse x,y");
 
 Window::WindowMap Window::active;
@@ -55,21 +56,11 @@ Window::Window() : caption("lfapp"), fps(128) {
 }
 
 Window::~Window() {
-  if (console) {
-    console->WriteHistory(LFAppDownloadDir(), "console");
-    delete console;
+  if (lfapp_console) {
+    lfapp_console->WriteHistory(LFAppDownloadDir(), "console");
+    delete lfapp_console;
   }
   delete cam;
-}
-
-void Window::ClearMouseGUIEvents() {
-  for (auto i = mouse_gui.begin(); i != mouse_gui.end(); ++i) (*i)->ClearEvents();
-}
-void Window::ClearKeyboardGUIEvents() {
-  for (auto i = keyboard_gui.begin(); i != keyboard_gui.end(); ++i) (*i)->ClearEvents();
-}
-void Window::ClearInputBindEvents() {
-  for (auto i = input_bind.begin(); i != input_bind.end(); ++i) (*i)->ClearEvents();
 }
 
 void Window::ClearEvents() { 
@@ -85,15 +76,25 @@ void Window::ClearGesture() {
   gesture_dpad_dx[0] = gesture_dpad_dx[1] = gesture_dpad_dy[0] = gesture_dpad_dy[1] = 0;
 }
 
-void Window::InitConsole() {
-  console = new Console(screen, Fonts::Get(A_or_B(FLAGS_console_font, FLAGS_default_font), "", 9, Color::white, Color::clear, FLAGS_console_font_flag));
-  console->ReadHistory(LFAppDownloadDir(), "console");
-  console->Write(StrCat(screen->caption, " started"));
-  console->Write("Try console commands 'cmds' and 'flags'");
+void Window::ClearMouseGUIEvents() {
+  for (auto i = mouse_gui.begin(); i != mouse_gui.end(); ++i) (*i)->ClearEvents();
+}
+void Window::ClearKeyboardGUIEvents() {
+  for (auto i = keyboard_gui.begin(); i != keyboard_gui.end(); ++i) (*i)->ClearEvents();
+}
+void Window::ClearInputBindEvents() {
+  for (auto i = input_bind.begin(); i != input_bind.end(); ++i) (*i)->ClearEvents();
+}
+
+void Window::InitLFAppConsole() {
+  lfapp_console = new Console(screen, Fonts::Get(A_or_B(FLAGS_lfapp_console_font, FLAGS_default_font), "", 9, Color::white, Color::clear, FLAGS_lfapp_console_font_flag));
+  lfapp_console->ReadHistory(LFAppDownloadDir(), "console");
+  lfapp_console->Write(StrCat(screen->caption, " started"));
+  lfapp_console->Write("Try console commands 'cmds' and 'flags'");
 }
 
 void Window::DrawDialogs() {
-  if (screen->console) screen->console->Draw();
+  if (screen->lfapp_console) screen->lfapp_console->Draw();
   if (FLAGS_draw_grid) {
     Color c(.7, .7, .7);
     glIntersect(screen->mouse.x, screen->mouse.y, &c);
@@ -161,7 +162,7 @@ void Widget::Button::LayoutComplete(Flow *flow, const Box &b) {
   flow->p = save_p;
 }
 
-Widget::Scrollbar::Scrollbar(GUI *Gui, Box window, int f) : Interface(Gui), win(window), flag(f), menuicon2(Fonts::Get("MenuAtlas2", "", 0, Color::black, Color::clear, 0)) {
+Widget::Scrollbar::Scrollbar(GUI *Gui, Box window, int f) : Interface(Gui), win(window), flag(f), menuicon(Fonts::Get("MenuAtlas", "", 0, Color::black, Color::clear, 0)) {
   if (win.w && win.h) { if (f & Flag::Attached) LayoutAttached(win); else LayoutFixed(win); }
 }
 
@@ -186,9 +187,9 @@ void Widget::Scrollbar::Layout(int aw, int ah, bool flip) {
 
   if (gui) {
     int attr_id = gui->child_box.attr.GetAttrId(Drawable::Attr());
-    gui->child_box.PushBack(arrow_up,   attr_id, menuicon2 ? menuicon2->FindGlyph(flip ? 64 : 66) : 0);
-    gui->child_box.PushBack(arrow_down, attr_id, menuicon2 ? menuicon2->FindGlyph(flip ? 65 : 61) : 0);
-    gui->child_box.PushBack(scroll_dot, attr_id, menuicon2 ? menuicon2->FindGlyph(            72) : 0, &drawbox_ind);
+    gui->child_box.PushBack(arrow_up,   attr_id, menuicon ? menuicon->FindGlyph(flip ? 2 : 4) : 0);
+    gui->child_box.PushBack(arrow_down, attr_id, menuicon ? menuicon->FindGlyph(flip ? 3 : 1) : 0);
+    gui->child_box.PushBack(scroll_dot, attr_id, menuicon ? menuicon->FindGlyph(           5) : 0, &drawbox_ind);
 
     AddDragBox(scroll_dot, MouseController::CB(bind(&Scrollbar::DragScrollDot, this)));
     AddClickBox(arrow_up,   MouseController::CB(bind(flip ? &Scrollbar::ScrollDown : &Scrollbar::ScrollUp,   this)));
@@ -1424,7 +1425,7 @@ void Console::Draw() {
 
 /* Dialog */
 
-Dialog::Dialog(float w, float h, int flag) : GUI(screen), font(Fonts::Get(FLAGS_default_font, "", 14, Color::white)), menuicon1(Fonts::Get("MenuAtlas1", "", 0, Color::black, Color::clear, 0)) {
+Dialog::Dialog(float w, float h, int flag) : GUI(screen), font(Fonts::Get(FLAGS_default_font, "", 14, Color::white)), menuicon(Fonts::Get("MenuAtlas", "", 0, Color::black, Color::clear, 0)) {
   screen->dialogs.push_back(this);
   box = screen->Box().center(screen->Box(w, h));
   fullscreen = flag & Flag::Fullscreen;
@@ -1446,8 +1447,8 @@ void Dialog::Layout() {
   AddClickBox(title,         MouseController::CB(bind(&Dialog::Reshape,     this, &moving)));
   AddClickBox(close,         MouseController::CB(bind(&Dialog::MarkDeleted, this)));
 
-  int attr_id = child_box.attr.GetAttrId(Drawable::Attr(menuicon1));
-  child_box.PushBack(close, attr_id, menuicon1 ? menuicon1->FindGlyph(11) : 0);
+  int attr_id = child_box.attr.GetAttrId(Drawable::Attr(menuicon));
+  child_box.PushBack(close, attr_id, menuicon ? menuicon->FindGlyph(0) : 0);
 
   if (title_text.size()) {
     Box title_text_size;

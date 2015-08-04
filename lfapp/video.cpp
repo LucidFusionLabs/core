@@ -1574,14 +1574,13 @@ void Video::InitFonts() {
   }
 
   FontEngine *atlas_engine = Singleton<AtlasFontEngine>::Get();
-  atlas_engine->Init(FontDesc("MenuAtlas1", "", 0, Color::black, Color::clear, 0, 0));
-  atlas_engine->Init(FontDesc("MenuAtlas2", "", 0, Color::black, Color::clear, 0, 0));
+  atlas_engine->Init(FontDesc("MenuAtlas", "", 0, Color::black, Color::clear, 0, 0));
 
-  if (FLAGS_font_engine != "atlas" && FLAGS_font_engine != "freetype") {
+  if (FLAGS_lfapp_console && FLAGS_font_engine != "atlas" && FLAGS_font_engine != "freetype") {
     FLAGS_atlas_font_sizes = "32";
     string console_font = "VeraMoBd.ttf";
-    Singleton<AtlasFontEngine>::Get()->Init(FontDesc(console_font, "", 32, Color::white, Color::clear, FLAGS_console_font_flag));
-    FLAGS_console_font = StrCat("atlas://", console_font);
+    Singleton<AtlasFontEngine>::Get()->Init(FontDesc(console_font, "", 32, Color::white, Color::clear, FLAGS_lfapp_console_font_flag));
+    FLAGS_lfapp_console_font = StrCat("atlas://", console_font);
   }
 }
 

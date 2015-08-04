@@ -479,18 +479,18 @@ void AtlasFontEngine::WriteAtlas(const string &name, Font *f, Texture *t) {
 
 void AtlasFontEngine::WriteGlyphFile(const string &name, Font *f) {
     int glyph_count = 0, glyph_out = 0;
-    GlyphTableIter(f) if (i->       advance) glyph_count++;
-    GlyphIndexIter(f) if (i->second.advance) glyph_count++;
+    GlyphTableIter(f) if (i->       tex.width && i->       tex.height) glyph_count++;
+    GlyphIndexIter(f) if (i->second.tex.width && i->second.tex.height) glyph_count++;
 
     Matrix *gm = new Matrix(glyph_count, 10);
-    GlyphTableIter(f) if (i->       advance) i->       ToArray(gm->row(glyph_out++), gm->N);
-    GlyphIndexIter(f) if (i->second.advance) i->second.ToArray(gm->row(glyph_out++), gm->N);
+    GlyphTableIter(f) if (i->       tex.width && i->       tex.height) i->       ToArray(gm->row(glyph_out++), gm->N);
+    GlyphIndexIter(f) if (i->second.tex.width && i->second.tex.height) i->second.ToArray(gm->row(glyph_out++), gm->N);
     MatrixFile(gm, "").WriteVersioned(VersionedFileName(app->assetdir.c_str(), name.c_str(), "glyphs"), 0);
 }
 
-void AtlasFontEngine::MakeFromPNGFiles(const string &name, const vector<string> &png, int atlas_dim, Font **glyphs_out) {
+void AtlasFontEngine::MakeFromPNGFiles(const string &name, const vector<string> &png, const point &atlas_dim, Font **glyphs_out) {
     Font *ret = new Font(Singleton<AtlasFontEngine>::Get(), FontDesc(name), shared_ptr<FontEngine::Resource>());
-    ret->glyph = shared_ptr<GlyphMap>(new GlyphMap(shared_ptr<GlyphCache>(new GlyphCache(0, atlas_dim))));
+    ret->glyph = shared_ptr<GlyphMap>(new GlyphMap(shared_ptr<GlyphCache>(new GlyphCache(0, atlas_dim.x, atlas_dim.y))));
     EnsureSize(ret->glyph->table, png.size());
 
     GlyphCache *cache = ret->glyph->cache.get();
@@ -528,11 +528,12 @@ void AtlasFontEngine::SplitIntoPNGFiles(const string &input_png_fn, const map<in
     Texture png;
     if (PngReader::Read(&in, &png)) return ERROR("read: ", input_png_fn);
 
+    int count=0;
     for (map<int, v4>::const_iterator i = glyphs.begin(); i != glyphs.end(); ++i) {
         unsigned gx1 = RoundF(i->second.x * png.width), gy1 = RoundF((1 - i->second.y) * png.height);
         unsigned gx2 = RoundF(i->second.z * png.width), gy2 = RoundF((1 - i->second.w) * png.height);
         unsigned gw = gx2 - gx1, gh = gy1 - gy2;
-        CHECK(gw > 0 && gh > 0);
+        if (gw <= 0 || gh <= 0) continue;
 
         Texture glyph;
         glyph.Resize(gw, gh, Texture::preferred_pf, Texture::Flag::CreateBuf);

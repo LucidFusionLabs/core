@@ -180,7 +180,7 @@ static const char **osx_argv = 0;
         static bool first_callback = 1;
         if (first_callback && !(first_callback = 0)) SetLFAppMainThread();
         if (!initialized) return;
-        if (app->run) LFAppFrame();
+        if (app->run) LFAppFrame(true);
         else [self stopThreadAndExit];
     }
     - (void)reshape {

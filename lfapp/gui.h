@@ -22,8 +22,9 @@ namespace LFL {
 
 DECLARE_bool(multitouch);
 DECLARE_bool(draw_grid);
-DECLARE_string(console_font);
-DECLARE_int(console_font_flag);
+DECLARE_bool(lfapp_console);
+DECLARE_string(lfapp_console_font);
+DECLARE_int(lfapp_console_font_flag);
 
 struct GUI : public MouseController {
   Box box;
@@ -46,9 +47,7 @@ struct GUI : public MouseController {
   virtual void Layout() {}
   virtual void Draw();
   virtual void HandleTextMessage(const string &s) {}
-
   virtual bool ToggleActive();
-  virtual void ToggleConsole() { if (!active) app->shell.console(vector<string>()); }
 };
 
 struct Widget {
@@ -113,7 +112,7 @@ struct Widget {
     int flag=0, doc_height=200, dot_size=25;
     float scrolled=0, last_scrolled=0, increment=20;
     Color color=Color(15, 15, 15, 55);
-    Font *menuicon2=0;
+    Font *menuicon=0;
     bool dragging=0, dirty=0;
     virtual ~Scrollbar() {}
     Scrollbar(GUI *Gui, Box window=Box(), int f=Flag::Attached);
@@ -525,7 +524,7 @@ struct Console : public TextArea {
 
 struct Dialog : public GUI {
   struct Flag { enum { None=0, Fullscreen=1, Next=2 }; };
-  Font *font=0, *menuicon1=0;
+  Font *font=0, *menuicon=0;
   Color color=Color(25,60,130,220);
   Box title, resize_left, resize_right, resize_bottom, close;
   bool deleted=0, moving=0, resizing_left=0, resizing_right=0, resizing_top=0, resizing_bottom=0, fullscreen=0;

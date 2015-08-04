@@ -527,21 +527,18 @@ struct Window : public NativeWindow {
     FrameCB frame_cb;
     Timer frame_time;
     RollingAvg<unsigned> fps;
-    BindMap *binds=0;
     Entity *cam=0;
-    Console *console=0;
+    BindMap *binds=0;
     Dialog *top_dialog=0;
     vector<Dialog*> dialogs;
     vector<GUI*> mouse_gui;
     vector<KeyboardGUI*> keyboard_gui;
     vector<InputController*> input_bind;
+    Console *lfapp_console=0;
 
     Window();
     virtual ~Window();
 
-    void InitConsole();
-    void ClearEvents();
-    void ClearGesture();
     void SetCaption(const string &c);
     void SetResizeIncrements(float x, float y);
     void SetTransparency(float v);
@@ -554,9 +551,12 @@ struct Window : public NativeWindow {
     int  Frame(unsigned clicks, unsigned mic_samples, bool cam_sample, int flag);
     void RenderToFrameBuffer(FrameBuffer *fb);
 
+    void ClearEvents();
+    void ClearGesture();
     void ClearMouseGUIEvents();
     void ClearKeyboardGUIEvents();
     void ClearInputBindEvents();
+    void InitLFAppConsole();
     void DrawDialogs();
 
     LFL::Box Box() const { return LFL::Box(0, 0, width, height); }

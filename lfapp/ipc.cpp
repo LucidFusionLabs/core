@@ -23,11 +23,14 @@
 
 #if defined(LFL_MOBILE)
 #elif defined(WIN32)
+#define LFL_TCP_IPC
 #else
 #include <signal.h>
 #include <sys/types.h>
 #include <sys/shm.h>
 #include <sys/mman.h>
+#define LFL_MMAPXFER_MPB
+#define LFL_SOCKETPAIR_IPC
 #endif
 
 namespace LFL {
@@ -235,7 +238,7 @@ int ProcessPipe::Close() {
   return 0;
 }
 
-#if 1
+#if defined(LFL_MMAPXFER_MPB)
 static string MultiProcessBufferURL = "fd://transferred";
 MultiProcessBuffer::MultiProcessBuffer(Connection *c, const InterProcessProtocol::ResourceHandle &h) : url(h.url), len(h.len) {
   if (url == MultiProcessBufferURL) swap(impl, c->transferred_socket);
@@ -265,7 +268,7 @@ bool MultiProcessBuffer::Open() {
   if ((buf = (char*)mmap(0, len, PROT_READ | (read_only ? 0 : PROT_WRITE), MAP_SHARED, impl, 0)) == MAP_FAILED) return ERRORv(false, "mmap ", impl); 
   return true;
 }
-#else
+#elif defined(LFL_SHM_MPB)
 static int ShmKeyFromMultiProcessBufferURL(const string &u) {
   static string shm_url = "shm://";
   CHECK(PrefixMatch(u, shm_url));
@@ -287,6 +290,8 @@ bool MultiProcessBuffer::Open() {
   if (url.empty()) url = StrCat("shm://", key);
   return true;
 }
+#else
+#error no_mpb_impl
 #endif
 
 #endif /* WIN32 */
@@ -331,19 +336,30 @@ static bool ProcessAPIWrite(Connection *conn, const Serializable &req, int seq, 
 void ProcessAPIClient::StartServer(const string &server_program) {
   if (!LocalFile(server_program, "r").Opened()) return ERROR("ProcessAPIClient: \"", server_program, "\" doesnt exist");
   INFO("ProcessAPIClient starting server ", server_program);
-#ifdef WIN32
-#if 1
+  Socket conn_socket = -1;
+  bool conn_control_messages = 0;
+
+#if defined(LFL_SOCKETPAIR_IPC)
+  Socket fd[2];
+  CHECK(SystemNetwork::OpenSocketPair(fd));
+  string arg0 = server_program, arg1 = StrCat("fd://", fd[0]);
+  SystemNetwork::SetSocketCloseOnExec(fd[1], true);
+#elif defined(LFL_TCP_IPC)
   Socket l = -1;
   IPV4Endpoint listen;
   CHECK_NE(-1, (l = SystemNetwork::Listen(Protocol::TCP, IPV4::Parse("127.0.0.1"), 0, 1, true)))
   CHECK_EQ(0, SystemNetwork::GetSockName(l, &listen.addr, &listen.port));
   string arg0 = server_program, arg1 = StrCat("tcp://", listen.name());
-#else
+#elif defined(LFL_NAMEDPIPE_IPC)
   string named_pipe = StrCat("\\\\.\\pipe\\", server_program, ".", getpid()), arg0 = server_program, arg1 = StrCat("np://", named_pipe);
   HANDLE hpipe = CreateNamedPipe(named_pipe.c_str(), PIPE_ACCESS_DUPLEX, PIPE_TYPE_MESSAGE | PIPE_READMODE_MESSAGE | PIPE_WAIT, 1, 65536, 65536, 0, NULL);
   CHECK_NE(INVALID_HANDLE_VALUE, hpipe);
   if (!ConnectNamedPipe(hpipe, NULL)) CHECK_EQ(ERROR_PIPE_CONNECTED, GetLastError());
+#else
+#error no_ipc_impl
 #endif
+
+#ifdef WIN32
   LUID change_notify_name_luid;
   BYTE WinWorldSid_buf[SECURITY_MAX_SID_SIZE];
   SID *WinWorldSID = reinterpret_cast<SID*>(WinWorldSid_buf);
@@ -397,35 +413,34 @@ void ProcessAPIClient::StartServer(const string &server_program) {
   CloseHandle(impersonation_token);
   CloseHandle(restricted_token);
   CloseHandle(process_token);
-#if 1
-  conn = new Connection(Singleton<UnixClient>::Get(), new ConnectionHandler(this));
-  CHECK_NE(-1, (conn->socket = SystemNetwork::Accept(l, 0, 0)));
-  SystemNetwork::CloseSocket(l);
-  SystemNetwork::SetSocketBlocking(conn->socket, 0);
-  conn->state = Connection::Connected;
-  conn->svc->conn[conn->socket] = conn;
-  app->network.active.Add(conn->socket, SocketSet::READABLE, &conn->self_reference);
-#endif
 #else
-  Socket fd[2];
-  CHECK(SystemNetwork::OpenSocketPair(fd));
-  if ((pid = fork())) {
-    CHECK_GT(pid, 0);
-    close(fd[0]);
-    conn = new Connection(Singleton<UnixClient>::Get(), new ConnectionHandler(this));
-    conn->state = Connection::Connected;
-    conn->control_messages = true;
-    conn->socket = fd[1];
-    conn->svc->conn[conn->socket] = conn;
-    app->network.active.Add(conn->socket, SocketSet::READABLE, &conn->self_reference);
-  } else {
-    close(fd[1]);
+  int pid = fork();
+  if (!pid) {
     // close(0); close(1); close(2);
-    string arg0 = server_program, arg1 = StrCat("fd://", fd[0]);
     vector<char*> av = { &arg0[0], &arg1[0], 0 };
     CHECK(!execvp(av[0], &av[0]));
   }
+  CHECK_GT(pid, 0);
 #endif
+
+#if defined(LFL_SOCKETPAIR_IPC)
+  close(fd[0]);
+  conn_socket = fd[1];
+  conn_control_messages = true;
+#elif defined(LFL_TCP_IPC)
+  CHECK_NE(-1, (conn_socket = SystemNetwork::Accept(l, 0, 0)));
+  SystemNetwork::SetSocketBlocking(conn_socket, 0);
+  SystemNetwork::CloseSocket(l);
+#else
+#error no_ipc_impl
+#endif
+  
+  conn = new Connection(Singleton<UnixClient>::Get(), new ConnectionHandler(this));
+  CHECK_NE(-1, (conn->socket = conn_socket));
+  conn->control_messages = conn_control_messages;
+  conn->state = Connection::Connected;
+  conn->svc->conn[conn->socket] = conn;
+  app->network.active.Add(conn->socket, SocketSet::READABLE, &conn->self_reference);
 }
 
 void ProcessAPIClient::LoadResource(const string &content, const string &fn, const ProcessAPIClient::LoadResourceCompleteCB &cb) { 

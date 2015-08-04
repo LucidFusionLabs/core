@@ -92,8 +92,8 @@ TEST(DOMTest, DOMTree) {
                             "<P id=cat>In  the  begining  was  fun.</p>\n"
                             "</body>\n");
     Box viewport = screen->Box();
-    sb.doc.v_scrollbar.menuicon2 = Fonts::Fake();
-    sb.doc.h_scrollbar.menuicon2 = Fonts::Fake();
+    sb.doc.v_scrollbar.menuicon = Fonts::Fake();
+    sb.doc.h_scrollbar.menuicon = Fonts::Fake();
     sb.Draw(&viewport);
     CHECK(sb.doc.node);
     EXPECT_EQ("#document", String::ToUTF8(sb.doc.node->nodeName()));

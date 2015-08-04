@@ -286,7 +286,7 @@ struct AtlasFontEngine : public FontEngine {
     static void WriteAtlas(const string &name, Font *glyphs, Texture *t);
     static void WriteAtlas(const string &name, Font *glyphs);
     static void WriteGlyphFile(const string &name, Font *glyphs);
-    static void MakeFromPNGFiles(const string &name, const vector<string> &png, int atlas_dim, Font **glyphs_out);
+    static void MakeFromPNGFiles(const string &name, const vector<string> &png, const point &atlas_dim, Font **glyphs_out);
     static void SplitIntoPNGFiles(const string &input_png_fn, const map<int, v4> &glyphs, const string &dir_out);
     static int Dimension(int n, int w, int h) { return 1 << max(8,FloorLog2(sqrt((w+4)*(h+4)*n))); }
 };

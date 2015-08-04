@@ -1235,7 +1235,7 @@ void Shell::mousein (const vector<string>&) { Mouse::GrabFocus(); }
 void Shell::mouseout(const vector<string>&) { Mouse::ReleaseFocus(); }
 
 void Shell::quit(const vector<string>&) { app->run = false; }
-void Shell::console(const vector<string>&) { screen->console->Toggle(); }
+void Shell::console(const vector<string>&) { if (screen->lfapp_console) screen->lfapp_console->Toggle(); }
 void Shell::showkeyboard(const vector<string>&) { TouchDevice::OpenKeyboard(); }
 
 void Shell::clipboard(const vector<string> &a) {
@@ -1244,13 +1244,14 @@ void Shell::clipboard(const vector<string> &a) {
 }
 
 void Shell::consolecolor(const vector<string>&) {
-  delete screen->console->font;
-  screen->console->font = Fonts::Get(FLAGS_default_font, "", 9, Color::black);
+  if (!screen->lfapp_console) return;
+  delete screen->lfapp_console->font;
+  screen->lfapp_console->font = Fonts::Get(FLAGS_default_font, "", 9, Color::black);
 }
 
 void Shell::startcmd(const vector<string> &a) {
-  if (a.empty()) return;
-  screen->console->startcmd = Join(a, " ");
+  if (a.empty() || !screen->lfapp_console) return;
+  screen->lfapp_console->startcmd = Join(a, " ");
 }
 
 void Shell::dldir(const vector<string>&) { INFO(LFAppDownloadDir()); }

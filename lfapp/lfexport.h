@@ -71,9 +71,9 @@
 #define X_or_Y_or_Z(x, y, z) ((x) ? (x) : ((y) ? (y) : (z)))
 #define A_or_B(x, y) ((x.size()) ? (x) : (y))
 
-#define  INFOf(fmt, ...) LFAppLog(LFApp::Log::Info,  __FILE__, __LINE__, fmt, __VA_ARGS__)
-#define DEBUGf(fmt, ...) LFAppLog(LFApp::Log::Debug, __FILE__, __LINE__, fmt, __VA_ARGS__)
-#define ERRORf(fmt, ...) LFAppLog(LFApp::Log::Error, __FILE__, __LINE__, fmt, __VA_ARGS__)
+#define  INFOf(fmt, ...) ((::LFApp::Log::Info  <= ::LFL::FLAGS_loglevel) ? LFAppLog(LFApp::Log::Info,  __FILE__, __LINE__, fmt, __VA_ARGS__) : void())
+#define DEBUGf(fmt, ...) ((::LFApp::Log::Info  <= ::LFL::FLAGS_loglevel) ? LFAppLog(LFApp::Log::Debug, __FILE__, __LINE__, fmt, __VA_ARGS__) : void())
+#define ERRORf(fmt, ...) ((::LFApp::Log::Info  <= ::LFL::FLAGS_loglevel) ? LFAppLog(LFApp::Log::Error, __FILE__, __LINE__, fmt, __VA_ARGS__) : void())
 #define FATALf(fmt, ...) { LFAppLog(LFApp::Log::Fatal, __FILE__, __LINE__, fmt, __VA_ARGS__); throw(0); }
 
 #define DECLARE_FLAG(name, type) extern type FLAGS_ ## name
@@ -113,6 +113,7 @@ DECLARE_bool(lfapp_camera);
 DECLARE_bool(lfapp_cuda);
 DECLARE_bool(lfapp_debug);
 DECLARE_bool(swap_axis);
+DECLARE_int(loglevel);
 DECLARE_int(target_fps);
 DECLARE_int(threadpool_size);
 DECLARE_int(invert);
@@ -197,7 +198,7 @@ struct LFApp {
     };
     bool run, initialized;
     size_t main_thread_id;
-    long long frames_ran, pre_frames_ran;
+    long long frames_ran;
 };
 
 struct NativeWindow {
@@ -221,7 +222,7 @@ LFApp *GetLFApp();
 
 int LFAppMain();
 int LFAppMainLoop();
-int LFAppFrame();
+int LFAppFrame(bool handle_events);
 void LFAppLog(int level, const char *file, int line, const char *fmt, ...);
 void LFAppFatal();
 void LFAppShutdown();

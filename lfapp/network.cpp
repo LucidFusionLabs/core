@@ -31,6 +31,7 @@ extern "C" {
 };
 
 #include "lfapp/lfapp.h"
+#include "lfapp/crypto.h"
 #include "lfapp/resolver.h"
 
 #ifdef LFL_OPENSSL

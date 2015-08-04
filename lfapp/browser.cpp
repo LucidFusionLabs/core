@@ -406,8 +406,8 @@ void Browser::Document::Clear() {
 }
 
 Browser::Browser(Window *W, const Box &V) : doc(W, V) {
-  if (Font *maf = Fonts::Get("MenuAtlas1", "", 0, Color::black, Color::clear, 0)) {
-    missing_image = maf->glyph->table[12].tex;
+  if (Font *maf = Fonts::Get("MenuAtlas", "", 0, Color::black, Color::clear, 0, 0)) {
+    missing_image = maf->FindGlyph(0)->tex;
     missing_image.width = missing_image.height = 16;
   }
   doc.Clear(); 
