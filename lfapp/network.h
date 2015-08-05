@@ -366,13 +366,14 @@ struct NetworkThread {
         int Read(Connection *c);
     };
 
+    bool init=0;
     Network *net;
     Connection *rd, *wr;
     unique_ptr<Thread> thread;
-    NetworkThread(Network *N);
+    NetworkThread(Network *N, bool Init);
 
     void Write(Callback *x) { CHECK_EQ(sizeof(x), wr->WriteFlush(reinterpret_cast<const char*>(&x), sizeof(x))); }
-    void HandleMessagesLoop() { while (GetLFApp()->run) { net->Frame(0); } }
+    void HandleMessagesLoop() { if (init) net->Init(); while (GetLFApp()->run) { net->Frame(0); } }
 };
 
 struct UDPClient : public Service {

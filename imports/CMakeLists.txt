@@ -3,7 +3,7 @@
 # Windows
 if(WIN32)
     INCLUDE_EXTERNAL_MSPROJECT(zlib ${CMAKE_CURRENT_SOURCE_DIR}/OpenCV/3rdparty/zlib/zlib.vcxproj)
-    set(PLATFORM_LIB Ws2_32.lib Winmm.lib Dnsapi.lib opengl32.lib glu32.lib strmiids.lib zlib.lib)
+    set(PLATFORM_LIB Ws2_32.lib Dnsapi.lib opengl32.lib glu32.lib strmiids.lib zlib.lib)
     set(PLATFORM_DEF "-DGLEW_STATIC")
 endif(WIN32)
 

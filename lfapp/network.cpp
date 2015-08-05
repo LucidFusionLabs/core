@@ -1106,7 +1106,7 @@ void Network::UpdateActive(Connection *c) {
 
 /* NetworkThread */
 
-NetworkThread::NetworkThread(Network *N) : net(N),
+NetworkThread::NetworkThread(Network *N, bool Init) : net(N), init(Init),
   rd(new Connection(Singleton<UnixClient>::Get(), new NetworkThread::ConnectionHandler())),
   wr(new Connection(Singleton<UnixClient>::Get(), new NetworkThread::ConnectionHandler())),
   thread(new Thread(bind(&NetworkThread::HandleMessagesLoop, this))) {

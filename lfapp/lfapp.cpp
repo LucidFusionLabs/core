@@ -518,9 +518,9 @@ void Application::CreateNewWindow(const function<void(Window*)> &start_cb) {
   Window::MakeCurrent(orig_window);
 }
 
-NetworkThread *Application::CreateNetworkThread() {
-  VectorEraseByValue(&app->modules, static_cast<Module*>(&network));
-  NetworkThread *ret = new NetworkThread(&app->network);
+NetworkThread *Application::CreateNetworkThread(bool detach) {
+  if (detach) VectorEraseByValue(&app->modules, static_cast<Module*>(&network));
+  NetworkThread *ret = new NetworkThread(&app->network, !detach);
   ret->thread->Start();
   return ret;
 }

@@ -432,7 +432,8 @@ void WinApp::CreateClass() {
   wndClass.hInstance = hInst;
   wndClass.hIcon = LoadIcon(hInst, "IDI_APP_ICON");
   wndClass.hCursor = LoadCursor(NULL, IDC_ARROW);
-  wndClass.hbrBackground = (HBRUSH)GetStockObject(NULL_BRUSH);
+  if (auto c = app->video.splash_color) wndClass.hbrBackground = CreateSolidBrush(RGB(c->R(), c->G(), c->B()));
+  else                                  wndClass.hbrBackground = (HBRUSH)GetStockObject(NULL_BRUSH);
   wndClass.lpszMenuName = NULL;
   wndClass.lpszClassName = app->name.c_str();
   if (!RegisterClass(&wndClass)) ERROR("RegisterClass: ", GetLastError());
@@ -443,7 +444,7 @@ int WinApp::MessageLoop() {
   CoInitialize(NULL);
   MSG msg;
   while (app->run) {
-    if (app->run && FLAGS_target_fps) LFAppFrame();
+    if (app->run && FLAGS_target_fps) app->TimerDrivenFrame();
     while (app->run && PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))         { TranslateMessage(&msg); DispatchMessage(&msg); }
     if (app->run && !FLAGS_target_fps) if (GetMessage(&msg, NULL, 0, 0)) { TranslateMessage(&msg); DispatchMessage(&msg); }
   }
@@ -457,11 +458,11 @@ LRESULT APIENTRY WinApp::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
   PAINTSTRUCT ps;
   POINT cursor;
   point p, d;
-  int ind;
+  int ind, w, h;
   switch (message) {
   case WM_CREATE:                      return 0;
   case WM_DESTROY:                     LFAppShutdown(); PostQuitMessage(0); return 0;
-  case WM_SIZE:                        WindowReshaped(LOWORD(lParam), HIWORD(lParam)); app->scheduler.Wakeup(0); return 0;
+  case WM_SIZE:                        if ((w = LOWORD(lParam)) != screen->width && (h = HIWORD(lParam)) != screen->height) { WindowReshaped(w, h); app->scheduler.Wakeup(0); } return 0;
   case WM_KEYUP:   case WM_SYSKEYUP:   if (KeyPress(WinInputModule::GetKeyCode(wParam), 0) && win->frame_on_keyboard_input) app->scheduler.Wakeup(0); return 0;
   case WM_KEYDOWN: case WM_SYSKEYDOWN: if (KeyPress(WinInputModule::GetKeyCode(wParam), 1) && win->frame_on_keyboard_input) app->scheduler.Wakeup(0); return 0;
   case WM_LBUTTONDOWN:                 if (MouseClick(1, 1, win->prev_mouse_pos.x, win->prev_mouse_pos.y) && win->frame_on_mouse_input) app->scheduler.Wakeup(0); return 0;
@@ -471,9 +472,9 @@ LRESULT APIENTRY WinApp::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
   case WM_MOUSEMOVE:                   WinInputModule::UpdateMousePosition(lParam, &p, &d); if (MouseMove(p.x, p.y, d.x, d.y) && win->frame_on_mouse_input) app->scheduler.Wakeup(0); return 0;
   case WM_COMMAND:                     if ((ind = wParam - win->start_msg_id) >= 0) if (ind < win->menu_cmds.size()) ShellRun(win->menu_cmds[ind].c_str()); return 0;
   case WM_CONTEXTMENU:                 if (win->menu) { GetCursorPos(&cursor); TrackPopupMenu(win->context_menu, TPM_LEFTALIGN|TPM_TOPALIGN, cursor.x, cursor.y, 0, hWnd, NULL); } return 0;
-  case WM_PAINT:                       BeginPaint((HWND)screen->id, &ps); if (!FLAGS_target_fps) LFAppFrame(); EndPaint((HWND)screen->id, &ps); return 0;
+  case WM_PAINT:                       BeginPaint((HWND)screen->id, &ps); if (!FLAGS_target_fps) LFAppFrame(true); EndPaint((HWND)screen->id, &ps); return 0;
   case WM_SIZING:                      return win->resize_increment.Zero() ? 0 : win->RestrictResize(wParam, reinterpret_cast<LPRECT>(lParam));
-  case WM_USER:                        if (!FLAGS_target_fps) LFAppFrame(); return 0;
+  case WM_USER:                        if (!FLAGS_target_fps) LFAppFrame(true); return 0;
   case WM_KILLFOCUS:                   app->input.ClearButtonsDown(); return 0;
   default:                             break;
   }

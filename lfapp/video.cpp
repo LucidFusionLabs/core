@@ -60,6 +60,7 @@
 #define glFramebufferRenderbufferEXT(a,b,c,d)
 #define glFramebufferTexture2DEXT(a,b,c,d,e)
 #define glCheckFramebufferStatusEXT(a) 0
+#define glewGetString() 0
 #define GL_FRAMEBUFFER 0
 #define GL_FRAMEBUFFER_BINDING_OES 0
 #define GL_LUMINANCE 0
@@ -86,6 +87,7 @@
 #define GL_MAX_VERTEX_UNIFORM_COMPONENTS 0
 #define GL_MAX_VERTEX_ATTRIBS 0
 #define GL_DEPTH_COMPONENT16 0
+#define GLEW_EXT_framebuffer_object 0
 
 #elif defined(LFL_IPHONE)
 #ifdef LFL_GLES2
@@ -1079,11 +1081,11 @@ struct WinVideoModule : public Module {
 bool Window::Create(Window *W) {
   static WinApp *winapp = Singleton<WinApp>::Get();
   ONCE({ winapp->CreateClass(); });
-  HWND hWnd = CreateWindow(app->name.c_str(), W->caption.c_str(), WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN | WS_CLIPSIBLINGS,
-    0, 0, W->width, W->height, NULL, NULL, winapp->hInst, NULL);
+  RECT r = { 0, 0, W->width, W->height };
+  DWORD dwStyle = WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN | WS_CLIPSIBLINGS;
+  if (!AdjustWindowRect(&r, dwStyle, 0)) return ERRORv(false, "AdjustWindowRect");
+  HWND hWnd = CreateWindow(app->name.c_str(), W->caption.c_str(), dwStyle, 0, 0, r.right-r.left, r.bottom-r.top, NULL, NULL, winapp->hInst, NULL);
   if (!hWnd) return ERRORv(false, "CreateWindow: ", GetLastError());
-  ShowWindow(hWnd, winapp->nCmdShow);
-  UpdateWindow(hWnd);
   HDC hDC = GetDC(hWnd);
   PIXELFORMATDESCRIPTOR pfd = { sizeof(PIXELFORMATDESCRIPTOR), 1, PFD_SUPPORT_OPENGL | PFD_DRAW_TO_WINDOW | PFD_DOUBLEBUFFER,
     PFD_TYPE_RGBA, 32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 16, 0, 0, PFD_MAIN_PLANE, 0, 0, 0, 0, };
@@ -1096,6 +1098,8 @@ bool Window::Create(Window *W) {
   Window::active[(W->id = hWnd)] = W;
   INFOf("Window::Create %p %p %p (%p)", W->id, W->surface, W->gl, W);
   MakeCurrent(W);
+  ShowWindow(hWnd, winapp->nCmdShow);
+  app->scheduler.Wakeup(0);
   return true;
 }
 void Window::MakeCurrent(Window *W) { if (W) wglMakeCurrent((HDC)W->surface, (HGLRC)W->gl); }
@@ -1453,15 +1457,36 @@ int Video::Init() {
 
 #if defined(LFL_GLEW) && !defined(LFL_HEADLESS)
 #ifdef GLEW_MX
-  screen.glew_context = new GLEWContext();
+  screen->glew_context = new GLEWContext();
 #endif
   GLenum glew_err;
   if ((glew_err = glewInit()) != GLEW_OK) { ERROR("glewInit: ", glewGetErrorString(glew_err)); return -1; }
 #endif
 
+  const char *glslver = (const char *)glGetString(GL_SHADING_LANGUAGE_VERSION);
+  const char *glexts = SpellNull((const char *)glGetString(GL_EXTENSIONS));
+  INFO("OpenGL Version: ", SpellNull((const char *)glGetString(GL_VERSION)));
+  INFO("OpenGL Vendor: ",  SpellNull((const char *)glGetString(GL_VENDOR)));
+  INFO("GLEW Version: ", SpellNull((const char*)glewGetString(GLEW_VERSION)));
+#ifdef LFL_GLSL_SHADERS
+  INFO("GL_SHADING_LANGUAGE_VERSION: ", SpellNull(glslver));
+#endif
+  INFO("GL_EXTENSIONS: ", glexts);
+
+  screen->opengles_version = 1 + (glslver != NULL);
+#if defined(LFL_ANDROID) || defined(LFL_IPHONE)
+  screen->opengles_cubemap = strstr(glexts, "GL_EXT_texture_cube_map") != 0;
+#else
+  screen->opengles_cubemap = strstr(glexts, "GL_ARB_texture_cube_map") != 0;
+#endif
+  INFO("lfapp_opengles_cubemap = ", screen->opengles_cubemap ? "true" : "false");
+  INFO("screen->opengles_version = ", screen->opengles_version);
+  app->video.opengl_framebuffer = GLEW_EXT_framebuffer_object;
+
   if (!screen->gd) CreateGraphicsDevice(screen);
   InitGraphicsDevice(screen);
 
+#ifndef WIN32
   if (splash_color) {
     screen->gd->ClearColor(*splash_color);
     screen->gd->Clear();
@@ -1469,28 +1494,15 @@ int Video::Init() {
     Swap();
     screen->gd->ClearColor(Color::black);
   }
-
-  INFO("OpenGL Version: ", SpellNull((const char *)glGetString(GL_VERSION)));
-  INFO("OpenGL Vendor: ",  SpellNull((const char *)glGetString(GL_VENDOR)));
-#ifdef LFL_GLSL_SHADERS
-  INFO("GL_SHADING_LANGUAGE_VERSION: ", SpellNull((const char *)glGetString(GL_SHADING_LANGUAGE_VERSION)));
 #endif
-  const char *glexts = SpellNull((const char *)glGetString(GL_EXTENSIONS));
-  INFO("GL_EXTENSIONS: ", glexts);
-#if defined(LFL_ANDROID) || defined(LFL_IPHONE)
-  screen->opengles_cubemap = strstr(glexts, "GL_EXT_texture_cube_map") != 0;
-#else
-  screen->opengles_cubemap = strstr(glexts, "GL_ARB_texture_cube_map") != 0;
-#endif
-  INFO("lfapp_opengles_cubemap = ", screen->opengles_cubemap ? "true" : "false");
-
   return 0;
 }
 
 
 void *Video::BeginGLContextCreate(Window *W) {
 #if defined(LFL_WINVIDEO)
-  return wglCreateContextAttribsARB((HDC)W->surface, (HGLRC)W->gl, 0);
+  if (wglewIsSupported("WGL_ARB_create_context")) return wglCreateContextAttribsARB((HDC)W->surface, (HGLRC)W->gl, 0);
+  else { HGLRC ret = wglCreateContext((HDC)W->surface); wglShareLists((HGLRC)W->gl, ret); return ret; }
 #else
   return 0;
 #endif
@@ -1516,9 +1528,6 @@ void Video::CreateGraphicsDevice(Window *W) {
   CHECK(!W->gd);
 #ifndef LFL_HEADLESS
 #ifdef LFL_GLES2
-#if !defined(LFL_IPHONE) && !defined(LFL_ANDROID)
-  W->opengles_version = FLAGS_request_gles_version;
-#endif
   if (W->opengles_version == 2) W->gd = new OpenGLES2();
   else
 #endif /* LFL_GLES2 */
@@ -2503,7 +2512,6 @@ void DrawableBoxRun::DrawBackground(point p, DrawBackgroundCB cb) {
 
 #ifdef _WIN32
 int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR lpCmdLine, int nCmdShow) {
-  timeBeginPeriod(1);
   vector<const char *> av;
   vector<string> a(1);
   a[0].resize(1024);

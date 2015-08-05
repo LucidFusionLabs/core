@@ -72,8 +72,8 @@
 #define A_or_B(x, y) ((x.size()) ? (x) : (y))
 
 #define  INFOf(fmt, ...) ((::LFApp::Log::Info  <= ::LFL::FLAGS_loglevel) ? LFAppLog(LFApp::Log::Info,  __FILE__, __LINE__, fmt, __VA_ARGS__) : void())
-#define DEBUGf(fmt, ...) ((::LFApp::Log::Info  <= ::LFL::FLAGS_loglevel) ? LFAppLog(LFApp::Log::Debug, __FILE__, __LINE__, fmt, __VA_ARGS__) : void())
-#define ERRORf(fmt, ...) ((::LFApp::Log::Info  <= ::LFL::FLAGS_loglevel) ? LFAppLog(LFApp::Log::Error, __FILE__, __LINE__, fmt, __VA_ARGS__) : void())
+#define DEBUGf(fmt, ...) ((::LFApp::Log::Debug <= ::LFL::FLAGS_loglevel) ? LFAppLog(LFApp::Log::Debug, __FILE__, __LINE__, fmt, __VA_ARGS__) : void())
+#define ERRORf(fmt, ...) ((::LFApp::Log::Error <= ::LFL::FLAGS_loglevel) ? LFAppLog(LFApp::Log::Error, __FILE__, __LINE__, fmt, __VA_ARGS__) : void())
 #define FATALf(fmt, ...) { LFAppLog(LFApp::Log::Fatal, __FILE__, __LINE__, fmt, __VA_ARGS__); throw(0); }
 
 #define DECLARE_FLAG(name, type) extern type FLAGS_ ## name

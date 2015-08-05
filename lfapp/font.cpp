@@ -837,7 +837,7 @@ GDIFontEngine::Resource::~Resource() {
 GDIFontEngine::~GDIFontEngine() { DeleteDC(hdc);}
 GDIFontEngine::GDIFontEngine() : hdc(CreateCompatibleDC(NULL)) {
   CHECK(!fontlink)
-  CHECK(!FAILED(CoCreateInstance(CLSID_CMultiLanguage, NULL, CLSCTX_ALL, IID_IMLangFontLink2, (void**)&fontlink)));
+  CoCreateInstance(CLSID_CMultiLanguage, NULL, CLSCTX_ALL, IID_IMLangFontLink2, (void**)&fontlink);
 }
 
 void GDIFontEngine::Shutdown() {
@@ -923,7 +923,6 @@ Font *GDIFontEngine::Open(const FontDesc &d) {
     DeleteObject(hbitmap);
     cache->hdc = 0;
   }
-
   SelectObject(hdc, pf);
   return ret;
 }
@@ -933,7 +932,7 @@ bool GDIFontEngine::GetSubstitutedFont(Font *f, HFONT hfont, char16_t glyph_id, 
   long processed = 0;
   WCHAR c = glyph_id;
   DWORD orig_code_pages = 0, replaced_code_pages = 0;
-  if (FAILED(fontlink->GetFontCodePages(hdc, hfont, &orig_code_pages))) return false;
+  if (!fontlink || FAILED(fontlink->GetFontCodePages(hdc, hfont, &orig_code_pages))) return false;
   if (FAILED(fontlink->GetStrCodePages(&c, 1, orig_code_pages, &replaced_code_pages, &processed))) return false;
   if (replaced_code_pages & orig_code_pages) return false;
   bool ret = !FAILED(fontlink->MapFont(hdc, replaced_code_pages, replaced_code_pages ? 0 : c, hfontout));
