@@ -928,7 +928,7 @@ extern "C" int main(int argc, const char *argv[]) {
     app->shell.soundassets = &soundasset;
 
     BindMap *binds = screen->binds = new BindMap();
-    binds->Add(Bind(Key::Backquote, Bind::CB(bind([&](){ screen->console->Toggle(); }))));
+    binds->Add(Bind(Key::Backquote, Bind::CB(bind([&](){ app->shell.console(vector<string>()); }))));
     binds->Add(Bind(Key::Escape,    Bind::CB(bind(&Shell::quit,   &app->shell, vector<string>()))));
     binds->Add(Bind(Key::F5,        Bind::CB(bind(&Shell::play,   &app->shell, vector<string>(1, "snap")))));
     binds->Add(Bind(Key::F6,        Bind::CB(bind(&Shell::snap,   &app->shell, vector<string>(1, "snap")))));

@@ -1495,13 +1495,16 @@ int Video::Init() {
 #endif
   GLenum glew_err;
   if ((glew_err = glewInit()) != GLEW_OK) { ERROR("glewInit: ", glewGetErrorString(glew_err)); return -1; }
+  app->video.opengl_framebuffer = GLEW_EXT_framebuffer_object;
 #endif
 
   const char *glslver = (const char *)glGetString(GL_SHADING_LANGUAGE_VERSION);
   const char *glexts = SpellNull((const char *)glGetString(GL_EXTENSIONS));
   INFO("OpenGL Version: ", SpellNull((const char *)glGetString(GL_VERSION)));
   INFO("OpenGL Vendor: ",  SpellNull((const char *)glGetString(GL_VENDOR)));
+#ifdef LFL_GLEW
   INFO("GLEW Version: ", SpellNull((const char*)glewGetString(GLEW_VERSION)));
+#endif
 #ifdef LFL_GLSL_SHADERS
   INFO("GL_SHADING_LANGUAGE_VERSION: ", SpellNull(glslver));
 #endif
@@ -1515,7 +1518,6 @@ int Video::Init() {
 #endif
   INFO("lfapp_opengles_cubemap = ", screen->opengles_cubemap ? "true" : "false");
   INFO("screen->opengles_version = ", screen->opengles_version);
-  app->video.opengl_framebuffer = GLEW_EXT_framebuffer_object;
 
   if (!screen->gd) CreateGraphicsDevice(screen);
   InitGraphicsDevice(screen);

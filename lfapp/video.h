@@ -505,7 +505,7 @@ struct Shader {
 struct Video : public Module {
     Shader shader_default, shader_normals, shader_cubemap, shader_cubenorm;
     const Color *splash_color = &Color::black;
-    bool opengl_framebuffer = 0;
+    bool opengl_framebuffer = 1;
     Module *impl = 0;
 
     int Init();

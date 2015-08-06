@@ -13,8 +13,7 @@ set(LFL_NLP_SOURCE ${LFL_NLP_SOURCE} PARENT_SCOPE)
 add_library(nlp ${LFL_NLP_SOURCE})
 
 # trainer
-add_executable(nlp-trainer trainer.cpp ${SDL_MAIN})
-set_target_properties(nlp-trainer PROPERTIES OUTPUT_NAME trainer)
+add_executable(nlp-trainer trainer.cpp)
 target_link_libraries(nlp-trainer ${LFAPP_LIB} nlp)
-lfapp_post_build_start(nlp-trainer trainer NLPTrainer)
+lfapp_post_build_start(nlp-trainer nlp-trainer NLPTrainer)
 

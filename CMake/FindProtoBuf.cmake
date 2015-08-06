@@ -88,6 +88,9 @@ function(PROTOBUF_GENERATE_CPP SRCS HDRS)
     if (NOT EXISTS "${SRCI}")
         file(WRITE "${SRCI}" "")
     endif()
+    if (NOT EXISTS "${HDRI}")
+        file(WRITE "${HDRI}" "")
+    endif()
 
     add_custom_command(
       OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/${FIL_WE}.pb.cc"

@@ -1060,7 +1060,7 @@ void Decoder::visualizeFeatures(AcousticModel::Compiled *model, Matrix *MFCC, Ma
 
     Box wcc = Box(5,345, 400,100);
     while (Running() && (app->audio.Out.size() || (interactive && !interactive_done))) {
-        app->PreFrame(app->frame_time.GetTime(true).count());
+        app->HandleEvents(app->frame_time.GetTime(true).count());
 
         screen->gd->DrawMode(DrawMode::_2D);
         app->shell.asset("snap")->tex.Draw(wcc); // 4);
@@ -1093,7 +1093,6 @@ void Decoder::visualizeFeatures(AcousticModel::Compiled *model, Matrix *MFCC, Ma
             screen->DrawDialogs();
         }
 
-        app->PostFrame();
         MSleep(1);
     }
 
