@@ -26,46 +26,6 @@
 #define NextMultipleOf64(n) NextMultipleOfPowerOfTwo(n, 64)
 
 namespace LFL {
-#if defined(LFL_COMMONCRYPTO) && 0
-typedef CCBigNumRef BigNum;
-typedef void* BigNumContext;
-#elif defined(LFL_OPENSSL)
-typedef BIGNUM* BigNum;
-typedef BN_CTX* BigNumContext;
-typedef int       ECDef;
-typedef EC_GROUP* ECGroup;
-typedef EC_POINT* ECPoint;
-typedef EC_KEY*   ECPair;
-#else
-typedef void* BigNum;
-typedef void* BigNumContext;
-typedef void* ECDef;
-typedef void* ECGroup;
-typedef void* ECPoint;
-typedef void* ECPair;
-#endif
-BigNum        NewBigNum();
-BigNumContext NewBigNumContext();
-void FreeBigNumContext(BigNumContext c);
-void FreeBigNum(BigNum n);
-void BigNumModExp(BigNum v, BigNum a, BigNum e, BigNum m, BigNumContext);
-void BigNumSetValue(BigNum v, int val);
-void BigNumGetData(BigNum v, char *out);
-BigNum BigNumSetData(BigNum v, const StringPiece &data);
-BigNum BigNumRand(BigNum v, int bits, int top, int bottom);
-int BigNumDataSize(BigNum v);
-int BigNumSignificantBits(BigNum v);
-ECPoint NewECPoint(ECGroup);
-void FreeECPoint(ECPoint);
-void FreeECPair(ECPair);
-ECGroup GetECPairGroup(ECPair);
-ECPoint GetECPairPubKey(ECPair);
-bool SetECPairPubKey(ECPair, ECPoint);
-string ECPointGetData(ECGroup, ECPoint, BigNumContext);
-int ECPointDataSize(ECGroup, ECPoint, BigNumContext);
-void ECPointGetData(ECGroup, ECPoint, char *out, int len, BigNumContext);
-void ECPointSetData(ECGroup, ECPoint out, const StringPiece &data);
-
 int NextMultipleOfPowerOfTwo(int input, int align);
 void *NextMultipleOfPowerOfTwo(void *input, int align);
 
@@ -756,6 +716,47 @@ void SVD(const Matrix *A, Matrix *D, Matrix *U, Matrix *V);
 
 /* principal components analysis */
 Matrix *PCA(const Matrix *obv, Matrix *projected, double *var=0);
+
+/* arbitrary precision integers */
+#if defined(LFL_COMMONCRYPTO) && 0
+typedef CCBigNumRef BigNum;
+typedef void* BigNumContext;
+#elif defined(LFL_OPENSSL)
+typedef BIGNUM* BigNum;
+typedef BN_CTX* BigNumContext;
+typedef int       ECDef;
+typedef EC_GROUP* ECGroup;
+typedef EC_POINT* ECPoint;
+typedef EC_KEY*   ECPair;
+#else
+typedef void* BigNum;
+typedef void* BigNumContext;
+typedef void* ECDef;
+typedef void* ECGroup;
+typedef void* ECPoint;
+typedef void* ECPair;
+#endif
+BigNum        NewBigNum();
+BigNumContext NewBigNumContext();
+void FreeBigNumContext(BigNumContext c);
+void FreeBigNum(BigNum n);
+void BigNumModExp(BigNum v, BigNum a, BigNum e, BigNum m, BigNumContext);
+void BigNumSetValue(BigNum v, int val);
+void BigNumGetData(BigNum v, char *out);
+BigNum BigNumSetData(BigNum v, const StringPiece &data);
+BigNum BigNumRand(BigNum v, int bits, int top, int bottom);
+int BigNumDataSize(BigNum v);
+int BigNumSignificantBits(BigNum v);
+ECPoint NewECPoint(ECGroup);
+void FreeECPoint(ECPoint);
+void FreeECPair(ECPair);
+ECGroup GetECPairGroup(ECPair);
+ECPoint GetECPairPubKey(ECPair);
+bool SetECPairPubKey(ECPair, ECPoint);
+string ECPointGetData(ECGroup, ECPoint, BigNumContext);
+int ECPointDataSize(ECGroup, ECPoint, BigNumContext);
+void ECPointGetData(ECGroup, ECPoint, char *out, int len, BigNumContext);
+void ECPointSetData(ECGroup, ECPoint out, const StringPiece &data);
 
 }; // namespace LFL
 #endif // __LFL_LFAPP_MATH_H__

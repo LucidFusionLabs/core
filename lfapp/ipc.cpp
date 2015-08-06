@@ -341,14 +341,15 @@ void ProcessAPIClient::StartServer(const string &server_program) {
 
 #if defined(LFL_SOCKETPAIR_IPC)
   Socket fd[2];
-  CHECK(SystemNetwork::OpenSocketPair(fd));
-  string arg0 = server_program, arg1 = StrCat("fd://", fd[0]);
+  CHECK(SystemNetwork::OpenSocketPair(fd, false));
   SystemNetwork::SetSocketCloseOnExec(fd[1], true);
+  string arg0 = server_program, arg1 = StrCat("fd://", fd[0]);
 #elif defined(LFL_TCP_IPC)
   Socket l = -1;
   IPV4Endpoint listen;
   CHECK_NE(-1, (l = SystemNetwork::Listen(Protocol::TCP, IPV4::Parse("127.0.0.1"), 0, 1, true)))
   CHECK_EQ(0, SystemNetwork::GetSockName(l, &listen.addr, &listen.port));
+  SystemNetwork::SetSocketCloseOnExec(l, true);
   string arg0 = server_program, arg1 = StrCat("tcp://", listen.name());
 #elif defined(LFL_NAMEDPIPE_IPC)
   string named_pipe = StrCat("\\\\.\\pipe\\", server_program, ".", getpid()), arg0 = server_program, arg1 = StrCat("np://", named_pipe);

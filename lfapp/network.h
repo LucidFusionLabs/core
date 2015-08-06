@@ -87,7 +87,7 @@ struct IPV4EndpointPoolFilter : public IPV4EndpointSource {
 struct SystemNetwork {
     static void CloseSocket(Socket);
     static Socket OpenSocket(int protocol);
-    static bool OpenSocketPair(Socket *fd_out);
+    static bool OpenSocketPair(Socket *fd_out, bool close_on_exec=true);
     static int SetSocketBlocking(Socket fd, int blocking);
     static int SetSocketCloseOnExec(Socket fd, int close);
     static int SetSocketBroadcastEnabled(Socket fd, int enabled);

@@ -25,7 +25,7 @@ if(CMAKE_SYSTEM_NAME MATCHES "Linux")
     set(CUDA_LIB /usr/local/cuda/lib64/libcudart.so PARENT_SCOPE)
     set(PLATFORM_LIB "-lutil -lz -lpng -lpthread")
     if(NOT LFL_HEADLESS)
-        set(PLATFORM_LIB "${PLATFORM_LIB} -lXi -lXv -lXext -lX11 -lXxf86vm -lXrandr -lXcursor -lbz2") # -lasound")
+        set(PLATFORM_LIB "${PLATFORM_LIB} -lXi -lXv -lXext -lX11 -lXxf86vm -lXrandr -lXcursor -lXt -lbz2") # -lasound")
     endif()
 endif(CMAKE_SYSTEM_NAME MATCHES "Linux")
 

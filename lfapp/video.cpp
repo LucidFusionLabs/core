@@ -60,7 +60,7 @@
 #define glFramebufferRenderbufferEXT(a,b,c,d)
 #define glFramebufferTexture2DEXT(a,b,c,d,e)
 #define glCheckFramebufferStatusEXT(a) 0
-#define glewGetString() 0
+#define glewGetString(a) 0
 #define GL_FRAMEBUFFER 0
 #define GL_FRAMEBUFFER_BINDING_OES 0
 #define GL_LUMINANCE 0
@@ -116,8 +116,14 @@
 #include <GL/glu.h>
 #endif
 
-#ifdef LFL_LINUXVIDEO
+#ifdef LFL_X11VIDEO
 #include <X11/Xlib.h>
+#include <GL/glx.h>
+#endif
+
+#ifdef LFL_XTVIDEO
+#include <X11/IntrinsicP.h>
+#include <X11/ShellP.h>
 #include <GL/glx.h>
 #endif
 
@@ -131,10 +137,8 @@ extern "C" {
 #ifdef LFL_QT
 #include <QtOpenGL>
 #include <QApplication>
-#undef main
-static QApplication *lfl_qapp;
-static vector<string> lfl_qapp_argv;  
-extern "C" int LFLQTMain(int argc, const char *argv[]);
+extern QApplication *lfl_qapp;
+extern vector<string> lfl_qapp_argv;  
 #endif // LFL_QT
 
 #ifdef LFL_WXWIDGETS
@@ -1112,18 +1116,19 @@ void Window::Close(Window *W) {
 }
 #endif
 
-#ifdef LFL_LINUXVIDEO
-struct LinuxVideoModule : public Module {
+#ifdef LFL_X11VIDEO
+struct X11VideoModule : public Module {
   Display *display = 0;
   XVisualInfo *vi = 0;
   int Init() {
     GLint att[] = { GLX_RGBA, GLX_DEPTH_SIZE, 16, GLX_DOUBLEBUFFER, None };
     if (!(display = XOpenDisplay(NULL))) return ERRORv(-1, "XOpenDisplay");
     if (!(vi = glXChooseVisual(display, 0, att))) return ERRORv(-1, "glXChooseVisual");
-    app->scheduler.AddWaitForeverSocket(ConnectionNumber(display), SocketSet::READABLE, 0);
-    INFO("LinuxVideoModule::Init()");
-    CHECK(Window::Create(screen));
-    return 0;
+    app->scheduler.system_event_socket = ConnectionNumber(display);
+    app->scheduler.AddWaitForeverSocket(app->scheduler.system_event_socket, SocketSet::READABLE, 0);
+    SystemNetwork::SetSocketCloseOnExec(app->scheduler.system_event_socket, true);
+    INFO("X11VideoModule::Init()");
+    return Window::Create(screen) ? 0 : -1;
   }
   int Free() {
     XCloseDisplay(display);
@@ -1131,7 +1136,7 @@ struct LinuxVideoModule : public Module {
   }
 };
 bool Window::Create(Window *W) {
-  LinuxVideoModule *video = dynamic_cast<LinuxVideoModule*>(app->video.impl);
+  X11VideoModule *video = dynamic_cast<X11VideoModule*>(app->video.impl);
   ::Window root = DefaultRootWindow(video->display);
   XSetWindowAttributes swa;
   swa.colormap = XCreateColormap(video->display, root, video->vi->visual, AllocNone);
@@ -1163,7 +1168,33 @@ void Window::Close(Window *W) {
 void Window::MakeCurrent(Window *W) {
   glXMakeCurrent(static_cast<Display*>(W->surface), (::Window)(W->id), static_cast<GLXContext>(W->gl));
 }
-#endif
+#endif // LFL_X11VIDEO
+
+#ifdef LFL_XTVIDEO
+struct XTVideoModule : public Module {
+  Widget toplevel = 0;
+  char *argv[2] = { 0, 0 };
+  int argc = 1;
+
+  int Init() {
+    XtAppContext xt_app;
+    argv[0] = &app->progname[0];
+    toplevel = XtOpenApplication(&xt_app, screen->caption.c_str(), NULL, 0, &argc, argv,
+                                 NULL, applicationShellWidgetClass, NULL, 0);
+    INFO("XTideoModule::Init()");
+    return Window::Create(screen) ? 0 : -1;
+  }
+};
+bool Window::Create(Window *W) {
+  XTVideoModule *video = dynamic_cast<XTVideoModule*>(app->video.impl);
+  W->surface = XtDisplay((::Widget)W->impl);
+  W->id = XmCreateFrame(video->toplevel, "frame", NULL, 0);
+  W->impl = video->toplevel;
+  return true;
+}
+void Window::Close(Window *W) {}
+void Window::MakeCurrent(Window *W) {}
+#endif // LFL_XTVIDEO
 
 #ifdef LFL_QT
 struct QTVideoModule : public Module {
@@ -1204,6 +1235,7 @@ void Window::MakeCurrent(Window *W) {
 }
 void Mouse::GrabFocus()    { ((OpenGLES2*)screen->gd)->QT_grabbed=1; ((QWindow*)screen->id)->setCursor(Qt::BlankCursor); app->grab_mode.On();  screen->cursor_grabbed=true;  }
 void Mouse::ReleaseFocus() { ((OpenGLES2*)screen->gd)->QT_grabbed=0; ((QWindow*)screen->id)->unsetCursor();              app->grab_mode.Off(); screen->cursor_grabbed=false; }
+extern "C" void QTTriggerFrame() { ((LFL::OpenGLES2*)LFL::screen->gd)->RequestRender(); }
 #endif
 
 #ifdef LFL_WXWIDGETS
@@ -1442,8 +1474,10 @@ int Video::Init() {
   impl = new OSXVideoModule();
 #elif defined(LFL_WINVIDEO)
   impl = new WinVideoModule();
-#elif defined(LFL_LINUXVIDEO)
-  impl = new LinuxVideoModule();
+#elif defined(LFL_X11VIDEO)
+  impl = new X11VideoModule();
+#elif defined(LFL_XTVIDEO)
+  impl = new XTVideoModule();
 #elif defined(LFL_QT)
   impl = new QTVideoModule();
 #elif defined(LFL_WXWIDGETS)
@@ -1514,8 +1548,8 @@ void *Video::CompleteGLContextCreate(Window *W, void *gl_context) {
 #elif defined(LFL_WINVIDEO)
   wglMakeCurrent((HDC)W->surface, (HGLRC)gl_context);
   return gl_context;
-#elif defined(LFL_LINUXVIDEO)
-  LinuxVideoModule *video = dynamic_cast<LinuxVideoModule*>(app->video.impl);
+#elif defined(LFL_X11VIDEO)
+  X11VideoModule *video = dynamic_cast<X11VideoModule*>(app->video.impl);
   GLXContext glc = glXCreateContext(video->display, video->vi, static_cast<GLXContext>(W->gl), GL_TRUE);
   glXMakeCurrent(video->display, (::Window)(W->id), glc);
   return glc;
@@ -1606,7 +1640,7 @@ int Video::Swap() {
   OSXVideoSwap(screen->id);
 #elif defined(LFL_WINVIDEO)
   SwapBuffers((HDC)screen->surface);
-#elif defined(LFL_LINUXVIDEO)
+#elif defined(LFL_X11VIDEO)
   glXSwapBuffers((Display*)screen->surface, (::Window)screen->id);
 #elif defined(LFL_QT)
   ((QOpenGLContext*)screen->gl)->swapBuffers((QWindow*)screen->id);
@@ -1665,8 +1699,8 @@ void Window::Reshape(int w, int h) {
   RECT r = { 0, 0, w, h };
   AdjustWindowRect(&r, lStyle, win->menubar);
   SetWindowPos((HWND)screen->id, 0, 0, 0, r.right-r.left, r.bottom-r.top, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
-#elif defined(LFL_LINUXVIDEO)
-  LinuxVideoModule *video = dynamic_cast<LinuxVideoModule*>(app->video.impl);
+#elif defined(LFL_X11VIDEO)
+  X11VideoModule *video = dynamic_cast<X11VideoModule*>(app->video.impl);
   XWindowChanges resize;
   resize.width = w;
   resize.height = h;
@@ -2509,37 +2543,3 @@ void DrawableBoxRun::DrawBackground(point p, DrawBackgroundCB cb) {
 }
 
 }; // namespace LFL
-
-#ifdef _WIN32
-int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR lpCmdLine, int nCmdShow) {
-  vector<const char *> av;
-  vector<string> a(1);
-  a[0].resize(1024);
-  GetModuleFileName(hInst, &(a[0])[0], a[0].size());
-  LFL::StringWordIter word_iter(lpCmdLine);
-  for (string word = IterNextString(&word_iter); !word_iter.Done(); word = IterNextString(&word_iter)) a.push_back(word);
-  for (auto &i : a) av.push_back(i.c_str());
-  av.push_back(0);
-#ifdef LFL_WINVIDEO
-  LFL::WinApp *winapp = LFL::Singleton<LFL::WinApp>::Get();
-  winapp->Setup(hInst, nCmdShow);
-#endif
-  int ret = main(av.size() - 1, &av[0]);
-#ifdef LFL_WINVIDEO
-  return ret ? ret : winapp->MessageLoop();
-#else
-  return ret;
-#endif
-}
-#endif
-
-#ifdef LFL_QT
-extern "C" void QTTriggerFrame() { ((LFL::OpenGLES2*)LFL::screen->gd)->RequestRender(); }
-extern "C" int main(int argc, const char *argv[]) {
-  for (int i=0; i<argc; i++) lfl_qapp_argv.push_back(argv[i]);
-  QApplication app(argc, (char**)argv);
-  lfl_qapp = &app;
-  LFL::Window::Create(LFL::screen);
-  return app.exec();
-}
-#endif // LFL_QT

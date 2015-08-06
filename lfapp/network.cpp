@@ -157,7 +157,7 @@ Socket SystemNetwork::OpenSocket(int protocol) {
   else return -1;
 }
 
-bool SystemNetwork::OpenSocketPair(Socket *fd) {
+bool SystemNetwork::OpenSocketPair(Socket *fd, bool close_on_exec) {
 #ifdef WIN32
 #ifdef LFL_NETWORK_MONOLITHIC_FRAME
   Socket l = -1;
@@ -185,6 +185,10 @@ bool SystemNetwork::OpenSocketPair(Socket *fd) {
   SetSocketBlocking(fd[0], 0);
   SetSocketBlocking(fd[1], 0);
 #endif
+  if (close_on_exec) {
+    SetSocketCloseOnExec(fd[0], true);
+    SetSocketCloseOnExec(fd[1], true);
+  }
   return true;
 }
 
@@ -201,7 +205,7 @@ int SystemNetwork::SetSocketBlocking(Socket fd, int blocking) {
 int SystemNetwork::SetSocketCloseOnExec(Socket fd, int close) {
 #ifdef _WIN32
 #else
-  if (fcntl(fd, F_SETFD, !close ? FD_CLOEXEC : 0) == -1) return -1;
+  if (fcntl(fd, F_SETFD, close ? FD_CLOEXEC : 0) == -1) return -1;
 #endif
   return 0;
 }

@@ -56,7 +56,7 @@ extern "C" {
 #endif
 #endif
 
-#ifdef LFL_LINUXINPUT
+#ifdef LFL_X11INPUT
 #include "X11/Xlib.h"
 #undef KeyPress
 #endif
@@ -66,7 +66,12 @@ extern "C" {
 #endif
 
 #ifdef LFL_QT
+#include <QApplication>
+QApplication *lfl_qapp;
+vector<string> lfl_qapp_argv;  
 extern "C" void QTTriggerFrame();
+extern "C" int LFLQTMain(int argc, const char *argv[]);
+#undef main
 #endif
 
 #ifdef LFL_WXWIDGETS
@@ -882,7 +887,7 @@ int Application::Exiting() {
 FrameScheduler::FrameScheduler() : maxfps(&FLAGS_target_fps), wakeup_thread(&frame_mutex, &wait_mutex) {
 #if defined(LFL_OSXINPUT) || defined(LFL_IPHONEINPUT)
   rate_limit = synchronize_waits = wait_forever_thread = monolithic_frame = 0;
-#elif defined(LFL_WININPUT) || defined(LFL_LINUXINPUT)
+#elif defined(LFL_WININPUT) || defined(LFL_X11INPUT)
   synchronize_waits = wait_forever_thread = 0;
   rate_limit = FLAGS_target_fps;
 #elif defined(LFL_QT) || defined(LFL_WXWIDGETS)
@@ -915,8 +920,11 @@ void FrameScheduler::FrameWait() {
       frame_mutex.unlock();
     }
 #if defined(LFL_OSXINPUT) || defined(LFL_WININPUT) || defined(LFL_IPHONEINPUT) || defined(LFL_QT) || defined(LFL_WXWIDGETS)
-#elif defined(LFL_LINUXINPUT)
+#elif defined(LFL_X11INPUT)
     wait_forever_sockets.Select(-1);
+    for (auto &s : wait_forever_sockets.socket)
+      if (s.first != system_event_socket && wait_forever_sockets.GetReadable(s.first))
+        app->scheduler.Wakeup(s.second.second);
 #elif defined(LFL_GLFWINPUT)
     glfwWaitEvents();
 #elif defined(LFL_SDLINPUT)
@@ -938,7 +946,7 @@ void FrameScheduler::Wakeup(void *opaque) {
 #elif defined(LFL_WININPUT)
     InvalidateRect((HWND)screen->id, NULL, 0);
     // PostMessage((HWND)screen->id, WM_USER, 0, 0);
-#elif defined(LFL_LINUXINPUT)
+#elif defined(LFL_X11INPUT)
     XEvent exp;
     exp.type = Expose;
     exp.xexpose.window = (::Window)screen->id;
@@ -1049,7 +1057,7 @@ void FrameScheduler::AddWaitForeverSocket(Socket fd, int flag, void *val) {
   if (!wait_forever_thread) { CHECK_EQ(SocketSet::READABLE, flag); OSXAddWaitForeverSocket(screen->id, fd); }
 #elif defined(LFL_WINVIDEO)
   WSAAsyncSelect(fd, (HWND)screen->id, WM_USER, FD_READ | FD_CLOSE);
-#elif defined(LFL_LINUXINPUT)
+#elif defined(LFL_X11INPUT)
   wait_forever_sockets.Add(fd, flag, val);  
 #elif defined(LFL_IPHONEINPUT)
   if (!wait_forever_thread) { CHECK_EQ(SocketSet::READABLE, flag); iPhoneAddWaitForeverSocket(screen->id, fd); }
@@ -1061,7 +1069,7 @@ void FrameScheduler::DelWaitForeverSocket(Socket fd) {
 #if defined(LFL_OSXINPUT)
   CHECK(screen->id);
   OSXDelWaitForeverSocket(screen->id, fd);
-#elif defined(LFL_LINUXINPUT)
+#elif defined(LFL_X11INPUT)
   wait_forever_sockets.Del(fd);
 #elif defined(LFL_WINVIDEO)
   WSAAsyncSelect(fd, (HWND)screen->id, WM_USER, 0);
@@ -1070,4 +1078,38 @@ void FrameScheduler::DelWaitForeverSocket(Socket fd) {
   iPhoneDelWaitForeverSocket(screen->id, fd);
 #endif
 }
+
 }; // namespace LFL
+
+#ifdef _WIN32
+int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR lpCmdLine, int nCmdShow) {
+  vector<const char *> av;
+  vector<string> a(1);
+  a[0].resize(1024);
+  GetModuleFileName(hInst, &(a[0])[0], a[0].size());
+  LFL::StringWordIter word_iter(lpCmdLine);
+  for (string word = IterNextString(&word_iter); !word_iter.Done(); word = IterNextString(&word_iter)) a.push_back(word);
+  for (auto &i : a) av.push_back(i.c_str());
+  av.push_back(0);
+#ifdef LFL_WINVIDEO
+  LFL::WinApp *winapp = LFL::Singleton<LFL::WinApp>::Get();
+  winapp->Setup(hInst, nCmdShow);
+#endif
+  int ret = main(av.size() - 1, &av[0]);
+#ifdef LFL_WINVIDEO
+  return ret ? ret : winapp->MessageLoop();
+#else
+  return ret;
+#endif
+}
+#endif
+
+#ifdef LFL_QT
+extern "C" int main(int argc, const char *argv[]) {
+  for (int i=0; i<argc; i++) lfl_qapp_argv.push_back(argv[i]);
+  QApplication app(argc, (char**)argv);
+  lfl_qapp = &app;
+  LFL::Window::Create(LFL::screen);
+  return app.exec();
+}
+#endif // LFL_QT
