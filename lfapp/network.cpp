@@ -918,7 +918,8 @@ int Network::Frame(unsigned clicks) {
 #endif
 
   /* pre loop */
-  for (auto svc : service_table) {
+  for (int svc_i = 0, svc_l = service_table.size(); svc_i < svc_l; ++svc_i) {
+    Service *svc = service_table[svc_i];
 
 #ifdef LFL_NETWORK_MONOLITHIC_FRAME
     /* answer listening sockets & UDP server read */

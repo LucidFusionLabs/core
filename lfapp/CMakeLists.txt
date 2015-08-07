@@ -139,11 +139,16 @@ if(CMAKE_SYSTEM_NAME MATCHES "Darwin")
     endif(LFL_CAMERA AND CMAKE_SIZEOF_VOID_P EQUAL 8)
 endif(CMAKE_SYSTEM_NAME MATCHES "Darwin")
 
+# cuda
+if(LFL_CUDA)
+    add_subdirectory(cuda)
+endif(LFL_CUDA)
+
 # proto
 # PROTOBUF_GENERATE_CPP(PROTO_SRC PROTO_HDR game.proto)
 
 add_library(${LFL_PROJECT}_lfapp ${LFAPP_LIB_TYPE} gui.cpp browser.cpp font.cpp flow.cpp lfapp.cpp lftypes.cpp string.cpp time.cpp "file.cpp" assets.cpp audio.cpp video.cpp input.cpp math.cpp ipc.cpp network.cpp wire.cpp resolver.cpp camera.cpp scene.cpp shell.cpp crypto.cpp bindings.cpp ${PROTO_SRC})
-target_include_directories(${LFL_PROJECT}_lfapp PUBLIC ${LFAPP_INCLUDE} ${LFL_PROJECT_DIR}/${LFL_PROJECT}_lfapp_obj)
+target_include_directories(${LFL_PROJECT}_lfapp PUBLIC ${LFAPP_INCLUDE} ${LFL_PROJECT_BINDIR}/${LFL_PROJECT}_lfapp_obj)
 target_compile_definitions(${LFL_PROJECT}_lfapp PUBLIC ${LFAPP_DEF})
 if(LFAPP_LIB_TYPE MATCHES "^SHARED$")
     target_link_libraries(${LFL_PROJECT}_lfapp ${LFAPP_LIB})

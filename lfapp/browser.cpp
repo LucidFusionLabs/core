@@ -932,6 +932,8 @@ class QTWebKitBrowser : public QObject, public BrowserInterface {
     }
 };
 
+#include "browser.moc"
+
 BrowserInterface *CreateQTWebKitBrowser(Asset *a) { return new QTWebKitBrowser(a); }
 #else /* LFL_QT */
 BrowserInterface *CreateQTWebKitBrowser(Asset *a) { return 0; }

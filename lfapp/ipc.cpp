@@ -456,6 +456,13 @@ void ProcessAPIClient::LoadResource(const string &content, const string &fn, con
   else cb(MultiProcessResource::Texture());
 }
 
+void ProcessAPIClient::LoadResourceSucceeded(LoadResourceQuery *query, const MultiProcessResource::Texture &tex) {
+  if (reply_success_from_main_thread && !MainThread()) return RunInMainThread(new Callback(bind(&ProcessAPIClient::LoadResourceSucceeded, this, query, tex)));
+  query->cb(tex);
+  query->response.Close();
+  delete query;
+}
+
 int ProcessAPIClient::ConnectionHandler::Read(Connection *c) {
   while (c->rl >= Serializable::Header::size) {
     IPCTrace("ProcessAPIClient begin parse %d bytes\n", c->rl);
@@ -463,7 +470,7 @@ int ProcessAPIClient::ConnectionHandler::Read(Connection *c) {
     Serializable::Header hdr;
     hdr.In(&in);
 
-    bool erase = true;
+    bool erase_reply = true, delete_reply = true;
     auto reply = parent->reqmap.find(hdr.seq);
     if (reply == parent->reqmap.end()) { ERROR("unknown seq ", hdr.seq); continue; }
 
@@ -474,9 +481,8 @@ int ProcessAPIClient::ConnectionHandler::Read(Connection *c) {
       IPCTrace("ProcessAPIClient LoadResourceResponse url='%s'\n", res_mpb->url.c_str());
 
       MultiProcessResource::Texture tex;
-      if (res_mpb->buf && ReadTexture(*res_mpb, &tex)) reply->second->cb(tex);
+      if (res_mpb->buf && ReadTexture(*res_mpb, &tex)) { parent->LoadResourceSucceeded(reply->second, tex); delete_reply = false; }
       else { ERROR("ProcessAPIClient res_mpb.Open: ", res_mpb->url); reply->second->cb(MultiProcessResource::Texture()); }
-      res_mpb->Close();
 
     } else if (hdr.id == InterProcessProtocol::AllocateResponseRequest::Type) {
       InterProcessProtocol::AllocateResponseRequest req;
@@ -487,11 +493,12 @@ int ProcessAPIClient::ConnectionHandler::Read(Connection *c) {
       if (!res_mpb->Create(req.bytes)) { ERROR("ProcessAPIClient ResposneMPB Create"); break; }
       if (!ProcessAPIWrite(c, InterProcessProtocol::AllocateResponseResponse(req.type, res_mpb->url, res_mpb->len),
                            hdr.seq, res_mpb->transfer_handle)) { ERROR("ProcessAPIClient ResponseMPB Write"); break; }
-      erase = false;
+      erase_reply = delete_reply = false;
 
     } else FATAL("ProcessAPIClient unknown hdr id ", hdr.id);
 
-    if (erase) { delete reply->second; parent->reqmap.erase(hdr.seq); }
+    if (erase_reply) parent->reqmap.erase(hdr.seq);
+    if (delete_reply) delete reply->second;
     c->ReadFlush(in.offset);
     IPCTrace("ProcessAPIClient flushed %d bytes\n", in.offset);
   }

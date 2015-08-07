@@ -379,7 +379,7 @@ class OpenGLES2 : public QWindow, protected QOpenGLFunctions, public GraphicsDev
       QT_init = true;
       if (!app->run) { app->Free(); lfl_qapp->exit(); return true; }
     }
-    app->Frame();
+    app->EventDrivenFrame(true);
     if (!app->run) { app->Free(); lfl_qapp->exit(); return true; }
     if (!app->scheduler.wait_forever) RequestRender();
     return true;

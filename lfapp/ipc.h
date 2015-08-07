@@ -72,10 +72,12 @@ struct ProcessAPIClient {
     Connection *conn=0;
     unsigned short seq=0;
     void *server_process=0;
+    bool reply_success_from_main_thread=true;
     unordered_map<unsigned short, LoadResourceQuery*> reqmap;
 
     void StartServer(const string &server_program);
     void LoadResource(const string &content, const string &fn, const LoadResourceCompleteCB &cb);
+    void LoadResourceSucceeded(LoadResourceQuery *query, const MultiProcessResource::Texture &tex);
 };
 
 struct ProcessAPIServer {

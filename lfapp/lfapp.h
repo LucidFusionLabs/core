@@ -363,8 +363,8 @@ template <class X> struct FlagOfType : public Flag {
 };
 
 struct Thread {
-  typedef unsigned long long Id;
-  Id id=0;
+  typedef unsigned long long id_t;
+  id_t id=0;
   Callback cb;
   mutex start_mutex;
   unique_ptr<std::thread> impl;
@@ -383,7 +383,7 @@ struct Thread {
     cb();
     ThreadLocalStorage::ThreadFree();
   }
-  static Id GetId() { return std::hash<std::thread::id>()(std::this_thread::get_id()); }
+  static id_t GetId() { return std::hash<std::thread::id>()(std::this_thread::get_id()); }
 };
 
 struct WorkerThread {

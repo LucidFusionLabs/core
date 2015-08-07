@@ -146,7 +146,7 @@ extern "C" NativeWindow *SetNativeWindow(NativeWindow *W) {
   return W;
 }
 extern "C" void SetLFAppMainThread() {
-  LFL::Thread::Id id = LFL::Thread::GetId();
+  LFL::Thread::id_t id = LFL::Thread::GetId();
   if (LFL::app->main_thread_id != id) INFOf("LFApp->main_thread_id changed from %llx to %llx", LFL::app->main_thread_id, id);
   LFL::app->main_thread_id = id; 
 }

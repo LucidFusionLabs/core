@@ -60,6 +60,7 @@ macro(lfl_project _name)
     project(${_name})
     set(LFL_PROJECT ${_name})
     set(LFL_PROJECT_DIR ${CMAKE_CURRENT_SOURCE_DIR})
+    set(LFL_PROJECT_BINDIR ${CMAKE_CURRENT_BINARY_DIR})
     set(LFAPP_LIB_TYPE STATIC)
     if(LFL_QT)
         set(CMAKE_AUTOMOC ON)
@@ -136,11 +137,6 @@ macro(lfl_clear_projects)
     set(LFL_X264)
 endmacro(lfl_clear_projects)
 lfl_clear_projects()
-
-# cuda
-if(LFL_CUDA)
-    add_subdirectory(${CORE_SUBDIR}/lfcuda)
-endif(LFL_CUDA)
 
 # lfapp unit tests
 add_subdirectory(${CORE_SUBDIR}/lfapp_tests)

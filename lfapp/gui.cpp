@@ -1537,7 +1537,6 @@ void EditorDialog::Draw() {
 }
 
 #ifdef LFL_QT
-#include "gui.moc"
 void Dialog::MessageBox(const string &n) {
   Mouse::ReleaseFocus();
   QMessageBox *msg = new QMessageBox();
