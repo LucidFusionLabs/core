@@ -122,9 +122,13 @@ using LFL_STL11_NAMESPACE::is_floating_point;
 using LFL_STL11_NAMESPACE::make_unsigned;
 #define tuple_get LFL_STL11_NAMESPACE::get
 
+#include <cfloat>
 #include <errno.h>
 #include <math.h>
-#include <cfloat>
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdarg.h>
+#include <string.h>
 
 #ifdef _WIN32
 #include <float.h>
@@ -142,19 +146,18 @@ extern char *optarg;
 extern int optind;
 #endif
 
-#ifdef LFL_ANDROID
-#include <sys/endian.h>
-#include "lfjni/lfjni.h"
-#endif
-
 #ifdef __linux__
 #include <arpa/inet.h>
 #endif
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <stdarg.h>
-#include <string.h>
+#ifdef LFL_ANDROID
+#include <sys/endian.h>
+#include "jni/lfjni.h"
+#endif
+
+#ifdef LFL_QT
+#include <QtOpenGL>
+#endif
 
 #define  INFO(...) ((::LFApp::Log::Info  <= ::LFL::FLAGS_loglevel) ? ::LFL::Log(::LFApp::Log::Info,  __FILE__, __LINE__, ::LFL::StrCat(__VA_ARGS__)) : void())
 #define DEBUG(...) ((::LFApp::Log::Debug <= ::LFL::FLAGS_loglevel) ? ::LFL::Log(::LFApp::Log::Debug, __FILE__, __LINE__, ::LFL::StrCat(__VA_ARGS__)) : void())

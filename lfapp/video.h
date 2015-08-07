@@ -580,7 +580,12 @@ struct Window : public NativeWindow {
     static void MakeCurrent(Window *W);
 };
 
+#ifndef LFL_QT
 struct GraphicsDevice {
+#else
+class GraphicsDevice : protected QOpenGLFunctions {
+public:
+#endif
     static const int Float, Points, Lines, LineLoop, Triangles, TriangleStrip, Polygon, Texture2D, UnsignedInt;
     static const int Ambient, Diffuse, Specular, Emission, Position;
     static const int One, SrcAlpha, OneMinusSrcAlpha, OneMinusDstColor;
@@ -686,6 +691,14 @@ struct GraphicsDevice {
     void PushScissorStack();
     void PopScissorStack();
     void DrawPixels(const Box &b, const Texture &tex);
+    void GenRenderBuffers(int n, unsigned *out);
+    void BindRenderBuffer(int id);
+    void RenderBufferStorage(int d, int w, int h);
+    void GenFrameBuffers(int n, unsigned *out);
+    void BindFrameBuffer(int id);
+    void FrameBufferTexture(int id);
+    void FrameBufferDepthTexture(int id);
+    int CheckFrameBufferStatus();
 
     static int VertsPerPrimitive(int gl_primtype);
 };

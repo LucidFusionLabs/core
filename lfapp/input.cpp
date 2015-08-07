@@ -28,10 +28,6 @@
 #include <windowsx.h>
 #endif
 
-#ifdef LFL_QT
-#include <QtOpenGL>
-#endif
-
 #ifdef LFL_WXWIDGETS
 #include <wx/wx.h>
 #endif

@@ -88,7 +88,7 @@ See [new_app_template/README.txt](new_app_template/README.txt) to quick start yo
 * Using Ubuntu 15.04 [http://virtualboxes.org/images/ubuntu](VirtualBox Image)
 
         sudo apt-get install screen vim git cmake yasm xorg-dev autotools-dev \
-        automake flex bison libssl-dev libbz2-dev
+        automake flex bison libssl-dev libbz2-dev qtbase5-dev libqt5webkit5-dev
 
 * Also see [.travis.yml](.travis.yml) for package dependencies
 

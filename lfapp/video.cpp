@@ -135,10 +135,17 @@ extern "C" {
 };
 
 #ifdef LFL_QT
-#include <QtOpenGL>
 #include <QApplication>
 extern QApplication *lfl_qapp;
 extern vector<string> lfl_qapp_argv;  
+#define glGenRenderbuffersEXT(a,b) glGenRenderbuffers(a,b)
+#define glBindRenderbufferEXT(a,b) glBindRenderbuffer(a,b)
+#define glRenderbufferStorageEXT(a,b,c,d) glRenderbufferStorage(a,b,c,d)
+#define glGenFramebuffersEXT(a,b) glGenFramebuffers(a,b)
+#define glBindFramebufferEXT(a,b) glBindFramebuffer(a,b)
+#define glFramebufferTexture2DEXT(a,b,c,d,e) glFramebufferTexture2D(a,b,c,d,e)
+#define glFramebufferRenderbufferEXT(a,b,c,d) glFramebufferRenderbuffer(a,b,c,d)
+#define glCheckFramebufferStatusEXT(a) glCheckFramebufferStatus(a)
 #endif // LFL_QT
 
 #ifdef LFL_WXWIDGETS
@@ -357,7 +364,7 @@ struct OpenGLES1 : public GraphicsDevice {
 
 #ifdef LFL_GLES2
 #ifdef LFL_QT
-class OpenGLES2 : public QWindow, protected QOpenGLFunctions, public GraphicsDevice {
+class OpenGLES2 : public QWindow, public GraphicsDevice {
   public:
   bool QT_init=0, QT_grabbed=0, frame_on_mouse_input=0, frame_on_keyboard_input=0;
   point QT_mp;
@@ -875,6 +882,15 @@ void GraphicsDevice::DrawPixels(const Box &b, const Texture &tex) {
   b.Draw(temp.coord);
   temp.ClearGL();
 }
+
+void GraphicsDevice::GenRenderBuffers(int n, unsigned *out) { glGenRenderbuffersEXT(n, out); }
+void GraphicsDevice::BindRenderBuffer(int id) { glBindRenderbufferEXT(GL_RENDERBUFFER, id); }
+void GraphicsDevice::RenderBufferStorage(int d, int w, int h) { glRenderbufferStorageEXT(GL_RENDERBUFFER, d, w, h); }
+void GraphicsDevice::GenFrameBuffers(int n, unsigned *out) { glGenFramebuffersEXT(n, out); }
+void GraphicsDevice::BindFrameBuffer(int id) { glBindFramebufferEXT(GL_FRAMEBUFFER, id); }
+void GraphicsDevice::FrameBufferTexture(int id) { glFramebufferTexture2DEXT(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, id, 0); }
+void GraphicsDevice::FrameBufferDepthTexture(int id) { glFramebufferRenderbufferEXT(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, id); }
+int GraphicsDevice::CheckFrameBufferStatus() { glCheckFramebufferStatusEXT(GL_FRAMEBUFFER); }
 
 int GraphicsDevice::VertsPerPrimitive(int primtype) {
   if (primtype == GL_TRIANGLES) return 3;
@@ -2321,11 +2337,11 @@ void Texture::ScreenshotBox(const Box &b, int flag) {
 void DepthTexture::Resize(int W, int H, int DF, int flag) {
   if (DF) df = DF;
   width=W; height=H;
-  if (!ID && (flag & Flag::CreateGL)) glGenRenderbuffersEXT(1, &ID);
+  if (!ID && (flag & Flag::CreateGL)) screen->gd->GenRenderBuffers(1, &ID);
   int opengl_width = NextPowerOfTwo(width), opengl_height = NextPowerOfTwo(height);
   if (ID) {
-    glBindRenderbufferEXT(GL_RENDERBUFFER, ID);
-    glRenderbufferStorageEXT(GL_RENDERBUFFER, Depth::OpenGLID(df), opengl_width, opengl_height);
+    screen->gd->BindRenderBuffer(ID);
+    screen->gd->RenderBufferStorage(Depth::OpenGLID(df), opengl_width, opengl_height);
   }
 }
 
@@ -2334,7 +2350,7 @@ void DepthTexture::Resize(int W, int H, int DF, int flag) {
 void FrameBuffer::Resize(int W, int H, int flag) {
   width=W; height=H;
   if (!ID && (flag & Flag::CreateGL)) {
-    glGenFramebuffersEXT(1, &ID);
+    screen->gd->GenFrameBuffers(1, &ID);
     if (flag & Flag::CreateTexture)      AllocTexture(&tex, !(flag & Flag::NoClampToEdge));
     if (flag & Flag::CreateDepthTexture) AllocDepthTexture(&depth);
   } else {
@@ -2342,7 +2358,7 @@ void FrameBuffer::Resize(int W, int H, int flag) {
     depth.Resize(width, height);
   }
   Attach(tex.ID, depth.ID);
-  int status = glCheckFramebufferStatusEXT(GL_FRAMEBUFFER);
+  int status = screen->gd->CheckFrameBufferStatus();
   if (status != GL_FRAMEBUFFER_COMPLETE) ERROR("FrameBuffer status ", status);
   if (flag & Flag::ReleaseFB) Release();
 }
@@ -2357,17 +2373,11 @@ void FrameBuffer::AllocTexture(Texture *out, bool clamp_to_edge) {
   }
 }
 
-void FrameBuffer::Release() { glBindFramebufferEXT(GL_FRAMEBUFFER, screen->gd->default_framebuffer); }
+void FrameBuffer::Release() { screen->gd->BindFrameBuffer(screen->gd->default_framebuffer); }
 void FrameBuffer::Attach(int ct, int dt) {
-  glBindFramebufferEXT(GL_FRAMEBUFFER, ID);
-  if (ct) {
-    tex.ID = ct;
-    glFramebufferTexture2DEXT(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tex.ID, 0);
-  }
-  if (dt) {
-    depth.ID = dt;
-    glFramebufferRenderbufferEXT(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depth.ID);
-  }
+  screen->gd->BindFrameBuffer(ID);
+  if (ct) screen->gd->FrameBufferTexture     ((tex.ID   = ct));
+  if (dt) screen->gd->FrameBufferDepthTexture((depth.ID = dt));
 }
 
 /* Shader */
