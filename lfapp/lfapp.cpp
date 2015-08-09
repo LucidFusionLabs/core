@@ -47,6 +47,7 @@ extern "C" {
 #include <sys/mman.h>
 #include <sys/types.h>
 #include <sys/resource.h>
+#include <dlfcn.h>
 #endif
 
 #ifdef __APPLE__
@@ -68,7 +69,6 @@ extern "C" {
 #ifdef LFL_QT
 #include <QApplication>
 QApplication *lfl_qapp;
-vector<string> lfl_qapp_argv;  
 extern "C" void QTTriggerFrame();
 extern "C" int LFLQTMain(int argc, const char *argv[]);
 #undef main
@@ -507,20 +507,27 @@ void Application::Log(int level, const char *file, int line, const string &messa
   if (FLAGS_lfapp_video && screen && screen->lfapp_console) screen->lfapp_console->Write(message);
 }
 
-void Application::CreateNewWindow(const function<void(Window*)> &start_cb) {
+void Application::CreateNewWindow(const Window::StartCB &start_cb) {
   Window *orig_window = screen;
   Window *new_window = new Window();
   if (window_init_cb) window_init_cb(new_window);
   app->video.CreateGraphicsDevice(new_window);
   CHECK(Window::Create(new_window));
+  new_window->start_cb = start_cb;
+#ifndef LFL_QT
   Window::MakeCurrent(new_window);
+  StartNewWindow(new_window);
+  Window::MakeCurrent(orig_window);
+#endif
+}
+
+void Application::StartNewWindow(Window *new_window) {
   app->video.InitGraphicsDevice(new_window);
   app->input.Init(new_window);
-  start_cb(new_window);
+  new_window->start_cb(new_window);
 #ifdef LFL_OSXINPUT
   OSXStartWindow(screen->id);
 #endif
-  Window::MakeCurrent(orig_window);
 }
 
 NetworkThread *Application::CreateNetworkThread(bool detach) {
@@ -584,6 +591,14 @@ void Application::AddNativeMenu(const string &title, const vector<MenuItem>&item
 #endif
 }
 
+void *Application::GetSymbol(const string &n) {
+#ifdef WIN32
+  return GetProcAddress(GetModuleHandle(NULL), n.c_str());
+#else
+  return dlsym(RTLD_DEFAULT, n.c_str());
+#endif
+}
+
 StringPiece Application::LoadResource(int id) {
 #ifdef WIN32
   HRSRC resource = FindResource(NULL, MAKEINTRESOURCE(id), MAKEINTRESOURCE(900));
@@ -594,7 +609,10 @@ StringPiece Application::LoadResource(int id) {
 #endif
 }
 
-int Application::Create(int argc, const char **argv, const char *source_filename) {
+int Application::Create(int argc, const char **argv, const char *source_filename, void (*create_cb)()) {
+#ifndef LFL_QT
+  if (create_cb) create_cb();
+#endif
 #ifdef LFL_GLOG
   google::InstallFailureSignalHandler();
 #endif
@@ -1105,11 +1123,20 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR lpCmdLine, int nC
 #endif
 
 #ifdef LFL_QT
+static vector<string> lfl_qapp_argv;  
+static vector<const char *> lfl_qapp_av;
 extern "C" int main(int argc, const char *argv[]) {
+  if (void (*create_cb)() = (void(*)())LFL::app->GetSymbol("LFAppCreateCB")) create_cb();
   for (int i=0; i<argc; i++) lfl_qapp_argv.push_back(argv[i]);
   QApplication app(argc, (char**)argv);
   lfl_qapp = &app;
   LFL::Window::Create(LFL::screen);
   return app.exec();
+}
+extern "C" int LFLQTInit() {
+  for (const auto &a : lfl_qapp_argv) lfl_qapp_av.push_back(a.c_str());
+  lfl_qapp_av.push_back(0);
+  LFLQTMain(lfl_qapp_argv.size(), &lfl_qapp_av[0]);
+  return LFL::app->run ? 0 : -1; 
 }
 #endif // LFL_QT

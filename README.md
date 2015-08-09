@@ -172,5 +172,5 @@ See [new_app_template/README.txt](new_app_template/README.txt) to quick start yo
 ## License
 
 * GPL
-* Unlimited commercial license available for 5$/year.
+* Unlimited commercial license available for $25/year.
 

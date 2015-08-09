@@ -580,15 +580,15 @@ struct Application : public ::LFApp, public Module {
   { run=1; initialized=0; main_thread_id=0; frames_ran=0; }
 
   void Log(int level, const char *file, int line, const string &message);
-  void CreateNewWindow(const function<void(Window*)> &start_cb = function<void(Window*)>());
+  void CreateNewWindow(const Window::StartCB &start_cb = Window::StartCB());
+  void StartNewWindow(Window *new_window);
   NetworkThread *CreateNetworkThread(bool detach_existing_module);
   void LaunchNativeFontChooser(const FontDesc &cur_font, const string &choose_cmd);
   void LaunchNativeMenu(const string &title);
   void AddNativeMenu(const string &title, const vector<MenuItem>&items);
   int LoadModule(Module *M) { modules.push_back(M); return M->Init(); }
-  StringPiece LoadResource(int id);
 
-  int Create(int argc, const char **argv, const char *source_filename);
+  int Create(int argc, const char **argv, const char *source_filename, void (*create_cb)()=0);
   int Init();
   int Start();
   int HandleEvents(unsigned clicks);
@@ -601,6 +601,8 @@ struct Application : public ::LFApp, public Module {
 
   static void Daemonize(const char *dir="");
   static void Daemonize(FILE *fout, FILE *ferr);
+  static void *GetSymbol(const string &n);
+  static StringPiece LoadResource(int id);
 };
 extern Application *app;
 

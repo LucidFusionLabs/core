@@ -521,10 +521,12 @@ struct Video : public Module {
 
 extern Window *screen;
 struct Window : public NativeWindow {
+    typedef function<void(Window*)> StartCB;
     typedef function<int(Window*, unsigned, unsigned, bool, int)> FrameCB;
     GraphicsDevice *gd=0;
     point mouse, mouse_wheel;
     string caption;
+    StartCB start_cb;
     FrameCB frame_cb;
     Timer frame_time;
     RollingAvg<unsigned> fps;
@@ -583,8 +585,7 @@ struct Window : public NativeWindow {
 #ifndef LFL_QT
 struct GraphicsDevice {
 #else
-class GraphicsDevice : protected QOpenGLFunctions {
-public:
+struct GraphicsDevice : public QOpenGLFunctions {
 #endif
     static const int Float, Points, Lines, LineLoop, Triangles, TriangleStrip, Polygon, Texture2D, UnsignedInt;
     static const int Ambient, Diffuse, Specular, Emission, Position;
