@@ -257,8 +257,11 @@ const int GraphicsDevice::GLInternalFormat  = GL_RGBA;
 
 #ifdef LFL_QT
 static bool lfl_qt_init = false;
-struct QTWindow : public QWindow {
-  bool init=0, grabbed=0, frame_on_mouse_input=0, frame_on_keyboard_input=0;
+class QTWindow : public QWindow {
+  Q_OBJECT
+  public:
+  QSocketNotifier *wait_forever_socket=0;
+  bool init=0, grabbed=0, frame_on_mouse_input=0, frame_on_keyboard_input=0, reenable_wait_forever_socket=0;
   LFL::Window *lfl_window=0;
   point mouse_p;
 
@@ -280,10 +283,17 @@ struct QTWindow : public QWindow {
     if (!LFL::screen || LFL::screen->impl != this) LFL::Window::MakeCurrent(lfl_window);
     app->EventDrivenFrame(true);
     if (!app->run) { app->Free(); lfl_qapp->exit(); return true; }
-    if (!app->scheduler.wait_forever) RequestRender();
-    return true;
+    if (reenable_wait_forever_socket && !(reenable_wait_forever_socket=0)) wait_forever_socket->setEnabled(true);
+    if (LFL::screen->target_fps) RequestRender();
+    return QWindow::event(event);
   }
-  void resizeEvent(QResizeEvent *ev) { QWindow::resizeEvent(ev); if (!init) return; LFL::screen->Reshaped(ev->size().width(), ev->size().height()); }
+  void resizeEvent(QResizeEvent *ev) {
+    QWindow::resizeEvent(ev);
+    if (!init) return; 
+    LFL::Window::MakeCurrent(lfl_window);
+    LFL::screen->Reshaped(ev->size().width(), ev->size().height());
+    RequestRender();
+  }
   void keyPressEvent  (QKeyEvent *ev) { keyEvent(ev, true); }
   void keyReleaseEvent(QKeyEvent *ev) { keyEvent(ev, false); }
   void keyEvent       (QKeyEvent *ev, bool down) {
@@ -292,14 +302,25 @@ struct QTWindow : public QWindow {
     int key = GetKeyCode(ev), fired = key ? KeyPress(key, down) : 0;
     if (fired && frame_on_keyboard_input) RequestRender();
   }
-  void mousePressEvent  (QMouseEvent *ev) { mouseClickEvent(ev, true); }
-  void mouseReleaseEvent(QMouseEvent *ev) { mouseClickEvent(ev, false); }
+  void mouseReleaseEvent(QMouseEvent *ev) { QWindow::mouseReleaseEvent(ev); mouseClickEvent(ev, false); }
+  void mousePressEvent  (QMouseEvent *ev) { QWindow::mousePressEvent(ev);   mouseClickEvent(ev, true);
+#if 0
+    if (ev->button() == Qt::RightButton) {
+      QMenu menu;
+      QAction* openAct = new QAction("Open...", this);
+      menu.addAction(openAct);
+      menu.addSeparator();
+      menu.exec(mapToGlobal(ev->pos()));
+    }
+#endif
+  }
   void mouseClickEvent  (QMouseEvent *ev, bool down) {
     if (!init) return;
     int fired = LFL::app->input.MouseClick(GetMouseButton(ev), down, GetMousePosition(ev));
     if (fired && frame_on_mouse_input) RequestRender();
   }
   void mouseMoveEvent(QMouseEvent *ev) {
+    QWindow::mouseMoveEvent(ev);
     if (!init) return;
     point p = GetMousePosition(ev);
     int fired = LFL::app->input.MouseMove(p, p - mouse_p);
@@ -308,6 +329,12 @@ struct QTWindow : public QWindow {
     else        { mouse_p = point(width()/2, height()/2); QCursor::setPos(mapToGlobal(QPoint(mouse_p.x, mouse_p.y))); }
   }
   void RequestRender() { QCoreApplication::postEvent(this, new QEvent(QEvent::UpdateRequest)); }
+  void DelWaitForeverSocket(Socket fd) {}
+  void AddWaitForeverSocket(Socket fd) {
+    CHECK(!wait_forever_socket);
+    wait_forever_socket = new QSocketNotifier(fd, QSocketNotifier::Read, this);
+    lfl_qapp->connect(wait_forever_socket, SIGNAL(activated(int)), this, SLOT(ReadInputChannel(int)));
+  }
   static unsigned GetKeyCode(QKeyEvent *ev) { int k = ev->key(); return k < 256 && isalpha(k) ? ::tolower(k) : k; }
   static point    GetMousePosition(QMouseEvent *ev) { return point(ev->x(), LFL::screen->height - ev->y()); }
   static unsigned GetMouseButton  (QMouseEvent *ev) {
@@ -316,7 +343,19 @@ struct QTWindow : public QWindow {
     else if (b == Qt::RightButton) return 2;
     return 0;
   }
+  public slots:
+  void ReadInputChannel(int fd) {
+    reenable_wait_forever_socket = true; 
+    wait_forever_socket->setEnabled(false);
+    RequestRender(); 
+  }
 };
+#include "video.moc"
+extern "C" void QTTriggerFrame          (void *w)            { ((QTWindow*)w)->RequestRender(); }
+extern "C" void QTSetWaitForeverMouse   (void *w, bool v)    { ((QTWindow*)w)->frame_on_mouse_input    = v; }
+extern "C" void QTSetWaitForeverKeyboard(void *w, bool v)    { ((QTWindow*)w)->frame_on_keyboard_input = v; }
+extern "C" void QTAddWaitForeverSocket  (void *w, Socket fd) { ((QTWindow*)w)->AddWaitForeverSocket(fd); }
+extern "C" void QTDelWaitForeverSocket  (void *w, Socket fd) { ((QTWindow*)w)->DelWaitForeverSocket(fd); }
 #endif
 
 #ifndef LFL_QT
@@ -1265,7 +1304,6 @@ void Window::MakeCurrent(Window *W) {
 }
 void Mouse::GrabFocus()    { ((QTWindow*)screen->impl)->grabbed=1; ((QWindow*)screen->id)->setCursor(Qt::BlankCursor); app->grab_mode.On();  screen->cursor_grabbed=true;  }
 void Mouse::ReleaseFocus() { ((QTWindow*)screen->impl)->grabbed=0; ((QWindow*)screen->id)->unsetCursor();              app->grab_mode.Off(); screen->cursor_grabbed=false; }
-extern "C" void QTTriggerFrame() { ((QTWindow*)screen->impl)->RequestRender(); }
 #endif // LFL_QT
 
 #ifdef LFL_WXWIDGETS
@@ -1699,6 +1737,8 @@ void Window::SetCaption(const string &v) {
   OSXSetWindowTitle(id, v.c_str());
 #elif defined(LFL_WINVIDEO)
   SetWindowText((HWND)screen->id, v.c_str());
+#elif defined(LFL_QT)
+  ((QWindow*)screen->id)->setTitle(QString::fromUtf8(v.data(), v.size()));
 #endif
 }
 
@@ -1708,6 +1748,8 @@ void Window::SetResizeIncrements(float x, float y) {
 #elif defined(LFL_WINVIDEO)
   WinWindow *win = static_cast<WinWindow*>(screen->impl);
   win->resize_increment = point(x, y);
+#elif defined(LFL_QT)
+  ((QWindow*)screen->id)->setSizeIncrement(QSize(x, y));
 #endif
 }
 
@@ -1719,6 +1761,8 @@ void Window::SetTransparency(float v) {
   else {      SetWindowLong((HWND)screen->id, GWL_EXSTYLE, GetWindowLong((HWND)screen->id, GWL_EXSTYLE) | ( WS_EX_LAYERED));
     SetLayeredWindowAttributes((HWND)screen->id, 0, static_cast<BYTE>(max(1.0, (1-v)*255.0)), LWA_ALPHA);
   }
+#elif defined(LFL_QT)
+  ((QWindow*)screen->id)->setOpacity(1-v);
 #endif
 }
 

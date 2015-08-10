@@ -69,7 +69,11 @@ extern "C" {
 #ifdef LFL_QT
 #include <QApplication>
 QApplication *lfl_qapp;
-extern "C" void QTTriggerFrame();
+extern "C" void QTTriggerFrame(void*);
+extern "C" void QTSetWaitForeverMouse   (void*, bool);
+extern "C" void QTSetWaitForeverKeyboard(void*, bool);
+extern "C" void QTAddWaitForeverSocket(void*, Socket);
+extern "C" void QTDelWaitForeverSocket(void*, Socket);
 extern "C" int LFLQTMain(int argc, const char *argv[]);
 #undef main
 #endif
@@ -903,12 +907,12 @@ int Application::Exiting() {
 /* FrameScheduler */
 
 FrameScheduler::FrameScheduler() : maxfps(&FLAGS_target_fps), wakeup_thread(&frame_mutex, &wait_mutex) {
-#if defined(LFL_OSXINPUT) || defined(LFL_IPHONEINPUT)
+#if defined(LFL_OSXINPUT) || defined(LFL_IPHONEINPUT) || defined(LFL_QT)
   rate_limit = synchronize_waits = wait_forever_thread = monolithic_frame = 0;
 #elif defined(LFL_WININPUT) || defined(LFL_X11INPUT)
   synchronize_waits = wait_forever_thread = 0;
   rate_limit = FLAGS_target_fps;
-#elif defined(LFL_QT) || defined(LFL_WXWIDGETS)
+#elif defined(LFL_WXWIDGETS)
   rate_limit = synchronize_waits = monolithic_frame = 0;
 #endif
 }
@@ -972,7 +976,7 @@ void FrameScheduler::Wakeup(void *opaque) {
 #elif defined(LFL_IPHONEINPUT)
     iPhoneTriggerFrame(screen->id);
 #elif defined(LFL_QT)
-    if (wait_forever_thread) QTTriggerFrame();
+    if (wait_forever_thread) QTTriggerFrame(screen->id);
 #elif defined(LFL_WXWIDGETS)
     if (wait_forever_thread) ((wxGLCanvas*)screen->id)->Refresh();
 #elif defined(LFL_GLFWINPUT)
@@ -1022,6 +1026,8 @@ void FrameScheduler::UpdateTargetFPS(int fps) {
   iPhoneUpdateTargetFPS(screen->id);
 #elif defined(LFL_OSXINPUT)
   OSXUpdateTargetFPS(screen->id);
+#elif defined(LFL_QT)
+  QTTriggerFrame(screen->id);
 #endif
 }
 
@@ -1033,6 +1039,8 @@ void FrameScheduler::AddWaitForeverMouse() {
   OSXAddWaitForeverMouse(screen->id);
 #elif defined(LFL_WINVIDEO)
   static_cast<WinWindow*>(screen->impl)->frame_on_mouse_input = true;
+#elif defined(LFL_QT)
+  QTSetWaitForeverMouse(screen->id, true);
 #endif
 }
 
@@ -1044,6 +1052,8 @@ void FrameScheduler::DelWaitForeverMouse() {
   OSXDelWaitForeverMouse(screen->id);
 #elif defined(LFL_WINVIDEO)
   static_cast<WinWindow*>(screen->impl)->frame_on_mouse_input = false;
+#elif defined(LFL_QT)
+  QTSetWaitForeverMouse(screen->id, false);
 #endif
 }
 
@@ -1055,6 +1065,8 @@ void FrameScheduler::AddWaitForeverKeyboard() {
   OSXAddWaitForeverKeyboard(screen->id);
 #elif defined(LFL_WINVIDEO)
   static_cast<WinWindow*>(screen->impl)->frame_on_keyboard_input = true;
+#elif defined(LFL_QT)
+  QTSetWaitForeverKeyboard(screen->id, true);
 #endif
 }
 
@@ -1066,6 +1078,8 @@ void FrameScheduler::DelWaitForeverKeyboard() {
   OSXDelWaitForeverKeyboard(screen->id);
 #elif defined(LFL_WINVIDEO)
   static_cast<WinWindow*>(screen->impl)->frame_on_keyboard_input = false;
+#elif defined(LFL_QT)
+  QTSetWaitForeverKeyboard(screen->id, false);
 #endif
 }
 
@@ -1079,6 +1093,8 @@ void FrameScheduler::AddWaitForeverSocket(Socket fd, int flag, void *val) {
   wait_forever_sockets.Add(fd, flag, val);  
 #elif defined(LFL_IPHONEINPUT)
   if (!wait_forever_thread) { CHECK_EQ(SocketSet::READABLE, flag); iPhoneAddWaitForeverSocket(screen->id, fd); }
+#elif defined(LFL_QT)
+  QTAddWaitForeverSocket(screen->id, fd);
 #endif
 }
 
@@ -1094,6 +1110,8 @@ void FrameScheduler::DelWaitForeverSocket(Socket fd) {
 #elif defined(LFL_IPHONEINPUT)
   CHECK(screen->id);
   iPhoneDelWaitForeverSocket(screen->id, fd);
+#elif defined(LFL_QT)
+  QTDelWaitForeverSocket(screen->id, fd);
 #endif
 }
 

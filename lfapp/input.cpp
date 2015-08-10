@@ -688,8 +688,8 @@ const int Key::F12        = Qt::Key_F12;
 const int Key::Home       = Qt::Key_Home;
 const int Key::End        = Qt::Key_End;
 
-string Clipboard::Get() { return ""; }
-void Clipboard::Set(const string &s) {}
+string Clipboard::Get() { QByteArray v = QApplication::clipboard()->text().toUtf8(); return string(v.constData(), v.size()); }
+void Clipboard::Set(const string &s) { QApplication::clipboard()->setText(QString::fromUtf8(s.data(), s.size())); }
 #endif /* LFL_QT */
 
 #ifdef LFL_WXWIDGETS
@@ -1096,8 +1096,8 @@ int Input::MouseEventDispatch(InputEvent::Id event, const point &p, int down) {
   else if (event == Mouse::Event::Wheel) screen->mouse_wheel = p;
   else                                   screen->mouse       = p;
 
-  if (FLAGS_input_debug && down)
-    INFO("MouseEvent ", InputEvent::Name(event), " ", screen->mouse.DebugString());
+  if (FLAGS_input_debug)
+    INFO("MouseEvent ", InputEvent::Name(event), " ", screen->mouse.DebugString(), " down=", down);
 
   int fired = 0;
   for (auto g = screen->mouse_gui.begin(); g != screen->mouse_gui.end(); ++g) {
