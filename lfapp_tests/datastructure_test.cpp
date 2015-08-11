@@ -127,30 +127,28 @@ template <class K, class V> struct SkipList {
     static int RandomLevel() { static float logP = log(.5); return 1 + (int)(log(Rand(0.0, 1.0)) / logP); }
 };
 
-struct AVLTreeZipper {
-    int sum=0;
-    vector<pair<int, bool> > path;
-    AVLTreeZipper() { path.reserve(64); }
-    void Reset() { sum=0; path.clear(); }
-};
-
 template <class K, class V> struct AVLTreeNode {
     enum { Left, Right };
+    typedef K Key;
+    typedef K Value;
     K key; unsigned val:30, left:30, right:30, height:6;
     AVLTreeNode(K k, unsigned v) : key(k), val(v), left(0), right(0), height(1) {}
     void SetChildren(unsigned l, unsigned r) { left=l; right=r; }
     void SwapKV(AVLTreeNode *n) { swap(key, n->key); unsigned v=val; val=n->val; n->val=v; }
-    virtual bool LessThan(const K &k, int ind, AVLTreeZipper *z) const { return key < k; }
-    virtual bool MoreThan(const K &k, int ind, AVLTreeZipper *z) const { return k < key; }
-    virtual void ComputeStateFromChildren(const AVLTreeNode<K,V> *lc, const AVLTreeNode<K,V> *rc) {
+    virtual void ComputeAnnotationFromChildren(const AVLTreeNode<K,V> *lc, const AVLTreeNode<K,V> *rc) {
         height = max(lc ? lc->height : 0, rc ? rc->height : 0) + 1;
     }
 };
 
-template <class K, class V, class Node = AVLTreeNode<K,V> > struct AVLTree {
+template <class Node> struct AVLTreeZipper {
+    virtual bool LessThan(const Node &n, const typename Node::Key &k) { return n.key < k; }
+    virtual bool MoreThan(const Node &n, const typename Node::Key &k) { return k < n.key; }
+};
+
+template <class K, class V, class Node = AVLTreeNode<K,V>, class Zipper = AVLTreeZipper<Node> > struct AVLTree {
     struct Query {
-        const K key; const V *val; V *ret; AVLTreeZipper *z;
-        Query(const K &k, const V *v=0, AVLTreeZipper *Z=0) : key(k), val(v), ret(0), z(Z) {}
+        const K key; const V *val; V *ret; Zipper z;
+        Query(const K &k, const V *v=0) : key(k), val(v), ret(0) {}
     };
 
     FreeListVector<Node> node;
@@ -173,16 +171,16 @@ template <class K, class V, class Node = AVLTreeNode<K,V> > struct AVLTree {
 
     int FindNode(int ind, Query *q) const {
         if (!ind) return 0;
-        const Node *n = &node[ind-1];
-        if      (n->MoreThan(q->key, ind, q->z)) return FindNode(n->left,  q);
-        else if (n->LessThan(q->key, ind, q->z)) return FindNode(n->right, q);
-        else return n->val+1;
+        const Node &n = node[ind-1];
+        if      (q->z.MoreThan(n, q->key)) return FindNode(n.left,  q);
+        else if (q->z.LessThan(n, q->key)) return FindNode(n.right, q);
+        else return n.val+1;
     }
     int InsertNode(int ind, Query *q) {
         if (!ind) return CreateNode(q);
-        Node *n = &node[ind-1];
-        if      (n->MoreThan(q->key, ind, q->z)) { int li = InsertNode(n->left,  q); node[ind-1].left  = li; }
-        else if (n->LessThan(q->key, ind, q->z)) { int ri = InsertNode(n->right, q); node[ind-1].right = ri; }
+        const Node &n = node[ind-1];
+        if      (q->z.MoreThan(n, q->key)) { int li = InsertNode(n.left,  q); node[ind-1].left  = li; }
+        else if (q->z.LessThan(n, q->key)) { int ri = InsertNode(n.right, q); node[ind-1].right = ri; }
         else return ResolveInsertCollision(ind, q);
         return Balance(ind);
     }
@@ -193,13 +191,13 @@ template <class K, class V, class Node = AVLTreeNode<K,V> > struct AVLTree {
     }
     int EraseNode(int ind, Query *q) {
         if (!ind) return 0;
-        Node *n = &node[ind-1];
-        if      (n->MoreThan(q->key, ind, q->z)) { int li = EraseNode(n->left,  q); node[ind-1].left  = li; }
-        else if (n->LessThan(q->key, ind, q->z)) { int ri = EraseNode(n->right, q); node[ind-1].right = ri; }
+        const Node &n = node[ind-1];
+        if      (q->z.MoreThan(n, q->key)) { int li = EraseNode(n.left,  q); node[ind-1].left  = li; }
+        else if (q->z.LessThan(n, q->key)) { int ri = EraseNode(n.right, q); node[ind-1].right = ri; }
         else {
-            q->ret = &val[n->val];
-            int left = n->left, right = n->right;
-            val.Erase(n->val);
+            q->ret = &val[n.val];
+            int left = n.left, right = n.right;
+            val.Erase(n.val);
             node.Erase(ind-1);
             if (!right) return left;
             ind = GetMinNode(right);
@@ -216,7 +214,7 @@ template <class K, class V, class Node = AVLTreeNode<K,V> > struct AVLTree {
     }
     int Balance(int ind) {
         Node *n = &node[ind-1];
-        ComputeStateFromChildren(n);
+        ComputeAnnotationFromChildren(n);
         int nbal = GetBalance(ind);
         if (GetBalance(ind) > 1) {
             if (GetBalance(n->right) < 0) n->right = RotateRight(n->right);
@@ -231,8 +229,8 @@ template <class K, class V, class Node = AVLTreeNode<K,V> > struct AVLTree {
         Node *n = &node[ind-1], *o = &node[(right_ind = n->right)-1];
         n->right = o->left;
         o->left = ind;
-        ComputeStateFromChildren(n);
-        ComputeStateFromChildren(o);
+        ComputeAnnotationFromChildren(n);
+        ComputeAnnotationFromChildren(o);
         return right_ind;
     }
     int RotateRight(int ind) {
@@ -240,12 +238,12 @@ template <class K, class V, class Node = AVLTreeNode<K,V> > struct AVLTree {
         Node *n = &node[ind-1], *o = &node[(left_ind = n->left)-1];
         n->left = o->right;
         o->right = ind;
-        ComputeStateFromChildren(n);
-        ComputeStateFromChildren(o);
+        ComputeAnnotationFromChildren(n);
+        ComputeAnnotationFromChildren(o);
         return left_ind;
     }
-    void ComputeStateFromChildren(Node *n) {
-        n->ComputeStateFromChildren(n->left ? &node[n->left -1] : 0, n->right ? &node[n->right-1] : 0);
+    void ComputeAnnotationFromChildren(Node *n) {
+        n->ComputeAnnotationFromChildren(n->left ? &node[n->left -1] : 0, n->right ? &node[n->right-1] : 0);
     }
     int GetMinNode(int ind) const {
         const Node *n = &node[ind-1];
@@ -273,44 +271,18 @@ template <class K, class V, class Node = AVLTreeNode<K,V> > struct AVLTree {
     virtual void PrintEdges(int ind, string *out) const {
         if (!ind) return;
         const Node *n = &node[ind-1], *l=n->left?&node[n->left-1]:0, *r=n->right?&node[n->right-1]:0;
-        if (l) { PrintEdges(n->left, out);  GraphVizFile::AppendEdge(out, StrCat(n->key), StrCat(l->key), "left" ); }
-        if (r) { PrintEdges(n->right, out); GraphVizFile::AppendEdge(out, StrCat(n->key), StrCat(r->key), "right"); }
+        const V    *v = &val[n->val], *lv = l?&val[l->val]:0, *rv = r?&val[r->val]:0;
+        if (l) { PrintEdges(n->left,  out); StrAppend(out, "\"", *v, "\" -> \"", *lv, "\" [ label = \"left\"  ];\r\n"); }
+        if (r) { PrintEdges(n->right, out); StrAppend(out, "\"", *v, "\" -> \"", *rv, "\" [ label = \"right\" ];\r\n"); }
     }
 };
 
-template <class K, class V> struct PrefixSumKeyedAVLTreeNode : public AVLTreeNode<K,V> {
-    typedef AVLTreeNode<K,V> Parent;
-    typedef PrefixSumKeyedAVLTreeNode<K,V> Self;
-    int left_sum=0, right_sum=0;
-    PrefixSumKeyedAVLTreeNode(K k=K(), unsigned v=0) : AVLTreeNode<K,V>(k,v) {}
-    virtual bool LessThan(const K &k, int ind, AVLTreeZipper *z) const {
-        if (!((z->sum + left_sum + Parent::key) < k)) return 0;
-        z->sum += left_sum + Parent::key;
-        return 1;
-    }
-    virtual bool MoreThan(const K &k, int ind, AVLTreeZipper *z) const {
-        if (!(k < (z->sum + left_sum + Parent::key))) return 0;
-        return 1;
-    }
-    virtual void ComputeStateFromChildren(const Self *lc, const Self *rc) {
-        Parent::ComputeStateFromChildren(lc, rc);
-        left_sum  = lc ? (lc->left_sum + lc->right_sum + lc->key) : 0;
-        right_sum = rc ? (rc->left_sum + rc->right_sum + rc->key) : 0;
-    }
-};
+template <class K, class V, class Node, class Finger>
+struct AVLFingerTree : public AVLTree<K,V,Node,Finger> {
+    typedef AVLTree<K,V,Node,Finger> Parent;
 
-template <class K, class V, class Node = PrefixSumKeyedAVLTreeNode<K,V> >
-struct PrefixSumKeyedAVLTree : public AVLTree<K,V,Node> {
-    typedef AVLTree<K,V,Node> Parent;
-    mutable AVLTreeZipper z;
-    function<K(const V*)> node_value_cb;
-    PrefixSumKeyedAVLTree() : node_value_cb([&](const V*){ return 1; }) {}
-
-    virtual K GetCreateNodeKey(const typename Parent::Query *q) const { return node_value_cb(q->ret); }
-    virtual typename Parent::Query GetQuery(const K &k, const V *v=0) {
-        z.Reset();
-        return typename Parent::Query(k + (v ? 0 : 1), v, &z);
-    }
+    virtual K GetCreateNodeKey(const typename Parent::Query *q) const { return q->z.GetValue(*q->ret); }
+    virtual typename Parent::Query GetQuery(const K &k, const V *v=0) { return typename Parent::Query(k + (v ? 0 : 1), v); }
     virtual int ResolveInsertCollision(int ind, typename Parent::Query *q) { 
         int li = ResolveInsertCollision(Parent::node[ind-1].left, ind, q);
         Parent::node[ind-1].left = li;
@@ -326,36 +298,63 @@ struct PrefixSumKeyedAVLTree : public AVLTree<K,V,Node> {
         Parent::node[ind-1].right = ri;
         return Parent::Balance(ind);
     }
+    void LoadFromSortedVal() {
+        Finger z;
+        CHECK_EQ(0, Parent::node.size());
+        Parent::head = BuildTreeFromSortedVal(z, 0, Parent::val.size()-1);
+    }
+    int BuildTreeFromSortedVal(const Finger &z, int beg_val_ind, int end_val_ind) {
+        if (end_val_ind < beg_val_ind) return 0;
+        int mid_val_ind = (beg_val_ind + end_val_ind) / 2;
+        int ind = Parent::node.Insert(Node(z.GetValue(Parent::val[mid_val_ind]), mid_val_ind))+1;
+        int li = BuildTreeFromSortedVal(z, beg_val_ind,   mid_val_ind-1);
+        int ri = BuildTreeFromSortedVal(z, mid_val_ind+1, end_val_ind);
+        Parent::node[ind-1].left  = li;
+        Parent::node[ind-1].right = ri;
+        Parent::ComputeAnnotationFromChildren(&Parent::node[ind-1]);
+        return ind;
+    }
+};
+
+template <class K, class V> struct PrefixSumKeyedAVLTreeNode : public AVLTreeNode<K,V> {
+    typedef K Key;
+    typedef V Value;
+    typedef PrefixSumKeyedAVLTreeNode<K,V> Self;
+    int left_sum=0, right_sum=0;
+    PrefixSumKeyedAVLTreeNode(K k=K(), unsigned v=0) : AVLTreeNode<K,V>(k,v) {}
+    virtual void ComputeAnnotationFromChildren(const Self *lc, const Self *rc) {
+        AVLTreeNode<K,V>::ComputeAnnotationFromChildren(lc, rc);
+        left_sum  = lc ? (lc->left_sum + lc->right_sum + lc->key) : 0;
+        right_sum = rc ? (rc->left_sum + rc->right_sum + rc->key) : 0;
+    }
+};
+
+template <class Node> struct PrefixSumKeyedAVLTreeZipper {
+    int sum=0;
+    virtual typename Node::Key GetValue(const Node &n) const {
+        return 1;
+    }
+    virtual bool LessThan(const Node &n, const typename Node::Key &k) {
+        if (!((sum + n.left_sum + n.key) < k)) return 0;
+        sum += n.left_sum + n.key;
+        return 1;
+    }
+    virtual bool MoreThan(const Node &n, const typename Node::Key &k) {
+        if (!(k < (sum + n.left_sum + n.key))) return 0;
+        return 1;
+    }
+};
+
+template <class K, class V, class Node = PrefixSumKeyedAVLTreeNode<K,V>, class Finger = PrefixSumKeyedAVLTreeZipper<Node> >
+struct PrefixSumKeyedAVLTree : public AVLFingerTree<K,V,Node,Finger> {
+    typedef AVLFingerTree<K,V,Node,Finger> Parent;
     virtual void PrintNodes(int ind, string *out) const {
         if (!ind) return;
         const Node *n = &Parent::node[ind-1];
         const V    *v = &Parent::val[n->val];
         PrintNodes(n->left, out);
-        StrAppend(out, "node [label = \"", *v, " v:", n->key,
-                  "\nlsum:", n->left_sum, " rsum:", n->right_sum, "\"];\r\n\"", *v, "\";\r\n");
+        StrAppend(out, "node [label = \"", *v, " v:", n->key, "\nlsum:", n->left_sum, " rsum:", n->right_sum, "\"];\r\n\"", *v, "\";\r\n");
         PrintNodes(n->right, out);
-    }
-    virtual void PrintEdges(int ind, string *out) const {
-        if (!ind) return;
-        const Node *n = &Parent::node[ind-1], *l=n->left?&Parent::node[n->left-1]:0, *r=n->right?&Parent::node[n->right-1]:0;
-        const V    *v = &Parent::val[n->val], *lv = l?&Parent::val[l->val]:0, *rv = r?&Parent::val[r->val]:0;
-        if (l) { PrintEdges(n->left,  out); StrAppend(out, "\"", *v, "\" -> \"", *lv, "\" [ label = \"left\"  ];\r\n"); }
-        if (r) { PrintEdges(n->right, out); StrAppend(out, "\"", *v, "\" -> \"", *rv, "\" [ label = \"right\" ];\r\n"); }
-    }
-    void LoadFromSortedVal() {
-        CHECK_EQ(0, Parent::node.size());
-        Parent::head = BuildTreeFromSortedVal(0, Parent::val.size()-1);
-    }
-    int BuildTreeFromSortedVal(int beg_val_ind, int end_val_ind) {
-        if (end_val_ind < beg_val_ind) return 0;
-        int mid_val_ind = (beg_val_ind + end_val_ind) / 2;
-        int ind = Parent::node.Insert(Node(node_value_cb(&Parent::val[mid_val_ind]), mid_val_ind))+1;
-        int li = BuildTreeFromSortedVal(beg_val_ind,   mid_val_ind-1);
-        int ri = BuildTreeFromSortedVal(mid_val_ind+1, end_val_ind);
-        Parent::node[ind-1].left  = li;
-        Parent::node[ind-1].right = ri;
-        Parent::ComputeStateFromChildren(&Parent::node[ind-1]);
-        return ind;
     }
 };
 

@@ -27,6 +27,11 @@
 #include <QMessageBox>
 #endif
 
+#ifdef LFL_LIBCLANG
+#include "clang-c/Index.h"
+static string GetClangString(const CXString &s) { string ret=LFL::BlankNull(clang_getCString(s)); clang_disposeString(s); return ret; }
+#endif
+
 namespace LFL {
 #if defined(LFL_ANDROID) || defined(LFL_IPHONE)
 DEFINE_bool(multitouch, true, "Touchscreen controls");
@@ -774,11 +779,47 @@ string TextArea::CopyText(int beg_line_ind, int beg_char_ind, int end_line_ind, 
 
 /* Editor */
 
+#ifdef LFL_LIBCLANG
+static CXChildVisitResult EditorClangVisitor(CXCursor cursor, CXCursor parent, CXClientData client_data) {
+  CXFile file;
+  unsigned line, column, offset;
+  CXSourceLocation loc = clang_getCursorLocation(cursor);
+  clang_getFileLocation(loc, &file, &line, &column, &offset);
+  string filename = GetClangString(clang_getFileName(file));
+  Editor* editor = static_cast<Editor*>(client_data);
+  bool primary_file = StringEquals(editor->file->Filename(), filename);
+  if (!primary_file) return CXChildVisit_Continue;
+
+  CXToken* tokens=0;
+  unsigned int num_tokens=0;
+  CXTranslationUnit tu = clang_Cursor_getTranslationUnit(cursor);
+  CXSourceRange range = clang_getCursorExtent(cursor);
+  clang_tokenize(tu, range, &tokens, &num_tokens);
+  for (int i=0; i<num_tokens-1; i++) {   
+    int tk = clang_getTokenKind(tokens[i]);
+    CXSourceLocation tl = clang_getTokenLocation(tu, tokens[i]);
+    string token = GetClangString(clang_getTokenSpelling(tu, tokens[i]));
+    clang_getFileLocation(tl, &file, &line, &column, &offset);
+    // printf("highlught line:%d column:%d token(%s) tokenkind(%d)\n", line, column, token.c_str(), tk);
+  }
+  return CXChildVisit_Continue;
+}
+#endif
+
 Editor::Editor(Window *W, Font *F, File *I, bool Wrap) : TextArea(W, F), file(I) {
   reverse_line_fb = 1;
   line_fb.wrap = Wrap;
   file_line.node_value_cb = &LineOffset::GetLines;
   file_line.node_print_cb = &LineOffset::GetString;
+#ifdef LFL_LIBCLANG
+  const char* args[] = { "-c", "-x", "c++" };
+  CXIndex index = clang_createIndex(0, 0);
+  CXTranslationUnit trans_unit = clang_parseTranslationUnit(index, I->Filename(), args, 3, 0, 0, CXTranslationUnit_None);
+  CXCursor start_cursor = clang_getTranslationUnitCursor(trans_unit);
+  clang_visitChildren(start_cursor, EditorClangVisitor, this);
+  clang_disposeTranslationUnit(trans_unit);
+  clang_disposeIndex(index);
+#endif
 }
 
 void Editor::UpdateWrappedLines(int cur_font_size, int width) {
