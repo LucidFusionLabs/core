@@ -74,6 +74,7 @@ struct Flow {
     struct CurrentLine { int out_ind=0, beg=0, end=0; short height=0, ascent=0, descent=0, base=0; bool fresh=0; } cur_line;
     struct CurrentWord { int len=0;                                                                bool fresh=0; } cur_word;
     enum class State { OK=1, NEW_WORD=2, NEW_LINE=3 } state=State::OK;
+    typedef ArrayPiece<pair<int, int>> TextAnnotation;
     int max_line_width=0;
 
     Flow(DrawableBoxArray *O) : Flow(0, 0, O) {}
@@ -137,6 +138,22 @@ struct Flow {
             }
         }
         return out->data.size() - start_size;
+    }
+
+    /**/               int AppendText(const string          &text, const TextAnnotation &attr) { return AppendText(StringPiece           (text), attr); }
+    /**/               int AppendText(const String16        &text, const TextAnnotation &attr) { return AppendText(String16Piece         (text), attr); }
+    template <class X> int AppendText(const X               *text, const TextAnnotation &attr) { return AppendText(StringPiece::Unbounded(text), attr); }
+    template <class X> int AppendText(const StringPieceT<X> &text, const TextAnnotation &attr) {
+      if (!attr.len) return AppendText(text, 0);
+      auto a = attr.buf, ae = a + attr.len;
+      int size = text.Length(), last_attr = 0, pl = 0;
+      for (const X *b = text.data(), *p = b; !text.Done(p); p += pl) {
+        int offset = p - b;
+        if (a != ae) { pl = min(size - offset, a->first - offset); last_attr = a++->second; }
+        else           pl =     size - offset;
+        AppendText(StringPieceT<X>(text.buf + offset, pl), last_attr);
+      }
+      return size;
     }
 
     State AppendChar(int c, int attr_id, DrawableBox *box);

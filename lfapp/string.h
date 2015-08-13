@@ -114,6 +114,11 @@ struct Scannable {
     static String16 Scan(const String16&, const char16_t *v) { return String16(v); }
 };
 
+struct PieceIndex {
+  int offset, len;
+  PieceIndex(int o=-1, int l=0) : offset(o), len(l) {}
+};
+
 template <class X> struct ArrayPiece {
     typedef       X*       iterator;
     typedef const X* const_iterator;
@@ -121,6 +126,7 @@ template <class X> struct ArrayPiece {
     virtual ~ArrayPiece() {}
     ArrayPiece()                  : buf(0), len(0) {}
     ArrayPiece(const X *b, int l) : buf(b), len(l) {}
+    ArrayPiece(const X *b, const PieceIndex &i) : buf(i.offset < 0 ? 0 : &b[i.offset]), len(i.len) {}
     const X& operator[](int i) const { return buf[i]; }
     const X& back() const { return buf[len-1]; }
     void clear() { buf=0; len=0; }

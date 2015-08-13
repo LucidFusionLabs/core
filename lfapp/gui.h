@@ -152,9 +152,26 @@ struct KeyboardGUI : public KeyboardController {
   int  WriteHistory(const string &dir, const string &name, const string &hdr);
 };
 
-struct TextGUI : public KeyboardGUI {
-  struct Lines;
+struct TextGUI : public KeyboardGUI, public Drawable::AttrSource {
+  struct Attr {
+    enum { Bold=1<<16, Underline=1<<17, Blink=1<<18, Reverse=1<<19, Italic=1<<20, Link=1<<21 };
+    static void SetFGColorIndex(int *a, int c) { *a = (*a & ~0x00ff) | ((c & 0xff)     ); }
+    static void SetBGColorIndex(int *a, int c) { *a = (*a & ~0xff00) | ((c & 0xff) << 8); }
+    static int GetFGColorIndex(int a) { int c = a & 0xff; return c | (((a & Bold) && c<16) ? (1<<3) : 0); }
+    static int GetBGColorIndex(int a) { return (a>>8) & 0xff; }
+  };
+
+  struct Colors {
+    static const int normal_index=16, bold_index=17, bg_index=18;
+    Color c[16 + 3];
+  };
+  struct StandardVGAColors    : public Colors { StandardVGAColors(); };
+  struct SolarizedDarkColors  : public Colors { SolarizedDarkColors(); };
+  struct SolarizedLightColors : public Colors { SolarizedLightColors(); };
+
   struct Line;
+  struct Lines;
+
   struct Link : public Widget::Interface {
     Box3 box;
     string link;
@@ -193,19 +210,25 @@ struct TextGUI : public KeyboardGUI {
     String16 Text16() const { return data->glyphs.Text16(); }
     void Clear() { data->links.clear(); data->glyphs.Clear(); data->flow=InitFlow(&data->glyphs); }
     int Erase(int o, int l=INT_MAX);
-    int AssignText(const StringPiece   &s, int a=0) { Clear(); return AppendText(s, a); }
-    int AssignText(const String16Piece &s, int a=0) { Clear(); return AppendText(s, a); }
-    int AppendText(const StringPiece   &s, int a=0) { return InsertTextAt(Size(), s, a); }
-    int AppendText(const String16Piece &s, int a=0) { return InsertTextAt(Size(), s, a); }
+    int AssignText(const StringPiece   &s, int                       a=0) { Clear(); return AppendText(s, a); }
+    int AssignText(const String16Piece &s, int                       a=0) { Clear(); return AppendText(s, a); }
+    int AssignText(const StringPiece   &s, const Flow::TextAnnotation &a) { Clear(); return AppendText(s, a); }
+    int AppendText(const StringPiece   &s, int                       a=0) { return InsertTextAt(Size(), s, a); }
+    int AppendText(const String16Piece &s, int                       a=0) { return InsertTextAt(Size(), s, a); }
+    int AppendText(const StringPiece   &s, const Flow::TextAnnotation &a) { return InsertTextAt(Size(), s, a); }
     template <class X> int OverwriteTextAt(int o, const StringPieceT<X> &s, int a=0);
     template <class X> int InsertTextAt   (int o, const StringPieceT<X> &s, int a=0);
+    template <class X> int InsertTextAt   (int o, const StringPieceT<X> &s, const Flow::TextAnnotation&);
+    template <class X> int InsertTextAt   (int o, const StringPieceT<X> &s, const DrawableBoxArray&);
     template <class X> int UpdateText     (int o, const StringPieceT<X> &s, int a, int max_width=0, bool *append=0, int insert_mode=-1);
     int InsertTextAt(int o, const string   &s, int a=0) { return InsertTextAt<char>    (o, s, a); }
     int InsertTextAt(int o, const String16 &s, int a=0) { return InsertTextAt<char16_t>(o, s, a); }
     int UpdateText(int o, const string   &s, int attr, int max_width=0, bool *append=0) { return UpdateText<char>    (o, s, attr, max_width, append); }
     int UpdateText(int o, const String16 &s, int attr, int max_width=0, bool *append=0) { return UpdateText<char16_t>(o, s, attr, max_width, append); }
-    void EncodeText(DrawableBoxArray *o, int x, const StringPiece   &s, int a=0) { Flow f=InitFlow(o); f.p.x=x; f.AppendText(s,a); }
-    void EncodeText(DrawableBoxArray *o, int x, const String16Piece &s, int a=0) { Flow f=InitFlow(o); f.p.x=x; f.AppendText(s,a); }
+    void EncodeText(DrawableBoxArray *o, int x, const StringPiece   &s,                       int a=0) { Flow f=InitFlow(o); f.p.x=x; f.AppendText(s,a); }
+    void EncodeText(DrawableBoxArray *o, int x, const String16Piece &s,                       int a=0) { Flow f=InitFlow(o); f.p.x=x; f.AppendText(s,a); }
+    void EncodeText(DrawableBoxArray *o, int x, const StringPiece   &s, const Flow::TextAnnotation &a) { Flow f=InitFlow(o); f.p.x=x; f.AppendText(s,a); }
+    void EncodeText(DrawableBoxArray *o, int x, const String16Piece &s, const Flow::TextAnnotation &a) { Flow f=InitFlow(o); f.p.x=x; f.AppendText(s,a); }
     int Layout(int width=0, bool flush=0) { Layout(Box(0,0,width,0), flush); return Lines(); }
     void Layout(Box win, bool flush=0);
     point Draw(point pos, int relayout_width=-1, int g_offset=0, int g_len=-1);
@@ -303,16 +326,20 @@ struct TextGUI : public KeyboardGUI {
   string cmd_prefix="> ";
   Color cmd_color=Color::white, selection_color=Color(Color::grey70, 0.5);
   bool deactivate_on_enter=0, token_processing=0, insert_mode=1;
-  int start_line=0, end_line=0, start_line_adjust=0, skip_last_lines=0;
+  int start_line=0, end_line=0, start_line_adjust=0, skip_last_lines=0, default_attr=0;
   function<void(const shared_ptr<Link>&)> new_link_cb;
   function<void(Link*)> hover_link_cb;
   Link *hover_link=0;
   const Border *clip=0;
+  const Colors *colors=0;
+  const Color *bg_color=0;
+  mutable Drawable::Attr last_attr;
 
   TextGUI(Window *W, Font *F) : KeyboardGUI(W, F), mouse_gui(this, W), font(F)
   { layout.pad_wide_chars=1; cmd_line.Init(this,0); cmd_line.GetAttrId(Drawable::Attr(F)); }
 
   virtual ~TextGUI() {}
+  virtual const Drawable::Attr *GetAttr(int attr) const;
   virtual int CommandLines() const { return 0; }
   virtual void Input(char k) { cmd_line.UpdateText(cursor.i.x++, String16(1, *Unsigned<char>(&k)), cursor.attr); UpdateCommandFB(); UpdateCursor(); }
   virtual void Erase()       { if (!cursor.i.x) return; cmd_line.Erase(--cursor.i.x, 1); UpdateCommandFB(); UpdateCursor(); }
@@ -325,8 +352,8 @@ struct TextGUI : public KeyboardGUI {
   virtual void Enter();
 
   virtual String16 Text16() const { return cmd_line.Text16(); }
-  virtual void AssignInput(const string &text)
-  { cmd_line.AssignText(text); cursor.i.x=cmd_line.Size(); UpdateCommandFB(); UpdateCursor(); }
+  virtual void AssignInput(const string &text) { cmd_line.AssignText(text); cursor.i.x=cmd_line.Size(); UpdateCommandFB(); UpdateCursor(); }
+  void SetColors(Colors *C);
 
   virtual LinesFrameBuffer *GetFrameBuffer() { return &cmd_fb; }
   virtual void UpdateCursor() { cursor.p = cmd_line.data->glyphs.Position(cursor.i.x); }
@@ -369,6 +396,7 @@ struct TextArea : public TextGUI {
   virtual int UpdateLines(float v_scrolled, int *first_ind, int *first_offset, int *first_len);
   virtual int WrappedLines() const { return line.wrapped_lines; }
   virtual LinesFrameBuffer *GetFrameBuffer() { return &line_fb; }
+  void ChangeColors(Colors *C);
 
   struct DrawFlag { enum { DrawCursor=1, CheckResized=2 }; };
   virtual void Draw(const Box &w, int flag, Shader *shader=0);
@@ -390,7 +418,7 @@ struct TextArea : public TextGUI {
 
 struct Editor : public TextArea {
   struct LineOffset { 
-    long long offset; int size, wrapped_lines;
+    long long offset; int size, wrapped_lines; PieceIndex annotation;
     LineOffset(int O=0, int S=0, int WL=1) : offset(O), size(S), wrapped_lines(WL) {}
     static string GetString(const LineOffset *v) { return StrCat(v->offset); }
     static int    GetLines (const LineOffset *v) { return v->wrapped_lines; }
@@ -401,6 +429,7 @@ struct Editor : public TextArea {
   shared_ptr<File> file;
   LineMap file_line;
   FreeListVector<string> edits;
+  vector<pair<int,int>> annotation;
   int last_fb_width=0, last_fb_lines=0, last_first_line=0, wrapped_lines=0, fb_wrapped_lines=0;
   Editor(Window *W, Font *F, File *I, bool Wrap=0);
 
@@ -409,24 +438,10 @@ struct Editor : public TextArea {
   int UpdateLines(float v_scrolled, int *first_ind, int *first_offset, int *first_len);
 };
 
-struct Terminal : public TextArea, public Drawable::AttrSource {
+struct Terminal : public TextArea {
   struct State { enum { TEXT=0, ESC=1, CSI=2, OSC=3, CHARSET=4 }; };
-  struct Attr {
-    enum { Bold=1<<16, Underline=1<<17, Blink=1<<18, Reverse=1<<19, Italic=1<<20, Link=1<<21 };
-    static void SetFGColorIndex(int *a, int c) { *a = (*a & ~0x00ff) | ((c & 0xff)     ); }
-    static void SetBGColorIndex(int *a, int c) { *a = (*a & ~0xff00) | ((c & 0xff) << 8); }
-    static int GetFGColorIndex(int a) { int c = a & 0xff; return c | (((a & Bold) && c<16) ? (1<<3) : 0); }
-    static int GetBGColorIndex(int a) { return (a>>8) & 0xff; }
-  };
-  struct Colors {
-    static const int normal_index=16, bold_index=17, bg_index=18;
-    Color c[16 + 3];
-  };
-  struct StandardVGAColors : public Colors { StandardVGAColors(); };
-  struct SolarizedColors : public Colors { SolarizedColors(); };
-
   ByteSink *sink=0;
-  int term_width=0, term_height=0, parse_state=State::TEXT, default_cursor_attr=0;
+  int term_width=0, term_height=0, parse_state=State::TEXT;
   int scroll_region_beg=0, scroll_region_end=0, tab_width=8;
   string parse_text, parse_csi, parse_osc;
   unsigned char parse_charset=0;
@@ -435,9 +450,6 @@ struct Terminal : public TextArea, public Drawable::AttrSource {
   LinesFrameBuffer::FromLineCB fb_cb;
   LinesFrameBuffer *last_fb=0;
   Border clip_border;
-  Colors *colors=0;
-  Color *bg_color=0;
-  mutable Drawable::Attr last_attr;
   set<int> tab_stop;
 
   Terminal(ByteSink *O, Window *W, Font *F);
@@ -465,7 +477,6 @@ struct Terminal : public TextArea, public Drawable::AttrSource {
   virtual void UpdateCursor() { cursor.p = point(GetCursorX(term_cursor.x, term_cursor.y), GetCursorY(term_cursor.y)); }
   virtual void UpdateToken(Line*, int word_offset, int word_len, int update_type, const LineTokenProcessor*);
   virtual bool GetGlyphFromCoords(const point &p, Selection::Point *out) { return GetGlyphFromCoordsOffset(p, out, 0, 0); }
-  virtual const Drawable::Attr *GetAttr(int attr) const;
   void ScrollUp  () { TextArea::PageDown(); }
   void ScrollDown() { TextArea::PageUp(); }
   int GetCursorX(int x, int y) const {
@@ -487,8 +498,6 @@ struct Terminal : public TextArea, public Drawable::AttrSource {
   void PushFrontLines(int n) {
     for (int i=0; i<n; ++i) LineUpdate(line.InsertAt(-term_height, 1, start_line_adjust), GetPrimaryFrameBuffer(), LineUpdate::PushFront);
   }
-  void SetColors(Colors *C);
-  void ChangeColors(Colors *C);
   Border *UpdateClipBorder();
   void MoveLines(int sy, int ey, int dy, bool move_fb_p);
   void Scroll(int sl);

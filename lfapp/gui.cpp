@@ -270,9 +270,19 @@ template <class X> int TextGUI::Line::InsertTextAt(int x, const StringPieceT<X> 
   DrawableBoxArray b;
   b.attr.source = data->glyphs.attr.source;
   EncodeText(&b, data->glyphs.Position(x).x, v, attr);
-  int ret = b.Size();
-  if (!ret) return 0;
+  return b.Size() ? InsertTextAt(x, v, b) : 0;
+}
 
+template <class X> int TextGUI::Line::InsertTextAt(int x, const StringPieceT<X> &v, const Flow::TextAnnotation &attr) {
+  if (!v.size()) return 0;
+  DrawableBoxArray b;
+  b.attr.source = data->glyphs.attr.source;
+  EncodeText(&b, data->glyphs.Position(x).x, v, attr);
+  return b.Size() ? InsertTextAt(x, v, b) : 0;
+}
+
+template <class X> int TextGUI::Line::InsertTextAt(int x, const StringPieceT<X> &v, const DrawableBoxArray &b) {
+  int ret = b.Size();
   bool token_processing = parent->token_processing, append = x == Size();
   LineTokenProcessor update(token_processing ? this : 0, x, DrawableBoxRun(&b[0], ret), 0);
   if (token_processing) {
@@ -336,6 +346,10 @@ template int TextGUI::Line::UpdateText<char>      (int x, const StringPiece   &v
 template int TextGUI::Line::UpdateText<char16_t>  (int x, const String16Piece &v, int attr, int max_width, bool *append, int);
 template int TextGUI::Line::InsertTextAt<char>    (int x, const StringPiece   &v, int attr);
 template int TextGUI::Line::InsertTextAt<char16_t>(int x, const String16Piece &v, int attr);
+template int TextGUI::Line::InsertTextAt<char>    (int x, const StringPiece   &v, const Flow::TextAnnotation &attr);
+template int TextGUI::Line::InsertTextAt<char16_t>(int x, const String16Piece &v, const Flow::TextAnnotation &attr);
+template int TextGUI::Line::InsertTextAt<char>    (int x, const StringPiece   &v, const DrawableBoxArray &b);
+template int TextGUI::Line::InsertTextAt<char16_t>(int x, const String16Piece &v, const DrawableBoxArray &b);
 
 void TextGUI::Line::Layout(Box win, bool flush) {
   if (data->box.w == win.w && !flush) return;
@@ -479,11 +493,33 @@ TextGUI::LineUpdate::~LineUpdate() {
   else fb->Update(v);
 }
 
+const Drawable::Attr *TextGUI::GetAttr(int attr) const {
+  const Color *fg=0, *bg=0;
+  if (colors) {
+    bool italic = attr & Attr::Italic, bold = attr & Attr::Bold;
+    int fg_index = Attr::GetFGColorIndex(attr), bg_index = Attr::GetBGColorIndex(attr);
+    fg = &colors->c[italic ? colors->bg_index     : ((bold && fg_index == colors->normal_index) ? colors->bold_index : fg_index)];
+    bg = &colors->c[italic ? colors->normal_index : bg_index];
+    if (attr & Attr::Reverse) swap(fg, bg);
+  }
+  last_attr.font = Fonts::Change(font, font->size, *fg, *bg, font->flag);
+  last_attr.bg = bg; // &font->bg;
+  last_attr.underline = attr & Attr::Underline;
+  return &last_attr;
+}
+
 void TextGUI::Enter() {
   string cmd = String::ToUTF8(Text16());
   AssignInput("");
   if (!cmd.empty()) { AddHistory(cmd); Run(cmd); }
   if (deactivate_on_enter) active = false;
+}
+
+void TextGUI::SetColors(Colors *C) {
+  colors = C;
+  Attr::SetFGColorIndex(&default_attr, colors->normal_index);
+  Attr::SetBGColorIndex(&default_attr, colors->bg_index);
+  bg_color = &colors->c[colors->bg_index];
 }
 
 void TextGUI::UpdateCommandFB() {
@@ -667,6 +703,13 @@ void TextArea::UpdateVScrolled(int dist, bool up, int ind, int first_offset, int
   }
 }
 
+void TextArea::ChangeColors(Colors *C) {
+  SetColors(C);
+  if (bg_color) screen->gd->ClearColor(*bg_color);
+  // for (int i=1; i<=term_height; ++i) if (Line *L = GetTermLine(i)) L->Layout(L->data->box, true);
+  Redraw();
+}
+
 void TextArea::Draw(const Box &b, int flag, Shader *shader) {
   if (shader) {
     float scale = shader->scale;
@@ -780,30 +823,47 @@ string TextArea::CopyText(int beg_line_ind, int beg_char_ind, int end_line_ind, 
 /* Editor */
 
 #ifdef LFL_LIBCLANG
-static CXChildVisitResult EditorClangVisitor(CXCursor cursor, CXCursor parent, CXClientData client_data) {
-  CXFile file;
-  unsigned line, column, offset;
-  CXSourceLocation loc = clang_getCursorLocation(cursor);
-  clang_getFileLocation(loc, &file, &line, &column, &offset);
-  string filename = GetClangString(clang_getFileName(file));
-  Editor* editor = static_cast<Editor*>(client_data);
-  bool primary_file = StringEquals(editor->file->Filename(), filename);
-  if (!primary_file) return CXChildVisit_Continue;
+struct ClangTokenVisitor {
+  typedef function<void(int, int, int, int)> TokenCB;
+  File *file;
+  TokenCB cb;
+  ClangTokenVisitor(File *f, const TokenCB &c) : file(f), cb(c) {}
 
-  CXToken* tokens=0;
-  unsigned int num_tokens=0;
-  CXTranslationUnit tu = clang_Cursor_getTranslationUnit(cursor);
-  CXSourceRange range = clang_getCursorExtent(cursor);
-  clang_tokenize(tu, range, &tokens, &num_tokens);
-  for (int i=0; i<num_tokens-1; i++) {   
-    int tk = clang_getTokenKind(tokens[i]);
-    CXSourceLocation tl = clang_getTokenLocation(tu, tokens[i]);
-    string token = GetClangString(clang_getTokenSpelling(tu, tokens[i]));
-    clang_getFileLocation(tl, &file, &line, &column, &offset);
-    // printf("highlught line:%d column:%d token(%s) tokenkind(%d)\n", line, column, token.c_str(), tk);
+  void Visit() {
+    const char* args[] = { "-c", "-x", "c++" };
+    CXIndex index = clang_createIndex(0, 0);
+    CXTranslationUnit trans_unit = clang_parseTranslationUnit(index, file->Filename(), args, 3, 0, 0, CXTranslationUnit_None);
+    CXCursor start_cursor = clang_getTranslationUnitCursor(trans_unit);
+    clang_visitChildren(start_cursor, ClangCB, this);
+    clang_disposeTranslationUnit(trans_unit);
+    clang_disposeIndex(index);
   }
-  return CXChildVisit_Continue;
-}
+  CXChildVisitResult Accept(CXCursor cursor, CXCursor parent) {
+    CXFile cxfile;
+    unsigned line, column, offset;
+    CXSourceLocation loc = clang_getCursorLocation(cursor);
+    clang_getFileLocation(loc, &cxfile, &line, &column, &offset);
+    string filename = GetClangString(clang_getFileName(cxfile));
+    bool primary_file = StringEquals(file->Filename(), filename);
+    if (!primary_file) return CXChildVisit_Continue;
+
+    CXToken* tokens=0;
+    unsigned int num_tokens=0;
+    CXTranslationUnit tu = clang_Cursor_getTranslationUnit(cursor);
+    CXSourceRange range = clang_getCursorExtent(cursor);
+    clang_tokenize(tu, range, &tokens, &num_tokens);
+    for (int i=0; i<num_tokens-1; i++) {   
+      int tk = clang_getTokenKind(tokens[i]);
+      CXSourceLocation tl = clang_getTokenLocation(tu, tokens[i]);
+      clang_getFileLocation(tl, &cxfile, &line, &column, &offset);
+      cb(tk, offset, line, column);
+    }
+    return CXChildVisit_Continue;
+  }
+  static CXChildVisitResult ClangCB(CXCursor cursor, CXCursor parent, CXClientData client_data) {
+    return static_cast<ClangTokenVisitor*>(client_data)->Accept(cursor, parent);
+  }
+};
 #endif
 
 Editor::Editor(Window *W, Font *F, File *I, bool Wrap) : TextArea(W, F), file(I) {
@@ -811,15 +871,8 @@ Editor::Editor(Window *W, Font *F, File *I, bool Wrap) : TextArea(W, F), file(I)
   line_fb.wrap = Wrap;
   file_line.node_value_cb = &LineOffset::GetLines;
   file_line.node_print_cb = &LineOffset::GetString;
-#ifdef LFL_LIBCLANG
-  const char* args[] = { "-c", "-x", "c++" };
-  CXIndex index = clang_createIndex(0, 0);
-  CXTranslationUnit trans_unit = clang_parseTranslationUnit(index, I->Filename(), args, 3, 0, 0, CXTranslationUnit_None);
-  CXCursor start_cursor = clang_getTranslationUnitCursor(trans_unit);
-  clang_visitChildren(start_cursor, EditorClangVisitor, this);
-  clang_disposeTranslationUnit(trans_unit);
-  clang_disposeIndex(index);
-#endif
+  for (int i=0; i<line.ring.size; i++) line[i].data->glyphs.attr.source = this;
+  SetColors(Singleton<SolarizedLightColors>::Get());
 }
 
 void Editor::UpdateWrappedLines(int cur_font_size, int width) {
@@ -836,10 +889,32 @@ void Editor::UpdateWrappedLines(int cur_font_size, int width) {
 
 int Editor::UpdateLines(float v_scrolled, int *first_ind, int *first_offset, int *first_len) {
   LinesFrameBuffer *fb = GetFrameBuffer();
-  bool width_changed = last_fb_width != fb->w, wrap = Wrap();
+  bool width_changed = last_fb_width != fb->w, wrap = Wrap(), init = !wrapped_lines;
   if (width_changed) {
     last_fb_width = fb->w;
-    if (wrap || !wrapped_lines) UpdateWrappedLines(TextArea::font->size, fb->w);
+    if (wrap || init) UpdateWrappedLines(TextArea::font->size, fb->w);
+#ifdef LFL_LIBCLANG
+    if (init) {
+      LineOffset *lo=0;
+      auto i = file_line.Begin();
+      int i_ind=1, last_line=-1, last_column=-1;
+      ClangTokenVisitor(file.get(), ClangTokenVisitor::TokenCB([&](int kind, int offset, int line, int column) {
+        // printf("highlight kind:%d offset:%d line:%d column:%d\n", kind, offset, line, column);
+        CHECK_LE(last_line, line);
+        if (line != last_line) {
+          last_column = -1;
+          for (; i.ind && i_ind < line; ++i_ind) ++i;
+          (lo = i.val)->annotation.offset = annotation.size();
+        }
+        // CHECK_LT(last_column, column);
+        if (last_column >= column) return;
+        annotation.emplace_back(column-1, kind+3);
+        lo->annotation.len++;
+        last_column = column;
+        last_line = line;
+      })).Visit();
+    }
+#endif
   }
 
   bool resized = (width_changed && wrap) || last_fb_lines != fb->lines;
@@ -897,12 +972,14 @@ int Editor::UpdateLines(float v_scrolled, int *first_ind, int *first_offset, int
   Line *L = 0;
   if (up) for (LineMap::ConstIterator li = lie; li != lib; bo += l + (L != 0), added++) {
     l = (e = -min(0, (--li).val->size)) ? 0 : li.val->size;
-    (L = line.PushBack())->AssignText(e ? edits[e-1] : StringPiece(buf.data() + read_len - bo - l, l));
+    (L = line.PushBack())->AssignText(e ? edits[e-1] : StringPiece(buf.data() + read_len - bo - l, l),
+                                      Flow::TextAnnotation(annotation.data(), e ? PieceIndex() : li.val->annotation));
     fb_wrapped_lines += L->Layout(fb->w);
   }
   else for (LineMap::ConstIterator li = lib; li != lie; ++li, bo += l+1, added++) {
     l = (e = -min(0, li.val->size)) ? 0 : li.val->size;
-    (L = line.PushFront())->AssignText(e ? edits[e-1] : StringPiece(buf.data() + bo, l));
+    (L = line.PushFront())->AssignText(e ? edits[e-1] : StringPiece(buf.data() + bo, l),
+                                       Flow::TextAnnotation(annotation.data(), e ? PieceIndex() : li.val->annotation));
     fb_wrapped_lines += L->Layout(fb->w);
   }
   if (!up) for (int i=0; i<past_end_lines; i++, added++) { 
@@ -943,29 +1020,43 @@ int Editor::UpdateLines(float v_scrolled, int *first_ind, int *first_offset, int
 #endif
 
 Terminal::StandardVGAColors::StandardVGAColors() { 
-  c[0] = Color(  0,   0,   0); c[ 8] = Color( 85,  85,  85);
-  c[1] = Color(170,   0,   0); c[ 9] = Color(255,  85,  85);
-  c[2] = Color(  0, 170,   0); c[10] = Color( 85, 255,  85);
-  c[3] = Color(170,  85,   0); c[11] = Color(255, 255,  85);
-  c[4] = Color(  0,   0, 170); c[12] = Color( 85,  85, 255);
-  c[5] = Color(170,   0, 170); c[13] = Color(255,  85, 255);
-  c[6] = Color(  0, 170, 170); c[14] = Color( 85, 255, 255);
-  c[7] = Color(170, 170, 170); c[15] = Color(255, 255, 255);
+  c[0] = Color(  0,   0,   0);  c[ 8] = Color( 85,  85,  85);
+  c[1] = Color(170,   0,   0);  c[ 9] = Color(255,  85,  85);
+  c[2] = Color(  0, 170,   0);  c[10] = Color( 85, 255,  85);
+  c[3] = Color(170,  85,   0);  c[11] = Color(255, 255,  85);
+  c[4] = Color(  0,   0, 170);  c[12] = Color( 85,  85, 255);
+  c[5] = Color(170,   0, 170);  c[13] = Color(255,  85, 255);
+  c[6] = Color(  0, 170, 170);  c[14] = Color( 85, 255, 255);
+  c[7] = Color(170, 170, 170);  c[15] = Color(255, 255, 255);
   c[normal_index] = c[7];
   c[bold_index]   = c[15];
   c[bg_index]     = c[0];
 }
 
 /// Solarized palette by Ethan Schoonover
-Terminal::SolarizedColors::SolarizedColors() { 
-  c[0] = Color(  7,  54,  66); c[ 8] = Color(  0,  43,  54);
-  c[1] = Color(220,  50,  47); c[ 9] = Color(203,  75,  22);
-  c[2] = Color(133, 153,   0); c[10] = Color( 88, 110, 117);
-  c[3] = Color(181, 137,   0); c[11] = Color(101, 123, 131);
-  c[4] = Color( 38, 139, 210); c[12] = Color(131, 148, 150);
-  c[5] = Color(211,  54, 130); c[13] = Color(108, 113, 196);
-  c[6] = Color( 42, 161, 152); c[14] = Color(147, 161, 161);
-  c[7] = Color(238, 232, 213); c[15] = Color(253, 246, 227);
+Terminal::SolarizedDarkColors::SolarizedDarkColors() { 
+  c[0] = Color(  7,  54,  66); /*base02*/   c[ 8] = Color(  0,  43,  54); /*base03*/
+  c[1] = Color(220,  50,  47); /*red*/      c[ 9] = Color(203,  75,  22); /*orange*/
+  c[2] = Color(133, 153,   0); /*green*/    c[10] = Color( 88, 110, 117); /*base01*/
+  c[3] = Color(181, 137,   0); /*yellow*/   c[11] = Color(101, 123, 131); /*base00*/
+  c[4] = Color( 38, 139, 210); /*blue*/     c[12] = Color(131, 148, 150); /*base0*/
+  c[5] = Color(211,  54, 130); /*magenta*/  c[13] = Color(108, 113, 196); /*violet*/
+  c[6] = Color( 42, 161, 152); /*cyan*/     c[14] = Color(147, 161, 161); /*base1*/
+  c[7] = Color(238, 232, 213); /*base2*/    c[15] = Color(253, 246, 227); /*base3*/
+  c[normal_index] = c[12];
+  c[bold_index]   = c[14];
+  c[bg_index]     = c[8];
+}
+
+Terminal::SolarizedLightColors::SolarizedLightColors() { 
+  c[0] = Color(238, 232, 213); /*base2*/    c[ 8] = Color(253, 246, 227); /*base3*/
+  c[1] = Color(220,  50,  47); /*red*/      c[ 9] = Color(203,  75,  22); /*orange*/
+  c[2] = Color(133, 153,   0); /*green*/    c[10] = Color(147, 161, 161); /*base1*/
+  c[3] = Color(181, 137,   0); /*yellow*/   c[11] = Color(131, 148, 150); /*base0*/
+  c[4] = Color( 38, 139, 210); /*blue*/     c[12] = Color(101, 123, 131); /*base00*/
+  c[5] = Color(211,  54, 130); /*magenta*/  c[13] = Color(108, 113, 196); /*violet*/
+  c[6] = Color( 42, 161, 152); /*cyan*/     c[14] = Color( 88, 110, 117); /*base01*/
+  c[7] = Color(  7,  54,  66); /*base02*/   c[15] = Color(  0,  43,  54); /*base03*/
   c[normal_index] = c[12];
   c[bold_index]   = c[14];
   c[bg_index]     = c[8];
@@ -975,8 +1066,8 @@ Terminal::Terminal(ByteSink *O, Window *W, Font *F) : TextArea(W, F), sink(O), f
   CHECK(F->fixed_width || (F->flag & FontDesc::Mono));
   wrap_lines = write_newline = insert_mode = 0;
   for (int i=0; i<line.ring.size; i++) line[i].data->glyphs.attr.source = this;
-  SetColors(Singleton<SolarizedColors>::Get());
-  cursor.attr = default_cursor_attr;
+  SetColors(Singleton<SolarizedDarkColors>::Get());
+  cursor.attr = default_attr;
   cursor.type = Cursor::Block;
   token_processing = 1;
   cmd_prefix = "";
@@ -1054,20 +1145,6 @@ void Terminal::SetDimension(int w, int h) {
   if (!line.Size()) TextArea::Write(string(term_height, '\n'), 0);
 }
 
-void Terminal::SetColors(Colors *C) {
-  colors = C;
-  Attr::SetFGColorIndex(&default_cursor_attr, colors->normal_index);
-  Attr::SetBGColorIndex(&default_cursor_attr, colors->bg_index);
-  bg_color = &colors->c[colors->bg_index];
-}
-
-void Terminal::ChangeColors(Colors *C) {
-  SetColors(C);
-  if (bg_color) screen->gd->ClearColor(*bg_color);
-  for (int i=1; i<=term_height; ++i) if (Line *L = GetTermLine(i)) L->Layout(L->data->box, true);
-  Redraw();
-}
-
 Border *Terminal::UpdateClipBorder() {
   int font_height = font->Height();
   clip_border.top    = font_height * skip_last_lines;
@@ -1119,21 +1196,6 @@ void Terminal::UpdateToken(Line *L, int word_offset, int word_len, int update_ty
                     CopyText(in_line_ind-1, 0, end_line_ind, end_offset, 0), update_type * -11);
 
   if (update_type > 0) UpdateLongToken(BL, beg_offset, EL, end_offset, text, update_type);
-}
-
-const Drawable::Attr *Terminal::GetAttr(int attr) const {
-  Color *fg=0, *bg=0;
-  if (colors) {
-    bool italic = attr & Attr::Italic, bold = attr & Attr::Bold;
-    int fg_index = Attr::GetFGColorIndex(attr), bg_index = Attr::GetBGColorIndex(attr);
-    fg = &colors->c[italic ? colors->bg_index     : ((bold && fg_index == colors->normal_index) ? colors->bold_index : fg_index)];
-    bg = &colors->c[italic ? colors->normal_index : bg_index];
-    if (attr & Attr::Reverse) swap(fg, bg);
-  }
-  last_attr.font = Fonts::Change(font, font->size, *fg, *bg, font->flag);
-  last_attr.bg = bg; // &font->bg;
-  last_attr.underline = attr & Attr::Underline;
-  return &last_attr;
 }
 
 void Terminal::Draw(const Box &b, int flag, Shader *shader) {
@@ -1295,7 +1357,7 @@ void Terminal::Write(const StringPiece &s, bool update_fb, bool release_fb) {
           if      (sgr >= 30 && sgr <= 37) Attr::SetFGColorIndex(&cursor.attr, sgr-30);
           else if (sgr >= 40 && sgr <= 47) Attr::SetBGColorIndex(&cursor.attr, sgr-40);
           else switch(sgr) {
-            case 0:         cursor.attr  =  default_cursor_attr;                       break;
+            case 0:         cursor.attr  =  default_attr;                              break;
             case 1:         cursor.attr |=  Attr::Bold;                                break;
             case 3:         cursor.attr |=  Attr::Italic;                              break;
             case 4:         cursor.attr |=  Attr::Underline;                           break;
