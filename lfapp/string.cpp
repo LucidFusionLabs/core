@@ -33,7 +33,7 @@ extern "C" {
 #endif
 };
 
-#define StringPrintfImpl(ret, fmt, vsprintf, buftype, offset) \
+#define StringPrintfImpl(ret, fmt, vsprintf, offset) \
     (ret)->resize(offset + 4096); \
     va_list ap, ap2; \
     va_start(ap, fmt); \
@@ -44,7 +44,7 @@ extern "C" {
             va_copy(ap, ap2); \
             (ret)->resize((ret)->size() * 2); \
         } \
-        len = vsprintf((buftype*)((ret)->data() + offset), (ret)->size(), fmt, ap); \
+        len = vsprintf(&(*ret)[0] + offset, (ret)->size(), fmt, ap); \
         va_end(ap); \
     } \
     va_end(ap2); \
@@ -52,7 +52,7 @@ extern "C" {
 
 extern "C" void LFAppLog(int level, const char *file, int line, const char *fmt, ...) {
     string message;
-    StringPrintfImpl(&message, fmt, vsnprintf, char, 0);
+    StringPrintfImpl(&message, fmt, vsnprintf, 0);
     LFL::app->Log(level, file, line, message);
 }
 
@@ -207,31 +207,31 @@ int sprint(char *out, int len, const char *fmt, ...) {
 
 void StringAppendf(string *out, const char *fmt, ...) {
     int offset = out->size();
-    StringPrintfImpl(out, fmt, vsnprintf, char, offset);
+    StringPrintfImpl(out, fmt, vsnprintf, offset);
 }
 void StringAppendf(String16 *uc_out, const char *fmt, ...) {
     string outs, *out = &outs;
-    StringPrintfImpl(out, fmt, vsnprintf, char, 0);
+    StringPrintfImpl(out, fmt, vsnprintf, 0);
     String::Append(outs, uc_out);
 }
 
 string StringPrintf(const char *fmt, ...) {
     string ret;
-    StringPrintfImpl(&ret, fmt, vsnprintf, char, 0);
-    return ret;
-}
-string WStringPrintf(const wchar_t *fmt, ...) {
-    string ret;
-    StringPrintfImpl(&ret, fmt, vswprintf, wchar_t, 0);
+    StringPrintfImpl(&ret, fmt, vsnprintf, 0);
     return ret;
 }
 String16 String16Printf(const char *fmt, ...) {
     string ret;
-    StringPrintfImpl(&ret, fmt, vsnprintf, char, 0);
+    StringPrintfImpl(&ret, fmt, vsnprintf, 0);
     return String::ToUTF16(ret);
 }
+basic_string<wchar_t> WStringPrintf(const wchar_t *fmt, ...) {
+    basic_string<wchar_t> ret;
+    StringPrintfImpl(&ret, fmt, vswprintf, 0);
+    return ret;
+}
 
-#define StrCatInit(s) string out; out.resize(s); Serializable::MutableStream o((char*)out.data(), out.size());
+#define StrCatInit(s) string out; out.resize(s); Serializable::MutableStream o(&out[0], out.size());
 #define StrCatAdd(x) memcpy(o.Get(x.size()), x.data(), x.size())
 #define StrCatReturn() CHECK_EQ(o.error, 0); return out;
 string StrCat(const Printable &x1, const Printable &x2) { StrCatInit(x1.size()+x2.size()); StrCatAdd(x1); StrCatAdd(x2); StrCatReturn(); }
@@ -249,7 +249,7 @@ string StrCat(const Printable &x1, const Printable &x2, const Printable &x3, con
 string StrCat(const Printable &x1, const Printable &x2, const Printable &x3, const Printable &x4, const Printable &x5, const Printable &x6, const Printable &x7, const Printable &x8, const Printable &x9, const Printable &x10, const Printable &x11, const Printable &x12, const Printable &x13, const Printable &x14) { StrCatInit(x1.size()+x2.size()+x3.size()+x4.size()+x5.size()+x6.size()+x7.size()+x8.size()+x9.size()+x10.size()+x11.size()+x12.size()+x13.size()+x14.size()); StrCatAdd(x1); StrCatAdd(x2); StrCatAdd(x3); StrCatAdd(x4); StrCatAdd(x5); StrCatAdd(x6); StrCatAdd(x7); StrCatAdd(x8); StrCatAdd(x9); StrCatAdd(x10); StrCatAdd(x11); StrCatAdd(x12); StrCatAdd(x13); StrCatAdd(x14); StrCatReturn(); }
 string StrCat(const Printable &x1, const Printable &x2, const Printable &x3, const Printable &x4, const Printable &x5, const Printable &x6, const Printable &x7, const Printable &x8, const Printable &x9, const Printable &x10, const Printable &x11, const Printable &x12, const Printable &x13, const Printable &x14, const Printable &x15) { StrCatInit(x1.size()+x2.size()+x3.size()+x4.size()+x5.size()+x6.size()+x7.size()+x8.size()+x9.size()+x10.size()+x11.size()+x12.size()+x13.size()+x14.size()+x15.size()); StrCatAdd(x1); StrCatAdd(x2); StrCatAdd(x3); StrCatAdd(x4); StrCatAdd(x5); StrCatAdd(x6); StrCatAdd(x7); StrCatAdd(x8); StrCatAdd(x9); StrCatAdd(x10); StrCatAdd(x11); StrCatAdd(x12); StrCatAdd(x13); StrCatAdd(x14); StrCatAdd(x15); StrCatReturn(); }
 
-#define StrAppendInit(s); out->resize(out->size()+(s)); Serializable::MutableStream o((char*)out->data()+out->size()-(s), (s));
+#define StrAppendInit(s); out->resize(out->size()+(s)); Serializable::MutableStream o(&(*out)[0]+out->size()-(s), (s));
 #define StrAppendReturn() CHECK_EQ(o.error, 0)
 void StrAppend(string *out, const Printable &x1) { (*out) += x1; }
 void StrAppend(string *out, const Printable &x1, const Printable &x2) { StrAppendInit(x1.size()+x2.size()); StrCatAdd(x1); StrCatAdd(x2); StrAppendReturn(); }

@@ -975,8 +975,8 @@ struct BerkeliumBrowser : public BrowserInterface, public Berkelium::WindowDeleg
   void MouseButton(int b, bool down) {
     if (b == BIND_MOUSE1 && down) {
       int click_x = screen->mouse.x/screen->width*W, click_y = (screen->height - screen->mouse.y)/screen->height*H;
-      string js = WStringPrintf(L"lfapp_browser_click(document.elementFromPoint(%d, %d).innerHTML)", click_x, click_y);
-      window->executeJavascript(Berkelium::WideString::point_to((wchar_t *)js.c_str(), js.size()));
+      basic_string<wchar_t> js = WStringPrintf(L"lfapp_browser_click(document.elementFromPoint(%d, %d).innerHTML)", click_x, click_y);
+      window->executeJavascript(Berkelium::WideString::point_to(js.data(), js.size()));
     }
     window->mouseButton(b == BIND_MOUSE1 ? 0 : 1, down);
   }

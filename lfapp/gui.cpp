@@ -50,8 +50,6 @@ Window::Window() : caption("lfapp"), fps(128) {
   id = gl = surface = glew_context = impl = user1 = user2 = user3 = 0;
   minimized = cursor_grabbed = frame_init = 0;
   target_fps = FLAGS_target_fps;
-  opengles_version = 1;
-  opengles_cubemap = 0;
   pow2_width = NextPowerOfTwo((width = 640));
   pow2_height = NextPowerOfTwo((height = 480));
   multitouch_keyboard_x = .93; 
@@ -853,10 +851,8 @@ struct ClangTokenVisitor {
     CXSourceRange range = clang_getCursorExtent(cursor);
     clang_tokenize(tu, range, &tokens, &num_tokens);
     for (int i=0; i<num_tokens-1; i++) {   
-      int tk = clang_getTokenKind(tokens[i]);
-      CXSourceLocation tl = clang_getTokenLocation(tu, tokens[i]);
-      clang_getFileLocation(tl, &cxfile, &line, &column, &offset);
-      cb(tk, offset, line, column);
+      clang_getFileLocation(clang_getTokenLocation(tu, tokens[i]), &cxfile, &line, &column, &offset);
+      cb(clang_getTokenKind(tokens[i]), offset, line, column);
     }
     return CXChildVisit_Continue;
   }
@@ -908,7 +904,16 @@ int Editor::UpdateLines(float v_scrolled, int *first_ind, int *first_offset, int
         }
         // CHECK_LT(last_column, column);
         if (last_column >= column) return;
-        annotation.emplace_back(column-1, kind+3);
+        int c = colors->normal_index;
+        switch (kind) {
+          case CXToken_Punctuation:         break;
+          case CXToken_Keyword:     c = 4;  break;
+          case CXToken_Identifier:  c = 13; break;
+          case CXToken_Literal:     c = 4;  break;
+          case CXToken_Comment:     c = 5;  break;
+          default:                  ERROR("unknown token kind ", kind); break;
+        }
+        annotation.emplace_back(column-1, c);
         lo->annotation.len++;
         last_column = column;
         last_line = line;
@@ -1297,11 +1302,10 @@ void Terminal::Write(const StringPiece &s, bool update_fb, bool release_fb) {
                                       Clamp(parse_csi_argv[0], 1, term_height)); break;
         case 'Z': TabPrev(parse_csi_argv[0]); break;
         case 'J': {
-          LineUpdate l(GetCursorLine(), fb_cb);
           int clear_beg_y = 1, clear_end_y = term_height;
-          if      (parse_csi_argv[0] == 0) { l->Erase(term_cursor.x-1);  clear_beg_y = term_cursor.y; }
-          else if (parse_csi_argv[0] == 1) { l->Erase(0, term_cursor.x); clear_end_y = term_cursor.y; }
-          else if (parse_csi_argv[0] == 2) { Clear(); term_cursor.x = term_cursor.y = 1; break; }
+          if      (parse_csi_argv[0] == 0) { LineUpdate(GetCursorLine(), fb_cb)->Erase(term_cursor.x-1);  clear_beg_y = term_cursor.y; }
+          else if (parse_csi_argv[0] == 1) { LineUpdate(GetCursorLine(), fb_cb)->Erase(0, term_cursor.x); clear_end_y = term_cursor.y; }
+          else if (parse_csi_argv[0] == 2) { Clear(); break; }
           for (int i = clear_beg_y; i <= clear_end_y; i++) LineUpdate(GetTermLine(i), fb_cb)->Clear();
         } break;
         case 'K': {
@@ -1482,6 +1486,7 @@ void Terminal::Redraw(bool attach) {
 
 void Terminal::Reset() {
   term_cursor.x = term_cursor.y = 1;
+  scroll_region_beg = scroll_region_end = 0;
   clip = 0;
   Clear();
 }

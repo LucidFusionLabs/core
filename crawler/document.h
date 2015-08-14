@@ -175,8 +175,10 @@ struct DocumentParser {
             Parser::Complete(this);
         }
         void LoadResourceComplete(const MultiProcessResource::Texture &tex) {
-            if (tex.width && tex.height)
+            if (tex.width && tex.height) {
                 target->LoadGL(reinterpret_cast<const unsigned char *>(tex.buf.data()), point(tex.width, tex.height), tex.pf, tex.linesize);
+                target->owner = true;
+            }
             Parser::Complete(this);
         }
     };

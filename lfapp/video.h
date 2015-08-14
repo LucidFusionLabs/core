@@ -367,15 +367,15 @@ typedef ArrayMemberSegmentIter    <DrawableBox, int, &DrawableBox::attr_id>     
 struct Texture : public Drawable {
     static const int preferred_pf;
     unsigned ID;
-    int width, height, pf, cubemap;
     unsigned char *buf;
-    bool buf_owner;
+    bool owner, buf_owner;
+    int width, height, pf, cubemap;
     float coord[4];
 
-    Texture(int w=0, int h=0, int PF=preferred_pf, unsigned id=0) : ID(id), width(w), height(h), cubemap(0), pf(PF), buf(0), buf_owner(1) { Coordinates(coord,1,1,1,1); }
-    Texture(int w,   int h,   int PF,           unsigned char *B) : ID(0),  width(w), height(h), cubemap(0), pf(PF), buf(B), buf_owner(0) { Coordinates(coord,1,1,1,1); }
-    Texture(const Texture &t) : ID(t.ID), width(t.width), height(t.height), pf(t.pf), cubemap(t.cubemap), buf(t.buf), buf_owner(buf?0:1) { memcpy(&coord, t.coord, sizeof(coord)); }
-    virtual ~Texture() { ClearBuffer(); }
+    Texture(int w=0, int h=0, int PF=preferred_pf, unsigned id=0) : ID(id), buf(0), owner(0), buf_owner(1), width(w), height(h), pf(PF), cubemap(0) { Coordinates(coord,1,1,1,1); }
+    Texture(int w,   int h,   int PF,           unsigned char *B) : ID(0),  buf(B), owner(0), buf_owner(0), width(w), height(h), pf(PF), cubemap(0) { Coordinates(coord,1,1,1,1); }
+    Texture(const Texture &t) : ID(t.ID), buf(t.buf), owner(0), buf_owner(buf?0:1), width(t.width), height(t.height), pf(t.pf), cubemap(t.cubemap) { memcpy(&coord, t.coord, sizeof(coord)); }
+    virtual ~Texture() { ClearBuffer(); if (owner) ClearGL(); }
 
     void Bind() const;
     string DebugString() const { return StrCat("Texture(", width, ", ", height, ", ", Pixel::Name(pf), ")"); }
@@ -387,6 +387,8 @@ struct Texture : public Drawable {
     int GLPixelType() const { return Pixel::OpenGLID(pf); }
     int GLTexType() const { return CubeMap::OpenGLID(cubemap); }
     int GLBufferType() const;
+
+    /// ClearGL() is thread-safe.
     void ClearGL();
     void RenewGL() { ClearGL(); Create(width, height); }
     void ClearBuffer() { if (buf_owner) delete [] buf; buf = 0; buf_owner = 1; }
@@ -504,8 +506,9 @@ struct Shader {
 
 struct Video : public Module {
     Shader shader_default, shader_normals, shader_cubemap, shader_cubenorm;
+    int opengles_version = 2;
+    bool opengl_framebuffer = 1, opengles_cubemap = 1;
     const Color *splash_color = &Color::black;
-    bool opengl_framebuffer = 1;
     Module *impl = 0;
 
     int Init();
@@ -674,6 +677,7 @@ struct GraphicsDevice : public QOpenGLFunctions {
     void LineWidth(float n);
     void GenTextures(int t, int n, unsigned *out);
     void DelTextures(int n, const unsigned *id);
+    void DelTexture(unsigned id) { DelTextures(1, &id); }
     void CheckForError(const char *file, int line);
     void EnableDepthTest();
     void DisableDepthTest();

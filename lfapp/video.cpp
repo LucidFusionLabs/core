@@ -191,12 +191,6 @@ Color Color::grey20(.2, .2, .2);
 Color Color::grey10(.1, .1, .1);
 Color Color::clear(0.0, 0.0, 0.0, 0.0);
 
-#ifdef LFL_GLES2
-DEFINE_int(request_gles_version, 2, "OpenGLES version");
-#else
-DEFINE_int(request_gles_version, 1, "OpenGLES version");
-#endif
-
 DEFINE_bool(gd_debug, false, "Debug graphics device");
 DEFINE_float(rotate_view, 0, "Rotate view by angle");
 DEFINE_float(field_of_view, 45, "Field of view");
@@ -823,7 +817,7 @@ void GraphicsDevice::CheckForError(const char *file, int line) {
     ERROR(file, ":", line, " gl error: ", gl_error);
     BreakHook();
 #ifdef LFL_GLES2
-    if (screen->opengles_version == 2) {
+    if (app->video.opengles_version == 2) {
       Shader *shader = ((OpenGLES2*)screen->gd)->shader;
       glValidateProgram(shader->ID);
       glGetProgramiv(shader->ID, GL_VALIDATE_STATUS, &gl_validate_status);
@@ -1073,7 +1067,7 @@ static void *android_screen_id = (void*)0x900df00d;
 struct AndroidVideoModule : public Module {
   int Init() {
     INFO("AndroidVideoModule::Init()");
-    if (AndroidVideoInit(FLAGS_request_gles_version)) return -1;
+    if (AndroidVideoInit(app->video.opengles_version)) return -1;
     CHECK(!screen->id);
     screen->id = android_screen_id;
     Window::active[screen->id] = screen;
@@ -1578,14 +1572,14 @@ int Video::Init() {
 #endif
   INFO("GL_EXTENSIONS: ", glexts);
 
-  screen->opengles_version = 1 + (glslver != NULL);
+  opengles_version = 1 + (glslver != NULL);
 #if defined(LFL_ANDROID) || defined(LFL_IPHONE)
-  screen->opengles_cubemap = strstr(glexts, "GL_EXT_texture_cube_map") != 0;
+  opengles_cubemap = strstr(glexts, "GL_EXT_texture_cube_map") != 0;
 #else
-  screen->opengles_cubemap = strstr(glexts, "GL_ARB_texture_cube_map") != 0;
+  opengles_cubemap = strstr(glexts, "GL_ARB_texture_cube_map") != 0;
 #endif
-  INFO("lfapp_opengles_cubemap = ", screen->opengles_cubemap ? "true" : "false");
-  INFO("screen->opengles_version = ", screen->opengles_version);
+  INFO("lfapp_opengles_cubemap = ", opengles_cubemap ? "true" : "false");
+  INFO("screen->opengles_version = ", opengles_version);
 
   if (!screen->gd) CreateGraphicsDevice(screen);
   InitGraphicsDevice(screen);
@@ -1632,7 +1626,7 @@ void Video::CreateGraphicsDevice(Window *W) {
   CHECK(!W->gd);
 #if !defined(LFL_HEADLESS) && !defined(LFL_QT)
 #ifdef LFL_GLES2
-  if (W->opengles_version == 2) W->gd = new OpenGLES2();
+  if (app->video.opengles_version == 2) W->gd = new OpenGLES2();
   else
 #endif
     W->gd = new OpenGLES1();
@@ -1652,7 +1646,7 @@ void Video::InitGraphicsDevice(Window *W) {
   W->gd->Light(0, GraphicsDevice::Specular, white);
   W->gd->Material(GraphicsDevice::Emission, black);
   W->gd->Material(GraphicsDevice::Specular, grey20);
-  INFO("opengl_init: width=", W->width, ", height=", W->height, ", opengles_version: ", W->opengles_version);
+  INFO("opengl_init: width=", W->width, ", height=", W->height, ", opengles_version: ", app->video.opengles_version);
 }
 
 void Video::InitFonts() {
@@ -2296,7 +2290,10 @@ void Texture::UpdateBuffer(const unsigned char *B, const ::LFL::Box &box, int PF
 }
 
 void Texture::Bind() const { screen->gd->BindTexture(GLTexType(), ID); }
-void Texture::ClearGL() { if (ID) screen->gd->DelTextures(1, &ID); ID=0; }
+void Texture::ClearGL() { 
+  if (!MainThread()) { RunInMainThread(new Callback(bind(&GraphicsDevice::DelTexture, screen->gd, ID))); ID=0; }
+  else if (ID) { screen->gd->DelTexture(ID); ID=0; }
+}
 
 void Texture::LoadGL(const unsigned char *B, const point &dim, int PF, int linesize, int flag) {
   Texture temp;
@@ -2467,7 +2464,7 @@ int Shader::Create(const string &name, const string &vertex_shader, const string
     "#define highp\r\n"
     "#endif\r\n";
 #ifdef LFL_GLES2
-  if (screen->opengles_version == 2) hdr += "#define LFL_GLES2\r\n";
+  if (app->video.opengles_version == 2) hdr += "#define LFL_GLES2\r\n";
 #endif
   hdr += defines.text + string("\r\n");
 

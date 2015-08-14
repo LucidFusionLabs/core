@@ -347,8 +347,8 @@ inline int    atoi(const string &v) { return ::atoi(v.c_str()); }
 unsigned           fnv32(const void *buf, unsigned len=0, unsigned           hval=0);
 unsigned long long fnv64(const void *buf, unsigned len=0, unsigned long long hval=0);
 
-string WStringPrintf(const wchar_t *fmt, ...);
 String16 String16Printf(const char *fmt, ...);
+basic_string<wchar_t> WStringPrintf(const wchar_t *fmt, ...);
 void StringAppendf(string *out, const char *fmt, ...);
 void StringAppendf(String16 *out, const char *fmt, ...);
 int sprint(char *out, int len, const char *fmt, ...);
