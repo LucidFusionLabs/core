@@ -371,10 +371,15 @@ template <typename K, typename V> struct SortedArrayMap : public vector<pair<K, 
     SortedArrayMap(int n = 0, const pair<K, V> &x = pair<K, V>()) : vector<pair<K, V>>(n, x) { sort(this->begin(), this->end(), Compare()); }
 
     iter       Erase(const K& k) { return this->erase(Find(k)); }
-    iter       Insert(const K& k, const V &v) { return this->insert(LowerBound(k), pair<K, V>(k, v)); }
-    iter       LowerBound(const K& k) { return lower_bound(this->begin(), this->end(), pair<K, V>(k, V()), Compare()); }
     iter       Find(const K& k) { return find(this->begin(), this->end(), pair<K, V>(k, V()), Compare()); }
     const_iter Find(const K& k) const { return find(this->begin(), this->end(), pair<K, V>(k, V()), Compare()); }
+    iter       LowerBound(const K& k) { return lower_bound(this->begin(), this->end(), pair<K, V>(k, V()), Compare()); }
+    iter       Insert(const K& k, const V &v) { return this->insert(LowerBound(k), pair<K, V>(k, v)); }
+    iter       InsertOrUpdate(const K& k, const V &v) {
+      auto i = LowerBound(k); 
+      if (i != this->end() && i->first == k) { i->second = v; return i; }
+      else return this->insert(i, pair<K, V>(k, v));
+    }
 };
 
 template <typename X> struct ArraySegmentIter {

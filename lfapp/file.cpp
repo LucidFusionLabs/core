@@ -32,6 +32,10 @@
 #include "libarchive/archive_entry.h"
 #endif
 
+#ifdef LFL_JSONCPP
+#include "json/json.h"
+#endif
+
 namespace LFL {
 string File::Contents() {
     if (!Opened()) return "";
@@ -824,6 +828,19 @@ void GraphVizFile::AppendEdge(string *out, const string &n1, const string &n2, c
     StrAppend(out, "\"", n1, "\" -> \"", n2, "\"",
               (label.size() ? StrCat(" [ label = \"", label, "\" ] ") : ""),
               ";\r\n");
+}
+
+void IDE::Project::LoadCMakeCompileCommandsJSON(File *f) {
+    if (!f || !f->Opened()) return;
+#ifdef LFL_JSONCPP
+    Json::Value root;
+    Json::Reader reader;
+    CHECK(reader.parse(f->Contents(), root, false));
+    for (int i=0, l=root.size(); i<l; ++i) {
+      const Json::Value &f = root[i];
+      build_rules[f["file"].asString()] = { f["directory"].asString(), f["command"].asString() };
+    }
+#endif
 }
 
 }; // namespace LFL

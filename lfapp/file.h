@@ -36,7 +36,7 @@ struct FileSuffix {
 
 struct File {
     virtual ~File() {}
-    virtual bool Opened() = 0;
+    virtual bool Opened() const = 0;
     virtual void Close() = 0;
     virtual bool Open(const string &path, const string &mode, bool pre_create=0) = 0;
     virtual const char *Filename() const = 0;
@@ -85,7 +85,7 @@ struct BufferFile : public File {
     BufferFile(const StringPiece &s, const char *FN=0) : ptr(s), fn(FN?FN:""), rdo(0), wro(0), owner(0) {}
     ~BufferFile() { Close(); }
 
-    bool Opened() { return true; }
+    bool Opened() const { return true; }
     bool Open(const string &path, const string &mode, bool pre_create=0) { return false; }
     const char *Filename() const { return fn.c_str(); }
     int Size() { return owner ? buf.size() : ptr.len; }
@@ -117,7 +117,7 @@ struct LocalFile : public File {
         return file.Opened() ? file.Write(sp.data(), sp.size()) : -1;
     }
 
-    bool Opened() { return impl; }
+    bool Opened() const { return impl; }
     bool Open(const string &path, const string &mode, bool pre_create=0);
     const char *Filename() const { return fn.c_str(); }
     int Size();
@@ -220,7 +220,7 @@ struct ProtoFile {
     File *file; int read_offset, write_offset; bool done;
     ProtoFile(const char *fn=0) : file(0) { Open(fn); }
     ~ProtoFile() { delete file; }
-    bool Opened() { return file && file->Opened(); }
+    bool Opened() const { return file && file->Opened(); }
     void Open(const char *fn);
     int Add(const Proto *msg, int status);
     bool Update(int offset, const ProtoHeader *ph, const Proto *msg);
@@ -438,6 +438,14 @@ struct GraphVizFile {
     static string Footer();
     static void AppendNode(string *out, const string &n1, const string &label=string());
     static void AppendEdge(string *out, const string &n1, const string &n2, const string &label=string());
+};
+
+struct IDE {
+  struct Project {
+    struct BuildRule { string dir, cmd; };
+    unordered_map<string, BuildRule> build_rules;
+    void LoadCMakeCompileCommandsJSON(File*);
+  };
 };
 
 }; // namespace LFL

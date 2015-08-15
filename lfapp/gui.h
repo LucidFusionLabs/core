@@ -107,7 +107,8 @@ struct Widget {
   };
 
   struct Scrollbar : public Interface {
-    struct Flag { enum { Attached=1, Horizontal=2, AttachedHorizontal=Attached|Horizontal }; };
+    struct Flag { enum { Attached=1, Horizontal=2, NoCorner=4, AttachedHorizontal=Attached|Horizontal,
+      AttachedNoCorner=Attached|NoCorner, AttachedHorizontalNoCorner=AttachedHorizontal|NoCorner }; };
     Box win;
     int flag=0, doc_height=200, dot_size=25;
     float scrolled=0, last_scrolled=0, increment=20;
@@ -225,10 +226,10 @@ struct TextGUI : public KeyboardGUI, public Drawable::AttrSource {
     int InsertTextAt(int o, const String16 &s, int a=0) { return InsertTextAt<char16_t>(o, s, a); }
     int UpdateText(int o, const string   &s, int attr, int max_width=0, bool *append=0) { return UpdateText<char>    (o, s, attr, max_width, append); }
     int UpdateText(int o, const String16 &s, int attr, int max_width=0, bool *append=0) { return UpdateText<char16_t>(o, s, attr, max_width, append); }
-    void EncodeText(DrawableBoxArray *o, int x, const StringPiece   &s,                       int a=0) { Flow f=InitFlow(o); f.p.x=x; f.AppendText(s,a); }
-    void EncodeText(DrawableBoxArray *o, int x, const String16Piece &s,                       int a=0) { Flow f=InitFlow(o); f.p.x=x; f.AppendText(s,a); }
-    void EncodeText(DrawableBoxArray *o, int x, const StringPiece   &s, const Flow::TextAnnotation &a) { Flow f=InitFlow(o); f.p.x=x; f.AppendText(s,a); }
-    void EncodeText(DrawableBoxArray *o, int x, const String16Piece &s, const Flow::TextAnnotation &a) { Flow f=InitFlow(o); f.p.x=x; f.AppendText(s,a); }
+    void EncodeText(DrawableBoxArray *o, int x, const StringPiece   &s, int a=0)                                 { Flow f=InitFlow(o); f.p.x=x; f.AppendText(s,a); }
+    void EncodeText(DrawableBoxArray *o, int x, const String16Piece &s, int a=0)                                 { Flow f=InitFlow(o); f.p.x=x; f.AppendText(s,a); }
+    void EncodeText(DrawableBoxArray *o, int x, const StringPiece   &s, const Flow::TextAnnotation &a, int da=0) { Flow f=InitFlow(o); f.p.x=x; f.AppendText(s,a,da); }
+    void EncodeText(DrawableBoxArray *o, int x, const String16Piece &s, const Flow::TextAnnotation &a, int da=0) { Flow f=InitFlow(o); f.p.x=x; f.AppendText(s,a,da); }
     int Layout(int width=0, bool flush=0) { Layout(Box(0,0,width,0), flush); return Lines(); }
     void Layout(Box win, bool flush=0);
     point Draw(point pos, int relayout_width=-1, int g_offset=0, int g_len=-1);
@@ -257,6 +258,7 @@ struct TextGUI : public KeyboardGUI, public Drawable::AttrSource {
     function<void(Line&, Line&)> move_cb, movep_cb;
     Lines(TextGUI *P, int N);
 
+    void SetAttrSource(Drawable::AttrSource *s) { for (int i=0; i<ring.size; i++) (*this)[i].data->glyphs.attr.source = s; }
     Line *PushFront() { Line *l = RingVector<Line>::PushFront(); l->Clear(); return l; }
     Line *InsertAt(int dest_line, int lines=1, int dont_move_last=0);
     static int GetBackLineLines(const Lines &l, int i) { return l[-i-1].Lines(); }
@@ -431,11 +433,13 @@ struct Editor : public TextArea {
   FreeListVector<string> edits;
   vector<pair<int,int>> annotation;
   int last_fb_width=0, last_fb_lines=0, last_first_line=0, wrapped_lines=0, fb_wrapped_lines=0;
+  IDE::Project *project=0;
   Editor(Window *W, Font *F, File *I, bool Wrap=0);
 
   int WrappedLines() const { return wrapped_lines; }
   void UpdateWrappedLines(int cur_font_size, int width);
   int UpdateLines(float v_scrolled, int *first_ind, int *first_offset, int *first_len);
+  void UpdateAnnotation();
 };
 
 struct Terminal : public TextArea {

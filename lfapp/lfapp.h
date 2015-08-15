@@ -438,7 +438,7 @@ struct PerformanceTimers {
 
   int Create(const string &n) { timers.push_back(Accumulator(n)); return timers.size()-1; }
   void AccumulateTo(int timer_id) { timers[cur_timer_id].time += cur_timer.GetTime(true); cur_timer_id = timer_id; }
-  string DebugString() const { string v; for (auto &t : timers) StrAppend(&v, t.name, " ", t.time / 1000.0, "\n"); return v; }
+  string DebugString() const { string v; for (auto &t : timers) StrAppend(&v, t.name, " ", t.time.count() / 1000.0, "\n"); return v; }
 };
 
 struct Vault {

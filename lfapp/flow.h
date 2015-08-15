@@ -140,18 +140,19 @@ struct Flow {
         return out->data.size() - start_size;
     }
 
-    /**/               int AppendText(const string          &text, const TextAnnotation &attr) { return AppendText(StringPiece           (text), attr); }
-    /**/               int AppendText(const String16        &text, const TextAnnotation &attr) { return AppendText(String16Piece         (text), attr); }
-    template <class X> int AppendText(const X               *text, const TextAnnotation &attr) { return AppendText(StringPiece::Unbounded(text), attr); }
-    template <class X> int AppendText(const StringPieceT<X> &text, const TextAnnotation &attr) {
-      if (!attr.len) return AppendText(text, 0);
+    /**/               int AppendText(const string          &text, const TextAnnotation &attr, int da=0) { return AppendText(StringPiece           (text), attr, da); }
+    /**/               int AppendText(const String16        &text, const TextAnnotation &attr, int da=0) { return AppendText(String16Piece         (text), attr, da); }
+    template <class X> int AppendText(const X               *text, const TextAnnotation &attr, int da=0) { return AppendText(StringPiece::Unbounded(text), attr, da); }
+    template <class X> int AppendText(const StringPieceT<X> &text, const TextAnnotation &attr, int da=0) {
+      if (!attr.len) return AppendText(text, da);
       auto a = attr.buf, ae = a + attr.len;
-      int size = text.Length(), last_attr = 0, pl = 0;
+      int size = text.Length(), last_attr = da, next_attr = da, pl = 0;
       for (const X *b = text.data(), *p = b; !text.Done(p); p += pl) {
         int offset = p - b;
-        if (a != ae) { pl = min(size - offset, a->first - offset); last_attr = a++->second; }
+        if (a != ae) { pl = min(size - offset, a->first - offset); next_attr = a++->second; }
         else           pl =     size - offset;
         AppendText(StringPieceT<X>(text.buf + offset, pl), last_attr);
+        last_attr = next_attr;
       }
       return size;
     }

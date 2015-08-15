@@ -202,20 +202,6 @@ if(LFL_GLEW)
     set(GLEW_LIB glew PARENT_SCOPE)
 endif(LFL_GLEW)
 
-# GLFW
-if(LFL_GLFWINPUT)
-    add_subdirectory(glfw)
-    set(GLFW_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/glfw/include PARENT_SCOPE)
-    set(GLFW_LIB glfw PARENT_SCOPE)
-endif(LFL_GLFWINPUT)
-
-# SDL
-if(LFL_SDLINPUT)
-    add_subdirectory(SDL)
-    set(SDL_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/SDL/include PARENT_SCOPE)
-    set(SDL_LIB ${CMAKE_CURRENT_BINARY_DIR}/SDL/build/.libs/libSDL2.a PARENT_SCOPE)
-endif(LFL_SDLINPUT)
-
 # wxWidgets
 # ./configure --disable-shared --enable-unicode --with-cocoa --with-macosx-version-min=10.7 --with-macosx-sdk=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.10.sdk CXXFLAGS="-std=c++0x -stdlib=libc++" CPPFLAGS="-stdlib=libc++" LIBS=-lc++
 if(LFL_WXWIDGETS)
@@ -231,6 +217,20 @@ if(LFL_WXWIDGETS)
     set(WXWIDGETS_INCLUDE "${wxWidgets_INCLUDE_DIRS}" PARENT_SCOPE)
     set(WXWIDGETS_LIB "${wxWidgets_LIBRARIES}" PARENT_SCOPE)
 endif(LFL_WXWIDGETS)
+
+# GLFW
+if(LFL_GLFWINPUT)
+    add_subdirectory(glfw)
+    set(GLFW_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/glfw/include PARENT_SCOPE)
+    set(GLFW_LIB glfw PARENT_SCOPE)
+endif(LFL_GLFWINPUT)
+
+# SDL
+if(LFL_SDLINPUT)
+    add_subdirectory(SDL)
+    set(SDL_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/SDL/include PARENT_SCOPE)
+    set(SDL_LIB ${CMAKE_CURRENT_BINARY_DIR}/SDL/build/.libs/libSDL2.a PARENT_SCOPE)
+endif(LFL_SDLINPUT)
 
 # portaudio
 if(LFL_PORTAUDIO)
@@ -345,6 +345,13 @@ endif(LFL_V8JS)
 if(LFL_TINYJS)
     set(TINYJS_LIB ${CMAKE_CURRENT_SOURCE_DIR}/TinyJS/TinyJS.o PARENT_SCOPE)
 endif(LFL_TINYJS)
+
+# jsoncpp
+if(LFL_JSONCPP)
+    set(JSONCPP_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/jsoncpp/include PARENT_SCOPE)
+    set(JSONCPP_LIB jsoncpp_lib_static PARENT_SCOPE)
+    add_subdirectory(jsoncpp)
+endif(LFL_JSONCPP)
 
 # pcap
 if(LFL_PCAP)

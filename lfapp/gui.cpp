@@ -103,7 +103,7 @@ void Window::DrawDialogs() {
     glIntersect(screen->mouse.x, screen->mouse.y, &c);
     Fonts::Default()->Draw(StrCat("draw_grid ", screen->mouse.x, " , ", screen->mouse.y), point(0,0));
   }
-  for (auto i = screen->dialogs.rbegin(); i != screen->dialogs.rend(); ++i) (*i)->Draw();
+  for (auto i = screen->dialogs.begin(), e = screen->dialogs.end(); i != e; ++i) (*i)->Draw();
 }
 
 void GUI::UpdateBox(const Box &b, int draw_box_ind, int input_box_ind) {
@@ -174,8 +174,12 @@ void Widget::Scrollbar::LayoutAttached(const Box &w) {
   win.y = -win.h;
   int aw = dot_size, ah = dot_size;
   bool flip = flag & Flag::Horizontal;
-  if (!flip) { win.x += win.w - aw; win.w = aw; }
-  else win.h = ah;
+  if (flip) win.h = ah;
+  else { win.x += win.w - aw; win.w = aw; }
+  if (flag & Flag::NoCorner) {
+    if (flip) win.w -= aw;
+    else { win.h -= ah; win.y += ah; }
+  }
   Layout(aw, ah, flip);
 }
 
@@ -189,7 +193,7 @@ void Widget::Scrollbar::Layout(int aw, int ah, bool flip) {
   else      { arrow_up.h = ah; win.h -= 2*ah; arrow_up.y += win.h; }
 
   if (gui) {
-    int attr_id = gui->child_box.attr.GetAttrId(Drawable::Attr());
+    int attr_id = gui->child_box.attr.GetAttrId(Drawable::Attr(menuicon));
     gui->child_box.PushBack(arrow_up,   attr_id, menuicon ? menuicon->FindGlyph(flip ? 2 : 4) : 0);
     gui->child_box.PushBack(arrow_down, attr_id, menuicon ? menuicon->FindGlyph(flip ? 3 : 1) : 0);
     gui->child_box.PushBack(scroll_dot, attr_id, menuicon ? menuicon->FindGlyph(           5) : 0, &drawbox_ind);
@@ -275,7 +279,7 @@ template <class X> int TextGUI::Line::InsertTextAt(int x, const StringPieceT<X> 
   if (!v.size()) return 0;
   DrawableBoxArray b;
   b.attr.source = data->glyphs.attr.source;
-  EncodeText(&b, data->glyphs.Position(x).x, v, attr);
+  EncodeText(&b, data->glyphs.Position(x).x, v, attr, parent->default_attr);
   return b.Size() ? InsertTextAt(x, v, b) : 0;
 }
 
@@ -820,55 +824,11 @@ string TextArea::CopyText(int beg_line_ind, int beg_char_ind, int end_line_ind, 
 
 /* Editor */
 
-#ifdef LFL_LIBCLANG
-struct ClangTokenVisitor {
-  typedef function<void(int, int, int, int)> TokenCB;
-  File *file;
-  TokenCB cb;
-  ClangTokenVisitor(File *f, const TokenCB &c) : file(f), cb(c) {}
-
-  void Visit() {
-    const char* args[] = { "-c", "-x", "c++" };
-    CXIndex index = clang_createIndex(0, 0);
-    CXTranslationUnit trans_unit = clang_parseTranslationUnit(index, file->Filename(), args, 3, 0, 0, CXTranslationUnit_None);
-    CXCursor start_cursor = clang_getTranslationUnitCursor(trans_unit);
-    clang_visitChildren(start_cursor, ClangCB, this);
-    clang_disposeTranslationUnit(trans_unit);
-    clang_disposeIndex(index);
-  }
-  CXChildVisitResult Accept(CXCursor cursor, CXCursor parent) {
-    CXFile cxfile;
-    unsigned line, column, offset;
-    CXSourceLocation loc = clang_getCursorLocation(cursor);
-    clang_getFileLocation(loc, &cxfile, &line, &column, &offset);
-    string filename = GetClangString(clang_getFileName(cxfile));
-    bool primary_file = StringEquals(file->Filename(), filename);
-    if (!primary_file) return CXChildVisit_Continue;
-
-    CXToken* tokens=0;
-    unsigned int num_tokens=0;
-    CXTranslationUnit tu = clang_Cursor_getTranslationUnit(cursor);
-    CXSourceRange range = clang_getCursorExtent(cursor);
-    clang_tokenize(tu, range, &tokens, &num_tokens);
-    for (int i=0; i<num_tokens-1; i++) {   
-      clang_getFileLocation(clang_getTokenLocation(tu, tokens[i]), &cxfile, &line, &column, &offset);
-      cb(clang_getTokenKind(tokens[i]), offset, line, column);
-    }
-    return CXChildVisit_Continue;
-  }
-  static CXChildVisitResult ClangCB(CXCursor cursor, CXCursor parent, CXClientData client_data) {
-    return static_cast<ClangTokenVisitor*>(client_data)->Accept(cursor, parent);
-  }
-};
-#endif
-
 Editor::Editor(Window *W, Font *F, File *I, bool Wrap) : TextArea(W, F), file(I) {
   reverse_line_fb = 1;
   line_fb.wrap = Wrap;
   file_line.node_value_cb = &LineOffset::GetLines;
   file_line.node_print_cb = &LineOffset::GetString;
-  for (int i=0; i<line.ring.size; i++) line[i].data->glyphs.attr.source = this;
-  SetColors(Singleton<SolarizedLightColors>::Get());
 }
 
 void Editor::UpdateWrappedLines(int cur_font_size, int width) {
@@ -889,37 +849,7 @@ int Editor::UpdateLines(float v_scrolled, int *first_ind, int *first_offset, int
   if (width_changed) {
     last_fb_width = fb->w;
     if (wrap || init) UpdateWrappedLines(TextArea::font->size, fb->w);
-#ifdef LFL_LIBCLANG
-    if (init) {
-      LineOffset *lo=0;
-      auto i = file_line.Begin();
-      int i_ind=1, last_line=-1, last_column=-1;
-      ClangTokenVisitor(file.get(), ClangTokenVisitor::TokenCB([&](int kind, int offset, int line, int column) {
-        // printf("highlight kind:%d offset:%d line:%d column:%d\n", kind, offset, line, column);
-        CHECK_LE(last_line, line);
-        if (line != last_line) {
-          last_column = -1;
-          for (; i.ind && i_ind < line; ++i_ind) ++i;
-          (lo = i.val)->annotation.offset = annotation.size();
-        }
-        // CHECK_LT(last_column, column);
-        if (last_column >= column) return;
-        int c = colors->normal_index;
-        switch (kind) {
-          case CXToken_Punctuation:         break;
-          case CXToken_Keyword:     c = 4;  break;
-          case CXToken_Identifier:  c = 13; break;
-          case CXToken_Literal:     c = 4;  break;
-          case CXToken_Comment:     c = 5;  break;
-          default:                  ERROR("unknown token kind ", kind); break;
-        }
-        annotation.emplace_back(column-1, c);
-        lo->annotation.len++;
-        last_column = column;
-        last_line = line;
-      })).Visit();
-    }
-#endif
+    if (init) UpdateAnnotation();
   }
 
   bool resized = (width_changed && wrap) || last_fb_lines != fb->lines;
@@ -1014,6 +944,81 @@ int Editor::UpdateLines(float v_scrolled, int *first_ind, int *first_offset, int
   return dist * (up ? -1 : 1);
 }
 
+#ifdef LFL_LIBCLANG
+struct ClangTokenVisitor {
+  typedef function<void(ClangTokenVisitor*, int, int, int)> TokenCB;
+  string filename, compile_command, working_directory;
+  point last_token;
+  TokenCB cb;
+  ClangTokenVisitor(const string &f, const string &cc, const string &wd, const TokenCB &c) :
+    filename(f), compile_command(cc), working_directory(wd), cb(c) {}
+
+  void Visit() {
+    vector<string> argv;
+    vector<const char*> av = { "-xc++", "-std=c++11" };
+    Split(compile_command, isspace, &argv);
+    // for (int i=1; i<argv.size()-4; i++) if (!PrefixMatch(argv[i], "-O") && !PrefixMatch(argv[i], "-m")) av.push_back(argv[i].data());
+    chdir(working_directory.c_str());
+    CXIndex index = clang_createIndex(0, 0);
+    CXTranslationUnit tu = clang_parseTranslationUnit(index, filename.c_str(), av.data(), av.size(), 0, 0, CXTranslationUnit_None);
+
+    CXToken* tokens=0;
+    unsigned num_tokens=0, by=0, bx=0, ey=0, ex=0;
+    CXFile cf = clang_getFile(tu, filename.c_str());
+    CXSourceRange sr = clang_getRange(clang_getLocationForOffset(tu, cf, 0),
+                                      clang_getLocationForOffset(tu, cf, LocalFile(filename, "r").Size()));
+    clang_tokenize(tu, sr, &tokens, &num_tokens);
+    for (int i = 0; i < num_tokens; i++) {
+      sr = clang_getTokenExtent(tu, tokens[i]);
+      clang_getSpellingLocation(clang_getRangeStart(sr), NULL, &by, &bx, NULL);
+      clang_getSpellingLocation(clang_getRangeEnd  (sr), NULL, &ey, &ex, NULL);
+
+      if (1)                  CHECK_LE(last_token.y, (int)by);
+      if (by == last_token.y) CHECK_LT(last_token.x, (int)bx);
+      cb(this, clang_getTokenKind(tokens[i]), by, bx);
+      last_token = point(bx, by);
+    }
+
+    clang_disposeTranslationUnit(tu);
+    clang_disposeIndex(index);
+  }
+};
+#endif
+
+void Editor::UpdateAnnotation() {
+#ifdef LFL_LIBCLANG
+  if (!project) return;
+  string filename = file->Filename();
+  auto rule = project->build_rules.find(filename);
+  bool have_rule = rule != project->build_rules.end();
+
+  int fl_ind = 1;
+  auto fl = file_line.Begin();
+  LineOffset *file_line_data = 0;
+  ClangTokenVisitor(filename, have_rule ? rule->second.cmd : "", have_rule ? rule->second.dir : "", ClangTokenVisitor::TokenCB([&]
+    (ClangTokenVisitor *v, int kind, int line, int column) {
+      int a = default_attr;
+      switch (kind) {
+        case CXToken_Punctuation:                                     break;
+        case CXToken_Keyword:     Attr::SetFGColorIndex(&a, 5);       break;
+        case CXToken_Identifier:  Attr::SetFGColorIndex(&a, 13);      break;
+        case CXToken_Literal:     Attr::SetFGColorIndex(&a, 1);       break;
+        case CXToken_Comment:     Attr::SetFGColorIndex(&a, 6);       break;
+        default:                  ERROR("unknown token kind ", kind); break;
+      }
+      if (line != v->last_token.y) {
+        if (v->last_token.y+1 < line && a != default_attr) PushBack(annotation, {0, a});
+        if (fl_ind < line)
+          for (++fl_ind, ++fl; fl.ind && fl_ind < line; ++fl_ind, ++fl) fl.val->annotation = PieceIndex(annotation.size()-1, 1);
+        if (!fl.ind) return;
+        (file_line_data = fl.val)->annotation.offset = annotation.size();
+      }
+      annotation.emplace_back(column-1, a);
+      file_line_data->annotation.len++;
+    })).Visit();
+#endif
+}
+
 /* Terminal */
 
 #ifdef  LFL_TERMINAL_DEBUG
@@ -1070,7 +1075,7 @@ Terminal::SolarizedLightColors::SolarizedLightColors() {
 Terminal::Terminal(ByteSink *O, Window *W, Font *F) : TextArea(W, F), sink(O), fb_cb(bind(&Terminal::GetFrameBuffer, this, _1)) {
   CHECK(F->fixed_width || (F->flag & FontDesc::Mono));
   wrap_lines = write_newline = insert_mode = 0;
-  for (int i=0; i<line.ring.size; i++) line[i].data->glyphs.attr.source = this;
+  line.SetAttrSource(this);
   SetColors(Singleton<SolarizedDarkColors>::Get());
   cursor.attr = default_attr;
   cursor.type = Cursor::Block;
@@ -1622,8 +1627,8 @@ SliderFlagDialog::SliderFlagDialog(const string &fn, float total, float inc) :
   flag_name(fn), flag_map(Singleton<FlagMap>::Get()) {}
 
 EditorDialog::EditorDialog(Window *W, Font *F, File *I, float w, float h, int flag) :
-  Dialog(w, h, flag), editor(W, F, I, flag & Flag::Wrap), v_scrollbar(this),
-  h_scrollbar(this, Box(), Widget::Scrollbar::Flag::AttachedHorizontal) {}
+  Dialog(w, h, flag), editor(W, F, I, flag & Flag::Wrap), v_scrollbar(this, Box(), Widget::Scrollbar::Flag::AttachedNoCorner),
+  h_scrollbar(this, Box(), Widget::Scrollbar::Flag::AttachedHorizontalNoCorner) {}
 
 void EditorDialog::Layout() {
   Dialog::Layout();
