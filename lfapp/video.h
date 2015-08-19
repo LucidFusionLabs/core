@@ -623,7 +623,7 @@ struct GraphicsDevice : public QOpenGLFunctions {
     virtual void BindTexture(int t, int n) = 0;
     virtual void ActiveTexture(int n) = 0;
     virtual void TexPointer(int m, int t, int w, int o, float *tex, int l, int *out, bool dirty) = 0;
-    virtual void VertexPointer(int m, int t, int w, int o, float *verts, int l, int *out, bool dirty) = 0;
+    virtual bool VertexPointer(int m, int t, int w, int o, float *verts, int l, int *out, bool dirty) = 0;
     virtual void ColorPointer(int m, int t, int w, int o, float *verts, int l, int *out, bool dirty) = 0;
     virtual void NormalPointer(int m, int t, int w, int o, float *verts, int l, int *out, bool dirty) = 0;
     virtual void Color4f(float r, float g, float b, float a) = 0;

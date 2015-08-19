@@ -64,6 +64,8 @@ extern "C" {
 
 #ifdef LFL_ANDROID
 #include <android/log.h>
+extern "C" void AndroidSetFrameOnKeyboardInput(int v);
+extern "C" void AndroidSetFrameOnMouseInput   (int v);
 #endif
 
 #ifdef LFL_QT
@@ -132,15 +134,18 @@ extern "C" LFApp        *GetLFApp()        { return LFL::app; }
 extern "C" int LFAppMain()                 { return LFL::app->Main(); }
 extern "C" int LFAppMainLoop()             { return LFL::app->MainLoop(); }
 extern "C" int LFAppFrame(bool handle_ev)  { return LFL::app->EventDrivenFrame(handle_ev); }
+extern "C" void LFAppWakeup(void *v)       { return LFL::app->scheduler.Wakeup(v); }
 extern "C" const char *LFAppDownloadDir()  { return LFL::app->dldir.c_str(); }
-extern "C" void LFAppShutdown() { LFL::app->run=0; LFL::app->scheduler.Wakeup(0); }
+extern "C" void LFAppShutdown()              { LFL::app->run=0; LFAppWakeup(0); }
 extern "C" void WindowReshaped(int w, int h) { LFL::screen->Reshaped(w, h); }
 extern "C" void WindowMinimized()            { LFL::screen->Minimized(); }
 extern "C" void WindowUnMinimized()          { LFL::screen->UnMinimized(); }
 extern "C" void WindowClosed()               { LFL::screen->Closed(); }
-extern "C" int  KeyPress  (int b, int d)                 { return LFL::app->input.KeyPress  (b, d); }
-extern "C" int  MouseClick(int b, int d, int x,  int y)  { return LFL::app->input.MouseClick(b, d, LFL::point(x, y)); }
-extern "C" int  MouseMove (int x, int y, int dx, int dy) { return LFL::app->input.MouseMove (LFL::point(x, y), LFL::point(dx, dy)); }
+extern "C" int  KeyPress  (int b, int d)                    { return LFL::app->input.KeyPress  (b, d); }
+extern "C" int  MouseClick(int b, int d, int x,  int y)     { return LFL::app->input.MouseClick(b, d, LFL::point(x, y)); }
+extern "C" int  MouseMove (int x, int y, int dx, int dy)    { return LFL::app->input.MouseMove (LFL::point(x, y), LFL::point(dx, dy)); }
+extern "C" void QueueKeyPress  (int b, int d)               { return LFL::app->input.QueueKeyPress  (b, d); }
+extern "C" void QueueMouseClick(int b, int d, int x, int y) { return LFL::app->input.QueueMouseClick(b, d, LFL::point(x, y)); }
 extern "C" void EndpointRead(void *svc, const char *name, const char *buf, int len) { LFL::app->network.EndpointRead((LFL::Service*)svc, name, buf, len); }
 extern "C" NativeWindow *SetNativeWindowByID(void *id) { return SetNativeWindow(LFL::FindOrNull(LFL::Window::active, id)); }
 extern "C" NativeWindow *SetNativeWindow(NativeWindow *W) {
@@ -175,11 +180,15 @@ DEFINE_bool(lfapp_debug, false, "Enable debug mode");
 DEFINE_bool(cursor_grabbed, false, "Center cursor every frame");
 DEFINE_bool(daemonize, false, "Daemonize server");
 DEFINE_bool(rcon_debug, false, "Print rcon commands");
-DEFINE_bool(frame_debug, false, "Print each frame");
+DEFINE_bool(frame_debug, true, "Print each frame");
 DEFINE_string(nameserver, "", "Default namesver");
 DEFINE_bool(max_rlimit_core, true, "Max core dump rlimit");
 DEFINE_bool(max_rlimit_open_files, false, "Max number of open files rlimit");
-DEFINE_int(loglevel, -1, "Log level: [Fatal=-1, Error=0, Info=3, Debug=7]");
+#ifdef LFL_DEBUG
+DEFINE_int(loglevel, 7, "Log level: [Fatal=-1, Error=0, Info=3, Debug=7]");
+#else
+DEFINE_int(loglevel, 0, "Log level: [Fatal=-1, Error=0, Info=3, Debug=7]");
+#endif
 DEFINE_int(threadpool_size, 0, "Threadpool size");
 DEFINE_int(sample_rate, 16000, "Audio sample rate");
 DEFINE_int(sample_secs, 3, "Seconds of RingBuf audio");
@@ -451,16 +460,19 @@ void Application::Daemonize(FILE *fout, FILE *ferr) {
 }
 #endif /* WIN32 */
 
-#ifdef LFL_IPHONE
 void Vault::SavePassword(const string &h, const string &u, const string &pw) {
+#if defined(LFL_IPHONE)
   iPhonePasswordSave(app->name.c_str(), h.c_str(), u.c_str(), pw.c_str(), pw.size());
+#endif
 }
 bool Vault::LoadPassword(const string &h, const string &u, string *pw) {
+#if defined(LFL_IPHONE)
   pw->resize(1024);
   pw->resize(iPhonePasswordCopy(app->name.c_str(), h.c_str(), u.c_str(), &(*pw)[0], pw->size()));
   return pw->size();
-}
 #endif
+  return 0;
+}
 
 void SystemBrowser::Open(const char *url_text) {
 #if defined(LFL_ANDROID)
@@ -490,6 +502,7 @@ void Advertising::HideAds() {
 void Application::Log(int level, const char *file, int line, const string &message) {
   char tbuf[64];
   logtime(tbuf, sizeof(tbuf));
+
   {
     ScopedMutex sm(log_mutex);
 
@@ -819,15 +832,17 @@ int Application::Start() {
 }
 
 int Application::HandleEvents(unsigned clicks) {
-  for (auto i = modules.begin(); i != modules.end() && run; ++i) (*i)->Frame(clicks);
+  int events = 0, module_events;
+  for (auto i = modules.begin(); i != modules.end() && run; ++i)
+    if ((module_events = (*i)->Frame(clicks)) > 0) events += module_events;
 
   // handle messages sent to main thread
-  if (run) message_queue.HandleMessages();
+  if (run) events += message_queue.HandleMessages();
 
   // fake threadpool that executes in main thread
-  if (run && !FLAGS_threadpool_size) thread_pool.worker[0].queue->HandleMessages();
+  if (run && !FLAGS_threadpool_size) events += thread_pool.worker[0].queue->HandleMessages();
 
-  return 0;
+  return events;
 }
 
 int Application::EventDrivenFrame(bool handle_events) {
@@ -842,13 +857,17 @@ int Application::EventDrivenFrame(bool handle_events) {
   return clicks;
 }
 
-int Application::TimerDrivenFrame() {
+int Application::TimerDrivenFrame(bool got_wakeup) {
   if (!MainThread()) ERROR("MonolithicFrame() called from thread ", Thread::GetId());
   unsigned clicks = frame_time.GetTime(true).count(), flag = 0;
-  HandleEvents(clicks);
+  int events = HandleEvents(clicks) + got_wakeup;
 
   for (auto i = Window::active.begin(); run && i != Window::active.end(); ++i) {
+#ifdef LFL_ANDROID
+    if (!i->second->target_fps && !events) continue;
+#else
     if (!i->second->target_fps) continue;
+#endif
     int ret = i->second->Frame(clicks, audio.mic_samples, camera.have_sample, flag);
     if (FLAGS_frame_debug) INFO("frame_debug Application::Frame Window ", i->second->id, " = ", ret);
   }
@@ -858,9 +877,12 @@ int Application::TimerDrivenFrame() {
 }
 
 int Application::Main() {
+  ONCE({
+    scheduler.Start();
 #ifdef LFL_IPHONE
-  ONCE({ return 0; });
+    return 0;
 #endif
+  });
   if (Start()) return Exiting();
 #if defined(LFL_OSXVIDEO) || defined(LFL_WINVIDEO) || defined(LFL_QT) || defined(LFL_WXWIDGETS)
   return 0;
@@ -872,8 +894,8 @@ int Application::MainLoop() {
   INFO("MainLoop: Begin, run=", run);
   while (run) {
     // if (!minimized)
-    scheduler.FrameWait();
-    TimerDrivenFrame();
+    bool got_wakeup = scheduler.FrameWait();
+    TimerDrivenFrame(got_wakeup);
     scheduler.FrameDone();
 #ifdef LFL_IPHONE
     // if (minimized) run = 0;
@@ -909,9 +931,10 @@ int Application::Exiting() {
 FrameScheduler::FrameScheduler() : maxfps(&FLAGS_target_fps), wakeup_thread(&frame_mutex, &wait_mutex) {
 #if defined(LFL_OSXINPUT) || defined(LFL_IPHONEINPUT) || defined(LFL_QT)
   rate_limit = synchronize_waits = wait_forever_thread = monolithic_frame = 0;
+#elif defined(LFL_ANDROIDINPUT)
+  synchronize_waits = wait_forever_thread = monolithic_frame = 0;
 #elif defined(LFL_WININPUT) || defined(LFL_X11INPUT)
   synchronize_waits = wait_forever_thread = 0;
-  rate_limit = FLAGS_target_fps;
 #elif defined(LFL_WXWIDGETS)
   rate_limit = synchronize_waits = monolithic_frame = 0;
 #endif
@@ -930,23 +953,39 @@ void FrameScheduler::Free() {
 }
 
 void FrameScheduler::Start() {
-  if (wait_forever && wait_forever_thread) wakeup_thread.Start();
+  if (!wait_forever) return;
+  if (wait_forever_thread) wakeup_thread.Start();
+#if defined(LFL_ANDROID)
+  Socket fd[2];
+  CHECK(SystemNetwork::OpenSocketPair(fd));
+  AddWaitForeverSocket((system_event_socket = fd[0]), SocketSet::READABLE, 0);
+  wait_forever_wakeup_socket = fd[1];
+#endif
 }
 
 void FrameScheduler::FrameDone() { if (rate_limit && app->run && FLAGS_target_fps) maxfps.Limit(); }
 
-void FrameScheduler::FrameWait() {
+bool FrameScheduler::FrameWait() {
+  bool ret = false;
   if (wait_forever && !FLAGS_target_fps) {
     if (synchronize_waits) {
       wait_mutex.lock();
       frame_mutex.unlock();
     }
 #if defined(LFL_OSXINPUT) || defined(LFL_WININPUT) || defined(LFL_IPHONEINPUT) || defined(LFL_QT) || defined(LFL_WXWIDGETS)
-#elif defined(LFL_X11INPUT)
+#elif defined(LFL_ANDROIDINPUT) || defined(LFL_X11INPUT)
     wait_forever_sockets.Select(-1);
     for (auto &s : wait_forever_sockets.socket)
-      if (s.first != system_event_socket && wait_forever_sockets.GetReadable(s.first))
-        app->scheduler.Wakeup(s.second.second);
+      if (wait_forever_sockets.GetReadable(s.first)) {
+        if (s.first != system_event_socket) app->scheduler.Wakeup(s.second.second);
+#ifdef LFL_ANDROIDINPUT
+        else {
+          char buf[512];
+          int l = read(system_event_socket, buf, sizeof(buf));
+          for (const char *p = buf, *e = p + l; p < e; p++) if (*p) { ret = true; break; }
+        }
+#endif
+      }
 #elif defined(LFL_GLFWINPUT)
     glfwWaitEvents();
 #elif defined(LFL_SDLINPUT)
@@ -959,6 +998,7 @@ void FrameScheduler::FrameWait() {
       wait_mutex.unlock();
     }
   }
+  return ret;
 }
 
 void FrameScheduler::Wakeup(void *opaque) {
@@ -973,6 +1013,9 @@ void FrameScheduler::Wakeup(void *opaque) {
     exp.type = Expose;
     exp.xexpose.window = (::Window)screen->id;
     XSendEvent((Display*)screen->surface, exp.xexpose.window, 0, ExposureMask, &exp);
+#elif defined(LFL_ANDROIDINPUT)
+    char c = opaque ? 0 : 'W';
+    write(wait_forever_wakeup_socket, &c, 1);
 #elif defined(LFL_IPHONEINPUT)
     iPhoneTriggerFrame(screen->id);
 #elif defined(LFL_QT)
@@ -1033,12 +1076,14 @@ void FrameScheduler::UpdateTargetFPS(int fps) {
 
 void FrameScheduler::AddWaitForeverMouse() {
   CHECK(screen->id);
-#if defined(LFL_IPHONEINPUT)
-  iPhoneAddWaitForeverMouse(screen->id);
-#elif defined(LFL_OSXINPUT)
+#if defined(LFL_OSXINPUT)
   OSXAddWaitForeverMouse(screen->id);
 #elif defined(LFL_WINVIDEO)
   static_cast<WinWindow*>(screen->impl)->frame_on_mouse_input = true;
+#elif defined(LFL_ANDROIDINPUT)
+  AndroidSetFrameOnMouseInput(true);
+#elif defined(LFL_IPHONEINPUT)
+  iPhoneAddWaitForeverMouse(screen->id);
 #elif defined(LFL_QT)
   QTSetWaitForeverMouse(screen->id, true);
 #endif
@@ -1046,12 +1091,14 @@ void FrameScheduler::AddWaitForeverMouse() {
 
 void FrameScheduler::DelWaitForeverMouse() {
   CHECK(screen->id);
-#if defined(LFL_IPHONEINPUT)
-  iPhoneDelWaitForeverMouse(screen->id);
-#elif defined(LFL_OSXINPUT)
+#if defined(LFL_OSXINPUT)
   OSXDelWaitForeverMouse(screen->id);
 #elif defined(LFL_WINVIDEO)
   static_cast<WinWindow*>(screen->impl)->frame_on_mouse_input = false;
+#elif defined(LFL_ANDROIDINPUT)
+  AndroidSetFrameOnMouseInput(false);
+#elif defined(LFL_IPHONEINPUT)
+  iPhoneDelWaitForeverMouse(screen->id);
 #elif defined(LFL_QT)
   QTSetWaitForeverMouse(screen->id, false);
 #endif
@@ -1059,12 +1106,14 @@ void FrameScheduler::DelWaitForeverMouse() {
 
 void FrameScheduler::AddWaitForeverKeyboard() {
   CHECK(screen->id);
-#if defined(LFL_IPHONEINPUT)
-  iPhoneAddWaitForeverKeyboard(screen->id);
-#elif defined(LFL_OSXINPUT)
+#if defined(LFL_OSXINPUT)
   OSXAddWaitForeverKeyboard(screen->id);
 #elif defined(LFL_WINVIDEO)
   static_cast<WinWindow*>(screen->impl)->frame_on_keyboard_input = true;
+#elif defined(LFL_ANDROIDINPUT)
+  AndroidSetFrameOnKeyboardInput(true);
+#elif defined(LFL_IPHONEINPUT)
+  iPhoneAddWaitForeverKeyboard(screen->id);
 #elif defined(LFL_QT)
   QTSetWaitForeverKeyboard(screen->id, true);
 #endif
@@ -1072,12 +1121,14 @@ void FrameScheduler::AddWaitForeverKeyboard() {
 
 void FrameScheduler::DelWaitForeverKeyboard() {
   CHECK(screen->id);
-#if defined(LFL_IPHONEINPUT)
-  iPhoneDelWaitForeverKeyboard(screen->id);
-#elif defined(LFL_OSXINPUT)
+#if defined(LFL_OSXINPUT)
   OSXDelWaitForeverKeyboard(screen->id);
 #elif defined(LFL_WINVIDEO)
   static_cast<WinWindow*>(screen->impl)->frame_on_keyboard_input = false;
+#elif defined(LFL_ANDROIDINPUT)
+  AndroidSetFrameOnKeyboardInput(false);
+#elif defined(LFL_IPHONEINPUT)
+  iPhoneDelWaitForeverKeyboard(screen->id);
 #elif defined(LFL_QT)
   QTSetWaitForeverKeyboard(screen->id, false);
 #endif
@@ -1089,7 +1140,7 @@ void FrameScheduler::AddWaitForeverSocket(Socket fd, int flag, void *val) {
   if (!wait_forever_thread) { CHECK_EQ(SocketSet::READABLE, flag); OSXAddWaitForeverSocket(screen->id, fd); }
 #elif defined(LFL_WINVIDEO)
   WSAAsyncSelect(fd, (HWND)screen->id, WM_USER, FD_READ | FD_CLOSE);
-#elif defined(LFL_X11INPUT)
+#elif defined(LFL_X11INPUT) || defined(LFL_ANDROIDINPUT)
   wait_forever_sockets.Add(fd, flag, val);  
 #elif defined(LFL_IPHONEINPUT)
   if (!wait_forever_thread) { CHECK_EQ(SocketSet::READABLE, flag); iPhoneAddWaitForeverSocket(screen->id, fd); }
@@ -1103,7 +1154,7 @@ void FrameScheduler::DelWaitForeverSocket(Socket fd) {
 #if defined(LFL_OSXINPUT)
   CHECK(screen->id);
   OSXDelWaitForeverSocket(screen->id, fd);
-#elif defined(LFL_X11INPUT)
+#elif defined(LFL_X11INPUT) || defined(LFL_ANDROIDINPUT)
   wait_forever_sockets.Del(fd);
 #elif defined(LFL_WINVIDEO)
   WSAAsyncSelect(fd, (HWND)screen->id, WM_USER, 0);

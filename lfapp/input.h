@@ -240,28 +240,34 @@ struct InputModule : public Module {
 };
 
 struct Input : public InputModule {
+  struct InputCB {
+    enum { KeyPress=1, MouseClick=2, MouseMove=3, MouseWheel=4 };
+    int type, x, y, a, b;
+    InputCB(int T=0, int X=0, int Y=0, int A=0, int B=0) : type(T), x(X), y(Y), a(A), b(B) {}
+  };
+
   bool left_shift_down = 0, right_shift_down = 0, left_ctrl_down = 0, right_ctrl_down = 0;
   bool left_cmd_down = 0, right_cmd_down = 0, mouse_but1_down = 0, mouse_but2_down = 0;
-  vector<Callback> queued_input;
+  vector<InputCB> queued_input;
   mutex queued_input_mutex;
   InputModule *impl = 0;
   Bind paste_bind;
 
-  void QueueKey(int key, bool down) {
+  void QueueKeyPress(int key, bool down) {
     ScopedMutex sm(queued_input_mutex);
-    queued_input.push_back(bind([&]() { KeyPress(key, down); }));
+    queued_input.emplace_back(InputCB::KeyPress, 0, 0, key, down);
   }
   void QueueMouseClick(int button, bool down, const point &p) {
     ScopedMutex sm(queued_input_mutex);
-    queued_input.push_back(bind([&]() { MouseClick(button, down, p); }));
+    queued_input.emplace_back(InputCB::MouseClick, p.x, p.y, button, down);
   }
   void QueueMouseMovement(const point &p, const point &d) {
     ScopedMutex sm(queued_input_mutex);
-    queued_input.push_back(bind([&]() { MouseMove(p, d); }));
+    queued_input.emplace_back(InputCB::MouseMove, p.x, p.y, d.x, d.y);
   }
   void QueueMouseWheel(const point &p, const point &d) {
     ScopedMutex sm(queued_input_mutex);
-    queued_input.push_back(bind([&]() { MouseWheel(p, d); }));
+    queued_input.emplace_back(InputCB::MouseWheel, p.x, p.y, d.x, d.y);
   }
 
   bool ShiftKeyDown() const { return left_shift_down || right_shift_down; }
@@ -274,7 +280,7 @@ struct Input : public InputModule {
   int Init();
   int Init(Window*);
   int Frame(unsigned time);
-  int DispatchQueuedInput();
+  int DispatchQueuedInput(bool event_on_keyboard_input, bool event_on_mouse_input);
 
   int  KeyPress(int key, bool down);
   int  KeyEventDispatch(InputEvent::Id event, bool down);

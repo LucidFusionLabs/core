@@ -34,7 +34,7 @@ public class Activity extends android.app.Activity {
 
     public static Activity instance;
     public FrameLayout frameLayout;
-    public SurfaceView view;
+    public GameView view;
     public Thread thread;
     public AudioManager audio;
     public GPlusClient gplus;
@@ -53,6 +53,7 @@ public class Activity extends android.app.Activity {
         this.getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
         setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);        
+        // setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);        
 
         // final ActivityManager activityManager = (ActivityManager)getSystemService(Context.ACTIVITY_SERVICE);
         // final ConfigurationInfo configurationInfo = activityManager.getDeviceConfigurationInfo();
@@ -60,7 +61,7 @@ public class Activity extends android.app.Activity {
         // if (supportsEs2) {}        
         
         frameLayout = new FrameLayout(this);
-        view = new SurfaceView(this, getApplication());
+        view = new GameView(this, getApplication());
         frameLayout.addView(view, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
 
         if (ActivityConfig.advertising) advertising = new Advertising(this, frameLayout);
@@ -77,6 +78,12 @@ public class Activity extends android.app.Activity {
         super.onDestroy();
         close();
         exit();
+    }
+
+    @Override
+    public void onResume() {
+        Log.i("lfjava", "Activity.onResume()");
+        super.onResume();
     }
 
     @Override
@@ -244,7 +251,7 @@ class MyGestureListener extends android.view.GestureDetector.SimpleOnGestureList
     }
 }
 
-class SurfaceView extends android.view.SurfaceView implements SurfaceHolder.Callback, View.OnKeyListener, View.OnTouchListener, SensorEventListener {
+class GameView extends android.view.SurfaceView implements SurfaceHolder.Callback, View.OnKeyListener, View.OnTouchListener, SensorEventListener {
 
     public EGLContext egl_context;
     public EGLSurface egl_surface;
@@ -252,7 +259,7 @@ class SurfaceView extends android.view.SurfaceView implements SurfaceHolder.Call
     public GestureDetector gesture;
     public SensorManager sensor;
 
-    public SurfaceView(Activity activity, Context context) {
+    public GameView(Activity activity, Context context) {
         super(context);
         // gesture = new GestureDetector(new MyGestureListener());
         sensor = (SensorManager)context.getSystemService("sensor");  
@@ -269,7 +276,7 @@ class SurfaceView extends android.view.SurfaceView implements SurfaceHolder.Call
     }
 
     public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
-        Log.i("lfjava", "SurfaceView.surfaceChanged(" + width + ", " + height + ")");
+        Log.i("lfjava", "GameView.surfaceChanged(" + width + ", " + height + ")");
         Activity.instance.open(format, width, height);
     }
 

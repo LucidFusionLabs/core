@@ -23,7 +23,7 @@
 extern "C" {
 #endif
 
-int   AndroidVideoInit(int gles_version);
+int   AndroidVideoInit(int *gles_version);
 int   AndroidVideoSwap();
 int   AndroidInput(unsigned clicks, unsigned *events);
 int   AndroidToggleKeyboard();

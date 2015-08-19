@@ -116,7 +116,7 @@ See [new_app_template/README.txt](new_app_template/README.txt) to quick start yo
         make lterm_pkg
 
 * OSX installer LTerminal.dmg results
-* For C++ Interpreter setup ~/cling following http://root.cern.ch/drupal/content/cling-build-instructions
+* For libclang setup ~/llvm following http://clang.llvm.org/get_started.html
 * For V8 Javascript setup ~/v8 following https://developers.google.com/v8/build then:
 
         export CXX="clang++ -std=c++11 -stdlib=libc++"

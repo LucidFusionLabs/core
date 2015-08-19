@@ -150,7 +150,7 @@ static int iphone_argc = 0;
   - (void)applicationWillResignActive:(UIApplication*)application {}
   - (void)applicationDidBecomeActive:(UIApplication*)application {}
   - (void)glkView:(GLKView *)v drawInRect:(CGRect)rect {
-    LFAppFrame(); 
+    LFAppFrame(true); 
     if (wait_forever_fh && restart_wait_forever_fh && !(restart_wait_forever_fh=0))
         [wait_forever_fh waitForDataInBackgroundAndNotify];
   }
@@ -530,7 +530,6 @@ static int iphone_argc = 0;
 
 extern "C" void NativeWindowInit() { 
   NativeWindow *screen = GetNativeWindow();
-  screen->opengles_version = 2;
   screen->id = [[LFUIApplication sharedAppDelegate] view];
 }
 extern "C" int NativeWindowOrientation() { return [[LFUIApplication sharedAppDelegate] getOrientation]; }

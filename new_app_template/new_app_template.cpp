@@ -51,6 +51,9 @@ extern "C" int main(int argc, const char *argv[]) {
     screen->width = 420;
     screen->height = 380;
     FLAGS_target_fps = 30;
+    FLAGS_font_engine = "atlas";
+    FLAGS_default_font = "Nobile.ttf";
+    FLAGS_default_font_flag = FLAGS_lfapp_console_font_flag = 0;
     FLAGS_lfapp_audio = FLAGS_lfapp_video = FLAGS_lfapp_input = 1;
 
     if (app->Create(argc, argv, __FILE__)) { app->Free(); return -1; }
@@ -70,10 +73,10 @@ extern "C" int main(int argc, const char *argv[]) {
 
     BindMap *binds = screen->binds = new BindMap();
     // binds.push_back(Bind(key,         callback));
-    binds->Add(Bind(Key::Backquote, Bind::CB(bind([&]() { screen->console->Toggle(); }))));
-    binds->Add(Bind(Key::Quote,     Bind::CB(bind([&]() { screen->console->Toggle(); }))));
-    binds->Add(Bind(Key::Escape,    Bind::CB(bind(&Shell::quit, &app->shell, vector<string>()))));
+    binds->Add(Bind(Key::Escape,    Bind::CB(bind(&Shell::quit,     &app->shell, vector<string>()))));
     binds->Add(Bind(Key::Return,    Bind::CB(bind(&Shell::grabmode, &app->shell, vector<string>()))));
+    binds->Add(Bind(Key::Backquote, Bind::CB(bind(&Shell::console,  &app->shell, vector<string>()))));
+    binds->Add(Bind(Key::Quote,     Bind::CB(bind(&Shell::console,  &app->shell, vector<string>()))));
     binds->Add(Bind(Key::LeftShift, Bind::TimeCB(bind(&Entity::RollLeft,   screen->cam, _1))));
     binds->Add(Bind(Key::Space,     Bind::TimeCB(bind(&Entity::RollRight,  screen->cam, _1))));
     binds->Add(Bind('w',            Bind::TimeCB(bind(&Entity::MoveFwd,    screen->cam, _1))));

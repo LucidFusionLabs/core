@@ -193,9 +193,6 @@ typedef struct ec_key_st EC_KEY;
 struct LFApp {
     struct Log { enum { Fatal=-1, Error=0, Info=3, Debug=7 }; int v; };
     struct Frame { enum { DontSkip=8 }; int v; };
-    struct Events {
-        int input, mouse_click, mouse_wheel, mouse_move, mouse_hover, key, gui, bind;
-    };
     bool run, initialized;
     size_t main_thread_id;
     long long frames_ran;
@@ -207,7 +204,6 @@ struct NativeWindow {
     bool minimized, cursor_grabbed, frame_init;
     int gesture_swipe_up, gesture_swipe_down, gesture_tap[2], gesture_dpad_stop[2];
     float gesture_dpad_x[2], gesture_dpad_y[2], gesture_dpad_dx[2], gesture_dpad_dy[2], multitouch_keyboard_x;
-    LFApp::Events events;
 };
 
 void NativeWindowInit();
@@ -223,6 +219,7 @@ int LFAppMain();
 int LFAppMainLoop();
 int LFAppFrame(bool handle_events);
 void LFAppLog(int level, const char *file, int line, const char *fmt, ...);
+void LFAppWakeup(void*);
 void LFAppFatal();
 void LFAppShutdown();
 void SetLFAppMainThread();
@@ -233,6 +230,8 @@ void WindowClosed();
 int KeyPress(int button, int down);
 int MouseClick(int button, int down, int x, int y);
 int MouseMove(int x, int y, int dx, int dy);
+void QueueKeyPress(int button, int down);
+void QueueMouseClick(int button, int down, int x, int y);
 void EndpointRead(void*, const char *name, const char *buf, int len);
 void ShellRun(const char *text);
 const char *LFAppDownloadDir();

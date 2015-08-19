@@ -185,6 +185,11 @@ void Mouse::ReleaseFocus() {}
 #endif
 
 #ifdef LFL_ANDROIDINPUT
+struct AndroidInputModule : public InputModule {
+  bool frame_on_keyboard_input = 0, frame_on_mouse_input = 0;
+  int Frame(unsigned clicks) { return app->input.DispatchQueuedInput(frame_on_keyboard_input, frame_on_mouse_input); }
+};
+
 const int Key::Escape     = -1;
 const int Key::Return     = 10;
 const int Key::Up         = -3;
@@ -222,10 +227,18 @@ const int Key::End        = -34;
 
 static bool android_keyboard_toggled = false;
 
+extern "C" void AndroidSetFrameOnKeyboardInput(int v) { static_cast<AndroidInputModule*>(app->input.impl)->frame_on_keyboard_input = v; }
+extern "C" void AndroidSetFrameOnMouseInput   (int v) { static_cast<AndroidInputModule*>(app->input.impl)->frame_on_mouse_input    = v; }
+
 string Clipboard::Get() { return ""; }
 void Clipboard::Set(const string &s) {}
+int TouchDevice::SetExtraScale(bool v) {}
+int TouchDevice::SetMultisample(bool v) {}
 void TouchDevice::OpenKeyboard()  { if ( android_keyboard_toggled) return; AndroidToggleKeyboard(); android_keyboard_toggled=1; }
 void TouchDevice::CloseKeyboard() { if (!android_keyboard_toggled) return; AndroidToggleKeyboard(); android_keyboard_toggled=0; }
+void TouchDevice::CloseKeyboardAfterReturn(bool v) {} 
+Box  TouchDevice::GetKeyboardBox() { return Box(); }
+void TouchDevice::ToggleToolbarButton(const string &n) {}
 void Mouse::GrabFocus() {}
 void Mouse::ReleaseFocus() {}
 #endif
@@ -748,7 +761,6 @@ struct GLFWInputModule : public InputModule {
   }
   static bool LoadScreen(GLFWwindow *W) {
     if (!SetNativeWindowByID(W)) return 0;
-    screen->events.input++;
     return 1;
   }
   static void WindowSize (GLFWwindow *W, int w, int h) { if (!LoadScreen(W)) return; screen->Reshaped(w, h); }
@@ -857,7 +869,6 @@ struct SDLInputModule : public InputModule {
       else if (ev.type == SDL_MOUSEBUTTONDOWN) app->input.MouseClick(ev.button.button, 1, point(ev.button.x, ev.button.y));
       else if (ev.type == SDL_MOUSEBUTTONUP)   app->input.MouseClick(ev.button.button, 0, point(ev.button.x, ev.button.y));
       // else if (ev.type == SDL_ACTIVEEVENT && ev.active.state & SDL_APPACTIVE) { if ((minimized = ev.active.gain)) return 0; }
-      if (screen) screen->events.input++;
     }
 
 #ifndef __APPLE__
@@ -950,6 +961,8 @@ int Input::Init() {
 
 #if defined(LFL_X11INPUT)
   impl = new X11InputModule();
+#elif defined(LFL_ANDROIDINPUT)
+  impl = new AndroidInputModule();
 #elif defined(LFL_GLFWINPUT)
   impl = new GLFWInputModule();
 #elif defined(LFL_SDLINPUT)
@@ -963,8 +976,9 @@ int Input::Init(Window *W) {
 }
 
 int Input::Frame(unsigned clicks) {
-  if (impl) impl->Frame(clicks);
-  return 0;
+  int events = 0;
+  if (impl) events += impl->Frame(clicks);
+  return events;
 }
 
 #if 0
@@ -977,22 +991,27 @@ int Input::GestureFrame(unsinged clicks) {
 }
 #endif
 
-int Input::DispatchQueuedInput() {
-  vector<Callback> icb;
+int Input::DispatchQueuedInput(bool event_on_keyboard_input, bool event_on_mouse_input) {
+  vector<InputCB> icb;
   {
     ScopedMutex sm(queued_input_mutex);
     swap(icb, queued_input);
   }
-  int ret = icb.size();
-  for (auto i = icb.begin(); i != icb.end(); ++i) {
-    (*i)();
-    if (screen) screen->events.input++;
-  }
-  return ret;
+  int events = 0, v = 0;
+  for (auto &i : icb)
+    switch (i.type) { 
+      case InputCB::KeyPress:   v = KeyPress  (i.a, i.b);                         if (event_on_keyboard_input) events += v; break;
+      case InputCB::MouseClick: v = MouseClick(i.a, i.b, point(i.x, i.y));        if (event_on_mouse_input)    events += v; break;
+      case InputCB::MouseMove:  v = MouseMove (point(i.x, i.y), point(i.a, i.b)); if (event_on_mouse_input)    events += v; break;
+      case InputCB::MouseWheel: v = MouseMove (point(i.x, i.y), point(i.a, i.b)); if (event_on_mouse_input)    events += v; break;
+    }
+  return events;
 }
 
 int Input::KeyPress(int key, bool down) {
-  // if (!MainThread()) ERROR("KeyPress() called from thread ", Thread::GetId());
+#ifdef LFL_DEBUG
+  if (!MainThread()) ERROR("KeyPress() called from thread ", Thread::GetId());
+#endif
 
   switch (key) {
     case Key::LeftShift:   left_shift_down = down; break;
@@ -1005,14 +1024,12 @@ int Input::KeyPress(int key, bool down) {
 
   InputEvent::Id event = key | (CtrlKeyDown() ? Key::Modifier::Ctrl : 0) | (CmdKeyDown() ? Key::Modifier::Cmd : 0);
   int fired = KeyEventDispatch(event, down);
-  screen->events.key++;
-  screen->events.gui += fired;
   if (fired) return fired;
 
   for (auto g = screen->input_bind.begin(); g != screen->input_bind.end(); ++g)
     if ((*g)->active) (*g)->Input(event, down); 
 
-  return fired;
+  return 0;
 }
 
 int Input::KeyEventDispatch(InputEvent::Id event, bool down) {
@@ -1028,7 +1045,6 @@ int Input::KeyEventDispatch(InputEvent::Id event, bool down) {
     if (!g->active) continue;
     if (g->toggle_bind.key == event && g->toggle_active.mode != Toggler::OneShot) return 0;
 
-    g->events.total++;
     if (event == paste_bind.key) { g->Input(Clipboard::Get()); return 1; }
     switch (event) {
       case Key::Backspace: g->Erase();       return 1;
@@ -1046,8 +1062,8 @@ int Input::KeyEventDispatch(InputEvent::Id event, bool down) {
       case Key::Escape:    g->Escape();      return 1;
     }
 
-    if (cmd_down) { g->events.total--; return 0; }
-    if (key >= 128) { g->events.total--; /* ERROR("unhandled key ", event); */ continue; }
+    if (cmd_down) return 0;
+    if (key >= 128) { /* ERROR("unhandled key ", event); */ continue; }
 
     if (shift_down) key = Key::ShiftModified(key);
     if (ctrl_down)  key = Key::CtrlModified(key);
@@ -1060,8 +1076,6 @@ int Input::KeyEventDispatch(InputEvent::Id event, bool down) {
 
 int Input::MouseMove(const point &p, const point &d) {
   int fired = MouseEventDispatch(Mouse::Event::Motion, p, MouseButton1Down());
-  screen->events.mouse_move++;
-  screen->events.gui += fired;
   if (!app->grab_mode.Enabled()) return fired;
   if (d.x<0) screen->cam->YawLeft  (-d.x); else if (d.x>0) screen->cam->YawRight(d.x);
   if (d.y<0) screen->cam->PitchDown(-d.y); else if (d.y>0) screen->cam->PitchUp (d.y);
@@ -1070,8 +1084,6 @@ int Input::MouseMove(const point &p, const point &d) {
 
 int Input::MouseWheel(const point &p, const point &d) {
   int fired = MouseEventDispatch(Mouse::Event::Wheel, screen->mouse, d.y);
-  screen->events.mouse_wheel++;
-  screen->events.gui += fired;
   return fired;
 }
 
@@ -1081,8 +1093,6 @@ int Input::MouseClick(int button, bool down, const point &p) {
   else if (event == Mouse::Button::_2) mouse_but2_down = down;
 
   int fired = MouseEventDispatch(event, p, down);
-  screen->events.mouse_click++;
-  screen->events.gui += fired;
   if (fired) return fired;
 
   for (auto g = screen->input_bind.begin(); g != screen->input_bind.end(); ++g)
@@ -1132,7 +1142,6 @@ int MouseController::Input(InputEvent::Id event, const point &p, int down, int f
     if (e->deleted) continue;
     e->val = 0;
     e->CB.Run(p, event, 0);
-    events.hover++;
     fired++;
   }
 
@@ -1155,9 +1164,7 @@ int MouseController::Input(InputEvent::Id event, const point &p, int down, int f
       if (FLAGS_input_debug && down) INFO("MouseController::Input ", p.DebugString(), " ", e->box.DebugString());
       if (!e->CB.Run(p, event, e_hover ? 1 : down)) continue;
 
-      if (1)       { events.total++; }
-      if (e_hover) { events.hover++; hover.push_back(ForwardIteratorFromReverse(e) - hit.data.begin()); }
-      else         { events.click++; }
+      if (e_hover) hover.push_back(ForwardIteratorFromReverse(e) - hit.data.begin());
       fired++;
 
       if (e->evtype == Event::Drag && down) drag.insert(ForwardIteratorFromReverse(e) - hit.data.begin());

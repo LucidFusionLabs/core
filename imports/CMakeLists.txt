@@ -134,6 +134,9 @@ if(LFL_OPENSSL)
     if(WIN32)
         set(OPENSSL_INCLUDE ${CMAKE_CURRENT_BINARY_DIR}/openssl/include PARENT_SCOPE)
         set(OPENSSL_LIB ${CMAKE_CURRENT_BINARY_DIR}/openssl/lib/ssleay32.lib ${CMAKE_CURRENT_BINARY_DIR}/openssl/lib/libeay32.lib PARENT_SCOPE)
+    elseif(LFL_ANDROID)
+        set(OPENSSL_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/OpenSSL-for-Android-Prebuilt/openssl-1.0.2/include PARENT_SCOPE)
+        set(OPENSSL_LIB ${CMAKE_CURRENT_SOURCE_DIR}/OpenSSL-for-Android-Prebuilt/openssl-1.0.2/armeabi-v7a/lib/libssl.a ${CMAKE_CURRENT_SOURCE_DIR}/OpenSSL-for-Android-Prebuilt/openssl-1.0.2/armeabi-v7a/lib/libcrypto.a PARENT_SCOPE)
     elseif(LFL_IPHONE)
         set(OPENSSL_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/ios-openssl/include PARENT_SCOPE)
         set(OPENSSL_LIB ${CMAKE_CURRENT_SOURCE_DIR}/ios-openssl/lib/libssl.a ${CMAKE_CURRENT_SOURCE_DIR}/ios-openssl/lib/libcrypto.a PARENT_SCOPE)
@@ -292,19 +295,12 @@ if(LFL_JUDY)
     set(JUDY_LIB ${CMAKE_CURRENT_BINARY_DIR}/judy/src/JudyL/.libs/libJudyL.a ${CMAKE_CURRENT_BINARY_DIR}/judy/src/JudyL/.libs/libprev.a ${CMAKE_CURRENT_BINARY_DIR}/judy/src/JudyL/.libs/libnext.a ${CMAKE_CURRENT_BINARY_DIR}/judy/src/JudySL/.libs/libJudySL.a ${CMAKE_CURRENT_BINARY_DIR}/judy/src/JudyCommon/.libs/libJudyMalloc.a PARENT_SCOPE)
 endif(LFL_JUDY)
 
-set(CLANG_LIB $ENV{HOME}/cling/lib/libclang.a $ENV{HOME}/cling/lib/libclangAnalysis.a $ENV{HOME}/cling/lib/libclangARCMigrate.a $ENV{HOME}/cling/lib/libclangAST.a $ENV{HOME}/cling/lib/libclangASTMatchers.a $ENV{HOME}/cling/lib/libclangBasic.a $ENV{HOME}/cling/lib/libclangCodeGen.a $ENV{HOME}/cling/lib/libclangDriver.a $ENV{HOME}/cling/lib/libclangDynamicASTMatchers.a $ENV{HOME}/cling/lib/libclangEdit.a $ENV{HOME}/cling/lib/libclangFormat.a $ENV{HOME}/cling/lib/libclangFrontend.a $ENV{HOME}/cling/lib/libclangFrontendTool.a $ENV{HOME}/cling/lib/libclangIndex.a $ENV{HOME}/cling/lib/libclangLex.a $ENV{HOME}/cling/lib/libclangParse.a $ENV{HOME}/cling/lib/libclangRewrite.a $ENV{HOME}/cling/lib/libclangRewriteFrontend.a $ENV{HOME}/cling/lib/libclangSema.a $ENV{HOME}/cling/lib/libclangSerialization.a $ENV{HOME}/cling/lib/libclangStaticAnalyzerCheckers.a $ENV{HOME}/cling/lib/libclangStaticAnalyzerCore.a $ENV{HOME}/cling/lib/libclangStaticAnalyzerFrontend.a $ENV{HOME}/cling/lib/libclangTooling.a)
-set(CLING_LIB $ENV{HOME}/cling/lib/libclingInterpreter.a $ENV{HOME}/cling/lib/libclingMetaProcessor.a $ENV{HOME}/cling/lib/libclingUITextInput.a $ENV{HOME}/cling/lib/libclingUserInterface.a $ENV{HOME}/cling/lib/libclingUtils.a)
-set(LLVM_LIB $ENV{HOME}/cling/lib/libLLVMAnalysis.a $ENV{HOME}/cling/lib/libLLVMAsmParser.a $ENV{HOME}/cling/lib/libLLVMAsmPrinter.a $ENV{HOME}/cling/lib/libLLVMBitReader.a $ENV{HOME}/cling/lib/libLLVMBitWriter.a $ENV{HOME}/cling/lib/libLLVMCodeGen.a $ENV{HOME}/cling/lib/libLLVMCore.a $ENV{HOME}/cling/lib/libLLVMDebugInfo.a $ENV{HOME}/cling/lib/libLLVMExecutionEngine.a $ENV{HOME}/cling/lib/libLLVMInstCombine.a $ENV{HOME}/cling/lib/libLLVMInstrumentation.a $ENV{HOME}/cling/lib/libLLVMInterpreter.a $ENV{HOME}/cling/lib/libLLVMipa.a $ENV{HOME}/cling/lib/libLLVMipo.a $ENV{HOME}/cling/lib/libLLVMIRReader.a $ENV{HOME}/cling/lib/libLLVMJIT.a $ENV{HOME}/cling/lib/libLLVMLineEditor.a $ENV{HOME}/cling/lib/libLLVMLinker.a $ENV{HOME}/cling/lib/libLLVMLTO.a $ENV{HOME}/cling/lib/libLLVMMC.a $ENV{HOME}/cling/lib/libLLVMMCAnalysis.a $ENV{HOME}/cling/lib/libLLVMMCDisassembler.a $ENV{HOME}/cling/lib/libLLVMMCJIT.a $ENV{HOME}/cling/lib/libLLVMMCParser.a $ENV{HOME}/cling/lib/libLLVMObjCARCOpts.a $ENV{HOME}/cling/lib/libLLVMObject.a $ENV{HOME}/cling/lib/libLLVMOption.a $ENV{HOME}/cling/lib/libLLVMProfileData.a $ENV{HOME}/cling/lib/libLLVMRuntimeDyld.a $ENV{HOME}/cling/lib/libLLVMScalarOpts.a $ENV{HOME}/cling/lib/libLLVMSelectionDAG.a $ENV{HOME}/cling/lib/libLLVMSupport.a $ENV{HOME}/cling/lib/libLLVMTableGen.a $ENV{HOME}/cling/lib/libLLVMTarget.a $ENV{HOME}/cling/lib/libLLVMTransformUtils.a $ENV{HOME}/cling/lib/libLLVMVectorize.a $ENV{HOME}/cling/lib/libLLVMX86AsmParser.a $ENV{HOME}/cling/lib/libLLVMX86AsmPrinter.a $ENV{HOME}/cling/lib/libLLVMX86CodeGen.a $ENV{HOME}/cling/lib/libLLVMX86Desc.a $ENV{HOME}/cling/lib/libLLVMX86Disassembler.a $ENV{HOME}/cling/lib/libLLVMX86Info.a $ENV{HOME}/cling/lib/libLLVMX86Utils.a)
-
-# cling
-if(LFL_CLING)
-    set(CLING_INCLUDE $ENV{HOME}/cling/include PARENT_SCOPE)
-    set(CLING_LIB ${CLANG_LIB} ${CLING_LIB} ${LLVM_LIB} $ENV{HOME}/cling/lib/libLTO.a -lcurses PARENT_SCOPE) 
-endif(LFL_CLING)
-
 # libclang
 if(LFL_LIBCLANG)
-    set(LIBCLANG_INCLUDE $ENV{HOME}/cling/include PARENT_SCOPE)
+    set(LLVM_DIR $ENV{HOME}/llvm)
+    set(CLANG_LIB ${LLVM_DIR}/lib/libclang.dylib)
+    set(LLVM_LIB ${LLVM_DIR}/lib/libLLVMAnalysis.a ${LLVM_DIR}/lib/libLLVMAsmParser.a ${LLVM_DIR}/lib/libLLVMAsmPrinter.a ${LLVM_DIR}/lib/libLLVMBitReader.a ${LLVM_DIR}/lib/libLLVMBitWriter.a ${LLVM_DIR}/lib/libLLVMCodeGen.a ${LLVM_DIR}/lib/libLLVMCore.a ${LLVM_DIR}/lib/libLLVMExecutionEngine.a ${LLVM_DIR}/lib/libLLVMInstCombine.a ${LLVM_DIR}/lib/libLLVMInstrumentation.a ${LLVM_DIR}/lib/libLLVMInterpreter.a ${LLVM_DIR}/lib/libLLVMipa.a ${LLVM_DIR}/lib/libLLVMipo.a ${LLVM_DIR}/lib/libLLVMIRReader.a ${LLVM_DIR}/lib/libLLVMLineEditor.a ${LLVM_DIR}/lib/libLLVMLinker.a ${LLVM_DIR}/lib/libLLVMLTO.a ${LLVM_DIR}/lib/libLLVMMC.a ${LLVM_DIR}/lib/libLLVMMCDisassembler.a ${LLVM_DIR}/lib/libLLVMMCJIT.a ${LLVM_DIR}/lib/libLLVMMCParser.a ${LLVM_DIR}/lib/libLLVMObjCARCOpts.a ${LLVM_DIR}/lib/libLLVMObject.a ${LLVM_DIR}/lib/libLLVMOption.a ${LLVM_DIR}/lib/libLLVMProfileData.a ${LLVM_DIR}/lib/libLLVMRuntimeDyld.a ${LLVM_DIR}/lib/libLLVMScalarOpts.a ${LLVM_DIR}/lib/libLLVMSelectionDAG.a ${LLVM_DIR}/lib/libLLVMSupport.a ${LLVM_DIR}/lib/libLLVMTableGen.a ${LLVM_DIR}/lib/libLLVMTarget.a ${LLVM_DIR}/lib/libLLVMTransformUtils.a ${LLVM_DIR}/lib/libLLVMVectorize.a ${LLVM_DIR}/lib/libLLVMX86AsmParser.a ${LLVM_DIR}/lib/libLLVMX86AsmPrinter.a ${LLVM_DIR}/lib/libLLVMX86CodeGen.a ${LLVM_DIR}/lib/libLLVMX86Desc.a ${LLVM_DIR}/lib/libLLVMX86Disassembler.a ${LLVM_DIR}/lib/libLLVMX86Info.a ${LLVM_DIR}/lib/libLLVMX86Utils.a)
+    set(LIBCLANG_INCLUDE ${LLVM_DIR}/include PARENT_SCOPE)
     set(LIBCLANG_LIB ${CLANG_LIB} ${LLVM_LIB} -lcurses PARENT_SCOPE)
 endif(LFL_LIBCLANG)
 

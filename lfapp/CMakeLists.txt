@@ -20,6 +20,7 @@ set(LFAPP_LIB ${LFL_PROJECT}_lfapp ${OPENGL_LIB})
 set(LFAPP_DEF -DLFL_BUILD ${PLATFORM_DEF} ${WXWIDGETS_DEF})
 set(LFAPP_CFLAGS)
 
+lfapp_def(LFL_DEBUG)
 lfapp_def(LFL_HEADLESS)
 lfapp_def(LFL_TEST)
 lfapp_def(LFL_GLES2)
@@ -97,7 +98,6 @@ lfapp_lib(LFL_TINYJS "${TINYJS_INCLUDE}" "${TINYJS_LIB}")
 lfapp_lib(LFL_JSONCPP "${JSONCPP_INCLUDE}" "${JSONCPP_LIB}")
 lfapp_lib(LFL_V8JS "${V8JS_INCLUDE}" "${V8JS_LIB}")
 lfapp_lib(LFL_LUA "${LUA_INCLUDE}" "${LUA_LIB}")
-lfapp_lib(LFL_CLING "${CLING_INCLUDE}" "${CLING_LIB}")
 lfapp_lib(LFL_LIBCLANG "${LIBCLANG_INCLUDE}" "${LIBCLANG_LIB}")
 
 set(LFAPP_LIB ${LFAPP_LIB} ${PLATFORM_LIB})
@@ -170,7 +170,6 @@ elseif(LFL_IPHONE)
         target_link_libraries(${target} ${LFAPP_LIB})
     endmacro(lfapp_add_target)
     macro(lfapp_post_build_start target binname pkgname)
-        get_filename_component(dirname ${CMAKE_CURRENT_SOURCE_DIR} NAME)
         set(bin i${pkgname}.app/Contents/MacOS/${target}) 
         set(info_plist ${CMAKE_CURRENT_SOURCE_DIR}/iphone-Info.plist)
         set(entitlements_plist ${CMAKE_CURRENT_SOURCE_DIR}/iphone-Entitlements.plist)
@@ -180,7 +179,7 @@ elseif(LFL_IPHONE)
             COMMAND cp  ${info_plist} i${pkgname}.app/Info.plist
             COMMAND cp -r ${CMAKE_CURRENT_SOURCE_DIR}/assets i${pkgname}.app
             COMMAND cp ${LFL_CORE}/lfapp/*.glsl i${pkgname}.app/assets
-            COMMAND cp ${CMAKE_CURRENT_SOURCE_DIR}/${dirname}-iphone/Images/Icon*.png i${pkgname}.app
+            COMMAND cp ${CMAKE_CURRENT_SOURCE_DIR}/${target}-iphone/Images/Icon*.png i${pkgname}.app
             COMMAND cp ${target} i${pkgname}.app
             COMMAND if ! [ ${LFL_IPHONESIM} ]\; then codesign -f -s \"${IPHONECERT}\" --entitlements ${entitlements_plist} i${pkgname}.app\; fi)
         add_custom_target(${target}_pkg WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
@@ -221,9 +220,9 @@ elseif(LFL_ANDROID)
         add_library(${target} ${ARGN})
         target_link_libraries(${target} ${LFL_PROJECT}_lfapp)
         set(${target}_lfapp_obj ${CMAKE_CURRENT_BINARY_DIR}/${LFL_PROJECT}_lfapp_obj/lib${LFL_PROJECT}_lfapp.a)
-        set(${target}_deps ${LFL_CORE}/lfapp/lfjni/lfjni.cpp ${${target}_lfapp_obj})
+        set(${target}_deps ${LFL_CORE}/lfapp/jni/lfjni.cpp ${${target}_lfapp_obj})
         set_source_files_properties(${${target}_lfapp_obj} PROPERTIES HEADER_FILE_ONLY TRUE)
-        set_source_files_properties(${LFL_CORE}/lfapp/lfjni/lfjni.cpp PROPERTIES HEADER_FILE_ONLY TRUE)
+        set_source_files_properties(${LFL_CORE}/lfapp/jni/lfjni.cpp PROPERTIES HEADER_FILE_ONLY TRUE)
         set_source_files_properties(${ARGV1} PROPERTIES OBJECT_DEPENDS "${${target}_deps}")
     endmacro(lfapp_add_target)
     macro(lfapp_post_build_start target binname pkgname)
@@ -233,8 +232,6 @@ elseif(LFL_ANDROID)
             COMMAND cp ${LFL_CORE}/lfapp/*.glsl ${CMAKE_CURRENT_SOURCE_DIR}/assets
             COMMAND if [ -f ${CMAKE_CURRENT_SOURCE_DIR}/assets/*.wav ]; then cp ${CMAKE_CURRENT_SOURCE_DIR}/assets/*.wav ../res/raw\; fi
             COMMAND if [ -f ${CMAKE_CURRENT_SOURCE_DIR}/assets/*.mp3 ]; then cp ${CMAKE_CURRENT_SOURCE_DIR}/assets/*.mp3 ../res/raw\; fi)
-        add_custom_target(${target}_pkg_debug WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/${target}-android DEPENDS ${target}
-            COMMAND "ANDROID_HOME=${ANDROIDSDK}" ${GRADLEBIN} assembleDebug)
         add_custom_target(${target}_debug WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/${target}-android DEPENDS ${target}
             COMMAND "ANDROID_HOME=${ANDROIDSDK}" ${GRADLEBIN} uninstallDebug
             COMMAND "ANDROID_HOME=${ANDROIDSDK}" ${GRADLEBIN}   installDebug

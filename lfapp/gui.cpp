@@ -67,7 +67,6 @@ Window::~Window() {
 }
 
 void Window::ClearEvents() { 
-  memzero(events);
   ClearMouseGUIEvents();
   ClearKeyboardGUIEvents();
   ClearInputBindEvents();
@@ -957,7 +956,7 @@ struct ClangTokenVisitor {
     vector<string> argv;
     vector<const char*> av = { "-xc++", "-std=c++11" };
     Split(compile_command, isspace, &argv);
-    // for (int i=1; i<argv.size()-4; i++) if (!PrefixMatch(argv[i], "-O") && !PrefixMatch(argv[i], "-m")) av.push_back(argv[i].data());
+    for (int i=1; i<(int)argv.size()-4; i++) if (!PrefixMatch(argv[i], "-O") && !PrefixMatch(argv[i], "-m")) av.push_back(argv[i].data());
     chdir(working_directory.c_str());
     CXIndex index = clang_createIndex(0, 0);
     CXTranslationUnit tu = clang_parseTranslationUnit(index, filename.c_str(), av.data(), av.size(), 0, 0, CXTranslationUnit_None);

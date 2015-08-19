@@ -536,7 +536,7 @@ template <class X> struct MessageQueue {
 struct CallbackQueue : public MessageQueue<Callback*> {
     void Shutdown() { Write(new Callback()); }
     void HandleMessage(Callback *cb) { (*cb)(); delete cb; }
-    void HandleMessages() { Callback *cb=0; while (NBRead(&cb)) HandleMessage(cb); }
+    int  HandleMessages() { int n=0; Callback *cb=0; for (; NBRead(&cb); n++) HandleMessage(cb); return n; }
     void HandleMessagesLoop() { for (use_cv=1; GetLFApp()->run; ) HandleMessage(Read()); }
 };
 

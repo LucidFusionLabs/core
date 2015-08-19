@@ -27,7 +27,7 @@ include $(PREBUILT_STATIC_LIBRARY)
 
 include $(CLEAR_VARS)
 LOCAL_MODULE := lfjni
-LOCAL_SRC_FILES := $(LOCAL_PATH)/../../../core/lfapp/lfjni/lfjni.cpp
+LOCAL_SRC_FILES := $(LOCAL_PATH)/../../../core/lfapp/jni/lfjni.cpp
 LOCAL_LDLIBS := -lGLESv2 -lGLESv1_CM -llog -lz
 LOCAL_STATIC_LIBRARIES := $BINNAME lfapp Box2D libpng libjpeg-turbo
 include $(BUILD_SHARED_LIBRARY)

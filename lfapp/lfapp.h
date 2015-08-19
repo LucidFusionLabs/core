@@ -481,14 +481,14 @@ struct FrameScheduler {
   mutex frame_mutex, wait_mutex;
   SocketWakeupThread wakeup_thread;
   SelectSocketSet wait_forever_sockets;
-  Socket system_event_socket = -1;
+  Socket system_event_socket = -1, wait_forever_wakeup_socket = -1;
   bool rate_limit = 1, wait_forever = 1, wait_forever_thread = 1, synchronize_waits = 1, monolithic_frame = 1;
   FrameScheduler();
 
   void Init();
   void Free();
   void Start();
-  void FrameWait();
+  bool FrameWait();
   void FrameDone();
   void Wakeup(void*);
   bool WakeupIn(void*, Time interval, bool force=0);
@@ -593,7 +593,7 @@ struct Application : public ::LFApp, public Module {
   int Start();
   int HandleEvents(unsigned clicks);
   int EventDrivenFrame(bool handle_events);
-  int TimerDrivenFrame();
+  int TimerDrivenFrame(bool got_wakeup);
   int Main();
   int MainLoop();
   int Free();

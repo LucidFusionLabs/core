@@ -116,6 +116,17 @@
 #include <GL/glu.h>
 #endif
 
+#if !defined(LFL_HEADLESS) && (defined(LFL_MOBILE) || defined(LFL_QT))
+#define glGenRenderbuffersEXT(a,b) glGenRenderbuffers(a,b)
+#define glBindRenderbufferEXT(a,b) glBindRenderbuffer(a,b)
+#define glRenderbufferStorageEXT(a,b,c,d) glRenderbufferStorage(a,b,c,d)
+#define glGenFramebuffersEXT(a,b) glGenFramebuffers(a,b)
+#define glBindFramebufferEXT(a,b) glBindFramebuffer(a,b)
+#define glFramebufferTexture2DEXT(a,b,c,d,e) glFramebufferTexture2D(a,b,c,d,e)
+#define glFramebufferRenderbufferEXT(a,b,c,d) glFramebufferRenderbuffer(a,b,c,d)
+#define glCheckFramebufferStatusEXT(a) glCheckFramebufferStatus(a)
+#endif
+
 #ifdef LFL_X11VIDEO
 #include <X11/Xlib.h>
 #include <GL/glx.h>
@@ -138,14 +149,6 @@ extern "C" {
 #include <QApplication>
 extern QApplication *lfl_qapp;
 extern "C" int LFLQTInit();
-#define glGenRenderbuffersEXT(a,b) glGenRenderbuffers(a,b)
-#define glBindRenderbufferEXT(a,b) glBindRenderbuffer(a,b)
-#define glRenderbufferStorageEXT(a,b,c,d) glRenderbufferStorage(a,b,c,d)
-#define glGenFramebuffersEXT(a,b) glGenFramebuffers(a,b)
-#define glBindFramebufferEXT(a,b) glBindFramebuffer(a,b)
-#define glFramebufferTexture2DEXT(a,b,c,d,e) glFramebufferTexture2D(a,b,c,d,e)
-#define glFramebufferRenderbufferEXT(a,b,c,d) glFramebufferRenderbuffer(a,b,c,d)
-#define glCheckFramebufferStatusEXT(a) glCheckFramebufferStatus(a)
 #endif // LFL_QT
 
 #ifdef LFL_WXWIDGETS
@@ -430,7 +433,7 @@ struct OpenGLES1 : public GraphicsDevice, public QTWindow {
     GDDebug("ActiveTexture=", n);
   }
   void BindTexture(int t, int n) { glBindTexture(t, n); GDDebug("BindTexture=", t, ",", n); }
-  void VertexPointer(int m, int t, int w, int o, float *verts, int l, int *out, bool ud) { glVertexPointer  (m, t, w, verts + o/sizeof(float)); GDDebug("VertexPointer"); }
+  bool VertexPointer(int m, int t, int w, int o, float *verts, int l, int *out, bool ud) { glVertexPointer  (m, t, w, verts + o/sizeof(float)); GDDebug("VertexPointer"); return true; }
   void TexPointer   (int m, int t, int w, int o, float *tex,   int l, int *out, bool ud) { glTexCoordPointer(m, t, w, tex   + o/sizeof(float)); GDDebug("TexPointer"); }
   void ColorPointer (int m, int t, int w, int o, float *verts, int l, int *out, bool ud) { glColorPointer   (m, t, w, verts + o/sizeof(float)); GDDebug("ColorPointer"); }
   void NormalPointer(int m, int t, int w, int o, float *verts, int l, int *out, bool ud) { glNormalPointer  (   t, w, verts + o/sizeof(float)); GDDebug("NormalPointer"); }
@@ -588,10 +591,10 @@ struct OpenGLES2 : public GraphicsDevice, public QTWindow {
   void SetVertexAttribPointer(int slot, const VertexAttribPointer &ptr) { 
     glVertexAttribPointer(slot, ptr.m, ptr.t, GL_FALSE, ptr.w, (GLvoid*)(long)ptr.o);
   }
-  void VertexPointer(int m, int t, int w, int o, float *verts, int l, int *out, bool dirty) {
-    bool input_dirty = dirty, first = (*out == -1);
+  bool VertexPointer(int m, int t, int w, int o, float *verts, int l, int *out, bool dirty) {
+    bool input_dirty = dirty, first = (*out == -1), changed = first || *out != enabled_array;
     if (first) { glGenBuffers(1, (GLuint*)out); dirty = true; }
-    if (*out != enabled_array) {
+    if (changed) {
       CHECK(shader);
       CHECK((!o && !w) || o < w);
       enabled_array = *out;
@@ -604,6 +607,7 @@ struct OpenGLES2 : public GraphicsDevice, public QTWindow {
       else       glBufferSubData(GL_ARRAY_BUFFER, 0, l, verts);
     }
     GDDebug("VertexPointer");
+    return changed;
   }
   void TexPointer(int m, int t, int w, int o, float *tex, int l, int *out, bool dirty) {
     CHECK_LT(o, w);
@@ -957,7 +961,7 @@ struct FakeGraphicsDevice : public GraphicsDevice {
   virtual void BindTexture(int t, int n) {}
   virtual void ActiveTexture(int n) {}
   virtual void TexPointer(int m, int t, int w, int o, float *tex, int l, int *out, bool dirty) {}
-  virtual void VertexPointer(int m, int t, int w, int o, float *verts, int l, int *out, bool dirty) {}
+  virtual bool VertexPointer(int m, int t, int w, int o, float *verts, int l, int *out, bool dirty) { return true; }
   virtual void ColorPointer(int m, int t, int w, int o, float *verts, int l, int *out, bool dirty) {}
   virtual void NormalPointer(int m, int t, int w, int o, float *verts, int l, int *out, bool dirty) {}
   virtual void Color4f(float r, float g, float b, float a) {}
@@ -1067,7 +1071,7 @@ static void *android_screen_id = (void*)0x900df00d;
 struct AndroidVideoModule : public Module {
   int Init() {
     INFO("AndroidVideoModule::Init()");
-    if (AndroidVideoInit(app->video.opengles_version)) return -1;
+    if (AndroidVideoInit(&app->video.opengles_version)) return -1;
     CHECK(!screen->id);
     screen->id = android_screen_id;
     Window::active[screen->id] = screen;
@@ -1921,9 +1925,9 @@ void Box::Draw(const float *texcoord) const {
                     (float)x,   (float)y+h, tc[Texture::CoordMinX], tc[Texture::CoordMaxY],
                     (float)x+w, (float)y,   tc[Texture::CoordMaxX], tc[Texture::CoordMinY],
                     (float)x+w, (float)y+h, tc[Texture::CoordMaxX], tc[Texture::CoordMaxY] };
-  if (1)        screen->gd->VertexPointer(2, GraphicsDevice::Float, sizeof(float)*4, 0,               verts, sizeof(verts), &verts_ind, true);
-  if (texcoord) screen->gd->TexPointer   (2, GraphicsDevice::Float, sizeof(float)*4, sizeof(float)*2, verts, sizeof(verts), &verts_ind, false);
-  if (1)        screen->gd->DrawArrays(GraphicsDevice::TriangleStrip, 0, 4);
+  bool changed =           screen->gd->VertexPointer(2, GraphicsDevice::Float, sizeof(float)*4, 0,               verts, sizeof(verts), &verts_ind, true);
+  if (changed && texcoord) screen->gd->TexPointer   (2, GraphicsDevice::Float, sizeof(float)*4, sizeof(float)*2, verts, sizeof(verts), &verts_ind, false);
+  if (1)                   screen->gd->DrawArrays(GraphicsDevice::TriangleStrip, 0, 4);
 }
 
 void Box::DrawCrimped(const float *texcoord, int orientation, float scrollX, float scrollY) const {

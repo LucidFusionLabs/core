@@ -22,15 +22,14 @@ using std::string;
 #define ACTION_POINTER_DOWN 5
 #define ACTION_POINTER_UP   6
 
-JNIEnv *jni_env;
-jobject jni_activity,       jni_view,       jni_gplus;
-jclass  jni_activity_class, jni_view_class, jni_gplus_class, jni_throwable_class, jni_frame_class;
-jmethodID jni_view_method_swap, jni_activity_method_toggle_keyboard, jni_activity_method_write_internal_file, jni_activity_method_play_music, jni_activity_method_play_background_music, jni_gplus_method_write, jni_gplus_method_write_with_retry, jni_throwable_method_get_cause, jni_throwable_method_get_stack_trace, jni_throwable_method_tostring, jni_frame_method_tostring;
-
-int jni_activity_width=0, jni_activity_height=0;
+static JNIEnv *jni_env;
+static jobject jni_activity,       jni_view,       jni_gplus;
+static jclass  jni_activity_class, jni_view_class, jni_gplus_class, jni_throwable_class, jni_frame_class;
+static jmethodID jni_view_method_swap, jni_activity_method_toggle_keyboard, jni_activity_method_write_internal_file, jni_activity_method_play_music, jni_activity_method_play_background_music, jni_gplus_method_write, jni_gplus_method_write_with_retry, jni_throwable_method_get_cause, jni_throwable_method_get_stack_trace, jni_throwable_method_tostring, jni_frame_method_tostring;
 
 static NativeWindow *screen;
 static void *gplus_service;
+static int jni_activity_width=0, jni_activity_height=0;
 
 extern "C" int main(int argc, const char **argv);
 
@@ -50,7 +49,7 @@ extern "C" void Java_com_lucidfusionlabs_lfjava_Activity_main(JNIEnv *e, jclass 
     CHECK(jni_activity_method_play_background_music = jni_env->GetMethodID(jni_activity_class, "playBackgroundMusic", "(Landroid/media/MediaPlayer;)V"));
     CHECK(jni_activity_method_write_internal_file = jni_env->GetMethodID(jni_activity_class, "writeFile", "(Ljava/io/FileOutputStream;[BI)V"));
 
-    CHECK(fid = jni_env->GetFieldID(jni_activity_class, "view", "Lcom/lucidfusionlabs/lfjava/SurfaceView;"));
+    CHECK(fid = jni_env->GetFieldID(jni_activity_class, "view", "Lcom/lucidfusionlabs/lfjava/GameView;"));
     CHECK(jni_view = jni_env->NewGlobalRef(jni_env->GetObjectField(jni_activity, fid)));
     CHECK(jni_view_class = (jclass)jni_env->NewGlobalRef(jni_env->GetObjectClass(jni_view)));
     CHECK(jni_view_method_swap = jni_env->GetMethodID(jni_view_class, "swapEGL", "()V"));
@@ -75,14 +74,21 @@ extern "C" void Java_com_lucidfusionlabs_lfjava_Activity_main(JNIEnv *e, jclass 
     int ret = main(argc, argv);
     INFOf("main: env=%p ret=%d", jni_env, ret);
 }
-extern "C" void Java_com_lucidfusionlabs_lfjava_Activity_resize(JNIEnv *e, jclass c, jint w, jint h) { jni_activity_width = w; jni_activity_height = h; }
-extern "C" void Java_com_lucidfusionlabs_lfjava_Activity_key(JNIEnv *e, jclass c, jint down, jint keycode) { KeyPress(keycode, down); }
+extern "C" void Java_com_lucidfusionlabs_lfjava_Activity_resize(JNIEnv *e, jclass c, jint w, jint h) { 
+    jni_activity_width = w;
+    jni_activity_height = h;
+}
+extern "C" void Java_com_lucidfusionlabs_lfjava_Activity_key(JNIEnv *e, jclass c, jint down, jint keycode) {
+    QueueKeyPress(keycode, down);
+    LFAppWakeup((void*)1);
+}
 extern "C" void Java_com_lucidfusionlabs_lfjava_Activity_touch(JNIEnv *e, jclass c, jint action, jfloat x, jfloat y, jfloat p) {
     static float lx[2]={0,0}, ly[2]={0,0};
     int dpind = (/*FLAGS_swap_axis*/ 0) ? y < screen->width/2 : x < screen->width/2;
     if (action == ACTION_DOWN || action == ACTION_POINTER_DOWN) {
         // INFOf("%d down %f, %f", dpind, x, y);
-        MouseClick(1, 1, (int)x, screen->height - (int)y);
+        QueueMouseClick(1, 1, (int)x, screen->height - (int)y);
+        LFAppWakeup((void*)1);
         screen->gesture_tap[dpind] = 1;
         screen->gesture_dpad_x[dpind] = x;
         screen->gesture_dpad_y[dpind] = y;
@@ -90,7 +96,8 @@ extern "C" void Java_com_lucidfusionlabs_lfjava_Activity_touch(JNIEnv *e, jclass
         ly[dpind] = y;
     } else if (action == ACTION_UP || action == ACTION_POINTER_UP) {
         // INFOf("%d up %f, %f", dpind, x, y);
-        MouseClick(1, 0, (int)x, screen->height - (int)y);
+        QueueMouseClick(1, 0, (int)x, screen->height - (int)y);
+        LFAppWakeup((void*)1);
         screen->gesture_dpad_stop[dpind] = 1;
         screen->gesture_dpad_x[dpind] = 0;
         screen->gesture_dpad_y[dpind] = 0;
@@ -168,16 +175,15 @@ int AndroidException() {
     return -1;
 }
 
-extern "C" int AndroidVideoInit(int gles_version) {
+extern "C" int AndroidVideoInit(int *gles_version) {
     screen->width = jni_activity_width;
     screen->height = jni_activity_height;
-    const char *method_name = (gles_version == 2 ? "initEGL2" : "initEGL1");
+    const char *method_name = (*gles_version == 2 ? "initEGL2" : "initEGL1");
     jmethodID mid; CHECK(mid = jni_env->GetMethodID(jni_view_class, method_name, "()I"));
     int ret = jni_env->CallIntMethod(jni_view, mid);
     INFOf("AndroidVideoInit: %d", ret);
     if (ret < 0) return ret;
-
-    screen->opengles_version = ret;
+    *gles_version = ret;
     return 0;
 }
 

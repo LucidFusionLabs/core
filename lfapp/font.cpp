@@ -67,10 +67,12 @@ FT_Library ft_library;
 #endif
 
 namespace LFL {
-#if defined(__APPLE__)
-DEFINE_string(font_engine, "coretext", "[atlas,freetype,coretext,gdi]");
-#elif defined(WIN32)
+#if defined(WIN32)
 DEFINE_string(font_engine, "gdi",      "[atlas,freetype,coretext,gdi]");
+#elif defined(__APPLE__)
+DEFINE_string(font_engine, "coretext", "[atlas,freetype,coretext,gdi]");
+#elif defined(LFL_ANDROID)
+DEFINE_string(font_engine, "atlas",    "[atlas,freetype,coretext,gdi]");
 #else
 DEFINE_string(font_engine, "freetype", "[atlas,freetype,coretext,gdi]");
 #endif
