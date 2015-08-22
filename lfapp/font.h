@@ -176,9 +176,8 @@ struct GlyphMap {
     unordered_map<int, Glyph> index;
     shared_ptr<GlyphCache>    cache;
     GlyphMap(const shared_ptr<GlyphCache> &C = shared_ptr<GlyphCache>()) :
-        table_start(FLAGS_glyph_table_start), table(FLAGS_glyph_table_size), cache(C) {
-        for (auto b = table.begin(), g = b, e = table.end(); g != e; ++g) g->id = table_start + (g - b);
-    }
+      table_start(FLAGS_glyph_table_start), table(FLAGS_glyph_table_size), cache(C)
+      { for (auto b = table.begin(), g = b, e = table.end(); g != e; ++g) g->id = table_start + (g - b); }
 };
 #define GlyphTableIter(f) for (auto i = (f)->glyph->table.begin(); i != (f)->glyph->table.end(); ++i)
 #define GlyphIndexIter(f) for (auto i = (f)->glyph->index.begin(); i != (f)->glyph->index.end(); ++i)
@@ -397,6 +396,7 @@ struct Fonts {
     template <class... Args> static Font *Get(Args&&... args) { return GetByDesc(FontDesc(args...)); }
     static Font *Change(Font*, int new_size, const Color &new_fg, const Color &new_bg, int new_flag=0);
     static int ScaledFontSize(int pointsize);
+    static void ResetGL();
 };
 
 }; // namespace LFL

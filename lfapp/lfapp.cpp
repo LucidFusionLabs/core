@@ -135,12 +135,17 @@ extern "C" int LFAppMain()                 { return LFL::app->Main(); }
 extern "C" int LFAppMainLoop()             { return LFL::app->MainLoop(); }
 extern "C" int LFAppFrame(bool handle_ev)  { return LFL::app->EventDrivenFrame(handle_ev); }
 extern "C" void LFAppWakeup(void *v)       { return LFL::app->scheduler.Wakeup(v); }
+extern "C" void LFAppResetGL()             { return LFL::app->ResetGL(); }
 extern "C" const char *LFAppDownloadDir()  { return LFL::app->dldir.c_str(); }
-extern "C" void LFAppShutdown()              { LFL::app->run=0; LFAppWakeup(0); }
-extern "C" void WindowReshaped(int w, int h) { LFL::screen->Reshaped(w, h); }
-extern "C" void WindowMinimized()            { LFL::screen->Minimized(); }
-extern "C" void WindowUnMinimized()          { LFL::screen->UnMinimized(); }
-extern "C" void WindowClosed()               { LFL::screen->Closed(); }
+extern "C" void LFAppShutdown()                   { LFL::app->run=0; LFAppWakeup(0); }
+extern "C" void WindowReshaped(int w, int h)      { LFL::screen->Reshaped(w, h); }
+extern "C" void WindowMinimized()                 { LFL::screen->Minimized(); }
+extern "C" void WindowUnMinimized()               { LFL::screen->UnMinimized(); }
+extern "C" void WindowClosed()                    { LFL::screen->Closed(); }
+extern "C" void QueueWindowReshaped(int w, int h) { LFL::RunInMainThread(new LFL::Callback(bind(&LFL::Window::Reshaped,    LFL::screen, w, h))); }
+extern "C" void QueueWindowMinimized()            { LFL::RunInMainThread(new LFL::Callback(bind(&LFL::Window::Minimized,   LFL::screen))); }
+extern "C" void QueueWindowUnMinimized()          { LFL::RunInMainThread(new LFL::Callback(bind(&LFL::Window::UnMinimized, LFL::screen))); }
+extern "C" void QueueWindowClosed()               { LFL::RunInMainThread(new LFL::Callback(bind(&LFL::Window::Closed,      LFL::screen))); }
 extern "C" int  KeyPress  (int b, int d)                    { return LFL::app->input.KeyPress  (b, d); }
 extern "C" int  MouseClick(int b, int d, int x,  int y)     { return LFL::app->input.MouseClick(b, d, LFL::point(x, y)); }
 extern "C" int  MouseMove (int x, int y, int dx, int dy)    { return LFL::app->input.MouseMove (LFL::point(x, y), LFL::point(dx, dy)); }
@@ -180,7 +185,7 @@ DEFINE_bool(lfapp_debug, false, "Enable debug mode");
 DEFINE_bool(cursor_grabbed, false, "Center cursor every frame");
 DEFINE_bool(daemonize, false, "Daemonize server");
 DEFINE_bool(rcon_debug, false, "Print rcon commands");
-DEFINE_bool(frame_debug, true, "Print each frame");
+DEFINE_bool(frame_debug, false, "Print each frame");
 DEFINE_string(nameserver, "", "Default namesver");
 DEFINE_bool(max_rlimit_core, true, "Max core dump rlimit");
 DEFINE_bool(max_rlimit_open_files, false, "Max number of open files rlimit");
@@ -859,17 +864,18 @@ int Application::EventDrivenFrame(bool handle_events) {
 
 int Application::TimerDrivenFrame(bool got_wakeup) {
   if (!MainThread()) ERROR("MonolithicFrame() called from thread ", Thread::GetId());
-  unsigned clicks = frame_time.GetTime(true).count(), flag = 0;
+  unsigned clicks = frame_time.GetTime(true).count();
   int events = HandleEvents(clicks) + got_wakeup;
 
   for (auto i = Window::active.begin(); run && i != Window::active.end(); ++i) {
+    auto w = i->second;
 #ifdef LFL_ANDROID
-    if (!i->second->target_fps && !events) continue;
+    if (w->minimized || (!w->target_fps && !events)) continue;
 #else
-    if (!i->second->target_fps) continue;
+    if (w->minimized || !w->target_fps) continue;
 #endif
-    int ret = i->second->Frame(clicks, audio.mic_samples, camera.have_sample, flag);
-    if (FLAGS_frame_debug) INFO("frame_debug Application::Frame Window ", i->second->id, " = ", ret);
+    int ret = w->Frame(clicks, audio.mic_samples, camera.have_sample, 0);
+    if (FLAGS_frame_debug) INFO("frame_debug Application::Frame Window ", w->id, " = ", ret);
   }
 
   frames_ran++;
@@ -893,13 +899,12 @@ int Application::Main() {
 int Application::MainLoop() {
   INFO("MainLoop: Begin, run=", run);
   while (run) {
-    // if (!minimized)
     bool got_wakeup = scheduler.FrameWait();
     TimerDrivenFrame(got_wakeup);
-    scheduler.FrameDone();
-#ifdef LFL_IPHONE
-    // if (minimized) run = 0;
+#ifdef LFL_ANDROID
+    if (screen->minimized) { INFO("MainLoop: minimized"); return 0; }
 #endif
+    scheduler.FrameDone();
     MSleep(1);
   }
   INFO("MainLoop: End, run=", run);
@@ -907,12 +912,7 @@ int Application::MainLoop() {
 }
 
 int Application::Free() {
-  while (!Window::active.empty()) Window::Close(Window::active.begin()->second);
-
-  if (FLAGS_lfapp_video)  video .Free();
-  if (FLAGS_lfapp_audio)  audio .Free();
-  if (FLAGS_lfapp_camera) camera.Free();
-
+  for (auto m : modules) m->Free();
   return Exiting();
 }
 
@@ -924,6 +924,11 @@ int Application::Exiting() {
   if (FLAGS_open_console) PressAnyKey();
 #endif
   return 0;
+}
+
+void Application::ResetGL() {
+  for (auto &w : Window::active) w.second->ResetGL();
+  Fonts::ResetGL();
 }
 
 /* FrameScheduler */

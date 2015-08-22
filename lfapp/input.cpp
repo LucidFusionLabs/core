@@ -190,42 +190,40 @@ struct AndroidInputModule : public InputModule {
   int Frame(unsigned clicks) { return app->input.DispatchQueuedInput(frame_on_keyboard_input, frame_on_mouse_input); }
 };
 
-const int Key::Escape     = -1;
+const int Key::Escape     = 0xE100;
 const int Key::Return     = 10;
-const int Key::Up         = -3;
-const int Key::Down       = -4;
-const int Key::Left       = -5;
-const int Key::Right      = -6;
+const int Key::Up         = 0xE101;
+const int Key::Down       = 0xE102;
+const int Key::Left       = 0xE103;
+const int Key::Right      = 0xE104;
 const int Key::LeftShift  = -7;
 const int Key::RightShift = -8;
-const int Key::LeftCtrl   = -9;
-const int Key::RightCtrl  = -10;
-const int Key::LeftCmd    = -11;
-const int Key::RightCmd   = -12;
-const int Key::Tab        = -13;
-const int Key::Space      = -14;
-const int Key::Backspace  = 0;
+const int Key::LeftCtrl   = 0xE105;
+const int Key::RightCtrl  = 0xE106;
+const int Key::LeftCmd    = 0xE107;
+const int Key::RightCmd   = 0xE108;
+const int Key::Tab        = 0xE109;
+const int Key::Space      = ' ';
+const int Key::Backspace  = '\b';
 const int Key::Delete     = -16;
 const int Key::Quote      = '\'';
 const int Key::Backquote  = '`';
-const int Key::PageUp     = -19;
-const int Key::PageDown   = -20;
-const int Key::F1         = -21;
-const int Key::F2         = -22;
-const int Key::F3         = -23;
-const int Key::F4         = -24;
-const int Key::F5         = -25;
-const int Key::F6         = -26;
-const int Key::F7         = -27;
-const int Key::F8         = -28;
-const int Key::F9         = -29;
+const int Key::PageUp     = 0xE10A;
+const int Key::PageDown   = 0xE10B;
+const int Key::F1         = 0xE10C;
+const int Key::F2         = 0xE10D;
+const int Key::F3         = 0xE10E;
+const int Key::F4         = 0xE10F;
+const int Key::F5         = 0xE110;
+const int Key::F6         = 0xE111;
+const int Key::F7         = 0xE112;
+const int Key::F8         = 0xE113;
+const int Key::F9         = 0xE114;
 const int Key::F10        = -30;
 const int Key::F11        = -31;
 const int Key::F12        = -32;
 const int Key::Home       = -33;
 const int Key::End        = -34;
-
-static bool android_keyboard_toggled = false;
 
 extern "C" void AndroidSetFrameOnKeyboardInput(int v) { static_cast<AndroidInputModule*>(app->input.impl)->frame_on_keyboard_input = v; }
 extern "C" void AndroidSetFrameOnMouseInput   (int v) { static_cast<AndroidInputModule*>(app->input.impl)->frame_on_mouse_input    = v; }
@@ -234,8 +232,8 @@ string Clipboard::Get() { return ""; }
 void Clipboard::Set(const string &s) {}
 int TouchDevice::SetExtraScale(bool v) {}
 int TouchDevice::SetMultisample(bool v) {}
-void TouchDevice::OpenKeyboard()  { if ( android_keyboard_toggled) return; AndroidToggleKeyboard(); android_keyboard_toggled=1; }
-void TouchDevice::CloseKeyboard() { if (!android_keyboard_toggled) return; AndroidToggleKeyboard(); android_keyboard_toggled=0; }
+void TouchDevice::OpenKeyboard()  { AndroidShowOrHideKeyboard(1); }
+void TouchDevice::CloseKeyboard() { AndroidShowOrHideKeyboard(0); }
 void TouchDevice::CloseKeyboardAfterReturn(bool v) {} 
 Box  TouchDevice::GetKeyboardBox() { return Box(); }
 void TouchDevice::ToggleToolbarButton(const string &n) {}

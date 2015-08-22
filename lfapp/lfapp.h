@@ -598,6 +598,7 @@ struct Application : public ::LFApp, public Module {
   int MainLoop();
   int Free();
   int Exiting();
+  void ResetGL();
 
   static void Daemonize(const char *dir="");
   static void Daemonize(FILE *fout, FILE *ferr);

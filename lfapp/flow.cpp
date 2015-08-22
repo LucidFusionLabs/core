@@ -24,6 +24,110 @@
 #include "lfapp/ipc.h"
 
 namespace LFL {
+point DrawableBoxRun::Draw(point p, DrawCB cb) {
+  Box w;
+  DrawBackground(p);
+  if (attr->tex) attr->tex->Bind();
+  if (attr->tex || attr->font) screen->gd-> SetColor(attr->fg ? *attr->fg : Color::white);
+  else                         screen->gd->FillColor(attr->fg ? *attr->fg : Color::white);
+  if (attr->font) attr->font->Select();
+  else if (attr->tex) screen->gd->EnableLayering();
+  if (attr->scissor) screen->gd->PushScissor(*attr->scissor + p);
+  for (auto i = data.buf, e = data.end(); i != e; ++i) if (i->drawable) cb(i->drawable, (w = i->box + p), attr);
+  if (attr->scissor) screen->gd->PopScissor();
+  return point(w.x + w.w, w.y);
+}
+
+void DrawableBoxRun::DrawBackground(point p, DrawBackgroundCB cb) {
+  if (attr->bg) screen->gd->FillColor(*attr->bg);
+  if (!attr->bg || !data.size()) return;
+  int line_height = line ? line->h : (attr->font ? attr->font->Height() : 0);
+  if (!line_height) return;
+  int left = data[0].LeftBound(attr), right = data.back().RightBound(attr);
+  cb(Box(p.x + left, p.y - line_height, right - left, line_height));
+}
+
+point DrawableBoxArray::Position(int o) const {
+  if (!Size()) return point();
+  CHECK_GE(o, 0);
+  bool last = o >= Size();
+  const DrawableBox &b = last ? data.back() : data[o];
+  const Drawable::Attr *a = attr.GetAttr(b.attr_id);
+  return point(last ? b.RightBound(a) : b.LeftBound(a), b.TopBound(a));
+}
+
+int DrawableBoxArray::BoundingWidth(const DrawableBox &b, const DrawableBox &e) const {
+  CHECK_LE(b.box.x, e.box.x);
+  return e.RightBound(attr.GetAttr(e.attr_id)) - b.LeftBound(attr.GetAttr(b.attr_id));
+}
+
+DrawableBox& DrawableBoxArray::PushBack(const Box &box, int cur_attr, Drawable *drawable, int *ind_out) {
+  if (ind_out) *ind_out = data.size();
+  return LFL::PushBack(data, DrawableBox(box, drawable, cur_attr, line.size()));
+}
+
+void DrawableBoxArray::InsertAt(int o, const DrawableBoxArray &x) {
+  if (!Size() && !o) *this = x;
+  else InsertAt(o, x.data);
+}
+
+void DrawableBoxArray::InsertAt(int o, const vector<DrawableBox> &x) {
+  CHECK_EQ(0, line_ind.size());
+  point p(x.size() ? BoundingWidth(x.front(), x.back()) : 0, 0);
+  data.insert(data.begin() + o, x.begin(), x.end());
+  for (auto i = data.begin() + o + x.size(); i != data.end(); ++i) i->box += p;
+}
+
+void DrawableBoxArray::OverwriteAt(int o, const vector<DrawableBox> &x) {
+  if (!x.size()) return;
+  CHECK_LE(o + x.size(), data.size());
+  auto i = data.begin() + o, e = i + x.size();
+  point p(BoundingWidth(x.front(), x.back()) - (data.size() ? BoundingWidth(*i, *(e-1)) : 0), 0);
+  for (auto xi = x.begin(); i != e; ++i, ++xi) *i = *xi;
+  if (p.x) for (i = e, e = data.end(); i != e; ++i) i->box += p;
+}
+
+void DrawableBoxArray::Erase(int o, size_t l, bool shift) { 
+  if (!l || data.size() <= o) return;
+  if (shift) CHECK_EQ(0, line_ind.size());
+  vector<DrawableBox>::iterator b = data.begin() + o, e = data.begin() + min(o+l, data.size());
+  point p(shift ? BoundingWidth(*b, *(e-1)) : 0, 0);
+  auto i = data.erase(b, e);
+  if (shift) for (; i != data.end(); ++i) i->box -= p;
+}
+
+point DrawableBoxArray::Draw(point p, int glyph_start, int glyph_len) {
+  point e;
+  if (!data.size()) return e;
+  for (DrawableBoxIterator iter(&data[glyph_start], Xge0_or_Y(glyph_len, data.size())); !iter.Done(); iter.Increment())
+    e = DrawableBoxRun(iter.Data(), iter.Length(), attr.GetAttr(iter.cur_attr1), VectorGet(line, iter.cur_attr2)).Draw(p);
+  return e;
+}
+
+string DrawableBoxArray::DebugString() const {
+  string ret = StrCat("BoxArray H=", height, " ");
+  for (DrawableBoxIterator iter(data); !iter.Done(); iter.Increment()) 
+    StrAppend(&ret, "R", iter.i, "(", DrawableBoxRun(iter.Data(), iter.Length()).DebugString(), "), ");
+  return ret;
+}
+
+bool DrawableBoxArray::GetGlyphFromCoords(const point &p, int *index_out, Box *box_out, int li) {
+  vector<DrawableBox>::const_iterator gb, ge, it;
+  gb = data.begin() + (li < line_ind.size() ? line_ind[li] : 0);
+  ge = (li+1) < line_ind.size() ? (data.begin() + line_ind[li+1]) : data.end();
+  it = LesserBound(gb, ge, DrawableBox(Box(p,0,0)), true);
+  if (it == data.end()) { *index_out = -1; *box_out = BackOrDefault(data).box; return false; }
+  else                  { *index_out = it - data.begin(); *box_out = it->box;  return true; }
+}
+
+string FloatContainer::DebugString() const {
+    string ret = StrCat(Box::DebugString(), " fl{");
+    for (int i=0; i<float_left.size(); i++) StrAppend(&ret, i?",":"", i, "=", float_left[i].DebugString());
+    StrAppend(&ret, "} fr{");
+    for (int i=0; i<float_right.size(); i++) StrAppend(&ret, i?",":"", i, "=", float_right[i].DebugString());
+    return ret + "}";
+}
+
 float FloatContainer::baseleft(float py, float ph, int *adjacent_out) const {
     int max_left = x;
     basedir(py, ph, &float_left, adjacent_out, [&](const Box &b){ return Max(&max_left, b.right()); });

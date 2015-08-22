@@ -23,6 +23,84 @@
 
 namespace LFL {
 
+struct DrawableBoxRun {
+    const Drawable::Attr *attr;
+    ArrayPiece<DrawableBox> data;
+    const Box *line;
+    DrawableBoxRun(const DrawableBox *buf=0, int len=0)                                        : attr(0), data(buf, len), line(0) {}
+    DrawableBoxRun(const DrawableBox *buf,   int len, const Drawable::Attr *A, const Box *L=0) : attr(A), data(buf, len), line(L) {}
+
+    int                Size () const { return data.size(); }
+    const DrawableBox &First() const { return data[0]; }
+    const DrawableBox &Last () const { return data[Size()-1]; }
+
+    template <class K> basic_string<K> Text(int i, int l) const {
+        basic_string<K> t(l, 0);
+        auto bi = &data.buf[i];
+        for (auto ti = t.begin(), te = t.end(); ti != te; ++ti, ++bi) *ti = bi->Id();
+        return t;
+    }
+    string   Text  ()             const { return Text<char>    (0, data.size()); }
+    String16 Text16()             const { return Text<char16_t>(0, data.size()); }
+    string   Text  (int i, int l) const { return Text<char>    (i, l); }
+    String16 Text16(int i, int l) const { return Text<char16_t>(i, l); }
+    string   DebugString()        const { return StrCat("BoxRun='", Text(), "'"); }
+
+    typedef function<void    (const Drawable *,  const Box &,  const Drawable::Attr *)> DrawCB;
+    static void DefaultDrawCB(const Drawable *d, const Box &w, const Drawable::Attr *a) { d->Draw(w, a); }
+    point Draw(point p, DrawCB = &DefaultDrawCB);
+    void draw(point p) { Draw(p); }
+
+    typedef function<void              (const Box &)> DrawBackgroundCB;
+    static void DefaultDrawBackgroundCB(const Box &w) { w.Draw(); }
+    void DrawBackground(point p, DrawBackgroundCB = &DefaultDrawBackgroundCB);
+};
+
+struct DrawableBoxArray {
+    vector<DrawableBox> data;
+    Drawable::AttrVec attr;
+    vector<Box> line;
+    vector<int> line_ind;
+    int height;
+    DrawableBoxArray() : height(0) { Clear(); }
+
+    /**/  DrawableBox& operator[](int i)       { return data[i]; }
+    const DrawableBox& operator[](int i) const { return data[i]; }
+    const DrawableBox& Back() const { return data.back(); }
+    int Size() const { return data.size(); }
+
+    string   Text  ()             const { return data.size() ? DrawableBoxRun(&data[0], data.size()).Text  ()     : string();   }
+    String16 Text16()             const { return data.size() ? DrawableBoxRun(&data[0], data.size()).Text16()     : String16(); }
+    string   Text  (int i, int l) const { return data.size() ? DrawableBoxRun(&data[0], data.size()).Text  (i, l) : string();   }
+    String16 Text16(int i, int l) const { return data.size() ? DrawableBoxRun(&data[0], data.size()).Text16(i, l) : String16(); }
+
+    point Position(int o) const;
+    int LeftBound (int o) const { const DrawableBox &b = data[o]; return b.LeftBound (attr.GetAttr(b.attr_id)); }
+    int RightBound(int o) const { const DrawableBox &b = data[o]; return b.RightBound(attr.GetAttr(b.attr_id)); }
+    int BoundingWidth(const DrawableBox &b, const DrawableBox &e) const;
+
+    void Clear() { data.clear(); attr.clear(); line.clear(); line_ind.clear(); height=0; }
+    DrawableBoxArray *Reset() { Clear(); return this; }
+
+    DrawableBox &PushBack(const Box &box, const Drawable::Attr &cur_attr, Drawable *drawable, int *ind_out=0) { return PushBack(box, attr.GetAttrId(cur_attr), drawable, ind_out); }
+    DrawableBox &PushBack(const Box &box, int                   cur_attr, Drawable *drawable, int *ind_out=0);
+
+    void InsertAt(int o, const DrawableBoxArray &x);
+    void InsertAt(int o, const vector<DrawableBox> &x);
+    void OverwriteAt(int o, const vector<DrawableBox> &x);
+    void Erase(int o, size_t l=UINT_MAX, bool shift=false);
+    point Draw(point p, int glyph_start=0, int glyph_len=-1);
+    string DebugString() const;
+
+    int   GetLineFromCoords(const point &p) { return 0; }
+    bool GetGlyphFromCoords(const point &p, int *index_out, Box *box_out) { return GetGlyphFromCoords(p, index_out, box_out, GetLineFromCoords(p)); }
+    bool GetGlyphFromCoords(const point &p, int *index_out, Box *box_out, int li);
+
+    struct RollbackState { size_t data_size, attr_size, line_size; int height; };
+    RollbackState GetRollbackState() const { return { data.size(), attr.size(), line.size(), height }; }
+    void Rollback(const RollbackState &s) { data.resize(s.data_size); attr.resize(s.attr_size); line.resize(s.line_size); height=s.height; }
+};
+
 struct FloatContainer : public Box {
     struct Float : public Box {
         bool inherited, stacked; void *val;

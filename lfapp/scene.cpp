@@ -72,7 +72,7 @@ void Scene::Select(Geometry *geom) {
     if (geom) {
         width = geom->width * sizeof(float);
         vert_size = geom->count * width;
-        screen->gd->VertexPointer(geom->vd, GraphicsDevice::Float, width, 0, &geom->vert[0], vert_size, &geom->vert_ind, false);
+        screen->gd->VertexPointer(geom->vd, GraphicsDevice::Float, width, 0, &geom->vert[0], vert_size, &geom->vert_ind, false, geom->primtype);
     }
 
     if (geom && geom->tex_offset >= 0) {

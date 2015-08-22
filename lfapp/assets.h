@@ -621,7 +621,7 @@ template <int MP, int MH, bool PerParticleColor> struct Particles : public Parti
         if (PerParticleColor) screen->gd->DisableVertexColor();
     } 
     void DrawParticles(int prim_type, int num_verts, float *v, int l) {
-        if (1)                screen->gd->VertexPointer(3, GraphicsDevice::Float, VertSize, 0,               v, l, &verts_id, true);
+        if (1)                screen->gd->VertexPointer(3, GraphicsDevice::Float, VertSize, 0,               v, l, &verts_id, true, prim_type);
         if (1)                screen->gd->TexPointer   (2, GraphicsDevice::Float, VertSize, 3*sizeof(float), v, l, &verts_id, false);
         if (PerParticleColor) screen->gd->ColorPointer (4, GraphicsDevice::Float, VertSize, 5*sizeof(float), v, l, &verts_id, true);
 
@@ -630,7 +630,7 @@ template <int MP, int MH, bool PerParticleColor> struct Particles : public Parti
     void DrawTrails(float *v, int l) {
         screen->gd->DisableTexture();
 
-        if (1)                screen->gd->VertexPointer(3, GraphicsDevice::Float, TrailVertSize, 0,               v, l, &trailverts_id, true);
+        if (1)                screen->gd->VertexPointer(3, GraphicsDevice::Float, TrailVertSize, 0,               v, l, &trailverts_id, true, GraphicsDevice::Triangles);
         if (PerParticleColor) screen->gd->ColorPointer (4, GraphicsDevice::Float, TrailVertSize, 3*sizeof(float), v, l, &trailverts_id, true);
 
         screen->gd->DrawArrays(GraphicsDevice::Triangles, 0, num_trailverts);
@@ -646,6 +646,7 @@ template <class Line> struct RingFrameBuffer {
     bool wrap=0;
     int w=0, h=0, font_size=0, font_height=0;
 
+    void Reset() { w=h=0; fb.Reset(); }
     virtual int Width()  const { return w; }
     virtual int Height() const { return h; }
     virtual void SizeChangedDone() { fb.Release(); scroll=v2(); p=point(); }

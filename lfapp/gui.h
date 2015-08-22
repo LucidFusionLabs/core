@@ -46,8 +46,9 @@ struct GUI : public MouseController {
   virtual void Layout(const Box &b) { box=b; Layout(); }
   virtual void Layout() {}
   virtual void Draw();
-  virtual void HandleTextMessage(const string &s) {}
   virtual bool ToggleActive();
+  virtual void HandleTextMessage(const string &s) {}
+  virtual void ResetGL() {}
 };
 
 struct Widget {
@@ -147,6 +148,7 @@ struct KeyboardGUI : public KeyboardController {
   virtual bool Toggle() { return toggle_active.Toggle(); }
   virtual void Run(const string &cmd) { if (runcb) runcb(cmd); }
   virtual void SetToggleKey(int TK, int TM=Toggler::Default) { toggle_bind.key=TK; toggle_active.mode=TM; }
+  virtual void ResetGL() {}
 
   void AddHistory  (const string &cmd);
   int  ReadHistory (const string &dir, const string &name);
@@ -358,6 +360,7 @@ struct TextGUI : public KeyboardGUI, public Drawable::AttrSource {
   void SetColors(Colors *C);
 
   virtual LinesFrameBuffer *GetFrameBuffer() { return &cmd_fb; }
+  virtual void ResetGL() { cmd_fb.Reset(); }
   virtual void UpdateCursor() { cursor.p = cmd_line.data->glyphs.Position(cursor.i.x); }
   virtual void UpdateCommandFB();
   virtual void Draw(const Box &b);
@@ -398,6 +401,7 @@ struct TextArea : public TextGUI {
   virtual int UpdateLines(float v_scrolled, int *first_ind, int *first_offset, int *first_len);
   virtual int WrappedLines() const { return line.wrapped_lines; }
   virtual LinesFrameBuffer *GetFrameBuffer() { return &line_fb; }
+  virtual void ResetGL() { line_fb.Reset(); TextGUI::ResetGL(); }
   void ChangeColors(Colors *C);
 
   struct DrawFlag { enum { DrawCursor=1, CheckResized=2 }; };

@@ -170,10 +170,13 @@ extern "C" {
 #endif
 
 namespace LFL {
-const int Texture::CoordMinX = 0;
-const int Texture::CoordMinY = 1;
-const int Texture::CoordMaxX = 2;
-const int Texture::CoordMaxY = 3;
+DEFINE_bool(gd_debug, false, "Debug graphics device");
+DEFINE_float(rotate_view, 0, "Rotate view by angle");
+DEFINE_float(field_of_view, 45, "Field of view");
+DEFINE_float(near_plane, 1, "Near clipping plane");
+DEFINE_float(far_plane, 100, "Far clipping plane");
+DEFINE_int(dots_per_inch, 75, "Screen DPI");
+DEFINE_bool(swap_axis, false," Swap x,y axis");
 
 Color Color::white (1.0, 1.0, 1.0);
 Color Color::black (0.0, 0.0, 0.0);
@@ -194,19 +197,706 @@ Color Color::grey20(.2, .2, .2);
 Color Color::grey10(.1, .1, .1);
 Color Color::clear(0.0, 0.0, 0.0, 0.0);
 
-DEFINE_bool(gd_debug, false, "Debug graphics device");
-DEFINE_float(rotate_view, 0, "Rotate view by angle");
-DEFINE_float(field_of_view, 45, "Field of view");
-DEFINE_float(near_plane, 1, "Near clipping plane");
-DEFINE_float(far_plane, 100, "Far clipping plane");
-DEFINE_int(dots_per_inch, 75, "Screen DPI");
-DEFINE_bool(swap_axis, false," Swap x,y axis");
-
+const int Texture::CoordMinX = 0;
+const int Texture::CoordMinY = 1;
+const int Texture::CoordMaxX = 2;
+const int Texture::CoordMaxY = 3;
 #ifdef LFL_MOBILE
 const int Texture::preferred_pf = Pixel::RGBA;
 #else
 const int Texture::preferred_pf = Pixel::BGRA;
 #endif
+
+Window::WindowMap Window::active;
+
+int Depth::OpenGLID(int id) {
+  switch(id) {
+    case _16: return GL_DEPTH_COMPONENT16;
+  } return 0;
+}
+
+int CubeMap::OpenGLID(int id) {
+  switch (id) {
+    case NX: return GL_TEXTURE_CUBE_MAP_NEGATIVE_X;    case PX: return GL_TEXTURE_CUBE_MAP_POSITIVE_X;
+    case NY: return GL_TEXTURE_CUBE_MAP_NEGATIVE_Y;    case PY: return GL_TEXTURE_CUBE_MAP_POSITIVE_Y;
+    case NZ: return GL_TEXTURE_CUBE_MAP_NEGATIVE_Z;    case PZ: return GL_TEXTURE_CUBE_MAP_POSITIVE_Z;
+  } return GL_TEXTURE_2D;
+}
+
+int ColorChannel::PixelOffset(int c) {
+  switch (c) {
+    case Red:  return 0;    case Green: return 1;
+    case Blue: return 2;    case Alpha: return 3;
+  }
+  return 0;
+}
+
+const char *Pixel::Name(int p) {
+  switch (p) {
+    case RGB32:   return "RGB32";      case RGB555:  return "RGB555";
+    case BGR32:   return "BGR32";      case BGR555:  return "BGR555";
+    case RGB24:   return "RGB24";      case RGB565:  return "RGB565";
+    case BGR24:   return "BGR24";      case BGR565:  return "BGR565";
+    case RGBA:    return "RGBA";       case BGRA:    return "BGRA";
+    case YUV420P: return "YUV420P";    case YUYV422: return "YUYV422";
+    case GRAY8:   return "GRAY8";      case GRAYA8:  return "GRAYA8";
+    case LCD:     return "LCD";
+  }; return 0; 
+}
+
+int Pixel::size(int p) {
+  switch (p) {
+    case RGB32:   case BGR32:  case RGBA:   case BGRA:                return 4;
+    case RGB24:   case BGR24:  case LCD:                              return 3;
+    case RGB555:  case BGR555: case RGB565: case BGR565: case GRAYA8: return 2;
+    case YUYV422: case GRAY8:                                         return 1;
+    default:                                                          return 0;
+  }
+}
+
+int Pixel::OpenGLID(int p) {
+  switch (p) {
+    case RGBA:   case RGB32: return GL_RGBA;
+    case RGB24:              return GL_RGB;
+#ifndef LFL_MOBILE
+    case BGRA:   case BGR32: return GL_BGRA;
+    case BGR24:              return GL_BGR;
+#endif
+    case GRAYA8:             return GL_LUMINANCE_ALPHA;
+    case GRAY8:              return GL_LUMINANCE;
+    default:                 return -1;
+  }
+}
+
+#ifdef LFL_FFMPEG
+int Pixel::FromFFMpegId(int fmt) {
+  switch (fmt) {
+    case AV_PIX_FMT_RGB32:    return Pixel::RGB32;
+    case AV_PIX_FMT_BGR32:    return Pixel::BGR32;
+    case AV_PIX_FMT_RGB24:    return Pixel::RGB24;
+    case AV_PIX_FMT_BGR24:    return Pixel::BGR24;
+    case AV_PIX_FMT_GRAY8:    return Pixel::GRAY8;
+    case AV_PIX_FMT_YUV410P:  return Pixel::YUV410P;
+    case AV_PIX_FMT_YUV420P:  return Pixel::YUV420P;
+    case AV_PIX_FMT_YUYV422:  return Pixel::YUYV422;
+    case AV_PIX_FMT_YUVJ420P: return Pixel::YUVJ420P;
+    case AV_PIX_FMT_YUVJ422P: return Pixel::YUVJ422P;
+    case AV_PIX_FMT_YUVJ444P: return Pixel::YUVJ444P;
+    default: ERROR("unknown pixel fmt: ", fmt); return 0;
+  }
+}
+int Pixel::ToFFMpegId(int fmt) {
+  switch (fmt) {
+    case Pixel::RGB32:    return AV_PIX_FMT_RGB32;
+    case Pixel::BGR32:    return AV_PIX_FMT_BGR32;
+    case Pixel::RGB24:    return AV_PIX_FMT_RGB24;
+    case Pixel::BGR24:    return AV_PIX_FMT_BGR24;
+    case Pixel::RGBA:     return AV_PIX_FMT_RGBA;
+    case Pixel::BGRA:     return AV_PIX_FMT_BGRA;
+    case Pixel::GRAY8:    return AV_PIX_FMT_GRAY8;
+    case Pixel::YUV410P:  return AV_PIX_FMT_YUV410P;
+    case Pixel::YUV420P:  return AV_PIX_FMT_YUV420P;
+    case Pixel::YUYV422:  return AV_PIX_FMT_YUYV422;
+    case Pixel::YUVJ420P: return AV_PIX_FMT_YUVJ420P;
+    case Pixel::YUVJ422P: return AV_PIX_FMT_YUVJ422P;
+    case Pixel::YUVJ444P: return AV_PIX_FMT_YUVJ444P;
+    default: ERROR("unknown pixel fmt: ", fmt); return 0;
+  }
+}
+#endif // LFL_FFMPEG
+
+void Color::ToHSV(float *h, float *s, float *v) const {
+  float M = max(r(), max(g(), b()));
+  float m = min(r(), min(g(), b()));
+  float C = M - m;
+  if (!C) { *h = *s = 0; *v = m; return; }
+
+  *v = M;
+  *s = C / M;
+
+  if      (r() == m) *h = 3 - (g() - b()) / C;
+  else if (g() == m) *h = 5 - (b() - r()) / C;
+  else               *h = 1 - (r() - g()) / C;
+
+  *h *= 60;
+  if (*h < 0) *h += 360;
+}
+
+Color Color::FromHSV(float h, float s, float v) {
+  if (s == 0) return Color(v, v, v);
+  while (h >= 360) h -= 360;
+  while (h <    0) h += 360;
+
+  float hf = Decimals(h / 60);
+  float p = v * (1 - s);
+  float q = v * (1 - s * hf);
+  float t = v * (1 - s * (1 - hf));
+
+  if      (h < 60)  return Color(v, t, p);
+  else if (h < 120) return Color(q, v, p);
+  else if (h < 180) return Color(p, v, t);
+  else if (h < 240) return Color(p, q, v);
+  else if (h < 300) return Color(t, p, v);
+  else              return Color(v, p, q);
+}
+
+Color Color::fade(float v) {
+  Color color;
+  if      (v < 0.166667f) color = Color(1.0, v * 6.0, 0.0);
+  else if (v < 0.333333f) color = Color((1/3.0 - v) * 6.0, 1.0, 0.0);
+  else if (v < 0.5f)      color = Color(0.0, 1.0, (v - 1/3.0) * 6);
+  else if (v < 0.666667f) color = Color(0.0, (2/3.0 - v) * 6, 1.0);
+  else if (v < 0.833333f) color = Color((v - 2/3.0) * 6, 0.0, 1.0);
+  else                    color = Color(1.0, 0.0, (1 - v)*6.0);
+  for (int i = 0; i < 4; i++) color.x[i] = min(1.0f, max(color.x[i], 0.0f));
+  return color;
+}
+
+#if 0
+void Material::SetLightColor(const Color &color) {
+  diffuse = specular = ambient = color;
+  ambient.scale(.2);
+  emissive = Color::black;
+}
+void Material::SetMaterialColor(const Color &color) {
+  diffuse = ambient = color;
+  specular = Color::white;
+  emissive = Color::black;
+}
+#else
+void Material::SetLightColor(const Color &color) {
+  diffuse = ambient = color;
+  diffuse.scale(.9);
+  ambient.scale(.5);
+  specular = emissive = Color::black;
+}
+void Material::SetMaterialColor(const Color &color) {
+  diffuse = ambient = color;
+  specular = emissive = Color::black;
+}
+#endif
+
+Box::Box(float X, float Y, float W, float H, bool round) {
+  if (round) { x=RoundF(X); y=RoundF(Y); w=RoundF(W); h=RoundF(H); }
+  else       { x= (int)(X); y= (int)(Y); w= (int)(W); h= (int)(H); }
+}
+
+Box::Box(const float *v4, bool round) {
+  if (round) { x=RoundF(v4[0]); y=RoundF(v4[1]); w=RoundF(v4[2]); h=RoundF(v4[3]); }
+  else       { x= (int)(v4[0]); y= (int)(v4[1]); w= (int)(v4[2]); h= (int)(v4[3]); }
+}
+
+string Box::DebugString() const { return StringPrintf("Box = { %d, %d, %d, %d }", x, y, w, h); }
+
+void Box::Draw(const float *texcoord) const {
+  static const float default_texcoord[4] = {0, 0, 1, 1};
+  const float *tc = X_or_Y(texcoord, default_texcoord);
+#if 1
+  float verts[] = { (float)x,   (float)y,   tc[Texture::CoordMinX], tc[Texture::CoordMinY],
+                    (float)x,   (float)y+h, tc[Texture::CoordMinX], tc[Texture::CoordMaxY],
+                    (float)x+w, (float)y,   tc[Texture::CoordMaxX], tc[Texture::CoordMinY],
+                    (float)x,   (float)y+h, tc[Texture::CoordMinX], tc[Texture::CoordMaxY],
+                    (float)x+w, (float)y,   tc[Texture::CoordMaxX], tc[Texture::CoordMinY],
+                    (float)x+w, (float)y+h, tc[Texture::CoordMaxX], tc[Texture::CoordMaxY] };
+  bool changed =           screen->gd->VertexPointer(2, GraphicsDevice::Float, sizeof(float)*4, 0,               verts, sizeof(verts), NULL, true, GraphicsDevice::Triangles);
+  if (changed && texcoord) screen->gd->TexPointer   (2, GraphicsDevice::Float, sizeof(float)*4, sizeof(float)*2, verts, sizeof(verts), NULL, false);
+  if (1)                   screen->gd->DeferDrawArrays(GraphicsDevice::Triangles, 0, 6);
+#else
+  float verts[] = { (float)x,   (float)y,   tc[Texture::CoordMinX], tc[Texture::CoordMinY],
+                    (float)x,   (float)y+h, tc[Texture::CoordMinX], tc[Texture::CoordMaxY],
+                    (float)x+w, (float)y,   tc[Texture::CoordMaxX], tc[Texture::CoordMinY],
+                    (float)x+w, (float)y+h, tc[Texture::CoordMaxX], tc[Texture::CoordMaxY] };
+  bool changed =           screen->gd->VertexPointer(2, GraphicsDevice::Float, sizeof(float)*4, 0,               verts, sizeof(verts), NULL, true, GraphicsDevice::TriangleStrip);
+  if (changed && texcoord) screen->gd->TexPointer   (2, GraphicsDevice::Float, sizeof(float)*4, sizeof(float)*2, verts, sizeof(verts), NULL, false);
+  if (1)                   screen->gd->DeferDrawArrays(GraphicsDevice::TriangleStrip, 0, 4);
+#endif
+}
+
+void Box::DrawCrimped(const float *texcoord, int orientation, float scrollX, float scrollY) const {
+  float left=x, right=x+w, top=y, bottom=y+h;
+  float texMinX, texMinY, texMaxX, texMaxY, texMidX1, texMidX2, texMidY1, texMidY2;
+
+  scrollX *= (texcoord[2] - texcoord[0]);
+  scrollY *= (texcoord[3] - texcoord[1]);
+  scrollX = ScrollCrimped(texcoord[0], texcoord[2], scrollX, &texMinX, &texMidX1, &texMidX2, &texMaxX);
+  scrollY = ScrollCrimped(texcoord[1], texcoord[3], scrollY, &texMinY, &texMidY1, &texMidY2, &texMaxY);
+
+#define DrawCrimpedBoxTriangleStrip() \
+  screen->gd->VertexPointer(2, GraphicsDevice::Float, 4*sizeof(float), 0,               verts, sizeof(verts), NULL, true, GraphicsDevice::TriangleStrip); \
+  screen->gd->TexPointer   (2, GraphicsDevice::Float, 4*sizeof(float), 2*sizeof(float), verts, sizeof(verts), NULL, false); \
+  screen->gd->DeferDrawArrays(GraphicsDevice::TriangleStrip, 0, 4); \
+  screen->gd->DeferDrawArrays(GraphicsDevice::TriangleStrip, 4, 4); \
+  screen->gd->DeferDrawArrays(GraphicsDevice::TriangleStrip, 8, 4); \
+  screen->gd->DeferDrawArrays(GraphicsDevice::TriangleStrip, 12, 4);
+
+  switch (orientation) {
+    case 0: {
+      float xmid = x + w * scrollX, ymid = y + h * scrollY, verts[] = {
+        /*02*/ xmid,  top,  texMidX1, texMaxY,  /*01*/ left, top,  texMinX,  texMaxY,  /*03*/ xmid,  ymid,   texMidX1, texMidY1, /*04*/ left, ymid,   texMinX,  texMidY1,
+        /*06*/ right, top,  texMaxX,  texMaxY,  /*05*/ xmid, top,  texMidX2, texMaxY,  /*07*/ right, ymid,   texMaxX,  texMidY1, /*08*/ xmid, ymid,   texMidX2, texMidY1,
+        /*10*/ right, ymid, texMaxX,  texMidY2, /*09*/ xmid, ymid, texMidX2, texMidY2, /*11*/ right, bottom, texMaxX,  texMinY,  /*12*/ xmid, bottom, texMidX2, texMinY,
+        /*14*/ xmid,  ymid, texMidX1, texMidY2, /*13*/ left, ymid, texMinX,  texMidY2, /*15*/ xmid,  bottom, texMidX1, texMinY,  /*16*/ left, bottom, texMinX,  texMinY 
+      };
+      DrawCrimpedBoxTriangleStrip();
+    } break;
+    case 1: {
+      float xmid = x + w * scrollX, ymid = y + h * (1-scrollY), verts[] = {
+        /*02*/ xmid,  top,  texMidX1, texMinY,  /*01*/ left,  top,  texMinX,  texMinY,  /*03*/ xmid, ymid,    texMidX1, texMidY2, /*04*/ left, ymid,   texMinX,  texMidY2,
+        /*06*/ right, top,  texMaxX,  texMinY,  /*05*/ xmid,  top,  texMidX2, texMinY,  /*07*/ right, ymid,   texMaxX,  texMidY2, /*08*/ xmid, ymid,   texMidX2, texMidY2,
+        /*10*/ right, ymid, texMaxX,  texMidY1, /*09*/ xmid,  ymid, texMidX2, texMidY1, /*11*/ right, bottom, texMaxX,  texMaxY,  /*12*/ xmid, bottom, texMidX2, texMaxY,
+        /*14*/ xmid,  ymid, texMidX1, texMidY1, /*13*/ left,  ymid, texMinX,  texMidY1, /*15*/ xmid, bottom,  texMidX1, texMaxY,  /*16*/ left, bottom, texMinX,  texMaxY 
+      };
+      DrawCrimpedBoxTriangleStrip();
+    } break;
+    case 2: {
+      float xmid = x + w * (1-scrollX), ymid = y + h * scrollY, verts[] = {
+        /*02*/ xmid,  top,  texMidX2, texMaxY,  /*01*/ left,  top,  texMaxX,  texMaxY,  /*03*/ xmid, ymid,    texMidX2, texMidY1, /*04*/ left, ymid,   texMaxX,  texMidY1,
+        /*06*/ right, top,  texMinX,  texMaxY,  /*05*/ xmid,  top,  texMidX1, texMaxY,  /*07*/ right, ymid,   texMinX,  texMidY1, /*08*/ xmid, ymid,   texMidX1, texMidY1,
+        /*10*/ right, ymid, texMinX,  texMidY2, /*09*/ xmid,  ymid, texMidX1, texMidY2, /*11*/ right, bottom, texMinX,  texMinY,  /*12*/ xmid, bottom, texMidX1, texMinY,
+        /*14*/ xmid,  ymid, texMidX2, texMidY2, /*13*/ left,  ymid, texMaxX,  texMidY2, /*15*/ xmid, bottom,  texMidX2, texMinY,  /*16*/ left, bottom, texMaxX,  texMinY 
+      };
+      DrawCrimpedBoxTriangleStrip();
+    } break;
+    case 3: {
+      float xmid = x + w * (1-scrollX), ymid = y + h * (1-scrollY), verts[] = {
+        /*02*/ xmid,  top,  texMidX2, texMinY,  /*01*/ left,  top,   texMaxX,  texMinY,  /*03*/ xmid, ymid,    texMidX2, texMidY2, /*04*/ left, ymid,   texMaxX,  texMidY2,
+        /*06*/ right, top,  texMinX,  texMinY,  /*05*/ xmid,  top,   texMidX1, texMinY,  /*07*/ right, ymid,   texMinX,  texMidY2, /*08*/ xmid, ymid,   texMidX1, texMidY2,
+        /*10*/ right, ymid, texMinX,  texMidY1, /*09*/ xmid,  ymid,  texMidX1, texMidY1, /*11*/ right, bottom, texMinX,  texMaxY,  /*12*/ xmid, bottom, texMidX1, texMaxY,
+        /*14*/ xmid,  ymid, texMidX2, texMidY1, /*13*/ left,  ymid,  texMaxX,  texMidY1, /*15*/ xmid, bottom,  texMidX2, texMaxY,  /*16*/ left, bottom, texMaxX,  texMaxY 
+      };
+      DrawCrimpedBoxTriangleStrip();
+    } break;
+    case 4: {
+      float xmid = x + w * (1-scrollY), ymid = y + h * scrollX, verts[] = {
+        /*13*/ xmid,  top,  texMinX,  texMidY2, /*16*/ left,  top,  texMinX,  texMaxY,  /*14*/ xmid, ymid,    texMidX1, texMidY2, /*15*/ left, ymid,   texMidX1, texMaxY, 
+        /*01*/ right, top,  texMinX,  texMinY,  /*04*/ xmid,  top,  texMinX,  texMidY1, /*02*/ right, ymid,   texMidX1, texMinY,  /*03*/ xmid, ymid,   texMidX1, texMidY1,
+        /*05*/ right, ymid, texMidX2, texMinY,  /*08*/ xmid,  ymid, texMidX2, texMidY1, /*06*/ right, bottom, texMaxX,  texMinY,  /*07*/ xmid, bottom, texMaxX,  texMidY1,
+        /*09*/ xmid,  ymid, texMidX2, texMidY2, /*12*/ left,  ymid, texMidX2, texMaxY,  /*10*/ xmid, bottom,  texMaxX,  texMidY2, /*11*/ left, bottom, texMaxX,  texMaxY 
+      };
+      DrawCrimpedBoxTriangleStrip();
+    } break;
+    case 5: {
+      float xmid = x + w * scrollY, ymid = y + h * scrollX, verts[] = {
+        /*13*/ xmid,  top,  texMinX,  texMidY1, /*16*/ left,  top,  texMinX,  texMinY,  /*14*/ xmid, ymid,    texMidX1, texMidY1, /*15*/ left, ymid,   texMidX1, texMinY, 
+        /*01*/ right, top,  texMinX,  texMaxY,  /*04*/ xmid,  top,  texMinX,  texMidY2, /*02*/ right, ymid,   texMidX1, texMaxY,  /*03*/ xmid, ymid,   texMidX1, texMidY2,
+        /*05*/ right, ymid, texMidX2, texMaxY,  /*08*/ xmid,  ymid, texMidX2, texMidY2, /*06*/ right, bottom, texMaxX,  texMaxY,  /*07*/ xmid, bottom, texMaxX,  texMidY2,
+        /*09*/ xmid,  ymid, texMidX2, texMidY1, /*12*/ left,  ymid, texMidX2, texMinY,  /*10*/ xmid, bottom,  texMaxX,  texMidY1, /*11*/ left, bottom, texMaxX,  texMinY 
+      };
+      DrawCrimpedBoxTriangleStrip();
+    } break;
+    case 6: {
+      float xmid = x + w * (1-scrollY), ymid = y + h * (1-scrollX), verts[] = {
+        /*13*/ xmid,  top,  texMaxX,  texMidY2, /*16*/ left,  top,  texMaxX,  texMaxY,  /*14*/ xmid, ymid,    texMidX2, texMidY2, /*15*/ left, ymid,   texMidX2, texMaxY, 
+        /*01*/ right, top,  texMaxX,  texMinY,  /*04*/ xmid,  top,  texMaxX,  texMidY1, /*02*/ right, ymid,   texMidX2, texMinY,  /*03*/ xmid, ymid,   texMidX2, texMidY1,
+        /*05*/ right, ymid, texMidX1, texMinY,  /*08*/ xmid,  ymid, texMidX1, texMidY1, /*06*/ right, bottom, texMinX,  texMinY,  /*07*/ xmid, bottom, texMinX,  texMidY1,
+        /*09*/ xmid,  ymid, texMidX1, texMidY2, /*12*/ left,  ymid, texMidX1, texMaxY,  /*10*/ xmid, bottom,  texMinX,  texMidY2, /*11*/ left, bottom, texMinX,  texMaxY 
+      };
+      DrawCrimpedBoxTriangleStrip();
+    } break;
+    case 7: {
+      float xmid = x + w * scrollY, ymid = y + h * (1-scrollX), verts[] = {
+        /*13*/ xmid,  top,  texMaxX,  texMidY1, /*16*/ left,  top,  texMaxX,  texMinY,  /*14*/ xmid, ymid,    texMidX2, texMidY1, /*15*/ left, ymid,   texMidX2, texMinY, 
+        /*01*/ right, top,  texMaxX,  texMaxY,  /*04*/ xmid,  top,  texMaxX,  texMidY2, /*02*/ right, ymid,   texMidX2, texMaxY,  /*03*/ xmid, ymid,   texMidX2, texMidY2,
+        /*05*/ right, ymid, texMidX1, texMaxY,  /*08*/ xmid,  ymid, texMidX1, texMidY2, /*06*/ right, bottom, texMinX,  texMaxY,  /*07*/ xmid, bottom, texMinX,  texMidY2,
+        /*09*/ xmid,  ymid, texMidX1, texMidY1, /*12*/ left,  ymid, texMidX1, texMinY,  /*10*/ xmid, bottom,  texMinX,  texMidY1, /*11*/ left, bottom, texMinX,  texMinY 
+      };
+      DrawCrimpedBoxTriangleStrip();
+    } break;
+  }
+}
+
+float Box::ScrollCrimped(float tex0, float tex1, float scroll, float *min, float *mid1, float *mid2, float *max) {
+  if (tex1 < 1.0 && tex0 == 0.0) {
+    *mid1=tex1; *mid2=0;
+    if (scroll > 0) *min = *max = tex1 - scroll;
+    else            *min = *max = tex0 - scroll;
+  } else if (tex0 > 0.0 && tex1 == 1.0) {
+    *mid1=1; *mid2=tex0;
+    if (scroll > 0) *min = *max = tex0 + scroll;
+    else            *min = *max = tex1 + scroll;
+  } else if (tex0 == 0 && tex1 == 1) {
+    *min = *max = 1;
+    *mid1 = tex1; *mid2 = tex0;
+  } else {
+    return 0;
+  }
+  return (*mid1 - *min) / (tex1 - tex0); 
+}
+
+Box3::Box3(const Box &cont, const point &pb, const point &pe, int first_line_height, int last_line_height) {
+  if (pb.y == pe.y) {
+    v[0] = Box(pb.x, pb.y, pe.x - pb.x, first_line_height);
+    v[1] = v[2] = Box();
+  } else {
+    v[0] = Box(pb.x, pb.y, cont.w - pb.x, first_line_height);
+    v[1] = Box(0, pe.y + last_line_height, cont.w, pb.y - pe.y - first_line_height);
+    v[2] = Box(0, pe.y, pe.x, last_line_height);
+  }
+}
+
+void Box3::Draw(const point &p, const Color *c) const {
+  if (c) screen->gd->SetColor(*c);
+  for (int i=0; i<3; i++) if (v[i].h) (v[i] + p).Draw();
+}
+
+Box Box3::BoundingBox() const {
+  int min_x = v[0].x, min_y = v[0].y, max_x = v[0].x + v[0].w, max_y = v[0].y + v[0].h;
+  if (v[1].h) { min_x = min(min_x, v[1].x); min_y = min(min_y, v[1].y); max_x = max(max_x, v[1].x + v[1].w); max_y = max(max_y, v[1].y + v[1].h); }
+  if (v[2].h) { min_x = min(min_x, v[2].x); min_y = min(min_y, v[2].y); max_x = max(max_x, v[2].x + v[2].w); max_y = max(max_y, v[2].y + v[2].h); }
+  return Box(min_x, min_y, max_x - min_x, max_y - min_y);
+}
+
+void Drawable::AttrVec::Insert(const Drawable::Attr &v) {
+  if (v.font) font_refs.Insert(&v.font->ref);
+  push_back(v);
+}
+
+/* Texture */
+
+int Texture::GLBufferType() const { return pf == preferred_pf ? GraphicsDevice::GLPreferredBuffer : GL_UNSIGNED_BYTE; }
+
+void Texture::Coordinates(float *texcoord, int w, int h, int wd, int hd) {
+  texcoord[CoordMinX] = texcoord[CoordMinY] = 0;
+  texcoord[CoordMaxX] = (float)w / wd;
+  texcoord[CoordMaxY] = (float)h / hd;
+}
+
+void Texture::Resize(int W, int H, int PF, int flag) {
+  if (PF) pf = PF;
+  width=W; height=H;
+  if (buf || (flag & Flag::CreateBuf)) RenewBuffer();
+  if (!ID && (flag & Flag::CreateGL)) {
+    if (!cubemap) {
+      screen->gd->DisableCubeMap();
+      screen->gd->GenTextures(GL_TEXTURE_2D, 1, &ID);
+    } else if (cubemap == CubeMap::PX) {
+      screen->gd->ActiveTexture(0);
+      screen->gd->GenTextures(GL_TEXTURE_CUBE_MAP, 1, &ID);
+      glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    }
+  }
+  if (ID || cubemap) {
+    int opengl_width = NextPowerOfTwo(width), opengl_height = NextPowerOfTwo(height);
+    int gl_tt = GLTexType(), gl_pt = GLPixelType(), gl_bt = GLBufferType();
+    if (ID) screen->gd->BindTexture(gl_tt, ID);
+    glTexImage2D(gl_tt, 0, GraphicsDevice::GLInternalFormat, opengl_width, opengl_height, 0, gl_pt, gl_bt, 0);
+    Coordinates(coord, width, height, opengl_width, opengl_height);
+  }
+}
+
+void Texture::LoadBuffer(const unsigned char *B, const point &dim, int PF, int linesize, int flag) {
+  Resize(dim.x, dim.y, pf, Flag::CreateBuf);
+  int resample_flag = 0 | ((flag & Flag::FlipY) ? SimpleVideoResampler::Flag::FlipY : 0);
+  SimpleVideoResampler::Blit(B, buf, width, height,
+                             PF, linesize,   0, 0,
+                             pf, LineSize(), 0, 0, resample_flag);
+}
+
+void Texture::UpdateBuffer(const unsigned char *B, const point &dim, int PF, int linesize, int flag) {
+  bool resample = flag & Flag::Resample;
+  VideoResampler conv;
+  conv.Open(dim.x, dim.y, PF, resample ? width : dim.x, resample ? height : dim.y, pf);
+  conv.Resample(B, linesize, buf, LineSize(), 0, flag & Flag::FlipY);
+}
+
+void Texture::UpdateBuffer(const unsigned char *B, const ::LFL::Box &box, int PF, int linesize, int blit_flag) {
+  SimpleVideoResampler::Blit(B, buf, box.w, box.h, PF, linesize, 0, 0, pf, LineSize(), box.x, box.y, blit_flag);
+}
+
+void Texture::Bind() const { screen->gd->BindTexture(GLTexType(), ID); }
+void Texture::ClearGL() { 
+  if (!MainThread()) { RunInMainThread(new Callback(bind(&GraphicsDevice::DelTexture, screen->gd, ID))); ID=0; }
+  else if (ID) { screen->gd->DelTexture(ID); ID=0; }
+}
+
+void Texture::LoadGL(const unsigned char *B, const point &dim, int PF, int linesize, int flag) {
+  Texture temp;
+  temp .Resize(dim.x, dim.y, preferred_pf, Flag::CreateBuf);
+  temp .UpdateBuffer(B, dim, PF, linesize, Flag::FlipY);
+  this->Resize(dim.x, dim.y, preferred_pf, Flag::CreateGL);
+  this->UpdateGL(temp.buf, LFL::Box(dim), flag);
+}
+
+void Texture::UpdateGL(const unsigned char *B, const ::LFL::Box &box, int flag) {
+  int gl_tt = GLTexType(), gl_y = (flag & Flag::FlipY) ? (height - box.y - box.h) : box.y;
+  screen->gd->BindTexture(gl_tt, ID);
+  glTexSubImage2D(gl_tt, 0, box.x, gl_y, box.w, box.h, GLPixelType(), GLBufferType(), B);
+}
+
+void Texture::DumpGL(unsigned tex_id) {
+#ifndef LFL_MOBILE
+  if (tex_id) {
+    GLint gl_tt = GLTexType(), tex_w = 0, tex_h = 0;
+    screen->gd->BindTexture(gl_tt, tex_id);
+    glGetTexLevelParameteriv(gl_tt, 0, GL_TEXTURE_WIDTH, &tex_w);
+    glGetTexLevelParameteriv(gl_tt, 0, GL_TEXTURE_WIDTH, &tex_h);
+    CHECK_GT((width  = tex_w), 0);
+    CHECK_GT((height = tex_h), 0);
+  }
+  RenewBuffer();
+  glGetTexImage(GLTexType(), 0, GLPixelType(), GLBufferType(), buf);
+#endif
+}
+
+void Texture::ToIplImage(_IplImage *out) {
+#ifdef LFL_OPENCV
+  memset(out, 0, sizeof(IplImage));
+  out->nSize = sizeof(IplImage);
+  out->nChannels = Pixel::size(pf);
+  out->depth = IPL_DEPTH_8U;
+  out->origin = 1;
+  out->width = width;
+  out->height = height;
+  out->widthStep = out->width * out->nChannels;
+  out->imageSize = out->widthStep * out->height;
+  out->imageData = (char*)buf;
+  out->imageDataOrigin = out->imageData;
+#else
+  ERROR("ToIplImage not implemented");
+#endif
+}
+
+#ifdef __APPLE__
+#import <CoreGraphics/CGBitmapContext.h> 
+CGContextRef Texture::CGBitMap() { return CGBitMap(0, 0, width, height); }
+CGContextRef Texture::CGBitMap(int X, int Y, int W, int H) {
+  int linesize = LineSize(), alpha_info = 0;
+  if      (pf == Pixel::RGBA)  alpha_info = kCGImageAlphaPremultipliedLast;
+  else if (pf == Pixel::BGRA)  alpha_info = kCGBitmapByteOrder32Host | kCGImageAlphaPremultipliedFirst;
+  else if (pf == Pixel::RGB32) alpha_info = kCGImageAlphaNoneSkipLast;
+  else if (pf == Pixel::BGR32) alpha_info = kCGBitmapByteOrder32Host | kCGImageAlphaNoneSkipFirst;
+  else { ERROR("unsupported pixel format: ", pf, " = ", Pixel::Name(pf)); return 0; }
+  CGColorSpaceRef colors = CGColorSpaceCreateDeviceRGB();
+  // CGColorSpaceRef colors = CGColorSpaceCreateWithName(kCGColorSpaceGenericRGB);
+  CGContextRef ret = CGBitmapContextCreate(buf + Y*linesize + X*PixelSize(), W, H, 8, linesize, colors, alpha_info);
+  CGColorSpaceRelease(colors);
+  return ret;
+}
+#endif
+
+#ifdef WIN32
+HBITMAP Texture::CreateGDIBitMap(HDC dc) {
+  ClearBuffer();
+  buf_owner = false;
+  pf = Pixel::BGR32;
+  BITMAPINFO bmi;
+  memzero(bmi.bmiHeader);
+  bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+  bmi.bmiHeader.biWidth = width;
+  bmi.bmiHeader.biHeight = -height;
+  bmi.bmiHeader.biPlanes = 1;
+  bmi.bmiHeader.biCompression = BI_RGB;
+  bmi.bmiHeader.biBitCount = 32;
+  HBITMAP ret = CreateDIBSection(dc, &bmi, DIB_RGB_COLORS, (void**)&buf, NULL, 0);
+  return ret;
+}
+#endif
+
+void Texture::Screenshot() { ScreenshotBox(Box(screen->width, screen->height), Flag::FlipY); }
+void Texture::ScreenshotBox(const Box &b, int flag) {
+  Resize(b.w, b.h, preferred_pf, Flag::CreateBuf);
+  unsigned char *pixels = NewBuffer();
+  glReadPixels(b.x, b.y, b.w, b.h, GLPixelType(), GLBufferType(), pixels);
+  UpdateBuffer(pixels, point(b.w, b.h), pf, b.w*4, flag);
+  delete [] pixels;
+}
+
+/* DepthTexture */
+
+void DepthTexture::Resize(int W, int H, int DF, int flag) {
+  if (DF) df = DF;
+  width=W; height=H;
+  if (!ID && (flag & Flag::CreateGL)) screen->gd->GenRenderBuffers(1, &ID);
+  int opengl_width = NextPowerOfTwo(width), opengl_height = NextPowerOfTwo(height);
+  if (ID) {
+    screen->gd->BindRenderBuffer(ID);
+    screen->gd->RenderBufferStorage(Depth::OpenGLID(df), opengl_width, opengl_height);
+  }
+}
+
+/* FrameBuffer */
+
+void FrameBuffer::Resize(int W, int H, int flag) {
+  width=W; height=H;
+  if (!ID && (flag & Flag::CreateGL)) {
+    screen->gd->GenFrameBuffers(1, &ID);
+    if (flag & Flag::CreateTexture)      AllocTexture(&tex, !(flag & Flag::NoClampToEdge));
+    if (flag & Flag::CreateDepthTexture) AllocDepthTexture(&depth);
+  } else {
+    tex.Resize(width, height);
+    depth.Resize(width, height);
+  }
+  Attach(tex.ID, depth.ID);
+  int status = screen->gd->CheckFrameBufferStatus();
+  if (status != GL_FRAMEBUFFER_COMPLETE) ERROR("FrameBuffer status ", status);
+  if (flag & Flag::ReleaseFB) Release();
+}
+
+void FrameBuffer::AllocDepthTexture(DepthTexture *out) { CHECK_EQ(out->ID, 0); out->Create(width, height); }
+void FrameBuffer::AllocTexture(Texture *out, bool clamp_to_edge) {
+  CHECK_EQ(out->ID, 0);
+  out->Create(width, height); 
+  if (clamp_to_edge) {
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+  }
+}
+
+void FrameBuffer::Release() { screen->gd->BindFrameBuffer(screen->gd->default_framebuffer); }
+void FrameBuffer::Attach(int ct, int dt) {
+  screen->gd->BindFrameBuffer(ID);
+  if (ct) screen->gd->FrameBufferTexture     ((tex.ID   = ct));
+  if (dt) screen->gd->FrameBufferDepthTexture((depth.ID = dt));
+}
+
+/* Shader */
+
+void Shader::SetGlobalUniform1f(const string &name, float v) {
+  screen->gd->UseShader(&app->video.shader_default);  app->video.shader_default .SetUniform1f(name, v);
+  screen->gd->UseShader(&app->video.shader_normals);  app->video.shader_normals .SetUniform1f(name, v);
+  screen->gd->UseShader(&app->video.shader_cubemap);  app->video.shader_cubemap .SetUniform1f(name, v);
+  screen->gd->UseShader(&app->video.shader_cubenorm); app->video.shader_cubenorm.SetUniform1f(name, v);
+}
+
+void Shader::SetGlobalUniform2f(const string &name, float v1, float v2){ 
+  screen->gd->UseShader(&app->video.shader_default);  app->video.shader_default .SetUniform2f(name, v1, v2);
+  screen->gd->UseShader(&app->video.shader_normals);  app->video.shader_normals .SetUniform2f(name, v1, v2);
+  screen->gd->UseShader(&app->video.shader_cubemap);  app->video.shader_cubemap .SetUniform2f(name, v1, v2);
+  screen->gd->UseShader(&app->video.shader_cubenorm); app->video.shader_cubenorm.SetUniform2f(name, v1, v2);
+}
+
+#ifdef LFL_GLSL_SHADERS
+int Shader::Create(const string &name, const string &vertex_shader, const string &fragment_shader, const ShaderDefines &defines, Shader *out) {
+  INFO("Shader::Create ", name);
+  GLuint p = screen->gd->CreateProgram();
+
+  string hdr =
+    "#ifdef GL_ES\r\n"
+    "precision highp float;\r\n"
+    "#else\r\n"
+    "#define lowp\r\n"
+    "#define highp\r\n"
+    "#endif\r\n";
+#ifdef LFL_GLES2
+  if (app->video.opengles_version == 2) hdr += "#define LFL_GLES2\r\n";
+#endif
+  hdr += defines.text + string("\r\n");
+
+  if (vertex_shader.size()) {
+    GLuint vs = screen->gd->CreateShader(GL_VERTEX_SHADER);
+    const char *vss[] = { hdr.c_str(), vertex_shader.c_str(), 0 };
+    screen->gd->ShaderSource(vs, 2, vss, 0);
+    screen->gd->CompileShader(vs);
+    screen->gd->AttachShader(p, vs);
+  }
+
+  if (fragment_shader.size()) {
+    GLuint fs = screen->gd->CreateShader(GL_FRAGMENT_SHADER);
+    const char *fss[] = { hdr.c_str(), fragment_shader.c_str(), 0 };
+    screen->gd->ShaderSource(fs, 2, fss, 0);
+    screen->gd->CompileShader(fs);
+    screen->gd->AttachShader(p, fs);
+  }
+
+  if (1)                    screen->gd->BindAttribLocation(p, 0, "Position"   );
+  if (defines.normals)      screen->gd->BindAttribLocation(p, 1, "Normal"     );
+  if (defines.vertex_color) screen->gd->BindAttribLocation(p, 2, "VertexColor");
+  if (defines.tex_2d)       screen->gd->BindAttribLocation(p, 3, "TexCoordIn" );
+
+  screen->gd->LinkProgram(p);
+
+  int active_uniforms=0, max_uniform_components=0, active_attributes=0, max_attributes=0;
+  screen->gd->GetProgramiv(p, GL_ACTIVE_UNIFORMS, &active_uniforms);
+  screen->gd->GetProgramiv(p, GL_ACTIVE_ATTRIBUTES, &active_attributes);
+#if !defined(LFL_ANDROID) && !defined(LFL_IPHONE)
+  screen->gd->GetIntegerv(GL_MAX_VERTEX_UNIFORM_COMPONENTS, &max_uniform_components);
+#endif
+  screen->gd->GetIntegerv(GL_MAX_VERTEX_ATTRIBS, &max_attributes);
+  INFO("shader=", name, ", mu=", active_uniforms, " avg_comps/", max_uniform_components, ", ma=", active_attributes, "/", max_attributes);
+
+  bool log_missing_attrib = false;
+  if (out) {
+    *out = Shader();
+    out->ID = p;
+    out->name = name;
+    if ((out->slot_position             = screen->gd->GetAttribLocation (p, "Position"))            < 0 && log_missing_attrib) INFO("shader ", name, " missing Position");
+    if ((out->slot_normal               = screen->gd->GetAttribLocation (p, "Normal"))              < 0 && log_missing_attrib) INFO("shader ", name, " missing Normal");
+    if ((out->slot_color                = screen->gd->GetAttribLocation (p, "VertexColor"))         < 0 && log_missing_attrib) INFO("shader ", name, " missing VertexColor");
+    if ((out->slot_tex                  = screen->gd->GetAttribLocation (p, "TexCoordIn"))          < 0 && log_missing_attrib) INFO("shader ", name, " missing TexCoordIn");
+    if ((out->uniform_modelview         = screen->gd->GetUniformLocation(p, "Modelview"))           < 0 && log_missing_attrib) INFO("shader ", name, " missing Modelview");
+    if ((out->uniform_modelviewproj     = screen->gd->GetUniformLocation(p, "ModelviewProjection")) < 0 && log_missing_attrib) INFO("shader ", name, " missing ModelviewProjection");
+    if ((out->uniform_tex               = screen->gd->GetUniformLocation(p, "iChannel0"))           < 0 && log_missing_attrib) INFO("shader ", name, " missing Texture");
+    if ((out->uniform_cubetex           = screen->gd->GetUniformLocation(p, "CubeTexture"))         < 0 && log_missing_attrib) INFO("shader ", name, " missing CubeTexture");
+    if ((out->uniform_normalon          = screen->gd->GetUniformLocation(p, "NormalEnabled"))       < 0 && log_missing_attrib) INFO("shader ", name, " missing NormalEnabled");
+    if ((out->uniform_texon             = screen->gd->GetUniformLocation(p, "TexCoordEnabled"))     < 0 && log_missing_attrib) INFO("shader ", name, " missing TexCoordEnabled");
+    if ((out->uniform_coloron           = screen->gd->GetUniformLocation(p, "VertexColorEnabled"))  < 0 && log_missing_attrib) INFO("shader ", name, " missing VertexColorEnabled");
+    if ((out->uniform_cubeon            = screen->gd->GetUniformLocation(p, "CubeMapEnabled"))      < 0 && log_missing_attrib) INFO("shader ", name, " missing CubeMapEnabled");
+    if ((out->uniform_colordefault      = screen->gd->GetUniformLocation(p, "DefaultColor"))        < 0 && log_missing_attrib) INFO("shader ", name, " missing DefaultColor");
+    if ((out->uniform_material_ambient  = screen->gd->GetUniformLocation(p, "MaterialAmbient"))     < 0 && log_missing_attrib) INFO("shader ", name, " missing MaterialAmbient");
+    if ((out->uniform_material_diffuse  = screen->gd->GetUniformLocation(p, "MaterialDiffuse"))     < 0 && log_missing_attrib) INFO("shader ", name, " missing MaterialDiffuse");
+    if ((out->uniform_material_specular = screen->gd->GetUniformLocation(p, "MaterialSpecular"))    < 0 && log_missing_attrib) INFO("shader ", name, " missing MaterialSpecular");
+    if ((out->uniform_material_emission = screen->gd->GetUniformLocation(p, "MaterialEmission"))    < 0 && log_missing_attrib) INFO("shader ", name, " missing MaterialEmission");
+    if ((out->uniform_light0_pos        = screen->gd->GetUniformLocation(p, "LightZeroPosition"))   < 0 && log_missing_attrib) INFO("shader ", name, " missing LightZeroPosition");
+    if ((out->uniform_light0_ambient    = screen->gd->GetUniformLocation(p, "LightZeroAmbient"))    < 0 && log_missing_attrib) INFO("shader ", name, " missing LightZeroAmbient");
+    if ((out->uniform_light0_diffuse    = screen->gd->GetUniformLocation(p, "LightZeroDiffuse"))    < 0 && log_missing_attrib) INFO("shader ", name, " missing LightZeroDiffuse");
+    if ((out->uniform_light0_specular   = screen->gd->GetUniformLocation(p, "LightZeroSpecular"))   < 0 && log_missing_attrib) INFO("shader ", name, " missing LightZeroSpecular");
+
+    int unused_attrib = 0;
+    memset(out->unused_attrib_slot, -1, sizeof(out->unused_attrib_slot));
+    for (int i=0; i<MaxVertexAttrib; i++) {
+      if (out->slot_position == i || out->slot_normal == i || out->slot_color == i || out->slot_tex == i) continue;
+      out->unused_attrib_slot[unused_attrib++] = i;
+    }
+  }
+
+  return p;
+}
+
+int Shader::CreateShaderToy(const string &name, const string &pixel_shader, Shader *out) {
+  static string header =
+    "uniform float iGlobalTime, iBlend;\r\n"
+    "uniform vec3 iResolution;\r\n"
+    "uniform vec2 iScroll;\r\n"
+    "uniform vec4 iMouse;\r\n"
+    "uniform sampler2D iChannel0;\r\n"
+    "uniform vec3 iChannelResolution[1];\r\n"
+    "#define SampleChannelAtPointAndModulus(c, p, m) texture2D(c, mod((p), (m)))\r\n"
+    "#define SampleChannelAtPoint(c, p) SampleChannelAtPointAndModulus(c, p, iChannelResolution[0].xy/iResolution.xy)\r\n"
+    "#define SamplePoint() ((fragCoord.xy + iScroll)/iResolution.xy)\r\n"
+    "#define SamplePointFlipY() vec2((fragCoord.x+iScroll.x)/iResolution.x, (iResolution.y-fragCoord.y-iScroll.y)/iResolution.y)\r\n"
+    "#define SampleChannel(c) SampleChannelAtPoint(c, SamplePoint())\r\n"
+#ifdef LFL_MOBILE
+    "#define BlendChannels(c1,c2) (((c1) + (c2))/2.0)\r\n";
+#else
+    "#define BlendChannels(c1,c2) ((c1)*iBlend + (c2)*(1.0-iBlend))\r\n";
+#endif
+
+  static string footer =
+    "void main(void) { mainImage(gl_FragColor, gl_FragCoord.xy); }\r\n";
+  return Shader::Create(name, screen->gd->vertex_shader, StrCat(header, pixel_shader, footer), ShaderDefines(1,0,1,0), out);
+}
+
+int Shader::GetUniformIndex(const string &name) { return screen->gd->GetUniformLocation(ID, name); }
+void Shader::SetUniform1i(const string &name, float v)                                { screen->gd->Uniform1i (GetUniformIndex(name), v); }
+void Shader::SetUniform1f(const string &name, float v)                                { screen->gd->Uniform1f (GetUniformIndex(name), v); }
+void Shader::SetUniform2f(const string &name, float v1, float v2)                     { screen->gd->Uniform2f (GetUniformIndex(name), v1, v2); }
+void Shader::SetUniform3f(const string &name, float v1, float v2, float v3)           { screen->gd->Uniform3f (GetUniformIndex(name), v1, v2, v3); }
+void Shader::SetUniform4f(const string &name, float v1, float v2, float v3, float v4) { screen->gd->Uniform4f (GetUniformIndex(name), v1, v2, v3, v4); }
+void Shader::SetUniform3fv(const string &name, const float *v)                        { screen->gd->Uniform3fv(GetUniformIndex(name), 1, v); }
+void Shader::SetUniform3fv(const string &name, int n, const float *v)                 { screen->gd->Uniform3fv(GetUniformIndex(name), n, v); }
+
+#else /* LFL_GLSL_SHADERS */
+
+int Shader::Create(const string &name, const string &vert, const string &frag, const ShaderDefines &defines, Shader *out) { return -1; }
+int Shader::GetUniformIndex(const string &name) { return -1; }
+void Shader::SetUniform1i(const string &name, float v) {}
+void Shader::SetUniform1f(const string &name, float v) {}
+void Shader::SetUniform2f(const string &name, float v1, float v2) {}
+void Shader::SetUniform3f(const string &name, float v1, float v2, float v3) {}
+void Shader::SetUniform4f(const string &name, float v1, float v2, float v3, float v4) {}
+void Shader::SetUniform3fv(const string &name, const float *v) {}
+void Shader::SetUniform3fv(const string &name, int n, const float *v) {}
+#endif /* LFL_GLSL_SHADERS */
 
 #ifndef LFL_HEADLESS
 #ifdef LFL_GDDEBUG
@@ -433,10 +1123,10 @@ struct OpenGLES1 : public GraphicsDevice, public QTWindow {
     GDDebug("ActiveTexture=", n);
   }
   void BindTexture(int t, int n) { glBindTexture(t, n); GDDebug("BindTexture=", t, ",", n); }
-  bool VertexPointer(int m, int t, int w, int o, float *verts, int l, int *out, bool ud) { glVertexPointer  (m, t, w, verts + o/sizeof(float)); GDDebug("VertexPointer"); return true; }
-  void TexPointer   (int m, int t, int w, int o, float *tex,   int l, int *out, bool ud) { glTexCoordPointer(m, t, w, tex   + o/sizeof(float)); GDDebug("TexPointer"); }
-  void ColorPointer (int m, int t, int w, int o, float *verts, int l, int *out, bool ud) { glColorPointer   (m, t, w, verts + o/sizeof(float)); GDDebug("ColorPointer"); }
-  void NormalPointer(int m, int t, int w, int o, float *verts, int l, int *out, bool ud) { glNormalPointer  (   t, w, verts + o/sizeof(float)); GDDebug("NormalPointer"); }
+  bool VertexPointer(int m, int t, int w, int o, float *verts, int l, int *out, bool ud, int) { glVertexPointer  (m, t, w, verts + o/sizeof(float)); GDDebug("VertexPointer"); return true; }
+  void TexPointer   (int m, int t, int w, int o, float *tex,   int l, int *out, bool ud)      { glTexCoordPointer(m, t, w, tex   + o/sizeof(float)); GDDebug("TexPointer"); }
+  void ColorPointer (int m, int t, int w, int o, float *verts, int l, int *out, bool ud)      { glColorPointer   (m, t, w, verts + o/sizeof(float)); GDDebug("ColorPointer"); }
+  void NormalPointer(int m, int t, int w, int o, float *verts, int l, int *out, bool ud)      { glNormalPointer  (   t, w, verts + o/sizeof(float)); GDDebug("NormalPointer"); }
   void Color4f(float r, float g, float b, float a) { default_color.back() = Color(r,g,b,a); UpdateColor(); }
   void MatrixProjection() { target_matrix=2; glMatrixMode(GL_PROJECTION); }
   void MatrixModelview() { target_matrix=1; glMatrixMode(GL_MODELVIEW); }
@@ -451,11 +1141,15 @@ struct OpenGLES1 : public GraphicsDevice, public QTWindow {
   void Frustum(float l, float r, float b, float t, float nv, float fv) { glFrustum(l,r, b,t, nv,fv); }
   void Mult(const float *m) { glMultMatrixf(m); }
   void Translate(float x, float y, float z) { glTranslatef(x, y, z); }
-  void Draw(int pt, int np, int it, int o, void *index, int l, int *out, bool dirty) {
+  void DrawElements(int pt, int np, int it, int o, void *index, int l, int *out, bool dirty) {
     glDrawElements(pt, np, it, (char*)index + o);
-    GDDebug("Draw(", pt, ", ", np, ", ", it, ", ", o, ", ", index, ", ", l, ", ", dirty, ")");
+    GDDebug("DrawElements(", pt, ", ", np, ", ", it, ", ", o, ", ", index, ", ", l, ", ", dirty, ")");
   }
   void DrawArrays(int type, int o, int n) {
+    glDrawArrays(type, o, n);
+    GDDebug("DrawArrays(", type, ", ", o, ", ", n, ")");
+  }
+  void DeferDrawArrays(int type, int o, int n) {
     glDrawArrays(type, o, n);
     GDDebug("DrawArrays(", type, ", ", o, ", ", n, ")");
   }
@@ -472,98 +1166,89 @@ struct OpenGLES2 : public GraphicsDevice {
 #else
 struct OpenGLES2 : public GraphicsDevice, public QTWindow {
 #endif
-  int enabled_array=-1, enabled_indexarray=-1, matrix_target=-1;
+  struct BoundTexture {
+    int t, n, l;
+    bool operator!=(const BoundTexture &x) const { return t != x.t || n != x.n || l != x.l; };
+  };
+  struct VertexAttribute {
+    int m, t, w, o;
+    bool operator!=(const VertexAttribute &x) const { return m != x.m || t != x.t || w != x.w || o != x.o; };
+  };
+  struct Deferred {
+    int prim_type=0, vertex_size=0, vertexbuffer=-1, vertexbuffer_size=1024*4*4, vertexbuffer_len=0, vertexbuffer_appended=0, draw_calls=0;
+  };
+
   vector<m44> modelview_matrix, projection_matrix;
-  bool dirty_matrix=1, dirty_color=1;
-  int cubemap_on=0, normals_on=0, texture_on=0, colorverts_on=0, lighting_on=0;
+  bool dirty_matrix=1, dirty_color=1, cubemap_on=0, normals_on=0, texture_on=0, colorverts_on=0, lighting_on=0;
+  int matrix_target=-1, bound_vertexbuffer=-1, bound_indexbuffer=-1;
+  VertexAttribute vertex_attr, tex_attr, color_attr, normal_attr;
+  BoundTexture bound_texture;
   LFL::Material material;
   LFL::Light light[4];
-
-  struct VertexAttribPointer {
-    int m, t, w, o;
-    VertexAttribPointer()                           : m(0), t(0), w(0), o(0) {}
-    VertexAttribPointer(int M, int T, int W, int O) : m(M), t(T), w(W), o(O) {}
-  } position_ptr, tex_ptr, color_ptr, normal_ptr;
-
-  OpenGLES2() {
-    modelview_matrix.push_back(m44::Identity());
-    projection_matrix.push_back(m44::Identity());
-    default_color.push_back(Color(1.0, 1.0, 1.0, 1.0));
-  }
+  Deferred deferred;
 
   void Init() {
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    vertex_shader = Asset::FileContents("lfapp_vertex.glsl");
-    pixel_shader  = Asset::FileContents("lfapp_pixel.glsl");
+    INFO("GraphicsDevice::Init");
+    memzero(vertex_attr); memzero(tex_attr); memzero(color_attr); memzero(normal_attr); memzero(bound_texture);
+    deferred.prim_type = deferred.vertex_size = deferred.vertexbuffer_len = deferred.draw_calls = 0;
+    deferred.vertexbuffer = -1;
+    modelview_matrix.clear();
+    modelview_matrix.push_back(m44::Identity());
+    projection_matrix.clear();
+    projection_matrix.push_back(m44::Identity());
+    default_color.clear();
+    default_color.push_back(Color(1.0, 1.0, 1.0, 1.0));
+    scissor_stack.clear();
+    scissor_stack.push_back(vector<Box>());
+    if (vertex_shader.empty()) vertex_shader = Asset::FileContents("lfapp_vertex.glsl");
+    if ( pixel_shader.empty()) pixel_shader  = Asset::FileContents("lfapp_pixel.glsl");
     Shader::Create("lfapp",          vertex_shader, pixel_shader, ShaderDefines(1,0,1,0), &app->video.shader_default);
     Shader::Create("lfapp_cubemap",  vertex_shader, pixel_shader, ShaderDefines(1,0,0,1), &app->video.shader_cubemap);
     Shader::Create("lfapp_normals",  vertex_shader, pixel_shader, ShaderDefines(0,1,1,0), &app->video.shader_normals);
     Shader::Create("lfapp_cubenorm", vertex_shader, pixel_shader, ShaderDefines(0,1,0,1), &app->video.shader_cubenorm);
-    UseShader(0);
     GDDebug("Init");
+    UseShader((shader = 0));
+    VertexPointer(0, 0, 0, 0, NULL, deferred.vertexbuffer_size, NULL, true, 0);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
   }
 
-  vector<m44> *TargetMatrix() {
-    if      (matrix_target == 1) return &modelview_matrix;
-    else if (matrix_target == 2) return &projection_matrix;
-    else FATAL("uknown matrix ", matrix_target);
-  }
-  void UpdateMatrix() { dirty_matrix = true; }
-  void UpdateColor() { dirty_color = true; }
-  void UpdateShader() {
-    if (cubemap_on && normals_on) UseShader(&app->video.shader_cubenorm);
-    else if          (cubemap_on) UseShader(&app->video.shader_cubemap);
-    else if          (normals_on) UseShader(&app->video.shader_normals);
-    else                          UseShader(&app->video.shader_default);
-  }
-  void UpdatePosition() {
-    glEnableVertexAttribArray(shader->slot_position);
-    SetVertexAttribPointer(shader->slot_position, position_ptr);
-  }
-  void UpdateTexture() {
-    bool supports = shader->slot_tex >= 0;
-    glUniform1i(shader->uniform_texon, texture_on && supports);
-    if (supports) {
-      if (texture_on) {  glEnableVertexAttribArray(shader->slot_tex); SetVertexAttribPointer(shader->slot_tex, tex_ptr); }
-      else            { glDisableVertexAttribArray(shader->slot_tex); }
-    } else if (texture_on && FLAGS_gd_debug) ERROR("shader doesnt support texture");
-  }
-  void UpdateColorVerts() {
-    bool supports = shader->slot_color >= 0;
-    glUniform1i(shader->uniform_coloron, colorverts_on && supports);
-    if (supports) {
-      if (colorverts_on) {  glEnableVertexAttribArray(shader->slot_color); SetVertexAttribPointer(shader->slot_color, color_ptr); }
-      else               { glDisableVertexAttribArray(shader->slot_color); }
-    } else if (colorverts_on) ERROR("shader doesnt support vertex color");
-  }
-  void UpdateNormals() {
-    bool supports = shader->slot_normal >= 0;
-    glUniform1i(shader->uniform_normalon, normals_on && supports);
-    if (supports) {
-      if (normals_on) {  glEnableVertexAttribArray(shader->slot_normal); SetVertexAttribPointer(shader->slot_normal, normal_ptr); }
-      else            { glDisableVertexAttribArray(shader->slot_normal); }
-    } else if (normals_on) ERROR("shader doesnt support normals");
-  }
-
-  bool ShaderSupport() { return true; }
-  bool LightingSupport() { return false; }
-  void EnableTexture()  { if (Changed(&texture_on, 1)) UpdateTexture(); GDDebug("Texture=1"); }
-  void DisableTexture() { if (Changed(&texture_on, 0)) UpdateTexture(); GDDebug("Texture=0"); }
-  void EnableLighting()  { lighting_on=1; GDDebug("Lighting=1"); }
-  void DisableLighting() { lighting_on=0; GDDebug("Lighting=0"); }
-  void EnableVertexColor()  { if (Changed(&colorverts_on, 1)) UpdateColorVerts(); GDDebug("VertexColor=1"); }
-  void DisableVertexColor() { if (Changed(&colorverts_on, 0)) UpdateColorVerts(); GDDebug("VertexColor=0"); }
-  void EnableNormals()  { if (Changed(&normals_on, 1)) { UpdateShader(); UpdateNormals(); } GDDebug("Normals=1"); }
-  void DisableNormals() { if (Changed(&normals_on, 0)) { UpdateShader(); UpdateNormals(); } GDDebug("Normals=0"); }
+  bool ShaderSupport()      { return true; }
+  void EnableLighting()     { lighting_on=1; GDDebug("Lighting=1"); }
+  void DisableLighting()    { lighting_on=0; GDDebug("Lighting=0"); }
+  void EnableTexture()      { if (Changed(&texture_on,    true))  { ClearDeferred(); UpdateTexture();    } GDDebug("Texture=1"); }
+  void DisableTexture()     { if (Changed(&texture_on,    false)) { ClearDeferred(); UpdateTexture();    } GDDebug("Texture=0"); }
+  void EnableVertexColor()  { if (Changed(&colorverts_on, true))  { ClearDeferred(); UpdateColorVerts(); } GDDebug("VertexColor=1"); }
+  void DisableVertexColor() { if (Changed(&colorverts_on, false)) { ClearDeferred(); UpdateColorVerts(); } GDDebug("VertexColor=0"); }
+  void EnableNormals()      { if (Changed(&normals_on,    true))  { UpdateShader();  UpdateNormals();    } GDDebug("Normals=1"); }
+  void DisableNormals()     { if (Changed(&normals_on,    false)) { UpdateShader();  UpdateNormals();    } GDDebug("Normals=0"); }
+  void DisableCubeMap()     { if (Changed(&cubemap_on,    false)) { UpdateShader();  glUniform1i(shader->uniform_cubeon, 0); }                                                                                 GDDebug("CubeMap=", 0); }
+  void BindCubeMap(int n)   { if (Changed(&cubemap_on,    true))  { UpdateShader();  glUniform1i(shader->uniform_cubeon, 1); } glUniform1i(shader->uniform_cubetex, 0); glBindTexture(GL_TEXTURE_CUBE_MAP, n); GDDebug("CubeMap=", n); }
+  void ActiveTexture(int n) { if (Changed(&bound_texture.l, n))   { ClearDeferred(); glActiveTexture(n ? GL_TEXTURE1 : GL_TEXTURE0); } GDDebug("ActivteTexture=", n); }
   void EnableLight(int n) {}
   void DisableLight(int n) {}
+  void TextureGenLinear() {}
+  void TextureGenReflection() {}
+  void BindTexture(int t, int n) {
+    if (!Changed(&bound_texture, BoundTexture{ t, n, 0 })) return;
+    ClearDeferred();
+    glActiveTexture(GL_TEXTURE0); 
+    glBindTexture(t, n);
+    glUniform1i(shader->uniform_tex, 0);
+    GDDebug("BindTexture=", t, ",", n);
+  }
+  void Color4f(float r, float g, float b, float a) {
+    if (lighting_on) {
+      float c[] = { r, g, b, a };
+      Material(GL_AMBIENT_AND_DIFFUSE, c);
+    } else if (Changed(&default_color.back(), Color(r,g,b,a))) UpdateColor();
+  }
   void Material(int t, float *v) {
     if      (t == GL_AMBIENT)             material.ambient  = Color(v);
     else if (t == GL_DIFFUSE)             material.diffuse  = Color(v);
     else if (t == GL_SPECULAR)            material.specular = Color(v);
     else if (t == GL_EMISSION)            material.emissive = Color(v);
     else if (t == GL_AMBIENT_AND_DIFFUSE) material.ambient = material.diffuse = Color(v);
-    shader->dirty_material = app->video.shader_cubenorm.dirty_material = app->video.shader_normals.dirty_material = 1;
+    UpdateMaterial();
   }
   void Light(int n, int t, float *v) {
     bool light_pos = 0, light_color = 0;
@@ -577,138 +1262,214 @@ struct OpenGLES2 : public GraphicsDevice, public QTWindow {
     if (light_pos)   { shader->dirty_light_pos  [n] = app->video.shader_cubenorm.dirty_light_pos  [n] = app->video.shader_normals.dirty_light_pos  [n] = 1; }
     if (light_color) { shader->dirty_light_color[n] = app->video.shader_cubenorm.dirty_light_color[n] = app->video.shader_normals.dirty_light_color[n] = 1; }
   }
-  void DisableCubeMap()   { if (Changed(&cubemap_on, 0)) { UpdateShader(); glUniform1i(shader->uniform_cubeon, 0); }                                                                                 GDDebug("CubeMap=", 0); }
-  void BindCubeMap(int n) { if (Changed(&cubemap_on, 1)) { UpdateShader(); glUniform1i(shader->uniform_cubeon, 1); } glUniform1i(shader->uniform_cubetex, 0); glBindTexture(GL_TEXTURE_CUBE_MAP, n); GDDebug("CubeMap=", n); }
-  void TextureGenLinear() {}
-  void TextureGenReflection() {}
-  void ActiveTexture(int n) { glActiveTexture(n ? GL_TEXTURE1 : GL_TEXTURE0); GDDebug("ActivteTexture=", n); }
-  void BindTexture(int t, int n) {
-    glActiveTexture(GL_TEXTURE0); 
-    glBindTexture(t, n);
-    glUniform1i(shader->uniform_tex, 0);
-    GDDebug("BindTexture=", t, ",", n);
+
+  void Scalef(float x, float y, float z) {
+    m44 &m = TargetMatrix()->back();
+    m[0].x *= x; m[0].y *= x; m[0].z *= x;
+    m[1].x *= y; m[1].y *= y; m[1].z *= y;
+    m[2].x *= z; m[2].y *= z; m[2].z *= z;
+    UpdateMatrix();
   }
-  void SetVertexAttribPointer(int slot, const VertexAttribPointer &ptr) { 
-    glVertexAttribPointer(slot, ptr.m, ptr.t, GL_FALSE, ptr.w, (GLvoid*)(long)ptr.o);
+  void Translate(float x, float y, float z) { 
+    m44 &m = TargetMatrix()->back();
+    m[3].x += m[0].x * x + m[1].x * y + m[2].x * z;
+    m[3].y += m[0].y * x + m[1].y * y + m[2].y * z;
+    m[3].z += m[0].z * x + m[1].z * y + m[2].z * z;
+    m[3].w += m[0].w * x + m[1].w * y + m[2].w * z;
+    UpdateMatrix();
   }
-  bool VertexPointer(int m, int t, int w, int o, float *verts, int l, int *out, bool dirty) {
-    bool input_dirty = dirty, first = (*out == -1), changed = first || *out != enabled_array;
-    if (first) { glGenBuffers(1, (GLuint*)out); dirty = true; }
-    if (changed) {
-      CHECK(shader);
-      CHECK((!o && !w) || o < w);
-      enabled_array = *out;
-      glBindBuffer(GL_ARRAY_BUFFER, *out);
-      position_ptr = VertexAttribPointer(m, t, w, o);
-      UpdatePosition();
-    }
-    if (first || dirty) {
-      if (first) glBufferData(GL_ARRAY_BUFFER, l, verts, input_dirty ? GL_DYNAMIC_DRAW : GL_STATIC_DRAW);
-      else       glBufferSubData(GL_ARRAY_BUFFER, 0, l, verts);
-    }
-    GDDebug("VertexPointer");
-    return changed;
-  }
-  void TexPointer(int m, int t, int w, int o, float *tex, int l, int *out, bool dirty) {
-    CHECK_LT(o, w);
-    CHECK(*out == enabled_array);
-    tex_ptr = VertexAttribPointer(m, t, w, o);
-    if (!texture_on) EnableTexture();
-    else if (shader->slot_tex >= 0) SetVertexAttribPointer(shader->slot_tex, tex_ptr);
-    GDDebug("TexPointer");
-  }
-  void ColorPointer(int m, int t, int w, int o, float *verts, int l, int *out, bool dirty) {
-    CHECK_LT(o, w);
-    CHECK(*out == enabled_array);
-    color_ptr = VertexAttribPointer(m, t, w, o);
-    if (!colorverts_on) EnableVertexColor();
-    else if (shader->slot_color >= 0) SetVertexAttribPointer(shader->slot_color, color_ptr);
-    GDDebug("ColorPointer");
-  }
-  void NormalPointer(int m, int t, int w, int o, float *verts, int l, int *out, bool dirty) {
-    CHECK_LT(o, w);
-    CHECK(*out == enabled_array);
-    normal_ptr = VertexAttribPointer(m, t, w, o);
-    if (!normals_on) EnableNormals();
-    else if (shader->slot_normal >= 0) SetVertexAttribPointer(shader->slot_normal, normal_ptr);
-    GDDebug("NormalPointer");
-  }
+  void Rotatef(float angle, float x, float y, float z) { TargetMatrix()->back().Mult(m44::Rotate(DegreeToRadian(angle), x, y, z)); UpdateMatrix(); }
+  void Ortho  (float l, float r, float b, float t, float nv, float fv) { TargetMatrix()->back().Mult(m44::Ortho  (l, r, b, t, nv, fv)); UpdateMatrix(); }
+  void Frustum(float l, float r, float b, float t, float nv, float fv) { TargetMatrix()->back().Mult(m44::Frustum(l, r, b, t, nv, fv)); UpdateMatrix(); }
+  
   void MatrixModelview()  { matrix_target=1; }
   void MatrixProjection() { matrix_target=2; }
-  void GetMatrix(m44 *out) { *out = TargetMatrix()->back(); }
   void PopMatrix() {
     vector<m44> *target = TargetMatrix();
     if      (target->size() >= 1) target->pop_back();
     else if (target->size() == 1) target->back().Assign(m44::Identity());
     UpdateMatrix();
   }
-  void PrintMatrix()        { TargetMatrix()->back().Print(StrCat("mt", matrix_target)); }
   void PushMatrix()         { TargetMatrix()->push_back(TargetMatrix()->back()); UpdateMatrix(); }
   void LoadIdentity()       { TargetMatrix()->back().Assign(m44::Identity());    UpdateMatrix(); }
   void Mult(const float *m) { TargetMatrix()->back().Mult(m44(m));               UpdateMatrix(); }
-  void Scalef(float x, float y, float z) {
-#if 0
-    TargetMatrix()->back().mult(m44::scale(x, y, z));
-#else
-    m44 &m = TargetMatrix()->back();
-    m[0].x *= x; m[0].y *= x; m[0].z *= x;
-    m[1].x *= y; m[1].y *= y; m[1].z *= y;
-    m[2].x *= z; m[2].y *= z; m[2].z *= z;
-#endif
-    UpdateMatrix();
+  void PrintMatrix()        { TargetMatrix()->back().Print(StrCat("mt", matrix_target)); }
+  void GetMatrix(m44 *out)  { *out = TargetMatrix()->back(); }
+  vector<m44> *TargetMatrix() {
+    if      (matrix_target == 1) return &modelview_matrix;
+    else if (matrix_target == 2) return &projection_matrix;
+    else FATAL("uknown matrix ", matrix_target);
   }
-  void Rotatef(float angle, float x, float y, float z) { TargetMatrix()->back().Mult(m44::Rotate(DegreeToRadian(angle), x, y, z)); UpdateMatrix(); }
-  void Ortho  (float l, float r, float b, float t, float nv, float fv) { TargetMatrix()->back().Mult(m44::Ortho  (l, r, b, t, nv, fv)); UpdateMatrix(); }
-  void Frustum(float l, float r, float b, float t, float nv, float fv) { TargetMatrix()->back().Mult(m44::Frustum(l, r, b, t, nv, fv)); UpdateMatrix(); }
-  void Translate(float x, float y, float z) { 
-#if 0
-    TargetMatrix()->back().mult(m44::translate(x, y, z));
-#else
-    m44 &m = TargetMatrix()->back();
-    m[3].x += m[0].x * x + m[1].x * y + m[2].x * z;
-    m[3].y += m[0].y * x + m[1].y * y + m[2].y * z;
-    m[3].z += m[0].z * x + m[1].z * y + m[2].z * z;
-    m[3].w += m[0].w * x + m[1].w * y + m[2].w * z;
-#endif
-    UpdateMatrix();
-  }
-  void Color4f(float r, float g, float b, float a) {
-    if (lighting_on) {
-      float c[] = { r, g, b, a };
-      Material(GL_AMBIENT_AND_DIFFUSE, c);
-    } else {
-      default_color.back() = Color(r,g,b,a);
-      UpdateColor();
+
+  bool VertexPointer(int m, int t, int w, int o, float *verts, int l, int *out, bool dirty, int prim_type) {
+    bool defer = !out, input_dirty = dirty;
+    if (defer) { out = &deferred.vertexbuffer; deferred.vertexbuffer_appended = l; }
+    bool first = (*out == -1), changed = first || *out != bound_vertexbuffer;
+    if (first) { glGenBuffers(1, (GLuint*)out); dirty = true; }
+    if (changed) {
+      CHECK(shader);
+      CHECK((!o && !w) || o < w);
+      ClearDeferred();
+      if (defer) deferred.prim_type = prim_type;
+      glBindBuffer(GL_ARRAY_BUFFER, (bound_vertexbuffer = *out));
+      vertex_attr = { m, t, w, o };
+      UpdateVertex();
+    } else if (defer) {
+      if (deferred.prim_type != prim_type) { ClearDeferred(); deferred.prim_type = prim_type; }
+      if (Changed(&vertex_attr, VertexAttribute{ m, t, w, o })) { ClearDeferred(); UpdateVertex(); }
     }
+    if (first || dirty) {
+      int vbo_offset = (defer && !first) ? AddDeferredVertexSpace(l) : 0;
+      if (first) glBufferData(GL_ARRAY_BUFFER, l, verts, input_dirty ? GL_DYNAMIC_DRAW : GL_STATIC_DRAW);
+      else       glBufferSubData(GL_ARRAY_BUFFER, vbo_offset, l, verts);
+    }
+    GDDebug("VertexPointer");
+    return changed;
   }
-  void Draw(int pt, int np, int it, int o, void *index, int l, int *out, bool dirty) {
+  void TexPointer(int m, int t, int w, int o, float *tex, int l, int *out, bool dirty) {
+    if (!out) out = &deferred.vertexbuffer;
+    CHECK(*out == bound_vertexbuffer);
+    CHECK_LT(o, w);
+    tex_attr = VertexAttribute{ m, t, w, o };
+    if (!texture_on) EnableTexture();
+    else if (shader->slot_tex >= 0) VertexAttribPointer(shader->slot_tex, tex_attr);
+    GDDebug("TexPointer");
+  }
+  void ColorPointer(int m, int t, int w, int o, float *verts, int l, int *out, bool dirty) {
+    if (!out) out = &deferred.vertexbuffer;
+    CHECK(*out == bound_vertexbuffer);
+    CHECK_LT(o, w);
+    color_attr = VertexAttribute{ m, t, w, o };
+    if (!colorverts_on) EnableVertexColor();
+    else if (shader->slot_color >= 0) VertexAttribPointer(shader->slot_color, color_attr);
+    GDDebug("ColorPointer");
+  }
+  void NormalPointer(int m, int t, int w, int o, float *verts, int l, int *out, bool dirty) {
+    if (!out) out = &deferred.vertexbuffer;
+    CHECK(*out == bound_vertexbuffer);
+    CHECK_LT(o, w);
+    normal_attr = VertexAttribute{ m, t, w, o };
+    if (!normals_on) EnableNormals();
+    else if (shader->slot_normal >= 0) VertexAttribPointer(shader->slot_normal, normal_attr);
+    GDDebug("NormalPointer");
+  }
+  void VertexAttribPointer(int slot, const VertexAttribute &attr) { 
+    glVertexAttribPointer(slot, attr.m, attr.t, GL_FALSE, attr.w, (GLvoid*)(long)attr.o);
+  }
+
+  void UseShader(Shader *S) {
+    if (!S) return UpdateShader();
+    if (shader == S || !S->ID) return;
+    ClearDeferred();
+    glUseProgram((shader = S)->ID);
+    GDDebug("Shader=", shader->name);
+    dirty_matrix = dirty_color = true;
+    for (int i=0, s; i<shader->MaxVertexAttrib; i++) {
+      if ((s = shader->unused_attrib_slot[i]) < 0) break;
+      glDisableVertexAttribArray(s);
+    }
+    UpdateVertex();
+    UpdateNormals();
+    UpdateColorVerts();
+    UpdateTexture();
+  }
+
+  void UpdateShader() {
+    if (cubemap_on && normals_on) UseShader(&app->video.shader_cubenorm);
+    else if          (cubemap_on) UseShader(&app->video.shader_cubemap);
+    else if          (normals_on) UseShader(&app->video.shader_normals);
+    else                          UseShader(&app->video.shader_default);
+  }
+  void UpdateColor()  { ClearDeferred(); dirty_color = true; }
+  void UpdateMatrix() { ClearDeferred(); dirty_matrix = true; }
+  void UpdateMaterial() {
+    ClearDeferred();
+    shader->dirty_material = app->video.shader_cubenorm.dirty_material = app->video.shader_normals.dirty_material = true;
+  }
+  void UpdateVertex() {
+    glEnableVertexAttribArray(shader->slot_position);
+    VertexAttribPointer(shader->slot_position, vertex_attr);
+  }
+  void UpdateNormals() {
+    bool supports = shader->slot_normal >= 0;
+    glUniform1i(shader->uniform_normalon, normals_on && supports);
+    if (supports) {
+      if (normals_on) {  glEnableVertexAttribArray(shader->slot_normal); VertexAttribPointer(shader->slot_normal, normal_attr); }
+      else            { glDisableVertexAttribArray(shader->slot_normal); }
+    } else if (normals_on) ERROR("shader doesnt support normals");
+  }
+  void UpdateColorVerts() {
+    bool supports = shader->slot_color >= 0;
+    glUniform1i(shader->uniform_coloron, colorverts_on && supports);
+    if (supports) {
+      if (colorverts_on) {  glEnableVertexAttribArray(shader->slot_color); VertexAttribPointer(shader->slot_color, color_attr); }
+      else               { glDisableVertexAttribArray(shader->slot_color); }
+    } else if (colorverts_on) ERROR("shader doesnt support vertex color");
+  }
+  void UpdateTexture() {
+    bool supports = shader->slot_tex >= 0;
+    glUniform1i(shader->uniform_texon, texture_on && supports);
+    if (supports) {
+      if (texture_on) {  glEnableVertexAttribArray(shader->slot_tex); VertexAttribPointer(shader->slot_tex, tex_attr); }
+      else            { glDisableVertexAttribArray(shader->slot_tex); }
+    } else if (texture_on && FLAGS_gd_debug) ERROR("shader doesnt support texture");
+  }
+
+  void DrawElements(int pt, int np, int it, int o, void *index, int l, int *out, bool dirty) {
     bool input_dirty = dirty;
     if (*out == -1) { glGenBuffers(1, (GLuint*)out); dirty = true; }
-    if (*out != enabled_indexarray) { 
-      enabled_indexarray = *out;
+    if (*out != bound_indexbuffer) { 
+      bound_indexbuffer = *out;
       glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, *out);
     }
-#if 0
-    int bound_buf, bound_array_buf;
-    glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &bound_buf);
-    glGetIntegerv(GL_ELEMENT_ARRAY_BUFFER_BINDING, &bound_array_buf);
-    INFO("bb=", bound_buf, " bab=", bound_array_buf);
-#endif
     if (dirty) glBufferData(GL_ELEMENT_ARRAY_BUFFER, l, index, input_dirty ? GL_DYNAMIC_DRAW : GL_STATIC_DRAW);
 
+    GDDebug("DrawElements-Pre(", pt, ", ", np, ", ", it, ", ", o, ", ", index, ", ", l, ", ", dirty, ")");
     PushDirtyState();
     glDrawElements(pt, np, it, (GLvoid*)(long)o);
-    GDDebug("Draw(", pt, ", ", np, ", ", it, ", ", o, ", ", index, ", ", l, ", ", dirty, ")");
+    GDDebug("DrawElements-Post(", pt, ", ", np, ", ", it, ", ", o, ", ", index, ", ", l, ", ", dirty, ")");
   }
   void DrawArrays(int type, int o, int n) {
     GDDebug("DrawArrays-Pre(", type, ", ", o, ", ", n, ")");
-    //glBindBuffer(GL_ARRAY_BUFFER, 0);
-    //glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    GDDebug("DrawArrays-Push(", type, ", ", o, ", ", n, ")");
     PushDirtyState();
     glDrawArrays(type, o, n);
     GDDebug("DrawArrays-Post(", type, ", ", o, ", ", n, ")");
   }
+
+  void DeferDrawArrays(int type, int o, int n) {
+    CHECK_EQ(deferred.prim_type, type);
+    bool first = !(deferred.vertexbuffer_len - deferred.vertexbuffer_appended);
+    if (first) { PushDirtyState(); deferred.vertex_size = vertex_attr.w; }
+#if 1
+    if (type == Triangles && o == 0 && n == deferred.vertexbuffer_appended / deferred.vertex_size) {
+      deferred.draw_calls++;
+    } else  {
+      glDrawArrays(type, o, n);
+      deferred.vertexbuffer_len = 0;
+    }
+#else
+    if (o || type == LineLoop) {
+      glDrawArrays(type, deferred.vertexbuffer_len /*+ deferred.last_append_len*/, n);
+    } else if (type == Points || type == Lines || type == Triangles) {
+
+    } else if (type == TriangleStrip) {
+    } else FATAL("unknown type ", type);
+#endif
+  }
+  void ClearDeferred() {
+    if (!deferred.vertexbuffer_len) return;
+    // INFOf("merged %d %d\n", deferred.draw_calls, deferred.vertexbuffer_len / deferred.vertex_size);
+    glDrawArrays(deferred.prim_type, 0, deferred.vertexbuffer_len / deferred.vertex_size);
+    deferred.vertexbuffer_len = deferred.draw_calls = 0;
+  }
+  int AddDeferredVertexSpace(int l) {
+    if (l + deferred.vertexbuffer_len > deferred.vertexbuffer_size) ClearDeferred();
+    int ret = deferred.vertexbuffer_len;
+    deferred.vertexbuffer_len += l;
+    CHECK_LE(deferred.vertexbuffer_len, deferred.vertexbuffer_size);
+    return ret;
+  }
+
   void PushDirtyState() {
     if (dirty_matrix) {
       dirty_matrix = false;
@@ -739,22 +1500,6 @@ struct OpenGLES2 : public GraphicsDevice, public QTWindow {
         glUniform4fv(shader->uniform_light0_specular, 1, light[i].color.specular.x);
       }
     }
-  }
-  void UseShader(Shader *S) {
-    if (!S) return UpdateShader();
-    if (shader == S || !S->ID) return;
-    shader = S;
-    glUseProgram(shader->ID);
-    GDDebug("Shader=", S->name);
-    dirty_matrix = dirty_color = true;
-    for (int i=0, s; i<S->MaxVertexAttrib; i++) {
-      if ((s = S->unused_attrib_slot[i]) < 0) break;
-      glDisableVertexAttribArray(s);
-    }
-    UpdatePosition();
-    UpdateNormals();
-    UpdateColorVerts();
-    UpdateTexture();
   }
 };
 #endif // LFL_GLES2
@@ -792,7 +1537,7 @@ void GraphicsDevice::Uniform4f(int u, float v1, float v2, float v3, float v4) { 
 void GraphicsDevice::Uniform3fv(int u, int n, const float *v) { glUniform3fv(u, n, v); }
 
 // Common layer
-void GraphicsDevice::Flush() { glFlush(); }
+void GraphicsDevice::Flush() { ClearDeferred(); glFlush(); }
 void GraphicsDevice::Clear() { glClear(GL_COLOR_BUFFER_BIT | (draw_mode == DrawMode::_3D ? GL_DEPTH_BUFFER_BIT : 0)); }
 void GraphicsDevice::ClearColor(const Color &c) { glClearColor(c.r(), c.g(), c.b(), c.a()); }
 void GraphicsDevice::PushColor() { default_color.push_back(default_color.back()); UpdateColor();  }
@@ -837,8 +1582,8 @@ void GraphicsDevice::CheckForError(const char *file, int line) {
 
 void GraphicsDevice::EnableDepthTest()  {  glEnable(GL_DEPTH_TEST); glDepthMask(GL_TRUE);  GDDebug("DepthTest=1"); }
 void GraphicsDevice::DisableDepthTest() { glDisable(GL_DEPTH_TEST); glDepthMask(GL_FALSE); GDDebug("DepthTest=0"); }
-void GraphicsDevice::DisableBlend() { glDisable(GL_BLEND);                                                    GDDebug("Blend=0"); }
-void GraphicsDevice::EnableBlend()  {  glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); GDDebug("Blend=1"); }
+void GraphicsDevice::DisableBlend() { /*ClearDeferred();*/ glDisable(GL_BLEND);                                                    GDDebug("Blend=0"); }
+void GraphicsDevice::EnableBlend()  { /*ClearDeferred();*/  glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); GDDebug("Blend=1"); }
 void GraphicsDevice::BlendMode(int sm, int dm) { glBlendFunc(sm, dm); GDDebug("BlendMode=", sm, ",", dm); }
 void GraphicsDevice::RestoreViewport(int dm) { ViewPort(screen->Box()); DrawMode(dm); }
 void GraphicsDevice::DrawMode(int dm, bool flush) { return DrawMode(dm, screen->width, screen->height, flush); }
@@ -882,11 +1627,13 @@ void GraphicsDevice::LookAt(const v3 &pos, const v3 &targ, const v3 &up) {
 
 void GraphicsDevice::ViewPort(Box w) {
   if (FLAGS_swap_axis) w.swapaxis(screen->width, screen->height);
+  ClearDeferred();
   glViewport(w.x, w.y, w.w, w.h);
 }
 
 void GraphicsDevice::Scissor(Box w) {
   if (FLAGS_swap_axis) w.swapaxis(screen->width, screen->height);
+  ClearDeferred();
   glEnable(GL_SCISSOR_TEST);
   glScissor(w.x, w.y, w.w, w.h);
 }
@@ -928,7 +1675,7 @@ void GraphicsDevice::GenRenderBuffers(int n, unsigned *out) { glGenRenderbuffers
 void GraphicsDevice::BindRenderBuffer(int id) { glBindRenderbufferEXT(GL_RENDERBUFFER, id); }
 void GraphicsDevice::RenderBufferStorage(int d, int w, int h) { glRenderbufferStorageEXT(GL_RENDERBUFFER, d, w, h); }
 void GraphicsDevice::GenFrameBuffers(int n, unsigned *out) { glGenFramebuffersEXT(n, out); }
-void GraphicsDevice::BindFrameBuffer(int id) { glBindFramebufferEXT(GL_FRAMEBUFFER, id); }
+void GraphicsDevice::BindFrameBuffer(int id) { ClearDeferred(); glBindFramebufferEXT(GL_FRAMEBUFFER, id); }
 void GraphicsDevice::FrameBufferTexture(int id) { glFramebufferTexture2DEXT(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, id, 0); }
 void GraphicsDevice::FrameBufferDepthTexture(int id) { glFramebufferRenderbufferEXT(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, id); }
 int GraphicsDevice::CheckFrameBufferStatus() { return glCheckFramebufferStatusEXT(GL_FRAMEBUFFER); }
@@ -961,7 +1708,7 @@ struct FakeGraphicsDevice : public GraphicsDevice {
   virtual void BindTexture(int t, int n) {}
   virtual void ActiveTexture(int n) {}
   virtual void TexPointer(int m, int t, int w, int o, float *tex, int l, int *out, bool dirty) {}
-  virtual bool VertexPointer(int m, int t, int w, int o, float *verts, int l, int *out, bool dirty) { return true; }
+  virtual bool VertexPointer(int m, int t, int w, int o, float *verts, int l, int *out, bool dirty, int) { return true; }
   virtual void ColorPointer(int m, int t, int w, int o, float *verts, int l, int *out, bool dirty) {}
   virtual void NormalPointer(int m, int t, int w, int o, float *verts, int l, int *out, bool dirty) {}
   virtual void Color4f(float r, float g, float b, float a) {}
@@ -980,8 +1727,9 @@ struct FakeGraphicsDevice : public GraphicsDevice {
   virtual void Mult(const float *m) {}
   virtual void Translate(float x, float y, float z) {}
   virtual void UseShader(Shader *shader) {}
-  virtual void Draw(int pt, int np, int it, int o, void *index, int l, int *out, bool dirty) {}
+  virtual void DrawElements(int pt, int np, int it, int o, void *index, int l, int *out, bool dirty) {}
   virtual void DrawArrays(int t, int o, int n) {}
+  virtual void DeferDrawArrays(int t, int o, int n) {}
 };
 
 const int GraphicsDevice::Float = 0;
@@ -1067,13 +1815,12 @@ void Window::MakeCurrent(Window *W) {}
 #endif // LFL_HEADLESS
 
 #ifdef LFL_ANDROIDVIDEO
-static void *android_screen_id = (void*)0x900df00d;
 struct AndroidVideoModule : public Module {
   int Init() {
     INFO("AndroidVideoModule::Init()");
     if (AndroidVideoInit(&app->video.opengles_version)) return -1;
     CHECK(!screen->id);
-    screen->id = android_screen_id;
+    screen->id = screen;
     Window::active[screen->id] = screen;
     return 0;
   }
@@ -1530,6 +2277,202 @@ void Window::Close(Window *W) {
 }
 #endif /* LFL_SDLVIDEO */
 
+Window::Window() : caption("lfapp"), fps(128) {
+  id = gl = surface = glew_context = impl = user1 = user2 = user3 = 0;
+  minimized = cursor_grabbed = frame_init = 0;
+  target_fps = FLAGS_target_fps;
+  pow2_width = NextPowerOfTwo((width = 640));
+  pow2_height = NextPowerOfTwo((height = 480));
+  multitouch_keyboard_x = .93; 
+  cam = new Entity(v3(5.54, 1.70, 4.39), v3(-.51, -.03, -.49), v3(-.03, 1, -.03));
+  ClearEvents();
+  ClearGesture();
+}
+
+Window::~Window() {
+  if (lfapp_console) {
+    lfapp_console->WriteHistory(LFAppDownloadDir(), "console");
+    delete lfapp_console;
+  }
+  delete cam;
+}
+
+Window *Window::Get(void *id) { return FindOrNull(Window::active, id); }
+
+Box Window::Box(float xp, float yp, float xs, float ys, float xbl, float ybt, float xbr, float ybb) const {
+  if (isinf(xbr)) xbr = xbl;
+  if (isinf(ybb)) ybb = ybt;
+  return LFL::Box(width  * (xp + xbl),
+                  height * (yp + ybb),
+                  width  * xs - width  * (xbl + xbr),
+                  height * ys - height * (ybt + ybb), false);
+}
+
+void Window::ClearEvents() { 
+  ClearMouseGUIEvents();
+  ClearKeyboardGUIEvents();
+  ClearInputBindEvents();
+}
+
+void Window::ClearGesture() {
+  gesture_swipe_up = gesture_swipe_down = 0;
+  gesture_tap[0] = gesture_tap[1] = gesture_dpad_stop[0] = gesture_dpad_stop[1] = 0;
+  gesture_dpad_dx[0] = gesture_dpad_dx[1] = gesture_dpad_dy[0] = gesture_dpad_dy[1] = 0;
+}
+
+void Window::ClearMouseGUIEvents() {
+  for (auto i = mouse_gui.begin(); i != mouse_gui.end(); ++i) (*i)->ClearEvents();
+}
+void Window::ClearKeyboardGUIEvents() {
+  for (auto i = keyboard_gui.begin(); i != keyboard_gui.end(); ++i) (*i)->ClearEvents();
+}
+void Window::ClearInputBindEvents() {
+  for (auto i = input_bind.begin(); i != input_bind.end(); ++i) (*i)->ClearEvents();
+}
+
+void Window::InitLFAppConsole() {
+  lfapp_console = new Console(screen, Fonts::Get(A_or_B(FLAGS_lfapp_console_font, FLAGS_default_font), "", 9, Color::white, Color::clear, FLAGS_lfapp_console_font_flag));
+  lfapp_console->ReadHistory(LFAppDownloadDir(), "console");
+  lfapp_console->Write(StrCat(screen->caption, " started"));
+  lfapp_console->Write("Try console commands 'cmds' and 'flags'");
+}
+
+void Window::DrawDialogs() {
+  if (screen->lfapp_console) screen->lfapp_console->Draw();
+  if (FLAGS_draw_grid) {
+    Color c(.7, .7, .7);
+    glIntersect(screen->mouse.x, screen->mouse.y, &c);
+    Fonts::Default()->Draw(StrCat("draw_grid ", screen->mouse.x, " , ", screen->mouse.y), point(0,0));
+  }
+  for (auto i = screen->dialogs.begin(), e = screen->dialogs.end(); i != e; ++i) (*i)->Draw();
+}
+
+void Window::SetCaption(const string &v) {
+#if defined(LFL_OSXVIDEO)
+  OSXSetWindowTitle(id, v.c_str());
+#elif defined(LFL_WINVIDEO)
+  SetWindowText((HWND)screen->id, v.c_str());
+#elif defined(LFL_QT)
+  ((QWindow*)screen->id)->setTitle(QString::fromUtf8(v.data(), v.size()));
+#endif
+}
+
+void Window::SetResizeIncrements(float x, float y) {
+#if defined(LFL_OSXVIDEO)
+  OSXSetWindowResizeIncrements(id, x, y);
+#elif defined(LFL_WINVIDEO)
+  WinWindow *win = static_cast<WinWindow*>(screen->impl);
+  win->resize_increment = point(x, y);
+#elif defined(LFL_QT)
+  ((QWindow*)screen->id)->setSizeIncrement(QSize(x, y));
+#endif
+}
+
+void Window::SetTransparency(float v) {
+#if defined(LFL_OSXVIDEO)
+  OSXSetWindowTransparency(id, v);
+#elif defined(LFL_WINVIDEO)
+  if (v <= 0) SetWindowLong((HWND)screen->id, GWL_EXSTYLE, GetWindowLong((HWND)screen->id, GWL_EXSTYLE) & (~WS_EX_LAYERED));
+  else {      SetWindowLong((HWND)screen->id, GWL_EXSTYLE, GetWindowLong((HWND)screen->id, GWL_EXSTYLE) | ( WS_EX_LAYERED));
+    SetLayeredWindowAttributes((HWND)screen->id, 0, static_cast<BYTE>(max(1.0, (1-v)*255.0)), LWA_ALPHA);
+  }
+#elif defined(LFL_QT)
+  ((QWindow*)screen->id)->setOpacity(1-v);
+#endif
+}
+
+void Window::Reshape(int w, int h) {
+#if defined(LFL_OSXVIDEO)
+  OSXSetWindowSize(id, w, h);
+#elif defined(LFL_WINVIDEO)
+  WinWindow *win = static_cast<WinWindow*>(screen->impl);
+  long lStyle = GetWindowLong((HWND)screen->id, GWL_STYLE);
+  RECT r = { 0, 0, w, h };
+  AdjustWindowRect(&r, lStyle, win->menubar);
+  SetWindowPos((HWND)screen->id, 0, 0, 0, r.right-r.left, r.bottom-r.top, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+#elif defined(LFL_X11VIDEO)
+  X11VideoModule *video = dynamic_cast<X11VideoModule*>(app->video.impl);
+  XWindowChanges resize;
+  resize.width = w;
+  resize.height = h;
+  XConfigureWindow(video->display, (::Window)screen->id, CWWidth|CWHeight, &resize);
+#elif defined(LFL_QT)
+  ((QWindow*)id)->resize(w, h);
+  Window::MakeCurrent(screen);
+#elif defined(LFL_WXWIDGETS)
+  ((wxGLCanvas*)screen->id)->SetSize(w, h);
+#elif defined(LFL_GLFWVIDEO)
+  glfwSetWindowSize((GLFWwindow*)id, w, h);
+#elif defined(LFL_SDLVIDEO)
+  SDL_SetWindowSize((SDL_Window*)id, w, h);
+#endif
+}
+
+void Window::Reshaped(int w, int h) {
+  INFO("Window::Reshaped(", w, ", ", h, ")");
+  pow2_width = NextPowerOfTwo((width = w));
+  pow2_height = NextPowerOfTwo((height = h));
+  if (!gd) return;
+  gd->ViewPort(LFL::Box(width, height));
+  gd->DrawMode(screen->gd->default_draw_mode);
+  for (auto g = screen->mouse_gui.begin(); g != screen->mouse_gui.end(); ++g) (*g)->Layout();
+  if (app->reshaped_cb) app->reshaped_cb();
+}
+
+void Window::ResetGL() {
+  Video::InitGraphicsDevice(this);
+  for (auto g : screen->keyboard_gui) g->ResetGL();
+  for (auto g : screen->   mouse_gui) g->ResetGL();
+  for (auto g : screen->     dialogs) g->ResetGL();
+}
+
+void Window::SwapAxis() {
+  FLAGS_rotate_view = FLAGS_rotate_view ? 0 : -90;
+  FLAGS_swap_axis = FLAGS_rotate_view != 0;
+  Reshaped(height, width);
+}
+
+int Window::Frame(unsigned clicks, unsigned mic_samples, bool cam_sample, int flag) {
+  if (screen != this) Window::MakeCurrent(this);
+
+  if (FLAGS_lfapp_video) {
+    if (!frame_init && (frame_init = true))  {
+#ifdef LFL_IPHONE
+      glGetIntegerv(GL_FRAMEBUFFER_BINDING_OES, &screen->gd->default_framebuffer);
+      INFO("default_framebuffer = ", screen->gd->default_framebuffer);
+#endif
+    }
+    gd->DrawMode(gd->default_draw_mode);
+    gd->Clear();
+    gd->LoadIdentity();
+  }
+
+  /* frame */
+  int ret = frame_cb ? frame_cb(screen, clicks, mic_samples, cam_sample, flag) : 0;
+  ClearEvents();
+
+  /* allow app to skip frame */
+  if (ret < 0) return ret;
+  fps.Add(clicks);
+
+  if (FLAGS_lfapp_video) {
+    app->video.Swap();
+  }
+  return ret;
+}
+
+void Window::RenderToFrameBuffer(FrameBuffer *fb) {
+  int dm = screen->gd->draw_mode;
+  fb->Attach();
+  screen->gd->ViewPort(Box(0, 0, fb->tex.width, fb->tex.height));
+  screen->gd->Clear();
+  frame_cb(0, 0, 0, 0, 0);
+  fb->Release();
+  screen->gd->RestoreViewport(dm);
+}
+
+/* Video */
+
 int Video::Init() {
   INFO("Video::Init()");
 #if defined(LFL_ANDROIDVIDEO)
@@ -1599,7 +2542,6 @@ int Video::Init() {
 #endif
   return 0;
 }
-
 
 void *Video::BeginGLContextCreate(Window *W) {
 #if defined(LFL_WINVIDEO)
@@ -1725,338 +2667,13 @@ int Video::Swap() {
 }
 
 int Video::Free() {
+  vector<Window*> close_list;
+  for (auto &i : Window::active) close_list.push_back(i.second);
+  for (auto &i : close_list)     Window::Close(i);
+
   if (impl) impl->Free();
   Fonts::DefaultFontEngine()->Shutdown();
   return 0;
-}
-
-void Window::SetCaption(const string &v) {
-#if defined(LFL_OSXVIDEO)
-  OSXSetWindowTitle(id, v.c_str());
-#elif defined(LFL_WINVIDEO)
-  SetWindowText((HWND)screen->id, v.c_str());
-#elif defined(LFL_QT)
-  ((QWindow*)screen->id)->setTitle(QString::fromUtf8(v.data(), v.size()));
-#endif
-}
-
-void Window::SetResizeIncrements(float x, float y) {
-#if defined(LFL_OSXVIDEO)
-  OSXSetWindowResizeIncrements(id, x, y);
-#elif defined(LFL_WINVIDEO)
-  WinWindow *win = static_cast<WinWindow*>(screen->impl);
-  win->resize_increment = point(x, y);
-#elif defined(LFL_QT)
-  ((QWindow*)screen->id)->setSizeIncrement(QSize(x, y));
-#endif
-}
-
-void Window::SetTransparency(float v) {
-#if defined(LFL_OSXVIDEO)
-  OSXSetWindowTransparency(id, v);
-#elif defined(LFL_WINVIDEO)
-  if (v <= 0) SetWindowLong((HWND)screen->id, GWL_EXSTYLE, GetWindowLong((HWND)screen->id, GWL_EXSTYLE) & (~WS_EX_LAYERED));
-  else {      SetWindowLong((HWND)screen->id, GWL_EXSTYLE, GetWindowLong((HWND)screen->id, GWL_EXSTYLE) | ( WS_EX_LAYERED));
-    SetLayeredWindowAttributes((HWND)screen->id, 0, static_cast<BYTE>(max(1.0, (1-v)*255.0)), LWA_ALPHA);
-  }
-#elif defined(LFL_QT)
-  ((QWindow*)screen->id)->setOpacity(1-v);
-#endif
-}
-
-void Window::Reshape(int w, int h) {
-#if defined(LFL_OSXVIDEO)
-  OSXSetWindowSize(id, w, h);
-#elif defined(LFL_WINVIDEO)
-  WinWindow *win = static_cast<WinWindow*>(screen->impl);
-  long lStyle = GetWindowLong((HWND)screen->id, GWL_STYLE);
-  RECT r = { 0, 0, w, h };
-  AdjustWindowRect(&r, lStyle, win->menubar);
-  SetWindowPos((HWND)screen->id, 0, 0, 0, r.right-r.left, r.bottom-r.top, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
-#elif defined(LFL_X11VIDEO)
-  X11VideoModule *video = dynamic_cast<X11VideoModule*>(app->video.impl);
-  XWindowChanges resize;
-  resize.width = w;
-  resize.height = h;
-  XConfigureWindow(video->display, (::Window)screen->id, CWWidth|CWHeight, &resize);
-#elif defined(LFL_QT)
-  ((QWindow*)id)->resize(w, h);
-  Window::MakeCurrent(screen);
-#elif defined(LFL_WXWIDGETS)
-  ((wxGLCanvas*)screen->id)->SetSize(w, h);
-#elif defined(LFL_GLFWVIDEO)
-  glfwSetWindowSize((GLFWwindow*)id, w, h);
-#elif defined(LFL_SDLVIDEO)
-  SDL_SetWindowSize((SDL_Window*)id, w, h);
-#endif
-}
-
-void Window::Reshaped(int w, int h) {
-  INFO("Window::Reshaped(", w, ", ", h, ")");
-  pow2_width = NextPowerOfTwo((width = w));
-  pow2_height = NextPowerOfTwo((height = h));
-  if (!gd) return;
-  gd->ViewPort(LFL::Box(width, height));
-  gd->DrawMode(screen->gd->default_draw_mode);
-  for (auto g = screen->mouse_gui.begin(); g != screen->mouse_gui.end(); ++g) (*g)->Layout();
-  if (app->reshaped_cb) app->reshaped_cb();
-}
-
-void Window::SwapAxis() {
-  FLAGS_rotate_view = FLAGS_rotate_view ? 0 : -90;
-  FLAGS_swap_axis = FLAGS_rotate_view != 0;
-  Reshaped(height, width);
-}
-
-int Window::Frame(unsigned clicks, unsigned mic_samples, bool cam_sample, int flag) {
-  if (minimized) return -1;
-  if (screen != this) Window::MakeCurrent(this);
-
-  if (FLAGS_lfapp_video) {
-    if (!frame_init && (frame_init = true))  {
-#ifdef LFL_IPHONE
-      glGetIntegerv(GL_FRAMEBUFFER_BINDING_OES, &screen->gd->default_framebuffer);
-      INFO("default_framebuffer = ", screen->gd->default_framebuffer);
-#endif
-    }
-    gd->DrawMode(gd->default_draw_mode);
-    gd->Clear();
-    gd->LoadIdentity();
-  }
-
-  /* frame */
-  int ret = frame_cb ? frame_cb(screen, clicks, mic_samples, cam_sample, flag) : 0;
-  ClearEvents();
-
-  /* allow app to skip frame */
-  if (ret < 0) return ret;
-  fps.Add(clicks);
-
-  if (FLAGS_lfapp_video) {
-    app->video.Swap();
-  }
-  return ret;
-}
-
-void Window::RenderToFrameBuffer(FrameBuffer *fb) {
-  int dm = screen->gd->draw_mode;
-  fb->Attach();
-  screen->gd->ViewPort(Box(0, 0, fb->tex.width, fb->tex.height));
-  screen->gd->Clear();
-  frame_cb(0, 0, 0, 0, 0);
-  fb->Release();
-  screen->gd->RestoreViewport(dm);
-}
-
-int Depth::OpenGLID(int id) {
-  switch(id) {
-    case _16: return GL_DEPTH_COMPONENT16;
-  } return 0;
-}
-
-int CubeMap::OpenGLID(int id) {
-  switch (id) {
-    case NX: return GL_TEXTURE_CUBE_MAP_NEGATIVE_X;    case PX: return GL_TEXTURE_CUBE_MAP_POSITIVE_X;
-    case NY: return GL_TEXTURE_CUBE_MAP_NEGATIVE_Y;    case PY: return GL_TEXTURE_CUBE_MAP_POSITIVE_Y;
-    case NZ: return GL_TEXTURE_CUBE_MAP_NEGATIVE_Z;    case PZ: return GL_TEXTURE_CUBE_MAP_POSITIVE_Z;
-  } return GL_TEXTURE_2D;
-}
-
-int ColorChannel::PixelOffset(int c) {
-  switch (c) {
-    case Red:  return 0;    case Green: return 1;
-    case Blue: return 2;    case Alpha: return 3;
-  }
-  return 0;
-}
-
-const char *Pixel::Name(int p) {
-  switch (p) {
-    case RGB32:   return "RGB32";      case RGB555:  return "RGB555";
-    case BGR32:   return "BGR32";      case BGR555:  return "BGR555";
-    case RGB24:   return "RGB24";      case RGB565:  return "RGB565";
-    case BGR24:   return "BGR24";      case BGR565:  return "BGR565";
-    case RGBA:    return "RGBA";       case BGRA:    return "BGRA";
-    case YUV420P: return "YUV420P";    case YUYV422: return "YUYV422";
-    case GRAY8:   return "GRAY8";      case GRAYA8:  return "GRAYA8";
-    case LCD:     return "LCD";
-  }; return 0; 
-}
-
-int Pixel::size(int p) {
-  switch (p) {
-    case RGB32:   case BGR32:  case RGBA:   case BGRA:                return 4;
-    case RGB24:   case BGR24:  case LCD:                              return 3;
-    case RGB555:  case BGR555: case RGB565: case BGR565: case GRAYA8: return 2;
-    case YUYV422: case GRAY8:                                         return 1;
-    default:                                                          return 0;
-  }
-}
-
-int Pixel::OpenGLID(int p) {
-  switch (p) {
-    case RGBA:   case RGB32: return GL_RGBA;
-    case RGB24:              return GL_RGB;
-#ifndef LFL_MOBILE
-    case BGRA:   case BGR32: return GL_BGRA;
-    case BGR24:              return GL_BGR;
-#endif
-    case GRAYA8:             return GL_LUMINANCE_ALPHA;
-    case GRAY8:              return GL_LUMINANCE;
-    default:                 return -1;
-  }
-}
-
-string FloatContainer::DebugString() const {
-  string ret = StrCat(Box::DebugString(), " fl{");
-  for (int i=0; i<float_left.size(); i++) StrAppend(&ret, i?",":"", i, "=", float_left[i].DebugString());
-  StrAppend(&ret, "} fr{");
-  for (int i=0; i<float_right.size(); i++) StrAppend(&ret, i?",":"", i, "=", float_right[i].DebugString());
-  return ret + "}";
-}
-
-string Box::DebugString() const { return StringPrintf("Box = { %d, %d, %d, %d }", x, y, w, h); }
-
-void Box::Draw(const float *texcoord) const {
-  static int verts_ind=-1;
-  static const float default_texcoord[4] = {0, 0, 1, 1};
-  const float *tc = X_or_Y(texcoord, default_texcoord);
-  float verts[] = { (float)x,   (float)y,   tc[Texture::CoordMinX], tc[Texture::CoordMinY],
-                    (float)x,   (float)y+h, tc[Texture::CoordMinX], tc[Texture::CoordMaxY],
-                    (float)x+w, (float)y,   tc[Texture::CoordMaxX], tc[Texture::CoordMinY],
-                    (float)x+w, (float)y+h, tc[Texture::CoordMaxX], tc[Texture::CoordMaxY] };
-  bool changed =           screen->gd->VertexPointer(2, GraphicsDevice::Float, sizeof(float)*4, 0,               verts, sizeof(verts), &verts_ind, true);
-  if (changed && texcoord) screen->gd->TexPointer   (2, GraphicsDevice::Float, sizeof(float)*4, sizeof(float)*2, verts, sizeof(verts), &verts_ind, false);
-  if (1)                   screen->gd->DrawArrays(GraphicsDevice::TriangleStrip, 0, 4);
-}
-
-void Box::DrawCrimped(const float *texcoord, int orientation, float scrollX, float scrollY) const {
-  float left=x, right=x+w, top=y, bottom=y+h;
-  float texMinX, texMinY, texMaxX, texMaxY, texMidX1, texMidX2, texMidY1, texMidY2;
-
-  scrollX *= (texcoord[2] - texcoord[0]);
-  scrollY *= (texcoord[3] - texcoord[1]);
-  scrollX = ScrollCrimped(texcoord[0], texcoord[2], scrollX, &texMinX, &texMidX1, &texMidX2, &texMaxX);
-  scrollY = ScrollCrimped(texcoord[1], texcoord[3], scrollY, &texMinY, &texMidY1, &texMidY2, &texMaxY);
-
-#define DrawCrimpedBoxTriangleStrip() \
-  screen->gd->VertexPointer(2, GraphicsDevice::Float, 4*sizeof(float), 0,               verts, sizeof(verts), &vind, true); \
-  screen->gd->TexPointer   (2, GraphicsDevice::Float, 4*sizeof(float), 2*sizeof(float), verts, sizeof(verts), &vind, false); \
-  screen->gd->DrawArrays(GraphicsDevice::TriangleStrip, 0, 4); \
-  screen->gd->DrawArrays(GraphicsDevice::TriangleStrip, 4, 4); \
-  screen->gd->DrawArrays(GraphicsDevice::TriangleStrip, 8, 4); \
-  screen->gd->DrawArrays(GraphicsDevice::TriangleStrip, 12, 4);
-
-  switch (orientation) {
-    case 0: {
-      static int vind = -1;
-      float xmid = x + w * scrollX, ymid = y + h * scrollY, verts[] = {
-        /*02*/ xmid,  top,  texMidX1, texMaxY,  /*01*/ left, top,  texMinX,  texMaxY,  /*03*/ xmid,  ymid,   texMidX1, texMidY1, /*04*/ left, ymid,   texMinX,  texMidY1,
-        /*06*/ right, top,  texMaxX,  texMaxY,  /*05*/ xmid, top,  texMidX2, texMaxY,  /*07*/ right, ymid,   texMaxX,  texMidY1, /*08*/ xmid, ymid,   texMidX2, texMidY1,
-        /*10*/ right, ymid, texMaxX,  texMidY2, /*09*/ xmid, ymid, texMidX2, texMidY2, /*11*/ right, bottom, texMaxX,  texMinY,  /*12*/ xmid, bottom, texMidX2, texMinY,
-        /*14*/ xmid,  ymid, texMidX1, texMidY2, /*13*/ left, ymid, texMinX,  texMidY2, /*15*/ xmid,  bottom, texMidX1, texMinY,  /*16*/ left, bottom, texMinX,  texMinY 
-      };
-      DrawCrimpedBoxTriangleStrip();
-    } break;
-    case 1: {
-      static int vind = -1;
-      float xmid = x + w * scrollX, ymid = y + h * (1-scrollY), verts[] = {
-        /*02*/ xmid,  top,  texMidX1, texMinY,  /*01*/ left,  top,  texMinX,  texMinY,  /*03*/ xmid, ymid,    texMidX1, texMidY2, /*04*/ left, ymid,   texMinX,  texMidY2,
-        /*06*/ right, top,  texMaxX,  texMinY,  /*05*/ xmid,  top,  texMidX2, texMinY,  /*07*/ right, ymid,   texMaxX,  texMidY2, /*08*/ xmid, ymid,   texMidX2, texMidY2,
-        /*10*/ right, ymid, texMaxX,  texMidY1, /*09*/ xmid,  ymid, texMidX2, texMidY1, /*11*/ right, bottom, texMaxX,  texMaxY,  /*12*/ xmid, bottom, texMidX2, texMaxY,
-        /*14*/ xmid,  ymid, texMidX1, texMidY1, /*13*/ left,  ymid, texMinX,  texMidY1, /*15*/ xmid, bottom,  texMidX1, texMaxY,  /*16*/ left, bottom, texMinX,  texMaxY 
-      };
-      DrawCrimpedBoxTriangleStrip();
-    } break;
-    case 2: {
-      static int vind = -1;
-      float xmid = x + w * (1-scrollX), ymid = y + h * scrollY, verts[] = {
-        /*02*/ xmid,  top,  texMidX2, texMaxY,  /*01*/ left,  top,  texMaxX,  texMaxY,  /*03*/ xmid, ymid,    texMidX2, texMidY1, /*04*/ left, ymid,   texMaxX,  texMidY1,
-        /*06*/ right, top,  texMinX,  texMaxY,  /*05*/ xmid,  top,  texMidX1, texMaxY,  /*07*/ right, ymid,   texMinX,  texMidY1, /*08*/ xmid, ymid,   texMidX1, texMidY1,
-        /*10*/ right, ymid, texMinX,  texMidY2, /*09*/ xmid,  ymid, texMidX1, texMidY2, /*11*/ right, bottom, texMinX,  texMinY,  /*12*/ xmid, bottom, texMidX1, texMinY,
-        /*14*/ xmid,  ymid, texMidX2, texMidY2, /*13*/ left,  ymid, texMaxX,  texMidY2, /*15*/ xmid, bottom,  texMidX2, texMinY,  /*16*/ left, bottom, texMaxX,  texMinY 
-      };
-      DrawCrimpedBoxTriangleStrip();
-    } break;
-    case 3: {
-      static int vind = -1;
-      float xmid = x + w * (1-scrollX), ymid = y + h * (1-scrollY), verts[] = {
-        /*02*/ xmid,  top,  texMidX2, texMinY,  /*01*/ left,  top,   texMaxX,  texMinY,  /*03*/ xmid, ymid,    texMidX2, texMidY2, /*04*/ left, ymid,   texMaxX,  texMidY2,
-        /*06*/ right, top,  texMinX,  texMinY,  /*05*/ xmid,  top,   texMidX1, texMinY,  /*07*/ right, ymid,   texMinX,  texMidY2, /*08*/ xmid, ymid,   texMidX1, texMidY2,
-        /*10*/ right, ymid, texMinX,  texMidY1, /*09*/ xmid,  ymid,  texMidX1, texMidY1, /*11*/ right, bottom, texMinX,  texMaxY,  /*12*/ xmid, bottom, texMidX1, texMaxY,
-        /*14*/ xmid,  ymid, texMidX2, texMidY1, /*13*/ left,  ymid,  texMaxX,  texMidY1, /*15*/ xmid, bottom,  texMidX2, texMaxY,  /*16*/ left, bottom, texMaxX,  texMaxY 
-      };
-      DrawCrimpedBoxTriangleStrip();
-    } break;
-    case 4: {
-      static int vind = -1;
-      float xmid = x + w * (1-scrollY), ymid = y + h * scrollX, verts[] = {
-        /*13*/ xmid,  top,  texMinX,  texMidY2, /*16*/ left,  top,  texMinX,  texMaxY,  /*14*/ xmid, ymid,    texMidX1, texMidY2, /*15*/ left, ymid,   texMidX1, texMaxY, 
-        /*01*/ right, top,  texMinX,  texMinY,  /*04*/ xmid,  top,  texMinX,  texMidY1, /*02*/ right, ymid,   texMidX1, texMinY,  /*03*/ xmid, ymid,   texMidX1, texMidY1,
-        /*05*/ right, ymid, texMidX2, texMinY,  /*08*/ xmid,  ymid, texMidX2, texMidY1, /*06*/ right, bottom, texMaxX,  texMinY,  /*07*/ xmid, bottom, texMaxX,  texMidY1,
-        /*09*/ xmid,  ymid, texMidX2, texMidY2, /*12*/ left,  ymid, texMidX2, texMaxY,  /*10*/ xmid, bottom,  texMaxX,  texMidY2, /*11*/ left, bottom, texMaxX,  texMaxY 
-      };
-      DrawCrimpedBoxTriangleStrip();
-    } break;
-    case 5: {
-      static int vind = -1;
-      float xmid = x + w * scrollY, ymid = y + h * scrollX, verts[] = {
-        /*13*/ xmid,  top,  texMinX,  texMidY1, /*16*/ left,  top,  texMinX,  texMinY,  /*14*/ xmid, ymid,    texMidX1, texMidY1, /*15*/ left, ymid,   texMidX1, texMinY, 
-        /*01*/ right, top,  texMinX,  texMaxY,  /*04*/ xmid,  top,  texMinX,  texMidY2, /*02*/ right, ymid,   texMidX1, texMaxY,  /*03*/ xmid, ymid,   texMidX1, texMidY2,
-        /*05*/ right, ymid, texMidX2, texMaxY,  /*08*/ xmid,  ymid, texMidX2, texMidY2, /*06*/ right, bottom, texMaxX,  texMaxY,  /*07*/ xmid, bottom, texMaxX,  texMidY2,
-        /*09*/ xmid,  ymid, texMidX2, texMidY1, /*12*/ left,  ymid, texMidX2, texMinY,  /*10*/ xmid, bottom,  texMaxX,  texMidY1, /*11*/ left, bottom, texMaxX,  texMinY 
-      };
-      DrawCrimpedBoxTriangleStrip();
-    } break;
-    case 6: {
-      static int vind = -1;
-      float xmid = x + w * (1-scrollY), ymid = y + h * (1-scrollX), verts[] = {
-        /*13*/ xmid,  top,  texMaxX,  texMidY2, /*16*/ left,  top,  texMaxX,  texMaxY,  /*14*/ xmid, ymid,    texMidX2, texMidY2, /*15*/ left, ymid,   texMidX2, texMaxY, 
-        /*01*/ right, top,  texMaxX,  texMinY,  /*04*/ xmid,  top,  texMaxX,  texMidY1, /*02*/ right, ymid,   texMidX2, texMinY,  /*03*/ xmid, ymid,   texMidX2, texMidY1,
-        /*05*/ right, ymid, texMidX1, texMinY,  /*08*/ xmid,  ymid, texMidX1, texMidY1, /*06*/ right, bottom, texMinX,  texMinY,  /*07*/ xmid, bottom, texMinX,  texMidY1,
-        /*09*/ xmid,  ymid, texMidX1, texMidY2, /*12*/ left,  ymid, texMidX1, texMaxY,  /*10*/ xmid, bottom,  texMinX,  texMidY2, /*11*/ left, bottom, texMinX,  texMaxY 
-      };
-      DrawCrimpedBoxTriangleStrip();
-    } break;
-    case 7: {
-      static int vind = -1;
-      float xmid = x + w * scrollY, ymid = y + h * (1-scrollX), verts[] = {
-        /*13*/ xmid,  top,  texMaxX,  texMidY1, /*16*/ left,  top,  texMaxX,  texMinY,  /*14*/ xmid, ymid,    texMidX2, texMidY1, /*15*/ left, ymid,   texMidX2, texMinY, 
-        /*01*/ right, top,  texMaxX,  texMaxY,  /*04*/ xmid,  top,  texMaxX,  texMidY2, /*02*/ right, ymid,   texMidX2, texMaxY,  /*03*/ xmid, ymid,   texMidX2, texMidY2,
-        /*05*/ right, ymid, texMidX1, texMaxY,  /*08*/ xmid,  ymid, texMidX1, texMidY2, /*06*/ right, bottom, texMinX,  texMaxY,  /*07*/ xmid, bottom, texMinX,  texMidY2,
-        /*09*/ xmid,  ymid, texMidX1, texMidY1, /*12*/ left,  ymid, texMidX1, texMinY,  /*10*/ xmid, bottom,  texMinX,  texMidY1, /*11*/ left, bottom, texMinX,  texMinY 
-      };
-      DrawCrimpedBoxTriangleStrip();
-    } break;
-  }
-}
-
-float Box::ScrollCrimped(float tex0, float tex1, float scroll, float *min, float *mid1, float *mid2, float *max) {
-  if (tex1 < 1.0 && tex0 == 0.0) {
-    *mid1=tex1; *mid2=0;
-    if (scroll > 0) *min = *max = tex1 - scroll;
-    else            *min = *max = tex0 - scroll;
-  } else if (tex0 > 0.0 && tex1 == 1.0) {
-    *mid1=1; *mid2=tex0;
-    if (scroll > 0) *min = *max = tex0 + scroll;
-    else            *min = *max = tex1 + scroll;
-  } else if (tex0 == 0 && tex1 == 1) {
-    *min = *max = 1;
-    *mid1 = tex1; *mid2 = tex0;
-  } else {
-    return 0;
-  }
-  return (*mid1 - *min) / (tex1 - tex0); 
-}
-
-void Box3::Draw(const point &p, const Color *c) const {
-  if (c) screen->gd->SetColor(*c);
-  for (int i=0; i<3; i++) if (v[i].h) (v[i] + p).Draw();
-}
-
-void Drawable::AttrVec::Insert(const Drawable::Attr &v) {
-  if (v.font) font_refs.Insert(&v.font->ref);
-  push_back(v);
 }
 
 void SimpleVideoResampler::RGB2BGRCopyPixels(unsigned char *dst, const unsigned char *src, int l, int bpp) {
@@ -2203,414 +2820,6 @@ void FFMPEGVideoResampler::Resample(const unsigned char *s, int sls, unsigned ch
             flip_y ? source   : source,
             flip_y ? sourcels : sourcels, 0, s_height, dest, destls);
 }
-
-int Pixel::FromFFMpegId(int fmt) {
-  switch (fmt) {
-    case AV_PIX_FMT_RGB32:    return Pixel::RGB32;
-    case AV_PIX_FMT_BGR32:    return Pixel::BGR32;
-    case AV_PIX_FMT_RGB24:    return Pixel::RGB24;
-    case AV_PIX_FMT_BGR24:    return Pixel::BGR24;
-    case AV_PIX_FMT_GRAY8:    return Pixel::GRAY8;
-    case AV_PIX_FMT_YUV410P:  return Pixel::YUV410P;
-    case AV_PIX_FMT_YUV420P:  return Pixel::YUV420P;
-    case AV_PIX_FMT_YUYV422:  return Pixel::YUYV422;
-    case AV_PIX_FMT_YUVJ420P: return Pixel::YUVJ420P;
-    case AV_PIX_FMT_YUVJ422P: return Pixel::YUVJ422P;
-    case AV_PIX_FMT_YUVJ444P: return Pixel::YUVJ444P;
-    default: ERROR("unknown pixel fmt: ", fmt); return 0;
-  }
-}
-
-int Pixel::ToFFMpegId(int fmt) {
-  switch (fmt) {
-    case Pixel::RGB32:    return AV_PIX_FMT_RGB32;
-    case Pixel::BGR32:    return AV_PIX_FMT_BGR32;
-    case Pixel::RGB24:    return AV_PIX_FMT_RGB24;
-    case Pixel::BGR24:    return AV_PIX_FMT_BGR24;
-    case Pixel::RGBA:     return AV_PIX_FMT_RGBA;
-    case Pixel::BGRA:     return AV_PIX_FMT_BGRA;
-    case Pixel::GRAY8:    return AV_PIX_FMT_GRAY8;
-    case Pixel::YUV410P:  return AV_PIX_FMT_YUV410P;
-    case Pixel::YUV420P:  return AV_PIX_FMT_YUV420P;
-    case Pixel::YUYV422:  return AV_PIX_FMT_YUYV422;
-    case Pixel::YUVJ420P: return AV_PIX_FMT_YUVJ420P;
-    case Pixel::YUVJ422P: return AV_PIX_FMT_YUVJ422P;
-    case Pixel::YUVJ444P: return AV_PIX_FMT_YUVJ444P;
-    default: ERROR("unknown pixel fmt: ", fmt); return 0;
-  }
-}
-#endif /* LFL_FFMPEG */
-
-/* Texture */
-
-int Texture::GLBufferType() const { return pf == preferred_pf ? GraphicsDevice::GLPreferredBuffer : GL_UNSIGNED_BYTE; }
-
-void Texture::Coordinates(float *texcoord, int w, int h, int wd, int hd) {
-  texcoord[CoordMinX] = texcoord[CoordMinY] = 0;
-  texcoord[CoordMaxX] = (float)w / wd;
-  texcoord[CoordMaxY] = (float)h / hd;
-}
-
-void Texture::Resize(int W, int H, int PF, int flag) {
-  if (PF) pf = PF;
-  width=W; height=H;
-  if (buf || (flag & Flag::CreateBuf)) RenewBuffer();
-  if (!ID && (flag & Flag::CreateGL)) {
-    if (!cubemap) {
-      screen->gd->DisableCubeMap();
-      screen->gd->GenTextures(GL_TEXTURE_2D, 1, &ID);
-    } else if (cubemap == CubeMap::PX) {
-      screen->gd->ActiveTexture(0);
-      screen->gd->GenTextures(GL_TEXTURE_CUBE_MAP, 1, &ID);
-      glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    }
-  }
-  if (ID || cubemap) {
-    int opengl_width = NextPowerOfTwo(width), opengl_height = NextPowerOfTwo(height);
-    int gl_tt = GLTexType(), gl_pt = GLPixelType(), gl_bt = GLBufferType();
-    if (ID) screen->gd->BindTexture(gl_tt, ID);
-    glTexImage2D(gl_tt, 0, GraphicsDevice::GLInternalFormat, opengl_width, opengl_height, 0, gl_pt, gl_bt, 0);
-    Coordinates(coord, width, height, opengl_width, opengl_height);
-  }
-}
-
-void Texture::LoadBuffer(const unsigned char *B, const point &dim, int PF, int linesize, int flag) {
-  Resize(dim.x, dim.y, pf, Flag::CreateBuf);
-  int resample_flag = 0 | ((flag & Flag::FlipY) ? SimpleVideoResampler::Flag::FlipY : 0);
-  SimpleVideoResampler::Blit(B, buf, width, height,
-                             PF, linesize,   0, 0,
-                             pf, LineSize(), 0, 0, resample_flag);
-}
-
-void Texture::UpdateBuffer(const unsigned char *B, const point &dim, int PF, int linesize, int flag) {
-  bool resample = flag & Flag::Resample;
-  VideoResampler conv;
-  conv.Open(dim.x, dim.y, PF, resample ? width : dim.x, resample ? height : dim.y, pf);
-  conv.Resample(B, linesize, buf, LineSize(), 0, flag & Flag::FlipY);
-}
-
-void Texture::UpdateBuffer(const unsigned char *B, const ::LFL::Box &box, int PF, int linesize, int blit_flag) {
-  SimpleVideoResampler::Blit(B, buf, box.w, box.h, PF, linesize, 0, 0, pf, LineSize(), box.x, box.y, blit_flag);
-}
-
-void Texture::Bind() const { screen->gd->BindTexture(GLTexType(), ID); }
-void Texture::ClearGL() { 
-  if (!MainThread()) { RunInMainThread(new Callback(bind(&GraphicsDevice::DelTexture, screen->gd, ID))); ID=0; }
-  else if (ID) { screen->gd->DelTexture(ID); ID=0; }
-}
-
-void Texture::LoadGL(const unsigned char *B, const point &dim, int PF, int linesize, int flag) {
-  Texture temp;
-  temp .Resize(dim.x, dim.y, preferred_pf, Flag::CreateBuf);
-  temp .UpdateBuffer(B, dim, PF, linesize, Flag::FlipY);
-  this->Resize(dim.x, dim.y, preferred_pf, Flag::CreateGL);
-  this->UpdateGL(temp.buf, LFL::Box(dim), flag);
-}
-
-void Texture::UpdateGL(const unsigned char *B, const ::LFL::Box &box, int flag) {
-  int gl_tt = GLTexType(), gl_y = (flag & Flag::FlipY) ? (height - box.y - box.h) : box.y;
-  screen->gd->BindTexture(gl_tt, ID);
-  glTexSubImage2D(gl_tt, 0, box.x, gl_y, box.w, box.h, GLPixelType(), GLBufferType(), B);
-}
-
-void Texture::DumpGL(unsigned tex_id) {
-#ifndef LFL_MOBILE
-  if (tex_id) {
-    GLint gl_tt = GLTexType(), tex_w = 0, tex_h = 0;
-    screen->gd->BindTexture(gl_tt, tex_id);
-    glGetTexLevelParameteriv(gl_tt, 0, GL_TEXTURE_WIDTH, &tex_w);
-    glGetTexLevelParameteriv(gl_tt, 0, GL_TEXTURE_WIDTH, &tex_h);
-    CHECK_GT((width  = tex_w), 0);
-    CHECK_GT((height = tex_h), 0);
-  }
-  RenewBuffer();
-  glGetTexImage(GLTexType(), 0, GLPixelType(), GLBufferType(), buf);
-#endif
-}
-
-void Texture::ToIplImage(_IplImage *out) {
-#ifdef LFL_OPENCV
-  memset(out, 0, sizeof(IplImage));
-  out->nSize = sizeof(IplImage);
-  out->nChannels = Pixel::size(pf);
-  out->depth = IPL_DEPTH_8U;
-  out->origin = 1;
-  out->width = width;
-  out->height = height;
-  out->widthStep = out->width * out->nChannels;
-  out->imageSize = out->widthStep * out->height;
-  out->imageData = (char*)buf;
-  out->imageDataOrigin = out->imageData;
-#else
-  ERROR("ToIplImage not implemented");
-#endif
-}
-
-#ifdef __APPLE__
-#import <CoreGraphics/CGBitmapContext.h> 
-CGContextRef Texture::CGBitMap() { return CGBitMap(0, 0, width, height); }
-CGContextRef Texture::CGBitMap(int X, int Y, int W, int H) {
-  int linesize = LineSize(), alpha_info = 0;
-  if      (pf == Pixel::RGBA)  alpha_info = kCGImageAlphaPremultipliedLast;
-  else if (pf == Pixel::BGRA)  alpha_info = kCGBitmapByteOrder32Host | kCGImageAlphaPremultipliedFirst;
-  else if (pf == Pixel::RGB32) alpha_info = kCGImageAlphaNoneSkipLast;
-  else if (pf == Pixel::BGR32) alpha_info = kCGBitmapByteOrder32Host | kCGImageAlphaNoneSkipFirst;
-  else { ERROR("unsupported pixel format: ", pf, " = ", Pixel::Name(pf)); return 0; }
-  CGColorSpaceRef colors = CGColorSpaceCreateDeviceRGB();
-  // CGColorSpaceRef colors = CGColorSpaceCreateWithName(kCGColorSpaceGenericRGB);
-  CGContextRef ret = CGBitmapContextCreate(buf + Y*linesize + X*PixelSize(), W, H, 8, linesize, colors, alpha_info);
-  CGColorSpaceRelease(colors);
-  return ret;
-}
-#endif
-
-#ifdef WIN32
-HBITMAP Texture::CreateGDIBitMap(HDC dc) {
-  ClearBuffer();
-  buf_owner = false;
-  pf = Pixel::BGR32;
-  BITMAPINFO bmi;
-  memzero(bmi.bmiHeader);
-  bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-  bmi.bmiHeader.biWidth = width;
-  bmi.bmiHeader.biHeight = -height;
-  bmi.bmiHeader.biPlanes = 1;
-  bmi.bmiHeader.biCompression = BI_RGB;
-  bmi.bmiHeader.biBitCount = 32;
-  HBITMAP ret = CreateDIBSection(dc, &bmi, DIB_RGB_COLORS, (void**)&buf, NULL, 0);
-  return ret;
-}
-#endif
-
-void Texture::Screenshot() { ScreenshotBox(Box(screen->width, screen->height), Flag::FlipY); }
-void Texture::ScreenshotBox(const Box &b, int flag) {
-  Resize(b.w, b.h, preferred_pf, Flag::CreateBuf);
-  unsigned char *pixels = NewBuffer();
-  glReadPixels(b.x, b.y, b.w, b.h, GLPixelType(), GLBufferType(), pixels);
-  UpdateBuffer(pixels, point(b.w, b.h), pf, b.w*4, flag);
-  delete [] pixels;
-}
-
-/* DepthTexture */
-
-void DepthTexture::Resize(int W, int H, int DF, int flag) {
-  if (DF) df = DF;
-  width=W; height=H;
-  if (!ID && (flag & Flag::CreateGL)) screen->gd->GenRenderBuffers(1, &ID);
-  int opengl_width = NextPowerOfTwo(width), opengl_height = NextPowerOfTwo(height);
-  if (ID) {
-    screen->gd->BindRenderBuffer(ID);
-    screen->gd->RenderBufferStorage(Depth::OpenGLID(df), opengl_width, opengl_height);
-  }
-}
-
-/* FrameBuffer */
-
-void FrameBuffer::Resize(int W, int H, int flag) {
-  width=W; height=H;
-  if (!ID && (flag & Flag::CreateGL)) {
-    screen->gd->GenFrameBuffers(1, &ID);
-    if (flag & Flag::CreateTexture)      AllocTexture(&tex, !(flag & Flag::NoClampToEdge));
-    if (flag & Flag::CreateDepthTexture) AllocDepthTexture(&depth);
-  } else {
-    tex.Resize(width, height);
-    depth.Resize(width, height);
-  }
-  Attach(tex.ID, depth.ID);
-  int status = screen->gd->CheckFrameBufferStatus();
-  if (status != GL_FRAMEBUFFER_COMPLETE) ERROR("FrameBuffer status ", status);
-  if (flag & Flag::ReleaseFB) Release();
-}
-
-void FrameBuffer::AllocDepthTexture(DepthTexture *out) { CHECK_EQ(out->ID, 0); out->Create(width, height); }
-void FrameBuffer::AllocTexture(Texture *out, bool clamp_to_edge) {
-  CHECK_EQ(out->ID, 0);
-  out->Create(width, height); 
-  if (clamp_to_edge) {
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-  }
-}
-
-void FrameBuffer::Release() { screen->gd->BindFrameBuffer(screen->gd->default_framebuffer); }
-void FrameBuffer::Attach(int ct, int dt) {
-  screen->gd->BindFrameBuffer(ID);
-  if (ct) screen->gd->FrameBufferTexture     ((tex.ID   = ct));
-  if (dt) screen->gd->FrameBufferDepthTexture((depth.ID = dt));
-}
-
-/* Shader */
-
-void Shader::SetGlobalUniform1f(const string &name, float v) {
-  screen->gd->UseShader(&app->video.shader_default);  app->video.shader_default .SetUniform1f(name, v);
-  screen->gd->UseShader(&app->video.shader_normals);  app->video.shader_normals .SetUniform1f(name, v);
-  screen->gd->UseShader(&app->video.shader_cubemap);  app->video.shader_cubemap .SetUniform1f(name, v);
-  screen->gd->UseShader(&app->video.shader_cubenorm); app->video.shader_cubenorm.SetUniform1f(name, v);
-}
-
-void Shader::SetGlobalUniform2f(const string &name, float v1, float v2){ 
-  screen->gd->UseShader(&app->video.shader_default);  app->video.shader_default .SetUniform2f(name, v1, v2);
-  screen->gd->UseShader(&app->video.shader_normals);  app->video.shader_normals .SetUniform2f(name, v1, v2);
-  screen->gd->UseShader(&app->video.shader_cubemap);  app->video.shader_cubemap .SetUniform2f(name, v1, v2);
-  screen->gd->UseShader(&app->video.shader_cubenorm); app->video.shader_cubenorm.SetUniform2f(name, v1, v2);
-}
-
-#ifdef LFL_GLSL_SHADERS
-int Shader::Create(const string &name, const string &vertex_shader, const string &fragment_shader, const ShaderDefines &defines, Shader *out) {
-  INFO("Shader::Create ", name);
-  GLuint p = screen->gd->CreateProgram();
-
-  string hdr =
-    "#ifdef GL_ES\r\n"
-    "precision highp float;\r\n"
-    "#else\r\n"
-    "#define lowp\r\n"
-    "#define highp\r\n"
-    "#endif\r\n";
-#ifdef LFL_GLES2
-  if (app->video.opengles_version == 2) hdr += "#define LFL_GLES2\r\n";
-#endif
-  hdr += defines.text + string("\r\n");
-
-  if (vertex_shader.size()) {
-    GLuint vs = screen->gd->CreateShader(GL_VERTEX_SHADER);
-    const char *vss[] = { hdr.c_str(), vertex_shader.c_str(), 0 };
-    screen->gd->ShaderSource(vs, 2, vss, 0);
-    screen->gd->CompileShader(vs);
-    screen->gd->AttachShader(p, vs);
-  }
-
-  if (fragment_shader.size()) {
-    GLuint fs = screen->gd->CreateShader(GL_FRAGMENT_SHADER);
-    const char *fss[] = { hdr.c_str(), fragment_shader.c_str(), 0 };
-    screen->gd->ShaderSource(fs, 2, fss, 0);
-    screen->gd->CompileShader(fs);
-    screen->gd->AttachShader(p, fs);
-  }
-
-  if (1)                    screen->gd->BindAttribLocation(p, 0, "Position"   );
-  if (defines.normals)      screen->gd->BindAttribLocation(p, 1, "Normal"     );
-  if (defines.vertex_color) screen->gd->BindAttribLocation(p, 2, "VertexColor");
-  if (defines.tex_2d)       screen->gd->BindAttribLocation(p, 3, "TexCoordIn" );
-
-  screen->gd->LinkProgram(p);
-
-  int active_uniforms=0, max_uniform_components=0, active_attributes=0, max_attributes=0;
-  screen->gd->GetProgramiv(p, GL_ACTIVE_UNIFORMS, &active_uniforms);
-  screen->gd->GetProgramiv(p, GL_ACTIVE_ATTRIBUTES, &active_attributes);
-#if !defined(LFL_ANDROID) && !defined(LFL_IPHONE)
-  screen->gd->GetIntegerv(GL_MAX_VERTEX_UNIFORM_COMPONENTS, &max_uniform_components);
-#endif
-  screen->gd->GetIntegerv(GL_MAX_VERTEX_ATTRIBS, &max_attributes);
-  INFO("shader=", name, ", mu=", active_uniforms, " avg_comps/", max_uniform_components, ", ma=", active_attributes, "/", max_attributes);
-
-  bool log_missing_attrib = false;
-  if (out) {
-    *out = Shader();
-    out->ID = p;
-    out->name = name;
-    if ((out->slot_position             = screen->gd->GetAttribLocation (p, "Position"))            < 0 && log_missing_attrib) INFO("shader ", name, " missing Position");
-    if ((out->slot_normal               = screen->gd->GetAttribLocation (p, "Normal"))              < 0 && log_missing_attrib) INFO("shader ", name, " missing Normal");
-    if ((out->slot_color                = screen->gd->GetAttribLocation (p, "VertexColor"))         < 0 && log_missing_attrib) INFO("shader ", name, " missing VertexColor");
-    if ((out->slot_tex                  = screen->gd->GetAttribLocation (p, "TexCoordIn"))          < 0 && log_missing_attrib) INFO("shader ", name, " missing TexCoordIn");
-    if ((out->uniform_modelview         = screen->gd->GetUniformLocation(p, "Modelview"))           < 0 && log_missing_attrib) INFO("shader ", name, " missing Modelview");
-    if ((out->uniform_modelviewproj     = screen->gd->GetUniformLocation(p, "ModelviewProjection")) < 0 && log_missing_attrib) INFO("shader ", name, " missing ModelviewProjection");
-    if ((out->uniform_tex               = screen->gd->GetUniformLocation(p, "iChannel0"))           < 0 && log_missing_attrib) INFO("shader ", name, " missing Texture");
-    if ((out->uniform_cubetex           = screen->gd->GetUniformLocation(p, "CubeTexture"))         < 0 && log_missing_attrib) INFO("shader ", name, " missing CubeTexture");
-    if ((out->uniform_normalon          = screen->gd->GetUniformLocation(p, "NormalEnabled"))       < 0 && log_missing_attrib) INFO("shader ", name, " missing NormalEnabled");
-    if ((out->uniform_texon             = screen->gd->GetUniformLocation(p, "TexCoordEnabled"))     < 0 && log_missing_attrib) INFO("shader ", name, " missing TexCoordEnabled");
-    if ((out->uniform_coloron           = screen->gd->GetUniformLocation(p, "VertexColorEnabled"))  < 0 && log_missing_attrib) INFO("shader ", name, " missing VertexColorEnabled");
-    if ((out->uniform_cubeon            = screen->gd->GetUniformLocation(p, "CubeMapEnabled"))      < 0 && log_missing_attrib) INFO("shader ", name, " missing CubeMapEnabled");
-    if ((out->uniform_colordefault      = screen->gd->GetUniformLocation(p, "DefaultColor"))        < 0 && log_missing_attrib) INFO("shader ", name, " missing DefaultColor");
-    if ((out->uniform_material_ambient  = screen->gd->GetUniformLocation(p, "MaterialAmbient"))     < 0 && log_missing_attrib) INFO("shader ", name, " missing MaterialAmbient");
-    if ((out->uniform_material_diffuse  = screen->gd->GetUniformLocation(p, "MaterialDiffuse"))     < 0 && log_missing_attrib) INFO("shader ", name, " missing MaterialDiffuse");
-    if ((out->uniform_material_specular = screen->gd->GetUniformLocation(p, "MaterialSpecular"))    < 0 && log_missing_attrib) INFO("shader ", name, " missing MaterialSpecular");
-    if ((out->uniform_material_emission = screen->gd->GetUniformLocation(p, "MaterialEmission"))    < 0 && log_missing_attrib) INFO("shader ", name, " missing MaterialEmission");
-    if ((out->uniform_light0_pos        = screen->gd->GetUniformLocation(p, "LightZeroPosition"))   < 0 && log_missing_attrib) INFO("shader ", name, " missing LightZeroPosition");
-    if ((out->uniform_light0_ambient    = screen->gd->GetUniformLocation(p, "LightZeroAmbient"))    < 0 && log_missing_attrib) INFO("shader ", name, " missing LightZeroAmbient");
-    if ((out->uniform_light0_diffuse    = screen->gd->GetUniformLocation(p, "LightZeroDiffuse"))    < 0 && log_missing_attrib) INFO("shader ", name, " missing LightZeroDiffuse");
-    if ((out->uniform_light0_specular   = screen->gd->GetUniformLocation(p, "LightZeroSpecular"))   < 0 && log_missing_attrib) INFO("shader ", name, " missing LightZeroSpecular");
-
-    int unused_attrib = 0;
-    memset(out->unused_attrib_slot, -1, sizeof(out->unused_attrib_slot));
-    for (int i=0; i<MaxVertexAttrib; i++) {
-      if (out->slot_position == i || out->slot_normal == i || out->slot_color == i || out->slot_tex == i) continue;
-      out->unused_attrib_slot[unused_attrib++] = i;
-    }
-  }
-
-  return p;
-}
-
-int Shader::CreateShaderToy(const string &name, const string &pixel_shader, Shader *out) {
-  static string header =
-    "uniform float iGlobalTime, iBlend;\r\n"
-    "uniform vec3 iResolution;\r\n"
-    "uniform vec2 iScroll;\r\n"
-    "uniform vec4 iMouse;\r\n"
-    "uniform sampler2D iChannel0;\r\n"
-    "uniform vec3 iChannelResolution[1];\r\n"
-    "#define SampleChannelAtPointAndModulus(c, p, m) texture2D(c, mod((p), (m)))\r\n"
-    "#define SampleChannelAtPoint(c, p) SampleChannelAtPointAndModulus(c, p, iChannelResolution[0].xy/iResolution.xy)\r\n"
-    "#define SamplePoint() ((fragCoord.xy + iScroll)/iResolution.xy)\r\n"
-    "#define SamplePointFlipY() vec2((fragCoord.x+iScroll.x)/iResolution.x, (iResolution.y-fragCoord.y-iScroll.y)/iResolution.y)\r\n"
-    "#define SampleChannel(c) SampleChannelAtPoint(c, SamplePoint())\r\n"
-#ifdef LFL_MOBILE
-    "#define BlendChannels(c1,c2) (((c1) + (c2))/2.0)\r\n";
-#else
-    "#define BlendChannels(c1,c2) ((c1)*iBlend + (c2)*(1.0-iBlend))\r\n";
-#endif
-
-  static string footer =
-    "void main(void) { mainImage(gl_FragColor, gl_FragCoord.xy); }\r\n";
-  return Shader::Create(name, screen->gd->vertex_shader, StrCat(header, pixel_shader, footer), ShaderDefines(1,0,1,0), out);
-}
-
-int Shader::GetUniformIndex(const string &name) { return screen->gd->GetUniformLocation(ID, name); }
-void Shader::SetUniform1i(const string &name, float v)                                { screen->gd->Uniform1i (GetUniformIndex(name), v); }
-void Shader::SetUniform1f(const string &name, float v)                                { screen->gd->Uniform1f (GetUniformIndex(name), v); }
-void Shader::SetUniform2f(const string &name, float v1, float v2)                     { screen->gd->Uniform2f (GetUniformIndex(name), v1, v2); }
-void Shader::SetUniform3f(const string &name, float v1, float v2, float v3)           { screen->gd->Uniform3f (GetUniformIndex(name), v1, v2, v3); }
-void Shader::SetUniform4f(const string &name, float v1, float v2, float v3, float v4) { screen->gd->Uniform4f (GetUniformIndex(name), v1, v2, v3, v4); }
-void Shader::SetUniform3fv(const string &name, const float *v)                        { screen->gd->Uniform3fv(GetUniformIndex(name), 1, v); }
-void Shader::SetUniform3fv(const string &name, int n, const float *v)                 { screen->gd->Uniform3fv(GetUniformIndex(name), n, v); }
-
-#else /* LFL_GLSL_SHADERS */
-
-int Shader::Create(const string &name, const string &vert, const string &frag, const ShaderDefines &defines, Shader *out) { return -1; }
-int Shader::GetUniformIndex(const string &name) { return -1; }
-void Shader::SetUniform1i(const string &name, float v) {}
-void Shader::SetUniform1f(const string &name, float v) {}
-void Shader::SetUniform2f(const string &name, float v1, float v2) {}
-void Shader::SetUniform3f(const string &name, float v1, float v2, float v3) {}
-void Shader::SetUniform4f(const string &name, float v1, float v2, float v3, float v4) {}
-void Shader::SetUniform3fv(const string &name, const float *v) {}
-void Shader::SetUniform3fv(const string &name, int n, const float *v) {}
-#endif /* LFL_GLSL_SHADERS */
-
-/* BoxRun */
-
-point DrawableBoxRun::Draw(point p, DrawCB cb) {
-  Box w;
-  DrawBackground(p);
-  if (attr->tex) attr->tex->Bind();
-  if (attr->tex || attr->font) screen->gd-> SetColor(attr->fg ? *attr->fg : Color::white);
-  else                         screen->gd->FillColor(attr->fg ? *attr->fg : Color::white);
-  if (attr->font) attr->font->Select();
-  else if (attr->tex) screen->gd->EnableLayering();
-  if (attr->scissor) screen->gd->PushScissor(*attr->scissor + p);
-  for (auto i = data.buf, e = data.end(); i != e; ++i) if (i->drawable) cb(i->drawable, (w = i->box + p), attr);
-  if (attr->scissor) screen->gd->PopScissor();
-  return point(w.x + w.w, w.y);
-}
-
-void DrawableBoxRun::DrawBackground(point p, DrawBackgroundCB cb) {
-  if (attr->bg) screen->gd->FillColor(*attr->bg);
-  if (!attr->bg || !data.size()) return;
-  int line_height = line ? line->h : (attr->font ? attr->font->Height() : 0);
-  if (!line_height) return;
-  int left = data[0].LeftBound(attr), right = data.back().RightBound(attr);
-  cb(Box(p.x + left, p.y - line_height, right - left, line_height));
-}
+#endif // LFL_FFMPEG
 
 }; // namespace LFL

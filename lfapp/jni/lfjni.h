@@ -26,7 +26,7 @@ extern "C" {
 int   AndroidVideoInit(int *gles_version);
 int   AndroidVideoSwap();
 int   AndroidInput(unsigned clicks, unsigned *events);
-int   AndroidToggleKeyboard();
+int   AndroidShowOrHideKeyboard(int v);
 int   AndroidAssetRead(const char *filename, char **malloc_out, int *size_out);
 int   AndroidFileRead(const char *fn, char **malloc_out, int *size_out);
 void *AndroidFileOpenWriter(const char *fn);

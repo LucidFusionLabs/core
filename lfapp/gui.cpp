@@ -43,68 +43,6 @@ DEFINE_string(lfapp_console_font, "", "Console font, blank for default_font");
 DEFINE_int(lfapp_console_font_flag, FontDesc::Mono, "Console font flag");
 DEFINE_bool(draw_grid, false, "Draw lines intersecting mouse x,y");
 
-Window::WindowMap Window::active;
-Window *Window::Get(void *id) { return FindOrNull(Window::active, id); }
-
-Window::Window() : caption("lfapp"), fps(128) {
-  id = gl = surface = glew_context = impl = user1 = user2 = user3 = 0;
-  minimized = cursor_grabbed = frame_init = 0;
-  target_fps = FLAGS_target_fps;
-  pow2_width = NextPowerOfTwo((width = 640));
-  pow2_height = NextPowerOfTwo((height = 480));
-  multitouch_keyboard_x = .93; 
-  cam = new Entity(v3(5.54, 1.70, 4.39), v3(-.51, -.03, -.49), v3(-.03, 1, -.03));
-  ClearEvents();
-  ClearGesture();
-}
-
-Window::~Window() {
-  if (lfapp_console) {
-    lfapp_console->WriteHistory(LFAppDownloadDir(), "console");
-    delete lfapp_console;
-  }
-  delete cam;
-}
-
-void Window::ClearEvents() { 
-  ClearMouseGUIEvents();
-  ClearKeyboardGUIEvents();
-  ClearInputBindEvents();
-}
-
-void Window::ClearGesture() {
-  gesture_swipe_up = gesture_swipe_down = 0;
-  gesture_tap[0] = gesture_tap[1] = gesture_dpad_stop[0] = gesture_dpad_stop[1] = 0;
-  gesture_dpad_dx[0] = gesture_dpad_dx[1] = gesture_dpad_dy[0] = gesture_dpad_dy[1] = 0;
-}
-
-void Window::ClearMouseGUIEvents() {
-  for (auto i = mouse_gui.begin(); i != mouse_gui.end(); ++i) (*i)->ClearEvents();
-}
-void Window::ClearKeyboardGUIEvents() {
-  for (auto i = keyboard_gui.begin(); i != keyboard_gui.end(); ++i) (*i)->ClearEvents();
-}
-void Window::ClearInputBindEvents() {
-  for (auto i = input_bind.begin(); i != input_bind.end(); ++i) (*i)->ClearEvents();
-}
-
-void Window::InitLFAppConsole() {
-  lfapp_console = new Console(screen, Fonts::Get(A_or_B(FLAGS_lfapp_console_font, FLAGS_default_font), "", 9, Color::white, Color::clear, FLAGS_lfapp_console_font_flag));
-  lfapp_console->ReadHistory(LFAppDownloadDir(), "console");
-  lfapp_console->Write(StrCat(screen->caption, " started"));
-  lfapp_console->Write("Try console commands 'cmds' and 'flags'");
-}
-
-void Window::DrawDialogs() {
-  if (screen->lfapp_console) screen->lfapp_console->Draw();
-  if (FLAGS_draw_grid) {
-    Color c(.7, .7, .7);
-    glIntersect(screen->mouse.x, screen->mouse.y, &c);
-    Fonts::Default()->Draw(StrCat("draw_grid ", screen->mouse.x, " , ", screen->mouse.y), point(0,0));
-  }
-  for (auto i = screen->dialogs.begin(), e = screen->dialogs.end(); i != e; ++i) (*i)->Draw();
-}
-
 void GUI::UpdateBox(const Box &b, int draw_box_ind, int input_box_ind) {
   if (draw_box_ind  >= 0) child_box.data[draw_box_ind ].box = b;
   if (input_box_ind >= 0) hit           [input_box_ind].box = b;
@@ -504,7 +442,7 @@ const Drawable::Attr *TextGUI::GetAttr(int attr) const {
     if (attr & Attr::Reverse) swap(fg, bg);
   }
   last_attr.font = Fonts::Change(font, font->size, *fg, *bg, font->flag);
-  last_attr.bg = bg; // &font->bg;
+  last_attr.bg = bg == &colors->c[colors->bg_index] ? 0 : bg; // &font->bg;
   last_attr.underline = attr & Attr::Underline;
   return &last_attr;
 }

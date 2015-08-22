@@ -12,6 +12,7 @@ import android.widget.FrameLayout;
 import android.widget.FrameLayout.LayoutParams;
 import android.media.*;
 import android.content.*;
+import android.content.res.Configuration;
 import android.content.pm.ActivityInfo;
 import android.hardware.*;
 import android.util.Log;
@@ -24,7 +25,8 @@ public class Activity extends android.app.Activity {
     static { System.loadLibrary("lfjni"); }
     
     public static native void main(Object activity);
-    public static native void shutdown();
+    public static native void mainloop(Object activity);
+    public static native void minimize();
     public static native void resize(int x, int y);
     public static native void key(int upordonw, int keycode);
     public static native void touch(int action, float x, float y, float p);
@@ -33,6 +35,7 @@ public class Activity extends android.app.Activity {
     public static native void accel(float x, float y, float z);
 
     public static Activity instance;
+    public static boolean init;
     public FrameLayout frameLayout;
     public GameView view;
     public Thread thread;
@@ -40,6 +43,7 @@ public class Activity extends android.app.Activity {
     public GPlusClient gplus;
     public Advertising advertising;
     public boolean waiting_activity_result;
+    public int egl_version;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -48,17 +52,7 @@ public class Activity extends android.app.Activity {
         instance = this;
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         super.onCreate(savedInstanceState);
-        this.getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,
-                                  WindowManager.LayoutParams.FLAG_FULLSCREEN);
         this.getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-
-        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);        
-        // setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);        
-
-        // final ActivityManager activityManager = (ActivityManager)getSystemService(Context.ACTIVITY_SERVICE);
-        // final ConfigurationInfo configurationInfo = activityManager.getDeviceConfigurationInfo();
-        // final boolean supportsEs2 = configurationInfo.reqGlEsVersion >= 0x20000;
-        // if (supportsEs2) {}        
         
         frameLayout = new FrameLayout(this);
         view = new GameView(this, getApplication());
@@ -76,28 +70,6 @@ public class Activity extends android.app.Activity {
         Log.i("lfjava", "Activity.onDestroy()");
         if (advertising != null) advertising.onDestroy();
         super.onDestroy();
-        close();
-        exit();
-    }
-
-    @Override
-    public void onResume() {
-        Log.i("lfjava", "Activity.onResume()");
-        super.onResume();
-    }
-
-    @Override
-    protected void onPause() {
-        Log.i("lfjava", "Activity.onPause()");
-        super.onPause();
-        if (!waiting_activity_result) { close(); }
-    }
-
-    @Override
-    protected void onStart() {
-        Log.i("lfjava", "Activity.onStart()");
-        super.onStart();
-        if (gplus != null) gplus.onStart(this);
     }
 
     @Override
@@ -108,39 +80,60 @@ public class Activity extends android.app.Activity {
     }
     
     @Override
+    protected void onPause() {
+        Log.i("lfjava", "Activity.onPause() enter");
+        super.onPause();
+        if (waiting_activity_result || thread == null) return;
+
+        Thread t = thread;
+        thread = null;        
+        minimize();
+        try { t.join(); }
+        catch(Exception e) { Log.e("lfjava", e.toString()); }
+        Log.i("lfjava", "Activity.onPause() exit");
+    }
+
+    @Override
+    protected void onStart() {
+        Log.i("lfjava", "Activity.onStart()");
+        super.onStart();
+        if (gplus != null) gplus.onStart(this);
+    }
+
+    @Override
+    public void onResume() {
+        Log.i("lfjava", "Activity.onResume()");
+        super.onResume();
+    }
+
+    @Override
+    public void onConfigurationChanged(Configuration newConfig) {
+        Log.i("lfjava", "onConfigurationChanged");
+        super.onConfigurationChanged(newConfig);
+    }
+
+    @Override
     protected void onActivityResult(int request, int response, Intent data) {
         Log.i("lfjava", "Activity.onActivityResult(" + request + ", " + response + ")");
         waiting_activity_result = false;
         super.onActivityResult(request, response, data);
         if (gplus != null) gplus.onActivityResult(request, response, data);
     }
-    
-    void exit() {
-        Log.i("lfjava", "Activity.exit()");
-        android.os.Process.killProcess(android.os.Process.myPid());
-    }
 
-    void open(int format, int width, int height) {
-        Log.i("lfjava", "Activity.open()");
+    void surfaceChanged(int format, int width, int height) {
+        boolean thread_exists = thread != null;
+        Log.i("lfjava", "surfaceChanged init= " + init + ", thread_exists=" + thread_exists);
         resize(width, height);
-
-        if (thread != null) return;
-        thread = new Thread(new Runnable() { public void run() {
-            Activity.main(Activity.instance);
-            Activity.instance.finish();
-        } }, "JNIMainThread");
+        if (thread_exists) return;
+        if (!init) thread = new Thread(new Runnable() { public void run() { view.initEGL(); main    (Activity.instance); } }, "JNIMainThread");
+        else       thread = new Thread(new Runnable() { public void run() { view.initEGL(); mainloop(Activity.instance); } }, "JNIMainThread");
         thread.start();
+        init = true;
     }
 
-    void close() {
-        if (thread == null) return;
-        Log.i("lfjava", "Activity.close() enter");
-        Thread t = thread;
-        thread = null;        
-        shutdown();
-        try { t.join(); }
-        catch(Exception e) { Log.e("lfjava", e.toString()); }
-        Log.i("lfjava", "Activity.close() exit");
+    void forceExit() {
+        Log.i("lfjava", "Activity.froceExit()");
+        android.os.Process.killProcess(android.os.Process.myPid());
     }
 
     public int readFile(String filename, byte[] buf, int size) {
@@ -174,6 +167,14 @@ public class Activity extends android.app.Activity {
         android.view.inputmethod.InputMethodManager imm = (android.view.inputmethod.InputMethodManager)getSystemService(Context.INPUT_METHOD_SERVICE);
         imm.toggleSoftInput(android.view.inputmethod.InputMethodManager.SHOW_FORCED, 0);
     }
+    public void showKeyboard() {
+        android.view.inputmethod.InputMethodManager imm = (android.view.inputmethod.InputMethodManager)getSystemService(Context.INPUT_METHOD_SERVICE);
+        imm.showSoftInput(view, android.view.inputmethod.InputMethodManager.SHOW_FORCED);
+    }
+    public void hideKeyboard() {
+        android.view.inputmethod.InputMethodManager imm = (android.view.inputmethod.InputMethodManager)getSystemService(Context.INPUT_METHOD_SERVICE);
+        // imm.hideSoftInput(view, 0);
+    }
 
     public MediaPlayer loadMusicResource(String filename) {
         android.content.res.Resources res = getResources();
@@ -182,11 +183,9 @@ public class Activity extends android.app.Activity {
         Log.i("lfjava", "loadMusicAsset " + package_name + " " + filename + " " + soundId);
         return MediaPlayer.create(this, soundId);
     }
-
     public void playMusic(MediaPlayer mp) {
         mp.start();
     }
-
     public void playBackgroundMusic(MediaPlayer mp) {
         mp.setLooping(true);
         mp.start();
@@ -271,18 +270,23 @@ class GameView extends android.view.SurfaceView implements SurfaceHolder.Callbac
         requestFocus();
     }
 
+    @Override
+    protected void onSizeChanged(int xNew, int yNew, int xOld, int yOld) {
+        Log.i("lfjava", "GameView.onSizeChanged(" + xNew + ", " + yNew + ", " + xOld + ", " + yOld + ")");
+    }
+
     public void surfaceCreated(SurfaceHolder holder) {
-       sensor.registerListener(this, sensor.getDefaultSensor(Sensor.TYPE_ACCELEROMETER), SensorManager.SENSOR_DELAY_GAME, null);
+        Log.i("lfjava", "GameView.surfaceCreated()");
+        sensor.registerListener(this, sensor.getDefaultSensor(Sensor.TYPE_ACCELEROMETER), SensorManager.SENSOR_DELAY_GAME, null);
     }
 
     public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
         Log.i("lfjava", "GameView.surfaceChanged(" + width + ", " + height + ")");
-        Activity.instance.open(format, width, height);
+        Activity.instance.surfaceChanged(format, width, height);
     }
 
     public void surfaceDestroyed(SurfaceHolder holder) {
         Log.i("lfjava", "surfaceDestroyed()");
-        Activity.instance.close(); 
         sensor.unregisterListener(this, sensor.getDefaultSensor(Sensor.TYPE_ACCELEROMETER));
     }
 
@@ -292,6 +296,32 @@ class GameView extends android.view.SurfaceView implements SurfaceHolder.Callbac
 
     public boolean onKey(View v, int keyCode, KeyEvent event) {
         int keyChar = event.getUnicodeChar();
+        if (keyChar == 0) {
+            switch(event.getKeyCode()) {
+                case KeyEvent.KEYCODE_DEL:        keyChar = '\b';   break;
+                case KeyEvent.KEYCODE_ESCAPE:     keyChar = 0xE100; break;
+                case KeyEvent.KEYCODE_DPAD_UP:    keyChar = 0xE101; break;
+                case KeyEvent.KEYCODE_DPAD_DOWN:  keyChar = 0xE102; break;
+                case KeyEvent.KEYCODE_DPAD_LEFT:  keyChar = 0xE103; break;
+                case KeyEvent.KEYCODE_DPAD_RIGHT: keyChar = 0xE104; break;
+                case KeyEvent.KEYCODE_CTRL_LEFT:  keyChar = 0xE105; break;
+                case KeyEvent.KEYCODE_CTRL_RIGHT: keyChar = 0xE106; break;
+                case KeyEvent.KEYCODE_META_LEFT:  keyChar = 0xE107; break;
+                case KeyEvent.KEYCODE_META_RIGHT: keyChar = 0xE108; break;
+                case KeyEvent.KEYCODE_TAB:        keyChar = 0xE109; break;
+                case KeyEvent.KEYCODE_PAGE_UP:    keyChar = 0xE10A; break;
+                case KeyEvent.KEYCODE_PAGE_DOWN:  keyChar = 0xE10B; break;
+                case KeyEvent.KEYCODE_F1:         keyChar = 0xE10C; break;
+                case KeyEvent.KEYCODE_F2:         keyChar = 0xE10D; break;
+                case KeyEvent.KEYCODE_F3:         keyChar = 0xE10E; break;
+                case KeyEvent.KEYCODE_F4:         keyChar = 0xE10F; break;
+                case KeyEvent.KEYCODE_F5:         keyChar = 0xE110; break;
+                case KeyEvent.KEYCODE_F6:         keyChar = 0xE111; break;
+                case KeyEvent.KEYCODE_F7:         keyChar = 0xE112; break;
+                case KeyEvent.KEYCODE_F8:         keyChar = 0xE113; break;
+                case KeyEvent.KEYCODE_F9:         keyChar = 0xE114; break;
+            }
+        }
         if      (event.getAction() == KeyEvent.ACTION_UP)   { Activity.key(0, keyChar); return true; }
         else if (event.getAction() == KeyEvent.ACTION_DOWN) { Activity.key(1, keyChar); return true; }
         else return false;
@@ -313,6 +343,12 @@ class GameView extends android.view.SurfaceView implements SurfaceHolder.Callbac
 
     public void onAccuracyChanged(Sensor sensor, int accuracy) {}
 
+    public void initEGL() {
+        if      (initEGL(2)) Activity.instance.egl_version = 2;
+        else if (initEGL(1)) Activity.instance.egl_version = 1;
+        else                 Activity.instance.egl_version = 0;
+    }
+
     public boolean initEGL(int requestedVersion) {
         try {
             final int EGL_OPENGL_ES2_BIT = 4, EGL_CONTEXT_CLIENT_VERSION = 0x3098;
@@ -323,8 +359,8 @@ class GameView extends android.view.SurfaceView implements SurfaceHolder.Callbac
             int[] context_attrib = requestedVersion >= 2 ? context_attrib2 : null;
             int[] version = new int[2], num_config = new int[1];
 
-        	EGLConfig[] configs = new EGLConfig[1];
-        	EGL10 egl = (EGL10)EGLContext.getEGL();
+            EGLConfig[] configs = new EGLConfig[1];
+            EGL10 egl = (EGL10)EGLContext.getEGL();
             egl_display = egl.eglGetDisplay(EGL10.EGL_DEFAULT_DISPLAY);
             egl.eglInitialize(egl_display, version);
 
@@ -332,24 +368,13 @@ class GameView extends android.view.SurfaceView implements SurfaceHolder.Callbac
             if ((egl_context = egl.eglCreateContext(egl_display, configs[0], EGL10.EGL_NO_CONTEXT, context_attrib)) == EGL10.EGL_NO_CONTEXT) throw new Exception("eglCreateContext");
             if ((egl_surface = egl.eglCreateWindowSurface(egl_display, configs[0], this, null)) == EGL10.EGL_NO_SURFACE) throw new Exception("eglCreateWindowSurface");
             if (!egl.eglMakeCurrent(egl_display, egl_surface, egl_surface, egl_context)) throw new Exception("eglMakeCurrent");
-        }
-        catch(Exception e) {
+        } catch(Exception e) {
             Log.e("lfjava", e.toString());
             for (StackTraceElement ste : e.getStackTrace()) Log.e("lfjava", ste.toString());
             egl_context = null; egl_surface = null; egl_display = null;
             return false;
         }
         return true;
-    }
-    
-    public int initEGL1() {
-        if (initEGL(1)) return 1;
-        return -1;
-    }
-    public int initEGL2() {
-        if (initEGL(2)) return 2;
-        if (initEGL(1)) return 1;
-        return -1;
     }
 
     public void swapEGL() {
@@ -359,8 +384,7 @@ class GameView extends android.view.SurfaceView implements SurfaceHolder.Callbac
             egl.eglWaitNative(EGL10.EGL_CORE_NATIVE_ENGINE, null);
             egl.eglWaitGL();
             egl.eglSwapBuffers(egl_display, egl_surface);
-        }
-        catch(Exception e) {
+        } catch(Exception e) {
             Log.e("lfjava", e.toString());
             for (StackTraceElement ste : e.getStackTrace()) Log.e("lfjava", ste.toString());
         }

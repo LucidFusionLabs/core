@@ -887,7 +887,7 @@ void Geometry::ScrollTexCoord(float dx, float dx_extra, int *subtract_max_int) {
     if (subtract_max_int) *subtract_max_int = max_int;
     int width_bytes = width * sizeof(float);
     int vert_size = count * width_bytes;
-    screen->gd->VertexPointer(vd, GraphicsDevice::Float, width_bytes, 0, &vert[0], vert_size, &vert_ind, true);
+    screen->gd->VertexPointer(vd, GraphicsDevice::Float, width_bytes, 0, &vert[0], vert_size, &vert_ind, true, primtype);
 }
 
 int Assets::Init() {

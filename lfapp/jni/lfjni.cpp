@@ -12,7 +12,7 @@
 
 using std::string;
 
-#define CHECK(x) if (!(x)) { __android_log_print(ANDROID_LOG_ERROR, "lfjni", "%s", #x); *((int*)0)=0; }
+#define CHECK(x) if (!(x)) { __android_log_print(ANDROID_LOG_ERROR, "lfjni", "FATAL: %s (%s:%d)", #x, __FILE__, __LINE__); *((int*)0)=0; }
 
 #define ACTION_DOWN         0
 #define ACTION_UP           1
@@ -25,37 +25,55 @@ using std::string;
 static JNIEnv *jni_env;
 static jobject jni_activity,       jni_view,       jni_gplus;
 static jclass  jni_activity_class, jni_view_class, jni_gplus_class, jni_throwable_class, jni_frame_class;
-static jmethodID jni_view_method_swap, jni_activity_method_toggle_keyboard, jni_activity_method_write_internal_file, jni_activity_method_play_music, jni_activity_method_play_background_music, jni_gplus_method_write, jni_gplus_method_write_with_retry, jni_throwable_method_get_cause, jni_throwable_method_get_stack_trace, jni_throwable_method_tostring, jni_frame_method_tostring;
+static jfieldID jni_view_id, jni_gplus_id;
+static jmethodID jni_view_method_swap;
+static jmethodID jni_activity_method_toggle_keyboard, jni_activity_method_show_keyboard, jni_activity_method_hide_keyboard;
+static jmethodID jni_activity_method_write_internal_file, jni_activity_method_play_music, jni_activity_method_play_background_music;
+static jmethodID jni_gplus_method_write, jni_gplus_method_write_with_retry;
+static jmethodID jni_throwable_method_get_cause, jni_throwable_method_get_stack_trace, jni_throwable_method_tostring, jni_frame_method_tostring;
 
 static NativeWindow *screen;
 static void *gplus_service;
 static int jni_activity_width=0, jni_activity_height=0;
 
+static void InitMyPointers(jobject a, bool init) {
+    if      (1)               CHECK(jni_activity = jni_env->NewGlobalRef(a));
+    if      (1)               CHECK(jni_view     = jni_env->NewGlobalRef(jni_env->GetObjectField(jni_activity, jni_view_id )));
+    if      (init)                  jni_gplus    = jni_env->NewGlobalRef(jni_env->GetObjectField(jni_activity, jni_gplus_id));
+    else if (jni_gplus_class) CHECK(jni_gplus    = jni_env->NewGlobalRef(jni_env->GetObjectField(jni_activity, jni_gplus_id)));
+}
+
+static void FreeMyPointers() {
+    if (jni_gplus_class) jni_env->DeleteGlobalRef(jni_gplus);    jni_gplus    = 0;
+    if (1)               jni_env->DeleteGlobalRef(jni_view);     jni_view     = 0;
+    if (1)               jni_env->DeleteGlobalRef(jni_activity); jni_activity = 0;
+    jni_activity_width = jni_activity_height = -1;
+}
+
 extern "C" int main(int argc, const char **argv);
 
 extern "C" jint JNI_OnLoad(JavaVM* vm, void* reserved) { INFOf("%s", "OnLoad"); return JNI_VERSION_1_4; }
-extern "C" void Java_com_lucidfusionlabs_lfjava_Activity_shutdown(JNIEnv* env, jclass c) {
-    INFOf("%s", "shutdown");
-    LFAppShutdown();
-}
+
 extern "C" void Java_com_lucidfusionlabs_lfjava_Activity_main(JNIEnv *e, jclass c, jobject a) {
-    CHECK(jni_env = e); jfieldID fid;
+    CHECK(jni_env = e);
     INFOf("main: env=%p", jni_env);
 
-    CHECK(jni_activity = jni_env->NewGlobalRef(a));
-    CHECK(jni_activity_class = (jclass)jni_env->NewGlobalRef(jni_env->GetObjectClass(jni_activity)));
-    CHECK(jni_activity_method_toggle_keyboard = jni_env->GetMethodID(jni_activity_class, "toggleKeyboard", "()V"));
-    CHECK(jni_activity_method_play_music = jni_env->GetMethodID(jni_activity_class, "playMusic", "(Landroid/media/MediaPlayer;)V"));
-    CHECK(jni_activity_method_play_background_music = jni_env->GetMethodID(jni_activity_class, "playBackgroundMusic", "(Landroid/media/MediaPlayer;)V"));
-    CHECK(jni_activity_method_write_internal_file = jni_env->GetMethodID(jni_activity_class, "writeFile", "(Ljava/io/FileOutputStream;[BI)V"));
+    CHECK(jni_activity_class = (jclass)jni_env->NewGlobalRef(jni_env->GetObjectClass(a)));
+    CHECK(jni_view_id  = jni_env->GetFieldID(jni_activity_class, "view",  "Lcom/lucidfusionlabs/lfjava/GameView;"));
+    CHECK(jni_gplus_id = jni_env->GetFieldID(jni_activity_class, "gplus", "Lcom/lucidfusionlabs/lfjava/GPlusClient;"));
+    InitMyPointers(a, true);
 
-    CHECK(fid = jni_env->GetFieldID(jni_activity_class, "view", "Lcom/lucidfusionlabs/lfjava/GameView;"));
-    CHECK(jni_view = jni_env->NewGlobalRef(jni_env->GetObjectField(jni_activity, fid)));
+    CHECK(jni_activity_method_toggle_keyboard       = jni_env->GetMethodID(jni_activity_class, "toggleKeyboard", "()V"));
+    CHECK(jni_activity_method_show_keyboard         = jni_env->GetMethodID(jni_activity_class, "showKeyboard", "()V"));
+    CHECK(jni_activity_method_hide_keyboard         = jni_env->GetMethodID(jni_activity_class, "hideKeyboard", "()V"));
+    CHECK(jni_activity_method_play_music            = jni_env->GetMethodID(jni_activity_class, "playMusic", "(Landroid/media/MediaPlayer;)V"));
+    CHECK(jni_activity_method_play_background_music = jni_env->GetMethodID(jni_activity_class, "playBackgroundMusic", "(Landroid/media/MediaPlayer;)V"));
+    CHECK(jni_activity_method_write_internal_file   = jni_env->GetMethodID(jni_activity_class, "writeFile", "(Ljava/io/FileOutputStream;[BI)V"));
+
     CHECK(jni_view_class = (jclass)jni_env->NewGlobalRef(jni_env->GetObjectClass(jni_view)));
     CHECK(jni_view_method_swap = jni_env->GetMethodID(jni_view_class, "swapEGL", "()V"));
 
-    CHECK(fid = jni_env->GetFieldID(jni_activity_class, "gplus", "Lcom/lucidfusionlabs/lfjava/GPlusClient;"));
-    if ((jni_gplus = jni_env->NewGlobalRef(jni_env->GetObjectField(jni_activity, fid)))) {
+    if (jni_gplus) {
         CHECK(jni_gplus_class = (jclass)jni_env->NewGlobalRef(jni_env->GetObjectClass(jni_gplus)));
         CHECK(jni_gplus_method_write = jni_env->GetMethodID(jni_gplus_class, "write", "(Ljava/lang/String;Ljava/nio/ByteBuffer;)V"));
         CHECK(jni_gplus_method_write_with_retry = jni_env->GetMethodID(jni_gplus_class, "writeWithRetry", "(Ljava/lang/String;Ljava/nio/ByteBuffer;)V"));
@@ -70,18 +88,41 @@ extern "C" void Java_com_lucidfusionlabs_lfjava_Activity_main(JNIEnv *e, jclass 
     CHECK(jni_frame_method_tostring = jni_env->GetMethodID(jni_frame_class, "toString", "()Ljava/lang/String;"));
     CHECK(screen = GetNativeWindow());
 
-    int argc=1; const char *argv[2] = { "lfjni", 0 };
-    int ret = main(argc, argv);
+    const char *argv[2] = { "lfjni", 0 };
+    int argc = 1, ret = main(argc, argv);
     INFOf("main: env=%p ret=%d", jni_env, ret);
+    FreeMyPointers();
 }
+
+extern "C" void Java_com_lucidfusionlabs_lfjava_Activity_mainloop(JNIEnv *e, jclass c, jobject a) {
+    CHECK(jni_env = e);
+    INFOf("mainloop: env=%p", jni_env);
+    InitMyPointers(a, false);
+    SetLFAppMainThread();
+    LFAppResetGL();
+    WindowUnMinimized();
+    LFAppMainLoop();
+    FreeMyPointers();
+}
+
+extern "C" void Java_com_lucidfusionlabs_lfjava_Activity_minimize(JNIEnv* env, jclass c) {
+    INFOf("%s", "minimize");
+    QueueWindowMinimized();
+}
+
 extern "C" void Java_com_lucidfusionlabs_lfjava_Activity_resize(JNIEnv *e, jclass c, jint w, jint h) { 
+    bool init = !jni_activity_width && !jni_activity_height;
     jni_activity_width = w;
     jni_activity_height = h;
+    if (init) return;
+    QueueWindowReshaped(w, h);
 }
+
 extern "C" void Java_com_lucidfusionlabs_lfjava_Activity_key(JNIEnv *e, jclass c, jint down, jint keycode) {
     QueueKeyPress(keycode, down);
     LFAppWakeup((void*)1);
 }
+
 extern "C" void Java_com_lucidfusionlabs_lfjava_Activity_touch(JNIEnv *e, jclass c, jint action, jfloat x, jfloat y, jfloat p) {
     static float lx[2]={0,0}, ly[2]={0,0};
     int dpind = (/*FLAGS_swap_axis*/ 0) ? y < screen->width/2 : x < screen->width/2;
@@ -113,15 +154,18 @@ extern "C" void Java_com_lucidfusionlabs_lfjava_Activity_touch(JNIEnv *e, jclass
         screen->gesture_dpad_y[dpind] = y;
     } else INFOf("unhandled action %d", action);
 } 
+
 extern "C" void Java_com_lucidfusionlabs_lfjava_Activity_fling(JNIEnv *e, jclass c, jfloat x, jfloat y, jfloat vx, jfloat vy) {
     int dpind = y < screen->width/2;
     screen->gesture_dpad_dx[dpind] = vx;
     screen->gesture_dpad_dy[dpind] = vy;
     INFOf("fling(%f, %f) = %d of (%d, %d) and vel = (%f, %f)", x, y, dpind, screen->width, screen->height, vx, vy);
 }
+
 extern "C" void Java_com_lucidfusionlabs_lfjava_Activity_scroll(JNIEnv *e, jclass c, jfloat x, jfloat y, jfloat vx, jfloat vy) {
     screen->gesture_swipe_up = screen->gesture_swipe_down = 0;
 }
+
 extern "C" void Java_com_lucidfusionlabs_lfjava_Activity_accel(JNIEnv *e, jclass c, jfloat x, jfloat y, jfloat z) {}
 
 extern "C" void Java_com_lucidfusionlabs_lfjava_GPlusClient_startGame(JNIEnv *e, jclass c, jboolean server, jstring pid) {
@@ -131,6 +175,7 @@ extern "C" void Java_com_lucidfusionlabs_lfjava_GPlusClient_startGame(JNIEnv *e,
     ShellRun(buf);
     e->ReleaseStringUTFChars(pid, participant_id);
 }
+
 extern "C" void Java_com_lucidfusionlabs_lfjava_GPlusClient_read(JNIEnv *e, jclass c, jstring pid, jobject bb, jint len) {
     const char *participant_id = e->GetStringUTFChars(pid, 0);
     if (gplus_service) EndpointRead(gplus_service, participant_id, (const char*)e->GetDirectBufferAddress(bb), len);
@@ -178,12 +223,13 @@ int AndroidException() {
 extern "C" int AndroidVideoInit(int *gles_version) {
     screen->width = jni_activity_width;
     screen->height = jni_activity_height;
-    const char *method_name = (*gles_version == 2 ? "initEGL2" : "initEGL1");
-    jmethodID mid; CHECK(mid = jni_env->GetMethodID(jni_view_class, method_name, "()I"));
-    int ret = jni_env->CallIntMethod(jni_view, mid);
-    INFOf("AndroidVideoInit: %d", ret);
-    if (ret < 0) return ret;
-    *gles_version = ret;
+
+    jint v;
+    jfieldID fid;
+    CHECK(fid = jni_env->GetFieldID(jni_activity_class, "egl_version", "I"));
+    CHECK(v   = jni_env->GetIntField(jni_activity, fid));
+    *gles_version = v;
+    INFOf("AndroidVideoInit: %d", v);
     return 0;
 }
 
@@ -192,8 +238,10 @@ extern "C" int AndroidVideoSwap() {
     return 0;
 }
 
-extern "C" int AndroidToggleKeyboard() {
-    jni_env->CallVoidMethod(jni_activity, jni_activity_method_toggle_keyboard);
+extern "C" int AndroidShowOrHideKeyboard(int v) {
+    if      (!v)     jni_env->CallVoidMethod(jni_activity, jni_activity_method_hide_keyboard);
+    else if (v == 1) jni_env->CallVoidMethod(jni_activity, jni_activity_method_show_keyboard);
+    else             jni_env->CallVoidMethod(jni_activity, jni_activity_method_toggle_keyboard);
     return 0;
 }
 
@@ -294,7 +342,8 @@ extern "C" void AndroidPlayBackgroundMusic(void *h) {
 }
 
 extern "C" void AndroidSetVolume(int v) {
-    jmethodID mid; jint jv = v;
+    jint jv = v;
+    jmethodID mid;
     CHECK(mid = jni_env->GetMethodID(jni_activity_class, "setVolume", "(I)V"));
     return jni_env->CallVoidMethod(jni_activity, mid, jv);
 }

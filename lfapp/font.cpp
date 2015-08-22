@@ -304,10 +304,10 @@ void Font::UpdateMetrics(Glyph *g) {
 }
 
 void Font::Select() {
-    screen->gd->EnableLayering();
+    screen->gd->EnableTexture();
     glyph->cache->tex.Bind();
-    if      (mix_fg)                screen->gd->SetColor(fg);
-    else if (has_bg && bg.a() == 1) screen->gd->DisableBlend();
+    if      (mix_fg)                { screen->gd->EnableBlend(); screen->gd->SetColor(fg); }
+    else if (has_bg && bg.a() == 1) { screen->gd->DisableBlend(); }
 }
 
 template <class X> void Font::Size(const StringPieceT<X> &text, Box *out, int maxwidth, int *lines_out) {
@@ -1056,6 +1056,27 @@ int Fonts::ScaledFontSize(int pointsize) {
         pointsize = (int)(pointsize * ratio);
     }
     return pointsize + FLAGS_add_font_size;
+}
+
+void Fonts::ResetGL() {
+    unordered_set<GlyphMap*> maps;
+    unordered_set<GlyphCache*> caches;
+    Fonts *inst = Singleton<Fonts>::Get();
+    AtlasFontEngine *atlas_engine = Singleton<AtlasFontEngine>::Get();
+    for (auto &i : inst->desc_map) {
+        auto f = i.second;
+        if (f->engine == atlas_engine && f == static_cast<AtlasFontEngine::Resource*>(f->resource.get())->primary) {
+          f->glyph->cache->tex = Texture();
+          Asset::LoadTexture(StrCat(f->desc->Filename(), ".0000.png"), &f->glyph->cache->tex);
+          if (!f->glyph->cache->tex.ID) ERROR("Reset font failed");
+        } else maps.insert(f->glyph.get());
+    }
+    for (auto m : maps) {
+        for (auto &g : m->table) g.       ready = 0;
+        for (auto &g : m->index) g.second.ready = 0;
+        if (auto c = m->cache.get()) caches.insert(c);
+    }
+    for (auto c : caches) {}
 }
 
 }; // namespace LFL
