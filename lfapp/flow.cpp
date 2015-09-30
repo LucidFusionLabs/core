@@ -32,6 +32,7 @@ point DrawableBoxRun::Draw(point p, DrawCB cb) {
   else                         screen->gd->FillColor(attr->fg ? *attr->fg : Color::white);
   if (attr->font) attr->font->Select();
   else if (attr->tex) screen->gd->EnableLayering();
+  if (attr->blend) screen->gd->EnableBlend();
   if (attr->scissor) screen->gd->PushScissor(*attr->scissor + p);
   for (auto i = data.buf, e = data.end(); i != e; ++i) if (i->drawable) cb(i->drawable, (w = i->box + p), attr);
   if (attr->scissor) screen->gd->PopScissor();

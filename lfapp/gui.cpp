@@ -130,7 +130,7 @@ void Widget::Scrollbar::Layout(int aw, int ah, bool flip) {
   else      { arrow_up.h = ah; win.h -= 2*ah; arrow_up.y += win.h; }
 
   if (gui) {
-    int attr_id = gui->child_box.attr.GetAttrId(Drawable::Attr(menuicon));
+    int attr_id = gui->child_box.attr.GetAttrId(Drawable::Attr(menuicon, NULL, NULL, false, true));
     gui->child_box.PushBack(arrow_up,   attr_id, menuicon ? menuicon->FindGlyph(flip ? 2 : 4) : 0);
     gui->child_box.PushBack(arrow_down, attr_id, menuicon ? menuicon->FindGlyph(flip ? 3 : 1) : 0);
     gui->child_box.PushBack(scroll_dot, attr_id, menuicon ? menuicon->FindGlyph(           5) : 0, &drawbox_ind);
@@ -143,7 +143,7 @@ void Widget::Scrollbar::Layout(int aw, int ah, bool flip) {
 }
 
 void Widget::Scrollbar::Update(bool force) {
-  if (!app->input.MouseButton1Down()) dragging = false;
+  if (!app->input || !app->input->MouseButton1Down()) dragging = false;
   if (!dragging && !dirty && !force) return;
   bool flip = flag & Flag::Horizontal;
   int aw = dot_size, ah = dot_size;
@@ -1518,7 +1518,7 @@ void Dialog::Draw() {
   if (resizing_bottom) MinusPlus(&outline.y, &outline.h, max(-outline.h + min_height + title.h, (int)(mouse_start.y - screen->mouse.y)));
   if (resizing_right)  outline.w += max(-outline.w + min_width, (int)(screen->mouse.x - mouse_start.x));
 
-  if (!app->input.MouseButton1Down()) {
+  if (!app->input->MouseButton1Down()) {
     if (resizing) {
       box = Box(outline.x, outline.y, outline.w, outline.h - title.h);
       Layout();

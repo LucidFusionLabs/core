@@ -442,7 +442,7 @@ struct PhoneticSegmentationGUI : public GUI {
     }
 
     void Play(int beg, int len) {
-        if (app->audio.Out.size()) return;
+        if (app->audio->Out.size()) return;
         vector<string> args;
         args.push_back(sound_asset_name);
         args.push_back(StrCat(beg*FLAGS_feat_hop));

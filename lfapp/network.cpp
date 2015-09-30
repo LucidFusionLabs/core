@@ -42,6 +42,7 @@ extern "C" {
 
 #ifndef WIN32
 #include <sys/socket.h>
+#include <sys/uio.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <fcntl.h>
@@ -507,7 +508,7 @@ int Connection::Write(const char *buf, int len) {
 
   if (!wl && len) {
     writable = true;
-    app->network.UpdateActive(this);
+    app->network->UpdateActive(this);
   }
   memcpy(wb+wl, buf, len);
   wl += len;
@@ -547,22 +548,38 @@ int Connection::WriteFlush(const char *buf, int len) {
   return wrote;
 }
 
+int Connection::WriteVFlush(const iovec *iov, int len) {
+  int wrote = 0;
+  if (ssl) {
+#ifdef LFL_OPENSSL
+#endif
+  }
+  else {
+    if ((wrote = writev(socket, iov, len)) < 0) {
+      if (!SystemNetwork::EWouldBlock()) { ERROR(Name(), ": send: ", strerror(errno)); return -1; }
+      wrote = 0;
+    }
+  }
+  if (FLAGS_network_debug) INFO("writev(", socket, ", ", wrote, ", '", len, "')");
+  return wrote;
+}
+
 int Connection::WriteFlush(const char *buf, int len, int transfer_socket) {
+  struct iovec iov = { (void*)buf, static_cast<size_t>(len) };
+  return WriteVFlush(&iov, 1);
+}
+
+int Connection::WriteVFlush(const iovec *iov, int len, int transfer_socket) {
   int wrote = 0;
 #if defined(WIN32) || defined(LFL_MOBILE)
   return -1;
 #else
-  struct iovec iov;
-  memzero(iov);
-  iov.iov_base = (void*)buf;
-  iov.iov_len = len;
-
   char control[CMSG_SPACE(sizeof (int))];
   memzero(control);
   struct msghdr msg;
   memzero(msg);
-  msg.msg_iov = &iov;
-  msg.msg_iovlen = 1;
+  msg.msg_iov = const_cast<iovec*>(iov);
+  msg.msg_iovlen = len;
   msg.msg_control = control;
   msg.msg_controllen = sizeof(control);
   struct cmsghdr *cmsg = CMSG_FIRSTHDR(&msg);
@@ -576,7 +593,7 @@ int Connection::WriteFlush(const char *buf, int len, int transfer_socket) {
     wrote = 0;
   }
 #endif
-  if (FLAGS_network_debug) INFO("write(", socket, ", ", wrote, ", '", buf, "')");
+  if (FLAGS_network_debug) INFO("writev(", socket, ", ", wrote, ", '", len, "')");
   return wrote;
 }
 
@@ -593,7 +610,7 @@ int Connection::SendTo(const char *buf, int len) { return SystemNetwork::SendTo(
 /* Service */
 
 void Service::Close(Connection *c) {
-  app->network.active.Del(c->socket);
+  app->network->active.Del(c->socket);
   if (!c->detach) SystemNetwork::CloseSocket(c->socket);
   if (connect_src_pool && (c->src_addr || c->src_port)) connect_src_pool->Close(c->src_addr, c->src_port);
 }
@@ -639,14 +656,14 @@ Socket Service::Listen(IPV4::Addr addr, int port, Listener *listener) {
     if ((listener->socket = SystemNetwork::Listen(protocol, addr, port)) == -1)
     { ERROR("SystemNetwork::Listen(", protocol, ", ", port, "): ", SystemNetwork::LastError()); return -1; }
   }
-  app->network.active.Add(listener->socket, SocketSet::READABLE, &listener->self_reference);
+  app->network->active.Add(listener->socket, SocketSet::READABLE, &listener->self_reference);
   return listener->socket;
 }
 
 Connection *Service::Accept(int state, Socket socket, IPV4::Addr addr, int port) {
   Connection *c = new Connection(this, state, socket, addr, port);
   conn[c->socket] = c;
-  app->network.active.Add(c->socket, SocketSet::READABLE, &c->self_reference);
+  app->network->active.Add(c->socket, SocketSet::READABLE, &c->self_reference);
   return c;
 }
 
@@ -678,9 +695,9 @@ Connection *Service::Connect(IPV4::Addr addr, int port, IPV4EndpointSource *src_
     if (this->Connected(c) < 0) c->SetError();
     if (c->handler) { if (c->handler->Connected(c) < 0) { ERROR(c->Name(), ": handler connected"); c->SetError(); } }
     if (c->detach) { conn.erase(c->socket); Detach(c); }
-    app->network.UpdateActive(c);
+    app->network->UpdateActive(c);
   } else {
-    app->network.active.Add(c->socket, SocketSet::READABLE|SocketSet::WRITABLE, &c->self_reference);
+    app->network->active.Add(c->socket, SocketSet::READABLE|SocketSet::WRITABLE, &c->self_reference);
   }
   return c;
 }
@@ -715,7 +732,7 @@ Connection *Service::SSLConnect(SSL_CTX *sslctx, const string &hostport, int def
 
   INFO(c->Name(), ": connecting (fd=", c->socket, ")");
   conn[c->socket] = c;
-  app->network.active.Add(c->socket, SocketSet::WRITABLE, &c->self_reference);
+  app->network->active.Add(c->socket, SocketSet::WRITABLE, &c->self_reference);
   return c;
 #else
   return 0;
@@ -745,7 +762,7 @@ Connection *Service::SSLConnect(SSL_CTX *sslctx, IPV4::Addr addr, int port, Call
 
   INFO(c->Name(), ": connecting (fd=", c->socket, ")");
   conn[c->socket] = c;
-  app->network.active.Add(c->socket, SocketSet::WRITABLE, &c->self_reference);
+  app->network->active.Add(c->socket, SocketSet::WRITABLE, &c->self_reference);
   return c;
 #else
   return 0;
@@ -1733,8 +1750,8 @@ void HTTPServer::StreamResource::Update(int audio_samples, bool video_sample) {
       resampler.Open(resampler.out, FLAGS_chans_in, FLAGS_sample_rate, Sample::S16,
                      channels,       ac->sample_rate,   Sample::FromFFMpegId(ac->channel_layout));
     };
-    RingBuf::Handle L(app->audio.IL, app->audio.IL->ring.back-audio_samples, audio_samples);
-    RingBuf::Handle R(app->audio.IR, app->audio.IR->ring.back-audio_samples, audio_samples);
+    RingBuf::Handle L(app->audio->IL, app->audio->IL->ring.back-audio_samples, audio_samples);
+    RingBuf::Handle R(app->audio->IR, app->audio->IR->ring.back-audio_samples, audio_samples);
     if (resampler.Update(audio_samples, &L, FLAGS_chans_in > 1 ? &R : 0)) open=0;
   }
 
@@ -1750,7 +1767,7 @@ void HTTPServer::StreamResource::Update(int audio_samples, bool video_sample) {
     int audio_behind = resampler.output_available - resamples_processed;
     microseconds audio_timestamp = resampler.out->ReadTimestamp(0, resampler.out->ring.back - audio_behind);
 
-    if (audio_timestamp < app->camera.image_timestamp) SendAudio();
+    if (audio_timestamp < app->camera->image_timestamp) SendAudio();
     else { SendVideo(); video_sample=0; }
   }
 }
@@ -1784,11 +1801,11 @@ void HTTPServer::StreamResource::SendVideo() {
 
   /* convert video */
   if (!conv)
-    conv = sws_getContext(FLAGS_camera_image_width, FLAGS_camera_image_height, (PixelFormat)Pixel::ToFFMpegId(app->camera.image_format),
+    conv = sws_getContext(FLAGS_camera_image_width, FLAGS_camera_image_height, (PixelFormat)Pixel::ToFFMpegId(app->camera->image_format),
                           vc->width, vc->height, vc->pix_fmt, SWS_BICUBIC, 0, 0, 0);
 
-  int camera_linesize[4] = { app->camera.image_linesize, 0, 0, 0 }, got = 0;
-  sws_scale(conv, (uint8_t**)&app->camera.image, camera_linesize, 0, FLAGS_camera_image_height, picture->data, picture->linesize);
+  int camera_linesize[4] = { app->camera->image_linesize, 0, 0, 0 }, got = 0;
+  sws_scale(conv, (uint8_t**)&app->camera->image, camera_linesize, 0, FLAGS_camera_image_height, picture->data, picture->linesize);
 
   /* broadcast */
   AVPacket pkt;
@@ -1797,7 +1814,7 @@ void HTTPServer::StreamResource::SendVideo() {
   pkt.size = 0;
 
   avcodec_encode_video2(vc, &pkt, picture, &got);
-  if (got) Broadcast(&pkt, app->camera.image_timestamp);
+  if (got) Broadcast(&pkt, app->camera->image_timestamp);
 
   av_free_packet(&pkt);
 }

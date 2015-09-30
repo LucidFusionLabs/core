@@ -10,7 +10,6 @@ set(LFL_REGEX 1)
 set(LFL_SREGEX 1)
 set(LFL_ICONV 1)
 set(LFL_PNG 1)
-set(LFL_JUDY 1)
 set(LFL_OPENSSL 1)
 
 lfl_project(lfapp_test)

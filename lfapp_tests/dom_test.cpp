@@ -84,7 +84,8 @@ TEST(DOMTest, DOMNode) {
 }
 
 TEST(DOMTest, DOMTree) {
-    Browser sb(screen, screen->Box());
+    GUI sb_gui;
+    Browser sb(&sb_gui, screen->Box());
     sb.doc.parser->OpenHTML("<html>\n"
                             "<head><style> h1 { background-color: #111111; } </style></head>\n"
                             "<body style=\"background-color: #00ff00\">\n"
@@ -92,8 +93,8 @@ TEST(DOMTest, DOMTree) {
                             "<P id=cat>In  the  begining  was  fun.</p>\n"
                             "</body>\n");
     Box viewport = screen->Box();
-    sb.doc.v_scrollbar.menuicon = Fonts::Fake();
-    sb.doc.h_scrollbar.menuicon = Fonts::Fake();
+    sb.v_scrollbar.menuicon = Fonts::Fake();
+    sb.h_scrollbar.menuicon = Fonts::Fake();
     sb.Draw(&viewport);
     CHECK(sb.doc.node);
     EXPECT_EQ("#document", String::ToUTF8(sb.doc.node->nodeName()));

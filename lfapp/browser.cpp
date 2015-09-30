@@ -43,11 +43,11 @@
 #endif
 
 namespace LFL {
-BrowserInterface *CreateDefaultBrowser(Window *W, Asset *a, int w, int h) {
+BrowserInterface *CreateDefaultBrowser(GUI *g, int w, int h) {
   BrowserInterface *ret = 0;
-  if ((ret = CreateQTWebKitBrowser(a)))        return ret;
-  if ((ret = CreateBerkeliumBrowser(a, w, h))) return ret;
-  return new Browser(W, Box(w, h));
+  if ((ret = CreateQTWebKitBrowser (g, w, h))) return ret;
+  if ((ret = CreateBerkeliumBrowser(g, w, h))) return ret;
+  return new Browser(g, Box(w, h));
 }
 
 int PercentRefersTo(unsigned short prt, Flow *inline_context) {
@@ -388,16 +388,12 @@ void DOM::Renderer::Finish() {
 }
 
 Browser::Document::~Document() { delete parser; }
-Browser::Document::Document(Window *W, const Box &V) : gui(W, V), parser(new DocumentParser(this)),
-  v_scrollbar(&gui, Box(V.w, V.h)),
-  h_scrollbar(&gui, Box(V.w, V.h), Widget::Scrollbar::Flag::AttachedHorizontal), alloc(1024*1024) {}
+Browser::Document::Document(Window *W, const Box &V) : gui(W, V), parser(new DocumentParser(this)), alloc(1024*1024) {}
 
 void Browser::Document::Clear() {
   delete js_context;
   VectorClear(&style_sheet);
   gui.Clear();
-  v_scrollbar.LayoutAttached(gui.box);
-  h_scrollbar.LayoutAttached(gui.box);
   alloc.Reset();
   node = AllocatorNew(&alloc, (DOM::HTMLDocument), (parser, &alloc, &gui));
   node->style_context = AllocatorNew(&alloc, (StyleContext), (node));
@@ -405,7 +401,13 @@ void Browser::Document::Clear() {
   js_context = CreateV8JSContext(js_console, node);
 }
 
-Browser::Browser(Window *W, const Box &V) : doc(W, V) {
+Browser::Browser(GUI *gui, const Box &V) : doc(gui ? gui->parent : NULL, V),
+  v_scrollbar(gui, Box(V.w, V.h)),
+  h_scrollbar(gui, Box(V.w, V.h), Widget::Scrollbar::Flag::AttachedHorizontal) {
+  if (gui) {
+    v_scrollbar.LayoutAttached(V);
+    h_scrollbar.LayoutAttached(V);
+  }
   if (Font *maf = Fonts::Get("MenuAtlas", "", 0, Color::black, Color::clear, 0, 0)) {
     missing_image = maf->FindGlyph(0)->tex;
     missing_image.width = missing_image.height = 16;
@@ -414,11 +416,12 @@ Browser::Browser(Window *W, const Box &V) : doc(W, V) {
 }
 
 void Browser::Navigate(const string &url) {
-  if (layers.empty()) return SystemBrowser::Open(url.c_str());
+  if (!layers) return SystemBrowser::Open(url.c_str());
 }
 
 void Browser::Open(const string &url) {
-  doc.parser->OpenFrame(url, (DOM::Frame*)NULL);
+  if (app->render_process) app->render_process->Navigate(url);
+  else                     doc.parser->OpenFrame(url, (DOM::Frame*)NULL);
 }
 
 void Browser::KeyEvent(int key, bool down) {}
@@ -430,7 +433,7 @@ void Browser::AnchorClicked(DOM::HTMLAnchorElement *anchor) {
 }
 
 bool Browser::Dirty(Box *VP) {
-  if (layers.empty()) return true;
+  if (!layers) return true;
   DOM::Node *n = doc.node->documentElement();
   Box viewport = Viewport();
   bool resized = viewport.w != VP->w || viewport.h != VP->h;
@@ -438,41 +441,43 @@ bool Browser::Dirty(Box *VP) {
   return n && (n->render->layout_dirty || n->render->style_dirty);
 }
 
-void Browser::Draw(Box *VP) { return Draw(VP, Dirty(VP)); }
-void Browser::Draw(Box *VP, bool dirty) {
+void Browser::Draw(Box *VP) {
   if (!VP || !doc.node || !doc.node->documentElement()) return;
   doc.gui.box = *VP;
-  bool tiles = layers.size();
-  int v_scrolled = doc.v_scrollbar.scrolled * doc.v_scrollbar.doc_height;
-  int h_scrolled = doc.h_scrollbar.scrolled * 1000; // doc.v_scrollbar.doc_height;
-  if (dirty) {
-    DOM::Renderer *html_render = doc.node->documentElement()->render;
-    html_render->tiles = tiles ? layers[0] : 0;
-    html_render->child_bg.Reset();
-    Flow flow(html_render->box.Reset(), 0, html_render->child_box.Reset());
-    flow.p.y -= tiles ? 0 : v_scrolled;
-    Draw(&flow, Viewport().TopLeft());
-    doc.height = html_render->box.h;
-    if (tiles) layers.Update();
+  int v_scrolled = v_scrollbar.scrolled * v_scrollbar.doc_height;
+  int h_scrolled = h_scrollbar.scrolled * 1000; // v_scrollbar.doc_height;
+  if (!layers) { Render(v_scrolled); DrawScrollbar(); }
+  else {
+    if (!app->render_process && Dirty(VP)) Render(0);
+    for (int i=0; i<layers->size(); i++) (*layers)[i]->Draw(Viewport(), !i ? h_scrolled : 0, !i ? -v_scrolled : 0);
   }
-  for (int i=0; i<layers.size(); i++) layers[i]->Draw(Viewport(), !i ? h_scrolled : 0, !i ? -v_scrolled : 0);
-}
-
-void Browser::Draw(Flow *flow, const point &displacement) {
-  initial_displacement = displacement;
-  DrawNode(flow, doc.node->documentElement(), initial_displacement);
-  if (layers.empty()) DrawScrollbar();
 }
 
 void Browser::DrawScrollbar() {
   doc.gui.Draw();
-  doc.v_scrollbar.SetDocHeight(doc.height);
-  doc.v_scrollbar.Update();
-  doc.h_scrollbar.Update();
+  v_scrollbar.SetDocHeight(doc.height);
+  v_scrollbar.Update();
+  h_scrollbar.Update();
   doc.gui.Activate();
 }
 
-void Browser::DrawNode(Flow *flow, DOM::Node *n, const point &displacement_in) {
+void Browser::Render(int v_scrolled) {
+  DOM::Renderer *html_render = doc.node->documentElement()->render;
+  html_render->tiles = layers ? (*layers)[0] : 0;
+  html_render->child_bg.Reset();
+  Flow flow(html_render->box.Reset(), 0, html_render->child_box.Reset());
+  flow.p.y -= layers ? 0 : v_scrolled;
+  Paint(&flow, Viewport().TopLeft());
+  doc.height = html_render->box.h;
+  if (layers) layers->Update();
+}
+
+void Browser::Paint(Flow *flow, const point &displacement) {
+  initial_displacement = displacement;
+  PaintNode(flow, doc.node->documentElement(), initial_displacement);
+}
+
+void Browser::PaintNode(Flow *flow, DOM::Node *n, const point &displacement_in) {
   if (!n) return;
   DOM::Renderer *render = n->render;
   ComputedStyle *style = &render->style;
@@ -531,12 +536,12 @@ void Browser::DrawNode(Flow *flow, DOM::Node *n, const point &displacement_in) {
     DOM::HTMLTableElement *table = n->AsHTMLTableElement();
     HTMLTableRowIter(table)
       if (!row->render->Dirty()) HTMLTableColIter(row) 
-        if (!cell->render->Dirty()) DrawNode(render->flow, cell, displacement);
+        if (!cell->render->Dirty()) PaintNode(render->flow, cell, displacement);
   } else {
     DOM::NodeList *children = &n->childNodes;
     for (int i=0, l=children->length(); i<l; i++) {
       DOM::Node *child = children->item(i);
-      if (!child->render->done_floated) DrawNode(render->flow, child, displacement);
+      if (!child->render->done_floated) PaintNode(render->flow, child, displacement);
     }
   }
 
@@ -549,7 +554,7 @@ void Browser::DrawNode(Flow *flow, DOM::Node *n, const point &displacement_in) {
         EX_EQ(render->box.float_left[i].h, child->render->margin.h);
         child->render->box.SetPosition(render->box.float_left[i].Position() - child->render->MarginPosition());
       }
-      DrawNode(render->flow, child, displacement);
+      PaintNode(render->flow, child, displacement);
     }
     for (int i=0; i<render->box.float_right.size(); i++) {
       if (render->box.float_right[i].inherited) continue;
@@ -559,7 +564,7 @@ void Browser::DrawNode(Flow *flow, DOM::Node *n, const point &displacement_in) {
         EX_EQ(render->box.float_right[i].h, child->render->margin.h);
         child->render->box.SetPosition(render->box.float_right[i].Position() - child->render->MarginPosition());
       }
-      DrawNode(render->flow, child, displacement);
+      PaintNode(render->flow, child, displacement);
     }
     if (render_log) render_log->indent -= 2;
   }
@@ -610,7 +615,7 @@ DOM::Node *Browser::LayoutNode(Flow *flow, DOM::Node *n, bool reflow) {
     if (!reflow) {
       render->box.Reset();
       if (render->normal_flow && !render->inline_block) render->box.InheritFloats(flow->container->AsFloatContainer());
-      if (render->position_fixed && layers.size()) render->tiles = layers[1];
+      if (render->position_fixed && layers) render->tiles = (*layers)[1];
     }
   } else render->flow = render->parent_flow;
   render->UpdateFlowAttributes(render->flow);
@@ -847,96 +852,85 @@ void Browser::UpdateRenderLog(DOM::Node *n) {
   }
 }
 
-struct BrowserController : public InputController {
-  BrowserInterface *browser;
-  BrowserController(BrowserInterface *B) : browser(B) {}
-  void Input(InputEvent::Id event, bool down) {
-    int key = InputEvent::GetKey(event);
-    if (key)                                browser->KeyEvent(key, down);
-    else if (event == Mouse::Event::Motion) browser->MouseMoved(screen->mouse.x, screen->mouse.y);
-    else if (event == Mouse::Event::Wheel)  browser->MouseWheel(0, down*32);
-    else                                    browser->MouseButton(event, down);
-  }
-};
-
 #ifdef LFL_QT
 extern QApplication *lfl_qapp;
 class QTWebKitBrowser : public QObject, public BrowserInterface {
   Q_OBJECT
   public:
-    Asset* asset;
-    int W, H, lastx, lasty, lastd;
-    QWebPage page;
+  QWebPage page;
+  Texture *tex;
+  point dim, mouse;
+  bool mouse1_down=0;
 
-    QTWebKitBrowser(Asset *a) : lastx(0), lasty(0), lastd(0) {
-      asset = a;
-      Resize(screen->width, screen->height);
-      lfl_qapp->connect(&page, SIGNAL(repaintRequested(const QRect&)),           this, SLOT(ViewUpdate(const QRect &)));
-      lfl_qapp->connect(&page, SIGNAL(scrollRequested(int, int, const QRect &)), this, SLOT(Scroll(int, int, const QRect &)));
-    }
-    void Resize(int win, int hin) {
-      W = win; H = hin;
-      page.setViewportSize(QSize(W, H));
-      if (!asset->tex.ID) asset->tex.CreateBacked(W, H);
-      else                asset->tex.Resize(W, H);
-    }
-    void Open(const string &url) { page.mainFrame()->load(QUrl(url.c_str())); }
-    void MouseMoved(int x, int y) {
-      lastx = x; lasty = screen->height - y; 
-      QMouseEvent me(QEvent::MouseMove, QPoint(lastx, lasty), Qt::NoButton,
-                     lastd ? Qt::LeftButton : Qt::NoButton, Qt::NoModifier);
-      QApplication::sendEvent(&page, &me);
-    }
-    void MouseButton(int b, bool d) {
-      lastd = d;
-      QMouseEvent me(QEvent::MouseButtonPress, QPoint(lastx, lasty), Qt::LeftButton,
-                     lastd ? Qt::LeftButton : Qt::NoButton, Qt::NoModifier);
-      QApplication::sendEvent(&page, &me);
-    }
-    void MouseWheel(int xs, int ys) {}
-    void KeyEvent(int key, bool down) {}
-    void BackButton() { page.triggerAction(QWebPage::Back); }
-    void ForwardButton() { page.triggerAction(QWebPage::Forward);  }
-    void RefreshButton() { page.triggerAction(QWebPage::Reload); }
-    string GetURL() { return page.mainFrame()->url().toString().toLocal8Bit().data(); }
-    void Draw(Box *w) {
-      asset->tex.DrawCrimped(*w, 1, 0, 0);
-      QPoint scroll = page.currentFrame()->scrollPosition();
-      QWebHitTestResult hit_test = page.currentFrame()->hitTestContent(QPoint(lastx, lasty));
-      QWebElement hit = hit_test.element();
-      QRect rect = hit.geometry();
-      Box hitwin(rect.x() - scroll.x(), w->h-rect.y()-rect.height()+scroll.y(), rect.width(), rect.height());
-      screen->gd->SetColor(Color::blue);
-      hitwin.Draw();
-    }
+  QTWebKitBrowser(Texture *t, int w, int h) : tex(t) {
+    Resize(w, h);
+    lfl_qapp->connect(&page, SIGNAL(repaintRequested(const QRect&)),           this, SLOT(ViewUpdate(const QRect &)));
+    lfl_qapp->connect(&page, SIGNAL(scrollRequested(int, int, const QRect &)), this, SLOT(Scroll(int, int, const QRect &)));
+  }
+  void Resize(int win, int hin) {
+    page.setViewportSize(QSize((dim.x = win), (dim.y = hin)));
+    if (!tex->ID) tex->CreateBacked(dim.x, dim.y);
+    else          tex->Resize(dim.x, dim.y);
+  }
+  void Open(const string &url) { page.mainFrame()->load(QUrl(url.c_str())); }
+  void MouseMoved(int x, int y) {
+    mouse = point(x, screen->height - y);
+    QMouseEvent me(QEvent::MouseMove, QPoint(mouse.x, mouse.y), Qt::NoButton, mouse1_down ? Qt::LeftButton : Qt::NoButton, Qt::NoModifier);
+    QApplication::sendEvent(&page, &me);
+  }
+  void MouseButton(int b, bool d) {
+    if (b != 1) return;
+    mouse1_down = d;
+    QMouseEvent me(QEvent::MouseButtonPress, QPoint(mouse.x, mouse.y), Qt::LeftButton, mouse1_down ? Qt::LeftButton : Qt::NoButton, Qt::NoModifier);
+    QApplication::sendEvent(&page, &me);
+  }
+  void MouseWheel(int xs, int ys) {}
+  void KeyEvent(int key, bool down) {}
+  void BackButton() { page.triggerAction(QWebPage::Back); }
+  void ForwardButton() { page.triggerAction(QWebPage::Forward);  }
+  void RefreshButton() { page.triggerAction(QWebPage::Reload); }
+  string GetURL() { return page.mainFrame()->url().toString().toLocal8Bit().data(); }
+  void Draw(Box *w) {
+    tex->DrawCrimped(*w, 1, 0, 0);
+    QPoint scroll = page.currentFrame()->scrollPosition();
+    QWebHitTestResult hit_test = page.currentFrame()->hitTestContent(QPoint(mouse.x, mouse.y));
+    QWebElement hit = hit_test.element();
+    QRect rect = hit.geometry();
+    Box hitwin(rect.x() - scroll.x(), w->h-rect.y()-rect.height()+scroll.y(), rect.width(), rect.height());
+    screen->gd->SetColor(Color::blue);
+    hitwin.Draw();
+  }
+
   public slots:
-    void Scroll(int dx, int dy, const QRect &rect) { ViewUpdate(QRect(0, 0, W, H)); }
-    void ViewUpdate(const QRect &dirtyRect) {
-      QImage image(page.viewportSize(), QImage::Format_ARGB32);
-      QPainter painter(&image);
-      page.currentFrame()->render(&painter, dirtyRect);
-      painter.end();
+  void Scroll(int dx, int dy, const QRect &rect) { ViewUpdate(QRect(0, 0, dim.x, dim.y)); }
+  void ViewUpdate(const QRect &dirtyRect) {
+    QImage image(page.viewportSize(), QImage::Format_ARGB32);
+    QPainter painter(&image);
+    page.currentFrame()->render(&painter, dirtyRect);
+    painter.end();
 
-      int instride = image.bytesPerLine(), bpp = Pixel::size(asset->tex.pf);
-      int mx = dirtyRect.x(), my = dirtyRect.y(), mw = dirtyRect.width(), mh = dirtyRect.height();
-      const unsigned char *in = (const unsigned char *)image.bits();
-      unsigned char *buf = asset->tex.buf;
-      screen->gd->BindTexture(GraphicsDevice::Texture2D, asset->tex.ID);
-      for (int j = 0; j < mh; j++) {
-        int src_ind = (j + my) * instride + mx * bpp;
-        int dst_ind = ((j + my) * asset->tex.width + mx) * bpp;
-        if (true) VideoResampler::RGB2BGRCopyPixels(buf+dst_ind, in+src_ind, mw, bpp);
-        else                                 memcpy(buf+dst_ind, in+src_ind, mw*bpp);
-      }
-      asset->tex.UpdateGL(Box(0, my, asset->tex.width, dirtyRect.height()));
+    int instride = image.bytesPerLine(), bpp = Pixel::size(tex->pf);
+    int mx = dirtyRect.x(), my = dirtyRect.y(), mw = dirtyRect.width(), mh = dirtyRect.height();
+    const unsigned char *in = (const unsigned char *)image.bits();
+    screen->gd->BindTexture(GraphicsDevice::Texture2D, tex->ID);
+
+    unsigned char *buf = tex->buf;
+    for (int j = 0; j < mh; j++) {
+      int src_ind = (j + my) * instride + mx * bpp;
+      int dst_ind = ((j + my) * tex->width + mx) * bpp;
+      if (false) VideoResampler::RGB2BGRCopyPixels(buf+dst_ind, in+src_ind, mw, bpp);
+      else                                  memcpy(buf+dst_ind, in+src_ind, mw*bpp);
     }
+    tex->UpdateGL(Box(0, my, tex->width, dirtyRect.height()));
+    if (!screen->target_fps) app->scheduler.Wakeup(0);
+  }
 };
 
 #include "browser.moc"
 
-BrowserInterface *CreateQTWebKitBrowser(Asset *a) { return new QTWebKitBrowser(a); }
+BrowserInterface *CreateQTWebKitBrowser(GUI *g, int w, int h) { return new QTWebKitBrowser(new Texture(), w, h); }
 #else /* LFL_QT */
-BrowserInterface *CreateQTWebKitBrowser(Asset *a) { return 0; }
+BrowserInterface *CreateQTWebKitBrowser(GUI *g, int w, int h) { return 0; }
 #endif /* LFL_QT */
 
 #ifdef LFL_BERKELIUM
@@ -959,8 +953,10 @@ struct BerkeliumModule : public Module {
 };
 
 struct BerkeliumBrowser : public BrowserInterface, public Berkelium::WindowDelegate {
-  Asset *asset; int W, H; Berkelium::Window *window;
-  BerkeliumBrowser(Asset *a, int win, int hin) : asset(a), window(0) { 
+  int W, H;
+  Texture *tex;
+  Berkelium::Window *window;
+  BerkeliumBrowser(Texture *t, int win, int hin) : tex(t), window(0) { 
     Singleton<BerkeliumModule>::Get();
     Berkelium::Context* context = Berkelium::Context::create();
     window = Berkelium::Window::create(context);
@@ -969,16 +965,21 @@ struct BerkeliumBrowser : public BrowserInterface, public Berkelium::WindowDeleg
     resize(win, hin); 
   }
 
-  void Draw(Box *w) { glOverlay(*w, asset, 1); }
+  void Resize(int win, int hin) {
+    window->resize((W = win), (H = hin));
+    if (!tex->ID) tex->CreateBacked(W, H);
+    else          tex->Resize(W, H);
+  }
+  void Draw(Box *w) { tex->DrawCrimped(*w, 1, 0, 0); }
   void Open(const string &url) { window->navigateTo(Berkelium::URLString::point_to(url.data(), url.length())); }
   void MouseMoved(int x, int y) { window->mouseMoved((float)x/screen->width*W, (float)(screen->height-y)/screen->height*H); }
   void MouseButton(int b, bool down) {
-    if (b == BIND_MOUSE1 && down) {
+    if (b == 1 && down) {
       int click_x = screen->mouse.x/screen->width*W, click_y = (screen->height - screen->mouse.y)/screen->height*H;
       basic_string<wchar_t> js = WStringPrintf(L"lfapp_browser_click(document.elementFromPoint(%d, %d).innerHTML)", click_x, click_y);
       window->executeJavascript(Berkelium::WideString::point_to(js.data(), js.size()));
     }
-    window->mouseButton(b == BIND_MOUSE1 ? 0 : 1, down);
+    window->mouseButton(b == 1 ? 0 : 1, down);
   }
   void MouseWheel(int xs, int ys) { window->mouseWheel(xs, ys); }
   void KeyEvent(int key, bool down) {
@@ -1004,50 +1005,43 @@ struct BerkeliumBrowser : public BrowserInterface, public Berkelium::WindowDeleg
     window->textEvent(wkey, 1);
   }
 
-  void Resize(int win, int hin) {
-    W = win; H = hin;
-    window->resize(W, H);
-    if (!asset->texID) PixelBuffer::create(W, H, asset);
-    else               asset->tex.resize(W, H, asset->texcoord);
-  }
-
   virtual void onPaint(Berkelium::Window* wini, const unsigned char *in_buf, const Berkelium::Rect &in_rect,
                        size_t num_copy_rects, const Berkelium::Rect* copy_rects, int dx, int dy, const Berkelium::Rect& scroll_rect) {
-    unsigned char *buf = asset->tex.buf;
-    int bpp = Pixel::size(asset->tex.pf);
-    screen->gd->BindTexture(GL_TEXTURE_2D, asset->texID);
+    unsigned char *buf = tex->buf;
+    int bpp = Pixel::size(tex->pf);
+    screen->gd->BindTexture(GL_TEXTURE_2D, tex->ID);
 
     if (dy < 0) {
       const Berkelium::Rect &r = scroll_rect;
       for (int j = -dy, h = r.height(); j < h; j++) {
-        int src_ind = ((j + r.top()     ) * asset->tex.w + r.left()) * bpp;
-        int dst_ind = ((j + r.top() + dy) * asset->tex.w + r.left()) * bpp;
+        int src_ind = ((j + r.top()     ) * tex->w + r.left()) * bpp;
+        int dst_ind = ((j + r.top() + dy) * tex->w + r.left()) * bpp;
         memcpy(buf+dst_ind, buf+src_ind, r.width()*bpp);
       }
     } else if (dy > 0) {
       const Berkelium::Rect &r = scroll_rect;
       for (int j = r.height() - dy; j >= 0; j--) {
-        int src_ind = ((j + r.top()     ) * asset->tex.w + r.left()) * bpp;
-        int dst_ind = ((j + r.top() + dy) * asset->tex.w + r.left()) * bpp;                
+        int src_ind = ((j + r.top()     ) * tex->w + r.left()) * bpp;
+        int dst_ind = ((j + r.top() + dy) * tex->w + r.left()) * bpp;                
         memcpy(buf+dst_ind, buf+src_ind, r.width()*bpp);
       }
     }
     if (dx) {
       const Berkelium::Rect &r = scroll_rect;
       for (int j = 0, h = r.height(); j < h; j++) {
-        int src_ind = ((j + r.top()) * asset->tex.w + r.left()     ) * bpp;
-        int dst_ind = ((j + r.top()) * asset->tex.w + r.left() - dx) * bpp;
+        int src_ind = ((j + r.top()) * tex->w + r.left()     ) * bpp;
+        int dst_ind = ((j + r.top()) * tex->w + r.left() - dx) * bpp;
         memcpy(buf+dst_ind, buf+src_ind, r.width()*bpp);
       }
     }
     for (int i = 0; i < num_copy_rects; i++) {
       const Berkelium::Rect &r = copy_rects[i];
       for(int j = 0, h = r.height(); j < h; j++) {
-        int dst_ind = ((j + r.top()) * asset->tex.w + r.left()) * bpp;
+        int dst_ind = ((j + r.top()) * tex->w + r.left()) * bpp;
         int src_ind = ((j + (r.top() - in_rect.top())) * in_rect.width() + (r.left() - in_rect.left())) * bpp;
         memcpy(buf+dst_ind, in_buf+src_ind, r.width()*bpp);
       }
-      asset->tex.flush(0, r.top(), asset->tex.w, r.height());        
+      tex->flush(0, r.top(), tex->w, r.height());        
     }
 
     // for (Berkelium::Window::FrontToBackIter iter = wini->frontIter(); 0 && iter != wini->frontEnd(); iter++) { Berkelium::Widget *w = *iter; }
@@ -1077,14 +1071,14 @@ struct BerkeliumBrowser : public BrowserInterface, public Berkelium::WindowDeleg
   }
 };
 
-BrowserInterface *CreateBerkeliumBrowser(Asset *a, int W, int H) {
+BrowserInterface *CreateBerkeliumBrowser(GUI *g, int W, int H) {
   BerkeliumBrowser *browser = new BerkeliumBrowser(a, W, H);
   Berkelium::WideString click = Berkelium::WideString::point_to(L"lfapp_browser_click");
   browser->window->bind(click, Berkelium::Script::Variant::bindFunction(click, true));
   return browser;
 }
 #else /* LFL_BERKELIUM */
-BrowserInterface *CreateBerkeliumBrowser(Asset *a, int W, int H) { return 0; }
+BrowserInterface *CreateBerkeliumBrowser(GUI *g, int W, int H) { return 0; }
 #endif /* LFL_BERKELIUM */
 
 }; // namespace LFL

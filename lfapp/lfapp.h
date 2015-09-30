@@ -561,18 +561,23 @@ struct Application : public ::LFApp, public Module {
   ThreadPool thread_pool;
   CallbackQueue message_queue;
   FrameScheduler scheduler;
+  NetworkThread *network_thread=0;
+  ProcessAPIClient *render_process=0;
+  ProcessAPIServer *main_process=0;
   Callback reshaped_cb, create_win_f;
   function<void(Window*)> window_init_cb, window_closed_cb;
-  Audio audio;
-  Video video;
-  Input input;
-  Assets assets;
-  Network network;
-  Camera camera;
-  CUDA cuda;
-  Shell shell;
-  vector<Module*> modules;
   CategoricalVariable<int> tex_mode, grab_mode, fill_mode;
+  const Color *splash_color = &Color::black;
+  Shell shell;
+
+  vector<Module*> modules;
+  Audio *audio=0;
+  Video *video=0;
+  Input *input=0;
+  Assets *assets=0;
+  Network *network=0;
+  Camera *camera=0;
+  CUDA *cuda=0;
 
   Application() : create_win_f(bind(&Application::CreateNewWindow, this, function<void(Window*)>())),
   window_closed_cb(DefaultLFAppWindowClosedCB), tex_mode(2, 1, 0), grab_mode(2, 0, 1),

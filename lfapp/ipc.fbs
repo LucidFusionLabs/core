@@ -1,0 +1,39 @@
+namespace LFL;
+
+table ResourceHandle {
+  type: int;
+  len:  int;
+  url:  string;
+}
+
+table LoadResourceRequest {
+  mpb: ResourceHandle;
+}
+table LoadResourceResponse {
+  mpb_id: int;
+}
+
+table AllocateBufferRequest { 
+  bytes: int;
+  type:  short;
+}
+table AllocateBufferResponse {
+  mpb:    ResourceHandle;
+  mpb_id: int;
+}
+
+table WGetRequest {
+  url:       string;
+  mime_type: int;
+}
+table WGetResponse {
+  headers: bool;
+  mpb:     ResourceHandle;
+}
+
+table NavigateRequest {
+  url: string;
+}
+table NavigateResponse {
+  success: bool;
+}

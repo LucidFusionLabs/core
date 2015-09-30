@@ -149,14 +149,14 @@ void Shell::campos(const vector<string>&) {
 void Shell::snap(const vector<string> &arg) {
   Asset      *a  = asset     (arg.size() ? arg[0] : "snap"); 
   SoundAsset *sa = soundasset(arg.size() ? arg[0] : "snap");
-  if (a && sa) { app->audio.Snapshot(sa); glSpectogram(sa, a); }
+  if (a && sa) { app->audio->Snapshot(sa); glSpectogram(sa, a); }
 }
 
 void Shell::play(const vector<string> &arg) {
   SoundAsset *sa     = arg.size() > 0 ? soundasset(arg[0]) : soundasset("snap");
   int         offset = arg.size() > 1 ?       atoi(arg[1]) : -1;
   int         len    = arg.size() > 2 ?       atoi(arg[2]) : -1;
-  if (sa) app->audio.QueueMix(sa, MixFlag::Reset, offset, len);
+  if (sa) app->audio->QueueMix(sa, MixFlag::Reset, offset, len);
 }
 
 void Shell::playmovie(const vector<string> &arg) {
@@ -242,7 +242,7 @@ void shell_filter(const vector<string> &arg, bool FFTfilter, int taps, int hop=0
     INFO(b);
   }
 
-  app->audio.QueueMixBuf(&O);
+  app->audio->QueueMixBuf(&O);
 }
 
 void Shell::filter   (const vector<string> &arg) { shell_filter(arg, false, 16); }
@@ -279,7 +279,7 @@ void Shell::f0(const vector<string> &arg) {
 void Shell::sinth(const vector<string> &a) { 
   int hz[3] = { 440, 0, 0};
   for (int i=0; i<sizeofarray(hz) && i<a.size(); i++) hz[i] = atof(a[i]);
-  Sinthesize(&app->audio, hz[0], hz[1], hz[2]);
+  Sinthesize(app->audio, hz[0], hz[1], hz[2]);
 }
 
 void Shell::writesnap(const vector<string> &a) {

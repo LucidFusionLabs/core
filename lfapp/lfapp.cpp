@@ -146,12 +146,12 @@ extern "C" void QueueWindowReshaped(int w, int h) { LFL::RunInMainThread(new LFL
 extern "C" void QueueWindowMinimized()            { LFL::RunInMainThread(new LFL::Callback(bind(&LFL::Window::Minimized,   LFL::screen))); }
 extern "C" void QueueWindowUnMinimized()          { LFL::RunInMainThread(new LFL::Callback(bind(&LFL::Window::UnMinimized, LFL::screen))); }
 extern "C" void QueueWindowClosed()               { LFL::RunInMainThread(new LFL::Callback(bind(&LFL::Window::Closed,      LFL::screen))); }
-extern "C" int  KeyPress  (int b, int d)                    { return LFL::app->input.KeyPress  (b, d); }
-extern "C" int  MouseClick(int b, int d, int x,  int y)     { return LFL::app->input.MouseClick(b, d, LFL::point(x, y)); }
-extern "C" int  MouseMove (int x, int y, int dx, int dy)    { return LFL::app->input.MouseMove (LFL::point(x, y), LFL::point(dx, dy)); }
-extern "C" void QueueKeyPress  (int b, int d)               { return LFL::app->input.QueueKeyPress  (b, d); }
-extern "C" void QueueMouseClick(int b, int d, int x, int y) { return LFL::app->input.QueueMouseClick(b, d, LFL::point(x, y)); }
-extern "C" void EndpointRead(void *svc, const char *name, const char *buf, int len) { LFL::app->network.EndpointRead((LFL::Service*)svc, name, buf, len); }
+extern "C" int  KeyPress  (int b, int d)                    { return LFL::app->input->KeyPress  (b, d); }
+extern "C" int  MouseClick(int b, int d, int x,  int y)     { return LFL::app->input->MouseClick(b, d, LFL::point(x, y)); }
+extern "C" int  MouseMove (int x, int y, int dx, int dy)    { return LFL::app->input->MouseMove (LFL::point(x, y), LFL::point(dx, dy)); }
+extern "C" void QueueKeyPress  (int b, int d)               { return LFL::app->input->QueueKeyPress  (b, d); }
+extern "C" void QueueMouseClick(int b, int d, int x, int y) { return LFL::app->input->QueueMouseClick(b, d, LFL::point(x, y)); }
+extern "C" void EndpointRead(void *svc, const char *name, const char *buf, int len) { LFL::app->network->EndpointRead((LFL::Service*)svc, name, buf, len); }
 extern "C" NativeWindow *SetNativeWindowByID(void *id) { return SetNativeWindow(LFL::FindOrNull(LFL::Window::active, id)); }
 extern "C" NativeWindow *SetNativeWindow(NativeWindow *W) {
   CHECK(W);
@@ -232,7 +232,7 @@ bool Running() { return app->run; }
 bool MainThread() { return Thread::GetId() == app->main_thread_id; }
 void DefaultLFAppWindowClosedCB(Window *W) { delete W; }
 double FPS() { return screen->fps.FPS(); }
-double CamFPS() { return app->camera.fps.FPS(); }
+double CamFPS() { return app->camera->fps.FPS(); }
 void RunInMainThread(Callback *cb) {
   app->message_queue.Write(cb);
   if (!FLAGS_target_fps) app->scheduler.Wakeup(0);
@@ -533,7 +533,7 @@ void Application::CreateNewWindow(const Window::StartCB &start_cb) {
   Window *orig_window = screen;
   Window *new_window = new Window();
   if (window_init_cb) window_init_cb(new_window);
-  app->video.CreateGraphicsDevice(new_window);
+  app->video->CreateGraphicsDevice(new_window);
   CHECK(Window::Create(new_window));
   new_window->start_cb = start_cb;
 #ifndef LFL_QT
@@ -544,8 +544,8 @@ void Application::CreateNewWindow(const Window::StartCB &start_cb) {
 }
 
 void Application::StartNewWindow(Window *new_window) {
-  app->video.InitGraphicsDevice(new_window);
-  app->input.Init(new_window);
+  app->video->InitGraphicsDevice(new_window);
+  app->input->Init(new_window);
   new_window->start_cb(new_window);
 #ifdef LFL_OSXINPUT
   OSXStartWindow(screen->id);
@@ -553,10 +553,11 @@ void Application::StartNewWindow(Window *new_window) {
 }
 
 NetworkThread *Application::CreateNetworkThread(bool detach) {
-  if (detach) VectorEraseByValue(&app->modules, static_cast<Module*>(&network));
-  NetworkThread *ret = new NetworkThread(&app->network, !detach);
-  ret->thread->Start();
-  return ret;
+  CHECK(app->network);
+  if (detach) VectorEraseByValue(&app->modules, static_cast<Module*>(network));
+  network_thread = new NetworkThread(app->network, !detach);
+  network_thread->thread->Start();
+  return network_thread;
 }
 
 void Application::LaunchNativeFontChooser(const FontDesc &cur_font, const string &choose_cmd) {
@@ -780,7 +781,7 @@ int Application::Init() {
   }
 
   if (FLAGS_lfapp_video) {
-    if (video.Init()) { ERROR("video init failed"); return -1; }
+    if ((video = new Video())->Init()) { ERROR("video init failed"); return -1; }
   } else {
     Window::active[screen->id] = screen;
   }
@@ -795,32 +796,32 @@ int Application::Init() {
 #endif /* LFL_FFMPEG */
 
   if (FLAGS_lfapp_audio) {
-    if (LoadModule(&audio)) { ERROR("audio init failed"); return -1; }
+    if (LoadModule((audio = new Audio()))) { ERROR("audio init failed"); return -1; }
   }
   else { FLAGS_chans_in=FLAGS_chans_out=1; }
 
   if (FLAGS_lfapp_audio || FLAGS_lfapp_video) {
-    if (assets.Init()) { ERROR("assets init failed"); return -1; }
+    if ((assets = new Assets())->Init()) { ERROR("assets init failed"); return -1; }
   }
 
-  app->video.InitFonts();
+  app->video->InitFonts();
   if (FLAGS_lfapp_console && !screen->lfapp_console) screen->InitLFAppConsole();
 
   if (FLAGS_lfapp_input) {
-    if (LoadModule(&input)) { ERROR("input init failed"); return -1; }
-    input.Init(screen);
+    if (LoadModule((input = new Input()))) { ERROR("input init failed"); return -1; }
+    input->Init(screen);
   }
 
   if (FLAGS_lfapp_network) {
-    if (LoadModule(&network)) { ERROR("network init failed"); return -1; }
+    if (LoadModule((network = new Network()))) { ERROR("network init failed"); return -1; }
   }
 
   if (FLAGS_lfapp_camera) {
-    if (LoadModule(&camera)) { ERROR("camera init failed"); return -1; }
+    if (LoadModule((camera = new Camera()))) { ERROR("camera init failed"); return -1; }
   }
 
   if (FLAGS_lfapp_cuda) {
-    cuda.Init();
+    (cuda = new CUDA())->Init();
   }
 
   scheduler.Init();
@@ -832,7 +833,7 @@ int Application::Init() {
 }
 
 int Application::Start() {
-  if (FLAGS_lfapp_audio && audio.Start()) { ERROR("lfapp audio start failed"); return -1; }
+  if (FLAGS_lfapp_audio && audio->Start()) { ERROR("lfapp audio start failed"); return -1; }
   return 0;
 }
 
@@ -852,10 +853,10 @@ int Application::HandleEvents(unsigned clicks) {
 
 int Application::EventDrivenFrame(bool handle_events) {
   if (!MainThread()) ERROR("Frame() called from thread ", Thread::GetId());
-  unsigned clicks = screen->frame_time.GetTime(true).count(), flag = 0;
+  unsigned clicks = screen->frame_time.GetTime(true).count();
   if (handle_events) HandleEvents(clicks);
 
-  int ret = screen->Frame(clicks, audio.mic_samples, camera.have_sample, flag);
+  int ret = screen->Frame(clicks, 0);
   if (FLAGS_frame_debug) INFO("frame_debug Application::Frame Window ", screen->id, " = ", ret);
 
   frames_ran++;
@@ -874,7 +875,7 @@ int Application::TimerDrivenFrame(bool got_wakeup) {
 #else
     if (w->minimized || !w->target_fps) continue;
 #endif
-    int ret = w->Frame(clicks, audio.mic_samples, camera.have_sample, 0);
+    int ret = w->Frame(clicks, 0);
     if (FLAGS_frame_debug) INFO("frame_debug Application::Frame Window ", w->id, " = ", ret);
   }
 
@@ -1024,7 +1025,7 @@ void FrameScheduler::Wakeup(void *opaque) {
 #elif defined(LFL_IPHONEINPUT)
     iPhoneTriggerFrame(screen->id);
 #elif defined(LFL_QT)
-    if (wait_forever_thread) QTTriggerFrame(screen->id);
+    QTTriggerFrame(screen->id);
 #elif defined(LFL_WXWIDGETS)
     if (wait_forever_thread) ((wxGLCanvas*)screen->id)->Refresh();
 #elif defined(LFL_GLFWINPUT)

@@ -20,6 +20,19 @@
 #define __LFL_LFAPP_BROWSER_H__
 namespace LFL {
 
+struct BrowserController : public InputController {
+  BrowserInterface *browser;
+  BrowserController(BrowserInterface *B) : browser(B) { active=1; }
+  void Input(InputEvent::Id event, bool down) {
+    int key = InputEvent::GetKey(event);
+    if (key)                                 browser->KeyEvent(key, down);
+    else if (event == Mouse::Event::Motion)  browser->MouseMoved(screen->mouse.x, screen->mouse.y);
+    else if (event == Mouse::Event::Wheel)   browser->MouseWheel(0, down*32);
+    else if (event == Mouse::Event::Button1) browser->MouseButton(1, down);
+    else if (event == Mouse::Event::Button2) browser->MouseButton(2, down);
+  }
+};
+
 namespace DOM {
 struct Renderer : public Object {
   FloatContainer box;
@@ -90,7 +103,6 @@ struct Browser : public BrowserInterface {
     Console *js_console=0;
     int height=0;
     GUI gui;
-    Widget::Scrollbar v_scrollbar, h_scrollbar;
 
     ~Document();
     Document(Window *W=0, const Box &V=Box());
@@ -98,12 +110,14 @@ struct Browser : public BrowserInterface {
   };
   struct RenderLog { string data; int indent; };
 
-  Layers layers;
   Document doc;
+  Layers *layers=0;
   RenderLog *render_log=0;
   Texture missing_image;
   point mouse, initial_displacement;
-  Browser(Window *W=0, const Box &V=Box());
+  Widget::Scrollbar v_scrollbar, h_scrollbar;
+
+  Browser(GUI *gui=0, const Box &V=Box());
 
   Box Viewport() const { return doc.gui.box; }
   void Navigate(const string &url);
@@ -116,16 +130,16 @@ struct Browser : public BrowserInterface {
   void ForwardButton() {}
   void RefreshButton() {}
   void AnchorClicked(DOM::HTMLAnchorElement *anchor);
-  void InitLayers() { layers.Init(2); }
+  void InitLayers() { CHECK(!layers); (layers = new Layers())->Init(2); }
   string GetURL() { return String::ToUTF8(doc.node->URL); }
 
   bool Dirty(Box *viewport);
   void Draw(Box *viewport);
-  void Draw(Box *viewport, bool dirty);
-  void Draw(Flow *flow, const point &displacement);
   void DrawScrollbar();
+  void Render(int v_scrolled);
 
-  void       DrawNode        (Flow *flow, DOM::Node*, const point &displacement);
+  void       Paint           (Flow *flow, const point &displacement);
+  void       PaintNode       (Flow *flow, DOM::Node*, const point &displacement);
   DOM::Node *LayoutNode      (Flow *flow, DOM::Node*, bool reflow);
   void       LayoutBackground(            DOM::Node*);
   void       LayoutTable     (Flow *flow, DOM::HTMLTableElement *n);
@@ -135,9 +149,9 @@ struct Browser : public BrowserInterface {
   static int ScreenToWebKitY(const Box &w) { return -w.y - w.h; }
 };
 
-BrowserInterface *CreateQTWebKitBrowser(Asset *a);
-BrowserInterface *CreateBerkeliumBrowser(Asset *a, int w=1024, int h=1024);
-BrowserInterface *CreateDefaultBrowser(Window *W, Asset *a, int w=1024, int h=1024);
+BrowserInterface *CreateQTWebKitBrowser (GUI *g, int w=1024, int h=1024);
+BrowserInterface *CreateBerkeliumBrowser(GUI *g, int w=1024, int h=1024);
+BrowserInterface *CreateDefaultBrowser  (GUI *g, int w=1024, int h=1024);
 
 }; // namespace LFL
 #endif // __LFL_LFAPP_BROWSER_H__

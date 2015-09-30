@@ -99,7 +99,7 @@ struct AcousticEventDetector {
         int offset = total - begin;
 
         if (!featureBuf) {
-            RingBuf::Handle L(app->audio.IL, app->audio.RL.next-behind()-offset*FLAGS_feat_hop, FLAGS_feat_window+(frames-1)*FLAGS_feat_hop);
+            RingBuf::Handle L(app->audio->IL, app->audio->RL.next-behind()-offset*FLAGS_feat_hop, FLAGS_feat_window+(frames-1)*FLAGS_feat_hop);
             Matrix features(frames, Features::dimension(), 0.0, 0, &alloc);
             Matrix *out = Features::fromBuf(&L, &features, &featureFilters, &alloc);
             sink->Write(out, begin);
@@ -120,7 +120,7 @@ struct AcousticEventDetector {
     void update(unsigned samples) {
         samples_available += samples;
         while (samples_available >= samples_processed + FLAGS_feat_window) {
-            RingBuf::Handle L(app->audio.IL, app->audio.RL.next-behind(), FLAGS_feat_window);
+            RingBuf::Handle L(app->audio->IL, app->audio->RL.next-behind(), FLAGS_feat_window);
             update(&L);
             samples_processed += FLAGS_feat_hop;
         }

@@ -1,12 +1,6 @@
 [submodule "imports/libarchive"]
 	path = imports/libarchive
 	url = https://github.com/libarchive/libarchive
-[submodule "imports/assimp"]
-	path = imports/assimp
-	url = https://github.com/assimp/assimp
-[submodule "imports/lua"]
-	path = imports/lua
-	url = https://github.com/LuaDist/lua
 [submodule "imports/ios-openssl"]
 	path = imports/ios-openssl
 	url = https://github.com/st3fan/ios-openssl
@@ -20,3 +14,6 @@
 [submodule "imports/OpenSSL-for-Android-Prebuilt"]
 	path = imports/OpenSSL-for-Android-Prebuilt
 	url = https://github.com/emileb/OpenSSL-for-Android-Prebuilt
+[submodule "imports/flatbuffers"]
+	path = imports/flatbuffers
+	url = https://github.com/google/flatbuffers

@@ -942,7 +942,7 @@ void Asset::LoadTexture(void *h, const string &asset_fn, Texture *out, VideoAsse
   if (!FLAGS_lfapp_video) return;
   auto i = cache.find(asset_fn);
   if (i != cache.end()) return LoadTexture(i->second.data(), asset_fn.c_str(), i->second.size(), out);
-  if (!l) l = app->assets.default_video_loader;
+  if (!l) l = app->assets->default_video_loader;
   void *handle = h ? h : l->LoadVideoFile(asset_fn[0] == '/' ? asset_fn : StrCat(app->assetdir, asset_fn).c_str());
   if (!handle) { ERROR("load: ", asset_fn); return; }
   l->LoadVideo(handle, out);
@@ -950,13 +950,32 @@ void Asset::LoadTexture(void *h, const string &asset_fn, Texture *out, VideoAsse
 }
 
 void Asset::LoadTexture(const void *FromBuf, const char *filename, int size, Texture *out, int flag) {
-    VideoAssetLoader *l = app->assets.default_video_loader;
+    VideoAssetLoader *l = app->assets->default_video_loader;
     // work around ffmpeg image2 format being AVFMT_NO_FILE; ie doesnt work with custom AVIOContext
     if (FileSuffix::Image(filename)) l = Singleton<SimpleAssetLoader>::Get();
     void *handle = l->LoadVideoBuf((const char *)FromBuf, size, filename);
     if (!handle) return;
     l->LoadVideo(handle, out, flag);
     l->UnloadVideoBuf(handle);
+}
+
+Texture *Asset::LoadTexture(const MultiProcessFileResource &file, int max_image_size) {
+  Texture *tex = new Texture();
+  Asset::LoadTexture(file.buf.data(), file.name.data(), file.buf.size(), tex, 0);
+
+  if (tex->BufferSize() >= max_image_size) {
+    unique_ptr<Texture> orig_tex(tex);
+    tex = new Texture();
+    float scale_factor = sqrt((float)max_image_size/orig_tex->BufferSize());
+    tex->Resize(orig_tex->width*scale_factor, orig_tex->height*scale_factor, Pixel::RGB24, Texture::Flag::CreateBuf);
+
+    VideoResampler resampler;
+    resampler.Open(orig_tex->width, orig_tex->height, orig_tex->pf, tex->width, tex->height, tex->pf);
+    resampler.Resample(orig_tex->buf, orig_tex->LineSize(), tex->buf, tex->LineSize());
+  }
+
+  if (!tex->buf || !tex->width || !tex->height) { delete tex; return 0; }
+  return tex;
 }
 
 void SoundAsset::Unload() {
@@ -967,16 +986,16 @@ void SoundAsset::Unload() {
 
 void SoundAsset::Load(void *handle, const char *FN, int Secs, int flag) {
     if (!FLAGS_lfapp_audio) { ERROR("load: ", FN, ": lfapp_audio = ", FLAGS_lfapp_audio); return; }
-    if (handle) app->assets.default_audio_loader->LoadAudio(handle, this, Secs, flag);
+    if (handle) app->assets->default_audio_loader->LoadAudio(handle, this, Secs, flag);
 }
 
 void SoundAsset::Load(void const *buf, int len, char const *FN, int Secs) {
-    void *handle = app->assets.default_audio_loader->LoadAudioBuf((const char *)buf, len, FN);
+    void *handle = app->assets->default_audio_loader->LoadAudioBuf((const char *)buf, len, FN);
     if (!handle) return;
 
     Load(handle, FN, Secs, FlagNoRefill);
     if (!refill) {
-        app->assets.default_audio_loader->UnloadAudioBuf(handle);
+        app->assets->default_audio_loader->UnloadAudioBuf(handle);
         handle = 0;
     }
 }
@@ -988,7 +1007,7 @@ void SoundAsset::Load(int Secs, bool unload) {
         fn = filename;
         if (fn.length() && isalpha(fn[0])) fn = app->assetdir + fn;
 
-        handle = app->assets.default_audio_loader->LoadAudioFile(fn);
+        handle = app->assets->default_audio_loader->LoadAudioFile(fn);
         if (!handle) ERROR("SoundAsset::Load ", fn);
     }
 
@@ -996,24 +1015,24 @@ void SoundAsset::Load(int Secs, bool unload) {
 
 #if !defined(LFL_IPHONE) && !defined(LFL_ANDROID) /* XXX */
     if (!refill && handle && unload) {
-        app->assets.default_audio_loader->UnloadAudioFile(handle);
+        app->assets->default_audio_loader->UnloadAudioFile(handle);
         handle = 0;
     }
 #endif
 }
 
-int SoundAsset::Refill(int reset) { return app->assets.default_audio_loader->RefillAudio(this, reset); }
+int SoundAsset::Refill(int reset) { return app->assets->default_audio_loader->RefillAudio(this, reset); }
 
 void MovieAsset::Load(const char *fn) {
-    if (!fn || !(handle = app->assets.default_movie_loader->LoadMovieFile(StrCat(app->assetdir, fn)))) return;
-    app->assets.default_movie_loader->LoadMovie(handle, this);
+    if (!fn || !(handle = app->assets->default_movie_loader->LoadMovieFile(StrCat(app->assetdir, fn)))) return;
+    app->assets->default_movie_loader->LoadMovie(handle, this);
     audio.Load();
     video.Load();
 }
 
 int MovieAsset::Play(int seek) {
-    app->assets.movie_playing = this; int ret;
-    if ((ret = app->assets.default_movie_loader->PlayMovie(this, 0) <= 0)) app->assets.movie_playing = 0;
+    app->assets->movie_playing = this; int ret;
+    if ((ret = app->assets->default_movie_loader->PlayMovie(this, 0) <= 0)) app->assets->movie_playing = 0;
     return ret;
 }
 
@@ -1107,7 +1126,7 @@ void glShadertoyShader(Shader *shader, const Texture *tex) {
     screen->gd->UseShader(shader);
     shader->SetUniform1f("iGlobalTime", ToFSeconds(Now() - app->time_started).count());
     shader->SetUniform1f("iBlend", FLAGS_shadertoy_blend);
-    shader->SetUniform4f("iMouse", screen->mouse.x, screen->mouse.y, app->input.MouseButton1Down(), 0);
+    shader->SetUniform4f("iMouse", screen->mouse.x, screen->mouse.y, app->input->MouseButton1Down(), 0);
     shader->SetUniform3f("iResolution", XY_or_Y(scale, screen->pow2_width), XY_or_Y(scale, screen->pow2_height), 0);
     if (tex) shader->SetUniform3f("iChannelResolution", tex->width, tex->height, 0);
 }
