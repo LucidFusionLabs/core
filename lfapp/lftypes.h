@@ -540,14 +540,13 @@ struct CallbackQueue : public MessageQueue<Callback*> {
 };
 
 struct CallbackList {
-  bool dirty;
+  bool dirty=0;
   vector<Callback> data;
-  CallbackList() : dirty(0) {}
   int Size() const { return data.size(); }
   void Clear() { dirty=0; data.clear(); }
   void Run() { for (auto i = data.begin(); i != data.end(); ++i) (*i)(); Clear(); }
   void Add(const Callback &cb) { data.push_back(cb); dirty=1; }
-  void Add(const CallbackList &cb) { data.insert(data.end(), cb.data.begin(), cb.data.end()); dirty=1; }
+  void AddList(const CallbackList &cb) { data.insert(data.end(), cb.data.begin(), cb.data.end()); dirty=1; }
 };
 #define CallbackListAdd(cblist, ...) (cblist)->Add(bind(__VA_ARGS__))
 #define CallbackListsAdd(cblists, ...) for(CallbackList **cbl=(cblists); *cbl; cbl++) CallbackListAdd(*cbl, __VA_ARGS__)

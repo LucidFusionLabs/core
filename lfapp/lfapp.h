@@ -195,6 +195,7 @@ extern int optind;
 namespace LFL {
 using LFL_STL11_NAMESPACE::isinf;
 using LFL_STL11_NAMESPACE::isnan;
+typedef void* Void;
 typedef function<void()> Callback;
 typedef lock_guard<mutex> ScopedMutex;
 template <class X> struct Singleton { static X *Get() { static X instance; return &instance; } };

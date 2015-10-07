@@ -378,8 +378,7 @@ void DOM::Renderer::UpdateFlowAttributes(Flow *F) {
 void DOM::Renderer::PushScissor(const Box &w) {
   if (!tiles) return;
   if (!tile_context_opened) { tile_context_opened=1; tiles->ContextOpen(); }
-  TilesPreAdd (tiles, &Tiles::PushScissor, tiles, w);
-  TilesPostAdd(tiles, &GraphicsDevice::PopScissor, screen->gd);
+  tiles->AddScissor(w);
 }
 
 void DOM::Renderer::Finish() {

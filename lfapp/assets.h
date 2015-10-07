@@ -699,26 +699,74 @@ template <class Line> struct RingFrameBuffer {
                                                 RingIndex::WrapOver(p.y + o.y, Height())); }
 };
 
-struct Tile {
-  CallbackList cb;
-  unsigned id, prepend_depth; bool dirty;
-  Tile() : id(0), prepend_depth(0), dirty(0) {}
+struct TilesInterface {
+  virtual void AddDrawableBoxArray(const DrawableBoxArray &box, point p);
+  virtual void SetAttr            (const Drawable::Attr *a)                                = 0;
+  virtual void InitDrawBox        (const point&)                                           = 0;
+  virtual void InitDrawBackground (const point&)                                           = 0;
+  virtual void DrawBox            (const Drawable*, const Box&, const Drawable::Attr *a=0) = 0;
+  virtual void DrawBackground     (const Box&)                                             = 0;
+  virtual void AddScissor         (const Box&)                                             = 0;
+  virtual void Draw(const Box &viewport, int scrolled_x, int scrolled_y)                   = 0;
+  virtual void ContextOpen()                                                               = 0;
+  virtual void ContextClose()                                                              = 0;
+  virtual void Run()                                                                       = 0;
 };
 
-struct Tiles {
+struct LayersInterface : public vector<TilesInterface*> {
+  virtual void Init(int N=1)                      = 0;
+  virtual void Draw(const Box &b, int vs, int hs) = 0;
+  virtual void Update()                           = 0;
+};
+
+#define TilesPreAdd(tiles, ...) CallbackListAdd(&(tiles)->prepend[(tiles)->context_depth]->cb, __VA_ARGS__)
+#define TilesPostAdd(tiles, ...) CallbackListAdd(&(tiles)->append[(tiles)->context_depth]->cb, __VA_ARGS__)
+#define TilesAdd(tiles, w, ...) (tiles)->AddCallback((w), bind(__VA_ARGS__));
+#define TilesMatrixIter(m) MatrixIter(m) if (Tile *tile = (Tile*)(m)->row(i)[j])
+template<class CB, class CBL> struct TilesT : public TilesInterface {
+  struct Tile {
+    CBL cb;
+    unsigned id, prepend_depth; bool dirty;
+    Tile() : id(0), prepend_depth(0), dirty(0) {}
+  };
   int W, H, zero_row=0, zero_col=0, context_depth=-1;
   bool clear=1, clear_empty=1;
   vector<Tile*> prepend, append;
   matrix<Tile*> mat;
-#define TilesMatrixIter(m) MatrixIter(m) if (Tile *tile = (Tile*)(m)->row(i)[j])
   FrameBuffer fb;
   Box current_tile;
-  Tiles(int w=256, int h=256) : W(w), H(h), mat(1,1) { CHECK(IsPowerOfTwo(W)); CHECK(IsPowerOfTwo(H)); }
+  TilesT(int w=256, int h=256) : W(w), H(h), mat(1,1) { CHECK(IsPowerOfTwo(W)); CHECK(IsPowerOfTwo(H)); }
 
-  void Run();
-  void Draw(const Box &viewport, int scrolled_x, int scrolled_y);
-  void PushScissor(const Box &w) { screen->gd->PushScissor(Box(w.x - current_tile.x, w.y - current_tile.y, w.w, w.h)); }
-  void AddDrawableBoxArray(const DrawableBoxArray &box, point p);
+  void GetScreenCoords(int i, int j, int *xo, int *yo) const {
+    *xo = j * W;
+    *yo = (i - zero_row) * H;
+  }
+  void GetTileCoords(int xi, int yi, int *xo, int *yo) const {
+    *xo = xi / W;
+    *yo = yi / H - (yi < 0 && (yi % W) != 0);
+  }
+  void GetTileCoords(const Box *box, int *x1, int *y1, int *x2, int *y2) const {
+    GetTileCoords(box->x,          box->y,          x1, y1);
+    GetTileCoords(box->x + box->w, box->y + box->h, x2, y2);
+  }
+  Tile *GetTile(int x, int y) {
+    int add; unsigned texid;
+    CHECK_GE(x, 0);
+    if (1)      { if ((add =  x + zero_col - mat.N + 1) > 0) { mat.AddCols(add); } }
+    if (y >= 0) { if ((add =  y + zero_row - mat.M + 1) > 0) { mat.AddRows(add); } }
+    else        { if ((add = -y - zero_row            ) > 0) { mat.AddRows(add, true); zero_row += add; } }
+
+    y = zero_row + y;
+    CHECK_RANGE(y, 0, mat.M);
+
+    Tile **ret = (Tile**)&mat.row(y)[x];
+    if (!*ret) *ret = new Tile();
+    if (!(*ret)->cb.dirty) {
+      for (int i = (*ret)->prepend_depth; i <= context_depth; i++) (*ret)->cb.AddList(prepend[i]->cb);
+      (*ret)->prepend_depth = context_depth + 1;
+    }
+    return *ret;
+  }
 
   void ContextOpen() {
     TilesMatrixIter(&mat) { if (tile->cb.dirty) tile->dirty = 1; tile->cb.dirty = 0; }
@@ -730,7 +778,7 @@ struct Tiles {
     TilesMatrixIter(&mat) {
       if (tile->cb.dirty) tile->dirty = 1;
       if (tile->dirty && tile->prepend_depth > context_depth) {
-        tile->cb.Add(append[context_depth]->cb);
+        tile->cb.AddList(append[context_depth]->cb);
         tile->prepend_depth = context_depth;
       }
       if (!context_depth) tile->dirty = 0;
@@ -738,20 +786,10 @@ struct Tiles {
     context_depth--;
   }
 
-  void GetTileCoords(int xi, int yi, int *xo, int *yo) const {
-    *xo = xi / W;
-    *yo = yi / H - (yi < 0 && (yi % W) != 0);
-  }
-  void GetTileCoords(const Box *box, int *x1, int *y1, int *x2, int *y2) const {
-    GetTileCoords(box->x,          box->y,          x1, y1);
-    GetTileCoords(box->x + box->w, box->y + box->h, x2, y2);
-  }
-  void GetScreenCoords(int i, int j, int *xo, int *yo) const {
-    *xo = j * W;
-    *yo = (i - zero_row) * H;
-  }
+  void PushScissor(const Box &w) { screen->gd->PushScissor(Box(w.x - current_tile.x, w.y - current_tile.y, w.w, w.h)); }
+  void InvalidBox(const Box *box) { /* ERROR("InvalidBox ", box->DebugString()); */ } 
 
-  void AddCallback(const Box *box, const Callback &cb) {
+  void AddCallback(const Box *box, const CB &cb) {
     int x1, x2, y1, y2, ind = 0; bool added = 0;
     GetTileCoords(box, &x1, &y1, &x2, &y2);
 
@@ -766,36 +804,73 @@ struct Tiles {
 
     if (!added) FATAL("AddCallback ", box->DebugString(), " = ", x1, " ", y1, " ", x2, " ", y2);
   }
-  void InvalidBox(const Box *box) { /* ERROR("InvalidBox ", box->DebugString()); */ } 
 
-  Tile *GetTile(int x, int y) {
-    int add; unsigned texid;
-    CHECK_GE(x, 0);
-    if (1)      { if ((add =  x + zero_col - mat.N + 1) > 0) { mat.AddCols(add); } }
-    if (y >= 0) { if ((add =  y + zero_row - mat.M + 1) > 0) { mat.AddRows(add); } }
-    else        { if ((add = -y - zero_row            ) > 0) { mat.AddRows(add, true); zero_row += add; } }
-
-    y = zero_row + y;
-    CHECK_RANGE(y, 0, mat.M);
-
-    Tile **ret = (Tile**)&mat.row(y)[x];
-    if (!*ret) *ret = new Tile();
-    if (!(*ret)->cb.dirty) {
-      for (int i = (*ret)->prepend_depth; i <= context_depth; i++) (*ret)->cb.Add(prepend[i]->cb);
-      (*ret)->prepend_depth = context_depth + 1;
+  void Run() {
+    bool init = !fb.ID;
+    if (init) fb.Create(W, H);
+    current_tile = Box(0, 0, W, H);
+    screen->gd->DrawMode(DrawMode::_2D);
+    screen->gd->ViewPort(current_tile);
+    screen->gd->EnableLayering();
+    TilesMatrixIter(&mat) {
+      if (!tile->cb.Size() && !clear_empty) continue;
+      GetScreenCoords(i, j, &current_tile.x, &current_tile.y);
+      if (!tile->id) fb.AllocTexture(&tile->id);
+      fb.Attach(tile->id);
+      screen->gd->MatrixProjection();
+      if (clear) screen->gd->Clear();
+      screen->gd->LoadIdentity();
+      screen->gd->Ortho(current_tile.x, current_tile.x + W, current_tile.y, current_tile.y + H, 0, 100);
+      screen->gd->MatrixModelview();
+      tile->cb.Run();
     }
-    return *ret;
+    fb.Release();
+    screen->gd->RestoreViewport(DrawMode::_2D);
+  }
+
+  void Draw(const Box &viewport, int scrolled_x, int scrolled_y) {
+    screen->gd->SetColor(Color::white);
+    int x1 = viewport.x + scrolled_x, y1 = viewport.y + scrolled_y, x2 = x1 + viewport.w, y2 = y1 + viewport.h;
+    for (int ys, y = y1; y < y2; y += ys) {
+      int ymh = y % H, yo = y >= 0 ? ymh : (ymh ? (H + ymh) : 0);
+      ys = min(y2 - y, H - yo);
+
+      for (int xs, x = x1; x < x2; x += xs) {
+        int xo = (x % W), tx, ty;
+        xs = min(x2 - x, W - xo);
+
+        GetTileCoords(x, y, &tx, &ty);
+        Tile *tile = GetTile(tx, ty);
+        if (!tile || !tile->id) continue;
+
+        Box w(x - scrolled_x, y - scrolled_y, xs, ys);
+        Texture tex(0, 0, Pixel::RGBA, tile->id);
+        tex.coord[0] = (float)xo/W; tex.coord[2] = (float)(xo+xs)/W;
+        tex.coord[1] = (float)yo/H; tex.coord[3] = (float)(yo+ys)/H;
+        tex.Draw(w);
+        // glBox(w, &Color::white);
+      }
+    }
   }
 };
-#define TilesPreAdd(tiles, ...) CallbackListAdd(&(tiles)->prepend[(tiles)->context_depth]->cb, __VA_ARGS__)
-#define TilesPostAdd(tiles, ...) CallbackListAdd(&(tiles)->append[(tiles)->context_depth]->cb, __VA_ARGS__)
-#define TilesAdd(tiles, w, ...) (tiles)->AddCallback((w), bind(__VA_ARGS__));
 
-struct Layers : public vector<Tiles*> {
-  void Init(int N=1) { CHECK_EQ(size(), 0); for (int i=0; i<N; i++) push_back(new Tiles()); }
+struct Tiles : public TilesT<Callback, CallbackList> {
+  const Drawable::Attr *attr=0;
+  void SetAttr           (const Drawable::Attr *a) { attr=a; }
+  void InitDrawBox       (const point&);
+  void InitDrawBackground(const point&);
+  void DrawBox           (const Drawable*, const Box&, const Drawable::Attr *a=0);
+  void DrawBackground    (const Box&);
+  void AddScissor        (const Box&);
+};
+
+template <class X> struct LayersT : public LayersInterface {
+  void Init(int N=1) { CHECK_EQ(this->size(), 0); for (int i=0; i<N; i++) this->push_back(new X()); }
   void Draw(const Box &b, int vs, int hs) { for (auto i : *this) i->Draw(b, vs, hs); }
   void Update() { for (auto i : *this) i->Run(); }
 };
+
+typedef LayersT<Tiles> Layers;
 
 }; // namespace LFL
 #endif // __LFL_LFAPP_ASSETS_H__

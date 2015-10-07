@@ -145,9 +145,9 @@ struct DocumentParser {
     shared_ptr<Texture> target;
     string content;
     int content_length=0;
-    ProcessAPIClient::LoadResourceCompleteCB complete_cb;
+    ProcessAPIClient::LoadAssetRPC::CB complete_cb;
     ImageParser(DocumentParser *p, const string &url, const shared_ptr<Texture> &t) :
-      Parser(p, url), target(t), complete_cb(bind(&ImageParser::LoadResourceComplete, this, _1)) {}
+      Parser(p, url), target(t), complete_cb(bind(&ImageParser::LoadAssetResponseCB, this, _1, _2, _3)) {}
 
     void WGetResponseCB(Connection*, const char *h, const string &ct, const char *cb, int cl) {
       if      (h)                  content_length = cl;
@@ -163,7 +163,7 @@ struct DocumentParser {
 
 #ifdef LFL_IPC
         if (app->render_process) {
-          app->render_process->LoadResource(content, fn, complete_cb);
+          app->render_process->LoadAsset(content, fn, complete_cb);
           return;
         } else
 #endif
@@ -174,13 +174,16 @@ struct DocumentParser {
       }
       Parser::Complete(this);
     }
-    void LoadResourceComplete(const MultiProcessTextureResource &tex) {
+    int LoadAssetResponseCB(ProcessAPIClient::LoadAssetQuery *q, const IPC::LoadAssetResponse*, const MultiProcessTextureResource &tex) {
+      if (!MainThread()) { RunInMainThread(new Callback([=,&tex]{ LoadAssetResponseCB(q, NULL, tex); })); return RPC::Accept; }
       if (tex.width && tex.height) {
         target->LoadGL(reinterpret_cast<const unsigned char *>(tex.buf.data()), point(tex.width, tex.height), tex.pf, tex.linesize);
         target->owner = true;
       }
       if (app->network_thread) app->network_thread->Write(new Callback([=]() { Parser::Complete(this); }));
       else                                                                   { Parser::Complete(this); }
+      delete q;
+      return RPC::Accept;
     }
   };
 

@@ -311,6 +311,56 @@ struct MultiProcessTextureResource : public Serializable {
   }
 };
 
+struct MultiProcessPaintResource : public Serializable {
+  static const int Type = 1<<11 | 3;
+  struct PaintCmd {};
+  struct SetAttr            : public PaintCmd { static const int Id=1; Drawable::Attr a; SetAttr           (const Drawable::Attr &A=Drawable::Attr()) : a(A) {} };
+  struct InitDrawBox        : public PaintCmd { static const int Id=2; point p;          InitDrawBox       (const point &P=point()) : p(P) {} };
+  struct InitDrawBackground : public PaintCmd { static const int Id=3; point p;          InitDrawBackground(const point &P=point()) : p(P) {} };
+  struct DrawBox            : public PaintCmd { static const int Id=4; Box b; int id;    DrawBox           (const Box &B=Box(), int ID=0) : b(B), id(ID) {} };
+  struct DrawBackground     : public PaintCmd { static const int Id=5; Box b;            DrawBackground    (const Box &B=Box())           : b(B) {} };
+  struct PushScissor        : public PaintCmd { static const int Id=6; Box b;            PushScissor       (const Box &B=Box())           : b(B) {} };
+  struct PopScissor         : public PaintCmd { static const int Id=7; };
+
+  struct Iterator {
+    Serializable::ConstStream in;
+    bool done=0;
+    int cur_id=0;
+    Iterator(const StringPiece &b) : in(b.buf, b.len) {
+      if ((done = in.Remaining() < sizeof(int))) return;
+    }
+  };
+
+  StringPiece buf;
+  MultiProcessPaintResource() : Serializable(Type) {}
+  void Out(Serializable::Stream *o) const { o->BString(buf); }
+  int In(const Serializable::Stream *i) { i->ReadString(&buf); return i->Result(); }
+  int Size() const { return HeaderSize() + buf.size(); }
+  int HeaderSize() const { return sizeof(int); }
+  void Run() {}
+};
+
+struct MultiProcessPaintResourceBuilder : public MultiProcessPaintResource {
+  int len=0, count=0;
+  bool dirty=0;
+  string data;
+  MultiProcessPaintResourceBuilder(int S=32768) { Resize(S); }
+  int Size() const { return count; }
+  void Clear() { len=count=0; dirty=0; }
+  void Resize(int n) { data.resize(n); buf.buf=data.data(); buf.len=data.size(); }
+  void Ensure(int n) { int s=data.size(), f=1; while(len+n > s*f) f*=2; if (f>1) Resize(s*f); }
+  void Add(const PaintCmd &cmd) {
+    static int size = sizeof(cmd);
+    Ensure(sizeof(int) + size);
+    char *b = &data[0] + len;
+    memcpy(b, &size, sizeof(int));
+    memcpy(b+sizeof(int), &cmd, sizeof(cmd));
+    b += sizeof(int) + size;
+    count++;
+  }
+  void AddList(const MultiProcessPaintResourceBuilder &x) { Ensure(x.len); memcpy(&data[0]+len, x.data.data(), x.len); len+=x.len; }
+};
+
 struct GameProtocol {
   struct Header : public Serializable::Header {};
   struct Position {

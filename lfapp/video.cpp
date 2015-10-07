@@ -2598,31 +2598,11 @@ void Video::InitGraphicsDevice(Window *W) {
 }
 
 void Video::InitFonts() {
-  if (FLAGS_default_font.size()) {}
-  else if (FLAGS_font_engine == "coretext") {
-#ifdef LFL_IPHONE
-    FLAGS_default_font = "Menlo-Bold";
-    FLAGS_default_font_size = 12;
-#else
-    FLAGS_default_font = "Monaco";
-    FLAGS_default_font_size = 15;
-#endif
-  } else if (FLAGS_font_engine == "gdi") {
-    FLAGS_default_font = "Consolas";
-    FLAGS_default_font_size = 17;
-    // FLAGS_default_font_flag = FontDesc::Bold | FontDesc::Mono;
-  } else if (FLAGS_font_engine == "freetype") {
-    FLAGS_default_font = "VeraMoBd.ttf"; // "DejaVuSansMono-Bold.ttf";
-    FLAGS_default_missing_glyph = 42;
-  } else if (FLAGS_font_engine == "atlas") {
-    FLAGS_default_font = "VeraMoBd.ttf";
-    FLAGS_default_missing_glyph = 42;
-    // FLAGS_default_font_size = 32;
-  }
+  FontEngine *font_engine = Fonts::DefaultFontEngine();
+  if (!FLAGS_default_font.size()) font_engine->SetDefault();
 
   vector<string> atlas_font_size;
   Split(FLAGS_atlas_font_sizes, iscomma, &atlas_font_size);
-  FontEngine *font_engine = Fonts::DefaultFontEngine();
   for (int i=0; i<atlas_font_size.size(); i++) {
     int size = atoi(atlas_font_size[i].c_str());
     font_engine->Init(FontDesc(FLAGS_default_font, FLAGS_default_font_family, size, Color::white, Color::clear, FLAGS_default_font_flag));

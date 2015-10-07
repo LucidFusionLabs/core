@@ -166,10 +166,11 @@ struct StyleContext;
 struct TextGUI;
 struct Texture;
 struct Terminal;
-struct Tiles;
+struct TilesInterface;
 struct VideoAssetLoader;
 struct Window;
 namespace DOM { struct Node; };
+namespace IPC { struct FontDescription; }
 
 typedef google::protobuf::Message Proto;
 typedef int (*MainCB)(int argc, const char **argv);

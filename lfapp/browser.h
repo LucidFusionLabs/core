@@ -42,7 +42,7 @@ struct Renderer : public Object {
   DOM::Node *absolute_parent=0;
   shared_ptr<Texture> background_image;
   DrawableBoxArray child_box, child_bg;
-  Tiles *tiles=0;
+  TilesInterface *tiles=0;
 
   Box content, padding, border, margin, clip_rect;
   Color color, background_color, border_top, border_bottom, border_right, border_left, outline;
@@ -111,7 +111,7 @@ struct Browser : public BrowserInterface {
   struct RenderLog { string data; int indent; };
 
   Document doc;
-  Layers *layers=0;
+  LayersInterface *layers=0;
   RenderLog *render_log=0;
   Texture missing_image;
   point mouse, initial_displacement;
@@ -130,7 +130,7 @@ struct Browser : public BrowserInterface {
   void ForwardButton() {}
   void RefreshButton() {}
   void AnchorClicked(DOM::HTMLAnchorElement *anchor);
-  void InitLayers() { CHECK(!layers); (layers = new Layers())->Init(2); }
+  void InitLayers(LayersInterface *l) { CHECK(!layers); (layers = l)->Init(2); }
   string GetURL() { return String::ToUTF8(doc.node->URL); }
 
   bool Dirty(Box *viewport);

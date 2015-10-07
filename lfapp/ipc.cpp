@@ -245,7 +245,7 @@ int ProcessPipe::Close() {
 
 #if defined(LFL_MMAPXFER_MPB)
 static string MultiProcessBufferURL = "fd://transferred";
-MultiProcessBuffer::MultiProcessBuffer(Connection *c, const ResourceHandle *h) : url(h->url()->c_str()), len(h->len()) {
+MultiProcessBuffer::MultiProcessBuffer(Connection *c, const IPC::ResourceHandle *h) : url(h->url()->c_str()), len(h->len()) {
   if (url == MultiProcessBufferURL) swap(impl, c->transferred_socket);
 }
 MultiProcessBuffer::~MultiProcessBuffer() {
@@ -303,9 +303,10 @@ bool MultiProcessBuffer::Open() {
 
 #if defined(LFL_MOBILE) || !defined(LFL_FLATBUFFERS)
 void ProcessAPIClient::StartServer(const string &server_program) {}
-void ProcessAPIClient::LoadResource(const string &content, const string &fn, const ProcessAPIClient::LoadResourceCompleteCB &cb) {}
+void ProcessAPIClient::LoadAsset(const string &content, const string &fn, const LoadAssetRPC::CB &cb) {}
 void ProcessAPIClient::Navigate(const string &url) {}
 void ProcessAPIServer::Start(const string &socket_name) {}
+void ProcessAPIServer::OpenSystemFont(const LFL::FontDesc &d, LFL::Font *f) {}
 void ProcessAPIServer::WGet(const string &url, const HTTPClient::ResponseCB &c) {}
 #else
 
@@ -447,68 +448,55 @@ void ProcessAPIClient::StartServer(const string &server_program) {
   app->network->active.Add(conn->socket, SocketSet::READABLE, &conn->self_reference);
 }
 
-void ProcessAPIClient::Navigate(const string &url) { 
-  bool ok = SendRPC(conn, seq++, -1, NavigateRequest, fb.CreateString(url));
-  IPCTrace("ProcessAPIClient Navigate url='%s' sent=%d\n", url.c_str(), ok);
-}
+void ProcessAPIClient::Navigate(const string &url) { SendRPC(conn, seq++, -1, NavigateRequest, fb.CreateString(url)); }
 
-void ProcessAPIClient::LoadResource(const string &content, const string &fn, const ProcessAPIClient::LoadResourceCompleteCB &cb) { 
+void ProcessAPIClient::LoadAsset(const string &content, const string &fn, const LoadAssetRPC::CB &cb) { 
   MultiProcessBuffer mpb(server_process);
-  if (!conn || !mpb.Create(MultiProcessFileResource(content, fn, ""))) return cb(MultiProcessTextureResource());
-  bool ok = SendRPC(conn, seq++, mpb.transfer_handle, LoadResourceRequest, MakeResourceHandle(MultiProcessFileResource::Type, mpb));
-  if (ok) reqmap[seq-1] = new LoadResourceQuery(cb);
-  else cb(MultiProcessTextureResource());
+  if (conn && mpb.Create(MultiProcessFileResource(content, fn, "")) &&
+      SendRPC(conn, seq++, mpb.transfer_handle, LoadAssetRequest, MakeResourceHandle(MultiProcessFileResource::Type, mpb)))
+    ExpectResponseRPC(LoadAsset, this, seq-1, cb);
 }
 
-// void ProcessAPIClient::LoadResourceResponse(Connection *c, int seq, const LoadResourceResponse *res) {}
-
-void ProcessAPIClient::LoadResourceSucceeded(LoadResourceQuery *query, const MultiProcessTextureResource &tex) {
-  if (reply_success_from_main_thread && !MainThread()) return RunInMainThread(new Callback(bind(&ProcessAPIClient::LoadResourceSucceeded, this, query, tex)));
-  query->cb(tex);
-  // query->response.Close();
-  delete query;
-}
-
-void ProcessAPIClient::HandleLoadResourceResponse(Connection *c, int seq, const LoadResourceResponse *res) {
-  auto reply = reqmap.find(seq);
-  auto mpbi = ipc_buffer.find(res->mpb_id());
-  if (reply == reqmap.end()) return ERROR("ProcessAPIClient missing seq ", seq);
-  if (mpbi == ipc_buffer.end()) return ERROR("ProcessAPIClient missing mpb ", res->mpb_id());
-  bool erase_reply = true, delete_reply = true;
-
-  MultiProcessBuffer *res_mpb = mpbi->second;
-  IPCTrace("ProcessAPIClient LoadResourceResponse url='%s'\n", res_mpb->url.c_str());
-
-  MultiProcessTextureResource tex;
-  if (res_mpb->buf && MultiProcessResource::Read(*res_mpb, MultiProcessTextureResource::Type, &tex)) {
-    IPCTrace("ProcessAPIClient Texture width=%d height=%d ret=1\n", tex.width, tex.height);
-    LoadResourceSucceeded(reply->second, tex);
-    delete_reply = false;
-  } else { ERROR("ProcessAPIClient res_mpb.Open: ", res_mpb->url); reply->second->cb(MultiProcessTextureResource()); }
-
-  if (erase_reply) reqmap.erase(seq);
-  if (delete_reply) delete reply->second;
-}
-
-void ProcessAPIClient::HandleAllocateBufferRequest(Connection *c, int seq, const AllocateBufferRequest *req) {
-  IPCTrace("ProcessAPIClient AllocateBufferRequest bytes=%d\n", req->bytes());
-
+int ProcessAPIClient::HandleAllocateBufferRequest(int seq, const IPC::AllocateBufferRequest *req, Void) {
   for (++ipc_buffer_id; !ipc_buffer_id || Contains(ipc_buffer, ipc_buffer_id); ++ipc_buffer_id) {}
   auto mpb = new MultiProcessBuffer(server_process);
   ipc_buffer[ipc_buffer_id] = mpb;
 
-  if (!mpb->Create(req->bytes())) return ERROR("ProcessAPIClient ResposneMPB Create");
-  SendRPC(c, seq, mpb->transfer_handle, AllocateBufferResponse, MakeResourceHandle(req->type(), *mpb), ipc_buffer_id);
+  if (!mpb->Create(req->bytes()) ||
+      !SendRPC(conn, seq, mpb->transfer_handle, AllocateBufferResponse, MakeResourceHandle(req->type(), *mpb), ipc_buffer_id))
+    return RPC::Error;
+
+  return RPC::Done;
 }
 
-void ProcessAPIClient::HandleNavigateResponse(Connection *c, int seq, const NavigateResponse *req) {}
+int ProcessAPIClient::HandleOpenSystemFontRequest(int seq, const IPC::OpenSystemFontRequest *req, Void) {
+  Font *font = 0;
+  MultiProcessBuffer mpb(server_process);
+  if (const IPC::FontDescription *desc = req->desc()) font = Fonts::GetByDesc(FontDesc(*desc));
+  GlyphMap *glyph = font ? font->glyph.get() : 0;;
+  int glyph_table_size = glyph ? glyph->table.size() : 0, glyph_table_bytes = glyph_table_size * sizeof(GlyphMetrics);
+  if (glyph && conn && mpb.Create(glyph_table_bytes)) {
+    GlyphMetrics *g = reinterpret_cast<GlyphMetrics*>(mpb.buf);
+    for (int i=0; i<glyph_table_size; ++i) {
+      drawable.push_back(&glyph->table[i]);
+      g[i] = GlyphMetrics(glyph->table[i]);
+      g[i].tex_id = drawable.size()-1;
+    }
+  }
+  if (!SendRPC(conn, seq++, mpb.transfer_handle, OpenSystemFontResponse, MakeResourceHandle(0, mpb), glyph_table_size, glyph->table_start)) return RPC::Error;
+  return RPC::Done;
+}
 
-void ProcessAPIClient::HandleWGetRequest(Connection *c, int seq, const WGetRequest *req) {
+int ProcessAPIClient::HandlePaintRequest(int seq, const IPC::PaintRequest *req, const MultiProcessPaintResource &paint) {
+  return RPC::Done;
+}
+
+int ProcessAPIClient::HandleWGetRequest(int seq, const IPC::WGetRequest *req, Void) {
   string url = req->url()->str();
   WGetQuery *wget = new WGetQuery(this, seq);
-  IPCTrace("ProcessAPIClient WGetRequest url='%s'\n", url.c_str());
   if (app->network_thread) app->network_thread->Write(new Callback([=]{ Singleton<HTTPClient>::Get()->WGet(url, 0, bind(&WGetQuery::WGetResponseCB, wget, _1, _2, _3, _4, _5)); }));
   else                                                                { Singleton<HTTPClient>::Get()->WGet(url, 0, bind(&WGetQuery::WGetResponseCB, wget, _1, _2, _3, _4, _5)); }
+  return RPC::Ok;
 }
 
 void ProcessAPIClient::WGetQuery::WGetResponseCB(Connection *c, const char *h, const string &ct, const char *b, int l) {
@@ -517,7 +505,6 @@ void ProcessAPIClient::WGetQuery::WGetResponseCB(Connection *c, const char *h, c
   if (len && res_mpb.Create(len)) {
     memcpy(res_mpb.buf, h ? h : b, len);
     parent->SendRPC(parent->conn, seq, res_mpb.transfer_handle, WGetResponse, h!=0, MakeResourceHandle(0, res_mpb));
-    IPCTrace("ProcessAPIClient WGetResponseCB %d %d %d %d %s\n", h!=0, b!=0, l, len, res_mpb.url.c_str());
     res_mpb.Close();
   } else if (len) ERROR("ProcessAPIClient ResposneMPB Create");
   if (!h && (!b || !l)) delete this;
@@ -542,52 +529,36 @@ void ProcessAPIServer::Start(const string &socket_name) {
   INFO("ProcessAPIServer opened ", socket_name);
 }
 
-void ProcessAPIServer::HandleLoadResourceRequest(Connection *c, int seq, const LoadResourceRequest *req, const MultiProcessFileResource &mpf) {
-  IPCTrace("ProcessAPIServer LoadResourceRequest fn='%s' %p %d\n", mpf.name.buf, mpf.buf.buf, mpf.buf.len);
-  Texture *tex=0;
-  if ((tex = Asset::LoadTexture(mpf))) {
-    IPCTrace("ProcessAPIServer AllocateBufferBufferRequest %d\n", tex->BufferSize());
-    if (!SendRPC(conn, seq, -1, AllocateBufferRequest, MultiProcessBuffer::Size(MultiProcessTextureResource(*tex)),
-                 MultiProcessTextureResource::Type)) ERROR("ProcessAPIServer write");
-    else swap(resmap[seq], tex);
-  } else {
-    IPCTrace("ProcessAPIServer LoadResourceResponse failed\n");
-    if (!SendRPC(conn, seq, -1, LoadResourceResponse, 0)) ERROR("ProcessAPIServer write");
-  }
-  delete tex;
+int ProcessAPIServer::HandleLoadAssetRequest(int id, const IPC::LoadAssetRequest *req, const MultiProcessFileResource &mpf) {
+  unique_ptr<Texture> tex(Asset::LoadTexture(mpf));
+  if (!tex || !SendRPC(conn, seq++, -1, AllocateBufferRequest, MultiProcessBuffer::Size(MultiProcessTextureResource(*tex))))
+    return RPC::Error;
+  return ExpectResponseRPC(AllocateBuffer, this, seq-1, bind(&LoadAssetQuery::AllocateBufferResponse,
+                                                             new LoadAssetQuery(this, id, tex.release()), _1, _2, _3));
 }
 
-void ProcessAPIServer::HandleAllocateBufferResponse(Connection *c, int seq, const AllocateBufferResponse *res, MultiProcessBuffer &mpb) {
-  IPCTrace("ProcessAPIServer AllocateBufferResponse url='%s'\n", res->mpb()->url()->c_str());
-  auto reply = resmap.find(seq);
-  if (reply != resmap.end()) {
-    bool success = mpb.Copy(MultiProcessTextureResource(*reply->second));
-    delete reply->second;
-    resmap.erase(seq);
-    if (!SendRPC(conn, seq, -1, LoadResourceResponse, res->mpb_id())) ERROR("ProcessAPIServer write");
-  } else ERROR("missing seq ", seq);
+int ProcessAPIServer::LoadAssetQuery::AllocateBufferResponse(AllocateBufferQuery *q, const IPC::AllocateBufferResponse *res, MultiProcessBuffer &mpb) {
+  if (res && mpb.Copy(MultiProcessTextureResource(*tex))) parent->SendRPC(parent->conn, seq, -1, LoadAssetResponse, res->mpb_id());
+  return Done();
 }
 
-void ProcessAPIServer::HandleWGetResponse(Connection *c, int seq, const WGetResponse *res, MultiProcessBuffer &mpb) {
-  IPCTrace("ProcessAPIServer WGetResponse '%s'\n", res->mpb()->url()->c_str());
-  auto wget = wgetmap.find(seq);
-  if (wget != wgetmap.end() || !res->mpb()->url()->str().size()) {
-    if (1) { // mpb.Open()) {
-      if (res->headers() && mpb.len) wget->second(0, mpb.buf, "", 0, 0);
-      else                           wget->second(0, 0, "", mpb.buf, mpb.len);
-      if (!mpb.len) wgetmap.erase(seq);
-    } else { ERROR("wget mpb read"); wget->second(0, 0, "", 0, 0); wgetmap.erase(seq); }
-  } else ERROR("missing seq ", seq);
-}
-
-void ProcessAPIServer::HandleNavigateRequest(Connection *c, int seq, const NavigateRequest *req) {
-  IPCTrace("ProcessAPIServer NavigateRequest url='%s'\n", req->url()->c_str());
+int ProcessAPIServer::HandleNavigateRequest(int seq, const IPC::NavigateRequest *req, Void) {
   browser->Open(req->url()->str());
+  return RPC::Done;
 }
+
+void ProcessAPIServer::OpenSystemFont(const LFL::FontDesc &d, LFL::Font *f) {}
 
 void ProcessAPIServer::WGet(const string &url, const HTTPClient::ResponseCB &c) {
-  if (!SendRPC(conn, seq++, -1, WGetRequest, fb.CreateString(url))) return ERROR("ProcessAPIServer write");
-  else wgetmap[seq-1] = c;
+  if (!SendRPC(conn, seq++, -1, WGetRequest, fb.CreateString(url))) c(0, 0, "", 0, 0);
+  ExpectResponseRPC(WGet, this, seq-1, &ProcessAPIServer::WGetQuery::WGetResponse, c);
+}
+
+int ProcessAPIServer::WGetQuery::WGetResponse(WGetQuery *q, const IPC::WGetResponse *res, const MultiProcessBuffer &mpb) {
+  if (!res) { q->cb(0, 0, "", 0, 0); return RPC::Done; }
+  if (res->headers() && mpb.len) q->cb(0, mpb.buf, "", 0, 0);
+  else                           q->cb(0, 0, "", mpb.buf, mpb.len);
+  return mpb.len ? RPC::Ok : RPC::Done;
 }
 #endif // LFL_MOBILE
 
