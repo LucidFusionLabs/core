@@ -3,7 +3,6 @@ compiler:
   - clang
 os:
   - linux
-  - osx
 
 before_install:
   - echo $TRAVIS_OS_NAME

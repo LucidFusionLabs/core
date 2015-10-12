@@ -131,6 +131,8 @@ struct Browser : public BrowserInterface {
   void RefreshButton() {}
   void AnchorClicked(DOM::HTMLAnchorElement *anchor);
   void InitLayers(LayersInterface *l) { CHECK(!layers); (layers = l)->Init(2); }
+  void PaintTile(int x, int y, int z, const MultiProcessPaintResource &paint);
+  void SetClearColor(const Color &c);
   string GetURL() { return String::ToUTF8(doc.node->URL); }
 
   bool Dirty(Box *viewport);

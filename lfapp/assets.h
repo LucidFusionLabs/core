@@ -723,19 +723,19 @@ struct LayersInterface : public vector<TilesInterface*> {
 #define TilesPostAdd(tiles, ...) CallbackListAdd(&(tiles)->append[(tiles)->context_depth]->cb, __VA_ARGS__)
 #define TilesAdd(tiles, w, ...) (tiles)->AddCallback((w), bind(__VA_ARGS__));
 #define TilesMatrixIter(m) MatrixIter(m) if (Tile *tile = (Tile*)(m)->row(i)[j])
-template<class CB, class CBL> struct TilesT : public TilesInterface {
+template<class CB, class CBL, class CBLI> struct TilesT : public TilesInterface {
   struct Tile {
     CBL cb;
     unsigned id, prepend_depth; bool dirty;
     Tile() : id(0), prepend_depth(0), dirty(0) {}
   };
-  int W, H, zero_row=0, zero_col=0, context_depth=-1;
+  int layer, W, H, zero_row=0, zero_col=0, context_depth=-1;
   bool clear=1, clear_empty=1;
   vector<Tile*> prepend, append;
   matrix<Tile*> mat;
   FrameBuffer fb;
   Box current_tile;
-  TilesT(int w=256, int h=256) : W(w), H(h), mat(1,1) { CHECK(IsPowerOfTwo(W)); CHECK(IsPowerOfTwo(H)); }
+  TilesT(int l, int w=256, int h=256) : layer(l), W(w), H(h), mat(1,1) { CHECK(IsPowerOfTwo(W)); CHECK(IsPowerOfTwo(H)); }
 
   void GetScreenCoords(int i, int j, int *xo, int *yo) const {
     *xo = j * W;
@@ -806,24 +806,37 @@ template<class CB, class CBL> struct TilesT : public TilesInterface {
   }
 
   void Run() {
+    Select();
+    TilesMatrixIter(&mat) {
+      if (!tile->cb.Count() && !clear_empty) continue;
+      RunTile(i, j, tile, tile->cb);
+      tile->cb.Clear();
+    }
+    Release();
+  }
+
+  void Select() {
     bool init = !fb.ID;
     if (init) fb.Create(W, H);
     current_tile = Box(0, 0, W, H);
     screen->gd->DrawMode(DrawMode::_2D);
     screen->gd->ViewPort(current_tile);
     screen->gd->EnableLayering();
-    TilesMatrixIter(&mat) {
-      if (!tile->cb.Size() && !clear_empty) continue;
-      GetScreenCoords(i, j, &current_tile.x, &current_tile.y);
-      if (!tile->id) fb.AllocTexture(&tile->id);
-      fb.Attach(tile->id);
-      screen->gd->MatrixProjection();
-      if (clear) screen->gd->Clear();
-      screen->gd->LoadIdentity();
-      screen->gd->Ortho(current_tile.x, current_tile.x + W, current_tile.y, current_tile.y + H, 0, 100);
-      screen->gd->MatrixModelview();
-      tile->cb.Run();
-    }
+  }
+
+  void RunTile(int i, int j, Tile *tile, const CBLI &tile_cb) {
+    GetScreenCoords(i, j, &current_tile.x, &current_tile.y);
+    if (!tile->id) fb.AllocTexture(&tile->id);
+    fb.Attach(tile->id);
+    screen->gd->MatrixProjection();
+    if (clear) screen->gd->Clear();
+    screen->gd->LoadIdentity();
+    screen->gd->Ortho(current_tile.x, current_tile.x + W, current_tile.y, current_tile.y + H, 0, 100);
+    screen->gd->MatrixModelview();
+    tile_cb.Run();
+  }
+
+  void Release() {
     fb.Release();
     screen->gd->RestoreViewport(DrawMode::_2D);
   }
@@ -854,8 +867,9 @@ template<class CB, class CBL> struct TilesT : public TilesInterface {
   }
 };
 
-struct Tiles : public TilesT<Callback, CallbackList> {
+struct Tiles : public TilesT<Callback, CallbackList, CallbackList> {
   const Drawable::Attr *attr=0;
+  Tiles(int l, int w=256, int h=256) : TilesT(l, w, h) {}
   void SetAttr           (const Drawable::Attr *a) { attr=a; }
   void InitDrawBox       (const point&);
   void InitDrawBackground(const point&);
@@ -865,7 +879,7 @@ struct Tiles : public TilesT<Callback, CallbackList> {
 };
 
 template <class X> struct LayersT : public LayersInterface {
-  void Init(int N=1) { CHECK_EQ(this->size(), 0); for (int i=0; i<N; i++) this->push_back(new X()); }
+  void Init(int N=1) { CHECK_EQ(this->size(), 0); for (int i=0; i<N; i++) this->push_back(new X(i)); }
   void Draw(const Box &b, int vs, int hs) { for (auto i : *this) i->Draw(b, vs, hs); }
   void Update() { for (auto i : *this) i->Run(); }
 };

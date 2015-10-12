@@ -1,24 +1,28 @@
 namespace LFL.IPC;
 
 table ResourceHandle { type: int; len: int; url: string; }
-
 table AllocateBufferRequest  { bytes: int; type: short; }
 table AllocateBufferResponse { mpb: ResourceHandle; mpb_id: int; }
+
+struct Color { r: ubyte; b: ubyte; g: ubyte; a: ubyte; }
+table SetClearColorRequest { c: Color; }
+table SetClearColorResponse { success: bool; }
+
+table FontDescription { name: string; family: string; size: int; flag: int; engine: int; fg: Color; bg: Color; unicode: bool; }
+table OpenSystemFontRequest { desc: FontDescription; }
+table OpenSystemFontResponse { mpb: ResourceHandle; font_id: int; num_glyphs: int; start_glyph_id: int; }
 
 table LoadAssetRequest  { mpb: ResourceHandle; }
 table LoadAssetResponse { mpb_id: int; }
 
+table LoadTextureRequest  { mpb_id: int; }
+table LoadTextureResponse { tex_id: int; }
+
+table PaintRequest  { x: int; y: int; z: int; mpb_id: int; }
+table PaintResponse { success: bool; }
+
 table WGetRequest  { url: string; mime_type: int; }
-table WGetResponse { headers: bool; mpb: ResourceHandle; }
+table WGetResponse { mpb: ResourceHandle; headers: bool; content_length: int; }
 
 table NavigateRequest  { url: string; }
 table NavigateResponse { success: bool; }
-
-table PaintRequest  { mpb_id: int; }
-table PaintResponse { success: bool; }
-
-struct Color { r: ubyte; b: ubyte; g: ubyte; a: ubyte; }
-table FontDescription { name: string; family: string; size: int; flag: int; engine: int; fg: Color; bg: Color; unicode: bool; }
-
-table OpenSystemFontRequest { desc: FontDescription; }
-table OpenSystemFontResponse { mpb: ResourceHandle; num_glyphs: int; start_glyph_id: int; }

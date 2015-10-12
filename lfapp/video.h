@@ -239,6 +239,7 @@ struct Drawable {
     bool operator==(const Attr &y) const { return font==y.font && fg==y.fg && bg==y.bg && tex==y.tex && scissor==y.scissor && underline==y.underline && overline==y.overline && midline==y.midline && blink==y.blink && blend == y.blend; }
     bool operator!=(const Attr &y) const { return !(*this == y); }
     void Clear() { font=0; fg=bg=0; tex=0; scissor=0; underline=overline=midline=blink=0; }
+    string DebugString() const;
   };
   struct AttrSource { virtual const Attr *GetAttr(int attr_id) const = 0; };
   struct AttrVec : public AttrSource, public vector<Attr> {
@@ -252,6 +253,7 @@ struct Drawable {
   };
 
   virtual int  Id()                                            const { return 0; }
+  virtual int  TexId()                                         const { return 0; }
   virtual bool Wide()                                          const { return 0; }
   virtual int  LeftBearing(                   const Attr *A=0) const { return 0; }
   virtual int  Ascender   (const LFL::Box *B, const Attr *A=0) const { return B ? B->h : 0; }
@@ -292,6 +294,7 @@ struct Texture : public Drawable {
   virtual ~Texture() { ClearBuffer(); if (owner) ClearGL(); }
 
   void Bind() const;
+  int TexId() const { return ID; }
   string DebugString() const { return StrCat("Texture(", width, ", ", height, ", ", Pixel::Name(pf), ")"); }
   string HexDump() const { string v; for (int ls=LineSize(), i=0; i<height; i++) StrAppend(&v, Vec<unsigned char>::Str(buf+i*ls, ls, "%02x"), "\n"); return v; }
   point Dimension() const { return point(width, height); }
@@ -323,6 +326,7 @@ struct Texture : public Drawable {
   void UpdateBuffer(const unsigned char *B, const ::LFL::Box &box, int PF, int linesize, int blit_flag=0);
   void FlipBufferY() { Texture t; t.LoadBuffer(buf, Dimension(), pf, LineSize(), Flag::FlipY); ClearBuffer(); swap(buf, t.buf); }
 
+  void LoadGL  (const MultiProcessTextureResource&);
   void LoadGL  (const unsigned char *B, const point &dim, int PF, int linesize, int flag=0);
   void UpdateGL(const unsigned char *B, const ::LFL::Box &box, int flag=0);
   void UpdateGL(const ::LFL::Box &b, int flag=0) { return UpdateGL(buf ? (buf+(b.y*width+b.x)*PixelSize()) : 0, b, flag); }

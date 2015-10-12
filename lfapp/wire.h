@@ -18,8 +18,8 @@
 
 #ifndef __LFL_LFAPP_WIRE_H__
 #define __LFL_LFAPP_WIRE_H__
-namespace LFL {
 
+namespace LFL {
 struct Protocol { 
   enum { TCP=1, UDP=2, UNIX=3, GPLUS=4 }; int p;
   static const char *Name(int p);
@@ -313,52 +313,78 @@ struct MultiProcessTextureResource : public Serializable {
 
 struct MultiProcessPaintResource : public Serializable {
   static const int Type = 1<<11 | 3;
-  struct PaintCmd {};
-  struct SetAttr            : public PaintCmd { static const int Id=1; Drawable::Attr a; SetAttr           (const Drawable::Attr &A=Drawable::Attr()) : a(A) {} };
-  struct InitDrawBox        : public PaintCmd { static const int Id=2; point p;          InitDrawBox       (const point &P=point()) : p(P) {} };
-  struct InitDrawBackground : public PaintCmd { static const int Id=3; point p;          InitDrawBackground(const point &P=point()) : p(P) {} };
-  struct DrawBox            : public PaintCmd { static const int Id=4; Box b; int id;    DrawBox           (const Box &B=Box(), int ID=0) : b(B), id(ID) {} };
-  struct DrawBackground     : public PaintCmd { static const int Id=5; Box b;            DrawBackground    (const Box &B=Box())           : b(B) {} };
-  struct PushScissor        : public PaintCmd { static const int Id=6; Box b;            PushScissor       (const Box &B=Box())           : b(B) {} };
-  struct PopScissor         : public PaintCmd { static const int Id=7; };
+
+  UNALIGNED_struct Cmd { int type; Cmd(int T=0) : type(T) {} }; UNALIGNED_END(Cmd, 4);
+  UNALIGNED_struct SetAttr : public Cmd {
+    static const int Type=1, Size=76;
+    int font_id, tex_id; Color fg, bg; Box scissor; bool underline, overline, midline, blink, blend, hfg, hbg, hs;
+    SetAttr(const Drawable::Attr &a=Drawable::Attr()) : Cmd(Type), font_id(a.font?IPCClientFontEngine::GetId(a.font):0),
+      tex_id(a.tex?a.tex->ID:0), fg(a.fg?*a.fg:Color()), bg(a.bg?*a.bg:Color()), scissor(a.scissor?*a.scissor:Box()),
+      underline(a.underline), overline(a.overline), midline(a.midline), blink(a.blink), blend(a.blend),
+      hfg(a.fg), hbg(a.bg), hs(a.scissor) {}
+    void Update(Drawable::Attr *o, ProcessAPIClient *s) const;
+  }; UNALIGNED_END(SetAttr, SetAttr::Size);
+
+  UNALIGNED_struct InitDrawBox        : public Cmd { static const int Type=2, Size=12; point p;       InitDrawBox       (const point &P=point())       : Cmd(Type), p(P) {} };         UNALIGNED_END(InitDrawBox,        InitDrawBox::Size);
+  UNALIGNED_struct InitDrawBackground : public Cmd { static const int Type=3, Size=12; point p;       InitDrawBackground(const point &P=point())       : Cmd(Type), p(P) {} };         UNALIGNED_END(InitDrawBackground, InitDrawBackground::Size);
+  UNALIGNED_struct DrawBox            : public Cmd { static const int Type=4, Size=32; Box b; int id; DrawBox           (const Box &B=Box(), int ID=0) : Cmd(Type), b(B), id(ID) {} }; UNALIGNED_END(DrawBox,            DrawBox::Size);
+  UNALIGNED_struct DrawBackground     : public Cmd { static const int Type=5, Size=28; Box b;         DrawBackground    (const Box &B=Box())           : Cmd(Type), b(B) {} };         UNALIGNED_END(DrawBackground,     DrawBackground::Size);
+  UNALIGNED_struct PushScissor        : public Cmd { static const int Type=6, Size=28; Box b;         PushScissor       (const Box &B=Box())           : Cmd(Type), b(B) {} };         UNALIGNED_END(PushScissor,        PushScissor::Size);
+  UNALIGNED_struct PopScissor         : public Cmd { static const int Type=7, Size=4;                 PopScissor        ()                             : Cmd(Type) {} };               UNALIGNED_END(PopScissor,         PopScissor::Size);
+
+  static int CmdSize(int n) {
+    switch(n) {
+      case SetAttr           ::Type: return SetAttr           ::Size;
+      case InitDrawBox       ::Type: return InitDrawBox       ::Size;
+      case InitDrawBackground::Type: return InitDrawBackground::Size;
+      case DrawBox           ::Type: return DrawBox           ::Size;
+      case DrawBackground    ::Type: return DrawBackground    ::Size;
+      case PushScissor       ::Type: return PushScissor       ::Size;
+      case PopScissor        ::Type: return PopScissor        ::Size;
+      default:                       FATAL("unknown cmd ", n);
+    }
+  }
 
   struct Iterator {
-    Serializable::ConstStream in;
-    bool done=0;
-    int cur_id=0;
-    Iterator(const StringPiece &b) : in(b.buf, b.len) {
-      if ((done = in.Remaining() < sizeof(int))) return;
-    }
+    int offset=0, type=0;
+    StringPiece buf;
+    Iterator(const StringPiece &b) : buf(b) { Load(); }
+    template <class X> const X* Get() { return reinterpret_cast<const X*>(buf.buf + offset); }
+    void Load() { type = (offset + sizeof(int) > buf.len) ? 0 : *Get<int>(); }
+    void Next() { offset += CmdSize(type); Load(); }
   };
 
   StringPiece buf;
+  mutable Drawable::Attr attr;
   MultiProcessPaintResource() : Serializable(Type) {}
   void Out(Serializable::Stream *o) const { o->BString(buf); }
   int In(const Serializable::Stream *i) { i->ReadString(&buf); return i->Result(); }
   int Size() const { return HeaderSize() + buf.size(); }
   int HeaderSize() const { return sizeof(int); }
-  void Run() {}
+  void Run() const;
 };
 
 struct MultiProcessPaintResourceBuilder : public MultiProcessPaintResource {
-  int len=0, count=0;
-  bool dirty=0;
-  string data;
+  string data; int count=0; bool dirty=0;
   MultiProcessPaintResourceBuilder(int S=32768) { Resize(S); }
-  int Size() const { return count; }
-  void Clear() { len=count=0; dirty=0; }
-  void Resize(int n) { data.resize(n); buf.buf=data.data(); buf.len=data.size(); }
-  void Ensure(int n) { int s=data.size(), f=1; while(len+n > s*f) f*=2; if (f>1) Resize(s*f); }
-  void Add(const PaintCmd &cmd) {
-    static int size = sizeof(cmd);
-    Ensure(sizeof(int) + size);
-    char *b = &data[0] + len;
-    memcpy(b, &size, sizeof(int));
-    memcpy(b+sizeof(int), &cmd, sizeof(cmd));
-    b += sizeof(int) + size;
+  int Count() const { return count; }
+  void Clear() { buf.len=0; count=0; dirty=0; }
+  void Resize(int n) { data.resize(n); buf.buf=data.data(); }
+  void Ensure(int n) { int s=data.size(), f=1; while(buf.len+n > s*f) f*=2; if (f>1) Resize(s*f); }
+  void Add(const Cmd &cmd) {
+    int size = CmdSize(cmd.type);
+    Ensure(size);
+    memcpy(&data[0] + buf.len, &cmd, size);
+    buf.len += size;
     count++;
+    dirty=1;
   }
-  void AddList(const MultiProcessPaintResourceBuilder &x) { Ensure(x.len); memcpy(&data[0]+len, x.data.data(), x.len); len+=x.len; }
+  void AddList(const MultiProcessPaintResourceBuilder &x) {
+    Ensure(x.buf.len);
+    memcpy(&data[0] + buf.len, x.data.data(), x.buf.len);
+    buf.len += x.buf.len;
+    dirty=1;
+  }
 };
 
 struct GameProtocol {

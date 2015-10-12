@@ -237,6 +237,10 @@ void RunInMainThread(Callback *cb) {
   app->message_queue.Write(cb);
   if (!FLAGS_target_fps) app->scheduler.Wakeup(0);
 }
+void RunInNetworkThread(const Callback &cb) {
+  if (auto nt = app->network_thread) nt->Write(new Callback(cb));
+  else cb();
+}
 void PressAnyKey() {
   printf("Press [enter] to continue..."); fflush(stdout);
   char buf[32]; fgets(buf, sizeof(buf), stdin);
@@ -552,11 +556,11 @@ void Application::StartNewWindow(Window *new_window) {
 #endif
 }
 
-NetworkThread *Application::CreateNetworkThread(bool detach) {
+NetworkThread *Application::CreateNetworkThread(bool detach, bool start) {
   CHECK(app->network);
   if (detach) VectorEraseByValue(&app->modules, static_cast<Module*>(network));
   network_thread = new NetworkThread(app->network, !detach);
-  network_thread->thread->Start();
+  if (start) network_thread->thread->Start();
   return network_thread;
 }
 

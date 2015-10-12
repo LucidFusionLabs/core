@@ -254,6 +254,7 @@ namespace LFL {
 bool Running();
 bool MainThread();
 void RunInMainThread(Callback *cb);
+void RunInNetworkThread(const Callback &cb);
 void DefaultLFAppWindowClosedCB(Window *);
 double FPS();
 double CamFPS();
@@ -588,7 +589,7 @@ struct Application : public ::LFApp, public Module {
   void Log(int level, const char *file, int line, const string &message);
   void CreateNewWindow(const Window::StartCB &start_cb = Window::StartCB());
   void StartNewWindow(Window *new_window);
-  NetworkThread *CreateNetworkThread(bool detach_existing_module);
+  NetworkThread *CreateNetworkThread(bool detach_existing_module, bool start);
   void LaunchNativeFontChooser(const FontDesc &cur_font, const string &choose_cmd);
   void LaunchNativeMenu(const string &title);
   void AddNativeMenu(const string &title, const vector<MenuItem>&items);

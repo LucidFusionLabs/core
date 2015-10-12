@@ -19,42 +19,55 @@
 #ifndef __LFL_LFAPP_LFEXPORT_H__
 #define __LFL_LFAPP_LFEXPORT_H__
 
-#if _WIN32 || _WIN64
- #if _WIN64
-  #define LFL64
- #else
-  #define LFL32
- #endif
- #define LFL_IMPORT __declspec(dllimport)
- #define LFL_EXPORT __declspec(dllexport)
- #define thread_local __declspec(thread)
- #define UNION struct
-#endif
+#if _MSC_VER
+  #if _WIN64
+    #define LFL64
+  #else
+    #define LFL32
+  #endif
+  #define LFL_IMPORT __declspec(dllimport)
+  #define LFL_EXPORT __declspec(dllexport)
+  #define thread_local __declspec(thread)
+  #define UNION struct
+  #define UNALIGNED_struct \
+    __pragma(pack(1)); \
+    struct __declspec(align(1))
+  #define UNALIGNED_END(n, s) \
+    __pragma(pack()); \
+    static_assert(sizeof(n) == s, "unexpected sizeof(" #n ")")
 
-#if __GNUC__
- #if __x86_64__ || __ppc64__ || __amd64__
-  #define LFL64
- #else
-  #define LFL32
- #endif
- #define LFL_IMPORT
- #define LFL_EXPORT
- #define thread_local __thread
- #define UNION union
+#elif defined(__GNUC__) || defined(__clang__)
+  #if __x86_64__ || __ppc64__ || __amd64__
+    #define LFL64
+  #else
+    #define LFL32
+  #endif
+  #define LFL_IMPORT
+  #define LFL_EXPORT
+  #define thread_local __thread
+  #define UNION union
+  #define UNALIGNED_struct \
+    _Pragma("pack(1)") \
+    struct __attribute__((aligned(1)))
+  #define UNALIGNED_END(n, s) \
+    _Pragma("pack()") \
+    static_assert(sizeof(n) == s, "unexpected sizeof(" #n ")")
+#else
+  #error Unknown compiler
 #endif
 
 #ifdef LFL_TEST
-#define tvirtual virtual
+  #define tvirtual virtual
 #else
-#define tvirtual
+  #define tvirtual
 #endif
 
 #if defined(LFL_ANDROID) || defined(LFL_IPHONE)
-#define LFL_MOBILE
+  #define LFL_MOBILE
 #endif
 
 #if defined(__linux__) && !defined(LFL_MOBILE)
-#define LFL_LINUX_SERVER 
+  #define LFL_LINUX_SERVER 
 #endif
 
 #define memzero(x) memset(&x, 0, sizeof(x))
@@ -145,6 +158,7 @@ struct Flow;
 struct Font;
 struct Geometry;
 struct Glyph;
+struct GlyphMetrics;
 struct GraphicsDevice;
 struct GUI;
 struct InputController;
@@ -153,6 +167,7 @@ struct Listener;
 struct MovieAsset;
 struct MultiProcessBuffer;
 struct MultiProcessFileResource;
+struct MultiProcessTextureResource;
 struct NetworkThread;
 struct ProcessAPIClient;
 struct ProcessAPIServer;
@@ -170,7 +185,7 @@ struct TilesInterface;
 struct VideoAssetLoader;
 struct Window;
 namespace DOM { struct Node; };
-namespace IPC { struct FontDescription; }
+namespace IPC { struct FontDescription; struct OpenSystemFontResponse; }
 
 typedef google::protobuf::Message Proto;
 typedef int (*MainCB)(int argc, const char **argv);

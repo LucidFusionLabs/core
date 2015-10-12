@@ -546,6 +546,13 @@ Box Box3::BoundingBox() const {
   return Box(min_x, min_y, max_x - min_x, max_y - min_y);
 }
 
+string Drawable::Attr::DebugString() const {
+  return StrCat("Attr ", (void*)this,
+                " = { font=", font?CheckPointer(font->desc)->DebugString():"", ", fg=", fg?fg->DebugString():"",
+                ", bg=", bg?bg->DebugString():"", ", tex=", tex?tex->ID:0,
+                ", scissor=", scissor?scissor->DebugString():"", ", blend=", blend, " }");
+}
+
 void Drawable::AttrVec::Insert(const Drawable::Attr &v) {
   if (v.font) font_refs.Insert(&v.font->ref);
   push_back(v);
@@ -609,6 +616,7 @@ void Texture::ClearGL() {
   else if (ID) { screen->gd->DelTexture(ID); ID=0; }
 }
 
+void Texture::LoadGL(const MultiProcessTextureResource &t) { return LoadGL(reinterpret_cast<const unsigned char *>(t.buf.data()), point(t.width, t.height), t.pf, t.linesize); }
 void Texture::LoadGL(const unsigned char *B, const point &dim, int PF, int linesize, int flag) {
   Texture temp;
   temp .Resize(dim.x, dim.y, preferred_pf, Flag::CreateBuf);

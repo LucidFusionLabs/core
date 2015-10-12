@@ -1453,7 +1453,7 @@ void TilesIPC::InitDrawBackground(const point &p) {
   prepend[context_depth]->cb.Add(MultiProcessPaintResource::InitDrawBackground(p));
 }
 void TilesIPC::DrawBox(const Drawable *d, const Box &b, const Drawable::Attr*) {
-  AddCallback(&b, MultiProcessPaintResource::DrawBox(b, 0));
+  if (d) AddCallback(&b, MultiProcessPaintResource::DrawBox(b, d->TexId()));
 }
 void TilesIPC::DrawBackground(const Box &b) {
   AddCallback(&b, MultiProcessPaintResource::DrawBackground(b));
@@ -1461,6 +1461,41 @@ void TilesIPC::DrawBackground(const Box &b) {
 void TilesIPC::AddScissor(const Box &b) {
   prepend[context_depth]->cb.Add(MultiProcessPaintResource::PushScissor(b));
   append [context_depth]->cb.Add(MultiProcessPaintResource::PopScissor());
+}
+
+void TilesIPCClient::Run() {
+  TilesMatrixIter(&mat) {
+    if (!tile->cb.Size() && !clear_empty) continue;
+    app->main_process->Paint(layer, point(i,j), tile->cb);
+  }
+}
+
+void MultiProcessPaintResource::Run() const {
+  ProcessAPIClient *s = app->render_process;
+  Iterator i(buf);
+  while (i.offset + sizeof(int) < buf.len) {
+    int type = *i.Get<int>();
+    switch(type) {
+      default:                       FATAL("unknown type ", type);
+      case SetAttr           ::Type: { auto c=i.Get<SetAttr>           (); c->Update(&attr, app->render_process);          i.offset += SetAttr           ::Size; } break;
+      case InitDrawBox       ::Type: { auto c=i.Get<InitDrawBox>       (); DrawableBoxRun(0,0,&attr).draw(c->p);           i.offset += InitDrawBox       ::Size; } break;
+      case InitDrawBackground::Type: { auto c=i.Get<InitDrawBackground>(); DrawableBoxRun(0,0,&attr).DrawBackground(c->p); i.offset += InitDrawBackground::Size; } break;
+      case DrawBackground    ::Type: { auto c=i.Get<DrawBackground>    (); c->b.Draw();                                    i.offset += DrawBackground    ::Size; } break;
+      case PushScissor       ::Type: { auto c=i.Get<PushScissor>       (); /* s->browser->              */                 i.offset += PushScissor       ::Size; } break;
+      case PopScissor        ::Type: { auto c=i.Get<PopScissor>        (); /* screen->gd->PopScissor(); */                 i.offset += PopScissor        ::Size; } break;
+      case DrawBox           ::Type: { auto c=i.Get<DrawBox>           ();
+                                       auto d=(c->id > 0 && c->id <= s->drawable.size()) ? s->drawable[c->id-1] : Singleton<BoxFilled>::Get();
+                                       d->Draw(c->b, &attr); i.offset += DrawBox::Size;
+                                     } break;
+    }
+  }
+}
+
+void MultiProcessPaintResource::SetAttr::Update(Drawable::Attr *o, ProcessAPIClient *s) const {
+  *o = Drawable::Attr((font_id > 0 && font_id <= s->font_table.size()) ? s->font_table[font_id-1] : NULL,
+                      hfg ? &fg : NULL, hbg ? &bg : NULL, underline, blend);
+  if (hs) o->scissor = &scissor;
+  if (tex_id > 0 && tex_id <= s->drawable.size()) o->tex = dynamic_cast<Texture*>(s->drawable[tex_id-1]);
 }
 
 }; // namespace LFL

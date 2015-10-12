@@ -122,11 +122,13 @@ struct Glyph : public Drawable {
   Glyph() { memzero(internal); }
 
   bool operator<(const Glyph &y) const { return id < y.id; }
+  void FromMetrics(const GlyphMetrics &m);
   void FromArray(const double *in,  int l);
   int  ToArray  (      double *out, int l);
 
-  virtual int  Id()   const { return id; }
-  virtual bool Wide() const { return wide; }
+  virtual int  Id()    const { return id; }
+  virtual int  TexId() const { return tex.ID; }
+  virtual bool Wide()  const { return wide; }
   virtual int  Ascender   (const LFL::Box *b, const Drawable::Attr *a=0) const;
   virtual int  Advance    (const LFL::Box *b, const Drawable::Attr *a=0) const;
   virtual int  LeftBearing(                   const Drawable::Attr *a=0) const;
@@ -389,11 +391,14 @@ struct GDIFontEngine : public FontEngine {
 
 #ifdef LFL_IPC
 struct IPCClientFontEngine : public FontEngine {
+  struct Resource : public FontEngine::Resource { int id; Resource(int I=0) : id(I) {} };
   virtual const char *Name() { return "IPCClientFontEngine"; }
   virtual Font *Open(const FontDesc&);
   virtual int   InitGlyphs(Font *f, Glyph *g, int n);
   virtual int   LoadGlyphs(Font *f, const Glyph *g, int n);
   string        DebugString(Font *f) const;
+  int OpenSystemFontResponse(Font *f, const IPC::OpenSystemFontResponse*, const MultiProcessBuffer&);
+  static int GetId(Font *f);
 };
 
 struct IPCServerFontEngine : public FontEngine {

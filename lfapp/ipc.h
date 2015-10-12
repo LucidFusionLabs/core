@@ -52,9 +52,9 @@ template<typename T> FlatBufferPiece CreateFlatBuffer(const std::function<flatbu
 bool Send ## name ## Request(Connection *c, int seq, const FlatBufferPiece &q, int th=-1) { \
   bool ok = RPC::Write(c, InterProcessProtocol::name ## Request::Type, seq, \
                        StringPiece(reinterpret_cast<const char *>(q.first.get()), q.second), th); \
-  IPCTrace("%s " #name " %s wrote=%d\n", rpc_table_name.c_str(), \
+  IPCTrace("%s Send" #name #Request "=%d %s\n", rpc_table_name.c_str(), ok, \
            InterProcessProtocol::name ## Request::DebugString \
-           (flatbuffers::GetRoot<IPC::name ## Request>(q.first.get())).c_str(), ok); \
+           (flatbuffers::GetRoot<IPC::name ## Request>(q.first.get())).c_str()); \
   return ok; \
 }
 
@@ -71,8 +71,8 @@ bool Send ## name ## Request(Connection *c, int seq, const FlatBufferPiece &q, i
       switch (hdr.id) {
 
 #define RPC_TABLE_CLIENT_QCALL(name, req, mpv) \
-  IPCTrace("%s " #name " %s\n", rpc_table_name.c_str(), InterProcessProtocol::name ## Response::DebugString(req, mpv).c_str()); \
-  switch (query->rpc_cb(query, req, mpv)) { \
+  IPCTrace("%s Receive " #name "Response %s\n", rpc_table_name.c_str(), InterProcessProtocol::name ## Response::DebugString(req, mpv).c_str()); \
+  switch (query->rpc_cb(req, mpv)) { \
     case RPC::Error: \
     case RPC::Done:   delete query; \
     case RPC::Accept: name ## _map.erase(hdr.seq); \
@@ -80,7 +80,7 @@ bool Send ## name ## Request(Connection *c, int seq, const FlatBufferPiece &q, i
   }
 
 #define RPC_TABLE_SERVER_QCALL(name, req, mpv) \
-  IPCTrace("%s " #name " %s\n", rpc_table_name.c_str(), InterProcessProtocol::name ## Request::DebugString(req, mpv).c_str()); \
+  IPCTrace("%s Receive " #name "Request %s\n", rpc_table_name.c_str(), InterProcessProtocol::name ## Request::DebugString(req, mpv).c_str()); \
   switch (Handle ## name ## Request(hdr.seq, req, mpv)) { \
     case RPC::Error: ErrorRPC(conn, hdr.seq, -1, name ## Response); \
     default: break; \
@@ -95,23 +95,23 @@ bool Send ## name ## Request(Connection *c, int seq, const FlatBufferPiece &q, i
     auto req = flatbuffers::GetRoot<IPC::name ## Response>(c->rb + RPC::Header::size); \
     auto query = FindOrNull(name ## _map, hdr.seq); \
     if (query) { RPC_TABLE_CLIENT_QCALL(name, req, mpv); } \
-    else ERROR(#name " missing seq %d", hdr.seq); \
+    else ERROR(#name " missing seq ", hdr.seq); \
   } break;
 
 #define RPC_TABLE_CLIENT_QXBC(name, mpv) case InterProcessProtocol::name ## Response::Type: { \
     auto req = flatbuffers::GetRoot<IPC::name ## Response>(c->rb + RPC::Header::size); \
     auto query = FindOrNull(name ## _map, hdr.seq); \
     MultiProcessBuffer mpb(conn, req->mpv()); \
-    if (query && mpb.Open()) { RPC_TABLE_CLIENT_QCALL(name, req, mpb); } \
-    else ERROR(#name " load MPB=%s failed", req->mpv()->url()->c_str()); \
+    if (query) mpb.Open(); \
+    RPC_TABLE_CLIENT_QCALL(name, req, mpb); \
     mpb.Close(); \
   } break;
 
 #define RPC_TABLE_SERVER_VXBC(name, mpv) case InterProcessProtocol::name ## Request::Type: { \
     auto req = flatbuffers::GetRoot<IPC::name ## Request>(c->rb + RPC::Header::size); \
     MultiProcessBuffer mpb(conn, req->mpv()); \
-    if (mpb.Open()) { RPC_TABLE_SERVER_QCALL(name, req, mpb); } \
-    else ERROR(#name " load MPB=%s failed", req->mpv()->url()->c_str()); \
+    mpb.Open(); \
+    RPC_TABLE_SERVER_QCALL(name, req, mpb); \
     mpb.Close(); \
   } break;
 
@@ -121,7 +121,7 @@ bool Send ## name ## Request(Connection *c, int seq, const FlatBufferPiece &q, i
     MultiProcessBuffer mpb(conn, req->mpv()); \
     mpt mpf; \
     if (query && req->mpv()->type() == mpt::Type && mpb.Open() && MultiProcessResource::Read(mpb, req->mpv()->type(), &mpf)) { RPC_TABLE_CLIENT_QCALL(name, req, mpf); } \
-    else ERROR(#name " load " #mpt "=%s failed", req->mpv()->url()->c_str()); \
+    else ERROR(#name " load " #mpt "=", req->mpv()->url()->c_str(), " failed"); \
     mpb.Close(); \
   } break;
 
@@ -130,7 +130,7 @@ bool Send ## name ## Request(Connection *c, int seq, const FlatBufferPiece &q, i
     MultiProcessBuffer mpb(conn, req->mpv()); \
     mpt mpf; \
     if (req->mpv()->type() == mpt::Type && mpb.Open() && MultiProcessResource::Read(mpb, req->mpv()->type(), &mpf)) { RPC_TABLE_SERVER_QCALL(name, req, mpf); } \
-    else ERROR(#name " load " #mpt "=%s failed", req->mpv()->url()->c_str()); \
+    else ERROR(#name " load " #mpt "=", req->mpv()->url()->c_str(), " failed"); \
     mpb.Close(); \
   } break;
 
@@ -141,7 +141,7 @@ bool Send ## name ## Request(Connection *c, int seq, const FlatBufferPiece &q, i
     mpt mpf; \
     if (mpb && mpb->buf && query && MultiProcessResource::Read(*mpb, mpt::Type, &mpf)) { RPC_TABLE_CLIENT_QCALL(name, req, mpf); }\
     else if (!query) ERROR(#name " missing seq %d", hdr.seq); \
-    else ERROR(#name " load " #mpt "_id=%d failed", req->mpv()); \
+    else ERROR(#name " load " #mpt "_id=", req->mpv(), " failed"); \
   } break;
 
 #define RPC_TABLE_SERVER_VIRC(name, mpt, mpv) case InterProcessProtocol::name ## Request::Type: { \
@@ -149,7 +149,7 @@ bool Send ## name ## Request(Connection *c, int seq, const FlatBufferPiece &q, i
     MultiProcessBuffer *mpb = FindOrNull(ipc_buffer, req->mpv()); \
     mpt mpf; \
     if (mpb && mpb->buf && MultiProcessResource::Read(*mpb, mpt::Type, &mpf)) { RPC_TABLE_SERVER_QCALL(name, req, mpf); } \
-    else ERROR(#name " load " #mpt "_id=%d failed", req->mpv()); \
+    else ERROR(#name " load " #mpt "_id=", req->mpv(), " failed"); \
   } break;
 
 #define RPC_TABLE_END(name) \
@@ -164,13 +164,14 @@ bool Send ## name ## Request(Connection *c, int seq, const FlatBufferPiece &q, i
 #define RPC_CLIENT_CALL(name, mpt, ...) RPC_SEND_DEFINITION(Request, Response, name) \
   struct name ## Query; \
   struct name ## RPC { \
-    typedef function<int(name ## Query*, const IPC::name ## Response*, mpt)> CB; \
+    typedef function<int(const IPC::name ## Response*, mpt)> CB; \
     Parent *parent; \
     RPC::Seq seq; \
     CB rpc_cb; \
     virtual ~name ## RPC() {} \
     name ## RPC(Parent *P=0, RPC::Seq S=0, const CB &C=CB()) : parent(P), seq(S), rpc_cb(C) {} \
     int Done() { delete this; return RPC::Done; } \
+    int Error() { delete this; return RPC::Error; } \
   }; \
   unordered_map<RPC::Seq, name ## Query*> name ## _map; \
   int Expect ## name ## Response(name ## Query *q) { name ## _map[q->seq] = q; return RPC::Ok; } \
@@ -191,7 +192,7 @@ bool Send ## name ## Request(Connection *c, int seq, const FlatBufferPiece &q, i
 
 #define IPC_TABLE_ENTRY(id, name, mpt, ...) struct name { \
     static const int Type = id; \
-    static string DebugString(const IPC::name *x, const mpt &mpv=mpt()) { return StrCat(#name " ", __VA_ARGS__); } \
+    static string DebugString(const IPC::name *x, const mpt &mpv=mpt()) { return StrCat("{", __VA_ARGS__, "}"); } \
   };
 
 #else
@@ -201,8 +202,10 @@ struct FontDescription { string *name() const { return 0; } string *family() con
 struct ResourceHandle { int len() const { return 0; } int type() const { return 0; } string *url() const { return 0; } };
 struct LoadAssetRequest { ResourceHandle *mpb() const { return 0; } };
 struct LoadAssetResponse {};
+struct LoadTextureResponse { int tex_id() const { return 0; } };
 struct AllocateBufferResponse {};
-struct OpenSystemFontResponse {};
+struct SetClearColorResponse {};
+struct OpenSystemFontResponse { int font_id() const { return 0; } int start_glyph_id() const { return 0; } int num_glyphs() const { return 0; } };
 struct PaintResponse {};
 struct NavigateResponse {};
 struct WGetResponse {};
@@ -220,7 +223,7 @@ struct WGetResponse {};
 #define RPC_CLIENT_CALL(name, mpt, ...) \
   struct name ## Query; \
   struct name ## RPC { \
-    typedef function<int(name ## Query*, const IPC::name ## Response*, mpt)> CB; \
+    typedef function<int(const IPC::name ## Response*, mpt)> CB; \
     name ## RPC(Parent *P=0, RPC::Seq S=0, const CB &C=CB()) {} \
   }; \
   void name(__VA_ARGS__); \
@@ -265,7 +268,7 @@ struct MultiProcessBuffer {
   virtual bool Open();
   bool Create(int s) { len=s; return Open(); }
   bool Create(const Serializable &s) { bool ret; if ((ret = Create(Size(s)))) s.ToString(buf, len, 0); return ret; }
-  bool Copy(const Serializable &s) { bool ret; if ((ret = len >= Size(s))) s.ToString(buf, len, 0); return ret; }
+  bool Copy(const Serializable &s) { bool ret; if ((ret = (len >= Size(s)))) s.ToString(buf, len, 0); return ret; }
   static int Size(const Serializable &s) { return Serializable::Header::size + s.Size(); }
 };
 
@@ -284,17 +287,21 @@ struct RPC {
 
 struct InterProcessProtocol {
   IPC_TABLE_ENTRY( 1, AllocateBufferRequest,  Void,                        "bytes=", x->bytes());
-  IPC_TABLE_ENTRY( 2, AllocateBufferResponse, MultiProcessBuffer,          "mpb_id=", x->mpb_id());
+  IPC_TABLE_ENTRY( 2, AllocateBufferResponse, MultiProcessBuffer,          "mpb_id=", x->mpb_id(), ", mpb_len=", mpv.len, ", b=", mpv.buf!=0);
   IPC_TABLE_ENTRY( 3, OpenSystemFontRequest,  Void,                        FontDesc(x->desc() ? *x->desc() : FontDesc()).DebugString());
-  IPC_TABLE_ENTRY( 4, OpenSystemFontResponse, MultiProcessBuffer,          "num_glyphs=", x->num_glyphs()); 
-  IPC_TABLE_ENTRY( 5, LoadAssetRequest,       MultiProcessFileResource,    "fn=", BlankNull(mpv.name.buf), ", len=", mpv.buf.len);
-  IPC_TABLE_ENTRY( 6, LoadAssetResponse,      MultiProcessTextureResource, ""); 
-  IPC_TABLE_ENTRY( 7, PaintRequest,           MultiProcessPaintResource,   ""); 
-  IPC_TABLE_ENTRY( 8, PaintResponse,          Void,                        "");
-  IPC_TABLE_ENTRY( 9, WGetRequest,            Void,                        "url=", x->url() ? x->url()->data() : ""); 
-  IPC_TABLE_ENTRY(10, WGetResponse,           MultiProcessBuffer,          x->headers(), " ", mpv.buf!=0, " ", mpv.len, " ", mpv.url.c_str());
-  IPC_TABLE_ENTRY(11, NavigateRequest,        Void,                        "url=", x->url() ? x->url()->data() : ""); 
-  IPC_TABLE_ENTRY(12, NavigateResponse,       Void,                        "");
+  IPC_TABLE_ENTRY( 4, OpenSystemFontResponse, MultiProcessBuffer,          "font_id=", x->font_id(), ", num_glyphs=", x->num_glyphs()); 
+  IPC_TABLE_ENTRY( 5, SetClearColorRequest,   Void,                        "c=", x->c() ? Color(x->c()->r(), x->c()->g(), x->c()->b(), x->c()->a()).DebugString() : "" ); 
+  IPC_TABLE_ENTRY( 6, SetClearColorResponse,  Void,                        "success=", x->success()); 
+  IPC_TABLE_ENTRY( 7, LoadTextureRequest,     MultiProcessTextureResource, "w=", mpv.width, ", h=", mpv.height, ", pf=", BlankNull(Pixel::Name(mpv.pf)));
+  IPC_TABLE_ENTRY( 8, LoadTextureResponse,    Void,                        "tex_id=", x->tex_id()); 
+  IPC_TABLE_ENTRY( 9, LoadAssetRequest,       MultiProcessFileResource,    "fn=", BlankNull(mpv.name.buf), ", l=", mpv.buf.len);
+  IPC_TABLE_ENTRY(10, LoadAssetResponse,      MultiProcessTextureResource, "w=", mpv.width, ", h=", mpv.height, ", pf=", Pixel::Name(mpv.pf))
+  IPC_TABLE_ENTRY(11, PaintRequest,           MultiProcessPaintResource,   "tile=(", x->x(), ",", x->y(), ",", x->z(), ") len=", mpv.buf.len);
+  IPC_TABLE_ENTRY(12, PaintResponse,          Void,                        "success=", x->success());
+  IPC_TABLE_ENTRY(13, WGetRequest,            Void,                        "url=", x->url() ? x->url()->data() : ""); 
+  IPC_TABLE_ENTRY(14, WGetResponse,           MultiProcessBuffer,          "h=", (int)x->headers(), ", hl=", x->mpb()?x->mpb()->len():0, ", hu=", x->mpb()?x->mpb()->url()->data():"", " b=", mpv.buf!=0, ", l=", mpv.len);
+  IPC_TABLE_ENTRY(15, NavigateRequest,        Void,                        "url=", x->url() ? x->url()->data() : ""); 
+  IPC_TABLE_ENTRY(16, NavigateResponse,       Void,                        "success=", x->success());
 };
 
 struct ProcessAPIClient {
@@ -310,6 +317,8 @@ struct ProcessAPIClient {
   int pid=0, ipc_buffer_id=0;
   unordered_map<int, MultiProcessBuffer*> ipc_buffer;
   vector<Drawable*> drawable;
+  vector<Font*> font_table;
+  Browser *browser=0;
   void StartServer(const string &server_program);
 
   RPC_TABLE_BEGIN(ProcessAPIClient);
@@ -317,6 +326,8 @@ struct ProcessAPIClient {
   RPC_TABLE_CLIENT_QIRC(LoadAsset, MultiProcessTextureResource, mpb_id);
   RPC_TABLE_SERVER_CALL(AllocateBuffer);
   RPC_TABLE_SERVER_CALL(OpenSystemFont);
+  RPC_TABLE_SERVER_CALL(SetClearColor);
+  RPC_TABLE_SERVER_VIRC(LoadTexture, MultiProcessTextureResource, mpb_id);
   RPC_TABLE_SERVER_VIRC(Paint, MultiProcessPaintResource, mpb_id);
   RPC_TABLE_SERVER_CALL(WGet);
   RPC_TABLE_END(ProcessAPIClient) {};
@@ -325,6 +336,12 @@ struct ProcessAPIClient {
   RPC_CLIENT_CALL(LoadAsset, const MultiProcessTextureResource&, const string&, const string&, const LoadAssetRPC::CB&) { using LoadAssetRPC::LoadAssetRPC; };
   RPC_SERVER_CALL(AllocateBuffer, Void) {};
   RPC_SERVER_CALL(OpenSystemFont, Void) {};
+  RPC_SERVER_CALL(SetClearColor,  Void) {};
+  RPC_SERVER_CALL(LoadTexture, const MultiProcessTextureResource&) {
+    using LoadTextureRPC::LoadTextureRPC;
+    void LoadTexture(const MultiProcessTextureResource&);
+    void SendResponse(Texture*);
+  };
   RPC_SERVER_CALL(Paint, const MultiProcessPaintResource&) {};
   RPC_SERVER_CALL(WGet, Void) {
     using WGetRPC::WGetRPC;
@@ -348,7 +365,9 @@ struct ProcessAPIServer {
 
   RPC_TABLE_BEGIN(ProcessAPIServer);
   RPC_TABLE_CLIENT_QXBC(AllocateBuffer, mpb);
-  RPC_TABLE_CLIENT_CALL(OpenSystemFont);
+  RPC_TABLE_CLIENT_QXBC(OpenSystemFont, mpb);
+  RPC_TABLE_CLIENT_CALL(SetClearColor);
+  RPC_TABLE_CLIENT_CALL(LoadTexture);
   RPC_TABLE_CLIENT_CALL(Paint);
   RPC_TABLE_CLIENT_QXBC(WGet, mpb);
   RPC_TABLE_SERVER_CALL(Navigate);
@@ -356,23 +375,37 @@ struct ProcessAPIServer {
   RPC_TABLE_END(ProcessAPIServer) {};
 
   RPC_CLIENT_CALL(AllocateBuffer, MultiProcessBuffer&, int, int) { using AllocateBufferRPC::AllocateBufferRPC; };
-  RPC_CLIENT_CALL(OpenSystemFont, Void, const FontDesc &fd, Font *out) {};
-  RPC_CLIENT_CALL(Paint, Void, const point &tile, const MultiProcessPaintResourceBuilder &list) {};
+  RPC_CLIENT_CALL(OpenSystemFont, const MultiProcessBuffer&, const FontDesc &fd, const OpenSystemFontRPC::CB &) { using OpenSystemFontRPC::OpenSystemFontRPC; };
+  RPC_CLIENT_CALL(SetClearColor, Void, const Color &c) {};
+  RPC_CLIENT_CALL(LoadTexture, Void, Texture*, const LoadTextureRPC::CB &cb) {
+    Texture *tex;
+    LoadTextureQuery(Parent *P, Texture *T, const LoadTextureRPC::CB &cb) : LoadTextureRPC(P,0,cb), tex(T) {}
+    int AllocateBufferResponse(const IPC::AllocateBufferResponse*, MultiProcessBuffer&);
+  };
+  RPC_CLIENT_CALL(Paint, Void, int layer, const point &tile, MultiProcessPaintResourceBuilder &list) {
+    int layer;
+    point tile;
+    MultiProcessPaintResourceBuilder paint_list;
+    PaintQuery(Parent *P, int L, const point &X, MultiProcessPaintResourceBuilder &list) :
+      PaintRPC(P,0), layer(L), tile(X) { swap(paint_list, list); }
+    int AllocateBufferResponse(const IPC::AllocateBufferResponse*, MultiProcessBuffer&);
+  };
   RPC_CLIENT_CALL(WGet, const MultiProcessBuffer&, const string&, const HTTPClient::ResponseCB &) {
     HTTPClient::ResponseCB cb; 
     WGetQuery(Parent *P, RPC::Seq S, const WGetRPC::CB &C, const HTTPClient::ResponseCB &R) : WGetRPC(P,S,C), cb(R) {}
-    static int WGetResponse(WGetQuery*, const IPC::WGetResponse*, const MultiProcessBuffer&);
+    int WGetResponse(const IPC::WGetResponse*, const MultiProcessBuffer&);
   };
   RPC_SERVER_CALL(Navigate, Void) {};
   RPC_SERVER_CALL(LoadAsset, const MultiProcessFileResource&) {
     Texture *tex; 
     LoadAssetQuery(Parent *P, RPC::Seq S, Texture *T) : LoadAssetRPC(P,S), tex(T) {}
-    int AllocateBufferResponse(AllocateBufferQuery*, const IPC::AllocateBufferResponse*, MultiProcessBuffer&);
+    int AllocateBufferResponse(const IPC::AllocateBufferResponse*, MultiProcessBuffer&);
   };
 };
 
-struct TilesIPC : public TilesT<MultiProcessPaintResource::PaintCmd, MultiProcessPaintResourceBuilder> {
+struct TilesIPC : public TilesT<MultiProcessPaintResource::Cmd, MultiProcessPaintResourceBuilder, MultiProcessPaintResource> {
   const Drawable::Attr *attr=0;
+  TilesIPC(int l, int w=256, int h=256) : TilesT(l, w, h) {}
   void SetAttr           (const Drawable::Attr*);
   void InitDrawBox       (const point&);
   void InitDrawBackground(const point&);
@@ -380,7 +413,12 @@ struct TilesIPC : public TilesT<MultiProcessPaintResource::PaintCmd, MultiProces
   void DrawBackground    (const Box&);
   void AddScissor        (const Box&);
 };
-typedef LayersT<TilesIPC> LayersIPC;
+
+struct TilesIPCServer : public TilesIPC { using TilesIPC::TilesIPC; };
+struct TilesIPCClient : public TilesIPC { using TilesIPC::TilesIPC; void Run(); };
+
+typedef LayersT<TilesIPCServer> LayersIPCServer;
+typedef LayersT<TilesIPCClient> LayersIPCClient;
 
 }; // namespace LFL
 #endif // __LFL_LFAPP_IPC_H__

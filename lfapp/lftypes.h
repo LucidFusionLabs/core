@@ -53,7 +53,9 @@ struct typed_ptr {
 template <class X> int TypeId()   { static int ret = fnv32(typeid(X).name()); return ret; }
 template <class X> int TypeId(X*) { static int ret = fnv32(typeid(X).name()); return ret; }
 template <class X> typed_ptr TypePointer(X* v) { return typed_ptr(TypeId<X>(), v); }
+template <class X> X *CheckPointer(X *x) { CHECK(x); return x; }
 template <class X> typename make_unsigned<X>::type *Unsigned(X *x) { return reinterpret_cast<typename make_unsigned<X>::type*>(x); }
+template <class X, int S, int XS=sizeof(X)> void StaticAssertSizeof() { static_assert(XS == S, "unexpected sizeof"); }
 
 struct RefCounter {
   int count=0;
@@ -542,9 +544,9 @@ struct CallbackQueue : public MessageQueue<Callback*> {
 struct CallbackList {
   bool dirty=0;
   vector<Callback> data;
-  int Size() const { return data.size(); }
+  int Count() const { return data.size(); }
   void Clear() { dirty=0; data.clear(); }
-  void Run() { for (auto i = data.begin(); i != data.end(); ++i) (*i)(); Clear(); }
+  void Run() const { for (auto i = data.begin(); i != data.end(); ++i) (*i)(); }
   void Add(const Callback &cb) { data.push_back(cb); dirty=1; }
   void AddList(const CallbackList &cb) { data.insert(data.end(), cb.data.begin(), cb.data.end()); dirty=1; }
 };

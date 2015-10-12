@@ -96,6 +96,11 @@ void Glyph::FromArray(const double *in, int l) {
   bearing_x = (int)in[5]; tex.coord[0] =      in[6]; tex.coord[1] =      in[7]; tex.coord[2] =      in[8]; tex.coord[3] =      in[9];
 }
 
+void Glyph::FromMetrics(const GlyphMetrics &m) {
+  id=m.id; tex.width=m.width; tex.height=m.height; bearing_x=m.bearing_x; bearing_y=m.bearing_y; advance=m.advance;
+  wide=m.wide; space=m.space; tex.ID=m.tex_id;
+}
+
 int Glyph::ToArray(double *out, int l) {
   CHECK_GE(l, 10);
   out[0] = id;        out[1] = advance;      out[2] = tex.width;    out[3] = tex.height;   out[4] = bearing_y;
@@ -264,7 +269,7 @@ void GlyphCache::Load(const Font *f, const Glyph *g, HFONT hfont, int size, HDC 
 FontDesc::FontDesc(const IPC::FontDescription &d) :
   FontDesc(d.name() ? d.name()->data() : "", d.family() ? d.family()->data() : "", d.size(),
            d.fg() ? Color(d.fg()->r(), d.fg()->g(), d.fg()->b(), d.fg()->a()) : Color::white,
-           d.bg() ? Color(d.bg()->r(), d.bg()->g(), d.bg()->b(), d.fg()->a()) : Color::clear, d.flag(), d.unicode()) {
+           d.bg() ? Color(d.bg()->r(), d.bg()->g(), d.bg()->b(), d.bg()->a()) : Color::clear, d.flag(), d.unicode()) {
   engine = d.engine();
 }
 
@@ -482,7 +487,7 @@ Font *AtlasFontEngine::OpenAtlas(const FontDesc &d) {
   cache->flow->p.x =  max_t * cache->tex.width;
   cache->flow->p.y = -max_u * cache->tex.height;
 
-  INFO("OpenAtlas ", d.name, ", texID=", tex.ID, ", height=", ret->Height(), ", fixed_width=", ret->fixed_width);
+  INFO("OpenAtlas ", d.DebugString(), ", texID=", tex.ID, ", height=", ret->Height(), ", fixed_width=", ret->fixed_width);
   return ret;
 }
 
@@ -992,11 +997,22 @@ void GDIFontEngine::AssignGlyph(Glyph *g, const ::SIZE &bounds, const ::SIZE &ad
 
 #ifdef LFL_IPC
 Font *IPCClientFontEngine::Open(const FontDesc &d) {
-  Font *ret = new Font(this, d, shared_ptr<FontEngine::Resource>());
+  Font *ret = new Font(this, d, shared_ptr<FontEngine::Resource>(new Resource()));
   ret->glyph = shared_ptr<GlyphMap>(new GlyphMap());
-  app->main_process->OpenSystemFont(d, ret);
+  ret->glyph->cache = shared_ptr<GlyphCache>(GlyphCache::Get());
+  app->main_process->OpenSystemFont(d, bind(&IPCClientFontEngine::OpenSystemFontResponse, this, ret, _1, _2));
   return ret;
 }
+int IPCClientFontEngine::OpenSystemFontResponse(Font *f, const IPC::OpenSystemFontResponse *res, const MultiProcessBuffer &mpb) {
+  if (!res) return RPC::Error;
+  static_cast<Resource*>(f->resource.get())->id = res->font_id();
+  f->glyph->table_start = res->start_glyph_id();
+  f->glyph->table.resize(res->num_glyphs());
+  GlyphMetrics *g = reinterpret_cast<GlyphMetrics*>(mpb.buf);
+  for (int i=0, l=f->glyph->table.size(); i<l; i++) f->glyph->table[i].FromMetrics(g[i]);
+  return RPC::Done;
+}
+int   IPCClientFontEngine::GetId(Font *f) { return static_cast<Resource*>(f->resource.get())->id; }
 int   IPCClientFontEngine::InitGlyphs(Font *f, Glyph *g, int n) { return 0; }
 int   IPCClientFontEngine::LoadGlyphs(Font *f, const Glyph *g, int n) { return 0; }
 string IPCClientFontEngine::DebugString(Font *f) const { return ""; }

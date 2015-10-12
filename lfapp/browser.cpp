@@ -441,7 +441,7 @@ bool Browser::Dirty(Box *VP) {
 }
 
 void Browser::Draw(Box *VP) {
-  if (!VP || !doc.node || !doc.node->documentElement()) return;
+  if (!VP || (!app->render_process && (!doc.node || !doc.node->documentElement()))) return;
   doc.gui.box = *VP;
   int v_scrolled = v_scrollbar.scrolled * v_scrollbar.doc_height;
   int h_scrolled = h_scrollbar.scrolled * 1000; // v_scrollbar.doc_height;
@@ -469,6 +469,26 @@ void Browser::Render(int v_scrolled) {
   Paint(&flow, Viewport().TopLeft());
   doc.height = html_render->box.h;
   if (layers) layers->Update();
+}
+
+void Browser::PaintTile(int x, int y, int z, const MultiProcessPaintResource &paint) {
+  CHECK(layers && layers->size());
+  if (z < 0 || z >= layers->size()) return;
+  TilesIPCServer *tiles = dynamic_cast<TilesIPCServer*>((*layers)[z]);
+  CHECK(tiles);
+  tiles->Select();
+#if 1
+  point current_tile;
+  tiles->GetScreenCoords(x, y, &current_tile.x, &current_tile.y);
+  INFO("current tile coords ", current_tile.DebugString());
+#endif
+  tiles->RunTile(x, y, tiles->GetTile(x,y), paint);
+  tiles->Release();
+}
+
+void Browser::SetClearColor(const Color &c) {
+  if (app->main_process) app->main_process->SetClearColor(c);
+  else                   screen->gd->ClearColor(c);
 }
 
 void Browser::Paint(Flow *flow, const point &displacement) {
@@ -707,7 +727,6 @@ DOM::Node *Browser::LayoutNode(Flow *flow, DOM::Node *n, bool reflow) {
   render->style_dirty = render->layout_dirty = 0;
   return (render->floating && !render->done_floated) ? n : 0;
 }
-
 void Browser::LayoutBackground(DOM::Node *n) {
   bool is_body = n->htmlElementType == DOM::HTML_BODY_ELEMENT;
   DOM::Renderer *render = n->render;
@@ -719,12 +738,12 @@ void Browser::LayoutBackground(DOM::Node *n) {
   else if (render->block_level_box || render->display_table_element) box = &render->padding;
 
   if (style->bgcolor_not_inherited && render->background_color.A()) {
-    if (is_body) screen->gd->ClearColor(Color(render->background_color, 0.0));
+    if (is_body) SetClearColor(Color(render->background_color, 0.0));
     else {
       flow.SetFGColor(&render->background_color);
       flow.out->PushBack(*box, flow.cur_attr, Singleton<BoxFilled>::Get());
     }
-  } else if (is_body) screen->gd->ClearColor(Color(1.0, 1.0, 1.0, 0.0));
+  } else if (is_body) SetClearColor(Color(1.0, 1.0, 1.0, 0.0));
 
   if (render->background_image && render->background_image->width && 
       render->background_image->height) {
