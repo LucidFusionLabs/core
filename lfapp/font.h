@@ -389,7 +389,6 @@ struct GDIFontEngine : public FontEngine {
 };
 #endif
 
-#ifdef LFL_IPC
 struct IPCClientFontEngine : public FontEngine {
   struct Resource : public FontEngine::Resource { int id; Resource(int I=0) : id(I) {} };
   virtual const char *Name() { return "IPCClientFontEngine"; }
@@ -408,7 +407,6 @@ struct IPCServerFontEngine : public FontEngine {
   virtual int   LoadGlyphs(Font *f, const Glyph *g, int n);
   string        DebugString(Font *f) const;
 };
-#endif
 
 struct Fonts {
   struct Family {

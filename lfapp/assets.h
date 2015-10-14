@@ -707,7 +707,7 @@ struct TilesInterface {
   virtual void DrawBox            (const Drawable*, const Box&, const Drawable::Attr *a=0) = 0;
   virtual void DrawBackground     (const Box&)                                             = 0;
   virtual void AddScissor         (const Box&)                                             = 0;
-  virtual void Draw(const Box &viewport, int scrolled_x, int scrolled_y)                   = 0;
+  virtual void Draw(const Box &viewport, const point &doc_position)                        = 0;
   virtual void ContextOpen()                                                               = 0;
   virtual void ContextClose()                                                              = 0;
   virtual void Run()                                                                       = 0;
@@ -715,7 +715,7 @@ struct TilesInterface {
 
 struct LayersInterface : public vector<TilesInterface*> {
   virtual void Init(int N=1)                      = 0;
-  virtual void Draw(const Box &b, int vs, int hs) = 0;
+  virtual void Draw(const Box &b, const point &p) = 0;
   virtual void Update()                           = 0;
 };
 
@@ -729,7 +729,7 @@ template<class CB, class CBL, class CBLI> struct TilesT : public TilesInterface 
     unsigned id, prepend_depth; bool dirty;
     Tile() : id(0), prepend_depth(0), dirty(0) {}
   };
-  int layer, W, H, zero_row=0, zero_col=0, context_depth=-1;
+  int layer, W, H, context_depth=-1;
   bool clear=1, clear_empty=1;
   vector<Tile*> prepend, append;
   matrix<Tile*> mat;
@@ -737,28 +737,20 @@ template<class CB, class CBL, class CBLI> struct TilesT : public TilesInterface 
   Box current_tile;
   TilesT(int l, int w=256, int h=256) : layer(l), W(w), H(h), mat(1,1) { CHECK(IsPowerOfTwo(W)); CHECK(IsPowerOfTwo(H)); }
 
-  void GetScreenCoords(int i, int j, int *xo, int *yo) const {
-    *xo = j * W;
-    *yo = (i - zero_row) * H;
+  void PushScissor(const Box &w) const { screen->gd->PushScissorOffset(current_tile, w); }
+  void GetSpaceCoords(int i, int j, int *xo, int *yo) const { *xo =  j * W; *yo = (-i-1) * H; }
+  void GetTileCoords (int x, int y, int *xo, int *yo) const { *xo =  x / W; *yo = -y     / H; }
+  void GetTileCoords(const Box &box, int *x1, int *y1, int *x2, int *y2) const {
+    GetTileCoords(box.x,         box.y + box.h, x1, y1);
+    GetTileCoords(box.x + box.w, box.y,         x2, y2);
   }
-  void GetTileCoords(int xi, int yi, int *xo, int *yo) const {
-    *xo = xi / W;
-    *yo = yi / H - (yi < 0 && (yi % W) != 0);
-  }
-  void GetTileCoords(const Box *box, int *x1, int *y1, int *x2, int *y2) const {
-    GetTileCoords(box->x,          box->y,          x1, y1);
-    GetTileCoords(box->x + box->w, box->y + box->h, x2, y2);
-  }
+
   Tile *GetTile(int x, int y) {
-    int add; unsigned texid;
     CHECK_GE(x, 0);
-    if (1)      { if ((add =  x + zero_col - mat.N + 1) > 0) { mat.AddCols(add); } }
-    if (y >= 0) { if ((add =  y + zero_row - mat.M + 1) > 0) { mat.AddRows(add); } }
-    else        { if ((add = -y - zero_row            ) > 0) { mat.AddRows(add, true); zero_row += add; } }
-
-    y = zero_row + y;
-    CHECK_RANGE(y, 0, mat.M);
-
+    CHECK_GE(y, 0);
+    int add;
+    if ((add = x - mat.N + 1) > 0) mat.AddCols(add);
+    if ((add = y - mat.M + 1) > 0) mat.AddRows(add);
     Tile **ret = (Tile**)&mat.row(y)[x];
     if (!*ret) *ret = new Tile();
     if (!(*ret)->cb.dirty) {
@@ -785,23 +777,12 @@ template<class CB, class CBL, class CBLI> struct TilesT : public TilesInterface 
     }
     context_depth--;
   }
-
-  void PushScissor(const Box &w) { screen->gd->PushScissor(Box(w.x - current_tile.x, w.y - current_tile.y, w.w, w.h)); }
-  void InvalidBox(const Box *box) { /* ERROR("InvalidBox ", box->DebugString()); */ } 
-
   void AddCallback(const Box *box, const CB &cb) {
-    int x1, x2, y1, y2, ind = 0; bool added = 0;
-    GetTileCoords(box, &x1, &y1, &x2, &y2);
-
-    if ((x1 < 0 && x2 < 0) || box->w < 0 || box->h < 0) { InvalidBox(box); return; }
-    x1 = max(x1, 0);
-
-    for (int y = y1; y <= y2; y++)
-      for (int x = x1; x <= x2; x++) {
-        GetTile(x, y)->cb.Add(cb);
-        added = true;
-      }
-
+    bool added = 0;
+    int x1, x2, y1, y2;
+    GetTileCoords(*box, &x1, &y1, &x2, &y2);
+    for (int y = max(y1, 0); y <= y2; y++)
+      for (int x = max(x1, 0); x <= x2; x++, added=1) GetTile(x, y)->cb.Add(cb);
     if (!added) FATAL("AddCallback ", box->DebugString(), " = ", x1, " ", y1, " ", x2, " ", y2);
   }
 
@@ -814,7 +795,6 @@ template<class CB, class CBL, class CBLI> struct TilesT : public TilesInterface 
     }
     Release();
   }
-
   void Select() {
     bool init = !fb.ID;
     if (init) fb.Create(W, H);
@@ -823,9 +803,8 @@ template<class CB, class CBL, class CBLI> struct TilesT : public TilesInterface 
     screen->gd->ViewPort(current_tile);
     screen->gd->EnableLayering();
   }
-
   void RunTile(int i, int j, Tile *tile, const CBLI &tile_cb) {
-    GetScreenCoords(i, j, &current_tile.x, &current_tile.y);
+    GetSpaceCoords(i, j, &current_tile.x, &current_tile.y);
     if (!tile->id) fb.AllocTexture(&tile->id);
     fb.Attach(tile->id);
     screen->gd->MatrixProjection();
@@ -833,35 +812,26 @@ template<class CB, class CBL, class CBLI> struct TilesT : public TilesInterface 
     screen->gd->LoadIdentity();
     screen->gd->Ortho(current_tile.x, current_tile.x + W, current_tile.y, current_tile.y + H, 0, 100);
     screen->gd->MatrixModelview();
-    tile_cb.Run();
+    tile_cb.Run(current_tile);
   }
-
   void Release() {
     fb.Release();
     screen->gd->RestoreViewport(DrawMode::_2D);
   }
 
-  void Draw(const Box &viewport, int scrolled_x, int scrolled_y) {
+  void Draw(const Box &viewport, const point &docp) {
+    int x1, x2, y1, y2, sx, sy;
+    point doc_to_view = docp - viewport.Position();
+    GetTileCoords(Box(docp.x, docp.y, viewport.w, viewport.h), &x1, &y1, &x2, &y2);
+
+    Scissor scissor(viewport);
     screen->gd->SetColor(Color::white);
-    int x1 = viewport.x + scrolled_x, y1 = viewport.y + scrolled_y, x2 = x1 + viewport.w, y2 = y1 + viewport.h;
-    for (int ys, y = y1; y < y2; y += ys) {
-      int ymh = y % H, yo = y >= 0 ? ymh : (ymh ? (H + ymh) : 0);
-      ys = min(y2 - y, H - yo);
-
-      for (int xs, x = x1; x < x2; x += xs) {
-        int xo = (x % W), tx, ty;
-        xs = min(x2 - x, W - xo);
-
-        GetTileCoords(x, y, &tx, &ty);
-        Tile *tile = GetTile(tx, ty);
+    for (int y = max(y1, 0); y <= y2; y++) {
+      for (int x = max(x1, 0); x <= x2; x++) {
+        Tile *tile = GetTile(x, y);
         if (!tile || !tile->id) continue;
-
-        Box w(x - scrolled_x, y - scrolled_y, xs, ys);
-        Texture tex(0, 0, Pixel::RGBA, tile->id);
-        tex.coord[0] = (float)xo/W; tex.coord[2] = (float)(xo+xs)/W;
-        tex.coord[1] = (float)yo/H; tex.coord[3] = (float)(yo+ys)/H;
-        tex.Draw(w);
-        // glBox(w, &Color::white);
+        GetSpaceCoords(y, x, &sx, &sy);
+        Texture(0, 0, Pixel::RGBA, tile->id).Draw(Box(sx - doc_to_view.x, sy - doc_to_view.y, W, H));
       }
     }
   }
@@ -880,7 +850,7 @@ struct Tiles : public TilesT<Callback, CallbackList, CallbackList> {
 
 template <class X> struct LayersT : public LayersInterface {
   void Init(int N=1) { CHECK_EQ(this->size(), 0); for (int i=0; i<N; i++) this->push_back(new X(i)); }
-  void Draw(const Box &b, int vs, int hs) { for (auto i : *this) i->Draw(b, vs, hs); }
+  void Draw(const Box &b, const point &p) { for (auto i : *this) i->Draw(b, p); }
   void Update() { for (auto i : *this) i->Run(); }
 };
 

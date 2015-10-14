@@ -230,6 +230,7 @@ Allocator *ThreadLocalStorage::GetAllocator(bool reset_allocator) {
 void Log(int level, const char *file, int line, const string &m) { app->Log(level, file, line, m); }
 bool Running() { return app->run; }
 bool MainThread() { return Thread::GetId() == app->main_thread_id; }
+bool MainProcess() { return !app->main_process; }
 void DefaultLFAppWindowClosedCB(Window *W) { delete W; }
 double FPS() { return screen->fps.FPS(); }
 double CamFPS() { return app->camera->fps.FPS(); }

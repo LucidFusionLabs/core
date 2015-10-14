@@ -403,10 +403,6 @@ void Browser::Document::Clear() {
 Browser::Browser(GUI *gui, const Box &V) : doc(gui ? gui->parent : NULL, V),
   v_scrollbar(gui, Box(V.w, V.h)),
   h_scrollbar(gui, Box(V.w, V.h), Widget::Scrollbar::Flag::AttachedHorizontal) {
-  if (gui) {
-    v_scrollbar.LayoutAttached(V);
-    h_scrollbar.LayoutAttached(V);
-  }
   if (Font *maf = Fonts::Get("MenuAtlas", "", 0, Color::black, Color::clear, 0, 0)) {
     missing_image = maf->FindGlyph(0)->tex;
     missing_image.width = missing_image.height = 16;
@@ -443,30 +439,31 @@ bool Browser::Dirty(Box *VP) {
 void Browser::Draw(Box *VP) {
   if (!VP || (!app->render_process && (!doc.node || !doc.node->documentElement()))) return;
   doc.gui.box = *VP;
-  int v_scrolled = v_scrollbar.scrolled * v_scrollbar.doc_height;
+  doc.gui.Activate();
+  int v_scrolled = v_scrollbar.scrolled * X_or_Y(v_scrollbar.doc_height, 1000); // v_scrollbar.doc_height;
   int h_scrolled = h_scrollbar.scrolled * 1000; // v_scrollbar.doc_height;
-  if (!layers) { Render(v_scrolled); DrawScrollbar(); }
+  if (!layers) { Render(v_scrolled); doc.gui.Draw(); UpdateScrollbar(); }
   else {
     if (!app->render_process && Dirty(VP)) Render(0);
-    for (int i=0; i<layers->size(); i++) (*layers)[i]->Draw(Viewport(), !i ? h_scrolled : 0, !i ? -v_scrolled : 0);
+    for (int i=0; i<layers->size(); i++)
+      (*layers)[i]->Draw(*VP, point(!i ? h_scrolled : 0, (!i ? -v_scrolled : 0) - VP->h));
   }
 }
 
-void Browser::DrawScrollbar() {
-  doc.gui.Draw();
+void Browser::UpdateScrollbar() {
   v_scrollbar.SetDocHeight(doc.height);
   v_scrollbar.Update();
   h_scrollbar.Update();
-  doc.gui.Activate();
 }
 
-void Browser::Render(int v_scrolled) {
+void Browser::Render(bool screen_coords, int v_scrolled) {
+  INFO(app->main_process ? "Render" : "Main", " process Browser::Render");
   DOM::Renderer *html_render = doc.node->documentElement()->render;
   html_render->tiles = layers ? (*layers)[0] : 0;
   html_render->child_bg.Reset();
   Flow flow(html_render->box.Reset(), 0, html_render->child_box.Reset());
   flow.p.y -= layers ? 0 : v_scrolled;
-  Paint(&flow, Viewport().TopLeft());
+  Paint(&flow, screen_coords ? Viewport().TopLeft() : point());
   doc.height = html_render->box.h;
   if (layers) layers->Update();
 }
@@ -479,10 +476,10 @@ void Browser::PaintTile(int x, int y, int z, const MultiProcessPaintResource &pa
   tiles->Select();
 #if 1
   point current_tile;
-  tiles->GetScreenCoords(x, y, &current_tile.x, &current_tile.y);
-  INFO("current tile coords ", current_tile.DebugString());
+  tiles->GetSpaceCoords(y, x, &current_tile.x, &current_tile.y);
+  INFO("tile(", x, ",", y, ") coords ", current_tile.DebugString());
 #endif
-  tiles->RunTile(x, y, tiles->GetTile(x,y), paint);
+  tiles->RunTile(y, x, tiles->GetTile(x, y), paint);
   tiles->Release();
 }
 

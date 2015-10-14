@@ -24,15 +24,12 @@ struct DocumentParser {
   struct Parser {
     string url;
     DocumentParser *parent;
-    virtual ~Parser() {}
     Parser(DocumentParser *P, const string &URL) : url(URL), parent(P) {}
-
-    void SetDocumentLayoutDirty() { DOM::Node *html = parent->doc->node->documentElement(); if (html) html->render->layout_dirty = true; }
-    void SetDocumentStyleDirty()  { DOM::Node *html = parent->doc->node->documentElement(); if (html) html->render->style_dirty  = true; }
+    virtual ~Parser() {}
     virtual void Complete(void *self) {
       parent->completed++;
       parent->outstanding.erase(self);
-      SetDocumentLayoutDirty();
+      parent->doc->SetLayoutDirty();
       delete this;
     }
   };
@@ -46,7 +43,7 @@ struct DocumentParser {
       style_target->Done();
       if (parent->Running(self)) {
         parent->doc->node->style_context->AppendSheet(style_target);
-        SetDocumentStyleDirty();
+        parent->doc->SetStyleDirty();
       }
       Parser::Complete(self);
     }
@@ -60,7 +57,7 @@ struct DocumentParser {
     vector<DOM::Node*> target;
     HTMLParser(DocumentParser *p, const string &url, DOM::Node *t) : StyleParser(p, url, "") { target.push_back(t); }
 
-    void ParseChunkCB(const char *content, int content_len) { SetDocumentLayoutDirty(); }
+    void ParseChunkCB(const char *content, int content_len) { parent->doc->SetLayoutDirty(); }
     void WGetContentBegin(Connection *c, const char *h, const string &ct) { parent->doc->content_type=ct; }
     void WGetContentEnd(Connection *c) { StyleParser::Complete(this); }
     void CloseTag(const String &tag, const KV &attr, const TagStack &stack) {

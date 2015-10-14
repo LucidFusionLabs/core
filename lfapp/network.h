@@ -91,6 +91,8 @@ struct SystemNetwork {
   static int SetSocketBlocking(Socket fd, int blocking);
   static int SetSocketCloseOnExec(Socket fd, int close);
   static int SetSocketBroadcastEnabled(Socket fd, int enabled);
+  static int SetSocketSendBufferSize(Socket fd, int size);
+  static int GetSocketSendBufferSize(Socket fd);
   static int SetSocketReceiveBufferSize(Socket fd, int size);
   static int GetSocketReceiveBufferSize(Socket fd);
 
@@ -103,6 +105,7 @@ struct SystemNetwork {
   static int GetPeerName(Socket fd, IPV4::Addr *addr_out, int *port_out);
   static string GetHostByAddr(IPV4::Addr addr);
   static IPV4::Addr GetHostByName(const string &host);
+  static int IOVLen(const iovec*, int len);
   static bool EWouldBlock();
   static string LastError();
 };

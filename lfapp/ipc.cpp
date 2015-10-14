@@ -257,7 +257,7 @@ MultiProcessBuffer::~MultiProcessBuffer() {
 void MultiProcessBuffer::Close() {}
 bool MultiProcessBuffer::Open() {
   bool read_only = 0 && url.size();
-  if (!len || (url.size() && impl < 0)) return ERRORv("mpb open url=", url, " len=", len, " fd=", impl);
+  if (!len || (url.size() && impl < 0)) return ERRORv(false, "mpb open url=", url, " len=", len, " fd=", impl);
   if (url.empty()) {
     CHECK_EQ(-1, impl);
 #ifdef __APPLE__
@@ -354,6 +354,13 @@ void ProcessAPIClient::StartServer(const string &server_program) {
   CHECK(SystemNetwork::OpenSocketPair(fd, false));
   SystemNetwork::SetSocketCloseOnExec(fd[1], true);
   string arg0 = server_program, arg1 = StrCat("fd://", fd[0]);
+  SystemNetwork::SetSocketSendBufferSize   (fd[0], 65536);
+  SystemNetwork::SetSocketReceiveBufferSize(fd[0], 65536);
+  SystemNetwork::SetSocketSendBufferSize   (fd[1], 65536);
+  SystemNetwork::SetSocketReceiveBufferSize(fd[1], 65536);
+  INFO("IPC channel buffer size ",
+       SystemNetwork::GetSocketReceiveBufferSize(fd[0]), " ", SystemNetwork::GetSocketSendBufferSize(fd[0]), " ",
+       SystemNetwork::GetSocketReceiveBufferSize(fd[1]), " ", SystemNetwork::GetSocketSendBufferSize(fd[1]), " ");
 #elif defined(LFL_TCP_IPC)
   Socket l = -1;
   IPV4Endpoint listen;
@@ -502,8 +509,7 @@ int ProcessAPIClient::HandleOpenSystemFontRequest(int seq, const IPC::OpenSystem
 }
 
 int ProcessAPIClient::HandleLoadTextureRequest(int seq, const IPC::LoadTextureRequest *req, const MultiProcessTextureResource &tex) {
-  RunInMainThread(new Callback(bind(&ProcessAPIClient::LoadTextureQuery::LoadTexture,
-                                    new LoadTextureQuery(this, seq), tex)));
+  RunInMainThread(new Callback(bind(&LoadTextureQuery::LoadTexture, new LoadTextureQuery(this, seq), tex)));
   return RPC::Accept; // leak
 }
 
@@ -595,6 +601,7 @@ void ProcessAPIServer::OpenSystemFont(const LFL::FontDesc &d, const OpenSystemFo
 }
 
 void ProcessAPIServer::LoadTexture(Texture *tex, const LoadTextureRPC::CB &cb) {
+  CHECK(tex);
   if (!SendRPC(conn, seq++, -1, AllocateBufferRequest, MultiProcessBuffer::Size(MultiProcessTextureResource(*tex)), MultiProcessTextureResource::Type)) return;
   ExpectResponseRPC(AllocateBuffer, this, seq-1, bind
                     (&LoadTextureQuery::AllocateBufferResponse, new LoadTextureQuery(this, tex, cb), _1, _2));
@@ -604,7 +611,7 @@ int ProcessAPIServer::LoadTextureQuery::AllocateBufferResponse(const IPC::Alloca
   if (!res || !mpb.Copy(MultiProcessTextureResource(*tex)) ||
       !parent->SendRPC(parent->conn, (seq = parent->seq++), -1, LoadTextureRequest, res->mpb_id())) return Error();
   parent->ExpectLoadTextureResponse(this);
-  return Done();
+  return RPC::Done;
 }
 
 void ProcessAPIServer::Paint(int layer, const point &tile, MultiProcessPaintResourceBuilder &list) {

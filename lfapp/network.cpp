@@ -217,6 +217,19 @@ int SystemNetwork::SetSocketBroadcastEnabled(Socket fd, int optval) {
   return 0;
 }
 
+int SystemNetwork::SetSocketSendBufferSize(Socket fd, int optval) {
+  if (setsockopt(fd, SOL_SOCKET, SO_SNDBUF, (const char *)&optval, sizeof(optval)))
+  { ERROR("setsockopt: ", SystemNetwork::LastError()); return -1; }
+  return 0;
+}
+
+int SystemNetwork::GetSocketSendBufferSize(Socket fd) {
+  int res=0, resSize=sizeof(res);
+  if (getsockopt(fd, SOL_SOCKET, SO_SNDBUF, (char*)&res, (socklen_t*)&resSize))
+  { ERROR("getsockopt: ", SystemNetwork::LastError()); return -1; }
+  return res;
+}
+
 int SystemNetwork::SetSocketReceiveBufferSize(Socket fd, int optval) {
   if (setsockopt(fd, SOL_SOCKET, SO_RCVBUF, (const char *)&optval, sizeof(optval)))
   { ERROR("setsockopt: ", SystemNetwork::LastError()); return -1; }
@@ -336,6 +349,12 @@ IPV4::Addr SystemNetwork::GetHostByName(const string &host) {
 
   ERROR("SystemNetwork::GetHostByName ", host);
   return -1;
+}
+
+int SystemNetwork::IOVLen(const iovec *iov, int len) {
+  int ret = 0;
+  if (iov) for (int i=0; i<len; i++) ret += iov[i].iov_len;
+  return ret;
 }
 
 bool SystemNetwork::EWouldBlock() {
@@ -578,8 +597,6 @@ int Connection::WriteVFlush(const iovec *iov, int len, int transfer_socket) {
   memzero(control);
   struct msghdr msg;
   memzero(msg);
-  msg.msg_iov = const_cast<iovec*>(iov);
-  msg.msg_iovlen = len;
   msg.msg_control = control;
   msg.msg_controllen = sizeof(control);
   struct cmsghdr *cmsg = CMSG_FIRSTHDR(&msg);
@@ -587,9 +604,13 @@ int Connection::WriteVFlush(const iovec *iov, int len, int transfer_socket) {
   cmsg->cmsg_level = SOL_SOCKET;
   cmsg->cmsg_type = SCM_RIGHTS;
   memcpy(CMSG_DATA(cmsg), &transfer_socket, sizeof(int));
+  msg.msg_controllen = cmsg->cmsg_len;
+  msg.msg_iov = const_cast<iovec*>(iov);
+  msg.msg_iovlen = len;
 
   if ((wrote = sendmsg(socket, &msg, 0)) < 0) {
-    if (!SystemNetwork::EWouldBlock()) { ERROR(Name(), ": sendmsg: ", strerror(errno)); return -1; }
+    if (!SystemNetwork::EWouldBlock())
+      return ERRORv(-1, Name(), ": sendmsg(l=", SystemNetwork::IOVLen(iov, len), "): ", strerror(errno)); 
     wrote = 0;
   }
 #endif

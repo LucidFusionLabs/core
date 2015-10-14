@@ -313,6 +313,14 @@ struct MultiProcessTextureResource : public Serializable {
 
 struct MultiProcessPaintResource : public Serializable {
   static const int Type = 1<<11 | 3;
+  struct Iterator {
+    int offset=0, type=0;
+    StringPiece buf;
+    Iterator(const StringPiece &b) : buf(b) { Load(); }
+    template <class X> const X* Get() { return reinterpret_cast<const X*>(buf.buf + offset); }
+    void Load() { type = (offset + sizeof(int) > buf.len) ? 0 : *Get<int>(); }
+    void Next() { offset += CmdSize(type); Load(); }
+  };
 
   UNALIGNED_struct Cmd { int type; Cmd(int T=0) : type(T) {} }; UNALIGNED_END(Cmd, 4);
   UNALIGNED_struct SetAttr : public Cmd {
@@ -332,6 +340,15 @@ struct MultiProcessPaintResource : public Serializable {
   UNALIGNED_struct PushScissor        : public Cmd { static const int Type=6, Size=28; Box b;         PushScissor       (const Box &B=Box())           : Cmd(Type), b(B) {} };         UNALIGNED_END(PushScissor,        PushScissor::Size);
   UNALIGNED_struct PopScissor         : public Cmd { static const int Type=7, Size=4;                 PopScissor        ()                             : Cmd(Type) {} };               UNALIGNED_END(PopScissor,         PopScissor::Size);
 
+  StringPiece buf;
+  mutable Drawable::Attr attr;
+  MultiProcessPaintResource() : Serializable(Type) {}
+  void Out(Serializable::Stream *o) const { o->BString(buf); }
+  int In(const Serializable::Stream *i) { i->ReadString(&buf); return i->Result(); }
+  int Size() const { return HeaderSize() + buf.size(); }
+  int HeaderSize() const { return sizeof(int); }
+  int Run(const Box&) const;
+
   static int CmdSize(int n) {
     switch(n) {
       case SetAttr           ::Type: return SetAttr           ::Size;
@@ -344,24 +361,6 @@ struct MultiProcessPaintResource : public Serializable {
       default:                       FATAL("unknown cmd ", n);
     }
   }
-
-  struct Iterator {
-    int offset=0, type=0;
-    StringPiece buf;
-    Iterator(const StringPiece &b) : buf(b) { Load(); }
-    template <class X> const X* Get() { return reinterpret_cast<const X*>(buf.buf + offset); }
-    void Load() { type = (offset + sizeof(int) > buf.len) ? 0 : *Get<int>(); }
-    void Next() { offset += CmdSize(type); Load(); }
-  };
-
-  StringPiece buf;
-  mutable Drawable::Attr attr;
-  MultiProcessPaintResource() : Serializable(Type) {}
-  void Out(Serializable::Stream *o) const { o->BString(buf); }
-  int In(const Serializable::Stream *i) { i->ReadString(&buf); return i->Result(); }
-  int Size() const { return HeaderSize() + buf.size(); }
-  int HeaderSize() const { return sizeof(int); }
-  void Run() const;
 };
 
 struct MultiProcessPaintResourceBuilder : public MultiProcessPaintResource {
@@ -370,19 +369,20 @@ struct MultiProcessPaintResourceBuilder : public MultiProcessPaintResource {
   int Count() const { return count; }
   void Clear() { buf.len=0; count=0; dirty=0; }
   void Resize(int n) { data.resize(n); buf.buf=data.data(); }
-  void Ensure(int n) { int s=data.size(), f=1; while(buf.len+n > s*f) f*=2; if (f>1) Resize(s*f); }
+  void EnsureAdditional(int n) { int s=data.size(), f=1; while(buf.len+n > s*f) f*=2; if (f>1) Resize(s*f); }
   void Add(const Cmd &cmd) {
     int size = CmdSize(cmd.type);
-    Ensure(size);
+    EnsureAdditional(size);
     memcpy(&data[0] + buf.len, &cmd, size);
     buf.len += size;
     count++;
     dirty=1;
   }
   void AddList(const MultiProcessPaintResourceBuilder &x) {
-    Ensure(x.buf.len);
+    EnsureAdditional(x.buf.len);
     memcpy(&data[0] + buf.len, x.data.data(), x.buf.len);
     buf.len += x.buf.len;
+    count += x.count;
     dirty=1;
   }
 };

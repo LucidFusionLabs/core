@@ -253,6 +253,7 @@ struct Module {
 namespace LFL {
 bool Running();
 bool MainThread();
+bool MainProcess();
 void RunInMainThread(Callback *cb);
 void RunInNetworkThread(const Callback &cb);
 void DefaultLFAppWindowClosedCB(Window *);
@@ -465,12 +466,12 @@ namespace LFL {
 ::std::ostream& operator<<(::std::ostream& os, const point &x);
 ::std::ostream& operator<<(::std::ostream& os, const Box   &x);
 
-struct FrameRateLimitter {
+struct RateLimiter {
   int *target_hz;
   float avgframe;
   Timer timer;
   RollingAvg<unsigned> sleep_bias;
-  FrameRateLimitter(int *HZ) : target_hz(HZ), avgframe(0), sleep_bias(32) {}
+  RateLimiter(int *HZ) : target_hz(HZ), avgframe(0), sleep_bias(32) {}
   void Limit() {
     Time since = timer.GetTime(true), targetframe(1000 / *target_hz);
     Time sleep = max(Time(0), targetframe - since - FMilliseconds(sleep_bias.Avg()));
@@ -479,7 +480,7 @@ struct FrameRateLimitter {
 };
 
 struct FrameScheduler {
-  FrameRateLimitter maxfps;
+  RateLimiter maxfps;
   mutex frame_mutex, wait_mutex;
   SocketWakeupThread wakeup_thread;
   SelectSocketSet wait_forever_sockets;

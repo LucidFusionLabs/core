@@ -22,6 +22,7 @@
 #include "lfapp/flow.h"
 #include "lfapp/gui.h"
 #include "lfapp/ipc.h"
+#include "lfapp/browser.h"
 
 #ifdef WIN32
 #include <mlang.h>
@@ -995,7 +996,6 @@ void GDIFontEngine::AssignGlyph(Glyph *g, const ::SIZE &bounds, const ::SIZE &ad
 }
 #endif /* WIN32 */
 
-#ifdef LFL_IPC
 Font *IPCClientFontEngine::Open(const FontDesc &d) {
   Font *ret = new Font(this, d, shared_ptr<FontEngine::Resource>(new Resource()));
   ret->glyph = shared_ptr<GlyphMap>(new GlyphMap());
@@ -1010,6 +1010,11 @@ int IPCClientFontEngine::OpenSystemFontResponse(Font *f, const IPC::OpenSystemFo
   f->glyph->table.resize(res->num_glyphs());
   GlyphMetrics *g = reinterpret_cast<GlyphMetrics*>(mpb.buf);
   for (int i=0, l=f->glyph->table.size(); i<l; i++) f->glyph->table[i].FromMetrics(g[i]);
+  if (app->main_process) {
+    INFO("marking dirty");
+    app->main_process->browser->doc.SetLayoutDirty();
+    app->main_process->browser->doc.SetStyleDirty();
+  }
   return RPC::Done;
 }
 int   IPCClientFontEngine::GetId(Font *f) { return static_cast<Resource*>(f->resource.get())->id; }
@@ -1021,7 +1026,6 @@ Font *IPCServerFontEngine::Open(const FontDesc&) { return 0; }
 int   IPCServerFontEngine::InitGlyphs(Font *f, Glyph *g, int n) { return 0; }
 int   IPCServerFontEngine::LoadGlyphs(Font *f, const Glyph *g, int n) { return 0; }
 string IPCServerFontEngine::DebugString(Font *f) const { return ""; }
-#endif
 
 FontEngine *Fonts::GetFontEngine(int engine_type) {
   switch (engine_type) {

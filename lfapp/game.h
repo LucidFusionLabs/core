@@ -1129,7 +1129,8 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
       menuflow.AppendNewlines(1);
       if (last_selected != 3) browser.Open("http://lucidfusionlabs.com/apps.html");
       browser.Paint(&menuflow, box.TopLeft());
-      browser.DrawScrollbar();
+      browser.doc.gui.Draw();
+      browser.UpdateScrollbar();
     }
     if (current_scrollbar) current_scrollbar->SetDocHeight(menuflow.Height());
   }

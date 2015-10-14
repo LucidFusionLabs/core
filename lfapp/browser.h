@@ -106,6 +106,8 @@ struct Browser : public BrowserInterface {
 
     ~Document();
     Document(Window *W=0, const Box &V=Box());
+    void SetLayoutDirty() { if (node) if (auto html = node->documentElement()) html->render->layout_dirty = true; }
+    void SetStyleDirty () { if (node) if (auto html = node->documentElement()) html->render->style_dirty  = true; }
     void Clear();
   };
   struct RenderLog { string data; int indent; };
@@ -137,8 +139,8 @@ struct Browser : public BrowserInterface {
 
   bool Dirty(Box *viewport);
   void Draw(Box *viewport);
-  void DrawScrollbar();
-  void Render(int v_scrolled);
+  void UpdateScrollbar();
+  void Render(bool screen_coords=0, int v_scrolled=0);
 
   void       Paint           (Flow *flow, const point &displacement);
   void       PaintNode       (Flow *flow, DOM::Node*, const point &displacement);

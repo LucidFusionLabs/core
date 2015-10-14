@@ -532,6 +532,7 @@ struct GraphicsDevice : public QOpenGLFunctions {
   void LookAt(const v3 &pos, const v3 &targ, const v3 &up);
   void ViewPort(Box w);
   void Scissor(Box w);
+  void PushScissorOffset(const Box &t, const Box &w) { PushScissor(Box(w.x-t.x, w.y-t.y, w.w, w.h)); }
   void PushScissor(Box w);
   void PopScissor();
   void PushScissorStack();
@@ -608,8 +609,8 @@ struct Window : public NativeWindow {
 
 struct Scissor {
   Scissor(int x, int y, int w, int h) { screen->gd->PushScissor(Box(x, y, w, h)); }
-  Scissor(Box w) { screen->gd->PushScissor(w); }
-  ~Scissor()     { screen->gd->PopScissor(); }
+  Scissor(const Box &w) { screen->gd->PushScissor(w); }
+  ~Scissor()            { screen->gd->PopScissor(); }
 };
 
 struct ScissorStack {

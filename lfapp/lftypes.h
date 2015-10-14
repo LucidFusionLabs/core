@@ -524,13 +524,13 @@ template <class X> struct MessageQueue {
     if (queue.empty()) return false;
     ScopedMutex sm(lock);
     if (queue.empty()) return false;
-    *out = PopBack(queue);
+    *out = PopFront(queue);
     return true;
   }
   X Read() {
     unique_lock<mutex> ul(lock);
     cv.wait(ul, [this](){ return !this->queue.empty(); } );
-    return PopBack(queue);
+    return PopFront(queue);
   }
 };
 
@@ -546,9 +546,10 @@ struct CallbackList {
   vector<Callback> data;
   int Count() const { return data.size(); }
   void Clear() { dirty=0; data.clear(); }
-  void Run() const { for (auto i = data.begin(); i != data.end(); ++i) (*i)(); }
   void Add(const Callback &cb) { data.push_back(cb); dirty=1; }
   void AddList(const CallbackList &cb) { data.insert(data.end(), cb.data.begin(), cb.data.end()); dirty=1; }
+  void Run() const { for (auto i = data.begin(); i != data.end(); ++i) (*i)(); }
+  template <class X> int Run(const X&) const { int count = Count(); Run(); return count; }
 };
 #define CallbackListAdd(cblist, ...) (cblist)->Add(bind(__VA_ARGS__))
 #define CallbackListsAdd(cblists, ...) for(CallbackList **cbl=(cblists); *cbl; cbl++) CallbackListAdd(*cbl, __VA_ARGS__)

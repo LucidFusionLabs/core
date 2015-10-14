@@ -1430,14 +1430,14 @@ void Tiles::InitDrawBackground(const point &p) {
   TilesPreAdd(this, &DrawableBoxRun::DrawBackground,
               DrawableBoxRun(0,0,attr), p, &DrawableBoxRun::DefaultDrawBackgroundCB);
 }
-void Tiles::DrawBox(const Drawable *d, const Box &w, const Drawable::Attr*) {
-  TilesAdd(this, &w, &Drawable::Draw, d, w, attr);
+void Tiles::DrawBox(const Drawable *d, const Box &b, const Drawable::Attr*) {
+  TilesAdd(this, &b, &Drawable::Draw, d, b, attr);
 }
-void Tiles::DrawBackground(const Box &w) {
-  TilesAdd(this, &w, &Box::Draw, w, (float*)0);
+void Tiles::DrawBackground(const Box &b) {
+  TilesAdd(this, &b, &Box::Draw, b, (float*)0);
 }
-void Tiles::AddScissor(const Box &w) {
-  TilesPreAdd (this, &Tiles::PushScissor, this, w);
+void Tiles::AddScissor(const Box &b) {
+  TilesPreAdd (this, &Tiles::PushScissor, this, b);
   TilesPostAdd(this, &GraphicsDevice::PopScissor, screen->gd);
 }
 
@@ -1465,30 +1465,33 @@ void TilesIPC::AddScissor(const Box &b) {
 
 void TilesIPCClient::Run() {
   TilesMatrixIter(&mat) {
-    if (!tile->cb.Size() && !clear_empty) continue;
-    app->main_process->Paint(layer, point(i,j), tile->cb);
+    if (!tile->cb.Count() && !clear_empty) continue;
+    app->main_process->Paint(layer, point(j, i), tile->cb);
   }
 }
 
-void MultiProcessPaintResource::Run() const {
-  ProcessAPIClient *s = app->render_process;
+int MultiProcessPaintResource::Run(const Box &t) const {
+  ProcessAPIClient *s = CheckPointer(app->render_process);
   Iterator i(buf);
-  while (i.offset + sizeof(int) < buf.len) {
+  int si=0, sd=0, count=0; 
+  for (; i.offset + sizeof(int) < buf.len; count++) {
     int type = *i.Get<int>();
-    switch(type) {
+    switch (type) {
       default:                       FATAL("unknown type ", type);
-      case SetAttr           ::Type: { auto c=i.Get<SetAttr>           (); c->Update(&attr, app->render_process);          i.offset += SetAttr           ::Size; } break;
-      case InitDrawBox       ::Type: { auto c=i.Get<InitDrawBox>       (); DrawableBoxRun(0,0,&attr).draw(c->p);           i.offset += InitDrawBox       ::Size; } break;
-      case InitDrawBackground::Type: { auto c=i.Get<InitDrawBackground>(); DrawableBoxRun(0,0,&attr).DrawBackground(c->p); i.offset += InitDrawBackground::Size; } break;
-      case DrawBackground    ::Type: { auto c=i.Get<DrawBackground>    (); c->b.Draw();                                    i.offset += DrawBackground    ::Size; } break;
-      case PushScissor       ::Type: { auto c=i.Get<PushScissor>       (); /* s->browser->              */                 i.offset += PushScissor       ::Size; } break;
-      case PopScissor        ::Type: { auto c=i.Get<PopScissor>        (); /* screen->gd->PopScissor(); */                 i.offset += PopScissor        ::Size; } break;
+      case SetAttr           ::Type: { auto c=i.Get<SetAttr>           (); c->Update(&attr, app->render_process);            i.offset += SetAttr           ::Size; } break;
+      case InitDrawBox       ::Type: { auto c=i.Get<InitDrawBox>       (); DrawableBoxRun(0,0,&attr).draw(c->p);             i.offset += InitDrawBox       ::Size; } break;
+      case InitDrawBackground::Type: { auto c=i.Get<InitDrawBackground>(); DrawableBoxRun(0,0,&attr).DrawBackground(c->p);   i.offset += InitDrawBackground::Size; } break;
+      case DrawBackground    ::Type: { auto c=i.Get<DrawBackground>    (); c->b.Draw();                                      i.offset += DrawBackground    ::Size; } break;
+      case PushScissor       ::Type: { auto c=i.Get<PushScissor>       (); screen->gd->PushScissorOffset(t, c->b);     si++; i.offset += PushScissor       ::Size; } break;
+      case PopScissor        ::Type: { auto c=i.Get<PopScissor>        (); screen->gd->PopScissor(); CHECK_LT(sd, si); sd++; i.offset += PopScissor        ::Size; } break;
       case DrawBox           ::Type: { auto c=i.Get<DrawBox>           ();
                                        auto d=(c->id > 0 && c->id <= s->drawable.size()) ? s->drawable[c->id-1] : Singleton<BoxFilled>::Get();
                                        d->Draw(c->b, &attr); i.offset += DrawBox::Size;
                                      } break;
     }
   }
+  if (si != sd) { ERROR("mismatching scissor ", si, " != ", sd); for (int i=sd; i<si; ++i) screen->gd->PopScissor(); }
+  return count;
 }
 
 void MultiProcessPaintResource::SetAttr::Update(Drawable::Attr *o, ProcessAPIClient *s) const {
