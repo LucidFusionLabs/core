@@ -267,7 +267,7 @@ bool NBReadable(Socket fd, int timeout) {
   return app->run && ss.GetReadable(fd);
 }
 int NBRead(Socket fd, char *buf, int len, int timeout) {
-  if (!NBReadable(fd, timeout)) return 0;
+  if (timeout && !NBReadable(fd, timeout)) return 0;
   int o = 0, s = 0;
   do if ((s = read(fd, buf+o, len-o)) > 0) o += s;
   while (s > 0 && len - o > 1024);

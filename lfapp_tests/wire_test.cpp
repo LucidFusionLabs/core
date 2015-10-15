@@ -29,7 +29,7 @@ TEST(WireTest, MultiProcessPaintResource) {
   builder.Add(MultiProcessPaintResource::DrawBox(       Box(3, 9,  11, 33), 17));
   builder.Add(MultiProcessPaintResource::DrawBackground(Box(4, 10, 12, 34)));
 
-  MultiProcessPaintResource::Iterator iter(builder.buf);
+  MultiProcessPaintResource::Iterator iter(builder.data.buf);
   /**/         EXPECT_EQ(MultiProcessPaintResource::DrawBox::Type,           iter.type);
   /**/         EXPECT_EQ(iter.Get<MultiProcessPaintResource::DrawBox>()->b,  Box(3, 9, 11, 33));
   /**/         EXPECT_EQ(iter.Get<MultiProcessPaintResource::DrawBox>()->id, 17);

@@ -1001,6 +1001,7 @@ Font *IPCClientFontEngine::Open(const FontDesc &d) {
   ret->glyph = shared_ptr<GlyphMap>(new GlyphMap());
   ret->glyph->cache = shared_ptr<GlyphCache>(GlyphCache::Get());
   app->main_process->OpenSystemFont(d, bind(&IPCClientFontEngine::OpenSystemFontResponse, this, ret, _1, _2));
+  // while (app->main_process->OpenSystemFont_map.size()) app->main_process->HandleMesssages();
   return ret;
 }
 int IPCClientFontEngine::OpenSystemFontResponse(Font *f, const IPC::OpenSystemFontResponse *res, const MultiProcessBuffer &mpb) {

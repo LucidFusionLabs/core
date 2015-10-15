@@ -154,8 +154,8 @@ struct Game {
     Game::ReliableUDPNetwork retry;
     ConnectionData() : retry(UDPClient::Sendto) {}
 
-    static void Init(Connection *out) { ConnectionData *cd = new(out->wb) ConnectionData(); }
-    static ConnectionData *Get(Connection *c) { return (ConnectionData*)c->wb; }
+    static void Init(Connection *out) { ConnectionData *cd = new(out->wb.begin()) ConnectionData(); }
+    static ConnectionData *Get(Connection *c) { return (ConnectionData*)c->wb.begin(); }
   };
 
   struct Controller {
@@ -309,7 +309,7 @@ struct GameServer : public Connection::Handler {
   }
   int Read(Connection *c) {
     for (int i=0; i<c->packets.size(); i++) {
-      int ret = Read(c, c->packets[i].buf, c->packets[i].len);
+      int ret = Read(c, c->rb.begin() + c->packets[i].offset, c->packets[i].len);
       if (ret < 0) return ret;
     }
     return 0;
@@ -985,7 +985,7 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
   void Close(Connection *c) { c->handler=0; }
   int Read(Connection *c) {
     for (int i=0; i<c->packets.size(); i++) {
-      string reply(c->packets[i].buf, c->packets[i].len);
+      string reply(c->rb.begin() + c->packets[i].offset, c->packets[i].len);
       PingResponseCB(c, reply);
     }
     return 0;

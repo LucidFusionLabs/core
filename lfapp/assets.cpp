@@ -1472,9 +1472,9 @@ void TilesIPCClient::Run() {
 
 int MultiProcessPaintResource::Run(const Box &t) const {
   ProcessAPIClient *s = CheckPointer(app->render_process);
-  Iterator i(buf);
+  Iterator i(data.buf);
   int si=0, sd=0, count=0; 
-  for (; i.offset + sizeof(int) < buf.len; count++) {
+  for (; i.offset + sizeof(int) < data.size(); count++) {
     int type = *i.Get<int>();
     switch (type) {
       default:                       FATAL("unknown type ", type);

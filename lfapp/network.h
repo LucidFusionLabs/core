@@ -26,15 +26,8 @@ namespace LFL {
 DECLARE_bool(dns_dump);
 DECLARE_bool(network_debug);
 
-struct IOVec { char *buf; int len; };
-
-struct ReadBuffer {
-  int size;
-  Time stamp;
-  string data;
-  ReadBuffer(int S=0) : size(S), stamp(Now()), data(S, 0) {}
-  void Reset() { stamp=Now(); data.resize(size); }
-};
+struct IOVec { int offset; int len; };
+struct TransferredSocket { Socket socket; int offset; };
 
 struct IPV4Endpoint {
   IPV4::Addr addr=0; int port=0;
@@ -91,10 +84,8 @@ struct SystemNetwork {
   static int SetSocketBlocking(Socket fd, int blocking);
   static int SetSocketCloseOnExec(Socket fd, int close);
   static int SetSocketBroadcastEnabled(Socket fd, int enabled);
-  static int SetSocketSendBufferSize(Socket fd, int size);
-  static int GetSocketSendBufferSize(Socket fd);
-  static int SetSocketReceiveBufferSize(Socket fd, int size);
-  static int GetSocketReceiveBufferSize(Socket fd);
+  static int SetSocketBufferSize(Socket fd, bool send_or_recv, int size);
+  static int GetSocketBufferSize(Socket fd, bool send_or_recv);
 
   static int Bind(int fd, IPV4::Addr addr, int port);
   static Socket Accept(Socket listener, IPV4::Addr *addr, int *port);
@@ -165,6 +156,7 @@ struct WFMOSocketSet : public SocketSet {
   int GetException(Socket fd) { return 0; }
 };
 typedef WFMOSocketSet LFLSocketSet;
+
 #elif defined(LFL_EPOLL) && defined(LFL_LINUX_SERVER)
 #include <sys/epoll.h>
 template <int S> struct EPollSocketSet : public SocketSet {
@@ -194,12 +186,13 @@ template <int S> struct EPollSocketSet : public SocketSet {
   }
 };
 typedef EPollSocketSet<65536 * 6> LFLSocketSet;
+
 #else
 #define LFL_NETWORK_MONOLITHIC_FRAME
 typedef SelectSocketSet LFLSocketSet;
 #endif
 
-/// SocketWakeupThread waits on SocketSet and simply calls app->scheduler.Wakeup() on event
+/// SocketWakeupThread waits on SocketSet and calls app->scheduler.Wakeup() on event
 struct SocketWakeupThread : public SocketSet {
   mutex *frame_mutex, *wait_mutex;
   SelectSocketSet sockets;
@@ -229,7 +222,6 @@ struct Listener {
 };
 
 struct Connection {
-  const static int BufSize = 16384;
   enum { Connected=1, Connecting=2, Reconnect=3, Error=5 };
   struct Handler {  
     virtual ~Handler() {}
@@ -246,20 +238,21 @@ struct Connection {
   string endpoint_name;
   IPV4::Addr addr, src_addr=0;
   bool readable=1, writable=0, control_messages=0;
-  int state, port, src_port=0, rl=0, wl=0, transferred_socket=-1;
-  char rb[BufSize], wb[BufSize];
+  int state, port, src_port=0;
+  StringBuffer rb, wb;
   typed_ptr self_reference;
   vector<IOVec> packets;
+  deque<TransferredSocket> transferred_socket;
   SSL *ssl=0;
   BIO *bio=0;
   Handler *handler;
   Callback *detach;
 
   ~Connection() { delete handler; }
-  Connection(Service *s, Handler *h,                                     Callback *Detach=0) : svc(s), socket(-1),   ct(Now()), rt(Now()), wt(Now()), addr(0),    detach(Detach), state(Error), port(0),    self_reference(TypePointer(this)), handler(h) {}
-  Connection(Service *s, int State, int Sock,                            Callback *Detach=0) : svc(s), socket(Sock), ct(Now()), rt(Now()), wt(Now()), addr(0),    detach(Detach), state(State), port(0),    self_reference(TypePointer(this)), handler(0) {}
-  Connection(Service *s, int State, int Sock, IPV4::Addr Addr, int Port, Callback *Detach=0) : svc(s), socket(Sock), ct(Now()), rt(Now()), wt(Now()), addr(Addr), detach(Detach), state(State), port(Port), self_reference(TypePointer(this)), handler(0) {}
-  Connection(Service *s, int State,           IPV4::Addr Addr, int Port, Callback *Detach=0) : svc(s), socket(-1),   ct(Now()), rt(Now()), wt(Now()), addr(Addr), detach(Detach), state(State), port(Port), self_reference(TypePointer(this)), handler(0) {}
+  Connection(Service *s, Handler *h,                                     Callback *Detach=0) : svc(s), socket(-1),   ct(Now()), rt(Now()), wt(Now()), addr(0),    detach(Detach), state(Error), port(0),    rb(65536), wb(65536), self_reference(TypePointer(this)), handler(h) {}
+  Connection(Service *s, int State, int Sock,                            Callback *Detach=0) : svc(s), socket(Sock), ct(Now()), rt(Now()), wt(Now()), addr(0),    detach(Detach), state(State), port(0),    rb(65536), wb(65536), self_reference(TypePointer(this)), handler(0) {}
+  Connection(Service *s, int State, int Sock, IPV4::Addr Addr, int Port, Callback *Detach=0) : svc(s), socket(Sock), ct(Now()), rt(Now()), wt(Now()), addr(Addr), detach(Detach), state(State), port(Port), rb(65536), wb(65536), self_reference(TypePointer(this)), handler(0) {}
+  Connection(Service *s, int State,           IPV4::Addr Addr, int Port, Callback *Detach=0) : svc(s), socket(-1),   ct(Now()), rt(Now()), wt(Now()), addr(Addr), detach(Detach), state(State), port(Port), rb(65536), wb(65536), self_reference(TypePointer(this)), handler(0) {}
 
   string Name() const { return !endpoint_name.empty() ? endpoint_name : IPV4::Text(addr, port); }
   void SetError() { state = Error; ct = Now(); }
@@ -277,6 +270,7 @@ struct Connection {
   int WriteVFlush(const iovec *iov, int len, int transfer_socket);
   int SendTo(const char *buf, int len);
   int Read();
+  int Reads();
   int ReadPacket();
   int ReadPackets();
   int Add(const char *buf, int len);
@@ -381,6 +375,14 @@ struct NetworkThread {
   void HandleMessagesLoop() { if (init) net->Init(); while (GetLFApp()->run) { net->Frame(0); } }
 };
 
+struct UnixClient : public Service {
+  UnixClient() : Service(Protocol::UNIX) {}
+};
+
+struct UnixServer : public Service {
+  UnixServer(const string &n) : Service(Protocol::UNIX) { QueueListen(n); }
+};
+
 struct UDPClient : public Service {
   static const int MTU = 1500;
   enum { Write=1, Sendto=2 };
@@ -398,14 +400,6 @@ struct UDPServer : public Service {
   Connection::Handler *handler=0;
   UDPServer(int port) { protocol=Protocol::UDP; QueueListen(0, port); }
   virtual int Connected(Connection *c) { c->handler = handler; return 0; }
-};
-
-struct UnixClient : public Service {
-  UnixClient() : Service(Protocol::UNIX) {}
-};
-
-struct UnixServer : public Service {
-  UnixServer(const string &n) : Service(Protocol::UNIX) { QueueListen(n); }
 };
 
 struct HTTPClient : public Service {

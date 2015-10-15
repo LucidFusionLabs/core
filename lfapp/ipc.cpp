@@ -179,7 +179,7 @@ MultiProcessBuffer::~MultiProcessBuffer() {
 void MultiProcessBuffer::Close() {}
 bool MultiProcessBuffer::Open() {
   bool read_only = url.size();
-  if (!len || (url.size() && !impl)) return ERRORv("mpb open url=", url, " len=", len);
+  if (!len || (url.size() && !impl)) return ERRORv(false, "mpb open url=", url, " len=", len);
   if (url.empty()) {
     if (!(impl = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, len, NULL))) return ERRORv(false, "CreateFileMapping");
     CHECK(share_process);
@@ -246,9 +246,9 @@ int ProcessPipe::Close() {
 
 #if defined(LFL_MMAPXFER_MPB)
 static string MultiProcessBufferURL = "fd://transferred";
-MultiProcessBuffer::MultiProcessBuffer(Connection *c, const IPC::ResourceHandle *h)
+MultiProcessBuffer::MultiProcessBuffer(const IPC::ResourceHandle *h, int socket)
   : url((h && h->url()) ? h->url()->c_str() : ""), len(h ? h->len() : 0) {
-  if (url == MultiProcessBufferURL) swap(impl, c->transferred_socket);
+  if (url == MultiProcessBufferURL) if ((impl = socket) < 0) ERROR(MultiProcessBufferURL, " = ", impl);
 }
 MultiProcessBuffer::~MultiProcessBuffer() {
   if (buf && buf != MAP_FAILED) munmap(buf, len);
@@ -281,7 +281,7 @@ static int ShmKeyFromMultiProcessBufferURL(const string &u) {
   CHECK(PrefixMatch(u, shm_url));
   return atoi(u.c_str() + shm_url.size());
 }
-MultiProcessBuffer::MultiProcessBuffer(Connection *c, const ResourceHandle *h) 
+MultiProcessBuffer::MultiProcessBuffer(const IPC::ResourceHandle *h, int)
   : url((h && h->url()) ? h->url()->c_str() : ""), len(h ? h->len() : 0) {}
 MultiProcessBuffer::~MultiProcessBuffer() { if (buf) shmdt(buf); }
 void MultiProcessBuffer::Close() { if (impl >= 0) shmctl(impl, IPC_RMID, NULL); }
@@ -354,13 +354,13 @@ void ProcessAPIClient::StartServer(const string &server_program) {
   CHECK(SystemNetwork::OpenSocketPair(fd, false));
   SystemNetwork::SetSocketCloseOnExec(fd[1], true);
   string arg0 = server_program, arg1 = StrCat("fd://", fd[0]);
-  SystemNetwork::SetSocketSendBufferSize   (fd[0], 65536);
-  SystemNetwork::SetSocketReceiveBufferSize(fd[0], 65536);
-  SystemNetwork::SetSocketSendBufferSize   (fd[1], 65536);
-  SystemNetwork::SetSocketReceiveBufferSize(fd[1], 65536);
+  SystemNetwork::SetSocketBufferSize(fd[0], 0, 65536);
+  SystemNetwork::SetSocketBufferSize(fd[0], 1, 65536);
+  SystemNetwork::SetSocketBufferSize(fd[1], 0, 65536);
+  SystemNetwork::SetSocketBufferSize(fd[1], 1, 65536);
   INFO("IPC channel buffer size ",
-       SystemNetwork::GetSocketReceiveBufferSize(fd[0]), " ", SystemNetwork::GetSocketSendBufferSize(fd[0]), " ",
-       SystemNetwork::GetSocketReceiveBufferSize(fd[1]), " ", SystemNetwork::GetSocketSendBufferSize(fd[1]), " ");
+       SystemNetwork::GetSocketBufferSize(fd[0], 0), " ", SystemNetwork::GetSocketBufferSize(fd[0], 1), " ",
+       SystemNetwork::GetSocketBufferSize(fd[1], 0), " ", SystemNetwork::GetSocketBufferSize(fd[1], 1), " ");
 #elif defined(LFL_TCP_IPC)
   Socket l = -1;
   IPV4Endpoint listen;

@@ -163,6 +163,26 @@ template <class X> struct StringPieceT : public ArrayPiece<X> {
 typedef StringPieceT<char> StringPiece;
 typedef StringPieceT<char16_t> String16Piece;
 
+struct StringBuffer {
+  string data;
+  StringPiece buf;
+  StringBuffer(int s=0) { if (s) Resize(s); }
+  int size() const { return buf.len; }
+  int Capacity() const { return data.size(); }
+  int Remaining() const { return data.size() - buf.len; }
+  const char *begin() const { return buf.buf; }
+  const char *end() const { return buf.buf + buf.len; };
+  char *begin() { return &data[0]; }
+  char *end() { return &data[0] + buf.len; }
+  void Clear() { buf.len=0; }
+  void Resize(int n) { data.resize(n); buf.buf=data.data(); }
+  void EnsureAdditional(int n) { int s=data.size(), f=1; while(buf.len+n > s*f) f*=2; if (f>1) Resize(s*f); }
+  void EnsureZeroTerminated() { if (buf.len < data.size()) data[buf.len] = 0; }
+  void Add(const void *x, int l) { EnsureAdditional(l); memcpy(&data[0] + buf.len, x, l); buf.len += l; }
+  void Added(int l) { /*CHECK_LE(buf.len+l, data.size());*/ buf.len += l; }
+  void Flush(int l) { if (l && l != buf.len) memmove(&data[0], &data[0]+l, buf.len-l); buf.len -= l; }
+};
+
 struct String {
   template          <class Y> static void Copy(const string          &in, basic_string<Y> *out, int offset=0) { return Copy<char,    Y>(in, out, offset); }
   template          <class Y> static void Copy(const String16        &in, basic_string<Y> *out, int offset=0) { return Copy<char16_t,Y>(in, out, offset); }

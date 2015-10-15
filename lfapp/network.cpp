@@ -213,40 +213,27 @@ int SystemNetwork::SetSocketCloseOnExec(Socket fd, int close) {
 
 int SystemNetwork::SetSocketBroadcastEnabled(Socket fd, int optval) {
   if (setsockopt(fd, SOL_SOCKET, SO_BROADCAST, (const char*)&optval, sizeof(optval)))
-  { ERROR("setsockopt: ", SystemNetwork::LastError()); return -1; }
+    return ERRORv(-1, "setsockopt: ", SystemNetwork::LastError());
   return 0;
 }
 
-int SystemNetwork::SetSocketSendBufferSize(Socket fd, int optval) {
-  if (setsockopt(fd, SOL_SOCKET, SO_SNDBUF, (const char *)&optval, sizeof(optval)))
-  { ERROR("setsockopt: ", SystemNetwork::LastError()); return -1; }
+int SystemNetwork::SetSocketBufferSize(Socket fd, bool send_or_recv, int optval) {
+  if (setsockopt(fd, SOL_SOCKET, send_or_recv ? SO_SNDBUF : SO_RCVBUF, (const char *)&optval, sizeof(optval)))
+    return ERRORv(-1, "setsockopt: ", SystemNetwork::LastError());
   return 0;
 }
 
-int SystemNetwork::GetSocketSendBufferSize(Socket fd) {
+int SystemNetwork::GetSocketBufferSize(Socket fd, bool send_or_recv) {
   int res=0, resSize=sizeof(res);
-  if (getsockopt(fd, SOL_SOCKET, SO_SNDBUF, (char*)&res, (socklen_t*)&resSize))
-  { ERROR("getsockopt: ", SystemNetwork::LastError()); return -1; }
-  return res;
-}
-
-int SystemNetwork::SetSocketReceiveBufferSize(Socket fd, int optval) {
-  if (setsockopt(fd, SOL_SOCKET, SO_RCVBUF, (const char *)&optval, sizeof(optval)))
-  { ERROR("setsockopt: ", SystemNetwork::LastError()); return -1; }
-  return 0;
-}
-
-int SystemNetwork::GetSocketReceiveBufferSize(Socket fd) {
-  int res=0, resSize=sizeof(res);
-  if (getsockopt(fd, SOL_SOCKET, SO_RCVBUF, (char*)&res, (socklen_t*)&resSize))
-  { ERROR("getsockopt: ", SystemNetwork::LastError()); return -1; }
+  if (getsockopt(fd, SOL_SOCKET, send_or_recv ? SO_SNDBUF : SO_RCVBUF, (char*)&res, (socklen_t*)&resSize))
+    return ERRORv(-1, "getsockopt: ", SystemNetwork::LastError());
   return res;
 }
 
 int SystemNetwork::Bind(int fd, IPV4::Addr addr, int port) {
   sockaddr_in sin; int optval = 1;
   if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (const char*)&optval, sizeof(optval)))
-  { ERROR("setsockopt: ", SystemNetwork::LastError()); return -1; }
+    return ERRORv(-1, "setsockopt: ", SystemNetwork::LastError());
 
   memset(&sin, 0, sizeof(sockaddr_in));
   sin.sin_family = PF_INET;
@@ -255,7 +242,7 @@ int SystemNetwork::Bind(int fd, IPV4::Addr addr, int port) {
 
   if (FLAGS_network_debug) INFO("bind(", fd, ", ", IPV4::Text(addr, port), ")");
   if (SystemBind(fd, (const sockaddr *)&sin, (socklen_t)sizeof(sockaddr_in)) == -1)
-  { ERROR("bind: ", SystemNetwork::LastError()); return -1; }
+    return ERRORv(-1, "bind: ", SystemNetwork::LastError());
 
   return 0;
 }
@@ -273,7 +260,7 @@ Socket SystemNetwork::Accept(Socket listener, IPV4::Addr *addr, int *port) {
 Socket SystemNetwork::Listen(int protocol, IPV4::Addr addr, int port, int backlog, bool blocking) {
   Socket fd;
   if ((fd = OpenSocket(protocol)) < 0) 
-  { ERROR("network_socket_open: ", SystemNetwork::LastError()); return -1; }
+    return ERRORv(-1, "network_socket_open: ", SystemNetwork::LastError());
 
   if (Bind(fd, addr, port) == -1) { CloseSocket(fd); return -1; }
 
@@ -299,7 +286,7 @@ int SystemNetwork::Connect(Socket fd, IPV4::Addr addr, int port, int *connected)
   if (FLAGS_network_debug) INFO("connect(", fd, ", ", IPV4::Text(addr, port), ")");
   int ret = ::connect(fd, (struct sockaddr *)&sin, sizeof(struct sockaddr_in));
   if (ret == -1 && !SystemNetwork::EWouldBlock())
-  { ERROR("connect(", IPV4::Text(addr, port), "): ", SystemNetwork::LastError()); return -1; }
+    return ERRORv(-1, "connect(", IPV4::Text(addr, port), "): ", SystemNetwork::LastError());
 
   if (connected) *connected = !ret;
   return 0;
@@ -316,7 +303,7 @@ int SystemNetwork::SendTo(Socket fd, IPV4::Addr addr, int port, const char *buf,
 int SystemNetwork::GetPeerName(Socket fd, IPV4::Addr *addr_out, int *port_out) {
   struct sockaddr_in sin; int sinSize=sizeof(sin);
   if (::getpeername(fd, (struct sockaddr *)&sin, (socklen_t*)&sinSize) < 0)
-  { ERROR("getpeername: ", strerror(errno)); return -1; }
+    return ERRORv(-1, "getpeername: ", strerror(errno));
   *addr_out = sin.sin_addr.s_addr;
   *port_out = ntohs(sin.sin_port);
   return 0;
@@ -325,7 +312,7 @@ int SystemNetwork::GetPeerName(Socket fd, IPV4::Addr *addr_out, int *port_out) {
 int SystemNetwork::GetSockName(Socket fd, IPV4::Addr *addr_out, int *port_out) {
   struct sockaddr_in sin; int sinSize=sizeof(sin);
   if (::getsockname(fd, (struct sockaddr *)&sin, (socklen_t*)&sinSize) < 0)
-  { ERROR("getsockname: ", strerror(errno)); return -1; }
+    return ERRORv(-1, "getsockname: ", strerror(errno));
   *addr_out = sin.sin_addr.s_addr;
   *port_out = ntohs(sin.sin_port);
   return 0;
@@ -385,8 +372,7 @@ int SelectSocketSet::Select(int wait_time) {
     if (added && s.first > maxfd) maxfd = s.first;
   }
   if (!rc && !wc && !xc) { MSleep(wait_time); return 0; }
-  if ((select(maxfd+1, rc?&rfds:0, wc?&wfds:0, xc?&xfds:0, wait_time >= 0 ? &tv : 0)) == -1)
-  { ERROR("select: ", SystemNetwork::LastError()); return -1; }
+  if ((select(maxfd+1, rc?&rfds:0, wc?&wfds:0, xc?&xfds:0, wait_time >= 0 ? &tv : 0)) == -1) return ERRORv(-1, "select: ", SystemNetwork::LastError());
   return 0;
 }
 
@@ -417,16 +403,15 @@ void SocketWakeupThread::ThreadProc() {
 /* Connection */
 
 int Connection::Read() {
-  int readlen = sizeof(rb)-1-rl, len = 0;
-  if (readlen <= 0) { ERROR(Name(), ": read queue full, rl=", rl); return -1; }
+  int readlen = rb.Remaining(), len = 0;
+  if (readlen <= 0) return ERRORv(-1, Name(), ": read queue full, rl=", rb.size());
 
   if (ssl) {
 #ifdef LFL_OPENSSL
-    if ((len = BIO_read(bio, rb+rl, readlen)) <= 0) {
+    if ((len = BIO_read(bio, rb.end(), readlen)) <= 0) {
       if (SSL_get_error(ssl, len) != SSL_ERROR_WANT_READ) {
         const char *err_string = ERR_reason_error_string(ERR_get_error());
-        ERROR(Name(), ": BIO_read: ", err_string ? err_string : "read() zero");
-        return -1;
+        return ERRORv(-1, Name(), ": BIO_read: ", err_string ? err_string : "read() zero");
       }
       return 0;
     }
@@ -436,7 +421,7 @@ int Connection::Read() {
   } else if (control_messages) {
     struct iovec iov;
     memzero(iov);
-    iov.iov_base = rb+rl;
+    iov.iov_base = rb.end();
     iov.iov_len = readlen;
 
     char control[CMSG_SPACE(sizeof (int))];
@@ -448,42 +433,47 @@ int Connection::Read() {
     msg.msg_controllen = sizeof(control);
 
     if ((len = recvmsg(socket, &msg, 0)) <= 0) {
-      if      (!len)                                     ERROR(Name(), ": read() zero");
-      else if (len < 0 && !SystemNetwork::EWouldBlock()) ERROR(Name(), ": read(): ", SystemNetwork::LastError());
-      return -1;
+      if      (!len)                                     return ERRORv(-1, Name(), ": read() zero");
+      else if (len < 0 && !SystemNetwork::EWouldBlock()) return ERRORv(-1, Name(), ": read(): ", SystemNetwork::LastError());
+      return 0;
     }
 
     struct cmsghdr *cmsg = CMSG_FIRSTHDR(&msg);
-    if (cmsg && cmsg->cmsg_len == CMSG_LEN(sizeof(int)) && cmsg->cmsg_level == SOL_SOCKET && cmsg->cmsg_type == SCM_RIGHTS)
-    { CHECK_EQ(-1, transferred_socket); memcpy(&transferred_socket, CMSG_DATA(cmsg), sizeof(int)); }
+    if (cmsg && cmsg->cmsg_len == CMSG_LEN(sizeof(int)) && cmsg->cmsg_level == SOL_SOCKET && cmsg->cmsg_type == SCM_RIGHTS) {
+      Socket received_socket;
+      memcpy(&received_socket, CMSG_DATA(cmsg), sizeof(int));
+      transferred_socket.push_back({ received_socket, rb.size() });
+    }
 #endif
 
   } else { // XXX loop until read -1 with EAGAIN
 #ifdef WIN32
-    if ((len = recv(socket, rb+rl, readlen, 0)) <= 0) {
+    if ((len = recv(socket, rb.end(), readlen, 0)) <= 0) {
 #else
-    if ((len = read(socket, rb+rl, readlen)) <= 0) {
+    if ((len = read(socket, rb.end(), readlen)) <= 0) {
 #endif
-      if      (!len)                                     ERROR(Name(), ": read() zero");
-      else if (len < 0 && !SystemNetwork::EWouldBlock()) ERROR(Name(), ": read(): ", SystemNetwork::LastError());
-      return -1;
+      if      (!len)                                     return ERRORv(-1, Name(), ": read() zero");
+      else if (len < 0 && !SystemNetwork::EWouldBlock()) return ERRORv(-1, Name(), ": read(): ", SystemNetwork::LastError());
+      return 0;
     }
   }
 
-  rl += len; 
-  rb[rl] = 0;
   rt = Now();
-  if (FLAGS_network_debug) INFO("read(", socket, ", ", len, ", '", rb+rl-len, "')");
+  rb.Added(len);
+  rb.EnsureZeroTerminated();
+  if (FLAGS_network_debug) INFO("read(", socket, ", ", len, ", '", rb.end()-len, "')");
   return len;
+}
+
+int Connection::Reads() {
+  int len = 0, l;
+  while ((l = Read()) > 0) len += l;
+  return l < 0 ? l : len;
 }
 
 int Connection::ReadPacket() {
   int ret = Read();
-  if (ret <= 0) return ret;
-
-  IOVec pkt = { rb+rl-ret, ret };
-  packets.push_back(pkt);
-  rl++;
+  if (ret > 0) packets.push_back({ rb.size()-ret, ret });
   return ret;
 }
 
@@ -497,25 +487,20 @@ int Connection::ReadPackets() {
 }
 
 int Connection::Add(const char *buf, int len) {
-  int readlen = sizeof(rb)-1-rl;
-  if (readlen < len) { ERROR(Name(), ": read packet queue full"); return -1; }
-
-  memcpy(rb+rl, buf, len);
-  rl += len;
-  rb[rl] = 0;
+  int readlen = rb.Remaining();
+  if (readlen < len) return ERRORv(-1, Name(), ": read packet queue full");
   rt = Now();
-  if (FLAGS_network_debug) INFO("add(", socket, ", ", len, ", '", rb+rl-len, "')");
+  rb.Add(buf, len);
+  rb.EnsureZeroTerminated();
+  if (FLAGS_network_debug) INFO("add(", socket, ", ", len, ", '", rb.end()-len, "')");
   return len;
 }
 
 int Connection::AddPacket(const char *buf, int len) {
   int ret = Add(buf, len);
   if (ret <= 0) return ret;
-
-  IOVec pkt = { rb+rl-ret, ret };
-  packets.push_back(pkt);
-  rl++;
   rt = Now();
+  packets.push_back({ rb.size()-ret, ret });
   if (FLAGS_network_debug) INFO("addpacket(", Name(), ", ", len, ")");
   return ret;
 }
@@ -523,28 +508,26 @@ int Connection::AddPacket(const char *buf, int len) {
 int Connection::Write(const char *buf, int len) {
   if (!buf || len<0) return -1;
   if (!len) len = strlen(buf);
-  if (wl+len > sizeof(wb)-1) { ERROR(Name(), ": write queue full"); return -1; }
+  if (wb.size() + len > wb.Capacity()) return ERRORv(-1, Name(), ": write queue full");
 
-  if (!wl && len) {
+  if (!wb.size() && len) {
     writable = true;
     app->network->UpdateActive(this);
   }
-  memcpy(wb+wl, buf, len);
-  wl += len;
-  wb[wl] = 0;
+  wb.Add(buf, len);
+  wb.EnsureZeroTerminated();
   wt = Now();
   return len;
 }
 
 int Connection::ReadFlush(int len) {
   if (len<0) return -1;
-  if (!len) return rl;
-  if (rl-len < 0) { ERROR(Name(), ": read queue underflow: ", len, " > ", rl); return -1; }
-
-  if (rl!=len) memmove(rb, rb+len, rl-len);
-  rl -= len;
-  rb[rl] = 0;
-  return rl;
+  if (!len) return rb.size();
+  if (rb.size()-len < 0) return ERRORv(-1, Name(), ": read queue underflow: ", len, " > ", rb.size());
+  rb.Flush(len);
+  rb.EnsureZeroTerminated();
+  if (control_messages) for (auto &s : transferred_socket) { s.offset -= len; CHECK_GE(s.offset, 0); }
+  return rb.size();
 }
 
 int Connection::WriteFlush(const char *buf, int len) {
@@ -552,14 +535,14 @@ int Connection::WriteFlush(const char *buf, int len) {
   if (ssl) {
 #ifdef LFL_OPENSSL
     if ((wrote = BIO_write(bio, buf, len)) < 0) {
-      if (!SystemNetwork::EWouldBlock()) { ERROR(Name(), ": send: ", strerror(errno)); return -1; }
+      if (!SystemNetwork::EWouldBlock()) return ERRORv(-1, Name(), ": send: ", strerror(errno));
       wrote = 0;
     }
 #endif
   }
   else {
     if ((wrote = send(socket, buf, len, 0)) < 0) {
-      if (!SystemNetwork::EWouldBlock()) { ERROR(Name(), ": send: ", strerror(errno)); return -1; }
+      if (!SystemNetwork::EWouldBlock()) return ERRORv(-1, Name(), ": send: ", strerror(errno));
       wrote = 0;
     }
   }
@@ -575,7 +558,7 @@ int Connection::WriteVFlush(const iovec *iov, int len) {
   }
   else {
     if ((wrote = writev(socket, iov, len)) < 0) {
-      if (!SystemNetwork::EWouldBlock()) { ERROR(Name(), ": send: ", strerror(errno)); return -1; }
+      if (!SystemNetwork::EWouldBlock()) return ERRORv(-1, Name(), ": send: ", strerror(errno));
       wrote = 0;
     }
   }
@@ -619,10 +602,9 @@ int Connection::WriteVFlush(const iovec *iov, int len, int transfer_socket) {
 }
 
 int Connection::WriteFlush() {
-  int wrote = WriteFlush(wb, wl);
-  if (wrote && wrote!=wl) memmove(wb, wb+wrote, wl-wrote);
-  wl -= wrote;
-  wb[wl] = 0;
+  int wrote = WriteFlush(wb.begin(), wb.size());
+  if (wrote) wb.Flush(wrote);
+  wb.EnsureZeroTerminated();
   return wrote;
 }
 
@@ -669,13 +651,13 @@ Socket Service::Listen(IPV4::Addr addr, int port, Listener *listener) {
     listener->ssl = BIO_new_accept((char*)StrCat(port).c_str());
     BIO_ctrl(listener->ssl, BIO_C_SET_ACCEPT, 1, (void*)"a");
     BIO_set_bind_mode(listener->ssl, BIO_BIND_REUSEADDR);
-    if (BIO_do_accept(listener->ssl) <= 0) { ERROR("ssl_listen: ", -1); return -1; }
+    if (BIO_do_accept(listener->ssl) <= 0) return ERRORv(-1, "ssl_listen: ", -1);
     BIO_get_fd(listener->ssl, &listener->socket);
     BIO_set_accept_bios(listener->ssl, BIO_new_ssl(lfapp_ssl, 0));
 #endif
   } else {
     if ((listener->socket = SystemNetwork::Listen(protocol, addr, port)) == -1)
-    { ERROR("SystemNetwork::Listen(", protocol, ", ", port, "): ", SystemNetwork::LastError()); return -1; }
+      return ERRORv(-1, "SystemNetwork::Listen(", protocol, ", ", port, "): ", SystemNetwork::LastError());
   }
   app->network->active.Add(listener->socket, SocketSet::READABLE, &listener->self_reference);
   return listener->socket;
@@ -725,17 +707,17 @@ Connection *Service::Connect(IPV4::Addr addr, int port, IPV4EndpointSource *src_
 
 Connection *Service::Connect(const string &hostport, int default_port, Callback *detach) {
   IPV4::Addr addr; int port;
-  if (!HTTP::ResolveHost(hostport.c_str(), 0, &addr, &port, 0, default_port)) { ERROR("resolve ", hostport, " failed"); return 0; }
+  if (!HTTP::ResolveHost(hostport.c_str(), 0, &addr, &port, 0, default_port)) return ERRORv(nullptr, "resolve ", hostport, " failed");
   return Connect(addr, port, NULL, detach);
 }
 
 Connection *Service::SSLConnect(SSL_CTX *sslctx, const string &hostport, int default_port, Callback *detach) {
 #ifdef LFL_OPENSSL
   if (!sslctx) sslctx = lfapp_ssl;
-  if (!sslctx) { ERROR("no ssl: ", -1); return 0; }
+  if (!sslctx) return ERRORv(nullptr, "no ssl: ", -1);
 
   Connection *c = new Connection(this, Connection::Connecting, 0, 0, detach);
-  if (!HTTP::ResolveHost(hostport.c_str(), 0, &c->addr, &c->port, true, default_port)) { ERROR("resolve: ", hostport); return 0; }
+  if (!HTTP::ResolveHost(hostport.c_str(), 0, &c->addr, &c->port, true, default_port)) return ERRORv(nullptr, "resolve: ", hostport);
 
   c->bio = BIO_new_ssl_connect(sslctx);
   BIO_set_conn_hostname(c->bio, hostport.c_str());
@@ -763,7 +745,7 @@ Connection *Service::SSLConnect(SSL_CTX *sslctx, const string &hostport, int def
 Connection *Service::SSLConnect(SSL_CTX *sslctx, IPV4::Addr addr, int port, Callback *detach) {
 #ifdef LFL_OPENSSL
   if (!sslctx) sslctx = lfapp_ssl;
-  if (!sslctx) { ERROR("no ssl: ", -1); return 0; }
+  if (!sslctx) return ERRORv(nullptr, "no ssl: ", -1);
 
   Connection *c = new Connection(this, Connection::Connecting, addr, port, detach);
   c->bio = BIO_new_ssl_connect(sslctx);
@@ -814,8 +796,8 @@ void Service::EndpointRead(const string &endpoint_name, const char *buf, int len
 
   Service::EndpointMap::iterator ep = endpoint.find(endpoint_name);
   if (ep == endpoint.end()) { 
-    if (!endpoint_read_autoconnect) { ERROR("unknown endpoint ", endpoint_name); return; }
-    if (!EndpointConnect(endpoint_name)) { ERROR("endpoint_read_autoconnect ", endpoint_name); return; }
+    if (!endpoint_read_autoconnect) return ERROR("unknown endpoint ", endpoint_name);
+    if (!EndpointConnect(endpoint_name)) return ERROR("endpoint_read_autoconnect ", endpoint_name);
     ep = endpoint.find(endpoint_name);
     CHECK(ep != endpoint.end());
   }
@@ -853,9 +835,9 @@ int Network::Init() {
   SSL_CTX_set_verify(lfapp_ssl, SSL_VERIFY_NONE, 0);
 
   if (FLAGS_ssl_certfile.size() && FLAGS_ssl_keyfile.size()) {
-    if (!SSL_CTX_use_certificate_file(lfapp_ssl, FLAGS_ssl_certfile.c_str(), SSL_FILETYPE_PEM)) { ERROR("SSL_CTX_use_certificate_file ", ERR_reason_error_string(ERR_get_error())); return -1; }
-    if (!SSL_CTX_use_PrivateKey_file(lfapp_ssl, FLAGS_ssl_keyfile.c_str(), SSL_FILETYPE_PEM)) { ERROR("SSL_CTX_use_PrivateKey_file ",  ERR_reason_error_string(ERR_get_error())); return -1; }
-    if (!SSL_CTX_check_private_key(lfapp_ssl)) { ERROR("SSL_CTX_check_private_key ", ERR_reason_error_string(ERR_get_error())); return -1; }
+    if (!SSL_CTX_use_certificate_file(lfapp_ssl, FLAGS_ssl_certfile.c_str(), SSL_FILETYPE_PEM)) return ERRORv(-1, "SSL_CTX_use_certificate_file ", ERR_reason_error_string(ERR_get_error()));
+    if (!SSL_CTX_use_PrivateKey_file(lfapp_ssl, FLAGS_ssl_keyfile.c_str(), SSL_FILETYPE_PEM)) return ERRORv(-1, "SSL_CTX_use_PrivateKey_file ",  ERR_reason_error_string(ERR_get_error()));
+    if (!SSL_CTX_check_private_key(lfapp_ssl)) return ERRORv(-1, "SSL_CTX_check_private_key ", ERR_reason_error_string(ERR_get_error()));
   }
 #endif
   Enable(Singleton<UDPClient>::Get());
@@ -943,7 +925,7 @@ int Network::Frame(unsigned clicks) {
 
   /* select */
   if (active.Select(select_time))
-  { ERROR("SocketSet.select: ", SystemNetwork::LastError()); return -1; }
+    return ERRORv(-1, "SocketSet.select: ", SystemNetwork::LastError());
 
 #ifndef LFL_NETWORK_MONOLITHIC_FRAME
   /* iterate events */
@@ -1103,19 +1085,19 @@ void Network::TCPConnectionFrame(Service *svc, Connection *c, ServiceEndpointEra
       if (c->packets.size()) {
         if (c->handler) { if (c->handler->Read(c) < 0) { ERROR(c->Name(), ": handler UDP read"); c->SetError(); } }
         c->packets.clear();
-        c->ReadFlush(c->rl);
+        c->ReadFlush(c->rb.size());
       }
     }
     else if (c->ssl || active.GetReadable(c->socket)) { /* TCP Read */
       if (c->Read()<0) { c->SetError(); break; }
-      if (c->rl) {
+      if (c->rb.size()) {
         if (c->handler) { if (c->handler->Read(c) < 0) { ERROR(c->Name(), ": handler read"); c->SetError(); } }
       }
     }
 
-    if (c->wl && active.GetWritable(c->socket)) {
+    if (c->wb.size() && active.GetWritable(c->socket)) {
       if (c->WriteFlush()<0) { c->SetError(); break; }
-      if (!c->wl) {
+      if (!c->wb.size()) {
         c->writable = 0;
         if (c->handler) { if (c->handler->Flushed(c) < 0) { ERROR(c->Name(), ": handler flushed"); c->SetError(); } }
         UpdateActive(c);
@@ -1131,7 +1113,7 @@ void Network::UDPConnectionFrame(Service *svc, Connection *c, ServiceEndpointEra
   if (c->state == Connection::Connected && c->packets.size()) {
     if (c->handler) { if (c->handler->Read(c) < 0) { ERROR(c->Name(), ": handler UDP read"); c->SetError(); } }
     c->packets.clear();
-    c->ReadFlush(c->rl);
+    c->ReadFlush(c->rb.size());
   }
 
   bool timeout; /* Timeout or error */
@@ -1166,7 +1148,7 @@ NetworkThread::NetworkThread(Network *N, bool Init) : net(N), init(Init),
 
 int NetworkThread::ConnectionHandler::Read(Connection *c) {
   int consumed = 0, s = sizeof(Callback*);
-  for (; consumed + s <= c->rl; consumed += s) HandleMessage(*reinterpret_cast<Callback**>(c->rb + consumed));
+  for (; consumed + s <= c->rb.size(); consumed += s) HandleMessage(*reinterpret_cast<Callback**>(c->rb.begin() + consumed));
   if (consumed) c->ReadFlush(consumed);
   return 0;
 }
@@ -1183,7 +1165,7 @@ struct UDPClientHandler {
     int Read(Connection *c) {
       for (int i=0; i<c->packets.size() && responseCB; i++) {
         if (c->state != Connection::Connected) break;
-        responseCB(c, c->packets[i].buf, c->packets[i].len);
+        responseCB(c, c->rb.begin() + c->packets[i].offset, c->packets[i].len);
       }
       return 0;
     }
@@ -1214,7 +1196,7 @@ struct HTTPClientHandler {
     void reset() { readHeaderLength=0; readContentLength=0; currentChunkLength=0; currentChunkRead=0; chunkedEncoding=0; content_type.clear();  }
 
     int Read(Connection *c) {
-      char *cur = c->rb;
+      char *cur = c->rb.begin();
       if (!readHeaderLength) {
         StringPiece ct, cl, te;
         char *headers = cur, *headersEnd = HTTP::FindHeadersEnd(headers);
@@ -1238,7 +1220,7 @@ struct HTTPClientHandler {
           currentChunkLength = strtoul(chunkHeader, 0, 16);
         }
 
-        int rb_left = c->rl - (cur - c->rb);
+        int rb_left = c->rb.size() - (cur - c->rb.begin());
         if (rb_left <= 0) break;
         if (chunkedEncoding) {
           int chunk_left = currentChunkLength - currentChunkRead;
@@ -1251,7 +1233,7 @@ struct HTTPClientHandler {
         currentChunkRead += rb_left;
         if (currentChunkRead == currentChunkLength) currentChunkRead = currentChunkLength = 0;
       }
-      if (cur != c->rb) c->ReadFlush(cur - c->rb);
+      if (cur != c->rb.begin()) c->ReadFlush(cur - c->rb.begin());
       return 0;
     }
     virtual void Headers(Connection *c, const char *headers, int len) {}
@@ -1403,7 +1385,7 @@ struct HTTPServerConnection : public Connection::Handler {
     Dispatcher() { clear() ; }
     Dispatcher(int T, const char *U, const char *A, const char *H, int L) : type(T), url(U), args(A), headers(H), postdata(0), reqlen(L), postlen(0) {}
     int Thunk(HTTPServerConnection *httpserv, Connection *c) {
-      if (c->rl < reqlen) return 0;
+      if (c->rb.size() < reqlen) return 0;
       int ret = httpserv->Dispatch(c, type, url, args, headers, postdata, postlen);
       c->ReadFlush(reqlen);
       clear();
@@ -1419,18 +1401,18 @@ struct HTTPServerConnection : public Connection::Handler {
     for (;;) {
       if (!dispatcher.empty()) return dispatcher.Thunk(this, c);
 
-      char *end = HTTP::FindHeadersEnd(c->rb);
+      char *end = HTTP::FindHeadersEnd(c->rb.begin());
       if (!end) return 0;
 
-      char *start = HTTP::FindHeadersStart(c->rb);
+      char *start = HTTP::FindHeadersStart(c->rb.begin());
       if (!start) return -1;
 
       char *headers = start;
       int headersLen = HTTP::GetHeaderLen(headers, end);
-      int cmdLen = start - c->rb;
+      int cmdLen = start - c->rb.begin();
 
       char *method, *url, *args, *ver;
-      if (HTTP::ParseRequest(c->rb, &method, &url, &args, &ver) == -1) return -1;
+      if (HTTP::ParseRequest(c->rb.begin(), &method, &url, &args, &ver) == -1) return -1;
 
       int type;
       if      (!strcasecmp(method, "GET"))  type = HTTPServer::Method::GET;
@@ -1540,8 +1522,8 @@ struct HTTPServerFileResourceHandler : public Connection::Handler {
   int Flushed(Connection *c) {
     if (!f.Opened()) return 0;
     c->writable = 1;
-    c->wl = f.Read(c->wb, sizeof(c->wb));
-    if (c->wl < sizeof(c->wb)) return 0;
+    c->wb.buf.len = f.Read(c->wb.begin(), c->wb.Capacity());
+    if (c->wb.buf.len < c->wb.Capacity()) return 0;
     return 1;
   }
 };
@@ -1608,7 +1590,7 @@ struct StreamResourceClient : public Connection::Handler {
   void Flush() {
     char *buf=0; int len=0;
     if (!(len = avio_close_dyn_buf(fctx->pb, (uint8_t**)&buf))) return;
-    if (len < 0) { ERROR("avio_close_dyn_buf"); return; }
+    if (len < 0) return ERROR("avio_close_dyn_buf");
     if (conn->Write(buf, len) < 0) conn->SetError();
     av_free(buf);
   }
@@ -1722,11 +1704,11 @@ void HTTPServer::StreamResource::OpenStreams(bool A, bool V) {
     if (fctx->oformat->flags & AVFMT_GLOBALHEADER) vc->flags |= CODEC_FLAG_GLOBAL_HEADER;
 
     AVCodec *codec = avcodec_find_encoder(vc->codec_id);
-    if (avcodec_open2(vc, codec, 0) < 0) { ERROR("avcodec_open2"); return; }
-    if (!vc->codec) { ERROR("no video codec"); return; }
+    if (avcodec_open2(vc, codec, 0) < 0) return ERROR("avcodec_open2");
+    if (!vc->codec) return ERROR("no video codec");
 
-    if (vc->pix_fmt != PIX_FMT_YUV420P) { ERROR("pix_fmt ", vc->pix_fmt, " != ", PIX_FMT_YUV420P); return; }
-    if (!(picture = StreamResourceClient::AllocPicture(vc->pix_fmt, vc->width, vc->height))) { ERROR("AllocPicture"); return; }
+    if (vc->pix_fmt != PIX_FMT_YUV420P) return ERROR("pix_fmt ", vc->pix_fmt, " != ", PIX_FMT_YUV420P);
+    if (!(picture = StreamResourceClient::AllocPicture(vc->pix_fmt, vc->width, vc->height))) return ERROR("AllocPicture");
   }
 
   if (0 && A) {
@@ -1747,13 +1729,13 @@ void HTTPServer::StreamResource::OpenStreams(bool A, bool V) {
     if (fctx->oformat->flags & AVFMT_GLOBALHEADER) ac->flags |= CODEC_FLAG_GLOBAL_HEADER;
 
     AVCodec *codec = avcodec_find_encoder(ac->codec_id);
-    if (avcodec_open2(ac, codec, 0) < 0) { ERROR("avcodec_open2"); return; }
-    if (!ac->codec) { ERROR("no audio codec"); return; }
+    if (avcodec_open2(ac, codec, 0) < 0) return ERROR("avcodec_open2");
+    if (!ac->codec) return ERROR("no audio codec");
 
-    if (!(frame = ac->frame_size)) { ERROR("empty frame size"); return; }
+    if (!(frame = ac->frame_size)) return ERROR("empty frame size");
     channels = ac->channels;
 
-    if (!(samples = StreamResourceClient::AllocSamples(frame, channels, &sample_data))) { ERROR("AllocPicture"); return; }
+    if (!(samples = StreamResourceClient::AllocSamples(frame, channels, &sample_data))) return ERROR("AllocPicture");
   }
 
   open = 1;
@@ -1894,7 +1876,7 @@ struct SSHClientConnection : public Connection::Handler {
   int Read(Connection *c) {
     if (state == INIT) {
       int processed = 0;
-      StringLineIter lines(StringPiece(c->rb, c->rl), StringLineIter::Flag::BlankLines);
+      StringLineIter lines(c->rb.buf, StringLineIter::Flag::BlankLines);
       for (string line = IterNextString(&lines); !lines.Done(); line = IterNextString(&lines)) {
         SSHTrace(c->Name(), ": SSH_INIT: ", line);
         processed = lines.next_offset;
@@ -1907,23 +1889,23 @@ struct SSHClientConnection : public Connection::Handler {
       bool encrypted = state > FIRST_NEWKEYS;
       if (!packet_len) {
         packet_MAC_len = MAC_len_s ? X_or_Y(mac_prefix_s2c, MAC_len_s) : 0;
-        if (c->rl < SSH::BinaryPacketHeaderSize || (encrypted && c->rl < decrypt_block_size)) return 0;
-        if (encrypted) decrypt_buf = ReadCipher(c, StringPiece(c->rb, decrypt_block_size));
-        const char *packet_text = encrypted ? decrypt_buf.data() : c->rb;
+        if (c->rb.size() < SSH::BinaryPacketHeaderSize || (encrypted && c->rb.size() < decrypt_block_size)) return 0;
+        if (encrypted) decrypt_buf = ReadCipher(c, StringPiece(c->rb.begin(), decrypt_block_size));
+        const char *packet_text = encrypted ? decrypt_buf.data() : c->rb.begin();
         packet_len = 4 + SSH::BinaryPacketLength(packet_text, &padding, &packet_id) + packet_MAC_len;
       }
-      if (c->rl < packet_len) return 0;
+      if (c->rb.size() < packet_len) return 0;
       if (encrypted) decrypt_buf +=
-        ReadCipher(c, StringPiece(c->rb + decrypt_block_size, packet_len - decrypt_block_size - packet_MAC_len));
+        ReadCipher(c, StringPiece(c->rb.begin() + decrypt_block_size, packet_len - decrypt_block_size - packet_MAC_len));
 
       sequence_number_s2c++;
-      const char *packet_text = encrypted ? decrypt_buf.data() : c->rb;
+      const char *packet_text = encrypted ? decrypt_buf.data() : c->rb.begin();
       Serializable::ConstStream s(packet_text + SSH::BinaryPacketHeaderSize,
                                   packet_len  - SSH::BinaryPacketHeaderSize - packet_MAC_len);
       if (encrypted && packet_MAC_len) {
         string mac = SSH::MAC(mac_algo_s2c, MAC_len_s, StringPiece(decrypt_buf.data(), packet_len - packet_MAC_len),
                               sequence_number_s2c-1, integrity_s2c, mac_prefix_s2c);
-        if (mac != string(c->rb + packet_len - packet_MAC_len, packet_MAC_len))
+        if (mac != string(c->rb.begin() + packet_len - packet_MAC_len, packet_MAC_len))
           return ERRORv(-1, c->Name(), ": verify MAC failed");
       }
 
@@ -2254,7 +2236,7 @@ struct SMTPClientConnection : public Connection::Handler {
 
   int Read(Connection *c) {
     int processed = 0;
-    StringLineIter lines(StringPiece(c->rb, c->rl), StringLineIter::Flag::BlankLines);
+    StringLineIter lines(c->rb.buf, StringLineIter::Flag::BlankLines);
     for (string line = IterNextString(&lines); !lines.Done(); line = IterNextString(&lines)) {
       processed = lines.next_offset;
       if (!response_lines.empty()) response_lines.append("\r\n");
@@ -2344,8 +2326,8 @@ struct SMTPServerConnection : public Connection::Handler {
     int offset = 0, processed;
     while (c->state == Connection::Connected) {
       bool last_in_data = in_data;
-      if (in_data) { if ((processed = ReadData    (c, c->rb+offset, c->rl-offset)) < 0) return -1; }
-      else         { if ((processed = ReadCommands(c, c->rb+offset, c->rl-offset)) < 0) return -1; }
+      if (in_data) { if ((processed = ReadData    (c, c->rb.begin()+offset, c->rb.size()-offset)) < 0) return -1; }
+      else         { if ((processed = ReadCommands(c, c->rb.begin()+offset, c->rb.size()-offset)) < 0) return -1; }
       offset += processed;
       if (last_in_data == in_data) break;
     }
@@ -2424,7 +2406,7 @@ struct GPlusClientHandler {
     int Read(Connection *c) {
       for (int i=0; i<c->packets.size() && responseCB; i++) {
         if (c->state != Connection::Connected) break;
-        responseCB(c, c->packets[i].buf, c->packets[i].len);
+        responseCB(c, c->rb.begin() + c->packets[i].offset, c->packets[i].len);
       }
       return 0;
     }
@@ -2474,12 +2456,12 @@ Sniffer *Sniffer::Open(const string &dev, const string &filter, int snaplen, CB 
   char errbuf[PCAP_ERRBUF_SIZE];
   bpf_u_int32 ip, mask, ret;
   pcap_t *handle;
-  if (pcap_lookupnet(dev.c_str(), &ip, &mask, errbuf)) { ERROR("no netmask for ", dev); return 0; }
-  if (!(handle = pcap_open_live(dev.c_str(), snaplen, 1, 1000, errbuf))) { ERROR("open failed: ", dev, ": ", errbuf); return 0; }
+  if (pcap_lookupnet(dev.c_str(), &ip, &mask, errbuf)) return ERRORv(nullptr, "no netmask for ", dev);
+  if (!(handle = pcap_open_live(dev.c_str(), snaplen, 1, 1000, errbuf))) return ERRORv(nullptr, "open failed: ", dev, ": ", errbuf);
   if (filter.size()) {
     bpf_program fp;
-    if (pcap_compile(handle, &fp, filter.c_str(), 0, ip)) { ERROR("parse filter: ", filter, ": ", pcap_geterr(handle)); return 0; }
-    if (pcap_setfilter(handle, &fp)) { ERROR("install filter: ", filter, ": ", pcap_geterr(handle)); return 0; }
+    if (pcap_compile(handle, &fp, filter.c_str(), 0, ip)) return ERRORv(nullptr, "parse filter: ", filter, ": ", pcap_geterr(handle));
+    if (pcap_setfilter(handle, &fp)) return ERRORv(nullptr, "install filter: ", filter, ": ", pcap_geterr(handle));
   }
   Sniffer *sniffer = new Sniffer(handle, ip, mask, cb);
   sniffer->thread.Open(bind(&Sniffer::Threadproc, sniffer));
@@ -2490,7 +2472,7 @@ Sniffer *Sniffer::Open(const string &dev, const string &filter, int snaplen, CB 
 void Sniffer::GetDeviceAddressSet(set<IPV4::Addr> *out) {}
 void Sniffer::PrintDevices(vector<string> *out) {}
 void Sniffer::Threadproc() {}
-Sniffer *Sniffer::Open(const string &dev, const string &filter, int snaplen, CB cb) { ERROR("sniffer not implemented"); return 0; }
+Sniffer *Sniffer::Open(const string &dev, const string &filter, int snaplen, CB cb) { return ERRORv(nullptr, "sniffer not implemented"); }
 #endif /* LFL_PCAP */
 void Sniffer::GetIPAddress(IPV4::Addr *out) {
   static IPV4::Addr localhost = IPV4::Parse("127.0.0.1");
@@ -2501,7 +2483,7 @@ void Sniffer::GetIPAddress(IPV4::Addr *out) {
 #else
   ifaddrs* ifap = NULL;
   int r = getifaddrs(&ifap);
-  if (r) { ERROR("getifaddrs ", r); return; }
+  if (r) return ERROR("getifaddrs ", r);
   for (ifaddrs *i = ifap; i; i = i->ifa_next) {
     if (!i->ifa_dstaddr || i->ifa_dstaddr->sa_family != AF_INET) continue;
     IPV4::Addr addr = ((struct sockaddr_in*)i->ifa_addr)->sin_addr.s_addr;
@@ -2520,7 +2502,7 @@ void Sniffer::GetBroadcastAddress(IPV4::Addr *out) {
 #else
   ifaddrs* ifap = NULL;
   int r = getifaddrs(&ifap);
-  if (r) { ERROR("getifaddrs ", r); return; }
+  if (r) return ERROR("getifaddrs ", r);
   for (ifaddrs *i = ifap; i; i = i->ifa_next) {
     if (!i->ifa_dstaddr || i->ifa_dstaddr->sa_family != AF_INET) continue;
     IPV4::Addr addr = ((struct sockaddr_in*)i->ifa_dstaddr)->sin_addr.s_addr;

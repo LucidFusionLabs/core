@@ -553,7 +553,7 @@ struct GraphicsDevice : public QOpenGLFunctions {
 extern Window *screen;
 struct Window : public NativeWindow {
   typedef function<void(Window*)> StartCB;
-  typedef function<int(Window*, bool, int)> FrameCB;
+  typedef function<int(Window*, unsigned, int)> FrameCB;
   GraphicsDevice *gd=0;
   point mouse, mouse_wheel;
   string caption;

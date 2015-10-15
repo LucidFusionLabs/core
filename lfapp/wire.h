@@ -340,12 +340,12 @@ struct MultiProcessPaintResource : public Serializable {
   UNALIGNED_struct PushScissor        : public Cmd { static const int Type=6, Size=28; Box b;         PushScissor       (const Box &B=Box())           : Cmd(Type), b(B) {} };         UNALIGNED_END(PushScissor,        PushScissor::Size);
   UNALIGNED_struct PopScissor         : public Cmd { static const int Type=7, Size=4;                 PopScissor        ()                             : Cmd(Type) {} };               UNALIGNED_END(PopScissor,         PopScissor::Size);
 
-  StringPiece buf;
+  StringBuffer data;
   mutable Drawable::Attr attr;
   MultiProcessPaintResource() : Serializable(Type) {}
-  void Out(Serializable::Stream *o) const { o->BString(buf); }
-  int In(const Serializable::Stream *i) { i->ReadString(&buf); return i->Result(); }
-  int Size() const { return HeaderSize() + buf.size(); }
+  void Out(Serializable::Stream *o) const { o->BString(data.buf); }
+  int In(const Serializable::Stream *i) { i->ReadString(&data.buf); return i->Result(); }
+  int Size() const { return HeaderSize() + data.buf.size(); }
   int HeaderSize() const { return sizeof(int); }
   int Run(const Box&) const;
 
@@ -364,27 +364,12 @@ struct MultiProcessPaintResource : public Serializable {
 };
 
 struct MultiProcessPaintResourceBuilder : public MultiProcessPaintResource {
-  string data; int count=0; bool dirty=0;
-  MultiProcessPaintResourceBuilder(int S=32768) { Resize(S); }
+  int count=0; bool dirty=0;
+  MultiProcessPaintResourceBuilder(int S=32768) { data.Resize(S); }
   int Count() const { return count; }
-  void Clear() { buf.len=0; count=0; dirty=0; }
-  void Resize(int n) { data.resize(n); buf.buf=data.data(); }
-  void EnsureAdditional(int n) { int s=data.size(), f=1; while(buf.len+n > s*f) f*=2; if (f>1) Resize(s*f); }
-  void Add(const Cmd &cmd) {
-    int size = CmdSize(cmd.type);
-    EnsureAdditional(size);
-    memcpy(&data[0] + buf.len, &cmd, size);
-    buf.len += size;
-    count++;
-    dirty=1;
-  }
-  void AddList(const MultiProcessPaintResourceBuilder &x) {
-    EnsureAdditional(x.buf.len);
-    memcpy(&data[0] + buf.len, x.data.data(), x.buf.len);
-    buf.len += x.buf.len;
-    count += x.count;
-    dirty=1;
-  }
+  void Clear() { data.Clear(); count=0; dirty=0; }
+  void Add(const Cmd &cmd) { data.Add(&cmd, CmdSize(cmd.type)); count++; dirty=1; }
+  void AddList(const MultiProcessPaintResourceBuilder &x) { data.Add(x.data.begin(), x.data.size()); count += x.count; dirty=1; }
 };
 
 struct GameProtocol {

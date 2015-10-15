@@ -61,12 +61,16 @@ bool Send ## name ## Request(Connection *c, int seq, const FlatBufferPiece &q, i
   typedef name Parent; \
   string rpc_table_name = #name; \
   void HandleRPC(Connection *c) { \
-    while (c->rl >= RPC::Header::size) { \
-      Serializable::ConstStream in(c->rb, c->rl); \
-      RPC::Header hdr; \
+    int offset = 0; \
+    RPC::Header hdr; \
+    auto xfer_fd_i = c->transferred_socket.begin(); \
+    for (; c->rb.size() - offset >= RPC::Header::size; offset += hdr.len) { \
+      Serializable::ConstStream in(c->rb.begin() + offset, c->rb.size() - offset); \
       hdr.In(&in); \
-      IPCTrace(#name " begin parse %d of %d bytes\n", hdr.len, c->rl); \
-      if (c->rl < hdr.len) break; \
+      IPCTrace(#name " begin parse %d of %d bytes\n", hdr.len, c->rb.size()); \
+      if (c->rb.size() - offset < hdr.len) break; \
+      int xfer_fd = (xfer_fd_i != c->transferred_socket.end() && xfer_fd_i->offset == offset) ? xfer_fd_i->socket : -1; \
+      if (xfer_fd >= 0) xfer_fd_i = c->transferred_socket.erase(xfer_fd_i); \
       switch (hdr.id) {
 
 #define RPC_TABLE_CLIENT_QCALL(name, req, mpv) \
@@ -87,40 +91,40 @@ bool Send ## name ## Request(Connection *c, int seq, const FlatBufferPiece &q, i
   }
 
 #define RPC_TABLE_SERVER_CALL(name) case InterProcessProtocol::name ## Request::Type: { \
-    RPC_TABLE_SERVER_QCALL(name, flatbuffers::GetRoot<IPC::name ## Request>(c->rb + RPC::Header::size), NULL); \
+    RPC_TABLE_SERVER_QCALL(name, flatbuffers::GetRoot<IPC::name ## Request>(c->rb.begin() + offset + RPC::Header::size), NULL); \
   } break;
 
 #define RPC_TABLE_CLIENT_CALL(name) case InterProcessProtocol::name ## Response::Type: { \
     void *mpv = 0; \
-    auto req = flatbuffers::GetRoot<IPC::name ## Response>(c->rb + RPC::Header::size); \
+    auto req = flatbuffers::GetRoot<IPC::name ## Response>(c->rb.begin() + offset + RPC::Header::size); \
     auto query = FindOrNull(name ## _map, hdr.seq); \
     if (!query) { ERROR(#name " missing seq ", hdr.seq); break; } \
     RPC_TABLE_CLIENT_QCALL(name, req, mpv); \
   } break;
 
 #define RPC_TABLE_CLIENT_QXBC(name, mpv) case InterProcessProtocol::name ## Response::Type: { \
-    auto req = flatbuffers::GetRoot<IPC::name ## Response>(c->rb + RPC::Header::size); \
+    auto req = flatbuffers::GetRoot<IPC::name ## Response>(c->rb.begin() + offset + RPC::Header::size); \
     auto query = FindOrNull(name ## _map, hdr.seq); \
     if (!query) { ERROR(#name " missing seq ", hdr.seq); break; } \
-    MultiProcessBuffer mpb(conn, req->mpv()); \
-    mpb.Open(); \
+    MultiProcessBuffer mpb(req->mpv(), xfer_fd); \
+    if (mpb.len) mpb.Open(); \
     RPC_TABLE_CLIENT_QCALL(name, req, mpb); \
-    mpb.Close(); \
+    if (mpb.len) mpb.Close(); \
   } break;
 
 #define RPC_TABLE_SERVER_VXBC(name, mpv) case InterProcessProtocol::name ## Request::Type: { \
-    auto req = flatbuffers::GetRoot<IPC::name ## Request>(c->rb + RPC::Header::size); \
-    MultiProcessBuffer mpb(conn, req->mpv()); \
-    mpb.Open(); \
+    auto req = flatbuffers::GetRoot<IPC::name ## Request>(c->rb.begin() + offset + RPC::Header::size); \
+    MultiProcessBuffer mpb(req->mpv(), xfer_fd); \
+    if (mpb.len) mpb.Open(); \
     RPC_TABLE_SERVER_QCALL(name, req, mpb); \
-    mpb.Close(); \
+    if (mpb.len) mpb.Close(); \
   } break;
 
 #define RPC_TABLE_CLIENT_QXRC(name, mpt, mpv) case InterProcessProtocol::name ## Response::Type: { \
-    auto req = flatbuffers::GetRoot<IPC::name ## Response>(c->rb + RPC::Header::size); \
+    auto req = flatbuffers::GetRoot<IPC::name ## Response>(c->rb.begin() + offset + RPC::Header::size); \
     auto query = FindOrNull(name ## _map, hdr.seq); \
     if (!query) { ERROR(#name " missing seq ", hdr.seq); break; } \
-    MultiProcessBuffer mpb(conn, req->mpv()); \
+    MultiProcessBuffer mpb(req->mpv(), xfer_fd); \
     mpt mpf; \
     if (req->mpv()->type() == mpt::Type && mpb.Open() && MultiProcessResource::Read(mpb, req->mpv()->type(), &mpf)) { RPC_TABLE_CLIENT_QCALL(name, req, mpf); } \
     else ERROR(#name " load " #mpt "=", req->mpv()->url()->c_str(), " failed"); \
@@ -128,8 +132,8 @@ bool Send ## name ## Request(Connection *c, int seq, const FlatBufferPiece &q, i
   } break;
 
 #define RPC_TABLE_SERVER_VXRC(name, mpt, mpv) case InterProcessProtocol::name ## Request::Type: { \
-    auto req = flatbuffers::GetRoot<IPC::name ## Request>(c->rb + RPC::Header::size); \
-    MultiProcessBuffer mpb(conn, req->mpv()); \
+    auto req = flatbuffers::GetRoot<IPC::name ## Request>(c->rb.begin() + offset + RPC::Header::size); \
+    MultiProcessBuffer mpb(req->mpv(), xfer_fd); \
     mpt mpf; \
     if (req->mpv()->type() == mpt::Type && mpb.Open() && MultiProcessResource::Read(mpb, req->mpv()->type(), &mpf)) { RPC_TABLE_SERVER_QCALL(name, req, mpf); } \
     else ERROR(#name " load " #mpt "=", req->mpv()->url()->c_str(), " failed"); \
@@ -137,7 +141,7 @@ bool Send ## name ## Request(Connection *c, int seq, const FlatBufferPiece &q, i
   } break;
 
 #define RPC_TABLE_CLIENT_QIRC(name, mpt, mpv) case InterProcessProtocol::name ## Response::Type: { \
-    auto req = flatbuffers::GetRoot<IPC::name ## Response>(c->rb + RPC::Header::size); \
+    auto req = flatbuffers::GetRoot<IPC::name ## Response>(c->rb.begin() + offset + RPC::Header::size); \
     auto query = FindOrNull(name ## _map, hdr.seq); \
     if (!query) { ERROR(#name " missing seq ", hdr.seq); break; } \
     MultiProcessBuffer *mpb = FindOrNull(ipc_buffer, req->mpv()); \
@@ -148,7 +152,7 @@ bool Send ## name ## Request(Connection *c, int seq, const FlatBufferPiece &q, i
   } break;
 
 #define RPC_TABLE_SERVER_VIRC(name, mpt, mpv) case InterProcessProtocol::name ## Request::Type: { \
-    auto req = flatbuffers::GetRoot<IPC::name ## Request>(c->rb + RPC::Header::size); \
+    auto req = flatbuffers::GetRoot<IPC::name ## Request>(c->rb.begin() + offset + RPC::Header::size); \
     MultiProcessBuffer *mpb = FindOrNull(ipc_buffer, req->mpv()); \
     mpt mpf; \
     if (mpb && mpb->buf && MultiProcessResource::Read(*mpb, mpt::Type, &mpf)) { RPC_TABLE_SERVER_QCALL(name, req, mpf); } \
@@ -159,8 +163,8 @@ bool Send ## name ## Request(Connection *c, int seq, const FlatBufferPiece &q, i
         default: FATAL("unknown id ", hdr.id); break; \
       } \
       IPCTrace(#name " flush %d bytes\n", hdr.len); \
-      c->ReadFlush(hdr.len); \
     } \
+    c->ReadFlush(offset); \
   } \
   name()
 
@@ -265,7 +269,7 @@ struct MultiProcessBuffer {
   int impl = -1; void *share_process = 0;
 #endif
   MultiProcessBuffer(void *share_with=0) : share_process(share_with) {}
-  MultiProcessBuffer(Connection *c, const IPC::ResourceHandle *h);
+  MultiProcessBuffer(const IPC::ResourceHandle *h, int socket);
   virtual ~MultiProcessBuffer();
   virtual void Close();
   virtual bool Open();
@@ -299,7 +303,7 @@ struct InterProcessProtocol {
   IPC_TABLE_ENTRY( 8, LoadTextureResponse,    Void,                        "tex_id=", x->tex_id()); 
   IPC_TABLE_ENTRY( 9, LoadAssetRequest,       MultiProcessFileResource,    "fn=", BlankNull(mpv.name.buf), ", l=", mpv.buf.len);
   IPC_TABLE_ENTRY(10, LoadAssetResponse,      MultiProcessTextureResource, "w=", mpv.width, ", h=", mpv.height, ", pf=", BlankNull(Pixel::Name(mpv.pf)))
-  IPC_TABLE_ENTRY(11, PaintRequest,           MultiProcessPaintResource,   "tile=(", x->x(), ",", x->y(), ",", x->z(), ") len=", mpv.buf.len);
+  IPC_TABLE_ENTRY(11, PaintRequest,           MultiProcessPaintResource,   "tile=(", x->x(), ",", x->y(), ",", x->z(), ") len=", mpv.data.size());
   IPC_TABLE_ENTRY(12, PaintResponse,          Void,                        "success=", x->success());
   IPC_TABLE_ENTRY(13, WGetRequest,            Void,                        "url=", x->url() ? x->url()->data() : ""); 
   IPC_TABLE_ENTRY(14, WGetResponse,           MultiProcessBuffer,          "h=", (int)x->headers(), ", hl=", x->mpb()?x->mpb()->len():0, ", hu=", x->mpb()?x->mpb()->url()->data():"", " b=", mpv.buf!=0, ", l=", mpv.len);
@@ -361,7 +365,7 @@ struct ProcessAPIServer {
   void HandleMessagesLoop() { while (app->run) if (!HandleMessages()) break; }
   bool HandleMessages() {
     if (!NBReadable(conn->socket, -1)) return true;
-    if (conn->Read() <= 0) return ERRORv(false, conn->Name(), ": read ");
+    if (conn->Reads() <= 0) return ERRORv(false, conn->Name(), ": read ");
     HandleRPC(conn);
     return true;
   }
