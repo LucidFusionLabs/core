@@ -277,7 +277,7 @@ Font *DOM::Renderer::UpdateFont(Flow *F) {
   int font_size_px = font_size.getFontSizeValue(F);
   int font_flag = ((font_weight.v == DOM::FontWeight::_700 || font_weight.v == DOM::FontWeight::_800 || font_weight.v == DOM::FontWeight::_900 || font_weight.v == DOM::FontWeight::Bold || font_weight.v == DOM::FontWeight::Bolder) ? FontDesc::Bold : 0) |
     ((font_style.v == DOM::FontStyle::Italic || font_style.v == DOM::FontStyle::Oblique) ? FontDesc::Italic : 0);
-  Font *font = font_family.attr ? Fonts::Get("", String::ToUTF8(font_family.cssText()), font_size_px, Color::white, Color::clear, font_flag) : 0;
+  Font *font = 0; // font_family.attr ? Fonts::Get("", String::ToUTF8(font_family.cssText()), font_size_px, Color::white, Color::clear, font_flag) : 0;
   for (int i=0; !font && i<font_family.name.size(); i++) {
     vector<DOM::FontFace> ff;
     style.node->ownerDocument->style_context->FontFaces(font_family.name[i], &ff);
@@ -393,6 +393,7 @@ void Browser::Document::Clear() {
   delete js_context;
   VectorClear(&style_sheet);
   gui.Clear();
+  gui.Activate();
   alloc.Reset();
   node = AllocatorNew(&alloc, (DOM::HTMLDocument), (parser, &alloc, &gui));
   node->style_context = AllocatorNew(&alloc, (StyleContext), (node));
@@ -415,7 +416,7 @@ void Browser::Navigate(const string &url) {
 }
 
 void Browser::Open(const string &url) {
-  if (app->render_process) app->render_process->Navigate(url);
+  if (app->render_process) RunInNetworkThread(bind(&ProcessAPIClient::Navigate, app->render_process, url));
   else                     doc.parser->OpenFrame(url, (DOM::Frame*)NULL);
 }
 
@@ -427,24 +428,26 @@ void Browser::AnchorClicked(DOM::HTMLAnchorElement *anchor) {
   Navigate(String::ToUTF8(anchor->getAttribute("href")));
 }
 
-bool Browser::Dirty(Box *VP) {
-  if (!layers) return true;
-  DOM::Node *n = doc.node->documentElement();
-  Box viewport = Viewport();
-  bool resized = viewport.w != VP->w || viewport.h != VP->h;
-  if (resized && n) n->render->layout_dirty = true;
-  return n && (n->render->layout_dirty || n->render->style_dirty);
+void Browser::SetClearColor(const Color &c) {
+  if (app->main_process) app->main_process->SetClearColor(c);
+  else                   screen->gd->ClearColor(c);
+}
+
+void Browser::SetViewport(const Box &b) {
+  doc.gui.box = b;
+  if (app->render_process) RunInNetworkThread(bind(&ProcessAPIClient::SetViewport, app->render_process, b.w, b.h));
+  else                     doc.SetLayoutDirty(); 
 }
 
 void Browser::Draw(Box *VP) {
   if (!VP || (!app->render_process && (!doc.node || !doc.node->documentElement()))) return;
-  doc.gui.box = *VP;
-  doc.gui.Activate();
+  bool viewport_changed = ViewportChanged(*VP);
+  if (viewport_changed) SetViewport(*VP);
   int v_scrolled = v_scrollbar.scrolled * X_or_Y(v_scrollbar.doc_height, 1000); // v_scrollbar.doc_height;
   int h_scrolled = h_scrollbar.scrolled * 1000; // v_scrollbar.doc_height;
   if (!layers) { Render(v_scrolled); doc.gui.Draw(); UpdateScrollbar(); }
   else {
-    if (!app->render_process && Dirty(VP)) Render(0);
+    if (!app->render_process && doc.Dirty()) Render();
     for (int i=0; i<layers->size(); i++)
       (*layers)[i]->Draw(*VP, point(!i ? h_scrolled : 0, (!i ? -v_scrolled : 0) - VP->h));
   }
@@ -457,7 +460,8 @@ void Browser::UpdateScrollbar() {
 }
 
 void Browser::Render(bool screen_coords, int v_scrolled) {
-  INFO(app->main_process ? "Render" : "Main", " process Browser::Render");
+  INFO(app->main_process ? "Render" : "Main", " process Browser::Render, requested: ", doc.parser->requested, ", completed:",
+       doc.parser->completed, ", outstanding: ", doc.parser->outstanding.size());
   DOM::Renderer *html_render = doc.node->documentElement()->render;
   html_render->tiles = layers ? (*layers)[0] : 0;
   html_render->child_bg.Reset();
@@ -481,11 +485,6 @@ void Browser::PaintTile(int x, int y, int z, const MultiProcessPaintResource &pa
 #endif
   tiles->RunTile(y, x, tiles->GetTile(x, y), paint);
   tiles->Release();
-}
-
-void Browser::SetClearColor(const Color &c) {
-  if (app->main_process) app->main_process->SetClearColor(c);
-  else                   screen->gd->ClearColor(c);
 }
 
 void Browser::Paint(Flow *flow, const point &displacement) {

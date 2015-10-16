@@ -446,7 +446,7 @@ int Connection::Read() {
     }
 #endif
 
-  } else { // XXX loop until read -1 with EAGAIN
+  } else {
 #ifdef WIN32
     if ((len = recv(socket, rb.end(), readlen, 0)) <= 0) {
 #else

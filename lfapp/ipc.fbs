@@ -26,3 +26,9 @@ table WGetResponse { mpb: ResourceHandle; headers: bool; content_length: int; }
 
 table NavigateRequest  { url: string; }
 table NavigateResponse { success: bool; }
+
+table SetViewportRequest  { w: int; h: int; }
+table SetViewportResponse { success: bool; }
+
+table SetDocsizeRequest  { w: int; h: int; }
+table SetDocsizeResponse { success: bool; }

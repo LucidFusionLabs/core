@@ -59,17 +59,29 @@ bool Send ## name ## Request(Connection *c, int seq, const FlatBufferPiece &q, i
 
 #define RPC_TABLE_BEGIN(name) \
   typedef name Parent; \
+  deque<int> rpc_done; \
+  bool in_handle_rpc = 0; \
   string rpc_table_name = #name; \
-  void HandleRPC(Connection *c) { \
-    int offset = 0; \
+  void HandleRPC(Connection *c, int filter_msg=0) { \
+    ScopedReentryGuard reentry_guard(&in_handle_rpc); \
+    IPCTrace(#name " begin HandleRPC filter=%d, xfer_q=%zd, done_q=%zd\n", filter_msg, c->transferred_socket.size(), rpc_done.size()); \
     RPC::Header hdr; \
+    int offset = 0; \
+    auto done_i = rpc_done.begin(); \
     auto xfer_fd_i = c->transferred_socket.begin(); \
     for (; c->rb.size() - offset >= RPC::Header::size; offset += hdr.len) { \
       Serializable::ConstStream in(c->rb.begin() + offset, c->rb.size() - offset); \
       hdr.In(&in); \
-      IPCTrace(#name " begin parse %d of %d bytes\n", hdr.len, c->rb.size()); \
+      IPCTrace(#name " begin parse %d at %d / %d bytes\n", hdr.len, offset, c->rb.size()); \
       if (c->rb.size() - offset < hdr.len) break; \
+      if (done_i != rpc_done.end() && *done_i == offset) { \
+        if (filter_msg) done_i++; \
+        else { CHECK_EQ(done_i, rpc_done.begin()); done_i = rpc_done.erase(done_i); } \
+        IPCTrace(#name " already handled offset %d (done_q=%zd)\n", offset, rpc_done.size()); \
+        continue; \
+      } \
       int xfer_fd = (xfer_fd_i != c->transferred_socket.end() && xfer_fd_i->offset == offset) ? xfer_fd_i->socket : -1; \
+      if (filter_msg && filter_msg != hdr.id) { if (xfer_fd >= 0) xfer_fd_i++; continue; } \
       if (xfer_fd >= 0) xfer_fd_i = c->transferred_socket.erase(xfer_fd_i); \
       switch (hdr.id) {
 
@@ -162,9 +174,18 @@ bool Send ## name ## Request(Connection *c, int seq, const FlatBufferPiece &q, i
 #define RPC_TABLE_END(name) \
         default: FATAL("unknown id ", hdr.id); break; \
       } \
-      IPCTrace(#name " flush %d bytes\n", hdr.len); \
+      IPCTrace(#name " finish %d bytes\n", hdr.len); \
+      if (filter_msg) { \
+        rpc_done.push_back(offset); \
+        IPCTrace("add %d to rpc_done size=%zd\n", offset, rpc_done.size()); \
+      } \
     } \
-    c->ReadFlush(offset); \
+    if (!filter_msg) { \
+      IPCTrace(#name " flush %d bytes\n", offset); \
+      c->ReadFlush(offset); \
+      for (auto &i : rpc_done) { i -= offset; CHECK_GE(i, 0); } \
+    } \
+    IPCTrace(#name " end HandleRPC filter=%d, xfer_q=%zd, done_q=%zd\n", filter_msg, c->transferred_socket.size(), rpc_done.size()); \
   } \
   name()
 
@@ -212,12 +233,14 @@ struct LoadAssetResponse {};
 struct LoadTextureResponse { int tex_id() const { return 0; } };
 struct AllocateBufferResponse {};
 struct SetClearColorResponse {};
+struct SetViewportResponse {};
+struct SetDocsizeResponse {};
 struct OpenSystemFontResponse { int font_id() const { return 0; } int start_glyph_id() const { return 0; } int num_glyphs() const { return 0; } };
 struct PaintResponse {};
 struct NavigateResponse {};
 struct WGetResponse {};
 }; // namespace IPC
-#define RPC_TABLE_BEGIN(name) typedef name Parent; void HandleRPC(Connection *c) {}
+#define RPC_TABLE_BEGIN(name) typedef name Parent; void HandleRPC(Connection *c, int fm=0) {}
 #define RPC_TABLE_CLIENT_CALL(name)
 #define RPC_TABLE_SERVER_CALL(name)
 #define RPC_TABLE_CLIENT_QXBC(name, mpv)
@@ -233,6 +256,7 @@ struct WGetResponse {};
     typedef function<int(const IPC::name ## Response*, mpt)> CB; \
     name ## RPC(Parent *P=0, RPC::Seq S=0, const CB &C=CB()) {} \
   }; \
+  unordered_map<RPC::Seq, void*> name ## _map; \
   void name(__VA_ARGS__); \
   struct name ## Query : public name ## RPC
 #define RPC_SERVER_CALL(name, mpt) \
@@ -309,6 +333,10 @@ struct InterProcessProtocol {
   IPC_TABLE_ENTRY(14, WGetResponse,           MultiProcessBuffer,          "h=", (int)x->headers(), ", hl=", x->mpb()?x->mpb()->len():0, ", hu=", x->mpb()?x->mpb()->url()->data():"", " b=", mpv.buf!=0, ", l=", mpv.len);
   IPC_TABLE_ENTRY(15, NavigateRequest,        Void,                        "url=", x->url() ? x->url()->data() : ""); 
   IPC_TABLE_ENTRY(16, NavigateResponse,       Void,                        "success=", x->success());
+  IPC_TABLE_ENTRY(17, SetViewportRequest,     Void,                        "w=", x->w(), ", h=", x->h()); 
+  IPC_TABLE_ENTRY(18, SetViewportResponse,    Void,                        "success=", x->success());
+  IPC_TABLE_ENTRY(19, SetDocsizeRequest,      Void,                        "w=", x->w(), ", h=", x->h()); 
+  IPC_TABLE_ENTRY(20, SetDocsizeResponse,     Void,                        "success=", x->success());
 };
 
 struct ProcessAPIClient {
@@ -326,24 +354,29 @@ struct ProcessAPIClient {
   vector<Drawable*> drawable;
   vector<Font*> font_table;
   Browser *browser=0;
-  void StartServer(const string &server_program);
+
+  void StartServer(const string &server_program, const vector<string> &arg);
 
   RPC_TABLE_BEGIN(ProcessAPIClient);
   RPC_TABLE_CLIENT_CALL(Navigate);
+  RPC_TABLE_CLIENT_CALL(SetViewport);
   RPC_TABLE_CLIENT_QIRC(LoadAsset, MultiProcessTextureResource, mpb_id);
   RPC_TABLE_SERVER_CALL(AllocateBuffer);
   RPC_TABLE_SERVER_CALL(OpenSystemFont);
   RPC_TABLE_SERVER_CALL(SetClearColor);
+  RPC_TABLE_SERVER_CALL(SetDocsize);
   RPC_TABLE_SERVER_VIRC(LoadTexture, MultiProcessTextureResource, mpb_id);
   RPC_TABLE_SERVER_VIRC(Paint, MultiProcessPaintResource, mpb_id);
   RPC_TABLE_SERVER_CALL(WGet);
   RPC_TABLE_END(ProcessAPIClient) {};
 
   RPC_CLIENT_CALL(Navigate, Void, const string&) {};
+  RPC_CLIENT_CALL(SetViewport, Void, int w, int h) {};
   RPC_CLIENT_CALL(LoadAsset, const MultiProcessTextureResource&, const string&, const string&, const LoadAssetRPC::CB&) { using LoadAssetRPC::LoadAssetRPC; };
   RPC_SERVER_CALL(AllocateBuffer, Void) {};
   RPC_SERVER_CALL(OpenSystemFont, Void) {};
   RPC_SERVER_CALL(SetClearColor,  Void) {};
+  RPC_SERVER_CALL(SetDocsize,     Void) {};
   RPC_SERVER_CALL(LoadTexture, const MultiProcessTextureResource&) {
     using LoadTextureRPC::LoadTextureRPC;
     void LoadTexture(const MultiProcessTextureResource&);
@@ -363,27 +396,33 @@ struct ProcessAPIServer {
 
   void Start(const string &socket_name);
   void HandleMessagesLoop() { while (app->run) if (!HandleMessages()) break; }
-  bool HandleMessages() {
+  bool HandleMessages(int filter_msg=0) {
     if (!NBReadable(conn->socket, -1)) return true;
     if (conn->Reads() <= 0) return ERRORv(false, conn->Name(), ": read ");
-    HandleRPC(conn);
+    HandleRPC(conn, filter_msg);
     return true;
+  }
+  void WaitAllOpenSystemFontResponse() {
+    while (OpenSystemFont_map.size()) HandleMessages(InterProcessProtocol::OpenSystemFontResponse::Type);
   }
 
   RPC_TABLE_BEGIN(ProcessAPIServer);
   RPC_TABLE_CLIENT_QXBC(AllocateBuffer, mpb);
   RPC_TABLE_CLIENT_QXBC(OpenSystemFont, mpb);
   RPC_TABLE_CLIENT_CALL(SetClearColor);
+  RPC_TABLE_CLIENT_CALL(SetDocsize);
   RPC_TABLE_CLIENT_CALL(LoadTexture);
   RPC_TABLE_CLIENT_CALL(Paint);
   RPC_TABLE_CLIENT_QXBC(WGet, mpb);
   RPC_TABLE_SERVER_CALL(Navigate);
+  RPC_TABLE_SERVER_CALL(SetViewport);
   RPC_TABLE_SERVER_VXRC(LoadAsset, MultiProcessFileResource, mpb);
   RPC_TABLE_END(ProcessAPIServer) {};
 
   RPC_CLIENT_CALL(AllocateBuffer, MultiProcessBuffer&, int, int) { using AllocateBufferRPC::AllocateBufferRPC; };
   RPC_CLIENT_CALL(OpenSystemFont, const MultiProcessBuffer&, const FontDesc &fd, const OpenSystemFontRPC::CB &) { using OpenSystemFontRPC::OpenSystemFontRPC; };
   RPC_CLIENT_CALL(SetClearColor, Void, const Color &c) {};
+  RPC_CLIENT_CALL(SetDocsize, Void, int w, int h) {};
   RPC_CLIENT_CALL(LoadTexture, Void, Texture*, const LoadTextureRPC::CB &cb) {
     Texture *tex;
     LoadTextureQuery(Parent *P, Texture *T, const LoadTextureRPC::CB &cb) : LoadTextureRPC(P,0,cb), tex(T) {}
@@ -403,6 +442,7 @@ struct ProcessAPIServer {
     int WGetResponse(const IPC::WGetResponse*, const MultiProcessBuffer&);
   };
   RPC_SERVER_CALL(Navigate, Void) {};
+  RPC_SERVER_CALL(SetViewport, Void) {};
   RPC_SERVER_CALL(LoadAsset, const MultiProcessFileResource&) {
     Texture *tex; 
     LoadAssetQuery(Parent *P, RPC::Seq S, Texture *T) : LoadAssetRPC(P,S), tex(T) {}

@@ -1001,7 +1001,7 @@ Font *IPCClientFontEngine::Open(const FontDesc &d) {
   ret->glyph = shared_ptr<GlyphMap>(new GlyphMap());
   ret->glyph->cache = shared_ptr<GlyphCache>(GlyphCache::Get());
   app->main_process->OpenSystemFont(d, bind(&IPCClientFontEngine::OpenSystemFontResponse, this, ret, _1, _2));
-  // while (app->main_process->OpenSystemFont_map.size()) app->main_process->HandleMesssages();
+  if (1 && app->main_process->browser) app->main_process->WaitAllOpenSystemFontResponse();
   return ret;
 }
 int IPCClientFontEngine::OpenSystemFontResponse(Font *f, const IPC::OpenSystemFontResponse *res, const MultiProcessBuffer &mpb) {
@@ -1011,11 +1011,7 @@ int IPCClientFontEngine::OpenSystemFontResponse(Font *f, const IPC::OpenSystemFo
   f->glyph->table.resize(res->num_glyphs());
   GlyphMetrics *g = reinterpret_cast<GlyphMetrics*>(mpb.buf);
   for (int i=0, l=f->glyph->table.size(); i<l; i++) f->glyph->table[i].FromMetrics(g[i]);
-  if (app->main_process) {
-    INFO("marking dirty");
-    app->main_process->browser->doc.SetLayoutDirty();
-    app->main_process->browser->doc.SetStyleDirty();
-  }
+  if (app->main_process && app->main_process->browser) app->main_process->browser->doc.SetStyleDirty();
   return RPC::Done;
 }
 int   IPCClientFontEngine::GetId(Font *f) { return static_cast<Resource*>(f->resource.get())->id; }

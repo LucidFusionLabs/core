@@ -106,11 +106,15 @@ struct Browser : public BrowserInterface {
 
     ~Document();
     Document(Window *W=0, const Box &V=Box());
+    bool Dirty() const    { if (node) if (auto html = node->documentElement()) return html->render->layout_dirty || html->render->style_dirty; return 0; }
     void SetLayoutDirty() { if (node) if (auto html = node->documentElement()) html->render->layout_dirty = true; }
     void SetStyleDirty () { if (node) if (auto html = node->documentElement()) html->render->style_dirty  = true; }
     void Clear();
   };
-  struct RenderLog { string data; int indent; };
+  struct RenderLog {
+    string data; int indent=0;
+    void Clear() { data.clear(); indent=0; }
+  };
 
   Document doc;
   LayersInterface *layers=0;
@@ -121,7 +125,6 @@ struct Browser : public BrowserInterface {
 
   Browser(GUI *gui=0, const Box &V=Box());
 
-  Box Viewport() const { return doc.gui.box; }
   void Navigate(const string &url);
   void Open(const string &url);
   void KeyEvent(int key, bool down);
@@ -132,12 +135,15 @@ struct Browser : public BrowserInterface {
   void ForwardButton() {}
   void RefreshButton() {}
   void AnchorClicked(DOM::HTMLAnchorElement *anchor);
+  void SetClearColor(const Color &c);
+  void SetViewport(const Box &b);
+  void SetDocsize(int w, int h) { /*doc.width=w;*/ doc.height=h; } 
+  Box Viewport() const { return doc.gui.box; }
+  bool ViewportChanged(const Box &b) const { Box vp = Viewport(); return vp.w != b.w || vp.h != b.h; }
   void InitLayers(LayersInterface *l) { CHECK(!layers); (layers = l)->Init(2); }
   void PaintTile(int x, int y, int z, const MultiProcessPaintResource &paint);
-  void SetClearColor(const Color &c);
   string GetURL() { return String::ToUTF8(doc.node->URL); }
 
-  bool Dirty(Box *viewport);
   void Draw(Box *viewport);
   void UpdateScrollbar();
   void Render(bool screen_coords=0, int v_scrolled=0);

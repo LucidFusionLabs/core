@@ -305,12 +305,14 @@ bool MultiProcessBuffer::Open() {
 #endif /* WIN32 */
 
 #if defined(LFL_MOBILE) || !defined(LFL_FLATBUFFERS)
-void ProcessAPIClient::StartServer(const string &server_program) {}
+void ProcessAPIClient::StartServer(const string &server_program, const vector<string> &arg) {}
 void ProcessAPIClient::LoadAsset(const string &content, const string &fn, const LoadAssetRPC::CB &cb) {}
 void ProcessAPIClient::Navigate(const string &url) {}
+void ProcessAPIClient::SetViewport(int w, int h) {}
 void ProcessAPIServer::Start(const string &socket_name) {}
 void ProcessAPIServer::OpenSystemFont(const LFL::FontDesc &d, const OpenSystemFontRPC::CB &cb) {}
 void ProcessAPIServer::SetClearColor(const Color &c) {}
+void ProcessAPIServer::SetDocsize(int w, int h) {}
 void ProcessAPIServer::WGet(const string &url, const HTTPClient::ResponseCB &cb) {}
 void ProcessAPIServer::LoadTexture(Texture*, const LoadTextureRPC::CB &cb) {}
 void ProcessAPIServer::Paint(int, const point&, MultiProcessPaintResourceBuilder&) {}
@@ -343,7 +345,7 @@ bool RPC::Write(Connection *conn, unsigned short id, unsigned short seq, const S
   else                      return conn->WriteVFlush(iov, 2)                  == hdr.len ? hdr.len : 0;
 }
 
-void ProcessAPIClient::StartServer(const string &server_program) {
+void ProcessAPIClient::StartServer(const string &server_program, const vector<string> &arg) {
   if (!LocalFile(server_program, "r").Opened()) return ERROR("ProcessAPIClient: \"", server_program, "\" doesnt exist");
   INFO("ProcessAPIClient starting server ", server_program);
   Socket conn_socket = -1;
@@ -417,7 +419,7 @@ void ProcessAPIClient::StartServer(const string &server_program) {
   CHECK((impersonation_token = MakeImpersonationToken (impersonation_token)));
   CHECK((impersonation_token = MakeUninheritableHandle(impersonation_token)));
   CHECK((   restricted_token = MakeUninheritableHandle(   restricted_token)));
-  string av = StrCat(arg0, " ", arg1);
+  string av = StrCat(arg0, " ", (arg.size() ? Join(arg, " ") : ""), (arg.size ? " " : ""), arg1);
   PROCESS_INFORMATION pi;
   STARTUPINFO si;
   memzero(pi);
@@ -435,7 +437,10 @@ void ProcessAPIClient::StartServer(const string &server_program) {
   int pid = fork();
   if (!pid) {
     // close(0); close(1); close(2);
-    vector<char*> av = { &arg0[0], &arg1[0], 0 };
+    vector<char*> av = { &arg0[0] };
+    for (auto &a : arg) av.push_back(const_cast<char*>(a.c_str()));
+    av.push_back(&arg1[0]);
+    av.push_back(0);
     CHECK(!execvp(av[0], &av[0]));
   }
   CHECK_GT(pid, 0);
@@ -462,6 +467,7 @@ void ProcessAPIClient::StartServer(const string &server_program) {
 }
 
 void ProcessAPIClient::Navigate(const string &url) { SendRPC(conn, seq++, -1, NavigateRequest, fb.CreateString(url)); }
+void ProcessAPIClient::SetViewport(int w, int h)   { SendRPC(conn, seq++, -1, SetViewportRequest, w, h); }
 
 void ProcessAPIClient::LoadAsset(const string &content, const string &fn, const LoadAssetRPC::CB &cb) { 
   MultiProcessBuffer mpb(server_process);
@@ -483,8 +489,13 @@ int ProcessAPIClient::HandleAllocateBufferRequest(int seq, const IPC::AllocateBu
 }
 
 int ProcessAPIClient::HandleSetClearColorRequest(int seq, const IPC::SetClearColorRequest *req, Void) {
-  if (req) if (auto c = req->c())
+  if (auto c = req->c())
     RunInMainThread(new Callback(bind(&GraphicsDevice::ClearColor, screen->gd, Color(c->r(), c->g(), c->b(), c->a()))));
+  return RPC::Done;
+}
+
+int ProcessAPIClient::HandleSetDocsizeRequest(int seq, const IPC::SetDocsizeRequest *req, Void) {
+  RunInMainThread(new Callback(bind(&Browser::SetDocsize, browser, req->w(), req->h())));
   return RPC::Done;
 }
 
@@ -586,6 +597,12 @@ int ProcessAPIServer::HandleNavigateRequest(int seq, const IPC::NavigateRequest 
   return RPC::Done;
 }
 
+int ProcessAPIServer::HandleSetViewportRequest(int seq, const IPC::SetViewportRequest *req, Void) {
+  browser->SetViewport(Box(req->w(), req->h()));
+  return RPC::Done;
+}
+
+void ProcessAPIServer::SetDocsize(int w, int h) { SendRPC(conn, seq++, -1, SetDocsizeRequest, w, h); }
 void ProcessAPIServer::SetClearColor(const Color &c) {
   IPC::Color cc(c.R(), c.G(), c.B(), c.A());
   SendRPC(conn, seq++, -1, SetClearColorRequest, &cc);

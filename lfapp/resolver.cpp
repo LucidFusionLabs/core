@@ -119,6 +119,7 @@ void Resolver::DefaultNameserver(vector<IPV4::Addr> *nameservers) {
 /* Resolver::Nameserver */
 
 bool Resolver::Nameserver::Resolve(const Request &req) {
+  INFO(c->Name(), ": resolve ", req.query);
   int len; unsigned short id = NextID();
   if ((len = DNS::WriteRequest(id, req.query, req.type, c->wb.begin(), c->wb.Capacity())) < 0) return false;
   if (c->WriteFlush(c->wb.begin(), len) != len) return false;

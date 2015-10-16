@@ -237,6 +237,12 @@ template <class X, class Y> void Move(X &buf, int to_ind, int from_ind, int size
   else                         { for (int i=0; i <= size-1; i++) move_cb(buf[to_ind+i], buf[from_ind+i]); }
 } 
 
+struct ScopedReentryGuard {
+  bool *guard_var;
+  ScopedReentryGuard(bool *gv) : guard_var(gv) { CHECK(!*guard_var); *guard_var = true;  }
+  ~ScopedReentryGuard()                        { CHECK( *guard_var); *guard_var = false; }
+};
+
 template <class X> struct ScopedValue {
   X *v, ov;
   ScopedValue(X *V, X nv) : v(V), ov(V ? *V : X()) { *v = nv; }
