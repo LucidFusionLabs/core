@@ -478,11 +478,6 @@ void Browser::PaintTile(int x, int y, int z, const MultiProcessPaintResource &pa
   TilesIPCServer *tiles = dynamic_cast<TilesIPCServer*>((*layers)[z]);
   CHECK(tiles);
   tiles->Select();
-#if 1
-  point current_tile;
-  tiles->GetSpaceCoords(y, x, &current_tile.x, &current_tile.y);
-  INFO("tile(", x, ",", y, ") coords ", current_tile.DebugString());
-#endif
   tiles->RunTile(y, x, tiles->GetTile(x, y), paint);
   tiles->Release();
 }

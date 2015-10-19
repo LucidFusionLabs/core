@@ -23,6 +23,19 @@
 #include "judymap.h"
 #endif
 
+#ifdef LFL_FLATBUFFERS
+#include "flatbuffers/flatbuffers.h"
+namespace LFL {
+using flatbuffers::FlatBufferBuilder;
+typedef pair<flatbuffers::unique_ptr_t, size_t> FlatBufferPiece;
+template<typename T> FlatBufferPiece CreateFlatBuffer(const function<flatbuffers::Offset<T>(FlatBufferBuilder &fb)> &f)
+{ FlatBufferBuilder fb; fb.Finish(f(fb)); size_t s=fb.GetSize(); return make_pair(fb.ReleaseBufferPointer(), s); }
+}; // namespace LFL
+#define MakeFlatBufferOfType(t, x) CreateFlatBuffer(function<flatbuffers::Offset<t>(FlatBufferBuilder&)>([&](FlatBufferBuilder &fb){ return x; }))
+#else
+typedef pair<unique_ptr<char*>, size_t> FlatBufferPiece;
+#endif
+
 #define SortImpl1(x1, y2) return x1 < y2;
 #define SortImpl2(x1, y1, x2, y2) \
   if      (x1 < y1) return true;  \
@@ -140,6 +153,14 @@ template <typename X> bool FindAndDispatch(const X &m, const typename X::key_typ
   if (it != m.end()) { it->second(); return true; }
   return false;
 }
+
+template <class K> struct Erasable { virtual bool Erase(const K&) const = 0; };
+
+template <class K, class V> struct ErasableUnorderedMap : public Erasable<K> {
+  unordered_map<K, V> &x;
+  ErasableUnorderedMap(unordered_map<K, V> &in) : x(in) {}
+  bool Erase(const K &k) const { return x.erase(k); }
+};
 
 template <class I, class T> I LesserBound(I first, I last, const T& v, bool strict=false) {
   I i = lower_bound(first, last, v);

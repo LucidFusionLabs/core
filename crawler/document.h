@@ -142,8 +142,8 @@ struct DocumentParser {
     shared_ptr<Texture> target;
     string content;
     int content_length=0;
-    ProcessAPIClient::LoadAssetRPC::CB loadasset_cb;
-    ProcessAPIServer::LoadTextureRPC::CB loadtex_cb;
+    ProcessAPIClient::LoadAssetIPC::CB loadasset_cb;
+    ProcessAPIServer::LoadTextureIPC::CB loadtex_cb;
     ImageParser(DocumentParser *p, const string &url, const shared_ptr<Texture> &t) :
       Parser(p, url), target(t), loadasset_cb(bind(&ImageParser::LoadAssetResponseCB, this, _1, _2)),
       loadtex_cb(bind(&ImageParser::LoadTextureResponseCB, this, _1, _2)) {}
@@ -178,15 +178,15 @@ struct DocumentParser {
       Parser::Complete(this);
     }
     int LoadAssetResponseCB(const IPC::LoadAssetResponse*, const MultiProcessTextureResource &tex) {
-      if (!MainThread()) { RunInMainThread(new Callback([=,&tex]{ LoadAssetResponseCB(NULL, tex); })); return RPC::Accept; }
+      if (!MainThread()) { RunInMainThread(new Callback([=,&tex]{ LoadAssetResponseCB(NULL, tex); })); return IPC::Accept; }
       if (tex.width && tex.height) { target->LoadGL(tex); target->owner = true; }
       RunInNetworkThread([=]() { Parser::Complete(this); });
-      return RPC::Accept; // leak
+      return IPC::Accept; // leak
     }
     int LoadTextureResponseCB(const IPC::LoadTextureResponse *res, Void) {
       if (res) target.get()->ID = res->tex_id();
       Parser::Complete(this);
-      return RPC::Done;
+      return IPC::Done;
     }
   };
 

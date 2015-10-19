@@ -1005,14 +1005,16 @@ Font *IPCClientFontEngine::Open(const FontDesc &d) {
   return ret;
 }
 int IPCClientFontEngine::OpenSystemFontResponse(Font *f, const IPC::OpenSystemFontResponse *res, const MultiProcessBuffer &mpb) {
-  if (!res) return RPC::Error;
+  if (!res) return IPC::Error;
   static_cast<Resource*>(f->resource.get())->id = res->font_id();
+  f->SetMetrics(res->ascender(), res->descender(), res->max_width(), res->fixed_width(), res->missing_glyph(),
+                res->mix_fg(), res->has_bg(), res->fix_metrics(), res->scale());
   f->glyph->table_start = res->start_glyph_id();
   f->glyph->table.resize(res->num_glyphs());
   GlyphMetrics *g = reinterpret_cast<GlyphMetrics*>(mpb.buf);
   for (int i=0, l=f->glyph->table.size(); i<l; i++) f->glyph->table[i].FromMetrics(g[i]);
   if (app->main_process && app->main_process->browser) app->main_process->browser->doc.SetStyleDirty();
-  return RPC::Done;
+  return IPC::Done;
 }
 int   IPCClientFontEngine::GetId(Font *f) { return static_cast<Resource*>(f->resource.get())->id; }
 int   IPCClientFontEngine::InitGlyphs(Font *f, Glyph *g, int n) { return 0; }

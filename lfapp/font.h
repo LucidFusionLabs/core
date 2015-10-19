@@ -210,7 +210,7 @@ struct Font {
 
   short size=0, ascender=0, descender=0, max_width=0, fixed_width=-1, missing_glyph=0;
   bool mono=0, mix_fg=0, has_bg=0, fix_metrics=0;
-  float scale=0, min_advance=0, max_advance=0;
+  float scale=0;
   int flag=0;
   Color fg, bg;
   RefCounter ref;
@@ -232,6 +232,8 @@ struct Font {
 
   void Select();
   void UpdateMetrics(Glyph *g);
+  void SetMetrics(short a, short d, short mw, short fw, short mg, bool mf, bool hb, bool fm, float f)
+  { ascender=a; descender=d; max_width=mw; fixed_width=fw; missing_glyph=mg; mix_fg=mf; has_bg=hb; fix_metrics=fm; scale=f; }
   void DrawGlyph(int g, const Box &w) { Select(); Drawable::Attr a(this); FindGlyph(g)->Draw(w, &a); }
   int GetGlyphWidth(int g) { return RoundXY_or_Y(scale, FindGlyph(g)->advance); }
 

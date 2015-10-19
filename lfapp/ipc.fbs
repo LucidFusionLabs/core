@@ -10,7 +10,11 @@ table SetClearColorResponse { success: bool; }
 
 table FontDescription { name: string; family: string; size: int; flag: int; engine: int; fg: Color; bg: Color; unicode: bool; }
 table OpenSystemFontRequest { desc: FontDescription; }
-table OpenSystemFontResponse { mpb: ResourceHandle; font_id: int; num_glyphs: int; start_glyph_id: int; }
+table OpenSystemFontResponse { mpb: ResourceHandle; font_id: int; num_glyphs: int; start_glyph_id: int; 
+ ascender: short; descender: short; max_width: short; fixed_width: short; missing_glyph: short;
+ mix_fg: bool; has_bg: bool; fix_metrics: bool;
+ scale: float;
+}
 
 table LoadAssetRequest  { mpb: ResourceHandle; }
 table LoadAssetResponse { mpb_id: int; }
