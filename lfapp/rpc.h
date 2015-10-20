@@ -27,10 +27,10 @@
 
 namespace LFL {
 #ifdef LFL_FLATBUFFERS
-#define MakeIPCBuffer(t, ...) MakeFlatBufferOfType(IPC::t, IPC::Create ## t(fb, __VA_ARGS__))
+#define MakeIPCRequest(t, ...) MakeFlatBufferOfType(IPC::t, IPC::Create ## t(fb, __VA_ARGS__))
 #define MakeResourceHandle(t, mpb) IPC::CreateResourceHandle(fb, t, (mpb).len, fb.CreateString((mpb).url))
-#define SendIPC(c, seq, th, name, ...) SendIPCBuffer<Protocol::name>(c, seq, MakeIPCBuffer(name, __VA_ARGS__), th)
-#define ErrorIPC(c, seq, th, name) SendIPCBuffer<Protocol::name>(c, seq, MakeFlatBufferOfType(IPC::name, IPC::Create ## name(fb)), th)
+#define SendIPC(c, seq, th, name, ...) SendIPCRequest<Protocol::name>(c, seq, MakeIPCRequest(name, __VA_ARGS__), th)
+#define ErrorIPC(c, seq, th, name) SendIPCRequest<Protocol::name>(c, seq, MakeFlatBufferOfType(IPC::name, IPC::Create ## name(fb)), th)
 #define ExpectResponseIPC(name, ...) Expect ## name ## Response(new name ## Query(__VA_ARGS__))
 
 #define IPC_BUILDER_GET_REQ(name) auto req = flatbuffers::GetRoot<IPC::name>(b.data())
@@ -58,7 +58,7 @@ namespace LFL {
 #define IPC_BUILDER_CLIENT_RUN(name, req, mpv) if (!query->Run(req, mpv)) name ## _map.erase(hdr.seq);
 
 #define IPC_BUILDER_SERVER_RUN(name, req, mpv) \
-  IPCTrace("%s Receive " #name "Request seq=%d %s\n", ipc_table_name.c_str(), hdr.seq, Protocol::name ## Request::DebugString(req, mpv).c_str()); \
+  IPCTrace("%s Receive " #name "Request seq=%d %s\n", ipc_name.c_str(), hdr.seq, Protocol::name ## Request::DebugString(req, mpv).c_str()); \
   switch (Handle ## name ## Request(hdr.seq, req, mpv)) { \
     case IPC::Error: ErrorIPC(conn, hdr.seq, -1, name ## Response); \
     default: break; \
@@ -171,12 +171,14 @@ struct ResourceHandle {
   int type() const { return 0; }
   string *url() const { return 0; }
 };
+struct AllocateBufferRequest {};
+struct AllocateBufferResponse {};
+struct CloseBufferRequest {};
+struct CloseBufferResponse {};
 struct LoadAssetRequest { ResourceHandle *mpb() const { return 0; } };
 struct LoadAssetResponse {};
 struct LoadTextureRequest {};
 struct LoadTextureResponse { int tex_id() const { return 0; } };
-struct AllocateBufferRequest {};
-struct AllocateBufferResponse {};
 struct SetClearColorRequest {};
 struct SetClearColorResponse {};
 struct SetViewportRequest {};
@@ -204,6 +206,12 @@ struct NavigateRequest {};
 struct NavigateResponse {};
 struct WGetRequest {};
 struct WGetResponse {};
+struct KeyPressRequest {};
+struct KeyPressResponse {};
+struct MouseClickRequest {};
+struct MouseClickResponse {};
+struct MouseMoveRequest {};
+struct MouseMoveResponse {};
 }; // namespace IPC
 #define IPC_TABLE_BEGIN(name) typedef name Parent; void HandleIPC(Connection *c, int fm=0) {}
 #define IPC_TABLE_CLIENT_CALL(name)
@@ -224,9 +232,11 @@ struct WGetResponse {};
   unordered_map<IPC::Seq, void*> name ## _map; \
   void name(__VA_ARGS__); \
   struct name ## Query : public name ## IPC
+
 #define IPC_SERVER_CALL(name, mpt) \
   struct name ## IPC { name ## IPC(Parent *P, IPC::Seq S=0) {} }; \
   struct name ## Query : public name ## IPC
+
 #define IPC_PROTO_ENTRY(id, name, mpt, ...) struct name { \
     typedef IPC::name Type; \
     static const int Id = id; \
@@ -254,22 +264,28 @@ struct InterProcessComm {
     int Read(Connection *c) { parent->HandleIPC(c); return 0; }
   };
 
-  template <class Parent> struct ServerQuery {
+  template <class Parent> struct Query {
     Parent *parent;
     IPC::Seq seq;
-    ServerQuery(Parent *P=0, IPC::Seq S=0) : parent(P), seq(S) {}
+    int mpb_id;
+    Query(Parent *P=0, IPC::Seq S=0, int I=0) : parent(P), seq(S), mpb_id(I) {}
+    ~Query() { if (mpb_id) parent->DelBuffer(mpb_id); }
     int Done()  { delete this; return IPC::Done; }
     int Error() { delete this; return IPC::Error; }
   };
+  
+  template <class Parent> struct ServerQuery : public Query<Parent> {
+    ServerQuery(Parent *P=0, IPC::Seq S=0, int I=0) : Query<Parent>(P, S, I) {}
+  };
 
-  template <class Parent, class Res, class MPT> struct ClientQuery : public ServerQuery<Parent> {
+  template <class Parent, class Res, class MPT> struct ClientQuery : public Query<Parent> {
     typedef function<int(const typename Res::Type*, MPT)> CB;
     CB ipc_cb;
-    ClientQuery(Parent *P=0, IPC::Seq S=0, const CB &C=CB()) : ServerQuery<Parent>(P, S), ipc_cb(C) {}
+    ClientQuery(Parent *P=0, IPC::Seq S=0, const CB &C=CB()) : Query<Parent>(P, S), ipc_cb(C) {}
 
     bool Run(const typename Res::Type *req, MPT mpv) {
       IPCTrace("%s Receive %s Response seq=%d, %s\n",
-               this->parent->ipc_table_name.c_str(), Res::Name(), this->seq, Res::DebugString(req, mpv).c_str());
+               this->parent->ipc_name.c_str(), Res::Name(), this->seq, Res::DebugString(req, mpv).c_str());
       CHECK(ipc_cb);
       bool ret = true;
       switch (ipc_cb(req, mpv)) {
@@ -282,18 +298,19 @@ struct InterProcessComm {
     } 
   };
 
-  int pid=0;
-  IPC::Seq seq=0;
-  Connection *conn=0;
-  void *server_process=0;
-  bool in_handle_ipc=0;
-  string ipc_table_name;
+  string ipc_name;
   deque<int> ipc_done;
+  unordered_map<int, MultiProcessBuffer*> ipc_buffer;
+  int pid=0, ipc_buffer_id=0;
+  void *server_process=0;
+  Connection *conn=0;
+  IPC::Seq seq=0;
+  bool in_handle_ipc=0;
 
-  InterProcessComm(const string &n) : ipc_table_name(n) {}
+  InterProcessComm(const string &n) : ipc_name(n) {}
   virtual ~InterProcessComm() {}
 
-  void StartServerProcess(const string &server_program, const vector<string> &arg);
+  void StartServerProcess(const string &server_program, const vector<string> &arg=vector<string>());
   void OpenSocket(const string &socket_name);
 
   virtual void HandleIPC(Connection *c, int filter_msg=0);
@@ -307,13 +324,17 @@ struct InterProcessComm {
     return true;
   }
 
-  template <class X> bool SendIPCBuffer(Connection *c, int seq, const FlatBufferPiece &q, int th=-1) {
+  template <class X> bool SendIPCRequest(Connection *c, int seq, const FlatBufferPiece &q, int th=-1) {
     bool ok = Write(c, X::Id, seq, StringPiece(reinterpret_cast<const char *>(q.first.get()), q.second), th);
-    IPCTrace("%s Send %s=%d seq=%d %s\n", ipc_table_name.c_str(), X::Name(), ok, seq,
-             X::DebugString(flatbuffers::GetRoot<X::Type>(q.first.get())).c_str());
+    IPCTrace("%s Send %s=%d seq=%d %s\n", ipc_name.c_str(), X::Name(), ok, seq,
+             X::DebugString(flatbuffers::GetRoot<typename X::Type>(q.first.get())).c_str());
     return ok;
   }
   static bool Write(Connection *conn, IPC::Id id, IPC::Seq seq, const StringPiece &ipc_text, int transfer_handle=-1);
+
+  MultiProcessBuffer *NewBuffer() const;
+  MultiProcessBuffer *AddBuffer();
+  bool DelBuffer(IPC::Seq id);
 };
 
 }; // namespace LFL

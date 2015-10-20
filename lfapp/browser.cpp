@@ -447,7 +447,8 @@ void Browser::Draw(Box *VP) {
   int h_scrolled = h_scrollbar.scrolled * 1000; // v_scrollbar.doc_height;
   if (!layers) { Render(v_scrolled); doc.gui.Draw(); UpdateScrollbar(); }
   else {
-    if (!app->render_process && doc.Dirty()) Render();
+    if (app->render_process) { IPCTrace("Browser::Draw ipc_buffer_size: %zd\n", app->render_process->ipc_buffer.size()); }
+    else if (doc.Dirty()) Render();
     for (int i=0; i<layers->size(); i++)
       (*layers)[i]->Draw(*VP, point(!i ? h_scrolled : 0, (!i ? -v_scrolled : 0) - VP->h));
   }

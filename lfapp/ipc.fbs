@@ -1,8 +1,12 @@
 namespace LFL.IPC;
 
 table ResourceHandle { type: int; len: int; url: string; }
+
 table AllocateBufferRequest  { bytes: int; type: short; }
 table AllocateBufferResponse { mpb: ResourceHandle; mpb_id: int; }
+
+table CloseBufferRequest { mpb_id: int; }
+table CloseBufferResponse { success: bool; }
 
 struct Color { r: ubyte; b: ubyte; g: ubyte; a: ubyte; }
 table SetClearColorRequest { c: Color; }
@@ -36,3 +40,12 @@ table SetViewportResponse { success: bool; }
 
 table SetDocsizeRequest  { w: int; h: int; }
 table SetDocsizeResponse { success: bool; }
+
+table KeyPressRequest { button: int; down: bool; }
+table KeyPressResponse { success: bool; }
+
+table MouseClickRequest { button: int; down: bool; x: int; y: int; }
+table MouseClickResponse { success: bool; }
+
+table MouseMoveRequest { x: int; y: int; dx: int; dy: int; }
+table MouseMoveResponse { success: bool; }
