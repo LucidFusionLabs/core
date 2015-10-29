@@ -130,6 +130,7 @@ struct Widget {
     void ScrollDown() { scrolled += increment / doc_height; Clamp(&scrolled, 0, 1); dirty=true; }
     float ScrollDelta() { float ret=scrolled-last_scrolled; last_scrolled=scrolled; return ret; }
     float AddScrollDelta(float cur_val);
+    static void AttachContentBox(Box *b, Scrollbar *vs, Scrollbar *hs);
   };
 };
 
@@ -437,6 +438,7 @@ struct Editor : public TextArea {
   FreeListVector<string> edits;
   vector<pair<int,int>> annotation;
   int last_fb_width=0, last_fb_lines=0, last_first_line=0, wrapped_lines=0, fb_wrapped_lines=0;
+  bool opened=0;
   IDE::Project *project=0;
   Editor(Window *W, Font *F, File *I, bool Wrap=0);
 
@@ -526,7 +528,8 @@ struct Console : public TextArea {
   Time anim_time=Time(333), anim_begin=Time(0);
   bool animating=0, drawing=0, bottom_or_top=0, blend=1, ran_startcmd=0;
   Color color=Color(25,60,130,120);
-  Console(Window *W, Font *F) : TextArea(W, F) { line_fb.wrap=write_timestamp=1; SetToggleKey(Key::Backquote); }
+  Console(Window *W, Font *F) : TextArea(W, F) { line_fb.wrap=write_timestamp=1; SetToggleKey(Key::Backquote); bg_color=&Color::clear; }
+  Console(Window *W) : Console(W, Fonts::Get(A_or_B(FLAGS_lfapp_console_font, FLAGS_default_font), "", 9, Color::white, Color::clear, FLAGS_lfapp_console_font_flag)) {}
 
   virtual ~Console() {}
   virtual int CommandLines() const { return cmd_line.Lines(); }

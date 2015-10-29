@@ -436,7 +436,7 @@ Font *AtlasFontEngine::Open(const FontDesc &d) {
 
     Font *primary      = static_cast<Resource*>(f->resource.get())->primary;
     Font *ret          = new Font(this, d, f->resource);
-    ret->mix_fg        = ci;
+    ret->mix_fg        = primary->mix_fg || ci;
     ret->mono          = primary->mono;
     ret->glyph         = primary->glyph;
     ret->missing_glyph = primary->missing_glyph;
@@ -463,6 +463,7 @@ Font *AtlasFontEngine::OpenAtlas(const FontDesc &d) {
   Resource *resource = new Resource();
   Font *ret = new Font(Singleton<AtlasFontEngine>::Get(), d, shared_ptr<FontEngine::Resource>(resource));
   ret->glyph = shared_ptr<GlyphMap>(new GlyphMap(shared_ptr<GlyphCache>(new GlyphCache(tex.ID, tex.width, tex.height))));
+  ret->mix_fg = d.bg.a() != 1.0;
   GlyphCache *cache = ret->glyph->cache.get();
   resource->primary = ret;
 
@@ -1155,6 +1156,13 @@ void Fonts::ResetGL() {
     if (auto c = m->cache.get()) caches.insert(c);
   }
   for (auto c : caches) {}
+}
+
+void VeraMoBdAtlas::SetConsoleDefault() {
+  FLAGS_atlas_font_sizes = "32";
+  string console_font = "VeraMoBd.ttf";
+  Singleton<AtlasFontEngine>::Get()->Init(FontDesc(console_font, "", 32, Color::white, Color::clear, FLAGS_lfapp_console_font_flag));
+  FLAGS_lfapp_console_font = StrCat("atlas://", console_font);
 }
 
 #ifdef LFL_FREETYPE

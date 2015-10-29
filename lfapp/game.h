@@ -931,7 +931,7 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
         particles.texture = parts->tex.ID;
       }
 #ifdef LFL_ANDROID
-      mobile_font = Fonts::Get("MobileAtlas", "", 0, Color::black);
+      mobile_font = Fonts::Get("MobileAtlas", "", 0, Color::white);
       gplus_signin_button.EnableHover();
 #endif
       pinger.handler = this;
@@ -1129,7 +1129,7 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
       menuflow.AppendNewlines(1);
       if (last_selected != 3) browser.Open("http://lucidfusionlabs.com/apps.html");
       browser.Paint(&menuflow, box.TopLeft());
-      browser.doc.gui.Draw();
+      // browser.doc.gui.Draw();
       browser.UpdateScrollbar();
     }
     if (current_scrollbar) current_scrollbar->SetDocHeight(menuflow.Height());

@@ -76,6 +76,7 @@
 #define sizeofarray(x) (sizeof(x) / sizeof((x)[0]))
 
 #define M_TAU (M_PI + M_PI)
+#define X_or_0(x) ((x) ? (x) : 0)
 #define X_or_1(x) ((x) ? (x) : 1)
 #define X_or_Y(x, y) ((x) ? (x) : (y))
 #define XY_or_Y(x, y) ((x) ? ((x)*(y)) : (y))
@@ -222,7 +223,7 @@ struct LFApp {
 struct NativeWindow {
     void *id, *gl, *surface, *glew_context, *impl, *user1, *user2, *user3;
     int width, height, pow2_width, pow2_height, target_fps;
-    bool minimized, cursor_grabbed, frame_init;
+    bool minimized, cursor_grabbed, frame_init, animating;
     int gesture_swipe_up, gesture_swipe_down, gesture_tap[2], gesture_dpad_stop[2];
     float gesture_dpad_x[2], gesture_dpad_y[2], gesture_dpad_dx[2], gesture_dpad_dy[2], multitouch_keyboard_x;
 };

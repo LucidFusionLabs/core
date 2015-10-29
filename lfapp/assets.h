@@ -825,6 +825,7 @@ template<class CB, class CBL, class CBLI> struct TilesT : public TilesInterface 
     GetTileCoords(Box(docp.x, docp.y, viewport.w, viewport.h), &x1, &y1, &x2, &y2);
 
     Scissor scissor(viewport);
+    screen->gd->DisableBlend();
     screen->gd->SetColor(Color::white);
     for (int y = max(y1, 0); y <= y2; y++) {
       for (int x = max(x1, 0); x <= x2; x++) {

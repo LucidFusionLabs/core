@@ -908,7 +908,7 @@ void Shader::SetUniform3fv(const string &name, int n, const float *v) {}
 
 #ifndef LFL_HEADLESS
 #ifdef LFL_GDDEBUG
-#define GDDebug(...) { screen->gd->CheckForError(__FILE__, __LINE__); if (FLAGS_gd_debug) INFO(__VA_ARGS__); }
+#define GDDebug(...) { screen->gd->CheckForError(__FILE__, __LINE__); if (FLAGS_gd_debug) printf("%s\n", StrCat(__VA_ARGS__).c_str()); }
 #else 
 #define GDDebug(...)
 #endif
@@ -1547,7 +1547,7 @@ void GraphicsDevice::Uniform3fv(int u, int n, const float *v) { glUniform3fv(u, 
 // Common layer
 void GraphicsDevice::Flush() { ClearDeferred(); glFlush(); }
 void GraphicsDevice::Clear() { glClear(GL_COLOR_BUFFER_BIT | (draw_mode == DrawMode::_3D ? GL_DEPTH_BUFFER_BIT : 0)); }
-void GraphicsDevice::ClearColor(const Color &c) { glClearColor(c.r(), c.g(), c.b(), c.a()); }
+void GraphicsDevice::ClearColor(const Color &c) { clear_color=c; glClearColor(c.r(), c.g(), c.b(), c.a()); GDDebug("ClearColor=", c.DebugString()); }
 void GraphicsDevice::PushColor() { default_color.push_back(default_color.back()); UpdateColor();  }
 void GraphicsDevice::PopColor() {
   if      (default_color.size() >= 1) default_color.pop_back();
@@ -2289,7 +2289,7 @@ void Window::Close(Window *W) {
 
 Window::Window() : caption("lfapp"), fps(128) {
   id = gl = surface = glew_context = impl = user1 = user2 = user3 = 0;
-  minimized = cursor_grabbed = frame_init = 0;
+  minimized = cursor_grabbed = frame_init = animating = 0;
   target_fps = FLAGS_target_fps;
   pow2_width = NextPowerOfTwo((width = 640));
   pow2_height = NextPowerOfTwo((height = 480));
@@ -2341,7 +2341,7 @@ void Window::ClearInputBindEvents() {
 }
 
 void Window::InitLFAppConsole() {
-  lfapp_console = new Console(screen, Fonts::Get(A_or_B(FLAGS_lfapp_console_font, FLAGS_default_font), "", 9, Color::white, Color::clear, FLAGS_lfapp_console_font_flag));
+  lfapp_console = new Console(screen);
   lfapp_console->ReadHistory(LFAppDownloadDir(), "console");
   lfapp_console->Write(StrCat(screen->caption, " started"));
   lfapp_console->Write("Try console commands 'cmds' and 'flags'");
@@ -2547,7 +2547,7 @@ int Video::Init() {
     screen->gd->Clear();
     screen->gd->Flush();
     Swap();
-    screen->gd->ClearColor(Color::black);
+    screen->gd->ClearColor(screen->gd->clear_color);
   }
 #endif
   return 0;
@@ -2617,14 +2617,9 @@ void Video::InitFonts() {
   }
 
   FontEngine *atlas_engine = Singleton<AtlasFontEngine>::Get();
-  atlas_engine->Init(FontDesc("MenuAtlas", "", 0, Color::black, Color::clear, 0, 0));
+  atlas_engine->Init(FontDesc("MenuAtlas", "", 0, Color::white, Color::clear, 0, 0));
 
-  if (FLAGS_lfapp_console && FLAGS_font_engine != "atlas" && FLAGS_font_engine != "freetype") {
-    FLAGS_atlas_font_sizes = "32";
-    string console_font = "VeraMoBd.ttf";
-    Singleton<AtlasFontEngine>::Get()->Init(FontDesc(console_font, "", 32, Color::white, Color::clear, FLAGS_lfapp_console_font_flag));
-    FLAGS_lfapp_console_font = StrCat("atlas://", console_font);
-  }
+  if (FLAGS_lfapp_console && FLAGS_font_engine != "atlas" && FLAGS_font_engine != "freetype") VeraMoBdAtlas::SetConsoleDefault();
 }
 
 int Video::InitFontWidth() {

@@ -440,6 +440,10 @@ struct Fonts {
   static void ResetGL();
 };
 
+struct VeraMoBdAtlas {
+  static void SetConsoleDefault();
+};
+
 struct DejaVuSansFreetype {
   static void SetDefault();
   static void Load();

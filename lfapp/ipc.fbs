@@ -32,6 +32,12 @@ table PaintResponse { success: bool; }
 table WGetRequest  { url: string; mime_type: int; }
 table WGetResponse { mpb: ResourceHandle; headers: bool; content_length: int; }
 
+table SetTitleRequest { title: string; }
+table SetTitleResponse { success: bool; }
+
+table SetURLRequest { url: string; }
+table SetURLResponse { success: bool; }
+
 table NavigateRequest  { url: string; }
 table NavigateResponse { success: bool; }
 
@@ -49,3 +55,6 @@ table MouseClickResponse { success: bool; }
 
 table MouseMoveRequest { x: int; y: int; dx: int; dy: int; }
 table MouseMoveResponse { success: bool; }
+
+table ExecuteScriptRequest { text: string; }
+table ExecuteScriptResponse { text: string; }

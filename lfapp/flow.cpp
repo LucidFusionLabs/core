@@ -249,6 +249,7 @@ void Flow::AppendVerticalSpace(int h) {
 }
 
 void Flow::AppendBlock(int w, int h, Box *box_out) {
+  Max(&max_line_width, w);
   AppendVerticalSpace(h);
   *box_out = Box(0, p.y + cur_line.height, w, h);
 }
@@ -273,9 +274,15 @@ int Flow::AppendBox(int w, int h, Drawable *drawable) {
 }
 
 void Flow::AppendBox(int w, int h, Box *box_out) {
-  DrawableBox box(Box(0,0,w,h), 0, out ? out->attr.GetAttrId(cur_attr) : 0, out ? out->line.size() : -1);
-  AppendBox(&box);
-  if (box_out) *box_out = box.box;
+  static bool add_non_drawable = true;
+  if (out && add_non_drawable) {
+    AppendBox(&out->PushBack(Box(0,0,w,h), cur_attr, NULL));
+    if (box_out) *box_out = out->data.back().box;
+  } else {
+    DrawableBox box(Box(0,0,w,h), 0, out ? out->attr.GetAttrId(cur_attr) : 0, out ? out->line.size() : -1);
+    AppendBox(&box);
+    if (box_out) *box_out = box.box;
+  }
 }
 
 void Flow::AppendBox(int w, int h, const Border &b, Box *box_out) {
@@ -291,7 +298,7 @@ void Flow::AppendBox(DrawableBox *box) {
     box->box.SetPosition(bp);
     cur_word.len = box->box.w;
     cur_word.fresh = 1;
-    AppendBoxOrChar(0, box, box->box.h);
+    CHECK_EQ(State::OK, AppendBoxOrChar(0, box, box->box.h));
   }
   cur_word.len = 0;
 }

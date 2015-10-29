@@ -196,8 +196,9 @@ namespace LFL {
 using LFL_STL11_NAMESPACE::isinf;
 using LFL_STL11_NAMESPACE::isnan;
 typedef void* Void;
-typedef function<void()> Callback;
 typedef lock_guard<mutex> ScopedMutex;
+typedef function<void()> Callback;
+typedef function<void(const string&)> StringCB;
 template <class X> struct Singleton { static X *Get() { static X instance; return &instance; } };
 void Log(int level, const char *file, int line, const string &m);
 }; // namespace LFL
@@ -497,6 +498,7 @@ struct FrameScheduler {
   bool WakeupIn(void*, Time interval, bool force=0);
   void ClearWakeupIn();
   void UpdateTargetFPS(int fps);
+  void SetAnimating(bool);
   void AddWaitForeverMouse();
   void DelWaitForeverMouse();
   void AddWaitForeverKeyboard();
@@ -506,19 +508,19 @@ struct FrameScheduler {
 };
 
 struct BrowserInterface {
-  virtual void Draw(Box *viewport) = 0;
+  virtual void Draw(const Box&) = 0;
   virtual void Open(const string &url) = 0;
   virtual void Navigate(const string &url) { Open(url); }
   virtual Asset *OpenImage(const string &url) { return 0; }
   virtual void OpenStyleImport(const string &url) {}
   virtual void MouseMoved(int x, int y) = 0;
-  virtual void MouseButton(int b, bool d) = 0;
+  virtual void MouseButton(int b, bool d, int x, int y) = 0;
   virtual void MouseWheel(int xs, int ys) = 0;
   virtual void KeyEvent(int key, bool down) = 0;
   virtual void BackButton() = 0;
   virtual void ForwardButton() = 0;
   virtual void RefreshButton() = 0;
-  virtual string GetURL() = 0;
+  virtual string GetURL() const = 0;
 };
 
 struct JSContext {

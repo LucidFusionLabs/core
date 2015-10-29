@@ -206,12 +206,18 @@ struct NavigateRequest {};
 struct NavigateResponse {};
 struct WGetRequest {};
 struct WGetResponse {};
+struct SetTitleRequest {};
+struct SetTitleResponse {};
+struct SetURLRequest {};
+struct SetURLResponse {};
 struct KeyPressRequest {};
 struct KeyPressResponse {};
 struct MouseClickRequest {};
 struct MouseClickResponse {};
 struct MouseMoveRequest {};
 struct MouseMoveResponse {};
+struct ExecuteScriptRequest {};
+struct ExecuteScriptResponse { struct String { string str() { return ""; } }; String *text() const { return 0; } };
 }; // namespace IPC
 #define IPC_TABLE_BEGIN(name) typedef name Parent; void HandleIPC(Connection *c, int fm=0) {}
 #define IPC_TABLE_CLIENT_CALL(name)

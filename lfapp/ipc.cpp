@@ -328,8 +328,14 @@ void ProcessAPIServer::OpenSystemFont(const LFL::FontDesc &d, const OpenSystemFo
 void ProcessAPIServer::SetClearColor(const Color &c) {}
 void ProcessAPIServer::SetDocsize(int w, int h) {}
 void ProcessAPIServer::WGet(const string &url, const HTTPClient::ResponseCB &cb) {}
+void ProcessAPIServer::SetTitle(const string&) {}
+void ProcessAPIServer::SetURL(const string&) {}
 void ProcessAPIServer::LoadTexture(Texture*, const LoadTextureIPC::CB &cb) {}
 void ProcessAPIServer::Paint(int, const point&, MultiProcessPaintResourceBuilder&) {}
+void ProcessAPIClient::KeyPress(int b, bool d) {}
+void ProcessAPIClient::MouseClick(int b, bool d, int x, int y) {}
+void ProcessAPIClient::MouseMove(int x, int y, int dx, int dy) {}
+void ProcessAPIClient::ExecuteScript(const string &text, const StringCB &cb) {}
 #else
 
 MultiProcessBuffer *InterProcessComm::NewBuffer() const { return new MultiProcessBuffer(server_process); }
@@ -548,6 +554,11 @@ void ProcessAPIClient::KeyPress(int b, bool d)                  { SendIPC(conn, 
 void ProcessAPIClient::MouseClick(int b, bool d, int x, int y)  { SendIPC(conn, seq++, -1, MouseClickRequest, b, d, x, y); }
 void ProcessAPIClient::MouseMove (int x, int y, int dx, int dy) { SendIPC(conn, seq++, -1, MouseMoveRequest, x, y, dx, dy); }
 
+void ProcessAPIClient::ExecuteScript(const string &text, const StringCB &cb) {
+  if (SendIPC(conn, seq++, -1, ExecuteScriptRequest, fb.CreateString(text)))
+    ExpectResponseIPC(ExecuteScript, this, seq-1, cb);
+}
+
 void ProcessAPIClient::LoadAsset(const string &content, const string &fn, const TextureCB &cb) { 
   MultiProcessBuffer mpb(server_process);
   if (conn && mpb.Create(MultiProcessFileResource(content, fn, "")) &&
@@ -588,6 +599,16 @@ int ProcessAPIClient::HandleSetClearColorRequest(int seq, const IPC::SetClearCol
 
 int ProcessAPIClient::HandleSetDocsizeRequest(int seq, const IPC::SetDocsizeRequest *req, Void) {
   RunInMainThread(new Callback(bind(&Browser::SetDocsize, browser, req->w(), req->h())));
+  return IPC::Done;
+}
+
+int ProcessAPIClient::HandleSetTitleRequest(int seq, const IPC::SetTitleRequest *req, Void) {
+  RunInMainThread(new Callback(bind(&Window::SetCaption, screen, req->title() ? req->title()->str() : "")));
+  return IPC::Done;
+}
+
+int ProcessAPIClient::HandleSetURLRequest(int seq, const IPC::SetURLRequest *req, Void) {
+  RunInMainThread(new Callback(bind(&Browser::SetURLText, browser, req->url() ? req->url()->str() : "")));
   return IPC::Done;
 }
 
@@ -675,12 +696,15 @@ int ProcessAPIServer::LoadAssetQuery::AllocateBufferResponse(const IPC::Allocate
 }
 
 int ProcessAPIServer::HandleNavigateRequest(int seq, const IPC::NavigateRequest *req, Void) {
-  browser->Open(req->url()->str());
+  string url = req->url()->str();
+  browser->Open(url);
+  SendIPC(conn, seq++, -1, SetURLRequest, fb.CreateString(url));
+  SendIPC(conn, seq++, -1, SetTitleRequest, fb.CreateString(url));
   return IPC::Done;
 }
 
 int ProcessAPIServer::HandleSetViewportRequest(int seq, const IPC::SetViewportRequest *req, Void) {
-  browser->SetViewport(Box(req->w(), req->h()));
+  browser->SetViewport(req->w(), req->h());
   return IPC::Done;
 }
 
@@ -699,7 +723,15 @@ int ProcessAPIServer::HandleMouseMoveRequest(int seq, const IPC::MouseMoveReques
   return IPC::Done;
 }
 
+int ProcessAPIServer::HandleExecuteScriptRequest(int seq, const IPC::ExecuteScriptRequest *req, Void) {
+  string ret = browser->doc.js_context->Execute(req->text()->data());
+  SendIPC(conn, seq, -1, ExecuteScriptResponse, fb.CreateString(ret));
+  return IPC::Done;
+}
+
 void ProcessAPIServer::SetDocsize(int w, int h) { SendIPC(conn, seq++, -1, SetDocsizeRequest, w, h); }
+void ProcessAPIServer::SetTitle(const string &t) { SendIPC(conn, seq++, -1, SetTitleRequest, fb.CreateString(t)); }
+void ProcessAPIServer::SetURL(const string &t) { SendIPC(conn, seq++, -1, SetURLRequest, fb.CreateString(t)); }
 void ProcessAPIServer::SetClearColor(const Color &c) {
   IPC::Color cc(c.R(), c.G(), c.B(), c.A());
   SendIPC(conn, seq++, -1, SetClearColorRequest, &cc);

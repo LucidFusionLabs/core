@@ -437,6 +437,7 @@ struct GraphicsDevice : public QOpenGLFunctions {
   string vertex_shader, pixel_shader;
   bool blend_enabled = 0;
   Shader *shader = 0;
+  Color clear_color = Color::black;
   vector<Color> default_color;
   vector<vector<Box> > scissor_stack;
   GraphicsDevice() : scissor_stack(1) {}
@@ -622,6 +623,14 @@ struct ScopedDrawMode {
   int prev_mode; bool nop;
   ScopedDrawMode(int dm) : prev_mode(screen->gd->draw_mode), nop(dm == DrawMode::NullOp) { if (!nop) screen->gd->DrawMode(dm,        0); }
   ~ScopedDrawMode()                                                                      { if (!nop) screen->gd->DrawMode(prev_mode, 0); }
+};
+
+struct ScopedClearColor {
+  bool enabled;
+  Color prev_color;
+  ~ScopedClearColor()                                                                { if (enabled) screen->gd->ClearColor(prev_color); }
+  ScopedClearColor(const Color *c) : enabled(c), prev_color(screen->gd->clear_color) { if (enabled) screen->gd->ClearColor(*c); }
+  ScopedClearColor(const Color &c) : enabled(1), prev_color(screen->gd->clear_color) {              screen->gd->ClearColor(c); }
 };
 
 struct Video : public Module {

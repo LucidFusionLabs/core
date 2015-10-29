@@ -80,18 +80,24 @@ struct ProcessAPI : public InterProcessComm {
     IPC_PROTO_ENTRY(14, PaintResponse,          Void,                        "success=", x->success());
     IPC_PROTO_ENTRY(15, WGetRequest,            Void,                        "url=", x->url() ? x->url()->data() : ""); 
     IPC_PROTO_ENTRY(16, WGetResponse,           MultiProcessBuffer,          "h=", (int)x->headers(), ", hl=", x->mpb()?x->mpb()->len():0, ", hu=", x->mpb()?x->mpb()->url()->data():"", " b=", mpv.buf!=0, ", l=", mpv.len);
-    IPC_PROTO_ENTRY(17, NavigateRequest,        Void,                        "url=", x->url() ? x->url()->data() : ""); 
-    IPC_PROTO_ENTRY(18, NavigateResponse,       Void,                        "success=", x->success());
-    IPC_PROTO_ENTRY(19, SetViewportRequest,     Void,                        "w=", x->w(), ", h=", x->h()); 
-    IPC_PROTO_ENTRY(20, SetViewportResponse,    Void,                        "success=", x->success());
-    IPC_PROTO_ENTRY(21, SetDocsizeRequest,      Void,                        "w=", x->w(), ", h=", x->h()); 
-    IPC_PROTO_ENTRY(22, SetDocsizeResponse,     Void,                        "success=", x->success());
-    IPC_PROTO_ENTRY(23, KeyPressRequest,        Void,                        "button=", x->button(), ", down=", x->down()); 
-    IPC_PROTO_ENTRY(24, KeyPressResponse,       Void,                        "success=", x->success());
-    IPC_PROTO_ENTRY(25, MouseClickRequest,      Void,                        "button=", x->button(), ", down=", x->down(), ", x=", x->x(), ", y=", x->y()); 
-    IPC_PROTO_ENTRY(26, MouseClickResponse,     Void,                        "success=", x->success());
-    IPC_PROTO_ENTRY(27, MouseMoveRequest,       Void,                        "x=", x->x(), ", y=", x->y(), ", dx=", x->dx(), ", dy=", x->dy()); 
-    IPC_PROTO_ENTRY(28, MouseMoveResponse,      Void,                        "success=", x->success());
+    IPC_PROTO_ENTRY(17, SetTitleRequest,        Void,                        "title=", x->title() ? x->title()->data() : ""); 
+    IPC_PROTO_ENTRY(18, SetTitleResponse,       Void,                        "success=", x->success());
+    IPC_PROTO_ENTRY(19, SetURLRequest,          Void,                        "url=", x->url() ? x->url()->data() : ""); 
+    IPC_PROTO_ENTRY(20, SetURLResponse,         Void,                        "success=", x->success());
+    IPC_PROTO_ENTRY(21, NavigateRequest,        Void,                        "url=", x->url() ? x->url()->data() : ""); 
+    IPC_PROTO_ENTRY(22, NavigateResponse,       Void,                        "success=", x->success());
+    IPC_PROTO_ENTRY(23, SetViewportRequest,     Void,                        "w=", x->w(), ", h=", x->h()); 
+    IPC_PROTO_ENTRY(24, SetViewportResponse,    Void,                        "success=", x->success());
+    IPC_PROTO_ENTRY(25, SetDocsizeRequest,      Void,                        "w=", x->w(), ", h=", x->h()); 
+    IPC_PROTO_ENTRY(26, SetDocsizeResponse,     Void,                        "success=", x->success());
+    IPC_PROTO_ENTRY(27, KeyPressRequest,        Void,                        "button=", x->button(), ", down=", x->down()); 
+    IPC_PROTO_ENTRY(28, KeyPressResponse,       Void,                        "success=", x->success());
+    IPC_PROTO_ENTRY(29, MouseClickRequest,      Void,                        "button=", x->button(), ", down=", x->down(), ", x=", x->x(), ", y=", x->y()); 
+    IPC_PROTO_ENTRY(30, MouseClickResponse,     Void,                        "success=", x->success());
+    IPC_PROTO_ENTRY(31, MouseMoveRequest,       Void,                        "x=", x->x(), ", y=", x->y(), ", dx=", x->dx(), ", dy=", x->dy()); 
+    IPC_PROTO_ENTRY(32, MouseMoveResponse,      Void,                        "success=", x->success());
+    IPC_PROTO_ENTRY(33, ExecuteScriptRequest,   Void,                        "text=", x->text() ? x->text()->data() : ""); 
+    IPC_PROTO_ENTRY(34, ExecuteScriptResponse,  Void,                        "text=", x->text() ? x->text()->data() : "");
   };
 };
 
@@ -109,6 +115,7 @@ struct ProcessAPIClient : public ProcessAPI {
   IPC_TABLE_CLIENT_CALL(KeyPress);
   IPC_TABLE_CLIENT_CALL(MouseClick);
   IPC_TABLE_CLIENT_CALL(MouseMove);
+  IPC_TABLE_CLIENT_CALL(ExecuteScript);
   IPC_TABLE_SERVER_CALL(AllocateBuffer);
   IPC_TABLE_SERVER_CALL(CloseBuffer);
   IPC_TABLE_SERVER_CALL(OpenSystemFont);
@@ -117,6 +124,8 @@ struct ProcessAPIClient : public ProcessAPI {
   IPC_TABLE_SERVER_VIRC(LoadTexture, MultiProcessTextureResource, mpb_id);
   IPC_TABLE_SERVER_VIRC(Paint, MultiProcessPaintResource, mpb_id);
   IPC_TABLE_SERVER_CALL(WGet);
+  IPC_TABLE_SERVER_CALL(SetTitle);
+  IPC_TABLE_SERVER_CALL(SetURL);
   IPC_TABLE_END(ProcessAPIClient);
 
   IPC_CLIENT_CALL(LoadAsset, const MultiProcessTextureResource&, const string&, const string&, const TextureCB&) {
@@ -130,6 +139,12 @@ struct ProcessAPIClient : public ProcessAPI {
   IPC_CLIENT_CALL(KeyPress,       Void, int button, bool down) {};
   IPC_CLIENT_CALL(MouseClick,     Void, int button, bool down, int x, int y) {};
   IPC_CLIENT_CALL(MouseMove,      Void, int x, int y, int dx, int dy) {};
+  IPC_CLIENT_CALL(ExecuteScript,  Void, const string&, const StringCB&) {
+    StringCB cb;
+    ExecuteScriptQuery(Parent *P, IPC::Seq S, const StringCB &c) : ExecuteScriptIPC(P,S,bind(&ExecuteScriptQuery::Response, this, _1, _2)), cb(c) {}
+    int Response(const IPC::ExecuteScriptResponse *res, Void) { RunInMainThread(new Callback(bind(&ExecuteScriptQuery::RunCB, cb, (res && res->text()) ? res->text()->str() : string()))); return IPC::Done; }
+    static void RunCB(const StringCB &cb, const string &s) { cb(s); }
+  };
   IPC_SERVER_CALL(AllocateBuffer, Void) {};
   IPC_SERVER_CALL(CloseBuffer,    Void) {};
   IPC_SERVER_CALL(OpenSystemFont, Void) {};
@@ -148,6 +163,8 @@ struct ProcessAPIClient : public ProcessAPI {
     using WGetIPC::WGetIPC;
     void WGetResponseCB(Connection *c, const char *h, const string &ct, const char *b, int l);
   };
+  IPC_SERVER_CALL(SetTitle, Void) {};
+  IPC_SERVER_CALL(SetURL, Void) {};
 };
 
 struct ProcessAPIServer : public ProcessAPI {
@@ -163,12 +180,15 @@ struct ProcessAPIServer : public ProcessAPI {
   IPC_TABLE_CLIENT_CALL(LoadTexture);
   IPC_TABLE_CLIENT_CALL(Paint);
   IPC_TABLE_CLIENT_QXBC(WGet, mpb);
+  IPC_TABLE_CLIENT_CALL(SetTitle);
+  IPC_TABLE_CLIENT_CALL(SetURL);
   IPC_TABLE_SERVER_VXRC(LoadAsset, MultiProcessFileResource, mpb);
   IPC_TABLE_SERVER_CALL(Navigate);
   IPC_TABLE_SERVER_CALL(SetViewport);
   IPC_TABLE_SERVER_CALL(KeyPress);
   IPC_TABLE_SERVER_CALL(MouseClick);
   IPC_TABLE_SERVER_CALL(MouseMove);
+  IPC_TABLE_SERVER_CALL(ExecuteScript);
   IPC_TABLE_END(ProcessAPIServer);
 
   IPC_CLIENT_CALL(CloseBuffer, Void, int) {};
@@ -194,16 +214,19 @@ struct ProcessAPIServer : public ProcessAPI {
     WGetQuery(Parent *P, IPC::Seq S, const WGetIPC::CB &C, const HTTPClient::ResponseCB &R) : WGetIPC(P,S,C), cb(R) {}
     int WGetResponse(const IPC::WGetResponse*, const MultiProcessBuffer&);
   };
+  IPC_CLIENT_CALL(SetTitle, Void, const string &) {};
+  IPC_CLIENT_CALL(SetURL,   Void, const string &) {};
   IPC_SERVER_CALL(LoadAsset, const MultiProcessFileResource&) {
     Texture *tex; 
     LoadAssetQuery(Parent *P, IPC::Seq S, Texture *T) : LoadAssetIPC(P,S), tex(T) {}
     int AllocateBufferResponse(const IPC::AllocateBufferResponse*, MultiProcessBuffer&);
   };
-  IPC_SERVER_CALL(Navigate,    Void) {};
-  IPC_SERVER_CALL(SetViewport, Void) {};
-  IPC_SERVER_CALL(KeyPress,    Void) {};
-  IPC_SERVER_CALL(MouseClick,  Void) {};
-  IPC_SERVER_CALL(MouseMove,   Void) {};
+  IPC_SERVER_CALL(Navigate,      Void) {};
+  IPC_SERVER_CALL(SetViewport,   Void) {};
+  IPC_SERVER_CALL(KeyPress,      Void) {};
+  IPC_SERVER_CALL(MouseClick,    Void) {};
+  IPC_SERVER_CALL(MouseMove,     Void) {};
+  IPC_SERVER_CALL(ExecuteScript, Void) {};
 
   void WaitAllOpenSystemFontResponse() {
     while (OpenSystemFont_map.size()) HandleMessages(Protocol::OpenSystemFontResponse::Id);

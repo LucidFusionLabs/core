@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef __LFL_LFAPP_CSS_H__
-#define __LFL_LFAPP_CSS_H__
+#ifndef LFL_LFAPP_CSS_H__
+#define LFL_LFAPP_CSS_H__
 
 #ifdef LFL_LIBCSS
 extern "C" {
@@ -34,6 +34,8 @@ struct PropertyNames : public vector<string> {
 #define XX(n) push_back(#n);
 #undef  YY
 #define YY(n)
+#undef  ZZ
+#define ZZ(n)
 #include "crawler/css_properties.h"
   }
 };
@@ -176,7 +178,8 @@ struct CSSRule : public Object {
 struct CSSValueList : public CSSValue {
   CSSValueList() : CSSValue(CSS_VALUE_LIST) {}
   virtual int length() const = 0;
-  virtual CSSValue *item(int index) = 0;
+  virtual       CSSValue *item(int index)       = 0;
+  virtual const CSSValue *item(int index) const = 0;
 };
 
 struct CSSValueListVector : public CSSValueList {
@@ -223,28 +226,28 @@ struct CSSStyleDeclaration : public Object {
   DOMString  cssText;
   CSSStyleDeclaration(CSSRule *p=0) : parentRule(p) {}
 
-  virtual int        length()        = 0;
-  virtual DOMString  item(int index) = 0;
+  virtual int        length()        const = 0;
+  virtual DOMString  item(int index) const = 0;
 
-  virtual DOMString  getPropertyValue(const DOMString &propertyName)    = 0;
-  virtual CSSValue  *getPropertyCSSValue(const DOMString &propertyName) = 0;
-  virtual DOMString  removeProperty(const DOMString &propertyName)      = 0;
-  virtual DOMString  getPropertyPriority(const DOMString &propertyName) = 0;
-  virtual void       setProperty(const DOMString &propertyName, const DOMString &value, const DOMString &priority) = 0;
+  virtual DOMString       getPropertyPriority(const DOMString &propertyName) const = 0;
+  virtual DOMString       getPropertyValue(const DOMString &propertyName)    const = 0;
+  virtual const CSSValue *getPropertyCSSValue(const DOMString &propertyName) const = 0;
+  virtual DOMString       removeProperty(const DOMString &propertyName) = 0;
+  virtual void            setProperty(const DOMString &propertyName, const DOMString &value, const DOMString &priority) = 0;
 };
 
 struct CSSStyleDeclarationMap : public CSSStyleDeclaration {
   NamedMap<CSSValue*> propMap;
   CSSStyleDeclarationMap(CSSRule *p=0) : CSSStyleDeclaration(p) {}
 
-  virtual int        length() { return propMap.length(); };
-  virtual DOMString  item(int index) { CSSValue *v = propMap.item(index); return v ? v->cssText() : ""; }
+  virtual int        length() const { return propMap.length(); };
+  virtual DOMString  item(int index) const { auto v = propMap.item(index); return v ? v->cssText() : ""; }
 
-  virtual DOMString  getPropertyValue(const DOMString &n) { CSSValue *v = propMap.getNamedItem(n);  return v ? v->cssText() : ""; }
-  virtual DOMString  removeProperty(const DOMString &n) { CSSValue *v = propMap.removeNamedItem(n); return v ? v->cssText() : ""; }
-  virtual CSSValue  *getPropertyCSSValue(const DOMString &n) { return propMap.getNamedItem(n); }
-  virtual DOMString  getPropertyPriority(const DOMString &n) { return ""; }
-  virtual void       setProperty(const DOMString &n, const DOMString &v, const DOMString &priority) { ERROR("not implemented"); }
+  virtual DOMString       getPropertyValue(const DOMString &n) const { CSSValue *v = propMap.getNamedItem(n);  return v ? v->cssText() : ""; }
+  virtual const CSSValue *getPropertyCSSValue(const DOMString &n) const { return propMap.getNamedItem(n); }
+  virtual DOMString       getPropertyPriority(const DOMString &n) const { return ""; }
+  virtual DOMString       removeProperty(const DOMString &n) { CSSValue *v = propMap.removeNamedItem(n); return v ? v->cssText() : ""; }
+  virtual void            setProperty(const DOMString &n, const DOMString &v, const DOMString &priority) { ERROR("not implemented"); }
 };
 
 struct CSSPrimitiveValue : public CSSValue {
@@ -341,7 +344,8 @@ struct CSSNumericValuePair : public CSSValueList {
   CSSNumericValue first, second;
   CSSNumericValuePair() {}
   CSSNumericValuePair(int v1, unsigned short u1, unsigned short prt1, int v2, unsigned short u2, unsigned short prt2) : first(v1, u1, prt1), second(v2, u2, prt2) {}
-  virtual CSSValue* item(int index) { if (index == 1) return &first; else if (index == 2) return &second; return 0; }
+  virtual       CSSValue* item(int index)       { if (index == 1) return &first; else if (index == 2) return &second; return 0; }
+  virtual const CSSValue* item(int index) const { if (index == 1) return &first; else if (index == 2) return &second; return 0; }
   virtual int       length()  const { return Null() ? 0 : 2; }
   virtual bool      Null()    const { return first.Null() && second.Null(); }
   virtual DOMString cssText() const {
@@ -846,7 +850,9 @@ struct Position : public CSSValue {
 };
 
 struct RGBColor : public CSSValue {
-  Color v; RGBColor(int hexval) : CSSValue(CSS_CUSTOM), v(hexval) {}
+  Color v;
+  RGBColor(int hexval) : CSSValue(CSS_CUSTOM), v(hexval) {}
+  RGBColor()           : CSSValue(CSS_INHERIT) {}
   int red  () const { return v.R(); }
   int green() const { return v.G(); }
   int blue () const { return v.B(); }
@@ -1059,8 +1065,8 @@ struct CSSImportRule : public CSSRule {
 
 #ifdef LFL_LIBCSS
 struct LibCSS_String {
-  static lwc_string *Intern(const string   &s) {                             lwc_string *v=0; CHECK_EQ(lwc_intern_string(s.data(), s.size(), &v), lwc_error_ok); return v; }
-  static lwc_string *Intern(const String16 &s) { string S=String::ToUTF8(s); lwc_string *v=0; CHECK_EQ(lwc_intern_string(S.data(), S.size(), &v), lwc_error_ok); return v; }
+  static lwc_string *Intern(const string   &s) {                             lwc_string *v=0; CHECK_EQ(lwc_error_ok, lwc_intern_string(s.data(), s.size(), &v)); return v; }
+  static lwc_string *Intern(const String16 &s) { string S=String::ToUTF8(s); lwc_string *v=0; CHECK_EQ(lwc_error_ok, lwc_intern_string(S.data(), S.size(), &v)); return v; }
   static LFL::DOM::DOMString ToString(lwc_string *s) { return LFL::DOM::DOMString(lwc_string_data(s), lwc_string_length(s)); }
   static string ToUTF8String(lwc_string *s) { return String::ToUTF8(ToString(s)); }
 };
@@ -1086,7 +1092,8 @@ struct StyleSheet : public LFL::DOM::Object {
   css_stylesheet *sheet;
   css_stylesheet_params params;
   string content_url, character_set;
-  ~StyleSheet() { CHECK_EQ(css_stylesheet_destroy(sheet), CSS_OK); }
+
+  ~StyleSheet() { CHECK_EQ(CSS_OK, css_stylesheet_destroy(sheet)); }
   StyleSheet(LFL::DOM::Document *D, const char *U=0, const char *CS=0, bool in_line=0, bool quirks=0, const char *Content=0) :
   ownerDocument(D), sheet(0), content_url(BlankNull(U)), character_set(BlankNull(CS)) {
     params.params_version = CSS_STYLESHEET_PARAMS_VERSION_1;
@@ -1101,16 +1108,18 @@ struct StyleSheet : public LFL::DOM::Object {
     params.color = Color;
     params.font = Font;
     params.resolve_pw = params.import_pw = params.color_pw = params.font_pw = this;
-    CHECK_EQ(css_stylesheet_create(&params, &sheet), CSS_OK);
+    CHECK_EQ(CSS_OK, css_stylesheet_create(&params, &sheet));
     if (Content) { Parse(Content); Done(); }
   }
+
   void Parse(File *f) { for (const char *line = f->NextLine(); line; line = f->NextLine()) Parse(line, f->nr.record_len); }
   void Parse(const string &content) { return Parse(content.c_str(), content.size()); }
   void Parse(const char *content, int content_len) {
     css_error code = css_stylesheet_append_data(sheet, (const unsigned char *)content, content_len);
     CHECK(code == CSS_OK || code == CSS_NEEDDATA);
   }
-  void Done() { CHECK_EQ(css_stylesheet_data_done(sheet), CSS_OK); }
+  void Done() { CHECK_EQ(CSS_OK, css_stylesheet_data_done(sheet)); }
+
   static StyleSheet *Default() { static StyleSheet ret(0, "", "UTF-8", 0, 0, LFL::CSS::Default); return &ret; }
   static css_error Resolve(void *pw, const char *base, lwc_string *rel, lwc_string **abs) { *abs = lwc_string_ref(rel); return CSS_OK; }
   static css_error Import(void *pw, css_stylesheet *parent, lwc_string *url, uint64_t media);
@@ -1126,105 +1135,108 @@ struct StyleSheet : public LFL::DOM::Object {
 
 struct ComputedStyle : public LFL::DOM::CSSStyleDeclaration {
   LFL::DOM::Node *node;
-  css_select_results *style;
-  bool is_root, font_not_inherited, bgcolor_not_inherited;
+  css_select_results *style=0;
+  bool is_root=0, font_not_inherited=0, bgcolor_not_inherited=0;
+  ComputedStyle(LFL::DOM::Node *N) : node(N) {}
   virtual ~ComputedStyle() { Reset(); }
-  ComputedStyle(LFL::DOM::Node *N) : node(N), style(0), is_root(0), font_not_inherited(0), bgcolor_not_inherited(0) {}
 
-  bool Computed() { return style; }
-  void Reset() { if (style) CHECK_EQ(css_select_results_destroy(style), CSS_OK); style = 0; }
-  css_computed_style *Style() { return style ? style->styles[CSS_PSEUDO_ELEMENT_NONE] : 0; }
+  bool Computed() const { return style; }
+  void Reset() { if (style) CHECK_EQ(CSS_OK, css_select_results_destroy(style)); style = 0; }
+  const css_computed_style *Style() const { return style ?style->styles[CSS_PSEUDO_ELEMENT_NONE] : 0; }
+  /**/  css_computed_style *Style()       { return style ?style->styles[CSS_PSEUDO_ELEMENT_NONE] : 0; }
 
-  LFL::DOM::Display              Display             () { return LFL::DOM::Display(css_computed_display(Style(), is_root)); }
-  LFL::DOM::Clear                Clear               () { return LFL::DOM::Clear(css_computed_clear(Style())); }
-  LFL::DOM::Float                Float               () { return LFL::DOM::Float(css_computed_float(Style())); }
-  LFL::DOM::Position             Position            () { return LFL::DOM::Position(css_computed_position(Style())); }
-  LFL::DOM::Overflow             Overflow            () { return LFL::DOM::Overflow(css_computed_overflow(Style())); }
-  LFL::DOM::TextAlign            TextAlign           () { return LFL::DOM::TextAlign(css_computed_text_align(Style())); }
-  LFL::DOM::Direction            Direction           () { return LFL::DOM::Direction(css_computed_direction(Style())); }
-  LFL::DOM::FontStyle            FontStyle           () { return LFL::DOM::FontStyle(css_computed_font_style(Style())); }
-  LFL::DOM::EmptyCells           EmptyCells          () { return LFL::DOM::EmptyCells(css_computed_empty_cells(Style())); }
-  LFL::DOM::FontWeight           FontWeight          () { return LFL::DOM::FontWeight(css_computed_font_weight(Style())); }
-  LFL::DOM::Visibility           Visibility          () { return LFL::DOM::Visibility(css_computed_visibility(Style())); }
-  LFL::DOM::WhiteSpace           WhiteSpace          () { return LFL::DOM::WhiteSpace(css_computed_white_space(Style())); }
-  LFL::DOM::CaptionSide          CaptionSide         () { return LFL::DOM::CaptionSide(css_computed_caption_side(Style())); }
-  LFL::DOM::FontVariant          FontVariant         () { return LFL::DOM::FontVariant(css_computed_font_variant(Style())); }
-  LFL::DOM::TableLayout          TableLayout         () { return LFL::DOM::TableLayout(css_computed_table_layout(Style())); }
-  LFL::DOM::UnicodeBidi          UnicodeBidi         () { return LFL::DOM::UnicodeBidi(css_computed_unicode_bidi(Style())); }
-  LFL::DOM::BorderStyle          OutlineStyle        () { return LFL::DOM::BorderStyle(css_computed_outline_style(Style())); }
-  LFL::DOM::TextTransform        TextTransform       () { return LFL::DOM::TextTransform(css_computed_text_transform(Style())); }
-  LFL::DOM::TextDecoration       TextDecoration      () { return LFL::DOM::TextDecoration(css_computed_text_decoration(Style())); }
-  LFL::DOM::BorderCollapse       BorderCollapse      () { return LFL::DOM::BorderCollapse(css_computed_border_collapse(Style())); }
-  LFL::DOM::ListStyleType        ListStyleType       () { return LFL::DOM::ListStyleType(css_computed_list_style_type(Style())); }
-  LFL::DOM::ListStylePosition    ListStylePosition   () { return LFL::DOM::ListStylePosition(css_computed_list_style_position(Style())); }
-  LFL::DOM::PageBreak            PageBreakAfter      () { return LFL::DOM::PageBreak(css_computed_page_break_after(Style())); }
-  LFL::DOM::PageBreak            PageBreakBefore     () { return LFL::DOM::PageBreak(css_computed_page_break_before(Style())); }
-  LFL::DOM::PageBreak            PageBreakInside     () { return LFL::DOM::PageBreak(css_computed_page_break_inside(Style())); }
-  LFL::DOM::BorderStyle          BorderTopStyle      () { return LFL::DOM::BorderStyle(css_computed_border_top_style(Style())); }
-  LFL::DOM::BorderStyle          BorderLeftStyle     () { return LFL::DOM::BorderStyle(css_computed_border_left_style(Style())); }
-  LFL::DOM::BorderStyle          BorderRightStyle    () { return LFL::DOM::BorderStyle(css_computed_border_right_style(Style())); }
-  LFL::DOM::BorderStyle          BorderBottomStyle   () { return LFL::DOM::BorderStyle(css_computed_border_bottom_style(Style())); }
-  LFL::DOM::BackgroundRepeat     BackgroundRepeat    () { return LFL::DOM::BackgroundRepeat(css_computed_background_repeat(Style())); }
-  LFL::DOM::BackgroundAttachment BackgroundAttachment() { return LFL::DOM::BackgroundAttachment(css_computed_background_attachment(Style())); }
-  LFL::DOM::RGBColor             BackgroundColor     () { css_color c; uint8_t t = css_computed_background_color   (Style(), &c); CHECK_EQ(t, CSS_BACKGROUND_COLOR_COLOR); return LFL::DOM::RGBColor(c); }
-  LFL::DOM::RGBColor             BorderBottomColor   () { css_color c; uint8_t t = css_computed_border_bottom_color(Style(), &c); CHECK_EQ(t, CSS_BORDER_COLOR_COLOR);     return LFL::DOM::RGBColor(c); }
-  LFL::DOM::RGBColor             BorderLeftColor     () { css_color c; uint8_t t = css_computed_border_left_color  (Style(), &c); CHECK_EQ(t, CSS_BORDER_COLOR_COLOR);     return LFL::DOM::RGBColor(c); }
-  LFL::DOM::RGBColor             BorderRightColor    () { css_color c; uint8_t t = css_computed_border_right_color (Style(), &c); CHECK_EQ(t, CSS_BORDER_COLOR_COLOR);     return LFL::DOM::RGBColor(c); }
-  LFL::DOM::RGBColor             BorderTopColor      () { css_color c; uint8_t t = css_computed_border_top_color   (Style(), &c); CHECK_EQ(t, CSS_BORDER_COLOR_COLOR);     return LFL::DOM::RGBColor(c); }
-  LFL::DOM::RGBColor             OutlineColor        () { css_color c; uint8_t t = css_computed_outline_color      (Style(), &c); /*CHECK_EQ(t, CSS_OUTLINE_COLOR_COLOR);*/ return LFL::DOM::RGBColor(c); }
-  LFL::DOM::RGBColor             Color               () { css_color c; uint8_t t = css_computed_color              (Style(), &c); CHECK_EQ(t, CSS_COLOR_COLOR);            return LFL::DOM::RGBColor(c); }
-  LFL::DOM::Cursor               Cursor              () { lwc_string **n=0; LFL::DOM::Cursor     ret(css_computed_cursor     (Style(), &n)); for (; n && *n; n++) ret.url .push_back(LibCSS_String::ToUTF8String(*n)); return ret; }
-  LFL::DOM::FontFamily           FontFamily          () { lwc_string **n=0; LFL::DOM::FontFamily ret(css_computed_font_family(Style(), &n)); for (; n && *n; n++) ret.name.push_back(LibCSS_String::ToUTF8String(*n)); return ret; }
-  LFL::DOM::CSSStringValue       BackgroundImage     () { lwc_string *v=0; css_computed_background_image (Style(), &v); return v ? LFL::DOM::CSSStringValue(LibCSS_String::ToString(v)) : LFL::DOM::CSSStringValue(); }
-  LFL::DOM::CSSNumericValuePair  BackgroundPosition  () { css_fixed x,y; css_unit xu,yu; return css_computed_background_position(Style(), &x, &xu, &y, &yu) == CSS_BACKGROUND_POSITION_SET ? LFL::DOM::CSSNumericValuePair(FIXTOFLT(x), LibCSS_Unit::ToPrimitive(xu), 0, FIXTOFLT(y), LibCSS_Unit::ToPrimitive(yu), LFL::DOM::CSSPrimitiveValue::PercentRefersTo::ContainingBoxHeight) : LFL::DOM::CSSNumericValuePair(); }
-  LFL::DOM::Rect                 Clip                () { css_computed_clip_rect r;      return css_computed_clip             (Style(), &r)      == CSS_CLIP_RECT       ? LFL::DOM::Rect(r.top_auto, FIXTOFLT(r.top), LibCSS_Unit::ToPrimitive(r.tunit), r.right_auto, FIXTOFLT(r.right), LibCSS_Unit::ToPrimitive(r.runit), r.bottom_auto, FIXTOFLT(r.bottom), LibCSS_Unit::ToPrimitive(r.bunit), r.left_auto, FIXTOFLT(r.left), LibCSS_Unit::ToPrimitive(r.lunit)) : LFL::DOM::Rect(); }
-  LFL::DOM::CSSNumericValue      Opacity             () { css_fixed s;                   return css_computed_opacity          (Style(), &s)      == CSS_OPACITY_SET     ? LFL::DOM::CSSNumericValue(FIXTOFLT(s), LFL::DOM::CSSPrimitiveValue::CSS_NUMBER) : LFL::DOM::CSSNumericValue(); }
-  LFL::DOM::CSSNumericValue      Orphans             () { css_fixed s;                   return css_computed_orphans          (Style(), &s)      == CSS_ORPHANS_SET     ? LFL::DOM::CSSNumericValue(FIXTOFLT(s), LFL::DOM::CSSPrimitiveValue::CSS_NUMBER) : LFL::DOM::CSSNumericValue(); }
-  LFL::DOM::CSSNumericValue      Widows              () { css_fixed s;                   return css_computed_widows           (Style(), &s)      == CSS_WIDOWS_SET      ? LFL::DOM::CSSNumericValue(FIXTOFLT(s), LFL::DOM::CSSPrimitiveValue::CSS_NUMBER) : LFL::DOM::CSSNumericValue(); }
-  LFL::DOM::CSSNumericValue      MinHeight           () { css_fixed s; css_unit su;      return css_computed_min_height       (Style(), &s, &su) == CSS_MIN_HEIGHT_SET  ? LFL::DOM::CSSNumericValue(FIXTOFLT(s), LibCSS_Unit::ToPrimitive(su)) : LFL::DOM::CSSNumericValue(); }
-  LFL::DOM::CSSNumericValue      MinWidth            () { css_fixed s; css_unit su;      return css_computed_min_width        (Style(), &s, &su) == CSS_MIN_WIDTH_SET   ? LFL::DOM::CSSNumericValue(FIXTOFLT(s), LibCSS_Unit::ToPrimitive(su)) : LFL::DOM::CSSNumericValue(); }
-  LFL::DOM::CSSNumericValue      PaddingTop          () { css_fixed s; css_unit su;      return css_computed_padding_top      (Style(), &s, &su) == CSS_PADDING_SET     ? LFL::DOM::CSSNumericValue(FIXTOFLT(s), LibCSS_Unit::ToPrimitive(su)) : LFL::DOM::CSSNumericValue(); }
-  LFL::DOM::CSSNumericValue      PaddingRight        () { css_fixed s; css_unit su;      return css_computed_padding_right    (Style(), &s, &su) == CSS_PADDING_SET     ? LFL::DOM::CSSNumericValue(FIXTOFLT(s), LibCSS_Unit::ToPrimitive(su)) : LFL::DOM::CSSNumericValue(); }
-  LFL::DOM::CSSNumericValue      PaddingBottom       () { css_fixed s; css_unit su;      return css_computed_padding_bottom   (Style(), &s, &su) == CSS_PADDING_SET     ? LFL::DOM::CSSNumericValue(FIXTOFLT(s), LibCSS_Unit::ToPrimitive(su)) : LFL::DOM::CSSNumericValue(); }
-  LFL::DOM::CSSNumericValue      PaddingLeft         () { css_fixed s; css_unit su;      return css_computed_padding_left     (Style(), &s, &su) == CSS_PADDING_SET     ? LFL::DOM::CSSNumericValue(FIXTOFLT(s), LibCSS_Unit::ToPrimitive(su)) : LFL::DOM::CSSNumericValue(); }
-  LFL::DOM::CSSNumericValue      TextIndent          () { css_fixed s; css_unit su;      return css_computed_text_indent      (Style(), &s, &su) == CSS_TEXT_INDENT_SET ? LFL::DOM::CSSNumericValue(FIXTOFLT(s), LibCSS_Unit::ToPrimitive(su)) : LFL::DOM::CSSNumericValue(); }
-  LFL::DOM::CSSAutoNumericValue  Top                 () { css_fixed s; css_unit su; int ret = css_computed_top                (Style(), &s, &su); return ret == CSS_TOP_SET             ? LFL::DOM::CSSAutoNumericValue(FIXTOFLT(s), LibCSS_Unit::ToPrimitive(su)) : LFL::DOM::CSSAutoNumericValue(ret == CSS_TOP_AUTO); }
-  LFL::DOM::CSSAutoNumericValue  Bottom              () { css_fixed s; css_unit su; int ret = css_computed_bottom             (Style(), &s, &su); return ret == CSS_BOTTOM_SET          ? LFL::DOM::CSSAutoNumericValue(FIXTOFLT(s), LibCSS_Unit::ToPrimitive(su)) : LFL::DOM::CSSAutoNumericValue(ret == CSS_BOTTOM_AUTO); }
-  LFL::DOM::CSSAutoNumericValue  Left                () { css_fixed s; css_unit su; int ret = css_computed_left               (Style(), &s, &su); return ret == CSS_LEFT_SET            ? LFL::DOM::CSSAutoNumericValue(FIXTOFLT(s), LibCSS_Unit::ToPrimitive(su)) : LFL::DOM::CSSAutoNumericValue(ret == CSS_LEFT_AUTO); }
-  LFL::DOM::CSSAutoNumericValue  Right               () { css_fixed s; css_unit su; int ret = css_computed_right              (Style(), &s, &su); return ret == CSS_RIGHT_SET           ? LFL::DOM::CSSAutoNumericValue(FIXTOFLT(s), LibCSS_Unit::ToPrimitive(su)) : LFL::DOM::CSSAutoNumericValue(ret == CSS_RIGHT_AUTO); }
-  LFL::DOM::CSSAutoNumericValue  Width               () { css_fixed s; css_unit su; int ret = css_computed_width              (Style(), &s, &su); return ret == CSS_WIDTH_SET           ? LFL::DOM::CSSAutoNumericValue(FIXTOFLT(s), LibCSS_Unit::ToPrimitive(su)) : LFL::DOM::CSSAutoNumericValue(ret == CSS_WIDTH_AUTO); }
-  LFL::DOM::CSSAutoNumericValue  Height              () { css_fixed s; css_unit su; int ret = css_computed_height             (Style(), &s, &su); return ret == CSS_HEIGHT_SET          ? LFL::DOM::CSSAutoNumericValue(FIXTOFLT(s), LibCSS_Unit::ToPrimitive(su)) : LFL::DOM::CSSAutoNumericValue(ret == CSS_HEIGHT_AUTO); }
-  LFL::DOM::FontSize             FontSize            () { css_fixed s; css_unit su; int ret = css_computed_font_size          (Style(), &s, &su); return ret == CSS_FONT_SIZE_DIMENSION ? LFL::DOM::FontSize           (FIXTOFLT(s), LibCSS_Unit::ToPrimitive(su)) : LFL::DOM::FontSize(ret); }
-  LFL::DOM::VerticalAlign        VerticalAlign       () { css_fixed s; css_unit su; int ret = css_computed_vertical_align     (Style(), &s, &su); return ret == CSS_VERTICAL_ALIGN_SET  ? LFL::DOM::VerticalAlign      (FIXTOFLT(s), LibCSS_Unit::ToPrimitive(su)) : LFL::DOM::VerticalAlign(ret); }
-  LFL::DOM::BorderWidth          BorderTopWidth      () { css_fixed w; css_unit wu; int ret = css_computed_border_top_width   (Style(), &w, &wu); return ret == CSS_BORDER_WIDTH_WIDTH  ? LFL::DOM::BorderWidth        (FIXTOFLT(w), LibCSS_Unit::ToPrimitive(wu)) : LFL::DOM::BorderWidth(ret); }
-  LFL::DOM::BorderWidth          BorderRightWidth    () { css_fixed w; css_unit wu; int ret = css_computed_border_right_width (Style(), &w, &wu); return ret == CSS_BORDER_WIDTH_WIDTH  ? LFL::DOM::BorderWidth        (FIXTOFLT(w), LibCSS_Unit::ToPrimitive(wu)) : LFL::DOM::BorderWidth(ret); }
-  LFL::DOM::BorderWidth          BorderBottomWidth   () { css_fixed w; css_unit wu; int ret = css_computed_border_bottom_width(Style(), &w, &wu); return ret == CSS_BORDER_WIDTH_WIDTH  ? LFL::DOM::BorderWidth        (FIXTOFLT(w), LibCSS_Unit::ToPrimitive(wu)) : LFL::DOM::BorderWidth(ret); }
-  LFL::DOM::BorderWidth          BorderLeftWidth     () { css_fixed w; css_unit wu; int ret = css_computed_border_left_width  (Style(), &w, &wu); return ret == CSS_BORDER_WIDTH_WIDTH  ? LFL::DOM::BorderWidth        (FIXTOFLT(w), LibCSS_Unit::ToPrimitive(wu)) : LFL::DOM::BorderWidth(ret); }
-  LFL::DOM::BorderWidth          OutlineWidth        () { css_fixed w; css_unit wu; int ret = css_computed_outline_width      (Style(), &w, &wu); return ret == CSS_BORDER_WIDTH_WIDTH  ? LFL::DOM::BorderWidth        (FIXTOFLT(w), LibCSS_Unit::ToPrimitive(wu)) : LFL::DOM::BorderWidth(ret); }
-  LFL::DOM::CSSAutoNumericValue  MarginBottom        () { css_fixed s; css_unit su; int ret = css_computed_margin_bottom      (Style(), &s, &su); return ret == CSS_MARGIN_SET          ? LFL::DOM::CSSAutoNumericValue(FIXTOFLT(s), LibCSS_Unit::ToPrimitive(su)) : LFL::DOM::CSSAutoNumericValue(ret == CSS_MARGIN_AUTO); }
-  LFL::DOM::CSSAutoNumericValue  MarginLeft          () { css_fixed s; css_unit su; int ret = css_computed_margin_left        (Style(), &s, &su); return ret == CSS_MARGIN_SET          ? LFL::DOM::CSSAutoNumericValue(FIXTOFLT(s), LibCSS_Unit::ToPrimitive(su)) : LFL::DOM::CSSAutoNumericValue(ret == CSS_MARGIN_AUTO); }
-  LFL::DOM::CSSAutoNumericValue  MarginRight         () { css_fixed s; css_unit su; int ret = css_computed_margin_right       (Style(), &s, &su); return ret == CSS_MARGIN_SET          ? LFL::DOM::CSSAutoNumericValue(FIXTOFLT(s), LibCSS_Unit::ToPrimitive(su)) : LFL::DOM::CSSAutoNumericValue(ret == CSS_MARGIN_AUTO); }
-  LFL::DOM::CSSAutoNumericValue  MarginTop           () { css_fixed s; css_unit su; int ret = css_computed_margin_top         (Style(), &s, &su); return ret == CSS_MARGIN_SET          ? LFL::DOM::CSSAutoNumericValue(FIXTOFLT(s), LibCSS_Unit::ToPrimitive(su)) : LFL::DOM::CSSAutoNumericValue(ret == CSS_MARGIN_AUTO); }
-  LFL::DOM::CSSNoneNumericValue  MaxHeight           () { css_fixed s; css_unit su; int ret = css_computed_max_height         (Style(), &s, &su); return ret == CSS_MAX_HEIGHT_SET      ? LFL::DOM::CSSNoneNumericValue(FIXTOFLT(s), LibCSS_Unit::ToPrimitive(su)) : LFL::DOM::CSSNoneNumericValue(ret == CSS_MAX_HEIGHT_NONE); }
-  LFL::DOM::CSSNoneNumericValue  MaxWidth            () { css_fixed s; css_unit su; int ret = css_computed_max_width          (Style(), &s, &su); return ret == CSS_MAX_WIDTH_SET       ? LFL::DOM::CSSNoneNumericValue(FIXTOFLT(s), LibCSS_Unit::ToPrimitive(su)) : LFL::DOM::CSSNoneNumericValue(ret == CSS_MAX_WIDTH_NONE); }
-  LFL::DOM::CSSAutoNumericValue  ZIndex              () { css_fixed s;              int ret = css_computed_z_index            (Style(), &s);      return ret == CSS_Z_INDEX_SET         ? LFL::DOM::CSSAutoNumericValue(FIXTOFLT(s), LFL::DOM::CSSPrimitiveValue::CSS_NUMBER) : LFL::DOM::CSSAutoNumericValue(ret == CSS_Z_INDEX_AUTO); }
-  LFL::DOM::CSSNormNumericValue  WordSpacing         () { css_fixed s; css_unit su; int ret = css_computed_word_spacing       (Style(), &s, &su); return ret == CSS_WORD_SPACING_SET    ? LFL::DOM::CSSNormNumericValue(FIXTOFLT(s), LibCSS_Unit::ToPrimitive(su), LFL::DOM::CSSPrimitiveValue::PercentRefersTo::FontWidth) : LFL::DOM::CSSNormNumericValue(ret == CSS_WORD_SPACING_NORMAL,   LFL::DOM::CSSPrimitiveValue::PercentRefersTo::FontWidth); }
-  LFL::DOM::CSSNormNumericValue  LetterSpacing       () { css_fixed s; css_unit su; int ret = css_computed_letter_spacing     (Style(), &s, &su); return ret == CSS_LETTER_SPACING_SET  ? LFL::DOM::CSSNormNumericValue(FIXTOFLT(s), LibCSS_Unit::ToPrimitive(su), LFL::DOM::CSSPrimitiveValue::PercentRefersTo::FontWidth) : LFL::DOM::CSSNormNumericValue(ret == CSS_LETTER_SPACING_NORMAL, LFL::DOM::CSSPrimitiveValue::PercentRefersTo::FontWidth); }
-  LFL::DOM::CSSNormNumericValue  LineHeight          () { css_fixed s; css_unit su; int ret = css_computed_line_height        (Style(), &s, &su); bool dim = ret == CSS_LINE_HEIGHT_DIMENSION; return (ret == CSS_LINE_HEIGHT_NUMBER || dim) ? LFL::DOM::CSSNormNumericValue(FIXTOFLT(s), dim ? LibCSS_Unit::ToPrimitive(su) : LFL::DOM::CSSPrimitiveValue::CSS_NUMBER, LFL::DOM::CSSPrimitiveValue::PercentRefersTo::FontHeight) : LFL::DOM::CSSNormNumericValue(ret == CSS_LINE_HEIGHT_NORMAL, LFL::DOM::CSSPrimitiveValue::PercentRefersTo::FontHeight); }
+  LFL::DOM::Display              Display             () const { return LFL::DOM::Display(css_computed_display(Style(), is_root)); }
+  LFL::DOM::Clear                Clear               () const { return LFL::DOM::Clear(css_computed_clear(Style())); }
+  LFL::DOM::Float                Float               () const { return LFL::DOM::Float(css_computed_float(Style())); }
+  LFL::DOM::Position             Position            () const { return LFL::DOM::Position(css_computed_position(Style())); }
+  LFL::DOM::Overflow             Overflow            () const { return LFL::DOM::Overflow(css_computed_overflow(Style())); }
+  LFL::DOM::TextAlign            TextAlign           () const { return LFL::DOM::TextAlign(css_computed_text_align(Style())); }
+  LFL::DOM::Direction            Direction           () const { return LFL::DOM::Direction(css_computed_direction(Style())); }
+  LFL::DOM::FontStyle            FontStyle           () const { return LFL::DOM::FontStyle(css_computed_font_style(Style())); }
+  LFL::DOM::EmptyCells           EmptyCells          () const { return LFL::DOM::EmptyCells(css_computed_empty_cells(Style())); }
+  LFL::DOM::FontWeight           FontWeight          () const { return LFL::DOM::FontWeight(css_computed_font_weight(Style())); }
+  LFL::DOM::Visibility           Visibility          () const { return LFL::DOM::Visibility(css_computed_visibility(Style())); }
+  LFL::DOM::WhiteSpace           WhiteSpace          () const { return LFL::DOM::WhiteSpace(css_computed_white_space(Style())); }
+  LFL::DOM::CaptionSide          CaptionSide         () const { return LFL::DOM::CaptionSide(css_computed_caption_side(Style())); }
+  LFL::DOM::FontVariant          FontVariant         () const { return LFL::DOM::FontVariant(css_computed_font_variant(Style())); }
+  LFL::DOM::TableLayout          TableLayout         () const { return LFL::DOM::TableLayout(css_computed_table_layout(Style())); }
+  LFL::DOM::UnicodeBidi          UnicodeBidi         () const { return LFL::DOM::UnicodeBidi(css_computed_unicode_bidi(Style())); }
+  LFL::DOM::BorderStyle          OutlineStyle        () const { return LFL::DOM::BorderStyle(css_computed_outline_style(Style())); }
+  LFL::DOM::TextTransform        TextTransform       () const { return LFL::DOM::TextTransform(css_computed_text_transform(Style())); }
+  LFL::DOM::TextDecoration       TextDecoration      () const { return LFL::DOM::TextDecoration(css_computed_text_decoration(Style())); }
+  LFL::DOM::BorderCollapse       BorderCollapse      () const { return LFL::DOM::BorderCollapse(css_computed_border_collapse(Style())); }
+  LFL::DOM::ListStyleType        ListStyleType       () const { return LFL::DOM::ListStyleType(css_computed_list_style_type(Style())); }
+  LFL::DOM::ListStylePosition    ListStylePosition   () const { return LFL::DOM::ListStylePosition(css_computed_list_style_position(Style())); }
+  LFL::DOM::PageBreak            PageBreakAfter      () const { return LFL::DOM::PageBreak(css_computed_page_break_after(Style())); }
+  LFL::DOM::PageBreak            PageBreakBefore     () const { return LFL::DOM::PageBreak(css_computed_page_break_before(Style())); }
+  LFL::DOM::PageBreak            PageBreakInside     () const { return LFL::DOM::PageBreak(css_computed_page_break_inside(Style())); }
+  LFL::DOM::BorderStyle          BorderTopStyle      () const { return LFL::DOM::BorderStyle(css_computed_border_top_style(Style())); }
+  LFL::DOM::BorderStyle          BorderLeftStyle     () const { return LFL::DOM::BorderStyle(css_computed_border_left_style(Style())); }
+  LFL::DOM::BorderStyle          BorderRightStyle    () const { return LFL::DOM::BorderStyle(css_computed_border_right_style(Style())); }
+  LFL::DOM::BorderStyle          BorderBottomStyle   () const { return LFL::DOM::BorderStyle(css_computed_border_bottom_style(Style())); }
+  LFL::DOM::BackgroundRepeat     BackgroundRepeat    () const { return LFL::DOM::BackgroundRepeat(css_computed_background_repeat(Style())); }
+  LFL::DOM::BackgroundAttachment BackgroundAttachment() const { return LFL::DOM::BackgroundAttachment(css_computed_background_attachment(Style())); }
+  LFL::DOM::RGBColor             BackgroundColor     () const { css_color c; return css_computed_background_color   (Style(), &c) == CSS_BACKGROUND_COLOR_COLOR ? LFL::DOM::RGBColor(c) : LFL::DOM::RGBColor(); }
+  LFL::DOM::RGBColor             BorderBottomColor   () const { css_color c; return css_computed_border_bottom_color(Style(), &c) == CSS_BORDER_COLOR_COLOR     ? LFL::DOM::RGBColor(c) : LFL::DOM::RGBColor(); }
+  LFL::DOM::RGBColor             BorderLeftColor     () const { css_color c; return css_computed_border_left_color  (Style(), &c) == CSS_BORDER_COLOR_COLOR     ? LFL::DOM::RGBColor(c) : LFL::DOM::RGBColor(); }
+  LFL::DOM::RGBColor             BorderRightColor    () const { css_color c; return css_computed_border_right_color (Style(), &c) == CSS_BORDER_COLOR_COLOR     ? LFL::DOM::RGBColor(c) : LFL::DOM::RGBColor(); }
+  LFL::DOM::RGBColor             BorderTopColor      () const { css_color c; return css_computed_border_top_color   (Style(), &c) == CSS_BORDER_COLOR_COLOR     ? LFL::DOM::RGBColor(c) : LFL::DOM::RGBColor(); }
+  LFL::DOM::RGBColor             OutlineColor        () const { css_color c; return css_computed_outline_color      (Style(), &c) == CSS_OUTLINE_COLOR_COLOR    ? LFL::DOM::RGBColor(c) : LFL::DOM::RGBColor(); }
+  LFL::DOM::RGBColor             Color               () const { css_color c; return css_computed_color              (Style(), &c) == CSS_COLOR_COLOR            ? LFL::DOM::RGBColor(c) : LFL::DOM::RGBColor(); }
+  LFL::DOM::Cursor               Cursor              () const { lwc_string **n=0; LFL::DOM::Cursor     ret(css_computed_cursor     (Style(), &n)); for (; n && *n; n++) ret.url .push_back(LibCSS_String::ToUTF8String(*n)); return ret; }
+  LFL::DOM::FontFamily           FontFamily          () const { lwc_string **n=0; LFL::DOM::FontFamily ret(css_computed_font_family(Style(), &n)); for (; n && *n; n++) ret.name.push_back(LibCSS_String::ToUTF8String(*n)); return ret; }
+  LFL::DOM::CSSStringValue       BackgroundImage     () const { lwc_string *v=0; css_computed_background_image (Style(), &v); return v ? LFL::DOM::CSSStringValue(LibCSS_String::ToString(v)) : LFL::DOM::CSSStringValue(); }
+  LFL::DOM::CSSNumericValuePair  BackgroundPosition  () const { css_fixed x,y; css_unit xu,yu; return css_computed_background_position(Style(), &x, &xu, &y, &yu) == CSS_BACKGROUND_POSITION_SET ? LFL::DOM::CSSNumericValuePair(FIXTOFLT(x), LibCSS_Unit::ToPrimitive(xu), 0, FIXTOFLT(y), LibCSS_Unit::ToPrimitive(yu), LFL::DOM::CSSPrimitiveValue::PercentRefersTo::ContainingBoxHeight) : LFL::DOM::CSSNumericValuePair(); }
+  LFL::DOM::Rect                 Clip                () const { css_computed_clip_rect r;      return css_computed_clip             (Style(), &r)      == CSS_CLIP_RECT       ? LFL::DOM::Rect(r.top_auto, FIXTOFLT(r.top), LibCSS_Unit::ToPrimitive(r.tunit), r.right_auto, FIXTOFLT(r.right), LibCSS_Unit::ToPrimitive(r.runit), r.bottom_auto, FIXTOFLT(r.bottom), LibCSS_Unit::ToPrimitive(r.bunit), r.left_auto, FIXTOFLT(r.left), LibCSS_Unit::ToPrimitive(r.lunit)) : LFL::DOM::Rect(); }
+  LFL::DOM::CSSNumericValue      Opacity             () const { css_fixed s;                   return css_computed_opacity          (Style(), &s)      == CSS_OPACITY_SET     ? LFL::DOM::CSSNumericValue(FIXTOFLT(s), LFL::DOM::CSSPrimitiveValue::CSS_NUMBER) : LFL::DOM::CSSNumericValue(); }
+  LFL::DOM::CSSNumericValue      Orphans             () const { css_fixed s;                   return css_computed_orphans          (Style(), &s)      == CSS_ORPHANS_SET     ? LFL::DOM::CSSNumericValue(FIXTOFLT(s), LFL::DOM::CSSPrimitiveValue::CSS_NUMBER) : LFL::DOM::CSSNumericValue(); }
+  LFL::DOM::CSSNumericValue      Widows              () const { css_fixed s;                   return css_computed_widows           (Style(), &s)      == CSS_WIDOWS_SET      ? LFL::DOM::CSSNumericValue(FIXTOFLT(s), LFL::DOM::CSSPrimitiveValue::CSS_NUMBER) : LFL::DOM::CSSNumericValue(); }
+  LFL::DOM::CSSNumericValue      MinHeight           () const { css_fixed s; css_unit su;      return css_computed_min_height       (Style(), &s, &su) == CSS_MIN_HEIGHT_SET  ? LFL::DOM::CSSNumericValue(FIXTOFLT(s), LibCSS_Unit::ToPrimitive(su)) : LFL::DOM::CSSNumericValue(); }
+  LFL::DOM::CSSNumericValue      MinWidth            () const { css_fixed s; css_unit su;      return css_computed_min_width        (Style(), &s, &su) == CSS_MIN_WIDTH_SET   ? LFL::DOM::CSSNumericValue(FIXTOFLT(s), LibCSS_Unit::ToPrimitive(su)) : LFL::DOM::CSSNumericValue(); }
+  LFL::DOM::CSSNumericValue      PaddingTop          () const { css_fixed s; css_unit su;      return css_computed_padding_top      (Style(), &s, &su) == CSS_PADDING_SET     ? LFL::DOM::CSSNumericValue(FIXTOFLT(s), LibCSS_Unit::ToPrimitive(su)) : LFL::DOM::CSSNumericValue(); }
+  LFL::DOM::CSSNumericValue      PaddingRight        () const { css_fixed s; css_unit su;      return css_computed_padding_right    (Style(), &s, &su) == CSS_PADDING_SET     ? LFL::DOM::CSSNumericValue(FIXTOFLT(s), LibCSS_Unit::ToPrimitive(su)) : LFL::DOM::CSSNumericValue(); }
+  LFL::DOM::CSSNumericValue      PaddingBottom       () const { css_fixed s; css_unit su;      return css_computed_padding_bottom   (Style(), &s, &su) == CSS_PADDING_SET     ? LFL::DOM::CSSNumericValue(FIXTOFLT(s), LibCSS_Unit::ToPrimitive(su)) : LFL::DOM::CSSNumericValue(); }
+  LFL::DOM::CSSNumericValue      PaddingLeft         () const { css_fixed s; css_unit su;      return css_computed_padding_left     (Style(), &s, &su) == CSS_PADDING_SET     ? LFL::DOM::CSSNumericValue(FIXTOFLT(s), LibCSS_Unit::ToPrimitive(su)) : LFL::DOM::CSSNumericValue(); }
+  LFL::DOM::CSSNumericValue      TextIndent          () const { css_fixed s; css_unit su;      return css_computed_text_indent      (Style(), &s, &su) == CSS_TEXT_INDENT_SET ? LFL::DOM::CSSNumericValue(FIXTOFLT(s), LibCSS_Unit::ToPrimitive(su)) : LFL::DOM::CSSNumericValue(); }
+  LFL::DOM::CSSAutoNumericValue  Top                 () const { css_fixed s; css_unit su; int ret = css_computed_top                (Style(), &s, &su); return ret == CSS_TOP_SET             ? LFL::DOM::CSSAutoNumericValue(FIXTOFLT(s), LibCSS_Unit::ToPrimitive(su)) : LFL::DOM::CSSAutoNumericValue(ret == CSS_TOP_AUTO); }
+  LFL::DOM::CSSAutoNumericValue  Bottom              () const { css_fixed s; css_unit su; int ret = css_computed_bottom             (Style(), &s, &su); return ret == CSS_BOTTOM_SET          ? LFL::DOM::CSSAutoNumericValue(FIXTOFLT(s), LibCSS_Unit::ToPrimitive(su)) : LFL::DOM::CSSAutoNumericValue(ret == CSS_BOTTOM_AUTO); }
+  LFL::DOM::CSSAutoNumericValue  Left                () const { css_fixed s; css_unit su; int ret = css_computed_left               (Style(), &s, &su); return ret == CSS_LEFT_SET            ? LFL::DOM::CSSAutoNumericValue(FIXTOFLT(s), LibCSS_Unit::ToPrimitive(su)) : LFL::DOM::CSSAutoNumericValue(ret == CSS_LEFT_AUTO); }
+  LFL::DOM::CSSAutoNumericValue  Right               () const { css_fixed s; css_unit su; int ret = css_computed_right              (Style(), &s, &su); return ret == CSS_RIGHT_SET           ? LFL::DOM::CSSAutoNumericValue(FIXTOFLT(s), LibCSS_Unit::ToPrimitive(su)) : LFL::DOM::CSSAutoNumericValue(ret == CSS_RIGHT_AUTO); }
+  LFL::DOM::CSSAutoNumericValue  Width               () const { css_fixed s; css_unit su; int ret = css_computed_width              (Style(), &s, &su); return ret == CSS_WIDTH_SET           ? LFL::DOM::CSSAutoNumericValue(FIXTOFLT(s), LibCSS_Unit::ToPrimitive(su)) : LFL::DOM::CSSAutoNumericValue(ret == CSS_WIDTH_AUTO); }
+  LFL::DOM::CSSAutoNumericValue  Height              () const { css_fixed s; css_unit su; int ret = css_computed_height             (Style(), &s, &su); return ret == CSS_HEIGHT_SET          ? LFL::DOM::CSSAutoNumericValue(FIXTOFLT(s), LibCSS_Unit::ToPrimitive(su)) : LFL::DOM::CSSAutoNumericValue(ret == CSS_HEIGHT_AUTO); }
+  LFL::DOM::FontSize             FontSize            () const { css_fixed s; css_unit su; int ret = css_computed_font_size          (Style(), &s, &su); return ret == CSS_FONT_SIZE_DIMENSION ? LFL::DOM::FontSize           (FIXTOFLT(s), LibCSS_Unit::ToPrimitive(su)) : LFL::DOM::FontSize(ret); }
+  LFL::DOM::VerticalAlign        VerticalAlign       () const { css_fixed s; css_unit su; int ret = css_computed_vertical_align     (Style(), &s, &su); return ret == CSS_VERTICAL_ALIGN_SET  ? LFL::DOM::VerticalAlign      (FIXTOFLT(s), LibCSS_Unit::ToPrimitive(su)) : LFL::DOM::VerticalAlign(ret); }
+  LFL::DOM::BorderWidth          BorderTopWidth      () const { css_fixed w; css_unit wu; int ret = css_computed_border_top_width   (Style(), &w, &wu); return ret == CSS_BORDER_WIDTH_WIDTH  ? LFL::DOM::BorderWidth        (FIXTOFLT(w), LibCSS_Unit::ToPrimitive(wu)) : LFL::DOM::BorderWidth(ret); }
+  LFL::DOM::BorderWidth          BorderRightWidth    () const { css_fixed w; css_unit wu; int ret = css_computed_border_right_width (Style(), &w, &wu); return ret == CSS_BORDER_WIDTH_WIDTH  ? LFL::DOM::BorderWidth        (FIXTOFLT(w), LibCSS_Unit::ToPrimitive(wu)) : LFL::DOM::BorderWidth(ret); }
+  LFL::DOM::BorderWidth          BorderBottomWidth   () const { css_fixed w; css_unit wu; int ret = css_computed_border_bottom_width(Style(), &w, &wu); return ret == CSS_BORDER_WIDTH_WIDTH  ? LFL::DOM::BorderWidth        (FIXTOFLT(w), LibCSS_Unit::ToPrimitive(wu)) : LFL::DOM::BorderWidth(ret); }
+  LFL::DOM::BorderWidth          BorderLeftWidth     () const { css_fixed w; css_unit wu; int ret = css_computed_border_left_width  (Style(), &w, &wu); return ret == CSS_BORDER_WIDTH_WIDTH  ? LFL::DOM::BorderWidth        (FIXTOFLT(w), LibCSS_Unit::ToPrimitive(wu)) : LFL::DOM::BorderWidth(ret); }
+  LFL::DOM::BorderWidth          OutlineWidth        () const { css_fixed w; css_unit wu; int ret = css_computed_outline_width      (Style(), &w, &wu); return ret == CSS_BORDER_WIDTH_WIDTH  ? LFL::DOM::BorderWidth        (FIXTOFLT(w), LibCSS_Unit::ToPrimitive(wu)) : LFL::DOM::BorderWidth(ret); }
+  LFL::DOM::CSSAutoNumericValue  MarginBottom        () const { css_fixed s; css_unit su; int ret = css_computed_margin_bottom      (Style(), &s, &su); return ret == CSS_MARGIN_SET          ? LFL::DOM::CSSAutoNumericValue(FIXTOFLT(s), LibCSS_Unit::ToPrimitive(su)) : LFL::DOM::CSSAutoNumericValue(ret == CSS_MARGIN_AUTO); }
+  LFL::DOM::CSSAutoNumericValue  MarginLeft          () const { css_fixed s; css_unit su; int ret = css_computed_margin_left        (Style(), &s, &su); return ret == CSS_MARGIN_SET          ? LFL::DOM::CSSAutoNumericValue(FIXTOFLT(s), LibCSS_Unit::ToPrimitive(su)) : LFL::DOM::CSSAutoNumericValue(ret == CSS_MARGIN_AUTO); }
+  LFL::DOM::CSSAutoNumericValue  MarginRight         () const { css_fixed s; css_unit su; int ret = css_computed_margin_right       (Style(), &s, &su); return ret == CSS_MARGIN_SET          ? LFL::DOM::CSSAutoNumericValue(FIXTOFLT(s), LibCSS_Unit::ToPrimitive(su)) : LFL::DOM::CSSAutoNumericValue(ret == CSS_MARGIN_AUTO); }
+  LFL::DOM::CSSAutoNumericValue  MarginTop           () const { css_fixed s; css_unit su; int ret = css_computed_margin_top         (Style(), &s, &su); return ret == CSS_MARGIN_SET          ? LFL::DOM::CSSAutoNumericValue(FIXTOFLT(s), LibCSS_Unit::ToPrimitive(su)) : LFL::DOM::CSSAutoNumericValue(ret == CSS_MARGIN_AUTO); }
+  LFL::DOM::CSSNoneNumericValue  MaxHeight           () const { css_fixed s; css_unit su; int ret = css_computed_max_height         (Style(), &s, &su); return ret == CSS_MAX_HEIGHT_SET      ? LFL::DOM::CSSNoneNumericValue(FIXTOFLT(s), LibCSS_Unit::ToPrimitive(su)) : LFL::DOM::CSSNoneNumericValue(ret == CSS_MAX_HEIGHT_NONE); }
+  LFL::DOM::CSSNoneNumericValue  MaxWidth            () const { css_fixed s; css_unit su; int ret = css_computed_max_width          (Style(), &s, &su); return ret == CSS_MAX_WIDTH_SET       ? LFL::DOM::CSSNoneNumericValue(FIXTOFLT(s), LibCSS_Unit::ToPrimitive(su)) : LFL::DOM::CSSNoneNumericValue(ret == CSS_MAX_WIDTH_NONE); }
+  LFL::DOM::CSSAutoNumericValue  ZIndex              () const { css_fixed s;              int ret = css_computed_z_index            (Style(), &s);      return ret == CSS_Z_INDEX_SET         ? LFL::DOM::CSSAutoNumericValue(FIXTOFLT(s), LFL::DOM::CSSPrimitiveValue::CSS_NUMBER) : LFL::DOM::CSSAutoNumericValue(ret == CSS_Z_INDEX_AUTO); }
+  LFL::DOM::CSSNormNumericValue  WordSpacing         () const { css_fixed s; css_unit su; int ret = css_computed_word_spacing       (Style(), &s, &su); return ret == CSS_WORD_SPACING_SET    ? LFL::DOM::CSSNormNumericValue(FIXTOFLT(s), LibCSS_Unit::ToPrimitive(su), LFL::DOM::CSSPrimitiveValue::PercentRefersTo::FontWidth) : LFL::DOM::CSSNormNumericValue(ret == CSS_WORD_SPACING_NORMAL,   LFL::DOM::CSSPrimitiveValue::PercentRefersTo::FontWidth); }
+  LFL::DOM::CSSNormNumericValue  LetterSpacing       () const { css_fixed s; css_unit su; int ret = css_computed_letter_spacing     (Style(), &s, &su); return ret == CSS_LETTER_SPACING_SET  ? LFL::DOM::CSSNormNumericValue(FIXTOFLT(s), LibCSS_Unit::ToPrimitive(su), LFL::DOM::CSSPrimitiveValue::PercentRefersTo::FontWidth) : LFL::DOM::CSSNormNumericValue(ret == CSS_LETTER_SPACING_NORMAL, LFL::DOM::CSSPrimitiveValue::PercentRefersTo::FontWidth); }
+  LFL::DOM::CSSNormNumericValue  LineHeight          () const { css_fixed s; css_unit su; int ret = css_computed_line_height        (Style(), &s, &su); bool dim = ret == CSS_LINE_HEIGHT_DIMENSION; return (ret == CSS_LINE_HEIGHT_NUMBER || dim) ? LFL::DOM::CSSNormNumericValue(FIXTOFLT(s), dim ? LibCSS_Unit::ToPrimitive(su) : LFL::DOM::CSSPrimitiveValue::CSS_NUMBER, LFL::DOM::CSSPrimitiveValue::PercentRefersTo::FontHeight) : LFL::DOM::CSSNormNumericValue(ret == CSS_LINE_HEIGHT_NORMAL, LFL::DOM::CSSPrimitiveValue::PercentRefersTo::FontHeight); }
 
-  virtual LFL::DOM::CSSValue *getPropertyCSSValue(const LFL::DOM::DOMString &n) { return 0; };
-  virtual LFL::DOM::DOMString getPropertyPriority(const LFL::DOM::DOMString &n) { return ""; }
-  virtual LFL::DOM::DOMString removeProperty(const LFL::DOM::DOMString &n)      { ERROR("not implemented"); return ""; }
+  virtual const LFL::DOM::CSSValue *getPropertyCSSValue(const LFL::DOM::DOMString &n) const { return 0; };
+  virtual LFL::DOM::DOMString getPropertyPriority(const LFL::DOM::DOMString &n) const { return ""; }
+  virtual LFL::DOM::DOMString removeProperty(const LFL::DOM::DOMString &n) { ERROR("not implemented"); return ""; }
   virtual void                setProperty(const LFL::DOM::DOMString &n, const LFL::DOM::DOMString &v, const LFL::DOM::DOMString &priority) { ERROR("not impelemented"); }
-  virtual int                 length() { return Singleton<LFL::CSS::PropertyNames>::Get()->size(); };
-  virtual LFL::DOM::DOMString item(int index) { CHECK_RANGE(index, 0, length()); return (*Singleton<LFL::CSS::PropertyNames>::Get())[index]; }
-  virtual LFL::DOM::DOMString getPropertyValue(const LFL::DOM::DOMString &n) {
+  virtual int                 length() const { return Singleton<LFL::CSS::PropertyNames>::Get()->size(); };
+  virtual LFL::DOM::DOMString item(int index) const { CHECK_RANGE(index, 0, length()); return (*Singleton<LFL::CSS::PropertyNames>::Get())[index]; }
+  virtual LFL::DOM::DOMString getPropertyValue(const LFL::DOM::DOMString &n) const {
     string name = String::ToUTF8(n);
     if (0) {}
 #undef  XX
-#define XX(x) else if (name == #x)
+#define XX(n)
 #undef  YY
-#define YY(y)     return y().cssText();
+#define YY(n) else if (name == #n)
+#undef  ZZ
+#define ZZ(n)   return n().cssText();
 #include "crawler/css_properties.h"
     return "";
   }
@@ -1232,77 +1244,31 @@ struct ComputedStyle : public LFL::DOM::CSSStyleDeclaration {
 
 struct StyleContext : public LFL::DOM::Object {
   LFL::DOM::HTMLDocument *doc;
-  css_select_ctx *select_ctx;
-  virtual ~StyleContext() { CHECK_EQ(css_select_ctx_destroy(select_ctx), CSS_OK); }
-  StyleContext(LFL::DOM::HTMLDocument *D) : doc(D), select_ctx(0) { CHECK_EQ(css_select_ctx_create(&select_ctx), CSS_OK); }
-  void AppendSheet(StyleSheet *ss) {
-    CHECK_EQ(css_select_ctx_append_sheet(select_ctx, ss->sheet, CSS_ORIGIN_AUTHOR, CSS_MEDIA_ALL), CSS_OK);
-  }
-  void Match(ComputedStyle *out, LFL::DOM::Node *node, ComputedStyle *parent_sheet=0, const char *inline_style=0) {
-    out->Reset();
+  css_select_ctx *select_ctx=0;
+  StyleContext(LFL::DOM::HTMLDocument *D) : doc(D) { CHECK_EQ(CSS_OK, css_select_ctx_create(&select_ctx)); }
+  virtual ~StyleContext() { CHECK_EQ(CSS_OK, css_select_ctx_destroy(select_ctx)); }
 
-    string html4_style = node->HTML4Style();
-    if (!html4_style.empty() && inline_style) html4_style.append(inline_style);
-    const char *concat_style = html4_style.empty() ? inline_style : html4_style.c_str();
-    if (concat_style) {
-      StyleSheet inline_sheet(doc, "", "UTF-8", true, false, concat_style);
-      CHECK_EQ(css_select_style(select_ctx, node, CSS_MEDIA_SCREEN, inline_sheet.sheet, SelectHandler(), this, &out->style), CSS_OK);
-    } else {
-      CHECK_EQ(css_select_style(select_ctx, node, CSS_MEDIA_SCREEN, 0,                  SelectHandler(), this, &out->style), CSS_OK);
-    }
+  void AppendSheet(StyleSheet *ss) { CHECK_EQ(CSS_OK, css_select_ctx_append_sheet(select_ctx, ss->sheet, CSS_ORIGIN_AUTHOR, CSS_MEDIA_ALL)); }
+  void Match(ComputedStyle *out, LFL::DOM::Node *node, const ComputedStyle *parent_sheet=0, StyleSheet *inline_style=0);
+  int FontFaces(const string &face_name, vector<LFL::DOM::FontFace> *out);
 
-    lwc_string **n; css_fixed s; css_unit su; css_color c;
-    out->font_not_inherited =
-      (css_computed_font_family (out->Style(), &n)      != CSS_FONT_FAMILY_INHERIT) ||
-      (css_computed_font_size   (out->Style(), &s, &su) != CSS_FONT_SIZE_INHERIT)   ||
-      (css_computed_font_style  (out->Style())          != CSS_FONT_STYLE_INHERIT)  ||
-      (css_computed_font_weight (out->Style())          != CSS_FONT_WEIGHT_INHERIT) ||
-      (css_computed_font_variant(out->Style())          != CSS_FONT_VARIANT_INHERIT);
-
-    out->bgcolor_not_inherited = css_computed_background_color(out->Style(), &c) == CSS_BACKGROUND_COLOR_COLOR;
-
-    if (parent_sheet) {
-      CHECK_EQ(css_computed_style_compose(parent_sheet->Style(), out->Style(), compute_font_size, NULL, out->Style()), CSS_OK);
-    }
-  }
-  int FontFaces(const string &face_name, vector<LFL::DOM::FontFace> *out) {
-    out->clear();
-    lwc_string *n=0; css_select_font_faces_results *v=0; uint32_t l;
-    int rc = css_select_font_faces(select_ctx, CSS_MEDIA_SCREEN, LibCSS_String::Intern(face_name), &v);
-    for (int i=0; rc == CSS_OK && v && i<v->n_font_faces; i++) {
-      LFL::DOM::FontFace ff;
-      ff.style  = LFL::DOM::FontStyle (css_font_face_font_style( v->font_faces[i]));
-      ff.weight = LFL::DOM::FontWeight(css_font_face_font_weight(v->font_faces[i]));
-      n=0; css_font_face_get_font_family(v->font_faces[i], &n); if (n) ff.family.name.push_back(LibCSS_String::ToUTF8String(n));
-      l=0; css_font_face_count_srcs(v->font_faces[i], &l);
-      for (int j=0; j<l; j++) {
-        const css_font_face_src *src=0; css_font_face_get_src(v->font_faces[i], j, &src);
-        if (css_font_face_src_location_type(src) == CSS_FONT_FACE_LOCATION_TYPE_UNSPECIFIED) continue;
-        n=0; if (src) css_font_face_src_get_location(src, &n);
-        if (n) ff.source.push_back(LibCSS_String::ToUTF8String(n));
-      }
-      out->push_back(ff);
-    }
-    if (v) css_select_font_faces_results_destroy(v);
-    return out->size();
-  }
   static css_select_handler *SelectHandler() {
     static css_select_handler select_handler = {
-      CSS_SELECT_HANDLER_VERSION_1, node_name, node_classes, node_id, named_ancestor_node, named_parent_node, named_sibling_node,
-      named_generic_sibling_node, parent_node, sibling_node, node_has_name, node_has_class, node_has_id, node_has_attribute,
-      node_has_attribute_equal, node_has_attribute_dashmatch, node_has_attribute_includes, node_has_attribute_prefix,
-      node_has_attribute_suffix, node_has_attribute_substring, node_is_root, node_count_siblings, node_is_empty, node_is_link,
-      node_is_visited, node_is_hover, node_is_active, node_is_focus, node_is_enabled, node_is_disabled, node_is_checked,
-      node_is_target, node_is_lang, node_presentational_hint, ua_default_for_property, compute_font_size, set_libcss_node_data,
-      get_libcss_node_data
+      CSS_SELECT_HANDLER_VERSION_1, NodeName, NodeClasses, NodeId, NamedAncestorNode, NamedParentNode, NamedSiblingNode,
+      NamedGenericSiblingNode, ParentNode, SiblingNode, NodeHasName, NodeHasClass, NodeHasId, NodeHasAttribute,
+      NodeHasAttributeEqual, NodeHasAttributeDashmatch, NodeHasAttributeIncludes, NodeHasAttributePrefix,
+      NodeHasAttributeSuffix, NodeHasAttributeSubstring, NodeIsRoot, NodeCountSiblings, NodeIsEmpty, NodeIsLink,
+      NodeIsVisited, NodeIsHover, NodeIsActive, NodeIsFocus, NodeIsEnabled, NodeIsDisabled, NodeIsChecked,
+      NodeIsTarget, NodeIsLang, NodePresentationalHint, UADefaultForProperty, ComputeFontSize, SetLibCSSNodeData,
+      GetLibCSSNodeData
     };
     return &select_handler;
   }
-  static css_error node_name(void *pw, void *n, css_qname *qname) {
+  static css_error NodeName(void *pw, void *n, css_qname *qname) {
     qname->name = LibCSS_String::Intern(((LFL::DOM::Node*)n)->nodeName());
     return CSS_OK;
   }
-  static css_error node_classes(void *pw, void *n, lwc_string ***classes_out, uint32_t *n_classes) {
+  static css_error NodeClasses(void *pw, void *n, lwc_string ***classes_out, uint32_t *n_classes) {
     *classes_out = NULL; *n_classes = 0;
     LFL::DOM::Node *node = (LFL::DOM::Node*)n, *attr = 0;
     if (!(attr = node->getAttributeNode("class"))) return CSS_OK;
@@ -1316,13 +1282,13 @@ struct StyleContext : public LFL::DOM::Object {
     for (int i=0; i<classes.size(); i++) (*classes_out)[i] = LibCSS_String::Intern(classes[i]);
     return CSS_OK;
   }
-  static css_error node_id(void *pw, void *n, lwc_string **id) {
+  static css_error NodeId(void *pw, void *n, lwc_string **id) {
     *id = NULL;
     LFL::DOM::Node *node = (LFL::DOM::Node*)n, *attr = 0;
     if ((attr = node->getAttributeNode("id"))) *id = LibCSS_String::Intern(attr->nodeValue());
     return CSS_OK;
   }
-  static css_error named_ancestor_node(void *pw, void *n, const css_qname *qname, void **ancestor) {
+  static css_error NamedAncestorNode(void *pw, void *n, const css_qname *qname, void **ancestor) {
     *ancestor = NULL;
     LFL::DOM::Node *node = (LFL::DOM::Node*)n;
     LFL::DOM::DOMString query = LibCSS_String::ToString(qname->name);
@@ -1331,21 +1297,21 @@ struct StyleContext : public LFL::DOM::Object {
     }
     return CSS_OK;
   }
-  static css_error named_parent_node(void *pw, void *n, const css_qname *qname, void **parent) {
+  static css_error NamedParentNode(void *pw, void *n, const css_qname *qname, void **parent) {
     *parent = NULL;
     LFL::DOM::Node *node = (LFL::DOM::Node*)n;
     for (node = node->parentNode; node && !node->AsElement(); node = node->parentNode) {}
     if (node && node->nodeName() == LibCSS_String::ToString(qname->name)) *parent = node;
     return CSS_OK;
   }
-  static css_error named_sibling_node(void *pw, void *n, const css_qname *qname, void **sibling) {
+  static css_error NamedSiblingNode(void *pw, void *n, const css_qname *qname, void **sibling) {
     *sibling = NULL;
     LFL::DOM::Node *node = (LFL::DOM::Node*)n;
     for (node = node->previousSibling(); node && !node->AsElement(); node = node->previousSibling()) {}
     if (node && node->nodeName() == LibCSS_String::ToString(qname->name)) *sibling = node;
     return CSS_OK;
   }
-  static css_error named_generic_sibling_node(void *pw, void *n, const css_qname *qname, void **sibling) {
+  static css_error NamedGenericSiblingNode(void *pw, void *n, const css_qname *qname, void **sibling) {
     *sibling = NULL;
     LFL::DOM::DOMString query = LibCSS_String::ToString(qname->name);
     for (LFL::DOM::Node *i = ((LFL::DOM::Node*)n)->previousSibling(); i; i = i->previousSibling()) {
@@ -1353,23 +1319,23 @@ struct StyleContext : public LFL::DOM::Object {
     }
     return CSS_OK;
   }
-  static css_error parent_node(void *pw, void *n, void **parent) {
+  static css_error ParentNode(void *pw, void *n, void **parent) {
     LFL::DOM::Node *node = (LFL::DOM::Node*)n;
     for (node = node->parentNode; node && !node->AsElement(); node = node->parentNode) {}
     *parent = node;
     return CSS_OK;
   }
-  static css_error sibling_node(void *pw, void *n, void **sibling) {
+  static css_error SiblingNode(void *pw, void *n, void **sibling) {
     LFL::DOM::Node *node = (LFL::DOM::Node*)n;
     for (node = node->previousSibling(); node && !node->AsElement(); node = node->previousSibling()) {}
     *sibling = node;
     return CSS_OK;
   }
-  static css_error node_has_name(void *pw, void *n, const css_qname *qname, bool *match) {
+  static css_error NodeHasName(void *pw, void *n, const css_qname *qname, bool *match) {
     *match = LibCSS_String::ToString(qname->name) == ((LFL::DOM::Node*)n)->nodeName();
     return CSS_OK;
   }
-  static css_error node_has_class(void *pw, void *n, lwc_string *name, bool *match) {
+  static css_error NodeHasClass(void *pw, void *n, lwc_string *name, bool *match) {
     *match = false;
     LFL::DOM::Node *node = (LFL::DOM::Node*)n, *attr = 0;
     if (!(attr = node->getAttributeNode("class"))) return CSS_OK;
@@ -1382,24 +1348,24 @@ struct StyleContext : public LFL::DOM::Object {
     for (int i=0; i<classes.size(); i++) if (classes[i] == query) { *match = true; break; }
     return CSS_OK;
   }
-  static css_error node_has_id(void *pw, void *n, lwc_string *name, bool *match) {
+  static css_error NodeHasId(void *pw, void *n, lwc_string *name, bool *match) {
     *match = false;
     LFL::DOM::Node *node = (LFL::DOM::Node*)n, *attr = 0;
     if ((attr = node->getAttributeNode("id"))) *match = attr->nodeValue() == LibCSS_String::ToString(name);
     return CSS_OK;
   }
-  static css_error node_has_attribute(void *pw, void *n, const css_qname *qname, bool *match) {
+  static css_error NodeHasAttribute(void *pw, void *n, const css_qname *qname, bool *match) {
     *match = ((LFL::DOM::Node*)n)->getAttributeNode(LibCSS_String::ToString(qname->name));
     return CSS_OK;
   }
-  static css_error node_has_attribute_equal(void *pw, void *n, const css_qname *qname, lwc_string *value, bool *match) {
+  static css_error NodeHasAttributeEqual(void *pw, void *n, const css_qname *qname, lwc_string *value, bool *match) {
     *match = false;
     LFL::DOM::Node *node = (LFL::DOM::Node*)n, *attr = 0;
     if ((attr = node->getAttributeNode(LibCSS_String::ToString(qname->name))))
       *match = attr->nodeValue() == LibCSS_String::ToString(value);
     return CSS_OK;
   }
-  static css_error node_has_attribute_dashmatch(void *pw, void *n, const css_qname *qname, lwc_string *value, bool *match) {
+  static css_error NodeHasAttributeDashmatch(void *pw, void *n, const css_qname *qname, lwc_string *value, bool *match) {
     *match = false;
     LFL::DOM::Node *node = (LFL::DOM::Node*)n, *attr = 0;
     if ((attr = node->getAttributeNode(LibCSS_String::ToString(qname->name)))) {
@@ -1409,7 +1375,7 @@ struct StyleContext : public LFL::DOM::Object {
     } 
     return CSS_OK;
   }
-  static css_error node_has_attribute_includes(void *pw, void *n, const css_qname *qname, lwc_string *value, bool *match) {
+  static css_error NodeHasAttributeIncludes(void *pw, void *n, const css_qname *qname, lwc_string *value, bool *match) {
     *match = false;
     LFL::DOM::Node *node = (LFL::DOM::Node*)n, *attr = 0;
     if ((attr = node->getAttributeNode(LibCSS_String::ToString(qname->name)))) {
@@ -1418,33 +1384,33 @@ struct StyleContext : public LFL::DOM::Object {
     } 
     return CSS_OK;
   }
-  static css_error node_has_attribute_prefix(void *pw, void *n, const css_qname *qname, lwc_string *value, bool *match) {
+  static css_error NodeHasAttributePrefix(void *pw, void *n, const css_qname *qname, lwc_string *value, bool *match) {
     *match = false;
     LFL::DOM::Node *node = (LFL::DOM::Node*)n, *attr = 0;
     if ((attr = node->getAttributeNode(LibCSS_String::ToString(qname->name))))
       *match = PrefixMatch(attr->nodeValue(), LibCSS_String::ToString(value));
     return CSS_OK;
   }
-  static css_error node_has_attribute_suffix(void *pw, void *n, const css_qname *qname, lwc_string *value, bool *match) {
+  static css_error NodeHasAttributeSuffix(void *pw, void *n, const css_qname *qname, lwc_string *value, bool *match) {
     *match = false;
     LFL::DOM::Node *node = (LFL::DOM::Node*)n, *attr = 0;
     if ((attr = node->getAttributeNode(LibCSS_String::ToString(qname->name))))
       *match = SuffixMatch(attr->nodeValue(), LibCSS_String::ToString(value));
     return CSS_OK;
   }
-  static css_error node_has_attribute_substring(void *pw, void *n, const css_qname *qname, lwc_string *value, bool *match) {
+  static css_error NodeHasAttributeSubstring(void *pw, void *n, const css_qname *qname, lwc_string *value, bool *match) {
     *match = false;
     LFL::DOM::Node *node = (LFL::DOM::Node*)n, *attr = 0;
     if ((attr = node->getAttributeNode(LibCSS_String::ToString(qname->name))))
       *match = attr->nodeValue().find(LibCSS_String::ToString(value)) != string::npos;
     return CSS_OK;
   }
-  static css_error node_is_root(void *pw, void *n, bool *match) {
+  static css_error NodeIsRoot(void *pw, void *n, bool *match) {
     LFL::DOM::Node *node = (LFL::DOM::Node*)n;
     *match = !node->parentNode || node->parentNode->AsDocument();
     return CSS_OK;
   }
-  static css_error node_count_siblings(void *pw, void *n, bool same_name, bool after, int32_t *count) {
+  static css_error NodeCountSiblings(void *pw, void *n, bool same_name, bool after, int32_t *count) {
     *count = 0;
     LFL::DOM::Node *node = (LFL::DOM::Node*)n;
     LFL::DOM::DOMString query = same_name ? node->nodeName() : "";
@@ -1454,50 +1420,29 @@ struct StyleContext : public LFL::DOM::Object {
     }
     return CSS_OK;
   }
-  static css_error node_is_empty(void *pw, void *n, bool *match) {
+  static css_error NodeIsEmpty(void *pw, void *n, bool *match) {
     *match = true;
     LFL::DOM::Node *node = (LFL::DOM::Node*)n;
     for (int i = 0; i < node->childNodes.length(); i++)
-      if (node->childNodes.item(i)->AsElement() || node->childNodes.item(i)->AsText())
-      { *match = false; break; }
+      if (node->childNodes.item(i)->AsElement() || node->childNodes.item(i)->AsText()) { *match = false; break; }
     return CSS_OK;
   }
-  static css_error node_is_link(void *pw, void *n, bool *match) {
+  static css_error NodeIsLink(void *pw, void *n, bool *match) {
     LFL::DOM::Node *node = (LFL::DOM::Node*)n;
     *match = node->htmlElementType == LFL::DOM::HTML_ANCHOR_ELEMENT && node->getAttributeNode("href");
     return CSS_OK;
   }
-  static css_error node_is_visited(void *pw, void *n, bool *match) {
-    *match = false; return CSS_OK;
-  }
-  static css_error node_is_hover(void *pw, void *n, bool *match) {
-    *match = false; return CSS_OK;
-  }
-  static css_error node_is_active(void *pw, void *n, bool *match) {
-    *match = false; return CSS_OK;
-  }
-  static css_error node_is_focus(void *pw, void *n, bool *match) {
-    *match = false; return CSS_OK;
-  }
-  static css_error node_is_enabled(void *pw, void *n, bool *match) {
-    *match = false; return CSS_OK;
-  }
-  static css_error node_is_disabled(void *pw, void *n, bool *match) {
-    *match = false; return CSS_OK;
-  }
-  static css_error node_is_checked(void *pw, void *n, bool *match) {
-    *match = false; return CSS_OK;
-  }
-  static css_error node_is_target(void *pw, void *n, bool *match) {
-    *match = false; return CSS_OK;
-  }
-  static css_error node_is_lang(void *pw, void *n, lwc_string *lang, bool *match) {
-    *match = false; return CSS_OK;
-  }
-  static css_error node_presentational_hint(void *pw, void *node, uint32_t property, css_hint *hint) {
-    return CSS_PROPERTY_NOT_SET;
-  }
-  static css_error ua_default_for_property(void *pw, uint32_t property, css_hint *hint) {
+  static css_error NodeIsVisited (void *pw, void *n, bool *match) { *match = false; return CSS_OK; }
+  static css_error NodeIsHover   (void *pw, void *n, bool *match) { *match = false; return CSS_OK; }
+  static css_error NodeIsActive  (void *pw, void *n, bool *match) { *match = false; return CSS_OK; }
+  static css_error NodeIsFocus   (void *pw, void *n, bool *match) { *match = false; return CSS_OK; }
+  static css_error NodeIsEnabled (void *pw, void *n, bool *match) { *match = false; return CSS_OK; }
+  static css_error NodeIsDisabled(void *pw, void *n, bool *match) { *match = false; return CSS_OK; }
+  static css_error NodeIsChecked (void *pw, void *n, bool *match) { *match = false; return CSS_OK; }
+  static css_error NodeIsTarget  (void *pw, void *n, bool *match) { *match = false; return CSS_OK; }
+  static css_error NodeIsLang    (void *pw, void *n, lwc_string *lang, bool *match) { *match = false; return CSS_OK; }
+  static css_error NodePresentationalHint(void *pw, void *node, uint32_t property, css_hint *hint) { return CSS_PROPERTY_NOT_SET; }
+  static css_error UADefaultForProperty(void *pw, uint32_t property, css_hint *hint) {
     if      (property == CSS_PROP_COLOR)        { hint->data.color = 0x00000000; hint->status = CSS_COLOR_COLOR; }
     else if (property == CSS_PROP_FONT_FAMILY)  { hint->data.strings = NULL;     hint->status = CSS_FONT_FAMILY_SANS_SERIF; }
     else if (property == CSS_PROP_QUOTES)       { hint->data.strings = NULL;     hint->status = CSS_QUOTES_NONE; }
@@ -1505,7 +1450,7 @@ struct StyleContext : public LFL::DOM::Object {
     else return CSS_INVALID;
     return CSS_OK;
   }
-  static css_error compute_font_size(void *pw, const css_hint *parent, css_hint *size) {
+  static css_error ComputeFontSize(void *pw, const css_hint *parent, css_hint *size) {
     static css_hint_length sizes[] = {
       { FLTTOFIX(6.75), CSS_UNIT_PT },
       { FLTTOFIX(7.50), CSS_UNIT_PT },
@@ -1520,9 +1465,9 @@ struct StyleContext : public LFL::DOM::Object {
     if (parent == NULL) {
       parent_size = &sizes[CSS_FONT_SIZE_MEDIUM - 1];
     } else {
-      CHECK_EQ(parent->status, CSS_FONT_SIZE_DIMENSION);
-      CHECK_NE(parent->data.length.unit, CSS_UNIT_EM);
-      CHECK_NE(parent->data.length.unit, CSS_UNIT_EX);
+      CHECK_EQ(CSS_FONT_SIZE_DIMENSION, parent->status);
+      CHECK_NE(CSS_UNIT_EM, parent->data.length.unit);
+      CHECK_NE(CSS_UNIT_EX, parent->data.length.unit);
       parent_size = &parent->data.length;
     }
     CHECK_NE(size->status, CSS_FONT_SIZE_INHERIT);
@@ -1548,16 +1493,17 @@ struct StyleContext : public LFL::DOM::Object {
     size->status = CSS_FONT_SIZE_DIMENSION;
     return CSS_OK;
   }
-  static css_error set_libcss_node_data(void *pw, void *n, void *libcss_node_data) {
+  static css_error SetLibCSSNodeData(void *pw, void *n, void *libcss_node_data) {
     /* Since we're not storing it, ensure node data gets deleted */
     css_libcss_node_data_handler(SelectHandler(), CSS_NODE_DELETED, pw, n, NULL, libcss_node_data);
     return CSS_OK;
   }
-  static css_error get_libcss_node_data(void *pw, void *n, void **libcss_node_data) {
+  static css_error GetLibCSSNodeData(void *pw, void *n, void **libcss_node_data) {
     *libcss_node_data = NULL;
     return CSS_OK;
   }
 };
+
 #else /* LFL_LIBCSS */
 struct StyleSheet : public LFL::DOM::Object {
   LFL::DOM::Document *ownerDocument;
@@ -1578,15 +1524,15 @@ struct ComputedStyle : public LFL::DOM::CSSStyleDeclaration {
     return false;
   }
 
-  virtual int                  length()        { return  0; }
-  virtual LFL::DOM::DOMString  item(int index) { return ""; }
-  virtual LFL::DOM::DOMString  getPropertyValue   (const LFL::DOM::DOMString &n) { return ""; }
-  virtual LFL::DOM::CSSValue  *getPropertyCSSValue(const LFL::DOM::DOMString &n) { return  0; }
-  virtual LFL::DOM::DOMString  getPropertyPriority(const LFL::DOM::DOMString &n) { return ""; }
-  virtual LFL::DOM::DOMString  removeProperty     (const LFL::DOM::DOMString &n) { ERROR("not implemented"); return ""; }
-  virtual void                 setProperty(const LFL::DOM::DOMString &n, const LFL::DOM::DOMString &v, const LFL::DOM::DOMString &priority) { ERROR("not implemented"); }
+  virtual int                       length() const { return  0; }
+  virtual LFL::DOM::DOMString       item(int index) const { return ""; }
+  virtual LFL::DOM::DOMString       getPropertyValue   (const LFL::DOM::DOMString &n) const { return ""; }
+  virtual const LFL::DOM::CSSValue *getPropertyCSSValue(const LFL::DOM::DOMString &n) const { return  0; }
+  virtual LFL::DOM::DOMString       getPropertyPriority(const LFL::DOM::DOMString &n) const { return ""; }
+  virtual LFL::DOM::DOMString       removeProperty     (const LFL::DOM::DOMString &n) { ERROR("not implemented"); return ""; }
+  virtual void                      setProperty(const LFL::DOM::DOMString &n, const LFL::DOM::DOMString &v, const LFL::DOM::DOMString &priority) { ERROR("not implemented"); }
 
-  LFL::DOM::Display Display() {
+  LFL::DOM::Display Display() const {
     switch (node->htmlElementType) {
       case LFL::DOM::HTML_BLOCK_QUOTE_ELEMENT:    case LFL::DOM::HTML_HR_ELEMENT:
       case LFL::DOM::HTML_CANVAS_ELEMENT:         case LFL::DOM::HTML_MENU_ELEMENT:
@@ -1598,89 +1544,89 @@ struct ComputedStyle : public LFL::DOM::CSSStyleDeclaration {
         return LFL::DOM::Display(LFL::DOM::Display::Block);
     } return LFL::DOM::Display(LFL::DOM::Display::Inline);
   }
-  LFL::DOM::Clear                Clear               () { return LFL::DOM::Clear(LFL::DOM::Clear::None); }
-  LFL::DOM::Float                Float               () { return LFL::DOM::Float(LFL::DOM::Float::None); }
-  LFL::DOM::Position             Position            () { return LFL::DOM::Position(LFL::DOM::Position::Static); }
-  LFL::DOM::Overflow             Overflow            () { return LFL::DOM::Overflow(LFL::DOM::Overflow::Visible); }
-  LFL::DOM::TextAlign            TextAlign           () { return LFL::DOM::TextAlign(LFL::DOM::TextAlign::Left); }
-  LFL::DOM::Direction            Direction           () { return LFL::DOM::Direction(LFL::DOM::Direction::LTR); }
-  LFL::DOM::FontStyle            FontStyle           () { return LFL::DOM::FontStyle(LFL::DOM::FontStyle::Normal); }
-  LFL::DOM::EmptyCells           EmptyCells          () { return LFL::DOM::EmptyCells(LFL::DOM::EmptyCells::Show); }
-  LFL::DOM::FontWeight           FontWeight          () { return LFL::DOM::FontWeight(LFL::DOM::FontWeight::Normal); }
-  LFL::DOM::Visibility           Visibility          () { return LFL::DOM::Visibility(LFL::DOM::Visibility::Visible); }
-  LFL::DOM::WhiteSpace           WhiteSpace          () { return LFL::DOM::WhiteSpace(LFL::DOM::WhiteSpace::Normal); }
-  LFL::DOM::CaptionSide          CaptionSide         () { return LFL::DOM::CaptionSide(LFL::DOM::CaptionSide::Top); }
-  LFL::DOM::FontVariant          FontVariant         () { return LFL::DOM::FontVariant(LFL::DOM::FontVariant::Normal); }
-  LFL::DOM::TableLayout          TableLayout         () { return LFL::DOM::TableLayout(LFL::DOM::TableLayout::Auto); }
-  LFL::DOM::UnicodeBidi          UnicodeBidi         () { return LFL::DOM::UnicodeBidi(LFL::DOM::UnicodeBidi::Normal); }
-  LFL::DOM::BorderStyle          OutlineStyle        () { return LFL::DOM::BorderStyle(LFL::DOM::BorderStyle::None); }
-  LFL::DOM::TextTransform        TextTransform       () { return LFL::DOM::TextTransform(LFL::DOM::TextTransform::None); }
-  LFL::DOM::TextDecoration       TextDecoration      () { return LFL::DOM::TextDecoration(IsLink() ? LFL::DOM::TextDecoration::Underline : LFL::DOM::TextDecoration::None); }
-  LFL::DOM::BorderCollapse       BorderCollapse      () { return LFL::DOM::BorderCollapse(LFL::DOM::BorderCollapse::Separate); }
-  LFL::DOM::ListStyleType        ListStyleType       () { return LFL::DOM::ListStyleType(LFL::DOM::ListStyleType::Disc); }
-  LFL::DOM::ListStylePosition    ListStylePosition   () { return LFL::DOM::ListStylePosition(LFL::DOM::ListStylePosition::Outside); }
-  LFL::DOM::PageBreak            PageBreakAfter      () { return LFL::DOM::PageBreak(LFL::DOM::PageBreak::Auto); }
-  LFL::DOM::PageBreak            PageBreakBefore     () { return LFL::DOM::PageBreak(LFL::DOM::PageBreak::Auto); }
-  LFL::DOM::PageBreak            PageBreakInside     () { return LFL::DOM::PageBreak(LFL::DOM::PageBreak::Auto); }
-  LFL::DOM::BorderWidth          BorderTopWidth      () { return LFL::DOM::BorderWidth(LFL::DOM::BorderWidth::Medium); }
-  LFL::DOM::BorderWidth          BorderLeftWidth     () { return LFL::DOM::BorderWidth(LFL::DOM::BorderWidth::Medium); }
-  LFL::DOM::BorderWidth          BorderRightWidth    () { return LFL::DOM::BorderWidth(LFL::DOM::BorderWidth::Medium); }
-  LFL::DOM::BorderWidth          BorderBottomWidth   () { return LFL::DOM::BorderWidth(LFL::DOM::BorderWidth::Medium); }
-  LFL::DOM::BackgroundRepeat     BackgroundRepeat    () { return LFL::DOM::BackgroundRepeat(LFL::DOM::BackgroundRepeat::Repeat); }
-  LFL::DOM::BackgroundAttachment BackgroundAttachment() { return LFL::DOM::BackgroundAttachment(LFL::DOM::BackgroundAttachment::Scroll); }
-  LFL::DOM::RGBColor             BackgroundColor     () { return LFL::DOM::RGBColor(0x00000000); }
-  LFL::DOM::RGBColor             BorderBottomColor   () { return LFL::DOM::RGBColor(0x00000000); }
-  LFL::DOM::RGBColor             BorderLeftColor     () { return LFL::DOM::RGBColor(0x00000000); }
-  LFL::DOM::RGBColor             BorderRightColor    () { return LFL::DOM::RGBColor(0x00000000); }
-  LFL::DOM::RGBColor             BorderTopColor      () { return LFL::DOM::RGBColor(0x00000000); }
-  LFL::DOM::RGBColor             OutlineColor        () { return LFL::DOM::RGBColor(0x00000000); }
-  LFL::DOM::RGBColor             Color               () { return LFL::DOM::RGBColor(0xffffffff); }
-  LFL::DOM::Cursor               Cursor              () { return LFL::DOM::Cursor(LFL::DOM::Cursor::Auto); }
-  LFL::DOM::FontFamily           FontFamily          () { return LFL::DOM::FontFamily(FLAGS_default_font); }
-  LFL::DOM::CSSStringValue       BackgroundImage     () { return LFL::DOM::CSSStringValue(); }
-  LFL::DOM::CSSNumericValuePair  BackgroundPosition  () { return LFL::DOM::CSSNumericValuePair(); }
-  LFL::DOM::Rect                 Clip                () { return LFL::DOM::Rect(); }
-  LFL::DOM::CSSNumericValue      Opacity             () { return LFL::DOM::CSSNumericValue(); }
-  LFL::DOM::CSSNumericValue      Orphans             () { return LFL::DOM::CSSNumericValue(); }
-  LFL::DOM::CSSNumericValue      Widows              () { return LFL::DOM::CSSNumericValue(); }
-  LFL::DOM::CSSNumericValue      MinHeight           () { return LFL::DOM::CSSNumericValue(); }
-  LFL::DOM::CSSNumericValue      MinWidth            () { return LFL::DOM::CSSNumericValue(); }
-  LFL::DOM::CSSNumericValue      PaddingTop          () { return LFL::DOM::CSSNumericValue    (0, LFL::DOM::CSSPrimitiveValue::CSS_PX); }
-  LFL::DOM::CSSNumericValue      PaddingRight        () { return LFL::DOM::CSSNumericValue    (0, LFL::DOM::CSSPrimitiveValue::CSS_PX); }
-  LFL::DOM::CSSNumericValue      PaddingBottom       () { return LFL::DOM::CSSNumericValue    (0, LFL::DOM::CSSPrimitiveValue::CSS_PX); }
-  LFL::DOM::CSSNumericValue      PaddingLeft         () { return LFL::DOM::CSSNumericValue    (0, LFL::DOM::CSSPrimitiveValue::CSS_PX); }
-  LFL::DOM::CSSNumericValue      TextIndent          () { return LFL::DOM::CSSNumericValue(); }
-  LFL::DOM::CSSAutoNumericValue  Top                 () { return LFL::DOM::CSSAutoNumericValue(true); }
-  LFL::DOM::CSSAutoNumericValue  Bottom              () { return LFL::DOM::CSSAutoNumericValue(true); }
-  LFL::DOM::CSSAutoNumericValue  Left                () { return LFL::DOM::CSSAutoNumericValue(true); }
-  LFL::DOM::CSSAutoNumericValue  Right               () { return LFL::DOM::CSSAutoNumericValue(true); }
-  LFL::DOM::CSSAutoNumericValue  Width               () { return LFL::DOM::CSSAutoNumericValue(true); }
-  LFL::DOM::CSSAutoNumericValue  Height              () { return LFL::DOM::CSSAutoNumericValue(true); }
-  LFL::DOM::FontSize             FontSize            () { return LFL::DOM::FontSize(LFL::DOM::FontSize::Medium); }
-  LFL::DOM::VerticalAlign        VerticalAlign       () { return LFL::DOM::VerticalAlign(LFL::DOM::VerticalAlign::Baseline); }
-  LFL::DOM::BorderStyle          BorderTopStyle      () { return LFL::DOM::BorderStyle(LFL::DOM::BorderStyle::None); }
-  LFL::DOM::BorderStyle          BorderRightStyle    () { return LFL::DOM::BorderStyle(LFL::DOM::BorderStyle::None); }
-  LFL::DOM::BorderStyle          BorderBottomStyle   () { return LFL::DOM::BorderStyle(LFL::DOM::BorderStyle::None); }
-  LFL::DOM::BorderStyle          BorderLeftStyle     () { return LFL::DOM::BorderStyle(LFL::DOM::BorderStyle::None); }
-  LFL::DOM::BorderWidth          OutlineWidth        () { return LFL::DOM::BorderWidth(LFL::DOM::BorderWidth::Medium); }
-  LFL::DOM::CSSAutoNumericValue  MarginBottom        () { return LFL::DOM::CSSAutoNumericValue(0, LFL::DOM::CSSPrimitiveValue::CSS_PX); }
-  LFL::DOM::CSSAutoNumericValue  MarginLeft          () { return LFL::DOM::CSSAutoNumericValue(0, LFL::DOM::CSSPrimitiveValue::CSS_PX); }
-  LFL::DOM::CSSAutoNumericValue  MarginRight         () { return LFL::DOM::CSSAutoNumericValue(0, LFL::DOM::CSSPrimitiveValue::CSS_PX); }
-  LFL::DOM::CSSAutoNumericValue  MarginTop           () { return LFL::DOM::CSSAutoNumericValue(0, LFL::DOM::CSSPrimitiveValue::CSS_PX); }
-  LFL::DOM::CSSNoneNumericValue  MaxHeight           () { return LFL::DOM::CSSNoneNumericValue(true); }
-  LFL::DOM::CSSNoneNumericValue  MaxWidth            () { return LFL::DOM::CSSNoneNumericValue(true); }
-  LFL::DOM::CSSAutoNumericValue  ZIndex              () { return LFL::DOM::CSSAutoNumericValue(true); }
-  LFL::DOM::CSSNormNumericValue  WordSpacing         () { return LFL::DOM::CSSNormNumericValue(true, LFL::DOM::CSSPrimitiveValue::PercentRefersTo::FontWidth); }
-  LFL::DOM::CSSNormNumericValue  LetterSpacing       () { return LFL::DOM::CSSNormNumericValue(true, LFL::DOM::CSSPrimitiveValue::PercentRefersTo::FontWidth); }
-  LFL::DOM::CSSNormNumericValue  LineHeight          () { return LFL::DOM::CSSNormNumericValue(true, LFL::DOM::CSSPrimitiveValue::PercentRefersTo::FontHeight); }
+  LFL::DOM::Clear                Clear               () const { return LFL::DOM::Clear(LFL::DOM::Clear::None); }
+  LFL::DOM::Float                Float               () const { return LFL::DOM::Float(LFL::DOM::Float::None); }
+  LFL::DOM::Position             Position            () const { return LFL::DOM::Position(LFL::DOM::Position::Static); }
+  LFL::DOM::Overflow             Overflow            () const { return LFL::DOM::Overflow(LFL::DOM::Overflow::Visible); }
+  LFL::DOM::TextAlign            TextAlign           () const { return LFL::DOM::TextAlign(LFL::DOM::TextAlign::Left); }
+  LFL::DOM::Direction            Direction           () const { return LFL::DOM::Direction(LFL::DOM::Direction::LTR); }
+  LFL::DOM::FontStyle            FontStyle           () const { return LFL::DOM::FontStyle(LFL::DOM::FontStyle::Normal); }
+  LFL::DOM::EmptyCells           EmptyCells          () const { return LFL::DOM::EmptyCells(LFL::DOM::EmptyCells::Show); }
+  LFL::DOM::FontWeight           FontWeight          () const { return LFL::DOM::FontWeight(LFL::DOM::FontWeight::Normal); }
+  LFL::DOM::Visibility           Visibility          () const { return LFL::DOM::Visibility(LFL::DOM::Visibility::Visible); }
+  LFL::DOM::WhiteSpace           WhiteSpace          () const { return LFL::DOM::WhiteSpace(LFL::DOM::WhiteSpace::Normal); }
+  LFL::DOM::CaptionSide          CaptionSide         () const { return LFL::DOM::CaptionSide(LFL::DOM::CaptionSide::Top); }
+  LFL::DOM::FontVariant          FontVariant         () const { return LFL::DOM::FontVariant(LFL::DOM::FontVariant::Normal); }
+  LFL::DOM::TableLayout          TableLayout         () const { return LFL::DOM::TableLayout(LFL::DOM::TableLayout::Auto); }
+  LFL::DOM::UnicodeBidi          UnicodeBidi         () const { return LFL::DOM::UnicodeBidi(LFL::DOM::UnicodeBidi::Normal); }
+  LFL::DOM::BorderStyle          OutlineStyle        () const { return LFL::DOM::BorderStyle(LFL::DOM::BorderStyle::None); }
+  LFL::DOM::TextTransform        TextTransform       () const { return LFL::DOM::TextTransform(LFL::DOM::TextTransform::None); }
+  LFL::DOM::TextDecoration       TextDecoration      () const { return LFL::DOM::TextDecoration(IsLink() ? LFL::DOM::TextDecoration::Underline : LFL::DOM::TextDecoration::None); }
+  LFL::DOM::BorderCollapse       BorderCollapse      () const { return LFL::DOM::BorderCollapse(LFL::DOM::BorderCollapse::Separate); }
+  LFL::DOM::ListStyleType        ListStyleType       () const { return LFL::DOM::ListStyleType(LFL::DOM::ListStyleType::Disc); }
+  LFL::DOM::ListStylePosition    ListStylePosition   () const { return LFL::DOM::ListStylePosition(LFL::DOM::ListStylePosition::Outside); }
+  LFL::DOM::PageBreak            PageBreakAfter      () const { return LFL::DOM::PageBreak(LFL::DOM::PageBreak::Auto); }
+  LFL::DOM::PageBreak            PageBreakBefore     () const { return LFL::DOM::PageBreak(LFL::DOM::PageBreak::Auto); }
+  LFL::DOM::PageBreak            PageBreakInside     () const { return LFL::DOM::PageBreak(LFL::DOM::PageBreak::Auto); }
+  LFL::DOM::BorderWidth          BorderTopWidth      () const { return LFL::DOM::BorderWidth(LFL::DOM::BorderWidth::Medium); }
+  LFL::DOM::BorderWidth          BorderLeftWidth     () const { return LFL::DOM::BorderWidth(LFL::DOM::BorderWidth::Medium); }
+  LFL::DOM::BorderWidth          BorderRightWidth    () const { return LFL::DOM::BorderWidth(LFL::DOM::BorderWidth::Medium); }
+  LFL::DOM::BorderWidth          BorderBottomWidth   () const { return LFL::DOM::BorderWidth(LFL::DOM::BorderWidth::Medium); }
+  LFL::DOM::BackgroundRepeat     BackgroundRepeat    () const { return LFL::DOM::BackgroundRepeat(LFL::DOM::BackgroundRepeat::Repeat); }
+  LFL::DOM::BackgroundAttachment BackgroundAttachment() const { return LFL::DOM::BackgroundAttachment(LFL::DOM::BackgroundAttachment::Scroll); }
+  LFL::DOM::RGBColor             BackgroundColor     () const { return LFL::DOM::RGBColor(0x00000000); }
+  LFL::DOM::RGBColor             BorderBottomColor   () const { return LFL::DOM::RGBColor(0x00000000); }
+  LFL::DOM::RGBColor             BorderLeftColor     () const { return LFL::DOM::RGBColor(0x00000000); }
+  LFL::DOM::RGBColor             BorderRightColor    () const { return LFL::DOM::RGBColor(0x00000000); }
+  LFL::DOM::RGBColor             BorderTopColor      () const { return LFL::DOM::RGBColor(0x00000000); }
+  LFL::DOM::RGBColor             OutlineColor        () const { return LFL::DOM::RGBColor(0x00000000); }
+  LFL::DOM::RGBColor             Color               () const { return LFL::DOM::RGBColor(0xffffffff); }
+  LFL::DOM::Cursor               Cursor              () const { return LFL::DOM::Cursor(LFL::DOM::Cursor::Auto); }
+  LFL::DOM::FontFamily           FontFamily          () const { return LFL::DOM::FontFamily(FLAGS_default_font); }
+  LFL::DOM::CSSStringValue       BackgroundImage     () const { return LFL::DOM::CSSStringValue(); }
+  LFL::DOM::CSSNumericValuePair  BackgroundPosition  () const { return LFL::DOM::CSSNumericValuePair(); }
+  LFL::DOM::Rect                 Clip                () const { return LFL::DOM::Rect(); }
+  LFL::DOM::CSSNumericValue      Opacity             () const { return LFL::DOM::CSSNumericValue(); }
+  LFL::DOM::CSSNumericValue      Orphans             () const { return LFL::DOM::CSSNumericValue(); }
+  LFL::DOM::CSSNumericValue      Widows              () const { return LFL::DOM::CSSNumericValue(); }
+  LFL::DOM::CSSNumericValue      MinHeight           () const { return LFL::DOM::CSSNumericValue(); }
+  LFL::DOM::CSSNumericValue      MinWidth            () const { return LFL::DOM::CSSNumericValue(); }
+  LFL::DOM::CSSNumericValue      PaddingTop          () const { return LFL::DOM::CSSNumericValue    (0, LFL::DOM::CSSPrimitiveValue::CSS_PX); }
+  LFL::DOM::CSSNumericValue      PaddingRight        () const { return LFL::DOM::CSSNumericValue    (0, LFL::DOM::CSSPrimitiveValue::CSS_PX); }
+  LFL::DOM::CSSNumericValue      PaddingBottom       () const { return LFL::DOM::CSSNumericValue    (0, LFL::DOM::CSSPrimitiveValue::CSS_PX); }
+  LFL::DOM::CSSNumericValue      PaddingLeft         () const { return LFL::DOM::CSSNumericValue    (0, LFL::DOM::CSSPrimitiveValue::CSS_PX); }
+  LFL::DOM::CSSNumericValue      TextIndent          () const { return LFL::DOM::CSSNumericValue(); }
+  LFL::DOM::CSSAutoNumericValue  Top                 () const { return LFL::DOM::CSSAutoNumericValue(true); }
+  LFL::DOM::CSSAutoNumericValue  Bottom              () const { return LFL::DOM::CSSAutoNumericValue(true); }
+  LFL::DOM::CSSAutoNumericValue  Left                () const { return LFL::DOM::CSSAutoNumericValue(true); }
+  LFL::DOM::CSSAutoNumericValue  Right               () const { return LFL::DOM::CSSAutoNumericValue(true); }
+  LFL::DOM::CSSAutoNumericValue  Width               () const { return LFL::DOM::CSSAutoNumericValue(true); }
+  LFL::DOM::CSSAutoNumericValue  Height              () const { return LFL::DOM::CSSAutoNumericValue(true); }
+  LFL::DOM::FontSize             FontSize            () const { return LFL::DOM::FontSize(LFL::DOM::FontSize::Medium); }
+  LFL::DOM::VerticalAlign        VerticalAlign       () const { return LFL::DOM::VerticalAlign(LFL::DOM::VerticalAlign::Baseline); }
+  LFL::DOM::BorderStyle          BorderTopStyle      () const { return LFL::DOM::BorderStyle(LFL::DOM::BorderStyle::None); }
+  LFL::DOM::BorderStyle          BorderRightStyle    () const { return LFL::DOM::BorderStyle(LFL::DOM::BorderStyle::None); }
+  LFL::DOM::BorderStyle          BorderBottomStyle   () const { return LFL::DOM::BorderStyle(LFL::DOM::BorderStyle::None); }
+  LFL::DOM::BorderStyle          BorderLeftStyle     () const { return LFL::DOM::BorderStyle(LFL::DOM::BorderStyle::None); }
+  LFL::DOM::BorderWidth          OutlineWidth        () const { return LFL::DOM::BorderWidth(LFL::DOM::BorderWidth::Medium); }
+  LFL::DOM::CSSAutoNumericValue  MarginBottom        () const { return LFL::DOM::CSSAutoNumericValue(0, LFL::DOM::CSSPrimitiveValue::CSS_PX); }
+  LFL::DOM::CSSAutoNumericValue  MarginLeft          () const { return LFL::DOM::CSSAutoNumericValue(0, LFL::DOM::CSSPrimitiveValue::CSS_PX); }
+  LFL::DOM::CSSAutoNumericValue  MarginRight         () const { return LFL::DOM::CSSAutoNumericValue(0, LFL::DOM::CSSPrimitiveValue::CSS_PX); }
+  LFL::DOM::CSSAutoNumericValue  MarginTop           () const { return LFL::DOM::CSSAutoNumericValue(0, LFL::DOM::CSSPrimitiveValue::CSS_PX); }
+  LFL::DOM::CSSNoneNumericValue  MaxHeight           () const { return LFL::DOM::CSSNoneNumericValue(true); }
+  LFL::DOM::CSSNoneNumericValue  MaxWidth            () const { return LFL::DOM::CSSNoneNumericValue(true); }
+  LFL::DOM::CSSAutoNumericValue  ZIndex              () const { return LFL::DOM::CSSAutoNumericValue(true); }
+  LFL::DOM::CSSNormNumericValue  WordSpacing         () const { return LFL::DOM::CSSNormNumericValue(true, LFL::DOM::CSSPrimitiveValue::PercentRefersTo::FontWidth); }
+  LFL::DOM::CSSNormNumericValue  LetterSpacing       () const { return LFL::DOM::CSSNormNumericValue(true, LFL::DOM::CSSPrimitiveValue::PercentRefersTo::FontWidth); }
+  LFL::DOM::CSSNormNumericValue  LineHeight          () const { return LFL::DOM::CSSNormNumericValue(true, LFL::DOM::CSSPrimitiveValue::PercentRefersTo::FontHeight); }
 };
 struct StyleContext : public LFL::DOM::Object {
   StyleContext(LFL::DOM::HTMLDocument *D) {}
   void AppendSheet(StyleSheet *ss) {}
-  void Match(ComputedStyle *out, LFL::DOM::Node *node, ComputedStyle *parent_sheet=0, const char *inline_style=0) {}
+  void Match(ComputedStyle *out, LFL::DOM::Node *node, const ComputedStyle *parent_sheet=0, StyleSheet *inline_style=0) {}
   int FontFaces(const string &face_name, vector<LFL::DOM::FontFace> *out) { out->clear(); return 0; }
 };
 #endif // LFL_LIBCSS
 
 }; // namespace LFL
-#endif // __LFL_LFAPP_CSS_H__
+#endif // LFL_LFAPP_CSS_H__

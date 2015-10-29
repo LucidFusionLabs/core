@@ -201,6 +201,11 @@ DEFINE_int(chans_in, -1, "Audio input channels");
 DEFINE_int(chans_out, -1, "Audio output channels");
 DEFINE_int(target_fps, 0, "Max frames per second");
 DEFINE_bool(open_console, 0, "Open console on win32");
+#ifdef LFL_MOBILE
+DEFINE_int(peak_fps, 30, "Peak FPS");
+#else
+DEFINE_int(peak_fps, 60, "Peak FPS");
+#endif
 
 void Allocator::Reset() { FATAL(Name(), ": reset"); }
 Allocator *Allocator::Default() { return Singleton<MallocAlloc>::Get(); }
@@ -1083,6 +1088,15 @@ void FrameScheduler::UpdateTargetFPS(int fps) {
 #elif defined(LFL_QT)
   QTTriggerFrame(screen->id);
 #endif
+}
+
+void FrameScheduler::SetAnimating(bool is_animating) {
+  screen->animating = is_animating;
+  int target_fps = is_animating ? FLAGS_peak_fps : 0;
+  if (target_fps != screen->target_fps) {
+    UpdateTargetFPS(target_fps);
+    Wakeup(0);
+  }
 }
 
 void FrameScheduler::AddWaitForeverMouse() {
