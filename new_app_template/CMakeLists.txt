@@ -8,11 +8,12 @@ set(LFL_LFLVIDEO 1)
 if(LFL_ANDROID)
 elseif(LFL_IPHONE)
 else(LFL_ANDROID)
+    set(LFL_GLEW 1)
     set(LFL_GLOG 1)
 endif(LFL_ANDROID)
 
 lfl_project($BINNAME)
-add_subdirectory(../core/lfapp ${CMAKE_CURRENT_BINARY_DIR}/$BINNAME_lfapp_obj)
+add_subdirectory(../core/lfapp ${CMAKE_CURRENT_BINARY_DIR}/${LFL_PROJECT}_lfapp_obj)
 add_definitions(${LFAPP_DEF})
 include_directories(${LFAPP_INCLUDE})
 

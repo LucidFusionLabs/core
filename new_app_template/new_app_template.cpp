@@ -28,69 +28,70 @@ SoundAssetMap soundasset;
 Scene scene;
 
 // engine callback driven by LFL::Application
-int Frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample, int flag) {
-    screen->cam->Look();
-    scene.Get("arrow")->YawRight((double)clicks);
-    scene.Draw(&asset.vec);
+int Frame(LFL::Window *W, unsigned clicks, int flag) {
+  screen->cam->Look();
+  scene.Get("arrow")->YawRight((double)clicks);
+  scene.Draw(&asset.vec);
 
-    screen->gd->DrawMode(DrawMode::_2D);
-    screen->DrawDialogs();
-    Fonts::Default()->Draw(StringPrintf("Hello warld, my FPS is %.2f", FPS()), point(screen->width*.05, screen->height*.15));
-    Fonts::Default()->Draw("press tick for console",                           point(screen->width*.05, screen->height*.05));
-    return 0;
+  screen->gd->DrawMode(DrawMode::_2D);
+  screen->DrawDialogs();
+  Fonts::Default()->Draw(StringPrintf("Hello warld, my FPS is %.2f", FPS()), point(screen->width*.05, screen->height*.15));
+  Fonts::Default()->Draw("press tick for console",                           point(screen->width*.05, screen->height*.05));
+  return 0;
 }
 
 }; // namespace LFL
 using namespace LFL;
 
+extern "C" void LFAppCreateCB() {
+  app->logfilename = StrCat(LFAppDownloadDir(), "$BINNAME.txt");
+  screen->caption = "$PKGNAME";
+  screen->frame_cb = Frame;
+  screen->width = 420;
+  screen->height = 380;
+  FLAGS_target_fps = 30;
+  FLAGS_font_engine = "atlas";
+  FLAGS_default_font = "Nobile.ttf";
+  FLAGS_default_font_flag = FLAGS_lfapp_console_font_flag = 0;
+  FLAGS_lfapp_audio = FLAGS_lfapp_video = FLAGS_lfapp_input = 1;
+}
+
 extern "C" int main(int argc, const char *argv[]) {
+  if (app->Create(argc, argv, __FILE__, LFAppCreateCB)) { app->Free(); return -1; }
+  if (app->Init()) { app->Free(); return -1; }
+  screen->gd->default_draw_mode = DrawMode::_3D;
 
-    app->logfilename = StrCat(LFAppDownloadDir(), "$BINNAME.txt");
-    screen->caption = "$PKGNAME";
-    screen->frame_cb = Frame;
-    screen->width = 420;
-    screen->height = 380;
-    FLAGS_target_fps = 30;
-    FLAGS_font_engine = "atlas";
-    FLAGS_default_font = "Nobile.ttf";
-    FLAGS_default_font_flag = FLAGS_lfapp_console_font_flag = 0;
-    FLAGS_lfapp_audio = FLAGS_lfapp_video = FLAGS_lfapp_input = 1;
+  // asset.Add(Asset(name, texture,  scale, translate, rotate, geometry              0, 0, 0, callback));
+  asset.Add(Asset("axis",  "",       0,     0,         0,      0,                    0, 0, 0, glAxis  ));
+  asset.Add(Asset("grid",  "",       0,     0,         0,      Grid::Grid3D(),       0, 0, 0          ));
+  asset.Add(Asset("room",  "",       0,     0,         0,      0,                    0, 0, 0, glRoom  ));
+  asset.Add(Asset("arrow", "",      .005,   1,        -90,     "arrow.obj",          0, 0             ));
+  asset.Load();
+  app->shell.assets = &asset;
 
-    if (app->Create(argc, argv, __FILE__)) { app->Free(); return -1; }
-    if (app->Init()) { app->Free(); return -1; }
-    screen->gd->default_draw_mode = DrawMode::_3D;
+  // soundasset.Add(SoundAsset(name, filename,   ringbuf, channels, sample_rate, seconds ));
+  app->shell.soundassets = &soundasset;
 
-    // asset.Add(Asset(name, texture,  scale, translate, rotate, geometry              0, 0, 0, callback));
-    asset.Add(Asset("axis",  "",       0,     0,         0,      0,                    0, 0, 0, glAxis  ));
-    asset.Add(Asset("grid",  "",       0,     0,         0,      Grid::Grid3D(),       0, 0, 0          ));
-    asset.Add(Asset("room",  "",       0,     0,         0,      0,                    0, 0, 0, glRoom  ));
-    asset.Add(Asset("arrow", "",      .005,   1,        -90,     "arrow.obj",          0, 0             ));
-    asset.Load();
-    app->shell.assets = &asset;
+  BindMap *binds = screen->binds = new BindMap();
+  // binds.push_back(Bind(key,         callback));
+  binds->Add(Bind(Key::Escape,    Bind::CB(bind(&Shell::quit,     &app->shell, vector<string>()))));
+  binds->Add(Bind(Key::Return,    Bind::CB(bind(&Shell::grabmode, &app->shell, vector<string>()))));
+  binds->Add(Bind(Key::Backquote, Bind::CB(bind(&Shell::console,  &app->shell, vector<string>()))));
+  binds->Add(Bind(Key::Quote,     Bind::CB(bind(&Shell::console,  &app->shell, vector<string>()))));
+  binds->Add(Bind(Key::LeftShift, Bind::TimeCB(bind(&Entity::RollLeft,   screen->cam, _1))));
+  binds->Add(Bind(Key::Space,     Bind::TimeCB(bind(&Entity::RollRight,  screen->cam, _1))));
+  binds->Add(Bind('w',            Bind::TimeCB(bind(&Entity::MoveFwd,    screen->cam, _1))));
+  binds->Add(Bind('s',            Bind::TimeCB(bind(&Entity::MoveRev,    screen->cam, _1))));
+  binds->Add(Bind('a',            Bind::TimeCB(bind(&Entity::MoveLeft,   screen->cam, _1))));
+  binds->Add(Bind('d',            Bind::TimeCB(bind(&Entity::MoveRight,  screen->cam, _1))));
+  binds->Add(Bind('q',            Bind::TimeCB(bind(&Entity::MoveDown,   screen->cam, _1))));
+  binds->Add(Bind('e',            Bind::TimeCB(bind(&Entity::MoveUp,     screen->cam, _1))));
 
-    // soundasset.Add(SoundAsset(name, filename,   ringbuf, channels, sample_rate, seconds ));
-    app->shell.soundassets = &soundasset;
+  scene.Add(new Entity("axis",  asset("axis")));
+  scene.Add(new Entity("grid",  asset("grid")));
+  scene.Add(new Entity("room",  asset("room")));
+  scene.Add(new Entity("arrow", asset("arrow"), v3(1, .24, 1)));
 
-    BindMap *binds = screen->binds = new BindMap();
-    // binds.push_back(Bind(key,         callback));
-    binds->Add(Bind(Key::Escape,    Bind::CB(bind(&Shell::quit,     &app->shell, vector<string>()))));
-    binds->Add(Bind(Key::Return,    Bind::CB(bind(&Shell::grabmode, &app->shell, vector<string>()))));
-    binds->Add(Bind(Key::Backquote, Bind::CB(bind(&Shell::console,  &app->shell, vector<string>()))));
-    binds->Add(Bind(Key::Quote,     Bind::CB(bind(&Shell::console,  &app->shell, vector<string>()))));
-    binds->Add(Bind(Key::LeftShift, Bind::TimeCB(bind(&Entity::RollLeft,   screen->cam, _1))));
-    binds->Add(Bind(Key::Space,     Bind::TimeCB(bind(&Entity::RollRight,  screen->cam, _1))));
-    binds->Add(Bind('w',            Bind::TimeCB(bind(&Entity::MoveFwd,    screen->cam, _1))));
-    binds->Add(Bind('s',            Bind::TimeCB(bind(&Entity::MoveRev,    screen->cam, _1))));
-    binds->Add(Bind('a',            Bind::TimeCB(bind(&Entity::MoveLeft,   screen->cam, _1))));
-    binds->Add(Bind('d',            Bind::TimeCB(bind(&Entity::MoveRight,  screen->cam, _1))));
-    binds->Add(Bind('q',            Bind::TimeCB(bind(&Entity::MoveDown,   screen->cam, _1))));
-    binds->Add(Bind('e',            Bind::TimeCB(bind(&Entity::MoveUp,     screen->cam, _1))));
-
-    scene.Add(new Entity("axis",  asset("axis")));
-    scene.Add(new Entity("grid",  asset("grid")));
-    scene.Add(new Entity("room",  asset("room")));
-    scene.Add(new Entity("arrow", asset("arrow"), v3(1, .24, 1)));
-
-    // start our engine
-    return app->Main();
+  // start our engine
+  return app->Main();
 }

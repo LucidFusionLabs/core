@@ -59,6 +59,18 @@ TEST(CPlusPlusTest, MethodResolution) {
     t.F(String16Piece()); EXPECT_EQ(5, t.A); EXPECT_EQ(1, t.B); EXPECT_EQ(1, t.C); EXPECT_EQ(1, t.D);
 }
 
+static bool ERRORvTest1() { return ERRORv(true,  "ERRORvTest1"); }
+static bool ERRORvTest2() { return ERRORv(false, "ERRORvTest2"); }
+static bool ERRORvTest3() { return ERRORv(true,  "ERRORvTest1", "-2"); }
+static bool ERRORvTest4() { return ERRORv(false, "ERRORvTest2", "-2"); }
+
+TEST(LFAppTest, ERRORv) {
+  EXPECT_EQ(true,  ERRORvTest1());
+  EXPECT_EQ(false, ERRORvTest2());
+  EXPECT_EQ(true,  ERRORvTest3());
+  EXPECT_EQ(false, ERRORvTest4());
+}
+
 #if defined(LFL_OPENSSL) || defined(LFL_COMMONCRYPTO)
 TEST(CryptoTest, MethodResolution) {
     EXPECT_EQ(string("\x68\xd2\x45\x2f\x71\x3a\x0b\x7f\xbf\x0f\xd0\xfb\x89\x05\x97\xad", 16),

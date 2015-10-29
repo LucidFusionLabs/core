@@ -132,7 +132,7 @@ void SystemAudio::PlaySoundEffect(SoundAsset *sa) {
 #elif defined(LFL_IPHONE)
     iPhonePlayMusic(sa->handle);
 #else
-    app->audio.QueueMix(sa, MixFlag::Reset | MixFlag::Mix | (app->audio.loop ? MixFlag::DontQueue : 0), -1, -1);
+    app->audio->QueueMix(sa, MixFlag::Reset | MixFlag::Mix | (app->audio->loop ? MixFlag::DontQueue : 0), -1, -1);
 #endif
 }
 
@@ -142,8 +142,8 @@ void SystemAudio::PlayBackgroundMusic(SoundAsset *music) {
 #elif defined(LFL_IPHONE)
     iPhonePlayBackgroundMusic(music->handle);
 #else
-    app->audio.QueueMix(music);
-    app->audio.loop = music;
+    app->audio->QueueMix(music);
+    app->audio->loop = music;
 #endif
 }
 
@@ -242,7 +242,7 @@ struct PortaudioAudioModule : public Module {
             ScopedMutex ML(audio->inlock);
             IL.Commit();
             IR.Commit();
-            app->audio.samples_read += samplesPerFrame;
+            app->audio->samples_read += samplesPerFrame;
         }
         {
             ScopedMutex ML(audio->outlock);
@@ -592,8 +592,8 @@ int Audio::Frame(unsigned clicks) {
 
     const int refillWhen = FLAGS_sample_rate*FLAGS_chans_out/2;
 
-    if (app->assets.movie_playing) {
-        app->assets.movie_playing->Play(0);
+    if (app->assets->movie_playing) {
+        app->assets->movie_playing->Play(0);
     } else if ((playing || loop) && Out.size() < refillWhen) {
         // QueueMix(playing ? playing : loop, !playing ? MixFlag::Reset : 0, -1, -1);
         RunInMainThread(new Callback(bind(&Audio::QueueMix, this,

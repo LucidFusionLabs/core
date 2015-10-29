@@ -627,10 +627,10 @@ struct X11InputModule : public InputModule {
       switch (xev.type) {
         case XKeyPress:       if (KeyPress(GetKeyCodeFromXEvent(display, xev), 1)) app->EventDrivenFrame(0); break;
         case KeyRelease:      if (KeyPress(GetKeyCodeFromXEvent(display, xev), 0)) app->EventDrivenFrame(0); break;
-        case ButtonPress:     if (MouseClick(xev.xbutton.button, 1, xev.xbutton.x, screen->height-xev.xbutton.y)) app->EventDrivenFrame(0); break;
-        case ButtonRelease:   if (MouseClick(xev.xbutton.button, 0, xev.xbutton.x, screen->height-xev.xbutton.y)) app->EventDrivenFrame(0); break;
-        case MotionNotify:    { point p(xev.xmotion.x, screen->height-xev.xmotion.y); if (app->input.MouseMove(p, p - screen->mouse)) app->EventDrivenFrame(0); } break;
-        case ConfigureNotify: if (xev.xconfigure.width != screen->width || xev.xconfigure.height != screen->height) { screen->Reshaped(xev.xconfigure.width, xev.xconfigure.height); app->EventDrivenFrame(0); } break;
+        case ButtonPress:     if (screen && MouseClick(xev.xbutton.button, 1, xev.xbutton.x, screen->height-xev.xbutton.y)) app->EventDrivenFrame(0); break;
+        case ButtonRelease:   if (screen && MouseClick(xev.xbutton.button, 0, xev.xbutton.x, screen->height-xev.xbutton.y)) app->EventDrivenFrame(0); break;
+        case MotionNotify:    if (screen) { point p(xev.xmotion.x, screen->height-xev.xmotion.y); if (app->input.MouseMove(p, p - screen->mouse)) app->EventDrivenFrame(0); } break;
+        case ConfigureNotify: if (screen && xev.xconfigure.width != screen->width || xev.xconfigure.height != screen->height) { screen->Reshaped(xev.xconfigure.width, xev.xconfigure.height); app->EventDrivenFrame(0); } break;
         case ClientMessage:   if (xev.xclient.data.l[0] == delete_win) WindowClosed(); break;
         case Expose:          app->EventDrivenFrame(0);
         default:              continue;

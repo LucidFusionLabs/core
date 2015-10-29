@@ -398,17 +398,17 @@ void Box::Draw(const float *texcoord) const {
                     (float)x,   (float)y+h, tc[Texture::CoordMinX], tc[Texture::CoordMaxY],
                     (float)x+w, (float)y,   tc[Texture::CoordMaxX], tc[Texture::CoordMinY],
                     (float)x+w, (float)y+h, tc[Texture::CoordMaxX], tc[Texture::CoordMaxY] };
-  bool changed =           screen->gd->VertexPointer(2, GraphicsDevice::Float, sizeof(float)*4, 0,               verts, sizeof(verts), NULL, true, GraphicsDevice::Triangles);
-  if (changed && texcoord) screen->gd->TexPointer   (2, GraphicsDevice::Float, sizeof(float)*4, sizeof(float)*2, verts, sizeof(verts), NULL, false);
-  if (1)                   screen->gd->DeferDrawArrays(GraphicsDevice::Triangles, 0, 6);
+  bool changed = screen->gd->VertexPointer(2, GraphicsDevice::Float, sizeof(float)*4, 0,               verts, sizeof(verts), NULL, true, GraphicsDevice::Triangles);
+  if (changed)   screen->gd->TexPointer   (2, GraphicsDevice::Float, sizeof(float)*4, sizeof(float)*2, verts, sizeof(verts), NULL, false);
+  if (1)         screen->gd->DeferDrawArrays(GraphicsDevice::Triangles, 0, 6);
 #else
   float verts[] = { (float)x,   (float)y,   tc[Texture::CoordMinX], tc[Texture::CoordMinY],
                     (float)x,   (float)y+h, tc[Texture::CoordMinX], tc[Texture::CoordMaxY],
                     (float)x+w, (float)y,   tc[Texture::CoordMaxX], tc[Texture::CoordMinY],
                     (float)x+w, (float)y+h, tc[Texture::CoordMaxX], tc[Texture::CoordMaxY] };
-  bool changed =           screen->gd->VertexPointer(2, GraphicsDevice::Float, sizeof(float)*4, 0,               verts, sizeof(verts), NULL, true, GraphicsDevice::TriangleStrip);
-  if (changed && texcoord) screen->gd->TexPointer   (2, GraphicsDevice::Float, sizeof(float)*4, sizeof(float)*2, verts, sizeof(verts), NULL, false);
-  if (1)                   screen->gd->DeferDrawArrays(GraphicsDevice::TriangleStrip, 0, 4);
+  bool changed = screen->gd->VertexPointer(2, GraphicsDevice::Float, sizeof(float)*4, 0,               verts, sizeof(verts), NULL, true, GraphicsDevice::TriangleStrip);
+  if  (changed)  screen->gd->TexPointer   (2, GraphicsDevice::Float, sizeof(float)*4, sizeof(float)*2, verts, sizeof(verts), NULL, false);
+  if (1)         screen->gd->DeferDrawArrays(GraphicsDevice::TriangleStrip, 0, 4);
 #endif
 }
 
@@ -546,6 +546,13 @@ Box Box3::BoundingBox() const {
   return Box(min_x, min_y, max_x - min_x, max_y - min_y);
 }
 
+string Drawable::Attr::DebugString() const {
+  return StrCat("Attr ", (void*)this,
+                " = { font=", font?CheckPointer(font->desc)->DebugString():"", ", fg=", fg?fg->DebugString():"",
+                ", bg=", bg?bg->DebugString():"", ", tex=", tex?tex->ID:0,
+                ", scissor=", scissor?scissor->DebugString():"", ", blend=", blend, " }");
+}
+
 void Drawable::AttrVec::Insert(const Drawable::Attr &v) {
   if (v.font) font_refs.Insert(&v.font->ref);
   push_back(v);
@@ -609,6 +616,7 @@ void Texture::ClearGL() {
   else if (ID) { screen->gd->DelTexture(ID); ID=0; }
 }
 
+void Texture::LoadGL(const MultiProcessTextureResource &t) { return LoadGL(reinterpret_cast<const unsigned char *>(t.buf.data()), point(t.width, t.height), t.pf, t.linesize); }
 void Texture::LoadGL(const unsigned char *B, const point &dim, int PF, int linesize, int flag) {
   Texture temp;
   temp .Resize(dim.x, dim.y, preferred_pf, Flag::CreateBuf);
@@ -752,17 +760,17 @@ void FrameBuffer::Attach(int ct, int dt) {
 /* Shader */
 
 void Shader::SetGlobalUniform1f(const string &name, float v) {
-  screen->gd->UseShader(&app->video.shader_default);  app->video.shader_default .SetUniform1f(name, v);
-  screen->gd->UseShader(&app->video.shader_normals);  app->video.shader_normals .SetUniform1f(name, v);
-  screen->gd->UseShader(&app->video.shader_cubemap);  app->video.shader_cubemap .SetUniform1f(name, v);
-  screen->gd->UseShader(&app->video.shader_cubenorm); app->video.shader_cubenorm.SetUniform1f(name, v);
+  screen->gd->UseShader(&app->video->shader_default);  app->video->shader_default .SetUniform1f(name, v);
+  screen->gd->UseShader(&app->video->shader_normals);  app->video->shader_normals .SetUniform1f(name, v);
+  screen->gd->UseShader(&app->video->shader_cubemap);  app->video->shader_cubemap .SetUniform1f(name, v);
+  screen->gd->UseShader(&app->video->shader_cubenorm); app->video->shader_cubenorm.SetUniform1f(name, v);
 }
 
 void Shader::SetGlobalUniform2f(const string &name, float v1, float v2){ 
-  screen->gd->UseShader(&app->video.shader_default);  app->video.shader_default .SetUniform2f(name, v1, v2);
-  screen->gd->UseShader(&app->video.shader_normals);  app->video.shader_normals .SetUniform2f(name, v1, v2);
-  screen->gd->UseShader(&app->video.shader_cubemap);  app->video.shader_cubemap .SetUniform2f(name, v1, v2);
-  screen->gd->UseShader(&app->video.shader_cubenorm); app->video.shader_cubenorm.SetUniform2f(name, v1, v2);
+  screen->gd->UseShader(&app->video->shader_default);  app->video->shader_default .SetUniform2f(name, v1, v2);
+  screen->gd->UseShader(&app->video->shader_normals);  app->video->shader_normals .SetUniform2f(name, v1, v2);
+  screen->gd->UseShader(&app->video->shader_cubemap);  app->video->shader_cubemap .SetUniform2f(name, v1, v2);
+  screen->gd->UseShader(&app->video->shader_cubenorm); app->video->shader_cubenorm.SetUniform2f(name, v1, v2);
 }
 
 #ifdef LFL_GLSL_SHADERS
@@ -778,7 +786,7 @@ int Shader::Create(const string &name, const string &vertex_shader, const string
     "#define highp\r\n"
     "#endif\r\n";
 #ifdef LFL_GLES2
-  if (app->video.opengles_version == 2) hdr += "#define LFL_GLES2\r\n";
+  if (app->video->opengles_version == 2) hdr += "#define LFL_GLES2\r\n";
 #endif
   hdr += defines.text + string("\r\n");
 
@@ -900,7 +908,7 @@ void Shader::SetUniform3fv(const string &name, int n, const float *v) {}
 
 #ifndef LFL_HEADLESS
 #ifdef LFL_GDDEBUG
-#define GDDebug(...) { screen->gd->CheckForError(__FILE__, __LINE__); if (FLAGS_gd_debug) INFO(__VA_ARGS__); }
+#define GDDebug(...) { screen->gd->CheckForError(__FILE__, __LINE__); if (FLAGS_gd_debug) printf("%s\n", StrCat(__VA_ARGS__).c_str()); }
 #else 
 #define GDDebug(...)
 #endif
@@ -1003,14 +1011,14 @@ class QTWindow : public QWindow {
   }
   void mouseClickEvent  (QMouseEvent *ev, bool down) {
     if (!init) return;
-    int fired = LFL::app->input.MouseClick(GetMouseButton(ev), down, GetMousePosition(ev));
+    int fired = LFL::app->input->MouseClick(GetMouseButton(ev), down, GetMousePosition(ev));
     if (fired && frame_on_mouse_input) RequestRender();
   }
   void mouseMoveEvent(QMouseEvent *ev) {
     QWindow::mouseMoveEvent(ev);
     if (!init) return;
     point p = GetMousePosition(ev);
-    int fired = LFL::app->input.MouseMove(p, p - mouse_p);
+    int fired = LFL::app->input->MouseMove(p, p - mouse_p);
     if (fired && frame_on_mouse_input) RequestRender();
     if (!grabbed) mouse_p = p;
     else        { mouse_p = point(width()/2, height()/2); QCursor::setPos(mapToGlobal(QPoint(mouse_p.x, mouse_p.y))); }
@@ -1053,7 +1061,7 @@ struct OpenGLES1 : public GraphicsDevice, public QTWindow {
   int target_matrix;
   OpenGLES1() : target_matrix(-1) { default_color.push_back(Color(1.0, 1.0, 1.0, 1.0)); }
   void Init() {
-    shader = &app->video.shader_default; 
+    shader = &app->video->shader_default; 
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
     glEnableClientState(GL_VERTEX_ARRAY);
 #if !defined(LFL_IPHONE) && !defined(LFL_ANDROID)
@@ -1151,10 +1159,10 @@ struct OpenGLES1 : public GraphicsDevice, public QTWindow {
   }
   void DeferDrawArrays(int type, int o, int n) {
     glDrawArrays(type, o, n);
-    GDDebug("DrawArrays(", type, ", ", o, ", ", n, ")");
+    GDDebug("DeferDrawArrays(", type, ", ", o, ", ", n, ") deferred 0");
   }
   void UseShader(Shader *S) {
-    shader = X_or_Y(S, &app->video.shader_default); 
+    shader = X_or_Y(S, &app->video->shader_default); 
     glUseProgram(shader->ID);
     GDDebug("Shader=", shader->name);
   }
@@ -1202,10 +1210,10 @@ struct OpenGLES2 : public GraphicsDevice, public QTWindow {
     scissor_stack.push_back(vector<Box>());
     if (vertex_shader.empty()) vertex_shader = Asset::FileContents("lfapp_vertex.glsl");
     if ( pixel_shader.empty()) pixel_shader  = Asset::FileContents("lfapp_pixel.glsl");
-    Shader::Create("lfapp",          vertex_shader, pixel_shader, ShaderDefines(1,0,1,0), &app->video.shader_default);
-    Shader::Create("lfapp_cubemap",  vertex_shader, pixel_shader, ShaderDefines(1,0,0,1), &app->video.shader_cubemap);
-    Shader::Create("lfapp_normals",  vertex_shader, pixel_shader, ShaderDefines(0,1,1,0), &app->video.shader_normals);
-    Shader::Create("lfapp_cubenorm", vertex_shader, pixel_shader, ShaderDefines(0,1,0,1), &app->video.shader_cubenorm);
+    Shader::Create("lfapp",          vertex_shader, pixel_shader, ShaderDefines(1,0,1,0), &app->video->shader_default);
+    Shader::Create("lfapp_cubemap",  vertex_shader, pixel_shader, ShaderDefines(1,0,0,1), &app->video->shader_cubemap);
+    Shader::Create("lfapp_normals",  vertex_shader, pixel_shader, ShaderDefines(0,1,1,0), &app->video->shader_normals);
+    Shader::Create("lfapp_cubenorm", vertex_shader, pixel_shader, ShaderDefines(0,1,0,1), &app->video->shader_cubenorm);
     GDDebug("Init");
     UseShader((shader = 0));
     VertexPointer(0, 0, 0, 0, NULL, deferred.vertexbuffer_size, NULL, true, 0);
@@ -1230,7 +1238,8 @@ struct OpenGLES2 : public GraphicsDevice, public QTWindow {
   void TextureGenReflection() {}
   void BindTexture(int t, int n) {
     if (!Changed(&bound_texture, BoundTexture{ t, n, 0 })) return;
-    ClearDeferred();
+    if (!texture_on) EnableTexture();
+    else ClearDeferred();
     glActiveTexture(GL_TEXTURE0); 
     glBindTexture(t, n);
     glUniform1i(shader->uniform_tex, 0);
@@ -1259,8 +1268,8 @@ struct OpenGLES2 : public GraphicsDevice, public QTWindow {
     else if (t == GL_DIFFUSE)  { light_color=1; light[n].color.diffuse  = Color(v); }
     else if (t == GL_SPECULAR) { light_color=1; light[n].color.specular = Color(v); }
 
-    if (light_pos)   { shader->dirty_light_pos  [n] = app->video.shader_cubenorm.dirty_light_pos  [n] = app->video.shader_normals.dirty_light_pos  [n] = 1; }
-    if (light_color) { shader->dirty_light_color[n] = app->video.shader_cubenorm.dirty_light_color[n] = app->video.shader_normals.dirty_light_color[n] = 1; }
+    if (light_pos)   { shader->dirty_light_pos  [n] = app->video->shader_cubenorm.dirty_light_pos  [n] = app->video->shader_normals.dirty_light_pos  [n] = 1; }
+    if (light_color) { shader->dirty_light_color[n] = app->video->shader_cubenorm.dirty_light_color[n] = app->video->shader_normals.dirty_light_color[n] = 1; }
   }
 
   void Scalef(float x, float y, float z) {
@@ -1315,15 +1324,15 @@ struct OpenGLES2 : public GraphicsDevice, public QTWindow {
       vertex_attr = { m, t, w, o };
       UpdateVertex();
     } else if (defer) {
-      if (deferred.prim_type != prim_type) { ClearDeferred(); deferred.prim_type = prim_type; }
-      if (Changed(&vertex_attr, VertexAttribute{ m, t, w, o })) { ClearDeferred(); UpdateVertex(); }
+      if (deferred.prim_type != prim_type) { ClearDeferred(); deferred.prim_type = prim_type; changed = true; }
+      if (Changed(&vertex_attr, VertexAttribute{ m, t, w, o })) { ClearDeferred(); UpdateVertex(); changed = true; }
     }
     if (first || dirty) {
       int vbo_offset = (defer && !first) ? AddDeferredVertexSpace(l) : 0;
       if (first) glBufferData(GL_ARRAY_BUFFER, l, verts, input_dirty ? GL_DYNAMIC_DRAW : GL_STATIC_DRAW);
       else       glBufferSubData(GL_ARRAY_BUFFER, vbo_offset, l, verts);
     }
-    GDDebug("VertexPointer");
+    GDDebug("VertexPointer changed=", changed);
     return changed;
   }
   void TexPointer(int m, int t, int w, int o, float *tex, int l, int *out, bool dirty) {
@@ -1331,8 +1340,7 @@ struct OpenGLES2 : public GraphicsDevice, public QTWindow {
     CHECK(*out == bound_vertexbuffer);
     CHECK_LT(o, w);
     tex_attr = VertexAttribute{ m, t, w, o };
-    if (!texture_on) EnableTexture();
-    else if (shader->slot_tex >= 0) VertexAttribPointer(shader->slot_tex, tex_attr);
+    if (shader->slot_tex >= 0) VertexAttribPointer(shader->slot_tex, tex_attr);
     GDDebug("TexPointer");
   }
   void ColorPointer(int m, int t, int w, int o, float *verts, int l, int *out, bool dirty) {
@@ -1340,8 +1348,7 @@ struct OpenGLES2 : public GraphicsDevice, public QTWindow {
     CHECK(*out == bound_vertexbuffer);
     CHECK_LT(o, w);
     color_attr = VertexAttribute{ m, t, w, o };
-    if (!colorverts_on) EnableVertexColor();
-    else if (shader->slot_color >= 0) VertexAttribPointer(shader->slot_color, color_attr);
+    if (shader->slot_color >= 0) VertexAttribPointer(shader->slot_color, color_attr);
     GDDebug("ColorPointer");
   }
   void NormalPointer(int m, int t, int w, int o, float *verts, int l, int *out, bool dirty) {
@@ -1349,8 +1356,7 @@ struct OpenGLES2 : public GraphicsDevice, public QTWindow {
     CHECK(*out == bound_vertexbuffer);
     CHECK_LT(o, w);
     normal_attr = VertexAttribute{ m, t, w, o };
-    if (!normals_on) EnableNormals();
-    else if (shader->slot_normal >= 0) VertexAttribPointer(shader->slot_normal, normal_attr);
+    if (shader->slot_normal >= 0) VertexAttribPointer(shader->slot_normal, normal_attr);
     GDDebug("NormalPointer");
   }
   void VertexAttribPointer(int slot, const VertexAttribute &attr) { 
@@ -1375,16 +1381,16 @@ struct OpenGLES2 : public GraphicsDevice, public QTWindow {
   }
 
   void UpdateShader() {
-    if (cubemap_on && normals_on) UseShader(&app->video.shader_cubenorm);
-    else if          (cubemap_on) UseShader(&app->video.shader_cubemap);
-    else if          (normals_on) UseShader(&app->video.shader_normals);
-    else                          UseShader(&app->video.shader_default);
+    if (cubemap_on && normals_on) UseShader(&app->video->shader_cubenorm);
+    else if          (cubemap_on) UseShader(&app->video->shader_cubemap);
+    else if          (normals_on) UseShader(&app->video->shader_normals);
+    else                          UseShader(&app->video->shader_default);
   }
   void UpdateColor()  { ClearDeferred(); dirty_color = true; }
   void UpdateMatrix() { ClearDeferred(); dirty_matrix = true; }
   void UpdateMaterial() {
     ClearDeferred();
-    shader->dirty_material = app->video.shader_cubenorm.dirty_material = app->video.shader_normals.dirty_material = true;
+    shader->dirty_material = app->video->shader_cubenorm.dirty_material = app->video->shader_normals.dirty_material = true;
   }
   void UpdateVertex() {
     glEnableVertexAttribArray(shader->slot_position);
@@ -1455,12 +1461,14 @@ struct OpenGLES2 : public GraphicsDevice, public QTWindow {
     } else if (type == TriangleStrip) {
     } else FATAL("unknown type ", type);
 #endif
+    GDDebug("DeferDrawArrays(", type, ", ", o, ", ", n, ") deferred ", deferred.draw_calls);
   }
   void ClearDeferred() {
     if (!deferred.vertexbuffer_len) return;
-    // INFOf("merged %d %d\n", deferred.draw_calls, deferred.vertexbuffer_len / deferred.vertex_size);
+    // INFOf("merged %d %d (type = %d)\n", deferred.draw_calls, deferred.vertexbuffer_len / deferred.vertex_size, deferred.prim_type);
     glDrawArrays(deferred.prim_type, 0, deferred.vertexbuffer_len / deferred.vertex_size);
     deferred.vertexbuffer_len = deferred.draw_calls = 0;
+    GDDebug("ClearDeferred");
   }
   int AddDeferredVertexSpace(int l) {
     if (l + deferred.vertexbuffer_len > deferred.vertexbuffer_size) ClearDeferred();
@@ -1539,7 +1547,7 @@ void GraphicsDevice::Uniform3fv(int u, int n, const float *v) { glUniform3fv(u, 
 // Common layer
 void GraphicsDevice::Flush() { ClearDeferred(); glFlush(); }
 void GraphicsDevice::Clear() { glClear(GL_COLOR_BUFFER_BIT | (draw_mode == DrawMode::_3D ? GL_DEPTH_BUFFER_BIT : 0)); }
-void GraphicsDevice::ClearColor(const Color &c) { glClearColor(c.r(), c.g(), c.b(), c.a()); }
+void GraphicsDevice::ClearColor(const Color &c) { clear_color=c; glClearColor(c.r(), c.g(), c.b(), c.a()); GDDebug("ClearColor=", c.DebugString()); }
 void GraphicsDevice::PushColor() { default_color.push_back(default_color.back()); UpdateColor();  }
 void GraphicsDevice::PopColor() {
   if      (default_color.size() >= 1) default_color.pop_back();
@@ -1550,6 +1558,7 @@ void GraphicsDevice::PointSize(float n) { glPointSize(n); }
 void GraphicsDevice::LineWidth(float n) { glLineWidth(n); }
 void GraphicsDevice::DelTextures(int n, const unsigned *id) { glDeleteTextures(n, id); }
 void GraphicsDevice::GenTextures(int t, int n, unsigned *out) {
+  ClearDeferred();
   for (int i=0; i<n; i++) CHECK_EQ(0, out[i]);
   if (t == GL_TEXTURE_CUBE_MAP) glEnable(GL_TEXTURE_CUBE_MAP);
   glGenTextures(n, out);
@@ -1566,7 +1575,7 @@ void GraphicsDevice::CheckForError(const char *file, int line) {
     ERROR(file, ":", line, " gl error: ", gl_error);
     BreakHook();
 #ifdef LFL_GLES2
-    if (app->video.opengles_version == 2) {
+    if (app->video->opengles_version == 2) {
       Shader *shader = ((OpenGLES2*)screen->gd)->shader;
       glValidateProgram(shader->ID);
       glGetProgramiv(shader->ID, GL_VALIDATE_STATUS, &gl_validate_status);
@@ -1582,8 +1591,8 @@ void GraphicsDevice::CheckForError(const char *file, int line) {
 
 void GraphicsDevice::EnableDepthTest()  {  glEnable(GL_DEPTH_TEST); glDepthMask(GL_TRUE);  GDDebug("DepthTest=1"); }
 void GraphicsDevice::DisableDepthTest() { glDisable(GL_DEPTH_TEST); glDepthMask(GL_FALSE); GDDebug("DepthTest=0"); }
-void GraphicsDevice::DisableBlend() { /*ClearDeferred();*/ glDisable(GL_BLEND);                                                    GDDebug("Blend=0"); }
-void GraphicsDevice::EnableBlend()  { /*ClearDeferred();*/  glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); GDDebug("Blend=1"); }
+void GraphicsDevice::DisableBlend() { if (Changed(&blend_enabled, false)) { ClearDeferred(); glDisable(GL_BLEND);                                                    GDDebug("Blend=0"); } }
+void GraphicsDevice::EnableBlend()  { if (Changed(&blend_enabled, true )) { ClearDeferred();  glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); GDDebug("Blend=1"); } }
 void GraphicsDevice::BlendMode(int sm, int dm) { glBlendFunc(sm, dm); GDDebug("BlendMode=", sm, ",", dm); }
 void GraphicsDevice::RestoreViewport(int dm) { ViewPort(screen->Box()); DrawMode(dm); }
 void GraphicsDevice::DrawMode(int dm, bool flush) { return DrawMode(dm, screen->width, screen->height, flush); }
@@ -1649,11 +1658,12 @@ void GraphicsDevice::PopScissor() {
   auto &ss = scissor_stack.back();
   if (ss.size()) ss.pop_back();
   if (ss.size()) screen->gd->Scissor(ss.back());
-  else           glDisable(GL_SCISSOR_TEST);
+  else { ClearDeferred(); glDisable(GL_SCISSOR_TEST); }
 }
 
 void GraphicsDevice::PushScissorStack() {
   scissor_stack.push_back(vector<Box>());
+  ClearDeferred();
   glDisable(GL_SCISSOR_TEST);
 }
 
@@ -2279,7 +2289,7 @@ void Window::Close(Window *W) {
 
 Window::Window() : caption("lfapp"), fps(128) {
   id = gl = surface = glew_context = impl = user1 = user2 = user3 = 0;
-  minimized = cursor_grabbed = frame_init = 0;
+  minimized = cursor_grabbed = frame_init = animating = 0;
   target_fps = FLAGS_target_fps;
   pow2_width = NextPowerOfTwo((width = 640));
   pow2_height = NextPowerOfTwo((height = 480));
@@ -2331,7 +2341,7 @@ void Window::ClearInputBindEvents() {
 }
 
 void Window::InitLFAppConsole() {
-  lfapp_console = new Console(screen, Fonts::Get(A_or_B(FLAGS_lfapp_console_font, FLAGS_default_font), "", 9, Color::white, Color::clear, FLAGS_lfapp_console_font_flag));
+  lfapp_console = new Console(screen);
   lfapp_console->ReadHistory(LFAppDownloadDir(), "console");
   lfapp_console->Write(StrCat(screen->caption, " started"));
   lfapp_console->Write("Try console commands 'cmds' and 'flags'");
@@ -2432,7 +2442,7 @@ void Window::SwapAxis() {
   Reshaped(height, width);
 }
 
-int Window::Frame(unsigned clicks, unsigned mic_samples, bool cam_sample, int flag) {
+int Window::Frame(unsigned clicks, int flag) {
   if (screen != this) Window::MakeCurrent(this);
 
   if (FLAGS_lfapp_video) {
@@ -2448,7 +2458,7 @@ int Window::Frame(unsigned clicks, unsigned mic_samples, bool cam_sample, int fl
   }
 
   /* frame */
-  int ret = frame_cb ? frame_cb(screen, clicks, mic_samples, cam_sample, flag) : 0;
+  int ret = frame_cb ? frame_cb(screen, clicks, flag) : 0;
   ClearEvents();
 
   /* allow app to skip frame */
@@ -2456,7 +2466,7 @@ int Window::Frame(unsigned clicks, unsigned mic_samples, bool cam_sample, int fl
   fps.Add(clicks);
 
   if (FLAGS_lfapp_video) {
-    app->video.Swap();
+    app->video->Swap();
   }
   return ret;
 }
@@ -2466,7 +2476,7 @@ void Window::RenderToFrameBuffer(FrameBuffer *fb) {
   fb->Attach();
   screen->gd->ViewPort(Box(0, 0, fb->tex.width, fb->tex.height));
   screen->gd->Clear();
-  frame_cb(0, 0, 0, 0, 0);
+  frame_cb(0, 0, 0);
   fb->Release();
   screen->gd->RestoreViewport(dm);
 }
@@ -2504,7 +2514,7 @@ int Video::Init() {
 #endif
   GLenum glew_err;
   if ((glew_err = glewInit()) != GLEW_OK) { ERROR("glewInit: ", glewGetErrorString(glew_err)); return -1; }
-  app->video.opengl_framebuffer = GLEW_EXT_framebuffer_object;
+  app->video->opengl_framebuffer = GLEW_EXT_framebuffer_object;
 #endif
 
   const char *glslver = (const char *)glGetString(GL_SHADING_LANGUAGE_VERSION);
@@ -2532,12 +2542,12 @@ int Video::Init() {
   InitGraphicsDevice(screen);
 
 #ifndef WIN32
-  if (splash_color) {
-    screen->gd->ClearColor(*splash_color);
+  if (app->splash_color) {
+    screen->gd->ClearColor(*app->splash_color);
     screen->gd->Clear();
     screen->gd->Flush();
     Swap();
-    screen->gd->ClearColor(Color::black);
+    screen->gd->ClearColor(screen->gd->clear_color);
   }
 #endif
   return 0;
@@ -2572,7 +2582,7 @@ void Video::CreateGraphicsDevice(Window *W) {
   CHECK(!W->gd);
 #if !defined(LFL_HEADLESS) && !defined(LFL_QT)
 #ifdef LFL_GLES2
-  if (app->video.opengles_version == 2) W->gd = new OpenGLES2();
+  if (app->video->opengles_version == 2) W->gd = new OpenGLES2();
   else
 #endif
     W->gd = new OpenGLES1();
@@ -2592,49 +2602,44 @@ void Video::InitGraphicsDevice(Window *W) {
   W->gd->Light(0, GraphicsDevice::Specular, white);
   W->gd->Material(GraphicsDevice::Emission, black);
   W->gd->Material(GraphicsDevice::Specular, grey20);
-  INFO("opengl_init: width=", W->width, ", height=", W->height, ", opengles_version: ", app->video.opengles_version);
+  INFO("opengl_init: width=", W->width, ", height=", W->height, ", opengles_version: ", app->video->opengles_version);
 }
 
 void Video::InitFonts() {
-  if (FLAGS_default_font.size()) {}
-  else if (FLAGS_font_engine == "coretext") {
-#ifdef LFL_IPHONE
-    FLAGS_default_font = "Menlo-Bold";
-    FLAGS_default_font_size = 12;
-#else
-    FLAGS_default_font = "Monaco";
-    FLAGS_default_font_size = 15;
-#endif
-  } else if (FLAGS_font_engine == "gdi") {
-    FLAGS_default_font = "Consolas";
-    FLAGS_default_font_size = 17;
-    // FLAGS_default_font_flag = FontDesc::Bold | FontDesc::Mono;
-  } else if (FLAGS_font_engine == "freetype") {
-    FLAGS_default_font = "VeraMoBd.ttf"; // "DejaVuSansMono-Bold.ttf";
-    FLAGS_default_missing_glyph = 42;
-  } else if (FLAGS_font_engine == "atlas") {
-    FLAGS_default_font = "VeraMoBd.ttf";
-    FLAGS_default_missing_glyph = 42;
-    // FLAGS_default_font_size = 32;
-  }
+  FontEngine *font_engine = Fonts::DefaultFontEngine();
+  if (!FLAGS_default_font.size()) font_engine->SetDefault();
 
   vector<string> atlas_font_size;
   Split(FLAGS_atlas_font_sizes, iscomma, &atlas_font_size);
-  FontEngine *font_engine = Fonts::DefaultFontEngine();
   for (int i=0; i<atlas_font_size.size(); i++) {
     int size = atoi(atlas_font_size[i].c_str());
     font_engine->Init(FontDesc(FLAGS_default_font, FLAGS_default_font_family, size, Color::white, Color::clear, FLAGS_default_font_flag));
   }
 
   FontEngine *atlas_engine = Singleton<AtlasFontEngine>::Get();
-  atlas_engine->Init(FontDesc("MenuAtlas", "", 0, Color::black, Color::clear, 0, 0));
+  atlas_engine->Init(FontDesc("MenuAtlas", "", 0, Color::white, Color::clear, 0, 0));
 
-  if (FLAGS_lfapp_console && FLAGS_font_engine != "atlas" && FLAGS_font_engine != "freetype") {
-    FLAGS_atlas_font_sizes = "32";
-    string console_font = "VeraMoBd.ttf";
-    Singleton<AtlasFontEngine>::Get()->Init(FontDesc(console_font, "", 32, Color::white, Color::clear, FLAGS_lfapp_console_font_flag));
-    FLAGS_lfapp_console_font = StrCat("atlas://", console_font);
-  }
+  if (FLAGS_lfapp_console && FLAGS_font_engine != "atlas" && FLAGS_font_engine != "freetype") VeraMoBdAtlas::SetConsoleDefault();
+}
+
+int Video::InitFontWidth() {
+#if defined(WIN32)
+  return 8;
+#elif defined(__APPLE__)
+  return 9;
+#else
+  return 10;
+#endif
+}
+
+int Video::InitFontHeight() {
+#if defined(WIN32)
+  return 17;
+#elif defined(__APPLE__)
+  return 20;
+#else
+  return 18;
+#endif
 }
 
 int Video::Swap() {

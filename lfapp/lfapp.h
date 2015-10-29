@@ -195,8 +195,10 @@ extern int optind;
 namespace LFL {
 using LFL_STL11_NAMESPACE::isinf;
 using LFL_STL11_NAMESPACE::isnan;
-typedef function<void()> Callback;
+typedef void* Void;
 typedef lock_guard<mutex> ScopedMutex;
+typedef function<void()> Callback;
+typedef function<void(const string&)> StringCB;
 template <class X> struct Singleton { static X *Get() { static X instance; return &instance; } };
 void Log(int level, const char *file, int line, const string &m);
 }; // namespace LFL
@@ -252,7 +254,9 @@ struct Module {
 namespace LFL {
 bool Running();
 bool MainThread();
+bool MainProcess();
 void RunInMainThread(Callback *cb);
+void RunInNetworkThread(const Callback &cb);
 void DefaultLFAppWindowClosedCB(Window *);
 double FPS();
 double CamFPS();
@@ -463,12 +467,12 @@ namespace LFL {
 ::std::ostream& operator<<(::std::ostream& os, const point &x);
 ::std::ostream& operator<<(::std::ostream& os, const Box   &x);
 
-struct FrameRateLimitter {
+struct RateLimiter {
   int *target_hz;
   float avgframe;
   Timer timer;
   RollingAvg<unsigned> sleep_bias;
-  FrameRateLimitter(int *HZ) : target_hz(HZ), avgframe(0), sleep_bias(32) {}
+  RateLimiter(int *HZ) : target_hz(HZ), avgframe(0), sleep_bias(32) {}
   void Limit() {
     Time since = timer.GetTime(true), targetframe(1000 / *target_hz);
     Time sleep = max(Time(0), targetframe - since - FMilliseconds(sleep_bias.Avg()));
@@ -477,7 +481,7 @@ struct FrameRateLimitter {
 };
 
 struct FrameScheduler {
-  FrameRateLimitter maxfps;
+  RateLimiter maxfps;
   mutex frame_mutex, wait_mutex;
   SocketWakeupThread wakeup_thread;
   SelectSocketSet wait_forever_sockets;
@@ -494,6 +498,7 @@ struct FrameScheduler {
   bool WakeupIn(void*, Time interval, bool force=0);
   void ClearWakeupIn();
   void UpdateTargetFPS(int fps);
+  void SetAnimating(bool);
   void AddWaitForeverMouse();
   void DelWaitForeverMouse();
   void AddWaitForeverKeyboard();
@@ -503,19 +508,19 @@ struct FrameScheduler {
 };
 
 struct BrowserInterface {
-  virtual void Draw(Box *viewport) = 0;
+  virtual void Draw(const Box&) = 0;
   virtual void Open(const string &url) = 0;
   virtual void Navigate(const string &url) { Open(url); }
   virtual Asset *OpenImage(const string &url) { return 0; }
   virtual void OpenStyleImport(const string &url) {}
   virtual void MouseMoved(int x, int y) = 0;
-  virtual void MouseButton(int b, bool d) = 0;
+  virtual void MouseButton(int b, bool d, int x, int y) = 0;
   virtual void MouseWheel(int xs, int ys) = 0;
   virtual void KeyEvent(int key, bool down) = 0;
   virtual void BackButton() = 0;
   virtual void ForwardButton() = 0;
   virtual void RefreshButton() = 0;
-  virtual string GetURL() = 0;
+  virtual string GetURL() const = 0;
 };
 
 struct JSContext {
@@ -561,18 +566,23 @@ struct Application : public ::LFApp, public Module {
   ThreadPool thread_pool;
   CallbackQueue message_queue;
   FrameScheduler scheduler;
+  NetworkThread *network_thread=0;
+  ProcessAPIClient *render_process=0;
+  ProcessAPIServer *main_process=0;
   Callback reshaped_cb, create_win_f;
   function<void(Window*)> window_init_cb, window_closed_cb;
-  Audio audio;
-  Video video;
-  Input input;
-  Assets assets;
-  Network network;
-  Camera camera;
-  CUDA cuda;
-  Shell shell;
-  vector<Module*> modules;
   CategoricalVariable<int> tex_mode, grab_mode, fill_mode;
+  const Color *splash_color = &Color::black;
+  Shell shell;
+
+  vector<Module*> modules;
+  Audio *audio=0;
+  Video *video=0;
+  Input *input=0;
+  Assets *assets=0;
+  Network *network=0;
+  Camera *camera=0;
+  CUDA *cuda=0;
 
   Application() : create_win_f(bind(&Application::CreateNewWindow, this, function<void(Window*)>())),
   window_closed_cb(DefaultLFAppWindowClosedCB), tex_mode(2, 1, 0), grab_mode(2, 0, 1),
@@ -582,7 +592,7 @@ struct Application : public ::LFApp, public Module {
   void Log(int level, const char *file, int line, const string &message);
   void CreateNewWindow(const Window::StartCB &start_cb = Window::StartCB());
   void StartNewWindow(Window *new_window);
-  NetworkThread *CreateNetworkThread(bool detach_existing_module);
+  NetworkThread *CreateNetworkThread(bool detach_existing_module, bool start);
   void LaunchNativeFontChooser(const FontDesc &cur_font, const string &choose_cmd);
   void LaunchNativeMenu(const string &title);
   void AddNativeMenu(const string &title, const vector<MenuItem>&items);

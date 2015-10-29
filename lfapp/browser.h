@@ -16,20 +16,34 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef __LFL_LFAPP_BROWSER_H__
-#define __LFL_LFAPP_BROWSER_H__
+#ifndef LFL_LFAPP_BROWSER_H__
+#define LFL_LFAPP_BROWSER_H__
 namespace LFL {
+
+struct BrowserController : public InputController {
+  BrowserInterface *browser;
+  BrowserController(BrowserInterface *B) : browser(B) { active=1; }
+  void Input(InputEvent::Id event, bool down) {
+    int key = InputEvent::GetKey(event);
+    if (key)                                 browser->KeyEvent(key, down);
+    else if (event == Mouse::Event::Motion)  browser->MouseMoved(screen->mouse.x, screen->mouse.y);
+    else if (event == Mouse::Event::Wheel)   browser->MouseWheel(0, down*32);
+    else if (event == Mouse::Event::Button1) browser->MouseButton(1, down, screen->mouse.x, screen->mouse.y);
+    else if (event == Mouse::Event::Button2) browser->MouseButton(2, down, screen->mouse.x, screen->mouse.y);
+  }
+};
 
 namespace DOM {
 struct Renderer : public Object {
   FloatContainer box;
-  ComputedStyle style;
+  ComputedStyle style, inline_style;
+  LFL::StyleSheet *inline_style_sheet=0;
   bool style_dirty=1, layout_dirty=1;
   Flow *flow=0, *parent_flow=0, child_flow;
   DOM::Node *absolute_parent=0;
   shared_ptr<Texture> background_image;
   DrawableBoxArray child_box, child_bg;
-  Tiles *tiles=0;
+  TilesInterface *tiles=0;
 
   Box content, padding, border, margin, clip_rect;
   Color color, background_color, border_top, border_bottom, border_right, border_left, outline;
@@ -44,7 +58,8 @@ struct Renderer : public Object {
   int lineheight_px=0, charspacing_px=0, wordspacing_px=0, valign_px=0, bgposition_x=0, bgposition_y=0, bs_t=0, bs_b=0, bs_r=0, bs_l=0, os=0;
   int clear_height=0, row_height=0, cell_colspan=0, cell_rowspan=0, extra_cell_height=0, max_child_i=-1;
 
-  Renderer(Node *N) : style(N) {}
+  Renderer(Node *N) : style(N), inline_style(N) {}
+  virtual ~Renderer() { delete inline_style_sheet; }
 
   void  UpdateStyle(Flow *F);
   Font* UpdateFont(Flow *F);
@@ -56,27 +71,29 @@ struct Renderer : public Object {
   void PushScissor(const Box &w);
   void Finish();
 
-  bool Dirty() { return style_dirty || layout_dirty; }
-  void InputActivate() { style.node->ownerDocument->gui->Activate(); }
-  int TopBorderOffset    () { return pt_px + bt_px; }
-  int RightBorderOffset  () { return pr_px + br_px; }
-  int BottomBorderOffset () { return pb_px + bb_px; }
-  int LeftBorderOffset   () { return pl_px + bl_px; }
-  int TopMarginOffset    () { return mt_px + TopBorderOffset(); }
-  int RightMarginOffset  () { return mr_px + RightBorderOffset(); }
-  int BottomMarginOffset () { return mb_px + BottomBorderOffset(); }
-  int LeftMarginOffset   () { return ml_px + LeftBorderOffset(); }
-  point MarginPosition   () { return -point(LeftMarginOffset(), BottomMarginOffset()); }
-  Border PaddingOffset   () { return Border(pt_px, pr_px, pb_px, pl_px); }
-  Border BorderOffset    () { return Border(TopBorderOffset(), RightBorderOffset(), BottomBorderOffset(), LeftBorderOffset()); }
-  Border MarginOffset    () { return Border(TopMarginOffset(), RightMarginOffset(), BottomMarginOffset(), LeftMarginOffset()); }
-  int MarginWidth        () { return LeftMarginOffset() + RightMarginOffset(); }
-  int MarginHeight       () { return TopMarginOffset () + BottomMarginOffset(); }
-  int MarginBoxWidth     () { return width_auto ? 0 : (width_px + MarginWidth()); }
-  int WidthAuto       (Flow *flow)        { return max(0, flow->container->w - MarginWidth()); }
-  int MarginCenterAuto(Flow *flow, int w) { return max(0, flow->container->w - bl_px - pl_px - w - br_px - pr_px) / 2; }
-  int MarginLeftAuto  (Flow *flow, int w) { return max(0, flow->container->w - bl_px - pl_px - w - RightMarginOffset()); } 
-  int MarginRightAuto (Flow *flow, int w) { return max(0, flow->container->w - br_px - pr_px - w - LeftMarginOffset()); } 
+  bool Dirty() const { return style_dirty || layout_dirty; }
+  int TopBorderOffset    () const { return pt_px + bt_px; }
+  int RightBorderOffset  () const { return pr_px + br_px; }
+  int BottomBorderOffset () const { return pb_px + bb_px; }
+  int LeftBorderOffset   () const { return pl_px + bl_px; }
+  int TopMarginOffset    () const { return mt_px + TopBorderOffset(); }
+  int RightMarginOffset  () const { return mr_px + RightBorderOffset(); }
+  int BottomMarginOffset () const { return mb_px + BottomBorderOffset(); }
+  int LeftMarginOffset   () const { return ml_px + LeftBorderOffset(); }
+  point MarginPosition   () const { return -point(LeftMarginOffset(), BottomMarginOffset()); }
+  Border PaddingOffset   () const { return Border(pt_px, pr_px, pb_px, pl_px); }
+  Border BorderOffset    () const { return Border(TopBorderOffset(), RightBorderOffset(), BottomBorderOffset(), LeftBorderOffset()); }
+  Border MarginOffset    () const { return Border(TopMarginOffset(), RightMarginOffset(), BottomMarginOffset(), LeftMarginOffset()); }
+  int MarginWidth        () const { return LeftMarginOffset() + RightMarginOffset(); }
+  int MarginHeight       () const { return TopMarginOffset () + BottomMarginOffset(); }
+  int MarginBoxWidth     () const { return width_auto ? 0 : (width_px + MarginWidth()); }
+  int WidthAuto       (Flow *flow)        const { return max(0, flow->container->w - MarginWidth()); }
+  int MarginCenterAuto(Flow *flow, int w) const { return max(0, flow->container->w - bl_px - pl_px - w - br_px - pr_px) / 2; }
+  int MarginLeftAuto  (Flow *flow, int w) const { return max(0, flow->container->w - bl_px - pl_px - w - RightMarginOffset()); } 
+  int MarginRightAuto (Flow *flow, int w) const { return max(0, flow->container->w - br_px - pr_px - w - LeftMarginOffset()); }
+  void ComputeStyle(StyleContext *style_context, ComputedStyle *out, const ComputedStyle *parent=0) const {
+    style_context->Match(out, style.node, parent, inline_style_sheet);
+  }
 }; }; // namespace DOM
 
 struct Browser : public BrowserInterface {
@@ -89,55 +106,75 @@ struct Browser : public BrowserInterface {
     JSContext *js_context=0;
     Console *js_console=0;
     int height=0;
-    GUI gui;
-    Widget::Scrollbar v_scrollbar, h_scrollbar;
 
     ~Document();
     Document(Window *W=0, const Box &V=Box());
+    bool Dirty() const    { if (node) if (auto html = node->documentElement()) return html->render->layout_dirty || html->render->style_dirty; return 0; }
+    void SetLayoutDirty() { if (node) if (auto html = node->documentElement()) html->render->layout_dirty = true; }
+    void SetStyleDirty () { if (node) if (auto html = node->documentElement()) html->render->style_dirty  = true; }
     void Clear();
   };
-  struct RenderLog { string data; int indent; };
+  struct RenderLog {
+    string data; int indent=0;
+    void Clear() { data.clear(); indent=0; }
+  };
 
-  Layers layers;
   Document doc;
+  LayersInterface *layers=0;
   RenderLog *render_log=0;
   Texture missing_image;
-  point mouse, initial_displacement;
-  Browser(Window *W=0, const Box &V=Box());
+  point dim, mouse, initial_displacement;
+  Box viewport;
+  Widget::Scrollbar v_scrollbar, h_scrollbar;
+  StringCB url_cb;
 
-  Box Viewport() const { return doc.gui.box; }
+  Browser(GUI *gui=0, const Box &V=Box());
+
   void Navigate(const string &url);
   void Open(const string &url);
   void KeyEvent(int key, bool down);
   void MouseMoved(int x, int y);
-  void MouseButton(int b, bool d);
+  void MouseButton(int b, bool d, int x, int y);
   void MouseWheel(int xs, int ys);
   void BackButton() {}
   void ForwardButton() {}
   void RefreshButton() {}
   void AnchorClicked(DOM::HTMLAnchorElement *anchor);
-  void InitLayers() { layers.Init(2); }
-  string GetURL() { return String::ToUTF8(doc.node->URL); }
+  void SetClearColor(const Color &c);
+  void SetViewport(int w, int h);
+  void SetDocsize(int w, int h) { /*doc.width=w;*/ doc.height=h; } 
+  Box Viewport() const { return Box(viewport.Dimension()); }
+  int VScrolled() const { return v_scrollbar.scrolled * X_or_Y(v_scrollbar.doc_height, 1000); }
+  int HScrolled() const { return h_scrollbar.scrolled * 1000; }
+  void InitLayers(LayersInterface *l) { CHECK(!layers); (layers = l)->Init(2); }
+  void PaintTile(int x, int y, int z, const MultiProcessPaintResource &paint);
+  string GetURL() const { return String::ToUTF8(doc.node->URL); }
+  void SetURLText(const string &s) { if (url_cb) url_cb(s); }
 
-  bool Dirty(Box *viewport);
-  void Draw(Box *viewport);
-  void Draw(Box *viewport, bool dirty);
-  void Draw(Flow *flow, const point &displacement);
-  void DrawScrollbar();
+  void Layout(const Box &b);
+  void Draw(const Box &b);
+  void UpdateScrollbar();
+  void Render(bool screen_coords=0, int v_scrolled=0);
 
-  void       DrawNode        (Flow *flow, DOM::Node*, const point &displacement);
+  void       EventNode       (DOM::Node*, const point &displacement, int);
+  void       Paint           (Flow *flow, const point &displacement);
+  void       PaintNode       (Flow *flow, DOM::Node*, const point &displacement);
   DOM::Node *LayoutNode      (Flow *flow, DOM::Node*, bool reflow);
   void       LayoutBackground(            DOM::Node*);
   void       LayoutTable     (Flow *flow, DOM::HTMLTableElement *n);
   void       UpdateTableStyle(Flow *flow, DOM::Node *n);
   void       UpdateRenderLog (            DOM::Node *n);
 
+  void VisitChildren        (DOM::Node *n, const function<bool(DOM::Node*)>&);
+  void VisitTableChildren   (DOM::Node *n, const function<bool(DOM::Node*)>&);
+  void VisitFloatingChildren(DOM::Node *n, const function<bool(DOM::Node*, const FloatContainer::Float&)>&);
+
   static int ScreenToWebKitY(const Box &w) { return -w.y - w.h; }
 };
 
-BrowserInterface *CreateQTWebKitBrowser(Asset *a);
-BrowserInterface *CreateBerkeliumBrowser(Asset *a, int w=1024, int h=1024);
-BrowserInterface *CreateDefaultBrowser(Window *W, Asset *a, int w=1024, int h=1024);
+BrowserInterface *CreateQTWebKitBrowser (GUI *g, int w=1024, int h=1024);
+BrowserInterface *CreateBerkeliumBrowser(GUI *g, int w=1024, int h=1024);
+BrowserInterface *CreateDefaultBrowser  (GUI *g, int w=1024, int h=1024);
 
 }; // namespace LFL
-#endif // __LFL_LFAPP_BROWSER_H__
+#endif // LFL_LFAPP_BROWSER_H__

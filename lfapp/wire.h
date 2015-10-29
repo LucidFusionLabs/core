@@ -18,8 +18,8 @@
 
 #ifndef __LFL_LFAPP_WIRE_H__
 #define __LFL_LFAPP_WIRE_H__
-namespace LFL {
 
+namespace LFL {
 struct Protocol { 
   enum { TCP=1, UDP=2, UNIX=3, GPLUS=4 }; int p;
   static const char *Name(int p);
@@ -264,98 +264,112 @@ struct SMTP {
   }
 };
 
-struct InterProcessProtocol {
-  struct Header : public Serializable::Header {};
-  struct ResourceHandle {
-    unsigned short type=0; int len=0; string url;
-    ResourceHandle() {}
-    ResourceHandle(unsigned short T, int L, const string &U) : type(T), len(L), url(U) {}
-  };
-  struct LoadResourceRequest : public Serializable {
-    static const int Type = 1;
-    ResourceHandle mpb;
-    LoadResourceRequest(unsigned short t=0, const string &u=string(), int l=0) : Serializable(Type), mpb(t, l, u) {}
-
-    int HeaderSize() const { return 8; }
-    int Size() const { return HeaderSize() + mpb.url.size(); }
-    void Out(Serializable::Stream *o) const { o->Htons(mpb.type); o->Htons((unsigned short)mpb.url.size()); o->Htonl(mpb.len); o->String(mpb.url); }
-    int   In(const Serializable::Stream *i) { unsigned short l; i->Ntohs(&mpb.type); i->Ntohs(&l); i->Ntohl(&mpb.len); mpb.url.assign(i->Get(l), l); return i->Result(); }
-  };
-  struct LoadResourceResponse : public Serializable {
-    static const int Type = 2;
-    unsigned char success;
-    LoadResourceResponse(bool s=0) : Serializable(Type), success(s) {}
-
-    int HeaderSize() const { return 1; }
-    int Size() const { return HeaderSize(); }
-    void Out(Serializable::Stream *o) const { o->Write8(success); }
-    int   In(const Serializable::Stream *i) { i->Read8(&success); return i->Result(); }
-  };
-  struct AllocateResponseRequest : public Serializable { 
-    static const int Type = 3;
-    int bytes; unsigned short type;
-    AllocateResponseRequest(unsigned short t=0, int b=0) : Serializable(Type), bytes(b), type(t) {}
-
-    int HeaderSize() const { return 4; }
-    int Size() const { return HeaderSize(); }
-    void Out(Serializable::Stream *o) const { o->Htonl( bytes); }
-    int   In(const Serializable::Stream *i) { i->Ntohl(&bytes); return i->Result(); }
-  };
-  struct AllocateResponseResponse : public Serializable {
-    static const int Type = 4;
-    ResourceHandle mpb;
-    AllocateResponseResponse(unsigned short t=0, const string &u=string(), int l=0) : Serializable(Type), mpb(t, l, u) {}
-
-    int HeaderSize() const { return 8; }
-    int Size() const { return HeaderSize() + mpb.url.size(); }
-    void Out(Serializable::Stream *o) const { o->Htons(mpb.type); o->Htons((unsigned short)mpb.url.size()); o->Htonl(mpb.len); o->String(mpb.url); }
-    int   In(const Serializable::Stream *i) { unsigned short l; i->Ntohs(&mpb.type); i->Ntohs(&l); i->Ntohl(&mpb.len); mpb.url.assign(i->Get(l), l); return i->Result(); }
-  };
+struct MultiProcessResource {
+  static bool Read(const MultiProcessBuffer &mpb, int type, Serializable *out);
 };
 
-struct MultiProcessResource {
-  struct File : public Serializable {
-    static const int Type = 1<<11 | 1;
-    StringPiece buf, name, type;
-    File() : Serializable(Type) {}
-    File(const string &b, const string &n, const string &t) : Serializable(Type), buf(b), name(n), type(t) {}
+struct MultiProcessFileResource : public Serializable {
+  static const int Type = 1<<11 | 1;
+  StringPiece buf, name, type;
+  MultiProcessFileResource() : Serializable(Type) {}
+  MultiProcessFileResource(const string &b, const string &n, const string &t) : Serializable(Type), buf(b), name(n), type(t) {}
 
-    int HeaderSize() const { return sizeof(int) * 3; }
-    int Size() const { return HeaderSize() + 3 + buf.size() + name.size() + type.size(); }
+  int HeaderSize() const { return sizeof(int) * 3; }
+  int Size() const { return HeaderSize() + 3 + buf.size() + name.size() + type.size(); }
 
-    void Out(Serializable::Stream *o) const {
-      o->Htonl   (buf.size()); o->Htonl   (name.size()); o->Htonl   (type.size());
-      o->NTString(buf);        o->NTString(name);        o->NTString(type);
-    }
-    int In(const Serializable::Stream *i) {
-      /**/      i->Ntohl(&buf.len); /**/         i->Ntohl(&name.len); /**/         i->Ntohl(&type.len);
-      buf.buf = i->Get  ( buf.len+1); name.buf = i->Get  ( name.len+1); type.buf = i->Get  ( type.len+1);
-      return i->Result();
-    }
-  };
-  struct Texture : public Serializable {
-    static const int Type = 1<<11 | 2;
-    int width, height, pf, linesize;
+  void Out(Serializable::Stream *o) const {
+    o->Htonl   (buf.size()); o->Htonl   (name.size()); o->Htonl   (type.size());
+    o->NTString(buf);        o->NTString(name);        o->NTString(type);
+  }
+  int In(const Serializable::Stream *i) {
+    /**/      i->Ntohl(&buf.len); /**/         i->Ntohl(&name.len); /**/         i->Ntohl(&type.len);
+    buf.buf = i->Get  ( buf.len+1); name.buf = i->Get  ( name.len+1); type.buf = i->Get  ( type.len+1);
+    return i->Result();
+  }
+};
+
+struct MultiProcessTextureResource : public Serializable {
+  static const int Type = 1<<11 | 2;
+  int width, height, pf, linesize;
+  StringPiece buf;
+  MultiProcessTextureResource() : Serializable(Type), width(0), height(0), pf(0), linesize(0) {}
+  MultiProcessTextureResource(const LFL::Texture &t) : Serializable(Type), width(t.width), height(t.height), pf(t.pf), linesize(t.LineSize()),
+  buf(reinterpret_cast<const char *>(t.buf), t.BufferSize()) {}
+
+  int HeaderSize() const { return sizeof(int) * 4; }
+  int Size() const { return HeaderSize() + buf.size(); }
+
+  void Out(Serializable::Stream *o) const {
+    CHECK_EQ(linesize * height, buf.len);
+    o->Htonl(width); o->Htonl(height); o->Htonl(pf); o->Htonl(linesize);
+    o->String(buf);
+  }
+  int In(const Serializable::Stream *i) {
+    i->Ntohl(&width); i->Ntohl(&height); i->Ntohl(&pf); i->Ntohl(&linesize);
+    buf.buf = i->Get((buf.len = linesize * height));
+    return i->Result();
+  }
+};
+
+struct MultiProcessPaintResource : public Serializable {
+  static const int Type = 1<<11 | 3;
+  struct Iterator {
+    int offset=0, type=0;
     StringPiece buf;
-    Texture() : Serializable(Type), width(0), height(0), pf(0), linesize(0) {}
-    Texture(const LFL::Texture &t) : Serializable(Type), width(t.width), height(t.height), pf(t.pf), linesize(t.LineSize()),
-    buf(reinterpret_cast<const char *>(t.buf), t.BufferSize()) {}
-
-    int HeaderSize() const { return sizeof(int) * 4; }
-    int Size() const { return HeaderSize() + buf.size(); }
-
-    void Out(Serializable::Stream *o) const {
-      CHECK_EQ(linesize * height, buf.len);
-      o->Htonl(width); o->Htonl(height); o->Htonl(pf); o->Htonl(linesize);
-      o->String(buf);
-    }
-    int In(const Serializable::Stream *i) {
-      i->Ntohl(&width); i->Ntohl(&height); i->Ntohl(&pf); i->Ntohl(&linesize);
-      buf.buf = i->Get((buf.len = linesize * height));
-      return i->Result();
-    }
+    Iterator(const StringPiece &b) : buf(b) { Load(); }
+    template <class X> const X* Get() { return reinterpret_cast<const X*>(buf.buf + offset); }
+    void Load() { type = (offset + sizeof(int) > buf.len) ? 0 : *Get<int>(); }
+    void Next() { offset += CmdSize(type); Load(); }
   };
-  static bool Read(const MultiProcessBuffer &mpb, int type, Serializable *out);
+
+  UNALIGNED_struct Cmd { int type; Cmd(int T=0) : type(T) {} }; UNALIGNED_END(Cmd, 4);
+  UNALIGNED_struct SetAttr : public Cmd {
+    static const int Type=1, Size=76;
+    int font_id, tex_id; Color fg, bg; Box scissor; bool underline, overline, midline, blink, blend, hfg, hbg, hs;
+    SetAttr(const Drawable::Attr &a=Drawable::Attr()) : Cmd(Type), font_id(a.font?IPCClientFontEngine::GetId(a.font):0),
+      tex_id(a.tex?a.tex->ID:0), fg(a.fg?*a.fg:Color()), bg(a.bg?*a.bg:Color()), scissor(a.scissor?*a.scissor:Box()),
+      underline(a.underline), overline(a.overline), midline(a.midline), blink(a.blink), blend(a.blend),
+      hfg(a.fg), hbg(a.bg), hs(a.scissor) {}
+    void Update(Drawable::Attr *o, ProcessAPIClient *s) const;
+  }; UNALIGNED_END(SetAttr, SetAttr::Size);
+
+  UNALIGNED_struct InitDrawBox        : public Cmd { static const int Type=2, Size=12; point p;       InitDrawBox       (const point &P=point())       : Cmd(Type), p(P) {} };         UNALIGNED_END(InitDrawBox,        InitDrawBox::Size);
+  UNALIGNED_struct InitDrawBackground : public Cmd { static const int Type=3, Size=12; point p;       InitDrawBackground(const point &P=point())       : Cmd(Type), p(P) {} };         UNALIGNED_END(InitDrawBackground, InitDrawBackground::Size);
+  UNALIGNED_struct DrawBox            : public Cmd { static const int Type=4, Size=32; Box b; int id; DrawBox           (const Box &B=Box(), int ID=0) : Cmd(Type), b(B), id(ID) {} }; UNALIGNED_END(DrawBox,            DrawBox::Size);
+  UNALIGNED_struct DrawBackground     : public Cmd { static const int Type=5, Size=28; Box b;         DrawBackground    (const Box &B=Box())           : Cmd(Type), b(B) {} };         UNALIGNED_END(DrawBackground,     DrawBackground::Size);
+  UNALIGNED_struct PushScissor        : public Cmd { static const int Type=6, Size=28; Box b;         PushScissor       (const Box &B=Box())           : Cmd(Type), b(B) {} };         UNALIGNED_END(PushScissor,        PushScissor::Size);
+  UNALIGNED_struct PopScissor         : public Cmd { static const int Type=7, Size=4;                 PopScissor        ()                             : Cmd(Type) {} };               UNALIGNED_END(PopScissor,         PopScissor::Size);
+
+  StringBuffer data;
+  mutable Drawable::Attr attr;
+  MultiProcessPaintResource() : Serializable(Type) {}
+  void Out(Serializable::Stream *o) const { o->BString(data.buf); }
+  int In(const Serializable::Stream *i) { i->ReadString(&data.buf); return i->Result(); }
+  int Size() const { return HeaderSize() + data.buf.size(); }
+  int HeaderSize() const { return sizeof(int); }
+  int Run(const Box&) const;
+
+  static int CmdSize(int n) {
+    switch(n) {
+      case SetAttr           ::Type: return SetAttr           ::Size;
+      case InitDrawBox       ::Type: return InitDrawBox       ::Size;
+      case InitDrawBackground::Type: return InitDrawBackground::Size;
+      case DrawBox           ::Type: return DrawBox           ::Size;
+      case DrawBackground    ::Type: return DrawBackground    ::Size;
+      case PushScissor       ::Type: return PushScissor       ::Size;
+      case PopScissor        ::Type: return PopScissor        ::Size;
+      default:                       FATAL("unknown cmd ", n);
+    }
+  }
+};
+
+struct MultiProcessPaintResourceBuilder : public MultiProcessPaintResource {
+  int count=0; bool dirty=0;
+  MultiProcessPaintResourceBuilder(int S=32768) { data.Resize(S); }
+  int Count() const { return count; }
+  void Clear() { data.Clear(); count=0; dirty=0; }
+  void Add(const Cmd &cmd) { data.Add(&cmd, CmdSize(cmd.type)); count++; dirty=1; }
+  void AddList(const MultiProcessPaintResourceBuilder &x) { data.Add(x.data.begin(), x.data.size()); count += x.count; dirty=1; }
 };
 
 struct GameProtocol {

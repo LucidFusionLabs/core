@@ -94,21 +94,22 @@ void Widget::Button::LayoutComplete(Flow *flow, const Box &b) {
     flow->SetFGColor(outline);
     flow->out->PushBack(box, flow->cur_attr, Singleton<BoxOutline>::Get());
   }
-  point save_p = flow->p;
-  flow->SetFont(font);
-  flow->SetFGColor(0);
-  flow->p = box.Position() + point(Box(0, 0, box.w, box.h).centerX(textsize.x), 0);
-  flow->AppendText(text);
-  flow->p = save_p;
+  if (!text.empty()) {
+    point save_p = flow->p;
+    flow->SetFont(font);
+    flow->SetFGColor(0);
+    flow->p = box.Position() + point(Box(0, 0, box.w, box.h).centerX(textsize.x), 0);
+    flow->AppendText(text);
+    flow->p = save_p;
+  }
 }
 
-Widget::Scrollbar::Scrollbar(GUI *Gui, Box window, int f) : Interface(Gui), win(window), flag(f), menuicon(Fonts::Get("MenuAtlas", "", 0, Color::black, Color::clear, 0)) {
+Widget::Scrollbar::Scrollbar(GUI *Gui, Box window, int f) : Interface(Gui), win(window), flag(f), menuicon(Fonts::Get("MenuAtlas", "", 0, Color::white, Color::clear, 0)) {
   if (win.w && win.h) { if (f & Flag::Attached) LayoutAttached(win); else LayoutFixed(win); }
 }
 
 void Widget::Scrollbar::LayoutAttached(const Box &w) {
   win = w;
-  win.y = -win.h;
   int aw = dot_size, ah = dot_size;
   bool flip = flag & Flag::Horizontal;
   if (flip) win.h = ah;
@@ -130,7 +131,7 @@ void Widget::Scrollbar::Layout(int aw, int ah, bool flip) {
   else      { arrow_up.h = ah; win.h -= 2*ah; arrow_up.y += win.h; }
 
   if (gui) {
-    int attr_id = gui->child_box.attr.GetAttrId(Drawable::Attr(menuicon));
+    int attr_id = gui->child_box.attr.GetAttrId(Drawable::Attr(menuicon, NULL, NULL, false, true));
     gui->child_box.PushBack(arrow_up,   attr_id, menuicon ? menuicon->FindGlyph(flip ? 2 : 4) : 0);
     gui->child_box.PushBack(arrow_down, attr_id, menuicon ? menuicon->FindGlyph(flip ? 3 : 1) : 0);
     gui->child_box.PushBack(scroll_dot, attr_id, menuicon ? menuicon->FindGlyph(           5) : 0, &drawbox_ind);
@@ -143,7 +144,7 @@ void Widget::Scrollbar::Layout(int aw, int ah, bool flip) {
 }
 
 void Widget::Scrollbar::Update(bool force) {
-  if (!app->input.MouseButton1Down()) dragging = false;
+  if (!app->input || !app->input->MouseButton1Down()) dragging = false;
   if (!dragging && !dirty && !force) return;
   bool flip = flag & Flag::Horizontal;
   int aw = dot_size, ah = dot_size;
@@ -160,6 +161,12 @@ float Widget::Scrollbar::AddScrollDelta(float cur_val) {
   scrolled = Clamp(cur_val + ScrollDelta(), 0, 1);
   if (EqualChanged(&last_scrolled, scrolled)) dirty = 1;
   return scrolled;
+}
+  
+void Widget::Scrollbar::AttachContentBox(Box *b, Scrollbar *vs, Scrollbar *hs) {
+  if (vs) { vs->LayoutAttached(*b); }
+  if (hs) { hs->LayoutAttached(*b); MinusPlus(&b->h, &b->y, vs->dot_size); }
+  if (vs) b->w -= vs->dot_size;
 }
 
 void KeyboardGUI::AddHistory(const string &cmd) {
@@ -463,6 +470,7 @@ void TextGUI::SetColors(Colors *C) {
 
 void TextGUI::UpdateCommandFB() {
   cmd_fb.fb.Attach();
+  ScopedClearColor scc(bg_color);
   ScopedDrawMode drawmode(DrawMode::_2D);
   cmd_fb.PushBackAndUpdate(&cmd_line); // cmd_fb.OverwriteUpdate(&cmd_line, cursor.x)
   cmd_fb.fb.Release();
@@ -536,8 +544,9 @@ void TextArea::Write(const StringPiece &s, bool update_fb, bool release_fb) {
   bool wrap = Wrap();
   int update_flag = LineFBPushBack();
   LinesFrameBuffer *fb = GetFrameBuffer();
-  if (update_fb && fb->lines) fb->fb.Attach();
+  ScopedClearColor scc(update_fb ? bg_color : NULL);
   ScopedDrawMode drawmode(update_fb ? DrawMode::_2D : DrawMode::NullOp);
+  if (update_fb && fb->lines) fb->fb.Attach();
   StringLineIter add_lines(s, StringLineIter::Flag::BlankLines);
   for (const char *add_line = add_lines.Next(); add_line; add_line = add_lines.Next()) {
     bool append = !write_newline && add_lines.first && add_lines.CurrentLength() && line.ring.count;
@@ -568,6 +577,7 @@ void TextArea::CheckResized(const Box &b) {
 }
 
 void TextArea::Redraw(bool attach) {
+  ScopedClearColor scc(bg_color);
   ScopedDrawMode drawmode(DrawMode::_2D);
   LinesFrameBuffer *fb = GetFrameBuffer();
   int fb_flag = LinesFrameBuffer::Flag::NoVWrap | LinesFrameBuffer::Flag::Flush;
@@ -635,6 +645,7 @@ void TextArea::UpdateVScrolled(int dist, bool up, int ind, int first_offset, int
     int wl = 0, (LinesFrameBuffer::*update_cb)(Line*, int, int, int, int) =
       front ? &LinesFrameBuffer::PushFrontAndUpdate : &LinesFrameBuffer::PushBackAndUpdate;
     ScopedDrawMode drawmode(DrawMode::_2D);
+    ScopedClearColor scc(bg_color);
     fb->fb.Attach();
     if (first_len)  wl += (fb->*update_cb)(&line[ind], -line_left, first_offset, min(dist, first_len), 0); 
     while (wl<dist) wl += (fb->*update_cb)(&line[decr ? --ind : ++ind], -line_left, 0, dist-wl, 0);
@@ -644,7 +655,6 @@ void TextArea::UpdateVScrolled(int dist, bool up, int ind, int first_offset, int
 
 void TextArea::ChangeColors(Colors *C) {
   SetColors(C);
-  if (bg_color) screen->gd->ClearColor(*bg_color);
   // for (int i=1; i<=term_height; ++i) if (Line *L = GetTermLine(i)) L->Layout(L->data->box, true);
   Redraw();
 }
@@ -762,6 +772,7 @@ string TextArea::CopyText(int beg_line_ind, int beg_char_ind, int end_line_ind, 
 /* Editor */
 
 Editor::Editor(Window *W, Font *F, File *I, bool Wrap) : TextArea(W, F), file(I) {
+  opened = file && file->Opened();
   reverse_line_fb = 1;
   line_fb.wrap = Wrap;
   file_line.node_value_cb = &LineOffset::GetLines;
@@ -781,6 +792,7 @@ void Editor::UpdateWrappedLines(int cur_font_size, int width) {
 }
 
 int Editor::UpdateLines(float v_scrolled, int *first_ind, int *first_offset, int *first_len) {
+  if (!opened) return 0;
   LinesFrameBuffer *fb = GetFrameBuffer();
   bool width_changed = last_fb_width != fb->w, wrap = Wrap(), init = !wrapped_lines;
   if (width_changed) {
@@ -1088,7 +1100,7 @@ void Terminal::SetScrollRegion(int b, int e, bool release_fb) {
 void Terminal::SetDimension(int w, int h) {
   term_width  = w;
   term_height = h;
-  if (bg_color) screen->gd->ClearColor(*bg_color);
+  ScopedClearColor scc(bg_color);
   if (!line.Size()) TextArea::Write(string(term_height, '\n'), 0);
 }
 
@@ -1161,7 +1173,7 @@ void Terminal::Write(const StringPiece &s, bool update_fb, bool release_fb) {
   if (!MainThread()) return RunInMainThread(new Callback(bind(&Terminal::WriteCB, this, s.str(), update_fb, release_fb)));
   TerminalTrace("Terminal: Write('%s', %zd)\n", CHexEscapeNonAscii(s.str()).c_str(), s.size());
   screen->gd->DrawMode(DrawMode::_2D, 0);
-  if (bg_color) screen->gd->ClearColor(*bg_color);
+  ScopedClearColor scc(bg_color);
   last_fb = 0;
   for (int i = 0; i < s.len; i++) {
     const unsigned char c = *(s.begin() + i);
@@ -1468,14 +1480,13 @@ void Console::Draw() {
   int y = bottom_or_top ? 0 : screen->height-h;
   Box(0, y, screen->width, h).Draw();
 
-  screen->gd->ClearColor(Color::clear);
   screen->gd->SetColor(Color::white);
   TextArea::Draw(Box(0, y, screen->width, h), DrawFlag::DrawCursor | DrawFlag::CheckResized);
 }
 
 /* Dialog */
 
-Dialog::Dialog(float w, float h, int flag) : GUI(screen), font(Fonts::Get(FLAGS_default_font, "", 14, Color::white)), menuicon(Fonts::Get("MenuAtlas", "", 0, Color::black, Color::clear, 0)) {
+Dialog::Dialog(float w, float h, int flag) : GUI(screen), font(Fonts::Get(FLAGS_default_font, "", 14, Color::white)), menuicon(Fonts::Get("MenuAtlas", "", 0, Color::white, Color::clear, 0)) {
   screen->dialogs.push_back(this);
   box = screen->Box().center(screen->Box(w, h));
   fullscreen = flag & Flag::Fullscreen;
@@ -1518,7 +1529,7 @@ void Dialog::Draw() {
   if (resizing_bottom) MinusPlus(&outline.y, &outline.h, max(-outline.h + min_height + title.h, (int)(mouse_start.y - screen->mouse.y)));
   if (resizing_right)  outline.w += max(-outline.w + min_width, (int)(screen->mouse.x - mouse_start.x));
 
-  if (!app->input.MouseButton1Down()) {
+  if (!app->input->MouseButton1Down()) {
     if (resizing) {
       box = Box(outline.x, outline.y, outline.w, outline.h - title.h);
       Layout();
@@ -1569,9 +1580,7 @@ EditorDialog::EditorDialog(Window *W, Font *F, File *I, float w, float h, int fl
 
 void EditorDialog::Layout() {
   Dialog::Layout();
-  content_box = box;
-  if (1)              { v_scrollbar.LayoutAttached(box.Dimension()); content_box.w -= v_scrollbar.dot_size; }
-  if (!editor.Wrap()) { h_scrollbar.LayoutAttached(box.Dimension()); MinusPlus(&content_box.h, &content_box.y, v_scrollbar.dot_size); }
+  Widget::Scrollbar::AttachContentBox(&(content_box = Box(0, -box.h, box.w, box.h)), &v_scrollbar, editor.Wrap() ? NULL : &h_scrollbar);
 }
 
 void EditorDialog::Draw() {
@@ -1581,7 +1590,7 @@ void EditorDialog::Draw() {
   if (!wrap) editor.h_scrolled = h_scrollbar.AddScrollDelta(editor.h_scrolled);
   if (1)     editor.UpdateScrolled();
   if (1)     Dialog::Draw();
-  if (1)     editor.Draw(content_box, Editor::DrawFlag::CheckResized);
+  if (1)     editor.Draw(content_box + box.TopLeft(), Editor::DrawFlag::CheckResized);
   if (1)     v_scrollbar.Update();
   if (!wrap) h_scrollbar.Update();
 }

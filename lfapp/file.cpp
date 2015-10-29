@@ -32,6 +32,11 @@
 #include "libarchive/archive_entry.h"
 #endif
 
+#ifdef LFL_FLATBUFFERS
+#include "flatbuffers/flatbuffers.h"
+#include "flatbuffers/idl.h"
+#endif
+
 #ifdef LFL_JSONCPP
 #include "json/json.h"
 #endif
@@ -832,13 +837,43 @@ void GraphVizFile::AppendEdge(string *out, const string &n1, const string &n2, c
 
 void IDE::Project::LoadCMakeCompileCommandsJSON(File *f) {
     if (!f || !f->Opened()) return;
-#ifdef LFL_JSONCPP
+#if defined(LFL_JSONCPP)
     Json::Value root;
     Json::Reader reader;
     CHECK(reader.parse(f->Contents(), root, false));
     for (int i=0, l=root.size(); i<l; ++i) {
       const Json::Value &f = root[i];
       build_rules[f["file"].asString()] = { f["directory"].asString(), f["command"].asString() };
+    }
+#elif defined(LFL_FLATBUFFERS)
+    flatbuffers::Parser parser;
+    CHECK(parser.Parse("table BuildRule {\n"
+                       "  directory: string;\n"
+                       "  command:   string;\n"
+                       "  file:      string;\n"
+                       "}\n"
+                       "table BuildRules {\n"
+                       "  rule: [BuildRule];\n"
+                       "}\n"
+                       "root_type BuildRules;\n"));
+    CHECK(parser.Parse(StrCat("{\nrule: \n", f->Contents(), "\n}\n").c_str()));
+
+    auto buildrule = parser.structs_.Lookup("BuildRule");
+    auto buildrule_dir = buildrule->fields.Lookup("directory");
+    auto buildrule_cmd = buildrule->fields.Lookup("command");
+    auto buildrule_file = buildrule->fields.Lookup("file");
+    auto buildrules = flatbuffers::GetRoot<flatbuffers::Table>(parser.builder_.GetBufferPointer());
+    auto buildrules_rule = parser.root_struct_def_->fields.Lookup("rule");
+    auto buildrules_rules = reinterpret_cast<const flatbuffers::Vector<flatbuffers::Offset<void>>*>
+      (buildrules->GetPointer<const void *>(buildrules_rule->value.offset));
+
+    string dir, cmd, file;
+    for (int i = 0, l = buildrules_rules->size(); i < l; ++i) {
+      auto br_i = reinterpret_cast<const flatbuffers::Table*>((*buildrules_rules)[i]);
+      if (auto s = reinterpret_cast<const flatbuffers::String*>(br_i->GetPointer<const void *>(buildrule_dir->value.offset)))  dir  = s->str();
+      if (auto s = reinterpret_cast<const flatbuffers::String*>(br_i->GetPointer<const void *>(buildrule_cmd->value.offset)))  cmd  = s->str();
+      if (auto s = reinterpret_cast<const flatbuffers::String*>(br_i->GetPointer<const void *>(buildrule_file->value.offset))) file = s->str();
+      if (file.size()) build_rules[file] = { dir, cmd };
     }
 #endif
 }

@@ -1,0 +1,60 @@
+namespace LFL.IPC;
+
+table ResourceHandle { type: int; len: int; url: string; }
+
+table AllocateBufferRequest  { bytes: int; type: short; }
+table AllocateBufferResponse { mpb: ResourceHandle; mpb_id: int; }
+
+table CloseBufferRequest { mpb_id: int; }
+table CloseBufferResponse { success: bool; }
+
+struct Color { r: ubyte; b: ubyte; g: ubyte; a: ubyte; }
+table SetClearColorRequest { c: Color; }
+table SetClearColorResponse { success: bool; }
+
+table FontDescription { name: string; family: string; size: int; flag: int; engine: int; fg: Color; bg: Color; unicode: bool; }
+table OpenSystemFontRequest { desc: FontDescription; }
+table OpenSystemFontResponse { mpb: ResourceHandle; font_id: int; num_glyphs: int; start_glyph_id: int; 
+ ascender: short; descender: short; max_width: short; fixed_width: short; missing_glyph: short;
+ mix_fg: bool; has_bg: bool; fix_metrics: bool;
+ scale: float;
+}
+
+table LoadAssetRequest  { mpb: ResourceHandle; }
+table LoadAssetResponse { mpb_id: int; }
+
+table LoadTextureRequest  { mpb_id: int; }
+table LoadTextureResponse { tex_id: int; }
+
+table PaintRequest  { x: int; y: int; z: int; mpb_id: int; }
+table PaintResponse { success: bool; }
+
+table WGetRequest  { url: string; mime_type: int; }
+table WGetResponse { mpb: ResourceHandle; headers: bool; content_length: int; }
+
+table SetTitleRequest { title: string; }
+table SetTitleResponse { success: bool; }
+
+table SetURLRequest { url: string; }
+table SetURLResponse { success: bool; }
+
+table NavigateRequest  { url: string; }
+table NavigateResponse { success: bool; }
+
+table SetViewportRequest  { w: int; h: int; }
+table SetViewportResponse { success: bool; }
+
+table SetDocsizeRequest  { w: int; h: int; }
+table SetDocsizeResponse { success: bool; }
+
+table KeyPressRequest { button: int; down: bool; }
+table KeyPressResponse { success: bool; }
+
+table MouseClickRequest { button: int; down: bool; x: int; y: int; }
+table MouseClickResponse { success: bool; }
+
+table MouseMoveRequest { x: int; y: int; dx: int; dy: int; }
+table MouseMoveResponse { success: bool; }
+
+table ExecuteScriptRequest { text: string; }
+table ExecuteScriptResponse { text: string; }

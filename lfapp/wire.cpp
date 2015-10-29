@@ -444,7 +444,6 @@ bool MultiProcessResource::Read(const MultiProcessBuffer &mpb, int type, Seriali
   Serializable::Header hdr;
   hdr.In(&in);
   CHECK_EQ(type, hdr.id);
-  MultiProcessResource::File content_res;
   return out->Read(&in) == 0;
 }
 

@@ -19,42 +19,55 @@
 #ifndef __LFL_LFAPP_LFEXPORT_H__
 #define __LFL_LFAPP_LFEXPORT_H__
 
-#if _WIN32 || _WIN64
- #if _WIN64
-  #define LFL64
- #else
-  #define LFL32
- #endif
- #define LFL_IMPORT __declspec(dllimport)
- #define LFL_EXPORT __declspec(dllexport)
- #define thread_local __declspec(thread)
- #define UNION struct
-#endif
+#if _MSC_VER
+  #if _WIN64
+    #define LFL64
+  #else
+    #define LFL32
+  #endif
+  #define LFL_IMPORT __declspec(dllimport)
+  #define LFL_EXPORT __declspec(dllexport)
+  #define thread_local __declspec(thread)
+  #define UNION struct
+  #define UNALIGNED_struct \
+    __pragma(pack(1)); \
+    struct __declspec(align(1))
+  #define UNALIGNED_END(n, s) \
+    __pragma(pack()); \
+    static_assert(sizeof(n) == s, "unexpected sizeof(" #n ")")
 
-#if __GNUC__
- #if __x86_64__ || __ppc64__ || __amd64__
-  #define LFL64
- #else
-  #define LFL32
- #endif
- #define LFL_IMPORT
- #define LFL_EXPORT
- #define thread_local __thread
- #define UNION union
+#elif defined(__GNUC__) || defined(__clang__)
+  #if __x86_64__ || __ppc64__ || __amd64__
+    #define LFL64
+  #else
+    #define LFL32
+  #endif
+  #define LFL_IMPORT
+  #define LFL_EXPORT
+  #define thread_local __thread
+  #define UNION union
+  #define UNALIGNED_struct \
+    _Pragma("pack(1)") \
+    struct __attribute__((aligned(1)))
+  #define UNALIGNED_END(n, s) \
+    _Pragma("pack()") \
+    static_assert(sizeof(n) == s, "unexpected sizeof(" #n ")")
+#else
+  #error Unknown compiler
 #endif
 
 #ifdef LFL_TEST
-#define tvirtual virtual
+  #define tvirtual virtual
 #else
-#define tvirtual
+  #define tvirtual
 #endif
 
 #if defined(LFL_ANDROID) || defined(LFL_IPHONE)
-#define LFL_MOBILE
+  #define LFL_MOBILE
 #endif
 
 #if defined(__linux__) && !defined(LFL_MOBILE)
-#define LFL_LINUX_SERVER 
+  #define LFL_LINUX_SERVER 
 #endif
 
 #define memzero(x) memset(&x, 0, sizeof(x))
@@ -63,6 +76,7 @@
 #define sizeofarray(x) (sizeof(x) / sizeof((x)[0]))
 
 #define M_TAU (M_PI + M_PI)
+#define X_or_0(x) ((x) ? (x) : 0)
 #define X_or_1(x) ((x) ? (x) : 1)
 #define X_or_Y(x, y) ((x) ? (x) : (y))
 #define XY_or_Y(x, y) ((x) ? ((x)*(y)) : (y))
@@ -130,6 +144,7 @@ struct Atlas;
 struct Bind;
 struct BindMap;
 struct Box;
+struct Browser;
 struct BrowserInterface;
 struct Color;
 struct Connection;
@@ -144,6 +159,7 @@ struct Flow;
 struct Font;
 struct Geometry;
 struct Glyph;
+struct GlyphMetrics;
 struct GraphicsDevice;
 struct GUI;
 struct InputController;
@@ -151,6 +167,11 @@ struct KeyboardGUI;
 struct Listener;
 struct MovieAsset;
 struct MultiProcessBuffer;
+struct MultiProcessFileResource;
+struct MultiProcessTextureResource;
+struct NetworkThread;
+struct ProcessAPIClient;
+struct ProcessAPIServer;
 struct ProtoHeader;
 struct Service;
 struct ServiceEndpointEraseList;
@@ -161,10 +182,11 @@ struct StyleContext;
 struct TextGUI;
 struct Texture;
 struct Terminal;
-struct Tiles;
+struct TilesInterface;
 struct VideoAssetLoader;
 struct Window;
 namespace DOM { struct Node; };
+namespace IPC { struct FontDescription; struct OpenSystemFontResponse; }
 
 typedef google::protobuf::Message Proto;
 typedef int (*MainCB)(int argc, const char **argv);
@@ -201,7 +223,7 @@ struct LFApp {
 struct NativeWindow {
     void *id, *gl, *surface, *glew_context, *impl, *user1, *user2, *user3;
     int width, height, pow2_width, pow2_height, target_fps;
-    bool minimized, cursor_grabbed, frame_init;
+    bool minimized, cursor_grabbed, frame_init, animating;
     int gesture_swipe_up, gesture_swipe_down, gesture_tap[2], gesture_dpad_stop[2];
     float gesture_dpad_x[2], gesture_dpad_y[2], gesture_dpad_dx[2], gesture_dpad_dy[2], multitouch_keyboard_x;
 };

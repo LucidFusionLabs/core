@@ -904,7 +904,7 @@ struct AVCaptureCamera : public Module {
     }
 };
 extern "C" void UpdateFrame(const char *imageData, int width, int height, int imageSize) {
-    return ((AVCaptureCamera*)app->camera.impl)->UpdateFrame(imageData, width, height, imageSize);
+    return ((AVCaptureCamera*)app->camera->impl)->UpdateFrame(imageData, width, height, imageSize);
 }
 #endif /* LFL_AVCAPTURE_CAMERA */
 
@@ -962,7 +962,7 @@ struct QTKitCamera : public Module {
     }
 };
 extern "C" void UpdateFrame(const char *imageData, int width, int height, int imageSize) {
-    return ((QTKitCamera*)app->camera.impl)->UpdateFrame(imageData, width, height, imageSize);
+    return ((QTKitCamera*)app->camera->impl)->UpdateFrame(imageData, width, height, imageSize);
 }
 #endif /* LFL_QTKIT_CAMERA */
 

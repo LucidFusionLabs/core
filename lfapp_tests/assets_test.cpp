@@ -47,7 +47,7 @@ TEST(ImageFormatTest, PNG) {
 TEST(AssetTest, Tiles) {
     int tile_test_a=0, tile_test_b=0, tile_test_c=0, tile_test_d=0, tile_test_e=0, tile_test_f=0, tile_test_g=0;
     int tile_test_h=0, tile_test_i=0, tile_test_j=0, tile_test_k=0, tile_test_l=0, tile_test_m=0;
-    Tiles tiles, *T = &tiles;
+    Tiles tiles(0), *T = &tiles;
     T->Run();
     T->ContextOpen();
     TilesPreAdd (T, [&](){ tile_test_a++; });
@@ -59,21 +59,21 @@ TEST(AssetTest, Tiles) {
     T->ContextOpen();
     TilesPreAdd (T, [&](){ tile_test_e++; });
     TilesPostAdd(T, [&](){ tile_test_k++; });
-    Box b(10, 10, 400, 400);
+    Box b(10, 10-1024, 400, 400);
     TilesAdd(T, &b, [&](){ tile_test_c++; });
     T->ContextClose();
 
     T->ContextOpen();
     TilesPreAdd (T, [&](){ tile_test_f++; });
     TilesPostAdd(T, [&](){ tile_test_l++; });
-    b = Box(10, 520, 400, 400);
+    b = Box(10, 520-1024, 400, 400);
     TilesAdd(T, &b, [&](){ tile_test_d++; });
     T->ContextClose();
 
     T->ContextOpen();
     TilesPreAdd (T, [&](){ tile_test_g++; });
     TilesPostAdd(T, [&](){ tile_test_m++; });
-    b = Box(10, 260, 400, 400);
+    b = Box(10, 260-1024, 400, 400);
     TilesAdd(T, &b, [&](){ tile_test_h++; });
     T->ContextClose();
 

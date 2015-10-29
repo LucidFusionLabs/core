@@ -23,7 +23,7 @@ endif(CMAKE_SYSTEM_NAME MATCHES "Darwin")
 if(CMAKE_SYSTEM_NAME MATCHES "Linux")
     set(HAVE_SDLCONFIG 1)
     set(CUDA_LIB /usr/local/cuda/lib64/libcudart.so PARENT_SCOPE)
-    set(PLATFORM_LIB "-lutil -lz -lpng -lpthread")
+    set(PLATFORM_LIB "-lutil -lz -lpng -lpthread -ldl")
     if(NOT LFL_HEADLESS)
         set(PLATFORM_LIB "${PLATFORM_LIB} -lXi -lXv -lXext -lX11 -lXxf86vm -lXrandr -lXcursor -lXt -lbz2") # -lasound")
     endif()
@@ -108,6 +108,19 @@ if(LFL_PROTOBUF)
     set(PROTOBUF_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/protobuf/src PARENT_SCOPE)
     set(PROTOBUF_PROTOC_EXECUTABLE ${CMAKE_CURRENT_BINARY_DIR}/protobuf/src/protoc PARENT_SCOPE)
 endif(LFL_PROTOBUF)
+
+# flatbuffers
+if(LFL_FLATBUFFERS)
+    add_subdirectory(flatbuffers)
+    set(FLATBUFFERS_LIB flatbuffers PARENT_SCOPE)
+endif(LFL_FLATBUFFERS)
+
+# capnproto
+if(LFL_CAPNPROTO)
+    ExternalProject_Add(capnproto SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/capnproto/c++
+                                  PREFIX ${CMAKE_CURRENT_BINARY_DIR}/capnproto
+                                  CMAKE_ARGS -DCMAKE_INSTALL_PREFIX:PATH=${CMAKE_CURRENT_BINARY_DIR}/capnproto)
+endif(LFL_CAPNPROTO)
 
 # glog
 if(LFL_GLOG)
@@ -258,7 +271,7 @@ if(LFL_OPENCV)
     else(WIN32)
         ExternalProject_Add(OpenCV SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/OpenCV
                                    PREFIX ${CMAKE_CURRENT_BINARY_DIR}/OpenCV
-                               CMAKE_ARGS -DCMAKE_INSTALL_PREFIX:PATH=${CMAKE_CURRENT_BINARY_DIR}/OpenCV)
+                                   CMAKE_ARGS -DCMAKE_INSTALL_PREFIX:PATH=${CMAKE_CURRENT_BINARY_DIR}/OpenCV)
         set(OPENCV_LIB -L${CMAKE_CURRENT_BINARY_DIR}/OpenCV/lib -lcv -lcxcore PARENT_SCOPE)
     endif(WIN32)
 endif(LFL_OPENCV)
