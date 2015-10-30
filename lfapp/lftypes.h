@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef __LFL_LFAPP_LFTYPES_H__
-#define __LFL_LFAPP_LFTYPES_H__
+#ifndef LFL_LFAPP_LFTYPES_H__
+#define LFL_LFAPP_LFTYPES_H__
 
 #ifdef LFL_JUDY
 #include "judymap.h"
@@ -191,11 +191,6 @@ template <typename X, class Y> void VectorAppend(vector<X> &out, const Y& begin,
   out.insert(out.end(), begin, end);
 }
 
-template <class X> void VectorClear(vector<X > *v) { v->clear(); }
-template <class X> void VectorClear(vector<X*> *v) {
-  for (typename vector<X*>::const_iterator i = v->begin(); i != v->end(); ++i) delete (*i);
-  v->clear();
-}
 template <class X> void VectorErase(X* v, int ind) {
   CHECK_RANGE(ind, 0, v->size());
   v->erase(v->begin()+ind, v->begin()+ind+1);
@@ -813,4 +808,4 @@ template <class X> struct CategoricalVariable {
 #include "lfapp/tree.h"
 #include "lfapp/trie.h"
 
-#endif // __LFL_LFAPP_LFTYPES_H__
+#endif // LFL_LFAPP_LFTYPES_H__

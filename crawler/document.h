@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef __LFL_CRAWLER_DOCUMENT_H__
-#define __LFL_CRAWLER_DOCUMENT_H__
+#ifndef LFL_CRAWLER_DOCUMENT_H__
+#define LFL_CRAWLER_DOCUMENT_H__
 namespace LFL {
 
 struct DocumentParser {
@@ -29,7 +29,7 @@ struct DocumentParser {
     virtual void Complete(void *self) {
       parent->completed++;
       parent->outstanding.erase(self);
-      parent->doc->SetLayoutDirty();
+      if (auto html = parent->doc->DocElement()) html->SetLayoutDirty();
       delete this;
     }
   };
@@ -37,13 +37,15 @@ struct DocumentParser {
   struct StyleParser : public Parser {
     string charset; StyleSheet *style_target;
     StyleParser(DocumentParser *p, const string &url, const DOM::DOMString &cs) : Parser(p, url), charset(String::ToUTF8(cs)),
-    style_target(new StyleSheet(parent->doc->node, "", charset.empty() ? "UTF-8" : charset.c_str(), 0, 0)) { p->doc->style_sheet.push_back(style_target); }
+    style_target(new StyleSheet(parent->doc->node, "", charset.empty() ? "UTF-8" : charset.c_str(), 0, 0)) {
+      p->doc->style_sheet.push_back(move(unique_ptr<StyleSheet>(style_target)));
+    }
 
     virtual void Complete(void *self) { 
       style_target->Done();
       if (parent->Running(self)) {
         parent->doc->node->style_context->AppendSheet(style_target);
-        parent->doc->SetStyleDirty();
+        if (auto html = parent->doc->DocElement()) html->SetStyleDirty();
       }
       Parser::Complete(self);
     }
@@ -57,7 +59,7 @@ struct DocumentParser {
     vector<DOM::Node*> target;
     HTMLParser(DocumentParser *p, const string &url, DOM::Node *t) : StyleParser(p, url, "") { target.push_back(t); }
 
-    void ParseChunkCB(const char *content, int content_len) { parent->doc->SetLayoutDirty(); }
+    void ParseChunkCB(const char *content, int content_len) { if (auto html = parent->doc->DocElement()) html->SetLayoutDirty(); }
     void WGetContentBegin(Connection *c, const char *h, const string &ct) { parent->doc->content_type=ct; }
     void WGetContentEnd(Connection *c) { StyleParser::Complete(this); }
     void CloseTag(const String &tag, const KV &attr, const TagStack &stack) {
@@ -286,4 +288,4 @@ struct DocumentParser {
 };
 
 }; // namespace LFL
-#endif // __LFL_CRAWLER_DOCUMENT_H__
+#endif // LFL_CRAWLER_DOCUMENT_H__

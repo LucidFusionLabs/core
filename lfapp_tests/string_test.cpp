@@ -107,7 +107,7 @@ TEST(StringTest, WordIter) {
 }
 
 TEST(IterTest, LineIter) {
-    string b = "1 2 3\n4 5 6";
+    string b = "1 2 3\n\n4 5 6";
     StringLineIter line(b);
     EXPECT_EQ("1 2 3", IterNextString(&line));
     EXPECT_EQ("4 5 6", IterNextString(&line));

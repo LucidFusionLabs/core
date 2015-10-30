@@ -160,8 +160,11 @@ struct Node : public Object {
 
   LFL::DOM::Renderer *render;
   LFL::DOM::Renderer *AttachRender();
-  void ClearParent() { parentNode=0; parentChildNodeIndex=-1; }
   void AssignParent(Node *n, int ind) { n->parentNode=this; n->parentChildNodeIndex=ind; }
+  void ClearParent() { parentNode=0; parentChildNodeIndex=-1; }
+  void ClearComputedInlineStyle();
+  void SetLayoutDirty();
+  void SetStyleDirty();
 
   virtual ~Node() {}
   Node(unsigned short t, Document *doc) : nodeType(t), htmlElementType(0), parentNode(0), ownerDocument(doc), parentChildNodeIndex(-1), render(0) {}

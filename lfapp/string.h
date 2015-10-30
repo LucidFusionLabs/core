@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef __LFL_LFAPP_STRING_H__
-#define __LFL_LFAPP_STRING_H__
+#ifndef LFL_LFAPP_STRING_H__
+#define LFL_LFAPP_STRING_H__
 
 #ifdef WIN32
 #include <intrin.h>
@@ -449,6 +449,10 @@ bool StringEmptyOrEquals(const string   &in, const string   &ref1, const string 
 bool StringEmptyOrEquals(const String16 &in, const String16 &ref1, const String16 &ref2, int case_sensitive=false);
 bool StringEmptyOrEquals(const String16 &in, const string   &ref1, const string   &ref2, int case_sensitive=false);
 
+template <class X>       X *FindChar(      X *text, int c,                                   int len=-1, int *outlen=0);
+template <class X> const X *FindChar(const X *text, int c,                                   int len=-1, int *outlen=0);
+template <class X>       X *FindChar(      X *text, int c,              int (*isquote)(int), int len=-1, int *outlen=0);
+template <class X> const X *FindChar(const X *text, int c,              int (*isquote)(int), int len=-1, int *outlen=0);
 template <class X>       X *FindChar(      X *text, int (*ischar)(int),                      int len=-1, int *outlen=0);
 template <class X> const X *FindChar(const X *text, int (*ischar)(int),                      int len=-1, int *outlen=0);
 template <class X>       X *FindChar(      X *text, int (*ischar)(int), int (*isquote)(int), int len=-1, int *outlen=0);
@@ -521,6 +525,9 @@ template <class X> string CHexEscapeNonAscii(const basic_string<X> &text);
 #define StrAppendCSV(out, ...) StrAppend((out), (out)->size() ? "," : "", __VA_ARGS__)
 string FirstMatchCSV(const StringPiece &haystack, const StringPiece &needle, int (*ischar)(int) = iscomma);
 
+bool ParseKV(const string &t, string *k_out, string *v_out, int equal_char='=');
+string UpdateKVLine(const string &haystack, const string &key, const string &val, int equal_char='=');
+
 const char     *NextLine   (const StringPiece   &text, bool final=0, int *outlen=0);
 const char16_t *NextLine   (const String16Piece &text, bool final=0, int *outlen=0);
 const char     *NextLineRaw(const StringPiece   &text, bool final=0, int *outlen=0);
@@ -579,4 +586,4 @@ struct Base64 {
 };
 
 }; // namespace LFL
-#endif // __LFL_LFAPP_STRING_H__
+#endif // LFL_LFAPP_STRING_H__

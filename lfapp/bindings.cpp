@@ -122,9 +122,12 @@ template <class X> inline X CastV8InternalFieldTo(v8::Local<v8::Object> &self, i
   return static_cast<X>(v8::Local<v8::External>::Cast(self->GetInternalField(field_index))->Value());
 }
 
-#define RETURN_V8_TYPE(X, type, ret) \
+#define GET_V8_SELF() \
   v8::Local<v8::Object> self = args.Holder(); \
-  X *inst = CastV8InternalFieldTo<X*>(self, 1); \
+  X *inst = CastV8InternalFieldTo<X*>(self, 1);
+
+#define RETURN_V8_TYPE(X, type, ret) \
+  GET_V8_SELF(); \
   args.GetReturnValue().Set(type(args.GetIsolate(), (ret)));
 
 #define RETURN_V8_OBJECT(X, OT, ret) \
@@ -138,6 +141,10 @@ template <class X> inline X CastV8InternalFieldTo(v8::Local<v8::Object> &self, i
   ret_obj->SetInternalField(2, v8::Integer ::New(args.GetIsolate(), TypeId(val))); \
   args.GetReturnValue().Set(ret_obj);
 
+#define GET_V8_PROPERTY_STRING() \
+  string n = BlankNull(*v8::String::Utf8Value(name)); \
+  if (n == "toString" || n == "valueOf" || n == "length" || n == "item") return;
+
 template <typename X, int       (*f)(const X*)> void IntGetter   (v8::Local<v8::String> property, const v8::PropertyCallbackInfo<v8::Value>& args) { RETURN_V8_TYPE(X, v8::Integer::New, f(inst)); }
 template <typename X, DOMString (*f)(const X*)> void StringGetter(v8::Local<v8::String> property, const v8::PropertyCallbackInfo<v8::Value>& args) { RETURN_V8_TYPE(X, NewV8String,      f(inst).c_str()); }
 
@@ -148,16 +155,24 @@ template <typename X, DOMString (*f)(const X*, int)> void IndexedStringFunc(cons
 template <typename X, DOMString (*f)(const X*, int)> void IndexedStringProperty(uint32_t index, const v8::PropertyCallbackInfo<v8::Value>& args) {
   RETURN_V8_TYPE(X, NewV8String, f(inst, index).c_str());
 }
-template <typename X, DOMString (*f)(const X*, const DOMString &)> void NamedStringProperty(v8::Local<v8::String> name, const v8::PropertyCallbackInfo<v8::Value>& args) {
-  string v = BlankNull(*v8::String::Utf8Value(name));
-  if (v == "toString" || v == "valueOf" || v == "length" || v == "item") return;
-  RETURN_V8_TYPE(X, NewV8String, f(inst, DOMString(v)).c_str());
+template <typename X, DOMString (*f)(const X*, const DOMString &)>
+void NamedStringProperty(v8::Local<v8::String> name, const v8::PropertyCallbackInfo<v8::Value>& args) {
+  GET_V8_PROPERTY_STRING();
+  RETURN_V8_TYPE(X, NewV8String, f(inst, DOMString(n)).c_str());
+}
+template <typename X, void (*f)(X*, const DOMString &, const DOMString&)>
+void SetNamedStringProperty(v8::Local<v8::String> name, v8::Local<v8::Value> value, const v8::PropertyCallbackInfo<v8::Value> &args) {
+  GET_V8_PROPERTY_STRING();
+  GET_V8_SELF();
+  string v = BlankNull(*v8::String::Utf8Value(value->ToString()));
+  f(inst, n, v);
 }
 
 template <class X, int        (X::*Z)()                 const> int       CallIntMember          (const X *x)                     { return (x->*Z)(); }
 template <class X, DOMString  (X::*Z)()                 const> DOMString CallStringMember       (const X *x)                     { return (x->*Z)(); }
 template <class X, DOMString  (X::*Z)(int)              const> DOMString CallIndexedStringMember(const X *x, int i)              { return (x->*Z)(i); }
 template <class X, DOMString  (X::*Z)(const DOMString&) const> DOMString CallNamedStringMember  (const X *x, const DOMString &n) { return (x->*Z)(n); }
+template <class X, void (X::*Z)(const DOMString&, const DOMString&)> void CallNamedSetterMember(X *x, const DOMString &n, const DOMString &v) { return (x->*Z)(n, v); }
 
 template <class X, class Y, Y  (X::*Z)                        > Y* GetObjectMember        (X *x)                     { return &(x->*Z); }
 template <class X, class Y, Y  (DOM::Element::*Z)             > Y* GetObjectFromElement   (X *x)                     { return x->AsElement() ? &(x->AsElement()->*Z) : 0; }
@@ -267,7 +282,8 @@ struct MyV8JSContext : public JSContext {
     css_style_declaration->Set(v8::String::NewFromUtf8(isolate, "item"),
                                v8::FunctionTemplate::New(isolate, IndexedStringFunc<DOM::CSSStyleDeclaration, CallIndexedStringMember<DOM::CSSStyleDeclaration, &DOM::CSSStyleDeclaration::item>>));
     css_style_declaration->SetIndexedPropertyHandler(IndexedStringProperty<DOM::CSSStyleDeclaration, &CallIndexedStringMember<DOM::CSSStyleDeclaration, &DOM::CSSStyleDeclaration::item>>);
-    css_style_declaration->SetNamedPropertyHandler(NamedStringProperty<DOM::CSSStyleDeclaration, &CallNamedStringMember<DOM::CSSStyleDeclaration, &DOM::CSSStyleDeclaration::getPropertyValue>>);
+    css_style_declaration->SetNamedPropertyHandler(   NamedStringProperty<DOM::CSSStyleDeclaration, &CallNamedStringMember<DOM::CSSStyleDeclaration, &DOM::CSSStyleDeclaration::getPropertyValue>>,
+                                                   SetNamedStringProperty<DOM::CSSStyleDeclaration, &CallNamedSetterMember<DOM::CSSStyleDeclaration, &DOM::CSSStyleDeclaration::setPropertyValue>>);
 
     if (D) {
       v8::Local<v8::Object> node_obj = node->NewInstance();

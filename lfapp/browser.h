@@ -37,7 +37,7 @@ namespace DOM {
 struct Renderer : public Object {
   FloatContainer box;
   ComputedStyle style, inline_style;
-  LFL::StyleSheet *inline_style_sheet=0;
+  unique_ptr<LFL::StyleSheet> inline_style_sheet;
   bool style_dirty=1, layout_dirty=1;
   Flow *flow=0, *parent_flow=0, child_flow;
   DOM::Node *absolute_parent=0;
@@ -59,7 +59,6 @@ struct Renderer : public Object {
   int clear_height=0, row_height=0, cell_colspan=0, cell_rowspan=0, extra_cell_height=0, max_child_i=-1;
 
   Renderer(Node *N) : style(N), inline_style(N) {}
-  virtual ~Renderer() { delete inline_style_sheet; }
 
   void  UpdateStyle(Flow *F);
   Font* UpdateFont(Flow *F);
@@ -92,7 +91,7 @@ struct Renderer : public Object {
   int MarginLeftAuto  (Flow *flow, int w) const { return max(0, flow->container->w - bl_px - pl_px - w - RightMarginOffset()); } 
   int MarginRightAuto (Flow *flow, int w) const { return max(0, flow->container->w - br_px - pr_px - w - LeftMarginOffset()); }
   void ComputeStyle(StyleContext *style_context, ComputedStyle *out, const ComputedStyle *parent=0) const {
-    style_context->Match(out, style.node, parent, inline_style_sheet);
+    style_context->Match(out, style.node, parent, inline_style_sheet.get());
   }
 }; }; // namespace DOM
 
@@ -101,17 +100,17 @@ struct Browser : public BrowserInterface {
     DOM::BlockChainObjectAlloc alloc;
     DOM::HTMLDocument *node=0;
     string content_type, char_set;
-    vector<StyleSheet*> style_sheet;
-    DocumentParser *parser=0;
-    JSContext *js_context=0;
-    Console *js_console=0;
+    vector<unique_ptr<StyleSheet>> style_sheet;
+    unique_ptr<DocumentParser> parser;
+    unique_ptr<JSContext> js_context;
+    unique_ptr<Console> js_console;
     int height=0;
 
     ~Document();
     Document(Window *W=0, const Box &V=Box());
-    bool Dirty() const    { if (node) if (auto html = node->documentElement()) return html->render->layout_dirty || html->render->style_dirty; return 0; }
-    void SetLayoutDirty() { if (node) if (auto html = node->documentElement()) html->render->layout_dirty = true; }
-    void SetStyleDirty () { if (node) if (auto html = node->documentElement()) html->render->style_dirty  = true; }
+    const DOM::Element *DocElement() const { return node ? node->documentElement() : 0; }
+    /**/  DOM::Element *DocElement()       { return node ? node->documentElement() : 0; }
+    bool Dirty() const { if (auto html = DocElement()) return html->render->layout_dirty || html->render->style_dirty; return 0; }
     void Clear();
   };
   struct RenderLog {

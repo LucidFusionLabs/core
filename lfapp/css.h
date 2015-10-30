@@ -31,11 +31,11 @@ namespace CSS {
 struct PropertyNames : public vector<string> {
   PropertyNames() {
 #undef  XX
-#define XX(n) push_back(#n);
+#define XX(n)
 #undef  YY
 #define YY(n)
 #undef  ZZ
-#define ZZ(n)
+#define ZZ(n) push_back(#n);
 #include "crawler/css_properties.h"
   }
 };
@@ -234,6 +234,7 @@ struct CSSStyleDeclaration : public Object {
   virtual const CSSValue *getPropertyCSSValue(const DOMString &propertyName) const = 0;
   virtual DOMString       removeProperty(const DOMString &propertyName) = 0;
   virtual void            setProperty(const DOMString &propertyName, const DOMString &value, const DOMString &priority) = 0;
+  virtual void            setPropertyValue(const DOMString &n, const DOMString &v) { return setProperty(n, v, ""); }
 };
 
 struct CSSStyleDeclarationMap : public CSSStyleDeclaration {
@@ -1135,6 +1136,7 @@ struct StyleSheet : public LFL::DOM::Object {
 
 struct ComputedStyle : public LFL::DOM::CSSStyleDeclaration {
   LFL::DOM::Node *node;
+  string override_style;
   css_select_results *style=0;
   bool is_root=0, font_not_inherited=0, bgcolor_not_inherited=0;
   ComputedStyle(LFL::DOM::Node *N) : node(N) {}
@@ -1142,8 +1144,8 @@ struct ComputedStyle : public LFL::DOM::CSSStyleDeclaration {
 
   bool Computed() const { return style; }
   void Reset() { if (style) CHECK_EQ(CSS_OK, css_select_results_destroy(style)); style = 0; }
-  const css_computed_style *Style() const { return style ?style->styles[CSS_PSEUDO_ELEMENT_NONE] : 0; }
-  /**/  css_computed_style *Style()       { return style ?style->styles[CSS_PSEUDO_ELEMENT_NONE] : 0; }
+  const css_computed_style *Style() const { return style ? style->styles[CSS_PSEUDO_ELEMENT_NONE] : 0; }
+  /**/  css_computed_style *Style()       { return style ? style->styles[CSS_PSEUDO_ELEMENT_NONE] : 0; }
 
   LFL::DOM::Display              Display             () const { return LFL::DOM::Display(css_computed_display(Style(), is_root)); }
   LFL::DOM::Clear                Clear               () const { return LFL::DOM::Clear(css_computed_clear(Style())); }
@@ -1221,24 +1223,38 @@ struct ComputedStyle : public LFL::DOM::CSSStyleDeclaration {
   LFL::DOM::CSSNormNumericValue  WordSpacing         () const { css_fixed s; css_unit su; int ret = css_computed_word_spacing       (Style(), &s, &su); return ret == CSS_WORD_SPACING_SET    ? LFL::DOM::CSSNormNumericValue(FIXTOFLT(s), LibCSS_Unit::ToPrimitive(su), LFL::DOM::CSSPrimitiveValue::PercentRefersTo::FontWidth) : LFL::DOM::CSSNormNumericValue(ret == CSS_WORD_SPACING_NORMAL,   LFL::DOM::CSSPrimitiveValue::PercentRefersTo::FontWidth); }
   LFL::DOM::CSSNormNumericValue  LetterSpacing       () const { css_fixed s; css_unit su; int ret = css_computed_letter_spacing     (Style(), &s, &su); return ret == CSS_LETTER_SPACING_SET  ? LFL::DOM::CSSNormNumericValue(FIXTOFLT(s), LibCSS_Unit::ToPrimitive(su), LFL::DOM::CSSPrimitiveValue::PercentRefersTo::FontWidth) : LFL::DOM::CSSNormNumericValue(ret == CSS_LETTER_SPACING_NORMAL, LFL::DOM::CSSPrimitiveValue::PercentRefersTo::FontWidth); }
   LFL::DOM::CSSNormNumericValue  LineHeight          () const { css_fixed s; css_unit su; int ret = css_computed_line_height        (Style(), &s, &su); bool dim = ret == CSS_LINE_HEIGHT_DIMENSION; return (ret == CSS_LINE_HEIGHT_NUMBER || dim) ? LFL::DOM::CSSNormNumericValue(FIXTOFLT(s), dim ? LibCSS_Unit::ToPrimitive(su) : LFL::DOM::CSSPrimitiveValue::CSS_NUMBER, LFL::DOM::CSSPrimitiveValue::PercentRefersTo::FontHeight) : LFL::DOM::CSSNormNumericValue(ret == CSS_LINE_HEIGHT_NORMAL, LFL::DOM::CSSPrimitiveValue::PercentRefersTo::FontHeight); }
-
-  virtual const LFL::DOM::CSSValue *getPropertyCSSValue(const LFL::DOM::DOMString &n) const { return 0; };
-  virtual LFL::DOM::DOMString getPropertyPriority(const LFL::DOM::DOMString &n) const { return ""; }
-  virtual LFL::DOM::DOMString removeProperty(const LFL::DOM::DOMString &n) { ERROR("not implemented"); return ""; }
-  virtual void                setProperty(const LFL::DOM::DOMString &n, const LFL::DOM::DOMString &v, const LFL::DOM::DOMString &priority) { ERROR("not impelemented"); }
+  
+  virtual const LFL::DOM::CSSValue *getPropertyCSSValue(const DOMString &n) const { return 0; };
+  virtual DOMString getPropertyPriority(const DOMString &n) const { return ""; }
+  virtual DOMString removeProperty(const DOMString &n) { ERROR("not implemented"); return ""; }
   virtual int                 length() const { return Singleton<LFL::CSS::PropertyNames>::Get()->size(); };
-  virtual LFL::DOM::DOMString item(int index) const { CHECK_RANGE(index, 0, length()); return (*Singleton<LFL::CSS::PropertyNames>::Get())[index]; }
-  virtual LFL::DOM::DOMString getPropertyValue(const LFL::DOM::DOMString &n) const {
-    string name = String::ToUTF8(n);
+  virtual DOMString item(int index) const { CHECK_RANGE(index, 0, length()); return (*Singleton<LFL::CSS::PropertyNames>::Get())[index]; }
+  virtual DOMString getPropertyValue(const DOMString &k) const {
+    string name = String::ToUTF8(k);
     if (0) {}
 #undef  XX
-#define XX(n)
+#define XX(n) else if (name == #n)
 #undef  YY
-#define YY(n) else if (name == #n)
+#define YY(n)   return n().cssText();
 #undef  ZZ
-#define ZZ(n)   return n().cssText();
+#define ZZ(n)
 #include "crawler/css_properties.h"
     return "";
+  }
+  virtual void setProperty(const DOMString &k, const DOMString &v, const DOMString &priority) {
+    string name = String::ToUTF8(k), val = StrCat(String::ToUTF8(v), ";");
+    INFO("ComputedStyle.setProperty(", name, ", ", val, ")"); 
+    if (0) {}
+#undef  XX
+#define XX(n) else if (name == #n)
+#undef  YY
+#define YY(n)
+#undef  ZZ
+#define ZZ(n)   override_style = StrCat("\n", UpdateKVLine(override_style, #n, val, ':')); 
+#include "crawler/css_properties.h"
+    else return;
+    if (auto html = node->ownerDocument->documentElement()) html->SetStyleDirty();
+    node->ClearComputedInlineStyle();
   }
 };
 

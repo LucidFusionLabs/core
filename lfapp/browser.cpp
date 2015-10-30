@@ -135,6 +135,10 @@ DOM::Renderer *DOM::Node::AttachRender() {
   return render;
 }
 
+void DOM::Node::SetLayoutDirty() { if (render) render->layout_dirty = true; }
+void DOM::Node::SetStyleDirty()  { if (render) render->style_dirty  = true; }
+void DOM::Node::ClearComputedInlineStyle() { if (render) { render->inline_style.Reset(); render->inline_style_sheet = unique_ptr<LFL::StyleSheet>(); } }
+
 void DOM::Element::setAttribute(const DOMString &name, const DOMString &value) {
   DOM::Attr *attr = AllocatorNew(ownerDocument->alloc, (DOM::Attr), (ownerDocument));
   attr->name = name;
@@ -193,9 +197,10 @@ void DOM::Renderer::UpdateStyle(Flow *F) {
 
   if (!inline_style_sheet) {
     DOM::Attr *inline_style_attr = n->getAttributeNode("style");
-    string style_text = StrCat(n->HTML4Style(), inline_style_attr ? inline_style_attr->nodeValue().c_str() : "");
-    if (!style_text.empty())
-      inline_style_sheet = new LFL::StyleSheet(n->ownerDocument, "", "UTF-8", true, false, style_text.c_str());
+    string style_text = StrCat(n->HTML4Style(), inline_style_attr ? inline_style_attr->nodeValue().c_str() : "",
+                               inline_style.override_style);
+    if (!style_text.empty()) inline_style_sheet =
+      unique_ptr<LFL::StyleSheet>(new LFL::StyleSheet(n->ownerDocument, "", "UTF-8", true, false, style_text.c_str()));
   }
 
   ComputeStyle(n->ownerDocument->style_context, &style, style.is_root ? 0 : &n->parentNode->render->style);
@@ -433,19 +438,19 @@ void DOM::Renderer::Finish() {
   tile_context_opened = 0;
 }
 
-Browser::Document::~Document() { delete parser; }
+Browser::Document::~Document() { printf("destructor called\n"); }
 Browser::Document::Document(Window *W, const Box &V) : parser(new DocumentParser(this)), alloc(1024*1024) {}
 
 void Browser::Document::Clear() {
-  delete js_context;
-  VectorClear(&style_sheet);
+  js_context = unique_ptr<JSContext>();
+  style_sheet.clear();
   alloc.Reset();
-  node = AllocatorNew(&alloc, (DOM::HTMLDocument), (parser, &alloc));
+  node = AllocatorNew(&alloc, (DOM::HTMLDocument), (parser.get(), &alloc));
   node->style_context        = AllocatorNew(&alloc, (StyleContext), (node));
   node->inline_style_context = AllocatorNew(&alloc, (StyleContext), (node));
   node->style_context       ->AppendSheet(StyleSheet::Default());
   node->inline_style_context->AppendSheet(StyleSheet::Default());
-  js_context = CreateV8JSContext(js_console, node);
+  js_context = unique_ptr<JSContext>(CreateV8JSContext(js_console.get(), node));
 }
 
 Browser::Browser(GUI *gui, const Box &V) : doc(gui ? gui->parent : NULL, V),
@@ -494,8 +499,8 @@ void Browser::SetClearColor(const Color &c) {
 
 void Browser::SetViewport(int w, int h) {
   viewport.SetDimension(point(w, h));
-  if (app->render_process) RunInNetworkThread(bind(&ProcessAPIClient::SetViewport, app->render_process, w, h));
-  else                     doc.SetLayoutDirty(); 
+  if (app->render_process)               RunInNetworkThread(bind(&ProcessAPIClient::SetViewport, app->render_process, w, h));
+  else if (auto html = doc.DocElement()) html->SetLayoutDirty(); 
 }
 
 void Browser::Layout(const Box &b) {
