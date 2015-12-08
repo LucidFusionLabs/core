@@ -59,11 +59,6 @@ struct BitString {
   static int FirstClear(const          char *b, int l) { return FirstClear(reinterpret_cast<const unsigned char*>(b), l); }
 };
 
-struct ByteSink {
-  virtual int Write(const char *b, int l) = 0;
-  virtual void IOCtlWindowSize(int w, int h) {}
-};
-
 struct Unicode {
   static const unsigned char non_breaking_space = 0xA0;
   static const unsigned short zero_width_non_breaking_space = 0xFEFF, replacement_char = 0xFFFD;

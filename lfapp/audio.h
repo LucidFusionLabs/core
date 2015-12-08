@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef __LFL_LFAPP_AUDIO_H__
-#define __LFL_LFAPP_AUDIO_H__
+#ifndef LFL_LFAPP_AUDIO_H__
+#define LFL_LFAPP_AUDIO_H__
 namespace LFL {
 
 DECLARE_int(sample_secs);
@@ -45,43 +45,43 @@ struct F0EstmMethod { enum { fftbucket=1, xcorr=2, Default=2, cepstral=3, harmon
 struct MixFlag { enum { Reset=1, Mix=2, DontQueue=4 }; };
 
 struct Sample {
-    enum { U8 =1, S16 =2, S32 =3, FLOAT =4, DOUBLE =5,
-           U8P=6, S16P=7, S32P=8, FLOATP=9, DOUBLEP=10 };
-    int Size(int fmt);
+  enum { U8 =1, S16 =2, S32 =3, FLOAT =4, DOUBLE =5,
+    U8P=6, S16P=7, S32P=8, FLOATP=9, DOUBLEP=10 };
+  int Size(int fmt);
 #ifdef LFL_FFMPEG
-    static int FromFFMpegId(int fmt);
-    static int ToFFMpegId(int fmt);
+  static int FromFFMpegId(int fmt);
+  static int ToFFMpegId(int fmt);
 #endif
 };
 
 struct SystemAudio {
-    static void PlaySoundEffect(SoundAsset *);
-    static void PlayBackgroundMusic(SoundAsset *);
-    static void SetVolume(int v);
-    static int GetVolume();
-    static int GetMaxVolume();
+  static void PlaySoundEffect(SoundAsset *);
+  static void PlayBackgroundMusic(SoundAsset *);
+  static void SetVolume(int v);
+  static int GetVolume();
+  static int GetMaxVolume();
 };
 
 struct Audio : public Module {
-    mutex inlock, outlock;
-    RingBuf micL, micR;
-    RingBuf *IL, *IR;
-    RingBuf::Handle RL, RR;
-    long long samples_read=0, samples_read_last=0;
-    int outlast=0, mic_samples=0;
-    SoundAsset *playing=0, *loop=0;
-    deque<float> Out;
-    Module *impl=0;
-    Audio() : micL(FLAGS_sample_rate*FLAGS_sample_secs), micR(FLAGS_sample_rate*FLAGS_sample_secs),
-    IL(&micL), IR(&micR), Out(32768)  {}
+  mutex inlock, outlock;
+  RingBuf micL, micR;
+  RingBuf *IL, *IR;
+  RingBuf::Handle RL, RR;
+  long long samples_read=0, samples_read_last=0;
+  int outlast=0, mic_samples=0;
+  SoundAsset *playing=0, *loop=0;
+  deque<float> Out;
+  Module *impl=0;
+  Audio() : micL(FLAGS_sample_rate*FLAGS_sample_secs), micR(FLAGS_sample_rate*FLAGS_sample_secs),
+  IL(&micL), IR(&micR), Out(32768)  {}
 
-    int Init ();
-    int Start();
-    int Frame(unsigned);
-    int Free ();
-    void QueueMix(SoundAsset *sa, int flag=MixFlag::Reset, int offset=-1, int len=-1);
-    void QueueMixBuf(const RingBuf::Handle *L, int channels=1, int flag=0);
-    int Snapshot(SoundAsset *sa);
+  int Init ();
+  int Start();
+  int Frame(unsigned);
+  int Free ();
+  void QueueMix(SoundAsset *sa, int flag=MixFlag::Reset, int offset=-1, int len=-1);
+  void QueueMixBuf(const RingBuf::Handle *L, int channels=1, int flag=0);
+  int Snapshot(SoundAsset *sa);
 };
 
 int Sinthesize(Audio *s, int hz1, int hz2, int hz3);
@@ -94,33 +94,33 @@ int CrossCorrelateTDOA(const RingBuf::Handle *a, const RingBuf::Handle *b, int w
 inline vector<double> PreEmphasisFilter() { vector<double> v { 1, FLAGS_feat_preemphasis_filter }; return v; }
 
 struct AudioResampler {
-    SwrContext *swr=0;
-    int input_processed=0, input_chans=0, output_available=0, output_chans=0, output_rate=0;
-    RingBuf *out=0;
-    AudioResampler() { Clear(); }
-    ~AudioResampler() { Close(); }
+  SwrContext *swr=0;
+  int input_processed=0, input_chans=0, output_available=0, output_chans=0, output_rate=0;
+  RingBuf *out=0;
+  AudioResampler() { Clear(); }
+  ~AudioResampler() { Close(); }
 
-    void Clear();
-    void Close();
-    bool Opened() { return swr; }
-    int Open(RingBuf *out, int  in_channels, int  in_sample_rate, int  in_sample_type,
-                           int out_channels, int out_sample_rate, int out_sample_type);
-    int Update(int samples, const short *in);
-    int Update(int samples, RingBuf::Handle *L, RingBuf::Handle *R);
-    int Update(int samples, const short **in, short *tmp, microseconds timestamp, int max_samples_out);
+  void Clear();
+  void Close();
+  bool Opened() { return swr; }
+  int Open(RingBuf *out, int  in_channels, int  in_sample_rate, int  in_sample_type,
+           int out_channels, int out_sample_rate, int out_sample_type);
+  int Update(int samples, const short *in);
+  int Update(int samples, RingBuf::Handle *L, RingBuf::Handle *R);
+  int Update(int samples, const short **in, short *tmp, microseconds timestamp, int max_samples_out);
 
-    static microseconds MonotonouslyIncreasingTimestamp(microseconds laststamp, microseconds stamp, microseconds *step, int steps);
+  static microseconds MonotonouslyIncreasingTimestamp(microseconds laststamp, microseconds stamp, microseconds *step, int steps);
 };
 
 struct StatefulFilter {
-    double state[32];
-    int size=0, next=0, filterLenB=0, filterLenA=0, samples=0;
-    const double *filterB=0, *filterA=0;
+  double state[32];
+  int size=0, next=0, filterLenB=0, filterLenA=0, samples=0;
+  const double *filterB=0, *filterA=0;
 
-    void Open(int FilterLenB, const double *FilterB, int FilterLenA, const double *FilterA);
+  void Open(int FilterLenB, const double *FilterB, int FilterLenA, const double *FilterA);
 
-    double Filter(double sample);
-    int Filter(const RingBuf::Handle *in, RingBuf::Handle *out, int start, int length=0);
+  double Filter(double sample);
+  int Filter(const RingBuf::Handle *in, RingBuf::Handle *out, int start, int length=0);
 };
 
 /* stateless filters */
@@ -153,4 +153,4 @@ Matrix *MFCC(const RingBuf::Handle *in, Matrix *out=0, Allocator *alloc=0);
 RingBuf *InvMFCC(const Matrix *in, int samplerate, const Matrix *f0=0);
 
 }; // namespace LFL
-#endif // __LFL_LFAPP_AUDIO_H__
+#endif // LFL_LFAPP_AUDIO_H__

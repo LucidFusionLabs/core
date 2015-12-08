@@ -438,7 +438,7 @@ void DOM::Renderer::Finish() {
   tile_context_opened = 0;
 }
 
-Browser::Document::~Document() { printf("destructor called\n"); }
+Browser::Document::~Document() {}
 Browser::Document::Document(Window *W, const Box &V) : parser(new DocumentParser(this)), alloc(1024*1024) {}
 
 void Browser::Document::Clear() {
@@ -464,6 +464,7 @@ Browser::Browser(GUI *gui, const Box &V) : doc(gui ? gui->parent : NULL, V),
 
 void Browser::Navigate(const string &url) {
   if (!layers) return SystemBrowser::Open(url.c_str());
+  else                Open(url);
 }
 
 void Browser::Open(const string &url) {
@@ -477,13 +478,13 @@ void Browser::KeyEvent(int key, bool down) {
 }
 
 void Browser::MouseMoved(int x, int y) {
-  if (app->render_process) { y -= Viewport().h+VScrolled(); RunInNetworkThread(bind(&ProcessAPIClient::MouseMove, app->render_process, x, y, x-mouse.x, y-mouse.y)); mouse=point(x,y); }
+  if (app->render_process) { y -= screen->height+viewport.top()+VScrolled(); RunInNetworkThread(bind(&ProcessAPIClient::MouseMove, app->render_process, x, y, x-mouse.x, y-mouse.y)); mouse=point(x,y); }
   else if (auto n = doc.node->documentElement()) { mouse=point(x,y); EventNode(n, initial_displacement, Mouse::Event::Motion); }
 }
 
 void Browser::MouseButton(int b, bool d, int x, int y) {
   // doc.gui.Input(b, mouse, d, 1);
-  if (app->render_process) { y -= Viewport().h+VScrolled(); RunInNetworkThread(bind(&ProcessAPIClient::MouseClick, app->render_process, b, d, mouse.x, mouse.y)); mouse=point(x,y); }
+  if (app->render_process) { y -= screen->height+viewport.top()+VScrolled(); RunInNetworkThread(bind(&ProcessAPIClient::MouseClick, app->render_process, b, d, x, y)); mouse=point(x,y); }
   else if (auto n = doc.node->documentElement()) { mouse=point(x,y); EventNode(n, initial_displacement, Mouse::ButtonID(b)); }
 }
 
@@ -551,17 +552,19 @@ void Browser::PaintTile(int x, int y, int z, const MultiProcessPaintResource &pa
   tiles->Release();
 }
 
-void Browser::EventNode(DOM::Node *n, const point &displacement_in, int type) {
+bool Browser::EventNode(DOM::Node *n, const point &displacement_in, int type) {
   auto render = n->render;
-  if (!render || !render->box.within(mouse)) return;
-  printf("event node type=%d %s vs %s %s\n", type, n->nodeName().c_str(),
-         mouse.DebugString().c_str(), render->box.DebugString().c_str());
+  if (!render) return true;
+  if (render->block_level_box) { if (!(render->box           + displacement_in).within(mouse)) return true; }
+  else                         { if (!(render->inline_box[0] + displacement_in).within(mouse)) return true; }
+  if (auto a = n->AsHTMLAnchorElement()) { AnchorClicked(a); return false; }
   bool is_table = n->htmlElementType == DOM::HTML_TABLE_ELEMENT;
   point displacement = displacement_in + (render->block_level_box ? render->box.TopLeft() : point());
-  if (is_table) VisitTableChildren (n, [&](DOM::Node *child) { EventNode(child, displacement, type); return true; });
-  else          VisitChildren      (n, [&](DOM::Node *child) { EventNode(child, displacement, type); return true; });
-  if (render->block_level_box) VisitFloatingChildren(n, [&](DOM::Node *child, const FloatContainer::Float &b) {
-                                                     EventNode(child, displacement, type); return true; });
+  if (is_table) { if (!VisitTableChildren (n, [&](DOM::Node *child) { return EventNode(child, displacement, type); })) return false; }
+  else          { if (!VisitChildren      (n, [&](DOM::Node *child) { return EventNode(child, displacement, type); })) return false; }
+  if (render->block_level_box) { if (!VisitFloatingChildren(n, [&](DOM::Node *child, const FloatContainer::Float &b) {
+                                                            return EventNode(child, displacement, type); })) return false; }
+  return true;
 }
 
 void Browser::Paint(Flow *flow, const point &displacement) {
@@ -611,7 +614,7 @@ void Browser::PaintNode(Flow *flow, DOM::Node *n, const point &displacement_in) 
   }
 
   point displacement = displacement_in + (render->block_level_box ? render->box.TopLeft() : point());
-  if (render_log)              UpdateRenderLog(n);
+  if (render_log)              UpdateRenderLog(n, displacement_in);
   if (render->clip)            render->PushScissor(render->border.TopLeft(render->clip_rect) + displacement);
   if (render->overflow_hidden) render->PushScissor(render->content                           + displacement);
   if (!render->hidden) {
@@ -691,12 +694,13 @@ DOM::Node *Browser::LayoutNode(Flow *flow, DOM::Node *n, bool reflow) {
     }
   } else render->flow = render->parent_flow;
   render->UpdateFlowAttributes(render->flow);
+  point sp = render->flow->p;
+  int beg_out_ind = render->flow->out->Size(), beg_line_ind = render->flow->out->line_ind.size();
 
   if (n->nodeType == DOM::TEXT_NODE) {
-    DOM::Text *T = n->AsText();
-    if (1)                            render->flow->SetFGColor(&render->color);
-    // if (style->bgcolor_not_inherited) render->flow->SetBGColor(&render->background_color);
-    render->flow->AppendText(T->data);
+    if (1)                                render->flow->SetFGColor(&render->color);
+    // if (style->bgcolor_not_inherited)  render->flow->SetBGColor(&render->background_color);
+    render->flow->AppendText(n->AsText()->data);
   } else if ((n->htmlElementType == DOM::HTML_IMAGE_ELEMENT) ||
              (n->htmlElementType == DOM::HTML_INPUT_ELEMENT && StringEquals(n->AsElement()->getAttribute("type"), "image"))) {
     Texture *tex = n->htmlElementType == DOM::HTML_IMAGE_ELEMENT ? n->AsHTMLImageElement()->tex.get() : n->AsHTMLInputElement()->image_tex.get();
@@ -765,6 +769,14 @@ DOM::Node *Browser::LayoutNode(Flow *flow, DOM::Node *n, bool reflow) {
       render->box.SetDimension(point(block_width, block_height));
       if (style->is_root || render->position_absolute || table_element) render->box.y -= block_height;
     }
+  } else {
+    int end_out_ind = flow->out->Size(), end_line_ind = flow->out->line_ind.size();
+    int first_line_height = flow->cur_attr.font->Height(), last_line_height = flow->cur_attr.font->Height();
+    Box gb = beg_out_ind ? flow->out->data[beg_out_ind-1].box : (flow->out->data.size() ? flow->out->data.begin()->box : Box());
+    Box ge = end_out_ind ? flow->out->data[end_out_ind-1].box : Box();
+    render->inline_box = Box3(Box(flow->container->w, flow->container->h),
+                              gb.Position(), ge.Position() + point(ge.w, 0),
+                              first_line_height, last_line_height);
   }
 
   if (render->background_image) render->UpdateBackgroundImage(flow);
@@ -902,7 +914,7 @@ void Browser::UpdateTableStyle(Flow *flow, DOM::Node *n) {
   n->render->style_dirty = 0;
 }
 
-void Browser::UpdateRenderLog(DOM::Node *n) {
+void Browser::UpdateRenderLog(DOM::Node *n, const point &displacement) {
   DOM::Renderer *render = n->render;
   if (render_log->data.empty()) {
     CHECK(render->style.is_root);
@@ -913,38 +925,42 @@ void Browser::UpdateRenderLog(DOM::Node *n) {
                               "\nlayer at (0,0) size ", render->box.w, "x", render->box.h, "\n");
   }
   if (render->block_level_box) {
-    StrAppend(&render_log->data, string(render_log->indent, ' '), "RenderBlock {", toupper(n->nodeName()), "} at (",
-              render->box.x, ",", ScreenToWebKitY(render->box), ") size ", render->box.w, "x", render->box.h, "\n");
+    Box box = render->box + displacement;
+    StrAppend(&render_log->data, string(render_log->indent, ' '), "RenderBlock {", toupper(n->nodeName()), "} at (");
+    StrAppend(&render_log->data, box.x, ",", ToWebKitY(box), ") size ", box.w, "x", box.h, "\n");
     render_log->indent += 2;
   }
   if (n->nodeType == DOM::TEXT_NODE) {
-    StrAppend(&render_log->data, string(render_log->indent, ' '),
-              "text run at (", render->box.x, ",",    ScreenToWebKitY(render->box),
-              ") width ",      render->box.w, ": \"", n->nodeValue(), "\"\n");
+    Box inline_box = render->inline_box[0] + displacement;
+    StrAppend(&render_log->data, string(render_log->indent, ' '), "text run at (", inline_box.x, ",", ToWebKitY(inline_box));
+    StrAppend(&render_log->data, ") width ", inline_box.w, " height ", inline_box.h);
+    StrAppend(&render_log->data, ": \"", n->nodeValue(), "\"\n");
   }
 }
 
-
-void Browser::VisitChildren(DOM::Node *n, const function<bool(DOM::Node*)> &f) {
+bool Browser::VisitChildren(DOM::Node *n, const function<bool(DOM::Node*)> &f) {
   DOM::NodeList *children = &n->childNodes;
   for (int i=0, l=children->length(); i<l; i++) {
     DOM::Node *child = children->item(i);
-    if (!child->render->done_floated) f(child);
+    if (!child->render->done_floated) if (!f(child)) return false;
   }
+  return true;
 }
 
-void Browser::VisitTableChildren(DOM::Node *n, const function<bool(DOM::Node*)> &f) {
+bool Browser::VisitTableChildren(DOM::Node *n, const function<bool(DOM::Node*)> &f) {
   DOM::HTMLTableElement *table = n->AsHTMLTableElement();
   HTMLTableRowIter(table)
     if (!row->render->Dirty()) HTMLTableColIter(row) 
-      if (!cell->render->Dirty()) f(cell);
+      if (!cell->render->Dirty()) if (!f(cell)) return false;
+  return true;
 }
 
-void Browser::VisitFloatingChildren(DOM::Node *n, const function<bool(DOM::Node*, const FloatContainer::Float&)> &f) {
+bool Browser::VisitFloatingChildren(DOM::Node *n, const function<bool(DOM::Node*, const FloatContainer::Float&)> &f) {
   auto render = n->render;
-  if (!render) return;
-  for (auto &i : render->box.float_left)  if (!i.inherited) f(static_cast<DOM::Node*>(i.val), i);
-  for (auto &i : render->box.float_right) if (!i.inherited) f(static_cast<DOM::Node*>(i.val), i);
+  if (!render) return true;
+  for (auto &i : render->box.float_left)  if (!i.inherited) if (!f(static_cast<DOM::Node*>(i.val), i)) return false;
+  for (auto &i : render->box.float_right) if (!i.inherited) if (!f(static_cast<DOM::Node*>(i.val), i)) return false;
+  return true;
 }
 
 #ifdef LFL_QT

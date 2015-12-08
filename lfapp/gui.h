@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef __LFL_LFAPP_GUI_H__
-#define __LFL_LFAPP_GUI_H__
+#ifndef LFL_LFAPP_GUI_H__
+#define LFL_LFAPP_GUI_H__
 namespace LFL {
 
 DECLARE_bool(multitouch);
@@ -450,6 +450,11 @@ struct Editor : public TextArea {
 
 struct Terminal : public TextArea {
   struct State { enum { TEXT=0, ESC=1, CSI=2, OSC=3, CHARSET=4 }; };
+  struct ByteSink {
+    virtual int Write(const char *b, int l) = 0;
+    virtual void IOCtlWindowSize(int w, int h) {}
+  };
+
   ByteSink *sink=0;
   int term_width=0, term_height=0, parse_state=State::TEXT;
   int scroll_region_beg=0, scroll_region_end=0, tab_width=8;
@@ -624,4 +629,4 @@ struct HelperGUI : public GUI {
 };
 
 }; // namespace LFL
-#endif // __LFL_LFAPP_GUI_H__
+#endif // LFL_LFAPP_GUI_H__

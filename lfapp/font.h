@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef __LFL_LFAPP_FONT_H__
-#define __LFL_LFAPP_FONT_H__
+#ifndef LFL_LFAPP_FONT_H__
+#define LFL_LFAPP_FONT_H__
 
 namespace LFL {
 DECLARE_string(font_engine);
@@ -450,4 +450,4 @@ struct DejaVuSansFreetype {
 };
 
 }; // namespace LFL
-#endif // __LFL_LFAPP_FONT_H__
+#endif // LFL_LFAPP_FONT_H__

@@ -1532,8 +1532,11 @@ struct StyleSheet : public LFL::DOM::Object {
 };
 struct ComputedStyle : public LFL::DOM::CSSStyleDeclaration {
   LFL::DOM::Node *node;
+  string override_style;
   bool is_root, font_not_inherited, bgcolor_not_inherited;
   ComputedStyle(LFL::DOM::Node *N) : node(N), is_root(0), font_not_inherited(0), bgcolor_not_inherited(0) {}
+
+  void Reset() {}
   bool IsLink() const {
     for (LFL::DOM::Node *n = node ? node->parentNode : 0; n; n = n->parentNode)
       if (n->htmlElementType == LFL::DOM::HTML_ANCHOR_ELEMENT) return true;

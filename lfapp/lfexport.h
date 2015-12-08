@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef __LFL_LFAPP_LFEXPORT_H__
-#define __LFL_LFAPP_LFEXPORT_H__
+#ifndef LFL_LFAPP_LFEXPORT_H__
+#define LFL_LFAPP_LFEXPORT_H__
 
 #if _MSC_VER
   #if _WIN64
@@ -267,4 +267,4 @@ void BreakHook();
 #ifdef __cplusplus
 };
 #endif // __cplusplus
-#endif // __LFL_LFAPP_LFEXPORT_H__
+#endif // LFL_LFAPP_LFEXPORT_H__

@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef __LFL_LFJNI_LFJNI_H__
-#define __LFL_LFJNI_LFJNI_H__
+#ifndef LFL_LFJNI_LFJNI_H__
+#define LFL_LFJNI_LFJNI_H__
 
 #ifdef __cplusplus
 extern "C" {
@@ -58,4 +58,4 @@ int   AndroidGPlusSendReliable(const char *participant_name, const char *buf, in
 };
 #endif
 
-#endif
+#endif // LFL_LFJNI_LFJNI_H__

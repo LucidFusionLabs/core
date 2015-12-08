@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef __LFL_LFAPP_VIDEO_H__
-#define __LFL_LFAPP_VIDEO_H__
+#ifndef LFL_LFAPP_VIDEO_H__
+#define LFL_LFAPP_VIDEO_H__
 
 namespace LFL {
 DECLARE_bool(gd_debug);
@@ -700,4 +700,4 @@ typedef SimpleVideoResampler VideoResampler;
 #endif
 
 }; // namespace LFL
-#endif // __LFL_LFAPP_VIDEO_H__
+#endif // LFL_LFAPP_VIDEO_H__

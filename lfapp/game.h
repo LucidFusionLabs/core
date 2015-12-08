@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef __LFL_LFAPP_GAME_H__
-#define __LFL_LFAPP_GAME_H__
+#ifndef LFL_LFAPP_GAME_H__
+#define LFL_LFAPP_GAME_H__
 namespace LFL {
 
 DECLARE_bool(rcon_debug);
@@ -1388,4 +1388,4 @@ struct GameMultiTouchControls {
 
 #include "lfapp/physics.h"
 
-#endif /* __LFL_LFAPP_GAME_H__ */
+#endif /* LFL_LFAPP_GAME_H__ */

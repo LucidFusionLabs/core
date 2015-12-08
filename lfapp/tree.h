@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef __LFL_LFAPP_TREE_H__
-#define __LFL_LFAPP_TREE_H__
+#ifndef LFL_LFAPP_TREE_H__
+#define LFL_LFAPP_TREE_H__
 namespace LFL {
 
 template <class K, class V> struct RedBlackTreeNode {
@@ -575,4 +575,4 @@ struct PrefixSumKeyedRedBlackTree : public RedBlackFingerTree<K, V, Node, Finger
 };
 
 }; // namespace LFL
-#endif // __LFL_LFAPP_TREE_H__
+#endif // LFL_LFAPP_TREE_H__

@@ -35,6 +35,7 @@ struct BrowserController : public InputController {
 
 namespace DOM {
 struct Renderer : public Object {
+  Box3 inline_box;
   FloatContainer box;
   ComputedStyle style, inline_style;
   unique_ptr<LFL::StyleSheet> inline_style_sheet;
@@ -155,20 +156,20 @@ struct Browser : public BrowserInterface {
   void UpdateScrollbar();
   void Render(bool screen_coords=0, int v_scrolled=0);
 
-  void       EventNode       (DOM::Node*, const point &displacement, int);
+  bool       EventNode       (DOM::Node*, const point &displacement, int);
   void       Paint           (Flow *flow, const point &displacement);
   void       PaintNode       (Flow *flow, DOM::Node*, const point &displacement);
   DOM::Node *LayoutNode      (Flow *flow, DOM::Node*, bool reflow);
-  void       LayoutBackground(            DOM::Node*);
+  void       LayoutBackground(DOM::Node*);
   void       LayoutTable     (Flow *flow, DOM::HTMLTableElement *n);
   void       UpdateTableStyle(Flow *flow, DOM::Node *n);
-  void       UpdateRenderLog (            DOM::Node *n);
+  void       UpdateRenderLog (DOM::Node *n, const point &displacement);
 
-  void VisitChildren        (DOM::Node *n, const function<bool(DOM::Node*)>&);
-  void VisitTableChildren   (DOM::Node *n, const function<bool(DOM::Node*)>&);
-  void VisitFloatingChildren(DOM::Node *n, const function<bool(DOM::Node*, const FloatContainer::Float&)>&);
+  bool VisitChildren        (DOM::Node *n, const function<bool(DOM::Node*)>&);
+  bool VisitTableChildren   (DOM::Node *n, const function<bool(DOM::Node*)>&);
+  bool VisitFloatingChildren(DOM::Node *n, const function<bool(DOM::Node*, const FloatContainer::Float&)>&);
 
-  static int ScreenToWebKitY(const Box &w) { return -w.y - w.h; }
+  static int ToWebKitY(const Box &w) { return -w.y - w.h; }
 };
 
 BrowserInterface *CreateQTWebKitBrowser (GUI *g, int w=1024, int h=1024);

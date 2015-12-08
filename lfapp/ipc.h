@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef __LFL_LFAPP_IPC_H__
-#define __LFL_LFAPP_IPC_H__
+#ifndef LFL_LFAPP_IPC_H__
+#define LFL_LFAPP_IPC_H__
 
 #ifdef LFL_FLATBUFFERS
 #include "ipc_generated.h"
@@ -251,4 +251,4 @@ typedef LayersT<TilesIPCServer> LayersIPCServer;
 typedef LayersT<TilesIPCClient> LayersIPCClient;
 
 }; // namespace LFL
-#endif // __LFL_LFAPP_IPC_H__
+#endif // LFL_LFAPP_IPC_H__

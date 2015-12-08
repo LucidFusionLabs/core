@@ -128,7 +128,7 @@ struct KeyRepeater {
       for (int j=0, max_repeat=10; elapsed >= FLAGS_keyboard_repeat; ++j) {
         if (!delay) { delay=1; key_delay[*i]=true; elapsed -= FLAGS_keyboard_delay; }
         else        {                              elapsed -= FLAGS_keyboard_repeat; }
-        if (j < max_repeat) app->input.KeyEventDispatch(*i, true);
+        if (j < max_repeat) app->input->KeyEventDispatch(*i, true);
       }
       key_down_repeat[*i] = now - elapsed;
     }
@@ -187,7 +187,7 @@ void Mouse::ReleaseFocus() {}
 #ifdef LFL_ANDROIDINPUT
 struct AndroidInputModule : public InputModule {
   bool frame_on_keyboard_input = 0, frame_on_mouse_input = 0;
-  int Frame(unsigned clicks) { return app->input.DispatchQueuedInput(frame_on_keyboard_input, frame_on_mouse_input); }
+  int Frame(unsigned clicks) { return app->input->DispatchQueuedInput(frame_on_keyboard_input, frame_on_mouse_input); }
 };
 
 const int Key::Escape     = 0xE100;
@@ -225,8 +225,8 @@ const int Key::F12        = -32;
 const int Key::Home       = -33;
 const int Key::End        = -34;
 
-extern "C" void AndroidSetFrameOnKeyboardInput(int v) { static_cast<AndroidInputModule*>(app->input.impl)->frame_on_keyboard_input = v; }
-extern "C" void AndroidSetFrameOnMouseInput   (int v) { static_cast<AndroidInputModule*>(app->input.impl)->frame_on_mouse_input    = v; }
+extern "C" void AndroidSetFrameOnKeyboardInput(int v) { static_cast<AndroidInputModule*>(app->input->impl)->frame_on_keyboard_input = v; }
+extern "C" void AndroidSetFrameOnMouseInput   (int v) { static_cast<AndroidInputModule*>(app->input->impl)->frame_on_mouse_input    = v; }
 
 string Clipboard::Get() { return ""; }
 void Clipboard::Set(const string &s) {}
@@ -480,7 +480,7 @@ LRESULT APIENTRY WinApp::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
   case WM_PAINT:                       BeginPaint((HWND)screen->id, &ps); if (!FLAGS_target_fps) LFAppFrame(true); EndPaint((HWND)screen->id, &ps); return 0;
   case WM_SIZING:                      return win->resize_increment.Zero() ? 0 : win->RestrictResize(wParam, reinterpret_cast<LPRECT>(lParam));
   case WM_USER:                        if (!FLAGS_target_fps) LFAppFrame(true); return 0;
-  case WM_KILLFOCUS:                   app->input.ClearButtonsDown(); return 0;
+  case WM_KILLFOCUS:                   app->input->ClearButtonsDown(); return 0;
   default:                             break;
   }
   return DefWindowProc(hWnd, message, wParam, lParam);
@@ -629,7 +629,7 @@ struct X11InputModule : public InputModule {
         case KeyRelease:      if (KeyPress(GetKeyCodeFromXEvent(display, xev), 0)) app->EventDrivenFrame(0); break;
         case ButtonPress:     if (screen && MouseClick(xev.xbutton.button, 1, xev.xbutton.x, screen->height-xev.xbutton.y)) app->EventDrivenFrame(0); break;
         case ButtonRelease:   if (screen && MouseClick(xev.xbutton.button, 0, xev.xbutton.x, screen->height-xev.xbutton.y)) app->EventDrivenFrame(0); break;
-        case MotionNotify:    if (screen) { point p(xev.xmotion.x, screen->height-xev.xmotion.y); if (app->input.MouseMove(p, p - screen->mouse)) app->EventDrivenFrame(0); } break;
+        case MotionNotify:    if (screen) { point p(xev.xmotion.x, screen->height-xev.xmotion.y); if (app->input->MouseMove(p, p - screen->mouse)) app->EventDrivenFrame(0); } break;
         case ConfigureNotify: if (screen && xev.xconfigure.width != screen->width || xev.xconfigure.height != screen->height) { screen->Reshaped(xev.xconfigure.width, xev.xconfigure.height); app->EventDrivenFrame(0); } break;
         case ClientMessage:   if (xev.xclient.data.l[0] == delete_win) WindowClosed(); break;
         case Expose:          app->EventDrivenFrame(0);
@@ -765,22 +765,22 @@ struct GLFWInputModule : public InputModule {
   static void WindowClose(GLFWwindow *W)               { if (!LoadScreen(W)) return; Window::Close(screen); }
   static void Key(GLFWwindow *W, int k, int s, int a, int m) {
     if (!LoadScreen(W)) return;
-    app->input.KeyPress((unsigned)k < 256 && isalpha((unsigned)k) ? ::tolower((unsigned)k) : k,
-                        (a == GLFW_PRESS || a == GLFW_REPEAT));
+    app->input->KeyPress((unsigned)k < 256 && isalpha((unsigned)k) ? ::tolower((unsigned)k) : k,
+                         (a == GLFW_PRESS || a == GLFW_REPEAT));
   }
   static void MouseClick(GLFWwindow *W, int b, int a, int m) {
     if (!LoadScreen(W)) return;
-    app->input.MouseClick(MouseButton(b), a == GLFW_PRESS, screen->mouse);
+    app->input->MouseClick(MouseButton(b), a == GLFW_PRESS, screen->mouse);
   }
   static void MousePosition(GLFWwindow *W, double x, double y) {
     if (!LoadScreen(W)) return;
     point p = Input::TransformMouseCoordinate(point(x, y));
-    app->input.MouseMove(p, p - screen->mouse);
+    app->input->MouseMove(p, p - screen->mouse);
   }
   static void MouseWheel(GLFWwindow *W, double x, double y) {
     if (!LoadScreen(W)) return;
     point p(x, y);
-    app->input.MouseWheel(p, p -screen->mouse_wheel);
+    app->input->MouseWheel(p, p -screen->mouse_wheel);
   }
   static unsigned MouseButton(int b) {
     switch (b) {
@@ -858,14 +858,14 @@ struct SDLInputModule : public InputModule {
         if      (ev.window.event == SDL_WINDOWEVENT_RESIZED) screen->Reshape(ev.window.data1, ev.window.data2);
         else if (ev.window.event == SDL_WINDOWEVENT_CLOSE) Window::Close(screen);
       }
-      else if (ev.type == SDL_KEYDOWN) app->input.KeyPress(ev.key.keysym.sym, 1);
-      else if (ev.type == SDL_KEYUP)   app->input.KeyPress(ev.key.keysym.sym, 0);
+      else if (ev.type == SDL_KEYDOWN) app->input->KeyPress(ev.key.keysym.sym, 1);
+      else if (ev.type == SDL_KEYUP)   app->input->KeyPress(ev.key.keysym.sym, 0);
       else if (ev.type == SDL_MOUSEMOTION) {
-        app->input.MouseMove(mp, point(ev.motion.xrel, ev.motion.yrel));
+        app->input->MouseMove(mp, point(ev.motion.xrel, ev.motion.yrel));
         mouse_moved = true;
       }
-      else if (ev.type == SDL_MOUSEBUTTONDOWN) app->input.MouseClick(ev.button.button, 1, point(ev.button.x, ev.button.y));
-      else if (ev.type == SDL_MOUSEBUTTONUP)   app->input.MouseClick(ev.button.button, 0, point(ev.button.x, ev.button.y));
+      else if (ev.type == SDL_MOUSEBUTTONDOWN) app->input->MouseClick(ev.button.button, 1, point(ev.button.x, ev.button.y));
+      else if (ev.type == SDL_MOUSEBUTTONUP)   app->input->MouseClick(ev.button.button, 0, point(ev.button.x, ev.button.y));
       // else if (ev.type == SDL_ACTIVEEVENT && ev.active.state & SDL_APPACTIVE) { if ((minimized = ev.active.gain)) return 0; }
     }
 

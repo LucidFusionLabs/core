@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef __LFL_LFAPP_NETWORK_H__
-#define __LFL_LFAPP_NETWORK_H__
+#ifndef LFL_LFAPP_NETWORK_H__
+#define LFL_LFAPP_NETWORK_H__
 
 #include "lfapp/wire.h"
 
@@ -627,4 +627,4 @@ struct GeoResolution {
 };
 
 }; // namespace LFL
-#endif // __LFL_LFAPP_NETWORK_H__
+#endif // LFL_LFAPP_NETWORK_H__

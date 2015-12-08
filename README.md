@@ -169,6 +169,8 @@ See [new_app_template/README.txt](new_app_template/README.txt) to quick start yo
 2. Commit your changes and push to your fork `git push origin master`
 3. Create a new pull request and submit it back to the project.
 
+* Code style should generally follow [http://google.github.io/styleguide/cppguide.html](Google C++ Style Guide)
+
 ## License
 
 * GPL

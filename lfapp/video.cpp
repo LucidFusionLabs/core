@@ -1828,7 +1828,7 @@ void Window::MakeCurrent(Window *W) {}
 struct AndroidVideoModule : public Module {
   int Init() {
     INFO("AndroidVideoModule::Init()");
-    if (AndroidVideoInit(&app->video.opengles_version)) return -1;
+    if (AndroidVideoInit(&app->video->opengles_version)) return -1;
     CHECK(!screen->id);
     screen->id = screen;
     Window::active[screen->id] = screen;
@@ -1958,7 +1958,7 @@ struct X11VideoModule : public Module {
   }
 };
 bool Window::Create(Window *W) {
-  X11VideoModule *video = dynamic_cast<X11VideoModule*>(app->video.impl);
+  X11VideoModule *video = dynamic_cast<X11VideoModule*>(app->video->impl);
   ::Window root = DefaultRootWindow(video->display);
   XSetWindowAttributes swa;
   swa.colormap = XCreateColormap(video->display, root, video->vi->visual, AllocNone);
@@ -2008,7 +2008,7 @@ struct XTVideoModule : public Module {
   }
 };
 bool Window::Create(Window *W) {
-  XTVideoModule *video = dynamic_cast<XTVideoModule*>(app->video.impl);
+  XTVideoModule *video = dynamic_cast<XTVideoModule*>(app->video->impl);
   W->surface = XtDisplay((::Widget)W->impl);
   W->id = XmCreateFrame(video->toplevel, "frame", NULL, 0);
   W->impl = video->toplevel;
@@ -2401,7 +2401,7 @@ void Window::Reshape(int w, int h) {
   AdjustWindowRect(&r, lStyle, win->menubar);
   SetWindowPos((HWND)screen->id, 0, 0, 0, r.right-r.left, r.bottom-r.top, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
 #elif defined(LFL_X11VIDEO)
-  X11VideoModule *video = dynamic_cast<X11VideoModule*>(app->video.impl);
+  X11VideoModule *video = dynamic_cast<X11VideoModule*>(app->video->impl);
   XWindowChanges resize;
   resize.width = w;
   resize.height = h;
@@ -2569,7 +2569,7 @@ void *Video::CompleteGLContextCreate(Window *W, void *gl_context) {
   wglMakeCurrent((HDC)W->surface, (HGLRC)gl_context);
   return gl_context;
 #elif defined(LFL_X11VIDEO)
-  X11VideoModule *video = dynamic_cast<X11VideoModule*>(app->video.impl);
+  X11VideoModule *video = dynamic_cast<X11VideoModule*>(app->video->impl);
   GLXContext glc = glXCreateContext(video->display, video->vi, static_cast<GLXContext>(W->gl), GL_TRUE);
   glXMakeCurrent(video->display, (::Window)(W->id), glc);
   return glc;
