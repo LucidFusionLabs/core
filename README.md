@@ -1,4 +1,4 @@
-![lfl](assets/lfl.png)
+![lfl](www/lfl/lfl.png)
 
 ## Overview
 

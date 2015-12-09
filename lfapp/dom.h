@@ -40,7 +40,7 @@ struct Renderer;
 
 #undef  XX
 #define XX(n) struct HTML ## n;
-#include "crawler/html_elements.h"
+#include "web/html_elements.h"
 
 typedef char Char;
 typedef StringWordIterT<Char> StringWordIter;
@@ -150,7 +150,7 @@ struct Node : public Object {
 
 # undef  XX
 # define XX(n) virtual HTML ## n *AsHTML ## n () { return 0; }
-# include "crawler/html_elements.h"
+# include "web/html_elements.h"
 
   unsigned short nodeType, htmlElementType;
   NodeList       childNodes;
@@ -469,6 +469,7 @@ struct HTMLOptionElement : public HTMLElement { DERIVE_ELEMENT(HTMLOptionElement
 struct HTMLInputElement : public HTMLElement { DERIVE_ELEMENT(HTMLInputElement, HTML_INPUT_ELEMENT), form(0), image_tex(0) {}
   DECLARE_TAG_NAMES("input");
   HTMLFormElement *form;
+  shared_ptr<TextGUI> text;
   shared_ptr<Texture> image_tex;
 
   PARSE_ATTR_BEGIN(HTMLElement);
@@ -912,14 +913,14 @@ struct HTMLDocument : public Document {
 
 # undef  XX
 # define XX(n) HTMLElement *Create ## n () { return AllocatorNew(alloc, (HTML ## n), (this)); }
-# include "crawler/html_elements.h"
+# include "web/html_elements.h"
 
   typedef HTMLElement *(HTMLDocument::*CreateElementCB)();
   struct CreateElementCallbacks : public unordered_map<string, CreateElementCB> {
     CreateElementCallbacks() {
 #     undef  XX
 #     define XX(n) for (const char **tn = HTML ## n::TagNames(); *tn; tn++) (*this)[*tn] = &HTMLDocument::Create ## n;
-#     include "crawler/html_elements.h"
+#     include "web/html_elements.h"
     }
   };
 

@@ -36,7 +36,7 @@ struct PropertyNames : public vector<string> {
 #define YY(n)
 #undef  ZZ
 #define ZZ(n) push_back(#n);
-#include "crawler/css_properties.h"
+#include "web/css_properties.h"
   }
 };
 
@@ -1238,7 +1238,7 @@ struct ComputedStyle : public LFL::DOM::CSSStyleDeclaration {
 #define YY(n)   return n().cssText();
 #undef  ZZ
 #define ZZ(n)
-#include "crawler/css_properties.h"
+#include "web/css_properties.h"
     return "";
   }
   virtual void setProperty(const DOMString &k, const DOMString &v, const DOMString &priority) {
@@ -1251,7 +1251,7 @@ struct ComputedStyle : public LFL::DOM::CSSStyleDeclaration {
 #define YY(n)
 #undef  ZZ
 #define ZZ(n)   override_style = StrCat("\n", UpdateKVLine(override_style, #n, val, ':')); 
-#include "crawler/css_properties.h"
+#include "web/css_properties.h"
     else return;
     if (auto html = node->ownerDocument->documentElement()) html->SetStyleDirty();
     node->ClearComputedInlineStyle();

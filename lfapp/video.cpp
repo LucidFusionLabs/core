@@ -1670,7 +1670,9 @@ void GraphicsDevice::PushScissorStack() {
 void GraphicsDevice::PopScissorStack() {
   CHECK_GT(scissor_stack.size(), 1);
   scissor_stack.pop_back();
-  screen->gd->Scissor(scissor_stack.back().back());
+  auto &ss = scissor_stack.back();
+  if (ss.size()) screen->gd->Scissor(ss.back());
+  else { ClearDeferred(); glDisable(GL_SCISSOR_TEST); }
 }
 
 void GraphicsDevice::DrawPixels(const Box &b, const Texture &tex) {

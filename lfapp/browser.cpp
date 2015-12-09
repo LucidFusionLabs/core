@@ -23,8 +23,8 @@
 #include "lfapp/gui.h"
 #include "lfapp/ipc.h"
 #include "lfapp/browser.h"
-#include "../crawler/html.h"
-#include "../crawler/document.h"
+#include "../web/html.h"
+#include "../web/document.h"
 
 #ifdef LFL_QT
 #include <QWindow>
@@ -464,12 +464,14 @@ Browser::Browser(GUI *gui, const Box &V) : doc(gui ? gui->parent : NULL, V),
 
 void Browser::Navigate(const string &url) {
   if (!layers) return SystemBrowser::Open(url.c_str());
-  else                Open(url);
+  else Open(url);
 }
 
 void Browser::Open(const string &url) {
-  if (app->render_process) RunInNetworkThread(bind(&ProcessAPIClient::Navigate, app->render_process, url));
-  else                     doc.parser->OpenFrame(url, (DOM::Frame*)NULL);
+  if (app->render_process) return RunInNetworkThread(bind(&ProcessAPIClient::Navigate, app->render_process, url));
+  doc.parser->OpenFrame(url, (DOM::Frame*)NULL);
+  if (app->main_process) { app->main_process->SetURL(url); app->main_process->SetTitle(url); }
+  else                   { SetURLText(url); screen->SetCaption(url); }
 }
 
 void Browser::KeyEvent(int key, bool down) {
@@ -722,8 +724,14 @@ DOM::Node *Browser::LayoutNode(Flow *flow, DOM::Node *n, bool reflow) {
     render->flow->SetFGColor(&Color::white);
     render->flow->AppendBox(dim.x, dim.y, tex);
     render->box = render->flow->out->data.back().box;
-  } 
-  else if (n->htmlElementType == DOM::HTML_BR_ELEMENT) render->flow->AppendNewlines(1);
+  } else if (n->htmlElementType == DOM::HTML_INPUT_ELEMENT) {
+    string t = n->AsElement()->getAttribute("type");
+    if (t == "" || t == "text") {
+      printf("input text %s\n", n->DebugString().c_str());
+      point dim(X_or_Y(n->render->width_px, 256), X_or_Y(n->render->height_px, 16));
+      render->flow->AppendBox(dim.x, dim.y, &render->box);
+    }
+  } else if (n->htmlElementType == DOM::HTML_BR_ELEMENT) render->flow->AppendNewlines(1);
   else if (is_table) LayoutTable(render->flow, n->AsHTMLTableElement());
 
   vector<Flow::RollbackState> child_flow_state;

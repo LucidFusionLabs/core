@@ -24,8 +24,8 @@
 #include "lfapp/gui.h"
 #include "lfapp/ipc.h"
 #include "lfapp/browser.h"
-#include "../crawler/html.h"
-#include "../crawler/document.h"
+#include "../web/html.h"
+#include "../web/document.h"
 
 namespace LFL {
 

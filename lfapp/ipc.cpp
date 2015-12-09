@@ -695,11 +695,8 @@ int ProcessAPIServer::LoadAssetQuery::AllocateBufferResponse(const IPC::Allocate
   return Done();
 }
 
-int ProcessAPIServer::HandleNavigateRequest(int seq, const IPC::NavigateRequest *req, Void) {
-  string url = req->url()->str();
-  browser->Open(url);
-  SendIPC(conn, seq++, -1, SetURLRequest, fb.CreateString(url));
-  SendIPC(conn, seq++, -1, SetTitleRequest, fb.CreateString(url));
+int ProcessAPIServer::HandleNavigateRequest(int, const IPC::NavigateRequest *req, Void) {
+  browser->Open(req->url()->str());
   return IPC::Done;
 }
 

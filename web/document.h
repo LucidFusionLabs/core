@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef LFL_CRAWLER_DOCUMENT_H__
-#define LFL_CRAWLER_DOCUMENT_H__
+#ifndef LFL_WEB_DOCUMENT_H__
+#define LFL_WEB_DOCUMENT_H__
 namespace LFL {
 
 struct DocumentParser {
@@ -115,11 +115,6 @@ struct DocumentParser {
       DOM::Text *ret = parentNode->document()->createTextNode(DOM::DOMString());
       ret->AttachRender();
       parentNode->appendChild(ret);
-
-      bool link = parentNode->htmlElementType == DOM::HTML_ANCHOR_ELEMENT;
-      if (link) {
-        // ret->render->activate_id.push_back(ret->ownerDocument->gui->mouse.AddClickBox(ret->render->box, MouseController::CB(bind(&Browser::AnchorClick, parentNode))));
-      }
 
       if (!inpre) {
         for (const char *p = text.data(), *e = p + text.size(); p < e; /**/) {
@@ -288,4 +283,4 @@ struct DocumentParser {
 };
 
 }; // namespace LFL
-#endif // LFL_CRAWLER_DOCUMENT_H__
+#endif // LFL_WEB_DOCUMENT_H__

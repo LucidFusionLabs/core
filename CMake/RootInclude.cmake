@@ -195,8 +195,8 @@ lfl_clear_projects()
 # lfapp unit tests
 add_subdirectory(${CORE_SUBDIR}/lfapp_tests)
 
-# crawler
-add_subdirectory(${CORE_SUBDIR}/crawler)
+# web
+add_subdirectory(${CORE_SUBDIR}/web)
 
 # nlp
 add_subdirectory(${CORE_SUBDIR}/nlp)
