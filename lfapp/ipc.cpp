@@ -332,6 +332,7 @@ void ProcessAPIServer::SetTitle(const string&) {}
 void ProcessAPIServer::SetURL(const string&) {}
 void ProcessAPIServer::LoadTexture(Texture*, const LoadTextureIPC::CB &cb) {}
 void ProcessAPIServer::Paint(int, const point&, MultiProcessPaintResourceBuilder&) {}
+void ProcessAPIServer::SwapTree(int, const LayersInterface*) {}
 void ProcessAPIClient::KeyPress(int b, bool d) {}
 void ProcessAPIClient::MouseClick(int b, bool d, int x, int y) {}
 void ProcessAPIClient::MouseMove(int x, int y, int dx, int dy) {}
@@ -663,6 +664,17 @@ void ProcessAPIClient::PaintQuery::PaintTile(int x, int y, int z, const MultiPro
   RunInNetworkThread([=]{ delete this; });
 }
 
+int ProcessAPIClient::HandleSwapTreeRequest(int seq, const IPC::SwapTreeRequest *req, const MultiProcessLayerTree &tree) {
+  RunInMainThread(new Callback(bind(&ProcessAPIClient::SwapTreeQuery::SwapLayerTree,
+                                    new SwapTreeQuery(this, seq, req->mpb_id()), req->id(), tree)));
+  return IPC::Accept;
+}
+
+void ProcessAPIClient::SwapTreeQuery::SwapLayerTree(int id, const MultiProcessLayerTree &tree) {
+  tree.AssignTo(parent->browser->layers);
+  RunInNetworkThread([=]{ delete this; });
+}
+
 int ProcessAPIClient::HandleWGetRequest(int seq, const IPC::WGetRequest *req, Void) {
   string url = req->url()->str();
   WGetQuery *wget = new WGetQuery(this, seq);
@@ -766,6 +778,19 @@ void ProcessAPIServer::Paint(int layer, const point &tile, MultiProcessPaintReso
 int ProcessAPIServer::PaintQuery::AllocateBufferResponse(const IPC::AllocateBufferResponse *res, MultiProcessBuffer &mpb) {
   if (!res || !mpb.Copy(paint_list)) return Error();
   parent->SendIPC(parent->conn, (seq = parent->seq++), -1, PaintRequest, tile.x, tile.y, layer, res->mpb_id());
+  return Done();
+}
+
+void ProcessAPIServer::SwapTree(int id, const LayersInterface *tree) {
+  unique_ptr<SwapTreeQuery> q(new SwapTreeQuery(this, id, tree));
+  if (!SendIPC(conn, seq++, -1, AllocateBufferRequest, MultiProcessBuffer::Size(q->tree), MultiProcessLayerTree::Type)) return;
+  ExpectResponseIPC(AllocateBuffer, this, seq-1, bind
+                    (&SwapTreeQuery::AllocateBufferResponse, q.release(), _1, _2));
+}
+
+int ProcessAPIServer::SwapTreeQuery::AllocateBufferResponse(const IPC::AllocateBufferResponse *res, MultiProcessBuffer &mpb) {
+  if (!res || !mpb.Copy(tree)) return Error();
+  parent->SendIPC(parent->conn, (seq = parent->seq++), -1, SwapTreeRequest, id, res->mpb_id());
   return Done();
 }
 

@@ -39,7 +39,7 @@ struct Renderer : public Object {
   FloatContainer box;
   ComputedStyle style, inline_style;
   unique_ptr<LFL::StyleSheet> inline_style_sheet;
-  bool style_dirty=1, layout_dirty=1;
+  bool style_dirty=1, layout_dirty=1, establishes_layer=0;
   Flow *flow=0, *parent_flow=0, child_flow;
   DOM::Node *absolute_parent=0;
   shared_ptr<Texture> background_image;

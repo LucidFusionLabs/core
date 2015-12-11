@@ -78,26 +78,28 @@ struct ProcessAPI : public InterProcessComm {
     IPC_PROTO_ENTRY(12, LoadAssetResponse,      MultiProcessTextureResource, "w=", mpv.width, ", h=", mpv.height, ", pf=", BlankNull(Pixel::Name(mpv.pf)));
     IPC_PROTO_ENTRY(13, PaintRequest,           MultiProcessPaintResource,   "tile=(", x->x(), ",", x->y(), ",", x->z(), ") len=", mpv.data.size());
     IPC_PROTO_ENTRY(14, PaintResponse,          Void,                        "success=", x->success());
-    IPC_PROTO_ENTRY(15, WGetRequest,            Void,                        "url=", x->url() ? x->url()->data() : ""); 
-    IPC_PROTO_ENTRY(16, WGetResponse,           MultiProcessBuffer,          "h=", (int)x->headers(), ", hl=", x->mpb()?x->mpb()->len():0, ", hu=", x->mpb()?x->mpb()->url()->data():"", " b=", mpv.buf!=0, ", l=", mpv.len);
-    IPC_PROTO_ENTRY(17, SetTitleRequest,        Void,                        "title=", x->title() ? x->title()->data() : ""); 
-    IPC_PROTO_ENTRY(18, SetTitleResponse,       Void,                        "success=", x->success());
-    IPC_PROTO_ENTRY(19, SetURLRequest,          Void,                        "url=", x->url() ? x->url()->data() : ""); 
-    IPC_PROTO_ENTRY(20, SetURLResponse,         Void,                        "success=", x->success());
-    IPC_PROTO_ENTRY(21, NavigateRequest,        Void,                        "url=", x->url() ? x->url()->data() : ""); 
-    IPC_PROTO_ENTRY(22, NavigateResponse,       Void,                        "success=", x->success());
-    IPC_PROTO_ENTRY(23, SetViewportRequest,     Void,                        "w=", x->w(), ", h=", x->h()); 
-    IPC_PROTO_ENTRY(24, SetViewportResponse,    Void,                        "success=", x->success());
-    IPC_PROTO_ENTRY(25, SetDocsizeRequest,      Void,                        "w=", x->w(), ", h=", x->h()); 
-    IPC_PROTO_ENTRY(26, SetDocsizeResponse,     Void,                        "success=", x->success());
-    IPC_PROTO_ENTRY(27, KeyPressRequest,        Void,                        "button=", x->button(), ", down=", x->down()); 
-    IPC_PROTO_ENTRY(28, KeyPressResponse,       Void,                        "success=", x->success());
-    IPC_PROTO_ENTRY(29, MouseClickRequest,      Void,                        "button=", x->button(), ", down=", x->down(), ", x=", x->x(), ", y=", x->y()); 
-    IPC_PROTO_ENTRY(30, MouseClickResponse,     Void,                        "success=", x->success());
-    IPC_PROTO_ENTRY(31, MouseMoveRequest,       Void,                        "x=", x->x(), ", y=", x->y(), ", dx=", x->dx(), ", dy=", x->dy()); 
-    IPC_PROTO_ENTRY(32, MouseMoveResponse,      Void,                        "success=", x->success());
-    IPC_PROTO_ENTRY(33, ExecuteScriptRequest,   Void,                        "text=", x->text() ? x->text()->data() : ""); 
-    IPC_PROTO_ENTRY(34, ExecuteScriptResponse,  Void,                        "text=", x->text() ? x->text()->data() : "");
+    IPC_PROTO_ENTRY(15, SwapTreeRequest,        MultiProcessLayerTree,       "id=(", x->id(), ") node_len=", mpv.node_data.size(), ", child_len=", mpv.child_data.size());
+    IPC_PROTO_ENTRY(16, SwapTreeResponse,       Void,                        "success=", x->success());
+    IPC_PROTO_ENTRY(17, WGetRequest,            Void,                        "url=", x->url() ? x->url()->data() : ""); 
+    IPC_PROTO_ENTRY(18, WGetResponse,           MultiProcessBuffer,          "h=", (int)x->headers(), ", hl=", x->mpb()?x->mpb()->len():0, ", hu=", x->mpb()?x->mpb()->url()->data():"", " b=", mpv.buf!=0, ", l=", mpv.len);
+    IPC_PROTO_ENTRY(19, SetTitleRequest,        Void,                        "title=", x->title() ? x->title()->data() : ""); 
+    IPC_PROTO_ENTRY(20, SetTitleResponse,       Void,                        "success=", x->success());
+    IPC_PROTO_ENTRY(21, SetURLRequest,          Void,                        "url=", x->url() ? x->url()->data() : ""); 
+    IPC_PROTO_ENTRY(22, SetURLResponse,         Void,                        "success=", x->success());
+    IPC_PROTO_ENTRY(23, NavigateRequest,        Void,                        "url=", x->url() ? x->url()->data() : ""); 
+    IPC_PROTO_ENTRY(24, NavigateResponse,       Void,                        "success=", x->success());
+    IPC_PROTO_ENTRY(25, SetViewportRequest,     Void,                        "w=", x->w(), ", h=", x->h()); 
+    IPC_PROTO_ENTRY(26, SetViewportResponse,    Void,                        "success=", x->success());
+    IPC_PROTO_ENTRY(27, SetDocsizeRequest,      Void,                        "w=", x->w(), ", h=", x->h()); 
+    IPC_PROTO_ENTRY(28, SetDocsizeResponse,     Void,                        "success=", x->success());
+    IPC_PROTO_ENTRY(29, KeyPressRequest,        Void,                        "button=", x->button(), ", down=", x->down()); 
+    IPC_PROTO_ENTRY(30, KeyPressResponse,       Void,                        "success=", x->success());
+    IPC_PROTO_ENTRY(31, MouseClickRequest,      Void,                        "button=", x->button(), ", down=", x->down(), ", x=", x->x(), ", y=", x->y()); 
+    IPC_PROTO_ENTRY(32, MouseClickResponse,     Void,                        "success=", x->success());
+    IPC_PROTO_ENTRY(33, MouseMoveRequest,       Void,                        "x=", x->x(), ", y=", x->y(), ", dx=", x->dx(), ", dy=", x->dy()); 
+    IPC_PROTO_ENTRY(34, MouseMoveResponse,      Void,                        "success=", x->success());
+    IPC_PROTO_ENTRY(35, ExecuteScriptRequest,   Void,                        "text=", x->text() ? x->text()->data() : ""); 
+    IPC_PROTO_ENTRY(36, ExecuteScriptResponse,  Void,                        "text=", x->text() ? x->text()->data() : "");
   };
 };
 
@@ -123,6 +125,7 @@ struct ProcessAPIClient : public ProcessAPI {
   IPC_TABLE_SERVER_CALL(SetDocsize);
   IPC_TABLE_SERVER_VIRC(LoadTexture, MultiProcessTextureResource, mpb_id);
   IPC_TABLE_SERVER_VIRC(Paint, MultiProcessPaintResource, mpb_id);
+  IPC_TABLE_SERVER_VIRC(SwapTree, MultiProcessLayerTree, mpb_id);
   IPC_TABLE_SERVER_CALL(WGet);
   IPC_TABLE_SERVER_CALL(SetTitle);
   IPC_TABLE_SERVER_CALL(SetURL);
@@ -158,6 +161,10 @@ struct ProcessAPIClient : public ProcessAPI {
   IPC_SERVER_CALL(Paint, const MultiProcessPaintResource&) {
     using PaintIPC::PaintIPC;
     void PaintTile(int x, int y, int z, const MultiProcessPaintResource&);
+  };
+  IPC_SERVER_CALL(SwapTree, const MultiProcessLayerTree&) {
+    using SwapTreeIPC::SwapTreeIPC;
+    void SwapLayerTree(int id, const MultiProcessLayerTree&);
   };
   IPC_SERVER_CALL(WGet, Void) {
     using WGetIPC::WGetIPC;
@@ -207,6 +214,12 @@ struct ProcessAPIServer : public ProcessAPI {
     MultiProcessPaintResourceBuilder paint_list;
     PaintQuery(Parent *P, int L, const point &X, MultiProcessPaintResourceBuilder &list) :
       PaintIPC(P,0), layer(L), tile(X) { swap(paint_list, list); }
+    int AllocateBufferResponse(const IPC::AllocateBufferResponse*, MultiProcessBuffer&);
+  };
+  IPC_CLIENT_CALL(SwapTree, Void, int id, const LayersInterface *layers) {
+    int id;
+    MultiProcessLayerTree tree;
+    SwapTreeQuery(Parent *P, int I, const LayersInterface *L) : SwapTreeIPC(P,0), id(I), tree(L->node, L->child) {}
     int AllocateBufferResponse(const IPC::AllocateBufferResponse*, MultiProcessBuffer&);
   };
   IPC_CLIENT_CALL(WGet, const MultiProcessBuffer&, const string&, const HTTPClient::ResponseCB &) {

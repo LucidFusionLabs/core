@@ -185,7 +185,7 @@ int KeyboardGUI::WriteHistory(const string &dir, const string &name, const strin
 int KeyboardGUI::ReadHistory(const string &dir, const string &name) {
   StringFile history;
   VersionedFileName vfn(dir.c_str(), name.c_str(), "history");
-  if (history.ReadVersioned(vfn) < 0) { ERROR("missing ", name); return -1; }
+  if (history.ReadVersioned(vfn) < 0) { ERROR("no ", name, " history"); return -1; }
   for (int i=0, l=history.Lines(); i<l; i++) AddHistory((*history.F)[l-1-i]);
   return 0;
 }

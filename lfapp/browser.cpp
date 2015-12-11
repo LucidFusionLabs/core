@@ -480,13 +480,15 @@ void Browser::KeyEvent(int key, bool down) {
 }
 
 void Browser::MouseMoved(int x, int y) {
-  if (app->render_process) { y -= screen->height+viewport.top()+VScrolled(); RunInNetworkThread(bind(&ProcessAPIClient::MouseMove, app->render_process, x, y, x-mouse.x, y-mouse.y)); mouse=point(x,y); }
+  if (app->render_process || (!app->render_process && !app->main_process)) y -= screen->height+viewport.top()+VScrolled();
+  if (app->render_process) { RunInNetworkThread(bind(&ProcessAPIClient::MouseMove, app->render_process, x, y, x-mouse.x, y-mouse.y)); mouse=point(x,y); }
   else if (auto n = doc.node->documentElement()) { mouse=point(x,y); EventNode(n, initial_displacement, Mouse::Event::Motion); }
 }
 
 void Browser::MouseButton(int b, bool d, int x, int y) {
   // doc.gui.Input(b, mouse, d, 1);
-  if (app->render_process) { y -= screen->height+viewport.top()+VScrolled(); RunInNetworkThread(bind(&ProcessAPIClient::MouseClick, app->render_process, b, d, x, y)); mouse=point(x,y); }
+  if (app->render_process || (!app->render_process && !app->main_process)) y -= screen->height+viewport.top()+VScrolled();
+  if (app->render_process) { RunInNetworkThread(bind(&ProcessAPIClient::MouseClick, app->render_process, b, d, x, y)); mouse=point(x,y); }
   else if (auto n = doc.node->documentElement()) { mouse=point(x,y); EventNode(n, initial_displacement, Mouse::ButtonID(b)); }
 }
 
@@ -520,8 +522,8 @@ void Browser::Draw(const Box &b) {
   else {
     if (app->render_process) { IPCTrace("Browser::Draw ipc_buffer_size: %zd\n", app->render_process->ipc_buffer.size()); }
     else if (doc.Dirty()) Render();
-    for (int i=0; i<layers->size(); i++)
-      (*layers)[i]->Draw(viewport + b.TopLeft(), point(!i ? h_scrolled : 0, (!i ? -v_scrolled : 0) - viewport.h));
+    layers->node[0].scrolled = point(h_scrolled, -v_scrolled);
+    layers->Draw(viewport + b.TopLeft(), point(0, -viewport.h));
   }
 }
 
@@ -535,8 +537,9 @@ void Browser::Render(bool screen_coords, int v_scrolled) {
   INFO(app->main_process ? "Render" : "Main", " process Browser::Render, requested: ", doc.parser->requested, ", completed:",
        doc.parser->completed, ", outstanding: ", doc.parser->outstanding.size());
   DOM::Renderer *html_render = doc.node->documentElement()->render;
-  html_render->tiles = layers ? (*layers)[0] : 0;
+  html_render->tiles = layers ? layers->layer[0] : 0;
   html_render->child_bg.Reset();
+  if (layers) layers->ClearLayerNodes();
   Flow flow(html_render->box.Reset(), 0, html_render->child_box.Reset());
   flow.p.y -= layers ? 0 : v_scrolled;
   Paint(&flow, screen_coords ? Viewport().TopLeft() : point());
@@ -545,9 +548,9 @@ void Browser::Render(bool screen_coords, int v_scrolled) {
 }
 
 void Browser::PaintTile(int x, int y, int z, const MultiProcessPaintResource &paint) {
-  CHECK(layers && layers->size());
-  if (z < 0 || z >= layers->size()) return;
-  TilesIPCServer *tiles = dynamic_cast<TilesIPCServer*>((*layers)[z]);
+  CHECK(layers && layers->layer.size());
+  if (z < 0 || z >= layers->layer.size()) return;
+  TilesIPCServer *tiles = dynamic_cast<TilesIPCServer*>(layers->layer[z]);
   CHECK(tiles);
   tiles->Select();
   tiles->RunTile(y, x, tiles->GetTile(x, y), paint);
@@ -619,6 +622,7 @@ void Browser::PaintNode(Flow *flow, DOM::Node *n, const point &displacement_in) 
   if (render_log)              UpdateRenderLog(n, displacement_in);
   if (render->clip)            render->PushScissor(render->border.TopLeft(render->clip_rect) + displacement);
   if (render->overflow_hidden) render->PushScissor(render->content                           + displacement);
+  if (render->establishes_layer) layers->AddLayerNode(1, render->content + displacement, 1);
   if (!render->hidden) {
     if (render->tiles) {
       render->tiles->AddDrawableBoxArray(render->child_bg,  displacement);
@@ -658,7 +662,7 @@ DOM::Node *Browser::LayoutNode(Flow *flow, DOM::Node *n, bool reflow) {
   if (!reflow) {
     if (render->style_dirty) render->UpdateStyle(flow);
     if (!style->is_root) render->tiles = n->parentNode->render->tiles;
-    render->done_positioned = render->done_floated = 0;
+    render->done_positioned = render->done_floated = render->establishes_layer = 0;
     render->max_child_i = -1;
   } else if (render->done_floated) return 0;
   if (render->display_none) { render->style_dirty = render->layout_dirty = 0; return 0; }
@@ -692,7 +696,7 @@ DOM::Node *Browser::LayoutNode(Flow *flow, DOM::Node *n, bool reflow) {
     if (!reflow) {
       render->box.Reset();
       if (render->normal_flow && !render->inline_block) render->box.InheritFloats(flow->container->AsFloatContainer());
-      if (render->position_fixed && layers) render->tiles = (*layers)[1];
+      if (render->position_fixed && layers && Changed(&render->tiles, layers->layer[1])) render->establishes_layer = true;
     }
   } else render->flow = render->parent_flow;
   render->UpdateFlowAttributes(render->flow);

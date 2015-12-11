@@ -202,6 +202,8 @@ struct OpenSystemFontResponse {
 };
 struct PaintRequest {};
 struct PaintResponse {};
+struct SwapTreeRequest {};
+struct SwapTreeResponse {};
 struct NavigateRequest {};
 struct NavigateResponse {};
 struct WGetRequest {};

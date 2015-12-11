@@ -713,10 +713,30 @@ struct TilesInterface {
   virtual void Run()                                                                       = 0;
 };
 
-struct LayersInterface : public vector<TilesInterface*> {
-  virtual void Init(int N=1)                      = 0;
-  virtual void Draw(const Box &b, const point &p) = 0;
-  virtual void Update()                           = 0;
+struct LayersInterface {
+  UNALIGNED_struct Node  { static const int Size=40; Box box; point scrolled; int layer_id, child_offset; }; UNALIGNED_END(Node,  Node::Size);
+  UNALIGNED_struct Child { static const int Size=8;  int node_id, next_child_offset; };                      UNALIGNED_END(Child, Child::Size);
+  vector<Node> node;
+  vector<Child> child;
+  vector<TilesInterface*> layer;
+
+  LayersInterface() { ClearLayerNodes(); }
+  void ClearLayerNodes() { child.clear(); node.clear(); node.push_back({ Box(), point(), 0, 0 }); }
+  int AddLayerNode(int parent_node_id, const Box &b, int layer_id) {
+    node.push_back({ b, point(), layer_id, 0 });
+    return AddChild(parent_node_id, node.size());
+  }
+  int AddChild(int node_id, int child_node_id) {
+    child.push_back({ child_node_id, 0 }); 
+    Node *n = &node[node_id-1];
+    if (!n->child_offset) return (n->child_offset = child.size());
+    Child *c = &child[n->child_offset-1];
+    while (c->next_child_offset) c = &child[c->next_child_offset-1];
+    return (c->next_child_offset = child.size());
+  }
+  virtual void Update();
+  virtual void Draw(const Box &b, const point &p);
+  virtual void Init(int N=1) = 0;
 };
 
 #define TilesPreAdd(tiles, ...) CallbackListAdd(&(tiles)->prepend[(tiles)->context_depth]->cb, __VA_ARGS__)
@@ -850,9 +870,7 @@ struct Tiles : public TilesT<Callback, CallbackList, CallbackList> {
 };
 
 template <class X> struct LayersT : public LayersInterface {
-  void Init(int N=1) { CHECK_EQ(this->size(), 0); for (int i=0; i<N; i++) this->push_back(new X(i)); }
-  void Draw(const Box &b, const point &p) { for (auto i : *this) i->Draw(b, p); }
-  void Update() { for (auto i : *this) i->Run(); }
+  void Init(int N=1) { CHECK_EQ(this->layer.size(), 0); for (int i=0; i<N; i++) this->layer.push_back(new X(i)); }
 };
 
 typedef LayersT<Tiles> Layers;

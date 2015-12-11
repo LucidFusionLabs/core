@@ -35,7 +35,7 @@ See [new_app_template/README.txt](new_app_template/README.txt) to quick start yo
 
 `git clone https://github.com/lucidfusionlabs/lfl.git`
 
-`git submodule update --init --recursive`
+`cd lfl; git submodule update --init --recursive`
 
 
 ## Get bleeding edge
@@ -85,7 +85,7 @@ See [new_app_template/README.txt](new_app_template/README.txt) to quick start yo
 
 ### Build Linux
 
-* Using Ubuntu 15.04 [http://virtualboxes.org/images/ubuntu](VirtualBox Image)
+* Using Ubuntu 15.04 [VirtualBox Image](http://virtualboxes.org/images/ubuntu)
 
         sudo apt-get install screen vim git cmake yasm xorg-dev autotools-dev \
         automake flex bison libssl-dev libbz2-dev qtbase5-dev libqt5webkit5-dev
@@ -169,7 +169,7 @@ See [new_app_template/README.txt](new_app_template/README.txt) to quick start yo
 2. Commit your changes and push to your fork `git push origin master`
 3. Create a new pull request and submit it back to the project.
 
-* Code style should generally follow [http://google.github.io/styleguide/cppguide.html](Google C++ Style Guide)
+* Code style should generally follow [Google C++ Style Guide](http://google.github.io/styleguide/cppguide.html)
 
 ## License
 
