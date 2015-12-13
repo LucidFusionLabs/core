@@ -63,6 +63,9 @@ struct typed_ptr {
   typed_ptr(int T, void *P) : type(T), value(P) {}
 };
 
+template<typename T, typename ...Args>
+std::unique_ptr<T> make_unique(Args&& ...args) { return std::unique_ptr<T>(new T(std::forward<Args>(args)...)); }
+
 template <class X> int TypeId()   { static int ret = fnv32(typeid(X).name()); return ret; }
 template <class X> int TypeId(X*) { static int ret = fnv32(typeid(X).name()); return ret; }
 template <class X> typed_ptr TypePointer(X* v) { return typed_ptr(TypeId<X>(), v); }

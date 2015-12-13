@@ -48,7 +48,7 @@ TEST(AssetTest, Tiles) {
     int tile_test_a=0, tile_test_b=0, tile_test_c=0, tile_test_d=0, tile_test_e=0, tile_test_f=0, tile_test_g=0;
     int tile_test_h=0, tile_test_i=0, tile_test_j=0, tile_test_k=0, tile_test_l=0, tile_test_m=0;
     Tiles tiles(0), *T = &tiles;
-    T->Run();
+    T->Run(0);
     T->ContextOpen();
     TilesPreAdd (T, [&](){ tile_test_a++; });
     TilesPostAdd(T, [&](){ tile_test_i++; });
@@ -79,7 +79,7 @@ TEST(AssetTest, Tiles) {
 
     T->ContextClose();
     T->ContextClose();
-    T->Run();
+    T->Run(0);
     EXPECT_EQ(4, tile_test_c);
     EXPECT_EQ(4, tile_test_d);
     EXPECT_EQ(4, tile_test_e);

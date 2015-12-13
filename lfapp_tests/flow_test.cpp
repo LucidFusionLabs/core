@@ -18,6 +18,8 @@
 
 #include "gtest/gtest.h"
 #include "lfapp/lfapp.h"
+#include "lfapp/flow.h"
+#include "lfapp/gui.h"
 #include "lfapp/dom.h"
 #include "lfapp/flow.h"
 

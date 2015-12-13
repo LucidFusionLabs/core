@@ -640,7 +640,7 @@ template <int MP, int MH, bool PerParticleColor> struct Particles : public Parti
 };
 
 template <class Line> struct RingFrameBuffer {
-  typedef point(*PaintCB)(Line*, point, const Box&);
+  typedef function<point(Line*, point, const Box&)> PaintCB;
   FrameBuffer fb;
   v2 scroll;
   point p;
@@ -700,6 +700,7 @@ template <class Line> struct RingFrameBuffer {
 };
 
 struct TilesInterface {
+  struct RunFlag { enum { DontClear=1, ClearEmpty=2 }; };
   virtual void AddDrawableBoxArray(const DrawableBoxArray &box, point p);
   virtual void SetAttr            (const Drawable::Attr *a)                                = 0;
   virtual void InitDrawBox        (const point&)                                           = 0;
@@ -710,7 +711,7 @@ struct TilesInterface {
   virtual void Draw(const Box &viewport, const point &doc_position)                        = 0;
   virtual void ContextOpen()                                                               = 0;
   virtual void ContextClose()                                                              = 0;
-  virtual void Run()                                                                       = 0;
+  virtual void Run(int flag)                                                               = 0;
 };
 
 struct LayersInterface {
@@ -750,7 +751,6 @@ template<class CB, class CBL, class CBLI> struct TilesT : public TilesInterface 
     Tile() : id(0), prepend_depth(0), dirty(0) {}
   };
   int layer, W, H, context_depth=-1;
-  bool clear=1, clear_empty=1;
   vector<Tile*> prepend, append;
   matrix<Tile*> mat;
   FrameBuffer fb;
@@ -806,11 +806,12 @@ template<class CB, class CBL, class CBLI> struct TilesT : public TilesInterface 
     if (!added) FATAL("AddCallback ", box->DebugString(), " = ", x1, " ", y1, " ", x2, " ", y2);
   }
 
-  void Run() {
+  void Run(int flag) {
+    bool clear_empty = (flag & RunFlag::ClearEmpty);
     Select();
     TilesMatrixIter(&mat) {
       if (!tile->cb.Count() && !clear_empty) continue;
-      RunTile(i, j, tile, tile->cb);
+      RunTile(i, j, flag, tile, tile->cb);
       tile->cb.Clear();
     }
     Release();
@@ -823,12 +824,12 @@ template<class CB, class CBL, class CBLI> struct TilesT : public TilesInterface 
     screen->gd->ViewPort(current_tile);
     screen->gd->EnableLayering();
   }
-  void RunTile(int i, int j, Tile *tile, const CBLI &tile_cb) {
+  void RunTile(int i, int j, int flag, Tile *tile, const CBLI &tile_cb) {
     GetSpaceCoords(i, j, &current_tile.x, &current_tile.y);
     if (!tile->id) fb.AllocTexture(&tile->id);
     fb.Attach(tile->id);
     screen->gd->MatrixProjection();
-    if (clear) screen->gd->Clear();
+    if (!(flag & RunFlag::DontClear)) screen->gd->Clear();
     screen->gd->LoadIdentity();
     screen->gd->Ortho(current_tile.x, current_tile.x + W, current_tile.y, current_tile.y + H, 0, 100);
     screen->gd->MatrixModelview();

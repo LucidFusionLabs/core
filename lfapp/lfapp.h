@@ -120,6 +120,7 @@ using LFL_STL11_NAMESPACE::enable_if;
 using LFL_STL11_NAMESPACE::is_integral;
 using LFL_STL11_NAMESPACE::is_floating_point;
 using LFL_STL11_NAMESPACE::make_unsigned;
+using LFL_STL11_NAMESPACE::make_shared;
 #define tuple_get LFL_STL11_NAMESPACE::get
 
 #include <cfloat>

@@ -76,7 +76,7 @@ struct ProcessAPI : public InterProcessComm {
     IPC_PROTO_ENTRY(10, LoadTextureResponse,    Void,                        "tex_id=", x->tex_id()); 
     IPC_PROTO_ENTRY(11, LoadAssetRequest,       MultiProcessFileResource,    "fn=", BlankNull(mpv.name.buf), ", l=", mpv.buf.len);
     IPC_PROTO_ENTRY(12, LoadAssetResponse,      MultiProcessTextureResource, "w=", mpv.width, ", h=", mpv.height, ", pf=", BlankNull(Pixel::Name(mpv.pf)));
-    IPC_PROTO_ENTRY(13, PaintRequest,           MultiProcessPaintResource,   "tile=(", x->x(), ",", x->y(), ",", x->z(), ") len=", mpv.data.size());
+    IPC_PROTO_ENTRY(13, PaintRequest,           MultiProcessPaintResource,   "tile=(", x->x(), ",", x->y(), ",", x->z(), ") flag=", x->flag(), " len=", mpv.data.size());
     IPC_PROTO_ENTRY(14, PaintResponse,          Void,                        "success=", x->success());
     IPC_PROTO_ENTRY(15, SwapTreeRequest,        MultiProcessLayerTree,       "id=(", x->id(), ") node_len=", mpv.node_data.size(), ", child_len=", mpv.child_data.size());
     IPC_PROTO_ENTRY(16, SwapTreeResponse,       Void,                        "success=", x->success());
@@ -160,7 +160,7 @@ struct ProcessAPIClient : public ProcessAPI {
   };
   IPC_SERVER_CALL(Paint, const MultiProcessPaintResource&) {
     using PaintIPC::PaintIPC;
-    void PaintTile(int x, int y, int z, const MultiProcessPaintResource&);
+    void PaintTile(int x, int y, int z, int flag, const MultiProcessPaintResource&);
   };
   IPC_SERVER_CALL(SwapTree, const MultiProcessLayerTree&) {
     using SwapTreeIPC::SwapTreeIPC;
@@ -208,12 +208,12 @@ struct ProcessAPIServer : public ProcessAPI {
     LoadTextureQuery(Parent *P, Texture *T, const LoadTextureIPC::CB &cb) : LoadTextureIPC(P,0,cb), tex(T) {}
     int AllocateBufferResponse(const IPC::AllocateBufferResponse*, MultiProcessBuffer&);
   };
-  IPC_CLIENT_CALL(Paint, Void, int layer, const point &tile, MultiProcessPaintResourceBuilder &list) {
-    int layer;
+  IPC_CLIENT_CALL(Paint, Void, int layer, const point &tile, int flag, MultiProcessPaintResourceBuilder &list) {
+    int layer, flag;
     point tile;
     MultiProcessPaintResourceBuilder paint_list;
-    PaintQuery(Parent *P, int L, const point &X, MultiProcessPaintResourceBuilder &list) :
-      PaintIPC(P,0), layer(L), tile(X) { swap(paint_list, list); }
+    PaintQuery(Parent *P, int L, const point &X, int F, MultiProcessPaintResourceBuilder &list) :
+      PaintIPC(P,0), layer(L), tile(X), flag(F) { swap(paint_list, list); }
     int AllocateBufferResponse(const IPC::AllocateBufferResponse*, MultiProcessBuffer&);
   };
   IPC_CLIENT_CALL(SwapTree, Void, int id, const LayersInterface *layers) {
@@ -258,7 +258,7 @@ struct TilesIPC : public TilesT<MultiProcessPaintResource::Cmd, MultiProcessPain
 };
 
 struct TilesIPCServer : public TilesIPC { using TilesIPC::TilesIPC; };
-struct TilesIPCClient : public TilesIPC { using TilesIPC::TilesIPC; void Run(); };
+struct TilesIPCClient : public TilesIPC { using TilesIPC::TilesIPC; void Run(int flag); };
 
 typedef LayersT<TilesIPCServer> LayersIPCServer;
 typedef LayersT<TilesIPCClient> LayersIPCClient;

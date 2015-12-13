@@ -1401,7 +1401,7 @@ void TextureArray::DrawSequence(Asset *out, Entity *e) {
 }
 
 void LayersInterface::Update() {
-  for (auto i : this->layer) i->Run();
+  for (auto i : this->layer) i->Run(0);
   if (app->main_process) app->main_process->SwapTree(0, this);
 }
 
@@ -1477,10 +1477,11 @@ void TilesIPC::AddScissor(const Box &b) {
   append [context_depth]->cb.Add(MultiProcessPaintResource::PopScissor());
 }
 
-void TilesIPCClient::Run() {
+void TilesIPCClient::Run(int flag) {
+  bool clear_empty = (flag & RunFlag::ClearEmpty);
   TilesMatrixIter(&mat) {
     if (!tile->cb.Count() && !clear_empty) continue;
-    app->main_process->Paint(layer, point(j, i), tile->cb);
+    app->main_process->Paint(layer, point(j, i), flag, tile->cb);
   }
 }
 

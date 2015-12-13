@@ -398,14 +398,16 @@ void TextGUI::LinesFrameBuffer::Update(TextGUI::Line *l, int flag) {
 int TextGUI::LinesFrameBuffer::PushFrontAndUpdate(TextGUI::Line *l, int xo, int wlo, int wll, int flag) {
   if (!(flag & Flag::NoLayout)) l->Layout(wrap ? w : 0, flag & Flag::Flush);
   int wl = max(0, l->Lines() - wlo), lh = (wll ? min(wll, wl) : wl) * font_height;
-  if (!lh) return 0; Box b(xo, wl * font_height - lh, w, lh);
+  if (!lh) return 0;
+  Box b(xo, wl * font_height - lh, w, lh);
   return RingFrameBuffer::PushFrontAndUpdate(l, b, paint_cb, !(flag & Flag::NoVWrap)) / font_height;
 }
 
 int TextGUI::LinesFrameBuffer::PushBackAndUpdate(TextGUI::Line *l, int xo, int wlo, int wll, int flag) {
   if (!(flag & Flag::NoLayout)) l->Layout(wrap ? w : 0, flag & Flag::Flush);
   int wl = max(0, l->Lines() - wlo), lh = (wll ? min(wll, wl) : wl) * font_height;
-  if (!lh) return 0; Box b(xo, wlo * font_height, w, lh);
+  if (!lh) return 0;
+  Box b(xo, wlo * font_height, w, lh);
   return RingFrameBuffer::PushBackAndUpdate(l, b, paint_cb, !(flag & Flag::NoVWrap)) / font_height;
 }
 
@@ -534,6 +536,11 @@ void TextGUI::UpdateLongToken(Line *BL, int beg_offset, Line *EL, int end_offset
       if (new_link_cb) new_link_cb(i->second);
     }
   }
+}
+
+point TilesTextGUI::PaintCB(Line *l, point lp, const Box &b) {
+  tiles->AddDrawableBoxArray(l->data->glyphs, lp + b.Position() + offset);
+  return point(lp.x, lp.y-b.h);
 }
 
 /* TextArea */

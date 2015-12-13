@@ -451,6 +451,7 @@ void Browser::Document::Clear() {
   node->style_context       ->AppendSheet(StyleSheet::Default());
   node->inline_style_context->AppendSheet(StyleSheet::Default());
   js_context = unique_ptr<JSContext>(CreateV8JSContext(js_console.get(), node));
+  active_input = 0;
 }
 
 Browser::Browser(GUI *gui, const Box &V) : doc(gui ? gui->parent : NULL, V),
@@ -476,7 +477,13 @@ void Browser::Open(const string &url) {
 
 void Browser::KeyEvent(int key, bool down) {
   if (app->render_process) RunInNetworkThread(bind(&ProcessAPIClient::KeyPress, app->render_process, key, down));
-  else if (auto n = doc.node->documentElement()) EventNode(n, initial_displacement, key);
+  else {
+    if (auto n = doc.node->documentElement()) EventNode(n, initial_displacement, key);
+    if (down && doc.active_input && doc.active_input->tiles) {
+      doc.active_input->Input(key);
+      doc.active_input->tiles->Run(TilesInterface::RunFlag::DontClear);
+    }
+  }
 }
 
 void Browser::MouseMoved(int x, int y) {
@@ -547,22 +554,27 @@ void Browser::Render(bool screen_coords, int v_scrolled) {
   if (layers) layers->Update();
 }
 
-void Browser::PaintTile(int x, int y, int z, const MultiProcessPaintResource &paint) {
+void Browser::PaintTile(int x, int y, int z, int flag, const MultiProcessPaintResource &paint) {
   CHECK(layers && layers->layer.size());
   if (z < 0 || z >= layers->layer.size()) return;
   TilesIPCServer *tiles = dynamic_cast<TilesIPCServer*>(layers->layer[z]);
   CHECK(tiles);
   tiles->Select();
-  tiles->RunTile(y, x, tiles->GetTile(x, y), paint);
+  tiles->RunTile(y, x, flag, tiles->GetTile(x, y), paint);
   tiles->Release();
 }
 
-bool Browser::EventNode(DOM::Node *n, const point &displacement_in, int type) {
+bool Browser::EventNode(DOM::Node *n, const point &displacement_in, InputEvent::Id type) {
   auto render = n->render;
   if (!render) return true;
-  if (render->block_level_box) { if (!(render->box           + displacement_in).within(mouse)) return true; }
-  else                         { if (!(render->inline_box[0] + displacement_in).within(mouse)) return true; }
-  if (auto a = n->AsHTMLAnchorElement()) { AnchorClicked(a); return false; }
+  Box b = (render->block_level_box ? render->box : render->inline_box[0]) + displacement_in;
+  // printf("%s cmp %s vs %s\n", n->DebugString().c_str(), mouse.DebugString().c_str(), b.DebugString().c_str());
+  if (!b.within(mouse)) return true;
+
+  if (auto e = n->AsHTMLAnchorElement()) { AnchorClicked(e); return false; }
+  else if (auto e = n->AsHTMLInputElement()) {
+    if (e->text && type == Mouse::ButtonID(1)) doc.active_input = e->text.get();
+  }
   bool is_table = n->htmlElementType == DOM::HTML_TABLE_ELEMENT;
   point displacement = displacement_in + (render->block_level_box ? render->box.TopLeft() : point());
   if (is_table) { if (!VisitTableChildren (n, [&](DOM::Node *child) { return EventNode(child, displacement, type); })) return false; }
@@ -632,6 +644,9 @@ void Browser::PaintNode(Flow *flow, DOM::Node *n, const point &displacement_in) 
       render->child_box.Draw(displacement);
     }
   }
+  if (auto input = n->AsHTMLInputElement()) {
+    if (input->text) input->text->AssignTarget(render->tiles, render->box.Position() + displacement);
+  }
 
   if (is_table) VisitTableChildren (n, [&](DOM::Node *child) { PaintNode(render->flow, child, displacement); return true; });
   else          VisitChildren      (n, [&](DOM::Node *child) { PaintNode(render->flow, child, displacement); return true; });
@@ -657,6 +672,8 @@ DOM::Node *Browser::LayoutNode(Flow *flow, DOM::Node *n, bool reflow) {
   DOM::Renderer *render = n->render;
   ComputedStyle *style = &render->style;
   bool is_table = n->htmlElementType == DOM::HTML_TABLE_ELEMENT;
+  bool is_input = n->htmlElementType == DOM::HTML_INPUT_ELEMENT;
+  bool is_image = n->htmlElementType == DOM::HTML_IMAGE_ELEMENT;
   bool table_element = render->display_table_element;
 
   if (!reflow) {
@@ -707,9 +724,8 @@ DOM::Node *Browser::LayoutNode(Flow *flow, DOM::Node *n, bool reflow) {
     if (1)                                render->flow->SetFGColor(&render->color);
     // if (style->bgcolor_not_inherited)  render->flow->SetBGColor(&render->background_color);
     render->flow->AppendText(n->AsText()->data);
-  } else if ((n->htmlElementType == DOM::HTML_IMAGE_ELEMENT) ||
-             (n->htmlElementType == DOM::HTML_INPUT_ELEMENT && StringEquals(n->AsElement()->getAttribute("type"), "image"))) {
-    Texture *tex = n->htmlElementType == DOM::HTML_IMAGE_ELEMENT ? n->AsHTMLImageElement()->tex.get() : n->AsHTMLInputElement()->image_tex.get();
+  } else if (is_image || (is_input && StringEquals(n->AsElement()->getAttribute("type"), "image"))) {
+    Texture *tex = is_image ? n->AsHTMLImageElement()->tex.get() : n->AsHTMLInputElement()->image_tex.get();
     bool missing = !tex || !tex->ID;
     if (missing) tex = &missing_image;
 
@@ -728,12 +744,20 @@ DOM::Node *Browser::LayoutNode(Flow *flow, DOM::Node *n, bool reflow) {
     render->flow->SetFGColor(&Color::white);
     render->flow->AppendBox(dim.x, dim.y, tex);
     render->box = render->flow->out->data.back().box;
-  } else if (n->htmlElementType == DOM::HTML_INPUT_ELEMENT) {
+  } else if (is_input) {
     string t = n->AsElement()->getAttribute("type");
     if (t == "" || t == "text") {
-      printf("input text %s\n", n->DebugString().c_str());
+      DOM::HTMLInputElement *input = n->AsHTMLInputElement();
+      if (!input->text) input->text = make_unique<TilesTextGUI>();
       point dim(X_or_Y(n->render->width_px, 256), X_or_Y(n->render->height_px, 16));
       render->flow->AppendBox(dim.x, dim.y, &render->box);
+      input->text->cmd_fb.SetDimensions(render->box.w, render->box.h,
+                                        (input->text->font = render->flow->cur_attr.font));
+      render->inline_box[0] = render->box;
+    } else if (t == "submit") {
+      point dim(X_or_Y(n->render->width_px, 128), X_or_Y(n->render->height_px, 16));
+      render->flow->AppendBox(dim.x, dim.y, &render->box);
+      render->inline_box[0] = render->box;
     }
   } else if (n->htmlElementType == DOM::HTML_BR_ELEMENT) render->flow->AppendNewlines(1);
   else if (is_table) LayoutTable(render->flow, n->AsHTMLTableElement());
@@ -781,7 +805,7 @@ DOM::Node *Browser::LayoutNode(Flow *flow, DOM::Node *n, bool reflow) {
       render->box.SetDimension(point(block_width, block_height));
       if (style->is_root || render->position_absolute || table_element) render->box.y -= block_height;
     }
-  } else {
+  } else if (!is_input) {
     int end_out_ind = flow->out->Size(), end_line_ind = flow->out->line_ind.size();
     int first_line_height = flow->cur_attr.font->Height(), last_line_height = flow->cur_attr.font->Height();
     Box gb = beg_out_ind ? flow->out->data[beg_out_ind-1].box : (flow->out->data.size() ? flow->out->data.begin()->box : Box());

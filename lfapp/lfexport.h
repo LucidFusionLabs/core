@@ -183,6 +183,7 @@ struct TextGUI;
 struct Texture;
 struct Terminal;
 struct TilesInterface;
+struct TilesTextGUI;
 struct VideoAssetLoader;
 struct Window;
 namespace DOM { struct Node; };

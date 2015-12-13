@@ -105,6 +105,7 @@ struct Browser : public BrowserInterface {
     unique_ptr<DocumentParser> parser;
     unique_ptr<JSContext> js_context;
     unique_ptr<Console> js_console;
+    TilesTextGUI *active_input=0;
     int height=0;
 
     ~Document();
@@ -147,7 +148,7 @@ struct Browser : public BrowserInterface {
   int VScrolled() const { return v_scrollbar.scrolled * X_or_Y(v_scrollbar.doc_height, 1000); }
   int HScrolled() const { return h_scrollbar.scrolled * 1000; }
   void InitLayers(LayersInterface *l) { CHECK(!layers); (layers = l)->Init(2); }
-  void PaintTile(int x, int y, int z, const MultiProcessPaintResource &paint);
+  void PaintTile(int x, int y, int z, int flag, const MultiProcessPaintResource &paint);
   string GetURL() const { return String::ToUTF8(doc.node->URL); }
   void SetURLText(const string &s) { if (url_cb) url_cb(s); }
 
@@ -156,7 +157,7 @@ struct Browser : public BrowserInterface {
   void UpdateScrollbar();
   void Render(bool screen_coords=0, int v_scrolled=0);
 
-  bool       EventNode       (DOM::Node*, const point &displacement, int);
+  bool       EventNode       (DOM::Node*, const point &displacement, InputEvent::Id);
   void       Paint           (Flow *flow, const point &displacement);
   void       PaintNode       (Flow *flow, DOM::Node*, const point &displacement);
   DOM::Node *LayoutNode      (Flow *flow, DOM::Node*, bool reflow);

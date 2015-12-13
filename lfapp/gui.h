@@ -375,6 +375,14 @@ struct UnbackedTextGUI : public TextGUI {
   virtual void UpdateCommandFB() {}
 };
 
+struct TilesTextGUI : public TextGUI {
+  point offset;
+  TilesInterface *tiles=0;
+  TilesTextGUI(Font *F=0) : TextGUI(0, F) { cmd_fb.paint_cb = bind(&TilesTextGUI::PaintCB, this, _1, _2, _3); }
+  void AssignTarget(TilesInterface *T, const point &p) { tiles=T; offset=p; }
+  point PaintCB(Line *l, point lp, const Box &b);
+};
+
 struct TextArea : public TextGUI {
   Lines line;
   LinesFrameBuffer line_fb;
