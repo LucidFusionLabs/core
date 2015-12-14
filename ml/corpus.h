@@ -16,24 +16,24 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef __LFL_ML_CORPUS_H__
-#define __LFL_ML_CORPUS_H__
+#ifndef LFL_ML_CORPUS_H__
+#define LFL_ML_CORPUS_H__
 namespace LFL {
 
 struct Corpus {
-    Callback start_cb, finish_cb;
-    virtual ~Corpus() {}
-    virtual void RunFile(const string &filename) {}
-    virtual void Run(const string &file_or_dir) {
-        if (start_cb) start_cb();
-        if (!file_or_dir.empty() && !LocalFile::IsDirectory(file_or_dir)) RunFile(file_or_dir);
-        else {
-            DirectoryIter iter(file_or_dir, -1);
-            for (const char *fn = iter.Next(); Running() && fn; fn = iter.Next()) Run(StrCat(file_or_dir, fn));
-        }
-        if (finish_cb) finish_cb();
-    }  
+  Callback start_cb, finish_cb;
+  virtual ~Corpus() {}
+  virtual void RunFile(const string &filename) {}
+  virtual void Run(const string &file_or_dir) {
+    if (start_cb) start_cb();
+    if (!file_or_dir.empty() && !LocalFile::IsDirectory(file_or_dir)) RunFile(file_or_dir);
+    else {
+      DirectoryIter iter(file_or_dir, -1);
+      for (const char *fn = iter.Next(); Running() && fn; fn = iter.Next()) Run(StrCat(file_or_dir, fn));
+    }
+    if (finish_cb) finish_cb();
+  }  
 };  
 
 }; // namespace LFL
-#endif // __LFL_ML_CORPUS_H__
+#endif // LFL_ML_CORPUS_H__

@@ -32,58 +32,55 @@ DEFINE_int   (WantIter,    -1,          "Model iteration");
 DEFINE_bool  (vp,          false,       "Print viterbi paths");
 DEFINE_bool  (amtx,        false,       "Print acoustic model transit");
 
-void path(AcousticModel::Compiled *, Matrix *viterbi, double vprob, Time vtime, Matrix *MFCC, Matrix *features, const char *transcript, void *arg) {}
+void Path(AcousticModel::Compiled *, Matrix *viterbi, double vprob, Time vtime, Matrix *MFCC, Matrix *features, const char *transcript) {}
 
 }; // namespace LFL
 using namespace LFL;
 
-extern "C" {
-int main(int argc, const char *argv[]) {
-    if (app->Create(argc, argv, __FILE__)) { app->Free(); return -1; }
+extern "C" int main(int argc, const char *argv[]) {
+  if (app->Create(argc, argv, __FILE__)) { app->Free(); return -1; }
 
-    FLAGS_lfapp_audio = FLAGS_lfapp_video = FLAGS_lfapp_input = FLAGS_lfapp_camera = FLAGS_lfapp_network = 0;
+  FLAGS_lfapp_audio = FLAGS_lfapp_video = FLAGS_lfapp_input = FLAGS_lfapp_camera = FLAGS_lfapp_network = 0;
 #ifdef _WIN32
-    open_console = 1;
+  open_console = 1;
 #endif
 
-    if (app->Init()) { app->Free(); return -1; }
+  if (app->Init()) { app->Free(); return -1; }
 
-    string modeldir = StrCat(FLAGS_homedir, "/", FLAGS_ModelDir, "/");
-    string featdir  = StrCat(FLAGS_homedir, "/", FLAGS_FeatDir,  "/");
+  string modeldir = StrCat(FLAGS_homedir, "/", FLAGS_ModelDir, "/");
+  string featdir  = StrCat(FLAGS_homedir, "/", FLAGS_FeatDir,  "/");
 
 #define LOAD_ACOUSTIC_MODEL(model, lastiter) AcousticModelFile model; int lastiter; \
-    if ((lastiter = model.Open("AcousticModel", modeldir.c_str(), FLAGS_WantIter)) < 0) FATAL("LOAD_ACOUSTIC_MODEL ", modeldir, " ", lastiter); \
-    INFO("loaded acoustic model iter ", lastiter, ", ", model.getStateCount(), " states");
+  if ((lastiter = model.Open("AcousticModel", modeldir.c_str(), FLAGS_WantIter)) < 0) FATAL("LOAD_ACOUSTIC_MODEL ", modeldir, " ", lastiter); \
+  INFO("loaded acoustic model iter ", lastiter, ", ", model.GetStateCount(), " states");
 
-    if (FLAGS_vp) {
-        FLAGS_lfapp_debug = 1;
-        MatrixArchiveIn ViterbiPathsIn;
-        ViterbiPathsIn.Open(argv[1]);
+  if (FLAGS_vp) {
+    FLAGS_lfapp_debug = 1;
+    MatrixArchiveIn ViterbiPathsIn;
+    ViterbiPathsIn.Open(argv[1]);
 
-        int count = PathCorpus::path_iter(featdir.c_str(), &ViterbiPathsIn, path, 0);
-        INFO(count, " paths");
+    int count = PathCorpus::PathIter(featdir.c_str(), &ViterbiPathsIn, bind(&Path, _1, _2, _3, _4, _5, _6, _7));
+    INFO(count, " paths");
+  }
+
+  if (FLAGS_amtx) {
+    LOAD_ACOUSTIC_MODEL(model, FLAGS_lastiter);
+    if (FLAGS_lastiter < 0) FATAL("no acoustic model: ", FLAGS_lastiter);
+
+    for (int i=0; i<model.states; i++) {
+      HMM::ActiveStateIndex active(1,1,1);
+      HMM::ActiveState::Iterator src(i);
+      AcousticModel::State *s1 = &model.state[i];
+
+      AcousticHMM::TransitMap tm(&model, true);
+      AcousticHMM::TransitMap::Iterator iter;
+      for (tm.Begin(&iter, &active, &src); !iter.done; tm.Next(&iter)) {
+        unsigned hash = iter.state;
+        AcousticModel::State *s2 = model.GetState(hash);
+        INFO(s1->name, " -> ", s2->name, " @ ", iter.cost);
+      }
     }
+  }
 
-    if (FLAGS_amtx) {
-        LOAD_ACOUSTIC_MODEL(model, FLAGS_lastiter);
-        if (FLAGS_lastiter < 0) FATAL("no acoustic model: ", FLAGS_lastiter);
-
-        for (int i=0; i<model.states; i++) {
-            HMM::ActiveStateIndex active(1,1,1);
-            HMM::ActiveState::Iterator src(i);
-            AcousticModel::State *s1 = &model.state[i];
-
-            AcousticHMM::TransitMap tm(&model, true);
-            AcousticHMM::TransitMap::Iterator iter;
-            for (tm.begin(&iter, &active, &src); !iter.done; tm.next(&iter)) {
-                unsigned hash = iter.state;
-                AcousticModel::State *s2 = model.getState(hash);
-                INFO(s1->name, " -> ", s2->name, " @ ", iter.cost);
-            }
-        }
-    }
-
-    return 0;
+  return 0;
 }
-}
-

@@ -4,9 +4,9 @@ http://lucidfusionlabs.com/svn/lfl/new_app_template/README.txt
 OVERVIEW
 --------
 
-Run: lfl/new_app_template/clone.sh <organization name> <package name> <binary name>
+Run: core/new_app_template/clone.sh <organization name> <package name> <binary name>
 
-Eg: ./new_app_template/clone.sh com.lucidfusionlabs SpaceballFuture spaceball
+Eg: ./core/new_app_template/clone.sh com.lucidfusionlabs SpaceballFuture spaceball
     Creates ./spaceball/spaceball.cpp, ./spaceball/spaceball-android, ./spaceball/spaceball-iphone, etc
 
 Append "add_subdiretory(spaceball)" to lfl/CMakeLists.txt.

@@ -102,6 +102,8 @@ using LFL_STL11_NAMESPACE::placeholders::_3;
 using LFL_STL11_NAMESPACE::placeholders::_4;
 using LFL_STL11_NAMESPACE::placeholders::_5;
 using LFL_STL11_NAMESPACE::placeholders::_6;
+using LFL_STL11_NAMESPACE::placeholders::_7;
+using LFL_STL11_NAMESPACE::placeholders::_8;
 using LFL_STL11_NAMESPACE::mutex;
 using LFL_STL11_NAMESPACE::lock_guard;
 using LFL_STL11_NAMESPACE::unique_lock;
