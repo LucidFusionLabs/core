@@ -21,20 +21,21 @@
 namespace LFL {
 
 struct YahooFinanceApi : public Crawler {
+  static const int MaxSymbolsPerQuery = 200;
+  static string URL(const char *query) {
+    return StringPrintf("http://download.finance.yahoo.com/d/quotes.csv?s=%s&f=snd1t1l1abva2m3m4j1mwedr", query);
+  }
+
   vector<Quote> results;
+  YahooFinanceApi() {}
+
   virtual void Results() {}
 
-  bool scrape(int qf, const CrawlFileEntry *entry) {
+  bool Scrape(int qf, const CrawlFileEntry *entry) {
     // INFO("scrape called w content='", entry->content(), "'");
     ScrapeCSV(entry, &results);
     if (results.size()) Results();
     return true;
-  }
-
-  static const int MaxSymbolsPerQuery = 200;
-
-  static string URL(const char *query) {
-    return StringPrintf("http://download.finance.yahoo.com/d/quotes.csv?s=%s&f=snd1t1l1abva2m3m4j1mwedr", query);
   }
 
   static float ParseMBValue(const char *text) {

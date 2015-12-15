@@ -1593,7 +1593,7 @@ void GraphicsDevice::EnableDepthTest()  {  glEnable(GL_DEPTH_TEST); glDepthMask(
 void GraphicsDevice::DisableDepthTest() { glDisable(GL_DEPTH_TEST); glDepthMask(GL_FALSE); GDDebug("DepthTest=0"); }
 void GraphicsDevice::DisableBlend() { if (Changed(&blend_enabled, false)) { ClearDeferred(); glDisable(GL_BLEND);                                                    GDDebug("Blend=0"); } }
 void GraphicsDevice::EnableBlend()  { if (Changed(&blend_enabled, true )) { ClearDeferred();  glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); GDDebug("Blend=1"); } }
-void GraphicsDevice::BlendMode(int sm, int dm) { glBlendFunc(sm, dm); GDDebug("BlendMode=", sm, ",", dm); }
+void GraphicsDevice::BlendMode(int sm, int dm) { ClearDeferred(); glBlendFunc(sm, dm); GDDebug("BlendMode=", sm, ",", dm); }
 void GraphicsDevice::RestoreViewport(int dm) { ViewPort(screen->Box()); DrawMode(dm); }
 void GraphicsDevice::DrawMode(int dm, bool flush) { return DrawMode(dm, screen->width, screen->height, flush); }
 void GraphicsDevice::DrawMode(int dm, int W, int H, bool flush) {

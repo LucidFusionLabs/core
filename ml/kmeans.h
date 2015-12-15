@@ -77,7 +77,6 @@ struct KMeansInit {
   int features, count, *pick;
 
   ~KMeansInit() { delete [] pick; }
-
   KMeansInit(KMeans *out, int feats) : kmeans(out), features(feats), count(0), pick(new int[kmeans->K]) {
     if (!features) {
       ERROR("KMeans::Init called with ", features, " features");

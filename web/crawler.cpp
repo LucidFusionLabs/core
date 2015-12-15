@@ -20,6 +20,8 @@
 
 #include "lfapp/lfapp.h"
 #include "lfapp/network.h"
+#include "lfapp/flow.h"
+#include "lfapp/gui.h"
 #include "lfapp/dom.h"
 
 #include "crawler.h"
@@ -50,21 +52,21 @@ DEFINE_bool(scrape, true, "Scrape");
 DEFINE_string(queue_dump, "", "Dump queue dump");
 DEFINE_string(crawl_dump, "", "Dump crawl dump");
 
-int Frame(LFL::Window *W, unsigned clicks, unsigned mic_samples, bool cam_sample, int flag) {
+int Frame(LFL::Window *W, unsigned clicks, int flag) {
 
-  bool crawl_done = crawler->crawl_done();
-  bool scrape_done = crawler->scrape_done();
+  bool crawl_done = crawler->CrawlDone();
+  bool scrape_done = crawler->ScrapeDone();
   bool q0_maxed = crawler->queue[0].completed >= FLAGS_q0max_completed;
 
   /* done */
-  if ((crawl_done && scrape_done) || (q0_maxed && crawler->crawl_done(1) && scrape_done))
+  if ((crawl_done && scrape_done) || (q0_maxed && crawler->CrawlDone(1) && scrape_done))
   { INFO("no more input, ", crawler->queue[0].completed, " completed, ", crawler->queue[0].scraped, " scraped, exiting"); app->run=0; return 0; }
 
   /* crawl */
-  crawler->crawl();
+  crawler->Crawl();
 
   /* scrape */
-  crawler->scrape();
+  crawler->Scrape();
 
   return 0;
 }
@@ -95,12 +97,12 @@ extern "C" int main(int argc, const char *argv[]) {
   /* forvo */
   if (FLAGS_forvo_init.size() || FLAGS_forvo_crawl || FLAGS_forvo_dump.size()) {
     crawler = new ForvoApi();
-    if (!crawler->add("forvo.root.queue", "forvo.root")) return -1;
-    if (!crawler->add("forvo.mp3.queue", "forvo.mp3")) return -1;
+    if (!crawler->Add("forvo.root.queue", "forvo.root")) return -1;
+    if (!crawler->Add("forvo.mp3.queue", "forvo.mp3")) return -1;
 
-    if (FLAGS_forvo_init.size()) ((ForvoApi*)crawler)->init(FLAGS_forvo_init.c_str());
+    if (FLAGS_forvo_init.size()) ((ForvoApi*)crawler)->Init(FLAGS_forvo_init.c_str());
 
-    if (FLAGS_forvo_dump.size()) ((ForvoApi*)crawler)->dump(FLAGS_forvo_dump.c_str());
+    if (FLAGS_forvo_dump.size()) ((ForvoApi*)crawler)->Dump(FLAGS_forvo_dump.c_str());
 
     if (!FLAGS_forvo_crawl) Replace<Crawler>(&crawler, 0);
   }
@@ -108,17 +110,17 @@ extern "C" int main(int argc, const char *argv[]) {
   /* google */
   if (FLAGS_google_init.size() || FLAGS_google_crawl) {
     crawler = new GoogleApi();
-    if (!crawler->add("google.search.queue", "google.search")) return -1;
-    if (!crawler->add("google.result.queue", "google.result")) return -1;
+    if (!crawler->Add("google.search.queue", "google.search")) return -1;
+    if (!crawler->Add("google.result.queue", "google.result")) return -1;
 
-    if (FLAGS_google_init.size()) ((GoogleApi*)crawler)->init(FLAGS_google_init.c_str());
+    if (FLAGS_google_init.size()) ((GoogleApi*)crawler)->Init(FLAGS_google_init.c_str());
 
     if (!FLAGS_google_crawl) Replace<Crawler>(&crawler, 0);
   }
 
   /* main */
   if (!crawler) FATAL("no crawler: ", crawler);
-  crawler->validate();
+  crawler->Validate();
 
   int ret = app->Main();
   delete crawler;

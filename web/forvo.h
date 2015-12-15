@@ -27,7 +27,7 @@ struct ForvoApi : public Crawler, public HTMLParser {
     return StringPrintf("http://apifree.forvo.com/key/%s/format/xml/action/word-pronunciations/word/%s/language/%s/order/rate-desc/",
                         KEY(), tolower(query).c_str(), LANGUAGE());
   }
-  static string queryFromURL(const char *url) {
+  static string QueryFromURL(const char *url) {
     const char *word_begin, *word_end, word_prefix[] = "/word-pronunciations/word/";
     if (!(word_begin = strstr(url, word_prefix))) return "";
     word_begin += strlen(word_prefix);
@@ -36,59 +36,60 @@ struct ForvoApi : public Crawler, public HTMLParser {
   }
 
   string text;
-  void clear() { text.clear(); }
-
   vector<string> scraped;
+  ForvoApi() {}
 
-  void init(const char *filename) {
+  void Clear() { text.clear(); }
+
+  void Init(const char *filename) {
     LocalFile file(filename, "r");
     if (!file.Opened()) { ERROR("Open: ", filename); return; }
 
     for (const char *line = file.NextLine(); line; line = file.NextLine()) 
-      queue[0].add(URL(line));
+      queue[0].Add(URL(line));
   }
 
-  void validate() {
+  void Validate() {
     if (queue.size() != 2) FATAL("invalid queue size ", queue.size());
     queue[1].scrape = false; /* let crawler know when to exit */
   }
 
-  void crawl() {
+  void Crawl() {
     if (queue[1].outstanding) return;
-    Crawler::crawl(1);
+    Crawler::Crawl(1);
     if (queue[1].outstanding) return;
 
     bool q0_maxed = queue[0].completed + queue[0].outstanding >= FLAGS_q0max_completed;
     if (q0_maxed || queue[0].outstanding) return;
-    Crawler::crawl(0);
+    Crawler::Crawl(0);
   }
 
-  bool scrape(int qf, const CrawlFileEntry *entry) {
-    clear();
+  bool Scrape(int qf, const CrawlFileEntry *entry) {
+    Clear();
     HTMLParser::Parse(entry->content().c_str(), entry->content().size());
     if (!scraped.size()) return true;
 
-    for (int i=0; i<scraped.size(); i++) queue[1].add(scraped[i].c_str());
+    for (int i=0; i<scraped.size(); i++) queue[1].Add(scraped[i].c_str());
     scraped.clear();
     return true;
   }
 
-  static bool filter(const TagStack &stack) { return !MatchStack(stack, 1, "pathmp3"); }
+  static bool Filter(const TagStack &stack) { return !MatchStack(stack, 1, "pathmp3"); }
 
   virtual void Text(const string &content, const TagStack &stack) {
-    if (filter(stack)) return;
+    if (Filter(stack)) return;
     text += content;
   }
 
   virtual void CloseTag(const string &tag, const KV &attr, const TagStack &stack) {
-    if (filter(stack)) return;
+    if (Filter(stack)) return;
     string url = HTTP::EncodeURL(text.c_str());
     INFO("pathmp3='", url, "'");
     scraped.push_back(url.c_str());
-    clear();
+    Clear();
   }
 
-  void dump(const char *dir) {
+  void Dump(const char *dir) {
     float totaltime = 0;
 
     typedef map<string, long long> mp3map;
@@ -102,7 +103,7 @@ struct ForvoApi : public Crawler, public HTMLParser {
       HTMLParser::Parse(entry.content().data(), entry.content().size());
       if (!scraped.size()) continue;
 
-      string word = queryFromURL(hdr.url().c_str());
+      string word = QueryFromURL(hdr.url().c_str());
       if (!word.size()) continue;
 
       for (int i=0; i<scraped.size(); i++) {

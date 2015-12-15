@@ -22,21 +22,23 @@ namespace LFL {
 
 struct RSSMonitor {
   struct Feed : public HTMLParser {
-    RSSMonitor *monitor;
-    string name, url;
-    vector<string> subscribers;
-    Time updated, lastpubdate;
-    bool updating;
-
     struct Item {
       Feed *feed; string title, link, description, date;
       void Clear() { feed=0; title.clear(); link.clear(); description.clear(); date.clear(); }
       Time Date() const { return RFC822Date(date.c_str()); }
       bool operator<(const Item &r) const { return Date() > r.Date(); }
-    } parse_item;
+    };
+
+    RSSMonitor *monitor;
+    string name, url;
+    vector<string> subscribers;
+    Time updated, lastpubdate;
+    bool updating;
+    Item parse_item;
     vector<Item> items;
 
     Feed(RSSMonitor *m, const string &n, const string &u) : monitor(m), name(n), url(u), updated(0), lastpubdate(0), updating(0) {}
+
     bool Subscriber(const string &n) const {
       for (int i=0, l=subscribers.size(); i<l; i++) if (subscribers[i] == n) return true;
       return false;
@@ -50,9 +52,11 @@ struct RSSMonitor {
           (url.c_str(), 0, HTTPClient::ResponseCB(bind(&HTMLParser::WGetCB, this, _1, _2, _3, _4, _5))))
       { ERROR("wget ", 0); return; }
     }
+
     virtual void OpenTag(const string &tag, const KV &attr, const TagStack &stack) {
       if (tag == "item") parse_item.Clear();
     }
+
     virtual void Text(const string &text, const TagStack &stack) {
       if (!MatchStackOffset(stack, 1, 1, "item")) return;
       if (MatchStack(stack, 1, "title")) parse_item.title += text;
@@ -60,9 +64,11 @@ struct RSSMonitor {
       else if (MatchStack(stack, 1, "description")) parse_item.description += text;
       else if (MatchStack(stack, 1, "pubdate")) parse_item.date += text;
     }
+
     virtual void CloseTag(const string &tag, const KV &attr, const TagStack &stack) {
       if (tag == "item" && !parse_item.title.empty() && !parse_item.link.empty()) items.push_back(parse_item);
     }
+
     virtual void WGetContentEnd(Connection *) {
       lastpubdate=Time(0);
       sort(items.begin(), items.end());
@@ -82,6 +88,7 @@ struct RSSMonitor {
 
   typedef map<string, Feed*> FeedMap;
   FeedMap feed;
+  RSSMonitor() {}
 
   void Subscribe(const string &name, const string &url, const string &target) {
     Feed *f = FindOrNull(feed, url);
@@ -92,6 +99,7 @@ struct RSSMonitor {
     if (!f->Subscriber(target)) f->subscribers.push_back(target);
     Update(0);
   }
+
   void Update(vector<Feed::Item> *out) {
     Time now = Now();
     for (FeedMap::iterator it = feed.begin(); it != feed.end(); it++) {

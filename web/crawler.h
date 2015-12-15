@@ -21,10 +21,10 @@
 namespace LFL {
 
 struct Crawler {
-  virtual void validate() { CHECK(queue.size()); }
-  virtual void crawl() { Crawler::crawl(0); }
-  virtual void scrape() { Crawler::scrape(0); }
-  virtual bool scrape(int queue, const CrawlFileEntry *entry) = 0;
+  virtual void Validate() { CHECK(queue.size()); }
+  virtual void Crawl() { Crawler::Crawl(0); }
+  virtual void Scrape() { Crawler::Scrape(0); }
+  virtual bool Scrape(int queue, const CrawlFileEntry *entry) = 0;
 
   struct Queue {
     ProtoFile *in, *out;
@@ -32,7 +32,7 @@ struct Crawler {
     int outstanding, completed, scraped;
     Queue(ProtoFile *In, ProtoFile *Out) : in(In), out(Out), crawl(1), scrape(1), outstanding(0), completed(0), scraped(0) {}
 
-    bool add(const string &url) {
+    bool Add(const string &url) {
       QueueFileEntry entry;
       entry.set_url(url.c_str());
       entry.set_flag(0);
@@ -51,7 +51,7 @@ struct Crawler {
     }
   }
 
-  bool crawl_done(int above=0) {
+  bool CrawlDone(int above=0) {
     int i = above;
     for (/**/; i < queue.size(); i++) {
       if (!queue[i].crawl) continue;
@@ -60,7 +60,7 @@ struct Crawler {
     return i == queue.size();
   }
 
-  bool scrape_done(int above=0) {
+  bool ScrapeDone(int above=0) {
     int i = above;
     for (/**/; i < queue.size(); i++) {
       if (!queue[i].scrape) continue;
@@ -69,13 +69,13 @@ struct Crawler {
     return i == queue.size();
   }
 
-  int outstanding(int above=0) {
+  int Outstanding(int above=0) {
     int ret = 0;
     for (int i=above; i < queue.size(); i++) ret += queue[i].outstanding;
     return ret;
   }
 
-  bool add(const char *qfn, const char *cfn) {
+  bool Add(const char *qfn, const char *cfn) {
     ProtoFile *qf = new ProtoFile(qfn);
     if (!qf->file->Opened()) { ERROR("crawler input open: ", qfn); delete qf; return false; }
 
@@ -97,11 +97,12 @@ struct Crawler {
     FetchBuffer(Crawler *P, int Q) : parent(P), queue(Q), qf_offset(-1), content_length(0)  {}
   };
 
-  bool scrape(int ind) {
-    CrawlFileEntry entry; int offset, ret;
+  bool Scrape(int ind) {
+    int offset, ret;
+    CrawlFileEntry entry;
     if (!queue[ind].out->Next(&entry, &offset, QueueFileEntry::CRAWLED)) return false;
-    ret = scrape(ind, &entry);
-    INFO("scrape(", ind, ") url='", entry.request().url().c_str(), "' ", ret);
+    ret = Scrape(ind, &entry);
+    INFO("Scrape(", ind, ") url='", entry.request().url().c_str(), "' ", ret);
     if (!ret) return false;
 
     if (!queue[ind].out->Update(offset, QueueFileEntry::SCRAPED)) return false;
@@ -109,7 +110,7 @@ struct Crawler {
     return true;
   }
 
-  bool crawl(int ind) {
+  bool Crawl(int ind) {
     FetchBuffer *next = new FetchBuffer(this, ind);
     if (!queue[ind].in->Next(&next->hdr, &next->request, &next->qf_offset, QueueFileEntry::QUEUED)) { delete next; return false; }
     INFO("crawl(", ind, ") oustanding=", queue[ind].outstanding+1, " url='", next->request.url().c_str(), "'");
@@ -123,7 +124,7 @@ struct Crawler {
     return true;
   }
 
-  void crawled(FetchBuffer *buf) {
+  void Crawled(FetchBuffer *buf) {
     CrawlFileEntry entry;
     entry.mutable_request()->CopyFrom(buf->request);
     entry.set_headers(buf->headers.data(), buf->headers.size());
@@ -137,7 +138,7 @@ struct Crawler {
     queue[buf->queue].in->Update(buf->qf_offset, &buf->hdr, &buf->request);
   }
 
-  void close(FetchBuffer *buf) {
+  void Close(FetchBuffer *buf) {
     queue[buf->queue].outstanding--;
     queue[buf->queue].completed++;
     INFO("out(", buf->queue, ") outstanding=", queue[buf->queue].outstanding, " completed=", queue[buf->queue].completed, " url='", buf->request.url(), "'");
@@ -156,8 +157,8 @@ struct Crawler {
     } else { /* neither headers or content = final */
       bool success = true;
       if (buf->content_length && buf->content_length != buf->content.size()) success = false;
-      if (success) crawled(buf);
-      close(buf);
+      if (success) Crawled(buf);
+      Close(buf);
     }
   }
 };

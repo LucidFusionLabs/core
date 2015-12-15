@@ -305,7 +305,7 @@ struct TextGUI : public KeyboardGUI, public Drawable::AttrSource {
 
   struct Cursor {
     enum { Underline=1, Block=2 };
-    int type=Underline, attr=0;
+    int type=Block, attr=0;
     Time blink_time=Time(333), blink_begin=Time(0);
     point i, p;
   };
@@ -450,10 +450,21 @@ struct Editor : public TextArea {
   IDE::Project *project=0;
   Editor(Window *W, Font *F, File *I, bool Wrap=0);
 
+  void Input(char k)  {}
+  void Erase()        {}
+  void CursorLeft()   { cursor.i.x = max(cursor.i.x-1, 0);                       UpdateCursor(); }
+  void CursorRight()  { cursor.i.x = min(cursor.i.x+1, GetCursorLine()->Size()); UpdateCursor(); }
+  void HistUp()       { cursor.i.y = max(cursor.i.y-1, 0);                       UpdateCursor(); }
+  void HistDown()     { cursor.i.y = min(cursor.i.y+1, line_fb.lines-1);         UpdateCursor(); }
+  void Home()         { cursor.i.x = 0;                                          UpdateCursor(); }
+  void End()          { cursor.i.x = GetCursorLine()->Size();                    UpdateCursor(); }
+
+  Line *GetCursorLine() { return &line[-1-cursor.i.y]; }
   int WrappedLines() const { return wrapped_lines; }
   void UpdateWrappedLines(int cur_font_size, int width);
   int UpdateLines(float v_scrolled, int *first_ind, int *first_offset, int *first_len);
   void UpdateAnnotation();
+  void UpdateCursor();
 };
 
 struct Terminal : public TextArea {

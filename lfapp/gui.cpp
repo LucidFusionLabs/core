@@ -575,6 +575,7 @@ void TextArea::Resized(const Box &b) {
     mouse_gui.UpdateBox(Box(0,-b.h,b.w,b.h*2), -1, selection.gui_ind);
   }
   UpdateLines(last_v_scrolled, 0, 0, 0);
+  UpdateCursor();
   Redraw(false);
 }
 
@@ -779,8 +780,9 @@ string TextArea::CopyText(int beg_line_ind, int beg_char_ind, int end_line_ind, 
 /* Editor */
 
 Editor::Editor(Window *W, Font *F, File *I, bool Wrap) : TextArea(W, F), file(I) {
-  opened = file && file->Opened();
   reverse_line_fb = 1;
+  opened = file && file->Opened();
+  cmd_color = Color(Color::black, .5);
   line_fb.wrap = Wrap;
   file_line.node_value_cb = &LineOffset::GetLines;
   file_line.node_print_cb = &LineOffset::GetString;
@@ -865,17 +867,17 @@ int Editor::UpdateLines(float v_scrolled, int *first_ind, int *first_offset, int
     l = (e = -min(0, (--li).val->size)) ? 0 : li.val->size;
     (L = line.PushBack())->AssignText(e ? edits[e-1] : StringPiece(buf.data() + read_len - bo - l, l),
                                       Flow::TextAnnotation(annotation.data(), e ? PieceIndex() : li.val->annotation));
-    fb_wrapped_lines += L->Layout(fb->w);
+    fb_wrapped_lines += L->Layout(wrap ? fb->w : 0, true);
   }
   else for (LineMap::ConstIterator li = lib; li != lie; ++li, bo += l+1, added++) {
     l = (e = -min(0, li.val->size)) ? 0 : li.val->size;
     (L = line.PushFront())->AssignText(e ? edits[e-1] : StringPiece(buf.data() + bo, l),
                                        Flow::TextAnnotation(annotation.data(), e ? PieceIndex() : li.val->annotation));
-    fb_wrapped_lines += L->Layout(fb->w);
+    fb_wrapped_lines += L->Layout(wrap ? fb->w : 0, true);
   }
   if (!up) for (int i=0; i<past_end_lines; i++, added++) { 
     (L = line.PushFront())->Clear();
-    fb_wrapped_lines += L->Layout(fb->w);
+    fb_wrapped_lines += L->Layout(wrap ? fb->w : 0, true);
   }
 
   CHECK_LT(line.ring.count, line.ring.size);
@@ -897,7 +899,15 @@ int Editor::UpdateLines(float v_scrolled, int *first_ind, int *first_offset, int
 
   last_fb_lines = fb->lines;
   last_first_line = new_first_line;
+  UpdateCursor();
   return dist * (up ? -1 : 1);
+}
+
+void Editor::UpdateCursor() {
+  cursor.i.y = min(cursor.i.y, line_fb.lines-1);
+  cursor.i.x = min(cursor.i.x, GetCursorLine()->Size());
+  cursor.p = point(GetCursorLine()->data->glyphs.Position(cursor.i.x).x,
+                   line_fb.Height() - cursor.i.y*font->Height());
 }
 
 #ifdef LFL_LIBCLANG
@@ -1034,7 +1044,6 @@ Terminal::Terminal(ByteSink *O, Window *W, Font *F) : TextArea(W, F), sink(O), f
   line.SetAttrSource(this);
   SetColors(Singleton<SolarizedDarkColors>::Get());
   cursor.attr = default_attr;
-  cursor.type = Cursor::Block;
   token_processing = 1;
   cmd_prefix = "";
 }
@@ -1052,7 +1061,6 @@ void Terminal::Resized(const Box &b) {
 
   term_cursor.x = min(term_cursor.x, term_width);
   term_cursor.y = min(term_cursor.y, term_height);
-  UpdateCursor();
   TextArea::Resized(b);
   if (clip) clip = UpdateClipBorder();
   ResizedLeftoverRegion(b.w, b.h);
@@ -1597,7 +1605,7 @@ void EditorDialog::Draw() {
   if (!wrap) editor.h_scrolled = h_scrollbar.AddScrollDelta(editor.h_scrolled);
   if (1)     editor.UpdateScrolled();
   if (1)     Dialog::Draw();
-  if (1)     editor.Draw(content_box + box.TopLeft(), Editor::DrawFlag::CheckResized);
+  if (1)     editor.Draw(content_box + box.TopLeft(), Editor::DrawFlag::DrawCursor | Editor::DrawFlag::CheckResized);
   if (1)     v_scrollbar.Update();
   if (!wrap) h_scrollbar.Update();
 }

@@ -29,47 +29,49 @@ struct GoogleApi : public Crawler, public DebugHTMLParser {
     string title, url;
     Result() {}
     Result(const Result &in) : title(in.title), url(in.url) {}
-    void clear() { title.clear(); url.clear(); }
+    void Clear() { title.clear(); url.clear(); }
   };
   typedef vector<Result> Results;
+
   Results results;
-
   Result builder;
-  void clear() { results.clear(); builder.clear(); }
+  GoogleApi() {}
 
-  void init(const char *query) { queue[0].add(URL(query)); }
+  void Clear() { results.clear(); builder.Clear(); }
 
-  void validate() {
+  void Init(const char *query) { queue[0].Add(URL(query)); }
+
+  void Validate() {
     if (queue.size() != 2) FATAL("invalid queue size ", queue.size());
     queue[1].scrape = false; /* disable scraping on 2nd queue */
   }
 
-  void crawl() {
+  void Crawl() {
     if (queue[1].outstanding < FLAGS_q1max_outstanding) 
-      Crawler::crawl(1);
+      Crawler::Crawl(1);
 
     bool q0_maxed = queue[0].completed + queue[0].outstanding >= FLAGS_q0max_completed;
     if (q0_maxed || queue[0].outstanding) return;
-    Crawler::crawl(0);
+    Crawler::Crawl(0);
   }
 
-  bool scrape(int qf, const CrawlFileEntry *entry) {
+  bool Scrape(int qf, const CrawlFileEntry *entry) {
     if (strstr(entry->content().c_str(), "computer virus or spyware application") ||
         strstr(entry->content().c_str(), "entire network is affected") ||
         strstr(entry->content().c_str(), "http://www.download.com/Antivirus"))
     { ERROR("the world's biggest scraper is upset about being scraped, shutting down, content='", entry->content().c_str(), "'"); app->run=0; return true; }
 
-    clear();
+    Clear();
     HTMLParser::Parse(entry->content().data(), entry->content().size());
 
     for (int i=0; i<results.size(); i++) {
-      queue[1].add(results[i].url.c_str());
+      queue[1].Add(results[i].url.c_str());
       INFO("RESULT='", results[i].title, "' URL='", results[i].url, "'");
     }
     return true;
   }
 
-  static bool filter(const TagStack &stack) {
+  static bool Filter(const TagStack &stack) {
     if (!MatchStack(stack, 2, "a", "h3") &&
         !MatchStack(stack, 3, "b", "a", "h3") &&
         !MatchStack(stack, 3, "em", "a", "h3"))
@@ -85,7 +87,7 @@ struct GoogleApi : public Crawler, public DebugHTMLParser {
   }
 
   virtual void OpenTag(const string &tag, const KV &attr, const TagStack &stack) {
-    if (filter(stack)) return;
+    if (Filter(stack)) return;
     if (tag != "a") return;
 
     KV::const_iterator href = attr.find("href");
@@ -94,12 +96,12 @@ struct GoogleApi : public Crawler, public DebugHTMLParser {
   }
 
   virtual void Text(const string &text, const TagStack &stack) {
-    if (filter(stack)) return;
+    if (Filter(stack)) return;
     builder.title += text;
   }
 
   virtual void CloseTag(const string &tag, const KV &attr, const TagStack &stack) {
-    if (filter(stack)) return;
+    if (Filter(stack)) return;
     if (tag != "a") return;
 
     if (builder.url.substr(0,5) == "http:") {
@@ -107,7 +109,7 @@ struct GoogleApi : public Crawler, public DebugHTMLParser {
       results.push_back(builder);
     }
 
-    builder.clear();
+    builder.Clear();
   }
 };
 

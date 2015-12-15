@@ -46,12 +46,15 @@ struct URLShortener {
     }
     virtual void WGetContentEnd(Connection*) { done = true; }
   };
+
   typedef set<Query*> QuerySet;
   QuerySet queries;
+  URLShortener() {}
 
   void Shorten(const string &name, const string &url, const string &out, const vector<string> &subscribers) { 
     queries.insert(new Query(name, url, out, subscribers));
   }
+
   void Update(vector<Query*> *out) {
     if (!out) return;
     out->clear();

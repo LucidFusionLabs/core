@@ -38,9 +38,9 @@ struct HTMLParser {
     Tag(int ID, const String &N, const KV &A) : id(ID), name(N), attr(A), closed(0) {}
 
     enum {
-#undef      XX
-#define     XX(x) x,
-#include    "web/html_tags.h"
+#undef   XX
+#define  XX(x) x,
+#include "web/html_tags.h"
       bang, doctype, _small
     };
   };
@@ -399,14 +399,14 @@ struct HTMLParser {
 
   struct Entity : public unordered_map<string, char16_t> {
     enum {
-#undef      XX
-#define     XX(x, y) x = y,
-#include    "web/html_entities.h"
+#undef   XX
+#define  XX(x, y) x = y,
+#include "web/html_entities.h"
     };
     Entity() {
-#undef      XX
-#define     XX(x, y) (*this)[#x] = y;
-#include    "web/html_entities.h"
+#undef   XX
+#define  XX(x, y) (*this)[#x] = y;
+#include "web/html_entities.h"
       // C++ reserved word entities
       (*this)["not"] = 172;
       (*this)["and"] = 8743;
@@ -419,9 +419,9 @@ struct HTMLParser {
 
   struct Tags : public unordered_map<string, char16_t> {
     Tags() {
-#undef      XX
-#define     XX(x) (*this)[#x] = Tag::x;
-#include    "web/html_tags.h"
+#undef   XX
+#define  XX(x) (*this)[#x] = Tag::x;
+#include "web/html_tags.h"
       (*this)["!"]        = Tag::bang;
       (*this)["!doctype"] = Tag::doctype;
       (*this)["small"]    = Tag::_small;
