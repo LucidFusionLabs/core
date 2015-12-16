@@ -681,7 +681,7 @@ void TextArea::Draw(const Box &b, int flag, Shader *shader) {
   if (clip) screen->gd->PushScissor(Box::DelBorder(b, *clip));
   fb->Draw(b.Position(), point(0, CommandLines() * font_height));
   if (clip) screen->gd->PopScissor();
-  if (flag & DrawFlag::DrawCursor) TextGUI::Draw(Box(b.x, b.y, b.w, font_height));
+  if (flag & DrawFlag::DrawCursor) DrawCursor(b.Position() + cursor.p);
   if (selection.enabled) mouse_gui.box.SetPosition(b.Position());
   if (selection.changing) DrawSelection();
   if (!clip && hover_link) DrawHoverLink(b);
@@ -701,7 +701,8 @@ void TextArea::DrawHoverLink(const Box &b) {
 
 bool TextArea::GetGlyphFromCoordsOffset(const point &p, Selection::Point *out, int sl, int sla) {
   LinesFrameBuffer *fb = GetFrameBuffer();
-  int h = fb->Height(), fh = font->Height(), targ = reverse_line_fb ? ((h - p.y) / fh - sla) : (p.y / fh + sla);
+  int h = fb->Height(), fh = font->Height();
+  int targ = reverse_line_fb ? ((h - p.y) / fh - sla) : (p.y / fh + sla);
   for (int i=sl, lines=0, ll; i<line.ring.count && lines<line_fb.lines; i++, lines += ll) {
     Line *L = &line[-i-1];
     if (lines + (ll = L->Lines()) <= targ) continue;
@@ -730,7 +731,7 @@ void TextArea::DragCB(int button, int, int, int down) {
   LinesFrameBuffer *fb = GetFrameBuffer();
   Selection *s = &selection;
   if (!(s->changing = down)) {
-    bool swap = s->end < s->beg;
+    bool swap = (!reverse_line_fb && s->end < s->beg) || (reverse_line_fb && s->beg < s->end);
     CopyText(swap ? s->end : s->beg, swap ? s->beg : s->end);
     s->changing_previously = 0;
     return;
@@ -743,8 +744,10 @@ void TextArea::DragCB(int button, int, int, int down) {
   bool swap = (!reverse_line_fb && s->end < s->beg) || (reverse_line_fb && s->beg < s->end);
   Box gb = swap ? s->end.glyph : s->beg.glyph;
   Box ge = swap ? s->beg.glyph : s->end.glyph;
-  if (reverse_line_fb) { gb.y=h-gb.y-gb.h; ge.y=h-ge.y-ge.h; }
-  s->box = Box3(Box(fb->Width(), fb->Height()), gb.Position(), ge.Position() + point(ge.w, 0), fh, fh);
+  if (reverse_line_fb) { gb.y=h-gb.y-fh; ge.y=h-ge.y-fh; }
+  point gbp = !reverse_line_fb ? gb.Position() : gb.Position() + point(gb.w, 0);
+  point gep =  reverse_line_fb ? ge.Position() : ge.Position() + point(ge.w, 0);
+  s->box = Box3(Box(fb->Width(), fb->Height()), gbp, gep, fh, fh);
   s->changing_previously = s->changing;
 }
 
@@ -755,24 +758,26 @@ void TextArea::CopyText(const Selection::Point &beg, const Selection::Point &end
 
 string TextArea::CopyText(int beg_line_ind, int beg_char_ind, int end_line_ind, int end_char_ind, bool add_nl) {
   String16 copy_text;
-  int d = reverse_line_fb ? 1 : -1;
-  int b = reverse_line_fb ? end_line_ind : beg_line_ind;
-  int e = reverse_line_fb ? beg_line_ind : end_line_ind;
-  for (int i = b; /**/; i += d) {
+  bool one_line = beg_line_ind == end_line_ind;
+  int bc = (one_line && reverse_line_fb) ? end_char_ind : beg_char_ind;
+  int ec = (one_line && reverse_line_fb) ? beg_char_ind : end_char_ind;
+
+  for (int i = beg_line_ind, d = reverse_line_fb ? 1 : -1; /**/; i += d) {
     Line *l = &line[-i-1];
     int len = l->Size();
     if (i == beg_line_ind) {
-      if (!l->Size() || beg_char_ind < 0) len = -1;
+      if (!l->Size() || bc < 0) len = -1;
       else {
-        len = (beg_line_ind == end_line_ind && end_char_ind >= 0) ? end_char_ind+1 : l->Size();
-        copy_text += Substr(l->Text16(), beg_char_ind, max(0, len - beg_char_ind));
+        len = (one_line && ec >= 0) ? ec+1 : l->Size();
+        copy_text += Substr(l->Text16(), bc, max(0, len - bc));
       }
     } else if (i == end_line_ind) {
       len = (end_char_ind >= 0) ? end_char_ind+1 : l->Size();
       copy_text += Substr(l->Text16(), 0, len);
     } else copy_text += l->Text16();
+
     if (add_nl && len == l->Size()) copy_text += String16(1, '\n');
-    if (i == e) break;
+    if (i == end_line_ind) break;
   }
   return String::ToUTF8(copy_text);
 }
@@ -1497,6 +1502,7 @@ void Console::Draw() {
 
   screen->gd->SetColor(Color::white);
   TextArea::Draw(Box(0, y, screen->width, h), DrawFlag::DrawCursor | DrawFlag::CheckResized);
+  TextGUI::Draw(Box(0, y, screen->width, font->Height()));
 }
 
 /* Dialog */
@@ -1600,7 +1606,7 @@ void EditorDialog::Layout() {
 
 void EditorDialog::Draw() {
   bool wrap = editor.Wrap();
-  if (1)     editor.active = screen->top_dialog == this;
+  if (1)     editor.active = fullscreen || screen->top_dialog == this;
   if (1)     editor.v_scrolled = v_scrollbar.AddScrollDelta(editor.v_scrolled);
   if (!wrap) editor.h_scrolled = h_scrollbar.AddScrollDelta(editor.h_scrolled);
   if (1)     editor.UpdateScrolled();

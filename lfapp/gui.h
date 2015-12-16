@@ -145,7 +145,6 @@ struct KeyboardGUI : public KeyboardController {
   KeyboardGUI(Window *W, Font *F, int LastCommands=50)
     : parent(W), toggle_active(&active), lastcmd(LastCommands) { if (parent) parent->keyboard_gui.push_back(this); }
   virtual ~KeyboardGUI() { if (parent) VectorEraseByValue(&parent->keyboard_gui, this); }
-  virtual void Enable() { active = true; }
   virtual bool Toggle() { return toggle_active.Toggle(); }
   virtual void Run(const string &cmd) { if (runcb) runcb(cmd); }
   virtual void SetToggleKey(int TK, int TM=Toggler::Default) { toggle_bind.key=TK; toggle_active.mode=TM; }
@@ -398,8 +397,8 @@ struct TextArea : public TextGUI {
   /// Write() is thread-safe.
   virtual void Write(const StringPiece &s, bool update_fb=true, bool release_fb=true);
   virtual void WriteCB(const string &s, bool update_fb, bool release_fb) { return Write(s, update_fb, release_fb); }
-  virtual void PageUp  () { v_scrolled = Clamp(v_scrolled - (float)scroll_inc/(WrappedLines()-1), 0, 1); UpdateScrolled(); }
-  virtual void PageDown() { v_scrolled = Clamp(v_scrolled + (float)scroll_inc/(WrappedLines()-1), 0, 1); UpdateScrolled(); }
+  virtual void PageUp  () { AddVScroll(-scroll_inc); }
+  virtual void PageDown() { AddVScroll( scroll_inc); }
   virtual void Resized(const Box &b);
   virtual void CheckResized(const Box &b);
 
@@ -422,6 +421,8 @@ struct TextArea : public TextGUI {
   bool Wrap() const { return line_fb.wrap; }
   int LineFBPushBack () const { return reverse_line_fb ? LineUpdate::PushFront : LineUpdate::PushBack;  }
   int LineFBPushFront() const { return reverse_line_fb ? LineUpdate::PushBack  : LineUpdate::PushFront; }
+  float PercentOfLines(int n) const { return static_cast<float>(n) / (WrappedLines()-1); }
+  void AddVScroll(int n) { v_scrolled = Clamp(v_scrolled + PercentOfLines(n), 0, 1); UpdateScrolled(); }
   int LayoutBackLine(Lines *l, int i) { return Wrap() ? (*l)[-i-1].Layout(line_fb.w) : 1; }
 
   void InitSelection();
@@ -454,10 +455,10 @@ struct Editor : public TextArea {
   void Erase()        {}
   void CursorLeft()   { cursor.i.x = max(cursor.i.x-1, 0);                       UpdateCursor(); }
   void CursorRight()  { cursor.i.x = min(cursor.i.x+1, GetCursorLine()->Size()); UpdateCursor(); }
-  void HistUp()       { cursor.i.y = max(cursor.i.y-1, 0);                       UpdateCursor(); }
-  void HistDown()     { cursor.i.y = min(cursor.i.y+1, line_fb.lines-1);         UpdateCursor(); }
   void Home()         { cursor.i.x = 0;                                          UpdateCursor(); }
   void End()          { cursor.i.x = GetCursorLine()->Size();                    UpdateCursor(); }
+  void HistUp()       { if (cursor.i.y <= 0)               AddVScroll(-1); else cursor.i.y--; UpdateCursor(); }
+  void HistDown()     { if (cursor.i.y >= line_fb.lines-1) AddVScroll( 1); else cursor.i.y++; UpdateCursor(); }
 
   Line *GetCursorLine() { return &line[-1-cursor.i.y]; }
   int WrappedLines() const { return wrapped_lines; }
@@ -553,7 +554,7 @@ struct Console : public TextArea {
   bool animating=0, drawing=0, bottom_or_top=0, blend=1, ran_startcmd=0;
   Color color=Color(25,60,130,120);
   Console(Window *W, Font *F) : TextArea(W, F) { line_fb.wrap=write_timestamp=1; SetToggleKey(Key::Backquote); bg_color=&Color::clear; }
-  Console(Window *W) : Console(W, Fonts::Get(A_or_B(FLAGS_lfapp_console_font, FLAGS_default_font), "", 9, Color::white, Color::clear, FLAGS_lfapp_console_font_flag)) {}
+  Console(Window *W) : Console(W, Fonts::Get(A_or_B(FLAGS_lfapp_console_font, FLAGS_default_font), "", 9, Color::white, Color::clear, FLAGS_lfapp_console_font_flag)) { cursor.type = Cursor::Underline; }
 
   virtual ~Console() {}
   virtual int CommandLines() const { return cmd_line.Lines(); }

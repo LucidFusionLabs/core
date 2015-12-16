@@ -2350,13 +2350,13 @@ void Window::InitLFAppConsole() {
 }
 
 void Window::DrawDialogs() {
+  for (auto i = screen->dialogs.begin(), e = screen->dialogs.end(); i != e; ++i) (*i)->Draw();
   if (screen->lfapp_console) screen->lfapp_console->Draw();
   if (FLAGS_draw_grid) {
     Color c(.7, .7, .7);
     glIntersect(screen->mouse.x, screen->mouse.y, &c);
     Fonts::Default()->Draw(StrCat("draw_grid ", screen->mouse.x, " , ", screen->mouse.y), point(0,0));
   }
-  for (auto i = screen->dialogs.begin(), e = screen->dialogs.end(); i != e; ++i) (*i)->Draw();
 }
 
 void Window::SetCaption(const string &v) {
