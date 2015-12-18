@@ -367,6 +367,7 @@ Flow::State Flow::AppendNewline(int need_height, bool next_glyph_preadded) {
   cur_line.out_ind = out ? out->data.size() : 0;
   SetMinimumAscent(max(need_height, LayoutLineHeight()));
   SetCurrentLineBounds();
+  if (cur_attr.font) cur_line.descent = cur_attr.font->descender;
   return state = State::NEW_LINE;
 }
 

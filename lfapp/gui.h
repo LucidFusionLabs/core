@@ -142,7 +142,7 @@ struct KeyboardGUI : public KeyboardController {
   RunCB runcb;
   RingVector<string> lastcmd;
   int lastcmd_ind=-1;
-  KeyboardGUI(Window *W, Font *F, int LastCommands=50)
+  KeyboardGUI(Window *W, Font *F, int LastCommands=10)
     : parent(W), toggle_active(&active), lastcmd(LastCommands) { if (parent) parent->keyboard_gui.push_back(this); }
   virtual ~KeyboardGUI() { if (parent) VectorEraseByValue(&parent->keyboard_gui, this); }
   virtual bool Toggle() { return toggle_active.Toggle(); }
@@ -216,14 +216,18 @@ struct TextGUI : public KeyboardGUI, public Drawable::AttrSource {
     int AssignText(const StringPiece   &s, int                       a=0) { Clear(); return AppendText(s, a); }
     int AssignText(const String16Piece &s, int                       a=0) { Clear(); return AppendText(s, a); }
     int AssignText(const StringPiece   &s, const Flow::TextAnnotation &a) { Clear(); return AppendText(s, a); }
+    int AssignText(const String16Piece &s, const Flow::TextAnnotation &a) { Clear(); return AppendText(s, a); }
     int AppendText(const StringPiece   &s, int                       a=0) { return InsertTextAt(Size(), s, a); }
     int AppendText(const String16Piece &s, int                       a=0) { return InsertTextAt(Size(), s, a); }
     int AppendText(const StringPiece   &s, const Flow::TextAnnotation &a) { return InsertTextAt(Size(), s, a); }
+    int AppendText(const String16Piece &s, const Flow::TextAnnotation &a) { return InsertTextAt(Size(), s, a); }
     template <class X> int OverwriteTextAt(int o, const StringPieceT<X> &s, int a=0);
     template <class X> int InsertTextAt   (int o, const StringPieceT<X> &s, int a=0);
     template <class X> int InsertTextAt   (int o, const StringPieceT<X> &s, const Flow::TextAnnotation&);
     template <class X> int InsertTextAt   (int o, const StringPieceT<X> &s, const DrawableBoxArray&);
     template <class X> int UpdateText     (int o, const StringPieceT<X> &s, int a, int max_width=0, bool *append=0, int insert_mode=-1);
+    int OverwriteTextAt(int o, const string   &s, int a=0) { return OverwriteTextAt<char>    (o, s, a); }
+    int OverwriteTextAt(int o, const String16 &s, int a=0) { return OverwriteTextAt<char16_t>(o, s, a); }
     int InsertTextAt(int o, const string   &s, int a=0) { return InsertTextAt<char>    (o, s, a); }
     int InsertTextAt(int o, const String16 &s, int a=0) { return InsertTextAt<char16_t>(o, s, a); }
     int UpdateText(int o, const string   &s, int attr, int max_width=0, bool *append=0) { return UpdateText<char>    (o, s, attr, max_width, append); }
@@ -278,6 +282,7 @@ struct TextGUI : public KeyboardGUI, public Drawable::AttrSource {
     tvirtual void Clear(Line *l) { RingFrameBuffer::Clear(l, Box(w, l->Lines() * font_height), true); }
     tvirtual void Update(Line *l, int flag=0);
     tvirtual void Update(Line *l, const point &p, int flag=0) { l->p=p; Update(l, flag); }
+    tvirtual void OverwriteUpdate(Line *l, int xo=0, int wlo=0, int wll=0, int flag=0);
     tvirtual int PushFrontAndUpdate(Line *l, int xo=0, int wlo=0, int wll=0, int flag=0);
     tvirtual int PushBackAndUpdate (Line *l, int xo=0, int wlo=0, int wll=0, int flag=0);
     tvirtual void PushFrontAndUpdateOffset(Line *l, int lo);
@@ -339,7 +344,7 @@ struct TextGUI : public KeyboardGUI, public Drawable::AttrSource {
   const Color *bg_color=0;
   mutable Drawable::Attr last_attr;
 
-  TextGUI(Window *W, Font *F) : KeyboardGUI(W, F), mouse_gui(this, W), font(F)
+  TextGUI(Window *W, Font *F, int LC=10) : KeyboardGUI(W, F, LC), mouse_gui(this, W), font(F)
   { layout.pad_wide_chars=1; cmd_line.Init(this,0); cmd_line.GetAttrId(Drawable::Attr(F)); }
 
   virtual ~TextGUI() {}
@@ -362,7 +367,8 @@ struct TextGUI : public KeyboardGUI, public Drawable::AttrSource {
   virtual LinesFrameBuffer *GetFrameBuffer() { return &cmd_fb; }
   virtual void ResetGL() { cmd_fb.Reset(); }
   virtual void UpdateCursor() { cursor.p = cmd_line.data->glyphs.Position(cursor.i.x); }
-  virtual void UpdateCommandFB();
+  virtual void UpdateCommandFB() { UpdateLineFB(&cmd_line, &cmd_fb); }
+  virtual void UpdateLineFB(Line *L, LinesFrameBuffer *fb);
   virtual void Draw(const Box &b);
   virtual void DrawCursor(point p);
   virtual void UpdateToken(Line*, int word_offset, int word_len, int update_type, const LineTokenProcessor*);
@@ -391,7 +397,8 @@ struct TextArea : public TextGUI {
   int scroll_inc=10, scrolled_lines=0;
   float v_scrolled=0, h_scrolled=0, last_v_scrolled=0, last_h_scrolled=0;
 
-  TextArea(Window *W, Font *F, int S=200) : TextGUI(W, F), line(this, S) { if (selection.enabled) InitSelection(); }
+  TextArea(Window *W, Font *F, int S=200, int LC=10) :
+    TextGUI(W, F, LC), line(this, S) { if (selection.enabled) InitSelection(); }
   virtual ~TextArea() {}
 
   /// Write() is thread-safe.
@@ -434,7 +441,7 @@ struct TextArea : public TextGUI {
 
 struct Editor : public TextArea {
   struct LineOffset { 
-    long long offset; int size, wrapped_lines; PieceIndex annotation;
+    long long offset; int size, wrapped_lines, modified=0; PieceIndex annotation;
     LineOffset(int O=0, int S=0, int WL=1) : offset(O), size(S), wrapped_lines(WL) {}
     static string GetString(const LineOffset *v) { return StrCat(v->offset); }
     static int    GetLines (const LineOffset *v) { return v->wrapped_lines; }
@@ -444,28 +451,31 @@ struct Editor : public TextArea {
 
   shared_ptr<File> file;
   LineMap file_line;
-  FreeListVector<string> edits;
+  FreeListVector<String16> edits;
+  LineOffset *cursor_line=0;
   vector<pair<int,int>> annotation;
   int last_fb_width=0, last_fb_lines=0, last_first_line=0, wrapped_lines=0, fb_wrapped_lines=0;
   bool opened=0;
   IDE::Project *project=0;
   Editor(Window *W, Font *F, File *I, bool Wrap=0);
 
-  void Input(char k)  {}
-  void Erase()        {}
+  void Input(char k)  { Modify(false, k); }
+  void Erase()        { Modify(true,  0); }
   void CursorLeft()   { cursor.i.x = max(cursor.i.x-1, 0);                       UpdateCursor(); }
   void CursorRight()  { cursor.i.x = min(cursor.i.x+1, GetCursorLine()->Size()); UpdateCursor(); }
   void Home()         { cursor.i.x = 0;                                          UpdateCursor(); }
   void End()          { cursor.i.x = GetCursorLine()->Size();                    UpdateCursor(); }
-  void HistUp()       { if (cursor.i.y <= 0)               AddVScroll(-1); else cursor.i.y--; UpdateCursor(); }
-  void HistDown()     { if (cursor.i.y >= line_fb.lines-1) AddVScroll( 1); else cursor.i.y++; UpdateCursor(); }
+  void HistUp()       { if (cursor.i.y <= 0)               AddVScroll(-1); else cursor.i.y--; UpdateCursor(); UpdateCursorLine(); }
+  void HistDown()     { if (cursor.i.y >= line_fb.lines-1) AddVScroll( 1); else cursor.i.y++; UpdateCursor(); UpdateCursorLine(); }
 
   Line *GetCursorLine() { return &line[-1-cursor.i.y]; }
   int WrappedLines() const { return wrapped_lines; }
   void UpdateWrappedLines(int cur_font_size, int width);
   int UpdateLines(float v_scrolled, int *first_ind, int *first_offset, int *first_len);
-  void UpdateAnnotation();
+  void UpdateCursorLine() { cursor_line = file_line.LesserBound(last_first_line + cursor.i.y).val; }
   void UpdateCursor();
+  void UpdateAnnotation();
+  void Modify(bool erase, int c);
 };
 
 struct Terminal : public TextArea {
@@ -553,7 +563,7 @@ struct Console : public TextArea {
   Time anim_time=Time(333), anim_begin=Time(0);
   bool animating=0, drawing=0, bottom_or_top=0, blend=1, ran_startcmd=0;
   Color color=Color(25,60,130,120);
-  Console(Window *W, Font *F) : TextArea(W, F) { line_fb.wrap=write_timestamp=1; SetToggleKey(Key::Backquote); bg_color=&Color::clear; }
+  Console(Window *W, Font *F) : TextArea(W, F, 200, 50) { line_fb.wrap=write_timestamp=1; SetToggleKey(Key::Backquote); bg_color=&Color::clear; }
   Console(Window *W) : Console(W, Fonts::Get(A_or_B(FLAGS_lfapp_console_font, FLAGS_default_font), "", 9, Color::white, Color::clear, FLAGS_lfapp_console_font_flag)) { cursor.type = Cursor::Underline; }
 
   virtual ~Console() {}

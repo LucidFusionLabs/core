@@ -187,7 +187,7 @@ struct TilesTextGUI;
 struct VideoAssetLoader;
 struct Window;
 namespace DOM { struct Node; };
-namespace IPC { struct FontDescription; struct OpenSystemFontResponse; }
+namespace IPC { struct ResourceHandle; struct FontDescription; struct OpenSystemFontResponse; }
 
 typedef google::protobuf::Message Proto;
 typedef int (*MainCB)(int argc, const char **argv);
