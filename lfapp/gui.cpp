@@ -795,6 +795,13 @@ Editor::Editor(Window *W, Font *F, File *I, bool Wrap) : TextArea(W, F), file(I)
   line_fb.wrap = Wrap;
   file_line.node_value_cb = &LineOffset::GetLines;
   file_line.node_print_cb = &LineOffset::GetString;
+  edits.free_func = [](String16 *v) { v->clear(); };
+}
+
+void Editor::AddWrappedLines(int n) {
+  v_scrolled *= static_cast<float>(wrapped_lines) / (wrapped_lines + n);
+  last_v_scrolled = v_scrolled;
+  wrapped_lines += n;
 }
 
 void Editor::UpdateWrappedLines(int cur_font_size, int width) {
@@ -809,7 +816,7 @@ void Editor::UpdateWrappedLines(int cur_font_size, int width) {
   file_line.LoadFromSortedVal();
 }
 
-int Editor::UpdateLines(float v_scrolled, int *first_ind, int *first_offset, int *first_len) {
+int Editor::UpdateLines(float vs, int *first_ind, int *first_offset, int *first_len) {
   if (!opened) return 0;
   LinesFrameBuffer *fb = GetFrameBuffer();
   bool width_changed = last_fb_width != fb->w, wrap = Wrap(), init = !wrapped_lines;
@@ -820,8 +827,8 @@ int Editor::UpdateLines(float v_scrolled, int *first_ind, int *first_offset, int
   }
 
   bool resized = (width_changed && wrap) || last_fb_lines != fb->lines;
-  int new_first_line = RoundF(v_scrolled * (wrapped_lines - 1)), new_last_line = new_first_line + fb->lines;
-  int dist = resized ? fb->lines : abs(new_first_line - last_first_line), read_len = 0, bo = 0, l;
+  int new_first_line = RoundF(vs * (wrapped_lines - 1)), new_last_line = new_first_line + fb->lines;
+  int dist = resized ? fb->lines : abs(new_first_line - last_first_line), read_len = 0, bo = 0, l, e;
   if (!dist || !file_line.size()) return 0;
 
   bool redraw = dist >= fb->lines;
@@ -846,6 +853,7 @@ int Editor::UpdateLines(float v_scrolled, int *first_ind, int *first_offset, int
   if      ( up && dist <= -start_line_adjust) { start_line_adjust += dist; read_lines.second=past_end_lines=0; }
   else if (!up && dist <=  end_line_cutoff)   { end_line_cutoff   -= dist; read_lines.second=past_end_lines=0; }
 
+  IOVector rv;
   LineMap::ConstIterator lib, lie;
   if (read_lines.second) {
     CHECK((lib = file_line.LesserBound(read_lines.first)).val);
@@ -857,7 +865,7 @@ int Editor::UpdateLines(float v_scrolled, int *first_ind, int *first_offset, int
     for (lie = lib; lie.val && lie.key <= last_read_line; ++lie) {
       auto v = lie.val;
       if (shorten_read && !(lie.key + v->wrapped_lines <= last_read_line)) break;
-      if (v->size >= 0) read_len += (v->size + 1);
+      if (!v->modified) read_len += rv.Append({v->offset, v->size+1});
     }
     if (wrap && tail_read) {
       LineMap::ConstIterator i = lie;
@@ -865,25 +873,20 @@ int Editor::UpdateLines(float v_scrolled, int *first_ind, int *first_offset, int
     }
   }
 
-  string buf((read_len = X_or_1(read_len)-1), 0);
-  if (read_len) {
-    file->Seek(lib.val->offset, File::Whence::SET);
-    CHECK_EQ(buf.size(), file->Read(&buf[0], buf.size()));
-  }
+  string buf(read_len, 0);
+  if (read_len) CHECK_EQ(buf.size(), file->Read(&buf[0], &rv[0], rv.size()));
 
   Line *L = 0;
-  if (up) for (LineMap::ConstIterator li = lie; li != lib; bo += l + (L != 0), added++) {
-    l = (--li).val->size;
-    int e = li.val->modified;
-    if (e) (L = line.PushBack())->AssignText(edits[e-1],                                     Flow::TextAnnotation(annotation.data(), PieceIndex()));
-    else   (L = line.PushBack())->AssignText(StringPiece(buf.data() + read_len - bo - l, l), Flow::TextAnnotation(annotation.data(), li.val->annotation));
+  if (up) for (LineMap::ConstIterator li = lie; li != lib; bo += l + !e, added++) {
+    l = (e = (--li).val->modified) ? 0 : li.val->size;
+    if (e) (L = line.PushBack())->AssignText(edits[e-1],                                 Flow::TextAnnotation(annotation.data(), PieceIndex()));
+    else   (L = line.PushBack())->AssignText(StringPiece(buf.data()+read_len-bo-l-1, l), Flow::TextAnnotation(annotation.data(), li.val->annotation));
     fb_wrapped_lines += L->Layout(wrap ? fb->w : 0, true);
   }
-  else for (LineMap::ConstIterator li = lib; li != lie; ++li, bo += l+1, added++) {
-    l = li.val->size;
-    int e = li.val->modified;
-    if (e) (L = line.PushFront())->AssignText(edits[e-1],                      Flow::TextAnnotation(annotation.data(), PieceIndex()));
-    else   (L = line.PushFront())->AssignText(StringPiece(buf.data() + bo, l), Flow::TextAnnotation(annotation.data(), li.val->annotation));
+  else for (LineMap::ConstIterator li = lib; li != lie; ++li, bo += l + !e, added++) {
+    l = (e = li.val->modified) ? 0 : li.val->size;
+    if (e) (L = line.PushFront())->AssignText(edits[e-1],                    Flow::TextAnnotation(annotation.data(), PieceIndex()));
+    else   (L = line.PushFront())->AssignText(StringPiece(buf.data()+bo, l), Flow::TextAnnotation(annotation.data(), li.val->annotation));
     fb_wrapped_lines += L->Layout(wrap ? fb->w : 0, true);
   }
   if (!up) for (int i=0; i<past_end_lines; i++, added++) { 
@@ -1000,16 +1003,46 @@ void Editor::UpdateAnnotation() {
 void Editor::Modify(bool erase, int c) {
   Line *L = GetCursorLine();
   if (!L || !cursor_line) return;
-  if (cursor_line->modified <= 0) cursor_line->modified = edits.Insert(L->Text16())+1;
-  String16 *b = &edits[cursor_line->modified-1];
+  int edit_id = ModifyCursorLine();
+  String16 *b = &edits[edit_id];
   CHECK_LE(cursor.i.x, L->Size());
   CHECK_LE(cursor.i.x, b->size());
-  if (erase)  b->erase(cursor.i.x, 1);
+  if (erase && !cursor.i.x) {
+    if (!cursor.i.y) return;
+    file_line.Erase(CursorLineNumber());
+    AddWrappedLines(-L->Lines());
+    HistUp();
+    *(b = &edits[ModifyCursorLine()]) += edits[edit_id];
+    UpdateCursorX(b->size());
+    edits.Erase(edit_id);
+    RefreshLines();
+    return Redraw(true);
+  } else if (!erase && c == '\r') {
+    if (cursor.i.y == line_fb.lines-1) return;
+    file_line.Insert(CursorLineNumber()+1, LineOffset());
+    AddWrappedLines(1);
+    int x = cursor.i.x;
+    cursor.i.x = 0;
+    HistDown();
+    edits[ModifyCursorLine()] = (b = &edits[edit_id])->substr(x);
+    b->resize(x);
+    RefreshLines();
+    return Redraw(true);
+  }
+  if (erase)  b->erase(cursor.i.x-1, 1);
   else        b->insert(cursor.i.x, 1, c);
-  if (erase)  L->Erase          (cursor.i.x, 1);
+  if (erase)  L->Erase          (cursor.i.x-1, 1);
   else if (0) L->OverwriteTextAt(cursor.i.x, String16(1, c), default_attr);
   else        L->InsertTextAt   (cursor.i.x, String16(1, c), default_attr);
+  if (erase)  CursorLeft();
+  else        CursorRight();
   UpdateLineFB(L, GetFrameBuffer());
+}
+
+int Editor::ModifyCursorLine() {
+  CHECK(cursor_line);
+  if (cursor_line->modified <= 0) cursor_line->modified = edits.Insert(GetCursorLine()->Text16())+1;
+  return cursor_line->modified-1;
 }
 
 /* Terminal */

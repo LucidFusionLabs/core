@@ -305,6 +305,7 @@ template <class I1, class I2> struct IterPair {
 template <class X> struct FreeListVector {
   vector<X> data;
   vector<int> free_list;
+  function<void(X*)> free_func;
 
   int size() const { return data.size(); }
   const X& back() const { return data.back(); }
@@ -324,6 +325,7 @@ template <class X> struct FreeListVector {
   }
   virtual void Erase(unsigned ind) {
     CHECK_LT(ind, data.size());
+    if (free_func) free_func(&data[ind]);
     free_list.push_back(ind);
   }
 };

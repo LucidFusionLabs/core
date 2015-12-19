@@ -26,7 +26,6 @@ namespace LFL {
 DECLARE_bool(dns_dump);
 DECLARE_bool(network_debug);
 
-struct IOVec { int offset; int len; };
 struct TransferredSocket { Socket socket; int offset; };
 
 struct IPV4Endpoint {

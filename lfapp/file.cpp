@@ -42,6 +42,12 @@
 #endif
 
 namespace LFL {
+int IOVector::Append(const IOVec &v) {
+  if (this->size() && (this->back().offset + this->back().len == v.offset)) this->back().len += v.len;
+  else this->push_back(v);
+  return v.len;
+}
+  
 string File::Contents() {
   if (!Opened()) return "";
   int l = Size();
@@ -111,6 +117,17 @@ const char *File::NextRecord::GetNextRecord(File *f, int *offsetOut, int *nextof
     buf_dirty = false;
     buf_offset = 0;
   }
+}
+
+int File::Read(void *buf, const IOVec *v, int iovlen) {
+  int ret = 0;
+  char *b = static_cast<char*>(buf);
+  for (const IOVec *i = v, *e = i + iovlen; i != e; ++i) {
+    Seek(i->offset, File::Whence::SET);
+    Read(b + ret, i->len);
+    ret += i->len;
+  }
+  return ret;
 }
 
 int File::WriteProto(const ProtoHeader *hdr, const Proto *msg, bool doflush) {

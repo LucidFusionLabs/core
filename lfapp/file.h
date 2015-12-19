@@ -19,6 +19,9 @@
 #ifndef LFL_LFAPP_FILE_H__
 #define LFL_LFAPP_FILE_H__
 namespace LFL {
+  
+struct IOVec { long long offset; int len; };
+struct IOVector : public vector<IOVec> { int Append(const IOVec&); };
 
 struct MIMEType {
   static bool Jpg(const string &mt) { return mt == "image/jpg" || mt == "image/jpeg"; }
@@ -66,6 +69,7 @@ struct File {
   const char *NextChunk  (int *offset=0, int *nextoffset=0);
   const char *NextProto  (int *offset=0, int *nextoffset=0, ProtoHeader *phout=0);
 
+  int Read(void *buf, const IOVec*, int iovlen);
   int Write(const string &b) { return Write(b.c_str(), b.size()); }
   int WriteProto(ProtoHeader *hdr, const Proto *msg, bool flush=0);
   int WriteProto(const ProtoHeader *hdr, const Proto *msg, bool flush=0);

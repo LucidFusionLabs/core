@@ -352,20 +352,21 @@ struct TextGUI : public KeyboardGUI, public Drawable::AttrSource {
   virtual int CommandLines() const { return 0; }
   virtual void Input(char k) { cmd_line.UpdateText(cursor.i.x++, String16(1, *Unsigned<char>(&k)), cursor.attr); UpdateCommandFB(); UpdateCursor(); }
   virtual void Erase()       { if (!cursor.i.x) return; cmd_line.Erase(--cursor.i.x, 1); UpdateCommandFB(); UpdateCursor(); }
-  virtual void CursorRight() { cursor.i.x = min(cursor.i.x+1, cmd_line.Size()); UpdateCursor(); }
-  virtual void CursorLeft()  { cursor.i.x = max(cursor.i.x-1, 0);               UpdateCursor(); }
-  virtual void Home()        { cursor.i.x = 0;                                  UpdateCursor(); }
-  virtual void End()         { cursor.i.x = cmd_line.Size();                    UpdateCursor(); }
+  virtual void CursorRight() { UpdateCursorX(min(cursor.i.x+1, cmd_line.Size())); }
+  virtual void CursorLeft()  { UpdateCursorX(max(cursor.i.x-1, 0)); }
+  virtual void Home()        { UpdateCursorX(0); }
+  virtual void End()         { UpdateCursorX(cmd_line.Size()); }
   virtual void HistUp()      { if (int c=lastcmd.ring.count) { AssignInput(lastcmd[lastcmd_ind]); lastcmd_ind=max(lastcmd_ind-1, -c); } }
   virtual void HistDown()    { if (int c=lastcmd.ring.count) { AssignInput(lastcmd[lastcmd_ind]); lastcmd_ind=min(lastcmd_ind+1, -1); } }
   virtual void Enter();
 
   virtual String16 Text16() const { return cmd_line.Text16(); }
-  virtual void AssignInput(const string &text) { cmd_line.AssignText(text); cursor.i.x=cmd_line.Size(); UpdateCommandFB(); UpdateCursor(); }
+  virtual void AssignInput(const string &text) { cmd_line.AssignText(text); UpdateCommandFB(); UpdateCursorX(cmd_line.Size()); }
   void SetColors(Colors *C);
 
   virtual LinesFrameBuffer *GetFrameBuffer() { return &cmd_fb; }
   virtual void ResetGL() { cmd_fb.Reset(); }
+  virtual void UpdateCursorX(int x) { cursor.i.x = x; UpdateCursor(); }
   virtual void UpdateCursor() { cursor.p = cmd_line.data->glyphs.Position(cursor.i.x); }
   virtual void UpdateCommandFB() { UpdateLineFB(&cmd_line, &cmd_fb); }
   virtual void UpdateLineFB(Line *L, LinesFrameBuffer *fb);
@@ -460,22 +461,27 @@ struct Editor : public TextArea {
   Editor(Window *W, Font *F, File *I, bool Wrap=0);
 
   void Input(char k)  { Modify(false, k); }
+  void Enter()        { Modify(false, '\r'); }
   void Erase()        { Modify(true,  0); }
-  void CursorLeft()   { cursor.i.x = max(cursor.i.x-1, 0);                       UpdateCursor(); }
-  void CursorRight()  { cursor.i.x = min(cursor.i.x+1, GetCursorLine()->Size()); UpdateCursor(); }
-  void Home()         { cursor.i.x = 0;                                          UpdateCursor(); }
-  void End()          { cursor.i.x = GetCursorLine()->Size();                    UpdateCursor(); }
+  void CursorLeft()   { UpdateCursorX(max(cursor.i.x-1, 0)); }
+  void CursorRight()  { UpdateCursorX(min(cursor.i.x+1, GetCursorLine()->Size())); }
+  void Home()         { UpdateCursorX(0); }
+  void End()          { UpdateCursorX(GetCursorLine()->Size()); }
   void HistUp()       { if (cursor.i.y <= 0)               AddVScroll(-1); else cursor.i.y--; UpdateCursor(); UpdateCursorLine(); }
   void HistDown()     { if (cursor.i.y >= line_fb.lines-1) AddVScroll( 1); else cursor.i.y++; UpdateCursor(); UpdateCursorLine(); }
 
   Line *GetCursorLine() { return &line[-1-cursor.i.y]; }
+  int CursorLineNumber() const { return last_first_line + cursor.i.y; }
   int WrappedLines() const { return wrapped_lines; }
+  void AddWrappedLines(int n);
   void UpdateWrappedLines(int cur_font_size, int width);
+  int RefreshLines() { last_fb_lines=0; return UpdateLines(last_v_scrolled, 0, 0, 0); }
   int UpdateLines(float v_scrolled, int *first_ind, int *first_offset, int *first_len);
-  void UpdateCursorLine() { cursor_line = file_line.LesserBound(last_first_line + cursor.i.y).val; }
+  void UpdateCursorLine() { cursor_line = file_line.LesserBound(CursorLineNumber()).val; }
   void UpdateCursor();
   void UpdateAnnotation();
   void Modify(bool erase, int c);
+  int ModifyCursorLine();
 };
 
 struct Terminal : public TextArea {
