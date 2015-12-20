@@ -865,7 +865,7 @@ int Editor::UpdateLines(float vs, int *first_ind, int *first_offset, int *first_
     for (lie = lib; lie.val && lie.key <= last_read_line; ++lie) {
       auto v = lie.val;
       if (shorten_read && !(lie.key + v->wrapped_lines <= last_read_line)) break;
-      if (!v->modified) read_len += rv.Append({v->offset, v->size+1});
+      if (v->size >= 0) read_len += rv.Append({v->offset, v->size+1});
     }
     if (wrap && tail_read) {
       LineMap::ConstIterator i = lie;
@@ -874,17 +874,17 @@ int Editor::UpdateLines(float vs, int *first_ind, int *first_offset, int *first_
   }
 
   string buf(read_len, 0);
-  if (read_len) CHECK_EQ(buf.size(), file->Read(&buf[0], &rv[0], rv.size()));
+  if (read_len) CHECK_EQ(buf.size(), file->Read(&buf[0], rv.data(), rv.size()));
 
   Line *L = 0;
   if (up) for (LineMap::ConstIterator li = lie; li != lib; bo += l + !e, added++) {
-    l = (e = (--li).val->modified) ? 0 : li.val->size;
+    l = (e = max(0, -(--li).val->size)) ? 0 : li.val->size;
     if (e) (L = line.PushBack())->AssignText(edits[e-1],                                 Flow::TextAnnotation(annotation.data(), PieceIndex()));
     else   (L = line.PushBack())->AssignText(StringPiece(buf.data()+read_len-bo-l-1, l), Flow::TextAnnotation(annotation.data(), li.val->annotation));
     fb_wrapped_lines += L->Layout(wrap ? fb->w : 0, true);
   }
   else for (LineMap::ConstIterator li = lib; li != lie; ++li, bo += l + !e, added++) {
-    l = (e = li.val->modified) ? 0 : li.val->size;
+    l = (e = max(0, -li.val->size)) ? 0 : li.val->size;
     if (e) (L = line.PushFront())->AssignText(edits[e-1],                    Flow::TextAnnotation(annotation.data(), PieceIndex()));
     else   (L = line.PushFront())->AssignText(StringPiece(buf.data()+bo, l), Flow::TextAnnotation(annotation.data(), li.val->annotation));
     fb_wrapped_lines += L->Layout(wrap ? fb->w : 0, true);
@@ -1041,8 +1041,19 @@ void Editor::Modify(bool erase, int c) {
 
 int Editor::ModifyCursorLine() {
   CHECK(cursor_line);
-  if (cursor_line->modified <= 0) cursor_line->modified = edits.Insert(GetCursorLine()->Text16())+1;
-  return cursor_line->modified-1;
+  if (cursor_line->size >= 0) cursor_line->size = -edits.Insert(GetCursorLine()->Text16())-1;
+  return -cursor_line->size-1;
+}
+
+int Editor::Save() {
+  IOVector rv;
+  for (LineMap::ConstIterator i = file_line.Begin(); i.ind; ++i)
+    rv.Append({ i.val->offset, i.val->size + (i.val->size >= 0) });
+  int ret = file->Rewrite(rv.data(), rv.size(), edits.data,
+                          function<string(const String16&)>([](const String16 &v){ return String::ToUTF8(v) + "\n"; }));
+  Reload();
+  Redraw(true);
+  return ret;
 }
 
 /* Terminal */

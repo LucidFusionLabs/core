@@ -113,6 +113,7 @@ extern "C" int  iPhonePasswordCopy(const char *, const char*, const char*,      
 extern "C" bool iPhonePasswordSave(const char *, const char*, const char*, const char*, int);
 #elif defined(__APPLE__)
 extern "C" void OSXStartWindow(void*);
+extern "C" void OSXCreateNativeEditMenu();
 extern "C" void OSXCreateNativeMenu(const char*, int, const char**, const char**, const char**);
 extern "C" void OSXLaunchNativeFontChooser(const char *, int, const char *);
 extern "C" void OSXTriggerFrame(void*);
@@ -621,6 +622,12 @@ void Application::AddNativeMenu(const string &title, const vector<MenuItem>&item
   AppendMenu(win->menu,         MF_STRING | MF_POPUP, (UINT)hAddMenu, title.c_str());
   AppendMenu(win->context_menu, MF_STRING | MF_POPUP, (UINT)hAddMenu, title.c_str());
   if (win->menubar) SetMenu((HWND)screen->id, win->menu);
+#endif
+}
+
+void Application::AddNativeEditMenu() {
+#if defined(LFL_OSXVIDEO)
+  OSXCreateNativeEditMenu();
 #endif
 }
 

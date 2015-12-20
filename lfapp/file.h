@@ -20,7 +20,7 @@
 #define LFL_LFAPP_FILE_H__
 namespace LFL {
   
-struct IOVec { long long offset; int len; };
+struct IOVec { long long offset; ssize_t len; };
 struct IOVector : public vector<IOVec> { int Append(const IOVec&); };
 
 struct MIMEType {
@@ -52,6 +52,9 @@ struct File {
   virtual int Write(const void *buf, size_t size=-1) = 0;
   virtual bool Flush() { return false; }
 
+  virtual File *Create() { return NULL; }
+  virtual bool ReplaceWith(File*) { return false; }
+
   struct NextRecord { 
     string buf;
     bool buf_dirty;
@@ -74,6 +77,7 @@ struct File {
   int WriteProto(ProtoHeader *hdr, const Proto *msg, bool flush=0);
   int WriteProto(const ProtoHeader *hdr, const Proto *msg, bool flush=0);
   int WriteProtoFlag(const ProtoHeader *hdr, bool flush=0);
+  template <class X> int Rewrite(const IOVec*, int, const vector<X>&, const function<string(const X&)>&);
 
   static bool ReadSuccess(File *f, void *out, int len) { return f->Read(out, len) == len; }
   static bool SeekSuccess(File *f, long long pos) { return f->Seek(pos, Whence::SET) == pos; }
@@ -99,6 +103,9 @@ struct BufferFile : public File {
   long long Seek(long long pos, int whence);
   int Read(void *out, size_t size);
   int Write(const void *in, size_t size=-1);
+
+  File *Create();
+  bool ReplaceWith(File*);
 };
 
 struct LocalFile : public File {
@@ -132,6 +139,9 @@ struct LocalFile : public File {
   int Read(void *buf, size_t size);
   int Write(const void *buf, size_t size=-1);
   bool Flush();
+
+  File *Create();
+  bool ReplaceWith(File*);
 };
 
 struct FileLineIter : public StringIter {

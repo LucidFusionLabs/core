@@ -442,7 +442,7 @@ struct TextArea : public TextGUI {
 
 struct Editor : public TextArea {
   struct LineOffset { 
-    long long offset; int size, wrapped_lines, modified=0; PieceIndex annotation;
+    long long offset; int size, wrapped_lines; PieceIndex annotation;
     LineOffset(int O=0, int S=0, int WL=1) : offset(O), size(S), wrapped_lines(WL) {}
     static string GetString(const LineOffset *v) { return StrCat(v->offset); }
     static int    GetLines (const LineOffset *v) { return v->wrapped_lines; }
@@ -475,6 +475,7 @@ struct Editor : public TextArea {
   int WrappedLines() const { return wrapped_lines; }
   void AddWrappedLines(int n);
   void UpdateWrappedLines(int cur_font_size, int width);
+  void Reload() { last_fb_width=0; wrapped_lines=0; RefreshLines(); }
   int RefreshLines() { last_fb_lines=0; return UpdateLines(last_v_scrolled, 0, 0, 0); }
   int UpdateLines(float v_scrolled, int *first_ind, int *first_offset, int *first_len);
   void UpdateCursorLine() { cursor_line = file_line.LesserBound(CursorLineNumber()).val; }
@@ -482,6 +483,7 @@ struct Editor : public TextArea {
   void UpdateAnnotation();
   void Modify(bool erase, int c);
   int ModifyCursorLine();
+  int Save();
 };
 
 struct Terminal : public TextArea {

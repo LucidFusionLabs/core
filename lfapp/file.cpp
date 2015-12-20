@@ -43,7 +43,8 @@
 
 namespace LFL {
 int IOVector::Append(const IOVec &v) {
-  if (this->size() && (this->back().offset + this->back().len == v.offset)) this->back().len += v.len;
+  if (v.len > 0 && this->size() && this->back().len > 0 &&
+      (this->back().offset + this->back().len == v.offset)) this->back().len += v.len;
   else this->push_back(v);
   return v.len;
 }
@@ -162,6 +163,31 @@ int File::WriteProtoFlag(const ProtoHeader *hdr, bool doflush) {
   return ret;
 }
 
+template <class X>
+int File::Rewrite(const IOVec *io, int iol, const vector<X> &b, const function<string(const X&)> &encode_f) {
+  File *new_file = Create();
+  string buf(4096, 0);
+  int ret = 0;
+  for (const IOVec *i = io, *e = i + iol; i != e; ++i) {
+    if (i->len < 0) {
+      string encoded = encode_f(b[-i->len-1]);
+      CHECK_EQ(encoded.size(), new_file->Write(encoded.data(), encoded.size()));
+      ret += encoded.size();
+    } else {
+      CHECK_EQ(i->offset, Seek(i->offset, Whence::SET));
+      for (int j=0, l; j<i->len; j+=l) {
+        l = min(static_cast<ssize_t>(buf.size()), i->len-j); 
+        CHECK_EQ(l, Read(&buf[0], l));
+        CHECK_EQ(l, new_file->Write(buf.data(), l));
+        ret += l;
+      }
+    }
+  }
+  return ReplaceWith(new_file) ? ret : -1;
+}
+template int File::Rewrite<string>  (const IOVec*, int, const vector<string>  &, const function<string(const string  &)>&);
+template int File::Rewrite<String16>(const IOVec*, int, const vector<String16>&, const function<string(const String16&)>&);
+
 long long BufferFile::Seek(long long offset, int whence) {
   if (offset < 0 || offset >= (owner ? buf.size() : ptr.len)) return -1;
   nr.buf_dirty = true;
@@ -188,6 +214,21 @@ int BufferFile::Write(const void *In, size_t size) {
   nr.file_offset += size;
   nr.buf_dirty = true;
   return size;
+}
+
+File *BufferFile::Create() {
+  BufferFile *ret = new BufferFile(string());
+  if (fn.size()) ret->fn = StrCat(fn, ".new");
+  return ret;
+}
+
+bool BufferFile::ReplaceWith(File *nf) {
+  BufferFile *new_file = dynamic_cast<BufferFile*>(nf);
+  if (!new_file) return false;
+  swap(*this, *new_file);
+  swap(this->fn, new_file->fn);
+  delete new_file;
+  return true;
 }
 
 #ifdef WIN32
@@ -259,7 +300,7 @@ bool LocalFile::Flush() { return false; }
 
 #else /* LFL_ANDROID */
 bool LocalFile::mkdir(const string &dir, int mode) {
-#ifdef _WIN32
+#ifdef WIN32
   return _mkdir(dir.c_str()) == 0;
 #else
   return ::mkdir(dir.c_str(), mode) == 0;
@@ -279,7 +320,7 @@ bool LocalFile::Open(const string &path, const string &mode, bool pre_create) {
     FILE *created = fopen(fn.c_str(), "a");
     if (created) fclose(created);
   }
-#ifdef _WIN32
+#ifdef WIN32
   if (!(impl = fopen(fn.c_str(), StrCat(mode, "b").c_str()))) return 0;
 #else
   if (!(impl = fopen(fn.c_str(), mode.c_str()))) return 0;
@@ -340,6 +381,19 @@ int LocalFile::Write(const void *buf, size_t size) {
 }
 
 bool LocalFile::Flush() { fflush((FILE*)impl); return true; }
+File *LocalFile::Create() { return new LocalFile(StrCat(fn, ".new"), "w+"); }
+bool LocalFile::ReplaceWith(File *nf) {
+  LocalFile *new_file = dynamic_cast<LocalFile*>(nf);
+  if (!new_file) return false;
+#ifdef WIN32
+  _unlink(fn.c_str());
+#endif
+  int ret = rename(new_file->fn.c_str(), fn.c_str());
+  swap(*this, *new_file);
+  swap(this->fn, new_file->fn);
+  delete new_file;
+  return !ret;
+}
 #endif /* LFL_ANDROID */
 
 string LocalFile::CurrentDirectory(int max_size) {
@@ -365,7 +419,7 @@ DirectoryIter::DirectoryIter(const string &path, int dirs, const char *Pref, con
     }
     return;
   }
-#ifdef _WIN32
+#ifdef WIN32
   _finddatai64_t f; int h;
   string match = StrCat(path, "*.*");
   if ((h = _findfirsti64(match.c_str(), &f)) < 0) return;
@@ -381,7 +435,7 @@ DirectoryIter::DirectoryIter(const string &path, int dirs, const char *Pref, con
   while (!_findnexti64(h, &f));
 
   _findclose(h);
-#else /* _WIN32 */
+#else /* WIN32 */
   DIR *dir; dirent *dent; string dirname=path;
   if (dirname.empty()) dirname = ".";
   if (dirname.size() > 1 && dirname[dirname.size()-1] == '/') dirname.erase(dirname.size()-1);
@@ -398,7 +452,7 @@ DirectoryIter::DirectoryIter(const string &path, int dirs, const char *Pref, con
   }
 
   closedir(dir);
-#endif /* _WIN32 */
+#endif /* WIN32 */
 }
 
 const char *DirectoryIter::Next() {

@@ -599,6 +599,7 @@ struct Application : public ::LFApp, public Module {
   void LaunchNativeFontChooser(const FontDesc &cur_font, const string &choose_cmd);
   void LaunchNativeMenu(const string &title);
   void AddNativeMenu(const string &title, const vector<MenuItem>&items);
+  void AddNativeEditMenu();
   int LoadModule(Module *M) { modules.push_back(M); return M->Init(); }
 
   int Create(int argc, const char **argv, const char *source_filename, void (*create_cb)()=0);
