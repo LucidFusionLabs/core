@@ -473,6 +473,8 @@ struct Editor : public TextArea {
   Line *GetCursorLine() { return &line[-1-cursor.i.y]; }
   int CursorLineNumber() const { return last_first_line + cursor.i.y; }
   int WrappedLines() const { return wrapped_lines; }
+  void ToggleShouldWrap() { SetShouldWrap(!line_fb.wrap); }
+  void SetShouldWrap(bool);
   void AddWrappedLines(int n);
   void UpdateWrappedLines(int cur_font_size, int width);
   void Reload() { last_fb_width=0; wrapped_lines=0; RefreshLines(); }

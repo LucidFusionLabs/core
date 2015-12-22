@@ -144,10 +144,13 @@ TEST(GUITest, TextArea) {
     EXPECT_EQ(u"z", ta.line[-1] .Text16()); EXPECT_EQ(-1,  ta.line.IndexOf(&ta.line[-1]));
   }
 
-  { // 0: 122, 1: 222, 2: 223, 3: 234, 4: 344, 5: 445
+  for (int test_iter=0; test_iter<2; test_iter++) { 
+    printf("TextAreaTest iter=%d reverse=%d\n", test_iter, test_iter);
+    // 0: 122, 1: 222, 2: 223, 3: 234, 4: 344, 5: 445
     TextGUI::Line *L;
     Font *font = Fonts::Fake();
     TextAreaTest ta(screen, font);
+    ta.reverse_line_fb = test_iter;
     ta.line_fb.wrap = 1;
     (L = ta.line.PushFront())->AssignText("1");       L->Layout();
     (L = ta.line.PushFront())->AssignText("2\n2\n2"); L->Layout();
@@ -160,221 +163,339 @@ TEST(GUITest, TextArea) {
     EXPECT_EQ(2, ta.line[-4].Lines());
     EXPECT_EQ(1, ta.line[-5].Lines());
 
+    bool reverse = ta.reverse_line_fb;
     LinesFrameBufferTest *test_fb = &ta.line_fb_test;
+    auto &test_fb_front = reverse ? test_fb->back  : test_fb->front;
+    auto &test_fb_back  = reverse ? test_fb->front : test_fb->back;
     int fh = font->Height();
     Box b(128, 3*fh);
     ta.Draw(b, TextArea::DrawFlag::CheckResized);
     int w = test_fb->w;
 
     // 0: 122 : 1=1:0, 2=2:2, 3=2:1
-    EXPECT_EQ(b.w, test_fb->w);
-    EXPECT_EQ(b.h, test_fb->h);
-    EXPECT_EQ(0, ta.start_line); EXPECT_EQ(0, ta.start_line_adjust);
-    EXPECT_EQ(1, ta.end_line);   EXPECT_EQ(1, ta.end_line_cutoff);
-    EXPECT_EQ(2, test_fb->front.size());
-    EXPECT_NEAR(0, test_fb->scroll.y, 1e-6);
+    EXPECT_EQ(b.w, test_fb->w);          EXPECT_EQ(b.h, test_fb->h);
+    EXPECT_EQ(0, ta.start_line);         EXPECT_EQ(1, ta.end_line);
+    EXPECT_EQ(0, ta.start_line_adjust);  EXPECT_EQ(1, ta.start_line_cutoff);
+    EXPECT_EQ(2, ta.end_line_adjust);    EXPECT_EQ(1, ta.end_line_cutoff);
+
+    EXPECT_EQ(2, test_fb_front.size());
+    EXPECT_NEAR(0, test_fb->scroll.y, 1e-5);
     EXPECT_EQ(point(0,0), test_fb->p);
-    if (test_fb->front.size() > 0) EXPECT_EQ(u"1",          test_fb->front[0].text);
-    if (test_fb->front.size() > 0) EXPECT_EQ(0,             test_fb->front[0].wlo);
-    if (test_fb->front.size() > 0) EXPECT_EQ(3,             test_fb->front[0].wll);
-    if (test_fb->front.size() > 0) EXPECT_EQ(point(0,fh),   test_fb->front[0].p);
-    if (test_fb->front.size() > 1) EXPECT_EQ(u"2\n2\n2",    test_fb->front[1].text);
-    if (test_fb->front.size() > 1) EXPECT_EQ(0,             test_fb->front[1].wlo);
-    if (test_fb->front.size() > 1) EXPECT_EQ(2,             test_fb->front[1].wll);
-    if (test_fb->front.size() > 1) EXPECT_EQ(point(0,4*fh), test_fb->front[1].p);
-    test_fb->front.clear();
+    if (test_fb_front.size() > 0) {
+      EXPECT_EQ(u"1",          test_fb_front[0].text);
+      EXPECT_EQ(0,             test_fb_front[0].wlo);
+      EXPECT_EQ(3,             test_fb_front[0].wll);
+      if (reverse) EXPECT_EQ(point(0,3*fh), test_fb_front[0].p);
+      else         EXPECT_EQ(point(0,fh),   test_fb_front[0].p);
+    }
+    if (test_fb_front.size() > 1) {
+      EXPECT_EQ(u"2\n2\n2",    test_fb_front[1].text);
+      EXPECT_EQ(0,             test_fb_front[1].wlo);
+      EXPECT_EQ(2,             test_fb_front[1].wll);
+      if (reverse) EXPECT_EQ(point(0,2*fh), test_fb_front[1].p);
+      else         EXPECT_EQ(point(0,4*fh), test_fb_front[1].p);
+    }
+    test_fb_front.clear();
     EXPECT_EQ(2, test_fb->paint.size());
-    if (test_fb->paint.size() > 0) EXPECT_EQ(u"1",             test_fb->paint[0].text);
-    if (test_fb->paint.size() > 0) EXPECT_EQ(point(0,fh),      test_fb->paint[0].p);
-    if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,0,w,fh),    test_fb->paint[0].b);
-    if (test_fb->paint.size() > 1) EXPECT_EQ(u"2\n2\n2",       test_fb->paint[1].text);
-    if (test_fb->paint.size() > 1) EXPECT_EQ(point(0,3*fh),    test_fb->paint[1].p);
-    if (test_fb->paint.size() > 1) EXPECT_EQ(Box(0,fh,w,2*fh), test_fb->paint[1].b);
+    if (test_fb->paint.size() > 0) {
+      EXPECT_EQ(u"1",             test_fb->paint[0].text);
+      EXPECT_EQ(Box(0,0,w,fh),    test_fb->paint[0].b);
+      if (reverse) EXPECT_EQ(point(0,3*fh),    test_fb->paint[0].p);
+      else         EXPECT_EQ(point(0,fh),      test_fb->paint[0].p);
+    }
+    if (test_fb->paint.size() > 1) {
+      EXPECT_EQ(u"2\n2\n2",       test_fb->paint[1].text);
+      if (reverse) EXPECT_EQ(point(0,2*fh),    test_fb->paint[1].p);
+      else         EXPECT_EQ(point(0,3*fh),    test_fb->paint[1].p);
+      if (reverse) EXPECT_EQ(Box(0,0, w,2*fh), test_fb->paint[1].b);
+      else         EXPECT_EQ(Box(0,fh,w,2*fh), test_fb->paint[1].b);
+    }
     test_fb->paint.clear();
 
     // 1: 222 : 2=2:2, 3=2:1, 1=2:0
     ta.v_scrolled = 1.0/(ta.WrappedLines()-1);
     ta.UpdateScrolled();
-    EXPECT_EQ(1, ta.start_line); EXPECT_EQ(0, ta.start_line_adjust);
-    EXPECT_EQ(1, ta.end_line);   EXPECT_EQ(0, ta.end_line_cutoff);
-    EXPECT_EQ(1, test_fb->front.size());
-    EXPECT_NEAR(-1/3.0, test_fb->scroll.y, 1e-6);
-    EXPECT_EQ(point(0,fh), test_fb->p);
-    if (test_fb->front.size() > 0) EXPECT_EQ(u"2\n2\n2",  test_fb->front[0].text);
-    if (test_fb->front.size() > 0) EXPECT_EQ(2,           test_fb->front[0].wlo);
-    if (test_fb->front.size() > 0) EXPECT_EQ(1,           test_fb->front[0].wll);
-    if (test_fb->front.size() > 0) EXPECT_EQ(point(0,fh), test_fb->front[0].p);
-    test_fb->front.clear();
+    EXPECT_EQ(1, ta.start_line);        EXPECT_EQ(1, ta.end_line);
+    EXPECT_EQ(0, ta.start_line_adjust); EXPECT_EQ(3, ta.start_line_cutoff);
+    EXPECT_EQ(3, ta.end_line_adjust);   EXPECT_EQ(0, ta.end_line_cutoff);
+
+    EXPECT_EQ(1, test_fb_front.size());
+    EXPECT_NEAR(-1/3.0*(reverse?-1:1), test_fb->scroll.y, 1e-5);
+    if (reverse) EXPECT_EQ(point(0,2*fh), test_fb->p);
+    else         EXPECT_EQ(point(0,  fh), test_fb->p);
+    if (test_fb_front.size() > 0) {
+      EXPECT_EQ(u"2\n2\n2",  test_fb_front[0].text);
+      EXPECT_EQ(2,           test_fb_front[0].wlo);
+      EXPECT_EQ(1,           test_fb_front[0].wll);
+      if (reverse) EXPECT_EQ(point(0,5*fh), test_fb_front[0].p);
+      else         EXPECT_EQ(point(0,  fh), test_fb_front[0].p);
+    }
+    test_fb_front.clear();
     EXPECT_EQ(1, test_fb->paint.size());
-    if (test_fb->paint.size() > 0) EXPECT_EQ(u"2\n2\n2",       test_fb->paint[0].text);
-    if (test_fb->paint.size() > 0) EXPECT_EQ(point(0,fh),      test_fb->paint[0].p);
-    if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,0,w,fh),    test_fb->paint[0].b);
+    if (test_fb->paint.size() > 0) {
+      EXPECT_EQ(u"2\n2\n2",       test_fb->paint[0].text);
+      if (reverse) EXPECT_EQ(point(0,3*fh),       test_fb->paint[0].p);
+      else         EXPECT_EQ(point(0,  fh),       test_fb->paint[0].p);
+      if (reverse) EXPECT_EQ(Box(0,2*fh,w,fh),    test_fb->paint[0].b);
+      else         EXPECT_EQ(Box(0,0,   w,fh),    test_fb->paint[0].b);
+    }
     test_fb->paint.clear();
 
     // 2: 223 : 3=2:1, 1=2:0, 2=3:0
     ta.v_scrolled = 2.0/(ta.WrappedLines()-1);
     ta.UpdateScrolled();
-    EXPECT_EQ(1, ta.start_line); EXPECT_EQ(-1, ta.start_line_adjust);
-    EXPECT_EQ(2, ta.end_line);   EXPECT_EQ( 0, ta.end_line_cutoff);
-    EXPECT_EQ(1, test_fb->front.size());
-    EXPECT_NEAR(-2/3.0, test_fb->scroll.y, 1e-6);
-    EXPECT_EQ(point(0,2*fh), test_fb->p);
-    if (test_fb->front.size() > 0) EXPECT_EQ(u"3",          test_fb->front[0].text);
-    if (test_fb->front.size() > 0) EXPECT_EQ(0,             test_fb->front[0].wlo);
-    if (test_fb->front.size() > 0) EXPECT_EQ(1,             test_fb->front[0].wll);
-    if (test_fb->front.size() > 0) EXPECT_EQ(point(0,fh*2), test_fb->front[0].p);
-    test_fb->front.clear();
+    EXPECT_EQ( 1, ta.start_line);        EXPECT_EQ( 2, ta.end_line);  
+    EXPECT_EQ(-1, ta.start_line_adjust); EXPECT_EQ( 2, ta.start_line_cutoff);
+    EXPECT_EQ( 1, ta.end_line_adjust);   EXPECT_EQ( 0, ta.end_line_cutoff);
+
+    EXPECT_EQ(1, test_fb_front.size());
+    EXPECT_NEAR(-2/3.0*(reverse?-1:1), test_fb->scroll.y, 1e-5);
+    if (reverse) EXPECT_EQ(point(0,  fh), test_fb->p);
+    else         EXPECT_EQ(point(0,2*fh), test_fb->p);
+    if (test_fb_front.size() > 0) {
+      EXPECT_EQ(u"3",          test_fb_front[0].text);
+      EXPECT_EQ(0,             test_fb_front[0].wlo);
+      EXPECT_EQ(1,             test_fb_front[0].wll);
+      EXPECT_EQ(point(0,fh*2), test_fb_front[0].p);
+    }
+    test_fb_front.clear();
     EXPECT_EQ(1, test_fb->paint.size());
-    if (test_fb->paint.size() > 0) EXPECT_EQ(u"3",          test_fb->paint[0].text);
-    if (test_fb->paint.size() > 0) EXPECT_EQ(point(0,fh*2), test_fb->paint[0].p);
-    if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,0,w,fh), test_fb->paint[0].b);
+    if (test_fb->paint.size() > 0) {
+      EXPECT_EQ(u"3",          test_fb->paint[0].text);
+      EXPECT_EQ(point(0,fh*2), test_fb->paint[0].p);
+      EXPECT_EQ(Box(0,0,w,fh), test_fb->paint[0].b);
+    }
     test_fb->paint.clear();
 
     // 1: 222 : 2=2:2, 3=2:1, 1=2:0
     ta.v_scrolled = 1.0/(ta.WrappedLines()-1);
     ta.UpdateScrolled();
-    EXPECT_EQ(1, ta.start_line); EXPECT_EQ(0, ta.start_line_adjust);
-    EXPECT_EQ(1, ta.end_line);   EXPECT_EQ(0, ta.end_line_cutoff);
-    EXPECT_EQ(1, test_fb->back.size());
-    EXPECT_NEAR(-1/3.0, test_fb->scroll.y, 1e-6);
-    EXPECT_EQ(point(0,fh), test_fb->p);
-    if (test_fb->back.size() > 0) EXPECT_EQ(u"2\n2\n2",    test_fb->back[0].text);
-    if (test_fb->back.size() > 0) EXPECT_EQ(2,             test_fb->back[0].wlo);
-    if (test_fb->back.size() > 0) EXPECT_EQ(1,             test_fb->back[0].wll);
-    if (test_fb->back.size() > 0) EXPECT_EQ(point(0,fh*4), test_fb->back[0].p);
-    test_fb->back.clear();
+    EXPECT_EQ(1, ta.start_line);         EXPECT_EQ(1, ta.end_line);   
+    EXPECT_EQ(0, ta.start_line_adjust);  EXPECT_EQ(3, ta.start_line_cutoff);
+    EXPECT_EQ(3, ta.end_line_adjust);    EXPECT_EQ(0, ta.end_line_cutoff);
+
+    EXPECT_EQ(1, test_fb_back.size());
+    EXPECT_NEAR(-1/3.0*(reverse?-1:1), test_fb->scroll.y, 1e-5);
+    if (reverse) EXPECT_EQ(point(0,2*fh), test_fb->p);
+    else         EXPECT_EQ(point(0,fh),   test_fb->p);
+    if (test_fb_back.size() > 0) {
+      EXPECT_EQ(u"2\n2\n2",    test_fb_back[0].text);
+      EXPECT_EQ(2,             test_fb_back[0].wlo);
+      EXPECT_EQ(1,             test_fb_back[0].wll);
+      if (reverse) EXPECT_EQ(point(0,fh*2), test_fb_back[0].p);
+      else         EXPECT_EQ(point(0,fh*4), test_fb_back[0].p);
+    }
+    test_fb_back.clear();
     EXPECT_EQ(1, test_fb->paint.size());
-    if (test_fb->paint.size() > 0) EXPECT_EQ(u"2\n2\n2",       test_fb->paint[0].text);
-    if (test_fb->paint.size() > 0) EXPECT_EQ(point(0,fh*2),    test_fb->paint[0].p);
-    if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,fh*2,w,fh), test_fb->paint[0].b);
+    if (test_fb->paint.size() > 0) {
+      EXPECT_EQ(u"2\n2\n2",       test_fb->paint[0].text);
+      EXPECT_EQ(point(0,fh*2),    test_fb->paint[0].p);
+      if (reverse) EXPECT_EQ(Box(0,0,   w,fh), test_fb->paint[0].b);
+      else         EXPECT_EQ(Box(0,fh*2,w,fh), test_fb->paint[0].b);
+    }
     test_fb->paint.clear();
 
     // 0: 122 : 1=1:0, 2=2:2, 3=2:1
     ta.v_scrolled = 0;
     ta.UpdateScrolled();
-    EXPECT_EQ(0, ta.start_line); EXPECT_EQ(0, ta.start_line_adjust);
-    EXPECT_EQ(1, ta.end_line);   EXPECT_EQ(1, ta.end_line_cutoff);
-    EXPECT_EQ(1, test_fb->back.size());
-    EXPECT_NEAR(0, test_fb->scroll.y, 1e-6);
-    EXPECT_EQ(point(0,0), test_fb->p);
-    if (test_fb->back.size() > 0) EXPECT_EQ(u"1",        test_fb->back[0].text);
-    if (test_fb->back.size() > 0) EXPECT_EQ(0,           test_fb->back[0].wlo);
-    if (test_fb->back.size() > 0) EXPECT_EQ(point(0,fh), test_fb->back[0].p);
-    test_fb->back.clear();
+    EXPECT_EQ(0, ta.start_line);         EXPECT_EQ(1, ta.end_line);   
+    EXPECT_EQ(0, ta.start_line_adjust);  EXPECT_EQ(1, ta.start_line_cutoff);
+    EXPECT_EQ(2, ta.end_line_adjust);    EXPECT_EQ(1, ta.end_line_cutoff);
+
+    EXPECT_EQ(1, test_fb_back.size());
+    EXPECT_NEAR(0, test_fb->scroll.y, 1e-5);
+    if (reverse) EXPECT_EQ(point(0,3*fh), test_fb->p);
+    else         EXPECT_EQ(point(0,0),    test_fb->p);
+    if (test_fb_back.size() > 0) {
+      EXPECT_EQ(u"1",        test_fb_back[0].text);
+      EXPECT_EQ(0,           test_fb_back[0].wlo);
+      EXPECT_EQ(1,           test_fb_back[0].wll);
+      if (reverse) EXPECT_EQ(point(0,3*fh), test_fb_back[0].p);
+      else         EXPECT_EQ(point(0,fh),   test_fb_back[0].p);
+    }
+    test_fb_back.clear();
     EXPECT_EQ(1, test_fb->paint.size());
-    if (test_fb->paint.size() > 0) EXPECT_EQ(u"1",          test_fb->paint[0].text);
-    if (test_fb->paint.size() > 0) EXPECT_EQ(point(0,fh),   test_fb->paint[0].p);
-    if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,0,w,fh), test_fb->paint[0].b);
+    if (test_fb->paint.size() > 0) {
+      EXPECT_EQ(u"1",          test_fb->paint[0].text);
+      EXPECT_EQ(Box(0,0,w,fh), test_fb->paint[0].b);
+      if (reverse) EXPECT_EQ(point(0,3*fh), test_fb->paint[0].p);
+      else         EXPECT_EQ(point(0,fh),   test_fb->paint[0].p);
+    }
     test_fb->paint.clear();
 
     // 2: 223 : 3=2:1, 1=2:0, 2=3:0
     ta.v_scrolled = 2.0/(ta.WrappedLines()-1);
     ta.UpdateScrolled();
-    EXPECT_EQ(1, ta.start_line); EXPECT_EQ(-1, ta.start_line_adjust);
-    EXPECT_EQ(2, ta.end_line);   EXPECT_EQ( 0, ta.end_line_cutoff);
-    EXPECT_EQ(2, test_fb->front.size());
-    EXPECT_NEAR(-2/3.0, test_fb->scroll.y, 1e-6);
-    EXPECT_EQ(point(0,2*fh), test_fb->p);
-    if (test_fb->front.size() > 0) EXPECT_EQ(u"2\n2\n2",    test_fb->front[0].text);
-    if (test_fb->front.size() > 0) EXPECT_EQ(2,             test_fb->front[0].wlo);
-    if (test_fb->front.size() > 0) EXPECT_EQ(1,             test_fb->front[0].wll);
-    if (test_fb->front.size() > 0) EXPECT_EQ(point(0,fh),   test_fb->front[0].p);
-    if (test_fb->front.size() > 1) EXPECT_EQ(u"3",          test_fb->front[1].text);
-    if (test_fb->front.size() > 1) EXPECT_EQ(0,             test_fb->front[1].wlo);
-    if (test_fb->front.size() > 1) EXPECT_EQ(1,             test_fb->front[1].wll);
-    if (test_fb->front.size() > 1) EXPECT_EQ(point(0,fh*2), test_fb->front[1].p);
-    test_fb->front.clear();
+    EXPECT_EQ( 1, ta.start_line);         EXPECT_EQ( 2, ta.end_line);   
+    EXPECT_EQ(-1, ta.start_line_adjust);  EXPECT_EQ( 2, ta.start_line_cutoff);
+    EXPECT_EQ( 1, ta.end_line_adjust);    EXPECT_EQ( 0, ta.end_line_cutoff);
+
+    EXPECT_EQ(2, test_fb_front.size());
+    EXPECT_NEAR(-2/3.0*(reverse?-1:1), test_fb->scroll.y, 1e-5);
+    if (reverse) EXPECT_EQ(point(0,  fh), test_fb->p);
+    else         EXPECT_EQ(point(0,2*fh), test_fb->p);
+    if (test_fb_front.size() > 0) {
+      EXPECT_EQ(u"2\n2\n2",    test_fb_front[0].text);
+      EXPECT_EQ(2,             test_fb_front[0].wlo);
+      EXPECT_EQ(1,             test_fb_front[0].wll);
+      if (reverse) EXPECT_EQ(point(0,5*fh),   test_fb_front[0].p);
+      else         EXPECT_EQ(point(0,fh),     test_fb_front[0].p);
+    }
+    if (test_fb_front.size() > 1) {
+      EXPECT_EQ(u"3",          test_fb_front[1].text);
+      EXPECT_EQ(0,             test_fb_front[1].wlo);
+      EXPECT_EQ(1,             test_fb_front[1].wll);
+      EXPECT_EQ(point(0,fh*2), test_fb_front[1].p);
+    }
+    test_fb_front.clear();
     EXPECT_EQ(2, test_fb->paint.size());
-    if (test_fb->paint.size() > 0) EXPECT_EQ(u"2\n2\n2",    test_fb->paint[0].text);
-    if (test_fb->paint.size() > 0) EXPECT_EQ(point(0,fh),   test_fb->paint[0].p);
-    if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,0,w,fh), test_fb->paint[0].b);
-    if (test_fb->paint.size() > 1) EXPECT_EQ(u"3",          test_fb->paint[1].text);
-    if (test_fb->paint.size() > 1) EXPECT_EQ(point(0,2*fh), test_fb->paint[1].p);
-    if (test_fb->paint.size() > 1) EXPECT_EQ(Box(0,0,w,fh), test_fb->paint[1].b);
+    if (test_fb->paint.size() > 0) {
+      EXPECT_EQ(u"2\n2\n2",    test_fb->paint[0].text);
+      if (reverse) EXPECT_EQ(point(0,3*fh),   test_fb->paint[0].p);
+      else         EXPECT_EQ(point(0,fh),     test_fb->paint[0].p);
+      if (reverse) EXPECT_EQ(Box(0,2*fh,w,fh), test_fb->paint[0].b);
+      else         EXPECT_EQ(Box(0,0,   w,fh), test_fb->paint[0].b);
+    }
+    if (test_fb->paint.size() > 1) {
+      EXPECT_EQ(u"3",          test_fb->paint[1].text);
+      EXPECT_EQ(point(0,2*fh), test_fb->paint[1].p);
+      EXPECT_EQ(Box(0,0,w,fh), test_fb->paint[1].b);
+    }
     test_fb->paint.clear();
 
     // 4: 344 : 2=3:0, 3=4:1, 1=4:0
     ta.v_scrolled = 4.0/(ta.WrappedLines()-1);
     ta.UpdateScrolled();
-    EXPECT_EQ(2, ta.start_line); EXPECT_EQ( 0, ta.start_line_adjust);
-    EXPECT_EQ(3, ta.end_line);   EXPECT_EQ( 0, ta.end_line_cutoff);
-    EXPECT_EQ(1, test_fb->front.size());
-    EXPECT_NEAR(-1/3.0, test_fb->scroll.y, 1e-6);
-    EXPECT_EQ(point(0,fh), test_fb->p);
-    if (test_fb->front.size() > 0) EXPECT_EQ(u"4\n4",     test_fb->front[0].text);
-    if (test_fb->front.size() > 0) EXPECT_EQ(0,           test_fb->front[0].wlo);
-    if (test_fb->front.size() > 0) EXPECT_EQ(2,           test_fb->front[0].wll);
-    if (test_fb->front.size() > 0) EXPECT_EQ(point(0,fh), test_fb->front[0].p);
-    test_fb->front.clear();
+    EXPECT_EQ( 2, ta.start_line);         EXPECT_EQ( 3, ta.end_line);   
+    EXPECT_EQ( 0, ta.start_line_adjust);  EXPECT_EQ( 1, ta.start_line_cutoff);
+    EXPECT_EQ( 2, ta.end_line_adjust);    EXPECT_EQ( 0, ta.end_line_cutoff);
+
+    EXPECT_EQ(1, test_fb_front.size());
+    EXPECT_NEAR(-1/3.0*(reverse?-1:1), test_fb->scroll.y, 1e-5);
+    if (reverse) EXPECT_EQ(point(0,2*fh), test_fb->p);
+    else         EXPECT_EQ(point(0,  fh), test_fb->p);
+    if (test_fb_front.size() > 0) {
+      EXPECT_EQ(u"4\n4",     test_fb_front[0].text);
+      EXPECT_EQ(0,           test_fb_front[0].wlo);
+      EXPECT_EQ(2,           test_fb_front[0].wll);
+      if (reverse) EXPECT_EQ(point(0,4*fh), test_fb_front[0].p);
+      else         EXPECT_EQ(point(0,fh),   test_fb_front[0].p);
+    }
+    test_fb_front.clear();
     EXPECT_EQ(2, test_fb->paint.size());
-    if (test_fb->paint.size() > 0) EXPECT_EQ(u"4\n4",         test_fb->paint[0].text);
-    if (test_fb->paint.size() > 0) EXPECT_EQ(point(0,4*fh),   test_fb->paint[0].p);
-    if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,0,w,2*fh), test_fb->paint[0].b);
-    if (test_fb->paint.size() > 1) EXPECT_EQ(u"4\n4",         test_fb->paint[1].text);
-    if (test_fb->paint.size() > 1) EXPECT_EQ(point(0,fh),     test_fb->paint[1].p);
-    if (test_fb->paint.size() > 1) EXPECT_EQ(Box(0,0,w,2*fh), test_fb->paint[1].b);
+    if (test_fb->paint.size() > 0) {
+      EXPECT_EQ(u"4\n4",         test_fb->paint[0].text);
+      EXPECT_EQ(Box(0,0,w,2*fh), test_fb->paint[0].b);
+      if (reverse) EXPECT_EQ(point(0,  fh),   test_fb->paint[0].p);
+      else         EXPECT_EQ(point(0,4*fh),   test_fb->paint[0].p);
+    }
+    if (test_fb->paint.size() > 1) {
+      EXPECT_EQ(u"4\n4",         test_fb->paint[1].text);
+      EXPECT_EQ(Box(0,0,w,2*fh), test_fb->paint[1].b);
+      if (reverse) EXPECT_EQ(point(0,4*fh),     test_fb->paint[1].p);
+      else         EXPECT_EQ(point(0,  fh),     test_fb->paint[1].p);
+    }
     test_fb->paint.clear();
 
     // 5: 445 : 3=4:1, 1=4:0, 2=5:0
     ta.v_scrolled = 5.0/(ta.WrappedLines()-1);
     ta.UpdateScrolled();
-    EXPECT_EQ(3, ta.start_line); EXPECT_EQ( 0, ta.start_line_adjust);
-    EXPECT_EQ(4, ta.end_line);   EXPECT_EQ( 0, ta.end_line_cutoff);
-    EXPECT_EQ(1, test_fb->front.size());
-    EXPECT_NEAR(-2/3.0, test_fb->scroll.y, 1e-6);
-    EXPECT_EQ(point(0,2*fh), test_fb->p);
-    if (test_fb->front.size() > 0) EXPECT_EQ(u"5",          test_fb->front[0].text);
-    if (test_fb->front.size() > 0) EXPECT_EQ(0,             test_fb->front[0].wlo);
-    if (test_fb->front.size() > 0) EXPECT_EQ(1,             test_fb->front[0].wll);
-    if (test_fb->front.size() > 0) EXPECT_EQ(point(0,2*fh), test_fb->front[0].p);
-    test_fb->front.clear();
+    EXPECT_EQ( 3, ta.start_line);         EXPECT_EQ( 4, ta.end_line);   
+    EXPECT_EQ( 0, ta.start_line_adjust);  EXPECT_EQ( 2, ta.start_line_cutoff);
+    EXPECT_EQ( 1, ta.end_line_adjust);    EXPECT_EQ( 0, ta.end_line_cutoff);
+
+    EXPECT_EQ(1, test_fb_front.size());
+    EXPECT_NEAR(-2/3.0*(reverse?-1:1), test_fb->scroll.y, 1e-5);
+    if (reverse) EXPECT_EQ(point(0,1*fh), test_fb->p);
+    else         EXPECT_EQ(point(0,2*fh), test_fb->p);
+    if (test_fb_front.size() > 0) {
+      EXPECT_EQ(u"5",          test_fb_front[0].text);
+      EXPECT_EQ(0,             test_fb_front[0].wlo);
+      EXPECT_EQ(1,             test_fb_front[0].wll);
+      EXPECT_EQ(point(0,2*fh), test_fb_front[0].p);
+    }
+    test_fb_front.clear();
     EXPECT_EQ(1, test_fb->paint.size());
-    if (test_fb->paint.size() > 0) EXPECT_EQ(u"5",          test_fb->paint[0].text);
-    if (test_fb->paint.size() > 0) EXPECT_EQ(point(0,2*fh), test_fb->paint[0].p);
-    if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,0,w,fh), test_fb->paint[0].b);
+    if (test_fb->paint.size() > 0) {
+      EXPECT_EQ(u"5",          test_fb->paint[0].text);
+      EXPECT_EQ(point(0,2*fh), test_fb->paint[0].p);
+      EXPECT_EQ(Box(0,0,w,fh), test_fb->paint[0].b);
+    }
     test_fb->paint.clear();
 
     // 3: 234 : 1=2:0, 2=3:0, 3=4:1
     ta.v_scrolled = 3.0/(ta.WrappedLines()-1);
     ta.UpdateScrolled();
-    EXPECT_EQ(1, ta.start_line); EXPECT_EQ(-2, ta.start_line_adjust);
-    EXPECT_EQ(3, ta.end_line);   EXPECT_EQ( 1, ta.end_line_cutoff);
-    EXPECT_EQ(2, test_fb->back.size());
-    EXPECT_NEAR(0, test_fb->scroll.y, 1e-6);
-    EXPECT_EQ(point(0,0), test_fb->p);
-    if (test_fb->back.size() > 0) EXPECT_EQ(u"3",          test_fb->back[0].text);
-    if (test_fb->back.size() > 0) EXPECT_EQ(0,             test_fb->back[0].wlo);
-    if (test_fb->back.size() > 0) EXPECT_EQ(point(0,2*fh), test_fb->back[0].p);
-    if (test_fb->back.size() > 1) EXPECT_EQ(u"2\n2\n2",    test_fb->back[1].text);
-    if (test_fb->back.size() > 1) EXPECT_EQ(0,             test_fb->back[1].wlo);
-    if (test_fb->back.size() > 1) EXPECT_EQ(point(0,fh),   test_fb->back[1].p);
-    test_fb->back.clear();
+    EXPECT_EQ( 1, ta.start_line);         EXPECT_EQ( 3, ta.end_line);   
+    EXPECT_EQ(-2, ta.start_line_adjust);  EXPECT_EQ( 1, ta.start_line_cutoff);
+    EXPECT_EQ( 1, ta.end_line_adjust);    EXPECT_EQ( 1, ta.end_line_cutoff);
+
+    EXPECT_EQ(2, test_fb_back.size());
+    EXPECT_NEAR(0, test_fb->scroll.y, 1e-5);
+    if (reverse) EXPECT_EQ(point(0,3*fh), test_fb->p);
+    else         EXPECT_EQ(point(0,0),    test_fb->p);
+    if (test_fb_back.size() > 0) {
+      EXPECT_EQ(u"3",          test_fb_back[0].text);
+      EXPECT_EQ(0,             test_fb_back[0].wlo);
+      EXPECT_EQ(2,             test_fb_back[0].wll);
+      EXPECT_EQ(point(0,2*fh), test_fb_back[0].p);
+    }
+    if (test_fb_back.size() > 1) {
+      EXPECT_EQ(u"2\n2\n2",    test_fb_back[1].text);
+      EXPECT_EQ(0,             test_fb_back[1].wlo);
+      EXPECT_EQ(1,             test_fb_back[1].wll);
+      if (reverse) EXPECT_EQ(point(0,5*fh),   test_fb_back[1].p);
+      else         EXPECT_EQ(point(0,  fh),   test_fb_back[1].p);
+    }
+    test_fb_back.clear();
     EXPECT_EQ(2, test_fb->paint.size());
-    if (test_fb->paint.size() > 0) EXPECT_EQ(u"3",          test_fb->paint[0].text);
-    if (test_fb->paint.size() > 0) EXPECT_EQ(point(0,2*fh), test_fb->paint[0].p);
-    if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,0,w,fh), test_fb->paint[0].b);
-    if (test_fb->paint.size() > 0) EXPECT_EQ(u"2\n2\n2",    test_fb->paint[1].text);
-    if (test_fb->paint.size() > 0) EXPECT_EQ(point(0,fh),   test_fb->paint[1].p);
-    if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,0,w,fh), test_fb->paint[1].b);
+    if (test_fb->paint.size() > 0) {
+      EXPECT_EQ(u"3",          test_fb->paint[0].text);
+      EXPECT_EQ(point(0,2*fh), test_fb->paint[0].p);
+      EXPECT_EQ(Box(0,0,w,fh), test_fb->paint[0].b);
+    }
+    if (test_fb->paint.size() > 1) {
+      EXPECT_EQ(u"2\n2\n2",    test_fb->paint[1].text);
+      if (reverse) EXPECT_EQ(point(0,3*fh),    test_fb->paint[1].p);
+      else         EXPECT_EQ(point(0,  fh),    test_fb->paint[1].p);
+      if (reverse) EXPECT_EQ(Box(0,2*fh,w,fh), test_fb->paint[1].b);
+      else         EXPECT_EQ(Box(0,0,   w,fh), test_fb->paint[1].b);
+    }
     test_fb->paint.clear();
 
     // 1: 222 : 2=2:2, 3=2:1, 1=2:0
     ta.v_scrolled = 1.0/(ta.WrappedLines()-1);
     ta.UpdateScrolled();
-    EXPECT_EQ(1, ta.start_line); EXPECT_EQ(0, ta.start_line_adjust);
-    EXPECT_EQ(1, ta.end_line);   EXPECT_EQ(0, ta.end_line_cutoff);
-    EXPECT_EQ(1, test_fb->back.size());
-    EXPECT_NEAR(2/3.0, test_fb->scroll.y, 1e-6);
-    EXPECT_EQ(point(0,fh), test_fb->p);
-    if (test_fb->back.size() > 0) EXPECT_EQ(u"2\n2\n2",    test_fb->back[0].text);
-    if (test_fb->back.size() > 0) EXPECT_EQ(1,             test_fb->back[0].wlo);
-    if (test_fb->back.size() > 0) EXPECT_EQ(2,             test_fb->back[0].wll);
-    if (test_fb->back.size() > 0) EXPECT_EQ(point(0,fh*4), test_fb->back[0].p);
-    test_fb->back.clear();
-    EXPECT_EQ(1, test_fb->paint.size());
-    if (test_fb->paint.size() > 0) EXPECT_EQ(u"2\n2\n2",       test_fb->paint[0].text);
-    if (test_fb->paint.size() > 0) EXPECT_EQ(point(0,fh*3),    test_fb->paint[0].p);
-    if (test_fb->paint.size() > 0) EXPECT_EQ(Box(0,fh,w,fh*2), test_fb->paint[0].b);
+    EXPECT_EQ(1, ta.start_line);         EXPECT_EQ(1, ta.end_line);   
+    EXPECT_EQ(0, ta.start_line_adjust);  EXPECT_EQ(3, ta.start_line_cutoff);
+    EXPECT_EQ(3, ta.end_line_adjust);    EXPECT_EQ(0, ta.end_line_cutoff);
+
+    EXPECT_EQ(1, test_fb_back.size());
+    EXPECT_NEAR(2/3.0*(reverse?-1:1), test_fb->scroll.y, 1e-5);
+    if (reverse) EXPECT_EQ(point(0,2*fh), test_fb->p);
+    else         EXPECT_EQ(point(0,fh),   test_fb->p);
+    if (test_fb_back.size() > 0) {
+      EXPECT_EQ(u"2\n2\n2",    test_fb_back[0].text);
+      EXPECT_EQ(1,             test_fb_back[0].wlo);
+      EXPECT_EQ(2,             test_fb_back[0].wll);
+      if (reverse) EXPECT_EQ(point(0,fh*2), test_fb_back[0].p);
+      else         EXPECT_EQ(point(0,fh*4), test_fb_back[0].p);
+    }
+    test_fb_back.clear();
+    if (reverse) EXPECT_EQ(2, test_fb->paint.size());
+    else         EXPECT_EQ(1, test_fb->paint.size());
+    if (test_fb->paint.size() > 0) {
+      EXPECT_EQ(u"2\n2\n2",       test_fb->paint[0].text);
+      if (reverse) EXPECT_EQ(point(0,fh*5),    test_fb->paint[0].p);
+      else         EXPECT_EQ(point(0,fh*3),    test_fb->paint[0].p);
+      if (reverse) EXPECT_EQ(Box(0,0, w,fh*2), test_fb->paint[0].b);
+      else         EXPECT_EQ(Box(0,fh,w,fh*2), test_fb->paint[0].b);
+    }
+    if (test_fb->paint.size() > 1) {
+      EXPECT_EQ(u"2\n2\n2",        test_fb->paint[1].text);
+      EXPECT_EQ(point(0,2*fh),   test_fb->paint[1].p);
+      EXPECT_EQ(Box(0,0,w,2*fh), test_fb->paint[1].b);
+    }
     test_fb->paint.clear();
   }
 }
@@ -389,10 +510,8 @@ TEST(GUITest, Editor) {
   e.Draw(b, TextArea::DrawFlag::CheckResized);
 
   // 0: 122 : 3=1:0, 2=2:0, 1=2:1
-  EXPECT_EQ(0, e.start_line_adjust);
-  EXPECT_EQ(1, e.start_line_cutoff);
-  EXPECT_EQ(2, e.end_line_adjust);
-  EXPECT_EQ(1, e.end_line_cutoff);
+  EXPECT_EQ(0, e.start_line_adjust); EXPECT_EQ(1, e.start_line_cutoff);
+  EXPECT_EQ(2, e.end_line_adjust);   EXPECT_EQ(1, e.end_line_cutoff);
   EXPECT_EQ(2, e.line.Size());
   EXPECT_EQ(4, e.fb_wrapped_lines);
   EXPECT_EQ(2, test_fb->back.size());
@@ -418,10 +537,8 @@ TEST(GUITest, Editor) {
   // 1: 222 : 2=2:0, 1=2:1, 3=2:2
   e.v_scrolled = 1.0/(e.WrappedLines()-1);
   e.UpdateScrolled();
-  EXPECT_EQ(0, e.start_line_adjust);
-  EXPECT_EQ(3, e.start_line_cutoff);
-  EXPECT_EQ(0, e.end_line_cutoff);
-  EXPECT_EQ(3, e.end_line_adjust);
+  EXPECT_EQ(0, e.start_line_adjust);  EXPECT_EQ(3, e.start_line_cutoff);
+  EXPECT_EQ(3, e.end_line_adjust);    EXPECT_EQ(0, e.end_line_cutoff);
   EXPECT_EQ(1, e.line.Size());
   EXPECT_EQ(3, e.fb_wrapped_lines);
   EXPECT_EQ(1, test_fb->back.size());
@@ -441,10 +558,8 @@ TEST(GUITest, Editor) {
   // 2: 223 : 1=2:1, 3=2:2, 2=3:0
   e.v_scrolled = 2.0/(e.WrappedLines()-1);
   e.UpdateScrolled();
-  EXPECT_EQ(-1, e.start_line_adjust);
-  EXPECT_EQ( 2, e.start_line_cutoff);
-  EXPECT_EQ( 0, e.end_line_cutoff);
-  EXPECT_EQ( 1, e.end_line_adjust);
+  EXPECT_EQ(-1, e.start_line_adjust);  EXPECT_EQ( 2, e.start_line_cutoff);
+  EXPECT_EQ( 1, e.end_line_adjust);    EXPECT_EQ( 0, e.end_line_cutoff);
   EXPECT_EQ( 2, e.line.Size());
   EXPECT_EQ( 4, e.fb_wrapped_lines);
   EXPECT_EQ( 1, test_fb->back.size());
@@ -464,10 +579,8 @@ TEST(GUITest, Editor) {
   // 1: 222 : 2=2:0, 1=2:1, 3=2:2
   e.v_scrolled = 1.0/(e.WrappedLines()-1);
   e.UpdateScrolled();
-  EXPECT_EQ(0, e.start_line_adjust);
-  EXPECT_EQ(3, e.start_line_cutoff);
-  EXPECT_EQ(0, e.end_line_cutoff);
-  EXPECT_EQ(3, e.end_line_adjust);
+  EXPECT_EQ(0, e.start_line_adjust);  EXPECT_EQ(3, e.start_line_cutoff);
+  EXPECT_EQ(3, e.end_line_adjust);    EXPECT_EQ(0, e.end_line_cutoff);
   EXPECT_EQ(1, e.line.Size());
   EXPECT_EQ(3, e.fb_wrapped_lines);
   EXPECT_EQ(1, test_fb->front.size());
@@ -487,13 +600,13 @@ TEST(GUITest, Editor) {
   // 0: 122 : 3=1:0, 2=2:0, 1=2:1
   e.v_scrolled = 0;
   e.UpdateScrolled();
-  EXPECT_EQ(0, e.start_line_adjust);
-  EXPECT_EQ(1, e.start_line_cutoff);
-  EXPECT_EQ(1, e.end_line_cutoff);
-  EXPECT_EQ(2, e.end_line_adjust);
+  EXPECT_EQ(0, e.start_line_adjust);  EXPECT_EQ(1, e.start_line_cutoff);
+  EXPECT_EQ(2, e.end_line_adjust);    EXPECT_EQ(1, e.end_line_cutoff);
   EXPECT_EQ(2, e.line.Size());
   EXPECT_EQ(4, e.fb_wrapped_lines);
   EXPECT_EQ(1, test_fb->front.size());
+  EXPECT_NEAR(0, test_fb->scroll.y, 1e-6);
+  EXPECT_EQ(point(0,3*fh), test_fb->p);
   if (test_fb->front.size() > 0) EXPECT_EQ(u"1",          test_fb->front[0].text);
   if (test_fb->front.size() > 0) EXPECT_EQ(0,             test_fb->front[0].wlo);
   if (test_fb->front.size() > 0) EXPECT_EQ(1,             test_fb->front[0].wll);
@@ -508,10 +621,8 @@ TEST(GUITest, Editor) {
   // 2: 223 : 1=2:1, 3=2:2, 2=3:0
   e.v_scrolled = 2.0/(e.WrappedLines()-1);
   e.UpdateScrolled();
-  EXPECT_EQ(-1, e.start_line_adjust);
-  EXPECT_EQ( 2, e.start_line_cutoff);
-  EXPECT_EQ( 0, e.end_line_cutoff);
-  EXPECT_EQ( 1, e.end_line_adjust);
+  EXPECT_EQ(-1, e.start_line_adjust);  EXPECT_EQ( 2, e.start_line_cutoff);
+  EXPECT_EQ( 1, e.end_line_adjust);    EXPECT_EQ( 0, e.end_line_cutoff);
   EXPECT_EQ( 2, e.line.Size());
   EXPECT_EQ( 4, e.fb_wrapped_lines);
   EXPECT_EQ( 2, test_fb->back.size());
@@ -538,10 +649,8 @@ TEST(GUITest, Editor) {
   // 4: 344 : 2=3:0, 1=4:0, 3=4:1
   e.v_scrolled = 4.0/(e.WrappedLines()-1);
   e.UpdateScrolled();
-  EXPECT_EQ( 0, e.start_line_adjust);
-  EXPECT_EQ( 1, e.start_line_cutoff);
-  EXPECT_EQ( 0, e.end_line_cutoff);
-  EXPECT_EQ( 2, e.end_line_adjust);
+  EXPECT_EQ( 0, e.start_line_adjust);  EXPECT_EQ( 1, e.start_line_cutoff);
+  EXPECT_EQ( 2, e.end_line_adjust);    EXPECT_EQ( 0, e.end_line_cutoff);
   EXPECT_EQ( 2, e.line.Size());
   EXPECT_EQ( 3, e.fb_wrapped_lines);
   EXPECT_EQ( 1, test_fb->back.size());
@@ -564,10 +673,8 @@ TEST(GUITest, Editor) {
   // 5: 445 : 1=4:0, 3=4:1, 2=5:0
   e.v_scrolled = 5.0/(e.WrappedLines()-1);
   e.UpdateScrolled();
-  EXPECT_EQ( 0, e.start_line_adjust);
-  EXPECT_EQ( 2, e.start_line_cutoff);
-  EXPECT_EQ( 0, e.end_line_cutoff);
-  EXPECT_EQ( 1, e.end_line_adjust);
+  EXPECT_EQ( 0, e.start_line_adjust);  EXPECT_EQ( 2, e.start_line_cutoff);
+  EXPECT_EQ( 1, e.end_line_adjust);    EXPECT_EQ( 0, e.end_line_cutoff);
   EXPECT_EQ( 2, e.line.Size());
   EXPECT_EQ( 3, e.fb_wrapped_lines);
   EXPECT_EQ( 1, test_fb->back.size());
@@ -587,10 +694,8 @@ TEST(GUITest, Editor) {
   // 3: 234 : 3=2:2, 2=3:0, 1=4:0
   e.v_scrolled = 3.0/(e.WrappedLines()-1);
   e.UpdateScrolled();
-  EXPECT_EQ(-2, e.start_line_adjust);
-  EXPECT_EQ( 1, e.start_line_cutoff);
-  EXPECT_EQ( 1, e.end_line_cutoff);
-  EXPECT_EQ( 1, e.end_line_adjust);
+  EXPECT_EQ(-2, e.start_line_adjust);  EXPECT_EQ( 1, e.start_line_cutoff);
+  EXPECT_EQ( 1, e.end_line_adjust);    EXPECT_EQ( 1, e.end_line_cutoff);
   EXPECT_EQ( 3, e.line.Size());
   EXPECT_EQ( 6, e.fb_wrapped_lines);
   EXPECT_EQ( 2, test_fb->front.size());
@@ -617,10 +722,8 @@ TEST(GUITest, Editor) {
   // 1: 222 : 2=2:0, 1=2:1, 3=2:2
   e.v_scrolled = 1.0/(e.WrappedLines()-1);
   e.UpdateScrolled();
-  EXPECT_EQ(0, e.start_line_adjust);
-  EXPECT_EQ(3, e.start_line_cutoff);
-  EXPECT_EQ(0, e.end_line_cutoff);
-  EXPECT_EQ(3, e.end_line_adjust);
+  EXPECT_EQ(0, e.start_line_adjust);  EXPECT_EQ(3, e.start_line_cutoff);
+  EXPECT_EQ(3, e.end_line_adjust);    EXPECT_EQ(0, e.end_line_cutoff);
   EXPECT_EQ(1, e.line.Size());
   EXPECT_EQ(3, e.fb_wrapped_lines);
   EXPECT_EQ(1, test_fb->front.size());

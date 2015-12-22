@@ -616,15 +616,15 @@ int TextArea::UpdateLines(float v_scrolled, int *first_ind, int *first_offset, i
   LayoutBackLine(&line, new_last_line.first);
   bool up = new_first_line < old_first_line;
   int dist = flattened_lines.Distance(new_first_line, old_first_line, fb->lines-1);
-  if (first_offset) *first_offset = up ?  start_line_cutoff+1 :  end_line_adjust+1;
-  if (first_ind)    *first_ind    = up ? -start_line-1        : -end_line-1;
-  if (first_len)    *first_len    = up ? -start_line_adjust   :  end_line_cutoff;
+  if (first_offset) *first_offset = up ?  start_line_cutoff :  end_line_adjust;
+  if (first_ind)    *first_ind    = up ? -start_line-1      : -end_line-1;
+  if (first_len)    *first_len    = up ? -start_line_adjust :  end_line_cutoff;
   start_line        =  new_first_line.first;
   start_line_adjust = -new_first_line.second;
   end_line          =  new_last_line.first;
-  end_line_adjust   =  new_last_line.second;
-  end_line_cutoff   = line[  -end_line-1].Lines() -  new_last_line.second - 1;
-  start_line_cutoff = line[-start_line-1].Lines() - new_first_line.second - 1;
+  end_line_adjust   =  new_last_line.second+1;
+  end_line_cutoff   = line[  -end_line-1].Lines() - end_line_adjust;
+  start_line_cutoff = line[-start_line-1].Lines() + start_line_adjust;
   return dist * (up ? -1 : 1);
 }
 
@@ -798,6 +798,12 @@ Editor::Editor(Window *W, Font *F, File *I, bool Wrap) : TextArea(W, F), file(I)
   edits.free_func = [](String16 *v) { v->clear(); };
 }
 
+void Editor::SetShouldWrap(bool w) {
+  line_fb.wrap = w;
+  Reload();
+  Redraw(true);
+}
+
 void Editor::AddWrappedLines(int n) {
   v_scrolled *= static_cast<float>(wrapped_lines) / (wrapped_lines + n);
   last_v_scrolled = v_scrolled;
@@ -841,11 +847,16 @@ int Editor::UpdateLines(float vs, int *first_ind, int *first_offset, int *first_
   pair<int, int> read_lines;
   if (dist < fb->lines) {
     if (up) read_lines = pair<int, int>(new_first_line, dist);
-    else    read_lines = pair<int, int>(new_first_line + fb->lines - dist, dist);
+    else    read_lines = pair<int, int>(new_last_line - dist, dist);
   } else    read_lines = pair<int, int>(new_first_line, fb->lines);
 
   bool head_read = new_first_line == read_lines.first;
   bool tail_read = new_last_line  == read_lines.first + read_lines.second;
+  CHECK(head_read || tail_read);
+  if (head_read && tail_read) CHECK(redraw);
+  if (up) { CHECK(head_read); }
+  else    { CHECK(tail_read); }
+
   bool short_read = !(head_read && tail_read), shorten_read = short_read && head_read && start_line_adjust;
   int past_end_lines = max(0, min(dist, read_lines.first + read_lines.second - wrapped_lines)), added = 0;
   read_lines.second = max(0, read_lines.second - past_end_lines);
