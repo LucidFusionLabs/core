@@ -303,8 +303,8 @@ void TextGUI::Line::Layout(Box win, bool flush) {
   ScopedDeltaTracker<int> SWLT(cont ? &cont->wrapped_lines : 0, bind(&Line::Lines, this));
   DrawableBoxArray b;
   swap(b, data->glyphs);
-  data->glyphs.attr.source = b.attr.source;
   Clear();
+  data->glyphs.attr.source = b.attr.source;
   data->flow.AppendBoxArrayText(b);
 }
 
@@ -667,7 +667,6 @@ void TextArea::UpdateVScrolled(int dist, bool up, int ind, int first_offset, int
 
 void TextArea::ChangeColors(Colors *C) {
   SetColors(C);
-  // for (int i=1; i<=term_height; ++i) if (Line *L = GetTermLine(i)) L->Layout(L->data->box, true);
   Redraw();
 }
 
@@ -711,7 +710,7 @@ bool TextArea::GetGlyphFromCoordsOffset(const point &p, Selection::Point *out, i
     Line *L = &line[-i-1];
     if (lines + (ll = L->Lines()) <= targ) continue;
     L->data->glyphs.GetGlyphFromCoords(p, &out->char_ind, &out->glyph, targ - lines);
-    out->glyph.y = lines * fh;
+    out->glyph.y = targ * fh;
     out->line_ind = i;
     return true;
   }
@@ -834,7 +833,7 @@ int Editor::UpdateLines(float vs, int *first_ind, int *first_offset, int *first_
 
   bool resized = (width_changed && wrap) || last_fb_lines != fb->lines;
   int new_first_line = RoundF(vs * (wrapped_lines - 1)), new_last_line = new_first_line + fb->lines;
-  int dist = resized ? fb->lines : abs(new_first_line - last_first_line), read_len = 0, bo = 0, l, e;
+  int dist = resized ? fb->lines : abs(new_first_line - last_first_line), read_len = 0, bo = 0, ll, l, e;
   if (!dist || !file_line.size()) return 0;
 
   bool redraw = dist >= fb->lines;
@@ -854,6 +853,7 @@ int Editor::UpdateLines(float vs, int *first_ind, int *first_offset, int *first_
   bool tail_read = new_last_line  == read_lines.first + read_lines.second;
   CHECK(head_read || tail_read);
   if (head_read && tail_read) CHECK(redraw);
+  if (redraw) CHECK(head_read && tail_read);
   if (up) { CHECK(head_read); }
   else    { CHECK(tail_read); }
 
@@ -892,13 +892,15 @@ int Editor::UpdateLines(float vs, int *first_ind, int *first_offset, int *first_
     l = (e = max(0, -(--li).val->size)) ? 0 : li.val->size;
     if (e) (L = line.PushBack())->AssignText(edits[e-1],                                 Flow::TextAnnotation(annotation.data(), PieceIndex()));
     else   (L = line.PushBack())->AssignText(StringPiece(buf.data()+read_len-bo-l-1, l), Flow::TextAnnotation(annotation.data(), li.val->annotation));
-    fb_wrapped_lines += L->Layout(wrap ? fb->w : 0, true);
+    fb_wrapped_lines += (ll = L->Layout(wrap ? fb->w : 0, true));
+    CHECK_EQ(li.val->wrapped_lines, ll);
   }
   else for (LineMap::ConstIterator li = lib; li != lie; ++li, bo += l + !e, added++) {
     l = (e = max(0, -li.val->size)) ? 0 : li.val->size;
     if (e) (L = line.PushFront())->AssignText(edits[e-1],                    Flow::TextAnnotation(annotation.data(), PieceIndex()));
     else   (L = line.PushFront())->AssignText(StringPiece(buf.data()+bo, l), Flow::TextAnnotation(annotation.data(), li.val->annotation));
-    fb_wrapped_lines += L->Layout(wrap ? fb->w : 0, true);
+    fb_wrapped_lines += (ll = L->Layout(wrap ? fb->w : 0, true));
+    CHECK_EQ(li.val->wrapped_lines, ll);
   }
   if (!up) for (int i=0; i<past_end_lines; i++, added++) { 
     (L = line.PushFront())->Clear();
@@ -908,7 +910,7 @@ int Editor::UpdateLines(float vs, int *first_ind, int *first_offset, int *first_
   CHECK_LT(line.ring.count, line.ring.size);
   if (!redraw) {
     for (bool first=1;;first=0) {
-      int ll = (L = up ? line.Front() : line.Back())->Lines();
+      ll = (L = up ? line.Front() : line.Back())->Lines();
       if (fb_wrapped_lines + (up ? start_line_adjust : -end_line_cutoff) - ll < fb->lines) break;
       fb_wrapped_lines -= ll;
       if (up) line.PopFront(1);

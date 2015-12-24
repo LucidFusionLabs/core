@@ -122,6 +122,7 @@ template <class X> struct ArrayPiece {
   ArrayPiece()                  : buf(0), len(0) {}
   ArrayPiece(const X *b, int l) : buf(b), len(l) {}
   ArrayPiece(const X *b, const PieceIndex &i) : buf(i.offset < 0 ? 0 : &b[i.offset]), len(i.len) {}
+  ArrayPiece(const vector<X> &b) : buf(b.data()), len(b.size()) {}
   const X& operator[](int i) const { return buf[i]; }
   const X& back() const { return buf[len-1]; }
   void clear() { buf=0; len=0; }

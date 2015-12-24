@@ -62,9 +62,9 @@ int DrawableBoxArray::BoundingWidth(const DrawableBox &b, const DrawableBox &e) 
   return e.RightBound(attr.GetAttr(e.attr_id)) - b.LeftBound(attr.GetAttr(b.attr_id));
 }
 
-DrawableBox& DrawableBoxArray::PushBack(const Box &box, int cur_attr, Drawable *drawable, int *ind_out) {
+DrawableBox& DrawableBoxArray::PushBack(const Box &box, int attr_id, Drawable *drawable, int *ind_out) {
   if (ind_out) *ind_out = data.size();
-  return LFL::PushBack(data, DrawableBox(box, drawable, cur_attr, line.size()));
+  return LFL::PushBack(data, DrawableBox(box, drawable, attr_id, line.size()));
 }
 
 void DrawableBoxArray::InsertAt(int o, const DrawableBoxArray &x) {
@@ -106,16 +106,27 @@ point DrawableBoxArray::Draw(point p, int glyph_start, int glyph_len) {
 }
 
 string DrawableBoxArray::DebugString() const {
-  string ret = StrCat("BoxArray H=", height, " ");
+  string ret = StrCat("BoxArray ", (void*)this, " H=", height, " line_ind ", line_ind.size(), " { ");
+  for (auto i : line_ind) StrAppend(&ret, i,  ", ");
+  StrAppend(&ret, " } size = ", data.size(), ", runs = [ ");
+
   for (DrawableBoxIterator iter(data); !iter.Done(); iter.Increment()) 
     StrAppend(&ret, "R", iter.i, "(", DrawableBoxRun(iter.Data(), iter.Length()).DebugString(), "), ");
+  StrAppend(&ret, "], lines = [\n");
+
+  for (int i=0, start=0; i<=line_ind.size() && start<data.size(); i++) {
+    int end = i<line_ind.size() ? line_ind[i] : data.size();
+    StrAppend(&ret, "\"", Text(start, end-start), "\",\n");
+    start = end;
+  }
+
   return ret;
 }
 
 bool DrawableBoxArray::GetGlyphFromCoords(const point &p, int *index_out, Box *box_out, int li) {
   vector<DrawableBox>::const_iterator gb, ge, it;
-  gb = data.begin() + (li < line_ind.size() ? line_ind[li] : 0);
-  ge = (li+1) < line_ind.size() ? (data.begin() + line_ind[li+1]) : data.end();
+  gb = data.begin() + ((li && line_ind.size() && li <= line_ind.size()) ? line_ind[li-1] : 0);
+  ge = li < line_ind.size() ? (data.begin() + line_ind[li]) : data.end();
   it = LesserBound(gb, ge, DrawableBox(Box(p,0,0)), true);
   if (it == data.end()) { *index_out = -1; *box_out = BackOrDefault(data).box; return false; }
   else                  { *index_out = it - data.begin(); *box_out = it->box;  return true; }
@@ -261,11 +272,10 @@ void Flow::AppendBlock(int w, int h, const Border &b, Box *box_out) {
 
 void Flow::AppendBoxArrayText(const DrawableBoxArray &in) {
   bool attr_fwd = in.attr.source;
-  for (DrawableBoxRawIterator iter(in.data); !iter.Done(); iter.Increment()) {
-    if (!attr_fwd) cur_attr      = *in.attr.GetAttr(iter.cur_attr);
-    else           cur_attr.font =  in.attr.GetAttr(iter.cur_attr)->font;
-    AppendText(DrawableBoxRun(iter.Data(), iter.Length()).Text16(), attr_fwd ? iter.cur_attr : 0);
-  }
+  vector<pair<int,int>> annotation;
+  for (DrawableBoxRawIterator iter(in.data); !iter.Done(); iter.Increment())
+    annotation.emplace_back(iter.cur_start, iter.cur_attr);
+  AppendText(DrawableBoxRun(&in[0], in.Size()).Text16(), TextAnnotation(annotation, &in.attr));
 }
 
 int Flow::AppendBox(int w, int h, Drawable *drawable) { 
@@ -324,12 +334,12 @@ Flow::State Flow::AppendBoxOrChar(int c, DrawableBox *box, int h) {
       int box_width = drawable ? box->drawable->Advance(&box->box, &cur_attr) : box->box.w;
       wrap = cur_line.end && p.x + box_width > cur_line.end;
     } else if (cur_word.fresh && !space) {
-      if (!cur_word.len) return state = State::NEW_WORD;
+      if (!cur_word.len) return (state = State::NEW_WORD);
       wrap = cur_word.len && cur_line.end && (p.x + cur_word.len > cur_line.end);
     }
     if (wrap && !(cur_line.fresh && adj_float_left == -1 && adj_float_right == -1)) {
       if (cur_line.fresh) { /* clear floats */ } 
-      AppendNewline(h);
+      AppendNewline(h, true);
       continue;
     }
     break;
