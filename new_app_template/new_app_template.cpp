@@ -30,6 +30,7 @@ Scene scene;
 // engine callback driven by LFL::Application
 int Frame(LFL::Window *W, unsigned clicks, int flag) {
   screen->cam->Look();
+  screen->binds->Repeat(clicks);
   scene.Get("arrow")->YawRight((double)clicks);
   scene.Draw(&asset.vec);
 

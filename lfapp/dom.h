@@ -40,7 +40,7 @@ struct Renderer;
 
 #undef  XX
 #define XX(n) struct HTML ## n;
-#include "crawler/html_elements.h"
+#include "web/html_elements.h"
 
 typedef char Char;
 typedef StringWordIterT<Char> StringWordIter;
@@ -150,7 +150,7 @@ struct Node : public Object {
 
 # undef  XX
 # define XX(n) virtual HTML ## n *AsHTML ## n () { return 0; }
-# include "crawler/html_elements.h"
+# include "web/html_elements.h"
 
   unsigned short nodeType, htmlElementType;
   NodeList       childNodes;
@@ -160,8 +160,11 @@ struct Node : public Object {
 
   LFL::DOM::Renderer *render;
   LFL::DOM::Renderer *AttachRender();
-  void ClearParent() { parentNode=0; parentChildNodeIndex=-1; }
   void AssignParent(Node *n, int ind) { n->parentNode=this; n->parentChildNodeIndex=ind; }
+  void ClearParent() { parentNode=0; parentChildNodeIndex=-1; }
+  void ClearComputedInlineStyle();
+  void SetLayoutDirty();
+  void SetStyleDirty();
 
   virtual ~Node() {}
   Node(unsigned short t, Document *doc) : nodeType(t), htmlElementType(0), parentNode(0), ownerDocument(doc), parentChildNodeIndex(-1), render(0) {}
@@ -183,6 +186,7 @@ struct Node : public Object {
     }
     return 0;
   }
+
   Node *replaceChild(Node *newChild, const Node *oldChild) {
     for (vector<Node*>::iterator i = childNodes.data.begin(); i != childNodes.data.end(); ++i) {
       if (*i != oldChild) continue;
@@ -193,6 +197,7 @@ struct Node : public Object {
     }
     return 0;
   }
+
   Node *removeChild(Node *oldChild) {
     Node *ret = 0;
     for (vector<Node*>::iterator i = childNodes.data.begin(); i != childNodes.data.end(); ++i) {
@@ -206,6 +211,7 @@ struct Node : public Object {
     }
     return 0;
   }
+
   Node *appendChild(Node *newChild, ExceptionCode ec=0) {
     removeChild(newChild);
     AssignParent(newChild, childNodes.data.size());
@@ -225,11 +231,13 @@ template <class X> struct NamedMap : public Object {
     int ind = FindOrDefault(data_index, name, -1);
     return ind >= 0 ? data_val[ind] : 0;
   }
+
   X createNamedItem(const DOMString &name, X arg) {
     data_index[name] = data_val.size();
     data_val.push_back(arg);
     return arg;
   }
+
   X setNamedItem(const DOMString &name, X arg) {
     bool inserted = false;
     unordered_map<DOMString, int>::iterator it = FindOrInsert(data_index, name, (int)data_val.size(), &inserted);
@@ -237,6 +245,7 @@ template <class X> struct NamedMap : public Object {
     else data_val[it->second] = arg;
     return arg;
   }
+
   X removeNamedItem(const DOMString &name) {
     unordered_map<DOMString, int>::iterator it = data_index.find(name);
     if (it == data_index.end()) return 0;
@@ -247,6 +256,7 @@ template <class X> struct NamedMap : public Object {
     for (it = data_index.begin(); it != data_index.end(); it++) if (it->second > ind) it->second--;
     return ret;
   }
+
   X item(int index) const { return (index >= 0 && index < data_val.size()) ? data_val[index] : 0; }
   int length() const { return data_val.size(); }
 };
@@ -322,6 +332,7 @@ struct Element : public Node { DERIVE_NODE(Element, ELEMENT_NODE) {}
     }
     return ret + ">";
   }
+
   static NodeList getElementsByTagName(Node *root, const DOMString &name) {
     NodeList ret;
     for (int i=0, l=root->childNodes.length(); i<l; i++) {
@@ -438,6 +449,7 @@ struct HTMLFormElement : public HTMLElement { DERIVE_ELEMENT(HTMLFormElement, HT
   void submit();
   void reset();
 };
+
 struct HTMLSelectElement : public HTMLElement { DERIVE_ELEMENT(HTMLSelectElement, HTML_SELECT_ELEMENT), form(0) {}
   DECLARE_TAG_NAMES("select", "keygen");
   HTMLCollection options;
@@ -454,6 +466,7 @@ struct HTMLSelectElement : public HTMLElement { DERIVE_ELEMENT(HTMLSelectElement
   void blur() {}
   void focus() {}
 };
+
 struct HTMLOptionElement : public HTMLElement { DERIVE_ELEMENT(HTMLOptionElement, HTML_OPTION_ELEMENT), form(0) {}
   DECLARE_TAG_NAMES("option");
   HTMLFormElement *form;
@@ -463,9 +476,11 @@ struct HTMLOptionElement : public HTMLElement { DERIVE_ELEMENT(HTMLOptionElement
   PARSE_int(disabled); PARSE_bool(selected);
   PARSE_ATTR_END;
 };
+
 struct HTMLInputElement : public HTMLElement { DERIVE_ELEMENT(HTMLInputElement, HTML_INPUT_ELEMENT), form(0), image_tex(0) {}
   DECLARE_TAG_NAMES("input");
   HTMLFormElement *form;
+  unique_ptr<TilesTextGUI> text;
   shared_ptr<Texture> image_tex;
 
   PARSE_ATTR_BEGIN(HTMLElement);
@@ -480,6 +495,7 @@ struct HTMLInputElement : public HTMLElement { DERIVE_ELEMENT(HTMLInputElement, 
   void select();
   void click();
 };
+
 struct HTMLTextAreaElement : public HTMLElement { DERIVE_ELEMENT(HTMLTextAreaElement, HTML_TEXT_AREA_ELEMENT), form(0) {}
   DECLARE_TAG_NAMES("textarea");
   HTMLFormElement *form;
@@ -494,6 +510,7 @@ struct HTMLTextAreaElement : public HTMLElement { DERIVE_ELEMENT(HTMLTextAreaEle
   void focus();
   void select();
 };
+
 struct HTMLButtonElement : public HTMLElement { DERIVE_ELEMENT(HTMLButtonElement, HTML_BUTTON_ELEMENT), form(0) {}
   DECLARE_TAG_NAMES("button");
   HTMLFormElement *form;
@@ -503,6 +520,7 @@ struct HTMLButtonElement : public HTMLElement { DERIVE_ELEMENT(HTMLButtonElement
   PARSE_bool(disabled); PARSE_int(tabindex);
   PARSE_ATTR_END;
 };
+
 struct HTMLAnchorElement : public HTMLElement { DERIVE_ELEMENT(HTMLAnchorElement, HTML_ANCHOR_ELEMENT) {}
   DECLARE_TAG_NAMES("a");
 
@@ -516,6 +534,7 @@ struct HTMLAnchorElement : public HTMLElement { DERIVE_ELEMENT(HTMLAnchorElement
   void focus();
   void blur();
 };
+
 struct HTMLImageElement : public HTMLElement { DERIVE_ELEMENT(HTMLImageElement, HTML_IMAGE_ELEMENT), tex(0) {}
   DECLARE_TAG_NAMES("img", "image");
   shared_ptr<Texture> tex;
@@ -526,6 +545,7 @@ struct HTMLImageElement : public HTMLElement { DERIVE_ELEMENT(HTMLImageElement, 
   PARSE_string(vspace); PARSE_string(width); PARSE_bool(ismap);
   PARSE_ATTR_END;
 };
+
 struct HTMLObjectElement : public HTMLElement { DERIVE_ELEMENT(HTMLObjectElement, HTML_OBJECT_ELEMENT), form(0) {}
   DECLARE_TAG_NAMES("object");
   HTMLFormElement *form;
@@ -537,6 +557,7 @@ struct HTMLObjectElement : public HTMLElement { DERIVE_ELEMENT(HTMLObjectElement
   PARSE_int(tabindex); PARSE_bool(declare);
   PARSE_ATTR_END;
 };
+
 struct HTMLTableCaptionElement : public HTMLElement {
   HTMLTableElement *parentTable;
   HTMLTableCaptionElement(Document *doc, HTMLTableElement *par=0) : HTMLElement(HTML_TABLE_CAPTION_ELEMENT, doc), parentTable(par) {}
@@ -546,6 +567,7 @@ struct HTMLTableCaptionElement : public HTMLElement {
   PARSE_string(align);
   PARSE_ATTR_END;
 };
+
 struct HTMLTableCellElement : public HTMLElement {
   HTMLTableRowElement *parentRow;
   HTMLTableCellElement(Document *doc, HTMLTableRowElement *par=0) : HTMLElement(HTML_TABLE_CELL_ELEMENT, doc), parentRow(par) {}
@@ -557,12 +579,14 @@ struct HTMLTableCellElement : public HTMLElement {
   PARSE_string(height); PARSE_string(scope); PARSE_string(valign); PARSE_string(width); PARSE_bool(nowrap);
   PARSE_ATTR_END;
 };
+
 struct HTMLTableColElement : public HTMLElement { DERIVE_ELEMENT(HTMLTableColElement, HTML_TABLE_COL_ELEMENT) {}
   DECLARE_TAG_NAMES("col", "colgroup");
   PARSE_ATTR_BEGIN(HTMLElement);
   PARSE_string(align); PARSE_string(char_); PARSE_string(charOff); PARSE_int(span); PARSE_string(valign); PARSE_string(width);
   PARSE_ATTR_END;
 };
+
 struct HTMLTableRowElement : public HTMLElement {
   HTMLCollection cells;
   HTMLTableElement *parentTable;
@@ -578,6 +602,7 @@ struct HTMLTableRowElement : public HTMLElement {
   void deleteCell(long index) { cells.EraseAt(index); }
   HTMLElement *insertCell(long index) { return (HTMLElement*)cells.InsertAt(index, AllocatorNew(ownerDocument->alloc, (HTMLTableCellElement), (ownerDocument, this))); }
 };
+
 struct HTMLTableSectionElement : public HTMLElement {
   HTMLTableElement *parentTable;
   HTMLTableSectionElement(Document *doc, HTMLTableElement *par=0) : HTMLElement(HTML_TABLE_SECTION_ELEMENT, doc), parentTable(par) {}
@@ -591,6 +616,7 @@ struct HTMLTableSectionElement : public HTMLElement {
   void deleteRow(long index);
   HTMLElement *insertRow(long index);
 };
+
 #define HTMLTableIterColGroup(t) for (int j=0, cols = (t)->colgroup ? (t)->colgroup->childNodes.length() : 0; j<cols; j++) if (LFL::DOM::HTMLTableColElement *col = n->colgroup->childNodes.item(j)->AsHTMLTableColElement())
 #define HTMLTableRowIter(t) for (int i=0; i<(t)->rows .length(); i++) if (LFL::DOM::HTMLTableRowElement  *row  = (t)->rows .item(i)->AsHTMLTableRowElement())
 #define HTMLTableColIter(t) for (int j=0; j<(t)->cells.length(); j++) if (LFL::DOM::HTMLTableCellElement *cell = (t)->cells.item(j)->AsHTMLTableCellElement())
@@ -619,30 +645,35 @@ struct HTMLTableElement : public HTMLElement { DERIVE_ELEMENT(HTMLTableElement, 
   HTMLElement *createColGroup() { if (!caption) colgroup = AllocatorNew(ownerDocument->alloc, (HTMLTableColElement),     (ownerDocument));       return colgroup; }
   HTMLElement *insertRow(long index) { return (HTMLElement*)rows.InsertAt(index, AllocatorNew(ownerDocument->alloc, (HTMLTableRowElement), (ownerDocument, this))); }
 };
+
 struct HTMLHtmlElement : public HTMLElement { DERIVE_ELEMENT(HTMLHtmlElement, HTML_HTML_ELEMENT) {}
   DECLARE_TAG_NAMES("html");
   PARSE_ATTR_BEGIN(HTMLElement);
   PARSE_string(version);
   PARSE_ATTR_END;
 };
+
 struct HTMLHeadElement : public HTMLElement { DERIVE_ELEMENT(HTMLHeadElement, HTML_HEAD_ELEMENT) {}
   DECLARE_TAG_NAMES("head");
   PARSE_ATTR_BEGIN(HTMLElement);
   PARSE_string(profile);
   PARSE_ATTR_END;
 };
+
 struct HTMLOptGroupElement : public HTMLElement { DERIVE_ELEMENT(HTMLOptGroupElement, HTML_OPT_GROUP_ELEMENT) {}
   DECLARE_TAG_NAMES("optgroup");
   PARSE_ATTR_BEGIN(HTMLElement);
   PARSE_bool(disabled); PARSE_string(label);
   PARSE_ATTR_END;
 };
+
 struct HTMLStyleElement : public HTMLElement { DERIVE_ELEMENT(HTMLStyleElement, HTML_STYLE_ELEMENT) {}
   DECLARE_TAG_NAMES("style");
   PARSE_ATTR_BEGIN(HTMLElement);
   PARSE_bool(disabled); PARSE_string(media); PARSE_string(type);
   PARSE_ATTR_END;
 };
+
 struct HTMLLinkElement : public HTMLElement { DERIVE_ELEMENT(HTMLLinkElement, HTML_LINK_ELEMENT) {}
   DECLARE_TAG_NAMES("link");
   PARSE_ATTR_BEGIN(HTMLElement);
@@ -650,24 +681,28 @@ struct HTMLLinkElement : public HTMLElement { DERIVE_ELEMENT(HTMLLinkElement, HT
   PARSE_string(rel); PARSE_string(rev); PARSE_string(target); PARSE_string(type);
   PARSE_ATTR_END;
 };
+
 struct HTMLTitleElement : public HTMLElement { DERIVE_ELEMENT(HTMLTitleElement, HTML_TITLE_ELEMENT) {}
   DECLARE_TAG_NAMES("title");
   PARSE_ATTR_BEGIN(HTMLElement);
   PARSE_string(text);
   PARSE_ATTR_END;
 };
+
 struct HTMLMetaElement : public HTMLElement { DERIVE_ELEMENT(HTMLMetaElement, HTML_META_ELEMENT) {}
   DECLARE_TAG_NAMES("meta");
   PARSE_ATTR_BEGIN(HTMLElement);
   PARSE_string(content); PARSE_string(http-equiv); PARSE_string(name); PARSE_string(scheme);
   PARSE_ATTR_END;
 };
+
 struct HTMLBaseElement : public HTMLElement { DERIVE_ELEMENT(HTMLBaseElement, HTML_BASE_ELEMENT) {}
   DECLARE_TAG_NAMES("base");
   PARSE_ATTR_BEGIN(HTMLElement);
   PARSE_string(href); PARSE_string(target);
   PARSE_ATTR_END;
 };
+
 struct HTMLIsIndexElement : public HTMLElement { DERIVE_ELEMENT(HTMLIsIndexElement, HTML_IS_INDEX_ELEMENT) {}
   DECLARE_TAG_NAMES("isindex");
   HTMLFormElement *form;
@@ -676,6 +711,7 @@ struct HTMLIsIndexElement : public HTMLElement { DERIVE_ELEMENT(HTMLIsIndexEleme
   PARSE_string(prompt);
   PARSE_ATTR_END;
 };
+
 struct HTMLBodyElement : public HTMLElement { DERIVE_ELEMENT(HTMLBodyElement, HTML_BODY_ELEMENT) {}
   DECLARE_TAG_NAMES("body");
   PARSE_ATTR_BEGIN(HTMLElement);
@@ -691,6 +727,7 @@ struct HTMLBodyElement : public HTMLElement { DERIVE_ELEMENT(HTMLBodyElement, HT
     return ret;
   }
 };
+
 struct HTMLLabelElement : public HTMLElement { DERIVE_ELEMENT(HTMLLabelElement, HTML_LABEL_ELEMENT) {}
   DECLARE_TAG_NAMES("label");
   HTMLFormElement *form;
@@ -699,10 +736,12 @@ struct HTMLLabelElement : public HTMLElement { DERIVE_ELEMENT(HTMLLabelElement, 
   PARSE_string(accesskey); PARSE_string(htmlfor);
   PARSE_ATTR_END;
 };
+
 struct HTMLFieldSetElement : public HTMLElement { DERIVE_ELEMENT(HTMLFieldSetElement, HTML_FIELD_SET_ELEMENT) {}
   DECLARE_TAG_NAMES("fieldset");
   HTMLFormElement *form;
 };
+
 struct HTMLLegendElement : public HTMLElement { DERIVE_ELEMENT(HTMLLegendElement, HTML_LEGEND_ELEMENT) {}
   DECLARE_TAG_NAMES("legend");
   HTMLFormElement *form;
@@ -711,108 +750,126 @@ struct HTMLLegendElement : public HTMLElement { DERIVE_ELEMENT(HTMLLegendElement
   PARSE_string(accesskey); PARSE_string(align);
   PARSE_ATTR_END;
 };
+
 struct HTMLUListElement : public HTMLElement { DERIVE_ELEMENT(HTMLUListElement, HTML_U_LIST_ELEMENT) {}
   DECLARE_TAG_NAMES("ul");
   PARSE_ATTR_BEGIN(HTMLElement);
   PARSE_bool(compact); PARSE_string(type);
   PARSE_ATTR_END;
 };
+
 struct HTMLOListElement : public HTMLElement { DERIVE_ELEMENT(HTMLOListElement, HTML_O_LIST_ELEMENT) {}
   DECLARE_TAG_NAMES("ol");
   PARSE_ATTR_BEGIN(HTMLElement);
   PARSE_bool(compact); PARSE_int(start); PARSE_string(type);
   PARSE_ATTR_END;
 };
+
 struct HTMLDListElement : public HTMLElement { DERIVE_ELEMENT(HTMLDListElement, HTML_D_LIST_ELEMENT) {}
   DECLARE_TAG_NAMES("dl");
   PARSE_ATTR_BEGIN(HTMLElement);
   PARSE_bool(compact);
   PARSE_ATTR_END;
 };
+
 struct HTMLDirectoryElement : public HTMLElement { DERIVE_ELEMENT(HTMLDirectoryElement, HTML_DIRECTORY_ELEMENT) {}
   DECLARE_TAG_NAMES("dir");
   PARSE_ATTR_BEGIN(HTMLElement);
   PARSE_bool(compact);
   PARSE_ATTR_END;
 };
+
 struct HTMLMenuElement : public HTMLElement { DERIVE_ELEMENT(HTMLMenuElement, HTML_MENU_ELEMENT) {}
   DECLARE_TAG_NAMES("menu");
   PARSE_ATTR_BEGIN(HTMLElement);
   PARSE_bool(compact);
   PARSE_ATTR_END;
 };
+
 struct HTMLLIElement : public HTMLElement { DERIVE_ELEMENT(HTMLLIElement, HTML_LI_ELEMENT) {}
   DECLARE_TAG_NAMES("li");
   PARSE_ATTR_BEGIN(HTMLElement);
   PARSE_string(type); PARSE_int(value);
   PARSE_ATTR_END;
 };
+
 struct HTMLDivElement : public HTMLElement { DERIVE_ELEMENT(HTMLDivElement, HTML_DIV_ELEMENT) {}
   DECLARE_TAG_NAMES("div");
   PARSE_ATTR_BEGIN(HTMLElement);
   PARSE_string(align);
   PARSE_ATTR_END;
 };
+
 struct HTMLParagraphElement : public HTMLElement { DERIVE_ELEMENT(HTMLParagraphElement, HTML_PARAGRAPH_ELEMENT) {}
   DECLARE_TAG_NAMES("p");
   PARSE_ATTR_BEGIN(HTMLElement);
   PARSE_string(align);
   PARSE_ATTR_END;
 };
+
 struct HTMLHeadingElement : public HTMLElement { DERIVE_ELEMENT(HTMLHeadingElement, HTML_HEADING_ELEMENT) {}
   DECLARE_TAG_NAMES("h1", "h2", "h3", "h4", "h5", "h6");
   PARSE_ATTR_BEGIN(HTMLElement);
   PARSE_string(align);
   PARSE_ATTR_END;
 };
+
 struct HTMLQuoteElement : public HTMLElement { DERIVE_ELEMENT(HTMLQuoteElement, HTML_QUOTE_ELEMENT) {}
   DECLARE_TAG_NAMES("q");
   PARSE_ATTR_BEGIN(HTMLElement);
   PARSE_string(cite);
   PARSE_ATTR_END;
 };
+
 struct HTMLPreElement : public HTMLElement { DERIVE_ELEMENT(HTMLPreElement, HTML_PRE_ELEMENT) {}
   DECLARE_TAG_NAMES("pre");
   PARSE_ATTR_BEGIN(HTMLElement);
   PARSE_int(width);
   PARSE_ATTR_END;
 };
+
 struct HTMLBRElement : public HTMLElement { DERIVE_ELEMENT(HTMLBRElement, HTML_BR_ELEMENT) {}
   DECLARE_TAG_NAMES("br");
   PARSE_ATTR_BEGIN(HTMLElement);
   PARSE_string(clear);
   PARSE_ATTR_END;
 };
+
 struct HTMLBaseFontElement : public HTMLElement { DERIVE_ELEMENT(HTMLBaseFontElement, HTML_BASE_FONT_ELEMENT) {}
   DECLARE_TAG_NAMES("basefont");
   PARSE_ATTR_BEGIN(HTMLElement);
   PARSE_string(color); PARSE_string(face); PARSE_string(size);
   PARSE_ATTR_END;
 };
+
 struct HTMLFontElement : public HTMLElement { DERIVE_ELEMENT(HTMLFontElement, HTML_FONT_ELEMENT) {}
   DECLARE_TAG_NAMES("font");
   PARSE_ATTR_BEGIN(HTMLElement);
   PARSE_string(color); PARSE_string(face); PARSE_string(size);
   PARSE_ATTR_END;
 };
+
 struct HTMLHRElement : public HTMLElement { DERIVE_ELEMENT(HTMLHRElement, HTML_HR_ELEMENT) {}
   DECLARE_TAG_NAMES("hr");
   PARSE_ATTR_BEGIN(HTMLElement);
   PARSE_string(align); PARSE_string(size); PARSE_string(width); PARSE_bool(noshade);
   PARSE_ATTR_END;
 };
+
 struct HTMLModElement : public HTMLElement { DERIVE_ELEMENT(HTMLModElement, HTML_MOD_ELEMENT) {}
   DECLARE_TAG_NAMES("del", "ins");
   PARSE_ATTR_BEGIN(HTMLElement);
   PARSE_string(cite); PARSE_string(datetime);
   PARSE_ATTR_END;
 };
+
 struct HTMLParamElement : public HTMLElement { DERIVE_ELEMENT(HTMLParamElement, HTML_PARAM_ELEMENT) {}
   DECLARE_TAG_NAMES("param");
   PARSE_ATTR_BEGIN(HTMLElement);
   PARSE_string(name); PARSE_string(type); PARSE_string(value); PARSE_string(valuetype);
   PARSE_ATTR_END;
 };
+
 struct HTMLAppletElement : public HTMLElement { DERIVE_ELEMENT(HTMLAppletElement, HTML_APPLET_ELEMENT) {}
   DECLARE_TAG_NAMES("applet");
   PARSE_ATTR_BEGIN(HTMLElement);
@@ -821,6 +878,7 @@ struct HTMLAppletElement : public HTMLElement { DERIVE_ELEMENT(HTMLAppletElement
   PARSE_string(width);
   PARSE_ATTR_END;
 };
+
 struct HTMLMapElement : public HTMLElement { DERIVE_ELEMENT(HTMLMapElement, HTML_MAP_ELEMENT) {}
   DECLARE_TAG_NAMES("map");
   HTMLCollection areas;
@@ -829,6 +887,7 @@ struct HTMLMapElement : public HTMLElement { DERIVE_ELEMENT(HTMLMapElement, HTML
   PARSE_string(name);
   PARSE_ATTR_END;
 };
+
 struct HTMLAreaElement : public HTMLElement { DERIVE_ELEMENT(HTMLAreaElement, HTML_AREA_ELEMENT) {}
   DECLARE_TAG_NAMES("area");
   PARSE_ATTR_BEGIN(HTMLElement);
@@ -836,6 +895,7 @@ struct HTMLAreaElement : public HTMLElement { DERIVE_ELEMENT(HTMLAreaElement, HT
   PARSE_string(target); PARSE_int(tabindex); PARSE_bool(nohref);
   PARSE_ATTR_END;
 };
+
 struct HTMLScriptElement : public HTMLElement { DERIVE_ELEMENT(HTMLScriptElement, HTML_SCRIPT_ELEMENT) {}
   DECLARE_TAG_NAMES("script");
   PARSE_ATTR_BEGIN(HTMLElement);
@@ -843,12 +903,14 @@ struct HTMLScriptElement : public HTMLElement { DERIVE_ELEMENT(HTMLScriptElement
   PARSE_string(src); PARSE_string(type);
   PARSE_ATTR_END;
 };
+
 struct HTMLFrameSetElement : public HTMLElement { DERIVE_ELEMENT(HTMLFrameSetElement, HTML_FRAME_SET_ELEMENT) {}
   DECLARE_TAG_NAMES("frameset");
   PARSE_ATTR_BEGIN(HTMLElement);
   PARSE_string(cols); PARSE_string(rows);
   PARSE_ATTR_END;
 };
+
 struct HTMLFrameElement : public HTMLElement { DERIVE_ELEMENT(HTMLFrameElement, HTML_FRAME_ELEMENT) {}
   DECLARE_TAG_NAMES("frame");
   PARSE_ATTR_BEGIN(HTMLElement);
@@ -856,6 +918,7 @@ struct HTMLFrameElement : public HTMLElement { DERIVE_ELEMENT(HTMLFrameElement, 
   PARSE_string(name); PARSE_string(scrolling); PARSE_string(src); PARSE_bool(noresize);
   PARSE_ATTR_END;
 };
+
 struct HTMLIFrameElement : public HTMLElement { DERIVE_ELEMENT(HTMLIFrameElement, HTML_I_FRAME_ELEMENT) {}
   DECLARE_TAG_NAMES("iframe");
   PARSE_ATTR_BEGIN(HTMLElement);
@@ -864,26 +927,31 @@ struct HTMLIFrameElement : public HTMLElement { DERIVE_ELEMENT(HTMLIFrameElement
   PARSE_string(src); PARSE_string(width);
   PARSE_ATTR_END;
 };
+
 struct HTMLBlockQuoteElement : public HTMLElement { DERIVE_ELEMENT(HTMLBlockQuoteElement, HTML_BLOCK_QUOTE_ELEMENT) {}
   DECLARE_TAG_NAMES("blockquote");
   PARSE_ATTR_BEGIN(HTMLElement);
   PARSE_ATTR_END;
 };
+
 struct HTMLCanvasElement : public HTMLElement { DERIVE_ELEMENT(HTMLCanvasElement, HTML_CANVAS_ELEMENT) {}
   DECLARE_TAG_NAMES("canvas");
   PARSE_ATTR_BEGIN(HTMLElement);
   PARSE_ATTR_END;
 };
+
 struct HTMLSpanElement : public HTMLElement { DERIVE_ELEMENT(HTMLSpanElement, HTML_SPAN_ELEMENT) {}
   DECLARE_TAG_NAMES("span");
   PARSE_ATTR_BEGIN(HTMLElement);
   PARSE_ATTR_END;
 };
+
 struct HTMLEmbedElement : public HTMLElement { DERIVE_ELEMENT(HTMLEmbedElement, HTML_EMBED_ELEMENT) {}
   DECLARE_TAG_NAMES("embed");
   PARSE_ATTR_BEGIN(HTMLElement);
   PARSE_ATTR_END;
 };
+
 struct HTMLMarqueeElement : public HTMLElement { DERIVE_ELEMENT(HTMLMarqueeElement, HTML_MARQUEE_ELEMENT) {}
   DECLARE_TAG_NAMES("marquee");
   PARSE_ATTR_BEGIN(HTMLElement);
@@ -909,14 +977,14 @@ struct HTMLDocument : public Document {
 
 # undef  XX
 # define XX(n) HTMLElement *Create ## n () { return AllocatorNew(alloc, (HTML ## n), (this)); }
-# include "crawler/html_elements.h"
+# include "web/html_elements.h"
 
   typedef HTMLElement *(HTMLDocument::*CreateElementCB)();
   struct CreateElementCallbacks : public unordered_map<string, CreateElementCB> {
     CreateElementCallbacks() {
 #     undef  XX
 #     define XX(n) for (const char **tn = HTML ## n::TagNames(); *tn; tn++) (*this)[*tn] = &HTMLDocument::Create ## n;
-#     include "crawler/html_elements.h"
+#     include "web/html_elements.h"
     }
   };
 

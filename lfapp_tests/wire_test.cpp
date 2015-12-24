@@ -20,7 +20,6 @@
 #include "lfapp/lfapp.h"
 
 namespace LFL {
-
 const int MultiProcessPaintResource::DrawBox::Type;
 const int MultiProcessPaintResource::DrawBackground::Type;
 
@@ -33,7 +32,7 @@ TEST(WireTest, MultiProcessPaintResource) {
   /**/         EXPECT_EQ(MultiProcessPaintResource::DrawBox::Type,           iter.type);
   /**/         EXPECT_EQ(iter.Get<MultiProcessPaintResource::DrawBox>()->b,  Box(3, 9, 11, 33));
   /**/         EXPECT_EQ(iter.Get<MultiProcessPaintResource::DrawBox>()->id, 17);
-  
+
   iter.Next(); EXPECT_EQ(MultiProcessPaintResource::DrawBackground::Type,    iter.type);
   /**/         EXPECT_EQ(iter.Get<MultiProcessPaintResource::DrawBox>()->b,  Box(4, 10, 12, 34));
 

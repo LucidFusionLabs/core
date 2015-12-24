@@ -1400,6 +1400,20 @@ void TextureArray::DrawSequence(Asset *out, Entity *e) {
   if (out->geometry) Scene::Draw(out->geometry, e);
 }
 
+void LayersInterface::Update() {
+  for (auto i : this->layer) i->Run(0);
+  if (app->main_process) app->main_process->SwapTree(0, this);
+}
+
+void LayersInterface::Draw(const Box &b, const point &p) {
+  if (layer.size() > 0) layer[0]->Draw(b, p + node[0].scrolled);
+  for (int c=node[0].child_offset; c; c=child[c-1].next_child_offset) {
+    const Node *n = &node[child[c-1].node_id-1];
+    Scissor s(n->box + b.TopLeft());
+    if (layer.size() > n->layer_id) layer[n->layer_id]->Draw(b, p + n->scrolled);
+  }
+}
+
 void TilesInterface::AddDrawableBoxArray(const DrawableBoxArray &box, point p) {
   for (DrawableBoxIterator iter(box.data); !iter.Done(); iter.Increment()) {
     const Drawable::Attr *attr = box.attr.GetAttr(iter.cur_attr1);
@@ -1463,10 +1477,11 @@ void TilesIPC::AddScissor(const Box &b) {
   append [context_depth]->cb.Add(MultiProcessPaintResource::PopScissor());
 }
 
-void TilesIPCClient::Run() {
+void TilesIPCClient::Run(int flag) {
+  bool clear_empty = (flag & RunFlag::ClearEmpty);
   TilesMatrixIter(&mat) {
     if (!tile->cb.Count() && !clear_empty) continue;
-    app->main_process->Paint(layer, point(j, i), tile->cb);
+    app->main_process->Paint(layer, point(j, i), flag, tile->cb);
   }
 }
 

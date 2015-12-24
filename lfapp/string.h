@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef __LFL_LFAPP_STRING_H__
-#define __LFL_LFAPP_STRING_H__
+#ifndef LFL_LFAPP_STRING_H__
+#define LFL_LFAPP_STRING_H__
 
 #ifdef WIN32
 #include <intrin.h>
@@ -57,11 +57,6 @@ struct BitString {
   static int LastClear (const unsigned char *b, int l) { for (auto i=b+l;      i != b; --i) { auto c = *(i-1); if (c != 255) return (i-b-1)*8 + ffs(~c)-1; } return -1; }
   static int LastClear (const          char *b, int l) { return LastClear (reinterpret_cast<const unsigned char*>(b), l); }
   static int FirstClear(const          char *b, int l) { return FirstClear(reinterpret_cast<const unsigned char*>(b), l); }
-};
-
-struct ByteSink {
-  virtual int Write(const char *b, int l) = 0;
-  virtual void IOCtlWindowSize(int w, int h) {}
 };
 
 struct Unicode {
@@ -127,6 +122,7 @@ template <class X> struct ArrayPiece {
   ArrayPiece()                  : buf(0), len(0) {}
   ArrayPiece(const X *b, int l) : buf(b), len(l) {}
   ArrayPiece(const X *b, const PieceIndex &i) : buf(i.offset < 0 ? 0 : &b[i.offset]), len(i.len) {}
+  ArrayPiece(const vector<X> &b) : buf(b.data()), len(b.size()) {}
   const X& operator[](int i) const { return buf[i]; }
   const X& back() const { return buf[len-1]; }
   void clear() { buf=0; len=0; }
@@ -134,6 +130,7 @@ template <class X> struct ArrayPiece {
   bool empty() const { return !buf || len <= 0; }
   bool has_size() const { return len >= 0; }
   int size() const { return max(0, len); }
+  int Bytes() const { return size() * sizeof(X); }
   void assign(const X *b, int l) { buf=b; len=l; }
   const X *data() const { return buf; }
   const_iterator begin() const { return buf; }
@@ -449,6 +446,10 @@ bool StringEmptyOrEquals(const string   &in, const string   &ref1, const string 
 bool StringEmptyOrEquals(const String16 &in, const String16 &ref1, const String16 &ref2, int case_sensitive=false);
 bool StringEmptyOrEquals(const String16 &in, const string   &ref1, const string   &ref2, int case_sensitive=false);
 
+template <class X>       X *FindChar(      X *text, int c,                                   int len=-1, int *outlen=0);
+template <class X> const X *FindChar(const X *text, int c,                                   int len=-1, int *outlen=0);
+template <class X>       X *FindChar(      X *text, int c,              int (*isquote)(int), int len=-1, int *outlen=0);
+template <class X> const X *FindChar(const X *text, int c,              int (*isquote)(int), int len=-1, int *outlen=0);
 template <class X>       X *FindChar(      X *text, int (*ischar)(int),                      int len=-1, int *outlen=0);
 template <class X> const X *FindChar(const X *text, int (*ischar)(int),                      int len=-1, int *outlen=0);
 template <class X>       X *FindChar(      X *text, int (*ischar)(int), int (*isquote)(int), int len=-1, int *outlen=0);
@@ -521,6 +522,9 @@ template <class X> string CHexEscapeNonAscii(const basic_string<X> &text);
 #define StrAppendCSV(out, ...) StrAppend((out), (out)->size() ? "," : "", __VA_ARGS__)
 string FirstMatchCSV(const StringPiece &haystack, const StringPiece &needle, int (*ischar)(int) = iscomma);
 
+bool ParseKV(const string &t, string *k_out, string *v_out, int equal_char='=');
+string UpdateKVLine(const string &haystack, const string &key, const string &val, int equal_char='=');
+
 const char     *NextLine   (const StringPiece   &text, bool final=0, int *outlen=0);
 const char16_t *NextLine   (const String16Piece &text, bool final=0, int *outlen=0);
 const char     *NextLineRaw(const StringPiece   &text, bool final=0, int *outlen=0);
@@ -579,4 +583,4 @@ struct Base64 {
 };
 
 }; // namespace LFL
-#endif // __LFL_LFAPP_STRING_H__
+#endif // LFL_LFAPP_STRING_H__

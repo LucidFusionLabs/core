@@ -1593,7 +1593,7 @@ void GraphicsDevice::EnableDepthTest()  {  glEnable(GL_DEPTH_TEST); glDepthMask(
 void GraphicsDevice::DisableDepthTest() { glDisable(GL_DEPTH_TEST); glDepthMask(GL_FALSE); GDDebug("DepthTest=0"); }
 void GraphicsDevice::DisableBlend() { if (Changed(&blend_enabled, false)) { ClearDeferred(); glDisable(GL_BLEND);                                                    GDDebug("Blend=0"); } }
 void GraphicsDevice::EnableBlend()  { if (Changed(&blend_enabled, true )) { ClearDeferred();  glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); GDDebug("Blend=1"); } }
-void GraphicsDevice::BlendMode(int sm, int dm) { glBlendFunc(sm, dm); GDDebug("BlendMode=", sm, ",", dm); }
+void GraphicsDevice::BlendMode(int sm, int dm) { ClearDeferred(); glBlendFunc(sm, dm); GDDebug("BlendMode=", sm, ",", dm); }
 void GraphicsDevice::RestoreViewport(int dm) { ViewPort(screen->Box()); DrawMode(dm); }
 void GraphicsDevice::DrawMode(int dm, bool flush) { return DrawMode(dm, screen->width, screen->height, flush); }
 void GraphicsDevice::DrawMode(int dm, int W, int H, bool flush) {
@@ -1670,7 +1670,9 @@ void GraphicsDevice::PushScissorStack() {
 void GraphicsDevice::PopScissorStack() {
   CHECK_GT(scissor_stack.size(), 1);
   scissor_stack.pop_back();
-  screen->gd->Scissor(scissor_stack.back().back());
+  auto &ss = scissor_stack.back();
+  if (ss.size()) screen->gd->Scissor(ss.back());
+  else { ClearDeferred(); glDisable(GL_SCISSOR_TEST); }
 }
 
 void GraphicsDevice::DrawPixels(const Box &b, const Texture &tex) {
@@ -1828,7 +1830,7 @@ void Window::MakeCurrent(Window *W) {}
 struct AndroidVideoModule : public Module {
   int Init() {
     INFO("AndroidVideoModule::Init()");
-    if (AndroidVideoInit(&app->video.opengles_version)) return -1;
+    if (AndroidVideoInit(&app->video->opengles_version)) return -1;
     CHECK(!screen->id);
     screen->id = screen;
     Window::active[screen->id] = screen;
@@ -1958,7 +1960,7 @@ struct X11VideoModule : public Module {
   }
 };
 bool Window::Create(Window *W) {
-  X11VideoModule *video = dynamic_cast<X11VideoModule*>(app->video.impl);
+  X11VideoModule *video = dynamic_cast<X11VideoModule*>(app->video->impl);
   ::Window root = DefaultRootWindow(video->display);
   XSetWindowAttributes swa;
   swa.colormap = XCreateColormap(video->display, root, video->vi->visual, AllocNone);
@@ -2008,7 +2010,7 @@ struct XTVideoModule : public Module {
   }
 };
 bool Window::Create(Window *W) {
-  XTVideoModule *video = dynamic_cast<XTVideoModule*>(app->video.impl);
+  XTVideoModule *video = dynamic_cast<XTVideoModule*>(app->video->impl);
   W->surface = XtDisplay((::Widget)W->impl);
   W->id = XmCreateFrame(video->toplevel, "frame", NULL, 0);
   W->impl = video->toplevel;
@@ -2348,13 +2350,13 @@ void Window::InitLFAppConsole() {
 }
 
 void Window::DrawDialogs() {
+  for (auto i = screen->dialogs.begin(), e = screen->dialogs.end(); i != e; ++i) (*i)->Draw();
   if (screen->lfapp_console) screen->lfapp_console->Draw();
   if (FLAGS_draw_grid) {
     Color c(.7, .7, .7);
     glIntersect(screen->mouse.x, screen->mouse.y, &c);
     Fonts::Default()->Draw(StrCat("draw_grid ", screen->mouse.x, " , ", screen->mouse.y), point(0,0));
   }
-  for (auto i = screen->dialogs.begin(), e = screen->dialogs.end(); i != e; ++i) (*i)->Draw();
 }
 
 void Window::SetCaption(const string &v) {
@@ -2401,7 +2403,7 @@ void Window::Reshape(int w, int h) {
   AdjustWindowRect(&r, lStyle, win->menubar);
   SetWindowPos((HWND)screen->id, 0, 0, 0, r.right-r.left, r.bottom-r.top, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
 #elif defined(LFL_X11VIDEO)
-  X11VideoModule *video = dynamic_cast<X11VideoModule*>(app->video.impl);
+  X11VideoModule *video = dynamic_cast<X11VideoModule*>(app->video->impl);
   XWindowChanges resize;
   resize.width = w;
   resize.height = h;
@@ -2569,7 +2571,7 @@ void *Video::CompleteGLContextCreate(Window *W, void *gl_context) {
   wglMakeCurrent((HDC)W->surface, (HGLRC)gl_context);
   return gl_context;
 #elif defined(LFL_X11VIDEO)
-  X11VideoModule *video = dynamic_cast<X11VideoModule*>(app->video.impl);
+  X11VideoModule *video = dynamic_cast<X11VideoModule*>(app->video->impl);
   GLXContext glc = glXCreateContext(video->display, video->vi, static_cast<GLXContext>(W->gl), GL_TRUE);
   glXMakeCurrent(video->display, (::Window)(W->id), glc);
   return glc;

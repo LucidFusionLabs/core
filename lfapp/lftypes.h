@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef __LFL_LFAPP_LFTYPES_H__
-#define __LFL_LFAPP_LFTYPES_H__
+#ifndef LFL_LFAPP_LFTYPES_H__
+#define LFL_LFAPP_LFTYPES_H__
 
 #ifdef LFL_JUDY
 #include "judymap.h"
@@ -62,6 +62,9 @@ struct typed_ptr {
   typed_ptr() : type(0), value(0) {}
   typed_ptr(int T, void *P) : type(T), value(P) {}
 };
+
+template<typename T, typename ...Args>
+std::unique_ptr<T> make_unique(Args&& ...args) { return std::unique_ptr<T>(new T(std::forward<Args>(args)...)); }
 
 template <class X> int TypeId()   { static int ret = fnv32(typeid(X).name()); return ret; }
 template <class X> int TypeId(X*) { static int ret = fnv32(typeid(X).name()); return ret; }
@@ -191,11 +194,6 @@ template <typename X, class Y> void VectorAppend(vector<X> &out, const Y& begin,
   out.insert(out.end(), begin, end);
 }
 
-template <class X> void VectorClear(vector<X > *v) { v->clear(); }
-template <class X> void VectorClear(vector<X*> *v) {
-  for (typename vector<X*>::const_iterator i = v->begin(); i != v->end(); ++i) delete (*i);
-  v->clear();
-}
 template <class X> void VectorErase(X* v, int ind) {
   CHECK_RANGE(ind, 0, v->size());
   v->erase(v->begin()+ind, v->begin()+ind+1);
@@ -307,6 +305,7 @@ template <class I1, class I2> struct IterPair {
 template <class X> struct FreeListVector {
   vector<X> data;
   vector<int> free_list;
+  function<void(X*)> free_func;
 
   int size() const { return data.size(); }
   const X& back() const { return data.back(); }
@@ -326,6 +325,7 @@ template <class X> struct FreeListVector {
   }
   virtual void Erase(unsigned ind) {
     CHECK_LT(ind, data.size());
+    if (free_func) free_func(&data[ind]);
     free_list.push_back(ind);
   }
 };
@@ -813,4 +813,4 @@ template <class X> struct CategoricalVariable {
 #include "lfapp/tree.h"
 #include "lfapp/trie.h"
 
-#endif // __LFL_LFAPP_LFTYPES_H__
+#endif // LFL_LFAPP_LFTYPES_H__

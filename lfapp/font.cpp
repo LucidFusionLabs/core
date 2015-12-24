@@ -358,7 +358,7 @@ template <class X> int Font::Draw(const StringPieceT<X> &text, const Box &box, v
   Shape(text, box, &out, draw_flag | DrawFlag::DontAssignFlowP);
   if (lb) *lb = out.line;
   if (!(draw_flag & DrawFlag::Clipped)) out.Draw(box.TopLeft());
-  return out.line.size();
+  return max(1UL, out.line.size());
 }
 
 template void Font::Size  <char>    (const StringPiece   &text, Box *out, int maxwidth, int *lines_out);
@@ -1014,7 +1014,7 @@ int IPCClientFontEngine::OpenSystemFontResponse(Font *f, const IPC::OpenSystemFo
   f->glyph->table.resize(res->num_glyphs());
   GlyphMetrics *g = reinterpret_cast<GlyphMetrics*>(mpb.buf);
   for (int i=0, l=f->glyph->table.size(); i<l; i++) f->glyph->table[i].FromMetrics(g[i]);
-  if (app->main_process && app->main_process->browser) app->main_process->browser->doc.SetStyleDirty();
+  if (app->main_process) if (auto html = app->main_process->browser->doc.DocElement()) html->SetStyleDirty();
   return IPC::Done;
 }
 int   IPCClientFontEngine::GetId(Font *f) { return static_cast<Resource*>(f->resource.get())->id; }

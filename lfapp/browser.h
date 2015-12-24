@@ -35,10 +35,11 @@ struct BrowserController : public InputController {
 
 namespace DOM {
 struct Renderer : public Object {
+  Box3 inline_box;
   FloatContainer box;
   ComputedStyle style, inline_style;
-  LFL::StyleSheet *inline_style_sheet=0;
-  bool style_dirty=1, layout_dirty=1;
+  unique_ptr<LFL::StyleSheet> inline_style_sheet;
+  bool style_dirty=1, layout_dirty=1, establishes_layer=0;
   Flow *flow=0, *parent_flow=0, child_flow;
   DOM::Node *absolute_parent=0;
   shared_ptr<Texture> background_image;
@@ -59,7 +60,6 @@ struct Renderer : public Object {
   int clear_height=0, row_height=0, cell_colspan=0, cell_rowspan=0, extra_cell_height=0, max_child_i=-1;
 
   Renderer(Node *N) : style(N), inline_style(N) {}
-  virtual ~Renderer() { delete inline_style_sheet; }
 
   void  UpdateStyle(Flow *F);
   Font* UpdateFont(Flow *F);
@@ -92,7 +92,7 @@ struct Renderer : public Object {
   int MarginLeftAuto  (Flow *flow, int w) const { return max(0, flow->container->w - bl_px - pl_px - w - RightMarginOffset()); } 
   int MarginRightAuto (Flow *flow, int w) const { return max(0, flow->container->w - br_px - pr_px - w - LeftMarginOffset()); }
   void ComputeStyle(StyleContext *style_context, ComputedStyle *out, const ComputedStyle *parent=0) const {
-    style_context->Match(out, style.node, parent, inline_style_sheet);
+    style_context->Match(out, style.node, parent, inline_style_sheet.get());
   }
 }; }; // namespace DOM
 
@@ -101,17 +101,18 @@ struct Browser : public BrowserInterface {
     DOM::BlockChainObjectAlloc alloc;
     DOM::HTMLDocument *node=0;
     string content_type, char_set;
-    vector<StyleSheet*> style_sheet;
-    DocumentParser *parser=0;
-    JSContext *js_context=0;
-    Console *js_console=0;
+    vector<unique_ptr<StyleSheet>> style_sheet;
+    unique_ptr<DocumentParser> parser;
+    unique_ptr<JSContext> js_context;
+    unique_ptr<Console> js_console;
+    TilesTextGUI *active_input=0;
     int height=0;
 
     ~Document();
     Document(Window *W=0, const Box &V=Box());
-    bool Dirty() const    { if (node) if (auto html = node->documentElement()) return html->render->layout_dirty || html->render->style_dirty; return 0; }
-    void SetLayoutDirty() { if (node) if (auto html = node->documentElement()) html->render->layout_dirty = true; }
-    void SetStyleDirty () { if (node) if (auto html = node->documentElement()) html->render->style_dirty  = true; }
+    const DOM::Element *DocElement() const { return node ? node->documentElement() : 0; }
+    /**/  DOM::Element *DocElement()       { return node ? node->documentElement() : 0; }
+    bool Dirty() const { if (auto html = DocElement()) return html->render->layout_dirty || html->render->style_dirty; return 0; }
     void Clear();
   };
   struct RenderLog {
@@ -147,7 +148,7 @@ struct Browser : public BrowserInterface {
   int VScrolled() const { return v_scrollbar.scrolled * X_or_Y(v_scrollbar.doc_height, 1000); }
   int HScrolled() const { return h_scrollbar.scrolled * 1000; }
   void InitLayers(LayersInterface *l) { CHECK(!layers); (layers = l)->Init(2); }
-  void PaintTile(int x, int y, int z, const MultiProcessPaintResource &paint);
+  void PaintTile(int x, int y, int z, int flag, const MultiProcessPaintResource &paint);
   string GetURL() const { return String::ToUTF8(doc.node->URL); }
   void SetURLText(const string &s) { if (url_cb) url_cb(s); }
 
@@ -156,20 +157,20 @@ struct Browser : public BrowserInterface {
   void UpdateScrollbar();
   void Render(bool screen_coords=0, int v_scrolled=0);
 
-  void       EventNode       (DOM::Node*, const point &displacement, int);
+  bool       EventNode       (DOM::Node*, const point &displacement, InputEvent::Id);
   void       Paint           (Flow *flow, const point &displacement);
   void       PaintNode       (Flow *flow, DOM::Node*, const point &displacement);
   DOM::Node *LayoutNode      (Flow *flow, DOM::Node*, bool reflow);
-  void       LayoutBackground(            DOM::Node*);
+  void       LayoutBackground(DOM::Node*);
   void       LayoutTable     (Flow *flow, DOM::HTMLTableElement *n);
   void       UpdateTableStyle(Flow *flow, DOM::Node *n);
-  void       UpdateRenderLog (            DOM::Node *n);
+  void       UpdateRenderLog (DOM::Node *n, const point &displacement);
 
-  void VisitChildren        (DOM::Node *n, const function<bool(DOM::Node*)>&);
-  void VisitTableChildren   (DOM::Node *n, const function<bool(DOM::Node*)>&);
-  void VisitFloatingChildren(DOM::Node *n, const function<bool(DOM::Node*, const FloatContainer::Float&)>&);
+  bool VisitChildren        (DOM::Node *n, const function<bool(DOM::Node*)>&);
+  bool VisitTableChildren   (DOM::Node *n, const function<bool(DOM::Node*)>&);
+  bool VisitFloatingChildren(DOM::Node *n, const function<bool(DOM::Node*, const FloatContainer::Float&)>&);
 
-  static int ScreenToWebKitY(const Box &w) { return -w.y - w.h; }
+  static int ToWebKitY(const Box &w) { return -w.y - w.h; }
 };
 
 BrowserInterface *CreateQTWebKitBrowser (GUI *g, int w=1024, int h=1024);

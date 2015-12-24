@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef __LFL_LFAPP_WIRE_H__
-#define __LFL_LFAPP_WIRE_H__
+#ifndef LFL_LFAPP_WIRE_H__
+#define LFL_LFAPP_WIRE_H__
 
 namespace LFL {
 struct Protocol { 
@@ -51,9 +51,11 @@ struct Serializable {
     const unsigned       *N32() const { unsigned       *ret = (unsigned      *)(buf+offset); offset += 4;   if (offset > size) { error=1; return 0; } return ret; }
     const char           *Get(int len=0) const { char  *ret = (char          *)(buf+offset); offset += len; if (offset > size) { error=1; return 0; } return ret; }
 
-    void String  (const StringPiece &in) { char *v = (char*)Get(in.size());   if (v) { memcpy(v,   in.data(), in.size()); } }
-    void BString (const StringPiece &in) { char *v = (char*)Get(in.size()+4); if (v) { memcpy(v+4, in.data(), in.size()); *((int*)v) = htonl(in.size()); } }
-    void NTString(const StringPiece &in) { char *v = (char*)Get(in.size()+1); if (v) { memcpy(v,   in.data(), in.size()); v[in.size()]=0; } }
+    template <class X>
+    void AString (const ArrayPiece<X> &in) { char *v = (char*)Get(in.Bytes()+4); if (v) { memcpy(v+4, (const char*)in.data(), in.Bytes()); *((int*)v) = htonl(in.Bytes()); } }
+    void BString (const StringPiece   &in) { char *v = (char*)Get(in.size ()+4); if (v) { memcpy(v+4, in.data(), in.size()); *((int*)v) = htonl(in.size ()); } }
+    void NTString(const StringPiece   &in) { char *v = (char*)Get(in.size ()+1); if (v) { memcpy(v,   in.data(), in.size()); v[in.size()]=0; } }
+    void String  (const StringPiece   &in) { char *v = (char*)Get(in.size ());   if (v) { memcpy(v,   in.data(), in.size()); } }
 
     void Write8 (const unsigned char  &in) { unsigned char  *v =                 N8();  if (v) *v = in; }
     void Write8 (const          char  &in) {          char  *v = (char*)         N8();  if (v) *v = in; }
@@ -91,6 +93,8 @@ struct Serializable {
     void Read32(unsigned long  *out) const { const unsigned long  *v = (unsigned long*)N32(); *out = v ? *v : 0; }
     void Read32(         long  *out) const { const          long  *v = (long*)         N32(); *out = v ? *v : 0; }
     void ReadString(StringPiece *out) const { Ntohl(&out->len); out->buf = Get(out->len); }
+    template <class X> void ReadArray(ArrayPiece<X> *out) const
+    { int l; Ntohl(&l); out->assign(reinterpret_cast<const X*>(Get(l)), l/sizeof(X)); }
   };
 
   struct ConstStream : public Stream {
@@ -372,6 +376,23 @@ struct MultiProcessPaintResourceBuilder : public MultiProcessPaintResource {
   void AddList(const MultiProcessPaintResourceBuilder &x) { data.Add(x.data.begin(), x.data.size()); count += x.count; dirty=1; }
 };
 
+struct MultiProcessLayerTree : public Serializable {
+  static const int Type = 1<<11 | 4;
+  ArrayPiece<LayersInterface::Node>  node_data;
+  ArrayPiece<LayersInterface::Child> child_data;
+  MultiProcessLayerTree() : Serializable(Type) {}
+  MultiProcessLayerTree(const vector<LayersInterface::Node> &n, const vector<LayersInterface::Child> &c) :
+    Serializable(Type), node_data(&n[0], n.size()), child_data(&c[0], c.size()) {}
+  void Out(Serializable::Stream *o) const { o->AString(node_data); o->AString(child_data); }
+  int In(const Serializable::Stream *i) { i->ReadArray(&node_data); i->ReadArray(&child_data); return i->Result(); }
+  int Size() const { return HeaderSize() + node_data.Bytes() + child_data.Bytes(); }
+  int HeaderSize() const { return sizeof(int)*2; }
+  void AssignTo(LayersInterface *layers) const {
+    layers->node .assign(node_data .data(), node_data .data() + node_data .size());
+    layers->child.assign(child_data.data(), child_data.data() + child_data.size());
+  }
+};
+
 struct GameProtocol {
   struct Header : public Serializable::Header {};
   struct Position {
@@ -530,4 +551,4 @@ struct GameProtocol {
 };
 
 }; // namespace LFL
-#endif // __LFL_LFAPP_WIRE_H__
+#endif // LFL_LFAPP_WIRE_H__

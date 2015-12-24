@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef __LFL_LFAPP_TIME_H__
-#define __LFL_LFAPP_TIME_H__
+#ifndef LFL_LFAPP_TIME_H__
+#define LFL_LFAPP_TIME_H__
 
 #define ToDays(x) duration_cast<days>(x)
 #define ToFDays(x) duration_cast<fdays>(x)
@@ -110,11 +110,11 @@ void WallStTime(Time t, struct tm *out, int hours_to_wall_st=0);
 bool TradingHoliday(int month, int day, int year);
 
 struct TradingPeriod {
-    enum { NONE=0, MARKET=1, PRE_MARKET=2, AFTER_MARKET=3 };
-    static const char *ToString(int id);
-    static string ToString(int id, Time remaining);
-    static int Now(Time now, Time *remaining=0, Time delayed=Time(0));
+  enum { NONE=0, MARKET=1, PRE_MARKET=2, AFTER_MARKET=3 };
+  static const char *ToString(int id);
+  static string ToString(int id, Time remaining);
+  static int Now(Time now, Time *remaining=0, Time delayed=Time(0));
 };
 
 }; // namespace LFL
-#endif // __LFL_LFAPP_TIME_H__
+#endif // LFL_LFAPP_TIME_H__

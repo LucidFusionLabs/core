@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef __LFL_LFAPP_FLOW_H__
-#define __LFL_LFAPP_FLOW_H__
+#ifndef LFL_LFAPP_FLOW_H__
+#define LFL_LFAPP_FLOW_H__
 
 #define FlowDebug(...) INFO(__VA_ARGS__)
 
@@ -82,8 +82,8 @@ struct DrawableBoxArray {
   void Clear() { data.clear(); attr.clear(); line.clear(); line_ind.clear(); height=0; }
   DrawableBoxArray *Reset() { Clear(); return this; }
 
-  DrawableBox &PushBack(const Box &box, const Drawable::Attr &cur_attr, Drawable *drawable, int *ind_out=0) { return PushBack(box, attr.GetAttrId(cur_attr), drawable, ind_out); }
-  DrawableBox &PushBack(const Box &box, int                   cur_attr, Drawable *drawable, int *ind_out=0);
+  DrawableBox &PushBack(const Box &box, const Drawable::Attr &a,       Drawable *drawable, int *ind_out=0) { return PushBack(box, attr.GetAttrId(a), drawable, ind_out); }
+  DrawableBox &PushBack(const Box &box, int                   attr_id, Drawable *drawable, int *ind_out=0);
 
   void InsertAt(int o, const DrawableBoxArray &x);
   void InsertAt(int o, const vector<DrawableBox> &x);
@@ -139,20 +139,30 @@ struct FloatContainer : public Box {
 };
 
 struct Flow {
+  enum class State { OK=1, NEW_WORD=2, NEW_LINE=3 };
+  struct TextAnnotation : public ArrayPiece<pair<int, int>> {
+    const Drawable::AttrSource *attr_source=0;
+    TextAnnotation() {}
+    TextAnnotation(const pair<int,int> *a, const PieceIndex &p)                     : ArrayPiece<pair<int, int>>(a, p) {} 
+    TextAnnotation(const vector<pair<int,int>> &a, const Drawable::AttrSource *s=0) : ArrayPiece<pair<int, int>>(a), attr_source(s) {}
+  };
   struct Layout {
     bool wrap_lines=1, word_break=1, align_center=0, align_right=0, ignore_newlines=0, pad_wide_chars=0;
     int char_spacing=0, word_spacing=0, line_height=0, valign_offset=0;
     int (*char_tf)(int)=0, (*word_start_char_tf)(int)=0;
-  } layout;
+  };
+  struct CurrentLine { int out_ind=0, beg=0, end=0; short height=0, ascent=0, descent=0, base=0; bool fresh=0; };
+  struct CurrentWord { int len=0;                                                                bool fresh=0; };
+
+  Layout layout;
   point p; 
   DrawableBoxArray *out;
   const Box *container;
   Drawable::Attr cur_attr;
+  CurrentLine cur_line;
+  CurrentWord cur_word;
   int adj_float_left=-1, adj_float_right=-1;
-  struct CurrentLine { int out_ind=0, beg=0, end=0; short height=0, ascent=0, descent=0, base=0; bool fresh=0; } cur_line;
-  struct CurrentWord { int len=0;                                                                bool fresh=0; } cur_word;
-  enum class State { OK=1, NEW_WORD=2, NEW_LINE=3 } state=State::OK;
-  typedef ArrayPiece<pair<int, int>> TextAnnotation;
+  State state=State::OK;
   int max_line_width=0;
 
   Flow(DrawableBoxArray *O) : Flow(0, 0, O) {}
@@ -199,12 +209,23 @@ struct Flow {
   /**/               int AppendText(const string          &text, int attr_id=0) { return AppendText(StringPiece           (text), attr_id); }
   /**/               int AppendText(const String16        &text, int attr_id=0) { return AppendText(String16Piece         (text), attr_id); }
   template <class X> int AppendText(const X               *text, int attr_id=0) { return AppendText(StringPiece::Unbounded(text), attr_id); }
-  template <class X> int AppendText(const StringPieceT<X> &text, int attr_id=0) {
+  template <class X> int AppendText(const StringPieceT<X> &text, int attr_id=0) { return AppendText(text, TextAnnotation(), attr_id); }
+
+  /**/               int AppendText(const string          &text, const TextAnnotation &attr, int da=0) { return AppendText(StringPiece           (text), attr, da); }
+  /**/               int AppendText(const String16        &text, const TextAnnotation &attr, int da=0) { return AppendText(String16Piece         (text), attr, da); }
+  template <class X> int AppendText(const X               *text, const TextAnnotation &attr, int da=0) { return AppendText(StringPiece::Unbounded(text), attr, da); }
+  template <class X> int AppendText(const StringPieceT<X> &text, const TextAnnotation &attr, int da=0) {
     int start_size = out->data.size();
-    if (!attr_id && !out->attr.source) attr_id = out->attr.GetAttrId(cur_attr);
     out->data.reserve(start_size + text.size());
     int initial_out_lines = out->line.size(), line_start_ind = 0, c_bytes = 0, ci_bytes = 0, c, ci;
-    for (const X *p = text.data(); !text.Done(p); p += c_bytes) {
+    int attr_id = (!attr.len && !da && !out->attr.source) ? out->attr.GetAttrId(cur_attr) : da;
+    auto a = attr.buf, ae = a + attr.len;
+
+    for (const X *b = text.data(), *p = b; !text.Done(p); p += c_bytes) {
+      if (a != ae && p - b == a->first) {
+        if (out->attr.source) cur_attr.font = out->attr.GetAttr((attr_id = a++->second))->font;
+        else attr_id = out->attr.GetAttrId((cur_attr = *attr.attr_source->GetAttr(a++->second)));
+      }
       if (!(c = UTF<X>::ReadGlyph(text, p, &c_bytes, true))) FlowDebug("null glyph");
       if (c == Unicode::zero_width_non_breaking_space) continue;
       if (AppendChar(c, attr_id, &PushBack(out->data, DrawableBox())) == State::NEW_WORD) {
@@ -218,28 +239,11 @@ struct Flow {
     return out->data.size() - start_size;
   }
 
-  /**/               int AppendText(const string          &text, const TextAnnotation &attr, int da=0) { return AppendText(StringPiece           (text), attr, da); }
-  /**/               int AppendText(const String16        &text, const TextAnnotation &attr, int da=0) { return AppendText(String16Piece         (text), attr, da); }
-  template <class X> int AppendText(const X               *text, const TextAnnotation &attr, int da=0) { return AppendText(StringPiece::Unbounded(text), attr, da); }
-  template <class X> int AppendText(const StringPieceT<X> &text, const TextAnnotation &attr, int da=0) {
-    if (!attr.len) return AppendText(text, da);
-    auto a = attr.buf, ae = a + attr.len;
-    int size = text.Length(), last_attr = da, next_attr = da, pl = 0;
-    for (const X *b = text.data(), *p = b; !text.Done(p); p += pl) {
-      int offset = p - b;
-      if (a != ae) { pl = min(size - offset, a->first - offset); next_attr = a++->second; }
-      else           pl =     size - offset;
-      AppendText(StringPieceT<X>(text.buf + offset, pl), last_attr);
-      last_attr = next_attr;
-    }
-    return size;
-  }
-
   State AppendChar(int c, int attr_id, DrawableBox *box);
   State AppendBoxOrChar(int c, DrawableBox *box, int h);
 
   void AppendNewlines(int n) { for (int i=0; i<n; i++) AppendNewline(); }
-  State AppendNewline(int need_height=0, bool next_glyph_preadded=1);
+  State AppendNewline(int need_height=0, bool next_glyph_preadded=0);
 
   void AlignCurrentLine();
   void MoveCurrentLine(const point &dx);
@@ -275,4 +279,4 @@ struct TableFlow {
 };
 
 }; // namespace LFL
-#endif // __LFL_LFAPP_FLOW_H__
+#endif // LFL_LFAPP_FLOW_H__

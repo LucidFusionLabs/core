@@ -16,107 +16,102 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef __LFL_ML_KMEANS_H__
-#define __LFL_ML_KMEANS_H__
+#ifndef LFL_ML_KMEANS_H__
+#define LFL_ML_KMEANS_H__
 namespace LFL {
 
 DECLARE_FLAG(CovarFloor, double);
 DECLARE_FLAG(PriorFloor, double);
 
 struct KMeans {
-    int K, D, *count;
-    Matrix *means, *accums, *prior;
-    double totaldist;
+  int K, D, *count;
+  Matrix *means, *accums, *prior;
+  double totaldist;
 
-    KMeans(int k, int d) : K(k), D(d), count(new int[K]), means(new Matrix(K,D)), accums(new Matrix(K,D)), prior(new Matrix(K,1)) { reset(); }
-    ~KMeans() { delete []count; delete means; delete accums; delete prior; }
+  KMeans(int k, int d) : K(k), D(d), count(new int[K]), means(new Matrix(K,D)), accums(new Matrix(K,D)), prior(new Matrix(K,1)) { Reset(); }
+  ~KMeans() { delete []count; delete means; delete accums; delete prior; }
 
-    void reset() { memset(accums->m,0,accums->bytes); memset(count,0,K*sizeof(int)); totaldist=0; }
-    
-    void add_features(Matrix *features) {
-        if (!DimCheck("KMeans", features->N, D)) return;
-        for (int i=0; i<features->M; i++) add_feature(features->row(i));
+  void Reset() { memset(accums->m,0,accums->bytes); memset(count,0,K*sizeof(int)); totaldist=0; }
+
+  void AddFeatures(Matrix *features) {
+    if (!DimCheck("KMeans", features->N, D)) return;
+    for (int i=0; i<features->M; i++) AddFeature(features->row(i));
+  }
+
+  void AddFeature(double *feature) {
+    double mindist; int minindex;
+    NearestNeighbor(means, feature, &minindex, &mindist);
+
+    Vector::Add(accums->row(minindex), feature, D);
+    count[minindex]++;
+    totaldist += mindist;
+  }
+
+  static void NearestNeighbor(Matrix *model, double *vectorIn, int *minindexOut, double *mindistOut, double *distOut=0) {
+    double mindist; int minindex=-1;
+    for (int k=0; k<model->M; k++) {
+      double distance = Vector::Dist2(model->row(k), vectorIn, model->N);
+      if (minindex<0 || distance < mindist) { mindist=distance; minindex=k; }
+      if (distOut) distOut[k] = distance;
     }
-    static void add_features(const char *fn, Matrix *, Matrix *features, const char *transcript, void *arg) { ((KMeans*)arg)->add_features(features); }
+    *minindexOut=minindex; *mindistOut=mindist;
+  }
 
-    void add_feature(double *feature) {
-        double mindist; int minindex;
-        nearest_neighbor(means, feature, &minindex, &mindist);
+  void Complete() {
+    int totalcount = 0;
+    for (int k=0; k<K; k++) totalcount += count[k];
+    INFO("Kmeans complete totaldist = ", totaldist, ", totalcount = ", totalcount);
 
-        Vector::Add(accums->row(minindex), feature, D);
-        count[minindex]++;
-        totaldist += mindist;
+    for (int k=0; k<K; k++) {
+      if (!count[k]) ERROR("kmeans div0");
+      else Vector::Div(accums->row(k), count[k], means->row(k), D);
+
+      prior->row(k)[0] = totalcount ? log((double)count[k] / totalcount) : FLAGS_PriorFloor;
     }
-    static void add_feature(double *feature, void *arg) { ((KMeans*)arg)->add_feature(feature); }
-    
-    static void nearest_neighbor(Matrix *model, double *vectorIn, int *minindexOut, double *mindistOut, double *distOut=0) {
-        double mindist; int minindex=-1;
-        for (int k=0; k<model->M; k++) {
-            double distance = Vector::Dist2(model->row(k), vectorIn, model->N);
-            if (minindex<0 || distance < mindist) { mindist=distance; minindex=k; }
-            if (distOut) distOut[k] = distance;
-        }
-        *minindexOut=minindex; *mindistOut=mindist;
-    }
-
-    void complete() {
-        int totalcount = 0;
-        for (int k=0; k<K; k++) totalcount += count[k];
-        INFO("Kmeans complete totaldist = ", totaldist, ", totalcount = ", totalcount);
-
-        for (int k=0; k<K; k++) {
-            if (!count[k]) ERROR("kmeans div0");
-            else Vector::Div(accums->row(k), count[k], means->row(k), D);
-
-            prior->row(k)[0] = totalcount ? log((double)count[k] / totalcount) : FLAGS_PriorFloor;
-        }
-        reset();
-    }
+    Reset();
+  }
 };
 
 struct KMeansInit {
-    KMeans *kmeans;
-    int features, count, *pick;
+  KMeans *kmeans;
+  int features, count, *pick;
 
-    ~KMeansInit() { delete [] pick; }
-
-    KMeansInit(KMeans *out, int feats) : kmeans(out), features(feats), count(0), pick(new int[kmeans->K]) {
-        if (!features) {
-            ERROR("KMeans::Init called with ", features, " features");
-            for (int k=0; k<kmeans->K; k++) Vector::Assign(kmeans->means->row(k), 0.0, kmeans->D);
-            return; 
-        }
-
-        for (int i=0, j=0; i<kmeans->K; i++) { 
-            pick[i] = Rand(0, features-1); /* choose uniform randomly */
-
-            /* dupe check */
-            for (j=0; j<i; j++) if (pick[j] == pick[i]) break;
-            if (j != i) i--;
-        }    
+  ~KMeansInit() { delete [] pick; }
+  KMeansInit(KMeans *out, int feats) : kmeans(out), features(feats), count(0), pick(new int[kmeans->K]) {
+    if (!features) {
+      ERROR("KMeans::Init called with ", features, " features");
+      for (int k=0; k<kmeans->K; k++) Vector::Assign(kmeans->means->row(k), 0.0, kmeans->D);
+      return; 
     }
 
-    void add_feature(double *feature) {
-        for (int k=0; k<kmeans->K; k++) {
-            if (count != pick[k]) continue;
+    for (int i=0, j=0; i<kmeans->K; i++) { 
+      pick[i] = Rand(0, features-1); /* choose uniform randomly */
 
-            double *mean = kmeans->means->row(k);
-            Vector::Assign(mean, feature, kmeans->D);
+      /* dupe check */
+      for (j=0; j<i; j++) if (pick[j] == pick[i]) break;
+      if (j != i) i--;
+    }    
+  }
 
-            string s;
-            for (int l=0; l<kmeans->D; l++) StrAppend(&s, mean[l], ", ");
-            INFO("chose mean ", k, " (", count, ") [", s, "]");
-        }
-        count++;
+  void AddFeature(double *feature) {
+    for (int k=0; k<kmeans->K; k++) {
+      if (count != pick[k]) continue;
+
+      double *mean = kmeans->means->row(k);
+      Vector::Assign(mean, feature, kmeans->D);
+
+      string s;
+      for (int l=0; l<kmeans->D; l++) StrAppend(&s, mean[l], ", ");
+      INFO("chose mean ", k, " (", count, ") [", s, "]");
     }
-    static void add_feature(double *feature, void *arg) { ((KMeansInit*)arg)->add_feature(feature); }
+    count++;
+  }
 
-    void add_features(Matrix *features) {
-        if (!DimCheck("KMeans.init", features->N, kmeans->D)) return;
-        for (int i=0; i<features->M; i++) add_feature(features->row(i));
-    }
-    static void add_features(const char *fn, Matrix *, Matrix *features, const char *transcript, void *arg) { ((KMeansInit*)arg)->add_features(features); }
+  void AddFeatures(Matrix *features) {
+    if (!DimCheck("KMeans.init", features->N, kmeans->D)) return;
+    for (int i=0; i<features->M; i++) AddFeature(features->row(i));
+  }
 };
 
 }; // namespace LFL
-#endif // __LFL_ML_KMEANS_H__
+#endif // LFL_ML_KMEANS_H__

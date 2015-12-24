@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef __LFL_LFAPP_IPC_H__
-#define __LFL_LFAPP_IPC_H__
+#ifndef LFL_LFAPP_IPC_H__
+#define LFL_LFAPP_IPC_H__
 
 #ifdef LFL_FLATBUFFERS
 #include "ipc_generated.h"
@@ -61,6 +61,81 @@ struct MultiProcessBuffer {
   static int Size(const Serializable &s) { return Serializable::Header::size + s.Size(); }
 };
 
+#ifndef LFL_FLATBUFFERS
+namespace IPC {
+struct Color {
+  unsigned char r() const { return 0; }
+  unsigned char g() const { return 0; }
+  unsigned char b() const { return 0; }
+  unsigned char a() const { return 0; }
+};
+struct FontDescription {
+  string *name() const { return 0; }
+  string *family() const { return 0; }
+  Color *fg() const { return 0; }
+  Color *bg() const { return 0; }
+  int engine() const { return 0; }
+  int size() const { return 0; }
+  int flag() const { return 0; }
+  bool unicode() const { return 0; }
+};
+struct ResourceHandle {
+  int len() const { return 0; }
+  int type() const { return 0; }
+  string *url() const { return 0; }
+};
+struct AllocateBufferRequest {};
+struct AllocateBufferResponse {};
+struct CloseBufferRequest {};
+struct CloseBufferResponse {};
+struct LoadAssetRequest { ResourceHandle *mpb() const { return 0; } };
+struct LoadAssetResponse {};
+struct LoadTextureRequest {};
+struct LoadTextureResponse { int tex_id() const { return 0; } };
+struct SetClearColorRequest {};
+struct SetClearColorResponse {};
+struct SetViewportRequest {};
+struct SetViewportResponse {};
+struct SetDocsizeRequest {};
+struct SetDocsizeResponse {};
+struct OpenSystemFontRequest {};
+struct OpenSystemFontResponse {
+  int font_id() const { return 0; }
+  int start_glyph_id() const { return 0; }
+  int num_glyphs() const { return 0; }
+  short ascender() const { return 0; }
+  short descender() const { return 0; }
+  short max_width() const { return 0; }
+  short fixed_width() const { return 0; }
+  short missing_glyph() const { return 0; }
+  bool mix_fg() const { return 0; }
+  bool has_bg() const { return 0; }
+  bool fix_metrics() const { return 0; }
+  float scale() const { return 0; }
+};
+struct PaintRequest {};
+struct PaintResponse {};
+struct SwapTreeRequest {};
+struct SwapTreeResponse {};
+struct NavigateRequest {};
+struct NavigateResponse {};
+struct WGetRequest {};
+struct WGetResponse {};
+struct SetTitleRequest {};
+struct SetTitleResponse {};
+struct SetURLRequest {};
+struct SetURLResponse {};
+struct KeyPressRequest {};
+struct KeyPressResponse {};
+struct MouseClickRequest {};
+struct MouseClickResponse {};
+struct MouseMoveRequest {};
+struct MouseMoveResponse {};
+struct ExecuteScriptRequest {};
+struct ExecuteScriptResponse { struct String { string str() { return ""; } }; String *text() const { return 0; } };
+}; // namespace IPC
+#endif // LFL_FLATBUFFERS
+
 struct ProcessAPI : public InterProcessComm {
   ProcessAPI(const string &n) : InterProcessComm(n) {}
   struct Protocol {
@@ -76,28 +151,30 @@ struct ProcessAPI : public InterProcessComm {
     IPC_PROTO_ENTRY(10, LoadTextureResponse,    Void,                        "tex_id=", x->tex_id()); 
     IPC_PROTO_ENTRY(11, LoadAssetRequest,       MultiProcessFileResource,    "fn=", BlankNull(mpv.name.buf), ", l=", mpv.buf.len);
     IPC_PROTO_ENTRY(12, LoadAssetResponse,      MultiProcessTextureResource, "w=", mpv.width, ", h=", mpv.height, ", pf=", BlankNull(Pixel::Name(mpv.pf)));
-    IPC_PROTO_ENTRY(13, PaintRequest,           MultiProcessPaintResource,   "tile=(", x->x(), ",", x->y(), ",", x->z(), ") len=", mpv.data.size());
+    IPC_PROTO_ENTRY(13, PaintRequest,           MultiProcessPaintResource,   "tile=(", x->x(), ",", x->y(), ",", x->z(), ") flag=", x->flag(), " len=", mpv.data.size());
     IPC_PROTO_ENTRY(14, PaintResponse,          Void,                        "success=", x->success());
-    IPC_PROTO_ENTRY(15, WGetRequest,            Void,                        "url=", x->url() ? x->url()->data() : ""); 
-    IPC_PROTO_ENTRY(16, WGetResponse,           MultiProcessBuffer,          "h=", (int)x->headers(), ", hl=", x->mpb()?x->mpb()->len():0, ", hu=", x->mpb()?x->mpb()->url()->data():"", " b=", mpv.buf!=0, ", l=", mpv.len);
-    IPC_PROTO_ENTRY(17, SetTitleRequest,        Void,                        "title=", x->title() ? x->title()->data() : ""); 
-    IPC_PROTO_ENTRY(18, SetTitleResponse,       Void,                        "success=", x->success());
-    IPC_PROTO_ENTRY(19, SetURLRequest,          Void,                        "url=", x->url() ? x->url()->data() : ""); 
-    IPC_PROTO_ENTRY(20, SetURLResponse,         Void,                        "success=", x->success());
-    IPC_PROTO_ENTRY(21, NavigateRequest,        Void,                        "url=", x->url() ? x->url()->data() : ""); 
-    IPC_PROTO_ENTRY(22, NavigateResponse,       Void,                        "success=", x->success());
-    IPC_PROTO_ENTRY(23, SetViewportRequest,     Void,                        "w=", x->w(), ", h=", x->h()); 
-    IPC_PROTO_ENTRY(24, SetViewportResponse,    Void,                        "success=", x->success());
-    IPC_PROTO_ENTRY(25, SetDocsizeRequest,      Void,                        "w=", x->w(), ", h=", x->h()); 
-    IPC_PROTO_ENTRY(26, SetDocsizeResponse,     Void,                        "success=", x->success());
-    IPC_PROTO_ENTRY(27, KeyPressRequest,        Void,                        "button=", x->button(), ", down=", x->down()); 
-    IPC_PROTO_ENTRY(28, KeyPressResponse,       Void,                        "success=", x->success());
-    IPC_PROTO_ENTRY(29, MouseClickRequest,      Void,                        "button=", x->button(), ", down=", x->down(), ", x=", x->x(), ", y=", x->y()); 
-    IPC_PROTO_ENTRY(30, MouseClickResponse,     Void,                        "success=", x->success());
-    IPC_PROTO_ENTRY(31, MouseMoveRequest,       Void,                        "x=", x->x(), ", y=", x->y(), ", dx=", x->dx(), ", dy=", x->dy()); 
-    IPC_PROTO_ENTRY(32, MouseMoveResponse,      Void,                        "success=", x->success());
-    IPC_PROTO_ENTRY(33, ExecuteScriptRequest,   Void,                        "text=", x->text() ? x->text()->data() : ""); 
-    IPC_PROTO_ENTRY(34, ExecuteScriptResponse,  Void,                        "text=", x->text() ? x->text()->data() : "");
+    IPC_PROTO_ENTRY(15, SwapTreeRequest,        MultiProcessLayerTree,       "id=(", x->id(), ") node_len=", mpv.node_data.size(), ", child_len=", mpv.child_data.size());
+    IPC_PROTO_ENTRY(16, SwapTreeResponse,       Void,                        "success=", x->success());
+    IPC_PROTO_ENTRY(17, WGetRequest,            Void,                        "url=", x->url() ? x->url()->data() : ""); 
+    IPC_PROTO_ENTRY(18, WGetResponse,           MultiProcessBuffer,          "h=", (int)x->headers(), ", hl=", x->mpb()?x->mpb()->len():0, ", hu=", x->mpb()?x->mpb()->url()->data():"", " b=", mpv.buf!=0, ", l=", mpv.len);
+    IPC_PROTO_ENTRY(19, SetTitleRequest,        Void,                        "title=", x->title() ? x->title()->data() : ""); 
+    IPC_PROTO_ENTRY(20, SetTitleResponse,       Void,                        "success=", x->success());
+    IPC_PROTO_ENTRY(21, SetURLRequest,          Void,                        "url=", x->url() ? x->url()->data() : ""); 
+    IPC_PROTO_ENTRY(22, SetURLResponse,         Void,                        "success=", x->success());
+    IPC_PROTO_ENTRY(23, NavigateRequest,        Void,                        "url=", x->url() ? x->url()->data() : ""); 
+    IPC_PROTO_ENTRY(24, NavigateResponse,       Void,                        "success=", x->success());
+    IPC_PROTO_ENTRY(25, SetViewportRequest,     Void,                        "w=", x->w(), ", h=", x->h()); 
+    IPC_PROTO_ENTRY(26, SetViewportResponse,    Void,                        "success=", x->success());
+    IPC_PROTO_ENTRY(27, SetDocsizeRequest,      Void,                        "w=", x->w(), ", h=", x->h()); 
+    IPC_PROTO_ENTRY(28, SetDocsizeResponse,     Void,                        "success=", x->success());
+    IPC_PROTO_ENTRY(29, KeyPressRequest,        Void,                        "button=", x->button(), ", down=", x->down()); 
+    IPC_PROTO_ENTRY(30, KeyPressResponse,       Void,                        "success=", x->success());
+    IPC_PROTO_ENTRY(31, MouseClickRequest,      Void,                        "button=", x->button(), ", down=", x->down(), ", x=", x->x(), ", y=", x->y()); 
+    IPC_PROTO_ENTRY(32, MouseClickResponse,     Void,                        "success=", x->success());
+    IPC_PROTO_ENTRY(33, MouseMoveRequest,       Void,                        "x=", x->x(), ", y=", x->y(), ", dx=", x->dx(), ", dy=", x->dy()); 
+    IPC_PROTO_ENTRY(34, MouseMoveResponse,      Void,                        "success=", x->success());
+    IPC_PROTO_ENTRY(35, ExecuteScriptRequest,   Void,                        "text=", x->text() ? x->text()->data() : ""); 
+    IPC_PROTO_ENTRY(36, ExecuteScriptResponse,  Void,                        "text=", x->text() ? x->text()->data() : "");
   };
 };
 
@@ -123,6 +200,7 @@ struct ProcessAPIClient : public ProcessAPI {
   IPC_TABLE_SERVER_CALL(SetDocsize);
   IPC_TABLE_SERVER_VIRC(LoadTexture, MultiProcessTextureResource, mpb_id);
   IPC_TABLE_SERVER_VIRC(Paint, MultiProcessPaintResource, mpb_id);
+  IPC_TABLE_SERVER_VIRC(SwapTree, MultiProcessLayerTree, mpb_id);
   IPC_TABLE_SERVER_CALL(WGet);
   IPC_TABLE_SERVER_CALL(SetTitle);
   IPC_TABLE_SERVER_CALL(SetURL);
@@ -157,7 +235,11 @@ struct ProcessAPIClient : public ProcessAPI {
   };
   IPC_SERVER_CALL(Paint, const MultiProcessPaintResource&) {
     using PaintIPC::PaintIPC;
-    void PaintTile(int x, int y, int z, const MultiProcessPaintResource&);
+    void PaintTile(int x, int y, int z, int flag, const MultiProcessPaintResource&);
+  };
+  IPC_SERVER_CALL(SwapTree, const MultiProcessLayerTree&) {
+    using SwapTreeIPC::SwapTreeIPC;
+    void SwapLayerTree(int id, const MultiProcessLayerTree&);
   };
   IPC_SERVER_CALL(WGet, Void) {
     using WGetIPC::WGetIPC;
@@ -201,12 +283,18 @@ struct ProcessAPIServer : public ProcessAPI {
     LoadTextureQuery(Parent *P, Texture *T, const LoadTextureIPC::CB &cb) : LoadTextureIPC(P,0,cb), tex(T) {}
     int AllocateBufferResponse(const IPC::AllocateBufferResponse*, MultiProcessBuffer&);
   };
-  IPC_CLIENT_CALL(Paint, Void, int layer, const point &tile, MultiProcessPaintResourceBuilder &list) {
-    int layer;
+  IPC_CLIENT_CALL(Paint, Void, int layer, const point &tile, int flag, MultiProcessPaintResourceBuilder &list) {
+    int layer, flag;
     point tile;
     MultiProcessPaintResourceBuilder paint_list;
-    PaintQuery(Parent *P, int L, const point &X, MultiProcessPaintResourceBuilder &list) :
-      PaintIPC(P,0), layer(L), tile(X) { swap(paint_list, list); }
+    PaintQuery(Parent *P, int L, const point &X, int F, MultiProcessPaintResourceBuilder &list) :
+      PaintIPC(P,0), layer(L), tile(X), flag(F) { swap(paint_list, list); }
+    int AllocateBufferResponse(const IPC::AllocateBufferResponse*, MultiProcessBuffer&);
+  };
+  IPC_CLIENT_CALL(SwapTree, Void, int id, const LayersInterface *layers) {
+    int id;
+    MultiProcessLayerTree tree;
+    SwapTreeQuery(Parent *P, int I, const LayersInterface *L) : SwapTreeIPC(P,0), id(I), tree(L->node, L->child) {}
     int AllocateBufferResponse(const IPC::AllocateBufferResponse*, MultiProcessBuffer&);
   };
   IPC_CLIENT_CALL(WGet, const MultiProcessBuffer&, const string&, const HTTPClient::ResponseCB &) {
@@ -245,10 +333,10 @@ struct TilesIPC : public TilesT<MultiProcessPaintResource::Cmd, MultiProcessPain
 };
 
 struct TilesIPCServer : public TilesIPC { using TilesIPC::TilesIPC; };
-struct TilesIPCClient : public TilesIPC { using TilesIPC::TilesIPC; void Run(); };
+struct TilesIPCClient : public TilesIPC { using TilesIPC::TilesIPC; void Run(int flag); };
 
 typedef LayersT<TilesIPCServer> LayersIPCServer;
 typedef LayersT<TilesIPCClient> LayersIPCClient;
 
 }; // namespace LFL
-#endif // __LFL_LFAPP_IPC_H__
+#endif // LFL_LFAPP_IPC_H__

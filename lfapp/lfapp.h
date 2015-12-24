@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef __LFL_LFAPP_LFAPP_H__
-#define __LFL_LFAPP_LFAPP_H__
+#ifndef LFL_LFAPP_LFAPP_H__
+#define LFL_LFAPP_LFAPP_H__
 
 #include <sstream>
 #include <typeinfo>
@@ -102,6 +102,8 @@ using LFL_STL11_NAMESPACE::placeholders::_3;
 using LFL_STL11_NAMESPACE::placeholders::_4;
 using LFL_STL11_NAMESPACE::placeholders::_5;
 using LFL_STL11_NAMESPACE::placeholders::_6;
+using LFL_STL11_NAMESPACE::placeholders::_7;
+using LFL_STL11_NAMESPACE::placeholders::_8;
 using LFL_STL11_NAMESPACE::mutex;
 using LFL_STL11_NAMESPACE::lock_guard;
 using LFL_STL11_NAMESPACE::unique_lock;
@@ -120,6 +122,7 @@ using LFL_STL11_NAMESPACE::enable_if;
 using LFL_STL11_NAMESPACE::is_integral;
 using LFL_STL11_NAMESPACE::is_floating_point;
 using LFL_STL11_NAMESPACE::make_unsigned;
+using LFL_STL11_NAMESPACE::make_shared;
 #define tuple_get LFL_STL11_NAMESPACE::get
 
 #include <cfloat>
@@ -596,6 +599,7 @@ struct Application : public ::LFApp, public Module {
   void LaunchNativeFontChooser(const FontDesc &cur_font, const string &choose_cmd);
   void LaunchNativeMenu(const string &title);
   void AddNativeMenu(const string &title, const vector<MenuItem>&items);
+  void AddNativeEditMenu();
   int LoadModule(Module *M) { modules.push_back(M); return M->Init(); }
 
   int Create(int argc, const char **argv, const char *source_filename, void (*create_cb)()=0);
@@ -650,4 +654,4 @@ struct WinWindow {
 
 extern "C" int main(int argc, const char **argv);
 
-#endif // __LFL_LFAPP_LFAPP_H__
+#endif // LFL_LFAPP_LFAPP_H__

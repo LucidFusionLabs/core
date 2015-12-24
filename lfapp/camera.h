@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef __LFL_LFAPP_CAMERA_H__
-#define __LFL_LFAPP_CAMERA_H__
+#ifndef LFL_LFAPP_CAMERA_H__
+#define LFL_LFAPP_CAMERA_H__
 namespace LFL {
 
 DECLARE_int(camera_fps);
@@ -25,19 +25,19 @@ DECLARE_int(camera_image_width);
 DECLARE_int(camera_image_height);
 
 struct Camera : public Module {
-    RollingAvg<unsigned> fps;
-    Module *impl=0;
-    bool have_sample=0;
-    unsigned char *image=0;
-    int image_format=0, image_linesize=0, since_last_frame=0;
-    unsigned long long frames_read=0, last_frames_read=0;
-    microseconds image_timestamp=microseconds(0);
-    Camera() : fps(64) {}
+  RollingAvg<unsigned> fps;
+  Module *impl=0;
+  bool have_sample=0;
+  unsigned char *image=0;
+  int image_format=0, image_linesize=0, since_last_frame=0;
+  unsigned long long frames_read=0, last_frames_read=0;
+  microseconds image_timestamp=microseconds(0);
+  Camera() : fps(64) {}
 
-    int Init ();
-    int Free ();
-    int Frame(unsigned time);
+  int Init ();
+  int Free ();
+  int Frame(unsigned time);
 };
 
 }; // namespace LFL
-#endif // __LFL_LFAPP_CAMERA_H__
+#endif // LFL_LFAPP_CAMERA_H__

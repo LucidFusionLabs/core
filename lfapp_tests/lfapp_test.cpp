@@ -23,40 +23,40 @@
 namespace LFL {
 
 struct RValueResolutionTest1 {
-    int A, B;
-    vector<string> data;
-    RValueResolutionTest1(const vector<string>  &in) : data(in), A(1), B(0) {}
+  int A, B;
+  vector<string> data;
+  RValueResolutionTest1(const vector<string>  &in) : data(in), A(1), B(0) {}
 };
 struct RValueResolutionTest2 {
-    int A, B;
-    vector<string> data;
-    RValueResolutionTest2(const vector<string>  &in) : data(in), A(1), B(0) {}
-    RValueResolutionTest2(      vector<string> &&in) : data(in), A(0), B(1) {}
+  int A, B;
+  vector<string> data;
+  RValueResolutionTest2(const vector<string>  &in) : data(in), A(1), B(0) {}
+  RValueResolutionTest2(      vector<string> &&in) : data(in), A(0), B(1) {}
 };
 TEST(CPlusPlusTest, RValuedResolution) {
-    vector<string> foo;
-    EXPECT_EQ(1, RValueResolutionTest1(     foo) .A);
-    EXPECT_EQ(1, RValueResolutionTest2(     foo) .A);
-    EXPECT_EQ(0, RValueResolutionTest1(move(foo)).B);
-    EXPECT_EQ(1, RValueResolutionTest2(move(foo)).B);
-    EXPECT_EQ(0, RValueResolutionTest1(vector<string>()).B);
-    EXPECT_EQ(1, RValueResolutionTest2(vector<string>()).B);
+  vector<string> foo;
+  EXPECT_EQ(1, RValueResolutionTest1(     foo) .A);
+  EXPECT_EQ(1, RValueResolutionTest2(     foo) .A);
+  EXPECT_EQ(0, RValueResolutionTest1(move(foo)).B);
+  EXPECT_EQ(1, RValueResolutionTest2(move(foo)).B);
+  EXPECT_EQ(0, RValueResolutionTest1(vector<string>()).B);
+  EXPECT_EQ(1, RValueResolutionTest2(vector<string>()).B);
 }
-    
+
 struct StringMethodResolutionTest {
-    int A=0, B=0, C=0, D=0;
-    template <class X> void F(const StringPieceT<X> &text) { A++; }
-    /**/               void F(const string          &text) { B++; F(StringPiece           (text)); }
-    /**/               void F(const String16        &text) { C++; F(String16Piece         (text)); }
-    template <class X> void F(const X               *text) { D++; F(StringPiece::Unbounded(text)); }
+  int A=0, B=0, C=0, D=0;
+  template <class X> void F(const StringPieceT<X> &text) { A++; }
+  /**/               void F(const string          &text) { B++; F(StringPiece           (text)); }
+  /**/               void F(const String16        &text) { C++; F(String16Piece         (text)); }
+  template <class X> void F(const X               *text) { D++; F(StringPiece::Unbounded(text)); }
 };
 TEST(CPlusPlusTest, MethodResolution) {
-    StringMethodResolutionTest t;
-    t.F("a");             EXPECT_EQ(1, t.A); EXPECT_EQ(0, t.B); EXPECT_EQ(0, t.C); EXPECT_EQ(1, t.D);
-    t.F(string());        EXPECT_EQ(2, t.A); EXPECT_EQ(1, t.B); EXPECT_EQ(0, t.C); EXPECT_EQ(1, t.D);
-    t.F(String16());      EXPECT_EQ(3, t.A); EXPECT_EQ(1, t.B); EXPECT_EQ(1, t.C); EXPECT_EQ(1, t.D);
-    t.F(StringPiece());   EXPECT_EQ(4, t.A); EXPECT_EQ(1, t.B); EXPECT_EQ(1, t.C); EXPECT_EQ(1, t.D);
-    t.F(String16Piece()); EXPECT_EQ(5, t.A); EXPECT_EQ(1, t.B); EXPECT_EQ(1, t.C); EXPECT_EQ(1, t.D);
+  StringMethodResolutionTest t;
+  t.F("a");             EXPECT_EQ(1, t.A); EXPECT_EQ(0, t.B); EXPECT_EQ(0, t.C); EXPECT_EQ(1, t.D);
+  t.F(string());        EXPECT_EQ(2, t.A); EXPECT_EQ(1, t.B); EXPECT_EQ(0, t.C); EXPECT_EQ(1, t.D);
+  t.F(String16());      EXPECT_EQ(3, t.A); EXPECT_EQ(1, t.B); EXPECT_EQ(1, t.C); EXPECT_EQ(1, t.D);
+  t.F(StringPiece());   EXPECT_EQ(4, t.A); EXPECT_EQ(1, t.B); EXPECT_EQ(1, t.C); EXPECT_EQ(1, t.D);
+  t.F(String16Piece()); EXPECT_EQ(5, t.A); EXPECT_EQ(1, t.B); EXPECT_EQ(1, t.C); EXPECT_EQ(1, t.D);
 }
 
 static bool ERRORvTest1() { return ERRORv(true,  "ERRORvTest1"); }
@@ -73,8 +73,8 @@ TEST(LFAppTest, ERRORv) {
 
 #if defined(LFL_OPENSSL) || defined(LFL_COMMONCRYPTO)
 TEST(CryptoTest, MethodResolution) {
-    EXPECT_EQ(string("\x68\xd2\x45\x2f\x71\x3a\x0b\x7f\xbf\x0f\xd0\xfb\x89\x05\x97\xad", 16),
-              Crypto::MD5("the quick brown fox jumped over the lazy dog"));
+  EXPECT_EQ(string("\x68\xd2\x45\x2f\x71\x3a\x0b\x7f\xbf\x0f\xd0\xfb\x89\x05\x97\xad", 16),
+            Crypto::MD5("the quick brown fox jumped over the lazy dog"));
 }
 #endif
 

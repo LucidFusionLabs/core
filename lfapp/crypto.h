@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef __LFL_LFAPP_CRYPTO_H__
-#define __LFL_LFAPP_CRYPTO_H__
+#ifndef LFL_LFAPP_CRYPTO_H__
+#define LFL_LFAPP_CRYPTO_H__
 
 #if defined(LFL_COMMONCRYPTO)
 #include <CommonCrypto/CommonCrypto.h>
@@ -512,4 +512,4 @@ struct SSH {
 };
 
 }; // namespace LFL
-#endif // __LFL_LFAPP_CRYPTO_H__
+#endif // LFL_LFAPP_CRYPTO_H__

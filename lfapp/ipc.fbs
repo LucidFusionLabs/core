@@ -26,8 +26,11 @@ table LoadAssetResponse { mpb_id: int; }
 table LoadTextureRequest  { mpb_id: int; }
 table LoadTextureResponse { tex_id: int; }
 
-table PaintRequest  { x: int; y: int; z: int; mpb_id: int; }
+table PaintRequest  { x: int; y: int; z: int; flag: int; mpb_id: int; }
 table PaintResponse { success: bool; }
+
+table SwapTreeRequest  { id: int; mpb_id: int; }
+table SwapTreeResponse { success: bool; }
 
 table WGetRequest  { url: string; mime_type: int; }
 table WGetResponse { mpb: ResourceHandle; headers: bool; content_length: int; }

@@ -17,6 +17,8 @@
  */
 
 #include "lfapp/lfapp.h"
+#include "lfapp/flow.h"
+#include "lfapp/gui.h"
 #include "lfapp/dom.h"
 #include "lfapp/trie.h"
 #include "ml/corpus.h"
@@ -40,49 +42,49 @@ DEFINE_string(nomcorpuspath,   "corpus/nombank/frames/",    "Nombank path");
 using namespace LFL;
 
 extern "C" int main(int argc, const char *argv[]) {
-    app->logfilename = StrCat(LFAppDownloadDir(), "trainer.txt");
-    screen->caption = "trainer";
-    FLAGS_open_console = 1;
-    if (app->Create(argc, argv, __FILE__)) { app->Free(); return -1; }
-    if (app->Init()) { app->Free(); return -1; }
+  app->logfilename = StrCat(LFAppDownloadDir(), "trainer.txt");
+  screen->caption = "trainer";
+  FLAGS_open_console = 1;
+  if (app->Create(argc, argv, __FILE__)) { app->Free(); return -1; }
+  if (app->Init()) { app->Free(); return -1; }
 
-    Callback finish_cb;
-    SentenceCorpus::SentenceCB input_cb;
-    if (FLAGS_target == "printer") {
-        input_cb = [=](const string &fn, SentenceCorpus::Sentence *s) {
-            printf("%s\n", s->DebugString().c_str());
-        };
-    } else if (FLAGS_target == "lmbuilder") {
-        BigramLanguageModelBuilder *target =
-            new BigramLanguageModelBuilder(FLAGS_modeldir, "LanguageModel", 0, FLAGS_min_occurrences);
-        input_cb  = bind(&BigramLanguageModelBuilder::Input, target, _1, _2);
-        finish_cb = bind(&BigramLanguageModelBuilder::Done,  target);
-    } else if (FLAGS_target == "lmquery") {
-        LanguageModel *lm = new LanguageModel();
-        lm->Open("LanguageModel", FLAGS_modeldir.c_str());
-        input_cb = [=](const string &fn, SentenceCorpus::Sentence *s) {
-            for (auto w : *s) printf("%s\n", lm->DebugString(tolower(w.text).c_str()).c_str());
-        };
-    } else if (FLAGS_target == "triebuilder") {
-        CounterS *words = new CounterS();
-        input_cb = [=](const string &fn, SentenceCorpus::Sentence *s) { for (auto w : *s) words->incr(tolower(w.text)); };
-        finish_cb = [=]() {
-            PatriciaCompleter<char, int> trie(words->count.begin(), words->count.end());
-            for (auto w : words->count) {
-                auto n = trie.Query(w.first);
-                CHECK(n);
-                CHECK(n->val_ind);
-                CHECK_EQ(w.second, trie.val[n->val_ind-1].val);
-            }
-        };
-    } else { ERROR("unknown target ", FLAGS_target); return -1; }
+  Callback finish_cb;
+  SentenceCorpus::SentenceCB input_cb;
+  if (FLAGS_target == "printer") {
+    input_cb = [=](const string &fn, SentenceCorpus::Sentence *s) {
+      printf("%s\n", s->DebugString().c_str());
+    };
+  } else if (FLAGS_target == "lmbuilder") {
+    BigramLanguageModelBuilder *target =
+      new BigramLanguageModelBuilder(FLAGS_modeldir, "LanguageModel", 0, FLAGS_min_occurrences);
+    input_cb  = bind(&BigramLanguageModelBuilder::Input, target, _1, _2);
+    finish_cb = bind(&BigramLanguageModelBuilder::Done,  target);
+  } else if (FLAGS_target == "lmquery") {
+    LanguageModel *lm = new LanguageModel();
+    lm->Open("LanguageModel", FLAGS_modeldir.c_str());
+    input_cb = [=](const string &fn, SentenceCorpus::Sentence *s) {
+      for (auto w : *s) printf("%s\n", lm->DebugString(tolower(w.text).c_str()).c_str());
+    };
+  } else if (FLAGS_target == "triebuilder") {
+    CounterS *words = new CounterS();
+    input_cb = [=](const string &fn, SentenceCorpus::Sentence *s) { for (auto w : *s) words->incr(tolower(w.text)); };
+    finish_cb = [=]() {
+      PatriciaCompleter<char, int> trie(words->count.begin(), words->count.end());
+      for (auto w : words->count) {
+        auto n = trie.Query(w.first);
+        CHECK(n);
+        CHECK(n->val_ind);
+        CHECK_EQ(w.second, trie.val[n->val_ind-1].val);
+      }
+    };
+  } else { ERROR("unknown target ", FLAGS_target); return -1; }
 
-    SentenceCorpus *corpus = 0;
-    if      (!FLAGS_query.empty())   corpus = new QueryCorpus(input_cb, FLAGS_query);
-    else if (FLAGS_corpus == "text") corpus = new TextCorpus(input_cb);
-    else { ERROR("unknown corpus ", FLAGS_corpus); return -1; }
+  SentenceCorpus *corpus = 0;
+  if      (!FLAGS_query.empty())   corpus = new QueryCorpus(input_cb, FLAGS_query);
+  else if (FLAGS_corpus == "text") corpus = new TextCorpus(input_cb);
+  else { ERROR("unknown corpus ", FLAGS_corpus); return -1; }
 
-    corpus->finish_cb = finish_cb;
-    corpus->Run(FLAGS_corpuspath);
-    return 0;
+  corpus->finish_cb = finish_cb;
+  corpus->Run(FLAGS_corpuspath);
+  return 0;
 };

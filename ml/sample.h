@@ -16,130 +16,122 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef __LFL_ML_SAMPLE_H__
-#define __LFL_ML_SAMPLE_H__
+#ifndef LFL_ML_SAMPLE_H__
+#define LFL_ML_SAMPLE_H__
 namespace LFL {
 
 struct SampleExtent {
-    int D, count;
-    double *vec_min, *vec_max;
+  int D=0, count=0;
+  double *vec_min=0, *vec_max=0;
 
-    SampleExtent() : D(0), count(0), vec_min(0), vec_max(0) {}
-    ~SampleExtent() { delete vec_min; delete vec_max; }
-    void complete() {}
+  SampleExtent() {}
+  ~SampleExtent() { delete vec_min; delete vec_max; }
+  void Complete() {}
 
-    void add_features(Matrix *features) {
-        if (!vec_min) {
-            D = features->N;
-            vec_min = new double[D]; vec_max = new double[D];
-            Vector::Assign(vec_min, INFINITY, D); Vector::Assign(vec_max, -INFINITY, D);
-        }
-        if (!DimCheck("SampleExtents", features->N, D)) return;
-
-        MatrixIter(features) {
-            if (features->row(i)[j] < vec_min[j]) vec_min[j] = features->row(i)[j];
-            if (features->row(i)[j] > vec_max[j]) vec_max[j] = features->row(i)[j];
-        }
-        count += features->M;
+  void AddFeatures(Matrix *features) {
+    if (!vec_min) {
+      D = features->N;
+      vec_min = new double[D]; Vector::Assign(vec_min, INFINITY, D);
+      vec_max = new double[D]; Vector::Assign(vec_max, -INFINITY, D);
     }
-    static void add_label_features(int label, Matrix *features, void *arg) { ((SampleExtent*)arg)->add_features(features); }
-    static void add_mfcc_features(const char *fn, Matrix *MFCC, Matrix *features, const char *transcript, void *arg) { ((SampleExtent*)arg)->add_features(features); }
+    if (!DimCheck("SampleExtents", features->N, D)) return;
+
+    MatrixIter(features) {
+      if (features->row(i)[j] < vec_min[j]) vec_min[j] = features->row(i)[j];
+      if (features->row(i)[j] > vec_max[j]) vec_max[j] = features->row(i)[j];
+    }
+    count += features->M;
+  }
 };
 
 struct SampleMean {
-    int D, count;
-    double *vec;
+  int D, count;
+  double *vec;
 
-    SampleMean() : D(0), count(0), vec(0) {}
-    ~SampleMean() { delete vec; }
+  SampleMean() : D(0), count(0), vec(0) {}
+  ~SampleMean() { delete vec; }
 
-    void complete() { Vector::Div(vec, count, D); }
+  void Complete() { Vector::Div(vec, count, D); }
 
-    void add_features(Matrix *features) {
-        if (!vec) { D = features->N; vec = new double[D](); }
-        if (!DimCheck("SampleMean", features->N, D)) return;
+  void AddFeatures(Matrix *features) {
+    if (!vec) { D = features->N; vec = new double[D](); }
+    if (!DimCheck("SampleMean", features->N, D)) return;
 
-        MatrixIter(features) { vec[j] += features->row(i)[j]; }
-        count += features->M;
-    }
-    static void add_label_features(int label, Matrix *features, void *arg) { ((SampleMean*)arg)->add_features(features); }
-    static void add_features(const char *fn, Matrix *MFCC, Matrix *features, const char *transcript, void *arg) { ((SampleMean*)arg)->add_features(features); }
+    MatrixIter(features) { vec[j] += features->row(i)[j]; }
+    count += features->M;
+  }
 };
 
 struct SampleCovariance {
-    int K, D, *count;
-    Matrix *model, *accums, *diagnol;
+  int K, D, *count;
+  Matrix *model, *accums, *diagnol;
 
-    ~SampleCovariance() { delete []count; delete accums; delete diagnol; }
-    SampleCovariance(Matrix *M) : K(M->M), D(M->N), count(new int[K]), model(M), accums(new Matrix(K, D)), diagnol(0) { reset(); }
+  ~SampleCovariance() { delete []count; delete accums; delete diagnol; }
+  SampleCovariance(Matrix *M) : K(M->M), D(M->N), count(new int[K]), model(M), accums(new Matrix(K, D)), diagnol(0) { Reset(); }
 
-    void reset() { memset(accums->m,0,accums->bytes); memset(count,0,K*sizeof(int)); }
-    
-    void add_features(Matrix *features) {
-        if (!DimCheck("SampleCovariance", features->N, D)) return;
-        for (int i=0; i<features->M; i++) add_feature(features->row(i));
-    }
-    static void add_features(const char *fn, Matrix *MFCC, Matrix *features, const char *transcript, void *arg) { return ((SampleCovariance*)arg)->add_features(features); }
+  void Reset() { memset(accums->m,0,accums->bytes); memset(count,0,K*sizeof(int)); }
+
+  void AddFeatures(Matrix *features) {
+    if (!DimCheck("SampleCovariance", features->N, D)) return;
+    for (int i=0; i<features->M; i++) AddFeature(features->row(i));
+  }
+
 #if 1
-    void add_feature(double *feature) {
-        int minindex; double mindist, *diff=(double*)alloca(D*sizeof(double));
-        KMeans::nearest_neighbor(model, feature, &minindex, &mindist);
+  void AddFeature(double *feature) {
+    int minindex; double mindist, *diff=(double*)alloca(D*sizeof(double));
+    KMeans::NearestNeighbor(model, feature, &minindex, &mindist);
 
-        Vector::Sub(model->row(minindex), feature, diff, D);
-        Vector::Mult(diff, diff, D);
-        Vector::Add(accums->row(minindex), diff, D);
-        count[minindex]++;
-    }
+    Vector::Sub(model->row(minindex), feature, diff, D);
+    Vector::Mult(diff, diff, D);
+    Vector::Add(accums->row(minindex), diff, D);
+    count[minindex]++;
+  }
 #else
-    void add_feature(double *feature) {
-        double *diff=(double*)alloca(D*sizeof(double));
-        for (int i=0; i<K; i++) {
-            Vector::sub(model->row(i), feature, diff, D);
-            Vector::mult(diff, diff, D);
-            Vector::add(accums->row(i), diff, D);
-            count[i]++;
-        }
+  void AddFeature(double *feature) {
+    double *diff=(double*)alloca(D*sizeof(double));
+    for (int i=0; i<K; i++) {
+      Vector::sub(model->row(i), feature, diff, D);
+      Vector::mult(diff, diff, D);
+      Vector::add(accums->row(i), diff, D);
+      count[i]++;
     }
+  }
 #endif
-    static void add_feature(double *feature, void *arg) { return ((SampleCovariance*)arg)->add_feature(feature); }
 
-    void complete() {
-        if (diagnol) delete diagnol;
-        diagnol = new Matrix(model->M, model->N);
+  void Complete() {
+    if (diagnol) delete diagnol;
+    diagnol = new Matrix(model->M, model->N);
 
-        for (int k=0; k<K; k++) {
-            if (!count[k]) { Vector::Assign(accums->row(k), FLAGS_CovarFloor, D); continue; }
+    for (int k=0; k<K; k++) {
+      if (!count[k]) { Vector::Assign(accums->row(k), FLAGS_CovarFloor, D); continue; }
 
-            Vector::Div(accums->row(k), count[k], diagnol->row(k), D);
-        }
-        reset();
+      Vector::Div(accums->row(k), count[k], diagnol->row(k), D);
     }
+    Reset();
+  }
 };
 
 struct SampleProb {
-    Matrix *means, *diagcovar;
-    double prob;
+  Matrix *means, *diagcovar;
+  double prob;
 
-    ~SampleProb() {}
-    SampleProb(Matrix *Means, Matrix *Var) : means(Means), diagcovar(Var) { reset(); }
+  ~SampleProb() {}
+  SampleProb(Matrix *Means, Matrix *Var) : means(Means), diagcovar(Var) { Reset(); }
 
-    void reset() { prob=-INFINITY; }
-    
-    void add_features(Matrix *features) {
-        if (!DimCheck("SampleProb", features->N, means->N)) return;
-        for (int i=0; i<features->M; i++) add_feature(features->row(i));
-    }
-    static void add_features(const char *fn, Matrix *, Matrix *features, const char *transcript, void *arg) { ((SampleProb*)arg)->add_features(features); }
+  void Reset() { prob=-INFINITY; }
+  void Complete() {}
 
-    void add_feature(double *feature) {
-        double p = GmmPdfEval(means, diagcovar, feature);
-        DEBUG("prob = ", exp(p));
-        prob += p;
-    }
-    static void add_feature(double *feature, void *arg) { return ((SampleProb*)arg)->add_feature(feature); }
+  void AddFeatures(Matrix *features) {
+    if (!DimCheck("SampleProb", features->N, means->N)) return;
+    for (int i=0; i<features->M; i++) AddFeature(features->row(i));
+  }
 
-    void complete() {}
+  void AddFeature(double *feature) {
+    double p = GmmPdfEval(means, diagcovar, feature);
+    DEBUG("prob = ", exp(p));
+    prob += p;
+  }
 };
 
 }; // namespace LFL
-#endif // __LFL_ML_SAMPLE_H__
+#endif // LFL_ML_SAMPLE_H__

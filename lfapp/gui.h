@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef __LFL_LFAPP_GUI_H__
-#define __LFL_LFAPP_GUI_H__
+#ifndef LFL_LFAPP_GUI_H__
+#define LFL_LFAPP_GUI_H__
 namespace LFL {
 
 DECLARE_bool(multitouch);
@@ -142,10 +142,9 @@ struct KeyboardGUI : public KeyboardController {
   RunCB runcb;
   RingVector<string> lastcmd;
   int lastcmd_ind=-1;
-  KeyboardGUI(Window *W, Font *F, int LastCommands=50)
+  KeyboardGUI(Window *W, Font *F, int LastCommands=10)
     : parent(W), toggle_active(&active), lastcmd(LastCommands) { if (parent) parent->keyboard_gui.push_back(this); }
   virtual ~KeyboardGUI() { if (parent) VectorEraseByValue(&parent->keyboard_gui, this); }
-  virtual void Enable() { active = true; }
   virtual bool Toggle() { return toggle_active.Toggle(); }
   virtual void Run(const string &cmd) { if (runcb) runcb(cmd); }
   virtual void SetToggleKey(int TK, int TM=Toggler::Default) { toggle_bind.key=TK; toggle_active.mode=TM; }
@@ -217,14 +216,18 @@ struct TextGUI : public KeyboardGUI, public Drawable::AttrSource {
     int AssignText(const StringPiece   &s, int                       a=0) { Clear(); return AppendText(s, a); }
     int AssignText(const String16Piece &s, int                       a=0) { Clear(); return AppendText(s, a); }
     int AssignText(const StringPiece   &s, const Flow::TextAnnotation &a) { Clear(); return AppendText(s, a); }
+    int AssignText(const String16Piece &s, const Flow::TextAnnotation &a) { Clear(); return AppendText(s, a); }
     int AppendText(const StringPiece   &s, int                       a=0) { return InsertTextAt(Size(), s, a); }
     int AppendText(const String16Piece &s, int                       a=0) { return InsertTextAt(Size(), s, a); }
     int AppendText(const StringPiece   &s, const Flow::TextAnnotation &a) { return InsertTextAt(Size(), s, a); }
+    int AppendText(const String16Piece &s, const Flow::TextAnnotation &a) { return InsertTextAt(Size(), s, a); }
     template <class X> int OverwriteTextAt(int o, const StringPieceT<X> &s, int a=0);
     template <class X> int InsertTextAt   (int o, const StringPieceT<X> &s, int a=0);
     template <class X> int InsertTextAt   (int o, const StringPieceT<X> &s, const Flow::TextAnnotation&);
     template <class X> int InsertTextAt   (int o, const StringPieceT<X> &s, const DrawableBoxArray&);
     template <class X> int UpdateText     (int o, const StringPieceT<X> &s, int a, int max_width=0, bool *append=0, int insert_mode=-1);
+    int OverwriteTextAt(int o, const string   &s, int a=0) { return OverwriteTextAt<char>    (o, s, a); }
+    int OverwriteTextAt(int o, const String16 &s, int a=0) { return OverwriteTextAt<char16_t>(o, s, a); }
     int InsertTextAt(int o, const string   &s, int a=0) { return InsertTextAt<char>    (o, s, a); }
     int InsertTextAt(int o, const String16 &s, int a=0) { return InsertTextAt<char16_t>(o, s, a); }
     int UpdateText(int o, const string   &s, int attr, int max_width=0, bool *append=0) { return UpdateText<char>    (o, s, attr, max_width, append); }
@@ -279,6 +282,7 @@ struct TextGUI : public KeyboardGUI, public Drawable::AttrSource {
     tvirtual void Clear(Line *l) { RingFrameBuffer::Clear(l, Box(w, l->Lines() * font_height), true); }
     tvirtual void Update(Line *l, int flag=0);
     tvirtual void Update(Line *l, const point &p, int flag=0) { l->p=p; Update(l, flag); }
+    tvirtual void OverwriteUpdate(Line *l, int xo=0, int wlo=0, int wll=0, int flag=0);
     tvirtual int PushFrontAndUpdate(Line *l, int xo=0, int wlo=0, int wll=0, int flag=0);
     tvirtual int PushBackAndUpdate (Line *l, int xo=0, int wlo=0, int wll=0, int flag=0);
     tvirtual void PushFrontAndUpdateOffset(Line *l, int lo);
@@ -305,7 +309,7 @@ struct TextGUI : public KeyboardGUI, public Drawable::AttrSource {
 
   struct Cursor {
     enum { Underline=1, Block=2 };
-    int type=Underline, attr=0;
+    int type=Block, attr=0;
     Time blink_time=Time(333), blink_begin=Time(0);
     point i, p;
   };
@@ -340,7 +344,7 @@ struct TextGUI : public KeyboardGUI, public Drawable::AttrSource {
   const Color *bg_color=0;
   mutable Drawable::Attr last_attr;
 
-  TextGUI(Window *W, Font *F) : KeyboardGUI(W, F), mouse_gui(this, W), font(F)
+  TextGUI(Window *W, Font *F, int LC=10) : KeyboardGUI(W, F, LC), mouse_gui(this, W), font(F)
   { layout.pad_wide_chars=1; cmd_line.Init(this,0); cmd_line.GetAttrId(Drawable::Attr(F)); }
 
   virtual ~TextGUI() {}
@@ -348,22 +352,24 @@ struct TextGUI : public KeyboardGUI, public Drawable::AttrSource {
   virtual int CommandLines() const { return 0; }
   virtual void Input(char k) { cmd_line.UpdateText(cursor.i.x++, String16(1, *Unsigned<char>(&k)), cursor.attr); UpdateCommandFB(); UpdateCursor(); }
   virtual void Erase()       { if (!cursor.i.x) return; cmd_line.Erase(--cursor.i.x, 1); UpdateCommandFB(); UpdateCursor(); }
-  virtual void CursorRight() { cursor.i.x = min(cursor.i.x+1, cmd_line.Size()); UpdateCursor(); }
-  virtual void CursorLeft()  { cursor.i.x = max(cursor.i.x-1, 0);               UpdateCursor(); }
-  virtual void Home()        { cursor.i.x = 0;                                  UpdateCursor(); }
-  virtual void End()         { cursor.i.x = cmd_line.Size();                    UpdateCursor(); }
+  virtual void CursorRight() { UpdateCursorX(min(cursor.i.x+1, cmd_line.Size())); }
+  virtual void CursorLeft()  { UpdateCursorX(max(cursor.i.x-1, 0)); }
+  virtual void Home()        { UpdateCursorX(0); }
+  virtual void End()         { UpdateCursorX(cmd_line.Size()); }
   virtual void HistUp()      { if (int c=lastcmd.ring.count) { AssignInput(lastcmd[lastcmd_ind]); lastcmd_ind=max(lastcmd_ind-1, -c); } }
   virtual void HistDown()    { if (int c=lastcmd.ring.count) { AssignInput(lastcmd[lastcmd_ind]); lastcmd_ind=min(lastcmd_ind+1, -1); } }
   virtual void Enter();
 
   virtual String16 Text16() const { return cmd_line.Text16(); }
-  virtual void AssignInput(const string &text) { cmd_line.AssignText(text); cursor.i.x=cmd_line.Size(); UpdateCommandFB(); UpdateCursor(); }
+  virtual void AssignInput(const string &text) { cmd_line.AssignText(text); UpdateCommandFB(); UpdateCursorX(cmd_line.Size()); }
   void SetColors(Colors *C);
 
   virtual LinesFrameBuffer *GetFrameBuffer() { return &cmd_fb; }
   virtual void ResetGL() { cmd_fb.Reset(); }
+  virtual void UpdateCursorX(int x) { cursor.i.x = x; UpdateCursor(); }
   virtual void UpdateCursor() { cursor.p = cmd_line.data->glyphs.Position(cursor.i.x); }
-  virtual void UpdateCommandFB();
+  virtual void UpdateCommandFB() { UpdateLineFB(&cmd_line, &cmd_fb); }
+  virtual void UpdateLineFB(Line *L, LinesFrameBuffer *fb);
   virtual void Draw(const Box &b);
   virtual void DrawCursor(point p);
   virtual void UpdateToken(Line*, int word_offset, int word_len, int update_type, const LineTokenProcessor*);
@@ -375,6 +381,14 @@ struct UnbackedTextGUI : public TextGUI {
   virtual void UpdateCommandFB() {}
 };
 
+struct TilesTextGUI : public TextGUI {
+  point offset;
+  TilesInterface *tiles=0;
+  TilesTextGUI(Font *F=0) : TextGUI(0, F) { cmd_fb.paint_cb = bind(&TilesTextGUI::PaintCB, this, _1, _2, _3); }
+  void AssignTarget(TilesInterface *T, const point &p) { tiles=T; offset=p; }
+  point PaintCB(Line *l, point lp, const Box &b);
+};
+
 struct TextArea : public TextGUI {
   Lines line;
   LinesFrameBuffer line_fb;
@@ -384,14 +398,15 @@ struct TextArea : public TextGUI {
   int scroll_inc=10, scrolled_lines=0;
   float v_scrolled=0, h_scrolled=0, last_v_scrolled=0, last_h_scrolled=0;
 
-  TextArea(Window *W, Font *F, int S=200) : TextGUI(W, F), line(this, S) { if (selection.enabled) InitSelection(); }
+  TextArea(Window *W, Font *F, int S=200, int LC=10) :
+    TextGUI(W, F, LC), line(this, S) { if (selection.enabled) InitSelection(); }
   virtual ~TextArea() {}
 
   /// Write() is thread-safe.
   virtual void Write(const StringPiece &s, bool update_fb=true, bool release_fb=true);
   virtual void WriteCB(const string &s, bool update_fb, bool release_fb) { return Write(s, update_fb, release_fb); }
-  virtual void PageUp  () { v_scrolled = Clamp(v_scrolled - (float)scroll_inc/(WrappedLines()-1), 0, 1); UpdateScrolled(); }
-  virtual void PageDown() { v_scrolled = Clamp(v_scrolled + (float)scroll_inc/(WrappedLines()-1), 0, 1); UpdateScrolled(); }
+  virtual void PageUp  () { AddVScroll(-scroll_inc); }
+  virtual void PageDown() { AddVScroll( scroll_inc); }
   virtual void Resized(const Box &b);
   virtual void CheckResized(const Box &b);
 
@@ -414,6 +429,8 @@ struct TextArea : public TextGUI {
   bool Wrap() const { return line_fb.wrap; }
   int LineFBPushBack () const { return reverse_line_fb ? LineUpdate::PushFront : LineUpdate::PushBack;  }
   int LineFBPushFront() const { return reverse_line_fb ? LineUpdate::PushBack  : LineUpdate::PushFront; }
+  float PercentOfLines(int n) const { return static_cast<float>(n) / (WrappedLines()-1); }
+  void AddVScroll(int n) { v_scrolled = Clamp(v_scrolled + PercentOfLines(n), 0, 1); UpdateScrolled(); }
   int LayoutBackLine(Lines *l, int i) { return Wrap() ? (*l)[-i-1].Layout(line_fb.w) : 1; }
 
   void InitSelection();
@@ -435,21 +452,49 @@ struct Editor : public TextArea {
 
   shared_ptr<File> file;
   LineMap file_line;
-  FreeListVector<string> edits;
+  FreeListVector<String16> edits;
+  LineOffset *cursor_line=0;
   vector<pair<int,int>> annotation;
   int last_fb_width=0, last_fb_lines=0, last_first_line=0, wrapped_lines=0, fb_wrapped_lines=0;
   bool opened=0;
   IDE::Project *project=0;
   Editor(Window *W, Font *F, File *I, bool Wrap=0);
 
+  void Input(char k)  { Modify(false, k); }
+  void Enter()        { Modify(false, '\r'); }
+  void Erase()        { Modify(true,  0); }
+  void CursorLeft()   { UpdateCursorX(max(cursor.i.x-1, 0)); }
+  void CursorRight()  { UpdateCursorX(min(cursor.i.x+1, GetCursorLine()->Size())); }
+  void Home()         { UpdateCursorX(0); }
+  void End()          { UpdateCursorX(GetCursorLine()->Size()); }
+  void HistUp()       { if (cursor.i.y <= 0)               AddVScroll(-1); else cursor.i.y--; UpdateCursor(); UpdateCursorLine(); }
+  void HistDown()     { if (cursor.i.y >= line_fb.lines-1) AddVScroll( 1); else cursor.i.y++; UpdateCursor(); UpdateCursorLine(); }
+
+  Line *GetCursorLine() { return &line[-1-cursor.i.y]; }
+  int CursorLineNumber() const { return last_first_line + cursor.i.y; }
   int WrappedLines() const { return wrapped_lines; }
+  void ToggleShouldWrap() { SetShouldWrap(!line_fb.wrap); }
+  void SetShouldWrap(bool);
+  void AddWrappedLines(int n);
   void UpdateWrappedLines(int cur_font_size, int width);
+  void Reload() { last_fb_width=0; wrapped_lines=0; RefreshLines(); }
+  int RefreshLines() { last_fb_lines=0; return UpdateLines(last_v_scrolled, 0, 0, 0); }
   int UpdateLines(float v_scrolled, int *first_ind, int *first_offset, int *first_len);
+  void UpdateCursorLine() { cursor_line = file_line.LesserBound(CursorLineNumber()).val; }
+  void UpdateCursor();
   void UpdateAnnotation();
+  void Modify(bool erase, int c);
+  int ModifyCursorLine();
+  int Save();
 };
 
 struct Terminal : public TextArea {
   struct State { enum { TEXT=0, ESC=1, CSI=2, OSC=3, CHARSET=4 }; };
+  struct ByteSink {
+    virtual int Write(const char *b, int l) = 0;
+    virtual void IOCtlWindowSize(int w, int h) {}
+  };
+
   ByteSink *sink=0;
   int term_width=0, term_height=0, parse_state=State::TEXT;
   int scroll_region_beg=0, scroll_region_end=0, tab_width=8;
@@ -528,8 +573,8 @@ struct Console : public TextArea {
   Time anim_time=Time(333), anim_begin=Time(0);
   bool animating=0, drawing=0, bottom_or_top=0, blend=1, ran_startcmd=0;
   Color color=Color(25,60,130,120);
-  Console(Window *W, Font *F) : TextArea(W, F) { line_fb.wrap=write_timestamp=1; SetToggleKey(Key::Backquote); bg_color=&Color::clear; }
-  Console(Window *W) : Console(W, Fonts::Get(A_or_B(FLAGS_lfapp_console_font, FLAGS_default_font), "", 9, Color::white, Color::clear, FLAGS_lfapp_console_font_flag)) {}
+  Console(Window *W, Font *F) : TextArea(W, F, 200, 50) { line_fb.wrap=write_timestamp=1; SetToggleKey(Key::Backquote); bg_color=&Color::clear; }
+  Console(Window *W) : Console(W, Fonts::Get(A_or_B(FLAGS_lfapp_console_font, FLAGS_default_font), "", 9, Color::white, Color::clear, FLAGS_lfapp_console_font_flag)) { cursor.type = Cursor::Underline; }
 
   virtual ~Console() {}
   virtual int CommandLines() const { return cmd_line.Lines(); }
@@ -624,4 +669,4 @@ struct HelperGUI : public GUI {
 };
 
 }; // namespace LFL
-#endif // __LFL_LFAPP_GUI_H__
+#endif // LFL_LFAPP_GUI_H__

@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef __LFL_LFAPP_LFEXPORT_H__
-#define __LFL_LFAPP_LFEXPORT_H__
+#ifndef LFL_LFAPP_LFEXPORT_H__
+#define LFL_LFAPP_LFEXPORT_H__
 
 #if _MSC_VER
   #if _WIN64
@@ -183,10 +183,11 @@ struct TextGUI;
 struct Texture;
 struct Terminal;
 struct TilesInterface;
+struct TilesTextGUI;
 struct VideoAssetLoader;
 struct Window;
 namespace DOM { struct Node; };
-namespace IPC { struct FontDescription; struct OpenSystemFontResponse; }
+namespace IPC { struct ResourceHandle; struct FontDescription; struct OpenSystemFontResponse; }
 
 typedef google::protobuf::Message Proto;
 typedef int (*MainCB)(int argc, const char **argv);
@@ -267,4 +268,4 @@ void BreakHook();
 #ifdef __cplusplus
 };
 #endif // __cplusplus
-#endif // __LFL_LFAPP_LFEXPORT_H__
+#endif // LFL_LFAPP_LFEXPORT_H__

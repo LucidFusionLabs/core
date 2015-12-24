@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef __LFL_LFAPP_ASSETS_H__
-#define __LFL_LFAPP_ASSETS_H__
+#ifndef LFL_LFAPP_ASSETS_H__
+#define LFL_LFAPP_ASSETS_H__
 namespace LFL {
 
 DECLARE_int(soundasset_seconds);
@@ -640,7 +640,7 @@ template <int MP, int MH, bool PerParticleColor> struct Particles : public Parti
 };
 
 template <class Line> struct RingFrameBuffer {
-  typedef point(*PaintCB)(Line*, point, const Box&);
+  typedef function<point(Line*, point, const Box&)> PaintCB;
   FrameBuffer fb;
   v2 scroll;
   point p;
@@ -700,6 +700,7 @@ template <class Line> struct RingFrameBuffer {
 };
 
 struct TilesInterface {
+  struct RunFlag { enum { DontClear=1, ClearEmpty=2 }; };
   virtual void AddDrawableBoxArray(const DrawableBoxArray &box, point p);
   virtual void SetAttr            (const Drawable::Attr *a)                                = 0;
   virtual void InitDrawBox        (const point&)                                           = 0;
@@ -710,13 +711,33 @@ struct TilesInterface {
   virtual void Draw(const Box &viewport, const point &doc_position)                        = 0;
   virtual void ContextOpen()                                                               = 0;
   virtual void ContextClose()                                                              = 0;
-  virtual void Run()                                                                       = 0;
+  virtual void Run(int flag)                                                               = 0;
 };
 
-struct LayersInterface : public vector<TilesInterface*> {
-  virtual void Init(int N=1)                      = 0;
-  virtual void Draw(const Box &b, const point &p) = 0;
-  virtual void Update()                           = 0;
+struct LayersInterface {
+  UNALIGNED_struct Node  { static const int Size=40; Box box; point scrolled; int layer_id, child_offset; }; UNALIGNED_END(Node,  Node::Size);
+  UNALIGNED_struct Child { static const int Size=8;  int node_id, next_child_offset; };                      UNALIGNED_END(Child, Child::Size);
+  vector<Node> node;
+  vector<Child> child;
+  vector<TilesInterface*> layer;
+
+  LayersInterface() { ClearLayerNodes(); }
+  void ClearLayerNodes() { child.clear(); node.clear(); node.push_back({ Box(), point(), 0, 0 }); }
+  int AddLayerNode(int parent_node_id, const Box &b, int layer_id) {
+    node.push_back({ b, point(), layer_id, 0 });
+    return AddChild(parent_node_id, node.size());
+  }
+  int AddChild(int node_id, int child_node_id) {
+    child.push_back({ child_node_id, 0 }); 
+    Node *n = &node[node_id-1];
+    if (!n->child_offset) return (n->child_offset = child.size());
+    Child *c = &child[n->child_offset-1];
+    while (c->next_child_offset) c = &child[c->next_child_offset-1];
+    return (c->next_child_offset = child.size());
+  }
+  virtual void Update();
+  virtual void Draw(const Box &b, const point &p);
+  virtual void Init(int N=1) = 0;
 };
 
 #define TilesPreAdd(tiles, ...) CallbackListAdd(&(tiles)->prepend[(tiles)->context_depth]->cb, __VA_ARGS__)
@@ -730,7 +751,6 @@ template<class CB, class CBL, class CBLI> struct TilesT : public TilesInterface 
     Tile() : id(0), prepend_depth(0), dirty(0) {}
   };
   int layer, W, H, context_depth=-1;
-  bool clear=1, clear_empty=1;
   vector<Tile*> prepend, append;
   matrix<Tile*> mat;
   FrameBuffer fb;
@@ -786,11 +806,12 @@ template<class CB, class CBL, class CBLI> struct TilesT : public TilesInterface 
     if (!added) FATAL("AddCallback ", box->DebugString(), " = ", x1, " ", y1, " ", x2, " ", y2);
   }
 
-  void Run() {
+  void Run(int flag) {
+    bool clear_empty = (flag & RunFlag::ClearEmpty);
     Select();
     TilesMatrixIter(&mat) {
       if (!tile->cb.Count() && !clear_empty) continue;
-      RunTile(i, j, tile, tile->cb);
+      RunTile(i, j, flag, tile, tile->cb);
       tile->cb.Clear();
     }
     Release();
@@ -803,12 +824,12 @@ template<class CB, class CBL, class CBLI> struct TilesT : public TilesInterface 
     screen->gd->ViewPort(current_tile);
     screen->gd->EnableLayering();
   }
-  void RunTile(int i, int j, Tile *tile, const CBLI &tile_cb) {
+  void RunTile(int i, int j, int flag, Tile *tile, const CBLI &tile_cb) {
     GetSpaceCoords(i, j, &current_tile.x, &current_tile.y);
     if (!tile->id) fb.AllocTexture(&tile->id);
     fb.Attach(tile->id);
     screen->gd->MatrixProjection();
-    if (clear) screen->gd->Clear();
+    if (!(flag & RunFlag::DontClear)) screen->gd->Clear();
     screen->gd->LoadIdentity();
     screen->gd->Ortho(current_tile.x, current_tile.x + W, current_tile.y, current_tile.y + H, 0, 100);
     screen->gd->MatrixModelview();
@@ -850,12 +871,10 @@ struct Tiles : public TilesT<Callback, CallbackList, CallbackList> {
 };
 
 template <class X> struct LayersT : public LayersInterface {
-  void Init(int N=1) { CHECK_EQ(this->size(), 0); for (int i=0; i<N; i++) this->push_back(new X(i)); }
-  void Draw(const Box &b, const point &p) { for (auto i : *this) i->Draw(b, p); }
-  void Update() { for (auto i : *this) i->Run(); }
+  void Init(int N=1) { CHECK_EQ(this->layer.size(), 0); for (int i=0; i<N; i++) this->layer.push_back(new X(i)); }
 };
 
 typedef LayersT<Tiles> Layers;
 
 }; // namespace LFL
-#endif // __LFL_LFAPP_ASSETS_H__
+#endif // LFL_LFAPP_ASSETS_H__

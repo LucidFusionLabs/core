@@ -473,7 +473,7 @@ extern "C" void OSXDelWaitForeverKeyboard(void *O) { [(GameView*)O setFrameOnKey
 extern "C" void OSXAddWaitForeverSocket(void *O, int fd) { [(GameView*)O setWaitForeverSocket: fd]; }
 extern "C" void OSXDelWaitForeverSocket(void *O, int fd) { [(GameView*)O delWaitForeverSocket: fd]; }
 
-extern "C" void OSXCreateApplicationMenus() {
+extern "C" void OSXCreateNativeApplicationMenu() {
     NSMenuItem *item; 
     NSMenu *menu = [[NSMenu alloc] initWithTitle:@""];
     NSString *app_name = [[NSRunningApplication currentApplication] localizedName];
@@ -495,8 +495,11 @@ extern "C" void OSXCreateApplicationMenus() {
     [[NSApp mainMenu] addItem: item];
     [menu release];
     [item release];
+}
 
-    menu = [[NSMenu alloc] initWithTitle:@"Edit"];
+extern "C" void OSXCreateNativeEditMenu() {
+    NSMenuItem *item; 
+    NSMenu *menu = [[NSMenu alloc] initWithTitle:@"Edit"];
     item = [menu addItemWithTitle:@"Copy"  action:@selector(copy:)  keyEquivalent:@"c"];
     item = [menu addItemWithTitle:@"Paste" action:@selector(paste:) keyEquivalent:@"v"];
     item = [[NSMenuItem alloc] initWithTitle:@"Edit" action:nil keyEquivalent:@""];
@@ -532,7 +535,7 @@ extern "C" int main(int argc, const char **argv) {
     AppDelegate *app_delegate = [[AppDelegate alloc] init];
     [[NSApplication sharedApplication] setDelegate: app_delegate];
     [NSApp setMainMenu:[[NSMenu alloc] init]];
-    OSXCreateApplicationMenus();
+    OSXCreateNativeApplicationMenu();
     return NSApplicationMain(argc, argv);
 }
 #endif // LFL_OSXVIDEO

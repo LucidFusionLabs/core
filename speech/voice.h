@@ -16,25 +16,25 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef __LFL_LFAPP_VOICE_H__
-#define __LFL_LFAPP_VOICE_H__
+#ifndef LFL_SPEECH_VOICE_H__
+#define LFL_SPEECH_VOICE_H__
 namespace LFL {
 
 /* unit database */
 struct VoiceModel {
-    struct Unit {
-        WavReader wav;
-        int samples;
-        struct Sample { int offset, len; } *sample;
-        Unit() : samples(0), sample(0) {}
-        ~Unit() { delete wav.f; free(sample); }
-    } unit[LFL_PHONES];
+  struct Unit {
+    struct Sample { int offset, len; } *sample;
+    WavReader wav;
+    int samples;
+    Unit() : samples(0), sample(0) {}
+    ~Unit() { delete wav.f; free(sample); }
+  } unit[LFL_PHONES];
 
-    int read(const char *dir);
-    RingBuf *synth(const char *text, int start=0);
+  int Read(const char *dir);
+  RingBuf *Synth(const char *text, int start=0);
 
-    int nextPhone(int phone, int lastphone, int lastphoneindex);
+  int NextPhone(int phone, int lastphone, int lastphoneindex);
 };
 
 }; // namespace LFL
-#endif // __LFL_LFAPP_VOICE_H__
+#endif // LFL_SPEECH_VOICE_H__
