@@ -14,17 +14,17 @@ The key implementation files are:
 
 ## Projects
 
-* **term**:         LTerminal, a modern terminal
-* **editor**:       LEditor, a text editor and IDE
-* **browser**:      LBrowser, a HTML4/CSS2 web browser with V8 javascript
-* **image**:        LImage, an image and 3D-model manipulation utility
-* **fs**:           Fusion Sensor, a speech and image recognition client/server
-* **market**:       Financial data visualization and automated trading code
-* **spaceball**:    Spaceball Future, a multiplayer 3d game
-* **cb**:           Crystal Bawl, a geopacket visualization screensaver
-* **chess**:        LChess, a magic bitboard chess engine and FICS client
-* **quake**:        LQuake, a quake clone
-* **senators**:     IRC bots with NLP capabilties
+* **[term](http://lucidfusionlabs.com/terminal)**:          LTerminal, a modern terminal
+* **[editor](http://lucidfusionlabs.com/editor)**:          LEditor, a text editor and IDE
+* **[browser](http://lucidfusionlabs.com/browser)**:        LBrowser, a HTML4/CSS2 web browser with V8 javascript
+* **[image](http://lucidfusionlabs.com/image)**:            LImage, an image and 3D-model manipulation utility
+* **[fs](http://lucidfusionlabs.com/fs)**:                  Fusion Sensor, a speech and image recognition client/server
+* **[market](http://lucidfusionlabs.com/market)**:          Financial data visualization and automated trading code
+* **[spaceball](http://lucidfusionlabs.com/spaceball)**:    Spaceball Future, a multiplayer 3d game
+* **[cb](http://lucidfusionlabs.com/cb)**:                  Crystal Bawl, a geopacket visualization screensaver
+* **[chess](http://lucidfusionlabs.com/chess)**:            LChess, a magic bitboard chess engine and FICS client
+* **[quake](http://lucidfusionlabs.com/quake)**:            LQuake, a quake clone
+* **[senators](http://lucidfusionlabs.com/senators)**:      IRC bots with NLP capabilties
 
 The following build procedures apply to any app cloned from [new_app_template](new_app_template).
 Replace "LTerminal" and "lterm" with "YourPackage" and "YourApp" to build other apps.

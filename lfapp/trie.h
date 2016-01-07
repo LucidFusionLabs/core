@@ -67,6 +67,7 @@ template <class K, class V, class TN = TrieNode<K>, class TV = TrieNodeValue<K, 
       stack.emplace_back(K(), (this->*insert_cb)(String(), NULL));
       Input(b, e);
     }
+
     template <class I> void Input(I b, I e) { 
       for (auto i = b; i != e; /**/) {
         const String &k = (*i).first;
@@ -76,6 +77,7 @@ template <class K, class V, class TN = TrieNode<K>, class TV = TrieNodeValue<K, 
       while (stack.size()) (this->*complete_cb)(PopBack(stack));
       out->head = 1;
     }
+
     void Input(const String &in, const String &lookahead, const V &v) {
       PopPrefixesNotMatching(in);
       AddPrefixesOf(in, lookahead);
@@ -87,6 +89,7 @@ template <class K, class V, class TN = TrieNode<K>, class TV = TrieNodeValue<K, 
       out->data.push_back(Node(v ? out->val.size() : 0));
       return out->data.size();
     }
+
     void Phase1Complete(const Prenode &n) {
       if (stack.size()) stack.back().next_len++;
       out->data[n.node-1].next_len = n.next_len;
@@ -112,6 +115,7 @@ template <class K, class V, class TN = TrieNode<K>, class TV = TrieNodeValue<K, 
       for (auto i = in.begin(), e = in.end(); i != e && si != se; ++i, ++si) if (*i != si->key) break;
       for (int pop = se - si; pop > 0; pop--) (this->*complete_cb)(PopBack(stack));
     }
+
     void AddPrefixesOf(const String &in, const String &lookahead) {
       int add_prefixes;
       if (patricia) {
@@ -202,6 +206,7 @@ struct PatriciaCompleter : public Trie<K, V, TN, TV> {
     if (key.substr(leaf_ind) != v->key.substr(leaf_ind)) return 0;
     return n;
   }
+
   virtual void ComputeStateFromChildren(typename Parent::Node *n) {
     TopN<pair<int, int> > completion(TN::completions);
     if (n->val_ind) AddCompletion(&completion, n->val_ind);
@@ -212,6 +217,7 @@ struct PatriciaCompleter : public Trie<K, V, TN, TV> {
     int ind = 0;
     for (auto i : completion.data) n->completion[ind++] = i.second;
   }
+
   void AddCompletion(TopN<pair<int, int> > *out, int val_ind) const {
     out->Insert(pair<int, int>(-completion_sort_cb(&Parent::val[val_ind-1].val), val_ind));
   }

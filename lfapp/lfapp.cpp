@@ -558,7 +558,7 @@ void Application::StartNewWindow(Window *new_window) {
   app->video->InitGraphicsDevice(new_window);
   app->input->Init(new_window);
   new_window->start_cb(new_window);
-#ifdef LFL_OSXINPUT
+#ifdef LFL_OSXVIDEO
   OSXStartWindow(screen->id);
 #endif
 }
@@ -952,7 +952,7 @@ void Application::ResetGL() {
 /* FrameScheduler */
 
 FrameScheduler::FrameScheduler() : maxfps(&FLAGS_target_fps), wakeup_thread(&frame_mutex, &wait_mutex) {
-#if defined(LFL_OSXINPUT) || defined(LFL_IPHONEINPUT) || defined(LFL_QT)
+#if defined(LFL_OSXVIDEO) || defined(LFL_IPHONEINPUT) || defined(LFL_QT)
   rate_limit = synchronize_waits = wait_forever_thread = monolithic_frame = 0;
 #elif defined(LFL_ANDROIDINPUT)
   synchronize_waits = wait_forever_thread = monolithic_frame = 0;
@@ -995,7 +995,7 @@ bool FrameScheduler::FrameWait() {
       wait_mutex.lock();
       frame_mutex.unlock();
     }
-#if defined(LFL_OSXINPUT) || defined(LFL_WININPUT) || defined(LFL_IPHONEINPUT) || defined(LFL_QT) || defined(LFL_WXWIDGETS)
+#if defined(LFL_OSXVIDEO) || defined(LFL_WININPUT) || defined(LFL_IPHONEINPUT) || defined(LFL_QT) || defined(LFL_WXWIDGETS)
 #elif defined(LFL_ANDROIDINPUT) || defined(LFL_X11INPUT)
     wait_forever_sockets.Select(-1);
     for (auto &s : wait_forever_sockets.socket)
@@ -1026,7 +1026,7 @@ bool FrameScheduler::FrameWait() {
 
 void FrameScheduler::Wakeup(void *opaque) {
   if (wait_forever && screen) {
-#if defined(LFL_OSXINPUT)
+#if defined(LFL_OSXVIDEO)
     OSXTriggerFrame(screen->id);
 #elif defined(LFL_WININPUT)
     InvalidateRect((HWND)screen->id, NULL, 0);
@@ -1066,7 +1066,7 @@ bool FrameScheduler::WakeupIn(void *opaque, Time interval, bool force) {
   // CHECK(!screen->target_fps);
 #if defined(LFL_IPHONEINPUT)
   return iPhoneTriggerFrameIn(screen->id, interval.count(), force);
-#elif defined(LFL_OSXINPUT)
+#elif defined(LFL_OSXVIDEO)
   return OSXTriggerFrameIn(screen->id, interval.count(), force);
 #endif
   return 0;
@@ -1075,7 +1075,7 @@ bool FrameScheduler::WakeupIn(void *opaque, Time interval, bool force) {
 void FrameScheduler::ClearWakeupIn() {
 #if defined(LFL_IPHONEINPUT)
   iPhoneClearTriggerFrameIn(screen->id);
-#elif defined(LFL_OSXINPUT)
+#elif defined(LFL_OSXVIDEO)
   OSXClearTriggerFrameIn(screen->id);
 #endif
 }
@@ -1090,7 +1090,7 @@ void FrameScheduler::UpdateTargetFPS(int fps) {
   CHECK(screen->id);
 #if defined(LFL_IPHONEINPUT)
   iPhoneUpdateTargetFPS(screen->id);
-#elif defined(LFL_OSXINPUT)
+#elif defined(LFL_OSXVIDEO)
   OSXUpdateTargetFPS(screen->id);
 #elif defined(LFL_QT)
   QTTriggerFrame(screen->id);
@@ -1108,7 +1108,7 @@ void FrameScheduler::SetAnimating(bool is_animating) {
 
 void FrameScheduler::AddWaitForeverMouse() {
   CHECK(screen->id);
-#if defined(LFL_OSXINPUT)
+#if defined(LFL_OSXVIDEO)
   OSXAddWaitForeverMouse(screen->id);
 #elif defined(LFL_WINVIDEO)
   static_cast<WinWindow*>(screen->impl)->frame_on_mouse_input = true;
@@ -1123,7 +1123,7 @@ void FrameScheduler::AddWaitForeverMouse() {
 
 void FrameScheduler::DelWaitForeverMouse() {
   CHECK(screen->id);
-#if defined(LFL_OSXINPUT)
+#if defined(LFL_OSXVIDEO)
   OSXDelWaitForeverMouse(screen->id);
 #elif defined(LFL_WINVIDEO)
   static_cast<WinWindow*>(screen->impl)->frame_on_mouse_input = false;
@@ -1138,7 +1138,7 @@ void FrameScheduler::DelWaitForeverMouse() {
 
 void FrameScheduler::AddWaitForeverKeyboard() {
   CHECK(screen->id);
-#if defined(LFL_OSXINPUT)
+#if defined(LFL_OSXVIDEO)
   OSXAddWaitForeverKeyboard(screen->id);
 #elif defined(LFL_WINVIDEO)
   static_cast<WinWindow*>(screen->impl)->frame_on_keyboard_input = true;
@@ -1153,7 +1153,7 @@ void FrameScheduler::AddWaitForeverKeyboard() {
 
 void FrameScheduler::DelWaitForeverKeyboard() {
   CHECK(screen->id);
-#if defined(LFL_OSXINPUT)
+#if defined(LFL_OSXVIDEO)
   OSXDelWaitForeverKeyboard(screen->id);
 #elif defined(LFL_WINVIDEO)
   static_cast<WinWindow*>(screen->impl)->frame_on_keyboard_input = false;
@@ -1168,7 +1168,7 @@ void FrameScheduler::DelWaitForeverKeyboard() {
 
 void FrameScheduler::AddWaitForeverSocket(Socket fd, int flag, void *val) {
   if (wait_forever && wait_forever_thread) wakeup_thread.Add(fd, flag, val);
-#if defined(LFL_OSXINPUT)
+#if defined(LFL_OSXVIDEO)
   if (!wait_forever_thread) { CHECK_EQ(SocketSet::READABLE, flag); OSXAddWaitForeverSocket(screen->id, fd); }
 #elif defined(LFL_WINVIDEO)
   WSAAsyncSelect(fd, (HWND)screen->id, WM_USER, FD_READ | FD_CLOSE);
@@ -1183,7 +1183,7 @@ void FrameScheduler::AddWaitForeverSocket(Socket fd, int flag, void *val) {
 
 void FrameScheduler::DelWaitForeverSocket(Socket fd) {
   if (wait_forever && wait_forever_thread) wakeup_thread.Del(fd);
-#if defined(LFL_OSXINPUT)
+#if defined(LFL_OSXVIDEO)
   CHECK(screen->id);
   OSXDelWaitForeverSocket(screen->id, fd);
 #elif defined(LFL_X11INPUT) || defined(LFL_ANDROIDINPUT)

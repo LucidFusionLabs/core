@@ -338,7 +338,7 @@ Font *DOM::Renderer::UpdateFont(Flow *F) {
       //      " ", ff[j].source.size() ? ff[j].source[0] : "<NO2>");
     }
   }
-  return font ? font : Fonts::Get(FLAGS_default_font, "", font_size_px, Color::white);
+  return font ? font : Fonts::Get(FLAGS_default_font, "", font_size_px, color, background_color);
 }
 
 void DOM::Renderer::UpdateDimensions(Flow *F) {
@@ -455,7 +455,7 @@ void Browser::Document::Clear() {
 }
 
 Browser::Browser(GUI *gui, const Box &V) : doc(gui ? gui->parent : NULL, V),
-  v_scrollbar(gui, Box()), h_scrollbar(gui, Box(), Widget::Scrollbar::Flag::AttachedHorizontal) {
+  v_scrollbar(gui, Box()), h_scrollbar(gui, Box(), Widget::Slider::Flag::AttachedHorizontal) {
   if (Font *maf = Fonts::Get("MenuAtlas", "", 0, Color::white, Color::clear, 0, 0)) {
     missing_image = maf->FindGlyph(0)->tex;
     missing_image.width = missing_image.height = 16;
@@ -480,7 +480,7 @@ void Browser::KeyEvent(int key, bool down) {
   else {
     if (auto n = doc.node->documentElement()) EventNode(n, initial_displacement, key);
     if (down && doc.active_input && doc.active_input->tiles) {
-      doc.active_input->Input(key);
+      if (!doc.active_input->HandleSpecialKey(key)) doc.active_input->Input(key);
       doc.active_input->tiles->Run(TilesInterface::RunFlag::DontClear);
     }
   }
@@ -518,7 +518,7 @@ void Browser::SetViewport(int w, int h) {
 void Browser::Layout(const Box &b) {
   if (dim.x == b.w && dim.y == b.h) return;
   dim = (viewport = b).Dimension();
-  Widget::Scrollbar::AttachContentBox(&viewport, &v_scrollbar, &h_scrollbar);
+  Widget::Slider::AttachContentBox(&viewport, &v_scrollbar, &h_scrollbar);
   SetViewport(viewport.w, viewport.h);
 }
 

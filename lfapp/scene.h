@@ -90,20 +90,20 @@ struct Scene {
   typedef vector<Entity*> EntityVector;
   typedef map<string, Entity*> EntityMap;
   typedef map<string, EntityVector> EntityAssetMap;
-  struct Filter { virtual bool filter(Entity *e) = 0; };
-  struct EntityFilter : public Filter {
+  struct EntityFilter { virtual bool Filter(Entity *e) = 0; };
+  struct SingleEntityFilter : public EntityFilter {
     Entity *entity;
-    EntityFilter(Entity *e) : entity(e) {}
-    bool filter(Entity *e) { return entity == e; }
+    SingleEntityFilter(Entity *e) : entity(e) {}
+    bool Filter(Entity *e) { return entity == e; }
   };
-  struct LastUpdatedFilter : public Filter {
-    Filter *super;
+  struct LastUpdatedFilter : public EntityFilter {
+    EntityFilter *super;
     Time cutoff;
     EntityVector *filtered;
 
-    LastUpdatedFilter(Filter *Super, Time val, EntityVector *out=0) : super(Super), cutoff(val), filtered(out) {}
-    bool filter(Entity *e) {
-      if (super && super->filter(e)) return true;
+    LastUpdatedFilter(EntityFilter *Super, Time val, EntityVector *out=0) : super(Super), cutoff(val), filtered(out) {}
+    bool Filter(Entity *e) {
+      if (super && super->Filter(e)) return true;
       if (e->updated >= cutoff) return false;
       if (filtered) filtered->push_back(e);
       return true;
@@ -131,10 +131,10 @@ struct Scene {
   static void DrawParticles(Entity *e, unsigned dt);
 
   void Draw(vector<Asset> *assets);
-  void Draw(Asset *a, Filter *filter=0);
-  static void Draw(Asset *a, Filter *filter, const EntityVector&);
+  void Draw(Asset *a, EntityFilter *filter=0);
+  static void Draw(Asset *a, EntityFilter *filter, const EntityVector&);
 
-  void ZSortDraw(Filter *filter, unsigned dt);
+  void ZSortDraw(EntityFilter *filter, unsigned dt);
   void ZSort(const vector<Asset> &assets);
 };
 

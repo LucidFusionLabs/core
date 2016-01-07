@@ -1143,12 +1143,13 @@ void glShadertoyShaderWindows(Shader *shader, const Color &backup_color, const v
   if (shader) screen->gd->UseShader(0);
 }
 
-void BoxOutline::Draw(const LFL::Box &w, const Drawable::Attr*) const {
+void BoxFilled::Draw(const LFL::Box &b, const Drawable::Attr*) const { b.Draw(); }
+void BoxOutline::Draw(const LFL::Box &b, const Drawable::Attr*) const {
   screen->gd->DisableTexture();
   if (line_width <= 1) {
     static int verts_ind = -1;
-    float verts[] = { /*1*/ (float)w.x,     (float)w.y,     /*2*/ (float)w.x,     (float)w.y+w.h,
-      /*3*/ (float)w.x+w.w, (float)w.y+w.h, /*4*/ (float)w.x+w.w, (float)w.y };
+    float verts[] = { /*1*/ (float)b.x,     (float)b.y,     /*2*/ (float)b.x,     (float)b.y+b.h,
+                      /*3*/ (float)b.x+b.w, (float)b.y+b.h, /*4*/ (float)b.x+b.w, (float)b.y };
     screen->gd->VertexPointer(2, GraphicsDevice::Float, 0, 0, verts, sizeof(verts), &verts_ind, true);
     screen->gd->DrawArrays(GraphicsDevice::LineLoop, 0, 4);
   } else {
@@ -1485,27 +1486,35 @@ void TilesIPCClient::Run(int flag) {
   }
 }
 
+#ifdef  LFL_MULTIPROCESSPAINTRESOURCE_DEBUG
+#define MPPRDebug(...) printf(__VA_ARGS__)
+#else
+#define MPPRDebug(...)
+#endif
+
 int MultiProcessPaintResource::Run(const Box &t) const {
   ProcessAPIClient *s = CheckPointer(app->render_process);
   Iterator i(data.buf);
   int si=0, sd=0, count=0; 
+  MPPRDebug("MPPR Begin\n");
   for (; i.offset + sizeof(int) < data.size(); count++) {
     int type = *i.Get<int>();
     switch (type) {
       default:                       FATAL("unknown type ", type);
-      case SetAttr           ::Type: { auto c=i.Get<SetAttr>           (); c->Update(&attr, app->render_process);            i.offset += SetAttr           ::Size; } break;
-      case InitDrawBox       ::Type: { auto c=i.Get<InitDrawBox>       (); DrawableBoxRun(0,0,&attr).draw(c->p);             i.offset += InitDrawBox       ::Size; } break;
-      case InitDrawBackground::Type: { auto c=i.Get<InitDrawBackground>(); DrawableBoxRun(0,0,&attr).DrawBackground(c->p);   i.offset += InitDrawBackground::Size; } break;
-      case DrawBackground    ::Type: { auto c=i.Get<DrawBackground>    (); c->b.Draw();                                      i.offset += DrawBackground    ::Size; } break;
-      case PushScissor       ::Type: { auto c=i.Get<PushScissor>       (); screen->gd->PushScissorOffset(t, c->b);     si++; i.offset += PushScissor       ::Size; } break;
-      case PopScissor        ::Type: { auto c=i.Get<PopScissor>        (); screen->gd->PopScissor(); CHECK_LT(sd, si); sd++; i.offset += PopScissor        ::Size; } break;
+      case SetAttr           ::Type: { auto c=i.Get<SetAttr>           (); c->Update(&attr, app->render_process);            i.offset += SetAttr           ::Size; MPPRDebug("MPPR SetAttr\n");                                    } break;
+      case InitDrawBox       ::Type: { auto c=i.Get<InitDrawBox>       (); DrawableBoxRun(0,0,&attr).draw(c->p);             i.offset += InitDrawBox       ::Size; MPPRDebug("MPPR InitDrawBox %s\n", c->p.DebugString().c_str()); } break;
+      case InitDrawBackground::Type: { auto c=i.Get<InitDrawBackground>(); DrawableBoxRun(0,0,&attr).DrawBackground(c->p);   i.offset += InitDrawBackground::Size; MPPRDebug("MPPR InitDrawBG %s\n",  c->p.DebugString().c_str()); } break;
+      case DrawBackground    ::Type: { auto c=i.Get<DrawBackground>    (); c->b.Draw();                                      i.offset += DrawBackground    ::Size; MPPRDebug("MPPR DrawBG %s\n",      c->b.DebugString().c_str()); } break;
+      case PushScissor       ::Type: { auto c=i.Get<PushScissor>       (); screen->gd->PushScissorOffset(t, c->b);     si++; i.offset += PushScissor       ::Size; MPPRDebug("MPPR PushScissor %s\n", c->b.DebugString().c_str()); } break;
+      case PopScissor        ::Type: { auto c=i.Get<PopScissor>        (); screen->gd->PopScissor(); CHECK_LT(sd, si); sd++; i.offset += PopScissor        ::Size; MPPRDebug("MPPR PopScissor\n");                                 } break;
       case DrawBox           ::Type: { auto c=i.Get<DrawBox>           ();
                                        auto d=(c->id > 0 && c->id <= s->drawable.size()) ? s->drawable[c->id-1] : Singleton<BoxFilled>::Get();
-                                       d->Draw(c->b, &attr); i.offset += DrawBox::Size;
+                                       d->Draw(c->b, &attr); i.offset += DrawBox::Size; MPPRDebug("DrawBox MPPR %s\n", c->b.DebugString().c_str());
                                      } break;
     }
   }
   if (si != sd) { ERROR("mismatching scissor ", si, " != ", sd); for (int i=sd; i<si; ++i) screen->gd->PopScissor(); }
+  MPPRDebug("MPPR End\n");
   return count;
 }
 

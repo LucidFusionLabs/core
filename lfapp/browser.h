@@ -126,7 +126,7 @@ struct Browser : public BrowserInterface {
   Texture missing_image;
   point dim, mouse, initial_displacement;
   Box viewport;
-  Widget::Scrollbar v_scrollbar, h_scrollbar;
+  Widget::Slider v_scrollbar, h_scrollbar;
   StringCB url_cb;
 
   Browser(GUI *gui=0, const Box &V=Box());

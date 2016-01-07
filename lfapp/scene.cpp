@@ -189,19 +189,19 @@ void Scene::Draw(vector<Asset> *assets) {
   }
 }
 
-void Scene::Draw(Asset *a, Filter *filter) {
+void Scene::Draw(Asset *a, EntityFilter *filter) {
   EntityVector &eav = assetMap[a->name];
   Draw(a, filter, eav);
 }
 
-void Scene::Draw(Asset *a, Filter *filter, const EntityVector &eav) {
+void Scene::Draw(Asset *a, EntityFilter *filter, const EntityVector &eav) {
   if (a->tex.cubemap && a->tex.cubemap != CubeMap::PX) return;
 
   Select(a);
 
   for (EntityVector::const_iterator j = eav.begin(); j != eav.end(); j++) {
     Entity *e = *j;
-    if (filter && filter->filter(e)) continue;
+    if (filter && filter->Filter(e)) continue;
 
     Draw(a, e);
   }
@@ -220,11 +220,11 @@ void Scene::DrawParticles(Entity *e, unsigned dt) {
   screen->gd->EnableDepthTest();
 }
 
-void Scene::ZSortDraw(Filter *filter, unsigned dt) {
+void Scene::ZSortDraw(EntityFilter *filter, unsigned dt) {
   Asset *last_asset = 0;
   for (EntityVector::const_iterator j = zsortVector.begin(); j != zsortVector.end(); j++) {
     Entity *e = *j;
-    if (filter && filter->filter(e)) continue;
+    if (filter && filter->Filter(e)) continue;
 
     float zangle = v3::Dot(screen->cam->ort, e->ort);
     if (zangle <= 0) { DrawParticles(e, dt); last_asset=0; }

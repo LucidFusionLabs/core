@@ -341,12 +341,19 @@ const int Key::F12 = 0xB0;
 const int Key::Home = 0xB3;
 const int Key::End = 0xB7;
 
+#ifdef LFL_OSXVIDEO
 void Clipboard::Set(const string &s) { OSXClipboardSet(s.c_str()); }
 string Clipboard::Get() { const char *v = OSXClipboardGet(); string ret = v; free((void*)v); return ret; }
 void Mouse::ReleaseFocus() { OSXReleaseMouseFocus(); app->grab_mode.Off(); screen->cursor_grabbed = 0; }
 void Mouse::GrabFocus()    { OSXGrabMouseFocus();    app->grab_mode.On();  screen->cursor_grabbed = 1;
   OSXSetMousePosition(screen->id, screen->width / 2, screen->height / 2);
 }
+#else // LFL_OSXVIDEO
+void Clipboard::Set(const string &s) {}
+string Clipboard::Get() { return ""; }
+void Mouse::ReleaseFocus() { screen->cursor_grabbed = 0; }
+void Mouse::GrabFocus()    { screen->cursor_grabbed = 1; }
+#endif // LFL_OSXVIDEO
 #endif // LFL_OSXINPUT
 
 #ifdef LFL_WININPUT
@@ -1044,21 +1051,7 @@ int Input::KeyEventDispatch(InputEvent::Id event, bool down) {
     if (g->toggle_bind.key == event && g->toggle_active.mode != Toggler::OneShot) return 0;
 
     if (event == paste_bind.key) { g->Input(Clipboard::Get()); return 1; }
-    switch (event) {
-      case Key::Backspace: g->Erase();       return 1;
-      case Key::Delete:    g->Erase();       return 1;
-      case Key::Return:    g->Enter();       return 1;
-      case Key::Left:      g->CursorLeft();  return 1;
-      case Key::Right:     g->CursorRight(); return 1;
-      case Key::Up:        g->HistUp();      return 1;
-      case Key::Down:      g->HistDown();    return 1;
-      case Key::PageUp:    g->PageUp();      return 1;
-      case Key::PageDown:  g->PageDown();    return 1;
-      case Key::Home:      g->Home();        return 1;
-      case Key::End:       g->End();         return 1;
-      case Key::Tab:       g->Tab();         return 1;
-      case Key::Escape:    g->Escape();      return 1;
-    }
+    if (g->HandleSpecialKey(event)) return 1;
 
     if (cmd_down) return 0;
     if (key >= 128) { /* ERROR("unhandled key ", event); */ continue; }
@@ -1127,6 +1120,25 @@ int Input::MouseEventDispatch(InputEvent::Id event, const point &p, int down) {
 
   if (FLAGS_input_debug && down) INFO("MouseEvent ", screen->mouse.DebugString(), " fired=", fired, ", guis=", screen->mouse_gui.size());
   return fired;
+}
+
+int KeyboardController::HandleSpecialKey(InputEvent::Id event) {
+  switch (event) {
+    case Key::Backspace: Erase();       return 1;
+    case Key::Delete:    Erase();       return 1;
+    case Key::Return:    Enter();       return 1;
+    case Key::Left:      CursorLeft();  return 1;
+    case Key::Right:     CursorRight(); return 1;
+    case Key::Up:        HistUp();      return 1;
+    case Key::Down:      HistDown();    return 1;
+    case Key::PageUp:    PageUp();      return 1;
+    case Key::PageDown:  PageDown();    return 1;
+    case Key::Home:      Home();        return 1;
+    case Key::End:       End();         return 1;
+    case Key::Tab:       Tab();         return 1;
+    case Key::Escape:    Escape();      return 1;
+  }
+  return 0;
 }
 
 int MouseController::Input(InputEvent::Id event, const point &p, int down, int flag) {

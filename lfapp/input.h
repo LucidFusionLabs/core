@@ -68,6 +68,7 @@ struct KeyboardController {
   bool active=0;
   KeyboardController() { ClearEvents(); }
 
+  int HandleSpecialKey(InputEvent::Id);
   void ClearEvents() { memzero(events); }
   virtual void Activate  () { active = 1; }
   virtual void Deactivate() { active = 0; }

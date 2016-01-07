@@ -93,6 +93,7 @@ struct Serializable {
     void Read32(unsigned long  *out) const { const unsigned long  *v = (unsigned long*)N32(); *out = v ? *v : 0; }
     void Read32(         long  *out) const { const          long  *v = (long*)         N32(); *out = v ? *v : 0; }
     void ReadString(StringPiece *out) const { Ntohl(&out->len); out->buf = Get(out->len); }
+
     template <class X> void ReadArray(ArrayPiece<X> *out) const
     { int l; Ntohl(&l); out->assign(reinterpret_cast<const X*>(Get(l)), l/sizeof(X)); }
   };
@@ -395,6 +396,7 @@ struct MultiProcessLayerTree : public Serializable {
 
 struct GameProtocol {
   struct Header : public Serializable::Header {};
+
   struct Position {
     static const int size = 12, scale = 1000;
     int x, y, z;
@@ -404,6 +406,7 @@ struct GameProtocol {
     void Out(Serializable::Stream *o) const { o->Htonl( x); o->Htonl( y); o->Htonl( z); }
     void In(const Serializable::Stream *i)  { i->Ntohl(&x); i->Ntohl(&y); i->Ntohl(&z); }
   };
+
   struct Orientation {
     static const int size = 12, scale=16384;
     short ort_x, ort_y, ort_z, up_x, up_y, up_z;
@@ -419,6 +422,7 @@ struct GameProtocol {
     void Out(Serializable::Stream *o) const { o->Htons( ort_x); o->Htons( ort_y); o->Htons( ort_z); o->Htons( up_x); o->Htons( up_y); o->Htons( up_z); }
     void In(const Serializable::Stream *i)  { i->Ntohs(&ort_x); i->Ntohs(&ort_y); i->Ntohs(&ort_z); i->Ntohs(&up_x); i->Ntohs(&up_y); i->Ntohs(&up_z); }
   };
+
   struct Velocity {
     static const int size = 6, scale=1000;
     unsigned short x, y, z;
@@ -428,6 +432,7 @@ struct GameProtocol {
     void Out(Serializable::Stream *o) const { o->Htons( x); o->Htons( y); o->Htons( z); }
     void In(const Serializable::Stream *i)  { i->Ntohs(&x); i->Ntohs(&y); i->Ntohs(&z); }
   };
+
   struct Entity {
     static const int size = 8 + Position::size + Orientation::size + Velocity::size;
     unsigned short id, type, anim_id, anim_len;
@@ -439,6 +444,7 @@ struct GameProtocol {
     void Out(Serializable::Stream *o) const { o->Htons( id); o->Htons( type); o->Htons( anim_id); o->Htons( anim_len); pos.Out(o); ort.Out(o); vel.Out(o); }
     void In(const Serializable::Stream *i)  { i->Ntohs(&id); i->Ntohs(&type); i->Ntohs(&anim_id); i->Ntohs(&anim_len); pos.In(i);  ort.In(i);  vel.In(i);  }
   };
+
   struct Collision {
     static const int size = 8;
     unsigned short fmt, id1, id2, time;
@@ -446,6 +452,7 @@ struct GameProtocol {
     void Out(Serializable::Stream *o) const { o->Htons( fmt); o->Htons( id1); o->Htons( id2); o->Htons( time); }
     void In(const Serializable::Stream *i)  { i->Ntohs(&fmt); i->Ntohs(&id1); i->Ntohs(&id2); i->Ntohs(&time); }
   };
+
   struct ChallengeRequest : public Serializable {
     static const int ID = 1;
     ChallengeRequest() : Serializable(ID) {}
@@ -455,6 +462,7 @@ struct GameProtocol {
     void Out(Serializable::Stream *o) const {}
     int   In(const Serializable::Stream *i) { return 0; }
   };
+
   struct ChallengeResponse : public Serializable {
     static const int ID = 2;
     int token;
@@ -465,6 +473,7 @@ struct GameProtocol {
     void Out(Serializable::Stream *o) const { o->Htonl( token); }
     int   In(const Serializable::Stream *i) { i->Ntohl(&token); return 0; }
   };
+
   struct JoinRequest : public Serializable {
     static const int ID = 3;
     int token;
@@ -476,6 +485,7 @@ struct GameProtocol {
     void Out(Serializable::Stream *o) const { o->Htonl( token); o->String(PlayerName); }
     int   In(const Serializable::Stream *i) { i->Ntohl(&token); PlayerName = i->Get(); return 0; }
   };
+
   struct JoinResponse : public Serializable {
     static const int ID = 4;
     string rcon;
@@ -486,6 +496,7 @@ struct GameProtocol {
     void Out(Serializable::Stream *o) const { o->String(rcon); }
     int   In(const Serializable::Stream *i) { rcon = i->Get(); return 0; }
   };
+
   struct WorldUpdate : public Serializable {
     static const int ID = 5;
     unsigned short id;
@@ -513,6 +524,7 @@ struct GameProtocol {
       return 0;
     }
   };
+
   struct PlayerUpdate : public Serializable {
     static const int ID = 6;
     unsigned short id_WorldUpdate, time_since_WorldUpdate;
@@ -525,6 +537,7 @@ struct GameProtocol {
     void Out(Serializable::Stream *o) const { o->Htons( id_WorldUpdate); o->Htons( time_since_WorldUpdate); o->Htonl( buttons); ort.Out(o); }
     int   In(const Serializable::Stream *i) { i->Ntohs(&id_WorldUpdate); i->Ntohs(&time_since_WorldUpdate); i->Ntohl(&buttons); ort.In(i); return 0; }
   };
+
   struct RconRequest : public Serializable {
     static const int ID = 7;
     string Text;
@@ -535,6 +548,7 @@ struct GameProtocol {
     void Out(Serializable::Stream *o) const { o->String(Text); }
     int   In(const Serializable::Stream *i) { Text = i->Get(); return 0; }
   };
+
   struct RconResponse : public Serializable {
     static const int ID = 8;
     RconResponse() : Serializable(ID) {}
@@ -544,6 +558,7 @@ struct GameProtocol {
     void Out(Serializable::Stream *o) const {}
     int   In(const Serializable::Stream *i) { return 0; }
   };
+
   struct PlayerList : public RconRequest {
     static const int ID = 9;
     PlayerList() { Id=ID; }

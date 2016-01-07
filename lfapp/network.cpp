@@ -1873,6 +1873,7 @@ struct SSHClientConnection : public Connection::Handler {
     if (!WriteKeyExchangeInit(c, false)) return ERRORv(-1, c->Name(), ": write");
     return 0;
   }
+
   int Read(Connection *c) {
     if (state == INIT) {
       int processed = 0;
@@ -2126,15 +2127,18 @@ struct SSHClientConnection : public Connection::Handler {
              " cipher=", cipher_pref, " mac=", mac_pref, " }");
     return c->WriteFlush(KEXINIT_C) == KEXINIT_C.size();
   }
+
   int ComputeExchangeHashAndVerifyHostKey(Connection *c, const StringPiece &k_s, const StringPiece &h_sig) {
     H_text = SSH::ComputeExchangeHash(kex_method, kex_hash, V_C, V_S, KEXINIT_C, KEXINIT_S, k_s, K, &dh, &ecdh);
     if (state == FIRST_KEXREPLY) session_id = H_text;
     SSHTrace(c->Name(), ": H = \"", CHexEscape(H_text), "\"");
     return SSH::VerifyHostKey(H_text, hostkey_type, k_s, h_sig);
   }
+
   string DeriveKey(Crypto::DigestAlgo algo, char ID, int bytes) {
     return SSH::DeriveKey(algo, session_id, H_text, K, ID, bytes);
   }
+
   int InitCipher(Connection *c, Crypto::Cipher *cipher, Crypto::CipherAlgo algo, const string &IV, const string &key, bool dir) {
     SSHTrace(c->Name(), ": ", dir ? "C->S" : "S->C", " IV  = \"", CHexEscape(IV),  "\"");
     SSHTrace(c->Name(), ": ", dir ? "C->S" : "S->C", " key = \"", CHexEscape(key), "\"");
@@ -2142,26 +2146,31 @@ struct SSHClientConnection : public Connection::Handler {
     Crypto::CipherInit(cipher);
     return Crypto::CipherOpen(cipher, algo, dir, key, IV);
   }
+
   string ReadCipher(Connection *c, const StringPiece &m) {
     string dec_text(m.size(), 0);
     if (Crypto::CipherUpdate(&decrypt, m, &dec_text[0], dec_text.size()) != 1) return ERRORv("", c->Name(), ": decrypt failed");
     return dec_text;
   }
+
   int WriteCipher(Connection *c, const string &m) {
     string enc_text(m.size(), 0);
     if (Crypto::CipherUpdate(&encrypt, m, &enc_text[0], enc_text.size()) != 1) return ERRORv(-1, c->Name(), ": encrypt failed");
     enc_text += SSH::MAC(mac_algo_c2s, MAC_len_c, m, sequence_number_c2s-1, integrity_c2s, mac_prefix_c2s);
     return c->WriteFlush(enc_text) == m.size() + X_or_Y(mac_prefix_c2s, MAC_len_c);
   }
+
   bool WriteCipher(Connection *c, const SSH::Serializable &m) {
     string text = m.ToString(rand_eng, encrypt_block_size, &sequence_number_c2s);
     return WriteCipher(c, text);
   }
+
   bool WriteClearOrEncrypted(Connection *c, const SSH::Serializable &m) {
     if (state > FIRST_NEWKEYS) return WriteCipher(c, m);
     string text = m.ToString(rand_eng, encrypt_block_size, &sequence_number_c2s);
     return c->WriteFlush(text) == text.size();
   }
+
   int WriteChannelData(Connection *c, const StringPiece &b) {
     if (!password_prompts) {
       if (!WriteCipher(c, SSH::MSG_CHANNEL_DATA(pty_channel.second, b))) return ERRORv(-1, c->Name(), ": write");
@@ -2173,6 +2182,7 @@ struct SSHClientConnection : public Connection::Handler {
     }
     return b.size();
   }
+
   bool WritePassword(Connection *c) {
     cb(c, "\r\n");
     bool success = false;
@@ -2186,10 +2196,12 @@ struct SSHClientConnection : public Connection::Handler {
     password_prompts = 0;
     return success;
   }
+
   void LoadPassword(Connection *c) {
     if ((loaded_pw = load_password_cb && load_password_cb(host, user, &pw))) WritePassword(c);
     if (loaded_pw) ClearPassword();
   }
+
   void ClearPassword() { pw.assign(pw.size(), ' '); pw.clear(); }
   void SetPasswordCB(const Vault::LoadPasswordCB &L, const Vault::SavePasswordCB &S) { load_password_cb=L; save_password_cb=S; }
   int SetTerminalWindowSize(Connection *c, int w, int h) {

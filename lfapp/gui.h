@@ -107,7 +107,7 @@ struct Widget {
     void LayoutComplete(Flow *flow, const Box &b);
   };
 
-  struct Scrollbar : public Interface {
+  struct Slider : public Interface {
     struct Flag { enum { Attached=1, Horizontal=2, NoCorner=4, AttachedHorizontal=Attached|Horizontal,
       AttachedNoCorner=Attached|NoCorner, AttachedHorizontalNoCorner=AttachedHorizontal|NoCorner }; };
     Box win;
@@ -116,8 +116,8 @@ struct Widget {
     Color color=Color(15, 15, 15, 55);
     Font *menuicon=0;
     bool dragging=0, dirty=0;
-    virtual ~Scrollbar() {}
-    Scrollbar(GUI *Gui, Box window=Box(), int f=Flag::Attached);
+    virtual ~Slider() {}
+    Slider(GUI *Gui, Box window=Box(), int f=Flag::Attached);
 
     float Percent() const { return scrolled * doc_height; }
     void LayoutFixed(const Box &w) { win = w; Layout(dot_size, dot_size, flag & Flag::Horizontal); }
@@ -130,7 +130,7 @@ struct Widget {
     void ScrollDown() { scrolled += increment / doc_height; Clamp(&scrolled, 0, 1); dirty=true; }
     float ScrollDelta() { float ret=scrolled-last_scrolled; last_scrolled=scrolled; return ret; }
     float AddScrollDelta(float cur_val);
-    static void AttachContentBox(Box *b, Scrollbar *vs, Scrollbar *hs);
+    static void AttachContentBox(Box *b, Slider *vs, Slider *hs);
   };
 };
 
@@ -624,10 +624,10 @@ struct TextureBoxDialog : public Dialog {
 };
 
 struct SliderDialog : public Dialog {
-  typedef function<void(Widget::Scrollbar*)> UpdatedCB;
+  typedef function<void(Widget::Slider*)> UpdatedCB;
   string title;
   UpdatedCB updated;
-  Widget::Scrollbar slider;
+  Widget::Slider slider;
   SliderDialog(const string &title="", const UpdatedCB &cb=UpdatedCB(), float scrolled=0, float total=100, float inc=1);
   void Layout() { Dialog::Layout(); slider.LayoutFixed(Box(0, -box.h, box.w, box.h)); }
   void Draw() { Dialog::Draw(); if (slider.dirty) { slider.Update(); if (updated) updated(&slider); } }
@@ -637,14 +637,14 @@ struct SliderFlagDialog : public SliderDialog {
   string flag_name;
   FlagMap *flag_map;
   SliderFlagDialog(const string &fn, float total=100, float inc=1);
-  virtual void Updated(Widget::Scrollbar *s) { flag_map->Set(flag_name, StrCat(s->Percent())); }
+  virtual void Updated(Widget::Slider *s) { flag_map->Set(flag_name, StrCat(s->Percent())); }
 };
 
 struct EditorDialog : public Dialog {
   struct Flag { enum { Wrap=Dialog::Flag::Next }; };
   Editor editor;
   Box content_box;
-  Widget::Scrollbar v_scrollbar, h_scrollbar;
+  Widget::Slider v_scrollbar, h_scrollbar;
   EditorDialog(Window *W, Font *F, File *I, float w=.5, float h=.5, int flag=0);
   void Layout();
   void Draw();

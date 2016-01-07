@@ -62,6 +62,7 @@ struct SimplePhysics : public Physics {
     for (Scene::EntityAssetMap::iterator i = scene->assetMap.begin(); i != scene->assetMap.end(); i++)
       for (Scene::EntityVector::iterator j = (*i).second.begin(); j != (*i).second.end(); j++) Update(*j, timestep);
   }
+
   static void Update(Entity *e, Time timestep) { e->pos.Add(e->vel * (timestep.count() / 1000.0)); }
 };
 }; // namespace LFL
@@ -84,6 +85,7 @@ struct Box2DScene : public Physics {
     bodyDef.angle = GetAngle(ort);
     return world.CreateBody(&bodyDef);
   }
+
   void AddFixture(b2Body *body, b2Shape *shape, float density, float friction) {
     b2FixtureDef fixtureDef;
     fixtureDef.shape = shape;
@@ -91,6 +93,7 @@ struct Box2DScene : public Physics {
     fixtureDef.friction = friction;
     body->CreateFixture(&fixtureDef);
   }
+
   virtual void *AddSphere(float radius, const v3 &pos, const v3 &ort, float mass, const CollidesWith &cw) {
     b2Body *body = Add(pos, ort);
     b2CircleShape circle;
@@ -99,6 +102,7 @@ struct Box2DScene : public Physics {
     body->SetBullet(true);
     return body;
   }
+
   virtual void *AddBox(const v3 &half_ext, const v3 &pos, const v3 &ort, float mass, const CollidesWith &cw) {
     b2Body *body = Add(pos, ort);
     b2PolygonShape dynamicBox;
@@ -106,6 +110,7 @@ struct Box2DScene : public Physics {
     AddFixture(body, &dynamicBox, 1.0, 0.3);
     return body;
   }
+
   virtual void *AddPlane(const v3 &normal, const v3 &pos, const CollidesWith &cw) { groundY = pos.y; return 0; }
   virtual void Input(const Entity *e, Time timestep, bool angular) {
     if (!e || !e->body) return;
@@ -125,6 +130,7 @@ struct Box2DScene : public Physics {
       body->SetAngularVelocity(delta * 1000.0 / timestep.count());
     }
   }
+
   virtual void Output(Entity *e, Time timestep) {
     if (!e || !e->body) return;
     b2Body *body = (b2Body*)e->body;
@@ -141,6 +147,7 @@ struct Box2DScene : public Physics {
     e->ort = v3(orientation.x, 0, orientation.y);        
     e->up = v3(0, 1, 0);
   }
+
   virtual void SetPosition(Entity *e, const v3 &pos, const v3 &ort) {
     b2Body *body = (b2Body*)e->body;
     body->SetTransform(b2Vec2(pos.x, pos.z), GetAngle(ort));
@@ -155,6 +162,7 @@ struct Box2DScene : public Physics {
       if (1) /*(!contact_pts)*/ { cb(eA, eB, 0, 0); continue; }
     }
   }
+
   virtual void Update(Time timestep) {
     static int velocityIterations = 6, positionIterations = 2;
     world.Step(timestep.count()/1000.0, velocityIterations, positionIterations);
@@ -195,6 +203,7 @@ struct BulletScene : public Physics {
     dynamicsWorld->addRigidBody(rigidBody, cw.self, cw.collides);
     return rigidBody;
   }
+
   void *Add(btCollisionShape *shape, v3 pos, float mass, const CollidesWith &cw) {
     btVector3 inertia(0,0,0);
     if (mass) shape->calculateLocalInertia(mass, inertia);
@@ -202,6 +211,7 @@ struct BulletScene : public Physics {
     body->setActivationState(DISABLE_DEACTIVATION);
     return Add(body, cw);
   }
+
   void *AddSphere(float radius, const v3 &pos, const v3 &ort, float mass, const CollidesWith &cw) { return Add(new btSphereShape(radius), pos, mass, cw); }
   void *AddBox(const v3 &half_ext, const v3 &pos, const v3 &ort, float mass, const CollidesWith &cw) { return Add(new btBoxShape(Vector(half_ext)), pos, mass, cw); }
   void *AddPlane(const v3 &normal, const v3 &pos, const CollidesWith &cw) { return Add(new btStaticPlaneShape(Vector(normal), -Plane(pos, normal).d), v3(0,0,0), 0, cw); }
@@ -234,6 +244,7 @@ struct BulletScene : public Physics {
 
     body->setAngularVelocity(avel);
   }
+
   void Output(Entity *e, Time timestep) {
     btRigidBody *body = (btRigidBody*)e->body;
     btVector3 vel = body->getLinearVelocity();
@@ -249,12 +260,14 @@ struct BulletScene : public Physics {
     e->ort = v3(ort[0], ort[1], ort[2]);
     e->up = v3(up[0], up[1], up[2]);
   }
+
   void SetPosition(Entity *e, const v3 &pos, const v3 &ort) {
     btRigidBody *body = (btRigidBody*)e->body;
     btTransform trans = body->getCenterOfMassTransform();
     trans.setOrigin(btVector3(pos.x, pos.y, pos.z));
     body->setCenterOfMassTransform(trans);
   }
+
   void SetContinuous(Entity *e, float threshhold, float sweepradius) {
     btRigidBody *body = (btRigidBody*)e->body;
     body->setCcdMotionThreshold(threshhold);
@@ -311,6 +324,7 @@ struct ODEScene : public Physics {
     contactgroup = dJointGroupCreate(0);
     SetGravity(v3(0,0,0));
   }
+
   virtual ~ODEScene() {
     dJointGroupDestroy(contactgroup);
     dSpaceDestroy(space);
@@ -321,6 +335,7 @@ struct ODEScene : public Physics {
     dGeomID geom = (dGeomID)b;
     dGeomDestroy(geom);
   }
+
   virtual void SetGravity(const v3 &gravity) { dWorldSetGravity(world, gravity.x, gravity.y, gravity.z); }
   virtual void *AddPlane(const v3 &normal, const v3 &pos, const CollidesWith &cw) {
     Plane plane(pos, normal);
@@ -329,14 +344,17 @@ struct ODEScene : public Physics {
     dGeomSetCollideBits(geom, cw.collides);
     return geom;
   }
+
   virtual void *AddBox(const v3 &half_ext, const v3 &pos, const v3 &ort, float mass, const CollidesWith &cw) {
     return NewObject(dBodyCreate(world), pos, cw,
                      dCreateBox(space, half_ext.x*2, half_ext.y*2, half_ext.z*2),
                      MassBox(mass, 1, half_ext.x*2, half_ext.y*2, half_ext.z*2));
   }
+
   virtual void *AddSphere(float radius, const v3 &pos, const v3 &ort, float mass, const CollidesWith &cw) {
     return NewObject(dBodyCreate(world), pos, cw, dCreateSphere(space, radius), MassSphere(mass, 1, radius));
   }
+
   virtual void Input(const Entity *e, Time timestep, bool angular) {
     if (!e->body) return;
     dGeomID geom = (dGeomID)e->body;
@@ -358,6 +376,7 @@ struct ODEScene : public Physics {
     };
     dGeomSetRotation(geom, r);
   }
+
   virtual void Output(Entity *e, Time timestep) {
     if (!e->body) return;
     dGeomID geom = (dGeomID)e->body;
@@ -373,6 +392,7 @@ struct ODEScene : public Physics {
     const dReal *vel = dBodyGetLinearVel(body);
     e->vel = v3(vel[0], vel[1], vel[2]);
   }
+
   virtual void SetPosition(Entity *e, const v3 &pos, const v3 &ort) {
     if (!e->body) return;
     dGeomID geom = (dGeomID)e->body;
@@ -387,6 +407,7 @@ struct ODEScene : public Physics {
 
     dJointGroupEmpty(contactgroup);
   }
+
   virtual void Collide(dGeomID o1, dGeomID o2, dContact *contact) {
     dBodyID b1 = dGeomGetBody(o1), b2 = dGeomGetBody(o2);
     dJointID j = dJointCreateContact(world, contactgroup, contact);
@@ -402,12 +423,14 @@ struct ODEScene : public Physics {
     dMassAdjust(&m, mass);
     return m;
   }
+
   static dMass MassSphere(float mass, float density, float radius) {
     dMass m;
     dMassSetSphere(&m, density, radius);
     dMassAdjust(&m, mass);
     return m;
   }
+
   static dGeomID NewObject(dBodyID body, v3 pos, CollidesWith cw, dGeomID geom, dMass mass) {
     dBodySetMass(body, &mass);
     dGeomSetBody(geom, body);

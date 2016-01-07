@@ -235,9 +235,9 @@ struct DocumentParser {
     if (image_tex) {
       CHECK_EQ(image_tex->get(), 0);
       if (shared_ptr<Texture> *cached = image_cache.Get(url)) { *image_tex = *cached; return; }
-      *image_tex = shared_ptr<Texture>(new Texture());
-      image_cache.Insert(url, *image_tex);
+      *image_tex = make_shared<Texture>();
       image_cache.EvictUnique();
+      image_cache.Insert(url, *image_tex);
     }
 
     if (data_url) {

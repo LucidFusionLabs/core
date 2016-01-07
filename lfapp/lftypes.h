@@ -489,7 +489,7 @@ struct LRUCache {
   void Reserve() { used.reserve(capacity); data.reserve(capacity); }
   void Evict() { while (used.size() > capacity) data.erase(PopFront(used).first); } 
   void EvictUnique() {
-    for (auto i = used.begin(), e = used.end(); i != e && used.size() > capacity; /**/) {
+    for (auto i = used.begin(); i != used.end() && used.size() > capacity; /**/) {
       if (!i->second.unique()) ++i;
       else { data.erase(i->first); i = used.erase(i); }
     }

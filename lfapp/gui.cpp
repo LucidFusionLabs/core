@@ -104,11 +104,11 @@ void Widget::Button::LayoutComplete(Flow *flow, const Box &b) {
   }
 }
 
-Widget::Scrollbar::Scrollbar(GUI *Gui, Box window, int f) : Interface(Gui), win(window), flag(f), menuicon(Fonts::Get("MenuAtlas", "", 0, Color::white, Color::clear, 0)) {
+Widget::Slider::Slider(GUI *Gui, Box window, int f) : Interface(Gui), win(window), flag(f), menuicon(Fonts::Get("MenuAtlas", "", 0, Color::white, Color::clear, 0)) {
   if (win.w && win.h) { if (f & Flag::Attached) LayoutAttached(win); else LayoutFixed(win); }
 }
 
-void Widget::Scrollbar::LayoutAttached(const Box &w) {
+void Widget::Slider::LayoutAttached(const Box &w) {
   win = w;
   int aw = dot_size, ah = dot_size;
   bool flip = flag & Flag::Horizontal;
@@ -121,7 +121,7 @@ void Widget::Scrollbar::LayoutAttached(const Box &w) {
   Layout(aw, ah, flip);
 }
 
-void Widget::Scrollbar::Layout(int aw, int ah, bool flip) {
+void Widget::Slider::Layout(int aw, int ah, bool flip) {
   Box arrow_down = win;
   if (flip) { arrow_down.w = aw; win.x += aw; }
   else      { arrow_down.h = ah; win.y += ah; }
@@ -136,14 +136,14 @@ void Widget::Scrollbar::Layout(int aw, int ah, bool flip) {
     gui->child_box.PushBack(arrow_down, attr_id, menuicon ? menuicon->FindGlyph(flip ? 3 : 1) : 0);
     gui->child_box.PushBack(scroll_dot, attr_id, menuicon ? menuicon->FindGlyph(           5) : 0, &drawbox_ind);
 
-    AddDragBox(scroll_dot, MouseController::CB(bind(&Scrollbar::DragScrollDot, this)));
-    AddClickBox(arrow_up,   MouseController::CB(bind(flip ? &Scrollbar::ScrollDown : &Scrollbar::ScrollUp,   this)));
-    AddClickBox(arrow_down, MouseController::CB(bind(flip ? &Scrollbar::ScrollUp   : &Scrollbar::ScrollDown, this)));
+    AddDragBox(scroll_dot, MouseController::CB(bind(&Slider::DragScrollDot, this)));
+    AddClickBox(arrow_up,   MouseController::CB(bind(flip ? &Slider::ScrollDown : &Slider::ScrollUp,   this)));
+    AddClickBox(arrow_down, MouseController::CB(bind(flip ? &Slider::ScrollUp   : &Slider::ScrollDown, this)));
   }
   Update(true);
 }
 
-void Widget::Scrollbar::Update(bool force) {
+void Widget::Slider::Update(bool force) {
   if (!app->input || !app->input->MouseButton1Down()) dragging = false;
   if (!dragging && !dirty && !force) return;
   bool flip = flag & Flag::Horizontal;
@@ -157,13 +157,13 @@ void Widget::Scrollbar::Update(bool force) {
   dirty = false;
 }
 
-float Widget::Scrollbar::AddScrollDelta(float cur_val) {
+float Widget::Slider::AddScrollDelta(float cur_val) {
   scrolled = Clamp(cur_val + ScrollDelta(), 0, 1);
   if (EqualChanged(&last_scrolled, scrolled)) dirty = 1;
   return scrolled;
 }
   
-void Widget::Scrollbar::AttachContentBox(Box *b, Scrollbar *vs, Scrollbar *hs) {
+void Widget::Slider::AttachContentBox(Box *b, Slider *vs, Slider *hs) {
   if (vs) { vs->LayoutAttached(*b); }
   if (hs) { hs->LayoutAttached(*b); MinusPlus(&b->h, &b->y, vs->dot_size); }
   if (vs) b->w -= vs->dot_size;
@@ -543,7 +543,16 @@ void TextGUI::UpdateLongToken(Line *BL, int beg_offset, Line *EL, int end_offset
 }
 
 point TilesTextGUI::PaintCB(Line *l, point lp, const Box &b) {
-  tiles->AddDrawableBoxArray(l->data->glyphs, lp + b.Position() + offset);
+  Box box = b + offset;
+  tiles->ContextOpen();
+  tiles->AddScissor(box);
+
+  // tiles->SetAttr(&a);
+  tiles->InitDrawBox(box.Position());
+  tiles->DrawBox(Singleton<BoxFilled>::Get(), box, NULL);
+
+  tiles->AddDrawableBoxArray(l->data->glyphs, lp + b.TopLeft() + offset);
+  tiles->ContextClose();
   return point(lp.x, lp.y-b.h);
 }
 
@@ -1663,7 +1672,7 @@ void MessageBoxDialog::Draw() {
 }
 
 SliderDialog::SliderDialog(const string &t, const SliderDialog::UpdatedCB &cb, float scrolled, float total, float inc) :
-  Dialog(.3, .05), updated(cb), slider(this, Box(), Widget::Scrollbar::Flag::Horizontal) {
+  Dialog(.3, .05), updated(cb), slider(this, Box(), Widget::Slider::Flag::Horizontal) {
   title_text = t;
   slider.scrolled = scrolled;
   slider.doc_height = total;
@@ -1675,12 +1684,12 @@ SliderFlagDialog::SliderFlagDialog(const string &fn, float total, float inc) :
   flag_name(fn), flag_map(Singleton<FlagMap>::Get()) {}
 
 EditorDialog::EditorDialog(Window *W, Font *F, File *I, float w, float h, int flag) :
-  Dialog(w, h, flag), editor(W, F, I, flag & Flag::Wrap), v_scrollbar(this, Box(), Widget::Scrollbar::Flag::AttachedNoCorner),
-  h_scrollbar(this, Box(), Widget::Scrollbar::Flag::AttachedHorizontalNoCorner) {}
+  Dialog(w, h, flag), editor(W, F, I, flag & Flag::Wrap), v_scrollbar(this, Box(), Widget::Slider::Flag::AttachedNoCorner),
+  h_scrollbar(this, Box(), Widget::Slider::Flag::AttachedHorizontalNoCorner) {}
 
 void EditorDialog::Layout() {
   Dialog::Layout();
-  Widget::Scrollbar::AttachContentBox(&(content_box = Box(0, -box.h, box.w, box.h)), &v_scrollbar, editor.Wrap() ? NULL : &h_scrollbar);
+  Widget::Slider::AttachContentBox(&(content_box = Box(0, -box.h, box.w, box.h)), &v_scrollbar, editor.Wrap() ? NULL : &h_scrollbar);
 }
 
 void EditorDialog::Draw() {
