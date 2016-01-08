@@ -87,8 +87,8 @@ TEST(DOMTest, DOMTree) {
   GUI sb_gui;
   Browser sb(&sb_gui, screen->Box());
   sb.doc.parser->OpenHTML("<html>\n"
-                          "<head><style> h1 { background-color: #111111; } </style></head>\n"
-                          "<body style=\"background-color: #00ff00\">\n"
+                          "<head><style> h1 { background-color: #123456; } </style></head>\n"
+                          "<body style=\"background-color: #654321\">\n"
                           "<H1 class=\"foo  bar\">Very header</h1>\n"
                           "<P id=cat>In  the  begining  was  fun.</p>\n"
                           "</body>\n");
@@ -146,7 +146,7 @@ TEST(DOMTest, DOMTree) {
   EXPECT_EQ(body_node->AsElement(), body_element);
   EXPECT_EQ(body_node->AsHTMLBodyElement(), body_element);
   EXPECT_EQ("body", String::ToUTF8(body_element->tagName));
-  EXPECT_EQ("background-color: #00ff00", String::ToUTF8(body_element->getAttribute("style")));
+  EXPECT_EQ("background-color: #654321", String::ToUTF8(body_element->getAttribute("style")));
   EXPECT_EQ(2, body_element->childNodes.length());
 #ifdef LFL_LIBCSS
   css_qname body_qn = { 0, 0 }, body_query = { 0, LibCSS_String::Intern("body") };
@@ -171,7 +171,7 @@ TEST(DOMTest, DOMTree) {
   EXPECT_EQ(1, matched);
   StyleContext::NodeHasAttributeEqual(0, body_node, &style_query, foo_query.name, &matched);
   EXPECT_EQ(0, matched);
-  StyleContext::NodeHasAttributeEqual(0, body_node, &style_query, LibCSS_String::Intern("background-color: #00ff00"), &matched);
+  StyleContext::NodeHasAttributeEqual(0, body_node, &style_query, LibCSS_String::Intern("background-color: #654321"), &matched);
   EXPECT_EQ(1, matched);
   StyleContext::NodeHasAttributeDashmatch(0, body_node, &style_query, foo_query.name, &matched);
   EXPECT_EQ(0, matched);
@@ -183,11 +183,11 @@ TEST(DOMTest, DOMTree) {
   EXPECT_EQ(1, matched);
   StyleContext::NodeHasAttributePrefix(0, body_node, &style_query, foo_query.name, &matched);
   EXPECT_EQ(0, matched);
-  StyleContext::NodeHasAttributePrefix(0, body_node, &style_query, LibCSS_String::Intern("background-color: #0"), &matched);
+  StyleContext::NodeHasAttributePrefix(0, body_node, &style_query, LibCSS_String::Intern("background-color: #6"), &matched);
   EXPECT_EQ(1, matched);
   StyleContext::NodeHasAttributeSuffix(0, body_node, &style_query, foo_query.name, &matched);
   EXPECT_EQ(0, matched);
-  StyleContext::NodeHasAttributeSuffix(0, body_node, &style_query, LibCSS_String::Intern("0ff00"), &matched);
+  StyleContext::NodeHasAttributeSuffix(0, body_node, &style_query, LibCSS_String::Intern("54321"), &matched);
   EXPECT_EQ(1, matched);
   StyleContext::NodeHasAttributeSubstring(0, body_node, &style_query, foo_query.name, &matched);
   EXPECT_EQ(0, matched);
@@ -195,7 +195,7 @@ TEST(DOMTest, DOMTree) {
   EXPECT_EQ(1, matched);
   CHECK(body_node->render);
   EXPECT_EQ(LFL::DOM::Display::Block, body_node->render->style.Display().v);
-  EXPECT_EQ("00FF00", String::ToUTF8(body_node->render->style.BackgroundColor().cssText()));
+  EXPECT_EQ("654321", String::ToUTF8(body_node->render->style.BackgroundColor().cssText()));
 #endif
 
   LFL::DOM::Node *h_node = body_element->firstChild();
@@ -239,7 +239,7 @@ TEST(DOMTest, DOMTree) {
   CHECK(h_node->render);
   EXPECT_EQ(LFL::DOM::Display::Block, h_node->render->style.Display().v);
   EXPECT_EQ("000000", String::ToUTF8(h_node->render->style.Color().cssText()));
-  EXPECT_EQ("111111", String::ToUTF8(h_node->render->style.BackgroundColor().cssText()));
+  EXPECT_EQ("123456", String::ToUTF8(h_node->render->style.BackgroundColor().cssText()));
 #endif
 
   LFL::DOM::Node *h1_text = h_element->firstChild();

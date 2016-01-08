@@ -548,9 +548,10 @@ Box Box3::BoundingBox() const {
 
 string Drawable::Attr::DebugString() const {
   return StrCat("Attr ", (void*)this,
-                " = { font=", font?CheckPointer(font->desc)->DebugString():"", ", fg=", fg?fg->DebugString():"",
-                ", bg=", bg?bg->DebugString():"", ", tex=", tex?tex->ID:0,
-                ", scissor=", scissor?scissor->DebugString():"", ", blend=", blend, " }");
+                " = { font=", font?CheckPointer(font->desc)->DebugString():string(), ", fg=", fg?fg->DebugString():string(),
+                ", bg=", bg?bg->DebugString():string(), ", tex=", tex?tex->ID:0,
+                ", scissor=", scissor?StrCat(scissor->x, ",", scissor->y, ",", scissor->w, ",", scissor->h):string(),
+                ", blend=", blend, " }");
 }
 
 void Drawable::AttrVec::Insert(const Drawable::Attr &v) {

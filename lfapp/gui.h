@@ -277,7 +277,7 @@ struct TextGUI : public KeyboardGUI, public Drawable::AttrSource {
     int lines=0;
 
     LinesFrameBuffer *Attach(LinesFrameBuffer **last_fb);
-    virtual bool SizeChanged(int W, int H, Font *font);
+    virtual bool SizeChanged(int W, int H, Font *font, const Color *bgc);
     virtual int Height() const { return lines * font_height; }
     tvirtual void Clear(Line *l) { RingFrameBuffer::Clear(l, Box(w, l->Lines() * font_height), true); }
     tvirtual void Update(Line *l, int flag=0);
@@ -367,7 +367,7 @@ struct TextGUI : public KeyboardGUI, public Drawable::AttrSource {
   virtual LinesFrameBuffer *GetFrameBuffer() { return &cmd_fb; }
   virtual void ResetGL() { cmd_fb.Reset(); }
   virtual void UpdateCursorX(int x) { cursor.i.x = x; UpdateCursor(); }
-  virtual void UpdateCursor() { cursor.p = cmd_line.data->glyphs.Position(cursor.i.x); }
+  virtual void UpdateCursor() { cursor.p = cmd_line.data->glyphs.Position(cursor.i.x) + point(0, font->Height()); }
   virtual void UpdateCommandFB() { UpdateLineFB(&cmd_line, &cmd_fb); }
   virtual void UpdateLineFB(Line *L, LinesFrameBuffer *fb);
   virtual void Draw(const Box &b);

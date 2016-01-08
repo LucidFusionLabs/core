@@ -675,10 +675,11 @@ template <class Line> struct RingFrameBuffer {
   virtual int Width()  const { return w; }
   virtual int Height() const { return h; }
   virtual void SizeChangedDone() { fb.Release(); scroll=v2(); p=point(); }
-  virtual bool SizeChanged(int W, int H, Font *font) {
+  virtual bool SizeChanged(int W, int H, Font *font, const Color *bgc) {
     if (W == w && H == h && font->size == font_size) return false;
     SetDimensions(W, H, font);
     fb.Resize(w, Height(), FrameBuffer::Flag::CreateGL | FrameBuffer::Flag::CreateTexture);
+    ScopedClearColor scc(bgc);
     screen->gd->Clear();
     screen->gd->DrawMode(DrawMode::_2D, false);
     return true;

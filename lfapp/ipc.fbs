@@ -8,7 +8,7 @@ table AllocateBufferResponse { mpb: ResourceHandle; mpb_id: int; }
 table CloseBufferRequest { mpb_id: int; }
 table CloseBufferResponse { success: bool; }
 
-struct Color { r: ubyte; b: ubyte; g: ubyte; a: ubyte; }
+struct Color { r: ubyte; g: ubyte; b: ubyte; a: ubyte; }
 table SetClearColorRequest { c: Color; }
 table SetClearColorResponse { success: bool; }
 

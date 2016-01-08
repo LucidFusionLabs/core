@@ -1402,7 +1402,7 @@ void TextureArray::DrawSequence(Asset *out, Entity *e) {
 }
 
 void LayersInterface::Update() {
-  for (auto i : this->layer) i->Run(0);
+  for (auto i : this->layer) i->Run(TilesInterface::RunFlag::ClearEmpty);
   if (app->main_process) app->main_process->SwapTree(0, this);
 }
 
@@ -1456,26 +1456,38 @@ void Tiles::AddScissor(const Box &b) {
   TilesPostAdd(this, &GraphicsDevice::PopScissor, screen->gd);
 }
 
+#ifdef  LFL_TILES_IPC_DEBUG
+#define TilesIPCDebug(...) printf(__VA_ARGS__)
+#else
+#define TilesIPCDebug(...)
+#endif
+
 void TilesIPC::SetAttr(const Drawable::Attr *a) {
   attr = a;
   prepend[context_depth]->cb.Add(MultiProcessPaintResource::SetAttr(*attr));
+  TilesIPCDebug("TilesIPC SetAttr %s\n", a->DebugString().c_str());
 }
 void TilesIPC::InitDrawBox(const point &p) {
   prepend[context_depth]->cb.Add(MultiProcessPaintResource::InitDrawBox(p));
   if (attr->scissor) AddScissor(*attr->scissor + p);
+  TilesIPCDebug("TilesIPC InitDrawBox %s\n", p.DebugString().c_str());
 }
 void TilesIPC::InitDrawBackground(const point &p) {
   prepend[context_depth]->cb.Add(MultiProcessPaintResource::InitDrawBackground(p));
+  TilesIPCDebug("TilesIPC InitDrawBackground %s\n", p.DebugString().c_str());
 }
 void TilesIPC::DrawBox(const Drawable *d, const Box &b, const Drawable::Attr*) {
   if (d) AddCallback(&b, MultiProcessPaintResource::DrawBox(b, d->TexId()));
+  TilesIPCDebug("TilesIPC DrawBox %s\n", b.DebugString().c_str());
 }
 void TilesIPC::DrawBackground(const Box &b) {
   AddCallback(&b, MultiProcessPaintResource::DrawBackground(b));
+  TilesIPCDebug("TilesIPC DrawBackground %s\n", b.DebugString().c_str());
 }
 void TilesIPC::AddScissor(const Box &b) {
   prepend[context_depth]->cb.Add(MultiProcessPaintResource::PushScissor(b));
   append [context_depth]->cb.Add(MultiProcessPaintResource::PopScissor());
+  TilesIPCDebug("TilesIPC AddScissor %s\n", b.DebugString().c_str());
 }
 
 void TilesIPCClient::Run(int flag) {
@@ -1486,35 +1498,29 @@ void TilesIPCClient::Run(int flag) {
   }
 }
 
-#ifdef  LFL_MULTIPROCESSPAINTRESOURCE_DEBUG
-#define MPPRDebug(...) printf(__VA_ARGS__)
-#else
-#define MPPRDebug(...)
-#endif
-
 int MultiProcessPaintResource::Run(const Box &t) const {
   ProcessAPIClient *s = CheckPointer(app->render_process);
   Iterator i(data.buf);
   int si=0, sd=0, count=0; 
-  MPPRDebug("MPPR Begin\n");
+  TilesIPCDebug("MPPR Begin\n");
   for (; i.offset + sizeof(int) < data.size(); count++) {
     int type = *i.Get<int>();
     switch (type) {
       default:                       FATAL("unknown type ", type);
-      case SetAttr           ::Type: { auto c=i.Get<SetAttr>           (); c->Update(&attr, app->render_process);            i.offset += SetAttr           ::Size; MPPRDebug("MPPR SetAttr\n");                                    } break;
-      case InitDrawBox       ::Type: { auto c=i.Get<InitDrawBox>       (); DrawableBoxRun(0,0,&attr).draw(c->p);             i.offset += InitDrawBox       ::Size; MPPRDebug("MPPR InitDrawBox %s\n", c->p.DebugString().c_str()); } break;
-      case InitDrawBackground::Type: { auto c=i.Get<InitDrawBackground>(); DrawableBoxRun(0,0,&attr).DrawBackground(c->p);   i.offset += InitDrawBackground::Size; MPPRDebug("MPPR InitDrawBG %s\n",  c->p.DebugString().c_str()); } break;
-      case DrawBackground    ::Type: { auto c=i.Get<DrawBackground>    (); c->b.Draw();                                      i.offset += DrawBackground    ::Size; MPPRDebug("MPPR DrawBG %s\n",      c->b.DebugString().c_str()); } break;
-      case PushScissor       ::Type: { auto c=i.Get<PushScissor>       (); screen->gd->PushScissorOffset(t, c->b);     si++; i.offset += PushScissor       ::Size; MPPRDebug("MPPR PushScissor %s\n", c->b.DebugString().c_str()); } break;
-      case PopScissor        ::Type: { auto c=i.Get<PopScissor>        (); screen->gd->PopScissor(); CHECK_LT(sd, si); sd++; i.offset += PopScissor        ::Size; MPPRDebug("MPPR PopScissor\n");                                 } break;
+      case SetAttr           ::Type: { auto c=i.Get<SetAttr>           (); c->Update(&attr, app->render_process);            i.offset += SetAttr           ::Size; TilesIPCDebug("MPPR SetAttr %s\n",     attr.DebugString().c_str()); } break;
+      case InitDrawBox       ::Type: { auto c=i.Get<InitDrawBox>       (); DrawableBoxRun(0,0,&attr).draw(c->p);             i.offset += InitDrawBox       ::Size; TilesIPCDebug("MPPR InitDrawBox %s\n", c->p.DebugString().c_str()); } break;
+      case InitDrawBackground::Type: { auto c=i.Get<InitDrawBackground>(); DrawableBoxRun(0,0,&attr).DrawBackground(c->p);   i.offset += InitDrawBackground::Size; TilesIPCDebug("MPPR InitDrawBG %s\n",  c->p.DebugString().c_str()); } break;
+      case DrawBackground    ::Type: { auto c=i.Get<DrawBackground>    (); c->b.Draw();                                      i.offset += DrawBackground    ::Size; TilesIPCDebug("MPPR DrawBG %s\n",      c->b.DebugString().c_str()); } break;
+      case PushScissor       ::Type: { auto c=i.Get<PushScissor>       (); screen->gd->PushScissorOffset(t, c->b);     si++; i.offset += PushScissor       ::Size; TilesIPCDebug("MPPR PushScissor %s\n", c->b.DebugString().c_str()); } break;
+      case PopScissor        ::Type: { auto c=i.Get<PopScissor>        (); screen->gd->PopScissor(); CHECK_LT(sd, si); sd++; i.offset += PopScissor        ::Size; TilesIPCDebug("MPPR PopScissor\n");                                 } break;
       case DrawBox           ::Type: { auto c=i.Get<DrawBox>           ();
                                        auto d=(c->id > 0 && c->id <= s->drawable.size()) ? s->drawable[c->id-1] : Singleton<BoxFilled>::Get();
-                                       d->Draw(c->b, &attr); i.offset += DrawBox::Size; MPPRDebug("DrawBox MPPR %s\n", c->b.DebugString().c_str());
+                                       d->Draw(c->b, &attr); i.offset += DrawBox::Size; TilesIPCDebug("DrawBox MPPR %s\n", c->b.DebugString().c_str());
                                      } break;
     }
   }
   if (si != sd) { ERROR("mismatching scissor ", si, " != ", sd); for (int i=sd; i<si; ++i) screen->gd->PopScissor(); }
-  MPPRDebug("MPPR End\n");
+  TilesIPCDebug("MPPR End\n");
   return count;
 }
 

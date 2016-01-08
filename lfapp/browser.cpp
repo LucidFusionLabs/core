@@ -73,14 +73,14 @@ void StyleContext::Match(ComputedStyle *out, LFL::DOM::Node *node, const Compute
                                     inline_style ? inline_style->sheet : 0, SelectHandler(), this, &out->style));
 
   lwc_string **n; css_fixed s; css_unit su; css_color c;
-  out->font_not_inherited =
+  out->color_not_inherited   = css_computed_color           (out->Style(), &c) == CSS_COLOR_COLOR;
+  out->bgcolor_not_inherited = css_computed_background_color(out->Style(), &c) == CSS_BACKGROUND_COLOR_COLOR;
+  out->font_not_inherited = out->color_not_inherited || out->bgcolor_not_inherited ||
     (css_computed_font_family (out->Style(), &n)      != CSS_FONT_FAMILY_INHERIT) ||
     (css_computed_font_size   (out->Style(), &s, &su) != CSS_FONT_SIZE_INHERIT)   ||
     (css_computed_font_style  (out->Style())          != CSS_FONT_STYLE_INHERIT)  ||
     (css_computed_font_weight (out->Style())          != CSS_FONT_WEIGHT_INHERIT) ||
     (css_computed_font_variant(out->Style())          != CSS_FONT_VARIANT_INHERIT);
-
-  out->bgcolor_not_inherited = css_computed_background_color(out->Style(), &c) == CSS_BACKGROUND_COLOR_COLOR;
 
   if (parent_sheet)
     CHECK_EQ(css_computed_style_compose(parent_sheet->Style(), out->Style(), ComputeFontSize, NULL, out->Style()), CSS_OK);
@@ -291,13 +291,13 @@ void DOM::Renderer::UpdateStyle(Flow *F) {
   lowercase        = texttransform .v == DOM::TextTransform::Lowercase;
   capitalize       = texttransform .v == DOM::TextTransform::Capitalize;
 
-  if (n->nodeType == DOM::TEXT_NODE) {
-    color = style.Color().v;
-    color.a() = 1.0;
-  }
-  if (style.bgcolor_not_inherited) {
-    background_color = style.BackgroundColor().v;
-  }
+  if (style.color_not_inherited)                                       color = Color(style.Color().v, 1.0);
+  else if (!style.node->parentNode || !style.node->parentNode->render) color = Color(style.Color().v, 1.0);
+  else                                                                 color = style.node->parentNode->render->color;
+
+  if (style.bgcolor_not_inherited && style.BackgroundColor().v.a())    background_color = style.BackgroundColor().v;
+  else if (!style.node->parentNode || !style.node->parentNode->render) background_color = style.BackgroundColor().v;
+  else                                                                 background_color = style.node->parentNode->render->background_color;
 
   os            = os       .Null() ? 0 : os.v;
   bs_t          = bs_top   .Null() ? 0 : bs_top.v;
@@ -699,14 +699,14 @@ DOM::Node *Browser::LayoutNode(Flow *flow, DOM::Node *n, bool reflow) {
   render->clear_height = flow->container->AsFloatContainer()->ClearFloats(flow->p.y, flow->cur_line.height, render->clear_left, render->clear_right);
   if (render->clear_height) flow->AppendVerticalSpace(render->clear_height);
 
-  if (style->font_not_inherited || !(render->child_flow.cur_attr.font = flow->cur_attr.font)) render->child_flow.cur_attr.font = render->UpdateFont(flow);
-  if (style->is_root) flow->SetFont(render->child_flow.cur_attr.font);
+  if (style->font_not_inherited || !(render->child_flow.cur_attr.font = flow->cur_attr.font))
+    flow->SetFont((render->child_flow.cur_attr.font = render->UpdateFont(flow)));
 
   if (render->block_level_box) {
     if (!table_element) {
       if (!flow->cur_line.fresh && (render->normal_flow || render->position_absolute) && 
           !render->inline_block && !render->floating && !render->position_absolute) flow->AppendNewlines(1);
-      render->box.y = flow->p.y;
+      render->box.y = -flow->Height();
     }
     render->child_flow = Flow(&render->box, render->child_flow.cur_attr.font, render->child_box.Reset());
     render->flow = &render->child_flow;
@@ -721,7 +721,7 @@ DOM::Node *Browser::LayoutNode(Flow *flow, DOM::Node *n, bool reflow) {
   int beg_out_ind = render->flow->out->Size(), beg_line_ind = render->flow->out->line_ind.size();
 
   if (n->nodeType == DOM::TEXT_NODE) {
-    if (1)                                render->flow->SetFGColor(&render->color);
+    if (1)                                render->flow->SetFGColor(&Color::white); // &render->color);
     // if (style->bgcolor_not_inherited)  render->flow->SetBGColor(&render->background_color);
     render->flow->AppendText(n->AsText()->data);
   } else if (is_image || (is_input && StringEquals(n->AsElement()->getAttribute("type"), "image"))) {
@@ -969,7 +969,7 @@ void Browser::UpdateRenderLog(DOM::Node *n, const point &displacement) {
   if (n->nodeType == DOM::TEXT_NODE) {
     Box inline_box = render->inline_box[0] + displacement;
     StrAppend(&render_log->data, string(render_log->indent, ' '), "text run at (", inline_box.x, ",", ToWebKitY(inline_box));
-    StrAppend(&render_log->data, ") width ", inline_box.w, " height ", inline_box.h);
+    StrAppend(&render_log->data, ") width ", inline_box.w, " height ", inline_box.h, " color ", render->color.DebugString());
     StrAppend(&render_log->data, ": \"", n->nodeValue(), "\"\n");
   }
 }

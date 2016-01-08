@@ -953,8 +953,10 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
       Layout();
       tab2_server_address.cmd_prefix.clear();
       tab3_player_name.cmd_prefix.clear();
+      tab3_player_name.cursor.type = TextGUI::Cursor::Underline;
       tab3_player_name.deactivate_on_enter = tab2_server_address.deactivate_on_enter = true;
       tab3_player_name.runcb = bind(&TextGUI::AssignInput, (TextGUI*)&tab3_player_name, _1);
+      tab3_player_name.bg_color = &Color::clear;
       tab3_player_name   .SetToggleKey(0, Toggler::OneShot);
       tab2_server_address.SetToggleKey(0, Toggler::OneShot);
       tab2_server_address.runcb = bind(&GameMenuGUI::MenuAddServer, this, _1);

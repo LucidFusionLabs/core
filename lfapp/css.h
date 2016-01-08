@@ -1138,7 +1138,7 @@ struct ComputedStyle : public LFL::DOM::CSSStyleDeclaration {
   LFL::DOM::Node *node;
   string override_style;
   css_select_results *style=0;
-  bool is_root=0, font_not_inherited=0, bgcolor_not_inherited=0;
+  bool is_root=0, font_not_inherited=0, color_not_inherited=0, bgcolor_not_inherited=0;
   ComputedStyle(LFL::DOM::Node *N) : node(N) {}
   virtual ~ComputedStyle() { Reset(); }
 
@@ -1533,8 +1533,8 @@ struct StyleSheet : public LFL::DOM::Object {
 struct ComputedStyle : public LFL::DOM::CSSStyleDeclaration {
   LFL::DOM::Node *node;
   string override_style;
-  bool is_root, font_not_inherited, bgcolor_not_inherited;
-  ComputedStyle(LFL::DOM::Node *N) : node(N), is_root(0), font_not_inherited(0), bgcolor_not_inherited(0) {}
+  bool is_root=0, font_not_inherited=0, color_not_inherited=0, bgcolor_not_inherited=0;
+  ComputedStyle(LFL::DOM::Node *N) : node(N) {}
 
   void Reset() {}
   bool IsLink() const {

@@ -684,7 +684,7 @@ int Application::Create(int argc, const char **argv, const char *source_filename
   assetdir = "assets/";
 #endif
 
-#ifdef _WIN32
+#ifdef WIN32
   { /* winsock startup */
     WSADATA wsadata;
     WSAStartup(MAKEWORD(2,2), &wsadata);
@@ -713,13 +713,13 @@ int Application::Create(int argc, const char **argv, const char *source_filename
 
   ThreadLocalStorage::Init();
 
-#ifdef _WIN32
+#ifdef WIN32
   if (argc > 1) OpenConsole();
 #endif
 
   if (Singleton<FlagMap>::Get()->getopt(argc, argv, source_filename) < 0) return -1;
 
-#ifdef _WIN32
+#ifdef WIN32
   if (argc > 1) {
     if (!FLAGS_open_console) CloseConsole();
   }
@@ -731,7 +731,7 @@ int Application::Create(int argc, const char **argv, const char *source_filename
     char *path = iPhoneDocumentPathCopy();
     dldir = StrCat(path, "/");
     free(path);
-#elif defined(_WIN32)
+#elif defined(WIN32)
     char path[MAX_PATH];
     if (!SUCCEEDED(SHGetFolderPath(NULL, CSIDL_PERSONAL|CSIDL_FLAG_CREATE, NULL, 0, path))) return -1;
     dldir = StrCat(path, "/");
@@ -742,7 +742,7 @@ int Application::Create(int argc, const char **argv, const char *source_filename
   if (LFLHOME && *LFLHOME) chdir(LFLHOME);
   INFO(screen->caption, ": lfapp init: LFLHOME=", LocalFile::CurrentDirectory(), " DLDIR=", LFAppDownloadDir());
 
-#ifndef _WIN32
+#ifndef WIN32
   if (FLAGS_max_rlimit_core) {
     struct rlimit rl;
     if (getrlimit(RLIMIT_CORE, &rl) == -1) { ERROR("core getrlimit ", strerror(errno)); return -1; }
@@ -750,18 +750,21 @@ int Application::Create(int argc, const char **argv, const char *source_filename
     rl.rlim_cur = rl.rlim_max;
     if (setrlimit(RLIMIT_CORE, &rl) == -1) { ERROR("core setrlimit ", strerror(errno)); return -1; }
   }
-#endif
 
-#ifdef __linux__
+#ifndef LFL_MOBILE
   if (FLAGS_max_rlimit_open_files) {
     struct rlimit rl;
     if (getrlimit(RLIMIT_NOFILE, &rl) == -1) { ERROR("files getrlimit ", strerror(errno)); return -1; }
-
+#ifdef __APPLE__
+    rl.rlim_cur = rl.rlim_max = OPEN_MAX;
+#else
     rl.rlim_cur = rl.rlim_max = 999999;
+#endif
     INFO("setrlimit(RLIMIT_NOFILE, ", rl.rlim_cur, ")");
     if (setrlimit(RLIMIT_NOFILE, &rl) == -1) { ERROR("files setrlimit ", strerror(errno)); return -1; }
   }
-#endif
+#endif // LFL_MOBILE
+#endif // WIN32
 
 #ifdef LFL_HEADLESS
   Window::Create(screen);
@@ -938,7 +941,7 @@ int Application::Exiting() {
   run = 0;
   INFO("exiting");
   scheduler.Free();
-#ifdef _WIN32
+#ifdef WIN32
   if (FLAGS_open_console) PressAnyKey();
 #endif
   return 0;
@@ -1200,7 +1203,7 @@ void FrameScheduler::DelWaitForeverSocket(Socket fd) {
 
 }; // namespace LFL
 
-#ifdef _WIN32
+#ifdef WIN32
 int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR lpCmdLine, int nCmdShow) {
   vector<const char *> av;
   vector<string> a(1);

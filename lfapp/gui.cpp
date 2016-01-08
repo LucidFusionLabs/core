@@ -136,7 +136,7 @@ void Widget::Slider::Layout(int aw, int ah, bool flip) {
     gui->child_box.PushBack(arrow_down, attr_id, menuicon ? menuicon->FindGlyph(flip ? 3 : 1) : 0);
     gui->child_box.PushBack(scroll_dot, attr_id, menuicon ? menuicon->FindGlyph(           5) : 0, &drawbox_ind);
 
-    AddDragBox(scroll_dot, MouseController::CB(bind(&Slider::DragScrollDot, this)));
+    AddDragBox (scroll_dot, MouseController::CB(bind(&Slider::DragScrollDot, this)));
     AddClickBox(arrow_up,   MouseController::CB(bind(flip ? &Slider::ScrollDown : &Slider::ScrollUp,   this)));
     AddClickBox(arrow_down, MouseController::CB(bind(flip ? &Slider::ScrollUp   : &Slider::ScrollDown, this)));
   }
@@ -385,9 +385,9 @@ TextGUI::LinesFrameBuffer *TextGUI::LinesFrameBuffer::Attach(TextGUI::LinesFrame
   return *last_fb = this;
 }
 
-bool TextGUI::LinesFrameBuffer::SizeChanged(int W, int H, Font *font) {
+bool TextGUI::LinesFrameBuffer::SizeChanged(int W, int H, Font *font, const Color *bgc) {
   lines = H / font->Height();
-  return RingFrameBuffer::SizeChanged(W, H, font);
+  return RingFrameBuffer::SizeChanged(W, H, font, bgc);
 }
 
 void TextGUI::LinesFrameBuffer::Update(TextGUI::Line *l, int flag) {
@@ -483,7 +483,7 @@ void TextGUI::UpdateLineFB(Line *L, LinesFrameBuffer *fb) {
 }
 
 void TextGUI::Draw(const Box &b) {
-  if (cmd_fb.SizeChanged(b.w, b.h, font)) {
+  if (cmd_fb.SizeChanged(b.w, b.h, font, bg_color)) {
     cmd_fb.p = point(0, font->Height());
     cmd_line.Draw(point(0, cmd_line.Lines() * font->Height()), cmd_fb.w);
     cmd_fb.SizeChangedDone();
@@ -510,7 +510,7 @@ void TextGUI::DrawCursor(point p) {
       if (elapsed > cursor.blink_time * 2) cursor.blink_begin = now;
       else blinking = true;
     }
-    if (blinking) font->Draw("_", p);
+    if (blinking) font->Draw("_", p - point(0, font->Height()));
   }
 }
 
@@ -594,7 +594,7 @@ void TextArea::Resized(const Box &b) {
 
 void TextArea::CheckResized(const Box &b) {
   LinesFrameBuffer *fb = GetFrameBuffer();
-  if (fb->SizeChanged(b.w, b.h, font)) { Resized(b); fb->SizeChangedDone(); }
+  if (fb->SizeChanged(b.w, b.h, font, bg_color)) { Resized(b); fb->SizeChangedDone(); }
 }
 
 void TextArea::Redraw(bool attach) {
@@ -1160,7 +1160,7 @@ void Terminal::Resized(const Box &b) {
 }
 
 void Terminal::ResizedLeftoverRegion(int w, int h, bool update_fb) {
-  if (!cmd_fb.SizeChanged(w, h, font)) return;
+  if (!cmd_fb.SizeChanged(w, h, font, bg_color)) return;
   if (update_fb) {
     for (int i=0; i<start_line;      i++) MoveToOrFromScrollRegion(&cmd_fb, &line[-i-1],             point(0,GetCursorY(term_height-i)), LinesFrameBuffer::Flag::Flush);
     for (int i=0; i<skip_last_lines; i++) MoveToOrFromScrollRegion(&cmd_fb, &line[-line_fb.lines+i], point(0,GetCursorY(i+1)),           LinesFrameBuffer::Flag::Flush);
