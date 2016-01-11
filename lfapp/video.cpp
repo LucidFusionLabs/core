@@ -2360,6 +2360,11 @@ void Window::DrawDialogs() {
   }
 }
 
+void Window::AddDialog(Dialog *d) {
+  screen->dialogs.push_back(d);
+  if (screen->dialogs.size() == 1) d->BringToFront();
+}
+
 void Window::SetCaption(const string &v) {
 #if defined(LFL_OSXVIDEO)
   OSXSetWindowTitle(id, v.c_str());
@@ -2620,9 +2625,10 @@ void Video::InitFonts() {
   }
 
   FontEngine *atlas_engine = Singleton<AtlasFontEngine>::Get();
-  atlas_engine->Init(FontDesc("MenuAtlas", "", 0, Color::white, Color::clear, 0, 0));
+  atlas_engine->Init(FontDesc("MenuAtlas", "", 0, Color::white, Color::clear, 0, false));
 
-  if (FLAGS_lfapp_console && FLAGS_font_engine != "atlas" && FLAGS_font_engine != "freetype") VeraMoBdAtlas::SetConsoleDefault();
+  if (FLAGS_lfapp_console && FLAGS_font_engine != "atlas" && FLAGS_font_engine != "freetype")
+    Fonts::LoadConsoleFont(FLAGS_lfapp_console_font.empty() ? "VeraMoBd.ttf" : FLAGS_lfapp_console_font);
 }
 
 int Video::InitFontWidth() {

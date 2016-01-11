@@ -30,8 +30,7 @@ struct GUI : public MouseController {
   Box box;
   Window *parent;
   DrawableBoxArray child_box;
-  Toggler toggle_active;
-  GUI(Window *W=0, const Box &B=Box()) : box(B), parent(W), toggle_active(&active) { if (parent) parent->mouse_gui.push_back(this); }
+  GUI(Window *W=0, const Box &B=Box()) : box(B), parent(W) { if (parent) parent->mouse_gui.push_back(this); }
   virtual ~GUI() { if (parent) VectorEraseByValue(&parent->mouse_gui, this); }
 
   DrawableBoxArray *Reset() { Clear(); return &child_box; }
@@ -46,9 +45,8 @@ struct GUI : public MouseController {
   virtual void Layout(const Box &b) { box=b; Layout(); }
   virtual void Layout() {}
   virtual void Draw();
-  virtual bool ToggleActive();
-  virtual void HandleTextMessage(const string &s) {}
   virtual void ResetGL() {}
+  virtual void HandleTextMessage(const string &s) {}
 };
 
 struct Widget {
@@ -137,17 +135,16 @@ struct Widget {
 struct KeyboardGUI : public KeyboardController {
   typedef function<void(const string &text)> RunCB;
   Window *parent;
-  Toggler toggle_active;
   Bind toggle_bind;
+  bool toggle_once=0;
   RunCB runcb;
   RingVector<string> lastcmd;
   int lastcmd_ind=-1;
   KeyboardGUI(Window *W, Font *F, int LastCommands=10)
-    : parent(W), toggle_active(&active), lastcmd(LastCommands) { if (parent) parent->keyboard_gui.push_back(this); }
+    : parent(W), lastcmd(LastCommands) { if (parent) parent->keyboard_gui.push_back(this); }
   virtual ~KeyboardGUI() { if (parent) VectorEraseByValue(&parent->keyboard_gui, this); }
-  virtual bool Toggle() { return toggle_active.Toggle(); }
+  virtual void SetToggleKey(int TK, bool TO=0) { toggle_bind.key=TK; toggle_once=TO; }
   virtual void Run(const string &cmd) { if (runcb) runcb(cmd); }
-  virtual void SetToggleKey(int TK, int TM=Toggler::Default) { toggle_bind.key=TK; toggle_active.mode=TM; }
   virtual void ResetGL() {}
 
   void AddHistory  (const string &cmd);
@@ -350,6 +347,10 @@ struct TextGUI : public KeyboardGUI, public Drawable::AttrSource {
   virtual ~TextGUI() {}
   virtual const Drawable::Attr *GetAttr(int attr) const;
   virtual int CommandLines() const { return 0; }
+  virtual bool Active() const { return screen->active_textgui == this; }
+  virtual void Activate()   { if (!Active()) { if (auto g=screen->active_textgui) g->Deactivate(); screen->active_textgui=this; } }
+  virtual void Deactivate() { if (Active()) screen->active_textgui = screen->default_textgui; }
+  virtual bool ToggleActive() { if (!Active()) Activate(); else Deactivate(); return Active(); }
   virtual void Input(char k) { cmd_line.UpdateText(cursor.i.x++, String16(1, *Unsigned<char>(&k)), cursor.attr); UpdateCommandFB(); UpdateCursor(); }
   virtual void Erase()       { if (!cursor.i.x) return; cmd_line.Erase(--cursor.i.x, 1); UpdateCommandFB(); UpdateCursor(); }
   virtual void CursorRight() { UpdateCursorX(min(cursor.i.x+1, cmd_line.Size())); }
@@ -420,8 +421,8 @@ struct TextArea : public TextGUI {
   virtual void ResetGL() { line_fb.Reset(); TextGUI::ResetGL(); }
   void ChangeColors(Colors *C);
 
-  struct DrawFlag { enum { DrawCursor=1, CheckResized=2 }; };
-  virtual void Draw(const Box &w, int flag, Shader *shader=0);
+  struct DrawFlag { enum { DrawCursor=1, CheckResized=2, Default=DrawCursor|CheckResized }; };
+  virtual void Draw(const Box &w, int flag=DrawFlag::Default, Shader *shader=0);
   virtual void DrawHoverLink(const Box &w);
   virtual bool GetGlyphFromCoords(const point &p, Selection::Point *out) { return GetGlyphFromCoordsOffset(p, out, start_line, start_line_adjust); }
   bool GetGlyphFromCoordsOffset(const point &p, Selection::Point *out, int sl, int sla);
@@ -491,8 +492,17 @@ struct Editor : public TextArea {
 struct Terminal : public TextArea {
   struct State { enum { TEXT=0, ESC=1, CSI=2, OSC=3, CHARSET=4 }; };
   struct ByteSink {
+    int WriteChar(unsigned char c) { return Write(reinterpret_cast<const char*>(&c), sizeof(c)); }
     virtual int Write(const char *b, int l) = 0;
     virtual void IOCtlWindowSize(int w, int h) {}
+  };
+  struct Controller : public ByteSink {
+    bool ctrl_down=0, frame_on_keyboard_input=0;
+    virtual ~Controller() {}
+    virtual int Open(Terminal*) = 0;
+    virtual StringPiece Read() = 0;
+    virtual void Close() {}
+    virtual void Dispose() {}
   };
 
   ByteSink *sink=0;
@@ -513,7 +523,7 @@ struct Terminal : public TextArea {
   virtual void ResizedLeftoverRegion(int w, int h, bool update_fb=true);
   virtual void SetScrollRegion(int b, int e, bool release_fb=false);
   virtual void SetDimension(int w, int h);
-  virtual void Draw(const Box &b, int flag, Shader *shader=0);
+  virtual void Draw(const Box &b, int flag=DrawFlag::Default, Shader *shader=0);
   virtual void Write(const StringPiece &s, bool update_fb=true, bool release_fb=true);
   virtual void Input(char k) {                       sink->Write(&k, 1); }
   virtual void Erase      () { char k = 0x7f;        sink->Write(&k, 1); }
@@ -581,10 +591,11 @@ struct Console : public TextArea {
   virtual void Run(const string &in) { app->shell.Run(in); }
   virtual void PageUp  () { TextArea::PageDown(); }
   virtual void PageDown() { TextArea::PageUp(); }
-  virtual bool Toggle();
+  virtual void Activate() { TextGUI::Activate(); StartAnimating(); }
+  virtual void Deactivate() { TextGUI::Deactivate(); StartAnimating(); }
   virtual void Draw();
-  int WriteHistory(const string &dir, const string &name)
-  { return KeyboardGUI::WriteHistory(dir, name, startcmd); }
+  void StartAnimating();
+  int WriteHistory(const string &dir, const string &name) { return KeyboardGUI::WriteHistory(dir, name, startcmd); }
 };
 
 struct Dialog : public GUI {
@@ -596,13 +607,18 @@ struct Dialog : public GUI {
   point mouse_start, win_start;
   string title_text;
   int zsort=0;
+
   Dialog(float w, float h, int flag=0);
   virtual ~Dialog() {}
   virtual void Layout();
   virtual void Draw();
+  virtual void TakeFocus() {}
+  virtual void LoseFocus() {}
+
   void BringToFront();
   Box BoxAndTitle() const { return Box(box.x, box.y, box.w, box.h + title.h); }
   void Reshape(bool *down) { mouse_start = screen->mouse; win_start = point(box.x, box.y); *down = 1; }
+  void GiveFocus() { if (this == screen->top_dialog) { screen->top_dialog=0; LoseFocus(); } }
   void MarkDeleted() { deleted = 1; }
 
   static bool LessThan(const Dialog *l, const Dialog *r) { return l->zsort < r->zsort; }
@@ -648,6 +664,8 @@ struct EditorDialog : public Dialog {
   EditorDialog(Window *W, Font *F, File *I, float w=.5, float h=.5, int flag=0);
   void Layout();
   void Draw();
+  void TakeFocus() { editor.Activate(); }
+  void LoseFocus() { editor.Deactivate(); }
 };
 
 struct HelperGUI : public GUI {

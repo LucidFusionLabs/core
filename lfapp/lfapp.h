@@ -589,7 +589,7 @@ struct Application : public ::LFApp, public Module {
 
   Application() : create_win_f(bind(&Application::CreateNewWindow, this, function<void(Window*)>())),
   window_closed_cb(DefaultLFAppWindowClosedCB), tex_mode(2, 1, 0), grab_mode(2, 0, 1),
-  fill_mode(3, GraphicsDevice::Fill, GraphicsDevice::Line, GraphicsDevice::Point)
+  fill_mode(3, GraphicsDevice::Fill, GraphicsDevice::Line, GraphicsDevice::Point), shell(0, 0, 0)
   { run=1; initialized=0; main_thread_id=0; frames_ran=0; }
 
   void Log(int level, const char *file, int line, const string &message);

@@ -100,7 +100,7 @@ void Shell::mousein (const vector<string>&) { Mouse::GrabFocus(); }
 void Shell::mouseout(const vector<string>&) { Mouse::ReleaseFocus(); }
 
 void Shell::quit(const vector<string>&) { app->run = false; }
-void Shell::console(const vector<string>&) { if (screen->lfapp_console) screen->lfapp_console->Toggle(); }
+void Shell::console(const vector<string>&) { if (screen->lfapp_console) screen->lfapp_console->ToggleActive(); }
 void Shell::showkeyboard(const vector<string>&) { TouchDevice::OpenKeyboard(); }
 
 void Shell::clipboard(const vector<string> &a) {
@@ -309,12 +309,12 @@ void Shell::Slider(const vector<string> &a) {
   string flag_name = a[0];
   float total = a.size() >= 1 ? atof(a[1]) : 0;
   float inc   = a.size() >= 2 ? atof(a[2]) : 0;
-  new SliderFlagDialog(flag_name, total ? total : 100, inc ? inc : 1);
+  screen->AddDialog(new SliderFlagDialog(flag_name, total ? total : 100, inc ? inc : 1));
 }
 
 void Shell::Edit(const vector<string> &a) {
   string s = Asset::FileContents("lfapp_vertex.glsl");
-  new EditorDialog(screen, Fonts::Default(), new BufferFile(s));
+  screen->AddDialog(new EditorDialog(screen, Fonts::Default(), new BufferFile(s)));
 }
 
 void Shell::cmds(const vector<string>&) {

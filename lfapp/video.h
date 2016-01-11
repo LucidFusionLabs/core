@@ -236,6 +236,7 @@ struct Drawable {
     const LFL::Box *scissor=0;
     bool underline=0, overline=0, midline=0, blink=0, blend=0;
     constexpr Attr(Font *F=0, const Color *FG=0, const Color *BG=0, bool UL=0, bool B=0) : font(F), fg(FG), bg(BG), underline(UL), blend(B) {}
+    constexpr Attr(const Texture *T, const Color *FG=0, const Color *BG=0, bool UL=0, bool B=0) : fg(FG), bg(BG), tex(T), underline(UL), blend(B) {}
     bool operator==(const Attr &y) const { return font==y.font && fg==y.fg && bg==y.bg && tex==y.tex && scissor==y.scissor && underline==y.underline && overline==y.overline && midline==y.midline && blink==y.blink && blend == y.blend; }
     bool operator!=(const Attr &y) const { return !(*this == y); }
     void Clear() { font=0; fg=bg=0; tex=0; scissor=0; underline=overline=midline=blink=0; }
@@ -295,7 +296,8 @@ struct Texture : public Drawable {
 
   void Bind() const;
   int TexId() const { return ID; }
-  string DebugString() const { return StrCat("Texture(", width, ", ", height, ", ", Pixel::Name(pf), ")"); }
+  string CoordString() const { return StrCat("[", coord[0], ", ", coord[1], ", ", coord[2], ", ", coord[3], "]"); } 
+  string DebugString() const { return StrCat("Texture(", ID, ": ", width, ", ", height, ", ", Pixel::Name(pf), ", ", CoordString(), ")"); }
   string HexDump() const { string v; for (int ls=LineSize(), i=0; i<height; i++) StrAppend(&v, Vec<unsigned char>::Str(buf+i*ls, ls, "%02x"), "\n"); return v; }
   point Dimension() const { return point(width, height); }
   int PixelSize() const { return Pixel::size(pf); }
@@ -569,6 +571,7 @@ struct Window : public NativeWindow {
   vector<GUI*> mouse_gui;
   vector<KeyboardGUI*> keyboard_gui;
   vector<InputController*> input_bind;
+  TextGUI *active_textgui=0, *default_textgui=0;
   Console *lfapp_console=0;
 
   Window();
@@ -594,6 +597,7 @@ struct Window : public NativeWindow {
   void ClearInputBindEvents();
   void InitLFAppConsole();
   void DrawDialogs();
+  void AddDialog(Dialog*);
 
   LFL::Box Box() const { return LFL::Box(0, 0, width, height); }
   LFL::Box Box(float xs, float ys) const { return LFL::Box(0, 0, width*xs, height*ys); }

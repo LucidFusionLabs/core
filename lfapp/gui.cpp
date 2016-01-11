@@ -68,12 +68,6 @@ void GUI::Draw() {
   child_box.Draw(box.TopLeft());
 }
 
-bool GUI::ToggleActive() {
-  bool ret = toggle_active.Toggle();
-  active ? Activate() : Deactivate();
-  return ret;
-}
-
 void Widget::Button::Layout(Flow *flow) {
   flow->SetFont(0);
   flow->SetFGColor(&Color::white);
@@ -464,7 +458,7 @@ void TextGUI::Enter() {
   string cmd = String::ToUTF8(Text16());
   AssignInput("");
   if (!cmd.empty()) { AddHistory(cmd); Run(cmd); }
-  if (deactivate_on_enter) active = false;
+  if (deactivate_on_enter) Deactivate();
 }
 
 void TextGUI::SetColors(Colors *C) {
@@ -506,7 +500,7 @@ void TextGUI::DrawCursor(point p) {
   } else {
     bool blinking = false;
     Time now = Now(), elapsed; 
-    if (active && (elapsed = now - cursor.blink_begin) > cursor.blink_time) {
+    if (Active() && (elapsed = now - cursor.blink_begin) > cursor.blink_time) {
       if (elapsed > cursor.blink_time * 2) cursor.blink_begin = now;
       else blinking = true;
     }
@@ -1266,7 +1260,7 @@ void Terminal::UpdateToken(Line *L, int word_offset, int word_len, int update_ty
 }
 
 void Terminal::Draw(const Box &b, int flag, Shader *shader) {
-  TextArea::Draw(b, false, shader);
+  TextArea::Draw(b, flag & ~DrawFlag::DrawCursor, shader);
   if (shader) shader->SetUniform2f("iScroll", 0, XY_or_Y(shader->scale, -b.y));
   if (clip) {
     { Scissor s(Box::TopBorder(b, *clip)); cmd_fb.Draw(b.Position(), point(), false); }
@@ -1555,14 +1549,12 @@ void Terminal::Reset() {
 
 /* Console */
 
-bool Console::Toggle() {
-  if (!TextGUI::Toggle()) return false;
+void Console::StartAnimating() {
   bool last_animating = animating;
   Time now = Now(), elapsed = now - anim_begin;
   anim_begin = now - (elapsed < anim_time ? anim_time - elapsed : Time(0));
   animating = (elapsed = now - anim_begin) < anim_time;
   if (animating && !last_animating && animating_cb) animating_cb();
-  return true;
 }
 
 void Console::Draw() {
@@ -1570,7 +1562,7 @@ void Console::Draw() {
 
   drawing = 1;
   Time now=Now(), elapsed;
-  bool last_animating = animating;
+  bool active = Active(), last_animating = animating;
   int h = active ? (int)(screen->height*screen_percent) : 0;
   if ((animating = (elapsed = now - anim_begin) < anim_time)) {
     if (active) h = (int)(screen->height*(  (double)elapsed.count()/anim_time.count())*screen_percent);
@@ -1596,7 +1588,6 @@ void Console::Draw() {
 /* Dialog */
 
 Dialog::Dialog(float w, float h, int flag) : GUI(screen), font(Fonts::Get(FLAGS_default_font, "", 14, Color::white)), menuicon(Fonts::Get("MenuAtlas", "", 0, Color::white, Color::clear, 0)) {
-  screen->dialogs.push_back(this);
   box = screen->Box().center(screen->Box(w, h));
   fullscreen = flag & Flag::Fullscreen;
   Activate();
@@ -1661,9 +1652,12 @@ void Dialog::Draw() {
 
 void Dialog::BringToFront() {
   if (screen->top_dialog == this) return;
-  for (vector<Dialog*>::iterator i = screen->dialogs.begin(); i != screen->dialogs.end(); ++i) (*i)->zsort++; zsort = 0;
+  if (screen->top_dialog) screen->top_dialog->LoseFocus();
+  int zsort_ind = 0;
+  for (auto d : screen->dialogs) d->zsort = ++zsort_ind;
+  zsort = 0;
   sort(screen->dialogs.begin(), screen->dialogs.end(), LessThan);
-  screen->top_dialog = this;
+  (screen->top_dialog = this)->TakeFocus();
 }
 
 void MessageBoxDialog::Draw() {
@@ -1694,7 +1688,6 @@ void EditorDialog::Layout() {
 
 void EditorDialog::Draw() {
   bool wrap = editor.Wrap();
-  if (1)     editor.active = fullscreen || screen->top_dialog == this;
   if (1)     editor.v_scrolled = v_scrollbar.AddScrollDelta(editor.v_scrolled);
   if (!wrap) editor.h_scrolled = h_scrollbar.AddScrollDelta(editor.h_scrolled);
   if (1)     editor.UpdateScrolled();
@@ -1720,11 +1713,11 @@ void Dialog::TextureBox(const string &n) {}
 
 void Dialog::MessageBox(const string &n) {
   Mouse::ReleaseFocus();
-  new MessageBoxDialog(n);
+  screen->AddDialog(new MessageBoxDialog(n));
 }
 void Dialog::TextureBox(const string &n) {
   Mouse::ReleaseFocus();
-  new TextureBoxDialog(n);
+  screen->AddDialog(new TextureBoxDialog(n));
 }
 #endif /* LFL_QT */
 

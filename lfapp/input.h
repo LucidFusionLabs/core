@@ -65,13 +65,10 @@ struct InputController {
 struct KeyboardController {
   struct Events { int total; };
   Events events;
-  bool active=0;
   KeyboardController() { ClearEvents(); }
 
   int HandleSpecialKey(InputEvent::Id);
   void ClearEvents() { memzero(events); }
-  virtual void Activate  () { active = 1; }
-  virtual void Deactivate() { active = 0; }
   virtual void Input(const string &s) { for (int i=0; i<s.size(); i++) Input(s[i]); }
   virtual void Input(char key) {}
   virtual void Enter      () {}
@@ -162,6 +159,7 @@ struct MouseController {
   virtual void Activate() { active = 1; }
   virtual void Deactivate() { active = 0; }
   virtual bool NotActive() const { return !active; }
+  virtual bool ToggleActive() { if ((active = !active)) Activate(); else Deactivate(); return active; }
   virtual int AddClickBox(const Box &w, const MouseControllerCallback &cb) { return hit.Insert(HitBox(Event::Click, w, cb)); }
   virtual int AddHoverBox(const Box &w, const MouseControllerCallback &cb) { return hit.Insert(HitBox(Event::Hover, w, cb)); }
   virtual int AddDragBox (const Box &w, const MouseControllerCallback &cb) { return hit.Insert(HitBox(Event::Drag,  w, cb)); }

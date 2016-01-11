@@ -30,7 +30,8 @@ struct Shell {
   AssetMap       *assets;
   SoundAssetMap  *soundassets;
   MovieAssetMap  *movieassets;
-  Shell(AssetMap *AM=0, SoundAssetMap *SAM=0, MovieAssetMap *MAM=0);
+  Shell() {}
+  Shell(AssetMap *AM, SoundAssetMap *SAM, MovieAssetMap *MAM);
 
   Asset      *asset     (const string &n);
   SoundAsset *soundasset(const string &n);

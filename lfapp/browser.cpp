@@ -194,6 +194,7 @@ void DOM::Renderer::UpdateStyle(Flow *F) {
   CHECK(n->parentNode);
   style.is_root = inline_style.is_root = n->parentNode == n->ownerDocument;
   CHECK(style.is_root || n->parentNode->render);
+  Renderer *parent_render = (n->parentNode && n->parentNode->render) ? n->parentNode->render : 0;
 
   if (!inline_style_sheet) {
     DOM::Attr *inline_style_attr = n->getAttributeNode("style");
@@ -203,7 +204,7 @@ void DOM::Renderer::UpdateStyle(Flow *F) {
       unique_ptr<LFL::StyleSheet>(new LFL::StyleSheet(n->ownerDocument, "", "UTF-8", true, false, style_text.c_str()));
   }
 
-  ComputeStyle(n->ownerDocument->style_context, &style, style.is_root ? 0 : &n->parentNode->render->style);
+  ComputeStyle(n->ownerDocument->style_context, &style, style.is_root ? 0 : &parent_render->style);
 
   DOM::Display              display        = style.Display();
   DOM::Position             position       = style.Position();
@@ -291,13 +292,15 @@ void DOM::Renderer::UpdateStyle(Flow *F) {
   lowercase        = texttransform .v == DOM::TextTransform::Lowercase;
   capitalize       = texttransform .v == DOM::TextTransform::Capitalize;
 
-  if (style.color_not_inherited)                                       color = Color(style.Color().v, 1.0);
-  else if (!style.node->parentNode || !style.node->parentNode->render) color = Color(style.Color().v, 1.0);
-  else                                                                 color = style.node->parentNode->render->color;
+  if (style.color_not_inherited || !parent_render)                     color = style.Color().v;
+  else                                                                 color = parent_render->color;
 
-  if (style.bgcolor_not_inherited && style.BackgroundColor().v.a())    background_color = style.BackgroundColor().v;
-  else if (!style.node->parentNode || !style.node->parentNode->render) background_color = style.BackgroundColor().v;
-  else                                                                 background_color = style.node->parentNode->render->background_color;
+  if (style.bgcolor_not_inherited && style.BackgroundColor().v.a()==1) solid_background_color = style.BackgroundColor().v;
+  else if (!parent_render)                                             solid_background_color = style.BackgroundColor().v;
+  else                                                                 solid_background_color = parent_render->solid_background_color;
+
+  if (style.bgcolor_not_inherited || !parent_render)                   background_color = style.BackgroundColor().v;
+  else                                                                 background_color = parent_render->background_color;
 
   os            = os       .Null() ? 0 : os.v;
   bs_t          = bs_top   .Null() ? 0 : bs_top.v;
@@ -312,6 +315,7 @@ void DOM::Renderer::UpdateStyle(Flow *F) {
 
   if (!bgimage.Null() && !background_image)
     background_image = n->ownerDocument->parser->OpenImage(String::ToUTF8(bgimage.v));
+  over_background_image = background_image.get() || (parent_render && parent_render->over_background_image);
 
   DOM::CSSNormNumericValue lineheight = style.LineHeight(), charspacing = style.LetterSpacing(), wordspacing = style.WordSpacing();
   lineheight_px  = (!lineheight .Null() && !lineheight. _norm) ? lineheight .getPixelValue(F) : 0;
@@ -338,7 +342,8 @@ Font *DOM::Renderer::UpdateFont(Flow *F) {
       //      " ", ff[j].source.size() ? ff[j].source[0] : "<NO2>");
     }
   }
-  return font ? font : Fonts::Get(FLAGS_default_font, "", font_size_px, color, background_color);
+  return font ? font : Fonts::Get(FLAGS_default_font, "", font_size_px, color,
+                                  over_background_image ? background_color : solid_background_color); 
 }
 
 void DOM::Renderer::UpdateDimensions(Flow *F) {
@@ -365,7 +370,7 @@ void DOM::Renderer::UpdateDimensions(Flow *F) {
   br_px         = !bs_r ? 0 : style.BorderRightWidth ().getPixelValue(F);
   bt_px         = !bs_t ? 0 : style.BorderTopWidth   ().getPixelValue(F);
   bb_px         = !bs_b ? 0 : style.BorderBottomWidth().getPixelValue(F);
-  o_px         = style.OutlineWidth     ().getPixelValue(F);
+  o_px          = style.OutlineWidth     ().getPixelValue(F);
   pl_px         = style.PaddingLeft      ().getPixelValue(F);
   pr_px         = style.PaddingRight     ().getPixelValue(F);
   pt_px         = style.PaddingTop       ().getPixelValue(F);
@@ -381,7 +386,7 @@ void DOM::Renderer::UpdateDimensions(Flow *F) {
   if (block_level_box && (width_auto || width_percent)) {
     if (normal_flow) shrink = inline_block || style.node->parentNode->render->shrink;
     else             shrink = width_auto && (floating || position_absolute || position_fixed);
-  } else               shrink = normal_flow ? style.node->parentNode->render->shrink : 0;
+  } else             shrink = normal_flow ? style.node->parentNode->render->shrink : 0;
 }
 
 void DOM::Renderer::UpdateMarginWidth(Flow *F, int w) {
@@ -573,7 +578,7 @@ bool Browser::EventNode(DOM::Node *n, const point &displacement_in, InputEvent::
 
   if (auto e = n->AsHTMLAnchorElement()) { AnchorClicked(e); return false; }
   else if (auto e = n->AsHTMLInputElement()) {
-    if (e->text && type == Mouse::ButtonID(1)) doc.active_input = e->text.get();
+    if (e->text && type == Mouse::ButtonID(1)) (doc.active_input = e->text.get())->Activate();
   }
   bool is_table = n->htmlElementType == DOM::HTML_TABLE_ELEMENT;
   point displacement = displacement_in + (render->block_level_box ? render->box.TopLeft() : point());
@@ -839,8 +844,8 @@ void Browser::LayoutBackground(DOM::Node *n) {
   if      (is_body)                                                  box = &render->margin;
   else if (render->block_level_box || render->display_table_element) box = &render->padding;
 
-  if (style->bgcolor_not_inherited && render->background_color.A()) {
-    if (is_body) SetClearColor(Color(render->background_color, 0.0));
+  if (style->bgcolor_not_inherited && render->background_color.a()) {
+    if (is_body) SetClearColor(render->background_color);
     else {
       flow.SetFGColor(&render->background_color);
       flow.out->PushBack(*box, flow.cur_attr, Singleton<BoxFilled>::Get());

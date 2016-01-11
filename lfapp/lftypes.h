@@ -70,6 +70,8 @@ template <class X> int TypeId()   { static int ret = fnv32(typeid(X).name()); re
 template <class X> int TypeId(X*) { static int ret = fnv32(typeid(X).name()); return ret; }
 template <class X> typed_ptr TypePointer(X* v) { return typed_ptr(TypeId<X>(), v); }
 template <class X> X *CheckPointer(X *x) { CHECK(x); return x; }
+template <class X> X *CheckNullAssign(X **x, X *v) { CHECK_EQ(nullptr, *x); return (*x = v); }
+template <class X> X *GetThenAssignNull(X **x) { X *v = *x; if (v) *x = nullptr; return v; }
 template <class X> typename make_unsigned<X>::type *Unsigned(X *x) { return reinterpret_cast<typename make_unsigned<X>::type*>(x); }
 template <class X, int S, int XS=sizeof(X)> void StaticAssertSizeof() { static_assert(XS == S, "unexpected sizeof"); }
 
@@ -778,17 +780,6 @@ struct BloomFilter {
       if (!op(buf, h1)) return 0;
     }
     return 1;
-  }
-};
-
-struct Toggler {
-  enum { Default = 1, OneShot = 2 };
-  int mode;
-  bool *target;
-  Toggler(bool *T, int M=Default) : target(T), mode(M) {}
-  bool Toggle() {
-    if (*target && mode == OneShot) return false;
-    else { *target = !*target; return true; }
   }
 };
 

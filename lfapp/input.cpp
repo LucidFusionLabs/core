@@ -1045,23 +1045,22 @@ int Input::KeyEventDispatch(InputEvent::Id event, bool down) {
   if (FLAGS_input_debug && down)
     INFO("KeyEvent ", InputEvent::Name(event), " ", key, " ", shift_down, " ", ctrl_down, " ", cmd_down);
 
-  for (auto it = screen->keyboard_gui.begin(); it != screen->keyboard_gui.end(); ++it) {
-    KeyboardGUI *g = *it;
-    if (!g->active) continue;
-    if (g->toggle_bind.key == event && g->toggle_active.mode != Toggler::OneShot) return 0;
+  if (KeyboardGUI *g = screen->active_textgui) do {
+    if (g->toggle_bind.key == event && !g->toggle_once) return 0;
 
     if (event == paste_bind.key) { g->Input(Clipboard::Get()); return 1; }
     if (g->HandleSpecialKey(event)) return 1;
 
     if (cmd_down) return 0;
-    if (key >= 128) { /* ERROR("unhandled key ", event); */ continue; }
+    if (key >= 128) { /* ERROR("unhandled key ", event); */ break; }
 
     if (shift_down) key = Key::ShiftModified(key);
     if (ctrl_down)  key = Key::CtrlModified(key);
 
     g->Input(key);
     return 1;
-  }
+  } while(0);
+
   return 0;
 }
 
@@ -1112,7 +1111,7 @@ int Input::MouseEventDispatch(InputEvent::Id event, const point &p, int down) {
     Dialog *gui = (*i);
     if (gui->NotActive()) { i++; continue; }
     fired += gui->Input(event, screen->mouse, down, 0);
-    if (gui->deleted) { delete gui; i = screen->dialogs.erase(i); continue; }
+    if (gui->deleted) { gui->GiveFocus(); delete gui; i = screen->dialogs.erase(i); continue; }
     if (event == Mouse::Event::Button1 && down && gui->BoxAndTitle().within(screen->mouse)) { bring_to_front = *i; break; }
     i++;
   }

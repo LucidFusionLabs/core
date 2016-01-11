@@ -234,8 +234,8 @@ struct Font {
   void UpdateMetrics(Glyph *g);
   void SetMetrics(short a, short d, short mw, short fw, short mg, bool mf, bool hb, bool fm, float f)
   { ascender=a; descender=d; max_width=mw; fixed_width=fw; missing_glyph=mg; mix_fg=mf; has_bg=hb; fix_metrics=fm; scale=f; }
-  void DrawGlyph(int g, const Box &w) { Select(); Drawable::Attr a(this); FindGlyph(g)->Draw(w, &a); }
   int GetGlyphWidth(int g) { return RoundXY_or_Y(scale, FindGlyph(g)->advance); }
+  void DrawGlyph(int g, const Box &w);
 
   template <class X> void Size(const StringPieceT<X> &text, Box *out, int width=0, int *lines_out=0);
   /**/               void Size(const string          &text, Box *out, int width=0, int *lines_out=0) { return Size(StringPiece           (text), out, width, lines_out); }
@@ -438,10 +438,7 @@ struct Fonts {
   static Font *Change(Font*, int new_size, const Color &new_fg, const Color &new_bg, int new_flag=0);
   static int ScaledFontSize(int pointsize);
   static void ResetGL();
-};
-
-struct VeraMoBdAtlas {
-  static void SetConsoleDefault();
+  static void LoadConsoleFont(const string &name, const vector<int> &sizes = vector<int>(1, 32));
 };
 
 struct DejaVuSansFreetype {

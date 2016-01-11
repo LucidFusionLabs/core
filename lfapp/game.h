@@ -926,9 +926,9 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
   GameMenuGUI(LFL::Window *W, const string &master_url, int port, Asset *t=0, Asset *parts=0) :
     GUI(W), topbar(W), pinger(-1), master_get_url(master_url), title(t),
     font(Fonts::Get("Origicide.ttf", "", 12)), default_port(port),
-    tab1(&topbar, 0, font, "single player", MouseController::CB([&](){ if (!Changed(&selected, 1)) ToggleActive(); })),
-    tab2(&topbar, 0, font, "multi player",  MouseController::CB([&](){ if (!Changed(&selected, 2)) ToggleActive(); })), 
-    tab3(&topbar, 0, font, "options",       MouseController::CB([&](){ if (!Changed(&selected, 3)) ToggleActive(); })),
+    tab1(&topbar, 0, font, "single player", MouseController::CB([&](){ if (!Changed(&selected, 1)) Deactivate(); })),
+    tab2(&topbar, 0, font, "multi player",  MouseController::CB([&](){ if (!Changed(&selected, 2)) Deactivate(); })), 
+    tab3(&topbar, 0, font, "options",       MouseController::CB([&](){ if (!Changed(&selected, 3)) Deactivate(); })),
     tab4(&topbar, 0, font, "quit",          MouseController::CB(bind(&GameMenuGUI::MenuQuit, this))),
     tab1_server_start(this, 0, font, "start", MouseController::CB(bind(&GameMenuGUI::MenuServerStart, this))),
     tab2_server_join (this, 0, font, "join",  MouseController::CB(bind(&GameMenuGUI::MenuServerJoin,  this))),
@@ -957,8 +957,8 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
       tab3_player_name.deactivate_on_enter = tab2_server_address.deactivate_on_enter = true;
       tab3_player_name.runcb = bind(&TextGUI::AssignInput, (TextGUI*)&tab3_player_name, _1);
       tab3_player_name.bg_color = &Color::clear;
-      tab3_player_name   .SetToggleKey(0, Toggler::OneShot);
-      tab2_server_address.SetToggleKey(0, Toggler::OneShot);
+      tab3_player_name   .SetToggleKey(0, true);
+      tab2_server_address.SetToggleKey(0, true);
       tab2_server_address.runcb = bind(&GameMenuGUI::MenuAddServer, this, _1);
       tab3_sensitivity.increment = .1;
       tab3_sensitivity.doc_height = 10;
@@ -984,7 +984,7 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
     }
 
   void Activate  () { active=1; topbar.active=1; selected=last_selected=0; app->shell.mouseout(vector<string>()); Advertising::HideAds(); }
-  void Deactivate() { active=0; topbar.active=0; UpdateSettings(); tab3_player_name.active=false; Advertising::ShowAds(); }
+  void Deactivate() { active=0; topbar.active=0; UpdateSettings(); tab3_player_name.Deactivate(); Advertising::ShowAds(); }
   bool DecayBoxIfMatch(int l1, int l2) { if (l1 != l2) return 0; decay_box_line = l1; decay_box_left = 10; return 1; }
   void UpdateSettings() {
     app->shell.Run(StrCat("name ", String::ToUTF8(tab3_player_name.Text16())));
@@ -995,13 +995,13 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
   void MenuLineClicked() { line_clicked = -MousePosition().y / font->Height(); }
   void MenuServerStart() {
     if (selected != 1 && !(selected == 2 && sub_selected == 3)) return;
-    ToggleActive();
+    Deactivate();
     app->shell.Run("local_server");
   }
 
   void MenuServerJoin() {
     if (selected != 2 || master_server_selected < 0 || master_server_selected >= master_server_list.size()) return;
-    ToggleActive();
+    Deactivate();
     app->shell.Run(StrCat("server ", master_server_list[master_server_selected].addr));
   }
 
@@ -1120,10 +1120,10 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
           menuflow.AppendText("\n[ add server ]");
           if (DecayBoxIfMatch(line_clicked, menuflow.out->line.size())) {
             TouchDevice::OpenKeyboard();
-            tab2_server_address.active = true;
+            tab2_server_address.Activate();
           }
 
-          if (tab2_server_address.active) menuflow.AppendText(.37, ":");
+          if (tab2_server_address.Active()) menuflow.AppendText(.37, ":");
           menuflow.AppendRow(.4, .6, &b);
           menuflow.AppendNewlines(1);
           { ScissorStack ss; tab2_server_address.Draw(b + box.TopLeft()); }
@@ -1154,7 +1154,7 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
       menuflow.AppendText("\nPlayer Name:");
       if (DecayBoxIfMatch(line_clicked, menuflow.out->line.size())) {
         TouchDevice::OpenKeyboard();
-        tab3_player_name.active = true;
+        tab3_player_name.Activate();
       }
       menuflow.AppendRow(.6, .4, &b);
       { ScissorStack ss; tab3_player_name.Draw(b + box.TopLeft()); }
@@ -1308,22 +1308,18 @@ struct GamePlayerListGUI : public GUI {
 struct GameChatGUI : public TextArea {
   GameClient **server;
   GameChatGUI(LFL::Window *W, int key, GameClient **s) : TextArea(W, Fonts::Get("Origicide.ttf", "", 10, Color::grey80)), server(s) { 
-    SetToggleKey(key, Toggler::OneShot);
-    write_timestamp=deactivate_on_enter=true;
+    SetToggleKey(key, true);
+    write_timestamp = deactivate_on_enter = true;
   }
 
-  void Run(string text) {
-    if (server && *server) (*server)->Rcon(StrCat("say ", text));
-    active = false;
-  }
-
+  void Run(string text) { if (server && *server) (*server)->Rcon(StrCat("say ", text)); }
   void Draw() {
-    if (!active && Now() - write_last >= Seconds(5)) return;
+    if (!Active() && Now() - write_last >= Seconds(5)) return;
     screen->gd->EnableBlend(); 
     {
       int h = (int)(screen->height/1.6);
       Scissor scissor(Box(1, screen->height-h+1, screen->width, screen->height*.15, false));
-      TextArea::Draw(Box(0, screen->height-h, screen->width, (int)(screen->height*.15)), active);
+      TextArea::Draw(Box(0, screen->height-h, screen->width, (int)(screen->height*.15)), DrawFlag::DrawCursor);
     }
   }
 };
