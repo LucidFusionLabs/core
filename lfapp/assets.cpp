@@ -734,12 +734,13 @@ struct AliasWavefrontObjLoader {
     LocalFile file(filename, "r");
     if (!file.Opened()) { ERROR("LocalFile::open(", file.Filename(), ")"); return 0; }
 
+    NextRecordReader nr(&file);
     vector<v3> vert, vert_out, norm, norm_out;
     vector<v2> tex, tex_out;
     Material mat; v3 xyz; v2 xy;
     int format=0, material=0, ind[3];
 
-    for (const char *line = file.NextLine(); line; line = file.NextLine()) {
+    for (const char *line = nr.NextLine(); line; line = nr.NextLine()) {
       if (!line[0] || line[0] == '#') continue;
       StringWordIter word(line);
       string cmd = IterNextString(&word);
@@ -807,9 +808,10 @@ struct AliasWavefrontObjLoader {
     LocalFile file(StrCat(dir, filename), "r");
     if (!file.Opened()) { ERROR("LocalFile::open(", file.Filename(), ")"); return -1; }
 
+    NextRecordReader nr(&file);
     Material m;
     string name;
-    for (const char *line = file.NextLine(); line; line = file.NextLine()) {
+    for (const char *line = nr.NextLine(); line; line = nr.NextLine()) {
       if (!line[0] || line[0] == '#') continue;
       StringWordIter word(line);
       string cmd = IterNextString(&word);

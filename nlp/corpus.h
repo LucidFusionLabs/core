@@ -66,7 +66,8 @@ struct TextCorpus : public SentenceCorpus {
   void RunFile(const string &filename) {
     LocalFile file(filename, "r");
     if (!file.Opened()) return;
-    for (const char *line = file.NextLine(); line; line = file.NextLine()) {
+    NextRecordReader nr(&file);
+    for (const char *line = nr.NextLine(); line; line = nr.NextLine()) {
       Sentence s(line);
       sentence_cb(filename, &s);
     }

@@ -152,6 +152,7 @@ template <class X> struct StringPieceT : public ArrayPiece<X> {
   int Length() const { return this->len >= 0 ? this->len : Length(this->buf); }
   static StringPieceT<X> Unbounded (const X *b) { return StringPieceT<X>(b, -1); }
   static StringPieceT<X> FromString(const X *b) { return StringPieceT<X>(b, b?Length(b):0); }
+  static StringPieceT<X> FromRemaining(const basic_string<X> &s, int r) { return StringPieceT<X>(s.data()+r, s.size()-r); }
   static size_t Length(const X *b) { const X *p = b; while (*p) p++; return p - b; }
   static const X *Blank() { static X x[1] = {0}; return x; }
   static const X *Space() { static X x[2] = {' ',0}; return x; }
@@ -550,6 +551,15 @@ int BaseDir(const char *path, const char *cmp);
 int DirNameLen(const StringPiece   &text, bool include_slash=false);
 int DirNameLen(const String16Piece &text, bool include_slash=false);
 
+struct Base64 {
+  string encoding_table, decoding_table;
+  int mod_table[3];
+  Base64();
+
+  string Encode(const char *in,   size_t input_length);
+  string Decode(const char *data, size_t input_length);
+};
+
 struct Regex {
   struct Result {
     int begin, end;
@@ -573,13 +583,26 @@ struct StreamRegex {
   int Match(const string &text, vector<Regex::Result> *out, bool eof=0);
 };
 
-struct Base64 {
-  string encoding_table, decoding_table;
-  int mod_table[3];
-  Base64();
+struct NextRecordReader {
+  typedef const char* (*NextRecordCB)(const StringPiece&, bool, int *);
+  typedef function<int(void*, size_t)> ReadCB;
+  ReadCB read_cb;
+  string buf;
+  bool buf_dirty;
+  int buf_offset, file_offset, record_offset, record_len;
+  NextRecordReader(File *f, int fo=0) { Init(f, fo); }
+  NextRecordReader(const ReadCB &cb, int fo=0) { Init(cb, fo); }
 
-  string Encode(const char *in,   size_t input_length);
-  string Decode(const char *data, size_t input_length);
+  void Init(File *f, int fo=0);
+  void Init(const ReadCB &cb, int fo=0) { read_cb=cb; Reset(); file_offset=fo; }
+  void Reset() { buf.clear(); buf_dirty = 0; buf_offset = file_offset = record_offset = record_len = 0; }
+  void AddFileOffset(int v) { file_offset += v; buf_dirty = 1; }
+  void SetFileOffset(int v) { file_offset  = v; buf_dirty = 1; }
+  const char *ReadNextRecord(int *offset, int *nextoffset, NextRecordCB cb);
+  const char *NextLine   (int *offset=0, int *nextoffset=0);
+  const char *NextLineRaw(int *offset=0, int *nextoffset=0);
+  const char *NextChunk  (int *offset=0, int *nextoffset=0);
+  const char *NextProto  (int *offset=0, int *nextoffset=0, ProtoHeader *phout=0);
 };
 
 }; // namespace LFL

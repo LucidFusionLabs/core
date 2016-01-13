@@ -816,10 +816,11 @@ void Editor::UpdateWrappedLines(int cur_font_size, int width) {
   wrapped_lines = 0;
   file_line.Clear();
   file->Reset();
+  NextRecordReader nr(file.get());
   int offset = 0, wrap = Wrap(), ll;
-  for (const char *l = file->NextLineRaw(&offset); l; l = file->NextLineRaw(&offset)) {
+  for (const char *l = nr.NextLineRaw(&offset); l; l = nr.NextLineRaw(&offset)) {
     wrapped_lines += (ll = wrap ? TextArea::font->Lines(l, width) : 1);
-    file_line.val.Insert(LineOffset(offset, file->nr.record_len, ll));
+    file_line.val.Insert(LineOffset(offset, nr.record_len, ll));
   }
   file_line.LoadFromSortedVal();
 }
@@ -888,7 +889,7 @@ int Editor::UpdateLines(float vs, int *first_ind, int *first_offset, int *first_
   }
 
   string buf(read_len, 0);
-  if (read_len) CHECK_EQ(buf.size(), file->Read(&buf[0], rv.data(), rv.size()));
+  if (read_len) CHECK_EQ(buf.size(), file->ReadIOV(&buf[0], rv.data(), rv.size()));
 
   Line *L = 0;
   if (up) for (LineMap::ConstIterator li = lie; li != lib; bo += l + !e, added++) {
@@ -1673,8 +1674,8 @@ SliderDialog::SliderDialog(const string &t, const SliderDialog::UpdatedCB &cb, f
   slider.increment = inc;
 }
 
-SliderFlagDialog::SliderFlagDialog(const string &fn, float total, float inc) :
-  SliderDialog(fn, bind(&SliderFlagDialog::Updated, this, _1), atof(Singleton<FlagMap>::Get()->Get(fn)) / total, total, inc),
+FlagSliderDialog::FlagSliderDialog(const string &fn, float total, float inc) :
+  SliderDialog(fn, bind(&FlagSliderDialog::Updated, this, _1), atof(Singleton<FlagMap>::Get()->Get(fn)) / total, total, inc),
   flag_name(fn), flag_map(Singleton<FlagMap>::Get()) {}
 
 EditorDialog::EditorDialog(Window *W, Font *F, File *I, float w, float h, int flag) :

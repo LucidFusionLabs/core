@@ -108,7 +108,8 @@ void Resolver::DefaultNameserver(vector<IPV4::Addr> *nameservers) {
   LocalFile file("/etc/resolv.conf", "r");
   if (!file.Opened()) return;
 
-  for (const char *line = file.NextLine(); line; line = file.NextLine()) {
+  NextRecordReader nr(&file);
+  for (const char *line = nr.NextLine(); line; line = nr.NextLine()) {
     StringWordIter words(line);
     if (IterNextString(&words) != "nameserver") continue;
     nameservers->push_back(IPV4::Parse(IterNextString(&words)));

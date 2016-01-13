@@ -32,11 +32,11 @@ int VoiceModel::Read(const char *dir) {
 
     string pn = dir; pn += fn;
 
-    int samples = MatrixArchiveIn::Count(pn);
+    int samples = MatrixArchiveInputFile::Count(pn);
     unit[phoneme].samples = samples;
     unit[phoneme].sample = (Unit::Sample*)calloc(sizeof(Unit::Sample), samples);
 
-    MatrixArchiveIn index(pn.c_str());
+    MatrixArchiveInputFile index(pn.c_str());
     Matrix *m=0; string hdr; int err, count=0;
     for (err = index.Read(&m, &hdr); err != -1; err = index.Read(&m, &hdr)) {
       int beg = m->row(0)[0], end = m->row(0)[1];

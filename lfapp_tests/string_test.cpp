@@ -432,7 +432,7 @@ TEST(RegexTest, StreamURL) {
 }
 
 TEST(RegexTest, AhoCorasickURL) {
-  AhoCorasickMatcher<char> url_matcher({"http://", "https://"});
+  AhoCorasickFSM<char> url_matcher({"http://", "https://"});
   vector<Regex::Result> matches;
 
   string in = "aa http://foo bb";
@@ -470,11 +470,11 @@ TEST(RegexTest, AhoCorasickURL) {
 }
 
 TEST(RegexTest, StringMatcherURL) {
-  AhoCorasickMatcher<char> url_matcher({"http://", "https://"});
-  StringMatcher<char> matcher(&url_matcher);
+  AhoCorasickFSM<char> url_fsm({"http://", "https://"});
+  StringMatcher<char> url_matcher(&url_fsm);
 
   string in = "aa http://foo bb";
-  StringMatcher<char>::iterator mi = matcher.Begin(in);
+  StringMatcher<char>::iterator mi = url_matcher.Begin(in);
   EXPECT_NE(mi.b, mi.e);
   EXPECT_EQ("aa http://", string(mi.b, mi.nb));
   EXPECT_EQ(0, mi.MatchBegin()); EXPECT_EQ(0, mi.Matching()); EXPECT_EQ(0, mi.MatchEnd());
@@ -490,7 +490,7 @@ TEST(RegexTest, StringMatcherURL) {
   EXPECT_EQ(mi.b, mi.e);
 
   in = "aa https://foo bb xxxxxxxxxxx ";
-  mi = matcher.Begin(in);
+  mi = url_matcher.Begin(in);
   EXPECT_NE(mi.b, mi.e);
   EXPECT_EQ("aa https://", string(mi.b, mi.nb));
   EXPECT_EQ(0, mi.MatchBegin()); EXPECT_EQ(0, mi.Matching()); EXPECT_EQ(0, mi.MatchEnd());
@@ -506,38 +506,77 @@ TEST(RegexTest, StringMatcherURL) {
   EXPECT_EQ(mi.b, mi.e);
 
   in = " nothing of note here ";
-  mi = matcher.Begin(in);
+  mi = url_matcher.Begin(in);
   EXPECT_NE(mi.b, mi.e);
   EXPECT_EQ(in, string(mi.b, mi.nb));
   ++mi;
   EXPECT_EQ(mi.b, mi.e);
 
   in = " and um htt";
-  mi = matcher.Begin(in);
+  mi = url_matcher.Begin(in);
   EXPECT_NE(mi.b, mi.e);
   EXPECT_EQ(in, string(mi.b, mi.nb));
   ++mi;
   EXPECT_EQ(mi.b, mi.e);
 
   in = "p://doo ddd ";
-  mi = matcher.Begin(in);
+  mi = url_matcher.Begin(in);
   EXPECT_NE(mi.b, mi.e);
   EXPECT_EQ("p://", string(mi.b, mi.nb));
   ++mi;
   EXPECT_NE(mi.b, mi.e);
   EXPECT_EQ("doo", string(mi.b, mi.nb));
   EXPECT_EQ(1, mi.MatchBegin()); EXPECT_EQ(1, mi.Matching()); EXPECT_EQ(1, mi.MatchEnd());
-  EXPECT_EQ(-3, matcher.match_begin);
+  EXPECT_EQ(-3, url_matcher.match_begin);
   ++mi;
   EXPECT_NE(mi.b, mi.e);
   EXPECT_EQ(" ddd ", string(mi.b, mi.nb));
   EXPECT_EQ(0, mi.MatchBegin()); EXPECT_EQ(0, mi.Matching()); EXPECT_EQ(0, mi.MatchEnd());
   ++mi;
   EXPECT_EQ(mi.b, mi.e);
+
+  AhoCorasickFSM<char> line_fsm({"\n<12>"});
+  StringMatcher<char> line_matcher(&line_fsm);
+  line_matcher.match_end_condition = &isint<'\n'>;
+
+  in = "y0y0y0\n<12";
+  mi = line_matcher.Begin(in);
+  EXPECT_NE(mi.b, mi.e);
+  EXPECT_EQ("y0y0y0\n<12", string(mi.b, mi.nb));
+  ++mi;
+  EXPECT_EQ(mi.b, mi.e);
+
+  in = ">line1\n<12";
+  mi = line_matcher.Begin(in);
+  EXPECT_NE(mi.b, mi.e);
+  EXPECT_EQ(">", string(mi.b, mi.nb));
+  ++mi;
+  EXPECT_NE(mi.b, mi.e);
+  EXPECT_EQ("line1", string(mi.b, mi.nb));
+  EXPECT_EQ(1, mi.MatchBegin()); EXPECT_EQ(1, mi.Matching()); EXPECT_EQ(1, mi.MatchEnd());
+  ++mi;
+  EXPECT_NE(mi.b, mi.e);
+  EXPECT_EQ("\n<12", string(mi.b, mi.nb));
+  ++mi;
+  EXPECT_EQ(mi.b, mi.e);
+
+  in = ">line2\n<12";
+  mi = line_matcher.Begin(in);
+  EXPECT_NE(mi.b, mi.e);
+  EXPECT_EQ(">", string(mi.b, mi.nb));
+  ++mi;
+  EXPECT_NE(mi.b, mi.e);
+  EXPECT_EQ("line2", string(mi.b, mi.nb));
+  EXPECT_EQ(1, mi.MatchBegin()); EXPECT_EQ(1, mi.Matching()); EXPECT_EQ(1, mi.MatchEnd());
+  ++mi;
+  EXPECT_NE(mi.b, mi.e);
+  EXPECT_EQ("\n<12", string(mi.b, mi.nb));
+  ++mi;
+  EXPECT_EQ(mi.b, mi.e);
 }
 
 TEST(RegexTest, AhoCorasick) {
-  AhoCorasickMatcher<char> matcher({"he", "hers", "his", "she"});
+  AhoCorasickFSM<char> matcher({"he", "hers", "his", "she"});
   string in = "ushers";
   vector<Regex::Result> matches;
   matcher.Match(in, &matches);

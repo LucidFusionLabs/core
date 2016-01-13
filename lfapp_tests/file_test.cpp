@@ -24,9 +24,10 @@ namespace LFL {
 TEST(FileTest, BufferFile) {
   string b = "1 2 3\n4 5 6", z = "7 8 9\n9 8 7\n7 8 9";
   BufferFile bf(b);
+  NextRecordReader nr(&bf);
   EXPECT_EQ(b.size(), bf.Size());
-  EXPECT_EQ(0, strcmp(BlankNull(bf.NextLine()), "1 2 3"));
-  EXPECT_EQ(0, strcmp(BlankNull(bf.NextLine()), "4 5 6"));
+  EXPECT_EQ(0, strcmp(BlankNull(nr.NextLine()), "1 2 3"));
+  EXPECT_EQ(0, strcmp(BlankNull(nr.NextLine()), "4 5 6"));
   EXPECT_EQ(b, bf.Contents());
   bf.Write(z.data(), z.size());
   EXPECT_EQ(z.size(), bf.Size());
@@ -38,7 +39,8 @@ TEST(FileTest, LocalFileRead) {
     string fn = "../../../core/www/lfl/lfl.png", contents = LocalFile::FileContents(fn), buf;
     INFO("Read ", fn, " ", contents.size(), " bytes");
     LocalFile f(fn, "r");
-    for (const char *line = f.NextChunk(); line; line = f.NextChunk()) buf.append(line, f.nr.record_len);
+    NextRecordReader nr(&f);
+    for (const char *line = nr.NextChunk(); line; line = nr.NextChunk()) buf.append(line, nr.record_len);
     EXPECT_EQ(contents, buf);
   }
   {
@@ -46,8 +48,9 @@ TEST(FileTest, LocalFileRead) {
     INFO("Read ", fn, " ", contents.size(), " bytes");
     if (contents.back() != '\n') contents.append("\n");
     LocalFile f(fn, "r");
-    for (const char *line = f.NextLineRaw(); line; line = f.NextLineRaw())
-      buf += string(line, f.nr.record_len) + "\n";
+    NextRecordReader nr(&f);
+    for (const char *line = nr.NextLineRaw(); line; line = nr.NextLineRaw())
+      buf += string(line, nr.record_len) + "\n";
     EXPECT_EQ(contents, buf);
   }
 }

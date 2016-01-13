@@ -56,7 +56,7 @@ extern "C" int main(int argc, const char *argv[]) {
 
   if (FLAGS_vp) {
     FLAGS_lfapp_debug = 1;
-    MatrixArchiveIn ViterbiPathsIn;
+    MatrixArchiveInputFile ViterbiPathsIn;
     ViterbiPathsIn.Open(argv[1]);
 
     int count = PathCorpus::PathIter(featdir.c_str(), &ViterbiPathsIn, bind(&Path, _1, _2, _3, _4, _5, _6, _7));

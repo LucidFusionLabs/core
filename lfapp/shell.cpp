@@ -309,11 +309,12 @@ void Shell::Slider(const vector<string> &a) {
   string flag_name = a[0];
   float total = a.size() >= 1 ? atof(a[1]) : 0;
   float inc   = a.size() >= 2 ? atof(a[2]) : 0;
-  screen->AddDialog(new SliderFlagDialog(flag_name, total ? total : 100, inc ? inc : 1));
+  screen->AddDialog(new FlagSliderDialog(flag_name, total ? total : 100, inc ? inc : 1));
 }
 
 void Shell::Edit(const vector<string> &a) {
   string s = Asset::FileContents("lfapp_vertex.glsl");
+  if (s.empty()) INFO("missing file lfapp_vertex.glsl");
   screen->AddDialog(new EditorDialog(screen, Fonts::Default(), new BufferFile(s)));
 }
 

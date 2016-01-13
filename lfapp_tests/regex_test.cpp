@@ -89,7 +89,7 @@ TEST(RegexTest, AhoCorasickURL) {
   int tid = timers->Create("AhoCorasickURL");
 
   vector<Regex::Result> matches;
-  AhoCorasickMatcher<char> url_matcher({ "http://", "https://" });
+  AhoCorasickFSM<char> url_matcher({ "http://", "https://" });
   timers->AccumulateTo(tid);
   for (int i=0; i<FLAGS_size; ++i) {
     url_matcher.Match(my_env->test1, &matches);
@@ -103,8 +103,8 @@ TEST(RegexTest, AhoCorasickMatcherURL) {
   PerformanceTimers *timers = Singleton<PerformanceTimers>::Get();
   int tid = timers->Create("AhoCorasickMatcherURL");
 
-  AhoCorasickMatcher<char> url_matcher({ "http://", "https://" });
-  StringMatcher<char> matcher(&url_matcher);
+  AhoCorasickFSM<char> url_fsm({ "http://", "https://" });
+  StringMatcher<char> matcher(&url_fsm);
   timers->AccumulateTo(tid);
   string r1 = my_env->prefix1 + my_env->prot1;
   for (int i=0; i<FLAGS_size; ++i) {

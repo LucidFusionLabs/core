@@ -497,7 +497,7 @@ struct Terminal : public TextArea {
     virtual void IOCtlWindowSize(int w, int h) {}
   };
   struct Controller : public ByteSink {
-    bool ctrl_down=0, frame_on_keyboard_input=0;
+    bool ctrl_down=0, local_echo=0, frame_on_keyboard_input=0;
     virtual ~Controller() {}
     virtual int Open(Terminal*) = 0;
     virtual StringPiece Read() = 0;
@@ -649,10 +649,10 @@ struct SliderDialog : public Dialog {
   void Draw() { Dialog::Draw(); if (slider.dirty) { slider.Update(); if (updated) updated(&slider); } }
 };
 
-struct SliderFlagDialog : public SliderDialog {
+struct FlagSliderDialog : public SliderDialog {
   string flag_name;
   FlagMap *flag_map;
-  SliderFlagDialog(const string &fn, float total=100, float inc=1);
+  FlagSliderDialog(const string &fn, float total=100, float inc=1);
   virtual void Updated(Widget::Slider *s) { flag_map->Set(flag_name, StrCat(s->Percent())); }
 };
 

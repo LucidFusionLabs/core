@@ -698,6 +698,46 @@ template <class X> int DirNameLen(const StringPieceT<X> &path, bool include_slas
 int DirNameLen(const StringPiece   &text, bool include_slash) { return DirNameLen<char>    (text, include_slash); }
 int DirNameLen(const String16Piece &text, bool include_slash) { return DirNameLen<char16_t>(text, include_slash); }
 
+Base64::Base64() : encoding_table("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"), decoding_table(256, 0) {
+  mod_table[0]=0; mod_table[1]=2; mod_table[2]=1;
+  for (int i = 0; i < 64; i++) decoding_table[(unsigned char)encoding_table[i]] = i;
+}
+
+string Base64::Encode(const char *in, size_t input_length) {
+  const unsigned char *data = (const unsigned char *) in;
+  string encoded_data(4 * ((input_length + 2) / 3), 0);
+  for (int i = 0, j = 0; i < input_length;) {
+    unsigned octet_a = i < input_length ? data[i++] : 0;
+    unsigned octet_b = i < input_length ? data[i++] : 0;
+    unsigned octet_c = i < input_length ? data[i++] : 0;
+    unsigned triple = (octet_a << 0x10) + (octet_b << 0x08) + octet_c;
+    encoded_data[j++] = encoding_table[(triple >> 3 * 6) & 0x3F];
+    encoded_data[j++] = encoding_table[(triple >> 2 * 6) & 0x3F];
+    encoded_data[j++] = encoding_table[(triple >> 1 * 6) & 0x3F];
+    encoded_data[j++] = encoding_table[(triple >> 0 * 6) & 0x3F];
+  }
+  for (int i = 0; i < mod_table[input_length % 3]; i++) encoded_data[encoded_data.size() - 1 - i] = '=';
+  return encoded_data;
+}
+
+string Base64::Decode(const char *data, size_t input_length) {
+  CHECK_EQ(input_length % 4, 0);
+  string decoded_data(input_length / 4 * 3, 0);
+  if (data[input_length - 1] == '=') decoded_data.erase(decoded_data.size()-1);
+  if (data[input_length - 2] == '=') decoded_data.erase(decoded_data.size()-1);
+  for (int i = 0, j = 0; i < input_length;) {
+    unsigned sextet_a = data[i] == '=' ? 0 & i++ : decoding_table[data[i++]];
+    unsigned sextet_b = data[i] == '=' ? 0 & i++ : decoding_table[data[i++]];
+    unsigned sextet_c = data[i] == '=' ? 0 & i++ : decoding_table[data[i++]];
+    unsigned sextet_d = data[i] == '=' ? 0 & i++ : decoding_table[data[i++]];
+    unsigned triple = (sextet_a << 3 * 6) + (sextet_b << 2 * 6) + (sextet_c << 1 * 6) + (sextet_d << 0 * 6);
+    if (j < decoded_data.size()) decoded_data[j++] = (triple >> 2 * 8) & 0xFF;
+    if (j < decoded_data.size()) decoded_data[j++] = (triple >> 1 * 8) & 0xFF;
+    if (j < decoded_data.size()) decoded_data[j++] = (triple >> 0 * 8) & 0xFF;
+  }
+  return decoded_data;
+}
+
 #ifdef LFL_REGEX
 Regex::~Regex() { re_free((regexp*)impl); }
 Regex::Regex(const string &patternstr) {
@@ -749,44 +789,66 @@ StreamRegex::StreamRegex(const string &patternstr) {}
 int StreamRegex::Match(const string &text, vector<Regex::Result> *out, bool eof) { return 0; }
 #endif
 
-Base64::Base64() : encoding_table("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"), decoding_table(256, 0) {
-  mod_table[0]=0; mod_table[1]=2; mod_table[2]=1;
-  for (int i = 0; i < 64; i++) decoding_table[(unsigned char)encoding_table[i]] = i;
+void NextRecordReader::Init(File *F, int fo) { return Init(bind(&File::Read, F, _1, _2), fo); }
+
+const char *NextRecordReader::ReadNextRecord(int *offsetOut, int *nextoffsetOut, NextRecordCB nextcb) {
+  const char *next, *text; int left; bool read_short = false;
+  if (buf_dirty) buf_offset = buf.size();
+  for (;;) {
+    left = buf.size() - buf_offset;
+    text = buf.data() + buf_offset;
+    if (!buf_dirty && left>0 && (next = nextcb(StringPiece(text, left), read_short, &record_len))) {
+
+      if (offsetOut) *offsetOut = file_offset - buf.size() + buf_offset;
+      if (nextoffsetOut) *nextoffsetOut = file_offset - buf.size() + (next - buf.data());
+
+      record_offset = buf_offset;
+      buf_offset = next-buf.data();
+      return text;
+    }
+    if (read_short) {
+      buf_offset = -1;
+      return 0;
+    }
+
+    buf.erase(0, buf_offset);
+    int buf_filled = buf.size();
+    buf.resize(buf.size() < 4096 ? 4096 : buf.size()*2);
+    int len = read_cb((char*)buf.data()+buf_filled, buf.size()-buf_filled);
+    if (len > 0) file_offset += len;
+    read_short = len < buf.size()-buf_filled;
+    buf.resize(max(len,0) + buf_filled);
+    buf_dirty = false;
+    buf_offset = 0;
+  }
 }
 
-string Base64::Encode(const char *in, size_t input_length) {
-  const unsigned char *data = (const unsigned char *) in;
-  string encoded_data(4 * ((input_length + 2) / 3), 0);
-  for (int i = 0, j = 0; i < input_length;) {
-    unsigned octet_a = i < input_length ? data[i++] : 0;
-    unsigned octet_b = i < input_length ? data[i++] : 0;
-    unsigned octet_c = i < input_length ? data[i++] : 0;
-    unsigned triple = (octet_a << 0x10) + (octet_b << 0x08) + octet_c;
-    encoded_data[j++] = encoding_table[(triple >> 3 * 6) & 0x3F];
-    encoded_data[j++] = encoding_table[(triple >> 2 * 6) & 0x3F];
-    encoded_data[j++] = encoding_table[(triple >> 1 * 6) & 0x3F];
-    encoded_data[j++] = encoding_table[(triple >> 0 * 6) & 0x3F];
-  }
-  for (int i = 0; i < mod_table[input_length % 3]; i++) encoded_data[encoded_data.size() - 1 - i] = '=';
-  return encoded_data;
+const char *NextRecordReader::NextLine(int *offset, int *nextoffset) {
+  const char *nl;
+  if (!(nl = ReadNextRecord(offset, nextoffset, LFL::NextLine))) return 0;
+  if (nl) buf[record_offset + record_len] = 0;
+  return nl;
 }
 
-string Base64::Decode(const char *data, size_t input_length) {
-  CHECK_EQ(input_length % 4, 0);
-  string decoded_data(input_length / 4 * 3, 0);
-  if (data[input_length - 1] == '=') decoded_data.erase(decoded_data.size()-1);
-  if (data[input_length - 2] == '=') decoded_data.erase(decoded_data.size()-1);
-  for (int i = 0, j = 0; i < input_length;) {
-    unsigned sextet_a = data[i] == '=' ? 0 & i++ : decoding_table[data[i++]];
-    unsigned sextet_b = data[i] == '=' ? 0 & i++ : decoding_table[data[i++]];
-    unsigned sextet_c = data[i] == '=' ? 0 & i++ : decoding_table[data[i++]];
-    unsigned sextet_d = data[i] == '=' ? 0 & i++ : decoding_table[data[i++]];
-    unsigned triple = (sextet_a << 3 * 6) + (sextet_b << 2 * 6) + (sextet_c << 1 * 6) + (sextet_d << 0 * 6);
-    if (j < decoded_data.size()) decoded_data[j++] = (triple >> 2 * 8) & 0xFF;
-    if (j < decoded_data.size()) decoded_data[j++] = (triple >> 1 * 8) & 0xFF;
-    if (j < decoded_data.size()) decoded_data[j++] = (triple >> 0 * 8) & 0xFF;
-  }
-  return decoded_data;
+const char *NextRecordReader::NextLineRaw(int *offset, int *nextoffset) {
+  const char *nl;
+  if (!(nl = ReadNextRecord(offset, nextoffset, LFL::NextLineRaw))) return 0;
+  if (nl) buf[record_offset + record_len] = 0;
+  return nl;
+}
+
+const char *NextRecordReader::NextChunk(int *offset, int *nextoffset) {
+  const char *nc;
+  if (!(nc = ReadNextRecord(offset, nextoffset, LFL::NextChunk<4096>))) return 0;
+  if (nc) buf[record_offset + record_len] = 0;
+  return nc;
+}
+
+const char *NextRecordReader::NextProto(int *offset, int *nextoffset, ProtoHeader *bhout) {
+  const char *np;
+  if (!(np = ReadNextRecord(offset, nextoffset, LFL::NextProto))) return 0;
+  if (bhout) *bhout = ProtoHeader(np);
+  return np + ProtoHeader::size;
 }
 
 }; // namespace LFL

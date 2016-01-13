@@ -1113,7 +1113,7 @@ struct StyleSheet : public LFL::DOM::Object {
     if (Content) { Parse(Content); Done(); }
   }
 
-  void Parse(File *f) { for (const char *line = f->NextLine(); line; line = f->NextLine()) Parse(line, f->nr.record_len); }
+  void Parse(File *f) { NextRecordReader nr(f); for (const char *l = nr.NextLine(); l; l = nr.NextLine()) Parse(l, nr.record_len); }
   void Parse(const string &content) { return Parse(content.c_str(), content.size()); }
   void Parse(const char *content, int content_len) {
     css_error code = css_stylesheet_append_data(sheet, (const unsigned char *)content, content_len);
@@ -1525,7 +1525,7 @@ struct StyleSheet : public LFL::DOM::Object {
   LFL::DOM::Document *ownerDocument;
   static StyleSheet *Default() { static StyleSheet ret(0); return &ret; }
   StyleSheet(LFL::DOM::Document *D, const char *U=0, const char *T=0, bool in_line=0, bool quirks=0, const char *Content=0) : ownerDocument(D) {}
-  void Parse(File *f) { for (const char *line = f->NextLine(); line; line = f->NextLine()) Parse(line, f->nr.record_len); }
+  void Parse(File *f) { NextRecordReader nr(f); for (const char *l = nr.NextLine(); l; l = nr.NextLine()) Parse(l, nr.record_len); }
   void Parse(const string &content) { return Parse(content.c_str(), content.size()); }
   void Parse(const char *content, int content_len) {}
   void Done()                                      {}

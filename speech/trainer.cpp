@@ -101,7 +101,7 @@ struct Wav2Features {
   enum Target { File, Archive };
   string dir;
   Target targ;
-  MatrixArchiveOut out;
+  MatrixArchiveOutputFile out;
 
   Wav2Features(const string &Dir, Target Targ) : dir(Dir), targ(Targ) {
     if (targ == Archive) {
@@ -396,7 +396,7 @@ int GrowDecisionTrees(const char *modeldir, AcousticModel::Compiled *model3, int
   Features2Pronunciation f2p(model3);
   if (!FLAGS_UttPathsInFile.size()) { ERROR("tie model states requires -UttPathsInFile: ", -1); return -1; }
 
-  MatrixArchiveIn UttPathsIn;
+  MatrixArchiveInputFile UttPathsIn;
   UttPathsIn.Open(modeldir + FLAGS_UttPathsInFile);
   PathCorpus::PathIter(featdir, &UttPathsIn, bind(&Features2Pronunciation::AddPath, f2p, _1, _2, _3, _4, _5, _6, _7));
   if (!Running()) return 0;
@@ -841,7 +841,7 @@ struct Wav2Segments {
   struct Out {
     LocalFile lf;
     WavWriter wav;
-    MatrixArchiveOut index;
+    MatrixArchiveOutputFile index;
     int count, samples;
     Out(const char *basename) : lf(StrCat(basename, ".wav"), "w"), wav(&lf), index(StrCat(basename, ".mat").c_str()), count(0), samples(0) {}
   };
