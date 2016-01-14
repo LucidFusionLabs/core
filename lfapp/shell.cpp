@@ -30,7 +30,6 @@ Shell::Shell(AssetMap *AM, SoundAssetMap *SAM, MovieAssetMap *MAM) : assets(AM),
   command.push_back(Command("flags",      bind(&Shell::flags,        this, _1)));
   command.push_back(Command("conscolor",  bind(&Shell::consolecolor, this, _1)));
   command.push_back(Command("clipboard",  bind(&Shell::clipboard,    this, _1)));
-  command.push_back(Command("startcmd",   bind(&Shell::startcmd,     this, _1)));
   command.push_back(Command("dldir",      bind(&Shell::dldir,        this, _1)));
   command.push_back(Command("screenshot", bind(&Shell::screenshot,   this, _1)));
   command.push_back(Command("fillmode",   bind(&Shell::fillmode,     this, _1)));
@@ -112,11 +111,6 @@ void Shell::consolecolor(const vector<string>&) {
   if (!screen->lfapp_console) return;
   delete screen->lfapp_console->font;
   screen->lfapp_console->font = Fonts::Get(FLAGS_default_font, "", 9, Color::black);
-}
-
-void Shell::startcmd(const vector<string> &a) {
-  if (a.empty() || !screen->lfapp_console) return;
-  screen->lfapp_console->startcmd = Join(a, " ");
 }
 
 void Shell::dldir(const vector<string>&) { INFO(LFAppDownloadDir()); }

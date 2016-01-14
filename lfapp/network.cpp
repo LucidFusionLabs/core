@@ -847,7 +847,7 @@ int Network::Init() {
   vector<IPV4::Addr> nameservers;
   if (FLAGS_nameserver.empty()) {
     INFO("Network::Init(): Enable(new Resolver(defaultNameserver()))");
-    Resolver::DefaultNameserver(&nameservers);
+    Resolver::GetDefaultNameservers(&nameservers);
   } else {
     INFO("Network::Init(): Enable(new Resolver(", FLAGS_nameserver, "))");
     IPV4::ParseCSV(FLAGS_nameserver, &nameservers);
@@ -1340,10 +1340,12 @@ bool HTTPClient::WPost(const string &url, const string &mimetype, const char *po
   bool ssl; int tcp_port; string host, path;
   if (!HTTP::ResolveURL(url.c_str(), &ssl, 0, &tcp_port, &host, &path)) return 0;
 
-  HTTPClientHandler::WPost *handler = new HTTPClientHandler::WPost(this, ssl, host, tcp_port, path, mimetype, postdata, postlen, cb);
-  if (!Singleton<Resolver>::Get()->Resolve(Resolver::Request(host, DNS::Type::A, bind(&HTTPClientHandler::WGet::ResolverResponseCB, handler, _1, _2))))
-  { ERROR("resolver: ", url); delete handler; return 0; }
+  HTTPClientHandler::WPost *handler = new
+    HTTPClientHandler::WPost(this, ssl, host, tcp_port, path, mimetype, postdata, postlen, cb);
 
+  if (!Singleton<Resolver>::Get()->QueueResolveRequest
+      (Resolver::Request(host, DNS::Type::A, bind(&HTTPClientHandler::WGet::ResolverResponseCB, handler, _1, _2))))
+  { ERROR("resolver: ", url); delete handler; return 0; }
   return true;
 }
 

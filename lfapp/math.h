@@ -139,12 +139,14 @@ struct v4 {
 };
 
 struct m33 {
-  v3 m[3]; m33() {}
-  v3 &operator[](unsigned i) { return m[i]; }
+  v3 m[3];
+  m33() {}
+  /**/  v3 &operator[](unsigned i)       { return m[i]; }
   const v3 &operator[](unsigned i) const { return m[i]; }
   static m33 RotAxis(float f, const v3 &v) { return RotAxis(f, v.x, v.y, v.z); }
   static m33 RotAxis(float f, float x, float y, float z) {
-    float s=sin(f), c=cos(f); m33 m;
+    m33 m;
+    float s=sin(f), c=cos(f);
     m[0][0] =    c + x*x*(1-c); m[1][0] =  z*s + y*x*(1-c); m[2][0] = -y*s + z*x*(1-c);
     m[0][1] = -z*s + x*y*(1-c); m[1][1] =    c + y*y*(1-c); m[2][1] =  x*s + z*y*(1-c);
     m[0][2] =  y*s + x*z*(1-c); m[1][2] = -x*s + y*z*(1-c); m[2][2] =    c + z*z*(1-c);
@@ -152,15 +154,16 @@ struct m33 {
   }
   v3 Transform(const v3 &v) const {
     v3 ret;
-    ret.x=m[0][0]*v.x + m[1][0]*v.y + m[2][0]*v.z;
-    ret.y=m[0][1]*v.x + m[1][1]*v.y + m[2][1]*v.z;
-    ret.z=m[0][2]*v.x + m[1][2]*v.y + m[2][2]*v.z;
+    ret.x = m[0][0]*v.x + m[1][0]*v.y + m[2][0]*v.z;
+    ret.y = m[0][1]*v.x + m[1][1]*v.y + m[2][1]*v.z;
+    ret.z = m[0][2]*v.x + m[1][2]*v.y + m[2][2]*v.z;
     return ret;
   }
 };
 
 struct m44 {
-  v4 m[4]; m44() {}
+  v4 m[4];
+  m44() {}
   m44(const int   *in) { Assign(in); }
   m44(const float *in) { Assign(in); }
   m44(const m44   &in) { Assign(in); }
@@ -185,6 +188,7 @@ struct m44 {
     ret.w=m[0][3]*v.x + m[1][3]*v.y + m[2][3]*v.z + m[3][3]*v.w;
     return ret;
   }
+
   static void Mult(const m44 &A, const m44 &B, m44 *C) {
     for (int i=0; i<4; i++) for (int j=0; j<4; j++) { ((*C)[i])[j] = 0; for (int k=0; k<4; k++) ((*C)[i])[j] += (A[i])[k] * (B[k])[j]; }
   }
@@ -215,11 +219,13 @@ struct Plane {
     Assign(ort.x, ort.y, ort.z);
     d = -a*pos.x -b*pos.y -c*pos.z;
   }
+
   float Distance(v3 p, bool norm=true) {
     float num = (a*p.x + b*p.y + c*p.z + d);
     if (!norm) return num;
     return num / sqrt(a*a + b*b + c*c);
   }
+
   static v3 Normal(v3 p1, v3 p2, v3 p3) { return v3::Cross(p3-p2, p1-p2); }
 };
 
@@ -330,6 +336,7 @@ template <class T=double> struct matrix {
       }
     }
   }
+
   void AddCols(unsigned cols, bool prepend=false) {
     matrix<T> new_matrix(M, N+cols, 0, flag, alloc);
     if (!prepend) new_matrix.AssignR(this);
@@ -345,6 +352,7 @@ template <class T=double> struct matrix {
   void AssignL(const matrix *m, int flag) { bool neg=flag&mNeg; MatrixIter(this) row(i)[j] = neg ? Negate(m->row(i)[j]) : m->row(i)[j]; CompleteOperation(m, 0, 0, flag); }
   void AssignR(const matrix *m, int flag) { bool neg=flag&mNeg; MatrixIter(m)    row(i)[j] = neg ? Negate(m->row(i)[j]) : m->row(i)[j]; CompleteOperation(m, 0, 0, flag); }
   void AssignDiagonal(double v) { MatrixRowIter(this) row(i)[i] = v; }
+
   void Absorb(matrix *nm) { 
     if (m) { alloc->Free(m); m=0; }
     Assign(nm->M, nm->N, nm->M*nm->N*sizeof(T), nm->flag, nm->alloc);
@@ -352,12 +360,14 @@ template <class T=double> struct matrix {
     nm->m = 0;
     delete nm;
   }
+
   void AssignDataPtr(int nm, int nn, T *nv, Allocator *Alloc=0) {
     if (m) { alloc->Free(m); m=0; }
     if (!Alloc) Alloc = Singleton<NullAlloc>::Get();
     Assign(nm, nn, nm*nn*sizeof(T), 0, Alloc);
     m = nv;
   }
+
   void Open(int Mrows, int Ncols, T InitialVal=0, int Flag=0, Allocator *Alloc=0) {
     if (m) { alloc->Free(m); m=0; }
     long long bytes = Mrows*Ncols*sizeof(T)*((Flag&Flag::Complex)?2:1);
@@ -371,6 +381,7 @@ template <class T=double> struct matrix {
     AddRows(0);
     MatrixIter(this) { row(i)[j] = InitialVal; }
   }
+
   void Open(int Mrows, int Ncols, const char *bitmap, int Flag=0, Allocator *Alloc=0) {
     if (m) { alloc->Free(m); m=0; }
     if (!Alloc) Alloc = Allocator::Default();
@@ -378,11 +389,13 @@ template <class T=double> struct matrix {
     AddRows(0);
     MatrixIter(this) { row(i)[j] = (unsigned char)bitmap[i + j*M]; }
   }
+
   void Clear() {
     if (m) { alloc->Free(m); m=0; }
     M = N = 0;
     bytes = 0;
   }
+
   matrix *Clone() const {
     matrix *ret = new matrix(M,N,flag);
     MatrixIter(ret) { ret->row(i)[j] = row(i)[j]; }
@@ -402,20 +415,24 @@ template <class T=double> struct matrix {
     if (flag & mDelA) delete A;
     return C;
   }
+
   static matrix *Add(const matrix *A, const matrix *B, matrix *C, int flag=0) {
     if (A->M != B->M || B->M != C->M || A->N != B->N || B->N != C->N) { ERROR("add ", A->M, ", ", A->N, ", ", B->M, ", ", B->N, ", ", C->M, ", ", C->N); return 0; }
     MatrixIter(A) C->row(i)[j] = A->row(i)[j] + B->row(i)[j];
     return CompleteOperation(A, B, C, flag);
   }
+
   static matrix *Sub(const matrix *A, const matrix *B, matrix *C, int flag=0) {
     if (A->M != B->M || B->M != C->M || A->N != B->N || B->N != C->N) { ERROR("sub ", A->M, ", ", A->N, ", ", B->M, ", ", B->N, ", ", C->M, ", ", C->N); return 0; }
     MatrixIter(A) C->row(i)[j] = A->row(i)[j] - B->row(i)[j];
     return CompleteOperation(A, B, C, flag);
   }
+
   static matrix *Mult(const matrix *A, const matrix *B, int flag=0) {
     matrix *C = new matrix((flag & mTrnpA)?A->N:A->M, (flag & mTrnpB)?B->M:B->N);
     return matrix::Mult(A, B, C, flag);
   }
+
   static matrix *Mult(const matrix *A, const matrix *B, matrix *C, int flag=0) {
     bool trnpA = flag & mTrnpA, trnpB = flag & mTrnpB, trnpC = flag & mTrnpC, neg = flag & mNeg;
     int AM = trnpA ? A->N : A->M, AN = trnpA ? A->M : A->N;
@@ -437,6 +454,7 @@ template <class T=double> struct matrix {
     }
     return CompleteOperation(A, B, C, flag);
   }
+
   static matrix *Convolve(const matrix *A, const matrix *B, matrix *C, int flag=0) {
     if (A->M != C->M || A->N != C->N || (B->M % 2) != 1 || (B->N % 2) != 1) { ERROR("convolve ", A->M, ", ", A->N, " ", B->M, ", ", B->N, " ", C->M, ", ", C->N); return 0; }
     bool zero_only = flag & mZeroOnly;
@@ -458,16 +476,19 @@ template <class T=double> struct matrix {
     }
     return CompleteOperation(A, B, C, flag);
   }
+
   static matrix *CompleteOperation(const matrix *A, const matrix *B, matrix *C, int flag) {
     if (flag & mDelA) delete A;
     if (flag & mDelB) delete B;
     return C;
   }
+
   static T Max(const matrix *A) {
     T ret = -INFINITY;
     MatrixIter(A) ret = max(ret, A->row(i)[j]);
     return ret;
   }
+
   static void Print(const matrix *A, const string &name) {
     INFO(name, " Matrix(", A->M, ",", A->N, ") = ");
     MatrixRowIter(A) Vec<T>::Print(A->row(i), A->N);
@@ -483,6 +504,13 @@ template <class X> struct RollingAvg {
   int window=0, index=0, count=0;
   RollingAvg(int W) : buf(W, 0), dbuf(W, 0), window(W) {}
 
+  double Min   () const { return Vec<X>::Min(&buf[0], count); }
+  double Max   () const { return Vec<X>::Max(&buf[0], count); }
+  double Avg   () const { return count ? total / count : 0; }
+  double SumAvg() const { return count ? Vec<X>::Sum(&buf[0], count) / count : 0; }
+  float  StdDev() const { return count ? sqrt(dev) : 0; }
+  float  FPS   () const { return 1000.0/Avg(); }
+
   void Add(X n) {
     X     ov = buf [index], nv = n + accum;
     float od = dbuf[index], nd = pow(Avg() - nv, 2);
@@ -494,12 +522,6 @@ template <class X> struct RollingAvg {
     if (count < window) count++;
     accum = 0;
   }
-  double Min   () const { return Vec<X>::Min(&buf[0], count); }
-  double Max   () const { return Vec<X>::Max(&buf[0], count); }
-  double Avg   () const { return count ? total / count : 0; }
-  double SumAvg() const { return count ? Vec<X>::Sum(&buf[0], count) / count : 0; }
-  float  StdDev() const { return count ? sqrt(dev) : 0; }
-  float  FPS   () const { return 1000.0/Avg(); }
 };
 
 /* util */
@@ -635,10 +657,12 @@ struct GMM {
     if (n) norm.AssignDataPtr(M, 1, n);
     else ComputeNorms();
   }
+
   void ComputeNorms() {
     if (!norm.m) norm.Open(diagcov.M, 1);
     MatrixRowIter(&diagcov) norm.row(i)[0] = GausNormC(diagcov.row(i), diagcov.N);
-  };
+  }
+
   double PDF(const double *observation, double *posteriors=0) {
     return GmmPdfEval(&mean, &diagcov, observation, prior.m ? prior.m : 0, norm.m ? norm.m : 0, posteriors);
   }
@@ -696,6 +720,7 @@ struct DiscreteDistribution {
   void Clear() { table.clear(); sum=0; samples=0; }
   void Add(double p, void *v) { table[sum] = v; sum += p; lastval = v; }
   void Prepare() { table[sum] = lastval; }
+
   void *Sample() {
     samples++;
     float rv = Rand(0.0, sum);

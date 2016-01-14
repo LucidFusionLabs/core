@@ -468,11 +468,11 @@ void TextGUI::SetColors(Colors *C) {
   bg_color = &colors->c[colors->bg_index];
 }
 
-void TextGUI::UpdateLineFB(Line *L, LinesFrameBuffer *fb) {
+void TextGUI::UpdateLineFB(Line *L, LinesFrameBuffer *fb, int flag) {
   fb->fb.Attach();
   ScopedClearColor scc(bg_color);
   ScopedDrawMode drawmode(DrawMode::_2D);
-  fb->OverwriteUpdate(L);
+  fb->OverwriteUpdate(L, 0, 0, 0, flag);
   fb->fb.Release();
 }
 
@@ -685,7 +685,7 @@ void TextArea::Draw(const Box &b, int flag, Shader *shader) {
   LinesFrameBuffer *fb = GetFrameBuffer();
   if (flag & DrawFlag::CheckResized) CheckResized(b);
   if (clip) screen->gd->PushScissor(Box::DelBorder(b, *clip));
-  fb->Draw(b.Position(), point(0, CommandLines() * font_height));
+  fb->Draw(b.Position(), point(0, max(0, CommandLines()-1) * font_height));
   if (clip) screen->gd->PopScissor();
   if (flag & DrawFlag::DrawCursor) DrawCursor(b.Position() + cursor.p);
   if (selection.enabled) mouse_gui.box.SetPosition(b.Position());
@@ -707,12 +707,11 @@ void TextArea::DrawHoverLink(const Box &b) {
 
 bool TextArea::GetGlyphFromCoordsOffset(const point &p, Selection::Point *out, int sl, int sla) {
   LinesFrameBuffer *fb = GetFrameBuffer();
-  int h = fb->Height(), fh = font->Height();
-  int targ = reverse_line_fb ? ((h - p.y) / fh - sla) : (p.y / fh + sla);
-  for (int i=sl, lines=0, ll; i<line.ring.count && lines<line_fb.lines; i++, lines += ll) {
+  int h = fb->Height(), fh = font->Height(), targ = reverse_line_fb ? ((h - p.y) / fh) : (p.y / fh);
+  for (int i=sl, lines=sla, ll; i<line.ring.count && lines<line_fb.lines; i++, lines += ll) {
     Line *L = &line[-i-1];
     if (lines + (ll = L->Lines()) <= targ) continue;
-    L->data->glyphs.GetGlyphFromCoords(p, &out->char_ind, &out->glyph, targ - lines);
+    L->data->glyphs.GetGlyphFromCoords(p, &out->char_ind, &out->glyph, reverse_line_fb ? targ-lines : lines+ll-targ-1);
     out->glyph.y = targ * fh;
     out->line_ind = i;
     return true;
@@ -892,14 +891,14 @@ int Editor::UpdateLines(float vs, int *first_ind, int *first_offset, int *first_
   if (read_len) CHECK_EQ(buf.size(), file->ReadIOV(&buf[0], rv.data(), rv.size()));
 
   Line *L = 0;
-  if (up) for (LineMap::ConstIterator li = lie; li != lib; bo += l + !e, added++) {
+  if (up) for (auto li = lie; li != lib; bo += l + !e, added++) {
     l = (e = max(0, -(--li).val->size)) ? 0 : li.val->size;
     if (e) (L = line.PushBack())->AssignText(edits[e-1],                                 Flow::TextAnnotation(annotation.data(), PieceIndex()));
     else   (L = line.PushBack())->AssignText(StringPiece(buf.data()+read_len-bo-l-1, l), Flow::TextAnnotation(annotation.data(), li.val->annotation));
     fb_wrapped_lines += (ll = L->Layout(wrap ? fb->w : 0, true));
     CHECK_EQ(li.val->wrapped_lines, ll);
   }
-  else for (LineMap::ConstIterator li = lib; li != lie; ++li, bo += l + !e, added++) {
+  else for (auto li = lib; li != lie; ++li, bo += l + !e, added++) {
     l = (e = max(0, -li.val->size)) ? 0 : li.val->size;
     if (e) (L = line.PushFront())->AssignText(edits[e-1],                    Flow::TextAnnotation(annotation.data(), PieceIndex()));
     else   (L = line.PushFront())->AssignText(StringPiece(buf.data()+bo, l), Flow::TextAnnotation(annotation.data(), li.val->annotation));
@@ -938,8 +937,7 @@ int Editor::UpdateLines(float vs, int *first_ind, int *first_offset, int *first_
 void Editor::UpdateCursor() {
   cursor.i.y = min(cursor.i.y, line_fb.lines-1);
   cursor.i.x = min(cursor.i.x, GetCursorLine()->Size());
-  cursor.p = point(GetCursorLine()->data->glyphs.Position(cursor.i.x).x,
-                   line_fb.Height() - cursor.i.y*font->Height());
+  cursor.p = GetCursorLine()->data->glyphs.Position(cursor.i.x) + point(0, line_fb.Height() - cursor.i.y*font->Height());
 }
 
 #ifdef LFL_LIBCLANG
@@ -1046,6 +1044,8 @@ void Editor::Modify(bool erase, int c) {
     RefreshLines();
     return Redraw(true);
   }
+  bool wrapped = L->data->glyphs.line_ind.size();
+  if (wrapped) L->data->glyphs.line_ind.clear();
   if (erase)  b->erase(cursor.i.x-1, 1);
   else        b->insert(cursor.i.x, 1, c);
   if (erase)  L->Erase          (cursor.i.x-1, 1);
@@ -1053,7 +1053,7 @@ void Editor::Modify(bool erase, int c) {
   else        L->InsertTextAt   (cursor.i.x, String16(1, c), default_attr);
   if (erase)  CursorLeft();
   else        CursorRight();
-  UpdateLineFB(L, GetFrameBuffer());
+  UpdateLineFB(L, GetFrameBuffer(), wrapped ? LinesFrameBuffer::Flag::Flush : 0);
 }
 
 int Editor::ModifyCursorLine() {
@@ -1559,12 +1559,11 @@ void Console::StartAnimating() {
 }
 
 void Console::Draw() {
-  if (!ran_startcmd && (ran_startcmd = 1)) if (startcmd.size()) Run(startcmd);
-
   drawing = 1;
-  Time now=Now(), elapsed;
+  Time now = Now(), elapsed;
   bool active = Active(), last_animating = animating;
   int h = active ? (int)(screen->height*screen_percent) : 0;
+
   if ((animating = (elapsed = now - anim_begin) < anim_time)) {
     if (active) h = (int)(screen->height*(  (double)elapsed.count()/anim_time.count())*screen_percent);
     else        h = (int)(screen->height*(1-(double)elapsed.count()/anim_time.count())*screen_percent);
@@ -1578,12 +1577,12 @@ void Console::Draw() {
   if (blend) screen->gd->EnableBlend(); 
   else       screen->gd->DisableBlend();
 
-  int y = bottom_or_top ? 0 : screen->height-h;
+  int y = bottom_or_top ? 0 : screen->height - h, fh = font->Height();
   Box(0, y, screen->width, h).Draw();
 
   screen->gd->SetColor(Color::white);
-  TextArea::Draw(Box(0, y, screen->width, h), DrawFlag::DrawCursor | DrawFlag::CheckResized);
-  TextGUI::Draw(Box(0, y, screen->width, font->Height()));
+  TextArea::Draw(Box(0, y + fh, screen->width, h - fh), DrawFlag::CheckResized);
+  TextGUI::Draw(Box(0, y, screen->width, fh));
 }
 
 /* Dialog */

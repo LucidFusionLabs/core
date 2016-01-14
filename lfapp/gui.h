@@ -370,7 +370,7 @@ struct TextGUI : public KeyboardGUI, public Drawable::AttrSource {
   virtual void UpdateCursorX(int x) { cursor.i.x = x; UpdateCursor(); }
   virtual void UpdateCursor() { cursor.p = cmd_line.data->glyphs.Position(cursor.i.x) + point(0, font->Height()); }
   virtual void UpdateCommandFB() { UpdateLineFB(&cmd_line, &cmd_fb); }
-  virtual void UpdateLineFB(Line *L, LinesFrameBuffer *fb);
+  virtual void UpdateLineFB(Line *L, LinesFrameBuffer *fb, int flag=0);
   virtual void Draw(const Box &b);
   virtual void DrawCursor(point p);
   virtual void UpdateToken(Line*, int word_offset, int word_len, int update_type, const LineTokenProcessor*);
@@ -443,7 +443,9 @@ struct TextArea : public TextGUI {
 
 struct Editor : public TextArea {
   struct LineOffset { 
-    long long offset; int size, wrapped_lines; PieceIndex annotation;
+    long long offset;
+    int size, wrapped_lines;
+    PieceIndex annotation;
     LineOffset(int O=0, int S=0, int WL=1) : offset(O), size(S), wrapped_lines(WL) {}
     static string GetString(const LineOffset *v) { return StrCat(v->offset); }
     static int    GetLines (const LineOffset *v) { return v->wrapped_lines; }
@@ -492,8 +494,7 @@ struct Editor : public TextArea {
 struct Terminal : public TextArea {
   struct State { enum { TEXT=0, ESC=1, CSI=2, OSC=3, CHARSET=4 }; };
   struct ByteSink {
-    int WriteChar(unsigned char c) { return Write(reinterpret_cast<const char*>(&c), sizeof(c)); }
-    virtual int Write(const char *b, int l) = 0;
+    virtual int Write(const StringPiece &b) = 0;
     virtual void IOCtlWindowSize(int w, int h) {}
   };
   struct Controller : public ByteSink {
@@ -525,23 +526,23 @@ struct Terminal : public TextArea {
   virtual void SetDimension(int w, int h);
   virtual void Draw(const Box &b, int flag=DrawFlag::Default, Shader *shader=0);
   virtual void Write(const StringPiece &s, bool update_fb=true, bool release_fb=true);
-  virtual void Input(char k) {                       sink->Write(&k, 1); }
-  virtual void Erase      () { char k = 0x7f;        sink->Write(&k, 1); }
-  virtual void Enter      () { char k = '\r';        sink->Write(&k, 1); }
-  virtual void Tab        () { char k = '\t';        sink->Write(&k, 1); }
-  virtual void Escape     () { char k = 0x1b;        sink->Write(&k, 1); }
-  virtual void HistUp     () { char k[] = "\x1bOA";  sink->Write( k, 3); }
-  virtual void HistDown   () { char k[] = "\x1bOB";  sink->Write( k, 3); }
-  virtual void CursorRight() { char k[] = "\x1bOC";  sink->Write( k, 3); }
-  virtual void CursorLeft () { char k[] = "\x1bOD";  sink->Write( k, 3); }
-  virtual void PageUp     () { char k[] = "\x1b[5~"; sink->Write( k, 4); }
-  virtual void PageDown   () { char k[] = "\x1b[6~"; sink->Write( k, 4); }
-  virtual void Home       () { char k[] = "\x1bOH";  sink->Write( k, 3); }
-  virtual void End        () { char k[] = "\x1bOF";  sink->Write( k, 3); }
+  virtual void Input(char k) {                       sink->Write(StringPiece(&k, 1)); }
+  virtual void Erase      () { char k = 0x7f;        sink->Write(StringPiece(&k, 1)); }
+  virtual void Enter      () { char k = '\r';        sink->Write(StringPiece(&k, 1)); }
+  virtual void Tab        () { char k = '\t';        sink->Write(StringPiece(&k, 1)); }
+  virtual void Escape     () { char k = 0x1b;        sink->Write(StringPiece(&k, 1)); }
+  virtual void HistUp     () { char k[] = "\x1bOA";  sink->Write(StringPiece( k, 3)); }
+  virtual void HistDown   () { char k[] = "\x1bOB";  sink->Write(StringPiece( k, 3)); }
+  virtual void CursorRight() { char k[] = "\x1bOC";  sink->Write(StringPiece( k, 3)); }
+  virtual void CursorLeft () { char k[] = "\x1bOD";  sink->Write(StringPiece( k, 3)); }
+  virtual void PageUp     () { char k[] = "\x1b[5~"; sink->Write(StringPiece( k, 4)); }
+  virtual void PageDown   () { char k[] = "\x1b[6~"; sink->Write(StringPiece( k, 4)); }
+  virtual void Home       () { char k[] = "\x1bOH";  sink->Write(StringPiece( k, 3)); }
+  virtual void End        () { char k[] = "\x1bOF";  sink->Write(StringPiece( k, 3)); }
   virtual void MoveToOrFromScrollRegion(LinesFrameBuffer *fb, Line *l, const point &p, int flag);
   virtual void UpdateCursor() { cursor.p = point(GetCursorX(term_cursor.x, term_cursor.y), GetCursorY(term_cursor.y)); }
   virtual void UpdateToken(Line*, int word_offset, int word_len, int update_type, const LineTokenProcessor*);
-  virtual bool GetGlyphFromCoords(const point &p, Selection::Point *out) { return GetGlyphFromCoordsOffset(p, out, 0, 0); }
+  virtual bool GetGlyphFromCoords(const point &p, Selection::Point *out) { return GetGlyphFromCoordsOffset(p, out, clip ? 0 : start_line, 0); }
   void ScrollUp  () { TextArea::PageDown(); }
   void ScrollDown() { TextArea::PageUp(); }
   int GetCursorX(int x, int y) const {
@@ -577,14 +578,16 @@ struct Terminal : public TextArea {
 };
 
 struct Console : public TextArea {
-  string startcmd;
+  Color color=Color(25,60,130,120);
   double screen_percent=.4;
   Callback animating_cb;
   Time anim_time=Time(333), anim_begin=Time(0);
-  bool animating=0, drawing=0, bottom_or_top=0, blend=1, ran_startcmd=0;
-  Color color=Color(25,60,130,120);
-  Console(Window *W, Font *F) : TextArea(W, F, 200, 50) { line_fb.wrap=write_timestamp=1; SetToggleKey(Key::Backquote); bg_color=&Color::clear; }
-  Console(Window *W) : Console(W, Fonts::Get(A_or_B(FLAGS_lfapp_console_font, FLAGS_default_font), "", 9, Color::white, Color::clear, FLAGS_lfapp_console_font_flag)) { cursor.type = Cursor::Underline; }
+  bool animating=0, drawing=0, bottom_or_top=0, blend=1;
+
+  Console(Window *W, Font *F) : TextArea(W, F, 200, 50)
+  { line_fb.wrap=write_timestamp=1; SetToggleKey(Key::Backquote); bg_color=&Color::clear; cursor.type = Cursor::Underline; }
+  Console(Window *W) : Console(W, Fonts::Get(A_or_B(FLAGS_lfapp_console_font, FLAGS_default_font), "", 9, Color::white,
+                                             Color::clear, FLAGS_lfapp_console_font_flag)) {}
 
   virtual ~Console() {}
   virtual int CommandLines() const { return cmd_line.Lines(); }
@@ -595,7 +598,6 @@ struct Console : public TextArea {
   virtual void Deactivate() { TextGUI::Deactivate(); StartAnimating(); }
   virtual void Draw();
   void StartAnimating();
-  int WriteHistory(const string &dir, const string &name) { return KeyboardGUI::WriteHistory(dir, name, startcmd); }
 };
 
 struct Dialog : public GUI {

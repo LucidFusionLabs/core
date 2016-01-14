@@ -350,9 +350,9 @@ struct GameServer : public Connection::Handler {
       if (!req.Read(&in)) Request ## CB(c, &hdr, &req); \
     }
     elif_parse(JoinRequest, in)
-      elif_parse(PlayerUpdate, in)
-      elif_parse(RconRequest, in)
-      elif_parse(RconResponse, in)
+    elif_parse(PlayerUpdate, in)
+    elif_parse(RconRequest, in)
+    elif_parse(RconResponse, in)
     else ERROR(c->Name(), ": parse failed: unknown type ", hdr.id);
     return 0;
   }
@@ -684,11 +684,11 @@ struct GameClient {
     hdr.In(&in);
     if (0) {}
     elif_parse(ChallengeResponse, in)
-      elif_parse(JoinResponse, in)
-      elif_parse(WorldUpdate, in)
-      elif_parse(RconRequest, in)
-      elif_parse(RconResponse, in)
-      elif_parse(PlayerList, in)        
+    elif_parse(JoinResponse, in)
+    elif_parse(WorldUpdate, in)
+    elif_parse(RconRequest, in)
+    elif_parse(RconResponse, in)
+    elif_parse(PlayerList, in)        
     else ERROR("parse failed: unknown type ", hdr.id);
   }
 
@@ -949,39 +949,39 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
     gplus_accept        (this, 0, font, "accept",     MouseController::CB([&](){ AndroidGPlusAccept(); })),
 #endif
     browser(this, box), particles("GameMenuParticles") {
-      tab1.outline = tab2.outline = tab3.outline = tab4.outline = tab1_server_start.outline = tab2_server_join.outline = sub_tab1.outline = sub_tab2.outline = sub_tab3.outline = &font->fg;
-      Layout();
-      tab2_server_address.cmd_prefix.clear();
-      tab3_player_name.cmd_prefix.clear();
-      tab3_player_name.cursor.type = TextGUI::Cursor::Underline;
-      tab3_player_name.deactivate_on_enter = tab2_server_address.deactivate_on_enter = true;
-      tab3_player_name.runcb = bind(&TextGUI::AssignInput, (TextGUI*)&tab3_player_name, _1);
-      tab3_player_name.bg_color = &Color::clear;
-      tab3_player_name   .SetToggleKey(0, true);
-      tab2_server_address.SetToggleKey(0, true);
-      tab2_server_address.runcb = bind(&GameMenuGUI::MenuAddServer, this, _1);
-      tab3_sensitivity.increment = .1;
-      tab3_sensitivity.doc_height = 10;
-      tab3_sensitivity.scrolled = FLAGS_msens / 10.0;
-      tab3_volume.increment = .5;
-      tab3_volume.doc_height = SystemAudio::GetMaxVolume();
-      tab3_volume.scrolled = (float)SystemAudio::GetVolume() / tab3_volume.doc_height;
+    tab1.outline = tab2.outline = tab3.outline = tab4.outline = tab1_server_start.outline = tab2_server_join.outline = sub_tab1.outline = sub_tab2.outline = sub_tab3.outline = &font->fg;
+    Layout();
+    tab2_server_address.cmd_prefix.clear();
+    tab3_player_name.cmd_prefix.clear();
+    tab3_player_name.cursor.type = TextGUI::Cursor::Underline;
+    tab3_player_name.deactivate_on_enter = tab2_server_address.deactivate_on_enter = true;
+    tab3_player_name.runcb = bind(&TextGUI::AssignInput, (TextGUI*)&tab3_player_name, _1);
+    tab3_player_name.bg_color = &Color::clear;
+    tab3_player_name   .SetToggleKey(0, true);
+    tab2_server_address.SetToggleKey(0, true);
+    tab2_server_address.runcb = bind(&GameMenuGUI::MenuAddServer, this, _1);
+    tab3_sensitivity.increment = .1;
+    tab3_sensitivity.doc_height = 10;
+    tab3_sensitivity.scrolled = FLAGS_msens / 10.0;
+    tab3_volume.increment = .5;
+    tab3_volume.doc_height = SystemAudio::GetMaxVolume();
+    tab3_volume.scrolled = (float)SystemAudio::GetVolume() / tab3_volume.doc_height;
 
-      sub_selected = 2;
-      if (parts) {
-        particles.emitter_type = MenuParticles::Emitter::Mouse | MenuParticles::Emitter::GlowFade;
-        particles.texture = parts->tex.ID;
-      }
-#ifdef LFL_ANDROID
-      mobile_font = Fonts::Get("MobileAtlas", "", 0, Color::white);
-      gplus_signin_button.EnableHover();
-#endif
-      pinger.handler = this;
-      app->network->Enable(&pinger);
-      SystemNetwork::SetSocketBroadcastEnabled(pinger.GetListener()->socket, true);
-      Sniffer::GetIPAddress(&ip);
-      Sniffer::GetBroadcastAddress(&broadcast_ip);
+    sub_selected = 2;
+    if (parts) {
+      particles.emitter_type = MenuParticles::Emitter::Mouse | MenuParticles::Emitter::GlowFade;
+      particles.texture = parts->tex.ID;
     }
+#ifdef LFL_ANDROID
+    mobile_font = Fonts::Get("MobileAtlas", "", 0, Color::white);
+    gplus_signin_button.EnableHover();
+#endif
+    pinger.handler = this;
+    app->network->Enable(&pinger);
+    SystemNetwork::SetSocketBroadcastEnabled(pinger.GetListener()->socket, true);
+    Sniffer::GetIPAddress(&ip);
+    Sniffer::GetBroadcastAddress(&broadcast_ip);
+  }
 
   void Activate  () { active=1; topbar.active=1; selected=last_selected=0; app->shell.mouseout(vector<string>()); Advertising::HideAds(); }
   void Deactivate() { active=0; topbar.active=0; UpdateSettings(); tab3_player_name.Deactivate(); Advertising::ShowAds(); }

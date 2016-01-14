@@ -50,6 +50,7 @@ bool Crypto::DiffieHellman::GeneratePair(int secret_bits, BigNumContext ctx) {
   BigNumModExp(e, g, x, p, ctx);
   return true;
 }
+
 string Crypto::DiffieHellman::GenerateModulus(int generator, int bits) {
   DH *dh = DH_new();
   DH_generate_parameters_ex(dh, bits, generator, NULL);
@@ -58,6 +59,7 @@ string Crypto::DiffieHellman::GenerateModulus(int generator, int bits) {
   DH_free(dh);
   return ret;
 }
+
 BigNum Crypto::DiffieHellman::Group1Modulus(BigNum g, BigNum p, int *rand_num_bits) {
   // https://tools.ietf.org/html/rfc2409 Second Oakley Group
   char buf[] =
@@ -71,6 +73,7 @@ BigNum Crypto::DiffieHellman::Group1Modulus(BigNum g, BigNum p, int *rand_num_bi
   *rand_num_bits = 160;
   return BigNumSetData(p, StringPiece(buf, sizeof(buf)-1));
 }
+
 BigNum Crypto::DiffieHellman::Group14Modulus(BigNum g, BigNum p, int *rand_num_bits) {
   // https://tools.ietf.org/html/rfc3526 Oakley Group 14
   char buf[] =
@@ -89,14 +92,17 @@ BigNum Crypto::DiffieHellman::Group14Modulus(BigNum g, BigNum p, int *rand_num_b
   *rand_num_bits = 224;
   return BigNumSetData(p, StringPiece(buf, sizeof(buf)-1));
 }
+
 ECDef Crypto::EllipticCurve::NISTP256() { return NID_X9_62_prime256v1; };
 ECDef Crypto::EllipticCurve::NISTP384() { return NID_secp384r1; };
 ECDef Crypto::EllipticCurve::NISTP521() { return NID_secp521r1; };
+
 ECPair Crypto::EllipticCurve::NewPair(ECDef id, bool generate) {
   ECPair pair = EC_KEY_new_by_curve_name(id);
   if (generate && pair && EC_KEY_generate_key(pair) != 1) { EC_KEY_free(pair); return NULL; }
   return pair;
 }
+
 bool Crypto::EllipticCurveDiffieHellman::GeneratePair(ECDef curve, BigNumContext ctx) {
   FreeECPair(pair);
   if (!(pair = Crypto::EllipticCurve::NewPair(curve, true))) return false;
@@ -107,13 +113,16 @@ bool Crypto::EllipticCurveDiffieHellman::GeneratePair(ECDef curve, BigNumContext
   s = NewECPoint(g);
   return true;
 }
+
 bool Crypto::EllipticCurveDiffieHellman::ComputeSecret(BigNum *K, BigNumContext ctx) {
   string k_text((EC_GROUP_get_degree(g) + 7) / 8, 0);
   if (ECDH_compute_key(&k_text[0], k_text.size(), s, pair, 0) != k_text.size()) return false;
   *K = BigNumSetData(*K, k_text);
   return true;
 }
+
 #else
+
 bool Crypto::DiffieHellman::GeneratePair(int secret_bits, BigNumContext ctx) { FATAL("not implemented"); }
 BigNum Crypto::DiffieHellman::Group1Modulus(BigNum g, BigNum p, int *rand_num_bits) { FATAL("not implemented"); }
 BigNum Crypto::DiffieHellman::Group14Modulus(BigNum g, BigNum p, int *rand_num_bits) { FATAL("not implemented"); }
@@ -143,6 +152,7 @@ Crypto::MACAlgo    Crypto::   MACAlgos::MD5()          { return kCCHmacAlgMD5; }
 Crypto::MACAlgo    Crypto::   MACAlgos::SHA1()         { return kCCHmacAlgSHA1; }
 Crypto::MACAlgo    Crypto::   MACAlgos::SHA256()       { return kCCHmacAlgSHA256; }
 Crypto::MACAlgo    Crypto::   MACAlgos::SHA512()       { return kCCHmacAlgSHA512; }
+
 const char *Crypto::CipherAlgos::Name(CipherAlgo v) {
   switch (v) {
     case CCCipherAlgo::AES128_CTR:   return "aes128-ctr";
@@ -153,6 +163,7 @@ const char *Crypto::CipherAlgos::Name(CipherAlgo v) {
     default:                         return "none";
   }
 }
+
 int Crypto::CipherAlgos::KeySize(CipherAlgo v) {
   switch (v) {
     case CCCipherAlgo::AES128_CTR:   return kCCKeySizeAES128;
@@ -163,6 +174,7 @@ int Crypto::CipherAlgos::KeySize(CipherAlgo v) {
     default:                         return 0;
   }
 }
+
 const char *Crypto::DigestAlgos::Name(DigestAlgo v) {
   switch (v) {
     case CCDigestAlgo::MD5:    return "md5";
@@ -173,6 +185,7 @@ const char *Crypto::DigestAlgos::Name(DigestAlgo v) {
     default:                   return "none";
   }
 }
+
 int Crypto::DigestAlgos::HashSize(DigestAlgo v) {
   switch (v) {
     case CCDigestAlgo::MD5:    return CC_MD5_DIGEST_LENGTH;
@@ -183,6 +196,7 @@ int Crypto::DigestAlgos::HashSize(DigestAlgo v) {
     default:                   return 0;
   }
 }
+
 const char *Crypto::MACAlgos::Name(MACAlgo v) {
   switch (v) {
     case kCCHmacAlgMD5:    return "md5";
@@ -192,6 +206,7 @@ const char *Crypto::MACAlgos::Name(MACAlgo v) {
     default:               return "none";
   }
 }
+
 int Crypto::MACAlgos::HashSize(MACAlgo v) {
   switch (v) {
     case kCCHmacAlgMD5:    return CC_MD5_DIGEST_LENGTH;
@@ -201,6 +216,7 @@ int Crypto::MACAlgos::HashSize(MACAlgo v) {
     default:               return 0;
   }
 }
+
 void Crypto::CipherInit(Cipher *c) { c->algo=0; c->ctx=0; }
 void Crypto::CipherFree(Cipher *c) { CCCryptorRelease(c->ctx); }
 int Crypto::CipherGetBlockSize(Cipher *c) {
@@ -212,6 +228,7 @@ int Crypto::CipherGetBlockSize(Cipher *c) {
     default:                   return -1;
   }
 }
+
 int Crypto::CipherOpen(Cipher *c, CipherAlgo algo, bool dir, const StringPiece &key, const StringPiece &IV) {
   bool ctr = false;
   switch((c->algo = algo)) {
@@ -226,10 +243,12 @@ int Crypto::CipherOpen(Cipher *c, CipherAlgo algo, bool dir, const StringPiece &
   return CCCryptorCreateWithMode(dir ? kCCEncrypt : kCCDecrypt, mode, c->ccalgo, 0, IV.data(), key.data(), key.size(),
                                  0, 0, 0, ctr ? kCCModeOptionCTR_BE : 0, &c->ctx) == kCCSuccess;
 }
+
 int Crypto::CipherUpdate(Cipher *c, const StringPiece &in, char *out, int outlen) {
   size_t wrote = 0;
   return CCCryptorUpdate(c->ctx, in.data(), in.size(), out, outlen, &wrote) == kCCSuccess;
 }
+
 int Crypto::DigestGetHashSize(Digest *d) { return DigestAlgos::HashSize(d->algo); }
 void Crypto::DigestOpen(Digest *d, DigestAlgo algo) {
   d->algo = algo;
@@ -242,6 +261,7 @@ void Crypto::DigestOpen(Digest *d, DigestAlgo algo) {
     default:                   d->v=0; break;
   }
 }
+
 void Crypto::DigestUpdate(Digest *d, const StringPiece &in) {
   switch(d->algo) {
     case CCDigestAlgo::MD5:    CC_MD5_Update   ((CC_MD5_CTX*)   d->v, in.data(), in.size()); break;
@@ -251,7 +271,8 @@ void Crypto::DigestUpdate(Digest *d, const StringPiece &in) {
     case CCDigestAlgo::SHA512: CC_SHA512_Update((CC_SHA512_CTX*)d->v, in.data(), in.size()); break;
     default: break;
   }
-} 
+}
+
 string Crypto::DigestFinish(Digest *d) {
   string ret;
   switch(d->algo) {
@@ -264,6 +285,7 @@ string Crypto::DigestFinish(Digest *d) {
   }
   return ret;
 }
+
 void Crypto::MACOpen(MAC *m, MACAlgo algo, const StringPiece &k) { CCHmacInit(&m->ctx, (m->algo=algo), k.data(), k.size()); }
 void Crypto::MACUpdate(MAC *m, const StringPiece &in) { CCHmacUpdate(&m->ctx, in.data(), in.size()); }
 int Crypto::MACFinish(MAC *m, char *out, int outlen) {
@@ -276,7 +298,9 @@ int Crypto::MACFinish(MAC *m, char *out, int outlen) {
     default:               return -1;
   }
 }
+
 #elif defined(LFL_OPENSSL)
+
 string Crypto::Blowfish(const string &passphrase, const string &in, bool encrypt_or_decrypt) {
   unsigned char iv[8] = {0,0,0,0,0,0,0,0};
   EVP_CIPHER_CTX ctx; 
@@ -330,6 +354,7 @@ int Crypto::CipherUpdate(Cipher *c, const StringPiece &in, char *out, int outlen
   return EVP_Cipher(c, reinterpret_cast<unsigned char*>(out),
                     reinterpret_cast<const unsigned char*>(in.data()), in.size());
 }
+
 int Crypto::DigestGetHashSize(Digest *d) { return EVP_MD_CTX_size(d); }
 void Crypto::DigestOpen(Digest *d, DigestAlgo algo) { CHECK(algo); EVP_DigestInit(d, algo); }
 void Crypto::DigestUpdate(Digest *d, const StringPiece &in) { EVP_DigestUpdate(d, in.data(), in.size()); }
@@ -340,10 +365,13 @@ string Crypto::DigestFinish(Digest *d) {
   ret.resize(len);
   return ret;
 }
+
 void Crypto::MACOpen(MAC *m, MACAlgo algo, const StringPiece &k) { HMAC_Init(m, k.data(), k.size(), algo); }
 void Crypto::MACUpdate(MAC *m, const StringPiece &in) { HMAC_Update(m, reinterpret_cast<const unsigned char *>(in.data()), in.size()); }
 int Crypto::MACFinish(MAC *m, char *out, int outlen) { unsigned len=outlen; HMAC_Final(m, reinterpret_cast<unsigned char *>(out), &len); return len; }
+
 #else
+
 string Crypto::Blowfish(const string &passphrase, const string &in, bool encrypt_or_decrypt) { FATAL("not implemented"); }
 Crypto::CipherAlgo Crypto::CipherAlgos::AES128_CTR()   { FATAL("not implemented"); }
 Crypto::CipherAlgo Crypto::CipherAlgos::AES128_CBC()   { FATAL("not implemented"); }

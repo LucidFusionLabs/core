@@ -2304,7 +2304,7 @@ Window::Window() : caption("lfapp"), fps(128) {
 
 Window::~Window() {
   if (lfapp_console) {
-    lfapp_console->WriteHistory(LFAppDownloadDir(), "console");
+    lfapp_console->WriteHistory(LFAppDownloadDir(), "console", "");
     delete lfapp_console;
   }
   delete cam;

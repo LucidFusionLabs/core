@@ -153,6 +153,7 @@ extern "C" int  MouseMove (int x, int y, int dx, int dy)    { return LFL::app->i
 extern "C" void QueueKeyPress  (int b, int d)               { return LFL::app->input->QueueKeyPress  (b, d); }
 extern "C" void QueueMouseClick(int b, int d, int x, int y) { return LFL::app->input->QueueMouseClick(b, d, LFL::point(x, y)); }
 extern "C" void EndpointRead(void *svc, const char *name, const char *buf, int len) { LFL::app->network->EndpointRead((LFL::Service*)svc, name, buf, len); }
+
 extern "C" NativeWindow *SetNativeWindowByID(void *id) { return SetNativeWindow(LFL::FindOrNull(LFL::Window::active, id)); }
 extern "C" NativeWindow *SetNativeWindow(NativeWindow *W) {
   CHECK(W);
@@ -160,11 +161,13 @@ extern "C" NativeWindow *SetNativeWindow(NativeWindow *W) {
   LFL::Window::MakeCurrent((LFL::screen = static_cast<LFL::Window*>(W)));
   return W;
 }
+
 extern "C" void SetLFAppMainThread() {
   LFL::Thread::id_t id = LFL::Thread::GetId();
   if (LFL::app->main_thread_id != id) INFOf("LFApp->main_thread_id changed from %llx to %llx", LFL::app->main_thread_id, id);
   LFL::app->main_thread_id = id; 
 }
+
 extern "C" void LFAppFatal() {
   ERROR("LFAppFatal");
   if (bool suicide=true) *(volatile int*)0 = 0;
@@ -240,18 +243,22 @@ bool MainProcess() { return !app->main_process; }
 void DefaultLFAppWindowClosedCB(Window *W) { delete W; }
 double FPS() { return screen->fps.FPS(); }
 double CamFPS() { return app->camera->fps.FPS(); }
+
 void RunInMainThread(Callback *cb) {
   app->message_queue.Write(cb);
   if (!FLAGS_target_fps) app->scheduler.Wakeup(0);
 }
+
 void RunInNetworkThread(const Callback &cb) {
   if (auto nt = app->network_thread) nt->Write(new Callback(cb));
   else cb();
 }
+
 void PressAnyKey() {
   printf("Press [enter] to continue..."); fflush(stdout);
   char buf[32]; fgets(buf, sizeof(buf), stdin);
 }
+
 bool FGets(char *buf, int len) { return NBFGets(stdin, buf, len); }
 bool NBFGets(FILE *f, char *buf, int len, int timeout) {
 #ifndef WIN32
@@ -266,12 +273,14 @@ bool NBFGets(FILE *f, char *buf, int len, int timeout) {
   return 0;
 #endif
 }
+
 bool NBReadable(Socket fd, int timeout) {
   SelectSocketSet ss;
   ss.Add(fd, SocketSet::READABLE, 0);
   ss.Select(timeout);
   return app->run && ss.GetReadable(fd);
 }
+
 int NBRead(Socket fd, char *buf, int len, int timeout) {
   if (timeout && !NBReadable(fd, timeout)) return 0;
   int o = 0, s = 0;
@@ -279,11 +288,13 @@ int NBRead(Socket fd, char *buf, int len, int timeout) {
   while (s > 0 && len - o > 1024);
   return o;
 }
+
 int NBRead(Socket fd, string *buf, int timeout) {
   int l = NBRead(fd, (char*)buf->data(), buf->size(), timeout);
   buf->resize(max(0,l));
   return l;
 }
+
 string NBRead(Socket fd, int len, int timeout) {
   string ret(len, 0);
   NBRead(fd, &ret, timeout);
@@ -433,6 +444,8 @@ void FlagMap::Print(const char *source_filename) const {
 
 #ifdef WIN32
 BOOL WINAPI CtrlHandler(DWORD sig) { INFO("interrupt"); LFAppShutdown(); return TRUE; }
+void Application::Daemonize(const char *dir) {}
+
 void OpenConsole() {
   FLAGS_open_console=1;
   AllocConsole();
@@ -441,16 +454,19 @@ void OpenConsole() {
   freopen("CONIN$", "rb", stdin);
   SetConsoleCtrlHandler(CtrlHandler ,1);
 }
+
 void CloseConsole() {
   fclose(stdin);
   fclose(stdout);
   FreeConsole();
 }
-void Application::Daemonize(const char *dir) {}
+
 #else /* WIN32 */
+
 void HandleSigInt(int sig) { INFO("interrupt"); LFAppShutdown(); }
 void OpenConsole() {}
 void CloseConsole() {}
+
 void Application::Daemonize(const char *dir) {
   char fn1[256], fn2[256];
   snprintf(fn1, sizeof(fn1), "%s%s.stdout", dir, app->progname.c_str());
@@ -459,6 +475,7 @@ void Application::Daemonize(const char *dir) {
   FILE *ferr = fopen(fn2, "a"); fprintf(stderr, "open %s %s\n", fn2, ferr ? "OK" : strerror(errno));
   Daemonize(fout, ferr);
 }
+
 void Application::Daemonize(FILE *fout, FILE *ferr) {
   int pid = fork();
   if (pid < 0) { fprintf(stderr, "fork: %d\n", pid); exit(-1); }
@@ -481,6 +498,7 @@ void Vault::SavePassword(const string &h, const string &u, const string &pw) {
   iPhonePasswordSave(app->name.c_str(), h.c_str(), u.c_str(), pw.c_str(), pw.size());
 #endif
 }
+
 bool Vault::LoadPassword(const string &h, const string &u, string *pw) {
 #if defined(LFL_IPHONE)
   pw->resize(1024);
@@ -1229,6 +1247,7 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR lpCmdLine, int nC
 #ifdef LFL_QT
 static vector<string> lfl_qapp_argv;  
 static vector<const char *> lfl_qapp_av;
+
 extern "C" int main(int argc, const char *argv[]) {
   if (void (*create_cb)() = (void(*)())LFL::app->GetSymbol("LFAppCreateCB")) create_cb();
   for (int i=0; i<argc; i++) lfl_qapp_argv.push_back(argv[i]);
@@ -1237,6 +1256,7 @@ extern "C" int main(int argc, const char *argv[]) {
   LFL::Window::Create(LFL::screen);
   return app.exec();
 }
+
 extern "C" int LFLQTInit() {
   for (const auto &a : lfl_qapp_argv) lfl_qapp_av.push_back(a.c_str());
   lfl_qapp_av.push_back(0);

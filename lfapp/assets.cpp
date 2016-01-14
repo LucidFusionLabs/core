@@ -155,6 +155,7 @@ int PngWriter::Write(const string &fn, const Texture &tex) {
 const JOCTET EOI_BUFFER[1] = { JPEG_EOI };
 struct MyJpegErrorMgr  { jpeg_error_mgr  pub; jmp_buf setjmp_buffer; };
 struct MyJpegSourceMgr { jpeg_source_mgr pub; const JOCTET *data; size_t len; } ;
+
 static void JpegErrorExit(j_common_ptr jcs) { longjmp(((MyJpegErrorMgr*)jcs->err)->setjmp_buffer, 1); }
 static void JpegInitSource(j_decompress_ptr jds) {}
 static void JpegTermSource(j_decompress_ptr jds) {}
@@ -164,6 +165,7 @@ static boolean JpegFillInputBuffer(j_decompress_ptr jds) {
   src->pub.bytes_in_buffer = 1;
   return true;
 }
+
 static void JpegSkipInputData(j_decompress_ptr jds, long len) {
   MyJpegSourceMgr *src = (MyJpegSourceMgr*)jds->src;
   if (src->pub.bytes_in_buffer < len) {
@@ -174,6 +176,7 @@ static void JpegSkipInputData(j_decompress_ptr jds, long len) {
     src->pub.bytes_in_buffer -= len;
   }
 }
+
 static void JpegMemSrc(j_decompress_ptr jds, const char *buf, size_t len) {
   if (!jds->src) jds->src = (jpeg_source_mgr*)(*jds->mem->alloc_small)((j_common_ptr)jds, JPOOL_PERMANENT, sizeof(MyJpegSourceMgr));
   MyJpegSourceMgr *src = (MyJpegSourceMgr*)jds->src;
@@ -187,6 +190,7 @@ static void JpegMemSrc(j_decompress_ptr jds, const char *buf, size_t len) {
   src->pub.bytes_in_buffer = len;
   src->pub.next_input_byte = src->data;
 }
+
 int JpegReader::Read(File *lf,           Texture *out) { return Read(lf->Contents(), out); }
 int JpegReader::Read(const string &data, Texture *out) {
   MyJpegErrorMgr jerr;
@@ -237,6 +241,7 @@ int JpegReader::Read(const string &data, Texture *out) { FATAL("not implemented"
 static int GIFInput(GifFileType *gif, GifByteType *out, int size) {
   return ((BufferFile*)gif->UserData)->Read(out, size);
 }
+
 int GIFReader::Read(File *lf,           Texture *out) { return Read(lf->Contents(), out); }
 int GIFReader::Read(const string &data, Texture *out) {
   int error_code = 0;
@@ -476,33 +481,6 @@ struct FFBIOC {
 
 struct FFMpegAssetLoader : public AudioAssetLoader, public VideoAssetLoader, public MovieAssetLoader {
   FFMpegAssetLoader() { INFO("FFMpegAssetLoader"); }
-  static AVFormatContext *Load(AVIOContext *pb, const string &filename, char *probe_buf, int probe_buflen, AVIOContext **pbOut=0) {
-    AVProbeData probe_data;
-    memzero(probe_data);
-    probe_data.filename = BaseName(filename);
-
-    bool probe_buf_data = probe_buf && probe_buflen;
-    if (probe_buf_data) {
-      probe_data.buf = (unsigned char *)probe_buf;
-      probe_data.buf_size = probe_buflen;
-    }
-
-    AVInputFormat *fmt = av_probe_input_format(&probe_data, probe_buf_data);
-    if (!fmt) { ERROR("no AVInputFormat for ", probe_data.filename); return 0; }
-
-    AVFormatContext *fctx = avformat_alloc_context(); int ret;
-    fctx->flags |= AVFMT_FLAG_CUSTOM_IO;
-
-    fctx->pb = pb;
-    if ((ret = avformat_open_input(&fctx, probe_data.filename, fmt, 0))) {
-      char errstr[128]; av_strerror(ret, errstr, sizeof(errstr));
-      ERROR("av_open_input ", probe_data.filename, ": ", ret, " ", errstr);
-      return 0;
-    }
-
-    if (pbOut) *pbOut = fctx->pb;
-    return fctx;
-  }
 
   virtual void *LoadFile(const string &filename) { return LoadFile(filename, 0); }
   AVFormatContext *LoadFile(const string &filename, AVIOContext **pbOut) {
@@ -519,6 +497,7 @@ struct FFMpegAssetLoader : public AudioAssetLoader, public VideoAssetLoader, pub
     return ret;
 #endif
   }
+
   virtual void UnloadFile(void *h) {
     AVFormatContext *handle = (AVFormatContext*)h;
     for (int i = handle->nb_streams - 1; handle->streams && i >= 0; --i) {
@@ -541,6 +520,7 @@ struct FFMpegAssetLoader : public AudioAssetLoader, public VideoAssetLoader, pub
     if (!ret) FFBIOC::Free(pb);
     return ret;
   }
+
   virtual void UnloadBuf(void *h) {
     AVFormatContext *handle = (AVFormatContext*)h;
     FFBIOC::Free(handle->pb);
@@ -608,7 +588,43 @@ struct FFMpegAssetLoader : public AudioAssetLoader, public VideoAssetLoader, pub
       a->resampler.Close();
     }
   }
+
+  void LoadMovie(void *handle, MovieAsset *ma) {
+    LoadMovie(&ma->audio, &ma->video, (AVFormatContext*)handle);
+    PlayMovie(&ma->audio, &ma->video, (AVFormatContext*)handle, 0);
+  }
+
+  int PlayMovie(MovieAsset *ma, int seek) { return PlayMovie(&ma->audio, &ma->video, (AVFormatContext*)ma->handle, seek); }
   int RefillAudio(SoundAsset *a, int reset) { return RefillAudioCB(a, reset); }
+
+  static AVFormatContext *Load(AVIOContext *pb, const string &filename, char *probe_buf, int probe_buflen, AVIOContext **pbOut=0) {
+    AVProbeData probe_data;
+    memzero(probe_data);
+    probe_data.filename = BaseName(filename);
+
+    bool probe_buf_data = probe_buf && probe_buflen;
+    if (probe_buf_data) {
+      probe_data.buf = (unsigned char *)probe_buf;
+      probe_data.buf_size = probe_buflen;
+    }
+
+    AVInputFormat *fmt = av_probe_input_format(&probe_data, probe_buf_data);
+    if (!fmt) { ERROR("no AVInputFormat for ", probe_data.filename); return 0; }
+
+    AVFormatContext *fctx = avformat_alloc_context(); int ret;
+    fctx->flags |= AVFMT_FLAG_CUSTOM_IO;
+
+    fctx->pb = pb;
+    if ((ret = avformat_open_input(&fctx, probe_data.filename, fmt, 0))) {
+      char errstr[128]; av_strerror(ret, errstr, sizeof(errstr));
+      ERROR("av_open_input ", probe_data.filename, ": ", ret, " ", errstr);
+      return 0;
+    }
+
+    if (pbOut) *pbOut = fctx->pb;
+    return fctx;
+  }
+
   static int RefillAudioCB(SoundAsset *a, int reset) {
     AVFormatContext *fctx = (AVFormatContext*)a->handle;
     AVCodecContext *avctx = fctx->streams[a->handle_arg1]->codec;
@@ -635,10 +651,6 @@ struct FFMpegAssetLoader : public AudioAssetLoader, public VideoAssetLoader, pub
     return wrote;
   }
 
-  void LoadMovie(void *handle, MovieAsset *ma) {
-    LoadMovie(&ma->audio, &ma->video, (AVFormatContext*)handle);
-    PlayMovie(&ma->audio, &ma->video, (AVFormatContext*)handle, 0);
-  }
   static void LoadMovie(SoundAsset *sa, Asset *va, AVFormatContext *fctx) {
     if (avformat_find_stream_info(fctx, 0) < 0) { ERROR("av_find_stream_info"); return; }
 
@@ -673,7 +685,6 @@ struct FFMpegAssetLoader : public AudioAssetLoader, public VideoAssetLoader, pub
     }
   }
 
-  int PlayMovie(MovieAsset *ma, int seek) { return PlayMovie(&ma->audio, &ma->video, (AVFormatContext*)ma->handle, seek); }
   static int PlayMovie(SoundAsset *sa, Asset *va, AVFormatContext *fctx, int seek_unused) {
     int begin_resamples_available = sa->resampler.output_available, wrote=0, done=0;
     Allocator *tlsalloc = ThreadLocalStorage::GetAllocator();
