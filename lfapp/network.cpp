@@ -1755,8 +1755,8 @@ void HTTPServer::StreamResource::Update(int audio_samples, bool video_sample) {
       resampler.Open(resampler.out, FLAGS_chans_in, FLAGS_sample_rate, Sample::S16,
                      channels,       ac->sample_rate,   Sample::FromFFMpegId(ac->channel_layout));
     };
-    RingBuf::Handle L(app->audio->IL, app->audio->IL->ring.back-audio_samples, audio_samples);
-    RingBuf::Handle R(app->audio->IR, app->audio->IR->ring.back-audio_samples, audio_samples);
+    RingBuf::Handle L(app->audio->IL.get(), app->audio->IL->ring.back-audio_samples, audio_samples);
+    RingBuf::Handle R(app->audio->IR.get(), app->audio->IR->ring.back-audio_samples, audio_samples);
     if (resampler.Update(audio_samples, &L, FLAGS_chans_in > 1 ? &R : 0)) open=0;
   }
 

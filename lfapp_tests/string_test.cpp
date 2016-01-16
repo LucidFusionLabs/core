@@ -527,7 +527,7 @@ TEST(RegexTest, StringMatcherURL) {
   EXPECT_NE(mi.b, mi.e);
   EXPECT_EQ("doo", string(mi.b, mi.nb));
   EXPECT_EQ(1, mi.MatchBegin()); EXPECT_EQ(1, mi.Matching()); EXPECT_EQ(1, mi.MatchEnd());
-  EXPECT_EQ(-3, url_matcher.match_begin);
+  EXPECT_EQ(-3, url_matcher.match.begin);
   ++mi;
   EXPECT_NE(mi.b, mi.e);
   EXPECT_EQ(" ddd ", string(mi.b, mi.nb));

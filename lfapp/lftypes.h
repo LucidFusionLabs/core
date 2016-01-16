@@ -73,7 +73,6 @@ template <class X> X *CheckPointer(X *x) { CHECK(x); return x; }
 template <class X> X *CheckNullAssign(X **x, X *v) { CHECK_EQ(nullptr, *x); return (*x = v); }
 template <class X> X *GetThenAssignNull(X **x) { X *v = *x; if (v) *x = nullptr; return v; }
 template <class X> typename make_unsigned<X>::type *Unsigned(X *x) { return reinterpret_cast<typename make_unsigned<X>::type*>(x); }
-template <class X, int S, int XS=sizeof(X)> void StaticAssertSizeof() { static_assert(XS == S, "unexpected sizeof"); }
 
 struct RefCounter {
   int count=0;
@@ -332,14 +331,16 @@ template <class X> struct FreeListVector {
   }
 };
 
-template <class X> struct IterableFreeListVector : public FreeListVector<X> { /// Expects X.deleted
+template <class X, bool (X::*x_deleted)>
+struct IterableFreeListVector : public FreeListVector<X> {
   virtual void Erase(unsigned ind) {
     FreeListVector<X>::Erase(ind);
-    FreeListVector<X>::data[ind].deleted = 1;
+    FreeListVector<X>::data[ind].*x_deleted = 1;
   }
 };
 
-template <class X, class Alloc = std::allocator<X> > struct FreeListBlockAllocator {
+template <class X, class Alloc = std::allocator<X> >
+struct FreeListBlockAllocator {
   typedef pair<X*, int> Block;
   const int block_size;
   Alloc alloc;
@@ -413,10 +414,13 @@ template <typename K, typename V> struct SortedArrayMap : public vector<pair<K, 
 };
 
 template <typename X> struct ArraySegmentIter {
-  const X *buf; int i, ind, len, cur_start; X cur_attr;
+  const X *buf;
+  int i, ind, len, cur_start; X cur_attr;
+
   ArraySegmentIter(const basic_string<X> &B) : buf(B.size() ? &B[0] : 0), i(-1), ind(0), len(B.size()) { Increment(); }
   ArraySegmentIter(const vector      <X> &B) : buf(B.size() ? &B[0] : 0), i(-1), ind(0), len(B.size()) { Increment(); }
   ArraySegmentIter(const X *B, int L)        : buf(B),                    i(-1), ind(0), len(L)        { Increment(); }
+
   const X *Data() const { return &buf[cur_start]; }
   int Length() const { return ind - cur_start; }
   bool Done() const { return cur_start == len; }
@@ -427,10 +431,16 @@ template <typename X> struct ArraySegmentIter {
 template <typename X, typename Y, Y (X::*Z)> struct ArrayMemberSegmentIter {
   typedef function<void (const X&)> CB;
   typedef function<bool (const Y&, const Y&)> Cmp;
-  const X *buf; int i, ind, len, cur_start; Y cur_attr; CB cb; Cmp cmp;
+  const X *buf;
+  int i, ind, len, cur_start;
+  Y cur_attr;
+  CB cb;
+  Cmp cmp;
+
   ArrayMemberSegmentIter(const vector<X> &B)              : buf(B.size() ? &B[0] : 0), i(-1), ind(0), len(B.size()),         cmp(equal_to<Y>()) { Increment(); }
   ArrayMemberSegmentIter(const X *B, int L)               : buf(B),                    i(-1), ind(0), len(L),                cmp(equal_to<Y>()) { Increment(); }
   ArrayMemberSegmentIter(const X *B, int L, const CB &Cb) : buf(B),                    i(-1), ind(0), len(L),        cb(Cb), cmp(equal_to<Y>()) { Increment(); }
+
   const X *Data() const { return &buf[cur_start]; }
   int Length() const { return ind - cur_start; }
   bool Done() const { return cur_start == len; }
@@ -441,10 +451,15 @@ template <typename X, typename Y, Y (X::*Z)> struct ArrayMemberSegmentIter {
 template <typename X, typename Y, Y (X::*Z1), Y (X::*Z2)> struct ArrayMemberPairSegmentIter {
   typedef function<void (const X&)> CB;
   typedef function<bool (const Y&, const Y&)> Cmp;
-  const X *buf; int i, ind, len, cur_start; Y cur_attr1, cur_attr2; CB cb; Cmp cmp;
+  const X *buf;
+  int i, ind, len, cur_start; Y cur_attr1, cur_attr2;
+  CB cb;
+  Cmp cmp;
+
   ArrayMemberPairSegmentIter(const vector<X> &B)              : buf(B.size() ? &B[0] : 0), i(-1), ind(0), len(B.size()),         cmp(equal_to<Y>()) { Increment(); }
   ArrayMemberPairSegmentIter(const X *B, int L)               : buf(B),                    i(-1), ind(0), len(L),                cmp(equal_to<Y>()) { Increment(); }
   ArrayMemberPairSegmentIter(const X *B, int L, const CB &Cb) : buf(B),                    i(-1), ind(0), len(L),        cb(Cb), cmp(equal_to<Y>()) { Increment(); }
+
   const X *Data() const { return &buf[cur_start]; }
   int Length() const { return ind - cur_start; }
   bool Done() const { return cur_start == len; }
@@ -455,10 +470,15 @@ template <typename X, typename Y, Y (X::*Z1), Y (X::*Z2)> struct ArrayMemberPair
 template <typename X, typename Y, Y (X::*Z)() const> struct ArrayMethodSegmentIter {
   typedef function<void (const X&)> CB;
   typedef function<bool (const Y&, const Y&)> Cmp;
-  const X *buf; int i, ind, len, cur_start; Y cur_attr; CB cb; Cmp cmp;
+  const X *buf;
+  int i, ind, len, cur_start;
+  Y cur_attr;
+  CB cb;
+  Cmp cmp;
   ArrayMethodSegmentIter(const vector<X> &B)              : buf(B.size() ? &B[0] : 0), i(-1), ind(0), len(B.size()),         cmp(equal_to<Y>()) { Increment(); }
   ArrayMethodSegmentIter(const X *B, int L)               : buf(B),                    i(-1), ind(0), len(L),                cmp(equal_to<Y>()) { Increment(); }
   ArrayMethodSegmentIter(const X *B, int L, const CB &Cb) : buf(B),                    i(-1), ind(0), len(L),        cb(Cb), cmp(equal_to<Y>()) { Increment(); }
+
   const X *Data() const { return &buf[cur_start]; }
   int Length() const { return ind - cur_start; }
   bool Done() const { return cur_start == len; }
@@ -481,6 +501,7 @@ struct LRUCache {
     CHECK(data.insert(make_pair(k, it)).second);
     return &it->second;
   }
+
   V *Get(const K& k) { 
     auto it = data.find(k);
     if (it == data.end()) return NULL;
@@ -524,6 +545,7 @@ template <class X> struct FlattenedArrayValues {
       }
     }
   }
+
   int Distance(Iter i1, Iter i2, int maxdist=0) {
     int dist = 0;
     if (i2 < i1) swap(i1, i2);
@@ -549,6 +571,7 @@ template <class X> struct MessageQueue {
     queue.push_back(x);
     if (use_cv) cv.notify_one();
   }
+
   bool NBRead(X* out) {
     if (queue.empty()) return false;
     ScopedMutex sm(lock);
@@ -556,6 +579,7 @@ template <class X> struct MessageQueue {
     *out = PopFront(queue);
     return true;
   }
+
   X Read() {
     unique_lock<mutex> ul(lock);
     cv.wait(ul, [this](){ return !this->queue.empty(); } );
@@ -656,8 +680,9 @@ struct RingBuf {
   virtual microseconds ReadTimestamp(int index, int Next=-1) const;
 
   struct Handle : public Vec<float> {
-    RingBuf *sb; int next, nlen;
-    Handle() : sb(0), next(-1), nlen(-1) {}
+    RingBuf *sb=0;
+    int next=-1, nlen=-1;
+    Handle() {}
     Handle(RingBuf *SB, int Next=-1, int Len=-1) : sb(SB), next((sb && Next != -1)?sb->Bucket(Next):-1), nlen(Len) {}
     virtual int Rate() const { return sb->samples_per_sec; }
     virtual int Len() const { return nlen >= 0 ? nlen : sb->ring.size; }

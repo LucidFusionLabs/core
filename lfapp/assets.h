@@ -145,6 +145,7 @@ struct Asset {
   static void LoadTexture(void *h, const string &asset_fn, Texture *out, VideoAssetLoader *l=0);
   static void LoadTexture(const void *from_buf, const char *fn, int size, Texture *out, int flag=VideoAssetLoader::Flag::Default);
   static Texture *LoadTexture(const MultiProcessFileResource &file, int max_image_size = 1000000);
+  static string FileName(const string &asset_fn);
   static string FileContents(const string &asset_fn);
   static File *OpenFile(const string &asset_fn);
   static unordered_map<string, StringPiece> cache;
@@ -165,22 +166,24 @@ struct SoundAsset {
 
   SoundAssetMap *parent;
   string name, filename;
-  RingBuf *wav;
-  int channels, sample_rate, seconds;
+  RingBuf *wav=0;
+  int channels=0, sample_rate=0, seconds=0;
   RefillCB refill;
-  void *handle;
-  int handle_arg1;
+  void *handle=0;
+  int handle_arg1=-1;
   AudioResampler resampler;
 
-  SoundAsset() : parent(0), wav(0), channels(0), sample_rate(0), seconds(0), handle(0), handle_arg1(-1) {}
-  SoundAsset(const string &N, const string &FN, RingBuf *W, int C, int SR, int S) : name(N), filename(FN), wav(W), channels(C), sample_rate(SR), seconds(S), handle(0), handle_arg1(-1) {}
+  SoundAsset() {}
+  SoundAsset(const string &N, const string &FN, RingBuf *W, int C, int SR, int S) :
+    name(N), filename(FN), wav(W), channels(C), sample_rate(SR), seconds(S), handle(0), handle_arg1(-1) {}
 
-  static void Load(vector<SoundAsset> *assets) { for (int i=0; i<assets->size(); ++i) (*assets)[i].Load(); }
   void Load(void *handle, const char *FN, int Secs, int flag=0);
   void Load(const void *FromBuf, int size, const char *FileName, int Seconds=10);
   void Load(int seconds=10, bool unload=true);
   void Unload();
   int Refill(int reset);
+
+  static void Load(vector<SoundAsset> *assets) { for (auto &a : *assets) a.Load(); }
 };
 
 struct MovieAsset {
@@ -218,12 +221,22 @@ struct PngWriter {
   static int Write(const string &fn, const Texture &tex);
 };
 
+UNALIGNED_struct WavHeader {
+  unsigned chunk_id, chunk_size, format, subchunk_id, subchunk_size;
+  unsigned short audio_format, num_channels;
+  unsigned sample_rate, byte_rate;
+  unsigned short block_align, bits_per_sample;
+  unsigned subchunk_id2, subchunk_size2;
+  static const int Size=44;
+};
+UNALIGNED_END(WavHeader, WavHeader::Size);
+
 struct WavReader {
   File *f;
   int last;
   ~WavReader() { Close(); }
   WavReader(File *F=0) { Open(F); }
-  void Open(File *F);
+  bool Open(File *F, WavHeader *H=0);
   void Close() { if (f) f->Close(); }
   int Read(RingBuf::Handle *, int offset, int size);
 };

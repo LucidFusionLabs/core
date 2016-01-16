@@ -66,6 +66,7 @@ struct File {
   static bool ReadSuccess(File *f, void *out, int len) { return f->Read(out, len) == len; }
   static bool SeekSuccess(File *f, long long pos) { return f->Seek(pos, Whence::SET) == pos; }
   static bool SeekReadSuccess(File *f, long long pos, void *out, int len) { return SeekSuccess(f, pos) ? ReadSuccess(f, out, len) : false; }
+  static bool WriteSuccess(File *f, void *out, int len) { return f->Write(out, len) == len; }
 };
 
 struct BufferFile : public File {

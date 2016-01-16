@@ -321,7 +321,8 @@ template <class K=char, class M=AhoCorasickFSM<K> > struct StringMatcher {
   struct iterator {
     StringMatcher *parent;
     typename String::const_iterator s, e, b, nb;
-    int size=0; bool match_begin=0, match_begin_next=0, match_end=0;
+    bool match_begin=0, match_begin_next=0, match_end=0;
+    int size=0;
 
     iterator(StringMatcher *p, const String &in)
       : parent(p), s(in.begin()), e(in.end()) { if ((b=nb=s) != e) ++(*this); }
@@ -339,7 +340,7 @@ template <class K=char, class M=AhoCorasickFSM<K> > struct StringMatcher {
       } else {
         vector<Regex::Result> result;
         nb = parent->impl ? parent->impl->MatchOne(s, b, e, &result) : e;
-        if (result.size()) { parent->in_match=1; parent->match_begin=result[0].begin; match_begin_next=1; }
+        if (result.size()) { parent->in_match=1; parent->match=result[0]; match_begin_next=1; }
       }
       size = nb - b;
       return *this;
@@ -349,20 +350,25 @@ template <class K=char, class M=AhoCorasickFSM<K> > struct StringMatcher {
   M *impl;
   bool in_match=0;
   string match_buf;
-  int match_begin=0, last_input_size=0;
+  Regex::Result match;
+  int last_input_size=0;
   int (*match_end_condition)(int) = &isspace;
   function<void(const String&)> match_cb;
   StringMatcher(M *m=0) : impl(m) {}
 
   iterator Begin(const String &in) {
-    if (in_match) match_begin -= last_input_size;
+    if (in_match) match -= last_input_size;
     last_input_size = in.size();
     return iterator(this, in);
   }
 
+  /// Match works with arbitrary segmentation, but filtering needs appropriate buffering
   void Match(const String &in, string *filtered=0) {
     for (auto i = Begin(in); i.b != i.e; ++i) {
-      if (i.MatchBegin()) match_buf.clear();
+      if (i.MatchBegin()) {
+        match_buf.clear();
+        if (filtered) { int ms=match.end-match.begin, fs=filtered->size(); if (fs >= ms) filtered->resize(fs-ms); }
+      }
       if (i.Matching()) match_buf.append(i.b, i.nb);
       else if (filtered) filtered->append(i.b, i.nb);
       if (i.MatchEnd()) match_cb(match_buf);

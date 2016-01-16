@@ -566,6 +566,8 @@ struct Regex {
     Result(int B=0, int E=0) : begin(B), end(E) {}
     string Text(const string &t) const { return t.substr(begin, end - begin); }
     float FloatVal(const string &t) const { return atof(Text(t).c_str()); }
+    void operator+=(const Result &v) { begin += v.begin; end += v.end; }
+    void operator-=(const Result &v) { begin -= v.begin; end -= v.end; }
   };
   void *impl=0;
   ~Regex();

@@ -480,11 +480,12 @@ struct HTTPServer : public Service {
   };
 
   struct FileResource : public Resource {
-    string filename; int size;
+    string filename;
     const char *type;
+    int size=0;
 
-    FileResource(const char *fn, const char *mimetype=0) : filename(fn), size(0) {
-      type = mimetype ? mimetype : "application/octet-stream";
+    FileResource(const string &fn, const char *mimetype=0) :
+      filename(fn), type(mimetype ? mimetype : "application/octet-stream") {
       LocalFile f(filename, "r");
       if (!f.Opened()) return;
       size = f.Size();

@@ -64,16 +64,14 @@ struct SystemAudio {
 
 struct Audio : public Module {
   mutex inlock, outlock;
-  RingBuf micL, micR;
-  RingBuf *IL, *IR;
+  unique_ptr<RingBuf> IL, IR;
   RingBuf::Handle RL, RR;
   long long samples_read=0, samples_read_last=0;
   int outlast=0, mic_samples=0;
   SoundAsset *playing=0, *loop=0;
   deque<float> Out;
   Module *impl=0;
-  Audio() : micL(FLAGS_sample_rate*FLAGS_sample_secs), micR(FLAGS_sample_rate*FLAGS_sample_secs),
-  IL(&micL), IR(&micR), Out(32768)  {}
+  Audio() : Out(32768)  {}
 
   int Init ();
   int Start();

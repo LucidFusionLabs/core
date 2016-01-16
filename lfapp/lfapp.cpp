@@ -685,21 +685,17 @@ int Application::Create(int argc, const char **argv, const char *source_filename
   bindir = LocalFile::JoinPath(startdir, progname.substr(0, DirNameLen(progname, true)));
 #endif
 
-#ifdef __APPLE__
+#if defined(LFL_ANDROID)
+#elif defined(__APPLE__)
   char rpath[1024];
   CFBundleRef mainBundle = CFBundleGetMainBundle();
   CFURLRef respath = CFBundleCopyResourcesDirectoryURL(mainBundle);
   CFURLGetFileSystemRepresentation(respath, true, (UInt8*)rpath, sizeof(rpath));
   CFRelease(respath);
-  INFO("chdir(", rpath, ")");
-  chdir(rpath);
+  if (PrefixMatch(rpath, startdir+"/")) assetdir = StrCat(rpath + startdir.size()+1, "/assets/");
+  else assetdir = StrCat(rpath, "/assets/"); 
 #else
-  INFO("chdir(", bindir, ")");
-  chdir(bindir.c_str());
-#endif
-
-#ifndef LFL_ANDROID
-  assetdir = "assets/";
+  assetdir = StrCat(bindir, "/assets/"); 
 #endif
 
 #ifdef WIN32
@@ -756,9 +752,9 @@ int Application::Create(int argc, const char **argv, const char *source_filename
 #endif
   }
 
-  const char *LFLHOME=getenv("LFLHOME");
-  if (LFLHOME && *LFLHOME) chdir(LFLHOME);
-  INFO(screen->caption, ": lfapp init: LFLHOME=", LocalFile::CurrentDirectory(), " DLDIR=", LFAppDownloadDir());
+  INFO("startdir = ", startdir);
+  INFO("assetdir = ", assetdir);
+  INFO("dldir = ", dldir);
 
 #ifndef WIN32
   if (FLAGS_max_rlimit_core) {

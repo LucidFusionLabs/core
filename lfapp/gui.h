@@ -311,13 +311,13 @@ struct TextGUI : public KeyboardGUI, public Drawable::AttrSource {
     point i, p;
   };
 
-  struct Selection {
-    bool enabled=1, changing=0, changing_previously=0;
+  struct Selection : public DragTracker {
+    bool enabled=1;
     int gui_ind=-1;
     struct Point { 
-      int line_ind=0, char_ind=0; point click; Box glyph;
+      int line_ind=0, char_ind=0; Box glyph;
       bool operator<(const Point &c) const { SortImpl2(c.glyph.y, glyph.y, glyph.x, c.glyph.x); }
-      string DebugString() const { return StrCat("i=", click.DebugString(), " l=", line_ind, " c=", char_ind, " b=", glyph.DebugString()); }
+      string DebugString() const { return StrCat("Selection::Point(l=", line_ind, ", c=", char_ind, ", b=", glyph.DebugString(), ")"); }
     } beg, end;
     Box3 box;
   };

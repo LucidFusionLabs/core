@@ -168,19 +168,19 @@ void KeyboardGUI::AddHistory(const string &cmd) {
   lastcmd[(lastcmd_ind = -1)] = cmd;
 }
 
-int KeyboardGUI::WriteHistory(const string &dir, const string &name, const string &hdr) {
-  if (!lastcmd.Size()) return 0;
-  LocalFile history(dir + MatrixFile::Filename(name, "history", "string", 0), "w");
-  MatrixFile::WriteHeader(&history, BaseName(history.fn), hdr, lastcmd.ring.count, 1);
-  for (int i=0; i<lastcmd.ring.count; i++) StringFile::WriteRow(&history, lastcmd[-1-i]);
-  return 0;
-}
-
 int KeyboardGUI::ReadHistory(const string &dir, const string &name) {
   StringFile history;
   VersionedFileName vfn(dir.c_str(), name.c_str(), "history");
   if (history.ReadVersioned(vfn) < 0) { ERROR("no ", name, " history"); return -1; }
   for (int i=0, l=history.Lines(); i<l; i++) AddHistory((*history.F)[l-1-i]);
+  return 0;
+}
+
+int KeyboardGUI::WriteHistory(const string &dir, const string &name, const string &hdr) {
+  if (!lastcmd.Size()) return 0;
+  LocalFile history(dir + MatrixFile::Filename(name, "history", "string", 0), "w");
+  MatrixFile::WriteHeader(&history, BaseName(history.fn), hdr, lastcmd.ring.count, 1);
+  for (int i=0; i<lastcmd.ring.count; i++) StringFile::WriteRow(&history, lastcmd[-1-i]);
   return 0;
 }
 
@@ -556,7 +556,7 @@ void TextArea::Write(const StringPiece &s, bool update_fb, bool release_fb) {
   if (!MainThread()) return RunInMainThread(new Callback(bind(&TextArea::WriteCB, this, s.str(), update_fb, release_fb)));
   write_last = Now();
   bool wrap = Wrap();
-  int update_flag = LineFBPushBack();
+  int update_flag = LineFBPushBack(), sl;
   LinesFrameBuffer *fb = GetFrameBuffer();
   ScopedClearColor scc(update_fb ? bg_color : NULL);
   ScopedDrawMode drawmode(update_fb ? DrawMode::_2D : DrawMode::NullOp);
@@ -565,11 +565,14 @@ void TextArea::Write(const StringPiece &s, bool update_fb, bool release_fb) {
   for (const char *add_line = add_lines.Next(); add_line; add_line = add_lines.Next()) {
     bool append = !write_newline && add_lines.first && add_lines.CurrentLength() && line.ring.count;
     Line *l = append ? &line[-1] : line.InsertAt(-1);
-    if (!append) { l->Clear(); if (start_line) { start_line++; end_line++; } }
+    if (!append) { l->Clear(); sl = 0; }
+    else sl = l->Lines();
     if (write_timestamp) l->AppendText(StrCat(logtime(Now()), " "), cursor.attr);
     l->AppendText(StringPiece(add_line, add_lines.CurrentLength()), cursor.attr);
-    l->Layout(wrap ? fb->w : 0);
-    if (scrolled_lines) v_scrolled = (float)++scrolled_lines / (WrappedLines()-1);
+    if (int dl = l->Layout(wrap ? fb->w : 0) - sl) {
+      if (start_line) { start_line += dl; end_line += dl; }
+      if (scrolled_lines) v_scrolled = (float)(scrolled_lines += dl) / (WrappedLines()-1);
+    }
     if (!update_fb || start_line) continue;
     LineUpdate(&line[-start_line-1], fb, (!append ? update_flag : 0));
   }
@@ -731,29 +734,24 @@ void TextArea::DrawSelection() {
   selection.box.Draw(mouse_gui.box.BottomLeft());
 }
 
-void TextArea::DragCB(int button, int, int, int down) {
-  point p = screen->mouse - mouse_gui.box.BottomLeft();
-  LinesFrameBuffer *fb = GetFrameBuffer();
+void TextArea::DragCB(int, int, int, int down) {
+  if (!Active()) return;
   Selection *s = &selection;
-  if (!(s->changing = down)) {
-    bool swap = (!reverse_line_fb && s->end < s->beg) || (reverse_line_fb && s->beg < s->end);
-    CopyText(swap ? s->end : s->beg, swap ? s->beg : s->end);
-    s->changing_previously = 0;
-    return;
-  }
-
-  int scp = s->changing_previously, fh = font->Height(), h = fb->Height();
-  if (scp) GetGlyphFromCoords((s->end.click = point(line_left+p.x, p.y)), &s->end);
-  else   { GetGlyphFromCoords((s->beg.click = point(line_left+p.x, p.y)), &s->beg); s->end = s->beg; }
-
+  bool start = s->Update(screen->mouse - mouse_gui.box.BottomLeft() + point(line_left, 0), down);
   bool swap = (!reverse_line_fb && s->end < s->beg) || (reverse_line_fb && s->beg < s->end);
-  Box gb = swap ? s->end.glyph : s->beg.glyph;
-  Box ge = swap ? s->beg.glyph : s->end.glyph;
-  if (reverse_line_fb) { gb.y=h-gb.y-fh; ge.y=h-ge.y-fh; }
-  point gbp = !reverse_line_fb ? gb.Position() : gb.Position() + point(gb.w, 0);
-  point gep =  reverse_line_fb ? ge.Position() : ge.Position() + point(ge.w, 0);
-  s->box = Box3(Box(fb->Width(), fb->Height()), gbp, gep, fh, fh);
-  s->changing_previously = s->changing;
+  if (start) { GetGlyphFromCoords(s->beg_click, &s->beg); s->end = s->beg; }
+  else       { GetGlyphFromCoords(s->end_click, &s->end); }
+  if (!s->changing) CopyText(swap ? s->end : s->beg, swap ? s->beg : s->end);
+  else {
+    LinesFrameBuffer *fb = GetFrameBuffer();
+    int fh = font->Height(), h = fb->Height();
+    Box gb = swap ? s->end.glyph : s->beg.glyph;
+    Box ge = swap ? s->beg.glyph : s->end.glyph;
+    if (reverse_line_fb) { gb.y=h-gb.y-fh; ge.y=h-ge.y-fh; }
+    point gbp = !reverse_line_fb ? gb.Position() : gb.Position() + point(gb.w, 0);
+    point gep =  reverse_line_fb ? ge.Position() : ge.Position() + point(ge.w, 0);
+    s->box = Box3(Box(fb->Width(), h), gbp, gep, fh, fh);
+  }
 }
 
 void TextArea::CopyText(const Selection::Point &beg, const Selection::Point &end) {

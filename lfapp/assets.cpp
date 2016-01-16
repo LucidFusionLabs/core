@@ -280,51 +280,47 @@ int GIFReader::Read(File *lf,           Texture *out) { FATAL("not implemented")
 int GIFReader::Read(const string &data, Texture *out) { FATAL("not implemented"); }
 #endif /* LFL_GIF */
 
-struct WavHeader {
-  unsigned chunk_id, chunk_size, format, subchunk_id, subchunk_size;
-  unsigned short audio_format, num_channels;
-  unsigned sampleRate, byte_rate;
-  unsigned short block_align, bits_per_sample;
-  unsigned subchunk_id2, subchunk_size2;
-  static const int Size=44;
-};
-
-void WavWriter::Open(File *F) { delete f; f=F; wrote=WavHeader::Size; if (f && f->Opened()) Flush(); }
-void WavReader::Open(File *F) { delete f; f=F; last =WavHeader::Size; }
+bool WavReader::Open(File *F, WavHeader *out) {
+  f = F;
+  last = WavHeader::Size;
+  return (f && out) ? File::SeekReadSuccess(f, 0, out, WavHeader::Size) : f != nullptr;
+}
 
 int WavReader::Read(RingBuf::Handle *B, int off, int num) {
   if (!f->Opened()) return -1;
-  int offset = WavHeader::Size + off * sizeof(short), bytes = num * sizeof(short);
-  if (f->Seek(offset, File::Whence::SET) != offset) return -1;
-
-  short *data = (short *)alloca(bytes);
-  if (f->Read(data, bytes) != bytes) return -1;
-  for (int i=0; i<num; i++) B->Write(data[i] / 32768.0);
-  last = offset + bytes;
+  basic_string<short> buf(num, 0);
+  int offset = WavHeader::Size + off * sizeof(short);
+  if (!File::SeekReadSuccess(f, offset, &buf[0], buf.size()*2)) return -1;
+  for (int i=0; i<num; i++) B->Write(buf[i] / 32768.0);
+  last = offset + buf.size()*2;
   return 0;
+}
+
+void WavWriter::Open(File *F) {
+  f = F;
+  wrote = WavHeader::Size;
+  if (f && f->Opened()) Flush();
 }
 
 int WavWriter::Write(const RingBuf::Handle *B, bool flush) {
   if (!f->Opened()) return -1;
-  int bytes = B->Len() * sizeof(short);
-  short *data = (short *)alloca(bytes);
-  for (int i=0; B && i<B->Len(); i++) data[i] = (short)(B->Read(i) * 32768.0);
-
-  if (f->Write(data, bytes) != bytes) return -1;
-  wrote += bytes;
+  basic_string<short> buf(B->Len(), 0);
+  for (int i=0, l=B?B->Len():0; i<l; ++i) buf[i] = static_cast<short>(B->Read(i) * 32768.0);
+  if (!File::WriteSuccess(f, &buf[0], buf.size()*2)) return -1;
+  wrote += buf.size()*2;
   return flush ? Flush() : 0;
 }
 
 int WavWriter::Flush() {
   if (!f->Opened()) return -1;
   WavHeader hdr;
-  hdr.chunk_id = *(unsigned*)"RIFF";    
+  hdr.chunk_id = *(unsigned*)"RIFF";
   hdr.format = *(unsigned*)"WAVE";
   hdr.subchunk_id = *(unsigned*)"fmt ";
   hdr.audio_format = 1;
   hdr.num_channels = 1;
-  hdr.sampleRate = FLAGS_sample_rate;
-  hdr.byte_rate = hdr.sampleRate * hdr.num_channels * sizeof(short);
+  hdr.sample_rate = FLAGS_sample_rate;
+  hdr.byte_rate = hdr.sample_rate * hdr.num_channels * sizeof(short);
   hdr.block_align = hdr.num_channels * sizeof(short);
   hdr.bits_per_sample = 16;
   hdr.subchunk_id2 = *(unsigned*)"data";
@@ -365,12 +361,12 @@ struct SimpleAssetLoader : public AudioAssetLoader, public VideoAssetLoader, pub
   virtual void *LoadMovieBuf(const char *buf, int len, const char *mimetype) { return LoadBuf(buf, len, mimetype); }
   virtual void UnloadMovieBuf(void *h) { return UnloadBuf(h); }
 
-  virtual void LoadVideo(void *handle, Texture *out, int load_flag=VideoAssetLoader::Flag::Default) {
+  virtual void LoadVideo(void *h, Texture *out, int load_flag=VideoAssetLoader::Flag::Default) {
     static char jpghdr[2] = { '\xff', '\xd8' }; // 0xff, 0xd8 };
     static char gifhdr[4] = { 'G', 'I', 'F', '8' };
     static char pnghdr[8] = { '\211', 'P', 'N', 'G', '\r', '\n', '\032', '\n' };
 
-    File *f = (File*)handle;
+    File *f = reinterpret_cast<File*>(h);
     string fn = f->Filename();
     unsigned char hdr[8];
     if (f->Read(hdr, 8) != 8) { ERROR("load ", fn, " : failed"); return; }
@@ -398,7 +394,29 @@ struct SimpleAssetLoader : public AudioAssetLoader, public VideoAssetLoader, pub
     if (load_flag & Flag::Clear)  out->ClearBuffer();
   }
 
-  virtual void LoadAudio(void *h, SoundAsset *a, int seconds, int flag) {}
+  virtual void LoadAudio(void *h, SoundAsset *a, int seconds, int flag) {
+    File *f = reinterpret_cast<File*>(h);
+    string fn = f->Filename();
+    if (SuffixMatch(fn, ".wav", false)) {
+      WavHeader wav_header;
+      WavReader wav_reader;
+      if (!wav_reader.Open(f, &wav_header))
+        return ERROR("LoadAudio(", a->name, ", ", fn, ") open failed: ", strerror(errno));
+
+      int wav_samples = (f->Size() - WavHeader::Size) / 2;
+      if (wav_header.audio_format != 1 || wav_header.num_channels != 1 ||
+          wav_header.bits_per_sample != 16 || wav_header.sample_rate != FLAGS_sample_rate ||
+          wav_samples > FLAGS_sample_rate*FLAGS_soundasset_seconds)
+        return ERROR("LoadAudio(", a->name, ", ", fn, ") not supported");
+
+      a->channels = 1;
+      a->sample_rate = FLAGS_sample_rate;
+      a->wav = new RingBuf(a->sample_rate, wav_samples);
+      RingBuf::Handle H(a->wav);
+      if (wav_reader.Read(&H, 0, wav_samples))
+        return ERROR("LoadAudio(", a->name, ", ", fn, ") read failed: ", strerror(errno));
+    }
+  }
   virtual int RefillAudio(SoundAsset *a, int reset) { return 0; }
 
   virtual void LoadMovie(void *h, MovieAsset *a) {}
@@ -641,7 +659,7 @@ struct FFMpegAssetLoader : public AudioAssetLoader, public VideoAssetLoader, pub
     }
     if (open_resampler)
       a->resampler.Open(a->wav, avctx->channels, avctx->sample_rate, Sample::FromFFMpegId(avctx->sample_fmt),
-                        a->channels,     a->sample_rate,     Sample::S16);
+                        a->channels, a->sample_rate, Sample::S16);
     a->wav->ring.back = 0;
     int wrote = PlayMovie(a, 0, fctx, 0);
     if (wrote < SoundAssetSize(a)) {
@@ -681,7 +699,7 @@ struct FFMpegAssetLoader : public AudioAssetLoader, public VideoAssetLoader, pub
       sa->seconds = FLAGS_soundasset_seconds;
       sa->wav = new RingBuf(sa->sample_rate, SoundAssetSize(sa));
       sa->resampler.Open(sa->wav, avctx->channels, avctx->sample_rate, Sample::FromFFMpegId(avctx->sample_fmt),
-                         sa->channels,    sa->sample_rate, Sample::S16);
+                         sa->channels, sa->sample_rate, Sample::S16);
     }
   }
 
@@ -927,16 +945,18 @@ int Assets::Init() {
 
 unordered_map<string, StringPiece> Asset::cache;
 
+string Asset::FileName(const string &asset_fn) { return StrCat(app->assetdir, asset_fn); }
+
 string Asset::FileContents(const string &asset_fn) {
   auto i = cache.find(asset_fn);
   if (i != cache.end()) return string(i->second.data(), i->second.size());
-  else                  return LocalFile::FileContents(StrCat(app->assetdir, asset_fn));
+  else                  return LocalFile::FileContents(Asset::FileName(asset_fn));
 }
 
 File *Asset::OpenFile(const string &asset_fn) {
   auto i = cache.find(asset_fn);
   if (i != cache.end()) return new BufferFile(i->second);
-  else                  return new LocalFile(StrCat(app->assetdir, asset_fn), "r");
+  else                  return new LocalFile(Asset::FileName(asset_fn), "r");
 }
 
 void Asset::Unload() {
@@ -1016,7 +1036,8 @@ void SoundAsset::Load(void const *buf, int len, char const *FN, int Secs) {
 }
 
 void SoundAsset::Load(int Secs, bool unload) {
-  string fn; void *handle = 0;
+  string fn;
+  void *handle = 0;
 
   if (!filename.empty()) {
     fn = filename;
