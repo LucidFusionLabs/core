@@ -193,7 +193,7 @@ struct ArchiveIter {
   void Skip();
   const char *Next();
   long long Size();
-  const void *Data();
+  bool LoadData();
 };
 
 struct VersionedFileName {
@@ -448,11 +448,34 @@ struct GraphVizFile {
   static void AppendEdge(string *out, const string &n1, const string &n2, const string &label=string());
 };
 
+struct ClangTranslationUnit {
+  CXIndex index=0;
+  CXTranslationUnit tu=0;
+  string filename, compile_command, working_directory;
+
+  ClangTranslationUnit(const string &f, const string &cc, const string &wd);
+  virtual ~ClangTranslationUnit();
+};
+
+struct ClangTokenVisitor {
+  typedef function<void(ClangTokenVisitor*, int, int, int)> TokenCB;
+  ClangTranslationUnit *tu;
+  point last_token;
+  TokenCB cb;
+
+  ClangTokenVisitor(ClangTranslationUnit *t, const TokenCB &c) : tu(t), cb(c) {}
+  void Visit();
+};
+
 struct IDE {
   struct Project {
     struct BuildRule { string dir, cmd; };
     unordered_map<string, BuildRule> build_rules;
     void LoadCMakeCompileCommandsFile(File*);
+  };
+  struct File {
+    ClangTranslationUnit tu;
+    File(const string &f, const string &cc, const string &wd) : tu(f, cc, wd) {}
   };
 };
 

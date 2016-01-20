@@ -92,7 +92,8 @@ struct DrawableBoxArray {
   point Draw(point p, int glyph_start=0, int glyph_len=-1);
   string DebugString() const;
 
-  int   GetLineFromCoords(const point &p) { return 0; }
+  int GetLineFromCoords(const point &p) { return 0; }
+  int GetLineFromIndex(int n) { return upper_bound(line_ind.begin(), line_ind.end(), n) - line_ind.begin(); }
   bool GetGlyphFromCoords(const point &p, int *index_out, Box *box_out) { return GetGlyphFromCoords(p, index_out, box_out, GetLineFromCoords(p)); }
   bool GetGlyphFromCoords(const point &p, int *index_out, Box *box_out, int li);
 

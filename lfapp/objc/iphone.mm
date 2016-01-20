@@ -143,10 +143,12 @@ static int iphone_argc = 0;
     [self initGestureRecognizers];
     return YES;
   }
+
   - (void)applicationWillTerminate:(UIApplication *)application {
     [self shutdownNotifications];
     [self shutdownGestureRecognizers];
   }
+
   - (void)applicationWillResignActive:(UIApplication*)application {}
   - (void)applicationDidBecomeActive:(UIApplication*)application {}
   - (void)glkView:(GLKView *)v drawInRect:(CGRect)rect {
@@ -154,6 +156,7 @@ static int iphone_argc = 0;
     if (wait_forever_fh && restart_wait_forever_fh && !(restart_wait_forever_fh=0))
         [wait_forever_fh waitForDataInBackgroundAndNotify];
   }
+
   - (void)updateTargetFPS: (int)fps {
     target_fps = fps;
     INFOf("updateTargetFPS: %d", target_fps);
@@ -178,6 +181,7 @@ static int iphone_argc = 0;
     [center addObserver:self selector:@selector(keyboardDidShow:)    name:@"UIKeyboardDidShowNotification"            object:nil];
     [center addObserver:self selector:@selector(keyboardWillHide:)   name:@"UIKeyboardWillHideNotification"           object:nil];
   }
+
   - (void)shutdownNotifications {
     INFOf("%s", "shutdown notifications");
     [[UIDevice currentDevice] endGeneratingDeviceOrientationNotifications];
@@ -191,6 +195,7 @@ static int iphone_argc = 0;
     keyboard_frame = CGRectMake(0, 0, 0, 0);
     [self.controller updateToolbarFrame];
   }
+
   - (void)keyboardDidShow:(NSNotification *)notification {
     NSDictionary *userInfo = [notification userInfo];
     CGRect rect = [[userInfo objectForKey:UIKeyboardFrameEndUserInfoKey] CGRectValue];
@@ -202,16 +207,18 @@ static int iphone_argc = 0;
     int l = [string length];
     if (!l) [self handleKey:IPhoneKeyCode::Backspace];
     for (int i = 0, l = [string length]; i < l; i++) {
-        unichar k = [string characterAtIndex: i];
-        [self handleKey: k];
+      unichar k = [string characterAtIndex: i];
+      [self handleKey: k];
     }
     return YES;
   }
+
   - (BOOL)textFieldShouldReturn: (UITextField *)tf {
     [self handleKey:IPhoneKeyCode::Return];
     if (_resign_textfield_on_return) [tf resignFirstResponder];
     return YES;
   }
+
   - (void)handleKey: (int)k {
     int fired = 0;
     fired += KeyPress(k, 1);
@@ -262,12 +269,14 @@ static int iphone_argc = 0;
     [tap release];
 #endif
   }
+
   - (void)shutdownGestureRecognizers {
     UIWindow *win = [[[UIApplication sharedApplication] windows] objectAtIndex:0];
     NSArray *gestures = [win gestureRecognizers];
     for (int i = 0; i < [gestures count]; i++)
       [win removeGestureRecognizer:[gestures objectAtIndex:i]];
   }
+
   - (void)doubleSwipeUp:   (id)sender { screen->gesture_swipe_up   = 1; }
   - (void)doubleSwipeDown: (id)sender { screen->gesture_swipe_down = 1; }
   - (void)tapGesture: (UITapGestureRecognizer *)tapGestureRecognizer {
@@ -280,6 +289,7 @@ static int iphone_argc = 0;
     int fired = MouseClick(1, 1, (int)position.x, screen->height - (int)position.y);
     if (fired && _frame_on_mouse_input) [self.view setNeedsDisplay];
   }
+
   - (void)panGesture: (UIPanGestureRecognizer *)panGestureRecognizer {
     UIView *v = [panGestureRecognizer view];
     int dpind = v.frame.origin.y == 0;
@@ -318,6 +328,7 @@ static int iphone_argc = 0;
       selector:@selector(fileDataAvailable:) name:NSFileHandleDataAvailableNotification object:wait_forever_fh];
     [wait_forever_fh waitForDataInBackgroundAndNotify];
   }
+
   - (void)delWaitForeverSocket: (int)fd {
     if (!wait_forever_fh || [wait_forever_fh fileDescriptor] != fd) FATALf("del mismatching wait_forever_fh %o", wait_forever_fh);
     [[NSNotificationCenter defaultCenter] removeObserver:self name:NSFileHandleDataAvailableNotification object:wait_forever_fh];
@@ -326,6 +337,7 @@ static int iphone_argc = 0;
     wait_forever_fh = nil;
     restart_wait_forever_fh = false;
   }
+
   - (void)fileDataAvailable: (NSNotification *)notification {
     NSFileHandle *fh = (NSFileHandle*) [notification object];
     if (fh != wait_forever_fh) return;
@@ -345,14 +357,17 @@ static int iphone_argc = 0;
     std::unordered_map<int, std::string> menu_tags;
     std::unordered_map<std::string, std::vector<std::pair<std::string, std::string>>> menus;
   }
+
   - (void)viewWillAppear:(BOOL)animated { 
     [super viewWillAppear:animated];
     [self setPaused:YES];
     app = [LFUIApplication sharedAppDelegate];
   }
+
   - (void)viewDidAppear:(BOOL)animated {
     [super viewDidAppear:animated];
   }
+
   - (void)viewDidLayoutSubviews { [app.view setNeedsDisplay]; }
   - (void)viewWillLayoutSubviews {
     [super viewWillLayoutSubviews];
@@ -394,28 +409,34 @@ static int iphone_argc = 0;
     [spacer release];
     [app.window addSubview:toolbar];
   }
+
   - (void)updateToolbarFrame {
     if (toolbar) toolbar.frame = [self getToolbarFrame];
     [self.view setNeedsLayout];
   }
+
   - (CGRect)getToolbarFrame {
     CGRect bounds = [[UIScreen mainScreen] bounds], kbd = [[LFUIApplication sharedAppDelegate] getKeyboardFrame];
     return CGRectMake(0, bounds.size.height - kbd.size.height - toolbar_height, bounds.size.width, toolbar_height);
   }
+
   - (CGRect)getKeyboardToolbarFrame {
     CGRect kbd = [[LFUIApplication sharedAppDelegate] getKeyboardFrame];
     return CGRectMake(kbd.origin.x, kbd.origin.y, kbd.size.width, kbd.size.height + toolbar_height);
   }
+
   - (void)toggleToolbarButton:(id)sender {
     if (![sender isKindOfClass:[UIBarButtonItem class]]) FATALf("unknown sender: %p", sender);
     UIBarButtonItem *item = (UIBarButtonItem*)sender;
     if (item.style != UIBarButtonItemStyleDone) { item.style = UIBarButtonItemStyleDone;     item.tintColor = [UIColor colorWithRed:0.8 green:0.8 blue:0.8 alpha:.8]; }
     else                                        { item.style = UIBarButtonItemStyleBordered; item.tintColor = nil; }
   }
+
   - (void)toggleToolbarButtonWithTitle:(const char *)k {
     auto it = toolbar_titles.find(k);
     if (it != toolbar_titles.end()) [self toggleToolbarButton: (id)(UIBarButtonItem*)it->second];
   }
+
   - (void)onClick:(id)sender {
     auto it = toolbar_cmds.find(sender);
     if (it != toolbar_cmds.end()) {
@@ -431,6 +452,7 @@ static int iphone_argc = 0;
     auto menu = &menus[title_text];
     for (int i=0; i<n; i++) menu->emplace_back(k[i], v[i]);
   }
+
   - (void)launchMenu:(const char*)title_text {
     auto it = menus.find(title_text);
     if (it == menus.end()) { ERRORf("unknown menu: %s", title_text); return; }
@@ -442,6 +464,7 @@ static int iphone_argc = 0;
     [actions showInView:[UIApplication sharedApplication].keyWindow];
     [actions release];
   }
+
   - (void)actionSheet:(UIActionSheet *)actions clickedButtonAtIndex:(NSInteger)buttonIndex {
     auto tag_it = menu_tags.find(actions.tag);
     if (tag_it == menu_tags.end()) { ERRORf("unknown tag: %d", actions.tag); return; }
@@ -457,12 +480,14 @@ static int iphone_argc = 0;
     NativeWindow *screen;
     LFUIApplication *app;
   }
+
   - (id)initWithFrame:(CGRect)aRect {
     if (!(self = [super initWithFrame:aRect])) return self;
     screen = GetNativeWindow();
     app = [LFUIApplication sharedAppDelegate];
     return self;
   }
+
   - (void)touchesBegan:(NSSet *)touches withEvent:(UIEvent *)event {
     UITouch *touch = [touches anyObject];
     UIView *v = [touch view];
@@ -475,6 +500,7 @@ static int iphone_argc = 0;
     int fired = MouseClick(1, 1, (int)position.x, screen->height - (int)position.y);
     if (fired && app.frame_on_mouse_input) [self.superview setNeedsDisplay];
   }
+
   - (void)touchesCancelled:(NSSet *)touches withEvent:(UIEvent *)event {}
   - (void)touchesEnded:(NSSet *)touches withEvent:(UIEvent *)event {
     UITouch *touch = [touches anyObject];
@@ -489,6 +515,7 @@ static int iphone_argc = 0;
     int fired = MouseClick(1, 0, (int)position.x, screen->height - (int)position.y);
     if (fired && app.frame_on_mouse_input) [self.superview setNeedsDisplay];
   }
+
   - (void)touchesMoved:(NSSet *)touches withEvent:(UIEvent *)event {
     UITouch *touch = [touches anyObject];
     UIView *v = [touch view];
@@ -506,12 +533,14 @@ static int iphone_argc = 0;
     return [NSMutableDictionary dictionaryWithObjectsAndKeys:(id)kSecClassGenericPassword, (id)kSecClass, service,
            (id)kSecAttrService, service, (id)kSecAttrAccount, (id)kSecAttrAccessibleAfterFirstUnlock, (id)kSecAttrAccessible, nil];
   }
+
   + (void)save:(NSString *)service data:(id)data {
     NSMutableDictionary *keychainQuery = [self getKeychainQuery:service];
     SecItemDelete((CFDictionaryRef)keychainQuery);
     [keychainQuery setObject:[NSKeyedArchiver archivedDataWithRootObject:data] forKey:(id)kSecValueData];
     SecItemAdd((CFDictionaryRef)keychainQuery, NULL);
   }
+
   + (id)load:(NSString *)service {
     id ret = nil;
     NSMutableDictionary *keychainQuery = [self getKeychainQuery:service];
@@ -532,10 +561,12 @@ extern "C" void NativeWindowInit() {
   NativeWindow *screen = GetNativeWindow();
   screen->id = [[LFUIApplication sharedAppDelegate] view];
 }
+
 extern "C" int NativeWindowOrientation() { return [[LFUIApplication sharedAppDelegate] getOrientation]; }
 extern "C" void NativeWindowQuit() {
   if (iphone_documents_directory != nil) { [iphone_documents_directory release]; iphone_documents_directory = nil; }
 }
+
 extern "C" void NativeWindowSize(int *width, int *height) {
   LFUIApplication *app = [LFUIApplication sharedAppDelegate];
   CGFloat scale = [app getScale];
@@ -589,12 +620,15 @@ extern "C" void iPhoneDelWaitForeverSocket(void*, int fd) { [[LFUIApplication sh
 extern "C" void iPhoneCreateToolbar(int n, const char **name, const char **val) {
   [[LFUIApplication sharedAppDelegate].controller addToolbar: n key:name val:val];
 }
+
 extern "C" void iPhoneToggleToolbarButton(const char *n) {
   [[LFUIApplication sharedAppDelegate].controller toggleToolbarButtonWithTitle:n];
 }
+
 extern "C" void iPhoneCreateNativeMenu(const char *title, int n, const char **name, const char **val) {
   [[LFUIApplication sharedAppDelegate].controller addMenu:title num:n key:name val:val];
 }
+
 extern "C" void iPhoneLaunchNativeMenu(const char *title) {
   [[LFUIApplication sharedAppDelegate].controller launchMenu:title];
 }

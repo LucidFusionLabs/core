@@ -129,7 +129,7 @@ void Glyph::Draw(const LFL::Box &b, const Drawable::Attr *a) const {
   if (!a || !a->font) return tex.Draw(b, a);
   if (!ready) a->font->engine->LoadGlyphs(a->font, this, 1);
   if (tex.buf) screen->gd->DrawPixels(b, tex);
-  else         b.Draw(tex.coord);
+  else b.Draw(tex.coord);
 }
 
 GlyphCache::GlyphCache(unsigned T, int W, int H) : dim(W, H ? H : W), tex(dim.w, dim.h, Texture::preferred_pf, T), flow(new Flow(&dim)) {}
@@ -329,9 +329,8 @@ void Font::Select() {
   else if (has_bg && bg.a() == 1) { screen->gd->DisableBlend(); }
 }
 
-void Font::DrawGlyph(int gid, const Box &w) {
+void Font::DrawGlyphWithAttr(int gid, const Box &w, const Drawable::Attr &a) {
   Select();
-  Drawable::Attr a(this);
   Glyph *g = FindGlyph(gid);
   g->Draw(w, &a);
 }

@@ -420,10 +420,9 @@ const char *ArchiveIter::Next() {
   }
   return archive_entry_pathname((archive_entry*)entry);
 }
-const void *ArchiveIter::Data() {
+bool ArchiveIter::LoadData() {
   buf.resize(Size());
-  CHECK_EQ(buf.size(), archive_read_data((archive*)impl, &buf[0], buf.size()));
-  return buf.c_str();
+  return buf.size() == archive_read_data((archive*)impl, &buf[0], buf.size());
 }
 void ArchiveIter::Skip() { archive_read_data_skip((archive*)impl); }
 long long ArchiveIter::Size() { return archive_entry_size((archive_entry*)entry); }
@@ -433,7 +432,7 @@ ArchiveIter::~ArchiveIter() {}
 ArchiveIter::ArchiveIter(const char *path) {}
 const char *ArchiveIter::Next() { return 0; }
 long long ArchiveIter::Size() { return 0; }
-const void *ArchiveIter::Data() { return 0; }
+bool ArchiveIter::LoadData() { return 0; }
 void ArchiveIter::Skip() {}
 #endif /* LFL_LIBARCHIVE */
 
@@ -840,7 +839,7 @@ void GraphVizFile::AppendEdge(string *out, const string &n1, const string &n2, c
             ";\r\n");
 }
 
-void IDE::Project::LoadCMakeCompileCommandsFile(File *f) {
+void IDE::Project::LoadCMakeCompileCommandsFile(LFL::File *f) {
   if (!f || !f->Opened()) return;
 #if defined(LFL_JSONCPP)
   Json::Value root;

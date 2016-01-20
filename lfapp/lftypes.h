@@ -57,22 +57,21 @@ typedef pair<unique_ptr<char*>, size_t> FlatBufferPiece;
   else return x4 < y4;
 
 namespace LFL {
-struct typed_ptr {
-  int type; void *value;
-  typed_ptr() : type(0), value(0) {}
-  typed_ptr(int T, void *P) : type(T), value(P) {}
-};
-
 template<typename T, typename ...Args>
 std::unique_ptr<T> make_unique(Args&& ...args) { return std::unique_ptr<T>(new T(std::forward<Args>(args)...)); }
-
-template <class X> int TypeId()   { static int ret = fnv32(typeid(X).name()); return ret; }
-template <class X> int TypeId(X*) { static int ret = fnv32(typeid(X).name()); return ret; }
-template <class X> typed_ptr TypePointer(X* v) { return typed_ptr(TypeId<X>(), v); }
+template <class X> int TypeId() { static int ret = fnv32(typeid(X).name()); return ret; }
 template <class X> X *CheckPointer(X *x) { CHECK(x); return x; }
 template <class X> X *CheckNullAssign(X **x, X *v) { CHECK_EQ(nullptr, *x); return (*x = v); }
 template <class X> X *GetThenAssignNull(X **x) { X *v = *x; if (v) *x = nullptr; return v; }
 template <class X> typename make_unsigned<X>::type *Unsigned(X *x) { return reinterpret_cast<typename make_unsigned<X>::type*>(x); }
+
+struct typed_ptr {
+  int type=0;
+  void *value=0;
+  typed_ptr() {}
+  template <class X> typed_ptr(X *v) : type(TypeId<X>()), value(v) { }
+  template <class X> X *Get(int id) { return id == TypeId<X> ? reinterpret_cast<X>(value) : nullptr; }
+};
 
 struct RefCounter {
   int count=0;

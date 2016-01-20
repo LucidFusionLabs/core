@@ -95,16 +95,16 @@ void Shell::Run(const string &text) {
   INFO("unkown cmd '", cmd, "'");
 }
 
-void Shell::mousein (const vector<string>&) { Mouse::GrabFocus(); }
-void Shell::mouseout(const vector<string>&) { Mouse::ReleaseFocus(); }
+void Shell::mousein (const vector<string>&) { app->GrabMouseFocus(); }
+void Shell::mouseout(const vector<string>&) { app->ReleaseMouseFocus(); }
 
 void Shell::quit(const vector<string>&) { app->run = false; }
 void Shell::console(const vector<string>&) { if (screen->lfapp_console) screen->lfapp_console->ToggleActive(); }
-void Shell::showkeyboard(const vector<string>&) { TouchDevice::OpenKeyboard(); }
+void Shell::showkeyboard(const vector<string>&) { app->OpenTouchKeyboard(); }
 
 void Shell::clipboard(const vector<string> &a) {
-  if (a.empty()) INFO(Clipboard::Get());
-  else Clipboard::Set(Join(a, " "));
+  if (a.empty()) INFO(app->GetClipboardText());
+  else app->SetClipboardText(Join(a, " "));
 }
 
 void Shell::consolecolor(const vector<string>&) {

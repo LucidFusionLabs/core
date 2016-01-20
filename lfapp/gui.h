@@ -180,7 +180,7 @@ struct TextGUI : public KeyboardGUI, public Drawable::AttrSource {
     Link(Line *P, GUI *G, const Box3 &b, const string &U);
     virtual ~Link() { if (line->parent->hover_link == this) line->parent->hover_link = 0; }
     void Hover(int, int, int, int down) { line->parent->hover_link = down ? this : 0; }
-    void Visit() { SystemBrowser::Open(link.c_str()); }
+    void Visit() { app->OpenSystemBrowser(link); }
   };
 
   struct LineData {
@@ -456,26 +456,29 @@ struct Editor : public TextArea {
   shared_ptr<File> file;
   LineMap file_line;
   FreeListVector<String16> edits;
-  LineOffset *cursor_line=0;
+  Line *cursor_line=0;
+  LineOffset *cursor_offset=0;
   vector<pair<int,int>> annotation;
-  int last_fb_width=0, last_fb_lines=0, last_first_line=0, wrapped_lines=0, fb_wrapped_lines=0;
+  int last_fb_width=0, last_fb_lines=0, last_first_line=0;
+  int wrapped_lines=0, fb_wrapped_lines=0;
+  int cursor_line_number=0, cursor_line_number_offset=0;
   bool opened=0;
   IDE::Project *project=0;
+  unique_ptr<IDE::File> ide_file;
   Editor(Window *W, Font *F, File *I, bool Wrap=0);
 
   void Input(char k)  { Modify(false, k); }
   void Enter()        { Modify(false, '\r'); }
   void Erase()        { Modify(true,  0); }
   void CursorLeft()   { UpdateCursorX(max(cursor.i.x-1, 0)); }
-  void CursorRight()  { UpdateCursorX(min(cursor.i.x+1, GetCursorLine()->Size())); }
+  void CursorRight()  { UpdateCursorX(min(cursor.i.x+1, CursorLineSize())); }
   void Home()         { UpdateCursorX(0); }
-  void End()          { UpdateCursorX(GetCursorLine()->Size()); }
-  void HistUp()       { if (cursor.i.y <= 0)               AddVScroll(-1); else cursor.i.y--; UpdateCursor(); UpdateCursorLine(); }
-  void HistDown()     { if (cursor.i.y >= line_fb.lines-1) AddVScroll( 1); else cursor.i.y++; UpdateCursor(); UpdateCursorLine(); }
+  void End()          { UpdateCursorX(CursorLineSize()); }
+  void HistUp();
+  void HistDown();
 
-  Line *GetCursorLine() { return &line[-1-cursor.i.y]; }
-  int CursorLineNumber() const { return last_first_line + cursor.i.y; }
   int WrappedLines() const { return wrapped_lines; }
+  int CursorLineSize() const { return cursor_line ? cursor_line->Size() : 0; }
   void ToggleShouldWrap() { SetShouldWrap(!line_fb.wrap); }
   void SetShouldWrap(bool);
   void AddWrappedLines(int n);
@@ -483,12 +486,14 @@ struct Editor : public TextArea {
   void Reload() { last_fb_width=0; wrapped_lines=0; RefreshLines(); }
   int RefreshLines() { last_fb_lines=0; return UpdateLines(last_v_scrolled, 0, 0, 0); }
   int UpdateLines(float v_scrolled, int *first_ind, int *first_offset, int *first_len);
-  void UpdateCursorLine() { cursor_line = file_line.LesserBound(CursorLineNumber()).val; }
   void UpdateCursor();
-  void UpdateAnnotation();
-  void Modify(bool erase, int c);
+  void UpdateCursorX(int x);
+  void UpdateCursorLine();
   int ModifyCursorLine();
+  void Modify(bool erase, int c);
   int Save();
+  void GoToDefinition(const point &p);
+  void UpdateAnnotation();
 };
 
 struct Terminal : public TextArea {
@@ -498,7 +503,7 @@ struct Terminal : public TextArea {
     virtual void IOCtlWindowSize(int w, int h) {}
   };
   struct Controller : public ByteSink {
-    bool ctrl_down=0, local_echo=0, frame_on_keyboard_input=0;
+    bool ctrl_down=0, frame_on_keyboard_input=0;
     virtual ~Controller() {}
     virtual int Open(Terminal*) = 0;
     virtual StringPiece Read() = 0;

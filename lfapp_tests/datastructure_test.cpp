@@ -601,7 +601,7 @@ TEST(DatastructureTest, RedBlackTree) {
 
     {                                                
       timers->AccumulateTo(ctid); for (auto i : db) t.Insert(i, i);
-      timers->AccumulateTo(0);    t.CheckProperties();
+      timers->AccumulateTo(0);    t.CheckProperties(); CHECK_EQ(0, (--t.Begin()).val);
       timers->AccumulateTo(qtid); for (auto i : db) { EXPECT_NE((int*)0, (ti=t.Find(i)).val); if (ti.val) EXPECT_EQ(i, *ti.val); }
       timers->AccumulateTo(itid); for (ti = t. Begin(); ti.ind; ++ti) {         EXPECT_EQ(sorted_db[iind], ti.key); EXPECT_EQ(sorted_db[iind], *ti.val); iind++; }
       timers->AccumulateTo(0);    for (ti = t.RBegin(); ti.ind; --ti) { iind--; EXPECT_EQ(sorted_db[iind], ti.key); EXPECT_EQ(sorted_db[iind], *ti.val);         }

@@ -207,8 +207,6 @@ const int Texture::preferred_pf = Pixel::RGBA;
 const int Texture::preferred_pf = Pixel::BGRA;
 #endif
 
-Window::WindowMap Window::active;
-
 int Depth::OpenGLID(int id) {
   switch(id) {
     case _16: return GL_DEPTH_COMPONENT16;
@@ -968,7 +966,7 @@ class QTWindow : public QWindow {
     glc->setFormat(requestedFormat());
     glc->create();
     lfl_window->gl = glc;
-    Window::MakeCurrent(lfl_window);
+    LFL::app->MakeCurrentWindow(lfl_window);
     lfl_window->gd->initializeOpenGLFunctions();
     if (lfl_qt_init) LFL::app->StartNewWindow(lfl_window);
   }
@@ -976,7 +974,7 @@ class QTWindow : public QWindow {
     if (event->type() != QEvent::UpdateRequest) return QWindow::event(event);
     if (!init && (init=1)) MyInit();
     if (!lfl_qt_init && (lfl_qt_init=true)) if (LFLQTInit() < 0) { app->Free(); lfl_qapp->exit(); return true; }
-    if (!LFL::screen || LFL::screen->impl != this) LFL::Window::MakeCurrent(lfl_window);
+    if (!LFL::screen || LFL::screen->impl != this) LFL::app->MakeCurrentWindow(lfl_window);
     app->EventDrivenFrame(true);
     if (!app->run) { app->Free(); lfl_qapp->exit(); return true; }
     if (reenable_wait_forever_socket && !(reenable_wait_forever_socket=0)) wait_forever_socket->setEnabled(true);
@@ -986,7 +984,7 @@ class QTWindow : public QWindow {
   void resizeEvent(QResizeEvent *ev) {
     QWindow::resizeEvent(ev);
     if (!init) return; 
-    LFL::Window::MakeCurrent(lfl_window);
+    LFL::app->MakeCurrentWindow(lfl_window);
     LFL::screen->Reshaped(ev->size().width(), ev->size().height());
     RequestRender();
   }
@@ -1596,6 +1594,7 @@ void GraphicsDevice::DisableBlend() { if (Changed(&blend_enabled, false)) { Clea
 void GraphicsDevice::EnableBlend()  { if (Changed(&blend_enabled, true )) { ClearDeferred();  glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); GDDebug("Blend=1"); } }
 void GraphicsDevice::BlendMode(int sm, int dm) { ClearDeferred(); glBlendFunc(sm, dm); GDDebug("BlendMode=", sm, ",", dm); }
 void GraphicsDevice::RestoreViewport(int dm) { ViewPort(screen->Box()); DrawMode(dm); }
+void GraphicsDevice::TranslateRotateTranslate(float a, const Box &b) { float x=b.x+b.w/2.0, y=b.y+b.h/2.0; Translate(x,y,0); Rotatef(a,0,0,1); Translate(-x,-y,0); }
 void GraphicsDevice::DrawMode(int dm, bool flush) { return DrawMode(dm, screen->width, screen->height, flush); }
 void GraphicsDevice::DrawMode(int dm, int W, int H, bool flush) {
   if (draw_mode == dm && !flush) return;
@@ -1822,9 +1821,9 @@ void GraphicsDevice::FrameBufferDepthTexture(int id) {}
 int GraphicsDevice::CheckFrameBufferStatus() { return 0; }
 int GraphicsDevice::GraphicsDevice::VertsPerPrimitive(int primtype) { return 0; }
 
-bool Window::Create(Window *W) { screen->gd = new FakeGraphicsDevice(); Window::active[W->id] = W; return true; }
-void Window::Close(Window *W) {}
-void Window::MakeCurrent(Window *W) {}
+bool Application::CreateWindow(Window *W) { W->gd = new FakeGraphicsDevice(); windows[W->id] = W; return true; }
+void Application::CloseWindow(Window *W) {}
+void Application::MakeCurrentWindow(Window *W) {}
 #endif // LFL_HEADLESS
 
 #ifdef LFL_ANDROIDVIDEO
@@ -1834,13 +1833,13 @@ struct AndroidVideoModule : public Module {
     if (AndroidVideoInit(&app->video->opengles_version)) return -1;
     CHECK(!screen->id);
     screen->id = screen;
-    Window::active[screen->id] = screen;
+    windows[screen->id] = screen;
     return 0;
   }
 };
-bool Window::Create(Window *W) { return true; }
-void Window::Close(Window *W) {}
-void Window::MakeCurrent(Window *W) {}
+bool Application::CreateWindow(Window *W) { return true; }
+void Application::CloseWindow(Window *W) {}
+void Application::MakeCurrentWindow(Window *W) {}
 #endif
 
 #ifdef LFL_IPHONEVIDEO
@@ -1852,13 +1851,13 @@ struct IPhoneVideoModule : public Module {
     NativeWindowInit();
     NativeWindowSize(&screen->width, &screen->height);
     CHECK(screen->id);
-    Window::active[screen->id] = screen;
+    windows[screen->id] = screen;
     return 0;
   }
 };
-bool Window::Create(Window *W) { return false; }
-void Window::Close(Window *W) {}
-void Window::MakeCurrent(Window *W) {}
+bool Application::CreateWindow(Window *W) { return false; }
+void Application::CloseWindow(Window *W) {}
+void Application::MakeCurrentWindow(Window *W) {}
 #endif
 
 #ifdef LFL_OSXVIDEO
@@ -1876,22 +1875,22 @@ struct OSXVideoModule : public Module {
     INFO("OSXVideoModule::Init()");
     NativeWindowInit();
     NativeWindowSize(&screen->width, &screen->height);
-    CHECK(Window::Create(screen));
+    CHECK(app->CreateWindow(screen));
     return 0;
   }
 };
-bool Window::Create(Window *W) { 
+bool Application::CreateWindow(Window *W) { 
   W->id = OSXCreateWindow(W->width, W->height, W);
-  if (W->id) Window::active[W->id] = W;
+  if (W->id) windows[W->id] = W;
   OSXSetWindowTitle(W->id, W->caption.c_str());
   return true; 
 }
-void Window::MakeCurrent(Window *W) { 
+void Application::MakeCurrentWindow(Window *W) { 
   if (W) OSXMakeWindowCurrent((screen = W)->id);
 }
-void Window::Close(Window *W) {
-  Window::active.erase(W->id);
-  if (Window::active.empty()) app->run = false;
+void Application::CloseWindow(Window *W) {
+  windows.erase(W->id);
+  if (windows.empty()) app->run = false;
   if (app->window_closed_cb) app->window_closed_cb(W);
   // OSXDestroyWindow(W->id);
   screen = 0;
@@ -1902,12 +1901,12 @@ void Window::Close(Window *W) {
 struct WinVideoModule : public Module {
   int Init() {
     INFO("WinVideoModule::Init()");
-    CHECK(Window::Create(screen));
+    CHECK(app->CreateWindow(screen));
     return 0;
   }
 };
 
-bool Window::Create(Window *W) {
+bool Application::CreateWindow(Window *W) {
   static WinApp *winapp = Singleton<WinApp>::Get();
   ONCE({ winapp->CreateClass(); });
   RECT r = { 0, 0, W->width, W->height };
@@ -1924,18 +1923,18 @@ bool Window::Create(Window *W) {
   if (!(W->gl = wglCreateContext(hDC))) return ERRORv(false, "wglCreateContext: ", GetLastError());
   W->surface = hDC;
   W->impl = new WinWindow();
-  Window::active[(W->id = hWnd)] = W;
-  INFOf("Window::Create %p %p %p (%p)", W->id, W->surface, W->gl, W);
+  windows[(W->id = hWnd)] = W;
+  INFOf("Application::CreateWindow %p %p %p (%p)", W->id, W->surface, W->gl, W);
   MakeCurrent(W);
   ShowWindow(hWnd, winapp->nCmdShow);
   app->scheduler.Wakeup(0);
   return true;
 }
-void Window::MakeCurrent(Window *W) { if (W) wglMakeCurrent((HDC)W->surface, (HGLRC)W->gl); }
-void Window::Close(Window *W) {
+void Application::MakeCurrentWindow(Window *W) { if (W) wglMakeCurrent((HDC)W->surface, (HGLRC)W->gl); }
+void Application::CloseWindow(Window *W) {
   delete (WinWindow*)W->impl;
-  Window::active.erase(W->id);
-  if (Window::active.empty()) app->run = false;
+  windows.erase(W->id);
+  if (windows.empty()) app->run = false;
   if (app->window_closed_cb) app->window_closed_cb(W);
   screen = 0;
 }
@@ -1953,14 +1952,14 @@ struct X11VideoModule : public Module {
     app->scheduler.AddWaitForeverSocket(app->scheduler.system_event_socket, SocketSet::READABLE, 0);
     SystemNetwork::SetSocketCloseOnExec(app->scheduler.system_event_socket, true);
     INFO("X11VideoModule::Init()");
-    return Window::Create(screen) ? 0 : -1;
+    return app->CreateWindow(screen) ? 0 : -1;
   }
   int Free() {
     XCloseDisplay(display);
     return 0;
   }
 };
-bool Window::Create(Window *W) {
+bool Application::CreateWindow(Window *W) {
   X11VideoModule *video = dynamic_cast<X11VideoModule*>(app->video->impl);
   ::Window root = DefaultRootWindow(video->display);
   XSetWindowAttributes swa;
@@ -1976,21 +1975,21 @@ bool Window::Create(Window *W) {
   XStoreName(video->display, win, W->caption.c_str());
   if (!(W->gl = glXCreateContext(video->display, video->vi, NULL, GL_TRUE))) return ERRORv(false, "glXCreateContext");
   W->surface = video->display;
-  Window::active[W->id] = W;
+  windows[W->id] = W;
   MakeCurrent(W);
   return true;
 }
-void Window::Close(Window *W) {
+void Application::CloseWindow(Window *W) {
   Display *display = static_cast<Display*>(W->surface);
   glXMakeCurrent(display, None, NULL);
   glXDestroyContext(display, static_cast<GLXContext>(W->gl));
   XDestroyWindow(display, reinterpret_cast<::Window>(W->id));
-  Window::active.erase(W->id);
-  if (Window::active.empty()) app->run = false;
+  windows.erase(W->id);
+  if (windows.empty()) app->run = false;
   if (app->window_closed_cb) app->window_closed_cb(W);
   screen = 0;
 }
-void Window::MakeCurrent(Window *W) {
+void Application::MakeCurrentWindow(Window *W) {
   glXMakeCurrent(static_cast<Display*>(W->surface), (::Window)(W->id), static_cast<GLXContext>(W->gl));
 }
 #endif // LFL_X11VIDEO
@@ -2007,18 +2006,18 @@ struct XTVideoModule : public Module {
     toplevel = XtOpenApplication(&xt_app, screen->caption.c_str(), NULL, 0, &argc, argv,
                                  NULL, applicationShellWidgetClass, NULL, 0);
     INFO("XTideoModule::Init()");
-    return Window::Create(screen) ? 0 : -1;
+    return app->CreateWindow(screen) ? 0 : -1;
   }
 };
-bool Window::Create(Window *W) {
+bool Application::CreateWindow(Window *W) {
   XTVideoModule *video = dynamic_cast<XTVideoModule*>(app->video->impl);
   W->surface = XtDisplay((::Widget)W->impl);
   W->id = XmCreateFrame(video->toplevel, "frame", NULL, 0);
   W->impl = video->toplevel;
   return true;
 }
-void Window::Close(Window *W) {}
-void Window::MakeCurrent(Window *W) {}
+void Application::CloseWindow(Window *W) {}
+void Application::MakeCurrentWindow(Window *W) {}
 #endif // LFL_XTVIDEO
 
 #ifdef LFL_QT
@@ -2028,7 +2027,7 @@ struct QTVideoModule : public Module {
     return 0;
   }
 };
-bool Window::Create(Window *W) {
+bool Application::CreateWindow(Window *W) {
   CHECK(!W->id && !W->gd);
   OpenGLES2 *gd = new OpenGLES2();
   QWindow *qwin = (QWindow*)gd;
@@ -2047,16 +2046,16 @@ bool Window::Create(Window *W) {
   W->id = qwin;
   W->gd = gd;
   W->impl = my_qwin;
-  Window::active[W->id] = W;
+  windows[W->id] = W;
   return true;
 }
-void Window::Close(Window *W) {
-  Window::active.erase(W->id);
-  if (Window::active.empty()) app->run = false;
+void Application::CloseWindow(Window *W) {
+  windows.erase(W->id);
+  if (windows.empty()) app->run = false;
   if (app->window_closed_cb) app->window_closed_cb(W);
   screen = 0;
 }
-void Window::MakeCurrent(Window *W) {
+void Application::MakeCurrentWindow(Window *W) {
   screen = W; 
   ((QOpenGLContext*)screen->gl)->makeCurrent((QWindow*)screen->id);
 }
@@ -2170,25 +2169,25 @@ namespace LFL {
 struct WxWidgetsVideoModule : public Module {
   int Init() {
     INFOf("WxWidgetsVideoModule::Init() %p", screen);
-    CHECK(Window::Create(screen));
+    CHECK(app->CreateWindow(screen));
     return 0;
   }
 };
-bool Window::Create(Window *W) {
-  if (!Window::active.empty()) W->gl = Window::active.begin()->second->gl;
+bool Application::CreateWindow(Window *W) {
+  if (!windows.empty()) W->gl = windows.begin()->second->gl;
   LFLWxWidgetCanvas *canvas = (new LFLWxWidgetFrame(W))->canvas;
-  if ((W->id = canvas)) Window::active[W->id] = W;
+  if ((W->id = canvas)) windows[W->id] = W;
   if (!W->gl) W->gl = canvas->context = new wxGLContext(canvas);
   MakeCurrent(W);
   return true; 
 }
-void Window::MakeCurrent(Window *W) { 
+void Application::MakeCurrentWindow(Window *W) { 
   LFLWxWidgetCanvas *canvas = (LFLWxWidgetCanvas*)W->id;
   canvas->SetCurrent(*canvas->context);
 }
-void Window::Close(Window *W) {
-  Window::active.erase(W->id);
-  if (Window::active.empty()) app->run = false;
+void Application::CloseWindow(Window *W) {
+  windows.erase(W->id);
+  if (windows.empty()) app->run = false;
   if (app->window_closed_cb) app->window_closed_cb(W);
   screen = 0;
 }
@@ -2201,8 +2200,8 @@ void Mouse::ReleaseFocus() {}
 struct GLFWVideoModule : public Module {
   int Init() {
     INFO("GLFWVideoModule::Init");
-    CHECK(Window::Create(screen));
-    Window::MakeCurrent(screen);
+    CHECK(app->CreateWindow(screen));
+    Application::MakeCurrentWindow(screen);
     glfwSwapInterval(1);
     return 0;
   }
@@ -2211,19 +2210,19 @@ struct GLFWVideoModule : public Module {
     return 0;
   }
 };
-bool Window::Create(Window *W) {
-  GLFWwindow *share = Window::active.empty() ? 0 : (GLFWwindow*)Window::active.begin()->second->id;
+bool Application::CreateWindow(Window *W) {
+  GLFWwindow *share = windows.empty() ? 0 : (GLFWwindow*)windows.begin()->second->id;
   if (!(W->id = glfwCreateWindow(W->width, W->height, W->caption.c_str(), 0, share))) { ERROR("glfwCreateWindow"); return false; }
-  Window::active[W->id] = W;
+  windows[W->id] = W;
   return true;
 }
-void Window::MakeCurrent(Window *W) {
+void Application::MakeCurrentWindow(Window *W) {
   glfwMakeContextCurrent((GLFWwindow*)W->id);
   screen = W;
 }
-void Window::Close(Window *W) {
-  Window::active.erase(W->id);
-  bool done = Window::active.empty();
+void Application::CloseWindow(Window *W) {
+  windows.erase(W->id);
+  bool done = windows.empty();
   if (done) app->shell.quit(vector<string>());
   if (!done) glfwDestroyWindow((GLFWwindow*)W->id);
   if (app->window_closed_cb) app->window_closed_cb(W);
@@ -2236,8 +2235,8 @@ void Window::Close(Window *W) {
 struct SDLVideoModule : public Module {
   int Init() {
     INFO("SFLVideoModule::Init");
-    CHECK(Window::Create(screen));
-    Window::MakeCurrent(screen);
+    CHECK(app->CreateWindow(screen));
+    app->MakeCurrentWindow(screen);
     SDL_GL_SetSwapInterval(1);
     return 0;
   }
@@ -2246,7 +2245,7 @@ struct SDLVideoModule : public Module {
     return 0;
   }
 };
-bool Window::Create(Window *W) {
+bool Application::CreateWindow(Window *W) {
   int createFlag = SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN;
 #if defined(LFL_IPHONE) || defined(LFL_ANDROID)
   createFlag |= SDL_WINDOW_BORDERLESS;
@@ -2263,24 +2262,24 @@ bool Window::Create(Window *W) {
   if (!(W->id = SDL_CreateWindow(W->caption.c_str(), SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, W->width, W->height, createFlag)))
   { ERROR("SDL_CreateWindow: ",     SDL_GetError()); return false; }
 
-  if (!Window::active.empty()) W->gl = Window::active.begin()->second->gl;
+  if (!windows.empty()) W->gl = windows.begin()->second->gl;
   else if (!(W->gl = SDL_GL_CreateContext((SDL_Window*)W->id)))
   { ERROR("SDL_GL_CreateContext: ", SDL_GetError()); return false; } 
 
   SDL_Surface* icon = SDL_LoadBMP(StrCat(app->assetdir, "icon.bmp").c_str());
   SDL_SetWindowIcon((SDL_Window*)W->id, icon);
 
-  Window::active[(void*)(long)SDL_GetWindowID((SDL_Window*)W->id)] = W;
+  windows[(void*)(long)SDL_GetWindowID((SDL_Window*)W->id)] = W;
   return true;
 }
-void Window::MakeCurrent(Window *W) {
+void Application::MakeCurrentWindow(Window *W) {
   if (SDL_GL_MakeCurrent((SDL_Window*)W->id, W->gl) < 0) ERROR("SDL_GL_MakeCurrent: ", SDL_GetError());
   screen = W; 
 }
-void Window::Close(Window *W) {
+void Application::CloseWindow(Window *W) {
   SDL_GL_MakeCurrent(NULL, NULL);
-  Window::active.erase((void*)(long)SDL_GetWindowID((SDL_Window*)W->id));
-  if (Window::active.empty()) {
+  windows.erase((void*)(long)SDL_GetWindowID((SDL_Window*)W->id));
+  if (windows.empty()) {
     app->run = false;
     SDL_GL_DeleteContext(W->gl);
   }
@@ -2309,8 +2308,6 @@ Window::~Window() {
   }
   delete cam;
 }
-
-Window *Window::Get(void *id) { return FindOrNull(Window::active, id); }
 
 Box Window::Box(float xp, float yp, float xs, float ys, float xbl, float ybt, float xbr, float ybb) const {
   if (isinf(xbr)) xbr = xbl;
@@ -2416,7 +2413,7 @@ void Window::Reshape(int w, int h) {
   XConfigureWindow(video->display, (::Window)screen->id, CWWidth|CWHeight, &resize);
 #elif defined(LFL_QT)
   ((QWindow*)id)->resize(w, h);
-  Window::MakeCurrent(screen);
+  app->MakeCurrentWindow(screen);
 #elif defined(LFL_WXWIDGETS)
   ((wxGLCanvas*)screen->id)->SetSize(w, h);
 #elif defined(LFL_GLFWVIDEO)
@@ -2451,7 +2448,7 @@ void Window::SwapAxis() {
 }
 
 int Window::Frame(unsigned clicks, int flag) {
-  if (screen != this) Window::MakeCurrent(this);
+  if (screen != this) app->MakeCurrentWindow(this);
 
   if (FLAGS_lfapp_video) {
     if (!frame_init && (frame_init = true))  {
@@ -2682,8 +2679,8 @@ int Video::Swap() {
 
 int Video::Free() {
   vector<Window*> close_list;
-  for (auto &i : Window::active) close_list.push_back(i.second);
-  for (auto &i : close_list)     Window::Close(i);
+  for (auto &i : app->windows) close_list.push_back(i.second);
+  for (auto &i : close_list)   app->CloseWindow(i);
 
   if (impl) impl->Free();
   Fonts::DefaultFontEngine()->Shutdown();

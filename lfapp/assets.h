@@ -148,8 +148,6 @@ struct Asset {
   static string FileName(const string &asset_fn);
   static string FileContents(const string &asset_fn);
   static File *OpenFile(const string &asset_fn);
-  static unordered_map<string, StringPiece> cache;
-
   static void Copy(const Asset *in, Asset *out) {
     string name = out->name;
     unsigned typeID = out->typeID;

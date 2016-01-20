@@ -217,7 +217,7 @@ struct Listener {
   Service *svc;
   Socket socket;
   typed_ptr self_reference;
-  Listener(Service *s, bool ssl=false) : svc(s), ssl((BIO*)ssl), socket(-1), self_reference(TypePointer(this)) {}
+  Listener(Service *s, bool ssl=false) : svc(s), ssl((BIO*)ssl), socket(-1), self_reference(this) {}
 };
 
 struct Connection {
@@ -248,10 +248,10 @@ struct Connection {
   Callback *detach;
 
   ~Connection() { delete handler; }
-  Connection(Service *s, Handler *h,                                     Callback *Detach=0) : svc(s), socket(-1),   ct(Now()), rt(Now()), wt(Now()), addr(0),    detach(Detach), state(Error), port(0),    rb(65536), wb(65536), self_reference(TypePointer(this)), handler(h) {}
-  Connection(Service *s, int State, int Sock,                            Callback *Detach=0) : svc(s), socket(Sock), ct(Now()), rt(Now()), wt(Now()), addr(0),    detach(Detach), state(State), port(0),    rb(65536), wb(65536), self_reference(TypePointer(this)), handler(0) {}
-  Connection(Service *s, int State, int Sock, IPV4::Addr Addr, int Port, Callback *Detach=0) : svc(s), socket(Sock), ct(Now()), rt(Now()), wt(Now()), addr(Addr), detach(Detach), state(State), port(Port), rb(65536), wb(65536), self_reference(TypePointer(this)), handler(0) {}
-  Connection(Service *s, int State,           IPV4::Addr Addr, int Port, Callback *Detach=0) : svc(s), socket(-1),   ct(Now()), rt(Now()), wt(Now()), addr(Addr), detach(Detach), state(State), port(Port), rb(65536), wb(65536), self_reference(TypePointer(this)), handler(0) {}
+  Connection(Service *s, Handler *h,                                     Callback *Detach=0) : svc(s), socket(-1),   ct(Now()), rt(Now()), wt(Now()), addr(0),    detach(Detach), state(Error), port(0),    rb(65536), wb(65536), self_reference(this), handler(h) {}
+  Connection(Service *s, int State, int Sock,                            Callback *Detach=0) : svc(s), socket(Sock), ct(Now()), rt(Now()), wt(Now()), addr(0),    detach(Detach), state(State), port(0),    rb(65536), wb(65536), self_reference(this), handler(0) {}
+  Connection(Service *s, int State, int Sock, IPV4::Addr Addr, int Port, Callback *Detach=0) : svc(s), socket(Sock), ct(Now()), rt(Now()), wt(Now()), addr(Addr), detach(Detach), state(State), port(Port), rb(65536), wb(65536), self_reference(this), handler(0) {}
+  Connection(Service *s, int State,           IPV4::Addr Addr, int Port, Callback *Detach=0) : svc(s), socket(-1),   ct(Now()), rt(Now()), wt(Now()), addr(Addr), detach(Detach), state(State), port(Port), rb(65536), wb(65536), self_reference(this), handler(0) {}
 
   string Name() const { return !endpoint_name.empty() ? endpoint_name : IPV4::Text(addr, port); }
   void SetError() { state = Error; ct = Now(); }
@@ -558,7 +558,7 @@ struct SSHClient : public Service {
   Connection *Open(const string &hostport, const ResponseCB &cb, Callback *detach=0);
 
   static void SetUser(Connection *c, const string &user);
-  static void SetPasswordCB(Connection *c, const Vault::LoadPasswordCB&, const Vault::SavePasswordCB&);
+  static void SetPasswordCB(Connection *c, const LoadPasswordCB&, const SavePasswordCB&);
   static int SetTerminalWindowSize(Connection *c, int w, int h);
   static int WriteChannelData(Connection *c, const StringPiece &b);
 };

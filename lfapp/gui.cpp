@@ -29,7 +29,6 @@
 
 #ifdef LFL_LIBCLANG
 #include "clang-c/Index.h"
-static string GetClangString(const CXString &s) { string ret=LFL::BlankNull(clang_getCString(s)); clang_disposeString(s); return ret; }
 #endif
 
 namespace LFL {
@@ -756,7 +755,7 @@ void TextArea::DragCB(int, int, int, int down) {
 
 void TextArea::CopyText(const Selection::Point &beg, const Selection::Point &end) {
   string copy_text = CopyText(beg.line_ind, beg.char_ind, end.line_ind, end.char_ind, true);
-  if (!copy_text.empty()) Clipboard::Set(copy_text);
+  if (!copy_text.empty()) app->SetClipboardText(copy_text);
 }
 
 string TextArea::CopyText(int beg_line_ind, int beg_char_ind, int end_line_ind, int end_char_ind, bool add_nl) {
@@ -787,7 +786,7 @@ string TextArea::CopyText(int beg_line_ind, int beg_char_ind, int end_line_ind, 
 
 /* Editor */
 
-Editor::Editor(Window *W, Font *F, File *I, bool Wrap) : TextArea(W, F), file(I) {
+Editor::Editor(Window *W, Font *F, File *I, bool Wrap) : TextArea(W, F), file(I), cursor_line(&line[-1]) {
   reverse_line_fb = 1;
   opened = file && file->Opened();
   cmd_color = Color(Color::black, .5);
@@ -927,102 +926,73 @@ int Editor::UpdateLines(float vs, int *first_ind, int *first_offset, int *first_
 
   last_fb_lines = fb->lines;
   last_first_line = new_first_line;
-  UpdateCursor();
   UpdateCursorLine();
+  UpdateCursor();
   return dist * (up ? -1 : 1);
 }
 
-void Editor::UpdateCursor() {
-  cursor.i.y = min(cursor.i.y, line_fb.lines-1);
-  cursor.i.x = min(cursor.i.x, GetCursorLine()->Size());
-  cursor.p = GetCursorLine()->data->glyphs.Position(cursor.i.x) + point(0, line_fb.Height() - cursor.i.y*font->Height());
+void Editor::UpdateCursorLine() {
+  cursor.i.y = min(cursor.i.y, line.Size()-1);
+  cursor_line = &line[-1-cursor.i.y];
+  cursor_line_number = last_first_line + start_line_adjust;
+  if (!Wrap()) cursor_line_number += cursor.i.y;
+  else for (int i=0; i<cursor.i.y; i++) cursor_line_number += line[-1-i].Lines();
+  cursor_line_number_offset = cursor_line_number - last_first_line;
+  cursor_offset = file_line.LesserBound(cursor_line_number).val;
 }
 
-#ifdef LFL_LIBCLANG
-struct ClangTokenVisitor {
-  typedef function<void(ClangTokenVisitor*, int, int, int)> TokenCB;
-  string filename, compile_command, working_directory;
-  point last_token;
-  TokenCB cb;
-  ClangTokenVisitor(const string &f, const string &cc, const string &wd, const TokenCB &c) :
-    filename(f), compile_command(cc), working_directory(wd), cb(c) {}
+void Editor::UpdateCursor() {
+  cursor.p = cursor_line->data->glyphs.Position(cursor.i.x) +
+    point(0, line_fb.Height() - cursor_line_number_offset * font->Height());
+}
 
-  void Visit() {
-    vector<string> argv;
-    vector<const char*> av = { "-xc++", "-std=c++11" };
-    Split(compile_command, isspace, &argv);
-    for (int i=1; i<(int)argv.size()-4; i++) if (!PrefixMatch(argv[i], "-O") && !PrefixMatch(argv[i], "-m")) av.push_back(argv[i].data());
-    chdir(working_directory.c_str());
-    CXIndex index = clang_createIndex(0, 0);
-    CXTranslationUnit tu = clang_parseTranslationUnit(index, filename.c_str(), av.data(), av.size(), 0, 0, CXTranslationUnit_None);
+void Editor::UpdateCursorX(int x) {
+  cursor.i.x = min(x, CursorLineSize());
+  if (!Wrap()) return UpdateCursor();
+  int wl = cursor_line_number_offset + cursor_line->data->glyphs.GetLineFromIndex(x);
+  if (wl >= line_fb.lines) { AddVScroll(wl-line_fb.lines+1); cursor.i=point(x, line.Size()-1); UpdateCursorLine(); }
+  UpdateCursor();
+}
 
-    CXToken* tokens=0;
-    unsigned num_tokens=0, by=0, bx=0, ey=0, ex=0;
-    CXFile cf = clang_getFile(tu, filename.c_str());
-    CXSourceRange sr = clang_getRange(clang_getLocationForOffset(tu, cf, 0),
-                                      clang_getLocationForOffset(tu, cf, LocalFile(filename, "r").Size()));
-    clang_tokenize(tu, sr, &tokens, &num_tokens);
-    for (int i = 0; i < num_tokens; i++) {
-      sr = clang_getTokenExtent(tu, tokens[i]);
-      clang_getSpellingLocation(clang_getRangeStart(sr), NULL, &by, &bx, NULL);
-      clang_getSpellingLocation(clang_getRangeEnd  (sr), NULL, &ey, &ex, NULL);
+int Editor::ModifyCursorLine() {
+  CHECK(cursor_offset);
+  if (cursor_offset->size >= 0) cursor_offset->size = -edits.Insert(cursor_line->Text16())-1;
+  return -cursor_offset->size-1;
+}
 
-      if (1)                  CHECK_LE(last_token.y, (int)by);
-      if (by == last_token.y) CHECK_LT(last_token.x, (int)bx);
-      cb(this, clang_getTokenKind(tokens[i]), by, bx);
-      last_token = point(bx, by);
-    }
-
-    clang_disposeTranslationUnit(tu);
-    clang_disposeIndex(index);
+void Editor::HistUp() {
+  if (cursor.i.y > 0) { if (!--cursor.i.y && start_line_adjust) return AddVScroll(start_line_adjust); }
+  else if (start_line_adjust) return AddVScroll(start_line_adjust);
+  else {
+    cursor.i.y = 0;
+    LineOffset *lo = 0;
+    if (Wrap()) lo = (--file_line.LesserBound(cursor_line_number-1)).val;
+    return AddVScroll(lo ? -lo->wrapped_lines : -1);
   }
-};
-#endif
+  UpdateCursorLine();
+  UpdateCursor();
+}
 
-void Editor::UpdateAnnotation() {
-#ifdef LFL_LIBCLANG
-  if (!project) return;
-  string filename = file->Filename();
-  auto rule = project->build_rules.find(filename);
-  bool have_rule = rule != project->build_rules.end();
-
-  int fl_ind = 1;
-  auto fl = file_line.Begin();
-  LineOffset *file_line_data = 0;
-  ClangTokenVisitor(filename, have_rule ? rule->second.cmd : "", have_rule ? rule->second.dir : "", ClangTokenVisitor::TokenCB([&]
-    (ClangTokenVisitor *v, int kind, int line, int column) {
-      int a = default_attr;
-      switch (kind) {
-        case CXToken_Punctuation:                                     break;
-        case CXToken_Keyword:     Attr::SetFGColorIndex(&a, 5);       break;
-        case CXToken_Identifier:  Attr::SetFGColorIndex(&a, 13);      break;
-        case CXToken_Literal:     Attr::SetFGColorIndex(&a, 1);       break;
-        case CXToken_Comment:     Attr::SetFGColorIndex(&a, 6);       break;
-        default:                  ERROR("unknown token kind ", kind); break;
-      }
-      if (line != v->last_token.y) {
-        if (v->last_token.y+1 < line && a != default_attr) PushBack(annotation, {0, a});
-        if (fl_ind < line)
-          for (++fl_ind, ++fl; fl.ind && fl_ind < line; ++fl_ind, ++fl) fl.val->annotation = PieceIndex(annotation.size()-1, 1);
-        if (!fl.ind) return;
-        (file_line_data = fl.val)->annotation.offset = annotation.size();
-      }
-      annotation.emplace_back(column-1, a);
-      file_line_data->annotation.len++;
-    })).Visit();
-#endif
+void Editor::HistDown() {
+  bool last=0;
+  if (cursor_line_number_offset + cursor_line->Lines() < line_fb.lines) last = ++cursor.i.y >= line.Size()-1;
+  else { AddVScroll(end_line_cutoff ? end_line_cutoff+1 : 1); cursor.i.y=line.Size()-1; last=1; }
+  UpdateCursorLine();
+  UpdateCursor();
+  if (last) UpdateCursorX(cursor.i.x);
 }
 
 void Editor::Modify(bool erase, int c) {
-  Line *L = GetCursorLine();
-  if (!L || !cursor_line) return;
+  Line *L = cursor_line;
+  if (!L || !cursor_offset) return;
   int edit_id = ModifyCursorLine();
   String16 *b = &edits[edit_id];
   CHECK_LE(cursor.i.x, L->Size());
   CHECK_LE(cursor.i.x, b->size());
+  CHECK_EQ(cursor_offset->wrapped_lines, L->Lines());
   if (erase && !cursor.i.x) {
     if (!cursor.i.y) return;
-    file_line.Erase(CursorLineNumber());
+    file_line.Erase(cursor_line_number);
     AddWrappedLines(-L->Lines());
     HistUp();
     *(b = &edits[ModifyCursorLine()]) += edits[edit_id];
@@ -1032,7 +1002,7 @@ void Editor::Modify(bool erase, int c) {
     return Redraw(true);
   } else if (!erase && c == '\r') {
     if (cursor.i.y == line_fb.lines-1) return;
-    file_line.Insert(CursorLineNumber()+1, LineOffset());
+    file_line.Insert(cursor_line_number+1, LineOffset());
     AddWrappedLines(1);
     int x = cursor.i.x;
     cursor.i.x = 0;
@@ -1052,12 +1022,7 @@ void Editor::Modify(bool erase, int c) {
   if (erase)  CursorLeft();
   else        CursorRight();
   UpdateLineFB(L, GetFrameBuffer(), wrapped ? LinesFrameBuffer::Flag::Flush : 0);
-}
-
-int Editor::ModifyCursorLine() {
-  CHECK(cursor_line);
-  if (cursor_line->size >= 0) cursor_line->size = -edits.Insert(GetCursorLine()->Text16())-1;
-  return -cursor_line->size-1;
+  if (wrapped) if (int d = ChangedDiff(&cursor_offset->wrapped_lines, L->Lines())) { AddWrappedLines(d); return Redraw(true); }
 }
 
 int Editor::Save() {
@@ -1069,6 +1034,47 @@ int Editor::Save() {
   Reload();
   Redraw(true);
   return ret;
+}
+ 
+void Editor::GoToDefinition(const point &p) {
+  if (!project || !ide_file) return;
+  printf("GoToDefinition: %s\n", p.DebugString().c_str());
+}
+
+void Editor::UpdateAnnotation() {
+#ifdef LFL_LIBCLANG
+  if (!project) return;
+  int fl_ind = 1;
+  auto fl = file_line.Begin();
+  LineOffset *file_line_data = 0;
+  string filename = file->Filename();
+  auto rule = project->build_rules.find(filename);
+  bool have_rule = rule != project->build_rules.end();
+  ide_file = make_unique<IDE::File>(filename, have_rule?rule->second.cmd:"", have_rule?rule->second.dir:"");
+
+  ClangTokenVisitor(&ide_file.get()->tu, ClangTokenVisitor::TokenCB([&]
+    (ClangTokenVisitor *v, int kind, int line, int column) {
+      int a = default_attr;
+      switch (kind) {
+        case CXToken_Punctuation:                                     break;
+        case CXToken_Keyword:     Attr::SetFGColorIndex(&a, 5);       break;
+        case CXToken_Identifier:  Attr::SetFGColorIndex(&a, 13);      break;
+        case CXToken_Literal:     Attr::SetFGColorIndex(&a, 1);       break;
+        case CXToken_Comment:     Attr::SetFGColorIndex(&a, 6);       break;
+        default:                  ERROR("unknown token kind ", kind); break;
+      }
+      if (line != v->last_token.y) {
+        if (v->last_token.y+1 < line && a != default_attr) PushBack(annotation, {0, a});
+        if (fl_ind < line)
+          for (++fl_ind, ++fl; fl.ind && fl_ind < line; ++fl_ind, ++fl)
+            fl.val->annotation = PieceIndex(annotation.size()-1, 1);
+        if (!fl.ind) return;
+        (file_line_data = fl.val)->annotation.offset = annotation.size();
+      }
+      annotation.emplace_back(column-1, a);
+      file_line_data->annotation.len++;
+    })).Visit();
+#endif
 }
 
 /* Terminal */
@@ -1697,7 +1703,7 @@ void EditorDialog::Draw() {
 
 #ifdef LFL_QT
 void Dialog::MessageBox(const string &n) {
-  Mouse::ReleaseFocus();
+  app->ReleaseMouseFocus();
   QMessageBox *msg = new QMessageBox();
   msg->setAttribute(Qt::WA_DeleteOnClose);
   msg->setText("MesssageBox");
@@ -1710,11 +1716,11 @@ void Dialog::TextureBox(const string &n) {}
 #else /* LFL_QT */
 
 void Dialog::MessageBox(const string &n) {
-  Mouse::ReleaseFocus();
+  app->ReleaseMouseFocus();
   screen->AddDialog(new MessageBoxDialog(n));
 }
 void Dialog::TextureBox(const string &n) {
-  Mouse::ReleaseFocus();
+  app->ReleaseMouseFocus();
   screen->AddDialog(new TextureBoxDialog(n));
 }
 #endif /* LFL_QT */

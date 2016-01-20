@@ -920,19 +920,15 @@ int Network::Shutdown(Service *svc) {
 }
 
 int Network::Frame(unsigned clicks) {
-  static const int listener_type = TypeId<Listener>(), connection_type = TypeId<Connection>();
+  if (active.Select(select_time)) return ERRORv(-1, "SocketSet.select: ", SystemNetwork::LastError());
   ServiceEndpointEraseList removelist;
-
-  /* select */
-  if (active.Select(select_time))
-    return ERRORv(-1, "SocketSet.select: ", SystemNetwork::LastError());
 
 #ifndef LFL_NETWORK_MONOLITHIC_FRAME
   /* iterate events */
   for (active.cur_event = 0; active.cur_event < active.num_events; active.cur_event++) {
-    typed_ptr *tp = (typed_ptr*)active.events[active.cur_event].data.ptr;
-    if      (tp->type == connection_type) { Connection *c=(Connection*)tp->value; active.cur_fd = c->socket; TCPConnectionFrame(c->svc, c, &removelist); }
-    else if (tp->type == listener_type)   { Listener   *l=(Listener*)  tp->value; active.cur_fd = l->socket; AcceptFrame(l->svc, l); }
+    typed_ptr *tp = reinterpret_cast<typed_ptr*>(active.events[active.cur_event].data.ptr);
+    if      (auto c = tp->Get<Connection>()) { active.cur_fd = c->socket; TCPConnectionFrame(c->svc, c, &removelist); }
+    else if (auto l = tp->Get<Listener  >()) { active.cur_fd = l->socket; AcceptFrame(l->svc, l); }
     else FATAL("unknown type", tp->type);
   }
 #endif
@@ -1842,8 +1838,8 @@ struct SSHClientConnection : public Connection::Handler {
   enum { INIT=0, FIRST_KEXINIT=1, FIRST_KEXREPLY=2, FIRST_NEWKEYS=3, KEXINIT=4, KEXREPLY=5, NEWKEYS=6 };
 
   SSHClient::ResponseCB cb;
-  Vault::LoadPasswordCB load_password_cb;
-  Vault::SavePasswordCB save_password_cb;
+  LoadPasswordCB load_password_cb;
+  SavePasswordCB save_password_cb;
   string V_C, V_S, KEXINIT_C, KEXINIT_S, H_text, session_id, integrity_c2s, integrity_s2c, decrypt_buf, host, user, pw;
   int state=0, packet_len=0, packet_MAC_len=0, MAC_len_c=0, MAC_len_s=0, encrypt_block_size=0, decrypt_block_size=0;
   unsigned sequence_number_c2s=0, sequence_number_s2c=0, password_prompts=0, userauth_fail=0;
@@ -2205,7 +2201,7 @@ struct SSHClientConnection : public Connection::Handler {
   }
 
   void ClearPassword() { pw.assign(pw.size(), ' '); pw.clear(); }
-  void SetPasswordCB(const Vault::LoadPasswordCB &L, const Vault::SavePasswordCB &S) { load_password_cb=L; save_password_cb=S; }
+  void SetPasswordCB(const LoadPasswordCB &L, const SavePasswordCB &S) { load_password_cb=L; save_password_cb=S; }
   int SetTerminalWindowSize(Connection *c, int w, int h) {
     term_width = w;
     term_height = h;
@@ -2223,10 +2219,10 @@ Connection *SSHClient::Open(const string &hostport, const SSHClient::ResponseCB 
   c->handler = new SSHClientConnection(cb, hostport);
   return c;
 }
-int  SSHClient::WriteChannelData     (Connection *c, const StringPiece &b)                            { return dynamic_cast<SSHClientConnection*>(c->handler)->WriteChannelData(c, b); }
-int  SSHClient::SetTerminalWindowSize(Connection *c, int w, int h)                                    { return dynamic_cast<SSHClientConnection*>(c->handler)->SetTerminalWindowSize(c, w, h); }
-void SSHClient::SetUser              (Connection *c, const string &user)                                     { dynamic_cast<SSHClientConnection*>(c->handler)->user = user; }
-void SSHClient::SetPasswordCB(Connection *c, const Vault::LoadPasswordCB &L, const Vault::SavePasswordCB &S) { dynamic_cast<SSHClientConnection*>(c->handler)->SetPasswordCB(L, S); }
+int  SSHClient::WriteChannelData     (Connection *c, const StringPiece &b)                     { return dynamic_cast<SSHClientConnection*>(c->handler)->WriteChannelData(c, b); }
+int  SSHClient::SetTerminalWindowSize(Connection *c, int w, int h)                             { return dynamic_cast<SSHClientConnection*>(c->handler)->SetTerminalWindowSize(c, w, h); }
+void SSHClient::SetUser              (Connection *c, const string &user)                       { dynamic_cast<SSHClientConnection*>(c->handler)->user = user; }
+void SSHClient::SetPasswordCB(Connection *c, const LoadPasswordCB &L, const SavePasswordCB &S) { dynamic_cast<SSHClientConnection*>(c->handler)->SetPasswordCB(L, S); }
 
 struct SMTPClientConnection : public Connection::Handler {
   enum { INIT=0, SENT_HELO=1, READY=2, MAIL_FROM=3, RCPT_TO=4, SENT_DATA=5, SENDING=6, RESETING=7, QUITING=8 };

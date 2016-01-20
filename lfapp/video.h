@@ -529,6 +529,7 @@ struct GraphicsDevice : public QOpenGLFunctions {
   void DisableBlend();
   void BlendMode(int sm, int tm);
   void RestoreViewport(int drawmode);
+  void TranslateRotateTranslate(float a, const Box&);
   void DrawMode(int drawmode, bool flush=1);
   void DrawMode(int drawmode, int W, int H, bool flush=1);
   void EnableLayering() { DisableDepthTest(); DisableLighting(); EnableBlend(); EnableTexture(); }
@@ -557,6 +558,8 @@ extern Window *screen;
 struct Window : public NativeWindow {
   typedef function<void(Window*)> StartCB;
   typedef function<int(Window*, unsigned, int)> FrameCB;
+  typedef unordered_map<void*, Window*> Map;
+
   GraphicsDevice *gd=0;
   point mouse, mouse_wheel;
   string caption;
@@ -582,7 +585,6 @@ struct Window : public NativeWindow {
   void SetTransparency(float v);
   void Reshape(int w, int h);
   void Reshaped(int w, int h);
-  void Closed()      { Window::Close(this); }
   void Minimized()   { minimized=1; }
   void UnMinimized() { minimized=0; }
   void ResetGL();
@@ -602,14 +604,6 @@ struct Window : public NativeWindow {
   LFL::Box Box() const { return LFL::Box(0, 0, width, height); }
   LFL::Box Box(float xs, float ys) const { return LFL::Box(0, 0, width*xs, height*ys); }
   LFL::Box Box(float xp, float yp, float xs, float ys, float xbl=0, float ybt=0, float xbr=-INFINITY, float ybb=-INFINITY) const;
-
-  typedef unordered_map<void*, Window*> WindowMap;
-  static WindowMap active;
-  static Window *Get() { return screen; }
-  static Window *Get(void *id);
-  static bool Create(Window *W);
-  static void Close(Window *W);
-  static void MakeCurrent(Window *W);
 };
 
 struct Scissor {

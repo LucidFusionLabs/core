@@ -18,7 +18,7 @@ The key implementation files are:
 * **[editor](http://lucidfusionlabs.com/editor)**:          LEditor, a text editor and IDE
 * **[browser](http://lucidfusionlabs.com/browser)**:        LBrowser, a HTML4/CSS2 web browser with V8 javascript
 * **[chess](http://lucidfusionlabs.com/chess)**:            LChess, a magic bitboard chess engine and FICS client
-* **[quake](http://lucidfusionlabs.com/quake)**:            LQuake, a quake clone
+* **[quake](http://github.com/LucidFusionLabs/quake)**:     LQuake, a quake clone
 * **[spaceball](http://spaceballfuture.com)**:              Spaceball Future, a multiplayer 3d game
 * **[fs](http://lucidfusionlabs.com/fs)**:                  Fusion Sensor, a speech and image recognition client/server
 

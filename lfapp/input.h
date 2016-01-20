@@ -45,8 +45,6 @@ struct Mouse {
       case 2: return Button::_2;
     } return 0;
   }
-  static void GrabFocus();
-  static void ReleaseFocus();
 };
 
 struct InputController {

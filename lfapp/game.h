@@ -983,8 +983,8 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
     Sniffer::GetBroadcastAddress(&broadcast_ip);
   }
 
-  void Activate  () { active=1; topbar.active=1; selected=last_selected=0; app->shell.mouseout(vector<string>()); Advertising::HideAds(); }
-  void Deactivate() { active=0; topbar.active=0; UpdateSettings(); tab3_player_name.Deactivate(); Advertising::ShowAds(); }
+  void Activate  () { active=1; topbar.active=1; selected=last_selected=0; app->shell.mouseout(vector<string>()); app->HideAds(); }
+  void Deactivate() { active=0; topbar.active=0; UpdateSettings(); tab3_player_name.Deactivate(); app->ShowAds(); }
   bool DecayBoxIfMatch(int l1, int l2) { if (l1 != l2) return 0; decay_box_line = l1; decay_box_left = 10; return 1; }
   void UpdateSettings() {
     app->shell.Run(StrCat("name ", String::ToUTF8(tab3_player_name.Text16())));
@@ -1119,7 +1119,7 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
 
           menuflow.AppendText("\n[ add server ]");
           if (DecayBoxIfMatch(line_clicked, menuflow.out->line.size())) {
-            TouchDevice::OpenKeyboard();
+            app->OpenTouchKeyboard();
             tab2_server_address.Activate();
           }
 
@@ -1153,7 +1153,7 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
 #endif
       menuflow.AppendText("\nPlayer Name:");
       if (DecayBoxIfMatch(line_clicked, menuflow.out->line.size())) {
-        TouchDevice::OpenKeyboard();
+        app->OpenTouchKeyboard();
         tab3_player_name.Activate();
       }
       menuflow.AppendRow(.6, .4, &b);

@@ -27,29 +27,29 @@
 #endif
 
 @interface MyThread : NSObject {}
-    @property int (*CB)(void*);
-    @property void *arg;
+  @property int (*CB)(void*);
+  @property void *arg;
 @end
 
 @implementation MyThread
-    - (void) myMain { _CB(_arg); }
+  - (void) myMain { _CB(_arg); }
 @end
 
 extern "C" void NativeThreadStart(int (*CB)(void *), void *arg) {
-    MyThread *thread = [MyThread alloc];
-    [thread setCB:  CB];
-    [thread setArg: arg];
-    [NSThread detachNewThreadSelector:@selector(myMain) toTarget:thread withObject:nil];
+  MyThread *thread = [MyThread alloc];
+  [thread setCB:  CB];
+  [thread setArg: arg];
+  [NSThread detachNewThreadSelector:@selector(myMain) toTarget:thread withObject:nil];
 }
 
 extern "C" void ConvertColorFromGenericToDeviceRGB(const float *i, float *o) {
 #ifdef LFL_IPHONE
 #else
-    double ib[4], ob[4], *ii = ib, *oi = ob;
-    for (auto e = i + 4; i != e; ) *ii++ = *i++;
-    NSColor *gen_color = [NSColor colorWithColorSpace:[NSColorSpace genericRGBColorSpace] components:ib count:4];
-    NSColor *dev_color = [gen_color colorUsingColorSpaceName:NSDeviceRGBColorSpace];
-    [dev_color getComponents: ob];
-    for (auto e = o + 4; o != e; ) *o++ = *oi++;
+  double ib[4], ob[4], *ii = ib, *oi = ob;
+  for (auto e = i + 4; i != e; ) *ii++ = *i++;
+  NSColor *gen_color = [NSColor colorWithColorSpace:[NSColorSpace genericRGBColorSpace] components:ib count:4];
+  NSColor *dev_color = [gen_color colorUsingColorSpaceName:NSDeviceRGBColorSpace];
+  [dev_color getComponents: ob];
+  for (auto e = o + 4; o != e; ) *o++ = *oi++;
 #endif
 }

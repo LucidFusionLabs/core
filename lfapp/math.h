@@ -57,6 +57,7 @@ template <class X> static bool Max(X *a, X b) { if (b <= *a) return 0; *a = b; r
 template <class X> static bool Within(X x, X a, X b) { return x >= a && x <= b; }
 template <class X> static bool Changed     (X* p, const X& r) { bool ret = *p != r;       if (ret) *p = r; return ret; }
 template <class X> static bool EqualChanged(X* p, const X& r) { bool ret = !Equal(*p, r); if (ret) *p = r; return ret; }
+template <class X> static X    ChangedDiff (X* p, const X& r) { X ret = r - *p;           if (ret) *p = r; return ret; }
 template <class X> static void MinusPlus(X *m, X* p, X v) { *m -= v; *p += v; }
 
 template <class X> struct V2 {

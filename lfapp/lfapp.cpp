@@ -116,6 +116,7 @@ extern "C" void OSXStartWindow(void*);
 extern "C" void OSXCreateNativeEditMenu();
 extern "C" void OSXCreateNativeMenu(const char*, int, const char**, const char**, const char**);
 extern "C" void OSXLaunchNativeFontChooser(const char *, int, const char *);
+extern "C" void OSXLaunchNativeContextMenu(void*, int, int, int, const char**, const char**, const char**);
 extern "C" void OSXTriggerFrame(void*);
 extern "C" bool OSXTriggerFrameIn(void*, int ms, bool force);
 extern "C" void OSXClearTriggerFrameIn(void *O);
@@ -142,11 +143,11 @@ extern "C" void LFAppShutdown()                   { LFL::app->run=0; LFAppWakeup
 extern "C" void WindowReshaped(int w, int h)      { LFL::screen->Reshaped(w, h); }
 extern "C" void WindowMinimized()                 { LFL::screen->Minimized(); }
 extern "C" void WindowUnMinimized()               { LFL::screen->UnMinimized(); }
-extern "C" void WindowClosed()                    { LFL::screen->Closed(); }
+extern "C" void WindowClosed()                    { LFL::app->CloseWindow(LFL::screen); }
 extern "C" void QueueWindowReshaped(int w, int h) { LFL::RunInMainThread(new LFL::Callback(bind(&LFL::Window::Reshaped,    LFL::screen, w, h))); }
 extern "C" void QueueWindowMinimized()            { LFL::RunInMainThread(new LFL::Callback(bind(&LFL::Window::Minimized,   LFL::screen))); }
 extern "C" void QueueWindowUnMinimized()          { LFL::RunInMainThread(new LFL::Callback(bind(&LFL::Window::UnMinimized, LFL::screen))); }
-extern "C" void QueueWindowClosed()               { LFL::RunInMainThread(new LFL::Callback(bind(&LFL::Window::Closed,      LFL::screen))); }
+extern "C" void QueueWindowClosed()               { LFL::RunInMainThread(new LFL::Callback(bind([=](){ LFL::app->CloseWindow(LFL::screen); }))); }
 extern "C" int  KeyPress  (int b, int d)                    { return LFL::app->input->KeyPress  (b, d); }
 extern "C" int  MouseClick(int b, int d, int x,  int y)     { return LFL::app->input->MouseClick(b, d, LFL::point(x, y)); }
 extern "C" int  MouseMove (int x, int y, int dx, int dy)    { return LFL::app->input->MouseMove (LFL::point(x, y), LFL::point(dx, dy)); }
@@ -154,11 +155,11 @@ extern "C" void QueueKeyPress  (int b, int d)               { return LFL::app->i
 extern "C" void QueueMouseClick(int b, int d, int x, int y) { return LFL::app->input->QueueMouseClick(b, d, LFL::point(x, y)); }
 extern "C" void EndpointRead(void *svc, const char *name, const char *buf, int len) { LFL::app->network->EndpointRead((LFL::Service*)svc, name, buf, len); }
 
-extern "C" NativeWindow *SetNativeWindowByID(void *id) { return SetNativeWindow(LFL::FindOrNull(LFL::Window::active, id)); }
+extern "C" NativeWindow *SetNativeWindowByID(void *id) { return SetNativeWindow(LFL::FindOrNull(LFL::app->windows, id)); }
 extern "C" NativeWindow *SetNativeWindow(NativeWindow *W) {
   CHECK(W);
   if (W == LFL::screen) return W;
-  LFL::Window::MakeCurrent((LFL::screen = static_cast<LFL::Window*>(W)));
+  LFL::app->MakeCurrentWindow((LFL::screen = static_cast<LFL::Window*>(W)));
   return W;
 }
 
@@ -493,13 +494,13 @@ void Application::Daemonize(FILE *fout, FILE *ferr) {
 }
 #endif /* WIN32 */
 
-void Vault::SavePassword(const string &h, const string &u, const string &pw) {
+void Application::SavePassword(const string &h, const string &u, const string &pw) {
 #if defined(LFL_IPHONE)
   iPhonePasswordSave(app->name.c_str(), h.c_str(), u.c_str(), pw.c_str(), pw.size());
 #endif
 }
 
-bool Vault::LoadPassword(const string &h, const string &u, string *pw) {
+bool Application::LoadPassword(const string &h, const string &u, string *pw) {
 #if defined(LFL_IPHONE)
   pw->resize(1024);
   pw->resize(iPhonePasswordCopy(app->name.c_str(), h.c_str(), u.c_str(), &(*pw)[0], pw->size()));
@@ -508,26 +509,26 @@ bool Vault::LoadPassword(const string &h, const string &u, string *pw) {
   return 0;
 }
 
-void SystemBrowser::Open(const char *url_text) {
+void Application::OpenSystemBrowser(const string &url_text) {
 #if defined(LFL_ANDROID)
-  AndroidOpenBrowser(url_text);
+  AndroidOpenBrowser(url_text.c_str());
 #elif defined(LFL_IPHONE)
-  iPhoneOpenBrowser(url_text);
+  iPhoneOpenBrowser(url_text.c_str());
 #elif defined(__APPLE__)
-  CFURLRef url = CFURLCreateWithBytes(0, (UInt8*)url_text, strlen(url_text), kCFStringEncodingASCII, 0);
+  CFURLRef url = CFURLCreateWithBytes(0, (UInt8*)url_text.c_str(), url_text.size(), kCFStringEncodingASCII, 0);
   if (url) { LSOpenCFURLRef(url, 0); CFRelease(url); }
 #elif defined(LFL_WINVIDEO)
-  ShellExecute(NULL, "open", url_text, NULL, NULL, SW_SHOWNORMAL);
+  ShellExecute(NULL, "open", url_text.c_str(), NULL, NULL, SW_SHOWNORMAL);
 #endif
 }
 
-void Advertising::ShowAds() {
+void Application::ShowAds() {
 #if defined(LFL_ANDROID)
   AndroidShowAds();
 #endif
 }
 
-void Advertising::HideAds() {
+void Application::HideAds() {
 #if defined(LFL_ANDROID)
   AndroidHideAds();
 #endif
@@ -563,12 +564,12 @@ void Application::CreateNewWindow(const Window::StartCB &start_cb) {
   Window *new_window = new Window();
   if (window_init_cb) window_init_cb(new_window);
   app->video->CreateGraphicsDevice(new_window);
-  CHECK(Window::Create(new_window));
+  CHECK(CreateWindow(new_window));
   new_window->start_cb = start_cb;
 #ifndef LFL_QT
-  Window::MakeCurrent(new_window);
+  MakeCurrentWindow(new_window);
   StartNewWindow(new_window);
-  Window::MakeCurrent(orig_window);
+  MakeCurrentWindow(orig_window);
 #endif
 }
 
@@ -610,6 +611,14 @@ void Application::LaunchNativeFontChooser(const FontDesc &cur_font, const string
   if (!ChooseFont(&cf)) return;
   int flag = FontDesc::Mono | (lf.lfWeight > FW_NORMAL ? FontDesc::Bold : 0) | (lf.lfItalic ? FontDesc::Italic : 0);
   app->shell.Run(StrCat(choose_cmd, " ", lf.lfFaceName, " ", cf.iPointSize/10, " ", flag));
+#endif
+}
+
+void Application::LaunchNativeContextMenu(const vector<MenuItem>&items) {
+#if defined(LFL_OSXVIDEO)
+  vector<const char *> k, n, v;
+  for (auto &i : items) { k.push_back(tuple_get<0>(i).c_str()); n.push_back(tuple_get<1>(i).c_str()); v.push_back(tuple_get<2>(i).c_str()); }
+  OSXLaunchNativeContextMenu(screen->id, screen->mouse.x, screen->mouse.y, items.size(), &k[0], &n[0], &v[0]);
 #endif
 }
 
@@ -781,7 +790,7 @@ int Application::Create(int argc, const char **argv, const char *source_filename
 #endif // WIN32
 
 #ifdef LFL_HEADLESS
-  Window::Create(screen);
+  CreateWindow(screen);
 #endif
 
   if (FLAGS_daemonize) {
@@ -816,9 +825,8 @@ int Application::Init() {
 
   if (FLAGS_lfapp_video) {
     if ((video = new Video())->Init()) { ERROR("video init failed"); return -1; }
-  } else {
-    Window::active[screen->id] = screen;
   }
+  else { windows[screen->id] = screen; }
 
   thread_pool.Open(X_or_1(FLAGS_threadpool_size));
   if (FLAGS_threadpool_size) thread_pool.Start();
@@ -902,7 +910,7 @@ int Application::TimerDrivenFrame(bool got_wakeup) {
   unsigned clicks = frame_time.GetTime(true).count();
   int events = HandleEvents(clicks) + got_wakeup;
 
-  for (auto i = Window::active.begin(); run && i != Window::active.end(); ++i) {
+  for (auto i = windows.begin(); run && i != windows.end(); ++i) {
     auto w = i->second;
 #ifdef LFL_ANDROID
     if (w->minimized || (!w->target_fps && !events)) continue;
@@ -962,7 +970,7 @@ int Application::Exiting() {
 }
 
 void Application::ResetGL() {
-  for (auto &w : Window::active) w.second->ResetGL();
+  for (auto &w : windows) w.second->ResetGL();
   Fonts::ResetGL();
 }
 
@@ -1101,7 +1109,7 @@ void FrameScheduler::UpdateTargetFPS(int fps) {
   screen->target_fps = fps;
   if (monolithic_frame) {
     int next_target_fps = 0;
-    for (const auto &w : Window::active) Max(&next_target_fps, w.second->target_fps);
+    for (const auto &w : app->windows) Max(&next_target_fps, w.second->target_fps);
     FLAGS_target_fps = next_target_fps;
   }
   CHECK(screen->id);
@@ -1249,7 +1257,7 @@ extern "C" int main(int argc, const char *argv[]) {
   for (int i=0; i<argc; i++) lfl_qapp_argv.push_back(argv[i]);
   QApplication app(argc, (char**)argv);
   lfl_qapp = &app;
-  LFL::Window::Create(LFL::screen);
+  LFL::app->CreateWindow(LFL::screen);
   return app.exec();
 }
 

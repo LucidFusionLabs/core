@@ -455,7 +455,7 @@ void Browser::Document::Clear() {
   node->inline_style_context = AllocatorNew(&alloc, (StyleContext), (node));
   node->style_context       ->AppendSheet(StyleSheet::Default());
   node->inline_style_context->AppendSheet(StyleSheet::Default());
-  js_context = unique_ptr<JSContext>(CreateV8JSContext(js_console.get(), node));
+  js_context = unique_ptr<JSContext>(JSContext::Create(js_console.get(), node));
   active_input = 0;
 }
 
@@ -469,7 +469,7 @@ Browser::Browser(GUI *gui, const Box &V) : doc(gui ? gui->parent : NULL, V),
 }
 
 void Browser::Navigate(const string &url) {
-  if (!layers) return SystemBrowser::Open(url.c_str());
+  if (!layers) return app->OpenSystemBrowser(url);
   else Open(url);
 }
 
