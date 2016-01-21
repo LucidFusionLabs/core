@@ -604,6 +604,7 @@ struct Window : public NativeWindow {
   LFL::Box Box() const { return LFL::Box(0, 0, width, height); }
   LFL::Box Box(float xs, float ys) const { return LFL::Box(0, 0, width*xs, height*ys); }
   LFL::Box Box(float xp, float yp, float xs, float ys, float xbl=0, float ybt=0, float xbr=-INFINITY, float ybb=-INFINITY) const;
+  static Window *Get() { return LFL::screen; }
 };
 
 struct Scissor {

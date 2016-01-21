@@ -44,7 +44,7 @@ bool Resolver::Nameserver::WriteResolveRequest(const Request &req) {
   return true;
 }
 
-void Resolver::Nameserver::HandleResponse(Connection *cin, DNS::Header *hdr, int len) {
+void Resolver::Nameserver::HandleResponse(Connection *cin, const DNS::Header *hdr, int len) {
   CHECK_EQ(c, cin);
   if (!hdr) {
     ERROR(c->Name(), ": nameserver closed, timedout=", timedout);

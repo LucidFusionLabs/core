@@ -130,9 +130,10 @@ template <class X> struct ArrayPiece {
   bool empty() const { return !buf || len <= 0; }
   bool has_size() const { return len >= 0; }
   int size() const { return max(0, len); }
-  int Bytes() const { return size() * sizeof(X); }
   void assign(const X *b, int l) { buf=b; len=l; }
   const X *data() const { return buf; }
+  const void *ByteData() const { return buf; }
+  int Bytes() const { return size() * sizeof(X); }
   const_iterator begin() const { return buf; }
   const_iterator rbegin() const { return buf+len-1; }
   const_iterator end() const { return buf+len; }

@@ -333,6 +333,7 @@ struct TextGUI : public KeyboardGUI, public Drawable::AttrSource {
   Color cmd_color=Color::white, selection_color=Color(Color::grey70, 0.5);
   bool deactivate_on_enter=0, token_processing=0, insert_mode=1;
   int start_line=0, end_line=0, start_line_adjust=0, skip_last_lines=0, default_attr=0;
+  function<void(const Selection::Point&)> selection_cb;
   function<void(const shared_ptr<Link>&)> new_link_cb;
   function<void(Link*)> hover_link_cb;
   Link *hover_link=0;
@@ -476,6 +477,7 @@ struct Editor : public TextArea {
   void End()          { UpdateCursorX(CursorLineSize()); }
   void HistUp();
   void HistDown();
+  void SelectionCB(const Selection::Point&);
 
   int WrappedLines() const { return wrapped_lines; }
   int CursorLineSize() const { return cursor_line ? cursor_line->Size() : 0; }
@@ -487,8 +489,9 @@ struct Editor : public TextArea {
   int RefreshLines() { last_fb_lines=0; return UpdateLines(last_v_scrolled, 0, 0, 0); }
   int UpdateLines(float v_scrolled, int *first_ind, int *first_offset, int *first_len);
   void UpdateCursor();
-  void UpdateCursorX(int x);
   void UpdateCursorLine();
+  void UpdateCursorX(int x);
+  int CursorLinesChanged(const String16 &b, int add_lines=0);
   int ModifyCursorLine();
   void Modify(bool erase, int c);
   int Save();

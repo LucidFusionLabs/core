@@ -51,12 +51,12 @@ struct Resolver {
     Nameserver(Resolver *P, IPV4::Addr addr) : parent(P),
     c(Singleton<UDPClient>::Get()->PersistentConnection
       (IPV4::Text(addr, 53),
-       [&](Connection *c, const char *cb, int cl) { HandleResponse(c, (DNS::Header*)cb, cl); },
+       [&](Connection *c, const char *cb, int cl) { HandleResponse(c, reinterpret_cast<const DNS::Header*>(cb), cl); },
        [&](Connection *c)                         { Heartbeat(); }, 53)) {}
 
     unsigned short GetNextID() const;
     bool WriteResolveRequest(const Request &req);
-    void HandleResponse(Connection *c, DNS::Header *hdr, int len);
+    void HandleResponse(Connection *c, const DNS::Header *hdr, int len);
     void Heartbeat();
     void Dequeue();
   };

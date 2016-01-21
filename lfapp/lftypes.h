@@ -39,21 +39,21 @@ typedef pair<unique_ptr<char*>, size_t> FlatBufferPiece;
 #define SortImpl1(x1, y2) return x1 < y2;
 #define SortImpl2(x1, y1, x2, y2) \
   if      (x1 < y1) return true;  \
-  else if (x1 > y1) return false; \
+  else if (y1 < x1) return false; \
   else return x2 < y2;
 #define SortImpl3(x1, y1, x2, y2, x3, y3) \
   if      (x1 < y1) return true;  \
-  else if (x1 > y1) return false; \
+  else if (y1 < x1) return false; \
   if      (x2 < y2) return true;  \
-  else if (x2 > y2) return false; \
+  else if (y2 < x2) return false; \
   else return x3 < y3;
 #define SortImpl4(x1, y1, x2, y2, x3, y3, x4, y4) \
   if      (x1 < y1) return true;  \
-  else if (x1 > y1) return false; \
+  else if (y1 < x1) return false; \
   if      (x2 < y2) return true;  \
-  else if (x2 > y2) return false; \
+  else if (y2 < x2) return false; \
   if      (x3 < y3) return true;  \
-  else if (x3 > y3) return false; \
+  else if (y3 < x3) return false; \
   else return x4 < y4;
 
 namespace LFL {
@@ -70,7 +70,7 @@ struct typed_ptr {
   void *value=0;
   typed_ptr() {}
   template <class X> typed_ptr(X *v) : type(TypeId<X>()), value(v) { }
-  template <class X> X *Get(int id) { return id == TypeId<X> ? reinterpret_cast<X>(value) : nullptr; }
+  template <class X> X *Get(int id) { return id == TypeId<X> ? reinterpret_cast<X*>(value) : nullptr; }
 };
 
 struct RefCounter {

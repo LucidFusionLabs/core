@@ -681,7 +681,7 @@ void TextArea::Draw(const Box &b, int flag, Shader *shader) {
     glShadertoyShader(shader);
     shader->SetUniform3f("iChannelResolution", XY_or_Y(scale, b.w), XY_or_Y(scale, b.h), 1);
     shader->SetUniform2f("iScroll", XY_or_Y(scale, -line_fb.scroll.x * line_fb.w),
-                         XY_or_Y(scale, -line_fb.scroll.y * line_fb.h - b.y));
+                                    XY_or_Y(scale, -line_fb.scroll.y * line_fb.h - b.y));
   }
   int font_height = font->Height();
   LinesFrameBuffer *fb = GetFrameBuffer();
@@ -738,7 +738,7 @@ void TextArea::DragCB(int, int, int, int down) {
   Selection *s = &selection;
   bool start = s->Update(screen->mouse - mouse_gui.box.BottomLeft() + point(line_left, 0), down);
   bool swap = (!reverse_line_fb && s->end < s->beg) || (reverse_line_fb && s->beg < s->end);
-  if (start) { GetGlyphFromCoords(s->beg_click, &s->beg); s->end = s->beg; }
+  if (start) { GetGlyphFromCoords(s->beg_click, &s->beg); s->end=s->beg; if (selection_cb) selection_cb(s->beg); }
   else       { GetGlyphFromCoords(s->end_click, &s->end); }
   if (!s->changing) CopyText(swap ? s->end : s->beg, swap ? s->beg : s->end);
   else {
@@ -794,12 +794,41 @@ Editor::Editor(Window *W, Font *F, File *I, bool Wrap) : TextArea(W, F), file(I)
   file_line.node_value_cb = &LineOffset::GetLines;
   file_line.node_print_cb = &LineOffset::GetString;
   edits.free_func = [](String16 *v) { v->clear(); };
+  selection_cb = bind(&Editor::SelectionCB, this, _1);
 }
 
 void Editor::SetShouldWrap(bool w) {
   line_fb.wrap = w;
   Reload();
   Redraw(true);
+}
+
+void Editor::HistUp() {
+  if (cursor.i.y > 0) { if (!--cursor.i.y && start_line_adjust) return AddVScroll(start_line_adjust); }
+  else {
+    cursor.i.y = 0;
+    LineOffset *lo = 0;
+    if (Wrap()) lo = (--file_line.LesserBound(cursor_line_number)).val;
+    return AddVScroll((lo ? -lo->wrapped_lines : -1) + start_line_adjust);
+  }
+  UpdateCursorLine();
+  UpdateCursor();
+}
+
+void Editor::HistDown() {
+  bool last=0;
+  if (cursor_line_number_offset + cursor_line->Lines() < line_fb.lines) last = ++cursor.i.y >= line.Size()-1;
+  else { AddVScroll(end_line_cutoff ? end_line_cutoff+1 : 1); cursor.i.y=line.Size()-1; last=1; }
+  UpdateCursorLine();
+  UpdateCursor();
+  if (last) UpdateCursorX(cursor.i.x);
+}
+
+void Editor::SelectionCB(const Selection::Point &p) {
+  cursor.i.y = p.line_ind;
+  UpdateCursorLine();
+  cursor.i.x = p.char_ind >= 0 ? p.char_ind : CursorLineSize();
+  UpdateCursor();
 }
 
 void Editor::AddWrappedLines(int n) {
@@ -951,7 +980,17 @@ void Editor::UpdateCursorX(int x) {
   if (!Wrap()) return UpdateCursor();
   int wl = cursor_line_number_offset + cursor_line->data->glyphs.GetLineFromIndex(x);
   if (wl >= line_fb.lines) { AddVScroll(wl-line_fb.lines+1); cursor.i=point(x, line.Size()-1); UpdateCursorLine(); }
+  else if (wl < 0) { AddVScroll(wl); cursor.i=point(x, 0); UpdateCursorLine(); }
   UpdateCursor();
+}
+
+int Editor::CursorLinesChanged(const String16 &b, int add_lines) {
+  cursor_line->AssignText(b);
+  int ll = cursor_line->Layout(GetFrameBuffer()->w, true);
+  int d = ChangedDiff(&cursor_offset->wrapped_lines, ll);
+  if (d) CHECK(file_line.Update(cursor_line_number, *cursor_offset));
+  if (int a = d + add_lines) AddWrappedLines(a);
+  return d;
 }
 
 int Editor::ModifyCursorLine() {
@@ -960,69 +999,56 @@ int Editor::ModifyCursorLine() {
   return -cursor_offset->size-1;
 }
 
-void Editor::HistUp() {
-  if (cursor.i.y > 0) { if (!--cursor.i.y && start_line_adjust) return AddVScroll(start_line_adjust); }
-  else if (start_line_adjust) return AddVScroll(start_line_adjust);
-  else {
-    cursor.i.y = 0;
-    LineOffset *lo = 0;
-    if (Wrap()) lo = (--file_line.LesserBound(cursor_line_number-1)).val;
-    return AddVScroll(lo ? -lo->wrapped_lines : -1);
-  }
-  UpdateCursorLine();
-  UpdateCursor();
-}
-
-void Editor::HistDown() {
-  bool last=0;
-  if (cursor_line_number_offset + cursor_line->Lines() < line_fb.lines) last = ++cursor.i.y >= line.Size()-1;
-  else { AddVScroll(end_line_cutoff ? end_line_cutoff+1 : 1); cursor.i.y=line.Size()-1; last=1; }
-  UpdateCursorLine();
-  UpdateCursor();
-  if (last) UpdateCursorX(cursor.i.x);
-}
-
 void Editor::Modify(bool erase, int c) {
-  Line *L = cursor_line;
-  if (!L || !cursor_offset) return;
+  if (!cursor_line || !cursor_offset) return;
+  bool wrap = Wrap();
   int edit_id = ModifyCursorLine();
   String16 *b = &edits[edit_id];
-  CHECK_LE(cursor.i.x, L->Size());
+  CHECK_LE(cursor.i.x, cursor_line->Size());
   CHECK_LE(cursor.i.x, b->size());
-  CHECK_EQ(cursor_offset->wrapped_lines, L->Lines());
+  CHECK_EQ(cursor_offset->wrapped_lines, cursor_line->Lines());
+
   if (erase && !cursor.i.x) {
-    if (!cursor.i.y) return;
     file_line.Erase(cursor_line_number);
-    AddWrappedLines(-L->Lines());
+    AddWrappedLines(-cursor_line->Lines());
     HistUp();
-    *(b = &edits[ModifyCursorLine()]) += edits[edit_id];
-    UpdateCursorX(b->size());
+    b = &edits[ModifyCursorLine()];
+    int x = b->size();
+    *b += edits[edit_id];
     edits.Erase(edit_id);
+    if (wrap) CursorLinesChanged(*b);
+    UpdateCursorX(x);
     RefreshLines();
     return Redraw(true);
   } else if (!erase && c == '\r') {
-    if (cursor.i.y == line_fb.lines-1) return;
+    String16 a = b->substr(cursor.i.x);
+    b->resize(cursor.i.x);
+    if (wrap) CursorLinesChanged(*b, 1);
+    else AddWrappedLines(1);
     file_line.Insert(cursor_line_number+1, LineOffset());
-    AddWrappedLines(1);
-    int x = cursor.i.x;
     cursor.i.x = 0;
     HistDown();
-    edits[ModifyCursorLine()] = (b = &edits[edit_id])->substr(x);
-    b->resize(x);
+    if (wrap) CursorLinesChanged(a);
+    swap(edits[ModifyCursorLine()], a);
     RefreshLines();
     return Redraw(true);
+  } else {
+    if (wrap)   cursor_line->data->glyphs.line_ind.clear();
+    if (erase)  b->erase(cursor.i.x-1, 1);
+    else        b->insert(cursor.i.x, 1, c);
+    if (erase)  cursor_line->Erase          (cursor.i.x-1, 1);
+    else if (0) cursor_line->OverwriteTextAt(cursor.i.x, String16(1, c), default_attr);
+    else        cursor_line->InsertTextAt   (cursor.i.x, String16(1, c), default_attr);
+    if (erase)  CursorLeft();
+    else        CursorRight();
+    UpdateLineFB(cursor_line, GetFrameBuffer(), wrap ? LinesFrameBuffer::Flag::Flush : 0);
+    if (wrap) {
+      int d = ChangedDiff(&cursor_offset->wrapped_lines, cursor_line->Lines());
+      if (d) { CHECK(file_line.Update(cursor_line_number, *cursor_offset)); AddWrappedLines(d); }
+      RefreshLines();
+      return Redraw(true);
+    }
   }
-  bool wrapped = L->data->glyphs.line_ind.size();
-  if (wrapped) L->data->glyphs.line_ind.clear();
-  if (erase)  b->erase(cursor.i.x-1, 1);
-  else        b->insert(cursor.i.x, 1, c);
-  if (erase)  L->Erase          (cursor.i.x-1, 1);
-  else if (0) L->OverwriteTextAt(cursor.i.x, String16(1, c), default_attr);
-  else        L->InsertTextAt   (cursor.i.x, String16(1, c), default_attr);
-  if (erase)  CursorLeft();
-  else        CursorRight();
-  UpdateLineFB(L, GetFrameBuffer(), wrapped ? LinesFrameBuffer::Flag::Flush : 0);
-  if (wrapped) if (int d = ChangedDiff(&cursor_offset->wrapped_lines, L->Lines())) { AddWrappedLines(d); return Redraw(true); }
 }
 
 int Editor::Save() {
