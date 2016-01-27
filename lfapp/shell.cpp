@@ -30,7 +30,6 @@ Shell::Shell(AssetMap *AM, SoundAssetMap *SAM, MovieAssetMap *MAM) : assets(AM),
   command.push_back(Command("flags",      bind(&Shell::flags,        this, _1)));
   command.push_back(Command("conscolor",  bind(&Shell::consolecolor, this, _1)));
   command.push_back(Command("clipboard",  bind(&Shell::clipboard,    this, _1)));
-  command.push_back(Command("startcmd",   bind(&Shell::startcmd,     this, _1)));
   command.push_back(Command("dldir",      bind(&Shell::dldir,        this, _1)));
   command.push_back(Command("screenshot", bind(&Shell::screenshot,   this, _1)));
   command.push_back(Command("fillmode",   bind(&Shell::fillmode,     this, _1)));
@@ -96,27 +95,22 @@ void Shell::Run(const string &text) {
   INFO("unkown cmd '", cmd, "'");
 }
 
-void Shell::mousein (const vector<string>&) { Mouse::GrabFocus(); }
-void Shell::mouseout(const vector<string>&) { Mouse::ReleaseFocus(); }
+void Shell::mousein (const vector<string>&) { app->GrabMouseFocus(); }
+void Shell::mouseout(const vector<string>&) { app->ReleaseMouseFocus(); }
 
 void Shell::quit(const vector<string>&) { app->run = false; }
-void Shell::console(const vector<string>&) { if (screen->lfapp_console) screen->lfapp_console->Toggle(); }
-void Shell::showkeyboard(const vector<string>&) { TouchDevice::OpenKeyboard(); }
+void Shell::console(const vector<string>&) { if (screen->lfapp_console) screen->lfapp_console->ToggleActive(); }
+void Shell::showkeyboard(const vector<string>&) { app->OpenTouchKeyboard(); }
 
 void Shell::clipboard(const vector<string> &a) {
-  if (a.empty()) INFO(Clipboard::Get());
-  else Clipboard::Set(Join(a, " "));
+  if (a.empty()) INFO(app->GetClipboardText());
+  else app->SetClipboardText(Join(a, " "));
 }
 
 void Shell::consolecolor(const vector<string>&) {
   if (!screen->lfapp_console) return;
   delete screen->lfapp_console->font;
   screen->lfapp_console->font = Fonts::Get(FLAGS_default_font, "", 9, Color::black);
-}
-
-void Shell::startcmd(const vector<string> &a) {
-  if (a.empty() || !screen->lfapp_console) return;
-  screen->lfapp_console->startcmd = Join(a, " ");
 }
 
 void Shell::dldir(const vector<string>&) { INFO(LFAppDownloadDir()); }
@@ -309,12 +303,13 @@ void Shell::Slider(const vector<string> &a) {
   string flag_name = a[0];
   float total = a.size() >= 1 ? atof(a[1]) : 0;
   float inc   = a.size() >= 2 ? atof(a[2]) : 0;
-  new SliderFlagDialog(flag_name, total ? total : 100, inc ? inc : 1);
+  screen->AddDialog(new FlagSliderDialog(flag_name, total ? total : 100, inc ? inc : 1));
 }
 
 void Shell::Edit(const vector<string> &a) {
   string s = Asset::FileContents("lfapp_vertex.glsl");
-  new EditorDialog(screen, Fonts::Default(), new BufferFile(s));
+  if (s.empty()) INFO("missing file lfapp_vertex.glsl");
+  screen->AddDialog(new EditorDialog(screen, Fonts::Default(), new BufferFile(s, "lfapp_vertex.glsl")));
 }
 
 void Shell::cmds(const vector<string>&) {

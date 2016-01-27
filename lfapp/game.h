@@ -43,6 +43,7 @@ struct Game {
     virtual void Heartbeat(Connection *c) {}
     virtual void WriteWithRetry(Connection *c, Serializable *req, unsigned short seq) = 0;
   };
+
   struct Network {
     struct Visitor {
       virtual void Visit(Connection *c, Game::ConnectionData *cd) = 0;
@@ -55,6 +56,7 @@ struct Game {
         }
       }
     };
+
     struct BroadcastVisitor : public Visitor {
       Game::Network *net;
       Serializable *msg;
@@ -66,6 +68,7 @@ struct Game {
         sent++;
       }
     };
+
     struct BroadcastWithRetryVisitor : public Visitor {
       Game::Network *net;
       Serializable *msg;
@@ -87,17 +90,20 @@ struct Game {
       msg->ToString(&buf, seq);
       return Write(c, method, buf.data(), buf.size());
     }
+
     int Broadcast(Service *svc, Serializable *msg) {
       BroadcastVisitor visitor(this, msg);
       Visitor::Accept(svc, &visitor);
       return visitor.sent;
     }
+
     int BroadcastWithRetry(Service *svc, Serializable *msg, Connection *skip=0) {
       BroadcastWithRetryVisitor visitor(this, msg, skip);
       Visitor::Accept(svc, &visitor);
       return visitor.sent;
     }
   };
+
 #ifdef LFL_ANDROID
   struct GoogleMultiplayerNetwork : public Network {
     virtual int Write(Connection *c, int method, const char *data, int len) {
@@ -105,6 +111,7 @@ struct Game {
       AndroidGPlusSendUnreliable(c->endpoint_name.c_str(), data, len);
       return 0;
     }
+
     virtual void WriteWithRetry(ReliableNetwork *n, Connection *c, Serializable *req, unsigned short seq) {
       if (c->endpoint_name.empty()) { ERROR(c->Name(), " blank send"); return; }
       string buf = req->ToString(); int ret;
@@ -112,6 +119,7 @@ struct Game {
     }
   };
 #endif
+
   struct UDPNetwork : public Network {
     virtual int Write(Connection *c, int method, const char *buf, int len) {
       return method == UDPClient::Sendto ? c->SendTo(buf, len) : c->WriteFlush(buf, len);
@@ -120,6 +128,7 @@ struct Game {
       return reliable->WriteWithRetry(c, req, seq);
     }
   };
+
   struct ReliableUDPNetwork : public ReliableNetwork {
     typedef unordered_map<unsigned short, pair<Time, string> > RetryMap;
     Game::Network *net;
@@ -137,6 +146,7 @@ struct Game {
       msg.first = Now();
       net->Write(c, method, msg.second.data(), msg.second.size());
     }
+
     void Heartbeat(Connection *c) {
       for (auto i = retry.begin(), e = retry.end(); i != e; ++i) {
         if (i->second.first + timeout > Now()) continue;
@@ -239,11 +249,13 @@ struct GameBots {
     Bot(Entity *e=0, Game::ConnectionData *pd=0) : entity(e), player_data(pd) {}
     static bool ComparePlayerEntityID(const Bot &l, const Bot &r) { return l.player_data->entityID < r.player_data->entityID; }
   };
+
   typedef vector<Bot> BotVector;
   Game *world;
   BotVector bots;
   GameBots(Game *w) : world(w) {}
 
+  virtual void Update(Time dt) {}
   virtual void Insert(int num) {
     for (int i=0; i<num; i++) {
       Game::ConnectionData *cd = new Game::ConnectionData();
@@ -261,20 +273,22 @@ struct GameBots {
     }
     sort(bots.begin(), bots.end(), Bot::ComparePlayerEntityID);
   }
+
   virtual bool RemoveFromTeam(int team) {
     for (int i=bots.size()-1; i>=1; i--) {
       if (bots[i].player_data->team == team) { Delete(&bots[i]); bots.erase(bots.begin()+i); return true; }
     } return false;
   }
+
   virtual void Delete(Bot *b) {
     world->PartEntity(b->player_data, b->entity, b->player_data->team);
     delete b->player_data;
   }
+
   virtual void Clear() {
     for (int i=0; i<bots.size(); i++) Delete(&bots[i]);
     bots.clear();
   }
-  virtual void Update(Time dt) {}
 };
 
 struct GameServer : public Connection::Handler {
@@ -307,6 +321,7 @@ struct GameServer : public Connection::Handler {
     GameProtocol::RconRequest print(StrCat("print *** ", cd->playerName, " left"));
     BroadcastWithRetry(&print, c);
   }
+
   int Read(Connection *c) {
     for (int i=0; i<c->packets.size(); i++) {
       int ret = Read(c, c->rb.begin() + c->packets[i].offset, c->packets[i].len);
@@ -314,6 +329,7 @@ struct GameServer : public Connection::Handler {
     }
     return 0;
   }
+
   int Read(Connection *c, const char *content, int content_len) {
     if (content_len < GameProtocol::Header::size) return -1;
 
@@ -334,9 +350,9 @@ struct GameServer : public Connection::Handler {
       if (!req.Read(&in)) Request ## CB(c, &hdr, &req); \
     }
     elif_parse(JoinRequest, in)
-      elif_parse(PlayerUpdate, in)
-      elif_parse(RconRequest, in)
-      elif_parse(RconResponse, in)
+    elif_parse(PlayerUpdate, in)
+    elif_parse(RconRequest, in)
+    elif_parse(RconResponse, in)
     else ERROR(c->Name(), ": parse failed: unknown type ", hdr.id);
     return 0;
   }
@@ -344,18 +360,22 @@ struct GameServer : public Connection::Handler {
   void Write(Connection *c, int method, unsigned short seq, Serializable *msg) {
     ((Game::Network*)c->svc->game_network)->Write(c, method, seq, msg);
   }
+
   void WriteWithRetry(Connection *c, Game::ConnectionData *cd, Serializable *msg) {
     ((Game::Network*)c->svc->game_network)->WriteWithRetry(&cd->retry, c, msg, cd->seq++);
   }
+
   void WritePrintWithRetry(Connection *c, Game::ConnectionData *cd, const string &text) {
     GameProtocol::RconRequest print(text);
     WriteWithRetry(c, cd, &print);
   }
+
   int BroadcastWithRetry(Serializable *msg, Connection *skip=0) {
     int ret = 0; for (int i = 0; i < svc.size(); ++i)
       ret += ((Game::Network*)svc[i]->game_network)->BroadcastWithRetry(svc[i], msg, skip);
     return ret;
   }
+
   int BroadcastPrintWithRetry(const string &text, Connection *skip = 0) {
     GameProtocol::RconRequest print(text);
     return BroadcastWithRetry(&print);
@@ -379,12 +399,12 @@ struct GameServer : public Connection::Handler {
 
     Scene *scene = world->scene;
     last.WorldUpdate.id++;
-    last.WorldUpdate.entity.resize(scene->entityMap.size());
+    last.WorldUpdate.entity.resize(scene->entity.size());
 
     int entity_type_index = 0, entity_index = 0;
-    for (auto i = scene->assetMap.begin(), ie = scene->assetMap.end(); i != ie; ++i)
-      for (auto j = i->second.begin(), je = i->second.end(); j != je; ++j)
-        last.WorldUpdate.entity[entity_index++].From(*j);
+    for (auto const &a : scene->asset)
+      for (auto e : a.second) 
+        last.WorldUpdate.entity[entity_index++].From(e);
 
     last.send_WorldUpdate[last.send_WorldUpdate_index].id = last.WorldUpdate.id;
     last.send_WorldUpdate[last.send_WorldUpdate_index].time = now;
@@ -401,6 +421,7 @@ struct GameServer : public Connection::Handler {
   void RconResponseCB(Connection *c, GameProtocol::Header *hdr, GameProtocol::RconResponse *req) {
     Game::ConnectionData::Get(c)->retry.Acknowledged(hdr->seq);
   }
+
   void JoinRequestCB(Connection *c, GameProtocol::Header *hdr, GameProtocol::JoinRequest *req) {
     Game::ConnectionData *cd = Game::ConnectionData::Get(c);
     cd->playerName = req->PlayerName;
@@ -424,6 +445,7 @@ struct GameServer : public Connection::Handler {
     INFO(c->Name(), ": ", cd->playerName, rejoin?" re":" ", "joins, entity_id=", e->name);
     if (world->JoinedRcon(cd, e, &rcon_broadcast.Text)) BroadcastWithRetry(&rcon_broadcast);
   }
+
   void PlayerUpdateCB(Connection *c, GameProtocol::Header *hdr, GameProtocol::PlayerUpdate *pup) {
     Game::ConnectionData *cd = Game::ConnectionData::Get(c);
     for (int i=0; i<sizeofarray(last.send_WorldUpdate); i++) {
@@ -447,6 +469,7 @@ struct GameServer : public Connection::Handler {
       AppendSerializedPlayerData(i->player_data, &playerlist.Text);
     Write(c, UDPClient::Sendto, cd->seq++, &playerlist);
   }
+
   void RconRequestCB(Connection *c, GameProtocol::Header *hdr, GameProtocol::RconRequest *rcon) {
     GameProtocol::RconResponse response;
     Write(c, UDPClient::Sendto, hdr->seq, &response);
@@ -488,6 +511,7 @@ struct GameServer : public Connection::Handler {
       }
     }
   }
+
   virtual void RconRequestCB(Connection *c, Game::ConnectionData *cd, const string &cmd, const string &arg) {
     GameProtocol::RconRequest print(StrCat("print *** Unknown command: ", cmd));
     WriteWithRetry(c, cd, &print);
@@ -507,6 +531,7 @@ struct GameUDPServer : public UDPServer {
     int conn_key[3] = { (int)c->addr, secret1, c->port }; 
     return fnv32(conn_key, sizeof(conn_key), secret2);
   }
+
   int UDPFilter(Connection *c, const char *content, int content_len) {
     if (content_len < GameProtocol::Header::size) return -1;
 
@@ -582,15 +607,18 @@ struct GameClient {
     world->scene->ChangeAsset(e, app->shell.asset(assets[type]));
     NewEntityCB(e);
   }
+
   void WorldDeleteEntity(Scene::EntityVector &v) {
     for (Scene::EntityVector::iterator i = v.begin(); i != v.end(); i++) DelEntityCB(*i);
     world->scene->Del(v);
   }
+
   void Rcon(const string &text) {
     if (!conn) return;
     GameProtocol::RconRequest req(text);
     net->WriteWithRetry(&retry, conn, &req, seq++);
   }
+
   void MoveUp    (unsigned t) { control.SetUp();      }
   void MoveDown  (unsigned t) { control.SetDown();    }
   void MoveFwd   (unsigned t) { control.SetForward(); }
@@ -607,6 +635,7 @@ struct GameClient {
     Rcon(StrCat("name ", n));
     Singleton<FlagMap>::Get()->Set("player_name", n);
   }
+
   void MyEntityName(vector<string>) {
     Entity *e = world->Get(entity_id);
     INFO("me = ", e ? e->name : "");
@@ -626,6 +655,7 @@ struct GameClient {
     last.time_send_PlayerUpdate = Now();
     return 0;
   }
+
   int ConnectGPlus(const string &participant_name) {
 #ifdef LFL_ANDROID
     GPlusClient *gplus_client = Singleton<GPlusClient>::Get();
@@ -644,6 +674,7 @@ struct GameClient {
     return -1;
 #endif
   }
+
   void Read(Connection *c, const char *content, int content_length) {
     if (c != conn) return;
     if (!content) { INFO(c->Name(), ": close"); Reset(); return; }
@@ -653,13 +684,14 @@ struct GameClient {
     hdr.In(&in);
     if (0) {}
     elif_parse(ChallengeResponse, in)
-      elif_parse(JoinResponse, in)
-      elif_parse(WorldUpdate, in)
-      elif_parse(RconRequest, in)
-      elif_parse(RconResponse, in)
-      elif_parse(PlayerList, in)        
+    elif_parse(JoinResponse, in)
+    elif_parse(WorldUpdate, in)
+    elif_parse(RconRequest, in)
+    elif_parse(RconResponse, in)
+    elif_parse(PlayerList, in)        
     else ERROR("parse failed: unknown type ", hdr.id);
   }
+
   void Heartbeat(Connection*) {
     if (!Connected()) return;
     retry.Heartbeat(conn);
@@ -678,6 +710,7 @@ struct GameClient {
     last.buttons = CS.buttons;
     last.time_send_PlayerUpdate = Now();
   }
+
   void Frame() {
     int WorldUpdates = last.WorldUpdate.size();
     if (WorldUpdates < 2) return;
@@ -751,10 +784,12 @@ struct GameClient {
     req.PlayerName = playername;
     net->WriteWithRetry(&retry, c, &req, seq++);
   }
+
   void JoinResponseCB(Connection *c, GameProtocol::Header *hdr, GameProtocol::JoinResponse *joined) {
     retry.Acknowledged(hdr->seq);
     RconRequestCB(c, hdr, joined->rcon);
   }
+
   void WorldUpdateCB(Connection *c, GameProtocol::Header *hdr, GameProtocol::WorldUpdate *wu) {       
     if (hdr->seq <= last.seq_WorldUpdate) {
       unsigned short cs = hdr->seq, ls = last.seq_WorldUpdate;
@@ -770,6 +805,7 @@ struct GameClient {
     if (last.WorldUpdate.size() > 200) last.WorldUpdate.pop_front();
     last.WorldUpdate.push_back(*wu);
   }
+
   void PlayerListCB(Connection *c, GameProtocol::Header *hdr, GameProtocol::PlayerList *pl) { playerlist->HandleTextMessage(pl->Text); }
   void RconResponseCB(Connection *c, GameProtocol::Header *hdr, GameProtocol::RconResponse*) { retry.Acknowledged(hdr->seq); }
   void RconRequestCB(Connection *c, GameProtocol::Header *hdr, GameProtocol::RconRequest *rcon) {
@@ -777,6 +813,7 @@ struct GameClient {
     net->Write(c, UDPClient::Write, hdr->seq, &response);
     RconRequestCB(c, hdr, rcon->Text);
   }
+
   void RconRequestCB(Connection *c, GameProtocol::Header *hdr, const string &rcon) {
     StringLineIter lines(rcon);
     for (string line = IterNextString(&lines); !lines.Done(); line = IterNextString(&lines)) {
@@ -852,7 +889,10 @@ struct GameSettings {
     Setting(const string &k, Value *v) : key(k), value(v) {}
   };
   typedef vector<Setting> Vector;
+
   Vector vec;
+  GameSettings() {}
+
   void SetIndex(int n, int v)  { CHECK(n < vec.size()); vec[n].value->ind = v; };
   int GetIndex(int n)    const { CHECK(n < vec.size()); return vec[n].value->ind; }
   const char *Get(int n) const { CHECK(n < vec.size()); return vec[n].value->Cur(); }
@@ -876,7 +916,7 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
   int line_clicked=-1, decay_box_line=-1, decay_box_left=0;
   Widget::Button tab1, tab2, tab3, tab4, tab1_server_start, tab2_server_join, sub_tab1, sub_tab2, sub_tab3; 
   TextGUI tab2_server_address, tab3_player_name;
-  Widget::Scrollbar tab1_options, tab2_servers, tab3_sensitivity, tab3_volume, *current_scrollbar;
+  Widget::Slider tab1_options, tab2_servers, tab3_sensitivity, tab3_volume, *current_scrollbar;
 #ifdef LFL_ANDROID
   Widget::Button gplus_signin_button, gplus_signout_button, gplus_quick, gplus_invite, gplus_accept;
 #endif
@@ -886,9 +926,9 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
   GameMenuGUI(LFL::Window *W, const string &master_url, int port, Asset *t=0, Asset *parts=0) :
     GUI(W), topbar(W), pinger(-1), master_get_url(master_url), title(t),
     font(Fonts::Get("Origicide.ttf", "", 12)), default_port(port),
-    tab1(&topbar, 0, font, "single player", MouseController::CB([&](){ if (!Changed(&selected, 1)) ToggleActive(); })),
-    tab2(&topbar, 0, font, "multi player",  MouseController::CB([&](){ if (!Changed(&selected, 2)) ToggleActive(); })), 
-    tab3(&topbar, 0, font, "options",       MouseController::CB([&](){ if (!Changed(&selected, 3)) ToggleActive(); })),
+    tab1(&topbar, 0, font, "single player", MouseController::CB([&](){ if (!Changed(&selected, 1)) Deactivate(); })),
+    tab2(&topbar, 0, font, "multi player",  MouseController::CB([&](){ if (!Changed(&selected, 2)) Deactivate(); })), 
+    tab3(&topbar, 0, font, "options",       MouseController::CB([&](){ if (!Changed(&selected, 3)) Deactivate(); })),
     tab4(&topbar, 0, font, "quit",          MouseController::CB(bind(&GameMenuGUI::MenuQuit, this))),
     tab1_server_start(this, 0, font, "start", MouseController::CB(bind(&GameMenuGUI::MenuServerStart, this))),
     tab2_server_join (this, 0, font, "join",  MouseController::CB(bind(&GameMenuGUI::MenuServerJoin,  this))),
@@ -897,10 +937,10 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
     sub_tab3(this, 0, font, "start",          MouseController::CB([&]() { sub_selected=3; })),
     tab2_server_address(W, font),
     tab3_player_name   (W, font),
-    tab1_options    (this, menuftr1),
-    tab2_servers    (this, menuftr2),
-    tab3_sensitivity(this, Box(), Widget::Scrollbar::Flag::Horizontal),
-    tab3_volume     (this, Box(), Widget::Scrollbar::Flag::Horizontal), current_scrollbar(0),
+    tab1_options    (this),
+    tab2_servers    (this),
+    tab3_sensitivity(this, Box(), Widget::Slider::Flag::Horizontal),
+    tab3_volume     (this, Box(), Widget::Slider::Flag::Horizontal), current_scrollbar(0),
 #ifdef LFL_ANDROID
     gplus_signin_button (this, 0, 0,    "",           MouseController::CB([&](){ AndroidGPlusSignin(); gplus_signin_button.decay = 10; })),
     gplus_signout_button(this, 0, font, "g+ Signout", MouseController::CB([&](){ AndroidGPlusSignout(); })),
@@ -909,40 +949,43 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
     gplus_accept        (this, 0, font, "accept",     MouseController::CB([&](){ AndroidGPlusAccept(); })),
 #endif
     browser(this, box), particles("GameMenuParticles") {
-      tab1.outline = tab2.outline = tab3.outline = tab4.outline = tab1_server_start.outline = tab2_server_join.outline = sub_tab1.outline = sub_tab2.outline = sub_tab3.outline = &font->fg;
-      Layout();
-      tab2_server_address.cmd_prefix.clear();
-      tab3_player_name.cmd_prefix.clear();
-      tab3_player_name.deactivate_on_enter = tab2_server_address.deactivate_on_enter = true;
-      tab3_player_name.runcb = bind(&TextGUI::AssignInput, (TextGUI*)&tab3_player_name, _1);
-      tab3_player_name   .SetToggleKey(0, Toggler::OneShot);
-      tab2_server_address.SetToggleKey(0, Toggler::OneShot);
-      tab2_server_address.runcb = bind(&GameMenuGUI::MenuAddServer, this, _1);
-      tab3_sensitivity.increment = .1;
-      tab3_sensitivity.doc_height = 10;
-      tab3_sensitivity.scrolled = FLAGS_msens / 10.0;
-      tab3_volume.increment = .5;
-      tab3_volume.doc_height = SystemAudio::GetMaxVolume();
-      tab3_volume.scrolled = (float)SystemAudio::GetVolume() / tab3_volume.doc_height;
+    tab1.outline = tab2.outline = tab3.outline = tab4.outline = tab1_server_start.outline = tab2_server_join.outline = sub_tab1.outline = sub_tab2.outline = sub_tab3.outline = &font->fg;
+    tab1_options.dot_size = tab2_servers.dot_size = tab3_sensitivity.dot_size = tab3_volume.dot_size = 25;
+    Layout();
+    tab3_player_name.cmd_prefix.clear();
+    tab3_player_name.cursor.type = TextGUI::Cursor::Underline;
+    tab3_player_name.deactivate_on_enter = tab2_server_address.deactivate_on_enter = true;
+    tab3_player_name.runcb = bind(&TextGUI::AssignInput, (TextGUI*)&tab3_player_name, _1);
+    tab3_player_name.bg_color = &Color::clear;
+    tab3_player_name   .SetToggleKey(0, true);
+    tab2_server_address.SetToggleKey(0, true);
+    tab2_server_address.runcb = bind(&GameMenuGUI::MenuAddServer, this, _1);
+    tab2_server_address.cmd_prefix.clear();
+    tab3_sensitivity.increment = .1;
+    tab3_sensitivity.doc_height = 10;
+    tab3_sensitivity.scrolled = FLAGS_msens / 10.0;
+    tab3_volume.increment = .5;
+    tab3_volume.doc_height = app->GetMaxVolume();
+    tab3_volume.scrolled = (float)app->GetVolume() / tab3_volume.doc_height;
 
-      sub_selected = 2;
-      if (parts) {
-        particles.emitter_type = MenuParticles::Emitter::Mouse | MenuParticles::Emitter::GlowFade;
-        particles.texture = parts->tex.ID;
-      }
-#ifdef LFL_ANDROID
-      mobile_font = Fonts::Get("MobileAtlas", "", 0, Color::white);
-      gplus_signin_button.EnableHover();
-#endif
-      pinger.handler = this;
-      app->network->Enable(&pinger);
-      SystemNetwork::SetSocketBroadcastEnabled(pinger.GetListener()->socket, true);
-      Sniffer::GetIPAddress(&ip);
-      Sniffer::GetBroadcastAddress(&broadcast_ip);
+    sub_selected = 2;
+    if (parts) {
+      particles.emitter_type = MenuParticles::Emitter::Mouse | MenuParticles::Emitter::GlowFade;
+      particles.texture = parts->tex.ID;
     }
+#ifdef LFL_ANDROID
+    mobile_font = Fonts::Get("MobileAtlas", "", 0, Color::white);
+    gplus_signin_button.EnableHover();
+#endif
+    pinger.handler = this;
+    app->network->Enable(&pinger);
+    SystemNetwork::SetSocketBroadcastEnabled(pinger.GetListener()->socket, true);
+    Sniffer::GetIPAddress(&ip);
+    Sniffer::GetBroadcastAddress(&broadcast_ip);
+  }
 
-  void Activate  () { active=1; topbar.active=1; selected=last_selected=0; app->shell.mouseout(vector<string>()); Advertising::HideAds(); }
-  void Deactivate() { active=0; topbar.active=0; UpdateSettings(); tab3_player_name.active=false; Advertising::ShowAds(); }
+  void Activate  () { active=1; topbar.active=1; selected=last_selected=0; app->shell.mouseout(vector<string>()); app->HideAds(); }
+  void Deactivate() { active=0; topbar.active=0; UpdateSettings(); tab3_player_name.Deactivate(); app->ShowAds(); }
   bool DecayBoxIfMatch(int l1, int l2) { if (l1 != l2) return 0; decay_box_line = l1; decay_box_left = 10; return 1; }
   void UpdateSettings() {
     app->shell.Run(StrCat("name ", String::ToUTF8(tab3_player_name.Text16())));
@@ -953,14 +996,16 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
   void MenuLineClicked() { line_clicked = -MousePosition().y / font->Height(); }
   void MenuServerStart() {
     if (selected != 1 && !(selected == 2 && sub_selected == 3)) return;
-    ToggleActive();
+    Deactivate();
     app->shell.Run("local_server");
   }
+
   void MenuServerJoin() {
     if (selected != 2 || master_server_selected < 0 || master_server_selected >= master_server_list.size()) return;
-    ToggleActive();
+    Deactivate();
     app->shell.Run(StrCat("server ", master_server_list[master_server_selected].addr));
   }
+
   void MenuAddServer(const string &text) {
     int delim = text.find(':');
     if (delim != string::npos) SystemNetwork::SendTo(pinger.GetListener()->socket, SystemNetwork::GetHostByName(text.substr(0, delim)),
@@ -972,6 +1017,7 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
     if (!master_get_url.empty()) Singleton<HTTPClient>::Get()->WGet(master_get_url, 0, bind(&GameMenuGUI::MasterGetResponseCB, this, _1, _2, _3, _4, _5));
     master_server_list.clear(); master_server_selected=-1;
   }
+
   void MasterGetResponseCB(Connection *c, const char *h, const string &ct, const char *cb, int cl) {
     if (!cb || !cl) return;
     const char *p;
@@ -982,6 +1028,7 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
       SystemNetwork::SendTo(pinger.GetListener()->socket, IPV4::Parse(string(l.c_str(), p-l.c_str())), atoi(p+1), "ping\n", 5);
     }
   }
+
   void Close(Connection *c) { c->handler=0; }
   int Read(Connection *c) {
     for (int i=0; i<c->packets.size(); i++) {
@@ -990,6 +1037,7 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
     }
     return 0;
   }
+
   void PingResponseCB(Connection *c, const string &reply) {
     if (ip && ip == c->addr) return;
     const char *p;
@@ -1019,6 +1067,7 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
       tab3.Layout(&topbarflow); tab4.Layout(&topbarflow);
     }
   }
+
   void LayoutMenu() {
     Box b;
     Flow menuflow(&box, font, Reset());
@@ -1071,11 +1120,11 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
 
           menuflow.AppendText("\n[ add server ]");
           if (DecayBoxIfMatch(line_clicked, menuflow.out->line.size())) {
-            TouchDevice::OpenKeyboard();
-            tab2_server_address.active = true;
+            app->OpenTouchKeyboard();
+            tab2_server_address.Activate();
           }
 
-          if (tab2_server_address.active) menuflow.AppendText(.37, ":");
+          if (tab2_server_address.Active()) menuflow.AppendText(.37, ":");
           menuflow.AppendRow(.4, .6, &b);
           menuflow.AppendNewlines(1);
           { ScissorStack ss; tab2_server_address.Draw(b + box.TopLeft()); }
@@ -1105,8 +1154,8 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
 #endif
       menuflow.AppendText("\nPlayer Name:");
       if (DecayBoxIfMatch(line_clicked, menuflow.out->line.size())) {
-        TouchDevice::OpenKeyboard();
-        tab3_player_name.active = true;
+        app->OpenTouchKeyboard();
+        tab3_player_name.Activate();
       }
       menuflow.AppendRow(.6, .4, &b);
       { ScissorStack ss; tab3_player_name.Draw(b + box.TopLeft()); }
@@ -1123,7 +1172,7 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
 
       if (tab3_volume.dirty) {
         tab3_volume.dirty = false;
-        SystemAudio::SetVolume((int)(tab3_volume.scrolled * tab3_volume.doc_height));
+        app->SetVolume((int)(tab3_volume.scrolled * tab3_volume.doc_height));
       }
 
       menuflow.AppendNewlines(1);
@@ -1134,6 +1183,7 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
     }
     if (current_scrollbar) current_scrollbar->SetDocHeight(menuflow.Height());
   }
+
   void LayoutGPlusSigninButton(Flow *menuflow, bool signedin) {
 #ifdef LFL_ANDROID
     int bh = menuflow->cur_attr.font->Height()*2, bw = bh * 41/9.0;
@@ -1221,6 +1271,7 @@ struct GamePlayerListGUI : public GUI {
     }
     sort(playerlist.begin(), playerlist.end(), PlayerCompareScore);
   }
+
   void Draw(Shader *MyShader) {
     if (!toggled) Deactivate();
     screen->gd->EnableBlend();
@@ -1241,6 +1292,7 @@ struct GamePlayerListGUI : public GUI {
     outgeom2.Draw(out2.TopLeft());
     font->Draw(titletext, Box(win.x, win.top()-font->Height(), win.w, font->Height()), 0, Font::DrawFlag::AlignCenter);
   }
+
   void LayoutLine(Flow *flow, const string &name, const string &score, const string &ping) {
     flow->AppendText(name);
     flow->AppendText(.6, score);
@@ -1257,21 +1309,18 @@ struct GamePlayerListGUI : public GUI {
 struct GameChatGUI : public TextArea {
   GameClient **server;
   GameChatGUI(LFL::Window *W, int key, GameClient **s) : TextArea(W, Fonts::Get("Origicide.ttf", "", 10, Color::grey80)), server(s) { 
-    SetToggleKey(key, Toggler::OneShot);
-    write_timestamp=deactivate_on_enter=true;
+    SetToggleKey(key, true);
+    write_timestamp = deactivate_on_enter = true;
   }
 
-  void Run(string text) {
-    if (server && *server) (*server)->Rcon(StrCat("say ", text));
-    active = false;
-  }
+  void Run(string text) { if (server && *server) (*server)->Rcon(StrCat("say ", text)); }
   void Draw() {
-    if (!active && Now() - write_last >= Seconds(5)) return;
+    if (!Active() && Now() - write_last >= Seconds(5)) return;
     screen->gd->EnableBlend(); 
     {
       int h = (int)(screen->height/1.6);
       Scissor scissor(Box(1, screen->height-h+1, screen->width, screen->height*.15, false));
-      TextArea::Draw(Box(0, screen->height-h, screen->width, (int)(screen->height*.15)), active);
+      TextArea::Draw(Box(0, screen->height-h, screen->width, (int)(screen->height*.15)), DrawFlag::DrawCursor);
     }
   }
 };

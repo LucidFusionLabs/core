@@ -129,7 +129,7 @@ void Glyph::Draw(const LFL::Box &b, const Drawable::Attr *a) const {
   if (!a || !a->font) return tex.Draw(b, a);
   if (!ready) a->font->engine->LoadGlyphs(a->font, this, 1);
   if (tex.buf) screen->gd->DrawPixels(b, tex);
-  else         b.Draw(tex.coord);
+  else b.Draw(tex.coord);
 }
 
 GlyphCache::GlyphCache(unsigned T, int W, int H) : dim(W, H ? H : W), tex(dim.w, dim.h, Texture::preferred_pf, T), flow(new Flow(&dim)) {}
@@ -215,6 +215,15 @@ void GlyphCache::Load(const Font *f, const Glyph *g, CGFontRef cgfont, int size)
     CGContextSetRGBFillColor(context, fg.r(), fg.g(), fg.b(), fg.a());
     CGContextSetFont(context, cgfont);
     CGContextSetFontSize(context, size);
+    if (f->flag & FontDesc::Shadow) {
+      // CGContextSetShadow(context, CGSizeMake(15, -20), 5); 
+      CGColorSpaceRef cs = CGColorSpaceCreateDeviceRGB();
+      CGFloat cv[] = { 0, 0, 0, 1 };
+      CGColorRef c = CGColorCreate(cs, cv);
+      CGContextSetShadowWithColor(context, CGSizeMake(15, -20), 5, c);
+      CGColorRelease(c);
+      CGColorSpaceRelease(cs); 
+    }
     CGContextShowGlyphsAtPositions(context, &cg, &point, 1);
     CGContextRelease(context);
     g->tex.FlipBufferY();
@@ -274,26 +283,31 @@ FontDesc::FontDesc(const IPC::FontDescription &d) :
   engine = d.engine();
 }
 
-Glyph *Font::FindOrInsertGlyph(char16_t gind) {
-  unsigned ind = gind - glyph->table_start;
-  return ind < glyph->table.size() ? &glyph->table[ind] : &glyph->index[gind];
+Glyph *Font::FindOrInsertGlyph(char16_t ind) {
+  if (ind >= glyph->table_start) {
+    int table_ind = ind - glyph->table_start;
+    if (table_ind < glyph->table.size()) return &glyph->table[table_ind];
+  }
+  return &glyph->index[ind];
 }
 
-Glyph *Font::FindGlyph(char16_t gind) {
-  unsigned ind = gind - glyph->table_start;
-  if (ind < glyph->table.size()) return &glyph->table[ind];
-  auto i = glyph->index.find(gind);
-  if (i != glyph->index.end()) return &i->second;
-  bool zwnbsp = gind == Unicode::zero_width_non_breaking_space, nbsp = zwnbsp || gind == Unicode::non_breaking_space;
-  if (!nbsp && !engine->HaveGlyph(this, gind)) {
-    ind = missing_glyph - glyph->table_start;
-    CHECK_LT(ind, glyph->table.size());
-    return &glyph->table[ind];
+Glyph *Font::FindGlyph(char16_t ind) {
+  if (ind >= glyph->table_start) {
+    int table_ind = ind - glyph->table_start;
+    if (table_ind < glyph->table.size()) return &glyph->table[table_ind];
   }
-  Glyph *g = &glyph->index[gind];
-  g->id = nbsp ? ' ' : gind;
+  auto i = glyph->index.find(ind);
+  if (i != glyph->index.end()) return &i->second;
+  bool zwnbsp = ind == Unicode::zero_width_non_breaking_space, nbsp = zwnbsp || ind == Unicode::non_breaking_space;
+  if (!nbsp && !engine->HaveGlyph(this, ind)) {
+    int table_ind = missing_glyph - glyph->table_start;
+    CHECK_LT(table_ind, glyph->table.size());
+    return &glyph->table[table_ind];
+  }
+  Glyph *g = &glyph->index[ind];
+  g->id = nbsp ? ' ' : ind;
   engine->InitGlyphs(this, g, 1);
-  if (nbsp) g->id = gind;
+  if (nbsp) g->id = ind;
   if (zwnbsp) g->advance = g->tex.width = g->tex.height = 0;
   return g;
 }
@@ -322,6 +336,12 @@ void Font::Select() {
   glyph->cache->tex.Bind();
   if      (mix_fg)                { screen->gd->EnableBlend(); screen->gd->SetColor(fg); }
   else if (has_bg && bg.a() == 1) { screen->gd->DisableBlend(); }
+}
+
+void Font::DrawGlyphWithAttr(int gid, const Box &w, const Drawable::Attr &a) {
+  Select();
+  Glyph *g = FindGlyph(gid);
+  g->Draw(w, &a);
 }
 
 template <class X> void Font::Size(const StringPieceT<X> &text, Box *out, int maxwidth, int *lines_out) {
@@ -469,7 +489,7 @@ Font *AtlasFontEngine::OpenAtlas(const FontDesc &d) {
 
   float max_t = 0, max_u = 0;
   MatrixRowIter(gm.F) {
-    int glyph_ind = (int)gm.F->row(i)[0];
+    int glyph_ind = static_cast<int>(gm.F->row(i)[0]);
     Glyph *g = ret->FindOrInsertGlyph(glyph_ind);
     g->FromArray(gm.F->row(i), gm.F->N);
     g->tex.ID = tex.ID;
@@ -1158,11 +1178,14 @@ void Fonts::ResetGL() {
   for (auto c : caches) {}
 }
 
-void VeraMoBdAtlas::SetConsoleDefault() {
-  FLAGS_atlas_font_sizes = "32";
-  string console_font = "VeraMoBd.ttf";
-  Singleton<AtlasFontEngine>::Get()->Init(FontDesc(console_font, "", 32, Color::white, Color::clear, FLAGS_lfapp_console_font_flag));
-  FLAGS_lfapp_console_font = StrCat("atlas://", console_font);
+void Fonts::LoadConsoleFont(const string &name, const vector<int> &sizes) {
+  auto atlas_font_engine = Singleton<AtlasFontEngine>::Get();
+  FLAGS_lfapp_console_font = StrCat("atlas://", name);
+  FLAGS_atlas_font_sizes.clear();
+  for (auto size : sizes) {
+    StrAppend(&FLAGS_atlas_font_sizes, FLAGS_atlas_font_sizes.empty()?"":",", size);
+    atlas_font_engine->Init(FontDesc(name, "", size, Color::white, Color::clear, FLAGS_lfapp_console_font_flag));
+  }
 }
 
 #ifdef LFL_FREETYPE

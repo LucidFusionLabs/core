@@ -21,11 +21,14 @@
 
 namespace LFL {
 struct Protocol { 
-  enum { TCP=1, UDP=2, UNIX=3, GPLUS=4 }; int p;
+  enum { TCP=1, UDP=2, UNIX=3, GPLUS=4 };
   static const char *Name(int p);
 };
 
 struct Serializable {
+  template <class X> static void ReadType (X    *addr, const void *v) { if (addr) memcpy(addr,  v, sizeof(X)); }
+  template <class X> static void WriteType(void *addr, const X    &v) { if (addr) memcpy(addr, &v, sizeof(X)); }
+
   struct Stream {
     char *buf;
     int size;
@@ -33,86 +36,79 @@ struct Serializable {
     mutable bool error=0;
     Stream(char *B, int S) : buf(B), size(S) {}
 
-    virtual unsigned char  *N8()            = 0;
-    virtual unsigned short *N16()           = 0;
-    virtual unsigned       *N32()           = 0;
-    virtual char           *Get(int size=0) = 0;
-    virtual char           *End()           = 0;
-
     int Len() const { return size; }
     int Pos() const { return offset; };
     int Remaining() const { return size - offset; }
     int Result() const { return error ? -1 : 0; }
     const char *Start() const { return buf; }
-    const char *Advance(int n=0) const { return Get(n); }
-    const char           *End() const { return buf + size; }
-    const unsigned char  *N8()  const { unsigned char  *ret = (unsigned char *)(buf+offset); offset += 1;   if (offset > size) { error=1; return 0; } return ret; }
-    const unsigned short *N16() const { unsigned short *ret = (unsigned short*)(buf+offset); offset += 2;   if (offset > size) { error=1; return 0; } return ret; }
-    const unsigned       *N32() const { unsigned       *ret = (unsigned      *)(buf+offset); offset += 4;   if (offset > size) { error=1; return 0; } return ret; }
-    const char           *Get(int len=0) const { char  *ret = (char          *)(buf+offset); offset += len; if (offset > size) { error=1; return 0; } return ret; }
+    const char *End() const { return buf + size; }
+    const char *Get(int len=0) const {
+      const char *ret = buf + offset;
+      if ((offset += len) > size) { error=1; return 0; }
+      return ret;
+    }
+    virtual char *End()          { FATAL(Void(this), ": ConstStream write"); return 0; }
+    virtual char *Get(int len=0) { FATAL(Void(this), ": ConstStream write"); return 0; }
 
     template <class X>
-    void AString (const ArrayPiece<X> &in) { char *v = (char*)Get(in.Bytes()+4); if (v) { memcpy(v+4, (const char*)in.data(), in.Bytes()); *((int*)v) = htonl(in.Bytes()); } }
-    void BString (const StringPiece   &in) { char *v = (char*)Get(in.size ()+4); if (v) { memcpy(v+4, in.data(), in.size()); *((int*)v) = htonl(in.size ()); } }
-    void NTString(const StringPiece   &in) { char *v = (char*)Get(in.size ()+1); if (v) { memcpy(v,   in.data(), in.size()); v[in.size()]=0; } }
-    void String  (const StringPiece   &in) { char *v = (char*)Get(in.size ());   if (v) { memcpy(v,   in.data(), in.size()); } }
+    void AString (const ArrayPiece<X> &in) { auto v = Get(in.Bytes()+sizeof(int)); if (v) { memcpy(v+4, in.ByteData(), in.Bytes()); WriteType<int>(v, htonl(in.Bytes())); } }
+    void BString (const StringPiece   &in) { auto v = Get(in.size ()+sizeof(int)); if (v) { memcpy(v+4, in.data(),     in.size());  WriteType<int>(v, htonl(in.size ())); } }
+    void NTString(const StringPiece   &in) { auto v = Get(in.size ()+1);           if (v) { memcpy(v,   in.data(),     in.size());  v[in.size()]=0; } }
+    void String  (const StringPiece   &in) { auto v = Get(in.size ());             if (v) { memcpy(v,   in.data(),     in.size());                  } }
 
-    void Write8 (const unsigned char  &in) { unsigned char  *v =                 N8();  if (v) *v = in; }
-    void Write8 (const          char  &in) {          char  *v = (char*)         N8();  if (v) *v = in; }
-    void Write16(const unsigned short &in) { unsigned short *v =                 N16(); if (v) *v = in; }
-    void Write16(const          short &in) {          short *v = (short*)        N16(); if (v) *v = in; }
-    void Write32(const unsigned int   &in) { unsigned int   *v =                 N32(); if (v) *v = in; }
-    void Write32(const          int   &in) {          int   *v = (int*)          N32(); if (v) *v = in; }
-    void Write32(const unsigned long  &in) { unsigned long  *v = (unsigned long*)N32(); if (v) *v = in; }
-    void Write32(const          long  &in) {          long  *v = (long*)         N32(); if (v) *v = in; }
+    void Write8 (const unsigned char  &v) { WriteType(Get(sizeof(v)), v); }
+    void Write8 (const          char  &v) { WriteType(Get(sizeof(v)), v); }
+    void Write16(const unsigned short &v) { WriteType(Get(sizeof(v)), v); }
+    void Write16(const          short &v) { WriteType(Get(sizeof(v)), v); }
+    void Write32(const unsigned int   &v) { WriteType(Get(sizeof(v)), v); }
+    void Write32(const          int   &v) { WriteType(Get(sizeof(v)), v); }
+    void Write32(const unsigned long  &v) { WriteType(Get(sizeof(v)), v); }
+    void Write32(const          long  &v) { WriteType(Get(sizeof(v)), v); }
 
-    void Ntohs(const unsigned short &in) { unsigned short *v =         N16(); if (v) *v = ntohs(in); }
-    void Htons(const unsigned short &in) { unsigned short *v =         N16(); if (v) *v = htons(in); }
-    void Ntohs(const          short &in) {          short *v = (short*)N16(); if (v) *v = ntohs(in); }
-    void Htons(const          short &in) {          short *v = (short*)N16(); if (v) *v = htons(in); }
-    void Ntohl(const unsigned int   &in) { unsigned int   *v =         N32(); if (v) *v = ntohl(in); }
-    void Htonl(const unsigned int   &in) { unsigned int   *v =         N32(); if (v) *v = htonl(in); }
-    void Ntohl(const          int   &in) {          int   *v = (int*)  N32(); if (v) *v = ntohl(in); }
-    void Htonl(const          int   &in) {          int   *v = (int*)  N32(); if (v) *v = htonl(in); }
+    void Htons  (const unsigned short &v) { WriteType(Get(sizeof(v)), htons(v)); }
+    void Ntohs  (const unsigned short &v) { WriteType(Get(sizeof(v)), ntohs(v)); }
+    void Htons  (const          short &v) { WriteType(Get(sizeof(v)), htons(v)); }
+    void Ntohs  (const          short &v) { WriteType(Get(sizeof(v)), ntohs(v)); }
+    void Htonl  (const unsigned int   &v) { WriteType(Get(sizeof(v)), htonl(v)); }
+    void Ntohl  (const unsigned int   &v) { WriteType(Get(sizeof(v)), ntohl(v)); }
+    void Htonl  (const          int   &v) { WriteType(Get(sizeof(v)), htonl(v)); }
+    void Ntohl  (const          int   &v) { WriteType(Get(sizeof(v)), ntohl(v)); }
 
-    void Htons(unsigned short *out) const { const unsigned short *v =         N16(); *out = v ? htons(*v) : 0; }
-    void Ntohs(unsigned short *out) const { const unsigned short *v =         N16(); *out = v ? ntohs(*v) : 0; }
-    void Htons(         short *out) const { const          short *v = (short*)N16(); *out = v ? htons(*v) : 0; }
-    void Ntohs(         short *out) const { const          short *v = (short*)N16(); *out = v ? ntohs(*v) : 0; }
-    void Htonl(unsigned int   *out) const { const unsigned int   *v =         N32(); *out = v ? htonl(*v) : 0; }
-    void Ntohl(unsigned int   *out) const { const unsigned int   *v =         N32(); *out = v ? ntohl(*v) : 0; }
-    void Htonl(         int   *out) const { const          int   *v = (int*)  N32(); *out = v ? htonl(*v) : 0; }
-    void Ntohl(         int   *out) const { const          int   *v = (int*)  N32(); *out = v ? ntohl(*v) : 0; }
-
-    void Read8 (unsigned char  *out) const { const unsigned char  *v =                 N8();  *out = v ? *v : 0; }
-    void Read8 (         char  *out) const { const          char  *v = (char*)         N8();  *out = v ? *v : 0; }
-    void Read16(unsigned short *out) const { const unsigned short *v =                 N16(); *out = v ? *v : 0; }
-    void Read16(         short *out) const { const          short *v = (short*)        N16(); *out = v ? *v : 0; }
-    void Read32(unsigned int   *out) const { const unsigned int   *v =                 N32(); *out = v ? *v : 0; }
-    void Read32(         int   *out) const { const          int   *v = (int*)          N32(); *out = v ? *v : 0; }
-    void Read32(unsigned long  *out) const { const unsigned long  *v = (unsigned long*)N32(); *out = v ? *v : 0; }
-    void Read32(         long  *out) const { const          long  *v = (long*)         N32(); *out = v ? *v : 0; }
+    void Htons(unsigned short *out) const { Read16(out); *out = htons(*out); }
+    void Ntohs(unsigned short *out) const { Read16(out); *out = ntohs(*out); }
+    void Htons(         short *out) const { Read16(out); *out = htons(*out); }
+    void Ntohs(         short *out) const { Read16(out); *out = ntohs(*out); }
+    void Htonl(unsigned int   *out) const { Read32(out); *out = htonl(*out); }
+    void Ntohl(unsigned int   *out) const { Read32(out); *out = ntohl(*out); }
+    void Htonl(         int   *out) const { Read32(out); *out = htonl(*out); }
+    void Ntohl(         int   *out) const { Read32(out); *out = ntohl(*out); }
+    
+    void Read8 (unsigned char   *out) const { ReadType(out, Get(sizeof(*out))); }
+    void Read8 (         char   *out) const { ReadType(out, Get(sizeof(*out))); }
+    void Read16(unsigned short  *out) const { ReadType(out, Get(sizeof(*out))); }
+    void Read16(         short  *out) const { ReadType(out, Get(sizeof(*out))); }
+    void Read32(unsigned int    *out) const { ReadType(out, Get(sizeof(*out))); }
+    void Read32(         int    *out) const { ReadType(out, Get(sizeof(*out))); }
+    void Read32(unsigned long   *out) const { ReadType(out, Get(sizeof(*out))); }
+    void Read32(         long   *out) const { ReadType(out, Get(sizeof(*out))); }
     void ReadString(StringPiece *out) const { Ntohl(&out->len); out->buf = Get(out->len); }
-    template <class X> void ReadArray(ArrayPiece<X> *out) const
-    { int l; Ntohl(&l); out->assign(reinterpret_cast<const X*>(Get(l)), l/sizeof(X)); }
+
+    template <class X> void ReadUnalignedArray(ArrayPiece<X> *out) const
+    { int l=0; Ntohl(&l); out->assign(reinterpret_cast<const X*>(Get(l)), l/sizeof(X)); }
   };
 
   struct ConstStream : public Stream {
-    ConstStream(const char *B, int S) : Stream((char*)B, S) {}
-    char           *End()          { FATAL((void*)this, ": ConstStream write"); return 0; }
-    unsigned char  *N8()           { FATAL((void*)this, ": ConstStream write"); return 0; }
-    unsigned short *N16()          { FATAL((void*)this, ": ConstStream write"); return 0; }
-    unsigned       *N32()          { FATAL((void*)this, ": ConstStream write"); return 0; }
-    char           *Get(int len=0) { FATAL((void*)this, ": ConstStream write"); return 0; }
+    ConstStream(const char *B, int S) : Stream(const_cast<char*>(B), S) {}
   };
 
   struct MutableStream : public Stream {
     MutableStream(char *B, int S) : Stream(B, S) {}
-    char           *End() { return buf + size; }
-    unsigned char  *N8()  { unsigned char  *ret = (unsigned char *)(buf+offset); offset += 1;   if (offset > size) { error=1; return 0; } return ret; }
-    unsigned short *N16() { unsigned short *ret = (unsigned short*)(buf+offset); offset += 2;   if (offset > size) { error=1; return 0; } return ret; }
-    unsigned       *N32() { unsigned       *ret = (unsigned      *)(buf+offset); offset += 4;   if (offset > size) { error=1; return 0; } return ret; }
-    char           *Get(int len=0) { char  *ret = (char          *)(buf+offset); offset += len; if (offset > size) { error=1; return 0; } return ret; }
+    char *End() { return buf + size; }
+    char *Get(int len=0) {
+      char *ret = buf + offset;
+      if ((offset += len) > size) { error=1; return 0; }
+      return ret;
+    }
   };
 
   struct Header {
@@ -146,17 +142,18 @@ struct Serializable {
 };
 
 struct Ethernet {
-  struct Header {
+  UNALIGNED_struct Header {
     static const int Size = 14, AddrSize = 6;
     unsigned char dst[AddrSize], src[AddrSize];
     unsigned short type;
-  };
+  }; UNALIGNED_END(Header, Header::Size);
 };
 
 struct IPV4 {
   typedef unsigned Addr;
   static const Addr ANY;
-  struct Header {
+
+  UNALIGNED_struct Header {
     static const int MinSize = 20;
     unsigned char vhl, tos;
     unsigned short len, id, off;
@@ -165,7 +162,8 @@ struct IPV4 {
     unsigned int src, dst;
     int version() const { return vhl >> 4; }
     int hdrlen() const { return (vhl & 0x0f); }
-  };
+  }; UNALIGNED_END(Header, Header::MinSize);
+
   static Addr Parse(const string &ip);
   static void ParseCSV(const string &text, vector<Addr> *out);
   static void ParseCSV(const string &text, set<Addr> *out);
@@ -176,7 +174,7 @@ struct IPV4 {
 };
 
 struct TCP {
-  struct Header {
+  UNALIGNED_struct Header {
     static const int MinSize = 20;
     unsigned short src, dst;
     unsigned int seqn, ackn;
@@ -187,19 +185,19 @@ struct TCP {
 #endif
     unsigned short win, checksum, urgp;
     int offset() const { return offx2 >> 4; }
-  };
+  }; UNALIGNED_END(Header, Header::MinSize);
 };
 
 struct UDP {
-  struct Header {
+  UNALIGNED_struct Header {
     static const int Size = 8;
     unsigned short src, dst, len, checksum;
-  };
+  }; UNALIGNED_END(Header, Header::Size);
 };
 
 #undef IN
 struct DNS {
-  struct Header {
+  UNALIGNED_struct Header {
     unsigned short id;
 #ifdef LFL_BIG_ENDIAN
     unsigned short qr:1, opcode:4, aa:1, tc:1, rd:1, ra:1, unused:1, ad:1, cd:1, rcode:4;
@@ -208,15 +206,19 @@ struct DNS {
 #endif
     unsigned short qdcount, ancount, nscount, arcount;
     static const int size = 12;
-  };
+  }; UNALIGNED_END(Header, Header::size);
 
   struct Type { enum { A=1, NS=2, MD=3, MF=4, CNAME=5, SOA=6, MB=7, MG=8, MR=9, _NULL=10, WKS=11, PTR=12, HINFO=13, MINFO=14, MX=15, TXT=16 }; };
   struct Class { enum { IN=1, CS=2, CH=3, HS=4 }; };
+  typedef map<string, vector<IPV4::Addr> > AnswerMap;
 
   struct Record {
-    string question, answer; unsigned short type=0, _class=0, ttl1=0, ttl2=0, pref=0; IPV4::Addr addr=0;
+    string question, answer;
+    unsigned short type=0, _class=0, ttl1=0, ttl2=0, pref=0;
+    IPV4::Addr addr=0;
     string DebugString() const { return StrCat("Q=", question, ", A=", answer.empty() ? IPV4::Text(addr) : answer); }
   };
+
   struct Response {
     vector<DNS::Record> Q, A, NS, E;
     string DebugString() const;
@@ -227,7 +229,6 @@ struct DNS {
   static int ReadResourceRecord(const Serializable::Stream *in, int num, vector<Record> *out);
   static int ReadString(const char *start, const char *cur, const char *end, string *out);
 
-  typedef map<string, vector<IPV4::Addr> > AnswerMap;
   static void MakeAnswerMap(const vector<Record> &in, AnswerMap *out);
   static void MakeAnswerMap(const vector<Record> &in, const AnswerMap &qmap, int type, AnswerMap *out);
 };
@@ -276,7 +277,8 @@ struct MultiProcessFileResource : public Serializable {
   static const int Type = 1<<11 | 1;
   StringPiece buf, name, type;
   MultiProcessFileResource() : Serializable(Type) {}
-  MultiProcessFileResource(const string &b, const string &n, const string &t) : Serializable(Type), buf(b), name(n), type(t) {}
+  MultiProcessFileResource(const string &b, const string &n, const string &t) :
+    Serializable(Type), buf(b), name(n), type(t) {}
 
   int HeaderSize() const { return sizeof(int) * 3; }
   int Size() const { return HeaderSize() + 3 + buf.size() + name.size() + type.size(); }
@@ -294,11 +296,12 @@ struct MultiProcessFileResource : public Serializable {
 
 struct MultiProcessTextureResource : public Serializable {
   static const int Type = 1<<11 | 2;
-  int width, height, pf, linesize;
+  int width=0, height=0, pf=0, linesize=0;
   StringPiece buf;
-  MultiProcessTextureResource() : Serializable(Type), width(0), height(0), pf(0), linesize(0) {}
-  MultiProcessTextureResource(const LFL::Texture &t) : Serializable(Type), width(t.width), height(t.height), pf(t.pf), linesize(t.LineSize()),
-  buf(reinterpret_cast<const char *>(t.buf), t.BufferSize()) {}
+  MultiProcessTextureResource() : Serializable(Type) {}
+  MultiProcessTextureResource(const LFL::Texture &t) :
+    Serializable(Type), width(t.width), height(t.height), pf(t.pf), linesize(t.LineSize()),
+    buf(reinterpret_cast<const char *>(t.buf), t.BufferSize()) {}
 
   int HeaderSize() const { return sizeof(int) * 4; }
   int Size() const { return HeaderSize() + buf.size(); }
@@ -370,10 +373,12 @@ struct MultiProcessPaintResource : public Serializable {
 struct MultiProcessPaintResourceBuilder : public MultiProcessPaintResource {
   int count=0; bool dirty=0;
   MultiProcessPaintResourceBuilder(int S=32768) { data.Resize(S); }
+
   int Count() const { return count; }
   void Clear() { data.Clear(); count=0; dirty=0; }
   void Add(const Cmd &cmd) { data.Add(&cmd, CmdSize(cmd.type)); count++; dirty=1; }
-  void AddList(const MultiProcessPaintResourceBuilder &x) { data.Add(x.data.begin(), x.data.size()); count += x.count; dirty=1; }
+  void AddList(const MultiProcessPaintResourceBuilder &x)
+  { data.Add(x.data.begin(), x.data.size()); count += x.count; dirty=1; }
 };
 
 struct MultiProcessLayerTree : public Serializable {
@@ -383,8 +388,10 @@ struct MultiProcessLayerTree : public Serializable {
   MultiProcessLayerTree() : Serializable(Type) {}
   MultiProcessLayerTree(const vector<LayersInterface::Node> &n, const vector<LayersInterface::Child> &c) :
     Serializable(Type), node_data(&n[0], n.size()), child_data(&c[0], c.size()) {}
+
   void Out(Serializable::Stream *o) const { o->AString(node_data); o->AString(child_data); }
-  int In(const Serializable::Stream *i) { i->ReadArray(&node_data); i->ReadArray(&child_data); return i->Result(); }
+  int In(const Serializable::Stream *i)
+  { i->ReadUnalignedArray(&node_data); i->ReadUnalignedArray(&child_data); return i->Result(); }
   int Size() const { return HeaderSize() + node_data.Bytes() + child_data.Bytes(); }
   int HeaderSize() const { return sizeof(int)*2; }
   void AssignTo(LayersInterface *layers) const {
@@ -395,6 +402,7 @@ struct MultiProcessLayerTree : public Serializable {
 
 struct GameProtocol {
   struct Header : public Serializable::Header {};
+
   struct Position {
     static const int size = 12, scale = 1000;
     int x, y, z;
@@ -404,21 +412,23 @@ struct GameProtocol {
     void Out(Serializable::Stream *o) const { o->Htonl( x); o->Htonl( y); o->Htonl( z); }
     void In(const Serializable::Stream *i)  { i->Ntohl(&x); i->Ntohl(&y); i->Ntohl(&z); }
   };
+
   struct Orientation {
     static const int size = 12, scale=16384;
     short ort_x, ort_y, ort_z, up_x, up_y, up_z;
 
     void From(const v3 &ort, const v3 &up) {
       ort_x = (short)(ort.x*scale); ort_y = (short)(ort.y*scale); ort_z = (short)(ort.z*scale);
-      up_x = (short)(up.x*scale);  up_y  = (short)(up.y*scale);  up_z =  (short)(up.z*scale);
+      up_x  = (short)(up.x*scale);  up_y  = (short)(up.y*scale);  up_z =  (short)(up.z*scale);
     }
     void To(v3 *ort, v3 *up) {
       ort->x = (float)ort_x/scale; ort->y = (float)ort_y/scale; ort->z = (float)ort_z/scale;
-      up->x = (float) up_x/scale;  up->y = (float) up_y/scale;  up->z = (float) up_z/scale;
+      up->x  = (float) up_x/scale;  up->y = (float) up_y/scale;  up->z = (float) up_z/scale;
     }
     void Out(Serializable::Stream *o) const { o->Htons( ort_x); o->Htons( ort_y); o->Htons( ort_z); o->Htons( up_x); o->Htons( up_y); o->Htons( up_z); }
     void In(const Serializable::Stream *i)  { i->Ntohs(&ort_x); i->Ntohs(&ort_y); i->Ntohs(&ort_z); i->Ntohs(&up_x); i->Ntohs(&up_y); i->Ntohs(&up_z); }
   };
+
   struct Velocity {
     static const int size = 6, scale=1000;
     unsigned short x, y, z;
@@ -428,6 +438,7 @@ struct GameProtocol {
     void Out(Serializable::Stream *o) const { o->Htons( x); o->Htons( y); o->Htons( z); }
     void In(const Serializable::Stream *i)  { i->Ntohs(&x); i->Ntohs(&y); i->Ntohs(&z); }
   };
+
   struct Entity {
     static const int size = 8 + Position::size + Orientation::size + Velocity::size;
     unsigned short id, type, anim_id, anim_len;
@@ -439,6 +450,7 @@ struct GameProtocol {
     void Out(Serializable::Stream *o) const { o->Htons( id); o->Htons( type); o->Htons( anim_id); o->Htons( anim_len); pos.Out(o); ort.Out(o); vel.Out(o); }
     void In(const Serializable::Stream *i)  { i->Ntohs(&id); i->Ntohs(&type); i->Ntohs(&anim_id); i->Ntohs(&anim_len); pos.In(i);  ort.In(i);  vel.In(i);  }
   };
+
   struct Collision {
     static const int size = 8;
     unsigned short fmt, id1, id2, time;
@@ -446,6 +458,7 @@ struct GameProtocol {
     void Out(Serializable::Stream *o) const { o->Htons( fmt); o->Htons( id1); o->Htons( id2); o->Htons( time); }
     void In(const Serializable::Stream *i)  { i->Ntohs(&fmt); i->Ntohs(&id1); i->Ntohs(&id2); i->Ntohs(&time); }
   };
+
   struct ChallengeRequest : public Serializable {
     static const int ID = 1;
     ChallengeRequest() : Serializable(ID) {}
@@ -455,6 +468,7 @@ struct GameProtocol {
     void Out(Serializable::Stream *o) const {}
     int   In(const Serializable::Stream *i) { return 0; }
   };
+
   struct ChallengeResponse : public Serializable {
     static const int ID = 2;
     int token;
@@ -465,6 +479,7 @@ struct GameProtocol {
     void Out(Serializable::Stream *o) const { o->Htonl( token); }
     int   In(const Serializable::Stream *i) { i->Ntohl(&token); return 0; }
   };
+
   struct JoinRequest : public Serializable {
     static const int ID = 3;
     int token;
@@ -476,6 +491,7 @@ struct GameProtocol {
     void Out(Serializable::Stream *o) const { o->Htonl( token); o->String(PlayerName); }
     int   In(const Serializable::Stream *i) { i->Ntohl(&token); PlayerName = i->Get(); return 0; }
   };
+
   struct JoinResponse : public Serializable {
     static const int ID = 4;
     string rcon;
@@ -486,6 +502,7 @@ struct GameProtocol {
     void Out(Serializable::Stream *o) const { o->String(rcon); }
     int   In(const Serializable::Stream *i) { rcon = i->Get(); return 0; }
   };
+
   struct WorldUpdate : public Serializable {
     static const int ID = 5;
     unsigned short id;
@@ -502,6 +519,7 @@ struct GameProtocol {
       for (int i=0; i<entities;   i++) entity   [i].Out(o);
       for (int i=0; i<collisions; i++) collision[i].Out(o);
     }
+
     int In(const Serializable::Stream *in) {
       unsigned short entities, collisions;
       in->Ntohs(&id); in->Ntohs(&entities); in->Ntohs(&collisions);
@@ -513,6 +531,7 @@ struct GameProtocol {
       return 0;
     }
   };
+
   struct PlayerUpdate : public Serializable {
     static const int ID = 6;
     unsigned short id_WorldUpdate, time_since_WorldUpdate;
@@ -525,6 +544,7 @@ struct GameProtocol {
     void Out(Serializable::Stream *o) const { o->Htons( id_WorldUpdate); o->Htons( time_since_WorldUpdate); o->Htonl( buttons); ort.Out(o); }
     int   In(const Serializable::Stream *i) { i->Ntohs(&id_WorldUpdate); i->Ntohs(&time_since_WorldUpdate); i->Ntohl(&buttons); ort.In(i); return 0; }
   };
+
   struct RconRequest : public Serializable {
     static const int ID = 7;
     string Text;
@@ -535,6 +555,7 @@ struct GameProtocol {
     void Out(Serializable::Stream *o) const { o->String(Text); }
     int   In(const Serializable::Stream *i) { Text = i->Get(); return 0; }
   };
+
   struct RconResponse : public Serializable {
     static const int ID = 8;
     RconResponse() : Serializable(ID) {}
@@ -544,6 +565,7 @@ struct GameProtocol {
     void Out(Serializable::Stream *o) const {}
     int   In(const Serializable::Stream *i) { return 0; }
   };
+
   struct PlayerList : public RconRequest {
     static const int ID = 9;
     PlayerList() { Id=ID; }

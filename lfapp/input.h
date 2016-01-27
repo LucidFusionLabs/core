@@ -45,8 +45,6 @@ struct Mouse {
       case 2: return Button::_2;
     } return 0;
   }
-  static void GrabFocus();
-  static void ReleaseFocus();
 };
 
 struct InputController {
@@ -65,12 +63,10 @@ struct InputController {
 struct KeyboardController {
   struct Events { int total; };
   Events events;
-  bool active=0;
   KeyboardController() { ClearEvents(); }
 
+  int HandleSpecialKey(InputEvent::Id);
   void ClearEvents() { memzero(events); }
-  virtual void Activate  () { active = 1; }
-  virtual void Deactivate() { active = 0; }
   virtual void Input(const string &s) { for (int i=0; i<s.size(); i++) Input(s[i]); }
   virtual void Input(char key) {}
   virtual void Enter      () {}
@@ -149,7 +145,7 @@ struct MouseController {
     HitBox(int ET=0, const Box &b=Box(), const MouseControllerCallback &cb=MouseControllerCallback()) : box(b), evtype(ET), CB(cb) {}
   };
 
-  IterableFreeListVector<HitBox> hit;
+  IterableFreeListVector<HitBox, &HitBox::deleted> hit;
   unordered_set<int> drag;
   vector<int> hover;
   Events events;
@@ -161,6 +157,7 @@ struct MouseController {
   virtual void Activate() { active = 1; }
   virtual void Deactivate() { active = 0; }
   virtual bool NotActive() const { return !active; }
+  virtual bool ToggleActive() { if ((active = !active)) Activate(); else Deactivate(); return active; }
   virtual int AddClickBox(const Box &w, const MouseControllerCallback &cb) { return hit.Insert(HitBox(Event::Click, w, cb)); }
   virtual int AddHoverBox(const Box &w, const MouseControllerCallback &cb) { return hit.Insert(HitBox(Event::Hover, w, cb)); }
   virtual int AddDragBox (const Box &w, const MouseControllerCallback &cb) { return hit.Insert(HitBox(Event::Drag,  w, cb)); }
@@ -233,6 +230,19 @@ struct BindMap : public InputController {
     else if (d) b->Run(0);
   }
   string DebugString() const { string v="{ "; for (auto b : data) StrAppend(&v, b.key, " "); return v + "}"; }
+};
+
+struct DragTracker {
+  bool changing=0;
+  point beg_click, end_click;
+
+  bool Update(const point &p, bool down) {
+    bool start = !changing && down;
+    if (start) beg_click = p;
+    end_click = p;
+    changing = down;
+    return start;
+  }
 };
 
 struct InputModule : public Module {

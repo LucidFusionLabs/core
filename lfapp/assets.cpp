@@ -155,6 +155,7 @@ int PngWriter::Write(const string &fn, const Texture &tex) {
 const JOCTET EOI_BUFFER[1] = { JPEG_EOI };
 struct MyJpegErrorMgr  { jpeg_error_mgr  pub; jmp_buf setjmp_buffer; };
 struct MyJpegSourceMgr { jpeg_source_mgr pub; const JOCTET *data; size_t len; } ;
+
 static void JpegErrorExit(j_common_ptr jcs) { longjmp(((MyJpegErrorMgr*)jcs->err)->setjmp_buffer, 1); }
 static void JpegInitSource(j_decompress_ptr jds) {}
 static void JpegTermSource(j_decompress_ptr jds) {}
@@ -164,6 +165,7 @@ static boolean JpegFillInputBuffer(j_decompress_ptr jds) {
   src->pub.bytes_in_buffer = 1;
   return true;
 }
+
 static void JpegSkipInputData(j_decompress_ptr jds, long len) {
   MyJpegSourceMgr *src = (MyJpegSourceMgr*)jds->src;
   if (src->pub.bytes_in_buffer < len) {
@@ -174,6 +176,7 @@ static void JpegSkipInputData(j_decompress_ptr jds, long len) {
     src->pub.bytes_in_buffer -= len;
   }
 }
+
 static void JpegMemSrc(j_decompress_ptr jds, const char *buf, size_t len) {
   if (!jds->src) jds->src = (jpeg_source_mgr*)(*jds->mem->alloc_small)((j_common_ptr)jds, JPOOL_PERMANENT, sizeof(MyJpegSourceMgr));
   MyJpegSourceMgr *src = (MyJpegSourceMgr*)jds->src;
@@ -187,6 +190,7 @@ static void JpegMemSrc(j_decompress_ptr jds, const char *buf, size_t len) {
   src->pub.bytes_in_buffer = len;
   src->pub.next_input_byte = src->data;
 }
+
 int JpegReader::Read(File *lf,           Texture *out) { return Read(lf->Contents(), out); }
 int JpegReader::Read(const string &data, Texture *out) {
   MyJpegErrorMgr jerr;
@@ -237,6 +241,7 @@ int JpegReader::Read(const string &data, Texture *out) { FATAL("not implemented"
 static int GIFInput(GifFileType *gif, GifByteType *out, int size) {
   return ((BufferFile*)gif->UserData)->Read(out, size);
 }
+
 int GIFReader::Read(File *lf,           Texture *out) { return Read(lf->Contents(), out); }
 int GIFReader::Read(const string &data, Texture *out) {
   int error_code = 0;
@@ -275,51 +280,47 @@ int GIFReader::Read(File *lf,           Texture *out) { FATAL("not implemented")
 int GIFReader::Read(const string &data, Texture *out) { FATAL("not implemented"); }
 #endif /* LFL_GIF */
 
-struct WavHeader {
-  unsigned chunk_id, chunk_size, format, subchunk_id, subchunk_size;
-  unsigned short audio_format, num_channels;
-  unsigned sampleRate, byte_rate;
-  unsigned short block_align, bits_per_sample;
-  unsigned subchunk_id2, subchunk_size2;
-  static const int Size=44;
-};
-
-void WavWriter::Open(File *F) { delete f; f=F; wrote=WavHeader::Size; if (f && f->Opened()) Flush(); }
-void WavReader::Open(File *F) { delete f; f=F; last =WavHeader::Size; }
+bool WavReader::Open(File *F, WavHeader *out) {
+  f = F;
+  last = WavHeader::Size;
+  return (f && out) ? File::SeekReadSuccess(f, 0, out, WavHeader::Size) : f != nullptr;
+}
 
 int WavReader::Read(RingBuf::Handle *B, int off, int num) {
   if (!f->Opened()) return -1;
-  int offset = WavHeader::Size + off * sizeof(short), bytes = num * sizeof(short);
-  if (f->Seek(offset, File::Whence::SET) != offset) return -1;
-
-  short *data = (short *)alloca(bytes);
-  if (f->Read(data, bytes) != bytes) return -1;
-  for (int i=0; i<num; i++) B->Write(data[i] / 32768.0);
-  last = offset + bytes;
+  basic_string<short> buf(num, 0);
+  int offset = WavHeader::Size + off * sizeof(short);
+  if (!File::SeekReadSuccess(f, offset, &buf[0], buf.size()*2)) return -1;
+  for (int i=0; i<num; i++) B->Write(buf[i] / 32768.0);
+  last = offset + buf.size()*2;
   return 0;
+}
+
+void WavWriter::Open(File *F) {
+  f = F;
+  wrote = WavHeader::Size;
+  if (f && f->Opened()) Flush();
 }
 
 int WavWriter::Write(const RingBuf::Handle *B, bool flush) {
   if (!f->Opened()) return -1;
-  int bytes = B->Len() * sizeof(short);
-  short *data = (short *)alloca(bytes);
-  for (int i=0; B && i<B->Len(); i++) data[i] = (short)(B->Read(i) * 32768.0);
-
-  if (f->Write(data, bytes) != bytes) return -1;
-  wrote += bytes;
+  basic_string<short> buf(B->Len(), 0);
+  for (int i=0, l=B?B->Len():0; i<l; ++i) buf[i] = static_cast<short>(B->Read(i) * 32768.0);
+  if (!File::WriteSuccess(f, &buf[0], buf.size()*2)) return -1;
+  wrote += buf.size()*2;
   return flush ? Flush() : 0;
 }
 
 int WavWriter::Flush() {
   if (!f->Opened()) return -1;
   WavHeader hdr;
-  hdr.chunk_id = *(unsigned*)"RIFF";    
+  hdr.chunk_id = *(unsigned*)"RIFF";
   hdr.format = *(unsigned*)"WAVE";
   hdr.subchunk_id = *(unsigned*)"fmt ";
   hdr.audio_format = 1;
   hdr.num_channels = 1;
-  hdr.sampleRate = FLAGS_sample_rate;
-  hdr.byte_rate = hdr.sampleRate * hdr.num_channels * sizeof(short);
+  hdr.sample_rate = FLAGS_sample_rate;
+  hdr.byte_rate = hdr.sample_rate * hdr.num_channels * sizeof(short);
   hdr.block_align = hdr.num_channels * sizeof(short);
   hdr.bits_per_sample = 16;
   hdr.subchunk_id2 = *(unsigned*)"data";
@@ -360,12 +361,12 @@ struct SimpleAssetLoader : public AudioAssetLoader, public VideoAssetLoader, pub
   virtual void *LoadMovieBuf(const char *buf, int len, const char *mimetype) { return LoadBuf(buf, len, mimetype); }
   virtual void UnloadMovieBuf(void *h) { return UnloadBuf(h); }
 
-  virtual void LoadVideo(void *handle, Texture *out, int load_flag=VideoAssetLoader::Flag::Default) {
+  virtual void LoadVideo(void *h, Texture *out, int load_flag=VideoAssetLoader::Flag::Default) {
     static char jpghdr[2] = { '\xff', '\xd8' }; // 0xff, 0xd8 };
     static char gifhdr[4] = { 'G', 'I', 'F', '8' };
     static char pnghdr[8] = { '\211', 'P', 'N', 'G', '\r', '\n', '\032', '\n' };
 
-    File *f = (File*)handle;
+    File *f = reinterpret_cast<File*>(h);
     string fn = f->Filename();
     unsigned char hdr[8];
     if (f->Read(hdr, 8) != 8) { ERROR("load ", fn, " : failed"); return; }
@@ -393,7 +394,29 @@ struct SimpleAssetLoader : public AudioAssetLoader, public VideoAssetLoader, pub
     if (load_flag & Flag::Clear)  out->ClearBuffer();
   }
 
-  virtual void LoadAudio(void *h, SoundAsset *a, int seconds, int flag) {}
+  virtual void LoadAudio(void *h, SoundAsset *a, int seconds, int flag) {
+    File *f = reinterpret_cast<File*>(h);
+    string fn = f->Filename();
+    if (SuffixMatch(fn, ".wav", false)) {
+      WavHeader wav_header;
+      WavReader wav_reader;
+      if (!wav_reader.Open(f, &wav_header))
+        return ERROR("LoadAudio(", a->name, ", ", fn, ") open failed: ", strerror(errno));
+
+      int wav_samples = (f->Size() - WavHeader::Size) / 2;
+      if (wav_header.audio_format != 1 || wav_header.num_channels != 1 ||
+          wav_header.bits_per_sample != 16 || wav_header.sample_rate != FLAGS_sample_rate ||
+          wav_samples > FLAGS_sample_rate*FLAGS_soundasset_seconds)
+        return ERROR("LoadAudio(", a->name, ", ", fn, ") not supported");
+
+      a->channels = 1;
+      a->sample_rate = FLAGS_sample_rate;
+      a->wav = new RingBuf(a->sample_rate, wav_samples);
+      RingBuf::Handle H(a->wav);
+      if (wav_reader.Read(&H, 0, wav_samples))
+        return ERROR("LoadAudio(", a->name, ", ", fn, ") read failed: ", strerror(errno));
+    }
+  }
   virtual int RefillAudio(SoundAsset *a, int reset) { return 0; }
 
   virtual void LoadMovie(void *h, MovieAsset *a) {}
@@ -476,33 +499,6 @@ struct FFBIOC {
 
 struct FFMpegAssetLoader : public AudioAssetLoader, public VideoAssetLoader, public MovieAssetLoader {
   FFMpegAssetLoader() { INFO("FFMpegAssetLoader"); }
-  static AVFormatContext *Load(AVIOContext *pb, const string &filename, char *probe_buf, int probe_buflen, AVIOContext **pbOut=0) {
-    AVProbeData probe_data;
-    memzero(probe_data);
-    probe_data.filename = BaseName(filename);
-
-    bool probe_buf_data = probe_buf && probe_buflen;
-    if (probe_buf_data) {
-      probe_data.buf = (unsigned char *)probe_buf;
-      probe_data.buf_size = probe_buflen;
-    }
-
-    AVInputFormat *fmt = av_probe_input_format(&probe_data, probe_buf_data);
-    if (!fmt) { ERROR("no AVInputFormat for ", probe_data.filename); return 0; }
-
-    AVFormatContext *fctx = avformat_alloc_context(); int ret;
-    fctx->flags |= AVFMT_FLAG_CUSTOM_IO;
-
-    fctx->pb = pb;
-    if ((ret = avformat_open_input(&fctx, probe_data.filename, fmt, 0))) {
-      char errstr[128]; av_strerror(ret, errstr, sizeof(errstr));
-      ERROR("av_open_input ", probe_data.filename, ": ", ret, " ", errstr);
-      return 0;
-    }
-
-    if (pbOut) *pbOut = fctx->pb;
-    return fctx;
-  }
 
   virtual void *LoadFile(const string &filename) { return LoadFile(filename, 0); }
   AVFormatContext *LoadFile(const string &filename, AVIOContext **pbOut) {
@@ -519,6 +515,7 @@ struct FFMpegAssetLoader : public AudioAssetLoader, public VideoAssetLoader, pub
     return ret;
 #endif
   }
+
   virtual void UnloadFile(void *h) {
     AVFormatContext *handle = (AVFormatContext*)h;
     for (int i = handle->nb_streams - 1; handle->streams && i >= 0; --i) {
@@ -541,6 +538,7 @@ struct FFMpegAssetLoader : public AudioAssetLoader, public VideoAssetLoader, pub
     if (!ret) FFBIOC::Free(pb);
     return ret;
   }
+
   virtual void UnloadBuf(void *h) {
     AVFormatContext *handle = (AVFormatContext*)h;
     FFBIOC::Free(handle->pb);
@@ -608,7 +606,43 @@ struct FFMpegAssetLoader : public AudioAssetLoader, public VideoAssetLoader, pub
       a->resampler.Close();
     }
   }
+
+  void LoadMovie(void *handle, MovieAsset *ma) {
+    LoadMovie(&ma->audio, &ma->video, (AVFormatContext*)handle);
+    PlayMovie(&ma->audio, &ma->video, (AVFormatContext*)handle, 0);
+  }
+
+  int PlayMovie(MovieAsset *ma, int seek) { return PlayMovie(&ma->audio, &ma->video, (AVFormatContext*)ma->handle, seek); }
   int RefillAudio(SoundAsset *a, int reset) { return RefillAudioCB(a, reset); }
+
+  static AVFormatContext *Load(AVIOContext *pb, const string &filename, char *probe_buf, int probe_buflen, AVIOContext **pbOut=0) {
+    AVProbeData probe_data;
+    memzero(probe_data);
+    probe_data.filename = BaseName(filename);
+
+    bool probe_buf_data = probe_buf && probe_buflen;
+    if (probe_buf_data) {
+      probe_data.buf = (unsigned char *)probe_buf;
+      probe_data.buf_size = probe_buflen;
+    }
+
+    AVInputFormat *fmt = av_probe_input_format(&probe_data, probe_buf_data);
+    if (!fmt) { ERROR("no AVInputFormat for ", probe_data.filename); return 0; }
+
+    AVFormatContext *fctx = avformat_alloc_context(); int ret;
+    fctx->flags |= AVFMT_FLAG_CUSTOM_IO;
+
+    fctx->pb = pb;
+    if ((ret = avformat_open_input(&fctx, probe_data.filename, fmt, 0))) {
+      char errstr[128]; av_strerror(ret, errstr, sizeof(errstr));
+      ERROR("av_open_input ", probe_data.filename, ": ", ret, " ", errstr);
+      return 0;
+    }
+
+    if (pbOut) *pbOut = fctx->pb;
+    return fctx;
+  }
+
   static int RefillAudioCB(SoundAsset *a, int reset) {
     AVFormatContext *fctx = (AVFormatContext*)a->handle;
     AVCodecContext *avctx = fctx->streams[a->handle_arg1]->codec;
@@ -625,7 +659,7 @@ struct FFMpegAssetLoader : public AudioAssetLoader, public VideoAssetLoader, pub
     }
     if (open_resampler)
       a->resampler.Open(a->wav, avctx->channels, avctx->sample_rate, Sample::FromFFMpegId(avctx->sample_fmt),
-                        a->channels,     a->sample_rate,     Sample::S16);
+                        a->channels, a->sample_rate, Sample::S16);
     a->wav->ring.back = 0;
     int wrote = PlayMovie(a, 0, fctx, 0);
     if (wrote < SoundAssetSize(a)) {
@@ -635,10 +669,6 @@ struct FFMpegAssetLoader : public AudioAssetLoader, public VideoAssetLoader, pub
     return wrote;
   }
 
-  void LoadMovie(void *handle, MovieAsset *ma) {
-    LoadMovie(&ma->audio, &ma->video, (AVFormatContext*)handle);
-    PlayMovie(&ma->audio, &ma->video, (AVFormatContext*)handle, 0);
-  }
   static void LoadMovie(SoundAsset *sa, Asset *va, AVFormatContext *fctx) {
     if (avformat_find_stream_info(fctx, 0) < 0) { ERROR("av_find_stream_info"); return; }
 
@@ -669,11 +699,10 @@ struct FFMpegAssetLoader : public AudioAssetLoader, public VideoAssetLoader, pub
       sa->seconds = FLAGS_soundasset_seconds;
       sa->wav = new RingBuf(sa->sample_rate, SoundAssetSize(sa));
       sa->resampler.Open(sa->wav, avctx->channels, avctx->sample_rate, Sample::FromFFMpegId(avctx->sample_fmt),
-                         sa->channels,    sa->sample_rate, Sample::S16);
+                         sa->channels, sa->sample_rate, Sample::S16);
     }
   }
 
-  int PlayMovie(MovieAsset *ma, int seek) { return PlayMovie(&ma->audio, &ma->video, (AVFormatContext*)ma->handle, seek); }
   static int PlayMovie(SoundAsset *sa, Asset *va, AVFormatContext *fctx, int seek_unused) {
     int begin_resamples_available = sa->resampler.output_available, wrote=0, done=0;
     Allocator *tlsalloc = ThreadLocalStorage::GetAllocator();
@@ -734,12 +763,13 @@ struct AliasWavefrontObjLoader {
     LocalFile file(filename, "r");
     if (!file.Opened()) { ERROR("LocalFile::open(", file.Filename(), ")"); return 0; }
 
+    NextRecordReader nr(&file);
     vector<v3> vert, vert_out, norm, norm_out;
     vector<v2> tex, tex_out;
     Material mat; v3 xyz; v2 xy;
     int format=0, material=0, ind[3];
 
-    for (const char *line = file.NextLine(); line; line = file.NextLine()) {
+    for (const char *line = nr.NextLine(); line; line = nr.NextLine()) {
       if (!line[0] || line[0] == '#') continue;
       StringWordIter word(line);
       string cmd = IterNextString(&word);
@@ -807,9 +837,10 @@ struct AliasWavefrontObjLoader {
     LocalFile file(StrCat(dir, filename), "r");
     if (!file.Opened()) { ERROR("LocalFile::open(", file.Filename(), ")"); return -1; }
 
+    NextRecordReader nr(&file);
     Material m;
     string name;
-    for (const char *line = file.NextLine(); line; line = file.NextLine()) {
+    for (const char *line = nr.NextLine(); line; line = nr.NextLine()) {
       if (!line[0] || line[0] == '#') continue;
       StringWordIter word(line);
       string cmd = IterNextString(&word);
@@ -912,18 +943,18 @@ int Assets::Init() {
   return 0;
 }
 
-unordered_map<string, StringPiece> Asset::cache;
+string Asset::FileName(const string &asset_fn) { return StrCat(app->assetdir, asset_fn); }
 
 string Asset::FileContents(const string &asset_fn) {
-  auto i = cache.find(asset_fn);
-  if (i != cache.end()) return string(i->second.data(), i->second.size());
-  else                  return LocalFile::FileContents(StrCat(app->assetdir, asset_fn));
+  auto i = app->asset_cache.find(asset_fn);
+  if (i != app->asset_cache.end()) return string(i->second.data(), i->second.size());
+  else                             return LocalFile::FileContents(Asset::FileName(asset_fn));
 }
 
 File *Asset::OpenFile(const string &asset_fn) {
-  auto i = cache.find(asset_fn);
-  if (i != cache.end()) return new BufferFile(i->second);
-  else                  return new LocalFile(StrCat(app->assetdir, asset_fn), "r");
+  auto i = app->asset_cache.find(asset_fn);
+  if (i != app->asset_cache.end()) return new BufferFile(i->second);
+  else                             return new LocalFile(Asset::FileName(asset_fn), "r");
 }
 
 void Asset::Unload() {
@@ -942,8 +973,8 @@ void Asset::Load(void *h, VideoAssetLoader *l) {
 
 void Asset::LoadTexture(void *h, const string &asset_fn, Texture *out, VideoAssetLoader *l) {
   if (!FLAGS_lfapp_video) return;
-  auto i = cache.find(asset_fn);
-  if (i != cache.end()) return LoadTexture(i->second.data(), asset_fn.c_str(), i->second.size(), out);
+  auto i = app->asset_cache.find(asset_fn);
+  if (i != app->asset_cache.end()) return LoadTexture(i->second.data(), asset_fn.c_str(), i->second.size(), out);
   if (!l) l = app->assets->default_video_loader;
   void *handle = h ? h : l->LoadVideoFile(asset_fn[0] == '/' ? asset_fn : StrCat(app->assetdir, asset_fn).c_str());
   if (!handle) { ERROR("load: ", asset_fn); return; }
@@ -1003,7 +1034,8 @@ void SoundAsset::Load(void const *buf, int len, char const *FN, int Secs) {
 }
 
 void SoundAsset::Load(int Secs, bool unload) {
-  string fn; void *handle = 0;
+  string fn;
+  void *handle = 0;
 
   if (!filename.empty()) {
     fn = filename;
@@ -1143,12 +1175,13 @@ void glShadertoyShaderWindows(Shader *shader, const Color &backup_color, const v
   if (shader) screen->gd->UseShader(0);
 }
 
-void BoxOutline::Draw(const LFL::Box &w, const Drawable::Attr*) const {
+void BoxFilled::Draw(const LFL::Box &b, const Drawable::Attr*) const { b.Draw(); }
+void BoxOutline::Draw(const LFL::Box &b, const Drawable::Attr*) const {
   screen->gd->DisableTexture();
   if (line_width <= 1) {
     static int verts_ind = -1;
-    float verts[] = { /*1*/ (float)w.x,     (float)w.y,     /*2*/ (float)w.x,     (float)w.y+w.h,
-      /*3*/ (float)w.x+w.w, (float)w.y+w.h, /*4*/ (float)w.x+w.w, (float)w.y };
+    float verts[] = { /*1*/ (float)b.x,     (float)b.y,     /*2*/ (float)b.x,     (float)b.y+b.h,
+                      /*3*/ (float)b.x+b.w, (float)b.y+b.h, /*4*/ (float)b.x+b.w, (float)b.y };
     screen->gd->VertexPointer(2, GraphicsDevice::Float, 0, 0, verts, sizeof(verts), &verts_ind, true);
     screen->gd->DrawArrays(GraphicsDevice::LineLoop, 0, 4);
   } else {
@@ -1401,7 +1434,7 @@ void TextureArray::DrawSequence(Asset *out, Entity *e) {
 }
 
 void LayersInterface::Update() {
-  for (auto i : this->layer) i->Run(0);
+  for (auto i : this->layer) i->Run(TilesInterface::RunFlag::ClearEmpty);
   if (app->main_process) app->main_process->SwapTree(0, this);
 }
 
@@ -1455,26 +1488,38 @@ void Tiles::AddScissor(const Box &b) {
   TilesPostAdd(this, &GraphicsDevice::PopScissor, screen->gd);
 }
 
+#ifdef  LFL_TILES_IPC_DEBUG
+#define TilesIPCDebug(...) printf(__VA_ARGS__)
+#else
+#define TilesIPCDebug(...)
+#endif
+
 void TilesIPC::SetAttr(const Drawable::Attr *a) {
   attr = a;
   prepend[context_depth]->cb.Add(MultiProcessPaintResource::SetAttr(*attr));
+  TilesIPCDebug("TilesIPC SetAttr %s\n", a->DebugString().c_str());
 }
 void TilesIPC::InitDrawBox(const point &p) {
   prepend[context_depth]->cb.Add(MultiProcessPaintResource::InitDrawBox(p));
   if (attr->scissor) AddScissor(*attr->scissor + p);
+  TilesIPCDebug("TilesIPC InitDrawBox %s\n", p.DebugString().c_str());
 }
 void TilesIPC::InitDrawBackground(const point &p) {
   prepend[context_depth]->cb.Add(MultiProcessPaintResource::InitDrawBackground(p));
+  TilesIPCDebug("TilesIPC InitDrawBackground %s\n", p.DebugString().c_str());
 }
 void TilesIPC::DrawBox(const Drawable *d, const Box &b, const Drawable::Attr*) {
   if (d) AddCallback(&b, MultiProcessPaintResource::DrawBox(b, d->TexId()));
+  TilesIPCDebug("TilesIPC DrawBox %s\n", b.DebugString().c_str());
 }
 void TilesIPC::DrawBackground(const Box &b) {
   AddCallback(&b, MultiProcessPaintResource::DrawBackground(b));
+  TilesIPCDebug("TilesIPC DrawBackground %s\n", b.DebugString().c_str());
 }
 void TilesIPC::AddScissor(const Box &b) {
   prepend[context_depth]->cb.Add(MultiProcessPaintResource::PushScissor(b));
   append [context_depth]->cb.Add(MultiProcessPaintResource::PopScissor());
+  TilesIPCDebug("TilesIPC AddScissor %s\n", b.DebugString().c_str());
 }
 
 void TilesIPCClient::Run(int flag) {
@@ -1489,23 +1534,25 @@ int MultiProcessPaintResource::Run(const Box &t) const {
   ProcessAPIClient *s = CheckPointer(app->render_process);
   Iterator i(data.buf);
   int si=0, sd=0, count=0; 
+  TilesIPCDebug("MPPR Begin\n");
   for (; i.offset + sizeof(int) < data.size(); count++) {
     int type = *i.Get<int>();
     switch (type) {
       default:                       FATAL("unknown type ", type);
-      case SetAttr           ::Type: { auto c=i.Get<SetAttr>           (); c->Update(&attr, app->render_process);            i.offset += SetAttr           ::Size; } break;
-      case InitDrawBox       ::Type: { auto c=i.Get<InitDrawBox>       (); DrawableBoxRun(0,0,&attr).draw(c->p);             i.offset += InitDrawBox       ::Size; } break;
-      case InitDrawBackground::Type: { auto c=i.Get<InitDrawBackground>(); DrawableBoxRun(0,0,&attr).DrawBackground(c->p);   i.offset += InitDrawBackground::Size; } break;
-      case DrawBackground    ::Type: { auto c=i.Get<DrawBackground>    (); c->b.Draw();                                      i.offset += DrawBackground    ::Size; } break;
-      case PushScissor       ::Type: { auto c=i.Get<PushScissor>       (); screen->gd->PushScissorOffset(t, c->b);     si++; i.offset += PushScissor       ::Size; } break;
-      case PopScissor        ::Type: { auto c=i.Get<PopScissor>        (); screen->gd->PopScissor(); CHECK_LT(sd, si); sd++; i.offset += PopScissor        ::Size; } break;
+      case SetAttr           ::Type: { auto c=i.Get<SetAttr>           (); c->Update(&attr, app->render_process);            i.offset += SetAttr           ::Size; TilesIPCDebug("MPPR SetAttr %s\n",     attr.DebugString().c_str()); } break;
+      case InitDrawBox       ::Type: { auto c=i.Get<InitDrawBox>       (); DrawableBoxRun(0,0,&attr).draw(c->p);             i.offset += InitDrawBox       ::Size; TilesIPCDebug("MPPR InitDrawBox %s\n", c->p.DebugString().c_str()); } break;
+      case InitDrawBackground::Type: { auto c=i.Get<InitDrawBackground>(); DrawableBoxRun(0,0,&attr).DrawBackground(c->p);   i.offset += InitDrawBackground::Size; TilesIPCDebug("MPPR InitDrawBG %s\n",  c->p.DebugString().c_str()); } break;
+      case DrawBackground    ::Type: { auto c=i.Get<DrawBackground>    (); c->b.Draw();                                      i.offset += DrawBackground    ::Size; TilesIPCDebug("MPPR DrawBG %s\n",      c->b.DebugString().c_str()); } break;
+      case PushScissor       ::Type: { auto c=i.Get<PushScissor>       (); screen->gd->PushScissorOffset(t, c->b);     si++; i.offset += PushScissor       ::Size; TilesIPCDebug("MPPR PushScissor %s\n", c->b.DebugString().c_str()); } break;
+      case PopScissor        ::Type: { auto c=i.Get<PopScissor>        (); screen->gd->PopScissor(); CHECK_LT(sd, si); sd++; i.offset += PopScissor        ::Size; TilesIPCDebug("MPPR PopScissor\n");                                 } break;
       case DrawBox           ::Type: { auto c=i.Get<DrawBox>           ();
                                        auto d=(c->id > 0 && c->id <= s->drawable.size()) ? s->drawable[c->id-1] : Singleton<BoxFilled>::Get();
-                                       d->Draw(c->b, &attr); i.offset += DrawBox::Size;
+                                       d->Draw(c->b, &attr); i.offset += DrawBox::Size; TilesIPCDebug("DrawBox MPPR %s\n", c->b.DebugString().c_str());
                                      } break;
     }
   }
   if (si != sd) { ERROR("mismatching scissor ", si, " != ", sd); for (int i=sd; i<si; ++i) screen->gd->PopScissor(); }
+  TilesIPCDebug("MPPR End\n");
   return count;
 }
 

@@ -61,66 +61,7 @@ string File::Contents() {
   return ret;
 }
 
-const char *File::NextLine(int *offset, int *nextoffset) {
-  const char *nl;
-  if (!(nl = nr.GetNextRecord(this, offset, nextoffset, LFL::NextLine))) return 0;
-  if (nl) nr.buf[nr.record_offset + nr.record_len] = 0;
-  return nl;
-}
-
-const char *File::NextLineRaw(int *offset, int *nextoffset) {
-  const char *nl;
-  if (!(nl = nr.GetNextRecord(this, offset, nextoffset, LFL::NextLineRaw))) return 0;
-  if (nl) nr.buf[nr.record_offset + nr.record_len] = 0;
-  return nl;
-}
-
-const char *File::NextChunk(int *offset, int *nextoffset) {
-  const char *nc;
-  if (!(nc = nr.GetNextRecord(this, offset, nextoffset, LFL::NextChunk<4096>))) return 0;
-  if (nc) nr.buf[nr.record_offset + nr.record_len] = 0;
-  return nc;
-}
-
-const char *File::NextProto(int *offset, int *nextoffset, ProtoHeader *bhout) {
-  const char *np;
-  if (!(np = nr.GetNextRecord(this, offset, nextoffset, LFL::NextProto))) return 0;
-  if (bhout) *bhout = ProtoHeader(np);
-  return np + ProtoHeader::size;
-}
-
-const char *File::NextRecord::GetNextRecord(File *f, int *offsetOut, int *nextoffsetOut, NextRecordCB nextcb) {
-  const char *next, *text; int left; bool read_short = false;
-  if (buf_dirty) buf_offset = buf.size();
-  for (;;) {
-    left = buf.size() - buf_offset;
-    text = buf.data() + buf_offset;
-    if (!buf_dirty && left>0 && (next = nextcb(StringPiece(text, left), read_short, &record_len))) {
-
-      if (offsetOut) *offsetOut = file_offset - buf.size() + buf_offset;
-      if (nextoffsetOut) *nextoffsetOut = file_offset - buf.size() + (next - buf.data());
-
-      record_offset = buf_offset;
-      buf_offset = next-buf.data();
-      return text;
-    }
-    if (read_short) {
-      buf_offset = -1;
-      return 0;
-    }
-
-    buf.erase(0, buf_offset);
-    int buf_filled = buf.size();
-    buf.resize(buf.size() < 4096 ? 4096 : buf.size()*2);
-    int len = f->Read((char*)buf.data()+buf_filled, buf.size()-buf_filled);
-    read_short = len < buf.size()-buf_filled;
-    buf.resize(max(len,0) + buf_filled);
-    buf_dirty = false;
-    buf_offset = 0;
-  }
-}
-
-int File::Read(void *buf, const IOVec *v, int iovlen) {
+int File::ReadIOV(void *buf, const IOVec *v, int iovlen) {
   int ret = 0;
   char *b = static_cast<char*>(buf);
   for (const IOVec *i = v, *e = i + iovlen; i != e; ++i) {
@@ -190,16 +131,13 @@ template int File::Rewrite<String16>(const IOVec*, int, const vector<String16>&,
 
 long long BufferFile::Seek(long long offset, int whence) {
   if (offset < 0 || offset >= (owner ? buf.size() : ptr.len)) return -1;
-  nr.buf_dirty = true;
-  return rdo = wro = nr.file_offset = offset;
+  return rdo = wro = offset;
 }
 
 int BufferFile::Read(void *out, size_t size) {
   size_t l = min(size, (owner ? buf.size() : ptr.len) - rdo);
   memcpy(out, (owner ? buf.data() : ptr.buf) + rdo, l);
   rdo += l;
-  nr.file_offset += l;
-  nr.buf_dirty = true;
   return l;
 }
 
@@ -211,8 +149,6 @@ int BufferFile::Write(const void *In, size_t size) {
   buf.replace(wro, l, in, l);
   if (size > l) buf.append(in + l, size - l);
   wro += size;
-  nr.file_offset += size;
-  nr.buf_dirty = true;
   return size;
 }
 
@@ -325,7 +261,6 @@ bool LocalFile::Open(const string &path, const string &mode, bool pre_create) {
 #else
   if (!(impl = fopen(fn.c_str(), mode.c_str()))) return 0;
 #endif
-  nr.Reset();
 
   if (!Opened()) return false;
   writable = strchr(mode.c_str(), 'w');
@@ -334,7 +269,6 @@ bool LocalFile::Open(const string &path, const string &mode, bool pre_create) {
 
 void LocalFile::Reset() {
   fseek((FILE*)impl, 0, SEEK_SET);
-  nr.Reset();
 }
 
 int LocalFile::Size() {
@@ -351,7 +285,6 @@ int LocalFile::Size() {
 void LocalFile::Close() {
   if (impl) fclose((FILE*)impl);
   impl = 0;
-  nr.Reset();
 }
 
 long long LocalFile::Seek(long long offset, int whence) {
@@ -359,24 +292,18 @@ long long LocalFile::Seek(long long offset, int whence) {
   if (ret < 0) return ret;
   if (whence == Whence::SET) ret = offset;
   else ret = ftell((FILE*)impl);
-  nr.file_offset = ret;
-  nr.buf_dirty = true;
   return ret;
 }
 
 int LocalFile::Read(void *buf, size_t size) {
   int ret = fread(buf, 1, size, (FILE*)impl);
   if (ret < 0) return ret;
-  nr.file_offset += ret;
-  nr.buf_dirty = true;
   return ret;
 }
 
 int LocalFile::Write(const void *buf, size_t size) {
   int ret = fwrite(buf, 1, size!=-1?size:strlen((char*)buf), (FILE*)impl);
   if (ret < 0) return ret;
-  nr.file_offset += ret;
-  nr.buf_dirty = true;
   return ret;
 }
 
@@ -493,10 +420,9 @@ const char *ArchiveIter::Next() {
   }
   return archive_entry_pathname((archive_entry*)entry);
 }
-const void *ArchiveIter::Data() {
+bool ArchiveIter::LoadData() {
   buf.resize(Size());
-  CHECK_EQ(buf.size(), archive_read_data((archive*)impl, &buf[0], buf.size()));
-  return buf.c_str();
+  return buf.size() == archive_read_data((archive*)impl, &buf[0], buf.size());
 }
 void ArchiveIter::Skip() { archive_read_data_skip((archive*)impl); }
 long long ArchiveIter::Size() { return archive_entry_size((archive_entry*)entry); }
@@ -506,7 +432,7 @@ ArchiveIter::~ArchiveIter() {}
 ArchiveIter::ArchiveIter(const char *path) {}
 const char *ArchiveIter::Next() { return 0; }
 long long ArchiveIter::Size() { return 0; }
-const void *ArchiveIter::Data() { return 0; }
+bool ArchiveIter::LoadData() { return 0; }
 void ArchiveIter::Skip() {}
 #endif /* LFL_LIBARCHIVE */
 
@@ -518,6 +444,7 @@ void ProtoFile::Open(const char *fn) {
   read_offset = 0;
   write_offset = -1;
   done = (file ? file->Size() : 0) <= 0;
+  nr.Init(file);
 }
 
 int ProtoFile::Add(const Proto *msg, int status) {
@@ -525,18 +452,24 @@ int ProtoFile::Add(const Proto *msg, int status) {
   write_offset = file->Seek(0, File::Whence::END);
 
   ProtoHeader ph(status);
-  return file->WriteProto(&ph, msg, true) > 0;
+  int wrote = file->WriteProto(&ph, msg, true);
+  nr.SetFileOffset(wrote > 0 ? write_offset + wrote : write_offset);
+  return wrote > 0;
 }
 
 bool ProtoFile::Update(int offset, const ProtoHeader *ph, const Proto *msg) {
   if (offset < 0 || (write_offset = file->Seek(offset, File::Whence::SET)) != offset) return false;
-  return file->WriteProto(ph, msg, true) > 0;
+  int wrote = file->WriteProto(ph, msg, true);
+  nr.SetFileOffset(wrote > 0 ? offset + wrote : offset);
+  return wrote > 0;
 }
 
 bool ProtoFile::Update(int offset, int status) {
   if (offset < 0 || (write_offset = file->Seek(offset, File::Whence::SET)) != offset) return false;
   ProtoHeader ph(status);
-  return file->WriteProtoFlag(&ph, true) > 0;
+  int wrote = file->WriteProtoFlag(&ph, true);
+  nr.SetFileOffset(wrote > 0 ? offset + wrote : offset);
+  return wrote > 0;
 }
 
 bool ProtoFile::Get(Proto *out, int offset, int status) {
@@ -559,7 +492,7 @@ bool ProtoFile::Next(ProtoHeader *hdr, Proto *out, int *offsetOut, int status) {
 
   for (;;) {
     const char *text; int offset;
-    if (!(text = file->NextProto(&offset, &read_offset, hdr))) { done=true; return false; }
+    if (!(text = nr.NextProto(&offset, &read_offset, hdr))) { done=true; return false; }
 #ifdef LFL_PROTOBUF
     if (!out->ParseFromArray(text, hdr->len)) { ERROR("parse failed, shutting down"); done=1; app->run=0; return false; }
 #endif
@@ -864,20 +797,20 @@ int SettingsFile::Write(const vector<string> &fields, const string &dir, const s
 
 /* Matrix Archive */ 
 
-MatrixArchiveOut::~MatrixArchiveOut() { Close(); }
-MatrixArchiveOut::MatrixArchiveOut(const string &name) : file(0) { if (name.size()) Open(name); }
-void MatrixArchiveOut::Close() { if (file) { delete file; file=0; } }
-int MatrixArchiveOut::Open(const string &name) { file = new LocalFile(name, "w"); if (file->Opened()) return 0; Close(); return -1; }
-int MatrixArchiveOut::Write(Matrix *m, const string &hdr, const string &name) { return MatrixFile(m, hdr).Write(file, name); } 
+MatrixArchiveOutputFile::~MatrixArchiveOutputFile() { Close(); }
+MatrixArchiveOutputFile::MatrixArchiveOutputFile(const string &name) : file(0) { if (name.size()) Open(name); }
+void MatrixArchiveOutputFile::Close() { if (file) { delete file; file=0; } }
+int MatrixArchiveOutputFile::Open(const string &name) { file = new LocalFile(name, "w"); if (file->Opened()) return 0; Close(); return -1; }
+int MatrixArchiveOutputFile::Write(Matrix *m, const string &hdr, const string &name) { return MatrixFile(m, hdr).Write(file, name); } 
 
-MatrixArchiveIn::~MatrixArchiveIn() { Close(); }
-MatrixArchiveIn::MatrixArchiveIn(const string &name) : file(0), index(0) { if (name.size()) Open(name); }
-void MatrixArchiveIn::Close() {if (file) { delete file; file=0; } index=0; }
-int MatrixArchiveIn::Open(const string &name) { LocalFileLineIter *lfi=new LocalFileLineIter(name); file=new IterWordIter(lfi, true); return !lfi->f.Opened(); }
-int MatrixArchiveIn::Read(Matrix **out, string *hdrout) { index++; return MatrixFile::Read(file, out, hdrout); }
-int MatrixArchiveIn::Skip() { index++; return MatrixFile().Read(file, 1); }
-string MatrixArchiveIn::Filename() { if (!file) return ""; return ""; } // file->file->f.filename(); }
-int MatrixArchiveIn::Count(const string &name) { MatrixArchiveIn a(name); int ret=0; while (a.Skip() != -1) ret++; return ret; }
+MatrixArchiveInputFile::~MatrixArchiveInputFile() { Close(); }
+MatrixArchiveInputFile::MatrixArchiveInputFile(const string &name) : file(0), index(0) { if (name.size()) Open(name); }
+void MatrixArchiveInputFile::Close() {if (file) { delete file; file=0; } index=0; }
+int MatrixArchiveInputFile::Open(const string &name) { LocalFileLineIter *lfi=new LocalFileLineIter(name); file=new IterWordIter(lfi, true); return !lfi->f.Opened(); }
+int MatrixArchiveInputFile::Read(Matrix **out, string *hdrout) { index++; return MatrixFile::Read(file, out, hdrout); }
+int MatrixArchiveInputFile::Skip() { index++; return MatrixFile().Read(file, 1); }
+string MatrixArchiveInputFile::Filename() { if (!file) return ""; return ""; } // file->file->f.filename(); }
+int MatrixArchiveInputFile::Count(const string &name) { MatrixArchiveInputFile a(name); int ret=0; while (a.Skip() != -1) ret++; return ret; }
 
 /* GraphVizFileFile */
 
@@ -906,7 +839,7 @@ void GraphVizFile::AppendEdge(string *out, const string &n1, const string &n2, c
             ";\r\n");
 }
 
-void IDE::Project::LoadCMakeCompileCommandsJSON(File *f) {
+void IDE::Project::LoadCMakeCompileCommandsFile(LFL::File *f) {
   if (!f || !f->Opened()) return;
 #if defined(LFL_JSONCPP)
   Json::Value root;

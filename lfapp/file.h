@@ -55,24 +55,8 @@ struct File {
   virtual File *Create() { return NULL; }
   virtual bool ReplaceWith(File*) { return false; }
 
-  struct NextRecord { 
-    string buf;
-    bool buf_dirty;
-    int buf_offset, file_offset, record_offset, record_len;
-    NextRecord() { Reset(); }
-    void Reset() { buf.clear(); buf_dirty = 0; buf_offset = file_offset = record_offset = record_len = 0; }
-    void SetFileOffset(int v) { file_offset = v; buf_dirty = 1; }
-    typedef const char* (*NextRecordCB)(const StringPiece&, bool, int *);
-    const char *GetNextRecord(File *f, int *offset, int *nextoffset, NextRecordCB cb); 
-  } nr;
-
   string Contents();
-  const char *NextLine   (int *offset=0, int *nextoffset=0);
-  const char *NextLineRaw(int *offset=0, int *nextoffset=0);
-  const char *NextChunk  (int *offset=0, int *nextoffset=0);
-  const char *NextProto  (int *offset=0, int *nextoffset=0, ProtoHeader *phout=0);
-
-  int Read(void *buf, const IOVec*, int iovlen);
+  int ReadIOV(void *buf, const IOVec*, int iovlen);
   int Write(const string &b) { return Write(b.c_str(), b.size()); }
   int WriteProto(ProtoHeader *hdr, const Proto *msg, bool flush=0);
   int WriteProto(const ProtoHeader *hdr, const Proto *msg, bool flush=0);
@@ -82,6 +66,7 @@ struct File {
   static bool ReadSuccess(File *f, void *out, int len) { return f->Read(out, len) == len; }
   static bool SeekSuccess(File *f, long long pos) { return f->Seek(pos, Whence::SET) == pos; }
   static bool SeekReadSuccess(File *f, long long pos, void *out, int len) { return SeekSuccess(f, pos) ? ReadSuccess(f, out, len) : false; }
+  static bool WriteSuccess(File *f, void *out, int len) { return f->Write(out, len) == len; }
 };
 
 struct BufferFile : public File {
@@ -97,7 +82,7 @@ struct BufferFile : public File {
   bool Open(const string &path, const string &mode, bool pre_create=0) { return false; }
   const char *Filename() const { return fn.c_str(); }
   int Size() { return owner ? buf.size() : ptr.len; }
-  void Reset() { rdo=wro=0; nr.Reset(); }
+  void Reset() { rdo=wro=0; }
   void Close() { ptr.assign(0,0); buf.clear(); Reset(); }
 
   long long Seek(long long pos, int whence);
@@ -146,40 +131,43 @@ struct LocalFile : public File {
 
 struct FileLineIter : public StringIter {
   File *f;
-  FileLineIter(File *F) : f(F) {}
-  const char *Next() { return f->NextLine(); }
-  void Reset() { f->Reset(); }
-  bool Done() const { return f->nr.buf_offset < 0; }
+  NextRecordReader nr;
+  FileLineIter(File *F, int fo=0) : f(F), nr(f, fo) {}
+  const char *Next() { return nr.NextLine(); }
+  void Reset() { f->Reset(); nr.Reset(); }
+  bool Done() const { return nr.buf_offset < 0; }
   const char *Begin() const { return 0; }
-  const char *Current() const { return f->nr.buf.c_str() + f->nr.record_offset; }
-  int CurrentOffset() const { return f->nr.file_offset; }
-  int CurrentLength() const { return f->nr.record_len; }
+  const char *Current() const { return nr.buf.c_str() + nr.record_offset; }
+  int CurrentOffset() const { return nr.file_offset; }
+  int CurrentLength() const { return nr.record_len; }
   int TotalLength() const { return 0; }
 };
 
 struct LocalFileLineIter : public StringIter {
   LocalFile f;
-  LocalFileLineIter(const string &path) : f(path, "r") {};
-  const char *Next() { return f.NextLine(); }
-  void Reset() { f.Reset(); }
-  bool Done() const { return f.nr.buf_offset < 0; }
+  NextRecordReader nr;
+  LocalFileLineIter(const string &path) : f(path, "r"), nr(&f) {};
+  const char *Next() { return nr.NextLine(); }
+  void Reset() { f.Reset(); nr.Reset(); }
+  bool Done() const { return nr.buf_offset < 0; }
   const char *Begin() const { return 0; }
-  const char *Current() const { return f.nr.buf.c_str() + f.nr.record_offset; }
-  int CurrentOffset() const { return f.nr.file_offset; }
-  int CurrentLength() const { return f.nr.record_len; }
+  const char *Current() const { return nr.buf.c_str() + nr.record_offset; }
+  int CurrentOffset() const { return nr.file_offset; }
+  int CurrentLength() const { return nr.record_len; }
   int TotalLength() const { return 0; }
 };
 
 struct BufferFileLineIter : public StringIter {
   BufferFile f;
-  BufferFileLineIter(const string &s) : f(s) {};
-  const char *Next() { return f.NextLine(); }
-  void Reset() { f.Reset(); }
-  bool Done() const { return f.nr.buf_offset < 0; }
+  NextRecordReader nr;
+  BufferFileLineIter(const string &s) : f(s), nr(&f) {};
+  const char *Next() { return nr.NextLine(); }
+  void Reset() { f.Reset(); nr.Reset(); }
+  bool Done() const { return nr.buf_offset < 0; }
   const char *Begin() const { return 0; }
-  const char *Current() const { return f.nr.buf.c_str() + f.nr.record_offset; }
-  int CurrentOffset() const { return f.nr.file_offset; }
-  int CurrentLength() const { return f.nr.record_len; }
+  const char *Current() const { return nr.buf.c_str() + nr.record_offset; }
+  int CurrentOffset() const { return nr.file_offset; }
+  int CurrentLength() const { return nr.record_len; }
   int TotalLength() const { return 0; }
 };
 
@@ -205,7 +193,13 @@ struct ArchiveIter {
   void Skip();
   const char *Next();
   long long Size();
-  const void *Data();
+  bool LoadData();
+};
+
+struct FileNameAndOffset {
+  string fn;
+  unsigned offset, y, x;
+  FileNameAndOffset(const string &F=string(), unsigned O=0, unsigned Y=0, unsigned X=0) : fn(F), offset(O), y(Y), x(X) {}
 };
 
 struct VersionedFileName {
@@ -215,7 +209,9 @@ struct VersionedFileName {
 };
 
 struct ProtoHeader {
+  static const int size = sizeof(int)*2, magic = 0xfefe;
   int flag, len; 
+
   ProtoHeader() : len(0) { SetFlag(0); }
   ProtoHeader(int f) : len(0) { SetFlag(f); }
   ProtoHeader(const char *text) {
@@ -223,17 +219,21 @@ struct ProtoHeader {
     memcpy(&len, text+sizeof(int), sizeof(int));
     Validate();
   }
+
   void Validate() const { if (((flag>>16)&0xffff) != magic) FATAL("magic check"); }
   void SetLength(int v) { Validate(); len = v; }
   void SetFlag(unsigned short v) { flag = (magic<<16) | v; }
   unsigned short GetFlag() const { return flag & 0xffff; }
-  static const int size = sizeof(int)*2, magic = 0xfefe;
 };
 
 struct ProtoFile {
-  File *file; int read_offset, write_offset; bool done;
-  ProtoFile(const char *fn=0) : file(0) { Open(fn); }
+  File *file;
+  bool done=0;
+  int read_offset, write_offset;
+  NextRecordReader nr;
+  ProtoFile(const char *fn=0) : file(0), nr(file) { Open(fn); }
   ~ProtoFile() { delete file; }
+
   bool Opened() const { return file && file->Opened(); }
   void Open(const char *fn);
   int Add(const Proto *msg, int status);
@@ -337,21 +337,10 @@ struct MatrixFile {
   { return ReadVersioned(VersionedFileName(D, C, V), F, H, iter); }
 };
 
-struct MatrixArchiveOut {
-  File *file;
-  MatrixArchiveOut(const string &name=string());
-  ~MatrixArchiveOut();
-
-  void Close();
-  int Open(const string &name);
-  int Write(Matrix*, const string &hdr, const string &name);
-  int Write(const MatrixFile *f, const string &name) { return Write(f->F, f->H, name); }
-};
-
-struct MatrixArchiveIn {
+struct MatrixArchiveInputFile {
   IterWordIter *file; int index;
-  MatrixArchiveIn(const string &name=string());
-  ~MatrixArchiveIn();
+  MatrixArchiveInputFile(const string &name=string());
+  ~MatrixArchiveInputFile();
 
   void Close();
   int Open(const string &name);
@@ -360,6 +349,17 @@ struct MatrixArchiveIn {
   int Skip();
   string Filename();
   static int Count(const string &name);
+};
+
+struct MatrixArchiveOutputFile {
+  File *file;
+  MatrixArchiveOutputFile(const string &name=string());
+  ~MatrixArchiveOutputFile();
+
+  void Close();
+  int Open(const string &name);
+  int Write(Matrix*, const string &hdr, const string &name);
+  int Write(const MatrixFile *f, const string &name) { return Write(f->F, f->H, name); }
 };
 
 template <class X, void (*Assign)(double *, X), bool (*Equals)(const double*, X)>
@@ -454,11 +454,35 @@ struct GraphVizFile {
   static void AppendEdge(string *out, const string &n1, const string &n2, const string &label=string());
 };
 
+struct ClangTranslationUnit {
+  CXIndex index=0;
+  CXTranslationUnit tu=0;
+  string filename, compile_command, working_directory;
+
+  ClangTranslationUnit(const string &f, const string &cc, const string &wd);
+  virtual ~ClangTranslationUnit();
+  FileNameAndOffset FindDefinition(const string &f, int offset);
+};
+
+struct ClangTokenVisitor {
+  typedef function<void(ClangTokenVisitor*, int, int, int)> TokenCB;
+  ClangTranslationUnit *tu;
+  point last_token;
+  TokenCB cb;
+
+  ClangTokenVisitor(ClangTranslationUnit *t, const TokenCB &c) : tu(t), cb(c) {}
+  void Visit();
+};
+
 struct IDE {
   struct Project {
     struct BuildRule { string dir, cmd; };
     unordered_map<string, BuildRule> build_rules;
-    void LoadCMakeCompileCommandsJSON(File*);
+    void LoadCMakeCompileCommandsFile(File*);
+  };
+  struct File {
+    ClangTranslationUnit tu;
+    File(const string &f, const string &cc, const string &wd) : tu(f, cc, wd) {}
   };
 };
 

@@ -93,6 +93,7 @@ using LFL_STL11_NAMESPACE::unordered_set;
 using LFL_STL11_NAMESPACE::shared_ptr;
 using LFL_STL11_NAMESPACE::unique_ptr;
 using LFL_STL11_NAMESPACE::tuple;
+using LFL_STL11_NAMESPACE::array;
 using LFL_STL11_NAMESPACE::move;
 using LFL_STL11_NAMESPACE::bind;
 using LFL_STL11_NAMESPACE::function;
@@ -202,6 +203,9 @@ typedef void* Void;
 typedef lock_guard<mutex> ScopedMutex;
 typedef function<void()> Callback;
 typedef function<void(const string&)> StringCB;
+typedef function<bool(const string&, const string&,       string*)> LoadPasswordCB;
+typedef function<void(const string&, const string&, const string&)> SavePasswordCB;
+typedef tuple<string, string, string> MenuItem;
 template <class X> struct Singleton { static X *Get() { static X instance; return &instance; } };
 void Log(int level, const char *file, int line, const string &m);
 }; // namespace LFL
@@ -219,7 +223,7 @@ struct Allocator {
   virtual void Free(void *p) = 0;
   virtual void Reset();
   static Allocator *Default();
-#define AllocatorNew(allocator, type, constructor_args) (new((allocator)->Malloc(sizeof type )) type constructor_args)
+#define AllocatorNew(allocator, type, constructor_args) (new((allocator)->Malloc(sizeof type)) type constructor_args)
 };
 
 struct NullAlloc : public Allocator {
@@ -447,13 +451,6 @@ struct PerformanceTimers {
   void AccumulateTo(int timer_id) { timers[cur_timer_id].time += cur_timer.GetTime(true); cur_timer_id = timer_id; }
   string DebugString() const { string v; for (auto &t : timers) StrAppend(&v, t.name, " ", t.time.count() / 1000.0, "\n"); return v; }
 };
-
-struct Vault {
-  typedef function<bool(const string&, const string&,       string*)> LoadPasswordCB;
-  typedef function<void(const string&, const string&, const string&)> SavePasswordCB;
-  static bool LoadPassword(const string &host, const string &user,       string *pw_out);
-  static void SavePassword(const string &host, const string &user, const string &pw);
-};
 }; // namespace LFL
 
 #include "lfapp/audio.h"
@@ -529,35 +526,16 @@ struct BrowserInterface {
 struct JSContext {
   virtual ~JSContext() {}
   virtual string Execute(const string &s) = 0;
+  static JSContext *Create(Console *js_console=0, LFL::DOM::Node *document=0);
 };
-JSContext *CreateV8JSContext(Console *js_console=0, LFL::DOM::Node *document=0);
 
 struct LuaContext {
   virtual ~LuaContext() {}
   virtual string Execute(const string &s) = 0;
-};
-LuaContext *CreateLuaContext();
-
-struct SystemBrowser { static void Open(const char *url); };
-struct Clipboard { static string Get(); static void Set(const string &s); };
-struct Advertising {
-  static void ShowAds();
-  static void HideAds();
-};
-struct TouchDevice {
-  static void OpenKeyboard();
-  static void CloseKeyboard();
-  static void CloseKeyboardAfterReturn(bool);
-  static Box GetKeyboardBox();
-  /// AddToolbar item values with prefix "toggle" stay depressed
-  static void AddToolbar(const vector<pair<string, string>>&items);
-  static void ToggleToolbarButton(const string &n);
-  static int SetExtraScale(bool on); /// e.g. Retina display
-  static int SetMultisample(bool on);
+  static LuaContext *Create();
 };
 
 struct CUDA : public Module { int Init(); };
-typedef tuple<string, string, string> MenuItem;
 
 struct Application : public ::LFApp, public Module {
   string name, progname, logfilename, startdir, bindir, assetdir, dldir;
@@ -572,8 +550,10 @@ struct Application : public ::LFApp, public Module {
   NetworkThread *network_thread=0;
   ProcessAPIClient *render_process=0;
   ProcessAPIServer *main_process=0;
+  Window::Map windows;
   Callback reshaped_cb, create_win_f;
   function<void(Window*)> window_init_cb, window_closed_cb;
+  unordered_map<string, StringPiece> asset_cache;
   CategoricalVariable<int> tex_mode, grab_mode, fill_mode;
   const Color *splash_color = &Color::black;
   Shell shell;
@@ -589,18 +569,18 @@ struct Application : public ::LFApp, public Module {
 
   Application() : create_win_f(bind(&Application::CreateNewWindow, this, function<void(Window*)>())),
   window_closed_cb(DefaultLFAppWindowClosedCB), tex_mode(2, 1, 0), grab_mode(2, 0, 1),
-  fill_mode(3, GraphicsDevice::Fill, GraphicsDevice::Line, GraphicsDevice::Point)
+  fill_mode(3, GraphicsDevice::Fill, GraphicsDevice::Line, GraphicsDevice::Point), shell(0, 0, 0)
   { run=1; initialized=0; main_thread_id=0; frames_ran=0; }
 
   void Log(int level, const char *file, int line, const string &message);
+  int LoadModule(Module *M) { modules.push_back(M); return M->Init(); }
+  Window *GetWindow(void *id) { return FindOrNull(windows, id); }
+  bool CreateWindow(Window *W);
+  void CloseWindow(Window *W);
+  void MakeCurrentWindow(Window *W);
   void CreateNewWindow(const Window::StartCB &start_cb = Window::StartCB());
   void StartNewWindow(Window *new_window);
   NetworkThread *CreateNetworkThread(bool detach_existing_module, bool start);
-  void LaunchNativeFontChooser(const FontDesc &cur_font, const string &choose_cmd);
-  void LaunchNativeMenu(const string &title);
-  void AddNativeMenu(const string &title, const vector<MenuItem>&items);
-  void AddNativeEditMenu();
-  int LoadModule(Module *M) { modules.push_back(M); return M->Init(); }
 
   int Create(int argc, const char **argv, const char *source_filename, void (*create_cb)()=0);
   int Init();
@@ -613,6 +593,43 @@ struct Application : public ::LFApp, public Module {
   int Free();
   int Exiting();
   void ResetGL();
+
+  void GrabMouseFocus();
+  void ReleaseMouseFocus();
+  string GetClipboardText();
+  void SetClipboardText(const string &s);
+  void OpenSystemBrowser(const string &url);
+
+  void AddNativeMenu(const string &title, const vector<MenuItem> &items);
+  void AddNativeEditMenu();
+  void LaunchNativeMenu(const string &title);
+  void LaunchNativeContextMenu(const vector<MenuItem> &items);
+  void LaunchNativeFontChooser(const FontDesc &cur_font, const string &choose_cmd);
+  void LaunchNativeFileChooser(bool files, bool dirs, bool multi, const string &choose_cmd);
+
+  /// AddToolbar item values with prefix "toggle" stay depressed
+  void AddToolbar(const vector<pair<string, string>>&items);
+  void ToggleToolbarButton(const string &n);
+
+  void OpenTouchKeyboard();
+  void CloseTouchKeyboard();
+  void CloseTouchKeyboardAfterReturn(bool);
+  Box GetTouchKeyboardBox();
+
+  int SetExtraScale(bool on); /// e.g. Retina display
+  int SetMultisample(bool on);
+
+  bool LoadPassword(const string &host, const string &user,       string *pw_out);
+  void SavePassword(const string &host, const string &user, const string &pw);
+
+  void ShowAds();
+  void HideAds();
+
+  int GetVolume();
+  int GetMaxVolume();
+  void SetVolume(int v);
+  void PlaySoundEffect(SoundAsset*);
+  void PlayBackgroundMusic(SoundAsset*);
 
   static void Daemonize(const char *dir="");
   static void Daemonize(FILE *fout, FILE *ferr);

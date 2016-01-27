@@ -26,36 +26,37 @@ struct Resolver {
   typedef function<void(IPV4::Addr, DNS::Response*)> ResponseCB;
 
   struct Request {
-    Nameserver *ns;
+    typedef unsigned short Type;
+    Nameserver *ns=0;
     string query;
-    unsigned short type;
-    ResponseCB cb;
+    Type type;
     Time stamp;
-    unsigned retrys;
+    unsigned retrys=0;
+    ResponseCB cb;
 
-    Request() : ns(0), type(DNS::Type::A), stamp(Now()), retrys(0) {}
-    Request(const string &Q, unsigned short T=DNS::Type::A, ResponseCB CB=ResponseCB(), int R=0) : ns(0), query(Q), type(T), cb(CB), stamp(Now()), retrys(R) {}
-    Request(Nameserver *NS, const string &Q, unsigned short T, ResponseCB CB, int R) : ns(NS), type(T), query(Q), cb(CB), stamp(Now()), retrys(R) {}
+    Request() : type(DNS::Type::A), stamp(Now()) {}
+    Request(const string &Q, Type T=DNS::Type::A, ResponseCB CB=ResponseCB(), int R=0) : query(Q), type(T), stamp(Now()), retrys(R), cb(CB) {}
+    Request(Nameserver *NS, const string &Q, Type T, ResponseCB CB, int R) : ns(NS), query(Q), type(T), stamp(Now()), retrys(R), cb(CB) {}
   };
 
   struct Nameserver {
+    typedef unordered_map<unsigned short, Request> RequestMap;
+    RequestMap request_map;
     Resolver *parent=0;
     Connection *c=0;
     bool timedout=0;
-    typedef unordered_map<unsigned short, Request> RequestMap;
-    RequestMap requestMap;
 
     ~Nameserver() { if (c) c->SetError(); }
     Nameserver() {}
     Nameserver(Resolver *P, IPV4::Addr addr) : parent(P),
     c(Singleton<UDPClient>::Get()->PersistentConnection
       (IPV4::Text(addr, 53),
-       [&](Connection *c, const char *cb, int cl) { Response(c, (DNS::Header*)cb, cl); },
+       [&](Connection *c, const char *cb, int cl) { HandleResponse(c, reinterpret_cast<const DNS::Header*>(cb), cl); },
        [&](Connection *c)                         { Heartbeat(); }, 53)) {}
 
-    unsigned short NextID() const { unsigned short id; for (id = rand(); Contains(requestMap, id); id = rand()) { /**/ } return id; }
-    bool Resolve(const Request &req);
-    void Response(Connection *c, DNS::Header *hdr, int len);
+    unsigned short GetNextID() const;
+    bool WriteResolveRequest(const Request &req);
+    void HandleResponse(Connection *c, const DNS::Header *hdr, int len);
     void Heartbeat();
     void Dequeue();
   };
@@ -65,14 +66,14 @@ struct Resolver {
   vector<IPV4::Addr> conn_available;
   int max_outstanding_per_ns=10, auto_disconnect_seconds=0;
 
-  void Reset();
-  bool Connected();
+  bool Connected() const { for (auto &n : conn) if (n.second->c->state == Connection::Connected) return 1; return 0; }
   Nameserver *Connect(IPV4::Addr addr);
   Nameserver *Connect(const vector<IPV4::Addr> &addrs);
-  bool Resolve(const Request &req);
-  void NSLookup(const string &host, const ResponseCB &cb);
 
-  static void DefaultNameserver(vector<IPV4::Addr> *nameservers);
+  void NSLookup(const string &host, const ResponseCB &cb);
+  bool QueueResolveRequest(const Request &req);
+
+  static void GetDefaultNameservers(vector<IPV4::Addr> *nameservers);
 };
 
 struct RecursiveResolver {
@@ -89,34 +90,37 @@ struct RecursiveResolver {
   };
 
   struct Request {
-    RecursiveResolver *resolver;
+    typedef unsigned short Type;
+    RecursiveResolver *resolver=0;
     string query;
-    unsigned short type;
+    Type type;
     Resolver::ResponseCB cb;
-    bool missing_answer;
     vector<DNS::Response> answer;
+    bool missing_answer=0;
     Request *parent_request;
-    set<Request*> child_request, pending_child_request;
-    set<void*> seen_authority;
+    unordered_set<Request*> child_request, pending_child_request;
+    unordered_set<AuthorityTreeNode*> seen_authority;
 
-    Request(const string &Q, unsigned short T=DNS::Type::A, Resolver::ResponseCB C=Resolver::ResponseCB(), Request *P=0) : resolver(0), query(Q), type(T), cb(C), missing_answer(0), parent_request(P) {}
+    Request(const string &Q, Type T=DNS::Type::A, Resolver::ResponseCB C=Resolver::ResponseCB(), Request *P=0) :
+      query(Q), type(T), cb(C), parent_request(P) {}
     virtual ~Request() { CHECK_EQ(child_request.size(), 0); }
 
     int Ancestors() const { return parent_request ? 1 + parent_request->Ancestors() : 0; }
-    void ChildResolve(Request *subreq);
-    void ChildResponse(Request *subreq, DNS::Response *res);
+    void ResponseCB(IPV4::Addr A, DNS::Response *R) { resolver->HandleRequestResponse(this, A, R, 0); }
+    void StartChildResolve(Request *subreq);
+    void HandleChildResponse(Request *subreq, DNS::Response *res);
     void Complete(IPV4::Addr addr, DNS::Response *res);
-    void ResponseCB(IPV4::Addr A, DNS::Response *R) { resolver->Response(this, A, R, 0); }
   };
 
   AuthorityTreeNode root;
-  long long queries_requested, queries_completed;
-  RecursiveResolver();
+  long long queries_requested=0, queries_completed=0;
+  RecursiveResolver() { ConnectoToRootServers(); }
 
   AuthorityTreeNode *GetAuthorityTreeNode(const string &query, bool create);
-  bool Resolve(Request *req);
-  int ResolveMissing(Request *req, const vector<DNS::Record> &R, const DNS::AnswerMap *answer);
-  void Response(Request *req, IPV4::Addr addr, DNS::Response *res, vector<DNS::Response> *subres);
+  void ConnectoToRootServers();
+  bool StartResolveRequest(Request *req);
+  int ResolveAnyMissingAnswers(Request *req, const vector<DNS::Record> &R, const DNS::AnswerMap *answer);
+  void HandleRequestResponse(Request *req, IPV4::Addr addr, DNS::Response *res, vector<DNS::Response> *subres);
 };
 
 }; // namespace LFL

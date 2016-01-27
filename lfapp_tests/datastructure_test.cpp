@@ -83,6 +83,7 @@ template <class K, class V> struct SkipList {
     }
     count++;
   }
+
   bool Erase(const K &k) {
     vector<pair<int, int> > zipper;
     zipper.reserve(64);
@@ -100,12 +101,14 @@ template <class K, class V> struct SkipList {
     CHECK(count);
     return count--;
   }
+
   V *Find(const K &k) {
     int ind = FindNode(k), next_ind;
     if (ind < 0 || (next_ind = node[ind].next_ind) < 0) return 0;
     const Node *n = &node[next_ind];
     return k == n->key ? &val[n->val_ind] : 0;
   }
+
   int FindNode(const K &k, vector<pair<int, int> > *zipper=0) const {
     int ind = head_ind, next_ind;
     for (int leveldown_ind; ind >= 0; ind = leveldown_ind) {
@@ -116,6 +119,7 @@ template <class K, class V> struct SkipList {
     }
     return ind;
   }
+
   string DebugString() const {
     string v;
     for (int i=0, ind=head_ind; ind >= 0; ind = node[ind].leveldown_ind, i--) {
@@ -124,6 +128,7 @@ template <class K, class V> struct SkipList {
         StrAppend(&v, " ", node[pi].val_ind < 0 ? "-1" : StrCat(val[node[pi].val_ind]));
     } return v;
   }
+
   static int RandomLevel() { static float logP = log(.5); return 1 + (int)(log(Rand(0.0, 1.0)) / logP); }
 };
 
@@ -176,6 +181,7 @@ template <class K, class V, class Node = AVLTreeNode<K,V>, class Zipper = AVLTre
     else if (q->z.LessThan(n, q->key)) return FindNode(n.right, q);
     else return n.val+1;
   }
+
   int InsertNode(int ind, Query *q) {
     if (!ind) return CreateNode(q);
     const Node &n = node[ind-1];
@@ -184,11 +190,13 @@ template <class K, class V, class Node = AVLTreeNode<K,V>, class Zipper = AVLTre
     else return ResolveInsertCollision(ind, q);
     return Balance(ind);
   }
+
   int CreateNode(Query *q) {
     int val_ind = val.Insert(*q->val);
     q->ret = &val[val_ind];
     return node.Insert(Node(GetCreateNodeKey(q), val_ind))+1;
   }
+
   int EraseNode(int ind, Query *q) {
     if (!ind) return 0;
     const Node &n = node[ind-1];
@@ -206,12 +214,14 @@ template <class K, class V, class Node = AVLTreeNode<K,V>, class Zipper = AVLTre
     }
     return Balance(ind);
   }
+
   int EraseMinNode(int ind) {
     Node *n = &node[ind-1];
     if (!n->left) return n->right;
     n->left = EraseMinNode(n->left);
     return Balance(ind);
   }
+
   int Balance(int ind) {
     Node *n = &node[ind-1];
     ComputeAnnotationFromChildren(n);
@@ -224,6 +234,7 @@ template <class K, class V, class Node = AVLTreeNode<K,V>, class Zipper = AVLTre
       return RotateRight(ind);
     } else return ind;
   }
+
   int RotateLeft(int ind) {
     int right_ind;
     Node *n = &node[ind-1], *o = &node[(right_ind = n->right)-1];
@@ -233,6 +244,7 @@ template <class K, class V, class Node = AVLTreeNode<K,V>, class Zipper = AVLTre
     ComputeAnnotationFromChildren(o);
     return right_ind;
   }
+
   int RotateRight(int ind) {
     int left_ind;
     Node *n = &node[ind-1], *o = &node[(left_ind = n->left)-1];
@@ -242,13 +254,16 @@ template <class K, class V, class Node = AVLTreeNode<K,V>, class Zipper = AVLTre
     ComputeAnnotationFromChildren(o);
     return left_ind;
   }
+
   void ComputeAnnotationFromChildren(Node *n) {
     n->ComputeAnnotationFromChildren(n->left ? &node[n->left -1] : 0, n->right ? &node[n->right-1] : 0);
   }
+
   int GetMinNode(int ind) const {
     const Node *n = &node[ind-1];
     return n->left ? GetMinNode(n->left) : ind;
   }
+
   int GetBalance(int ind) const {
     const Node *n = &node[ind-1];
     return (n->right ? node[n->right-1].height : 0) -
@@ -261,6 +276,7 @@ template <class K, class V, class Node = AVLTreeNode<K,V>, class Zipper = AVLTre
     PrintEdges(head, &ret);
     return ret + GraphVizFile::Footer();
   }
+
   virtual void PrintNodes(int ind, string *out) const {
     if (!ind) return;
     const Node *n = &node[ind-1];
@@ -268,6 +284,7 @@ template <class K, class V, class Node = AVLTreeNode<K,V>, class Zipper = AVLTre
     GraphVizFile::AppendNode(out, StrCat(n->key), StrCat(n->key, " ", n->val));
     PrintNodes(n->right, out);
   }
+
   virtual void PrintEdges(int ind, string *out) const {
     if (!ind) return;
     const Node *n = &node[ind-1], *l=n->left?&node[n->left-1]:0, *r=n->right?&node[n->right-1]:0;
@@ -288,6 +305,7 @@ struct AVLFingerTree : public AVLTree<K,V,Node,Finger> {
     Parent::node[ind-1].left = li;
     return Parent::Balance(ind);
   }
+
   virtual int ResolveInsertCollision(int ind, int dup_ind, typename Parent::Query *q) {
     if (!ind) {
       int new_ind = Parent::CreateNode(q);
@@ -298,11 +316,13 @@ struct AVLFingerTree : public AVLTree<K,V,Node,Finger> {
     Parent::node[ind-1].right = ri;
     return Parent::Balance(ind);
   }
+
   void LoadFromSortedVal() {
     Finger z;
     CHECK_EQ(0, Parent::node.size());
     Parent::head = BuildTreeFromSortedVal(z, 0, Parent::val.size()-1);
   }
+
   int BuildTreeFromSortedVal(const Finger &z, int beg_val_ind, int end_val_ind) {
     if (end_val_ind < beg_val_ind) return 0;
     int mid_val_ind = (beg_val_ind + end_val_ind) / 2;
@@ -334,11 +354,13 @@ template <class Node> struct PrefixSumKeyedAVLTreeZipper {
   virtual typename Node::Key GetValue(const Node &n) const {
     return 1;
   }
+
   virtual bool LessThan(const Node &n, const typename Node::Key &k) {
     if (!((sum + n.left_sum + n.key) < k)) return 0;
     sum += n.left_sum + n.key;
     return 1;
   }
+
   virtual bool MoreThan(const Node &n, const typename Node::Key &k) {
     if (!(k < (sum + n.left_sum + n.key))) return 0;
     return 1;
@@ -579,7 +601,7 @@ TEST(DatastructureTest, RedBlackTree) {
 
     {                                                
       timers->AccumulateTo(ctid); for (auto i : db) t.Insert(i, i);
-      timers->AccumulateTo(0);    t.CheckProperties();
+      timers->AccumulateTo(0);    t.CheckProperties(); CHECK_EQ(0, (--t.Begin()).val);
       timers->AccumulateTo(qtid); for (auto i : db) { EXPECT_NE((int*)0, (ti=t.Find(i)).val); if (ti.val) EXPECT_EQ(i, *ti.val); }
       timers->AccumulateTo(itid); for (ti = t. Begin(); ti.ind; ++ti) {         EXPECT_EQ(sorted_db[iind], ti.key); EXPECT_EQ(sorted_db[iind], *ti.val); iind++; }
       timers->AccumulateTo(0);    for (ti = t.RBegin(); ti.ind; --ti) { iind--; EXPECT_EQ(sorted_db[iind], ti.key); EXPECT_EQ(sorted_db[iind], *ti.val);         }

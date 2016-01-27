@@ -30,8 +30,7 @@ struct GUI : public MouseController {
   Box box;
   Window *parent;
   DrawableBoxArray child_box;
-  Toggler toggle_active;
-  GUI(Window *W=0, const Box &B=Box()) : box(B), parent(W), toggle_active(&active) { if (parent) parent->mouse_gui.push_back(this); }
+  GUI(Window *W=0, const Box &B=Box()) : box(B), parent(W) { if (parent) parent->mouse_gui.push_back(this); }
   virtual ~GUI() { if (parent) VectorEraseByValue(&parent->mouse_gui, this); }
 
   DrawableBoxArray *Reset() { Clear(); return &child_box; }
@@ -46,9 +45,8 @@ struct GUI : public MouseController {
   virtual void Layout(const Box &b) { box=b; Layout(); }
   virtual void Layout() {}
   virtual void Draw();
-  virtual bool ToggleActive();
-  virtual void HandleTextMessage(const string &s) {}
   virtual void ResetGL() {}
+  virtual void HandleTextMessage(const string &s) {}
 };
 
 struct Widget {
@@ -107,17 +105,17 @@ struct Widget {
     void LayoutComplete(Flow *flow, const Box &b);
   };
 
-  struct Scrollbar : public Interface {
+  struct Slider : public Interface {
     struct Flag { enum { Attached=1, Horizontal=2, NoCorner=4, AttachedHorizontal=Attached|Horizontal,
       AttachedNoCorner=Attached|NoCorner, AttachedHorizontalNoCorner=AttachedHorizontal|NoCorner }; };
     Box win;
-    int flag=0, doc_height=200, dot_size=25;
+    int flag=0, doc_height=200, dot_size=15;
     float scrolled=0, last_scrolled=0, increment=20;
     Color color=Color(15, 15, 15, 55);
     Font *menuicon=0;
     bool dragging=0, dirty=0;
-    virtual ~Scrollbar() {}
-    Scrollbar(GUI *Gui, Box window=Box(), int f=Flag::Attached);
+    virtual ~Slider() {}
+    Slider(GUI *Gui, Box window=Box(), int f=Flag::Attached);
 
     float Percent() const { return scrolled * doc_height; }
     void LayoutFixed(const Box &w) { win = w; Layout(dot_size, dot_size, flag & Flag::Horizontal); }
@@ -130,24 +128,23 @@ struct Widget {
     void ScrollDown() { scrolled += increment / doc_height; Clamp(&scrolled, 0, 1); dirty=true; }
     float ScrollDelta() { float ret=scrolled-last_scrolled; last_scrolled=scrolled; return ret; }
     float AddScrollDelta(float cur_val);
-    static void AttachContentBox(Box *b, Scrollbar *vs, Scrollbar *hs);
+    static void AttachContentBox(Box *b, Slider *vs, Slider *hs);
   };
 };
 
 struct KeyboardGUI : public KeyboardController {
   typedef function<void(const string &text)> RunCB;
   Window *parent;
-  Toggler toggle_active;
   Bind toggle_bind;
+  bool toggle_once=0;
   RunCB runcb;
   RingVector<string> lastcmd;
   int lastcmd_ind=-1;
   KeyboardGUI(Window *W, Font *F, int LastCommands=10)
-    : parent(W), toggle_active(&active), lastcmd(LastCommands) { if (parent) parent->keyboard_gui.push_back(this); }
+    : parent(W), lastcmd(LastCommands) { if (parent) parent->keyboard_gui.push_back(this); }
   virtual ~KeyboardGUI() { if (parent) VectorEraseByValue(&parent->keyboard_gui, this); }
-  virtual bool Toggle() { return toggle_active.Toggle(); }
+  virtual void SetToggleKey(int TK, bool TO=0) { toggle_bind.key=TK; toggle_once=TO; }
   virtual void Run(const string &cmd) { if (runcb) runcb(cmd); }
-  virtual void SetToggleKey(int TK, int TM=Toggler::Default) { toggle_bind.key=TK; toggle_active.mode=TM; }
   virtual void ResetGL() {}
 
   void AddHistory  (const string &cmd);
@@ -183,7 +180,7 @@ struct TextGUI : public KeyboardGUI, public Drawable::AttrSource {
     Link(Line *P, GUI *G, const Box3 &b, const string &U);
     virtual ~Link() { if (line->parent->hover_link == this) line->parent->hover_link = 0; }
     void Hover(int, int, int, int down) { line->parent->hover_link = down ? this : 0; }
-    void Visit() { SystemBrowser::Open(link.c_str()); }
+    void Visit() { app->OpenSystemBrowser(link); }
   };
 
   struct LineData {
@@ -277,7 +274,7 @@ struct TextGUI : public KeyboardGUI, public Drawable::AttrSource {
     int lines=0;
 
     LinesFrameBuffer *Attach(LinesFrameBuffer **last_fb);
-    virtual bool SizeChanged(int W, int H, Font *font);
+    virtual bool SizeChanged(int W, int H, Font *font, const Color *bgc);
     virtual int Height() const { return lines * font_height; }
     tvirtual void Clear(Line *l) { RingFrameBuffer::Clear(l, Box(w, l->Lines() * font_height), true); }
     tvirtual void Update(Line *l, int flag=0);
@@ -314,13 +311,13 @@ struct TextGUI : public KeyboardGUI, public Drawable::AttrSource {
     point i, p;
   };
 
-  struct Selection {
-    bool enabled=1, changing=0, changing_previously=0;
+  struct Selection : public DragTracker {
+    bool enabled=1;
     int gui_ind=-1;
     struct Point { 
-      int line_ind=0, char_ind=0; point click; Box glyph;
+      int line_ind=0, char_ind=0; Box glyph;
       bool operator<(const Point &c) const { SortImpl2(c.glyph.y, glyph.y, glyph.x, c.glyph.x); }
-      string DebugString() const { return StrCat("i=", click.DebugString(), " l=", line_ind, " c=", char_ind, " b=", glyph.DebugString()); }
+      string DebugString() const { return StrCat("Selection::Point(l=", line_ind, ", c=", char_ind, ", b=", glyph.DebugString(), ")"); }
     } beg, end;
     Box3 box;
   };
@@ -336,6 +333,7 @@ struct TextGUI : public KeyboardGUI, public Drawable::AttrSource {
   Color cmd_color=Color::white, selection_color=Color(Color::grey70, 0.5);
   bool deactivate_on_enter=0, token_processing=0, insert_mode=1;
   int start_line=0, end_line=0, start_line_adjust=0, skip_last_lines=0, default_attr=0;
+  function<void(const Selection::Point&)> selection_cb;
   function<void(const shared_ptr<Link>&)> new_link_cb;
   function<void(Link*)> hover_link_cb;
   Link *hover_link=0;
@@ -350,6 +348,10 @@ struct TextGUI : public KeyboardGUI, public Drawable::AttrSource {
   virtual ~TextGUI() {}
   virtual const Drawable::Attr *GetAttr(int attr) const;
   virtual int CommandLines() const { return 0; }
+  virtual bool Active() const { return screen->active_textgui == this; }
+  virtual void Activate()   { if (!Active()) { if (auto g=screen->active_textgui) g->Deactivate(); screen->active_textgui=this; } }
+  virtual void Deactivate() { if (Active()) screen->active_textgui = screen->default_textgui(); }
+  virtual bool ToggleActive() { if (!Active()) Activate(); else Deactivate(); return Active(); }
   virtual void Input(char k) { cmd_line.UpdateText(cursor.i.x++, String16(1, *Unsigned<char>(&k)), cursor.attr); UpdateCommandFB(); UpdateCursor(); }
   virtual void Erase()       { if (!cursor.i.x) return; cmd_line.Erase(--cursor.i.x, 1); UpdateCommandFB(); UpdateCursor(); }
   virtual void CursorRight() { UpdateCursorX(min(cursor.i.x+1, cmd_line.Size())); }
@@ -367,9 +369,9 @@ struct TextGUI : public KeyboardGUI, public Drawable::AttrSource {
   virtual LinesFrameBuffer *GetFrameBuffer() { return &cmd_fb; }
   virtual void ResetGL() { cmd_fb.Reset(); }
   virtual void UpdateCursorX(int x) { cursor.i.x = x; UpdateCursor(); }
-  virtual void UpdateCursor() { cursor.p = cmd_line.data->glyphs.Position(cursor.i.x); }
+  virtual void UpdateCursor() { cursor.p = cmd_line.data->glyphs.Position(cursor.i.x) + point(0, font->Height()); }
   virtual void UpdateCommandFB() { UpdateLineFB(&cmd_line, &cmd_fb); }
-  virtual void UpdateLineFB(Line *L, LinesFrameBuffer *fb);
+  virtual void UpdateLineFB(Line *L, LinesFrameBuffer *fb, int flag=0);
   virtual void Draw(const Box &b);
   virtual void DrawCursor(point p);
   virtual void UpdateToken(Line*, int word_offset, int word_len, int update_type, const LineTokenProcessor*);
@@ -420,8 +422,8 @@ struct TextArea : public TextGUI {
   virtual void ResetGL() { line_fb.Reset(); TextGUI::ResetGL(); }
   void ChangeColors(Colors *C);
 
-  struct DrawFlag { enum { DrawCursor=1, CheckResized=2 }; };
-  virtual void Draw(const Box &w, int flag, Shader *shader=0);
+  struct DrawFlag { enum { DrawCursor=1, CheckResized=2, Default=DrawCursor|CheckResized }; };
+  virtual void Draw(const Box &w, int flag=DrawFlag::Default, Shader *shader=0);
   virtual void DrawHoverLink(const Box &w);
   virtual bool GetGlyphFromCoords(const point &p, Selection::Point *out) { return GetGlyphFromCoordsOffset(p, out, start_line, start_line_adjust); }
   bool GetGlyphFromCoordsOffset(const point &p, Selection::Point *out, int sl, int sla);
@@ -431,6 +433,7 @@ struct TextArea : public TextGUI {
   int LineFBPushFront() const { return reverse_line_fb ? LineUpdate::PushBack  : LineUpdate::PushFront; }
   float PercentOfLines(int n) const { return static_cast<float>(n) / (WrappedLines()-1); }
   void AddVScroll(int n) { v_scrolled = Clamp(v_scrolled + PercentOfLines(n), 0, 1); UpdateScrolled(); }
+  void SetVScroll(int n) { v_scrolled = Clamp(0          + PercentOfLines(n), 0, 1); UpdateScrolled(); }
   int LayoutBackLine(Lines *l, int i) { return Wrap() ? (*l)[-i-1].Layout(line_fb.w) : 1; }
 
   void InitSelection();
@@ -442,7 +445,9 @@ struct TextArea : public TextGUI {
 
 struct Editor : public TextArea {
   struct LineOffset { 
-    long long offset; int size, wrapped_lines; PieceIndex annotation;
+    long long offset;
+    int size, wrapped_lines;
+    PieceIndex annotation;
     LineOffset(int O=0, int S=0, int WL=1) : offset(O), size(S), wrapped_lines(WL) {}
     static string GetString(const LineOffset *v) { return StrCat(v->offset); }
     static int    GetLines (const LineOffset *v) { return v->wrapped_lines; }
@@ -453,26 +458,30 @@ struct Editor : public TextArea {
   shared_ptr<File> file;
   LineMap file_line;
   FreeListVector<String16> edits;
-  LineOffset *cursor_line=0;
+  Line *cursor_line=0;
+  LineOffset *cursor_offset=0;
   vector<pair<int,int>> annotation;
-  int last_fb_width=0, last_fb_lines=0, last_first_line=0, wrapped_lines=0, fb_wrapped_lines=0;
+  int last_fb_width=0, last_fb_lines=0, last_first_line=0;
+  int wrapped_lines=0, fb_wrapped_lines=0;
+  int cursor_line_number=0, cursor_line_number_offset=0;
   bool opened=0;
   IDE::Project *project=0;
+  unique_ptr<IDE::File> ide_file;
   Editor(Window *W, Font *F, File *I, bool Wrap=0);
 
   void Input(char k)  { Modify(false, k); }
   void Enter()        { Modify(false, '\r'); }
   void Erase()        { Modify(true,  0); }
   void CursorLeft()   { UpdateCursorX(max(cursor.i.x-1, 0)); }
-  void CursorRight()  { UpdateCursorX(min(cursor.i.x+1, GetCursorLine()->Size())); }
+  void CursorRight()  { UpdateCursorX(min(cursor.i.x+1, CursorLineSize())); }
   void Home()         { UpdateCursorX(0); }
-  void End()          { UpdateCursorX(GetCursorLine()->Size()); }
-  void HistUp()       { if (cursor.i.y <= 0)               AddVScroll(-1); else cursor.i.y--; UpdateCursor(); UpdateCursorLine(); }
-  void HistDown()     { if (cursor.i.y >= line_fb.lines-1) AddVScroll( 1); else cursor.i.y++; UpdateCursor(); UpdateCursorLine(); }
+  void End()          { UpdateCursorX(CursorLineSize()); }
+  void HistUp();
+  void HistDown();
+  void SelectionCB(const Selection::Point&);
 
-  Line *GetCursorLine() { return &line[-1-cursor.i.y]; }
-  int CursorLineNumber() const { return last_first_line + cursor.i.y; }
   int WrappedLines() const { return wrapped_lines; }
+  int CursorLineSize() const { return cursor_line ? cursor_line->Size() : 0; }
   void ToggleShouldWrap() { SetShouldWrap(!line_fb.wrap); }
   void SetShouldWrap(bool);
   void AddWrappedLines(int n);
@@ -480,19 +489,30 @@ struct Editor : public TextArea {
   void Reload() { last_fb_width=0; wrapped_lines=0; RefreshLines(); }
   int RefreshLines() { last_fb_lines=0; return UpdateLines(last_v_scrolled, 0, 0, 0); }
   int UpdateLines(float v_scrolled, int *first_ind, int *first_offset, int *first_len);
-  void UpdateCursorLine() { cursor_line = file_line.LesserBound(CursorLineNumber()).val; }
   void UpdateCursor();
-  void UpdateAnnotation();
-  void Modify(bool erase, int c);
+  void UpdateCursorLine();
+  void UpdateCursorX(int x);
+  int CursorLinesChanged(const String16 &b, int add_lines=0);
   int ModifyCursorLine();
+  void Modify(bool erase, int c);
   int Save();
+  FileNameAndOffset FindDefinition(const point &p);
+  void UpdateAnnotation();
 };
 
 struct Terminal : public TextArea {
   struct State { enum { TEXT=0, ESC=1, CSI=2, OSC=3, CHARSET=4 }; };
   struct ByteSink {
-    virtual int Write(const char *b, int l) = 0;
+    virtual int Write(const StringPiece &b) = 0;
     virtual void IOCtlWindowSize(int w, int h) {}
+  };
+  struct Controller : public ByteSink {
+    bool ctrl_down=0, frame_on_keyboard_input=0;
+    virtual ~Controller() {}
+    virtual int Open(Terminal*) = 0;
+    virtual StringPiece Read() = 0;
+    virtual void Close() {}
+    virtual void Dispose() {}
   };
 
   ByteSink *sink=0;
@@ -513,25 +533,25 @@ struct Terminal : public TextArea {
   virtual void ResizedLeftoverRegion(int w, int h, bool update_fb=true);
   virtual void SetScrollRegion(int b, int e, bool release_fb=false);
   virtual void SetDimension(int w, int h);
-  virtual void Draw(const Box &b, int flag, Shader *shader=0);
+  virtual void Draw(const Box &b, int flag=DrawFlag::Default, Shader *shader=0);
   virtual void Write(const StringPiece &s, bool update_fb=true, bool release_fb=true);
-  virtual void Input(char k) {                       sink->Write(&k, 1); }
-  virtual void Erase      () { char k = 0x7f;        sink->Write(&k, 1); }
-  virtual void Enter      () { char k = '\r';        sink->Write(&k, 1); }
-  virtual void Tab        () { char k = '\t';        sink->Write(&k, 1); }
-  virtual void Escape     () { char k = 0x1b;        sink->Write(&k, 1); }
-  virtual void HistUp     () { char k[] = "\x1bOA";  sink->Write( k, 3); }
-  virtual void HistDown   () { char k[] = "\x1bOB";  sink->Write( k, 3); }
-  virtual void CursorRight() { char k[] = "\x1bOC";  sink->Write( k, 3); }
-  virtual void CursorLeft () { char k[] = "\x1bOD";  sink->Write( k, 3); }
-  virtual void PageUp     () { char k[] = "\x1b[5~"; sink->Write( k, 4); }
-  virtual void PageDown   () { char k[] = "\x1b[6~"; sink->Write( k, 4); }
-  virtual void Home       () { char k[] = "\x1bOH";  sink->Write( k, 3); }
-  virtual void End        () { char k[] = "\x1bOF";  sink->Write( k, 3); }
+  virtual void Input(char k) {                       sink->Write(StringPiece(&k, 1)); }
+  virtual void Erase      () { char k = 0x7f;        sink->Write(StringPiece(&k, 1)); }
+  virtual void Enter      () { char k = '\r';        sink->Write(StringPiece(&k, 1)); }
+  virtual void Tab        () { char k = '\t';        sink->Write(StringPiece(&k, 1)); }
+  virtual void Escape     () { char k = 0x1b;        sink->Write(StringPiece(&k, 1)); }
+  virtual void HistUp     () { char k[] = "\x1bOA";  sink->Write(StringPiece( k, 3)); }
+  virtual void HistDown   () { char k[] = "\x1bOB";  sink->Write(StringPiece( k, 3)); }
+  virtual void CursorRight() { char k[] = "\x1bOC";  sink->Write(StringPiece( k, 3)); }
+  virtual void CursorLeft () { char k[] = "\x1bOD";  sink->Write(StringPiece( k, 3)); }
+  virtual void PageUp     () { char k[] = "\x1b[5~"; sink->Write(StringPiece( k, 4)); }
+  virtual void PageDown   () { char k[] = "\x1b[6~"; sink->Write(StringPiece( k, 4)); }
+  virtual void Home       () { char k[] = "\x1bOH";  sink->Write(StringPiece( k, 3)); }
+  virtual void End        () { char k[] = "\x1bOF";  sink->Write(StringPiece( k, 3)); }
   virtual void MoveToOrFromScrollRegion(LinesFrameBuffer *fb, Line *l, const point &p, int flag);
   virtual void UpdateCursor() { cursor.p = point(GetCursorX(term_cursor.x, term_cursor.y), GetCursorY(term_cursor.y)); }
   virtual void UpdateToken(Line*, int word_offset, int word_len, int update_type, const LineTokenProcessor*);
-  virtual bool GetGlyphFromCoords(const point &p, Selection::Point *out) { return GetGlyphFromCoordsOffset(p, out, 0, 0); }
+  virtual bool GetGlyphFromCoords(const point &p, Selection::Point *out) { return GetGlyphFromCoordsOffset(p, out, clip ? 0 : start_line, 0); }
   void ScrollUp  () { TextArea::PageDown(); }
   void ScrollDown() { TextArea::PageUp(); }
   int GetCursorX(int x, int y) const {
@@ -567,47 +587,87 @@ struct Terminal : public TextArea {
 };
 
 struct Console : public TextArea {
-  string startcmd;
+  Color color=Color(25,60,130,120);
   double screen_percent=.4;
   Callback animating_cb;
   Time anim_time=Time(333), anim_begin=Time(0);
-  bool animating=0, drawing=0, bottom_or_top=0, blend=1, ran_startcmd=0;
-  Color color=Color(25,60,130,120);
-  Console(Window *W, Font *F) : TextArea(W, F, 200, 50) { line_fb.wrap=write_timestamp=1; SetToggleKey(Key::Backquote); bg_color=&Color::clear; }
-  Console(Window *W) : Console(W, Fonts::Get(A_or_B(FLAGS_lfapp_console_font, FLAGS_default_font), "", 9, Color::white, Color::clear, FLAGS_lfapp_console_font_flag)) { cursor.type = Cursor::Underline; }
+  bool animating=0, drawing=0, bottom_or_top=0, blend=1;
+
+  Console(Window *W, Font *F) : TextArea(W, F, 200, 50)
+  { line_fb.wrap=write_timestamp=1; SetToggleKey(Key::Backquote); bg_color=&Color::clear; cursor.type = Cursor::Underline; }
+  Console(Window *W) : Console(W, Fonts::Get(A_or_B(FLAGS_lfapp_console_font, FLAGS_default_font), "", 9, Color::white,
+                                             Color::clear, FLAGS_lfapp_console_font_flag)) {}
 
   virtual ~Console() {}
   virtual int CommandLines() const { return cmd_line.Lines(); }
   virtual void Run(const string &in) { app->shell.Run(in); }
   virtual void PageUp  () { TextArea::PageDown(); }
   virtual void PageDown() { TextArea::PageUp(); }
-  virtual bool Toggle();
+  virtual void Activate() { TextGUI::Activate(); StartAnimating(); }
+  virtual void Deactivate() { TextGUI::Deactivate(); StartAnimating(); }
   virtual void Draw();
-  int WriteHistory(const string &dir, const string &name)
-  { return KeyboardGUI::WriteHistory(dir, name, startcmd); }
+  void StartAnimating();
 };
 
 struct Dialog : public GUI {
   struct Flag { enum { None=0, Fullscreen=1, Next=2 }; };
+  static const int min_width = 50, min_height = 25;
+  Color color, title_gradient[4];
   Font *font=0, *menuicon=0;
-  Color color=Color(25,60,130,220);
-  Box title, resize_left, resize_right, resize_bottom, close;
-  bool deleted=0, moving=0, resizing_left=0, resizing_right=0, resizing_top=0, resizing_bottom=0, fullscreen=0;
+  Box title, content, resize_left, resize_right, resize_bottom, close;
+  bool deleted=0, moving=0, resizing_left=0, resizing_right=0, resizing_bottom=0, fullscreen=0, tabbed=0;
   point mouse_start, win_start;
+  Callback deleted_cb;
   string title_text;
   int zsort=0;
+
   Dialog(float w, float h, int flag=0);
   virtual ~Dialog() {}
   virtual void Layout();
   virtual void Draw();
-  void BringToFront();
-  Box BoxAndTitle() const { return Box(box.x, box.y, box.w, box.h + title.h); }
+  virtual void TakeFocus() {}
+  virtual void LoseFocus() {}
+
+  void LayoutTabbed(int, const Box &b, const point &d, MouseController*, DrawableBoxArray*);
+  void LayoutTitle(const Box &b, MouseController*, DrawableBoxArray*);
+  void LayoutReshapeControls(const point &d, MouseController*);
+  bool HandleReshape(Box *outline);
+  void DrawGradient(const point &p) const { (title + p).DrawGradient(title_gradient); }
   void Reshape(bool *down) { mouse_start = screen->mouse; win_start = point(box.x, box.y); *down = 1; }
-  void MarkDeleted() { deleted = 1; }
 
   static bool LessThan(const Dialog *l, const Dialog *r) { return l->zsort < r->zsort; }
   static void MessageBox(const string &text);
   static void TextureBox(const string &text);
+};
+
+struct DialogTab {
+  Dialog *dialog;
+  DrawableBoxArray child_box;
+  DialogTab(Dialog *D=0) : dialog(D) {}
+  bool operator<(const DialogTab &x) const { return dialog < x.dialog; }
+  bool operator==(const DialogTab &x) const { return dialog == x.dialog; }
+  static void Draw(const Box &b, const point &tab_dim, const vector<DialogTab>&);
+};
+
+template <class D=Dialog> struct TabbedDialog {
+  GUI *gui;
+  Box box;
+  D *top=0;
+  point tab_dim;
+  unordered_set<D*> tabs;
+  vector<DialogTab> tab_list;
+  TabbedDialog(GUI *g, const point &d=point(200,16)) : gui(g), tab_dim(d) {}
+
+  D *FirstTab() const { return tab_list.size() ? dynamic_cast<D*>(tab_list.begin()->dialog) : 0; }
+  void AddTab(D *t) { tabs.insert(t); tab_list.emplace_back(t); SelectTab(t); }
+  void DelTab(D *t) { tabs.erase(t); VectorEraseByValue(&tab_list, DialogTab(t)); ReleaseTab(t); }
+  void SelectTab(D *t) { (top = t)->TakeFocus(); }
+  void ReleaseTab(D *t) { if (top == t) { top=0; t->LoseFocus(); if ((top = FirstTab())) top->TakeFocus(); } }
+  void Draw() { DialogTab::Draw(box, tab_dim, tab_list); if (top) top->Draw(); }
+  void Layout() {
+    for (auto b=tab_list.begin(), e=tab_list.end(), t=b; t != e; ++t)
+      t->dialog->LayoutTabbed(t-b, box, tab_dim, gui, &t->child_box);
+  }
 };
 
 struct MessageBoxDialog : public Dialog {
@@ -624,30 +684,31 @@ struct TextureBoxDialog : public Dialog {
 };
 
 struct SliderDialog : public Dialog {
-  typedef function<void(Widget::Scrollbar*)> UpdatedCB;
+  typedef function<void(Widget::Slider*)> UpdatedCB;
   string title;
   UpdatedCB updated;
-  Widget::Scrollbar slider;
+  Widget::Slider slider;
   SliderDialog(const string &title="", const UpdatedCB &cb=UpdatedCB(), float scrolled=0, float total=100, float inc=1);
   void Layout() { Dialog::Layout(); slider.LayoutFixed(Box(0, -box.h, box.w, box.h)); }
   void Draw() { Dialog::Draw(); if (slider.dirty) { slider.Update(); if (updated) updated(&slider); } }
 };
 
-struct SliderFlagDialog : public SliderDialog {
+struct FlagSliderDialog : public SliderDialog {
   string flag_name;
   FlagMap *flag_map;
-  SliderFlagDialog(const string &fn, float total=100, float inc=1);
-  virtual void Updated(Widget::Scrollbar *s) { flag_map->Set(flag_name, StrCat(s->Percent())); }
+  FlagSliderDialog(const string &fn, float total=100, float inc=1);
+  virtual void Updated(Widget::Slider *s) { flag_map->Set(flag_name, StrCat(s->Percent())); }
 };
 
 struct EditorDialog : public Dialog {
   struct Flag { enum { Wrap=Dialog::Flag::Next }; };
   Editor editor;
-  Box content_box;
-  Widget::Scrollbar v_scrollbar, h_scrollbar;
+  Widget::Slider v_scrollbar, h_scrollbar;
   EditorDialog(Window *W, Font *F, File *I, float w=.5, float h=.5, int flag=0);
   void Layout();
   void Draw();
+  void TakeFocus() { editor.Activate(); }
+  void LoseFocus() { editor.Deactivate(); }
 };
 
 struct HelperGUI : public GUI {

@@ -19,10 +19,6 @@
 #ifndef LFL_LFAPP_LFTYPES_H__
 #define LFL_LFAPP_LFTYPES_H__
 
-#ifdef LFL_JUDY
-#include "judymap.h"
-#endif
-
 #ifdef LFL_FLATBUFFERS
 #include "flatbuffers/flatbuffers.h"
 namespace LFL {
@@ -39,39 +35,40 @@ typedef pair<unique_ptr<char*>, size_t> FlatBufferPiece;
 #define SortImpl1(x1, y2) return x1 < y2;
 #define SortImpl2(x1, y1, x2, y2) \
   if      (x1 < y1) return true;  \
-  else if (x1 > y1) return false; \
+  else if (y1 < x1) return false; \
   else return x2 < y2;
 #define SortImpl3(x1, y1, x2, y2, x3, y3) \
   if      (x1 < y1) return true;  \
-  else if (x1 > y1) return false; \
+  else if (y1 < x1) return false; \
   if      (x2 < y2) return true;  \
-  else if (x2 > y2) return false; \
+  else if (y2 < x2) return false; \
   else return x3 < y3;
 #define SortImpl4(x1, y1, x2, y2, x3, y3, x4, y4) \
   if      (x1 < y1) return true;  \
-  else if (x1 > y1) return false; \
+  else if (y1 < x1) return false; \
   if      (x2 < y2) return true;  \
-  else if (x2 > y2) return false; \
+  else if (y2 < x2) return false; \
   if      (x3 < y3) return true;  \
-  else if (x3 > y3) return false; \
+  else if (y3 < x3) return false; \
   else return x4 < y4;
 
 namespace LFL {
-struct typed_ptr {
-  int type; void *value;
-  typed_ptr() : type(0), value(0) {}
-  typed_ptr(int T, void *P) : type(T), value(P) {}
-};
-
 template<typename T, typename ...Args>
 std::unique_ptr<T> make_unique(Args&& ...args) { return std::unique_ptr<T>(new T(std::forward<Args>(args)...)); }
-
-template <class X> int TypeId()   { static int ret = fnv32(typeid(X).name()); return ret; }
-template <class X> int TypeId(X*) { static int ret = fnv32(typeid(X).name()); return ret; }
-template <class X> typed_ptr TypePointer(X* v) { return typed_ptr(TypeId<X>(), v); }
+template <class X> int TypeId() { static int ret = fnv32(typeid(X).name()); return ret; }
+template <class X> int TypeId(X*) { return TypeId<X>(); };
 template <class X> X *CheckPointer(X *x) { CHECK(x); return x; }
+template <class X> X *CheckNullAssign(X **x, X *v) { CHECK_EQ(nullptr, *x); return (*x = v); }
+template <class X> X *GetThenAssignNull(X **x) { X *v = *x; if (v) *x = nullptr; return v; }
 template <class X> typename make_unsigned<X>::type *Unsigned(X *x) { return reinterpret_cast<typename make_unsigned<X>::type*>(x); }
-template <class X, int S, int XS=sizeof(X)> void StaticAssertSizeof() { static_assert(XS == S, "unexpected sizeof"); }
+
+struct typed_ptr {
+  int type=0;
+  void *value=0;
+  typed_ptr() {}
+  template <class X> typed_ptr(X *v) : type(TypeId<X>()), value(v) { }
+  template <class X> X *Get(int id) { return id == TypeId<X> ? reinterpret_cast<X*>(value) : nullptr; }
+};
 
 struct RefCounter {
   int count=0;
@@ -330,14 +327,16 @@ template <class X> struct FreeListVector {
   }
 };
 
-template <class X> struct IterableFreeListVector : public FreeListVector<X> { /// Expects X.deleted
+template <class X, bool (X::*x_deleted)>
+struct IterableFreeListVector : public FreeListVector<X> {
   virtual void Erase(unsigned ind) {
     FreeListVector<X>::Erase(ind);
-    FreeListVector<X>::data[ind].deleted = 1;
+    FreeListVector<X>::data[ind].*x_deleted = 1;
   }
 };
 
-template <class X, class Alloc = std::allocator<X> > struct FreeListBlockAllocator {
+template <class X, class Alloc = std::allocator<X> >
+struct FreeListBlockAllocator {
   typedef pair<X*, int> Block;
   const int block_size;
   Alloc alloc;
@@ -383,38 +382,44 @@ template <class X, class Alloc = std::allocator<X> > struct FreeListBlockAllocat
   void Erase(unsigned ind) { free_list.push_back(ind); }
 };
 
-template <typename X> struct SortedArray : public vector<X> {
-  SortedArray(int n = 0, const X &x = X()) : vector<X>(n, x) { sort(this->begin(), this->end()); }
-  typename vector<X>::iterator       Erase     (const X& x)       { return this->erase(Find(x)); }
+template <typename X> struct SortedVector : public vector<X> {
+  SortedVector(int n=0, const X &x=X()) : vector<X>(n, x) {}
+  void Sort() { sort(this->begin(), this->end()); }
+
+  int                                Erase     (const X& x)       { return VectorEraseByValue(this, x); }
   typename vector<X>::iterator       Insert    (const X& x)       { return this->insert(LowerBound(x), x); }
   typename vector<X>::iterator       LowerBound(const X& x)       { return lower_bound(this->begin(), this->end(), x); }
-  typename vector<X>::iterator       Find      (const X& x)       { return find(this->begin(), this->end(), x); }
-  typename vector<X>::const_iterator Find      (const X& x) const { return find(this->begin(), this->end(), x); }
+  typename vector<X>::iterator       Find      (const X& x)       { auto i=LowerBound(x), e=this->end(); return (i == e || x < *i) ? e : i; }
+  typename vector<X>::const_iterator Find      (const X& x) const { auto i=LowerBound(x), e=this->end(); return (i == e || x < *i) ? e : i; }
 };
 
-template <typename K, typename V> struct SortedArrayMap : public vector<pair<K, V>> {
+template <typename K, typename V> struct SortedVectorMap : public vector<pair<K, V>> {
   typedef typename vector<pair<K, V>>::iterator       iter;
   typedef typename vector<pair<K, V>>::iterator const_iter;
   struct Compare { bool operator()(const pair<K, V> &a, const pair<K, V> &b) { return a.first < b.first; } };
-  SortedArrayMap(int n = 0, const pair<K, V> &x = pair<K, V>()) : vector<pair<K, V>>(n, x) { sort(this->begin(), this->end(), Compare()); }
+  SortedVectorMap(int n = 0, const pair<K, V> &x = pair<K, V>()) : vector<pair<K, V>>(n, x) {}
+  void Sort() { sort(this->begin(), this->end(), Compare()); }
 
-  iter       Erase     (const K& k)             { return this->erase(Find(k)); }
-  iter       Find      (const K& k)             { return find(this->begin(), this->end(), pair<K, V>(k, V()), Compare()); }
-  const_iter Find      (const K& k) const       { return find(this->begin(), this->end(), pair<K, V>(k, V()), Compare()); }
+  int        Erase     (const K& k)             { return VectorEraseByValue(this, k); }
+  iter       Find      (const K& k)             { auto i=LowerBound(k), e=this->end(); return (i == e || k < *i) ? e : i; }
+  const_iter Find      (const K& k) const       { auto i=LowerBound(k), e=this->end(); return (i == e || k < *i) ? e : i; }
   iter       LowerBound(const K& k)             { return lower_bound(this->begin(), this->end(), pair<K, V>(k, V()), Compare()); }
   iter       Insert    (const K& k, const V &v) { return this->insert(LowerBound(k), pair<K, V>(k, v)); }
   iter       InsertOrUpdate(const K& k, const V &v) {
-    auto i = LowerBound(k); 
-    if (i != this->end() && i->first == k) { i->second = v; return i; }
+    auto i = Find(k); 
+    if (i != this->end()) { i->second = v; return i; }
     else return this->insert(i, pair<K, V>(k, v));
   }
 };
 
 template <typename X> struct ArraySegmentIter {
-  const X *buf; int i, ind, len, cur_start; X cur_attr;
+  const X *buf;
+  int i, ind, len, cur_start; X cur_attr;
+
   ArraySegmentIter(const basic_string<X> &B) : buf(B.size() ? &B[0] : 0), i(-1), ind(0), len(B.size()) { Increment(); }
   ArraySegmentIter(const vector      <X> &B) : buf(B.size() ? &B[0] : 0), i(-1), ind(0), len(B.size()) { Increment(); }
   ArraySegmentIter(const X *B, int L)        : buf(B),                    i(-1), ind(0), len(L)        { Increment(); }
+
   const X *Data() const { return &buf[cur_start]; }
   int Length() const { return ind - cur_start; }
   bool Done() const { return cur_start == len; }
@@ -425,10 +430,16 @@ template <typename X> struct ArraySegmentIter {
 template <typename X, typename Y, Y (X::*Z)> struct ArrayMemberSegmentIter {
   typedef function<void (const X&)> CB;
   typedef function<bool (const Y&, const Y&)> Cmp;
-  const X *buf; int i, ind, len, cur_start; Y cur_attr; CB cb; Cmp cmp;
+  const X *buf;
+  int i, ind, len, cur_start;
+  Y cur_attr;
+  CB cb;
+  Cmp cmp;
+
   ArrayMemberSegmentIter(const vector<X> &B)              : buf(B.size() ? &B[0] : 0), i(-1), ind(0), len(B.size()),         cmp(equal_to<Y>()) { Increment(); }
   ArrayMemberSegmentIter(const X *B, int L)               : buf(B),                    i(-1), ind(0), len(L),                cmp(equal_to<Y>()) { Increment(); }
   ArrayMemberSegmentIter(const X *B, int L, const CB &Cb) : buf(B),                    i(-1), ind(0), len(L),        cb(Cb), cmp(equal_to<Y>()) { Increment(); }
+
   const X *Data() const { return &buf[cur_start]; }
   int Length() const { return ind - cur_start; }
   bool Done() const { return cur_start == len; }
@@ -439,10 +450,15 @@ template <typename X, typename Y, Y (X::*Z)> struct ArrayMemberSegmentIter {
 template <typename X, typename Y, Y (X::*Z1), Y (X::*Z2)> struct ArrayMemberPairSegmentIter {
   typedef function<void (const X&)> CB;
   typedef function<bool (const Y&, const Y&)> Cmp;
-  const X *buf; int i, ind, len, cur_start; Y cur_attr1, cur_attr2; CB cb; Cmp cmp;
+  const X *buf;
+  int i, ind, len, cur_start; Y cur_attr1, cur_attr2;
+  CB cb;
+  Cmp cmp;
+
   ArrayMemberPairSegmentIter(const vector<X> &B)              : buf(B.size() ? &B[0] : 0), i(-1), ind(0), len(B.size()),         cmp(equal_to<Y>()) { Increment(); }
   ArrayMemberPairSegmentIter(const X *B, int L)               : buf(B),                    i(-1), ind(0), len(L),                cmp(equal_to<Y>()) { Increment(); }
   ArrayMemberPairSegmentIter(const X *B, int L, const CB &Cb) : buf(B),                    i(-1), ind(0), len(L),        cb(Cb), cmp(equal_to<Y>()) { Increment(); }
+
   const X *Data() const { return &buf[cur_start]; }
   int Length() const { return ind - cur_start; }
   bool Done() const { return cur_start == len; }
@@ -453,10 +469,15 @@ template <typename X, typename Y, Y (X::*Z1), Y (X::*Z2)> struct ArrayMemberPair
 template <typename X, typename Y, Y (X::*Z)() const> struct ArrayMethodSegmentIter {
   typedef function<void (const X&)> CB;
   typedef function<bool (const Y&, const Y&)> Cmp;
-  const X *buf; int i, ind, len, cur_start; Y cur_attr; CB cb; Cmp cmp;
+  const X *buf;
+  int i, ind, len, cur_start;
+  Y cur_attr;
+  CB cb;
+  Cmp cmp;
   ArrayMethodSegmentIter(const vector<X> &B)              : buf(B.size() ? &B[0] : 0), i(-1), ind(0), len(B.size()),         cmp(equal_to<Y>()) { Increment(); }
   ArrayMethodSegmentIter(const X *B, int L)               : buf(B),                    i(-1), ind(0), len(L),                cmp(equal_to<Y>()) { Increment(); }
   ArrayMethodSegmentIter(const X *B, int L, const CB &Cb) : buf(B),                    i(-1), ind(0), len(L),        cb(Cb), cmp(equal_to<Y>()) { Increment(); }
+
   const X *Data() const { return &buf[cur_start]; }
   int Length() const { return ind - cur_start; }
   bool Done() const { return cur_start == len; }
@@ -479,6 +500,7 @@ struct LRUCache {
     CHECK(data.insert(make_pair(k, it)).second);
     return &it->second;
   }
+
   V *Get(const K& k) { 
     auto it = data.find(k);
     if (it == data.end()) return NULL;
@@ -489,7 +511,7 @@ struct LRUCache {
   void Reserve() { used.reserve(capacity); data.reserve(capacity); }
   void Evict() { while (used.size() > capacity) data.erase(PopFront(used).first); } 
   void EvictUnique() {
-    for (auto i = used.begin(), e = used.end(); i != e && used.size() > capacity; /**/) {
+    for (auto i = used.begin(); i != used.end() && used.size() > capacity; /**/) {
       if (!i->second.unique()) ++i;
       else { data.erase(i->first); i = used.erase(i); }
     }
@@ -522,6 +544,7 @@ template <class X> struct FlattenedArrayValues {
       }
     }
   }
+
   int Distance(Iter i1, Iter i2, int maxdist=0) {
     int dist = 0;
     if (i2 < i1) swap(i1, i2);
@@ -547,6 +570,7 @@ template <class X> struct MessageQueue {
     queue.push_back(x);
     if (use_cv) cv.notify_one();
   }
+
   bool NBRead(X* out) {
     if (queue.empty()) return false;
     ScopedMutex sm(lock);
@@ -554,6 +578,7 @@ template <class X> struct MessageQueue {
     *out = PopFront(queue);
     return true;
   }
+
   X Read() {
     unique_lock<mutex> ul(lock);
     cv.wait(ul, [this](){ return !this->queue.empty(); } );
@@ -654,8 +679,9 @@ struct RingBuf {
   virtual microseconds ReadTimestamp(int index, int Next=-1) const;
 
   struct Handle : public Vec<float> {
-    RingBuf *sb; int next, nlen;
-    Handle() : sb(0), next(-1), nlen(-1) {}
+    RingBuf *sb=0;
+    int next=-1, nlen=-1;
+    Handle() {}
     Handle(RingBuf *SB, int Next=-1, int Len=-1) : sb(SB), next((sb && Next != -1)?sb->Bucket(Next):-1), nlen(Len) {}
     virtual int Rate() const { return sb->samples_per_sec; }
     virtual int Len() const { return nlen >= 0 ? nlen : sb->ring.size; }
@@ -778,17 +804,6 @@ struct BloomFilter {
       if (!op(buf, h1)) return 0;
     }
     return 1;
-  }
-};
-
-struct Toggler {
-  enum { Default = 1, OneShot = 2 };
-  int mode;
-  bool *target;
-  Toggler(bool *T, int M=Default) : target(T), mode(M) {}
-  bool Toggle() {
-    if (*target && mode == OneShot) return false;
-    else { *target = !*target; return true; }
   }
 };
 

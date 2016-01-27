@@ -1113,7 +1113,7 @@ struct StyleSheet : public LFL::DOM::Object {
     if (Content) { Parse(Content); Done(); }
   }
 
-  void Parse(File *f) { for (const char *line = f->NextLine(); line; line = f->NextLine()) Parse(line, f->nr.record_len); }
+  void Parse(File *f) { NextRecordReader nr(f); for (const char *l = nr.NextLine(); l; l = nr.NextLine()) Parse(l, nr.record_len); }
   void Parse(const string &content) { return Parse(content.c_str(), content.size()); }
   void Parse(const char *content, int content_len) {
     css_error code = css_stylesheet_append_data(sheet, (const unsigned char *)content, content_len);
@@ -1138,7 +1138,7 @@ struct ComputedStyle : public LFL::DOM::CSSStyleDeclaration {
   LFL::DOM::Node *node;
   string override_style;
   css_select_results *style=0;
-  bool is_root=0, font_not_inherited=0, bgcolor_not_inherited=0;
+  bool is_root=0, font_not_inherited=0, color_not_inherited=0, bgcolor_not_inherited=0;
   ComputedStyle(LFL::DOM::Node *N) : node(N) {}
   virtual ~ComputedStyle() { Reset(); }
 
@@ -1525,7 +1525,7 @@ struct StyleSheet : public LFL::DOM::Object {
   LFL::DOM::Document *ownerDocument;
   static StyleSheet *Default() { static StyleSheet ret(0); return &ret; }
   StyleSheet(LFL::DOM::Document *D, const char *U=0, const char *T=0, bool in_line=0, bool quirks=0, const char *Content=0) : ownerDocument(D) {}
-  void Parse(File *f) { for (const char *line = f->NextLine(); line; line = f->NextLine()) Parse(line, f->nr.record_len); }
+  void Parse(File *f) { NextRecordReader nr(f); for (const char *l = nr.NextLine(); l; l = nr.NextLine()) Parse(l, nr.record_len); }
   void Parse(const string &content) { return Parse(content.c_str(), content.size()); }
   void Parse(const char *content, int content_len) {}
   void Done()                                      {}
@@ -1533,8 +1533,8 @@ struct StyleSheet : public LFL::DOM::Object {
 struct ComputedStyle : public LFL::DOM::CSSStyleDeclaration {
   LFL::DOM::Node *node;
   string override_style;
-  bool is_root, font_not_inherited, bgcolor_not_inherited;
-  ComputedStyle(LFL::DOM::Node *N) : node(N), is_root(0), font_not_inherited(0), bgcolor_not_inherited(0) {}
+  bool is_root=0, font_not_inherited=0, color_not_inherited=0, bgcolor_not_inherited=0;
+  ComputedStyle(LFL::DOM::Node *N) : node(N) {}
 
   void Reset() {}
   bool IsLink() const {

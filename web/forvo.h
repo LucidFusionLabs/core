@@ -45,8 +45,8 @@ struct ForvoApi : public Crawler, public HTMLParser {
     LocalFile file(filename, "r");
     if (!file.Opened()) { ERROR("Open: ", filename); return; }
 
-    for (const char *line = file.NextLine(); line; line = file.NextLine()) 
-      queue[0].Add(URL(line));
+    NextRecordReader nr(&file);
+    for (const char *line = nr.NextLine(); line; line = nr.NextLine()) queue[0].Add(URL(line));
   }
 
   void Validate() {

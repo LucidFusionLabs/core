@@ -24,7 +24,7 @@
 #include "lfapp/ipc.h"
 
 namespace LFL {
-point DrawableBoxRun::Draw(point p, DrawCB cb) {
+point DrawableBoxRun::Draw(point p, DrawCB cb) const {
   Box w;
   DrawBackground(p);
   if (attr->tex) attr->tex->Bind();
@@ -33,13 +33,14 @@ point DrawableBoxRun::Draw(point p, DrawCB cb) {
   if (attr->font) attr->font->Select();
   else if (attr->tex) screen->gd->EnableLayering();
   if (attr->blend) screen->gd->EnableBlend();
+  // else if (!attr->font) screen->gd->DisableBlend();
   if (attr->scissor) screen->gd->PushScissor(*attr->scissor + p);
   for (auto i = data.buf, e = data.end(); i != e; ++i) if (i->drawable) cb(i->drawable, (w = i->box + p), attr);
   if (attr->scissor) screen->gd->PopScissor();
   return point(w.x + w.w, w.y);
 }
 
-void DrawableBoxRun::DrawBackground(point p, DrawBackgroundCB cb) {
+void DrawableBoxRun::DrawBackground(point p, DrawBackgroundCB cb) const {
   if (attr->bg) screen->gd->FillColor(*attr->bg);
   if (!attr->bg || !data.size()) return;
   int line_height = line ? line->h : (attr->font ? attr->font->Height() : 0);
@@ -97,7 +98,7 @@ void DrawableBoxArray::Erase(int o, size_t l, bool shift) {
   if (shift) for (; i != data.end(); ++i) i->box -= p;
 }
 
-point DrawableBoxArray::Draw(point p, int glyph_start, int glyph_len) {
+point DrawableBoxArray::Draw(point p, int glyph_start, int glyph_len) const {
   point e;
   if (!data.size()) return e;
   for (DrawableBoxIterator iter(&data[glyph_start], Xge0_or_Y(glyph_len, data.size())); !iter.Done(); iter.Increment())
@@ -128,8 +129,8 @@ bool DrawableBoxArray::GetGlyphFromCoords(const point &p, int *index_out, Box *b
   gb = data.begin() + ((li && line_ind.size() && li <= line_ind.size()) ? line_ind[li-1] : 0);
   ge = li < line_ind.size() ? (data.begin() + line_ind[li]) : data.end();
   it = LesserBound(gb, ge, DrawableBox(Box(p,0,0)), true);
-  if (it == data.end()) { *index_out = -1; *box_out = BackOrDefault(data).box; return false; }
-  else                  { *index_out = it - data.begin(); *box_out = it->box;  return true; }
+  if (it == data.end()) { *index_out = data.size(); *box_out = BackOrDefault(data).box; return false; }
+  else                  { *index_out = it - data.begin(); *box_out = it->box; return true; }
 }
 
 string FloatContainer::DebugString() const {

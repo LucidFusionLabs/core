@@ -130,7 +130,7 @@ int DNS::ReadResponse(const char *buf, int bufsize, Response *res) {
 
   for (int i = 0; i < qdcount; i++) {
     Record out; int len;
-    if ((len = DNS::ReadString(in->Start(), in->Get(), in->End(), &out.question)) < 0 || !in->Advance(len + 4)) return -1;
+    if ((len = DNS::ReadString(in->Start(), in->Get(), in->End(), &out.question)) < 0 || !in->Get(len + 4)) return -1;
     res->Q.push_back(out);
   }
 
@@ -143,7 +143,7 @@ int DNS::ReadResponse(const char *buf, int bufsize, Response *res) {
 int DNS::ReadResourceRecord(const Serializable::Stream *in, int num, vector<Record> *out) {
   for (int i = 0; i < num; i++) {
     Record rec; int len; unsigned short rrlen;
-    if ((len = ReadString(in->Start(), in->Get(), in->End(), &rec.question)) < 0 || !in->Advance(len)) return -1;
+    if ((len = ReadString(in->Start(), in->Get(), in->End(), &rec.question)) < 0 || !in->Get(len)) return -1;
 
     in->Ntohs(&rec.type);
     in->Ntohs(&rec._class);
@@ -155,13 +155,13 @@ int DNS::ReadResourceRecord(const Serializable::Stream *in, int num, vector<Reco
       if (rrlen != 4) return -1;
       in->Read32(&rec.addr);
     } else if (rec._class == Class::IN && (rec.type == Type::NS || rec.type == Type::CNAME)) {
-      if ((len = ReadString(in->Start(), in->Get(), in->End(), &rec.answer)) != rrlen   || !in->Advance(len)) return -1;
+      if ((len = ReadString(in->Start(), in->Get(), in->End(), &rec.answer)) != rrlen   || !in->Get(len)) return -1;
     } else if (rec._class == Class::IN && rec.type == Type::MX) {
       in->Ntohs(&rec.pref);
-      if ((len = ReadString(in->Start(), in->Get(), in->End(), &rec.answer)) != rrlen-2 || !in->Advance(len)) return -1;
+      if ((len = ReadString(in->Start(), in->Get(), in->End(), &rec.answer)) != rrlen-2 || !in->Get(len)) return -1;
     } else {
       ERROR("unhandled type=", rec.type, ", class=", rec._class);
-      in->Advance(rrlen);
+      in->Get(rrlen);
       continue;
     }
     out->push_back(rec);

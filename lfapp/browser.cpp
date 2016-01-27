@@ -73,14 +73,14 @@ void StyleContext::Match(ComputedStyle *out, LFL::DOM::Node *node, const Compute
                                     inline_style ? inline_style->sheet : 0, SelectHandler(), this, &out->style));
 
   lwc_string **n; css_fixed s; css_unit su; css_color c;
-  out->font_not_inherited =
+  out->color_not_inherited   = css_computed_color           (out->Style(), &c) == CSS_COLOR_COLOR;
+  out->bgcolor_not_inherited = css_computed_background_color(out->Style(), &c) == CSS_BACKGROUND_COLOR_COLOR;
+  out->font_not_inherited = out->color_not_inherited || out->bgcolor_not_inherited ||
     (css_computed_font_family (out->Style(), &n)      != CSS_FONT_FAMILY_INHERIT) ||
     (css_computed_font_size   (out->Style(), &s, &su) != CSS_FONT_SIZE_INHERIT)   ||
     (css_computed_font_style  (out->Style())          != CSS_FONT_STYLE_INHERIT)  ||
     (css_computed_font_weight (out->Style())          != CSS_FONT_WEIGHT_INHERIT) ||
     (css_computed_font_variant(out->Style())          != CSS_FONT_VARIANT_INHERIT);
-
-  out->bgcolor_not_inherited = css_computed_background_color(out->Style(), &c) == CSS_BACKGROUND_COLOR_COLOR;
 
   if (parent_sheet)
     CHECK_EQ(css_computed_style_compose(parent_sheet->Style(), out->Style(), ComputeFontSize, NULL, out->Style()), CSS_OK);
@@ -194,6 +194,7 @@ void DOM::Renderer::UpdateStyle(Flow *F) {
   CHECK(n->parentNode);
   style.is_root = inline_style.is_root = n->parentNode == n->ownerDocument;
   CHECK(style.is_root || n->parentNode->render);
+  Renderer *parent_render = (n->parentNode && n->parentNode->render) ? n->parentNode->render : 0;
 
   if (!inline_style_sheet) {
     DOM::Attr *inline_style_attr = n->getAttributeNode("style");
@@ -203,7 +204,7 @@ void DOM::Renderer::UpdateStyle(Flow *F) {
       unique_ptr<LFL::StyleSheet>(new LFL::StyleSheet(n->ownerDocument, "", "UTF-8", true, false, style_text.c_str()));
   }
 
-  ComputeStyle(n->ownerDocument->style_context, &style, style.is_root ? 0 : &n->parentNode->render->style);
+  ComputeStyle(n->ownerDocument->style_context, &style, style.is_root ? 0 : &parent_render->style);
 
   DOM::Display              display        = style.Display();
   DOM::Position             position       = style.Position();
@@ -291,13 +292,15 @@ void DOM::Renderer::UpdateStyle(Flow *F) {
   lowercase        = texttransform .v == DOM::TextTransform::Lowercase;
   capitalize       = texttransform .v == DOM::TextTransform::Capitalize;
 
-  if (n->nodeType == DOM::TEXT_NODE) {
-    color = style.Color().v;
-    color.a() = 1.0;
-  }
-  if (style.bgcolor_not_inherited) {
-    background_color = style.BackgroundColor().v;
-  }
+  if (style.color_not_inherited || !parent_render)                     color = style.Color().v;
+  else                                                                 color = parent_render->color;
+
+  if (style.bgcolor_not_inherited && style.BackgroundColor().v.a()==1) solid_background_color = style.BackgroundColor().v;
+  else if (!parent_render)                                             solid_background_color = style.BackgroundColor().v;
+  else                                                                 solid_background_color = parent_render->solid_background_color;
+
+  if (style.bgcolor_not_inherited || !parent_render)                   background_color = style.BackgroundColor().v;
+  else                                                                 background_color = parent_render->background_color;
 
   os            = os       .Null() ? 0 : os.v;
   bs_t          = bs_top   .Null() ? 0 : bs_top.v;
@@ -312,6 +315,7 @@ void DOM::Renderer::UpdateStyle(Flow *F) {
 
   if (!bgimage.Null() && !background_image)
     background_image = n->ownerDocument->parser->OpenImage(String::ToUTF8(bgimage.v));
+  over_background_image = background_image.get() || (parent_render && parent_render->over_background_image);
 
   DOM::CSSNormNumericValue lineheight = style.LineHeight(), charspacing = style.LetterSpacing(), wordspacing = style.WordSpacing();
   lineheight_px  = (!lineheight .Null() && !lineheight. _norm) ? lineheight .getPixelValue(F) : 0;
@@ -338,7 +342,8 @@ Font *DOM::Renderer::UpdateFont(Flow *F) {
       //      " ", ff[j].source.size() ? ff[j].source[0] : "<NO2>");
     }
   }
-  return font ? font : Fonts::Get(FLAGS_default_font, "", font_size_px, Color::white);
+  return font ? font : Fonts::Get(FLAGS_default_font, "", font_size_px, color,
+                                  over_background_image ? background_color : solid_background_color); 
 }
 
 void DOM::Renderer::UpdateDimensions(Flow *F) {
@@ -365,7 +370,7 @@ void DOM::Renderer::UpdateDimensions(Flow *F) {
   br_px         = !bs_r ? 0 : style.BorderRightWidth ().getPixelValue(F);
   bt_px         = !bs_t ? 0 : style.BorderTopWidth   ().getPixelValue(F);
   bb_px         = !bs_b ? 0 : style.BorderBottomWidth().getPixelValue(F);
-  o_px         = style.OutlineWidth     ().getPixelValue(F);
+  o_px          = style.OutlineWidth     ().getPixelValue(F);
   pl_px         = style.PaddingLeft      ().getPixelValue(F);
   pr_px         = style.PaddingRight     ().getPixelValue(F);
   pt_px         = style.PaddingTop       ().getPixelValue(F);
@@ -381,7 +386,7 @@ void DOM::Renderer::UpdateDimensions(Flow *F) {
   if (block_level_box && (width_auto || width_percent)) {
     if (normal_flow) shrink = inline_block || style.node->parentNode->render->shrink;
     else             shrink = width_auto && (floating || position_absolute || position_fixed);
-  } else               shrink = normal_flow ? style.node->parentNode->render->shrink : 0;
+  } else             shrink = normal_flow ? style.node->parentNode->render->shrink : 0;
 }
 
 void DOM::Renderer::UpdateMarginWidth(Flow *F, int w) {
@@ -450,12 +455,12 @@ void Browser::Document::Clear() {
   node->inline_style_context = AllocatorNew(&alloc, (StyleContext), (node));
   node->style_context       ->AppendSheet(StyleSheet::Default());
   node->inline_style_context->AppendSheet(StyleSheet::Default());
-  js_context = unique_ptr<JSContext>(CreateV8JSContext(js_console.get(), node));
+  js_context = unique_ptr<JSContext>(JSContext::Create(js_console.get(), node));
   active_input = 0;
 }
 
 Browser::Browser(GUI *gui, const Box &V) : doc(gui ? gui->parent : NULL, V),
-  v_scrollbar(gui, Box()), h_scrollbar(gui, Box(), Widget::Scrollbar::Flag::AttachedHorizontal) {
+  v_scrollbar(gui, Box()), h_scrollbar(gui, Box(), Widget::Slider::Flag::AttachedHorizontal) {
   if (Font *maf = Fonts::Get("MenuAtlas", "", 0, Color::white, Color::clear, 0, 0)) {
     missing_image = maf->FindGlyph(0)->tex;
     missing_image.width = missing_image.height = 16;
@@ -464,7 +469,7 @@ Browser::Browser(GUI *gui, const Box &V) : doc(gui ? gui->parent : NULL, V),
 }
 
 void Browser::Navigate(const string &url) {
-  if (!layers) return SystemBrowser::Open(url.c_str());
+  if (!layers) return app->OpenSystemBrowser(url);
   else Open(url);
 }
 
@@ -480,7 +485,7 @@ void Browser::KeyEvent(int key, bool down) {
   else {
     if (auto n = doc.node->documentElement()) EventNode(n, initial_displacement, key);
     if (down && doc.active_input && doc.active_input->tiles) {
-      doc.active_input->Input(key);
+      if (!doc.active_input->HandleSpecialKey(key)) doc.active_input->Input(key);
       doc.active_input->tiles->Run(TilesInterface::RunFlag::DontClear);
     }
   }
@@ -518,7 +523,7 @@ void Browser::SetViewport(int w, int h) {
 void Browser::Layout(const Box &b) {
   if (dim.x == b.w && dim.y == b.h) return;
   dim = (viewport = b).Dimension();
-  Widget::Scrollbar::AttachContentBox(&viewport, &v_scrollbar, &h_scrollbar);
+  Widget::Slider::AttachContentBox(&viewport, &v_scrollbar, &h_scrollbar);
   SetViewport(viewport.w, viewport.h);
 }
 
@@ -573,7 +578,7 @@ bool Browser::EventNode(DOM::Node *n, const point &displacement_in, InputEvent::
 
   if (auto e = n->AsHTMLAnchorElement()) { AnchorClicked(e); return false; }
   else if (auto e = n->AsHTMLInputElement()) {
-    if (e->text && type == Mouse::ButtonID(1)) doc.active_input = e->text.get();
+    if (e->text && type == Mouse::ButtonID(1)) (doc.active_input = e->text.get())->Activate();
   }
   bool is_table = n->htmlElementType == DOM::HTML_TABLE_ELEMENT;
   point displacement = displacement_in + (render->block_level_box ? render->box.TopLeft() : point());
@@ -699,14 +704,14 @@ DOM::Node *Browser::LayoutNode(Flow *flow, DOM::Node *n, bool reflow) {
   render->clear_height = flow->container->AsFloatContainer()->ClearFloats(flow->p.y, flow->cur_line.height, render->clear_left, render->clear_right);
   if (render->clear_height) flow->AppendVerticalSpace(render->clear_height);
 
-  if (style->font_not_inherited || !(render->child_flow.cur_attr.font = flow->cur_attr.font)) render->child_flow.cur_attr.font = render->UpdateFont(flow);
-  if (style->is_root) flow->SetFont(render->child_flow.cur_attr.font);
+  if (style->font_not_inherited || !(render->child_flow.cur_attr.font = flow->cur_attr.font))
+    flow->SetFont((render->child_flow.cur_attr.font = render->UpdateFont(flow)));
 
   if (render->block_level_box) {
     if (!table_element) {
       if (!flow->cur_line.fresh && (render->normal_flow || render->position_absolute) && 
           !render->inline_block && !render->floating && !render->position_absolute) flow->AppendNewlines(1);
-      render->box.y = flow->p.y;
+      render->box.y = -flow->Height();
     }
     render->child_flow = Flow(&render->box, render->child_flow.cur_attr.font, render->child_box.Reset());
     render->flow = &render->child_flow;
@@ -721,7 +726,7 @@ DOM::Node *Browser::LayoutNode(Flow *flow, DOM::Node *n, bool reflow) {
   int beg_out_ind = render->flow->out->Size(), beg_line_ind = render->flow->out->line_ind.size();
 
   if (n->nodeType == DOM::TEXT_NODE) {
-    if (1)                                render->flow->SetFGColor(&render->color);
+    if (1)                                render->flow->SetFGColor(&Color::white); // &render->color);
     // if (style->bgcolor_not_inherited)  render->flow->SetBGColor(&render->background_color);
     render->flow->AppendText(n->AsText()->data);
   } else if (is_image || (is_input && StringEquals(n->AsElement()->getAttribute("type"), "image"))) {
@@ -839,8 +844,8 @@ void Browser::LayoutBackground(DOM::Node *n) {
   if      (is_body)                                                  box = &render->margin;
   else if (render->block_level_box || render->display_table_element) box = &render->padding;
 
-  if (style->bgcolor_not_inherited && render->background_color.A()) {
-    if (is_body) SetClearColor(Color(render->background_color, 0.0));
+  if (style->bgcolor_not_inherited && render->background_color.a()) {
+    if (is_body) SetClearColor(render->background_color);
     else {
       flow.SetFGColor(&render->background_color);
       flow.out->PushBack(*box, flow.cur_attr, Singleton<BoxFilled>::Get());
@@ -969,7 +974,7 @@ void Browser::UpdateRenderLog(DOM::Node *n, const point &displacement) {
   if (n->nodeType == DOM::TEXT_NODE) {
     Box inline_box = render->inline_box[0] + displacement;
     StrAppend(&render_log->data, string(render_log->indent, ' '), "text run at (", inline_box.x, ",", ToWebKitY(inline_box));
-    StrAppend(&render_log->data, ") width ", inline_box.w, " height ", inline_box.h);
+    StrAppend(&render_log->data, ") width ", inline_box.w, " height ", inline_box.h, " color ", render->color.DebugString());
     StrAppend(&render_log->data, ": \"", n->nodeValue(), "\"\n");
   }
 }

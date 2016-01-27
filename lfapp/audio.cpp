@@ -49,11 +49,6 @@ extern "C" {
 #include <SLES/OpenSLES_Android.h>
 #endif
 
-#ifdef LFL_IPHONE
-extern "C" void iPhonePlayMusic(void *handle);
-extern "C" void iPhonePlayBackgroundMusic(void *handle);
-#endif
-
 namespace LFL {
 const int feat_lpccoefs  = 12;
 const int feat_barkbands = 21;
@@ -126,71 +121,24 @@ int Sample::ToFFMpegId(int fmt) {
 }
 #endif
 
-void SystemAudio::PlaySoundEffect(SoundAsset *sa) {
-#if defined(LFL_ANDROID)
-  AndroidPlayMusic(sa->handle);
-#elif defined(LFL_IPHONE)
-  iPhonePlayMusic(sa->handle);
-#else
-  app->audio->QueueMix(sa, MixFlag::Reset | MixFlag::Mix | (app->audio->loop ? MixFlag::DontQueue : 0), -1, -1);
-#endif
-}
-
-void SystemAudio::PlayBackgroundMusic(SoundAsset *music) {
-#if defined(LFL_ANDROID)
-  AndroidPlayBackgroundMusic(music->handle);
-#elif defined(LFL_IPHONE)
-  iPhonePlayBackgroundMusic(music->handle);
-#else
-  app->audio->QueueMix(music);
-  app->audio->loop = music;
-#endif
-}
-
-void SystemAudio::SetVolume(int v) { 
-#if defined(LFL_ANDROID)
-  AndroidSetVolume(v);
-#endif
-}
-
-int SystemAudio::GetVolume() { 
-#if defined(LFL_ANDROID)
-  return AndroidGetVolume();
-#else
-  return 0;
-#endif
-}
-
-int SystemAudio::GetMaxVolume() { 
-#if defined(LFL_ANDROID)
-  return AndroidGetMaxVolume();
-#else
-  return 10;
-#endif
-}
-
 #ifdef LFL_PORTAUDIO
 struct PortaudioAudioModule : public Module {
   Audio *audio;
-  void *impl=0;
+  PaStream *impl=0;
+  PaTime input_latency, output_latency;
   PortaudioAudioModule(Audio *A) : audio(A) {}
 
   int Init() {
-    INFO("PortaudioAudioModule::Init");
     PaError err = Pa_Initialize();
-    if (err != paNoError) { ERROR("init_portaudio: ", Pa_GetErrorText(err)); return -1; }
+    if (err != paNoError) return ERRORv(-1, "init_portaudio: ", Pa_GetErrorText(err));
 
     int numDevices = Pa_GetDeviceCount();
-    if (numDevices <= 0) { ERROR("open_portaudio: devices=", numDevices); return -1; }
-
+    if (numDevices <= 0) return ERRORv(-1, "open_portaudio: devices=", numDevices);
     for (int i=0; false && i<numDevices; i++) {
       const PaDeviceInfo *di = Pa_GetDeviceInfo(i);
       ERROR(di->name, ",", di->hostApi, ", mi=", di->maxInputChannels, ", mo=", di->maxOutputChannels, ", ", di->defaultSampleRate, " ", di->defaultHighInputLatency);
     }
-    return 0;
-  }
 
-  int Start() {
     if (FLAGS_audio_input_device  == -1) FLAGS_audio_input_device  = Pa_GetDefaultInputDevice();
     if (FLAGS_audio_output_device == -1) FLAGS_audio_output_device = Pa_GetDefaultOutputDevice();
 
@@ -208,8 +156,15 @@ struct PortaudioAudioModule : public Module {
     if (FLAGS_chans_in == -1) FLAGS_chans_in = min(ii->maxInputChannels, 2);
     if (FLAGS_chans_out == -1) FLAGS_chans_out = min(oi->maxOutputChannels, 2);
 
-    PaStreamParameters in  = { FLAGS_audio_input_device,  FLAGS_chans_in,  paFloat32, ii->defaultHighInputLatency, 0 };
-    PaStreamParameters out = { FLAGS_audio_output_device, FLAGS_chans_out, paFloat32, oi->defaultHighInputLatency, 0 };
+    input_latency = ii->defaultHighInputLatency;
+    output_latency = oi->defaultHighInputLatency;
+    INFO("PortaudioAudioModule::Init sample_rate=", FLAGS_sample_rate, ", chans_in = ", FLAGS_chans_in, ", chans_out = ", FLAGS_chans_out);
+    return 0;
+  }
+
+  int Start() {
+    PaStreamParameters in  = { FLAGS_audio_input_device,  FLAGS_chans_in,  paFloat32, input_latency, 0 };
+    PaStreamParameters out = { FLAGS_audio_output_device, FLAGS_chans_out, paFloat32, output_latency, 0 };
 
     PaError err = Pa_OpenStream(&impl, &in, FLAGS_chans_out ? &out : 0, FLAGS_sample_rate,
                                 paFramesPerBufferUnspecified, 0, &PortaudioAudioModule::IOCB, this);
@@ -234,7 +189,7 @@ struct PortaudioAudioModule : public Module {
     float *in = (float*)input, *out = (float *)output;
     microseconds step(1000000/FLAGS_sample_rate), stamp =
       AudioResampler::MonotonouslyIncreasingTimestamp(audio->IL->ReadTimestamp(-1), ToMicroseconds(Now()), &step, samplesPerFrame);
-    RingBuf::WriteAheadHandle IL(audio->IL), IR(audio->IR);
+    RingBuf::WriteAheadHandle IL(audio->IL.get()), IR(audio->IR.get());
     for (unsigned i=0; i<samplesPerFrame; i++) {
       microseconds timestamp = stamp + i * step;
       IL.Write(in[i*FLAGS_chans_in+0], RingBuf::Stamp, timestamp);
@@ -316,13 +271,13 @@ struct SDLAudioModule : public Module {
 #ifdef LFL_AUDIOQUEUE
 struct AudioQueueAudioModule : public Module {
   static const int AQbuffers=3, AQframesPerCB=512;
-  AudioQueueRef inputAudioQueue=0, outputAudioQueue=0;
+  AudioQueueRef input_audio_queue=0, output_audio_queue=0;
   Audio *audio;
   AudioQueueAudioModule(Audio *A) : audio(A) {}
 
   int Init() {
     INFO("AudioQueueAudioModule::Init");
-    if (inputAudioQueue || outputAudioQueue) return -1;
+    if (input_audio_queue || output_audio_queue) return -1;
     if (FLAGS_chans_in == -1) FLAGS_chans_in = 2;
     if (FLAGS_chans_out == -1) FLAGS_chans_out = 2;
 
@@ -337,43 +292,46 @@ struct AudioQueueAudioModule : public Module {
     desc_in.mBytesPerPacket = desc_in.mFramesPerPacket * desc_in.mBytesPerFrame;
     desc_in.mBitsPerChannel = 8 * sizeof(short);
 
-    int err = AudioQueueNewInput(&desc_in, AudioQueueAudioModule::IOInCB, this, 0, kCFRunLoopCommonModes, 0, &inputAudioQueue);
+    int err = AudioQueueNewInput(&desc_in, AudioQueueAudioModule::IOInCB, this, 0, kCFRunLoopCommonModes, 0, &input_audio_queue);
     if (err == kAudioFormatUnsupportedDataFormatError) { ERROR("AudioQueueNewInput: format unsupported sr=", desc_in.mSampleRate); return -1; }
-    if (err || !inputAudioQueue) { ERROR("AudioQueueNewInput: error ", err); return -1; }
+    if (err || !input_audio_queue) { ERROR("AudioQueueNewInput: error ", err); return -1; }
 
     AudioStreamBasicDescription desc_out = desc_in;
     desc_out.mChannelsPerFrame = FLAGS_chans_out;
     desc_out.mBytesPerFrame = desc_out.mChannelsPerFrame * sizeof(short);
     desc_out.mBytesPerPacket = desc_out.mFramesPerPacket * desc_out.mBytesPerFrame;
 
-    err = AudioQueueNewOutput(&desc_out, &AudioQueueAudioModule::IOOutCB, this, 0, kCFRunLoopCommonModes, 0, &outputAudioQueue);
+    err = AudioQueueNewOutput(&desc_out, &AudioQueueAudioModule::IOOutCB, this, 0, kCFRunLoopCommonModes, 0, &output_audio_queue);
     if (err == kAudioFormatUnsupportedDataFormatError) { ERROR("AudioQueueNewOutput: format unsupported sr=", desc_out.mSampleRate); return -1; }
-    if (err || !outputAudioQueue) { ERROR("AudioQueueNewOutput: error ", err); return -1; }
+    if (err || !output_audio_queue) { ERROR("AudioQueueNewOutput: error ", err); return -1; }
 
     for (int i=0; i<AQbuffers; i++) {
       AudioQueueBufferRef buf_in, buf_out;
-      if ((err = AudioQueueAllocateBuffer(inputAudioQueue, AQframesPerCB*desc_in.mBytesPerFrame, &buf_in))) { ERROR("AudioQueueAllocateBuffer: error ", err); return -1; }
-      if ((err = AudioQueueEnqueueBuffer(inputAudioQueue, buf_in, 0, 0))) { ERROR("AudioQueueEnqueueBuffer: error ", err); return -1; }
+      if ((err = AudioQueueAllocateBuffer(input_audio_queue, AQframesPerCB*desc_in.mBytesPerFrame, &buf_in))) { ERROR("AudioQueueAllocateBuffer: error ", err); return -1; }
+      if ((err = AudioQueueEnqueueBuffer(input_audio_queue, buf_in, 0, 0))) { ERROR("AudioQueueEnqueueBuffer: error ", err); return -1; }
 
-      if ((err = AudioQueueAllocateBuffer(outputAudioQueue, AQframesPerCB*desc_out.mBytesPerFrame, &buf_out))) { ERROR("AudioQueueAllocateBuffer: error ", err); return -1; }
+      if ((err = AudioQueueAllocateBuffer(output_audio_queue, AQframesPerCB*desc_out.mBytesPerFrame, &buf_out))) { ERROR("AudioQueueAllocateBuffer: error ", err); return -1; }
       buf_out->mAudioDataByteSize = AQframesPerCB * FLAGS_chans_out * sizeof(short);
       memset(buf_out->mAudioData, 0, buf_out->mAudioDataByteSize);
-      if ((err = AudioQueueEnqueueBuffer(outputAudioQueue, buf_out, 0, 0))) { ERROR("AudioQueueEnqueueBuffer: error ", err); return -1; }
+      if ((err = AudioQueueEnqueueBuffer(output_audio_queue, buf_out, 0, 0))) { ERROR("AudioQueueEnqueueBuffer: error ", err); return -1; }
     }
+    return 0;
+  }
 
-    if ((err = AudioQueueStart(inputAudioQueue, 0))) { ERROR("AudioQueueStart: error ", err); return -1; }
-    if ((err = AudioQueueStart(outputAudioQueue, 0))) { ERROR("AudioQueueStart: error ", err); return -1; }
+  int Start() {
+    if ((err = AudioQueueStart(input_audio_queue, 0))) { ERROR("AudioQueueStart: error ", err); return -1; }
+    if ((err = AudioQueueStart(output_audio_queue, 0))) { ERROR("AudioQueueStart: error ", err); return -1; }
     return 0;
   }
 
   int Free() {
-    if (inputAudioQueue) {
-      AudioQueueStop(inputAudioQueue, true);
-      AudioQueueDispose(inputAudioQueue, true);
+    if (input_audio_queue) {
+      AudioQueueStop(input_audio_queue, true);
+      AudioQueueDispose(input_audio_queue, true);
     }
-    if (outputAudioQueue) {
-      AudioQueueStop(outputAudioQueue, true);
-      AudioQueueDispose(outputAudioQueue, true);
+    if (output_audio_queue) {
+      AudioQueueStop(output_audio_queue, true);
+      AudioQueueDispose(output_audio_queue, true);
     }
     return 0;
   }
@@ -382,7 +340,7 @@ struct AudioQueueAudioModule : public Module {
     short *in = (short *)inB->mAudioData;
     double step = Seconds(1)*1000/FLAGS_sample_rate;
     Time stamp = AudioResampler::monotonouslyIncreasingTimestamp(audio->IL->ReadTimestamp(-1), Now()*1000, &step, count);
-    RingBuf::WriteAheadHandle IL(audio->IL), IR(audio->IR);
+    RingBuf::WriteAheadHandle IL(audio->IL.get()), IR(audio->IR.get());
     for (int i=0; i<count; i++) {
       Time timestamp = stamp + i*step;
       IL.Write(in[i*FLAGS_chans_in+0]/32768.0, RingBuf::Stamp, timestamp);
@@ -513,7 +471,7 @@ struct AudioUnitAudioModule : public Module {
 
     double step = Seconds(1)*1000/FLAGS_sample_rate;
     Time stamp = AudioResampler::monotonouslyIncreasingTimestamp(audio->IL->ReadTimestamp(-1), Now()*1000, &step, inNumberFrames);
-    RingBuf::WriteAheadHandle IL(audio->IL), IR(audio->IR);
+    RingBuf::WriteAheadHandle IL(audio->IL.get()), IR(audio->IR.get());
     for (int i=0; i<inNumberFrames; i++) {
       Time timestamp = stamp + i*step;
       IL.Write(in[i*FLAGS_chans_in+0]/32768.0, RingBuf::Stamp, timestamp);
@@ -567,8 +525,6 @@ struct OpenSLAudioModule : public Module {
 
 int Audio::Init() {
   INFO("Audio::Init()");
-  RL = RingBuf::Handle(IL);
-  RR = RingBuf::Handle(IR);
 #if defined(LFL_PORTAUDIO)
   impl = new PortaudioAudioModule(this);
 #elif defined(LFL_SDLAUDIO)
@@ -587,6 +543,12 @@ int Audio::Init() {
   FLAGS_lfapp_audio = false;
 #endif
   if (impl && impl->Init()) return -1;
+
+  IL = make_unique<RingBuf>(FLAGS_sample_rate*FLAGS_sample_secs);
+  IR = make_unique<RingBuf>(FLAGS_sample_rate*FLAGS_sample_secs);
+  RL = RingBuf::Handle(IL.get());
+  RR = RingBuf::Handle(IR.get());
+
   if (impl && impl->Start()) return -1;
   if (FLAGS_chans_out < 0) FLAGS_chans_out = 0;
   return 0;
@@ -704,7 +666,7 @@ Matrix *EqualLoudnessCurve(int outrows, double max) {
 
 double *LifterMatrixROSA(int n, double L, bool inverse=false) {
   double *dm = new double[n];
-  for (int i=0; i<n; i++) {
+  for (int i = 0; i < n; i++) {
     dm[i] = !i ? 1 : pow(i, L);
     if (inverse) dm[i] = 1 / dm[i];
   }
@@ -713,7 +675,7 @@ double *LifterMatrixROSA(int n, double L, bool inverse=false) {
 
 double *LifterMatrixHTK(int n, double L, bool inverse=false) {
   double *dm = new double[n];
-  for (int i=0; i<n; i++) {
+  for (int i = 0; i < n; i++) {
     dm[i] = !i ? 1 : (1+L/2*sin(i*M_PI/L));
     if (inverse) dm[i] = 1 / dm[i];
   }
@@ -722,16 +684,16 @@ double *LifterMatrixHTK(int n, double L, bool inverse=false) {
 
 float PseudoEnergy(const RingBuf::Handle *in, int window, int offset) {
   float e=0;
-  for (int i=0; i<window; i++) e += fabs(in->Read(offset+i) * 32768.0);
+  for (int i = 0; i < window; i++) e += fabs(in->Read(offset + i) * 32768.0);
   return e;
 }
 
 int ZeroCrossings(const RingBuf::Handle *in, int window, int offset) {
   int zcr=0;
   float last = in->Read(offset);
-  for (int i=1; i<window; i++) {
-    float cur = in->Read(offset+i);
-    if ((cur<0 && last>=0) || (cur>=0 && last<0)) zcr++;
+  for (int i = 1; i < window; i++) {
+    float cur = in->Read(offset + i);
+    if ((cur < 0 && last >= 0) || (cur >= 0 && last < 0)) zcr++;
     last = cur;
   }
   return zcr;
@@ -742,15 +704,13 @@ RingBuf *Decimate(const RingBuf::Handle *inh, int factor) {
   RingBuf *outbuf = new RingBuf(SPS/factor, SPB/factor);
   RingBuf::Handle out(outbuf);
 
-  double sum=0; int count=0;
-  for (int i=0; i<SPB; i++)
-  {
-    count++;
+  double sum = 0;
+  for (int i = 0, count = 0; i < SPB; i++) {
     sum += inh->Read(-SPB + i);
-
-    if (count >= factor) {
+    if (++count >= factor) {
       out.Write(sum / count);
-      sum = 0; count = 0; 
+      count = 0; 
+      sum = 0;
     }
   }
   return outbuf;

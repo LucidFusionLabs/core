@@ -105,6 +105,7 @@ struct RedBlackTree {
       else return ind;
     } return 0;
   }
+
   int LowerBoundNode(Query *q) const {
     int ind = head;
     while (ind) {
@@ -117,6 +118,7 @@ struct RedBlackTree {
     }
     return ind;
   }
+
   int IncrementNode(int ind, Zipper *z) const {
     const Node *n = &node[ind-1], *p;
     if (n->right) for (n = &node[(ind = z->WalkRight(*n))-1]; n->left; n = &node[(ind = n->left)-1]) {}
@@ -127,6 +129,7 @@ struct RedBlackTree {
     }
     return ind;
   }
+
   int DecrementNode(int ind, Zipper *z) const {
     const Node *n = &node[ind-1], *p;
     if (n->left) for (n = &node[(ind = n->left)-1]; n->right; n = &node[(ind = z->WalkRight(*n))-1]) {}
@@ -156,6 +159,7 @@ struct RedBlackTree {
     count++;
     return new_ind;
   }
+
   void InsertBalance(int ind) {
     int p_ind, gp_ind, u_ind;
     Node *n = &node[ind-1], *p, *gp, *u;
@@ -209,6 +213,7 @@ struct RedBlackTree {
     count--;
     return true;
   }
+
   void EraseBalance(int ind, int p_ind) {
     if (!p_ind) return;
     Node *p = &node[p_ind-1];
@@ -246,6 +251,7 @@ struct RedBlackTree {
     }
     if (new_ind) node[new_ind-1].parent = n->parent;
   }
+
   void RotateLeft(int ind) {
     int right_ind;
     Node *n = &node[ind-1], *o = &node[(right_ind = n->right)-1];
@@ -257,6 +263,7 @@ struct RedBlackTree {
     ComputeAnnotationFromChildren(n);
     ComputeAnnotationFromChildren(o);
   }
+
   void RotateRight(int ind) {
     int left_ind;
     Node *n = &node[ind-1], *o = &node[(left_ind = n->left)-1];
@@ -268,14 +275,17 @@ struct RedBlackTree {
     ComputeAnnotationFromChildren(n);
     ComputeAnnotationFromChildren(o);
   }
+
   void ComputeAnnotationFromChildren(Node *n) {
     n->ComputeAnnotationFromChildren(n->left ? &node[n->left -1] : 0, n->right ? &node[n->right-1] : 0);
   }
+
   void ComputeAnnotationFromChildrenOnMaxPath(int ind) {
     Node *n = &node[ind-1];
     if (n->right) ComputeAnnotationFromChildrenOnMaxPath(n->right);
     ComputeAnnotationFromChildren(n);
   }
+
   void SetColor(int ind, int color) { node[ind-1].color = color; }
   int GetColor  (int ind) const { return ind ? node[ind-1].color : Black; }
   int GetParent (int ind) const { return node[ind-1].parent; }
@@ -284,6 +294,7 @@ struct RedBlackTree {
     const Node *n = &node[ind-1];
     return n->left ? GetMinNode(n->left) : ind;
   }
+
   int GetMaxNode(int ind, Zipper *z) const {
     const Node &n = node[ind-1];
     return n.right ? GetMaxNode(z->WalkRight(n), z) : ind;
@@ -296,6 +307,7 @@ struct RedBlackTree {
     count = n;
     head = BuildTreeFromSortedArrays(&q, 0, n-1, 1);
   }
+
   virtual int BuildTreeFromSortedArrays(LoadFromSortedArraysQuery *q, int beg_ind, int end_ind, int h) {
     if (end_ind < beg_ind) return 0;
     CHECK_LE(h, q->max_height);
@@ -318,6 +330,7 @@ struct RedBlackTree {
     int same_black_length = -1;
     CheckEveryPathToLeafHasSameBlackLength(head, 0, &same_black_length);
   }
+
   void CheckNoAdjacentRedNodes(int ind) const {
     if (!ind) return;
     const Node *n = &node[ind-1];
@@ -328,6 +341,7 @@ struct RedBlackTree {
     CHECK_EQ(Black, GetColor(n->parent));
     CHECK_EQ(Black, GetColor(n->parent));
   }
+
   void CheckEveryPathToLeafHasSameBlackLength(int ind, int black_length, int *same_black_length) const {
     if (!ind) {
       if (*same_black_length < 0) *same_black_length = black_length;
@@ -347,6 +361,7 @@ struct RedBlackTree {
     PrintEdges(head, &ret);
     return ret + GraphVizFile::Footer();
   }
+
   virtual void PrintNodes(int ind, int color, string *out) const {
     if (!ind) return;
     const Node *n = &node[ind-1];
@@ -354,6 +369,7 @@ struct RedBlackTree {
     if (n->color == color) GraphVizFile::AppendNode(out, StrCat(n->key));
     PrintNodes(n->right, color, out);
   }
+
   virtual void PrintEdges(int ind, string *out) const {
     if (!ind) return;
     const Node *n = &node[ind-1], *l=n->left?&node[n->left-1]:0, *r=n->right?&node[n->right-1]:0;
@@ -388,6 +404,7 @@ struct RedBlackFingerTree : public RedBlackTree<K, V, Node, Finger> {
     Parent::count++;
     return new_ind;
   }
+
   virtual void ComputeAnnotationFromChildrenOnPath(typename Parent::Query *q) {
     for (auto i = q->z.path.rbegin(), e = q->z.path.rend(); i != e; ++i) 
       Parent::ComputeAnnotationFromChildren(&Parent::node[i->first-1]);
@@ -399,6 +416,7 @@ struct RedBlackFingerTree : public RedBlackTree<K, V, Node, Finger> {
     Parent::count = Parent::val.size();
     Parent::head = BuildTreeFromSortedVal(0, n-1, 1, WhichLog2(NextPowerOfTwo(n, true)));
   }
+
   int BuildTreeFromSortedVal(int beg_val_ind, int end_val_ind, int h, int max_h) {
     if (end_val_ind < beg_val_ind) return 0;
     CHECK_LE(h, max_h);
@@ -459,6 +477,7 @@ template <class K, class V> struct RedBlackIntervalTreeNode {
     left_min  = lc ? ComputeMinFromChild(lc) : 0;
     right_min = lc ? ComputeMinFromChild(rc) : 0;
   }
+
   static K ComputeMinFromChild(const RedBlackIntervalTreeNode *n) {
     K ret = n->key.first;
     if (n->left_min)  ret = min(ret, n->left_min);
@@ -501,6 +520,7 @@ struct RedBlackIntervalTree : public RedBlackTree<pair<K, K>, V, Node, Finger> {
       ind = (n->left && q <= n->left_max) ? n->left : n->right;
     } return 0;
   }
+
   int IntersectAllNode(Finger *z) const {
     const Node *n;
     while (z->path.size()) {
@@ -512,6 +532,7 @@ struct RedBlackIntervalTree : public RedBlackTree<pair<K, K>, V, Node, Finger> {
       z->path.pop_back();
     } return 0;
   }
+
   static bool Intersect(const pair<K,K> &q, const pair<K,K> &p) {
     return q.first <= p.second && p.first <= q.second;
   }
@@ -538,21 +559,25 @@ template <class Node> struct PrefixSumKeyedRedBlackTreeFinger {
   typename Node::Key sum=0;
   vector<pair<int, bool> > path;
   PrefixSumKeyedRedBlackTreeFinger(bool U=0) : update(U) { if (update) path.reserve(64); }
+
   string DebugString() const { 
     string p;
     for (auto i : path) StrAppend(&p, p.size()?", ":"", i.first);
     return StrCat("PrefixSumFinger: sum=", sum, ", update=", update, ", path={", p, "}");
   }
+
   typename Node::Key GetValue   (const typename Node::Value &v) { return 1; }
   typename Node::Key GetKey     (const Node &n) const { return sum + n.left_sum; }
   int                WalkLeft   (const Node &n)       { return n.left; }
   int                WalkRight  (const Node &n)       { sum += (n.left_sum + n.key); return n.right; }
   int                UnwalkRight(const Node &n)       { sum -= (n.left_sum + n.key); return n.parent; }
+
   bool LessThan(const Node &n, int ind, const typename Node::Key &k) {
     if (!(GetKey(n) < k)) return 0;
     if (update) path.emplace_back(ind, Node::Left);
     return 1;
   }
+
   bool MoreThan(const Node &n, int ind, const typename Node::Key &k) {
     if (!(k < GetKey(n))) return 0;
     if (update) path.emplace_back(ind, Node::Right);

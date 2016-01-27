@@ -847,7 +847,7 @@ int Network::Init() {
   vector<IPV4::Addr> nameservers;
   if (FLAGS_nameserver.empty()) {
     INFO("Network::Init(): Enable(new Resolver(defaultNameserver()))");
-    Resolver::DefaultNameserver(&nameservers);
+    Resolver::GetDefaultNameservers(&nameservers);
   } else {
     INFO("Network::Init(): Enable(new Resolver(", FLAGS_nameserver, "))");
     IPV4::ParseCSV(FLAGS_nameserver, &nameservers);
@@ -920,19 +920,15 @@ int Network::Shutdown(Service *svc) {
 }
 
 int Network::Frame(unsigned clicks) {
-  static const int listener_type = TypeId<Listener>(), connection_type = TypeId<Connection>();
+  if (active.Select(select_time)) return ERRORv(-1, "SocketSet.select: ", SystemNetwork::LastError());
   ServiceEndpointEraseList removelist;
-
-  /* select */
-  if (active.Select(select_time))
-    return ERRORv(-1, "SocketSet.select: ", SystemNetwork::LastError());
 
 #ifndef LFL_NETWORK_MONOLITHIC_FRAME
   /* iterate events */
   for (active.cur_event = 0; active.cur_event < active.num_events; active.cur_event++) {
-    typed_ptr *tp = (typed_ptr*)active.events[active.cur_event].data.ptr;
-    if      (tp->type == connection_type) { Connection *c=(Connection*)tp->value; active.cur_fd = c->socket; TCPConnectionFrame(c->svc, c, &removelist); }
-    else if (tp->type == listener_type)   { Listener   *l=(Listener*)  tp->value; active.cur_fd = l->socket; AcceptFrame(l->svc, l); }
+    typed_ptr *tp = reinterpret_cast<typed_ptr*>(active.events[active.cur_event].data.ptr);
+    if      (auto c = tp->Get<Connection>()) { active.cur_fd = c->socket; TCPConnectionFrame(c->svc, c, &removelist); }
+    else if (auto l = tp->Get<Listener  >()) { active.cur_fd = l->socket; AcceptFrame(l->svc, l); }
     else FATAL("unknown type", tp->type);
   }
 #endif
@@ -1340,10 +1336,12 @@ bool HTTPClient::WPost(const string &url, const string &mimetype, const char *po
   bool ssl; int tcp_port; string host, path;
   if (!HTTP::ResolveURL(url.c_str(), &ssl, 0, &tcp_port, &host, &path)) return 0;
 
-  HTTPClientHandler::WPost *handler = new HTTPClientHandler::WPost(this, ssl, host, tcp_port, path, mimetype, postdata, postlen, cb);
-  if (!Singleton<Resolver>::Get()->Resolve(Resolver::Request(host, DNS::Type::A, bind(&HTTPClientHandler::WGet::ResolverResponseCB, handler, _1, _2))))
-  { ERROR("resolver: ", url); delete handler; return 0; }
+  HTTPClientHandler::WPost *handler = new
+    HTTPClientHandler::WPost(this, ssl, host, tcp_port, path, mimetype, postdata, postlen, cb);
 
+  if (!Singleton<Resolver>::Get()->QueueResolveRequest
+      (Resolver::Request(host, DNS::Type::A, bind(&HTTPClientHandler::WGet::ResolverResponseCB, handler, _1, _2))))
+  { ERROR("resolver: ", url); delete handler; return 0; }
   return true;
 }
 
@@ -1753,8 +1751,8 @@ void HTTPServer::StreamResource::Update(int audio_samples, bool video_sample) {
       resampler.Open(resampler.out, FLAGS_chans_in, FLAGS_sample_rate, Sample::S16,
                      channels,       ac->sample_rate,   Sample::FromFFMpegId(ac->channel_layout));
     };
-    RingBuf::Handle L(app->audio->IL, app->audio->IL->ring.back-audio_samples, audio_samples);
-    RingBuf::Handle R(app->audio->IR, app->audio->IR->ring.back-audio_samples, audio_samples);
+    RingBuf::Handle L(app->audio->IL.get(), app->audio->IL->ring.back-audio_samples, audio_samples);
+    RingBuf::Handle R(app->audio->IR.get(), app->audio->IR->ring.back-audio_samples, audio_samples);
     if (resampler.Update(audio_samples, &L, FLAGS_chans_in > 1 ? &R : 0)) open=0;
   }
 
@@ -1840,8 +1838,8 @@ struct SSHClientConnection : public Connection::Handler {
   enum { INIT=0, FIRST_KEXINIT=1, FIRST_KEXREPLY=2, FIRST_NEWKEYS=3, KEXINIT=4, KEXREPLY=5, NEWKEYS=6 };
 
   SSHClient::ResponseCB cb;
-  Vault::LoadPasswordCB load_password_cb;
-  Vault::SavePasswordCB save_password_cb;
+  LoadPasswordCB load_password_cb;
+  SavePasswordCB save_password_cb;
   string V_C, V_S, KEXINIT_C, KEXINIT_S, H_text, session_id, integrity_c2s, integrity_s2c, decrypt_buf, host, user, pw;
   int state=0, packet_len=0, packet_MAC_len=0, MAC_len_c=0, MAC_len_s=0, encrypt_block_size=0, decrypt_block_size=0;
   unsigned sequence_number_c2s=0, sequence_number_s2c=0, password_prompts=0, userauth_fail=0;
@@ -1873,6 +1871,7 @@ struct SSHClientConnection : public Connection::Handler {
     if (!WriteKeyExchangeInit(c, false)) return ERRORv(-1, c->Name(), ": write");
     return 0;
   }
+
   int Read(Connection *c) {
     if (state == INIT) {
       int processed = 0;
@@ -2126,15 +2125,18 @@ struct SSHClientConnection : public Connection::Handler {
              " cipher=", cipher_pref, " mac=", mac_pref, " }");
     return c->WriteFlush(KEXINIT_C) == KEXINIT_C.size();
   }
+
   int ComputeExchangeHashAndVerifyHostKey(Connection *c, const StringPiece &k_s, const StringPiece &h_sig) {
     H_text = SSH::ComputeExchangeHash(kex_method, kex_hash, V_C, V_S, KEXINIT_C, KEXINIT_S, k_s, K, &dh, &ecdh);
     if (state == FIRST_KEXREPLY) session_id = H_text;
     SSHTrace(c->Name(), ": H = \"", CHexEscape(H_text), "\"");
     return SSH::VerifyHostKey(H_text, hostkey_type, k_s, h_sig);
   }
+
   string DeriveKey(Crypto::DigestAlgo algo, char ID, int bytes) {
     return SSH::DeriveKey(algo, session_id, H_text, K, ID, bytes);
   }
+
   int InitCipher(Connection *c, Crypto::Cipher *cipher, Crypto::CipherAlgo algo, const string &IV, const string &key, bool dir) {
     SSHTrace(c->Name(), ": ", dir ? "C->S" : "S->C", " IV  = \"", CHexEscape(IV),  "\"");
     SSHTrace(c->Name(), ": ", dir ? "C->S" : "S->C", " key = \"", CHexEscape(key), "\"");
@@ -2142,26 +2144,31 @@ struct SSHClientConnection : public Connection::Handler {
     Crypto::CipherInit(cipher);
     return Crypto::CipherOpen(cipher, algo, dir, key, IV);
   }
+
   string ReadCipher(Connection *c, const StringPiece &m) {
     string dec_text(m.size(), 0);
     if (Crypto::CipherUpdate(&decrypt, m, &dec_text[0], dec_text.size()) != 1) return ERRORv("", c->Name(), ": decrypt failed");
     return dec_text;
   }
+
   int WriteCipher(Connection *c, const string &m) {
     string enc_text(m.size(), 0);
     if (Crypto::CipherUpdate(&encrypt, m, &enc_text[0], enc_text.size()) != 1) return ERRORv(-1, c->Name(), ": encrypt failed");
     enc_text += SSH::MAC(mac_algo_c2s, MAC_len_c, m, sequence_number_c2s-1, integrity_c2s, mac_prefix_c2s);
     return c->WriteFlush(enc_text) == m.size() + X_or_Y(mac_prefix_c2s, MAC_len_c);
   }
+
   bool WriteCipher(Connection *c, const SSH::Serializable &m) {
     string text = m.ToString(rand_eng, encrypt_block_size, &sequence_number_c2s);
     return WriteCipher(c, text);
   }
+
   bool WriteClearOrEncrypted(Connection *c, const SSH::Serializable &m) {
     if (state > FIRST_NEWKEYS) return WriteCipher(c, m);
     string text = m.ToString(rand_eng, encrypt_block_size, &sequence_number_c2s);
     return c->WriteFlush(text) == text.size();
   }
+
   int WriteChannelData(Connection *c, const StringPiece &b) {
     if (!password_prompts) {
       if (!WriteCipher(c, SSH::MSG_CHANNEL_DATA(pty_channel.second, b))) return ERRORv(-1, c->Name(), ": write");
@@ -2173,6 +2180,7 @@ struct SSHClientConnection : public Connection::Handler {
     }
     return b.size();
   }
+
   bool WritePassword(Connection *c) {
     cb(c, "\r\n");
     bool success = false;
@@ -2186,12 +2194,14 @@ struct SSHClientConnection : public Connection::Handler {
     password_prompts = 0;
     return success;
   }
+
   void LoadPassword(Connection *c) {
     if ((loaded_pw = load_password_cb && load_password_cb(host, user, &pw))) WritePassword(c);
     if (loaded_pw) ClearPassword();
   }
+
   void ClearPassword() { pw.assign(pw.size(), ' '); pw.clear(); }
-  void SetPasswordCB(const Vault::LoadPasswordCB &L, const Vault::SavePasswordCB &S) { load_password_cb=L; save_password_cb=S; }
+  void SetPasswordCB(const LoadPasswordCB &L, const SavePasswordCB &S) { load_password_cb=L; save_password_cb=S; }
   int SetTerminalWindowSize(Connection *c, int w, int h) {
     term_width = w;
     term_height = h;
@@ -2209,10 +2219,10 @@ Connection *SSHClient::Open(const string &hostport, const SSHClient::ResponseCB 
   c->handler = new SSHClientConnection(cb, hostport);
   return c;
 }
-int  SSHClient::WriteChannelData     (Connection *c, const StringPiece &b)                            { return dynamic_cast<SSHClientConnection*>(c->handler)->WriteChannelData(c, b); }
-int  SSHClient::SetTerminalWindowSize(Connection *c, int w, int h)                                    { return dynamic_cast<SSHClientConnection*>(c->handler)->SetTerminalWindowSize(c, w, h); }
-void SSHClient::SetUser              (Connection *c, const string &user)                                     { dynamic_cast<SSHClientConnection*>(c->handler)->user = user; }
-void SSHClient::SetPasswordCB(Connection *c, const Vault::LoadPasswordCB &L, const Vault::SavePasswordCB &S) { dynamic_cast<SSHClientConnection*>(c->handler)->SetPasswordCB(L, S); }
+int  SSHClient::WriteChannelData     (Connection *c, const StringPiece &b)                     { return dynamic_cast<SSHClientConnection*>(c->handler)->WriteChannelData(c, b); }
+int  SSHClient::SetTerminalWindowSize(Connection *c, int w, int h)                             { return dynamic_cast<SSHClientConnection*>(c->handler)->SetTerminalWindowSize(c, w, h); }
+void SSHClient::SetUser              (Connection *c, const string &user)                       { dynamic_cast<SSHClientConnection*>(c->handler)->user = user; }
+void SSHClient::SetPasswordCB(Connection *c, const LoadPasswordCB &L, const SavePasswordCB &S) { dynamic_cast<SSHClientConnection*>(c->handler)->SetPasswordCB(L, S); }
 
 struct SMTPClientConnection : public Connection::Handler {
   enum { INIT=0, SENT_HELO=1, READY=2, MAIL_FROM=3, RCPT_TO=4, SENT_DATA=5, SENDING=6, RESETING=7, QUITING=8 };

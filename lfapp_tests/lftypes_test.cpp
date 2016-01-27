@@ -45,8 +45,8 @@ TEST(UtilTest, TopN) {
   for (auto i : top.data) EXPECT_EQ(expect[ind++], i);
 }
 
-TEST(ArrayTest, SortedArray) {
-  SortedArray<int> top;
+TEST(ArrayTest, SortedVector) {
+  SortedVector<int> top;
   top.Insert(87);
   top.Insert(99);
   top.Insert(1003);
@@ -56,8 +56,8 @@ TEST(ArrayTest, SortedArray) {
   for (auto i : top) EXPECT_EQ(expect[ind++], i);
 }
 
-TEST(ArrayTest, SortedArrayMap) {
-  SortedArrayMap<int, int> top;
+TEST(ArrayTest, SortedVectorMap) {
+  SortedVectorMap<int, int> top;
   top.Insert(87, 87);
   top.Insert(99, 99);
   top.Insert(1003, 1003);

@@ -137,9 +137,9 @@ struct KeyRepeater {
 #endif
 
 #if !defined(LFL_ANDROIDINPUT) && !defined(LFL_IPHONEINPUT)
-void TouchDevice::OpenKeyboard() {}
-void TouchDevice::CloseKeyboard() {}
-Box TouchDevice::GetKeyboardBox() { return Box(); }
+void Application::OpenTouchKeyboard() {}
+void Application::CloseTouchKeyboard() {}
+Box Application::GetTouchKeyboardBox() { return Box(); }
 #endif
 
 #if !defined(LFL_ANDROIDINPUT) && !defined(LFL_IPHONEINPUT) && !defined(LFL_OSXINPUT) && !defined(LFL_WININPUT) && !defined(LFL_X11INPUT) && !defined(LFL_XTINPUT) && !defined(LFL_QT) && !defined(LFL_WXWIDGETS) && !defined(LFL_GLFWINPUT) && !defined(LFL_SDLINPUT)
@@ -178,10 +178,10 @@ const int Key::F12        = -32;
 const int Key::Home       = -33;
 const int Key::End        = -34;
 
-string Clipboard::Get() { return ""; }
-void Clipboard::Set(const string &s) {}
-void Mouse::GrabFocus() {}
-void Mouse::ReleaseFocus() {}
+string Application::GetClipboardText() { return ""; }
+void Application::SetClipboardText(const string &s) {}
+void Application::GrabMouseFocus() {}
+void Application::ReleaseMouseFocus() {}
 #endif
 
 #ifdef LFL_ANDROIDINPUT
@@ -228,17 +228,17 @@ const int Key::End        = -34;
 extern "C" void AndroidSetFrameOnKeyboardInput(int v) { static_cast<AndroidInputModule*>(app->input->impl)->frame_on_keyboard_input = v; }
 extern "C" void AndroidSetFrameOnMouseInput   (int v) { static_cast<AndroidInputModule*>(app->input->impl)->frame_on_mouse_input    = v; }
 
-string Clipboard::Get() { return ""; }
-void Clipboard::Set(const string &s) {}
-int TouchDevice::SetExtraScale(bool v) {}
-int TouchDevice::SetMultisample(bool v) {}
-void TouchDevice::OpenKeyboard()  { AndroidShowOrHideKeyboard(1); }
-void TouchDevice::CloseKeyboard() { AndroidShowOrHideKeyboard(0); }
-void TouchDevice::CloseKeyboardAfterReturn(bool v) {} 
-Box  TouchDevice::GetKeyboardBox() { return Box(); }
-void TouchDevice::ToggleToolbarButton(const string &n) {}
-void Mouse::GrabFocus() {}
-void Mouse::ReleaseFocus() {}
+string Application::GetClipboardText() { return ""; }
+void Application::SetClipboardText(const string &s) {}
+int  Application::SetExtraScale(bool v) {}
+int  Application::SetMultisample(bool v) {}
+void Application::OpenTouchKeyboard()  { AndroidShowOrHideKeyboard(1); }
+void Application::CloseTouchKeyboard() { AndroidShowOrHideKeyboard(0); }
+void Application::CloseTouchKeyboardAfterReturn(bool v) {} 
+Box  Application::GetTouchKeyboardBox() { return Box(); }
+void Application::ToggleToolbarButton(const string &n) {}
+void Application::GrabMouseFocus() {}
+void Application::ReleaseMouseFocus() {}
 #endif
 
 #ifdef LFL_IPHONEINPUT
@@ -286,17 +286,17 @@ const int Key::F12        = -32;
 const int Key::Home       = -33;
 const int Key::End        = -34;
 
-string Clipboard::Get() { return ""; }
-void Clipboard::Set(const string &s) {}
-int TouchDevice::SetExtraScale(bool v) { return iPhoneSetExtraScale(v); }
-int TouchDevice::SetMultisample(bool v) { return iPhoneSetMultisample(v); }
-void TouchDevice::OpenKeyboard() { iPhoneShowKeyboard(); }
-void TouchDevice::CloseKeyboard() { iPhoneHideKeyboard(); }
-void TouchDevice::CloseKeyboardAfterReturn(bool v) { iPhoneHideKeyboardAfterReturn(v); } 
-Box  TouchDevice::GetKeyboardBox() { Box ret; iPhoneGetKeyboardBox(&ret.x, &ret.y, &ret.w, &ret.h); return ret; }
-void TouchDevice::ToggleToolbarButton(const string &n) { iPhoneToggleToolbarButton(n.c_str()); }
-void Mouse::GrabFocus() {}
-void Mouse::ReleaseFocus() {}
+string Application::GetClipboardText() { return ""; }
+void Application::SetClipboardText(const string &s) {}
+int  Applicateion::SetExtraScale(bool v) { return iPhoneSetExtraScale(v); }
+int  Applicateion::SetMultisample(bool v) { return iPhoneSetMultisample(v); }
+void Application::OpenTouchKeyboard() { iPhoneShowKeyboard(); }
+void Application::CloseTouchKeyboard() { iPhoneHideKeyboard(); }
+void Application::CloseTouchKeyboardAfterReturn(bool v) { iPhoneHideKeyboardAfterReturn(v); } 
+Box  Applicateion::GetTouchKeyboardBox() { Box ret; iPhoneGetKeyboardBox(&ret.x, &ret.y, &ret.w, &ret.h); return ret; }
+void Applicateion::ToggleToolbarButton(const string &n) { iPhoneToggleToolbarButton(n.c_str()); }
+void Application::GrabMouseFocus() {}
+void Application::ReleaseMouseFocus() {}
 #endif
 
 #ifdef LFL_OSXINPUT
@@ -341,12 +341,19 @@ const int Key::F12 = 0xB0;
 const int Key::Home = 0xB3;
 const int Key::End = 0xB7;
 
-void Clipboard::Set(const string &s) { OSXClipboardSet(s.c_str()); }
-string Clipboard::Get() { const char *v = OSXClipboardGet(); string ret = v; free((void*)v); return ret; }
-void Mouse::ReleaseFocus() { OSXReleaseMouseFocus(); app->grab_mode.Off(); screen->cursor_grabbed = 0; }
-void Mouse::GrabFocus()    { OSXGrabMouseFocus();    app->grab_mode.On();  screen->cursor_grabbed = 1;
+#ifdef LFL_OSXVIDEO
+void Application::SetClipboardText(const string &s) { OSXClipboardSet(s.c_str()); }
+string Application::GetClipboardText() { const char *v = OSXClipboardGet(); string ret = v; free((void*)v); return ret; }
+void Application::ReleaseMouseFocus() { OSXReleaseMouseFocus(); app->grab_mode.Off(); screen->cursor_grabbed = 0; }
+void Application::GrabMouseFocus()    { OSXGrabMouseFocus();    app->grab_mode.On();  screen->cursor_grabbed = 1;
   OSXSetMousePosition(screen->id, screen->width / 2, screen->height / 2);
 }
+#else // LFL_OSXVIDEO
+void Application::SetClipboardText(const string &s) {}
+string Application::GetClipboardText() { return ""; }
+void Application::ReleaseMouseFocus() { screen->cursor_grabbed = 0; }
+void Application::GrabMouseFocus()    { screen->cursor_grabbed = 1; }
+#endif // LFL_OSXVIDEO
 #endif // LFL_OSXINPUT
 
 #ifdef LFL_WININPUT
@@ -543,9 +550,9 @@ const int Key::F12        = 0xf00 | VK_F12;
 const int Key::Home       = 0xf00 | VK_HOME;
 const int Key::End        = 0xf00 | VK_END;
 
-void Mouse::ReleaseFocus() {}
-void Mouse::GrabFocus() {}
-void Clipboard::Set(const string &in) {
+void Application::ReleaseMouseFocus() {}
+void Application::GrabMouseFocus() {}
+void Application::SetClipboardText(const string &in) {
   String16 s = String::ToUTF16(in);
   if (!OpenClipboard(NULL)) return;
   EmptyClipboard();
@@ -557,7 +564,7 @@ void Clipboard::Set(const string &in) {
   CloseClipboard();
   GlobalFree(hg);
 }
-string Clipboard::Get() {
+string Application::GetClipboardText() {
   string ret;
   if (!OpenClipboard(NULL)) return "";
   const HANDLE hg = GetClipboardData(CF_UNICODETEXT);
@@ -640,10 +647,10 @@ struct X11InputModule : public InputModule {
   }
 };
 
-void Clipboard::Set(const string &s) {}
-string Clipboard::Get() {}
-void Mouse::ReleaseFocus() {}
-void Mouse::GrabFocus() {}
+void Application::SetClipboardText(const string &s) {}
+string Application::GetClipboardText() {}
+void Application::ReleaseMouseFocus() {}
+void Application::GrabMouseFocus() {}
 #endif // LFL_X11INPUT
 
 #ifdef LFL_XTINPUT
@@ -657,10 +664,10 @@ struct XTInputModule : public InputModule {
     return 0;
   }
 };
-void Clipboard::Set(const string &s) {}
-string Clipboard::Get() {}
-void Mouse::ReleaseFocus() {}
-void Mouse::GrabFocus() {}
+void Application::SetClipboardText(const string &s) {}
+string Application::GetClipboardText() {}
+void Application::ReleaseMouseFocus() {}
+void Application::GrabMouseFocus() {}
 #endif // LFL_XTINPUT
 
 #ifdef LFL_QT
@@ -699,8 +706,8 @@ const int Key::F12        = Qt::Key_F12;
 const int Key::Home       = Qt::Key_Home;
 const int Key::End        = Qt::Key_End;
 
-string Clipboard::Get() { QByteArray v = QApplication::clipboard()->text().toUtf8(); return string(v.constData(), v.size()); }
-void Clipboard::Set(const string &s) { QApplication::clipboard()->setText(QString::fromUtf8(s.data(), s.size())); }
+string Application::GetClipboardText() { QByteArray v = QApplication::clipboard()->text().toUtf8(); return string(v.constData(), v.size()); }
+void Application::SetClipboardText(const string &s) { QApplication::clipboard()->setText(QString::fromUtf8(s.data(), s.size())); }
 #endif /* LFL_QT */
 
 #ifdef LFL_WXWIDGETS
@@ -739,8 +746,8 @@ const int Key::F12        = WXK_F12;
 const int Key::Home       = WXK_HOME;
 const int Key::End        = WXK_END;
 
-string Clipboard::Get() { return ""; }
-void Clipboard::Set(const string &s) {}
+string Application::GetClipboardText() { return ""; }
+void Application::SetClipboardText(const string &s) {}
 #endif /* LFL_WXWIDGETS */
 
 #ifdef LFL_GLFWINPUT
@@ -832,10 +839,10 @@ const int Key::F12        = GLFW_KEY_F12;
 const int Key::Home       = GLFW_KEY_HOME;
 const int Key::End        = GLFW_KEY_END;
 
-string Clipboard::Get()                { return glfwGetClipboardString((GLFWwindow*)screen->id); }
-void   Clipboard::Set(const string &s) {        glfwSetClipboardString((GLFWwindow*)screen->id, s.c_str()); }
-void Mouse::GrabFocus()    { glfwSetInputMode((GLFWwindow*)screen->id, GLFW_CURSOR, GLFW_CURSOR_DISABLED); app->grab_mode.On();  screen->cursor_grabbed=true;  }
-void Mouse::ReleaseFocus() { glfwSetInputMode((GLFWwindow*)screen->id, GLFW_CURSOR, GLFW_CURSOR_NORMAL);   app->grab_mode.Off(); screen->cursor_grabbed=false; }
+string Application::GetClipboardText()                { return glfwGetClipboardString((GLFWwindow*)screen->id); }
+void   Application::SetClipboardText(const string &s) {        glfwSetClipboardString((GLFWwindow*)screen->id, s.c_str()); }
+void Application::GrabMouseFocus()    { glfwSetInputMode((GLFWwindow*)screen->id, GLFW_CURSOR, GLFW_CURSOR_DISABLED); app->grab_mode.On();  screen->cursor_grabbed=true;  }
+void Application::ReleaseMouseFocus() { glfwSetInputMode((GLFWwindow*)screen->id, GLFW_CURSOR, GLFW_CURSOR_NORMAL);   app->grab_mode.Off(); screen->cursor_grabbed=false; }
 #endif
 
 #ifdef LFL_SDLINPUT
@@ -914,23 +921,23 @@ const int Key::F12        = SDLK_F12;
 const int Key::Home       = SDLK_HOME;
 const int Key::End        = SDLK_END;
 
-string Clipboard::Get() { return SDL_GetClipboardText(); }
-void Clipboard::Set(const string &s) { SDL_SetClipboardText(s.c_str()); }
-void TouchDevice::CloseKeyboard() {
+string Application::GetClipboardText() { return SDL_GetClipboardText(); }
+void Application::SetClipboardText(const string &s) { SDL_SetClipboardText(s.c_str()); }
+void Application::CloseTouchKeyboard() {
 #ifdef LFL_IPHONE 
   SDL_iPhoneKeyboardHide((SDL_Window*)screen->id);
 #endif
 }
-void TouchDevice::OpenKeyboard() {
+void Application::OpenTouchKeyboard() {
 #ifdef LFL_IPHONE 
   SDL_iPhoneKeyboardShow((SDL_Window*)screen->id);
 #endif
 }
-void Mouse::GrabFocus()    { SDL_ShowCursor(0); SDL_SetWindowGrab((SDL_Window*)screen->id, SDL_TRUE);  SDL_SetRelativeMouseMode(SDL_TRUE);  app->grab_mode.On();  screen->cursor_grabbed=true; }
-void Mouse::ReleaseFocus() { SDL_ShowCursor(1); SDL_SetWindowGrab((SDL_Window*)screen->id, SDL_FALSE); SDL_SetRelativeMouseMode(SDL_FALSE); app->grab_mode.Off(); screen->cursor_grabbed=false; }
+void Application::GrabMouseFocus()    { SDL_ShowCursor(0); SDL_SetWindowGrab((SDL_Window*)screen->id, SDL_TRUE);  SDL_SetRelativeMouseMode(SDL_TRUE);  app->grab_mode.On();  screen->cursor_grabbed=true; }
+void Application::ReleaseMouseFocus() { SDL_ShowCursor(1); SDL_SetWindowGrab((SDL_Window*)screen->id, SDL_FALSE); SDL_SetRelativeMouseMode(SDL_FALSE); app->grab_mode.Off(); screen->cursor_grabbed=false; }
 #endif /* LFL_SDLINPUT */
 
-void TouchDevice::AddToolbar(const vector<pair<string, string>>&items) {
+void Application::AddToolbar(const vector<pair<string, string>>&items) {
   vector<const char *> k, v;
   for (auto &i : items) { k.push_back(i.first.c_str()); v.push_back(i.second.c_str()); }
 #ifdef LFL_IPHONEINPUT
@@ -1007,6 +1014,7 @@ int Input::DispatchQueuedInput(bool event_on_keyboard_input, bool event_on_mouse
 }
 
 int Input::KeyPress(int key, bool down) {
+  if (!app->run) return 0;
 #ifdef LFL_DEBUG
   if (!MainThread()) ERROR("KeyPress() called from thread ", Thread::GetId());
 #endif
@@ -1038,41 +1046,27 @@ int Input::KeyEventDispatch(InputEvent::Id event, bool down) {
   if (FLAGS_input_debug && down)
     INFO("KeyEvent ", InputEvent::Name(event), " ", key, " ", shift_down, " ", ctrl_down, " ", cmd_down);
 
-  for (auto it = screen->keyboard_gui.begin(); it != screen->keyboard_gui.end(); ++it) {
-    KeyboardGUI *g = *it;
-    if (!g->active) continue;
-    if (g->toggle_bind.key == event && g->toggle_active.mode != Toggler::OneShot) return 0;
+  if (KeyboardGUI *g = screen->active_textgui) do {
+    if (g->toggle_bind.key == event && !g->toggle_once) return 0;
 
-    if (event == paste_bind.key) { g->Input(Clipboard::Get()); return 1; }
-    switch (event) {
-      case Key::Backspace: g->Erase();       return 1;
-      case Key::Delete:    g->Erase();       return 1;
-      case Key::Return:    g->Enter();       return 1;
-      case Key::Left:      g->CursorLeft();  return 1;
-      case Key::Right:     g->CursorRight(); return 1;
-      case Key::Up:        g->HistUp();      return 1;
-      case Key::Down:      g->HistDown();    return 1;
-      case Key::PageUp:    g->PageUp();      return 1;
-      case Key::PageDown:  g->PageDown();    return 1;
-      case Key::Home:      g->Home();        return 1;
-      case Key::End:       g->End();         return 1;
-      case Key::Tab:       g->Tab();         return 1;
-      case Key::Escape:    g->Escape();      return 1;
-    }
+    if (event == paste_bind.key) { g->Input(app->GetClipboardText()); return 1; }
+    if (g->HandleSpecialKey(event)) return 1;
 
     if (cmd_down) return 0;
-    if (key >= 128) { /* ERROR("unhandled key ", event); */ continue; }
+    if (key >= 128) { /* ERROR("unhandled key ", event); */ break; }
 
     if (shift_down) key = Key::ShiftModified(key);
     if (ctrl_down)  key = Key::CtrlModified(key);
 
     g->Input(key);
     return 1;
-  }
+  } while(0);
+
   return 0;
 }
 
 int Input::MouseMove(const point &p, const point &d) {
+  if (!app->run) return 0;
   int fired = MouseEventDispatch(Mouse::Event::Motion, p, MouseButton1Down());
   if (!app->grab_mode.Enabled()) return fired;
   if (d.x<0) screen->cam->YawLeft  (-d.x); else if (d.x>0) screen->cam->YawRight(d.x);
@@ -1081,14 +1075,17 @@ int Input::MouseMove(const point &p, const point &d) {
 }
 
 int Input::MouseWheel(const point &p, const point &d) {
+  if (!app->run) return 0;
   int fired = MouseEventDispatch(Mouse::Event::Wheel, screen->mouse, d.y);
   return fired;
 }
 
 int Input::MouseClick(int button, bool down, const point &p) {
+  if (!app->run) return 0;
   InputEvent::Id event = Mouse::ButtonID(button);
   if      (event == Mouse::Button::_1) mouse_but1_down = down;
   else if (event == Mouse::Button::_2) mouse_but2_down = down;
+  event |= (CtrlKeyDown() ? Key::Modifier::Ctrl : 0) | (CmdKeyDown() ? Key::Modifier::Cmd : 0);
 
   int fired = MouseEventDispatch(event, p, down);
   if (fired) return fired;
@@ -1119,14 +1116,33 @@ int Input::MouseEventDispatch(InputEvent::Id event, const point &p, int down) {
     Dialog *gui = (*i);
     if (gui->NotActive()) { i++; continue; }
     fired += gui->Input(event, screen->mouse, down, 0);
-    if (gui->deleted) { delete gui; i = screen->dialogs.erase(i); continue; }
-    if (event == Mouse::Event::Button1 && down && gui->BoxAndTitle().within(screen->mouse)) { bring_to_front = *i; break; }
+    if (gui->deleted) { screen->GiveDialogFocusAway(gui); delete gui; i = screen->dialogs.erase(i); continue; }
+    if (event == Mouse::Event::Button1 && down && gui->box.within(screen->mouse)) { bring_to_front = *i; break; }
     i++;
   }
-  if (bring_to_front) bring_to_front->BringToFront();
+  if (bring_to_front) screen->BringDialogToFront(bring_to_front);
 
   if (FLAGS_input_debug && down) INFO("MouseEvent ", screen->mouse.DebugString(), " fired=", fired, ", guis=", screen->mouse_gui.size());
   return fired;
+}
+
+int KeyboardController::HandleSpecialKey(InputEvent::Id event) {
+  switch (event) {
+    case Key::Backspace: Erase();       return 1;
+    case Key::Delete:    Erase();       return 1;
+    case Key::Return:    Enter();       return 1;
+    case Key::Left:      CursorLeft();  return 1;
+    case Key::Right:     CursorRight(); return 1;
+    case Key::Up:        HistUp();      return 1;
+    case Key::Down:      HistDown();    return 1;
+    case Key::PageUp:    PageUp();      return 1;
+    case Key::PageDown:  PageDown();    return 1;
+    case Key::Home:      Home();        return 1;
+    case Key::End:       End();         return 1;
+    case Key::Tab:       Tab();         return 1;
+    case Key::Escape:    Escape();      return 1;
+  }
+  return 0;
 }
 
 int MouseController::Input(InputEvent::Id event, const point &p, int down, int flag) {

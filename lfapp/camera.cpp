@@ -72,7 +72,9 @@ DEFINE_int(camera_image_width, 0, "Camera capture image width");
 DEFINE_int(camera_image_height, 0, "Camera capture image height");
 
 #ifdef LFL_OPENCV_CAMERA
+}; // namespace LFL
 LFL_IMPORT extern int OPENCV_FPS;
+namespace LFL {
 
 struct OpenCvCamera : public Module {
   Thread thread;
@@ -310,7 +312,9 @@ struct DsvlCamera : public Module {
     CoInitialize(0);
     L.vs = new DSVL_VideoSource();
 
-    LONG w, h; double fps; PIXELFORMAT pf;
+    LONG w, h;
+    double fps;
+    PIXELFORMAT pf;
     if (FAILED(L.vs->BuildGraphFromXMLString(config))) return -1;
     if (FAILED(L.vs->GetCurrentMediaFormat(&w, &h, &fps, &pf))) return -1;
     if (FAILED(L.vs->EnableMemoryBuffer())) return -1;
@@ -362,7 +366,8 @@ struct DsvlCamera : public Module {
       DWORD ret = L.vs->WaitForNextSample(1000/FLAGS_camera_fps);
       if (ret != WAIT_OBJECT_0) continue;
 
-      MemoryBufferHandle h; char *b;
+      char *b;
+      MemoryBufferHandle h;
       L.vs->CheckoutMemoryBuffer(&h, (BYTE**)&b);
       memcpy(L.frames->write(RingBuf::Peek | RingBuf::Stamp), b, L.frames->width);
       L.vs->CheckinMemoryBuffer(h);

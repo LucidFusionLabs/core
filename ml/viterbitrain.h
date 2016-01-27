@@ -98,8 +98,8 @@ struct ViterbiTrain {
   AcousticModel::Compiled *model;
   ViterbF viterbF;
 
-  MatrixArchiveIn utt_paths_in;
-  MatrixArchiveOut utt_paths_out;
+  MatrixArchiveInputFile utt_paths_in;
+  MatrixArchiveOutputFile utt_paths_out;
 
   double totalprob, accumprob, beamwidth;
   int totalcount, accumcount;

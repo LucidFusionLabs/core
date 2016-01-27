@@ -191,6 +191,7 @@ struct Box {
   point BottomLeft () const { return point(x,       y);     }
   point BottomRight() const { return point(right(), y);     }
   void Draw(const float *texcoord=0) const;
+  void DrawGradient(const Color*) const;
   void DrawCrimped(const float *texcoord, int orientation, float scrollX=0, float scrollY=0) const;
 
   static float ScrollCrimped(float tex0, float tex1, float scroll, float *min, float *mid1, float *mid2, float *max);
@@ -236,6 +237,7 @@ struct Drawable {
     const LFL::Box *scissor=0;
     bool underline=0, overline=0, midline=0, blink=0, blend=0;
     constexpr Attr(Font *F=0, const Color *FG=0, const Color *BG=0, bool UL=0, bool B=0) : font(F), fg(FG), bg(BG), underline(UL), blend(B) {}
+    constexpr Attr(const Texture *T, const Color *FG=0, const Color *BG=0, bool UL=0, bool B=0) : fg(FG), bg(BG), tex(T), underline(UL), blend(B) {}
     bool operator==(const Attr &y) const { return font==y.font && fg==y.fg && bg==y.bg && tex==y.tex && scissor==y.scissor && underline==y.underline && overline==y.overline && midline==y.midline && blink==y.blink && blend == y.blend; }
     bool operator!=(const Attr &y) const { return !(*this == y); }
     void Clear() { font=0; fg=bg=0; tex=0; scissor=0; underline=overline=midline=blink=0; }
@@ -295,7 +297,8 @@ struct Texture : public Drawable {
 
   void Bind() const;
   int TexId() const { return ID; }
-  string DebugString() const { return StrCat("Texture(", width, ", ", height, ", ", Pixel::Name(pf), ")"); }
+  string CoordString() const { return StrCat("[", coord[0], ", ", coord[1], ", ", coord[2], ", ", coord[3], "]"); } 
+  string DebugString() const { return StrCat("Texture(", ID, ": ", width, ", ", height, ", ", Pixel::Name(pf), ", ", CoordString(), ")"); }
   string HexDump() const { string v; for (int ls=LineSize(), i=0; i<height; i++) StrAppend(&v, Vec<unsigned char>::Str(buf+i*ls, ls, "%02x"), "\n"); return v; }
   point Dimension() const { return point(width, height); }
   int PixelSize() const { return Pixel::size(pf); }
@@ -527,6 +530,7 @@ struct GraphicsDevice : public QOpenGLFunctions {
   void DisableBlend();
   void BlendMode(int sm, int tm);
   void RestoreViewport(int drawmode);
+  void TranslateRotateTranslate(float a, const Box&);
   void DrawMode(int drawmode, bool flush=1);
   void DrawMode(int drawmode, int W, int H, bool flush=1);
   void EnableLayering() { DisableDepthTest(); DisableLighting(); EnableBlend(); EnableTexture(); }
@@ -555,6 +559,8 @@ extern Window *screen;
 struct Window : public NativeWindow {
   typedef function<void(Window*)> StartCB;
   typedef function<int(Window*, unsigned, int)> FrameCB;
+  typedef unordered_map<void*, Window*> Map;
+
   GraphicsDevice *gd=0;
   point mouse, mouse_wheel;
   string caption;
@@ -569,6 +575,8 @@ struct Window : public NativeWindow {
   vector<GUI*> mouse_gui;
   vector<KeyboardGUI*> keyboard_gui;
   vector<InputController*> input_bind;
+  function<TextGUI*()> default_textgui = []{ return nullptr; };
+  TextGUI *active_textgui=0;
   Console *lfapp_console=0;
 
   Window();
@@ -579,7 +587,6 @@ struct Window : public NativeWindow {
   void SetTransparency(float v);
   void Reshape(int w, int h);
   void Reshaped(int w, int h);
-  void Closed()      { Window::Close(this); }
   void Minimized()   { minimized=1; }
   void UnMinimized() { minimized=0; }
   void ResetGL();
@@ -594,18 +601,14 @@ struct Window : public NativeWindow {
   void ClearInputBindEvents();
   void InitLFAppConsole();
   void DrawDialogs();
+  void AddDialog(Dialog*);
+  void BringDialogToFront(Dialog*);
+  void GiveDialogFocusAway(Dialog*);
 
   LFL::Box Box() const { return LFL::Box(0, 0, width, height); }
   LFL::Box Box(float xs, float ys) const { return LFL::Box(0, 0, width*xs, height*ys); }
   LFL::Box Box(float xp, float yp, float xs, float ys, float xbl=0, float ybt=0, float xbr=-INFINITY, float ybb=-INFINITY) const;
-
-  typedef unordered_map<void*, Window*> WindowMap;
-  static WindowMap active;
-  static Window *Get() { return screen; }
-  static Window *Get(void *id);
-  static bool Create(Window *W);
-  static void Close(Window *W);
-  static void MakeCurrent(Window *W);
+  static Window *Get() { return LFL::screen; }
 };
 
 struct Scissor {

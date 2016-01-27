@@ -51,6 +51,7 @@ struct Crypto {
   typedef void* DigestAlgo;
   typedef void* MACAlgo;
 #endif
+
   struct CipherAlgos {
     static CipherAlgo AES128_CTR();
     static CipherAlgo AES128_CBC();
@@ -60,6 +61,7 @@ struct Crypto {
     static const char *Name(CipherAlgo);
     static int KeySize(CipherAlgo);
   };
+
   struct DigestAlgos {
     static DigestAlgo MD5();
     static DigestAlgo SHA1();
@@ -69,6 +71,7 @@ struct Crypto {
     static const char *Name(DigestAlgo);
     static int HashSize(DigestAlgo);
   };
+
   struct MACAlgos {
     static MACAlgo MD5();
     static MACAlgo SHA1();
@@ -77,6 +80,7 @@ struct Crypto {
     static const char *Name(MACAlgo);
     static int HashSize(MACAlgo);
   };
+
   struct DiffieHellman {
     int gex_min=1024, gex_max=8192, gex_pref=2048;
     BigNum g, p, x, e, f;
@@ -88,12 +92,14 @@ struct Crypto {
     static BigNum Group1Modulus (BigNum g, BigNum p, int *rand_num_bits);
     static BigNum Group14Modulus(BigNum g, BigNum p, int *rand_num_bits);
   };
+
   struct EllipticCurve {
     static ECDef NISTP256();
     static ECDef NISTP384();
     static ECDef NISTP521();
     static ECPair NewPair(ECDef, bool generate);
   };
+
   struct EllipticCurveDiffieHellman {
     ECPair pair=0;
     ECGroup g=0;
@@ -149,6 +155,7 @@ struct SSH {
     static string PreferenceCSV(int start_after=0);
     static bool PreferenceIntersect(const StringPiece &pref_csv, int *out, int start_after=0);
   };
+
   struct KEX {
     enum { ECDH_SHA2_NISTP256=1, ECDH_SHA2_NISTP384=2, ECDH_SHA2_NISTP521=3, DHGEX_SHA256=4, DHGEX_SHA1=5, DH14_SHA1=6, DH1_SHA1=7, End=7 };
     static int Id(const string &n);
@@ -159,6 +166,7 @@ struct SSH {
     static bool DiffieHellmanGroupExchange(int id) { return id==DHGEX_SHA256 || id==DHGEX_SHA1; }
     static bool DiffieHellman(int id) { return id==DHGEX_SHA256 || id==DHGEX_SHA1 || id==DH14_SHA1 || id==DH1_SHA1; }
   };
+
   struct Cipher {
     enum { AES128_CTR=1, AES128_CBC=2, TripDES_CBC=3, Blowfish_CBC=4, RC4=5, End=5 };
     static int Id(const string &n);
@@ -167,6 +175,7 @@ struct SSH {
     static string PreferenceCSV(int start_after=0);
     static bool PreferenceIntersect(const StringPiece &pref_csv, int *out, int start_after=0);
   };
+
   struct MAC {
     enum { MD5=1, SHA1=2, SHA1_96=3, MD5_96=4, SHA256=5, SHA256_96=6, SHA512=7, SHA512_96=8, End=8 };
     static int Id(const string &n);
@@ -182,6 +191,7 @@ struct SSH {
     void ToString(string *out, std::mt19937&, int block_size) const;
     void ToString(char *buf, int len, std::mt19937&) const;
   };
+
   struct MSG_DISCONNECT : public Serializable {
     static const int ID = 1;
     int reason_code=0;
@@ -193,6 +203,7 @@ struct SSH {
     int In(const Serializable::Stream *i) { i->Ntohl(&reason_code); i->ReadString(&description); i->ReadString(&language); return i->Result(); }
     void Out(Serializable::Stream *o) const {}
   };
+
   struct MSG_DEBUG : public Serializable {
     static const int ID = 4;
     unsigned char always_display=0;
@@ -204,6 +215,7 @@ struct SSH {
     int In(const Serializable::Stream *i) { i->Read8(&always_display); i->ReadString(&message); i->ReadString(&language); return i->Result(); }
     void Out(Serializable::Stream *o) const {}
   };
+
   struct MSG_SERVICE_REQUEST : public Serializable {
     static const int ID = 5;
     StringPiece service_name;
@@ -214,6 +226,7 @@ struct SSH {
     int In(const Serializable::Stream *i) { i->ReadString(&service_name); return i->Result(); }
     void Out(Serializable::Stream *o) const { o->BString(service_name); }
   };
+
   struct MSG_SERVICE_ACCEPT : public Serializable {
     static const int ID = 6;
     StringPiece service_name;
@@ -224,6 +237,7 @@ struct SSH {
     int In(const Serializable::Stream *i) { i->ReadString(&service_name); return i->Result(); }
     void Out(Serializable::Stream *o) const { o->BString(service_name); }
   };
+
   struct MSG_KEXINIT : public Serializable {
     static const int ID = 20;
     StringPiece cookie, kex_algorithms, server_host_key_algorithms, encryption_algorithms_client_to_server,
@@ -246,6 +260,7 @@ struct SSH {
     void Out(Serializable::Stream *o) const;
     int In(const Serializable::Stream *i);
   };
+
   struct MSG_NEWKEYS : public Serializable {
     static const int ID = 21;
     MSG_NEWKEYS() : Serializable(ID) {}
@@ -255,6 +270,7 @@ struct SSH {
     void Out(Serializable::Stream *o) const {}
     int In(const Serializable::Stream *i) { return 0; }
   };
+
   struct MSG_KEXDH_INIT : public Serializable {
     static const int ID = 30;
     BigNum e;
@@ -265,6 +281,7 @@ struct SSH {
     void Out(Serializable::Stream *o) const { WriteBigNum(e, o); }
     int In(const Serializable::Stream *i) { return 0; }
   };
+
   struct MSG_KEXDH_REPLY : public Serializable {
     static const int ID = 31;
     StringPiece k_s, h_sig;
@@ -276,6 +293,7 @@ struct SSH {
     void Out(Serializable::Stream *o) const {}
     int In(const Serializable::Stream *i) { i->ReadString(&k_s); f=ReadBigNum(f,i); i->ReadString(&h_sig); return i->Result(); }
   };
+
   struct MSG_KEX_DH_GEX_REQUEST : public Serializable {
     static const int ID = 34;
     int min_n, max_n, n;
@@ -286,6 +304,7 @@ struct SSH {
     void Out(Serializable::Stream *o) const { o->Htonl( min_n); o->Htonl( n); o->Htonl( max_n); }
     int In(const Serializable::Stream *i)   { i->Ntohl(&min_n); i->Ntohl(&n); i->Ntohl(&max_n); return i->Result(); }
   };
+
   struct MSG_KEX_DH_GEX_GROUP : public Serializable {
     static const int ID = 31;
     BigNum p, g;
@@ -296,14 +315,17 @@ struct SSH {
     void Out(Serializable::Stream *o) const {}
     int In(const Serializable::Stream *i) { p=ReadBigNum(p,i); g=ReadBigNum(g,i); return i->Result(); }
   };
+
   struct MSG_KEX_DH_GEX_INIT : public MSG_KEXDH_INIT {
     static const int ID = 32;
     MSG_KEX_DH_GEX_INIT(BigNum E=0) : MSG_KEXDH_INIT(E) { Id=ID; }
   };
+
   struct MSG_KEX_DH_GEX_REPLY : public MSG_KEXDH_REPLY {
     static const int ID = 33;
     MSG_KEX_DH_GEX_REPLY(BigNum F=0) : MSG_KEXDH_REPLY(F) { Id=ID; }
   };
+
   struct MSG_KEX_ECDH_INIT : public Serializable {
     static const int ID = 30;
     StringPiece q_c;
@@ -314,6 +336,7 @@ struct SSH {
     void Out(Serializable::Stream *o) const { o->BString(q_c); }
     int In(const Serializable::Stream *i) { i->ReadString(&q_c); return i->Result(); }
   };
+
   struct MSG_KEX_ECDH_REPLY : public Serializable {
     static const int ID = 31;
     StringPiece k_s, q_s, h_sig;
@@ -324,6 +347,7 @@ struct SSH {
     void Out(Serializable::Stream *o) const { o->BString(k_s); o->BString(q_s); o->BString(h_sig); }
     int In(const Serializable::Stream *i) { i->ReadString(&k_s); i->ReadString(&q_s); i->ReadString(&h_sig); return i->Result(); }
   };
+
   struct MSG_USERAUTH_REQUEST : public Serializable {
     static const int ID = 50;
     StringPiece user_name, service_name, method_name, algo_name, secret, sig;
@@ -335,6 +359,7 @@ struct SSH {
     void Out(Serializable::Stream *o) const;
     int In(const Serializable::Stream *i) { return 0; }
   };
+
   struct MSG_USERAUTH_FAILURE : public Serializable {
     static const int ID = 51;
     StringPiece auth_left;
@@ -346,6 +371,7 @@ struct SSH {
     void Out(Serializable::Stream *o) const {}
     int In(const Serializable::Stream *i) { i->ReadString(&auth_left); i->Read8(&partial_success); return i->Result(); }
   };
+
   struct MSG_USERAUTH_SUCCESS : public Serializable {
     static const int ID = 52;
     MSG_USERAUTH_SUCCESS() : Serializable(ID) {}
@@ -355,6 +381,7 @@ struct SSH {
     void Out(Serializable::Stream *o) const {}
     int In(const Serializable::Stream *i) { return i->Result(); }
   };
+
   struct MSG_USERAUTH_INFO_REQUEST : public Serializable {
     static const int ID = 60;
     StringPiece name, instruction, language;
@@ -367,6 +394,7 @@ struct SSH {
     void Out(Serializable::Stream *o) const {}
     int In(const Serializable::Stream *i);
   };
+
   struct MSG_USERAUTH_INFO_RESPONSE : public Serializable {
     static const int ID = 61;
     vector<StringPiece> response;
@@ -378,6 +406,7 @@ struct SSH {
     void Out(Serializable::Stream *o) const;
     int In(const Serializable::Stream *i) { return i->Result(); }
   };
+
   struct MSG_CHANNEL_OPEN : public Serializable {
     static const int ID = 90;
     StringPiece channel_type;
@@ -389,6 +418,7 @@ struct SSH {
     void Out(Serializable::Stream *o) const { o->BString(channel_type); o->Htonl(sender_channel); o->Htonl(initial_win_size); o->Htonl(maximum_packet_size); }
     int In(const Serializable::Stream *i) { return i->Result(); }
   };
+
   struct MSG_CHANNEL_OPEN_CONFIRMATION : public Serializable {
     static const int ID = 91;
     int recipient_channel, sender_channel, initial_win_size, maximum_packet_size;
@@ -399,6 +429,7 @@ struct SSH {
     void Out(Serializable::Stream *o) const {}
     int In(const Serializable::Stream *i) { i->Ntohl(&recipient_channel); i->Ntohl(&sender_channel); i->Ntohl(&initial_win_size); i->Ntohl(&maximum_packet_size); return i->Result(); }
   };
+
   struct MSG_CHANNEL_WINDOW_ADJUST : public Serializable {
     static const int ID = 93;
     int recipient_channel, bytes_to_add;
@@ -409,6 +440,7 @@ struct SSH {
     void Out(Serializable::Stream *o) const { o->Htonl(recipient_channel); o->Htonl(bytes_to_add); }
     int In(const Serializable::Stream *i) { i->Ntohl(&recipient_channel); i->Ntohl(&bytes_to_add); return i->Result(); }
   };
+
   struct MSG_CHANNEL_DATA : public Serializable {
     static const int ID = 94;
     int recipient_channel;
@@ -421,6 +453,7 @@ struct SSH {
     void Out(Serializable::Stream *o) const { o->Htonl(recipient_channel); o->BString(data); }
     int In(const Serializable::Stream *i) { i->Ntohl(&recipient_channel); i->ReadString(&data); return i->Result(); }
   };
+
   struct MSG_CHANNEL_REQUEST : public Serializable {
     static const int ID = 98;
     int recipient_channel=0, width=0, height=0, pixel_width=0, pixel_height=0;
@@ -435,6 +468,7 @@ struct SSH {
     void Out(Serializable::Stream *o) const;
     int In(const Serializable::Stream *i) { return i->Result(); }
   };
+
   struct MSG_CHANNEL_SUCCESS : public Serializable {
     static const int ID = 99;
     MSG_CHANNEL_SUCCESS() : Serializable(ID) {}
@@ -444,6 +478,7 @@ struct SSH {
     void Out(Serializable::Stream *o) const {}
     int In(const Serializable::Stream *i) { return 0; }
   };
+
   struct MSG_CHANNEL_FAILURE : public Serializable {
     static const int ID = 100;
     MSG_CHANNEL_FAILURE() : Serializable(ID) {}
@@ -453,6 +488,7 @@ struct SSH {
     void Out(Serializable::Stream *o) const {}
     int In(const Serializable::Stream *i) { return 0; }
   };
+
   struct DSSKey {
     StringPiece format_id;
     BigNum p, q, g, y;
@@ -463,6 +499,7 @@ struct SSH {
     void Out(Serializable::Stream *o) const {}
     int In(const Serializable::Stream *i);
   };
+
   struct DSSSignature {
     StringPiece format_id;
     BigNum r, s;
@@ -473,6 +510,7 @@ struct SSH {
     void Out(Serializable::Stream *o) const {}
     int In(const Serializable::Stream *i);
   };
+
   struct RSAKey {
     StringPiece format_id;
     BigNum e, n;
@@ -483,6 +521,7 @@ struct SSH {
     void Out(Serializable::Stream *o) const {}
     int In(const Serializable::Stream *i);
   };
+
   struct RSASignature {
     StringPiece format_id, sig;
 
@@ -491,6 +530,7 @@ struct SSH {
     void Out(Serializable::Stream *o) const {}
     int In(const Serializable::Stream *i);
   };
+
   struct ECDSAKey {
     StringPiece format_id, curve_id, q;
 
@@ -499,6 +539,7 @@ struct SSH {
     void Out(Serializable::Stream *o) const {}
     int In(const Serializable::Stream *i);
   };
+
   struct ECDSASignature {
     StringPiece format_id;
     BigNum r, s;

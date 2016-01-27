@@ -146,6 +146,7 @@ struct BindMap;
 struct Box;
 struct Browser;
 struct BrowserInterface;
+struct ClangTranslationUnit;
 struct Color;
 struct Connection;
 struct Console;
@@ -212,21 +213,23 @@ typedef struct _CCBigNumRef *CCBigNumRef;
 typedef struct ec_group_st EC_GROUP;
 typedef struct ec_point_st EC_POINT;
 typedef struct ec_key_st EC_KEY;
+typedef struct CXTranslationUnitImpl* CXTranslationUnit;
+typedef void* CXIndex;
 
 struct LFApp {
-    struct Log { enum { Fatal=-1, Error=0, Info=3, Debug=7 }; int v; };
-    struct Frame { enum { DontSkip=8 }; int v; };
-    bool run, initialized;
-    size_t main_thread_id;
-    long long frames_ran;
+  struct Log { enum { Fatal=-1, Error=0, Info=3, Debug=7 }; int v; };
+  struct Frame { enum { DontSkip=8 }; int v; };
+  bool run, initialized;
+  size_t main_thread_id;
+  long long frames_ran;
 };
 
 struct NativeWindow {
-    void *id, *gl, *surface, *glew_context, *impl, *user1, *user2, *user3;
-    int width, height, pow2_width, pow2_height, target_fps;
-    bool minimized, cursor_grabbed, frame_init, animating;
-    int gesture_swipe_up, gesture_swipe_down, gesture_tap[2], gesture_dpad_stop[2];
-    float gesture_dpad_x[2], gesture_dpad_y[2], gesture_dpad_dx[2], gesture_dpad_dy[2], multitouch_keyboard_x;
+  void *id, *gl, *surface, *glew_context, *impl, *user1, *user2, *user3;
+  int width, height, pow2_width, pow2_height, target_fps;
+  bool minimized, cursor_grabbed, frame_init, animating;
+  int gesture_swipe_up, gesture_swipe_down, gesture_tap[2], gesture_dpad_stop[2];
+  float gesture_dpad_x[2], gesture_dpad_y[2], gesture_dpad_dx[2], gesture_dpad_dy[2], multitouch_keyboard_x;
 };
 
 void NativeWindowInit();

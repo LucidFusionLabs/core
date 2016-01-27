@@ -27,7 +27,8 @@ template <class K> struct TrieNode {
 };
 
 template <class K> struct TrieNodeNext {
-  K key; int next; 
+  K key;
+  int next; 
   TrieNodeNext(const K &k=K(), int n=0) : key(k), next(n) {}
   bool operator<(const TrieNodeNext &n) const { SortImpl1(key, n.key) } 
 };
@@ -46,7 +47,8 @@ template <class K, class V, class TN = TrieNode<K>, class TV = TrieNodeValue<K, 
 
   struct SortedInputConstructor {
     struct Prenode {
-      K key; int node, next_len; 
+      K key;
+      int node, next_len; 
       Prenode(const K &k, int n) : key(k), node(n), next_len(0) {}
     };
     typedef int  (SortedInputConstructor::*InsertCB)(const String &k, const V*);
@@ -67,6 +69,7 @@ template <class K, class V, class TN = TrieNode<K>, class TV = TrieNodeValue<K, 
       stack.emplace_back(K(), (this->*insert_cb)(String(), NULL));
       Input(b, e);
     }
+
     template <class I> void Input(I b, I e) { 
       for (auto i = b; i != e; /**/) {
         const String &k = (*i).first;
@@ -76,6 +79,7 @@ template <class K, class V, class TN = TrieNode<K>, class TV = TrieNodeValue<K, 
       while (stack.size()) (this->*complete_cb)(PopBack(stack));
       out->head = 1;
     }
+
     void Input(const String &in, const String &lookahead, const V &v) {
       PopPrefixesNotMatching(in);
       AddPrefixesOf(in, lookahead);
@@ -87,6 +91,7 @@ template <class K, class V, class TN = TrieNode<K>, class TV = TrieNodeValue<K, 
       out->data.push_back(Node(v ? out->val.size() : 0));
       return out->data.size();
     }
+
     void Phase1Complete(const Prenode &n) {
       if (stack.size()) stack.back().next_len++;
       out->data[n.node-1].next_len = n.next_len;
@@ -112,6 +117,7 @@ template <class K, class V, class TN = TrieNode<K>, class TV = TrieNodeValue<K, 
       for (auto i = in.begin(), e = in.end(); i != e && si != se; ++i, ++si) if (*i != si->key) break;
       for (int pop = se - si; pop > 0; pop--) (this->*complete_cb)(PopBack(stack));
     }
+
     void AddPrefixesOf(const String &in, const String &lookahead) {
       int add_prefixes;
       if (patricia) {
@@ -202,6 +208,7 @@ struct PatriciaCompleter : public Trie<K, V, TN, TV> {
     if (key.substr(leaf_ind) != v->key.substr(leaf_ind)) return 0;
     return n;
   }
+
   virtual void ComputeStateFromChildren(typename Parent::Node *n) {
     TopN<pair<int, int> > completion(TN::completions);
     if (n->val_ind) AddCompletion(&completion, n->val_ind);
@@ -212,23 +219,24 @@ struct PatriciaCompleter : public Trie<K, V, TN, TV> {
     int ind = 0;
     for (auto i : completion.data) n->completion[ind++] = i.second;
   }
+
   void AddCompletion(TopN<pair<int, int> > *out, int val_ind) const {
     out->Insert(pair<int, int>(-completion_sort_cb(&Parent::val[val_ind-1].val), val_ind));
   }
 };
 
-// Aho-Corasick Matcher
+// Aho-Corasick Finite State Machine
 
-template <class K> struct AhoCorasickMatcherNode : public TrieNode<K> {
+template <class K> struct AhoCorasickFSMNode : public TrieNode<K> {
   int fail=-1, out_ind=-1, out_len=0;
-  AhoCorasickMatcherNode(int V=0) : TrieNode<K>(V) {}
+  AhoCorasickFSMNode(int V=0) : TrieNode<K>(V) {}
 };
 
-template <class K = char> struct AhoCorasickMatcher {
+template <class K = char> struct AhoCorasickFSM {
   struct PatternTable : public vector<int> {
     PatternTable(int s) : vector<int>(s) { std::iota(begin(), end(), 0); }
   };
-  typedef Trie<K, int, AhoCorasickMatcherNode<K> > FSM;
+  typedef Trie<K, int, AhoCorasickFSMNode<K> > FSM;
   typedef typename FSM::String String;
   typedef IterPair<typename vector<String>::const_iterator, typename PatternTable::const_iterator> InputPair;
 
@@ -237,7 +245,7 @@ template <class K = char> struct AhoCorasickMatcher {
   vector<int> out;
   int match_state=0, max_pattern_size=0;
 
-  AhoCorasickMatcher(const vector<String> &sorted_in) : pattern(sorted_in.size()),
+  AhoCorasickFSM(const vector<String> &sorted_in) : pattern(sorted_in.size()),
   fsm(InputPair(sorted_in.begin(), pattern.begin()), InputPair(sorted_in.end(), pattern.end())),
   match_state(fsm.head) {
     for (int i=0, l=sorted_in.size(); i != l; ++i)
@@ -308,12 +316,13 @@ template <class K = char> struct AhoCorasickMatcher {
 
 // StringMatcher
 
-template <class K=char, class M=AhoCorasickMatcher<K> > struct StringMatcher {
+template <class K=char, class M=AhoCorasickFSM<K> > struct StringMatcher {
   typedef basic_string<K> String;
   struct iterator {
     StringMatcher *parent;
     typename String::const_iterator s, e, b, nb;
-    int size=0; bool match_begin=0, match_begin_next=0, match_end=0;
+    bool match_begin=0, match_begin_next=0, match_end=0;
+    int size=0;
 
     iterator(StringMatcher *p, const String &in)
       : parent(p), s(in.begin()), e(in.end()) { if ((b=nb=s) != e) ++(*this); }
@@ -331,7 +340,7 @@ template <class K=char, class M=AhoCorasickMatcher<K> > struct StringMatcher {
       } else {
         vector<Regex::Result> result;
         nb = parent->impl ? parent->impl->MatchOne(s, b, e, &result) : e;
-        if (result.size()) { parent->in_match=1; parent->match_begin=result[0].begin; match_begin_next=1; }
+        if (result.size()) { parent->in_match=1; parent->match=result[0]; match_begin_next=1; }
       }
       size = nb - b;
       return *this;
@@ -341,14 +350,29 @@ template <class K=char, class M=AhoCorasickMatcher<K> > struct StringMatcher {
   M *impl;
   bool in_match=0;
   string match_buf;
-  int match_begin=0, last_input_size=0;
+  Regex::Result match;
+  int last_input_size=0;
   int (*match_end_condition)(int) = &isspace;
+  function<void(const String&)> match_cb;
   StringMatcher(M *m=0) : impl(m) {}
 
   iterator Begin(const String &in) {
-    if (in_match) match_begin -= last_input_size;
+    if (in_match) match -= last_input_size;
     last_input_size = in.size();
     return iterator(this, in);
+  }
+
+  /// Match works with arbitrary segmentation, but filtering needs appropriate buffering
+  void Match(const String &in, string *filtered=0) {
+    for (auto i = Begin(in); i.b != i.e; ++i) {
+      if (i.MatchBegin()) {
+        match_buf.clear();
+        if (filtered) { int ms=match.end-match.begin, fs=filtered->size(); if (fs >= ms) filtered->resize(fs-ms); }
+      }
+      if (i.Matching()) match_buf.append(i.b, i.nb);
+      else if (filtered) filtered->append(i.b, i.nb);
+      if (i.MatchEnd()) match_cb(match_buf);
+    }
   }
 };
 

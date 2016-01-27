@@ -48,12 +48,12 @@ struct DrawableBoxRun {
 
   typedef function<void    (const Drawable *,  const Box &,  const Drawable::Attr *)> DrawCB;
   static void DefaultDrawCB(const Drawable *d, const Box &w, const Drawable::Attr *a) { d->Draw(w, a); }
-  point Draw(point p, DrawCB = &DefaultDrawCB);
-  void draw(point p) { Draw(p); }
+  point Draw(point p, DrawCB = &DefaultDrawCB) const;
+  void draw(point p) const { Draw(p); }
 
   typedef function<void              (const Box &)> DrawBackgroundCB;
   static void DefaultDrawBackgroundCB(const Box &w) { w.Draw(); }
-  void DrawBackground(point p, DrawBackgroundCB = &DefaultDrawBackgroundCB);
+  void DrawBackground(point p, DrawBackgroundCB = &DefaultDrawBackgroundCB) const;
 };
 
 struct DrawableBoxArray {
@@ -89,10 +89,11 @@ struct DrawableBoxArray {
   void InsertAt(int o, const vector<DrawableBox> &x);
   void OverwriteAt(int o, const vector<DrawableBox> &x);
   void Erase(int o, size_t l=UINT_MAX, bool shift=false);
-  point Draw(point p, int glyph_start=0, int glyph_len=-1);
+  point Draw(point p, int glyph_start=0, int glyph_len=-1) const;
   string DebugString() const;
 
-  int   GetLineFromCoords(const point &p) { return 0; }
+  int GetLineFromCoords(const point &p) { return 0; }
+  int GetLineFromIndex(int n) { return upper_bound(line_ind.begin(), line_ind.end(), n) - line_ind.begin(); }
   bool GetGlyphFromCoords(const point &p, int *index_out, Box *box_out) { return GetGlyphFromCoords(p, index_out, box_out, GetLineFromCoords(p)); }
   bool GetGlyphFromCoords(const point &p, int *index_out, Box *box_out, int li);
 

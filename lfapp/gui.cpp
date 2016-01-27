@@ -29,7 +29,6 @@
 
 #ifdef LFL_LIBCLANG
 #include "clang-c/Index.h"
-static string GetClangString(const CXString &s) { string ret=LFL::BlankNull(clang_getCString(s)); clang_disposeString(s); return ret; }
 #endif
 
 namespace LFL {
@@ -68,12 +67,6 @@ void GUI::Draw() {
   child_box.Draw(box.TopLeft());
 }
 
-bool GUI::ToggleActive() {
-  bool ret = toggle_active.Toggle();
-  active ? Activate() : Deactivate();
-  return ret;
-}
-
 void Widget::Button::Layout(Flow *flow) {
   flow->SetFont(0);
   flow->SetFGColor(&Color::white);
@@ -104,11 +97,11 @@ void Widget::Button::LayoutComplete(Flow *flow, const Box &b) {
   }
 }
 
-Widget::Scrollbar::Scrollbar(GUI *Gui, Box window, int f) : Interface(Gui), win(window), flag(f), menuicon(Fonts::Get("MenuAtlas", "", 0, Color::white, Color::clear, 0)) {
+Widget::Slider::Slider(GUI *Gui, Box window, int f) : Interface(Gui), win(window), flag(f), menuicon(Fonts::Get("MenuAtlas", "", 0, Color::white, Color::clear, 0)) {
   if (win.w && win.h) { if (f & Flag::Attached) LayoutAttached(win); else LayoutFixed(win); }
 }
 
-void Widget::Scrollbar::LayoutAttached(const Box &w) {
+void Widget::Slider::LayoutAttached(const Box &w) {
   win = w;
   int aw = dot_size, ah = dot_size;
   bool flip = flag & Flag::Horizontal;
@@ -121,7 +114,7 @@ void Widget::Scrollbar::LayoutAttached(const Box &w) {
   Layout(aw, ah, flip);
 }
 
-void Widget::Scrollbar::Layout(int aw, int ah, bool flip) {
+void Widget::Slider::Layout(int aw, int ah, bool flip) {
   Box arrow_down = win;
   if (flip) { arrow_down.w = aw; win.x += aw; }
   else      { arrow_down.h = ah; win.y += ah; }
@@ -136,14 +129,14 @@ void Widget::Scrollbar::Layout(int aw, int ah, bool flip) {
     gui->child_box.PushBack(arrow_down, attr_id, menuicon ? menuicon->FindGlyph(flip ? 3 : 1) : 0);
     gui->child_box.PushBack(scroll_dot, attr_id, menuicon ? menuicon->FindGlyph(           5) : 0, &drawbox_ind);
 
-    AddDragBox(scroll_dot, MouseController::CB(bind(&Scrollbar::DragScrollDot, this)));
-    AddClickBox(arrow_up,   MouseController::CB(bind(flip ? &Scrollbar::ScrollDown : &Scrollbar::ScrollUp,   this)));
-    AddClickBox(arrow_down, MouseController::CB(bind(flip ? &Scrollbar::ScrollUp   : &Scrollbar::ScrollDown, this)));
+    AddDragBox (scroll_dot, MouseController::CB(bind(&Slider::DragScrollDot, this)));
+    AddClickBox(arrow_up,   MouseController::CB(bind(flip ? &Slider::ScrollDown : &Slider::ScrollUp,   this)));
+    AddClickBox(arrow_down, MouseController::CB(bind(flip ? &Slider::ScrollUp   : &Slider::ScrollDown, this)));
   }
   Update(true);
 }
 
-void Widget::Scrollbar::Update(bool force) {
+void Widget::Slider::Update(bool force) {
   if (!app->input || !app->input->MouseButton1Down()) dragging = false;
   if (!dragging && !dirty && !force) return;
   bool flip = flag & Flag::Horizontal;
@@ -157,13 +150,13 @@ void Widget::Scrollbar::Update(bool force) {
   dirty = false;
 }
 
-float Widget::Scrollbar::AddScrollDelta(float cur_val) {
+float Widget::Slider::AddScrollDelta(float cur_val) {
   scrolled = Clamp(cur_val + ScrollDelta(), 0, 1);
   if (EqualChanged(&last_scrolled, scrolled)) dirty = 1;
   return scrolled;
 }
   
-void Widget::Scrollbar::AttachContentBox(Box *b, Scrollbar *vs, Scrollbar *hs) {
+void Widget::Slider::AttachContentBox(Box *b, Slider *vs, Slider *hs) {
   if (vs) { vs->LayoutAttached(*b); }
   if (hs) { hs->LayoutAttached(*b); MinusPlus(&b->h, &b->y, vs->dot_size); }
   if (vs) b->w -= vs->dot_size;
@@ -174,19 +167,19 @@ void KeyboardGUI::AddHistory(const string &cmd) {
   lastcmd[(lastcmd_ind = -1)] = cmd;
 }
 
-int KeyboardGUI::WriteHistory(const string &dir, const string &name, const string &hdr) {
-  if (!lastcmd.Size()) return 0;
-  LocalFile history(dir + MatrixFile::Filename(name, "history", "string", 0), "w");
-  MatrixFile::WriteHeader(&history, BaseName(history.fn), hdr, lastcmd.ring.count, 1);
-  for (int i=0; i<lastcmd.ring.count; i++) StringFile::WriteRow(&history, lastcmd[-1-i]);
-  return 0;
-}
-
 int KeyboardGUI::ReadHistory(const string &dir, const string &name) {
   StringFile history;
   VersionedFileName vfn(dir.c_str(), name.c_str(), "history");
   if (history.ReadVersioned(vfn) < 0) { ERROR("no ", name, " history"); return -1; }
   for (int i=0, l=history.Lines(); i<l; i++) AddHistory((*history.F)[l-1-i]);
+  return 0;
+}
+
+int KeyboardGUI::WriteHistory(const string &dir, const string &name, const string &hdr) {
+  if (!lastcmd.Size()) return 0;
+  LocalFile history(dir + MatrixFile::Filename(name, "history", "string", 0), "w");
+  MatrixFile::WriteHeader(&history, BaseName(history.fn), hdr, lastcmd.ring.count, 1);
+  for (int i=0; i<lastcmd.ring.count; i++) StringFile::WriteRow(&history, lastcmd[-1-i]);
   return 0;
 }
 
@@ -385,9 +378,9 @@ TextGUI::LinesFrameBuffer *TextGUI::LinesFrameBuffer::Attach(TextGUI::LinesFrame
   return *last_fb = this;
 }
 
-bool TextGUI::LinesFrameBuffer::SizeChanged(int W, int H, Font *font) {
+bool TextGUI::LinesFrameBuffer::SizeChanged(int W, int H, Font *font, const Color *bgc) {
   lines = H / font->Height();
-  return RingFrameBuffer::SizeChanged(W, H, font);
+  return RingFrameBuffer::SizeChanged(W, H, font, bgc);
 }
 
 void TextGUI::LinesFrameBuffer::Update(TextGUI::Line *l, int flag) {
@@ -464,7 +457,7 @@ void TextGUI::Enter() {
   string cmd = String::ToUTF8(Text16());
   AssignInput("");
   if (!cmd.empty()) { AddHistory(cmd); Run(cmd); }
-  if (deactivate_on_enter) active = false;
+  if (deactivate_on_enter) Deactivate();
 }
 
 void TextGUI::SetColors(Colors *C) {
@@ -474,16 +467,16 @@ void TextGUI::SetColors(Colors *C) {
   bg_color = &colors->c[colors->bg_index];
 }
 
-void TextGUI::UpdateLineFB(Line *L, LinesFrameBuffer *fb) {
+void TextGUI::UpdateLineFB(Line *L, LinesFrameBuffer *fb, int flag) {
   fb->fb.Attach();
   ScopedClearColor scc(bg_color);
   ScopedDrawMode drawmode(DrawMode::_2D);
-  fb->OverwriteUpdate(L);
+  fb->OverwriteUpdate(L, 0, 0, 0, flag);
   fb->fb.Release();
 }
 
 void TextGUI::Draw(const Box &b) {
-  if (cmd_fb.SizeChanged(b.w, b.h, font)) {
+  if (cmd_fb.SizeChanged(b.w, b.h, font, bg_color)) {
     cmd_fb.p = point(0, font->Height());
     cmd_line.Draw(point(0, cmd_line.Lines() * font->Height()), cmd_fb.w);
     cmd_fb.SizeChangedDone();
@@ -506,11 +499,11 @@ void TextGUI::DrawCursor(point p) {
   } else {
     bool blinking = false;
     Time now = Now(), elapsed; 
-    if (active && (elapsed = now - cursor.blink_begin) > cursor.blink_time) {
+    if (Active() && (elapsed = now - cursor.blink_begin) > cursor.blink_time) {
       if (elapsed > cursor.blink_time * 2) cursor.blink_begin = now;
       else blinking = true;
     }
-    if (blinking) font->Draw("_", p);
+    if (blinking) font->Draw("_", p - point(0, font->Height()));
   }
 }
 
@@ -543,7 +536,16 @@ void TextGUI::UpdateLongToken(Line *BL, int beg_offset, Line *EL, int end_offset
 }
 
 point TilesTextGUI::PaintCB(Line *l, point lp, const Box &b) {
-  tiles->AddDrawableBoxArray(l->data->glyphs, lp + b.Position() + offset);
+  Box box = b + offset;
+  tiles->ContextOpen();
+  tiles->AddScissor(box);
+
+  // tiles->SetAttr(&a);
+  tiles->InitDrawBox(box.Position());
+  tiles->DrawBox(Singleton<BoxFilled>::Get(), box, NULL);
+
+  tiles->AddDrawableBoxArray(l->data->glyphs, lp + b.TopLeft() + offset);
+  tiles->ContextClose();
   return point(lp.x, lp.y-b.h);
 }
 
@@ -553,7 +555,7 @@ void TextArea::Write(const StringPiece &s, bool update_fb, bool release_fb) {
   if (!MainThread()) return RunInMainThread(new Callback(bind(&TextArea::WriteCB, this, s.str(), update_fb, release_fb)));
   write_last = Now();
   bool wrap = Wrap();
-  int update_flag = LineFBPushBack();
+  int update_flag = LineFBPushBack(), sl;
   LinesFrameBuffer *fb = GetFrameBuffer();
   ScopedClearColor scc(update_fb ? bg_color : NULL);
   ScopedDrawMode drawmode(update_fb ? DrawMode::_2D : DrawMode::NullOp);
@@ -562,11 +564,14 @@ void TextArea::Write(const StringPiece &s, bool update_fb, bool release_fb) {
   for (const char *add_line = add_lines.Next(); add_line; add_line = add_lines.Next()) {
     bool append = !write_newline && add_lines.first && add_lines.CurrentLength() && line.ring.count;
     Line *l = append ? &line[-1] : line.InsertAt(-1);
-    if (!append) { l->Clear(); if (start_line) { start_line++; end_line++; } }
+    if (!append) { l->Clear(); sl = 0; }
+    else sl = l->Lines();
     if (write_timestamp) l->AppendText(StrCat(logtime(Now()), " "), cursor.attr);
     l->AppendText(StringPiece(add_line, add_lines.CurrentLength()), cursor.attr);
-    l->Layout(wrap ? fb->w : 0);
-    if (scrolled_lines) v_scrolled = (float)++scrolled_lines / (WrappedLines()-1);
+    if (int dl = l->Layout(wrap ? fb->w : 0) - sl) {
+      if (start_line) { start_line += dl; end_line += dl; }
+      if (scrolled_lines) v_scrolled = (float)(scrolled_lines += dl) / (WrappedLines()-1);
+    }
     if (!update_fb || start_line) continue;
     LineUpdate(&line[-start_line-1], fb, (!append ? update_flag : 0));
   }
@@ -585,7 +590,7 @@ void TextArea::Resized(const Box &b) {
 
 void TextArea::CheckResized(const Box &b) {
   LinesFrameBuffer *fb = GetFrameBuffer();
-  if (fb->SizeChanged(b.w, b.h, font)) { Resized(b); fb->SizeChangedDone(); }
+  if (fb->SizeChanged(b.w, b.h, font, bg_color)) { Resized(b); fb->SizeChangedDone(); }
 }
 
 void TextArea::Redraw(bool attach) {
@@ -676,13 +681,13 @@ void TextArea::Draw(const Box &b, int flag, Shader *shader) {
     glShadertoyShader(shader);
     shader->SetUniform3f("iChannelResolution", XY_or_Y(scale, b.w), XY_or_Y(scale, b.h), 1);
     shader->SetUniform2f("iScroll", XY_or_Y(scale, -line_fb.scroll.x * line_fb.w),
-                         XY_or_Y(scale, -line_fb.scroll.y * line_fb.h - b.y));
+                                    XY_or_Y(scale, -line_fb.scroll.y * line_fb.h - b.y));
   }
   int font_height = font->Height();
   LinesFrameBuffer *fb = GetFrameBuffer();
   if (flag & DrawFlag::CheckResized) CheckResized(b);
   if (clip) screen->gd->PushScissor(Box::DelBorder(b, *clip));
-  fb->Draw(b.Position(), point(0, CommandLines() * font_height));
+  fb->Draw(b.Position(), point(0, max(0, CommandLines()-1) * font_height));
   if (clip) screen->gd->PopScissor();
   if (flag & DrawFlag::DrawCursor) DrawCursor(b.Position() + cursor.p);
   if (selection.enabled) mouse_gui.box.SetPosition(b.Position());
@@ -704,12 +709,11 @@ void TextArea::DrawHoverLink(const Box &b) {
 
 bool TextArea::GetGlyphFromCoordsOffset(const point &p, Selection::Point *out, int sl, int sla) {
   LinesFrameBuffer *fb = GetFrameBuffer();
-  int h = fb->Height(), fh = font->Height();
-  int targ = reverse_line_fb ? ((h - p.y) / fh - sla) : (p.y / fh + sla);
-  for (int i=sl, lines=0, ll; i<line.ring.count && lines<line_fb.lines; i++, lines += ll) {
+  int h = fb->Height(), fh = font->Height(), targ = reverse_line_fb ? ((h - p.y) / fh) : (p.y / fh);
+  for (int i=sl, lines=sla, ll; i<line.ring.count && lines<line_fb.lines; i++, lines += ll) {
     Line *L = &line[-i-1];
     if (lines + (ll = L->Lines()) <= targ) continue;
-    L->data->glyphs.GetGlyphFromCoords(p, &out->char_ind, &out->glyph, targ - lines);
+    L->data->glyphs.GetGlyphFromCoords(p, &out->char_ind, &out->glyph, reverse_line_fb ? targ-lines : lines+ll-targ-1);
     out->glyph.y = targ * fh;
     out->line_ind = i;
     return true;
@@ -729,34 +733,30 @@ void TextArea::DrawSelection() {
   selection.box.Draw(mouse_gui.box.BottomLeft());
 }
 
-void TextArea::DragCB(int button, int, int, int down) {
-  point p = screen->mouse - mouse_gui.box.BottomLeft();
-  LinesFrameBuffer *fb = GetFrameBuffer();
+void TextArea::DragCB(int, int, int, int down) {
+  if (!Active()) return;
   Selection *s = &selection;
-  if (!(s->changing = down)) {
-    bool swap = (!reverse_line_fb && s->end < s->beg) || (reverse_line_fb && s->beg < s->end);
-    CopyText(swap ? s->end : s->beg, swap ? s->beg : s->end);
-    s->changing_previously = 0;
-    return;
-  }
-
-  int scp = s->changing_previously, fh = font->Height(), h = fb->Height();
-  if (scp) GetGlyphFromCoords((s->end.click = point(line_left+p.x, p.y)), &s->end);
-  else   { GetGlyphFromCoords((s->beg.click = point(line_left+p.x, p.y)), &s->beg); s->end = s->beg; }
+  bool start = s->Update(screen->mouse - mouse_gui.box.BottomLeft() + point(line_left, 0), down);
+  if (start) { GetGlyphFromCoords(s->beg_click, &s->beg); s->end=s->beg; if (selection_cb) selection_cb(s->beg); }
+  else       { GetGlyphFromCoords(s->end_click, &s->end); }
 
   bool swap = (!reverse_line_fb && s->end < s->beg) || (reverse_line_fb && s->beg < s->end);
-  Box gb = swap ? s->end.glyph : s->beg.glyph;
-  Box ge = swap ? s->beg.glyph : s->end.glyph;
-  if (reverse_line_fb) { gb.y=h-gb.y-fh; ge.y=h-ge.y-fh; }
-  point gbp = !reverse_line_fb ? gb.Position() : gb.Position() + point(gb.w, 0);
-  point gep =  reverse_line_fb ? ge.Position() : ge.Position() + point(ge.w, 0);
-  s->box = Box3(Box(fb->Width(), fb->Height()), gbp, gep, fh, fh);
-  s->changing_previously = s->changing;
+  if (!s->changing) CopyText(swap ? s->end : s->beg, swap ? s->beg : s->end);
+  else {
+    LinesFrameBuffer *fb = GetFrameBuffer();
+    int fh = font->Height(), h = fb->Height();
+    Box gb = swap ? s->end.glyph : s->beg.glyph;
+    Box ge = swap ? s->beg.glyph : s->end.glyph;
+    if (reverse_line_fb) { gb.y=h-gb.y-fh; ge.y=h-ge.y-fh; }
+    point gbp = !reverse_line_fb ? gb.Position() : gb.Position() + point(gb.w, 0);
+    point gep =  reverse_line_fb ? ge.Position() : ge.Position() + point(ge.w, 0);
+    s->box = Box3(Box(fb->Width(), h), gbp, gep, fh, fh);
+  }
 }
 
 void TextArea::CopyText(const Selection::Point &beg, const Selection::Point &end) {
   string copy_text = CopyText(beg.line_ind, beg.char_ind, end.line_ind, end.char_ind, true);
-  if (!copy_text.empty()) Clipboard::Set(copy_text);
+  if (!copy_text.empty()) app->SetClipboardText(copy_text);
 }
 
 string TextArea::CopyText(int beg_line_ind, int beg_char_ind, int end_line_ind, int end_char_ind, bool add_nl) {
@@ -764,8 +764,11 @@ string TextArea::CopyText(int beg_line_ind, int beg_char_ind, int end_line_ind, 
   bool one_line = beg_line_ind == end_line_ind;
   int bc = (one_line && reverse_line_fb) ? end_char_ind : beg_char_ind;
   int ec = (one_line && reverse_line_fb) ? beg_char_ind : end_char_ind;
+  int d = reverse_line_fb ? 1 : -1;
+  if (d < 0) { CHECK_LE(end_line_ind, beg_line_ind); }
+  else       { CHECK_LE(beg_line_ind, end_line_ind); }
 
-  for (int i = beg_line_ind, d = reverse_line_fb ? 1 : -1; /**/; i += d) {
+  for (int i = beg_line_ind; /**/; i += d) {
     Line *l = &line[-i-1];
     int len = l->Size();
     if (i == beg_line_ind) {
@@ -787,7 +790,7 @@ string TextArea::CopyText(int beg_line_ind, int beg_char_ind, int end_line_ind, 
 
 /* Editor */
 
-Editor::Editor(Window *W, Font *F, File *I, bool Wrap) : TextArea(W, F), file(I) {
+Editor::Editor(Window *W, Font *F, File *I, bool Wrap) : TextArea(W, F), file(I), cursor_line(&line[-1]) {
   reverse_line_fb = 1;
   opened = file && file->Opened();
   cmd_color = Color(Color::black, .5);
@@ -795,12 +798,41 @@ Editor::Editor(Window *W, Font *F, File *I, bool Wrap) : TextArea(W, F), file(I)
   file_line.node_value_cb = &LineOffset::GetLines;
   file_line.node_print_cb = &LineOffset::GetString;
   edits.free_func = [](String16 *v) { v->clear(); };
+  selection_cb = bind(&Editor::SelectionCB, this, _1);
 }
 
 void Editor::SetShouldWrap(bool w) {
   line_fb.wrap = w;
   Reload();
   Redraw(true);
+}
+
+void Editor::HistUp() {
+  if (cursor.i.y > 0) { if (!--cursor.i.y && start_line_adjust) return AddVScroll(start_line_adjust); }
+  else {
+    cursor.i.y = 0;
+    LineOffset *lo = 0;
+    if (Wrap()) lo = (--file_line.LesserBound(cursor_line_number)).val;
+    return AddVScroll((lo ? -lo->wrapped_lines : -1) + start_line_adjust);
+  }
+  UpdateCursorLine();
+  UpdateCursor();
+}
+
+void Editor::HistDown() {
+  bool last=0;
+  if (cursor_line_number_offset + cursor_line->Lines() < line_fb.lines) last = ++cursor.i.y >= line.Size()-1;
+  else { AddVScroll(end_line_cutoff ? end_line_cutoff+1 : 1); cursor.i.y=line.Size()-1; last=1; }
+  UpdateCursorLine();
+  UpdateCursor();
+  if (last) UpdateCursorX(cursor.i.x);
+}
+
+void Editor::SelectionCB(const Selection::Point &p) {
+  cursor.i.y = p.line_ind;
+  UpdateCursorLine();
+  cursor.i.x = p.char_ind >= 0 ? p.char_ind : CursorLineSize();
+  UpdateCursor();
 }
 
 void Editor::AddWrappedLines(int n) {
@@ -813,10 +845,11 @@ void Editor::UpdateWrappedLines(int cur_font_size, int width) {
   wrapped_lines = 0;
   file_line.Clear();
   file->Reset();
+  NextRecordReader nr(file.get());
   int offset = 0, wrap = Wrap(), ll;
-  for (const char *l = file->NextLineRaw(&offset); l; l = file->NextLineRaw(&offset)) {
+  for (const char *l = nr.NextLineRaw(&offset); l; l = nr.NextLineRaw(&offset)) {
     wrapped_lines += (ll = wrap ? TextArea::font->Lines(l, width) : 1);
-    file_line.val.Insert(LineOffset(offset, file->nr.record_len, ll));
+    file_line.val.Insert(LineOffset(offset, nr.record_len, ll));
   }
   file_line.LoadFromSortedVal();
 }
@@ -885,17 +918,17 @@ int Editor::UpdateLines(float vs, int *first_ind, int *first_offset, int *first_
   }
 
   string buf(read_len, 0);
-  if (read_len) CHECK_EQ(buf.size(), file->Read(&buf[0], rv.data(), rv.size()));
+  if (read_len) CHECK_EQ(buf.size(), file->ReadIOV(&buf[0], rv.data(), rv.size()));
 
   Line *L = 0;
-  if (up) for (LineMap::ConstIterator li = lie; li != lib; bo += l + !e, added++) {
+  if (up) for (auto li = lie; li != lib; bo += l + !e, added++) {
     l = (e = max(0, -(--li).val->size)) ? 0 : li.val->size;
     if (e) (L = line.PushBack())->AssignText(edits[e-1],                                 Flow::TextAnnotation(annotation.data(), PieceIndex()));
     else   (L = line.PushBack())->AssignText(StringPiece(buf.data()+read_len-bo-l-1, l), Flow::TextAnnotation(annotation.data(), li.val->annotation));
     fb_wrapped_lines += (ll = L->Layout(wrap ? fb->w : 0, true));
     CHECK_EQ(li.val->wrapped_lines, ll);
   }
-  else for (LineMap::ConstIterator li = lib; li != lie; ++li, bo += l + !e, added++) {
+  else for (auto li = lib; li != lie; ++li, bo += l + !e, added++) {
     l = (e = max(0, -li.val->size)) ? 0 : li.val->size;
     if (e) (L = line.PushFront())->AssignText(edits[e-1],                    Flow::TextAnnotation(annotation.data(), PieceIndex()));
     else   (L = line.PushFront())->AssignText(StringPiece(buf.data()+bo, l), Flow::TextAnnotation(annotation.data(), li.val->annotation));
@@ -926,70 +959,130 @@ int Editor::UpdateLines(float vs, int *first_ind, int *first_offset, int *first_
 
   last_fb_lines = fb->lines;
   last_first_line = new_first_line;
-  UpdateCursor();
   UpdateCursorLine();
+  UpdateCursor();
   return dist * (up ? -1 : 1);
 }
 
-void Editor::UpdateCursor() {
-  cursor.i.y = min(cursor.i.y, line_fb.lines-1);
-  cursor.i.x = min(cursor.i.x, GetCursorLine()->Size());
-  cursor.p = point(GetCursorLine()->data->glyphs.Position(cursor.i.x).x,
-                   line_fb.Height() - cursor.i.y*font->Height());
+void Editor::UpdateCursorLine() {
+  cursor.i.y = min(cursor.i.y, line.Size()-1);
+  cursor_line = &line[-1-cursor.i.y];
+  cursor_line_number = last_first_line + start_line_adjust;
+  if (!Wrap()) cursor_line_number += cursor.i.y;
+  else for (int i=0; i<cursor.i.y; i++) cursor_line_number += line[-1-i].Lines();
+  cursor_line_number_offset = cursor_line_number - last_first_line;
+  cursor_offset = file_line.LesserBound(cursor_line_number).val;
 }
 
-#ifdef LFL_LIBCLANG
-struct ClangTokenVisitor {
-  typedef function<void(ClangTokenVisitor*, int, int, int)> TokenCB;
-  string filename, compile_command, working_directory;
-  point last_token;
-  TokenCB cb;
-  ClangTokenVisitor(const string &f, const string &cc, const string &wd, const TokenCB &c) :
-    filename(f), compile_command(cc), working_directory(wd), cb(c) {}
+void Editor::UpdateCursor() {
+  cursor.p = cursor_line->data->glyphs.Position(cursor.i.x) +
+    point(0, line_fb.Height() - cursor_line_number_offset * font->Height());
+}
 
-  void Visit() {
-    vector<string> argv;
-    vector<const char*> av = { "-xc++", "-std=c++11" };
-    Split(compile_command, isspace, &argv);
-    for (int i=1; i<(int)argv.size()-4; i++) if (!PrefixMatch(argv[i], "-O") && !PrefixMatch(argv[i], "-m")) av.push_back(argv[i].data());
-    chdir(working_directory.c_str());
-    CXIndex index = clang_createIndex(0, 0);
-    CXTranslationUnit tu = clang_parseTranslationUnit(index, filename.c_str(), av.data(), av.size(), 0, 0, CXTranslationUnit_None);
+void Editor::UpdateCursorX(int x) {
+  cursor.i.x = min(x, CursorLineSize());
+  if (!Wrap()) return UpdateCursor();
+  int wl = cursor_line_number_offset + cursor_line->data->glyphs.GetLineFromIndex(x);
+  if (wl >= line_fb.lines) { AddVScroll(wl-line_fb.lines+1); cursor.i=point(x, line.Size()-1); UpdateCursorLine(); }
+  else if (wl < 0) { AddVScroll(wl); cursor.i=point(x, 0); UpdateCursorLine(); }
+  UpdateCursor();
+}
 
-    CXToken* tokens=0;
-    unsigned num_tokens=0, by=0, bx=0, ey=0, ex=0;
-    CXFile cf = clang_getFile(tu, filename.c_str());
-    CXSourceRange sr = clang_getRange(clang_getLocationForOffset(tu, cf, 0),
-                                      clang_getLocationForOffset(tu, cf, LocalFile(filename, "r").Size()));
-    clang_tokenize(tu, sr, &tokens, &num_tokens);
-    for (int i = 0; i < num_tokens; i++) {
-      sr = clang_getTokenExtent(tu, tokens[i]);
-      clang_getSpellingLocation(clang_getRangeStart(sr), NULL, &by, &bx, NULL);
-      clang_getSpellingLocation(clang_getRangeEnd  (sr), NULL, &ey, &ex, NULL);
+int Editor::CursorLinesChanged(const String16 &b, int add_lines) {
+  cursor_line->AssignText(b);
+  int ll = cursor_line->Layout(GetFrameBuffer()->w, true);
+  int d = ChangedDiff(&cursor_offset->wrapped_lines, ll);
+  if (d) CHECK(file_line.Update(cursor_line_number, *cursor_offset));
+  if (int a = d + add_lines) AddWrappedLines(a);
+  return d;
+}
 
-      if (1)                  CHECK_LE(last_token.y, (int)by);
-      if (by == last_token.y) CHECK_LT(last_token.x, (int)bx);
-      cb(this, clang_getTokenKind(tokens[i]), by, bx);
-      last_token = point(bx, by);
+int Editor::ModifyCursorLine() {
+  CHECK(cursor_offset);
+  if (cursor_offset->size >= 0) cursor_offset->size = -edits.Insert(cursor_line->Text16())-1;
+  return -cursor_offset->size-1;
+}
+
+void Editor::Modify(bool erase, int c) {
+  if (!cursor_line || !cursor_offset) return;
+  bool wrap = Wrap();
+  int edit_id = ModifyCursorLine();
+  String16 *b = &edits[edit_id];
+  CHECK_LE(cursor.i.x, cursor_line->Size());
+  CHECK_LE(cursor.i.x, b->size());
+  CHECK_EQ(cursor_offset->wrapped_lines, cursor_line->Lines());
+
+  if (erase && !cursor.i.x) {
+    file_line.Erase(cursor_line_number);
+    AddWrappedLines(-cursor_line->Lines());
+    HistUp();
+    b = &edits[ModifyCursorLine()];
+    int x = b->size();
+    *b += edits[edit_id];
+    edits.Erase(edit_id);
+    if (wrap) CursorLinesChanged(*b);
+    UpdateCursorX(x);
+    RefreshLines();
+    return Redraw(true);
+  } else if (!erase && c == '\r') {
+    String16 a = b->substr(cursor.i.x);
+    b->resize(cursor.i.x);
+    if (wrap) CursorLinesChanged(*b, 1);
+    else AddWrappedLines(1);
+    file_line.Insert(cursor_line_number+1, LineOffset());
+    cursor.i.x = 0;
+    HistDown();
+    if (wrap) CursorLinesChanged(a);
+    swap(edits[ModifyCursorLine()], a);
+    RefreshLines();
+    return Redraw(true);
+  } else {
+    if (wrap)   cursor_line->data->glyphs.line_ind.clear();
+    if (erase)  b->erase(cursor.i.x-1, 1);
+    else        b->insert(cursor.i.x, 1, c);
+    if (erase)  cursor_line->Erase          (cursor.i.x-1, 1);
+    else if (0) cursor_line->OverwriteTextAt(cursor.i.x, String16(1, c), default_attr);
+    else        cursor_line->InsertTextAt   (cursor.i.x, String16(1, c), default_attr);
+    if (erase)  CursorLeft();
+    else        CursorRight();
+    UpdateLineFB(cursor_line, GetFrameBuffer(), wrap ? LinesFrameBuffer::Flag::Flush : 0);
+    if (wrap) {
+      int d = ChangedDiff(&cursor_offset->wrapped_lines, cursor_line->Lines());
+      if (d) { CHECK(file_line.Update(cursor_line_number, *cursor_offset)); AddWrappedLines(d); }
+      RefreshLines();
+      return Redraw(true);
     }
-
-    clang_disposeTranslationUnit(tu);
-    clang_disposeIndex(index);
   }
-};
-#endif
+}
+
+int Editor::Save() {
+  IOVector rv;
+  for (LineMap::ConstIterator i = file_line.Begin(); i.ind; ++i)
+    rv.Append({ i.val->offset, i.val->size + (i.val->size >= 0) });
+  int ret = file->Rewrite(rv.data(), rv.size(), edits.data,
+                          function<string(const String16&)>([](const String16 &v){ return String::ToUTF8(v) + "\n"; }));
+  Reload();
+  Redraw(true);
+  return ret;
+}
+ 
+FileNameAndOffset Editor::FindDefinition(const point &p) {
+  if (!project || !ide_file || ! cursor_offset) return FileNameAndOffset();
+  return ide_file->tu.FindDefinition(file->Filename(), cursor_offset->offset + cursor.i.x);
+}
 
 void Editor::UpdateAnnotation() {
 #ifdef LFL_LIBCLANG
   if (!project) return;
-  string filename = file->Filename();
-  auto rule = project->build_rules.find(filename);
-  bool have_rule = rule != project->build_rules.end();
-
   int fl_ind = 1;
   auto fl = file_line.Begin();
   LineOffset *file_line_data = 0;
-  ClangTokenVisitor(filename, have_rule ? rule->second.cmd : "", have_rule ? rule->second.dir : "", ClangTokenVisitor::TokenCB([&]
+  string filename = file->Filename();
+  auto rule = project->build_rules.find(filename);
+  bool have_rule = rule != project->build_rules.end();
+  ide_file = make_unique<IDE::File>(filename, have_rule?rule->second.cmd:"", have_rule?rule->second.dir:"");
+
+  ClangTokenVisitor(&ide_file.get()->tu, ClangTokenVisitor::TokenCB([&]
     (ClangTokenVisitor *v, int kind, int line, int column) {
       int a = default_attr;
       switch (kind) {
@@ -1003,7 +1096,8 @@ void Editor::UpdateAnnotation() {
       if (line != v->last_token.y) {
         if (v->last_token.y+1 < line && a != default_attr) PushBack(annotation, {0, a});
         if (fl_ind < line)
-          for (++fl_ind, ++fl; fl.ind && fl_ind < line; ++fl_ind, ++fl) fl.val->annotation = PieceIndex(annotation.size()-1, 1);
+          for (++fl_ind, ++fl; fl.ind && fl_ind < line; ++fl_ind, ++fl)
+            fl.val->annotation = PieceIndex(annotation.size()-1, 1);
         if (!fl.ind) return;
         (file_line_data = fl.val)->annotation.offset = annotation.size();
       }
@@ -1011,62 +1105,6 @@ void Editor::UpdateAnnotation() {
       file_line_data->annotation.len++;
     })).Visit();
 #endif
-}
-
-void Editor::Modify(bool erase, int c) {
-  Line *L = GetCursorLine();
-  if (!L || !cursor_line) return;
-  int edit_id = ModifyCursorLine();
-  String16 *b = &edits[edit_id];
-  CHECK_LE(cursor.i.x, L->Size());
-  CHECK_LE(cursor.i.x, b->size());
-  if (erase && !cursor.i.x) {
-    if (!cursor.i.y) return;
-    file_line.Erase(CursorLineNumber());
-    AddWrappedLines(-L->Lines());
-    HistUp();
-    *(b = &edits[ModifyCursorLine()]) += edits[edit_id];
-    UpdateCursorX(b->size());
-    edits.Erase(edit_id);
-    RefreshLines();
-    return Redraw(true);
-  } else if (!erase && c == '\r') {
-    if (cursor.i.y == line_fb.lines-1) return;
-    file_line.Insert(CursorLineNumber()+1, LineOffset());
-    AddWrappedLines(1);
-    int x = cursor.i.x;
-    cursor.i.x = 0;
-    HistDown();
-    edits[ModifyCursorLine()] = (b = &edits[edit_id])->substr(x);
-    b->resize(x);
-    RefreshLines();
-    return Redraw(true);
-  }
-  if (erase)  b->erase(cursor.i.x-1, 1);
-  else        b->insert(cursor.i.x, 1, c);
-  if (erase)  L->Erase          (cursor.i.x-1, 1);
-  else if (0) L->OverwriteTextAt(cursor.i.x, String16(1, c), default_attr);
-  else        L->InsertTextAt   (cursor.i.x, String16(1, c), default_attr);
-  if (erase)  CursorLeft();
-  else        CursorRight();
-  UpdateLineFB(L, GetFrameBuffer());
-}
-
-int Editor::ModifyCursorLine() {
-  CHECK(cursor_line);
-  if (cursor_line->size >= 0) cursor_line->size = -edits.Insert(GetCursorLine()->Text16())-1;
-  return -cursor_line->size-1;
-}
-
-int Editor::Save() {
-  IOVector rv;
-  for (LineMap::ConstIterator i = file_line.Begin(); i.ind; ++i)
-    rv.Append({ i.val->offset, i.val->size + (i.val->size >= 0) });
-  int ret = file->Rewrite(rv.data(), rv.size(), edits.data,
-                          function<string(const String16&)>([](const String16 &v){ return String::ToUTF8(v) + "\n"; }));
-  Reload();
-  Redraw(true);
-  return ret;
 }
 
 /* Terminal */
@@ -1151,7 +1189,7 @@ void Terminal::Resized(const Box &b) {
 }
 
 void Terminal::ResizedLeftoverRegion(int w, int h, bool update_fb) {
-  if (!cmd_fb.SizeChanged(w, h, font)) return;
+  if (!cmd_fb.SizeChanged(w, h, font, bg_color)) return;
   if (update_fb) {
     for (int i=0; i<start_line;      i++) MoveToOrFromScrollRegion(&cmd_fb, &line[-i-1],             point(0,GetCursorY(term_height-i)), LinesFrameBuffer::Flag::Flush);
     for (int i=0; i<skip_last_lines; i++) MoveToOrFromScrollRegion(&cmd_fb, &line[-line_fb.lines+i], point(0,GetCursorY(i+1)),           LinesFrameBuffer::Flag::Flush);
@@ -1257,7 +1295,7 @@ void Terminal::UpdateToken(Line *L, int word_offset, int word_len, int update_ty
 }
 
 void Terminal::Draw(const Box &b, int flag, Shader *shader) {
-  TextArea::Draw(b, false, shader);
+  TextArea::Draw(b, flag & ~DrawFlag::DrawCursor, shader);
   if (shader) shader->SetUniform2f("iScroll", 0, XY_or_Y(shader->scale, -b.y));
   if (clip) {
     { Scissor s(Box::TopBorder(b, *clip)); cmd_fb.Draw(b.Position(), point(), false); }
@@ -1546,115 +1584,137 @@ void Terminal::Reset() {
 
 /* Console */
 
-bool Console::Toggle() {
-  if (!TextGUI::Toggle()) return false;
+void Console::StartAnimating() {
   bool last_animating = animating;
   Time now = Now(), elapsed = now - anim_begin;
   anim_begin = now - (elapsed < anim_time ? anim_time - elapsed : Time(0));
   animating = (elapsed = now - anim_begin) < anim_time;
   if (animating && !last_animating && animating_cb) animating_cb();
-  return true;
 }
 
 void Console::Draw() {
-  if (!ran_startcmd && (ran_startcmd = 1)) if (startcmd.size()) Run(startcmd);
-
   drawing = 1;
-  Time now=Now(), elapsed;
-  bool last_animating = animating;
-  int h = active ? (int)(screen->height*screen_percent) : 0;
+  Time now = Now(), elapsed;
+  bool active = Active(), last_animating = animating;
+  int full_height = screen->height * screen_percent, h = active ? full_height : 0;
+
   if ((animating = (elapsed = now - anim_begin) < anim_time)) {
-    if (active) h = (int)(screen->height*(  (double)elapsed.count()/anim_time.count())*screen_percent);
-    else        h = (int)(screen->height*(1-(double)elapsed.count()/anim_time.count())*screen_percent);
+    if (active) h = full_height * (  (double)elapsed.count()/anim_time.count());
+    else        h = full_height * (1-(double)elapsed.count()/anim_time.count());
   }
   if (!animating) {
     if (last_animating && animating_cb) animating_cb();
     if (!active) { drawing = 0; return; }
   }
 
-  screen->gd->FillColor(color);
+  int y = bottom_or_top ? 0 : screen->height - h, fh = font->Height();
+  Box b(0, y, screen->width, h), tb(0, y + fh, screen->width, full_height - fh);
+
   if (blend) screen->gd->EnableBlend(); 
   else       screen->gd->DisableBlend();
-
-  int y = bottom_or_top ? 0 : screen->height-h;
-  Box(0, y, screen->width, h).Draw();
-
+  screen->gd->FillColor(color);
+  b.Draw();
   screen->gd->SetColor(Color::white);
-  TextArea::Draw(Box(0, y, screen->width, h), DrawFlag::DrawCursor | DrawFlag::CheckResized);
-  TextGUI::Draw(Box(0, y, screen->width, font->Height()));
+  CheckResized(tb);
+  if (animating) screen->gd->PushScissor(b);
+  TextArea::Draw(tb, 0);
+  if (animating) screen->gd->PopScissor();
+  TextGUI::Draw(b);
 }
 
 /* Dialog */
 
-Dialog::Dialog(float w, float h, int flag) : GUI(screen), font(Fonts::Get(FLAGS_default_font, "", 14, Color::white)), menuicon(Fonts::Get("MenuAtlas", "", 0, Color::white, Color::clear, 0)) {
-  screen->dialogs.push_back(this);
+Dialog::Dialog(float w, float h, int flag) : GUI(screen), color(85,85,85,220),
+  title_gradient{Color(127,0,0), Color(0,0,127), Color(0,0,178), Color(208,0,127)},
+  font(Fonts::Get(FLAGS_default_font, "", 14, Color(Color::white,.8), Color::clear, FLAGS_default_font_flag|FontDesc::Bold|FontDesc::Shadow)),
+  menuicon(Fonts::Get("MenuAtlas", "", 0, Color::white, Color::clear, 0)), deleted_cb([=]{ deleted=true; })
+{
   box = screen->Box().center(screen->Box(w, h));
   fullscreen = flag & Flag::Fullscreen;
   Activate();
 }
 
+void Dialog::LayoutTabbed(int tab, const Box &b, const point &tab_dim, MouseController *oc, DrawableBoxArray *od) {
+  fullscreen = tabbed = true;
+  box = b;
+  Layout();
+  LayoutTitle(Box(tab*tab_dim.x, 0, tab_dim.x, tab_dim.y), oc, od);
+}
+
 void Dialog::Layout() {
   Reset();
+  int fh = font->Height();
+  content = Box(0, -box.h, box.w, box.h + ((fullscreen && !tabbed) ? 0 : -fh));
   if (fullscreen) return;
-  title         = Box(0,       0,      box.w, screen->height*.05);
-  resize_left   = Box(0,       -box.h, 3,     box.h);
-  resize_right  = Box(box.w-3, -box.h, 3,     box.h);
-  resize_bottom = Box(0,       -box.h, box.w, 3);
+  LayoutTitle(Box(box.w, fh), this, &child_box);
+  LayoutReshapeControls(box.Dimension(), this);
+}
 
-  Box close = Box(box.w-10, title.top()-10, 10, 10);
-  AddClickBox(resize_left,   MouseController::CB(bind(&Dialog::Reshape,     this, &resizing_left)));
-  AddClickBox(resize_right,  MouseController::CB(bind(&Dialog::Reshape,     this, &resizing_right)));
-  AddClickBox(resize_bottom, MouseController::CB(bind(&Dialog::Reshape,     this, &resizing_bottom)));
-  AddClickBox(title,         MouseController::CB(bind(&Dialog::Reshape,     this, &moving)));
-  AddClickBox(close,         MouseController::CB(bind(&Dialog::MarkDeleted, this)));
+void Dialog::LayoutTitle(const Box &b, MouseController *oc, DrawableBoxArray *od) {
+  title = Box(0, -b.h, b.w, b.h);
+  Box close = Box(b.w-10, title.top()-10, 10, 10);
+  oc->AddClickBox(close + b.Position(), deleted_cb);
 
-  int attr_id = child_box.attr.GetAttrId(Drawable::Attr(menuicon));
-  child_box.PushBack(close, attr_id, menuicon ? menuicon->FindGlyph(0) : 0);
-
+  int attr_id = od->attr.GetAttrId(Drawable::Attr(menuicon));
+  od->PushBack(close, attr_id, menuicon ? menuicon->FindGlyph(0) : 0);
   if (title_text.size()) {
     Box title_text_size;
     font->Size(title_text, &title_text_size);
-    font->Shape(title_text, Box(title.centerX(title_text_size.w), title.centerY(title_text_size.h), 0, 0), &child_box);
+    font->Shape(title_text, Box(title.centerX(title_text_size.w), title.centerY(title_text_size.h), 0, 0), od);
   }
 }
 
-void Dialog::Draw() {
-  bool resizing = resizing_left || resizing_right || resizing_top || resizing_bottom;
-  if (child_box.data.empty() && !resizing) Layout();
+void Dialog::LayoutReshapeControls(const point &dim, MouseController *oc) {
+  resize_left   = Box(0,       -dim.y, 3, dim.y);
+  resize_right  = Box(dim.x-3, -dim.y, 3, dim.y);
+  resize_bottom = Box(0,       -dim.y, dim.x, 3);
+
+  oc->AddClickBox(resize_left,   MouseController::CB(bind(&Dialog::Reshape, this, &resizing_left)));
+  oc->AddClickBox(resize_right,  MouseController::CB(bind(&Dialog::Reshape, this, &resizing_right)));
+  oc->AddClickBox(resize_bottom, MouseController::CB(bind(&Dialog::Reshape, this, &resizing_bottom)));
+  oc->AddClickBox(title,         MouseController::CB(bind(&Dialog::Reshape, this, &moving)));
+}
+
+bool Dialog::HandleReshape(Box *outline) {
+  bool resizing = resizing_left || resizing_right || resizing_bottom;
   if (moving) box.SetPosition(win_start + screen->mouse - mouse_start);
-
-  Box outline = BoxAndTitle();
-  static const int min_width = 50, min_height = 1;
-  if (resizing_left)   MinusPlus(&outline.x, &outline.w, max(-outline.w + min_width,            (int)(mouse_start.x - screen->mouse.x)));
-  if (resizing_bottom) MinusPlus(&outline.y, &outline.h, max(-outline.h + min_height + title.h, (int)(mouse_start.y - screen->mouse.y)));
-  if (resizing_right)  outline.w += max(-outline.w + min_width, (int)(screen->mouse.x - mouse_start.x));
-
+  if (moving || resizing) *outline = box;
+  if (resizing_left)   MinusPlus(&outline->x, &outline->w, max(-outline->w + min_width,  (int)(mouse_start.x - screen->mouse.x)));
+  if (resizing_bottom) MinusPlus(&outline->y, &outline->h, max(-outline->h + min_height, (int)(mouse_start.y - screen->mouse.y)));
+  if (resizing_right)  outline->w += max(-outline->w + min_width, (int)(screen->mouse.x - mouse_start.x));
   if (!app->input->MouseButton1Down()) {
-    if (resizing) {
-      box = Box(outline.x, outline.y, outline.w, outline.h - title.h);
-      Layout();
-    }
-    moving = resizing_left = resizing_right = resizing_top = resizing_bottom = 0;
+    if (resizing) { box = *outline; Layout(); }
+    moving = resizing_left = resizing_right = resizing_bottom = 0;
   }
+  return moving || resizing_left || resizing_right || resizing_bottom;
+}
+
+void Dialog::Draw() {
+  if (fullscreen) { child_box.Draw(box.TopLeft()); return; }
+  Box outline;
+  bool reshaping = HandleReshape(&outline);
+  if (child_box.data.empty() && !reshaping) Layout();
 
   screen->gd->FillColor(color);
   box.Draw();
-
-  screen->gd->SetColor(color + Color(0,0,0,(int)(color.A()*.25)));
-  (title + box.TopLeft()).Draw();
   screen->gd->SetColor(Color::white);
+  if (reshaping) BoxOutline().Draw(outline);
 
-  if (moving || resizing_left || resizing_right || resizing_top || resizing_bottom)
-    BoxOutline().Draw(outline);
+  screen->gd->EnableVertexColor();
+  DrawGradient(box.TopLeft());
+  screen->gd->DisableVertexColor();
 
   child_box.Draw(box.TopLeft());
 }
 
-void Dialog::BringToFront() {
-  if (screen->top_dialog == this) return;
-  for (vector<Dialog*>::iterator i = screen->dialogs.begin(); i != screen->dialogs.end(); ++i) (*i)->zsort++; zsort = 0;
-  sort(screen->dialogs.begin(), screen->dialogs.end(), LessThan);
-  screen->top_dialog = this;
+void DialogTab::Draw(const Box &b, const point &tab_dim, const vector<DialogTab> &t) {
+  screen->gd->FillColor(Color::grey70);
+  Box(b.x, b.y+b.h-tab_dim.y, b.w, tab_dim.y).Draw();
+  screen->gd->EnableVertexColor();
+  for (int i=0, l=t.size(); i<l; ++i) t[i].dialog->DrawGradient(b.TopLeft() + point(i*tab_dim.x, 0));
+  screen->gd->DisableVertexColor();
+  screen->gd->EnableTexture();
+  for (int i=0, l=t.size(); i<l; ++i) t[i].child_box.Draw(b.TopLeft() + point(i*tab_dim.x, 0));
 }
 
 void MessageBoxDialog::Draw() {
@@ -1663,41 +1723,41 @@ void MessageBoxDialog::Draw() {
 }
 
 SliderDialog::SliderDialog(const string &t, const SliderDialog::UpdatedCB &cb, float scrolled, float total, float inc) :
-  Dialog(.3, .05), updated(cb), slider(this, Box(), Widget::Scrollbar::Flag::Horizontal) {
+  Dialog(.3, .05), updated(cb), slider(this, Box(), Widget::Slider::Flag::Horizontal) {
   title_text = t;
   slider.scrolled = scrolled;
   slider.doc_height = total;
   slider.increment = inc;
 }
 
-SliderFlagDialog::SliderFlagDialog(const string &fn, float total, float inc) :
-  SliderDialog(fn, bind(&SliderFlagDialog::Updated, this, _1), atof(Singleton<FlagMap>::Get()->Get(fn)) / total, total, inc),
+FlagSliderDialog::FlagSliderDialog(const string &fn, float total, float inc) :
+  SliderDialog(fn, bind(&FlagSliderDialog::Updated, this, _1), atof(Singleton<FlagMap>::Get()->Get(fn)) / total, total, inc),
   flag_name(fn), flag_map(Singleton<FlagMap>::Get()) {}
 
 EditorDialog::EditorDialog(Window *W, Font *F, File *I, float w, float h, int flag) :
-  Dialog(w, h, flag), editor(W, F, I, flag & Flag::Wrap), v_scrollbar(this, Box(), Widget::Scrollbar::Flag::AttachedNoCorner),
-  h_scrollbar(this, Box(), Widget::Scrollbar::Flag::AttachedHorizontalNoCorner) {}
+  Dialog(w, h, flag), editor(W, F, I, flag & Flag::Wrap), v_scrollbar(this, Box(), Widget::Slider::Flag::AttachedNoCorner),
+  h_scrollbar(this, Box(), Widget::Slider::Flag::AttachedHorizontalNoCorner) {}
 
 void EditorDialog::Layout() {
+  if (editor.file) title_text = BaseName(editor.file->Filename());
   Dialog::Layout();
-  Widget::Scrollbar::AttachContentBox(&(content_box = Box(0, -box.h, box.w, box.h)), &v_scrollbar, editor.Wrap() ? NULL : &h_scrollbar);
+  Widget::Slider::AttachContentBox(&content, &v_scrollbar, editor.Wrap() ? NULL : &h_scrollbar);
 }
 
 void EditorDialog::Draw() {
   bool wrap = editor.Wrap();
-  if (1)     editor.active = fullscreen || screen->top_dialog == this;
   if (1)     editor.v_scrolled = v_scrollbar.AddScrollDelta(editor.v_scrolled);
   if (!wrap) editor.h_scrolled = h_scrollbar.AddScrollDelta(editor.h_scrolled);
   if (1)     editor.UpdateScrolled();
   if (1)     Dialog::Draw();
-  if (1)     editor.Draw(content_box + box.TopLeft(), Editor::DrawFlag::DrawCursor | Editor::DrawFlag::CheckResized);
+  if (1)     editor.Draw(content + box.TopLeft(), Editor::DrawFlag::DrawCursor | Editor::DrawFlag::CheckResized);
   if (1)     v_scrollbar.Update();
   if (!wrap) h_scrollbar.Update();
 }
 
 #ifdef LFL_QT
 void Dialog::MessageBox(const string &n) {
-  Mouse::ReleaseFocus();
+  app->ReleaseMouseFocus();
   QMessageBox *msg = new QMessageBox();
   msg->setAttribute(Qt::WA_DeleteOnClose);
   msg->setText("MesssageBox");
@@ -1710,12 +1770,12 @@ void Dialog::TextureBox(const string &n) {}
 #else /* LFL_QT */
 
 void Dialog::MessageBox(const string &n) {
-  Mouse::ReleaseFocus();
-  new MessageBoxDialog(n);
+  app->ReleaseMouseFocus();
+  screen->AddDialog(new MessageBoxDialog(n));
 }
 void Dialog::TextureBox(const string &n) {
-  Mouse::ReleaseFocus();
-  new TextureBoxDialog(n);
+  app->ReleaseMouseFocus();
+  screen->AddDialog(new TextureBoxDialog(n));
 }
 #endif /* LFL_QT */
 

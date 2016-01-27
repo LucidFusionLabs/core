@@ -67,7 +67,7 @@ extern "C" int main(int argc, const char *argv[]) {
     };
   } else if (FLAGS_target == "triebuilder") {
     CounterS *words = new CounterS();
-    input_cb = [=](const string &fn, SentenceCorpus::Sentence *s) { for (auto w : *s) words->incr(tolower(w.text)); };
+    input_cb = [=](const string &fn, SentenceCorpus::Sentence *s) { for (auto w : *s) words->Incr(tolower(w.text)); };
     finish_cb = [=]() {
       PatriciaCompleter<char, int> trie(words->count.begin(), words->count.end());
       for (auto w : words->count) {

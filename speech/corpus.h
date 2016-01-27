@@ -58,8 +58,8 @@ struct VoxForgeTgzFile {
     ArchiveIter a(file.c_str());
     if (!a.impl) return;
     for (const char *afn = a.Next(); Running() && afn; afn = a.Next()) {
-      if (SuffixMatch(afn, "etc/prompts", false)) HandlePrompts(       (const char *)a.Data(), a.Size());
-      else if (BaseDir(afn, "wav"))               HandleWAV(file, afn, (const char *)a.Data(), a.Size());
+      if (SuffixMatch(afn, "etc/prompts", false)) HandlePrompts(       a.buf.data(), a.buf.size());
+      else if (BaseDir(afn, "wav"))               HandleWAV(file, afn, a.buf.data(), a.buf.size());
     }
   }
   void HandlePrompts(const char *promptsdata, int promptsdatalen) {
@@ -110,7 +110,7 @@ struct FeatCorpus {
   }
 
   static int FeatIterMatList(const char *fn, const FeatCB &cb) {
-    MatrixArchiveIn featlist;
+    MatrixArchiveInputFile featlist;
     featlist.Open(fn);
     int count=0;
 
@@ -146,14 +146,14 @@ struct FeatCorpus {
 struct PathCorpus {
   typedef function<void(AcousticModel::Compiled*, Matrix*, double, Time, Matrix*, Matrix*, const char*)> PathCB;
 
-  static void AddPath(MatrixArchiveOut *out, Matrix *viterbi, const char *uttfilename) {
+  static void AddPath(MatrixArchiveOutputFile *out, Matrix *viterbi, const char *uttfilename) {
     MatrixFile f(viterbi, BaseName(uttfilename));
     out->Write(&f, "viterbi");
     f.Clear();
   }
 
-  static int PathIter(const char *featdir, MatrixArchiveIn *paths, PathCB cb) {
-    MatrixArchiveIn utts; string lastarchive; int listfile, count=0;
+  static int PathIter(const char *featdir, MatrixArchiveInputFile *paths, PathCB cb) {
+    MatrixArchiveInputFile utts; string lastarchive; int listfile, count=0;
 
     while (Running()) {
       Timer vtime;
@@ -208,7 +208,8 @@ void WavCorpus::RunFile(const string &fn) {
     LocalFile tf(tfn.c_str(), "r");
     if (!tf.Opened()) return;
 
-    StringWordIter words(tf.NextLine());
+    NextRecordReader nr(&tf);
+    StringWordIter words(nr.NextLine());
     if (bool skip_two_words=true) { words.Next(); words.Next(); }
     string transcript = toupper(words.in + words.next_offset);
     transcript = togrep(transcript.c_str(), isalnum, isspace);
