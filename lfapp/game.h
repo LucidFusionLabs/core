@@ -399,12 +399,12 @@ struct GameServer : public Connection::Handler {
 
     Scene *scene = world->scene;
     last.WorldUpdate.id++;
-    last.WorldUpdate.entity.resize(scene->entityMap.size());
+    last.WorldUpdate.entity.resize(scene->entity.size());
 
     int entity_type_index = 0, entity_index = 0;
-    for (auto i = scene->assetMap.begin(), ie = scene->assetMap.end(); i != ie; ++i)
-      for (auto j = i->second.begin(), je = i->second.end(); j != je; ++j)
-        last.WorldUpdate.entity[entity_index++].From(*j);
+    for (auto const &a : scene->asset)
+      for (auto e : a.second) 
+        last.WorldUpdate.entity[entity_index++].From(e);
 
     last.send_WorldUpdate[last.send_WorldUpdate_index].id = last.WorldUpdate.id;
     last.send_WorldUpdate[last.send_WorldUpdate_index].time = now;
@@ -937,8 +937,8 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
     sub_tab3(this, 0, font, "start",          MouseController::CB([&]() { sub_selected=3; })),
     tab2_server_address(W, font),
     tab3_player_name   (W, font),
-    tab1_options    (this, menuftr1),
-    tab2_servers    (this, menuftr2),
+    tab1_options    (this),
+    tab2_servers    (this),
     tab3_sensitivity(this, Box(), Widget::Slider::Flag::Horizontal),
     tab3_volume     (this, Box(), Widget::Slider::Flag::Horizontal), current_scrollbar(0),
 #ifdef LFL_ANDROID
@@ -950,8 +950,8 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
 #endif
     browser(this, box), particles("GameMenuParticles") {
     tab1.outline = tab2.outline = tab3.outline = tab4.outline = tab1_server_start.outline = tab2_server_join.outline = sub_tab1.outline = sub_tab2.outline = sub_tab3.outline = &font->fg;
+    tab1_options.dot_size = tab2_servers.dot_size = tab3_sensitivity.dot_size = tab3_volume.dot_size = 25;
     Layout();
-    tab2_server_address.cmd_prefix.clear();
     tab3_player_name.cmd_prefix.clear();
     tab3_player_name.cursor.type = TextGUI::Cursor::Underline;
     tab3_player_name.deactivate_on_enter = tab2_server_address.deactivate_on_enter = true;
@@ -960,12 +960,13 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
     tab3_player_name   .SetToggleKey(0, true);
     tab2_server_address.SetToggleKey(0, true);
     tab2_server_address.runcb = bind(&GameMenuGUI::MenuAddServer, this, _1);
+    tab2_server_address.cmd_prefix.clear();
     tab3_sensitivity.increment = .1;
     tab3_sensitivity.doc_height = 10;
     tab3_sensitivity.scrolled = FLAGS_msens / 10.0;
     tab3_volume.increment = .5;
-    tab3_volume.doc_height = SystemAudio::GetMaxVolume();
-    tab3_volume.scrolled = (float)SystemAudio::GetVolume() / tab3_volume.doc_height;
+    tab3_volume.doc_height = app->GetMaxVolume();
+    tab3_volume.scrolled = (float)app->GetVolume() / tab3_volume.doc_height;
 
     sub_selected = 2;
     if (parts) {
@@ -1171,7 +1172,7 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
 
       if (tab3_volume.dirty) {
         tab3_volume.dirty = false;
-        SystemAudio::SetVolume((int)(tab3_volume.scrolled * tab3_volume.doc_height));
+        app->SetVolume((int)(tab3_volume.scrolled * tab3_volume.doc_height));
       }
 
       menuflow.AppendNewlines(1);

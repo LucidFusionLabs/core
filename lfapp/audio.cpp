@@ -49,11 +49,6 @@ extern "C" {
 #include <SLES/OpenSLES_Android.h>
 #endif
 
-#ifdef LFL_IPHONE
-extern "C" void iPhonePlayMusic(void *handle);
-extern "C" void iPhonePlayBackgroundMusic(void *handle);
-#endif
-
 namespace LFL {
 const int feat_lpccoefs  = 12;
 const int feat_barkbands = 21;
@@ -125,49 +120,6 @@ int Sample::ToFFMpegId(int fmt) {
   }
 }
 #endif
-
-void SystemAudio::PlaySoundEffect(SoundAsset *sa) {
-#if defined(LFL_ANDROID)
-  AndroidPlayMusic(sa->handle);
-#elif defined(LFL_IPHONE)
-  iPhonePlayMusic(sa->handle);
-#else
-  app->audio->QueueMix(sa, MixFlag::Reset | MixFlag::Mix | (app->audio->loop ? MixFlag::DontQueue : 0), -1, -1);
-#endif
-}
-
-void SystemAudio::PlayBackgroundMusic(SoundAsset *music) {
-#if defined(LFL_ANDROID)
-  AndroidPlayBackgroundMusic(music->handle);
-#elif defined(LFL_IPHONE)
-  iPhonePlayBackgroundMusic(music->handle);
-#else
-  app->audio->QueueMix(music);
-  app->audio->loop = music;
-#endif
-}
-
-void SystemAudio::SetVolume(int v) { 
-#if defined(LFL_ANDROID)
-  AndroidSetVolume(v);
-#endif
-}
-
-int SystemAudio::GetVolume() { 
-#if defined(LFL_ANDROID)
-  return AndroidGetVolume();
-#else
-  return 0;
-#endif
-}
-
-int SystemAudio::GetMaxVolume() { 
-#if defined(LFL_ANDROID)
-  return AndroidGetMaxVolume();
-#else
-  return 10;
-#endif
-}
 
 #ifdef LFL_PORTAUDIO
 struct PortaudioAudioModule : public Module {
@@ -714,7 +666,7 @@ Matrix *EqualLoudnessCurve(int outrows, double max) {
 
 double *LifterMatrixROSA(int n, double L, bool inverse=false) {
   double *dm = new double[n];
-  for (int i=0; i<n; i++) {
+  for (int i = 0; i < n; i++) {
     dm[i] = !i ? 1 : pow(i, L);
     if (inverse) dm[i] = 1 / dm[i];
   }
@@ -723,7 +675,7 @@ double *LifterMatrixROSA(int n, double L, bool inverse=false) {
 
 double *LifterMatrixHTK(int n, double L, bool inverse=false) {
   double *dm = new double[n];
-  for (int i=0; i<n; i++) {
+  for (int i = 0; i < n; i++) {
     dm[i] = !i ? 1 : (1+L/2*sin(i*M_PI/L));
     if (inverse) dm[i] = 1 / dm[i];
   }
@@ -732,16 +684,16 @@ double *LifterMatrixHTK(int n, double L, bool inverse=false) {
 
 float PseudoEnergy(const RingBuf::Handle *in, int window, int offset) {
   float e=0;
-  for (int i=0; i<window; i++) e += fabs(in->Read(offset+i) * 32768.0);
+  for (int i = 0; i < window; i++) e += fabs(in->Read(offset + i) * 32768.0);
   return e;
 }
 
 int ZeroCrossings(const RingBuf::Handle *in, int window, int offset) {
   int zcr=0;
   float last = in->Read(offset);
-  for (int i=1; i<window; i++) {
-    float cur = in->Read(offset+i);
-    if ((cur<0 && last>=0) || (cur>=0 && last<0)) zcr++;
+  for (int i = 1; i < window; i++) {
+    float cur = in->Read(offset + i);
+    if ((cur < 0 && last >= 0) || (cur >= 0 && last < 0)) zcr++;
     last = cur;
   }
   return zcr;
@@ -752,15 +704,13 @@ RingBuf *Decimate(const RingBuf::Handle *inh, int factor) {
   RingBuf *outbuf = new RingBuf(SPS/factor, SPB/factor);
   RingBuf::Handle out(outbuf);
 
-  double sum=0; int count=0;
-  for (int i=0; i<SPB; i++)
-  {
-    count++;
+  double sum = 0;
+  for (int i = 0, count = 0; i < SPB; i++) {
     sum += inh->Read(-SPB + i);
-
-    if (count >= factor) {
+    if (++count >= factor) {
       out.Write(sum / count);
-      sum = 0; count = 0; 
+      count = 0; 
+      sum = 0;
     }
   }
   return outbuf;

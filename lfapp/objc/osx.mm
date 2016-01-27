@@ -16,6 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <string>
 #include <stdlib.h>
 #include "../lfexport.h"
 
@@ -564,6 +565,23 @@ extern "C" void OSXLaunchNativeContextMenu(void *O, int x, int y, int n, const c
 
 extern "C" void OSXLaunchNativeFontChooser(const char *cur_font, int size, const char *change_font_cmd) {
   [(AppDelegate*)[NSApp delegate] selectFont:cur_font size:size cmd:change_font_cmd];
+}
+
+extern "C" void OSXLaunchNativeFileChooser(bool choose_files, bool choose_dirs, bool choose_multi, const char *open_files_cmd) {
+  NSOpenPanel *panel = [NSOpenPanel openPanel];
+  [panel setCanChooseFiles:choose_files];
+  [panel setCanChooseDirectories:choose_dirs];
+  [panel setAllowsMultipleSelection:choose_multi];
+  NSInteger clicked = [panel runModal];
+  [(GameView*)GetNativeWindow()->id clearKeyModifiers];
+  if (clicked != NSFileHandlingPanelOKButton) return;
+
+  std::string start = open_files_cmd, run = start;
+  for (NSURL *url in [panel URLs]) {
+    run.append(" ");
+    run.append([[url absoluteString] UTF8String]);
+  }
+  if (run.size() > start.size()) ShellRun(run.c_str());
 }
 
 extern "C" int main(int argc, const char **argv) {

@@ -90,6 +90,7 @@ struct Scene {
   typedef vector<Entity*> EntityVector;
   typedef map<string, Entity*> EntityMap;
   typedef map<string, EntityVector> EntityAssetMap;
+
   struct EntityFilter { virtual bool Filter(Entity *e) = 0; };
   struct SingleEntityFilter : public EntityFilter {
     Entity *entity;
@@ -110,11 +111,11 @@ struct Scene {
     }
   };
 
-  EntityMap entityMap;
-  EntityAssetMap assetMap;
-  EntityVector zsortVector;
+  EntityMap entity;
+  EntityAssetMap asset;
+  EntityVector zsort;
 
-  Entity *Get(const string &n) { return FindOrNull(entityMap, n); }
+  Entity *Get(const string &n) { return FindOrNull(entity, n); }
   Entity *Add(Entity *e) { return Add(e->name, e); }
   Entity *Add(const string &name, Entity *);
   bool ChangeAsset(const string &entity_name, Asset *new_asset);

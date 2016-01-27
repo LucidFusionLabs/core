@@ -19,10 +19,6 @@
 #ifndef LFL_LFAPP_LFTYPES_H__
 #define LFL_LFAPP_LFTYPES_H__
 
-#ifdef LFL_JUDY
-#include "judymap.h"
-#endif
-
 #ifdef LFL_FLATBUFFERS
 #include "flatbuffers/flatbuffers.h"
 namespace LFL {
@@ -60,6 +56,7 @@ namespace LFL {
 template<typename T, typename ...Args>
 std::unique_ptr<T> make_unique(Args&& ...args) { return std::unique_ptr<T>(new T(std::forward<Args>(args)...)); }
 template <class X> int TypeId() { static int ret = fnv32(typeid(X).name()); return ret; }
+template <class X> int TypeId(X*) { return TypeId<X>(); };
 template <class X> X *CheckPointer(X *x) { CHECK(x); return x; }
 template <class X> X *CheckNullAssign(X **x, X *v) { CHECK_EQ(nullptr, *x); return (*x = v); }
 template <class X> X *GetThenAssignNull(X **x) { X *v = *x; if (v) *x = nullptr; return v; }
@@ -385,29 +382,32 @@ struct FreeListBlockAllocator {
   void Erase(unsigned ind) { free_list.push_back(ind); }
 };
 
-template <typename X> struct SortedArray : public vector<X> {
-  SortedArray(int n = 0, const X &x = X()) : vector<X>(n, x) { sort(this->begin(), this->end()); }
-  typename vector<X>::iterator       Erase     (const X& x)       { return this->erase(Find(x)); }
+template <typename X> struct SortedVector : public vector<X> {
+  SortedVector(int n=0, const X &x=X()) : vector<X>(n, x) {}
+  void Sort() { sort(this->begin(), this->end()); }
+
+  int                                Erase     (const X& x)       { return VectorEraseByValue(this, x); }
   typename vector<X>::iterator       Insert    (const X& x)       { return this->insert(LowerBound(x), x); }
   typename vector<X>::iterator       LowerBound(const X& x)       { return lower_bound(this->begin(), this->end(), x); }
-  typename vector<X>::iterator       Find      (const X& x)       { return find(this->begin(), this->end(), x); }
-  typename vector<X>::const_iterator Find      (const X& x) const { return find(this->begin(), this->end(), x); }
+  typename vector<X>::iterator       Find      (const X& x)       { auto i=LowerBound(x), e=this->end(); return (i == e || x < *i) ? e : i; }
+  typename vector<X>::const_iterator Find      (const X& x) const { auto i=LowerBound(x), e=this->end(); return (i == e || x < *i) ? e : i; }
 };
 
-template <typename K, typename V> struct SortedArrayMap : public vector<pair<K, V>> {
+template <typename K, typename V> struct SortedVectorMap : public vector<pair<K, V>> {
   typedef typename vector<pair<K, V>>::iterator       iter;
   typedef typename vector<pair<K, V>>::iterator const_iter;
   struct Compare { bool operator()(const pair<K, V> &a, const pair<K, V> &b) { return a.first < b.first; } };
-  SortedArrayMap(int n = 0, const pair<K, V> &x = pair<K, V>()) : vector<pair<K, V>>(n, x) { sort(this->begin(), this->end(), Compare()); }
+  SortedVectorMap(int n = 0, const pair<K, V> &x = pair<K, V>()) : vector<pair<K, V>>(n, x) {}
+  void Sort() { sort(this->begin(), this->end(), Compare()); }
 
-  iter       Erase     (const K& k)             { return this->erase(Find(k)); }
-  iter       Find      (const K& k)             { return find(this->begin(), this->end(), pair<K, V>(k, V()), Compare()); }
-  const_iter Find      (const K& k) const       { return find(this->begin(), this->end(), pair<K, V>(k, V()), Compare()); }
+  int        Erase     (const K& k)             { return VectorEraseByValue(this, k); }
+  iter       Find      (const K& k)             { auto i=LowerBound(k), e=this->end(); return (i == e || k < *i) ? e : i; }
+  const_iter Find      (const K& k) const       { auto i=LowerBound(k), e=this->end(); return (i == e || k < *i) ? e : i; }
   iter       LowerBound(const K& k)             { return lower_bound(this->begin(), this->end(), pair<K, V>(k, V()), Compare()); }
   iter       Insert    (const K& k, const V &v) { return this->insert(LowerBound(k), pair<K, V>(k, v)); }
   iter       InsertOrUpdate(const K& k, const V &v) {
-    auto i = LowerBound(k); 
-    if (i != this->end() && i->first == k) { i->second = v; return i; }
+    auto i = Find(k); 
+    if (i != this->end()) { i->second = v; return i; }
     else return this->insert(i, pair<K, V>(k, v));
   }
 };

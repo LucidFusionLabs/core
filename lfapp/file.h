@@ -196,6 +196,12 @@ struct ArchiveIter {
   bool LoadData();
 };
 
+struct FileNameAndOffset {
+  string fn;
+  unsigned offset, y, x;
+  FileNameAndOffset(const string &F=string(), unsigned O=0, unsigned Y=0, unsigned X=0) : fn(F), offset(O), y(Y), x(X) {}
+};
+
 struct VersionedFileName {
   const char *dir, *_class, *var;
   VersionedFileName(const char *D=0, const char *C=0, const char *V=0) : dir(D), _class(C), var(V) {}
@@ -455,6 +461,7 @@ struct ClangTranslationUnit {
 
   ClangTranslationUnit(const string &f, const string &cc, const string &wd);
   virtual ~ClangTranslationUnit();
+  FileNameAndOffset FindDefinition(const string &f, int offset);
 };
 
 struct ClangTokenVisitor {

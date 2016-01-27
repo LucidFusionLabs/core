@@ -23,14 +23,6 @@
 #include "lfapp/lfapp.h"
 #include "lfapp/network.h"
 
-#ifdef LFL_JUDY
-#ifdef _WIN32
-#define JU_WIN
-#endif
-#define LFL_INCLUDE_JUDY_IMPL
-#include "judymap.h"
-#endif
-
 namespace LFL {
 void RingBuf::Resize(int SPS, int SPB, int Width) {
   if (SPS != samples_per_sec || SPB != ring.size || Width != width) { 

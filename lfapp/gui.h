@@ -109,7 +109,7 @@ struct Widget {
     struct Flag { enum { Attached=1, Horizontal=2, NoCorner=4, AttachedHorizontal=Attached|Horizontal,
       AttachedNoCorner=Attached|NoCorner, AttachedHorizontalNoCorner=AttachedHorizontal|NoCorner }; };
     Box win;
-    int flag=0, doc_height=200, dot_size=25;
+    int flag=0, doc_height=200, dot_size=15;
     float scrolled=0, last_scrolled=0, increment=20;
     Color color=Color(15, 15, 15, 55);
     Font *menuicon=0;
@@ -350,7 +350,7 @@ struct TextGUI : public KeyboardGUI, public Drawable::AttrSource {
   virtual int CommandLines() const { return 0; }
   virtual bool Active() const { return screen->active_textgui == this; }
   virtual void Activate()   { if (!Active()) { if (auto g=screen->active_textgui) g->Deactivate(); screen->active_textgui=this; } }
-  virtual void Deactivate() { if (Active()) screen->active_textgui = screen->default_textgui; }
+  virtual void Deactivate() { if (Active()) screen->active_textgui = screen->default_textgui(); }
   virtual bool ToggleActive() { if (!Active()) Activate(); else Deactivate(); return Active(); }
   virtual void Input(char k) { cmd_line.UpdateText(cursor.i.x++, String16(1, *Unsigned<char>(&k)), cursor.attr); UpdateCommandFB(); UpdateCursor(); }
   virtual void Erase()       { if (!cursor.i.x) return; cmd_line.Erase(--cursor.i.x, 1); UpdateCommandFB(); UpdateCursor(); }
@@ -433,6 +433,7 @@ struct TextArea : public TextGUI {
   int LineFBPushFront() const { return reverse_line_fb ? LineUpdate::PushBack  : LineUpdate::PushFront; }
   float PercentOfLines(int n) const { return static_cast<float>(n) / (WrappedLines()-1); }
   void AddVScroll(int n) { v_scrolled = Clamp(v_scrolled + PercentOfLines(n), 0, 1); UpdateScrolled(); }
+  void SetVScroll(int n) { v_scrolled = Clamp(0          + PercentOfLines(n), 0, 1); UpdateScrolled(); }
   int LayoutBackLine(Lines *l, int i) { return Wrap() ? (*l)[-i-1].Layout(line_fb.w) : 1; }
 
   void InitSelection();
@@ -495,7 +496,7 @@ struct Editor : public TextArea {
   int ModifyCursorLine();
   void Modify(bool erase, int c);
   int Save();
-  void GoToDefinition(const point &p);
+  FileNameAndOffset FindDefinition(const point &p);
   void UpdateAnnotation();
 };
 
@@ -610,11 +611,13 @@ struct Console : public TextArea {
 
 struct Dialog : public GUI {
   struct Flag { enum { None=0, Fullscreen=1, Next=2 }; };
+  static const int min_width = 50, min_height = 25;
+  Color color, title_gradient[4];
   Font *font=0, *menuicon=0;
-  Color color=Color(25,60,130,220);
-  Box title, resize_left, resize_right, resize_bottom, close;
-  bool deleted=0, moving=0, resizing_left=0, resizing_right=0, resizing_top=0, resizing_bottom=0, fullscreen=0;
+  Box title, content, resize_left, resize_right, resize_bottom, close;
+  bool deleted=0, moving=0, resizing_left=0, resizing_right=0, resizing_bottom=0, fullscreen=0, tabbed=0;
   point mouse_start, win_start;
+  Callback deleted_cb;
   string title_text;
   int zsort=0;
 
@@ -625,15 +628,46 @@ struct Dialog : public GUI {
   virtual void TakeFocus() {}
   virtual void LoseFocus() {}
 
-  void BringToFront();
-  Box BoxAndTitle() const { return Box(box.x, box.y, box.w, box.h + title.h); }
+  void LayoutTabbed(int, const Box &b, const point &d, MouseController*, DrawableBoxArray*);
+  void LayoutTitle(const Box &b, MouseController*, DrawableBoxArray*);
+  void LayoutReshapeControls(const point &d, MouseController*);
+  bool HandleReshape(Box *outline);
+  void DrawGradient(const point &p) const { (title + p).DrawGradient(title_gradient); }
   void Reshape(bool *down) { mouse_start = screen->mouse; win_start = point(box.x, box.y); *down = 1; }
-  void GiveFocus() { if (this == screen->top_dialog) { screen->top_dialog=0; LoseFocus(); } }
-  void MarkDeleted() { deleted = 1; }
 
   static bool LessThan(const Dialog *l, const Dialog *r) { return l->zsort < r->zsort; }
   static void MessageBox(const string &text);
   static void TextureBox(const string &text);
+};
+
+struct DialogTab {
+  Dialog *dialog;
+  DrawableBoxArray child_box;
+  DialogTab(Dialog *D=0) : dialog(D) {}
+  bool operator<(const DialogTab &x) const { return dialog < x.dialog; }
+  bool operator==(const DialogTab &x) const { return dialog == x.dialog; }
+  static void Draw(const Box &b, const point &tab_dim, const vector<DialogTab>&);
+};
+
+template <class D=Dialog> struct TabbedDialog {
+  GUI *gui;
+  Box box;
+  D *top=0;
+  point tab_dim;
+  unordered_set<D*> tabs;
+  vector<DialogTab> tab_list;
+  TabbedDialog(GUI *g, const point &d=point(200,16)) : gui(g), tab_dim(d) {}
+
+  D *FirstTab() const { return tab_list.size() ? dynamic_cast<D*>(tab_list.begin()->dialog) : 0; }
+  void AddTab(D *t) { tabs.insert(t); tab_list.emplace_back(t); SelectTab(t); }
+  void DelTab(D *t) { tabs.erase(t); VectorEraseByValue(&tab_list, DialogTab(t)); ReleaseTab(t); }
+  void SelectTab(D *t) { (top = t)->TakeFocus(); }
+  void ReleaseTab(D *t) { if (top == t) { top=0; t->LoseFocus(); if ((top = FirstTab())) top->TakeFocus(); } }
+  void Draw() { DialogTab::Draw(box, tab_dim, tab_list); if (top) top->Draw(); }
+  void Layout() {
+    for (auto b=tab_list.begin(), e=tab_list.end(), t=b; t != e; ++t)
+      t->dialog->LayoutTabbed(t-b, box, tab_dim, gui, &t->child_box);
+  }
 };
 
 struct MessageBoxDialog : public Dialog {
@@ -669,7 +703,6 @@ struct FlagSliderDialog : public SliderDialog {
 struct EditorDialog : public Dialog {
   struct Flag { enum { Wrap=Dialog::Flag::Next }; };
   Editor editor;
-  Box content_box;
   Widget::Slider v_scrollbar, h_scrollbar;
   EditorDialog(Window *W, Font *F, File *I, float w=.5, float h=.5, int flag=0);
   void Layout();

@@ -59,8 +59,9 @@ struct SimplePhysics : public Physics {
   virtual void Collided(bool contact_pts, CollidedCB cb) {}
 
   virtual void Update(Time timestep) {
-    for (Scene::EntityAssetMap::iterator i = scene->assetMap.begin(); i != scene->assetMap.end(); i++)
-      for (Scene::EntityVector::iterator j = (*i).second.begin(); j != (*i).second.end(); j++) Update(*j, timestep);
+    for (auto const &a : scene->asset)
+      for (auto e : a.second)
+        Update(e, timestep);
   }
 
   static void Update(Entity *e, Time timestep) { e->pos.Add(e->vel * (timestep.count() / 1000.0)); }

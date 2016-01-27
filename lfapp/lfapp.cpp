@@ -111,12 +111,15 @@ extern "C" void iPhoneAddWaitForeverSocket(void*, int fd);
 extern "C" void iPhoneDelWaitForeverSocket(void*, int fd);
 extern "C" int  iPhonePasswordCopy(const char *, const char*, const char*,       char*, int);
 extern "C" bool iPhonePasswordSave(const char *, const char*, const char*, const char*, int);
+extern "C" void iPhonePlayMusic(void *handle);
+extern "C" void iPhonePlayBackgroundMusic(void *handle);
 #elif defined(__APPLE__)
 extern "C" void OSXStartWindow(void*);
 extern "C" void OSXCreateNativeEditMenu();
 extern "C" void OSXCreateNativeMenu(const char*, int, const char**, const char**, const char**);
-extern "C" void OSXLaunchNativeFontChooser(const char *, int, const char *);
 extern "C" void OSXLaunchNativeContextMenu(void*, int, int, int, const char**, const char**, const char**);
+extern "C" void OSXLaunchNativeFontChooser(const char *, int, const char *);
+extern "C" void OSXLaunchNativeFileChooser(bool, bool, bool, const char *);
 extern "C" void OSXTriggerFrame(void*);
 extern "C" bool OSXTriggerFrameIn(void*, int ms, bool force);
 extern "C" void OSXClearTriggerFrameIn(void *O);
@@ -494,46 +497,6 @@ void Application::Daemonize(FILE *fout, FILE *ferr) {
 }
 #endif /* WIN32 */
 
-void Application::SavePassword(const string &h, const string &u, const string &pw) {
-#if defined(LFL_IPHONE)
-  iPhonePasswordSave(app->name.c_str(), h.c_str(), u.c_str(), pw.c_str(), pw.size());
-#endif
-}
-
-bool Application::LoadPassword(const string &h, const string &u, string *pw) {
-#if defined(LFL_IPHONE)
-  pw->resize(1024);
-  pw->resize(iPhonePasswordCopy(app->name.c_str(), h.c_str(), u.c_str(), &(*pw)[0], pw->size()));
-  return pw->size();
-#endif
-  return 0;
-}
-
-void Application::OpenSystemBrowser(const string &url_text) {
-#if defined(LFL_ANDROID)
-  AndroidOpenBrowser(url_text.c_str());
-#elif defined(LFL_IPHONE)
-  iPhoneOpenBrowser(url_text.c_str());
-#elif defined(__APPLE__)
-  CFURLRef url = CFURLCreateWithBytes(0, (UInt8*)url_text.c_str(), url_text.size(), kCFStringEncodingASCII, 0);
-  if (url) { LSOpenCFURLRef(url, 0); CFRelease(url); }
-#elif defined(LFL_WINVIDEO)
-  ShellExecute(NULL, "open", url_text.c_str(), NULL, NULL, SW_SHOWNORMAL);
-#endif
-}
-
-void Application::ShowAds() {
-#if defined(LFL_ANDROID)
-  AndroidShowAds();
-#endif
-}
-
-void Application::HideAds() {
-#if defined(LFL_ANDROID)
-  AndroidHideAds();
-#endif
-}
-
 void Application::Log(int level, const char *file, int line, const string &message) {
   char tbuf[64];
   logtime(tbuf, sizeof(tbuf));
@@ -590,44 +553,6 @@ NetworkThread *Application::CreateNetworkThread(bool detach, bool start) {
   return network_thread;
 }
 
-void Application::LaunchNativeFontChooser(const FontDesc &cur_font, const string &choose_cmd) {
-#if defined(LFL_OSXVIDEO)
-  OSXLaunchNativeFontChooser(cur_font.name.c_str(), cur_font.size, choose_cmd.c_str());
-#elif defined(LFL_WINVIDEO)
-  LOGFONT lf;
-  memzero(lf);
-  HDC hdc = GetDC(NULL);
-  lf.lfHeight = -MulDiv(cur_font.size, GetDeviceCaps(hdc, LOGPIXELSY), 72);
-  lf.lfWeight = (cur_font.flag & FontDesc::Bold) ? FW_BOLD : FW_NORMAL;
-  lf.lfItalic = cur_font.flag & FontDesc::Italic;
-  strncpy(lf.lfFaceName, cur_font.name.c_str(), sizeof(lf.lfFaceName)-1);
-  ReleaseDC(NULL, hdc);
-  CHOOSEFONT cf;
-  memzero(cf);
-  cf.lpLogFont = &lf;
-  cf.lStructSize = sizeof(cf);
-  cf.hwndOwner = (HWND)screen->id;
-  cf.Flags = CF_SCREENFONTS | CF_INITTOLOGFONTSTRUCT;
-  if (!ChooseFont(&cf)) return;
-  int flag = FontDesc::Mono | (lf.lfWeight > FW_NORMAL ? FontDesc::Bold : 0) | (lf.lfItalic ? FontDesc::Italic : 0);
-  app->shell.Run(StrCat(choose_cmd, " ", lf.lfFaceName, " ", cf.iPointSize/10, " ", flag));
-#endif
-}
-
-void Application::LaunchNativeContextMenu(const vector<MenuItem>&items) {
-#if defined(LFL_OSXVIDEO)
-  vector<const char *> k, n, v;
-  for (auto &i : items) { k.push_back(tuple_get<0>(i).c_str()); n.push_back(tuple_get<1>(i).c_str()); v.push_back(tuple_get<2>(i).c_str()); }
-  OSXLaunchNativeContextMenu(screen->id, screen->mouse.x, screen->mouse.y, items.size(), &k[0], &n[0], &v[0]);
-#endif
-}
-
-void Application::LaunchNativeMenu(const string &title) {
-#if defined(LFL_IPHONE)
-  iPhoneLaunchNativeMenu(title.c_str());
-#endif
-}
-
 void Application::AddNativeMenu(const string &title, const vector<MenuItem>&items) {
 #if defined(LFL_IPHONE)
   vector<const char *> n, v;
@@ -655,6 +580,133 @@ void Application::AddNativeMenu(const string &title, const vector<MenuItem>&item
 void Application::AddNativeEditMenu() {
 #if defined(LFL_OSXVIDEO)
   OSXCreateNativeEditMenu();
+#endif
+}
+
+void Application::LaunchNativeMenu(const string &title) {
+#if defined(LFL_IPHONE)
+  iPhoneLaunchNativeMenu(title.c_str());
+#endif
+}
+
+void Application::LaunchNativeContextMenu(const vector<MenuItem>&items) {
+#if defined(LFL_OSXVIDEO)
+  vector<const char *> k, n, v;
+  for (auto &i : items) { k.push_back(tuple_get<0>(i).c_str()); n.push_back(tuple_get<1>(i).c_str()); v.push_back(tuple_get<2>(i).c_str()); }
+  OSXLaunchNativeContextMenu(screen->id, screen->mouse.x, screen->mouse.y, items.size(), &k[0], &n[0], &v[0]);
+#endif
+}
+
+void Application::LaunchNativeFontChooser(const FontDesc &cur_font, const string &choose_cmd) {
+#if defined(LFL_OSXVIDEO)
+  OSXLaunchNativeFontChooser(cur_font.name.c_str(), cur_font.size, choose_cmd.c_str());
+#elif defined(LFL_WINVIDEO)
+  LOGFONT lf;
+  memzero(lf);
+  HDC hdc = GetDC(NULL);
+  lf.lfHeight = -MulDiv(cur_font.size, GetDeviceCaps(hdc, LOGPIXELSY), 72);
+  lf.lfWeight = (cur_font.flag & FontDesc::Bold) ? FW_BOLD : FW_NORMAL;
+  lf.lfItalic = cur_font.flag & FontDesc::Italic;
+  strncpy(lf.lfFaceName, cur_font.name.c_str(), sizeof(lf.lfFaceName)-1);
+  ReleaseDC(NULL, hdc);
+  CHOOSEFONT cf;
+  memzero(cf);
+  cf.lpLogFont = &lf;
+  cf.lStructSize = sizeof(cf);
+  cf.hwndOwner = (HWND)screen->id;
+  cf.Flags = CF_SCREENFONTS | CF_INITTOLOGFONTSTRUCT;
+  if (!ChooseFont(&cf)) return;
+  int flag = FontDesc::Mono | (lf.lfWeight > FW_NORMAL ? FontDesc::Bold : 0) | (lf.lfItalic ? FontDesc::Italic : 0);
+  app->shell.Run(StrCat(choose_cmd, " ", lf.lfFaceName, " ", cf.iPointSize/10, " ", flag));
+#endif
+}
+
+void Application::LaunchNativeFileChooser(bool files, bool dirs, bool multi, const string &choose_cmd) {
+#if defined(LFL_OSXVIDEO)
+  OSXLaunchNativeFileChooser(files, dirs, multi, choose_cmd.c_str());
+#endif
+}
+
+void Application::OpenSystemBrowser(const string &url_text) {
+#if defined(LFL_ANDROID)
+  AndroidOpenBrowser(url_text.c_str());
+#elif defined(LFL_IPHONE)
+  iPhoneOpenBrowser(url_text.c_str());
+#elif defined(__APPLE__)
+  CFURLRef url = CFURLCreateWithBytes(0, (UInt8*)url_text.c_str(), url_text.size(), kCFStringEncodingASCII, 0);
+  if (url) { LSOpenCFURLRef(url, 0); CFRelease(url); }
+#elif defined(LFL_WINVIDEO)
+  ShellExecute(NULL, "open", url_text.c_str(), NULL, NULL, SW_SHOWNORMAL);
+#endif
+}
+
+void Application::SavePassword(const string &h, const string &u, const string &pw) {
+#if defined(LFL_IPHONE)
+  iPhonePasswordSave(app->name.c_str(), h.c_str(), u.c_str(), pw.c_str(), pw.size());
+#endif
+}
+
+bool Application::LoadPassword(const string &h, const string &u, string *pw) {
+#if defined(LFL_IPHONE)
+  pw->resize(1024);
+  pw->resize(iPhonePasswordCopy(app->name.c_str(), h.c_str(), u.c_str(), &(*pw)[0], pw->size()));
+  return pw->size();
+#endif
+  return 0;
+}
+
+void Application::ShowAds() {
+#if defined(LFL_ANDROID)
+  AndroidShowAds();
+#endif
+}
+
+void Application::HideAds() {
+#if defined(LFL_ANDROID)
+  AndroidHideAds();
+#endif
+}
+
+int Application::GetVolume() { 
+#if defined(LFL_ANDROID)
+  return AndroidGetVolume();
+#else
+  return 0;
+#endif
+}
+
+int Application::GetMaxVolume() { 
+#if defined(LFL_ANDROID)
+  return AndroidGetMaxVolume();
+#else
+  return 10;
+#endif
+}
+
+void Application::SetVolume(int v) { 
+#if defined(LFL_ANDROID)
+  AndroidSetVolume(v);
+#endif
+}
+
+void Application::PlaySoundEffect(SoundAsset *sa) {
+#if defined(LFL_ANDROID)
+  AndroidPlayMusic(sa->handle);
+#elif defined(LFL_IPHONE)
+  iPhonePlayMusic(sa->handle);
+#else
+  app->audio->QueueMix(sa, MixFlag::Reset | MixFlag::Mix | (app->audio->loop ? MixFlag::DontQueue : 0), -1, -1);
+#endif
+}
+
+void Application::PlayBackgroundMusic(SoundAsset *music) {
+#if defined(LFL_ANDROID)
+  AndroidPlayBackgroundMusic(music->handle);
+#elif defined(LFL_IPHONE)
+  iPhonePlayBackgroundMusic(music->handle);
+#else
+  app->audio->QueueMix(music);
+  app->audio->loop = music;
 #endif
 }
 
@@ -1239,7 +1291,7 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR lpCmdLine, int nC
   LFL::WinApp *winapp = LFL::Singleton<LFL::WinApp>::Get();
   winapp->Setup(hInst, nCmdShow);
 #endif
-  int ret = main(av.size() - 1, &av[0]);
+  int ret = main(av.size()-1, &av[0]);
 #ifdef LFL_WINVIDEO
   return ret ? ret : winapp->MessageLoop();
 #else

@@ -58,8 +58,8 @@ struct VoxForgeTgzFile {
     ArchiveIter a(file.c_str());
     if (!a.impl) return;
     for (const char *afn = a.Next(); Running() && afn; afn = a.Next()) {
-      if (SuffixMatch(afn, "etc/prompts", false)) HandlePrompts(       (const char *)a.Data(), a.Size());
-      else if (BaseDir(afn, "wav"))               HandleWAV(file, afn, (const char *)a.Data(), a.Size());
+      if (SuffixMatch(afn, "etc/prompts", false)) HandlePrompts(       a.buf.data(), a.buf.size());
+      else if (BaseDir(afn, "wav"))               HandleWAV(file, afn, a.buf.data(), a.buf.size());
     }
   }
   void HandlePrompts(const char *promptsdata, int promptsdatalen) {

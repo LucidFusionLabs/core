@@ -215,6 +215,15 @@ void GlyphCache::Load(const Font *f, const Glyph *g, CGFontRef cgfont, int size)
     CGContextSetRGBFillColor(context, fg.r(), fg.g(), fg.b(), fg.a());
     CGContextSetFont(context, cgfont);
     CGContextSetFontSize(context, size);
+    if (f->flag & FontDesc::Shadow) {
+      // CGContextSetShadow(context, CGSizeMake(15, -20), 5); 
+      CGColorSpaceRef cs = CGColorSpaceCreateDeviceRGB();
+      CGFloat cv[] = { 0, 0, 0, 1 };
+      CGColorRef c = CGColorCreate(cs, cv);
+      CGContextSetShadowWithColor(context, CGSizeMake(15, -20), 5, c);
+      CGColorRelease(c);
+      CGColorSpaceRelease(cs); 
+    }
     CGContextShowGlyphsAtPositions(context, &cg, &point, 1);
     CGContextRelease(context);
     g->tex.FlipBufferY();

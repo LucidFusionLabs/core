@@ -309,7 +309,7 @@ void Shell::Slider(const vector<string> &a) {
 void Shell::Edit(const vector<string> &a) {
   string s = Asset::FileContents("lfapp_vertex.glsl");
   if (s.empty()) INFO("missing file lfapp_vertex.glsl");
-  screen->AddDialog(new EditorDialog(screen, Fonts::Default(), new BufferFile(s)));
+  screen->AddDialog(new EditorDialog(screen, Fonts::Default(), new BufferFile(s, "lfapp_vertex.glsl")));
 }
 
 void Shell::cmds(const vector<string>&) {

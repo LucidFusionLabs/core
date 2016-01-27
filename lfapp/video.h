@@ -191,6 +191,7 @@ struct Box {
   point BottomLeft () const { return point(x,       y);     }
   point BottomRight() const { return point(right(), y);     }
   void Draw(const float *texcoord=0) const;
+  void DrawGradient(const Color*) const;
   void DrawCrimped(const float *texcoord, int orientation, float scrollX=0, float scrollY=0) const;
 
   static float ScrollCrimped(float tex0, float tex1, float scroll, float *min, float *mid1, float *mid2, float *max);
@@ -574,7 +575,8 @@ struct Window : public NativeWindow {
   vector<GUI*> mouse_gui;
   vector<KeyboardGUI*> keyboard_gui;
   vector<InputController*> input_bind;
-  TextGUI *active_textgui=0, *default_textgui=0;
+  function<TextGUI*()> default_textgui = []{ return nullptr; };
+  TextGUI *active_textgui=0;
   Console *lfapp_console=0;
 
   Window();
@@ -600,6 +602,8 @@ struct Window : public NativeWindow {
   void InitLFAppConsole();
   void DrawDialogs();
   void AddDialog(Dialog*);
+  void BringDialogToFront(Dialog*);
+  void GiveDialogFocusAway(Dialog*);
 
   LFL::Box Box() const { return LFL::Box(0, 0, width, height); }
   LFL::Box Box(float xs, float ys) const { return LFL::Box(0, 0, width*xs, height*ys); }

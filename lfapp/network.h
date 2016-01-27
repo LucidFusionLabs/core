@@ -136,7 +136,7 @@ struct SelectSocketSet : public SocketSet {
 struct WFMOSocketSet : public SocketSet {
   static const int max_sockets = MAXIMUM_WAIT_OBJECTS;
   struct Event { struct Data { void *ptr=0; } data; } events[1];
-  SortedArray<HANDLE> sockets;
+  SortedVector<HANDLE> sockets;
   int num_events=0, cur_event=0;
   Socket cur_fd=-1;
   WFMOSocketSet() { sockets.reserve(max_sockets); }

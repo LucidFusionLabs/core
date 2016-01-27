@@ -34,7 +34,7 @@ DECLARE_int(glyph_table_size);
 DECLARE_int(glyph_table_start);
 
 struct FontDesc {
-  enum { Bold=1, Italic=2, Mono=4, Outline=8 };
+  enum { Bold=1, Italic=2, Mono=4, Outline=8, Shadow=16 };
   struct Engine {
     enum { Default=0, Atlas=1, FreeType=2, CoreText=3, GDI=4 };
     static int Parse(const string &s) {

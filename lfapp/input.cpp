@@ -1014,6 +1014,7 @@ int Input::DispatchQueuedInput(bool event_on_keyboard_input, bool event_on_mouse
 }
 
 int Input::KeyPress(int key, bool down) {
+  if (!app->run) return 0;
 #ifdef LFL_DEBUG
   if (!MainThread()) ERROR("KeyPress() called from thread ", Thread::GetId());
 #endif
@@ -1065,6 +1066,7 @@ int Input::KeyEventDispatch(InputEvent::Id event, bool down) {
 }
 
 int Input::MouseMove(const point &p, const point &d) {
+  if (!app->run) return 0;
   int fired = MouseEventDispatch(Mouse::Event::Motion, p, MouseButton1Down());
   if (!app->grab_mode.Enabled()) return fired;
   if (d.x<0) screen->cam->YawLeft  (-d.x); else if (d.x>0) screen->cam->YawRight(d.x);
@@ -1073,11 +1075,13 @@ int Input::MouseMove(const point &p, const point &d) {
 }
 
 int Input::MouseWheel(const point &p, const point &d) {
+  if (!app->run) return 0;
   int fired = MouseEventDispatch(Mouse::Event::Wheel, screen->mouse, d.y);
   return fired;
 }
 
 int Input::MouseClick(int button, bool down, const point &p) {
+  if (!app->run) return 0;
   InputEvent::Id event = Mouse::ButtonID(button);
   if      (event == Mouse::Button::_1) mouse_but1_down = down;
   else if (event == Mouse::Button::_2) mouse_but2_down = down;
@@ -1112,11 +1116,11 @@ int Input::MouseEventDispatch(InputEvent::Id event, const point &p, int down) {
     Dialog *gui = (*i);
     if (gui->NotActive()) { i++; continue; }
     fired += gui->Input(event, screen->mouse, down, 0);
-    if (gui->deleted) { gui->GiveFocus(); delete gui; i = screen->dialogs.erase(i); continue; }
-    if (event == Mouse::Event::Button1 && down && gui->BoxAndTitle().within(screen->mouse)) { bring_to_front = *i; break; }
+    if (gui->deleted) { screen->GiveDialogFocusAway(gui); delete gui; i = screen->dialogs.erase(i); continue; }
+    if (event == Mouse::Event::Button1 && down && gui->box.within(screen->mouse)) { bring_to_front = *i; break; }
     i++;
   }
-  if (bring_to_front) bring_to_front->BringToFront();
+  if (bring_to_front) screen->BringDialogToFront(bring_to_front);
 
   if (FLAGS_input_debug && down) INFO("MouseEvent ", screen->mouse.DebugString(), " fired=", fired, ", guis=", screen->mouse_gui.size());
   return fired;

@@ -22,11 +22,11 @@ namespace LFL {
 DEFINE_bool(hull_geometry, false, "Draw entity bounding hull"); 
 
 Entity *Scene::Add(const string &name, Entity *e) {
-  if (!name.size()) return 0;
-  entityMap[name] = e;
+  if (name.empty()) return 0;
+  entity[name] = e;
 
   if (e->asset) {
-    EntityVector &eav = assetMap[e->asset->name];
+    EntityVector &eav = asset[e->asset->name];
     eav.push_back(e);
     sort(eav.begin(), eav.end(), Entity::ZSort);
   }
@@ -34,18 +34,18 @@ Entity *Scene::Add(const string &name, Entity *e) {
 }
 
 bool Scene::ChangeAsset(const string &entity_name, Asset *new_asset) {
-  Entity *e = FindOrNull(entityMap, entity_name);
+  Entity *e = FindOrNull(entity, entity_name);
   return e ? ChangeAsset(e, new_asset) : false;
 }
 
 bool Scene::ChangeAsset(Entity *e, Asset *new_asset) {
   if (e->asset) {
-    EntityVector &eav = assetMap[e->asset->name];
-    for (EntityVector::iterator j = eav.begin(); j != eav.end(); j++) if (*j == e) { eav.erase(j); break; }
+    EntityVector &eav = asset[e->asset->name];
+    for (auto j = eav.begin(); j != eav.end(); ++j) if (*j == e) { eav.erase(j); break; }
   }
   e->asset = new_asset;
   if (new_asset) {
-    EntityVector &eav = assetMap[e->asset->name];
+    EntityVector &eav = asset[e->asset->name];
     eav.push_back(e);
     sort(eav.begin(), eav.end(), Entity::ZSort);
   }
@@ -53,18 +53,18 @@ bool Scene::ChangeAsset(Entity *e, Asset *new_asset) {
 }
 
 void Scene::Del(const string &name) { 
-  EntityMap::iterator i = entityMap.find(name);
-  if (i == entityMap.end()) return;
-  Entity *e = (*i).second;
+  auto i = entity.find(name);
+  if (i == entity.end()) return;
+  Entity *e = i->second;
   if (e->asset) {
-    EntityVector &eav = assetMap[e->asset->name];
-    for (EntityVector::iterator j = eav.begin(); j != eav.end(); j++) if (*j == e) { eav.erase(j); break; }
+    EntityVector &eav = asset[e->asset->name];
+    for (auto j = eav.begin(); j != eav.end(); ++j) if (*j == e) { eav.erase(j); break; }
   }
-  entityMap.erase(i);
+  entity.erase(i);
 }
 
 void Scene::Del(const EntityVector &deleted) {
-  for (Scene::EntityVector::const_iterator i = deleted.begin(); i != deleted.end(); i++) Del((*i)->name);
+  for (auto e : deleted) Del(e->name);
 }
 
 void Scene::Select(Geometry *geom) {
@@ -183,14 +183,14 @@ void Scene::Draw(Asset *a, Entity *e) {
 }
 
 void Scene::Draw(vector<Asset> *assets) {
-  for (vector<Asset>::iterator a = assets->begin(); a != assets->end(); ++a) {
-    if (a->zsort) continue;
-    Draw(&(*a));
+  for (auto &a : *assets) {
+    if (a.zsort) continue;
+    Draw(&a);
   }
 }
 
 void Scene::Draw(Asset *a, EntityFilter *filter) {
-  EntityVector &eav = assetMap[a->name];
+  EntityVector &eav = asset[a->name];
   Draw(a, filter, eav);
 }
 
@@ -199,10 +199,8 @@ void Scene::Draw(Asset *a, EntityFilter *filter, const EntityVector &eav) {
 
   Select(a);
 
-  for (EntityVector::const_iterator j = eav.begin(); j != eav.end(); j++) {
-    Entity *e = *j;
+  for (auto e : eav) {
     if (filter && filter->Filter(e)) continue;
-
     Draw(a, e);
   }
 }
@@ -222,8 +220,7 @@ void Scene::DrawParticles(Entity *e, unsigned dt) {
 
 void Scene::ZSortDraw(EntityFilter *filter, unsigned dt) {
   Asset *last_asset = 0;
-  for (EntityVector::const_iterator j = zsortVector.begin(); j != zsortVector.end(); j++) {
-    Entity *e = *j;
+  for (auto e : zsort) {
     if (filter && filter->Filter(e)) continue;
 
     float zangle = v3::Dot(screen->cam->ort, e->ort);
@@ -237,20 +234,18 @@ void Scene::ZSortDraw(EntityFilter *filter, unsigned dt) {
 }
 
 void Scene::ZSort(const vector<Asset> &assets) {
-  zsortVector.clear();
+  zsort.clear();
 
-  for (vector<Asset>::const_iterator a = assets.begin(); a != assets.end(); ++a) {
-    if (!a->zsort) continue;
+  for (auto const &a : assets) { 
+    if (!a.zsort) continue;
 
-    EntityVector &eav = assetMap[a->name];
-    for (EntityVector::const_iterator j = eav.begin(); j != eav.end(); j++) {
-      Entity *e = *j;
+    for (auto e : asset[a.name]) {
       e->zsort = v3::Dot(screen->cam->ort, e->pos);
-      zsortVector.push_back(e);
+      zsort.push_back(e);
     }
   }
 
-  sort(zsortVector.begin(), zsortVector.end(), Entity::ZSort);
+  sort(zsort.begin(), zsort.end(), Entity::ZSort);
 }
 
 }; // namespace LFL

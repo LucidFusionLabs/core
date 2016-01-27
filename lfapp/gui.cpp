@@ -737,9 +737,10 @@ void TextArea::DragCB(int, int, int, int down) {
   if (!Active()) return;
   Selection *s = &selection;
   bool start = s->Update(screen->mouse - mouse_gui.box.BottomLeft() + point(line_left, 0), down);
-  bool swap = (!reverse_line_fb && s->end < s->beg) || (reverse_line_fb && s->beg < s->end);
   if (start) { GetGlyphFromCoords(s->beg_click, &s->beg); s->end=s->beg; if (selection_cb) selection_cb(s->beg); }
   else       { GetGlyphFromCoords(s->end_click, &s->end); }
+
+  bool swap = (!reverse_line_fb && s->end < s->beg) || (reverse_line_fb && s->beg < s->end);
   if (!s->changing) CopyText(swap ? s->end : s->beg, swap ? s->beg : s->end);
   else {
     LinesFrameBuffer *fb = GetFrameBuffer();
@@ -763,8 +764,11 @@ string TextArea::CopyText(int beg_line_ind, int beg_char_ind, int end_line_ind, 
   bool one_line = beg_line_ind == end_line_ind;
   int bc = (one_line && reverse_line_fb) ? end_char_ind : beg_char_ind;
   int ec = (one_line && reverse_line_fb) ? beg_char_ind : end_char_ind;
+  int d = reverse_line_fb ? 1 : -1;
+  if (d < 0) { CHECK_LE(end_line_ind, beg_line_ind); }
+  else       { CHECK_LE(beg_line_ind, end_line_ind); }
 
-  for (int i = beg_line_ind, d = reverse_line_fb ? 1 : -1; /**/; i += d) {
+  for (int i = beg_line_ind; /**/; i += d) {
     Line *l = &line[-i-1];
     int len = l->Size();
     if (i == beg_line_ind) {
@@ -1062,9 +1066,9 @@ int Editor::Save() {
   return ret;
 }
  
-void Editor::GoToDefinition(const point &p) {
-  if (!project || !ide_file) return;
-  printf("GoToDefinition: %s\n", p.DebugString().c_str());
+FileNameAndOffset Editor::FindDefinition(const point &p) {
+  if (!project || !ide_file || ! cursor_offset) return FileNameAndOffset();
+  return ide_file->tu.FindDefinition(file->Filename(), cursor_offset->offset + cursor.i.x);
 }
 
 void Editor::UpdateAnnotation() {
@@ -1592,102 +1596,125 @@ void Console::Draw() {
   drawing = 1;
   Time now = Now(), elapsed;
   bool active = Active(), last_animating = animating;
-  int h = active ? (int)(screen->height*screen_percent) : 0;
+  int full_height = screen->height * screen_percent, h = active ? full_height : 0;
 
   if ((animating = (elapsed = now - anim_begin) < anim_time)) {
-    if (active) h = (int)(screen->height*(  (double)elapsed.count()/anim_time.count())*screen_percent);
-    else        h = (int)(screen->height*(1-(double)elapsed.count()/anim_time.count())*screen_percent);
+    if (active) h = full_height * (  (double)elapsed.count()/anim_time.count());
+    else        h = full_height * (1-(double)elapsed.count()/anim_time.count());
   }
   if (!animating) {
     if (last_animating && animating_cb) animating_cb();
     if (!active) { drawing = 0; return; }
   }
 
-  screen->gd->FillColor(color);
+  int y = bottom_or_top ? 0 : screen->height - h, fh = font->Height();
+  Box b(0, y, screen->width, h), tb(0, y + fh, screen->width, full_height - fh);
+
   if (blend) screen->gd->EnableBlend(); 
   else       screen->gd->DisableBlend();
-
-  int y = bottom_or_top ? 0 : screen->height - h, fh = font->Height();
-  Box(0, y, screen->width, h).Draw();
-
+  screen->gd->FillColor(color);
+  b.Draw();
   screen->gd->SetColor(Color::white);
-  TextArea::Draw(Box(0, y + fh, screen->width, h - fh), DrawFlag::CheckResized);
-  TextGUI::Draw(Box(0, y, screen->width, fh));
+  CheckResized(tb);
+  if (animating) screen->gd->PushScissor(b);
+  TextArea::Draw(tb, 0);
+  if (animating) screen->gd->PopScissor();
+  TextGUI::Draw(b);
 }
 
 /* Dialog */
 
-Dialog::Dialog(float w, float h, int flag) : GUI(screen), font(Fonts::Get(FLAGS_default_font, "", 14, Color::white)), menuicon(Fonts::Get("MenuAtlas", "", 0, Color::white, Color::clear, 0)) {
+Dialog::Dialog(float w, float h, int flag) : GUI(screen), color(85,85,85,220),
+  title_gradient{Color(127,0,0), Color(0,0,127), Color(0,0,178), Color(208,0,127)},
+  font(Fonts::Get(FLAGS_default_font, "", 14, Color(Color::white,.8), Color::clear, FLAGS_default_font_flag|FontDesc::Bold|FontDesc::Shadow)),
+  menuicon(Fonts::Get("MenuAtlas", "", 0, Color::white, Color::clear, 0)), deleted_cb([=]{ deleted=true; })
+{
   box = screen->Box().center(screen->Box(w, h));
   fullscreen = flag & Flag::Fullscreen;
   Activate();
 }
 
+void Dialog::LayoutTabbed(int tab, const Box &b, const point &tab_dim, MouseController *oc, DrawableBoxArray *od) {
+  fullscreen = tabbed = true;
+  box = b;
+  Layout();
+  LayoutTitle(Box(tab*tab_dim.x, 0, tab_dim.x, tab_dim.y), oc, od);
+}
+
 void Dialog::Layout() {
   Reset();
+  int fh = font->Height();
+  content = Box(0, -box.h, box.w, box.h + ((fullscreen && !tabbed) ? 0 : -fh));
   if (fullscreen) return;
-  title         = Box(0,       0,      box.w, screen->height*.05);
-  resize_left   = Box(0,       -box.h, 3,     box.h);
-  resize_right  = Box(box.w-3, -box.h, 3,     box.h);
-  resize_bottom = Box(0,       -box.h, box.w, 3);
+  LayoutTitle(Box(box.w, fh), this, &child_box);
+  LayoutReshapeControls(box.Dimension(), this);
+}
 
-  Box close = Box(box.w-10, title.top()-10, 10, 10);
-  AddClickBox(resize_left,   MouseController::CB(bind(&Dialog::Reshape,     this, &resizing_left)));
-  AddClickBox(resize_right,  MouseController::CB(bind(&Dialog::Reshape,     this, &resizing_right)));
-  AddClickBox(resize_bottom, MouseController::CB(bind(&Dialog::Reshape,     this, &resizing_bottom)));
-  AddClickBox(title,         MouseController::CB(bind(&Dialog::Reshape,     this, &moving)));
-  AddClickBox(close,         MouseController::CB(bind(&Dialog::MarkDeleted, this)));
+void Dialog::LayoutTitle(const Box &b, MouseController *oc, DrawableBoxArray *od) {
+  title = Box(0, -b.h, b.w, b.h);
+  Box close = Box(b.w-10, title.top()-10, 10, 10);
+  oc->AddClickBox(close + b.Position(), deleted_cb);
 
-  int attr_id = child_box.attr.GetAttrId(Drawable::Attr(menuicon));
-  child_box.PushBack(close, attr_id, menuicon ? menuicon->FindGlyph(0) : 0);
-
+  int attr_id = od->attr.GetAttrId(Drawable::Attr(menuicon));
+  od->PushBack(close, attr_id, menuicon ? menuicon->FindGlyph(0) : 0);
   if (title_text.size()) {
     Box title_text_size;
     font->Size(title_text, &title_text_size);
-    font->Shape(title_text, Box(title.centerX(title_text_size.w), title.centerY(title_text_size.h), 0, 0), &child_box);
+    font->Shape(title_text, Box(title.centerX(title_text_size.w), title.centerY(title_text_size.h), 0, 0), od);
   }
 }
 
-void Dialog::Draw() {
-  bool resizing = resizing_left || resizing_right || resizing_top || resizing_bottom;
-  if (child_box.data.empty() && !resizing) Layout();
+void Dialog::LayoutReshapeControls(const point &dim, MouseController *oc) {
+  resize_left   = Box(0,       -dim.y, 3, dim.y);
+  resize_right  = Box(dim.x-3, -dim.y, 3, dim.y);
+  resize_bottom = Box(0,       -dim.y, dim.x, 3);
+
+  oc->AddClickBox(resize_left,   MouseController::CB(bind(&Dialog::Reshape, this, &resizing_left)));
+  oc->AddClickBox(resize_right,  MouseController::CB(bind(&Dialog::Reshape, this, &resizing_right)));
+  oc->AddClickBox(resize_bottom, MouseController::CB(bind(&Dialog::Reshape, this, &resizing_bottom)));
+  oc->AddClickBox(title,         MouseController::CB(bind(&Dialog::Reshape, this, &moving)));
+}
+
+bool Dialog::HandleReshape(Box *outline) {
+  bool resizing = resizing_left || resizing_right || resizing_bottom;
   if (moving) box.SetPosition(win_start + screen->mouse - mouse_start);
-
-  Box outline = BoxAndTitle();
-  static const int min_width = 50, min_height = 1;
-  if (resizing_left)   MinusPlus(&outline.x, &outline.w, max(-outline.w + min_width,            (int)(mouse_start.x - screen->mouse.x)));
-  if (resizing_bottom) MinusPlus(&outline.y, &outline.h, max(-outline.h + min_height + title.h, (int)(mouse_start.y - screen->mouse.y)));
-  if (resizing_right)  outline.w += max(-outline.w + min_width, (int)(screen->mouse.x - mouse_start.x));
-
+  if (moving || resizing) *outline = box;
+  if (resizing_left)   MinusPlus(&outline->x, &outline->w, max(-outline->w + min_width,  (int)(mouse_start.x - screen->mouse.x)));
+  if (resizing_bottom) MinusPlus(&outline->y, &outline->h, max(-outline->h + min_height, (int)(mouse_start.y - screen->mouse.y)));
+  if (resizing_right)  outline->w += max(-outline->w + min_width, (int)(screen->mouse.x - mouse_start.x));
   if (!app->input->MouseButton1Down()) {
-    if (resizing) {
-      box = Box(outline.x, outline.y, outline.w, outline.h - title.h);
-      Layout();
-    }
-    moving = resizing_left = resizing_right = resizing_top = resizing_bottom = 0;
+    if (resizing) { box = *outline; Layout(); }
+    moving = resizing_left = resizing_right = resizing_bottom = 0;
   }
+  return moving || resizing_left || resizing_right || resizing_bottom;
+}
+
+void Dialog::Draw() {
+  if (fullscreen) { child_box.Draw(box.TopLeft()); return; }
+  Box outline;
+  bool reshaping = HandleReshape(&outline);
+  if (child_box.data.empty() && !reshaping) Layout();
 
   screen->gd->FillColor(color);
   box.Draw();
-
-  screen->gd->SetColor(color + Color(0,0,0,(int)(color.A()*.25)));
-  (title + box.TopLeft()).Draw();
   screen->gd->SetColor(Color::white);
+  if (reshaping) BoxOutline().Draw(outline);
 
-  if (moving || resizing_left || resizing_right || resizing_top || resizing_bottom)
-    BoxOutline().Draw(outline);
+  screen->gd->EnableVertexColor();
+  DrawGradient(box.TopLeft());
+  screen->gd->DisableVertexColor();
 
   child_box.Draw(box.TopLeft());
 }
 
-void Dialog::BringToFront() {
-  if (screen->top_dialog == this) return;
-  if (screen->top_dialog) screen->top_dialog->LoseFocus();
-  int zsort_ind = 0;
-  for (auto d : screen->dialogs) d->zsort = ++zsort_ind;
-  zsort = 0;
-  sort(screen->dialogs.begin(), screen->dialogs.end(), LessThan);
-  (screen->top_dialog = this)->TakeFocus();
+void DialogTab::Draw(const Box &b, const point &tab_dim, const vector<DialogTab> &t) {
+  screen->gd->FillColor(Color::grey70);
+  Box(b.x, b.y+b.h-tab_dim.y, b.w, tab_dim.y).Draw();
+  screen->gd->EnableVertexColor();
+  for (int i=0, l=t.size(); i<l; ++i) t[i].dialog->DrawGradient(b.TopLeft() + point(i*tab_dim.x, 0));
+  screen->gd->DisableVertexColor();
+  screen->gd->EnableTexture();
+  for (int i=0, l=t.size(); i<l; ++i) t[i].child_box.Draw(b.TopLeft() + point(i*tab_dim.x, 0));
 }
 
 void MessageBoxDialog::Draw() {
@@ -1712,8 +1739,9 @@ EditorDialog::EditorDialog(Window *W, Font *F, File *I, float w, float h, int fl
   h_scrollbar(this, Box(), Widget::Slider::Flag::AttachedHorizontalNoCorner) {}
 
 void EditorDialog::Layout() {
+  if (editor.file) title_text = BaseName(editor.file->Filename());
   Dialog::Layout();
-  Widget::Slider::AttachContentBox(&(content_box = Box(0, -box.h, box.w, box.h)), &v_scrollbar, editor.Wrap() ? NULL : &h_scrollbar);
+  Widget::Slider::AttachContentBox(&content, &v_scrollbar, editor.Wrap() ? NULL : &h_scrollbar);
 }
 
 void EditorDialog::Draw() {
@@ -1722,7 +1750,7 @@ void EditorDialog::Draw() {
   if (!wrap) editor.h_scrolled = h_scrollbar.AddScrollDelta(editor.h_scrolled);
   if (1)     editor.UpdateScrolled();
   if (1)     Dialog::Draw();
-  if (1)     editor.Draw(content_box + box.TopLeft(), Editor::DrawFlag::DrawCursor | Editor::DrawFlag::CheckResized);
+  if (1)     editor.Draw(content + box.TopLeft(), Editor::DrawFlag::DrawCursor | Editor::DrawFlag::CheckResized);
   if (1)     v_scrollbar.Update();
   if (!wrap) h_scrollbar.Update();
 }

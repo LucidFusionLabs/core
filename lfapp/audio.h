@@ -54,14 +54,6 @@ struct Sample {
 #endif
 };
 
-struct SystemAudio {
-  static void PlaySoundEffect(SoundAsset *);
-  static void PlayBackgroundMusic(SoundAsset *);
-  static void SetVolume(int v);
-  static int GetVolume();
-  static int GetMaxVolume();
-};
-
 struct Audio : public Module {
   mutex inlock, outlock;
   unique_ptr<RingBuf> IL, IR;

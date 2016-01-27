@@ -97,7 +97,19 @@ int CUDA::Init() { FLAGS_lfapp_cuda=0; INFO("CUDA not supported lfapp_cuda(", FL
 }; // namespace LFL
 #include "clang-c/Index.h"
 namespace LFL {
-string GetClangString(const CXString &s) { string v=BlankNull(clang_getCString(s)); clang_disposeString(s); return v; }
+typedef function<CXChildVisitResult(CXCursor)> ClangCursorVisitor;  
+unsigned ClangVisitChildren(CXCursor p, ClangCursorVisitor f) {
+  auto visitor_closure = [](CXCursor c, CXCursor p, CXClientData v) -> CXChildVisitResult {
+    return (*reinterpret_cast<const ClangCursorVisitor*>(v))(c);
+  };
+  return clang_visitChildren(p, visitor_closure, &f);
+}
+
+string GetClangString(const CXString &s) {
+  string v = BlankNull(clang_getCString(s));
+  clang_disposeString(s);
+  return v;
+}
 
 ClangTranslationUnit::ClangTranslationUnit(const string &f, const string &cc, const string &wd) :
   index(clang_createIndex(0, 0)), filename(f), compile_command(cc), working_directory(wd) {
@@ -112,6 +124,26 @@ ClangTranslationUnit::ClangTranslationUnit(const string &f, const string &cc, co
 ClangTranslationUnit::~ClangTranslationUnit() {
   clang_disposeTranslationUnit(tu);
   clang_disposeIndex(index);
+}
+
+FileNameAndOffset ClangTranslationUnit::FindDefinition(const string &fn, int offset) {
+  CXFile cf = clang_getFile(tu, fn.c_str());
+  if (!cf) return FileNameAndOffset();
+  CXCursor cursor = clang_getCursor(tu, clang_getLocationForOffset(tu, cf, offset));
+  CXCursor cursor_canonical = clang_getCanonicalCursor(cursor), null = clang_getNullCursor();
+  CXCursor parent = clang_getCursorSemanticParent(cursor), child = null;
+  if (clang_equalCursors(parent, null)) return FileNameAndOffset();
+  ClangVisitChildren(parent, [&](CXCursor c){
+    if (!clang_equalCursors(clang_getCanonicalCursor(c), cursor_canonical)) return CXChildVisit_Continue;
+    else { child = c; return CXChildVisit_Break; }
+  });
+  if (clang_equalCursors(child, null)) return FileNameAndOffset();
+  CXFile rf;
+  unsigned ry, rx, ro;
+  CXSourceRange sr = clang_getCursorExtent(child);
+  clang_getSpellingLocation(clang_getRangeStart(sr), &rf, &ry, &rx, &ro);
+  string rfn = GetClangString(clang_getFileName(rf));
+  return FileNameAndOffset(GetClangString(clang_getFileName(rf)), ro, ry, rx);
 }
 
 void ClangTokenVisitor::Visit() {
@@ -135,6 +167,7 @@ void ClangTokenVisitor::Visit() {
 #else // LFL_LIBCLANG
 ClangTranslationUnit::ClangTranslationUnit(const string &f, const string &cc, const string &wd) {}
 ClangTranslationUnit::~ClangTranslationUnit() {}
+FileNameAndOffset ClangTranslationUnit::FindDefinition(const string&, int) { return FileNameAndOffset(); }
 #endif // LFL_LIBCLANG
 
 #ifdef LFL_LUA

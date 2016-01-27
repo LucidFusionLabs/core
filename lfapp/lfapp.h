@@ -603,8 +603,9 @@ struct Application : public ::LFApp, public Module {
   void AddNativeMenu(const string &title, const vector<MenuItem> &items);
   void AddNativeEditMenu();
   void LaunchNativeMenu(const string &title);
-  void LaunchNativeFontChooser(const FontDesc &cur_font, const string &choose_cmd);
   void LaunchNativeContextMenu(const vector<MenuItem> &items);
+  void LaunchNativeFontChooser(const FontDesc &cur_font, const string &choose_cmd);
+  void LaunchNativeFileChooser(bool files, bool dirs, bool multi, const string &choose_cmd);
 
   /// AddToolbar item values with prefix "toggle" stay depressed
   void AddToolbar(const vector<pair<string, string>>&items);
@@ -623,6 +624,12 @@ struct Application : public ::LFApp, public Module {
 
   void ShowAds();
   void HideAds();
+
+  int GetVolume();
+  int GetMaxVolume();
+  void SetVolume(int v);
+  void PlaySoundEffect(SoundAsset*);
+  void PlayBackgroundMusic(SoundAsset*);
 
   static void Daemonize(const char *dir="");
   static void Daemonize(FILE *fout, FILE *ferr);

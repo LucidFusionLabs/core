@@ -410,6 +410,28 @@ void Box::Draw(const float *texcoord) const {
 #endif
 }
 
+void Box::DrawGradient(const Color *c) const {
+#if 0
+  float verts[] = { (float)x,   (float)y,   c[0].r(), c[0].g(), c[0].b(), c[0].a(),
+                    (float)x,   (float)y+h, c[3].r(), c[3].g(), c[3].b(), c[3].a(),
+                    (float)x+w, (float)y,   c[1].r(), c[1].g(), c[1].b(), c[1].a(),
+                    (float)x,   (float)y+h, c[3].r(), c[3].g(), c[3].b(), c[3].a(),
+                    (float)x+w, (float)y,   c[1].r(), c[1].g(), c[1].b(), c[1].a(),
+                    (float)x+w, (float)y+h, c[2].r(), c[2].g(), c[2].b(), c[2].a() };
+  bool changed = screen->gd->VertexPointer(2, GraphicsDevice::Float, sizeof(float)*6, 0,               verts, sizeof(verts), NULL, true, GraphicsDevice::Triangles);
+  if (changed)   screen->gd->ColorPointer (4, GraphicsDevice::Float, sizeof(float)*6, sizeof(float)*2, verts, sizeof(verts), NULL, false);
+  if (1)         screen->gd->DeferDrawArrays(GraphicsDevice::Triangles, 0, 6);
+#else
+  float verts[] = { (float)x,   (float)y,   c[0].r(), c[0].g(), c[0].b(), c[0].a(),
+                    (float)x,   (float)y+h, c[3].r(), c[3].g(), c[3].b(), c[3].a(),
+                    (float)x+w, (float)y,   c[1].r(), c[1].g(), c[1].b(), c[1].a(),
+                    (float)x+w, (float)y+h, c[2].r(), c[2].g(), c[2].b(), c[2].a() };
+  bool changed = screen->gd->VertexPointer(2, GraphicsDevice::Float, sizeof(float)*6, 0,               verts, sizeof(verts), NULL, true, GraphicsDevice::TriangleStrip);
+  if  (changed)  screen->gd->ColorPointer (4, GraphicsDevice::Float, sizeof(float)*6, sizeof(float)*2, verts, sizeof(verts), NULL, false);
+  if (1)         screen->gd->DeferDrawArrays(GraphicsDevice::TriangleStrip, 0, 4);
+#endif
+}
+
 void Box::DrawCrimped(const float *texcoord, int orientation, float scrollX, float scrollY) const {
   float left=x, right=x+w, top=y, bottom=y+h;
   float texMinX, texMinY, texMaxX, texMaxY, texMidX1, texMidX2, texMidY1, texMidY2;
@@ -2347,6 +2369,25 @@ void Window::InitLFAppConsole() {
   lfapp_console->Write("Try console commands 'cmds' and 'flags'");
 }
 
+void Window::AddDialog(Dialog *d) {
+  dialogs.push_back(d);
+  if (dialogs.size() == 1) BringDialogToFront(d);
+}
+
+void Window::BringDialogToFront(Dialog *d) {
+  if (top_dialog == d) return;
+  if (top_dialog) top_dialog->LoseFocus();
+  int zsort_ind = 0;
+  for (auto d : dialogs) d->zsort = ++zsort_ind;
+  d->zsort = 0;
+  sort(dialogs.begin(), dialogs.end(), Dialog::LessThan);
+  (top_dialog = d)->TakeFocus();
+}
+
+void Window::GiveDialogFocusAway(Dialog *d) {
+  if (top_dialog == d) { top_dialog=0; d->LoseFocus(); }
+}
+
 void Window::DrawDialogs() {
   for (auto i = screen->dialogs.begin(), e = screen->dialogs.end(); i != e; ++i) (*i)->Draw();
   if (screen->lfapp_console) screen->lfapp_console->Draw();
@@ -2355,11 +2396,6 @@ void Window::DrawDialogs() {
     glIntersect(screen->mouse.x, screen->mouse.y, &c);
     Fonts::Default()->Draw(StrCat("draw_grid ", screen->mouse.x, " , ", screen->mouse.y), point(0,0));
   }
-}
-
-void Window::AddDialog(Dialog *d) {
-  screen->dialogs.push_back(d);
-  if (screen->dialogs.size() == 1) d->BringToFront();
 }
 
 void Window::SetCaption(const string &v) {
