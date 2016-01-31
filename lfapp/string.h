@@ -161,6 +161,8 @@ template <class X> struct StringPieceT : public ArrayPiece<X> {
 };
 typedef StringPieceT<char> StringPiece;
 typedef StringPieceT<char16_t> String16Piece;
+template <class X> StringPieceT<X> MakeUnbounded(const typename enable_if<is_signed<X>::value, X                              >::type *b) { return StringPieceT<X>::Unbounded(b); }
+template <class X> StringPieceT<X> MakeUnbounded(const typename enable_if<is_signed<X>::value, typename make_unsigned<X>::type>::type *b) { return StringPieceT<X>::Unbounded(reinterpret_cast<const X*>(b)); }
 
 struct StringBuffer {
   string data;

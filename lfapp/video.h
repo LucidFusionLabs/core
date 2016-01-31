@@ -404,11 +404,12 @@ struct Shader {
   float scale=0;
   int unused_attrib_slot[MaxVertexAttrib];
   bool dirty_material=0, dirty_light_pos[4], dirty_light_color[4];
-  int ID=0, slot_position=-1, slot_normal=-1, slot_tex=-1, slot_color=-1, uniform_modelview=-1, uniform_modelviewproj=-1,
-      uniform_tex=-1,uniform_cubetex=-1, uniform_normalon=-1, uniform_texon=-1, uniform_coloron=-1, uniform_cubeon=-1,
-      uniform_colordefault=-1, uniform_material_ambient=-1, uniform_material_diffuse=-1, uniform_material_specular=-1,
-      uniform_material_emission=-1, uniform_light0_pos=-1, uniform_light0_ambient=-1, uniform_light0_diffuse=-1,
-      uniform_light0_specular=-1;
+  int ID=0, slot_position=-1, slot_normal=-1, slot_tex=-1, slot_color=-1,
+    uniform_model=-1, uniform_invview=-1, uniform_modelview=-1, uniform_modelviewproj=-1, uniform_campos=-1,
+    uniform_tex=-1, uniform_cubetex=-1, uniform_normalon=-1, uniform_texon=-1, uniform_coloron=-1, uniform_cubeon=-1,
+    uniform_colordefault=-1, uniform_material_ambient=-1, uniform_material_diffuse=-1, uniform_material_specular=-1,
+    uniform_material_emission=-1, uniform_light0_pos=-1, uniform_light0_ambient=-1, uniform_light0_diffuse=-1,
+    uniform_light0_specular=-1;
   Shader() { memzeros(dirty_light_pos); memzeros(dirty_light_color); }
 
   static int Create(const string &name, const string &vertex_shader, const string &fragment_shader, const ShaderDefines&, Shader *out);
@@ -437,9 +438,11 @@ struct GraphicsDevice : public QOpenGLFunctions {
   static const int Fill, Line, Point, GLPreferredBuffer, GLInternalFormat;
 
   int default_draw_mode = DrawMode::_2D, draw_mode = 0, default_framebuffer = 0;
+  bool blend_enabled = 0, invert_view_matrix = 0, track_model_matrix = 0;
   string vertex_shader, pixel_shader;
-  bool blend_enabled = 0;
   Shader *shader = 0;
+  v3 camera_pos;
+  m44 invview_matrix, model_matrix;
   Color clear_color = Color::black;
   vector<Color> default_color;
   vector<vector<Box> > scissor_stack;
@@ -512,6 +515,7 @@ struct GraphicsDevice : public QOpenGLFunctions {
   // Common layer
   void Flush();
   void Clear();
+  void ClearDepth();
   void ClearColor(const Color &c);
   void FillColor(const Color &c) { DisableTexture(); SetColor(c); };
   void SetColor(const Color &c) { Color4f(c.r(), c.g(), c.b(), c.a()); }
@@ -582,6 +586,7 @@ struct Window : public NativeWindow {
   Window();
   virtual ~Window();
 
+  void SetSize(const point &d);
   void SetCaption(const string &c);
   void SetResizeIncrements(float x, float y);
   void SetTransparency(float v);

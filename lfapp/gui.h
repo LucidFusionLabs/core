@@ -673,14 +673,14 @@ template <class D=Dialog> struct TabbedDialog {
 struct MessageBoxDialog : public Dialog {
   string message;
   Box messagesize;
-  MessageBoxDialog(const string &m) : Dialog(.25, .1), message(m) { font->Size(message, &messagesize); }
+  MessageBoxDialog(const string &m) : Dialog(.25, .2), message(m) { font->Size(message, &messagesize); }
   void Draw();
 };
 
 struct TextureBoxDialog : public Dialog {
   Texture tex;
-  TextureBoxDialog(const string &m) : Dialog(.25, .1) { tex.ID = ::atoi(m.c_str()); }
-  void Draw() { Dialog::Draw(); tex.Draw(box); }
+  TextureBoxDialog(const string &m) : Dialog(.33, .33) { tex.ID = ::atoi(m.c_str()); }
+  void Draw() { Dialog::Draw(); tex.Draw(content + box.TopLeft()); }
 };
 
 struct SliderDialog : public Dialog {
@@ -689,7 +689,7 @@ struct SliderDialog : public Dialog {
   UpdatedCB updated;
   Widget::Slider slider;
   SliderDialog(const string &title="", const UpdatedCB &cb=UpdatedCB(), float scrolled=0, float total=100, float inc=1);
-  void Layout() { Dialog::Layout(); slider.LayoutFixed(Box(0, -box.h, box.w, box.h)); }
+  void Layout() { Dialog::Layout(); slider.LayoutFixed(content); }
   void Draw() { Dialog::Draw(); if (slider.dirty) { slider.Update(); if (updated) updated(&slider); } }
 };
 

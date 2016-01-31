@@ -175,6 +175,7 @@ DEFINE_float(rotate_view, 0, "Rotate view by angle");
 DEFINE_float(field_of_view, 45, "Field of view");
 DEFINE_float(near_plane, 1, "Near clipping plane");
 DEFINE_float(far_plane, 100, "Far clipping plane");
+DEFINE_unsigned(depth_buffer_bits, 0, "Depth buffer bits");
 DEFINE_int(dots_per_inch, 75, "Screen DPI");
 DEFINE_bool(swap_axis, false," Swap x,y axis");
 
@@ -852,14 +853,15 @@ int Shader::Create(const string &name, const string &vertex_shader, const string
     if ((out->slot_normal               = screen->gd->GetAttribLocation (p, "Normal"))              < 0 && log_missing_attrib) INFO("shader ", name, " missing Normal");
     if ((out->slot_color                = screen->gd->GetAttribLocation (p, "VertexColor"))         < 0 && log_missing_attrib) INFO("shader ", name, " missing VertexColor");
     if ((out->slot_tex                  = screen->gd->GetAttribLocation (p, "TexCoordIn"))          < 0 && log_missing_attrib) INFO("shader ", name, " missing TexCoordIn");
+    if ((out->uniform_model             = screen->gd->GetUniformLocation(p, "Model"))               < 0 && log_missing_attrib) INFO("shader ", name, " missing Model");
+    if ((out->uniform_invview           = screen->gd->GetUniformLocation(p, "InverseView"))         < 0 && log_missing_attrib) INFO("shader ", name, " missing InverseView");
     if ((out->uniform_modelview         = screen->gd->GetUniformLocation(p, "Modelview"))           < 0 && log_missing_attrib) INFO("shader ", name, " missing Modelview");
     if ((out->uniform_modelviewproj     = screen->gd->GetUniformLocation(p, "ModelviewProjection")) < 0 && log_missing_attrib) INFO("shader ", name, " missing ModelviewProjection");
+    if ((out->uniform_campos            = screen->gd->GetUniformLocation(p, "CameraPosition"))      < 0 && log_missing_attrib) INFO("shader ", name, " missing CameraPosition");
     if ((out->uniform_tex               = screen->gd->GetUniformLocation(p, "iChannel0"))           < 0 && log_missing_attrib) INFO("shader ", name, " missing Texture");
     if ((out->uniform_cubetex           = screen->gd->GetUniformLocation(p, "CubeTexture"))         < 0 && log_missing_attrib) INFO("shader ", name, " missing CubeTexture");
-    if ((out->uniform_normalon          = screen->gd->GetUniformLocation(p, "NormalEnabled"))       < 0 && log_missing_attrib) INFO("shader ", name, " missing NormalEnabled");
     if ((out->uniform_texon             = screen->gd->GetUniformLocation(p, "TexCoordEnabled"))     < 0 && log_missing_attrib) INFO("shader ", name, " missing TexCoordEnabled");
     if ((out->uniform_coloron           = screen->gd->GetUniformLocation(p, "VertexColorEnabled"))  < 0 && log_missing_attrib) INFO("shader ", name, " missing VertexColorEnabled");
-    if ((out->uniform_cubeon            = screen->gd->GetUniformLocation(p, "CubeMapEnabled"))      < 0 && log_missing_attrib) INFO("shader ", name, " missing CubeMapEnabled");
     if ((out->uniform_colordefault      = screen->gd->GetUniformLocation(p, "DefaultColor"))        < 0 && log_missing_attrib) INFO("shader ", name, " missing DefaultColor");
     if ((out->uniform_material_ambient  = screen->gd->GetUniformLocation(p, "MaterialAmbient"))     < 0 && log_missing_attrib) INFO("shader ", name, " missing MaterialAmbient");
     if ((out->uniform_material_diffuse  = screen->gd->GetUniformLocation(p, "MaterialDiffuse"))     < 0 && log_missing_attrib) INFO("shader ", name, " missing MaterialDiffuse");
@@ -894,11 +896,7 @@ int Shader::CreateShaderToy(const string &name, const string &pixel_shader, Shad
     "#define SamplePoint() ((fragCoord.xy + iScroll)/iResolution.xy)\r\n"
     "#define SamplePointFlipY() vec2((fragCoord.x+iScroll.x)/iResolution.x, (iResolution.y-fragCoord.y-iScroll.y)/iResolution.y)\r\n"
     "#define SampleChannel(c) SampleChannelAtPoint(c, SamplePoint())\r\n"
-#ifdef LFL_MOBILE
-    "#define BlendChannels(c1,c2) (((c1) + (c2))/2.0)\r\n";
-#else
     "#define BlendChannels(c1,c2) ((c1)*iBlend + (c2)*(1.0-iBlend))\r\n";
-#endif
 
   static string footer =
     "void main(void) { mainImage(gl_FragColor, gl_FragCoord.xy); }\r\n";
@@ -1099,7 +1097,7 @@ struct OpenGLES1 : public GraphicsDevice, public QTWindow {
 #if defined(LFL_ANDROID) || defined(LFL_IPHONE)
     return false;
 #endif
-    const char *ver = (const char*)glGetString(GL_VERSION);
+    const char *ver = MakeUnbounded<char>(glGetString(GL_VERSION)).data();
     return ver && *ver == '2';
   }
   void  EnableTexture() {  glEnable(GL_TEXTURE_2D);  glEnableClientState(GL_TEXTURE_COORD_ARRAY); GDDebug("Texture=1"); }
@@ -1136,9 +1134,9 @@ struct OpenGLES1 : public GraphicsDevice, public QTWindow {
   }
   void TextureGenReflection() {
     EnableTextureGen();
-    glTexGeni(GL_S, GL_TEXTURE_GEN_MODE, GL_OBJECT_LINEAR);
-    glTexGeni(GL_T, GL_TEXTURE_GEN_MODE, GL_OBJECT_LINEAR);
-    glTexGeni(GL_R, GL_TEXTURE_GEN_MODE, GL_OBJECT_LINEAR);
+    glTexGeni(GL_S, GL_TEXTURE_GEN_MODE, GL_REFLECTION_MAP);
+    glTexGeni(GL_T, GL_TEXTURE_GEN_MODE, GL_REFLECTION_MAP);
+    glTexGeni(GL_R, GL_TEXTURE_GEN_MODE, GL_REFLECTION_MAP);
     GDDebug("TextureGen=R");
   }
 #endif
@@ -1250,8 +1248,8 @@ struct OpenGLES2 : public GraphicsDevice, public QTWindow {
   void DisableVertexColor() { if (Changed(&colorverts_on, false)) { ClearDeferred(); UpdateColorVerts(); } GDDebug("VertexColor=0"); }
   void EnableNormals()      { if (Changed(&normals_on,    true))  { UpdateShader();  UpdateNormals();    } GDDebug("Normals=1"); }
   void DisableNormals()     { if (Changed(&normals_on,    false)) { UpdateShader();  UpdateNormals();    } GDDebug("Normals=0"); }
-  void DisableCubeMap()     { if (Changed(&cubemap_on,    false)) { UpdateShader();  glUniform1i(shader->uniform_cubeon, 0); }                                                                                 GDDebug("CubeMap=", 0); }
-  void BindCubeMap(int n)   { if (Changed(&cubemap_on,    true))  { UpdateShader();  glUniform1i(shader->uniform_cubeon, 1); } glUniform1i(shader->uniform_cubetex, 0); glBindTexture(GL_TEXTURE_CUBE_MAP, n); GDDebug("CubeMap=", n); }
+  void DisableCubeMap()     { if (Changed(&cubemap_on,    false)) { UpdateShader(); }                                                                                 GDDebug("CubeMap=", 0); }
+  void BindCubeMap(int n)   { if (Changed(&cubemap_on,    true))  { UpdateShader(); } glUniform1i(shader->uniform_cubetex, 0); glBindTexture(GL_TEXTURE_CUBE_MAP, n); GDDebug("CubeMap=", n); }
   void ActiveTexture(int n) { if (Changed(&bound_texture.l, n))   { ClearDeferred(); glActiveTexture(n ? GL_TEXTURE1 : GL_TEXTURE0); } GDDebug("ActivteTexture=", n); }
   void EnableLight(int n) {}
   void DisableLight(int n) {}
@@ -1419,7 +1417,6 @@ struct OpenGLES2 : public GraphicsDevice, public QTWindow {
   }
   void UpdateNormals() {
     bool supports = shader->slot_normal >= 0;
-    glUniform1i(shader->uniform_normalon, normals_on && supports);
     if (supports) {
       if (normals_on) {  glEnableVertexAttribArray(shader->slot_normal); VertexAttribPointer(shader->slot_normal, normal_attr); }
       else            { glDisableVertexAttribArray(shader->slot_normal); }
@@ -1504,8 +1501,11 @@ struct OpenGLES2 : public GraphicsDevice, public QTWindow {
       dirty_matrix = false;
       m44 m = projection_matrix.back();
       m.Mult(modelview_matrix.back());
-      glUniformMatrix4fv(shader->uniform_modelviewproj, 1, 0, m[0]);
-      glUniformMatrix4fv(shader->uniform_modelview,     1, 0, modelview_matrix.back()[0]);
+      if (1)                  glUniformMatrix4fv(shader->uniform_modelviewproj, 1, 0, m[0]);
+      if (1)                  glUniformMatrix4fv(shader->uniform_modelview,     1, 0, modelview_matrix.back()[0]);
+      if (1)                  glUniform3fv      (shader->uniform_campos,        1,    camera_pos);
+      if (invert_view_matrix) glUniformMatrix4fv(shader->uniform_invview,       1, 0, invview_matrix[0]);
+      if (track_model_matrix) glUniformMatrix4fv(shader->uniform_model,         1, 0, model_matrix[0]);
     }
     if (dirty_color && shader->uniform_colordefault >= 0) {
       dirty_color = false;
@@ -1568,6 +1568,7 @@ void GraphicsDevice::Uniform3fv(int u, int n, const float *v) { glUniform3fv(u, 
 // Common layer
 void GraphicsDevice::Flush() { ClearDeferred(); glFlush(); }
 void GraphicsDevice::Clear() { glClear(GL_COLOR_BUFFER_BIT | (draw_mode == DrawMode::_3D ? GL_DEPTH_BUFFER_BIT : 0)); }
+void GraphicsDevice::ClearDepth() { glClear(GL_DEPTH_BUFFER_BIT); }
 void GraphicsDevice::ClearColor(const Color &c) { clear_color=c; glClearColor(c.r(), c.g(), c.b(), c.a()); GDDebug("ClearColor=", c.DebugString()); }
 void GraphicsDevice::PushColor() { default_color.push_back(default_color.back()); UpdateColor();  }
 void GraphicsDevice::PopColor() {
@@ -1646,14 +1647,17 @@ void GraphicsDevice::LookAt(const v3 &pos, const v3 &targ, const v3 &up) {
   v3 Z = pos - targ;       Z.Norm();
   v3 X = v3::Cross(up, Z); X.Norm();
   v3 Y = v3::Cross(Z,  X); Y.Norm();
+
   float m[16] = {
     X.x, Y.x, Z.x, 0.0,
     X.y, Y.y, Z.y, 0.0,
     X.z, Y.z, Z.z, 0.0,
-    0.0, 0.0, 0.0, 1.0
+    -v3::Dot(X, pos), -v3::Dot(Y, pos), -v3::Dot(Z, pos), 1.0
   };
+
+  if (invert_view_matrix) m44::Invert(m44(m), &invview_matrix);
+  camera_pos = pos;
   Mult(m);
-  Translate(-pos.x, -pos.y, -pos.z);
 }
 
 void GraphicsDevice::ViewPort(Box w) {
@@ -1967,7 +1971,7 @@ struct X11VideoModule : public Module {
   Display *display = 0;
   XVisualInfo *vi = 0;
   int Init() {
-    GLint att[] = { GLX_RGBA, GLX_DEPTH_SIZE, 16, GLX_DOUBLEBUFFER, None };
+    GLint att[] = { GLX_RGBA, GLX_DEPTH_SIZE, FLAGS_depth_buffer_bits, GLX_DOUBLEBUFFER, None };
     if (!(display = XOpenDisplay(NULL))) return ERRORv(-1, "XOpenDisplay");
     if (!(vi = glXChooseVisual(display, 0, att))) return ERRORv(-1, "glXChooseVisual");
     app->scheduler.system_event_socket = ConnectionNumber(display);
@@ -2143,7 +2147,7 @@ END_EVENT_TABLE()
 struct LFLWxWidgetFrame : public wxFrame {
   LFLWxWidgetCanvas *canvas=0;
   LFLWxWidgetFrame(LFL::Window *w) : wxFrame(NULL, wxID_ANY, wxString::FromUTF8(w->caption.c_str())) {
-    int args[] = { WX_GL_RGBA, WX_GL_DOUBLEBUFFER, WX_GL_DEPTH_SIZE, 16, 0 };
+    int args[] = { WX_GL_RGBA, WX_GL_DOUBLEBUFFER, WX_GL_DEPTH_SIZE, FLAGS_depth_buffer_bits, 0 };
     canvas = new LFLWxWidgetCanvas(w, this, args);
     SetClientSize(w->width, w->height);
     wxMenu *menu = new wxMenu;
@@ -2278,7 +2282,7 @@ bool Application::CreateWindow(Window *W) {
   SDL_GL_SetAttribute(SDL_GL_RED_SIZE, bitdepth[0]);
   SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE, bitdepth[1]);
   SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE, bitdepth[2]);
-  SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 16);
+  SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, FLAGS_depth_buffer_bits);
   SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
 
   if (!(W->id = SDL_CreateWindow(W->caption.c_str(), SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, W->width, W->height, createFlag)))
@@ -2315,10 +2319,9 @@ Window::Window() : caption("lfapp"), fps(128) {
   id = gl = surface = glew_context = impl = user1 = user2 = user3 = 0;
   minimized = cursor_grabbed = frame_init = animating = 0;
   target_fps = FLAGS_target_fps;
-  pow2_width = NextPowerOfTwo((width = 640));
-  pow2_height = NextPowerOfTwo((height = 480));
   multitouch_keyboard_x = .93; 
   cam = new Entity(v3(5.54, 1.70, 4.39), v3(-.51, -.03, -.49), v3(-.03, 1, -.03));
+  SetSize(point(640, 480));
   ClearEvents();
   ClearGesture();
 }
@@ -2398,6 +2401,11 @@ void Window::DrawDialogs() {
   }
 }
 
+void Window::SetSize(const point &d) {
+  pow2_width  = NextPowerOfTwo((width  = d.x));
+  pow2_height = NextPowerOfTwo((height = d.y));
+}
+
 void Window::SetCaption(const string &v) {
 #if defined(LFL_OSXVIDEO)
   OSXSetWindowTitle(id, v.c_str());
@@ -2461,8 +2469,7 @@ void Window::Reshape(int w, int h) {
 
 void Window::Reshaped(int w, int h) {
   INFO("Window::Reshaped(", w, ", ", h, ")");
-  pow2_width = NextPowerOfTwo((width = w));
-  pow2_height = NextPowerOfTwo((height = h));
+  SetSize(point(w, h));
   if (!gd) return;
   gd->ViewPort(LFL::Box(width, height));
   gd->DrawMode(screen->gd->default_draw_mode);
@@ -2515,7 +2522,8 @@ int Window::Frame(unsigned clicks, int flag) {
 void Window::RenderToFrameBuffer(FrameBuffer *fb) {
   int dm = screen->gd->draw_mode;
   fb->Attach();
-  screen->gd->ViewPort(Box(0, 0, fb->tex.width, fb->tex.height));
+  // screen->gd->ViewPort(Box(fb->tex.width, fb->tex.height));
+  screen->gd->DrawMode(screen->gd->default_draw_mode);
   screen->gd->Clear();
   frame_cb(0, 0, 0);
   fb->Release();
@@ -2558,26 +2566,28 @@ int Video::Init() {
   app->video->opengl_framebuffer = GLEW_EXT_framebuffer_object;
 #endif
 
-  const char *glslver = (const char *)glGetString(GL_SHADING_LANGUAGE_VERSION);
-  const char *glexts = SpellNull((const char *)glGetString(GL_EXTENSIONS));
-  INFO("OpenGL Version: ", SpellNull((const char *)glGetString(GL_VERSION)));
-  INFO("OpenGL Vendor: ",  SpellNull((const char *)glGetString(GL_VENDOR)));
+  StringPiece glslver = MakeUnbounded<char>(glGetString(GL_SHADING_LANGUAGE_VERSION));
+  StringPiece glexts = MakeUnbounded<char>(SpellNull(glGetString(GL_EXTENSIONS)));
+  INFO("OpenGL Version: ", SpellNull(glGetString(GL_VERSION)));
+  INFO("OpenGL Vendor: ",  SpellNull(glGetString(GL_VENDOR)));
 #ifdef LFL_GLEW
-  INFO("GLEW Version: ", SpellNull((const char*)glewGetString(GLEW_VERSION)));
+  INFO("GLEW Version: ", SpellNull(glewGetString(GLEW_VERSION)));
 #endif
 #ifdef LFL_GLSL_SHADERS
-  INFO("GL_SHADING_LANGUAGE_VERSION: ", SpellNull(glslver));
+  INFO("GL_SHADING_LANGUAGE_VERSION: ", SpellNull(glslver.data()));
 #endif
-  INFO("GL_EXTENSIONS: ", glexts);
+  INFO("GL_EXTENSIONS: ", glexts.data());
 
-  opengles_version = 1 + (glslver != NULL);
+  opengles_version = 1 + (glslver.data() != NULL);
 #if defined(LFL_ANDROID) || defined(LFL_IPHONE)
-  opengles_cubemap = strstr(glexts, "GL_EXT_texture_cube_map") != 0;
+  opengles_cubemap = strstr(glexts.data(), "GL_EXT_texture_cube_map") != 0;
 #else
-  opengles_cubemap = strstr(glexts, "GL_ARB_texture_cube_map") != 0;
+  opengles_cubemap = strstr(glexts.data(), "GL_ARB_texture_cube_map") != 0;
 #endif
+  int depth_bits=0;
+  glGetIntegerv(GL_DEPTH_BITS, &depth_bits);
+  INFO("screen->opengles_version = ", opengles_version, ", depth_bits = ", depth_bits);
   INFO("lfapp_opengles_cubemap = ", opengles_cubemap ? "true" : "false");
-  INFO("screen->opengles_version = ", opengles_version);
 
   if (!screen->gd) CreateGraphicsDevice(screen);
   InitGraphicsDevice(screen);

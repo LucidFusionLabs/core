@@ -103,14 +103,15 @@ void Scene::Select(Geometry *geom) {
 }
 
 void Scene::Select(const Asset *a) {
+  if (FLAGS_hull_geometry && a && a->hull) Select(a->hull);
+  else if (a && a->geometry)               Select(a->geometry);
+
   if (a && a->tex.ID && !(FLAGS_hull_geometry && a->hull)) {
     if (a->tex.cubemap) {
       screen->gd->DisableTexture();
       screen->gd->BindCubeMap(a->tex.ID);
-
       if      (a->texgen == TexGen::LINEAR)     screen->gd->TextureGenLinear();
       else if (a->texgen == TexGen::REFLECTION) screen->gd->TextureGenReflection();
-
     } else {
       screen->gd->DisableCubeMap();
       screen->gd->EnableTexture();
@@ -125,12 +126,8 @@ void Scene::Select(const Asset *a) {
     screen->gd->DisableTexture();
   }
 
-  screen->gd->Color4f(1,1,1,1);
-
-  if (FLAGS_hull_geometry && a && a->hull) Select(a->hull);
-  else if (a && a->geometry)               Select(a->geometry);
-
   if (a && a->color) screen->gd->SetColor(a->col);
+  else screen->gd->Color4f(1,1,1,1);
 
   if (!a || !a->tex.ID) screen->gd->DisableTexture();
 }
@@ -149,20 +146,29 @@ void Scene::Draw(Asset *a, Entity *e) {
   screen->gd->PushMatrix();
 
   if (a->translate) {
-    v3 ort = e->ort; ort.Norm();
-    v3 up = e->up; up.Norm();
+    v3 ort   = e->ort;                   ort  .Norm();
+    v3 up    = e->up;                    up   .Norm();
     v3 right = v3::Cross(e->ort, e->up); right.Norm();
 
-    float m[16] = { right.x, right.y, right.z, 0,
-      up.x,    up.y,    up.z,    0,
-      ort.x,   ort.y,   ort.z,   0,
-      0,       0,       0,       1 };
-
-    screen->gd->Translate(e->pos.x, e->pos.y, e->pos.z);
-    screen->gd->Mult(m);
+    if (float s = a->scale) {
+      float m[16] = { s*right.x, s*right.y, s*right.z, 0,
+                      s*up.x,    s*up.y,    s*up.z,    0,
+                      s*ort.x,   s*ort.y,   s*ort.z,   0,
+                      e->pos.x,  e->pos.y,  e->pos.z,  1 };
+      if (screen->gd->track_model_matrix) screen->gd->model_matrix = m44(m);
+      screen->gd->Mult(m);
+    } else {
+      float m[16] = { right.x,  right.y,  right.z,  0,
+                      up.x,     up.y,     up.z,     0,
+                      ort.x,    ort.y,    ort.z,    0,
+                      e->pos.x, e->pos.y, e->pos.z, 1 };
+      if (screen->gd->track_model_matrix) screen->gd->model_matrix = m44(m);
+      screen->gd->Mult(m);
+    }
+  } else {
+    if (a->rotate) screen->gd->Rotatef(a->rotate, 0, 1, 0);
+    if (a->scale && !(FLAGS_hull_geometry && a->hull)) screen->gd->Scalef(a->scale, a->scale, a->scale);
   }
-  if (a->rotate) screen->gd->Rotatef(a->rotate, 0, 1, 0);
-  if (a->scale && !(FLAGS_hull_geometry && a->hull)) screen->gd->Scalef(a->scale, a->scale, a->scale);
 
   if (a->hull && FLAGS_hull_geometry) {
     Draw(a->hull, e);
@@ -170,12 +176,12 @@ void Scene::Draw(Asset *a, Entity *e) {
   }
 
   if (a->cb) {
-    if (FLAGS_gd_debug) INFO("scene.DrawCB ", a->name);
+    if (FLAGS_gd_debug) printf("scene.DrawCB %s", a->name.c_str());
     a->cb(a, e);
   }
 
   if (a->geometry) {
-    if (FLAGS_gd_debug) INFO("scene.DrawGeometry ", a->name);
+    if (FLAGS_gd_debug) printf("scene.DrawGeometry %s", a->name.c_str());
     Draw(a->geometry, e);
   }
 

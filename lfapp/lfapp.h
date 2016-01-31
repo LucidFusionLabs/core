@@ -122,6 +122,7 @@ using LFL_STL11_NAMESPACE::chrono::high_resolution_clock;
 using LFL_STL11_NAMESPACE::enable_if;
 using LFL_STL11_NAMESPACE::is_integral;
 using LFL_STL11_NAMESPACE::is_floating_point;
+using LFL_STL11_NAMESPACE::is_signed;
 using LFL_STL11_NAMESPACE::make_unsigned;
 using LFL_STL11_NAMESPACE::make_shared;
 #define tuple_get LFL_STL11_NAMESPACE::get
@@ -195,6 +196,7 @@ extern int optind;
 #define DEFINE_float(name, initial, description) DEFINE_FLAG(name, float, initial, description)
 #define DEFINE_double(name, initial, description) DEFINE_FLAG(name, double, initial, description)
 #define DEFINE_string(name, initial, description) DEFINE_FLAG(name, string, initial, description)
+#define DEFINE_unsigned(name, initial, description) DEFINE_FLAG(name, unsigned, initial, description)
 
 namespace LFL {
 using LFL_STL11_NAMESPACE::isinf;

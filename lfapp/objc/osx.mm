@@ -73,7 +73,7 @@ static const char **osx_argv = 0;
     return self;
   }
   + (NSOpenGLPixelFormat *)defaultPixelFormat {
-    NSOpenGLPixelFormatAttribute attributes[] = { 0 };
+    NSOpenGLPixelFormatAttribute attributes[] = { NSOpenGLPFADepthSize, LFL::FLAGS_depth_buffer_bits, 0 };
     return [[[NSOpenGLPixelFormat alloc] initWithAttributes:attributes] autorelease];
   }
   - (NSOpenGLPixelFormat *)pixelFormat { return pixel_format; }

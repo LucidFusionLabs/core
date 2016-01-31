@@ -1626,7 +1626,7 @@ void Console::Draw() {
 
 Dialog::Dialog(float w, float h, int flag) : GUI(screen), color(85,85,85,220),
   title_gradient{Color(127,0,0), Color(0,0,127), Color(0,0,178), Color(208,0,127)},
-  font(Fonts::Get(FLAGS_default_font, "", 14, Color(Color::white,.8), Color::clear, FLAGS_default_font_flag|FontDesc::Bold|FontDesc::Shadow)),
+  font(Fonts::Get(FLAGS_default_font, "", 14, Color(Color::white,.8), Color::clear, FLAGS_default_font_flag)),
   menuicon(Fonts::Get("MenuAtlas", "", 0, Color::white, Color::clear, 0)), deleted_cb([=]{ deleted=true; })
 {
   box = screen->Box().center(screen->Box(w, h));
@@ -1723,7 +1723,7 @@ void MessageBoxDialog::Draw() {
 }
 
 SliderDialog::SliderDialog(const string &t, const SliderDialog::UpdatedCB &cb, float scrolled, float total, float inc) :
-  Dialog(.3, .05), updated(cb), slider(this, Box(), Widget::Slider::Flag::Horizontal) {
+  Dialog(.33, .09), updated(cb), slider(this, Box(), Widget::Slider::Flag::Horizontal) {
   title_text = t;
   slider.scrolled = scrolled;
   slider.doc_height = total;

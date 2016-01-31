@@ -12,23 +12,20 @@ uniform lowp sampler2D iChannel0;
 #endif
 
 #ifdef TEXCUBE
-uniform bool CubeMapEnabled;
-varying lowp vec3 CubeCoordOut;
 uniform lowp samplerCube CubeTexture;
+varying lowp vec3 CubeCoordOut;
 #endif
 
 void main(void) {
 #ifdef TEXCUBE
-    if (CubeMapEnabled) {
-	    gl_FragColor = DestinationColor * textureCube(CubeTexture, CubeCoordOut);
-    } else
-#endif
-    {
+  gl_FragColor = DestinationColor * textureCube(CubeTexture, CubeCoordOut);
+#else // TEXCUBE
+
 #ifdef TEX2D
-	    gl_FragColor = TexCoordEnabled ? DestinationColor * texture2D(iChannel0, TexCoordOut) : DestinationColor; 
-#else
-	    gl_FragColor = DestinationColor; 
-#endif
-	}
-    // gl_FragColor = pow(gl_FragColor, vec4(1.0/2.2)); // gamma correction
+  gl_FragColor = TexCoordEnabled ? DestinationColor * texture2D(iChannel0, TexCoordOut) : DestinationColor; 
+#else // TEX2D
+  gl_FragColor = DestinationColor; 
+#endif // TEX2D
+  // gl_FragColor = pow(gl_FragColor, vec4(1.0/2.2)); // gamma correction
+#endif // TEXCUBE
 }

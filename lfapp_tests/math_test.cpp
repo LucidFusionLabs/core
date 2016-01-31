@@ -119,13 +119,41 @@ TEST(MatrixTest, Convolve) {
 }
 
 TEST(MatrixTest, Invert) {
-  Matrix A(2, 2), Ainv(2, 2);
-  { double *r = A.row(0); r[0] = 4; r[1] = 7; }
-  { double *r = A.row(1); r[0] = 2; r[1] = 6; }
+  const float e = 1e-6;
+  {
+    Matrix A(2, 2), Ainv(2, 2);
+    { double *r = A.row(0); r[0] = 4; r[1] = 7; }
+    { double *r = A.row(1); r[0] = 2; r[1] = 6; }
 
-  Invert(&A, &Ainv);
-  { double *r = Ainv.row(0); EXPECT_NEAR( 0.6, r[0], 1e-6); EXPECT_NEAR(-0.7, r[1], 1e-6); }
-  { double *r = Ainv.row(1); EXPECT_NEAR(-0.2, r[0], 1e-6); EXPECT_NEAR( 0.4, r[1], 1e-6); }
+    Invert(&A, &Ainv);
+    { double *r = Ainv.row(0); EXPECT_NEAR( 0.6, r[0], e); EXPECT_NEAR(-0.7, r[1], e); }
+    { double *r = Ainv.row(1); EXPECT_NEAR(-0.2, r[0], e); EXPECT_NEAR( 0.4, r[1], e); }
+  }
+  {
+    Matrix A(4, 4), Ainv(4, 4);
+    { double *r = A.row(0); r[0] = 2; r[1] = 3; r[2] = 1; r[3] = 9; }
+    { double *r = A.row(1); r[0] = 7; r[1] = 4; r[2] = 1; r[3] = 3; }
+    { double *r = A.row(2); r[0] = 8; r[1] = 5; r[2] = 2; r[3] = 0; }
+    { double *r = A.row(3); r[0] = 1; r[1] = 7; r[2] = 3; r[3] = 1; }
+
+    float d, av[] = { 2, 3, 1, 9,
+                      7, 4, 1, 3,
+                      8, 5, 2, 0,
+                      1, 7, 3, 1 };
+    m44 a(av), ai;
+    EXPECT_EQ(true, m44::Invert(a, &ai, &d));
+    EXPECT_NEAR(222, d, e);
+    { const v4 &r = ai[0];     EXPECT_NEAR( 6  /d, r[0], e); EXPECT_NEAR(-10 /d, r[1], e); EXPECT_NEAR( 38 /d, r[2], e); EXPECT_NEAR(-24/d, r[3], e); }
+    { const v4 &r = ai[1];     EXPECT_NEAR(-72 /d, r[0], e); EXPECT_NEAR( 194/d, r[1], e); EXPECT_NEAR(-160/d, r[2], e); EXPECT_NEAR( 66/d, r[3], e); }
+    { const v4 &r = ai[2];     EXPECT_NEAR( 156/d, r[0], e); EXPECT_NEAR(-445/d, r[1], e); EXPECT_NEAR( 359/d, r[2], e); EXPECT_NEAR(-69/d, r[3], e); }
+    { const v4 &r = ai[3];     EXPECT_NEAR( 30 /d, r[0], e); EXPECT_NEAR(-13 /d, r[1], e); EXPECT_NEAR( 5  /d, r[2], e); EXPECT_NEAR(-9 /d, r[3], e); }
+
+    Invert(&A, &Ainv);
+    { double *r = Ainv.row(0); EXPECT_NEAR( 6  /d, r[0], e); EXPECT_NEAR(-10 /d, r[1], e); EXPECT_NEAR( 38 /d, r[2], e); EXPECT_NEAR(-24/d, r[3], e); }
+    { double *r = Ainv.row(1); EXPECT_NEAR(-72 /d, r[0], e); EXPECT_NEAR( 194/d, r[1], e); EXPECT_NEAR(-160/d, r[2], e); EXPECT_NEAR( 66/d, r[3], e); }
+    { double *r = Ainv.row(2); EXPECT_NEAR( 156/d, r[0], e); EXPECT_NEAR(-445/d, r[1], e); EXPECT_NEAR( 359/d, r[2], e); EXPECT_NEAR(-69/d, r[3], e); }
+    { double *r = Ainv.row(3); EXPECT_NEAR( 30 /d, r[0], e); EXPECT_NEAR(-13 /d, r[1], e); EXPECT_NEAR( 5  /d, r[2], e); EXPECT_NEAR(-9 /d, r[3], e); }
+  }
 }
 
 TEST(MatrixTest, Ortho) {

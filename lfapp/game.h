@@ -910,7 +910,7 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
   vector<Server> master_server_list;
 
   Asset *title;
-  Font *font, *mobile_font=0;
+  Font *font, *glow_font, *bright_font, *mobile_font=0;
   Box titlewin, menuhdr, menuftr1, menuftr2;
   int default_port, selected=1, last_selected=0, sub_selected=0, last_sub_selected=0, master_server_selected=-1;
   int line_clicked=-1, decay_box_line=-1, decay_box_left=0;
@@ -925,18 +925,21 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
 
   GameMenuGUI(LFL::Window *W, const string &master_url, int port, Asset *t=0, Asset *parts=0) :
     GUI(W), topbar(W), pinger(-1), master_get_url(master_url), title(t),
-    font(Fonts::Get("Origicide.ttf", "", 12)), default_port(port),
-    tab1(&topbar, 0, font, "single player", MouseController::CB([&](){ if (!Changed(&selected, 1)) Deactivate(); })),
-    tab2(&topbar, 0, font, "multi player",  MouseController::CB([&](){ if (!Changed(&selected, 2)) Deactivate(); })), 
-    tab3(&topbar, 0, font, "options",       MouseController::CB([&](){ if (!Changed(&selected, 3)) Deactivate(); })),
+    font       (Fonts::Get(FLAGS_default_font,                   "", 12, Color::grey80)),
+    bright_font(Fonts::Get(FLAGS_default_font,                   "", 12, Color::white)),
+    glow_font  (Fonts::Get(StrCat(FLAGS_default_font, "Glow"),   "", 12)),
+    default_port(port),
+    tab1(&topbar, 0, font, "single player", MouseController::CB([&](){ if (!Changed(&selected, 1)) Deactivate(); else LayoutTopbar(); })),
+    tab2(&topbar, 0, font, "multi player",  MouseController::CB([&](){ if (!Changed(&selected, 2)) Deactivate(); else LayoutTopbar(); })), 
+    tab3(&topbar, 0, font, "options",       MouseController::CB([&](){ if (!Changed(&selected, 3)) Deactivate(); else LayoutTopbar(); })),
     tab4(&topbar, 0, font, "quit",          MouseController::CB(bind(&GameMenuGUI::MenuQuit, this))),
-    tab1_server_start(this, 0, font, "start", MouseController::CB(bind(&GameMenuGUI::MenuServerStart, this))),
-    tab2_server_join (this, 0, font, "join",  MouseController::CB(bind(&GameMenuGUI::MenuServerJoin,  this))),
+    tab1_server_start(this, 0, bright_font, "start", MouseController::CB(bind(&GameMenuGUI::MenuServerStart, this))),
+    tab2_server_join (this, 0, bright_font, "join",  MouseController::CB(bind(&GameMenuGUI::MenuServerJoin,  this))),
     sub_tab1(this, 0, font, "g+",             MouseController::CB([&]() { sub_selected=1; })),
     sub_tab2(this, 0, font, "join",           MouseController::CB([&]() { sub_selected=2; })),
     sub_tab3(this, 0, font, "start",          MouseController::CB([&]() { sub_selected=3; })),
-    tab2_server_address(W, font),
-    tab3_player_name   (W, font),
+    tab2_server_address(W, bright_font),
+    tab3_player_name   (W, bright_font),
     tab1_options    (this),
     tab2_servers    (this),
     tab3_sensitivity(this, Box(), Widget::Slider::Flag::Horizontal),
@@ -949,18 +952,19 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
     gplus_accept        (this, 0, font, "accept",     MouseController::CB([&](){ AndroidGPlusAccept(); })),
 #endif
     browser(this, box), particles("GameMenuParticles") {
-    tab1.outline = tab2.outline = tab3.outline = tab4.outline = tab1_server_start.outline = tab2_server_join.outline = sub_tab1.outline = sub_tab2.outline = sub_tab3.outline = &font->fg;
+    tab1.outline = tab2.outline = tab3.outline = tab4.outline = tab1_server_start.outline = tab2_server_join.outline = sub_tab1.outline = sub_tab2.outline = sub_tab3.outline = &bright_font->fg;
     tab1_options.dot_size = tab2_servers.dot_size = tab3_sensitivity.dot_size = tab3_volume.dot_size = 25;
     Layout();
-    tab3_player_name.cmd_prefix.clear();
-    tab3_player_name.cursor.type = TextGUI::Cursor::Underline;
+    tab3_player_name.cursor.type         = tab2_server_address.cursor.type         = TextGUI::Cursor::Underline;
+    tab3_player_name.bg_color            = tab2_server_address.bg_color            = &Color::clear;
     tab3_player_name.deactivate_on_enter = tab2_server_address.deactivate_on_enter = true;
     tab3_player_name.runcb = bind(&TextGUI::AssignInput, (TextGUI*)&tab3_player_name, _1);
-    tab3_player_name.bg_color = &Color::clear;
+    tab3_player_name.cmd_prefix.clear();
     tab3_player_name   .SetToggleKey(0, true);
     tab2_server_address.SetToggleKey(0, true);
     tab2_server_address.runcb = bind(&GameMenuGUI::MenuAddServer, this, _1);
     tab2_server_address.cmd_prefix.clear();
+    tab2_server_address.UpdateCursor();
     tab3_sensitivity.increment = .1;
     tab3_sensitivity.doc_height = 10;
     tab3_sensitivity.scrolled = FLAGS_msens / 10.0;
@@ -1059,18 +1063,22 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
     box        = screen->Box(.15, .4, .7, .5);
     menuhdr    = Box (box.x, box.y+box.h-font->Height(), box.w, font->Height());
     menuftr1   = Box (box.x, box.y+font->Height()*4, box.w, box.h-font->Height()*5);
-    menuftr2   = Box (box.x, box.y+font->Height()*4, box.w, box.h-font->Height()*6); 
-    { 
-      Flow topbarflow(&topbar.box, font, topbar.Reset());
-      tab1.box = tab2.box = tab3.box = tab4.box = Box(topbar.box.w/4, topbar.box.h);
-      tab1.Layout(&topbarflow); tab2.Layout(&topbarflow);
-      tab3.Layout(&topbarflow); tab4.Layout(&topbarflow);
-    }
+    menuftr2   = Box (box.x, box.y+font->Height()*4, box.w, box.h-font->Height()*6);
+    LayoutTopbar();
+  }
+
+  void LayoutTopbar() {
+    Flow topbarflow(&topbar.box, font, topbar.Reset());
+    tab1.box = tab2.box = tab3.box = tab4.box = Box(topbar.box.w/4, topbar.box.h);
+    tab1.font = (selected == 1) ? glow_font : font; tab1.Layout(&topbarflow);
+    tab2.font = (selected == 2) ? glow_font : font; tab2.Layout(&topbarflow);
+    tab3.font = (selected == 3) ? glow_font : font; tab3.Layout(&topbarflow);
+    tab4.font = (selected == 4) ? glow_font : font; tab4.Layout(&topbarflow);
   }
 
   void LayoutMenu() {
     Box b;
-    Flow menuflow(&box, font, Reset());
+    Flow menuflow(&box, bright_font, Reset());
     AddClickBox(Box(0, -box.h, box.w, box.h), MouseController::CB(bind(&GameMenuGUI::MenuLineClicked, this)));
 
     current_scrollbar = 0;
@@ -1082,12 +1090,16 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
     int my_selected = selected;
     if (my_selected == 2) {
       sub_tab1.box = sub_tab2.box = sub_tab3.box = Box(box.w/3, font->Height());
+      sub_tab1.font = (sub_selected == 1) ? glow_font : font;
+      sub_tab2.font = (sub_selected == 2) ? glow_font : font;
+      sub_tab3.font = (sub_selected == 3) ? glow_font : font;
       sub_tab1.outline = (sub_selected == 1) ? 0 : &Color::white;
       sub_tab2.outline = (sub_selected == 2) ? 0 : &Color::white;
       sub_tab3.outline = (sub_selected == 3) ? 0 : &Color::white;
       sub_tab1.Layout(&menuflow);
       sub_tab2.Layout(&menuflow);
       sub_tab3.Layout(&menuflow);
+      menuflow.SetFont(bright_font);
       menuflow.AppendNewline();
 
       if (sub_selected == 1) {
@@ -1201,7 +1213,7 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
 
   void Draw(unsigned clicks, Shader *MyShader) {
     screen->gd->EnableBlend();
-    vector<Box*> bgwins;
+    vector<const Box*> bgwins;
     bgwins.push_back(&topbar.box);
     if (selected) bgwins.push_back(&box);
     glShadertoyShaderWindows(MyShader, Color(25, 60, 130, 120), bgwins);
@@ -1249,7 +1261,7 @@ struct GamePlayerListGUI : public GUI {
   PlayerList playerlist;
   int winning_team=0;
   GamePlayerListGUI(LFL::Window *W, const char *TitleName, const char *Team1, const char *Team2)
-    : GUI(W), font(Fonts::Get("Origicide.ttf", "", 12, Color::black)),
+    : GUI(W), font(Fonts::Get(FLAGS_default_font, "", 12, Color::black)),
     titlename(TitleName), team1(Team1), team2(Team2) {}
 
   void HandleTextMessage(const string &in) {
@@ -1308,7 +1320,7 @@ struct GamePlayerListGUI : public GUI {
 
 struct GameChatGUI : public TextArea {
   GameClient **server;
-  GameChatGUI(LFL::Window *W, int key, GameClient **s) : TextArea(W, Fonts::Get("Origicide.ttf", "", 10, Color::grey80)), server(s) { 
+  GameChatGUI(LFL::Window *W, int key, GameClient **s) : TextArea(W, Fonts::Get(FLAGS_default_font, "", 10, Color::grey80)), server(s) { 
     SetToggleKey(key, true);
     write_timestamp = deactivate_on_enter = true;
   }

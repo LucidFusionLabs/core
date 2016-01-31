@@ -96,6 +96,7 @@
 #define DECLARE_float(name) DECLARE_FLAG(name, float)
 #define DECLARE_double(name) DECLARE_FLAG(name, double)
 #define DECLARE_string(name) DECLARE_FLAG(name, string)
+#define DECLARE_unsigned(name) DECLARE_FLAG(name, unsigned)
 
 #ifdef __cplusplus
 struct CGRect;
@@ -136,6 +137,7 @@ DECLARE_float(msens);
 DECLARE_bool(open_console);
 DECLARE_bool(max_rlimit_core);
 DECLARE_bool(max_rlimit_open_files);
+DECLARE_unsigned(depth_buffer_bits);
 DECLARE_float(rotate_view);
 
 struct Allocator;

@@ -107,8 +107,8 @@ struct v3 {
   void Norm() { float l=Len(); if (!l) return; x /= l; y /= l; z /= l; }
   string DebugString() const { return StrCat("v(", x, ", ", y, ", ", z, ")"); }
   static v3 Norm(v3 q) { float l=q.Len(); if (!l) return q; q.x /= l; q.y /= l; q.z /= l; return q; }
-  static float Dot(v3 q, v3 p) { return q.x*p.x + q.y*p.y + q.z*p.z; }
-  static float Dist2(v3 q, v3 p) { v3 d = q - p; return Dot(d, d); }
+  static float Dot(const v3 &q, const v3 &p) { return q.x*p.x + q.y*p.y + q.z*p.z; }
+  static float Dist2(const v3 &q, const v3 &p) { v3 d = q - p; return Dot(d, d); }
   static v3 Cross(v3 q, v3 p) { return v3(q.y*p.z - q.z*p.y, q.z*p.x - q.x*p.z, q.x*p.y - q.y*p.x); }
   static v3 Normal(v3 a, v3 b, v3 c) { v3 q=c, p=c; q.Sub(a); p.Sub(b); q = v3::Cross(q, p); q.Norm(); return q; }
   static v3 Rand();
@@ -190,6 +190,7 @@ struct m44 {
     return ret;
   }
 
+  static bool Invert(const m44 &A, m44 *out=0, float *det_out=0);
   static void Mult(const m44 &A, const m44 &B, m44 *C) {
     for (int i=0; i<4; i++) for (int j=0; j<4; j++) { ((*C)[i])[j] = 0; for (int k=0; k<4; k++) ((*C)[i])[j] += (A[i])[k] * (B[k])[j]; }
   }

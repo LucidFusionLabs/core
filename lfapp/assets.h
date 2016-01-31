@@ -21,6 +21,7 @@
 namespace LFL {
 
 DECLARE_int(soundasset_seconds);
+DECLARE_float(shadertoy_blend);
 
 struct AudioAssetLoader {
   virtual void *LoadAudioFile(const string &fn) = 0;
@@ -263,8 +264,8 @@ void glAxis(Asset*, Entity*);
 void glRoom(Asset*, Entity*);
 void glIntersect(int x, int y, Color *c);
 void glShadertoyShader(Shader *shader, const Texture *tex=0);
-void glShadertoyShaderWindows(Shader *shader, const Color &backup_color, const Box          &win, const Texture *tex=0);
-void glShadertoyShaderWindows(Shader *shader, const Color &backup_color, const vector<Box*> &win, const Texture *tex=0);
+void glShadertoyShaderWindows(Shader *shader, const Color &backup_color, const Box                &win, const Texture *tex=0);
+void glShadertoyShaderWindows(Shader *shader, const Color &backup_color, const vector<const Box*> &win, const Texture *tex=0);
 void glSpectogram(Matrix *m, unsigned char *data, int width, int height, int hjump, float max, float clip, bool interpolate, int pd=PowerDomain::dB);
 void glSpectogram(Matrix *m, Asset *a, float *max=0, float clip=-INFINITY, int pd=PowerDomain::dB);
 void glSpectogram(SoundAsset *sa, Asset *a, Matrix *transform=0, float *max=0, float clip=-INFINITY);
