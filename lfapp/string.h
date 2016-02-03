@@ -117,7 +117,8 @@ struct PieceIndex {
 template <class X> struct ArrayPiece {
   typedef       X*       iterator;
   typedef const X* const_iterator;
-  const X *buf; int len;
+  const X *buf;
+  int len;
   virtual ~ArrayPiece() {}
   ArrayPiece()                  : buf(0), len(0) {}
   ArrayPiece(const X *b, int l) : buf(b), len(l) {}
@@ -134,6 +135,7 @@ template <class X> struct ArrayPiece {
   const X *data() const { return buf; }
   const void *ByteData() const { return buf; }
   int Bytes() const { return size() * sizeof(X); }
+  int Remaining(int offset) { return has_size() ? len - offset : -1; }
   const_iterator begin() const { return buf; }
   const_iterator rbegin() const { return buf+len-1; }
   const_iterator end() const { return buf+len; }
@@ -149,7 +151,7 @@ template <class X> struct StringPieceT : public ArrayPiece<X> {
     if (this->buf && this->len < 0) return this->buf;
     return this->buf ? basic_string<X>(this->buf, this->len) : basic_string<X>();
   }
-  bool Done(const X* p) const { return (this->len >= 0 && p >= this->buf + this->len) || !*p; }
+  bool Done(const X* p) const { return (this->len >= 0 && p >= this->buf + this->len) || *p == X(); }
   int Length() const { return this->len >= 0 ? this->len : Length(this->buf); }
   static StringPieceT<X> Unbounded (const X *b) { return StringPieceT<X>(b, -1); }
   static StringPieceT<X> FromString(const X *b) { return StringPieceT<X>(b, b?Length(b):0); }
@@ -266,37 +268,38 @@ template <class X, class Y> void IterScanN(X *iter, Y *out, int N) {
 }
 
 template <class X> struct StringWordIterT : public StringIterT<X> {
-  const X *in=0;
-  int size=0, cur_len=0, cur_offset=0, next_offset=0, (*IsSpace)(int)=0, (*IsQuote)(int)=0, flag=0; 
+  StringPieceT<X> in;
+  int cur_len=0, cur_offset=0, next_offset=0, (*IsSpace)(int)=0, (*IsQuote)(int)=0, flag=0; 
   StringWordIterT() {}
   StringWordIterT(const X *buf, int len,    int (*IsSpace)(int)=0, int(*IsQuote)(int)=0, int Flag=0);
   StringWordIterT(const StringPieceT<X> &b, int (*IsSpace)(int)=0, int(*IsQuote)(int)=0, int Flag=0) :
     StringWordIterT(b.buf, b.len, IsSpace, IsQuote, Flag) {}
   bool Done() const { return cur_offset < 0; }
   const X *Next();
-  const X *Begin() const { return in; }
-  const X *Current() const { return in + cur_offset; }
+  const X *Begin() const { return in.buf; }
+  const X *Current() const { return in.buf + cur_offset; }
   int CurrentOffset() const { return cur_offset; }
   int CurrentLength() const { return cur_len; }
-  int TotalLength() const { return size; }
+  int TotalLength() const { return in.len; }
 };
 typedef StringWordIterT<char>     StringWordIter;
 typedef StringWordIterT<char16_t> StringWord16Iter;
 
 template <class X> struct StringLineIterT : public StringIterT<X> {
   struct Flag { enum { BlankLines=1 }; };
-  const X *in;
+  StringPieceT<X> in;
   basic_string<X> buf;
-  int size=0, cur_len=0, cur_offset=0, next_offset=0, flag=0; bool first=0;
-  StringLineIterT(const StringPieceT<X> &B, int F=0) : in(B.buf), size(B.len), flag(F), first(1) {}
+  int cur_len=0, cur_offset=0, next_offset=0, flag=0;
+  bool first=0;
+  StringLineIterT(const StringPieceT<X> &B, int F=0) : in(B), flag(F), first(1) {}
   StringLineIterT() : cur_offset(-1) {}
   bool Done() const { return cur_offset < 0; }
   const X *Next();
-  const X *Begin() const { return in; }
-  const X *Current() const { return in + cur_offset; }
+  const X *Begin() const { return in.buf; }
+  const X *Current() const { return in.buf + cur_offset; }
   int CurrentOffset() const { return cur_offset; }
   int CurrentLength() const { return cur_len; }
-  int TotalLength() const { return size; }
+  int TotalLength() const { return in.len; }
 };
 typedef StringLineIterT<char>     StringLineIter;
 typedef StringLineIterT<char16_t> StringLine16Iter;

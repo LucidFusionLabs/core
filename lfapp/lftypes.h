@@ -162,6 +162,14 @@ template <class K, class V> struct ErasableUnorderedMap : public Erasable<K> {
   bool Erase(const K &k) const { return x.erase(k); }
 };
 
+template <class X> typename X::mapped_type Remove(X *m, const typename X::key_type &k) {
+  auto it = m->find(k);
+  CHECK_NE(m->end(), it);
+  auto ret = move(it->second);
+  m->erase(it);
+  return ret;
+}
+
 template <class I, class T> I LesserBound(I first, I last, const T& v, bool strict=false) {
   I i = lower_bound(first, last, v);
   if (i == last || i == first) return last;
@@ -174,8 +182,12 @@ template <class X> basic_string<X> Substr(const basic_string<X> &in, size_t o=0,
   return o < in.size() ? in.substr(o, l) : basic_string<X>();
 }
 
-template <typename X> bool Contains(const X &c, const typename X::key_type &k) { return c.find(k) != c.end(); }
 template <typename X> void EnsureSize(X &x, int n) { if (x.size() < n) x.resize(n); }
+template <typename X> bool Contains(const X &c, const typename X::key_type &k) { return c.find(k) != c.end(); }
+template <typename X> typename X::key_type RandKey(const X &c, int max_tries=100) {
+  for (int i=0; i<max_tries; i++) { typename X::key_type k = Rand<typename X::key_type>(); if (!Contains(c, k)) return k; }
+  FATAL("RandKey ", &c, " exceeded max_tries=", max_tries);
+}
 
 template <typename X> typename X::value_type &PushFront(X &v, const typename X::value_type &x) { v.push_front(x); return v.front(); }
 template <typename X> typename X::value_type &PushBack (X &v, const typename X::value_type &x) { v.push_back (x); return v.back (); }
@@ -228,9 +240,16 @@ template <class I1, class I2> size_t MismatchOffset(I1 first1, I1 last1, I2 firs
   return ret;
 }
 
-template <class X> void FilterValues(X *v, const typename X::value_type &val) {
+template <class X> void FilterByValue(X *v, const typename X::value_type &val) {
   for (typename X::iterator i = v->begin(); i != v->end(); /**/) {
     if (*i == val) i = v->erase(i);
+    else i++;
+  }
+}
+
+template <class X, class Y> void FilterValues(X *v, const Y &f) {
+  for (typename X::iterator i = v->begin(); i != v->end(); /**/) {
+    if (Contains(f, *i)) i = v->erase(i);
     else i++;
   }
 }

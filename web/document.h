@@ -35,20 +35,22 @@ struct DocumentParser {
   };
 
   struct StyleParser : public Parser {
-    string charset; StyleSheet *style_target;
+    string charset;
+    StyleSheet *style_target;
     StyleParser(DocumentParser *p, const string &url, const DOM::DOMString &cs) : Parser(p, url), charset(String::ToUTF8(cs)),
     style_target(new StyleSheet(parent->doc->node, "", charset.empty() ? "UTF-8" : charset.c_str(), 0, 0)) {
       p->doc->style_sheet.push_back(move(unique_ptr<StyleSheet>(style_target)));
     }
 
     virtual void Complete(void *self) { 
-      style_target->Done();
       if (parent->Running(self)) {
+        style_target->Done();
         parent->doc->node->style_context->AppendSheet(style_target);
         if (auto html = parent->doc->DocElement()) html->SetStyleDirty();
       }
       Parser::Complete(self);
     }
+
     void WGetResponseCB(Connection*, const char *h, const string &ct, const char *cb, int cl) {
       if      (!h && (!cb || !cl)) Complete(this);
       else if (!h)                 style_target->Parse(string(cb, cl));
@@ -65,6 +67,7 @@ struct DocumentParser {
     void CloseTag(const String &tag, const KV &attr, const TagStack &stack) {
       if (target.size() && tag == target.back()->nodeName()) target.pop_back();
     }
+
     void OpenTag(const String &input_tag, const KV &attr, const TagStack &stack) {
       string tag = LFL::String::ToAscii(input_tag);
       DOM::Node *parentNode = target.back();
@@ -109,6 +112,7 @@ struct DocumentParser {
         }
       }
     }
+
     void Text(const String &input_text, const TagStack &stack) {
       if (!parent->Running(this)) return;
       DOM::Node *parentNode = target.back();
@@ -129,6 +133,7 @@ struct DocumentParser {
         }
       } else ret->appendData(text);
     }
+
     void Script(const String &text, const TagStack &stack) {}
     void Style(const String &text, const TagStack &stack) {
       if (style_target) style_target->Parse(LFL::String::ToUTF8(text));
@@ -150,6 +155,7 @@ struct DocumentParser {
       if      (!h && (!cb || !cl)) WGetComplete(ct);
       else if (!h)                 content.append(cb, cl);
     }
+
     void WGetComplete(const string &content_type) {
       if (!content.empty() && content_length == content.size() && parent->Running(this)) {
         string fn = BaseName(url);
@@ -174,10 +180,12 @@ struct DocumentParser {
       }
       Parser::Complete(this);
     }
+
     void LoadAssetResponseCB(const MultiProcessTextureResource &tex) {
       if (tex.width && tex.height) { target->LoadGL(tex); target->owner = true; }
       RunInNetworkThread([=]() { Parser::Complete(this); });
     }
+
     int LoadTextureResponseCB(const IPC::LoadTextureResponse *res, Void) {
       if (res) target.get()->ID = res->tex_id();
       Parser::Complete(this);
@@ -185,6 +193,7 @@ struct DocumentParser {
     }
   };
 
+  StringCB redirect_cb;
   Browser::Document *doc;
   int requested=0, completed=0;
   unordered_set<void*> outstanding;
@@ -202,7 +211,7 @@ struct DocumentParser {
     html_handler->WGetCB(0, 0, string(), 0,               0);
   }
 
-  void OpenFrame(const string &url, DOM::Frame *frame) {
+  void OpenFrame(const string &url, DOM::Frame*) {
     Clear();
     doc->node->setURL(url);
     doc->node->setDomain(HTTP::HostURL(url.c_str()).c_str());
@@ -255,16 +264,17 @@ struct DocumentParser {
       return;
     }
 
-    if      (html)      { handler = new HTMLParser (this, url, html);                          callback = bind(&HTMLParser::WGetCB,          (HTMLParser*) handler, _1, _2, _3, _4, _5); }
-    else if (image_tex) { handler = new ImageParser(this, url, *image_tex);                    callback = bind(&ImageParser::WGetResponseCB, (ImageParser*)handler, _1, _2, _3, _4, _5); }
-    else if (link)      { handler = new StyleParser(this, url, link->getAttribute("charset")); callback = bind(&StyleParser::WGetResponseCB, (StyleParser*)handler, _1, _2, _3, _4, _5); }
+    if      (html)      { auto h = new HTMLParser (this, url, html);                          handler = h; callback = bind(&HTMLParser::WGetCB,          h, _1, _2, _3, _4, _5); }
+    else if (image_tex) { auto h = new ImageParser(this, url, *image_tex);                    handler = h; callback = bind(&ImageParser::WGetResponseCB, h, _1, _2, _3, _4, _5); }
+    else if (link)      { auto h = new StyleParser(this, url, link->getAttribute("charset")); handler = h; callback = bind(&StyleParser::WGetResponseCB, h, _1, _2, _3, _4, _5); }
 
     if (handler) {
       INFO("Browser open '", url, "'");
       requested++;
       outstanding.insert(handler);
-      if (app->main_process) app->main_process->WGet(url,    callback);
-      else        Singleton<HTTPClient>::Get()->WGet(url, 0, callback);
+      bool root = target == doc->node;
+      if (app->main_process) app->main_process->WGet(url,    callback, root ? redirect_cb : StringCB());
+      else        Singleton<HTTPClient>::Get()->WGet(url, 0, callback, root ? redirect_cb : StringCB());
     } else {
       ERROR("unknown mimetype for url ", url);
     }

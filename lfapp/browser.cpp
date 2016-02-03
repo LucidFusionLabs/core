@@ -465,6 +465,7 @@ Browser::Browser(GUI *gui, const Box &V) : doc(gui ? gui->parent : NULL, V),
     missing_image = maf->FindGlyph(0)->tex;
     missing_image.width = missing_image.height = 16;
   }
+  doc.parser->redirect_cb = bind(&Browser::Open, this, _1);
   doc.Clear(); 
 }
 
@@ -506,7 +507,11 @@ void Browser::MouseButton(int b, bool d, int x, int y) {
 
 void Browser::MouseWheel(int xs, int ys) {}
 void Browser::AnchorClicked(DOM::HTMLAnchorElement *anchor) {
-  Navigate(String::ToUTF8(anchor->getAttribute("href")));
+  const string &d = doc.node->domain;
+  string href = String::ToUTF8(anchor->getAttribute("href"));
+  if      (href.size() > 1 && href[0] == '/' && href[1] == '/') href = StrCat(d.substr(0, d.find(':')), ":", href);
+  else if (href.size()     && href[0] == '/')                   href = StrCat(d,                             href);
+  Navigate(href);
 }
 
 void Browser::SetClearColor(const Color &c) {

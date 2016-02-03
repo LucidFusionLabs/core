@@ -33,7 +33,7 @@ table SwapTreeRequest  { id: int; mpb_id: int; }
 table SwapTreeResponse { success: bool; }
 
 table WGetRequest  { url: string; mime_type: int; }
-table WGetResponse { mpb: ResourceHandle; headers: bool; content_length: int; }
+table WGetResponse { mpb: ResourceHandle; headers: bool; redirect: bool; content_length: int; }
 
 table SetTitleRequest { title: string; }
 table SetTitleResponse { success: bool; }

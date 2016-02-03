@@ -195,7 +195,7 @@ struct CSSRuleList    : public List<CSSRule*>    {};
 struct StyleSheetList : public List<StyleSheet*> {};
 struct MediaList      : public List<DOMString> {
   DOMString mediaText;
-  void deleteMedium(DOMString oldMedium) { FilterValues(&data, oldMedium); }
+  void deleteMedium(DOMString oldMedium) { FilterByValue(&data, oldMedium); }
   void appendMedium(DOMString newMedium) { deleteMedium(newMedium); data.push_back(newMedium); }
 };
 

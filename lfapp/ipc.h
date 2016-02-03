@@ -243,7 +243,9 @@ struct ProcessAPIClient : public ProcessAPI {
   };
   IPC_SERVER_CALL(WGet, Void) {
     using WGetIPC::WGetIPC;
-    void WGetResponseCB(Connection *c, const char *h, const string &ct, const char *b, int l);
+    void WGetRedirectCB(const string &to) { return SendResponse(to.c_str(), 0, 0, true); }
+    void WGetResponseCB(Connection *c, const char *h, const string &ct, const char *b, int l) { return SendResponse(h,b,l); }
+    void SendResponse(const char *h, const char *b, int l, bool redir=false);
   };
   IPC_SERVER_CALL(SetTitle, Void) {};
   IPC_SERVER_CALL(SetURL, Void) {};
@@ -297,9 +299,10 @@ struct ProcessAPIServer : public ProcessAPI {
     SwapTreeQuery(Parent *P, int I, const LayersInterface *L) : SwapTreeIPC(P,0), id(I), tree(L->node, L->child) {}
     int AllocateBufferResponse(const IPC::AllocateBufferResponse*, MultiProcessBuffer&);
   };
-  IPC_CLIENT_CALL(WGet, const MultiProcessBuffer&, const string&, const HTTPClient::ResponseCB &) {
-    HTTPClient::ResponseCB cb; 
-    WGetQuery(Parent *P, IPC::Seq S, const WGetIPC::CB &C, const HTTPClient::ResponseCB &R) : WGetIPC(P,S,C), cb(R) {}
+  IPC_CLIENT_CALL(WGet, const MultiProcessBuffer&, const string&, const HTTPClient::ResponseCB&, const StringCB&) {
+    HTTPClient::ResponseCB cb;
+    StringCB redirect_cb;
+    WGetQuery(Parent *P, IPC::Seq S, const WGetIPC::CB &C, const HTTPClient::ResponseCB &R, const StringCB &D) : WGetIPC(P,S,C), cb(R), redirect_cb(D) {}
     int WGetResponse(const IPC::WGetResponse*, const MultiProcessBuffer&);
   };
   IPC_CLIENT_CALL(SetTitle, Void, const string &) {};

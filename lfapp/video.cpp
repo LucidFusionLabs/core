@@ -2571,7 +2571,7 @@ int Video::Init() {
   INFO("OpenGL Version: ", SpellNull(glGetString(GL_VERSION)));
   INFO("OpenGL Vendor: ",  SpellNull(glGetString(GL_VENDOR)));
 #ifdef LFL_GLEW
-  INFO("GLEW Version: ", SpellNull(glewGetString(GLEW_VERSION)));
+  INFO("GLEW Version: ", SpellNull(reinterpret_cast<const char *>(glewGetString(GLEW_VERSION))));
 #endif
 #ifdef LFL_GLSL_SHADERS
   INFO("GL_SHADING_LANGUAGE_VERSION: ", SpellNull(glslver.data()));

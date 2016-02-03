@@ -371,8 +371,8 @@ struct GameServer : public Connection::Handler {
   }
 
   int BroadcastWithRetry(Serializable *msg, Connection *skip=0) {
-    int ret = 0; for (int i = 0; i < svc.size(); ++i)
-      ret += ((Game::Network*)svc[i]->game_network)->BroadcastWithRetry(svc[i], msg, skip);
+    int ret = 0;
+    for (int i=0; i<svc.size(); ++i) ret += ((Game::Network*)svc[i]->game_network)->BroadcastWithRetry(svc[i], msg, skip);
     return ret;
   }
 

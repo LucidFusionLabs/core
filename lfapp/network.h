@@ -403,29 +403,16 @@ struct UDPServer : public Service {
 
 struct HTTPClient : public Service {
   typedef function<void(Connection*, const char*, const string&, const char*, int)> ResponseCB;
-  static int request(Connection *c, int method, const char *host, const char *path, const char *postmime, const char *postdata, int postlen, bool persist);
-
-  bool WGet(const string &url, File *out=0, ResponseCB responseCB=ResponseCB());
+  bool WGet(const string &url, File *out=0, const ResponseCB &responseCB=ResponseCB(), const StringCB &redirectCB=StringCB());
   bool WPost(const string &url, const string &mimetype, const char *postdata, int postlen, ResponseCB=ResponseCB());
   Connection *PersistentConnection(const string &url, string *hostOut, string *pathOut, ResponseCB responseCB);
+  static int WriteRequest(Connection *c, int method, const char *host, const char *path, const char *postmime, const char *postdata, int postlen, bool persist);
 };
 
 struct HTTPServer : public Service {
-  virtual ~HTTPServer() { ClearURL(); }
-  HTTPServer(IPV4::Addr addr, int port, bool SSL) : Service(Protocol::TCP) { QueueListen(addr, port, SSL); }
-  HTTPServer(                 int port, bool SSL) : Service(Protocol::TCP) { QueueListen(0,    port, SSL); }
-  int Connected(Connection *c);
-
-  typedef function<void(Connection*)> ConnectionClosedCB;
-  static void connectionClosedCB(Connection *httpServerConnection, ConnectionClosedCB cb);
-
   struct Method {
-    enum { GET=1, POST=2 }; int x;
-    static const char *name(int n) {
-      if      (n == GET)  return "GET";
-      else if (n == POST) return "POST";
-      return 0;
-    }
+    enum { GET=1, POST=2 };
+    static const char *name(int n);
   };
 
   struct Response {
@@ -434,7 +421,6 @@ struct HTTPServer : public Service {
     string type_buf, content_buf;
     Connection::Handler *refill;
     bool write_headers;
-
     Response(     const string *T, const string        *C)            : code(200), content_length(C->size()), type_buf(*T), content_buf(*C), refill(0), write_headers(1)  { content=content_buf.c_str(); type=type_buf.c_str(); }
     Response(       const char *T, const string        *C)            : code(200), content_length(C->size()), type(T),      content_buf(*C), refill(0), write_headers(1)  { content=content_buf.c_str(); }
     Response(       const char *T, const char          *C)            : code(200), content_length(strlen(C)), type(T),      content(C),      refill(0), write_headers(1)  {}
@@ -442,7 +428,6 @@ struct HTTPServer : public Service {
     Response(int K, const char *T, const StringPiece   &C)            : code(K),   content_length(C.len),     type(T),      content(C.buf),  refill(0), write_headers(1)  {}
     Response(int K, const char *T, const char          *C)            : code(K),   content_length(strlen(C)), type(T),      content(C),      refill(0), write_headers(1)  {}
     Response(const char *T, int L, Connection::Handler *C, bool WH=1) : code(200), content_length(L),         type(T),      content(0),      refill(C), write_headers(WH) {}
-
     static Response _400;
   };
 
@@ -451,25 +436,22 @@ struct HTTPServer : public Service {
     virtual Response Request(Connection *, int method, const char *url, const char *args, const char *headers, const char *postdata, int postlen) = 0;
   };
 
+  typedef function<void(Connection*)> ConnectionClosedCB;
   typedef map<string, Resource*> URLMap;
-  URLMap urlmap;
 
+  URLMap urlmap;
+  HTTPServer(IPV4::Addr addr, int port, bool SSL) : Service(Protocol::TCP) { QueueListen(addr, port, SSL); }
+  HTTPServer(                 int port, bool SSL) : Service(Protocol::TCP) { QueueListen(0,    port, SSL); }
+  virtual ~HTTPServer() { ClearURL(); }
+
+  int Connected(Connection *c);
   void AddURL(const string &url, Resource *resource) { urlmap[url] = resource; }
   void ClearURL() { for (URLMap::iterator i = urlmap.begin(); i != urlmap.end(); i++) delete (*i).second; }
-
-  virtual Response Request(Connection *c, int method, const char *url, const char *args, const char *headers, const char *postdata, int postlen) {
-    Resource *requested = FindOrNull(urlmap, url);
-    if (!requested) return Response::_400;
-    return requested->Request(c, method, url, args, headers, postdata, postlen);
-  }
+  virtual Response Request(Connection *c, int method, const char *url, const char *args, const char *headers, const char *postdata, int postlen);
+  static void connectionClosedCB(Connection *conn, ConnectionClosedCB cb);
 
   struct DebugResource : public Resource {
-    Response Request(Connection *c, int, const char *url, const char *args, const char *hdrs, const char *postdata, int postlen) {
-      INFO("url: %s", url);
-      INFO("args: %s", args);
-      INFO("hdrs: %s", hdrs);
-      return Response::_400;
-    }
+    Response Request(Connection *c, int, const char *url, const char *args, const char *hdrs, const char *postdata, int postlen);
   };
 
   struct StringResource : public Resource {
@@ -484,12 +466,7 @@ struct HTTPServer : public Service {
     const char *type;
     int size=0;
 
-    FileResource(const string &fn, const char *mimetype=0) :
-      filename(fn), type(mimetype ? mimetype : "application/octet-stream") {
-      LocalFile f(filename, "r");
-      if (!f.Opened()) return;
-      size = f.Size();
-    }
+    FileResource(const string &fn, const char *mimetype=0);
     Response Request(Connection *, int method, const char *url, const char *args, const char *headers, const char *postdata, int postlen);
   };
 
@@ -499,17 +476,16 @@ struct HTTPServer : public Service {
 
 #ifdef LFL_FFMPEG
   struct StreamResource : public Resource {
-    AVFormatContext *fctx;
     typedef map<void*, Connection*> SubscriberMap;
+    AVFormatContext *fctx;
     SubscriberMap subscribers;
-    bool open; int abr, vbr;
-
+    bool open;
+    int abr, vbr;
     AVStream *audio;
     AVFrame *samples;
     short *sample_data;
     AudioResampler resampler;
     int frame, channels, resamples_processed;
-
     AVStream *video;
     AVFrame *picture; SwsContext *conv;
 
@@ -529,27 +505,12 @@ struct HTTPServer : public Service {
     typedef map<Connection*, Resource*> ConnMap;
     ConnMap connmap;
     virtual ~SessionResource() { ClearConnections(); }
-    void ClearConnections() { for (ConnMap::iterator i = connmap.begin(); i != connmap.end(); i++) delete (*i).second; }
-
-    Response Request(Connection *c, int method, const char *url, const char *args, const char *headers, const char *postdata, int postlen) {
-      Resource *resource;
-      if (!(resource = FindOrNull(connmap, c))) {
-        resource = Open();
-        connmap[c] = resource;
-        connectionClosedCB(c, bind(&SessionResource::ConnectionClosedCB, this, _1));
-      }
-      return resource->Request(c, method, url, args, headers, postdata, postlen);
-    }
-    void ConnectionClosedCB(Connection *c) {
-      ConnMap::iterator i = connmap.find(c);
-      if (i == connmap.end()) return;
-      Resource *resource = (*i).second;
-      connmap.erase(i);
-      Close(resource);
-    }
-
     virtual Resource *Open() = 0;
     virtual void Close(Resource *) = 0;
+
+    void ClearConnections() { for (ConnMap::iterator i = connmap.begin(); i != connmap.end(); i++) delete (*i).second; }
+    Response Request(Connection *c, int method, const char *url, const char *args, const char *headers, const char *postdata, int postlen);
+    void ConnectionClosedCB(Connection *c);
   };
 };
 

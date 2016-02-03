@@ -327,7 +327,7 @@ void ProcessAPIClient::SetViewport(int w, int h) {}
 void ProcessAPIServer::OpenSystemFont(const LFL::FontDesc &d, const OpenSystemFontIPC::CB &cb) {}
 void ProcessAPIServer::SetClearColor(const Color &c) {}
 void ProcessAPIServer::SetDocsize(int w, int h) {}
-void ProcessAPIServer::WGet(const string &url, const HTTPClient::ResponseCB &cb) {}
+void ProcessAPIServer::WGet(const string&, const HTTPClient::ResponseCB&, const StringCB&) {}
 void ProcessAPIServer::SetTitle(const string&) {}
 void ProcessAPIServer::SetURL(const string&) {}
 void ProcessAPIServer::LoadTexture(Texture*, const LoadTextureIPC::CB &cb) {}
@@ -678,17 +678,18 @@ void ProcessAPIClient::SwapTreeQuery::SwapLayerTree(int id, const MultiProcessLa
 int ProcessAPIClient::HandleWGetRequest(int seq, const IPC::WGetRequest *req, Void) {
   string url = req->url()->str();
   WGetQuery *wget = new WGetQuery(this, seq);
-  RunInNetworkThread([=]{ Singleton<HTTPClient>::Get()->WGet(url,0,bind(&WGetQuery::WGetResponseCB,wget,_1,_2,_3,_4,_5)); });
+  RunInNetworkThread([=]{ Singleton<HTTPClient>::Get()->WGet(url, 0, bind(&WGetQuery::WGetResponseCB, wget, _1, _2, _3, _4, _5),
+                                                             bind(&WGetQuery::WGetRedirectCB, wget, _1)); });
   return IPC::Ok;
 }
 
-void ProcessAPIClient::WGetQuery::WGetResponseCB(Connection *c, const char *h, const string &ct, const char *b, int l) {
+void ProcessAPIClient::WGetQuery::SendResponse(const char *h, const char *b, int l, bool redir) {
   int len = h ? strlen(h)+1 : l;
   MultiProcessBuffer res_mpb(parent->server_process);
   if (!len) parent->SendIPC(parent->conn, seq, -1, WGetResponse, 0);
   else if (res_mpb.Create(len)) {
     memcpy(res_mpb.buf, h ? h : b, len);
-    parent->SendIPC(parent->conn, seq, res_mpb.transfer_handle, WGetResponse, MakeResourceHandle(0, res_mpb), h!=0, h?l:0);
+    parent->SendIPC(parent->conn, seq, res_mpb.transfer_handle, WGetResponse, MakeResourceHandle(0, res_mpb), h!=0, redir, h?l:0);
     res_mpb.Close();
   } else ERROR("ProcessAPIClient ResposneMPB Create");
   if (!h && (!b || !l)) delete this;
@@ -794,15 +795,16 @@ int ProcessAPIServer::SwapTreeQuery::AllocateBufferResponse(const IPC::AllocateB
   return Done();
 }
 
-void ProcessAPIServer::WGet(const string &url, const HTTPClient::ResponseCB &c) {
+void ProcessAPIServer::WGet(const string &url, const HTTPClient::ResponseCB &c, const StringCB &rc) {
   if (!SendIPC(conn, seq++, -1, WGetRequest, fb.CreateString(url))) return c(0, 0, "", 0, 0);
-  WGetQuery *q = new WGetQuery(this, seq-1, WGetIPC::CB(), c);
+  WGetQuery *q = new WGetQuery(this, seq-1, WGetIPC::CB(), c, rc);
   q->ipc_cb = bind(&ProcessAPIServer::WGetQuery::WGetResponse, q, _1, _2);
   ExpectWGetResponse(q);
 }
 
 int ProcessAPIServer::WGetQuery::WGetResponse(const IPC::WGetResponse *res, const MultiProcessBuffer &mpb) {
   if (!res) { cb(0, 0, "", 0, 0); return IPC::Done; }
+  if (res->redirect()) { if (mpb.len && redirect_cb) redirect_cb(string(mpb.buf, mpb.len)); return IPC::Ok; }
   if (res->headers() && mpb.len) cb(0, mpb.buf, "", 0, res->content_length());
   else                           cb(0, 0, "", mpb.buf, mpb.len);
   return mpb.len ? IPC::Ok : IPC::Done;

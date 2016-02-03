@@ -194,7 +194,6 @@ DEFINE_bool(cursor_grabbed, false, "Center cursor every frame");
 DEFINE_bool(daemonize, false, "Daemonize server");
 DEFINE_bool(rcon_debug, false, "Print rcon commands");
 DEFINE_bool(frame_debug, false, "Print each frame");
-DEFINE_string(nameserver, "", "Default namesver");
 DEFINE_bool(max_rlimit_core, true, "Max core dump rlimit");
 DEFINE_bool(max_rlimit_open_files, false, "Max number of open files rlimit");
 #ifdef LFL_DEBUG
@@ -498,28 +497,32 @@ void Application::Daemonize(FILE *fout, FILE *ferr) {
 #endif /* WIN32 */
 
 void Application::Log(int level, const char *file, int line, const string &message) {
-  char tbuf[64];
-  logtime(tbuf, sizeof(tbuf));
-
   {
     ScopedMutex sm(log_mutex);
-
-    fprintf(stdout, "%s %s (%s:%d)\r\n", tbuf, message.c_str(), file, line);
-    fflush(stdout);
-
-    if (logfile) {
-      fprintf(app->logfile, "%s %s (%s:%d)\r\n", tbuf, message.c_str(), file, line);
-      fflush(app->logfile);
-    }
-#ifdef LFL_IPHONE
-    iPhoneLog(StringPrintf("%s (%s:%d)", message.c_str(), file, line).c_str());
-#endif
-#ifdef LFL_ANDROID
-    __android_log_print(ANDROID_LOG_INFO, screen->caption.c_str(), "%s (%s:%d)", message.c_str(), file, line);
-#endif
+    char tbuf[64];
+    tm last_log_time = log_time;
+    logtime(tbuf, sizeof(tbuf), &log_time);
+    if (DayChanged(log_time, last_log_time)) 
+      WriteLogLine(tbuf, StrCat("Date changed to ", logfileday(log_time)).c_str(), __FILE__, __LINE__);
+    WriteLogLine(tbuf, message.c_str(), file, line);
   }
   if (level == LFApp::Log::Fatal) LFAppFatal();
   if (FLAGS_lfapp_video && screen && screen->lfapp_console) screen->lfapp_console->Write(message);
+}
+
+void Application::WriteLogLine(const char *tbuf, const char *message, const char *file, int line) {
+  fprintf(stdout, "%s %s (%s:%d)\r\n", tbuf, message, file, line);
+  fflush(stdout);
+  if (logfile) {
+    fprintf(logfile, "%s %s (%s:%d)\r\n", tbuf, message, file, line);
+    fflush(logfile);
+  }
+#ifdef LFL_IPHONE
+  iPhoneLog(StringPrintf("%s (%s:%d)", message, file, line).c_str());
+#endif
+#ifdef LFL_ANDROID
+  __android_log_print(ANDROID_LOG_INFO, screen->caption.c_str(), "%s (%s:%d)", message, file, line);
+#endif
 }
 
 void Application::CreateNewWindow(const Window::StartCB &start_cb) {

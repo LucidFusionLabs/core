@@ -584,24 +584,27 @@ const char *NextProto(const StringPiece &text, bool final, int *outlen) {
 
 template <class X> 
 StringWordIterT<X>::StringWordIterT(const X *B, int S, int (*delim)(int), int (*quote)(int), int F)
-  : in(B), size(S), IsSpace(delim ? delim : isspace), IsQuote(quote), flag(F) {
-  if (!in || !size) next_offset = -1;
-  else              next_offset += LengthChar(in + cur_offset, IsSpace, size >= 0 ? size - cur_offset : -1);
+  : in(B, S), IsSpace(delim ? delim : isspace), IsQuote(quote), flag(F) {
+  if (!in.buf || !in.len) next_offset  = -1;
+  else                    next_offset += LengthChar(in.buf + cur_offset, IsSpace, in.Remaining(cur_offset));
 }
 
 template <class X> const X *StringWordIterT<X>::Next() {
   cur_offset = next_offset;
   if (cur_offset < 0) return 0;
-  const X *word = in + cur_offset, *next = FindChar(word, IsSpace, IsQuote, (size >= 0 ? size-cur_offset : -1), &cur_len);
-  if ((next_offset = next ? next-in : -1) >= 0) next_offset += LengthChar(in+next_offset, IsSpace, size >= 0 ? size-next_offset : -1);
+  const X *word = in.buf + cur_offset, *next = FindChar(word, IsSpace, IsQuote, in.Remaining(cur_offset), &cur_len);
+  if ((next_offset = next ? next - in.buf : -1) >= 0) {
+    next_offset += LengthChar(in.buf + next_offset, IsSpace, in.Remaining(next_offset));
+    if (in.Done(in.buf + next_offset)) next_offset = -1;
+  }
   return cur_len ? word : 0;
 }
 
 template <class X> const X *StringLineIterT<X>::Next() {
   first = false;
   for (cur_offset = next_offset; cur_offset >= 0; cur_offset = next_offset) {
-    const X *line = in + cur_offset, *next = NextLine(StringPieceT<X>(line, (size >= 0 ? size-cur_offset : -1)), false, &cur_len);
-    next_offset = next ? next-in : -1;
+    const X *line = in.buf + cur_offset, *next = NextLine(StringPieceT<X>(line, in.Remaining(cur_offset)), false, &cur_len);
+    next_offset = next ? next - in.buf : -1;
     if (cur_len) cur_len -= ChompNewlineLength(line, cur_len);
     if (cur_len || ((flag & Flag::BlankLines) && next)) return line;
   }
@@ -616,7 +619,7 @@ template struct StringWordIterT<DrawableBox>;
 
 const char *IterWordIter::Next() {
   if (!iter) return 0;
-  const char *w = word.in ? word.Next() : 0;
+  const char *w = word.in.buf ? word.Next() : 0;
   while (!w) {
     first_count++;
     const char *line = iter->Next();

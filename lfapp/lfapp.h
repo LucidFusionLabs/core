@@ -543,6 +543,7 @@ struct Application : public ::LFApp, public Module {
   string name, progname, logfilename, startdir, bindir, assetdir, dldir;
   int pid=0;
   FILE *logfile=0;
+  tm log_time;
   mutex log_mutex;
   Time time_started;
   Timer frame_time;
@@ -572,9 +573,10 @@ struct Application : public ::LFApp, public Module {
   Application() : create_win_f(bind(&Application::CreateNewWindow, this, function<void(Window*)>())),
   window_closed_cb(DefaultLFAppWindowClosedCB), tex_mode(2, 1, 0), grab_mode(2, 0, 1),
   fill_mode(3, GraphicsDevice::Fill, GraphicsDevice::Line, GraphicsDevice::Point), shell(0, 0, 0)
-  { run=1; initialized=0; main_thread_id=0; frames_ran=0; }
+  { run=1; initialized=0; main_thread_id=0; frames_ran=0; memzero(log_time); }
 
   void Log(int level, const char *file, int line, const string &message);
+  void WriteLogLine(const char *tbuf, const char *message, const char *file, int line);
   int LoadModule(Module *M) { modules.push_back(M); return M->Init(); }
   Window *GetWindow(void *id) { return FindOrNull(windows, id); }
   bool CreateWindow(Window *W);

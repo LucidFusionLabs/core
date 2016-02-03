@@ -19,19 +19,6 @@
 #ifndef LFL_LFAPP_TIME_H__
 #define LFL_LFAPP_TIME_H__
 
-#define ToDays(x) duration_cast<days>(x)
-#define ToFDays(x) duration_cast<fdays>(x)
-#define ToHours(x) duration_cast<hours>(x)
-#define ToFHours(x) duration_cast<fhours>(x)
-#define ToMinutes(x) duration_cast<minutes>(x)
-#define ToFMinutes(x) duration_cast<fminutes>(x)
-#define ToSeconds(x) duration_cast<seconds>(x)
-#define ToFSeconds(x) duration_cast<fseconds>(x)
-#define ToMilliseconds(x) x
-#define ToFMilliseconds(x) duration_cast<FTime>(x)
-#define ToMicroseconds(x) duration_cast<microseconds>(x)
-#define ToFMicroseconds(x) duration_cast<fmicroseconds>(x)
-
 namespace LFL {
 typedef duration<float, std::micro>        fmicroseconds;
 typedef duration<float, std::milli>        fmilliseconds;
@@ -43,6 +30,19 @@ typedef duration<int,   std::ratio<86400>> days;
 
 typedef milliseconds Time;
 typedef fmilliseconds FTime;
+
+template <class R, class P> constexpr days          ToDays         (const duration<R,P> &x) { return duration_cast<days>(x); }
+template <class R, class P> constexpr fdays         ToFDays        (const duration<R,P> &x) { return duration_cast<fdays>(x); }
+template <class R, class P> constexpr hours         ToHours        (const duration<R,P> &x) { return duration_cast<hours>(x); }
+template <class R, class P> constexpr fhours        ToFHours       (const duration<R,P> &x) { return duration_cast<fhours>(x); }
+template <class R, class P> constexpr minutes       ToMinutes      (const duration<R,P> &x) { return duration_cast<minutes>(x); }
+template <class R, class P> constexpr fminutes      ToFMinutes     (const duration<R,P> &x) { return duration_cast<fminutes>(x); }
+template <class R, class P> constexpr seconds       ToSeconds      (const duration<R,P> &x) { return duration_cast<seconds>(x); }
+template <class R, class P> constexpr fseconds      ToFSeconds     (const duration<R,P> &x) { return duration_cast<fseconds>(x); }
+template <class X>          constexpr Time          ToMilliseconds (const X             &x) { return x; }
+template <class R, class P> constexpr FTime         ToFMilliseconds(const duration<R,P> &x) { return duration_cast<FTime>(x); }
+template <class R, class P> constexpr microseconds  ToMicroseconds (const duration<R,P> &x) { return duration_cast<microseconds>(x); }
+template <class R, class P> constexpr fmicroseconds ToFMicroseconds(const duration<R,P> &x) { return duration_cast<fmicroseconds>(x); }
 
 inline Time          Days(int   x) { return duration_cast<Time>(    days(x)); }
 inline Time         FDays(float x) { return duration_cast<Time>(   fdays(x)); }
@@ -59,37 +59,39 @@ inline Time FMicroseconds(float x) { return duration_cast<Time>(fmicroseconds(x)
 
 Time Now();
 void MSleep(int x);
+bool DayChanged(const tm&, const tm&); 
 time_t Time2time_t(Time x);
 timeval Time2timeval(Time x);
-void localtm(time_t, struct tm *t);
-void GMTtm(time_t, struct tm *t);
+void localtm(time_t, tm*);
+void GMTtm(time_t, tm*);
 string logtime(Time t);
-int logtime(char *buf, int size);
-int logtime(Time time, char *buf, int size);
-int logtime(time_t secs, int ms, char *buf, int size);
-int logtime(struct tm*, int ms, char *buf, int size);
+int logtime(char *buf, int size, tm *s=0);
+int logtime(Time time, char *buf, int size, tm *s=0);
+int logtime(time_t secs, int ms, char *buf, int size, tm *s=0);
+int logtime(const tm*, int ms, char *buf, int size);
+string logfileday(const tm&);
 string logfileday(Time t);
 int logfileday(char *buf, int size);
 int logfileday(time_t t, char *buf, int size);
-int logfileday(struct tm *tm, char *buf, int size);
+int logfileday(const tm *tm, char *buf, int size);
 string logfiledaytime(Time t);
 int logfiledaytime(char *buf, int size);
 int logfiledaytime(time_t t, char *buf, int size);
-int logfiledaytime(struct tm *tm, char *buf, int size);
+int logfiledaytime(const tm *tm, char *buf, int size);
 int httptime(char *buf, int size);
 int httptime(time_t time, char *buf, int size);
-int httptime(struct tm*, char *buf, int size);
+int httptime(const tm*, char *buf, int size);
 int localhttptime(char *buf, int size);
 int localhttptime(time_t time, char *buf, int size);
-int localhttptime(struct tm*, char *buf, int size);
+int localhttptime(const tm*, char *buf, int size);
 string localhttptime(Time t);
 int localsmtptime(char *buf, int size);
 int localsmtptime(time_t time, char *buf, int size);
-int localsmtptime(struct tm*, char *buf, int size);
+int localsmtptime(const tm*, char *buf, int size);
 string localsmtptime(Time t);
 int localmboxtime(char *buf, int size);
 int localmboxtime(time_t time, char *buf, int size);
-int localmboxtime(struct tm*, char *buf, int size);
+int localmboxtime(const tm*, char *buf, int size);
 string localmboxtime(Time t);
 int intervaltime(time_t t, int ms, char *buf, int size);
 string intervaltime(Time t);

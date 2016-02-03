@@ -317,6 +317,11 @@ TEST(StringTest, Split) {
   EXPECT_EQ(34, vi[1]);
   EXPECT_EQ(29, vi[2]);
   EXPECT_EQ(48, vi[3]);
+
+  vector<string> dotv;
+  Split("com.", isdot, &dotv);
+  EXPECT_EQ(1, dotv.size());
+  EXPECT_EQ("com", dotv[0]);
 }
 
 TEST(StringTest, CHexEscape) {

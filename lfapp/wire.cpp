@@ -122,14 +122,11 @@ int DNS::ReadResponse(const char *buf, int bufsize, Response *res) {
   Serializable::ConstStream is(buf, bufsize);
   const Serializable::Stream *in = &is;
   const Header *hdr = (Header*)in->Get(Header::size);
-
-  int qdcount = ntohs(hdr->qdcount);
-  int ancount = ntohs(hdr->ancount);
-  int nscount = ntohs(hdr->nscount);
-  int arcount = ntohs(hdr->arcount);
+  int qdcount = ntohs(hdr->qdcount), ancount = ntohs(hdr->ancount);
+  int nscount = ntohs(hdr->nscount), arcount = ntohs(hdr->arcount), len;
 
   for (int i = 0; i < qdcount; i++) {
-    Record out; int len;
+    Record out;
     if ((len = DNS::ReadString(in->Start(), in->Get(), in->End(), &out.question)) < 0 || !in->Get(len + 4)) return -1;
     res->Q.push_back(out);
   }

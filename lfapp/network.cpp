@@ -57,7 +57,6 @@ extern "C" {
 #endif
 
 namespace LFL {
-DECLARE_string(nameserver);
 DEFINE_bool(dns_dump,       0,  "Print DNS responses");
 DEFINE_bool(network_debug,  0,  "Print send()/recv() bytes");
 DEFINE_int (udp_idle_sec,   15, "Timeout UDP connections idle for seconds");
@@ -531,6 +530,7 @@ int Connection::ReadFlush(int len) {
 }
 
 int Connection::WriteFlush(const char *buf, int len) {
+  CHECK_GE(len, 0);
   int wrote = 0;
   if (ssl) {
 #ifdef LFL_OPENSSL
@@ -843,17 +843,7 @@ int Network::Init() {
   Enable(Singleton<UDPClient>::Get());
   Enable(Singleton<HTTPClient>::Get());
   Enable(Singleton<UnixClient>::Get());
-
-  vector<IPV4::Addr> nameservers;
-  if (FLAGS_nameserver.empty()) {
-    INFO("Network::Init(): Enable(new Resolver(defaultNameserver()))");
-    Resolver::GetDefaultNameservers(&nameservers);
-  } else {
-    INFO("Network::Init(): Enable(new Resolver(", FLAGS_nameserver, "))");
-    IPV4::ParseCSV(FLAGS_nameserver, &nameservers);
-  }
-  for (auto &n : nameservers) Singleton<Resolver>::Get()->Connect(n);
-
+  Singleton<SystemResolver>::Get()->HandleNoConnections();
   return 0;
 }
 
@@ -1169,12 +1159,13 @@ struct UDPClientHandler {
 };
 
 Connection *UDPClient::PersistentConnection(const string &url, ResponseCB responseCB, HeartbeatCB heartbeatCB, int default_port) {
-  IPV4::Addr ipv4_addr; int udp_port;
+  int udp_port;
+  IPV4::Addr ipv4_addr; 
   if (!HTTP::ResolveURL(url.c_str(), (bool*)0, &ipv4_addr, &udp_port, (string*)0, (string*)0, default_port))
-  { INFO(url, ": connect failed"); return 0; }
+    return ERRORv(nullptr, url, ": connect failed");
 
   Connection *c = Connect(ipv4_addr, udp_port);
-  if (!c) { INFO(url, ": connect failed"); return 0; }
+  if (!c) return ERRORv(nullptr, url, ": connect failed");
 
   c->handler = new UDPClientHandler::PersistentConnection(responseCB, heartbeatCB);
   return c;
@@ -1184,80 +1175,111 @@ Connection *UDPClient::PersistentConnection(const string &url, ResponseCB respon
 
 struct HTTPClientHandler {
   struct Protocol : public Connection::Handler {
-    int readHeaderLength, readContentLength, currentChunkLength, currentChunkRead;
-    bool chunkedEncoding, fullChunkCBs;
+    int result_code, read_header_length, read_content_length, current_chunk_length, current_chunk_read;
+    bool chunked_encoding, full_chunk_cb;
     string content_type;
 
-    Protocol(bool fullChunks) : fullChunkCBs(fullChunks) { reset(); }
-    void reset() { readHeaderLength=0; readContentLength=0; currentChunkLength=0; currentChunkRead=0; chunkedEncoding=0; content_type.clear();  }
+    Protocol(bool full_chunks) : full_chunk_cb(full_chunks) { Reset(); }
+    void Reset() {
+      result_code=read_header_length=read_content_length=current_chunk_length=current_chunk_read=0;
+      chunked_encoding=0;
+      content_type.clear();  
+    }
 
     int Read(Connection *c) {
       char *cur = c->rb.begin();
-      if (!readHeaderLength) {
-        StringPiece ct, cl, te;
-        char *headers = cur, *headersEnd = HTTP::FindHeadersEnd(headers);
-        if (!headersEnd) return 1;
+      if (!read_header_length) {
+        char *headers_end = HTTP::FindHeadersEnd(cur);
+        if (!headers_end) return 1;
 
-        readHeaderLength = HTTP::GetHeaderLen(headers, headersEnd);
-        HTTP::GrepHeaders(headers, headersEnd, 3, "Content-Type", &ct, "Content-Length", &cl, "Transfer-Encoding", &te);
-        currentChunkLength = readContentLength = atoi(BlankNull(cl.data()));
-        chunkedEncoding = te.str() == "chunked";
+        StringPiece status_line=StringPiece::Unbounded(cur), h, ct, cl, te;
+        h.buf = NextLine(status_line.buf, true, &status_line.len);
+        h.len = read_header_length = HTTP::GetHeaderLen(cur, headers_end);
+        StringWordIter status_words(status_line);
+        status_words.Next();
+        result_code = atoi(status_words.Next());
+
+        HTTP::GrepHeaders(h.buf, headers_end, 3, "Content-Type", &ct, "Content-Length", &cl, "Transfer-Encoding", &te);
+        current_chunk_length = read_content_length = atoi(BlankNull(cl.data()));
+        chunked_encoding = te.str() == "chunked";
         content_type = ct.str();
 
-        Headers(c, headers, readHeaderLength);
-        cur += readHeaderLength;
+        Headers(c, status_line, h);
+        cur = headers_end+2;
       }
       for (;;) {
-        if (chunkedEncoding && !currentChunkLength) {
+        if (chunked_encoding && !current_chunk_length) {
           char *cur_in = cur;
           cur += IsNewline(cur);
           char *chunkHeader = cur;
           if (!(cur = (char*)NextLine(cur))) { cur=cur_in; break; }
-          currentChunkLength = strtoul(chunkHeader, 0, 16);
+          current_chunk_length = strtoul(chunkHeader, 0, 16);
         }
 
         int rb_left = c->rb.size() - (cur - c->rb.begin());
         if (rb_left <= 0) break;
-        if (chunkedEncoding) {
-          int chunk_left = currentChunkLength - currentChunkRead;
+        if (chunked_encoding) {
+          int chunk_left = current_chunk_length - current_chunk_read;
           if (chunk_left < rb_left) rb_left = chunk_left;
-          if (rb_left < chunk_left && fullChunkCBs) break;
+          if (rb_left < chunk_left && full_chunk_cb) break;
         }
 
-        if (rb_left) Content(c, cur, rb_left);
+        if (rb_left) Content(c, StringPiece(cur, rb_left));
         cur += rb_left;
-        currentChunkRead += rb_left;
-        if (currentChunkRead == currentChunkLength) currentChunkRead = currentChunkLength = 0;
+        current_chunk_read += rb_left;
+        if (current_chunk_read == current_chunk_length) current_chunk_read = current_chunk_length = 0;
       }
       if (cur != c->rb.begin()) c->ReadFlush(cur - c->rb.begin());
       return 0;
     }
-    virtual void Headers(Connection *c, const char *headers, int len) {}
-    virtual void Content(Connection *c, const char *headers, int len) {}
+    virtual void Headers(Connection *c, const StringPiece &sl, const StringPiece &h) {}
+    virtual void Content(Connection *c, const StringPiece &b) {}
   };
 
   struct WGet : public Protocol {
-    Service *svc;
-    bool ssl;
+    Service *svc=0;
+    bool ssl=0;
     string host, path;
-    int port;
-    File *out;
+    int port=0, redirects=0;
+    File *out=0;
     HTTPClient::ResponseCB cb;
+    StringCB redirect_cb;
 
     virtual ~WGet() { if (out) INFO("close ", out->Filename()); delete out; }
-    WGet(Service *Svc, bool SSL, const string &Host, int Port, const string &Path, File *Out, HTTPClient::ResponseCB CB=HTTPClient::ResponseCB()) :
-      Protocol(false), svc(Svc), ssl(SSL), host(Host), path(Path), port(Port), out(Out), cb(CB) {}
+    WGet(Service *Svc, bool SSL, const string &Host, int Port, const string &Path, File *Out,
+         const HTTPClient::ResponseCB &CB=HTTPClient::ResponseCB(), const StringCB &RedirCB=StringCB()) :
+      Protocol(false), svc(Svc), ssl(SSL), host(Host), path(Path), port(Port), out(Out), cb(CB), redirect_cb(RedirCB) {}
 
-    int Connected(Connection *c) { return HTTPClient::request(c, HTTPServer::Method::GET, host.c_str(), path.c_str(), 0, 0, 0, false); }
-    void Close(Connection *c) { if (cb) cb(c, 0, content_type, 0, 0); }
-
-    void Headers(Connection *c, const char *headers, int len) {
-      if (cb) cb(c, headers, content_type, 0, readContentLength);
+    bool LoadURL(const string &url, string *prot=0) {
+      return HTTP::ResolveURL(url.c_str(), &ssl, 0, &port, &host, &path, 0, prot);
     }
 
-    void Content(Connection *c, const char *content, int len) {
-      if (out) { if (out->Write(content, len) != len) ERROR("write ", out->Filename()); }
-      if (cb) cb(c, 0, content_type, content, len);
+    void Close(Connection *c) { if (cb) cb(c, 0, content_type, 0, 0); }
+    int Connected(Connection *c) {
+      return HTTPClient::WriteRequest(c, HTTPServer::Method::GET, host.c_str(), path.c_str(), 0, 0, 0, false);
+    }
+
+    void Headers(Connection *c, const StringPiece &sl, const StringPiece &h) { 
+      if (result_code == 301 && redirects++ < 5) {
+        StringPiece loc;
+        HTTP::GrepHeaders(h.begin(), h.end(), 1, "Location", &loc);
+        string location = loc.str();
+        if (!location.empty()) {
+          if (redirect_cb) redirect_cb(location);
+          else { c->handler = nullptr; return ResolveHost(); }
+        }
+      }
+      if (cb) cb(c, h.data(), content_type, 0, read_content_length);
+    }
+
+    void Content(Connection *c, const StringPiece &b) {
+      if (out) { if (out->Write(b.buf, b.len) != b.len) ERROR("write ", out->Filename()); }
+      if (cb) cb(c, 0, content_type, b.buf, b.len);
+    }
+
+    void ResolveHost() {
+      Singleton<SystemResolver>::Get()->NSLookup
+        (host, bind(&HTTPClientHandler::WGet::ResolverResponseCB, this, _1, _2));
     }
 
     void ResolverResponseCB(IPV4::Addr ipv4_addr, DNS::Response*) {
@@ -1278,8 +1300,10 @@ struct HTTPClientHandler {
     string mimetype, postdata;
     WPost(Service *Svc, bool SSL, const string &Host, int Port, const string &Path, const string &Mimetype, const char *Postdata, int Postlen,
           HTTPClient::ResponseCB CB=HTTPClient::ResponseCB()) : WGet(Svc, SSL, Host, Port, Path, 0, CB), mimetype(Mimetype), postdata(Postdata,Postlen) {}
-
-    int Connected(Connection *c) { return HTTPClient::request(c, HTTPServer::Method::POST, host.c_str(), path.c_str(), mimetype.data(), postdata.data(), postdata.size(), false); }
+    int Connected(Connection *c) {
+      return HTTPClient::WriteRequest(c, HTTPServer::Method::POST, host.c_str(), path.c_str(),
+                                      mimetype.data(), postdata.data(), postdata.size(), false);
+    }
   };
 
   struct PersistentConnection : public Protocol {
@@ -1287,15 +1311,15 @@ struct HTTPClientHandler {
     PersistentConnection(HTTPClient::ResponseCB RCB) : Protocol(true), responseCB(RCB) {}
 
     void Close(Connection *c) { if (responseCB) responseCB(c, 0, content_type, 0, 0); }
-    void Content(Connection *c, const char *content, int len) {
-      if (!readContentLength) FATAL("chunked transfer encoding not supported");
-      if (responseCB) responseCB(c, 0, content_type, content, len);
-      Protocol::reset();
+    void Content(Connection *c, const StringPiece &b) {
+      if (!read_content_length) FATAL("chunked transfer encoding not supported");
+      if (responseCB) responseCB(c, 0, content_type, b.buf, b.len);
+      Protocol::Reset();
     }
   };
 };
 
-int HTTPClient::request(Connection *c, int method, const char *host, const char *path, const char *postmime, const char *postdata, int postlen, bool persist) {
+int HTTPClient::WriteRequest(Connection *c, int method, const char *host, const char *path, const char *postmime, const char *postdata, int postlen, bool persist) {
   string hdr, posthdr;
 
   if (postmime && postdata && postlen)
@@ -1310,36 +1334,41 @@ int HTTPClient::request(Connection *c, int method, const char *host, const char 
   return c->Write(postdata, postlen);
 }
 
-bool HTTPClient::WGet(const string &url, File *out, ResponseCB cb) {
-  bool ssl; int tcp_port; string host, path, prot;
-  if (!HTTP::ResolveURL(url.c_str(), &ssl, 0, &tcp_port, &host, &path, 0, &prot)) {
-    if (prot != "file") return 0;
-    string fn = StrCat(!host.empty() ? "/" : "", host , "/", path), content = LocalFile::FileContents(fn);
+bool HTTPClient::WGet(const string &url, File *out, const ResponseCB &cb, const StringCB &redirect_cb) {
+  unique_ptr<HTTPClientHandler::WGet> handler = make_unique<HTTPClientHandler::WGet>(this, 0, "", 0, "", out, cb, redirect_cb);
+
+  string prot;
+  if (!handler->LoadURL(url, &prot)) {
+    if (prot != "file") return false;
+    string fn = StrCat(!handler->host.empty() ? "/" : "", handler->host , "/", handler->path);
+    string content = LocalFile::FileContents(fn);
     if (!content.empty() && cb) cb(0, 0, string(), content.data(), content.size());
     if (cb)                     cb(0, 0, string(), 0,              0);
     return true;
   }
 
   if (!out && !cb) {
-    string fn = BaseName(path);
+    string fn = BaseName(handler->path);
     if (fn.empty()) fn = "index.html";
-    out = new LocalFile(StrCat(LFAppDownloadDir(), fn), "w");
-    if (!out->Opened()) { ERROR("open file"); delete out; return 0; }
+    unique_ptr<LocalFile> f = make_unique<LocalFile>(StrCat(LFAppDownloadDir(), fn), "w");
+    if (!f->Opened()) return ERRORv(false, "open file");
+    handler->out = f.release();
   }
 
-  HTTPClientHandler::WGet *handler = new HTTPClientHandler::WGet(this, ssl, host, tcp_port, path, out, cb);
-  Singleton<Resolver>::Get()->NSLookup(host, bind(&HTTPClientHandler::WGet::ResolverResponseCB, handler, _1, _2));
+  handler.release()->ResolveHost();
   return true;
 }
 
 bool HTTPClient::WPost(const string &url, const string &mimetype, const char *postdata, int postlen, ResponseCB cb) {
-  bool ssl; int tcp_port; string host, path;
+  bool ssl;
+  int tcp_port;
+  string host, path;
   if (!HTTP::ResolveURL(url.c_str(), &ssl, 0, &tcp_port, &host, &path)) return 0;
 
   HTTPClientHandler::WPost *handler = new
     HTTPClientHandler::WPost(this, ssl, host, tcp_port, path, mimetype, postdata, postlen, cb);
 
-  if (!Singleton<Resolver>::Get()->QueueResolveRequest
+  if (!Singleton<SystemResolver>::Get()->QueueResolveRequest
       (Resolver::Request(host, DNS::Type::A, bind(&HTTPClientHandler::WGet::ResolverResponseCB, handler, _1, _2))))
   { ERROR("resolver: ", url); delete handler; return 0; }
   return true;
@@ -1494,11 +1523,11 @@ struct HTTPServerConnection : public Connection::Handler {
   }
 };
 
-int HTTPServer::Connected(Connection *c) { c->handler = new HTTPServerConnection(this); return 0; }
-
-void HTTPServer::connectionClosedCB(Connection *c, ConnectionClosedCB cb) {
-  ((HTTPServerConnection*)c->handler)->closedCB.push_back(HTTPServerConnection::ClosedCallback(cb));
-} 
+const char *HTTPServer::Method::name(int n) {
+  if      (n == GET)  return "GET";
+  else if (n == POST) return "POST";
+  return 0;
+}
 
 HTTPServer::Response HTTPServer::Response::_400
 (400, "text/html; charset=iso-8859-1", StringPiece::FromString
@@ -1512,7 +1541,24 @@ HTTPServer::Response HTTPServer::Response::_400
   "<hr>\r\n"
   "</body></html>\r\n"));
 
-/* FileResource */
+int HTTPServer::Connected(Connection *c) { c->handler = new HTTPServerConnection(this); return 0; }
+
+HTTPServer::Response HTTPServer::Request(Connection *c, int method, const char *url, const char *args, const char *headers, const char *postdata, int postlen) {
+  Resource *requested = FindOrNull(urlmap, url);
+  if (!requested) return Response::_400;
+  return requested->Request(c, method, url, args, headers, postdata, postlen);
+}
+
+void HTTPServer::connectionClosedCB(Connection *c, ConnectionClosedCB cb) {
+  ((HTTPServerConnection*)c->handler)->closedCB.push_back(HTTPServerConnection::ClosedCallback(cb));
+}
+
+HTTPServer::Response HTTPServer::DebugResource::Request(Connection *c, int, const char *url, const char *args, const char *hdrs, const char *postdata, int postlen) {
+  INFO("url: ", url);
+  INFO("args: ", args);
+  INFO("hdrs: ", hdrs);
+  return Response::_400;
+}
 
 struct HTTPServerFileResourceHandler : public Connection::Handler {
   LocalFile f;
@@ -1526,12 +1572,17 @@ struct HTTPServerFileResourceHandler : public Connection::Handler {
   }
 };
 
+HTTPServer::FileResource::FileResource(const string &fn, const char *mimetype) :
+  filename(fn), type(mimetype ? mimetype : "application/octet-stream") {
+  LocalFile f(filename, "r");
+  if (!f.Opened()) return;
+  size = f.Size();
+}
+
 HTTPServer::Response HTTPServer::FileResource::Request(Connection *, int method, const char *url, const char *args, const char *headers, const char *postdata, int postlen) {
   if (!size) return HTTPServer::Response::_400;
   return Response(type, size, new HTTPServerFileResourceHandler(filename));
 }
-
-/* ConsoleResource */
 
 HTTPServer::Response HTTPServer::ConsoleResource::Request(Connection *c, int method, const char *url, const char *args, const char *headers, const char *postdata, int postlen) {
   StringPiece v;
@@ -1540,8 +1591,6 @@ HTTPServer::Response HTTPServer::ConsoleResource::Request(Connection *c, int met
   string response = StrCat("<html>Shell::run('", v.str(), "')<br/></html>\n");
   return HTTPServer::Response("text/html; charset=UTF-8", &response);
 }
-
-/* StreamResource */
 
 #ifdef LFL_FFMPEG
 struct StreamResourceClient : public Connection::Handler {
@@ -1827,6 +1876,26 @@ void HTTPServer::StreamResource::Broadcast(AVPacket *pkt, microseconds timestamp
   }
 }
 #endif /* LFL_FFMPEG */
+
+HTTPServer::Response HTTPServer::SessionResource::Request(Connection *c, int method, const char *url, const char *args, const char *headers, const char *postdata, int postlen) {
+  Resource *resource;
+  if (!(resource = FindOrNull(connmap, c))) {
+    resource = Open();
+    connmap[c] = resource;
+    connectionClosedCB(c, bind(&SessionResource::ConnectionClosedCB, this, _1));
+  }
+  return resource->Request(c, method, url, args, headers, postdata, postlen);
+}
+
+void HTTPServer::SessionResource::ConnectionClosedCB(Connection *c) {
+  ConnMap::iterator i = connmap.find(c);
+  if (i == connmap.end()) return;
+  Resource *resource = (*i).second;
+  connmap.erase(i);
+  Close(resource);
+}
+
+/* SSHClient */
 
 #ifdef LFL_SSH_DEBUG
 #define SSHTrace(...) INFO(__VA_ARGS__)
@@ -2224,6 +2293,8 @@ int  SSHClient::SetTerminalWindowSize(Connection *c, int w, int h)              
 void SSHClient::SetUser              (Connection *c, const string &user)                       { dynamic_cast<SSHClientConnection*>(c->handler)->user = user; }
 void SSHClient::SetPasswordCB(Connection *c, const LoadPasswordCB &L, const SavePasswordCB &S) { dynamic_cast<SSHClientConnection*>(c->handler)->SetPasswordCB(L, S); }
 
+/* SMTPClient */
+
 struct SMTPClientConnection : public Connection::Handler {
   enum { INIT=0, SENT_HELO=1, READY=2, MAIL_FROM=3, RCPT_TO=4, SENT_DATA=5, SENDING=6, RESETING=7, QUITING=8 };
   SMTPClient *server;
@@ -2317,6 +2388,8 @@ Connection *SMTPClient::DeliverTo(IPV4::Addr ipv4_addr, IPV4EndpointSource *src_
 }
 
 void SMTPClient::DeliverDeferred(Connection *c) { ((SMTPClientConnection*)c->handler)->Deliver(c); }
+
+/* SMTPServer */
 
 struct SMTPServerConnection : public Connection::Handler {
   SMTPServer *server;

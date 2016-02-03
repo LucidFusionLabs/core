@@ -273,7 +273,8 @@ struct DrawableBox {
   int attr_id, line_id;
   DrawableBox(                   const Drawable *D = 0, int A = 0, int L = -1) :         drawable(D), attr_id(A), line_id(L) {}
   DrawableBox(const LFL::Box &B, const Drawable *D = 0, int A = 0, int L = -1) : box(B), drawable(D), attr_id(A), line_id(L) {}
-  bool operator<(const DrawableBox &x) const { return box < x.box; }
+  bool operator< (const DrawableBox &x) const { return box < x.box; }
+  bool operator==(const DrawableBox &x) const { return Id() == x.Id(); }
   int LeftBound (const Drawable::Attr *A) const { return box.x - (drawable ? drawable->LeftBearing(A) : 0); }
   int RightBound(const Drawable::Attr *A) const { return box.x + (drawable ? (drawable->Advance(&box, A) - drawable->LeftBearing(A)) : box.w); }
   int TopBound  (const Drawable::Attr *A) const { return box.y + (drawable ? drawable->Ascender(&box, A) : box.h); }
