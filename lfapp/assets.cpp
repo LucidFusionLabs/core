@@ -772,18 +772,18 @@ struct AliasWavefrontObjLoader {
     for (const char *line = nr.NextLine(); line; line = nr.NextLine()) {
       if (!line[0] || line[0] == '#') continue;
       StringWordIter word(line);
-      string cmd = IterNextString(&word);
+      string cmd = word.NextString();
       if (word.Done()) continue;
 
-      if      (cmd == "mtllib") LoadMaterial(IterNextString(&word));
+      if      (cmd == "mtllib") LoadMaterial(word.NextString());
       else if (cmd == "usemtl") {
-        MtlMap::iterator it = MaterialMap.find(IterNextString(&word));
+        MtlMap::iterator it = MaterialMap.find(word.NextString());
         if (it != MaterialMap.end()) { mat = (*it).second; material = 1; }
       }
-      else if (cmd == "v" ) { IterScanN(&word, &xyz[0], 3);             vert.push_back(xyz); }
-      else if (cmd == "vn") { IterScanN(&word, &xyz[0], 3); xyz.Norm(); norm.push_back(xyz); }
+      else if (cmd == "v" ) { word.ScanN(&xyz[0], 3);             vert.push_back(xyz); }
+      else if (cmd == "vn") { word.ScanN(&xyz[0], 3); xyz.Norm(); norm.push_back(xyz); }
       else if (cmd == "vt") {
-        IterScanN(&word, &xy[0], 2);
+        word.ScanN(&xy[0], 2);
         if (map_tex_coord) {
           xy.x = map_tex_coord[Texture::CoordMinX] + xy.x * (map_tex_coord[Texture::CoordMaxX] - map_tex_coord[Texture::CoordMinX]);
           xy.y = map_tex_coord[Texture::CoordMinY] + xy.y * (map_tex_coord[Texture::CoordMaxY] - map_tex_coord[Texture::CoordMinY]);
@@ -794,7 +794,7 @@ struct AliasWavefrontObjLoader {
         vector<v3> face; 
         for (const char *fi = word.Next(); fi; fi = word.Next()) {
           StringWordIter indexword(fi, word.cur_len, isint<'/'>);
-          IterScanN(&indexword, ind, 3);
+          indexword.ScanN(ind, 3);
 
           int count = (ind[0]!=0) + (ind[1]!=0) + (ind[2]!=0);
           if (!count) continue;
@@ -843,13 +843,13 @@ struct AliasWavefrontObjLoader {
     for (const char *line = nr.NextLine(); line; line = nr.NextLine()) {
       if (!line[0] || line[0] == '#') continue;
       StringWordIter word(line);
-      string cmd = IterNextString(&word);
+      string cmd = word.NextString();
       if (word.Done()) continue;
 
-      if      (cmd == "Ka") IterScanN(&word, m.ambient .x, 4);
-      else if (cmd == "Kd") IterScanN(&word, m.diffuse .x, 4);
-      else if (cmd == "Ks") IterScanN(&word, m.specular.x, 4);
-      else if (cmd == "Ke") IterScanN(&word, m.emissive.x, 4);
+      if      (cmd == "Ka") word.ScanN(m.ambient .x, 4);
+      else if (cmd == "Kd") word.ScanN(m.diffuse .x, 4);
+      else if (cmd == "Ks") word.ScanN(m.specular.x, 4);
+      else if (cmd == "Ke") word.ScanN(m.emissive.x, 4);
       else if (cmd == "newmtl") {
         if (name.size()) MaterialMap[name] = m;
         name = word.Next();
@@ -1535,7 +1535,7 @@ int MultiProcessPaintResource::Run(const Box &t) const {
   Iterator i(data.buf);
   int si=0, sd=0, count=0; 
   TilesIPCDebug("MPPR Begin\n");
-  for (; i.offset + sizeof(int) < data.size(); count++) {
+  for (; i.offset + sizeof(int) <= data.size(); count++) {
     int type = *i.Get<int>();
     switch (type) {
       default:                       FATAL("unknown type ", type);

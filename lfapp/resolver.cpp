@@ -194,8 +194,8 @@ void SystemResolver::GetNameservers(vector<IPV4::Addr> *nameservers) {
   NextRecordReader nr(&file);
   for (const char *line = nr.NextLine(); line; line = nr.NextLine()) {
     StringWordIter words(line);
-    if (IterNextString(&words) != "nameserver") continue;
-    IPV4::Addr addr = IPV4::Parse(IterNextString(&words));
+    if (words.NextString() != "nameserver") continue;
+    IPV4::Addr addr = IPV4::Parse(words.NextString());
     if (addr != -1) nameservers->push_back(addr);
   }
 #endif

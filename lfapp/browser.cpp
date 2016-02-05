@@ -434,7 +434,7 @@ void DOM::Renderer::UpdateFlowAttributes(Flow *F) {
 
 void DOM::Renderer::PushScissor(const Box &w) {
   if (!tiles) return;
-  if (!tile_context_opened) { tile_context_opened=1; tiles->ContextOpen(); }
+  if (!tile_context_opened && (tile_context_opened=1)) tiles->ContextOpen();
   tiles->AddScissor(w);
 }
 
@@ -583,7 +583,7 @@ bool Browser::EventNode(DOM::Node *n, const point &displacement_in, InputEvent::
 
   if (auto e = n->AsHTMLAnchorElement()) { AnchorClicked(e); return false; }
   else if (auto e = n->AsHTMLInputElement()) {
-    if (e->text && type == Mouse::ButtonID(1)) (doc.active_input = e->text.get())->Activate();
+    if (e->text && type == Mouse::ButtonID(1)) doc.active_input = e->text.get();
   }
   bool is_table = n->htmlElementType == DOM::HTML_TABLE_ELEMENT;
   point displacement = displacement_in + (render->block_level_box ? render->box.TopLeft() : point());

@@ -101,7 +101,7 @@ TEST(StringTest, WordIter) {
   }
   {
     StringWordIter words("");
-    EXPECT_EQ("", IterNextString(&words));
+    EXPECT_EQ("", words.NextString());
     EXPECT_EQ(true, words.Done());
   }
 }
@@ -109,8 +109,8 @@ TEST(StringTest, WordIter) {
 TEST(IterTest, LineIter) {
   string b = "1 2 3\n\n4 5 6";
   StringLineIter line(b);
-  EXPECT_EQ("1 2 3", IterNextString(&line));
-  EXPECT_EQ("4 5 6", IterNextString(&line));
+  EXPECT_EQ("1 2 3", line.NextString());
+  EXPECT_EQ("4 5 6", line.NextString());
 }
 
 TEST(StringTest, StringAppendf) {

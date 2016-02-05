@@ -208,22 +208,22 @@ Time RFC822Date(const char *text) {
   tm tm;
   memset(&tm, 0, sizeof(tm));
   StringWordIter words(start);
-  tm.tm_mday = atoi(IterNextString(&words));
-  tm.tm_mon = RFC822Month(IterNextString(&words).c_str());
-  tm.tm_year = atoi(IterNextString(&words)) - 1900;
-  string timetext = IterNextString(&words);
+  tm.tm_mday = atoi(words.NextString());
+  tm.tm_mon = RFC822Month(words.NextString().c_str());
+  tm.tm_year = atoi(words.NextString()) - 1900;
+  string timetext = words.NextString();
   if (!RFC822Time(timetext.c_str(), &tm.tm_hour, &tm.tm_min, &tm.tm_sec))
   { ERROR("RFC822Date('", text, "') RFC822Time('", timetext, "') failed"); return Time(0); }
-  int hours_from_gmt = RFC822TimeZone(IterNextString(&words).c_str());
+  int hours_from_gmt = RFC822TimeZone(words.NextString().c_str());
   return Seconds(timegm(&tm) - hours_from_gmt * 3600);
 }
 
 bool NumericTime(const char *text, int *hour, int *min, int *sec) {
   int textlen = strlen(text);
   StringWordIter words(StringPiece(text, textlen), isint<':'>);
-  *hour = atoi(IterNextString(&words));
-  *min = atoi(IterNextString(&words));
-  *sec = atoi(IterNextString(&words));
+  *hour = atoi(words.NextString());
+  *min = atoi(words.NextString());
+  *sec = atoi(words.NextString());
   if (textlen >= 2 && !strcmp(text+textlen-2, "pm") && *hour != 12) *hour += 12;
   return true;
 }
@@ -232,9 +232,9 @@ Time NumericDate(const char *datetext, const char *timetext, const char *timezon
   tm tm;
   memset(&tm, 0, sizeof(tm));
   StringWordIter words(datetext, isint<'/'>);
-  tm.tm_mon = atoi(IterNextString(&words)) - 1;
-  tm.tm_mday = atoi(IterNextString(&words));
-  tm.tm_year = atoi(IterNextString(&words)) - 1900;
+  tm.tm_mon = atoi(words.NextString()) - 1;
+  tm.tm_mday = atoi(words.NextString());
+  tm.tm_year = atoi(words.NextString()) - 1900;
   NumericTime(timetext, &tm.tm_hour, &tm.tm_min, &tm.tm_sec);
   int hours_from_gmt = RFC822TimeZone(BlankNull(timezone));
   return Seconds(timegm(&tm) - hours_from_gmt * 3600);

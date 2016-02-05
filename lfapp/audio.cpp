@@ -62,6 +62,10 @@ const double feat_progressbar_c = .4;
 const double feat_rastaB[] = { .2, .1, 0, -.1, -.2 };
 const double feat_rastaA[] = { 1, -.94 };
 
+DEFINE_int(sample_rate, 16000, "Audio sample rate");
+DEFINE_int(sample_secs, 3, "Seconds of RingBuf audio");
+DEFINE_int(chans_in, -1, "Audio input channels");
+DEFINE_int(chans_out, -1, "Audio output channels");
 DEFINE_int(audio_input_device, -1, "Audio input device index");
 DEFINE_int(audio_output_device, -1, "Audio output device index");
 DEFINE_bool(print_audio_devices, false, "Print audio device list");

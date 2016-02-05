@@ -331,7 +331,7 @@ struct TextGUI : public KeyboardGUI, public Drawable::AttrSource {
   LinesFrameBuffer cmd_fb;
   string cmd_prefix="> ";
   Color cmd_color=Color::white, selection_color=Color(Color::grey70, 0.5);
-  bool deactivate_on_enter=0, token_processing=0, insert_mode=1;
+  bool deactivate_on_enter=0, token_processing=0, insert_mode=1, run_blank_cmd=0;
   int start_line=0, end_line=0, start_line_adjust=0, skip_last_lines=0, default_attr=0;
   function<void(const Selection::Point&)> selection_cb;
   function<void(const shared_ptr<Link>&)> new_link_cb;
@@ -409,8 +409,11 @@ struct TextArea : public TextGUI {
   virtual void WriteCB(const string &s, bool update_fb, bool release_fb) { return Write(s, update_fb, release_fb); }
   virtual void PageUp  () { AddVScroll(-scroll_inc); }
   virtual void PageDown() { AddVScroll( scroll_inc); }
+  virtual void ScrollUp  () { PageUp(); }
+  virtual void ScrollDown() { PageDown(); }
   virtual void Resized(const Box &b);
   virtual void CheckResized(const Box &b);
+  virtual void SetDimension(int w, int h) {}
 
   virtual void Redraw(bool attach=true);
   virtual void UpdateScrolled();
@@ -509,7 +512,7 @@ struct Terminal : public TextArea {
   struct Controller : public ByteSink {
     bool ctrl_down=0, frame_on_keyboard_input=0;
     virtual ~Controller() {}
-    virtual int Open(Terminal*) = 0;
+    virtual int Open(TextArea*) = 0;
     virtual StringPiece Read() = 0;
     virtual void Close() {}
     virtual void Dispose() {}
@@ -552,8 +555,8 @@ struct Terminal : public TextArea {
   virtual void UpdateCursor() { cursor.p = point(GetCursorX(term_cursor.x, term_cursor.y), GetCursorY(term_cursor.y)); }
   virtual void UpdateToken(Line*, int word_offset, int word_len, int update_type, const LineTokenProcessor*);
   virtual bool GetGlyphFromCoords(const point &p, Selection::Point *out) { return GetGlyphFromCoordsOffset(p, out, clip ? 0 : start_line, 0); }
-  void ScrollUp  () { TextArea::PageDown(); }
-  void ScrollDown() { TextArea::PageUp(); }
+  virtual void ScrollUp  () { TextArea::PageDown(); }
+  virtual void ScrollDown() { TextArea::PageUp(); }
   int GetCursorX(int x, int y) const {
     const Line *l = GetTermLine(y);
     return x <= l->Size() ? l->data->glyphs.Position(x-1).x : ((x-1) * font->FixedWidth());
@@ -592,6 +595,7 @@ struct Console : public TextArea {
   Callback animating_cb;
   Time anim_time=Time(333), anim_begin=Time(0);
   bool animating=0, drawing=0, bottom_or_top=0, blend=1;
+  Box *scissor=0, scissor_buf;
 
   Console(Window *W, Font *F) : TextArea(W, F, 200, 50)
   { line_fb.wrap=write_timestamp=1; SetToggleKey(Key::Backquote); bg_color=&Color::clear; cursor.type = Cursor::Underline; }
@@ -605,6 +609,7 @@ struct Console : public TextArea {
   virtual void PageDown() { TextArea::PageUp(); }
   virtual void Activate() { TextGUI::Activate(); StartAnimating(); }
   virtual void Deactivate() { TextGUI::Deactivate(); StartAnimating(); }
+  virtual void Draw(const Box &b, int flag=DrawFlag::Default, Shader *shader=0);
   virtual void Draw();
   void StartAnimating();
 };

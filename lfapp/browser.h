@@ -28,8 +28,11 @@ struct BrowserController : public InputController {
     if (key)                                 browser->KeyEvent(key, down);
     else if (event == Mouse::Event::Motion)  browser->MouseMoved(screen->mouse.x, screen->mouse.y);
     else if (event == Mouse::Event::Wheel)   browser->MouseWheel(0, down*32);
-    else if (event == Mouse::Event::Button1) browser->MouseButton(1, down, screen->mouse.x, screen->mouse.y);
     else if (event == Mouse::Event::Button2) browser->MouseButton(2, down, screen->mouse.x, screen->mouse.y);
+    else if (event == Mouse::Event::Button1) {
+      if (down) screen->active_textgui = 0;
+      browser->MouseButton(1, down, screen->mouse.x, screen->mouse.y);
+    }
   }
 };
 

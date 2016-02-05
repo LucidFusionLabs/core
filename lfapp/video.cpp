@@ -1257,8 +1257,8 @@ struct OpenGLES2 : public GraphicsDevice, public QTWindow {
   void TextureGenReflection() {}
   void BindTexture(int t, int n) {
     if (!Changed(&bound_texture, BoundTexture{ t, n, 0 })) return;
+    ClearDeferred();
     if (!texture_on) EnableTexture();
-    else ClearDeferred();
     glActiveTexture(GL_TEXTURE0); 
     glBindTexture(t, n);
     glUniform1i(shader->uniform_tex, 0);

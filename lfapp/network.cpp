@@ -546,7 +546,7 @@ int Connection::WriteFlush(const char *buf, int len) {
       wrote = 0;
     }
   }
-  if (FLAGS_network_debug) INFO("write(", socket, ", ", wrote, ", '", buf, "')");
+  if (FLAGS_network_debug && wrote) INFO("write(", socket, ", ", wrote, ", '", string(buf, wrote), "')");
   return wrote;
 }
 
@@ -1945,7 +1945,7 @@ struct SSHClientConnection : public Connection::Handler {
     if (state == INIT) {
       int processed = 0;
       StringLineIter lines(c->rb.buf, StringLineIter::Flag::BlankLines);
-      for (string line = IterNextString(&lines); !lines.Done(); line = IterNextString(&lines)) {
+      for (string line = lines.NextString(); !lines.Done(); line = lines.NextString()) {
         SSHTrace(c->Name(), ": SSH_INIT: ", line);
         processed = lines.next_offset;
         if (PrefixMatch(line, "SSH-")) { V_S=line; state++; break; }
@@ -2318,7 +2318,7 @@ struct SMTPClientConnection : public Connection::Handler {
   int Read(Connection *c) {
     int processed = 0;
     StringLineIter lines(c->rb.buf, StringLineIter::Flag::BlankLines);
-    for (string line = IterNextString(&lines); !lines.Done(); line = IterNextString(&lines)) {
+    for (string line = lines.NextString(); !lines.Done(); line = lines.NextString()) {
       processed = lines.next_offset;
       if (!response_lines.empty()) response_lines.append("\r\n");
       response_lines.append(line);
@@ -2424,17 +2424,17 @@ struct SMTPServerConnection : public Connection::Handler {
     for (const char *line = lines.Next(); line && lines.next_offset>=0 && !in_data; line = lines.Next()) {
       processed = lines.next_offset;
       StringWordIter words(line, lines.cur_len, isint3<' ', '\t', ':'>);
-      string cmd = toupper(IterNextString(&words));
-      string a1_orig = IterNextString(&words);
+      string cmd = toupper(words.NextString());
+      string a1_orig = words.NextString();
       string a1 = toupper(a1_orig), response="500 unrecognized command\r\n";
 
       if (cmd == "MAIL" && a1 == "FROM") {
         ClearStateTable();
-        message.mail_from = IterRemainingString(&words);
+        message.mail_from = words.RemainingString();
         response = "250 OK\r\n";
       }
       else if (cmd == "RCPT" && a1 == "TO") {
-        message.rcpt_to.push_back(IterRemainingString(&words));
+        message.rcpt_to.push_back(words.RemainingString());
         response="250 OK\r\n"; }
       else if (cmd == "DATA") {
         if      (!message.rcpt_to.size())   response = "503 valid RCPT command must precede DATA\r\n";

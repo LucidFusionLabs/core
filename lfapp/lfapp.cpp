@@ -202,10 +202,6 @@ DEFINE_int(loglevel, 7, "Log level: [Fatal=-1, Error=0, Info=3, Debug=7]");
 DEFINE_int(loglevel, 0, "Log level: [Fatal=-1, Error=0, Info=3, Debug=7]");
 #endif
 DEFINE_int(threadpool_size, 0, "Threadpool size");
-DEFINE_int(sample_rate, 16000, "Audio sample rate");
-DEFINE_int(sample_secs, 3, "Seconds of RingBuf audio");
-DEFINE_int(chans_in, -1, "Audio input channels");
-DEFINE_int(chans_out, -1, "Audio output channels");
 DEFINE_int(target_fps, 0, "Max frames per second");
 DEFINE_bool(open_console, 0, "Open console on win32");
 #ifdef LFL_MOBILE

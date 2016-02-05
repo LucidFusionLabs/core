@@ -792,8 +792,8 @@ struct LayersInterface {
 template<class CB, class CBL, class CBLI> struct TilesT : public TilesInterface {
   struct Tile {
     CBL cb;
-    unsigned id, prepend_depth; bool dirty;
-    Tile() : id(0), prepend_depth(0), dirty(0) {}
+    unsigned id=0, prepend_depth=0;
+    bool dirty=0;
   };
   int layer, W, H, context_depth=-1;
   vector<Tile*> prepend, append;

@@ -530,8 +530,8 @@ string FirstMatchCSV(const StringPiece &haystack, const StringPiece &needle, int
   unordered_set<string> h_map;
   StringWordIter h_words(haystack, ischar);
   StringWordIter i_words(needle,   ischar);
-  for (string w = IterNextString(&h_words); !h_words.Done(); w = IterNextString(&h_words)) h_map.insert(w);
-  for (string w = IterNextString(&i_words); !i_words.Done(); w = IterNextString(&i_words)) if (Contains(h_map, w)) return w;
+  for (string w = h_words.NextString(); !h_words.Done(); w = h_words.NextString()) h_map.insert(w);
+  for (string w = i_words.NextString(); !i_words.Done(); w = i_words.NextString()) if (Contains(h_map, w)) return w;
   return "";
 }
 
@@ -540,8 +540,8 @@ bool ParseKV(const string &t, string *k_out, string *v_out, int equal_char) {
   if (!p) return false;
   ptrdiff_t p_offset = p - t.c_str();
   StringWordIter k_words(t.c_str(), p_offset), v_words(p+1, t.size()-p_offset-1);
-  *k_out = IterNextString(&k_words);
-  *v_out = IterRemainingString(&v_words);
+  *k_out = k_words.NextString();
+  *v_out = v_words.RemainingString();
   return k_out->size();
 }
 
@@ -549,7 +549,7 @@ string UpdateKVLine(const string &haystack, const string &key, const string &val
   bool found = 0;
   StringLineIter lines(haystack);
   string ret, k, v, update = StrCat(key, string(1, equal_char), val);
-  for (string line = IterNextString(&lines); !lines.Done(); line = IterNextString(&lines)) {
+  for (string line = lines.NextString(); !lines.Done(); line = lines.NextString()) {
     if (ParseKV(line, &k, &v, ':') && k == key && (found=1)) StrAppend(&ret, update, "\n");
     else                                                     StrAppend(&ret, line,   "\n");
   }
@@ -853,5 +853,15 @@ const char *NextRecordReader::NextProto(int *offset, int *nextoffset, ProtoHeade
   if (bhout) *bhout = ProtoHeader(np);
   return np + ProtoHeader::size;
 }
+
+void NextRecordDispatcher::AddData(const StringPiece &b, bool final) {
+  buf.append(b.data(), b.size());
+  StringPiece remaining(buf), record;
+  while ((remaining.buf = next_cb((record.buf = remaining.buf), final, &record.len))) {
+    remaining.len = buf.size() - (remaining.buf - buf.data());
+    cb(record.str());
+  }
+  buf.erase(0, buf.size() - remaining.len);
+};
 
 }; // namespace LFL

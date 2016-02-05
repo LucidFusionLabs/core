@@ -106,7 +106,7 @@ int DNS::WriteRequest(unsigned short id, const string &querytext, unsigned short
   hdr->qdcount = htons(1);
 
   StringWordIter words(querytext, isdot);
-  for (string word = IterNextString(&words); !word.empty(); word = IterNextString(&words)) {
+  for (string word = words.NextString(); !word.empty(); word = words.NextString()) {
     CHECK_LT(word.size(), 64);
     os.Write8((unsigned char)word.size());
     os.String(word);

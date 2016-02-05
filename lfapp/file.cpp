@@ -542,15 +542,15 @@ int StringFile::Read(IterWordIter *word, int header) {
     if (!format) return -1;
   }
   if (header != MatrixFile::Header::NONE) {
-    M = (int)atof(IterNextString(word));
-    N = (int)atof(IterNextString(word));
+    M = (int)atof(word->NextString());
+    N = (int)atof(word->NextString());
   } else {
     if (MatrixFile::ReadDimensions(word, &M, &N)) return -1;
   }
 
   if (!F) F = new vector<string>;
   else F->clear(); 
-  for (string line = IterNextString(word->iter); !word->iter->Done(); line = IterNextString(word->iter)) F->push_back(line);
+  for (string line = word->iter->NextString(); !word->iter->Done(); line = word->iter->NextString()) F->push_back(line);
   return 0;
 }
 
@@ -612,8 +612,8 @@ int MatrixFile::Read(IterWordIter *word, int header) {
   int M, N;
   if (header == Header::DIM_PLUS) { if (ReadHeader(word, &H) < 0) return -1; }
   if (header != Header::NONE) {
-    M = (int)atof(IterNextString(word));
-    N = (int)atof(IterNextString(word));
+    M = (int)atof(word->NextString());
+    N = (int)atof(word->NextString());
   } else {
     if (ReadDimensions(word, &M, &N)) return -1;
   }
@@ -623,7 +623,7 @@ int MatrixFile::Read(IterWordIter *word, int header) {
 
   MatrixIter(F) {
     double *ov = &F->row(i)[j];
-    string w = IterNextString(word);
+    string w = word->NextString();
     if (word->Done()) FATAL("%s", "MatrixFile: unexpected EOF");
     if (w == "-1.#INF00" || w == "-inf") { *ov = -INFINITY; continue; }
     *ov = atof(w);

@@ -244,28 +244,24 @@ template <class X> struct StringIterT {
   virtual int CurrentOffset() const = 0;
   virtual int CurrentLength() const = 0;
   virtual int TotalLength() const = 0;
+
+  template <class Y=X> typename enable_if<is_pod<Y>::value, basic_string<type>>::type NextString() {
+    if (const type *b = Next()) return basic_string<type>(b, CurrentLength());
+    else                        return basic_string<type>();
+  }
+  template <class Y=X> typename enable_if<is_pod<Y>::value, basic_string<type>>::type RemainingString() {
+    int total = TotalLength(), offset = CurrentOffset();
+    if (total >= 0) return basic_string<type>(Begin() + offset, total - offset);
+    else            return basic_string<type>(Begin() + offset);
+  }
+  template <class Y=X, class Z> typename enable_if<is_pod<Y>::value, void>::type ScanN(Z *out, int N) {
+    for (int i=0; i<N; ++i) {
+      auto v = Next(); 
+      out[i] = v ? Scannable::Scan(Y(), basic_string<type>(v, CurrentLength()).data()) : 0;
+    }
+  }
 };
 typedef StringIterT<char> StringIter;
-
-template <class X> basic_string<typename X::type> IterNextString(X *iter) {
-  const typename X::type *w = iter->Next();
-  return w ? basic_string<typename X::type>(w, iter->CurrentLength()) : basic_string<typename X::type>();
-}
-
-template <class X> basic_string<typename X::type> IterRemainingString(X *iter) {
-  basic_string<typename X::type> ret;
-  int total = iter->TotalLength(), offset = iter->CurrentOffset();
-  if (total >= 0) ret.assign(iter->Begin() + offset, total - offset);
-  else            ret.assign(iter->Begin() + offset);
-  return ret;
-}
-
-template <class X, class Y> void IterScanN(X *iter, Y *out, int N) {
-  for (int i=0; i<N; ++i) {
-    auto v = iter->Next(); 
-    out[i] = v ? Scannable::Scan(Y(), string(v, iter->CurrentLength()).c_str()) : 0;
-  }
-}
 
 template <class X> struct StringWordIterT : public StringIterT<X> {
   StringPieceT<X> in;
@@ -468,7 +464,7 @@ template <class X, class Y> int Split(const StringPieceT<X> &in, int (*ischar)(i
   out->clear();
   if (!in.buf) return 0;
   StringWordIterT<X> words(in, ischar, isquote);
-  for (string word = IterNextString(&words); !words.Done(); word = IterNextString(&words))
+  for (string word = words.NextString(); !words.Done(); word = words.NextString())
     out->push_back(Scannable::Scan(Y(), word.c_str()));
   return out->size();
 }
@@ -485,7 +481,7 @@ template <class X> int Split(const StringPiece &in, int (*ischar)(int), int (*is
   out->clear();
   if (!in.buf) return 0;
   StringWordIter words(in, ischar, isquote);
-  for (string word = IterNextString(&words); !words.Done(); word = IterNextString(&words))
+  for (string word = words.NextString(); !words.Done(); word = words.NextString())
     out->insert(Scannable::Scan(X(), word.c_str()));
   return out->size();
 }
@@ -611,6 +607,15 @@ struct NextRecordReader {
   const char *NextLineRaw(int *offset=0, int *nextoffset=0);
   const char *NextChunk  (int *offset=0, int *nextoffset=0);
   const char *NextProto  (int *offset=0, int *nextoffset=0, ProtoHeader *phout=0);
+};
+
+struct NextRecordDispatcher {
+  typedef const char* (*NextCB)(const StringPiece&, bool, int*);
+  StringCB cb;
+  string buf;
+  NextCB next_cb;
+  NextRecordDispatcher(const StringCB &C=StringCB(), NextCB NC=&LFL::NextLine) : cb(C), next_cb(NC) {}
+  void AddData(const StringPiece &b, bool final=0);
 };
 
 }; // namespace LFL

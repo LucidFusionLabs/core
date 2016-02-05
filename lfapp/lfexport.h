@@ -129,6 +129,7 @@ DECLARE_bool(lfapp_cuda);
 DECLARE_bool(lfapp_debug);
 DECLARE_bool(swap_axis);
 DECLARE_int(loglevel);
+DECLARE_int(peak_fps);
 DECLARE_int(target_fps);
 DECLARE_int(threadpool_size);
 DECLARE_int(invert);

@@ -456,7 +456,8 @@ const Drawable::Attr *TextGUI::GetAttr(int attr) const {
 void TextGUI::Enter() {
   string cmd = String::ToUTF8(Text16());
   AssignInput("");
-  if (!cmd.empty()) { AddHistory(cmd); Run(cmd); }
+  if (!cmd.empty()) AddHistory(cmd);
+  if (!cmd.empty() || run_blank_cmd) Run(cmd);
   if (deactivate_on_enter) Deactivate();
 }
 
@@ -484,7 +485,7 @@ void TextGUI::Draw(const Box &b) {
   // screen->gd->PushColor();
   // screen->gd->SetColor(cmd_color);
   cmd_fb.Draw(b.Position(), point());
-  DrawCursor(b.Position() + cursor.p);
+  if (Active()) DrawCursor(b.Position() + cursor.p);
   // screen->gd->PopColor();
 }
 
@@ -1597,7 +1598,6 @@ void Console::Draw() {
   Time now = Now(), elapsed;
   bool active = Active(), last_animating = animating;
   int full_height = screen->height * screen_percent, h = active ? full_height : 0;
-
   if ((animating = (elapsed = now - anim_begin) < anim_time)) {
     if (active) h = full_height * (  (double)elapsed.count()/anim_time.count());
     else        h = full_height * (1-(double)elapsed.count()/anim_time.count());
@@ -1606,20 +1606,20 @@ void Console::Draw() {
     if (last_animating && animating_cb) animating_cb();
     if (!active) { drawing = 0; return; }
   }
+  scissor = (animating && bottom_or_top) ? &(scissor_buf = Box(0, 0, screen->width, h)) : 0;
+  Draw(Box(0, bottom_or_top ? 0 : screen->height - h, screen->width, full_height));
+}
 
-  int y = bottom_or_top ? 0 : screen->height - h, fh = font->Height();
-  Box b(0, y, screen->width, h), tb(0, y + fh, screen->width, full_height - fh);
-
+void Console::Draw(const Box &b, int flag, Shader *shader) {
+  if (scissor) screen->gd->PushScissor(*scissor);
+  int fh = font->Height();
+  Box tb(b.x, b.y + fh, b.w, b.h - fh);
   if (blend) screen->gd->EnableBlend(); 
   else       screen->gd->DisableBlend();
-  screen->gd->FillColor(color);
-  b.Draw();
-  screen->gd->SetColor(Color::white);
-  CheckResized(tb);
-  if (animating) screen->gd->PushScissor(b);
-  TextArea::Draw(tb, 0);
-  if (animating) screen->gd->PopScissor();
+  if (blend) { screen->gd->FillColor(color); b.Draw(); screen->gd->SetColor(Color::white); }
   TextGUI::Draw(b);
+  TextArea::Draw(tb, flag & ~DrawFlag::DrawCursor, shader);
+  if (scissor) screen->gd->PopScissor();
 }
 
 /* Dialog */
