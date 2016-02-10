@@ -147,10 +147,10 @@ extern "C" void WindowReshaped(int w, int h)      { LFL::screen->Reshaped(w, h);
 extern "C" void WindowMinimized()                 { LFL::screen->Minimized(); }
 extern "C" void WindowUnMinimized()               { LFL::screen->UnMinimized(); }
 extern "C" void WindowClosed()                    { LFL::app->CloseWindow(LFL::screen); }
-extern "C" void QueueWindowReshaped(int w, int h) { LFL::RunInMainThread(new LFL::Callback(bind(&LFL::Window::Reshaped,    LFL::screen, w, h))); }
-extern "C" void QueueWindowMinimized()            { LFL::RunInMainThread(new LFL::Callback(bind(&LFL::Window::Minimized,   LFL::screen))); }
-extern "C" void QueueWindowUnMinimized()          { LFL::RunInMainThread(new LFL::Callback(bind(&LFL::Window::UnMinimized, LFL::screen))); }
-extern "C" void QueueWindowClosed()               { LFL::RunInMainThread(new LFL::Callback(bind([=](){ LFL::app->CloseWindow(LFL::screen); }))); }
+extern "C" void QueueWindowReshaped(int w, int h) { LFL::app->RunInMainThread(bind(&LFL::Window::Reshaped,    LFL::screen, w, h)); }
+extern "C" void QueueWindowMinimized()            { LFL::app->RunInMainThread(bind(&LFL::Window::Minimized,   LFL::screen)); }
+extern "C" void QueueWindowUnMinimized()          { LFL::app->RunInMainThread(bind(&LFL::Window::UnMinimized, LFL::screen)); }
+extern "C" void QueueWindowClosed()               { LFL::app->RunInMainThread(bind([=](){ LFL::app->CloseWindow(LFL::screen); })); }
 extern "C" int  KeyPress  (int b, int d)                    { return LFL::app->input->KeyPress  (b, d); }
 extern "C" int  MouseClick(int b, int d, int x,  int y)     { return LFL::app->input->MouseClick(b, d, LFL::point(x, y)); }
 extern "C" int  MouseMove (int x, int y, int dx, int dy)    { return LFL::app->input->MouseMove (LFL::point(x, y), LFL::point(dx, dy)); }
@@ -180,7 +180,7 @@ extern "C" void LFAppFatal() {
 }
 
 namespace LFL {
-Application *app = new Application();
+Application *app = Singleton<Application>::Get();
 Window *screen = new Window();
 
 DEFINE_bool(lfapp_audio, false, "Enable audio in/out");
@@ -210,6 +210,8 @@ DEFINE_int(peak_fps, 30, "Peak FPS");
 DEFINE_int(peak_fps, 60, "Peak FPS");
 #endif
 
+void Log(int level, const char *file, int line, const string &m) { app->Log(level, file, line, m); }
+
 void Allocator::Reset() { FATAL(Name(), ": reset"); }
 Allocator *Allocator::Default() { return Singleton<MallocAlloc>::Get(); }
 
@@ -233,71 +235,6 @@ Allocator *ThreadLocalStorage::GetAllocator(bool reset_allocator) {
   if (!tls->alloc) tls->alloc = new FixedAlloc<1024*1024>;
   if (reset_allocator) tls->alloc->Reset();
   return tls->alloc;
-}
-
-void Log(int level, const char *file, int line, const string &m) { app->Log(level, file, line, m); }
-bool Running() { return app->run; }
-bool MainThread() { return Thread::GetId() == app->main_thread_id; }
-bool MainProcess() { return !app->main_process; }
-void DefaultLFAppWindowClosedCB(Window *W) { delete W; }
-double FPS() { return screen->fps.FPS(); }
-double CamFPS() { return app->camera->fps.FPS(); }
-
-void RunInMainThread(Callback *cb) {
-  app->message_queue.Write(cb);
-  if (!FLAGS_target_fps) app->scheduler.Wakeup(0);
-}
-
-void RunInNetworkThread(const Callback &cb) {
-  if (auto nt = app->network_thread) nt->Write(new Callback(cb));
-  else cb();
-}
-
-void PressAnyKey() {
-  printf("Press [enter] to continue..."); fflush(stdout);
-  char buf[32]; fgets(buf, sizeof(buf), stdin);
-}
-
-bool FGets(char *buf, int len) { return NBFGets(stdin, buf, len); }
-bool NBFGets(FILE *f, char *buf, int len, int timeout) {
-#ifndef WIN32
-  int fd = fileno(f);
-  SelectSocketSet ss;
-  ss.Add(fd, SocketSet::READABLE, 0);
-  ss.Select(timeout);
-  if (!app->run || !ss.GetReadable(fd)) return 0;
-  fgets(buf, len, f);
-  return 1;
-#else
-  return 0;
-#endif
-}
-
-bool NBReadable(Socket fd, int timeout) {
-  SelectSocketSet ss;
-  ss.Add(fd, SocketSet::READABLE, 0);
-  ss.Select(timeout);
-  return app->run && ss.GetReadable(fd);
-}
-
-int NBRead(Socket fd, char *buf, int len, int timeout) {
-  if (timeout && !NBReadable(fd, timeout)) return 0;
-  int o = 0, s = 0;
-  do if ((s = read(fd, buf+o, len-o)) > 0) o += s;
-  while (s > 0 && len - o > 1024);
-  return o;
-}
-
-int NBRead(Socket fd, string *buf, int timeout) {
-  int l = NBRead(fd, (char*)buf->data(), buf->size(), timeout);
-  buf->resize(max(0,l));
-  return l;
-}
-
-string NBRead(Socket fd, int len, int timeout) {
-  string ret(len, 0);
-  NBRead(fd, &ret, timeout);
-  return ret;
 }
 
 void *MallocAlloc::Malloc(int size) { return ::malloc(size); }
@@ -546,8 +483,8 @@ void Application::StartNewWindow(Window *new_window) {
 
 NetworkThread *Application::CreateNetworkThread(bool detach, bool start) {
   CHECK(app->network);
-  if (detach) VectorEraseByValue(&app->modules, static_cast<Module*>(network));
-  network_thread = new NetworkThread(app->network, !detach);
+  if (detach) VectorEraseByValue(&app->modules, static_cast<Module*>(network.get()));
+  network_thread = new NetworkThread(app->network.get(), !detach);
   if (start) network_thread->thread->Start();
   return network_thread;
 }
@@ -875,7 +812,7 @@ int Application::Init() {
   }
 
   if (FLAGS_lfapp_video) {
-    if ((video = new Video())->Init()) { ERROR("video init failed"); return -1; }
+    if ((video = make_unique<Video>())->Init()) { ERROR("video init failed"); return -1; }
   }
   else { windows[screen->id] = screen; }
 
@@ -889,32 +826,32 @@ int Application::Init() {
 #endif /* LFL_FFMPEG */
 
   if (FLAGS_lfapp_audio) {
-    if (LoadModule((audio = new Audio()))) { ERROR("audio init failed"); return -1; }
+    if (LoadModule((audio = make_unique<Audio>()).get())) { ERROR("audio init failed"); return -1; }
   }
   else { FLAGS_chans_in=FLAGS_chans_out=1; }
 
   if (FLAGS_lfapp_audio || FLAGS_lfapp_video) {
-    if ((assets = new Assets())->Init()) { ERROR("assets init failed"); return -1; }
+    if ((assets = make_unique<Assets>())->Init()) { ERROR("assets init failed"); return -1; }
   }
 
   app->video->InitFonts();
   if (FLAGS_lfapp_console && !screen->lfapp_console) screen->InitLFAppConsole();
 
   if (FLAGS_lfapp_input) {
-    if (LoadModule((input = new Input()))) { ERROR("input init failed"); return -1; }
+    if (LoadModule((input = make_unique<Input>()).get())) { ERROR("input init failed"); return -1; }
     input->Init(screen);
   }
 
   if (FLAGS_lfapp_network) {
-    if (LoadModule((network = new Network()))) { ERROR("network init failed"); return -1; }
+    if (LoadModule((network = make_unique<Network>()).get())) { ERROR("network init failed"); return -1; }
   }
 
   if (FLAGS_lfapp_camera) {
-    if (LoadModule((camera = new Camera()))) { ERROR("camera init failed"); return -1; }
+    if (LoadModule((camera = make_unique<Camera>()).get())) { ERROR("camera init failed"); return -1; }
   }
 
   if (FLAGS_lfapp_cuda) {
-    (cuda = new CUDA())->Init();
+    (cuda = make_unique<CUDA>())->Init();
   }
 
   scheduler.Init();
@@ -983,7 +920,7 @@ int Application::Main() {
     return 0;
 #endif
   });
-  if (Start()) return Exiting();
+  if (Start()) return -1;
 #if defined(LFL_OSXVIDEO) || defined(LFL_WINVIDEO) || defined(LFL_QT) || defined(LFL_WXWIDGETS)
   return 0;
 #endif
@@ -1002,27 +939,22 @@ int Application::MainLoop() {
     MSleep(1);
   }
   INFO("MainLoop: End, run=", run);
-  return Free();
-}
-
-int Application::Free() {
-  for (auto m : modules) m->Free();
-  return Exiting();
-}
-
-int Application::Exiting() {
-  run = 0;
-  INFO("exiting");
-  scheduler.Free();
-#ifdef WIN32
-  if (FLAGS_open_console) PressAnyKey();
-#endif
   return 0;
 }
 
 void Application::ResetGL() {
   for (auto &w : windows) w.second->ResetGL();
   Fonts::ResetGL();
+}
+
+Application::~Application() {
+  run = 0;
+  INFO("exiting");
+  for (auto &m : modules) m->Free();
+  scheduler.Free();
+#ifdef WIN32
+  if (FLAGS_open_console) PromptFGets("Press [enter] to continue...");
+#endif
 }
 
 /* FrameScheduler */

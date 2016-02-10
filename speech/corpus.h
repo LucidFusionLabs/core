@@ -68,7 +68,7 @@ struct VoxForgeTgzFile {
 
     for (const char *line = prompts.Next(); line; line = prompts.Next()) {
       StringWordIter words(line); 
-      string key = IterNextString(&words);
+      string key = words.NextString();
       int val = words.next_offset;
       if (key.empty() || val<0) continue;
       wav2transcript[BaseName(key)] = &line[val];
@@ -211,7 +211,7 @@ void WavCorpus::RunFile(const string &fn) {
     NextRecordReader nr(&tf);
     StringWordIter words(nr.NextLine());
     if (bool skip_two_words=true) { words.Next(); words.Next(); }
-    string transcript = toupper(words.in + words.next_offset);
+    string transcript = toupper(words.in.data() + words.next_offset);
     transcript = togrep(transcript.c_str(), isalnum, isspace);
 
     WavCorpus::RunFile(dn, fn, transcript.c_str());

@@ -260,7 +260,7 @@ struct Input : public InputModule {
   bool left_cmd_down = 0, right_cmd_down = 0, mouse_but1_down = 0, mouse_but2_down = 0;
   vector<InputCB> queued_input;
   mutex queued_input_mutex;
-  InputModule *impl = 0;
+  unique_ptr<InputModule> impl;
   Bind paste_bind;
 
   void QueueKeyPress(int key, bool down) {

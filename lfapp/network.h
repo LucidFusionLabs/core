@@ -29,7 +29,8 @@ DECLARE_bool(network_debug);
 struct TransferredSocket { Socket socket; int offset; };
 
 struct IPV4Endpoint {
-  IPV4::Addr addr=0; int port=0;
+  IPV4::Addr addr=0;
+  int port=0;
   IPV4Endpoint() {}
   IPV4Endpoint(int A, int P) : addr(A), port(P) {};
   string name() const { return IPV4::Text(addr, port); }
@@ -159,7 +160,9 @@ typedef WFMOSocketSet LFLSocketSet;
 #elif defined(LFL_EPOLL) && defined(LFL_LINUX_SERVER)
 #include <sys/epoll.h>
 template <int S> struct EPollSocketSet : public SocketSet {
-  Socket epollfd, cur_fd; int cur_event=-1, num_events=0; struct epoll_event events[S];
+  Socket epollfd, cur_fd;
+  epoll_event events[S];
+  int cur_event=-1, num_events=0;
   EPollSocketSet() : epollfd(epoll_create(S)) {}
   virtual ~EPollSocketSet() { close(epollfd); }
 
@@ -168,7 +171,9 @@ template <int S> struct EPollSocketSet : public SocketSet {
     return 0;
   }
   void Change(Socket fd, int op, int flag, void *val) {
-    struct epoll_event ev; memzero(ev); ev.data.ptr = val;
+    epoll_event ev;
+    memzero(ev);
+    ev.data.ptr = val;
     ev.events = ((flag & READABLE) ? EPOLLIN : 0) | ((flag & WRITABLE) ? EPOLLOUT : 0);
     if (epoll_ctl(epollfd, op, fd, &ev) == -1) ERROR("epoll_ctl(", epollfd, ", ", op, ", ", events, "): ", strerror(errno)); 
   }
@@ -178,7 +183,7 @@ template <int S> struct EPollSocketSet : public SocketSet {
   int GetReadable(Socket fd) { return Get(fd)->events & (EPOLLIN  | EPOLLERR | EPOLLHUP); }
   int GetWritable(Socket fd) { return Get(fd)->events & (EPOLLOUT | EPOLLERR | EPOLLHUP); }
   int GetException(Socket fd) { return 0; }
-  struct epoll_event *Get(Socket fd) {
+  epoll_event *Get(Socket fd) {
     CHECK_EQ(fd, cur_fd);
     CHECK(cur_event >= 0 && cur_event < S);
     return &events[cur_event];
@@ -242,16 +247,16 @@ struct Connection {
   typed_ptr self_reference;
   vector<IOVec> packets;
   deque<TransferredSocket> transferred_socket;
+  unique_ptr<Handler> handler;
+  Callback *detach;
   SSL *ssl=0;
   BIO *bio=0;
-  Handler *handler;
-  Callback *detach;
 
-  ~Connection() { delete handler; }
-  Connection(Service *s, Handler *h,                                     Callback *Detach=0) : svc(s), socket(-1),   ct(Now()), rt(Now()), wt(Now()), addr(0),    detach(Detach), state(Error), port(0),    rb(65536), wb(65536), self_reference(this), handler(h) {}
-  Connection(Service *s, int State, int Sock,                            Callback *Detach=0) : svc(s), socket(Sock), ct(Now()), rt(Now()), wt(Now()), addr(0),    detach(Detach), state(State), port(0),    rb(65536), wb(65536), self_reference(this), handler(0) {}
-  Connection(Service *s, int State, int Sock, IPV4::Addr Addr, int Port, Callback *Detach=0) : svc(s), socket(Sock), ct(Now()), rt(Now()), wt(Now()), addr(Addr), detach(Detach), state(State), port(Port), rb(65536), wb(65536), self_reference(this), handler(0) {}
-  Connection(Service *s, int State,           IPV4::Addr Addr, int Port, Callback *Detach=0) : svc(s), socket(-1),   ct(Now()), rt(Now()), wt(Now()), addr(Addr), detach(Detach), state(State), port(Port), rb(65536), wb(65536), self_reference(this), handler(0) {}
+  virtual ~Connection() {}
+  Connection(Service *s, Handler *h,                                     Callback *Detach=0) : svc(s), socket(-1),   ct(Now()), rt(Now()), wt(Now()), addr(0),    state(Error), port(0),    rb(65536), wb(65536), self_reference(this), handler(h), detach(Detach) {}
+  Connection(Service *s, int State, int Sock,                            Callback *Detach=0) : svc(s), socket(Sock), ct(Now()), rt(Now()), wt(Now()), addr(0),    state(State), port(0),    rb(65536), wb(65536), self_reference(this),             detach(Detach) {}
+  Connection(Service *s, int State, int Sock, IPV4::Addr Addr, int Port, Callback *Detach=0) : svc(s), socket(Sock), ct(Now()), rt(Now()), wt(Now()), addr(Addr), state(State), port(Port), rb(65536), wb(65536), self_reference(this),             detach(Detach) {}
+  Connection(Service *s, int State,           IPV4::Addr Addr, int Port, Callback *Detach=0) : svc(s), socket(-1),   ct(Now()), rt(Now()), wt(Now()), addr(Addr), state(State), port(Port), rb(65536), wb(65536), self_reference(this),             detach(Detach) {}
 
   string Name() const { return !endpoint_name.empty() ? endpoint_name : IPV4::Text(addr, port); }
   void SetError() { state = Error; ct = Now(); }
@@ -278,24 +283,20 @@ struct Connection {
 };
 
 struct Service {
-  typedef map<string, Listener*> ListenMap;
-  typedef map<Socket, Connection*> ConnMap;
-  typedef map<string, Connection*> EndpointMap;
-
   string name;
   int protocol, reconnect=0;
   bool initialized=0, heartbeats=0, endpoint_read_autoconnect=0;
   void *game_network=0;
-  ListenMap listen;
-  ConnMap conn;
-  Connection fake;
+  map<string, unique_ptr<Listener>> listen;
+  map<Socket, unique_ptr<Connection>> conn;
+  map<string, unique_ptr<Connection>> endpoint;
   IPV4EndpointSource *connect_src_pool=0;
-  EndpointMap endpoint;
+  Connection fake;
   Service(int prot=Protocol::TCP) : protocol(prot), fake(this, Connection::Connected, 0) {}
 
   void QueueListen(IPV4::Addr addr, int port, bool SSL=false) { QueueListen(IPV4Endpoint(addr,port).ToString(), SSL); }
-  void QueueListen(const string &n, bool SSL=false) { listen[n] = new Listener(this, SSL); }
-  Listener *GetListener() { return listen.size() ? listen.begin()->second : 0; }
+  void QueueListen(const string &n, bool SSL=false) { listen[n] = make_unique<Listener>(this, SSL); }
+  Listener *GetListener() { return listen.size() ? listen.begin()->second.get() : 0; }
 
   int OpenSocket(Connection *c, int protocol, int blocking, IPV4EndpointSource*);
   Socket Listen(IPV4::Addr addr, int port, Listener*);
@@ -365,8 +366,9 @@ struct NetworkThread {
   };
 
   bool init=0;
-  Network *net;
-  Connection *rd, *wr;
+  Network *net=0;
+  Connection *rd=0;
+  unique_ptr<Connection> wr;
   unique_ptr<Thread> thread;
   NetworkThread(Network *N, bool Init);
 
@@ -385,20 +387,26 @@ struct UnixServer : public Service {
 struct UDPClient : public Service {
   static const int MTU = 1500;
   enum { Write=1, Sendto=2 };
-  UDPClient() : Service(Protocol::UDP) { heartbeats=true; }
-
   typedef function<void(Connection*, const char*, int)> ResponseCB;
-  Connection *PersistentConnection(const string &url, ResponseCB cb, int default_port) { return PersistentConnection(url, cb, HeartbeatCB(), default_port); }
-
   typedef function<void(Connection*)> HeartbeatCB; 
-  Connection *PersistentConnection(const string &url, ResponseCB, HeartbeatCB, int default_port);
+  struct PersistentConnectionHandler : public Connection::Handler {
+    UDPClient::ResponseCB responseCB;
+    UDPClient::HeartbeatCB heartbeatCB;
+    PersistentConnectionHandler(const UDPClient::ResponseCB &RCB, const UDPClient::HeartbeatCB &HCB) : responseCB(RCB), heartbeatCB(HCB) {}
+    int Heartbeat(Connection *c) { if (heartbeatCB) heartbeatCB(c); return 0; }
+    void Close(Connection *c) { if (responseCB) responseCB(c, 0, 0); }
+    int Read(Connection *c);
+  };
+  UDPClient() : Service(Protocol::UDP) { heartbeats=true; }
+  Connection *PersistentConnection(const string &url, const ResponseCB& cb, int default_port) { return PersistentConnection(url, cb, HeartbeatCB(), default_port); }
+  Connection *PersistentConnection(const string &url, const ResponseCB&, const HeartbeatCB&, int default_port);
 };
 
 struct UDPServer : public Service {
   virtual ~UDPServer() {}
   Connection::Handler *handler=0;
   UDPServer(int port) { protocol=Protocol::UDP; QueueListen(0, port); }
-  virtual int Connected(Connection *c) { c->handler = handler; return 0; }
+  virtual int Connected(Connection *c) { c->handler = unique_ptr<Connection::Handler>(handler); return 0; }
 };
 
 struct HTTPClient : public Service {
@@ -410,6 +418,7 @@ struct HTTPClient : public Service {
 };
 
 struct HTTPServer : public Service {
+  typedef function<void(Connection*)> ConnectionClosedCB;
   struct Method {
     enum { GET=1, POST=2 };
     static const char *name(int n);
@@ -436,17 +445,14 @@ struct HTTPServer : public Service {
     virtual Response Request(Connection *, int method, const char *url, const char *args, const char *headers, const char *postdata, int postlen) = 0;
   };
 
-  typedef function<void(Connection*)> ConnectionClosedCB;
-  typedef map<string, Resource*> URLMap;
-
-  URLMap urlmap;
+  map<string, Resource*> urlmap;
   HTTPServer(IPV4::Addr addr, int port, bool SSL) : Service(Protocol::TCP) { QueueListen(addr, port, SSL); }
   HTTPServer(                 int port, bool SSL) : Service(Protocol::TCP) { QueueListen(0,    port, SSL); }
   virtual ~HTTPServer() { ClearURL(); }
 
   int Connected(Connection *c);
   void AddURL(const string &url, Resource *resource) { urlmap[url] = resource; }
-  void ClearURL() { for (URLMap::iterator i = urlmap.begin(); i != urlmap.end(); i++) delete (*i).second; }
+  void ClearURL() { for (auto i = urlmap.begin(); i != urlmap.end(); i++) delete (*i).second; }
   virtual Response Request(Connection *c, int method, const char *url, const char *args, const char *headers, const char *postdata, int postlen);
   static void connectionClosedCB(Connection *conn, ConnectionClosedCB cb);
 
@@ -476,9 +482,8 @@ struct HTTPServer : public Service {
 
 #ifdef LFL_FFMPEG
   struct StreamResource : public Resource {
-    typedef map<void*, Connection*> SubscriberMap;
     AVFormatContext *fctx;
-    SubscriberMap subscribers;
+    map<void*, Connection*> subscribers;
     bool open;
     int abr, vbr;
     AVStream *audio;
@@ -502,13 +507,12 @@ struct HTTPServer : public Service {
 #endif
 
   struct SessionResource : public Resource {
-    typedef map<Connection*, Resource*> ConnMap;
-    ConnMap connmap;
+    map<Connection*, Resource*> connmap;
     virtual ~SessionResource() { ClearConnections(); }
     virtual Resource *Open() = 0;
     virtual void Close(Resource *) = 0;
 
-    void ClearConnections() { for (ConnMap::iterator i = connmap.begin(); i != connmap.end(); i++) delete (*i).second; }
+    void ClearConnections() { for (auto i = connmap.begin(); i != connmap.end(); i++) delete (*i).second; }
     Response Request(Connection *c, int method, const char *url, const char *args, const char *headers, const char *postdata, int postlen);
     void ConnectionClosedCB(Connection *c);
   };
@@ -560,7 +564,7 @@ struct GPlusServer : public Service {
   virtual ~GPlusServer() {}
   Connection::Handler *handler=0;
   GPlusServer() : Service(Protocol::GPLUS) { endpoint_read_autoconnect=1; }
-  virtual int Connected(Connection *c) { c->handler = handler; return 0; }
+  virtual int Connected(Connection *c) { c->handler = unique_ptr<Connection::Handler>(handler); return 0; }
 };
 
 struct Sniffer {
@@ -586,6 +590,14 @@ struct GeoResolution {
   GeoResolution(void *I) : impl(I) {}
   void *impl;
 };
+
+int NBRead(Socket fd, char *buf, int size, int timeout=0);
+int NBRead(Socket fd, string *buf, int timeout=0);
+string NBRead(Socket fd, int size, int timeout=0);
+bool NBReadable(Socket fd, int timeout=0);
+bool NBFGets(FILE*, char *buf, int size, int timeout=0);
+bool FGets(char *buf, int size);
+string PromptFGets(const string &p, int s=32);
 
 }; // namespace LFL
 #endif // LFL_LFAPP_NETWORK_H__

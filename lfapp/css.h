@@ -1459,7 +1459,7 @@ struct StyleContext : public LFL::DOM::Object {
   static css_error NodeIsLang    (void *pw, void *n, lwc_string *lang, bool *match) { *match = false; return CSS_OK; }
   static css_error NodePresentationalHint(void *pw, void *node, uint32_t property, css_hint *hint) { return CSS_PROPERTY_NOT_SET; }
   static css_error UADefaultForProperty(void *pw, uint32_t property, css_hint *hint) {
-    if      (property == CSS_PROP_COLOR)        { hint->data.color = 0x00000000; hint->status = CSS_COLOR_COLOR; }
+    if      (property == CSS_PROP_COLOR)        { hint->data.color = 0xFF000000; hint->status = CSS_COLOR_COLOR; }
     else if (property == CSS_PROP_FONT_FAMILY)  { hint->data.strings = NULL;     hint->status = CSS_FONT_FAMILY_SANS_SERIF; }
     else if (property == CSS_PROP_QUOTES)       { hint->data.strings = NULL;     hint->status = CSS_QUOTES_NONE; }
     else if (property == CSS_PROP_VOICE_FAMILY) { hint->data.strings = NULL;     hint->status = 0; }

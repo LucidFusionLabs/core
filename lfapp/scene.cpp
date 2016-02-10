@@ -176,12 +176,12 @@ void Scene::Draw(Asset *a, Entity *e) {
   }
 
   if (a->cb) {
-    if (FLAGS_gd_debug) printf("scene.DrawCB %s", a->name.c_str());
+    if (FLAGS_gd_debug) printf("scene.DrawCB %s\n", a->name.c_str());
     a->cb(a, e);
   }
 
   if (a->geometry) {
-    if (FLAGS_gd_debug) printf("scene.DrawGeometry %s", a->name.c_str());
+    if (FLAGS_gd_debug) printf("scene.DrawGeometry %s\n", a->name.c_str());
     Draw(a->geometry, e);
   }
 

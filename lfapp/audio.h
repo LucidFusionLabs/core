@@ -62,7 +62,7 @@ struct Audio : public Module {
   int outlast=0, mic_samples=0;
   SoundAsset *playing=0, *loop=0;
   deque<float> Out;
-  Module *impl=0;
+  unique_ptr<Module> impl;
   Audio() : Out(32768)  {}
 
   int Init ();

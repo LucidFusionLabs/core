@@ -116,7 +116,7 @@ int PronunciationDict::Pronounce(const char *utterance, const char **w, const ch
   *phones=0;
   int words=0;
   StringWordIter script(utterance);
-  for (string word = IterNextString(&script); !script.Done(); word = IterNextString(&script)) {
+  for (string word = script.NextString(); !script.Done(); word = script.NextString()) {
     const char *pronunciation = Pronounce(word.c_str());
     if (!pronunciation || words+1 >= max) { DEBUG("pronunciation %s count=%d", word.c_str(), words); return -1; }
 
@@ -414,7 +414,7 @@ string AcousticModel::Flags() {
 
 void AcousticModel::LoadFlags(const char *flags) {
   StringWordIter iter(flags, iscomma);
-  for (string k = IterNextString(&iter); !iter.Done(); k = IterNextString(&iter)) {
+  for (string k = iter.NextString(); !iter.Done(); k = iter.NextString()) {
     char *v; double val;
     if ((v = (char*)strchr(k.c_str(), '='))) { *v++=0; val=atof(v); }
 
@@ -1051,7 +1051,7 @@ void Decoder::VisualizeFeatures(AcousticModel::Compiled *model, Matrix *MFCC, Ma
 
   Matrix *spect = Spectogram(&B, 0, FLAGS_feat_window, FLAGS_feat_hop, FLAGS_feat_window, 0, PowerDomain::dB);
   Asset *snap = app->shell.asset("snap");
-  glSpectogram(spect, snap, 0);
+  glSpectogram(spect, &snap->tex, 0);
   delete spect;
 
   if (FLAGS_lfapp_audio) app->audio->QueueMixBuf(&B);
@@ -1059,7 +1059,7 @@ void Decoder::VisualizeFeatures(AcousticModel::Compiled *model, Matrix *MFCC, Ma
   Font *font = Fonts::Default();
 
   Box wcc = Box(5,345, 400,100);
-  while (Running() && (app->audio->Out.size() || (interactive && !interactive_done))) {
+  while (app->run && (app->audio->Out.size() || (interactive && !interactive_done))) {
     app->HandleEvents(app->frame_time.GetTime(true).count());
 
     screen->gd->DrawMode(DrawMode::_2D);

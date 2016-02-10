@@ -257,7 +257,7 @@ template <class X> struct StringIterT {
   template <class Y=X, class Z> typename enable_if<is_pod<Y>::value, void>::type ScanN(Z *out, int N) {
     for (int i=0; i<N; ++i) {
       auto v = Next(); 
-      out[i] = v ? Scannable::Scan(Y(), basic_string<type>(v, CurrentLength()).data()) : 0;
+      out[i] = v ? Scannable::Scan(Z(), basic_string<type>(v, CurrentLength()).data()) : 0;
     }
   }
 };

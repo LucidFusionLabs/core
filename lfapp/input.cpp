@@ -965,13 +965,13 @@ int Input::Init() {
 #endif
 
 #if defined(LFL_X11INPUT)
-  impl = new X11InputModule();
+  impl = make_unique<X11InputModule>();
 #elif defined(LFL_ANDROIDINPUT)
-  impl = new AndroidInputModule();
+  impl = make_unique<AndroidInputModule>();
 #elif defined(LFL_GLFWINPUT)
-  impl = new GLFWInputModule();
+  impl = make_unique<GLFWInputModule>();
 #elif defined(LFL_SDLINPUT)
-  impl = new SDLInputModule();
+  impl = make_unique<SDLInputModule>();
 #endif
   return 0;
 }
@@ -1016,7 +1016,7 @@ int Input::DispatchQueuedInput(bool event_on_keyboard_input, bool event_on_mouse
 int Input::KeyPress(int key, bool down) {
   if (!app->run) return 0;
 #ifdef LFL_DEBUG
-  if (!MainThread()) ERROR("KeyPress() called from thread ", Thread::GetId());
+  if (!app->MainThread()) ERROR("KeyPress() called from thread ", Thread::GetId());
 #endif
 
   switch (key) {

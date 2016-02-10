@@ -357,7 +357,6 @@ bool InterProcessComm::DelBuffer(IPC::Seq id) {
 
 void InterProcessComm::StartServerProcess(const string &server_program, const vector<string> &arg) {
   if (!LocalFile(server_program, "r").Opened()) return ERROR("ProcessAPIClient: \"", server_program, "\" doesnt exist");
-  INFO("ProcessAPIClient starting server ", server_program);
   Socket conn_socket = -1;
   bool conn_control_messages = 0;
 
@@ -437,6 +436,7 @@ void InterProcessComm::StartServerProcess(const string &server_program, const ve
   si.dwFlags = STARTF_USESHOWWINDOW | STARTF_USESTDHANDLES;
   if (!CreateProcessAsUser(restricted_token, 0, &av[0], 0, 0, 0, CREATE_SUSPENDED | DETACHED_PROCESS, 0, 0, &si, &pi)) FATAL("CreateProcess", av, ": ", GetLastError());
   server_process = pi.hProcess;
+  int pid = pi.dwProcessId;
   CHECK(SetThreadToken(&pi.hThread, impersonation_token));
   CHECK(ResumeThread(pi.hThread));
   CloseHandle(pi.hThread);
@@ -472,8 +472,9 @@ void InterProcessComm::StartServerProcess(const string &server_program, const ve
   CHECK_NE(-1, (conn->socket = conn_socket));
   conn->control_messages = conn_control_messages;
   conn->state = Connection::Connected;
-  conn->svc->conn[conn->socket] = conn;
+  conn->svc->conn[conn->socket] = unique_ptr<Connection>(conn);
   app->network->active.Add(conn->socket, SocketSet::READABLE, &conn->self_reference);
+  INFO("ProcessAPIClient started server PID=", pid, " ", server_program);
 }
 
 void InterProcessComm::OpenSocket(const string &socket_name) {
@@ -569,13 +570,13 @@ void ProcessAPIClient::LoadAsset(const string &content, const string &fn, const 
 
 int ProcessAPIClient::LoadAssetQuery::Response(const IPC::LoadAssetResponse *res, const MultiProcessTextureResource &tex) {
   if (res) mpb_id = res->mpb_id();
-  RunInMainThread(new Callback(bind(&LoadAssetQuery::RunCB, this, tex)));
+  app->RunInMainThread(bind(&LoadAssetQuery::RunCB, this, tex));
   return IPC::Accept;
 }
 
 void ProcessAPIClient::LoadAssetQuery::RunCB(const MultiProcessTextureResource &tex) {
   cb(tex);
-  RunInNetworkThread([=]{ delete this; });
+  app->RunInNetworkThread([=]{ delete this; });
 }
 
 int ProcessAPIClient::HandleAllocateBufferRequest(int seq, const IPC::AllocateBufferRequest *req, Void) {
@@ -594,22 +595,22 @@ int ProcessAPIClient::HandleCloseBufferRequest(int seq, const IPC::CloseBufferRe
 
 int ProcessAPIClient::HandleSetClearColorRequest(int seq, const IPC::SetClearColorRequest *req, Void) {
   if (auto c = req->c())
-    RunInMainThread(new Callback(bind(&GraphicsDevice::ClearColor, screen->gd, Color(c->r(), c->g(), c->b(), c->a()))));
+    app->RunInMainThread(bind(&GraphicsDevice::ClearColor, screen->gd, Color(c->r(), c->g(), c->b(), c->a())));
   return IPC::Done;
 }
 
 int ProcessAPIClient::HandleSetDocsizeRequest(int seq, const IPC::SetDocsizeRequest *req, Void) {
-  RunInMainThread(new Callback(bind(&Browser::SetDocsize, browser, req->w(), req->h())));
+  app->RunInMainThread(bind(&Browser::SetDocsize, browser, req->w(), req->h()));
   return IPC::Done;
 }
 
 int ProcessAPIClient::HandleSetTitleRequest(int seq, const IPC::SetTitleRequest *req, Void) {
-  RunInMainThread(new Callback(bind(&Window::SetCaption, screen, req->title() ? req->title()->str() : "")));
+  app->RunInMainThread(bind(&Window::SetCaption, screen, req->title() ? req->title()->str() : ""));
   return IPC::Done;
 }
 
 int ProcessAPIClient::HandleSetURLRequest(int seq, const IPC::SetURLRequest *req, Void) {
-  RunInMainThread(new Callback(bind(&Browser::SetURLText, browser, req->url() ? req->url()->str() : "")));
+  app->RunInMainThread(bind(&Browser::SetURLText, browser, req->url() ? req->url()->str() : ""));
   return IPC::Done;
 }
 
@@ -636,7 +637,7 @@ int ProcessAPIClient::HandleOpenSystemFontRequest(int seq, const IPC::OpenSystem
 }
 
 int ProcessAPIClient::HandleLoadTextureRequest(int seq, const IPC::LoadTextureRequest *req, const MultiProcessTextureResource &tex) {
-  RunInMainThread(new Callback(bind(&LoadTextureQuery::LoadTexture, new LoadTextureQuery(this, seq, req->mpb_id()), tex)));
+  app->RunInMainThread(bind(&LoadTextureQuery::LoadTexture, new LoadTextureQuery(this, seq, req->mpb_id()), tex));
   return IPC::Accept;
 }
 
@@ -644,7 +645,7 @@ void ProcessAPIClient::LoadTextureQuery::LoadTexture(const MultiProcessTextureRe
   Texture *tex = new Texture();
   tex->LoadGL(mpt);
   tex->owner = true;
-  RunInNetworkThread(bind(&ProcessAPIClient::LoadTextureQuery::Complete, this, tex));
+  app->RunInNetworkThread(bind(&ProcessAPIClient::LoadTextureQuery::Complete, this, tex));
 }
 
 void ProcessAPIClient::LoadTextureQuery::Complete(Texture *tex) {
@@ -654,32 +655,32 @@ void ProcessAPIClient::LoadTextureQuery::Complete(Texture *tex) {
 }
 
 int ProcessAPIClient::HandlePaintRequest(int seq, const IPC::PaintRequest *req, const MultiProcessPaintResource &paint) {
-  RunInMainThread(new Callback(bind(&ProcessAPIClient::PaintQuery::PaintTile, new PaintQuery(this, seq, req->mpb_id()),
-                                    req->x(), req->y(), req->z(), req->flag(), paint)));
+  app->RunInMainThread(bind(&ProcessAPIClient::PaintQuery::PaintTile, new PaintQuery(this, seq, req->mpb_id()),
+                            req->x(), req->y(), req->z(), req->flag(), paint));
   return IPC::Accept;
 }
 
 void ProcessAPIClient::PaintQuery::PaintTile(int x, int y, int z, int flag, const MultiProcessPaintResource &paint) {
   parent->browser->PaintTile(x, y, z, flag, paint);
-  RunInNetworkThread([=]{ delete this; });
+  app->RunInNetworkThread([=]{ delete this; });
 }
 
 int ProcessAPIClient::HandleSwapTreeRequest(int seq, const IPC::SwapTreeRequest *req, const MultiProcessLayerTree &tree) {
-  RunInMainThread(new Callback(bind(&ProcessAPIClient::SwapTreeQuery::SwapLayerTree,
-                                    new SwapTreeQuery(this, seq, req->mpb_id()), req->id(), tree)));
+  app->RunInMainThread(bind(&ProcessAPIClient::SwapTreeQuery::SwapLayerTree,
+                            new SwapTreeQuery(this, seq, req->mpb_id()), req->id(), tree));
   return IPC::Accept;
 }
 
 void ProcessAPIClient::SwapTreeQuery::SwapLayerTree(int id, const MultiProcessLayerTree &tree) {
   tree.AssignTo(parent->browser->layers);
-  RunInNetworkThread([=]{ delete this; });
+  app->RunInNetworkThread([=]{ delete this; });
 }
 
 int ProcessAPIClient::HandleWGetRequest(int seq, const IPC::WGetRequest *req, Void) {
   string url = req->url()->str();
   WGetQuery *wget = new WGetQuery(this, seq);
-  RunInNetworkThread([=]{ Singleton<HTTPClient>::Get()->WGet(url, 0, bind(&WGetQuery::WGetResponseCB, wget, _1, _2, _3, _4, _5),
-                                                             bind(&WGetQuery::WGetRedirectCB, wget, _1)); });
+  app->RunInNetworkThread([=]{ Singleton<HTTPClient>::Get()->WGet(url, 0, bind(&WGetQuery::WGetResponseCB, wget, _1, _2, _3, _4, _5),
+                                                                  bind(&WGetQuery::WGetRedirectCB, wget, _1)); });
   return IPC::Ok;
 }
 
@@ -700,7 +701,7 @@ int ProcessAPIServer::HandleLoadAssetRequest(int id, const IPC::LoadAssetRequest
   if (!tex || !SendIPC(conn, seq++, -1, AllocateBufferRequest, MultiProcessBuffer::Size(MultiProcessTextureResource(*tex)), MultiProcessTextureResource::Type))
     return IPC::Error;
   return ExpectResponseIPC(AllocateBuffer, this, seq-1, bind
-                           (&LoadAssetQuery::AllocateBufferResponse, new LoadAssetQuery(this, id, tex.release()), _1, _2));
+                           (&LoadAssetQuery::AllocateBufferResponse, new LoadAssetQuery(this, id, move(tex)), _1, _2));
 }
 
 int ProcessAPIServer::LoadAssetQuery::AllocateBufferResponse(const IPC::AllocateBufferResponse *res, MultiProcessBuffer &mpb) {
@@ -783,7 +784,7 @@ int ProcessAPIServer::PaintQuery::AllocateBufferResponse(const IPC::AllocateBuff
 }
 
 void ProcessAPIServer::SwapTree(int id, const LayersInterface *tree) {
-  unique_ptr<SwapTreeQuery> q(new SwapTreeQuery(this, id, tree));
+  unique_ptr<SwapTreeQuery> q = make_unique<SwapTreeQuery>(this, id, tree);
   if (!SendIPC(conn, seq++, -1, AllocateBufferRequest, MultiProcessBuffer::Size(q->tree), MultiProcessLayerTree::Type)) return;
   ExpectResponseIPC(AllocateBuffer, this, seq-1, bind
                     (&SwapTreeQuery::AllocateBufferResponse, q.release(), _1, _2));

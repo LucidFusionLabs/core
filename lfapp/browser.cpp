@@ -42,6 +42,13 @@
 #include "berkelium/Context.hpp"
 #endif
 
+// #define BROWSER_DEBUG
+#ifdef BROWSER_DEBUG
+#define BrowserDebug(...) printf(__VA_ARGS__)
+#else
+#define BrowserDebug(...)
+#endif
+
 namespace LFL {
 BrowserInterface *CreateDefaultBrowser(GUI *g, int w, int h) {
   BrowserInterface *ret = 0;
@@ -137,7 +144,7 @@ DOM::Renderer *DOM::Node::AttachRender() {
 
 void DOM::Node::SetLayoutDirty() { if (render) render->layout_dirty = true; }
 void DOM::Node::SetStyleDirty()  { if (render) render->style_dirty  = true; }
-void DOM::Node::ClearComputedInlineStyle() { if (render) { render->inline_style.Reset(); render->inline_style_sheet = unique_ptr<LFL::StyleSheet>(); } }
+void DOM::Node::ClearComputedInlineStyle() { if (render) { render->inline_style.Reset(); render->inline_style_sheet.reset(); } }
 
 void DOM::Element::setAttribute(const DOMString &name, const DOMString &value) {
   DOM::Attr *attr = AllocatorNew(ownerDocument->alloc, (DOM::Attr), (ownerDocument));
@@ -201,7 +208,7 @@ void DOM::Renderer::UpdateStyle(Flow *F) {
     string style_text = StrCat(n->HTML4Style(), inline_style_attr ? inline_style_attr->nodeValue().c_str() : "",
                                inline_style.override_style);
     if (!style_text.empty()) inline_style_sheet =
-      unique_ptr<LFL::StyleSheet>(new LFL::StyleSheet(n->ownerDocument, "", "UTF-8", true, false, style_text.c_str()));
+      make_unique<LFL::StyleSheet>(n->ownerDocument, "", "UTF-8", true, false, style_text.c_str());
   }
 
   ComputeStyle(n->ownerDocument->style_context, &style, style.is_root ? 0 : &parent_render->style);
@@ -444,10 +451,10 @@ void DOM::Renderer::Finish() {
 }
 
 Browser::Document::~Document() {}
-Browser::Document::Document(Window *W, const Box &V) : parser(new DocumentParser(this)), alloc(1024*1024) {}
+Browser::Document::Document(Window *W, const Box &V) : parser(make_unique<DocumentParser>(this)), alloc(1024*1024) {}
 
 void Browser::Document::Clear() {
-  js_context = unique_ptr<JSContext>();
+  js_context.reset();
   style_sheet.clear();
   alloc.Reset();
   node = AllocatorNew(&alloc, (DOM::HTMLDocument), (parser.get(), &alloc));
@@ -475,14 +482,14 @@ void Browser::Navigate(const string &url) {
 }
 
 void Browser::Open(const string &url) {
-  if (app->render_process) return RunInNetworkThread(bind(&ProcessAPIClient::Navigate, app->render_process, url));
+  if (app->render_process) return app->RunInNetworkThread(bind(&ProcessAPIClient::Navigate, app->render_process, url));
   doc.parser->OpenFrame(url, (DOM::Frame*)NULL);
   if (app->main_process) { app->main_process->SetURL(url); app->main_process->SetTitle(url); }
   else                   { SetURLText(url); screen->SetCaption(url); }
 }
 
 void Browser::KeyEvent(int key, bool down) {
-  if (app->render_process) RunInNetworkThread(bind(&ProcessAPIClient::KeyPress, app->render_process, key, down));
+  if (app->render_process) app->RunInNetworkThread(bind(&ProcessAPIClient::KeyPress, app->render_process, key, down));
   else {
     if (auto n = doc.node->documentElement()) EventNode(n, initial_displacement, key);
     if (down && doc.active_input && doc.active_input->tiles) {
@@ -494,14 +501,14 @@ void Browser::KeyEvent(int key, bool down) {
 
 void Browser::MouseMoved(int x, int y) {
   if (app->render_process || (!app->render_process && !app->main_process)) y -= screen->height+viewport.top()+VScrolled();
-  if (app->render_process) { RunInNetworkThread(bind(&ProcessAPIClient::MouseMove, app->render_process, x, y, x-mouse.x, y-mouse.y)); mouse=point(x,y); }
+  if (app->render_process) { app->RunInNetworkThread(bind(&ProcessAPIClient::MouseMove, app->render_process, x, y, x-mouse.x, y-mouse.y)); mouse=point(x,y); }
   else if (auto n = doc.node->documentElement()) { mouse=point(x,y); EventNode(n, initial_displacement, Mouse::Event::Motion); }
 }
 
 void Browser::MouseButton(int b, bool d, int x, int y) {
   // doc.gui.Input(b, mouse, d, 1);
   if (app->render_process || (!app->render_process && !app->main_process)) y -= screen->height+viewport.top()+VScrolled();
-  if (app->render_process) { RunInNetworkThread(bind(&ProcessAPIClient::MouseClick, app->render_process, b, d, x, y)); mouse=point(x,y); }
+  if (app->render_process) { app->RunInNetworkThread(bind(&ProcessAPIClient::MouseClick, app->render_process, b, d, x, y)); mouse=point(x,y); }
   else if (auto n = doc.node->documentElement()) { mouse=point(x,y); EventNode(n, initial_displacement, Mouse::ButtonID(b)); }
 }
 
@@ -521,7 +528,7 @@ void Browser::SetClearColor(const Color &c) {
 
 void Browser::SetViewport(int w, int h) {
   viewport.SetDimension(point(w, h));
-  if (app->render_process)               RunInNetworkThread(bind(&ProcessAPIClient::SetViewport, app->render_process, w, h));
+  if (app->render_process)               app->RunInNetworkThread(bind(&ProcessAPIClient::SetViewport, app->render_process, w, h));
   else if (auto html = doc.DocElement()) html->SetLayoutDirty(); 
 }
 
@@ -578,7 +585,7 @@ bool Browser::EventNode(DOM::Node *n, const point &displacement_in, InputEvent::
   auto render = n->render;
   if (!render) return true;
   Box b = (render->block_level_box ? render->box : render->inline_box[0]) + displacement_in;
-  // printf("%s cmp %s vs %s\n", n->DebugString().c_str(), mouse.DebugString().c_str(), b.DebugString().c_str());
+  BrowserDebug("%s mouse %s box %s\n", n->DebugString().c_str(), mouse.DebugString().c_str(), b.DebugString().c_str());
   if (!b.within(mouse)) return true;
 
   if (auto e = n->AsHTMLAnchorElement()) { AnchorClicked(e); return false; }
@@ -641,6 +648,7 @@ void Browser::PaintNode(Flow *flow, DOM::Node *n, const point &displacement_in) 
   }
 
   point displacement = displacement_in + (render->block_level_box ? render->box.TopLeft() : point());
+  BrowserDebug("PaintNode %s box %s displacement %s\n", n->DebugString().c_str(), Box(render->box).DebugString().c_str(), displacement.DebugString().c_str());
   if (render_log)              UpdateRenderLog(n, displacement_in);
   if (render->clip)            render->PushScissor(render->border.TopLeft(render->clip_rect) + displacement);
   if (render->overflow_hidden) render->PushScissor(render->content                           + displacement);
@@ -729,6 +737,7 @@ DOM::Node *Browser::LayoutNode(Flow *flow, DOM::Node *n, bool reflow) {
   render->UpdateFlowAttributes(render->flow);
   point sp = render->flow->p;
   int beg_out_ind = render->flow->out->Size(), beg_line_ind = render->flow->out->line_ind.size();
+  BrowserDebug("LayoutNode %s blb %d font %s sp %s\n", n->DebugString().c_str(), render->block_level_box, render->flow->cur_attr.font->desc->DebugString().c_str(), sp.DebugString().c_str());
 
   if (n->nodeType == DOM::TEXT_NODE) {
     if (1)                                render->flow->SetFGColor(&Color::white); // &render->color);

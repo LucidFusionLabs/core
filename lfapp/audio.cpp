@@ -530,15 +530,15 @@ struct OpenSLAudioModule : public Module {
 int Audio::Init() {
   INFO("Audio::Init()");
 #if defined(LFL_PORTAUDIO)
-  impl = new PortaudioAudioModule(this);
+  impl = make_unique<PortaudioAudioModule>(this);
 #elif defined(LFL_SDLAUDIO)
-  impl = new SDLAudioModule(this);
+  impl = make_unique<SDLAudioModule>(this);
 #elif defined(LFL_AUDIOQUEUE)
-  impl = new AudioQueueAudioModule(this);
+  impl = make_unique<AudioQueueAudioModule>(this);
 #elif defined(LFL_AUDIOUNIT)
-  impl = new AudioUnitAudioModule(this);
+  impl = make_unique<AudioUnitAudioModule>(this);
 #elif defined(LFL_OPENSL)
-  impl = new OpenSLAudioModule(this);
+  impl = make_unique<OpenSLAudioModule>(this);
 #elif defined(LFL_IPHONE)
   INFO("audio_engine: iPhone");
 #elif defined(LFL_ANDROID)
@@ -580,8 +580,8 @@ int Audio::Frame(unsigned clicks) {
     app->assets->movie_playing->Play(0);
   } else if ((playing || loop) && Out.size() < refillWhen) {
     // QueueMix(playing ? playing : loop, !playing ? MixFlag::Reset : 0, -1, -1);
-    RunInMainThread(new Callback(bind(&Audio::QueueMix, this,
-                                      playing ? playing : loop, !playing ? MixFlag::Reset : 0, -1, -1)));
+    app->RunInMainThread(bind(&Audio::QueueMix, this,
+                              playing ? playing : loop, !playing ? MixFlag::Reset : 0, -1, -1));
   }
   return 0;
 }

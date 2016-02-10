@@ -54,7 +54,7 @@ typedef pair<unique_ptr<char*>, size_t> FlatBufferPiece;
 
 namespace LFL {
 template<typename T, typename ...Args>
-std::unique_ptr<T> make_unique(Args&& ...args) { return std::unique_ptr<T>(new T(std::forward<Args>(args)...)); }
+unique_ptr<T> make_unique(Args&& ...args) { return unique_ptr<T>(new T(args...)); }
 template <class X> int TypeId() { static int ret = fnv32(typeid(X).name()); return ret; }
 template <class X> int TypeId(X*) { return TypeId<X>(); };
 template <class X> X *CheckPointer(X *x) { CHECK(x); return x; }
@@ -221,6 +221,10 @@ template <class X> int VectorEraseByValue(vector<X> *v, const X& x) {
   int orig_size = v->size();
   v->erase(LFL_STL_NAMESPACE::remove(v->begin(), v->end(), x), v->end());
   return orig_size - v->size();
+}
+template <class X> int VectorRemoveUnique(vector<unique_ptr<X>> *v, const X* x) {
+  for (auto i = v->begin(), e = v->end(); i != e; ++i) if (i->get() == x) { v->erase(i); return 1; }
+  return 0;
 }
 
 template <class X> X BackOrDefault (const vector<X> &a)                    { return a.size() ? a.back () : X(); }

@@ -29,7 +29,7 @@ struct Corpus {
     if (!file_or_dir.empty() && !LocalFile::IsDirectory(file_or_dir)) RunFile(file_or_dir);
     else {
       DirectoryIter iter(file_or_dir, -1);
-      for (const char *fn = iter.Next(); Running() && fn; fn = iter.Next()) Run(StrCat(file_or_dir, fn));
+      for (const char *fn = iter.Next(); app->run && fn; fn = iter.Next()) Run(StrCat(file_or_dir, fn));
     }
     if (finish_cb) finish_cb();
   }  

@@ -81,7 +81,7 @@ struct OpenCvCamera : public Module {
   mutex lock;
   struct Stream { 
     CvCapture *capture=0;
-    RingBuf *frames=0;
+    unique_ptr<RingBuf> frames;
     int width=0, height=0, next=0;
     void SetDimensions(int W, int H) { width=W; height=H; }
   } L, R;
@@ -148,11 +148,11 @@ struct OpenCvCamera : public Module {
       /* 1-time cosntruct */
       if (lf && !L.frames) {
         L.dimensions(lf->width, lf->height);
-        L.frames = new RingBuf(FLAGS_camera_fps, FLAGS_camera_fps, lf->imageSize);
+        L.frames = make_unique<RingBuf>(FLAGS_camera_fps, FLAGS_camera_fps, lf->imageSize);
       }
       if (rf && !R.frames) {
         R.dimensions(rf->width, rf->height);
-        R.frames = new RingBuf(FLAGS_camera_fps, FLAGS_camera_fps, rf->imageSize);
+        R.frames = make_unique<RingBuf>(FLAGS_camera_fps, FLAGS_camera_fps, rf->imageSize);
       }
 
       /* write */
@@ -181,8 +181,6 @@ struct FFmpegCamera : public Module {
   mutex lock;
 
   struct Stream { 
-    AVFormatContext *fctx;
-
     struct FramePtr {
       AVPacket data;
       bool dirty;
@@ -194,11 +192,9 @@ struct FFmpegCamera : public Module {
 
       static void swap(FramePtr *A, FramePtr *B) { FramePtr C = *A; *A = *B; *B = C; C.clear(); }
     };
-
-    RingBuf *frames;
-    int next;
-
-    Stream() : fctx(0), frames(0), next(0) {}
+    AVFormatContext *fctx=0;
+    unique_ptr<RingBuf> frames;
+    int next=0;
   } L, R;
   Camera *camera;
   FFmpegCamera(Camera *C) : thread(Threadthunk, this), camera(C) {}
@@ -228,7 +224,7 @@ struct FFmpegCamera : public Module {
       FLAGS_lfapp_camera = 0;
       return 0;
     }
-    L.frames = new RingBuf(FLAGS_camera_fps, FLAGS_camera_fps, sizeof(Stream::FramePtr));
+    L.frames = make_unique<RingBuf>(FLAGS_camera_fps, FLAGS_camera_fps, sizeof(Stream::FramePtr));
     av_dict_free(&options);
 
     if (!thread.Start()) { FLAGS_lfapp_camera=0; return -1; }
@@ -291,8 +287,8 @@ struct DsvlCamera : public Module {
   Thread thread;
   mutex lock;
   struct Stream { 
-    DSVL_VideoSource *vs=0;
-    RingBuf *frames=0;
+    unique_ptr<DSVL_VideoSource> vs;
+    unique_ptr<RingBuf> frames;
     int next=0;
   } L, R;
   Camera *camera;
@@ -310,7 +306,7 @@ struct DsvlCamera : public Module {
       "</camera></dsvl_input>\r\n";
 
     CoInitialize(0);
-    L.vs = new DSVL_VideoSource();
+    L.vs = make_unique<DSVL_VideoSource>();
 
     LONG w, h;
     double fps;
@@ -332,7 +328,7 @@ struct DsvlCamera : public Module {
     }
     else { ERROR("unknown pixel format: ", pf); return -1; }
 
-    L.frames = new RingBuf(FLAGS_camera_fps, FLAGS_camera_fps, FLAGS_camera_image_width*FLAGS_camera_image_height*depth);
+    L.frames = make_unique<RingBuf>(FLAGS_camera_fps, FLAGS_camera_fps, FLAGS_camera_image_width*FLAGS_camera_image_height*depth);
 
     if (!thread.Start()) { FLAGS_lfapp_camera=0; return -1; }
 
@@ -470,14 +466,13 @@ struct DirectShowCamera : public Module {
   CComPtr<ISampleGrabber> pGrabber;
   SampleGrabberThunker<DirectShowCamera> thunker;
 
-  RingBuf *frames;
-  int next;
+  unique_ptr<RingBuf> frames;
+  int next=0;
   mutex lock;
-  bool invert;
+  bool invert=0;
 
   Camera *camera;
-  DirectShowCamera(Camer *C) : thunker(this), frames(0), next(0), invert(0), camera(C) {}
-  virtual ~DirectShowCamera() { delete frames; }
+  DirectShowCamera(Camer *C) : thunker(this), camera(C) {}
 
   int Free() {
     pMC->Stop();
@@ -645,7 +640,7 @@ struct DirectShowCamera : public Module {
     image_linesize = FLAGS_camera_image_width * Pixel::size(image_format);
 
     /* create ring buffer */
-    frames = new RingBuf(FLAGS_camera_fps, FLAGS_camera_fps, FLAGS_camera_image_height*image_linesize);
+    frames = make_unique<RingBuf>(FLAGS_camera_fps, FLAGS_camera_fps, FLAGS_camera_image_height*image_linesize);
 
     /* success */
     FLAGS_lfapp_camera = 1;
@@ -734,16 +729,14 @@ struct QuickTimeCamera : public Module {
   VideoResampler conv;
   mutex lock;
   struct Stream {
-    SeqGrabComponent grabber;
-    SGChannel channel;
-    GWorldPtr gworld;
+    SeqGrabComponent grabber=0;
+    SGChannel channel=0;
+    GWorldPtr gworld=0;
     Rect rect;
     PixMapHandle pixmap;
-    ImageSequence seq;
-
-    RingBuf *frames;
-    int next;
-    Stream() : grabber(0), channel(0), gworld(0), seq(0), frames(0), next(0) {}
+    ImageSequence seq=0;
+    unique_ptr<RingBuf> frames;
+    int next=0;
   } L, R;
   Camera *camera;
   QuickTimeCamera(Camera *C) : thread(Threadthunk, this), camera(C) {}
@@ -796,7 +789,7 @@ struct QuickTimeCamera : public Module {
               FLAGS_camera_image_width, FLAGS_camera_image_height, camera->image_format);
 
     /* start */
-    L.frames = new RingBuf(FLAGS_camera_fps, FLAGS_camera_fps, FLAGS_camera_image_width*FLAGS_camera_image_height*image_depth);
+    L.frames = make_unqiue<RingBuf>(FLAGS_camera_fps, FLAGS_camera_fps, FLAGS_camera_image_width*FLAGS_camera_image_height*image_depth);
     L.pixmap = GetGWorldPixMap(L.gworld);
     LockPixels(L.pixmap);
     if ((ret = SGSetDataProc(L.grabber, NewSGDataUPP(SGDataProcL), (long)this)) != noErr) { ERROR("SGSetDataProc: ", ret); return -1; }
@@ -882,7 +875,7 @@ struct QuickTimeCamera : public Module {
 struct AVCaptureCamera : public Module {
   mutex lock; 
   struct Stream {
-    RingBuf *frames=0;
+    unique_ptr<RingBuf> frames;
     int next=0;
   } L, R;
   Camera *camera;
@@ -924,7 +917,7 @@ struct AVCaptureCamera : public Module {
   }
 
   void UpdateFrame(const char *imageData, int width, int height, int imageSize) {
-    if (!L.frames) L.frames = new RingBuf(FLAGS_camera_fps, FLAGS_camera_fps, imageSize);
+    if (!L.frames) L.frames = make_unique<RingBuf>(FLAGS_camera_fps, FLAGS_camera_fps, imageSize);
     memcpy(L.frames->Write(RingBuf::Peek | RingBuf::Stamp), imageData, imageSize);
     { /* commit */  
       ScopedMutex ML(lock);
@@ -942,7 +935,7 @@ extern "C" void UpdateFrame(const char *imageData, int width, int height, int im
 struct QTKitCamera : public Module {
   mutex lock; 
   struct Stream {
-    RingBuf *frames=0;
+    unique_ptr<RingBuf> frames;
     int next=0;
   } L, R;
   Camera *camera;
@@ -980,7 +973,7 @@ struct QTKitCamera : public Module {
 
   void UpdateFrame(const char *imageData, int width, int height, int imageSize) {
     if (!L.frames) {
-      L.frames = new RingBuf(FLAGS_camera_fps, FLAGS_camera_fps, imageSize);
+      L.frames = make_unique<RingBuf>(FLAGS_camera_fps, FLAGS_camera_fps, imageSize);
       FLAGS_camera_image_width = width;
       FLAGS_camera_image_height = height;
       camera->image_format = Pixel::RGB32;
@@ -995,26 +988,26 @@ struct QTKitCamera : public Module {
   }
 };
 extern "C" void UpdateFrame(const char *imageData, int width, int height, int imageSize) {
-  return ((QTKitCamera*)app->camera->impl)->UpdateFrame(imageData, width, height, imageSize);
+  return ((QTKitCamera*)app->camera->impl.get())->UpdateFrame(imageData, width, height, imageSize);
 }
 #endif /* LFL_QTKIT_CAMERA */
 
 int Camera::Init() {
   INFO("Camera::Init()");
 #if defined(LFL_OPENCV_CAMERA)
-  impl = new OpenCvCamera(this);
+  impl = make_unique<OpenCvCamera>(this);
 #elif defined(LFL_FFMPEG_CAMERA)
-  impl = new FFmpegCamera(this);
+  impl = make_unique<FFmpegCamera>(this);
 #elif defined(LFL_DSVL_CAMERA)
-  impl = new DsvlCamera(this);
+  impl = make_unique<DsvlCamera>(this);
 #elif defined(LFL_DIRECTSHOW_CAMERA)
-  impl = new DirectShowCamera(this);
+  impl = make_unique<DirectShowCamera>(this);
 #elif defined(LFL_QUICKTIME_CAMERA)
-  impl = new QuickTimeCamera(this);
+  impl = make_unique<QuickTimeCamera>(this);
 #elif defined(LFL_AVCAPTURE_CAMERA)
-  impl = new AVCaptureCamera(this);
+  impl = make_unique<AVCaptureCamera>(this);
 #elif defined(LFL_QTKIT_CAMERA)
-  impl = new QTKitCamera(this);
+  impl = make_unique<QTKitCamera>(this);
 #endif
 
   int ret = 0;
@@ -1036,8 +1029,7 @@ int Camera::Frame(unsigned clicks) {
 
 int Camera::Free() {
   int ret = impl ? impl->Free() : 0;
-  delete impl;
-  impl = 0;
+  impl.reset();
   return ret;
 }
 

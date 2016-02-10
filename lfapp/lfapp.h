@@ -250,6 +250,7 @@ struct ThreadLocalStorage {
 };
 
 struct Module {
+  virtual ~Module() {}
   virtual int Init ()         { return 0; }
   virtual int Start()         { return 0; }
   virtual int Frame(unsigned) { return 0; }
@@ -262,22 +263,6 @@ struct Module {
 #include "lfapp/lftypes.h"
 
 namespace LFL {
-bool Running();
-bool MainThread();
-bool MainProcess();
-void RunInMainThread(Callback *cb);
-void RunInNetworkThread(const Callback &cb);
-void DefaultLFAppWindowClosedCB(Window *);
-double FPS();
-double CamFPS();
-void PressAnyKey();
-bool FGets(char *buf, int size);
-bool NBFGets(FILE*, char *buf, int size, int timeout=0);
-int NBRead(Socket fd, char *buf, int size, int timeout=0);
-int NBRead(Socket fd, string *buf, int timeout=0);
-string NBRead(Socket fd, int size, int timeout=0);
-bool NBReadable(Socket fd, int timeout=0);
-
 struct MallocAlloc : public Allocator {
   const char *Name() { return "MallocAlloc"; }
   void *Malloc(int size);
@@ -390,7 +375,7 @@ struct Thread {
   void Wait() { if (impl) impl->join(); }
   void Start() {
     ScopedMutex sm(start_mutex);
-    impl = move(unique_ptr<std::thread>(new std::thread(bind(&Thread::ThreadProc, this))));
+    impl = make_unique<std::thread>(bind(&Thread::ThreadProc, this));
     id = std::hash<std::thread::id>()(impl->get_id());
   }
   void ThreadProc() {
@@ -406,8 +391,8 @@ struct Thread {
 struct WorkerThread {
   unique_ptr<CallbackQueue> queue;
   unique_ptr<Thread> thread;
-  WorkerThread() : queue(new CallbackQueue()) {}
-  void Init(const Callback &main_cb) { thread = unique_ptr<Thread>(new Thread(main_cb)); }
+  WorkerThread() : queue(make_unique<CallbackQueue>()) {}
+  void Init(const Callback &main_cb) { thread = make_unique<Thread>(main_cb); }
 };
 
 struct ThreadPool {
@@ -540,7 +525,7 @@ struct LuaContext {
 
 struct CUDA : public Module { int Init(); };
 
-struct Application : public ::LFApp, public Module {
+struct Application : public ::LFApp {
   string name, progname, logfilename, startdir, bindir, assetdir, dldir;
   int pid=0;
   FILE *logfile=0;
@@ -563,23 +548,29 @@ struct Application : public ::LFApp, public Module {
   Shell shell;
 
   vector<Module*> modules;
-  Audio *audio=0;
-  Video *video=0;
-  Input *input=0;
-  Assets *assets=0;
-  Network *network=0;
-  Camera *camera=0;
-  CUDA *cuda=0;
+  unique_ptr<Audio> audio;
+  unique_ptr<Video> video;
+  unique_ptr<Input> input;
+  unique_ptr<Assets> assets;
+  unique_ptr<Network> network;
+  unique_ptr<Camera> camera;
+  unique_ptr<CUDA> cuda;
 
+  virtual ~Application();
   Application() : create_win_f(bind(&Application::CreateNewWindow, this, function<void(Window*)>())),
-  window_closed_cb(DefaultLFAppWindowClosedCB), tex_mode(2, 1, 0), grab_mode(2, 0, 1),
+  window_closed_cb([](Window *w){ delete w; }), tex_mode(2, 1, 0), grab_mode(2, 0, 1),
   fill_mode(3, GraphicsDevice::Fill, GraphicsDevice::Line, GraphicsDevice::Point), shell(0, 0, 0)
   { run=1; initialized=0; main_thread_id=0; frames_ran=0; memzero(log_time); }
 
+  bool Running() const { return run; }
+  bool MainThread() const { return Thread::GetId() == main_thread_id; }
+  bool MainProcess() const { return !main_process; }
+  double FPS() const { return screen->fps.FPS(); }
+  double CamFPS() const { return camera->fps.FPS(); }
+  int LoadModule(Module *m) { return PushBack(modules, m)->Init(); }
+  Window *GetWindow(void *id) { return FindOrNull(windows, id); }
   void Log(int level, const char *file, int line, const string &message);
   void WriteLogLine(const char *tbuf, const char *message, const char *file, int line);
-  int LoadModule(Module *M) { modules.push_back(M); return M->Init(); }
-  Window *GetWindow(void *id) { return FindOrNull(windows, id); }
   bool CreateWindow(Window *W);
   void CloseWindow(Window *W);
   void MakeCurrentWindow(Window *W);
@@ -595,8 +586,6 @@ struct Application : public ::LFApp, public Module {
   int TimerDrivenFrame(bool got_wakeup);
   int Main();
   int MainLoop();
-  int Free();
-  int Exiting();
   void ResetGL();
 
   void GrabMouseFocus();
@@ -635,6 +624,15 @@ struct Application : public ::LFApp, public Module {
   void SetVolume(int v);
   void PlaySoundEffect(SoundAsset*);
   void PlayBackgroundMusic(SoundAsset*);
+
+  template <class... Args> void RunInMainThread(Args&&... args) {
+    message_queue.Write(new Callback(args...));
+    if (!FLAGS_target_fps) scheduler.Wakeup(0);
+  }
+  template <class... Args> void RunInNetworkThread(Args&&... args) {
+    if (auto nt = network_thread) nt->Write(new Callback(args...));
+    else (Callback(args...))();
+  }
 
   static void Daemonize(const char *dir="");
   static void Daemonize(FILE *fout, FILE *ferr);

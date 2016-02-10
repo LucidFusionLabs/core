@@ -993,12 +993,12 @@ void Asset::LoadTexture(const void *FromBuf, const char *filename, int size, Tex
 }
 
 Texture *Asset::LoadTexture(const MultiProcessFileResource &file, int max_image_size) {
-  Texture *tex = new Texture();
-  Asset::LoadTexture(file.buf.data(), file.name.data(), file.buf.size(), tex, 0);
+  unique_ptr<Texture> tex = make_unique<Texture>();
+  Asset::LoadTexture(file.buf.data(), file.name.data(), file.buf.size(), tex.get(), 0);
 
   if (tex->BufferSize() >= max_image_size) {
-    unique_ptr<Texture> orig_tex(tex);
-    tex = new Texture();
+    unique_ptr<Texture> orig_tex = move(tex);
+    tex = make_unique<Texture>();
     float scale_factor = sqrt((float)max_image_size/orig_tex->BufferSize());
     tex->Resize(orig_tex->width*scale_factor, orig_tex->height*scale_factor, Pixel::RGB24, Texture::Flag::CreateBuf);
 
@@ -1007,8 +1007,8 @@ Texture *Asset::LoadTexture(const MultiProcessFileResource &file, int max_image_
     resampler.Resample(orig_tex->buf, orig_tex->LineSize(), tex->buf, tex->LineSize());
   }
 
-  if (!tex->buf || !tex->width || !tex->height) { delete tex; return 0; }
-  return tex;
+  if (!tex->buf || !tex->width || !tex->height) return 0;
+  return tex.release();
 }
 
 void SoundAsset::Unload() {
@@ -1142,7 +1142,7 @@ void glRoom(Asset*, Entity*) {
 }
 
 void glIntersect(int x, int y, Color *c) {
-  unique_ptr<Geometry> geom(new Geometry(GraphicsDevice::Lines, 4, (v2*)0, 0, 0, *c));
+  unique_ptr<Geometry> geom = make_unique<Geometry>(GraphicsDevice::Lines, 4, (v2*)0, (v3*)0, (v2*)0, *c);
   v2 *vert = (v2*)&geom->vert[0];
 
   vert[0] = v2(0, y);
@@ -1201,14 +1201,14 @@ Waveform Waveform::Decimated(point dim, const Color *c, const RingBuf::Handle *s
   return WF;
 }
 
-Waveform::Waveform(point dim, const Color *c, const Vec<float> *sbh) : width(dim.x), height(dim.y), geom(0) {
+Waveform::Waveform(point dim, const Color *c, const Vec<float> *sbh) : width(dim.x), height(dim.y) {
   float xmax=sbh->Len(), ymin=INFINITY, ymax=-INFINITY;
   for (int i=0; i<xmax; i++) {
     ymin = min(ymin,sbh->Read(i));
     ymax = max(ymax,sbh->Read(i));
   }
 
-  geom = new Geometry(GraphicsDevice::Lines, (int)(xmax-1)*2, (v2*)0, 0, 0, *c);
+  geom = make_unique<Geometry>(GraphicsDevice::Lines, (int)(xmax-1)*2, (v2*)0, (v3*)0, (v2*)0, *c);
   v2 *vert = (v2*)&geom->vert[0];
 
   for (int i=0; i<geom->count/2; i++) {
@@ -1220,12 +1220,15 @@ Waveform::Waveform(point dim, const Color *c, const Vec<float> *sbh) : width(dim
   }
 }
 
-void glSpectogram(Matrix *m, unsigned char *data, int width, int height, int hjump, float vmax, float clip, bool interpolate, int pd) {
-  for (int j=0; j<width; j++) {
-    for(int i=0; i<height; i++) {
-      double v;
+void glSpectogram(Matrix *m, unsigned char *data, int pf, int width, int height, int hjump, float vmax, float clip, bool interpolate, int pd) {
+  int ps = Pixel::size(pf);
+  unsigned char pb[4];
+  double v;
+
+  for (int j = 0; j < width; j++) {
+    for (int i = 0; i < height; i++) {
       if (!interpolate) v = m->row(j)[i];
-      else v = MatrixAsFunc(m, i?(float)i/(height-1):0, j?(float)j/(width-1):0);
+      else              v = MatrixAsFunc(m, i?(float)i/(height-1):0, j?(float)j/(width-1):0);
 
       if      (pd == PowerDomain::dB)   { /**/ }
       else if (pd == PowerDomain::abs)  { v = AmplitudeRatioDecibels(v, 1); }
@@ -1234,43 +1237,43 @@ void glSpectogram(Matrix *m, unsigned char *data, int width, int height, int hju
       if (v < clip) v = clip;
       v = (v - clip) / (vmax - clip);
 
-      int pixel = 4;
-      int ind = j*hjump*pixel + i*pixel;
-      data[ind + 0] = (unsigned)(v > 1.0/3.0 ? 255 : v*3*255); v=max(0.0,v-1.0/3.0);
-      data[ind + 1] = (unsigned)(v > 1.0/3.0 ? 255 : v*3*255); v=max(0.0,v-1.0/3.0);
-      data[ind + 2] = (unsigned)(v > 1.0/3.0 ? 255 : v*3*255); v=max(0.0,v-1.0/3.0);
-      data[ind + 3] = (unsigned)255;
+      pb[0] = (unsigned)(v > 1.0/3.0 ? 255 : v*3*255); v = max(0.0, v-1.0/3.0);
+      pb[1] = (unsigned)(v > 1.0/3.0 ? 255 : v*3*255); v = max(0.0, v-1.0/3.0);
+      pb[2] = (unsigned)(v > 1.0/3.0 ? 255 : v*3*255); v = max(0.0, v-1.0/3.0);
+      pb[3] = (unsigned)255;
+
+      SimpleVideoResampler::CopyPixel(Pixel::RGBA, pf, pb, data + j*hjump*ps + i*ps, 0, 0);
     }
   }
 }
 
-void glSpectogram(Matrix *m, Asset *a, float *max, float clip, int pd) {
-  if (!a->tex.ID) a->tex.CreateBacked(m->N, m->M);
+void glSpectogram(Matrix *m, Texture *t, float *max, float clip, int pd) {
+  if (!t->ID) t->CreateBacked(m->N, m->M);
   else {
-    if (a->tex.width < m->N || a->tex.height < m->M) a->tex.Resize(m->N, m->M);
-    else Texture::Coordinates(a->tex.coord, m->N, m->M, NextPowerOfTwo(a->tex.width), NextPowerOfTwo(a->tex.height));
+    if (t->width < m->N || t->height < m->M) t->Resize(m->N, m->M);
+    else Texture::Coordinates(t->coord, m->N, m->M, NextPowerOfTwo(t->width), NextPowerOfTwo(t->height));
   }
 
   if (clip == -INFINITY) clip = -65;
-  if (!a->tex.buf) return;
+  if (!t->buf) return;
 
   float Max = Matrix::Max(m);
   if (max) *max = Max;
 
-  glSpectogram(m, a->tex.buf, m->M, m->N, a->tex.width, Max, clip, 0, pd);
+  glSpectogram(m, t->buf, t->pf, m->M, m->N, t->width, Max, clip, 0, pd);
 
-  screen->gd->BindTexture(GraphicsDevice::Texture2D, a->tex.ID);
-  a->tex.UpdateGL();
+  screen->gd->BindTexture(GraphicsDevice::Texture2D, t->ID);
+  t->UpdateGL();
 }
 
-void glSpectogram(SoundAsset *sa, Asset *a, Matrix *transform, float *max, float clip) {
+void glSpectogram(SoundAsset *sa, Texture *t, Matrix *transform, float *max, float clip) {
   const RingBuf::Handle B(sa->wav);
 
   /* 20*log10(abs(specgram(y,2048,sr,hamming(512),256))) */
   Matrix *m = Spectogram(&B, 0, FLAGS_feat_window, FLAGS_feat_hop, FLAGS_feat_window, 0, PowerDomain::abs);
   if (transform) m = Matrix::Mult(m, transform, mDelA);
 
-  glSpectogram(m, a, max, clip, PowerDomain::abs);
+  glSpectogram(m, t, max, clip, PowerDomain::abs);
   delete m;
 }
 

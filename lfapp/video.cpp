@@ -634,7 +634,7 @@ void Texture::UpdateBuffer(const unsigned char *B, const ::LFL::Box &box, int PF
 
 void Texture::Bind() const { screen->gd->BindTexture(GLTexType(), ID); }
 void Texture::ClearGL() { 
-  if (!MainThread()) { RunInMainThread(new Callback(bind(&GraphicsDevice::DelTexture, screen->gd, ID))); ID=0; }
+  if (!app->MainThread()) { app->RunInMainThread(bind(&GraphicsDevice::DelTexture, screen->gd, ID)); ID=0; }
   else if (ID) { screen->gd->DelTexture(ID); ID=0; }
 }
 
@@ -1951,7 +1951,7 @@ bool Application::CreateWindow(Window *W) {
   W->impl = new WinWindow();
   windows[(W->id = hWnd)] = W;
   INFOf("Application::CreateWindow %p %p %p (%p)", W->id, W->surface, W->gl, W);
-  MakeCurrent(W);
+  MakeCurrentWindow(W);
   ShowWindow(hWnd, winapp->nCmdShow);
   app->scheduler.Wakeup(0);
   return true;
@@ -1971,7 +1971,8 @@ struct X11VideoModule : public Module {
   Display *display = 0;
   XVisualInfo *vi = 0;
   int Init() {
-    GLint att[] = { GLX_RGBA, GLX_DEPTH_SIZE, FLAGS_depth_buffer_bits, GLX_DOUBLEBUFFER, None };
+    GLint dbb = FLAGS_depth_buffer_bits;
+    GLint att[] = { GLX_RGBA, GLX_DEPTH_SIZE, dbb, GLX_DOUBLEBUFFER, None };
     if (!(display = XOpenDisplay(NULL))) return ERRORv(-1, "XOpenDisplay");
     if (!(vi = glXChooseVisual(display, 0, att))) return ERRORv(-1, "glXChooseVisual");
     app->scheduler.system_event_socket = ConnectionNumber(display);
@@ -2002,7 +2003,7 @@ bool Application::CreateWindow(Window *W) {
   if (!(W->gl = glXCreateContext(video->display, video->vi, NULL, GL_TRUE))) return ERRORv(false, "glXCreateContext");
   W->surface = video->display;
   windows[W->id] = W;
-  MakeCurrent(W);
+  MakeCurrentWindow(W);
   return true;
 }
 void Application::CloseWindow(Window *W) {
@@ -2204,7 +2205,7 @@ bool Application::CreateWindow(Window *W) {
   LFLWxWidgetCanvas *canvas = (new LFLWxWidgetFrame(W))->canvas;
   if ((W->id = canvas)) windows[W->id] = W;
   if (!W->gl) W->gl = canvas->context = new wxGLContext(canvas);
-  MakeCurrent(W);
+  MakeCurrentWindow(W);
   return true; 
 }
 void Application::MakeCurrentWindow(Window *W) { 
@@ -2320,7 +2321,7 @@ Window::Window() : caption("lfapp"), fps(128) {
   minimized = cursor_grabbed = frame_init = animating = 0;
   target_fps = FLAGS_target_fps;
   multitouch_keyboard_x = .93; 
-  cam = new Entity(v3(5.54, 1.70, 4.39), v3(-.51, -.03, -.49), v3(-.03, 1, -.03));
+  cam = make_unique<Entity>(v3(5.54, 1.70, 4.39), v3(-.51, -.03, -.49), v3(-.03, 1, -.03));
   SetSize(point(640, 480));
   ClearEvents();
   ClearGesture();
@@ -2331,7 +2332,6 @@ Window::~Window() {
     lfapp_console->WriteHistory(LFAppDownloadDir(), "console", "");
     delete lfapp_console;
   }
-  delete cam;
 }
 
 Box Window::Box(float xp, float yp, float xs, float ys, float xbl, float ybt, float xbr, float ybb) const {
@@ -2535,25 +2535,25 @@ void Window::RenderToFrameBuffer(FrameBuffer *fb) {
 int Video::Init() {
   INFO("Video::Init()");
 #if defined(LFL_ANDROIDVIDEO)
-  impl = new AndroidVideoModule();
+  impl = make_unique<AndroidVideoModule>();
 #elif defined(LFL_IPHONEVIDEO)
-  impl = new IPhoneVideoModule();
+  impl = make_unique<IPhoneVideoModule>();
 #elif defined(LFL_OSXVIDEO)
-  impl = new OSXVideoModule();
+  impl = make_unique<OSXVideoModule>();
 #elif defined(LFL_WINVIDEO)
-  impl = new WinVideoModule();
+  impl = make_unique<WinVideoModule>();
 #elif defined(LFL_X11VIDEO)
-  impl = new X11VideoModule();
+  impl = make_unique<X11VideoModule>();
 #elif defined(LFL_XTVIDEO)
-  impl = new XTVideoModule();
+  impl = make_unique<XTVideoModule>();
 #elif defined(LFL_QT)
-  impl = new QTVideoModule();
+  impl = make_unique<QTVideoModule>();
 #elif defined(LFL_WXWIDGETS)
-  impl = new WxWidgetsVideoModule();
+  impl = make_unique<WxWidgetsVideoModule>();
 #elif defined(LFL_GLFWVIDEO)
-  impl = new GLFWVideoModule();
+  impl = make_unique<GLFWVideoModule>();
 #elif defined(LFL_SDLVIDEO)
-  impl = new SDLVideoModule();
+  impl = make_unique<SDLVideoModule>();
 #endif
   if (impl) if (impl->Init()) return -1;
 

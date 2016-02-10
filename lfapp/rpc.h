@@ -164,6 +164,7 @@ namespace LFL {
   struct name ## IPC { \
     typedef function<int(const IPC::name ## Response*, mpt)> CB; \
     name ## IPC(Parent *P=0, IPC::Seq S=0, const CB &C=CB()) {} \
+    virtual ~name ## IPC() {} \
   }; \
   unordered_map<IPC::Seq, void*> name ## _map; \
   void name(__VA_ARGS__); \
@@ -205,19 +206,21 @@ struct InterProcessComm {
     IPC::Seq seq;
     int mpb_id;
     Query(Parent *P=0, IPC::Seq S=0, int I=0) : parent(P), seq(S), mpb_id(I) {}
-    ~Query() { if (mpb_id) parent->DelBuffer(mpb_id); }
+    virtual ~Query() { if (mpb_id) parent->DelBuffer(mpb_id); }
     int Done()  { delete this; return IPC::Done; }
     int Error() { delete this; return IPC::Error; }
   };
   
   template <class Parent> struct ServerQuery : public Query<Parent> {
     ServerQuery(Parent *P=0, IPC::Seq S=0, int I=0) : Query<Parent>(P, S, I) {}
+    virtual ~ServerQuery() {}
   };
 
   template <class Parent, class Res, class MPT> struct ClientQuery : public Query<Parent> {
     typedef function<int(const typename Res::Type*, MPT)> CB;
     CB ipc_cb;
     ClientQuery(Parent *P=0, IPC::Seq S=0, const CB &C=CB()) : Query<Parent>(P, S), ipc_cb(C) {}
+    virtual ~ClientQuery() {}
 
     bool Run(const typename Res::Type *req, MPT mpv) {
       IPCTrace("%s Receive %s Response seq=%d, %s\n",

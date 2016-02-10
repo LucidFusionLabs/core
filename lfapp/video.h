@@ -573,7 +573,7 @@ struct Window : public NativeWindow {
   FrameCB frame_cb;
   Timer frame_time;
   RollingAvg<unsigned> fps;
-  Entity *cam=0;
+  unique_ptr<Entity> cam;
   BindMap *binds=0;
   Dialog *top_dialog=0;
   vector<Dialog*> dialogs;
@@ -646,7 +646,7 @@ struct Video : public Module {
   Shader shader_default, shader_normals, shader_cubemap, shader_cubenorm;
   int opengles_version = 2;
   bool opengl_framebuffer = 1, opengles_cubemap = 1;
-  Module *impl = 0;
+  unique_ptr<Module> impl;
 
   int Init();
   int Free();

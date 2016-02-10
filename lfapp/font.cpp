@@ -393,7 +393,7 @@ FakeFontEngine::FakeFontEngine() : fake_font(this, fake_font_desc, shared_ptr<Fo
   fake_font.fixed_width = fake_font.max_width = fixed_width;
   fake_font.ascender = ascender;
   fake_font.descender = descender;
-  fake_font.glyph = shared_ptr<GlyphMap>(new GlyphMap(shared_ptr<GlyphCache>(new GlyphCache(0, 0))));
+  fake_font.glyph = make_shared<GlyphMap>(make_shared<GlyphCache>(0, 0));
   InitGlyphs(&fake_font, &fake_font.glyph->table[0], fake_font.glyph->table.size());
   for (char16_t wide_glyph_id = wide_glyph_begin, e = wide_glyph_end + 1; wide_glyph_id != e; ++wide_glyph_id) {
     Glyph *wg = fake_font.FindGlyph(wide_glyph_id);
@@ -482,7 +482,7 @@ Font *AtlasFontEngine::OpenAtlas(const FontDesc &d) {
 
   Resource *resource = new Resource();
   Font *ret = new Font(Singleton<AtlasFontEngine>::Get(), d, shared_ptr<FontEngine::Resource>(resource));
-  ret->glyph = shared_ptr<GlyphMap>(new GlyphMap(shared_ptr<GlyphCache>(new GlyphCache(tex.ID, tex.width, tex.height))));
+  ret->glyph = make_shared<GlyphMap>(make_shared<GlyphCache>(tex.ID, tex.width, tex.height));
   ret->mix_fg = d.bg.a() != 1.0;
   GlyphCache *cache = ret->glyph->cache.get();
   resource->primary = ret;
@@ -534,7 +534,7 @@ void AtlasFontEngine::WriteGlyphFile(const string &name, Font *f) {
 
 void AtlasFontEngine::MakeFromPNGFiles(const string &name, const vector<string> &png, const point &atlas_dim, Font **glyphs_out) {
   Font *ret = new Font(Singleton<AtlasFontEngine>::Get(), FontDesc(name), shared_ptr<FontEngine::Resource>());
-  ret->glyph = shared_ptr<GlyphMap>(new GlyphMap(shared_ptr<GlyphCache>(new GlyphCache(0, atlas_dim.x, atlas_dim.y))));
+  ret->glyph = make_shared<GlyphMap>(make_shared<GlyphCache>(0, atlas_dim.x, atlas_dim.y));
   EnsureSize(ret->glyph->table, png.size());
 
   GlyphCache *cache = ret->glyph->cache.get();
@@ -704,7 +704,7 @@ Font *FreeTypeFontEngine::Open(const FontDesc &d) {
   auto ri = resource.find(d.name);
   if (ri == resource.end()) return 0;
   Font *ret = new Font(this, d, ri->second);
-  ret->glyph = shared_ptr<GlyphMap>(new GlyphMap());
+  ret->glyph = make_shared<GlyphMap>();
   int count = InitGlyphs(ret, &ret->glyph->table[0], ret->glyph->table.size());
   ret->fix_metrics = true;
   ret->mix_fg = true;
@@ -801,7 +801,7 @@ Font *CoreTextFontEngine::Open(const FontDesc &d) {
   auto ri = FindOrInsert(resource, d.name, &inserted);
   if (inserted) {
     CFStringRef cfname = ToCFStr(d.name);
-    ri->second = shared_ptr<Resource>(new Resource());
+    ri->second = make_shared<Resource>();
     if (!(ri->second->cgfont = CGFontCreateWithFontName(cfname))) { CFRelease(cfname); resource.erase(d.name); return 0; }
 #ifdef LFL_HARFBUZZ
     ri->second->hb_face = hb_coretext_face_create(ri->second->cgfont);
@@ -814,7 +814,7 @@ Font *CoreTextFontEngine::Open(const FontDesc &d) {
   CFRelease(ctfont);
 
   Font *ret = new Font(this, d, ri->second);
-  ret->glyph = shared_ptr<GlyphMap>(new GlyphMap());
+  ret->glyph = make_shared<GlyphMap>();
   ret->ascender = RoundUp(ascent);
   ret->descender = RoundUp(descent) + RoundDown(leading);
   int count = InitGlyphs(ret, &ret->glyph->table[0], ret->glyph->table.size());
@@ -955,7 +955,7 @@ Font *GDIFontEngine::Open(const FontDesc &d) {
   bool inserted = 0;
   auto ri = FindOrInsert(resource, StrCat(d.name,",",d.size,",",d.flag), &inserted);
   if (inserted) {
-    ri->second = shared_ptr<Resource>(new Resource());
+    ri->second = make_shared<Resource>();
     if (!(ri->second->hfont = CreateFont(d.size, 0, 0, 0, (d.flag & FontDesc::Bold) ? FW_BOLD : FW_NORMAL, d.flag & FontDesc::Italic, 0, 0,
                                          DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, VARIABLE_PITCH,
                                          d.name.c_str()))) { resource.erase(d.name); return 0; }
@@ -967,7 +967,7 @@ Font *GDIFontEngine::Open(const FontDesc &d) {
   GetTextMetrics(hdc, &tm);
 
   Font *ret = new Font(this, d, ri->second);
-  ret->glyph = shared_ptr<GlyphMap>(new GlyphMap());
+  ret->glyph = make_shared<GlyphMap>();
   ret->ascender = tm.tmAscent + tm.tmDescent;
   ret->descender = 0;
   int count = InitGlyphs(ret, &ret->glyph->table[0], ret->glyph->table.size()); 
@@ -1018,8 +1018,8 @@ void GDIFontEngine::AssignGlyph(Glyph *g, const ::SIZE &bounds, const ::SIZE &ad
 #endif /* WIN32 */
 
 Font *IPCClientFontEngine::Open(const FontDesc &d) {
-  Font *ret = new Font(this, d, shared_ptr<FontEngine::Resource>(new Resource()));
-  ret->glyph = shared_ptr<GlyphMap>(new GlyphMap());
+  Font *ret = new Font(this, d, make_shared<FontEngine::Resource>());
+  ret->glyph = make_shared<GlyphMap>();
   ret->glyph->cache = shared_ptr<GlyphCache>(GlyphCache::Get());
   app->main_process->OpenSystemFont(d, bind(&IPCClientFontEngine::OpenSystemFontResponse, this, ret, _1, _2));
   if (1 && app->main_process->browser) app->main_process->WaitAllOpenSystemFontResponse();

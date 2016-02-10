@@ -183,7 +183,7 @@ struct DocumentParser {
 
     void LoadAssetResponseCB(const MultiProcessTextureResource &tex) {
       if (tex.width && tex.height) { target->LoadGL(tex); target->owner = true; }
-      RunInNetworkThread([=]() { Parser::Complete(this); });
+      app->RunInNetworkThread([=]() { Parser::Complete(this); });
     }
 
     int LoadTextureResponseCB(const IPC::LoadTextureResponse *res, Void) {

@@ -220,7 +220,7 @@ struct ProcessAPIClient : public ProcessAPI {
   IPC_CLIENT_CALL(ExecuteScript,  Void, const string&, const StringCB&) {
     StringCB cb;
     ExecuteScriptQuery(Parent *P, IPC::Seq S, const StringCB &c) : ExecuteScriptIPC(P,S,bind(&ExecuteScriptQuery::Response, this, _1, _2)), cb(c) {}
-    int Response(const IPC::ExecuteScriptResponse *res, Void) { RunInMainThread(new Callback(bind(&ExecuteScriptQuery::RunCB, cb, (res && res->text()) ? res->text()->str() : string()))); return IPC::Done; }
+    int Response(const IPC::ExecuteScriptResponse *res, Void) { app->RunInMainThread(bind(&ExecuteScriptQuery::RunCB, cb, (res && res->text()) ? res->text()->str() : string())); return IPC::Done; }
     static void RunCB(const StringCB &cb, const string &s) { cb(s); }
   };
   IPC_SERVER_CALL(AllocateBuffer, Void) {};
@@ -308,8 +308,8 @@ struct ProcessAPIServer : public ProcessAPI {
   IPC_CLIENT_CALL(SetTitle, Void, const string &) {};
   IPC_CLIENT_CALL(SetURL,   Void, const string &) {};
   IPC_SERVER_CALL(LoadAsset, const MultiProcessFileResource&) {
-    Texture *tex; 
-    LoadAssetQuery(Parent *P, IPC::Seq S, Texture *T) : LoadAssetIPC(P,S), tex(T) {}
+    unique_ptr<Texture> tex; 
+    LoadAssetQuery(Parent *P, IPC::Seq S, unique_ptr<Texture> T) : LoadAssetIPC(P,S), tex(move(T)) {}
     int AllocateBufferResponse(const IPC::AllocateBufferResponse*, MultiProcessBuffer&);
   };
   IPC_SERVER_CALL(Navigate,      Void) {};

@@ -266,9 +266,9 @@ void glIntersect(int x, int y, Color *c);
 void glShadertoyShader(Shader *shader, const Texture *tex=0);
 void glShadertoyShaderWindows(Shader *shader, const Color &backup_color, const Box                &win, const Texture *tex=0);
 void glShadertoyShaderWindows(Shader *shader, const Color &backup_color, const vector<const Box*> &win, const Texture *tex=0);
-void glSpectogram(Matrix *m, unsigned char *data, int width, int height, int hjump, float max, float clip, bool interpolate, int pd=PowerDomain::dB);
-void glSpectogram(Matrix *m, Asset *a, float *max=0, float clip=-INFINITY, int pd=PowerDomain::dB);
-void glSpectogram(SoundAsset *sa, Asset *a, Matrix *transform=0, float *max=0, float clip=-INFINITY);
+void glSpectogram(Matrix *m, unsigned char *data, int pf, int width, int height, int hjump, float max, float clip, bool interpolate, int pd=PowerDomain::dB);
+void glSpectogram(Matrix *m, Texture *t, float *max=0, float clip=-INFINITY, int pd=PowerDomain::dB);
+void glSpectogram(SoundAsset *sa, Texture *t, Matrix *transform=0, float *max=0, float clip=-INFINITY);
 
 struct BoxFilled : public Drawable { void Draw(const LFL::Box &b, const Drawable::Attr *a=0) const; };
 struct BoxOutline : public Drawable {
@@ -279,18 +279,17 @@ struct BoxOutline : public Drawable {
 
 struct Waveform : public Drawable {
   int width=0, height=0;
-  Geometry *geom=0;
+  unique_ptr<Geometry> geom;
 
   Waveform() {}
   Waveform(point dim, const Color *c, const Vec<float> *);
-  virtual ~Waveform() { delete geom; }
 
   void Draw(const LFL::Box &w, const Drawable::Attr *a=0) const {
     if (!geom) return;
     geom->SetPosition(w.Position());
     screen->gd->DisableTexture();
-    Scene::Select(geom);
-    Scene::Draw(geom, 0);
+    Scene::Select(geom.get());
+    Scene::Draw(geom.get(), 0);
   }
 
   static Waveform Decimated(point dim, const Color *c, const RingBuf::Handle *, int decimateBy);

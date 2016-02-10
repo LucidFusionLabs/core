@@ -553,7 +553,7 @@ point TilesTextGUI::PaintCB(Line *l, point lp, const Box &b) {
 /* TextArea */
 
 void TextArea::Write(const StringPiece &s, bool update_fb, bool release_fb) {
-  if (!MainThread()) return RunInMainThread(new Callback(bind(&TextArea::WriteCB, this, s.str(), update_fb, release_fb)));
+  if (!app->MainThread()) return app->RunInMainThread(bind(&TextArea::WriteCB, this, s.str(), update_fb, release_fb));
   write_last = Now();
   bool wrap = Wrap();
   int update_flag = LineFBPushBack(), sl;
@@ -1308,7 +1308,7 @@ void Terminal::Draw(const Box &b, int flag, Shader *shader) {
 }
 
 void Terminal::Write(const StringPiece &s, bool update_fb, bool release_fb) {
-  if (!MainThread()) return RunInMainThread(new Callback(bind(&Terminal::WriteCB, this, s.str(), update_fb, release_fb)));
+  if (!app->MainThread()) return app->RunInMainThread(bind(&Terminal::WriteCB, this, s.str(), update_fb, release_fb));
   TerminalTrace("Terminal: Write('%s', %zd)\n", CHexEscapeNonAscii(s.str()).c_str(), s.size());
   screen->gd->DrawMode(DrawMode::_2D, 0);
   ScopedClearColor scc(bg_color);

@@ -68,7 +68,7 @@ bool Shell::FGets() {
 }
 
 void Shell::Run(const string &text) {
-  if (!MainThread()) return RunInMainThread(new Callback(bind(&Shell::Run, this, text)));
+  if (!app->MainThread()) return app->RunInMainThread(bind(&Shell::Run, this, text));
 
   string cmd;
   vector<string> arg;
@@ -143,7 +143,7 @@ void Shell::campos(const vector<string>&) {
 void Shell::snap(const vector<string> &arg) {
   Asset      *a  = asset     (arg.size() ? arg[0] : "snap"); 
   SoundAsset *sa = soundasset(arg.size() ? arg[0] : "snap");
-  if (a && sa) { app->audio->Snapshot(sa); glSpectogram(sa, a); }
+  if (a && sa) { app->audio->Snapshot(sa); glSpectogram(sa, &a->tex); }
 }
 
 void Shell::play(const vector<string> &arg) {
@@ -273,7 +273,7 @@ void Shell::f0(const vector<string> &arg) {
 void Shell::sinth(const vector<string> &a) { 
   int hz[3] = { 440, 0, 0};
   for (int i=0; i<sizeofarray(hz) && i<a.size(); i++) hz[i] = atof(a[i]);
-  Sinthesize(app->audio, hz[0], hz[1], hz[2]);
+  Sinthesize(app->audio.get(), hz[0], hz[1], hz[2]);
 }
 
 void Shell::writesnap(const vector<string> &a) {
@@ -288,7 +288,7 @@ void Shell::writesnap(const vector<string> &a) {
   }
 }
 
-void Shell::fps(const vector<string>&) { INFO("FPS ", FPS()); }
+void Shell::fps(const vector<string>&) { INFO("FPS ", screen->fps.FPS()); }
 
 void Shell::wget(const vector<string> &a) {
   if (a.empty()) return;

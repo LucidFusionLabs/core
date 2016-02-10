@@ -49,7 +49,7 @@ struct Game {
       virtual void Visit(Connection *c, Game::ConnectionData *cd) = 0;
       static void Accept(Service *svc, Visitor *visitor) {
         for (auto iter = svc->endpoint.begin(), e = svc->endpoint.end(); iter != e; ++iter) {
-          Connection *c = iter->second;
+          Connection *c = iter->second.get();
           Game::ConnectionData *cd = Game::ConnectionData::Get(c);
           if (!cd->team) continue;
           visitor->Visit(c, cd);
@@ -314,7 +314,7 @@ struct GameServer : public Connection::Handler {
   void Close(Connection *c) {
     Game::ConnectionData *cd = Game::ConnectionData::Get(c);
     world->PartEntity(cd, world->Get(cd->entityID), cd->team);
-    c->handler = 0;
+    c->handler.release();
     if (!cd->team) return;
 
     INFO(c->Name(), ": ", cd->playerName, " left");
@@ -464,7 +464,7 @@ struct GameServer : public Connection::Handler {
     playerlist.Text = StrCat(world->red_score, ",", world->blue_score, "\n");
     for (int i = 0; i < svc.size(); ++i)
       for (auto iter = svc[i]->endpoint.begin(), e = svc[i]->endpoint.end(); iter != e; ++iter)
-        AppendSerializedPlayerData(Game::ConnectionData::Get(iter->second), &playerlist.Text);
+        AppendSerializedPlayerData(Game::ConnectionData::Get(iter->second.get()), &playerlist.Text);
     if (bots) for (GameBots::BotVector::iterator i = bots->bots.begin(); i != bots->bots.end(); i++)
       AppendSerializedPlayerData(i->player_data, &playerlist.Text);
     Write(c, UDPClient::Sendto, cd->seq++, &playerlist);
@@ -476,7 +476,7 @@ struct GameServer : public Connection::Handler {
 
     Game::ConnectionData *cd = Game::ConnectionData::Get(c);
     StringLineIter lines(rcon->Text);
-    for (string line = IterNextString(&lines); !lines.Done(); line = IterNextString(&lines)) {
+    for (string line = lines.NextString(); !lines.Done(); line = lines.NextString()) {
       if (FLAGS_rcon_debug) INFO("rcon: ", line);
       string cmd, arg;
       Split(line, isspace, &cmd, &arg);
@@ -816,7 +816,7 @@ struct GameClient {
 
   void RconRequestCB(Connection *c, GameProtocol::Header *hdr, const string &rcon) {
     StringLineIter lines(rcon);
-    for (string line = IterNextString(&lines); !lines.Done(); line = IterNextString(&lines)) {
+    for (string line = lines.NextString(); !lines.Done(); line = lines.NextString()) {
       if (FLAGS_rcon_debug) INFO("rcon: ", line);
       string cmd, arg;
       Split(line, isspace, &cmd, &arg);
@@ -1027,13 +1027,13 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
     const char *p;
     string servers(cb, cl);
     StringLineIter lines(servers);
-    for (string l = IterNextString(&lines); !lines.Done(); l = IterNextString(&lines)) {
+    for (string l = lines.NextString(); !lines.Done(); l = lines.NextString()) {
       if (!(p = strchr(l.c_str(), ':'))) continue;
       SystemNetwork::SendTo(pinger.GetListener()->socket, IPV4::Parse(string(l.c_str(), p-l.c_str())), atoi(p+1), "ping\n", 5);
     }
   }
 
-  void Close(Connection *c) { c->handler=0; }
+  void Close(Connection *c) { c->handler.release(); }
   int Read(Connection *c) {
     for (int i=0; i<c->packets.size(); i++) {
       string reply(c->rb.begin() + c->packets[i].offset, c->packets[i].len);
@@ -1047,7 +1047,7 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
     const char *p;
     string name, players;
     StringLineIter lines(reply);
-    for (string l = IterNextString(&lines); !lines.Done(); l = IterNextString(&lines)) {
+    for (string l = lines.NextString(); !lines.Done(); l = lines.NextString()) {
       if (!(p = strchr(l.c_str(), '='))) continue;
       string k(l, p-l.c_str()), v(p+1);
       if      (k == "name")    name    = v;
@@ -1277,7 +1277,7 @@ struct GamePlayerListGUI : public GUI {
     for (const char *line = lines.Next(); line; line = lines.Next()) {
       StringWordIter words(line, lines.cur_len, iscomma);
       Player player;
-      for (string word = IterNextString(&words); !words.Done(); word = IterNextString(&words)) player.push_back(word);
+      for (string word = words.NextString(); !words.Done(); word = words.NextString()) player.push_back(word);
       if (player.size() < 5) continue;
       playerlist.push_back(player);
     }

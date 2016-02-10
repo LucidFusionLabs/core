@@ -107,10 +107,14 @@ TEST(StringTest, WordIter) {
 }
 
 TEST(IterTest, LineIter) {
+  float e = 1e-6;
   string b = "1 2 3\n\n4 5 6";
   StringLineIter line(b);
   EXPECT_EQ("1 2 3", line.NextString());
   EXPECT_EQ("4 5 6", line.NextString());
+  EXPECT_EQ("4 5 6", string(line.Current(), line.CurrentLength()));
+  { StringWordIter w(line.Current(), line.CurrentLength()); int   x[3]; w.ScanN(x, 3); EXPECT_EQ  (4, x[0]);    EXPECT_EQ  (5, x[1]);    EXPECT_EQ  (6, x[2]); }
+  { StringWordIter w(line.Current(), line.CurrentLength()); float x[3]; w.ScanN(x, 3); EXPECT_NEAR(4, x[0], e); EXPECT_NEAR(5, x[1], e); EXPECT_NEAR(6, x[2], e); }
 }
 
 TEST(StringTest, StringAppendf) {

@@ -95,7 +95,7 @@ DEFINE_string(UttPathsOutFile,       "",          "Viterbi paths output file");
 AssetMap asset;
 SoundAssetMap soundasset;
 
-void MyResynth(const vector<string> &args) { SoundAsset *sa=soundasset(args.size()?args[0]:"snap"); if (sa) { Resynthesize(app->audio, sa); } }
+void MyResynth(const vector<string> &args) { SoundAsset *sa=soundasset(args.size()?args[0]:"snap"); if (sa) { Resynthesize(app->audio.get(), sa); } }
 
 struct Wav2Features {
   enum Target { File, Archive };
@@ -134,7 +134,7 @@ struct Features2Pronunciation {
     PronunciationDict *dict = PronunciationDict::Instance();
 
     StringWordIter worditer(transcript);
-    for (string word = IterNextString(&worditer); !worditer.Done(); word = IterNextString(&worditer)) {
+    for (string word = worditer.NextString(); !worditer.Done(); word = worditer.NextString()) {
       if (!dict->Pronounce(word.c_str())) ERROR("no pronunciation dictionary for '", word, "'");
       words.Incr(word);
     }
@@ -153,7 +153,7 @@ struct Features2Pronunciation {
     PronunciationDict *dict = PronunciationDict::Instance();
 
     StringWordIter worditer(transcript);
-    for (string word = IterNextString(&worditer); !worditer.Done(); word = IterNextString(&worditer)) {
+    for (string word = worditer.NextString(); !worditer.Done(); word = worditer.NextString()) {
       if (!dict->Pronounce(word.c_str())) ERROR("no pronunciation dictionary for '", word, "'");
       words.Incr(word);
     }
@@ -754,8 +754,8 @@ int RecognizeQuery(RecognitionModel *model, const char *input) {
   vector<int> query, query2;
   int pp = 0;
 
-  for (string nextword, word = IterNextString(&words); word.size(); word = nextword) {
-    nextword = IterNextString(&words);
+  for (string nextword, word = words.NextString(); word.size(); word = nextword) {
+    nextword = words.NextString();
     const char *pronunciation = dict->Pronounce(word.c_str());
     query2.push_back(model->recognition_network_out.Id(word.c_str()));
 

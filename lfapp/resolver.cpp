@@ -138,8 +138,10 @@ bool Resolver::QueueResolveRequest(const Request &req) {
     Request outreq(req.query, req.type, req.cb, req.retrys);
     if (!ns) queue.push_back(outreq);
     else if (!ns->WriteResolveRequest(outreq)) {
-      bool retried = conn.size() > 1 || conn_available.size() || HandleNoConnections();
+      dynamic_cast<UDPClient::PersistentConnectionHandler*>(ns->c)->responseCB = UDPClient::ResponseCB();
       ns->c->SetError();
+      HandleClosed(ns);
+      bool retried = conn.size() > 1 || conn_available.size() || HandleNoConnections();
       if (retried) continue;
       else return ERRORv(false, "last nameserver failed");
     }
@@ -222,7 +224,7 @@ bool RecursiveResolver::StartResolveRequest(Request *req) {
   if (cached) {
     IPV4::Addr addr = cached->A.size() ? cached->A[Rand<int>(0, cached->A.size()-1)].addr : -1;
     INFO("RecursiveResolver found ", req->query, " = ", IPV4::Text(addr), " in cache=", node->authority_domain);
-    RunInMainThread(new Callback(bind(&RecursiveResolver::Complete, this, req, addr, cached)));
+    app->RunInMainThread(bind(&RecursiveResolver::Complete, this, req, addr, cached));
     return true;
   }
 

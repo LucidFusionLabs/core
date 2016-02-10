@@ -238,7 +238,7 @@ TEST(DOMTest, DOMTree) {
   EXPECT_EQ(0, matched);
   CHECK(h_node->render);
   EXPECT_EQ(LFL::DOM::Display::Block, h_node->render->style.Display().v);
-  EXPECT_EQ("00000000", String::ToUTF8(h_node->render->style.Color().v.DebugString()));
+  EXPECT_EQ("000000FF", String::ToUTF8(h_node->render->style.Color().v.DebugString()));
   EXPECT_EQ("123456FF", String::ToUTF8(h_node->render->style.BackgroundColor().v.DebugString()));
 #endif
 

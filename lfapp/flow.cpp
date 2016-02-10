@@ -144,13 +144,13 @@ string FloatContainer::DebugString() const {
 float FloatContainer::baseleft(float py, float ph, int *adjacent_out) const {
   int max_left = x;
   basedir(py, ph, &float_left, adjacent_out, [&](const Box &b){ return Max(&max_left, b.right()); });
-  return max_left - x;
+  return max_left;
 }
 
 float FloatContainer::baseright(float py, float ph, int *adjacent_out) const { 
   int min_right = x + w;
   basedir(py, ph, &float_right, adjacent_out, [&](const Box &b){ return Min(&min_right, b.x); });
-  return min_right - x;
+  return min_right;
 }
 
 void FloatContainer::basedir(float py, float ph, const vector<Float> *float_target, int *adjacent_out, function<bool (const Box&)> filter_cb) const {

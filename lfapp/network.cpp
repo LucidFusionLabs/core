@@ -614,7 +614,8 @@ int Connection::SendTo(const char *buf, int len) { return SystemNetwork::SendTo(
 
 void Service::Close(Connection *c) {
   app->network->active.Del(c->socket);
-  if (!c->detach) SystemNetwork::CloseSocket(c->socket);
+  if (c->detach) conn[c->socket].release();
+  else SystemNetwork::CloseSocket(c->socket);
   if (connect_src_pool && (c->src_addr || c->src_port)) connect_src_pool->Close(c->src_addr, c->src_port);
 }
 
@@ -664,8 +665,7 @@ Socket Service::Listen(IPV4::Addr addr, int port, Listener *listener) {
 }
 
 Connection *Service::Accept(int state, Socket socket, IPV4::Addr addr, int port) {
-  Connection *c = new Connection(this, state, socket, addr, port);
-  conn[c->socket] = c;
+  auto c = (conn[socket] = make_unique<Connection>(this, state, socket, addr, port)).get();
   app->network->active.Add(c->socket, SocketSet::READABLE, &c->self_reference);
   return c;
 }
@@ -688,7 +688,7 @@ Connection *Service::Connect(IPV4::Addr addr, int port, IPV4EndpointSource *src_
     return 0;
   }
   INFO(c->Name(), ": connecting");
-  conn[c->socket] = c;
+  conn[c->socket] = unique_ptr<Connection>(c);
 
   if (connected) {
     /* connected 3 */ 
@@ -734,7 +734,7 @@ Connection *Service::SSLConnect(SSL_CTX *sslctx, const string &hostport, int def
   BIO_get_fd(c->bio, &c->socket);
 
   INFO(c->Name(), ": connecting (fd=", c->socket, ")");
-  conn[c->socket] = c;
+  conn[c->socket] = unique_ptr<Connection>(c);
   app->network->active.Add(c->socket, SocketSet::WRITABLE, &c->self_reference);
   return c;
 #else
@@ -764,7 +764,7 @@ Connection *Service::SSLConnect(SSL_CTX *sslctx, IPV4::Addr addr, int port, Call
   BIO_get_fd(c->bio, &c->socket);
 
   INFO(c->Name(), ": connecting (fd=", c->socket, ")");
-  conn[c->socket] = c;
+  conn[c->socket] = unique_ptr<Connection>(c);
   app->network->active.Add(c->socket, SocketSet::WRITABLE, &c->self_reference);
   return c;
 #else
@@ -773,9 +773,8 @@ Connection *Service::SSLConnect(SSL_CTX *sslctx, IPV4::Addr addr, int port, Call
 }
 
 Connection *Service::EndpointConnect(const string &endpoint_name) {
-  Connection *c = new Connection(this, Connection::Connected, -1);
+  auto c = (endpoint[endpoint_name] = make_unique<Connection>(this, Connection::Connected, -1)).get();
   c->endpoint_name = endpoint_name;
-  endpoint[endpoint_name] = c;
 
   /* connected 4 */
   if (this->Connected(c) < 0) c->SetError();
@@ -792,9 +791,9 @@ void Service::EndpointReadCB(string *endpoint_name, string *packet) {
 
 void Service::EndpointRead(const string &endpoint_name, const char *buf, int len) {
   if (len) CHECK(buf);
-  if (!MainThread()) return RunInMainThread(new Callback(bind(&Service::EndpointReadCB, this, new string(endpoint_name), new string(buf, len))));
+  if (!app->MainThread()) return app->RunInMainThread(bind(&Service::EndpointReadCB, this, new string(endpoint_name), new string(buf, len)));
 
-  Service::EndpointMap::iterator ep = endpoint.find(endpoint_name);
+  auto ep = endpoint.find(endpoint_name);
   if (ep == endpoint.end()) { 
     if (!endpoint_read_autoconnect) return ERROR("unknown endpoint ", endpoint_name);
     if (!EndpointConnect(endpoint_name)) return ERROR("endpoint_read_autoconnect ", endpoint_name);
@@ -802,21 +801,22 @@ void Service::EndpointRead(const string &endpoint_name, const char *buf, int len
     CHECK(ep != endpoint.end());
   }
 
-  Connection *c = ep->second; int ret;
+  int ret;
+  Connection *c = ep->second.get();
   if ((ret = c->AddPacket(buf, len)) != len) 
   { ERROR(c->Name(), ": addpacket(", len, ")"); c->SetError(); return; }
 }
 
 void Service::EndpointClose(const string &endpoint_name) {
   INFO(Protocol::Name(protocol), "(", (void*)this, ") endpoint close: ", endpoint_name);
-  Service::EndpointMap::iterator ep = endpoint.find(endpoint_name);
+  auto ep = endpoint.find(endpoint_name);
   if (ep != endpoint.end()) ep->second->SetError();
 }
 
 void Service::Detach(Connection *c) {
   Service::Close(c);
   c->readable = c->writable = 0;
-  RunInMainThread(new Callback([=]() { (*c->detach)(); }));
+  app->RunInMainThread([=]() { (*c->detach)(); });
   app->scheduler.Wakeup(0);
 }
 
@@ -852,17 +852,16 @@ int Network::Disable (const vector<Service*> &st) { int ret = 0; for (auto s : s
 int Network::Enable  (const vector<Service*> &st) { int ret = 0; for (auto s : st) if (Enable  (s) < 0) ret = -1; return ret; }
 
 int Network::Enable(Service *s) {
-
   /* listen */
   if (s->listen.size() && !s->initialized) {
     s->initialized = true;
     vector<string> removelist;
-    for (Service::ListenMap::iterator i = s->listen.begin(); i != s->listen.end(); ++i) {
+    for (auto i = s->listen.begin(); i != s->listen.end(); ++i) {
       const IPV4Endpoint *listen_addr = IPV4Endpoint::FromString(i->first.c_str());
-      if (s->Listen(listen_addr->addr, listen_addr->port, i->second) == -1)
-      { delete i->second; removelist.push_back(i->first); }
+      if (s->Listen(listen_addr->addr, listen_addr->port, i->second.get()) == -1)
+        removelist.push_back(i->first);
     }
-    for (vector<string>::const_iterator i = removelist.begin(); i != removelist.end(); ++i) s->listen.erase(*i);
+    for (auto i = removelist.begin(); i != removelist.end(); ++i) s->listen.erase(*i);
   }
 
   /* insert */
@@ -882,11 +881,10 @@ int Network::Disable(Service *s) {
 void Network::ConnClose(Service *svc, Connection *c, ServiceEndpointEraseList *removelist) {
   if (c->handler) c->handler->Close(c);
   svc->Close(c);
-  if (removelist) removelist->AddSocket(svc, c->socket);
-  delete c;
+  removelist->AddSocket(svc, c->socket);
 }
 void Network::ConnCloseAll(Service *svc) {
-  for (auto i = svc->conn.begin(), e = svc->conn.end(); i != e; ++i) ConnClose(svc, i->second, 0);
+  for (auto i = svc->conn.begin(), e = svc->conn.end(); i != e; ++i) ConnClose(svc, i->second.get(), 0);
   svc->conn.clear();
 }
 
@@ -894,12 +892,12 @@ void Network::EndpointRead(Service *svc, const char *name, const char *buf, int 
 void Network::EndpointClose(Service *svc, Connection *c, ServiceEndpointEraseList *removelist, const string &epk) {
   if (c->handler) c->handler->Close(c);
   if (svc->listen.empty()) svc->Close(c);
-  if (removelist) removelist->AddEndpoint(svc, epk);
-  delete c;
+  removelist->AddEndpoint(svc, epk);
 }
 void Network::EndpointCloseAll(Service *svc) {
-  for (Service::EndpointMap::iterator i = svc->endpoint.begin(); i != svc->endpoint.end(); ++i)
-    EndpointClose(svc, i->second, 0, "");
+  ServiceEndpointEraseList unused;
+  for (auto i = svc->endpoint.begin(); i != svc->endpoint.end(); ++i)
+    EndpointClose(svc, i->second.get(), &unused, "");
   svc->endpoint.clear();
 }
 
@@ -930,16 +928,16 @@ int Network::Frame(unsigned clicks) {
 #ifdef LFL_NETWORK_MONOLITHIC_FRAME
     /* answer listening sockets & UDP server read */
     for (auto i = svc->listen.begin(), e = svc->listen.end(); i != e; ++i) 
-      if (active.GetReadable(i->second->socket)) AcceptFrame(svc, i->second);
+      if (active.GetReadable(i->second->socket)) AcceptFrame(svc, i->second.get());
 
     /* iterate connections */
     for (auto i = svc->conn.begin(), e = svc->conn.end(); i != e; ++i)
-      TCPConnectionFrame(svc, i->second, &removelist);
+      TCPConnectionFrame(svc, i->second.get(), &removelist);
 #endif
 
     /* iterate endpoints */
     for (auto i = svc->endpoint.begin(), e = svc->endpoint.end(); i != e; i++) {
-      UDPConnectionFrame(svc, (*i).second, &removelist, (*i).first);
+      UDPConnectionFrame(svc, i->second.get(), &removelist, i->first);
     }
 
     /* remove closed */
@@ -947,13 +945,13 @@ int Network::Frame(unsigned clicks) {
 
     if (svc->heartbeats) { /* connection heartbeats */
       for (auto i = svc->conn.begin(), e = svc->conn.end(); i != e; ++i) {
-        Connection *c = i->second;
+        Connection *c = i->second.get();
         int ret = c->handler ? c->handler->Heartbeat(c) : 0;
         if (c->state == Connection::Error || ret < 0) ConnClose(svc, c, &removelist);
       }
 
       for (auto i = svc->endpoint.begin(), e = svc->endpoint.end(); i != e; ++i) {
-        Connection *c = i->second;
+        Connection *c = i->second.get();
         int ret = c->handler ? c->handler->Heartbeat(c) : 0;
         if (c->state == Connection::Error || ret < 0) EndpointClose(svc, c, &removelist, c->endpoint_name);
       }
@@ -1003,15 +1001,15 @@ void Network::AcceptFrame(Service *svc, Listener *listener) {
 
       IPV4Endpoint epk(sin.sin_addr.s_addr, ntohs(sin.sin_port));
       string epkstr = epk.ToString();
-      Service::EndpointMap::iterator ep = svc->endpoint.find(epkstr);
-      if (ep != svc->endpoint.end()) c = ep->second;
+      auto ep = svc->endpoint.find(epkstr);
+      if (ep != svc->endpoint.end()) c = ep->second.get();
       else {
         svc->fake.addr = epk.addr;
         svc->fake.port = epk.port;
         svc->fake.socket = listener->socket;
         if (svc->UDPFilter(&svc->fake, buf, len)) continue;
-        c = new Connection(svc, Connection::Connected, listener->socket, epk.addr, epk.port);
-        svc->endpoint[epkstr] = c;
+        c = (svc->endpoint[epkstr] = make_unique<Connection>
+             (svc, Connection::Connected, listener->socket, epk.addr, epk.port)).get();
         inserted = true;
       }
 
@@ -1052,7 +1050,7 @@ void Network::TCPConnectionFrame(Service *svc, Connection *c, ServiceEndpointEra
       INFO(c->Name(), ": connected");
       if (svc->Connected(c) < 0) c->SetError();
       if (c->handler) { if (c->handler->Connected(c) < 0) { ERROR(c->Name(), ": handler connected"); c->SetError(); } }
-      if (c->detach) { removelist->AddSocket(svc, c->socket); svc->Detach(c); }
+      if (c->detach) { svc->Detach(c); removelist->AddSocket(svc, c->socket); }
       UpdateActive(c);
       return;
     }
@@ -1128,7 +1126,7 @@ NetworkThread::NetworkThread(Network *N, bool Init) : net(N), init(Init),
   wr->socket = fd[1];
 
   net->select_time = -1;
-  rd->svc->conn[rd->socket] = rd;
+  rd->svc->conn[rd->socket] = unique_ptr<Connection>(rd);
   net->active.Add(rd->socket, SocketSet::READABLE, &rd->self_reference);
 }
 
@@ -1141,24 +1139,15 @@ int NetworkThread::ConnectionHandler::Read(Connection *c) {
 
 /* UDP Client */
 
-struct UDPClientHandler {
-  struct PersistentConnection : public Connection::Handler {
-    UDPClient::ResponseCB responseCB; UDPClient::HeartbeatCB heartbeatCB;
-    PersistentConnection(UDPClient::ResponseCB RCB, UDPClient::HeartbeatCB HCB) : responseCB(RCB), heartbeatCB(HCB) {}
+int UDPClient::PersistentConnectionHandler::Read(Connection *c) {
+  for (int i=0; i<c->packets.size() && responseCB; i++) {
+    if (c->state != Connection::Connected) break;
+    responseCB(c, c->rb.begin() + c->packets[i].offset, c->packets[i].len);
+  }
+  return 0;
+}
 
-    int Heartbeat(Connection *c) { if (heartbeatCB) heartbeatCB(c); return 0; }
-    void Close(Connection *c) { if (responseCB) responseCB(c, 0, 0); }
-    int Read(Connection *c) {
-      for (int i=0; i<c->packets.size() && responseCB; i++) {
-        if (c->state != Connection::Connected) break;
-        responseCB(c, c->rb.begin() + c->packets[i].offset, c->packets[i].len);
-      }
-      return 0;
-    }
-  };
-};
-
-Connection *UDPClient::PersistentConnection(const string &url, ResponseCB responseCB, HeartbeatCB heartbeatCB, int default_port) {
+Connection *UDPClient::PersistentConnection(const string &url, const ResponseCB &responseCB, const HeartbeatCB &heartbeatCB, int default_port) {
   int udp_port;
   IPV4::Addr ipv4_addr; 
   if (!HTTP::ResolveURL(url.c_str(), (bool*)0, &ipv4_addr, &udp_port, (string*)0, (string*)0, default_port))
@@ -1167,7 +1156,7 @@ Connection *UDPClient::PersistentConnection(const string &url, ResponseCB respon
   Connection *c = Connect(ipv4_addr, udp_port);
   if (!c) return ERRORv(nullptr, url, ": connect failed");
 
-  c->handler = new UDPClientHandler::PersistentConnection(responseCB, heartbeatCB);
+  c->handler = make_unique<PersistentConnectionHandler>(responseCB, heartbeatCB);
   return c;
 }
 
@@ -1292,7 +1281,7 @@ struct HTTPClientHandler {
           svc->Connect(ipv4_addr, port);
       }
       if (!c) { if (cb) cb(0, 0, string(), 0, 0); delete this; }
-      else c->handler = this;
+      else c->handler = unique_ptr<Connection::Handler>(this);
     }
   };
 
@@ -1386,7 +1375,7 @@ Connection *HTTPClient::PersistentConnection(const string &url, string *host, st
 
   if (!c) return 0;
 
-  c->handler = new HTTPClientHandler::PersistentConnection(responseCB);
+  c->handler = make_unique<HTTPClientHandler::PersistentConnection>(responseCB);
   return c;
 }
 
@@ -1541,7 +1530,7 @@ HTTPServer::Response HTTPServer::Response::_400
   "<hr>\r\n"
   "</body></html>\r\n"));
 
-int HTTPServer::Connected(Connection *c) { c->handler = new HTTPServerConnection(this); return 0; }
+int HTTPServer::Connected(Connection *c) { c->handler = make_unique<HTTPServerConnection>(this); return 0; }
 
 HTTPServer::Response HTTPServer::Request(Connection *c, int method, const char *url, const char *args, const char *headers, const char *postdata, int postlen) {
   Resource *requested = FindOrNull(urlmap, url);
@@ -1550,7 +1539,7 @@ HTTPServer::Response HTTPServer::Request(Connection *c, int method, const char *
 }
 
 void HTTPServer::connectionClosedCB(Connection *c, ConnectionClosedCB cb) {
-  ((HTTPServerConnection*)c->handler)->closedCB.push_back(HTTPServerConnection::ClosedCallback(cb));
+  ((HTTPServerConnection*)c->handler.get())->closedCB.push_back(HTTPServerConnection::ClosedCallback(cb));
 }
 
 HTTPServer::Response HTTPServer::DebugResource::Request(Connection *c, int, const char *url, const char *args, const char *hdrs, const char *postdata, int postlen) {
@@ -1870,8 +1859,8 @@ void HTTPServer::StreamResource::SendVideo() {
 }
 
 void HTTPServer::StreamResource::Broadcast(AVPacket *pkt, microseconds timestamp) {
-  for (SubscriberMap::iterator i = subscribers.begin(); i != subscribers.end(); i++) {
-    StreamResourceClient *client = (StreamResourceClient*)(*i).first;
+  for (auto i = subscribers.begin(); i != subscribers.end(); i++) {
+    StreamResourceClient *client = (StreamResourceClient*)i->first;
     client->Write(pkt, timestamp);
   }
 }
@@ -1888,7 +1877,7 @@ HTTPServer::Response HTTPServer::SessionResource::Request(Connection *c, int met
 }
 
 void HTTPServer::SessionResource::ConnectionClosedCB(Connection *c) {
-  ConnMap::iterator i = connmap.find(c);
+  auto i = connmap.find(c);
   if (i == connmap.end()) return;
   Resource *resource = (*i).second;
   connmap.erase(i);
@@ -2285,13 +2274,13 @@ struct SSHClientConnection : public Connection::Handler {
 Connection *SSHClient::Open(const string &hostport, const SSHClient::ResponseCB &cb, Callback *detach) { 
   Connection *c = Connect(hostport, 22, detach);
   if (!c) return 0;
-  c->handler = new SSHClientConnection(cb, hostport);
+  c->handler = make_unique<SSHClientConnection>(cb, hostport);
   return c;
 }
-int  SSHClient::WriteChannelData     (Connection *c, const StringPiece &b)                     { return dynamic_cast<SSHClientConnection*>(c->handler)->WriteChannelData(c, b); }
-int  SSHClient::SetTerminalWindowSize(Connection *c, int w, int h)                             { return dynamic_cast<SSHClientConnection*>(c->handler)->SetTerminalWindowSize(c, w, h); }
-void SSHClient::SetUser              (Connection *c, const string &user)                       { dynamic_cast<SSHClientConnection*>(c->handler)->user = user; }
-void SSHClient::SetPasswordCB(Connection *c, const LoadPasswordCB &L, const SavePasswordCB &S) { dynamic_cast<SSHClientConnection*>(c->handler)->SetPasswordCB(L, S); }
+int  SSHClient::WriteChannelData     (Connection *c, const StringPiece &b)                     { return dynamic_cast<SSHClientConnection*>(c->handler.get())->WriteChannelData(c, b); }
+int  SSHClient::SetTerminalWindowSize(Connection *c, int w, int h)                             { return dynamic_cast<SSHClientConnection*>(c->handler.get())->SetTerminalWindowSize(c, w, h); }
+void SSHClient::SetUser              (Connection *c, const string &user)                       { dynamic_cast<SSHClientConnection*>(c->handler.get())->user = user; }
+void SSHClient::SetPasswordCB(Connection *c, const LoadPasswordCB &L, const SavePasswordCB &S) { dynamic_cast<SSHClientConnection*>(c->handler.get())->SetPasswordCB(L, S); }
 
 /* SMTPClient */
 
@@ -2383,11 +2372,11 @@ Connection *SMTPClient::DeliverTo(IPV4::Addr ipv4_addr, IPV4EndpointSource *src_
   Connection *c = Connect(ipv4_addr, tcp_port, src_pool);
   if (!c) return 0;
 
-  c->handler = new SMTPClientConnection(this, deliverable_cb, delivered_cb);
+  c->handler = make_unique<SMTPClientConnection>(this, deliverable_cb, delivered_cb);
   return c;
 }
 
-void SMTPClient::DeliverDeferred(Connection *c) { ((SMTPClientConnection*)c->handler)->Deliver(c); }
+void SMTPClient::DeliverDeferred(Connection *c) { ((SMTPClientConnection*)c->handler.get())->Deliver(c); }
 
 /* SMTPServer */
 
@@ -2470,7 +2459,7 @@ struct SMTPServerConnection : public Connection::Handler {
   }
 };
 
-int SMTPServer::Connected(Connection *c) { total_connected++; c->handler = new SMTPServerConnection(this); return 0; }
+int SMTPServer::Connected(Connection *c) { total_connected++; c->handler = make_unique<SMTPServerConnection>(this); return 0; }
 
 void SMTPServer::ReceiveMail(Connection *c, const SMTP::Message &mail) {
   INFO("SMTPServer::ReceiveMail FROM=", mail.mail_from, ", TO=", mail.rcpt_to, ", content=", mail.content);
@@ -2498,7 +2487,7 @@ struct GPlusClientHandler {
 
 Connection *GPlusClient::PersistentConnection(const string &name, UDPClient::ResponseCB responseCB, UDPClient::HeartbeatCB HCB) {
   Connection *c = EndpointConnect(name);
-  c->handler = new GPlusClientHandler::PersistentConnection(responseCB, HCB);
+  c->handler = make_unique<GPlusClientHandler::PersistentConnection>(responseCB, HCB);
   return c;
 }
 
@@ -2618,5 +2607,55 @@ bool GeoResolution::resolve(const string &addr, string *country, string *region,
 GeoResolution *GeoResolution::Open(const string &db) { return 0; }
 bool GeoResolution::resolve(const string &addr, string *country, string *region, string *city, float *lat, float *lng) { FATAL("not implemented"); }
 #endif
+
+bool NBReadable(Socket fd, int timeout) {
+  SelectSocketSet ss;
+  ss.Add(fd, SocketSet::READABLE, 0);
+  ss.Select(timeout);
+  return app->run && ss.GetReadable(fd);
+}
+
+int NBRead(Socket fd, char *buf, int len, int timeout) {
+  if (timeout && !NBReadable(fd, timeout)) return 0;
+  int o = 0, s = 0;
+  do if ((s = read(fd, buf+o, len-o)) > 0) o += s;
+  while (s > 0 && len - o > 1024);
+  return o;
+}
+
+int NBRead(Socket fd, string *buf, int timeout) {
+  int l = NBRead(fd, (char*)buf->data(), buf->size(), timeout);
+  buf->resize(max(0,l));
+  return l;
+}
+
+string NBRead(Socket fd, int len, int timeout) {
+  string ret(len, 0);
+  NBRead(fd, &ret, timeout);
+  return ret;
+}
+
+bool FGets(char *buf, int len) { return NBFGets(stdin, buf, len); }
+bool NBFGets(FILE *f, char *buf, int len, int timeout) {
+#ifndef WIN32
+  int fd = fileno(f);
+  SelectSocketSet ss;
+  ss.Add(fd, SocketSet::READABLE, 0);
+  ss.Select(timeout);
+  if (!app->run || !ss.GetReadable(fd)) return 0;
+  fgets(buf, len, f);
+  return 1;
+#else
+  return 0;
+#endif
+}
+
+string PromptFGets(const string &p, int s) {
+  printf("%s\n", p.c_str());
+  fflush(stdout);
+  string ret(s, 0);
+  fgets(&ret[0], ret.size(), stdin);
+  return ret;
+}
 
 }; // namespace LFL

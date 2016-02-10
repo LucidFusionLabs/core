@@ -178,30 +178,28 @@ struct Box2DScene : public Physics {
 #include "btBulletDynamicsCommon.h"
 namespace LFL {
 struct BulletScene : public Physics {
-  btBroadphaseInterface *broadphase;
-  btDefaultCollisionConfiguration *collisionConfiguration;
-  btCollisionDispatcher *dispatcher;
-  btSequentialImpulseConstraintSolver *solver;
-  btDiscreteDynamicsWorld *dynamicsWorld;
+  unique_ptr<btBroadphaseInterface> broadphase;
+  unique_ptr<btDefaultCollisionConfiguration> collision_configuration;
+  unique_ptr<btCollisionDispatcher> dispatcher;
+  unique_ptr<btSequentialImpulseConstraintSolver> solver;
+  unique_ptr<btDiscreteDynamicsWorld> dynamics_world;
 #define btConstruct btRigidBody::btRigidBodyConstructionInfo
 
-  ~BulletScene() { delete dynamicsWorld; delete solver; delete dispatcher; delete collisionConfiguration; delete broadphase; }
   BulletScene(v3 *gravity=0) { 
     INFO("BulletPhysics");
-    broadphase = new btDbvtBroadphase();
-    collisionConfiguration = new btDefaultCollisionConfiguration();
-    dispatcher = new btCollisionDispatcher(collisionConfiguration);
-    solver = new btSequentialImpulseConstraintSolver;
-
-    dynamicsWorld = new btDiscreteDynamicsWorld(dispatcher, broadphase, solver, collisionConfiguration);
+    broadphase = make_unique<btDbvtBroadphase>();
+    collision_configuration = make_unique<btDefaultCollisionConfiguration>();
+    dispatcher = make_unique<btCollisionDispatcher>(collision_configuration.get());
+    solver = make_unique<btSequentialImpulseConstraintSolver>;
+    dynamics_world = make_unique<btDiscreteDynamicsWorld>(dispatcher.get(), broadphase.get(), solver.get(), collision_configuration.get());
     if (gravity) SetGravity(*gravity);
     else SetGravity(v3(0,0,0));
   }
 
   void Free(void *) {}
-  void SetGravity(const v3 &gravity) { dynamicsWorld->setGravity(btVector3(gravity.x, gravity.y, gravity.z)); }
+  void SetGravity(const v3 &gravity) { dynamics_world->setGravity(btVector3(gravity.x, gravity.y, gravity.z)); }
   void *Add(btRigidBody *rigidBody, const CollidesWith &cw) {
-    dynamicsWorld->addRigidBody(rigidBody, cw.self, cw.collides);
+    dynamics_world->addRigidBody(rigidBody, cw.self, cw.collides);
     return rigidBody;
   }
 
@@ -275,21 +273,21 @@ struct BulletScene : public Physics {
     body->setCcdSweptSphereRadius(sweepradius);
   }
 
-  void Update(Time timestep) { dynamicsWorld->stepSimulation(timestep.count()/1000.0, 1000, 1/180.0); }
+  void Update(Time timestep) { dynamics_world->stepSimulation(timestep.count()/1000.0, 1000, 1/180.0); }
   void Collided(bool contact_pts, CollidedCB cb) {
-    int numManifolds = dynamicsWorld->getDispatcher()->getNumManifolds();
+    int numManifolds = dynamics_world->getDispatcher()->getNumManifolds();
     for (int i=0;i<numManifolds;i++) {
-      btPersistentManifold *contactManifold = dynamicsWorld->getDispatcher()->getManifoldByIndexInternal(i);
-      btCollisionObject *obA = (btCollisionObject*)contactManifold->getBody0();
-      btCollisionObject *obB = (btCollisionObject*)contactManifold->getBody1();
+      btPersistentManifold *contact_manifold = dynamics_world->getDispatcher()->getManifoldByIndexInternal(i);
+      btCollisionObject *obA = (btCollisionObject*)contact_manifold->getBody0();
+      btCollisionObject *obB = (btCollisionObject*)contact_manifold->getBody1();
       const Entity *eA = (Entity*)obA->getUserPointer(), *eB = (Entity*)obB->getUserPointer();
       if (!eA || !eB) continue;
       if (!contact_pts) { cb(eA, eB, 0, 0); continue; }
 
       vector<Physics::Contact> contacts;
-      int numContacts = contactManifold->getNumContacts();
+      int numContacts = contact_manifold->getNumContacts();
       for (int j=0; j<numContacts; j++) {
-        btManifoldPoint& pt = contactManifold->getContactPoint(j);
+        btManifoldPoint& pt = contact_manifold->getContactPoint(j);
         if (pt.getDistance()< 0.f) {
           const btVector3& ptA = pt.getPositionWorldOnA();
           const btVector3& ptB = pt.getPositionWorldOnB();
