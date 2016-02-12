@@ -29,6 +29,8 @@ extern "C" {
 #include "lfapp/lfapp.h"
 #include "lfapp/flow.h"
 #include "lfapp/gui.h"
+#include "lfapp/ipc.h"
+#include "lfapp/resolver.h"
 
 #include <time.h>
 #include <fcntl.h>
@@ -142,6 +144,7 @@ extern "C" int LFAppFrame(bool handle_ev)  { return LFL::app->EventDrivenFrame(h
 extern "C" void LFAppWakeup(void *v)       { return LFL::app->scheduler.Wakeup(v); }
 extern "C" void LFAppResetGL()             { return LFL::app->ResetGL(); }
 extern "C" const char *LFAppDownloadDir()  { return LFL::app->dldir.c_str(); }
+extern "C" void LFAppAtExit()              { delete LFL::app; }
 extern "C" void LFAppShutdown()                   { LFL::app->run=0; LFAppWakeup(0); }
 extern "C" void WindowReshaped(int w, int h)      { LFL::screen->Reshaped(w, h); }
 extern "C" void WindowMinimized()                 { LFL::screen->Minimized(); }
@@ -156,7 +159,7 @@ extern "C" int  MouseClick(int b, int d, int x,  int y)     { return LFL::app->i
 extern "C" int  MouseMove (int x, int y, int dx, int dy)    { return LFL::app->input->MouseMove (LFL::point(x, y), LFL::point(dx, dy)); }
 extern "C" void QueueKeyPress  (int b, int d)               { return LFL::app->input->QueueKeyPress  (b, d); }
 extern "C" void QueueMouseClick(int b, int d, int x, int y) { return LFL::app->input->QueueMouseClick(b, d, LFL::point(x, y)); }
-extern "C" void EndpointRead(void *svc, const char *name, const char *buf, int len) { LFL::app->network->EndpointRead((LFL::Service*)svc, name, buf, len); }
+extern "C" void EndpointRead(void *svc, const char *name, const char *buf, int len) { LFL::app->net->EndpointRead((LFL::Service*)svc, name, buf, len); }
 
 extern "C" NativeWindow *SetNativeWindowByID(void *id) { return SetNativeWindow(LFL::FindOrNull(LFL::app->windows, id)); }
 extern "C" NativeWindow *SetNativeWindow(NativeWindow *W) {
@@ -180,7 +183,7 @@ extern "C" void LFAppFatal() {
 }
 
 namespace LFL {
-Application *app = Singleton<Application>::Get();
+Application *app = new Application();
 Window *screen = new Window();
 
 DEFINE_bool(lfapp_audio, false, "Enable audio in/out");
@@ -429,6 +432,16 @@ void Application::Daemonize(FILE *fout, FILE *ferr) {
 }
 #endif /* WIN32 */
 
+Application::Application() :
+  create_win_f(bind(&Application::CreateNewWindow, this, function<void(Window*)>())),
+  tex_mode(2, 1, 0), grab_mode(2, 0, 1),
+  fill_mode(3, GraphicsDevice::Fill, GraphicsDevice::Line, GraphicsDevice::Point),
+  shell(0, 0, 0)
+{
+  run=1; initialized=0; main_thread_id=0; frames_ran=0; memzero(log_time); 
+  fonts = make_unique<Fonts>();
+}
+
 void Application::Log(int level, const char *file, int line, const string &message) {
   {
     ScopedMutex sm(log_mutex);
@@ -440,7 +453,7 @@ void Application::Log(int level, const char *file, int line, const string &messa
     WriteLogLine(tbuf, message.c_str(), file, line);
   }
   if (level == LFApp::Log::Fatal) LFAppFatal();
-  if (FLAGS_lfapp_video && screen && screen->lfapp_console) screen->lfapp_console->Write(message);
+  if (run && FLAGS_lfapp_video && screen && screen->lfapp_console) screen->lfapp_console->Write(message);
 }
 
 void Application::WriteLogLine(const char *tbuf, const char *message, const char *file, int line) {
@@ -462,7 +475,7 @@ void Application::CreateNewWindow(const Window::StartCB &start_cb) {
   Window *orig_window = screen;
   Window *new_window = new Window();
   if (window_init_cb) window_init_cb(new_window);
-  app->video->CreateGraphicsDevice(new_window);
+  video->CreateGraphicsDevice(new_window);
   CHECK(CreateWindow(new_window));
   new_window->start_cb = start_cb;
 #ifndef LFL_QT
@@ -473,8 +486,8 @@ void Application::CreateNewWindow(const Window::StartCB &start_cb) {
 }
 
 void Application::StartNewWindow(Window *new_window) {
-  app->video->InitGraphicsDevice(new_window);
-  app->input->Init(new_window);
+  video->InitGraphicsDevice(new_window);
+  input->Init(new_window);
   new_window->start_cb(new_window);
 #ifdef LFL_OSXVIDEO
   OSXStartWindow(screen->id);
@@ -482,11 +495,11 @@ void Application::StartNewWindow(Window *new_window) {
 }
 
 NetworkThread *Application::CreateNetworkThread(bool detach, bool start) {
-  CHECK(app->network);
-  if (detach) VectorEraseByValue(&app->modules, static_cast<Module*>(network.get()));
-  network_thread = new NetworkThread(app->network.get(), !detach);
+  CHECK(net);
+  if (detach) VectorEraseByValue(&modules, static_cast<Module*>(net.get()));
+  network_thread = make_unique<NetworkThread>(net.get(), !detach);
   if (start) network_thread->thread->Start();
-  return network_thread;
+  return network_thread.get();
 }
 
 void Application::AddNativeMenu(const string &title, const vector<MenuItem>&items) {
@@ -553,7 +566,7 @@ void Application::LaunchNativeFontChooser(const FontDesc &cur_font, const string
   cf.Flags = CF_SCREENFONTS | CF_INITTOLOGFONTSTRUCT;
   if (!ChooseFont(&cf)) return;
   int flag = FontDesc::Mono | (lf.lfWeight > FW_NORMAL ? FontDesc::Bold : 0) | (lf.lfItalic ? FontDesc::Italic : 0);
-  app->shell.Run(StrCat(choose_cmd, " ", lf.lfFaceName, " ", cf.iPointSize/10, " ", flag));
+  shell.Run(StrCat(choose_cmd, " ", lf.lfFaceName, " ", cf.iPointSize/10, " ", flag));
 #endif
 }
 
@@ -578,14 +591,14 @@ void Application::OpenSystemBrowser(const string &url_text) {
 
 void Application::SavePassword(const string &h, const string &u, const string &pw) {
 #if defined(LFL_IPHONE)
-  iPhonePasswordSave(app->name.c_str(), h.c_str(), u.c_str(), pw.c_str(), pw.size());
+  iPhonePasswordSave(name.c_str(), h.c_str(), u.c_str(), pw.c_str(), pw.size());
 #endif
 }
 
 bool Application::LoadPassword(const string &h, const string &u, string *pw) {
 #if defined(LFL_IPHONE)
   pw->resize(1024);
-  pw->resize(iPhonePasswordCopy(app->name.c_str(), h.c_str(), u.c_str(), &(*pw)[0], pw->size()));
+  pw->resize(iPhonePasswordCopy(name.c_str(), h.c_str(), u.c_str(), &(*pw)[0], pw->size()));
   return pw->size();
 #endif
   return 0;
@@ -631,7 +644,7 @@ void Application::PlaySoundEffect(SoundAsset *sa) {
 #elif defined(LFL_IPHONE)
   iPhonePlayMusic(sa->handle);
 #else
-  app->audio->QueueMix(sa, MixFlag::Reset | MixFlag::Mix | (app->audio->loop ? MixFlag::DontQueue : 0), -1, -1);
+  audio->QueueMix(sa, MixFlag::Reset | MixFlag::Mix | (audio->loop ? MixFlag::DontQueue : 0), -1, -1);
 #endif
 }
 
@@ -641,8 +654,8 @@ void Application::PlayBackgroundMusic(SoundAsset *music) {
 #elif defined(LFL_IPHONE)
   iPhonePlayBackgroundMusic(music->handle);
 #else
-  app->audio->QueueMix(music);
-  app->audio->loop = music;
+  audio->QueueMix(music);
+  audio->loop = music;
 #endif
 }
 
@@ -723,6 +736,7 @@ int Application::Create(int argc, const char **argv, const char *source_filename
   }
 
   ThreadLocalStorage::Init();
+  atexit(LFAppAtExit);
 
 #ifdef WIN32
   if (argc > 1) OpenConsole();
@@ -756,23 +770,23 @@ int Application::Create(int argc, const char **argv, const char *source_filename
 #ifndef WIN32
   if (FLAGS_max_rlimit_core) {
     struct rlimit rl;
-    if (getrlimit(RLIMIT_CORE, &rl) == -1) { ERROR("core getrlimit ", strerror(errno)); return -1; }
+    if (getrlimit(RLIMIT_CORE, &rl) == -1) return ERRORv(-1, "core getrlimit ", strerror(errno));
 
     rl.rlim_cur = rl.rlim_max;
-    if (setrlimit(RLIMIT_CORE, &rl) == -1) { ERROR("core setrlimit ", strerror(errno)); return -1; }
+    if (setrlimit(RLIMIT_CORE, &rl) == -1) return ERRORv(-1, "core setrlimit ", strerror(errno));
   }
 
 #ifndef LFL_MOBILE
   if (FLAGS_max_rlimit_open_files) {
     struct rlimit rl;
-    if (getrlimit(RLIMIT_NOFILE, &rl) == -1) { ERROR("files getrlimit ", strerror(errno)); return -1; }
+    if (getrlimit(RLIMIT_NOFILE, &rl) == -1) return ERRORv(-1, "files getrlimit ", strerror(errno));
 #ifdef __APPLE__
     rl.rlim_cur = rl.rlim_max = OPEN_MAX;
 #else
     rl.rlim_cur = rl.rlim_max = 999999;
 #endif
     INFO("setrlimit(RLIMIT_NOFILE, ", rl.rlim_cur, ")");
-    if (setrlimit(RLIMIT_NOFILE, &rl) == -1) { ERROR("files setrlimit ", strerror(errno)); return -1; }
+    if (setrlimit(RLIMIT_NOFILE, &rl) == -1) return ERRORv(-1, "files setrlimit ", strerror(errno));
   }
 #endif // LFL_MOBILE
 #endif // WIN32
@@ -793,7 +807,7 @@ int Application::Init() {
   if (FLAGS_lfapp_video) {
 #if defined(LFL_GLFWVIDEO) || defined(LFL_GLFWINPUT)
     INFO("lfapp_open: glfwInit()");
-    if (!glfwInit()) { ERROR("glfwInit: ", strerror(errno)); return -1; }
+    if (!glfwInit()) return ERRORv(-1, "glfwInit: ", strerror(errno));
 #endif
   }
 
@@ -807,12 +821,13 @@ int Application::Init() {
     SDL_Init_Flag |= (FLAGS_lfapp_audio ? SDL_INIT_AUDIO : 0);
 #endif
     INFO("lfapp_open: SDL_init()");
-    if (SDL_Init(SDL_Init_Flag) < 0) { ERROR("SDL_Init: ", SDL_GetError()); return -1; }
+    if (SDL_Init(SDL_Init_Flag) < 0) return ERRORv(-1, "SDL_Init: ", SDL_GetError());
 #endif
   }
 
   if (FLAGS_lfapp_video) {
-    if ((video = make_unique<Video>())->Init()) { ERROR("video init failed"); return -1; }
+    shaders = make_unique<Shaders>();
+    if ((video = make_unique<Video>())->Init()) return ERRORv(-1, "video init failed");
   }
   else { windows[screen->id] = screen; }
 
@@ -826,28 +841,28 @@ int Application::Init() {
 #endif /* LFL_FFMPEG */
 
   if (FLAGS_lfapp_audio) {
-    if (LoadModule((audio = make_unique<Audio>()).get())) { ERROR("audio init failed"); return -1; }
+    if (LoadModule((audio = make_unique<Audio>()).get())) return ERRORv(-1, "audio init failed");
   }
   else { FLAGS_chans_in=FLAGS_chans_out=1; }
 
   if (FLAGS_lfapp_audio || FLAGS_lfapp_video) {
-    if ((assets = make_unique<Assets>())->Init()) { ERROR("assets init failed"); return -1; }
+    if ((asset_loader = make_unique<AssetLoader>())->Init()) return ERRORv(-1, "asset loader init failed");
   }
 
-  app->video->InitFonts();
+  video->InitFonts();
   if (FLAGS_lfapp_console && !screen->lfapp_console) screen->InitLFAppConsole();
 
   if (FLAGS_lfapp_input) {
-    if (LoadModule((input = make_unique<Input>()).get())) { ERROR("input init failed"); return -1; }
+    if (LoadModule((input = make_unique<Input>()).get())) return ERRORv(-1, "input init failed");
     input->Init(screen);
   }
 
   if (FLAGS_lfapp_network) {
-    if (LoadModule((network = make_unique<Network>()).get())) { ERROR("network init failed"); return -1; }
+    if (LoadModule((net = make_unique<Network>()).get())) return ERRORv(-1, "network init failed");
   }
 
   if (FLAGS_lfapp_camera) {
-    if (LoadModule((camera = make_unique<Camera>()).get())) { ERROR("camera init failed"); return -1; }
+    if (LoadModule((camera = make_unique<Camera>()).get())) return ERRORv(-1, "camera init failed");
   }
 
   if (FLAGS_lfapp_cuda) {
@@ -863,7 +878,7 @@ int Application::Init() {
 }
 
 int Application::Start() {
-  if (FLAGS_lfapp_audio && audio->Start()) { ERROR("lfapp audio start failed"); return -1; }
+  if (FLAGS_lfapp_audio && audio->Start()) return ERRORv(-1, "lfapp audio start failed");
   return 0;
 }
 
@@ -950,8 +965,21 @@ void Application::ResetGL() {
 Application::~Application() {
   run = 0;
   INFO("exiting");
+  if (fonts) fonts.reset();
+  if (shaders) shaders.reset();
+  vector<Window*> close_list;
+  for (auto &i : windows) close_list.push_back(i.second);
+  for (auto &i : close_list) CloseWindow(i);
+  if (network_thread) {
+    network_thread->Write(new Callback([](){}));
+    network_thread->thread->Wait();
+    network_thread->net->Free();
+  }
+  if (cuda) cuda->Free();
   for (auto &m : modules) m->Free();
+  if (video) video->Free();
   scheduler.Free();
+  if (logfile) fclose(logfile);
 #ifdef WIN32
   if (FLAGS_open_console) PromptFGets("Press [enter] to continue...");
 #endif

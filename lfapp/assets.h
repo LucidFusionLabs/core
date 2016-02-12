@@ -250,12 +250,12 @@ struct WavWriter {
   int Flush();
 };
 
-struct Assets : public Module {
+struct AssetLoader : public Module {
   AudioAssetLoader *default_audio_loader;
   VideoAssetLoader *default_video_loader;
   MovieAssetLoader *default_movie_loader;
   MovieAsset       *movie_playing;
-  Assets() : default_audio_loader(0), default_video_loader(0), default_movie_loader(0), movie_playing(0) {}
+  AssetLoader() : default_audio_loader(0), default_video_loader(0), default_movie_loader(0), movie_playing(0) {}
   int Init();
 };
 
@@ -682,7 +682,7 @@ template <class Line> struct RingFrameBuffer {
   bool wrap=0;
   int w=0, h=0, font_size=0, font_height=0;
 
-  void Reset() { w=h=0; fb.Reset(); }
+  void ResetGL() { w=h=0; fb.ResetGL(); }
   virtual int Width()  const { return w; }
   virtual int Height() const { return h; }
   virtual void SizeChangedDone() { fb.Release(); scroll=v2(); p=point(); }

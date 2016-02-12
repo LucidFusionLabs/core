@@ -367,7 +367,7 @@ struct TextGUI : public KeyboardGUI, public Drawable::AttrSource {
   void SetColors(Colors *C);
 
   virtual LinesFrameBuffer *GetFrameBuffer() { return &cmd_fb; }
-  virtual void ResetGL() { cmd_fb.Reset(); }
+  virtual void ResetGL() { cmd_fb.ResetGL(); }
   virtual void UpdateCursorX(int x) { cursor.i.x = x; UpdateCursor(); }
   virtual void UpdateCursor() { cursor.p = cmd_line.data->glyphs.Position(cursor.i.x) + point(0, font->Height()); }
   virtual void UpdateCommandFB() { UpdateLineFB(&cmd_line, &cmd_fb); }
@@ -422,7 +422,7 @@ struct TextArea : public TextGUI {
   virtual int UpdateLines(float v_scrolled, int *first_ind, int *first_offset, int *first_len);
   virtual int WrappedLines() const { return line.wrapped_lines; }
   virtual LinesFrameBuffer *GetFrameBuffer() { return &line_fb; }
-  virtual void ResetGL() { line_fb.Reset(); TextGUI::ResetGL(); }
+  virtual void ResetGL() { line_fb.ResetGL(); TextGUI::ResetGL(); }
   void ChangeColors(Colors *C);
 
   struct DrawFlag { enum { DrawCursor=1, CheckResized=2, Default=DrawCursor|CheckResized }; };

@@ -999,6 +999,7 @@ struct HTMLDocument : public Document {
 
 template <class X> struct ObjectWrapperAlloc : public X {
   vector<void*> allocs;
+  virtual ~ObjectWrapperAlloc() { Reset(); }
   virtual void *Malloc(int n)           { void *ret = X::Malloc(n);     allocs.push_back(ret); return ret; }
   virtual void *Realloc(void *p, int n) { void *ret = X::Realloc(p, n); allocs.push_back(ret); return ret; }
   virtual void Reset() {

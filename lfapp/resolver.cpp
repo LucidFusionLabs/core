@@ -51,7 +51,7 @@ Resolver::Nameserver *Resolver::Connect(const vector<IPV4::Addr> &addrs, bool ra
 Resolver::Nameserver *Resolver::Connect(IPV4::Addr addr) {
   unique_ptr<Nameserver> nameserver = make_unique<Nameserver>();
   Nameserver *ns = nameserver.get();
-  ns->c = Singleton<UDPClient>::Get()->PersistentConnection
+  ns->c = app->net->udp_client->PersistentConnection
     (IPV4::Text(addr, 53),
      [=](Connection *c, const char *cb, int cl) { HandleResponse(ns, reinterpret_cast<const DNS::Header*>(cb), cl); },
      [=](Connection *c)                         { Heartbeat(ns); }, 53);

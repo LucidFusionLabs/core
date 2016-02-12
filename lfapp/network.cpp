@@ -38,6 +38,8 @@ extern "C" {
 #include "openssl/bio.h"
 #include "openssl/ssl.h"
 #include "openssl/err.h"
+#include "openssl/conf.h"
+#include "openssl/engine.h"
 #endif
 
 #ifndef WIN32
@@ -511,7 +513,7 @@ int Connection::Write(const char *buf, int len) {
 
   if (!wb.size() && len) {
     writable = true;
-    app->network->UpdateActive(this);
+    app->net->UpdateActive(this);
   }
   wb.Add(buf, len);
   wb.EnsureZeroTerminated();
@@ -613,7 +615,7 @@ int Connection::SendTo(const char *buf, int len) { return SystemNetwork::SendTo(
 /* Service */
 
 void Service::Close(Connection *c) {
-  app->network->active.Del(c->socket);
+  app->net->active.Del(c->socket);
   if (c->detach) conn[c->socket].release();
   else SystemNetwork::CloseSocket(c->socket);
   if (connect_src_pool && (c->src_addr || c->src_port)) connect_src_pool->Close(c->src_addr, c->src_port);
@@ -660,13 +662,13 @@ Socket Service::Listen(IPV4::Addr addr, int port, Listener *listener) {
     if ((listener->socket = SystemNetwork::Listen(protocol, addr, port)) == -1)
       return ERRORv(-1, "SystemNetwork::Listen(", protocol, ", ", port, "): ", SystemNetwork::LastError());
   }
-  app->network->active.Add(listener->socket, SocketSet::READABLE, &listener->self_reference);
+  app->net->active.Add(listener->socket, SocketSet::READABLE, &listener->self_reference);
   return listener->socket;
 }
 
 Connection *Service::Accept(int state, Socket socket, IPV4::Addr addr, int port) {
   auto c = (conn[socket] = make_unique<Connection>(this, state, socket, addr, port)).get();
-  app->network->active.Add(c->socket, SocketSet::READABLE, &c->self_reference);
+  app->net->active.Add(c->socket, SocketSet::READABLE, &c->self_reference);
   return c;
 }
 
@@ -697,16 +699,17 @@ Connection *Service::Connect(IPV4::Addr addr, int port, IPV4EndpointSource *src_
     INFO(c->Name(), ": connected");
     if (this->Connected(c) < 0) c->SetError();
     if (c->handler) { if (c->handler->Connected(c) < 0) { ERROR(c->Name(), ": handler connected"); c->SetError(); } }
-    if (c->detach) { conn.erase(c->socket); Detach(c); }
-    app->network->UpdateActive(c);
+    if (c->detach) { Detach(c); conn.erase(c->socket); }
+    app->net->UpdateActive(c);
   } else {
-    app->network->active.Add(c->socket, SocketSet::READABLE|SocketSet::WRITABLE, &c->self_reference);
+    app->net->active.Add(c->socket, SocketSet::READABLE|SocketSet::WRITABLE, &c->self_reference);
   }
   return c;
 }
 
 Connection *Service::Connect(const string &hostport, int default_port, Callback *detach) {
-  IPV4::Addr addr; int port;
+  int port;
+  IPV4::Addr addr;
   if (!HTTP::ResolveHost(hostport.c_str(), 0, &addr, &port, 0, default_port)) return ERRORv(nullptr, "resolve ", hostport, " failed");
   return Connect(addr, port, NULL, detach);
 }
@@ -735,7 +738,7 @@ Connection *Service::SSLConnect(SSL_CTX *sslctx, const string &hostport, int def
 
   INFO(c->Name(), ": connecting (fd=", c->socket, ")");
   conn[c->socket] = unique_ptr<Connection>(c);
-  app->network->active.Add(c->socket, SocketSet::WRITABLE, &c->self_reference);
+  app->net->active.Add(c->socket, SocketSet::WRITABLE, &c->self_reference);
   return c;
 #else
   return 0;
@@ -765,7 +768,7 @@ Connection *Service::SSLConnect(SSL_CTX *sslctx, IPV4::Addr addr, int port, Call
 
   INFO(c->Name(), ": connecting (fd=", c->socket, ")");
   conn[c->socket] = unique_ptr<Connection>(c);
-  app->network->active.Add(c->socket, SocketSet::WRITABLE, &c->self_reference);
+  app->net->active.Add(c->socket, SocketSet::WRITABLE, &c->self_reference);
   return c;
 #else
   return 0;
@@ -814,6 +817,7 @@ void Service::EndpointClose(const string &endpoint_name) {
 }
 
 void Service::Detach(Connection *c) {
+  INFO(c->Name(), ": detached from ", name);
   Service::Close(c);
   c->readable = c->writable = 0;
   app->RunInMainThread([=]() { (*c->detach)(); });
@@ -821,6 +825,26 @@ void Service::Detach(Connection *c) {
 }
 
 /* Network */
+
+Network::Network() {
+  udp_client = make_unique<UDPClient>();
+  http_client = make_unique<HTTPClient>();
+  unix_client = make_unique<UnixClient>();
+  system_resolver = make_unique<SystemResolver>();
+}
+
+Network::~Network() {
+#ifdef LFL_OPENSSL
+  CONF_modules_free();
+  ERR_remove_state(0);
+  ENGINE_cleanup();
+  CONF_modules_unload(1);
+  ERR_free_strings();
+  EVP_cleanup();
+  CRYPTO_cleanup_all_ex_data();
+  sk_SSL_COMP_free(SSL_COMP_get_compression_methods());
+#endif
+}
 
 int Network::Init() {
   INFO("Network::Init()");
@@ -840,10 +864,10 @@ int Network::Init() {
     if (!SSL_CTX_check_private_key(lfapp_ssl)) return ERRORv(-1, "SSL_CTX_check_private_key ", ERR_reason_error_string(ERR_get_error()));
   }
 #endif
-  Enable(Singleton<UDPClient>::Get());
-  Enable(Singleton<HTTPClient>::Get());
-  Enable(Singleton<UnixClient>::Get());
-  Singleton<SystemResolver>::Get()->HandleNoConnections();
+  Enable(udp_client.get());
+  Enable(http_client.get());
+  Enable(unix_client.get());
+  system_resolver->HandleNoConnections();
   return 0;
 }
 
@@ -1034,7 +1058,7 @@ void Network::AcceptFrame(Service *svc, Listener *listener) {
     INFO(c->Name(), ": incoming connection (socket=", c->socket, ")");
     if (svc->Connected(c) < 0) c->SetError();
     if (c->handler) { if (c->handler->Connected(c) < 0) { ERROR(c->Name(), ": handler connected"); c->SetError(); } }
-    if (c->detach) { svc->conn.erase(c->socket); svc->Detach(c); }
+    if (c->detach) { svc->Detach(c); svc->conn.erase(c->socket); }
   }
 }
 
@@ -1116,8 +1140,8 @@ void Network::UpdateActive(Connection *c) {
 /* NetworkThread */
 
 NetworkThread::NetworkThread(Network *N, bool Init) : net(N), init(Init),
-  rd(new Connection(Singleton<UnixClient>::Get(), new NetworkThread::ConnectionHandler())),
-  wr(new Connection(Singleton<UnixClient>::Get(), new NetworkThread::ConnectionHandler())),
+  rd(new Connection(app->net->unix_client.get(), new NetworkThread::ConnectionHandler())),
+  wr(new Connection(app->net->unix_client.get(), new NetworkThread::ConnectionHandler())),
   thread(new Thread(bind(&NetworkThread::HandleMessagesLoop, this))) {
   Socket fd[2];
   CHECK(SystemNetwork::OpenSocketPair(fd));
@@ -1267,7 +1291,7 @@ struct HTTPClientHandler {
     }
 
     void ResolveHost() {
-      Singleton<SystemResolver>::Get()->NSLookup
+      app->net->system_resolver->NSLookup
         (host, bind(&HTTPClientHandler::WGet::ResolverResponseCB, this, _1, _2));
     }
 
@@ -1357,7 +1381,7 @@ bool HTTPClient::WPost(const string &url, const string &mimetype, const char *po
   HTTPClientHandler::WPost *handler = new
     HTTPClientHandler::WPost(this, ssl, host, tcp_port, path, mimetype, postdata, postlen, cb);
 
-  if (!Singleton<SystemResolver>::Get()->QueueResolveRequest
+  if (!app->net->system_resolver->QueueResolveRequest
       (Resolver::Request(host, DNS::Type::A, bind(&HTTPClientHandler::WGet::ResolverResponseCB, handler, _1, _2))))
   { ERROR("resolver: ", url); delete handler; return 0; }
   return true;

@@ -119,7 +119,7 @@ struct Glyph : public Drawable {
   } internal;
   mutable Texture tex;
   mutable bool ready=0;
-  Glyph() { memzero(internal); }
+  Glyph() { memzero(internal); tex.owner=0; }
 
   bool operator<(const Glyph &y) const { return id < y.id; }
   void FromMetrics(const GlyphMetrics &m);
@@ -178,10 +178,10 @@ struct GlyphCache {
   void Load(const Font*, const Glyph*, HFONT hfont, int size, HDC dc);
 #endif
 
-  static GlyphCache *Get() {
-    static GlyphCache inst(0, 512);
-    if (!inst.tex.ID) inst.tex.Create(inst.tex.width, inst.tex.height);
-    return &inst;
+  static shared_ptr<GlyphCache> Get() {
+    static shared_ptr<GlyphCache> inst = make_shared<GlyphCache>(0, 512);
+    if (!inst->tex.ID) inst->tex.Create(inst->tex.width, inst->tex.height);
+    return inst;
   }
 };
 
@@ -190,8 +190,8 @@ struct GlyphMap {
   vector<Glyph>             table;
   unordered_map<int, Glyph> index;
   shared_ptr<GlyphCache>    cache;
-  GlyphMap(const shared_ptr<GlyphCache> &C = shared_ptr<GlyphCache>()) :
-    table_start(FLAGS_glyph_table_start), table(FLAGS_glyph_table_size), cache(C)
+  GlyphMap(shared_ptr<GlyphCache> C = shared_ptr<GlyphCache>()) :
+    table_start(FLAGS_glyph_table_start), table(FLAGS_glyph_table_size), cache(move(C))
   { for (auto b = table.begin(), g = b, e = table.end(); g != e; ++g) g->id = table_start + (g - b); }
 };
 #define GlyphTableIter(f) for (auto i = (f)->glyph->table.begin(); i != (f)->glyph->table.end(); ++i)
@@ -220,9 +220,9 @@ struct Font {
   shared_ptr<FontEngine::Resource> resource;
 
   virtual ~Font() {}
-  Font(FontEngine *E, const FontDesc &D, const shared_ptr<FontEngine::Resource> &R) :
+  Font(FontEngine *E, const FontDesc &D, shared_ptr<FontEngine::Resource> R) :
     size(D.size), missing_glyph(FLAGS_default_missing_glyph), mono(D.flag & FontDesc::Mono),
-    flag(D.flag), fg(D.fg), bg(D.bg), engine(E), resource(R) {}
+    flag(D.flag), fg(D.fg), bg(D.bg), engine(E), resource(move(R)) {}
 
   short Height() const { return ascender + descender; }
   short FixedWidth() const { return X_or_Y(fixed_width, mono ? max_width : 0); }
@@ -276,7 +276,7 @@ struct FakeFontEngine : public FontEngine {
   Font fake_font;
   FakeFontEngine();
   virtual const char *Name() { return "FakeFontEngine"; }
-  virtual Font *Open(const FontDesc&) { return &fake_font; }
+  virtual Font *Open(const FontDesc&) { return new Font(fake_font); }
   virtual int LoadGlyphs(Font *f, const Glyph *g, int n) { return n; }
   virtual int InitGlyphs(Font *f,       Glyph *g, int n);
   virtual string DebugString(Font *f) const { return "FakeFontEngineFont"; }
@@ -290,6 +290,7 @@ struct AtlasFontEngine : public FontEngine {
   typedef map<size_t, FontFlagMap> FontColorMap;
   typedef map<string, FontColorMap> FontMap;
   FontMap font_map;
+  bool in_init=0;
 
   virtual const char *Name() { return "AtlasFontEngine"; }
   virtual void  SetDefault();
@@ -355,8 +356,7 @@ struct CoreTextFontEngine : public FontEngine {
   virtual string DebugString(Font *f) const;
 
   struct Flag { enum { WriteAtlas=1 }; };
-  static Font *Open(const string &name,            int size, Color c, int flag, int ct_flag);
-  static Font *Open(const shared_ptr<Resource> &R, int size, Color c, int flag);
+  static Font *Open(const string &name, int size, Color c, int flag, int ct_flag);
   static void GetSubstitutedFont(Font*, CTFontRef, char16_t gid, CGFontRef *cgout, CTFontRef *ctout, int *id_out);
   static void AssignGlyph(Glyph *out, const CGRect &bounds, struct CGSize &advance);
   static v2 GetAdvanceBounds(Font*);
@@ -386,7 +386,6 @@ struct GDIFontEngine : public FontEngine {
 
   struct Flag { enum { WriteAtlas = 1 }; };
   static Font *Open(const string &name, int size, Color c, int flag, int ct_flag);
-  static Font *Open(const shared_ptr<Resource> &R, int size, Color c, int flag);
   static bool GetSubstitutedFont(Font *f, HFONT hfont, char16_t glyph_id, HDC hdc, HFONT *hfontout);
   static void AssignGlyph(Glyph *out, const ::SIZE &bounds, const ::SIZE &advance);
 };
@@ -422,7 +421,7 @@ struct Fonts {
       else                      normal     .push_back(n);
     }
   };
-  unordered_map<FontDesc, Font*, FontDesc::ColoredHasher, FontDesc::ColoredEqual> desc_map;
+  unordered_map<FontDesc, unique_ptr<Font>, FontDesc::ColoredHasher, FontDesc::ColoredEqual> desc_map;
   unordered_map<string, Family> family_map;
   FontEngine *default_font_engine=0;
 

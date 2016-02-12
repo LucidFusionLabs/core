@@ -115,7 +115,7 @@ struct Crawler {
     if (!queue[ind].in->Next(&next->hdr, &next->request, &next->qf_offset, QueueFileEntry::QUEUED)) { delete next; return false; }
     INFO("crawl(", ind, ") oustanding=", queue[ind].outstanding+1, " url='", next->request.url().c_str(), "'");
 
-    if (!Singleton<HTTPClient>::Get()->WGet
+    if (!app->net->http_client->WGet
         (next->request.url(), 0,
          HTTPClient::ResponseCB(bind(&Crawler::WGetResponseCB, this, _1, _2, _3, _4, _5, next))))
     { delete next; return false; }

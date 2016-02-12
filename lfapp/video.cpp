@@ -53,7 +53,9 @@
 #define glGetTexImage(a,b,c,d,e)
 #define glGetTexLevelParameteriv(a,b,c,d)
 #define glGenRenderbuffersEXT(a,b)
+#define glDeleteRenderbuffersEXT(a,b)
 #define glGenFramebuffersEXT(a,b)
+#define glDeleteFramebuffersEXT(a,b)
 #define glBindRenderbufferEXT(a,b)
 #define glBindFramebufferEXT(a,b)
 #define glRenderbufferStorageEXT(a,b,c,d)
@@ -119,9 +121,11 @@
 #if !defined(LFL_HEADLESS) && (defined(LFL_MOBILE) || defined(LFL_QT))
 #define glGenRenderbuffersEXT(a,b) glGenRenderbuffers(a,b)
 #define glBindRenderbufferEXT(a,b) glBindRenderbuffer(a,b)
+#define glDeleteRenderbuffersEXT(a,b) glDeleteRenderbuffers(a,b)
 #define glRenderbufferStorageEXT(a,b,c,d) glRenderbufferStorage(a,b,c,d)
 #define glGenFramebuffersEXT(a,b) glGenFramebuffers(a,b)
 #define glBindFramebufferEXT(a,b) glBindFramebuffer(a,b)
+#define glDeleteFramebuffersEXT(a,b) glDeleteFramebuffers(a,b)
 #define glFramebufferTexture2DEXT(a,b,c,d,e) glFramebufferTexture2D(a,b,c,d,e)
 #define glFramebufferRenderbufferEXT(a,b,c,d) glFramebufferRenderbuffer(a,b,c,d)
 #define glCheckFramebufferStatusEXT(a) glCheckFramebufferStatus(a)
@@ -167,6 +171,14 @@ extern "C" {
 #include "SDL_androidvideo.h"
 };
 #endif
+#endif
+
+#ifdef LFL_GDDEBUG
+#define GDDebug(...) { \
+  if (screen) screen->gd->CheckForError(__FILE__, __LINE__); \
+  if (FLAGS_gd_debug) printf("%s\n", StrCat(__VA_ARGS__).c_str()); }
+#else 
+#define GDDebug(...)
 #endif
 
 namespace LFL {
@@ -576,7 +588,7 @@ string Drawable::Attr::DebugString() const {
 }
 
 void Drawable::AttrVec::Insert(const Drawable::Attr &v) {
-  if (v.font) font_refs.Insert(&v.font->ref);
+  // if (v.font) font_refs.Insert(&v.font->ref);
   push_back(v);
 }
 
@@ -635,7 +647,11 @@ void Texture::UpdateBuffer(const unsigned char *B, const ::LFL::Box &box, int PF
 void Texture::Bind() const { screen->gd->BindTexture(GLTexType(), ID); }
 void Texture::ClearGL() { 
   if (!app->MainThread()) { app->RunInMainThread(bind(&GraphicsDevice::DelTexture, screen->gd, ID)); ID=0; }
-  else if (ID) { screen->gd->DelTexture(ID); ID=0; }
+  else if (ID) { 
+    if (screen) screen->gd->DelTexture(ID);
+    else { GDDebug("DelTexture no screen ", ID); }
+    ID = 0;
+  }
 }
 
 void Texture::LoadGL(const MultiProcessTextureResource &t) { return LoadGL(reinterpret_cast<const unsigned char *>(t.buf.data()), point(t.width, t.height), t.pf, t.linesize); }
@@ -744,6 +760,14 @@ void DepthTexture::Resize(int W, int H, int DF, int flag) {
   }
 }
 
+void DepthTexture::ClearGL() {
+  if (ID) {
+    if (screen) screen->gd->DelRenderBuffers(1, &ID);
+    else { GDDebug("DelRenderBuffer no screen ", ID); }
+    ID = 0;
+  }
+}
+
 /* FrameBuffer */
 
 void FrameBuffer::Resize(int W, int H, int flag) {
@@ -779,20 +803,28 @@ void FrameBuffer::Attach(int ct, int dt) {
   if (dt) screen->gd->FrameBufferDepthTexture((depth.ID = dt));
 }
 
+void FrameBuffer::ClearGL() {
+  if (ID) {
+    if (screen) screen->gd->DelFrameBuffers(1, &ID);
+    else { GDDebug("DelFrameBuffer no screen ", ID); }
+    ID = 0;
+  }
+}
+
 /* Shader */
 
 void Shader::SetGlobalUniform1f(const string &name, float v) {
-  screen->gd->UseShader(&app->video->shader_default);  app->video->shader_default .SetUniform1f(name, v);
-  screen->gd->UseShader(&app->video->shader_normals);  app->video->shader_normals .SetUniform1f(name, v);
-  screen->gd->UseShader(&app->video->shader_cubemap);  app->video->shader_cubemap .SetUniform1f(name, v);
-  screen->gd->UseShader(&app->video->shader_cubenorm); app->video->shader_cubenorm.SetUniform1f(name, v);
+  screen->gd->UseShader(&app->shaders->shader_default);  app->shaders->shader_default .SetUniform1f(name, v);
+  screen->gd->UseShader(&app->shaders->shader_normals);  app->shaders->shader_normals .SetUniform1f(name, v);
+  screen->gd->UseShader(&app->shaders->shader_cubemap);  app->shaders->shader_cubemap .SetUniform1f(name, v);
+  screen->gd->UseShader(&app->shaders->shader_cubenorm); app->shaders->shader_cubenorm.SetUniform1f(name, v);
 }
 
 void Shader::SetGlobalUniform2f(const string &name, float v1, float v2){ 
-  screen->gd->UseShader(&app->video->shader_default);  app->video->shader_default .SetUniform2f(name, v1, v2);
-  screen->gd->UseShader(&app->video->shader_normals);  app->video->shader_normals .SetUniform2f(name, v1, v2);
-  screen->gd->UseShader(&app->video->shader_cubemap);  app->video->shader_cubemap .SetUniform2f(name, v1, v2);
-  screen->gd->UseShader(&app->video->shader_cubenorm); app->video->shader_cubenorm.SetUniform2f(name, v1, v2);
+  screen->gd->UseShader(&app->shaders->shader_default);  app->shaders->shader_default .SetUniform2f(name, v1, v2);
+  screen->gd->UseShader(&app->shaders->shader_normals);  app->shaders->shader_normals .SetUniform2f(name, v1, v2);
+  screen->gd->UseShader(&app->shaders->shader_cubemap);  app->shaders->shader_cubemap .SetUniform2f(name, v1, v2);
+  screen->gd->UseShader(&app->shaders->shader_cubenorm); app->shaders->shader_cubenorm.SetUniform2f(name, v1, v2);
 }
 
 #ifdef LFL_GLSL_SHADERS
@@ -818,6 +850,7 @@ int Shader::Create(const string &name, const string &vertex_shader, const string
     screen->gd->ShaderSource(vs, 2, vss, 0);
     screen->gd->CompileShader(vs);
     screen->gd->AttachShader(p, vs);
+    screen->gd->DelShader(vs);
   }
 
   if (fragment_shader.size()) {
@@ -826,6 +859,7 @@ int Shader::Create(const string &name, const string &vertex_shader, const string
     screen->gd->ShaderSource(fs, 2, fss, 0);
     screen->gd->CompileShader(fs);
     screen->gd->AttachShader(p, fs);
+    screen->gd->DelShader(fs);
   }
 
   if (1)                    screen->gd->BindAttribLocation(p, 0, "Position"   );
@@ -911,7 +945,13 @@ void Shader::SetUniform3f(const string &name, float v1, float v2, float v3)     
 void Shader::SetUniform4f(const string &name, float v1, float v2, float v3, float v4) { screen->gd->Uniform4f (GetUniformIndex(name), v1, v2, v3, v4); }
 void Shader::SetUniform3fv(const string &name, const float *v)                        { screen->gd->Uniform3fv(GetUniformIndex(name), 1, v); }
 void Shader::SetUniform3fv(const string &name, int n, const float *v)                 { screen->gd->Uniform3fv(GetUniformIndex(name), n, v); }
-
+void Shader::ClearGL() {
+  if (ID) {
+    if (screen) screen->gd->DelProgram(ID);
+    else { GDDebug("DelProgram no screen ", ID); }
+    ID = 0;
+  }
+}
 #else /* LFL_GLSL_SHADERS */
 
 int Shader::Create(const string &name, const string &vert, const string &frag, const ShaderDefines &defines, Shader *out) { return -1; }
@@ -926,11 +966,6 @@ void Shader::SetUniform3fv(const string &name, int n, const float *v) {}
 #endif /* LFL_GLSL_SHADERS */
 
 #ifndef LFL_HEADLESS
-#ifdef LFL_GDDEBUG
-#define GDDebug(...) { screen->gd->CheckForError(__FILE__, __LINE__); if (FLAGS_gd_debug) printf("%s\n", StrCat(__VA_ARGS__).c_str()); }
-#else 
-#define GDDebug(...)
-#endif
 const int GraphicsDevice::Float            = GL_FLOAT;
 const int GraphicsDevice::Points           = GL_POINTS;
 const int GraphicsDevice::Lines            = GL_LINES;
@@ -1080,7 +1115,7 @@ struct OpenGLES1 : public GraphicsDevice, public QTWindow {
   int target_matrix;
   OpenGLES1() : target_matrix(-1) { default_color.push_back(Color(1.0, 1.0, 1.0, 1.0)); }
   void Init() {
-    shader = &app->video->shader_default; 
+    shader = &app->shaders->shader_default; 
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
     glEnableClientState(GL_VERTEX_ARRAY);
 #if !defined(LFL_IPHONE) && !defined(LFL_ANDROID)
@@ -1181,7 +1216,7 @@ struct OpenGLES1 : public GraphicsDevice, public QTWindow {
     GDDebug("DeferDrawArrays(", type, ", ", o, ", ", n, ") deferred 0");
   }
   void UseShader(Shader *S) {
-    shader = X_or_Y(S, &app->video->shader_default); 
+    shader = X_or_Y(S, &app->shaders->shader_default); 
     glUseProgram(shader->ID);
     GDDebug("Shader=", shader->name);
   }
@@ -1229,10 +1264,10 @@ struct OpenGLES2 : public GraphicsDevice, public QTWindow {
     scissor_stack.push_back(vector<Box>());
     if (vertex_shader.empty()) vertex_shader = Asset::FileContents("lfapp_vertex.glsl");
     if ( pixel_shader.empty()) pixel_shader  = Asset::FileContents("lfapp_pixel.glsl");
-    Shader::Create("lfapp",          vertex_shader, pixel_shader, ShaderDefines(1,0,1,0), &app->video->shader_default);
-    Shader::Create("lfapp_cubemap",  vertex_shader, pixel_shader, ShaderDefines(1,0,0,1), &app->video->shader_cubemap);
-    Shader::Create("lfapp_normals",  vertex_shader, pixel_shader, ShaderDefines(0,1,1,0), &app->video->shader_normals);
-    Shader::Create("lfapp_cubenorm", vertex_shader, pixel_shader, ShaderDefines(0,1,0,1), &app->video->shader_cubenorm);
+    Shader::Create("lfapp",          vertex_shader, pixel_shader, ShaderDefines(1,0,1,0), &app->shaders->shader_default);
+    Shader::Create("lfapp_cubemap",  vertex_shader, pixel_shader, ShaderDefines(1,0,0,1), &app->shaders->shader_cubemap);
+    Shader::Create("lfapp_normals",  vertex_shader, pixel_shader, ShaderDefines(0,1,1,0), &app->shaders->shader_normals);
+    Shader::Create("lfapp_cubenorm", vertex_shader, pixel_shader, ShaderDefines(0,1,0,1), &app->shaders->shader_cubenorm);
     GDDebug("Init");
     UseShader((shader = 0));
     VertexPointer(0, 0, 0, 0, NULL, deferred.vertexbuffer_size, NULL, true, 0);
@@ -1287,8 +1322,8 @@ struct OpenGLES2 : public GraphicsDevice, public QTWindow {
     else if (t == GL_DIFFUSE)  { light_color=1; light[n].color.diffuse  = Color(v); }
     else if (t == GL_SPECULAR) { light_color=1; light[n].color.specular = Color(v); }
 
-    if (light_pos)   { shader->dirty_light_pos  [n] = app->video->shader_cubenorm.dirty_light_pos  [n] = app->video->shader_normals.dirty_light_pos  [n] = 1; }
-    if (light_color) { shader->dirty_light_color[n] = app->video->shader_cubenorm.dirty_light_color[n] = app->video->shader_normals.dirty_light_color[n] = 1; }
+    if (light_pos)   { shader->dirty_light_pos  [n] = app->shaders->shader_cubenorm.dirty_light_pos  [n] = app->shaders->shader_normals.dirty_light_pos  [n] = 1; }
+    if (light_color) { shader->dirty_light_color[n] = app->shaders->shader_cubenorm.dirty_light_color[n] = app->shaders->shader_normals.dirty_light_color[n] = 1; }
   }
 
   void Scalef(float x, float y, float z) {
@@ -1400,16 +1435,16 @@ struct OpenGLES2 : public GraphicsDevice, public QTWindow {
   }
 
   void UpdateShader() {
-    if (cubemap_on && normals_on) UseShader(&app->video->shader_cubenorm);
-    else if          (cubemap_on) UseShader(&app->video->shader_cubemap);
-    else if          (normals_on) UseShader(&app->video->shader_normals);
-    else                          UseShader(&app->video->shader_default);
+    if (cubemap_on && normals_on) UseShader(&app->shaders->shader_cubenorm);
+    else if          (cubemap_on) UseShader(&app->shaders->shader_cubemap);
+    else if          (normals_on) UseShader(&app->shaders->shader_normals);
+    else                          UseShader(&app->shaders->shader_default);
   }
   void UpdateColor()  { ClearDeferred(); dirty_color = true; }
   void UpdateMatrix() { ClearDeferred(); dirty_matrix = true; }
   void UpdateMaterial() {
     ClearDeferred();
-    shader->dirty_material = app->video->shader_cubenorm.dirty_material = app->video->shader_normals.dirty_material = true;
+    shader->dirty_material = app->shaders->shader_cubenorm.dirty_material = app->shaders->shader_normals.dirty_material = true;
   }
   void UpdateVertex() {
     glEnableVertexAttribArray(shader->slot_position);
@@ -1534,7 +1569,8 @@ struct OpenGLES2 : public GraphicsDevice, public QTWindow {
 #endif // LFL_GLES2
 
 // Shader interaface
-int GraphicsDevice::CreateProgram() { return glCreateProgram(); }
+int GraphicsDevice::CreateProgram() { int p=glCreateProgram(); GDDebug("CreateProgram ", p); return p; }
+void GraphicsDevice::DelProgram(int p) { glDeleteProgram(p); GDDebug("DelProgram ", p); }
 int GraphicsDevice::CreateShader(int t) { return glCreateShader(t); }
 void GraphicsDevice::ShaderSource(int shader, int count, const char **source, int *len) { glShaderSource(shader, count, source, len); }
 void GraphicsDevice::CompileShader(int shader) {
@@ -1544,6 +1580,7 @@ void GraphicsDevice::CompileShader(int shader) {
   if (l) INFO(buf);
 }
 void GraphicsDevice::AttachShader(int prog, int shader) { glAttachShader(prog, shader); }
+void GraphicsDevice::DelShader(int shader) { glDeleteShader(shader); }
 void GraphicsDevice::BindAttribLocation(int prog, int loc, const string &name) { glBindAttribLocation(prog, loc, name.c_str()); }
 void GraphicsDevice::LinkProgram(int prog) {
   char buf[1024] = {0}; int l=0;
@@ -1578,7 +1615,10 @@ void GraphicsDevice::PopColor() {
 }
 void GraphicsDevice::PointSize(float n) { glPointSize(n); }
 void GraphicsDevice::LineWidth(float n) { glLineWidth(n); }
-void GraphicsDevice::DelTextures(int n, const unsigned *id) { glDeleteTextures(n, id); }
+void GraphicsDevice::DelTextures(int n, const unsigned *id) {
+  if (FLAGS_gd_debug) for (int i=0; i<n; i++) GDDebug("DelTexture ", id[i]);
+  glDeleteTextures(n, id);
+}
 void GraphicsDevice::GenTextures(int t, int n, unsigned *out) {
   ClearDeferred();
   for (int i=0; i<n; i++) CHECK_EQ(0, out[i]);
@@ -1588,6 +1628,7 @@ void GraphicsDevice::GenTextures(int t, int n, unsigned *out) {
     glBindTexture(t, out[i]);
     glTexParameteri(t, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(t, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    GDDebug("GenTexture ", t, ",", out[i]);
   }
 }
 
@@ -1709,10 +1750,28 @@ void GraphicsDevice::DrawPixels(const Box &b, const Texture &tex) {
   temp.ClearGL();
 }
 
-void GraphicsDevice::GenRenderBuffers(int n, unsigned *out) { glGenRenderbuffersEXT(n, out); }
+void GraphicsDevice::GenRenderBuffers(int n, unsigned *out) {
+  glGenRenderbuffersEXT(n, out);
+  if (FLAGS_gd_debug) for (int i=0; i<n; i++) GDDebug("GenRenderBuffer ", out[i]);
+}
+
+void GraphicsDevice::DelRenderBuffers(int n, const unsigned *id) { 
+  if (FLAGS_gd_debug) for (int i=0; i<n; i++) GDDebug("DelRenderBuffer ", id[i]);
+  glDeleteRenderbuffersEXT(n, id);
+}
+
 void GraphicsDevice::BindRenderBuffer(int id) { glBindRenderbufferEXT(GL_RENDERBUFFER, id); }
 void GraphicsDevice::RenderBufferStorage(int d, int w, int h) { glRenderbufferStorageEXT(GL_RENDERBUFFER, d, w, h); }
-void GraphicsDevice::GenFrameBuffers(int n, unsigned *out) { glGenFramebuffersEXT(n, out); }
+void GraphicsDevice::GenFrameBuffers(int n, unsigned *out) {
+  glGenFramebuffersEXT(n, out);
+  if (FLAGS_gd_debug) for (int i=0; i<n; i++) GDDebug("GenFrameBuffer ", out[i]);
+}
+
+void GraphicsDevice::DelFrameBuffers(int n, const unsigned *id) {
+  if (FLAGS_gd_debug) for (int i=0; i<n; i++) GDDebug("DelFrameBuffer ", id[i]);
+  glDeleteFramebuffersEXT(n, id);
+}
+
 void GraphicsDevice::BindFrameBuffer(int id) { ClearDeferred(); glBindFramebufferEXT(GL_FRAMEBUFFER, id); }
 void GraphicsDevice::FrameBufferTexture(int id) { glFramebufferTexture2DEXT(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, id, 0); }
 void GraphicsDevice::FrameBufferDepthTexture(int id) { glFramebufferRenderbufferEXT(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, id); }
@@ -1795,12 +1854,14 @@ const int GraphicsDevice::GLPreferredBuffer = 0;
 const int GraphicsDevice::GLInternalFormat = 0;
 
 int GraphicsDevice::CreateProgram() { return 0; }
+void GraphicsDevice::DelProgram(int p) {}
 int GraphicsDevice::CreateShader(int t) { return 0; }
 int GraphicsDevice::GetAttribLocation (int prog, const string &name) { return 0; }
 int GraphicsDevice::GetUniformLocation(int prog, const string &name) { return 0; }
 void GraphicsDevice::ShaderSource(int shader, int count, const char **source, int *len) {}
 void GraphicsDevice::CompileShader(int shader) {}
 void GraphicsDevice::AttachShader(int prog, int shader) {}
+void GraphicsDevice::DelShader(int shader) {}
 void GraphicsDevice::BindAttribLocation(int prog, int loc, const string &name) {}
 void GraphicsDevice::LinkProgram(int prog) {}
 void GraphicsDevice::GetProgramiv(int p, int t, int *out) {}
@@ -1838,18 +1899,25 @@ void GraphicsDevice::PushScissorStack() {}
 void GraphicsDevice::PopScissorStack() {}
 void GraphicsDevice::DrawPixels(const Box&, const Texture&) {}
 void GraphicsDevice::GenRenderBuffers(int n, unsigned *out) {}
+void GraphicsDevice::DelRenderBuffers(int n, const unsigned *id) {}
 void GraphicsDevice::BindRenderBuffer(int id) {}
 void GraphicsDevice::RenderBufferStorage(int d, int w, int h) {}
 void GraphicsDevice::GenFrameBuffers(int n, unsigned *out) {}
+void GraphicsDevice::DelFrameBuffers(int n, const unsigned *id) {}
 void GraphicsDevice::BindFrameBuffer(int id) {}
 void GraphicsDevice::FrameBufferTexture(int id) {}
 void GraphicsDevice::FrameBufferDepthTexture(int id) {}
 int GraphicsDevice::CheckFrameBufferStatus() { return 0; }
 int GraphicsDevice::GraphicsDevice::VertsPerPrimitive(int primtype) { return 0; }
 
-bool Application::CreateWindow(Window *W) { W->gd = new FakeGraphicsDevice(); windows[W->id] = W; return true; }
-void Application::CloseWindow(Window *W) {}
 void Application::MakeCurrentWindow(Window *W) {}
+bool Application::CreateWindow(Window *W) { W->gd = new FakeGraphicsDevice(); windows[W->id] = W; return true; }
+void Application::CloseWindow(Window *W) {
+  windows.erase(W->id);
+  if (windows.empty()) app->run = false;
+  if (app->window_closed_cb) app->window_closed_cb(W);
+  screen = 0;
+}
 #endif // LFL_HEADLESS
 
 #ifdef LFL_ANDROIDVIDEO
@@ -1982,12 +2050,13 @@ struct X11VideoModule : public Module {
     return app->CreateWindow(screen) ? 0 : -1;
   }
   int Free() {
+    XFree(vi);
     XCloseDisplay(display);
     return 0;
   }
 };
 bool Application::CreateWindow(Window *W) {
-  X11VideoModule *video = dynamic_cast<X11VideoModule*>(app->video->impl);
+  X11VideoModule *video = dynamic_cast<X11VideoModule*>(app->video->impl.get());
   ::Window root = DefaultRootWindow(video->display);
   XSetWindowAttributes swa;
   swa.colormap = XCreateColormap(video->display, root, video->vi->visual, AllocNone);
@@ -2037,7 +2106,7 @@ struct XTVideoModule : public Module {
   }
 };
 bool Application::CreateWindow(Window *W) {
-  XTVideoModule *video = dynamic_cast<XTVideoModule*>(app->video->impl);
+  XTVideoModule *video = dynamic_cast<XTVideoModule*>(app->video->impl.get());
   W->surface = XtDisplay((::Widget)W->impl);
   W->id = XmCreateFrame(video->toplevel, "frame", NULL, 0);
   W->impl = video->toplevel;
@@ -2332,6 +2401,7 @@ Window::~Window() {
     lfapp_console->WriteHistory(LFAppDownloadDir(), "console", "");
     delete lfapp_console;
   }
+  if (gd) delete gd;
 }
 
 Box Window::Box(float xp, float yp, float xs, float ys, float xbl, float ybt, float xbr, float ybb) const {
@@ -2450,7 +2520,7 @@ void Window::Reshape(int w, int h) {
   AdjustWindowRect(&r, lStyle, win->menubar);
   SetWindowPos((HWND)screen->id, 0, 0, 0, r.right-r.left, r.bottom-r.top, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
 #elif defined(LFL_X11VIDEO)
-  X11VideoModule *video = dynamic_cast<X11VideoModule*>(app->video->impl);
+  X11VideoModule *video = dynamic_cast<X11VideoModule*>(app->video->impl.get());
   XWindowChanges resize;
   resize.width = w;
   resize.height = h;
@@ -2620,7 +2690,7 @@ void *Video::CompleteGLContextCreate(Window *W, void *gl_context) {
   wglMakeCurrent((HDC)W->surface, (HGLRC)gl_context);
   return gl_context;
 #elif defined(LFL_X11VIDEO)
-  X11VideoModule *video = dynamic_cast<X11VideoModule*>(app->video->impl);
+  X11VideoModule *video = dynamic_cast<X11VideoModule*>(app->video->impl.get());
   GLXContext glc = glXCreateContext(video->display, video->vi, static_cast<GLXContext>(W->gl), GL_TRUE);
   glXMakeCurrent(video->display, (::Window)(W->id), glc);
   return glc;
@@ -2724,12 +2794,7 @@ int Video::Swap() {
 }
 
 int Video::Free() {
-  vector<Window*> close_list;
-  for (auto &i : app->windows) close_list.push_back(i.second);
-  for (auto &i : close_list)   app->CloseWindow(i);
-
   if (impl) impl->Free();
-  Fonts::DefaultFontEngine()->Shutdown();
   return 0;
 }
 

@@ -51,8 +51,8 @@ struct InputController {
   struct Events { int total; };
   Events events;
   bool active=0;
-  InputController() { ClearEvents(); screen->input_bind.push_back(this); }
-  virtual ~InputController() { VectorEraseByValue(&screen->input_bind, this); }
+  virtual ~InputController() {}
+  InputController() { ClearEvents(); }
 
   void ClearEvents() { memzero(events); }
   virtual void Activate  () { active = 1; }
@@ -95,6 +95,7 @@ struct MouseControllerCallback {
     FunctionPointer() {}
     ~FunctionPointer() {}
   } cb;
+
   ~MouseControllerCallback() { Destruct(); }
   MouseControllerCallback()                  : type(NONE) {}
   MouseControllerCallback(const CB       &c) : type(CB_VOID)  { new (&cb.cb_void)  CB     (c); }
@@ -175,6 +176,8 @@ struct Bind {
     ~FunctionPointer() {}
   } cb;
   InputEvent::Id key;
+
+  ~Bind() { Destruct(); }
   Bind(InputEvent::Id K=0, Key::Mod M=0)               : cb_type(NONE),    key(K|M) {}
   Bind(InputEvent::Id K,             const CB     &Cb) : cb_type(CB_VOID), key(K|0) { new (&cb.cb_void)     CB(Cb); }
   Bind(InputEvent::Id K, Key::Mod M, const CB     &Cb) : cb_type(CB_VOID), key(K|M) { new (&cb.cb_void)     CB(Cb); }

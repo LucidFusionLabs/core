@@ -331,51 +331,6 @@ struct ServiceEndpointEraseList {
   }
 };
 
-struct Network : public Module {
-  int select_time=0;
-  LFLSocketSet active;
-  vector<Service*> service_table;
-
-  int Init();
-  int Enable(Service *svc);
-  int Disable(Service *svc);
-  int Shutdown(Service *svc);
-  int Enable(const vector<Service*> &svc);
-  int Disable(const vector<Service*> &svc);
-  int Shutdown(const vector<Service*> &svc);
-  int Frame(unsigned);
-  void AcceptFrame(Service *svc, Listener *listener);
-  void TCPConnectionFrame(Service *svc, Connection *c, ServiceEndpointEraseList *removelist);
-  void UDPConnectionFrame(Service *svc, Connection *c, ServiceEndpointEraseList *removelist, const string &epk);
-
-  void ConnClose(Service *svc, Connection *c, ServiceEndpointEraseList *removelist);
-  void ConnCloseAll(Service *svc);
-
-  void EndpointRead(Service *svc, const char *name, const char *buf, int len);
-  void EndpointClose(Service *svc, Connection *c, ServiceEndpointEraseList *removelist, const string &epk);
-  void EndpointCloseAll(Service *svc);
-
-  void UpdateActive(Connection *c);
-};
-
-/// NetworkThread runs the Network Module in a new thread with a multiplexed Callback queue
-struct NetworkThread {
-  struct ConnectionHandler : public Connection::Handler {
-    void HandleMessage(Callback *cb) { (*cb)(); delete cb; }
-    int Read(Connection *c);
-  };
-
-  bool init=0;
-  Network *net=0;
-  Connection *rd=0;
-  unique_ptr<Connection> wr;
-  unique_ptr<Thread> thread;
-  NetworkThread(Network *N, bool Init);
-
-  void Write(Callback *x) { CHECK_EQ(sizeof(x), wr->WriteFlush(reinterpret_cast<const char*>(&x), sizeof(x))); }
-  void HandleMessagesLoop() { if (init) net->Init(); while (GetLFApp()->run) { net->Frame(0); } }
-};
-
 struct UnixClient : public Service {
   UnixClient() : Service(Protocol::UNIX) {}
 };
@@ -565,6 +520,66 @@ struct GPlusServer : public Service {
   Connection::Handler *handler=0;
   GPlusServer() : Service(Protocol::GPLUS) { endpoint_read_autoconnect=1; }
   virtual int Connected(Connection *c) { c->handler = unique_ptr<Connection::Handler>(handler); return 0; }
+};
+
+struct Network : public Module {
+  int select_time=0;
+  LFLSocketSet active;
+  vector<Service*> service_table;
+  unique_ptr<UnixClient> unix_client;
+  unique_ptr<UnixServer> unix_server;
+  unique_ptr<UDPClient> udp_client;
+  unique_ptr<UDPServer> udp_server;
+  unique_ptr<HTTPClient> http_client;
+  unique_ptr<HTTPServer> http_server;
+  unique_ptr<SSHClient> ssh_client;
+  unique_ptr<SMTPClient> smtp_client;
+  unique_ptr<SMTPServer> smtp_server;
+  unique_ptr<GPlusClient> gplus_client;
+  unique_ptr<GPlusServer> gplus_server;
+  unique_ptr<SystemResolver> system_resolver;
+  unique_ptr<RecursiveResolver> recursive_resolver;
+  Network();
+  virtual ~Network();
+
+  int Init();
+  int Enable(Service *svc);
+  int Disable(Service *svc);
+  int Shutdown(Service *svc);
+  int Enable(const vector<Service*> &svc);
+  int Disable(const vector<Service*> &svc);
+  int Shutdown(const vector<Service*> &svc);
+  int Frame(unsigned);
+  void AcceptFrame(Service *svc, Listener *listener);
+  void TCPConnectionFrame(Service *svc, Connection *c, ServiceEndpointEraseList *removelist);
+  void UDPConnectionFrame(Service *svc, Connection *c, ServiceEndpointEraseList *removelist, const string &epk);
+
+  void ConnClose(Service *svc, Connection *c, ServiceEndpointEraseList *removelist);
+  void ConnCloseAll(Service *svc);
+
+  void EndpointRead(Service *svc, const char *name, const char *buf, int len);
+  void EndpointClose(Service *svc, Connection *c, ServiceEndpointEraseList *removelist, const string &epk);
+  void EndpointCloseAll(Service *svc);
+
+  void UpdateActive(Connection *c);
+};
+
+/// NetworkThread runs the Network Module in a new thread with a multiplexed Callback queue
+struct NetworkThread {
+  struct ConnectionHandler : public Connection::Handler {
+    void HandleMessage(Callback *cb) { (*cb)(); delete cb; }
+    int Read(Connection *c);
+  };
+
+  bool init=0;
+  Network *net=0;
+  Connection *rd=0;
+  unique_ptr<Connection> wr;
+  unique_ptr<Thread> thread;
+  NetworkThread(Network *N, bool Init);
+
+  void Write(Callback *x) { CHECK_EQ(sizeof(x), wr->WriteFlush(reinterpret_cast<const char*>(&x), sizeof(x))); }
+  void HandleMessagesLoop() { if (init) net->Init(); while (GetLFApp()->run) { net->Frame(0); } }
 };
 
 struct Sniffer {

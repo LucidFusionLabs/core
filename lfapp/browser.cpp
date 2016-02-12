@@ -471,6 +471,7 @@ Browser::Browser(GUI *gui, const Box &V) : doc(gui ? gui->parent : NULL, V),
   if (Font *maf = Fonts::Get("MenuAtlas", "", 0, Color::white, Color::clear, 0, 0)) {
     missing_image = maf->FindGlyph(0)->tex;
     missing_image.width = missing_image.height = 16;
+    missing_image.owner = false;
   }
   doc.parser->redirect_cb = bind(&Browser::Open, this, _1);
   doc.Clear(); 
@@ -482,14 +483,14 @@ void Browser::Navigate(const string &url) {
 }
 
 void Browser::Open(const string &url) {
-  if (app->render_process) return app->RunInNetworkThread(bind(&ProcessAPIClient::Navigate, app->render_process, url));
+  if (app->render_process) return app->RunInNetworkThread(bind(&ProcessAPIClient::Navigate, app->render_process.get(), url));
   doc.parser->OpenFrame(url, (DOM::Frame*)NULL);
   if (app->main_process) { app->main_process->SetURL(url); app->main_process->SetTitle(url); }
   else                   { SetURLText(url); screen->SetCaption(url); }
 }
 
 void Browser::KeyEvent(int key, bool down) {
-  if (app->render_process) app->RunInNetworkThread(bind(&ProcessAPIClient::KeyPress, app->render_process, key, down));
+  if (app->render_process) app->RunInNetworkThread(bind(&ProcessAPIClient::KeyPress, app->render_process.get(), key, down));
   else {
     if (auto n = doc.node->documentElement()) EventNode(n, initial_displacement, key);
     if (down && doc.active_input && doc.active_input->tiles) {
@@ -501,14 +502,14 @@ void Browser::KeyEvent(int key, bool down) {
 
 void Browser::MouseMoved(int x, int y) {
   if (app->render_process || (!app->render_process && !app->main_process)) y -= screen->height+viewport.top()+VScrolled();
-  if (app->render_process) { app->RunInNetworkThread(bind(&ProcessAPIClient::MouseMove, app->render_process, x, y, x-mouse.x, y-mouse.y)); mouse=point(x,y); }
+  if (app->render_process) { app->RunInNetworkThread(bind(&ProcessAPIClient::MouseMove, app->render_process.get(), x, y, x-mouse.x, y-mouse.y)); mouse=point(x,y); }
   else if (auto n = doc.node->documentElement()) { mouse=point(x,y); EventNode(n, initial_displacement, Mouse::Event::Motion); }
 }
 
 void Browser::MouseButton(int b, bool d, int x, int y) {
   // doc.gui.Input(b, mouse, d, 1);
   if (app->render_process || (!app->render_process && !app->main_process)) y -= screen->height+viewport.top()+VScrolled();
-  if (app->render_process) { app->RunInNetworkThread(bind(&ProcessAPIClient::MouseClick, app->render_process, b, d, x, y)); mouse=point(x,y); }
+  if (app->render_process) { app->RunInNetworkThread(bind(&ProcessAPIClient::MouseClick, app->render_process.get(), b, d, x, y)); mouse=point(x,y); }
   else if (auto n = doc.node->documentElement()) { mouse=point(x,y); EventNode(n, initial_displacement, Mouse::ButtonID(b)); }
 }
 
@@ -528,7 +529,7 @@ void Browser::SetClearColor(const Color &c) {
 
 void Browser::SetViewport(int w, int h) {
   viewport.SetDimension(point(w, h));
-  if (app->render_process)               app->RunInNetworkThread(bind(&ProcessAPIClient::SetViewport, app->render_process, w, h));
+  if (app->render_process)               app->RunInNetworkThread(bind(&ProcessAPIClient::SetViewport, app->render_process.get(), w, h));
   else if (auto html = doc.DocElement()) html->SetLayoutDirty(); 
 }
 

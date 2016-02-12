@@ -402,7 +402,7 @@ FakeFontEngine::FakeFontEngine() : fake_font(this, fake_font_desc, shared_ptr<Fo
   }
 }
 
-int FakeFontEngine::InitGlyphs(Font *f,       Glyph *g, int n) {
+int FakeFontEngine::InitGlyphs(Font *f, Glyph *g, int n) {
   for (Glyph *e = g + n; g != e; ++g) {
     g->tex.height = g->bearing_y = fake_font.Height();
     g->tex.width  = g->advance   = fake_font.fixed_width;
@@ -422,10 +422,13 @@ void AtlasFontEngine::SetDefault() {
 
 bool AtlasFontEngine::Init(const FontDesc &d) {
   if (Font *f = OpenAtlas(d)) {
+    ScopedReentryGuard scoped(&in_init);
     FontDesc de = d;
     de.engine = FontDesc::Engine::Atlas;
     font_map[d.name][d.fg.AsUnsigned()][d.flag][d.size] = f;
-    return Fonts::GetByDesc(de);
+    Font *ret = Fonts::GetByDesc(de);
+    CHECK_EQ(f, ret);
+    return ret;
   }
   return false;
 }
@@ -452,7 +455,10 @@ Font *AtlasFontEngine::Open(const FontDesc &d) {
     else if ((l = j->second.rbegin())            != j->second.rend()) f = l->second;
 
     if (!f) continue;
-    if (!ci && f->size == d.size) return f;
+    if (!ci && f->size == d.size) {
+      if (in_init) return f;
+      ERROR("OpenDuplicate ", d.DebugString());
+    }
 
     Font *primary      = static_cast<Resource*>(f->resource.get())->primary;
     Font *ret          = new Font(this, d, f->resource);
@@ -480,6 +486,7 @@ Font *AtlasFontEngine::OpenAtlas(const FontDesc &d) {
   unique_ptr<File> gmfile(Asset::OpenFile(MatrixFile::Filename(VersionedFileName(app->assetdir.c_str(), fn.c_str(), "glyphs"), "matrix", 0)));
   if (gmfile && gm.Read(gmfile.get())) return ERRORv(nullptr, "load ", d.name, ".0000.glyphs.matrix failed");
 
+  tex.owner = false;
   Resource *resource = new Resource();
   Font *ret = new Font(Singleton<AtlasFontEngine>::Get(), d, shared_ptr<FontEngine::Resource>(resource));
   ret->glyph = make_shared<GlyphMap>(make_shared<GlyphCache>(tex.ID, tex.width, tex.height));
@@ -710,9 +717,11 @@ Font *FreeTypeFontEngine::Open(const FontDesc &d) {
   ret->mix_fg = true;
 
   bool new_cache = false, pre_load = false;
-  GlyphCache *cache =
-    new_cache ? new GlyphCache(0, AtlasFontEngine::Dimension(ret->max_width, ret->Height(), count)) : GlyphCache::Get();
-  ret->glyph->cache = shared_ptr<GlyphCache>(cache);
+  ret->glyph->cache = 
+    (!new_cache ? GlyphCache::Get() :
+     make_shared<GlyphCache>(0, AtlasFontEngine::Dimension(ret->max_width, ret->Height(), count)));
+  GlyphCache *cache = ret->glyph->cache.get();
+
   if (new_cache) cache->tex.RenewBuffer();
   if (pre_load) LoadGlyphs(ret, &ret->glyph->table[0], ret->glyph->table.size());
   if (FLAGS_atlas_dump) AtlasFontEngine::WriteAtlas(d.Filename(), ret, &cache->tex);
@@ -824,9 +833,11 @@ Font *CoreTextFontEngine::Open(const FontDesc &d) {
   // ConvertColorFromGenericToDeviceRGB(d.bg.x, ret->bg.x);
 
   bool new_cache = false, pre_load = false;
-  GlyphCache *cache =
-    new_cache ? new GlyphCache(0, AtlasFontEngine::Dimension(ret->max_width, ret->Height(), count)) : GlyphCache::Get();
-  ret->glyph->cache = shared_ptr<GlyphCache>(cache);
+  ret->glyph->cache = 
+    (!new_cache ? GlyphCache::Get() : 
+     new_cache ? new GlyphCache(0, AtlasFontEngine::Dimension(ret->max_width, ret->Height(), count))
+  GlyphCache *cache = ret->glyph->cache.get();
+
   if (new_cache) {
     cache->tex.RenewBuffer();
     cache->cgcontext = cache->tex.CGBitMap();
@@ -975,9 +986,11 @@ Font *GDIFontEngine::Open(const FontDesc &d) {
   ret->has_bg = true;
 
   bool new_cache = false, pre_load = false;
-  GlyphCache *cache =
-    new_cache ? new GlyphCache(0, AtlasFontEngine::Dimension(ret->max_width, ret->Height(), count)) : GlyphCache::Get();
-  ret->glyph->cache = shared_ptr<GlyphCache>(cache);
+  ret->glyph->cache =
+    (!new_cache ? GlyphCache::Get() :
+     make_shared<GlyphCache>(0, AtlasFontEngine::Dimension(ret->max_width, ret->Height(), count)));
+  GlyphCache *cache = ret->glyph->cache.get();
+
   if (new_cache) {
     pbm = SelectObject((cache->hdc = hdc), (hbitmap = cache->tex.CreateGDIBitMap(hdc)));
   }
@@ -1020,7 +1033,7 @@ void GDIFontEngine::AssignGlyph(Glyph *g, const ::SIZE &bounds, const ::SIZE &ad
 Font *IPCClientFontEngine::Open(const FontDesc &d) {
   Font *ret = new Font(this, d, make_shared<FontEngine::Resource>());
   ret->glyph = make_shared<GlyphMap>();
-  ret->glyph->cache = shared_ptr<GlyphCache>(GlyphCache::Get());
+  ret->glyph->cache = GlyphCache::Get();
   app->main_process->OpenSystemFont(d, bind(&IPCClientFontEngine::OpenSystemFontResponse, this, ret, _1, _2));
   if (1 && app->main_process->browser) app->main_process->WaitAllOpenSystemFontResponse();
   return ret;
@@ -1064,7 +1077,7 @@ FontEngine *Fonts::GetFontEngine(int engine_type) {
 }
 
 FontEngine *Fonts::DefaultFontEngine() {
-  static Fonts *inst = Singleton<Fonts>::Get();
+  static Fonts *inst = app->fonts.get();
   if (!inst->default_font_engine) {
     if      (FLAGS_font_engine == "atlas")      inst->default_font_engine = Singleton<AtlasFontEngine>    ::Get();
 #ifdef LFL_IPC
@@ -1084,7 +1097,7 @@ FontEngine *Fonts::DefaultFontEngine() {
   return inst->default_font_engine;
 }
 
-Font *Fonts::Fake() { return Singleton<FakeFontEngine>::Get()->Open(FontDesc()); }
+Font *Fonts::Fake() { return &Singleton<FakeFontEngine>::Get()->fake_font; }
 Font *Fonts::Default() {
   static Font *default_font = 0;
   if (!default_font) default_font = Fonts::Get(FLAGS_default_font, FLAGS_default_font_family, FLAGS_default_font_size);
@@ -1094,13 +1107,13 @@ Font *Fonts::Default() {
 Font *Fonts::Find(const FontDesc &d) {
   if (d.name.empty()) return 0;
   auto di = desc_map.find(d);
-  return (di != desc_map.end()) ? di->second : 0;
+  return (di != desc_map.end()) ? di->second.get() : 0;
 }
 
 Font *Fonts::Insert(FontEngine *engine, const FontDesc &d) {
   if (d.name.size()) {
     if (Font *new_font = engine->Open(d)) {
-      auto di = desc_map.insert(decltype(desc_map)::value_type(d, new_font)).first;
+      auto di = desc_map.insert(decltype(desc_map)::value_type(d, unique_ptr<Font>(new_font))).first;
       di->second->desc = &di->first;
       return new_font;
     }
@@ -1115,7 +1128,7 @@ Font *Fonts::FindOrInsert(FontEngine *engine, const FontDesc &d) {
 }
 
 Font *Fonts::GetByDesc(FontDesc d) {
-  static Fonts *inst = Singleton<Fonts>::Get();
+  static Fonts *inst = app->fonts.get();
   d.size = ScaledFontSize(d.size);
   if (Font *f = inst->Find(d)) return f;
 
@@ -1158,13 +1171,14 @@ int Fonts::ScaledFontSize(int pointsize) {
 }
 
 void Fonts::ResetGL() {
-  static Fonts *inst = Singleton<Fonts>::Get();
+  static Fonts *inst = app->fonts.get();
   unordered_set<GlyphMap*> maps;
   unordered_set<GlyphCache*> caches;
   AtlasFontEngine *atlas_engine = Singleton<AtlasFontEngine>::Get();
   for (auto &i : inst->desc_map) {
-    auto f = i.second;
+    auto f = i.second.get();
     if (f->engine == atlas_engine && f == static_cast<AtlasFontEngine::Resource*>(f->resource.get())->primary) {
+      f->glyph->cache->tex.owner = false;
       f->glyph->cache->tex = Texture();
       Asset::LoadTexture(StrCat(f->desc->Filename(), ".0000.png"), &f->glyph->cache->tex);
       if (!f->glyph->cache->tex.ID) ERROR("Reset font failed");

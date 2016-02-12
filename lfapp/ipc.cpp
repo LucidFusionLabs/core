@@ -468,24 +468,24 @@ void InterProcessComm::StartServerProcess(const string &server_program, const ve
 #error no_ipc_impl
 #endif
   
-  conn = new Connection(Singleton<UnixClient>::Get(), new ConnectionHandler(this));
+  conn = new Connection(app->net->unix_client.get(), new ConnectionHandler(this));
   CHECK_NE(-1, (conn->socket = conn_socket));
   conn->control_messages = conn_control_messages;
   conn->state = Connection::Connected;
   conn->svc->conn[conn->socket] = unique_ptr<Connection>(conn);
-  app->network->active.Add(conn->socket, SocketSet::READABLE, &conn->self_reference);
+  app->net->active.Add(conn->socket, SocketSet::READABLE, &conn->self_reference);
   INFO("ProcessAPIClient started server PID=", pid, " ", server_program);
 }
 
 void InterProcessComm::OpenSocket(const string &socket_name) {
   static string fd_url = "fd://", np_url = "np://", tcp_url = "tcp://";
   if (PrefixMatch(socket_name, fd_url)) {
-    conn = new Connection(Singleton<UnixClient>::Get(), static_cast<Connection::Handler*>(nullptr));
+    conn = new Connection(app->net->unix_client.get(), static_cast<Connection::Handler*>(nullptr));
     conn->state = Connection::Connected;
     conn->socket = atoi(socket_name.c_str() + fd_url.size());
     conn->control_messages = true;
   } else if (PrefixMatch(socket_name, tcp_url)) {
-    conn = new Connection(Singleton<UnixClient>::Get(), static_cast<Connection::Handler*>(nullptr));
+    conn = new Connection(app->net->unix_client.get(), static_cast<Connection::Handler*>(nullptr));
     string host, port;
     HTTP::ParseHost(socket_name.c_str() + tcp_url.size(), socket_name.c_str() + socket_name.size(), &host, &port);
     CHECK_NE(-1, (conn->socket = SystemNetwork::OpenSocket(LFL::Protocol::TCP)));
@@ -679,8 +679,8 @@ void ProcessAPIClient::SwapTreeQuery::SwapLayerTree(int id, const MultiProcessLa
 int ProcessAPIClient::HandleWGetRequest(int seq, const IPC::WGetRequest *req, Void) {
   string url = req->url()->str();
   WGetQuery *wget = new WGetQuery(this, seq);
-  app->RunInNetworkThread([=]{ Singleton<HTTPClient>::Get()->WGet(url, 0, bind(&WGetQuery::WGetResponseCB, wget, _1, _2, _3, _4, _5),
-                                                                  bind(&WGetQuery::WGetRedirectCB, wget, _1)); });
+  app->RunInNetworkThread([=]{ app->net->http_client->WGet(url, 0, bind(&WGetQuery::WGetResponseCB, wget, _1, _2, _3, _4, _5),
+                                                           bind(&WGetQuery::WGetRedirectCB, wget, _1)); });
   return IPC::Ok;
 }
 

@@ -92,6 +92,7 @@ using LFL_STL11_NAMESPACE::unordered_map;
 using LFL_STL11_NAMESPACE::unordered_set;
 using LFL_STL11_NAMESPACE::shared_ptr;
 using LFL_STL11_NAMESPACE::unique_ptr;
+using LFL_STL11_NAMESPACE::weak_ptr;
 using LFL_STL11_NAMESPACE::tuple;
 using LFL_STL11_NAMESPACE::array;
 using LFL_STL11_NAMESPACE::move;
@@ -536,12 +537,12 @@ struct Application : public ::LFApp {
   ThreadPool thread_pool;
   CallbackQueue message_queue;
   FrameScheduler scheduler;
-  NetworkThread *network_thread=0;
-  ProcessAPIClient *render_process=0;
-  ProcessAPIServer *main_process=0;
+  unique_ptr<NetworkThread> network_thread;
+  unique_ptr<ProcessAPIClient> render_process;
+  unique_ptr<ProcessAPIServer> main_process;
   Window::Map windows;
   Callback reshaped_cb, create_win_f;
-  function<void(Window*)> window_init_cb, window_closed_cb;
+  function<void(Window*)> window_init_cb, window_closed_cb = [](Window *w){ delete w; };
   unordered_map<string, StringPiece> asset_cache;
   CategoricalVariable<int> tex_mode, grab_mode, fill_mode;
   const Color *splash_color = &Color::black;
@@ -551,16 +552,15 @@ struct Application : public ::LFApp {
   unique_ptr<Audio> audio;
   unique_ptr<Video> video;
   unique_ptr<Input> input;
-  unique_ptr<Assets> assets;
-  unique_ptr<Network> network;
+  unique_ptr<Fonts> fonts;
+  unique_ptr<Shaders> shaders;
+  unique_ptr<AssetLoader> asset_loader;
+  unique_ptr<Network> net;
   unique_ptr<Camera> camera;
   unique_ptr<CUDA> cuda;
 
   virtual ~Application();
-  Application() : create_win_f(bind(&Application::CreateNewWindow, this, function<void(Window*)>())),
-  window_closed_cb([](Window *w){ delete w; }), tex_mode(2, 1, 0), grab_mode(2, 0, 1),
-  fill_mode(3, GraphicsDevice::Fill, GraphicsDevice::Line, GraphicsDevice::Point), shell(0, 0, 0)
-  { run=1; initialized=0; main_thread_id=0; frames_ran=0; memzero(log_time); }
+  Application();
 
   bool Running() const { return run; }
   bool MainThread() const { return Thread::GetId() == main_thread_id; }
@@ -630,7 +630,7 @@ struct Application : public ::LFApp {
     if (!FLAGS_target_fps) scheduler.Wakeup(0);
   }
   template <class... Args> void RunInNetworkThread(Args&&... args) {
-    if (auto nt = network_thread) nt->Write(new Callback(args...));
+    if (auto nt = network_thread.get()) nt->Write(new Callback(args...));
     else (Callback(args...))();
   }
 

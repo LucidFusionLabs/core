@@ -922,7 +922,7 @@ void Geometry::ScrollTexCoord(float dx, float dx_extra, int *subtract_max_int) {
   screen->gd->VertexPointer(vd, GraphicsDevice::Float, width_bytes, 0, &vert[0], vert_size, &vert_ind, true, primtype);
 }
 
-int Assets::Init() {
+int AssetLoader::Init() {
 #ifdef LFL_FFMPEG
   static FFMpegAssetLoader *ffmpeg_loader = new FFMpegAssetLoader();
   default_audio_loader = ffmpeg_loader;
@@ -975,7 +975,7 @@ void Asset::LoadTexture(void *h, const string &asset_fn, Texture *out, VideoAsse
   if (!FLAGS_lfapp_video) return;
   auto i = app->asset_cache.find(asset_fn);
   if (i != app->asset_cache.end()) return LoadTexture(i->second.data(), asset_fn.c_str(), i->second.size(), out);
-  if (!l) l = app->assets->default_video_loader;
+  if (!l) l = app->asset_loader->default_video_loader;
   void *handle = h ? h : l->LoadVideoFile(asset_fn[0] == '/' ? asset_fn : StrCat(app->assetdir, asset_fn).c_str());
   if (!handle) { ERROR("load: ", asset_fn); return; }
   l->LoadVideo(handle, out);
@@ -983,7 +983,7 @@ void Asset::LoadTexture(void *h, const string &asset_fn, Texture *out, VideoAsse
 }
 
 void Asset::LoadTexture(const void *FromBuf, const char *filename, int size, Texture *out, int flag) {
-  VideoAssetLoader *l = app->assets->default_video_loader;
+  VideoAssetLoader *l = app->asset_loader->default_video_loader;
   // work around ffmpeg image2 format being AVFMT_NO_FILE; ie doesnt work with custom AVIOContext
   if (FileSuffix::Image(filename)) l = Singleton<SimpleAssetLoader>::Get();
   void *handle = l->LoadVideoBuf((const char *)FromBuf, size, filename);
@@ -1019,16 +1019,16 @@ void SoundAsset::Unload() {
 
 void SoundAsset::Load(void *handle, const char *FN, int Secs, int flag) {
   if (!FLAGS_lfapp_audio) { ERROR("load: ", FN, ": lfapp_audio = ", FLAGS_lfapp_audio); return; }
-  if (handle) app->assets->default_audio_loader->LoadAudio(handle, this, Secs, flag);
+  if (handle) app->asset_loader->default_audio_loader->LoadAudio(handle, this, Secs, flag);
 }
 
 void SoundAsset::Load(void const *buf, int len, char const *FN, int Secs) {
-  void *handle = app->assets->default_audio_loader->LoadAudioBuf((const char *)buf, len, FN);
+  void *handle = app->asset_loader->default_audio_loader->LoadAudioBuf((const char *)buf, len, FN);
   if (!handle) return;
 
   Load(handle, FN, Secs, FlagNoRefill);
   if (!refill) {
-    app->assets->default_audio_loader->UnloadAudioBuf(handle);
+    app->asset_loader->default_audio_loader->UnloadAudioBuf(handle);
     handle = 0;
   }
 }
@@ -1041,7 +1041,7 @@ void SoundAsset::Load(int Secs, bool unload) {
     fn = filename;
     if (fn.length() && isalpha(fn[0])) fn = app->assetdir + fn;
 
-    handle = app->assets->default_audio_loader->LoadAudioFile(fn);
+    handle = app->asset_loader->default_audio_loader->LoadAudioFile(fn);
     if (!handle) ERROR("SoundAsset::Load ", fn);
   }
 
@@ -1049,24 +1049,24 @@ void SoundAsset::Load(int Secs, bool unload) {
 
 #if !defined(LFL_IPHONE) && !defined(LFL_ANDROID) /* XXX */
   if (!refill && handle && unload) {
-    app->assets->default_audio_loader->UnloadAudioFile(handle);
+    app->asset_loader->default_audio_loader->UnloadAudioFile(handle);
     handle = 0;
   }
 #endif
 }
 
-int SoundAsset::Refill(int reset) { return app->assets->default_audio_loader->RefillAudio(this, reset); }
+int SoundAsset::Refill(int reset) { return app->asset_loader->default_audio_loader->RefillAudio(this, reset); }
 
 void MovieAsset::Load(const char *fn) {
-  if (!fn || !(handle = app->assets->default_movie_loader->LoadMovieFile(StrCat(app->assetdir, fn)))) return;
-  app->assets->default_movie_loader->LoadMovie(handle, this);
+  if (!fn || !(handle = app->asset_loader->default_movie_loader->LoadMovieFile(StrCat(app->assetdir, fn)))) return;
+  app->asset_loader->default_movie_loader->LoadMovie(handle, this);
   audio.Load();
   video.Load();
 }
 
 int MovieAsset::Play(int seek) {
-  app->assets->movie_playing = this; int ret;
-  if ((ret = app->assets->default_movie_loader->PlayMovie(this, 0) <= 0)) app->assets->movie_playing = 0;
+  app->asset_loader->movie_playing = this; int ret;
+  if ((ret = app->asset_loader->default_movie_loader->PlayMovie(this, 0) <= 0)) app->asset_loader->movie_playing = 0;
   return ret;
 }
 
@@ -1534,7 +1534,7 @@ void TilesIPCClient::Run(int flag) {
 }
 
 int MultiProcessPaintResource::Run(const Box &t) const {
-  ProcessAPIClient *s = CheckPointer(app->render_process);
+  ProcessAPIClient *s = CheckPointer(app->render_process.get());
   Iterator i(data.buf);
   int si=0, sd=0, count=0; 
   TilesIPCDebug("MPPR Begin\n");
@@ -1542,7 +1542,7 @@ int MultiProcessPaintResource::Run(const Box &t) const {
     int type = *i.Get<int>();
     switch (type) {
       default:                       FATAL("unknown type ", type);
-      case SetAttr           ::Type: { auto c=i.Get<SetAttr>           (); c->Update(&attr, app->render_process);            i.offset += SetAttr           ::Size; TilesIPCDebug("MPPR SetAttr %s\n",     attr.DebugString().c_str()); } break;
+      case SetAttr           ::Type: { auto c=i.Get<SetAttr>           (); c->Update(&attr, app->render_process.get());      i.offset += SetAttr           ::Size; TilesIPCDebug("MPPR SetAttr %s\n",     attr.DebugString().c_str()); } break;
       case InitDrawBox       ::Type: { auto c=i.Get<InitDrawBox>       (); DrawableBoxRun(0,0,&attr).draw(c->p);             i.offset += InitDrawBox       ::Size; TilesIPCDebug("MPPR InitDrawBox %s\n", c->p.DebugString().c_str()); } break;
       case InitDrawBackground::Type: { auto c=i.Get<InitDrawBackground>(); DrawableBoxRun(0,0,&attr).DrawBackground(c->p);   i.offset += InitDrawBackground::Size; TilesIPCDebug("MPPR InitDrawBG %s\n",  c->p.DebugString().c_str()); } break;
       case DrawBackground    ::Type: { auto c=i.Get<DrawBackground>    (); c->b.Draw();                                      i.offset += DrawBackground    ::Size; TilesIPCDebug("MPPR DrawBG %s\n",      c->b.DebugString().c_str()); } break;

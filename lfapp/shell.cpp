@@ -292,7 +292,7 @@ void Shell::fps(const vector<string>&) { INFO("FPS ", screen->fps.FPS()); }
 
 void Shell::wget(const vector<string> &a) {
   if (a.empty()) return;
-  Singleton<HTTPClient>::Get()->WGet(a[0]);
+  app->net->http_client->WGet(a[0]);
 }
 
 void Shell::MessageBox(const vector<string> &a) { Dialog::MessageBox(Join(a, " ")); }

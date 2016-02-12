@@ -135,7 +135,8 @@ struct Game {
     RetryMap retry;
     unsigned method;
     Time timeout;
-    ReliableUDPNetwork(unsigned m, unsigned t=500) : net(Singleton<UDPNetwork>::Get()), method(m), timeout(t) {}
+    ReliableUDPNetwork(unsigned m, unsigned t=500) :
+      net(Singleton<Game::UDPNetwork>::Get()), method(m), timeout(t) {}
 
     void Clear() { retry.clear(); }
     void Acknowledged(unsigned short id) { retry.erase(id); }
@@ -387,7 +388,7 @@ struct GameServer : public Connection::Handler {
     if (now > last.time_post_MasterUpdate + MasterUpdateInterval || last.time_post_MasterUpdate == Time(0)) {
       last.time_post_MasterUpdate = now;
       if (!master_sink_url.empty())
-        Singleton<HTTPClient>::Get()->WPost(master_sink_url, "application/octet-stream", (char*)local_game_url.c_str(), local_game_url.size());
+        app->net->http_client->WPost(master_sink_url, "application/octet-stream", (char*)local_game_url.c_str(), local_game_url.size());
     }
 
     int updated = 0;
@@ -646,8 +647,8 @@ struct GameClient {
   int Connect(const string &url, int default_port) {
     Reset();
     net = Singleton<Game::UDPNetwork>::Get();
-    conn = Singleton<UDPClient>::Get()->PersistentConnection(url, bind(&GameClient::Read, this, _1, _2, _3),
-                                                             bind(&GameClient::Heartbeat, this, _1), default_port);
+    conn = app->net->udp_client->PersistentConnection(url, bind(&GameClient::Read, this, _1, _2, _3),
+                                                      bind(&GameClient::Heartbeat, this, _1), default_port);
     if (!Connected()) return 0;
 
     GameProtocol::ChallengeRequest req;
@@ -658,7 +659,7 @@ struct GameClient {
 
   int ConnectGPlus(const string &participant_name) {
 #ifdef LFL_ANDROID
-    GPlusClient *gplus_client = Singleton<GPlusClient>::Get();
+    GPlusClient *gplus_client = app->net->gplus_client.get();
     app->network.Enable(gplus_client);
     Reset();
     net = Singleton<Game::GoogleMultiplayerNetwork>::Get();
@@ -1018,7 +1019,7 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
 
   void Refresh() { 
     if (broadcast_ip) SystemNetwork::SendTo(pinger.GetListener()->socket, broadcast_ip, default_port, "ping\n", 5);
-    if (!master_get_url.empty()) Singleton<HTTPClient>::Get()->WGet(master_get_url, 0, bind(&GameMenuGUI::MasterGetResponseCB, this, _1, _2, _3, _4, _5));
+    if (!master_get_url.empty()) app->net->http_client->WGet(master_get_url, 0, bind(&GameMenuGUI::MasterGetResponseCB, this, _1, _2, _3, _4, _5));
     master_server_list.clear(); master_server_selected=-1;
   }
 

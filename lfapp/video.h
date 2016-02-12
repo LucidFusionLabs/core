@@ -291,9 +291,9 @@ struct Texture : public Drawable {
   int width, height, pf, cubemap;
   float coord[4];
 
-  Texture(int w=0, int h=0, int PF=preferred_pf, unsigned id=0) : ID(id), buf(0), owner(0), buf_owner(1), width(w), height(h), pf(PF), cubemap(0) { Coordinates(coord,1,1,1,1); }
-  Texture(int w,   int h,   int PF,           unsigned char *B) : ID(0),  buf(B), owner(0), buf_owner(0), width(w), height(h), pf(PF), cubemap(0) { Coordinates(coord,1,1,1,1); }
-  Texture(const Texture &t) : ID(t.ID), buf(t.buf), owner(0), buf_owner(buf?0:1), width(t.width), height(t.height), pf(t.pf), cubemap(t.cubemap) { memcpy(&coord, t.coord, sizeof(coord)); }
+  Texture(int w=0, int h=0, int PF=preferred_pf, unsigned id=0) : ID(id), buf(0), owner(1), buf_owner(1), width(w), height(h), pf(PF), cubemap(0) { Coordinates(coord,1,1,1,1); }
+  Texture(int w,   int h,   int PF,           unsigned char *B) : ID(0),  buf(B), owner(1), buf_owner(0), width(w), height(h), pf(PF), cubemap(0) { Coordinates(coord,1,1,1,1); }
+  Texture(const Texture &t) : ID(t.ID), buf(t.buf), owner(ID?0:1), buf_owner(buf?0:1), width(t.width), height(t.height), pf(t.pf), cubemap(t.cubemap) { memcpy(&coord, t.coord, sizeof(coord)); }
   virtual ~Texture() { ClearBuffer(); if (owner) ClearGL(); }
 
   void Bind() const;
@@ -360,11 +360,14 @@ struct Texture : public Drawable {
 struct DepthTexture {
   unsigned ID;
   int width, height, df;
+  bool owner=true;
   DepthTexture(int w=0, int h=0, int DF=Depth::_16, unsigned id=0) : ID(id), width(w), height(h), df(DF) {}
+  ~DepthTexture() { if (owner) ClearGL(); }
 
   struct Flag { enum { CreateGL=1 }; };
   void Create(int W, int H, int DF=0) { Resize(W, H, DF, Flag::CreateGL); }
   void Resize(int W, int H, int DF=0, int flag=0);
+  void ClearGL();
 };
 
 struct FrameBuffer {
@@ -372,8 +375,11 @@ struct FrameBuffer {
   int width, height;
   Texture tex;
   DepthTexture depth;
+  bool owner=true;
+
   FrameBuffer(int w=0, int h=0, unsigned id=0) : ID(id), width(w), height(h) {}
-  void Reset() { ID=width=height=0; tex=Texture(); depth=DepthTexture(); }
+  ~FrameBuffer() { if (owner) ClearGL(); }
+  void ResetGL() { ID=width=height=0; tex.owner=depth.owner=0; tex=Texture(); depth=DepthTexture(); }
 
   struct Flag { enum { CreateGL=1, CreateTexture=2, CreateDepthTexture=4, ReleaseFB=8, NoClampToEdge=16 }; };
   void Create(int W, int H, int flag=0) { Resize(W, H, Flag::CreateGL | flag); }
@@ -385,6 +391,7 @@ struct FrameBuffer {
 
   void Attach(int ct=0, int dt=0);
   void Release();
+  void ClearGL();
 };
 
 struct ShaderDefines {
@@ -404,7 +411,7 @@ struct Shader {
   string name;
   float scale=0;
   int unused_attrib_slot[MaxVertexAttrib];
-  bool dirty_material=0, dirty_light_pos[4], dirty_light_color[4];
+  bool dirty_material=0, dirty_light_pos[4], dirty_light_color[4], owner=true;
   int ID=0, slot_position=-1, slot_normal=-1, slot_tex=-1, slot_color=-1,
     uniform_model=-1, uniform_invview=-1, uniform_modelview=-1, uniform_modelviewproj=-1, uniform_campos=-1,
     uniform_tex=-1, uniform_cubetex=-1, uniform_normalon=-1, uniform_texon=-1, uniform_coloron=-1, uniform_cubeon=-1,
@@ -412,6 +419,7 @@ struct Shader {
     uniform_material_emission=-1, uniform_light0_pos=-1, uniform_light0_ambient=-1, uniform_light0_diffuse=-1,
     uniform_light0_specular=-1;
   Shader() { memzeros(dirty_light_pos); memzeros(dirty_light_color); }
+  ~Shader() { if (owner) ClearGL(); }
 
   static int Create(const string &name, const string &vertex_shader, const string &fragment_shader, const ShaderDefines&, Shader *out);
   static int CreateShaderToy(const string &name, const string &fragment_shader, Shader *out);
@@ -423,6 +431,7 @@ struct Shader {
   void SetUniform4f(const string &name, float v1, float v2, float v3, float v4);
   void SetUniform3fv(const string &name, const float *v);
   void SetUniform3fv(const string &name, int n, const float *v);
+  void ClearGL();
 
   static void SetGlobalUniform1f(const string &name, float v);
   static void SetGlobalUniform2f(const string &name, float v1, float v2);
@@ -447,8 +456,9 @@ struct GraphicsDevice : public QOpenGLFunctions {
   Color clear_color = Color::black;
   vector<Color> default_color;
   vector<vector<Box> > scissor_stack;
-  GraphicsDevice() : scissor_stack(1) {}
 
+  GraphicsDevice() : scissor_stack(1) {}
+  virtual ~GraphicsDevice() {}
   virtual void Init() = 0;
   virtual bool ShaderSupport() = 0;
   virtual void EnableTexture() = 0;
@@ -496,10 +506,12 @@ struct GraphicsDevice : public QOpenGLFunctions {
 
   // Shader interface
   int CreateProgram();
+  void DelProgram(int p);
   int CreateShader(int t);
   void ShaderSource(int shader, int count, const char **source, int *len);
   void CompileShader(int shader);
   void AttachShader(int prog, int shader);
+  void DelShader(int shader);
   void BindAttribLocation(int prog, int loc, const string &name);
   void LinkProgram(int prog);
   void GetProgramiv(int p, int t, int *out);
@@ -549,9 +561,11 @@ struct GraphicsDevice : public QOpenGLFunctions {
   void PopScissorStack();
   void DrawPixels(const Box &b, const Texture &tex);
   void GenRenderBuffers(int n, unsigned *out);
+  void DelRenderBuffers(int n, const unsigned *id);
   void BindRenderBuffer(int id);
   void RenderBufferStorage(int d, int w, int h);
   void GenFrameBuffers(int n, unsigned *out);
+  void DelFrameBuffers(int n, const unsigned *id);
   void BindFrameBuffer(int id);
   void FrameBufferTexture(int id);
   void FrameBufferDepthTexture(int id);
@@ -574,7 +588,7 @@ struct Window : public NativeWindow {
   Timer frame_time;
   RollingAvg<unsigned> fps;
   unique_ptr<Entity> cam;
-  BindMap *binds=0;
+  unique_ptr<BindMap> binds;
   Dialog *top_dialog=0;
   vector<Dialog*> dialogs;
   vector<GUI*> mouse_gui;
@@ -642,8 +656,11 @@ struct ScopedClearColor {
   ScopedClearColor(const Color &c) : enabled(1), prev_color(screen->gd->clear_color) {              screen->gd->ClearColor(c); }
 };
 
-struct Video : public Module {
+struct Shaders {
   Shader shader_default, shader_normals, shader_cubemap, shader_cubenorm;
+};
+
+struct Video : public Module {
   int opengles_version = 2;
   bool opengl_framebuffer = 1, opengles_cubemap = 1;
   unique_ptr<Module> impl;

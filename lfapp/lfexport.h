@@ -177,12 +177,14 @@ struct NetworkThread;
 struct ProcessAPIClient;
 struct ProcessAPIServer;
 struct ProtoHeader;
+struct RecursiveResolver;
 struct Service;
 struct ServiceEndpointEraseList;
 struct Shader;
 struct SoundAsset;
 struct StyleSheet;
 struct StyleContext;
+struct SystemResolver;
 struct TextGUI;
 struct Texture;
 struct Terminal;
@@ -220,8 +222,8 @@ typedef struct CXTranslationUnitImpl* CXTranslationUnit;
 typedef void* CXIndex;
 
 struct LFApp {
-  struct Log { enum { Fatal=-1, Error=0, Info=3, Debug=7 }; int v; };
-  struct Frame { enum { DontSkip=8 }; int v; };
+  struct Log { enum { Fatal=-1, Error=0, Info=3, Debug=7 }; };
+  struct Frame { enum { DontSkip=8 }; };
   bool run, initialized;
   size_t main_thread_id;
   long long frames_ran;
