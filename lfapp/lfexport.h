@@ -222,8 +222,8 @@ typedef struct CXTranslationUnitImpl* CXTranslationUnit;
 typedef void* CXIndex;
 
 struct LFApp {
-  struct Log { enum { Fatal=-1, Error=0, Info=3, Debug=7 }; };
-  struct Frame { enum { DontSkip=8 }; };
+  struct Log { enum { Fatal=-1, Error=0, Info=3, Debug=7 }; int unused; };
+  struct Frame { enum { DontSkip=8 }; int unused; };
   bool run, initialized;
   size_t main_thread_id;
   long long frames_ran;
@@ -254,6 +254,7 @@ void LFAppWakeup(void*);
 void LFAppFatal();
 void LFAppResetGL();
 void LFAppShutdown();
+void LFAppAtExit();
 void SetLFAppMainThread();
 void WindowReshaped(int w, int h);
 void WindowMinimized(); 

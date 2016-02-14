@@ -252,7 +252,7 @@ struct Connection {
   SSL *ssl=0;
   BIO *bio=0;
 
-  virtual ~Connection() {}
+  virtual ~Connection();
   Connection(Service *s, Handler *h,                                     Callback *Detach=0) : svc(s), socket(-1),   ct(Now()), rt(Now()), wt(Now()), addr(0),    state(Error), port(0),    rb(65536), wb(65536), self_reference(this), handler(h), detach(Detach) {}
   Connection(Service *s, int State, int Sock,                            Callback *Detach=0) : svc(s), socket(Sock), ct(Now()), rt(Now()), wt(Now()), addr(0),    state(State), port(0),    rb(65536), wb(65536), self_reference(this),             detach(Detach) {}
   Connection(Service *s, int State, int Sock, IPV4::Addr Addr, int Port, Callback *Detach=0) : svc(s), socket(Sock), ct(Now()), rt(Now()), wt(Now()), addr(Addr), state(State), port(Port), rb(65536), wb(65536), self_reference(this),             detach(Detach) {}

@@ -187,9 +187,9 @@ struct MyLuaContext : public LuaContext {
     return "";
   }
 };
-LuaContext *LuaContext::Create() { return new MyLuaContext(); }
+unique_ptr<LuaContext> LuaContext::Create() { return make_unique<MyLuaContext>(); }
 #else /* LFL_LUA */
-LuaContext *LuaContext::Create() { return 0; }
+unique_ptr<LuaContext> LuaContext::Create() { return 0; }
 #endif /* LFL_LUA */
 
 #ifdef LFL_V8JS
@@ -401,8 +401,8 @@ struct MyV8JSContext : public JSContext {
     args.GetReturnValue().Set(v8::Null(args.GetIsolate()));
   };
 };
-JSContext *JSContext::Create(Console *js_console, DOM::Node *doc) { Singleton<MyV8JSInit>::Get(); return new MyV8JSContext(js_console, doc); }
+unique_ptr<JSContext> JSContext::Create(Console *js_console, DOM::Node *doc) { Singleton<MyV8JSInit>::Get(); return make_unique<MyV8JSContext>(js_console, doc); }
 #else /* LFL_V8JS */
-JSContext *JSContext::Create(Console *js_console, DOM::Node *doc) { return 0; }
+unique_ptr<JSContext> JSContext::Create(Console *js_console, DOM::Node *doc) { return nullptr; }
 #endif /* LFL_V8JS */
 }; // namespace LFL

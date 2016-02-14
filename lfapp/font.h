@@ -150,7 +150,7 @@ struct GlyphCache {
   typedef function<void(const Box&, unsigned char *buf, int linesize, int pf)> FilterCB;
   Box dim;
   Texture tex;
-  Flow *flow=0;
+  unique_ptr<Flow> flow;
 #ifdef __APPLE__
   CGContextRef cgcontext=0;
 #endif
@@ -194,8 +194,6 @@ struct GlyphMap {
     table_start(FLAGS_glyph_table_start), table(FLAGS_glyph_table_size), cache(move(C))
   { for (auto b = table.begin(), g = b, e = table.end(); g != e; ++g) g->id = table_start + (g - b); }
 };
-#define GlyphTableIter(f) for (auto i = (f)->glyph->table.begin(); i != (f)->glyph->table.end(); ++i)
-#define GlyphIndexIter(f) for (auto i = (f)->glyph->index.begin(); i != (f)->glyph->index.end(); ++i)
 
 struct Font {
   struct DrawFlag {
@@ -335,6 +333,8 @@ struct FreeTypeFontEngine : public FontEngine {
   static Resource *OpenFile  (const FontDesc&);
   static Resource *OpenBuffer(const FontDesc&, string *content);
 };
+#else
+struct FreeTypeFontEngine {};
 #endif
 
 #ifdef __APPLE__
@@ -361,6 +361,8 @@ struct CoreTextFontEngine : public FontEngine {
   static void AssignGlyph(Glyph *out, const CGRect &bounds, struct CGSize &advance);
   static v2 GetAdvanceBounds(Font*);
 };
+#else
+struct CoreTextFontEngine {};
 #endif
 
 #ifdef WIN32
@@ -389,6 +391,8 @@ struct GDIFontEngine : public FontEngine {
   static bool GetSubstitutedFont(Font *f, HFONT hfont, char16_t glyph_id, HDC hdc, HFONT *hfontout);
   static void AssignGlyph(Glyph *out, const ::SIZE &bounds, const ::SIZE &advance);
 };
+#else
+struct GDIFontEngine {};
 #endif
 
 struct IPCClientFontEngine : public FontEngine {
@@ -421,9 +425,17 @@ struct Fonts {
       else                      normal     .push_back(n);
     }
   };
+
+  FontEngine *default_font_engine=0;
+  LazyInitializedPtr<FakeFontEngine> fake_engine;
+  LazyInitializedPtr<AtlasFontEngine> atlas_engine;
+  LazyInitializedPtr<FreeTypeFontEngine> freetype_engine;
+  LazyInitializedPtr<CoreTextFontEngine> coretext_engine;
+  LazyInitializedPtr<GDIFontEngine> gdi_engine;
+  LazyInitializedPtr<IPCClientFontEngine> ipc_client_engine;
+  LazyInitializedPtr<IPCServerFontEngine> ipc_server_engine;
   unordered_map<FontDesc, unique_ptr<Font>, FontDesc::ColoredHasher, FontDesc::ColoredEqual> desc_map;
   unordered_map<string, Family> family_map;
-  FontEngine *default_font_engine=0;
 
   Font *Find        (                    const FontDesc &d);
   Font *Insert      (FontEngine *engine, const FontDesc &d);
@@ -434,7 +446,7 @@ struct Fonts {
   static Font *Default();
   static Font *Fake();
   static Font *GetByDesc(FontDesc);
-  template <class... Args> static Font *Get(Args&&... args) { return GetByDesc(FontDesc(args...)); }
+  template <class... Args> static Font *Get(Args&&... args) { return GetByDesc(FontDesc(forward<Args>(args)...)); }
   static Font *Change(Font*, int new_size, const Color &new_fg, const Color &new_bg, int new_flag=0);
   static int ScaledFontSize(int pointsize);
   static void ResetGL();

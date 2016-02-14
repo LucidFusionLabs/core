@@ -133,11 +133,10 @@ void Glyph::Draw(const LFL::Box &b, const Drawable::Attr *a) const {
 }
 
 GlyphCache::GlyphCache(unsigned T, int W, int H) : dim(W, H ? H : W), tex(dim.w, dim.h, Texture::preferred_pf, T), flow(new Flow(&dim)) {}
-GlyphCache::~GlyphCache() { delete flow; }
+GlyphCache::~GlyphCache() {}
 
 void GlyphCache::Clear() {
-  delete flow;
-  flow = new Flow(&dim);
+  flow = make_unique<Flow>(&dim);
   for (auto g : glyph) g->ready = false;
   glyph.clear();
   if      (tex.buf) tex.RenewBuffer();
@@ -156,10 +155,10 @@ bool GlyphCache::Add(point *out, float *texcoord, int w, int h, int max_height) 
     return Add(out, texcoord, w, h, max_height);
   }
 
-  texcoord[Texture::CoordMinX] =     (float)(out->x    ) / tex.width;
-  texcoord[Texture::CoordMinY] = 1 - (float)(out->y + h) / tex.height;
-  texcoord[Texture::CoordMaxX] =     (float)(out->x + w) / tex.width;
-  texcoord[Texture::CoordMaxY] = 1 - (float)(out->y    ) / tex.height;
+  texcoord[Texture::minx_coord_ind] =     (float)(out->x    ) / tex.width;
+  texcoord[Texture::miny_coord_ind] = 1 - (float)(out->y + h) / tex.height;
+  texcoord[Texture::maxx_coord_ind] =     (float)(out->x + w) / tex.width;
+  texcoord[Texture::maxy_coord_ind] = 1 - (float)(out->y    ) / tex.height;
   return true;
 }
 
@@ -423,11 +422,11 @@ void AtlasFontEngine::SetDefault() {
 bool AtlasFontEngine::Init(const FontDesc &d) {
   if (Font *f = OpenAtlas(d)) {
     ScopedReentryGuard scoped(&in_init);
+    font_map[d.name][d.fg.AsUnsigned()][d.flag][d.size] = f;
     FontDesc de = d;
     de.engine = FontDesc::Engine::Atlas;
-    font_map[d.name][d.fg.AsUnsigned()][d.flag][d.size] = f;
     Font *ret = Fonts::GetByDesc(de);
-    CHECK_EQ(f, ret);
+    if (ret != f) {} // leak
     return ret;
   }
   return false;
@@ -488,7 +487,7 @@ Font *AtlasFontEngine::OpenAtlas(const FontDesc &d) {
 
   tex.owner = false;
   Resource *resource = new Resource();
-  Font *ret = new Font(Singleton<AtlasFontEngine>::Get(), d, shared_ptr<FontEngine::Resource>(resource));
+  Font *ret = new Font(app->fonts->atlas_engine.get(), d, shared_ptr<FontEngine::Resource>(resource));
   ret->glyph = make_shared<GlyphMap>(make_shared<GlyphCache>(tex.ID, tex.width, tex.height));
   ret->mix_fg = d.bg.a() != 1.0;
   GlyphCache *cache = ret->glyph->cache.get();
@@ -530,17 +529,18 @@ void AtlasFontEngine::WriteAtlas(const string &name, Font *f, Texture *t) {
 
 void AtlasFontEngine::WriteGlyphFile(const string &name, Font *f) {
   int glyph_count = 0, glyph_out = 0;
-  GlyphTableIter(f) if (i->       tex.width && i->       tex.height) glyph_count++;
-  GlyphIndexIter(f) if (i->second.tex.width && i->second.tex.height) glyph_count++;
+  for (auto &i : f->glyph->table) if (i.       tex.width && i.       tex.height) glyph_count++;
+  for (auto &i : f->glyph->index) if (i.second.tex.width && i.second.tex.height) glyph_count++;
 
-  Matrix *gm = new Matrix(glyph_count, 10);
-  GlyphTableIter(f) if (i->       tex.width && i->       tex.height) i->       ToArray(gm->row(glyph_out++), gm->N);
-  GlyphIndexIter(f) if (i->second.tex.width && i->second.tex.height) i->second.ToArray(gm->row(glyph_out++), gm->N);
-  MatrixFile(gm, "").WriteVersioned(VersionedFileName(app->assetdir.c_str(), name.c_str(), "glyphs"), 0);
+  unique_ptr<Matrix> gm = make_unique<Matrix>(glyph_count, 10);
+  for (auto &i : f->glyph->table) if (i.       tex.width && i.       tex.height) i.       ToArray(gm->row(glyph_out++), gm->N);
+  for (auto &i : f->glyph->index) if (i.second.tex.width && i.second.tex.height) i.second.ToArray(gm->row(glyph_out++), gm->N);
+  MatrixFile(gm.release(), "").
+    WriteVersioned(VersionedFileName(app->assetdir.c_str(), name.c_str(), "glyphs"), 0);
 }
 
 void AtlasFontEngine::MakeFromPNGFiles(const string &name, const vector<string> &png, const point &atlas_dim, Font **glyphs_out) {
-  Font *ret = new Font(Singleton<AtlasFontEngine>::Get(), FontDesc(name), shared_ptr<FontEngine::Resource>());
+  Font *ret = new Font(app->fonts->atlas_engine.get(), FontDesc(name), shared_ptr<FontEngine::Resource>());
   ret->glyph = make_shared<GlyphMap>(make_shared<GlyphCache>(0, atlas_dim.x, atlas_dim.y));
   EnsureSize(ret->glyph->table, png.size());
 
@@ -833,9 +833,9 @@ Font *CoreTextFontEngine::Open(const FontDesc &d) {
   // ConvertColorFromGenericToDeviceRGB(d.bg.x, ret->bg.x);
 
   bool new_cache = false, pre_load = false;
-  ret->glyph->cache = 
-    (!new_cache ? GlyphCache::Get() : 
-     new_cache ? new GlyphCache(0, AtlasFontEngine::Dimension(ret->max_width, ret->Height(), count))
+  ret->glyph->cache =
+    (!new_cache ? GlyphCache::Get() :
+     make_shared<GlyphCache>(0, AtlasFontEngine::Dimension(ret->max_width, ret->Height(), count)));
   GlyphCache *cache = ret->glyph->cache.get();
 
   if (new_cache) {
@@ -1062,15 +1062,15 @@ string IPCServerFontEngine::DebugString(Font *f) const { return ""; }
 
 FontEngine *Fonts::GetFontEngine(int engine_type) {
   switch (engine_type) {
-    case FontDesc::Engine::Atlas:    return Singleton<AtlasFontEngine>   ::Get();
+    case FontDesc::Engine::Atlas:    return app->fonts->atlas_engine.get();
 #ifdef LFL_FREETYPE
-    case FontDesc::Engine::FreeType: return Singleton<FreeTypeFontEngine>::Get();
+    case FontDesc::Engine::FreeType: return app->fonts->freetype_engine.get();
 #endif
 #ifdef __APPLE__
-    case FontDesc::Engine::CoreText: return Singleton<CoreTextFontEngine>::Get();
+    case FontDesc::Engine::CoreText: return app->fonts->coretext_engine.get();
 #endif
 #ifdef WIN32
-    case FontDesc::Engine::GDI:      return Singleton<GDIFontEngine>::Get();
+    case FontDesc::Engine::GDI:      return app->fonts->gdi_engine.get();
 #endif
     case FontDesc::Engine::Default:  return DefaultFontEngine();
   } return DefaultFontEngine();
@@ -1079,25 +1079,25 @@ FontEngine *Fonts::GetFontEngine(int engine_type) {
 FontEngine *Fonts::DefaultFontEngine() {
   static Fonts *inst = app->fonts.get();
   if (!inst->default_font_engine) {
-    if      (FLAGS_font_engine == "atlas")      inst->default_font_engine = Singleton<AtlasFontEngine>    ::Get();
+    if      (FLAGS_font_engine == "atlas")      inst->default_font_engine = app->fonts->atlas_engine.get();
 #ifdef LFL_IPC
-    else if (FLAGS_font_engine == "ipc_client") inst->default_font_engine = Singleton<IPCClientFontEngine>::Get();
+    else if (FLAGS_font_engine == "ipc_client") inst->default_font_engine = app->fonts->ipc_client_engine.get();
 #endif
 #ifdef LFL_FREETYPE                             
-    else if (FLAGS_font_engine == "freetype")   inst->default_font_engine = Singleton<FreeTypeFontEngine> ::Get();
+    else if (FLAGS_font_engine == "freetype")   inst->default_font_engine = app->fonts->freetype_engine.get();
 #endif                                          
 #ifdef __APPLE__                                
-    else if (FLAGS_font_engine == "coretext")   inst->default_font_engine = Singleton<CoreTextFontEngine> ::Get();
+    else if (FLAGS_font_engine == "coretext")   inst->default_font_engine = app->fonts->coretext_engine.get();
 #endif                                          
 #ifdef WIN32                                    
-    else if (FLAGS_font_engine == "gdi")        inst->default_font_engine = Singleton<GDIFontEngine>      ::Get();
+    else if (FLAGS_font_engine == "gdi")        inst->default_font_engine = app->fonts->gdi_engine.get();
 #endif                                          
-    else                                        inst->default_font_engine = Singleton<FakeFontEngine>     ::Get();
+    else                                        inst->default_font_engine = app->fonts->fake_engine.get();
   }
   return inst->default_font_engine;
 }
 
-Font *Fonts::Fake() { return &Singleton<FakeFontEngine>::Get()->fake_font; }
+Font *Fonts::Fake() { return &app->fonts->fake_engine.get()->fake_font; }
 Font *Fonts::Default() {
   static Font *default_font = 0;
   if (!default_font) default_font = Fonts::Get(FLAGS_default_font, FLAGS_default_font_family, FLAGS_default_font_size);
@@ -1165,7 +1165,7 @@ Font *Fonts::Change(Font *in, int new_size, const Color &new_fg, const Color &ne
 int Fonts::ScaledFontSize(int pointsize) {
   if (FLAGS_scale_font_height) {
     float ratio = (float)screen->height / FLAGS_scale_font_height;
-    pointsize = (int)(pointsize * ratio);
+    pointsize = RoundF(pointsize * ratio);
   }
   return pointsize + FLAGS_add_font_size;
 }
@@ -1174,7 +1174,7 @@ void Fonts::ResetGL() {
   static Fonts *inst = app->fonts.get();
   unordered_set<GlyphMap*> maps;
   unordered_set<GlyphCache*> caches;
-  AtlasFontEngine *atlas_engine = Singleton<AtlasFontEngine>::Get();
+  AtlasFontEngine *atlas_engine = app->fonts->atlas_engine.get();
   for (auto &i : inst->desc_map) {
     auto f = i.second.get();
     if (f->engine == atlas_engine && f == static_cast<AtlasFontEngine::Resource*>(f->resource.get())->primary) {
@@ -1193,7 +1193,7 @@ void Fonts::ResetGL() {
 }
 
 void Fonts::LoadConsoleFont(const string &name, const vector<int> &sizes) {
-  auto atlas_font_engine = Singleton<AtlasFontEngine>::Get();
+  auto atlas_font_engine = app->fonts->atlas_engine.get();
   FLAGS_lfapp_console_font = StrCat("atlas://", name);
   FLAGS_atlas_font_sizes.clear();
   for (auto size : sizes) {
@@ -1214,7 +1214,7 @@ void DejaVuSansFreetype::SetDefault() {
 void DejaVuSansFreetype::Load() { 
   vector<string> atlas_font_size;
   Split(FLAGS_atlas_font_sizes, iscomma, &atlas_font_size);
-  FontEngine *freetype = Singleton<FreeTypeFontEngine>::Get();
+  FontEngine *freetype = app->fonts->freetype_engine.get();
   for (int i=0; i<atlas_font_size.size(); i++) {
     int size = ::atoi(atlas_font_size[i].c_str());
     freetype->Init(FontDesc("DejaVuSans.ttf",                "sans-serif", size, Color::white, Color::clear, 0));

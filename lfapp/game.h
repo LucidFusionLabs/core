@@ -983,7 +983,7 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
     gplus_signin_button.EnableHover();
 #endif
     pinger.handler = this;
-    app->network->Enable(&pinger);
+    app->net->Enable(&pinger);
     SystemNetwork::SetSocketBroadcastEnabled(pinger.GetListener()->socket, true);
     Sniffer::GetIPAddress(&ip);
     Sniffer::GetBroadcastAddress(&broadcast_ip);

@@ -403,6 +403,12 @@ void SocketWakeupThread::ThreadProc() {
 
 /* Connection */
 
+Connection::~Connection() {
+#ifdef LFL_OPENSSL
+  if (bio) BIO_free_all(bio);
+#endif
+}
+
 int Connection::Read() {
   int readlen = rb.Remaining(), len = 0;
   if (readlen <= 0) return ERRORv(-1, Name(), ": read queue full, rl=", rb.size());

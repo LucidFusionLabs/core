@@ -97,6 +97,7 @@ using LFL_STL11_NAMESPACE::tuple;
 using LFL_STL11_NAMESPACE::array;
 using LFL_STL11_NAMESPACE::move;
 using LFL_STL11_NAMESPACE::bind;
+using LFL_STL11_NAMESPACE::forward;
 using LFL_STL11_NAMESPACE::function;
 using LFL_STL11_NAMESPACE::placeholders::_1;
 using LFL_STL11_NAMESPACE::placeholders::_2;
@@ -238,9 +239,8 @@ struct NullAlloc : public Allocator {
 };
 
 struct ThreadLocalStorage {
-  Allocator *alloc=0;
+  unique_ptr<Allocator> alloc;
   std::default_random_engine rand_eng;
-  virtual ~ThreadLocalStorage() { delete alloc; }
   ThreadLocalStorage() : rand_eng(std::random_device{}()) {}
   static void Init();
   static void Free();
@@ -515,13 +515,13 @@ struct BrowserInterface {
 struct JSContext {
   virtual ~JSContext() {}
   virtual string Execute(const string &s) = 0;
-  static JSContext *Create(Console *js_console=0, LFL::DOM::Node *document=0);
+  static unique_ptr<JSContext> Create(Console *js_console=0, LFL::DOM::Node *document=0);
 };
 
 struct LuaContext {
   virtual ~LuaContext() {}
   virtual string Execute(const string &s) = 0;
-  static LuaContext *Create();
+  static unique_ptr<LuaContext> Create();
 };
 
 struct CUDA : public Module { int Init(); };
@@ -541,7 +541,7 @@ struct Application : public ::LFApp {
   unique_ptr<ProcessAPIClient> render_process;
   unique_ptr<ProcessAPIServer> main_process;
   Window::Map windows;
-  Callback reshaped_cb, create_win_f;
+  Callback reshaped_cb, create_win_f, exit_cb;
   function<void(Window*)> window_init_cb, window_closed_cb = [](Window *w){ delete w; };
   unordered_map<string, StringPiece> asset_cache;
   CategoricalVariable<int> tex_mode, grab_mode, fill_mode;
@@ -626,12 +626,12 @@ struct Application : public ::LFApp {
   void PlayBackgroundMusic(SoundAsset*);
 
   template <class... Args> void RunInMainThread(Args&&... args) {
-    message_queue.Write(new Callback(args...));
+    message_queue.Write(new Callback(forward<Args>(args)...));
     if (!FLAGS_target_fps) scheduler.Wakeup(0);
   }
   template <class... Args> void RunInNetworkThread(Args&&... args) {
-    if (auto nt = network_thread.get()) nt->Write(new Callback(args...));
-    else (Callback(args...))();
+    if (auto nt = network_thread.get()) nt->Write(new Callback(forward<Args>(args)...));
+    else (Callback(forward<Args>(args)...))();
   }
 
   static void Daemonize(const char *dir="");

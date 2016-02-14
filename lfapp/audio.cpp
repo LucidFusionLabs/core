@@ -622,13 +622,13 @@ void Audio::QueueMix(SoundAsset *sa, int flag, int begin, int len) {
     int samples = sa->refill(sa, flag & MixFlag::Reset);
     playing = (samples == SoundAssetSize(sa)) ? sa : 0;
   }
-  RingBuf::Handle B(sa->wav, begin, len);
+  RingBuf::Handle B(sa->wav.get(), begin, len);
   QueueMixBuf(&B, sa->channels, flag);
 }
 
 int Audio::Snapshot(SoundAsset *out) {
   ScopedMutex ML(inlock);
-  RingBuf::Handle(out->wav).CopyFrom(&RL);
+  RingBuf::Handle(out->wav.get()).CopyFrom(&RL);
   return 0;
 }
 

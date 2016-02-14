@@ -235,9 +235,9 @@ ThreadLocalStorage *ThreadLocalStorage::Get() { return tls_instance ? tls_instan
 #endif
 Allocator *ThreadLocalStorage::GetAllocator(bool reset_allocator) {
   ThreadLocalStorage *tls = Get();
-  if (!tls->alloc) tls->alloc = new FixedAlloc<1024*1024>;
+  if (!tls->alloc) tls->alloc = make_unique<FixedAlloc<1024*1024>>();
   if (reset_allocator) tls->alloc->Reset();
-  return tls->alloc;
+  return tls->alloc.get();
 }
 
 void *MallocAlloc::Malloc(int size) { return ::malloc(size); }
@@ -970,6 +970,7 @@ Application::~Application() {
   vector<Window*> close_list;
   for (auto &i : windows) close_list.push_back(i.second);
   for (auto &i : close_list) CloseWindow(i);
+  if (exit_cb) exit_cb();
   if (network_thread) {
     network_thread->Write(new Callback([](){}));
     network_thread->thread->Wait();

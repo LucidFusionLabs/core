@@ -191,15 +191,22 @@ static void JpegMemSrc(j_decompress_ptr jds, const char *buf, size_t len) {
   src->pub.next_input_byte = src->data;
 }
 
-int JpegReader::Read(File *lf,           Texture *out) { return Read(lf->Contents(), out); }
+static string JpegErrorMessage(j_decompress_ptr jds) {
+  char buf[JMSG_LENGTH_MAX];
+  jds->err->format_message((j_common_ptr)jds, buf);
+  return buf;
+}
+
+int JpegReader::Read(File *lf, Texture *out) { return Read(lf->Contents(), out); }
 int JpegReader::Read(const string &data, Texture *out) {
   MyJpegErrorMgr jerr;
   jpeg_decompress_struct jds;
   jds.err = jpeg_std_error(&jerr.pub);
   jerr.pub.error_exit = JpegErrorExit;
   if (setjmp(jerr.setjmp_buffer)) {
-    char buf[JMSG_LENGTH_MAX]; jds.err->format_message((j_common_ptr)&jds, buf);
-    INFO("jpeg decompress failed ", buf); jpeg_destroy_decompress(&jds); return -1;
+    string error = JpegErrorMessage(&jds);
+    jpeg_destroy_decompress(&jds);
+    return ERRORv(-1, "jpeg decompress failed ", error);
   }
 
   jpeg_create_decompress(&jds);
@@ -411,8 +418,8 @@ struct SimpleAssetLoader : public AudioAssetLoader, public VideoAssetLoader, pub
 
       a->channels = 1;
       a->sample_rate = FLAGS_sample_rate;
-      a->wav = new RingBuf(a->sample_rate, wav_samples);
-      RingBuf::Handle H(a->wav);
+      a->wav = make_unique<RingBuf>(a->sample_rate, wav_samples);
+      RingBuf::Handle H(a->wav.get());
       if (wav_reader.Read(&H, 0, wav_samples))
         return ERROR("LoadAudio(", a->name, ", ", fn, ") read failed: ", strerror(errno));
     }
@@ -432,10 +439,12 @@ struct AndroidAudioAssetLoader : public AudioAssetLoader {
   virtual void LoadAudio(void *handle, SoundAsset *a, int seconds, int flag) { a->handle = handle; }
   virtual int RefillAudio(SoundAsset *a, int reset) { return 0; }
 };
+#else
+struct AndroidAudioAssetLoader {};
 #endif
 
 #ifdef LFL_IPHONE
-struct IPhoneAudioAssetLoader : public AudioAssetLoader {
+struct iPhoneAudioAssetLoader : public AudioAssetLoader {
   virtual void *LoadAudioFile(const string &filename) { return iPhoneMusicCreate(filename.c_str()); }
   virtual void UnloadAudioFile(void *h) {}
   virtual void *LoadAudioBuf(const char *buf, int len, const char *mimetype) { return 0; }
@@ -443,6 +452,8 @@ struct IPhoneAudioAssetLoader : public AudioAssetLoader {
   virtual void LoadAudio(void *handle, SoundAsset *a, int seconds, int flag) { a->handle = handle; }
   virtual int RefillAudio(SoundAsset *a, int reset) { return 0; }
 };
+#else
+struct iPhoneAudioAssetLoader {};
 #endif
 
 #ifdef LFL_FFMPEG
@@ -654,11 +665,11 @@ struct FFMpegAssetLoader : public AudioAssetLoader, public VideoAssetLoader, pub
       open_resampler = true;
     }
     if (!a->wav) {
-      a->wav = new RingBuf(a->sample_rate, SoundAssetSize(a));
+      a->wav = make_unique<RingBuf>(a->sample_rate, SoundAssetSize(a));
       open_resampler = true;
     }
     if (open_resampler)
-      a->resampler.Open(a->wav, avctx->channels, avctx->sample_rate, Sample::FromFFMpegId(avctx->sample_fmt),
+      a->resampler.Open(a->wav.get(), avctx->channels, avctx->sample_rate, Sample::FromFFMpegId(avctx->sample_fmt),
                         a->channels, a->sample_rate, Sample::S16);
     a->wav->ring.back = 0;
     int wrote = PlayMovie(a, 0, fctx, 0);
@@ -697,8 +708,8 @@ struct FFMpegAssetLoader : public AudioAssetLoader, public VideoAssetLoader, pub
       sa->channels = avctx->channels == 1 ? 1 : FLAGS_chans_out;
       sa->sample_rate = FLAGS_sample_rate;
       sa->seconds = FLAGS_soundasset_seconds;
-      sa->wav = new RingBuf(sa->sample_rate, SoundAssetSize(sa));
-      sa->resampler.Open(sa->wav, avctx->channels, avctx->sample_rate, Sample::FromFFMpegId(avctx->sample_fmt),
+      sa->wav = make_unique<RingBuf>(sa->sample_rate, SoundAssetSize(sa));
+      sa->resampler.Open(sa->wav.get(), avctx->channels, avctx->sample_rate, Sample::FromFFMpegId(avctx->sample_fmt),
                          sa->channels, sa->sample_rate, Sample::S16);
     }
   }
@@ -750,6 +761,8 @@ struct FFMpegAssetLoader : public AudioAssetLoader, public VideoAssetLoader, pub
     return wrote;
   }
 };
+#else
+struct FFMpegAssetLoader {};
 #endif
 
 struct AliasWavefrontObjLoader {
@@ -757,11 +770,11 @@ struct AliasWavefrontObjLoader {
   MtlMap MaterialMap;
   string dir;
 
-  Geometry *LoadOBJ(const string &filename, const float *map_tex_coord=0) {
+  unique_ptr<Geometry> LoadOBJ(const string &filename, const float *map_tex_coord=0) {
     dir.assign(filename, 0, DirNameLen(filename, true));
 
     LocalFile file(filename, "r");
-    if (!file.Opened()) { ERROR("LocalFile::open(", file.Filename(), ")"); return 0; }
+    if (!file.Opened()) return ERRORv(nullptr, "obj.open: ", file.Filename());
 
     NextRecordReader nr(&file);
     vector<v3> vert, vert_out, norm, norm_out;
@@ -785,8 +798,8 @@ struct AliasWavefrontObjLoader {
       else if (cmd == "vt") {
         word.ScanN(&xy[0], 2);
         if (map_tex_coord) {
-          xy.x = map_tex_coord[Texture::CoordMinX] + xy.x * (map_tex_coord[Texture::CoordMaxX] - map_tex_coord[Texture::CoordMinX]);
-          xy.y = map_tex_coord[Texture::CoordMinY] + xy.y * (map_tex_coord[Texture::CoordMaxY] - map_tex_coord[Texture::CoordMinY]);
+          xy.x = map_tex_coord[Texture::minx_coord_ind] + xy.x * (map_tex_coord[Texture::maxx_coord_ind] - map_tex_coord[Texture::minx_coord_ind]);
+          xy.y = map_tex_coord[Texture::miny_coord_ind] + xy.y * (map_tex_coord[Texture::maxy_coord_ind] - map_tex_coord[Texture::miny_coord_ind]);
         }
         tex.push_back(xy);
       }
@@ -799,19 +812,19 @@ struct AliasWavefrontObjLoader {
           int count = (ind[0]!=0) + (ind[1]!=0) + (ind[2]!=0);
           if (!count) continue;
           if (!format) format = count;
-          if (format != count) { ERROR("face format ", format, " != ", count); return 0; }
+          if (format != count) return ERRORv(nullptr, "face format ", format, " != ", count);
 
           face.push_back(v3(ind[0], ind[1], ind[2]));
         }
-        if (face.size() && face.size() < 2) { ERROR("face size ", face.size()); return 0; }
+        if (face.size() && face.size() < 2) return ERRORv(nullptr, "face size ", face.size());
 
         int next = 1;
         for (int i=0,j=0; i<face.size(); i++,j++) {
           unsigned ind[3] = { (unsigned)face[i].x, (unsigned)face[i].y, (unsigned)face[i].z };
 
-          if (ind[0] > (int) vert.size()) { ERROR("index error 1 ", ind[0], ", ", vert.size()); return 0; }
-          if (ind[1] > (int)  tex.size()) { ERROR("index error 2 ", ind[1], ", ", tex.size());  return 0; }
-          if (ind[2] > (int) norm.size()) { ERROR("index error 3 ", ind[2], ", ", norm.size()); return 0; }
+          if (ind[0] > (int) vert.size()) return ERRORv(nullptr, "index error 1 ", ind[0], ", ", vert.size());
+          if (ind[1] > (int)  tex.size()) return ERRORv(nullptr, "index error 2 ", ind[1], ", ", tex.size());
+          if (ind[2] > (int) norm.size()) return ERRORv(nullptr, "index error 3 ", ind[2], ", ", norm.size());
 
           if (ind[0]) vert_out.push_back(vert[ind[0]-1]);
           if (ind[1])  tex_out.push_back(tex [ind[1]-1]);
@@ -824,8 +837,9 @@ struct AliasWavefrontObjLoader {
       }
     }
 
-    Geometry *ret = new Geometry(GraphicsDevice::Triangles, vert_out.size(), &vert_out[0],
-                                 norm_out.size() ? &norm_out[0] : 0, tex_out.size() ? &tex_out[0] : 0);
+    unique_ptr<Geometry> ret =
+      make_unique<Geometry>(GraphicsDevice::Triangles, vert_out.size(), &vert_out[0],
+                            norm_out.size() ? &norm_out[0] : 0, tex_out.size() ? &tex_out[0] : 0);
     ret->material = material;
     ret->mat = mat;
 
@@ -860,7 +874,7 @@ struct AliasWavefrontObjLoader {
   }
 };
 
-Geometry *Geometry::LoadOBJ(const string &filename, const float *map_tex_coord) {
+unique_ptr<Geometry> Geometry::LoadOBJ(const string &filename, const float *map_tex_coord) {
   return AliasWavefrontObjLoader().LoadOBJ(filename, map_tex_coord);
 }
 
@@ -922,23 +936,27 @@ void Geometry::ScrollTexCoord(float dx, float dx_extra, int *subtract_max_int) {
   screen->gd->VertexPointer(vd, GraphicsDevice::Float, width_bytes, 0, &vert[0], vert_size, &vert_ind, true, primtype);
 }
 
+AssetLoader::AssetLoader() {}
+AssetLoader::~AssetLoader() {}
+
 int AssetLoader::Init() {
+  simple_loader = make_unique<SimpleAssetLoader>();
 #ifdef LFL_FFMPEG
-  static FFMpegAssetLoader *ffmpeg_loader = new FFMpegAssetLoader();
-  default_audio_loader = ffmpeg_loader;
-  default_video_loader = ffmpeg_loader;
-  default_movie_loader = ffmpeg_loader;
+  ffmpeg_loader = make_unique<FFMpegAssetLoader>();
+  default_audio_loader = ffmpeg_loader.get();
+  default_video_loader = ffmpeg_loader.get();
+  default_movie_loader = ffmpeg_loader.get();
 #endif
   if (!default_audio_loader || !default_video_loader || !default_movie_loader) {
-    if (!default_audio_loader) default_audio_loader = Singleton<SimpleAssetLoader>::Get();
-    if (!default_video_loader) default_video_loader = Singleton<SimpleAssetLoader>::Get();
-    if (!default_movie_loader) default_movie_loader = Singleton<SimpleAssetLoader>::Get();
+    if (!default_audio_loader) default_audio_loader = simple_loader.get();
+    if (!default_video_loader) default_video_loader = simple_loader.get();
+    if (!default_movie_loader) default_movie_loader = simple_loader.get();
   }
 #ifdef LFL_ANDROID
-  default_audio_loader = new AndroidAudioAssetLoader();
+  default_audio_loader = (android_audio_loader = make_unique<AndroidAudioAssetLoader>()).get();
 #endif
 #ifdef LFL_IPHONE
-  default_audio_loader = new IPhoneAudioAssetLoader();
+  default_audio_loader = (iphone_audio_loader = make_unique<iPhoneAudioAssetLoader>()).get();
 #endif
   return 0;
 }
@@ -967,7 +985,7 @@ void Asset::Unload() {
 void Asset::Load(void *h, VideoAssetLoader *l) {
   static int next_asset_type_id = 1, next_list_id = 1;
   if (!name.empty()) typeID = next_asset_type_id++;
-  if (!geom_fn.empty()) geometry = Geometry::LoadOBJ(StrCat(app->assetdir, geom_fn));
+  if (!geom_fn.empty()) geometry = Geometry::LoadOBJ(StrCat(app->assetdir, geom_fn)).release();
   if (!texture.empty() || h) LoadTexture(h, texture, &tex, l);
 }
 
@@ -985,7 +1003,7 @@ void Asset::LoadTexture(void *h, const string &asset_fn, Texture *out, VideoAsse
 void Asset::LoadTexture(const void *FromBuf, const char *filename, int size, Texture *out, int flag) {
   VideoAssetLoader *l = app->asset_loader->default_video_loader;
   // work around ffmpeg image2 format being AVFMT_NO_FILE; ie doesnt work with custom AVIOContext
-  if (FileSuffix::Image(filename)) l = Singleton<SimpleAssetLoader>::Get();
+  if (FileSuffix::Image(filename)) l = app->asset_loader->simple_loader.get();
   void *handle = l->LoadVideoBuf((const char *)FromBuf, size, filename);
   if (!handle) return;
   l->LoadVideo(handle, out, flag);
@@ -1013,7 +1031,7 @@ Texture *Asset::LoadTexture(const MultiProcessFileResource &file, int max_image_
 
 void SoundAsset::Unload() {
   if (parent) parent->Unloaded(this);
-  delete wav; wav=0;
+  wav.reset();
   if (handle) ERROR("leak: ", handle);
 }
 
@@ -1267,7 +1285,7 @@ void glSpectogram(Matrix *m, Texture *t, float *max, float clip, int pd) {
 }
 
 void glSpectogram(SoundAsset *sa, Texture *t, Matrix *transform, float *max, float clip) {
-  const RingBuf::Handle B(sa->wav);
+  const RingBuf::Handle B(sa->wav.get());
 
   /* 20*log10(abs(specgram(y,2048,sr,hamming(512),256))) */
   Matrix *m = Spectogram(&B, 0, FLAGS_feat_window, FLAGS_feat_hop, FLAGS_feat_window, 0, PowerDomain::abs);
@@ -1279,126 +1297,129 @@ void glSpectogram(SoundAsset *sa, Texture *t, Matrix *transform, float *max, flo
 
 /* Cube */
 
-Geometry *Cube::Create(v3 v) { return Create(v.x, v.y, v.z); } 
-Geometry *Cube::Create(float rx, float ry, float rz, bool normals) {
+unique_ptr<Geometry> Cube::Create(v3 v) { return Create(v.x, v.y, v.z); } 
+unique_ptr<Geometry> Cube::Create(float rx, float ry, float rz, bool normals) {
   vector<v3> verts, norms;
 
-  verts.push_back(v3(-rx,  ry, -rz)); norms.push_back(v3(0, 0, 1));
-  verts.push_back(v3(-rx, -ry, -rz)); norms.push_back(v3(0, 0, 1));
-  verts.push_back(v3( rx, -ry, -rz)); norms.push_back(v3(0, 0, 1));
-  verts.push_back(v3( rx,  ry, -rz)); norms.push_back(v3(0, 0, 1));
-  verts.push_back(v3(-rx,  ry, -rz)); norms.push_back(v3(0, 0, 1));
-  verts.push_back(v3( rx, -ry, -rz)); norms.push_back(v3(0, 0, 1));
+  PushBack(&verts, &norms, v3(-rx,  ry, -rz), v3(0, 0, 1));
+  PushBack(&verts, &norms, v3(-rx, -ry, -rz), v3(0, 0, 1));
+  PushBack(&verts, &norms, v3( rx, -ry, -rz), v3(0, 0, 1));
+  PushBack(&verts, &norms, v3( rx,  ry, -rz), v3(0, 0, 1));
+  PushBack(&verts, &norms, v3(-rx,  ry, -rz), v3(0, 0, 1));
+  PushBack(&verts, &norms, v3( rx, -ry, -rz), v3(0, 0, 1));
 
-  verts.push_back(v3( rx,  ry,  rz)); norms.push_back(v3(0, 0, -1));
-  verts.push_back(v3( rx, -ry,  rz)); norms.push_back(v3(0, 0, -1));
-  verts.push_back(v3(-rx, -ry,  rz)); norms.push_back(v3(0, 0, -1));
-  verts.push_back(v3(-rx,  ry,  rz)); norms.push_back(v3(0, 0, -1));
-  verts.push_back(v3( rx,  ry,  rz)); norms.push_back(v3(0, 0, -1));
-  verts.push_back(v3(-rx, -ry,  rz)); norms.push_back(v3(0, 0, -1));
+  PushBack(&verts, &norms, v3( rx,  ry,  rz), v3(0, 0, -1));
+  PushBack(&verts, &norms, v3( rx, -ry,  rz), v3(0, 0, -1));
+  PushBack(&verts, &norms, v3(-rx, -ry,  rz), v3(0, 0, -1));
+  PushBack(&verts, &norms, v3(-rx,  ry,  rz), v3(0, 0, -1));
+  PushBack(&verts, &norms, v3( rx,  ry,  rz), v3(0, 0, -1));
+  PushBack(&verts, &norms, v3(-rx, -ry,  rz), v3(0, 0, -1));
 
-  verts.push_back(v3(rx,  ry, -rz));  norms.push_back(v3(-1, 0, 0));
-  verts.push_back(v3(rx, -ry, -rz));  norms.push_back(v3(-1, 0, 0));
-  verts.push_back(v3(rx, -ry,  rz));  norms.push_back(v3(-1, 0, 0));
-  verts.push_back(v3(rx,  ry,  rz));  norms.push_back(v3(-1, 0, 0));
-  verts.push_back(v3(rx,  ry, -rz));  norms.push_back(v3(-1, 0, 0));
-  verts.push_back(v3(rx, -ry,  rz));  norms.push_back(v3(-1, 0, 0));
+  PushBack(&verts, &norms, v3(rx,  ry, -rz), v3(-1, 0, 0));
+  PushBack(&verts, &norms, v3(rx, -ry, -rz), v3(-1, 0, 0));
+  PushBack(&verts, &norms, v3(rx, -ry,  rz), v3(-1, 0, 0));
+  PushBack(&verts, &norms, v3(rx,  ry,  rz), v3(-1, 0, 0));
+  PushBack(&verts, &norms, v3(rx,  ry, -rz), v3(-1, 0, 0));
+  PushBack(&verts, &norms, v3(rx, -ry,  rz), v3(-1, 0, 0));
 
-  verts.push_back(v3(-rx,  ry,  rz)); norms.push_back(v3(1, 0, 0));
-  verts.push_back(v3(-rx, -ry,  rz)); norms.push_back(v3(1, 0, 0));
-  verts.push_back(v3(-rx, -ry, -rz)); norms.push_back(v3(1, 0, 0));
-  verts.push_back(v3(-rx,  ry, -rz)); norms.push_back(v3(1, 0, 0));
-  verts.push_back(v3(-rx,  ry,  rz)); norms.push_back(v3(1, 0, 0));
-  verts.push_back(v3(-rx, -ry, -rz)); norms.push_back(v3(1, 0, 0));
+  PushBack(&verts, &norms, v3(-rx,  ry,  rz), v3(1, 0, 0));
+  PushBack(&verts, &norms, v3(-rx, -ry,  rz), v3(1, 0, 0));
+  PushBack(&verts, &norms, v3(-rx, -ry, -rz), v3(1, 0, 0));
+  PushBack(&verts, &norms, v3(-rx,  ry, -rz), v3(1, 0, 0));
+  PushBack(&verts, &norms, v3(-rx,  ry,  rz), v3(1, 0, 0));
+  PushBack(&verts, &norms, v3(-rx, -ry, -rz), v3(1, 0, 0));
 
-  verts.push_back(v3( rx,  ry, -rz)); norms.push_back(v3(0, -1, 0));
-  verts.push_back(v3( rx,  ry,  rz)); norms.push_back(v3(0, -1, 0));
-  verts.push_back(v3(-rx,  ry,  rz)); norms.push_back(v3(0, -1, 0));
-  verts.push_back(v3(-rx,  ry, -rz)); norms.push_back(v3(0, -1, 0));
-  verts.push_back(v3( rx,  ry, -rz)); norms.push_back(v3(0, -1, 0));
-  verts.push_back(v3(-rx,  ry,  rz)); norms.push_back(v3(0, -1, 0));
+  PushBack(&verts, &norms, v3( rx,  ry, -rz), v3(0, -1, 0));
+  PushBack(&verts, &norms, v3( rx,  ry,  rz), v3(0, -1, 0));
+  PushBack(&verts, &norms, v3(-rx,  ry,  rz), v3(0, -1, 0));
+  PushBack(&verts, &norms, v3(-rx,  ry, -rz), v3(0, -1, 0));
+  PushBack(&verts, &norms, v3( rx,  ry, -rz), v3(0, -1, 0));
+  PushBack(&verts, &norms, v3(-rx,  ry,  rz), v3(0, -1, 0));
 
-  verts.push_back(v3( rx, -ry,  rz)); norms.push_back(v3(0, 1, 0));
-  verts.push_back(v3( rx, -ry, -rz)); norms.push_back(v3(0, 1, 0));
-  verts.push_back(v3(-rx, -ry, -rz)); norms.push_back(v3(0, 1, 0));
-  verts.push_back(v3(-rx, -ry,  rz)); norms.push_back(v3(0, 1, 0));
-  verts.push_back(v3( rx, -ry,  rz)); norms.push_back(v3(0, 1, 0));
-  verts.push_back(v3(-rx, -ry, -rz)); norms.push_back(v3(0, 1, 0));
+  PushBack(&verts, &norms, v3( rx, -ry,  rz), v3(0, 1, 0));
+  PushBack(&verts, &norms, v3( rx, -ry, -rz), v3(0, 1, 0));
+  PushBack(&verts, &norms, v3(-rx, -ry, -rz), v3(0, 1, 0));
+  PushBack(&verts, &norms, v3(-rx, -ry,  rz), v3(0, 1, 0));
+  PushBack(&verts, &norms, v3( rx, -ry,  rz), v3(0, 1, 0));
+  PushBack(&verts, &norms, v3(-rx, -ry, -rz), v3(0, 1, 0));
 
-  return new Geometry(GraphicsDevice::Triangles, verts.size(), &verts[0], normals ? &norms[0] : 0, 0, 0);
+  return make_unique<Geometry>(GraphicsDevice::Triangles, verts.size(), &verts[0], normals ? &norms[0] : 0, nullptr, nullptr);
 }
 
-Geometry *Cube::CreateFrontFace(float r) {
-  vector<v3> verts; vector<v2> tex;
-  verts.push_back(v3(-r,  r, -r)); tex.push_back(v2(1, 1)); 
-  verts.push_back(v3(-r, -r, -r)); tex.push_back(v2(1, 0)); 
-  verts.push_back(v3( r, -r, -r)); tex.push_back(v2(0, 0)); 
-  verts.push_back(v3( r,  r, -r)); tex.push_back(v2(0, 1)); 
-  verts.push_back(v3(-r,  r, -r)); tex.push_back(v2(1, 1)); 
-  verts.push_back(v3( r, -r, -r)); tex.push_back(v2(0, 0)); 
-  return new Geometry(GraphicsDevice::Triangles, verts.size(), &verts[0], 0, &tex[0]);
+unique_ptr<Geometry> Cube::CreateFrontFace(float r) {
+  vector<v3> verts;
+  vector<v2> tex;
+  PushBack(&verts, &tex, v3(-r,  r, -r), v2(1, 1)); 
+  PushBack(&verts, &tex, v3(-r, -r, -r), v2(1, 0)); 
+  PushBack(&verts, &tex, v3( r, -r, -r), v2(0, 0)); 
+  PushBack(&verts, &tex, v3( r,  r, -r), v2(0, 1)); 
+  PushBack(&verts, &tex, v3(-r,  r, -r), v2(1, 1)); 
+  PushBack(&verts, &tex, v3( r, -r, -r), v2(0, 0)); 
+  return make_unique<Geometry>(GraphicsDevice::Triangles, verts.size(), &verts[0], nullptr, &tex[0]);
 }
 
-Geometry *Cube::CreateBackFace(float r) {
-  vector<v3> verts; vector<v2> tex;
-  verts.push_back(v3( r,  r,  r)); tex.push_back(v2(1, 1)); 
-  verts.push_back(v3( r, -r,  r)); tex.push_back(v2(1, 0)); 
-  verts.push_back(v3(-r, -r,  r)); tex.push_back(v2(0, 0)); 
-  verts.push_back(v3(-r,  r,  r)); tex.push_back(v2(0, 1)); 
-  verts.push_back(v3( r,  r,  r)); tex.push_back(v2(1, 1)); 
-  verts.push_back(v3(-r, -r,  r)); tex.push_back(v2(0, 0)); 
-  return new Geometry(GraphicsDevice::Triangles, verts.size(), &verts[0], 0, &tex[0]);
+unique_ptr<Geometry> Cube::CreateBackFace(float r) {
+  vector<v3> verts;
+  vector<v2> tex;
+  PushBack(&verts, &tex, v3( r,  r,  r), v2(1, 1)); 
+  PushBack(&verts, &tex, v3( r, -r,  r), v2(1, 0)); 
+  PushBack(&verts, &tex, v3(-r, -r,  r), v2(0, 0)); 
+  PushBack(&verts, &tex, v3(-r,  r,  r), v2(0, 1)); 
+  PushBack(&verts, &tex, v3( r,  r,  r), v2(1, 1)); 
+  PushBack(&verts, &tex, v3(-r, -r,  r), v2(0, 0)); 
+  return make_unique<Geometry>(GraphicsDevice::Triangles, verts.size(), &verts[0], nullptr, &tex[0]);
 }
 
-Geometry *Cube::CreateLeftFace(float r) {
-  vector<v3> verts; vector<v2> tex;
-  verts.push_back(v3(r,  r, -r)); tex.push_back(v2(1, 1));
-  verts.push_back(v3(r, -r, -r)); tex.push_back(v2(1, 0));
-  verts.push_back(v3(r, -r,  r)); tex.push_back(v2(0, 0));
-  verts.push_back(v3(r,  r,  r)); tex.push_back(v2(0, 1));
-  verts.push_back(v3(r,  r, -r)); tex.push_back(v2(1, 1));
-  verts.push_back(v3(r, -r,  r)); tex.push_back(v2(0, 0));
-  return new Geometry(GraphicsDevice::Triangles, verts.size(), &verts[0], 0, &tex[0]);
+unique_ptr<Geometry> Cube::CreateLeftFace(float r) {
+  vector<v3> verts;
+  vector<v2> tex;
+  PushBack(&verts, &tex, v3(r,  r, -r), v2(1, 1));
+  PushBack(&verts, &tex, v3(r, -r, -r), v2(1, 0));
+  PushBack(&verts, &tex, v3(r, -r,  r), v2(0, 0));
+  PushBack(&verts, &tex, v3(r,  r,  r), v2(0, 1));
+  PushBack(&verts, &tex, v3(r,  r, -r), v2(1, 1));
+  PushBack(&verts, &tex, v3(r, -r,  r), v2(0, 0));
+  return make_unique<Geometry>(GraphicsDevice::Triangles, verts.size(), &verts[0], nullptr, &tex[0]);
 }
 
-Geometry *Cube::CreateRightFace(float r) {
-  vector<v3> verts; vector<v2> tex;
-  verts.push_back(v3(-r,  r,  r)); tex.push_back(v2(1, 1));
-  verts.push_back(v3(-r, -r,  r)); tex.push_back(v2(1, 0));
-  verts.push_back(v3(-r, -r, -r)); tex.push_back(v2(0, 0));
-  verts.push_back(v3(-r,  r, -r)); tex.push_back(v2(0, 1));
-  verts.push_back(v3(-r,  r,  r)); tex.push_back(v2(1, 1));
-  verts.push_back(v3(-r, -r, -r)); tex.push_back(v2(0, 0));
-  return new Geometry(GraphicsDevice::Triangles, verts.size(), &verts[0], 0, &tex[0]);
+unique_ptr<Geometry> Cube::CreateRightFace(float r) {
+  vector<v3> verts;
+  vector<v2> tex;
+  PushBack(&verts, &tex, v3(-r,  r,  r), v2(1, 1));
+  PushBack(&verts, &tex, v3(-r, -r,  r), v2(1, 0));
+  PushBack(&verts, &tex, v3(-r, -r, -r), v2(0, 0));
+  PushBack(&verts, &tex, v3(-r,  r, -r), v2(0, 1));
+  PushBack(&verts, &tex, v3(-r,  r,  r), v2(1, 1));
+  PushBack(&verts, &tex, v3(-r, -r, -r), v2(0, 0));
+  return make_unique<Geometry>(GraphicsDevice::Triangles, verts.size(), &verts[0], nullptr, &tex[0]);
 }
 
-Geometry *Cube::CreateTopFace(float r) {
-  vector<v3> verts; vector<v2> tex;
-  verts.push_back(v3( r,  r, -r)); tex.push_back(v2(1, 1));
-  verts.push_back(v3( r,  r,  r)); tex.push_back(v2(1, 0));
-  verts.push_back(v3(-r,  r,  r)); tex.push_back(v2(0, 0));
-  verts.push_back(v3(-r,  r, -r)); tex.push_back(v2(0, 1));
-  verts.push_back(v3( r,  r, -r)); tex.push_back(v2(1, 1));
-  verts.push_back(v3(-r,  r,  r)); tex.push_back(v2(0, 0));
-  return new Geometry(GraphicsDevice::Triangles, verts.size(), &verts[0], 0, &tex[0]);
+unique_ptr<Geometry> Cube::CreateTopFace(float r) {
+  vector<v3> verts;
+  vector<v2> tex;
+  PushBack(&verts, &tex, v3( r,  r, -r), v2(1, 1));
+  PushBack(&verts, &tex, v3( r,  r,  r), v2(1, 0));
+  PushBack(&verts, &tex, v3(-r,  r,  r), v2(0, 0));
+  PushBack(&verts, &tex, v3(-r,  r, -r), v2(0, 1));
+  PushBack(&verts, &tex, v3( r,  r, -r), v2(1, 1));
+  PushBack(&verts, &tex, v3(-r,  r,  r), v2(0, 0));
+  return make_unique<Geometry>(GraphicsDevice::Triangles, verts.size(), &verts[0], nullptr, &tex[0]);
 }
 
-Geometry *Cube::CreateBottomFace(float r) {
-  vector<v3> verts; vector<v2> tex;
-  verts.push_back(v3( r, -r,  r)); tex.push_back(v2(1, 1));
-  verts.push_back(v3( r, -r, -r)); tex.push_back(v2(1, 0));
-  verts.push_back(v3(-r, -r, -r)); tex.push_back(v2(0, 0));
-  verts.push_back(v3(-r, -r,  r)); tex.push_back(v2(0, 1));
-  verts.push_back(v3( r, -r,  r)); tex.push_back(v2(1, 1));
-  verts.push_back(v3(-r, -r, -r)); tex.push_back(v2(0, 0));
-  return new Geometry(GraphicsDevice::Triangles, verts.size(), &verts[0], 0, &tex[0]);
+unique_ptr<Geometry> Cube::CreateBottomFace(float r) {
+  vector<v3> verts;
+  vector<v2> tex;
+  PushBack(&verts, &tex, v3( r, -r,  r), v2(1, 1));
+  PushBack(&verts, &tex, v3( r, -r, -r), v2(1, 0));
+  PushBack(&verts, &tex, v3(-r, -r, -r), v2(0, 0));
+  PushBack(&verts, &tex, v3(-r, -r,  r), v2(0, 1));
+  PushBack(&verts, &tex, v3( r, -r,  r), v2(1, 1));
+  PushBack(&verts, &tex, v3(-r, -r, -r), v2(0, 0));
+  return make_unique<Geometry>(GraphicsDevice::Triangles, verts.size(), &verts[0], nullptr, &tex[0]);
 }
 
-Geometry *Grid::Grid3D() {
-  const float scaleFactor = 1;
-  const float range = powf(10, scaleFactor);
-  const float step = range/10;
-
+unique_ptr<Geometry> Grid::Grid3D() {
+  const float scale_factor = 1, range = powf(10, scale_factor), step = range/10;
   vector<v3> verts;
   for (float d = -range ; d <= range; d += step) {
     verts.push_back(v3(range,0,d));
@@ -1406,11 +1427,10 @@ Geometry *Grid::Grid3D() {
     verts.push_back(v3(d,0,range));
     verts.push_back(v3(d,0,-range));
   }
-
-  return new Geometry(GraphicsDevice::Lines, verts.size(), &verts[0], 0, 0, Color(.5,.5,.5));
+  return make_unique<Geometry>(GraphicsDevice::Lines, verts.size(), &verts[0], nullptr, nullptr, Color(.5,.5,.5));
 }
 
-Geometry *Grid::Grid2D(float x, float y, float range, float step) {
+unique_ptr<Geometry> Grid::Grid2D(float x, float y, float range, float step) {
   vector<v2> verts;
   for (float d = 0; d <= range; d += step) {
     verts.push_back(v2(x+range, y+d));
@@ -1418,8 +1438,7 @@ Geometry *Grid::Grid2D(float x, float y, float range, float step) {
     verts.push_back(v2(x+d, y+range));
     verts.push_back(v2(x+d, y));
   }
-
-  return new Geometry(GraphicsDevice::Lines, verts.size(), &verts[0], 0, 0, Color(0,0,0));
+  return make_unique<Geometry>(GraphicsDevice::Lines, verts.size(), &verts[0], nullptr, nullptr, Color(0,0,0));
 }
 
 void TextureArray::Load(const string &fmt, const string &prefix, const string &suffix, int N) {
@@ -1437,7 +1456,7 @@ void TextureArray::DrawSequence(Asset *out, Entity *e) {
 }
 
 void LayersInterface::Update() {
-  for (auto i : this->layer) i->Run(TilesInterface::RunFlag::ClearEmpty);
+  for (auto &i : this->layer) i->Run(TilesInterface::RunFlag::ClearEmpty);
   if (app->main_process) app->main_process->SwapTree(0, this);
 }
 

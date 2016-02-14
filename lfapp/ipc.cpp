@@ -319,8 +319,8 @@ bool MultiProcessBuffer::Open() {
 #endif /* WIN32 */
 
 #if defined(LFL_MOBILE) || !defined(LFL_FLATBUFFERS)
-void InterProcessComm::StartServerProcess(const string &server_program, const vector<string> &arg) {}
-void InterProcessComm::OpenSocket(const string &socket_name) {}
+bool InterProcessComm::StartServerProcess(const string &server_program, const vector<string> &arg) { return false; }
+bool InterProcessComm::OpenSocket(const string &socket_name) { return false; }
 void ProcessAPIClient::LoadAsset(const string &content, const string &fn, const TextureCB &cb) {}
 void ProcessAPIClient::Navigate(const string &url) {}
 void ProcessAPIClient::SetViewport(int w, int h) {}
@@ -355,8 +355,8 @@ bool InterProcessComm::DelBuffer(IPC::Seq id) {
   return true;
 }
 
-void InterProcessComm::StartServerProcess(const string &server_program, const vector<string> &arg) {
-  if (!LocalFile(server_program, "r").Opened()) return ERROR("ProcessAPIClient: \"", server_program, "\" doesnt exist");
+bool InterProcessComm::StartServerProcess(const string &server_program, const vector<string> &arg) {
+  if (!LocalFile(server_program, "r").Opened()) return ERRORv(false, "ProcessAPIClient: \"", server_program, "\" doesnt exist");
   Socket conn_socket = -1;
   bool conn_control_messages = 0;
 
@@ -475,9 +475,10 @@ void InterProcessComm::StartServerProcess(const string &server_program, const ve
   conn->svc->conn[conn->socket] = unique_ptr<Connection>(conn);
   app->net->active.Add(conn->socket, SocketSet::READABLE, &conn->self_reference);
   INFO("ProcessAPIClient started server PID=", pid, " ", server_program);
+  return true;
 }
 
-void InterProcessComm::OpenSocket(const string &socket_name) {
+bool InterProcessComm::OpenSocket(const string &socket_name) {
   static string fd_url = "fd://", np_url = "np://", tcp_url = "tcp://";
   if (PrefixMatch(socket_name, fd_url)) {
     conn = new Connection(app->net->unix_client.get(), static_cast<Connection::Handler*>(nullptr));
@@ -492,8 +493,9 @@ void InterProcessComm::OpenSocket(const string &socket_name) {
     CHECK_EQ(0, SystemNetwork::Connect(conn->socket, IPV4::Parse(host), atoi(port), 0));
     SystemNetwork::SetSocketBlocking(conn->socket, 0);
     conn->state = Connection::Connected;
-  } else return;
+  } else return false;
   INFO("InterProcessComm opened ", socket_name);
+  return true;
 }
 
 void InterProcessComm::HandleIPC(Connection *c, int filter_msg) {

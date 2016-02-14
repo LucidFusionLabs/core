@@ -196,7 +196,7 @@ struct TextGUI : public KeyboardGUI, public Drawable::AttrSource {
     TextGUI *parent=0;
     TextGUI::Lines *cont=0;
     shared_ptr<LineData> data;
-    Line() : data(new LineData()) {}
+    Line() : data(make_shared<LineData>()) {}
     Line &operator=(const Line &s) { data=s.data; return *this; }
     const DrawableBox& operator[](int i) const { return data->glyphs[i]; }
     static void Move (Line &t, Line &s) { swap(t.data, s.data); }
@@ -640,7 +640,7 @@ struct Dialog : public GUI {
   void DrawGradient(const point &p) const { (title + p).DrawGradient(title_gradient); }
   void Reshape(bool *down) { mouse_start = screen->mouse; win_start = point(box.x, box.y); *down = 1; }
 
-  static bool LessThan(const Dialog *l, const Dialog *r) { return l->zsort < r->zsort; }
+  static bool LessThan(const unique_ptr<Dialog> &l, const unique_ptr<Dialog> &r) { return l->zsort < r->zsort; }
   static void MessageBox(const string &text);
   static void TextureBox(const string &text);
 };

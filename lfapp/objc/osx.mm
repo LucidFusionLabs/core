@@ -58,8 +58,8 @@ static const char **osx_argv = 0;
 
   - (void)dealloc {
     if (trigger_timer) [self clearTriggerTimer];
-    if (runloop_timer)   ERRORf("%s", "runloop_timer remaining");
-    if (wait_forever_fh) ERRORf("%s", "wait_forever_fh remaining");
+    if (runloop_timer) ERRORf("%s", "runloop_timer remaining");
+    if (wait_forever_fh) [self delWaitForeverSocket: [wait_forever_fh fileDescriptor]];
     CVDisplayLinkRelease(displayLink);
     [pixel_format release];
     [context release];

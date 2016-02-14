@@ -57,11 +57,11 @@ struct MovieAssetLoader {
 };
 
 template <class X> struct AssetMapT {
-  bool loaded;
+  bool loaded=0;
   vector<X> vec;
-  map<string, X*> amap;
-  AssetMapT() : loaded(0) {}
-  void Add(const X &a) { CHECK(!loaded); vec.push_back(a); }
+  unordered_map<string, X*> amap;
+  template<typename ...Args>
+  void Add(Args&& ...args) { CHECK(!loaded); vec.emplace_back(forward<Args>(args)...); }
   void Unloaded(X *a) { if (!a->name.empty()) amap.erase(a->name); }
   void Load(X *a) { a->parent = this; if (!a->name.empty()) amap[a->name] = a; a->Load(); }
   void Load() { CHECK(!loaded); for (int i=0; i<vec.size(); i++) Load(&vec[i]); loaded=1; }
@@ -109,7 +109,7 @@ struct Geometry {
   void SetPosition(const point &p) { v2 v=p; SetPosition(&v[0]); }
   void ScrollTexCoord(float dx, float dx_extra, int *subtract_max_int);
 
-  static Geometry *LoadOBJ(const string &filename, const float *map_tex_coord=0);
+  static unique_ptr<Geometry> LoadOBJ(const string &filename, const float *map_tex_coord=0);
   static string ExportOBJ(const Geometry *geometry, const set<int> *prim_filter=0, bool prim_filter_invert=0);
 };
 
@@ -165,7 +165,7 @@ struct SoundAsset {
 
   SoundAssetMap *parent;
   string name, filename;
-  RingBuf *wav=0;
+  unique_ptr<RingBuf> wav;
   int channels=0, sample_rate=0, seconds=0;
   RefillCB refill;
   void *handle=0;
@@ -250,12 +250,22 @@ struct WavWriter {
   int Flush();
 };
 
+struct SimpleAssetLoader;
+struct FFMpegAssetLoader;
+struct AndroidAudioAssetLoader;
+struct iPhoneAudioAssetLoader;
+
 struct AssetLoader : public Module {
-  AudioAssetLoader *default_audio_loader;
-  VideoAssetLoader *default_video_loader;
-  MovieAssetLoader *default_movie_loader;
-  MovieAsset       *movie_playing;
-  AssetLoader() : default_audio_loader(0), default_video_loader(0), default_movie_loader(0), movie_playing(0) {}
+  AudioAssetLoader *default_audio_loader=0;
+  VideoAssetLoader *default_video_loader=0;
+  MovieAssetLoader *default_movie_loader=0;
+  MovieAsset       *movie_playing=0;
+  unique_ptr<SimpleAssetLoader> simple_loader;
+  unique_ptr<FFMpegAssetLoader> ffmpeg_loader;
+  unique_ptr<AndroidAudioAssetLoader> android_audio_loader;
+  unique_ptr<iPhoneAudioAssetLoader> iphone_audio_loader;
+  AssetLoader();
+  ~AssetLoader();
   int Init();
 };
 
@@ -296,19 +306,19 @@ struct Waveform : public Drawable {
 };
 
 struct Cube {
-  static Geometry *Create(v3 v);
-  static Geometry *Create(float rx, float ry, float rz, bool normals=false);
-  static Geometry *CreateFrontFace(float r);
-  static Geometry *CreateBackFace(float r);
-  static Geometry *CreateLeftFace(float r);
-  static Geometry *CreateRightFace(float r);
-  static Geometry *CreateTopFace(float r);
-  static Geometry *CreateBottomFace(float r);
+  static unique_ptr<Geometry> Create(v3 v);
+  static unique_ptr<Geometry> Create(float rx, float ry, float rz, bool normals=false);
+  static unique_ptr<Geometry> CreateFrontFace(float r);
+  static unique_ptr<Geometry> CreateBackFace(float r);
+  static unique_ptr<Geometry> CreateLeftFace(float r);
+  static unique_ptr<Geometry> CreateRightFace(float r);
+  static unique_ptr<Geometry> CreateTopFace(float r);
+  static unique_ptr<Geometry> CreateBottomFace(float r);
 };
 
 struct Grid {
-  static Geometry *Grid3D();
-  static Geometry *Grid2D(float x, float y, float range, float step);
+  static unique_ptr<Geometry> Grid3D();
+  static unique_ptr<Geometry> Grid2D(float x, float y, float range, float step);
 };
 
 struct TextureArray {
@@ -326,12 +336,12 @@ struct Skybox {
   Scene::EntityVector v_left, v_right, v_top, v_bottom, v_front, v_back;
 
   Skybox() :
-    a_left  ("", "", 1, 0, 0, Cube::Create(500, 500, 500), 0, CubeMap::PX, TexGen::LINEAR),
-    a_right ("", "", 1, 0, 0, 0,                           0, CubeMap::NX, 0),
-    a_top   ("", "", 1, 0, 0, 0,                           0, CubeMap::PY, 0),
-    a_bottom("", "", 1, 0, 0, 0,                           0, CubeMap::NY, 0),
-    a_front ("", "", 1, 0, 0, 0,                           0, CubeMap::PZ, 0),
-    a_back  ("", "", 1, 0, 0, 0,                           0, CubeMap::NZ, 0),
+    a_left  ("", "", 1, 0, 0, Cube::Create(500, 500, 500).release(), 0, CubeMap::PX, TexGen::LINEAR),
+    a_right ("", "", 1, 0, 0, 0,                                     0, CubeMap::NX, 0),
+    a_top   ("", "", 1, 0, 0, 0,                                     0, CubeMap::PY, 0),
+    a_bottom("", "", 1, 0, 0, 0,                                     0, CubeMap::NY, 0),
+    a_front ("", "", 1, 0, 0, 0,                                     0, CubeMap::PZ, 0),
+    a_back  ("", "", 1, 0, 0, 0,                                     0, CubeMap::NZ, 0),
     e_left ("sb_left",  &a_left),  e_right ("sb_right",  &a_right),
     e_top  ("sb_top",   &a_top),   e_bottom("sb_bottom", &a_bottom),
     e_front("sb_front", &a_front), e_back  ("sb_back",   &a_back)
@@ -743,6 +753,7 @@ template <class Line> struct RingFrameBuffer {
 
 struct TilesInterface {
   struct RunFlag { enum { DontClear=1, ClearEmpty=2 }; };
+  virtual ~TilesInterface() {}
   virtual void AddDrawableBoxArray(const DrawableBoxArray &box, point p);
   virtual void SetAttr            (const Drawable::Attr *a)                                = 0;
   virtual void InitDrawBox        (const point&)                                           = 0;
@@ -761,7 +772,7 @@ struct LayersInterface {
   UNALIGNED_struct Child { static const int Size=8;  int node_id, next_child_offset; };                      UNALIGNED_END(Child, Child::Size);
   vector<Node> node;
   vector<Child> child;
-  vector<TilesInterface*> layer;
+  vector<unique_ptr<TilesInterface>> layer;
   LayersInterface() { ClearLayerNodes(); }
 
   void ClearLayerNodes() { child.clear(); node.clear(); node.push_back({ Box(), point(), 0, 0 }); }
@@ -800,6 +811,7 @@ template<class CB, class CBL, class CBLI> struct TilesT : public TilesInterface 
   FrameBuffer fb;
   Box current_tile;
   TilesT(int l, int w=256, int h=256) : layer(l), W(w), H(h), mat(1,1) { CHECK(IsPowerOfTwo(W)); CHECK(IsPowerOfTwo(H)); }
+  ~TilesT() { TilesMatrixIter(&mat) delete tile; for (auto t : prepend) delete t; for (auto t : append) delete t; }
 
   void PushScissor(const Box &w) const { screen->gd->PushScissorOffset(current_tile, w); }
   void GetSpaceCoords(int i, int j, int *xo, int *yo) const { *xo =  j * W; *yo = (-i-1) * H; }
@@ -902,7 +914,8 @@ template<class CB, class CBL, class CBLI> struct TilesT : public TilesInterface 
         Tile *tile = GetTile(x, y);
         if (!tile || !tile->id) continue;
         GetSpaceCoords(y, x, &sx, &sy);
-        Texture(0, 0, Pixel::RGBA, tile->id).Draw(Box(sx - doc_to_view.x, sy - doc_to_view.y, W, H));
+        screen->gd->BindTexture(GraphicsDevice::Texture2D, tile->id);
+        Box(sx - doc_to_view.x, sy - doc_to_view.y, W, H).Draw(Texture::unit_texcoord);
       }
     }
   }
@@ -920,7 +933,7 @@ struct Tiles : public TilesT<Callback, CallbackList, CallbackList> {
 };
 
 template <class X> struct LayersT : public LayersInterface {
-  void Init(int N=1) { CHECK_EQ(this->layer.size(), 0); for (int i=0; i<N; i++) this->layer.push_back(new X(i)); }
+  void Init(int N=1) { CHECK_EQ(this->layer.size(), 0); for (int i=0; i<N; i++) this->layer.emplace_back(make_unique<X>(i)); }
 };
 
 typedef LayersT<Tiles> Layers;

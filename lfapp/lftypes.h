@@ -19,19 +19,6 @@
 #ifndef LFL_LFAPP_LFTYPES_H__
 #define LFL_LFAPP_LFTYPES_H__
 
-#ifdef LFL_FLATBUFFERS
-#include "flatbuffers/flatbuffers.h"
-namespace LFL {
-using flatbuffers::FlatBufferBuilder;
-typedef pair<flatbuffers::unique_ptr_t, size_t> FlatBufferPiece;
-template<typename T> FlatBufferPiece CreateFlatBuffer(const function<flatbuffers::Offset<T>(FlatBufferBuilder &fb)> &f)
-{ FlatBufferBuilder fb; fb.Finish(f(fb)); size_t s=fb.GetSize(); return make_pair(fb.ReleaseBufferPointer(), s); }
-}; // namespace LFL
-#define MakeFlatBufferOfType(t, x) CreateFlatBuffer(function<flatbuffers::Offset<t>(FlatBufferBuilder&)>([&](FlatBufferBuilder &fb){ return x; }))
-#else
-typedef pair<unique_ptr<char*>, size_t> FlatBufferPiece;
-#endif
-
 #define SortImpl1(x1, y2) return x1 < y2;
 #define SortImpl2(x1, y1, x2, y2) \
   if      (x1 < y1) return true;  \
@@ -53,8 +40,21 @@ typedef pair<unique_ptr<char*>, size_t> FlatBufferPiece;
   else return x4 < y4;
 
 namespace LFL {
+#ifdef LFL_FLATBUFFERS
+}; // namespace LFL
+#include "flatbuffers/flatbuffers.h"
+namespace LFL {
+using flatbuffers::FlatBufferBuilder;
+typedef pair<flatbuffers::unique_ptr_t, size_t> FlatBufferPiece;
+template<typename T> FlatBufferPiece CreateFlatBuffer(const function<flatbuffers::Offset<T>(FlatBufferBuilder &fb)> &f)
+{ FlatBufferBuilder fb; fb.Finish(f(fb)); size_t s=fb.GetSize(); return make_pair(fb.ReleaseBufferPointer(), s); }
+#define MakeFlatBufferOfType(t, x) CreateFlatBuffer(function<flatbuffers::Offset<t>(FlatBufferBuilder&)>([&](FlatBufferBuilder &fb){ return x; }))
+#else
+typedef pair<unique_ptr<char*>, size_t> FlatBufferPiece;
+#endif
+  
 template<typename T, typename ...Args>
-unique_ptr<T> make_unique(Args&& ...args) { return unique_ptr<T>(new T(args...)); }
+unique_ptr<T> make_unique(Args&& ...args) { return unique_ptr<T>(new T(forward<Args>(args)...)); }
 template <class X> int TypeId() { static int ret = fnv32(typeid(X).name()); return ret; }
 template <class X> int TypeId(X*) { return TypeId<X>(); };
 template <class X> X *CheckPointer(X *x) { CHECK(x); return x; }
@@ -68,6 +68,12 @@ struct typed_ptr {
   typed_ptr() {}
   template <class X> typed_ptr(X *v) : type(TypeId<X>()), value(v) { }
   template <class X> X *Get(int id) { return id == TypeId<X> ? reinterpret_cast<X*>(value) : nullptr; }
+};
+
+template <class X> struct LazyInitializedPtr {
+  unique_ptr<X> ptr;
+  X *get() { if (!ptr) ptr = make_unique<X>(); return ptr.get(); }
+  X *get() const { return ptr.get(); }
 };
 
 struct RefCounter {
@@ -194,6 +200,7 @@ template <typename X> typename X::value_type &PushBack (X &v, const typename X::
 template <typename X> typename X::value_type  PopBack  (X &v) { typename X::value_type ret = v.back (); v.pop_back (); return ret; }
 template <typename X> typename X::value_type  PopFront (X &v) { typename X::value_type ret = v.front(); v.pop_front(); return ret; }
 template <typename X> typename std::queue<X>::value_type PopFront(std::queue<X> &v) { typename std::queue<X>::value_type ret = v.front(); v.pop(); return ret; }
+template <class X, class Y> void PushBack(X *vx, Y *vy, const typename X::value_type &x, const typename Y::value_type &y) { vx->push_back(x); vy->push_back(y); }
 
 template <class X>       X *VectorGet(      vector<X> &x, int n) { return (n >= 0 && n < x.size()) ? &x[n] : 0; }
 template <class X> const X *VectorGet(const vector<X> &x, int n) { return (n >= 0 && n < x.size()) ? &x[n] : 0; }
@@ -802,16 +809,15 @@ struct ColMatPtrRingBuf : public RingBuf {
 
 struct BloomFilter {
   int M, K;
-  unsigned char *buf;
-  ~BloomFilter() { free(buf); }
-  BloomFilter(int m, int k, unsigned char *B) : M(m), K(k), buf(B) {}
-  static BloomFilter *Empty(int M, int K) { int s=M/8+1; BloomFilter *bf = new BloomFilter(M, K, (unsigned char*)calloc(s, 1)); return bf; }
-  static BloomFilter *Full (int M, int K) { int s=M/8+1; BloomFilter *bf = new BloomFilter(M, K, (unsigned char*)malloc(s)); memset(bf->buf, ~0, s); return bf; }
+  string buf;
+  BloomFilter(int m, int k) : M(m), K(k), buf(M/8, 0) {}
+  static unique_ptr<BloomFilter> Empty(int M, int K) { unique_ptr<BloomFilter> bf = make_unique<BloomFilter>(M, K);                                          return bf; }
+  static unique_ptr<BloomFilter> Full (int M, int K) { unique_ptr<BloomFilter> bf = make_unique<BloomFilter>(M, K); memset(&bf->buf[0], ~0, bf->buf.size()); return bf; }
 
-  void Set  (long long val) { return Set  ((      unsigned char *)&val, sizeof(long long)); }
-  void Clear(long long val) { return Clear((      unsigned char *)&val, sizeof(long long)); }
-  int  Get  (long long val) { return Get  ((const unsigned char *)&val, sizeof(long long)); }
-  int  Not  (long long val) { return Not  ((const unsigned char *)&val, sizeof(long long)); }
+  void Set  (long long val) { return Set  (reinterpret_cast<      unsigned char*>(&val), sizeof(long long)); }
+  void Clear(long long val) { return Clear(reinterpret_cast<      unsigned char*>(&val), sizeof(long long)); }
+  int  Get  (long long val) { return Get  (reinterpret_cast<const unsigned char*>(&val), sizeof(long long)); }
+  int  Not  (long long val) { return Not  (reinterpret_cast<const unsigned char*>(&val), sizeof(long long)); }
 
   void Set  (      unsigned char *val, size_t len) {        ForEachBitBucketDo(BitString::Set,   val, len); }
   void Clear(      unsigned char *val, size_t len) {        ForEachBitBucketDo(BitString::Clear, val, len); }
@@ -824,7 +830,7 @@ struct BloomFilter {
     for (int i = 1; i <= K; i++) {
       h1 = (h1 + h2) % M;
       h2 = (h2 +  i) % M;
-      if (!op(buf, h1)) return 0;
+      if (!op(Unsigned(&buf[0]), h1)) return 0;
     }
     return 1;
   }

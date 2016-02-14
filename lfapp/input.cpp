@@ -1110,14 +1110,13 @@ int Input::MouseEventDispatch(InputEvent::Id event, const point &p, int down) {
     fired += (*g)->Input(event, (*g)->MousePosition(), down, 0);
   }
 
-  vector<Dialog*> removed;
   Dialog *bring_to_front = 0;
   for (auto i = screen->dialogs.begin(); i != screen->dialogs.end(); /**/) {
-    Dialog *gui = (*i);
+    Dialog *gui = i->get();
     if (gui->NotActive()) { i++; continue; }
     fired += gui->Input(event, screen->mouse, down, 0);
-    if (gui->deleted) { screen->GiveDialogFocusAway(gui); delete gui; i = screen->dialogs.erase(i); continue; }
-    if (event == Mouse::Event::Button1 && down && gui->box.within(screen->mouse)) { bring_to_front = *i; break; }
+    if (gui->deleted) { screen->GiveDialogFocusAway(gui); i = screen->dialogs.erase(i); continue; }
+    if (event == Mouse::Event::Button1 && down && gui->box.within(screen->mouse)) { bring_to_front = gui; break; }
     i++;
   }
   if (bring_to_front) screen->BringDialogToFront(bring_to_front);

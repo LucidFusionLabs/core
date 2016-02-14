@@ -249,8 +249,8 @@ struct InterProcessComm {
   InterProcessComm(const string &n) : ipc_name(n) {}
   virtual ~InterProcessComm() {}
 
-  void StartServerProcess(const string &server_program, const vector<string> &arg=vector<string>());
-  void OpenSocket(const string &socket_name);
+  bool StartServerProcess(const string &server_program, const vector<string> &arg=vector<string>());
+  bool OpenSocket(const string &socket_name);
 
   virtual void HandleIPC(Connection *c, int filter_msg=0);
   virtual void HandleIPCMessage(const IPC::Header&, const StringPiece&, int) = 0;

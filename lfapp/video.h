@@ -289,10 +289,10 @@ struct Texture : public Drawable {
   unsigned char *buf;
   bool owner, buf_owner;
   int width, height, pf, cubemap;
-  float coord[4];
+  float coord[4] = { unit_texcoord[0], unit_texcoord[1], unit_texcoord[2], unit_texcoord[3] };
 
-  Texture(int w=0, int h=0, int PF=preferred_pf, unsigned id=0) : ID(id), buf(0), owner(1), buf_owner(1), width(w), height(h), pf(PF), cubemap(0) { Coordinates(coord,1,1,1,1); }
-  Texture(int w,   int h,   int PF,           unsigned char *B) : ID(0),  buf(B), owner(1), buf_owner(0), width(w), height(h), pf(PF), cubemap(0) { Coordinates(coord,1,1,1,1); }
+  Texture(int w=0, int h=0, int PF=preferred_pf, unsigned id=0) : ID(id), buf(0), owner(1), buf_owner(1), width(w), height(h), pf(PF), cubemap(0) {}
+  Texture(int w,   int h,   int PF,           unsigned char *B) : ID(0),  buf(B), owner(1), buf_owner(0), width(w), height(h), pf(PF), cubemap(0) {}
   Texture(const Texture &t) : ID(t.ID), buf(t.buf), owner(ID?0:1), buf_owner(buf?0:1), width(t.width), height(t.height), pf(t.pf), cubemap(t.cubemap) { memcpy(&coord, t.coord, sizeof(coord)); }
   virtual ~Texture() { ClearBuffer(); if (owner) ClearGL(); }
 
@@ -312,6 +312,8 @@ struct Texture : public Drawable {
   /// ClearGL() is thread-safe.
   void ClearGL();
   void RenewGL() { ClearGL(); Create(width, height); }
+  unsigned ReleaseGL() { unsigned ret = ID; ID = 0; return ret; }
+
   void ClearBuffer() { if (buf_owner) delete [] buf; buf = 0; buf_owner = 1; }
   unsigned char *NewBuffer() const { return new unsigned char [BufferSize()](); }
   unsigned char *RenewBuffer() { ClearBuffer(); buf = NewBuffer(); return buf; }
@@ -336,15 +338,12 @@ struct Texture : public Drawable {
   void UpdateGL(const ::LFL::Box &b, int flag=0) { return UpdateGL(buf ? (buf+(b.y*width+b.x)*PixelSize()) : 0, b, flag); }
   void UpdateGL() { UpdateGL(LFL::Box(0, 0, width, height)); }
   void LoadGL() { LoadGL(buf, point(width, height), pf, LineSize()); }
-  void DumpGL(unsigned tex_id=0);
 
   virtual int Id() const { return 0; }
   virtual int LayoutAtPoint(const point &p, LFL::Box *out) const { *out = LFL::Box(p, width, height); return width; } 
   virtual void Draw(const LFL::Box &B, const Drawable::Attr *A=0) const { Bind(); B.Draw(coord); }
   virtual void DrawCrimped(const LFL::Box &B, int ort, float sx, float sy) const { Bind(); B.DrawCrimped(coord, ort, sx, sy); }
 
-  void Screenshot();
-  void ScreenshotBox(const Box &b, int flag);
   void ToIplImage(_IplImage *out);
 #ifdef __APPLE__
   CGContextRef CGBitMap();
@@ -354,7 +353,8 @@ struct Texture : public Drawable {
   HBITMAP CreateGDIBitMap(HDC dc);
 #endif
   static void Coordinates(float *texcoord, int w, int h, int wd, int hd);
-  static const int CoordMinX, CoordMinY, CoordMaxX, CoordMaxY;
+  static const int minx_coord_ind, miny_coord_ind, maxx_coord_ind, maxy_coord_ind;
+  static const float unit_texcoord[4];
 };
 
 struct DepthTexture {
@@ -386,7 +386,7 @@ struct FrameBuffer {
   void Resize(int W, int H, int flag=0);
 
   void AllocTexture(Texture *out, bool clamp_to_edge=true);
-  void AllocTexture(unsigned *out, bool clamp_to_edge=true) { Texture tex; AllocTexture(&tex, clamp_to_edge); *out = tex.ID; } 
+  void AllocTexture(unsigned *out, bool clamp_to_edge=true);
   void AllocDepthTexture(DepthTexture *out);
 
   void Attach(int ct=0, int dt=0);
@@ -560,6 +560,9 @@ struct GraphicsDevice : public QOpenGLFunctions {
   void PushScissorStack();
   void PopScissorStack();
   void DrawPixels(const Box &b, const Texture &tex);
+  void DumpTexture(Texture *out, unsigned tex_id=0);
+  void Screenshot(Texture *out);
+  void ScreenshotBox(Texture *out, const Box &b, int flag);
   void GenRenderBuffers(int n, unsigned *out);
   void DelRenderBuffers(int n, const unsigned *id);
   void BindRenderBuffer(int id);
@@ -589,14 +592,14 @@ struct Window : public NativeWindow {
   RollingAvg<unsigned> fps;
   unique_ptr<Entity> cam;
   unique_ptr<BindMap> binds;
-  Dialog *top_dialog=0;
-  vector<Dialog*> dialogs;
+  unique_ptr<Console> lfapp_console;
   vector<GUI*> mouse_gui;
   vector<KeyboardGUI*> keyboard_gui;
   vector<InputController*> input_bind;
   function<TextGUI*()> default_textgui = []{ return nullptr; };
   TextGUI *active_textgui=0;
-  Console *lfapp_console=0;
+  vector<unique_ptr<Dialog>> dialogs;
+  Dialog *top_dialog=0;
 
   Window();
   virtual ~Window();
@@ -621,7 +624,7 @@ struct Window : public NativeWindow {
   void ClearInputBindEvents();
   void InitLFAppConsole();
   void DrawDialogs();
-  void AddDialog(Dialog*);
+  void AddDialog(unique_ptr<Dialog>);
   void BringDialogToFront(Dialog*);
   void GiveDialogFocusAway(Dialog*);
 

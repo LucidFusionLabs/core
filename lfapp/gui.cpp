@@ -530,7 +530,7 @@ void TextGUI::UpdateLongToken(Line *BL, int beg_offset, Line *EL, int end_offset
       Box gb = Box(BL->data->glyphs[beg_offset].box).SetY(BL->p.y - fh + adjust_y);
       Box ge = Box(EL->data->glyphs[end_offset].box).SetY(EL->p.y - fh + adjust_y);
       Box3 box(Box(fb->Width(), fb_h), gb.Position(), ge.Position() + point(ge.w, 0), fh, fh);
-      auto i = Insert(BL->data->links, beg_offset, shared_ptr<Link>(new Link(BL, &mouse_gui, box, offset ? textp.str() : text)));
+      auto i = Insert(BL->data->links, beg_offset, make_shared<Link>(BL, &mouse_gui, box, offset ? textp.str() : text));
       if (new_link_cb) new_link_cb(i->second);
     }
   }
@@ -1771,11 +1771,11 @@ void Dialog::TextureBox(const string &n) {}
 
 void Dialog::MessageBox(const string &n) {
   app->ReleaseMouseFocus();
-  screen->AddDialog(new MessageBoxDialog(n));
+  screen->AddDialog(make_unique<MessageBoxDialog>(n));
 }
 void Dialog::TextureBox(const string &n) {
   app->ReleaseMouseFocus();
-  screen->AddDialog(new TextureBoxDialog(n));
+  screen->AddDialog(make_unique<TextureBoxDialog>(n));
 }
 #endif /* LFL_QT */
 

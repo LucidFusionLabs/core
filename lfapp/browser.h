@@ -177,9 +177,9 @@ struct Browser : public BrowserInterface {
   static int ToWebKitY(const Box &w) { return -w.y - w.h; }
 };
 
-BrowserInterface *CreateQTWebKitBrowser (GUI *g, int w=1024, int h=1024);
-BrowserInterface *CreateBerkeliumBrowser(GUI *g, int w=1024, int h=1024);
-BrowserInterface *CreateDefaultBrowser  (GUI *g, int w=1024, int h=1024);
+unique_ptr<BrowserInterface> CreateQTWebKitBrowser (GUI *g, int w=1024, int h=1024);
+unique_ptr<BrowserInterface> CreateBerkeliumBrowser(GUI *g, int w=1024, int h=1024);
+unique_ptr<BrowserInterface> CreateDefaultBrowser  (GUI *g, int w=1024, int h=1024);
 
 }; // namespace LFL
 #endif // LFL_LFAPP_BROWSER_H__

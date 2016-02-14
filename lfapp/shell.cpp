@@ -118,8 +118,8 @@ void Shell::dldir(const vector<string>&) { INFO(LFAppDownloadDir()); }
 void Shell::screenshot(const vector<string> &a) {
   if (a.empty()) return INFO("usage: screenshot <file> [tex_id]");
   Texture tex;
-  if (a.size() == 1) tex.Screenshot();
-  else               tex.DumpGL(atoi(a[1]));
+  if (a.size() == 1) screen->gd->Screenshot(&tex);
+  else               screen->gd->DumpTexture(&tex, atoi(a[1]));
   LocalFile lf(a[0], "w");
   PngWriter::Write(&lf, tex);
 }
@@ -188,7 +188,7 @@ void Shell::copy(const vector<string> &arg) {
         src->name.c_str(), src->sample_rate, src->channels, src->seconds,
         dst->name.c_str(), dst->sample_rate, dst->channels, dst->seconds);
 
-  RingBuf::Handle srch(src->wav), dsth(dst->wav);
+  RingBuf::Handle srch(src->wav.get()), dsth(dst->wav.get());
   dsth.CopyFrom(&srch);
 }
 
@@ -216,7 +216,7 @@ void shell_filter(const vector<string> &arg, bool FFTfilter, int taps, int hop=0
   }
 
   RingBuf filtered(sa->wav->samples_per_sec, sa->wav->ring.size);
-  RingBuf::Handle I(sa->wav), O(&filtered);
+  RingBuf::Handle I(sa->wav.get()), O(&filtered);
 
   if (FFTfilter) {
     FFTFilterCompile(taps, &filter[0]);
@@ -255,12 +255,12 @@ void Shell::f0(const vector<string> &arg) {
   }
 
   if (offset) {
-    RingBuf::Handle I(sa->wav, offset);
+    RingBuf::Handle I(sa->wav.get(), offset);
     float f0 = FundamentalFrequency(&I, FLAGS_feat_window, 0, method);
     INFO("f0 = (", sa->name, ":", offset, ") = ", f0);    
   }
   else {
-    RingBuf::Handle I(sa->wav, offset);
+    RingBuf::Handle I(sa->wav.get(), offset);
     Matrix *f0 = F0Stream(&I, 0, FLAGS_feat_window, FLAGS_feat_hop, method);
     for (int i=0; i<f0->M; /**/) {
       char buf[1024]; int len=0;
@@ -280,7 +280,7 @@ void Shell::writesnap(const vector<string> &a) {
   SoundAsset *sa = app->shell.soundasset(a.size() ? a[0] : "snap");
   if (sa) {
     string filename = StrCat(LFAppDownloadDir(), "snap.wav"); 
-    RingBuf::Handle B(sa->wav);
+    RingBuf::Handle B(sa->wav.get());
     LocalFile lf(filename, "r");
     WavWriter w(&lf);
     int ret = w.Write(&B);
@@ -303,13 +303,13 @@ void Shell::Slider(const vector<string> &a) {
   string flag_name = a[0];
   float total = a.size() >= 1 ? atof(a[1]) : 0;
   float inc   = a.size() >= 2 ? atof(a[2]) : 0;
-  screen->AddDialog(new FlagSliderDialog(flag_name, total ? total : 100, inc ? inc : 1));
+  screen->AddDialog(make_unique<FlagSliderDialog>(flag_name, total ? total : 100, inc ? inc : 1));
 }
 
 void Shell::Edit(const vector<string> &a) {
   string s = Asset::FileContents("lfapp_vertex.glsl");
   if (s.empty()) INFO("missing file lfapp_vertex.glsl");
-  screen->AddDialog(new EditorDialog(screen, Fonts::Default(), new BufferFile(s, "lfapp_vertex.glsl")));
+  screen->AddDialog(make_unique<EditorDialog>(screen, Fonts::Default(), new BufferFile(s, "lfapp_vertex.glsl")));
 }
 
 void Shell::cmds(const vector<string>&) {

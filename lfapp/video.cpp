@@ -42,54 +42,19 @@
 #if defined(LFL_HEADLESS)
 #define GLint int
 #define GLuint unsigned 
-#define glFlush(x)
-#define glGetError() 0
+#define GL_RGBA 0
+#define GL_TEXTURE_2D 0
+#define GL_TEXTURE_CUBE_MAP 0
+#define GL_UNSIGNED_BYTE 0
+#define GL_FRAMEBUFFER_COMPLETE 0
+#define GL_FRAMEBUFFER_BINDING_OES 0
+#define GLEW_EXT_framebuffer_object 0
+#define glewGetString(a) 0
 #define glGetString(a) ""
 #define glGetIntegerv(a,b)
-#define glReadPixels(a,b,c,d,e,f,g)
 #define glTexImage2D(a,b,c,d,e,f,g,h,i)
 #define glTexSubImage2D(a,b,c,d,e,f,g,h,i)
 #define glTexParameteri(a,b,c)
-#define glGetTexImage(a,b,c,d,e)
-#define glGetTexLevelParameteriv(a,b,c,d)
-#define glGenRenderbuffersEXT(a,b)
-#define glDeleteRenderbuffersEXT(a,b)
-#define glGenFramebuffersEXT(a,b)
-#define glDeleteFramebuffersEXT(a,b)
-#define glBindRenderbufferEXT(a,b)
-#define glBindFramebufferEXT(a,b)
-#define glRenderbufferStorageEXT(a,b,c,d)
-#define glFramebufferRenderbufferEXT(a,b,c,d)
-#define glFramebufferTexture2DEXT(a,b,c,d,e)
-#define glCheckFramebufferStatusEXT(a) 0
-#define glewGetString(a) 0
-#define GL_FRAMEBUFFER 0
-#define GL_FRAMEBUFFER_BINDING_OES 0
-#define GL_LUMINANCE 0
-#define GL_LUMINANCE_ALPHA 0
-#define GL_RGB 0
-#define GL_BGR 0
-#define GL_RGBA 0
-#define GL_BGRA 0
-#define GL_TEXTURE_2D 0
-#define GL_TEXTURE_WIDTH 0
-#define GL_TEXTURE_CUBE_MAP 0
-#define GL_TEXTURE_CUBE_MAP_NEGATIVE_X 0
-#define GL_TEXTURE_CUBE_MAP_NEGATIVE_Y 0
-#define GL_TEXTURE_CUBE_MAP_NEGATIVE_Z 0
-#define GL_TEXTURE_CUBE_MAP_POSITIVE_X 0
-#define GL_TEXTURE_CUBE_MAP_POSITIVE_Y 0
-#define GL_TEXTURE_CUBE_MAP_POSITIVE_Z 0
-#define GL_UNSIGNED_BYTE 0
-#define GL_FRAGMENT_SHADER 0
-#define GL_ACTIVE_UNIFORMS 0
-#define GL_ACTIVE_ATTRIBUTES 0
-#define GL_FRAMEBUFFER_COMPLETE 0
-#define GL_VERTEX_SHADER 0
-#define GL_MAX_VERTEX_UNIFORM_COMPONENTS 0
-#define GL_MAX_VERTEX_ATTRIBS 0
-#define GL_DEPTH_COMPONENT16 0
-#define GLEW_EXT_framebuffer_object 0
 
 #elif defined(LFL_IPHONE)
 #ifdef LFL_GLES2
@@ -210,10 +175,11 @@ Color Color::grey20(.2, .2, .2);
 Color Color::grey10(.1, .1, .1);
 Color Color::clear(0.0, 0.0, 0.0, 0.0);
 
-const int Texture::CoordMinX = 0;
-const int Texture::CoordMinY = 1;
-const int Texture::CoordMaxX = 2;
-const int Texture::CoordMaxY = 3;
+const int Texture::minx_coord_ind = 0;
+const int Texture::miny_coord_ind = 1;
+const int Texture::maxx_coord_ind = 2;
+const int Texture::maxy_coord_ind = 3;
+const float Texture::unit_texcoord[4] = { 0, 0, 1, 1 };
 #ifdef LFL_MOBILE
 const int Texture::preferred_pf = Pixel::RGBA;
 #else
@@ -222,16 +188,22 @@ const int Texture::preferred_pf = Pixel::BGRA;
 
 int Depth::OpenGLID(int id) {
   switch(id) {
+#ifndef LFL_HEADLESS
     case _16: return GL_DEPTH_COMPONENT16;
+#endif
   } return 0;
 }
 
 int CubeMap::OpenGLID(int id) {
+#ifndef LFL_HEADLESS
   switch (id) {
     case NX: return GL_TEXTURE_CUBE_MAP_NEGATIVE_X;    case PX: return GL_TEXTURE_CUBE_MAP_POSITIVE_X;
     case NY: return GL_TEXTURE_CUBE_MAP_NEGATIVE_Y;    case PY: return GL_TEXTURE_CUBE_MAP_POSITIVE_Y;
     case NZ: return GL_TEXTURE_CUBE_MAP_NEGATIVE_Z;    case PZ: return GL_TEXTURE_CUBE_MAP_POSITIVE_Z;
   } return GL_TEXTURE_2D;
+#else
+  return 0;
+#endif
 }
 
 int ColorChannel::PixelOffset(int c) {
@@ -267,6 +239,7 @@ int Pixel::size(int p) {
 
 int Pixel::OpenGLID(int p) {
   switch (p) {
+#ifndef LFL_HEADLESS
     case RGBA:   case RGB32: return GL_RGBA;
     case RGB24:              return GL_RGB;
 #ifndef LFL_MOBILE
@@ -275,6 +248,7 @@ int Pixel::OpenGLID(int p) {
 #endif
     case GRAYA8:             return GL_LUMINANCE_ALPHA;
     case GRAY8:              return GL_LUMINANCE;
+#endif
     default:                 return -1;
   }
 }
@@ -403,20 +377,20 @@ void Box::Draw(const float *texcoord) const {
   static const float default_texcoord[4] = {0, 0, 1, 1};
   const float *tc = X_or_Y(texcoord, default_texcoord);
 #if 1
-  float verts[] = { (float)x,   (float)y,   tc[Texture::CoordMinX], tc[Texture::CoordMinY],
-                    (float)x,   (float)y+h, tc[Texture::CoordMinX], tc[Texture::CoordMaxY],
-                    (float)x+w, (float)y,   tc[Texture::CoordMaxX], tc[Texture::CoordMinY],
-                    (float)x,   (float)y+h, tc[Texture::CoordMinX], tc[Texture::CoordMaxY],
-                    (float)x+w, (float)y,   tc[Texture::CoordMaxX], tc[Texture::CoordMinY],
-                    (float)x+w, (float)y+h, tc[Texture::CoordMaxX], tc[Texture::CoordMaxY] };
+  float verts[] = { (float)x,   (float)y,   tc[Texture::minx_coord_ind], tc[Texture::miny_coord_ind],
+                    (float)x,   (float)y+h, tc[Texture::minx_coord_ind], tc[Texture::maxy_coord_ind],
+                    (float)x+w, (float)y,   tc[Texture::maxx_coord_ind], tc[Texture::miny_coord_ind],
+                    (float)x,   (float)y+h, tc[Texture::minx_coord_ind], tc[Texture::maxy_coord_ind],
+                    (float)x+w, (float)y,   tc[Texture::maxx_coord_ind], tc[Texture::miny_coord_ind],
+                    (float)x+w, (float)y+h, tc[Texture::maxx_coord_ind], tc[Texture::maxy_coord_ind] };
   bool changed = screen->gd->VertexPointer(2, GraphicsDevice::Float, sizeof(float)*4, 0,               verts, sizeof(verts), NULL, true, GraphicsDevice::Triangles);
   if (changed)   screen->gd->TexPointer   (2, GraphicsDevice::Float, sizeof(float)*4, sizeof(float)*2, verts, sizeof(verts), NULL, false);
   if (1)         screen->gd->DeferDrawArrays(GraphicsDevice::Triangles, 0, 6);
 #else
-  float verts[] = { (float)x,   (float)y,   tc[Texture::CoordMinX], tc[Texture::CoordMinY],
-                    (float)x,   (float)y+h, tc[Texture::CoordMinX], tc[Texture::CoordMaxY],
-                    (float)x+w, (float)y,   tc[Texture::CoordMaxX], tc[Texture::CoordMinY],
-                    (float)x+w, (float)y+h, tc[Texture::CoordMaxX], tc[Texture::CoordMaxY] };
+  float verts[] = { (float)x,   (float)y,   tc[Texture::minx_coord_ind], tc[Texture::miny_coord_ind],
+                    (float)x,   (float)y+h, tc[Texture::minx_coord_ind], tc[Texture::maxy_coord_ind],
+                    (float)x+w, (float)y,   tc[Texture::maxx_coord_ind], tc[Texture::miny_coord_ind],
+                    (float)x+w, (float)y+h, tc[Texture::maxx_coord_ind], tc[Texture::maxy_coord_ind] };
   bool changed = screen->gd->VertexPointer(2, GraphicsDevice::Float, sizeof(float)*4, 0,               verts, sizeof(verts), NULL, true, GraphicsDevice::TriangleStrip);
   if  (changed)  screen->gd->TexPointer   (2, GraphicsDevice::Float, sizeof(float)*4, sizeof(float)*2, verts, sizeof(verts), NULL, false);
   if (1)         screen->gd->DeferDrawArrays(GraphicsDevice::TriangleStrip, 0, 4);
@@ -579,6 +553,8 @@ Box Box3::BoundingBox() const {
   return Box(min_x, min_y, max_x - min_x, max_y - min_y);
 }
 
+/* Drawable */
+
 string Drawable::Attr::DebugString() const {
   return StrCat("Attr ", (void*)this,
                 " = { font=", font?CheckPointer(font->desc)->DebugString():string(), ", fg=", fg?fg->DebugString():string(),
@@ -597,9 +573,9 @@ void Drawable::AttrVec::Insert(const Drawable::Attr &v) {
 int Texture::GLBufferType() const { return pf == preferred_pf ? GraphicsDevice::GLPreferredBuffer : GL_UNSIGNED_BYTE; }
 
 void Texture::Coordinates(float *texcoord, int w, int h, int wd, int hd) {
-  texcoord[CoordMinX] = texcoord[CoordMinY] = 0;
-  texcoord[CoordMaxX] = (float)w / wd;
-  texcoord[CoordMaxY] = (float)h / hd;
+  texcoord[minx_coord_ind] = texcoord[miny_coord_ind] = 0;
+  texcoord[maxx_coord_ind] = (float)w / wd;
+  texcoord[maxy_coord_ind] = (float)h / hd;
 }
 
 void Texture::Resize(int W, int H, int PF, int flag) {
@@ -669,21 +645,6 @@ void Texture::UpdateGL(const unsigned char *B, const ::LFL::Box &box, int flag) 
   glTexSubImage2D(gl_tt, 0, box.x, gl_y, box.w, box.h, GLPixelType(), GLBufferType(), B);
 }
 
-void Texture::DumpGL(unsigned tex_id) {
-#ifndef LFL_MOBILE
-  if (tex_id) {
-    GLint gl_tt = GLTexType(), tex_w = 0, tex_h = 0;
-    screen->gd->BindTexture(gl_tt, tex_id);
-    glGetTexLevelParameteriv(gl_tt, 0, GL_TEXTURE_WIDTH, &tex_w);
-    glGetTexLevelParameteriv(gl_tt, 0, GL_TEXTURE_WIDTH, &tex_h);
-    CHECK_GT((width  = tex_w), 0);
-    CHECK_GT((height = tex_h), 0);
-  }
-  RenewBuffer();
-  glGetTexImage(GLTexType(), 0, GLPixelType(), GLBufferType(), buf);
-#endif
-}
-
 void Texture::ToIplImage(_IplImage *out) {
 #ifdef LFL_OPENCV
   memset(out, 0, sizeof(IplImage));
@@ -738,15 +699,6 @@ HBITMAP Texture::CreateGDIBitMap(HDC dc) {
 }
 #endif
 
-void Texture::Screenshot() { ScreenshotBox(Box(screen->width, screen->height), Flag::FlipY); }
-void Texture::ScreenshotBox(const Box &b, int flag) {
-  Resize(b.w, b.h, preferred_pf, Flag::CreateBuf);
-  unsigned char *pixels = NewBuffer();
-  glReadPixels(b.x, b.y, b.w, b.h, GLPixelType(), GLBufferType(), pixels);
-  UpdateBuffer(pixels, point(b.w, b.h), pf, b.w*4, flag);
-  delete [] pixels;
-}
-
 /* DepthTexture */
 
 void DepthTexture::Resize(int W, int H, int DF, int flag) {
@@ -787,6 +739,7 @@ void FrameBuffer::Resize(int W, int H, int flag) {
 }
 
 void FrameBuffer::AllocDepthTexture(DepthTexture *out) { CHECK_EQ(out->ID, 0); out->Create(width, height); }
+void FrameBuffer::AllocTexture(unsigned *out, bool clamp) { Texture t; AllocTexture(&t, clamp); *out = t.ReleaseGL(); } 
 void FrameBuffer::AllocTexture(Texture *out, bool clamp_to_edge) {
   CHECK_EQ(out->ID, 0);
   out->Create(width, height); 
@@ -799,8 +752,8 @@ void FrameBuffer::AllocTexture(Texture *out, bool clamp_to_edge) {
 void FrameBuffer::Release() { screen->gd->BindFrameBuffer(screen->gd->default_framebuffer); }
 void FrameBuffer::Attach(int ct, int dt) {
   screen->gd->BindFrameBuffer(ID);
-  if (ct) screen->gd->FrameBufferTexture     ((tex.ID   = ct));
-  if (dt) screen->gd->FrameBufferDepthTexture((depth.ID = dt));
+  if (ct) { if (tex  .ID != ct) tex.owner   = false; screen->gd->FrameBufferTexture     ((tex.ID   = ct)); }
+  if (dt) { if (depth.ID != dt) depth.owner = false; screen->gd->FrameBufferDepthTexture((depth.ID = dt)); }
 }
 
 void FrameBuffer::ClearGL() {
@@ -827,7 +780,7 @@ void Shader::SetGlobalUniform2f(const string &name, float v1, float v2){
   screen->gd->UseShader(&app->shaders->shader_cubenorm); app->shaders->shader_cubenorm.SetUniform2f(name, v1, v2);
 }
 
-#ifdef LFL_GLSL_SHADERS
+#if defined(LFL_GLSL_SHADERS) && !defined(LFL_HEADLESS)
 int Shader::Create(const string &name, const string &vertex_shader, const string &fragment_shader, const ShaderDefines &defines, Shader *out) {
   INFO("Shader::Create ", name);
   GLuint p = screen->gd->CreateProgram();
@@ -963,6 +916,7 @@ void Shader::SetUniform3f(const string &name, float v1, float v2, float v3) {}
 void Shader::SetUniform4f(const string &name, float v1, float v2, float v3, float v4) {}
 void Shader::SetUniform3fv(const string &name, const float *v) {}
 void Shader::SetUniform3fv(const string &name, int n, const float *v) {}
+void Shader::ClearGL() {}
 #endif /* LFL_GLSL_SHADERS */
 
 #ifndef LFL_HEADLESS
@@ -1750,6 +1704,30 @@ void GraphicsDevice::DrawPixels(const Box &b, const Texture &tex) {
   temp.ClearGL();
 }
 
+void GraphicsDevice::DumpTexture(Texture *out, unsigned tex_id) {
+#ifndef LFL_MOBILE
+  if (tex_id) {
+    GLint gl_tt = out->GLTexType(), tex_w = 0, tex_h = 0;
+    BindTexture(gl_tt, tex_id);
+    glGetTexLevelParameteriv(gl_tt, 0, GL_TEXTURE_WIDTH, &tex_w);
+    glGetTexLevelParameteriv(gl_tt, 0, GL_TEXTURE_WIDTH, &tex_h);
+    CHECK_GT((out->width  = tex_w), 0);
+    CHECK_GT((out->height = tex_h), 0);
+  }
+  out->RenewBuffer();
+  glGetTexImage(out->GLTexType(), 0, out->GLPixelType(), out->GLBufferType(), out->buf);
+#endif
+}
+
+void GraphicsDevice::Screenshot(Texture *out) { ScreenshotBox(out, Box(screen->width, screen->height), Texture::Flag::FlipY); }
+void GraphicsDevice::ScreenshotBox(Texture *out, const Box &b, int flag) {
+  out->Resize(b.w, b.h, Texture::preferred_pf, Texture::Flag::CreateBuf);
+  unsigned char *pixels = out->NewBuffer();
+  glReadPixels(b.x, b.y, b.w, b.h, out->GLPixelType(), out->GLBufferType(), pixels);
+  out->UpdateBuffer(pixels, point(b.w, b.h), out->pf, b.w*4, flag);
+  delete [] pixels;
+}
+
 void GraphicsDevice::GenRenderBuffers(int n, unsigned *out) {
   glGenRenderbuffersEXT(n, out);
   if (FLAGS_gd_debug) for (int i=0; i<n; i++) GDDebug("GenRenderBuffer ", out[i]);
@@ -1898,6 +1876,9 @@ void GraphicsDevice::PopScissor() {}
 void GraphicsDevice::PushScissorStack() {}
 void GraphicsDevice::PopScissorStack() {}
 void GraphicsDevice::DrawPixels(const Box&, const Texture&) {}
+void GraphicsDevice::DumpTexture(Texture *out, unsigned tex_id) {}
+void GraphicsDevice::Screenshot(Texture *out) {}
+void GraphicsDevice::ScreenshotBox(Texture *out, const Box &b, int flag) {}
 void GraphicsDevice::GenRenderBuffers(int n, unsigned *out) {}
 void GraphicsDevice::DelRenderBuffers(int n, const unsigned *id) {}
 void GraphicsDevice::BindRenderBuffer(int id) {}
@@ -2397,10 +2378,7 @@ Window::Window() : caption("lfapp"), fps(128) {
 }
 
 Window::~Window() {
-  if (lfapp_console) {
-    lfapp_console->WriteHistory(LFAppDownloadDir(), "console", "");
-    delete lfapp_console;
-  }
+  if (lfapp_console) lfapp_console->WriteHistory(LFAppDownloadDir(), "console", "");
   if (gd) delete gd;
 }
 
@@ -2436,22 +2414,22 @@ void Window::ClearInputBindEvents() {
 }
 
 void Window::InitLFAppConsole() {
-  lfapp_console = new Console(screen);
+  lfapp_console = make_unique<Console>(screen);
   lfapp_console->ReadHistory(LFAppDownloadDir(), "console");
   lfapp_console->Write(StrCat(screen->caption, " started"));
   lfapp_console->Write("Try console commands 'cmds' and 'flags'");
 }
 
-void Window::AddDialog(Dialog *d) {
-  dialogs.push_back(d);
-  if (dialogs.size() == 1) BringDialogToFront(d);
+void Window::AddDialog(unique_ptr<Dialog> d) {
+  dialogs.emplace_back(move(d));
+  if (dialogs.size() == 1) BringDialogToFront(dialogs.back().get());
 }
 
 void Window::BringDialogToFront(Dialog *d) {
   if (top_dialog == d) return;
   if (top_dialog) top_dialog->LoseFocus();
   int zsort_ind = 0;
-  for (auto d : dialogs) d->zsort = ++zsort_ind;
+  for (auto &d : dialogs) d->zsort = ++zsort_ind;
   d->zsort = 0;
   sort(dialogs.begin(), dialogs.end(), Dialog::LessThan);
   (top_dialog = d)->TakeFocus();
@@ -2549,9 +2527,9 @@ void Window::Reshaped(int w, int h) {
 
 void Window::ResetGL() {
   Video::InitGraphicsDevice(this);
-  for (auto g : screen->keyboard_gui) g->ResetGL();
-  for (auto g : screen->   mouse_gui) g->ResetGL();
-  for (auto g : screen->     dialogs) g->ResetGL();
+  for (auto &g : screen->keyboard_gui) g->ResetGL();
+  for (auto &g : screen->   mouse_gui) g->ResetGL();
+  for (auto &g : screen->     dialogs) g->ResetGL();
 }
 
 void Window::SwapAxis() {
@@ -2737,7 +2715,7 @@ void Video::InitFonts() {
     font_engine->Init(FontDesc(FLAGS_default_font, FLAGS_default_font_family, size, Color::white, Color::clear, FLAGS_default_font_flag));
   }
 
-  FontEngine *atlas_engine = Singleton<AtlasFontEngine>::Get();
+  FontEngine *atlas_engine = app->fonts->atlas_engine.get();
   atlas_engine->Init(FontDesc("MenuAtlas", "", 0, Color::white, Color::clear, 0, false));
 
   if (FLAGS_lfapp_console && FLAGS_font_engine != "atlas" && FLAGS_font_engine != "freetype")
