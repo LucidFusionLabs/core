@@ -783,7 +783,7 @@ int Application::Create(int argc, const char **argv, const char *source_filename
 #ifdef __APPLE__
     rl.rlim_cur = rl.rlim_max = OPEN_MAX;
 #else
-    rl.rlim_cur = rl.rlim_max = 999999;
+    rl.rlim_cur = rl.rlim_max; // 999999
 #endif
     INFO("setrlimit(RLIMIT_NOFILE, ", rl.rlim_cur, ")");
     if (setrlimit(RLIMIT_NOFILE, &rl) == -1) return ERRORv(-1, "files setrlimit ", strerror(errno));
@@ -965,17 +965,19 @@ void Application::ResetGL() {
 Application::~Application() {
   run = 0;
   INFO("exiting");
+  if (network_thread) {
+    network_thread->Write(new Callback([](){}));
+    network_thread->thread->Wait();
+    network_thread->net->Free();
+  }
+  message_queue.HandleMessages();
+  if (!FLAGS_threadpool_size && thread_pool.worker.size()) thread_pool.worker[0].queue->HandleMessages();
   if (fonts) fonts.reset();
   if (shaders) shaders.reset();
   vector<Window*> close_list;
   for (auto &i : windows) close_list.push_back(i.second);
   for (auto &i : close_list) CloseWindow(i);
   if (exit_cb) exit_cb();
-  if (network_thread) {
-    network_thread->Write(new Callback([](){}));
-    network_thread->thread->Wait();
-    network_thread->net->Free();
-  }
   if (cuda) cuda->Free();
   for (auto &m : modules) m->Free();
   if (video) video->Free();

@@ -362,7 +362,7 @@ bool InterProcessComm::StartServerProcess(const string &server_program, const ve
 
 #if defined(LFL_SOCKETPAIR_IPC)
   Socket fd[2];
-  CHECK(SystemNetwork::OpenSocketPair(fd, false));
+  CHECK(SystemNetwork::OpenSocketPair(fd, SocketType::SeqPacket, false));
   SystemNetwork::SetSocketCloseOnExec(fd[1], true);
   string arg0 = server_program, arg1 = StrCat("fd://", fd[0]);
   SystemNetwork::SetSocketBufferSize(fd[0], 0, 65536);
@@ -627,7 +627,7 @@ int ProcessAPIClient::HandleOpenSystemFontRequest(int seq, const IPC::OpenSystem
   font_table.push_back(font);
   GlyphMetrics *g = reinterpret_cast<GlyphMetrics*>(mpb.buf);
   for (int i=0; i<glyph_table_size; ++i) {
-    drawable.push_back(&glyph->table[i]);
+    drawable.emplace_back(&glyph->table[i]);
     g[i] = GlyphMetrics(glyph->table[i]);
     g[i].tex_id = drawable.size();
   }
@@ -644,14 +644,15 @@ int ProcessAPIClient::HandleLoadTextureRequest(int seq, const IPC::LoadTextureRe
 }
 
 void ProcessAPIClient::LoadTextureQuery::LoadTexture(const MultiProcessTextureResource &mpt) {
-  Texture *tex = new Texture();
+  unique_ptr<Texture> tex = make_unique<Texture>();
   tex->LoadGL(mpt);
   tex->owner = true;
-  app->RunInNetworkThread(bind(&ProcessAPIClient::LoadTextureQuery::Complete, this, tex));
+  app->RunInNetworkThread(bind(&ProcessAPIClient::LoadTextureQuery::Complete, this, tex.release()));
 }
 
 void ProcessAPIClient::LoadTextureQuery::Complete(Texture *tex) {
-  parent->drawable.push_back(tex);
+  parent->texture.emplace_back(tex);
+  parent->drawable.emplace_back(tex);
   parent->SendIPC(parent->conn, seq, -1, LoadTextureResponse, parent->drawable.size());
   delete this;
 }
@@ -674,7 +675,7 @@ int ProcessAPIClient::HandleSwapTreeRequest(int seq, const IPC::SwapTreeRequest 
 }
 
 void ProcessAPIClient::SwapTreeQuery::SwapLayerTree(int id, const MultiProcessLayerTree &tree) {
-  tree.AssignTo(parent->browser->layers);
+  tree.AssignTo(parent->browser->layers.get());
   app->RunInNetworkThread([=]{ delete this; });
 }
 

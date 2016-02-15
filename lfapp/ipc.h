@@ -182,6 +182,7 @@ struct ProcessAPIClient : public ProcessAPI {
   typedef function<void(const MultiProcessTextureResource&)> TextureCB;
   vector<Drawable*> drawable;
   vector<Font*> font_table;
+  vector<unique_ptr<Texture>> texture;
   Browser *browser=0;
   ProcessAPIClient() : ProcessAPI("ProcessAPIClient") {}
 

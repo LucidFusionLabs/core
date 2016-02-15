@@ -459,7 +459,7 @@ Font *AtlasFontEngine::Open(const FontDesc &d) {
       ERROR("OpenDuplicate ", d.DebugString());
     }
 
-    Font *primary      = static_cast<Resource*>(f->resource.get())->primary;
+    Font *primary      = dynamic_cast<Resource*>(f->resource.get())->primary;
     Font *ret          = new Font(this, d, f->resource);
     ret->mix_fg        = primary->mix_fg || ci;
     ret->mono          = primary->mono;
@@ -495,7 +495,7 @@ Font *AtlasFontEngine::OpenAtlas(const FontDesc &d) {
 
   float max_t = 0, max_u = 0;
   MatrixRowIter(gm.F) {
-    int glyph_ind = static_cast<int>(gm.F->row(i)[0]);
+    int glyph_ind = int(gm.F->row(i)[0]);
     Glyph *g = ret->FindOrInsertGlyph(glyph_ind);
     g->FromArray(gm.F->row(i), gm.F->N);
     g->tex.ID = tex.ID;
@@ -659,7 +659,7 @@ FreeTypeFontEngine::Resource *FreeTypeFontEngine::OpenBuffer(const FontDesc &d, 
 
 int FreeTypeFontEngine::InitGlyphs(Font *f, Glyph *g, int n) {
   int count = 0, error;
-  FT_FaceRec_ *face = static_cast<Resource*>(f->resource.get())->face;
+  FT_FaceRec_ *face = dynamic_cast<Resource*>(f->resource.get())->face;
   FT_Int32 flags = FT_LOAD_RENDER | (FLAGS_subpixel_fonts ? FT_LOAD_TARGET_LCD : 0) | FT_LOAD_FORCE_AUTOHINT;
   if ((error = FT_Set_Pixel_Sizes(face, 0, f->size))) { ERROR("FT_Set_Pixel_Sizes(", f->size, ") = ", error); return 0; }
 
@@ -685,7 +685,7 @@ int FreeTypeFontEngine::LoadGlyphs(Font *f, const Glyph *g, int n) {
   int count = 0, spf = FLAGS_subpixel_fonts ? Pixel::LCD : Pixel::GRAY8, error;
   bool outline = f->flag & FontDesc::Outline;
   GlyphCache *cache = f->glyph->cache.get();
-  FT_FaceRec_ *face = static_cast<Resource*>(f->resource.get())->face;
+  FT_FaceRec_ *face = dynamic_cast<Resource*>(f->resource.get())->face;
   FT_Int32 flags = FT_LOAD_RENDER | (FLAGS_subpixel_fonts ? FT_LOAD_TARGET_LCD : 0) | FT_LOAD_FORCE_AUTOHINT;
   if ((error = FT_Set_Pixel_Sizes(face, 0, f->size))) { ERROR("FT_Set_Pixel_Sizes(", f->size, ") = ", error); return false; }
 
@@ -757,7 +757,7 @@ void CoreTextFontEngine::SetDefault() {
 
 int CoreTextFontEngine::InitGlyphs(Font *f, Glyph *g, int n) {
   CGSize advance;
-  Resource *resource = static_cast<Resource*>(f->resource.get());
+  Resource *resource = dynamic_cast<Resource*>(f->resource.get());
   CTFontRef ctfont = CTFontCreateWithGraphicsFont(resource->cgfont, f->size, 0, 0);
   if (bool no_substitution = false) {
     vector<UniChar> ascii (n);
@@ -793,7 +793,7 @@ int CoreTextFontEngine::InitGlyphs(Font *f, Glyph *g, int n) {
 
 int CoreTextFontEngine::LoadGlyphs(Font *f, const Glyph *g, int n) {
   GlyphCache *cache = f->glyph->cache.get();
-  Resource *resource = static_cast<Resource*>(f->resource.get());
+  Resource *resource = dynamic_cast<Resource*>(f->resource.get());
   CTFontRef ctfont = CTFontCreateWithGraphicsFont(resource->cgfont, f->size, 0, 0);
   for (const Glyph *e = g + n; g != e; ++g) {
     g->ready = true;
@@ -894,8 +894,8 @@ void CoreTextFontEngine::AssignGlyph(Glyph *g, const CGRect &bounds, struct CGSi
 v2 CoreTextFontEngine::GetAdvanceBounds(Font *f) {
   v2 ret(INFINITY, -INFINITY);
   for (auto b = f->glyph->table.begin(), e = f->glyph->table.end(), g = b; g != e; ++g) {
-    if (g->internal.coretext.advance) Min(&ret.x, static_cast<float>(g->internal.coretext.advance));
-    if (1)                            Max(&ret.y, static_cast<float>(g->internal.coretext.advance));
+    if (g->internal.coretext.advance) Min(&ret.x, float(g->internal.coretext.advance));
+    if (1)                            Max(&ret.y, float(g->internal.coretext.advance));
   }
   return ret;
 }
@@ -929,7 +929,7 @@ string GDIFontEngine::DebugString(Font *f) const {
 
 int GDIFontEngine::InitGlyphs(Font *f, Glyph *g, int n) {
   GlyphCache *cache = f->glyph->cache.get();
-  Resource *resource = static_cast<Resource*>(f->resource.get());
+  Resource *resource = dynamic_cast<Resource*>(f->resource.get());
   HGDIOBJ pf = SelectObject(hdc, resource->hfont);
   SIZE s, advance;
 
@@ -949,7 +949,7 @@ int GDIFontEngine::InitGlyphs(Font *f, Glyph *g, int n) {
 
 int GDIFontEngine::LoadGlyphs(Font *f, const Glyph *g, int n) {
   GlyphCache *cache = f->glyph->cache.get();
-  Resource *resource = static_cast<Resource*>(f->resource.get());
+  Resource *resource = dynamic_cast<Resource*>(f->resource.get());
   HGDIOBJ pf = SelectObject(hdc, resource->hfont);
   for (const Glyph *e = g + n; g != e; ++g) {
     g->ready = true;
@@ -1031,7 +1031,7 @@ void GDIFontEngine::AssignGlyph(Glyph *g, const ::SIZE &bounds, const ::SIZE &ad
 #endif /* WIN32 */
 
 Font *IPCClientFontEngine::Open(const FontDesc &d) {
-  Font *ret = new Font(this, d, make_shared<FontEngine::Resource>());
+  Font *ret = new Font(this, d, make_shared<Resource>());
   ret->glyph = make_shared<GlyphMap>();
   ret->glyph->cache = GlyphCache::Get();
   app->main_process->OpenSystemFont(d, bind(&IPCClientFontEngine::OpenSystemFontResponse, this, ret, _1, _2));
@@ -1040,7 +1040,7 @@ Font *IPCClientFontEngine::Open(const FontDesc &d) {
 }
 int IPCClientFontEngine::OpenSystemFontResponse(Font *f, const IPC::OpenSystemFontResponse *res, const MultiProcessBuffer &mpb) {
   if (!res) return IPC::Error;
-  static_cast<Resource*>(f->resource.get())->id = res->font_id();
+  dynamic_cast<Resource*>(f->resource.get())->id = res->font_id();
   f->SetMetrics(res->ascender(), res->descender(), res->max_width(), res->fixed_width(), res->missing_glyph(),
                 res->mix_fg(), res->has_bg(), res->fix_metrics(), res->scale());
   f->glyph->table_start = res->start_glyph_id();
@@ -1050,7 +1050,7 @@ int IPCClientFontEngine::OpenSystemFontResponse(Font *f, const IPC::OpenSystemFo
   if (app->main_process) if (auto html = app->main_process->browser->doc.DocElement()) html->SetStyleDirty();
   return IPC::Done;
 }
-int   IPCClientFontEngine::GetId(Font *f) { return static_cast<Resource*>(f->resource.get())->id; }
+int   IPCClientFontEngine::GetId(Font *f) { return dynamic_cast<Resource*>(f->resource.get())->id; }
 int   IPCClientFontEngine::InitGlyphs(Font *f, Glyph *g, int n) { return 0; }
 int   IPCClientFontEngine::LoadGlyphs(Font *f, const Glyph *g, int n) { return 0; }
 string IPCClientFontEngine::DebugString(Font *f) const { return ""; }
@@ -1177,7 +1177,7 @@ void Fonts::ResetGL() {
   AtlasFontEngine *atlas_engine = app->fonts->atlas_engine.get();
   for (auto &i : inst->desc_map) {
     auto f = i.second.get();
-    if (f->engine == atlas_engine && f == static_cast<AtlasFontEngine::Resource*>(f->resource.get())->primary) {
+    if (f->engine == atlas_engine && f == dynamic_cast<AtlasFontEngine::Resource*>(f->resource.get())->primary) {
       f->glyph->cache->tex.owner = false;
       f->glyph->cache->tex = Texture();
       Asset::LoadTexture(StrCat(f->desc->Filename(), ".0000.png"), &f->glyph->cache->tex);

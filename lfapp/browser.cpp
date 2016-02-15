@@ -93,6 +93,22 @@ void StyleContext::Match(ComputedStyle *out, LFL::DOM::Node *node, const Compute
     CHECK_EQ(css_computed_style_compose(parent_sheet->Style(), out->Style(), ComputeFontSize, NULL, out->Style()), CSS_OK);
 }
 
+css_error StyleContext::NodeClasses(void *pw, void *n, lwc_string ***classes_out, uint32_t *n_classes) {
+  *n_classes = 0;
+  *classes_out = NULL;
+  LFL::DOM::Node *node = (LFL::DOM::Node*)n, *attr = 0;
+  if (!(attr = node->getAttributeNode("class"))) return CSS_OK;
+
+  vector<LFL::DOM::DOMString> classes;
+  Split(attr->nodeValue(), isspace, &classes);
+  if (!classes.size()) return CSS_OK;
+
+  node->render->style.class_cache.resize(classes.size());
+  *classes_out = &node->render->style.class_cache[0];
+  for (int i=0; i<classes.size(); i++) (*classes_out)[i] = LibCSS_String::Intern(classes[i]);
+  return CSS_OK;
+}
+
 int StyleContext::FontFaces(const string &face_name, vector<LFL::DOM::FontFace> *out) {
   out->clear();
   lwc_string *n=0; css_select_font_faces_results *v=0; uint32_t l;

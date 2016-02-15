@@ -1138,7 +1138,8 @@ struct ComputedStyle : public LFL::DOM::CSSStyleDeclaration {
   LFL::DOM::Node *node;
   string override_style;
   css_select_results *style=0;
-  bool is_root=0, font_not_inherited=0, color_not_inherited=0, bgcolor_not_inherited=0;
+  bool is_root=0, font_not_inherited=0, color_not_inherited=0, bgcolor_not_inherited=0, class_cached=0;
+  vector<lwc_string*> class_cache;
   ComputedStyle(LFL::DOM::Node *N) : node(N) {}
   virtual ~ComputedStyle() { Reset(); }
 
@@ -1284,20 +1285,7 @@ struct StyleContext : public LFL::DOM::Object {
     qname->name = LibCSS_String::Intern(((LFL::DOM::Node*)n)->nodeName());
     return CSS_OK;
   }
-  static css_error NodeClasses(void *pw, void *n, lwc_string ***classes_out, uint32_t *n_classes) {
-    *classes_out = NULL; *n_classes = 0;
-    LFL::DOM::Node *node = (LFL::DOM::Node*)n, *attr = 0;
-    if (!(attr = node->getAttributeNode("class"))) return CSS_OK;
-
-    vector<LFL::DOM::DOMString> classes;
-    Split(attr->nodeValue(), isspace, &classes);
-    if (!classes.size()) return CSS_OK;
-
-    *n_classes = classes.size();
-    *classes_out = (lwc_string**)malloc(classes.size() * sizeof(lwc_string*));
-    for (int i=0; i<classes.size(); i++) (*classes_out)[i] = LibCSS_String::Intern(classes[i]);
-    return CSS_OK;
-  }
+  static css_error NodeClasses(void *pw, void *n, lwc_string ***classes_out, uint32_t *n_classes);
   static css_error NodeId(void *pw, void *n, lwc_string **id) {
     *id = NULL;
     LFL::DOM::Node *node = (LFL::DOM::Node*)n, *attr = 0;
@@ -1533,7 +1521,8 @@ struct StyleSheet : public LFL::DOM::Object {
 struct ComputedStyle : public LFL::DOM::CSSStyleDeclaration {
   LFL::DOM::Node *node;
   string override_style;
-  bool is_root=0, font_not_inherited=0, color_not_inherited=0, bgcolor_not_inherited=0;
+  bool is_root=0, font_not_inherited=0, color_not_inherited=0, bgcolor_not_inherited=0, class_cached=0;
+  vector<void*> class_cache;
   ComputedStyle(LFL::DOM::Node *N) : node(N) {}
 
   void Reset() {}

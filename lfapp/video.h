@@ -254,6 +254,7 @@ struct Drawable {
     void Insert(const Attr &v);
   };
 
+  virtual ~Drawable() {}
   virtual int  Id()                                            const { return 0; }
   virtual int  TexId()                                         const { return 0; }
   virtual bool Wide()                                          const { return 0; }

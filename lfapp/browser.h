@@ -125,7 +125,7 @@ struct Browser : public BrowserInterface {
   };
 
   Document doc;
-  LayersInterface *layers=0;
+  unique_ptr<LayersInterface> layers;
   RenderLog *render_log=0;
   Texture missing_image;
   point dim, mouse, initial_displacement;
@@ -151,7 +151,7 @@ struct Browser : public BrowserInterface {
   Box Viewport() const { return Box(viewport.Dimension()); }
   int VScrolled() const { return v_scrollbar.scrolled * X_or_Y(v_scrollbar.doc_height, 1000); }
   int HScrolled() const { return h_scrollbar.scrolled * 1000; }
-  void InitLayers(LayersInterface *l) { CHECK(!layers); (layers = l)->Init(2); }
+  void InitLayers(unique_ptr<LayersInterface> l) { CHECK(!layers); (layers = move(l))->Init(2); }
   void PaintTile(int x, int y, int z, int flag, const MultiProcessPaintResource &paint);
   string GetURL() const { return String::ToUTF8(doc.node->URL); }
   void SetURLText(const string &s) { if (url_cb) url_cb(s); }

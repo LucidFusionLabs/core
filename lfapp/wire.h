@@ -121,6 +121,7 @@ struct Serializable {
 
   int Id;
   Serializable(int ID) : Id(ID) {}
+  virtual ~Serializable() {}
 
   virtual int Size() const = 0;
   virtual int HeaderSize() const = 0;

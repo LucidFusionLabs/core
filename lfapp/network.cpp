@@ -68,6 +68,11 @@ DEFINE_string(ssl_keyfile,  "", "SSL server key file");
 SSL_CTX *lfapp_ssl = 0;
 #endif
 
+const int SocketType::Stream    = SOCK_STREAM;
+const int SocketType::Datagram  = SOCK_DGRAM; 
+const int SocketType::SeqPacket = SOCK_SEQPACKET;
+const int SocketType::Raw       = SOCK_RAW;
+
 IPV4EndpointPool::IPV4EndpointPool(const string &ip_csv) {
   IPV4::ParseCSV(ip_csv, &source_addrs);
   source_ports.resize(source_addrs.size());
@@ -159,7 +164,7 @@ Socket SystemNetwork::OpenSocket(int protocol) {
   else return -1;
 }
 
-bool SystemNetwork::OpenSocketPair(Socket *fd, bool close_on_exec) {
+bool SystemNetwork::OpenSocketPair(Socket *fd, int socket_type, bool close_on_exec) {
 #ifdef WIN32
 #ifdef LFL_NETWORK_MONOLITHIC_FRAME
   Socket l = -1;
@@ -183,7 +188,7 @@ bool SystemNetwork::OpenSocketPair(Socket *fd, bool close_on_exec) {
   // XXX use WFMO with HANDLE* instead of select with SOCKET
 #endif // LFL_NETWORK_MONOLITHIC_FRAME
 #else // WIN32
-  CHECK(!socketpair(PF_LOCAL, SOCK_STREAM, 0, fd));
+  CHECK(!socketpair(PF_LOCAL, socket_type, 0, fd));
   SetSocketBlocking(fd[0], 0);
   SetSocketBlocking(fd[1], 0);
 #endif
