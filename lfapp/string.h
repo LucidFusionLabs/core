@@ -364,8 +364,8 @@ int atoi(const char16_t *v);
 float my_atof(const char *v);
 inline double atof(const string &v) { return ::atof(v.c_str()); }
 inline int    atoi(const string &v) { return ::atoi(v.c_str()); }
-unsigned           fnv32(const void *buf, unsigned len=0, unsigned           hval=0);
-unsigned long long fnv64(const void *buf, unsigned len=0, unsigned long long hval=0);
+uint32_t fnv32(const void *buf, unsigned len=0, uint32_t hval=0);
+uint64_t fnv64(const void *buf, unsigned len=0, uint64_t hval=0);
 
 String16 String16Printf(const char *fmt, ...);
 basic_string<wchar_t> WStringPrintf(const wchar_t *fmt, ...);
@@ -522,7 +522,7 @@ bool ReplaceString(string *text, const string &needle, const string &replace);
 template <class X> string CHexEscape        (const basic_string<X> &text);
 template <class X> string CHexEscapeNonAscii(const basic_string<X> &text);
 
-#define StrAppendCSV(out, ...) StrAppend((out), (out)->size() ? "," : "", __VA_ARGS__)
+template <class... Args> void StrAppendCSV(string *out, Args&&... args) { StrAppend(out, out->size() ? "," : "", forward<Args>(args)...); }
 string FirstMatchCSV(const StringPiece &haystack, const StringPiece &needle, int (*ischar)(int) = iscomma);
 
 bool ParseKV(const string &t, string *k_out, string *v_out, int equal_char='=');

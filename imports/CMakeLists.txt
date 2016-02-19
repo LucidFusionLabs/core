@@ -1,5 +1,9 @@
 # $Id: CMakeLists.txt 1325 2014-10-29 06:08:31Z justin $
 
+FOREACH(flag CMAKE_CXX_FLAGS_DEBUG)
+    STRING(REPLACE "-Wold-style-cast" "" "${flag}" "${${flag}}")
+ENDFOREACH()
+
 # Windows
 if(WIN32)
     INCLUDE_EXTERNAL_MSPROJECT(zlib ${CMAKE_CURRENT_SOURCE_DIR}/OpenCV/3rdparty/zlib/zlib.vcxproj)

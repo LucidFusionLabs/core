@@ -156,7 +156,7 @@ struct ProcessAPI : public InterProcessComm {
     IPC_PROTO_ENTRY(15, SwapTreeRequest,        MultiProcessLayerTree,       "id=(", x->id(), ") node_len=", mpv.node_data.size(), ", child_len=", mpv.child_data.size());
     IPC_PROTO_ENTRY(16, SwapTreeResponse,       Void,                        "success=", x->success());
     IPC_PROTO_ENTRY(17, WGetRequest,            Void,                        "url=", x->url() ? x->url()->data() : ""); 
-    IPC_PROTO_ENTRY(18, WGetResponse,           MultiProcessBuffer,          "h=", (int)x->headers(), ", hl=", x->mpb()?x->mpb()->len():0, ", hu=", x->mpb()?x->mpb()->url()->data():"", " b=", mpv.buf!=0, ", l=", mpv.len);
+    IPC_PROTO_ENTRY(18, WGetResponse,           MultiProcessBuffer,          "h=", int(x->headers()), ", hl=", x->mpb()?x->mpb()->len():0, ", hu=", x->mpb()?x->mpb()->url()->data():"", " b=", mpv.buf!=0, ", l=", mpv.len);
     IPC_PROTO_ENTRY(19, SetTitleRequest,        Void,                        "title=", x->title() ? x->title()->data() : ""); 
     IPC_PROTO_ENTRY(20, SetTitleResponse,       Void,                        "success=", x->success());
     IPC_PROTO_ENTRY(21, SetURLRequest,          Void,                        "url=", x->url() ? x->url()->data() : ""); 
@@ -327,7 +327,7 @@ struct ProcessAPIServer : public ProcessAPI {
 
 struct TilesIPC : public TilesT<MultiProcessPaintResource::Cmd, MultiProcessPaintResourceBuilder, MultiProcessPaintResource> {
   const Drawable::Attr *attr=0;
-  TilesIPC(int l, int w=256, int h=256) : TilesT(l, w, h) {}
+  TilesIPC(GraphicsDevice *d, int l, int w=256, int h=256) : TilesT(d, l, w, h) {}
   void SetAttr           (const Drawable::Attr*);
   void InitDrawBox       (const point&);
   void InitDrawBackground(const point&);

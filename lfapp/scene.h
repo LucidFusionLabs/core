@@ -35,6 +35,7 @@ struct Animation {
 
 struct Entity {
   struct Type { enum { STATIC=1, PLAYER=2, BOT=3 }; };
+  typedef function<void(Asset*, Entity*)> DrawCB;
 
   string name;
   Asset *asset=0; 
@@ -46,12 +47,13 @@ struct Entity {
   void *body=0, *particles=0, *userdata=0;
   Color color1, color2;
   int type=0;
+  DrawCB cb;
 
   Entity() {}
-  Entity(const char *N, Asset *A)                                        : name(N), asset(A),                        namehash(fnv32(N)) {}
-  Entity(const char *N, Asset *A, const v3 &p)                           : name(N), asset(A), pos(p),                namehash(fnv32(N)) {}
-  Entity(const char *N, Asset *A, const v3 &p, const v3 &v)              : name(N), asset(A), pos(p), vel(v),        namehash(fnv32(N)) {}
-  Entity(const char *N, Asset *A, const v3 &p, const v3 &o, const v3 &u) : name(N), asset(A), pos(p), ort(o), up(u), namehash(fnv32(N)) {}
+  Entity(const char *N, Asset *A, const DrawCB &C=DrawCB())               : name(N), asset(A),                        namehash(fnv32(N)), cb(C) {}
+  Entity(const char *N, Asset *A, const v3 &p)                            : name(N), asset(A), pos(p),                namehash(fnv32(N)) {}
+  Entity(const char *N, Asset *A, const v3 &p, const v3 &v)               : name(N), asset(A), pos(p), vel(v),        namehash(fnv32(N)) {}
+  Entity(const char *N, Asset *A, const v3 &p, const v3 &o, const v3 &u)  : name(N), asset(A), pos(p), ort(o), up(u), namehash(fnv32(N)) {}
 
   Entity(const char *N, const v3 &p, const v3 &v)              : name(N), pos(p), vel(v),        namehash(fnv32(N)) {}
   Entity(const char *N, const v3 &p, const v3 &o, const v3 &u) : name(N), pos(p), ort(o), up(u), namehash(fnv32(N)) {}
@@ -60,7 +62,7 @@ struct Entity {
   Entity(const v3 &p, const v3 &o, const v3 &u) : pos(p), ort(o), up(u) {}
 
   v3 Right() const { v3 r = v3::Cross(ort, up); r.Norm(); return r; }
-  void Look() const { v3 targ = pos; targ.Add(ort); screen->gd->LookAt(pos, targ, up); }
+  void Look(GraphicsDevice *gd) const { v3 targ = pos; targ.Add(ort); gd->LookAt(pos, targ, up); }
   void SetName(const string &n) { name=n; namehash=fnv32(n.c_str()); }
 
   void MoveUp   (unsigned t) { AddUp   (t/ 1000.0*FLAGS_ksens); }

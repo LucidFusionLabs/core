@@ -87,7 +87,7 @@ int Sample::Size(int fmt) {
     case Sample::S32:    case Sample::S32P:    return 4;
     case Sample::FLOAT:  case Sample::FLOATP:  return 4;
     case Sample::DOUBLE: case Sample::DOUBLEP: return 8;
-    default: ERROR("unknown sample fmt: ", fmt); return 0;
+    default: return ERRORv(0, "unknown sample fmt: ", fmt);
   }
 }
 
@@ -104,7 +104,7 @@ int Sample::FromFFMpegId(int fmt) {
     case AV_SAMPLE_FMT_FLTP: return Sample::FLOATP;
     case AV_SAMPLE_FMT_DBL:  return Sample::DOUBLE;
     case AV_SAMPLE_FMT_DBLP: return Sample::DOUBLEP;
-    default: ERROR("unknown sample fmt: ", fmt); return 0;
+    default: return ERRORv(0, "unknown sample fmt: ", fmt);
   }
 }
 
@@ -120,7 +120,7 @@ int Sample::ToFFMpegId(int fmt) {
     case Sample::FLOATP:  return AV_SAMPLE_FMT_FLTP;
     case Sample::DOUBLE:  return AV_SAMPLE_FMT_DBL;
     case Sample::DOUBLEP: return AV_SAMPLE_FMT_DBLP;
-    default: ERROR("unknown sample fmt: ", fmt); return 0;
+    default: return ERRORv(0, "unknown sample fmt: ", fmt);
   }
 }
 #endif
@@ -172,25 +172,26 @@ struct PortaudioAudioModule : public Module {
 
     PaError err = Pa_OpenStream(&impl, &in, FLAGS_chans_out ? &out : 0, FLAGS_sample_rate,
                                 paFramesPerBufferUnspecified, 0, &PortaudioAudioModule::IOCB, this);
-    if (err != paNoError) { ERROR("open_portaudio: ", Pa_GetErrorText(err)); return -1; }
+    if (err != paNoError) return ERRORv(-1, "open_portaudio: ", Pa_GetErrorText(err));
 
     err = Pa_StartStream(impl);
-    if (err != paNoError) { ERROR("open_portaudio2: ", Pa_GetErrorText(err)); return -1; }
+    if (err != paNoError) return ERRORv(-1, "open_portaudio2: ", Pa_GetErrorText(err));
     return 0;
   }
 
   int Free() {
     PaError err = Pa_StopStream(impl);
-    if (err != paNoError) { ERROR("free_portaudio: stop ", Pa_GetErrorText(err)); return 0; }
+    if (err != paNoError) return ERRORv(0, "free_portaudio: stop ", Pa_GetErrorText(err));
 
     err = Pa_Terminate();
-    if (err != paNoError) { ERROR("free_portaudio: term ", Pa_GetErrorText(err)); return 0; }
+    if (err != paNoError) return ERRORv(0, "free_portaudio: term ", Pa_GetErrorText(err));
     return 0;
   }
 
   int IO(const void *input, void *output, unsigned long samplesPerFrame,
          const PaStreamCallbackTimeInfo *timeInfo, PaStreamCallbackFlags flags) {
-    float *in = (float*)input, *out = (float *)output;
+    const float *in = FromVoid<const float*>(input);
+    float *out = FromVoid<float*>(output);
     microseconds step(1000000/FLAGS_sample_rate), stamp =
       AudioResampler::MonotonouslyIncreasingTimestamp(audio->IL->ReadTimestamp(-1), ToMicroseconds(Now()), &step, samplesPerFrame);
     RingBuf::WriteAheadHandle IL(audio->IL.get()), IR(audio->IR.get());
@@ -216,7 +217,7 @@ struct PortaudioAudioModule : public Module {
 
   static int IOCB(const void *input, void *output, unsigned long samplesPerFrame,
                   const PaStreamCallbackTimeInfo *timeInfo, PaStreamCallbackFlags flags, void *opaque) {
-    return ((PortaudioAudioModule*)opaque)->IO(input, output, samplesPerFrame, timeInfo, flags);
+    return FromVoid<PortaudioAudioModule*>(opaque)->IO(input, output, samplesPerFrame, timeInfo, flags);
   }
 };
 #endif /* LFL_PORTAUDIO */
@@ -246,8 +247,8 @@ struct SDLAudioModule : public Module {
     desired.callback = &SDLAudioModule::IOCB;
     desired.userdata = this;
 
-    if (SDL_OpenAudio(&desired, &obtained) < 0) { ERROR("SDL_OpenAudio:", SDL_GetError()); return -1; }
-    if (obtained.freq != FLAGS_sample_rate) { ERROR("SDL_OpenAudio: sample_rate ", obtained.freq, " != ", FLAGS_sample_rate); return -1; }
+    if (SDL_OpenAudio(&desired, &obtained) < 0) return ERRORv(-1, "SDL_OpenAudio:", SDL_GetError());
+    if (obtained.freq != FLAGS_sample_rate) return ERRORv(-1, "SDL_OpenAudio: sample_rate ", obtained.freq, " != ", FLAGS_sample_rate);
 
     FLAGS_chans_out = obtained.channels;
     SDL_PauseAudio(0);
@@ -297,8 +298,8 @@ struct AudioQueueAudioModule : public Module {
     desc_in.mBitsPerChannel = 8 * sizeof(short);
 
     int err = AudioQueueNewInput(&desc_in, AudioQueueAudioModule::IOInCB, this, 0, kCFRunLoopCommonModes, 0, &input_audio_queue);
-    if (err == kAudioFormatUnsupportedDataFormatError) { ERROR("AudioQueueNewInput: format unsupported sr=", desc_in.mSampleRate); return -1; }
-    if (err || !input_audio_queue) { ERROR("AudioQueueNewInput: error ", err); return -1; }
+    if (err == kAudioFormatUnsupportedDataFormatError) return ERROR(-1, "AudioQueueNewInput: format unsupported sr=", desc_in.mSampleRate);
+    if (err || !input_audio_queue) return ERRORv(-1, "AudioQueueNewInput: error ", err);
 
     AudioStreamBasicDescription desc_out = desc_in;
     desc_out.mChannelsPerFrame = FLAGS_chans_out;
@@ -306,25 +307,25 @@ struct AudioQueueAudioModule : public Module {
     desc_out.mBytesPerPacket = desc_out.mFramesPerPacket * desc_out.mBytesPerFrame;
 
     err = AudioQueueNewOutput(&desc_out, &AudioQueueAudioModule::IOOutCB, this, 0, kCFRunLoopCommonModes, 0, &output_audio_queue);
-    if (err == kAudioFormatUnsupportedDataFormatError) { ERROR("AudioQueueNewOutput: format unsupported sr=", desc_out.mSampleRate); return -1; }
-    if (err || !output_audio_queue) { ERROR("AudioQueueNewOutput: error ", err); return -1; }
+    if (err == kAudioFormatUnsupportedDataFormatError) return ERRORv(-1, "AudioQueueNewOutput: format unsupported sr=", desc_out.mSampleRate);
+    if (err || !output_audio_queue) return ERRORv(-1, "AudioQueueNewOutput: error ", err);
 
     for (int i=0; i<AQbuffers; i++) {
       AudioQueueBufferRef buf_in, buf_out;
-      if ((err = AudioQueueAllocateBuffer(input_audio_queue, AQframesPerCB*desc_in.mBytesPerFrame, &buf_in))) { ERROR("AudioQueueAllocateBuffer: error ", err); return -1; }
-      if ((err = AudioQueueEnqueueBuffer(input_audio_queue, buf_in, 0, 0))) { ERROR("AudioQueueEnqueueBuffer: error ", err); return -1; }
+      if ((err = AudioQueueAllocateBuffer(input_audio_queue, AQframesPerCB*desc_in.mBytesPerFrame, &buf_in))) return ERRORv(-1, "AudioQueueAllocateBuffer: error ", err); return -1; }
+      if ((err = AudioQueueEnqueueBuffer(input_audio_queue, buf_in, 0, 0))) return ERRORv(-1, "AudioQueueEnqueueBuffer: error ", err); return -1; }
 
-      if ((err = AudioQueueAllocateBuffer(output_audio_queue, AQframesPerCB*desc_out.mBytesPerFrame, &buf_out))) { ERROR("AudioQueueAllocateBuffer: error ", err); return -1; }
+      if ((err = AudioQueueAllocateBuffer(output_audio_queue, AQframesPerCB*desc_out.mBytesPerFrame, &buf_out))) return ERRORv(-1, "AudioQueueAllocateBuffer: error ", err); return -1; }
       buf_out->mAudioDataByteSize = AQframesPerCB * FLAGS_chans_out * sizeof(short);
       memset(buf_out->mAudioData, 0, buf_out->mAudioDataByteSize);
-      if ((err = AudioQueueEnqueueBuffer(output_audio_queue, buf_out, 0, 0))) { ERROR("AudioQueueEnqueueBuffer: error ", err); return -1; }
+      if ((err = AudioQueueEnqueueBuffer(output_audio_queue, buf_out, 0, 0))) return ERRORv(-1, "AudioQueueEnqueueBuffer: error ", err); return -1; }
     }
     return 0;
   }
 
   int Start() {
-    if ((err = AudioQueueStart(input_audio_queue, 0))) { ERROR("AudioQueueStart: error ", err); return -1; }
-    if ((err = AudioQueueStart(output_audio_queue, 0))) { ERROR("AudioQueueStart: error ", err); return -1; }
+    if ((err = AudioQueueStart(input_audio_queue, 0))) return ERRORv(-1, "AudioQueueStart: error ", err);
+    if ((err = AudioQueueStart(output_audio_queue, 0))) return ERRORv(-1, "AudioQueueStart: error ", err);
     return 0;
   }
 
@@ -407,8 +408,8 @@ struct AudioUnitAudioModule : public Module {
     AudioComponentInstanceNew(comp, &inst_audiounit);
 
     UInt32 enableIO = 1; int err;
-    if ((err = AudioUnitSetProperty(inst_audiounit, kAudioOutputUnitProperty_EnableIO, kAudioUnitScope_Input,  au_input_element,  &enableIO, sizeof(enableIO)))) { ERROR("AudioUnitSetProperty: ", err); return -1; }
-    if ((err = AudioUnitSetProperty(inst_audiounit, kAudioOutputUnitProperty_EnableIO, kAudioUnitScope_Output, au_output_element, &enableIO, sizeof(enableIO)))) { ERROR("AudioUnitSetProperty: ", err); return -1; }
+    if ((err = AudioUnitSetProperty(inst_audiounit, kAudioOutputUnitProperty_EnableIO, kAudioUnitScope_Input,  au_input_element,  &enableIO, sizeof(enableIO)))) return ERRORv(-1, "AudioUnitSetProperty: ", err);
+    if ((err = AudioUnitSetProperty(inst_audiounit, kAudioOutputUnitProperty_EnableIO, kAudioUnitScope_Output, au_output_element, &enableIO, sizeof(enableIO)))) return ERRORv(-1, "AudioUnitSetProperty: ", err);
 
     AudioStreamBasicDescription desc;
     memset(&desc, 0, sizeof(desc));
@@ -421,8 +422,8 @@ struct AudioUnitAudioModule : public Module {
     desc.mBytesPerPacket = desc.mFramesPerPacket * desc.mBytesPerFrame;
     desc.mBitsPerChannel = 8 * sizeof(short);
 
-    if ((err = AudioUnitSetProperty(inst_audiounit, kAudioUnitProperty_StreamFormat, kAudioUnitScope_Input,  au_output_element, &desc, sizeof(AudioStreamBasicDescription)))) { ERROR("AudioUnitSetProperty: ", err); return -1; }
-    if ((err = AudioUnitSetProperty(inst_audiounit, kAudioUnitProperty_StreamFormat, kAudioUnitScope_Output, au_input_element,  &desc, sizeof(AudioStreamBasicDescription)))) { ERROR("AudioUnitSetProperty: ", err); return -1; }
+    if ((err = AudioUnitSetProperty(inst_audiounit, kAudioUnitProperty_StreamFormat, kAudioUnitScope_Input,  au_output_element, &desc, sizeof(AudioStreamBasicDescription)))) return ERRORv(-1, "AudioUnitSetProperty: ", err);
+    if ((err = AudioUnitSetProperty(inst_audiounit, kAudioUnitProperty_StreamFormat, kAudioUnitScope_Output, au_input_element,  &desc, sizeof(AudioStreamBasicDescription)))) return ERRORv(-1, "AudioUnitSetProperty: ", err);
 
     AURenderCallbackStruct cbin, cbout;
     cbin.inputProc = &AudioUnitAudioModule::IOInCB;
@@ -430,11 +431,11 @@ struct AudioUnitAudioModule : public Module {
     cbout.inputProc = &AudioUnitAudioModule::IOOutCB;
     cbout.inputProcRefCon = inst_audiounit;
 
-    if ((err = AudioUnitSetProperty(inst_audiounit, kAudioOutputUnitProperty_SetInputCallback, kAudioUnitScope_Global, au_input_element,  &cbin,  sizeof( cbin)))) { ERROR("AudioUnitSetProperty: ", err); return -1; }
-    if ((err = AudioUnitSetProperty(inst_audiounit, kAudioUnitProperty_SetRenderCallback,      kAudioUnitScope_Global,  au_output_element, &cbout, sizeof(cbout)))) { ERROR("AudioUnitSetProperty: ", err); return -1; }
+    if ((err = AudioUnitSetProperty(inst_audiounit, kAudioOutputUnitProperty_SetInputCallback, kAudioUnitScope_Global, au_input_element,  &cbin,  sizeof( cbin)))) return ERRORv(-1, "AudioUnitSetProperty: ", err);
+    if ((err = AudioUnitSetProperty(inst_audiounit, kAudioUnitProperty_SetRenderCallback,      kAudioUnitScope_Global,  au_output_element, &cbout, sizeof(cbout)))) return ERRORv(-1, "AudioUnitSetProperty: ", err);
 
     // UInt32 shouldAllocateBuffer = 0;
-    // if ((err = AudioUnitSetProperty(inst_audiounit, kAudioUnitProperty_ShouldAllocateBuffer, kAudioUnitScope_Output, au_input_element,   &shouldAllocateBuffer, sizeof(shouldAllocateBuffer)))) { ERROR("AudioUnitSetProperty: ", err); return -1; };
+    // if ((err = AudioUnitSetProperty(inst_audiounit, kAudioUnitProperty_ShouldAllocateBuffer, kAudioUnitScope_Output, au_input_element,   &shouldAllocateBuffer, sizeof(shouldAllocateBuffer)))) return ERRORv(-1, "AudioUnitSetProperty: ", err);
 
     char errBuf[sizeof(int)+1]; errBuf[sizeof(errBuf)-1] = 0;
     if (err = AudioSessionInitialize(NULL, NULL, NULL, NULL)) { memcpy(errBuf, &err, sizeof(int)); INFO("AudioSessionInitialize - ", errBuf); }
@@ -445,13 +446,13 @@ struct AudioUnitAudioModule : public Module {
     UInt32 newRoute = kAudioSessionOverrideAudioRoute_Speaker;
     if (err = AudioSessionSetProperty(kAudioSessionProperty_OverrideAudioRoute, sizeof(newRoute), &newRoute)) { memcpy(errBuf, &err, sizeof(int)); INFO("AudioSessionSetProperty - kAudioSessionProperty_OverrideAudioRoute - Set speaker on ", errBuf); }
 
-    if ((err = AudioUnitInitialize(inst_audiounit))) { ERROR("AudioUnitInitialize: ", err); return -1; }
+    if ((err = AudioUnitInitialize(inst_audiounit))) return ERRORv(-1, "AudioUnitInitialize: ", err);
     return 0;
   }
 
   int Start() {
     int err;
-    if ((err = AudioOutputUnitStart(inst_audiounit))) { ERROR("AudioOutputUnitState: ", err); return -1; }
+    if ((err = AudioOutputUnitStart(inst_audiounit))) return ERRORv(-1, "AudioOutputUnitState: ", err);
     return 0;
   }
 
@@ -617,10 +618,10 @@ void Audio::QueueMixBuf(const RingBuf::Handle *B, int channels, int flag) {
 }
 
 void Audio::QueueMix(SoundAsset *sa, int flag, int begin, int len) {
-  if (!sa->wav) { ERROR("QueueMix: asset(", sa->name, ") missing wave data", sa->name); return; }
+  if (!sa->wav) return ERROR("QueueMix: asset(", sa->name, ") missing wave data", sa->name);
   if (sa->refill) {
     int samples = sa->refill(sa, flag & MixFlag::Reset);
-    playing = (samples == SoundAssetSize(sa)) ? sa : 0;
+    playing = (samples == SoundAsset::Size(sa)) ? sa : 0;
   }
   RingBuf::Handle B(sa->wav.get(), begin, len);
   QueueMixBuf(&B, sa->channels, flag);
@@ -660,12 +661,12 @@ double HighPassFilter(int n, int i, int minfreq) {
 
 Matrix *EqualLoudnessCurve(int outrows, double max) {
   double maxbark = HZToBark(max), stepbark = maxbark/(outrows-1);   
-  Matrix *ret = new Matrix(outrows, 1);
+  unique_ptr<Matrix> ret = make_unique<Matrix>(outrows, 1);
   MatrixIter(ret) {
     double bandcfhz = BarkToHZ(i*stepbark), fsq = pow(bandcfhz, 2);
     ret->row(i)[j] = pow(fsq/(fsq + 1.6e5), 2) * ((fsq + 1.44e6) / (fsq + 9.61e6));
   }
-  return ret;
+  return ret.get();
 }
 
 double *LifterMatrixROSA(int n, double L, bool inverse=false) {
@@ -705,8 +706,8 @@ int ZeroCrossings(const RingBuf::Handle *in, int window, int offset) {
 
 RingBuf *Decimate(const RingBuf::Handle *inh, int factor) {
   const int SPS=inh->Rate(), SPB=inh->Len();
-  RingBuf *outbuf = new RingBuf(SPS/factor, SPB/factor);
-  RingBuf::Handle out(outbuf);
+  unique_ptr<RingBuf> outbuf = make_unique<RingBuf>(SPS/factor, SPB/factor);
+  RingBuf::Handle out(outbuf.get());
 
   double sum = 0;
   for (int i = 0, count = 0; i < SPB; i++) {
@@ -717,7 +718,7 @@ RingBuf *Decimate(const RingBuf::Handle *inh, int factor) {
       sum = 0;
     }
   }
-  return outbuf;
+  return outbuf.release();
 }
 
 int CrossCorrelateTDOA(const RingBuf::Handle *a, const RingBuf::Handle *b, int window, int offset, int samps) {
@@ -761,8 +762,8 @@ int AudioResampler::Open(RingBuf *rb, int in_channels,  int in_sample_rate,  int
   output_rate = out_sample_rate;
   int input_layout  =  in_channels > 1 ? AV_CH_LAYOUT_STEREO : AV_CH_LAYOUT_MONO;
   int output_layout = out_channels > 1 ? AV_CH_LAYOUT_STEREO : AV_CH_LAYOUT_MONO;
-  swr = swr_alloc_set_opts(swr, output_layout, (AVSampleFormat)Sample::ToFFMpegId(out_sample_type), output_rate,
-                           input_layout,  (AVSampleFormat)Sample::ToFFMpegId( in_sample_type), in_sample_rate, 0, 0);
+  swr = swr_alloc_set_opts(swr, output_layout, AVSampleFormat(Sample::ToFFMpegId(out_sample_type)), output_rate,
+                           input_layout,  AVSampleFormat(Sample::ToFFMpegId(in_sample_type)), in_sample_rate, 0, 0);
   if (swr_init(swr) < 0) ERROR("swr_init");
   return 0;
 }
@@ -771,7 +772,7 @@ int AudioResampler::Update(int samples, const short *in) {
   if (!out || !in) return -1;
   const short *input[SWR_CH_MAX] = { in, 0 }; 
   Allocator *tlsalloc = ThreadLocalStorage::GetAllocator();
-  short *rsout = (short*)tlsalloc->Malloc(AVCODEC_MAX_AUDIO_FRAME_SIZE + FF_INPUT_BUFFER_PADDING_SIZE);
+  short *rsout = FromVoid<short*>(tlsalloc->Malloc(AVCODEC_MAX_AUDIO_FRAME_SIZE + FF_INPUT_BUFFER_PADDING_SIZE));
   return Update(samples, input, rsout, microseconds(-1), AVCODEC_MAX_AUDIO_FRAME_SIZE/output_chans/2);
 }
 
@@ -779,8 +780,8 @@ int AudioResampler::Update(int samples, RingBuf::Handle *L, RingBuf::Handle *R) 
   int channels = (L!=0) + (R!=0);
   if (!out || !channels) return -1;
   Allocator *tlsalloc = ThreadLocalStorage::GetAllocator();
-  short *rsin = (short*)tlsalloc->Malloc(AVCODEC_MAX_AUDIO_FRAME_SIZE + FF_INPUT_BUFFER_PADDING_SIZE);
-  short *rsout = (short*)tlsalloc->Malloc(AVCODEC_MAX_AUDIO_FRAME_SIZE + FF_INPUT_BUFFER_PADDING_SIZE);
+  short *rsin = FromVoid<short*>(tlsalloc->Malloc(AVCODEC_MAX_AUDIO_FRAME_SIZE + FF_INPUT_BUFFER_PADDING_SIZE));
+  short *rsout = FromVoid<short*>(tlsalloc->Malloc(AVCODEC_MAX_AUDIO_FRAME_SIZE + FF_INPUT_BUFFER_PADDING_SIZE));
   memset(rsin+samples*channels, 0, FF_INPUT_BUFFER_PADDING_SIZE);
 
   RingBuf::Handle *chan[2] = { L, R }; 
@@ -794,9 +795,9 @@ int AudioResampler::Update(int samples, RingBuf::Handle *L, RingBuf::Handle *R) 
 
 int AudioResampler::Update(int samples, const short **in, short *rsout, microseconds timestamp, int max_samples_out) {
   CHECK(swr);
-  uint8_t *aout[SWR_CH_MAX] = { (uint8_t*)rsout, 0 };
-  int resampled = swr_convert(swr, aout, max_samples_out, (const uint8_t**)in, samples);
-  if (resampled < 0) { ERROR("av_resample return ", resampled); return -1; }
+  uint8_t *aout[SWR_CH_MAX] = { MakeUnsigned(rsout), 0 };
+  int resampled = swr_convert(swr, aout, max_samples_out, reinterpret_cast<const uint8_t**>(in), samples);
+  if (resampled < 0) return ERRORv(-1, "av_resample return ", resampled);
   if (!resampled) return 0;
 
   microseconds step(1000000/output_rate);
@@ -804,7 +805,7 @@ int AudioResampler::Update(int samples, const short **in, short *rsout, microsec
   microseconds stamp = MonotonouslyIncreasingTimestamp(out->ReadTimestamp(-1), timestamp, &step, output);
   for (int i=0; i<output; i++) {
     if (timestamp != microseconds(-1)) out->stamp[out->ring.back] = stamp + i/output_chans*step;
-    *(float*)out->Write() = rsout[i] / 32768.0;
+    *FromVoid<float*>(out->Write()) = rsout[i] / 32768.0;
   }
 
   input_processed += samples;
@@ -931,8 +932,9 @@ int FFT(const RingBuf::Handle *in, int i, int window, int hop, int fftlen, float
 }
 
 int IFFT(const Complex *in, int i, int window, int hop, int fftlen, RingBuf::Handle *out) {
-  float *fftbuf=(float*)alloca(sizeof(float)*fftlen*2);
-  int split=fftlen/2, bits=WhichLog2(fftlen); Complex zero={0,0};
+  Complex zero={0,0};
+  vector<float> fftbuf(fftlen*2);
+  int split=fftlen/2, bits=WhichLog2(fftlen);
   if (bits < 0) return -1;
 
   for (int j=0; j<split; j++) {
@@ -947,14 +949,14 @@ int IFFT(const Complex *in, int i, int window, int hop, int fftlen, RingBuf::Han
 
 #ifdef LFL_FFMPEG
   RDFTContext *fftctx = av_rdft_init(bits, IDFT_C2R);
-  av_rdft_calc(fftctx, (float*)fftbuf);
+  av_rdft_calc(fftctx, &fftbuf[0]);
   av_rdft_end(fftctx);
 #endif
 
   for (int j=0; j<split; j++) *out->Index(i*hop +         j) += fftbuf[split+j];
   for (int j=0; j<split; j++) *out->Index(i*hop + split + j) += fftbuf[j];
 
-  double scalef = (1.0/fftlen) * ((double)window/fftlen);
+  double scalef = (1.0/fftlen) * (double(window)/fftlen);
   for (int j=0; j<hop; j++) *out->Index(i*hop + j) *= scalef;
   return 0;
 }
@@ -966,28 +968,28 @@ void FFTFilterCompile(int n, double *filter) {
   RingBuf::Handle filtcoef(&filtbuf);
   for (int i=0; i<n; i++) filtcoef.Write(filter[i]);
 
-  float *fftbuf = (float *)alloca(sizeof(float)*n);
-  FFT(&filtcoef, 0, n, 0, n, fftbuf);
+  vector<float> fftbuf(n);
+  FFT(&filtcoef, 0, n, 0, n, &fftbuf[0]);
   for (int i=0; i<n; i++) filter[i] = fftbuf[i];
 }
 
 int FFTFilter(const RingBuf::Handle *in, RingBuf::Handle *out, int window, int hop, const double *filter) {
   int frames = (in->Len() - (window - hop)) / hop;
-  float *fftbuf = (float*)alloca(sizeof(float)*window);
-  Complex *ifftb = (Complex*)alloca(sizeof(Complex)*window/2);
+  vector<float> fftbuf(window);
+  vector<Complex> ifftb(window/2);
 
   for (int j=0; j<in->Len(); j++) *out->Index(j) = 0;
 
   for (int i=0; i<frames; i++) {
-    if (FFT(in, i, window, hop, window, fftbuf)) return -1;
+    if (FFT(in, i, window, hop, window, &fftbuf[0])) return -1;
 
     for (int j=0; j<window/2; j++) {
-      Complex x={fft_r(fftbuf, window, j), fft_i(fftbuf, window, j)};
-      Complex h={fft_r(filter, window, j), fft_i(filter, window, j)};
+      Complex x={fft_r(&fftbuf[0], window, j), fft_i(&fftbuf[0], window, j)};
+      Complex h={fft_r(filter,     window, j), fft_i(filter,     window, j)};
       ifftb[j] = Complex::Mult(x, h); /* cyclic convolution */
     }
 
-    if (IFFT(ifftb, i, window, hop, window, out)) return -1;
+    if (IFFT(&ifftb[0], i, window, hop, window, out)) return -1;
   }
   return 0;
 }
@@ -997,12 +999,12 @@ float FundamentalFrequency(const RingBuf::Handle *in, int window, int offset, in
   if (bits<0) return -1;
 
   if (method == F0EstmMethod::fftbucket) { /* max(fft.bucket) */
-    float *samp = (float *)alloca(window*sizeof(float));
-    FFT(in, 1, window, offset, window, samp);
+    vector<float> samp(window);
+    FFT(in, 1, window, offset, window, &samp[0]);
 
     int maxind=0; double max=0;
     for (int i=1; i<window/2; i++) {
-      float abs = sqrt(fft_abs2(samp, window, i));
+      float abs = sqrt(fft_abs2(&samp[0], window, i));
       if (abs > max) { max=abs; maxind=i; }
     }
     return in->Rate() * maxind / (window/2.0);
@@ -1015,28 +1017,28 @@ float FundamentalFrequency(const RingBuf::Handle *in, int window, int offset, in
     for (int i=0; i<window; i++) *zpin.Index(i) = in->Read(i+offset);
 
     /* fft */
-    float *buf = (float *)alloca(window*2*sizeof(float));
-    FFT(&zpin, 0, window*2, 0, window*2, buf, false);
+    vector<float> buf(window*2);
+    FFT(&zpin, 0, window*2, 0, window*2, &buf[0], false);
 
     /* to spectrum */
-    fft_r(buf, window*2, 0) = pow(fft_r(buf, window*2, 0), 2);
-    fft_i(buf, window*2, 0) = pow(fft_i(buf, window*2, 0), 2);
+    fft_r(&buf[0], window*2, 0) = pow(fft_r(&buf[0], window*2, 0), 2);
+    fft_i(&buf[0], window*2, 0) = pow(fft_i(&buf[0], window*2, 0), 2);
     for (int i=1; i<window; i++) {
-      fft_r(buf, window*2, i) = fft_abs2(buf, window*2, i);
-      fft_i(buf, window*2, i) = 0;
+      fft_r(&buf[0], window*2, i) = fft_abs2(&buf[0], window*2, i);
+      fft_i(&buf[0], window*2, i) = 0;
     }
 
     /* ifft */
 #ifdef LFL_FFMPEG
     RDFTContext *fftctx = av_rdft_init(bits+1, IDFT_C2R);
-    av_rdft_calc(fftctx, buf);
+    av_rdft_calc(fftctx, &buf[0]);
     av_rdft_end(fftctx);
 #endif
 
     /* auto correlation */
     int minlag = min(in->Rate() / 500, window*2); /* 500 hz */
     int maxlag = min(in->Rate() / 50 + 1, window*2); /* 50 hz */
-    float *xcorr = (float*)alloca(maxlag*sizeof(float));
+    vector<float> xcorr(maxlag);
 
     /* divide by window for ifft and zxc for auto-correlation coefficients */
     float zxc = buf[0] / window;
@@ -1049,29 +1051,29 @@ float FundamentalFrequency(const RingBuf::Handle *in, int window, int offset, in
       if (xcorr[i] > max) { max=xcorr[i]; maxind=i; }
 
     /* xcorr index to hz */
-    return (float)in->Rate() / (maxind+1);
+    return float(in->Rate()) / (maxind+1);
   }
   else if (method == F0EstmMethod::cepstral) { /* cepstral analysis */
-    float *buf = (float *)alloca(window*sizeof(float));
-    FFT(in, 1, window, offset, window, buf);
+    vector<float> buf(window);
+    FFT(in, 1, window, offset, window, &buf[0]);
 
     /* to log spectrum */
     RingBuf spe(in->Rate(), window);
     RingBuf::Handle spec(&spe);
-    *spec.Index(0) = log(fabs(fft_r(buf, window, 0)));
-    for (int i=0; i<window/2; i++) *spec.Index(i) = log(sqrt(fft_abs2(buf, window, i)));
-    *spec.Index(window/2) = log(fabs(fft_i(buf, window, 0)));
+    *spec.Index(0) = log(fabs(fft_r(&buf[0], window, 0)));
+    for (int i=0; i<window/2; i++) *spec.Index(i) = log(sqrt(fft_abs2(&buf[0], window, i)));
+    *spec.Index(window/2) = log(fabs(fft_i(&buf[0], window, 0)));
     for (int i=1; i<window/2; i++) *spec.Index(window/2+i) = *spec.Index(window/2-i);
 
     /* fft */
-    FFT(&spec, 0, window, 0, window, buf, false); 
+    FFT(&spec, 0, window, 0, window, &buf[0], false); 
 
     /* cepstrum */
     int minlag = min(in->Rate() / 1000, window/2); /* 1000 hz */
     int maxlag = min(in->Rate() / 50, window/2); /* 50 hz */
 
-    float *cepstrum = (float*)alloca(sizeof(float)*window/2);
-    for (int i=0; i<window/2; i++) cepstrum[i] = sqrt(fft_abs2(buf, window, i));
+    vector<float> cepstrum(window/2);
+    for (int i=0; i<window/2; i++) cepstrum[i] = sqrt(fft_abs2(&buf[0], window, i));
 
     /* max(cepstrum[minlag,maxlag]) */
     int maxind=-1; double max=-INFINITY;
@@ -1080,23 +1082,23 @@ float FundamentalFrequency(const RingBuf::Handle *in, int window, int offset, in
     }
 
     /* cepstrum index to hz */
-    return (float)in->Rate() / (maxind-1);
+    return float(in->Rate()) / (maxind-1);
   }
   else if (method == F0EstmMethod::harmonicity) { /* harmonicity */
-    float *buf = (float *)alloca(window*sizeof(float));
-    FFT(in, 1, window, offset, window, buf);
+    vector<float> buf(window);
+    FFT(in, 1, window, offset, window, &buf[0]);
   }
   return -1;
 }
 
 Matrix *FFT2Bark(int outrows, double minfreq, double maxfreq, int fftlen, int samplerate) {
-  Matrix *m = new Matrix(outrows, fftlen/2);
+  unique_ptr<Matrix> m = make_unique<Matrix>(outrows, fftlen/2);
   double minbark = HZToBark(minfreq), maxbark = HZToBark(maxfreq);
   double nyqbark = maxbark - minbark, stepbark = nyqbark/(outrows-1);
 
-  double *binbark = (double *)alloca(fftlen/2 * sizeof(double));
+  vector<double> binbark(fftlen/2);
   for (int i=0; i<fftlen/2; i++)
-    binbark[i] = HZToBark((double)i/fftlen*samplerate);
+    binbark[i] = HZToBark(double(i)/fftlen*samplerate);
 
   for (int i=0; i<outrows; i++) {
     double *row = m->row(i), midbark = minbark + i*stepbark;
@@ -1107,29 +1109,29 @@ Matrix *FFT2Bark(int outrows, double minfreq, double maxfreq, int fftlen, int sa
       row[j] = pow(10, min(0.0, min(hifreq, -2.5*lofreq)));
     }
   }
-  return m;
+  return m.release();
 }
 
 Matrix *FFT2Mel(int outrows, double minfreq, double maxfreq, int fftlen, int samplerate) {
-  Matrix *m = new Matrix(outrows, fftlen/2);
+  unique_ptr<Matrix> m = make_unique<Matrix>(outrows, fftlen/2);
   double minmel = HZToMel(minfreq), maxmel = HZToMel(maxfreq);
 
-  double *mel = (double *)alloca((outrows+2) * sizeof(double));
+  vector<double> mel(outrows+2);
   for (int i=0; i<outrows+2; i++)
-    mel[i] = MelToHZ(minmel + ((double)i/(double)(outrows+1)) * (maxmel-minmel)); 
+    mel[i] = MelToHZ(minmel + (double(i)/(outrows+1)) * (maxmel-minmel)); 
 
   for (int i=0; i<outrows; i++) {
     double *row = m->row(i);
 
     for (int j=0; j<fftlen/2; j++) {
-      double binfreq = (double)j/fftlen*samplerate;
+      double binfreq = double(j)/fftlen*samplerate;
       double loslope = ( binfreq - mel[i+0]) / (mel[i+1] - mel[i+0]);
       double hislope = (-binfreq + mel[i+2]) / (mel[i+2] - mel[i+1]);
 
       row[j] = max(0.0, min(loslope, hislope));
     }
   }
-  return m;
+  return m.release();
 }
 
 Matrix *Mel2FFT(int outrows, double minfreq, double maxfreq, int fftlen, int samplerate) {
@@ -1154,7 +1156,7 @@ Matrix *Mel2FFT(int outrows, double minfreq, double maxfreq, int fftlen, int sam
 Matrix *Spectogram(const RingBuf::Handle *in, Matrix *out, int window, int hop, int fftlen, bool preemph, int pd, int scale) {
   bool complex = (pd==PowerDomain::complex);
   int frames = (in->Len() - (window - hop)) / hop;
-  float *fftbuf = (float*)alloca(sizeof(float)*fftlen);
+  vector<float> fftbuf(fftlen);
 
   Matrix *m;
   if (out) { m=out; if (m->M != frames || m->N != fftlen/2 || (m->flag&Matrix::Flag::Complex && !complex)) return 0; }
@@ -1162,18 +1164,18 @@ Matrix *Spectogram(const RingBuf::Handle *in, Matrix *out, int window, int hop, 
 
   for (int i=0; i<frames; i++) {
     double *row = m->row(i);
-    if (FFT(in, i, window, hop, fftlen, fftbuf, preemph, true, scale)) { if (!out) delete m; return 0; }
+    if (FFT(in, i, window, hop, fftlen, &fftbuf[0], preemph, true, scale)) { if (!out) delete m; return 0; }
 
     for (int j=0; j<fftlen/2; j++) {
       if (pd == PowerDomain::complex) {
-        row[j*2 + 0] = fft_r(fftbuf, fftlen, j);
-        row[j*2 + 1] = fft_i(fftbuf, fftlen, j);
+        row[j*2 + 0] = fft_r(&fftbuf[0], fftlen, j);
+        row[j*2 + 1] = fft_i(&fftbuf[0], fftlen, j);
         continue;
       }
 
-      if      (pd == PowerDomain::abs)  row[j] = sqrt(fft_abs2(fftbuf, fftlen, j));
-      else if (pd == PowerDomain::abs2) row[j] = fft_abs2(fftbuf, fftlen, j);      
-      else if (pd == PowerDomain::dB)   row[j] = AmplitudeRatioDecibels(sqrt(fft_abs2(fftbuf, fftlen, j)), 1);
+      if      (pd == PowerDomain::abs)  row[j] = sqrt(fft_abs2(&fftbuf[0], fftlen, j));
+      else if (pd == PowerDomain::abs2) row[j] = fft_abs2(&fftbuf[0], fftlen, j);      
+      else if (pd == PowerDomain::dB)   row[j] = AmplitudeRatioDecibels(sqrt(fft_abs2(&fftbuf[0], fftlen, j)), 1);
     }
   }
 
@@ -1181,13 +1183,13 @@ Matrix *Spectogram(const RingBuf::Handle *in, Matrix *out, int window, int hop, 
 }
 
 RingBuf *ISpectogram(const Matrix *in, int window, int hop, int fftlen, int samplerate) {
-  RingBuf *outbuf = new RingBuf(samplerate, fftlen + hop * (in->M-1));
-  RingBuf::Handle out(outbuf);
+  unique_ptr<RingBuf> outbuf = make_unique<RingBuf>(samplerate, fftlen + hop * (in->M-1));
+  RingBuf::Handle out(outbuf.get());
 
   for (int i=0; i<in->M; i++) {
-    if (IFFT(in->crow(i), i, window, hop, fftlen, &out)) { delete outbuf; return 0; }
+    if (IFFT(in->crow(i), i, window, hop, fftlen, &out)) return nullptr;
   }
-  return outbuf;
+  return outbuf.release();
 }
 
 Matrix *F0Stream(const RingBuf::Handle *in, Matrix *out, int window, int hop, int method) {
@@ -1206,7 +1208,7 @@ Matrix *F0Stream(const RingBuf::Handle *in, Matrix *out, int window, int hop, in
 
 Matrix *PLP(const RingBuf::Handle *in, Matrix *out, vector<StatefulFilter> *rastaFilters, Allocator *alloc) {
   /* http://seed.ucsd.edu/mediawiki/images/5/5c/PLP.pdf */
-  if (!alloc) alloc = Singleton<MallocAlloc>::Get();
+  if (!alloc) alloc = Singleton<MallocAllocator>::Get();
 
   /* plp = melfcc(x, sr, 'lifterexp', -22, 'nbands', 21, 'maxfreq', sr/2, 'fbtype', 'bark', 'modelorder', 12, 'usecmp',1, 'wintime', 512/sr, 'hoptime', 256/sr, 'preemph', 0, 'dcttype', 1) */
   static const Matrix *barktrans = FFT2Bark(feat_barkbands, FLAGS_feat_minfreq, FLAGS_feat_maxfreq, FLAGS_feat_window, FLAGS_sample_rate)->Transpose(mDelA);
@@ -1269,9 +1271,9 @@ Matrix *PLP(const RingBuf::Handle *in, Matrix *out, vector<StatefulFilter> *rast
   /* levinson durbin recursion to LPC */
   int order = feat_lpccoefs, ceps = order+1;
   Matrix LPC(xcorr.M, ceps, 0.0, 0, alloc);
-  double *reflect = (double*)alloca(order*sizeof(double)), *lpc = (double*)alloca(order*sizeof(double));
+  vector<double> reflect(order), lpc(order);
   MatrixRowIter(&xcorr) {
-    double err = LevinsonDurbin(order, xcorr.row(i), reflect, lpc);
+    double err = LevinsonDurbin(order, xcorr.row(i), &reflect[0], &lpc[0]);
     MatrixColIter(&LPC) LPC.row(i)[j] = (!j ? 1.0 : lpc[j-1]) / err;
   }
 
@@ -1304,7 +1306,7 @@ Matrix *PLP(const RingBuf::Handle *in, Matrix *out, vector<StatefulFilter> *rast
 
 RingBuf *InvPLP(const Matrix *in, int samplerate, Allocator *alloc) {
   /* [dr,aspec,spec] = invmelfcc() */
-  if (!alloc) alloc = Singleton<MallocAlloc>::Get();
+  if (!alloc) alloc = Singleton<MallocAllocator>::Get();
   Matrix plpcc(in->M, in->N, 0.0, 0, alloc);
   plpcc.AssignL(in);
 
@@ -1317,7 +1319,7 @@ RingBuf *InvPLP(const Matrix *in, int samplerate, Allocator *alloc) {
 }
 
 Matrix *MFCC(const RingBuf::Handle *in, Matrix *out, Allocator *alloc) {
-  if (!alloc) alloc = Singleton<MallocAlloc>::Get();
+  if (!alloc) alloc = Singleton<MallocAllocator>::Get();
 
   /* [mm,aspc,pspc] = melfcc(y/32768, sr, 'maxfreq', sr/2, 'numcep', 20, 'nbands', 40, 'fbtype', 'htkmel', 'dcttype', 3, 'usecmp', 0, 'wintime', 512/44100, 'hoptime', 256/44100, 'dither', 0, 'lifterexp', 0) */
   static const Matrix *meltrans = FFT2Mel(FLAGS_feat_melbands, FLAGS_feat_minfreq, FLAGS_feat_maxfreq, FLAGS_feat_window, FLAGS_sample_rate)->Transpose(mDelA);
@@ -1356,8 +1358,8 @@ RingBuf *InvMFCC(const Matrix *in, int samplerate, const Matrix *f0) {
 
   if (0 && f0) {
     if (f0->M != in->M || m->M != in->M) return 0;
-    RingBuf *outbuf = new RingBuf(samplerate, FLAGS_feat_window + FLAGS_feat_hop * (m->M-1));
-    RingBuf::Handle out(outbuf);
+    unique_ptr<RingBuf> outbuf = make_unique<RingBuf>(samplerate, FLAGS_feat_window + FLAGS_feat_hop * (m->M-1));
+    RingBuf::Handle out(outbuf.get());
 
     for (int i=0; i<m->M; i++) {
       float F0 = f0->row(i)[0];
@@ -1365,7 +1367,7 @@ RingBuf *InvMFCC(const Matrix *in, int samplerate, const Matrix *f0) {
 
       for (int j=0; j<sizeofarray(wavs); j++) {
         double f = (2 * M_PI * wavs[j]) / out.Rate();
-        int ind = (int)(wavs[j] * m->N / out.Rate());
+        int ind = int(wavs[j] * m->N / out.Rate());
         double a = m->row(i)[ind];
 
         for (int k=0; k<FLAGS_feat_window; k++) 
@@ -1373,28 +1375,25 @@ RingBuf *InvMFCC(const Matrix *in, int samplerate, const Matrix *f0) {
       }
     }
 
-    return outbuf;
+    return outbuf.release();
   }
   else {
-    RingBuf *outbuf = new RingBuf(samplerate, FLAGS_feat_window + FLAGS_feat_hop * (m->M-1));
-    RingBuf::Handle out(outbuf);
+    unique_ptr<RingBuf> outbuf = make_unique<RingBuf>(samplerate, FLAGS_feat_window + FLAGS_feat_hop * (m->M-1));
+    RingBuf::Handle out(outbuf.get());
     { 
       double f = (2 * M_PI * 440) / out.Rate();
       for (int i=0; i<out.Len(); i++) out.Write(sin(f*i)/16 + Rand(-1.0,1.0)/2);
     }
-    Matrix *spec = Spectogram(&out, 0, FLAGS_feat_window, FLAGS_feat_hop, FLAGS_feat_window, 0, PowerDomain::complex);
-    delete outbuf;
+    unique_ptr<Matrix> spec(Spectogram(&out, 0, FLAGS_feat_window, FLAGS_feat_hop, FLAGS_feat_window, 0, PowerDomain::complex));
 
-    if (m->M != spec->M || m->N != spec->N) { delete m; delete spec; return 0; }	
+    if (m->M != spec->M || m->N != spec->N) { delete m; return nullptr; }	
     MatrixIter(spec) {
       Complex v = {sqrt(m->row(i)[j]), 0}; 
       spec->crow(i)[j].Mult(v);
     }
-    delete m;
 
-    outbuf = ISpectogram(spec, FLAGS_feat_window, FLAGS_feat_hop, FLAGS_feat_window/2, samplerate);
-    delete spec;
-    return outbuf;
+    delete m;
+    return ISpectogram(spec.get(), FLAGS_feat_window, FLAGS_feat_hop, FLAGS_feat_window/2, samplerate);
   }
 }
 

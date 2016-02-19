@@ -20,7 +20,8 @@
 #define LFL_SPEECH_SPEECH_H__
 namespace LFL {
 
-DECLARE_bool(TriphoneModel);
+DECLARE_bool(triphone_model);
+DECLARE_bool(speech_recognition_debug);
 
 /* phonemes */
 struct Phoneme { 
@@ -98,7 +99,7 @@ struct AcousticModel {
     struct Val { int samples, emission_index; } val;
 
     ~State() {}
-    State() : alloc(Singleton<NullAlloc>::Get()), prior(-INFINITY), txself(-INFINITY) { val.samples=val.emission_index=0; }
+    State() : alloc(Singleton<NullAllocator>::Get()), prior(-INFINITY), txself(-INFINITY) { val.samples=val.emission_index=0; }
     unsigned Id() { return fnv32(name.c_str()); }
     void AssignPtr(State *s) {
       if (!s) FATAL("assign ", s);
@@ -144,9 +145,9 @@ struct AcousticModel {
 
     int GetStateCount() { return states; }
     State *GetState(unsigned stateID) { return 0; }
-    void BeginState(Iterator *iter) { iter->done = 0; *((int*)iter->impl) = 0; NextState(iter); }
+    void BeginState(Iterator *iter) { iter->done = 0; *FromVoid<int*>(iter->impl) = 0; NextState(iter); }
     void NextState(Iterator *iter) {
-      int *impl = (int*)iter->impl;
+      int *impl = FromVoid<int*>(iter->impl);
       if (*impl >= states) { iter->done = 1; return; }
       iter->k = (*impl)++;
       iter->v = &state[iter->k];
@@ -195,7 +196,7 @@ struct AcousticModelFile : public AcousticModel::Compiled {
   AcousticModelFile() : map(0, 4) {}
   ~AcousticModelFile() { Reset(); }
   void Reset() { delete initial; initial=0; delete mean; mean=0; delete covar; covar=0; delete prior; prior=0; delete transit; transit=0; delete map.map; map.map=0; delete tied; tied=0; delete names; names=0; }
-  AcousticModel::State *GetState(unsigned hash) { double *he = GetHashEntry(hash); return he ? &state[(int)he[1]] : 0; }
+  AcousticModel::State *GetState(unsigned hash) { double *he = GetHashEntry(hash); return he ? &state[int(he[1])] : 0; }
   double *GetHashEntry(unsigned hash) { return map.Get(hash); }
   Matrix *TiedStates() { return tied; }
   int Open(const char *name, const char *dir, int lastiter=-1, bool rebuildTransit=0);
@@ -215,8 +216,8 @@ struct AcousticModelBuilder : public AcousticModel::StateCollection {
   int GetStateCount() { return statemap.size(); }
   AcousticModel::State *GetState(unsigned stateID) { Map::iterator i = statemap.find(stateID); return i != statemap.end() ? (*i).second : 0; }
 
-  void BeginState(Iterator *iter) { iter->done=0; Map::iterator *i = (Map::iterator*)iter->impl; *i = statemap.begin(); AssignKV(iter, i); }
-  void NextState (Iterator *iter) {               Map::iterator *i = (Map::iterator*)iter->impl; (*i)++;                AssignKV(iter, i); }
+  void BeginState(Iterator *iter) { iter->done=0; Map::iterator *i = FromVoid<Map::iterator*>(iter->impl); *i = statemap.begin(); AssignKV(iter, i); }
+  void NextState (Iterator *iter) {               Map::iterator *i = FromVoid<Map::iterator*>(iter->impl); (*i)++;                AssignKV(iter, i); }
 
   void AssignKV(Iterator *iter, Map::iterator *i) {
     if (*i == statemap.end()) iter->done = 1;
@@ -242,14 +243,14 @@ struct AcousticHMM {
     TransitMap(AcousticModel::Compiled *M, bool UT) : model(M), use_transition_prob(UT) {}
 
     void Begin(Iterator *iter, HMM::ActiveState *active, HMM::ActiveState::Iterator *Lstate) {
-      iter->impl1 = (void*)&model->state[Lstate->index / active->NBest];
+      iter->impl1 = Void(&model->state[Lstate->index / active->NBest]);
       iter->impl2 = 0;
       iter->state2 = 0;
       iter->done = 0;
       Next(iter);
     }
     void Next(Iterator *iter) {
-      AcousticModel::State *s = (AcousticModel::State*)iter->impl1;
+      AcousticModel::State *s = FromVoid<AcousticModel::State*>(iter->impl1);
       if (iter->impl2 >= s->transition.M) { iter->done=1; return; }
       double *tr = s->transition.row(iter->impl2++);
       iter->state = tr[TC_Edge];
@@ -269,8 +270,8 @@ struct AcousticHMM {
 
     ~EmissionArray() { if (alloc) alloc->Free(emission); }
     EmissionArray(AcousticModel::Compiled *M, Matrix *Observed, bool UsePrior, Allocator *Alloc=0) : model(M),
-    observed(Observed), use_prior_prob(UsePrior), time_index(0), alloc(Alloc?Alloc:Singleton<MallocAlloc>::Get()),
-    emission((double*)alloc->Malloc(sizeof(double)*model->states)) {}
+    observed(Observed), use_prior_prob(UsePrior), time_index(0), alloc(Alloc?Alloc:Singleton<MallocAllocator>::Get()),
+    emission(FromVoid<double*>(alloc->Malloc(sizeof(double)*model->states))) {}
 
     double *Observation(int t) { return observed->row(t); }
     int Observations() { return observed->M; }
@@ -296,9 +297,9 @@ struct AcousticHMM {
 
     ~EmissionMatrix() { if (!alloc) return; alloc->Free(calcd); alloc->Free(cudaPosterior); }
     EmissionMatrix(AcousticModel::Compiled *M, Matrix *Observed, bool UsePrior, Allocator *Alloc=0) : model(M), observed(Observed), use_prior_prob(UsePrior),
-    K(model->state[0].emission.mean.M), time_index(0), alloc(Alloc?Alloc:Singleton<MallocAlloc>::Get()),
+    K(model->state[0].emission.mean.M), time_index(0), alloc(Alloc?Alloc:Singleton<MallocAllocator>::Get()),
     emission(observed->M, model->states, 0, 0, Alloc), emissionPosterior(observed->M, model->states*K, 0, 0, Alloc),
-    calcd((bool*)alloc->Malloc(observed->M)), cudaPosterior((double*)alloc->Malloc(model->states*K*sizeof(double)))
+    calcd(FromVoid<bool*>(alloc->Malloc(observed->M))), cudaPosterior(FromVoid<double*>(alloc->Malloc(model->states*K*sizeof(double))))
     { memset(calcd, 0, observed->M);  }
 
     double *Observation(int t) { return observed->row(t); }
@@ -337,7 +338,7 @@ struct FeatureSink {
   typedef deque<DecodedWord> DecodedWords;
   DecodedWords decode;
 
-  typedef void (*ResponseCB)(DecodedWords &decoded, int inputlen);
+  typedef function<void(DecodedWords &decoded, int inputlen)> ResponseCB;
   ResponseCB responseCB;
   int inputlen;
 
@@ -367,7 +368,7 @@ struct Decoder {
       for (/**/; end<m->M; end++) if (PhoneID(end) != phone) break;
     }
     int PhoneID(int offset) {
-      int ind = (int)m->row(offset)[0];
+      int ind = int(m->row(offset)[0]);
       if (ind < 0 || ind >= model->states) FATAL("oob ind ", ind, " (0, ", model->states, ")");
       int pp, np;
       return AcousticModel::ParseName(model->state[ind].name.c_str(), 0, &pp, &np);
@@ -388,12 +389,12 @@ struct PhoneticSegmentationGUI : public GUI {
   string sound_asset_name;
   int sound_asset_len;
 
-  PhoneticSegmentationGUI(LFL::Window *w, FeatureSink::DecodedWords &decoded, int len, const string &AN) : GUI(w), sound_asset_name(AN), sound_asset_len(len) {
+  PhoneticSegmentationGUI(FeatureSink::DecodedWords &decoded, int len, const string &AN) : sound_asset_name(AN), sound_asset_len(len) {
     Activate();
     for (int i=0, l=decoded.size(); i<l; i++)
       segments.push_back(Segment(decoded[i].text, decoded[i].beg, decoded[i].end));
   }
-  PhoneticSegmentationGUI(LFL::Window *w, AcousticModel::Compiled *model, Matrix *decoded, const string &AN) : GUI(w), sound_asset_name(AN), sound_asset_len(decoded ? decoded->M : 0) {
+  PhoneticSegmentationGUI(AcousticModel::Compiled *model, Matrix *decoded, const string &AN) : sound_asset_name(AN), sound_asset_len(decoded ? decoded->M : 0) {
     Activate();
     for (Decoder::PhoneIter iter(model, decoded); !iter.Done(); iter.Next()) {
       if (!iter.phone) continue;
@@ -406,21 +407,21 @@ struct PhoneticSegmentationGUI : public GUI {
     for (int i=0, l=segments.size(); i<l; i++) {
       int beg = segments[i].beg, end = segments[i].end, len = end-beg, total = sound_asset_len;
 
-      int wb = !flip ? (float)beg/total*box.w : (float)beg/total*box.h;
+      int wb = !flip ? float(beg)/total*box.w : float(beg)/total*box.h;
       verts.push_back(!flip ? v2(wb, 0)      : v2(0,     wb));
       verts.push_back(!flip ? v2(wb, -box.h) : v2(box.w, wb));
 
-      int we = !flip ? (float)end/total*box.w : (float)end/total*box.h;
+      int we = !flip ? float(end)/total*box.w : float(end)/total*box.h;
       verts.push_back(!flip ? v2(we, 0)      : v2(0,     we));
       verts.push_back(!flip ? v2(we, -box.h) : v2(box.w, we));
 
-      segments[i].win = !flip ? Box(wb, -box.h, (float)len/total*box.w, box.h) : Box(0, wb, box.w, (float)len/total*box.h);
-      AddHoverBox(segments[i].win, Callback([&,i](){ segments[i].hover = !segments[i].hover; })); 
-      AddClickBox(segments[i].win, Callback([&,beg,len](){ Play(beg, len); }));
+      segments[i].win = !flip ? Box(wb, -box.h, float(len)/total*box.w, box.h) : Box(0, wb, box.w, float(len)/total*box.h);
+      mouse.AddHoverBox(segments[i].win, Callback([&,i](){ segments[i].hover = !segments[i].hover; })); 
+      mouse.AddClickBox(segments[i].win, Callback([&,beg,len](){ Play(beg, len); }));
     }
 
-    if (verts.size()) geometry = unique_ptr<Geometry>
-      (new Geometry(GraphicsDevice::Lines, verts.size(), &verts[0], 0, 0, Color(1.0,1.0,1.0)));
+    if (verts.size()) geometry = make_unique<Geometry>(GraphicsDevice::Lines, verts.size(), &verts[0],
+                                                       nullptr, nullptr, Color(1.0,1.0,1.0));
   }
 
   void Frame(Box win, Font *font, bool flip=false) {
@@ -447,7 +448,7 @@ struct PhoneticSegmentationGUI : public GUI {
     args.push_back(sound_asset_name);
     args.push_back(StrCat(beg*FLAGS_feat_hop));
     args.push_back(StrCat(len*FLAGS_feat_hop)); 
-    app->shell.play(args);
+    screen->shell->play(args);
   }
 };
 #endif /* LFL_LFAPP_GUI_H__ */

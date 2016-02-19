@@ -57,7 +57,7 @@ string File::Contents() {
 
   string ret;
   ret.resize(l);
-  Read((char*)ret.data(), l);
+  Read(&ret[0], l);
   return ret;
 }
 
@@ -143,7 +143,7 @@ int BufferFile::Read(void *out, size_t size) {
 
 int BufferFile::Write(const void *In, size_t size) {
   CHECK(owner);
-  const char *in = (const char *)In;
+  const char *in = FromVoid<const char*>(In);
   if (size == -1) size = strlen(in);
   size_t l = min(size, buf.size() - wro);
   buf.replace(wro, l, in, l);
@@ -173,7 +173,7 @@ const char LocalFile::ExecutableSuffix[] = ".exe";
 int LocalFile::IsDirectory(const string &filename) {
   if (filename.empty()) return true;
   DWORD attr = ::GetFileAttributes(filename.c_str());
-  if (attr == INVALID_FILE_ATTRIBUTES) { ERROR("GetFileAttributes(", filename, ") failed: ", strerror(errno)); return 0; }
+  if (attr == INVALID_FILE_ATTRIBUTES) return ERRORv(0, "GetFileAttributes(", filename, ") failed: ", strerror(errno));
   return attr & FILE_ATTRIBUTE_DIRECTORY;
 }
 #else // WIN32
@@ -186,7 +186,7 @@ int LocalFile::IsDirectory(const string &filename) {
   return 0;
 #else
   struct stat buf;
-  if (stat(filename.c_str(), &buf)) { ERROR("stat(", filename, ") failed: ", strerror(errno)); return 0; }
+  if (stat(filename.c_str(), &buf)) return ERRORv(0, "stat(", filename, ") failed: ", strerror(errno));
   return buf.st_mode & S_IFDIR;
 #endif
 }
@@ -218,8 +218,8 @@ bool LocalFile::Open(const string &path, const string &mode, bool pre_create) {
   char *b=0;
   int l=0, ret=0;
   bool internal_path = 0; // !strchr(path.c_str(), '/');
-  if (internal_path) { if ((ret = AndroidFileRead (path.c_str(), &b, &l))) { ERROR("AndroidFileRead ",  path); return false; } }
-  else               { if ((ret = AndroidAssetRead(path.c_str(), &b, &l))) { ERROR("AndroidAssetRead ", path); return false; } }
+  if (internal_path) { if ((ret = AndroidFileRead (path.c_str(), &b, &l))) return ERRORv(false, "AndroidFileRead ",  path); }
+  else               { if ((ret = AndroidAssetRead(path.c_str(), &b, &l))) return ERRORv(false, "AndroidAssetRead ", path); }
 
   impl = new BufferFile(string(b, l));
   free(b);
@@ -268,46 +268,46 @@ bool LocalFile::Open(const string &path, const string &mode, bool pre_create) {
 }
 
 void LocalFile::Reset() {
-  fseek((FILE*)impl, 0, SEEK_SET);
+  fseek(FromVoid<FILE*>(impl), 0, SEEK_SET);
 }
 
 int LocalFile::Size() {
   if (!impl) return -1;
 
-  int place = ftell((FILE*)impl);
-  fseek((FILE*)impl, 0, SEEK_END);
+  int place = ftell(FromVoid<FILE*>(impl));
+  fseek(FromVoid<FILE*>(impl), 0, SEEK_END);
 
-  int ret = ftell((FILE*)impl);
-  fseek((FILE*)impl, place, SEEK_SET);
+  int ret = ftell(FromVoid<FILE*>(impl));
+  fseek(FromVoid<FILE*>(impl), place, SEEK_SET);
   return ret;
 }
 
 void LocalFile::Close() {
-  if (impl) fclose((FILE*)impl);
+  if (impl) fclose(FromVoid<FILE*>(impl));
   impl = 0;
 }
 
 long long LocalFile::Seek(long long offset, int whence) {
-  long long ret = fseek((FILE*)impl, offset, WhenceMap(whence));
+  long long ret = fseek(FromVoid<FILE*>(impl), offset, WhenceMap(whence));
   if (ret < 0) return ret;
   if (whence == Whence::SET) ret = offset;
-  else ret = ftell((FILE*)impl);
+  else ret = ftell(FromVoid<FILE*>(impl));
   return ret;
 }
 
 int LocalFile::Read(void *buf, size_t size) {
-  int ret = fread(buf, 1, size, (FILE*)impl);
+  int ret = fread(buf, 1, size, FromVoid<FILE*>(impl));
   if (ret < 0) return ret;
   return ret;
 }
 
 int LocalFile::Write(const void *buf, size_t size) {
-  int ret = fwrite(buf, 1, size!=-1?size:strlen((char*)buf), (FILE*)impl);
+  int ret = fwrite(buf, 1, size!=-1?size:strlen(FromVoid<const char*>(buf)), FromVoid<FILE*>(impl));
   if (ret < 0) return ret;
   return ret;
 }
 
-bool LocalFile::Flush() { fflush((FILE*)impl); return true; }
+bool LocalFile::Flush() { fflush(FromVoid<FILE*>(impl)); return true; }
 File *LocalFile::Create() { return new LocalFile(StrCat(fn, ".new"), "w+"); }
 bool LocalFile::ReplaceWith(File *nf) {
   LocalFile *new_file = dynamic_cast<LocalFile*>(nf);
@@ -325,7 +325,7 @@ bool LocalFile::ReplaceWith(File *nf) {
 
 string LocalFile::CurrentDirectory(int max_size) {
   string ret(max_size, 0); 
-  getcwd((char*)ret.data(), ret.size());
+  getcwd(&ret[0], ret.size());
   ret.resize(strlen(ret.data()));
   return ret;
 }
@@ -494,7 +494,7 @@ bool ProtoFile::Next(ProtoHeader *hdr, Proto *out, int *offsetOut, int status) {
     const char *text; int offset;
     if (!(text = nr.NextProto(&offset, &read_offset, hdr))) { done=true; return false; }
 #ifdef LFL_PROTOBUF
-    if (!out->ParseFromArray(text, hdr->len)) { ERROR("parse failed, shutting down"); done=1; app->run=0; return false; }
+    if (!out->ParseFromArray(text, hdr->len)) { done=1; app->run=0; return ERRORv(false, "parse failed, shutting down"); }
 #endif
     if (status >= 0 && status != hdr->GetFlag()) continue;
     if (offsetOut) *offsetOut = offset;
@@ -542,8 +542,8 @@ int StringFile::Read(IterWordIter *word, int header) {
     if (!format) return -1;
   }
   if (header != MatrixFile::Header::NONE) {
-    M = (int)atof(word->NextString());
-    N = (int)atof(word->NextString());
+    M = int(atof(word->NextString()));
+    N = int(atof(word->NextString()));
   } else {
     if (MatrixFile::ReadDimensions(word, &M, &N)) return -1;
   }
@@ -612,8 +612,8 @@ int MatrixFile::Read(IterWordIter *word, int header) {
   int M, N;
   if (header == Header::DIM_PLUS) { if (ReadHeader(word, &H) < 0) return -1; }
   if (header != Header::NONE) {
-    M = (int)atof(word->NextString());
-    N = (int)atof(word->NextString());
+    M = int(atof(word->NextString()));
+    N = int(atof(word->NextString()));
   } else {
     if (ReadDimensions(word, &M, &N)) return -1;
   }
@@ -632,23 +632,22 @@ int MatrixFile::Read(IterWordIter *word, int header) {
 }
 
 int MatrixFile::ReadBinary(const string &path) {
-  MMapAlloc *mmap = MMapAlloc::Open(path.c_str(), false, false);
+  unique_ptr<MMapAllocator> mmap = MMapAllocator::Open(path.c_str(), false, false);
   if (!mmap) return -1;
 
-  char *buf = (char *)mmap->addr;
-  BinaryHeader *hdr = (BinaryHeader*)buf;
+  char *buf = FromVoid<char*>(mmap->addr);
+  BinaryHeader *hdr = FromVoid<BinaryHeader*>(buf);
   H = buf + hdr->transcript;
   long long databytes = mmap->size - hdr->data;
   long long matrixbytes = hdr->M * hdr->N * sizeof(double);
   if (databytes < matrixbytes) {
     ERRORf("%lld (%lld %d) < %lld (%d, %d)", databytes, mmap->size, hdr->data, matrixbytes, hdr->M, hdr->N);
-    delete mmap;
     return -1;
   }
 
   if (F) FATAL("unexpected arg %p", this);
   F = new Matrix();
-  F->AssignDataPtr(hdr->M, hdr->N, (double*)(buf + hdr->data), mmap);
+  F->AssignDataPtr(hdr->M, hdr->N, FromVoid<double*>(buf + hdr->data), mmap.release());
   return 0;
 }
 
@@ -749,13 +748,12 @@ int MatrixFile::WriteHeader(File *file, const string &name, const string &hdr, i
 int MatrixFile::WriteBinaryHeader(File *file, const string &name, const string &hdr, int M, int N) {
   int nl=name.size()+1, hl=hdr.size()+1;
   int pnl=NextMultipleOfN(nl, 32), phl=NextMultipleOfN(hl, 32);
-  BinaryHeader hdrbuf = { (int)0xdeadbeef, M, N, (int)sizeof(BinaryHeader), (int)sizeof(BinaryHeader)+pnl, (int)sizeof(BinaryHeader)+pnl+phl, 0, 0 };
+  BinaryHeader hdrbuf = { int(0xdeadbeef), M, N, int(sizeof(BinaryHeader)), int(sizeof(BinaryHeader)+pnl), int(sizeof(BinaryHeader)+pnl+phl), 0, 0 };
   if (file->Write(&hdrbuf, sizeof(BinaryHeader)) != sizeof(BinaryHeader)) return -1;
-  char *buf = (char*)alloca(pnl+phl);
-  memset(buf, 0, pnl+phl);
-  strncpy(buf, name.c_str(), nl);
-  strncpy(buf+pnl, hdr.c_str(), hl);
-  if (file->Write(buf, pnl+phl) != pnl+phl) return -1;
+  string buf(pnl+phl, 0);
+  strncpy(&buf[0], name.c_str(), nl);
+  strncpy(&buf[0]+pnl, hdr.c_str(), hl);
+  if (file->Write(buf.data(), pnl+phl) != pnl+phl) return -1;
   return sizeof(BinaryHeader)+pnl+phl;
 }
 
@@ -765,7 +763,7 @@ int MatrixFile::WriteRow(File *file, const double *row, int N, bool lastrow) {
     bool lastcol = (j == N-1);
     const char *delim = (lastcol /*&& (lastrow || N != 1)*/) ? "\r\n" : " ";
     double val = row[j];
-    unsigned ival = (unsigned)val;
+    unsigned ival = unsigned(val);
     if (val == ival) l += sprint(buf+l,sizeof(buf)-l, "%u%s", ival, delim);
     else             l += sprint(buf+l,sizeof(buf)-l, "%f%s", val, delim);
   }
@@ -778,7 +776,7 @@ int MatrixFile::WriteRow(File *file, const double *row, int N, bool lastrow) {
 int SettingsFile::Read(const string &dir, const string &name) {
   StringFile settings; int lastiter=0;
   VersionedFileName vfn(dir.c_str(), name.c_str(), VarName());
-  if (settings.ReadVersioned(vfn, lastiter) < 0) { ERROR(name, ".", lastiter, ".name"); return -1; }
+  if (settings.ReadVersioned(vfn, lastiter) < 0) return ERRORv(-1, name, ".", lastiter, ".name");
   for (int i=0, l=settings.Lines(); i<l; i++) {
     const char *line = (*settings.F)[i].c_str(), *sep = strstr(line, Separator());
     if (sep) Singleton<FlagMap>::Get()->Set(string(line, sep-line), sep + strlen(Separator()));

@@ -57,17 +57,22 @@ template<typename T, typename ...Args>
 unique_ptr<T> make_unique(Args&& ...args) { return unique_ptr<T>(new T(forward<Args>(args)...)); }
 template <class X> int TypeId() { static int ret = fnv32(typeid(X).name()); return ret; }
 template <class X> int TypeId(X*) { return TypeId<X>(); };
+template <class X> X *NullPointer() { return nullptr; }
 template <class X> X *CheckPointer(X *x) { CHECK(x); return x; }
 template <class X> X *CheckNullAssign(X **x, X *v) { CHECK_EQ(nullptr, *x); return (*x = v); }
 template <class X> X *GetThenAssignNull(X **x) { X *v = *x; if (v) *x = nullptr; return v; }
-template <class X> typename make_unsigned<X>::type *Unsigned(X *x) { return reinterpret_cast<typename make_unsigned<X>::type*>(x); }
+template <class X> X FromVoid(const void *v) { return static_cast<X>(v); }
+template <class X> X FromVoid(      void *v) { return static_cast<X>(v); }
+template <class X> typename make_unsigned<X>::type *MakeUnsigned(X *x) { return reinterpret_cast<typename make_unsigned<X>::type*>(x); }
+template <class X> typename make_signed  <X>::type *MakeSigned  (X *x) { return reinterpret_cast<typename make_signed  <X>::type*>(x); }
+inline const char *MakeSigned(const unsigned char *x) { return reinterpret_cast<const char*>(x); }
 
 struct typed_ptr {
   int type=0;
   void *value=0;
   typed_ptr() {}
   template <class X> typed_ptr(X *v) : type(TypeId<X>()), value(v) { }
-  template <class X> X *Get(int id) { return id == TypeId<X> ? reinterpret_cast<X*>(value) : nullptr; }
+  template <class X> X *Get(int id) { return id == TypeId<X> ? static_cast<X*>(value) : nullptr; }
 };
 
 template <class X> struct LazyInitializedPtr {
@@ -87,9 +92,6 @@ struct RefSet {
   virtual ~RefSet() { for (auto i : refs) i->DelRef(); }
   void Insert(RefCounter *x) { auto i = refs.insert(x); if (i.second) x->AddRef(); }
 };
-
-template <class X> static void Replace(X** p, X* r) { delete (*p); (*p) = r; }
-template <class X> static void AllocReplace(X** p, X* r) { if (*p && (*p)->alloc) (*p)->alloc->free(*p); *p = r; }
 
 template <class X> typename X::iterator Insert(X &m, const typename X::key_type &k, const typename X::mapped_type &v) {
   return m.insert(typename X::value_type(k, v)).first;
@@ -200,7 +202,9 @@ template <typename X> typename X::value_type &PushBack (X &v, const typename X::
 template <typename X> typename X::value_type  PopBack  (X &v) { typename X::value_type ret = v.back (); v.pop_back (); return ret; }
 template <typename X> typename X::value_type  PopFront (X &v) { typename X::value_type ret = v.front(); v.pop_front(); return ret; }
 template <typename X> typename std::queue<X>::value_type PopFront(std::queue<X> &v) { typename std::queue<X>::value_type ret = v.front(); v.pop(); return ret; }
-template <class X, class Y> void PushBack(X *vx, Y *vy, const typename X::value_type &x, const typename Y::value_type &y) { vx->push_back(x); vy->push_back(y); }
+template <class X, class Y>                   void PushBack(X *vx, Y *vy,               const typename X::value_type &x, const typename Y::value_type &y)                                                                   { vx->push_back(x); vy->push_back(y); }
+template <class X, class Y, class Z>          void PushBack(X *vx, Y *vy, Z *vz,        const typename X::value_type &x, const typename Y::value_type &y, const typename Z::value_type &z)                                  { vx->push_back(x); vy->push_back(y); vz->push_back(z); }
+template <class X, class Y, class Z, class W> void PushBack(X *vx, Y *vy, Z *vz, W *vw, const typename X::value_type &x, const typename Y::value_type &y, const typename Z::value_type &z, const typename W::value_type &w) { vx->push_back(x); vy->push_back(y); vz->push_back(z); vw->push_back(w); }
 
 template <class X>       X *VectorGet(      vector<X> &x, int n) { return (n >= 0 && n < x.size()) ? &x[n] : 0; }
 template <class X> const X *VectorGet(const vector<X> &x, int n) { return (n >= 0 && n < x.size()) ? &x[n] : 0; }
@@ -232,6 +236,11 @@ template <class X> int VectorEraseByValue(vector<X> *v, const X& x) {
 template <class X> int VectorRemoveUnique(vector<unique_ptr<X>> *v, const X* x) {
   for (auto i = v->begin(), e = v->end(); i != e; ++i) if (i->get() == x) { v->erase(i); return 1; }
   return 0;
+}
+template <class X, class Y> X* VectorAddUnique(Y *v, unique_ptr<X> x) {
+  X *ret = x.get();
+  v->emplace_back(move(x));
+  return ret;
 }
 
 template <class X> X BackOrDefault (const vector<X> &a)                    { return a.size() ? a.back () : X(); }
@@ -410,6 +419,66 @@ struct FreeListBlockAllocator {
   }
 
   void Erase(unsigned ind) { free_list.push_back(ind); }
+};
+
+struct MallocAllocator : public Allocator {
+  const char *Name() { return "MallocAllocator"; }
+  void *Malloc(int size);
+  void *Realloc(void *p, int size);
+  void Free(void *p);
+};
+
+struct NewAllocator : public Allocator {
+  const char *Name() { return "NewAllocator"; }
+  void *Malloc(int size) { return new char[size]; }
+  void *Realloc(void *p, int size) { return !p ? Malloc(size) : 0; }
+  void Free(void *p) { delete [] reinterpret_cast<char*>(p); }
+};
+
+template <int S> struct FixedAllocator : public Allocator {
+  const char *Name() { return "FixedAllocator"; }
+  static const int size = S;
+  char buf[S];
+  int len=0;
+  virtual void Reset() { len=0; }
+  virtual void *Malloc(int n) { CHECK_LE(len + n, S); char *ret = &buf[len]; len += NextMultipleOf16(n); return ret; }
+  virtual void *Realloc(void *p, int n) { CHECK_EQ(nullptr, p); return this->Malloc(n); }
+  virtual void Free(void *p) {}
+};
+
+struct MMapAllocator : public Allocator {
+#ifdef _WIN32
+  HANDLE file, map; void *addr; long long size;
+  MMapAlloc(HANDLE File, HANDLE Map, void *Addr, int Size) : file(File), map(Map), addr(Addr), size(Size) {}
+#else
+  void *addr; long long size;
+  MMapAllocator(void *Addr, long long Size) : addr(Addr), size(Size) {}
+#endif
+  virtual ~MMapAllocator();
+  static unique_ptr<MMapAllocator> Open(const char *fn, const bool logerror=true, const bool readonly=true, long long size=0);
+
+  const char *Name() { return "MMapAllocator"; }
+  void *Malloc(int size) { return 0; }
+  void *Realloc(void *p, int size) { return 0; }
+  void Free(void *p) { delete this; }
+};
+
+struct BlockChainAllocator : public Allocator {
+  const char *Name() { return "BlockChainAllocator"; }
+  struct Block { string buf; int len=0; Block(int size=0) : buf(size, 0) {} };
+  vector<Block> blocks;
+  int block_size, cur_block_ind;
+  BlockChainAllocator(int s=1024*1024) : block_size(s), cur_block_ind(-1) {}
+  void Reset() { for (auto &b : blocks) b.len = 0; cur_block_ind = blocks.size() ? 0 : -1; }
+  void *Realloc(void *p, int n) { CHECK_EQ(nullptr, p); return this->Malloc(n); }
+  void *Malloc(int n);
+  void Free(void *p) {}
+};
+
+struct StringAlloc {
+  string buf;
+  void Reset() { buf.clear(); }
+  int Alloc(int bytes) { int ret=buf.size(); buf.resize(ret + bytes); return ret; }
 };
 
 template <typename X> struct SortedVector : public vector<X> {
@@ -628,13 +697,11 @@ struct CallbackList {
   vector<Callback> data;
   int Count() const { return data.size(); }
   void Clear() { dirty=0; data.clear(); }
-  void Add(const Callback &cb) { data.push_back(cb); dirty=1; }
   void AddList(const CallbackList &cb) { data.insert(data.end(), cb.data.begin(), cb.data.end()); dirty=1; }
   void Run() const { for (auto i = data.begin(); i != data.end(); ++i) (*i)(); }
   template <class X> int Run(const X&) const { int count = Count(); Run(); return count; }
+  template <class... Args> void Add(Args&&... args) { data.emplace_back(forward<Args>(args)...); dirty=1; }
 };
-#define CallbackListAdd(cblist, ...) (cblist)->Add(bind(__VA_ARGS__))
-#define CallbackListsAdd(cblists, ...) for(CallbackList **cbl=(cblists); *cbl; cbl++) CallbackListAdd(*cbl, __VA_ARGS__)
 
 template <class X> struct TopN {
   const int num;
@@ -692,12 +759,12 @@ struct RingBuf {
   Allocator *alloc;
   char *buf;
   microseconds *stamp;
-  ~RingBuf() { alloc->Free((void*)buf); alloc->Free((void*)stamp); }
+  ~RingBuf() { alloc->Free(buf); alloc->Free(stamp); }
   RingBuf(int SPS=0, int SPB=0, int Width=0, Allocator *Alloc=0) : samples_per_sec(0), width(0), bytes(0),
   alloc(Alloc?Alloc:Allocator::Default()), buf(0), stamp(0) { if (SPS) Resize(SPS, X_or_Y(SPB, SPS), Width); }
 
   int Bucket(int n) const { return ring.AbsoluteIndex(n); }
-  virtual void *Ind(int index) const { return (void *)(buf + index*width); }
+  virtual void *Ind(int index) const { return buf + index*width; }
 
   void Resize(int SPS, int SPB, int Width=0);
   enum WriteFlag { Peek=1, Stamp=2 };
@@ -715,12 +782,12 @@ struct RingBuf {
     Handle(RingBuf *SB, int Next=-1, int Len=-1) : sb(SB), next((sb && Next != -1)?sb->Bucket(Next):-1), nlen(Len) {}
     virtual int Rate() const { return sb->samples_per_sec; }
     virtual int Len() const { return nlen >= 0 ? nlen : sb->ring.size; }
-    virtual float *Index(int index) { return (float *)sb->Ind(index); }
-    virtual float Ind(int index) const { return *(float *)sb->Ind(index); }
-    virtual void Write(float v, int flag=0, microseconds ts=microseconds(-1)) { *(float *)(sb->Write(flag, ts)) = v; }
-    virtual void Write(float *v, int flag=0, microseconds ts=microseconds(-1)) { *(float *)(sb->Write(flag, ts)) = *v; }
-    virtual float Read(int index) const { return *(float *)sb->Read(index, next); }
-    virtual float *ReadAddr(int index) const { return (float *)sb->Read(index, next); } 
+    virtual float *Index(int index) { return FromVoid<float*>(sb->Ind(index)); }
+    virtual float Ind(int index) const { return *FromVoid<float*>(sb->Ind(index)); }
+    virtual void Write(float v, int flag=0, microseconds ts=microseconds(-1)) { *FromVoid<float*>(sb->Write(flag, ts)) = v; }
+    virtual void Write(float *v, int flag=0, microseconds ts=microseconds(-1)) { *FromVoid<float*>(sb->Write(flag, ts)) = *v; }
+    virtual float Read(int index) const { return *FromVoid<float*>(sb->Read(index, next)); }
+    virtual float *ReadAddr(int index) const { return FromVoid<float*>(sb->Read(index, next)); } 
     virtual microseconds ReadTimestamp(int index) const { return sb->ReadTimestamp(index, next); }
     void CopyFrom(const RingBuf::Handle *src);
   };
@@ -728,10 +795,10 @@ struct RingBuf {
   template <typename X> struct HandleT : public Handle {
     HandleT() {}
     HandleT(RingBuf *SB, int Next=-1, int Len=-1) : Handle(SB, Next, Len) {}
-    virtual float Ind(int index) const { return *(X *)sb->Ind(index); }
-    virtual float Read(int index) const { return *(X *)sb->Read(index, next); }
-    virtual void Write(float  v, int flag=0, microseconds ts=microseconds(-1)) { *(X *)(sb->Write(flag, ts)) =  v; }
-    virtual void Write(float *v, int flag=0, microseconds ts=microseconds(-1)) { *(X *)(sb->Write(flag, ts)) = *v; }
+    virtual float Ind(int index) const { return *FromVoid<X*>(sb->Ind(index)); }
+    virtual float Read(int index) const { return *FromVoid<X*>(sb->Read(index, next)); }
+    virtual void Write(float  v, int flag=0, microseconds ts=microseconds(-1)) { *FromVoid<X*>(sb->Write(flag, ts)) =  v; }
+    virtual void Write(float *v, int flag=0, microseconds ts=microseconds(-1)) { *FromVoid<X*>(sb->Write(flag, ts)) = *v; }
   };
 
   struct DelayHandle : public Handle {
@@ -745,7 +812,7 @@ struct RingBuf {
 
   struct WriteAheadHandle : public Handle {
     WriteAheadHandle(RingBuf *SB) : Handle(SB, SB->ring.back) {}
-    virtual void Write(float v, int flag=0, microseconds ts=microseconds(-1)) { *(float*)Write(flag, ts) = v; }
+    virtual void Write(float v, int flag=0, microseconds ts=microseconds(-1)) { *FromVoid<float*>(Write(flag, ts)) = v; }
     virtual void *Write(int flag=0, microseconds ts=microseconds(-1)) {
       void *ret = sb->Ind(next);
       if (flag & Stamp) sb->stamp[next] = (ts != microseconds(-1)) ? ts : Now();
@@ -764,10 +831,10 @@ struct RingBuf {
       matrix<T>::N = matrix<T>::bytes/sizeof(T);
     }
 
-    T             * row(int i)       { return (T*)sb->Read(i, next); }
-    const T       * row(int i) const { return (T*)sb->Read(i, next); }
-    Complex       *crow(int i)       { return (Complex*)sb->Read(i, next); }
-    const Complex *crow(int i) const { return (Complex*)sb->Read(i, next); }
+    T             * row(int i)       { return FromVoid<T*>(sb->Read(i, next)); }
+    const T       * row(int i) const { return FromVoid<T*>(sb->Read(i, next)); }
+    Complex       *crow(int i)       { return FromVoid<Complex*>(sb->Read(i, next)); }
+    const Complex *crow(int i) const { return FromVoid<Complex*>(sb->Read(i, next)); }
   };
   typedef MatrixHandleT<double> MatrixHandle;
 
@@ -782,10 +849,10 @@ struct RingBuf {
     RowMatHandleT(RingBuf *SB) : sb(SB), next(-1) { Init(); }
     RowMatHandleT(RingBuf *SB, int Next) : sb(SB), next((sb && Next != -1)?sb->Bucket(Next):-1) { Init(); }
 
-    matrix<T> *Ind(int index) { wrap.m = (double *)sb->Ind(index); return &wrap; }
-    matrix<T> *Read(int index) { wrap.m = (double *)sb->Read(index, next); return &wrap; }
-    double *ReadRow(int index) { wrap.m = (double *)sb->Read(index, next); return wrap.row(0); }
-    matrix<T> *Write(int flag=0, microseconds ts=microseconds(-1)) { wrap.m = (double *)sb->Write(flag, ts); return &wrap; }
+    matrix<T> *Ind(int index) { wrap.m = FromVoid<double*>(sb->Ind(index)); return &wrap; }
+    matrix<T> *Read(int index) { wrap.m = FromVoid<double*>(sb->Read(index, next)); return &wrap; }
+    double *ReadRow(int index) { wrap.m = FromVoid<double*>(sb->Read(index, next)); return wrap.row(0); }
+    matrix<T> *Write(int flag=0, microseconds ts=microseconds(-1)) { wrap.m = FromVoid<double*>(sb->Write(flag, ts)); return &wrap; }
     microseconds ReadTimestamp(int index) const { return sb->ReadTimestamp(index, next); }
   };
   typedef RowMatHandleT<double> RowMatHandle;
@@ -830,7 +897,7 @@ struct BloomFilter {
     for (int i = 1; i <= K; i++) {
       h1 = (h1 + h2) % M;
       h2 = (h2 +  i) % M;
-      if (!op(Unsigned(&buf[0]), h1)) return 0;
+      if (!op(MakeUnsigned(&buf[0]), h1)) return 0;
     }
     return 1;
   }

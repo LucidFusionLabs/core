@@ -27,9 +27,10 @@ struct DocumentParser {
     Parser(DocumentParser *P, const string &URL) : url(URL), parent(P) {}
     virtual ~Parser() {}
     virtual void Complete(void *self) {
-      parent->completed++;
-      parent->outstanding.erase(self);
-      if (auto html = parent->doc->DocElement()) html->SetLayoutDirty();
+      if (parent->outstanding.erase(self)) {
+        parent->completed++;
+        if (auto html = parent->doc->DocElement()) html->SetLayoutDirty();
+      }
       delete this;
     }
   };

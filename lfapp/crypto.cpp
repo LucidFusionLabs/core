@@ -55,7 +55,7 @@ string Crypto::DiffieHellman::GenerateModulus(int generator, int bits) {
   DH *dh = DH_new();
   DH_generate_parameters_ex(dh, bits, generator, NULL);
   string ret(BN_num_bytes(dh->p), 0);
-  BN_bn2bin(dh->p, (unsigned char*)&ret[0]);
+  BN_bn2bin(dh->p, MakeUnsigned(&ret[0]));
   DH_free(dh);
   return ret;
 }
@@ -253,22 +253,22 @@ int Crypto::DigestGetHashSize(Digest *d) { return DigestAlgos::HashSize(d->algo)
 void Crypto::DigestOpen(Digest *d, DigestAlgo algo) {
   d->algo = algo;
   switch(algo) {
-    case CCDigestAlgo::MD5:    d->v=calloc(sizeof(CC_MD5_CTX),   1); CC_MD5_Init   ((CC_MD5_CTX*)   d->v); break;
-    case CCDigestAlgo::SHA1:   d->v=calloc(sizeof(CC_SHA1_CTX),  1); CC_SHA1_Init  ((CC_SHA1_CTX*)  d->v); break;
-    case CCDigestAlgo::SHA256: d->v=calloc(sizeof(CC_SHA256_CTX),1); CC_SHA256_Init((CC_SHA256_CTX*)d->v); break;
-    case CCDigestAlgo::SHA384: d->v=calloc(sizeof(CC_SHA512_CTX),1); CC_SHA384_Init((CC_SHA512_CTX*)d->v); break;
-    case CCDigestAlgo::SHA512: d->v=calloc(sizeof(CC_SHA512_CTX),1); CC_SHA512_Init((CC_SHA512_CTX*)d->v); break;
+    case CCDigestAlgo::MD5:    d->v=calloc(sizeof(CC_MD5_CTX),   1); CC_MD5_Init   (FromVoid<CC_MD5_CTX*>   (d->v)); break;
+    case CCDigestAlgo::SHA1:   d->v=calloc(sizeof(CC_SHA1_CTX),  1); CC_SHA1_Init  (FromVoid<CC_SHA1_CTX*>  (d->v)); break;
+    case CCDigestAlgo::SHA256: d->v=calloc(sizeof(CC_SHA256_CTX),1); CC_SHA256_Init(FromVoid<CC_SHA256_CTX*>(d->v)); break;
+    case CCDigestAlgo::SHA384: d->v=calloc(sizeof(CC_SHA512_CTX),1); CC_SHA384_Init(FromVoid<CC_SHA512_CTX*>(d->v)); break;
+    case CCDigestAlgo::SHA512: d->v=calloc(sizeof(CC_SHA512_CTX),1); CC_SHA512_Init(FromVoid<CC_SHA512_CTX*>(d->v)); break;
     default:                   d->v=0; break;
   }
 }
 
 void Crypto::DigestUpdate(Digest *d, const StringPiece &in) {
   switch(d->algo) {
-    case CCDigestAlgo::MD5:    CC_MD5_Update   ((CC_MD5_CTX*)   d->v, in.data(), in.size()); break;
-    case CCDigestAlgo::SHA1:   CC_SHA1_Update  ((CC_SHA1_CTX*)  d->v, in.data(), in.size()); break;
-    case CCDigestAlgo::SHA256: CC_SHA256_Update((CC_SHA256_CTX*)d->v, in.data(), in.size()); break;
-    case CCDigestAlgo::SHA384: CC_SHA384_Update((CC_SHA512_CTX*)d->v, in.data(), in.size()); break;
-    case CCDigestAlgo::SHA512: CC_SHA512_Update((CC_SHA512_CTX*)d->v, in.data(), in.size()); break;
+    case CCDigestAlgo::MD5:    CC_MD5_Update   (FromVoid<CC_MD5_CTX*>   (d->v), in.data(), in.size()); break;
+    case CCDigestAlgo::SHA1:   CC_SHA1_Update  (FromVoid<CC_SHA1_CTX*>  (d->v), in.data(), in.size()); break;
+    case CCDigestAlgo::SHA256: CC_SHA256_Update(FromVoid<CC_SHA256_CTX*>(d->v), in.data(), in.size()); break;
+    case CCDigestAlgo::SHA384: CC_SHA384_Update(FromVoid<CC_SHA512_CTX*>(d->v), in.data(), in.size()); break;
+    case CCDigestAlgo::SHA512: CC_SHA512_Update(FromVoid<CC_SHA512_CTX*>(d->v), in.data(), in.size()); break;
     default: break;
   }
 }
@@ -276,11 +276,11 @@ void Crypto::DigestUpdate(Digest *d, const StringPiece &in) {
 string Crypto::DigestFinish(Digest *d) {
   string ret;
   switch(d->algo) {
-    case CCDigestAlgo::MD5:    ret.resize(CC_MD5_DIGEST_LENGTH);    CC_MD5_Final   (reinterpret_cast<unsigned char *>(&ret[0]), (CC_MD5_CTX*)   d->v); free(d->v); d->v=0; break;
-    case CCDigestAlgo::SHA1:   ret.resize(CC_SHA1_DIGEST_LENGTH);   CC_SHA1_Final  (reinterpret_cast<unsigned char *>(&ret[0]), (CC_SHA1_CTX*)  d->v); free(d->v); d->v=0; break;
-    case CCDigestAlgo::SHA256: ret.resize(CC_SHA256_DIGEST_LENGTH); CC_SHA256_Final(reinterpret_cast<unsigned char *>(&ret[0]), (CC_SHA256_CTX*)d->v); free(d->v); d->v=0; break;
-    case CCDigestAlgo::SHA384: ret.resize(CC_SHA384_DIGEST_LENGTH); CC_SHA384_Final(reinterpret_cast<unsigned char *>(&ret[0]), (CC_SHA512_CTX*)d->v); free(d->v); d->v=0; break;
-    case CCDigestAlgo::SHA512: ret.resize(CC_SHA512_DIGEST_LENGTH); CC_SHA512_Final(reinterpret_cast<unsigned char *>(&ret[0]), (CC_SHA512_CTX*)d->v); free(d->v); d->v=0; break;
+    case CCDigestAlgo::MD5:    ret.resize(CC_MD5_DIGEST_LENGTH);    CC_MD5_Final   (MakeUnsigned(&ret[0]), FromVoid<CC_MD5_CTX*>   (d->v)); free(d->v); d->v=0; break;
+    case CCDigestAlgo::SHA1:   ret.resize(CC_SHA1_DIGEST_LENGTH);   CC_SHA1_Final  (MakeUnsigned(&ret[0]), FromVoid<CC_SHA1_CTX*>  (d->v)); free(d->v); d->v=0; break;
+    case CCDigestAlgo::SHA256: ret.resize(CC_SHA256_DIGEST_LENGTH); CC_SHA256_Final(MakeUnsigned(&ret[0]), FromVoid<CC_SHA256_CTX*>(d->v)); free(d->v); d->v=0; break;
+    case CCDigestAlgo::SHA384: ret.resize(CC_SHA384_DIGEST_LENGTH); CC_SHA384_Final(MakeUnsigned(&ret[0]), FromVoid<CC_SHA512_CTX*>(d->v)); free(d->v); d->v=0; break;
+    case CCDigestAlgo::SHA512: ret.resize(CC_SHA512_DIGEST_LENGTH); CC_SHA512_Final(MakeUnsigned(&ret[0]), FromVoid<CC_SHA512_CTX*>(d->v)); free(d->v); d->v=0; break;
     default: break;
   }
   return ret;
@@ -311,8 +311,8 @@ string Crypto::Blowfish(const string &passphrase, const string &in, bool encrypt
 
   int outlen = 0, tmplen = 0;
   string out(in.size()+encrypt_or_decrypt*EVP_MAX_BLOCK_LENGTH, 0);
-  EVP_CipherUpdate(&ctx, (unsigned char*)out.data(), &outlen, (const unsigned char *)in.c_str(), in.size());
-  EVP_CipherFinal_ex(&ctx, (unsigned char*)out.data() + outlen, &tmplen); 
+  EVP_CipherUpdate(&ctx, MakeUnsigned(&out[0]), &outlen, (const unsigned char *)in.c_str(), in.size());
+  EVP_CipherFinal_ex(&ctx, MakeUnsigned(&out[0]) + outlen, &tmplen); 
   if (in.size() % 8) outlen += tmplen;
 
   EVP_CIPHER_CTX_cleanup(&ctx); 
@@ -347,12 +347,10 @@ void Crypto::CipherInit(Cipher *c) { EVP_CIPHER_CTX_init(c); }
 void Crypto::CipherFree(Cipher *c) { EVP_CIPHER_CTX_cleanup(c); }
 int Crypto::CipherGetBlockSize(Cipher *c) { return EVP_CIPHER_CTX_block_size(c); }
 int Crypto::CipherOpen(Cipher *c, CipherAlgo algo, bool dir, const StringPiece &key, const StringPiece &IV) { 
-  return EVP_CipherInit(c, algo, reinterpret_cast<const unsigned char *>(key.data()),
-                        reinterpret_cast<const unsigned char *>(IV.data()), dir);
+  return EVP_CipherInit(c, algo, MakeUnsigned(key.data()), MakeUnsigned(IV.data()), dir);
 }
 int Crypto::CipherUpdate(Cipher *c, const StringPiece &in, char *out, int outlen) {
-  return EVP_Cipher(c, reinterpret_cast<unsigned char*>(out),
-                    reinterpret_cast<const unsigned char*>(in.data()), in.size());
+  return EVP_Cipher(c, MakeUnsigned(out), MakeUnsigned(in.data()), in.size());
 }
 
 int Crypto::DigestGetHashSize(Digest *d) { return EVP_MD_CTX_size(d); }
@@ -361,14 +359,14 @@ void Crypto::DigestUpdate(Digest *d, const StringPiece &in) { EVP_DigestUpdate(d
 string Crypto::DigestFinish(Digest *d) {
   unsigned len = 0;
   string ret(EVP_MAX_MD_SIZE, 0);
-  EVP_DigestFinal(d, reinterpret_cast<unsigned char *>(&ret[0]), &len);
+  EVP_DigestFinal(d, MakeUnsigned(&ret[0]), &len);
   ret.resize(len);
   return ret;
 }
 
 void Crypto::MACOpen(MAC *m, MACAlgo algo, const StringPiece &k) { HMAC_Init(m, k.data(), k.size(), algo); }
-void Crypto::MACUpdate(MAC *m, const StringPiece &in) { HMAC_Update(m, reinterpret_cast<const unsigned char *>(in.data()), in.size()); }
-int Crypto::MACFinish(MAC *m, char *out, int outlen) { unsigned len=outlen; HMAC_Final(m, reinterpret_cast<unsigned char *>(out), &len); return len; }
+void Crypto::MACUpdate(MAC *m, const StringPiece &in) { HMAC_Update(m, MakeUnsigned(in.data()), in.size()); }
+int Crypto::MACFinish(MAC *m, char *out, int outlen) { unsigned len=outlen; HMAC_Final(m, MakeUnsigned(out), &len); return len; }
 
 #else
 
@@ -408,9 +406,9 @@ int Crypto::MACFinish(MAC *m, char *out, int outlen) { FATAL("not implemented");
 #endif
 
 int SSH::BinaryPacketLength(const char *b, unsigned char *padding, unsigned char *id) {
-  if (padding) *padding = *(reinterpret_cast<const unsigned char *>(b + 4));
-  if (id)      *id      = *(reinterpret_cast<const unsigned char *>(b + 5));
-  return ntohl(*(int*)b);
+  if (padding) *padding = *MakeUnsigned(b + 4);
+  if (id)      *id      = *MakeUnsigned(b + 5);
+  return ntohl(*reinterpret_cast<const int*>(b));
 }
 
 int SSH::BigNumSize(const BigNum n) { return BigNumDataSize(n) + !(BigNumSignificantBits(n) % 8); }
@@ -464,8 +462,8 @@ int SSH::VerifyHostKey(const string &H_text, int hostkey_type, const StringPiece
     if (rsa_sig.In(&rsasig_stream)) { RSA_free(rsa_key); return -3; }
     string rsa_sigbuf(rsa_sig.sig.data(), rsa_sig.sig.size());
     if (SSH::RSAKey(rsa_key->e, rsa_key->n).In(&rsakey_stream)) { RSA_free(rsa_key); return -2; }
-    int verified = RSA_verify(NID_sha1, reinterpret_cast<const unsigned char *>(H_hash.data()), H_hash.size(),
-                              reinterpret_cast<unsigned char *>(&rsa_sigbuf[0]), rsa_sigbuf.size(), rsa_key);
+    int verified = RSA_verify(NID_sha1, MakeUnsigned(H_hash.data()), H_hash.size(),
+                              MakeUnsigned(&rsa_sigbuf[0]), rsa_sigbuf.size(), rsa_key);
     RSA_free(rsa_key);
     return verified;
 
@@ -477,7 +475,7 @@ int SSH::VerifyHostKey(const string &H_text, int hostkey_type, const StringPiece
     Serializable::ConstStream dsasig_stream(sig.data(), sig.size());
     if (SSH::DSSKey(dsa_key->p, dsa_key->q, dsa_key->g, dsa_key->pub_key).In(&dsakey_stream)) { DSA_free(dsa_key); return -4; }
     if (SSH::DSSSignature(dsa_sig->r, dsa_sig->s).In(&dsasig_stream)) { DSA_free(dsa_key); DSA_SIG_free(dsa_sig); return -5; }
-    int verified = DSA_do_verify(reinterpret_cast<const unsigned char *>(H_hash.data()), H_hash.size(), dsa_sig, dsa_key);
+    int verified = DSA_do_verify(MakeUnsigned(H_hash.data()), H_hash.size(), dsa_sig, dsa_key);
     DSA_free(dsa_key);
     DSA_SIG_free(dsa_sig);
     return verified;
@@ -494,7 +492,7 @@ int SSH::VerifyHostKey(const string &H_text, int hostkey_type, const StringPiece
     ECPoint ecdsa_key = NewECPoint(GetECPairGroup(ecdsa_keypair));
     ECPointSetData(GetECPairGroup(ecdsa_keypair), ecdsa_key, key_msg.q);
     if (!SetECPairPubKey(ecdsa_keypair, ecdsa_key)) { FreeECPair(ecdsa_keypair); ECDSA_SIG_free(ecdsa_sig); return -8; }
-    int verified = ECDSA_do_verify(reinterpret_cast<const unsigned char *>(H_hash.data()), H_hash.size(), ecdsa_sig, ecdsa_keypair);
+    int verified = ECDSA_do_verify(MakeUnsigned(H_hash.data()), H_hash.size(), ecdsa_sig, ecdsa_keypair);
     FreeECPair(ecdsa_keypair);
     ECDSA_SIG_free(ecdsa_sig);
     return verified;
@@ -697,7 +695,7 @@ string SSH::MSG_KEXINIT::DebugString() const {
   StrAppend(&ret, "compression_algorithms_server_to_client: ", compression_algorithms_server_to_client.str(), "\n");
   StrAppend(&ret, "languages_client_to_server: ",              languages_client_to_server.str(),              "\n");
   StrAppend(&ret, "languages_server_to_client: ",              languages_server_to_client.str(),              "\n");
-  StrAppend(&ret, "first_kex_packet_follows: ",                (int)first_kex_packet_follows,                 "\n");
+  StrAppend(&ret, "first_kex_packet_follows: ",                int(first_kex_packet_follows),                 "\n");
   return ret;
 }
 

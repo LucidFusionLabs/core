@@ -304,7 +304,7 @@ extern "C" void OSXGrabMouseFocus();
 extern "C" void OSXReleaseMouseFocus();
 extern "C" void OSXSetMousePosition(void*, int x, int y);
 extern "C" void OSXClipboardSet(const char *v);
-extern "C" const char *OSXClipboardGet();
+extern "C" char *OSXClipboardGet();
 
 const int Key::Escape = 0x81;
 const int Key::Return = '\r';
@@ -343,7 +343,7 @@ const int Key::End = 0xB7;
 
 #ifdef LFL_OSXVIDEO
 void Application::SetClipboardText(const string &s) { OSXClipboardSet(s.c_str()); }
-string Application::GetClipboardText() { const char *v = OSXClipboardGet(); string ret = v; free((void*)v); return ret; }
+string Application::GetClipboardText() { char *v = OSXClipboardGet(); string ret = v; free(reinterpret_cast<void*>(v)); return ret; }
 void Application::ReleaseMouseFocus() { OSXReleaseMouseFocus(); app->grab_mode.Off(); screen->cursor_grabbed = 0; }
 void Application::GrabMouseFocus()    { OSXGrabMouseFocus();    app->grab_mode.On();  screen->cursor_grabbed = 1;
   OSXSetMousePosition(screen->id, screen->width / 2, screen->height / 2);
@@ -945,6 +945,11 @@ void Application::AddToolbar(const vector<pair<string, string>>&items) {
 #endif
 }
 
+point Input::TransformMouseCoordinate(point p) {
+  if (FLAGS_swap_axis) p = point(screen->width - p.y, p.x);
+  return point(p.x, screen->height - p.y);
+}
+
 void Input::ClearButtonsDown() {
   if (left_shift_down)  { KeyPress(Key::LeftShift,  0);    left_shift_down = 0; }
   if (right_shift_down) { KeyPress(Key::RightShift, 0);    left_shift_down = 0; }
@@ -988,11 +993,11 @@ int Input::Frame(unsigned clicks) {
 
 #if 0
 int Input::GestureFrame(unsinged clicks) {
-  if (screen) { // XXX support multiple windows
-    if (screen->gesture_swipe_up)   { if (screen->console && screen->console->active) screen->console->PageUp();   }
-    if (screen->gesture_swipe_down) { if (screen->console && screen->console->active) screen->console->PageDown(); }
-    screen->ClearGesture();
-  }
+  if (screen->gesture_swipe_up)   { if (screen->console && screen->console->active) screen->console->PageUp();   }
+  if (screen->gesture_swipe_down) { if (screen->console && screen->console->active) screen->console->PageDown(); }
+  screen->gesture_swipe_up = screen->gesture_swipe_down = 0;
+  screen->gesture_tap[0] = screen->gesture_tap[1] = screen->gesture_dpad_stop[0] = screen->gesture_dpad_stop[1] = 0;
+  screen->gesture_dpad_dx[0] = screen->gesture_dpad_dx[1] = screen->gesture_dpad_dy[0] = screen->gesture_dpad_dy[1] = 0;
 }
 #endif
 
@@ -1032,8 +1037,8 @@ int Input::KeyPress(int key, bool down) {
   int fired = KeyEventDispatch(event, down);
   if (fired) return fired;
 
-  for (auto g = screen->input_bind.begin(); g != screen->input_bind.end(); ++g)
-    if ((*g)->active) (*g)->Input(event, down); 
+  for (auto &g : screen->input)
+    if (g->active) g->Input(event, down); 
 
   return 0;
 }
@@ -1046,7 +1051,7 @@ int Input::KeyEventDispatch(InputEvent::Id event, bool down) {
   if (FLAGS_input_debug && down)
     INFO("KeyEvent ", InputEvent::Name(event), " ", key, " ", shift_down, " ", ctrl_down, " ", cmd_down);
 
-  if (KeyboardGUI *g = screen->active_textgui) do {
+  if (KeyboardController *g = screen->active_textbox) do {
     if (g->toggle_bind.key == event && !g->toggle_once) return 0;
 
     if (event == paste_bind.key) { g->Input(app->GetClipboardText()); return 1; }
@@ -1090,7 +1095,7 @@ int Input::MouseClick(int button, bool down, const point &p) {
   int fired = MouseEventDispatch(event, p, down);
   if (fired) return fired;
 
-  for (auto g = screen->input_bind.begin(); g != screen->input_bind.end(); ++g)
+  for (auto g = screen->input.begin(); g != screen->input.end(); ++g)
     if ((*g)->active) (*g)->Input(event, down);
 
   return fired;
@@ -1105,23 +1110,23 @@ int Input::MouseEventDispatch(InputEvent::Id event, const point &p, int down) {
     INFO("MouseEvent ", InputEvent::Name(event), " ", screen->mouse.DebugString(), " down=", down);
 
   int fired = 0;
-  for (auto g = screen->mouse_gui.begin(); g != screen->mouse_gui.end(); ++g) {
-    if ((*g)->NotActive()) continue;
-    fired += (*g)->Input(event, (*g)->MousePosition(), down, 0);
+  for (auto &g : screen->gui) {
+    if (g->NotActive()) continue;
+    fired += g->mouse.Input(event, g->RelativePosition(screen->mouse), down, 0);
   }
 
   Dialog *bring_to_front = 0;
   for (auto i = screen->dialogs.begin(); i != screen->dialogs.end(); /**/) {
     Dialog *gui = i->get();
     if (gui->NotActive()) { i++; continue; }
-    fired += gui->Input(event, screen->mouse, down, 0);
+    fired += gui->mouse.Input(event, screen->mouse, down, 0);
     if (gui->deleted) { screen->GiveDialogFocusAway(gui); i = screen->dialogs.erase(i); continue; }
     if (event == Mouse::Event::Button1 && down && gui->box.within(screen->mouse)) { bring_to_front = gui; break; }
     i++;
   }
   if (bring_to_front) screen->BringDialogToFront(bring_to_front);
 
-  if (FLAGS_input_debug && down) INFO("MouseEvent ", screen->mouse.DebugString(), " fired=", fired, ", guis=", screen->mouse_gui.size());
+  if (FLAGS_input_debug && down) INFO("MouseEvent ", screen->mouse.DebugString(), " fired=", fired, ", guis=", screen->gui.size());
   return fired;
 }
 
@@ -1142,6 +1147,37 @@ int KeyboardController::HandleSpecialKey(InputEvent::Id event) {
     case Key::Escape:    Escape();      return 1;
   }
   return 0;
+}
+
+void MouseControllerCallback::Destruct() {
+  switch(type) {
+    case CB_VOID:  cb.cb_void .~CB();      break;
+    case CB_BOOL:  cb.cb_bool .~BoolCB();  break;
+    case CB_COORD: cb.cb_coord.~CoordCB(); break;
+    default:                               break;
+  }
+}
+
+void MouseControllerCallback::Assign(const MouseControllerCallback &c) {
+  run_from_message_loop = c.run_from_message_loop;
+  switch ((type = c.type)) {
+    case CB_VOID:  new (&cb.cb_void)  CB     (c.cb.cb_void);  break;
+    case CB_BOOL:  new (&cb.cb_bool)  BoolCB (c.cb.cb_bool);  break;
+    case CB_COORD: new (&cb.cb_coord) CoordCB(c.cb.cb_coord); break;
+    default:                                                  break;
+  }
+}
+
+bool MouseControllerCallback::Run(const point &p, int button, int down, bool wrote) {
+  if (run_from_message_loop && !wrote) { app->RunInMainThread([=]{ Run(p, button, down, true); }); return false; }
+  bool ret = 1;
+  switch (type) {
+    case CB_VOID:  cb.cb_void();                        break;
+    case CB_BOOL:  ret = cb.cb_bool();                  break;
+    case CB_COORD: cb.cb_coord(button, p.x, p.y, down); break;
+    default:                                            break;
+  }
+  return ret;
 }
 
 int MouseController::Input(InputEvent::Id event, const point &p, int down, int flag) {

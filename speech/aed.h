@@ -26,7 +26,7 @@ bool SpeechClientAuto() { return FLAGS_speech_client == "auto"; }
 bool SpeechClientManual() { return !SpeechClientAuto() && !SpeechClientFlood(); }
 
 struct AcousticEventDetector {
-  FixedAlloc<65536*2> alloc;
+  FixedAllocator<65536*2> alloc;
   int feature_rate;
   long long samples_processed, samples_available;
 
@@ -57,8 +57,8 @@ struct AcousticEventDetector {
   bool OnAir() { return words.size() && Top().PE == -1; }
 
   static const int szcr_shift=3, d2jump_left=3, d2jump_right=7;
-  double Percent(long long n) const { return 1 - (double) (total - n) / pe.ring.size; }
-  double Seconds(long long n) const { return (double) (total - n) / pe.samples_per_sec; }
+  double Percent(long long n) const { return 1 - double(total - n) / pe.ring.size; }
+  double Seconds(long long n) const { return double(total - n) / pe.samples_per_sec; }
 
   double SNR(int t=8) {
     if      (t == 1) return sl/nl;
@@ -141,14 +141,14 @@ struct AcousticEventDetector {
     }
 
     /* compute ZCR & PE */
-    float ZCR = *(float*)zcr.Write() = ZeroCrossings(/*&filtered_input*/ in, FLAGS_feat_window, 0);
-    float PE = *(float*)pe.Write() = PseudoEnergy(/*&filtered_input*/ in, FLAGS_feat_window, 0);
+    float ZCR = *reinterpret_cast<float*>(zcr.Write()) = ZeroCrossings(/*&filtered_input*/ in, FLAGS_feat_window, 0);
+    float PE  = *reinterpret_cast<float*>(pe .Write()) = PseudoEnergy (/*&filtered_input*/ in, FLAGS_feat_window, 0);
     total++;
 
     /* smoothed zero crossing rate */
     float SZCR = 0; int zcr_extend = pe.ring.size/2;
-    for (int i=0; i<szcr_shift; i++) SZCR += *(float*)zcr.Read(-i-1);
-    SZCR = *(float*)szcr.Write() = SZCR / szcr_shift;
+    for (int i=0; i<szcr_shift; i++) SZCR += *reinterpret_cast<float*>(zcr.Read(-i-1));
+    SZCR = *reinterpret_cast<float*>(szcr.Write()) = SZCR / szcr_shift;
 
     /* track average zcr and standard deviation */
     float zcrdist = pow(zcravg - ZCR, 2);
@@ -315,8 +315,8 @@ struct AcousticEventGUI {
     AED->alloc.Reset();
 
     int maxverts = AED->words.size()*6+SpeechClientFlood()*2;
-    Geometry *geom = new Geometry(GraphicsDevice::Lines, maxverts, (v2*)0, 0, 0, Color(1.0,1.0,1.0));
-    v2 *verts = (v2*)&geom->vert[0];
+    Geometry *geom = new Geometry(GraphicsDevice::Lines, maxverts, NullPointer<v2>(), 0, 0, Color(1.0,1.0,1.0));
+    v2 *verts = reinterpret_cast<v2*>(&geom->vert[0]);
     geom->count = 0;
 
     if (SpeechClientFlood()) {
@@ -367,7 +367,7 @@ struct AcousticEventGUI {
         if (!flip) { tx = win.x + perc * win.w; ty = win.centerY();        }
         else       { tx = win.centerX();        ty = win.y + perc * win.h; }
 
-        static Font *text = Fonts::Get(FLAGS_default_font, "", 12, Color::white, Color::clear, FontDesc::Outline);
+        static Font *text = app->fonts->Get(FLAGS_default_font, "", 12, Color::white, Color::clear, FontDesc::Outline);
         text->Draw(AED->sink->decode[i].text, point(tx, ty), 0, Font::DrawFlag::Orientation(!flip ? 1 : 3));
       }
     }

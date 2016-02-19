@@ -194,7 +194,7 @@ unique_ptr<LuaContext> LuaContext::Create() { return 0; }
 
 #ifdef LFL_V8JS
 v8::Local<v8::String> NewV8String(v8::Isolate *I, const char  *s) { return v8::String::NewFromUtf8(I, s); }
-v8::Local<v8::String> NewV8String(v8::Isolate *I, const short *s) { return v8::String::NewFromTwoByte(I, (const uint16_t *)s); }
+v8::Local<v8::String> NewV8String(v8::Isolate *I, const short *s) { return v8::String::NewFromTwoByte(I, MakeUnsigned(s)); }
 template <class X> inline X CastV8InternalFieldTo(v8::Local<v8::Object> &self, int field_index) {
   return static_cast<X>(v8::Local<v8::External>::Cast(self->GetInternalField(field_index))->Value());
 }
@@ -397,7 +397,7 @@ struct MyV8JSContext : public JSContext {
     MyV8JSContext *js_context = CastV8InternalFieldTo<MyV8JSContext*>(self, 0);
     for (int i=0; i < args.Length(); i++) StrAppend(&msg, BlankNull(*v8::String::Utf8Value(args[i]->ToString())));
     if (js_context->js_console) js_context->js_console->Write(msg);
-    else INFO("VSJ8(", (void*)js_context, ") console.log: ", msg);
+    else INFO("VSJ8(", Void(js_context), ") console.log: ", msg);
     args.GetReturnValue().Set(v8::Null(args.GetIsolate()));
   };
 };

@@ -105,9 +105,10 @@ struct HTMLParser {
     Text(text, stack);
   }
 
-  void TagText(const String &tag) {
-    String tagname; KV attr;
-    Char *base=(Char*)tag.c_str(), *space=FindChar(base, isspace);
+  void TagText(const String &tag_in) {
+    KV attr;
+    String tag = tag_in, tagname;
+    Char *base = reinterpret_cast<Char*>(&tag[0]), *space = FindChar(base, isspace);
     bool selfclose = tag.size() && tag[tag.size()-1] == '/';
     if (!space) tagname = tag.substr(0, tag.size()-selfclose);
     else {
@@ -115,7 +116,7 @@ struct HTMLParser {
       tagname = tag.substr(0, len);
       len = tag.size()-len-1;
       Char *key, *val; bool done=0, dquote=0;
-      for (Char *b=space+1, *e=b+len, *p=b; p && p<e; /**/) {
+      for (Char *b = space+1, *e = b+len, *p = b; p && p < e; /**/) {
         if (!(key = FindChar(p, notspace, len-(p-b)))) break;
         if (!(p = FindChar(key, notalnum, len-(key-b)))) break;
         if (isspace(*p)) *p++ = 0;

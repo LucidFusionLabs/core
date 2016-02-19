@@ -107,7 +107,7 @@ point DrawableBoxArray::Draw(point p, int glyph_start, int glyph_len) const {
 }
 
 string DrawableBoxArray::DebugString() const {
-  string ret = StrCat("BoxArray ", (void*)this, " H=", height, " line_ind ", line_ind.size(), " { ");
+  string ret = StrCat("BoxArray ", Void(this), " H=", height, " line_ind ", line_ind.size(), " { ");
   for (auto i : line_ind) StrAppend(&ret, i,  ", ");
   StrAppend(&ret, " } size = ", data.size(), ", runs = [ ");
 
@@ -244,7 +244,7 @@ void Flow::SetFont(Font *F) {
 void Flow::SetMinimumAscent(short line_ascent) {
   int prev_height = cur_line.height, prev_ascent = cur_line.ascent;
   Max(&cur_line.ascent, line_ascent);
-  Max(&cur_line.height, (short)(cur_line.ascent + cur_line.descent));
+  Max(&cur_line.height, int16_t(cur_line.ascent + cur_line.descent));
   UpdateCurrentLine(cur_line.height-prev_height, cur_line.ascent-prev_ascent, 0);
 }
 
@@ -448,7 +448,7 @@ void TableFlow::AppendCell(int j, Box *out, int colspan) {
   TableFlow::Column *cj = 0;
   for (;;col_skipped++) {
     if (!(cj = VectorCheckElement(column, j+col_skipped))->remaining_rowspan) break;
-    flow->AppendBox(cj->width, 0, (Box*)0);
+    flow->AppendBox(cj->width, 0, NullPointer<Box>());
   }
   cell_width = 0;
   CHECK_LE(j+col_skipped+colspan, column.size());
@@ -475,7 +475,7 @@ int TableFlow::AppendRow() {
     int subtracted = min(max_cell_height, cj->remaining_height);
     if (subtracted) cj->remaining_height -= subtracted;
   }
-  flow->AppendBox(1, max_cell_height, (Box*)0);
+  flow->AppendBox(1, max_cell_height, NullPointer<Box>());
   flow->AppendNewline();
   int ret = max_cell_height;
   col_skipped = cell_width = max_cell_height = split_cell_height = 0;

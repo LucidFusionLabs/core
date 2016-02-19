@@ -133,7 +133,7 @@ struct BigramLanguageModelBuilder {
     for (auto i = words.begin(); i != words.end(); ++i) {
       CounterS *word = &i->second;
       unsigned self = fnv32(i->first.c_str());
-      double pr[] = { (double)i->second.seen /* log(i->second.seen/(float)total) */ }, *he;
+      double pr[] = { double(i->second.seen) /* log(i->second.seen/(float)total) */ }, *he;
 
       StringFile::WriteRow(&names, i->first);
       MatrixFile::WriteRow(&prior, pr, 1);
@@ -146,7 +146,7 @@ struct BigramLanguageModelBuilder {
       for (auto j = word->count.begin(); j != word->count.end(); j++, transits++) {
         tx[TC_Self] = self;
         tx[TC_Edge] = fnv32((*j).first.c_str());
-        tx[TC_Cost] = log((double)(*j).second / word->incrs);
+        tx[TC_Cost] = log(double((*j).second) / word->incrs);
         MatrixFile::WriteRow(&transit, tx, TransitCols);
       }
     }

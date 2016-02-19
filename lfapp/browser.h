@@ -30,7 +30,7 @@ struct BrowserController : public InputController {
     else if (event == Mouse::Event::Wheel)   browser->MouseWheel(0, down*32);
     else if (event == Mouse::Event::Button2) browser->MouseButton(2, down, screen->mouse.x, screen->mouse.y);
     else if (event == Mouse::Event::Button1) {
-      if (down) screen->active_textgui = 0;
+      if (down) screen->active_textbox = 0;
       browser->MouseButton(1, down, screen->mouse.x, screen->mouse.y);
     }
   }
@@ -109,11 +109,11 @@ struct Browser : public BrowserInterface {
     unique_ptr<DocumentParser> parser;
     unique_ptr<JSContext> js_context;
     unique_ptr<Console> js_console;
-    TilesTextGUI *active_input=0;
+    TiledTextBox *active_input=0;
     int height=0;
 
     ~Document();
-    Document(Window *W=0, const Box &V=Box());
+    Document(const Box &V=Box());
     const DOM::Element *DocElement() const { return node ? node->documentElement() : 0; }
     /**/  DOM::Element *DocElement()       { return node ? node->documentElement() : 0; }
     bool Dirty() const { if (auto html = DocElement()) return html->render->layout_dirty || html->render->style_dirty; return 0; }
@@ -151,7 +151,7 @@ struct Browser : public BrowserInterface {
   Box Viewport() const { return Box(viewport.Dimension()); }
   int VScrolled() const { return v_scrollbar.scrolled * X_or_Y(v_scrollbar.doc_height, 1000); }
   int HScrolled() const { return h_scrollbar.scrolled * 1000; }
-  void InitLayers(unique_ptr<LayersInterface> l) { CHECK(!layers); (layers = move(l))->Init(2); }
+  void InitLayers(unique_ptr<LayersInterface> l) { CHECK(!layers); (layers = move(l))->Init(screen->gd, 2); }
   void PaintTile(int x, int y, int z, int flag, const MultiProcessPaintResource &paint);
   string GetURL() const { return String::ToUTF8(doc.node->URL); }
   void SetURLText(const string &s) { if (url_cb) url_cb(s); }

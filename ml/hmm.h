@@ -55,8 +55,8 @@ struct HMM {
   }
 
   static void SortBest(double *alpha, double *backtrace, int NBest) {
-    SortPair *sortMap = (SortPair*)alloca(NBest*sizeof(SortPair));
-    SortPairs(alpha, backtrace, sortMap, NBest);
+    vector<SortPair> sortMap(NBest);
+    SortPairs(alpha, backtrace, &sortMap[0], NBest);
 
     for (int i=0; i<NBest; i++) {
       alpha[i] = sortMap[i].val;
@@ -68,7 +68,7 @@ struct HMM {
     int NumStates, NBest, BeamWidth, time_index;
     Allocator *alloc;
 
-    ActiveState(int NS, int NB, int BW, Allocator *Alloc) : NumStates(NS), NBest(NB), BeamWidth(BW), time_index(-1), alloc(Alloc ? Alloc : Singleton<MallocAlloc>::Get()) {}
+    ActiveState(int NS, int NB, int BW, Allocator *Alloc) : NumStates(NS), NBest(NB), BeamWidth(BW), time_index(-1), alloc(Alloc ? Alloc : Singleton<MallocAllocator>::Get()) {}
     virtual ~ActiveState() {}
 
     struct Iterator {
@@ -155,9 +155,11 @@ struct HMM {
 
   struct ActiveStateIndex : public ActiveState {
     int *active, count, init_max;
-
     ~ActiveStateIndex() { alloc->Free(active); }
-    ActiveStateIndex(int NS, int NB, int BW, int InitMax=0, Allocator *Alloc=0) : ActiveState(NS, NB, BW, Alloc), active((int*)alloc->Malloc(sizeof(int)*BeamWidth)), count(0), init_max(InitMax) { if (!active) FATAL(alloc->Name(), " failed"); }
+    ActiveStateIndex(int NS, int NB, int BW, int InitMax=0, Allocator *Alloc=0) :
+      ActiveState(NS, NB, BW, Alloc), active(FromVoid<int*>(alloc->Malloc(sizeof(int)*BeamWidth))),
+      count(0), init_max(InitMax) { if (!active) FATAL(alloc->Name(), " failed"); }
+
     int Size() { 
       if (!time_index) return init_max ? init_max : NumStates;
       return count;
@@ -176,8 +178,8 @@ struct HMM {
 
     virtual int Update(double *alpha) {
       int num = NumStates*NBest;
-      SortPair *sortMap = (SortPair*)alloca(num*sizeof(SortPair));
-      SortPairs(alpha, 0, sortMap, num);
+      vector<SortPair> sortMap(num);
+      SortPairs(alpha, 0, &sortMap[0], num);
       for (count=0; count<num && count<BeamWidth; count++) active[count] = sortMap[count].ind;
       return sortMap[0].ind;
     }
@@ -188,7 +190,7 @@ struct HMM {
     TransitMapMatrix(const Matrix *T) : transit(T) {}
 
     void Begin(Iterator *iter, ActiveState *active, ActiveState::Iterator *Lstate) {
-      iter->impl1 = (void*)transit->row(Lstate->index / active->NBest);
+      iter->impl1 = Void(transit->row(Lstate->index / active->NBest));
       iter->impl2 = 0;
       iter->state2 = 0;
       iter->done = 0;
@@ -197,7 +199,7 @@ struct HMM {
     void Next(Iterator *iter) {
       if (iter->impl2 >= transit->N) { iter->done=1; return; }
       iter->state = iter->impl2++;
-      iter->cost = ((double*)iter->impl1)[iter->state];
+      iter->cost = FromVoid<double*>(iter->impl1)[iter->state];
     }
     int Id(int Lstate) { return Lstate; }
   };
@@ -273,7 +275,7 @@ struct HMM {
       viterbi->row(len-1)[0] = *t;
 
       for (int i=len-1; i>0; i--) {
-        t = &backtrace->row(i-1)[(int)t->backtrace];
+        t = &backtrace->row(i-1)[int(t->backtrace)];
         if (returnMerged && viterbi->row(i-1)[0] == *t) return i-1;
         viterbi->row(i-1)[0] = *t;
       }
@@ -320,7 +322,7 @@ struct HMM {
 
     virtual ~TokenPasser() { if (alloc) { alloc->Free(active); alloc->Free(nextActive); } }
     TokenPasser(int NS, int NB, int BW, TokenBacktrace<T> *BT, int Scale=100, Allocator *Alloc=0) : ActiveState(NS, NB, BW, Alloc), backtrace(BT), num(BeamWidth*Scale),
-    count(0), nextCount(0), viterbi(Singleton<Algorithm::Viterbi>::Get()), active((T*)alloc->Malloc(sizeof(T)*num)), nextActive((T*)alloc->Malloc(sizeof(T)*num)) {
+    count(0), nextCount(0), viterbi(Singleton<Algorithm::Viterbi>::Get()), active(FromVoid<T*>(alloc->Malloc(sizeof(T)*num))), nextActive(FromVoid<T*>(alloc->Malloc(sizeof(T)*num))) {
       if (!active) FATAL(alloc->Name(), " failed");
       ClearNext();
     }
@@ -541,7 +543,7 @@ struct HMM {
     viterbi->row(len-1)[0] = endindex;
 
     for (int i=len-1; i>0; i--) {
-      int ind = (int)viterbi->row(i)[0];
+      int ind = int(viterbi->row(i)[0]);
       viterbi->row(i-1)[0] = backtrace->row(i)[ind];
     }
   }
@@ -559,7 +561,7 @@ struct HMM {
   static void PrintViterbi(Matrix *vp, NameCB *nameCB) {
     string v = StrCat("vitebri(", vp->M, "): ");
     MatrixRowIter(vp) {
-      int id = (int)vp->row(i)[0];
+      int id = int(vp->row(i)[0]);
       StringAppendf(&v, "%03d : %s, ", i, nameCB->Name(id).c_str());
       if ((i+1) % 32 == 0) { INFO(v); v.clear(); }
     }

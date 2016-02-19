@@ -96,7 +96,7 @@ struct RecognitionHMM {
     TransitMap(RecognitionModel *M, bool UT=false) : model(M), use_transition_prob(UT) {}
 
     virtual void Begin(Iterator *iter, HMM::ActiveState *active, HMM::ActiveState::Iterator *LstateI) {
-      HMM::TokenPasser<HMM::Token> *beam = (HMM::TokenPasser<HMM::Token>*)active;
+      HMM::TokenPasser<HMM::Token> *beam = static_cast<HMM::TokenPasser<HMM::Token>*>(active);
       HMM::Token *L = &beam->active[LstateI->impl-1];
       iter->done = 0;
       iter->state = LstateI->index / active->NBest;
@@ -104,7 +104,7 @@ struct RecognitionHMM {
       iter->emission_index = L->emission_index;
       iter->out = L->out;
       iter->cost = model->acoustic_model.state[iter->emission_index].txself;
-      iter->impl1 = (void*)L;
+      iter->impl1 = Void(L);
       iter->impl2 = -1;
       iter->impl5 = L->ind2;
       iter->impl6 = 0;
@@ -153,7 +153,7 @@ struct RecognitionHMM {
       TransitMap::Next(iter);
       if (iter->done || !iter->out) return;
 
-      HMM::Token *t = (HMM::Token*)iter->impl1;
+      HMM::Token *t = FromVoid<HMM::Token*>(iter->impl1);
       WFST::Composer::trip q(t->ind, t->ind2, 0);
       WFST::Edge e1(t->ind, iter->state, iter->emission_index, iter->out, iter->cost), e2;
       int matched = model->composer.ComposeRight(q.second, e1.out, e1, 0, q.third, &e2);
@@ -179,7 +179,8 @@ struct RecognitionHMM {
     ~Emission() { if (alloc) alloc->Free(emission); }
     Emission(RecognitionModel *M, HMM::ObservationInterface *O, TransitMap *T, Allocator *Alloc=0, bool UP=false) :
       model(M), observed(O), transit(T), use_prior_prob(UP),
-      alloc(Alloc?Alloc:Singleton<MallocAlloc>::Get()), beam(model->emissions, 1, model->emissions, 0, alloc), emission((double*)alloc->Malloc(model->emissions*sizeof(double))) {}
+      alloc(Alloc?Alloc:Singleton<MallocAllocator>::Get()), beam(model->emissions, 1, model->emissions, 0, alloc),
+      emission(FromVoid<double*>(alloc->Malloc(model->emissions*sizeof(double)))) {}
 
     double *Observation(int t) { return observed->Observation(t); }
     int Observations() { return observed->Observations(); }
@@ -188,7 +189,7 @@ struct RecognitionHMM {
     double Prior(HMM::ActiveState *actiae, HMM::ActiveState::Iterator *state) { return 0; }
 
     double Prob(HMM::ActiveState *active, HMM::ActiveState::Iterator *state) {
-      int emission_index = ((HMM::TokenPasser<HMM::Token>*)active)->active[state->impl-1].emission_index;
+      int emission_index = static_cast<HMM::TokenPasser<HMM::Token>*>(active)->active[state->impl-1].emission_index;
       return emission[emission_index];
     }
 
@@ -197,7 +198,7 @@ struct RecognitionHMM {
     void Calc(HMM::ActiveState *active, int t) {
       if (t) FATAL("unexpected ", t); /* bootstrap t=0 */
 
-      HMM::TokenPasser<HMM::Token> *beam = (HMM::TokenPasser<HMM::Token>*)active;
+      HMM::TokenPasser<HMM::Token> *beam = static_cast<HMM::TokenPasser<HMM::Token>*>(active);
       beam->count = 1;
       beam->active[0].ind = 0;
       beam->active[0].ind2 = 0;
@@ -218,7 +219,7 @@ struct RecognitionHMM {
 
       HMM::ActiveState::Iterator LstateI;
       for (active->Begin(t, &LstateI); !LstateI.done; active->Next(&LstateI)) {
-        int emission_index = ((HMM::TokenPasser<HMM::Token>*)active)->active[LstateI.impl-1].emission_index;
+        int emission_index = static_cast<HMM::TokenPasser<HMM::Token>*>(active)->active[LstateI.impl-1].emission_index;
         beam.active[emission_index] = emission_index;
 
         HMM::TransitMap::Iterator RstateI;
@@ -394,7 +395,7 @@ struct Recognizer {
     LFL::StringWordIter aw(gold), bw(x);
     for (string w = aw.NextString(); !aw.Done(); w = aw.NextString()) A.push_back(model->recognition_network_out.Id(tolower(w).c_str()));
     for (string w = bw.NextString(); !bw.Done(); w = bw.NextString()) B.push_back(model->recognition_network_out.Id(tolower(w).c_str()));
-    return (double)Levenshtein(A, B) / A.size();
+    return double(Levenshtein(A, B)) / A.size();
   }
 };
 

@@ -228,7 +228,7 @@ int ProcessPipe::Open(const char **argv, const char *startdir) {
     dup2(pipein[1], 1);
     dup2(pipeout[0], 0);
     if (startdir) chdir(startdir);
-    execvp(argv[0], (char*const*)argv);
+    execvp(argv[0], const_cast<char*const*>(argv));
   }
   return 0;
 }
@@ -246,7 +246,7 @@ int ProcessPipe::OpenPTY(const char **argv, const char *startdir) {
     out = fdopen(fd, "w");
   } else {
     if (startdir) chdir(startdir);
-    execvp(argv[0], (char*const*)argv);
+    execvp(argv[0], const_cast<char*const*>(argv));
   }
   return 0;
 }
@@ -286,7 +286,7 @@ bool MultiProcessBuffer::Open() {
     url = MultiProcessBufferURL;
     transfer_handle = impl;
   }
-  if ((buf = (char*)mmap(0, len, PROT_READ | (read_only ? 0 : PROT_WRITE), MAP_SHARED, impl, 0)) == MAP_FAILED) return ERRORv(false, "mmap ", impl); 
+  if ((buf = FromVoid<char*>(mmap(0, len, PROT_READ | (read_only ? 0 : PROT_WRITE), MAP_SHARED, impl, 0))) == MAP_FAILED) return ERRORv(false, "mmap ", impl); 
   return true;
 }
 #elif defined(LFL_SHM_MPB)
@@ -306,7 +306,7 @@ bool MultiProcessBuffer::Open() {
     return ERRORv(false, "MultiProcessBuffer Open id=", impl, ", size=", len, ", url=", url, ": ", strerror(errno));
 
   CHECK_GE(impl, 0);
-  buf = reinterpret_cast<char*>(shmat(impl, NULL, 0));
+  buf = FromVoid<char*>(shmat(impl, NULL, 0));
   CHECK(buf);
   CHECK_NE((char*)-1, buf);
   if (url.empty()) url = StrCat("shm://", key);
@@ -362,7 +362,12 @@ bool InterProcessComm::StartServerProcess(const string &server_program, const ve
 
 #if defined(LFL_SOCKETPAIR_IPC)
   Socket fd[2];
-  CHECK(SystemNetwork::OpenSocketPair(fd, SocketType::SeqPacket, false));
+#ifdef __APPLE__
+  int socket_type = SocketType::Stream;
+#else
+  int socket_type = SocketType::SeqPacket;
+#endif
+  CHECK(SystemNetwork::OpenSocketPair(fd, socket_type, false));
   SystemNetwork::SetSocketCloseOnExec(fd[1], true);
   string arg0 = server_program, arg1 = StrCat("fd://", fd[0]);
   SystemNetwork::SetSocketBufferSize(fd[0], 0, 65536);
@@ -481,12 +486,12 @@ bool InterProcessComm::StartServerProcess(const string &server_program, const ve
 bool InterProcessComm::OpenSocket(const string &socket_name) {
   static string fd_url = "fd://", np_url = "np://", tcp_url = "tcp://";
   if (PrefixMatch(socket_name, fd_url)) {
-    conn = new Connection(app->net->unix_client.get(), static_cast<Connection::Handler*>(nullptr));
+    conn = new Connection(app->net->unix_client.get(), nullptr);
     conn->state = Connection::Connected;
     conn->socket = atoi(socket_name.c_str() + fd_url.size());
     conn->control_messages = true;
   } else if (PrefixMatch(socket_name, tcp_url)) {
-    conn = new Connection(app->net->unix_client.get(), static_cast<Connection::Handler*>(nullptr));
+    conn = new Connection(app->net->unix_client.get(), nullptr);
     string host, port;
     HTTP::ParseHost(socket_name.c_str() + tcp_url.size(), socket_name.c_str() + socket_name.size(), &host, &port);
     CHECK_NE(-1, (conn->socket = SystemNetwork::OpenSocket(LFL::Protocol::TCP)));
@@ -547,7 +552,7 @@ bool InterProcessComm::Write(Connection *conn, IPC::Id id, IPC::Seq seq, const S
   Serializable::MutableStream o(hdrbuf, sizeof(hdrbuf));
   IPC::Header hdr = { 8+rpc_text.size(), id, seq };
   hdr.Out(&o);
-  struct iovec iov[2] = { { hdrbuf, 8 }, { (void*)(rpc_text.data()), static_cast<size_t>(rpc_text.size()) } };
+  struct iovec iov[2] = { { hdrbuf, 8 }, { Void(rpc_text.data()), size_t(rpc_text.size()) } };
   if (transfer_handle >= 0) return conn->WriteVFlush(iov, 2, transfer_handle) == hdr.len ? hdr.len : 0;
   else                      return conn->WriteVFlush(iov, 2)                  == hdr.len ? hdr.len : 0;
 }
@@ -619,7 +624,7 @@ int ProcessAPIClient::HandleSetURLRequest(int seq, const IPC::SetURLRequest *req
 int ProcessAPIClient::HandleOpenSystemFontRequest(int seq, const IPC::OpenSystemFontRequest *req, Void) {
   Font *font = 0;
   MultiProcessBuffer mpb(server_process);
-  if (const IPC::FontDescription *desc = req->desc()) font = Fonts::GetByDesc(FontDesc(*desc));
+  if (const IPC::FontDescription *desc = req->desc()) font = app->fonts->GetByDesc(FontDesc(*desc));
   GlyphMap *glyph = font ? font->glyph.get() : 0;
   int glyph_table_size = glyph ? glyph->table.size() : 0, glyph_table_bytes = glyph_table_size * sizeof(GlyphMetrics);
   if (!glyph || !conn || !mpb.Create(glyph_table_bytes)) return IPC::Error;

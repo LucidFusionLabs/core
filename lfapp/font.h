@@ -97,15 +97,15 @@ struct FontDesc {
 
 struct FontEngine {
   struct Resource { virtual ~Resource() {} };
-  virtual const char *Name() = 0;
-  virtual void  Shutdown() {}
-  virtual void  SetDefault() {}
-  virtual bool  Init(const FontDesc&) { return true; }
-  virtual Font *Open(const FontDesc&) = 0;
-  virtual bool  HaveGlyph (Font *f, char16_t) { return true; }
-  virtual int   InitGlyphs(Font *f,       Glyph *g, int n) = 0;
-  virtual int   LoadGlyphs(Font *f, const Glyph *g, int n) = 0;
-  virtual string DebugString(Font *f) const = 0;
+  virtual const char*      Name() = 0;
+  virtual void             Shutdown() {}
+  virtual void             SetDefault() {}
+  virtual bool             Init(const FontDesc&) { return true; }
+  virtual unique_ptr<Font> Open(const FontDesc&) = 0;
+  virtual bool             HaveGlyph (Font *f, char16_t) { return true; }
+  virtual int              InitGlyphs(Font *f,       Glyph *g, int n) = 0;
+  virtual int              LoadGlyphs(Font *f, const Glyph *g, int n) = 0;
+  virtual string           DebugString(Font *f) const = 0;
 };
 
 struct Glyph : public Drawable {
@@ -274,7 +274,7 @@ struct FakeFontEngine : public FontEngine {
   Font fake_font;
   FakeFontEngine();
   virtual const char *Name() { return "FakeFontEngine"; }
-  virtual Font *Open(const FontDesc&) { return new Font(fake_font); }
+  virtual unique_ptr<Font> Open(const FontDesc&) { return make_unique<Font>(fake_font); }
   virtual int LoadGlyphs(Font *f, const Glyph *g, int n) { return n; }
   virtual int InitGlyphs(Font *f,       Glyph *g, int n);
   virtual string DebugString(Font *f) const { return "FakeFontEngineFont"; }
@@ -290,14 +290,14 @@ struct AtlasFontEngine : public FontEngine {
   FontMap font_map;
   bool in_init=0;
 
-  virtual const char *Name() { return "AtlasFontEngine"; }
-  virtual void  SetDefault();
-  virtual bool  Init(const FontDesc&);
-  virtual Font *Open(const FontDesc&);
-  virtual bool  HaveGlyph (Font *f, char16_t) { return false; }
-  virtual int   InitGlyphs(Font *f,       Glyph *g, int n) { return n; }
-  virtual int   LoadGlyphs(Font *f, const Glyph *g, int n) { return n; }
-  virtual string DebugString(Font *f) const;
+  virtual const char*      Name() { return "AtlasFontEngine"; }
+  virtual void             SetDefault();
+  virtual bool             Init(const FontDesc&);
+  virtual unique_ptr<Font> Open(const FontDesc&);
+  virtual bool             HaveGlyph (Font *f, char16_t) { return false; }
+  virtual int              InitGlyphs(Font *f,       Glyph *g, int n) { return n; }
+  virtual int              LoadGlyphs(Font *f, const Glyph *g, int n) { return n; }
+  virtual string           DebugString(Font *f) const;
 
   static Font *OpenAtlas(const FontDesc&);
   static void WriteAtlas(const string &name, Font *glyphs, Texture *t);
@@ -320,13 +320,13 @@ struct FreeTypeFontEngine : public FontEngine {
   unordered_map<string, shared_ptr<Resource> > resource;
   GlyphCache::FilterCB subpixel_filter = &FreeTypeFontEngine::SubPixelFilter;
 
-  virtual const char *Name() { return "FreeTypeFontEngine"; }
-  virtual void  SetDefault();
-  virtual bool  Init(const FontDesc&);
-  virtual Font *Open(const FontDesc&);
-  virtual int   InitGlyphs(Font *f,       Glyph *g, int n);
-  virtual int   LoadGlyphs(Font *f, const Glyph *g, int n);
-  virtual string DebugString(Font *f) const;
+  virtual const char*      Name() { return "FreeTypeFontEngine"; }
+  virtual void             SetDefault();
+  virtual bool             Init(const FontDesc&);
+  virtual unique_ptr<Font> Open(const FontDesc&);
+  virtual int              InitGlyphs(Font *f,       Glyph *g, int n);
+  virtual int              LoadGlyphs(Font *f, const Glyph *g, int n);
+  virtual string           DebugString(Font *f) const;
 
   static void Init();
   static void SubPixelFilter(const Box &b, unsigned char *buf, int linesize, int pf);
@@ -348,12 +348,13 @@ struct CoreTextFontEngine : public FontEngine {
     Resource(const char *N=0, CGFontRef CGF=0, int F=0) : name(BlankNull(N)), cgfont(CGF), flag(F) {}
   };
   unordered_map<string, shared_ptr<Resource> > resource;
-  virtual const char *Name() { return "CoreTextFontEngine"; }
-  virtual void SetDefault();
-  virtual Font *Open(const FontDesc&);
-  virtual int   InitGlyphs(Font *f,       Glyph *g, int n);
-  virtual int   LoadGlyphs(Font *f, const Glyph *g, int n);
-  virtual string DebugString(Font *f) const;
+
+  virtual const char*      Name() { return "CoreTextFontEngine"; }
+  virtual void             SetDefault();
+  virtual unique_ptr<Font> Open(const FontDesc&);
+  virtual int              InitGlyphs(Font *f,       Glyph *g, int n);
+  virtual int              LoadGlyphs(Font *f, const Glyph *g, int n);
+  virtual string           DebugString(Font *f) const;
 
   struct Flag { enum { WriteAtlas=1 }; };
   static Font *Open(const string &name, int size, Color c, int flag, int ct_flag);
@@ -378,13 +379,14 @@ struct GDIFontEngine : public FontEngine {
   HDC hdc=0;
   GDIFontEngine();
   ~GDIFontEngine();
-  virtual const char *Name() { return "GDIFontEngine"; }
-  virtual void  Shutdown();
-  virtual void  SetDefault();
-  virtual Font *Open(const FontDesc&);
-  virtual int   InitGlyphs(Font *f, Glyph *g, int n);
-  virtual int   LoadGlyphs(Font *f, const Glyph *g, int n);
-  virtual string DebugString(Font *f) const;
+
+  virtual const char*      Name() { return "GDIFontEngine"; }
+  virtual void             Shutdown();
+  virtual void             SetDefault();
+  virtual unique_ptr<Font> Open(const FontDesc&);
+  virtual int              InitGlyphs(Font *f, Glyph *g, int n);
+  virtual int              LoadGlyphs(Font *f, const Glyph *g, int n);
+  virtual string           DebugString(Font *f) const;
 
   struct Flag { enum { WriteAtlas = 1 }; };
   static Font *Open(const string &name, int size, Color c, int flag, int ct_flag);
@@ -398,20 +400,20 @@ struct GDIFontEngine {};
 struct IPCClientFontEngine : public FontEngine {
   struct Resource : public FontEngine::Resource { int id; Resource(int I=0) : id(I) {} };
   virtual const char *Name() { return "IPCClientFontEngine"; }
-  virtual Font *Open(const FontDesc&);
-  virtual int   InitGlyphs(Font *f, Glyph *g, int n);
-  virtual int   LoadGlyphs(Font *f, const Glyph *g, int n);
-  string        DebugString(Font *f) const;
+  virtual unique_ptr<Font> Open(const FontDesc&);
+  virtual int InitGlyphs(Font *f, Glyph *g, int n);
+  virtual int LoadGlyphs(Font *f, const Glyph *g, int n);
+  string DebugString(Font *f) const;
   int OpenSystemFontResponse(Font *f, const IPC::OpenSystemFontResponse*, const MultiProcessBuffer&);
   static int GetId(Font *f);
 };
 
 struct IPCServerFontEngine : public FontEngine {
   virtual const char *Name() { return "IPCServerFontEngine"; }
-  virtual Font *Open(const FontDesc&);
-  virtual int   InitGlyphs(Font *f, Glyph *g, int n);
-  virtual int   LoadGlyphs(Font *f, const Glyph *g, int n);
-  string        DebugString(Font *f) const;
+  virtual unique_ptr<Font> Open(const FontDesc&);
+  virtual int InitGlyphs(Font *f, Glyph *g, int n);
+  virtual int LoadGlyphs(Font *f, const Glyph *g, int n);
+  string DebugString(Font *f) const;
 };
 
 struct Fonts {
@@ -436,21 +438,35 @@ struct Fonts {
   LazyInitializedPtr<IPCServerFontEngine> ipc_server_engine;
   unordered_map<FontDesc, unique_ptr<Font>, FontDesc::ColoredHasher, FontDesc::ColoredEqual> desc_map;
   unordered_map<string, Family> family_map;
+  Font *default_font=0;
 
   Font *Find        (                    const FontDesc &d);
   Font *Insert      (FontEngine *engine, const FontDesc &d);
   Font *FindOrInsert(FontEngine *engine, const FontDesc &d);
 
-  static FontEngine *GetFontEngine(int engine_type);
-  static FontEngine *DefaultFontEngine();
-  static Font *Default();
-  static Font *Fake();
-  static Font *GetByDesc(FontDesc);
-  template <class... Args> static Font *Get(Args&&... args) { return GetByDesc(FontDesc(forward<Args>(args)...)); }
-  static Font *Change(Font*, int new_size, const Color &new_fg, const Color &new_bg, int new_flag=0);
-  static int ScaledFontSize(int pointsize);
-  static void ResetGL();
-  static void LoadConsoleFont(const string &name, const vector<int> &sizes = vector<int>(1, 32));
+  FontEngine *GetFontEngine(int engine_type);
+  FontEngine *DefaultFontEngine();
+  FontDesc DefaultDesc();
+  Font *Default();
+  Font *Fake();
+  Font *GetByDesc(FontDesc);
+  template <class... Args> Font *Get(Args&&... args) { return GetByDesc(FontDesc(forward<Args>(args)...)); }
+  Font *Change(Font*, int new_size, const Color &new_fg, const Color &new_bg, int new_flag=0);
+  int ScaledFontSize(int pointsize);
+  void ResetGL();
+  void LoadConsoleFont(const string &name, const vector<int> &sizes = vector<int>(1, 32));
+};
+
+struct FontRef {
+  Font *ptr=0;
+  FontDesc desc;
+  FontRef(Font *F) { SetFont(F); }
+  FontRef(const FontDesc &d=FontDesc(), bool load=true) : desc(d) { if (load) Load(); }
+
+  Font *Load();
+  operator Font* () const { return ptr; }
+  Font* operator->() const { return ptr; }
+  void SetFont(Font *F) { if ((ptr = F)) desc = *ptr->desc; }
 };
 
 struct DejaVuSansFreetype {

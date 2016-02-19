@@ -23,7 +23,8 @@ namespace LFL {
 struct Shell {
   typedef function<void(const vector<string>&)> CB;
   struct Command { 
-    string name; CB cb;
+    string name;
+    CB cb;
     Command(const string &N, const CB &Cb) : name(N), cb(Cb) {}
   };
   vector<Command> command;
@@ -32,6 +33,8 @@ struct Shell {
   MovieAssetMap  *movieassets;
   Shell() {}
   Shell(AssetMap *AM, SoundAssetMap *SAM, MovieAssetMap *MAM);
+
+  template <class... Args> void Add(Args&&... args) { command.emplace_back(forward<Args>(args)...); }
 
   Asset      *asset     (const string &n);
   SoundAsset *soundasset(const string &n);

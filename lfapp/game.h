@@ -166,7 +166,7 @@ struct Game {
     ConnectionData() : retry(UDPClient::Sendto) {}
 
     static void Init(Connection *out) { ConnectionData *cd = new(out->wb.begin()) ConnectionData(); }
-    static ConnectionData *Get(Connection *c) { return (ConnectionData*)c->wb.begin(); }
+    static ConnectionData *Get(Connection *c) { return reinterpret_cast<ConnectionData*>(c->wb.begin()); }
   };
 
   struct Controller {
@@ -359,11 +359,11 @@ struct GameServer : public Connection::Handler {
   }
 
   void Write(Connection *c, int method, unsigned short seq, Serializable *msg) {
-    ((Game::Network*)c->svc->game_network)->Write(c, method, seq, msg);
+    FromVoid<Game::Network*>(c->svc->game_network)->Write(c, method, seq, msg);
   }
 
   void WriteWithRetry(Connection *c, Game::ConnectionData *cd, Serializable *msg) {
-    ((Game::Network*)c->svc->game_network)->WriteWithRetry(&cd->retry, c, msg, cd->seq++);
+    FromVoid<Game::Network*>(c->svc->game_network)->WriteWithRetry(&cd->retry, c, msg, cd->seq++);
   }
 
   void WritePrintWithRetry(Connection *c, Game::ConnectionData *cd, const string &text) {
@@ -373,7 +373,7 @@ struct GameServer : public Connection::Handler {
 
   int BroadcastWithRetry(Serializable *msg, Connection *skip=0) {
     int ret = 0;
-    for (int i=0; i<svc.size(); ++i) ret += ((Game::Network*)svc[i]->game_network)->BroadcastWithRetry(svc[i], msg, skip);
+    for (int i=0; i<svc.size(); ++i) ret += FromVoid<Game::Network*>(svc[i]->game_network)->BroadcastWithRetry(svc[i], msg, skip);
     return ret;
   }
 
@@ -388,7 +388,7 @@ struct GameServer : public Connection::Handler {
     if (now > last.time_post_MasterUpdate + MasterUpdateInterval || last.time_post_MasterUpdate == Time(0)) {
       last.time_post_MasterUpdate = now;
       if (!master_sink_url.empty())
-        app->net->http_client->WPost(master_sink_url, "application/octet-stream", (char*)local_game_url.c_str(), local_game_url.size());
+        app->net->http_client->WPost(master_sink_url, "application/octet-stream", local_game_url.c_str(), local_game_url.size());
     }
 
     int updated = 0;
@@ -413,7 +413,7 @@ struct GameServer : public Connection::Handler {
 
     last.num_send_WorldUpdate = 0;
     for (int i = 0; i < svc.size(); ++i) {
-      last.num_send_WorldUpdate += ((Game::Network*)svc[i]->game_network)->Broadcast(svc[i], &last.WorldUpdate);
+      last.num_send_WorldUpdate += FromVoid<Game::Network*>(svc[i]->game_network)->Broadcast(svc[i], &last.WorldUpdate);
     }
     if (bots) bots->Update(timestep); 
     return 0;
@@ -529,7 +529,7 @@ struct GameUDPServer : public UDPServer {
   GameUDPServer(int port) : UDPServer(port), secret1(rand()), secret2(rand()) {}
 
   int Hash(Connection *c) {
-    int conn_key[3] = { (int)c->addr, secret1, c->port }; 
+    int conn_key[3] = { int(c->addr), secret1, c->port }; 
     return fnv32(conn_key, sizeof(conn_key), secret2);
   }
 
@@ -546,7 +546,7 @@ struct GameUDPServer : public UDPServer {
     // echo "ping" | nc -u 127.0.0.1 27640
     static string ping="ping\n";
     if (in.size == ping.size() && in.buf == ping) {
-      ((GameServer*)handler)->Read(c, content, content_len);
+      dynamic_cast<GameServer*>(handler)->Read(c, content, content_len);
     } else if (hdr.id == GameProtocol::ChallengeRequest::ID && !challenge.Read(&in)) {
       GameProtocol::ChallengeResponse response;
       response.token = Hash(c);
@@ -605,7 +605,7 @@ struct GameClient {
   Entity *WorldAddEntity(int id) { return world->Add(id, new Entity()); }
   void WorldAddEntityFinish(Entity *e, int type) {
     CHECK(!e->asset);
-    world->scene->ChangeAsset(e, app->shell.asset(assets[type]));
+    world->scene->ChangeAsset(e, screen->shell->asset(assets[type]));
     NewEntityCB(e);
   }
 
@@ -726,11 +726,11 @@ struct GameClient {
       /* replay */
       if (replay.enabled() && replay.while_seq != last.seq_WorldUpdate) replay.disable();
       if (replay.enabled()) {
-        float frames = min(WorldUpdates - replay.start_ind - 2.0f, (Now() - replay.start).count() / (float)updateInterval);
-        int ind = (int)(replay.start_ind + frames);
+        float frames = min(WorldUpdates - replay.start_ind - 2.0f, (Now() - replay.start).count() / float(updateInterval));
+        int ind = int(replay.start_ind + frames);
         wu1 = &last.WorldUpdate[ind+1];
         wu2 = &last.WorldUpdate[ind];
-        updateLast = (unsigned)((frames - floor(frames)) * updateInterval);
+        updateLast = unsigned((frames - floor(frames)) * updateInterval);
       }
 
       /* game over */
@@ -759,7 +759,7 @@ struct GameClient {
         if (updateLast) {
           delta_pos = next_pos;
           delta_pos.Sub(e->pos);
-          delta_pos.Scale(min(1000.0f, (float)updateLast) / updateInterval);
+          delta_pos.Scale(min(1000.0f, float(updateLast)) / updateInterval);
           e->pos.Add(delta_pos);
         }
 
@@ -911,12 +911,12 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
   vector<Server> master_server_list;
 
   Asset *title;
-  Font *font, *glow_font, *bright_font, *mobile_font=0;
+  FontRef font, glow_font, bright_font, mobile_font;
   Box titlewin, menuhdr, menuftr1, menuftr2;
   int default_port, selected=1, last_selected=0, sub_selected=0, last_sub_selected=0, master_server_selected=-1;
   int line_clicked=-1, decay_box_line=-1, decay_box_left=0;
   Widget::Button tab1, tab2, tab3, tab4, tab1_server_start, tab2_server_join, sub_tab1, sub_tab2, sub_tab3; 
-  TextGUI tab2_server_address, tab3_player_name;
+  TextBox tab2_server_address, tab3_player_name;
   Widget::Slider tab1_options, tab2_servers, tab3_sensitivity, tab3_volume, *current_scrollbar;
 #ifdef LFL_ANDROID
   Widget::Button gplus_signin_button, gplus_signout_button, gplus_quick, gplus_invite, gplus_accept;
@@ -924,42 +924,42 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
   Browser browser;
   MenuParticles particles;
 
-  GameMenuGUI(LFL::Window *W, const string &master_url, int port, Asset *t=0, Asset *parts=0) :
-    GUI(W), topbar(W), pinger(-1), master_get_url(master_url), title(t),
-    font       (Fonts::Get(FLAGS_default_font,                   "", 12, Color::grey80)),
-    bright_font(Fonts::Get(FLAGS_default_font,                   "", 12, Color::white)),
-    glow_font  (Fonts::Get(StrCat(FLAGS_default_font, "Glow"),   "", 12)),
+  GameMenuGUI(const string &master_url, int port, Asset *t=0, Asset *parts=0) :
+    pinger(-1), master_get_url(master_url), title(t),
+    font       (FontDesc(FLAGS_default_font,                   "", 12, Color::grey80)),
+    bright_font(FontDesc(FLAGS_default_font,                   "", 12, Color::white)),
+    glow_font  (FontDesc(StrCat(FLAGS_default_font, "Glow"),   "", 12)),
     default_port(port),
-    tab1(&topbar, 0, font, "single player", MouseController::CB([&](){ if (!Changed(&selected, 1)) Deactivate(); else LayoutTopbar(); })),
-    tab2(&topbar, 0, font, "multi player",  MouseController::CB([&](){ if (!Changed(&selected, 2)) Deactivate(); else LayoutTopbar(); })), 
-    tab3(&topbar, 0, font, "options",       MouseController::CB([&](){ if (!Changed(&selected, 3)) Deactivate(); else LayoutTopbar(); })),
-    tab4(&topbar, 0, font, "quit",          MouseController::CB(bind(&GameMenuGUI::MenuQuit, this))),
-    tab1_server_start(this, 0, bright_font, "start", MouseController::CB(bind(&GameMenuGUI::MenuServerStart, this))),
-    tab2_server_join (this, 0, bright_font, "join",  MouseController::CB(bind(&GameMenuGUI::MenuServerJoin,  this))),
-    sub_tab1(this, 0, font, "g+",             MouseController::CB([&]() { sub_selected=1; })),
-    sub_tab2(this, 0, font, "join",           MouseController::CB([&]() { sub_selected=2; })),
-    sub_tab3(this, 0, font, "start",          MouseController::CB([&]() { sub_selected=3; })),
-    tab2_server_address(W, bright_font),
-    tab3_player_name   (W, bright_font),
+    tab1(&topbar, 0, "single player",   MouseController::CB([&](){ if (!Changed(&selected, 1)) Deactivate(); else LayoutTopbar(); })),
+    tab2(&topbar, 0, "multi player",    MouseController::CB([&](){ if (!Changed(&selected, 2)) Deactivate(); else LayoutTopbar(); })), 
+    tab3(&topbar, 0, "options",         MouseController::CB([&](){ if (!Changed(&selected, 3)) Deactivate(); else LayoutTopbar(); })),
+    tab4(&topbar, 0, "quit",            MouseController::CB(bind(&GameMenuGUI::MenuQuit, this))),
+    tab1_server_start(this, 0, "start", MouseController::CB(bind(&GameMenuGUI::MenuServerStart, this))),
+    tab2_server_join (this, 0, "join",  MouseController::CB(bind(&GameMenuGUI::MenuServerJoin,  this))),
+    sub_tab1(this, 0, "g+",             MouseController::CB([&]() { sub_selected=1; })),
+    sub_tab2(this, 0, "join",           MouseController::CB([&]() { sub_selected=2; })),
+    sub_tab3(this, 0, "start",          MouseController::CB([&]() { sub_selected=3; })),
+    tab2_server_address(screen->gd, bright_font.desc),
+    tab3_player_name   (screen->gd, bright_font.desc),
     tab1_options    (this),
     tab2_servers    (this),
     tab3_sensitivity(this, Box(), Widget::Slider::Flag::Horizontal),
     tab3_volume     (this, Box(), Widget::Slider::Flag::Horizontal), current_scrollbar(0),
 #ifdef LFL_ANDROID
-    gplus_signin_button (this, 0, 0,    "",           MouseController::CB([&](){ AndroidGPlusSignin(); gplus_signin_button.decay = 10; })),
-    gplus_signout_button(this, 0, font, "g+ Signout", MouseController::CB([&](){ AndroidGPlusSignout(); })),
-    gplus_quick         (this, 0, font, "match" ,     MouseController::CB([&](){ AndroidGPlusQuickGame(); })),
-    gplus_invite        (this, 0, font, "invite",     MouseController::CB([&](){ AndroidGPlusInvite(); })),
-    gplus_accept        (this, 0, font, "accept",     MouseController::CB([&](){ AndroidGPlusAccept(); })),
+    gplus_signin_button (this, 0, "",           MouseController::CB([&](){ AndroidGPlusSignin(); gplus_signin_button.decay = 10; })),
+    gplus_signout_button(this, 0, "g+ Signout", MouseController::CB([&](){ AndroidGPlusSignout(); })),
+    gplus_quick         (this, 0, "match" ,     MouseController::CB([&](){ AndroidGPlusQuickGame(); })),
+    gplus_invite        (this, 0, "invite",     MouseController::CB([&](){ AndroidGPlusInvite(); })),
+    gplus_accept        (this, 0, "accept",     MouseController::CB([&](){ AndroidGPlusAccept(); })),
 #endif
     browser(this, box), particles("GameMenuParticles") {
     tab1.outline = tab2.outline = tab3.outline = tab4.outline = tab1_server_start.outline = tab2_server_join.outline = sub_tab1.outline = sub_tab2.outline = sub_tab3.outline = &bright_font->fg;
     tab1_options.dot_size = tab2_servers.dot_size = tab3_sensitivity.dot_size = tab3_volume.dot_size = 25;
     Layout();
-    tab3_player_name.cursor.type         = tab2_server_address.cursor.type         = TextGUI::Cursor::Underline;
+    tab3_player_name.cursor.type         = tab2_server_address.cursor.type         = TextBox::Cursor::Underline;
     tab3_player_name.bg_color            = tab2_server_address.bg_color            = &Color::clear;
     tab3_player_name.deactivate_on_enter = tab2_server_address.deactivate_on_enter = true;
-    tab3_player_name.runcb = bind(&TextGUI::AssignInput, (TextGUI*)&tab3_player_name, _1);
+    tab3_player_name.runcb = bind(&TextBox::AssignInput, &tab3_player_name, _1);
     tab3_player_name.cmd_prefix.clear();
     tab3_player_name   .SetToggleKey(0, true);
     tab2_server_address.SetToggleKey(0, true);
@@ -971,17 +971,12 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
     tab3_sensitivity.scrolled = FLAGS_msens / 10.0;
     tab3_volume.increment = .5;
     tab3_volume.doc_height = app->GetMaxVolume();
-    tab3_volume.scrolled = (float)app->GetVolume() / tab3_volume.doc_height;
-
+    tab3_volume.scrolled = float(app->GetVolume()) / tab3_volume.doc_height;
     sub_selected = 2;
     if (parts) {
       particles.emitter_type = MenuParticles::Emitter::Mouse | MenuParticles::Emitter::GlowFade;
       particles.texture = parts->tex.ID;
     }
-#ifdef LFL_ANDROID
-    mobile_font = Fonts::Get("MobileAtlas", "", 0, Color::white);
-    gplus_signin_button.EnableHover();
-#endif
     pinger.handler = this;
     app->net->Enable(&pinger);
     SystemNetwork::SetSocketBroadcastEnabled(pinger.GetListener()->socket, true);
@@ -989,26 +984,26 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
     Sniffer::GetBroadcastAddress(&broadcast_ip);
   }
 
-  void Activate  () { active=1; topbar.active=1; selected=last_selected=0; app->shell.mouseout(vector<string>()); app->HideAds(); }
+  void Activate  () { active=1; topbar.active=1; selected=last_selected=0; screen->shell->mouseout(vector<string>()); app->HideAds(); }
   void Deactivate() { active=0; topbar.active=0; UpdateSettings(); tab3_player_name.Deactivate(); app->ShowAds(); }
   bool DecayBoxIfMatch(int l1, int l2) { if (l1 != l2) return 0; decay_box_line = l1; decay_box_left = 10; return 1; }
   void UpdateSettings() {
-    app->shell.Run(StrCat("name ", String::ToUTF8(tab3_player_name.Text16())));
-    app->shell.Run(StrCat("msens ", StrCat(tab3_sensitivity.scrolled * tab3_sensitivity.doc_height)));
+    screen->shell->Run(StrCat("name ", String::ToUTF8(tab3_player_name.Text16())));
+    screen->shell->Run(StrCat("msens ", StrCat(tab3_sensitivity.scrolled * tab3_sensitivity.doc_height)));
   }
 
   void MenuQuit() { selected=4; app->run=0; }
-  void MenuLineClicked() { line_clicked = -MousePosition().y / font->Height(); }
+  void MenuLineClicked() { line_clicked = -RelativePosition(screen->mouse).y / font->Height(); }
   void MenuServerStart() {
     if (selected != 1 && !(selected == 2 && sub_selected == 3)) return;
     Deactivate();
-    app->shell.Run("local_server");
+    screen->shell->Run("local_server");
   }
 
   void MenuServerJoin() {
     if (selected != 2 || master_server_selected < 0 || master_server_selected >= master_server_list.size()) return;
     Deactivate();
-    app->shell.Run(StrCat("server ", master_server_list[master_server_selected].addr));
+    screen->shell->Run(StrCat("server ", master_server_list[master_server_selected].addr));
   }
 
   void MenuAddServer(const string &text) {
@@ -1059,6 +1054,12 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
   }
 
   void Layout() {
+    CHECK(font.Load() && bright_font.Load() && glow_font.Load());
+#ifdef LFL_ANDROID
+    gplus_signin_button.EnableHover();
+    mobile_font.desc = FontDesc("MobileAtlas", "", 0, Color::white);
+    CHECK(mobile_font.Load());
+#endif
     topbar.box = screen->Box(0, .95, 1, .05);
     titlewin   = screen->Box(.15, .9, .7, .05); 
     box        = screen->Box(.15, .4, .7, .5);
@@ -1071,35 +1072,32 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
   void LayoutTopbar() {
     Flow topbarflow(&topbar.box, font, topbar.Reset());
     tab1.box = tab2.box = tab3.box = tab4.box = Box(topbar.box.w/4, topbar.box.h);
-    tab1.font = (selected == 1) ? glow_font : font; tab1.Layout(&topbarflow);
-    tab2.font = (selected == 2) ? glow_font : font; tab2.Layout(&topbarflow);
-    tab3.font = (selected == 3) ? glow_font : font; tab3.Layout(&topbarflow);
-    tab4.font = (selected == 4) ? glow_font : font; tab4.Layout(&topbarflow);
+    tab1.Layout(&topbarflow, (selected == 1) ? glow_font : font);
+    tab2.Layout(&topbarflow, (selected == 2) ? glow_font : font);
+    tab3.Layout(&topbarflow, (selected == 3) ? glow_font : font);
+    tab4.Layout(&topbarflow, (selected == 4) ? glow_font : font);
   }
 
   void LayoutMenu() {
     Box b;
     Flow menuflow(&box, bright_font, Reset());
-    AddClickBox(Box(0, -box.h, box.w, box.h), MouseController::CB(bind(&GameMenuGUI::MenuLineClicked, this)));
+    mouse.AddClickBox(Box(0, -box.h, box.w, box.h), MouseController::CB(bind(&GameMenuGUI::MenuLineClicked, this)));
 
     current_scrollbar = 0;
     if      (selected == 1) { current_scrollbar = &tab1_options;        menuflow.container = &menuftr1; }
     else if (selected == 2) { current_scrollbar = &tab2_servers;        menuflow.container = &menuftr2; }
     else if (selected == 3) { current_scrollbar = &browser.v_scrollbar; menuflow.container = &box; }
-    menuflow.p.y -= current_scrollbar ? (int)(current_scrollbar->scrolled * current_scrollbar->doc_height) : 0;
+    menuflow.p.y -= current_scrollbar ? int(current_scrollbar->scrolled * current_scrollbar->doc_height) : 0;
 
     int my_selected = selected;
     if (my_selected == 2) {
       sub_tab1.box = sub_tab2.box = sub_tab3.box = Box(box.w/3, font->Height());
-      sub_tab1.font = (sub_selected == 1) ? glow_font : font;
-      sub_tab2.font = (sub_selected == 2) ? glow_font : font;
-      sub_tab3.font = (sub_selected == 3) ? glow_font : font;
       sub_tab1.outline = (sub_selected == 1) ? 0 : &Color::white;
       sub_tab2.outline = (sub_selected == 2) ? 0 : &Color::white;
       sub_tab3.outline = (sub_selected == 3) ? 0 : &Color::white;
-      sub_tab1.Layout(&menuflow);
-      sub_tab2.Layout(&menuflow);
-      sub_tab3.Layout(&menuflow);
+      sub_tab1.Layout(&menuflow, (sub_selected == 1) ? glow_font : font);
+      sub_tab2.Layout(&menuflow, (sub_selected == 2) ? glow_font : font);
+      sub_tab3.Layout(&menuflow, (sub_selected == 3) ? glow_font : font);
       menuflow.SetFont(bright_font);
       menuflow.AppendNewline();
 
@@ -1107,19 +1105,19 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
 #ifdef LFL_ANDROID
         Scissor s(*menuflow.container);
         bool gplus_signedin = AndroidGPlusSignedin();
-        if (!gplus_signedin) LayoutGPlusSigninButton(&menuflow, gplus_signedin);
+        if (!gplus_signedin) LayoutGPlusSigninButton(&menuflow, 0, gplus_signedin);
         else {
           int fw = menuflow.container->w, bh = font->Height();
-          menuflow.AppendBox(fw/3.0, bh, 0/3.0, &gplus_quick.box);  gplus_quick. LayoutBox(&menuflow, gplus_quick.box);
-          menuflow.AppendBox(fw/3.0, bh, 1/3.0, &gplus_invite.box); gplus_invite.LayoutBox(&menuflow, gplus_invite.box);
-          menuflow.AppendBox(fw/3.0, bh, 2/3.0, &gplus_accept.box); gplus_accept.LayoutBox(&menuflow, gplus_accept.box);
+          menuflow.AppendBox(fw/3.0, bh, 0/3.0, &gplus_quick.box);  gplus_quick. LayoutBox(&menuflow, font, gplus_quick.box);
+          menuflow.AppendBox(fw/3.0, bh, 1/3.0, &gplus_invite.box); gplus_invite.LayoutBox(&menuflow, font, gplus_invite.box);
+          menuflow.AppendBox(fw/3.0, bh, 2/3.0, &gplus_accept.box); gplus_accept.LayoutBox(&menuflow, font, gplus_accept.box);
           menuflow.AppendNewlines(1);
         }
 #endif
       } else if (sub_selected == 2) {
         if (last_selected != 2 || last_sub_selected != 2) Refresh();
         {
-          Scissor s(*menuflow.container);
+          Scissor s(screen->gd, *menuflow.container);
 
           menuflow.AppendText(0,   "Server List:");
           menuflow.AppendText(.75, "Players\n");
@@ -1140,9 +1138,9 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
           if (tab2_server_address.Active()) menuflow.AppendText(.37, ":");
           menuflow.AppendRow(.4, .6, &b);
           menuflow.AppendNewlines(1);
-          { ScissorStack ss; tab2_server_address.Draw(b + box.TopLeft()); }
+          { ScissorStack ss(screen->gd); tab2_server_address.Draw(b + box.TopLeft()); }
         }
-        tab2_server_join.LayoutBox(&menuflow, Box(box.w*.2, -box.h*.8, box.w*.6, box.h*.1));
+        tab2_server_join.LayoutBox(&menuflow, bright_font, Box(box.w*.2, -box.h*.8, box.w*.6, box.h*.1));
       } else if (sub_selected == 3) {
         my_selected = 1;
       }
@@ -1150,7 +1148,7 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
     if (my_selected == 1) {
       menuflow.AppendNewline();
       if (settings) {
-        Scissor s(*menuflow.container);
+        Scissor s(screen->gd, *menuflow.container);
         for (GameSettings::Vector::iterator i = settings->vec.begin(); i != settings->vec.end(); ++i) {
           if (DecayBoxIfMatch(line_clicked, menuflow.out->line.size())) i->value->Next();
           menuflow.AppendText(0,  i->key + ":");
@@ -1158,10 +1156,10 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
           menuflow.AppendNewlines(1);
         }
       }
-      tab1_server_start.LayoutBox(&menuflow, Box(box.w*.2, -box.h*.8, box.w*.6, box.h*.1));
+      tab1_server_start.LayoutBox(&menuflow, bright_font, Box(box.w*.2, -box.h*.8, box.w*.6, box.h*.1));
     }
     if (my_selected == 3) {
-      Scissor s(*menuflow.container);
+      Scissor s(screen->gd, *menuflow.container);
 #ifdef LFL_ANDROID
       LayoutGPlusSigninButton(&menuflow, AndroidGPlusSignedin());
 #endif
@@ -1171,7 +1169,7 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
         tab3_player_name.Activate();
       }
       menuflow.AppendRow(.6, .4, &b);
-      { ScissorStack ss; tab3_player_name.Draw(b + box.TopLeft()); }
+      { ScissorStack ss(screen->gd); tab3_player_name.Draw(b + box.TopLeft()); }
 
       menuflow.AppendText("\nControl Sensitivity:");
       menuflow.AppendRow(.6, .35, &b);
@@ -1185,7 +1183,7 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
 
       if (tab3_volume.dirty) {
         tab3_volume.dirty = false;
-        app->SetVolume((int)(tab3_volume.scrolled * tab3_volume.doc_height));
+        app->SetVolume(int(tab3_volume.scrolled * tab3_volume.doc_height));
       }
 
       menuflow.AppendNewlines(1);
@@ -1227,8 +1225,8 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
       BoxOutline().Draw(titlewin);
     }
 
-    LayoutMenu();
     GUI::Draw();
+    LayoutMenu();
     topbar.Draw();
     tab3_volume.Update();
     tab3_sensitivity.Update();
@@ -1236,8 +1234,8 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
     if (current_scrollbar) current_scrollbar->Update();
 
     if (particles.texture) {
-      particles.Update(clicks, screen->mouse.x, screen->mouse.y, app->input->MouseButton1Down());
-      particles.Draw();
+      particles.Update(screen->cam.get(), clicks, screen->mouse.x, screen->mouse.y, app->input->MouseButton1Down());
+      particles.Draw(screen->gd);
     }
 
     if (selected) BoxOutline().Draw(box);
@@ -1256,13 +1254,13 @@ struct GamePlayerListGUI : public GUI {
   typedef vector<string> Player;
   typedef vector<Player> PlayerList;
 
-  Font *font;
+  FontRef font;
   bool toggled=0;
   string titlename, titletext, team1, team2;
   PlayerList playerlist;
   int winning_team=0;
-  GamePlayerListGUI(LFL::Window *W, const char *TitleName, const char *Team1, const char *Team2)
-    : GUI(W), font(Fonts::Get(FLAGS_default_font, "", 12, Color::black)),
+  GamePlayerListGUI(const char *TitleName, const char *Team1, const char *Team2) :
+    font(FontDesc(FLAGS_default_font, "", 12, Color::black)),
     titlename(TitleName), team1(Team1), team2(Team2) {}
 
   void HandleTextMessage(const string &in) {
@@ -1285,7 +1283,13 @@ struct GamePlayerListGUI : public GUI {
     sort(playerlist.begin(), playerlist.end(), PlayerCompareScore);
   }
 
+  void Layout() {
+    CHECK(font.Load());
+    if (!child_box.Size()) child_box.PushNop();
+  }
+
   void Draw(Shader *MyShader) {
+    GUI::Draw();
     if (!toggled) Deactivate();
     screen->gd->EnableBlend();
     Box win = screen->Box(.1, .1, .8, .8, false);
@@ -1321,7 +1325,8 @@ struct GamePlayerListGUI : public GUI {
 
 struct GameChatGUI : public TextArea {
   GameClient **server;
-  GameChatGUI(LFL::Window *W, int key, GameClient **s) : TextArea(W, Fonts::Get(FLAGS_default_font, "", 10, Color::grey80)), server(s) { 
+  GameChatGUI(int key, GameClient **s) :
+    TextArea(screen->gd, FontDesc(FLAGS_default_font, "", 10, Color::grey80)), server(s) { 
     SetToggleKey(key, true);
     write_timestamp = deactivate_on_enter = true;
   }
@@ -1331,9 +1336,9 @@ struct GameChatGUI : public TextArea {
     if (!Active() && Now() - write_last >= Seconds(5)) return;
     screen->gd->EnableBlend(); 
     {
-      int h = (int)(screen->height/1.6);
-      Scissor scissor(Box(1, screen->height-h+1, screen->width, screen->height*.15, false));
-      TextArea::Draw(Box(0, screen->height-h, screen->width, (int)(screen->height*.15)), DrawFlag::DrawCursor);
+      int h = int(screen->height/1.6);
+      Scissor scissor(screen->gd, Box(1, screen->height-h+1, screen->width, screen->height*.15, false));
+      TextArea::Draw(Box(0, screen->height-h, screen->width, int(screen->height*.15)));
     }
   }
 };
@@ -1348,7 +1353,7 @@ struct GameMultiTouchControls {
   bool swipe_controls=0;
 
   GameMultiTouchControls(GameClient *C) : client(C),
-  dpad_font(Fonts::Get("dpad_atlas", "", 0, Color::black)),
+  dpad_font(app->fonts->Get("dpad_atlas", "", 0, Color::black)),
   lpad_win(screen->Box(.03, .05, .2, .2)),
   rpad_win(screen->Box(.78, .05, .2, .2)),
   lpad_tbx(RoundF(lpad_win.w * .6)), lpad_tby(RoundF(lpad_win.h *.6)),
@@ -1399,11 +1404,11 @@ struct GameMultiTouchControls {
     } else {
       point l, r;
       if (FLAGS_swap_axis) {
-        l.x=(int)screen->gesture_dpad_x[0]; l.y=(int)screen->gesture_dpad_y[0];
-        r.x=(int)screen->gesture_dpad_x[1]; r.y=(int)screen->gesture_dpad_y[1];
+        l.x=int(screen->gesture_dpad_x[0]); l.y=int(screen->gesture_dpad_y[0]);
+        r.x=int(screen->gesture_dpad_x[1]); r.y=int(screen->gesture_dpad_y[1]);
       } else {
-        r.x=(int)screen->gesture_dpad_x[0]; r.y=(int)screen->gesture_dpad_y[0];
-        l.x=(int)screen->gesture_dpad_x[1]; l.y=(int)screen->gesture_dpad_y[1];
+        r.x=int(screen->gesture_dpad_x[0]); r.y=int(screen->gesture_dpad_y[0]);
+        l.x=int(screen->gesture_dpad_x[1]); l.y=int(screen->gesture_dpad_y[1]);
       }
       l = Input::TransformMouseCoordinate(l);
       r = Input::TransformMouseCoordinate(r);

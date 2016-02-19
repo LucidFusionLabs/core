@@ -47,124 +47,6 @@ struct Mouse {
   }
 };
 
-struct InputController {
-  struct Events { int total; };
-  Events events;
-  bool active=0;
-  virtual ~InputController() {}
-  InputController() { ClearEvents(); }
-
-  void ClearEvents() { memzero(events); }
-  virtual void Activate  () { active = 1; }
-  virtual void Deactivate() { active = 0; }
-  virtual void Input(InputEvent::Id event, bool down) {}
-};
-
-struct KeyboardController {
-  struct Events { int total; };
-  Events events;
-  KeyboardController() { ClearEvents(); }
-
-  int HandleSpecialKey(InputEvent::Id);
-  void ClearEvents() { memzero(events); }
-  virtual void Input(const string &s) { for (int i=0; i<s.size(); i++) Input(s[i]); }
-  virtual void Input(char key) {}
-  virtual void Enter      () {}
-  virtual void Erase      () {}
-  virtual void CursorLeft () {}
-  virtual void CursorRight() {}
-  virtual void PageUp     () {}
-  virtual void PageDown   () {}
-  virtual void Home       () {}
-  virtual void End        () {}
-  virtual void HistUp     () {}
-  virtual void HistDown   () {}
-  virtual void Tab        () {}
-  virtual void Escape     () {}
-};
-
-struct MouseControllerCallback {
-  typedef function<void()> CB;
-  typedef function<bool()> BoolCB;
-  typedef function<void(int, int, int, int)> CoordCB;
-  enum { NONE=0, CB_VOID=1, CB_BOOL=2, CB_COORD=3 } type;
-  UNION FunctionPointer {
-    CB      cb_void;
-    BoolCB  cb_bool;
-    CoordCB cb_coord;
-    FunctionPointer() {}
-    ~FunctionPointer() {}
-  } cb;
-
-  ~MouseControllerCallback() { Destruct(); }
-  MouseControllerCallback()                  : type(NONE) {}
-  MouseControllerCallback(const CB       &c) : type(CB_VOID)  { new (&cb.cb_void)  CB     (c); }
-  MouseControllerCallback(const BoolCB   &c) : type(CB_BOOL)  { new (&cb.cb_bool)  BoolCB (c); }
-  MouseControllerCallback(const CoordCB  &c) : type(CB_COORD) { new (&cb.cb_coord) CoordCB(c); }
-  MouseControllerCallback(const MouseControllerCallback &c) { Assign(c); }
-  MouseControllerCallback &operator=(const MouseControllerCallback &c) { Destruct(); Assign(c); return *this; }
-  void Destruct() {
-    switch(type) {
-      case CB_VOID:  cb.cb_void .~CB();      break;
-      case CB_BOOL:  cb.cb_bool .~BoolCB();  break;
-      case CB_COORD: cb.cb_coord.~CoordCB(); break;
-      default:                               break;
-    }
-  }
-  void Assign(const MouseControllerCallback &c) {
-    switch ((type = c.type)) {
-      case CB_VOID:  new (&cb.cb_void)  CB     (c.cb.cb_void);  break;
-      case CB_BOOL:  new (&cb.cb_bool)  BoolCB (c.cb.cb_bool);  break;
-      case CB_COORD: new (&cb.cb_coord) CoordCB(c.cb.cb_coord); break;
-      default:                                                  break;
-    }
-  }
-  bool Run(const point &p, int button, int down) {
-    bool ret = 1;
-    switch (type) {
-      case CB_VOID:  cb.cb_void();                        break;
-      case CB_BOOL:  ret = cb.cb_bool();                  break;
-      case CB_COORD: cb.cb_coord(button, p.x, p.y, down); break;
-      default:                                            break;
-    } return ret;
-  }
-};
-
-struct MouseController {
-  typedef MouseControllerCallback::CB CB;
-  typedef MouseControllerCallback::BoolCB BoolCB;
-  typedef MouseControllerCallback::CoordCB CoordCB;
-
-  struct Event { enum { Click=1, Hover=2, Drag=3 }; };
-  struct Events { int total, click, hover; };
-
-  struct HitBox {
-    Box box;
-    int evtype, val=0;
-    bool active=1, deleted=0, run_only_if_first=0;
-    MouseControllerCallback CB;
-    HitBox(int ET=0, const Box &b=Box(), const MouseControllerCallback &cb=MouseControllerCallback()) : box(b), evtype(ET), CB(cb) {}
-  };
-
-  IterableFreeListVector<HitBox, &HitBox::deleted> hit;
-  unordered_set<int> drag;
-  vector<int> hover;
-  Events events;
-  bool active=0;
-  virtual ~MouseController() { Clear(); }
-
-  virtual void Clear() { hit.Clear(); ClearEvents(); }
-  virtual void ClearEvents() { memzero(events); }
-  virtual void Activate() { active = 1; }
-  virtual void Deactivate() { active = 0; }
-  virtual bool NotActive() const { return !active; }
-  virtual bool ToggleActive() { if ((active = !active)) Activate(); else Deactivate(); return active; }
-  virtual int AddClickBox(const Box &w, const MouseControllerCallback &cb) { return hit.Insert(HitBox(Event::Click, w, cb)); }
-  virtual int AddHoverBox(const Box &w, const MouseControllerCallback &cb) { return hit.Insert(HitBox(Event::Hover, w, cb)); }
-  virtual int AddDragBox (const Box &w, const MouseControllerCallback &cb) { return hit.Insert(HitBox(Event::Drag,  w, cb)); }
-  virtual int Input(InputEvent::Id, const point &p, int down, int flag);
-};
-
 struct Bind {
   typedef function<void()> CB;
   typedef function<void(unsigned)> TimeCB;
@@ -221,10 +103,19 @@ namespace std {
 }; // namespace std;
 namespace LFL {
 
+struct InputController {
+  bool active=0;
+  virtual ~InputController() {}
+  virtual void Activate  () { active = 1; }
+  virtual void Deactivate() { active = 0; }
+  virtual void Input(InputEvent::Id event, bool down) {}
+};
+
 struct BindMap : public InputController {
   unordered_set<Bind> data, down;
   BindMap() { active = 1; }
-  void Add(const Bind &b) { data.insert(b); }
+  template <class... Args> void Add(Args&&... args) { AddBind(Bind(forward<Args>(args)...)); }
+  void AddBind(const Bind &b) { data.insert(b); }
   void Repeat(unsigned clicks) { for (auto b : down) b.Run(clicks); }
   void Input(InputEvent::Id event, bool d) {
     auto b = data.find(event);
@@ -233,6 +124,82 @@ struct BindMap : public InputController {
     else if (d) b->Run(0);
   }
   string DebugString() const { string v="{ "; for (auto b : data) StrAppend(&v, b.key, " "); return v + "}"; }
+};
+
+struct KeyboardController {
+  Bind toggle_bind;
+  bool toggle_once=0;
+  virtual ~KeyboardController() {}
+  virtual int HandleSpecialKey(InputEvent::Id);
+  virtual void SetToggleKey(int TK, bool TO=0) { toggle_bind.key=TK; toggle_once=TO; }
+  virtual void Input(const string &s) { for (int i=0; i<s.size(); i++) Input(s[i]); }
+  virtual void Input(char key) {}
+  virtual void Enter      () {}
+  virtual void Erase      () {}
+  virtual void CursorLeft () {}
+  virtual void CursorRight() {}
+  virtual void PageUp     () {}
+  virtual void PageDown   () {}
+  virtual void Home       () {}
+  virtual void End        () {}
+  virtual void HistUp     () {}
+  virtual void HistDown   () {}
+  virtual void Tab        () {}
+  virtual void Escape     () {}
+};
+
+struct MouseControllerCallback {
+  typedef function<void()> CB;
+  typedef function<bool()> BoolCB;
+  typedef function<void(int, int, int, int)> CoordCB;
+  enum { NONE=0, CB_VOID=1, CB_BOOL=2, CB_COORD=3 } type;
+  UNION FunctionPointer {
+    CB      cb_void;
+    BoolCB  cb_bool;
+    CoordCB cb_coord;
+    FunctionPointer() {}
+    ~FunctionPointer() {}
+  };
+
+  FunctionPointer cb;
+  bool run_from_message_loop=false;
+
+  ~MouseControllerCallback() { Destruct(); }
+  MouseControllerCallback()                                 : type(NONE) {}
+  MouseControllerCallback(const CB       &c, bool mt=false) : type(CB_VOID)  { new (&cb.cb_void)  CB     (c); run_from_message_loop=mt; }
+  MouseControllerCallback(const BoolCB   &c, bool mt=false) : type(CB_BOOL)  { new (&cb.cb_bool)  BoolCB (c); run_from_message_loop=mt; }
+  MouseControllerCallback(const CoordCB  &c, bool mt=false) : type(CB_COORD) { new (&cb.cb_coord) CoordCB(c); run_from_message_loop=mt; }
+  MouseControllerCallback(const MouseControllerCallback &c) { Assign(c); }
+  MouseControllerCallback &operator=(const MouseControllerCallback &c) { Destruct(); Assign(c); return *this; }
+
+  void Destruct();
+  void Assign(const MouseControllerCallback &c);
+  bool Run(const point &p, int button, int down, bool wrote=false);
+};
+
+struct MouseController {
+  typedef MouseControllerCallback::CB CB;
+  typedef MouseControllerCallback::BoolCB BoolCB;
+  typedef MouseControllerCallback::CoordCB CoordCB;
+  struct Event { enum { Click=1, Hover=2, Drag=3 }; };
+  struct HitBox {
+    Box box;
+    int evtype, val=0;
+    bool active=1, deleted=0, run_only_if_first=0;
+    MouseControllerCallback CB;
+    HitBox(int ET=0, const Box &b=Box(), const MouseControllerCallback &cb=MouseControllerCallback()) : box(b), evtype(ET), CB(cb) {}
+  };
+
+  IterableFreeListVector<HitBox, &HitBox::deleted> hit;
+  unordered_set<int> drag;
+  vector<int> hover;
+
+  virtual ~MouseController() { Clear(); }
+  virtual void Clear() { hit.Clear(); }
+  virtual int AddClickBox(const Box &w, const MouseControllerCallback &cb) { return hit.Insert(HitBox(Event::Click, w, cb)); }
+  virtual int AddHoverBox(const Box &w, const MouseControllerCallback &cb) { return hit.Insert(HitBox(Event::Hover, w, cb)); }
+  virtual int AddDragBox (const Box &w, const MouseControllerCallback &cb) { return hit.Insert(HitBox(Event::Drag,  w, cb)); }
+  virtual int Input(InputEvent::Id, const point &p, int down, int flag);
 };
 
 struct DragTracker {
@@ -303,10 +270,7 @@ struct Input : public InputModule {
   int MouseClick(int button, bool down, const point &p);
   int MouseEventDispatch(InputEvent::Id event, const point &p, int down);
 
-  static point TransformMouseCoordinate(point p) {
-    if (FLAGS_swap_axis) p = point(screen->width - p.y, p.x);
-    return point(p.x, screen->height - p.y);
-  }
+  static point TransformMouseCoordinate(point p);
 };
 
 }; // namespace LFL

@@ -29,8 +29,8 @@ struct Count {
   static void Print(const Count *c, const char *name, const char *good="good", const char *bad="bad") {
     string out = StringPrintf("%d\t%s,\t%d %s", c->total, name, c->good, good);
     if (bad) StrAppend(&out, ", ", c->bad, " ", bad);
-    StrAppend(&out, " (", (float)c->good / c->total, ")");
-    if (bad) StrAppend(&out, " (weighted = ", (float)(c->good - c->bad) / c->total, ")");
+    StrAppend(&out, " (", float(c->good) / c->total, ")");
+    if (bad) StrAppend(&out, " (weighted = ", float(c->good - c->bad) / c->total, ")");
     printf("%s\n", out.c_str());
   }
 };

@@ -27,7 +27,7 @@ bool DayChanged(const tm &t1, const tm &t2) { return t1.tm_yday != t2.tm_yday ||
 time_t Time2time_t(Time x) { return ToSeconds(x).count(); }
 timeval Time2timeval(Time x) {
   microseconds us = duration_cast<microseconds>(x);
-  timeval ret = { (int)us.count() / 1000000, (int)us.count() % 1000000 };
+  timeval ret = { int(us.count() / 1000000), int(us.count() % 1000000) };
   return ret;
 }
 

@@ -31,7 +31,7 @@ namespace LFL {
 
 TEST(DOMTest, DOMNode) {
   LFL::DOM::FixedObjectAlloc<65536> alloc;
-  LFL::DOM::HTMLDocument *doc = AllocatorNew(&alloc, (LFL::DOM::HTMLDocument), (0, &alloc));
+  LFL::DOM::HTMLDocument *doc = alloc.New<LFL::DOM::HTMLDocument>(nullptr, &alloc);
   LFL::DOM::Text A(doc), B(doc), C(doc), D(doc);
   EXPECT_EQ(0, doc->firstChild()); EXPECT_EQ(0, doc->lastChild());
 
@@ -93,8 +93,8 @@ TEST(DOMTest, DOMTree) {
                           "<P id=cat>In  the  begining  was  fun.</p>\n"
                           "</body>\n");
   Box viewport = screen->Box();
-  sb.v_scrollbar.menuicon = Fonts::Fake();
-  sb.h_scrollbar.menuicon = Fonts::Fake();
+  sb.v_scrollbar.menuicon = app->fonts->Fake();
+  sb.h_scrollbar.menuicon = app->fonts->Fake();
   sb.Draw(viewport);
   CHECK(sb.doc.node);
   EXPECT_EQ("#document", String::ToUTF8(sb.doc.node->nodeName()));
@@ -106,7 +106,7 @@ TEST(DOMTest, DOMTree) {
   EXPECT_EQ("html", String::ToUTF8(html_node->nodeName()));
   EXPECT_EQ(LFL::DOM::ELEMENT_NODE, html_node->nodeType);
   EXPECT_EQ(LFL::DOM::HTML_HTML_ELEMENT, html_node->htmlElementType);
-  LFL::DOM::HTMLElement *html_element = (LFL::DOM::HTMLElement*)html_node;
+  LFL::DOM::HTMLElement *html_element = dynamic_cast<LFL::DOM::HTMLElement*>(html_node);
   EXPECT_EQ(html_node->AsElement(), html_element);
   EXPECT_EQ("html", String::ToUTF8(html_element->tagName));
   EXPECT_EQ(2, html_element->childNodes.length());
@@ -142,7 +142,7 @@ TEST(DOMTest, DOMTree) {
   EXPECT_EQ("body", String::ToUTF8(body_node->nodeName()));
   EXPECT_EQ(LFL::DOM::ELEMENT_NODE, body_node->nodeType);
   EXPECT_EQ(LFL::DOM::HTML_BODY_ELEMENT, body_node->htmlElementType);
-  LFL::DOM::HTMLBodyElement *body_element = (LFL::DOM::HTMLBodyElement*)body_node;
+  LFL::DOM::HTMLBodyElement *body_element = dynamic_cast<LFL::DOM::HTMLBodyElement*>(body_node);
   EXPECT_EQ(body_node->AsElement(), body_element);
   EXPECT_EQ(body_node->AsHTMLBodyElement(), body_element);
   EXPECT_EQ("body", String::ToUTF8(body_element->tagName));
@@ -202,7 +202,7 @@ TEST(DOMTest, DOMTree) {
   EXPECT_EQ("h1", String::ToUTF8(h_node->nodeName()));
   EXPECT_EQ(LFL::DOM::ELEMENT_NODE, h_node->nodeType);
   EXPECT_EQ(LFL::DOM::HTML_HEADING_ELEMENT, h_node->htmlElementType);
-  LFL::DOM::HTMLHeadingElement *h_element = (LFL::DOM::HTMLHeadingElement*)h_node;
+  LFL::DOM::HTMLHeadingElement *h_element = dynamic_cast<LFL::DOM::HTMLHeadingElement*>(h_node);
   EXPECT_EQ(h_node->AsElement(), h_element);
   EXPECT_EQ(h_node->AsHTMLHeadingElement(), h_element);
   EXPECT_EQ("h1", String::ToUTF8(h_element->tagName));
@@ -256,7 +256,7 @@ TEST(DOMTest, DOMTree) {
   EXPECT_EQ("p", String::ToUTF8(p_node->nodeName()));
   EXPECT_EQ(LFL::DOM::ELEMENT_NODE, p_node->nodeType);
   EXPECT_EQ(LFL::DOM::HTML_PARAGRAPH_ELEMENT, p_node->htmlElementType);
-  LFL::DOM::HTMLParagraphElement *p_element = (LFL::DOM::HTMLParagraphElement*)p_node;
+  LFL::DOM::HTMLParagraphElement *p_element = dynamic_cast<LFL::DOM::HTMLParagraphElement*>(p_node);
   EXPECT_EQ(p_node->AsElement(), p_element);
   EXPECT_EQ(p_node->AsHTMLParagraphElement(), p_element);
   EXPECT_EQ("p", String::ToUTF8(p_element->tagName));

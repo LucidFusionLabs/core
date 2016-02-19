@@ -51,7 +51,7 @@ extern "C" {
   (ret)->resize(offset + len);
 
 extern "C" void LFAppLog(int level, const char *file, int line, const char *fmt, ...) {
-  string message;
+  LFL::string message;
   StringPrintfImpl(&message, fmt, vsnprintf, 0);
   LFL::app->Log(level, file, line, message);
 }
@@ -82,7 +82,7 @@ int String::Convert(const StringPieceT<X> &in, basic_string<Y> *out, const char 
   if (cd < 0) { ERROR("failed convert ", from, " to ", to); out->clear(); return 0; }
 
   out->resize(in.len*4/sizeof(Y)+4);
-  char *inp = (char*)in.buf, *top = (char*)out->data();
+  char *inp = reinterpret_cast<char*>(const_cast<X*>(in.buf)), *top = reinterpret_cast<char*>(&(*out)[0]);
   size_t in_remaining = in.len*sizeof(X), to_remaining = out->size()*sizeof(Y);
   if (iconv(cd, &inp, &in_remaining, &top, &to_remaining) == -1)
   { /* ERROR("failed convert ", from, " to ", to); */ iconv_close(cd); out->clear(); return 0; }
@@ -132,7 +132,7 @@ String16 UTF16::WriteGlyph(int codepoint) { return String16(1, codepoint); }
 int UTF16::ReadGlyph(const String16Piece &s, const char16_t *p, int *len, bool eof) { *len=1; return *p; }
 int UTF8 ::ReadGlyph(const StringPiece   &s, const char     *p, int *len, bool eof) {
   *len = 1;
-  unsigned char c0 = *(const unsigned char *)p;
+  unsigned char c0 = *reinterpret_cast<const unsigned char*>(p);
   if ((c0 & (1<<7)) == 0) return c0; // ascii
   if ((c0 & (1<<6)) == 0) { UnicodeDebug("unexpected continuation byte"); return c0; }
   for ((*len)++; *len < 4; (*len)++) {
@@ -147,7 +147,7 @@ int UTF8 ::ReadGlyph(const StringPiece   &s, const char     *p, int *len, bool e
   else { UnicodeDebug("invalid len ", *len); *len=1; return c0; }
 
   for (int i = *len; i > 1; i--) {
-    unsigned char c = *(const unsigned char *)++p;
+    unsigned char c = *reinterpret_cast<const unsigned char*>(++p);
     if ((c & 0xc0) != 0x80) { UnicodeDebug("unexpected non-continuation byte"); *len=1; return c0; }
     ret = (ret << 6) | (c & 0x3f);
   }
@@ -156,7 +156,7 @@ int UTF8 ::ReadGlyph(const StringPiece   &s, const char     *p, int *len, bool e
 string UTF8::WriteGlyph(int codepoint) {
 #if 1
   string out;
-  char16_t in[] = { (char16_t)codepoint, 0 };
+  char16_t in[] = { char16_t(codepoint), 0 };
   String::Convert(String16Piece(in, 1), &out, "UTF-16LE", "UTF-8");
   return out;
 #else
@@ -176,22 +176,22 @@ int atoi(const char16_t *v) {
   return neg ? -ret : ret;
 }
 
-unsigned fnv32(const void *buf, unsigned len, unsigned hval) {
-  if (!len) len = strlen((const char *)buf);
-  unsigned char *bp = (unsigned char *)buf, *be = bp + len;
+uint32_t fnv32(const void *buf, unsigned len, uint32_t hval) {
+  if (!len) len = strlen(FromVoid<const char*>(buf));
+  const unsigned char *bp = FromVoid<const unsigned char*>(buf), *be = bp + len;
   while (bp < be) {
     hval += (hval<<1) + (hval<<4) + (hval<<7) + (hval<<8) + (hval<<24);
-    hval ^= (unsigned)*bp++;
+    hval ^= uint32_t(*bp++);
   }
   return hval;
 }
 
-unsigned long long fnv64(const void *buf, unsigned len, unsigned long long hval) {
-  if (!len) len = strlen((const char *)buf);
-  unsigned char *bp = (unsigned char *)buf, *be = bp + len;
+uint64_t fnv64(const void *buf, unsigned len, uint64_t hval) {
+  if (!len) len = strlen(FromVoid<const char*>(buf));
+  const unsigned char *bp = FromVoid<const unsigned char*>(buf), *be = bp + len;
   while (bp < be) {
     hval += (hval<<1) + (hval<<4) + (hval<<5) + (hval<<7) + (hval<<8) + (hval<<40);
-    hval ^= (unsigned long long)*bp++;
+    hval ^= uint64_t(*bp++);
   }
   return hval;
 }
@@ -348,23 +348,23 @@ bool StringEmptyOrEquals(const String16 &cmp, const string   &ref1, const string
 template <class X> const X *FindChar(const X *text, int ischar, int (*isquotec)(int), int len, int *outlen) {
   FindCharImpl(X, (ischar == *p), *p, *p);
 }
-template <class X>       X *FindChar(      X *text, int ischar, int (*isquotec)(int), int len, int *outlen) { return (X*)FindChar((const X *)text, ischar, isquotec, len, outlen); }
+template <class X>       X *FindChar(      X *text, int ischar, int (*isquotec)(int), int len, int *outlen) { return const_cast<X*>(FindChar(const_cast<const X*>(text), ischar, isquotec, len, outlen)); }
 template <class X> const X *FindChar(const X *text, int ischar, int len, int *outlen) { return FindChar(text, ischar, 0, len, outlen); }
-template <class X>       X *FindChar(      X *text, int ischar, int len, int *outlen) { return (X*)FindChar((const X *)text, ischar, len, outlen); }
+template <class X>       X *FindChar(      X *text, int ischar, int len, int *outlen) { return const_cast<X*>(FindChar(const_cast<const X*>(text), ischar, len, outlen)); }
 
 template <class X> const X *FindChar(const X *text, int (*ischar)(int), int (*isquotec)(int), int len, int *outlen) {
   FindCharImpl(X, ischar(*p), *p, *p);
 }
-template <class X>       X *FindChar(      X *text, int (*ischar)(int), int (*isquotec)(int), int len, int *outlen) { return (X*)FindChar((const X *)text, ischar, isquotec, len, outlen); }
+template <class X>       X *FindChar(      X *text, int (*ischar)(int), int (*isquotec)(int), int len, int *outlen) { return const_cast<X*>(FindChar(const_cast<const X*>(text), ischar, isquotec, len, outlen)); }
 template <class X> const X *FindChar(const X *text, int (*ischar)(int), int len, int *outlen) { return FindChar(text, ischar, 0, len, outlen); }
-template <class X>       X *FindChar(      X *text, int (*ischar)(int), int len, int *outlen) { return (X*)FindChar((const X *)text, ischar, len, outlen); }
+template <class X>       X *FindChar(      X *text, int (*ischar)(int), int len, int *outlen) { return const_cast<X*>(FindChar(const_cast<const X*>(text), ischar, len, outlen)); }
 
 template <> const DrawableBox *FindChar(const DrawableBox *text, int (*ischar)(int), int (*isquotec)(int), int len, int *outlen) {
   FindCharImpl(DrawableBox, ischar(p->Id()), p->Id(), 1);
 }
-template <>       DrawableBox *FindChar(      DrawableBox *text, int (*ischar)(int), int (*isquotec)(int), int len, int *outlen) { return (DrawableBox*)FindChar((const DrawableBox *)text, ischar, isquotec, len, outlen); }
+template <>       DrawableBox *FindChar(      DrawableBox *text, int (*ischar)(int), int (*isquotec)(int), int len, int *outlen) { return const_cast<DrawableBox*>(FindChar(const_cast<const DrawableBox*>(text), ischar, isquotec, len, outlen)); }
 template <> const DrawableBox *FindChar(const DrawableBox *text, int (*ischar)(int), int len, int *outlen) { return FindChar(text, ischar, 0, len, outlen); }
-template <>       DrawableBox *FindChar(      DrawableBox *text, int (*ischar)(int), int len, int *outlen) { return (DrawableBox*)FindChar((const DrawableBox *)text, ischar, len, outlen); }
+template <>       DrawableBox *FindChar(      DrawableBox *text, int (*ischar)(int), int len, int *outlen) { return const_cast<DrawableBox*>(FindChar(const_cast<const DrawableBox*>(text), ischar, len, outlen)); }
 
 template       char*        FindChar<char    >   (      char*,        int (*)(int), int, int*);
 template const char*        FindChar<char    >   (const char*,        int (*)(int), int, int*);
@@ -703,11 +703,11 @@ int DirNameLen(const String16Piece &text, bool include_slash) { return DirNameLe
 
 Base64::Base64() : encoding_table("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"), decoding_table(256, 0) {
   mod_table[0]=0; mod_table[1]=2; mod_table[2]=1;
-  for (int i = 0; i < 64; i++) decoding_table[(unsigned char)encoding_table[i]] = i;
+  for (int i = 0; i < 64; i++) decoding_table[uint8_t(encoding_table[i])] = i;
 }
 
 string Base64::Encode(const char *in, size_t input_length) {
-  const unsigned char *data = (const unsigned char *) in;
+  const unsigned char *data = MakeUnsigned(in);
   string encoded_data(4 * ((input_length + 2) / 3), 0);
   for (int i = 0, j = 0; i < input_length;) {
     unsigned octet_a = i < input_length ? data[i++] : 0;
@@ -742,14 +742,14 @@ string Base64::Decode(const char *data, size_t input_length) {
 }
 
 #ifdef LFL_REGEX
-Regex::~Regex() { re_free((regexp*)impl); }
+Regex::~Regex() { re_free(FromVoid<regexp*>(impl)); }
 Regex::Regex(const string &patternstr) {
   regexp* compiled = 0;
   if (!re_comp(&compiled, patternstr.c_str())) impl = compiled;
 }
 int Regex::Match(const string &text, vector<Regex::Result> *out) {
   if (!impl) return -1;
-  regexp* compiled = (regexp*)impl;
+  regexp* compiled = FromVoid<regexp*>(impl);
   vector<regmatch> matches(re_nsubexp(compiled));
   int retval = re_exec(compiled, text.c_str(), matches.size(), &matches[0]);
   if (retval < 1) return retval;
@@ -764,21 +764,24 @@ int Regex::Match(const string &text, vector<Regex::Result> *out) { ERROR("regex 
 
 #ifdef LFL_SREGEX
 StreamRegex::~StreamRegex() {
-  if (ppool) sre_destroy_pool((sre_pool_t*)ppool);
-  if (cpool) sre_destroy_pool((sre_pool_t*)cpool);
+  if (ppool) sre_destroy_pool(FromVoid<sre_pool_t*>(ppool));
+  if (cpool) sre_destroy_pool(FromVoid<sre_pool_t*>(cpool));
 }
 StreamRegex::StreamRegex(const string &patternstr) : ppool(sre_create_pool(1024)), cpool(sre_create_pool(1024)) {
   sre_uint_t ncaps;
   sre_int_t err_offset = -1;
-  sre_regex_t *re = sre_regex_parse((sre_pool_t*)cpool, (sre_char *)patternstr.c_str(), &ncaps, 0, &err_offset);
-  prog = sre_regex_compile((sre_pool_t*)ppool, re);
-  sre_reset_pool((sre_pool_t*)cpool);
+  sre_regex_t *re = sre_regex_parse(FromVoid<sre_pool_t*>(cpool),
+                                    MakeUnsigned(const_cast<char*>(patternstr.c_str())),
+                                    &ncaps, 0, &err_offset);
+  prog = sre_regex_compile(FromVoid<sre_pool_t*>(ppool), re);
+  sre_reset_pool(FromVoid<sre_pool_t*>(cpool));
   res.resize(2*(ncaps+1));
-  ctx = sre_vm_pike_create_ctx((sre_pool_t*)cpool, (sre_program_t*)prog, &res[0], res.size()*sizeof(sre_int_t));
+  ctx = sre_vm_pike_create_ctx(FromVoid<sre_pool_t*>(cpool), FromVoid<sre_program_t*>(prog), &res[0], res.size()*sizeof(sre_int_t));
 }
 int StreamRegex::Match(const string &text, vector<Regex::Result> *out, bool eof) {
   int offset = last_end + since_last_end;
-  sre_int_t rc = sre_vm_pike_exec((sre_vm_pike_ctx_t*)ctx, (sre_char*)text.data(), text.size(), eof, NULL);
+  sre_int_t rc = sre_vm_pike_exec(FromVoid<sre_vm_pike_ctx_t*>(ctx),
+                                  MakeUnsigned(const_cast<char*>(text.data())), text.size(), eof, NULL);
   if (rc >= 0) {
     since_last_end = 0;
     for (int i = 0, l = res.size(); i < l; i += 2) 
@@ -817,9 +820,9 @@ const char *NextRecordReader::ReadNextRecord(int *offsetOut, int *nextoffsetOut,
     buf.erase(0, buf_offset);
     int buf_filled = buf.size();
     buf.resize(buf.size() < 4096 ? 4096 : buf.size()*2);
-    int len = read_cb((char*)buf.data()+buf_filled, buf.size()-buf_filled);
+    int len = read_cb(&buf[0] + buf_filled, buf.size() - buf_filled);
     if (len > 0) file_offset += len;
-    read_short = len < buf.size()-buf_filled;
+    read_short = len < buf.size() - buf_filled;
     buf.resize(max(len,0) + buf_filled);
     buf_dirty = false;
     buf_offset = 0;

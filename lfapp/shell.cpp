@@ -24,35 +24,35 @@
 
 namespace LFL {
 Shell::Shell(AssetMap *AM, SoundAssetMap *SAM, MovieAssetMap *MAM) : assets(AM), soundassets(SAM), movieassets(MAM) {
-  command.push_back(Command("quit",       bind(&Shell::quit,         this, _1)));
-  command.push_back(Command("cmds",       bind(&Shell::cmds,         this, _1)));
-  command.push_back(Command("binds",      bind(&Shell::binds,        this, _1)));
-  command.push_back(Command("flags",      bind(&Shell::flags,        this, _1)));
-  command.push_back(Command("conscolor",  bind(&Shell::consolecolor, this, _1)));
-  command.push_back(Command("clipboard",  bind(&Shell::clipboard,    this, _1)));
-  command.push_back(Command("dldir",      bind(&Shell::dldir,        this, _1)));
-  command.push_back(Command("screenshot", bind(&Shell::screenshot,   this, _1)));
-  command.push_back(Command("fillmode",   bind(&Shell::fillmode,     this, _1)));
-  command.push_back(Command("texmode",    bind(&Shell::texmode,      this, _1)));
-  command.push_back(Command("swapaxis",   bind(&Shell::swapaxis,     this, _1)));
-  command.push_back(Command("campos",     bind(&Shell::campos,       this, _1)));
-  command.push_back(Command("filter",     bind(&Shell::filter,       this, _1)));
-  command.push_back(Command("fftfilter",  bind(&Shell::filter,       this, _1)));
-  command.push_back(Command("f0",         bind(&Shell::f0,           this, _1)));
-  command.push_back(Command("sinth",      bind(&Shell::sinth,        this, _1)));
-  command.push_back(Command("play",       bind(&Shell::play,         this, _1)));
-  command.push_back(Command("playmovie",  bind(&Shell::playmovie,    this, _1)));
-  command.push_back(Command("loadsound",  bind(&Shell::loadsound,    this, _1)));
-  command.push_back(Command("loadmovie",  bind(&Shell::loadmovie,    this, _1)));
-  command.push_back(Command("copy",       bind(&Shell::copy,         this, _1)));
-  command.push_back(Command("snap",       bind(&Shell::snap,         this, _1)));
-  command.push_back(Command("writesnap",  bind(&Shell::writesnap,    this, _1)));
-  command.push_back(Command("fps",        bind(&Shell::fps,          this, _1)));
-  command.push_back(Command("wget",       bind(&Shell::wget,         this, _1)));
-  command.push_back(Command("messagebox", bind(&Shell::MessageBox,   this, _1)));
-  command.push_back(Command("texturebox", bind(&Shell::TextureBox,   this, _1)));
-  command.push_back(Command("edit",       bind(&Shell::Edit,         this, _1)));
-  command.push_back(Command("slider",     bind(&Shell::Slider,       this, _1)));
+  command.emplace_back("quit",       bind(&Shell::quit,         this, _1));
+  command.emplace_back("cmds",       bind(&Shell::cmds,         this, _1));
+  command.emplace_back("binds",      bind(&Shell::binds,        this, _1));
+  command.emplace_back("flags",      bind(&Shell::flags,        this, _1));
+  command.emplace_back("conscolor",  bind(&Shell::consolecolor, this, _1));
+  command.emplace_back("clipboard",  bind(&Shell::clipboard,    this, _1));
+  command.emplace_back("dldir",      bind(&Shell::dldir,        this, _1));
+  command.emplace_back("screenshot", bind(&Shell::screenshot,   this, _1));
+  command.emplace_back("fillmode",   bind(&Shell::fillmode,     this, _1));
+  command.emplace_back("texmode",    bind(&Shell::texmode,      this, _1));
+  command.emplace_back("swapaxis",   bind(&Shell::swapaxis,     this, _1));
+  command.emplace_back("campos",     bind(&Shell::campos,       this, _1));
+  command.emplace_back("filter",     bind(&Shell::filter,       this, _1));
+  command.emplace_back("fftfilter",  bind(&Shell::filter,       this, _1));
+  command.emplace_back("f0",         bind(&Shell::f0,           this, _1));
+  command.emplace_back("sinth",      bind(&Shell::sinth,        this, _1));
+  command.emplace_back("play",       bind(&Shell::play,         this, _1));
+  command.emplace_back("playmovie",  bind(&Shell::playmovie,    this, _1));
+  command.emplace_back("loadsound",  bind(&Shell::loadsound,    this, _1));
+  command.emplace_back("loadmovie",  bind(&Shell::loadmovie,    this, _1));
+  command.emplace_back("copy",       bind(&Shell::copy,         this, _1));
+  command.emplace_back("snap",       bind(&Shell::snap,         this, _1));
+  command.emplace_back("writesnap",  bind(&Shell::writesnap,    this, _1));
+  command.emplace_back("fps",        bind(&Shell::fps,          this, _1));
+  command.emplace_back("wget",       bind(&Shell::wget,         this, _1));
+  command.emplace_back("messagebox", bind(&Shell::MessageBox,   this, _1));
+  command.emplace_back("texturebox", bind(&Shell::TextureBox,   this, _1));
+  command.emplace_back("edit",       bind(&Shell::Edit,         this, _1));
+  command.emplace_back("slider",     bind(&Shell::Slider,       this, _1));
 }
 
 Asset      *Shell::asset     (const string &n) { return assets      ? (*     assets)(n) : 0; }
@@ -99,7 +99,7 @@ void Shell::mousein (const vector<string>&) { app->GrabMouseFocus(); }
 void Shell::mouseout(const vector<string>&) { app->ReleaseMouseFocus(); }
 
 void Shell::quit(const vector<string>&) { app->run = false; }
-void Shell::console(const vector<string>&) { if (screen->lfapp_console) screen->lfapp_console->ToggleActive(); }
+void Shell::console(const vector<string>&) { if (screen->console) screen->console->ToggleActive(); }
 void Shell::showkeyboard(const vector<string>&) { app->OpenTouchKeyboard(); }
 
 void Shell::clipboard(const vector<string> &a) {
@@ -108,9 +108,8 @@ void Shell::clipboard(const vector<string> &a) {
 }
 
 void Shell::consolecolor(const vector<string>&) {
-  if (!screen->lfapp_console) return;
-  delete screen->lfapp_console->font;
-  screen->lfapp_console->font = Fonts::Get(FLAGS_default_font, "", 9, Color::black);
+  if (!screen->console) return;
+  screen->console->font.SetFont(app->fonts->Get(FLAGS_default_font, "", 9, Color::black));
 }
 
 void Shell::dldir(const vector<string>&) { INFO(LFAppDownloadDir()); }
@@ -181,8 +180,8 @@ void Shell::loadmovie(const vector<string> &arg) {
 
 void Shell::copy(const vector<string> &arg) {
   SoundAsset *src = 0, *dst = 0;
-  if (!(src = app->shell.soundasset(arg.size() > 0 ? arg[0] : "")) ||
-      !(dst = app->shell.soundasset(arg.size() > 1 ? arg[1] : ""))) { INFO("copy <src> <dst>"); return; }
+  if (!(src = soundasset(arg.size() > 0 ? arg[0] : "")) ||
+      !(dst = soundasset(arg.size() > 1 ? arg[1] : ""))) { INFO("copy <src> <dst>"); return; }
 
   INFOf("copy %s %d %d %d %s %d %d %d",
         src->name.c_str(), src->sample_rate, src->channels, src->seconds,
@@ -193,16 +192,18 @@ void Shell::copy(const vector<string> &arg) {
 }
 
 void shell_filter(const vector<string> &arg, bool FFTfilter, int taps, int hop=0) {
-  SoundAsset *sa=0; vector<double> filter; double cutoff=0;
+  vector<double> filter;
+  SoundAsset *sa=0;
+  double cutoff=0;
 
-  if (arg.size() > 0) sa     = app->shell.soundasset(arg[0]);
+  if (arg.size() > 0) sa     = screen->shell->soundasset(arg[0]);
   if (arg.size() > 2) cutoff = atof(arg[2]);
   if (arg.size() > 1) {
     filter.resize(taps);
     if        (arg[1] == "low") {
-      for (int i=0; i<taps; i++) filter[i] = LowPassFilter(taps, i, (int)cutoff);
+      for (int i=0; i<taps; i++) filter[i] = LowPassFilter(taps, i, int(cutoff));
     } else if (arg[1] == "high") {
-      for (int i=0; i<taps; i++) filter[i] = HighPassFilter(taps, i, (int)cutoff);
+      for (int i=0; i<taps; i++) filter[i] = HighPassFilter(taps, i, int(cutoff));
     } else if (arg[1] == "preemph") {
       taps = 2;
       filter = PreEmphasisFilter();
@@ -245,7 +246,7 @@ void Shell::fftfilter(const vector<string> &arg) { shell_filter(arg, true, FLAGS
 void Shell::f0(const vector<string> &arg) {
   SoundAsset *sa=0; int offset=0; int method=F0EstmMethod::Default;
 
-  if (arg.size() > 0) sa = app->shell.soundasset(arg[0]);
+  if (arg.size() > 0) sa = soundasset(arg[0]);
   if (arg.size() > 1) offset = atoi(arg[1]);
   if (arg.size() > 2) method = atoi(arg[2]);
 
@@ -277,7 +278,7 @@ void Shell::sinth(const vector<string> &a) {
 }
 
 void Shell::writesnap(const vector<string> &a) {
-  SoundAsset *sa = app->shell.soundasset(a.size() ? a[0] : "snap");
+  SoundAsset *sa = soundasset(a.size() ? a[0] : "snap");
   if (sa) {
     string filename = StrCat(LFAppDownloadDir(), "snap.wav"); 
     RingBuf::Handle B(sa->wav.get());
@@ -303,13 +304,13 @@ void Shell::Slider(const vector<string> &a) {
   string flag_name = a[0];
   float total = a.size() >= 1 ? atof(a[1]) : 0;
   float inc   = a.size() >= 2 ? atof(a[2]) : 0;
-  screen->AddDialog(make_unique<FlagSliderDialog>(flag_name, total ? total : 100, inc ? inc : 1));
+  screen->AddDialog(make_unique<FlagSliderDialog>(screen->gd, flag_name, total ? total : 100, inc ? inc : 1));
 }
 
 void Shell::Edit(const vector<string> &a) {
   string s = Asset::FileContents("lfapp_vertex.glsl");
   if (s.empty()) INFO("missing file lfapp_vertex.glsl");
-  screen->AddDialog(make_unique<EditorDialog>(screen, Fonts::Default(), new BufferFile(s, "lfapp_vertex.glsl")));
+  screen->AddDialog(make_unique<EditorDialog>(screen->gd, app->fonts->DefaultDesc(), new BufferFile(s, "lfapp_vertex.glsl")));
 }
 
 void Shell::cmds(const vector<string>&) {

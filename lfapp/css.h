@@ -274,9 +274,9 @@ struct CSSPrimitiveValue : public CSSValue {
   }
 
   DOMString  getStringValue()   { return cssText(); }
-  Counter   *getCounterValue()  { return primitiveType == CSS_COUNTER  ? (Counter*) this : 0; }
-  Rect      *getRectValue()     { return primitiveType == CSS_RECT     ? (Rect*)    this : 0; }
-  RGBColor  *getRGBColorValue() { return primitiveType == CSS_RGBCOLOR ? (RGBColor*)this : 0; }
+  Counter   *getCounterValue()  { return primitiveType == CSS_COUNTER  ? reinterpret_cast<Counter*> (this) : nullptr; }
+  Rect      *getRectValue()     { return primitiveType == CSS_RECT     ? reinterpret_cast<Rect*>    (this) : nullptr; }
+  RGBColor  *getRGBColorValue() { return primitiveType == CSS_RGBCOLOR ? reinterpret_cast<RGBColor*>(this) : nullptr; }
 
   static float ConvertToPixels  (float n, unsigned short u, unsigned short prt, Flow *inline_context);
   static float ConvertFromPixels(float n, unsigned short u, unsigned short prt, Flow *inline_context);
@@ -1116,7 +1116,7 @@ struct StyleSheet : public LFL::DOM::Object {
   void Parse(File *f) { NextRecordReader nr(f); for (const char *l = nr.NextLine(); l; l = nr.NextLine()) Parse(l, nr.record_len); }
   void Parse(const string &content) { return Parse(content.c_str(), content.size()); }
   void Parse(const char *content, int content_len) {
-    css_error code = css_stylesheet_append_data(sheet, (const unsigned char *)content, content_len);
+    css_error code = css_stylesheet_append_data(sheet, MakeUnsigned(content), content_len);
     CHECK(code == CSS_OK || code == CSS_NEEDDATA);
   }
   void Done() { CHECK_EQ(CSS_OK, css_stylesheet_data_done(sheet)); }
@@ -1282,19 +1282,19 @@ struct StyleContext : public LFL::DOM::Object {
     return &select_handler;
   }
   static css_error NodeName(void *pw, void *n, css_qname *qname) {
-    qname->name = LibCSS_String::Intern(((LFL::DOM::Node*)n)->nodeName());
+    qname->name = LibCSS_String::Intern(LFL::FromVoid<LFL::DOM::Node*>(n)->nodeName());
     return CSS_OK;
   }
   static css_error NodeClasses(void *pw, void *n, lwc_string ***classes_out, uint32_t *n_classes);
   static css_error NodeId(void *pw, void *n, lwc_string **id) {
     *id = NULL;
-    LFL::DOM::Node *node = (LFL::DOM::Node*)n, *attr = 0;
+    LFL::DOM::Node *node = LFL::FromVoid<LFL::DOM::Node*>(n), *attr = 0;
     if ((attr = node->getAttributeNode("id"))) *id = LibCSS_String::Intern(attr->nodeValue());
     return CSS_OK;
   }
   static css_error NamedAncestorNode(void *pw, void *n, const css_qname *qname, void **ancestor) {
     *ancestor = NULL;
-    LFL::DOM::Node *node = (LFL::DOM::Node*)n;
+    LFL::DOM::Node *node = LFL::FromVoid<LFL::DOM::Node*>(n);
     LFL::DOM::DOMString query = LibCSS_String::ToString(qname->name);
     for (node = node->parentNode; node; node = node->parentNode) {
       if (node->nodeName() == query && node->AsElement()) { *ancestor = node; break; }
@@ -1303,14 +1303,14 @@ struct StyleContext : public LFL::DOM::Object {
   }
   static css_error NamedParentNode(void *pw, void *n, const css_qname *qname, void **parent) {
     *parent = NULL;
-    LFL::DOM::Node *node = (LFL::DOM::Node*)n;
+    LFL::DOM::Node *node = LFL::FromVoid<LFL::DOM::Node*>(n);
     for (node = node->parentNode; node && !node->AsElement(); node = node->parentNode) {}
     if (node && node->nodeName() == LibCSS_String::ToString(qname->name)) *parent = node;
     return CSS_OK;
   }
   static css_error NamedSiblingNode(void *pw, void *n, const css_qname *qname, void **sibling) {
     *sibling = NULL;
-    LFL::DOM::Node *node = (LFL::DOM::Node*)n;
+    LFL::DOM::Node *node = LFL::FromVoid<LFL::DOM::Node*>(n);
     for (node = node->previousSibling(); node && !node->AsElement(); node = node->previousSibling()) {}
     if (node && node->nodeName() == LibCSS_String::ToString(qname->name)) *sibling = node;
     return CSS_OK;
@@ -1318,19 +1318,19 @@ struct StyleContext : public LFL::DOM::Object {
   static css_error NamedGenericSiblingNode(void *pw, void *n, const css_qname *qname, void **sibling) {
     *sibling = NULL;
     LFL::DOM::DOMString query = LibCSS_String::ToString(qname->name);
-    for (LFL::DOM::Node *i = ((LFL::DOM::Node*)n)->previousSibling(); i; i = i->previousSibling()) {
+    for (LFL::DOM::Node *i = LFL::FromVoid<LFL::DOM::Node*>(n)->previousSibling(); i; i = i->previousSibling()) {
       if (i->nodeName() == query && i->AsElement()) { *sibling = i; break; }
     }
     return CSS_OK;
   }
   static css_error ParentNode(void *pw, void *n, void **parent) {
-    LFL::DOM::Node *node = (LFL::DOM::Node*)n;
+    LFL::DOM::Node *node = LFL::FromVoid<LFL::DOM::Node*>(n);
     for (node = node->parentNode; node && !node->AsElement(); node = node->parentNode) {}
     *parent = node;
     return CSS_OK;
   }
   static css_error SiblingNode(void *pw, void *n, void **sibling) {
-    LFL::DOM::Node *node = (LFL::DOM::Node*)n;
+    LFL::DOM::Node *node = LFL::FromVoid<LFL::DOM::Node*>(n);
     for (node = node->previousSibling(); node && !node->AsElement(); node = node->previousSibling()) {}
     *sibling = node;
     return CSS_OK;
@@ -1341,7 +1341,7 @@ struct StyleContext : public LFL::DOM::Object {
   }
   static css_error NodeHasClass(void *pw, void *n, lwc_string *name, bool *match) {
     *match = false;
-    LFL::DOM::Node *node = (LFL::DOM::Node*)n, *attr = 0;
+    LFL::DOM::Node *node = LFL::FromVoid<LFL::DOM::Node*>(n), *attr = 0;
     if (!(attr = node->getAttributeNode("class"))) return CSS_OK;
 
     vector<LFL::DOM::DOMString> classes;
@@ -1354,24 +1354,24 @@ struct StyleContext : public LFL::DOM::Object {
   }
   static css_error NodeHasId(void *pw, void *n, lwc_string *name, bool *match) {
     *match = false;
-    LFL::DOM::Node *node = (LFL::DOM::Node*)n, *attr = 0;
+    LFL::DOM::Node *node = LFL::FromVoid<LFL::DOM::Node*>(n), *attr = 0;
     if ((attr = node->getAttributeNode("id"))) *match = attr->nodeValue() == LibCSS_String::ToString(name);
     return CSS_OK;
   }
   static css_error NodeHasAttribute(void *pw, void *n, const css_qname *qname, bool *match) {
-    *match = ((LFL::DOM::Node*)n)->getAttributeNode(LibCSS_String::ToString(qname->name));
+    *match = LFL::FromVoid<LFL::DOM::Node*>(n)->getAttributeNode(LibCSS_String::ToString(qname->name));
     return CSS_OK;
   }
   static css_error NodeHasAttributeEqual(void *pw, void *n, const css_qname *qname, lwc_string *value, bool *match) {
     *match = false;
-    LFL::DOM::Node *node = (LFL::DOM::Node*)n, *attr = 0;
+    LFL::DOM::Node *node = LFL::FromVoid<LFL::DOM::Node*>(n), *attr = 0;
     if ((attr = node->getAttributeNode(LibCSS_String::ToString(qname->name))))
       *match = attr->nodeValue() == LibCSS_String::ToString(value);
     return CSS_OK;
   }
   static css_error NodeHasAttributeDashmatch(void *pw, void *n, const css_qname *qname, lwc_string *value, bool *match) {
     *match = false;
-    LFL::DOM::Node *node = (LFL::DOM::Node*)n, *attr = 0;
+    LFL::DOM::Node *node = LFL::FromVoid<LFL::DOM::Node*>(n), *attr = 0;
     if ((attr = node->getAttributeNode(LibCSS_String::ToString(qname->name)))) {
       LFL::DOM::DOMString attr_val = attr->nodeValue(), seek_val = LibCSS_String::ToString(value);
       *match = (seek_val == attr_val) ||
@@ -1381,7 +1381,7 @@ struct StyleContext : public LFL::DOM::Object {
   }
   static css_error NodeHasAttributeIncludes(void *pw, void *n, const css_qname *qname, lwc_string *value, bool *match) {
     *match = false;
-    LFL::DOM::Node *node = (LFL::DOM::Node*)n, *attr = 0;
+    LFL::DOM::Node *node = LFL::FromVoid<LFL::DOM::Node*>(n), *attr = 0;
     if ((attr = node->getAttributeNode(LibCSS_String::ToString(qname->name)))) {
       LFL::DOM::DOMString attr_val = attr->nodeValue(), seek_val = LibCSS_String::ToString(value);
       *match = seek_val == attr_val.substr(0, attr_val.find(' '));
@@ -1390,21 +1390,21 @@ struct StyleContext : public LFL::DOM::Object {
   }
   static css_error NodeHasAttributePrefix(void *pw, void *n, const css_qname *qname, lwc_string *value, bool *match) {
     *match = false;
-    LFL::DOM::Node *node = (LFL::DOM::Node*)n, *attr = 0;
+    LFL::DOM::Node *node = LFL::FromVoid<LFL::DOM::Node*>(n), *attr = 0;
     if ((attr = node->getAttributeNode(LibCSS_String::ToString(qname->name))))
       *match = PrefixMatch(attr->nodeValue(), LibCSS_String::ToString(value));
     return CSS_OK;
   }
   static css_error NodeHasAttributeSuffix(void *pw, void *n, const css_qname *qname, lwc_string *value, bool *match) {
     *match = false;
-    LFL::DOM::Node *node = (LFL::DOM::Node*)n, *attr = 0;
+    LFL::DOM::Node *node = LFL::FromVoid<LFL::DOM::Node*>(n), *attr = 0;
     if ((attr = node->getAttributeNode(LibCSS_String::ToString(qname->name))))
       *match = SuffixMatch(attr->nodeValue(), LibCSS_String::ToString(value));
     return CSS_OK;
   }
   static css_error NodeHasAttributeSubstring(void *pw, void *n, const css_qname *qname, lwc_string *value, bool *match) {
     *match = false;
-    LFL::DOM::Node *node = (LFL::DOM::Node*)n, *attr = 0;
+    LFL::DOM::Node *node = LFL::FromVoid<LFL::DOM::Node*>(n), *attr = 0;
     if ((attr = node->getAttributeNode(LibCSS_String::ToString(qname->name))))
       *match = attr->nodeValue().find(LibCSS_String::ToString(value)) != string::npos;
     return CSS_OK;
@@ -1416,7 +1416,7 @@ struct StyleContext : public LFL::DOM::Object {
   }
   static css_error NodeCountSiblings(void *pw, void *n, bool same_name, bool after, int32_t *count) {
     *count = 0;
-    LFL::DOM::Node *node = (LFL::DOM::Node*)n;
+    LFL::DOM::Node *node = LFL::FromVoid<LFL::DOM::Node*>(n);
     LFL::DOM::DOMString query = same_name ? node->nodeName() : "";
     while ((node = after ? node->nextSibling() : node->previousSibling())) {
       if (!node->AsElement() || (same_name && node->nodeName() != query)) continue;
@@ -1426,13 +1426,13 @@ struct StyleContext : public LFL::DOM::Object {
   }
   static css_error NodeIsEmpty(void *pw, void *n, bool *match) {
     *match = true;
-    LFL::DOM::Node *node = (LFL::DOM::Node*)n;
+    LFL::DOM::Node *node = LFL::FromVoid<LFL::DOM::Node*>(n);
     for (int i = 0; i < node->childNodes.length(); i++)
       if (node->childNodes.item(i)->AsElement() || node->childNodes.item(i)->AsText()) { *match = false; break; }
     return CSS_OK;
   }
   static css_error NodeIsLink(void *pw, void *n, bool *match) {
-    LFL::DOM::Node *node = (LFL::DOM::Node*)n;
+    LFL::DOM::Node *node = LFL::FromVoid<LFL::DOM::Node*>(n);
     *match = node->htmlElementType == LFL::DOM::HTML_ANCHOR_ELEMENT && node->getAttributeNode("href");
     return CSS_OK;
   }

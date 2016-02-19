@@ -35,8 +35,8 @@ struct IPV4Endpoint {
   IPV4Endpoint() {}
   IPV4Endpoint(int A, int P) : addr(A), port(P) {};
   string name() const { return IPV4::Text(addr, port); }
-  string ToString() const { string s; s.resize(sizeof(*this)); memcpy((char*)s.data(), this, sizeof(*this)); return s; }
-  static const IPV4Endpoint *FromString(const char *s) { return (const IPV4Endpoint *)s; }
+  string ToString() const { string s; s.resize(sizeof(*this)); memcpy(&s[0], this, sizeof(*this)); return s; }
+  static const IPV4Endpoint *FromString(const char *s) { return reinterpret_cast<const IPV4Endpoint*>(s); }
 };
 
 struct IPV4EndpointSource { 
@@ -223,7 +223,7 @@ struct Listener {
   Service *svc;
   Socket socket;
   typed_ptr self_reference;
-  Listener(Service *s, bool ssl=false) : svc(s), ssl((BIO*)ssl), socket(-1), self_reference(this) {}
+  Listener(Service *s, bool ssl=false) : svc(s), ssl(reinterpret_cast<BIO*>(ssl)), socket(-1), self_reference(this) {}
 };
 
 struct Connection {
@@ -476,6 +476,8 @@ struct HTTPServer : public Service {
 
 struct SSHClient : public Service {
   typedef function<void(Connection*, const StringPiece&)> ResponseCB;
+  typedef function<bool(const string&, const string&,       string*)> LoadPasswordCB;
+  typedef function<void(const string&, const string&, const string&)> SavePasswordCB;
   Connection *Open(const string &hostport, const ResponseCB &cb, Callback *detach=0);
 
   static void SetUser(Connection *c, const string &user);
@@ -584,13 +586,7 @@ struct NetworkThread {
 };
 
 struct Sniffer {
-  static void PrintDevices(vector<string> *out);
-  static void GetDeviceAddressSet(set<IPV4::Addr> *out);
-  static void GetBroadcastAddress(IPV4::Addr *out);
-  static void GetIPAddress(IPV4::Addr *out);
   typedef function<void(const char*, int, int)> CB;
-  static Sniffer *Open(const string &dev, const string &filter, int snaplen, CB cb);
-
   Thread thread;
   CB cb;
   int ip, mask;
@@ -598,13 +594,18 @@ struct Sniffer {
   Sniffer(void *H, int I, int M, CB C) : cb(C), handle(H), ip(I), mask(M) {}
   ~Sniffer() { thread.Wait(); }
   void Threadproc();
+  static unique_ptr<Sniffer> Open(const string &dev, const string &filter, int snaplen, CB cb);
+  static void PrintDevices(vector<string> *out);
+  static void GetDeviceAddressSet(set<IPV4::Addr> *out);
+  static void GetIPAddress(IPV4::Addr *out);
+  static void GetBroadcastAddress(IPV4::Addr *out);
 };
 
 struct GeoResolution {
-  static GeoResolution *Open(const string &db);
-  bool resolve(const string &addr, string *country, string *region, string *city, float *lat, float *lng);
-  GeoResolution(void *I) : impl(I) {}
   void *impl;
+  GeoResolution(void *I) : impl(I) {}
+  bool Resolve(const string &addr, string *country, string *region, string *city, float *lat, float *lng);
+  static unique_ptr<GeoResolution> Open(const string &db);
 };
 
 int NBRead(Socket fd, char *buf, int size, int timeout=0);

@@ -218,27 +218,28 @@ int SystemNetwork::SetSocketCloseOnExec(Socket fd, int close) {
 }
 
 int SystemNetwork::SetSocketBroadcastEnabled(Socket fd, int optval) {
-  if (setsockopt(fd, SOL_SOCKET, SO_BROADCAST, (const char*)&optval, sizeof(optval)))
+  if (setsockopt(fd, SOL_SOCKET, SO_BROADCAST, reinterpret_cast<const char*>(&optval), sizeof(optval)))
     return ERRORv(-1, "setsockopt: ", SystemNetwork::LastError());
   return 0;
 }
 
 int SystemNetwork::SetSocketBufferSize(Socket fd, bool send_or_recv, int optval) {
-  if (setsockopt(fd, SOL_SOCKET, send_or_recv ? SO_SNDBUF : SO_RCVBUF, (const char *)&optval, sizeof(optval)))
+  if (setsockopt(fd, SOL_SOCKET, send_or_recv ? SO_SNDBUF : SO_RCVBUF, reinterpret_cast<const char*>(&optval), sizeof(optval)))
     return ERRORv(-1, "setsockopt: ", SystemNetwork::LastError());
   return 0;
 }
 
 int SystemNetwork::GetSocketBufferSize(Socket fd, bool send_or_recv) {
-  int res=0, resSize=sizeof(res);
-  if (getsockopt(fd, SOL_SOCKET, send_or_recv ? SO_SNDBUF : SO_RCVBUF, (char*)&res, (socklen_t*)&resSize))
+  int res=0;
+  socklen_t resSize=sizeof(res);
+  if (getsockopt(fd, SOL_SOCKET, send_or_recv ? SO_SNDBUF : SO_RCVBUF, reinterpret_cast<char*>(&res), &resSize))
     return ERRORv(-1, "getsockopt: ", SystemNetwork::LastError());
   return res;
 }
 
 int SystemNetwork::Bind(int fd, IPV4::Addr addr, int port) {
   sockaddr_in sin; int optval = 1;
-  if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (const char*)&optval, sizeof(optval)))
+  if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char*>(&optval), sizeof(optval)))
     return ERRORv(-1, "setsockopt: ", SystemNetwork::LastError());
 
   memset(&sin, 0, sizeof(sockaddr_in));
@@ -247,7 +248,7 @@ int SystemNetwork::Bind(int fd, IPV4::Addr addr, int port) {
   sin.sin_addr.s_addr = addr ? addr : INADDR_ANY;
 
   if (FLAGS_network_debug) INFO("bind(", fd, ", ", IPV4::Text(addr, port), ")");
-  if (SystemBind(fd, (const sockaddr *)&sin, (socklen_t)sizeof(sockaddr_in)) == -1)
+  if (::bind(fd, reinterpret_cast<const sockaddr*>(&sin), socklen_t(sizeof(sockaddr_in))) == -1)
     return ERRORv(-1, "bind: ", SystemNetwork::LastError());
 
   return 0;
@@ -255,8 +256,8 @@ int SystemNetwork::Bind(int fd, IPV4::Addr addr, int port) {
 
 Socket SystemNetwork::Accept(Socket listener, IPV4::Addr *addr, int *port) {
   struct sockaddr_in sin;
-  int sinSize = sizeof(sin);
-  Socket socket = ::accept(listener, (struct sockaddr *)&sin, (socklen_t*)&sinSize);
+  socklen_t sinSize = sizeof(sin);
+  Socket socket = ::accept(listener, reinterpret_cast<struct sockaddr*>(&sin), &sinSize);
   if (socket == -1 && !SystemNetwork::EWouldBlock()) return ERRORv(-1, "accept: ", SystemNetwork::LastError());
   if (addr) *addr = sin.sin_addr.s_addr;
   if (port) *port = ntohs(sin.sin_port);
@@ -290,7 +291,7 @@ int SystemNetwork::Connect(Socket fd, IPV4::Addr addr, int port, int *connected)
   sin.sin_addr.s_addr = addr;
 
   if (FLAGS_network_debug) INFO("connect(", fd, ", ", IPV4::Text(addr, port), ")");
-  int ret = ::connect(fd, (struct sockaddr *)&sin, sizeof(struct sockaddr_in));
+  int ret = ::connect(fd, reinterpret_cast<struct sockaddr*>(&sin), sizeof(struct sockaddr_in));
   if (ret == -1 && !SystemNetwork::EWouldBlock())
     return ERRORv(-1, "connect(", IPV4::Text(addr, port), "): ", SystemNetwork::LastError());
 
@@ -303,12 +304,13 @@ int SystemNetwork::SendTo(Socket fd, IPV4::Addr addr, int port, const char *buf,
   sin.sin_family = PF_INET;
   sin.sin_addr.s_addr = addr;
   sin.sin_port = htons(port);
-  return ::sendto(fd, buf, len, 0, (struct sockaddr*)&sin, sinSize);
+  return ::sendto(fd, buf, len, 0, reinterpret_cast<struct sockaddr*>(&sin), sinSize);
 }
 
 int SystemNetwork::GetPeerName(Socket fd, IPV4::Addr *addr_out, int *port_out) {
-  struct sockaddr_in sin; int sinSize=sizeof(sin);
-  if (::getpeername(fd, (struct sockaddr *)&sin, (socklen_t*)&sinSize) < 0)
+  struct sockaddr_in sin;
+  socklen_t sinSize=sizeof(sin);
+  if (::getpeername(fd, reinterpret_cast<struct sockaddr*>(&sin), &sinSize) < 0)
     return ERRORv(-1, "getpeername: ", strerror(errno));
   *addr_out = sin.sin_addr.s_addr;
   *port_out = ntohs(sin.sin_port);
@@ -316,8 +318,9 @@ int SystemNetwork::GetPeerName(Socket fd, IPV4::Addr *addr_out, int *port_out) {
 }
 
 int SystemNetwork::GetSockName(Socket fd, IPV4::Addr *addr_out, int *port_out) {
-  struct sockaddr_in sin; int sinSize=sizeof(sin);
-  if (::getsockname(fd, (struct sockaddr *)&sin, (socklen_t*)&sinSize) < 0)
+  struct sockaddr_in sin;
+  socklen_t sinSize=sizeof(sin);
+  if (::getsockname(fd, reinterpret_cast<struct sockaddr*>(&sin), &sinSize) < 0)
     return ERRORv(-1, "getsockname: ", strerror(errno));
   *addr_out = sin.sin_addr.s_addr;
   *port_out = ntohs(sin.sin_port);
@@ -326,19 +329,19 @@ int SystemNetwork::GetSockName(Socket fd, IPV4::Addr *addr_out, int *port_out) {
 
 string SystemNetwork::GetHostByAddr(IPV4::Addr addr) {
 #if defined(_WIN32) || defined(LFL_ANDROID)
-  struct hostent *h = ::gethostbyaddr((const char *)&addr, sizeof(addr), PF_INET);
+  struct hostent *h = ::gethostbyaddr(reinterpret_cast<const char*>(&addr), sizeof(addr), PF_INET);
 #else
-  struct hostent *h = ::gethostbyaddr((const void *)&addr, sizeof(addr), PF_INET);
+  struct hostent *h = ::gethostbyaddr(reinterpret_cast<const void*>(&addr), sizeof(addr), PF_INET);
 #endif
   return h ? h->h_name : "";
 }
 
 IPV4::Addr SystemNetwork::GetHostByName(const string &host) {
   in_addr a;
-  if ((a.s_addr = IPV4::Parse(host)) != INADDR_NONE) return (int)a.s_addr;
+  if ((a.s_addr = IPV4::Parse(host)) != INADDR_NONE) return int(a.s_addr);
 
   hostent *h = gethostbyname(host.c_str());
-  if (h && h->h_length == 4) return *(int *)h->h_addr_list[0];
+  if (h && h->h_length == 4) return *reinterpret_cast<const int*>(h->h_addr_list[0]);
 
   ERROR("SystemNetwork::GetHostByName ", host);
   return -1;
@@ -378,7 +381,8 @@ int SelectSocketSet::Select(int wait_time) {
     if (added && s.first > maxfd) maxfd = s.first;
   }
   if (!rc && !wc && !xc) { MSleep(wait_time); return 0; }
-  if ((select(maxfd+1, rc?&rfds:0, wc?&wfds:0, xc?&xfds:0, wait_time >= 0 ? &tv : 0)) == -1) return ERRORv(-1, "select: ", SystemNetwork::LastError());
+  if ((select(maxfd+1, rc?&rfds:0, wc?&wfds:0, xc?&xfds:0, wait_time >= 0 ? &tv : 0)) == -1)
+    return ERRORv(-1, "select: ", SystemNetwork::LastError(), " maxfd=", maxfd, " ", DebugString());
   return 0;
 }
 
@@ -580,7 +584,7 @@ int Connection::WriteVFlush(const iovec *iov, int len) {
 }
 
 int Connection::WriteFlush(const char *buf, int len, int transfer_socket) {
-  struct iovec iov = { (void*)buf, static_cast<size_t>(len) };
+  struct iovec iov = { Void(const_cast<char*>(buf)), size_t(len) };
   return WriteVFlush(&iov, 1);
 }
 
@@ -662,8 +666,8 @@ Socket Service::Listen(IPV4::Addr addr, int port, Listener *listener) {
   Socket fd = -1;
   if (listener->ssl) {
 #ifdef LFL_OPENSSL
-    listener->ssl = BIO_new_accept((char*)StrCat(port).c_str());
-    BIO_ctrl(listener->ssl, BIO_C_SET_ACCEPT, 1, (void*)"a");
+    listener->ssl = BIO_new_accept(const_cast<char*>(StrCat(port).c_str()));
+    BIO_ctrl(listener->ssl, BIO_C_SET_ACCEPT, 1, Void("a"));
     BIO_set_bind_mode(listener->ssl, BIO_BIND_REUSEADDR);
     if (BIO_do_accept(listener->ssl) <= 0) return ERRORv(-1, "ssl_listen: ", -1);
     BIO_get_fd(listener->ssl, &listener->socket);
@@ -711,7 +715,7 @@ Connection *Service::Connect(IPV4::Addr addr, int port, IPV4EndpointSource *src_
     if (this->Connected(c) < 0) c->SetError();
     if (c->handler) { if (c->handler->Connected(c) < 0) { ERROR(c->Name(), ": handler connected"); c->SetError(); } }
     if (c->detach) { Detach(c); conn.erase(c->socket); }
-    app->net->UpdateActive(c);
+    else app->net->UpdateActive(c);
   } else {
     app->net->active.Add(c->socket, SocketSet::READABLE|SocketSet::WRITABLE, &c->self_reference);
   }
@@ -763,8 +767,8 @@ Connection *Service::SSLConnect(SSL_CTX *sslctx, IPV4::Addr addr, int port, Call
 
   Connection *c = new Connection(this, Connection::Connecting, addr, port, detach);
   c->bio = BIO_new_ssl_connect(sslctx);
-  BIO_set_conn_ip(c->bio, (char*)&addr);
-  BIO_set_conn_int_port(c->bio, (char*)&port);
+  BIO_set_conn_ip(c->bio, reinterpret_cast<char*>(&addr));
+  BIO_set_conn_int_port(c->bio, reinterpret_cast<char*>(&port));
   BIO_get_ssl(c->bio, &c->ssl);
   BIO_set_nbio(c->bio, 1);
 
@@ -792,7 +796,7 @@ Connection *Service::EndpointConnect(const string &endpoint_name) {
 
   /* connected 4 */
   if (this->Connected(c) < 0) c->SetError();
-  INFO(Protocol::Name(protocol), "(", (void*)this, ") endpoint connect: ", endpoint_name);
+  INFO(Protocol::Name(protocol), "(", Void(this), ") endpoint connect: ", endpoint_name);
   if (c->handler) { if (c->handler->Connected(c) < 0) { ERROR(c->Name(), ": handler connected"); c->SetError(); } }
   return c;
 }
@@ -822,7 +826,7 @@ void Service::EndpointRead(const string &endpoint_name, const char *buf, int len
 }
 
 void Service::EndpointClose(const string &endpoint_name) {
-  INFO(Protocol::Name(protocol), "(", (void*)this, ") endpoint close: ", endpoint_name);
+  INFO(Protocol::Name(protocol), "(", Void(this), ") endpoint close: ", endpoint_name);
   auto ep = endpoint.find(endpoint_name);
   if (ep != endpoint.end()) ep->second->SetError();
 }
@@ -1006,13 +1010,13 @@ void Network::AcceptFrame(Service *svc, Listener *listener) {
     if (listener->ssl) { /* SSL accept */
 #ifdef LFL_OPENSSL
       struct sockaddr_in sin;
-      int sinSize = sizeof(sin);
+      socklen_t sinSize = sizeof(sin);
       Socket socket;
       if (BIO_do_accept(listener->ssl) <= 0) continue;
       BIO *bio = BIO_pop(listener->ssl);
       BIO_get_fd(bio, &socket);
 
-      if (::getpeername(socket, (struct sockaddr *)&sin, (socklen_t*)&sinSize) < 0)
+      if (::getpeername(socket, reinterpret_cast<struct sockaddr*>(&sin), &sinSize) < 0)
       { if (!SystemNetwork::EWouldBlock()) ERROR("getpeername: ", strerror(errno)); break; }
 
       /* insert socket */
@@ -1025,9 +1029,10 @@ void Network::AcceptFrame(Service *svc, Listener *listener) {
     }
     else if (svc->protocol == Protocol::UDP) { /* UDP server read */
       struct sockaddr_in sin;
-      int sinSize = sizeof(sin), inserted = 0, ret;
+      socklen_t sinSize = sizeof(sin);
+      int inserted = 0, ret;
       char buf[2048];
-      int len = recvfrom(listener->socket, buf, sizeof(buf)-1, 0, (struct sockaddr*)&sin, (socklen_t*)&sinSize);
+      int len = recvfrom(listener->socket, buf, sizeof(buf)-1, 0, reinterpret_cast<struct sockaddr*>(&sin), &sinSize);
       if (len <= 0) {
         if (SystemNetwork::EWouldBlock()) break;
         else { ERROR("recvfrom: ", SystemNetwork::LastError()); break; }
@@ -1076,8 +1081,9 @@ void Network::AcceptFrame(Service *svc, Listener *listener) {
 void Network::TCPConnectionFrame(Service *svc, Connection *c, ServiceEndpointEraseList *removelist) {
   /* complete connecting sockets */
   if (c->state == Connection::Connecting && active.GetWritable(c->socket)) {
-    int res=0, resSize=sizeof(res);
-    if (!getsockopt(c->socket, SOL_SOCKET, SO_ERROR, (char*)&res, (socklen_t*)&resSize) && !res) {
+    int res=0;
+    socklen_t resSize=sizeof(res);
+    if (!getsockopt(c->socket, SOL_SOCKET, SO_ERROR, reinterpret_cast<char*>(&res), &resSize) && !res) {
 
       /* connected 2 */ 
       c->SetConnected();
@@ -1086,7 +1092,7 @@ void Network::TCPConnectionFrame(Service *svc, Connection *c, ServiceEndpointEra
       if (svc->Connected(c) < 0) c->SetError();
       if (c->handler) { if (c->handler->Connected(c) < 0) { ERROR(c->Name(), ": handler connected"); c->SetError(); } }
       if (c->detach) { svc->Detach(c); removelist->AddSocket(svc, c->socket); }
-      UpdateActive(c);
+      else UpdateActive(c);
       return;
     }
 
@@ -1153,7 +1159,7 @@ void Network::UpdateActive(Connection *c) {
 NetworkThread::NetworkThread(Network *N, bool Init) : net(N), init(Init),
   rd(new Connection(app->net->unix_client.get(), new NetworkThread::ConnectionHandler())),
   wr(new Connection(app->net->unix_client.get(), new NetworkThread::ConnectionHandler())),
-  thread(new Thread(bind(&NetworkThread::HandleMessagesLoop, this))) {
+  thread(make_unique<Thread>(bind(&NetworkThread::HandleMessagesLoop, this))) {
   Socket fd[2];
   CHECK(SystemNetwork::OpenSocketPair(fd));
   rd->state = wr->state = Connection::Connected;
@@ -1185,7 +1191,7 @@ int UDPClient::PersistentConnectionHandler::Read(Connection *c) {
 Connection *UDPClient::PersistentConnection(const string &url, const ResponseCB &responseCB, const HeartbeatCB &heartbeatCB, int default_port) {
   int udp_port;
   IPV4::Addr ipv4_addr; 
-  if (!HTTP::ResolveURL(url.c_str(), (bool*)0, &ipv4_addr, &udp_port, (string*)0, (string*)0, default_port))
+  if (!HTTP::ResolveURL(url.c_str(), 0, &ipv4_addr, &udp_port, 0, 0, default_port))
     return ERRORv(nullptr, url, ": connect failed");
 
   Connection *c = Connect(ipv4_addr, udp_port);
@@ -1236,7 +1242,7 @@ struct HTTPClientHandler {
           char *cur_in = cur;
           cur += IsNewline(cur);
           char *chunkHeader = cur;
-          if (!(cur = (char*)NextLine(cur))) { cur=cur_in; break; }
+          if (!(cur = const_cast<char*>(NextLine(cur)))) { cur=cur_in; break; }
           current_chunk_length = strtoul(chunkHeader, 0, 16);
         }
 
@@ -1308,7 +1314,7 @@ struct HTTPClientHandler {
 
     void ResolverResponseCB(IPV4::Addr ipv4_addr, DNS::Response*) {
       Connection *c = 0;
-      if (ipv4_addr != (IPV4::Addr)-1) {
+      if (ipv4_addr != IPV4::Addr(-1)) {
         c =
 #ifdef LFL_OPENSSL
           ssl ? svc->SSLConnect(lfapp_ssl, ipv4_addr, port) :
@@ -1419,7 +1425,7 @@ Connection *HTTPClient::PersistentConnection(const string &url, string *host, st
 struct HTTPServerConnection : public Connection::Handler {
   HTTPServer *server;
   bool persistent;
-  Connection::Handler *refill;
+  unique_ptr<Connection::Handler> refill;
 
   struct ClosedCallback {
     HTTPServer::ConnectionClosedCB cb;
@@ -1444,9 +1450,8 @@ struct HTTPServerConnection : public Connection::Handler {
     }
   } dispatcher;
 
-  ~HTTPServerConnection() { delete refill; }
-  HTTPServerConnection(HTTPServer *s) : server(s), persistent(true), refill(0) {}
-  void Closed(Connection *c) { for (ClosedCB::iterator i = closedCB.begin(); i != closedCB.end(); i++) (*i).thunk(c); }
+  HTTPServerConnection(HTTPServer *s) : server(s), persistent(true) {}
+  void Closed(Connection *c) { for (auto &i : closedCB) i.thunk(c); }
 
   int Read(Connection *c) {
     for (;;) {
@@ -1508,7 +1513,7 @@ struct HTTPServerConnection : public Connection::Handler {
     }
     else if (response.refill) {
       if (refill) return -1;
-      refill = response.refill;
+      refill = unique_ptr<Connection::Handler>(response.refill);
     }
     else return -1;
 
@@ -1519,7 +1524,7 @@ struct HTTPServerConnection : public Connection::Handler {
     if (refill) {
       int ret;
       if ((ret = refill->Flushed(c))) return ret;
-      Replace<Connection::Handler>(&refill, 0);
+      refill.reset();
       c->readable = 1;
       return 0;
     }
@@ -1574,7 +1579,7 @@ HTTPServer::Response HTTPServer::Request(Connection *c, int method, const char *
 }
 
 void HTTPServer::connectionClosedCB(Connection *c, ConnectionClosedCB cb) {
-  ((HTTPServerConnection*)c->handler.get())->closedCB.push_back(HTTPServerConnection::ClosedCallback(cb));
+  dynamic_cast<HTTPServerConnection*>(c->handler.get())->closedCB.push_back(HTTPServerConnection::ClosedCallback(cb));
 }
 
 HTTPServer::Response HTTPServer::DebugResource::Request(Connection *c, int, const char *url, const char *args, const char *hdrs, const char *postdata, int postlen) {
@@ -1611,7 +1616,7 @@ HTTPServer::Response HTTPServer::FileResource::Request(Connection *, int method,
 HTTPServer::Response HTTPServer::ConsoleResource::Request(Connection *c, int method, const char *url, const char *args, const char *headers, const char *postdata, int postlen) {
   StringPiece v;
   if (args) HTTP::GrepURLArgs(args, 0, 1, "v", &v);
-  app->shell.Run(v.str());
+  screen->shell->Run(v.str());
   string response = StrCat("<html>Shell::run('", v.str(), "')<br/></html>\n");
   return HTTPServer::Response("text/html; charset=UTF-8", &response);
 }
@@ -1627,7 +1632,7 @@ struct StreamResourceClient : public Connection::Handler {
     resource->subscribers[this] = conn;
     fctx = avformat_alloc_context();
     CopyAVFormatContextStreams(fctx, resource->fctx);
-    fctx->max_delay = (int)(0.7*AV_TIME_BASE);
+    fctx->max_delay = int(0.7*AV_TIME_BASE);
   }
   virtual ~StreamResourceClient() {
     resource->subscribers.erase(this);
@@ -1659,8 +1664,9 @@ struct StreamResourceClient : public Connection::Handler {
   }
 
   void Flush() {
-    char *buf=0; int len=0;
-    if (!(len = avio_close_dyn_buf(fctx->pb, (uint8_t**)&buf))) return;
+    int len=0;
+    char *buf=0;
+    if (!(len = avio_close_dyn_buf(fctx->pb, reinterpret_cast<uint8_t**>(&buf)))) return;
     if (len < 0) return ERROR("avio_close_dyn_buf");
     if (conn->Write(buf, len) < 0) conn->SetError();
     av_free(buf);
@@ -1674,11 +1680,11 @@ struct StreamResourceClient : public Connection::Handler {
   static void CopyAVFormatContextStreams(AVFormatContext *dst, AVFormatContext *src) {
     if (!dst->streams) {
       dst->nb_streams = src->nb_streams;
-      dst->streams = (AVStream**)av_mallocz(sizeof(AVStream*) * src->nb_streams);
+      dst->streams = FromVoid<AVStream**>(av_mallocz(sizeof(AVStream*) * src->nb_streams));
     }
 
     for (int i=0; i<src->nb_streams; i++) {
-      AVStream *s = (AVStream*)av_mallocz(sizeof(AVStream));
+      AVStream *s = FromVoid<AVStream*>(av_mallocz(sizeof(AVStream)));
       *s = *src->streams[i];
       s->priv_data = 0;
       s->codec->frame_number = 0;
@@ -1693,9 +1699,9 @@ struct StreamResourceClient : public Connection::Handler {
     AVFrame *picture = avcodec_alloc_frame();
     if (!picture) return 0;
     int size = avpicture_get_size(pix_fmt, width, height);
-    uint8_t *picture_buf = (uint8_t*)av_malloc(size);
+    uint8_t *picture_buf = FromVoid<uint8_t*>(av_malloc(size));
     if (!picture_buf) { av_free(picture); return 0; }
-    avpicture_fill((AVPicture *)picture, picture_buf, pix_fmt, width, height);
+    avpicture_fill(reinterpret_cast<AVPicture*>(picture), picture_buf, pix_fmt, width, height);
     return picture;
   } 
   static void FreePicture(AVFrame *picture) {
@@ -1708,11 +1714,11 @@ struct StreamResourceClient : public Connection::Handler {
     if (!samples) return 0;
     samples->nb_samples = num_samples;
     int size = 2 * num_samples * num_channels;
-    uint8_t *samples_buf = (uint8_t*)av_malloc(size + FF_INPUT_BUFFER_PADDING_SIZE);
+    uint8_t *samples_buf = FromVoid<uint8_t*>(av_malloc(size + FF_INPUT_BUFFER_PADDING_SIZE));
     if (!samples_buf) { av_free(samples); return 0; }
     avcodec_fill_audio_frame(samples, num_channels, AV_SAMPLE_FMT_S16, samples_buf, size, 1);
     memset(samples_buf+size, 0, FF_INPUT_BUFFER_PADDING_SIZE);
-    if (samples_out) *samples_out = (short*)samples_buf;
+    if (samples_out) *samples_out = reinterpret_cast<short*>(samples_buf);
     return samples;
   }
   static void FreeSamples(AVFrame *picture) {
@@ -1743,7 +1749,7 @@ HTTPServer::Response HTTPServer::StreamResource::Request(Connection *c, int meth
   if (!open) return HTTPServer::Response::_400;
   Response response(fctx->oformat->mime_type, -1, new StreamResourceClient(c, this), false);
   if (HTTPServerConnection::WriteHeaders(c, &response) < 0) { c->SetError(); return response; }
-  ((StreamResourceClient*)response.refill)->WriteHeader();
+  dynamic_cast<StreamResourceClient*>(response.refill)->WriteHeader();
   return response;
 }
 
@@ -1875,11 +1881,12 @@ void HTTPServer::StreamResource::SendVideo() {
 
   /* convert video */
   if (!conv)
-    conv = sws_getContext(FLAGS_camera_image_width, FLAGS_camera_image_height, (PixelFormat)Pixel::ToFFMpegId(app->camera->image_format),
+    conv = sws_getContext(FLAGS_camera_image_width, FLAGS_camera_image_height, PixelFormat(Pixel::ToFFMpegId(app->camera->image_format)),
                           vc->width, vc->height, vc->pix_fmt, SWS_BICUBIC, 0, 0, 0);
 
   int camera_linesize[4] = { app->camera->image_linesize, 0, 0, 0 }, got = 0;
-  sws_scale(conv, (uint8_t**)&app->camera->image, camera_linesize, 0, FLAGS_camera_image_height, picture->data, picture->linesize);
+  sws_scale(conv, reinterpret_cast<uint8_t**>(&app->camera->image), camera_linesize, 0,
+            FLAGS_camera_image_height, picture->data, picture->linesize);
 
   /* broadcast */
   AVPacket pkt;
@@ -1895,7 +1902,7 @@ void HTTPServer::StreamResource::SendVideo() {
 
 void HTTPServer::StreamResource::Broadcast(AVPacket *pkt, microseconds timestamp) {
   for (auto i = subscribers.begin(); i != subscribers.end(); i++) {
-    StreamResourceClient *client = (StreamResourceClient*)i->first;
+    StreamResourceClient *client = FromVoid<StreamResourceClient*>(i->first);
     client->Write(pkt, timestamp);
   }
 }
@@ -1931,8 +1938,8 @@ struct SSHClientConnection : public Connection::Handler {
   enum { INIT=0, FIRST_KEXINIT=1, FIRST_KEXREPLY=2, FIRST_NEWKEYS=3, KEXINIT=4, KEXREPLY=5, NEWKEYS=6 };
 
   SSHClient::ResponseCB cb;
-  LoadPasswordCB load_password_cb;
-  SavePasswordCB save_password_cb;
+  SSHClient::LoadPasswordCB load_password_cb;
+  SSHClient::SavePasswordCB save_password_cb;
   string V_C, V_S, KEXINIT_C, KEXINIT_S, H_text, session_id, integrity_c2s, integrity_s2c, decrypt_buf, host, user, pw;
   int state=0, packet_len=0, packet_MAC_len=0, MAC_len_c=0, MAC_len_s=0, encrypt_block_size=0, decrypt_block_size=0;
   unsigned sequence_number_c2s=0, sequence_number_s2c=0, password_prompts=0, userauth_fail=0;
@@ -2200,7 +2207,7 @@ struct SSHClientConnection : public Connection::Handler {
         } break;
 
         default: {
-          ERROR(c->Name(), " unknown packet number ", (int)packet_id, " len ", packet_len);
+          ERROR(c->Name(), " unknown packet number ", int(packet_id), " len ", packet_len);
         } break;
       }
       c->ReadFlush(packet_len);
@@ -2294,7 +2301,7 @@ struct SSHClientConnection : public Connection::Handler {
   }
 
   void ClearPassword() { pw.assign(pw.size(), ' '); pw.clear(); }
-  void SetPasswordCB(const LoadPasswordCB &L, const SavePasswordCB &S) { load_password_cb=L; save_password_cb=S; }
+  void SetPasswordCB(const SSHClient::LoadPasswordCB &L, const SSHClient::SavePasswordCB &S) { load_password_cb=L; save_password_cb=S; }
   int SetTerminalWindowSize(Connection *c, int w, int h) {
     term_width = w;
     term_height = h;
@@ -2411,7 +2418,7 @@ Connection *SMTPClient::DeliverTo(IPV4::Addr ipv4_addr, IPV4EndpointSource *src_
   return c;
 }
 
-void SMTPClient::DeliverDeferred(Connection *c) { ((SMTPClientConnection*)c->handler.get())->Deliver(c); }
+void SMTPClient::DeliverDeferred(Connection *c) { dynamic_cast<SMTPClientConnection*>(c->handler.get())->Deliver(c); }
 
 /* SMTPServer */
 
@@ -2529,6 +2536,40 @@ Connection *GPlusClient::PersistentConnection(const string &name, UDPClient::Res
 /* Sniffer */
 
 #ifdef LFL_PCAP
+void Sniffer::Threadproc() {
+  pcap_pkthdr *pkthdr; const unsigned char *packet; int ret;
+  while (Running() && (ret = pcap_next_ex((pcap_t*)handle, &pkthdr, &packet)) >= 0) {
+    if (!ret) continue;
+    cb((const char *)packet, pkthdr->caplen, pkthdr->len);
+  }
+}
+
+unique_ptr<Sniffer> Sniffer::Open(const string &dev, const string &filter, int snaplen, CB cb) {
+  char errbuf[PCAP_ERRBUF_SIZE];
+  bpf_u_int32 ip, mask, ret;
+  pcap_t *handle;
+  if (pcap_lookupnet(dev.c_str(), &ip, &mask, errbuf)) return ERRORv(nullptr, "no netmask for ", dev);
+  if (!(handle = pcap_open_live(dev.c_str(), snaplen, 1, 1000, errbuf))) return ERRORv(nullptr, "open failed: ", dev, ": ", errbuf);
+  if (filter.size()) {
+    bpf_program fp;
+    if (pcap_compile(handle, &fp, filter.c_str(), 0, ip)) return ERRORv(nullptr, "parse filter: ", filter, ": ", pcap_geterr(handle));
+    if (pcap_setfilter(handle, &fp)) return ERRORv(nullptr, "install filter: ", filter, ": ", pcap_geterr(handle));
+  }
+  unique_ptr<Sniffer> sniffer = make_unique<Sniffer>(handle, ip, mask, cb);
+  sniffer->thread.Open(bind(&Sniffer::Threadproc, sniffer));
+  sniffer->thread.Start();
+  return sniffer;
+}
+
+void Sniffer::PrintDevices(vector<string> *out) {
+  char errbuf[PCAP_ERRBUF_SIZE]; pcap_if_t *devs = 0; int ret;
+  if ((ret = pcap_findalldevs(&devs, errbuf))) FATAL("pcap_findalldevs: ", ret);
+  for (pcap_if_t *d = devs; d; d = d->next) {
+    if (out) out->push_back(d->name);
+    INFO(ret++, ": ", d->name, " : ", d->description ? d->description : "(none)");
+  }
+}
+
 void Sniffer::GetDeviceAddressSet(set<IPV4::Addr> *out) {
   static IPV4::Addr localhost = IPV4::Parse("127.0.0.1");
   char errbuf[PCAP_ERRBUF_SIZE]; pcap_if_t *devs = 0; int ret;
@@ -2541,46 +2582,13 @@ void Sniffer::GetDeviceAddressSet(set<IPV4::Addr> *out) {
     }
   }
 }
-
-void Sniffer::PrintDevices(vector<string> *out) {
-  char errbuf[PCAP_ERRBUF_SIZE]; pcap_if_t *devs = 0; int ret;
-  if ((ret = pcap_findalldevs(&devs, errbuf))) FATAL("pcap_findalldevs: ", ret);
-  for (pcap_if_t *d = devs; d; d = d->next) {
-    if (out) out->push_back(d->name);
-    INFO(ret++, ": ", d->name, " : ", d->description ? d->description : "(none)");
-  }
-}
-
-void Sniffer::Threadproc() {
-  pcap_pkthdr *pkthdr; const unsigned char *packet; int ret;
-  while (Running() && (ret = pcap_next_ex((pcap_t*)handle, &pkthdr, &packet)) >= 0) {
-    if (!ret) continue;
-    cb((const char *)packet, pkthdr->caplen, pkthdr->len);
-  }
-}
-
-Sniffer *Sniffer::Open(const string &dev, const string &filter, int snaplen, CB cb) {
-  char errbuf[PCAP_ERRBUF_SIZE];
-  bpf_u_int32 ip, mask, ret;
-  pcap_t *handle;
-  if (pcap_lookupnet(dev.c_str(), &ip, &mask, errbuf)) return ERRORv(nullptr, "no netmask for ", dev);
-  if (!(handle = pcap_open_live(dev.c_str(), snaplen, 1, 1000, errbuf))) return ERRORv(nullptr, "open failed: ", dev, ": ", errbuf);
-  if (filter.size()) {
-    bpf_program fp;
-    if (pcap_compile(handle, &fp, filter.c_str(), 0, ip)) return ERRORv(nullptr, "parse filter: ", filter, ": ", pcap_geterr(handle));
-    if (pcap_setfilter(handle, &fp)) return ERRORv(nullptr, "install filter: ", filter, ": ", pcap_geterr(handle));
-  }
-  Sniffer *sniffer = new Sniffer(handle, ip, mask, cb);
-  sniffer->thread.Open(bind(&Sniffer::Threadproc, sniffer));
-  sniffer->thread.Start();
-  return sniffer;
-}
 #else /* LFL_PCAP */
-void Sniffer::GetDeviceAddressSet(set<IPV4::Addr> *out) {}
-void Sniffer::PrintDevices(vector<string> *out) {}
 void Sniffer::Threadproc() {}
-Sniffer *Sniffer::Open(const string &dev, const string &filter, int snaplen, CB cb) { return ERRORv(nullptr, "sniffer not implemented"); }
+unique_ptr<Sniffer> Sniffer::Open(const string &dev, const string &filter, int snaplen, CB cb) { return ERRORv(nullptr, "sniffer not implemented"); }
+void Sniffer::PrintDevices(vector<string> *out) {}
+void Sniffer::GetDeviceAddressSet(set<IPV4::Addr> *out) {}
 #endif /* LFL_PCAP */
+
 void Sniffer::GetIPAddress(IPV4::Addr *out) {
   static IPV4::Addr localhost = IPV4::Parse("127.0.0.1");
   *out = 0;
@@ -2593,7 +2601,7 @@ void Sniffer::GetIPAddress(IPV4::Addr *out) {
   if (r) return ERROR("getifaddrs ", r);
   for (ifaddrs *i = ifap; i; i = i->ifa_next) {
     if (!i->ifa_dstaddr || i->ifa_dstaddr->sa_family != AF_INET) continue;
-    IPV4::Addr addr = ((struct sockaddr_in*)i->ifa_addr)->sin_addr.s_addr;
+    IPV4::Addr addr = reinterpret_cast<struct sockaddr_in*>(i->ifa_addr)->sin_addr.s_addr;
     if (addr == localhost) continue;
     *out = addr;
     break;
@@ -2612,7 +2620,7 @@ void Sniffer::GetBroadcastAddress(IPV4::Addr *out) {
   if (r) return ERROR("getifaddrs ", r);
   for (ifaddrs *i = ifap; i; i = i->ifa_next) {
     if (!i->ifa_dstaddr || i->ifa_dstaddr->sa_family != AF_INET) continue;
-    IPV4::Addr addr = ((struct sockaddr_in*)i->ifa_dstaddr)->sin_addr.s_addr;
+    IPV4::Addr addr = reinterpret_cast<struct sockaddr_in*>(i->ifa_dstaddr)->sin_addr.s_addr;
     if (addr == localhost) continue;
     *out = addr;
     break;
@@ -2621,13 +2629,12 @@ void Sniffer::GetBroadcastAddress(IPV4::Addr *out) {
 }
 
 #ifdef LFL_GEOIP
-GeoResolution *GeoResolution::Open(const string &db) {
+unique_ptr<GeoResolution> GeoResolution::Open(const string &db) {
   void *impl = GeoIP_open(db.c_str(), GEOIP_INDEX_CACHE);
   if (!impl) return 0;
-  return new GeoResolution(impl);
+  return make_unique<GeoResolution>(impl);
 }
-
-bool GeoResolution::resolve(const string &addr, string *country, string *region, string *city, float *lat, float *lng) {
+bool GeoResolution::Resolve(const string &addr, string *country, string *region, string *city, float *lat, float *lng) {
   GeoIPRecord *gir = GeoIP_record_by_name((GeoIP*)impl, addr.c_str());
   if (!gir) return false;
   if (country) *country = gir->country_code ? gir->country_code : "";
@@ -2639,8 +2646,8 @@ bool GeoResolution::resolve(const string &addr, string *country, string *region,
   return true;
 }
 #else
-GeoResolution *GeoResolution::Open(const string &db) { return 0; }
-bool GeoResolution::resolve(const string &addr, string *country, string *region, string *city, float *lat, float *lng) { FATAL("not implemented"); }
+unique_ptr<GeoResolution> GeoResolution::Open(const string &db) { return nullptr; }
+bool GeoResolution::Resolve(const string &addr, string *country, string *region, string *city, float *lat, float *lng) { FATAL("not implemented"); }
 #endif
 
 bool NBReadable(Socket fd, int timeout) {
@@ -2659,7 +2666,7 @@ int NBRead(Socket fd, char *buf, int len, int timeout) {
 }
 
 int NBRead(Socket fd, string *buf, int timeout) {
-  int l = NBRead(fd, (char*)buf->data(), buf->size(), timeout);
+  int l = NBRead(fd, &(*buf)[0], buf->size(), timeout);
   buf->resize(max(0,l));
   return l;
 }

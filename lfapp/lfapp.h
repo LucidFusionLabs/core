@@ -47,8 +47,9 @@
 #include <type_traits>
 #define LFL_STL11_NAMESPACE std
 
-#ifdef _WIN32
+#ifdef WIN32
 #define NOMINMAX
+#define _USE_MATH_DEFINES
 #include <winsock2.h>
 #include <windows.h>
 #include <process.h>
@@ -56,79 +57,14 @@
 #include <io.h>
 #include <sstream>
 #include <typeinfo>
-#define _USE_MATH_DEFINES
 typedef SOCKET Socket;
-#else /* _WIN32 */
+#else
 #include <unistd.h>
 #include <limits.h>
 #include <sys/time.h>
 #include <sys/socket.h>
 typedef int Socket;
 #endif
-inline int SystemBind(Socket s, const sockaddr *sa, int l) { return bind(s, sa, l); }
-
-using LFL_STL_NAMESPACE::min;
-using LFL_STL_NAMESPACE::max;
-using LFL_STL_NAMESPACE::swap;
-using LFL_STL_NAMESPACE::pair;
-using LFL_STL_NAMESPACE::vector;
-using LFL_STL_NAMESPACE::string;
-using LFL_STL_NAMESPACE::basic_string;
-using LFL_STL_NAMESPACE::map;
-using LFL_STL_NAMESPACE::set;
-using LFL_STL_NAMESPACE::list;
-using LFL_STL_NAMESPACE::deque;
-using LFL_STL_NAMESPACE::inserter;
-using LFL_STL_NAMESPACE::binary_search;
-using LFL_STL_NAMESPACE::sort;
-using LFL_STL_NAMESPACE::unique;
-using LFL_STL_NAMESPACE::reverse;
-using LFL_STL_NAMESPACE::equal_to;
-using LFL_STL_NAMESPACE::lower_bound;
-using LFL_STL_NAMESPACE::make_pair;
-using LFL_STL_NAMESPACE::set_difference;
-using LFL_STL_NAMESPACE::numeric_limits;
-using LFL_STL11_NAMESPACE::unordered_map;
-using LFL_STL11_NAMESPACE::unordered_set;
-using LFL_STL11_NAMESPACE::shared_ptr;
-using LFL_STL11_NAMESPACE::unique_ptr;
-using LFL_STL11_NAMESPACE::weak_ptr;
-using LFL_STL11_NAMESPACE::tuple;
-using LFL_STL11_NAMESPACE::array;
-using LFL_STL11_NAMESPACE::move;
-using LFL_STL11_NAMESPACE::bind;
-using LFL_STL11_NAMESPACE::forward;
-using LFL_STL11_NAMESPACE::function;
-using LFL_STL11_NAMESPACE::placeholders::_1;
-using LFL_STL11_NAMESPACE::placeholders::_2;
-using LFL_STL11_NAMESPACE::placeholders::_3;
-using LFL_STL11_NAMESPACE::placeholders::_4;
-using LFL_STL11_NAMESPACE::placeholders::_5;
-using LFL_STL11_NAMESPACE::placeholders::_6;
-using LFL_STL11_NAMESPACE::placeholders::_7;
-using LFL_STL11_NAMESPACE::placeholders::_8;
-using LFL_STL11_NAMESPACE::mutex;
-using LFL_STL11_NAMESPACE::lock_guard;
-using LFL_STL11_NAMESPACE::unique_lock;
-using LFL_STL11_NAMESPACE::condition_variable;
-using LFL_STL11_NAMESPACE::chrono::hours;
-using LFL_STL11_NAMESPACE::chrono::minutes;
-using LFL_STL11_NAMESPACE::chrono::seconds;
-using LFL_STL11_NAMESPACE::chrono::milliseconds;
-using LFL_STL11_NAMESPACE::chrono::microseconds;
-using LFL_STL11_NAMESPACE::chrono::duration;
-using LFL_STL11_NAMESPACE::chrono::duration_cast;
-using LFL_STL11_NAMESPACE::chrono::system_clock;
-using LFL_STL11_NAMESPACE::chrono::steady_clock;
-using LFL_STL11_NAMESPACE::chrono::high_resolution_clock;
-using LFL_STL11_NAMESPACE::enable_if;
-using LFL_STL11_NAMESPACE::is_integral;
-using LFL_STL11_NAMESPACE::is_floating_point;
-using LFL_STL11_NAMESPACE::is_signed;
-using LFL_STL11_NAMESPACE::is_pod;
-using LFL_STL11_NAMESPACE::make_unsigned;
-using LFL_STL11_NAMESPACE::make_shared;
-#define tuple_get LFL_STL11_NAMESPACE::get
 
 #include <cfloat>
 #include <errno.h>
@@ -138,20 +74,20 @@ using LFL_STL11_NAMESPACE::make_shared;
 #include <stdarg.h>
 #include <string.h>
 
-#ifdef _WIN32
+#ifdef WIN32
 #include <float.h>
 #include <direct.h>
+typedef int socklen_t;
+extern char *optarg;
+extern int optind;
 #undef ERROR
 #undef CALLBACK
+#define S_IFDIR _S_IFDIR
 #define getcwd _getcwd
 #define chdir _chdir
 #define strcasecmp _stricmp
 #define strncasecmp _strnicmp
 #define snprintf _snprintf
-#define S_IFDIR _S_IFDIR
-typedef int socklen_t;
-extern char *optarg;
-extern int optind;
 #endif
 
 #ifdef __linux__
@@ -202,14 +138,86 @@ extern int optind;
 #define DEFINE_unsigned(name, initial, description) DEFINE_FLAG(name, unsigned, initial, description)
 
 namespace LFL {
+using LFL_STL_NAMESPACE::min;
+using LFL_STL_NAMESPACE::max;
+using LFL_STL_NAMESPACE::swap;
+using LFL_STL_NAMESPACE::pair;
+using LFL_STL_NAMESPACE::vector;
+using LFL_STL_NAMESPACE::string;
+using LFL_STL_NAMESPACE::basic_string;
+using LFL_STL_NAMESPACE::map;
+using LFL_STL_NAMESPACE::set;
+using LFL_STL_NAMESPACE::list;
+using LFL_STL_NAMESPACE::deque;
+using LFL_STL_NAMESPACE::inserter;
+using LFL_STL_NAMESPACE::binary_search;
+using LFL_STL_NAMESPACE::sort;
+using LFL_STL_NAMESPACE::unique;
+using LFL_STL_NAMESPACE::reverse;
+using LFL_STL_NAMESPACE::equal_to;
+using LFL_STL_NAMESPACE::lower_bound;
+using LFL_STL_NAMESPACE::make_pair;
+using LFL_STL_NAMESPACE::set_difference;
+using LFL_STL_NAMESPACE::numeric_limits;
+using LFL_STL11_NAMESPACE::size_t;
+using LFL_STL11_NAMESPACE::ptrdiff_t;
+using LFL_STL11_NAMESPACE::int8_t;
+using LFL_STL11_NAMESPACE::int16_t;
+using LFL_STL11_NAMESPACE::int32_t;
+using LFL_STL11_NAMESPACE::int64_t;
+using LFL_STL11_NAMESPACE::uint8_t;
+using LFL_STL11_NAMESPACE::uint16_t;
+using LFL_STL11_NAMESPACE::uint32_t;
+using LFL_STL11_NAMESPACE::uint64_t;
+using LFL_STL11_NAMESPACE::unordered_map;
+using LFL_STL11_NAMESPACE::unordered_set;
+using LFL_STL11_NAMESPACE::shared_ptr;
+using LFL_STL11_NAMESPACE::unique_ptr;
+using LFL_STL11_NAMESPACE::weak_ptr;
+using LFL_STL11_NAMESPACE::tuple;
+using LFL_STL11_NAMESPACE::array;
+using LFL_STL11_NAMESPACE::move;
+using LFL_STL11_NAMESPACE::bind;
+using LFL_STL11_NAMESPACE::forward;
+using LFL_STL11_NAMESPACE::function;
+using LFL_STL11_NAMESPACE::placeholders::_1;
+using LFL_STL11_NAMESPACE::placeholders::_2;
+using LFL_STL11_NAMESPACE::placeholders::_3;
+using LFL_STL11_NAMESPACE::placeholders::_4;
+using LFL_STL11_NAMESPACE::placeholders::_5;
+using LFL_STL11_NAMESPACE::placeholders::_6;
+using LFL_STL11_NAMESPACE::placeholders::_7;
+using LFL_STL11_NAMESPACE::placeholders::_8;
+using LFL_STL11_NAMESPACE::mutex;
+using LFL_STL11_NAMESPACE::lock_guard;
+using LFL_STL11_NAMESPACE::unique_lock;
+using LFL_STL11_NAMESPACE::condition_variable;
+using LFL_STL11_NAMESPACE::chrono::hours;
+using LFL_STL11_NAMESPACE::chrono::minutes;
+using LFL_STL11_NAMESPACE::chrono::seconds;
+using LFL_STL11_NAMESPACE::chrono::milliseconds;
+using LFL_STL11_NAMESPACE::chrono::microseconds;
+using LFL_STL11_NAMESPACE::chrono::duration;
+using LFL_STL11_NAMESPACE::chrono::duration_cast;
+using LFL_STL11_NAMESPACE::chrono::system_clock;
+using LFL_STL11_NAMESPACE::chrono::steady_clock;
+using LFL_STL11_NAMESPACE::chrono::high_resolution_clock;
+using LFL_STL11_NAMESPACE::enable_if;
+using LFL_STL11_NAMESPACE::is_integral;
+using LFL_STL11_NAMESPACE::is_floating_point;
+using LFL_STL11_NAMESPACE::is_signed;
+using LFL_STL11_NAMESPACE::is_pod;
+using LFL_STL11_NAMESPACE::make_unsigned;
+using LFL_STL11_NAMESPACE::make_signed;
+using LFL_STL11_NAMESPACE::make_shared;
 using LFL_STL11_NAMESPACE::isinf;
 using LFL_STL11_NAMESPACE::isnan;
+#define tuple_get LFL_STL11_NAMESPACE::get
+
 typedef void* Void;
 typedef lock_guard<mutex> ScopedMutex;
 typedef function<void()> Callback;
 typedef function<void(const string&)> StringCB;
-typedef function<bool(const string&, const string&,       string*)> LoadPasswordCB;
-typedef function<void(const string&, const string&, const string&)> SavePasswordCB;
 typedef tuple<string, string, string> MenuItem;
 template <class X> struct Singleton { static X *Get() { static X instance; return &instance; } };
 void Log(int level, const char *file, int line, const string &m);
@@ -220,6 +228,9 @@ void Log(int level, const char *file, int line, const string &m);
 #include "lfapp/time.h"
 
 namespace LFL {
+extern Window *screen;
+extern Application *app;
+
 struct Allocator {
   virtual ~Allocator() {}
   virtual const char *Name() = 0;
@@ -227,12 +238,12 @@ struct Allocator {
   virtual void *Realloc(void *p, int size) = 0;
   virtual void Free(void *p) = 0;
   virtual void Reset();
+  template <class X, class... Args> X* New(Args&&... args) { return new(Malloc(sizeof(X))) X(forward<Args>(args)...); }
   static Allocator *Default();
-#define AllocatorNew(allocator, type, constructor_args) (new((allocator)->Malloc(sizeof type)) type constructor_args)
 };
 
-struct NullAlloc : public Allocator {
-  const char *Name() { return "NullAlloc"; }
+struct NullAllocator : public Allocator {
+  const char *Name() { return "NullAllocator"; }
   void *Malloc(int size) { return 0; }
   void *Realloc(void *p, int size) { return 0; }
   void Free(void *p) {}
@@ -264,66 +275,6 @@ struct Module {
 #include "lfapp/lftypes.h"
 
 namespace LFL {
-struct MallocAlloc : public Allocator {
-  const char *Name() { return "MallocAlloc"; }
-  void *Malloc(int size);
-  void *Realloc(void *p, int size);
-  void Free(void *p);
-};
-
-struct NewAlloc : public Allocator {
-  const char *Name() { return "NewAlloc"; }
-  void *Malloc(int size) { return new char[size]; }
-  void *Realloc(void *p, int size) { return !p ? Malloc(size) : 0; }
-  void Free(void *p) { delete [] (char *)p; }
-};
-
-template <int S> struct FixedAlloc : public Allocator {
-  const char *Name() { return "FixedAlloc"; }
-  static const int size = S;
-  char buf[S];
-  int len=0;
-  virtual void Reset() { len=0; }
-  virtual void *Malloc(int n) { CHECK_LE(len + n, S); char *ret = &buf[len]; len += NextMultipleOf16(n); return ret; }
-  virtual void *Realloc(void *p, int n) { CHECK_EQ(nullptr, p); return this->Malloc(n); }
-  virtual void Free(void *p) {}
-};
-
-struct MMapAlloc : public Allocator {
-#ifdef _WIN32
-  HANDLE file, map; void *addr; long long size;
-  MMapAlloc(HANDLE File, HANDLE Map, void *Addr, int Size) : file(File), map(Map), addr(Addr), size(Size) {}
-#else
-  void *addr; long long size;
-  MMapAlloc(void *Addr, long long Size) : addr(Addr), size(Size) {}
-#endif
-  virtual ~MMapAlloc();
-  static MMapAlloc *Open(const char *fn, const bool logerror=true, const bool readonly=true, long long size=0);
-
-  const char *Name() { return "MMapAlloc"; }
-  void *Malloc(int size) { return 0; }
-  void *Realloc(void *p, int size) { return 0; }
-  void Free(void *p) { delete this; }
-};
-
-struct BlockChainAlloc : public Allocator {
-  const char *Name() { return "BlockChainAlloc"; }
-  struct Block { string buf; int len=0; Block(int size=0) : buf(size, 0) {} };
-  vector<Block> blocks;
-  int block_size, cur_block_ind;
-  BlockChainAlloc(int s=1024*1024) : block_size(s), cur_block_ind(-1) {}
-  void Reset() { for (auto &b : blocks) b.len = 0; cur_block_ind = blocks.size() ? 0 : -1; }
-  void *Realloc(void *p, int n) { CHECK_EQ(nullptr, p); return this->Malloc(n); }
-  void *Malloc(int n);
-  void Free(void *p) {}
-};
-
-struct StringAlloc {
-  string buf;
-  void Reset() { buf.clear(); }
-  int Alloc(int bytes) { int ret=buf.size(); buf.resize(ret + bytes); return ret; }
-};
-
 struct Flag {
   const char *name, *desc, *file;
   int line;
@@ -526,6 +477,71 @@ struct LuaContext {
 
 struct CUDA : public Module { int Init(); };
 
+struct Window : public ::NativeWindow {
+  typedef function<int(Window*, unsigned, int)> FrameCB;
+
+  GraphicsDevice *gd=0;
+  point mouse, mouse_wheel;
+  string caption;
+  FrameCB frame_cb;
+  Timer frame_time;
+  RollingAvg<unsigned> fps;
+  unique_ptr<Entity> cam;
+  unique_ptr<Console> console;
+  vector<GUI*> gui;
+  vector<unique_ptr<GUI>> my_gui;
+  vector<unique_ptr<InputController>> input;
+  vector<unique_ptr<Dialog>> dialogs;
+  unique_ptr<Shell> shell;
+  function<TextBox*()> default_textbox = []{ return nullptr; };
+  TextBox *active_textbox=0;
+  Dialog *top_dialog=0;
+
+  Window();
+  virtual ~Window();
+
+  LFL::Box Box()                   const { return LFL::Box(width, height); }
+  LFL::Box Box(float xs, float ys) const { return LFL::Box(width*xs, height*ys); }
+  LFL::Box Box(float xp, float yp, float xs, float ys,
+               float xbl=0, float ybt=0, float xbr=-INFINITY, float ybb=-INFINITY) const;
+
+  void SetSize(const point &d);
+  void SetCaption(const string &c);
+  void SetResizeIncrements(float x, float y);
+  void SetTransparency(float v);
+  void Reshape(int w, int h);
+  void Reshaped(int w, int h);
+  void Minimized()   { minimized=1; }
+  void UnMinimized() { minimized=0; }
+  void ResetGL();
+  void SwapAxis();
+  int  Frame(unsigned clicks, int flag);
+  void RenderToFrameBuffer(FrameBuffer *fb);
+
+  template <class X> X* GetGUI(size_t i) { return i < gui.size() ? dynamic_cast<X*>(gui[i]) : nullptr; }
+  template <class X> X* GetOwnGUI(size_t i) { return i < my_gui.size() ? dynamic_cast<X*>(my_gui[i].get()) : nullptr; }
+  template <class X> X* AddGUI(unique_ptr<X> g) { auto gp = VectorAddUnique(&my_gui, move(g)); gui.push_back(gp); return gp; }
+  template <class X> X* GetInputController(size_t i) { return i < input.size() ? dynamic_cast<X*>(input[i].get()) : nullptr; }
+  template <class X> X* AddInputController(unique_ptr<X> g) { return VectorAddUnique(&input, move(g)); }
+  template <class X> void DelGUIPointer(X **g) { DelGUI(*g); *g = nullptr; }
+  template <class X> X* ReplaceGUI(size_t i, unique_ptr<X> g) {
+    auto gp = g.get();
+    if (auto p = my_gui[i].get()) RemoveGUI(p);
+    gui.push_back((my_gui[i] = move(g)).get());
+    return gp;
+  }
+  void DelInputController(InputController *g) { VectorRemoveUnique(&input, g); }
+  void RemoveGUI(GUI *g) { VectorEraseByValue(&gui, g); }
+  void DelGUI(GUI *g);
+  size_t NewGUI();
+
+  void InitConsole(const Callback &animating_cb);
+  void AddDialog(unique_ptr<Dialog>);
+  void BringDialogToFront(Dialog*);
+  void GiveDialogFocusAway(Dialog*);
+  void DrawDialogs();
+};
+
 struct Application : public ::LFApp {
   string name, progname, logfilename, startdir, bindir, assetdir, dldir;
   int pid=0;
@@ -540,13 +556,12 @@ struct Application : public ::LFApp {
   unique_ptr<NetworkThread> network_thread;
   unique_ptr<ProcessAPIClient> render_process;
   unique_ptr<ProcessAPIServer> main_process;
-  Window::Map windows;
-  Callback reshaped_cb, create_win_f, exit_cb;
-  function<void(Window*)> window_init_cb, window_closed_cb = [](Window *w){ delete w; };
+  unordered_map<void*, Window*> windows;
+  Callback reshaped_cb, exit_cb;
+  function<void(Window*)> window_init_cb, window_start_cb, window_closed_cb = [](Window *w){ delete w; };
   unordered_map<string, StringPiece> asset_cache;
   CategoricalVariable<int> tex_mode, grab_mode, fill_mode;
   const Color *splash_color = &Color::black;
-  Shell shell;
 
   vector<Module*> modules;
   unique_ptr<Audio> audio;
@@ -574,7 +589,7 @@ struct Application : public ::LFApp {
   bool CreateWindow(Window *W);
   void CloseWindow(Window *W);
   void MakeCurrentWindow(Window *W);
-  void CreateNewWindow(const Window::StartCB &start_cb = Window::StartCB());
+  void CreateNewWindow();
   void StartNewWindow(Window *new_window);
   NetworkThread *CreateNetworkThread(bool detach_existing_module, bool start);
 
@@ -639,7 +654,6 @@ struct Application : public ::LFApp {
   static void *GetSymbol(const string &n);
   static StringPiece LoadResource(int id);
 };
-extern Application *app;
 
 #ifdef LFL_WININPUT
 struct WinApp {

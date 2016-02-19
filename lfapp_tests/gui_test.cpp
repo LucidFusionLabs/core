@@ -25,28 +25,29 @@
 #include "lfapp/ipc.h"
 
 namespace LFL {
-struct LinesFrameBufferTest : public TextGUI::LinesFrameBuffer {
+struct LinesFrameBufferTest : public TextBox::LinesFrameBuffer {
   struct LineOp {
     point p; String16 text; int xo, wlo, wll;
-    LineOp(TextGUI::Line *L, int X, int O, int S) : p(L->p), text(L->Text16()), xo(X), wlo(O), wll(S) {}
+    LineOp(TextBox::Line *L, int X, int O, int S) : p(L->p), text(L->Text16()), xo(X), wlo(O), wll(S) {}
     string DebugString() const { return StrCat("LineOp text(", text, ") ", xo, " ", wlo, " ", wll); }
   };
   struct PaintOp {
     String16 text; int lines; point p; Box b;
-    PaintOp(TextGUI::Line *L, const point &P, const Box &B) : text(L->Text16()), lines(L->Lines()), p(P), b(B) {}
+    PaintOp(TextBox::Line *L, const point &P, const Box &B) : text(L->Text16()), lines(L->Lines()), p(P), b(B) {}
     string DebugString() const { return StrCat("PaintOp text(", text, ") ", p, " ", b); }
   };
   static vector<LineOp> front, back;
   static vector<PaintOp> paint;
-  LinesFrameBufferTest() { paint_cb = &LinesFrameBufferTest::PaintTest; }
-  virtual void Clear(TextGUI::Line *l)                              override { EXPECT_EQ(0, 1); }
-  virtual void Update(TextGUI::Line *l, int flag=0)                 override { EXPECT_EQ(0, 1); }
-  virtual void Update(TextGUI::Line *l, const point &p, int flag=0) override { EXPECT_EQ(0, 1); }
-  virtual void PushFrontAndUpdateOffset(TextGUI::Line *l, int lo)   override { EXPECT_EQ(0, 1); }
-  virtual void PushBackAndUpdateOffset (TextGUI::Line *l, int lo)   override { EXPECT_EQ(0, 1); }
-  virtual int PushFrontAndUpdate(TextGUI::Line *l, int xo=0, int wlo=0, int wll=0, int flag=0) override { int ret = TextGUI::LinesFrameBuffer::PushFrontAndUpdate(l,xo,wlo,wll); front.emplace_back(l,xo,wlo,wll); return ret; }
-  virtual int PushBackAndUpdate (TextGUI::Line *l, int xo=0, int wlo=0, int wll=0, int flag=0) override { int ret = TextGUI::LinesFrameBuffer::PushBackAndUpdate (l,xo,wlo,wll); back .emplace_back(l,xo,wlo,wll); return ret; }
-  static point PaintTest(TextGUI::Line *l, point lp, const Box &b)
+  LinesFrameBufferTest(GraphicsDevice *D) :
+    TextBox::LinesFrameBuffer(D) { paint_cb = &LinesFrameBufferTest::PaintTest; }
+  virtual void Clear(TextBox::Line *l)                              override { EXPECT_EQ(0, 1); }
+  virtual void Update(TextBox::Line *l, int flag=0)                 override { EXPECT_EQ(0, 1); }
+  virtual void Update(TextBox::Line *l, const point &p, int flag=0) override { EXPECT_EQ(0, 1); }
+  virtual void PushFrontAndUpdateOffset(TextBox::Line *l, int lo)   override { EXPECT_EQ(0, 1); }
+  virtual void PushBackAndUpdateOffset (TextBox::Line *l, int lo)   override { EXPECT_EQ(0, 1); }
+  virtual int PushFrontAndUpdate(TextBox::Line *l, int xo=0, int wlo=0, int wll=0, int flag=0) override { int ret = TextBox::LinesFrameBuffer::PushFrontAndUpdate(l,xo,wlo,wll); front.emplace_back(l,xo,wlo,wll); return ret; }
+  virtual int PushBackAndUpdate (TextBox::Line *l, int xo=0, int wlo=0, int wll=0, int flag=0) override { int ret = TextBox::LinesFrameBuffer::PushBackAndUpdate (l,xo,wlo,wll); back .emplace_back(l,xo,wlo,wll); return ret; }
+  static point PaintTest(TextBox::Line *l, point lp, const Box &b)
   { l->Draw(lp + b.Position()); paint.emplace_back(l, lp, b); return point(lp.x, lp.y-b.h); }
 };
 vector<LinesFrameBufferTest::LineOp> LinesFrameBufferTest::front;
@@ -60,7 +61,7 @@ struct TextAreaTest : public TextArea {
   };
   vector<UpdateTokenOp> token;
   LinesFrameBufferTest line_fb_test;
-  TextAreaTest(Window *W, Font *F, int S=200) : TextArea(W,F,S) {}
+  TextAreaTest(GraphicsDevice *D, const FontRef &F, int S=200) : TextArea(D, F, S), line_fb_test(D) {}
   virtual LinesFrameBuffer *GetFrameBuffer() override { return &line_fb_test; }
   virtual void UpdateToken(Line *l, int wo, int wl, int t, const LineTokenProcessor*) override {
     token.emplace_back(l, DrawableBoxRun(&l->data->glyphs[wo], wl).Text16(), t);
@@ -69,7 +70,8 @@ struct TextAreaTest : public TextArea {
 
 struct EditorTest : public Editor {
   LinesFrameBufferTest line_fb_test;
-  EditorTest(Window *W, Font *F, File *I, bool Wrap=0) : Editor(W,F,I,Wrap) { line_fb_test.wrap=Wrap; }
+  EditorTest(GraphicsDevice *D, const FontRef &F, File *I, bool Wrap=0) :
+    Editor(D, F, I, Wrap), line_fb_test(D) { line_fb_test.wrap=Wrap; }
   virtual LinesFrameBuffer *GetFrameBuffer() override { return &line_fb_test; }
 };
 
@@ -79,7 +81,7 @@ struct TerminalTest : public Terminal {
     UpdateTokenOp(Line *BL, int BO, Line *EL, int EO, const string &X, int T) : bl(BL), el(EL), bo(BO), eo(EO), type(T), text(X) {}
   };
   vector<UpdateTokenOp> token;
-  TerminalTest(ByteSink *S, Window *W, Font *F) : Terminal(S,W,F) {}
+  TerminalTest(ByteSink *S, GraphicsDevice *D, const FontRef &F) : Terminal(S, D, F) {}
   void UpdateLongToken(Line *BL, int BO, Line *EL, int EO, const string &text, int T) {
     token.emplace_back(BL, BO, EL, EO, text, T);
   }
@@ -95,7 +97,8 @@ struct TerminalTest : public Terminal {
 
 TEST(GUITest, TextArea) { 
   {
-    TextAreaTest ta(screen, Fonts::Fake(), 10);
+    Font *font = app->fonts->Fake();
+    TextAreaTest ta(screen->gd, font, 10);
     ta.line.InsertAt(-1)->AssignText("a");
     EXPECT_EQ(String16(u"a"), ta.line[-1].Text16());
 
@@ -147,9 +150,9 @@ TEST(GUITest, TextArea) {
   for (int test_iter=0; test_iter<2; test_iter++) { 
     printf("TextAreaTest iter=%d reverse=%d\n", test_iter, test_iter);
     // 0: 122, 1: 222, 2: 223, 3: 234, 4: 344, 5: 445
-    TextGUI::Line *L;
-    Font *font = Fonts::Fake();
-    TextAreaTest ta(screen, font);
+    TextBox::Line *L;
+    Font *font = app->fonts->Fake();
+    TextAreaTest ta(screen->gd, font);
     ta.reverse_line_fb = test_iter;
     ta.line_fb.wrap = 1;
     (L = ta.line.PushFront())->AssignText("1");       L->Layout();
@@ -501,10 +504,10 @@ TEST(GUITest, TextArea) {
 }
 
 TEST(GUITest, Editor) {
-  Font *font = Fonts::Fake();
+  Font *font = app->fonts->Fake();
   int fh = font->Height(), w = font->fixed_width;
   EXPECT_NE(0, fh); EXPECT_NE(0, w);
-  EditorTest e(screen, font, new BufferFile(string("1\n2 2 2\n3\n4 4\n5\n")), true);
+  EditorTest e(screen->gd, font, new BufferFile(string("1\n2 2 2\n3\n4 4\n5\n")), true);
   LinesFrameBufferTest *test_fb = &e.line_fb_test;
   Box b(w, 3*fh);
   e.Draw(b, TextArea::DrawFlag::CheckResized);
@@ -763,7 +766,7 @@ TEST(GUITest, Terminal) {
   cursor_attr &= ~Terminal::Attr::Bold;
   EXPECT_EQ(4,  Terminal::Attr::GetFGColorIndex(cursor_attr));
 
-  TerminalTest ta(NULL, screen, Fonts::Fake());
+  TerminalTest ta(nullptr, screen->gd, app->fonts->Fake());
   ta.SetDimension(80, 25);
   int tw = ta.term_width, th = ta.term_height, fw = ta.font->FixedWidth(), fh = ta.font->Height();
   ta.CheckResized(Box(tw*fw, th*fh));
@@ -817,9 +820,9 @@ TEST(GUITest, Terminal) {
 }
 
 TEST(GUITest, LineTokenProcessor) {
-  TextAreaTest ta(screen, Fonts::Fake(), 10);
+  TextAreaTest ta(screen->gd, app->fonts->Fake(), 10);
   ta.token_processing = 1;
-  TextGUI::Line *L = ta.line.InsertAt(-1);
+  TextBox::Line *L = ta.line.InsertAt(-1);
 
   L->UpdateText(0, "a", 0);
   EXPECT_EQ(u"a", L->Text16()); EXPECT_EQ(1, ta.token.size());
@@ -1003,7 +1006,7 @@ TEST(GUITest, LineTokenProcessor) {
 }
 
 TEST(GUITest, TerminalTokenProcessor) {
-  TerminalTest ta(NULL, screen, Fonts::Fake());
+  TerminalTest ta(NULL, screen->gd, app->fonts->Fake());
   ta.SetDimension(80, 25);
   EXPECT_EQ(80, ta.term_width);
   EXPECT_EQ(25, ta.line.Size());

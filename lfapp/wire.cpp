@@ -58,7 +58,7 @@ void Serializable::ToString(char *buf, int len) const {
 }
 void Serializable::ToString(char *buf, int len, unsigned short seq) const {
   MutableStream os(buf, len);
-  Header hdr = { (unsigned short)Id, seq };
+  Header hdr = { uint16_t(Id), seq };
   hdr.Out(&os);
   Out(&os);
 }
@@ -99,7 +99,7 @@ string IPV4::MakeCSV(const set<IPV4::Addr> &in) {
 
 int DNS::WriteRequest(unsigned short id, const string &querytext, unsigned short type, char *out, int len) {
   Serializable::MutableStream os(out, len);
-  Header *hdr = (Header*)os.Get(Header::size);
+  Header *hdr = reinterpret_cast<Header*>(os.Get(Header::size));
   memset(hdr, 0, Header::size);
   hdr->rd = 1;
   hdr->id = id;
@@ -108,20 +108,20 @@ int DNS::WriteRequest(unsigned short id, const string &querytext, unsigned short
   StringWordIter words(querytext, isdot);
   for (string word = words.NextString(); !word.empty(); word = words.NextString()) {
     CHECK_LT(word.size(), 64);
-    os.Write8((unsigned char)word.size());
+    os.Write8(uint8_t(word.size()));
     os.String(word);
   }
-  os.Write8((char)0);
+  os.Write8(char(0));
 
-  os.Htons(type);                      // QueryTypeClass.Type
-  os.Htons((unsigned short)Class::IN); // QueryTypeClass.QClass
+  os.Htons(type);                // QueryTypeClass.Type
+  os.Htons(uint16_t(Class::IN)); // QueryTypeClass.QClass
   return os.error ? -1 : os.offset;
 }
 
 int DNS::ReadResponse(const char *buf, int bufsize, Response *res) {
   Serializable::ConstStream is(buf, bufsize);
   const Serializable::Stream *in = &is;
-  const Header *hdr = (Header*)in->Get(Header::size);
+  const Header *hdr = reinterpret_cast<const Header*>(in->Get(Header::size));
   int qdcount = ntohs(hdr->qdcount), ancount = ntohs(hdr->ancount);
   int nscount = ntohs(hdr->nscount), arcount = ntohs(hdr->arcount), len;
 
@@ -173,10 +173,10 @@ int DNS::ReadString(const char *start, const char *cur, const char *end, string 
   for (unsigned char len = 1; len && cur < end; cur += len+1) {
     len = *cur;
     if (len >= 64) { // Pointer to elsewhere in packet
-      int offset = ntohs(*(unsigned short*)cur) & ~(3<<14);
+      int offset = ntohs(*reinterpret_cast<const unsigned short*>(cur)) & ~(3<<14);
       if (!final) final = cur + 2;
       cur = start + offset - 2;
-      if (cur < start || cur >= end) { ERROR("OOB cur ", (void*)start, " ", (void*)cur, " ", (void*)end); return -1; }
+      if (cur < start || cur >= end) return ERRORv(-1, "OOB cur ", Void(start), " ", Void(cur), " ", Void(end));
       len = 1;
       continue;
     }
@@ -285,10 +285,10 @@ string HTTP::HostURL(const char *url) {
 
 int HTTP::ParseRequest(char *buf, char **methodO, char **urlO, char **argsO, char **verO) {
   char *url, *ver, *args;
-  if (!(url = (char*)FindChar(buf, isspace)))    return -1;    *url = 0;
-  if (!(url = (char*)FindChar(url+1, notspace))) return -1;
-  if (!(ver = (char*)FindChar(url, isspace)))    return -1;    *ver = 0;
-  if (!(ver = (char*)FindChar(ver+1, notspace))) return -1;
+  if (!(url = const_cast<char*>(FindChar(buf, isspace))))    return -1;    *url = 0;
+  if (!(url = const_cast<char*>(FindChar(url+1, notspace)))) return -1;
+  if (!(ver = const_cast<char*>(FindChar(url, isspace))))    return -1;    *ver = 0;
+  if (!(ver = const_cast<char*>(FindChar(ver+1, notspace)))) return -1;
 
   if ((args = strchr(url, '?'))) *args++ = 0;
 
@@ -347,10 +347,11 @@ string HTTP::GrepHeaders(const char *headers, const char *end, const string &nam
 }
 
 #define HTTPGrepImpl(k, kl, v) \
-  va_list ap; va_start(ap, num); \
-  char **k = (char **)alloca(num*sizeof(char*)); \
-  int *kl = (int *)alloca(num*sizeof(int)); \
-  StringPiece **v = (StringPiece **)alloca(num*sizeof(char*)); \
+  va_list ap; \
+  va_start(ap, num); \
+  vector<char*> k(num); \
+  vector<int> kl(num); \
+  vector<StringPiece*> v(num); \
   for (int i=0; i<num; i++) { \
     k[i] = va_arg(ap, char*); \
     kl[i] = strlen(k[i]); \
@@ -396,7 +397,7 @@ string HTTP::EncodeURL(const char *url) {
   static const char encodeURIcomponentPass[] = "~!*()'";
   static const char encodeURIPass[] = "./@#:?,;-_&";
   string ret;
-  for (const unsigned char *p = (const unsigned char *)url; *p; p++) {
+  for (const unsigned char *p = MakeUnsigned(url); *p; p++) {
     if      (*p >= '0' && *p <= '9') ret += *p;
     else if (*p >= 'a' && *p <= 'z') ret += *p;
     else if (*p >= 'A' && *p <= 'Z') ret += *p;

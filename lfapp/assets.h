@@ -96,7 +96,7 @@ struct Geometry {
     }
   }
   template <class X> Geometry(int VD, int primtype, int num, X *v, v3 *norm, v2 *tex, const Color &vcol) :
-    Geometry(VD, primtype, num, v, norm, tex, (const Color*)0) { color=1; col=vcol; }
+    Geometry(VD, primtype, num, v, norm, tex, nullptr) { color=1; col=vcol; }
 
   Geometry (int pt, int n, v2 *v, v3 *norm, v2 *tex            ) : Geometry(2, pt, n, v, norm, tex, 0  ) {}
   Geometry (int pt, int n, v3 *v, v3 *norm, v2 *tex            ) : Geometry(3, pt, n, v, norm, tex, 0  ) {}
@@ -116,27 +116,22 @@ struct Geometry {
 struct Asset {
   typedef function<void(Asset*, Entity*)> DrawCB;
 
-  AssetMap *parent;
+  AssetMap *parent=0;
   string name, texture, geom_fn;
   DrawCB cb;
-  float scale;
-  int translate, rotate;
-  Geometry *geometry, *hull;
+  float scale=0;
+  int translate=0, rotate=0;
+  Geometry *geometry=0, *hull=0;
   Texture tex;
-  unsigned texgen, typeID, particleTexID, blends, blendt;
+  unsigned texgen=0, typeID=0, particleTexID=0, blends=GraphicsDevice::SrcAlpha, blendt=GraphicsDevice::OneMinusSrcAlpha;
   Color col;
-  bool color, zsort;
+  bool color=0, zsort=0;
 
-  Asset() : parent(0), scale(0), translate(0), rotate(0), geometry(0), hull(0), texgen(0), typeID(0), particleTexID(0),
-  blends(GraphicsDevice::SrcAlpha), blendt(GraphicsDevice::OneMinusSrcAlpha), color(0), zsort(0) {}
-
-  Asset(const string &N, const string &Tex, float S, int T, int R, const char *G, Geometry *H, unsigned CM, DrawCB CB=DrawCB())
-    : parent(0), name(N), texture(Tex), geom_fn(BlankNull(G)), cb(CB), scale(S), translate(T), rotate(R), geometry(0), hull(H), texgen(0),
-    typeID(0), particleTexID(0), blends(GraphicsDevice::SrcAlpha), blendt(GraphicsDevice::OneMinusSrcAlpha), color(0), zsort(0) { tex.cubemap=CM; }
-
-  Asset(const string &N, const string &Tex, float S, int T, int R, Geometry *G, Geometry *H, unsigned CM, unsigned TG, DrawCB CB=DrawCB())
-    : parent(0), name(N), texture(Tex), cb(CB), scale(S), translate(T), rotate(R), geometry(G), hull(H), texgen(TG),
-    typeID(0), particleTexID(0), blends(GraphicsDevice::SrcAlpha), blendt(GraphicsDevice::OneMinusSrcAlpha), color(0), zsort(0) { tex.cubemap=CM; }
+  Asset() {}
+  Asset(const string &N, const string &Tex, float S, int T, int R, const char *G, Geometry *H, unsigned CM, const DrawCB &CB=DrawCB())
+    : name(N), texture(Tex), geom_fn(BlankNull(G)), cb(CB), scale(S), translate(T), rotate(R), hull(H) { tex.cubemap=CM; }
+  Asset(const string &N, const string &Tex, float S, int T, int R, Geometry *G, Geometry *H, unsigned CM, unsigned TG, const DrawCB &CB=DrawCB())
+    : name(N), texture(Tex), cb(CB), scale(S), translate(T), rotate(R), geometry(G), hull(H), texgen(TG) { tex.cubemap=CM; }
 
   void Load(void *handle=0, VideoAssetLoader *l=0);
   void Unload();
@@ -161,7 +156,6 @@ struct Asset {
 struct SoundAsset {
   static const int FlagNoRefill, FromBufPad;
   typedef function<int(SoundAsset*, int)> RefillCB;
-# define SoundAssetSize(sa) ((sa)->seconds * FLAGS_sample_rate * FLAGS_chans_out)
 
   SoundAssetMap *parent;
   string name, filename;
@@ -183,6 +177,7 @@ struct SoundAsset {
   int Refill(int reset);
 
   static void Load(vector<SoundAsset> *assets) { for (auto &a : *assets) a.Load(); }
+  static int Size(const SoundAsset *sa) { return sa->seconds * FLAGS_sample_rate * FLAGS_chans_out; }
 };
 
 struct MovieAsset {
@@ -286,22 +281,23 @@ struct BoxOutline : public Drawable {
   BoxOutline(int LW=1) : line_width(LW) {}
   void Draw(const LFL::Box &b, const Drawable::Attr *a=0) const;
 };
+struct BoxTopLeftOutline : public Drawable {
+  int line_width;
+  BoxTopLeftOutline(int LW=1) : line_width(LW) {}
+  void Draw(const LFL::Box &b, const Drawable::Attr *a=0) const;
+};
+struct BoxBottomRightOutline : public Drawable {
+  int line_width;
+  BoxBottomRightOutline(int LW=1) : line_width(LW) {}
+  void Draw(const LFL::Box &b, const Drawable::Attr *a=0) const;
+};
 
 struct Waveform : public Drawable {
   int width=0, height=0;
   unique_ptr<Geometry> geom;
-
   Waveform() {}
   Waveform(point dim, const Color *c, const Vec<float> *);
-
-  void Draw(const LFL::Box &w, const Drawable::Attr *a=0) const {
-    if (!geom) return;
-    geom->SetPosition(w.Position());
-    screen->gd->DisableTexture();
-    Scene::Select(geom.get());
-    Scene::Draw(geom.get(), 0);
-  }
-
+  void Draw(const LFL::Box &w, const Drawable::Attr *a=0) const;
   static Waveform Decimated(point dim, const Color *c, const RingBuf::Handle *, int decimateBy);
 };
 
@@ -323,54 +319,20 @@ struct Grid {
 
 struct TextureArray {
   vector<Texture> a;
-  int ind=0;
-
   void ClearGL() { for (auto &i : a) i.ClearGL(); }
   void Load(const string &fmt, const string &prefix, const string &suffix, int N);
-  void DrawSequence(Asset *out, Entity *e);
+  void DrawSequence(Asset *out, Entity *e, int *ind);
 };
 
 struct Skybox {
   Asset               a_left, a_right, a_top, a_bottom, a_front, a_back;
   Entity              e_left, e_right, e_top, e_bottom, e_front, e_back;
   Scene::EntityVector v_left, v_right, v_top, v_bottom, v_front, v_back;
-
-  Skybox() :
-    a_left  ("", "", 1, 0, 0, Cube::Create(500, 500, 500).release(), 0, CubeMap::PX, TexGen::LINEAR),
-    a_right ("", "", 1, 0, 0, 0,                                     0, CubeMap::NX, 0),
-    a_top   ("", "", 1, 0, 0, 0,                                     0, CubeMap::PY, 0),
-    a_bottom("", "", 1, 0, 0, 0,                                     0, CubeMap::NY, 0),
-    a_front ("", "", 1, 0, 0, 0,                                     0, CubeMap::PZ, 0),
-    a_back  ("", "", 1, 0, 0, 0,                                     0, CubeMap::NZ, 0),
-    e_left ("sb_left",  &a_left),  e_right ("sb_right",  &a_right),
-    e_top  ("sb_top",   &a_top),   e_bottom("sb_bottom", &a_bottom),
-    e_front("sb_front", &a_front), e_back  ("sb_back",   &a_back)
-  { 
-    v_left .push_back(&e_left); v_right .push_back(&e_right);
-    v_top  .push_back(&e_left); v_bottom.push_back(&e_right);
-    v_front.push_back(&e_left); v_back  .push_back(&e_right);
-  }
-
-  void Load(const string &filename_prefix) {
-    a_left  .texture = StrCat(filename_prefix,   "_left.png"); a_left  .Load();
-    a_right .texture = StrCat(filename_prefix,  "_right.png"); a_right .Load();
-    a_top   .texture = StrCat(filename_prefix,    "_top.png"); a_top   .Load();
-    a_bottom.texture = StrCat(filename_prefix, "_bottom.png"); a_bottom.Load();
-    a_front .texture = StrCat(filename_prefix,  "_front.png"); a_front .Load();
-    a_back  .texture = StrCat(filename_prefix,   "_back.png"); a_back  .Load();
-  }
-
-  void Draw() {
-    screen->gd->DisableNormals();
-    screen->gd->DisableVertexColor();
-    screen->gd->DisableDepthTest();
-    Scene::Draw(&a_left,  0, v_left ); Scene::Draw(&a_right,  0, v_right);
-    Scene::Draw(&a_top,   0, v_top  ); Scene::Draw(&a_bottom, 0, v_bottom);
-    Scene::Draw(&a_front, 0, v_front); Scene::Draw(&a_back,   0, v_back);
-    screen->gd->EnableDepthTest();
-  }
+  Skybox();
 
   Asset *asset() { return &a_left; }
+  void Load(const string &filename_prefix);
+  void Draw();
 };
 
 struct ParticleSystem {
@@ -380,8 +342,8 @@ struct ParticleSystem {
   vector<v3> *pos_transform;
   int pos_transform_index;
   ParticleSystem(const string &n) : name(n), ort(0,0,1), updir(0,1,0), pos_transform(0), pos_transform_index(0) {}
-  virtual void Update(unsigned dt, int mx, int my, int mdown) = 0;
-  virtual void Draw() = 0;
+  virtual void Update(Entity *cam, unsigned dt, int mx, int my, int mdown) = 0;
+  virtual void Draw(GraphicsDevice*) = 0;
 };
 
 template <int MP, int MH, bool PerParticleColor> struct Particles : public ParticleSystem {
@@ -401,24 +363,20 @@ template <int MP, int MH, bool PerParticleColor> struct Particles : public Parti
     bool dead;
 
     void InitColor() {
-      if (config->rand_color) {
+      if (config->rand_color)
         color = Color(Rand(config->rand_color_min.r(), config->rand_color_max.r()),
                       Rand(config->rand_color_min.g(), config->rand_color_max.g()),
                       Rand(config->rand_color_min.b(), config->rand_color_max.b()),
                       Rand(config->rand_color_min.a(), config->rand_color_max.a()));
-      }
-      else if (config->emitter_type & Emitter::RainbowFade) {
-        color = Color::fade(config->color_fade);
-      } else {
-        color = config->color;
-      }
+      else if (config->emitter_type & Emitter::RainbowFade) color = Color::fade(config->color_fade);
+      else                                                  color = config->color;
       start_color = color;
     }
 
     void Init() {
       InitColor();
       radius = Rand(config->radius_min, config->radius_max);
-      history_len = Trails ? (int)Rand(max(3.0f, config->radius_min), static_cast<float>(MaxHistory)) : 1;
+      history_len = Trails ? int(Rand(max(3.0f, config->radius_min), float(MaxHistory))) : 1;
 
       v3 start;
       if (!config->move_with_pos) start = config->pos;
@@ -464,39 +422,38 @@ template <int MP, int MH, bool PerParticleColor> struct Particles : public Parti
     }
   };
 
-  int num_particles, nops, texture, verts_id, trailverts_id, num_trailverts, emitter_type, blend_mode_s, blend_mode_t, burst;
-  float floorval, gravity, radius_min, radius_max, age_min, age_max, rand_initpos, rand_initvel, emitter_angle, color_fade;
-  long long ticks_seen, ticks_processed, ticks_step;
+  int num_particles, nops=0, texture=0, verts_id=-1, trailverts_id=-1, num_trailverts, emitter_type=0;
+  int blend_mode_s=GraphicsDevice::SrcAlpha, blend_mode_t=GraphicsDevice::One, burst=0;
+  float floorval=0, gravity=0, radius_min, radius_max, age_min=.05, age_max=1, rand_initpos, rand_initvel, emitter_angle=0, color_fade=0;
+  long long ticks_seen=0, ticks_processed=0, ticks_step=0;
   float verts[NumFloats], trailverts[NumTrailFloats];
-  bool trails, floor, always_on, per_particle_color, radius_decay, billboard, move_with_pos, blend, rand_color, draw_each;
+  bool trails, floor=0, always_on, per_particle_color, radius_decay=1, billboard=0, move_with_pos=0, blend=1, rand_color=0;
   Color rand_color_min, rand_color_max;
   Particle particles[MP], *free_list[MP];
+  GraphicsDevice *gd=0;
+  Entity *cam=0;
+
+  Particles(const string &n, bool AlwaysOn=false, float RadiusMin=10, float RadiusMax=40, float RandInitPos=5, float RandInitVel=500) :
+    ParticleSystem(n), num_particles(AlwaysOn ? MaxParticles : 0), radius_min(RadiusMin), radius_max(RadiusMax), rand_initpos(RandInitPos),
+    rand_initvel(RandInitVel), trails(Trails), always_on(AlwaysOn), per_particle_color(PerParticleColor) {
+    for (int i=0; i<MP; i++) {
+      Particle *particle = &particles[i];
+      particle->dead = true;
+      particle->config = this;
+      free_list[i] = particle;
+      if (always_on) particle->Init();
+      float *v = particle_verts(i);
+      AssignTex(v, 0, 0); v += VertFloats;
+      AssignTex(v, 0, 1); v += VertFloats;
+      AssignTex(v, 1, 0); v += VertFloats;
+      AssignTex(v, 0, 1); v += VertFloats;
+      AssignTex(v, 1, 0); v += VertFloats;
+      AssignTex(v, 1, 1); v += VertFloats;
+    }
+  }
 
   float       *particle_verts(int n)       { return &verts[n * ParticleVerts * VertFloats]; }
   const float *particle_verts(int n) const { return &verts[n * ParticleVerts * VertFloats]; }
-
-  Particles(const string &n, bool AlwaysOn=false, float RadiusMin=10, float RadiusMax=40, float RandInitPos=5, float RandInitVel=500) : ParticleSystem(n), num_particles(AlwaysOn ? MaxParticles : 0),
-    nops(0), texture(0), verts_id(-1), trailverts_id(-1), emitter_type(0), blend_mode_s(GraphicsDevice::SrcAlpha), blend_mode_t(GraphicsDevice::One), burst(0), floorval(0), gravity(0),
-    age_min(.05), age_max(1), radius_min(RadiusMin), radius_max(RadiusMax), rand_initpos(RandInitPos), rand_initvel(RandInitVel), emitter_angle(0), color_fade(0),
-    ticks_seen(0), ticks_processed(0), ticks_step(0), trails(Trails), floor(0), always_on(AlwaysOn), per_particle_color(PerParticleColor), radius_decay(true), billboard(0), move_with_pos(0), blend(true), rand_color(0), draw_each(0)
-    {
-      for (int i=0; i<MP; i++) {
-        Particle *particle = &particles[i];
-        particle->dead = true;
-        particle->config = this;
-        free_list[i] = particle;
-        if (always_on) particle->Init();
-
-        float *v = particle_verts(i);
-        AssignTex(v, 0, 0); v += VertFloats;
-        AssignTex(v, 0, 1); v += VertFloats;
-        AssignTex(v, 1, 0); v += VertFloats;
-
-        AssignTex(v, 0, 1); v += VertFloats;
-        AssignTex(v, 1, 0); v += VertFloats;
-        AssignTex(v, 1, 1); v += VertFloats;
-      }
-    }
 
   Particle *AddParticle() {
     if (num_particles == MP) { nops++; return 0; }
@@ -511,7 +468,8 @@ template <int MP, int MH, bool PerParticleColor> struct Particles : public Parti
     free_list[--num_particles] = particle;
   }
 
-  void Update(unsigned dt, int mx, int my, int mdown) {
+  void Update(Entity *C, unsigned dt, int mx, int my, int mdown) {
+    cam = C;
     if (!dt) return;
     ticks_seen += dt;
     float secs = dt / 1000.0;
@@ -554,10 +512,10 @@ template <int MP, int MH, bool PerParticleColor> struct Particles : public Parti
       particle->Update(stepsecs);
       if (particle->dead) {
         if (always_on) particle->Init();
-        else { DelParticle(particle); return; }
+        else return DelParticle(particle);
       }
     }
-    if (!draw_each) UpdateVertices(particle, v, tv);
+    UpdateVertices(particle, v, tv);
   }
 
   void UpdateVertices(Particle *particle, float *v, float *tv) {
@@ -565,14 +523,12 @@ template <int MP, int MH, bool PerParticleColor> struct Particles : public Parti
     if (emitter_type & Emitter::GlowFade) particle->color = Color(remaining, remaining * 0.75, 1-remaining, 1.0);
     if (emitter_type & Emitter::FadeFromWhite) particle->color = Color::Interpolate(Color::white, particle->start_color, remaining);
 
-    v3 p = particle->history[0];
+    v3 p = particle->history[0], right, up;
     if (move_with_pos) p.Add(pos);
+    if (billboard) { right = v3::Cross(cam->ort, cam->up) * size; up = cam->up * size; }
+    else           { right = v3(size, 0, 0);                      up = v3(0, size, 0); }
 
-    v3 o1=p, o2=p, o3=p, o4=p, right, up;
-
-    if (billboard) { right = v3::Cross(screen->cam->ort, screen->cam->up) * size; up = screen->cam->up * size; }
-    else           { right = v3(size, 0, 0);                                      up = v3(0, size, 0); }
-
+    v3 o1=p, o2=p, o3=p, o4=p;
     o1.Add(-right + -up);
     o2.Add(-right +  up);
     o3.Add( right + -up);
@@ -581,21 +537,15 @@ template <int MP, int MH, bool PerParticleColor> struct Particles : public Parti
     AssignPosColor(v, o1, PerParticleColor ? &particle->color : 0, 2); v += VertFloats;
     AssignPosColor(v, o2, PerParticleColor ? &particle->color : 0, 2); v += VertFloats;
     AssignPosColor(v, o3, PerParticleColor ? &particle->color : 0, 2); v += VertFloats;
-
-    if (!draw_each) {
-      AssignPosColor(v, o2, PerParticleColor ? &particle->color : 0, 2); v += VertFloats;
-      AssignPosColor(v, o3, PerParticleColor ? &particle->color : 0, 2); v += VertFloats;
-      AssignPosColor(v, o4, PerParticleColor ? &particle->color : 0, 2); v += VertFloats;
-    } else {
-      AssignPosColor(v, o4, PerParticleColor ? &particle->color : 0, 2); v += VertFloats;
-      DrawParticles(GraphicsDevice::TriangleStrip, 4, vin, 4*VertSize);
-    }
+    AssignPosColor(v, o2, PerParticleColor ? &particle->color : 0, 2); v += VertFloats;
+    AssignPosColor(v, o3, PerParticleColor ? &particle->color : 0, 2); v += VertFloats;
+    AssignPosColor(v, o4, PerParticleColor ? &particle->color : 0, 2); v += VertFloats;
 
     if (trails) {
       v3 last_v1, last_v2, *history = particle->history;
       int history_len = particle->history_len;
       for (int i = 0; i < history_len - 1; i++) {
-        float step = 1.0f - i / (float)(history_len-1);
+        float step = 1.0f - i / float(history_len-1);
         v3 dp = history[i] - history[i+1];
         v3 perp1 = v3::Cross(dp, updir);
         v3 perp2 = v3::Cross(dp, perp1);
@@ -610,12 +560,6 @@ template <int MP, int MH, bool PerParticleColor> struct Particles : public Parti
           AssignPosColor(tv, last_v2, PerParticleColor ? &trail_color : 0, 0); tv += TrailVertFloats;
           AssignPosColor(tv,      v1, PerParticleColor ? &trail_color : 0, 0); tv += TrailVertFloats;
           num_trailverts += 3;
-#if 0
-          AssignPosColor(tv, last_v2, PerParticleColor ? &trail_color : 0, 0); tv += TrailVertFloats;
-          AssignPosColor(tv,      v1, PerParticleColor ? &trail_color : 0, 0); tv += TrailVertFloats;
-          AssignPosColor(tv,      v2.x,      v2.y,      v2.z, PerParticleColor ? &trail_color : 0, 0); tv += TrailVertFloats;
-          num_trailverts += 3;
-#endif
         }
         last_v1 = v1;
         last_v2 = v2;
@@ -623,59 +567,47 @@ template <int MP, int MH, bool PerParticleColor> struct Particles : public Parti
     }
   }
 
-  void Draw() {
-    screen->gd->DisableDepthTest();
-    screen->gd->DisableLighting();
-    screen->gd->DisableNormals();
-
+  void Draw(GraphicsDevice *GD) {
+    gd = GD;
+    gd->DisableDepthTest();
+    gd->DisableLighting();
+    gd->DisableNormals();
     if (blend) {
-      screen->gd->EnableBlend();
-      screen->gd->BlendMode(blend_mode_s, blend_mode_t);
+      gd->EnableBlend();
+      gd->BlendMode(blend_mode_s, blend_mode_t);
     }
-    if (PerParticleColor) {
-      screen->gd->EnableVertexColor();
-    }
+    if (PerParticleColor) gd->EnableVertexColor();
     if (texture) {
-      screen->gd->EnableTexture();
-      screen->gd->BindTexture(GraphicsDevice::Texture2D, texture);
+      gd->EnableTexture();
+      gd->BindTexture(GraphicsDevice::Texture2D, texture);
     }
 
-    if (draw_each) {
-      for (int i=0; i<MP; i++) {
-        if (particles[i].dead) continue;
-        UpdateVertices(&particles[i], particle_verts(i), &trailverts[i * TrailVertFloats]);
-      }
-    } else {
-      int update_size = verts_id < 0 ? sizeof(verts) : num_particles * ParticleSize;
-      DrawParticles(GraphicsDevice::Triangles, num_particles*ParticleVerts, verts, update_size);
+    int update_size = verts_id < 0 ? sizeof(verts) : num_particles * ParticleSize;
+    DrawParticles(GraphicsDevice::Triangles, num_particles*ParticleVerts, verts, update_size);
 
-      if (trails) {
-        int trail_update_size = trailverts_id < 0 ? sizeof(trailverts) : num_trailverts * TrailVertSize;
-        DrawTrails(trailverts, trail_update_size);
-      }
+    if (trails) {
+      int trail_update_size = trailverts_id < 0 ? sizeof(trailverts) : num_trailverts * TrailVertSize;
+      DrawTrails(trailverts, trail_update_size);
     }
 
-    if (PerParticleColor) screen->gd->DisableVertexColor();
+    if (PerParticleColor) gd->DisableVertexColor();
   }
 
   void DrawParticles(int prim_type, int num_verts, float *v, int l) {
-    if (1)                screen->gd->VertexPointer(3, GraphicsDevice::Float, VertSize, 0,               v, l, &verts_id, true, prim_type);
-    if (1)                screen->gd->TexPointer   (2, GraphicsDevice::Float, VertSize, 3*sizeof(float), v, l, &verts_id, false);
-    if (PerParticleColor) screen->gd->ColorPointer (4, GraphicsDevice::Float, VertSize, 5*sizeof(float), v, l, &verts_id, true);
-
-    screen->gd->DrawArrays(prim_type, 0, num_verts);
+    if (1)                gd->VertexPointer(3, GraphicsDevice::Float, VertSize, 0,               v, l, &verts_id, true, prim_type);
+    if (1)                gd->TexPointer   (2, GraphicsDevice::Float, VertSize, 3*sizeof(float), v, l, &verts_id, false);
+    if (PerParticleColor) gd->ColorPointer (4, GraphicsDevice::Float, VertSize, 5*sizeof(float), v, l, &verts_id, true);
+    gd->DrawArrays(prim_type, 0, num_verts);
   }
 
   void DrawTrails(float *v, int l) {
-    screen->gd->DisableTexture();
-
-    if (1)                screen->gd->VertexPointer(3, GraphicsDevice::Float, TrailVertSize, 0,               v, l, &trailverts_id, true, GraphicsDevice::Triangles);
-    if (PerParticleColor) screen->gd->ColorPointer (4, GraphicsDevice::Float, TrailVertSize, 3*sizeof(float), v, l, &trailverts_id, true);
-
-    screen->gd->DrawArrays(GraphicsDevice::Triangles, 0, num_trailverts);
+    gd->DisableTexture();
+    if (1)                gd->VertexPointer(3, GraphicsDevice::Float, TrailVertSize, 0,               v, l, &trailverts_id, true, GraphicsDevice::Triangles);
+    if (PerParticleColor) gd->ColorPointer (4, GraphicsDevice::Float, TrailVertSize, 3*sizeof(float), v, l, &trailverts_id, true);
+    gd->DrawArrays(GraphicsDevice::Triangles, 0, num_trailverts);
   }
 
-  void AssetDrawCB(Asset *out, Entity *e) { pos = e->pos; Draw(); }
+  void AssetDrawCB(GraphicsDevice *d, Asset *out, Entity *e) { pos = e->pos; Draw(d); }
 
   static void AssignTex(float *out, float tx, float ty) { out[3]=tx; out[4]=ty; }
   static void AssignPosColor(float *out, const v3 &v, const Color *c, int tex_size) {
@@ -691,6 +623,7 @@ template <class Line> struct RingFrameBuffer {
   point p;
   bool wrap=0;
   int w=0, h=0, font_size=0, font_height=0;
+  RingFrameBuffer(GraphicsDevice *d) : fb(d) {}
 
   void ResetGL() { w=h=0; fb.ResetGL(); }
   virtual int Width()  const { return w; }
@@ -700,23 +633,23 @@ template <class Line> struct RingFrameBuffer {
     if (W == w && H == h && font->size == font_size) return false;
     SetDimensions(W, H, font);
     fb.Resize(w, Height(), FrameBuffer::Flag::CreateGL | FrameBuffer::Flag::CreateTexture);
-    ScopedClearColor scc(bgc);
-    screen->gd->Clear();
-    screen->gd->DrawMode(DrawMode::_2D, false);
+    ScopedClearColor scc(fb.gd, bgc);
+    fb.gd->Clear();
+    fb.gd->DrawMode(DrawMode::_2D, false);
     return true;
   }
 
   virtual void Draw(point pos, point adjust, bool scissor=true) {
     Box box(pos.x, pos.y, w, Height());
-    if (scissor) screen->gd->PushScissor(box);
+    if (scissor) fb.gd->PushScissor(box);
     fb.tex.Bind();
     (box + adjust).DrawCrimped(fb.tex.coord, 0, 0, scroll.y);
-    if (scissor) screen->gd->PopScissor();
+    if (scissor) fb.gd->PopScissor();
   }
 
   void Clear(Line *l, const Box &b, bool vwrap=true) {
-    if (1)                         { Scissor s(0, l->p.y - b.h,      b.w, b.h); screen->gd->Clear(); }
-    if (l->p.y - b.h < 0 && vwrap) { Scissor s(0, l->p.y + Height(), b.w, b.h); screen->gd->Clear(); }
+    if (1)                         { Scissor s(fb.gd, 0, l->p.y - b.h,      b.w, b.h); fb.gd->Clear(); }
+    if (l->p.y - b.h < 0 && vwrap) { Scissor s(fb.gd, 0, l->p.y + Height(), b.w, b.h); fb.gd->Clear(); }
   }
 
   void Update(Line *l, const Box &b, const PaintCB &paint, bool vwrap=true) {
@@ -729,7 +662,7 @@ template <class Line> struct RingFrameBuffer {
     if (b.h >= ht)     p = paint(l,      point(0, ht),         b);
     else                   paint(l, (p = point(0, p.y + b.h)), b);
     if (p.y > ht && vwrap) paint(l, (p = point(0, p.y - ht)),  b);
-    ScrollPercent((float)-b.h / ht);
+    ScrollPercent(float(-b.h) / ht);
     return b.h;
   }
 
@@ -739,13 +672,13 @@ template <class Line> struct RingFrameBuffer {
     if (b.h >= ht)        p = paint(l, point(0, b.h),            b);
     else                  p = paint(l, point(0, p.y),            b);
     if (p.y < 0 && vwrap) p = paint(l, point(0, p.y + b.h + ht), b);
-    ScrollPercent((float)b.h / ht);
+    ScrollPercent(float(b.h) / ht);
     return b.h;
   }
 
   void SetDimensions(int W, int H, Font *f) { w = W; h = H; font_size = f->size; font_height = f->Height(); }
   void ScrollPercent(float y) { scroll.y = fmod(scroll.y + y, 1.0); }
-  void ScrollPixels(int y) { ScrollPercent((float)y / Height()); }
+  void ScrollPixels(int y) { ScrollPercent(float(y) / Height()); }
   void AdvancePixels(int y) { ScrollPixels(y); p.y = RingIndex::WrapOver(p.y - y, Height()); }
   point BackPlus(const point &o) { return point(RingIndex::WrapOver(p.x + o.x, Width()),
                                                 RingIndex::WrapOver(p.y + o.y, Height())); }
@@ -792,13 +725,10 @@ struct LayersInterface {
 
   virtual void Update();
   virtual void Draw(const Box &b, const point &p);
-  virtual void Init(int N=1) = 0;
+  virtual void Init(GraphicsDevice *D, int N=1) = 0;
 };
 
-#define TilesPreAdd(tiles, ...) CallbackListAdd(&(tiles)->prepend[(tiles)->context_depth]->cb, __VA_ARGS__)
-#define TilesPostAdd(tiles, ...) CallbackListAdd(&(tiles)->append[(tiles)->context_depth]->cb, __VA_ARGS__)
-#define TilesAdd(tiles, w, ...) (tiles)->AddCallback((w), bind(__VA_ARGS__));
-#define TilesMatrixIter(m) MatrixIter(m) if (Tile *tile = (Tile*)(m)->row(i)[j])
+#define TilesMatrixIter(m) MatrixIter(m) if (Tile *tile = static_cast<Tile*>((m)->row(i)[j]))
 template<class CB, class CBL, class CBLI> struct TilesT : public TilesInterface {
   struct Tile {
     CBL cb;
@@ -810,10 +740,21 @@ template<class CB, class CBL, class CBLI> struct TilesT : public TilesInterface 
   matrix<Tile*> mat;
   FrameBuffer fb;
   Box current_tile;
-  TilesT(int l, int w=256, int h=256) : layer(l), W(w), H(h), mat(1,1) { CHECK(IsPowerOfTwo(W)); CHECK(IsPowerOfTwo(H)); }
+  TilesT(GraphicsDevice *d, int l, int w=256, int h=256) : layer(l), W(w), H(h), mat(1,1), fb(d) { CHECK(IsPowerOfTwo(W)); CHECK(IsPowerOfTwo(H)); }
   ~TilesT() { TilesMatrixIter(&mat) delete tile; for (auto t : prepend) delete t; for (auto t : append) delete t; }
+  
+  template <class... Args> void PreAdd(Args&&... args) { prepend[context_depth]->cb.Add(forward<Args>(args)...); }
+  template <class... Args> void PostAdd(Args&&... args) { append[context_depth]->cb.Add(forward<Args>(args)...); }
+  template <class... Args> void AddCallback(const Box *box, Args&&... args) {
+    bool added = 0;
+    int x1, x2, y1, y2;
+    GetTileCoords(*box, &x1, &y1, &x2, &y2);
+    for (int y = max(y1, 0); y <= y2; y++)
+      for (int x = max(x1, 0); x <= x2; x++, added=1) GetTile(x, y)->cb.Add(args...);
+    if (!added) ERROR("AddCallback zero ", box->DebugString(), " = ", x1, " ", y1, " ", x2, " ", y2);
+  }
 
-  void PushScissor(const Box &w) const { screen->gd->PushScissorOffset(current_tile, w); }
+  void PushScissor(const Box &w) const { fb.gd->PushScissorOffset(current_tile, w); }
   void GetSpaceCoords(int i, int j, int *xo, int *yo) const { *xo =  j * W; *yo = (-i-1) * H; }
   void GetTileCoords (int x, int y, int *xo, int *yo) const { *xo =  x / W; *yo = -y     / H; }
   void GetTileCoords(const Box &box, int *x1, int *y1, int *x2, int *y2) const {
@@ -827,7 +768,7 @@ template<class CB, class CBL, class CBLI> struct TilesT : public TilesInterface 
     int add;
     if ((add = x - mat.N + 1) > 0) mat.AddCols(add);
     if ((add = y - mat.M + 1) > 0) mat.AddRows(add);
-    Tile **ret = (Tile**)&mat.row(y)[x];
+    Tile **ret = reinterpret_cast<Tile**>(&mat.row(y)[x]);
     if (!*ret) *ret = new Tile();
     if (!(*ret)->cb.dirty) {
       for (int i = (*ret)->prepend_depth; i <= context_depth; i++) (*ret)->cb.AddList(prepend[i]->cb);
@@ -855,15 +796,6 @@ template<class CB, class CBL, class CBLI> struct TilesT : public TilesInterface 
     context_depth--;
   }
 
-  void AddCallback(const Box *box, const CB &cb) {
-    bool added = 0;
-    int x1, x2, y1, y2;
-    GetTileCoords(*box, &x1, &y1, &x2, &y2);
-    for (int y = max(y1, 0); y <= y2; y++)
-      for (int x = max(x1, 0); x <= x2; x++, added=1) GetTile(x, y)->cb.Add(cb);
-    if (!added) FATAL("AddCallback ", box->DebugString(), " = ", x1, " ", y1, " ", x2, " ", y2);
-  }
-
   void Run(int flag) {
     bool clear_empty = (flag & RunFlag::ClearEmpty);
     Select();
@@ -879,26 +811,26 @@ template<class CB, class CBL, class CBLI> struct TilesT : public TilesInterface 
     bool init = !fb.ID;
     if (init) fb.Create(W, H);
     current_tile = Box(0, 0, W, H);
-    screen->gd->DrawMode(DrawMode::_2D);
-    screen->gd->ViewPort(current_tile);
-    screen->gd->EnableLayering();
+    fb.gd->DrawMode(DrawMode::_2D);
+    fb.gd->ViewPort(current_tile);
+    fb.gd->EnableLayering();
   }
 
   void RunTile(int i, int j, int flag, Tile *tile, const CBLI &tile_cb) {
     GetSpaceCoords(i, j, &current_tile.x, &current_tile.y);
     if (!tile->id) fb.AllocTexture(&tile->id);
     fb.Attach(tile->id);
-    screen->gd->MatrixProjection();
-    if (!(flag & RunFlag::DontClear)) screen->gd->Clear();
-    screen->gd->LoadIdentity();
-    screen->gd->Ortho(current_tile.x, current_tile.x + W, current_tile.y, current_tile.y + H, 0, 100);
-    screen->gd->MatrixModelview();
+    fb.gd->MatrixProjection();
+    if (!(flag & RunFlag::DontClear)) fb.gd->Clear();
+    fb.gd->LoadIdentity();
+    fb.gd->Ortho(current_tile.x, current_tile.x + W, current_tile.y, current_tile.y + H, 0, 100);
+    fb.gd->MatrixModelview();
     tile_cb.Run(current_tile);
   }
 
   void Release() {
     fb.Release();
-    screen->gd->RestoreViewport(DrawMode::_2D);
+    fb.gd->RestoreViewport(DrawMode::_2D);
   }
 
   void Draw(const Box &viewport, const point &docp) {
@@ -906,15 +838,15 @@ template<class CB, class CBL, class CBLI> struct TilesT : public TilesInterface 
     point doc_to_view = docp - viewport.Position();
     GetTileCoords(Box(docp.x, docp.y, viewport.w, viewport.h), &x1, &y1, &x2, &y2);
 
-    Scissor scissor(viewport);
-    screen->gd->DisableBlend();
-    screen->gd->SetColor(Color::white);
+    Scissor scissor(fb.gd, viewport);
+    fb.gd->DisableBlend();
+    fb.gd->SetColor(Color::white);
     for (int y = max(y1, 0); y <= y2; y++) {
       for (int x = max(x1, 0); x <= x2; x++) {
         Tile *tile = GetTile(x, y);
         if (!tile || !tile->id) continue;
         GetSpaceCoords(y, x, &sx, &sy);
-        screen->gd->BindTexture(GraphicsDevice::Texture2D, tile->id);
+        fb.gd->BindTexture(GraphicsDevice::Texture2D, tile->id);
         Box(sx - doc_to_view.x, sy - doc_to_view.y, W, H).Draw(Texture::unit_texcoord);
       }
     }
@@ -923,7 +855,7 @@ template<class CB, class CBL, class CBLI> struct TilesT : public TilesInterface 
 
 struct Tiles : public TilesT<Callback, CallbackList, CallbackList> {
   const Drawable::Attr *attr=0;
-  Tiles(int l, int w=256, int h=256) : TilesT(l, w, h) {}
+  Tiles(GraphicsDevice *d, int l, int w=256, int h=256) : TilesT(d, l, w, h) {}
   void SetAttr           (const Drawable::Attr *a) { attr=a; }
   void InitDrawBox       (const point&);
   void InitDrawBackground(const point&);
@@ -933,7 +865,10 @@ struct Tiles : public TilesT<Callback, CallbackList, CallbackList> {
 };
 
 template <class X> struct LayersT : public LayersInterface {
-  void Init(int N=1) { CHECK_EQ(this->layer.size(), 0); for (int i=0; i<N; i++) this->layer.emplace_back(make_unique<X>(i)); }
+  void Init(GraphicsDevice *D, int N=1) {
+    CHECK_EQ(this->layer.size(), 0);
+    for (int i=0; i<N; i++) this->layer.emplace_back(make_unique<X>(D, i));
+  }
 };
 
 typedef LayersT<Tiles> Layers;

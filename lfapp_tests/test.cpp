@@ -20,7 +20,7 @@
 #include "lfapp/lfapp.h"
 
 GTEST_API_ int main(int argc, const char **argv) {
-  testing::InitGoogleTest(&argc, (char**)argv);
+  testing::InitGoogleTest(&argc, const_cast<char**>(argv));
   LFL::FLAGS_default_font = LFL::FakeFontEngine::Filename();
   CHECK_EQ(LFL::app->Create(argc, argv, __FILE__), 0);
   return RUN_ALL_TESTS();

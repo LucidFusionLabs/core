@@ -30,7 +30,8 @@ CudaAcousticModel *CAM = 0;
 #endif
 
 namespace LFL {
-DEFINE_bool(TriphoneModel, false, "Using triphone model");
+DEFINE_bool(triphone_model, false, "Using triphone model");
+DEFINE_bool(speech_recognition_debug, false, "Debug speech recognition");
 
 /* phonemes */
 const char *Phoneme::Name(char in) {
@@ -69,7 +70,7 @@ int PronunciationDict::ReadDictionary(StringIter *in, PronunciationDict *out) {
     /* Format: word <two spaces> pronunciation */
     c += LengthChar(c, notspace);
     if (!*c || !isspace(*(c+1))) continue;
-    *(char *)c = 0;
+    *const_cast<char*>(c) = 0;
 
     const char *word=line, *pronunciation=c+2; /* (k,v) */
 
@@ -95,7 +96,7 @@ int PronunciationDict::ReadPronunciation(const char *in, int len, char *phonesOu
 
     int accent = LengthChar(phone.c_str(), isalpha);
     char stress = phone[accent];
-    ((char *)phone_text)[accent]=0;
+    const_cast<char*>(phone_text)[accent]=0;
     accent = isdigit(stress) ? stress - '0' : 0;
 
     if (!(phonesOut[outi] = Phoneme::Id(phone.c_str(), 0))) return -1;
@@ -209,15 +210,15 @@ Matrix *Features::FromFeat(Matrix *features, int flag, bool filterzeroth, bool d
     if (filterzeroth) features = FilterZeroth(features);
 
     if (meannorm) {
-      double *mean = (double *)alloca(features->N * sizeof(double));
-      double *var = (double *)alloca(features->N * sizeof(double));
+      vector<double> mean(features->N);
+      vector<double> var(features->N);
 
-      Vector::Assign(mean, 0.0, features->N);
-      MatrixRowIter(features) Vector::Add(mean, features->row(i), features->N);
-      Vector::Div(mean, features->M, features->N);
+      Vector::Assign(&mean[0], 0.0, features->N);
+      MatrixRowIter(features) Vector::Add(&mean[0], features->row(i), features->N);
+      Vector::Div(&mean[0], features->M, features->N);
 
       if (varnorm) {                
-        Vector::Assign(var, 0.0, features->N);
+        Vector::Assign(&var[0], 0.0, features->N);
         MatrixIter(features) {
           double diff = features->row(i)[j] - mean[j];
           var[j] += diff*diff;
@@ -226,7 +227,7 @@ Matrix *Features::FromFeat(Matrix *features, int flag, bool filterzeroth, bool d
       }
 
       MatrixRowIter(features) {
-        MeanAndVarianceNormalization(features->N, features->row(i), mean, variance_normalization ? var : 0);
+        MeanAndVarianceNormalization(features->N, features->row(i), &mean[0], variance_normalization ? &var[0] : 0);
       }            
     }
 
@@ -241,7 +242,7 @@ Matrix *Features::FromFeat(Matrix *features, int flag) {
 
 Matrix *Features::FromAsset(SoundAsset *wav, int flag) {
   if (wav->channels > 1) ERROR("Features::fromAsset called on SoundAsset with ", wav->channels, " channels");
-  RingBuf::Handle B(wav->wav);
+  RingBuf::Handle B(wav->wav.get());
   Matrix *features = FromBuf(&B);
   return FromFeat(features, flag);
 }
@@ -276,9 +277,9 @@ double *AcousticModel::State::Transit(Compiled *model, Matrix *transit, State *R
   return AcousticModel::State::Transit(transit, to);
 }
 
-double *AcousticModel::State::Transit(Matrix *trans, unsigned K) { double k[3]={0,(double)K,0}; return (double*)bsearch(k, trans->m, trans->M, sizeof(double)*TransitCols, TransitionSort); }
+double *AcousticModel::State::Transit(Matrix *trans, unsigned K) { double k[3]={0,double(K),0}; return FromVoid<double*>(bsearch(k, trans->m, trans->M, sizeof(double)*TransitCols, TransitionSort)); }
 
-int AcousticModel::State::TransitionSort(const void *a, const void *b) { return DoubleSortR((void*)((double*)a+1), (void*)((double*)b+1)); }
+int AcousticModel::State::TransitionSort(const void *a, const void *b) { return DoubleSortR(Void(FromVoid<const double*>(a)+1), Void(FromVoid<const double*>(b)+1)); }
 
 void AcousticModel::State::SortTransitionMap(double *trans, int M) { qsort(trans, M, sizeof(double)*TransitCols, TransitionSort); }
 
@@ -351,7 +352,7 @@ void AcousticModel::State::Assign(State *out, int *outind, int outsize, StateCol
     if (tied) {
       static unsigned silhash = fnv32("Model_SIL_State_00");
 
-      out[ind].alloc = Singleton<MallocAlloc>::Get();
+      out[ind].alloc = Singleton<MallocAllocator>::Get();
       out[ind].name = n;
 
       MatrixIter(&out[ind].transition) { out[ind].transition.row(i)[TC_Self] = ohash; }
@@ -407,7 +408,7 @@ string AcousticModel::Flags() {
   if (Features::deltas)                 s += ",delta";
   if (Features::deltadeltas)            s += ",deltadelta";
 
-  if (FLAGS_TriphoneModel) s += ",triphone";
+  if (FLAGS_triphone_model) s += ",triphone";
 
   return s;
 }
@@ -416,7 +417,7 @@ void AcousticModel::LoadFlags(const char *flags) {
   StringWordIter iter(flags, iscomma);
   for (string k = iter.NextString(); !iter.Done(); k = iter.NextString()) {
     char *v; double val;
-    if ((v = (char*)strchr(k.c_str(), '='))) { *v++=0; val=atof(v); }
+    if ((v = const_cast<char*>(strchr(k.c_str(), '=')))) { *v++=0; val=atof(v); }
 
     if      (k == "sr")         FLAGS_sample_rate = val;
     else if (k == "type")       FLAGS_feat_type   = v;
@@ -432,7 +433,7 @@ void AcousticModel::LoadFlags(const char *flags) {
     else if (k == "delta")        Features::deltas                 = 1;
     else if (k == "deltadelta")   Features::deltadeltas            = 1;
     else if (k == "preemph") { FLAGS_feat_preemphasis_filter = val; FLAGS_feat_preemphasis = 1; }
-    else if (k == "triphone") { FLAGS_TriphoneModel = 1; }
+    else if (k == "triphone") { FLAGS_triphone_model = 1; }
   }
   INFO("loaded flags: ", flags);
 }
@@ -480,7 +481,7 @@ int AcousticModel::Write(StateCollection *model, const char *name, const char *d
   /* write data */
   states=means=transits=0;
   for (model->BeginState(&iter); !iter.done; model->NextState(&iter)) {
-    AcousticModel::State *s = (AcousticModel::State*)iter.v;
+    AcousticModel::State *s = FromVoid<AcousticModel::State*>(iter.v);
     if (minSamples && s->val.samples < minSamples) continue;
 
     StringFile::WriteRow(&names, s->name);
@@ -552,7 +553,7 @@ AcousticModel::Compiled *AcousticModel::FullyConnected(Compiled *model) {
 }
 
 AcousticModel::Compiled *AcousticModel::FromUtterance(Compiled *model, const char *transcript, bool UseTransit) {
-  return FLAGS_TriphoneModel ? FromUtterance3(model, transcript, UseTransit) : FromUtterance1(model, transcript, UseTransit);
+  return FLAGS_triphone_model ? FromUtterance3(model, transcript, UseTransit) : FromUtterance1(model, transcript, UseTransit);
 }
 
 /* context independent utterance model */
@@ -572,7 +573,7 @@ AcousticModel::Compiled *AcousticModel::FromUtterance1(AcousticModel::Compiled *
   }
   hmm->states = len;
 
-  if (FLAGS_lfapp_debug) {
+  if (FLAGS_speech_recognition_debug) {
     INFO("lattice pre patch");
     AcousticHMM::PrintLattice(hmm, model);
   }
@@ -667,7 +668,7 @@ AcousticModel::Compiled *AcousticModel::FromUtterance3(AcousticModel::Compiled *
   }
   hmm->states = len;
 
-  if (FLAGS_lfapp_debug) {
+  if (FLAGS_speech_recognition_debug) {
     INFO("lattice pre patch");
     AcousticHMM::PrintLattice(hmm, model);
   }
@@ -739,7 +740,7 @@ AcousticModel::Compiled *AcousticModel::FromUtterance3(AcousticModel::Compiled *
   final->transition.row(0)[TC_Edge] = len-1;
   final->transition.row(0)[TC_Cost] = fstrcost;
 
-  if (FLAGS_lfapp_debug) {
+  if (FLAGS_speech_recognition_debug) {
     INFO("lattice pre localization");
     AcousticHMM::PrintLattice(hmm, model);
   }
@@ -757,7 +758,7 @@ AcousticModel::Compiled *AcousticModel::FromUtterance3(AcousticModel::Compiled *
     s->transition.M++;
   }
 
-  if (FLAGS_lfapp_debug) {
+  if (FLAGS_speech_recognition_debug) {
     INFO("lattice post localization");
     AcousticHMM::PrintLattice(hmm, model);
   }
@@ -786,7 +787,7 @@ AcousticModel::Compiled *AcousticModel::FromModel1(StateCollection *model, bool 
   }
 
   if (rewriteTransitions) {
-    double tp = log((double)1/LFL_PHONES);
+    double tp = log(1.0/LFL_PHONES);
     Matrix *trans = new Matrix(LFL_PHONES, TransitCols);
     MatrixRowIter(trans) {
       trans->row(i)[TC_Edge] = i*StatesPerPhone;
@@ -937,8 +938,8 @@ double AcousticHMM::UniformViterbi(AcousticModel::Compiled *model, Matrix *obser
     states++;
   }
 
-  double spmF = (double)obvs/states;
-  int spm = (int)spmF, len=0;
+  double spmF = double(obvs)/states;
+  int spm = int(spmF), len=0;
   spmF -= spm;
 
   for (int i=0; i<model->states; i++) {
@@ -957,7 +958,7 @@ void AcousticHMM::PrintLattice(AcousticModel::Compiled *hmm, AcousticModel::Comp
     StrAppend(&v, s->name, " (", s->Id(), " ", model ? model->state[s->val.emission_index].Id() : 0, ")");
     StrAppend(&v, " ei=", s->val.emission_index, " sc=", s->val.samples, " tx = ");
     for (int j=0; j<s->transition.M; j++) {
-      StringAppendf(&v, "%u = %.02f, ", (unsigned)s->transition.row(j)[TC_Edge], s->transition.row(j)[TC_Cost]);
+      StringAppendf(&v, "%u = %.02f, ", unsigned(s->transition.row(j)[TC_Edge]), s->transition.row(j)[TC_Cost]);
     }
     INFO(v);
   }
@@ -969,8 +970,8 @@ void AcousticHMM::EmissionArray::Calc(AcousticModel::Compiled *model, HMM::Activ
 #ifdef LFL_CUDA
   if (lfapp_cuda) {
     if (posterior && !cudaposterior) FATAL("posterior ", posterior, " requires cudaposterior ", cudaposterior);
-    double *cudaemission = (double*)alloca(active_states*sizeof(double));
-    int *beam = (int*)alloca(active_states*sizeof(int));
+    vector<double> cudaemission(active_states);
+    vector<int> beam(active_states);
     int K = model->state[0].emission.mean.M;
 
     HMM::ActiveState::Iterator stateI; int ind=0;
@@ -979,7 +980,7 @@ void AcousticHMM::EmissionArray::Calc(AcousticModel::Compiled *model, HMM::Activ
       beam[ind++] = si->val.emission_index;
     }
 
-    if (CudaAcousticModel::calcEmissions(CAM, observation, beam, active->size(), cudaemission, cudaposterior))
+    if (CudaAcousticModel::calcEmissions(CAM, observation, &beam[0], active->size(), &cudaemission[0], cudaposterior))
       ERROR("cuda calc emissions failed: ", CAM);
 
     ind = 0;
@@ -1015,7 +1016,7 @@ Matrix *Decoder::DecodeFile(AcousticModel::Compiled *model, const char *fn, doub
 
 Matrix *Decoder::DecodeFeatures(AcousticModel::Compiled *model, Matrix *features, double beamWidth, int flag) {
   if (!DimCheck("DecodeFeatures", features->N, model->state[0].emission.mean.N)) return 0;
-  if (FLAGS_lfapp_debug) AcousticHMM::PrintLattice(model);
+  if (FLAGS_speech_recognition_debug) AcousticHMM::PrintLattice(model);
 
   Matrix *viterbi = new Matrix(features->M, 1); Timer vtime;
   double vprob = AcousticHMM::Viterbi(model, features, viterbi, 0, beamWidth, flag);
@@ -1038,7 +1039,8 @@ void Decoder::VisualizeFeatures(AcousticModel::Compiled *model, Matrix *MFCC, Ma
   static PhoneticSegmentationGUI *segments = 0;
   static bool interactive_done;
 
-  Replace(&segments, new PhoneticSegmentationGUI(screen, model, viterbi, "visbuf"));
+  delete segments;
+  segments = new PhoneticSegmentationGUI(model, viterbi, "visbuf");
   interactive_done = 0;
 
   SoundAsset sa;
@@ -1046,27 +1048,27 @@ void Decoder::VisualizeFeatures(AcousticModel::Compiled *model, Matrix *MFCC, Ma
   sa.Load();
   sa.channels = 1;
   sa.sample_rate = FLAGS_sample_rate;
-  sa.wav = Features::Reverse(MFCC, FLAGS_sample_rate);
-  RingBuf::Handle B = RingBuf::Handle(sa.wav);
+  sa.wav = unique_ptr<RingBuf>(Features::Reverse(MFCC, FLAGS_sample_rate));
+  RingBuf::Handle B = RingBuf::Handle(sa.wav.get());
 
   Matrix *spect = Spectogram(&B, 0, FLAGS_feat_window, FLAGS_feat_hop, FLAGS_feat_window, 0, PowerDomain::dB);
-  Asset *snap = app->shell.asset("snap");
+  Asset *snap = screen->shell->asset("snap");
   glSpectogram(spect, &snap->tex, 0);
   delete spect;
 
   if (FLAGS_lfapp_audio) app->audio->QueueMixBuf(&B);
   INFO("vprob=", vprob, " vtime=", vtime.count());
-  Font *font = Fonts::Default();
+  Font *font = app->fonts->Default();
 
   Box wcc = Box(5,345, 400,100);
   while (app->run && (app->audio->Out.size() || (interactive && !interactive_done))) {
     app->HandleEvents(app->frame_time.GetTime(true).count());
 
     screen->gd->DrawMode(DrawMode::_2D);
-    app->shell.asset("snap")->tex.Draw(wcc); // 4);
+    screen->shell->asset("snap")->tex.Draw(wcc); // 4);
 
     int levels=10;
-    float percent = 1-(float)app->audio->Out.size()/app->audio->outlast;
+    float percent = 1-float(app->audio->Out.size())/app->audio->outlast;
     font->Draw(StringPrintf("time=%d vprob=%f percent=%f next=%d", vtime.count(), vprob, percent, interactive_done), point(10, 440));
 
     percent -= feat_progressbar_c*FLAGS_sample_rate*FLAGS_chans_out/app->audio->outlast;
@@ -1078,11 +1080,11 @@ void Decoder::VisualizeFeatures(AcousticModel::Compiled *model, Matrix *MFCC, Ma
     for (Decoder::PhoneIter iter(model, viterbi); !iter.Done(); iter.Next()) {
       if (!iter.phone) continue;
       int r = count++%levels+1;
-      font->Draw(Phoneme::Name(iter.phone), point(wcc.x+(float)iter.beg*wcc.w/viterbi->M, wcc.y-r*30));
+      font->Draw(Phoneme::Name(iter.phone), point(wcc.x+float(iter.beg)*wcc.w/viterbi->M, wcc.y-r*30));
     }
 
     if (interactive) {
-      static Font *norm = Fonts::Get(FLAGS_default_font, "", 12, Color::grey70);
+      static Font *norm = app->fonts->Get(FLAGS_default_font, "", 12, Color::grey70);
       segments->Frame(wcc, norm);
 
       // gui.mouse.Activate();
@@ -1101,7 +1103,7 @@ void Decoder::VisualizeFeatures(AcousticModel::Compiled *model, Matrix *MFCC, Ma
 
 int Resynthesize(Audio *s, const SoundAsset *sa) {
   if (!sa->wav) return -1;
-  RingBuf::Handle B(sa->wav);
+  RingBuf::Handle B(sa->wav.get());
   Matrix *m = Features::FromBuf(&B);
   Matrix *f0 = F0Stream(&B, 0, FLAGS_feat_window, FLAGS_feat_hop);
 

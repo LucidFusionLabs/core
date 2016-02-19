@@ -178,7 +178,7 @@ struct WFST {
       return (i == end() || (*i) != state) ? -1 : i - begin();
     }
     void Sort() {
-      ::sort(begin(), end());
+      sort(begin(), end());
       erase(unique(begin(), end()), end());
     }
     void Clear() { vector<int>::clear(); }
@@ -206,7 +206,7 @@ struct WFST {
       return set->row(ind)[0];
     }
     int Find(int state) {
-      double x = state, *row = (double*)bsearch(&x, set->m, set->M, sizeof(double), DoubleSortR);
+      double x = state, *row = FromVoid<double*>(bsearch(&x, set->m, set->M, sizeof(double), DoubleSortR));
       return row ? row - set->m : -1;
     }
     void Clear()                   { FATAL(this, " function not implemented"); }
@@ -217,7 +217,7 @@ struct WFST {
       LocalFile out(string(dir) + MatrixFile::Filename(name1, name2, "matrix", iteration), "w");
       MatrixFile::WriteHeader(&out, BaseName(out.Filename()), "", S->States(), 1);
       for (int i=0, l=S->States(); i<l; i++) {
-        double row[] = { (double)S->State(i) };
+        double row[] = { double(S->State(i)) };
         MatrixFile::WriteRow(&out, row, 1);
       }
       return 0;
@@ -362,7 +362,7 @@ struct WFST {
     TransitMapMatrix(Matrix *State, Matrix *Transit) : state(State), transit(Transit) {}
 
     static int SourceInputRowSort(const void *R1, const void *R2) { 
-      const double *r1 = (double*)R1, *r2 = (double*)R2;
+      const double *r1 = FromVoid<const double*>(R1), *r2 = FromVoid<const double*>(R2);
       if      (r1[0] < r2[0]) return -1; else if (r2[0] < r1[0]) return 1;
       else if (r1[2] < r2[2]) return -1; else if (r2[2] < r1[2]) return 1;
       return 0;
@@ -377,8 +377,8 @@ struct WFST {
       double *row = transit->row(transitIndex);
 
       if (input != -1) {
-        double seek[] = { (double)stateIndex, -1, (double)input, -1, -1 }, *found; 
-        found = (double*)bsearch(&seek, row, transitCount, sizeof(double)*Edge::Cols, SourceInputRowSort);
+        double seek[] = { double(stateIndex), -1, double(input), -1, -1 }, *found; 
+        found = FromVoid<double*>(bsearch(&seek, row, transitCount, sizeof(double)*Edge::Cols, SourceInputRowSort));
         if (!found) { iter->done=1; return; }
         while (found >= row && found[0] == stateIndex && found[2] == input) found -= Edge::Cols;
         transitIndex += (found - row) / Edge::Cols + 1;
@@ -426,11 +426,11 @@ struct WFST {
       int transits = 0;
       Matrix map(NextPrime(M->Transitions()*4), HashBuckets * HashValues);
       for (int i=0, l=M->States(); i<l; i++) {
-        double row[] = { (double)i, (double)transits, (double)M->Transitions(i), 0 };
+        double row[] = { double(i), double(transits), double(M->Transitions(i)), 0 };
 
         Iterator iter; int count=0;
         for (M->Begin(&iter, i); !iter.done; M->Next(&iter)) {
-          double row[] = { (double)iter.prevState, (double)iter.nextState, (double)iter.in, (double)iter.out, (double)iter.weight };
+          double row[] = { double(iter.prevState), double(iter.nextState), double(iter.in), double(iter.out), double(iter.weight) };
           MatrixFile::WriteRow(&transit, row, Edge::Cols);
           transits++;
           count++;
@@ -464,7 +464,7 @@ struct WFST {
       Edge lower(reverse ? -1 : state, reverse ? state : -1, input, -1, -1);
       Edgevec::iterator it = lower_bound(transits.begin(), transits.end(), lower, reverse ? Edge::Reverse : Edge::LessThan);
       if (Done(it, state, input)) { iter->done = 1; return; }
-      *(Edge*)iter = (*it++);
+      *static_cast<Edge*>(iter) = (*it++);
       iter->impl1 = it - transits.begin();
       iter->impl2 = state;
       iter->impl3 = input;
@@ -473,7 +473,7 @@ struct WFST {
     void Next(Iterator *iter) {
       Edgevec::iterator it = transits.begin() + iter->impl1;
       if (Done(it, iter->impl2, iter->impl3)) { iter->done = 1; return; }
-      *(Edge*)iter = (*it++);
+      *static_cast<Edge*>(iter) = (*it++);
       iter->impl1 = it - transits.begin();
     }
     bool Done(Edgevec::iterator it, int state, int input) {
@@ -491,7 +491,7 @@ struct WFST {
       transits.push_back(e);
     }
     void Add(const Edgevec &ev) { for (Edgevec::const_iterator i = ev.begin(); i != ev.end(); i++) Add(*i); }
-    void Sort() { ::sort(transits.begin(), transits.end(), reverse ? Edge::Reverse : Edge::LessThan); }
+    void Sort() { sort(transits.begin(), transits.end(), reverse ? Edge::Reverse : Edge::LessThan); }
     void SubtractIDs(int n) { for (Edgevec::iterator i = transits.begin(); i != transits.end(); i++) { (*i).prevState -= n; (*i).nextState -= n; } maxStateInd -= n; }
     int MaxID() { int ret=-1; for (Edgevec::iterator i = transits.begin(); i != transits.end(); i++) { if ((*i).prevState > ret) ret = (*i).prevState; if ((*i).nextState > ret) ret = (*i).nextState; } return ret; }
 
@@ -1011,7 +1011,7 @@ struct WFST {
       }
       int operator()(int r2s, int r2i, int matches, Edge *singleMatchOut=0) {
         if (r2s || !r2i) return SingleSourceNullClosure::operator()(r2s, r2i, matches, singleMatchOut);
-        TransitMapMatrix *E = (TransitMapMatrix *)T2->E;
+        TransitMapMatrix *E = static_cast<TransitMapMatrix*>(T2->E);
         TransitMap::Iterator edge2;
         E->Begin(&edge2, r2s);
         double *row = E->transit->row(edge2.impl1 + r2i - 2);
@@ -1589,8 +1589,8 @@ struct WFST {
       }
 
       int prevState = FindOrInsert(idmap, wordhash, state, &state)->second;
-      E->Add(0, prevState, out, out, -log((double)LM_count / LM->total));
-      E->Add(prevState, 0, 0, 0, -log((double)1 / (LM_transits+1)));
+      E->Add(0, prevState, out, out, -log(double(LM_count) / LM->total));
+      E->Add(prevState, 0, 0, 0, -log(1.0 / (LM_transits+1)));
 
       for (int i=0; i<LM_transits; i++) {
         double *tr = LM->transit->row(LM_transitInd + i);
@@ -1621,7 +1621,7 @@ struct WFST {
       if (!pronunciation || !*pronunciation) { ERROR("no pronuciation for existing word '", word, "'"); continue; }
 
       /* disambiguate homophones */ 
-      map<string, int>::iterator hpi = FindOrInsert(homophone, string(pronunciation), (int)0);
+      map<string, int>::iterator hpi = FindOrInsert(homophone, string(pronunciation), int(0));
       (*hpi).second++;
       for (int i=max_homophones; i<(*hpi).second; i++) if ((id = aux->Add(StrCat("#", i+1))) != i+1) FATAL("mismatch ", id, " != ", i+1);
 
@@ -1633,7 +1633,7 @@ struct WFST {
 
         double weight = K->One(); int priorInd;
         if (out_on_this && LM && LM->Get(word, &priorInd)) /* unigram LM */
-          weight = -log((double)LM->Occurrences(priorInd) / LM->total);
+          weight = -log(double(LM->Occurrences(priorInd)) / LM->total);
 
         int nextstate = state+1;
         E->Add(state++, nextstate, pronunciation[j], out_on_this ? B->Add(word) : 0, weight);

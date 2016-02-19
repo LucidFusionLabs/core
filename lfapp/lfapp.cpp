@@ -34,11 +34,9 @@ extern "C" {
 
 #include <time.h>
 #include <fcntl.h>
-#include <sys/stat.h>
 
 #ifdef WIN32
 #define CALLBACK __stdcall
-#include <Shlobj.h>
 #include <Windns.h>
 #define stat(x,y) _stat(x,y)
 #define gmtime_r(i,o) memcpy(o, gmtime(&in), sizeof(tm))
@@ -46,9 +44,6 @@ extern "C" {
 #else
 #include <signal.h>
 #include <pthread.h>
-#include <sys/mman.h>
-#include <sys/types.h>
-#include <sys/resource.h>
 #include <dlfcn.h>
 #endif
 
@@ -135,7 +130,7 @@ extern "C" void OSXDelWaitForeverSocket(void*, int fd);
 #endif
 
 extern "C" void BreakHook() {}
-extern "C" void ShellRun(const char *text) { return LFL::app->shell.Run(text); }
+extern "C" void ShellRun(const char *text) { return LFL::screen->shell->Run(text); }
 extern "C" NativeWindow *GetNativeWindow() { return LFL::screen; }
 extern "C" LFApp        *GetLFApp()        { return LFL::app; }
 extern "C" int LFAppMain()                 { return LFL::app->Main(); }
@@ -150,16 +145,16 @@ extern "C" void WindowReshaped(int w, int h)      { LFL::screen->Reshaped(w, h);
 extern "C" void WindowMinimized()                 { LFL::screen->Minimized(); }
 extern "C" void WindowUnMinimized()               { LFL::screen->UnMinimized(); }
 extern "C" void WindowClosed()                    { LFL::app->CloseWindow(LFL::screen); }
-extern "C" void QueueWindowReshaped(int w, int h) { LFL::app->RunInMainThread(bind(&LFL::Window::Reshaped,    LFL::screen, w, h)); }
-extern "C" void QueueWindowMinimized()            { LFL::app->RunInMainThread(bind(&LFL::Window::Minimized,   LFL::screen)); }
-extern "C" void QueueWindowUnMinimized()          { LFL::app->RunInMainThread(bind(&LFL::Window::UnMinimized, LFL::screen)); }
-extern "C" void QueueWindowClosed()               { LFL::app->RunInMainThread(bind([=](){ LFL::app->CloseWindow(LFL::screen); })); }
+extern "C" void QueueWindowReshaped(int w, int h) { LFL::app->RunInMainThread(LFL::bind(&LFL::Window::Reshaped,    LFL::screen, w, h)); }
+extern "C" void QueueWindowMinimized()            { LFL::app->RunInMainThread(LFL::bind(&LFL::Window::Minimized,   LFL::screen)); }
+extern "C" void QueueWindowUnMinimized()          { LFL::app->RunInMainThread(LFL::bind(&LFL::Window::UnMinimized, LFL::screen)); }
+extern "C" void QueueWindowClosed()               { LFL::app->RunInMainThread(LFL::bind([=](){ LFL::app->CloseWindow(LFL::screen); })); }
 extern "C" int  KeyPress  (int b, int d)                    { return LFL::app->input->KeyPress  (b, d); }
 extern "C" int  MouseClick(int b, int d, int x,  int y)     { return LFL::app->input->MouseClick(b, d, LFL::point(x, y)); }
 extern "C" int  MouseMove (int x, int y, int dx, int dy)    { return LFL::app->input->MouseMove (LFL::point(x, y), LFL::point(dx, dy)); }
 extern "C" void QueueKeyPress  (int b, int d)               { return LFL::app->input->QueueKeyPress  (b, d); }
 extern "C" void QueueMouseClick(int b, int d, int x, int y) { return LFL::app->input->QueueMouseClick(b, d, LFL::point(x, y)); }
-extern "C" void EndpointRead(void *svc, const char *name, const char *buf, int len) { LFL::app->net->EndpointRead((LFL::Service*)svc, name, buf, len); }
+extern "C" void EndpointRead(void *svc, const char *name, const char *buf, int len) { LFL::app->net->EndpointRead(LFL::FromVoid<LFL::Service*>(svc), name, buf, len); }
 
 extern "C" NativeWindow *SetNativeWindowByID(void *id) { return SetNativeWindow(LFL::FindOrNull(LFL::app->windows, id)); }
 extern "C" NativeWindow *SetNativeWindow(NativeWindow *W) {
@@ -177,46 +172,60 @@ extern "C" void SetLFAppMainThread() {
 
 extern "C" void LFAppFatal() {
   ERROR("LFAppFatal");
-  if (bool suicide=true) *(volatile int*)0 = 0;
+  if (bool suicide=true) *reinterpret_cast<volatile int*>(0) = 0;
   LFL::app->run = 0;
   exit(-1);
 }
 
-namespace LFL {
-Application *app = new Application();
-Window *screen = new Window();
+#ifndef WIN32
+extern "C" void HandleSigInt(int sig) { INFO("interrupt"); LFAppShutdown(); }
+#else
+extern "C" BOOL WINAPI HandlerCtrlC(DWORD sig) { INFO("interrupt"); LFAppShutdown(); return TRUE; }
+extern "C" void OpenSystemConsole(const char *title) {
+  FLAGS_open_console=1;
+  AllocConsole();
+  SetConsoleTitle(title);
+  freopen("CONOUT$", "wb", stdout);
+  freopen("CONIN$", "rb", stdin);
+  SetConsoleCtrlHandler(HandleCtrlC, 1);
+}
+extern "C" void CloseSystemConsole() {
+  fclose(stdin);
+  fclose(stdout);
+  FreeConsole();
+}
+#endif
 
-DEFINE_bool(lfapp_audio, false, "Enable audio in/out");
-DEFINE_bool(lfapp_video, false, "Enable OpenGL");
-DEFINE_bool(lfapp_input, false, "Enable keyboard/mouse input");
-DEFINE_bool(lfapp_camera, false, "Enable camera capture");
-DEFINE_bool(lfapp_cuda, false, "Enable CUDA acceleration");
-DEFINE_bool(lfapp_network, false, "Enable asynchronous network engine");
-DEFINE_bool(lfapp_debug, false, "Enable debug mode");
-DEFINE_bool(cursor_grabbed, false, "Center cursor every frame");
-DEFINE_bool(daemonize, false, "Daemonize server");
-DEFINE_bool(rcon_debug, false, "Print rcon commands");
-DEFINE_bool(frame_debug, false, "Print each frame");
-DEFINE_bool(max_rlimit_core, true, "Max core dump rlimit");
-DEFINE_bool(max_rlimit_open_files, false, "Max number of open files rlimit");
+namespace LFL {
 #ifdef LFL_DEBUG
 DEFINE_int(loglevel, 7, "Log level: [Fatal=-1, Error=0, Info=3, Debug=7]");
 #else
 DEFINE_int(loglevel, 0, "Log level: [Fatal=-1, Error=0, Info=3, Debug=7]");
 #endif
+DEFINE_bool(lfapp_audio, false, "Enable audio in/out");
+DEFINE_bool(lfapp_video, false, "Enable OpenGL");
+DEFINE_bool(lfapp_input, false, "Enable keyboard/mouse input");
+DEFINE_bool(lfapp_network, false, "Enable asynchronous network engine");
+DEFINE_bool(lfapp_camera, false, "Enable camera capture");
+DEFINE_bool(lfapp_cuda, false, "Enable CUDA acceleration");
+DEFINE_bool(daemonize, false, "Daemonize server");
+DEFINE_bool(max_rlimit_core, true, "Max core dump rlimit");
+DEFINE_bool(max_rlimit_open_files, false, "Max number of open files rlimit");
 DEFINE_int(threadpool_size, 0, "Threadpool size");
 DEFINE_int(target_fps, 0, "Max frames per second");
-DEFINE_bool(open_console, 0, "Open console on win32");
 #ifdef LFL_MOBILE
 DEFINE_int(peak_fps, 30, "Peak FPS");
 #else
 DEFINE_int(peak_fps, 60, "Peak FPS");
 #endif
+DEFINE_bool(open_console, 0, "Open console on win32");
+DEFINE_bool(cursor_grabbed, false, "Center cursor every frame");
+DEFINE_bool(rcon_debug, false, "Print rcon commands");
+DEFINE_bool(frame_debug, false, "Print each frame");
 
+Application *app = new Application();
+Window *screen = new Window();
 void Log(int level, const char *file, int line, const string &m) { app->Log(level, file, line, m); }
-
-void Allocator::Reset() { FATAL(Name(), ": reset"); }
-Allocator *Allocator::Default() { return Singleton<MallocAlloc>::Get(); }
 
 #ifdef LFL_IPHONE
 static pthread_key_t tls_key;
@@ -230,91 +239,17 @@ thread_local ThreadLocalStorage *tls_instance = 0;
 void ThreadLocalStorage::Init() {}
 void ThreadLocalStorage::Free() {}
 void ThreadLocalStorage::ThreadInit() {}
-void ThreadLocalStorage::ThreadFree() { Replace(&tls_instance, static_cast<ThreadLocalStorage*>(nullptr)); }
+void ThreadLocalStorage::ThreadFree() { delete tls_instance; tls_instance = nullptr; }
 ThreadLocalStorage *ThreadLocalStorage::Get() { return tls_instance ? tls_instance : (tls_instance = new ThreadLocalStorage()); }
 #endif
 Allocator *ThreadLocalStorage::GetAllocator(bool reset_allocator) {
   ThreadLocalStorage *tls = Get();
-  if (!tls->alloc) tls->alloc = make_unique<FixedAlloc<1024*1024>>();
+  if (!tls->alloc) tls->alloc = make_unique<FixedAllocator<1024*1024>>();
   if (reset_allocator) tls->alloc->Reset();
   return tls->alloc.get();
 }
 
-void *MallocAlloc::Malloc(int size) { return ::malloc(size); }
-void *MallocAlloc::Realloc(void *p, int size) { 
-  if (!p) return ::malloc(size);
-#ifdef __APPLE__
-  else return ::reallocf(p, size);
-#else
-  else return ::realloc(p, size);
-#endif
-}
-void  MallocAlloc::Free(void *p) { return ::free(p); }
-
-MMapAlloc::~MMapAlloc() {
-#ifdef WIN32
-  UnmapViewOfFile(addr);
-  CloseHandle(map);
-  CloseHandle(file);
-#else
-  munmap(addr, size);
-#endif
-}
-
-MMapAlloc *MMapAlloc::Open(const char *path, bool logerror, bool readonly, long long size) {
-#ifdef LFL_ANDROID
-  return 0;
-#endif
-#ifdef WIN32
-  HANDLE file = CreateFile(path, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
-  if (file == INVALID_HANDLE_VALUE) { if (logerror) ERROR("CreateFile ", path, " failed ", GetLastError()); return 0; }
-
-  DWORD hsize, lsize=GetFileSize(file, &hsize);
-
-  HANDLE map = CreateFileMapping(file, 0, PAGE_READONLY, 0, 0, 0);
-  if (!map) { ERROR("CreateFileMapping ", path, " failed"); return 0; }
-
-  void *addr = MapViewOfFile(map, readonly ? FILE_MAP_READ : FILE_MAP_COPY, 0, 0, 0);
-  if (!addr) { ERROR("MapViewOfFileEx ", path, " failed ", GetLastError()); return 0; }
-
-  INFO("MMapAlloc::open(", path, ")");
-  return new MMapAlloc(file, map, addr, lsize);
-#else
-  int fd = ::open(path, O_RDONLY);
-  if (fd < 0) { if (logerror) ERROR("open ", path, " failed: ", strerror(errno)); return 0; }
-
-  if (!size) {
-    struct stat s;
-    if (fstat(fd, &s)) { ERROR("fstat failed: ", strerror(errno)); close(fd); return 0; }
-    size = s.st_size;
-  }
-
-  char *buf = (char *)mmap(0, size, PROT_READ | (readonly ? 0 : PROT_WRITE) , MAP_PRIVATE, fd, 0);
-  if (buf == MAP_FAILED) { ERROR("mmap failed: ", strerror(errno)); close(fd); return 0; }
-
-  close(fd);
-  INFO("MMapAlloc::open(", path, ")");
-  return new MMapAlloc(buf, size);
-#endif
-}
-
-void *BlockChainAlloc::Malloc(int n) { 
-  n = NextMultipleOfPowerOfTwo(n, 16);
-  CHECK_LT(n, block_size);
-  if (cur_block_ind == -1 || blocks[cur_block_ind].len + n > block_size) {
-    cur_block_ind++;
-    if (cur_block_ind >= blocks.size()) blocks.emplace_back(block_size);
-    CHECK_EQ(blocks[cur_block_ind].len, 0);
-    CHECK_LT(n, block_size);
-  }
-  Block *b = &blocks[cur_block_ind];
-  char *ret = &b->buf[b->len];
-  b->len += n;
-  return ret;
-}
-
 string Flag::GetString() const { string v=Get(); return StrCat(name, v.size()?" = ":"", v.size()?v:"", " : ", desc); } 
-
 string FlagMap::Get   (const string &k) const { Flag *f = FindOrNull(flagmap, k); return f ? f->Get()    : "";    }
 bool   FlagMap::IsBool(const string &k) const { Flag *f = FindOrNull(flagmap, k); return f ? f->IsBool() : false; }
 
@@ -330,24 +265,23 @@ bool FlagMap::Set(const string &k, const string &v) {
 }
 
 string FlagMap::Match(const string &key, const char *source_filename) const {
-  vector<int> keyv(key.size());
-  for (int j=0, l=key.size(); j<l; j++) keyv[0] = key[j];
+  vector<int> keyv(key.size()), dbiv;
+  Vec<int>::Assign(&keyv[0], key.data(), key.size());
 
   vector<string> db;
-  for (AllFlags::const_iterator i = flagmap.begin(); i != flagmap.end(); i++) {
-    if (source_filename && strcmp(source_filename, i->second->file)) continue;
-    db.push_back(i->first);
+  for (auto &i : flagmap) {
+    if (source_filename && strcmp(source_filename, i.second->file)) continue;
+    db.push_back(i.first);
   }
 
-  string mindistflag = "";
+  string mindistval;
   double dist, mindist = INFINITY;
-  for (int i = 0; i < db.size(); i++) {
-    const string &t = db[i];
-    vector<int> dbiv(t.size());
-    for (int j=0, l=t.size(); j<l; j++) dbiv[j] = t[j];
-    if ((dist = Levenshtein(keyv, dbiv)) < mindist) { mindist = dist; mindistflag = t; }
+  for (auto &t : db) {
+    dbiv.resize(t.size());
+    Vec<int>::Assign(&dbiv[0], t.data(), t.size());
+    if ((dist = Levenshtein(keyv, dbiv)) < mindist) { mindist = dist; mindistval = t; }
   }
-  return mindistflag;
+  return mindistval;
 }
 
 int FlagMap::getopt(int argc, const char **argv, const char *source_filename) {
@@ -381,63 +315,11 @@ void FlagMap::Print(const char *source_filename) const {
   if (source_filename) INFO("fullhelp : Display full help"); 
 }
 
-#ifdef WIN32
-BOOL WINAPI CtrlHandler(DWORD sig) { INFO("interrupt"); LFAppShutdown(); return TRUE; }
-void Application::Daemonize(const char *dir) {}
-
-void OpenConsole() {
-  FLAGS_open_console=1;
-  AllocConsole();
-  SetConsoleTitle(StrCat(screen->caption, " console").c_str());
-  freopen("CONOUT$", "wb", stdout);
-  freopen("CONIN$", "rb", stdin);
-  SetConsoleCtrlHandler(CtrlHandler ,1);
-}
-
-void CloseConsole() {
-  fclose(stdin);
-  fclose(stdout);
-  FreeConsole();
-}
-
-#else /* WIN32 */
-
-void HandleSigInt(int sig) { INFO("interrupt"); LFAppShutdown(); }
-void OpenConsole() {}
-void CloseConsole() {}
-
-void Application::Daemonize(const char *dir) {
-  char fn1[256], fn2[256];
-  snprintf(fn1, sizeof(fn1), "%s%s.stdout", dir, app->progname.c_str());
-  snprintf(fn2, sizeof(fn2), "%s%s.stderr", dir, app->progname.c_str());
-  FILE *fout = fopen(fn1, "a"); fprintf(stderr, "open %s %s\n", fn1, fout ? "OK" : strerror(errno));
-  FILE *ferr = fopen(fn2, "a"); fprintf(stderr, "open %s %s\n", fn2, ferr ? "OK" : strerror(errno));
-  Daemonize(fout, ferr);
-}
-
-void Application::Daemonize(FILE *fout, FILE *ferr) {
-  int pid = fork();
-  if (pid < 0) { fprintf(stderr, "fork: %d\n", pid); exit(-1); }
-  if (pid > 0) { fprintf(stderr, "daemonized pid: %d\n", pid); exit(0); }
-
-  int sid = setsid();
-  if (sid < 0) { fprintf(stderr, "setsid: %d\n", sid); exit(-1); }
-
-  close(STDIN_FILENO); 
-  close(STDOUT_FILENO);
-  close(STDERR_FILENO);
-
-  if (fout) dup2(fileno(fout), 1);
-  if (ferr) dup2(fileno(ferr), 2);
-}
-#endif /* WIN32 */
+/* Application */
 
 Application::Application() :
-  create_win_f(bind(&Application::CreateNewWindow, this, function<void(Window*)>())),
   tex_mode(2, 1, 0), grab_mode(2, 0, 1),
-  fill_mode(3, GraphicsDevice::Fill, GraphicsDevice::Line, GraphicsDevice::Point),
-  shell(0, 0, 0)
-{
+  fill_mode(3, GraphicsDevice::Fill, GraphicsDevice::Line, GraphicsDevice::Point) {
   run=1; initialized=0; main_thread_id=0; frames_ran=0; memzero(log_time); 
   fonts = make_unique<Fonts>();
 }
@@ -453,7 +335,7 @@ void Application::Log(int level, const char *file, int line, const string &messa
     WriteLogLine(tbuf, message.c_str(), file, line);
   }
   if (level == LFApp::Log::Fatal) LFAppFatal();
-  if (run && FLAGS_lfapp_video && screen && screen->lfapp_console) screen->lfapp_console->Write(message);
+  if (run && FLAGS_lfapp_video && screen && screen->console) screen->console->Write(message);
 }
 
 void Application::WriteLogLine(const char *tbuf, const char *message, const char *file, int line) {
@@ -471,13 +353,12 @@ void Application::WriteLogLine(const char *tbuf, const char *message, const char
 #endif
 }
 
-void Application::CreateNewWindow(const Window::StartCB &start_cb) {
+void Application::CreateNewWindow() {
   Window *orig_window = screen;
   Window *new_window = new Window();
   if (window_init_cb) window_init_cb(new_window);
   video->CreateGraphicsDevice(new_window);
   CHECK(CreateWindow(new_window));
-  new_window->start_cb = start_cb;
 #ifndef LFL_QT
   MakeCurrentWindow(new_window);
   StartNewWindow(new_window);
@@ -488,7 +369,7 @@ void Application::CreateNewWindow(const Window::StartCB &start_cb) {
 void Application::StartNewWindow(Window *new_window) {
   video->InitGraphicsDevice(new_window);
   input->Init(new_window);
-  new_window->start_cb(new_window);
+  if (window_start_cb) window_start_cb(new_window);
 #ifdef LFL_OSXVIDEO
   OSXStartWindow(screen->id);
 #endif
@@ -566,7 +447,7 @@ void Application::LaunchNativeFontChooser(const FontDesc &cur_font, const string
   cf.Flags = CF_SCREENFONTS | CF_INITTOLOGFONTSTRUCT;
   if (!ChooseFont(&cf)) return;
   int flag = FontDesc::Mono | (lf.lfWeight > FW_NORMAL ? FontDesc::Bold : 0) | (lf.lfItalic ? FontDesc::Italic : 0);
-  shell.Run(StrCat(choose_cmd, " ", lf.lfFaceName, " ", cf.iPointSize/10, " ", flag));
+  screen->shell.Run(StrCat(choose_cmd, " ", lf.lfFaceName, " ", cf.iPointSize/10, " ", flag));
 #endif
 }
 
@@ -582,7 +463,7 @@ void Application::OpenSystemBrowser(const string &url_text) {
 #elif defined(LFL_IPHONE)
   iPhoneOpenBrowser(url_text.c_str());
 #elif defined(__APPLE__)
-  CFURLRef url = CFURLCreateWithBytes(0, (UInt8*)url_text.c_str(), url_text.size(), kCFStringEncodingASCII, 0);
+  CFURLRef url = CFURLCreateWithBytes(0, MakeUnsigned(url_text.c_str()), url_text.size(), kCFStringEncodingASCII, 0);
   if (url) { LSOpenCFURLRef(url, 0); CFRelease(url); }
 #elif defined(LFL_WINVIDEO)
   ShellExecute(NULL, "open", url_text.c_str(), NULL, NULL, SW_SHOWNORMAL);
@@ -677,6 +558,35 @@ StringPiece Application::LoadResource(int id) {
 #endif
 }
 
+void Application::Daemonize(const char *dir) {
+#ifndef WIN32
+  char fn1[256], fn2[256];
+  snprintf(fn1, sizeof(fn1), "%s%s.stdout", dir, app->progname.c_str());
+  snprintf(fn2, sizeof(fn2), "%s%s.stderr", dir, app->progname.c_str());
+  FILE *fout = fopen(fn1, "a"); fprintf(stderr, "open %s %s\n", fn1, fout ? "OK" : strerror(errno));
+  FILE *ferr = fopen(fn2, "a"); fprintf(stderr, "open %s %s\n", fn2, ferr ? "OK" : strerror(errno));
+  Daemonize(fout, ferr);
+#endif
+}
+
+void Application::Daemonize(FILE *fout, FILE *ferr) {
+#ifndef WIN32
+  int pid = fork();
+  if (pid < 0) { fprintf(stderr, "fork: %d\n", pid); exit(-1); }
+  if (pid > 0) { fprintf(stderr, "daemonized pid: %d\n", pid); exit(0); }
+
+  int sid = setsid();
+  if (sid < 0) { fprintf(stderr, "setsid: %d\n", sid); exit(-1); }
+
+  close(STDIN_FILENO); 
+  close(STDOUT_FILENO);
+  close(STDERR_FILENO);
+
+  if (fout) dup2(fileno(fout), 1);
+  if (ferr) dup2(fileno(ferr), 2);
+#endif
+}
+
 int Application::Create(int argc, const char **argv, const char *source_filename, void (*create_cb)()) {
 #ifndef LFL_QT
   if (create_cb) create_cb();
@@ -700,7 +610,7 @@ int Application::Create(int argc, const char **argv, const char *source_filename
   char rpath[1024];
   CFBundleRef mainBundle = CFBundleGetMainBundle();
   CFURLRef respath = CFBundleCopyResourcesDirectoryURL(mainBundle);
-  CFURLGetFileSystemRepresentation(respath, true, (UInt8*)rpath, sizeof(rpath));
+  CFURLGetFileSystemRepresentation(respath, true, MakeUnsigned(rpath), sizeof(rpath));
   CFRelease(respath);
   if (PrefixMatch(rpath, startdir+"/")) assetdir = StrCat(rpath + startdir.size()+1, "/assets/");
   else assetdir = StrCat(rpath, "/assets/"); 
@@ -739,16 +649,18 @@ int Application::Create(int argc, const char **argv, const char *source_filename
   atexit(LFAppAtExit);
 
 #ifdef WIN32
-  if (argc > 1) OpenConsole();
+  string console_title = StrCat(screen->caption, " console");
+  if (argc > 1) OpenSystemConsole(console_title.c_str());
 #endif
 
   if (Singleton<FlagMap>::Get()->getopt(argc, argv, source_filename) < 0) return -1;
 
 #ifdef WIN32
   if (argc > 1) {
-    if (!FLAGS_open_console) CloseConsole();
+    if (!FLAGS_open_console) CloseSystemConsole();
   }
-  else if (FLAGS_open_console) OpenConsole();
+  else if (FLAGS_open_console) OpenSystemConsole();
+  if (argc > 1) OpenSystemConsole(console_title.c_str());
 #endif
 
   {
@@ -850,7 +762,6 @@ int Application::Init() {
   }
 
   video->InitFonts();
-  if (FLAGS_lfapp_console && !screen->lfapp_console) screen->InitLFAppConsole();
 
   if (FLAGS_lfapp_input) {
     if (LoadModule((input = make_unique<Input>()).get())) return ERRORv(-1, "input init failed");
@@ -959,7 +870,7 @@ int Application::MainLoop() {
 
 void Application::ResetGL() {
   for (auto &w : windows) w.second->ResetGL();
-  Fonts::ResetGL();
+  fonts->ResetGL();
 }
 
 Application::~Application() {
@@ -986,6 +897,136 @@ Application::~Application() {
 #ifdef WIN32
   if (FLAGS_open_console) PromptFGets("Press [enter] to continue...");
 #endif
+}
+
+/* Window */
+
+Window::Window() : caption("lfapp"), fps(128) {
+  id = gl = surface = glew_context = impl = user1 = user2 = user3 = 0;
+  minimized = cursor_grabbed = frame_init = animating = 0;
+  target_fps = FLAGS_target_fps;
+  multitouch_keyboard_x = .93; 
+  cam = make_unique<Entity>(v3(5.54, 1.70, 4.39), v3(-.51, -.03, -.49), v3(-.03, 1, -.03));
+  SetSize(point(640, 480));
+}
+
+Window::~Window() {
+  if (console) console->WriteHistory(LFAppDownloadDir(), "console", "");
+  if (gd) delete gd;
+}
+
+Box Window::Box(float xp, float yp, float xs, float ys, float xbl, float ybt, float xbr, float ybb) const {
+  if (isinf(xbr)) xbr = xbl;
+  if (isinf(ybb)) ybb = ybt;
+  return LFL::Box(width  * (xp + xbl),
+                  height * (yp + ybb),
+                  width  * xs - width  * (xbl + xbr),
+                  height * ys - height * (ybt + ybb), false);
+}
+
+void Window::InitConsole(const Callback &animating_cb) {
+  gui.push_back((console = make_unique<Console>(gd, animating_cb)).get());
+  console->ReadHistory(LFAppDownloadDir(), "console");
+  console->Write(StrCat(screen->caption, " started"));
+  console->Write("Try console commands 'cmds' and 'flags'");
+}
+
+size_t Window::NewGUI() { my_gui.emplace_back(unique_ptr<GUI>()); return my_gui.size()-1; }
+void Window::DelGUI(GUI *g) { RemoveGUI(g); VectorRemoveUnique(&my_gui, g); }
+
+void Window::AddDialog(unique_ptr<Dialog> d) {
+  dialogs.emplace_back(move(d));
+  if (dialogs.size() == 1) BringDialogToFront(dialogs.back().get());
+}
+
+void Window::BringDialogToFront(Dialog *d) {
+  if (top_dialog == d) return;
+  if (top_dialog) top_dialog->LoseFocus();
+  int zsort_ind = 0;
+  for (auto &d : dialogs) d->zsort = ++zsort_ind;
+  d->zsort = 0;
+  sort(dialogs.begin(), dialogs.end(), Dialog::LessThan);
+  (top_dialog = d)->TakeFocus();
+}
+
+void Window::GiveDialogFocusAway(Dialog *d) {
+  if (top_dialog == d) { top_dialog=0; d->LoseFocus(); }
+}
+
+void Window::DrawDialogs() {
+  for (auto i = screen->dialogs.begin(), e = screen->dialogs.end(); i != e; ++i) (*i)->Draw();
+  if (screen->console) screen->console->Draw();
+  if (FLAGS_draw_grid) {
+    Color c(.7, .7, .7);
+    glIntersect(screen->mouse.x, screen->mouse.y, &c);
+    app->fonts->Default()->Draw(StrCat("draw_grid ", screen->mouse.x, " , ", screen->mouse.y), point(0,0));
+  }
+}
+
+void Window::SetSize(const point &d) {
+  pow2_width  = NextPowerOfTwo((width  = d.x));
+  pow2_height = NextPowerOfTwo((height = d.y));
+}
+
+void Window::Reshaped(int w, int h) {
+  INFO("Window::Reshaped(", w, ", ", h, ")");
+  SetSize(point(w, h));
+  if (!gd) return;
+  gd->ViewPort(LFL::Box(width, height));
+  gd->DrawMode(screen->gd->default_draw_mode);
+  for (auto g = screen->gui.begin(); g != screen->gui.end(); ++g) (*g)->Layout();
+  if (app->reshaped_cb) app->reshaped_cb();
+}
+
+void Window::ResetGL() {
+  Video::InitGraphicsDevice(this);
+  for (auto &g : screen->gui    ) g->ResetGL();
+  for (auto &g : screen->dialogs) g->ResetGL();
+}
+
+void Window::SwapAxis() {
+  FLAGS_rotate_view = FLAGS_rotate_view ? 0 : -90;
+  FLAGS_swap_axis = FLAGS_rotate_view != 0;
+  Reshaped(height, width);
+}
+
+int Window::Frame(unsigned clicks, int flag) {
+  if (screen != this) app->MakeCurrentWindow(this);
+
+  if (FLAGS_lfapp_video) {
+    if (!frame_init && (frame_init = true))  {
+#ifdef LFL_IPHONE
+      screen->GetIntegerv(GL_FRAMEBUFFER_BINDING_OES, &screen->gd->default_framebuffer);
+      INFO("default_framebuffer = ", screen->gd->default_framebuffer);
+#endif
+    }
+    gd->DrawMode(gd->default_draw_mode);
+    gd->Clear();
+    gd->LoadIdentity();
+  }
+
+  /* frame */
+  int ret = frame_cb ? frame_cb(screen, clicks, flag) : 0;
+
+  /* allow app to skip frame */
+  if (ret < 0) return ret;
+  fps.Add(clicks);
+
+  if (FLAGS_lfapp_video) {
+    app->video->Swap();
+  }
+  return ret;
+}
+
+void Window::RenderToFrameBuffer(FrameBuffer *fb) {
+  int dm = screen->gd->draw_mode;
+  fb->Attach();
+  // screen->gd->ViewPort(Box(fb->tex.width, fb->tex.height));
+  screen->gd->DrawMode(screen->gd->default_draw_mode);
+  screen->gd->Clear();
+  frame_cb(0, 0, 0);
+  fb->Release();
+  screen->gd->RestoreViewport(dm);
 }
 
 /* FrameScheduler */

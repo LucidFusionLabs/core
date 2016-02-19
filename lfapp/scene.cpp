@@ -133,8 +133,8 @@ void Scene::Select(const Asset *a) {
 }
 
 void Scene::Select() {
-  Scene::Select((Geometry*)0);
-  Scene::Select((const Asset*)0);
+  Scene::Select(NullPointer<Geometry>());
+  Scene::Select(NullPointer<const Asset>());
 }
 
 void Scene::Draw(const Geometry *geom, Entity*, int start_vert, int num_verts) {
@@ -176,8 +176,13 @@ void Scene::Draw(Asset *a, Entity *e) {
   }
 
   if (a->cb) {
-    if (FLAGS_gd_debug) printf("scene.DrawCB %s\n", a->name.c_str());
+    if (FLAGS_gd_debug) printf("scene.DrawAssetCB %s\n", a->name.c_str());
     a->cb(a, e);
+  }
+
+  if (e->cb) {
+    if (FLAGS_gd_debug) printf("scene.DrawEntityCB %s\n", a->name.c_str());
+    e->cb(a, e);
   }
 
   if (a->geometry) {
@@ -213,14 +218,14 @@ void Scene::Draw(Asset *a, EntityFilter *filter, const EntityVector &eav) {
 
 void Scene::DrawParticles(Entity *e, unsigned dt) {
   if (!e->particles) return;
-  ParticleSystem *particles = (ParticleSystem*)e->particles;
+  ParticleSystem *particles = reinterpret_cast<ParticleSystem*>(e->particles);
   particles->pos = e->pos;
   particles->ort = e->ort;
   particles->updir = e->up;
   particles->vel = e->ort;
   particles->vel.Scale(-0.01);
-  particles->Update(dt,0,0,0);
-  particles->Draw();
+  particles->Update(screen->cam.get(), dt, 0, 0, 0);
+  particles->Draw(screen->gd);
   screen->gd->EnableDepthTest();
 }
 

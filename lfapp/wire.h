@@ -31,10 +31,10 @@ struct Serializable {
 
   struct Stream {
     char *buf;
-    int size;
+    size_t size;
     mutable int offset=0;
     mutable bool error=0;
-    Stream(char *B, int S) : buf(B), size(S) {}
+    Stream(char *B, size_t S) : buf(B), size(S) {}
 
     int Len() const { return size; }
     int Pos() const { return offset; };
@@ -406,25 +406,25 @@ struct GameProtocol {
 
   struct Position {
     static const int size = 12, scale = 1000;
-    int x, y, z;
+    int32_t x, y, z;
 
-    void From(const v3 &v) { x=(int)(v.x*scale); y=(int)(v.y*scale); z=(int)(v.z*scale); }
-    void To(v3 *v) { v->x=(float)x/scale; v->y=(float)y/scale; v->z=(float)z/scale; }
+    void From(const v3 &v) { x=int32_t(v.x*scale); y=int32_t(v.y*scale); z=int32_t(v.z*scale); }
+    void To(v3 *v) { v->x=float(x)/scale; v->y=float(y)/scale; v->z=float(z)/scale; }
     void Out(Serializable::Stream *o) const { o->Htonl( x); o->Htonl( y); o->Htonl( z); }
     void In(const Serializable::Stream *i)  { i->Ntohl(&x); i->Ntohl(&y); i->Ntohl(&z); }
   };
 
   struct Orientation {
     static const int size = 12, scale=16384;
-    short ort_x, ort_y, ort_z, up_x, up_y, up_z;
+    int16_t ort_x, ort_y, ort_z, up_x, up_y, up_z;
 
     void From(const v3 &ort, const v3 &up) {
-      ort_x = (short)(ort.x*scale); ort_y = (short)(ort.y*scale); ort_z = (short)(ort.z*scale);
-      up_x  = (short)(up.x*scale);  up_y  = (short)(up.y*scale);  up_z =  (short)(up.z*scale);
+      ort_x = int16_t(ort.x*scale); ort_y = int16_t(ort.y*scale); ort_z = int16_t(ort.z*scale);
+      up_x  = int16_t(up.x *scale); up_y  = int16_t(up.y *scale); up_z  = int16_t(up.z *scale);
     }
     void To(v3 *ort, v3 *up) {
-      ort->x = (float)ort_x/scale; ort->y = (float)ort_y/scale; ort->z = (float)ort_z/scale;
-      up->x  = (float) up_x/scale;  up->y = (float) up_y/scale;  up->z = (float) up_z/scale;
+      ort->x = float(ort_x)/scale; ort->y = float(ort_y)/scale; ort->z = float(ort_z)/scale;
+      up ->x = float(up_x) /scale; up ->y = float(up_y) /scale; up ->z = float(up_z) /scale;
     }
     void Out(Serializable::Stream *o) const { o->Htons( ort_x); o->Htons( ort_y); o->Htons( ort_z); o->Htons( up_x); o->Htons( up_y); o->Htons( up_z); }
     void In(const Serializable::Stream *i)  { i->Ntohs(&ort_x); i->Ntohs(&ort_y); i->Ntohs(&ort_z); i->Ntohs(&up_x); i->Ntohs(&up_y); i->Ntohs(&up_z); }
@@ -432,17 +432,17 @@ struct GameProtocol {
 
   struct Velocity {
     static const int size = 6, scale=1000;
-    unsigned short x, y, z;
+    uint16_t x, y, z;
 
-    void From(const v3 &v) { x=(unsigned short)(v.x*scale); y=(unsigned short)(v.y*scale); z=(unsigned short)(v.z*scale); }
-    void To(v3 *v) { v->x=(float)x/scale; v->y=(float)y/scale; v->z=(float)z/scale; }
+    void From(const v3 &v) { x=uint16_t(v.x*scale); y=uint16_t(v.y*scale); z=uint16_t(v.z*scale); }
+    void To(v3 *v) { v->x=float(x)/scale; v->y=float(y)/scale; v->z=float(z)/scale; }
     void Out(Serializable::Stream *o) const { o->Htons( x); o->Htons( y); o->Htons( z); }
     void In(const Serializable::Stream *i)  { i->Ntohs(&x); i->Ntohs(&y); i->Ntohs(&z); }
   };
 
   struct Entity {
     static const int size = 8 + Position::size + Orientation::size + Velocity::size;
-    unsigned short id, type, anim_id, anim_len;
+    uint16_t id, type, anim_id, anim_len;
     Position pos;
     Orientation ort;
     Velocity vel;
@@ -454,7 +454,7 @@ struct GameProtocol {
 
   struct Collision {
     static const int size = 8;
-    unsigned short fmt, id1, id2, time;
+    uint16_t fmt, id1, id2, time;
 
     void Out(Serializable::Stream *o) const { o->Htons( fmt); o->Htons( id1); o->Htons( id2); o->Htons( time); }
     void In(const Serializable::Stream *i)  { i->Ntohs(&fmt); i->Ntohs(&id1); i->Ntohs(&id2); i->Ntohs(&time); }
@@ -472,7 +472,7 @@ struct GameProtocol {
 
   struct ChallengeResponse : public Serializable {
     static const int ID = 2;
-    int token;
+    int32_t token;
     ChallengeResponse() : Serializable(ID) {}
 
     int HeaderSize() const { return 4; }
@@ -483,7 +483,7 @@ struct GameProtocol {
 
   struct JoinRequest : public Serializable {
     static const int ID = 3;
-    int token;
+    int32_t token;
     string PlayerName;
     JoinRequest() : Serializable(ID) {}
 
@@ -506,7 +506,7 @@ struct GameProtocol {
 
   struct WorldUpdate : public Serializable {
     static const int ID = 5;
-    unsigned short id;
+    uint16_t id;
     vector<Entity> entity;
     vector<Collision> collision;
     WorldUpdate() : Serializable(ID) {}
@@ -535,8 +535,8 @@ struct GameProtocol {
 
   struct PlayerUpdate : public Serializable {
     static const int ID = 6;
-    unsigned short id_WorldUpdate, time_since_WorldUpdate;
-    unsigned buttons;
+    uint16_t id_WorldUpdate, time_since_WorldUpdate;
+    uint32_t buttons;
     Orientation ort;
     PlayerUpdate() : Serializable(ID) {}
 

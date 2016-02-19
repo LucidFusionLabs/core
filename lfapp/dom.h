@@ -240,7 +240,7 @@ template <class X> struct NamedMap : public Object {
 
   X setNamedItem(const DOMString &name, X arg) {
     bool inserted = false;
-    unordered_map<DOMString, int>::iterator it = FindOrInsert(data_index, name, (int)data_val.size(), &inserted);
+    unordered_map<DOMString, int>::iterator it = FindOrInsert(data_index, name, int(data_val.size()), &inserted);
     if (inserted) data_val.push_back(arg);
     else data_val[it->second] = arg;
     return arg;
@@ -320,7 +320,7 @@ struct Element : public Node { DERIVE_NODE(Element, ELEMENT_NODE) {}
   virtual void      setAttribute(const DOMString &name, const DOMString &value);
   virtual DOMString getAttribute(const DOMString &name) { Node *n = getAttributeNode(name); return n ? n->nodeValue() : DOMString(); }
   virtual void      removeAttribute(const DOMString &name) { attributes.removeNamedItem(name); }
-  virtual Attr     *getAttributeNode(const DOMString &name) { return (Attr*)attributes.getNamedItem(name); }
+  virtual Attr     *getAttributeNode(const DOMString &name) { return dynamic_cast<Attr*>(attributes.getNamedItem(name)); }
   virtual Attr     *setAttributeNode(Attr *newAttr) { attributes.setNamedItem(newAttr->nodeName(), newAttr); return newAttr; }
   virtual Attr     *removeAttributeNode(const Attr *oldAttr) { attributes.removeNamedItem(oldAttr->nodeName()); return NULL; }
   virtual NodeList  getElementsByTagName(const DOMString &name) { return getElementsByTagName(this, name); }
@@ -383,14 +383,14 @@ struct Document : public Node { DERIVE_NODE_IMPL(Document, DOCUMENT_NODE);
 
   virtual DOMString nodeName()  const { return "#document"; }
   virtual DOMString nodeValue() const { return DOMStringNull; }
-  virtual DocumentFragment *createDocumentFragment() { return AllocatorNew(ownerDocument->alloc, (DocumentFragment), (ownerDocument)); }
-  virtual Attr                  *createAttribute(const DOMString &name) { return AllocatorNew(ownerDocument->alloc, (Attr), (ownerDocument)); }
-  virtual EntityReference *createEntityReference(const DOMString &name) { return AllocatorNew(ownerDocument->alloc, (EntityReference), (ownerDocument)); }
-  virtual Element                 *createElement(const DOMString &name) { Element      *ret = AllocatorNew(ownerDocument->alloc, (Element),      (ownerDocument)); ret->tagName = name; return ret; }
-  virtual Text                   *createTextNode(const DOMString &data) { Text         *ret = AllocatorNew(ownerDocument->alloc, (Text),         (ownerDocument)); ret->data    = data; return ret; }
-  virtual Comment                 *createComment(const DOMString &data) { Comment      *ret = AllocatorNew(ownerDocument->alloc, (Comment),      (ownerDocument)); ret->data    = data; return ret; }
-  virtual CDATASection       *createCDATASection(const DOMString &data) { CDATASection *ret = AllocatorNew(ownerDocument->alloc, (CDATASection), (ownerDocument)); ret->data    = data; return ret; }
-  virtual ProcessingInstruction *createProcessingInstruction(const DOMString &target, const DOMString &data) { return AllocatorNew(ownerDocument->alloc, (ProcessingInstruction), (ownerDocument)); }
+  virtual DocumentFragment *createDocumentFragment() { return ownerDocument->alloc->New<DocumentFragment>(ownerDocument); }
+  virtual Attr                  *createAttribute(const DOMString &name) { return ownerDocument->alloc->New<Attr>(ownerDocument); }
+  virtual EntityReference *createEntityReference(const DOMString &name) { return ownerDocument->alloc->New<EntityReference>(ownerDocument); }
+  virtual Element                 *createElement(const DOMString &name) { Element      *ret = ownerDocument->alloc->New<Element>     (ownerDocument); ret->tagName = name; return ret; }
+  virtual Text                   *createTextNode(const DOMString &data) { Text         *ret = ownerDocument->alloc->New<Text>        (ownerDocument); ret->data    = data; return ret; }
+  virtual Comment                 *createComment(const DOMString &data) { Comment      *ret = ownerDocument->alloc->New<Comment>     (ownerDocument); ret->data    = data; return ret; }
+  virtual CDATASection       *createCDATASection(const DOMString &data) { CDATASection *ret = ownerDocument->alloc->New<CDATASection>(ownerDocument); ret->data    = data; return ret; }
+  virtual ProcessingInstruction *createProcessingInstruction(const DOMString &target, const DOMString &data) { return ownerDocument->alloc->New<ProcessingInstruction>(ownerDocument); }
   virtual Element              *documentElement() { for (int i=0, l=childNodes.length(); i<l; i++) if (childNodes.item(i)->htmlElementType == HTML_HTML_ELEMENT) return childNodes.item(i)->AsElement(); return NULL; }
   virtual NodeList              getElementsByTagName(const DOMString &tagname) { return Element::getElementsByTagName(this, tagname); }
 };
@@ -480,7 +480,7 @@ struct HTMLOptionElement : public HTMLElement { DERIVE_ELEMENT(HTMLOptionElement
 struct HTMLInputElement : public HTMLElement { DERIVE_ELEMENT(HTMLInputElement, HTML_INPUT_ELEMENT), form(0), image_tex(0) {}
   DECLARE_TAG_NAMES("input");
   HTMLFormElement *form;
-  unique_ptr<TilesTextGUI> text;
+  unique_ptr<TiledTextBox> text;
   shared_ptr<Texture> image_tex;
 
   PARSE_ATTR_BEGIN(HTMLElement);
@@ -600,7 +600,7 @@ struct HTMLTableRowElement : public HTMLElement {
   PARSE_ATTR_END;
 
   void deleteCell(long index) { cells.EraseAt(index); }
-  HTMLElement *insertCell(long index) { return (HTMLElement*)cells.InsertAt(index, AllocatorNew(ownerDocument->alloc, (HTMLTableCellElement), (ownerDocument, this))); }
+  HTMLElement *insertCell(long index) { return dynamic_cast<HTMLElement*>(cells.InsertAt(index, ownerDocument->alloc->New<HTMLTableCellElement>(ownerDocument, this))); }
 };
 
 struct HTMLTableSectionElement : public HTMLElement {
@@ -638,12 +638,12 @@ struct HTMLTableElement : public HTMLElement { DERIVE_ELEMENT(HTMLTableElement, 
   void deleteTBody() { tBodies=0; }
   void deleteCaption() { caption=0; }
   void deleteRow(long index) { rows.EraseAt(index); }
-  HTMLElement *createTHead   () { if (!tHead)   tHead    = AllocatorNew(ownerDocument->alloc, (HTMLTableSectionElement), (ownerDocument, this)); return tHead; }
-  HTMLElement *createTFoot   () { if (!tFoot)   tFoot    = AllocatorNew(ownerDocument->alloc, (HTMLTableSectionElement), (ownerDocument, this)); return tFoot; }
-  HTMLElement *createTBody   () { if (!tBodies) tBodies  = AllocatorNew(ownerDocument->alloc, (HTMLTableSectionElement), (ownerDocument, this)); return tBodies; }
-  HTMLElement *createCaption () { if (!caption) caption  = AllocatorNew(ownerDocument->alloc, (HTMLTableCaptionElement), (ownerDocument, this)); return caption; }
-  HTMLElement *createColGroup() { if (!caption) colgroup = AllocatorNew(ownerDocument->alloc, (HTMLTableColElement),     (ownerDocument));       return colgroup; }
-  HTMLElement *insertRow(long index) { return (HTMLElement*)rows.InsertAt(index, AllocatorNew(ownerDocument->alloc, (HTMLTableRowElement), (ownerDocument, this))); }
+  HTMLElement *createTHead   () { if (!tHead)   tHead    = ownerDocument->alloc->New<HTMLTableSectionElement>(ownerDocument, this); return tHead; }
+  HTMLElement *createTFoot   () { if (!tFoot)   tFoot    = ownerDocument->alloc->New<HTMLTableSectionElement>(ownerDocument, this); return tFoot; }
+  HTMLElement *createTBody   () { if (!tBodies) tBodies  = ownerDocument->alloc->New<HTMLTableSectionElement>(ownerDocument, this); return tBodies; }
+  HTMLElement *createCaption () { if (!caption) caption  = ownerDocument->alloc->New<HTMLTableCaptionElement>(ownerDocument, this); return caption; }
+  HTMLElement *createColGroup() { if (!caption) colgroup = ownerDocument->alloc->New<HTMLTableColElement>    (ownerDocument);       return colgroup; }
+  HTMLElement *insertRow(long index) { return dynamic_cast<HTMLElement*>(rows.InsertAt(index, ownerDocument->alloc->New<HTMLTableRowElement>(ownerDocument, this))); }
 };
 
 struct HTMLHtmlElement : public HTMLElement { DERIVE_ELEMENT(HTMLHtmlElement, HTML_HTML_ELEMENT) {}
@@ -976,7 +976,7 @@ struct HTMLDocument : public Document {
   NodeList *getElementsByName(const DOMString &elementName) { return NULL; }
 
 # undef  XX
-# define XX(n) HTMLElement *Create ## n () { return AllocatorNew(alloc, (HTML ## n), (this)); }
+# define XX(n) HTMLElement *Create ## n () { return alloc->New<HTML ## n>(this); }
 # include "web/html_elements.h"
 
   typedef HTMLElement *(HTMLDocument::*CreateElementCB)();
@@ -991,7 +991,7 @@ struct HTMLDocument : public Document {
   virtual Element *createElement(const DOMString &name) {
     static CreateElementCallbacks cb;
     CreateElementCB create_cb = FindOrNull(cb, String::ToAscii(name));
-    Element *ret = create_cb ? (this->*create_cb)() : AllocatorNew(ownerDocument->alloc, (HTMLElement), (0, ownerDocument));
+    Element *ret = create_cb ? (this->*create_cb)() : ownerDocument->alloc->New<HTMLElement>(0, ownerDocument);
     ret->tagName = name;
     return ret;
   }
@@ -1003,14 +1003,14 @@ template <class X> struct ObjectWrapperAlloc : public X {
   virtual void *Malloc(int n)           { void *ret = X::Malloc(n);     allocs.push_back(ret); return ret; }
   virtual void *Realloc(void *p, int n) { void *ret = X::Realloc(p, n); allocs.push_back(ret); return ret; }
   virtual void Reset() {
-    for (vector<void*>::iterator i = allocs.begin(); i != allocs.end(); i++) ((LFL::DOM::Object*)*i)->~Object();
+    for (auto i = allocs.begin(); i != allocs.end(); i++) reinterpret_cast<LFL::DOM::Object*>(*i)->~Object();
     X::Reset();
     allocs.clear();
   }
 };
 
-template <int X> struct FixedObjectAlloc : public ObjectWrapperAlloc<FixedAlloc<X> > {};
-struct BlockChainObjectAlloc : public ObjectWrapperAlloc<BlockChainAlloc> {
+template <int X> struct FixedObjectAlloc : public ObjectWrapperAlloc<FixedAllocator<X> > {};
+struct BlockChainObjectAlloc : public ObjectWrapperAlloc<BlockChainAllocator> {
   BlockChainObjectAlloc(int s) { block_size = s; }
 };
 

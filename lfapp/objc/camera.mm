@@ -245,7 +245,7 @@ void AVCaptureShutdown() {
 
     NSDictionary *pixelBufferOptions = [NSDictionary dictionaryWithObjectsAndKeys:
                                        [NSNumber numberWithUnsignedInt:kCVPixelFormatType_32BGRA],
-                                       (id)kCVPixelBufferPixelFormatTypeKey,
+                                       id(kCVPixelBufferPixelFormatTypeKey),
                                        nil];
 
     mCaptureDecompressedVideoOutput = [[QTCaptureDecompressedVideoOutput alloc] init];
@@ -269,13 +269,13 @@ void AVCaptureShutdown() {
     CVPixelBufferLockBaseAddress(pixels,0);
 
     /* image pixel dimensions */
-    uint8_t *baseAddress = (uint8_t *)CVPixelBufferGetBaseAddress(pixels);
+    uint8_t *baseAddress = reinterpret_cast<uint8_t*>(CVPixelBufferGetBaseAddress(pixels));
     size_t width = CVPixelBufferGetWidth(pixels);
     size_t height = CVPixelBufferGetHeight(pixels);
     size_t rowbytes = CVPixelBufferGetBytesPerRow(pixels);
 
     /* write data to ring buffer */
-    UpdateFrame((char *)baseAddress, width, height, rowbytes * height); 
+    UpdateFrame(reinterpret_cast<char*>(baseAddress), width, height, rowbytes * height); 
 
     /* unlock pixel buffer */
     CVPixelBufferUnlockBaseAddress(pixels,0);

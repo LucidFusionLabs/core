@@ -84,7 +84,7 @@ bool m44::Invert(const m44 &in, m44 *out, float *det_out)  {
 }
 
 double Squared(double n) { return n*n; }
-float Decimals(float n) { return n - (int)n; }
+float Decimals(float n) { return n - int(n); }
 
 void Clamp(float *x, float floor, float ceil) { *x = Clamp(*x, floor, ceil); }
 float Clamp(float x, float floor, float ceil) { if (x < floor) return floor; if (x > ceil) return ceil; return x; }
@@ -102,13 +102,13 @@ int Sign(float f) {
 }
 
 int RoundDown  (float f) { return f; }
-int RoundUp    (float f) { if (!(f - (int)f)) return f; return f > 0 ? ((int)f + 1) : ((int)f - 1); }
+int RoundUp    (float f) { if (!(f - int(f))) return f; return f > 0 ? (int(f) + 1) : (int(f) - 1); }
 int RoundHigher(float f) { return f < 0 ? RoundDown(f) : RoundUp  (f); }
 int RoundLower (float f) { return f < 0 ? RoundUp  (f) : RoundDown(f); }
 
 int RoundF(float f, bool round_point_five_up) {
-  if (round_point_five_up) return (int)(fabs(f - (int)f) >= 0.5 ? (f + Sign(f)) : f); 
-  else                     return (int)(fabs(f - (int)f) >  0.5 ? (f + Sign(f)) : f); 
+  if (round_point_five_up) return int(fabs(f - int(f)) >= 0.5 ? (f + Sign(f)) : f); 
+  else                     return int(fabs(f - int(f)) >  0.5 ? (f + Sign(f)) : f); 
 }
 
 int DimCheck(const char *alg, int d1, int d2) {
@@ -125,7 +125,7 @@ int NextPowerOfTwo(int input, bool strict) {
 
 bool IsPowerOfTwo(unsigned x) { return x && (x & (~x + 1)) == x; }
 int NextMultipleOfPowerOfTwo(int input, int align) { return (input+align-1) & ~(align-1); }
-void *NextMultipleOfPowerOfTwo(void *input, int align) { return (void*)(((unsigned long long)input+align-1) & ~(align-1)); }
+void *NextMultipleOfPowerOfTwo(void *input, int align) { return Void((uint64_t(input)+align-1) & ~(align-1)); }
 int NextMultipleOfN(int input, int N) { return (input % N) ? (input/N+1)*N : input; }
 int PrevMultipleOfN(int input, int N) { return (input % N) ? (input/N  )*N : input; }
 
@@ -151,7 +151,7 @@ int FloorLog2(int n) {
 }
 
 int IsPrime(int n) {
-  int r = (int)sqrtf(n);
+  int r = int(sqrtf(n));
   for (int i=2; i<=r; i++) if (!(n % i)) return 0;
   return 1;
 }
@@ -172,8 +172,8 @@ int DoubleSort(double a, double b) {
   else if (a > b) return -1;
   else return 0;
 }
-int DoubleSort (const void *a, const void *b) { return DoubleSort(*(double*)a, *(double*)b); }
-int DoubleSortR(const void *a, const void *b) { return DoubleSort(*(double*)b, *(double*)a); }
+int DoubleSort (const void *a, const void *b) { return DoubleSort(*FromVoid<const double*>(a), *FromVoid<const double*>(b)); }
+int DoubleSortR(const void *a, const void *b) { return DoubleSort(*FromVoid<const double*>(b), *FromVoid<const double*>(a)); }
 
 double RadianToDegree(float rad) { return rad * 180 / M_PI; }
 double DegreeToRadian(float deg) { return deg * M_PI / 180; }
@@ -190,7 +190,8 @@ double CumulativeAvg(double last, double next, int count) { return (last*(count-
 
 /* interpolate f(x) : 0<=x<=1 */
 double ArrayAsFunc(double *Array, int ArrayLen, double x) {
-  double xi=x*(ArrayLen-1); int xind=(int)xi;
+  double xi = x*(ArrayLen-1);
+  int xind = int(xi);
   return (Array[xind+1] - Array[xind]) * (xi-xind) + Array[xind]; 
 }
 
@@ -205,9 +206,9 @@ double MatrixAsFunc(Matrix *m, double x, double y)
 #else
 /* bilinearly interpolate m as f(x,y) : 0<=x<=1 */
 double MatrixAsFunc(Matrix *m, double x, double y) {
-  double yi=y*(m->M-1), xi=x*(m->N-1);
-  int yind=(int)yi, xind=(int)xi;
-  int yp=yind!=m->M-1, xp=xind!=m->N-1;
+  double yi = y*(m->M-1), xi = x*(m->N-1);
+  int yind = int(yi), xind = int(xi);
+  int yp = yind!=m->M-1, xp = xind!=m->N-1;
   double *row1 = m->row(yind), *row2 = m->row(yind+yp);
   double q11 = row1[xind], q12 = row1[xind+xp];
   double q21 = row2[xind], q22 = row2[xind+xp];
@@ -331,7 +332,7 @@ Matrix *IDFT(int rows, int cols) {
 Matrix *DCT2(int rows, int cols) {
   Matrix *m = new Matrix(rows, cols);
   MatrixIter(m) { 
-    m->row(i)[j] = cos(M_PI * i * (-1+(j+1)*2) / (2*cols)) * sqrt((double)2/cols);	
+    m->row(i)[j] = cos(M_PI * i * (-1+(j+1)*2) / (2*cols)) * sqrt(2.0/cols);	
   }
   return m;
 }
@@ -363,7 +364,8 @@ double GausPdfEval(const double *mean, const double *diagcovar, const double *no
 double GmmPdfEval(const Matrix *means, const Matrix *diagcovar,
                   const double *obv, const double *prior, const double *normC, double *outPosteriors) {
   int K=means->M, D=means->N;
-  double total=-INFINITY, *prob=(double *)alloca(K*sizeof(double));
+  double total=-INFINITY;
+  vector<double> prob(K);
   MatrixRowIter(means) {
     prob[i] = GausPdfEval(means->row(i), diagcovar->row(i), normC?&normC[i]:0, obv, D);
     if (prior) prob[i] += prior[i];
@@ -410,7 +412,7 @@ Matrix *PCA(const Matrix *obv, Matrix *projected, double *var) {
   Matrix A(obv->M, obv->N), D(obv->N, 1), U(obv->M, obv->M), V(obv->N, obv->N);
   MeanNormalizeRows(obv, &A);
 
-  double scale = sqrt((double)obv->M-1);
+  double scale = sqrt(double(obv->M)-1);
   MatrixIter(&A) A.row(i)[j] /= scale;
   SVD(&A, &D, &U, &V);
   MatrixIter(&A) A.row(i)[j] *= scale;
@@ -440,8 +442,8 @@ void FreeBigNumContext(BigNumContext c) { return BN_CTX_free(c); }
 void FreeBigNum(BigNum n) { return BN_free(n); }
 void BigNumModExp(BigNum v, BigNum a, BigNum e, BigNum m, BigNumContext c) { BN_mod_exp(v, a, e, m, c); }
 void BigNumSetValue(BigNum v, int val) { BN_set_word(v, val); }
-void BigNumGetData(BigNum v, char *out) { BN_bn2bin(v, reinterpret_cast<unsigned char *>(out)); }
-BigNum BigNumSetData(BigNum v, const StringPiece &data) { BN_bin2bn(reinterpret_cast<const unsigned char *>(data.data()), data.size(), v); return v; }
+void BigNumGetData(BigNum v, char *out) { BN_bn2bin(v, MakeUnsigned(out)); }
+BigNum BigNumSetData(BigNum v, const StringPiece &data) { BN_bin2bn(MakeUnsigned(data.data()), data.size(), v); return v; }
 BigNum BigNumRand(BigNum v, int bits, int top, int bottom) { BN_rand(v, bits, top, bottom); return v; }
 int BigNumDataSize(BigNum v) { return BN_num_bytes(v); }
 int BigNumSignificantBits(BigNum v) { return BN_num_bits(v); }
@@ -452,8 +454,8 @@ ECGroup GetECPairGroup (ECPair p) { return const_cast<ECGroup>(EC_KEY_get0_group
 ECPoint GetECPairPubKey(ECPair p) { return const_cast<ECPoint>(EC_KEY_get0_public_key(p)); }
 bool SetECPairPubKey(ECPair p, ECPoint k) { return EC_KEY_set_public_key(p, k); }
 int ECPointDataSize(ECGroup g, ECPoint p, BigNumContext x) { return EC_POINT_point2oct(g, p, POINT_CONVERSION_UNCOMPRESSED, 0, 0, x); }
-void ECPointGetData(ECGroup g, ECPoint p, char *out, int len, BigNumContext x) { EC_POINT_point2oct(g, p, POINT_CONVERSION_UNCOMPRESSED, reinterpret_cast<unsigned char *>(out), len, x); }
-void ECPointSetData(ECGroup g, ECPoint v, const StringPiece &data) { EC_POINT_oct2point(g, v, reinterpret_cast<const unsigned char *>(data.buf), data.len, 0); }
+void ECPointGetData(ECGroup g, ECPoint p, char *out, int len, BigNumContext x) { EC_POINT_point2oct(g, p, POINT_CONVERSION_UNCOMPRESSED, MakeUnsigned(out), len, x); }
+void ECPointSetData(ECGroup g, ECPoint v, const StringPiece &data) { EC_POINT_oct2point(g, v, MakeUnsigned(data.buf), data.len, 0); }
 #else
 BigNum        NewBigNum        ()                { FATAL("not implemented"); }
 BigNumContext NewBigNumContext ()                { FATAL("not implemented"); }

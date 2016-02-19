@@ -40,18 +40,6 @@
 #endif
 
 #if defined(LFL_HEADLESS)
-#define GLint int
-#define GLuint unsigned 
-#define GL_RGBA 0
-#define GL_TEXTURE_2D 0
-#define GL_TEXTURE_CUBE_MAP 0
-#define GL_UNSIGNED_BYTE 0
-#define GL_FRAMEBUFFER_COMPLETE 0
-#define GL_FRAMEBUFFER_BINDING_OES 0
-#define GLEW_EXT_framebuffer_object 0
-#define glewGetString(a) 0
-#define glGetString(a) ""
-#define glGetIntegerv(a,b)
 #define glTexImage2D(a,b,c,d,e,f,g,h,i)
 #define glTexSubImage2D(a,b,c,d,e,f,g,h,i)
 #define glTexParameteri(a,b,c)
@@ -267,7 +255,7 @@ int Pixel::FromFFMpegId(int fmt) {
     case AV_PIX_FMT_YUVJ420P: return Pixel::YUVJ420P;
     case AV_PIX_FMT_YUVJ422P: return Pixel::YUVJ422P;
     case AV_PIX_FMT_YUVJ444P: return Pixel::YUVJ444P;
-    default: ERROR("unknown pixel fmt: ", fmt); return 0;
+    default: return ERRORv(0, "unknown pixel fmt: ", fmt);
   }
 }
 int Pixel::ToFFMpegId(int fmt) {
@@ -285,7 +273,7 @@ int Pixel::ToFFMpegId(int fmt) {
     case Pixel::YUVJ420P: return AV_PIX_FMT_YUVJ420P;
     case Pixel::YUVJ422P: return AV_PIX_FMT_YUVJ422P;
     case Pixel::YUVJ444P: return AV_PIX_FMT_YUVJ444P;
-    default: ERROR("unknown pixel fmt: ", fmt); return 0;
+    default: return ERRORv(0, "unknown pixel fmt: ", fmt);
   }
 }
 #endif // LFL_FFMPEG
@@ -363,12 +351,12 @@ void Material::SetMaterialColor(const Color &color) {
 
 Box::Box(float X, float Y, float W, float H, bool round) {
   if (round) { x=RoundF(X); y=RoundF(Y); w=RoundF(W); h=RoundF(H); }
-  else       { x= (int)(X); y= (int)(Y); w= (int)(W); h= (int)(H); }
+  else       { x=   int(X); y=   int(Y); w=   int(W); h=   int(H); }
 }
 
 Box::Box(const float *v4, bool round) {
   if (round) { x=RoundF(v4[0]); y=RoundF(v4[1]); w=RoundF(v4[2]); h=RoundF(v4[3]); }
-  else       { x= (int)(v4[0]); y= (int)(v4[1]); w= (int)(v4[2]); h= (int)(v4[3]); }
+  else       { x=   int(v4[0]); y=   int(v4[1]); w=   int(v4[2]); h=   int(v4[3]); }
 }
 
 string Box::DebugString() const { return StringPrintf("Box = { %d, %d, %d, %d }", x, y, w, h); }
@@ -377,20 +365,20 @@ void Box::Draw(const float *texcoord) const {
   static const float default_texcoord[4] = {0, 0, 1, 1};
   const float *tc = X_or_Y(texcoord, default_texcoord);
 #if 1
-  float verts[] = { (float)x,   (float)y,   tc[Texture::minx_coord_ind], tc[Texture::miny_coord_ind],
-                    (float)x,   (float)y+h, tc[Texture::minx_coord_ind], tc[Texture::maxy_coord_ind],
-                    (float)x+w, (float)y,   tc[Texture::maxx_coord_ind], tc[Texture::miny_coord_ind],
-                    (float)x,   (float)y+h, tc[Texture::minx_coord_ind], tc[Texture::maxy_coord_ind],
-                    (float)x+w, (float)y,   tc[Texture::maxx_coord_ind], tc[Texture::miny_coord_ind],
-                    (float)x+w, (float)y+h, tc[Texture::maxx_coord_ind], tc[Texture::maxy_coord_ind] };
+  float verts[] = { float(x),   float(y),   tc[Texture::minx_coord_ind], tc[Texture::miny_coord_ind],
+                    float(x),   float(y+h), tc[Texture::minx_coord_ind], tc[Texture::maxy_coord_ind],
+                    float(x+w), float(y),   tc[Texture::maxx_coord_ind], tc[Texture::miny_coord_ind],
+                    float(x),   float(y+h), tc[Texture::minx_coord_ind], tc[Texture::maxy_coord_ind],
+                    float(x+w), float(y),   tc[Texture::maxx_coord_ind], tc[Texture::miny_coord_ind],
+                    float(x+w), float(y+h), tc[Texture::maxx_coord_ind], tc[Texture::maxy_coord_ind] };
   bool changed = screen->gd->VertexPointer(2, GraphicsDevice::Float, sizeof(float)*4, 0,               verts, sizeof(verts), NULL, true, GraphicsDevice::Triangles);
   if (changed)   screen->gd->TexPointer   (2, GraphicsDevice::Float, sizeof(float)*4, sizeof(float)*2, verts, sizeof(verts), NULL, false);
   if (1)         screen->gd->DeferDrawArrays(GraphicsDevice::Triangles, 0, 6);
 #else
-  float verts[] = { (float)x,   (float)y,   tc[Texture::minx_coord_ind], tc[Texture::miny_coord_ind],
-                    (float)x,   (float)y+h, tc[Texture::minx_coord_ind], tc[Texture::maxy_coord_ind],
-                    (float)x+w, (float)y,   tc[Texture::maxx_coord_ind], tc[Texture::miny_coord_ind],
-                    (float)x+w, (float)y+h, tc[Texture::maxx_coord_ind], tc[Texture::maxy_coord_ind] };
+  float verts[] = { float(x),   float(y),   tc[Texture::minx_coord_ind], tc[Texture::miny_coord_ind],
+                    float(x),   float(y+h), tc[Texture::minx_coord_ind], tc[Texture::maxy_coord_ind],
+                    float(x+w), float(y),   tc[Texture::maxx_coord_ind], tc[Texture::miny_coord_ind],
+                    float(x+w), float(y+h), tc[Texture::maxx_coord_ind], tc[Texture::maxy_coord_ind] };
   bool changed = screen->gd->VertexPointer(2, GraphicsDevice::Float, sizeof(float)*4, 0,               verts, sizeof(verts), NULL, true, GraphicsDevice::TriangleStrip);
   if  (changed)  screen->gd->TexPointer   (2, GraphicsDevice::Float, sizeof(float)*4, sizeof(float)*2, verts, sizeof(verts), NULL, false);
   if (1)         screen->gd->DeferDrawArrays(GraphicsDevice::TriangleStrip, 0, 4);
@@ -399,20 +387,20 @@ void Box::Draw(const float *texcoord) const {
 
 void Box::DrawGradient(const Color *c) const {
 #if 0
-  float verts[] = { (float)x,   (float)y,   c[0].r(), c[0].g(), c[0].b(), c[0].a(),
-                    (float)x,   (float)y+h, c[3].r(), c[3].g(), c[3].b(), c[3].a(),
-                    (float)x+w, (float)y,   c[1].r(), c[1].g(), c[1].b(), c[1].a(),
-                    (float)x,   (float)y+h, c[3].r(), c[3].g(), c[3].b(), c[3].a(),
-                    (float)x+w, (float)y,   c[1].r(), c[1].g(), c[1].b(), c[1].a(),
-                    (float)x+w, (float)y+h, c[2].r(), c[2].g(), c[2].b(), c[2].a() };
+  float verts[] = { float(x),   float(y),   c[0].r(), c[0].g(), c[0].b(), c[0].a(),
+                    float(x),   float(y+h), c[3].r(), c[3].g(), c[3].b(), c[3].a(),
+                    float(x+w), float(y),   c[1].r(), c[1].g(), c[1].b(), c[1].a(),
+                    float(x),   float(y+h), c[3].r(), c[3].g(), c[3].b(), c[3].a(),
+                    float(x+w), float(y),   c[1].r(), c[1].g(), c[1].b(), c[1].a(),
+                    float(x+w), float(y+h), c[2].r(), c[2].g(), c[2].b(), c[2].a() };
   bool changed = screen->gd->VertexPointer(2, GraphicsDevice::Float, sizeof(float)*6, 0,               verts, sizeof(verts), NULL, true, GraphicsDevice::Triangles);
   if (changed)   screen->gd->ColorPointer (4, GraphicsDevice::Float, sizeof(float)*6, sizeof(float)*2, verts, sizeof(verts), NULL, false);
   if (1)         screen->gd->DeferDrawArrays(GraphicsDevice::Triangles, 0, 6);
 #else
-  float verts[] = { (float)x,   (float)y,   c[0].r(), c[0].g(), c[0].b(), c[0].a(),
-                    (float)x,   (float)y+h, c[3].r(), c[3].g(), c[3].b(), c[3].a(),
-                    (float)x+w, (float)y,   c[1].r(), c[1].g(), c[1].b(), c[1].a(),
-                    (float)x+w, (float)y+h, c[2].r(), c[2].g(), c[2].b(), c[2].a() };
+  float verts[] = { float(x),   float(y),   c[0].r(), c[0].g(), c[0].b(), c[0].a(),
+                    float(x),   float(y+h), c[3].r(), c[3].g(), c[3].b(), c[3].a(),
+                    float(x+w), float(y),   c[1].r(), c[1].g(), c[1].b(), c[1].a(),
+                    float(x+w), float(y+h), c[2].r(), c[2].g(), c[2].b(), c[2].a() };
   bool changed = screen->gd->VertexPointer(2, GraphicsDevice::Float, sizeof(float)*6, 0,               verts, sizeof(verts), NULL, true, GraphicsDevice::TriangleStrip);
   if  (changed)  screen->gd->ColorPointer (4, GraphicsDevice::Float, sizeof(float)*6, sizeof(float)*2, verts, sizeof(verts), NULL, false);
   if (1)         screen->gd->DeferDrawArrays(GraphicsDevice::TriangleStrip, 0, 4);
@@ -556,7 +544,7 @@ Box Box3::BoundingBox() const {
 /* Drawable */
 
 string Drawable::Attr::DebugString() const {
-  return StrCat("Attr ", (void*)this,
+  return StrCat("Attr ", Void(this),
                 " = { font=", font?CheckPointer(font->desc)->DebugString():string(), ", fg=", fg?fg->DebugString():string(),
                 ", bg=", bg?bg->DebugString():string(), ", tex=", tex?tex->ID:0,
                 ", scissor=", scissor?StrCat(scissor->x, ",", scissor->y, ",", scissor->w, ",", scissor->h):string(),
@@ -570,12 +558,14 @@ void Drawable::AttrVec::Insert(const Drawable::Attr &v) {
 
 /* Texture */
 
-int Texture::GLBufferType() const { return pf == preferred_pf ? GraphicsDevice::GLPreferredBuffer : GL_UNSIGNED_BYTE; }
+int Texture::GLBufferType() const {
+  return pf == preferred_pf ? GraphicsDevice::GLPreferredBuffer : GraphicsDevice::UnsignedByte;
+}
 
 void Texture::Coordinates(float *texcoord, int w, int h, int wd, int hd) {
   texcoord[minx_coord_ind] = texcoord[miny_coord_ind] = 0;
-  texcoord[maxx_coord_ind] = (float)w / wd;
-  texcoord[maxy_coord_ind] = (float)h / hd;
+  texcoord[maxx_coord_ind] = float(w) / wd;
+  texcoord[maxy_coord_ind] = float(h) / hd;
 }
 
 void Texture::Resize(int W, int H, int PF, int flag) {
@@ -585,10 +575,10 @@ void Texture::Resize(int W, int H, int PF, int flag) {
   if (!ID && (flag & Flag::CreateGL)) {
     if (!cubemap) {
       screen->gd->DisableCubeMap();
-      screen->gd->GenTextures(GL_TEXTURE_2D, 1, &ID);
+      screen->gd->GenTextures(GraphicsDevice::Texture2D, 1, &ID);
     } else if (cubemap == CubeMap::PX) {
       screen->gd->ActiveTexture(0);
-      screen->gd->GenTextures(GL_TEXTURE_CUBE_MAP, 1, &ID);
+      screen->gd->GenTextures(GraphicsDevice::TextureCubeMap, 1, &ID);
       glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     }
   }
@@ -630,7 +620,7 @@ void Texture::ClearGL() {
   }
 }
 
-void Texture::LoadGL(const MultiProcessTextureResource &t) { return LoadGL(reinterpret_cast<const unsigned char *>(t.buf.data()), point(t.width, t.height), t.pf, t.linesize); }
+void Texture::LoadGL(const MultiProcessTextureResource &t) { return LoadGL(MakeUnsigned(t.buf.data()), point(t.width, t.height), t.pf, t.linesize); }
 void Texture::LoadGL(const unsigned char *B, const point &dim, int PF, int linesize, int flag) {
   Texture temp;
   temp .Resize(dim.x, dim.y, preferred_pf, Flag::CreateBuf);
@@ -672,7 +662,7 @@ CGContextRef Texture::CGBitMap(int X, int Y, int W, int H) {
   else if (pf == Pixel::BGRA)  alpha_info = kCGBitmapByteOrder32Host | kCGImageAlphaPremultipliedFirst;
   else if (pf == Pixel::RGB32) alpha_info = kCGImageAlphaNoneSkipLast;
   else if (pf == Pixel::BGR32) alpha_info = kCGBitmapByteOrder32Host | kCGImageAlphaNoneSkipFirst;
-  else { ERROR("unsupported pixel format: ", pf, " = ", Pixel::Name(pf)); return 0; }
+  else return ERRORv(nullptr, "unsupported pixel format: ", pf, " = ", Pixel::Name(pf));
   CGColorSpaceRef colors = CGColorSpaceCreateDeviceRGB();
   // CGColorSpaceRef colors = CGColorSpaceCreateWithName(kCGColorSpaceGenericRGB);
   CGContextRef ret = CGBitmapContextCreate(buf + Y*linesize + X*PixelSize(), W, H, 8, linesize, colors, alpha_info);
@@ -734,7 +724,7 @@ void FrameBuffer::Resize(int W, int H, int flag) {
   }
   Attach(tex.ID, depth.ID);
   int status = screen->gd->CheckFrameBufferStatus();
-  if (status != GL_FRAMEBUFFER_COMPLETE) ERROR("FrameBuffer status ", status);
+  if (status != GraphicsDevice::FramebufferComplete) ERROR("FrameBuffer status ", status);
   if (flag & Flag::ReleaseFB) Release();
 }
 
@@ -920,23 +910,26 @@ void Shader::ClearGL() {}
 #endif /* LFL_GLSL_SHADERS */
 
 #ifndef LFL_HEADLESS
-const int GraphicsDevice::Float            = GL_FLOAT;
-const int GraphicsDevice::Points           = GL_POINTS;
-const int GraphicsDevice::Lines            = GL_LINES;
-const int GraphicsDevice::LineLoop         = GL_LINE_LOOP;
-const int GraphicsDevice::Triangles        = GL_TRIANGLES;
-const int GraphicsDevice::TriangleStrip    = GL_TRIANGLE_STRIP;
-const int GraphicsDevice::Texture2D        = GL_TEXTURE_2D;
-const int GraphicsDevice::UnsignedInt      = GL_UNSIGNED_INT;
-const int GraphicsDevice::Ambient          = GL_AMBIENT;
-const int GraphicsDevice::Diffuse          = GL_DIFFUSE;
-const int GraphicsDevice::Specular         = GL_SPECULAR;
-const int GraphicsDevice::Position         = GL_POSITION;
-const int GraphicsDevice::Emission         = GL_EMISSION;
-const int GraphicsDevice::One              = GL_ONE;
-const int GraphicsDevice::SrcAlpha         = GL_SRC_ALPHA;
-const int GraphicsDevice::OneMinusSrcAlpha = GL_ONE_MINUS_SRC_ALPHA;
-const int GraphicsDevice::OneMinusDstColor = GL_ONE_MINUS_DST_COLOR;
+const int GraphicsDevice::Float               = GL_FLOAT;
+const int GraphicsDevice::Points              = GL_POINTS;
+const int GraphicsDevice::Lines               = GL_LINES;
+const int GraphicsDevice::LineLoop            = GL_LINE_LOOP;
+const int GraphicsDevice::Triangles           = GL_TRIANGLES;
+const int GraphicsDevice::TriangleStrip       = GL_TRIANGLE_STRIP;
+const int GraphicsDevice::Texture2D           = GL_TEXTURE_2D;
+const int GraphicsDevice::TextureCubeMap      = GL_TEXTURE_CUBE_MAP;
+const int GraphicsDevice::UnsignedByte        = GL_UNSIGNED_BYTE;
+const int GraphicsDevice::UnsignedInt         = GL_UNSIGNED_INT;
+const int GraphicsDevice::FramebufferComplete = GL_FRAMEBUFFER_COMPLETE;
+const int GraphicsDevice::Ambient             = GL_AMBIENT;
+const int GraphicsDevice::Diffuse             = GL_DIFFUSE;
+const int GraphicsDevice::Specular            = GL_SPECULAR;
+const int GraphicsDevice::Position            = GL_POSITION;
+const int GraphicsDevice::Emission            = GL_EMISSION;
+const int GraphicsDevice::One                 = GL_ONE;
+const int GraphicsDevice::SrcAlpha            = GL_SRC_ALPHA;
+const int GraphicsDevice::OneMinusSrcAlpha    = GL_ONE_MINUS_SRC_ALPHA;
+const int GraphicsDevice::OneMinusDstColor    = GL_ONE_MINUS_DST_COLOR;
 
 #ifdef LFL_MOBILE
 const int GraphicsDevice::Fill              = 0;
@@ -1158,7 +1151,7 @@ struct OpenGLES1 : public GraphicsDevice, public QTWindow {
   void Mult(const float *m) { glMultMatrixf(m); }
   void Translate(float x, float y, float z) { glTranslatef(x, y, z); }
   void DrawElements(int pt, int np, int it, int o, void *index, int l, int *out, bool dirty) {
-    glDrawElements(pt, np, it, (char*)index + o);
+    glDrawElements(pt, np, it, FromVoid<char*>(index) + o);
     GDDebug("DrawElements(", pt, ", ", np, ", ", it, ", ", o, ", ", index, ", ", l, ", ", dirty, ")");
   }
   void DrawArrays(int type, int o, int n) {
@@ -1269,7 +1262,7 @@ struct OpenGLES2 : public GraphicsDevice, public QTWindow {
   }
   void Light(int n, int t, float *v) {
     bool light_pos = 0, light_color = 0;
-    if (n != 0) { ERROR("ignoring Light(", n, ")"); return; }
+    if (n != 0) return ERROR("ignoring Light(", n, ")");
 
     if      (t == GL_POSITION) { light_pos=1;   light[n].pos = modelview_matrix.back().Transform(v4(v)); }
     else if (t == GL_AMBIENT)  { light_color=1; light[n].color.ambient  = Color(v); }
@@ -1322,7 +1315,7 @@ struct OpenGLES2 : public GraphicsDevice, public QTWindow {
     bool defer = !out, input_dirty = dirty;
     if (defer) { out = &deferred.vertexbuffer; deferred.vertexbuffer_appended = l; }
     bool first = (*out == -1), changed = first || *out != bound_vertexbuffer;
-    if (first) { glGenBuffers(1, (GLuint*)out); dirty = true; }
+    if (first) { glGenBuffers(1, MakeUnsigned(out)); dirty = true; }
     if (changed) {
       CHECK(shader);
       CHECK((!o && !w) || o < w);
@@ -1368,7 +1361,7 @@ struct OpenGLES2 : public GraphicsDevice, public QTWindow {
     GDDebug("NormalPointer");
   }
   void VertexAttribPointer(int slot, const VertexAttribute &attr) { 
-    glVertexAttribPointer(slot, attr.m, attr.t, GL_FALSE, attr.w, (GLvoid*)(long)attr.o);
+    glVertexAttribPointer(slot, attr.m, attr.t, GL_FALSE, attr.w, Void(long(attr.o)));
   }
 
   void UseShader(Shader *S) {
@@ -1430,7 +1423,7 @@ struct OpenGLES2 : public GraphicsDevice, public QTWindow {
 
   void DrawElements(int pt, int np, int it, int o, void *index, int l, int *out, bool dirty) {
     bool input_dirty = dirty;
-    if (*out == -1) { glGenBuffers(1, (GLuint*)out); dirty = true; }
+    if (*out == -1) { glGenBuffers(1, MakeUnsigned(out)); dirty = true; }
     if (*out != bound_indexbuffer) { 
       bound_indexbuffer = *out;
       glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, *out);
@@ -1439,7 +1432,7 @@ struct OpenGLES2 : public GraphicsDevice, public QTWindow {
 
     GDDebug("DrawElements-Pre(", pt, ", ", np, ", ", it, ", ", o, ", ", index, ", ", l, ", ", dirty, ")");
     PushDirtyState();
-    glDrawElements(pt, np, it, (GLvoid*)(long)o);
+    glDrawElements(pt, np, it, Void(long(o)));
     GDDebug("DrawElements-Post(", pt, ", ", np, ", ", it, ", ", o, ", ", index, ", ", l, ", ", dirty, ")");
   }
   void DrawArrays(int type, int o, int n) {
@@ -1547,6 +1540,8 @@ void GraphicsDevice::LinkProgram(int prog) {
 }
 void GraphicsDevice::GetProgramiv(int p, int t, int *out) { glGetProgramiv(p, t, out); }
 void GraphicsDevice::GetIntegerv(int t, int *out) { glGetIntegerv(t, out); }
+const char *GraphicsDevice::GetString(int t) { return SpellNull(MakeSigned(glGetString(t))); }
+const char *GraphicsDevice::GetGLEWString(int t) { return SpellNull(MakeSigned(glewGetString(t))); }
 int GraphicsDevice::GetAttribLocation (int prog, const string &name) { return glGetAttribLocation (prog, name.c_str()); }
 int GraphicsDevice::GetUniformLocation(int prog, const string &name) { return glGetUniformLocation(prog, name.c_str()); }
 void GraphicsDevice::Uniform1i(int u, int v) { glUniform1i(u, v); }
@@ -1593,7 +1588,7 @@ void GraphicsDevice::CheckForError(const char *file, int line) {
     BreakHook();
 #ifdef LFL_GLES2
     if (app->video->opengles_version == 2) {
-      Shader *shader = ((OpenGLES2*)screen->gd)->shader;
+      Shader *shader = dynamic_cast<OpenGLES2*>(screen->gd)->shader;
       glValidateProgram(shader->ID);
       glGetProgramiv(shader->ID, GL_VALIDATE_STATUS, &gl_validate_status);
       if (gl_validate_status != GL_TRUE) ERROR(shader->name, ": gl validate status ", gl_validate_status);
@@ -1624,7 +1619,7 @@ void GraphicsDevice::DrawMode(int dm, int W, int H, bool flush) {
 
   if (_2D) Ortho(0, W, 0, H, 0, 100);
   else {
-    float aspect=(float)W/H;
+    float aspect=float(W)/H;
     double top = tan(FLAGS_field_of_view * M_PI/360.0) * FLAGS_near_plane;
     screen->gd->Frustum(aspect*-top, aspect*top, -top, top, FLAGS_near_plane, FLAGS_far_plane);
   }
@@ -1815,7 +1810,10 @@ const int GraphicsDevice::Triangles = 0;
 const int GraphicsDevice::Polygon = 0;
 const int GraphicsDevice::TriangleStrip = 0;
 const int GraphicsDevice::Texture2D = 0;
+const int GraphicsDevice::TextureCubeMap = 0;
+const int GraphicsDevice::UnsignedByte = 0;
 const int GraphicsDevice::UnsignedInt = 0;
+const int GraphicsDevice::FramebufferComplete = 0;
 const int GraphicsDevice::Ambient = 0;
 const int GraphicsDevice::Diffuse = 0;
 const int GraphicsDevice::Specular = 0;
@@ -1899,6 +1897,11 @@ void Application::CloseWindow(Window *W) {
   if (app->window_closed_cb) app->window_closed_cb(W);
   screen = 0;
 }
+
+void Window::SetCaption(const string &v) {}
+void Window::SetResizeIncrements(float x, float y) {}
+void Window::SetTransparency(float v) {}
+void Window::Reshape(int w, int h) {}
 #endif // LFL_HEADLESS
 
 #ifdef LFL_ANDROIDVIDEO
@@ -1970,6 +1973,10 @@ void Application::CloseWindow(Window *W) {
   // OSXDestroyWindow(W->id);
   screen = 0;
 }
+void Window::SetCaption(const string &v) { OSXSetWindowTitle(id, v.c_str()); }
+void Window::SetResizeIncrements(float x, float y) { OSXSetWindowResizeIncrements(id, x, y); }
+void Window::SetTransparency(float v) { OSXSetWindowTransparency(id, v); }
+void Window::Reshape(int w, int h) { OSXSetWindowSize(id, w, h); }
 #endif
 
 #ifdef LFL_WINVIDEO
@@ -2012,6 +2019,26 @@ void Application::CloseWindow(Window *W) {
   if (windows.empty()) app->run = false;
   if (app->window_closed_cb) app->window_closed_cb(W);
   screen = 0;
+}
+
+void Window::SetCaption(const string &v) { SetWindowText(FromVoid<HWND>(screen->id), v.c_str()); }
+void Window::SetResizeIncrements(float x, float y) {
+  WinWindow *win = FromVoid<WinWindow*>(screen->impl);
+  win->resize_increment = point(x, y);
+}
+void Window::SetTransparency(float v) {
+  HWND hwnd = FromVoid<HWND>(screen->id);
+  if (v <= 0) SetWindowLong(hwnd, GWL_EXSTYLE, GetWindowLong(hwnd, GWL_EXSTYLE) & (~WS_EX_LAYERED));
+  else {      SetWindowLong(hwnd, GWL_EXSTYLE, GetWindowLong(hwnd, GWL_EXSTYLE) | ( WS_EX_LAYERED));
+    SetLayeredWindowAttributes(hwnd, 0, BYTE(max(1.0, (1-v)*255.0)), LWA_ALPHA);
+  }
+}
+void Window::Reshape(int w, int h) {
+  WinWindow *win = FromVoid<WinWindow*>(impl);
+  long lStyle = GetWindowLong((HWND)id, GWL_STYLE);
+  RECT r = { 0, 0, w, h };
+  AdjustWindowRect(&r, lStyle, win->menubar);
+  SetWindowPos((HWND)id, 0, 0, 0, r.right-r.left, r.bottom-r.top, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
 }
 #endif
 
@@ -2057,17 +2084,24 @@ bool Application::CreateWindow(Window *W) {
   return true;
 }
 void Application::CloseWindow(Window *W) {
-  Display *display = static_cast<Display*>(W->surface);
+  Display *display = FromVoid<Display*>(W->surface);
   glXMakeCurrent(display, None, NULL);
-  glXDestroyContext(display, static_cast<GLXContext>(W->gl));
-  XDestroyWindow(display, reinterpret_cast<::Window>(W->id));
+  glXDestroyContext(display, FromVoid<GLXContext>(W->gl));
+  XDestroyWindow(display, FromVoid<::Window>(W->id));
   windows.erase(W->id);
   if (windows.empty()) app->run = false;
   if (app->window_closed_cb) app->window_closed_cb(W);
   screen = 0;
 }
 void Application::MakeCurrentWindow(Window *W) {
-  glXMakeCurrent(static_cast<Display*>(W->surface), (::Window)(W->id), static_cast<GLXContext>(W->gl));
+  glXMakeCurrent(FromVoid<Display*>(W->surface), FromVoid<::Window>(W->id), FromVoid<GLXContext>(W->gl));
+}
+void Window::Reshape(int w, int h) {
+  X11VideoModule *video = dynamic_cast<X11VideoModule*>(app->video->impl.get());
+  XWindowChanges resize;
+  resize.width = w;
+  resize.height = h;
+  XConfigureWindow(video->display, FromVoid<::Window*>(id), CWWidth|CWHeight, &resize);
 }
 #endif // LFL_X11VIDEO
 
@@ -2136,6 +2170,10 @@ void Application::MakeCurrentWindow(Window *W) {
   screen = W; 
   ((QOpenGLContext*)screen->gl)->makeCurrent((QWindow*)screen->id);
 }
+void Window::SetCaption(const string &v) { FromVoid<QWindow*>(screen->id)->setTitle(QString::fromUtf8(v.data(), v.size())); }
+void Window::SetResizeIncrements(float x, float y) { FromVoid<QWindow*>(screen->id)->setSizeIncrement(QSize(x, y)); }
+void Window::SetTransparency(float v) { FromVoid<QWindow*>(screen->id)->setOpacity(1-v); }
+void Window::Reshape(int w, int h) { FromVoid<QWindow*>(id)->resize(w, h); app->MakeCurrentWindow(screen); }
 void Mouse::GrabFocus()    { ((QTWindow*)screen->impl)->grabbed=1; ((QWindow*)screen->id)->setCursor(Qt::BlankCursor); app->grab_mode.On();  screen->cursor_grabbed=true;  }
 void Mouse::ReleaseFocus() { ((QTWindow*)screen->impl)->grabbed=0; ((QWindow*)screen->id)->unsetCursor();              app->grab_mode.Off(); screen->cursor_grabbed=false; }
 #endif // LFL_QT
@@ -2210,7 +2248,7 @@ struct LFLWxWidgetFrame : public wxFrame {
     if (w->gl) Show();
   }
   void OnClose(wxCommandEvent& event) { Close(true); }
-  void OnNewWindow(wxCommandEvent& event) { LFL::app->create_win_f(); }
+  void OnNewWindow(wxCommandEvent& event) { LFL::app->CreateNewWindow(); }
   wxDECLARE_EVENT_TABLE();
 };
 wxBEGIN_EVENT_TABLE(LFLWxWidgetFrame, wxFrame)
@@ -2268,6 +2306,7 @@ void Application::CloseWindow(Window *W) {
   if (app->window_closed_cb) app->window_closed_cb(W);
   screen = 0;
 }
+void Window::Reshape(int w, int h) { FromVoid<wxGLCanvas*>(id)->SetSize(w, h); }
 void Mouse::GrabFocus()    {}
 void Mouse::ReleaseFocus() {}
 #endif
@@ -2289,7 +2328,7 @@ struct GLFWVideoModule : public Module {
 };
 bool Application::CreateWindow(Window *W) {
   GLFWwindow *share = windows.empty() ? 0 : (GLFWwindow*)windows.begin()->second->id;
-  if (!(W->id = glfwCreateWindow(W->width, W->height, W->caption.c_str(), 0, share))) { ERROR("glfwCreateWindow"); return false; }
+  if (!(W->id = glfwCreateWindow(W->width, W->height, W->caption.c_str(), 0, share))) return ERRORv(false, "glfwCreateWindow");
   windows[W->id] = W;
   return true;
 }
@@ -2305,6 +2344,7 @@ void Application::CloseWindow(Window *W) {
   if (app->window_closed_cb) app->window_closed_cb(W);
   screen = 0;
 }
+void Window::Reshape(int w, int h) { glfwSetWindowSize(FromVoid<GLFWwindow*>(id), w, h); }
 #endif
 
 #ifdef LFL_SDLVIDEO
@@ -2337,11 +2377,11 @@ bool Application::CreateWindow(Window *W) {
   SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
 
   if (!(W->id = SDL_CreateWindow(W->caption.c_str(), SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, W->width, W->height, createFlag)))
-  { ERROR("SDL_CreateWindow: ",     SDL_GetError()); return false; }
+    return ERRORv(false, "SDL_CreateWindow: ",     SDL_GetError());
 
   if (!windows.empty()) W->gl = windows.begin()->second->gl;
   else if (!(W->gl = SDL_GL_CreateContext((SDL_Window*)W->id)))
-  { ERROR("SDL_GL_CreateContext: ", SDL_GetError()); return false; } 
+    return ERRORv(false, "SDL_GL_CreateContext: ", SDL_GetError());
 
   SDL_Surface* icon = SDL_LoadBMP(StrCat(app->assetdir, "icon.bmp").c_str());
   SDL_SetWindowIcon((SDL_Window*)W->id, icon);
@@ -2364,219 +2404,8 @@ void Application::CloseWindow(Window *W) {
   if (app->window_closed_cb) app->window_closed_cb(W);
   screen = 0;
 }
+void Window::Reshape(int w, int h) { SDL_SetWindowSize(FromVoid<SDL_Window*>(id), w, h); }
 #endif /* LFL_SDLVIDEO */
-
-Window::Window() : caption("lfapp"), fps(128) {
-  id = gl = surface = glew_context = impl = user1 = user2 = user3 = 0;
-  minimized = cursor_grabbed = frame_init = animating = 0;
-  target_fps = FLAGS_target_fps;
-  multitouch_keyboard_x = .93; 
-  cam = make_unique<Entity>(v3(5.54, 1.70, 4.39), v3(-.51, -.03, -.49), v3(-.03, 1, -.03));
-  SetSize(point(640, 480));
-  ClearEvents();
-  ClearGesture();
-}
-
-Window::~Window() {
-  if (lfapp_console) lfapp_console->WriteHistory(LFAppDownloadDir(), "console", "");
-  if (gd) delete gd;
-}
-
-Box Window::Box(float xp, float yp, float xs, float ys, float xbl, float ybt, float xbr, float ybb) const {
-  if (isinf(xbr)) xbr = xbl;
-  if (isinf(ybb)) ybb = ybt;
-  return LFL::Box(width  * (xp + xbl),
-                  height * (yp + ybb),
-                  width  * xs - width  * (xbl + xbr),
-                  height * ys - height * (ybt + ybb), false);
-}
-
-void Window::ClearEvents() { 
-  ClearMouseGUIEvents();
-  ClearKeyboardGUIEvents();
-  ClearInputBindEvents();
-}
-
-void Window::ClearGesture() {
-  gesture_swipe_up = gesture_swipe_down = 0;
-  gesture_tap[0] = gesture_tap[1] = gesture_dpad_stop[0] = gesture_dpad_stop[1] = 0;
-  gesture_dpad_dx[0] = gesture_dpad_dx[1] = gesture_dpad_dy[0] = gesture_dpad_dy[1] = 0;
-}
-
-void Window::ClearMouseGUIEvents() {
-  for (auto i = mouse_gui.begin(); i != mouse_gui.end(); ++i) (*i)->ClearEvents();
-}
-void Window::ClearKeyboardGUIEvents() {
-  for (auto i = keyboard_gui.begin(); i != keyboard_gui.end(); ++i) (*i)->ClearEvents();
-}
-void Window::ClearInputBindEvents() {
-  for (auto i = input_bind.begin(); i != input_bind.end(); ++i) (*i)->ClearEvents();
-}
-
-void Window::InitLFAppConsole() {
-  lfapp_console = make_unique<Console>(screen);
-  lfapp_console->ReadHistory(LFAppDownloadDir(), "console");
-  lfapp_console->Write(StrCat(screen->caption, " started"));
-  lfapp_console->Write("Try console commands 'cmds' and 'flags'");
-}
-
-void Window::AddDialog(unique_ptr<Dialog> d) {
-  dialogs.emplace_back(move(d));
-  if (dialogs.size() == 1) BringDialogToFront(dialogs.back().get());
-}
-
-void Window::BringDialogToFront(Dialog *d) {
-  if (top_dialog == d) return;
-  if (top_dialog) top_dialog->LoseFocus();
-  int zsort_ind = 0;
-  for (auto &d : dialogs) d->zsort = ++zsort_ind;
-  d->zsort = 0;
-  sort(dialogs.begin(), dialogs.end(), Dialog::LessThan);
-  (top_dialog = d)->TakeFocus();
-}
-
-void Window::GiveDialogFocusAway(Dialog *d) {
-  if (top_dialog == d) { top_dialog=0; d->LoseFocus(); }
-}
-
-void Window::DrawDialogs() {
-  for (auto i = screen->dialogs.begin(), e = screen->dialogs.end(); i != e; ++i) (*i)->Draw();
-  if (screen->lfapp_console) screen->lfapp_console->Draw();
-  if (FLAGS_draw_grid) {
-    Color c(.7, .7, .7);
-    glIntersect(screen->mouse.x, screen->mouse.y, &c);
-    Fonts::Default()->Draw(StrCat("draw_grid ", screen->mouse.x, " , ", screen->mouse.y), point(0,0));
-  }
-}
-
-void Window::SetSize(const point &d) {
-  pow2_width  = NextPowerOfTwo((width  = d.x));
-  pow2_height = NextPowerOfTwo((height = d.y));
-}
-
-void Window::SetCaption(const string &v) {
-#if defined(LFL_OSXVIDEO)
-  OSXSetWindowTitle(id, v.c_str());
-#elif defined(LFL_WINVIDEO)
-  SetWindowText((HWND)screen->id, v.c_str());
-#elif defined(LFL_QT)
-  ((QWindow*)screen->id)->setTitle(QString::fromUtf8(v.data(), v.size()));
-#endif
-}
-
-void Window::SetResizeIncrements(float x, float y) {
-#if defined(LFL_OSXVIDEO)
-  OSXSetWindowResizeIncrements(id, x, y);
-#elif defined(LFL_WINVIDEO)
-  WinWindow *win = static_cast<WinWindow*>(screen->impl);
-  win->resize_increment = point(x, y);
-#elif defined(LFL_QT)
-  ((QWindow*)screen->id)->setSizeIncrement(QSize(x, y));
-#endif
-}
-
-void Window::SetTransparency(float v) {
-#if defined(LFL_OSXVIDEO)
-  OSXSetWindowTransparency(id, v);
-#elif defined(LFL_WINVIDEO)
-  if (v <= 0) SetWindowLong((HWND)screen->id, GWL_EXSTYLE, GetWindowLong((HWND)screen->id, GWL_EXSTYLE) & (~WS_EX_LAYERED));
-  else {      SetWindowLong((HWND)screen->id, GWL_EXSTYLE, GetWindowLong((HWND)screen->id, GWL_EXSTYLE) | ( WS_EX_LAYERED));
-    SetLayeredWindowAttributes((HWND)screen->id, 0, static_cast<BYTE>(max(1.0, (1-v)*255.0)), LWA_ALPHA);
-  }
-#elif defined(LFL_QT)
-  ((QWindow*)screen->id)->setOpacity(1-v);
-#endif
-}
-
-void Window::Reshape(int w, int h) {
-#if defined(LFL_OSXVIDEO)
-  OSXSetWindowSize(id, w, h);
-#elif defined(LFL_WINVIDEO)
-  WinWindow *win = static_cast<WinWindow*>(screen->impl);
-  long lStyle = GetWindowLong((HWND)screen->id, GWL_STYLE);
-  RECT r = { 0, 0, w, h };
-  AdjustWindowRect(&r, lStyle, win->menubar);
-  SetWindowPos((HWND)screen->id, 0, 0, 0, r.right-r.left, r.bottom-r.top, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
-#elif defined(LFL_X11VIDEO)
-  X11VideoModule *video = dynamic_cast<X11VideoModule*>(app->video->impl.get());
-  XWindowChanges resize;
-  resize.width = w;
-  resize.height = h;
-  XConfigureWindow(video->display, (::Window)screen->id, CWWidth|CWHeight, &resize);
-#elif defined(LFL_QT)
-  ((QWindow*)id)->resize(w, h);
-  app->MakeCurrentWindow(screen);
-#elif defined(LFL_WXWIDGETS)
-  ((wxGLCanvas*)screen->id)->SetSize(w, h);
-#elif defined(LFL_GLFWVIDEO)
-  glfwSetWindowSize((GLFWwindow*)id, w, h);
-#elif defined(LFL_SDLVIDEO)
-  SDL_SetWindowSize((SDL_Window*)id, w, h);
-#endif
-}
-
-void Window::Reshaped(int w, int h) {
-  INFO("Window::Reshaped(", w, ", ", h, ")");
-  SetSize(point(w, h));
-  if (!gd) return;
-  gd->ViewPort(LFL::Box(width, height));
-  gd->DrawMode(screen->gd->default_draw_mode);
-  for (auto g = screen->mouse_gui.begin(); g != screen->mouse_gui.end(); ++g) (*g)->Layout();
-  if (app->reshaped_cb) app->reshaped_cb();
-}
-
-void Window::ResetGL() {
-  Video::InitGraphicsDevice(this);
-  for (auto &g : screen->keyboard_gui) g->ResetGL();
-  for (auto &g : screen->   mouse_gui) g->ResetGL();
-  for (auto &g : screen->     dialogs) g->ResetGL();
-}
-
-void Window::SwapAxis() {
-  FLAGS_rotate_view = FLAGS_rotate_view ? 0 : -90;
-  FLAGS_swap_axis = FLAGS_rotate_view != 0;
-  Reshaped(height, width);
-}
-
-int Window::Frame(unsigned clicks, int flag) {
-  if (screen != this) app->MakeCurrentWindow(this);
-
-  if (FLAGS_lfapp_video) {
-    if (!frame_init && (frame_init = true))  {
-#ifdef LFL_IPHONE
-      glGetIntegerv(GL_FRAMEBUFFER_BINDING_OES, &screen->gd->default_framebuffer);
-      INFO("default_framebuffer = ", screen->gd->default_framebuffer);
-#endif
-    }
-    gd->DrawMode(gd->default_draw_mode);
-    gd->Clear();
-    gd->LoadIdentity();
-  }
-
-  /* frame */
-  int ret = frame_cb ? frame_cb(screen, clicks, flag) : 0;
-  ClearEvents();
-
-  /* allow app to skip frame */
-  if (ret < 0) return ret;
-  fps.Add(clicks);
-
-  if (FLAGS_lfapp_video) {
-    app->video->Swap();
-  }
-  return ret;
-}
-
-void Window::RenderToFrameBuffer(FrameBuffer *fb) {
-  int dm = screen->gd->draw_mode;
-  fb->Attach();
-  // screen->gd->ViewPort(Box(fb->tex.width, fb->tex.height));
-  screen->gd->DrawMode(screen->gd->default_draw_mode);
-  screen->gd->Clear();
-  frame_cb(0, 0, 0);
-  fb->Release();
-  screen->gd->RestoreViewport(dm);
-}
 
 /* Video */
 
@@ -2610,32 +2439,9 @@ int Video::Init() {
   screen->glew_context = new GLEWContext();
 #endif
   GLenum glew_err;
-  if ((glew_err = glewInit()) != GLEW_OK) { ERROR("glewInit: ", glewGetErrorString(glew_err)); return -1; }
+  if ((glew_err = glewInit()) != GLEW_OK) return ERRORv(-1, "glewInit: ", glewGetErrorString(glew_err));
   app->video->opengl_framebuffer = GLEW_EXT_framebuffer_object;
 #endif
-
-  StringPiece glslver = MakeUnbounded<char>(glGetString(GL_SHADING_LANGUAGE_VERSION));
-  StringPiece glexts = MakeUnbounded<char>(SpellNull(glGetString(GL_EXTENSIONS)));
-  INFO("OpenGL Version: ", SpellNull(glGetString(GL_VERSION)));
-  INFO("OpenGL Vendor: ",  SpellNull(glGetString(GL_VENDOR)));
-#ifdef LFL_GLEW
-  INFO("GLEW Version: ", SpellNull(reinterpret_cast<const char *>(glewGetString(GLEW_VERSION))));
-#endif
-#ifdef LFL_GLSL_SHADERS
-  INFO("GL_SHADING_LANGUAGE_VERSION: ", SpellNull(glslver.data()));
-#endif
-  INFO("GL_EXTENSIONS: ", glexts.data());
-
-  opengles_version = 1 + (glslver.data() != NULL);
-#if defined(LFL_ANDROID) || defined(LFL_IPHONE)
-  opengles_cubemap = strstr(glexts.data(), "GL_EXT_texture_cube_map") != 0;
-#else
-  opengles_cubemap = strstr(glexts.data(), "GL_ARB_texture_cube_map") != 0;
-#endif
-  int depth_bits=0;
-  glGetIntegerv(GL_DEPTH_BITS, &depth_bits);
-  INFO("screen->opengles_version = ", opengles_version, ", depth_bits = ", depth_bits);
-  INFO("lfapp_opengles_cubemap = ", opengles_cubemap ? "true" : "false");
 
   if (!screen->gd) CreateGraphicsDevice(screen);
   InitGraphicsDevice(screen);
@@ -2648,6 +2454,31 @@ int Video::Init() {
     Swap();
     screen->gd->ClearColor(screen->gd->clear_color);
   }
+#endif
+
+#ifndef LFL_HEADLESS
+  const char *glslver = screen->gd->GetString(GL_SHADING_LANGUAGE_VERSION);
+  const char *glexts = screen->gd->GetString(GL_EXTENSIONS);
+  INFO("OpenGL Version: ", screen->gd->GetString(GL_VERSION));
+  INFO("OpenGL Vendor: ", screen->gd->GetString(GL_VENDOR));
+#ifdef LFL_GLEW
+  INFO("GLEW Version: ", screen->gd->GetGLEWString(GLEW_VERSION));
+#endif
+#ifdef LFL_GLSL_SHADERS
+  INFO("GL_SHADING_LANGUAGE_VERSION: ", glslver);
+#endif
+  INFO("GL_EXTENSIONS: ", glexts);
+
+  opengles_version = 1 + (glslver != NULL);
+#if defined(LFL_ANDROID) || defined(LFL_IPHONE)
+  opengles_cubemap = strstr(glexts, "GL_EXT_texture_cube_map") != 0;
+#else
+  opengles_cubemap = strstr(glexts, "GL_ARB_texture_cube_map") != 0;
+#endif
+  int depth_bits=0;
+  screen->gd->GetIntegerv(GL_DEPTH_BITS, &depth_bits);
+  INFO("screen->opengles_version = ", opengles_version, ", depth_bits = ", depth_bits);
+  INFO("lfapp_opengles_cubemap = ", opengles_cubemap ? "true" : "false");
 #endif
   return 0;
 }
@@ -2669,7 +2500,7 @@ void *Video::CompleteGLContextCreate(Window *W, void *gl_context) {
   return gl_context;
 #elif defined(LFL_X11VIDEO)
   X11VideoModule *video = dynamic_cast<X11VideoModule*>(app->video->impl.get());
-  GLXContext glc = glXCreateContext(video->display, video->vi, static_cast<GLXContext>(W->gl), GL_TRUE);
+  GLXContext glc = glXCreateContext(video->display, video->vi, FromVoid<GLXContext>(W->gl), GL_TRUE);
   glXMakeCurrent(video->display, (::Window)(W->id), glc);
   return glc;
 #else
@@ -2705,7 +2536,7 @@ void Video::InitGraphicsDevice(Window *W) {
 }
 
 void Video::InitFonts() {
-  FontEngine *font_engine = Fonts::DefaultFontEngine();
+  FontEngine *font_engine = app->fonts->DefaultFontEngine();
   if (!FLAGS_default_font.size()) font_engine->SetDefault();
 
   vector<string> atlas_font_size;
@@ -2719,7 +2550,7 @@ void Video::InitFonts() {
   atlas_engine->Init(FontDesc("MenuAtlas", "", 0, Color::white, Color::clear, 0, false));
 
   if (FLAGS_lfapp_console && FLAGS_font_engine != "atlas" && FLAGS_font_engine != "freetype")
-    Fonts::LoadConsoleFont(FLAGS_lfapp_console_font.empty() ? "VeraMoBd.ttf" : FLAGS_lfapp_console_font);
+    app->fonts->LoadConsoleFont(FLAGS_lfapp_console_font.empty() ? "VeraMoBd.ttf" : FLAGS_lfapp_console_font);
 }
 
 int Video::InitFontWidth() {
@@ -2791,11 +2622,11 @@ void SimpleVideoResampler::Open(int sw, int sh, int sf, int dw, int dh, int df) 
 }
 
 void SimpleVideoResampler::Resample(const unsigned char *sb, int sls, unsigned char *db, int dls, bool flip_x, bool flip_y) {
-  if (!Opened()) { ERROR("resample not opened()"); return; }
+  if (!Opened()) return ERROR("resample not opened()");
 
   int spw = Pixel::size(s_fmt), dpw = Pixel::size(d_fmt);
-  if (spw * s_width > sls) { ERROR(spw * s_width, " > ", sls); return; }
-  if (dpw * d_width > dls) { ERROR(dpw * d_width, " > ", dls); return; }
+  if (spw * s_width > sls) return ERROR(spw * s_width, " > ", sls);
+  if (dpw * d_width > dls) return ERROR(dpw * d_width, " > ", dls);
 
   if (s_width == d_width && s_height == d_height) {
     for (int y=0; y<d_height; y++) {
@@ -2812,7 +2643,7 @@ void SimpleVideoResampler::Resample(const unsigned char *sb, int sls, unsigned c
       for (int y=0; y<d_height; y++) {
         for (int x=0; x<d_width; x++) {
           unsigned char *dp = (db + dls * (flip_y ? d_height-1-y : y) + (flip_x ? d_width-1-x : x) * dpw);
-          *(dp + po) = MatrixAsFunc(&M, x?(float)x/(d_width-1):0, y?(float)y/(d_height-1):0) * 255;
+          *(dp + po) = MatrixAsFunc(&M, x?float(x)/(d_width-1):0, y?float(y)/(d_height-1):0) * 255;
         }
       }
     }
@@ -2836,7 +2667,7 @@ void SimpleVideoResampler::CopyPixel(int s_fmt, int d_fmt, const unsigned char *
       b = (          *(sp-1)) / 3.0 + *sp / 3.0 + (sxe ? 0 : *(sp+1)) / 3.0; sp++;
       a = ((f & Flag::TransparentBlack) && !r && !g && !b) ? 0 : 255;
       break;
-    default: ERROR("s_fmt ", s_fmt, " not supported"); return;
+    default: return ERROR("s_fmt ", s_fmt, " not supported");
   }
   switch (d_fmt) {
     case Pixel::RGB24: *dp++ = r; *dp++ = g; *dp++ = b; break;
@@ -2845,7 +2676,7 @@ void SimpleVideoResampler::CopyPixel(int s_fmt, int d_fmt, const unsigned char *
     case Pixel::BGR32: *dp++ = b; *dp++ = g; *dp++ = r; *dp++ = a; break;
     case Pixel::RGBA:  *dp++ = r; *dp++ = g; *dp++ = b; *dp++ = a; break;
     case Pixel::BGRA:  *dp++ = b; *dp++ = g; *dp++ = r; *dp++ = a; break;
-    default: ERROR("d_fmt ", d_fmt, " not supported"); return;
+    default: return ERROR("d_fmt ", d_fmt, " not supported");
   }
 }
 
@@ -2893,7 +2724,7 @@ void SimpleVideoResampler::CopyMatrixToColorChannels(const Matrix *M, int w, int
 }
 
 #ifdef LFL_FFMPEG
-FFMPEGVideoResampler::~FFMPEGVideoResampler() { if (conv) sws_freeContext((SwsContext*)conv); }
+FFMPEGVideoResampler::~FFMPEGVideoResampler() { if (conv) sws_freeContext(FromVoid<SwsContext*>(conv)); }
 bool FFMPEGVideoResampler::Opened() { return conv || simple_resampler_passthru; }
 
 void FFMPEGVideoResampler::Open(int sw, int sh, int sf, int dw, int dh, int df) {
@@ -2904,19 +2735,20 @@ void FFMPEGVideoResampler::Open(int sw, int sh, int sf, int dw, int dh, int df) 
   if (SimpleVideoResampler::Supports(s_fmt) && SimpleVideoResampler::Supports(d_fmt) && sw == dw && sh == dh)
   { simple_resampler_passthru = 1; return; }
 
-  conv = sws_getContext(sw, sh, (PixelFormat)Pixel::ToFFMpegId(sf),
-                        dw, dh, (PixelFormat)Pixel::ToFFMpegId(df), SWS_BICUBIC, 0, 0, 0);
+  conv = sws_getContext(sw, sh, PixelFormat(Pixel::ToFFMpegId(sf)),
+                        dw, dh, PixelFormat(Pixel::ToFFMpegId(df)), SWS_BICUBIC, 0, 0, 0);
 }
 
 void FFMPEGVideoResampler::Resample(const unsigned char *s, int sls, unsigned char *d, int dls, bool flip_x, bool flip_y) {
   if (simple_resampler_passthru) return SimpleVideoResampler::Resample(s, sls, d, dls, flip_x, flip_y);
-  uint8_t *source  [4] = { (uint8_t*)s, 0, 0, 0 }, *dest[  4] = { (uint8_t*)d, 0, 0, 0 };
-  int      sourcels[4] = {         sls, 0, 0, 0 },  destls[4] = {         dls, 0, 0, 0 };
+  const uint8_t *source[4] = { MakeUnsigned(s), 0, 0, 0 };
+  /**/  uint8_t *dest  [4] = { MakeUnsigned(d), 0, 0, 0 };
+  int sourcels[4] = { sls, 0, 0, 0 }, destls[4] = { dls, 0, 0, 0 };
   if (flip_y) {
     source[0] += sls * (s_height - 1);
     sourcels[0] *= -1;
   }
-  sws_scale((SwsContext*)conv,
+  sws_scale(FromVoid<SwsContext*>(conv),
             flip_y ? source   : source,
             flip_y ? sourcels : sourcels, 0, s_height, dest, destls);
 }

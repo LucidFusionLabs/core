@@ -263,7 +263,7 @@ struct FFmpegCamera : public Module {
     while (app->run) {
       /* grab */
       Stream::FramePtr Lframe(0);
-      if (av_read_frame(L.fctx, &Lframe.data) < 0) { ERROR("av_read_frame"); return -1; }
+      if (av_read_frame(L.fctx, &Lframe.data) < 0) return ERRORv(-1, "av_read_frame");
       else Lframe.dirty = 1;
 
       Stream::FramePtr::swap((Stream::FramePtr*)L.frames->Write(RingBuf::Peek | RingBuf::Stamp), &Lframe);
@@ -326,7 +326,7 @@ struct DsvlCamera : public Module {
       camera->image_format = Pixel::RGB24;
       camera->image_linesize = FLAGS_camera_image_width * depth;
     }
-    else { ERROR("unknown pixel format: ", pf); return -1; }
+    else return ERRORv(-1, "unknown pixel format: ", pf);
 
     L.frames = make_unique<RingBuf>(FLAGS_camera_fps, FLAGS_camera_fps, FLAGS_camera_image_width*FLAGS_camera_image_height*depth);
 
@@ -747,12 +747,12 @@ struct QuickTimeCamera : public Module {
 
     /* open device */
     SGDeviceList devlist; int devind=-1, di=0, ret;
-    if ((ret = EnterMovies()) != noErr) { ERROR("EnterMovies: ", ret); return -1; }
-    if (!(L.grabber = OpenDefaultComponent(SeqGrabComponentType, 0))) { ERROR("OpenDefaultComonent: ", L.grabber); return -1; }
-    if ((ret = SGInitialize(L.grabber)) != noErr) { ERROR("SGInitialize: ", ret); return -1; }
-    if ((ret = SGSetDataRef(L.grabber, 0, 0, seqGrabDontMakeMovie)) != noErr) { ERROR("SGSetDataRef: ", ret); return -1; }
-    if ((ret = SGNewChannel(L.grabber, VideoMediaType, &L.channel)) != noErr) { ERROR("SGNewChannel: ", ret); return -1; }
-    if ((ret = SGGetChannelDeviceList(L.channel, 0, &devlist)) != noErr) { ERROR("SGGetChannelDeviceList: ", ret); return -1; }
+    if ((ret = EnterMovies()) != noErr) return ERRORv(-1, "EnterMovies: ", ret);
+    if (!(L.grabber = OpenDefaultComponent(SeqGrabComponentType, 0))) return ERRORv(-1, "OpenDefaultComonent: ", L.grabber);
+    if ((ret = SGInitialize(L.grabber)) != noErr) return ERRORv(-1, "SGInitialize: ", ret);
+    if ((ret = SGSetDataRef(L.grabber, 0, 0, seqGrabDontMakeMovie)) != noErr) return ERRORv(-1, "SGSetDataRef: ", ret);
+    if ((ret = SGNewChannel(L.grabber, VideoMediaType, &L.channel)) != noErr) return ERRORv(-1, "SGNewChannel: ", ret);
+    if ((ret = SGGetChannelDeviceList(L.channel, 0, &devlist)) != noErr) return ERRORv(-1, "SGGetChannelDeviceList: ", ret);
     for (int i=0; i<(*devlist)->count; i++) {
       SGDeviceName devname = (*devlist)->entry[i];
       if (devname.flags) continue;
@@ -763,26 +763,26 @@ struct QuickTimeCamera : public Module {
     }
     if (devind < 0) { FLAGS_lfapp_camera=0; return 0; }
     SGDeviceName devname = (*devlist)->entry[devind];
-    if ((ret = SGSetChannelDevice(L.channel, devname.name)) != noErr) { ERROR("SGSetChannelDevice: ", ret); return -1; }
-    if ((ret = SGDisposeDeviceList(L.grabber, devlist)) != noErr) { ERROR("SGDisposeDeviceList: ", ret); return -1; }
+    if ((ret = SGSetChannelDevice(L.channel, devname.name)) != noErr) return ERRORv(-1, "SGSetChannelDevice: ", ret);
+    if ((ret = SGDisposeDeviceList(L.grabber, devlist)) != noErr) return ERRORv(-1, "SGDisposeDeviceList: ", ret);
 
     /* get resolution */
     ImageDescriptionHandle imgdesc = (ImageDescriptionHandle)NewHandle(0);
-    if ((ret = SGGetSrcVideoBounds(L.channel, &L.rect)) != noErr) { ERROR("SGGetSrcVideoBounds: ", ret); return -1; }
-    if ((ret = QTNewGWorld(&L.gworld, k32ARGBPixelFormat, &L.rect, 0, 0, 0)) != noErr) { ERROR("QTNewGworld: ", ret); return -1; }
-    if ((ret = SGSetGWorld(L.grabber, L.gworld, 0)) != noErr) { ERROR("SGSetGWorld: ", ret); return -1; }
-    if ((ret = SGSetChannelBounds(L.channel, &L.rect)) != noErr) { ERROR("SGSetChannelBounds: ", ret); return -1; }
-    if ((ret = SGSetChannelUsage(L.channel, seqGrabRecord)) != noErr) { ERROR("SGSetChannelUsage: ", ret); return -1; }
-    if ((ret = SGStartRecord(L.grabber)) != noErr) { ERROR("SGStartRecord: ", ret); return -1; }
-    if ((ret = SGGetChannelSampleDescription(L.channel, (Handle)imgdesc)) != noErr) { ERROR("SGSetGWorld: ", ret); return -1; }
-    if ((ret = SGStop(L.grabber)) != noErr) { ERROR("SGStop: ", ret); return -1; }
+    if ((ret = SGGetSrcVideoBounds(L.channel, &L.rect)) != noErr) return ERRORv(-1, "SGGetSrcVideoBounds: ", ret);
+    if ((ret = QTNewGWorld(&L.gworld, k32ARGBPixelFormat, &L.rect, 0, 0, 0)) != noErr) return ERRORv(-1, "QTNewGworld: ", ret);
+    if ((ret = SGSetGWorld(L.grabber, L.gworld, 0)) != noErr) return ERRORv(-1, "SGSetGWorld: ", ret);
+    if ((ret = SGSetChannelBounds(L.channel, &L.rect)) != noErr) return ERRORv(-1, "SGSetChannelBounds: ", ret);
+    if ((ret = SGSetChannelUsage(L.channel, seqGrabRecord)) != noErr) return ERRORv(-1, "SGSetChannelUsage: ", ret);
+    if ((ret = SGStartRecord(L.grabber)) != noErr) return ERRORv(-1, "SGStartRecord: ", ret);
+    if ((ret = SGGetChannelSampleDescription(L.channel, (Handle)imgdesc)) != noErr) return ERRORv(-1, "SGSetGWorld: ", ret);
+    if ((ret = SGStop(L.grabber)) != noErr) return ERRORv(-1, "SGStop: ", ret);
     L.rect.right = FLAGS_camera_image_width = (*imgdesc)->width;
     L.rect.bottom = FLAGS_camera_image_height = (*imgdesc)->height;
     DisposeHandle((Handle)imgdesc);
     GWorldPtr oldgworld = L.gworld;
-    if ((ret = QTNewGWorld(&L.gworld, k32ARGBPixelFormat, &L.rect, 0, 0, 0)) != noErr) { ERROR("QTNewGworld: ", ret); return -1; }
-    if ((ret = SGSetGWorld(L.grabber, L.gworld, 0)) != noErr) { ERROR("SGSetGWorld: ", ret); return -1; }
-    if ((ret = SGSetChannelBounds(L.channel, &L.rect)) != noErr) { ERROR("SGSetChannelBounds: ", ret); return -1; }
+    if ((ret = QTNewGWorld(&L.gworld, k32ARGBPixelFormat, &L.rect, 0, 0, 0)) != noErr) return ERRORv(-1, "QTNewGworld: ", ret);
+    if ((ret = SGSetGWorld(L.grabber, L.gworld, 0)) != noErr) return ERRORv(-1, "SGSetGWorld: ", ret);
+    if ((ret = SGSetChannelBounds(L.channel, &L.rect)) != noErr) return ERRORv(-1, "SGSetChannelBounds: ", ret);
     DisposeGWorld(oldgworld);
     camera->image_linesize = FLAGS_camera_image_width * image_depth;
     conv.Open(FLAGS_camera_image_width, FLAGS_camera_image_height, Pixel::BGR32,
@@ -792,8 +792,8 @@ struct QuickTimeCamera : public Module {
     L.frames = make_unqiue<RingBuf>(FLAGS_camera_fps, FLAGS_camera_fps, FLAGS_camera_image_width*FLAGS_camera_image_height*image_depth);
     L.pixmap = GetGWorldPixMap(L.gworld);
     LockPixels(L.pixmap);
-    if ((ret = SGSetDataProc(L.grabber, NewSGDataUPP(SGDataProcL), (long)this)) != noErr) { ERROR("SGSetDataProc: ", ret); return -1; }
-    if ((ret = SGStartRecord(L.grabber) )!= noErr) { ERROR("SGSartRecord: ", ret); return -1; }
+    if ((ret = SGSetDataProc(L.grabber, NewSGDataUPP(SGDataProcL), (long)this)) != noErr) return ERRORv(-1, "SGSetDataProc: ", ret);
+    if ((ret = SGStartRecord(L.grabber) )!= noErr) return ERRORv(-1, "SGSartRecord: ", ret);
     if (!thread.Start()) return -1;
     return 0;
   }
@@ -842,13 +842,13 @@ struct QuickTimeCamera : public Module {
     CodecFlags codecflags; int ret;
     if (!cam->seq) {
       ImageDescriptionHandle desc = (ImageDescriptionHandle)NewHandle(0);
-      if ((ret = SGGetChannelSampleDescription(chan, (Handle)desc)) != noErr) { ERROR("SGsFtChannelSampleDescription: ", ret); return -1; }
+      if ((ret = SGGetChannelSampleDescription(chan, (Handle)desc)) != noErr) return ERRORv(-1, "SGsFtChannelSampleDescription: ", ret);
       Rect rect; rect.top=rect.left=0; rect.right=(*desc)->width; rect.bottom=(*desc)->height;
       MatrixRecord mat; RectMatrix(&mat, &rect, &cam->rect);
-      if ((ret = DecompressSequenceBegin(&cam->seq, desc, cam->gworld, 0, &cam->rect, &mat, srcCopy, 0, 0, codecNormalQuality, bestSpeedCodec)) != noErr) { ERROR("DecompressSequenceBegin: ", ret); return -1; }
+      if ((ret = DecompressSequenceBegin(&cam->seq, desc, cam->gworld, 0, &cam->rect, &mat, srcCopy, 0, 0, codecNormalQuality, bestSpeedCodec)) != noErr) return ERRORv(-1, "DecompressSequenceBegin: ", ret);
       DisposeHandle((Handle)desc);
     }
-    if ((ret = DecompressSequenceFrameS(cam->seq, buf, len, 0, &codecflags, 0)) != noErr) { ERROR("DecompressSequenceFrame: ", ret); return -1; }
+    if ((ret = DecompressSequenceFrameS(cam->seq, buf, len, 0, &codecflags, 0)) != noErr) return ERRORv(-1, "DecompressSequenceFrame: ", ret);
 
     /* write */
     unsigned char *in = (unsigned char*)(GetPixBaseAddr(cam->pixmap)+1);
@@ -961,7 +961,7 @@ struct QTKitCamera : public Module {
       camera->last_frames_read = camera->frames_read;
     }
     if (!new_frame) return 0;
-    camera->image = (unsigned char*)L.frames->Read(-1, L.next);
+    camera->image = MakeUnsigned(L.frames->Read(-1, L.next));
     camera->image_timestamp = L.frames->ReadTimestamp(-1, L.next);
     return 1;
   }
@@ -988,7 +988,7 @@ struct QTKitCamera : public Module {
   }
 };
 extern "C" void UpdateFrame(const char *imageData, int width, int height, int imageSize) {
-  return ((QTKitCamera*)app->camera->impl.get())->UpdateFrame(imageData, width, height, imageSize);
+  return dynamic_cast<QTKitCamera*>(app->camera->impl.get())->UpdateFrame(imageData, width, height, imageSize);
 }
 #endif /* LFL_QTKIT_CAMERA */
 

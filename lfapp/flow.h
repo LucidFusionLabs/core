@@ -84,6 +84,7 @@ struct DrawableBoxArray {
 
   DrawableBox &PushBack(const Box &box, const Drawable::Attr &a,       Drawable *drawable, int *ind_out=0) { return PushBack(box, attr.GetAttrId(a), drawable, ind_out); }
   DrawableBox &PushBack(const Box &box, int                   attr_id, Drawable *drawable, int *ind_out=0);
+  DrawableBox &PushNop() { return PushBack(Box(), Drawable::Attr(), NullPointer<Texture>()); };
 
   void InsertAt(int o, const DrawableBoxArray &x);
   void InsertAt(int o, const vector<DrawableBox> &x);
@@ -109,7 +110,7 @@ struct FloatContainer : public Box {
     Float(const point &p, int W=0, int H=0, void *V=0) : Box(p, W, H), inherited(0), stacked(0), val(V) {}
     Float(const Box   &w,                   void *V=0) : Box(w),       inherited(0), stacked(0), val(V) {}
     Float(const Float &f, const point &p) : Box(p, f.w, f.h), inherited(f.inherited), stacked(f.stacked), val(f.val) {}
-    virtual string DebugString() const { return StrCat("Float{", Box::DebugString(), ", inherited=", inherited, ", stacked=", stacked, ", val=", (void*)val, "}"); }
+    virtual string DebugString() const { return StrCat("Float{", Box::DebugString(), ", inherited=", inherited, ", stacked=", stacked, ", val=", Void(val), "}"); }
     static void MarkInherited(vector<Float> *t) { for (auto i = t->begin(); i != t->end(); ++i) i->inherited=1; }
   };
   vector<Float> float_left, float_right;

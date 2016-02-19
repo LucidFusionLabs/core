@@ -20,12 +20,12 @@
 #define LFL_LFAPP_VIDEO_H__
 
 namespace LFL {
-DECLARE_bool(gd_debug);
-DECLARE_bool(swap_axis);
 DECLARE_int(dots_per_inch);
 DECLARE_float(field_of_view);
 DECLARE_float(near_plane);
 DECLARE_float(far_plane);
+DECLARE_bool(swap_axis);
+DECLARE_bool(gd_debug);
 
 struct DrawMode { enum { _2D=0, _3D=1, NullOp=2 }; int m; };
 struct TexGen { enum { LINEAR=1, REFLECTION=2 }; };
@@ -82,7 +82,7 @@ struct Color {
   string IntString() const { return StrCat("Color(", R(), ",", G(), ",", B(), ",", A(), ")"); }
   string HexString() const { return StringPrintf("%02X%02X%02X", R(), G(), B()); }
   string DebugString() const { return StringPrintf("%02X%02X%02X%02X", R(), G(), B(), A()); }
-  unsigned AsUnsigned() const { return (unsigned char)R()<<24 | (unsigned char)G()<<16 | (unsigned char)B()<<8 | (unsigned char)A(); }
+  unsigned AsUnsigned() const { return uint8_t(R())<<24 | uint8_t(G())<<16 | uint8_t(B())<<8 | uint8_t(A()); }
   const float &r() const { return x[0]; }
   const float &g() const { return x[1]; }
   const float &b() const { return x[2]; }     
@@ -265,8 +265,9 @@ struct Drawable {
   virtual void Draw       (const LFL::Box &B, const Attr *A=0) const = 0;
 };
 
-struct DrawableNullOp : public Drawable { void Draw(const LFL::Box &B, const Drawable::Attr *A=0) const {} };
-#define DrawableNop() Singleton<DrawableNullOp>::Get()
+struct DrawableNop : public Drawable {
+  void Draw(const LFL::Box &B, const Drawable::Attr *A=0) const {}
+};
 
 struct DrawableBox {
   LFL::Box box;
@@ -372,13 +373,14 @@ struct DepthTexture {
 };
 
 struct FrameBuffer {
+  GraphicsDevice *gd;
   unsigned ID;
   int width, height;
   Texture tex;
   DepthTexture depth;
   bool owner=true;
 
-  FrameBuffer(int w=0, int h=0, unsigned id=0) : ID(id), width(w), height(h) {}
+  FrameBuffer(GraphicsDevice *d, int w=0, int h=0, unsigned id=0) : gd(d), ID(id), width(w), height(h) {}
   ~FrameBuffer() { if (owner) ClearGL(); }
   void ResetGL() { ID=width=height=0; tex.owner=depth.owner=0; tex=Texture(); depth=DepthTexture(); }
 
@@ -443,7 +445,8 @@ struct GraphicsDevice {
 #else
 struct GraphicsDevice : public QOpenGLFunctions {
 #endif
-  static const int Float, Points, Lines, LineLoop, Triangles, TriangleStrip, Polygon, Texture2D, UnsignedInt;
+  static const int Float, Points, Lines, LineLoop, Triangles, TriangleStrip, Polygon;
+  static const int Texture2D, TextureCubeMap, UnsignedByte, UnsignedInt, FramebufferComplete;
   static const int Ambient, Diffuse, Specular, Emission, Position;
   static const int One, SrcAlpha, OneMinusSrcAlpha, OneMinusDstColor;
   static const int Fill, Line, Point, GLPreferredBuffer, GLInternalFormat;
@@ -517,6 +520,8 @@ struct GraphicsDevice : public QOpenGLFunctions {
   void LinkProgram(int prog);
   void GetProgramiv(int p, int t, int *out);
   void GetIntegerv(int t, int *out);
+  const char *GetString(int t);
+  const char *GetGLEWString(int t);
   int GetAttribLocation(int prog, const string &name);
   int GetUniformLocation(int prog, const string &name);
   void Uniform1i(int u, int v);
@@ -578,86 +583,34 @@ struct GraphicsDevice : public QOpenGLFunctions {
   static int VertsPerPrimitive(int gl_primtype);
 };
 
-extern Window *screen;
-struct Window : public NativeWindow {
-  typedef function<void(Window*)> StartCB;
-  typedef function<int(Window*, unsigned, int)> FrameCB;
-  typedef unordered_map<void*, Window*> Map;
-
-  GraphicsDevice *gd=0;
-  point mouse, mouse_wheel;
-  string caption;
-  StartCB start_cb;
-  FrameCB frame_cb;
-  Timer frame_time;
-  RollingAvg<unsigned> fps;
-  unique_ptr<Entity> cam;
-  unique_ptr<BindMap> binds;
-  unique_ptr<Console> lfapp_console;
-  vector<GUI*> mouse_gui;
-  vector<KeyboardGUI*> keyboard_gui;
-  vector<InputController*> input_bind;
-  function<TextGUI*()> default_textgui = []{ return nullptr; };
-  TextGUI *active_textgui=0;
-  vector<unique_ptr<Dialog>> dialogs;
-  Dialog *top_dialog=0;
-
-  Window();
-  virtual ~Window();
-
-  void SetSize(const point &d);
-  void SetCaption(const string &c);
-  void SetResizeIncrements(float x, float y);
-  void SetTransparency(float v);
-  void Reshape(int w, int h);
-  void Reshaped(int w, int h);
-  void Minimized()   { minimized=1; }
-  void UnMinimized() { minimized=0; }
-  void ResetGL();
-  void SwapAxis();
-  int  Frame(unsigned clicks, int flag);
-  void RenderToFrameBuffer(FrameBuffer *fb);
-
-  void ClearEvents();
-  void ClearGesture();
-  void ClearMouseGUIEvents();
-  void ClearKeyboardGUIEvents();
-  void ClearInputBindEvents();
-  void InitLFAppConsole();
-  void DrawDialogs();
-  void AddDialog(unique_ptr<Dialog>);
-  void BringDialogToFront(Dialog*);
-  void GiveDialogFocusAway(Dialog*);
-
-  LFL::Box Box() const { return LFL::Box(0, 0, width, height); }
-  LFL::Box Box(float xs, float ys) const { return LFL::Box(0, 0, width*xs, height*ys); }
-  LFL::Box Box(float xp, float yp, float xs, float ys, float xbl=0, float ybt=0, float xbr=-INFINITY, float ybb=-INFINITY) const;
-  static Window *Get() { return LFL::screen; }
-};
-
 struct Scissor {
-  Scissor(int x, int y, int w, int h) { screen->gd->PushScissor(Box(x, y, w, h)); }
-  Scissor(const Box &w) { screen->gd->PushScissor(w); }
-  ~Scissor()            { screen->gd->PopScissor(); }
+  GraphicsDevice *gd;
+  Scissor(GraphicsDevice *d, int x, int y, int w, int h) : gd(d) { gd->PushScissor(Box(x, y, w, h)); }
+  Scissor(GraphicsDevice *d, const Box &w)               : gd(d) { gd->PushScissor(w); }
+  ~Scissor()                                                     { gd->PopScissor(); }
 };
 
 struct ScissorStack {
-  ScissorStack()  { screen->gd->PushScissorStack(); }
-  ~ScissorStack() { screen->gd->PopScissorStack(); }
+  GraphicsDevice *gd;
+  ScissorStack(GraphicsDevice *d) : gd(d) { gd->PushScissorStack(); }
+  ~ScissorStack()                         { gd->PopScissorStack(); }
 };
 
 struct ScopedDrawMode {
-  int prev_mode; bool nop;
-  ScopedDrawMode(int dm) : prev_mode(screen->gd->draw_mode), nop(dm == DrawMode::NullOp) { if (!nop) screen->gd->DrawMode(dm,        0); }
-  ~ScopedDrawMode()                                                                      { if (!nop) screen->gd->DrawMode(prev_mode, 0); }
+  GraphicsDevice *gd;
+  int prev_mode;
+  bool nop;
+  ScopedDrawMode(GraphicsDevice *d, int dm) : gd(d), prev_mode(gd->draw_mode), nop(dm == DrawMode::NullOp) { if (!nop) gd->DrawMode(dm,        0); }
+  ~ScopedDrawMode()                                                                                        { if (!nop) gd->DrawMode(prev_mode, 0); }
 };
 
 struct ScopedClearColor {
+  GraphicsDevice *gd;
   bool enabled;
   Color prev_color;
-  ~ScopedClearColor()                                                                { if (enabled) screen->gd->ClearColor(prev_color); }
-  ScopedClearColor(const Color *c) : enabled(c), prev_color(screen->gd->clear_color) { if (enabled) screen->gd->ClearColor(*c); }
-  ScopedClearColor(const Color &c) : enabled(1), prev_color(screen->gd->clear_color) {              screen->gd->ClearColor(c); }
+  ~ScopedClearColor()                                                                                  { if (enabled) gd->ClearColor(prev_color); }
+  ScopedClearColor(GraphicsDevice *d, const Color *c) : gd(d), enabled(c), prev_color(gd->clear_color) { if (enabled) gd->ClearColor(*c); }
+  ScopedClearColor(GraphicsDevice *d, const Color &c) : gd(d), enabled(1), prev_color(gd->clear_color) {              gd->ClearColor(c); }
 };
 
 struct Shaders {

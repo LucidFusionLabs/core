@@ -76,12 +76,12 @@ void Resolver::HandleClosed(Nameserver *ns) {
 void Resolver::HandleResponse(Nameserver *ns, const DNS::Header *hdr, int len) {
   if (!hdr) return HandleClosed(ns);
   auto rmiter = ns->request_map.find(hdr->id);
-  if (rmiter == ns->request_map.end()) { ERROR(ns->c->Name(), ": unknown DNS reply id=", hdr->id, ", len=", len); return; }
+  if (rmiter == ns->request_map.end()) return ERROR(ns->c->Name(), ": unknown DNS reply id=", hdr->id, ", len=", len);
   Resolver::Request req = rmiter->second;
   ns->request_map.erase(rmiter);
 
   DNS::Response res;
-  if (DNS::ReadResponse((const char *)hdr, len, &res)) { ERROR(ns->c->Name(), ": parse "); return; }
+  if (DNS::ReadResponse(reinterpret_cast<const char*>(hdr), len, &res)) return ERROR(ns->c->Name(), ": parse ");
   if (FLAGS_dns_dump) INFO(ns->c->Name(), ": ", res.DebugString());
 
   vector<IPV4::Addr> results;
@@ -259,7 +259,7 @@ RecursiveResolver::AuthorityTreeNode *RecursiveResolver::GetAuthorityTreeNode(co
 }
 
 void RecursiveResolver::HandleResponse(Request *req, IPV4::Addr addr, DNS::Response *res, vector<DNS::Response> *subres) {
-  if (FLAGS_dns_dump) INFO("RecursiveResolver::Response ", (int)addr, " ", (void*)res, " " , (void*)subres);
+  if (FLAGS_dns_dump) INFO("RecursiveResolver::Response ", int(addr), " ", Void(res), " " , Void(subres));
 
   if (addr != -1) {
     if (addr == 0 && !req->parent_request && res) {

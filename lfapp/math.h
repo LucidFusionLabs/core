@@ -19,15 +19,14 @@
 #ifndef LFL_LFAPP_MATH_H__
 #define LFL_LFAPP_MATH_H__
 
-#define NextMultipleOf4(n)  NextMultipleOfPowerOfTwo(n, 4)
-#define NextMultipleOf8(n)  NextMultipleOfPowerOfTwo(n, 8)
-#define NextMultipleOf16(n) NextMultipleOfPowerOfTwo(n, 16)
-#define NextMultipleOf32(n) NextMultipleOfPowerOfTwo(n, 32)
-#define NextMultipleOf64(n) NextMultipleOfPowerOfTwo(n, 64)
-
 namespace LFL {
 int NextMultipleOfPowerOfTwo(int input, int align);
 void *NextMultipleOfPowerOfTwo(void *input, int align);
+inline int NextMultipleOf4 (int n) { return NextMultipleOfPowerOfTwo(n, 4); }
+inline int NextMultipleOf8 (int n) { return NextMultipleOfPowerOfTwo(n, 8); }
+inline int NextMultipleOf16(int n) { return NextMultipleOfPowerOfTwo(n, 16); }
+inline int NextMultipleOf32(int n) { return NextMultipleOfPowerOfTwo(n, 32); }
+inline int NextMultipleOf64(int n) { return NextMultipleOfPowerOfTwo(n, 64); }
 
 template <typename X> typename enable_if<is_integral<X>::value, X>::type
 Rand(X rmin = 0, X rmax = numeric_limits<X>::max()) {
@@ -41,8 +40,8 @@ Rand(X rmin = 0, X rmax = numeric_limits<X>::max()) {
 
 template <class Generator> string RandBytes(int n, Generator &g) {
   string ret(NextMultipleOfPowerOfTwo(n, sizeof(int)), 0);
-  std::uniform_int_distribution<unsigned int> dist(0, numeric_limits<unsigned int>::max());
-  for (int *p = (int*)ret.data(), *e = p + ret.size()/sizeof(int); p != e; ++p) *p = dist(g);
+  std::uniform_int_distribution<uint32_t> dist(0, numeric_limits<unsigned int>::max());
+  for (uint32_t *p = reinterpret_cast<uint32_t*>(&ret[0]), *e = p + ret.size()/sizeof(int); p != e; ++p) *p = dist(g);
   ret.resize(n);
   return ret;
 }
@@ -64,7 +63,7 @@ template <class X> struct V2 {
   X x, y;
   V2() : x(0), y(0) {}
   V2(X xin, X yin) : x(xin), y(yin) {}
-  template <class Y> V2(const V2<Y> &c) : x((X)c.x), y((Y)c.y) {}
+  template <class Y> V2(const V2<Y> &c) : x(X(c.x)), y(Y(c.y)) {}
   operator X *() { return &x; }
   operator const X *() const { return &x; }
   bool operator == (const V2<X> &r) const { return x == r.x && y == r.y; }
@@ -289,9 +288,10 @@ template <class X> struct Vec {
   static void Exp   (      X *v1, int D) { exp(v1, v1, D); }
   static void Log   (      X *v1, int D) { log(v1, v1, D); }
   static double Sum (const X *v1, int D) { X ret=0; for (int i=0; i<D; i++) ret += v1[i]; return ret; }
-  static double Min (const X *v1, int D) { X ret=(X) INFINITY; for (int i=0; i<D; i++) if (v1[i] < ret) ret = v1[i]; return (double)ret; }
-  static double Max (const X *v1, int D) { X ret=(X)-INFINITY; for (int i=0; i<D; i++) if (v1[i] > ret) ret = v1[i]; return (double)ret; }
-  static int MaxInd (const X *v1, int D) { X mx =(X)-INFINITY; int ret=-1; for (int i=0; i<D; i++) if (v1[i] > mx) { mx = v1[i]; ret = i; } return ret; }
+  static double Min (const X *v1, int D) { X ret=X( INFINITY); for (int i=0; i<D; i++) if (v1[i] < ret) ret = v1[i]; return double(ret); }
+  static double Max (const X *v1, int D) { X ret=X(-INFINITY); for (int i=0; i<D; i++) if (v1[i] > ret) ret = v1[i]; return double(ret); }
+  static int MaxInd (const X *v1, int D) { X mx =X(-INFINITY); int ret=-1; for (int i=0; i<D; i++) if (v1[i] > mx) { mx = v1[i]; ret = i; } return ret; }
+  template <class Y> static void Assign(X *v1, Y *v2, int D) { for (int i=0; i<D; i++) v1[i] = v2[i]; }
 };
 typedef Vec<double> Vector;
 
@@ -315,8 +315,8 @@ template <class T=double> struct matrix {
 
   virtual T             *row(int i)        { if (i>=M||i<0) return 0; return &m[i*N*((flag&Flag::Complex)?2:1)]; }
   virtual const T       *row(int i) const  { if (i>=M||i<0) return 0; return &m[i*N*((flag&Flag::Complex)?2:1)]; }
-  virtual Complex       *crow(int i)       { if (i>=M||i<0) return 0; return (Complex*)&m[i*N*2]; }
-  virtual const Complex *crow(int i) const { if (i>=M||i<0) return 0; return (Complex*)&m[i*N*2]; }
+  virtual Complex       *crow(int i)       { if (i>=M||i<0) return 0; return reinterpret_cast<Complex*>(&m[i*N*2]); }
+  virtual const Complex *crow(int i) const { if (i>=M||i<0) return 0; return reinterpret_cast<Complex*>(&m[i*N*2]); }
 
   virtual T       *lastrow()       { return row(M-1); }
   virtual const T *lastrow() const { return row(M-1); }
@@ -327,11 +327,12 @@ template <class T=double> struct matrix {
     bytes = M*N*sizeof(T)*((flag&Flag::Complex)?2:1);
     void *pre = m;
     if (!alloc) FATAL("null alloc: ", alloc, ", ", rows, ", ", bytes);
-    if (!(m = (T*)alloc->Realloc(m, bytes))) FATALf("matrix %s failed: %p (%p) %lld (%d * %d * %lld)", alloc->Name(), m, pre, bytes, M, N, bytes/(M*N));
+    if (!(m = reinterpret_cast<T*>(alloc->Realloc(m, bytes))))
+      FATALf("matrix %s failed: %p (%p) %lld (%d * %d * %lld)", alloc->Name(), m, pre, bytes, M, N, bytes/(M*N));
     if (rows > 0) {
       if (prepend) {
         int rowbytes = bytes/M;
-        memmove((char*)m + rowbytes*rows, m, rowbytes*(M-rows));
+        memmove(reinterpret_cast<char*>(m) + rowbytes*rows, m, rowbytes*(M-rows));
         for (int i=0; i<rows; i++) { MatrixColIter(this) { row(i)[j] = T(); } }
       } else {
         for (int i=M-rows; i<M; i++) { MatrixColIter(this) { row(i)[j] = T(); } }
@@ -344,7 +345,7 @@ template <class T=double> struct matrix {
     if (!prepend) new_matrix.AssignR(this);
     else MatrixIter(this) new_matrix.row(i)[j+cols] = row(i)[j];
     swap(m, new_matrix.m);
-    MinusPlus(&new_matrix.N, &N, (int)cols);
+    MinusPlus(&new_matrix.N, &N, int(cols));
     bytes = M*N*sizeof(T)*((flag&Flag::Complex)?2:1);
   }
 
@@ -365,7 +366,7 @@ template <class T=double> struct matrix {
 
   void AssignDataPtr(int nm, int nn, T *nv, Allocator *Alloc=0) {
     if (m) { alloc->Free(m); m=0; }
-    if (!Alloc) Alloc = Singleton<NullAlloc>::Get();
+    if (!Alloc) Alloc = Singleton<NullAllocator>::Get();
     Assign(nm, nn, nm*nn*sizeof(T), 0, Alloc);
     m = nv;
   }
@@ -389,7 +390,7 @@ template <class T=double> struct matrix {
     if (!Alloc) Alloc = Allocator::Default();
     Assign(Mrows, Ncols, Mrows*Ncols*sizeof(T), Flag, Alloc);
     AddRows(0);
-    MatrixIter(this) { row(i)[j] = (unsigned char)bitmap[i + j*M]; }
+    MatrixIter(this) { row(i)[j] = uint8_t(bitmap[i + j*M]); }
   }
 
   void Clear() {

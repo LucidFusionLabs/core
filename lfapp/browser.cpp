@@ -42,7 +42,6 @@
 #include "berkelium/Context.hpp"
 #endif
 
-// #define BROWSER_DEBUG
 #ifdef BROWSER_DEBUG
 #define BrowserDebug(...) printf(__VA_ARGS__)
 #else
@@ -68,7 +67,7 @@ int PercentRefersTo(unsigned short prt, Flow *inline_context) {
 
 #ifdef LFL_LIBCSS
 css_error StyleSheet::Import(void *pw, css_stylesheet *parent, lwc_string *url, uint64_t media) {
-  LFL::DOM::Document *D = ((StyleSheet*)pw)->ownerDocument;
+  LFL::DOM::Document *D = FromVoid<StyleSheet*>(pw)->ownerDocument;
   if (D) D->parser->OpenStyleImport(LibCSS_String::ToUTF8String(url)); // XXX use parent
   INFO("libcss Import ", LibCSS_String::ToString(url));
   return CSS_INVALID; // CSS_OK;
@@ -96,15 +95,16 @@ void StyleContext::Match(ComputedStyle *out, LFL::DOM::Node *node, const Compute
 css_error StyleContext::NodeClasses(void *pw, void *n, lwc_string ***classes_out, uint32_t *n_classes) {
   *n_classes = 0;
   *classes_out = NULL;
-  LFL::DOM::Node *node = (LFL::DOM::Node*)n, *attr = 0;
+  DOM::Node *node = FromVoid<DOM::Node*>(n), *attr = 0;
   if (!(attr = node->getAttributeNode("class"))) return CSS_OK;
 
-  vector<LFL::DOM::DOMString> classes;
+  vector<DOM::DOMString> classes;
   Split(attr->nodeValue(), isspace, &classes);
   if (!classes.size()) return CSS_OK;
 
   node->render->style.class_cache.resize(classes.size());
   *classes_out = &node->render->style.class_cache[0];
+  *n_classes = classes.size();
   for (int i=0; i<classes.size(); i++) (*classes_out)[i] = LibCSS_String::Intern(classes[i]);
   return CSS_OK;
 }
@@ -154,7 +154,7 @@ DOM::Node *DOM::Node::cloneNode(bool deep) {
 }
 
 DOM::Renderer *DOM::Node::AttachRender() {
-  if (!render) render = AllocatorNew(ownerDocument->alloc, (DOM::Renderer), (this));
+  if (!render) render = ownerDocument->alloc->New<DOM::Renderer>(this);
   return render;
 }
 
@@ -163,7 +163,7 @@ void DOM::Node::SetStyleDirty()  { if (render) render->style_dirty  = true; }
 void DOM::Node::ClearComputedInlineStyle() { if (render) { render->inline_style.Reset(); render->inline_style_sheet.reset(); } }
 
 void DOM::Element::setAttribute(const DOMString &name, const DOMString &value) {
-  DOM::Attr *attr = AllocatorNew(ownerDocument->alloc, (DOM::Attr), (ownerDocument));
+  DOM::Attr *attr = ownerDocument->alloc->New<DOM::Attr>(ownerDocument);
   attr->name = name;
   attr->value = value;
   setAttributeNode(attr);
@@ -365,8 +365,8 @@ Font *DOM::Renderer::UpdateFont(Flow *F) {
       //      " ", ff[j].source.size() ? ff[j].source[0] : "<NO2>");
     }
   }
-  return font ? font : Fonts::Get(FLAGS_default_font, "", font_size_px, color,
-                                  over_background_image ? background_color : solid_background_color); 
+  return font ? font : app->fonts->Get(FLAGS_default_font, "", font_size_px, color,
+                                       over_background_image ? background_color : solid_background_color); 
 }
 
 void DOM::Renderer::UpdateDimensions(Flow *F) {
@@ -467,24 +467,24 @@ void DOM::Renderer::Finish() {
 }
 
 Browser::Document::~Document() {}
-Browser::Document::Document(Window *W, const Box &V) : parser(make_unique<DocumentParser>(this)), alloc(1024*1024) {}
+Browser::Document::Document(const Box &V) : parser(make_unique<DocumentParser>(this)), alloc(1024*1024) {}
 
 void Browser::Document::Clear() {
   js_context.reset();
   style_sheet.clear();
   alloc.Reset();
-  node = AllocatorNew(&alloc, (DOM::HTMLDocument), (parser.get(), &alloc));
-  node->style_context        = AllocatorNew(&alloc, (StyleContext), (node));
-  node->inline_style_context = AllocatorNew(&alloc, (StyleContext), (node));
+  node = alloc.New<DOM::HTMLDocument>(parser.get(), &alloc);
+  node->style_context        = alloc.New<StyleContext>(node);
+  node->inline_style_context = alloc.New<StyleContext>(node);
   node->style_context       ->AppendSheet(StyleSheet::Default());
   node->inline_style_context->AppendSheet(StyleSheet::Default());
   js_context = JSContext::Create(js_console.get(), node);
   active_input = 0;
 }
 
-Browser::Browser(GUI *gui, const Box &V) : doc(gui ? gui->parent : NULL, V),
-  v_scrollbar(gui, Box()), h_scrollbar(gui, Box(), Widget::Slider::Flag::AttachedHorizontal) {
-  if (Font *maf = Fonts::Get("MenuAtlas", "", 0, Color::white, Color::clear, 0, 0)) {
+Browser::Browser(GUI *gui, const Box &V) :
+  doc(V), v_scrollbar(gui, Box()), h_scrollbar(gui, Box(), Widget::Slider::Flag::AttachedHorizontal) {
+  if (Font *maf = app->fonts->Get("MenuAtlas", "", 0, Color::white, Color::clear, 0, 0)) {
     missing_image = maf->FindGlyph(0)->tex;
     missing_image.width = missing_image.height = 16;
     missing_image.owner = false;
@@ -500,7 +500,7 @@ void Browser::Navigate(const string &url) {
 
 void Browser::Open(const string &url) {
   if (app->render_process) return app->RunInNetworkThread(bind(&ProcessAPIClient::Navigate, app->render_process.get(), url));
-  doc.parser->OpenFrame(url, (DOM::Frame*)NULL);
+  doc.parser->OpenFrame(url, nullptr);
   if (app->main_process) { app->main_process->SetURL(url); app->main_process->SetTitle(url); }
   else                   { SetURLText(url); screen->SetCaption(url); }
 }
@@ -629,7 +629,7 @@ void Browser::PaintNode(Flow *flow, DOM::Node *n, const point &displacement_in) 
   ComputedStyle *style = &render->style;
   bool is_body  = n->htmlElementType == DOM::HTML_BODY_ELEMENT;
   bool is_table = n->htmlElementType == DOM::HTML_TABLE_ELEMENT;
-  if (render->style_dirty || render->layout_dirty) { ScissorStack ss; LayoutNode(flow, n, 0); }
+  if (render->style_dirty || render->layout_dirty) { ScissorStack ss(screen->gd); LayoutNode(flow, n, 0); }
   if (render->display_none) return;
 
   if (!render->done_positioned) {
@@ -767,13 +767,13 @@ DOM::Node *Browser::LayoutNode(Flow *flow, DOM::Node *n, bool reflow) {
 
     point dim(n->render->width_px, n->render->height_px);
     if      (!dim.x && !dim.y)                dim   = point(tex->width, tex->height);
-    if      ( dim.x && !dim.y && tex->width ) dim.y = RoundF((float)tex->height/tex->width *dim.x);
-    else if (!dim.x &&  dim.y && tex->height) dim.x = RoundF((float)tex->width /tex->height*dim.y);
+    if      ( dim.x && !dim.y && tex->width ) dim.y = RoundF(float(tex->height)/tex->width *dim.x);
+    else if (!dim.x &&  dim.y && tex->height) dim.x = RoundF(float(tex->width) /tex->height*dim.y);
 
     bool add_margin = !n->render->floating && !n->render->position_absolute && !n->render->position_fixed;
     Border margin = add_margin ? n->render->MarginOffset() : Border();
     if (missing) {
-      point d(max(0, dim.x - (int)tex->width), max(0, dim.y - (int)tex->height));
+      point d(max(0, dim.x - int(tex->width)), max(0, dim.y - int(tex->height)));
       margin += Border(d.y/2, d.x/2, d.y/2, d.x/2);
       dim -= d;
     }
@@ -784,11 +784,11 @@ DOM::Node *Browser::LayoutNode(Flow *flow, DOM::Node *n, bool reflow) {
     string t = n->AsElement()->getAttribute("type");
     if (t == "" || t == "text") {
       DOM::HTMLInputElement *input = n->AsHTMLInputElement();
-      if (!input->text) input->text = make_unique<TilesTextGUI>();
+      if (!input->text) input->text = make_unique<TiledTextBox>();
       point dim(X_or_Y(n->render->width_px, 256), X_or_Y(n->render->height_px, 16));
       render->flow->AppendBox(dim.x, dim.y, &render->box);
       input->text->cmd_fb.SetDimensions(render->box.w, render->box.h,
-                                        (input->text->font = render->flow->cur_attr.font));
+                                        (input->text->font.ptr = render->flow->cur_attr.font));
       render->inline_box[0] = render->box;
     } else if (t == "submit") {
       point dim(X_or_Y(n->render->width_px, 128), X_or_Y(n->render->height_px, 16));
@@ -836,7 +836,7 @@ DOM::Node *Browser::LayoutNode(Flow *flow, DOM::Node *n, bool reflow) {
     if (render->normal_flow) {
       if (render->inline_block) render->parent_flow->AppendBox  (block_width, block_height, render->MarginOffset(), &render->box);
       else                      render->parent_flow->AppendBlock(block_width, block_height, render->MarginOffset(), &render->box); 
-      if (!render->establishes_block) render->box.AddFloatsToParent((FloatContainer*)render->parent_flow->container->AsFloatContainer());
+      if (!render->establishes_block) render->box.AddFloatsToParent(const_cast<FloatContainer*>(render->parent_flow->container->AsFloatContainer()));
     } else {
       render->box.SetDimension(point(block_width, block_height));
       if (style->is_root || render->position_absolute || table_element) render->box.y -= block_height;
