@@ -45,6 +45,7 @@ extern "C" {
 #include <signal.h>
 #include <pthread.h>
 #include <dlfcn.h>
+#include <sys/resource.h>
 #endif
 
 #ifdef __APPLE__
@@ -220,8 +221,8 @@ DEFINE_int(peak_fps, 60, "Peak FPS");
 #endif
 DEFINE_bool(open_console, 0, "Open console on win32");
 DEFINE_bool(cursor_grabbed, false, "Center cursor every frame");
-DEFINE_bool(rcon_debug, false, "Print rcon commands");
 DEFINE_bool(frame_debug, false, "Print each frame");
+DEFINE_bool(rcon_debug, false, "Print game protocol commands");
 
 Application *app = new Application();
 Window *screen = new Window();

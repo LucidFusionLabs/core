@@ -73,6 +73,8 @@ struct DrawableBoxArray {
   String16 Text16()             const { return data.size() ? DrawableBoxRun(&data[0], data.size()).Text16()     : String16(); }
   string   Text  (int i, int l) const { return data.size() ? DrawableBoxRun(&data[0], data.size()).Text  (i, l) : string();   }
   String16 Text16(int i, int l) const { return data.size() ? DrawableBoxRun(&data[0], data.size()).Text16(i, l) : String16(); }
+  operator ArrayPiece<DrawableBox>() const { return ArrayPiece<DrawableBox>(&data[0], data.size()); }
+  ArrayPiece<DrawableBox> Substr(int o, int l) { return ArrayPiece<DrawableBox>(&data[o], l); }
 
   point Position(int o) const;
   int LeftBound (int o) const { const DrawableBox &b = data[o]; return b.LeftBound (attr.GetAttr(b.attr_id)); }

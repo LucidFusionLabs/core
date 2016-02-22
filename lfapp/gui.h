@@ -22,9 +22,9 @@ namespace LFL {
 
 DECLARE_bool(multitouch);
 DECLARE_bool(draw_grid);
-DECLARE_bool(lfapp_console);
-DECLARE_string(lfapp_console_font);
-DECLARE_int(lfapp_console_font_flag);
+DECLARE_bool(console);
+DECLARE_string(console_font);
+DECLARE_int(console_font_flag);
 
 struct GUI {
   Box box;
@@ -147,7 +147,7 @@ struct TextBox : public GUI, public KeyboardController, public Drawable::AttrSou
 
   struct Line;
   struct Lines;
-  typedef function<void(const string &text)> RunCB;
+  typedef function<void(const string&)> RunCB;
 
   struct Link : public Widget::Interface {
     Box3 box;
@@ -215,23 +215,6 @@ struct TextBox : public GUI, public KeyboardController, public Drawable::AttrSou
     point Draw(point pos, int relayout_width=-1, int g_offset=0, int g_len=-1);
   };
 
-  struct LineTokenProcessor {
-    Line *const L;
-    bool sw=0, ew=0, pw=0, nw=0, overwrite=0, osw=1, oew=1;
-    bool lbw=0, lew=0, nlbw=0, nlew=0;
-    int x, line_size, erase, pi=0, ni=0;
-    DrawableBoxRun v;
-    LineTokenProcessor(Line *l, int o, const DrawableBoxRun &V, int Erase);
-    void LoadV(const DrawableBoxRun &V) { FindBoundaryConditions((v=V), &sw, &ew); }
-    void FindPrev(const DrawableBoxArray &g) { const Drawable *p; while (pi > 0           && (p = g[pi-1].drawable) && !isspace(p->Id())) pi--; }
-    void FindNext(const DrawableBoxArray &g) { const Drawable *n; while (ni < line_size-1 && (n = g[ni+1].drawable) && !isspace(n->Id())) ni++; }
-    void PrepareOverwrite(const DrawableBoxRun &V) { osw=sw; oew=ew; LoadV(V); erase=0; overwrite=1; }
-    void ProcessUpdate();
-    void ProcessResult();
-    void SetNewLineBoundaryConditions(bool sw, bool ew) { nlbw=sw; nlew=ew; }
-    static void FindBoundaryConditions(const DrawableBoxRun &v, bool *sw, bool *ew);
-  };
-
   struct Lines : public RingVector<Line> {
     TextBox *parent;
     int wrapped_lines;
@@ -263,13 +246,6 @@ struct TextBox : public GUI, public KeyboardController, public Drawable::AttrSou
     tvirtual void PushBackAndUpdateOffset (Line *l, int lo); 
     static point PaintCB(Line *l, point lp, const Box &b) { return Paint(l, lp, b); }
     static point Paint  (Line *l, point lp, const Box &b, int offset=0, int len=-1);
-  };
-
-  struct LinesGUI : public GUI {
-    TextBox *parent;
-    LinesGUI(TextBox *P, const Box &B=Box()) : GUI(B), parent(P) {}
-    bool NotActive() const { return !box.within(screen->mouse); }
-    point MousePosition() const;
   };
 
   struct LineUpdate {
@@ -324,10 +300,12 @@ struct TextBox : public GUI, public KeyboardController, public Drawable::AttrSou
   { if (font.Load()) cmd_line.GetAttrId(Drawable::Attr(font)); layout.pad_wide_chars=1; cmd_line.Init(this,0); }
 
   virtual ~TextBox() {}
+  virtual point RelativePosition(const point&) const;
   virtual const Drawable::Attr *GetAttr(int attr) const;
   virtual int CommandLines() const { return 0; }
   virtual void Run(const string &cmd) { if (runcb) runcb(cmd); }
   virtual bool Active() const { return screen->active_textbox == this; }
+  virtual bool NotActive() const { return !box.within(screen->mouse); }
   virtual void Activate()   { if (!Active()) { if (auto g=screen->active_textbox) g->Deactivate(); screen->active_textbox=this; } }
   virtual void Deactivate() { if (Active()) screen->active_textbox = screen->default_textbox(); }
   virtual bool ToggleActive() { if (!Active()) Activate(); else Deactivate(); return Active(); }
@@ -345,7 +323,8 @@ struct TextBox : public GUI, public KeyboardController, public Drawable::AttrSou
   virtual void AssignInput(const string &text) { cmd_line.AssignText(text); UpdateCommandFB(); UpdateCursorX(cmd_line.Size()); }
   void SetColors(Colors *C);
 
-  virtual LinesFrameBuffer *GetFrameBuffer() { return &cmd_fb; }
+  virtual const LinesFrameBuffer *GetFrameBuffer() const { return &cmd_fb; }
+  virtual       LinesFrameBuffer *GetFrameBuffer()       { return &cmd_fb; }
   virtual void ResetGL() { cmd_fb.ResetGL(); }
   virtual void UpdateCursorX(int x) { cursor.i.x = x; UpdateCursor(); }
   virtual void UpdateCursor() { cursor.p = cmd_line.data->glyphs.Position(cursor.i.x) + point(0, font->Height()); }
@@ -353,7 +332,7 @@ struct TextBox : public GUI, public KeyboardController, public Drawable::AttrSou
   virtual void UpdateLineFB(Line *L, LinesFrameBuffer *fb, int flag=0);
   virtual void Draw(const Box &b);
   virtual void DrawCursor(point p);
-  virtual void UpdateToken(Line*, int word_offset, int word_len, int update_type, const LineTokenProcessor*);
+  virtual void UpdateToken(Line*, int word_offset, int word_len, int update_type, const TokenProcessor<DrawableBox>*);
   virtual void UpdateLongToken(Line *BL, int beg_offset, Line *EL, int end_offset, const string &text, int update_type);
 
   void AddHistory  (const string &cmd);
@@ -404,7 +383,8 @@ struct TextArea : public TextBox {
   virtual void UpdateVScrolled(int dist, bool reverse, int first_ind, int first_offset, int first_len);
   virtual int UpdateLines(float v_scrolled, int *first_ind, int *first_offset, int *first_len);
   virtual int WrappedLines() const { return line.wrapped_lines; }
-  virtual LinesFrameBuffer *GetFrameBuffer() { return &line_fb; }
+  virtual const LinesFrameBuffer *GetFrameBuffer() const { return &line_fb; }
+  virtual       LinesFrameBuffer *GetFrameBuffer()       { return &line_fb; }
   virtual void ResetGL() { line_fb.ResetGL(); TextBox::ResetGL(); }
   void ChangeColors(Colors *C);
 
@@ -417,7 +397,7 @@ struct TextArea : public TextBox {
   bool Wrap() const { return line_fb.wrap; }
   int LineFBPushBack () const { return reverse_line_fb ? LineUpdate::PushFront : LineUpdate::PushBack;  }
   int LineFBPushFront() const { return reverse_line_fb ? LineUpdate::PushBack  : LineUpdate::PushFront; }
-  float PercentOfLines(int n) const { return static_cast<float>(n) / (WrappedLines()-1); }
+  float PercentOfLines(int n) const { return float(n) / (WrappedLines()-1); }
   void AddVScroll(int n) { v_scrolled = Clamp(v_scrolled + PercentOfLines(n), 0, 1); UpdateScrolled(); }
   void SetVScroll(int n) { v_scrolled = Clamp(0          + PercentOfLines(n), 0, 1); UpdateScrolled(); }
   int LayoutBackLine(Lines *l, int i) { return Wrap() ? (*l)[-i-1].Layout(line_fb.w) : 1; }
@@ -536,7 +516,7 @@ struct Terminal : public TextArea {
   virtual void End        () { char k[] = "\x1bOF";  sink->Write(StringPiece( k, 3)); }
   virtual void MoveToOrFromScrollRegion(LinesFrameBuffer *fb, Line *l, const point &p, int flag);
   virtual void UpdateCursor() { cursor.p = point(GetCursorX(term_cursor.x, term_cursor.y), GetCursorY(term_cursor.y)); }
-  virtual void UpdateToken(Line*, int word_offset, int word_len, int update_type, const LineTokenProcessor*);
+  virtual void UpdateToken(Line*, int word_offset, int word_len, int update_type, const TokenProcessor<DrawableBox>*);
   virtual bool GetGlyphFromCoords(const point &p, Selection::Point *out) { return GetGlyphFromCoordsOffset(p, out, clip ? 0 : start_line, 0); }
   virtual void ScrollUp  () { TextArea::PageDown(); }
   virtual void ScrollDown() { TextArea::PageUp(); }
@@ -583,8 +563,8 @@ struct Console : public TextArea {
   Console(GraphicsDevice *D, const FontRef &F, const Callback &C=Callback()) : TextArea(D, F, 200, 50), animating_cb(C)
   { line_fb.wrap=write_timestamp=1; SetToggleKey(Key::Backquote); bg_color=&Color::clear; cursor.type = Cursor::Underline; }
   Console(GraphicsDevice *D, const Callback &C=Callback()) :
-    Console(D, FontDesc(A_or_B(FLAGS_lfapp_console_font, FLAGS_default_font), "", 9, Color::white,
-                        Color::clear, FLAGS_lfapp_console_font_flag), C) {}
+    Console(D, FontDesc(A_or_B(FLAGS_console_font, FLAGS_default_font), "", 9, Color::white,
+                        Color::clear, FLAGS_console_font_flag), C) {}
 
   virtual ~Console() {}
   virtual int CommandLines() const { return cmd_line.Lines(); }

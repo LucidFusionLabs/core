@@ -1191,11 +1191,11 @@ void Fonts::ResetGL() {
 
 void Fonts::LoadConsoleFont(const string &name, const vector<int> &sizes) {
   auto atlas_font_engine = atlas_engine.get();
-  FLAGS_lfapp_console_font = StrCat("atlas://", name);
+  FLAGS_console_font = StrCat("atlas://", name);
   FLAGS_atlas_font_sizes.clear();
   for (auto size : sizes) {
     StrAppend(&FLAGS_atlas_font_sizes, FLAGS_atlas_font_sizes.empty()?"":",", size);
-    atlas_font_engine->Init(FontDesc(name, "", size, Color::white, Color::clear, FLAGS_lfapp_console_font_flag));
+    atlas_font_engine->Init(FontDesc(name, "", size, Color::white, Color::clear, FLAGS_console_font_flag));
   }
 }
 

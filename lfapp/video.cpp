@@ -2549,8 +2549,8 @@ void Video::InitFonts() {
   FontEngine *atlas_engine = app->fonts->atlas_engine.get();
   atlas_engine->Init(FontDesc("MenuAtlas", "", 0, Color::white, Color::clear, 0, false));
 
-  if (FLAGS_lfapp_console && FLAGS_font_engine != "atlas" && FLAGS_font_engine != "freetype")
-    app->fonts->LoadConsoleFont(FLAGS_lfapp_console_font.empty() ? "VeraMoBd.ttf" : FLAGS_lfapp_console_font);
+  if (FLAGS_console && FLAGS_font_engine != "atlas" && FLAGS_font_engine != "freetype")
+    app->fonts->LoadConsoleFont(FLAGS_console_font.empty() ? "VeraMoBd.ttf" : FLAGS_console_font);
 }
 
 int Video::InitFontWidth() {

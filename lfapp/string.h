@@ -125,6 +125,7 @@ template <class X> struct ArrayPiece {
   ArrayPiece(const X *b, const PieceIndex &i) : buf(i.offset < 0 ? 0 : &b[i.offset]), len(i.len) {}
   ArrayPiece(const vector<X> &b) : buf(b.data()), len(b.size()) {}
   const X& operator[](int i) const { return buf[i]; }
+  const X& front() const { return buf[0]; }
   const X& back() const { return buf[len-1]; }
   void clear() { buf=0; len=0; }
   bool null() const { return !buf; }
@@ -616,6 +617,24 @@ struct NextRecordDispatcher {
   NextCB next_cb;
   NextRecordDispatcher(const StringCB &C=StringCB(), NextCB NC=&LFL::NextLine) : cb(C), next_cb(NC) {}
   void AddData(const StringPiece &b, bool final=0);
+};
+
+template <class X> struct TokenProcessor {
+  typedef function<void(int,int,int)> CB;
+  bool sw=0, ew=0, pw=0, nw=0, overwrite=0, osw=1, oew=1;
+  bool lbw=0, lew=0, nlbw=0, nlew=0;
+  int x=0, erase=0, pi=0, ni=0;
+  ArrayPiece<X> v;
+  CB cb;
+  void Init(const ArrayPiece<X>&, int o, const ArrayPiece<X>&, int Erase, CB&&);
+  void LoadV(const ArrayPiece<X> &V) { FindBoundaryConditions((v=V), &sw, &ew); }
+  void FindPrev(const ArrayPiece<X> &t) { while (pi > 0       && !isspace(t[pi-1])) pi--; }
+  void FindNext(const ArrayPiece<X> &t) { while (ni < t.len-1 && !isspace(t[ni+1])) ni++; }
+  void PrepareOverwrite(const ArrayPiece<X> &V) { osw=sw; oew=ew; LoadV(V); erase=0; overwrite=1; }
+  void ProcessUpdate(const ArrayPiece<X>&);
+  void ProcessResult();
+  void SetNewLineBoundaryConditions(bool sw, bool ew) { nlbw=sw; nlew=ew; }
+  static void FindBoundaryConditions(const ArrayPiece<X> &v, bool *sw, bool *ew);
 };
 
 }; // namespace LFL

@@ -680,8 +680,8 @@ template <class Line> struct RingFrameBuffer {
   void ScrollPercent(float y) { scroll.y = fmod(scroll.y + y, 1.0); }
   void ScrollPixels(int y) { ScrollPercent(float(y) / Height()); }
   void AdvancePixels(int y) { ScrollPixels(y); p.y = RingIndex::WrapOver(p.y - y, Height()); }
-  point BackPlus(const point &o) { return point(RingIndex::WrapOver(p.x + o.x, Width()),
-                                                RingIndex::WrapOver(p.y + o.y, Height())); }
+  point BackPlus(const point &o) const { return point(RingIndex::WrapOver(p.x + o.x, Width()),
+                                                      RingIndex::WrapOver(p.y + o.y, Height())); }
 };
 
 struct TilesInterface {

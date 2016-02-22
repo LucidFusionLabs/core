@@ -4,9 +4,9 @@
 
 [![Build Status](https://travis-ci.org/LucidFusionLabs/core.svg?branch=master)](https://travis-ci.org/LucidFusionLabs/core)
 
-The API primarly consists of the: `Application`, `Window`, and `Scene` classes,
-plus the 7 modules: `Audio`, `Video`, `Input`, `Assets`, `Network`, `Camera`,
-and `CUDA`.
+The core API consists of the: `Application`, `Window` classes,
+the `Audio`, `Video`, `Input`, `Network`, `Camera`, `CUDA` Modules,
+and the `Fonts`, `GUI`, `AssetLoader`, `Scene` subsystems. 
 
 The key implementation files are:
 [lfapp/lfapp.h](lfapp/lfapp.h)

@@ -37,9 +37,9 @@ DEFINE_bool(multitouch, true, "Touchscreen controls");
 #else
 DEFINE_bool(multitouch, false, "Touchscreen controls");
 #endif
-DEFINE_bool(lfapp_console, false, "Enable dropdown lfapp console");
-DEFINE_string(lfapp_console_font, "", "Console font, blank for default_font");
-DEFINE_int(lfapp_console_font_flag, FontDesc::Mono, "Console font flag");
+DEFINE_bool(console, false, "Enable dropdown lfapp console");
+DEFINE_string(console_font, "", "Console font, blank for default_font");
+DEFINE_int(console_font_flag, FontDesc::Mono, "Console font flag");
 DEFINE_bool(draw_grid, false, "Draw lines intersecting mouse x,y");
 
 void GUI::UpdateBox(const Box &b, int draw_box_ind, int input_box_ind) {
@@ -191,11 +191,13 @@ TextBox::Link::Link(TextBox::Line *P, GUI *G, const Box3 &b, const string &U) : 
 
 int TextBox::Line::Erase(int x, int l) {
   if (!(l = max(0, min(Size() - x, l)))) return 0;
+  TokenProcessor<DrawableBox> update;
   bool token_processing = parent->token_processing;
-  LineTokenProcessor update(token_processing ? this : 0, x, DrawableBoxRun(&data->glyphs[x], l), l);
   if (token_processing) {
-    update.SetNewLineBoundaryConditions(!x ? update.nw : update.lbw, x + l == update.line_size ? update.pw : update.lew);
-    update.ProcessUpdate();
+    update.Init(data->glyphs, x, data->glyphs.Substr(x, l), l, bind(&TextBox::UpdateToken, parent, this, _1, _2, _3, &update));
+    update.SetNewLineBoundaryConditions(!x ? update.nw : update.lbw,
+                                        x + l == data->glyphs.Size() ? update.pw : update.lew);
+    update.ProcessUpdate(data->glyphs);
   }
   data->glyphs.Erase(x, l, true);
   data->flow.p.x = data->glyphs.Position(data->glyphs.Size()).x;
@@ -222,10 +224,12 @@ template <class X> int TextBox::Line::InsertTextAt(int x, const StringPieceT<X> 
 
 template <class X> int TextBox::Line::InsertTextAt(int x, const StringPieceT<X> &v, const DrawableBoxArray &b) {
   int ret = b.Size();
+  TokenProcessor<DrawableBox> update;
   bool token_processing = parent->token_processing, append = x == Size();
-  LineTokenProcessor update(token_processing ? this : 0, x, DrawableBoxRun(&b[0], ret), 0);
   if (token_processing) {
-    update.SetNewLineBoundaryConditions(!x ? update.sw : update.lbw, x == update.line_size-1 ? update.ew : update.lew);
+    update.Init(data->glyphs, x, b, 0, bind(&TextBox::UpdateToken, parent, this, _1, _2, _3, &update));
+    update.SetNewLineBoundaryConditions(!x ? update.sw : update.lbw,
+                                        x == data->glyphs.Size()-1 ? update.ew : update.lew);
     update.ProcessResult();
   }
 
@@ -233,7 +237,7 @@ template <class X> int TextBox::Line::InsertTextAt(int x, const StringPieceT<X> 
   data->flow.p.x = data->glyphs.Position(data->glyphs.Size()).x;
   if (!append && update.nw) update.ni += ret;
 
-  if (token_processing) update.ProcessUpdate();
+  if (token_processing) update.ProcessUpdate(data->glyphs);
   return ret;
 }
 
@@ -247,20 +251,22 @@ template <class X> int TextBox::Line::OverwriteTextAt(int x, const StringPieceT<
   if (!(size = b.Size())) return 0;
   if (size - v.len > 0 && (grow = max(0, x + size - Size())))
     data->flow.AppendText(basic_string<X>(grow, ' '), attr);
-  DrawableBoxRun orun(&data->glyphs[x], size), nrun(&b[0], size);
+  ArrayPiece<DrawableBox> orun(&data->glyphs[x], size), nrun(&b[0], size);
 
+  TokenProcessor<DrawableBox> update;
   bool token_processing = parent->token_processing;
-  LineTokenProcessor update(token_processing ? this : 0, x, orun, size);
   if (token_processing) {
+    update.Init(data->glyphs, x, orun, size, bind(&TextBox::UpdateToken, parent, this, _1, _2, _3, &update));
     update.FindBoundaryConditions(nrun, &update.osw, &update.oew);
-    update.SetNewLineBoundaryConditions(!x ? update.osw : update.lbw, x + size == update.line_size ? update.oew : update.lew);
-    update.ProcessUpdate();
+    update.SetNewLineBoundaryConditions(!x ? update.osw : update.lbw,
+                                        x + size == data->glyphs.Size() ? update.oew : update.lew);
+    update.ProcessUpdate(data->glyphs);
   }
   data->glyphs.OverwriteAt(x, b.data);
   data->flow.p.x = data->glyphs.Position(data->glyphs.Size()).x;
   if (token_processing) {
     update.PrepareOverwrite(nrun);
-    update.ProcessUpdate();
+    update.ProcessUpdate(data->glyphs);
   }
   return size;
 }
@@ -305,54 +311,6 @@ point TextBox::Line::Draw(point pos, int relayout_width, int g_offset, int g_len
   if (relayout_width >= 0) Layout(relayout_width);
   data->glyphs.Draw((p = pos), g_offset, g_len);
   return p - point(0, parent->font->Height() + data->glyphs.height);
-}
-
-TextBox::LineTokenProcessor::LineTokenProcessor(TextBox::Line *l, int o, const DrawableBoxRun &V, int Erase)
-  : L(l), x(o), line_size(L?L->Size():0), erase(Erase) {
-    if (!L) return;
-    const DrawableBoxArray &glyphs = L->data->glyphs;
-    const Drawable *p=0, *n=0;
-    CHECK_LE(x, line_size);
-    LoadV(V);
-    ni = x + (Erase ? Erase : 0);
-    nw = ni<line_size && (n=glyphs[ni ].drawable) && !isspace(n->Id());
-    pw = x >0         && (p=glyphs[x-1].drawable) && !isspace(p->Id());
-    pi = x - pw;
-    if ((pw && nw) || (pw && sw)) FindPrev(glyphs);
-    if ((pw && nw) || (nw && ew)) FindNext(glyphs);
-    FindBoundaryConditions(DrawableBoxRun(&glyphs[0], line_size), &lbw, &lew);
-  }
-
-void TextBox::LineTokenProcessor::ProcessUpdate() {
-  int tokens = 0, vl = v.Size();
-  if (!vl) return;
-
-  StringWordIterT<DrawableBox> word(v.data.buf, v.data.len, isspace, 0);
-  for (const DrawableBox *w = word.Next(); w; w = word.Next(), tokens++) {
-    int start_offset = w - v.data.buf, end_offset = start_offset + word.cur_len;
-    bool first = start_offset == 0, last = end_offset == v.data.len;
-    if (first && last && pw && nw) L->parent->UpdateToken(L, pi, ni-pi+1,                             erase ? -1 : 1, this);
-    else if (first && pw)          L->parent->UpdateToken(L, pi, x+end_offset-pi,                     erase ? -2 : 2, this);
-    else if (last && nw)           L->parent->UpdateToken(L, x+start_offset, ni-x-start_offset+1,     erase ? -3 : 3, this);
-    else                           L->parent->UpdateToken(L, x+start_offset, end_offset-start_offset, erase ? -4 : 4, this);
-  }
-  if ((!tokens || overwrite) && vl) {
-    const DrawableBoxArray &glyphs = L->data->glyphs;
-    if (pw && !sw && osw) { FindPrev(glyphs); L->parent->UpdateToken(L, pi, x-pi,        erase ? -5 : 5, this); }
-    if (nw && !ew && oew) { FindNext(glyphs); L->parent->UpdateToken(L, x+vl, ni-x-vl+1, erase ? -6 : 6, this); }
-  }
-}
-
-void TextBox::LineTokenProcessor::ProcessResult() {
-  const DrawableBoxArray &glyphs = L->data->glyphs;
-  if      (pw && nw) L->parent->UpdateToken(L, pi, ni - pi + 1, erase ? 7 : -7, this);
-  else if (pw && sw) L->parent->UpdateToken(L, pi, x  - pi,     erase ? 8 : -8, this);
-  else if (nw && ew) L->parent->UpdateToken(L, x,  ni - x + 1,  erase ? 9 : -9, this);
-}
-
-void TextBox::LineTokenProcessor::FindBoundaryConditions(const DrawableBoxRun &v, bool *sw, bool *ew) {
-  *sw = v.Size() && !isspace(v.First().Id());
-  *ew = v.Size() && !isspace(v.Last ().Id());
 }
 
 TextBox::Lines::Lines(TextBox *P, int N) : RingVector<Line>(N), parent(P), wrapped_lines(N),
@@ -425,17 +383,17 @@ point TextBox::LinesFrameBuffer::Paint(TextBox::Line *l, point lp, const Box &b,
   return point(lp.x, lp.y-b.h);
 }
 
-point TextBox::LinesGUI::MousePosition() const {
-  point p = screen->mouse - box.BottomLeft();
-  if (const Border *clip = parent->clip) if (p.y < clip->bottom || p.y > box.h - clip->top) return p - point(0, box.h);
-  return parent->GetFrameBuffer()->BackPlus(p);
-}
-
 TextBox::LineUpdate::~LineUpdate() {
   if (!fb->lines || (flag & DontUpdate)) v->Layout(fb->wrap ? fb->w : 0);
   else if (flag & PushFront) { if (o) fb->PushFrontAndUpdateOffset(v,o); else fb->PushFrontAndUpdate(v); }
   else if (flag & PushBack)  { if (o) fb->PushBackAndUpdateOffset (v,o); else fb->PushBackAndUpdate (v); }
   else fb->Update(v);
+}
+
+point TextBox::RelativePosition(const point &in) const {
+  point p = in - box.BottomLeft();
+  if (clip) if (p.y < clip->bottom || p.y > box.h - clip->top) return p - point(0, box.h);
+  return GetFrameBuffer()->BackPlus(p);
 }
 
 const Drawable::Attr *TextBox::GetAttr(int attr) const {
@@ -508,7 +466,7 @@ void TextBox::DrawCursor(point p) {
   }
 }
 
-void TextBox::UpdateToken(Line *L, int word_offset, int word_len, int update_type, const LineTokenProcessor*) {
+void TextBox::UpdateToken(Line *L, int word_offset, int word_len, int update_type, const TokenProcessor<DrawableBox>*) {
   const DrawableBoxArray &glyphs = L->data->glyphs;
   CHECK_LE(word_offset + word_len, glyphs.Size());
   string text = DrawableBoxRun(&glyphs[word_offset], word_len).Text();
@@ -858,7 +816,7 @@ void Editor::SelectionCB(const Selection::Point &p) {
 }
 
 void Editor::AddWrappedLines(int n) {
-  v_scrolled *= static_cast<float>(wrapped_lines) / (wrapped_lines + n);
+  v_scrolled *= float(wrapped_lines) / (wrapped_lines + n);
   last_v_scrolled = v_scrolled;
   wrapped_lines += n;
 }
@@ -1289,7 +1247,7 @@ void Terminal::Scroll(int sl) {
     LineUpdate(GetTermLine(up ? (end_y-l+i+1) : (beg_y+l-i-1)), &line_fb, flag, offset);
 }
 
-void Terminal::UpdateToken(Line *L, int word_offset, int word_len, int update_type, const LineTokenProcessor *token) {
+void Terminal::UpdateToken(Line *L, int word_offset, int word_len, int update_type, const TokenProcessor<DrawableBox> *token) {
   CHECK_LE(word_offset + word_len, L->data->glyphs.Size());
   Line *BL = L, *EL = L, *NL;
   int in_line_ind = -line.IndexOf(L)-1, beg_line_ind = in_line_ind, end_line_ind = in_line_ind;

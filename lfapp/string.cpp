@@ -359,19 +359,10 @@ template <class X>       X *FindChar(      X *text, int (*ischar)(int), int (*is
 template <class X> const X *FindChar(const X *text, int (*ischar)(int), int len, int *outlen) { return FindChar(text, ischar, 0, len, outlen); }
 template <class X>       X *FindChar(      X *text, int (*ischar)(int), int len, int *outlen) { return const_cast<X*>(FindChar(const_cast<const X*>(text), ischar, len, outlen)); }
 
-template <> const DrawableBox *FindChar(const DrawableBox *text, int (*ischar)(int), int (*isquotec)(int), int len, int *outlen) {
-  FindCharImpl(DrawableBox, ischar(p->Id()), p->Id(), 1);
-}
-template <>       DrawableBox *FindChar(      DrawableBox *text, int (*ischar)(int), int (*isquotec)(int), int len, int *outlen) { return const_cast<DrawableBox*>(FindChar(const_cast<const DrawableBox*>(text), ischar, isquotec, len, outlen)); }
-template <> const DrawableBox *FindChar(const DrawableBox *text, int (*ischar)(int), int len, int *outlen) { return FindChar(text, ischar, 0, len, outlen); }
-template <>       DrawableBox *FindChar(      DrawableBox *text, int (*ischar)(int), int len, int *outlen) { return const_cast<DrawableBox*>(FindChar(const_cast<const DrawableBox*>(text), ischar, len, outlen)); }
-
 template       char*        FindChar<char    >   (      char*,        int (*)(int), int, int*);
 template const char*        FindChar<char    >   (const char*,        int (*)(int), int, int*);
 template       char16_t*    FindChar<char16_t>   (      char16_t*,    int (*)(int), int, int*);
 template const char16_t*    FindChar<char16_t>   (const char16_t*,    int (*)(int), int, int*);
-template       DrawableBox* FindChar<DrawableBox>(      DrawableBox*, int (*)(int), int, int*);
-template const DrawableBox* FindChar<DrawableBox>(const DrawableBox*, int (*)(int), int, int*);
 
 #define LengthCharImpl(in, len, p, deref_p, check_p) \
   if (len >= 0) while (p-in < len &&  ischar(deref_p)) p++; \
@@ -381,32 +372,20 @@ template const DrawableBox* FindChar<DrawableBox>(const DrawableBox*, int (*)(in
   if (len >= 0) while (p-in < len && !ischar(deref_p)) p++; \
   else          while (check_p    && !ischar(deref_p)) p++;
 
-#define LengthCharFunctionImpl(type, deref_p, check_p) \
-  const type *p = in; \
-  LengthCharImpl(in, len, p, deref_p, check_p); \
-  return p - in;
-
 template <class X> int LengthChar(const X *in, int (*ischar)(int), int len) {
-  LengthCharFunctionImpl(X, *p, *p);
-}
-template <> int LengthChar(const DrawableBox *in, int (*ischar)(int), int len) {
-  LengthCharFunctionImpl(DrawableBox, p->Id(), 1);
+  const X *p = in;
+  LengthCharImpl(in, len, p, *p, *p);
+  return p - in;
 }
 template int LengthChar(const char*,        int(*)(int), int);
 template int LengthChar(const char16_t*,    int(*)(int), int);
 template int LengthChar(const DrawableBox*, int(*)(int), int);
 
-#define RLengthCharFunctionImpl(type, deref_p) \
-  if (len <= 0) return 0; \
-  const type *p = in, *e = in - len; \
-  for (; p != e; --p) if (!ischar(deref_p)) break; \
-  return in - p;
-
 template <class X> int RLengthChar(const X *in, int (*ischar)(int), int len) {
-  RLengthCharFunctionImpl(X, *p);
-}
-template <> int RLengthChar(const DrawableBox *in, int (*ischar)(int), int len) {
-  RLengthCharFunctionImpl(DrawableBox, p->Id());
+  if (len <= 0) return 0;
+  const X *p = in, *e = in - len;
+  for (; p != e; --p) if (!ischar(*p)) break;
+  return in - p;
 }
 template int RLengthChar(const char*,        int(*)(int), int);
 template int RLengthChar(const char16_t*,    int(*)(int), int);
@@ -866,5 +845,55 @@ void NextRecordDispatcher::AddData(const StringPiece &b, bool final) {
   }
   buf.erase(0, buf.size() - remaining.len);
 };
+
+template <class X>
+void TokenProcessor<X>::Init(const ArrayPiece<X> &text, int o, const ArrayPiece<X> &V, 
+                             int Erase, TokenProcessor::CB &&C) {
+  CHECK_LE((x = o), text.len);
+  LoadV(V);
+  cb = C;
+  ni = x + ((erase = Erase) ? erase : 0);
+  nw = ni<text.len && !isspace(text[ni ]);
+  pw = x >0        && !isspace(text[x-1]);
+  pi = x - pw;
+  if ((pw && nw) || (pw && sw)) FindPrev(text);
+  if ((pw && nw) || (nw && ew)) FindNext(text);
+  FindBoundaryConditions(text, &lbw, &lew);
+}
+
+template <class X> void TokenProcessor<X>::ProcessUpdate(const ArrayPiece<X> &text) {
+  int tokens = 0, vl = v.size();
+  if (!vl) return;
+
+  StringWordIterT<X> word(v.buf, v.len, isspace, 0);
+  for (const X *w = word.Next(); w; w = word.Next(), tokens++) {
+    int start_offset = w - v.buf, end_offset = start_offset + word.cur_len;
+    bool first = start_offset == 0, last = end_offset == v.len;
+    if (first && last && pw && nw) cb(pi, ni-pi+1,                             erase ? -1 : 1);
+    else if (first && pw)          cb(pi, x+end_offset-pi,                     erase ? -2 : 2);
+    else if (last && nw)           cb(x+start_offset, ni-x-start_offset+1,     erase ? -3 : 3);
+    else                           cb(x+start_offset, end_offset-start_offset, erase ? -4 : 4);
+  }
+  if ((!tokens || overwrite) && vl) {
+    if (pw && !sw && osw) { FindPrev(text); cb(pi, x-pi,        erase ? -5 : 5); }
+    if (nw && !ew && oew) { FindNext(text); cb(x+vl, ni-x-vl+1, erase ? -6 : 6); }
+  }
+}
+
+template <class X> void TokenProcessor<X>::ProcessResult() {
+  if      (pw && nw) cb(pi, ni - pi + 1, erase ? 7 : -7);
+  else if (pw && sw) cb(pi, x  - pi,     erase ? 8 : -8);
+  else if (nw && ew) cb(x,  ni - x + 1,  erase ? 9 : -9);
+}
+
+template <class X>
+void TokenProcessor<X>::FindBoundaryConditions(const ArrayPiece<X> &v, bool *sw, bool *ew) {
+  *sw = v.size() && !isspace(v.front());
+  *ew = v.size() && !isspace(v.back ());
+}
+
+template struct TokenProcessor<char>;
+template struct TokenProcessor<char16_t>;
+template struct TokenProcessor<DrawableBox>;
 
 }; // namespace LFL
