@@ -25,6 +25,7 @@
 #include "lfapp/css.h"
 #include "lfapp/flow.h"
 #include "lfapp/gui.h"
+#include "lfapp/ipc.h"
 
 #if defined(LFL_GLEW) && !defined(LFL_HEADLESS)
 #define glewGetContext() ((GLEWContext*)screen->glew_context)
@@ -1890,9 +1891,9 @@ int GraphicsDevice::CheckFrameBufferStatus() { return 0; }
 int GraphicsDevice::GraphicsDevice::VertsPerPrimitive(int primtype) { return 0; }
 
 void Application::MakeCurrentWindow(Window *W) {}
-bool Application::CreateWindow(Window *W) { W->gd = new FakeGraphicsDevice(); windows[W->id] = W; return true; }
+bool Application::CreateWindow(Window *W) { W->gd = new FakeGraphicsDevice(); windows[W->id.value] = W; return true; }
 void Application::CloseWindow(Window *W) {
-  windows.erase(W->id);
+  windows.erase(W->id.value);
   if (windows.empty()) app->run = false;
   if (app->window_closed_cb) app->window_closed_cb(W);
   screen = 0;
@@ -1939,15 +1940,15 @@ void Application::MakeCurrentWindow(Window *W) {}
 #endif
 
 #ifdef LFL_OSXVIDEO
-extern "C" void OSXVideoSwap(void*);
-extern "C" void *OSXCreateWindow(int W, int H, struct NativeWindow *nw);
-extern "C" void OSXDestroyWindow(void *O);
-extern "C" void OSXMakeWindowCurrent(void *O);
-extern "C" void OSXSetWindowSize(void*, int W, int H);
-extern "C" void OSXSetWindowTitle(void *O, const char *v);
-extern "C" void OSXSetWindowResizeIncrements(void *O, float x, float y);
-extern "C" void OSXSetWindowTransparency(void *O, float v);
-extern "C" void *OSXCreateGLContext(void *O);
+extern "C" void OSXVideoSwap(typed_ptr);
+extern "C" typed_ptr OSXCreateWindow(int W, int H, struct NativeWindow *nw);
+extern "C" void OSXDestroyWindow(typed_ptr O);
+extern "C" void OSXMakeWindowCurrent(typed_ptr O);
+extern "C" void OSXSetWindowSize(typed_ptr, int W, int H);
+extern "C" void OSXSetWindowTitle(typed_ptr, const char *v);
+extern "C" void OSXSetWindowResizeIncrements(typed_ptr, float x, float y);
+extern "C" void OSXSetWindowTransparency(typed_ptr, float v);
+extern "C" typed_ptr OSXCreateGLContext(typed_ptr);
 struct OSXVideoModule : public Module {
   int Init() {
     INFO("OSXVideoModule::Init()");
@@ -1959,7 +1960,7 @@ struct OSXVideoModule : public Module {
 };
 bool Application::CreateWindow(Window *W) { 
   W->id = OSXCreateWindow(W->width, W->height, W);
-  if (W->id) windows[W->id] = W;
+  if (W->id.value) windows[W->id.value] = W;
   OSXSetWindowTitle(W->id, W->caption.c_str());
   return true; 
 }
@@ -1967,7 +1968,7 @@ void Application::MakeCurrentWindow(Window *W) {
   if (W) OSXMakeWindowCurrent((screen = W)->id);
 }
 void Application::CloseWindow(Window *W) {
-  windows.erase(W->id);
+  windows.erase(W->id.value);
   if (windows.empty()) app->run = false;
   if (app->window_closed_cb) app->window_closed_cb(W);
   // OSXDestroyWindow(W->id);
@@ -2444,10 +2445,10 @@ int Video::Init() {
 #endif
 
   if (!screen->gd) CreateGraphicsDevice(screen);
-  InitGraphicsDevice(screen);
 
 #ifndef WIN32
   if (app->splash_color) {
+    InitGraphicsDevice(screen);
     screen->gd->ClearColor(*app->splash_color);
     screen->gd->Clear();
     screen->gd->Flush();
@@ -2494,7 +2495,7 @@ void *Video::BeginGLContextCreate(Window *W) {
 
 void *Video::CompleteGLContextCreate(Window *W, void *gl_context) {
 #if defined(LFL_OSXVIDEO)
-  return OSXCreateGLContext(W->id);
+  return OSXCreateGLContext(W->id).value;
 #elif defined(LFL_WINVIDEO)
   wglMakeCurrent((HDC)W->surface, (HGLRC)gl_context);
   return gl_context;
@@ -2551,6 +2552,8 @@ void Video::InitFonts() {
 
   if (FLAGS_console && FLAGS_font_engine != "atlas" && FLAGS_font_engine != "freetype")
     app->fonts->LoadConsoleFont(FLAGS_console_font.empty() ? "VeraMoBd.ttf" : FLAGS_console_font);
+
+  screen->default_font = FontRef(FontDesc::Default(), false);
 }
 
 int Video::InitFontWidth() {

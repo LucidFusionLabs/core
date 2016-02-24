@@ -20,33 +20,19 @@
 #define LFL_LFAPP_AUDIO_H__
 namespace LFL {
 
-DECLARE_int(sample_secs);
 DECLARE_int(sample_rate);
-DECLARE_int(chans_out);
+DECLARE_int(sample_secs);
 DECLARE_int(chans_in);
-DECLARE_string(feat_type);
-DECLARE_bool(feat_dither);
-DECLARE_bool(feat_preemphasis);
-DECLARE_double(feat_preemphasis_filter);
-DECLARE_double(feat_minfreq);
-DECLARE_double(feat_maxfreq);
-DECLARE_int(feat_window);
-DECLARE_int(feat_hop);
-DECLARE_int(feat_melbands);
-DECLARE_int(feat_cepcoefs);
+DECLARE_int(chans_out);
 
-extern const int feat_lpccoefs, feat_barkbands;
-extern const double feat_progressbar_c;
-extern const double feat_rastaB[], feat_rastaA[];
-
-struct PowerDomain { enum { complex=1, abs=2, abs2=3, dB=4 }; };
-struct FreqDomain { enum { hz=1, mel=2, }; };
-struct F0EstmMethod { enum { fftbucket=1, xcorr=2, Default=2, cepstral=3, harmonicity=4 }; };
 struct MixFlag { enum { Reset=1, Mix=2, DontQueue=4 }; };
+struct FreqDomain { enum { hz=1, mel=2, }; };
+struct PowerDomain { enum { complex=1, abs=2, abs2=3, dB=4 }; };
+struct F0EstmMethod { enum { fftbucket=1, xcorr=2, Default=2, cepstral=3, harmonicity=4 }; };
 
 struct Sample {
   enum { U8 =1, S16 =2, S32 =3, FLOAT =4, DOUBLE =5,
-    U8P=6, S16P=7, S32P=8, FLOATP=9, DOUBLEP=10 };
+         U8P=6, S16P=7, S32P=8, FLOATP=9, DOUBLEP=10 };
   int Size(int fmt);
 #ifdef LFL_FFMPEG
   static int FromFFMpegId(int fmt);
@@ -72,16 +58,17 @@ struct Audio : public Module {
   void QueueMix(SoundAsset *sa, int flag=MixFlag::Reset, int offset=-1, int len=-1);
   void QueueMixBuf(const RingBuf::Handle *L, int channels=1, int flag=0);
   int Snapshot(SoundAsset *sa);
+  static double VisualDelay();
 };
 
 int Sinthesize(Audio *s, int hz1, int hz2, int hz3);
 double LowPassFilter(int n, int i, int maxfreq);
 double HighPassFilter(int n, int i, int minfreq);
+inline vector<double> PreEmphasisFilter(double fv) { vector<double> v { 1, fv }; return v; }
 float PseudoEnergy(const RingBuf::Handle *in, int window, int offset);
 int ZeroCrossings(const RingBuf::Handle *in, int window, int offset);
 RingBuf *Decimate(const RingBuf::Handle *in, int factor);
 int CrossCorrelateTDOA(const RingBuf::Handle *a, const RingBuf::Handle *b, int window, int offset, int samps);
-inline vector<double> PreEmphasisFilter() { vector<double> v { 1, FLAGS_feat_preemphasis_filter }; return v; }
 
 struct AudioResampler {
   SwrContext *swr=0;
@@ -121,26 +108,20 @@ int Filter(const RingBuf::Handle *in, RingBuf::Handle *out, int filterlen, const
 int Filter(const RingBuf::Handle *in, RingBuf::Handle *out, int filterlenB, const double *filterB, int filterlenA, const double *filterA, int start, double *ic, double iclen, bool nohistory);
 
 /* streaming overlap-add fft/ifft */
-int FFT(const RingBuf::Handle *in, int i, int window, int hop, int fftlen, float *out, bool preemph=false, bool hamming=true, int scale=1);
+int FFT(const RingBuf::Handle *in, int i, int window, int hop, int fftlen, float *out,
+        const vector<double> &preemph_filter=vector<double>(), bool hamming=true, int scale=1);
 int IFFT(const Complex *in, int i, int window, int hop, int fftlen, RingBuf::Handle *out);
 
 /* fft filter */
 void FFTFilterCompile(int n, double *filter);
 int FFTFilter(const RingBuf::Handle *in, RingBuf::Handle *out, int window, int hop, const double *filter);
 
-float FundamentalFrequency(const RingBuf::Handle *in, int window, int offset, int method=F0EstmMethod::Default);
+Matrix *Spectogram(const RingBuf::Handle *in, Matrix *out, int window, int hop, int fftlen,
+                   const vector<double> &preemph=vector<double>(), int pd=PowerDomain::dB, int scale=1);
+RingBuf *ISpectogram(const Matrix *in, int window, int hop, int fftlen, int samplerate);
 
-Matrix *FFT2Mel(int outrows, double minfreq, double maxfreq, int fftlen, int samplerate);
-Matrix *Mel2FFT(int outrows, double minfreq, double maxfreq, int fftlen, int samplerate);
-
-Matrix *Spectogram(const RingBuf::Handle *in, Matrix *out, int window, int hop, int fftlen, bool preemph=false, int pd=PowerDomain::dB, int scale=1);
 Matrix *F0Stream(const RingBuf::Handle *in, Matrix *out, int window, int hop, int method=F0EstmMethod::Default);
-
-Matrix *PLP(const RingBuf::Handle *in, Matrix *out=0, vector<StatefulFilter> *rastaFilter=0, Allocator *alloc=0);
-RingBuf *InvPLP(const Matrix *in, int samplerate, Allocator *alloc=0);
-
-Matrix *MFCC(const RingBuf::Handle *in, Matrix *out=0, Allocator *alloc=0);
-RingBuf *InvMFCC(const Matrix *in, int samplerate, const Matrix *f0=0);
+float FundamentalFrequency(const RingBuf::Handle *in, int window, int offset, int method=F0EstmMethod::Default);
 
 }; // namespace LFL
 #endif // LFL_LFAPP_AUDIO_H__

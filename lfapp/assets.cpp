@@ -1349,13 +1349,10 @@ void glSpectogram(Matrix *m, Texture *t, float *max, float clip, int pd) {
   t->UpdateGL();
 }
 
-void glSpectogram(SoundAsset *sa, Texture *t, Matrix *transform, float *max, float clip) {
-  const RingBuf::Handle B(sa->wav.get());
-
+void glSpectogram(const RingBuf::Handle *in, Texture *t, Matrix *transform, float *max, float clip) {
   /* 20*log10(abs(specgram(y,2048,sr,hamming(512),256))) */
-  Matrix *m = Spectogram(&B, 0, FLAGS_feat_window, FLAGS_feat_hop, FLAGS_feat_window, 0, PowerDomain::abs);
+  Matrix *m = Spectogram(in, 0, 512, 256, 512, vector<double>(), PowerDomain::abs);
   if (transform) m = Matrix::Mult(m, transform, mDelA);
-
   glSpectogram(m, t, max, clip, PowerDomain::abs);
   delete m;
 }

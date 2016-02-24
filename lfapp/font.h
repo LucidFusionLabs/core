@@ -93,6 +93,11 @@ struct FontDesc {
   string DebugString() const {
     return StrCat(name, " (", family, ") ", size, " ", fg.DebugString(), " ", bg.DebugString(), " ", flag);
   }
+
+  static FontDesc Default() {
+    return FontDesc(FLAGS_default_font, FLAGS_default_font_family, FLAGS_default_font_size,
+                    Color::white, Color::clear, FLAGS_default_font_flag);
+  }
 };
 
 struct FontEngine {
@@ -446,8 +451,6 @@ struct Fonts {
 
   FontEngine *GetFontEngine(int engine_type);
   FontEngine *DefaultFontEngine();
-  FontDesc DefaultDesc();
-  Font *Default();
   Font *Fake();
   Font *GetByDesc(FontDesc);
   template <class... Args> Font *Get(Args&&... args) { return GetByDesc(FontDesc(forward<Args>(args)...)); }

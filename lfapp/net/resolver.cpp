@@ -18,7 +18,7 @@
 
 #include "lfapp/lfapp.h"
 #include "lfapp/network.h"
-#include "lfapp/resolver.h"
+#include "lfapp/net/resolver.h"
 
 #ifdef WIN32
 #include <WinDNS.h>
@@ -28,6 +28,133 @@
 
 namespace LFL {
 DEFINE_string(nameserver, "", "Default namesver");
+
+int DNS::WriteRequest(unsigned short id, const string &querytext, unsigned short type, char *out, int len) {
+  Serializable::MutableStream os(out, len);
+  Header *hdr = reinterpret_cast<Header*>(os.Get(Header::size));
+  memset(hdr, 0, Header::size);
+  hdr->rd = 1;
+  hdr->id = id;
+  hdr->qdcount = htons(1);
+
+  StringWordIter words(querytext, isdot);
+  for (string word = words.NextString(); !word.empty(); word = words.NextString()) {
+    CHECK_LT(word.size(), 64);
+    os.Write8(uint8_t(word.size()));
+    os.String(word);
+  }
+  os.Write8(char(0));
+
+  os.Htons(type);                // QueryTypeClass.Type
+  os.Htons(uint16_t(Class::IN)); // QueryTypeClass.QClass
+  return os.error ? -1 : os.offset;
+}
+
+int DNS::ReadResponse(const char *buf, int bufsize, Response *res) {
+  Serializable::ConstStream is(buf, bufsize);
+  const Serializable::Stream *in = &is;
+  const Header *hdr = reinterpret_cast<const Header*>(in->Get(Header::size));
+  int qdcount = ntohs(hdr->qdcount), ancount = ntohs(hdr->ancount);
+  int nscount = ntohs(hdr->nscount), arcount = ntohs(hdr->arcount), len;
+
+  for (int i = 0; i < qdcount; i++) {
+    Record out;
+    if ((len = DNS::ReadString(in->Start(), in->Get(), in->End(), &out.question)) < 0 || !in->Get(len + 4)) return -1;
+    res->Q.push_back(out);
+  }
+
+  if (DNS::ReadResourceRecord(in, ancount, &res->A)  < 0) return -1;
+  if (DNS::ReadResourceRecord(in, nscount, &res->NS) < 0) return -1;
+  if (DNS::ReadResourceRecord(in, arcount, &res->E)  < 0) return -1;
+  return 0;
+}
+
+int DNS::ReadResourceRecord(const Serializable::Stream *in, int num, vector<Record> *out) {
+  for (int i = 0; i < num; i++) {
+    Record rec; int len; unsigned short rrlen;
+    if ((len = ReadString(in->Start(), in->Get(), in->End(), &rec.question)) < 0 || !in->Get(len)) return -1;
+
+    in->Ntohs(&rec.type);
+    in->Ntohs(&rec._class);
+    in->Ntohs(&rec.ttl1);
+    in->Ntohs(&rec.ttl2);
+    in->Ntohs(&rrlen);
+
+    if (rec._class == Class::IN && rec.type == Type::A) {
+      if (rrlen != 4) return -1;
+      in->Read32(&rec.addr);
+    } else if (rec._class == Class::IN && (rec.type == Type::NS || rec.type == Type::CNAME)) {
+      if ((len = ReadString(in->Start(), in->Get(), in->End(), &rec.answer)) != rrlen   || !in->Get(len)) return -1;
+    } else if (rec._class == Class::IN && rec.type == Type::MX) {
+      in->Ntohs(&rec.pref);
+      if ((len = ReadString(in->Start(), in->Get(), in->End(), &rec.answer)) != rrlen-2 || !in->Get(len)) return -1;
+    } else {
+      ERROR("unhandled type=", rec.type, ", class=", rec._class);
+      in->Get(rrlen);
+      continue;
+    }
+    out->push_back(rec);
+  }
+  return in->error ? -1 : 0;
+}
+
+int DNS::ReadString(const char *start, const char *cur, const char *end, string *out) {
+  if (!cur) { ERROR("DNS::ReadString null input"); return -1; }
+  if (out) out->clear();
+  const char *cur_start = cur, *final = 0;
+  for (unsigned char len = 1; len && cur < end; cur += len+1) {
+    len = *cur;
+    if (len >= 64) { // Pointer to elsewhere in packet
+      int offset = ntohs(*reinterpret_cast<const unsigned short*>(cur)) & ~(3<<14);
+      if (!final) final = cur + 2;
+      cur = start + offset - 2;
+      if (cur < start || cur >= end) return ERRORv(-1, "OOB cur ", Void(start), " ", Void(cur), " ", Void(end));
+      len = 1;
+      continue;
+    }
+    if (out) StrAppend(out, out->empty() ? "" : ".", string(cur+1, len));
+  }
+  if (out) *out = tolower(*out);
+  if (final) cur = final;
+  return (cur > end) ? -1 : (cur - cur_start);
+}
+
+void DNS::MakeAnswerMap(const vector<DNS::Record> &in, AnswerMap *out) {
+  for (int i = 0; i < in.size(); ++i) {
+    const DNS::Record &e = in[i];
+    if (e.question.empty() || !e.addr) continue;
+    (*out)[e.question].push_back(e.addr);
+  }
+  for (int i = 0; i < in.size(); ++i) {
+    const DNS::Record &e = in[i];
+    if (e.question.empty() || e.answer.empty() || e.type != DNS::Type::CNAME) continue;
+    AnswerMap::const_iterator a = out->find(e.answer);
+    if (a == out->end()) continue;
+    VectorAppend((*out)[e.question], a->second.begin(), a->second.end());
+  }
+}
+
+void DNS::MakeAnswerMap(const vector<DNS::Record> &in, const AnswerMap &qmap, int type, AnswerMap *out) {
+  for (int i = 0; i < in.size(); ++i) {
+    const DNS::Record &e = in[i];
+    if (e.type != type) continue;
+    AnswerMap::const_iterator q_iter = qmap.find(e.answer);
+    if (e.question.empty() || e.answer.empty() || q_iter == qmap.end())
+    { ERROR("DNS::MakeAnswerMap missing ", e.answer); continue; }
+    VectorAppend((*out)[e.question], q_iter->second.begin(), q_iter->second.end());
+  }
+}
+
+string DNS::Response::DebugString() const {
+  string ret;
+  StrAppend(&ret, "Question ",   Q .size(), "\n"); for (int i = 0; i < Q .size(); ++i) StrAppend(&ret, Q [i].DebugString(), "\n");
+  StrAppend(&ret, "Answer ",     A .size(), "\n"); for (int i = 0; i < A .size(); ++i) StrAppend(&ret, A [i].DebugString(), "\n");
+  StrAppend(&ret, "NS ",         NS.size(), "\n"); for (int i = 0; i < NS.size(); ++i) StrAppend(&ret, NS[i].DebugString(), "\n");
+  StrAppend(&ret, "Additional ", E .size(), "\n"); for (int i = 0; i < E .size(); ++i) StrAppend(&ret, E [i].DebugString(), "\n");
+  return ret;
+}
+
+/* Resolver */
 
 bool Resolver::Nameserver::WriteResolveRequest(const Request &req) {
   INFO(c->Name(), ": resolve ", req.query);
@@ -138,7 +265,7 @@ bool Resolver::QueueResolveRequest(const Request &req) {
     Request outreq(req.query, req.type, req.cb, req.retrys);
     if (!ns) queue.push_back(outreq);
     else if (!ns->WriteResolveRequest(outreq)) {
-      dynamic_cast<UDPClient::PersistentConnectionHandler*>(ns->c)->responseCB = UDPClient::ResponseCB();
+      dynamic_cast<UDPClient::PersistentConnectionHandler*>(ns->c->handler.get())->responseCB = UDPClient::ResponseCB();
       ns->c->SetError();
       HandleClosed(ns);
       bool retried = conn.size() > 1 || conn_available.size() || HandleNoConnections();

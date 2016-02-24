@@ -20,10 +20,19 @@
 #define LFL_SPEECH_SPEECH_H__
 namespace LFL {
 
+DECLARE_string(feat_type);
+DECLARE_bool(feat_dither);
+DECLARE_bool(feat_preemphasis);
+DECLARE_double(feat_preemphasis_filter);
+DECLARE_double(feat_minfreq);
+DECLARE_double(feat_maxfreq);
+DECLARE_int(feat_window);
+DECLARE_int(feat_hop);
+DECLARE_int(feat_melbands);
+DECLARE_int(feat_cepcoefs);
 DECLARE_bool(triphone_model);
 DECLARE_bool(speech_recognition_debug);
 
-/* phonemes */
 struct Phoneme { 
   enum {
 #define LFL_LANGUAGE_ENGLISH
@@ -36,7 +45,6 @@ struct Phoneme {
 };
 #define PhonemeIter() for (int phone=0; phone<LFL_PHONES; phone++)
 
-/* pronunciation dictionary */
 struct PronunciationDict {
   typedef map<string, int> Map;
   Map word_pronunciation;
@@ -50,13 +58,22 @@ struct PronunciationDict {
   int Pronounce(const char *utterance, const char **words, const char **accents, int *phones, int max);
 };
 
-struct SoundAsset;
-
-/* features */
 struct Features {
-  static int filter_zeroth, deltas, deltadeltas, mean_normalization, variance_normalization;
-  static Matrix *FilterZeroth(Matrix *features);
+  static int filter_zeroth, deltas, deltadeltas, mean_normalization, variance_normalization, lpccoefs, barkbands;
+  static double rastaB[5], rastaA[2];
 
+  static Matrix *EqualLoudnessCurve(int outrows, double max);
+  static double *LifterMatrixROSA(int n, double L, bool inverse=false);
+  static double *LifterMatrixHTK(int n, double L, bool inverse=false);
+  static Matrix *FFT2Bark(int outrows, double minfreq, double maxfreq, int fftlen, int samplerate);
+  static Matrix *FFT2Mel(int outrows, double minfreq, double maxfreq, int fftlen, int samplerate);
+  static Matrix *Mel2FFT(int outrows, double minfreq, double maxfreq, int fftlen, int samplerate);
+  static Matrix *PLP(const RingBuf::Handle *in, Matrix *out=0, vector<StatefulFilter> *rastaFilter=0, Allocator *alloc=0);
+  static RingBuf *InvPLP(const Matrix *in, int samplerate, Allocator *alloc=0);
+  static Matrix *MFCC(const RingBuf::Handle *in, Matrix *out=0, Allocator *alloc=0);
+  static RingBuf *InvMFCC(const Matrix *in, int samplerate, const Matrix *f0=0);
+
+  static Matrix *FilterZeroth(Matrix *features);
   static void MeanAndVarianceNormalization(int D, double *feat, const double *mean, const double *var);
   static void DeltaCoefficients(int D, const double *n2, double *f, const double *p2);
   static void DeltaDeltaCoefficients(int D, const double *n3, const double *n1, double *f,  const double *p1, const double *p3);
@@ -73,7 +90,6 @@ struct Features {
   static int Dimension();
 };
 
-/* acoustic model */
 struct AcousticModel {
   struct State;
   struct StateCollection { 
@@ -324,7 +340,6 @@ struct AcousticHMM {
   static void PrintLattice(AcousticModel::Compiled *hmm, AcousticModel::Compiled *model=0);
 };
 
-/* client network interface */
 struct FeatureSink {
   virtual ~FeatureSink() {}
   FeatureSink() : responseCB(0), inputlen(0) {}
@@ -347,7 +362,6 @@ struct FeatureSink {
   virtual bool Connected() = 0;
 };
 
-/* decoder */
 struct Decoder {
   static Matrix *DecodeFile(AcousticModel::Compiled *model, const char *filename, double beamWidth);
   static Matrix *DecodeFeatures(AcousticModel::Compiled *model, Matrix *features, double beamWidth, int flag=0);

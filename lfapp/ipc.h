@@ -61,6 +61,154 @@ struct MultiProcessBuffer {
   static int Size(const Serializable &s) { return Serializable::Header::size + s.Size(); }
 };
 
+struct MultiProcessResource {
+  static bool Read(const MultiProcessBuffer &mpb, int type, Serializable *out);
+};
+
+struct MultiProcessFileResource : public Serializable {
+  static const int Type = 1<<11 | 1;
+  StringPiece buf, name, type;
+  MultiProcessFileResource() : Serializable(Type) {}
+  MultiProcessFileResource(const string &b, const string &n, const string &t) :
+    Serializable(Type), buf(b), name(n), type(t) {}
+
+  int HeaderSize() const { return sizeof(int) * 3; }
+  int Size() const { return HeaderSize() + 3 + buf.size() + name.size() + type.size(); }
+
+  void Out(Serializable::Stream *o) const {
+    o->Htonl   (buf.size()); o->Htonl   (name.size()); o->Htonl   (type.size());
+    o->NTString(buf);        o->NTString(name);        o->NTString(type);
+  }
+  int In(const Serializable::Stream *i) {
+    /**/      i->Ntohl(&buf.len); /**/         i->Ntohl(&name.len); /**/         i->Ntohl(&type.len);
+    buf.buf = i->Get  ( buf.len+1); name.buf = i->Get  ( name.len+1); type.buf = i->Get  ( type.len+1);
+    return i->Result();
+  }
+};
+
+struct MultiProcessTextureResource : public Serializable {
+  static const int Type = 1<<11 | 2;
+  int width=0, height=0, pf=0, linesize=0;
+  StringPiece buf;
+  MultiProcessTextureResource() : Serializable(Type) {}
+  MultiProcessTextureResource(const LFL::Texture &t) :
+    Serializable(Type), width(t.width), height(t.height), pf(t.pf), linesize(t.LineSize()),
+    buf(MakeSigned(t.buf), t.BufferSize()) {}
+
+  int HeaderSize() const { return sizeof(int) * 4; }
+  int Size() const { return HeaderSize() + buf.size(); }
+
+  void Out(Serializable::Stream *o) const {
+    CHECK_EQ(linesize * height, buf.len);
+    o->Htonl(width); o->Htonl(height); o->Htonl(pf); o->Htonl(linesize);
+    o->String(buf);
+  }
+  int In(const Serializable::Stream *i) {
+    i->Ntohl(&width); i->Ntohl(&height); i->Ntohl(&pf); i->Ntohl(&linesize);
+    buf.buf = i->Get((buf.len = linesize * height));
+    return i->Result();
+  }
+};
+
+struct MultiProcessPaintResource : public Serializable {
+  static const int Type = 1<<11 | 3;
+  struct Iterator {
+    int offset=0, type=0;
+    StringPiece buf;
+    Iterator(const StringPiece &b) : buf(b) { Load(); }
+    template <class X> const X* Get() { return reinterpret_cast<const X*>(buf.buf + offset); }
+    void Load() { type = (offset + sizeof(int) > buf.len) ? 0 : *Get<int>(); }
+    void Next() { offset += CmdSize(type); Load(); }
+  };
+
+  UNALIGNED_struct Cmd { int type; Cmd(int T=0) : type(T) {} }; UNALIGNED_END(Cmd, 4);
+  UNALIGNED_struct SetAttr : public Cmd {
+    static const int Type=1, Size=76;
+    int font_id, tex_id; Color fg, bg; Box scissor; bool underline, overline, midline, blink, blend, hfg, hbg, hs;
+    SetAttr(const Drawable::Attr &a=Drawable::Attr()) : Cmd(Type), font_id(a.font?IPCClientFontEngine::GetId(a.font):0),
+      tex_id(a.tex?a.tex->ID:0), fg(a.fg?*a.fg:Color()), bg(a.bg?*a.bg:Color()), scissor(a.scissor?*a.scissor:Box()),
+      underline(a.underline), overline(a.overline), midline(a.midline), blink(a.blink), blend(a.blend),
+      hfg(a.fg), hbg(a.bg), hs(a.scissor) {}
+    void Update(Drawable::Attr *o, ProcessAPIClient *s) const;
+  }; UNALIGNED_END(SetAttr, SetAttr::Size);
+
+  UNALIGNED_struct InitDrawBox        : public Cmd { static const int Type=2, Size=12; point p;       InitDrawBox       (const point &P=point())       : Cmd(Type), p(P) {} };         UNALIGNED_END(InitDrawBox,        InitDrawBox::Size);
+  UNALIGNED_struct InitDrawBackground : public Cmd { static const int Type=3, Size=12; point p;       InitDrawBackground(const point &P=point())       : Cmd(Type), p(P) {} };         UNALIGNED_END(InitDrawBackground, InitDrawBackground::Size);
+  UNALIGNED_struct DrawBox            : public Cmd { static const int Type=4, Size=32; Box b; int id; DrawBox           (const Box &B=Box(), int ID=0) : Cmd(Type), b(B), id(ID) {} }; UNALIGNED_END(DrawBox,            DrawBox::Size);
+  UNALIGNED_struct DrawBackground     : public Cmd { static const int Type=5, Size=28; Box b;         DrawBackground    (const Box &B=Box())           : Cmd(Type), b(B) {} };         UNALIGNED_END(DrawBackground,     DrawBackground::Size);
+  UNALIGNED_struct PushScissor        : public Cmd { static const int Type=6, Size=28; Box b;         PushScissor       (const Box &B=Box())           : Cmd(Type), b(B) {} };         UNALIGNED_END(PushScissor,        PushScissor::Size);
+  UNALIGNED_struct PopScissor         : public Cmd { static const int Type=7, Size=4;                 PopScissor        ()                             : Cmd(Type) {} };               UNALIGNED_END(PopScissor,         PopScissor::Size);
+
+  StringBuffer data;
+  mutable Drawable::Attr attr;
+  MultiProcessPaintResource() : Serializable(Type) {}
+  void Out(Serializable::Stream *o) const { o->BString(data.buf); }
+  int In(const Serializable::Stream *i) { i->ReadString(&data.buf); return i->Result(); }
+  int Size() const { return HeaderSize() + data.buf.size(); }
+  int HeaderSize() const { return sizeof(int); }
+  int Run(const Box&) const;
+
+  static int CmdSize(int n) {
+    switch(n) {
+      case SetAttr           ::Type: return SetAttr           ::Size;
+      case InitDrawBox       ::Type: return InitDrawBox       ::Size;
+      case InitDrawBackground::Type: return InitDrawBackground::Size;
+      case DrawBox           ::Type: return DrawBox           ::Size;
+      case DrawBackground    ::Type: return DrawBackground    ::Size;
+      case PushScissor       ::Type: return PushScissor       ::Size;
+      case PopScissor        ::Type: return PopScissor        ::Size;
+      default:                       FATAL("unknown cmd ", n);
+    }
+  }
+};
+
+struct MultiProcessPaintResourceBuilder : public MultiProcessPaintResource {
+  int count=0; bool dirty=0;
+  MultiProcessPaintResourceBuilder(int S=32768) { data.Resize(S); }
+
+  int Count() const { return count; }
+  void Clear() { data.Clear(); count=0; dirty=0; }
+  void Add(const Cmd &cmd) { data.Add(&cmd, CmdSize(cmd.type)); count++; dirty=1; }
+  void AddList(const MultiProcessPaintResourceBuilder &x)
+  { data.Add(x.data.begin(), x.data.size()); count += x.count; dirty=1; }
+};
+
+struct MultiProcessLayerTree : public Serializable {
+  static const int Type = 1<<11 | 4;
+  ArrayPiece<LayersInterface::Node>  node_data;
+  ArrayPiece<LayersInterface::Child> child_data;
+  MultiProcessLayerTree() : Serializable(Type) {}
+  MultiProcessLayerTree(const vector<LayersInterface::Node> &n, const vector<LayersInterface::Child> &c) :
+    Serializable(Type), node_data(&n[0], n.size()), child_data(&c[0], c.size()) {}
+
+  void Out(Serializable::Stream *o) const { o->AString(node_data); o->AString(child_data); }
+  int In(const Serializable::Stream *i)
+  { i->ReadUnalignedArray(&node_data); i->ReadUnalignedArray(&child_data); return i->Result(); }
+  int Size() const { return HeaderSize() + node_data.Bytes() + child_data.Bytes(); }
+  int HeaderSize() const { return sizeof(int)*2; }
+  void AssignTo(LayersInterface *layers) const {
+    layers->node .assign(node_data .data(), node_data .data() + node_data .size());
+    layers->child.assign(child_data.data(), child_data.data() + child_data.size());
+  }
+};
+
+struct TilesIPC : public TilesT<MultiProcessPaintResource::Cmd, MultiProcessPaintResourceBuilder, MultiProcessPaintResource> {
+  const Drawable::Attr *attr=0;
+  TilesIPC(GraphicsDevice *d, int l, int w=256, int h=256) : TilesT(d, l, w, h) {}
+  void SetAttr           (const Drawable::Attr*);
+  void InitDrawBox       (const point&);
+  void InitDrawBackground(const point&);
+  void DrawBox           (const Drawable*, const Box&, const Drawable::Attr *a=0);
+  void DrawBackground    (const Box&);
+  void AddScissor        (const Box&);
+};
+
+struct TilesIPCServer : public TilesIPC { using TilesIPC::TilesIPC; };
+struct TilesIPCClient : public TilesIPC { using TilesIPC::TilesIPC; void Run(int flag); };
+
+typedef LayersT<TilesIPCServer> LayersIPCServer;
+typedef LayersT<TilesIPCClient> LayersIPCClient;
+
 #ifndef LFL_FLATBUFFERS
 namespace IPC {
 struct Color {
@@ -324,23 +472,6 @@ struct ProcessAPIServer : public ProcessAPI {
     while (OpenSystemFont_map.size()) HandleMessages(Protocol::OpenSystemFontResponse::Id);
   }
 };
-
-struct TilesIPC : public TilesT<MultiProcessPaintResource::Cmd, MultiProcessPaintResourceBuilder, MultiProcessPaintResource> {
-  const Drawable::Attr *attr=0;
-  TilesIPC(GraphicsDevice *d, int l, int w=256, int h=256) : TilesT(d, l, w, h) {}
-  void SetAttr           (const Drawable::Attr*);
-  void InitDrawBox       (const point&);
-  void InitDrawBackground(const point&);
-  void DrawBox           (const Drawable*, const Box&, const Drawable::Attr *a=0);
-  void DrawBackground    (const Box&);
-  void AddScissor        (const Box&);
-};
-
-struct TilesIPCServer : public TilesIPC { using TilesIPC::TilesIPC; };
-struct TilesIPCClient : public TilesIPC { using TilesIPC::TilesIPC; void Run(int flag); };
-
-typedef LayersT<TilesIPCServer> LayersIPCServer;
-typedef LayersT<TilesIPCClient> LayersIPCClient;
 
 }; // namespace LFL
 #endif // LFL_LFAPP_IPC_H__

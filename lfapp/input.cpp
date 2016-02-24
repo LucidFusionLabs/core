@@ -302,7 +302,7 @@ void Application::ReleaseMouseFocus() {}
 #ifdef LFL_OSXINPUT
 extern "C" void OSXGrabMouseFocus();
 extern "C" void OSXReleaseMouseFocus();
-extern "C" void OSXSetMousePosition(void*, int x, int y);
+extern "C" void OSXSetMousePosition(typed_ptr, int x, int y);
 extern "C" void OSXClipboardSet(const char *v);
 extern "C" char *OSXClipboardGet();
 

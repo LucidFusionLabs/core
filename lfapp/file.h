@@ -58,9 +58,6 @@ struct File {
   string Contents();
   int ReadIOV(void *buf, const IOVec*, int iovlen);
   int Write(const string &b) { return Write(b.c_str(), b.size()); }
-  int WriteProto(ProtoHeader *hdr, const Proto *msg, bool flush=0);
-  int WriteProto(const ProtoHeader *hdr, const Proto *msg, bool flush=0);
-  int WriteProtoFlag(const ProtoHeader *hdr, bool flush=0);
   template <class X> int Rewrite(const IOVec*, int, const vector<X>&, const function<string(const X&)>&);
 
   static bool ReadSuccess(File *f, void *out, int len) { return f->Read(out, len) == len; }
@@ -242,6 +239,9 @@ struct ProtoFile {
   bool Get(Proto *out, int offset, int status=-1);
   bool Next(Proto *out, int *offsetOut=0, int status=-1);
   bool Next(ProtoHeader *hdr, Proto *out, int *offsetOut=0, int status=-1);
+  static int WriteProto(File*, ProtoHeader *hdr, const Proto *msg, bool flush=0);
+  static int WriteProto(File*, const ProtoHeader *hdr, const Proto *msg, bool flush=0);
+  static int WriteProtoFlag(File*, const ProtoHeader *hdr, bool flush=0);
 };
 
 struct StringFile {
@@ -433,12 +433,11 @@ struct HashMatrixFile : public HashMatrixFileT<unsigned, &HashMatrixF::Assign, &
 
 struct HashMatrix64F {
   static void Assign(double *hashrow, unsigned long long hash) {
-    hashrow[0] = static_cast<unsigned>(hash>>32);
-    hashrow[1] = static_cast<unsigned>(hash&0xffffffff);
+    hashrow[0] = unsigned(hash>>32);
+    hashrow[1] = unsigned(hash&0xffffffff);
   }
   static bool Equals(const double *hashrow, unsigned long long hash) {
-    return hashrow[0] == static_cast<unsigned>(hash>>32) &&
-      hashrow[1] == static_cast<unsigned>(hash&0xffffffff);
+    return hashrow[0] == unsigned(hash>>32) && hashrow[1] == unsigned(hash&0xffffffff);
   }
 };
 struct HashMatrix64     : public HashMatrixT    <unsigned long long, &HashMatrix64F::Assign, &HashMatrix64F::Equals> {};

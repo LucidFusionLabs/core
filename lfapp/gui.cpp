@@ -390,6 +390,12 @@ TextBox::LineUpdate::~LineUpdate() {
   else fb->Update(v);
 }
 
+TextBox::TextBox(GraphicsDevice *d, const FontRef &F, int LC) : font(F), cmd_last(LC), cmd_fb(d) {
+  if (font.Load()) cmd_line.GetAttrId(Drawable::Attr(font));
+  layout.pad_wide_chars = 1;
+  cmd_line.Init(this, 0);
+}
+
 point TextBox::RelativePosition(const point &in) const {
   point p = in - box.BottomLeft();
   if (clip) if (p.y < clip->bottom || p.y > box.h - clip->top) return p - point(0, box.h);
@@ -530,6 +536,11 @@ int TextBox::WriteHistory(const string &dir, const string &name, const string &h
 }
 
 /* TextArea */
+
+TextArea::TextArea(GraphicsDevice *D, const FontRef &F, int S, int LC) :
+  TextBox(D, F, LC), line(this, S), line_fb(D) {
+  if (selection.enabled) InitSelection();
+}
 
 void TextArea::Write(const StringPiece &s, bool update_fb, bool release_fb) {
   if (!app->MainThread()) return app->RunInMainThread(bind(&TextArea::WriteCB, this, s.str(), update_fb, release_fb));
@@ -702,6 +713,7 @@ bool TextArea::GetGlyphFromCoordsOffset(const point &p, Selection::Point *out, i
 }
 
 void TextArea::InitSelection() {
+  Activate();
   selection.gui_ind = mouse.AddDragBox
     (Box(), MouseController::CoordCB(bind(&TextArea::DragCB, this, _1, _2, _3, _4)));
 }

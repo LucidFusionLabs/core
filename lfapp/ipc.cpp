@@ -44,12 +44,13 @@ int NTService::Install  (const char *name, const char *path) { FATAL("not implem
 int NTService::Uninstall(const char *name)                   { FATAL("not implemented"); }
 int NTService::WrapMain (const char *name, MainCB main_cb, int argc, const char **argv) { return main_cb(argc, argv); }
 #endif
+
 #if defined(LFL_MOBILE)
 int ProcessPipe::OpenPTY(const char **argv, const char *startdir) { FATAL("not implemented"); }
 int ProcessPipe::Open   (const char **argv, const char *startdir) { FATAL("not implemented"); }
 int ProcessPipe::Close()                                          { FATAL("not implemented"); }
-#elif defined(WIN32)
 
+#elif defined(WIN32)
 MainCB nt_service_main = 0;
 const char *nt_service_name = 0;
 SERVICE_STATUS_HANDLE nt_service_status_handle = 0;
@@ -317,6 +318,15 @@ bool MultiProcessBuffer::Open() {
 #endif
 
 #endif /* WIN32 */
+
+bool MultiProcessResource::Read(const MultiProcessBuffer &mpb, int type, Serializable *out) {
+  CHECK(mpb.buf);
+  Serializable::ConstStream in(mpb.buf, mpb.len);
+  Serializable::Header hdr;
+  hdr.In(&in);
+  CHECK_EQ(type, hdr.id);
+  return out->Read(&in) == 0;
+}
 
 #if defined(LFL_MOBILE) || !defined(LFL_FLATBUFFERS)
 bool InterProcessComm::StartServerProcess(const string &server_program, const vector<string> &arg) { return false; }
@@ -687,8 +697,8 @@ void ProcessAPIClient::SwapTreeQuery::SwapLayerTree(int id, const MultiProcessLa
 int ProcessAPIClient::HandleWGetRequest(int seq, const IPC::WGetRequest *req, Void) {
   string url = req->url()->str();
   WGetQuery *wget = new WGetQuery(this, seq);
-  app->RunInNetworkThread([=]{ app->net->http_client->WGet(url, 0, bind(&WGetQuery::WGetResponseCB, wget, _1, _2, _3, _4, _5),
-                                                           bind(&WGetQuery::WGetRedirectCB, wget, _1)); });
+  app->RunInNetworkThread([=]{ HTTPClient::WGet(url, 0, bind(&WGetQuery::WGetResponseCB, wget, _1, _2, _3, _4, _5),
+                                                bind(&WGetQuery::WGetRedirectCB, wget, _1)); });
   return IPC::Ok;
 }
 

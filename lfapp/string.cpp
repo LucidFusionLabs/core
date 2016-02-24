@@ -896,4 +896,31 @@ template struct TokenProcessor<char>;
 template struct TokenProcessor<char16_t>;
 template struct TokenProcessor<DrawableBox>;
 
+void Serializable::Header::Out(Stream *o) const { o->Htons( id); o->Htons( seq); }
+void Serializable::Header::In(const Stream *i)  { i->Ntohs(&id); i->Ntohs(&seq); }
+
+string Serializable::ToString()                   const { string ret; ToString(&ret);      return ret; }
+string Serializable::ToString(unsigned short seq) const { string ret; ToString(&ret, seq); return ret; }
+
+void Serializable::ToString(string *out) const {
+  out->resize(Size());
+  return ToString(&(*out)[0], out->size());
+}
+void Serializable::ToString(string *out, unsigned short seq) const {
+  out->resize(Header::size + Size());
+  return ToString(&(*out)[0], out->size(), seq);
+}
+
+void Serializable::ToString(char *buf, int len) const {
+  MutableStream os(buf, len);
+  Out(&os);
+}
+
+void Serializable::ToString(char *buf, int len, unsigned short seq) const {
+  MutableStream os(buf, len);
+  Header hdr = { uint16_t(Id), seq };
+  hdr.Out(&os);
+  Out(&os);
+}
+
 }; // namespace LFL

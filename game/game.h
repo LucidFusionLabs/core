@@ -18,8 +18,10 @@
 
 #ifndef LFL_LFAPP_GAME_H__
 #define LFL_LFAPP_GAME_H__
-namespace LFL {
 
+#include "game/proto.h"
+
+namespace LFL {
 DECLARE_bool(rcon_debug);
 
 struct GameServer;
@@ -388,7 +390,7 @@ struct GameServer : public Connection::Handler {
     if (now > last.time_post_MasterUpdate + MasterUpdateInterval || last.time_post_MasterUpdate == Time(0)) {
       last.time_post_MasterUpdate = now;
       if (!master_sink_url.empty())
-        app->net->http_client->WPost(master_sink_url, "application/octet-stream", local_game_url.c_str(), local_game_url.size());
+        HTTPClient::WPost(master_sink_url, "application/octet-stream", local_game_url.c_str(), local_game_url.size());
     }
 
     int updated = 0;
@@ -1014,7 +1016,7 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
 
   void Refresh() { 
     if (broadcast_ip) SystemNetwork::SendTo(pinger.GetListener()->socket, broadcast_ip, default_port, "ping\n", 5);
-    if (!master_get_url.empty()) app->net->http_client->WGet(master_get_url, 0, bind(&GameMenuGUI::MasterGetResponseCB, this, _1, _2, _3, _4, _5));
+    if (!master_get_url.empty()) HTTPClient::WGet(master_get_url, 0, bind(&GameMenuGUI::MasterGetResponseCB, this, _1, _2, _3, _4, _5));
     master_server_list.clear(); master_server_selected=-1;
   }
 
@@ -1453,6 +1455,6 @@ struct GameMultiTouchControls {
 };
 }; // namespace LFL
 
-#include "lfapp/physics.h"
+#include "game/physics.h"
 
 #endif /* LFL_LFAPP_GAME_H__ */

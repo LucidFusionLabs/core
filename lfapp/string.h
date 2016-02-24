@@ -637,5 +637,122 @@ template <class X> struct TokenProcessor {
   static void FindBoundaryConditions(const ArrayPiece<X> &v, bool *sw, bool *ew);
 };
 
+struct Serializable {
+  template <class X> static void ReadType (X    *addr, const void *v) { if (addr) memcpy(addr,  v, sizeof(X)); }
+  template <class X> static void WriteType(void *addr, const X    &v) { if (addr) memcpy(addr, &v, sizeof(X)); }
+
+  struct Stream {
+    char *buf;
+    size_t size;
+    mutable int offset=0;
+    mutable bool error=0;
+    Stream(char *B, size_t S) : buf(B), size(S) {}
+
+    int Len() const { return size; }
+    int Pos() const { return offset; };
+    int Remaining() const { return size - offset; }
+    int Result() const { return error ? -1 : 0; }
+    const char *Start() const { return buf; }
+    const char *End() const { return buf + size; }
+    const char *Get(int len=0) const {
+      const char *ret = buf + offset;
+      if ((offset += len) > size) { error=1; return 0; }
+      return ret;
+    }
+    virtual char *End()          { FATAL(Void(this), ": ConstStream write"); return 0; }
+    virtual char *Get(int len=0) { FATAL(Void(this), ": ConstStream write"); return 0; }
+
+    template <class X>
+    void AString (const ArrayPiece<X> &in) { auto v = Get(in.Bytes()+sizeof(int)); if (v) { memcpy(v+4, in.ByteData(), in.Bytes()); WriteType<int>(v, htonl(in.Bytes())); } }
+    void BString (const StringPiece   &in) { auto v = Get(in.size ()+sizeof(int)); if (v) { memcpy(v+4, in.data(),     in.size());  WriteType<int>(v, htonl(in.size ())); } }
+    void NTString(const StringPiece   &in) { auto v = Get(in.size ()+1);           if (v) { memcpy(v,   in.data(),     in.size());  v[in.size()]=0; } }
+    void String  (const StringPiece   &in) { auto v = Get(in.size ());             if (v) { memcpy(v,   in.data(),     in.size());                  } }
+
+    void Write8 (const unsigned char  &v) { WriteType(Get(sizeof(v)), v); }
+    void Write8 (const          char  &v) { WriteType(Get(sizeof(v)), v); }
+    void Write16(const unsigned short &v) { WriteType(Get(sizeof(v)), v); }
+    void Write16(const          short &v) { WriteType(Get(sizeof(v)), v); }
+    void Write32(const unsigned int   &v) { WriteType(Get(sizeof(v)), v); }
+    void Write32(const          int   &v) { WriteType(Get(sizeof(v)), v); }
+    void Write32(const unsigned long  &v) { WriteType(Get(sizeof(v)), v); }
+    void Write32(const          long  &v) { WriteType(Get(sizeof(v)), v); }
+
+    void Htons  (const unsigned short &v) { WriteType(Get(sizeof(v)), htons(v)); }
+    void Ntohs  (const unsigned short &v) { WriteType(Get(sizeof(v)), ntohs(v)); }
+    void Htons  (const          short &v) { WriteType(Get(sizeof(v)), htons(v)); }
+    void Ntohs  (const          short &v) { WriteType(Get(sizeof(v)), ntohs(v)); }
+    void Htonl  (const unsigned int   &v) { WriteType(Get(sizeof(v)), htonl(v)); }
+    void Ntohl  (const unsigned int   &v) { WriteType(Get(sizeof(v)), ntohl(v)); }
+    void Htonl  (const          int   &v) { WriteType(Get(sizeof(v)), htonl(v)); }
+    void Ntohl  (const          int   &v) { WriteType(Get(sizeof(v)), ntohl(v)); }
+
+    void Htons(unsigned short *out) const { Read16(out); *out = htons(*out); }
+    void Ntohs(unsigned short *out) const { Read16(out); *out = ntohs(*out); }
+    void Htons(         short *out) const { Read16(out); *out = htons(*out); }
+    void Ntohs(         short *out) const { Read16(out); *out = ntohs(*out); }
+    void Htonl(unsigned int   *out) const { Read32(out); *out = htonl(*out); }
+    void Ntohl(unsigned int   *out) const { Read32(out); *out = ntohl(*out); }
+    void Htonl(         int   *out) const { Read32(out); *out = htonl(*out); }
+    void Ntohl(         int   *out) const { Read32(out); *out = ntohl(*out); }
+    
+    void Read8 (unsigned char   *out) const { ReadType(out, Get(sizeof(*out))); }
+    void Read8 (         char   *out) const { ReadType(out, Get(sizeof(*out))); }
+    void Read16(unsigned short  *out) const { ReadType(out, Get(sizeof(*out))); }
+    void Read16(         short  *out) const { ReadType(out, Get(sizeof(*out))); }
+    void Read32(unsigned int    *out) const { ReadType(out, Get(sizeof(*out))); }
+    void Read32(         int    *out) const { ReadType(out, Get(sizeof(*out))); }
+    void Read32(unsigned long   *out) const { ReadType(out, Get(sizeof(*out))); }
+    void Read32(         long   *out) const { ReadType(out, Get(sizeof(*out))); }
+    void ReadString(StringPiece *out) const { Ntohl(&out->len); out->buf = Get(out->len); }
+
+    template <class X> void ReadUnalignedArray(ArrayPiece<X> *out) const
+    { int l=0; Ntohl(&l); out->assign(reinterpret_cast<const X*>(Get(l)), l/sizeof(X)); }
+  };
+
+  struct ConstStream : public Stream {
+    ConstStream(const char *B, int S) : Stream(const_cast<char*>(B), S) {}
+  };
+
+  struct MutableStream : public Stream {
+    MutableStream(char *B, int S) : Stream(B, S) {}
+    char *End() { return buf + size; }
+    char *Get(int len=0) {
+      char *ret = buf + offset;
+      if ((offset += len) > size) { error=1; return 0; }
+      return ret;
+    }
+  };
+
+  struct Header {
+    static const int size = 4;
+    unsigned short id, seq;
+
+    void Out(Stream *o) const;
+    void In(const Stream *i);
+  };
+
+  int Id;
+  Serializable(int ID) : Id(ID) {}
+  virtual ~Serializable() {}
+
+  virtual int Size() const = 0;
+  virtual int HeaderSize() const = 0;
+  virtual int In(const Stream *i) = 0;
+  virtual void Out(Stream *o) const = 0;
+
+  virtual string ToString() const;
+  virtual string ToString(unsigned short seq) const;
+  virtual void ToString(string *out) const;
+  virtual void ToString(string *out, unsigned short seq) const;
+  virtual void ToString(char *buf, int len) const;
+  virtual void ToString(char *buf, int len, unsigned short seq) const;
+
+  bool HdrCheck(int content_len) { return content_len >= Header::size + HeaderSize(); }
+  bool    Check(int content_len) { return content_len >= Header::size +       Size(); }
+  bool HdrCheck(const Stream *is) { return HdrCheck(is->Len()); }
+  bool    Check(const Stream *is) { return    Check(is->Len()); }
+  int      Read(const Stream *is) { if (!HdrCheck(is)) return -1; return In(is); }
+};
+
 }; // namespace LFL
 #endif // LFL_LFAPP_STRING_H__

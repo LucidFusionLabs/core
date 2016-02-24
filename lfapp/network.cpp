@@ -17,14 +17,6 @@
  */
 
 extern "C" {
-#ifdef LFL_FFMPEG
-#include <libavcodec/avcodec.h>
-#include <libavformat/avformat.h>
-#include <libavcodec/avfft.h>
-#include <libswscale/swscale.h>
-#define AVCODEC_MAX_AUDIO_FRAME_SIZE 192000 
-#endif
-
 #ifdef LFL_PCAP
 #include "pcap/pcap.h"
 #endif
@@ -32,7 +24,7 @@ extern "C" {
 
 #include "lfapp/lfapp.h"
 #include "lfapp/crypto.h"
-#include "lfapp/resolver.h"
+#include "lfapp/net/resolver.h"
 
 #ifdef LFL_OPENSSL
 #include "openssl/bio.h"
@@ -65,13 +57,56 @@ DEFINE_int (udp_idle_sec,   15, "Timeout UDP connections idle for seconds");
 #ifdef LFL_OPENSSL
 DEFINE_string(ssl_certfile, "", "SSL server certificate file");
 DEFINE_string(ssl_keyfile,  "", "SSL server key file");
-SSL_CTX *lfapp_ssl = 0;
 #endif
 
 const int SocketType::Stream    = SOCK_STREAM;
 const int SocketType::Datagram  = SOCK_DGRAM; 
 const int SocketType::SeqPacket = SOCK_SEQPACKET;
 const int SocketType::Raw       = SOCK_RAW;
+
+const char *Protocol::Name(int p) {
+  switch (p) {
+    case TCP:   return "TCP";
+    case UDP:   return "UDP";
+    case UNIX:  return "UNIX";
+    case GPLUS: return "GPLUS";
+    default:    return "";
+  }
+}
+
+const IPV4::Addr IPV4::ANY = INADDR_ANY;
+
+IPV4::Addr IPV4::Parse(const string &ip) { return inet_addr(ip.c_str()); }
+
+void IPV4::ParseCSV(const string &text, vector<IPV4::Addr> *out) {
+  vector<string> addrs; IPV4::Addr addr;
+  Split(text, iscomma, &addrs);
+  for (int i = 0; i < addrs.size(); i++) {
+    if ((addr = Parse(addrs[i])) == INADDR_NONE) FATAL("unknown addr ", addrs[i]);
+    out->push_back(addr);
+  }
+}
+
+void IPV4::ParseCSV(const string &text, set<IPV4::Addr> *out) {
+  vector<string> addrs; IPV4::Addr addr;
+  Split(text, iscomma, &addrs);
+  for (int i = 0; i < addrs.size(); i++) {
+    if ((addr = Parse(addrs[i])) == INADDR_NONE) FATAL("unknown addr ", addrs[i]);
+    out->insert(addr);
+  }
+}
+
+string IPV4::MakeCSV(const vector<IPV4::Addr> &in) {
+  string ret;
+  for (vector<Addr>::const_iterator i = in.begin(); i != in.end(); ++i) StrAppend(&ret, ret.size()?",":"", IPV4::Text(*i));
+  return ret;
+}
+
+string IPV4::MakeCSV(const set<IPV4::Addr> &in) {
+  string ret;
+  for (set<Addr>::const_iterator i = in.begin(); i != in.end(); ++i) StrAppend(&ret, ret.size()?",":"", IPV4::Text(*i));
+  return ret;
+}
 
 IPV4EndpointPool::IPV4EndpointPool(const string &ip_csv) {
   IPV4::ParseCSV(ip_csv, &source_addrs);
@@ -671,7 +706,7 @@ Socket Service::Listen(IPV4::Addr addr, int port, Listener *listener) {
     BIO_set_bind_mode(listener->ssl, BIO_BIND_REUSEADDR);
     if (BIO_do_accept(listener->ssl) <= 0) return ERRORv(-1, "ssl_listen: ", -1);
     BIO_get_fd(listener->ssl, &listener->socket);
-    BIO_set_accept_bios(listener->ssl, BIO_new_ssl(lfapp_ssl, 0));
+    BIO_set_accept_bios(listener->ssl, BIO_new_ssl(app->net->ssl, 0));
 #endif
   } else {
     if ((listener->socket = SystemNetwork::Listen(protocol, addr, port)) == -1)
@@ -731,7 +766,7 @@ Connection *Service::Connect(const string &hostport, int default_port, Callback 
 
 Connection *Service::SSLConnect(SSL_CTX *sslctx, const string &hostport, int default_port, Callback *detach) {
 #ifdef LFL_OPENSSL
-  if (!sslctx) sslctx = lfapp_ssl;
+  if (!sslctx) sslctx = app->net->ssl;
   if (!sslctx) return ERRORv(nullptr, "no ssl: ", -1);
 
   Connection *c = new Connection(this, Connection::Connecting, 0, 0, detach);
@@ -762,7 +797,7 @@ Connection *Service::SSLConnect(SSL_CTX *sslctx, const string &hostport, int def
 
 Connection *Service::SSLConnect(SSL_CTX *sslctx, IPV4::Addr addr, int port, Callback *detach) {
 #ifdef LFL_OPENSSL
-  if (!sslctx) sslctx = lfapp_ssl;
+  if (!sslctx) sslctx = app->net->ssl;
   if (!sslctx) return ERRORv(nullptr, "no ssl: ", -1);
 
   Connection *c = new Connection(this, Connection::Connecting, addr, port, detach);
@@ -843,7 +878,7 @@ void Service::Detach(Connection *c) {
 
 Network::Network() {
   udp_client = make_unique<UDPClient>();
-  http_client = make_unique<HTTPClient>();
+  tcp_client = make_unique<TCPClient>();
   unix_client = make_unique<UnixClient>();
   system_resolver = make_unique<SystemResolver>();
 }
@@ -867,21 +902,21 @@ int Network::Init() {
   SSL_load_error_strings();
   SSL_library_init(); 
 
-  if (bool client_only=0) lfapp_ssl = SSL_CTX_new(SSLv23_client_method());
-  else                    lfapp_ssl = SSL_CTX_new(SSLv23_method());
+  if (bool client_only=0) ssl = SSL_CTX_new(SSLv23_client_method());
+  else                    ssl = SSL_CTX_new(SSLv23_method());
 
-  if (!lfapp_ssl) FATAL("no SSL_CTX: ", ERR_reason_error_string(ERR_get_error()));
-  SSL_CTX_set_verify(lfapp_ssl, SSL_VERIFY_NONE, 0);
+  if (!ssl) FATAL("no SSL_CTX: ", ERR_reason_error_string(ERR_get_error()));
+  SSL_CTX_set_verify(ssl, SSL_VERIFY_NONE, 0);
 
   if (FLAGS_ssl_certfile.size() && FLAGS_ssl_keyfile.size()) {
-    if (!SSL_CTX_use_certificate_file(lfapp_ssl, FLAGS_ssl_certfile.c_str(), SSL_FILETYPE_PEM)) return ERRORv(-1, "SSL_CTX_use_certificate_file ", ERR_reason_error_string(ERR_get_error()));
-    if (!SSL_CTX_use_PrivateKey_file(lfapp_ssl, FLAGS_ssl_keyfile.c_str(), SSL_FILETYPE_PEM)) return ERRORv(-1, "SSL_CTX_use_PrivateKey_file ",  ERR_reason_error_string(ERR_get_error()));
-    if (!SSL_CTX_check_private_key(lfapp_ssl)) return ERRORv(-1, "SSL_CTX_check_private_key ", ERR_reason_error_string(ERR_get_error()));
+    if (!SSL_CTX_use_certificate_file(ssl, FLAGS_ssl_certfile.c_str(), SSL_FILETYPE_PEM)) return ERRORv(-1, "SSL_CTX_use_certificate_file ", ERR_reason_error_string(ERR_get_error()));
+    if (!SSL_CTX_use_PrivateKey_file(ssl, FLAGS_ssl_keyfile.c_str(), SSL_FILETYPE_PEM)) return ERRORv(-1, "SSL_CTX_use_PrivateKey_file ",  ERR_reason_error_string(ERR_get_error()));
+    if (!SSL_CTX_check_private_key(ssl)) return ERRORv(-1, "SSL_CTX_check_private_key ", ERR_reason_error_string(ERR_get_error()));
   }
 #endif
-  Enable(udp_client.get());
-  Enable(http_client.get());
   Enable(unix_client.get());
+  Enable(udp_client.get());
+  Enable(tcp_client.get());
   system_resolver->HandleNoConnections();
   return 0;
 }
@@ -922,8 +957,15 @@ void Network::ConnClose(Service *svc, Connection *c, ServiceEndpointEraseList *r
   svc->Close(c);
   removelist->AddSocket(svc, c->socket);
 }
+
+void Network::ConnCloseDetached(Service *svc, Connection *c) {
+  SystemNetwork::CloseSocket(c->socket);
+  delete c;
+}
+
 void Network::ConnCloseAll(Service *svc) {
-  for (auto i = svc->conn.begin(), e = svc->conn.end(); i != e; ++i) ConnClose(svc, i->second.get(), 0);
+  ServiceEndpointEraseList removelist;
+  for (auto &i : svc->conn) ConnClose(svc, i.second.get(), &removelist);
   svc->conn.clear();
 }
 
@@ -1199,1312 +1241,6 @@ Connection *UDPClient::PersistentConnection(const string &url, const ResponseCB 
 
   c->handler = make_unique<PersistentConnectionHandler>(responseCB, heartbeatCB);
   return c;
-}
-
-/* HTTPClient */
-
-struct HTTPClientHandler {
-  struct Protocol : public Connection::Handler {
-    int result_code, read_header_length, read_content_length, current_chunk_length, current_chunk_read;
-    bool chunked_encoding, full_chunk_cb;
-    string content_type;
-
-    Protocol(bool full_chunks) : full_chunk_cb(full_chunks) { Reset(); }
-    void Reset() {
-      result_code=read_header_length=read_content_length=current_chunk_length=current_chunk_read=0;
-      chunked_encoding=0;
-      content_type.clear();  
-    }
-
-    int Read(Connection *c) {
-      char *cur = c->rb.begin();
-      if (!read_header_length) {
-        char *headers_end = HTTP::FindHeadersEnd(cur);
-        if (!headers_end) return 1;
-
-        StringPiece status_line=StringPiece::Unbounded(cur), h, ct, cl, te;
-        h.buf = NextLine(status_line.buf, true, &status_line.len);
-        h.len = read_header_length = HTTP::GetHeaderLen(cur, headers_end);
-        StringWordIter status_words(status_line);
-        status_words.Next();
-        result_code = atoi(status_words.Next());
-
-        HTTP::GrepHeaders(h.buf, headers_end, 3, "Content-Type", &ct, "Content-Length", &cl, "Transfer-Encoding", &te);
-        current_chunk_length = read_content_length = atoi(BlankNull(cl.data()));
-        chunked_encoding = te.str() == "chunked";
-        content_type = ct.str();
-
-        Headers(c, status_line, h);
-        cur = headers_end+2;
-      }
-      for (;;) {
-        if (chunked_encoding && !current_chunk_length) {
-          char *cur_in = cur;
-          cur += IsNewline(cur);
-          char *chunkHeader = cur;
-          if (!(cur = const_cast<char*>(NextLine(cur)))) { cur=cur_in; break; }
-          current_chunk_length = strtoul(chunkHeader, 0, 16);
-        }
-
-        int rb_left = c->rb.size() - (cur - c->rb.begin());
-        if (rb_left <= 0) break;
-        if (chunked_encoding) {
-          int chunk_left = current_chunk_length - current_chunk_read;
-          if (chunk_left < rb_left) rb_left = chunk_left;
-          if (rb_left < chunk_left && full_chunk_cb) break;
-        }
-
-        if (rb_left) Content(c, StringPiece(cur, rb_left));
-        cur += rb_left;
-        current_chunk_read += rb_left;
-        if (current_chunk_read == current_chunk_length) current_chunk_read = current_chunk_length = 0;
-      }
-      if (cur != c->rb.begin()) c->ReadFlush(cur - c->rb.begin());
-      return 0;
-    }
-    virtual void Headers(Connection *c, const StringPiece &sl, const StringPiece &h) {}
-    virtual void Content(Connection *c, const StringPiece &b) {}
-  };
-
-  struct WGet : public Protocol {
-    Service *svc=0;
-    bool ssl=0;
-    string host, path;
-    int port=0, redirects=0;
-    File *out=0;
-    HTTPClient::ResponseCB cb;
-    StringCB redirect_cb;
-
-    virtual ~WGet() { if (out) INFO("close ", out->Filename()); delete out; }
-    WGet(Service *Svc, bool SSL, const string &Host, int Port, const string &Path, File *Out,
-         const HTTPClient::ResponseCB &CB=HTTPClient::ResponseCB(), const StringCB &RedirCB=StringCB()) :
-      Protocol(false), svc(Svc), ssl(SSL), host(Host), path(Path), port(Port), out(Out), cb(CB), redirect_cb(RedirCB) {}
-
-    bool LoadURL(const string &url, string *prot=0) {
-      return HTTP::ResolveURL(url.c_str(), &ssl, 0, &port, &host, &path, 0, prot);
-    }
-
-    void Close(Connection *c) { if (cb) cb(c, 0, content_type, 0, 0); }
-    int Connected(Connection *c) {
-      return HTTPClient::WriteRequest(c, HTTPServer::Method::GET, host.c_str(), path.c_str(), 0, 0, 0, false);
-    }
-
-    void Headers(Connection *c, const StringPiece &sl, const StringPiece &h) { 
-      if (result_code == 301 && redirects++ < 5) {
-        StringPiece loc;
-        HTTP::GrepHeaders(h.begin(), h.end(), 1, "Location", &loc);
-        string location = loc.str();
-        if (!location.empty()) {
-          if (redirect_cb) redirect_cb(location);
-          else { c->handler = nullptr; return ResolveHost(); }
-        }
-      }
-      if (cb) cb(c, h.data(), content_type, 0, read_content_length);
-    }
-
-    void Content(Connection *c, const StringPiece &b) {
-      if (out) { if (out->Write(b.buf, b.len) != b.len) ERROR("write ", out->Filename()); }
-      if (cb) cb(c, 0, content_type, b.buf, b.len);
-    }
-
-    void ResolveHost() {
-      app->net->system_resolver->NSLookup
-        (host, bind(&HTTPClientHandler::WGet::ResolverResponseCB, this, _1, _2));
-    }
-
-    void ResolverResponseCB(IPV4::Addr ipv4_addr, DNS::Response*) {
-      Connection *c = 0;
-      if (ipv4_addr != IPV4::Addr(-1)) {
-        c =
-#ifdef LFL_OPENSSL
-          ssl ? svc->SSLConnect(lfapp_ssl, ipv4_addr, port) :
-#endif
-          svc->Connect(ipv4_addr, port);
-      }
-      if (!c) { if (cb) cb(0, 0, string(), 0, 0); delete this; }
-      else c->handler = unique_ptr<Connection::Handler>(this);
-    }
-  };
-
-  struct WPost : public WGet {
-    string mimetype, postdata;
-    WPost(Service *Svc, bool SSL, const string &Host, int Port, const string &Path, const string &Mimetype, const char *Postdata, int Postlen,
-          HTTPClient::ResponseCB CB=HTTPClient::ResponseCB()) : WGet(Svc, SSL, Host, Port, Path, 0, CB), mimetype(Mimetype), postdata(Postdata,Postlen) {}
-    int Connected(Connection *c) {
-      return HTTPClient::WriteRequest(c, HTTPServer::Method::POST, host.c_str(), path.c_str(),
-                                      mimetype.data(), postdata.data(), postdata.size(), false);
-    }
-  };
-
-  struct PersistentConnection : public Protocol {
-    HTTPClient::ResponseCB responseCB;
-    PersistentConnection(HTTPClient::ResponseCB RCB) : Protocol(true), responseCB(RCB) {}
-
-    void Close(Connection *c) { if (responseCB) responseCB(c, 0, content_type, 0, 0); }
-    void Content(Connection *c, const StringPiece &b) {
-      if (!read_content_length) FATAL("chunked transfer encoding not supported");
-      if (responseCB) responseCB(c, 0, content_type, b.buf, b.len);
-      Protocol::Reset();
-    }
-  };
-};
-
-int HTTPClient::WriteRequest(Connection *c, int method, const char *host, const char *path, const char *postmime, const char *postdata, int postlen, bool persist) {
-  string hdr, posthdr;
-
-  if (postmime && postdata && postlen)
-    posthdr = StringPrintf("Content-Type: %s\r\nContent-Length: %d\r\n", postmime, postlen);
-
-  hdr = StringPrintf("%s /%s HTTP/1.1\r\nHost: %s\r\n%s%s\r\n",
-                     HTTPServer::Method::name(method), path, host, persist?"":"Connection: close\r\n", posthdr.c_str());
-
-  int ret = c->Write(hdr.data(), hdr.size());
-  if (posthdr.empty()) return ret;
-  if (ret != hdr.size()) return -1;
-  return c->Write(postdata, postlen);
-}
-
-bool HTTPClient::WGet(const string &url, File *out, const ResponseCB &cb, const StringCB &redirect_cb) {
-  unique_ptr<HTTPClientHandler::WGet> handler = make_unique<HTTPClientHandler::WGet>(this, 0, "", 0, "", out, cb, redirect_cb);
-
-  string prot;
-  if (!handler->LoadURL(url, &prot)) {
-    if (prot != "file") return false;
-    string fn = StrCat(!handler->host.empty() ? "/" : "", handler->host , "/", handler->path);
-    string content = LocalFile::FileContents(fn);
-    if (!content.empty() && cb) cb(0, 0, string(), content.data(), content.size());
-    if (cb)                     cb(0, 0, string(), 0,              0);
-    return true;
-  }
-
-  if (!out && !cb) {
-    string fn = BaseName(handler->path);
-    if (fn.empty()) fn = "index.html";
-    unique_ptr<LocalFile> f = make_unique<LocalFile>(StrCat(LFAppDownloadDir(), fn), "w");
-    if (!f->Opened()) return ERRORv(false, "open file");
-    handler->out = f.release();
-  }
-
-  handler.release()->ResolveHost();
-  return true;
-}
-
-bool HTTPClient::WPost(const string &url, const string &mimetype, const char *postdata, int postlen, ResponseCB cb) {
-  bool ssl;
-  int tcp_port;
-  string host, path;
-  if (!HTTP::ResolveURL(url.c_str(), &ssl, 0, &tcp_port, &host, &path)) return 0;
-
-  HTTPClientHandler::WPost *handler = new
-    HTTPClientHandler::WPost(this, ssl, host, tcp_port, path, mimetype, postdata, postlen, cb);
-
-  if (!app->net->system_resolver->QueueResolveRequest
-      (Resolver::Request(host, DNS::Type::A, bind(&HTTPClientHandler::WGet::ResolverResponseCB, handler, _1, _2))))
-  { ERROR("resolver: ", url); delete handler; return 0; }
-  return true;
-}
-
-Connection *HTTPClient::PersistentConnection(const string &url, string *host, string *path, ResponseCB responseCB) {
-  bool ssl; IPV4::Addr ipv4_addr; int tcp_port;
-  if (!HTTP::ResolveURL(url.c_str(), &ssl, &ipv4_addr, &tcp_port, host, path)) return 0;
-
-  Connection *c = 
-#ifdef LFL_OPENSSL
-    ssl ? SSLConnect(lfapp_ssl, ipv4_addr, tcp_port) : 
-#endif
-    Connect(ipv4_addr, tcp_port);
-
-  if (!c) return 0;
-
-  c->handler = make_unique<HTTPClientHandler::PersistentConnection>(responseCB);
-  return c;
-}
-
-/* HTTPServer */
-
-struct HTTPServerConnection : public Connection::Handler {
-  HTTPServer *server;
-  bool persistent;
-  unique_ptr<Connection::Handler> refill;
-
-  struct ClosedCallback {
-    HTTPServer::ConnectionClosedCB cb;
-    ClosedCallback(HTTPServer::ConnectionClosedCB CB) : cb(CB) {}
-    void thunk(Connection *c) { cb(c); }
-  };
-  typedef vector<ClosedCallback> ClosedCB;
-  ClosedCB closedCB;
-
-  struct Dispatcher {
-    int type; const char *url, *args, *headers, *postdata; int reqlen, postlen;
-    void clear() { type=0; url=args=headers=postdata=0; reqlen=postlen=0; }
-    bool empty() { return !type; }
-    Dispatcher() { clear() ; }
-    Dispatcher(int T, const char *U, const char *A, const char *H, int L) : type(T), url(U), args(A), headers(H), postdata(0), reqlen(L), postlen(0) {}
-    int Thunk(HTTPServerConnection *httpserv, Connection *c) {
-      if (c->rb.size() < reqlen) return 0;
-      int ret = httpserv->Dispatch(c, type, url, args, headers, postdata, postlen);
-      c->ReadFlush(reqlen);
-      clear();
-      return ret;
-    }
-  } dispatcher;
-
-  HTTPServerConnection(HTTPServer *s) : server(s), persistent(true) {}
-  void Closed(Connection *c) { for (auto &i : closedCB) i.thunk(c); }
-
-  int Read(Connection *c) {
-    for (;;) {
-      if (!dispatcher.empty()) return dispatcher.Thunk(this, c);
-
-      char *end = HTTP::FindHeadersEnd(c->rb.begin());
-      if (!end) return 0;
-
-      char *start = HTTP::FindHeadersStart(c->rb.begin());
-      if (!start) return -1;
-
-      char *headers = start;
-      int headersLen = HTTP::GetHeaderLen(headers, end);
-      int cmdLen = start - c->rb.begin();
-
-      char *method, *url, *args, *ver;
-      if (HTTP::ParseRequest(c->rb.begin(), &method, &url, &args, &ver) == -1) return -1;
-
-      int type;
-      if      (!strcasecmp(method, "GET"))  type = HTTPServer::Method::GET;
-      else if (!strcasecmp(method, "POST")) type = HTTPServer::Method::POST;
-      else return -1;
-
-      dispatcher = Dispatcher(type, url, args, headers, cmdLen+headersLen);
-
-      StringPiece cnhv;
-      if (type == HTTPServer::Method::POST) {
-        StringPiece ct, cl;
-        HTTP::GrepHeaders(headers, end, 3, "Connection", &cnhv, "Content-Type", &ct, "Content-Length", &cl);
-        dispatcher.postlen = atoi(BlankNull(cl.data()));
-        dispatcher.reqlen += dispatcher.postlen;
-        if (dispatcher.postlen) dispatcher.postdata = headers + headersLen;
-      }
-      else {
-        HTTP::GrepHeaders(headers, end, 1, "Connection", &cnhv);
-      }
-      persistent = PrefixMatch(BlankNull(cnhv.data()), "close\r\n");
-
-      int ret = dispatcher.Thunk(this, c);
-      if (ret < 0) return ret;
-    }
-  }
-
-  int Dispatch(Connection *c, int type, const char *url, const char *args, const char *headers, const char *postdata, int postlen) {
-    /* process request */
-    Timer timer;
-    HTTPServer::Response response = server->Request(c, type, url, args, headers, postdata, postlen);
-    INFOf("%s %s %s %d cl=%d %f ms", c->Name().c_str(), HTTPServer::Method::name(type), url, response.code, response.content_length, timer.GetTime()); 
-    if (response.refill) c->readable = 0;
-
-    /* write response/headers */
-    if (response.write_headers) {
-      if (WriteHeaders(c, &response) < 0) return -1;
-    }
-
-    /* prepare/deliver content */
-    if (response.content) {
-      if (c->Write(response.content, response.content_length) < 0) return -1;
-    }
-    else if (response.refill) {
-      if (refill) return -1;
-      refill = unique_ptr<Connection::Handler>(response.refill);
-    }
-    else return -1;
-
-    return 0;
-  }
-
-  int Flushed(Connection *c) { 
-    if (refill) {
-      int ret;
-      if ((ret = refill->Flushed(c))) return ret;
-      refill.reset();
-      c->readable = 1;
-      return 0;
-    }
-    if (!persistent) return -1;
-    return 0;
-  }
-
-  static int WriteHeaders(Connection *c, HTTPServer::Response *r) {
-    const char *code;
-    if      (r->code == 200) code = "OK";
-    else if (r->code == 400) code = "Bad Request";
-    else return -1;
-
-    char date[64];
-    httptime(date, sizeof(date));
-
-    char h[16384]; int hl=0;
-    hl += sprint(h+hl, sizeof(h)-hl, "HTTP/1.1 %d %s\r\nDate: %s\r\n", r->code, code, date);
-
-    if (r->content_length >= 0) hl += sprint(h+hl, sizeof(h)-hl, "Content-Length: %d\r\n", r->content_length);
-
-    hl += sprint(h+hl, sizeof(h)-hl, "Content-Type: %s\r\n\r\n", r->type);
-
-    return c->Write(h, hl);
-  }
-};
-
-const char *HTTPServer::Method::name(int n) {
-  if      (n == GET)  return "GET";
-  else if (n == POST) return "POST";
-  return 0;
-}
-
-HTTPServer::Response HTTPServer::Response::_400
-(400, "text/html; charset=iso-8859-1", StringPiece::FromString
- ("<!DOCTYPE HTML PUBLIC \"-//IETF//DTD HTML 2.0//EN\">\r\n"
-  "<html><head>\r\n"
-  "<title>400 Bad Request</title>\r\n"
-  "</head><body>\r\n"
-  "<h1>Bad Request</h1>\r\n"
-  "<p>Your browser sent a request that this server could not understand.<br />\r\n"
-  "</p>\r\n"
-  "<hr>\r\n"
-  "</body></html>\r\n"));
-
-int HTTPServer::Connected(Connection *c) { c->handler = make_unique<HTTPServerConnection>(this); return 0; }
-
-HTTPServer::Response HTTPServer::Request(Connection *c, int method, const char *url, const char *args, const char *headers, const char *postdata, int postlen) {
-  Resource *requested = FindOrNull(urlmap, url);
-  if (!requested) return Response::_400;
-  return requested->Request(c, method, url, args, headers, postdata, postlen);
-}
-
-void HTTPServer::connectionClosedCB(Connection *c, ConnectionClosedCB cb) {
-  dynamic_cast<HTTPServerConnection*>(c->handler.get())->closedCB.push_back(HTTPServerConnection::ClosedCallback(cb));
-}
-
-HTTPServer::Response HTTPServer::DebugResource::Request(Connection *c, int, const char *url, const char *args, const char *hdrs, const char *postdata, int postlen) {
-  INFO("url: ", url);
-  INFO("args: ", args);
-  INFO("hdrs: ", hdrs);
-  return Response::_400;
-}
-
-struct HTTPServerFileResourceHandler : public Connection::Handler {
-  LocalFile f;
-  HTTPServerFileResourceHandler(const string &fn) : f(fn, "r") {}
-  int Flushed(Connection *c) {
-    if (!f.Opened()) return 0;
-    c->writable = 1;
-    c->wb.buf.len = f.Read(c->wb.begin(), c->wb.Capacity());
-    if (c->wb.buf.len < c->wb.Capacity()) return 0;
-    return 1;
-  }
-};
-
-HTTPServer::FileResource::FileResource(const string &fn, const char *mimetype) :
-  filename(fn), type(mimetype ? mimetype : "application/octet-stream") {
-  LocalFile f(filename, "r");
-  if (!f.Opened()) return;
-  size = f.Size();
-}
-
-HTTPServer::Response HTTPServer::FileResource::Request(Connection *, int method, const char *url, const char *args, const char *headers, const char *postdata, int postlen) {
-  if (!size) return HTTPServer::Response::_400;
-  return Response(type, size, new HTTPServerFileResourceHandler(filename));
-}
-
-HTTPServer::Response HTTPServer::ConsoleResource::Request(Connection *c, int method, const char *url, const char *args, const char *headers, const char *postdata, int postlen) {
-  StringPiece v;
-  if (args) HTTP::GrepURLArgs(args, 0, 1, "v", &v);
-  screen->shell->Run(v.str());
-  string response = StrCat("<html>Shell::run('", v.str(), "')<br/></html>\n");
-  return HTTPServer::Response("text/html; charset=UTF-8", &response);
-}
-
-#ifdef LFL_FFMPEG
-struct StreamResourceClient : public Connection::Handler {
-  Connection *conn;
-  HTTPServer::StreamResource *resource;
-  AVFormatContext *fctx;
-  microseconds start;
-
-  StreamResourceClient(Connection *c, HTTPServer::StreamResource *r) : conn(c), resource(r), start(0) {
-    resource->subscribers[this] = conn;
-    fctx = avformat_alloc_context();
-    CopyAVFormatContextStreams(fctx, resource->fctx);
-    fctx->max_delay = int(0.7*AV_TIME_BASE);
-  }
-  virtual ~StreamResourceClient() {
-    resource->subscribers.erase(this);
-    FreeAVFormatContext(fctx);
-  }
-
-  int Flushed(Connection *c) { return 1; }
-  void Open() { if (avio_open_dyn_buf(&fctx->pb)) ERROR("avio_open_dyn_buf"); }
-
-  void Write(AVPacket *pkt, microseconds timestamp) {        
-    Open();
-    if (start == microseconds(0)) start = timestamp;
-    if (timestamp != microseconds(0)) {
-      AVStream *st = fctx->streams[pkt->stream_index];
-      AVRational r = {1, 1000000};
-      unsigned t = (timestamp - start).count();
-      pkt->pts = av_rescale_q(t, r, st->time_base);
-    }
-    int ret;
-    if ((ret = av_interleaved_write_frame(fctx, pkt))) ERROR("av_interleaved_write_frame: ", ret);
-    Flush();
-  }
-
-  void WriteHeader() {
-    Open();
-    if (avformat_write_header(fctx, 0)) ERROR("av_write_header");
-    avio_flush(fctx->pb);
-    Flush();
-  }
-
-  void Flush() {
-    int len=0;
-    char *buf=0;
-    if (!(len = avio_close_dyn_buf(fctx->pb, reinterpret_cast<uint8_t**>(&buf)))) return;
-    if (len < 0) return ERROR("avio_close_dyn_buf");
-    if (conn->Write(buf, len) < 0) conn->SetError();
-    av_free(buf);
-  }
-
-  static void FreeAVFormatContext(AVFormatContext *fctx) {
-    for (int i=0; i<fctx->nb_streams; i++) av_freep(&fctx->streams[i]);
-    av_free(fctx);
-  }
-
-  static void CopyAVFormatContextStreams(AVFormatContext *dst, AVFormatContext *src) {
-    if (!dst->streams) {
-      dst->nb_streams = src->nb_streams;
-      dst->streams = FromVoid<AVStream**>(av_mallocz(sizeof(AVStream*) * src->nb_streams));
-    }
-
-    for (int i=0; i<src->nb_streams; i++) {
-      AVStream *s = FromVoid<AVStream*>(av_mallocz(sizeof(AVStream)));
-      *s = *src->streams[i];
-      s->priv_data = 0;
-      s->codec->frame_number = 0;
-      dst->streams[i] = s;
-    }
-
-    dst->oformat = src->oformat;
-    dst->nb_streams = src->nb_streams;
-  }
-
-  static AVFrame *AllocPicture(enum PixelFormat pix_fmt, int width, int height) {
-    AVFrame *picture = avcodec_alloc_frame();
-    if (!picture) return 0;
-    int size = avpicture_get_size(pix_fmt, width, height);
-    uint8_t *picture_buf = FromVoid<uint8_t*>(av_malloc(size));
-    if (!picture_buf) { av_free(picture); return 0; }
-    avpicture_fill(reinterpret_cast<AVPicture*>(picture), picture_buf, pix_fmt, width, height);
-    return picture;
-  } 
-  static void FreePicture(AVFrame *picture) {
-    av_free(picture->data[0]);
-    av_free(picture);
-  }
-
-  static AVFrame *AllocSamples(int num_samples, int num_channels, short **samples_out) {
-    AVFrame *samples = avcodec_alloc_frame();
-    if (!samples) return 0;
-    samples->nb_samples = num_samples;
-    int size = 2 * num_samples * num_channels;
-    uint8_t *samples_buf = FromVoid<uint8_t*>(av_malloc(size + FF_INPUT_BUFFER_PADDING_SIZE));
-    if (!samples_buf) { av_free(samples); return 0; }
-    avcodec_fill_audio_frame(samples, num_channels, AV_SAMPLE_FMT_S16, samples_buf, size, 1);
-    memset(samples_buf+size, 0, FF_INPUT_BUFFER_PADDING_SIZE);
-    if (samples_out) *samples_out = reinterpret_cast<short*>(samples_buf);
-    return samples;
-  }
-  static void FreeSamples(AVFrame *picture) {
-    av_free(picture->data[0]);
-    av_free(picture);
-  }
-};
-
-HTTPServer::StreamResource::~StreamResource() {
-  delete resampler.out;
-  if (audio && audio->codec) avcodec_close(audio->codec);
-  if (video && video->codec) avcodec_close(video->codec);
-  if (picture) StreamResourceClient::FreePicture(picture);
-  if (samples) StreamResourceClient::FreeSamples(picture);
-  StreamResourceClient::FreeAVFormatContext(fctx);
-}
-
-HTTPServer::StreamResource::StreamResource(const char *oft, int Abr, int Vbr) : fctx(0), open(0), abr(Abr), vbr(Vbr), 
-  audio(0), samples(0), sample_data(0), frame(0), channels(0), resamples_processed(0), video(0), picture(0), conv(0) {
-  fctx = avformat_alloc_context();
-  fctx->oformat = av_guess_format(oft, 0, 0);
-  if (!fctx->oformat) { ERROR("guess_format '", oft, "' failed"); return; }
-  INFO("StreamResource: format ", fctx->oformat->mime_type);
-  OpenStreams(FLAGS_lfapp_audio, FLAGS_lfapp_camera);
-}
-
-HTTPServer::Response HTTPServer::StreamResource::Request(Connection *c, int method, const char *url, const char *args, const char *headers, const char *postdata, int postlen) {
-  if (!open) return HTTPServer::Response::_400;
-  Response response(fctx->oformat->mime_type, -1, new StreamResourceClient(c, this), false);
-  if (HTTPServerConnection::WriteHeaders(c, &response) < 0) { c->SetError(); return response; }
-  dynamic_cast<StreamResourceClient*>(response.refill)->WriteHeader();
-  return response;
-}
-
-void HTTPServer::StreamResource::OpenStreams(bool A, bool V) {
-  if (V) {
-    CHECK(!video);
-    video = avformat_new_stream(fctx, 0);
-    video->id = fctx->nb_streams;
-    AVCodecContext *vc = video->codec;
-
-    vc->codec_type = AVMEDIA_TYPE_VIDEO;
-    vc->codec_id = CODEC_ID_H264;
-    vc->codec_tag = av_codec_get_tag(fctx->oformat->codec_tag, vc->codec_id);
-
-    vc->width = 576;
-    vc->height = 342;
-    vc->bit_rate = vbr;
-    vc->time_base.num = 1;
-    vc->time_base.den = FLAGS_camera_fps;
-    vc->pix_fmt = PIX_FMT_YUV420P;
-
-    /* x264 defaults */
-    vc->me_range = 16;
-    vc->max_qdiff = 4;
-    vc->qmin = 10;
-    vc->qmax = 51;
-    vc->qcompress = 0.6;
-
-    if (fctx->oformat->flags & AVFMT_GLOBALHEADER) vc->flags |= CODEC_FLAG_GLOBAL_HEADER;
-
-    AVCodec *codec = avcodec_find_encoder(vc->codec_id);
-    if (avcodec_open2(vc, codec, 0) < 0) return ERROR("avcodec_open2");
-    if (!vc->codec) return ERROR("no video codec");
-
-    if (vc->pix_fmt != PIX_FMT_YUV420P) return ERROR("pix_fmt ", vc->pix_fmt, " != ", PIX_FMT_YUV420P);
-    if (!(picture = StreamResourceClient::AllocPicture(vc->pix_fmt, vc->width, vc->height))) return ERROR("AllocPicture");
-  }
-
-  if (0 && A) {
-    audio = avformat_new_stream(fctx, 0);
-    audio->id = fctx->nb_streams;
-    AVCodecContext *ac = audio->codec;
-
-    ac->codec_type = AVMEDIA_TYPE_AUDIO;
-    ac->codec_id = CODEC_ID_MP3;
-    ac->codec_tag = av_codec_get_tag(fctx->oformat->codec_tag, ac->codec_id);
-
-    ac->channels = FLAGS_chans_in;
-    ac->bit_rate = abr;
-    ac->sample_rate = 22050;
-    ac->sample_fmt = AV_SAMPLE_FMT_S16P;
-    ac->channel_layout = AV_CH_LAYOUT_STEREO;
-
-    if (fctx->oformat->flags & AVFMT_GLOBALHEADER) ac->flags |= CODEC_FLAG_GLOBAL_HEADER;
-
-    AVCodec *codec = avcodec_find_encoder(ac->codec_id);
-    if (avcodec_open2(ac, codec, 0) < 0) return ERROR("avcodec_open2");
-    if (!ac->codec) return ERROR("no audio codec");
-
-    if (!(frame = ac->frame_size)) return ERROR("empty frame size");
-    channels = ac->channels;
-
-    if (!(samples = StreamResourceClient::AllocSamples(frame, channels, &sample_data))) return ERROR("AllocPicture");
-  }
-
-  open = 1;
-}
-
-void HTTPServer::StreamResource::Update(int audio_samples, bool video_sample) {
-  if (!open || !subscribers.size()) return;
-
-  AVCodecContext *vc = video ? video->codec : 0;
-  AVCodecContext *ac = audio ? audio->codec : 0;
-
-  if (ac && audio_samples) {
-    if (!resampler.out) {
-      resampler.out = new RingBuf(ac->sample_rate, ac->sample_rate*channels);
-      resampler.Open(resampler.out, FLAGS_chans_in, FLAGS_sample_rate, Sample::S16,
-                     channels,       ac->sample_rate,   Sample::FromFFMpegId(ac->channel_layout));
-    };
-    RingBuf::Handle L(app->audio->IL.get(), app->audio->IL->ring.back-audio_samples, audio_samples);
-    RingBuf::Handle R(app->audio->IR.get(), app->audio->IR->ring.back-audio_samples, audio_samples);
-    if (resampler.Update(audio_samples, &L, FLAGS_chans_in > 1 ? &R : 0)) open=0;
-  }
-
-  for (;;) {
-    bool asa = ac && resampler.output_available >= resamples_processed + frame * channels;
-    bool vsa = vc && video_sample;
-    if (!asa && !vsa) break;
-    if (vc && !vsa) break;
-
-    if (!vsa) { SendAudio(); continue; }       
-    if (!asa) { SendVideo(); video_sample=0; continue; }
-
-    int audio_behind = resampler.output_available - resamples_processed;
-    microseconds audio_timestamp = resampler.out->ReadTimestamp(0, resampler.out->ring.back - audio_behind);
-
-    if (audio_timestamp < app->camera->image_timestamp) SendAudio();
-    else { SendVideo(); video_sample=0; }
-  }
-}
-
-void HTTPServer::StreamResource::SendAudio() {
-  int behind = resampler.output_available - resamples_processed, got = 0;
-  resamples_processed += frame * channels;
-
-  AVCodecContext *ac = audio->codec;
-  RingBuf::Handle H(resampler.out, resampler.out->ring.back - behind, frame * channels);
-
-  /* linearize */
-  for (int i=0; i<frame; i++) 
-    for (int c=0; c<channels; c++)
-      sample_data[i*channels + c] = H.Read(i*channels + c) * 32768.0;
-
-  /* broadcast */
-  AVPacket pkt;
-  av_init_packet(&pkt);
-  pkt.data = NULL;
-  pkt.size = 0;
-
-  avcodec_encode_audio2(ac, &pkt, samples, &got);
-  if (got) Broadcast(&pkt, H.ReadTimestamp(0));
-
-  av_free_packet(&pkt);
-}
-
-void HTTPServer::StreamResource::SendVideo() {
-  AVCodecContext *vc = video->codec;
-
-  /* convert video */
-  if (!conv)
-    conv = sws_getContext(FLAGS_camera_image_width, FLAGS_camera_image_height, PixelFormat(Pixel::ToFFMpegId(app->camera->image_format)),
-                          vc->width, vc->height, vc->pix_fmt, SWS_BICUBIC, 0, 0, 0);
-
-  int camera_linesize[4] = { app->camera->image_linesize, 0, 0, 0 }, got = 0;
-  sws_scale(conv, reinterpret_cast<uint8_t**>(&app->camera->image), camera_linesize, 0,
-            FLAGS_camera_image_height, picture->data, picture->linesize);
-
-  /* broadcast */
-  AVPacket pkt;
-  av_init_packet(&pkt);
-  pkt.data = NULL;
-  pkt.size = 0;
-
-  avcodec_encode_video2(vc, &pkt, picture, &got);
-  if (got) Broadcast(&pkt, app->camera->image_timestamp);
-
-  av_free_packet(&pkt);
-}
-
-void HTTPServer::StreamResource::Broadcast(AVPacket *pkt, microseconds timestamp) {
-  for (auto i = subscribers.begin(); i != subscribers.end(); i++) {
-    StreamResourceClient *client = FromVoid<StreamResourceClient*>(i->first);
-    client->Write(pkt, timestamp);
-  }
-}
-#endif /* LFL_FFMPEG */
-
-HTTPServer::Response HTTPServer::SessionResource::Request(Connection *c, int method, const char *url, const char *args, const char *headers, const char *postdata, int postlen) {
-  Resource *resource;
-  if (!(resource = FindOrNull(connmap, c))) {
-    resource = Open();
-    connmap[c] = resource;
-    connectionClosedCB(c, bind(&SessionResource::ConnectionClosedCB, this, _1));
-  }
-  return resource->Request(c, method, url, args, headers, postdata, postlen);
-}
-
-void HTTPServer::SessionResource::ConnectionClosedCB(Connection *c) {
-  auto i = connmap.find(c);
-  if (i == connmap.end()) return;
-  Resource *resource = (*i).second;
-  connmap.erase(i);
-  Close(resource);
-}
-
-/* SSHClient */
-
-#ifdef LFL_SSH_DEBUG
-#define SSHTrace(...) INFO(__VA_ARGS__)
-#else
-#define SSHTrace(...)
-#endif
-
-struct SSHClientConnection : public Connection::Handler {
-  enum { INIT=0, FIRST_KEXINIT=1, FIRST_KEXREPLY=2, FIRST_NEWKEYS=3, KEXINIT=4, KEXREPLY=5, NEWKEYS=6 };
-
-  SSHClient::ResponseCB cb;
-  SSHClient::LoadPasswordCB load_password_cb;
-  SSHClient::SavePasswordCB save_password_cb;
-  string V_C, V_S, KEXINIT_C, KEXINIT_S, H_text, session_id, integrity_c2s, integrity_s2c, decrypt_buf, host, user, pw;
-  int state=0, packet_len=0, packet_MAC_len=0, MAC_len_c=0, MAC_len_s=0, encrypt_block_size=0, decrypt_block_size=0;
-  unsigned sequence_number_c2s=0, sequence_number_s2c=0, password_prompts=0, userauth_fail=0;
-  bool guessed_c=0, guessed_s=0, guessed_right_c=0, guessed_right_s=0, loaded_pw=0;
-  unsigned char padding=0, packet_id=0;
-  pair<int, int> pty_channel;
-  std::mt19937 rand_eng;
-  BigNumContext ctx;
-  BigNum K;
-  Crypto::DiffieHellman dh;
-  Crypto::EllipticCurveDiffieHellman ecdh;
-  Crypto::DigestAlgo kex_hash;
-  Crypto::Cipher encrypt, decrypt;
-  Crypto::CipherAlgo cipher_algo_c2s=0, cipher_algo_s2c=0;
-  Crypto::MACAlgo mac_algo_c2s=0, mac_algo_s2c=0;
-  ECDef curve_id;
-  int kex_method=0, hostkey_type=0, mac_prefix_c2s=0, mac_prefix_s2c=0, window_c=0, window_s=0;
-  int initial_window_size=1048576, max_packet_size=32768, term_width=80, term_height=25;
-
-  SSHClientConnection(const SSHClient::ResponseCB &CB, const string &H) : cb(CB), V_C("SSH-2.0-LFL_1.0"), host(H), rand_eng(std::random_device{}()),
-    pty_channel(1,-1), ctx(NewBigNumContext()), K(NewBigNum()) { Crypto::CipherInit(&encrypt); Crypto::CipherInit(&decrypt); }
-  virtual ~SSHClientConnection() { ClearPassword(); FreeBigNumContext(ctx); FreeBigNum(K); Crypto::CipherFree(&encrypt); Crypto::CipherFree(&decrypt); }
-
-  void Close(Connection *c) { cb(c, StringPiece()); }
-  int Connected(Connection *c) {
-    if (state != INIT) return -1;
-    string version_text = StrCat(V_C, "\r\n");
-    if (c->WriteFlush(version_text) != version_text.size()) return ERRORv(-1, c->Name(), ": write");
-    if (!WriteKeyExchangeInit(c, false)) return ERRORv(-1, c->Name(), ": write");
-    return 0;
-  }
-
-  int Read(Connection *c) {
-    if (state == INIT) {
-      int processed = 0;
-      StringLineIter lines(c->rb.buf, StringLineIter::Flag::BlankLines);
-      for (string line = lines.NextString(); !lines.Done(); line = lines.NextString()) {
-        SSHTrace(c->Name(), ": SSH_INIT: ", line);
-        processed = lines.next_offset;
-        if (PrefixMatch(line, "SSH-")) { V_S=line; state++; break; }
-      }
-      c->ReadFlush(processed);
-      if (state == INIT) return 0;
-    }
-    for (;;) {
-      bool encrypted = state > FIRST_NEWKEYS;
-      if (!packet_len) {
-        packet_MAC_len = MAC_len_s ? X_or_Y(mac_prefix_s2c, MAC_len_s) : 0;
-        if (c->rb.size() < SSH::BinaryPacketHeaderSize || (encrypted && c->rb.size() < decrypt_block_size)) return 0;
-        if (encrypted) decrypt_buf = ReadCipher(c, StringPiece(c->rb.begin(), decrypt_block_size));
-        const char *packet_text = encrypted ? decrypt_buf.data() : c->rb.begin();
-        packet_len = 4 + SSH::BinaryPacketLength(packet_text, &padding, &packet_id) + packet_MAC_len;
-      }
-      if (c->rb.size() < packet_len) return 0;
-      if (encrypted) decrypt_buf +=
-        ReadCipher(c, StringPiece(c->rb.begin() + decrypt_block_size, packet_len - decrypt_block_size - packet_MAC_len));
-
-      sequence_number_s2c++;
-      const char *packet_text = encrypted ? decrypt_buf.data() : c->rb.begin();
-      Serializable::ConstStream s(packet_text + SSH::BinaryPacketHeaderSize,
-                                  packet_len  - SSH::BinaryPacketHeaderSize - packet_MAC_len);
-      if (encrypted && packet_MAC_len) {
-        string mac = SSH::MAC(mac_algo_s2c, MAC_len_s, StringPiece(decrypt_buf.data(), packet_len - packet_MAC_len),
-                              sequence_number_s2c-1, integrity_s2c, mac_prefix_s2c);
-        if (mac != string(c->rb.begin() + packet_len - packet_MAC_len, packet_MAC_len))
-          return ERRORv(-1, c->Name(), ": verify MAC failed");
-      }
-
-      int v;
-      switch (packet_id) {
-        case SSH::MSG_DISCONNECT::ID: {
-          SSH::MSG_DISCONNECT msg;
-          if (msg.In(&s)) return ERRORv(-1, c->Name(), ": read MSG_DISCONNECT");
-          SSHTrace(c->Name(), ": MSG_DISCONNECT ", msg.reason_code, " ", msg.description.str());
-        } break;
-
-        case SSH::MSG_DEBUG::ID: {
-          SSH::MSG_DEBUG msg;
-          if (msg.In(&s)) return ERRORv(-1, c->Name(), ": read MSG_DEBUG");
-          SSHTrace(c->Name(), ": MSG_DEBUG ", msg.message.str());
-        } break;
-
-        case SSH::MSG_KEXINIT::ID: {
-          state = state == FIRST_KEXINIT ? FIRST_KEXREPLY : KEXREPLY;
-          SSH::MSG_KEXINIT msg;
-          if (msg.In(&s)) return ERRORv(-1, c->Name(), ": read MSG_KEXINIT");
-          SSHTrace(c->Name(), ": MSG_KEXINIT ", msg.DebugString());
-
-          int cipher_id_c2s=0, cipher_id_s2c=0, mac_id_c2s=0, mac_id_s2c=0;
-          guessed_s = msg.first_kex_packet_follows;
-          KEXINIT_S.assign(packet_text, packet_len - packet_MAC_len);
-          if (!SSH::KEX   ::PreferenceIntersect(msg.kex_algorithms,                         &kex_method))    return ERRORv(-1, c->Name(), ": negotiate kex");
-          if (!SSH::Key   ::PreferenceIntersect(msg.server_host_key_algorithms,             &hostkey_type))  return ERRORv(-1, c->Name(), ": negotiate hostkey");
-          if (!SSH::Cipher::PreferenceIntersect(msg.encryption_algorithms_client_to_server, &cipher_id_c2s)) return ERRORv(-1, c->Name(), ": negotiate c2s cipher");
-          if (!SSH::Cipher::PreferenceIntersect(msg.encryption_algorithms_server_to_client, &cipher_id_s2c)) return ERRORv(-1, c->Name(), ": negotiate s2c cipher");
-          if (!SSH::MAC   ::PreferenceIntersect(msg.mac_algorithms_client_to_server,        &mac_id_c2s))    return ERRORv(-1, c->Name(), ": negotiate c2s mac");
-          if (!SSH::MAC   ::PreferenceIntersect(msg.mac_algorithms_server_to_client,        &mac_id_s2c))    return ERRORv(-1, c->Name(), ": negotiate s2c mac");
-          guessed_right_s = kex_method == SSH::KEX::Id(Split(msg.kex_algorithms, iscomma)) && hostkey_type == SSH::Key::Id(Split(msg.server_host_key_algorithms, iscomma));
-          guessed_right_c = kex_method == 1                                                && hostkey_type == 1;
-          cipher_algo_c2s = SSH::Cipher::Algo(cipher_id_c2s, &encrypt_block_size);
-          cipher_algo_s2c = SSH::Cipher::Algo(cipher_id_s2c, &decrypt_block_size);
-          mac_algo_c2s = SSH::MAC::Algo(mac_id_c2s, &mac_prefix_c2s);
-          mac_algo_s2c = SSH::MAC::Algo(mac_id_s2c, &mac_prefix_s2c);
-          INFO(c->Name(), ": ssh negotiated { kex=", SSH::KEX::Name(kex_method), ", hostkey=", SSH::Key::Name(hostkey_type),
-               cipher_algo_c2s == cipher_algo_s2c ? StrCat(", cipher=", Crypto::CipherAlgos::Name(cipher_algo_c2s)) : StrCat(", cipher_c2s=", Crypto::CipherAlgos::Name(cipher_algo_c2s), ", cipher_s2c=", Crypto::CipherAlgos::Name(cipher_algo_s2c)),
-               mac_id_c2s      == mac_id_s2c      ? StrCat(", mac=",               SSH::MAC::Name(mac_id_c2s))      : StrCat(", mac_c2s=",               SSH::MAC::Name(mac_id_c2s),      ", mac_s2c=",               SSH::MAC::Name(mac_id_s2c)),
-               " }");
-          SSHTrace(c->Name(), ": block_size=", encrypt_block_size, ",", decrypt_block_size, " mac_len=", MAC_len_c, ",", MAC_len_s);
-
-          if (SSH::KEX::EllipticCurveDiffieHellman(kex_method)) {
-            switch (kex_method) {
-              case SSH::KEX::ECDH_SHA2_NISTP256: curve_id=Crypto::EllipticCurve::NISTP256(); kex_hash=Crypto::DigestAlgos::SHA256(); break;
-              case SSH::KEX::ECDH_SHA2_NISTP384: curve_id=Crypto::EllipticCurve::NISTP384(); kex_hash=Crypto::DigestAlgos::SHA384(); break;
-              case SSH::KEX::ECDH_SHA2_NISTP521: curve_id=Crypto::EllipticCurve::NISTP521(); kex_hash=Crypto::DigestAlgos::SHA512(); break;
-              default:                           return ERRORv(-1, c->Name(), ": ecdh curve");
-            }
-            if (!ecdh.GeneratePair(curve_id, ctx)) return ERRORv(-1, c->Name(), ": generate ecdh key");
-            if (!WriteClearOrEncrypted(c, SSH::MSG_KEX_ECDH_INIT(ecdh.c_text))) return ERRORv(-1, c->Name(), ": write");
-
-          } else if (SSH::KEX::DiffieHellmanGroupExchange(kex_method)) {
-            if      (kex_method == SSH::KEX::DHGEX_SHA1)   kex_hash = Crypto::DigestAlgos::SHA1();
-            else if (kex_method == SSH::KEX::DHGEX_SHA256) kex_hash = Crypto::DigestAlgos::SHA256();
-            if (!WriteClearOrEncrypted(c, SSH::MSG_KEX_DH_GEX_REQUEST(dh.gex_min, dh.gex_max, dh.gex_pref)))
-              return ERRORv(-1, c->Name(), ": write");
-
-          } else if (SSH::KEX::DiffieHellman(kex_method)) {
-            int secret_bits=0;
-            if      (kex_method == SSH::KEX::DH14_SHA1) dh.p = Crypto::DiffieHellman::Group14Modulus(dh.g, dh.p, &secret_bits);
-            else if (kex_method == SSH::KEX::DH1_SHA1)  dh.p = Crypto::DiffieHellman::Group1Modulus (dh.g, dh.p, &secret_bits);
-            kex_hash = Crypto::DigestAlgos::SHA1();
-            if (!dh.GeneratePair(secret_bits, ctx)) return ERRORv(-1, c->Name(), ": generate dh key");
-            if (!WriteClearOrEncrypted(c, SSH::MSG_KEXDH_INIT(dh.e))) return ERRORv(-1, c->Name(), ": write");
-
-          } else return ERRORv(-1, c->Name(), "unkown kex method: ", kex_method);
-        } break;
-
-        case SSH::MSG_KEXDH_REPLY::ID:
-        case SSH::MSG_KEX_DH_GEX_REPLY::ID: {
-          if (state != FIRST_KEXREPLY && state != KEXREPLY) return ERRORv(-1, c->Name(), ": unexpected state ", state);
-          if (guessed_s && !guessed_right_s && !(guessed_s=0)) { INFO(c->Name(), ": server guessed wrong, ignoring packet"); break; }
-          if (packet_id == SSH::MSG_KEXDH_REPLY::ID && SSH::KEX::EllipticCurveDiffieHellman(kex_method)) {
-            SSH::MSG_KEX_ECDH_REPLY msg; // MSG_KEX_ECDH_REPLY and MSG_KEXDH_REPLY share ID 31
-            if (msg.In(&s)) return ERRORv(-1, c->Name(), ": read MSG_KEX_ECDH_REPLY");
-            SSHTrace(c->Name(), ": MSG_KEX_ECDH_REPLY");
-
-            ecdh.s_text = msg.q_s.str();
-            ECPointSetData(ecdh.g, ecdh.s, ecdh.s_text);
-            if (!ecdh.ComputeSecret(&K, ctx)) return ERRORv(-1, c->Name(), ": ecdh");
-            if ((v = ComputeExchangeHashAndVerifyHostKey(c, msg.k_s, msg.h_sig)) != 1) return ERRORv(-1, c->Name(), ": verify hostkey failed: ", v);
-            // fall forward
-
-          } else if (packet_id == SSH::MSG_KEXDH_REPLY::ID && SSH::KEX::DiffieHellmanGroupExchange(kex_method)) {
-            SSH::MSG_KEX_DH_GEX_GROUP msg(dh.p, dh.g); // MSG_KEX_DH_GEX_GROUP and MSG_KEXDH_REPLY share ID 31
-            if (msg.In(&s)) return ERRORv(-1, c->Name(), ": read MSG_KEX_DH_GEX_GROUP");
-            SSHTrace(c->Name(), ": MSG_KEX_DH_GEX_GROUP");
-
-            if (!dh.GeneratePair(256, ctx)) return ERRORv(-1, c->Name(), ": generate dh_gex key");
-            if (!WriteClearOrEncrypted(c, SSH::MSG_KEX_DH_GEX_INIT(dh.e))) return ERRORv(-1, c->Name(), ": write");
-            break;
-
-          } else {
-            SSH::MSG_KEXDH_REPLY msg(dh.f);
-            if (msg.In(&s)) return ERRORv(-1, c->Name(), ": read MSG_KEXDH_REPLY");
-            SSHTrace(c->Name(), ": MSG_KEXDH_REPLY");
-            if (!dh.ComputeSecret(&K, ctx)) return ERRORv(-1, c->Name(), ": dh");
-            if ((v = ComputeExchangeHashAndVerifyHostKey(c, msg.k_s, msg.h_sig)) != 1) return ERRORv(-1, c->Name(), ": verify hostkey failed: ", v);
-            // fall forward
-          }
-
-          state = state == FIRST_KEXREPLY ? FIRST_NEWKEYS : NEWKEYS;
-          if (!WriteClearOrEncrypted(c, SSH::MSG_NEWKEYS())) return ERRORv(-1, c->Name(), ": write");
-        } break;
-
-        case SSH::MSG_NEWKEYS::ID: {
-          if (state != FIRST_NEWKEYS && state != NEWKEYS) return ERRORv(-1, c->Name(), ": unexpected state ", state);
-          SSHTrace(c->Name(), ": MSG_NEWKEYS");
-          int key_len_c = Crypto::CipherAlgos::KeySize(cipher_algo_c2s), key_len_s = Crypto::CipherAlgos::KeySize(cipher_algo_s2c);
-          if ((v = InitCipher(c, &encrypt, cipher_algo_c2s, DeriveKey(kex_hash, 'A', 24), DeriveKey(kex_hash, 'C', key_len_c), true))  != 1) return ERRORv(-1, c->Name(), ": init c->s cipher ", v, " keylen=", key_len_c);
-          if ((v = InitCipher(c, &decrypt, cipher_algo_s2c, DeriveKey(kex_hash, 'B', 24), DeriveKey(kex_hash, 'D', key_len_s), false)) != 1) return ERRORv(-1, c->Name(), ": init s->c cipher ", v, " keylen=", key_len_s);
-          if ((MAC_len_c = Crypto::MACAlgos::HashSize(mac_algo_c2s)) <= 0) return ERRORv(-1, c->Name(), ": invalid maclen ", encrypt_block_size);
-          if ((MAC_len_s = Crypto::MACAlgos::HashSize(mac_algo_s2c)) <= 0) return ERRORv(-1, c->Name(), ": invalid maclen ", encrypt_block_size);
-          integrity_c2s = DeriveKey(kex_hash, 'E', MAC_len_c);
-          integrity_s2c = DeriveKey(kex_hash, 'F', MAC_len_s);
-          state = NEWKEYS;
-          if (!WriteCipher(c, SSH::MSG_SERVICE_REQUEST("ssh-userauth"))) return ERRORv(-1, c->Name(), ": write");
-        } break;
-
-        case SSH::MSG_SERVICE_ACCEPT::ID: {
-          SSHTrace(c->Name(), ": MSG_SERVICE_ACCEPT");
-          if (!WriteCipher(c, SSH::MSG_USERAUTH_REQUEST(user, "ssh-connection", "keyboard-interactive", "", "", "")))
-            return ERRORv(-1, c->Name(), ": write");
-        } break;
-
-        case SSH::MSG_USERAUTH_FAILURE::ID: {
-          SSH::MSG_USERAUTH_FAILURE msg;
-          if (msg.In(&s)) return ERRORv(-1, c->Name(), ": read MSG_USERAUTH_FAILURE");
-          SSHTrace(c->Name(), ": MSG_USERAUTH_FAILURE: auth_left='", msg.auth_left.str(), "'");
-
-          if (!loaded_pw) ClearPassword();
-          if (!userauth_fail++) { cb(c, "Password:"); if ((password_prompts=1)) LoadPassword(c); }
-          else return ERRORv(-1, c->Name(), ": authorization failed");
-        } break;
-
-        case SSH::MSG_USERAUTH_SUCCESS::ID: {
-          SSHTrace(c->Name(), ": MSG_USERAUTH_SUCCESS");
-          window_s = initial_window_size;
-          if (!loaded_pw) { if (save_password_cb) save_password_cb(host, user, pw); ClearPassword(); }
-          if (!WriteCipher(c, SSH::MSG_CHANNEL_OPEN("session", pty_channel.first, initial_window_size, max_packet_size)))
-            return ERRORv(-1, c->Name(), ": write");
-        } break;
-
-        case SSH::MSG_USERAUTH_INFO_REQUEST::ID: {
-          SSH::MSG_USERAUTH_INFO_REQUEST msg;
-          if (msg.In(&s)) return ERRORv(-1, c->Name(), ": read MSG_USERAUTH_INFO_REQUEST");
-          SSHTrace(c->Name(), ": MSG_USERAUTH_INFO_REQUEST prompts=", msg.prompt.size());
-          if (!msg.instruction.empty()) { SSHTrace(c->Name(), ": instruction: ", msg.instruction.str()); cb(c, msg.instruction); }
-          for (auto &i : msg.prompt)    { SSHTrace(c->Name(), ": prompt: ",      i.text.str());          cb(c, i.text); }
-
-          if ((password_prompts = msg.prompt.size())) LoadPassword(c);
-          else if (!WriteCipher(c, SSH::MSG_USERAUTH_INFO_RESPONSE())) return ERRORv(-1, c->Name(), ": write");
-        } break;
-
-        case SSH::MSG_CHANNEL_OPEN_CONFIRMATION::ID: {
-          SSH::MSG_CHANNEL_OPEN_CONFIRMATION msg;
-          if (msg.In(&s)) return ERRORv(-1, c->Name(), ": read MSG_CHANNEL_OPEN_CONFIRMATION");
-          SSHTrace(c->Name(), ": MSG_CHANNEL_OPEN_CONFIRMATION");
-          pty_channel.second = msg.sender_channel;
-          window_c = msg.initial_win_size;
-
-          if (!WriteCipher(c, SSH::MSG_CHANNEL_REQUEST
-                           (pty_channel.second, "pty-req", point(term_width, term_height),
-                            point(term_width*8, term_height*12), "screen", "", true))) return ERRORv(-1, c->Name(), ": write");
-
-          if (!WriteCipher(c, SSH::MSG_CHANNEL_REQUEST(pty_channel.second, "shell", "", true))) return ERRORv(-1, c->Name(), ": write");
-        } break;
-
-        case SSH::MSG_CHANNEL_WINDOW_ADJUST::ID: {
-          SSH::MSG_CHANNEL_WINDOW_ADJUST msg;
-          if (msg.In(&s)) return ERRORv(-1, c->Name(), ": read MSG_CHANNEL_WINDOW_ADJUST");
-          SSHTrace(c->Name(), ": MSG_CHANNEL_WINDOW_ADJUST add ", msg.bytes_to_add, " to channel ", msg.recipient_channel);
-          window_c += msg.bytes_to_add;
-        } break;
-
-        case SSH::MSG_CHANNEL_DATA::ID: {
-          SSH::MSG_CHANNEL_DATA msg;
-          if (msg.In(&s)) return ERRORv(-1, c->Name(), ": read MSG_CHANNEL_DATA");
-          SSHTrace(c->Name(), ": MSG_CHANNEL_DATA: channel ", msg.recipient_channel, ": ", msg.data.size(), " bytes");
-
-          window_s -= (packet_len - packet_MAC_len - 4);
-          if (window_s < initial_window_size / 2) {
-            if (!WriteClearOrEncrypted(c, SSH::MSG_CHANNEL_WINDOW_ADJUST(pty_channel.second, initial_window_size)))
-              return ERRORv(-1, c->Name(), ": write");
-            window_s += initial_window_size;
-          }
-
-          cb(c, msg.data);
-        } break;
-
-        case SSH::MSG_CHANNEL_SUCCESS::ID: {
-          SSHTrace(c->Name(), ": MSG_CHANNEL_SUCCESS");
-        } break;
-
-        case SSH::MSG_CHANNEL_FAILURE::ID: {
-          SSHTrace(c->Name(), ": MSG_CHANNEL_FAILURE");
-        } break;
-
-        default: {
-          ERROR(c->Name(), " unknown packet number ", int(packet_id), " len ", packet_len);
-        } break;
-      }
-      c->ReadFlush(packet_len);
-      packet_len = 0;
-    }
-    return 0;
-  }
-
-  bool WriteKeyExchangeInit(Connection *c, bool guess) {
-    string cipher_pref = SSH::Cipher::PreferenceCSV(), mac_pref = SSH::MAC::PreferenceCSV();
-    KEXINIT_C = SSH::MSG_KEXINIT(RandBytes(16, rand_eng), SSH::KEX::PreferenceCSV(), SSH::Key::PreferenceCSV(),
-                                 cipher_pref, cipher_pref, mac_pref, mac_pref, "none", "none",
-                                 "", "", guess).ToString(rand_eng, 8, &sequence_number_c2s);
-    SSHTrace(c->Name(), " wrote KEXINIT_C { kex=", SSH::KEX::PreferenceCSV(), " key=", SSH::Key::PreferenceCSV(),
-             " cipher=", cipher_pref, " mac=", mac_pref, " }");
-    return c->WriteFlush(KEXINIT_C) == KEXINIT_C.size();
-  }
-
-  int ComputeExchangeHashAndVerifyHostKey(Connection *c, const StringPiece &k_s, const StringPiece &h_sig) {
-    H_text = SSH::ComputeExchangeHash(kex_method, kex_hash, V_C, V_S, KEXINIT_C, KEXINIT_S, k_s, K, &dh, &ecdh);
-    if (state == FIRST_KEXREPLY) session_id = H_text;
-    SSHTrace(c->Name(), ": H = \"", CHexEscape(H_text), "\"");
-    return SSH::VerifyHostKey(H_text, hostkey_type, k_s, h_sig);
-  }
-
-  string DeriveKey(Crypto::DigestAlgo algo, char ID, int bytes) {
-    return SSH::DeriveKey(algo, session_id, H_text, K, ID, bytes);
-  }
-
-  int InitCipher(Connection *c, Crypto::Cipher *cipher, Crypto::CipherAlgo algo, const string &IV, const string &key, bool dir) {
-    SSHTrace(c->Name(), ": ", dir ? "C->S" : "S->C", " IV  = \"", CHexEscape(IV),  "\"");
-    SSHTrace(c->Name(), ": ", dir ? "C->S" : "S->C", " key = \"", CHexEscape(key), "\"");
-    Crypto::CipherFree(cipher);
-    Crypto::CipherInit(cipher);
-    return Crypto::CipherOpen(cipher, algo, dir, key, IV);
-  }
-
-  string ReadCipher(Connection *c, const StringPiece &m) {
-    string dec_text(m.size(), 0);
-    if (Crypto::CipherUpdate(&decrypt, m, &dec_text[0], dec_text.size()) != 1) return ERRORv("", c->Name(), ": decrypt failed");
-    return dec_text;
-  }
-
-  int WriteCipher(Connection *c, const string &m) {
-    string enc_text(m.size(), 0);
-    if (Crypto::CipherUpdate(&encrypt, m, &enc_text[0], enc_text.size()) != 1) return ERRORv(-1, c->Name(), ": encrypt failed");
-    enc_text += SSH::MAC(mac_algo_c2s, MAC_len_c, m, sequence_number_c2s-1, integrity_c2s, mac_prefix_c2s);
-    return c->WriteFlush(enc_text) == m.size() + X_or_Y(mac_prefix_c2s, MAC_len_c);
-  }
-
-  bool WriteCipher(Connection *c, const SSH::Serializable &m) {
-    string text = m.ToString(rand_eng, encrypt_block_size, &sequence_number_c2s);
-    return WriteCipher(c, text);
-  }
-
-  bool WriteClearOrEncrypted(Connection *c, const SSH::Serializable &m) {
-    if (state > FIRST_NEWKEYS) return WriteCipher(c, m);
-    string text = m.ToString(rand_eng, encrypt_block_size, &sequence_number_c2s);
-    return c->WriteFlush(text) == text.size();
-  }
-
-  int WriteChannelData(Connection *c, const StringPiece &b) {
-    if (!password_prompts) {
-      if (!WriteCipher(c, SSH::MSG_CHANNEL_DATA(pty_channel.second, b))) return ERRORv(-1, c->Name(), ": write");
-      window_c -= (b.size() - 4);
-    } else {
-      bool cr = b.len && b.back() == '\r';
-      pw.append(b.data(), b.size() - cr);
-      if (cr && !WritePassword(c)) return ERRORv(-1, c->Name(), ": write");
-    }
-    return b.size();
-  }
-
-  bool WritePassword(Connection *c) {
-    cb(c, "\r\n");
-    bool success = false;
-    if (userauth_fail) {
-      success = WriteCipher(c, SSH::MSG_USERAUTH_REQUEST(user, "ssh-connection", "password", "", pw, ""));
-    } else {
-      vector<StringPiece> prompt(password_prompts);
-      prompt.back() = StringPiece(pw.data(), pw.size());
-      success = WriteCipher(c, SSH::MSG_USERAUTH_INFO_RESPONSE(prompt));
-    }
-    password_prompts = 0;
-    return success;
-  }
-
-  void LoadPassword(Connection *c) {
-    if ((loaded_pw = load_password_cb && load_password_cb(host, user, &pw))) WritePassword(c);
-    if (loaded_pw) ClearPassword();
-  }
-
-  void ClearPassword() { pw.assign(pw.size(), ' '); pw.clear(); }
-  void SetPasswordCB(const SSHClient::LoadPasswordCB &L, const SSHClient::SavePasswordCB &S) { load_password_cb=L; save_password_cb=S; }
-  int SetTerminalWindowSize(Connection *c, int w, int h) {
-    term_width = w;
-    term_height = h;
-    if (!c || c->state != Connection::Connected || state <= FIRST_NEWKEYS || pty_channel.second < 0) return 0;
-    if (!WriteCipher(c, SSH::MSG_CHANNEL_REQUEST(pty_channel.second, "window-change", point(term_width, term_height),
-                                                 point(term_width*8, term_height*12),
-                                                 "", "", false))) return ERRORv(-1, c->Name(), ": write");
-    return 0;
-  }
-};
-
-Connection *SSHClient::Open(const string &hostport, const SSHClient::ResponseCB &cb, Callback *detach) { 
-  Connection *c = Connect(hostport, 22, detach);
-  if (!c) return 0;
-  c->handler = make_unique<SSHClientConnection>(cb, hostport);
-  return c;
-}
-int  SSHClient::WriteChannelData     (Connection *c, const StringPiece &b)                     { return dynamic_cast<SSHClientConnection*>(c->handler.get())->WriteChannelData(c, b); }
-int  SSHClient::SetTerminalWindowSize(Connection *c, int w, int h)                             { return dynamic_cast<SSHClientConnection*>(c->handler.get())->SetTerminalWindowSize(c, w, h); }
-void SSHClient::SetUser              (Connection *c, const string &user)                       { dynamic_cast<SSHClientConnection*>(c->handler.get())->user = user; }
-void SSHClient::SetPasswordCB(Connection *c, const LoadPasswordCB &L, const SavePasswordCB &S) { dynamic_cast<SSHClientConnection*>(c->handler.get())->SetPasswordCB(L, S); }
-
-/* SMTPClient */
-
-struct SMTPClientConnection : public Connection::Handler {
-  enum { INIT=0, SENT_HELO=1, READY=2, MAIL_FROM=3, RCPT_TO=4, SENT_DATA=5, SENDING=6, RESETING=7, QUITING=8 };
-  SMTPClient *server;
-  SMTPClient::DeliverableCB deliverable_cb;
-  SMTPClient::DeliveredCB delivered_cb;
-  int state=0, rcpt_index=0;
-  string greeting, helo_domain, ehlo_response, response_lines;
-  SMTP::Message mail;
-  string RcptTo(int index) const { return StrCat("RCPT TO: <", mail.rcpt_to[index], ">\r\n"); }
-  SMTPClientConnection(SMTPClient *S, SMTPClient::DeliverableCB CB1, SMTPClient::DeliveredCB CB2)
-    : server(S), deliverable_cb(CB1), delivered_cb(CB2) {}
-
-  int Connected(Connection *c) { helo_domain = server->HeloDomain(c->src_addr); return 0; }
-
-  void Close(Connection *c) {
-    server->total_disconnected++;
-    if (DeliveringState(state)) delivered_cb(0, mail, 0, "");
-    deliverable_cb(c, helo_domain, 0);
-  }
-
-  int Read(Connection *c) {
-    int processed = 0;
-    StringLineIter lines(c->rb.buf, StringLineIter::Flag::BlankLines);
-    for (string line = lines.NextString(); !lines.Done(); line = lines.NextString()) {
-      processed = lines.next_offset;
-      if (!response_lines.empty()) response_lines.append("\r\n");
-      response_lines.append(line);
-
-      const char *dash = FindChar(line.c_str(), notnum);
-      bool multiline = dash && *dash == '-';
-      if (multiline) continue;
-
-      int code = atoi(line), need_code=0; string response;
-      if      (state == INIT)        { response=StrCat("EHLO ", helo_domain, "\r\n"); greeting=response_lines; }
-      else if (state == SENT_HELO)   { need_code=250; ehlo_response=response_lines; }
-      else if (state == READY)       { ERROR("read unexpected line: ", response_lines); return -1; }
-      else if (state == MAIL_FROM)   { need_code=250; response=RcptTo(rcpt_index++); }
-      else if (state == RCPT_TO)     { need_code=250; response="DATA\r\n";
-        if (rcpt_index < mail.rcpt_to.size()) { response=RcptTo(rcpt_index++); state--; }
-      }
-      else if (state == SENT_DATA)   { need_code=354; response=StrCat(mail.content, "\r\n.\r\n"); }
-      else if (state == SENDING)     { delivered_cb(c, mail, code, response_lines); server->delivered++; state=READY-1; }
-      else if (state == RESETING)    { need_code=250; state=READY-1; }
-      else if (state == QUITING)     { /**/ }
-      else { ERROR("unknown state ", state); return -1; }
-
-      if (need_code && code != need_code) {
-        ERROR(StateString(state), " failed: ", response_lines);
-        if (state == SENT_HELO || state == RESETING || state == QUITING) return -1;
-
-        if (DeliveringState(state)) delivered_cb(c, mail, code, response_lines);
-        response="RSET\r\n"; server->failed++; state=RESETING-1;
-      }
-      if (!response.empty()) if (c->WriteFlush(response) != response.size()) return -1;
-
-      response_lines.clear();
-      state++;
-    }
-    c->ReadFlush(processed);
-
-    if (state == READY) {
-      mail.clear();
-      rcpt_index = 0;
-      if (deliverable_cb(c, helo_domain, &mail)) Deliver(c);
-    }
-    return 0;
-  }
-
-  void Deliver(Connection *c) {
-    string response;
-    if (!mail.mail_from.size() || !mail.rcpt_to.size() || !mail.content.size()) { response="QUIT\r\n"; state=QUITING; }
-    else { response=StrCat("MAIL FROM: <", mail.mail_from, ">\r\n"); state++; }
-    if (c->WriteFlush(response) != response.size()) c->SetError();
-  }
-
-  static const char *StateString(int n) {
-    static const char *s[] = { "INIT", "SENT_HELO", "READY", "MAIL_FROM", "RCPT_TO", "SENT_DATA", "SENDING", "RESETING", "QUITTING" };
-    return (n >= 0 && n < sizeofarray(s)) ? s[n] : "";
-  }
-  static bool DeliveringState(int state) { return (state >= MAIL_FROM && state <= SENDING); }
-};
-
-Connection *SMTPClient::DeliverTo(IPV4::Addr ipv4_addr, IPV4EndpointSource *src_pool,
-                                  DeliverableCB deliverable_cb, DeliveredCB delivered_cb) {
-  static const int tcp_port = 25;
-  Connection *c = Connect(ipv4_addr, tcp_port, src_pool);
-  if (!c) return 0;
-
-  c->handler = make_unique<SMTPClientConnection>(this, deliverable_cb, delivered_cb);
-  return c;
-}
-
-void SMTPClient::DeliverDeferred(Connection *c) { dynamic_cast<SMTPClientConnection*>(c->handler.get())->Deliver(c); }
-
-/* SMTPServer */
-
-struct SMTPServerConnection : public Connection::Handler {
-  SMTPServer *server;
-  string my_domain, client_domain;
-  SMTP::Message message;
-  bool in_data;
-
-  SMTPServerConnection(SMTPServer *s) : server(s), in_data(0) {}
-  void ClearStateTable() { message.mail_from.clear(); message.rcpt_to.clear(); message.content.clear(); in_data=0; }
-
-  int Connected(Connection *c) {
-    my_domain = server->HeloDomain(c->src_addr);
-    string greeting = StrCat("220 ", my_domain, " Simple Mail Transfer Service Ready\r\n");
-    return (c->Write(greeting) == greeting.size()) ? 0 : -1;
-  }
-  int Read(Connection *c) {
-    int offset = 0, processed;
-    while (c->state == Connection::Connected) {
-      bool last_in_data = in_data;
-      if (in_data) { if ((processed = ReadData    (c, c->rb.begin()+offset, c->rb.size()-offset)) < 0) return -1; }
-      else         { if ((processed = ReadCommands(c, c->rb.begin()+offset, c->rb.size()-offset)) < 0) return -1; }
-      offset += processed;
-      if (last_in_data == in_data) break;
-    }
-    if (offset) c->ReadFlush(offset);
-    return 0;
-  }
-
-  int ReadCommands(Connection *c, const char *in, int len) {
-    int processed = 0;
-    StringLineIter lines(StringPiece(in, len), StringLineIter::Flag::BlankLines);
-    for (const char *line = lines.Next(); line && lines.next_offset>=0 && !in_data; line = lines.Next()) {
-      processed = lines.next_offset;
-      StringWordIter words(line, lines.cur_len, isint3<' ', '\t', ':'>);
-      string cmd = toupper(words.NextString());
-      string a1_orig = words.NextString();
-      string a1 = toupper(a1_orig), response="500 unrecognized command\r\n";
-
-      if (cmd == "MAIL" && a1 == "FROM") {
-        ClearStateTable();
-        message.mail_from = words.RemainingString();
-        response = "250 OK\r\n";
-      }
-      else if (cmd == "RCPT" && a1 == "TO") {
-        message.rcpt_to.push_back(words.RemainingString());
-        response="250 OK\r\n"; }
-      else if (cmd == "DATA") {
-        if      (!message.rcpt_to.size())   response = "503 valid RCPT command must precede DATA\r\n";
-        else if (!message.mail_from.size()) response = "503 valid FROM command must precede DATA\r\n";
-        else                 { in_data = 1; response = "354 Start mail input; end with <CRLF>.<CRLF>\r\n"; }
-      }
-      else if (cmd == "EHLO") { response=StrCat("250 ", server->domain, " greets ", a1_orig, "\r\n"); client_domain=a1_orig; }
-      else if (cmd == "HELO") { response=StrCat("250 ", server->domain, " greets ", a1_orig, "\r\n"); client_domain=a1_orig; }
-      else if (cmd == "RSET") { response="250 OK\r\n"; ClearStateTable(); }
-      else if (cmd == "NOOP") { response="250 OK\r\n"; }
-      else if (cmd == "VRFY") { response="250 OK\r\n"; }
-      else if (cmd == "QUIT") { c->WriteFlush(StrCat("221 ", server->domain, " closing connection\r\n")); c->SetError(); }
-      if (!response.empty()) if (c->Write(response) != response.size()) return -1;
-    }
-    return processed;
-  }
-
-  int ReadData(Connection *c, const char *in, int len) {
-    int processed = 0;
-    StringLineIter lines(StringPiece(in, len), StringLineIter::Flag::BlankLines);
-    for (const char *line = lines.Next(); line && lines.next_offset>=0; line = lines.Next()) {
-      processed = lines.next_offset;
-      if (lines.cur_len == 1 && *line == '.') { in_data=0; break; }
-      message.content.append(line, lines.cur_len);
-      message.content.append("\r\n");
-    }
-    if (!in_data) {
-      c->Write("250 OK\r\n");
-      server->ReceiveMail(c, message); 
-      ClearStateTable();
-    }
-    return processed;
-  }
-};
-
-int SMTPServer::Connected(Connection *c) { total_connected++; c->handler = make_unique<SMTPServerConnection>(this); return 0; }
-
-void SMTPServer::ReceiveMail(Connection *c, const SMTP::Message &mail) {
-  INFO("SMTPServer::ReceiveMail FROM=", mail.mail_from, ", TO=", mail.rcpt_to, ", content=", mail.content);
 }
 
 /* GPlusClient */

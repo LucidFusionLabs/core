@@ -275,7 +275,7 @@ struct DocumentParser {
       outstanding.insert(handler);
       bool root = target == doc->node;
       if (app->main_process) app->main_process->WGet(url,    callback, root ? redirect_cb : StringCB());
-      else               app->net->http_client->WGet(url, 0, callback, root ? redirect_cb : StringCB());
+      else                          HTTPClient::WGet(url, 0, callback, root ? redirect_cb : StringCB());
     } else {
       ERROR("unknown mimetype for url ", url);
     }

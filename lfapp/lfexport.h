@@ -126,19 +126,19 @@ DECLARE_bool(lfapp_input);
 DECLARE_bool(lfapp_network);
 DECLARE_bool(lfapp_camera);
 DECLARE_bool(lfapp_cuda);
-DECLARE_bool(swap_axis);
 DECLARE_int(loglevel);
 DECLARE_int(peak_fps);
 DECLARE_int(target_fps);
 DECLARE_int(threadpool_size);
-DECLARE_int(invert);
-DECLARE_float(ksens);
-DECLARE_float(msens);
-DECLARE_bool(open_console);
 DECLARE_bool(max_rlimit_core);
 DECLARE_bool(max_rlimit_open_files);
 DECLARE_unsigned(depth_buffer_bits);
+DECLARE_bool(open_console);
+DECLARE_bool(swap_axis);
 DECLARE_float(rotate_view);
+DECLARE_float(ksens);
+DECLARE_float(msens);
+DECLARE_int(invert);
 
 struct Allocator;
 struct Application;
@@ -172,6 +172,7 @@ struct Listener;
 struct MovieAsset;
 struct MultiProcessBuffer;
 struct MultiProcessFileResource;
+struct MultiProcessPaintResource;
 struct MultiProcessTextureResource;
 struct NetworkThread;
 struct ProcessAPIClient;
@@ -221,6 +222,7 @@ typedef struct ec_point_st EC_POINT;
 typedef struct ec_key_st EC_KEY;
 typedef struct CXTranslationUnitImpl* CXTranslationUnit;
 typedef void* CXIndex;
+struct typed_ptr { size_t type; void *value; };
 
 struct LFApp {
   struct Log { enum { Fatal=-1, Error=0, Info=3, Debug=7 }; int unused; };
@@ -231,7 +233,7 @@ struct LFApp {
 };
 
 struct NativeWindow {
-  void *id, *gl, *surface, *glew_context, *impl, *user1, *user2, *user3;
+  typed_ptr id, gl, surface, glew_context, impl, user1, user2, user3;
   int width, height, pow2_width, pow2_height, target_fps;
   bool minimized, cursor_grabbed, frame_init, animating;
   int gesture_swipe_up, gesture_swipe_down, gesture_tap[2], gesture_dpad_stop[2];
@@ -276,6 +278,12 @@ const char *LFAppDownloadDir();
 void BreakHook();
 
 #ifdef __cplusplus
-};
+}; // extern C
+#include <typeinfo>
+namespace LFL {
+template <class X> size_t TypeId() { static size_t id = typeid(X).hash_code(); return id; }
+template <class X> typed_ptr MakeTyped(X *v) { return typed_ptr{ TypeId<X>(), v }; }
+template <class X> X *GetTyped(const typed_ptr &p) { return p.type == TypeId<X>() ? static_cast<X*>(p.value) : nullptr; }
+}; // namespace LFL
 #endif // __cplusplus
 #endif // LFL_LFAPP_LFEXPORT_H__

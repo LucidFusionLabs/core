@@ -30,7 +30,7 @@ extern "C" {
 #include "lfapp/flow.h"
 #include "lfapp/gui.h"
 #include "lfapp/ipc.h"
-#include "lfapp/resolver.h"
+#include "lfapp/net/resolver.h"
 
 #include <time.h>
 #include <fcntl.h>
@@ -112,22 +112,22 @@ extern "C" bool iPhonePasswordSave(const char *, const char*, const char*, const
 extern "C" void iPhonePlayMusic(void *handle);
 extern "C" void iPhonePlayBackgroundMusic(void *handle);
 #elif defined(__APPLE__)
-extern "C" void OSXStartWindow(void*);
+extern "C" void OSXStartWindow(typed_ptr);
 extern "C" void OSXCreateNativeEditMenu();
 extern "C" void OSXCreateNativeMenu(const char*, int, const char**, const char**, const char**);
-extern "C" void OSXLaunchNativeContextMenu(void*, int, int, int, const char**, const char**, const char**);
+extern "C" void OSXLaunchNativeContextMenu(typed_ptr, int, int, int, const char**, const char**, const char**);
 extern "C" void OSXLaunchNativeFontChooser(const char *, int, const char *);
 extern "C" void OSXLaunchNativeFileChooser(bool, bool, bool, const char *);
-extern "C" void OSXTriggerFrame(void*);
-extern "C" bool OSXTriggerFrameIn(void*, int ms, bool force);
-extern "C" void OSXClearTriggerFrameIn(void *O);
-extern "C" void OSXUpdateTargetFPS(void*);
-extern "C" void OSXAddWaitForeverMouse(void*);
-extern "C" void OSXDelWaitForeverMouse(void*);
-extern "C" void OSXAddWaitForeverKeyboard(void*);
-extern "C" void OSXDelWaitForeverKeyboard(void*);
-extern "C" void OSXAddWaitForeverSocket(void*, int fd);
-extern "C" void OSXDelWaitForeverSocket(void*, int fd);
+extern "C" void OSXTriggerFrame(typed_ptr);
+extern "C" bool OSXTriggerFrameIn(typed_ptr, int ms, bool force);
+extern "C" void OSXClearTriggerFrameIn(typed_ptr);
+extern "C" void OSXUpdateTargetFPS(typed_ptr);
+extern "C" void OSXAddWaitForeverMouse(typed_ptr);
+extern "C" void OSXDelWaitForeverMouse(typed_ptr);
+extern "C" void OSXAddWaitForeverKeyboard(typed_ptr);
+extern "C" void OSXDelWaitForeverKeyboard(typed_ptr);
+extern "C" void OSXAddWaitForeverSocket(typed_ptr, int fd);
+extern "C" void OSXDelWaitForeverSocket(typed_ptr, int fd);
 #endif
 
 extern "C" void BreakHook() {}
@@ -370,6 +370,7 @@ void Application::CreateNewWindow() {
 void Application::StartNewWindow(Window *new_window) {
   video->InitGraphicsDevice(new_window);
   input->Init(new_window);
+  new_window->default_font.Load();
   if (window_start_cb) window_start_cb(new_window);
 #ifdef LFL_OSXVIDEO
   OSXStartWindow(screen->id);
@@ -742,7 +743,7 @@ int Application::Init() {
     shaders = make_unique<Shaders>();
     if ((video = make_unique<Video>())->Init()) return ERRORv(-1, "video init failed");
   }
-  else { windows[screen->id] = screen; }
+  else { windows[screen->id.value] = screen; }
 
   thread_pool.Open(X_or_1(FLAGS_threadpool_size));
   if (FLAGS_threadpool_size) thread_pool.Start();
@@ -766,7 +767,6 @@ int Application::Init() {
 
   if (FLAGS_lfapp_input) {
     if (LoadModule((input = make_unique<Input>()).get())) return ERRORv(-1, "input init failed");
-    input->Init(screen);
   }
 
   if (FLAGS_lfapp_network) {
@@ -903,7 +903,7 @@ Application::~Application() {
 /* Window */
 
 Window::Window() : caption("lfapp"), fps(128) {
-  id = gl = surface = glew_context = impl = user1 = user2 = user3 = 0;
+  id = gl = surface = glew_context = impl = user1 = user2 = user3 = typed_ptr{0, nullptr};
   minimized = cursor_grabbed = frame_init = animating = 0;
   target_fps = FLAGS_target_fps;
   multitouch_keyboard_x = .93; 
@@ -960,7 +960,7 @@ void Window::DrawDialogs() {
   if (FLAGS_draw_grid) {
     Color c(.7, .7, .7);
     glIntersect(screen->mouse.x, screen->mouse.y, &c);
-    app->fonts->Default()->Draw(StrCat("draw_grid ", screen->mouse.x, " , ", screen->mouse.y), point(0,0));
+    default_font->Draw(StrCat("draw_grid ", screen->mouse.x, " , ", screen->mouse.y), point(0,0));
   }
 }
 
@@ -1168,7 +1168,7 @@ void FrameScheduler::UpdateTargetFPS(int fps) {
     for (const auto &w : app->windows) Max(&next_target_fps, w.second->target_fps);
     FLAGS_target_fps = next_target_fps;
   }
-  CHECK(screen->id);
+  CHECK(screen->id.value);
 #if defined(LFL_IPHONEINPUT)
   iPhoneUpdateTargetFPS(screen->id);
 #elif defined(LFL_OSXVIDEO)
@@ -1188,7 +1188,7 @@ void FrameScheduler::SetAnimating(bool is_animating) {
 }
 
 void FrameScheduler::AddWaitForeverMouse() {
-  CHECK(screen->id);
+  CHECK(screen->id.value);
 #if defined(LFL_OSXVIDEO)
   OSXAddWaitForeverMouse(screen->id);
 #elif defined(LFL_WINVIDEO)
@@ -1203,7 +1203,7 @@ void FrameScheduler::AddWaitForeverMouse() {
 }
 
 void FrameScheduler::DelWaitForeverMouse() {
-  CHECK(screen->id);
+  CHECK(screen->id.value);
 #if defined(LFL_OSXVIDEO)
   OSXDelWaitForeverMouse(screen->id);
 #elif defined(LFL_WINVIDEO)
@@ -1218,7 +1218,7 @@ void FrameScheduler::DelWaitForeverMouse() {
 }
 
 void FrameScheduler::AddWaitForeverKeyboard() {
-  CHECK(screen->id);
+  CHECK(screen->id.value);
 #if defined(LFL_OSXVIDEO)
   OSXAddWaitForeverKeyboard(screen->id);
 #elif defined(LFL_WINVIDEO)
@@ -1233,7 +1233,7 @@ void FrameScheduler::AddWaitForeverKeyboard() {
 }
 
 void FrameScheduler::DelWaitForeverKeyboard() {
-  CHECK(screen->id);
+  CHECK(screen->id.value);
 #if defined(LFL_OSXVIDEO)
   OSXDelWaitForeverKeyboard(screen->id);
 #elif defined(LFL_WINVIDEO)
@@ -1265,7 +1265,7 @@ void FrameScheduler::AddWaitForeverSocket(Socket fd, int flag, void *val) {
 void FrameScheduler::DelWaitForeverSocket(Socket fd) {
   if (wait_forever && wait_forever_thread) wakeup_thread.Del(fd);
 #if defined(LFL_OSXVIDEO)
-  CHECK(screen->id);
+  CHECK(screen->id.value);
   OSXDelWaitForeverSocket(screen->id, fd);
 #elif defined(LFL_X11INPUT) || defined(LFL_ANDROIDINPUT)
   wait_forever_sockets.Del(fd);

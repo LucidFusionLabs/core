@@ -55,8 +55,6 @@ typedef pair<unique_ptr<char*>, size_t> FlatBufferPiece;
   
 template<typename T, typename ...Args>
 unique_ptr<T> make_unique(Args&& ...args) { return unique_ptr<T>(new T(forward<Args>(args)...)); }
-template <class X> int TypeId() { static int ret = fnv32(typeid(X).name()); return ret; }
-template <class X> int TypeId(X*) { return TypeId<X>(); };
 template <class X> X *NullPointer() { return nullptr; }
 template <class X> X *CheckPointer(X *x) { CHECK(x); return x; }
 template <class X> X *CheckNullAssign(X **x, X *v) { CHECK_EQ(nullptr, *x); return (*x = v); }
@@ -65,15 +63,8 @@ template <class X> X FromVoid(const void *v) { return static_cast<X>(v); }
 template <class X> X FromVoid(      void *v) { return static_cast<X>(v); }
 template <class X> typename make_unsigned<X>::type *MakeUnsigned(X *x) { return reinterpret_cast<typename make_unsigned<X>::type*>(x); }
 template <class X> typename make_signed  <X>::type *MakeSigned  (X *x) { return reinterpret_cast<typename make_signed  <X>::type*>(x); }
+inline       char *MakeSigned(      unsigned char *x) { return reinterpret_cast<      char*>(x); }
 inline const char *MakeSigned(const unsigned char *x) { return reinterpret_cast<const char*>(x); }
-
-struct typed_ptr {
-  int type=0;
-  void *value=0;
-  typed_ptr() {}
-  template <class X> typed_ptr(X *v) : type(TypeId<X>()), value(v) { }
-  template <class X> X *Get(int id) { return id == TypeId<X> ? static_cast<X*>(value) : nullptr; }
-};
 
 template <class X> struct LazyInitializedPtr {
   unique_ptr<X> ptr;
@@ -91,6 +82,52 @@ struct RefSet {
   unordered_set<RefCounter*> refs;
   virtual ~RefSet() { for (auto i : refs) i->DelRef(); }
   void Insert(RefCounter *x) { auto i = refs.insert(x); if (i.second) x->AddRef(); }
+};
+
+template <class I1, class I2> struct IterPair {
+  typedef pair<const typename I1::value_type&, const typename I2::value_type&> value_type;
+  I1 i1; I2 i2;
+  IterPair(I1 x1, I2 x2) : i1(x1), i2(x2) {}
+  IterPair& operator++() { ++i1; ++i2; return *this; }
+  IterPair& operator++(int) { IterPair v(*this); ++(*this); return v; }
+  value_type operator*() const { return value_type(*i1, *i2); }
+  bool operator!=(const IterPair &x) const { return i1 != x.i1; }
+};
+
+template <class T1, class T2, class T3> struct Triple {
+  T1 first; T2 second; T3 third;
+  Triple() {}
+  Triple(const T1 &t1, const T2 &t2, const T3 &t3) : first(t1), second(t2), third(t3) {}
+  Triple(const Triple &copy) : first(copy.first), second(copy.second), third(copy.third) {}
+  const Triple &operator=(const Triple &r) { first=r.first; second=r.second; third=r.third; return *this; }
+  bool operator<(const Triple &r) const { SortImpl3(first, r.first, second, r.second, third, r.third); }
+};
+
+template <class T1, class T2, class T3, class T4> struct Quadruple {
+  T1 first; T2 second; T3 third; T4 fourth;
+  Quadruple() {}
+  Quadruple(const T1 &t1, const T2 &t2, const T3 &t3, const T4 &t4) : first(t1), second(t2), third(t3), fourth(t4) {}
+  Quadruple(const Quadruple &copy) : first(copy.first), second(copy.second), third(copy.third), fourth(copy.fourth) {}
+  const Quadruple &operator=(const Quadruple &r) { first=r.first; second=r.second; third=r.third; fourth=r.fourth; return *this; }
+  bool operator<(const Quadruple &r) const { SortImpl4(first, r.first, second, r.second, third, r.third, fourth, r.fourth); }
+};
+
+template <class X> struct ScopedValue {
+  X *v, ov;
+  ScopedValue(X *V, X nv) : v(V), ov(V ? *V : X()) { *v = nv; }
+  ~ScopedValue() { if (v) *v = ov; }
+};
+
+template <class X> struct ScopedDeltaTracker {
+  X *v, ov; function<X()> f;
+  ScopedDeltaTracker(X *V, const function<X()> &F) : v(V), ov(V ? F() : X()), f(F) {}
+  ~ScopedDeltaTracker() { if (v) (*v) += (f() - ov); }
+};
+
+struct ScopedReentryGuard {
+  bool *guard_var;
+  ScopedReentryGuard(bool *gv) : guard_var(gv) { CHECK(!*guard_var); *guard_var = true;  }
+  ~ScopedReentryGuard()                        { CHECK( *guard_var); *guard_var = false; }
 };
 
 template <class X> typename X::iterator Insert(X &m, const typename X::key_type &k, const typename X::mapped_type &v) {
@@ -160,6 +197,19 @@ template <typename X> bool FindAndDispatch(const X &m, const typename X::key_typ
   auto it = m.find(k);
   if (it != m.end()) { it->second(); return true; }
   return false;
+}
+
+template <typename X> tuple<typename X::mapped_type*> MakeValueTuple(X *m, const typename X::key_type &k1) {
+  return make_tuple<typename X::mapped_type*>(&(*m)[k1]);
+}
+template <typename X> tuple<typename X::mapped_type*, typename X::mapped_type*>
+MakeValueTuple(X *m, const typename X::key_type &k1, const typename X::key_type &k2) {
+  return make_tuple<typename X::mapped_type*, typename X::mapped_type*>(&(*m)[k1], &(*m)[k2]);
+}
+template <typename X> tuple<typename X::mapped_type*, typename X::mapped_type*, typename X::mapped_type*>
+MakeValueTuple(X *m, const typename X::key_type &k1, const typename X::key_type &k2, const typename X::key_type &k3) {
+  return make_tuple<typename X::mapped_type*, typename X::mapped_type*, typename X::mapped_type*>
+    (&(*m)[k1], &(*m)[k2], &(*m)[k3]);
 }
 
 template <class K> struct Erasable { virtual bool Erase(const K&) const = 0; };
@@ -291,52 +341,6 @@ template <class X, class Y> void Move(X &buf, int to_ind, int from_ind, int size
   else if (from_ind <  to_ind) { for (int i=size-1; i >= 0; i--) move_cb(buf[to_ind+i], buf[from_ind+i]); }
   else                         { for (int i=0; i <= size-1; i++) move_cb(buf[to_ind+i], buf[from_ind+i]); }
 } 
-
-struct ScopedReentryGuard {
-  bool *guard_var;
-  ScopedReentryGuard(bool *gv) : guard_var(gv) { CHECK(!*guard_var); *guard_var = true;  }
-  ~ScopedReentryGuard()                        { CHECK( *guard_var); *guard_var = false; }
-};
-
-template <class X> struct ScopedValue {
-  X *v, ov;
-  ScopedValue(X *V, X nv) : v(V), ov(V ? *V : X()) { *v = nv; }
-  ~ScopedValue() { if (v) *v = ov; }
-};
-
-template <class X> struct ScopedDeltaTracker {
-  X *v, ov; function<X()> f;
-  ScopedDeltaTracker(X *V, const function<X()> &F) : v(V), ov(V ? F() : X()), f(F) {}
-  ~ScopedDeltaTracker() { if (v) (*v) += (f() - ov); }
-};
-
-template <class T1, class T2, class T3> struct Triple {
-  T1 first; T2 second; T3 third;
-  Triple() {}
-  Triple(const T1 &t1, const T2 &t2, const T3 &t3) : first(t1), second(t2), third(t3) {}
-  Triple(const Triple &copy) : first(copy.first), second(copy.second), third(copy.third) {}
-  const Triple &operator=(const Triple &r) { first=r.first; second=r.second; third=r.third; return *this; }
-  bool operator<(const Triple &r) const { SortImpl3(first, r.first, second, r.second, third, r.third); }
-};
-
-template <class T1, class T2, class T3, class T4> struct Quadruple {
-  T1 first; T2 second; T3 third; T4 fourth;
-  Quadruple() {}
-  Quadruple(const T1 &t1, const T2 &t2, const T3 &t3, const T4 &t4) : first(t1), second(t2), third(t3), fourth(t4) {}
-  Quadruple(const Quadruple &copy) : first(copy.first), second(copy.second), third(copy.third), fourth(copy.fourth) {}
-  const Quadruple &operator=(const Quadruple &r) { first=r.first; second=r.second; third=r.third; fourth=r.fourth; return *this; }
-  bool operator<(const Quadruple &r) const { SortImpl4(first, r.first, second, r.second, third, r.third, fourth, r.fourth); }
-};
-
-template <class I1, class I2> struct IterPair {
-  typedef pair<const typename I1::value_type&, const typename I2::value_type&> value_type;
-  I1 i1; I2 i2;
-  IterPair(I1 x1, I2 x2) : i1(x1), i2(x2) {}
-  IterPair& operator++() { ++i1; ++i2; return *this; }
-  IterPair& operator++(int) { IterPair v(*this); ++(*this); return v; }
-  value_type operator*() const { return value_type(*i1, *i2); }
-  bool operator!=(const IterPair &x) const { return i1 != x.i1; }
-};
 
 template <class X> struct FreeListVector {
   vector<X> data;

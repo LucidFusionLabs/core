@@ -18,6 +18,7 @@
 
 #include "gtest/gtest.h"
 #include "lfapp/lfapp.h"
+#include "lfapp/ipc.h"
 
 namespace LFL {
 const int MultiProcessPaintResource::DrawBox::Type;

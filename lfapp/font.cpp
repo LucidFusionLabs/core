@@ -1098,11 +1098,6 @@ FontEngine *Fonts::DefaultFontEngine() {
 }
 
 Font *Fonts::Fake() { return &fake_engine.get()->fake_font; }
-FontDesc Fonts::DefaultDesc() { return FontDesc(FLAGS_default_font, FLAGS_default_font_family, FLAGS_default_font_size); }
-Font *Fonts::Default() {
-  if (!default_font) default_font = Fonts::Get(DefaultDesc());
-  return default_font;
-}
 
 Font *Fonts::Find(const FontDesc &d) {
   if (d.name.empty()) return 0;

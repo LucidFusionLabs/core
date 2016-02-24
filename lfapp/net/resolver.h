@@ -18,7 +18,47 @@
 
 #ifndef LFL_LFAPP_RESOLVER_H__
 #define LFL_LFAPP_RESOLVER_H__
+
 namespace LFL {
+DECLARE_bool(dns_dump);
+
+struct DNS {
+  UNALIGNED_struct Header {
+    unsigned short id;
+#ifdef LFL_BIG_ENDIAN
+    unsigned short qr:1, opcode:4, aa:1, tc:1, rd:1, ra:1, unused:1, ad:1, cd:1, rcode:4;
+#else
+    unsigned short rd:1, tc:1, aa:1, opcode:4, qr:1, rcode:4, cd:1, ad:1, unused:1, ra:1;
+#endif
+    unsigned short qdcount, ancount, nscount, arcount;
+    static const int size = 12;
+  }; UNALIGNED_END(Header, Header::size);
+
+#undef IN
+  struct Class { enum { IN=1, CS=2, CH=3, HS=4 }; };
+  struct Type { enum { A=1, NS=2, MD=3, MF=4, CNAME=5, SOA=6, MB=7, MG=8, MR=9, _NULL=10, WKS=11, PTR=12, HINFO=13, MINFO=14, MX=15, TXT=16 }; };
+  typedef map<string, vector<IPV4::Addr>> AnswerMap;
+
+  struct Record {
+    string question, answer;
+    unsigned short type=0, _class=0, ttl1=0, ttl2=0, pref=0;
+    IPV4::Addr addr=0;
+    string DebugString() const { return StrCat("Q=", question, ", A=", answer.empty() ? IPV4::Text(addr) : answer); }
+  };
+
+  struct Response {
+    vector<DNS::Record> Q, A, NS, E;
+    string DebugString() const;
+  };
+
+  static int WriteRequest(unsigned short id, const string &querytext, unsigned short type, char *out, int len);
+  static int ReadResponse(const char *buf, int len, Response *response);
+  static int ReadResourceRecord(const Serializable::Stream *in, int num, vector<Record> *out);
+  static int ReadString(const char *start, const char *cur, const char *end, string *out);
+
+  static void MakeAnswerMap(const vector<Record> &in, AnswerMap *out);
+  static void MakeAnswerMap(const vector<Record> &in, const AnswerMap &qmap, int type, AnswerMap *out);
+};
     
 struct Resolver {
   typedef function<void(IPV4::Addr, DNS::Response*)> ResponseCB;

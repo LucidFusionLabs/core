@@ -273,7 +273,7 @@ void glShadertoyShaderWindows(Shader *shader, const Color &backup_color, const B
 void glShadertoyShaderWindows(Shader *shader, const Color &backup_color, const vector<const Box*> &win, const Texture *tex=0);
 void glSpectogram(Matrix *m, unsigned char *data, int pf, int width, int height, int hjump, float max, float clip, bool interpolate, int pd=PowerDomain::dB);
 void glSpectogram(Matrix *m, Texture *t, float *max=0, float clip=-INFINITY, int pd=PowerDomain::dB);
-void glSpectogram(SoundAsset *sa, Texture *t, Matrix *transform=0, float *max=0, float clip=-INFINITY);
+void glSpectogram(const RingBuf::Handle *in, Texture *t, Matrix *transform=0, float *max=0, float clip=-INFINITY);
 
 struct BoxFilled : public Drawable { void Draw(const LFL::Box &b, const Drawable::Attr *a=0) const; };
 struct BoxOutline : public Drawable {

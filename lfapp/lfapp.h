@@ -20,7 +20,6 @@
 #define LFL_LFAPP_LFAPP_H__
 
 #include <sstream>
-#include <typeinfo>
 #include <vector>
 #include <string>
 #include <map>
@@ -210,6 +209,7 @@ using LFL_STL11_NAMESPACE::is_pod;
 using LFL_STL11_NAMESPACE::make_unsigned;
 using LFL_STL11_NAMESPACE::make_signed;
 using LFL_STL11_NAMESPACE::make_shared;
+using LFL_STL11_NAMESPACE::make_tuple;
 using LFL_STL11_NAMESPACE::isinf;
 using LFL_STL11_NAMESPACE::isnan;
 #define tuple_get LFL_STL11_NAMESPACE::get
@@ -492,10 +492,11 @@ struct Window : public ::NativeWindow {
   vector<unique_ptr<GUI>> my_gui;
   vector<unique_ptr<InputController>> input;
   vector<unique_ptr<Dialog>> dialogs;
-  unique_ptr<Shell> shell;
+  FontRef default_font = FontRef(FontDesc::Default(), false);
   function<TextBox*()> default_textbox = []{ return nullptr; };
   TextBox *active_textbox=0;
   Dialog *top_dialog=0;
+  unique_ptr<Shell> shell;
 
   Window();
   virtual ~Window();

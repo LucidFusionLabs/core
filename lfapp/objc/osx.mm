@@ -123,13 +123,13 @@ static const char **osx_argv = 0;
   - (NSOpenGLContext *)openGLContext {
     if (context == nil) {
       context = [self createGLContext];
-      screen->gl = context;
+      screen->gl = LFL::MakeTyped(context);
       needs_reshape = YES;
     }
     return context;
   }
   - (NSOpenGLContext *)createGLContext {
-    NSOpenGLContext *prev_context = reinterpret_cast<NSOpenGLContext*>(GetNativeWindow()->gl);
+    NSOpenGLContext *prev_context = LFL::GetTyped<NSOpenGLContext>(GetNativeWindow()->gl);
     NSOpenGLContext *ret = [[NSOpenGLContext alloc] initWithFormat:pixel_format shareContext:prev_context];
     [ret setView:self];
     return ret;
@@ -212,7 +212,7 @@ static const char **osx_argv = 0;
     wait_forever_fh = nil;
   }
   - (void)fileDataAvailable: (NSNotification *)notification { 
-    NSFileHandle *fh = reinterpret_cast<NSFileHandle*>([notification object]);
+    NSFileHandle *fh = static_cast<NSFileHandle*>([notification object]);
     if (fh != wait_forever_fh) return;
     SetNativeWindow(screen);
     // [self setNeedsDisplay:YES]; 
@@ -312,7 +312,7 @@ static const char **osx_argv = 0;
   }
   static CVReturn MyDisplayLinkCallback(CVDisplayLinkRef displayLink, const CVTimeStamp* now, const CVTimeStamp* outputTime, CVOptionFlags flagsIn, CVOptionFlags* flagsOut, void* displayLinkContext) {
     NSAutoreleasePool * pool = [[NSAutoreleasePool alloc] init];
-    [reinterpret_cast<GameView*>(displayLinkContext) getFrameForTime:outputTime];
+    [static_cast<GameView*>(displayLinkContext) getFrameForTime:outputTime];
     [pool release];
     return kCVReturnSuccess;
   }
@@ -334,9 +334,8 @@ static const char **osx_argv = 0;
     int ret = OSXMain(osx_argc, osx_argv);
     if (ret) exit(ret);
     INFOf("%s", "OSXModule::Main done");
-    [reinterpret_cast<GameView*>(GetNativeWindow()->id) startThread:true];
   }
-  - (void*)createWindow: (int)w height:(int)h nativeWindow:(NativeWindow*)s {
+  - (GameView*)createWindow: (int)w height:(int)h nativeWindow:(NativeWindow*)s {
     NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, w, h)
                                          styleMask:NSClosableWindowMask|NSMiniaturizableWindowMask|NSResizableWindowMask|NSTitledWindowMask
                                          backing:NSBackingStoreBuffered defer:NO];
@@ -387,49 +386,49 @@ extern "C" void NativeWindowQuit() {}
 extern "C" int NativeWindowOrientation() { return 1; }
 extern "C" void NativeWindowSize(int *width, int *height) {}
 
-extern "C" void *OSXCreateWindow(int w, int h, struct NativeWindow *nw) {
-  [reinterpret_cast<GameView*>(GetNativeWindow()->id) clearKeyModifiers];
-  return [reinterpret_cast<AppDelegate*>([NSApp delegate]) createWindow:w height:h nativeWindow:nw];
+extern "C" typed_ptr OSXCreateWindow(int w, int h, struct NativeWindow *nw) {
+  [LFL::GetTyped<GameView>(GetNativeWindow()->id) clearKeyModifiers];
+  return LFL::MakeTyped([static_cast<AppDelegate*>([NSApp delegate]) createWindow:w height:h nativeWindow:nw]);
 }
 
-extern "C" void OSXDestroyWindow(void *O) {
-  [reinterpret_cast<AppDelegate*>([NSApp delegate]) destroyWindow: [reinterpret_cast<GameView*>(O) window]];
+extern "C" void OSXDestroyWindow(typed_ptr O) {
+  [static_cast<AppDelegate*>([NSApp delegate]) destroyWindow: [LFL::GetTyped<GameView>(O) window]];
 }
 
-extern "C" void OSXSetWindowResizeIncrements(void *O, float x, float y) {
-  [[reinterpret_cast<GameView*>(O) window] setContentResizeIncrements: NSMakeSize(x, y)];
+extern "C" void OSXSetWindowResizeIncrements(typed_ptr O, float x, float y) {
+  [[LFL::GetTyped<GameView>(O) window] setContentResizeIncrements: NSMakeSize(x, y)];
 }
 
-extern "C" void OSXSetWindowTransparency(void *O, float v) {
-  [[reinterpret_cast<GameView*>(O) window] setAlphaValue: 1.0 - v];
+extern "C" void OSXSetWindowTransparency(typed_ptr O, float v) {
+  [[LFL::GetTyped<GameView>(O) window] setAlphaValue: 1.0 - v];
 }
 
-extern "C" void *OSXCreateGLContext(void *O) {
-  return [reinterpret_cast<GameView*>(O) createGLContext];
+extern "C" typed_ptr OSXCreateGLContext(typed_ptr O) {
+  return LFL::MakeTyped([LFL::GetTyped<GameView>(O) createGLContext]);
 }
 
-extern "C" void OSXDeleteGLContext(void *O) {
+extern "C" void OSXDeleteGLContext(typed_ptr O) {
 }
 
-extern "C" void OSXStartWindow(void *O) {
-  [reinterpret_cast<GameView*>(O) startThread:true];
+extern "C" void OSXStartWindow(typed_ptr O) {
+  [LFL::GetTyped<GameView>(O) startThread:true];
 }
 
-extern "C" void OSXMakeWindowCurrent(void *O) {
-  [[reinterpret_cast<GameView*>(O) openGLContext] makeCurrentContext];
+extern "C" void OSXMakeWindowCurrent(typed_ptr O) {
+  [[LFL::GetTyped<GameView>(O) openGLContext] makeCurrentContext];
 }
 
-extern "C" void OSXSetWindowSize(void *O, int W, int H) {
-  [[reinterpret_cast<GameView*>(O) window] setContentSize:NSMakeSize(W, H)];
+extern "C" void OSXSetWindowSize(typed_ptr O, int W, int H) {
+  [[LFL::GetTyped<GameView>(O) window] setContentSize:NSMakeSize(W, H)];
 }
 
-extern "C" void OSXSetWindowTitle(void *O, const char *v) {
-  [reinterpret_cast<GameView*>(O) window].title = [NSString stringWithUTF8String:v];
+extern "C" void OSXSetWindowTitle(typed_ptr O, const char *v) {
+  [LFL::GetTyped<GameView>(O) window].title = [NSString stringWithUTF8String:v];
 }
 
-extern "C" void OSXVideoSwap(void *O) {
-  // [[reinterpret_cast<GameView*>(O) openGLContext] flushBuffer];
-  CGLFlushDrawable([[reinterpret_cast<GameView*>(O) openGLContext] CGLContextObj]);
+extern "C" void OSXVideoSwap(typed_ptr O) {
+  // [[LFL::GetTyped<GameView>(O) openGLContext] flushBuffer];
+  CGLFlushDrawable([[LFL::GetTyped<GameView>(O) openGLContext] CGLContextObj]);
 }
 
 extern "C" void OSXGrabMouseFocus() { 
@@ -442,9 +441,9 @@ extern "C" void OSXReleaseMouseFocus() {
   CGAssociateMouseAndMouseCursorPosition(true);
 }
 
-extern "C" void OSXSetMousePosition(void *O, int x, int y) {
+extern "C" void OSXSetMousePosition(typed_ptr O, int x, int y) {
   CGWarpMouseCursorPosition
-    (NSPointToCGPoint([[reinterpret_cast<GameView*>(O) window] convertRectToScreen:NSMakeRect(x, y, 0, 0)].origin));
+    (NSPointToCGPoint([[LFL::GetTyped<GameView>(O) window] convertRectToScreen:NSMakeRect(x, y, 0, 0)].origin));
 }
 
 extern "C" void OSXClipboardSet(const char *v) {
@@ -460,29 +459,29 @@ extern "C" char *OSXClipboardGet() {
   return strdup([v UTF8String]);
 }
 
-extern "C" void OSXTriggerFrame(void *O) {
-  [reinterpret_cast<GameView*>(O) performSelectorOnMainThread:@selector(setNeedsDisplay:) withObject:@YES waitUntilDone:NO];
+extern "C" void OSXTriggerFrame(typed_ptr O) {
+  [LFL::GetTyped<GameView>(O) performSelectorOnMainThread:@selector(setNeedsDisplay:) withObject:@YES waitUntilDone:NO];
 }
 
-extern "C" bool OSXTriggerFrameIn(void *O, int ms, bool force) {
-  return [reinterpret_cast<GameView*>(O) triggerFrameIn:ms force:force];
+extern "C" bool OSXTriggerFrameIn(typed_ptr O, int ms, bool force) {
+  return [LFL::GetTyped<GameView>(O) triggerFrameIn:ms force:force];
 }
 
-extern "C" void OSXClearTriggerFrameIn(void *O) {
-  [reinterpret_cast<GameView*>(O) clearTriggerTimer];
+extern "C" void OSXClearTriggerFrameIn(typed_ptr O) {
+  [LFL::GetTyped<GameView>(O) clearTriggerTimer];
 }
 
-extern "C" void OSXUpdateTargetFPS(void *O) {
-  [reinterpret_cast<GameView*>(O) stopThread];
-  [reinterpret_cast<GameView*>(O) startThread:false];
+extern "C" void OSXUpdateTargetFPS(typed_ptr O) {
+  [LFL::GetTyped<GameView>(O) stopThread];
+  [LFL::GetTyped<GameView>(O) startThread:false];
 }
 
-extern "C" void OSXAddWaitForeverMouse(void *O) { [reinterpret_cast<GameView*>(O) setFrameOnMouseInput:1]; }
-extern "C" void OSXDelWaitForeverMouse(void *O) { [reinterpret_cast<GameView*>(O) setFrameOnMouseInput:0]; }
-extern "C" void OSXAddWaitForeverKeyboard(void *O) { [reinterpret_cast<GameView*>(O) setFrameOnKeyboardInput:1]; }
-extern "C" void OSXDelWaitForeverKeyboard(void *O) { [reinterpret_cast<GameView*>(O) setFrameOnKeyboardInput:0]; }
-extern "C" void OSXAddWaitForeverSocket(void *O, int fd) { [reinterpret_cast<GameView*>(O) setWaitForeverSocket: fd]; }
-extern "C" void OSXDelWaitForeverSocket(void *O, int fd) { [reinterpret_cast<GameView*>(O) delWaitForeverSocket: fd]; }
+extern "C" void OSXAddWaitForeverMouse(typed_ptr O) { [LFL::GetTyped<GameView>(O) setFrameOnMouseInput:1]; }
+extern "C" void OSXDelWaitForeverMouse(typed_ptr O) { [LFL::GetTyped<GameView>(O) setFrameOnMouseInput:0]; }
+extern "C" void OSXAddWaitForeverKeyboard(typed_ptr O) { [LFL::GetTyped<GameView>(O) setFrameOnKeyboardInput:1]; }
+extern "C" void OSXDelWaitForeverKeyboard(typed_ptr O) { [LFL::GetTyped<GameView>(O) setFrameOnKeyboardInput:0]; }
+extern "C" void OSXAddWaitForeverSocket(typed_ptr O, int fd) { [LFL::GetTyped<GameView>(O) setWaitForeverSocket: fd]; }
+extern "C" void OSXDelWaitForeverSocket(typed_ptr O, int fd) { [LFL::GetTyped<GameView>(O) delWaitForeverSocket: fd]; }
 
 extern "C" void OSXCreateNativeApplicationMenu() {
   NSMenuItem *item; 
@@ -538,13 +537,13 @@ extern "C" void OSXCreateNativeMenu(const char *title_text, int n, const char **
   [item release];
 }
 
-extern "C" void OSXLaunchNativeContextMenu(void *O, int x, int y, int n, const char **key, const char **name, const char **val) {
+extern "C" void OSXLaunchNativeContextMenu(typed_ptr O, int x, int y, int n, const char **key, const char **name, const char **val) {
   NSEvent *event = [NSEvent mouseEventWithType: NSLeftMouseDown
                             location:           NSMakePoint(x, y)
                             modifierFlags:      NSLeftMouseDownMask
                             timestamp:          0
-                            windowNumber:       [[reinterpret_cast<GameView*>(O) window] windowNumber]
-                            context:            [[reinterpret_cast<GameView*>(O) window] graphicsContext]
+                            windowNumber:       [[LFL::GetTyped<GameView>(O) window] windowNumber]
+                            context:            [[LFL::GetTyped<GameView>(O) window] graphicsContext]
                             eventNumber:        0
                             clickCount:         1
                             pressure:           1];
@@ -559,12 +558,12 @@ extern "C" void OSXLaunchNativeContextMenu(void *O, int x, int y, int n, const c
     [item setRepresentedObject: [NSString stringWithUTF8String: val[i]]];
   }
 
-  [NSMenu popUpContextMenu:menu withEvent:event forView:reinterpret_cast<GameView*>(O)];
-  [reinterpret_cast<GameView*>(O) clearKeyModifiers];
+  [NSMenu popUpContextMenu:menu withEvent:event forView:LFL::GetTyped<GameView>(O)];
+  [LFL::GetTyped<GameView>(O) clearKeyModifiers];
 }
 
 extern "C" void OSXLaunchNativeFontChooser(const char *cur_font, int size, const char *change_font_cmd) {
-  [reinterpret_cast<AppDelegate*>([NSApp delegate]) selectFont:cur_font size:size cmd:change_font_cmd];
+  [static_cast<AppDelegate*>([NSApp delegate]) selectFont:cur_font size:size cmd:change_font_cmd];
 }
 
 extern "C" void OSXLaunchNativeFileChooser(bool choose_files, bool choose_dirs, bool choose_multi, const char *open_files_cmd) {
@@ -573,7 +572,7 @@ extern "C" void OSXLaunchNativeFileChooser(bool choose_files, bool choose_dirs, 
   [panel setCanChooseDirectories:choose_dirs];
   [panel setAllowsMultipleSelection:choose_multi];
   NSInteger clicked = [panel runModal];
-  [reinterpret_cast<GameView*>(GetNativeWindow()->id) clearKeyModifiers];
+  [LFL::GetTyped<GameView>(GetNativeWindow()->id) clearKeyModifiers];
   if (clicked != NSFileHandlingPanelOKButton) return;
 
   std::string start = open_files_cmd, run = start;

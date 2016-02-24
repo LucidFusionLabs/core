@@ -135,7 +135,7 @@ if(LFL_FLATBUFFERS)
 FLATBUFFERS_GENERATE_C_HEADERS(FLATBUFFERS_SRC ipc.fbs)
 endif(LFL_FLATBUFFERS)
 
-add_library(${LFL_PROJECT}_lfapp ${LFAPP_LIB_TYPE} gui.cpp browser.cpp font.cpp flow.cpp lfapp.cpp lftypes.cpp string.cpp time.cpp "file.cpp" assets.cpp audio.cpp video.cpp input.cpp math.cpp ipc.cpp network.cpp wire.cpp resolver.cpp camera.cpp scene.cpp shell.cpp crypto.cpp bindings.cpp ${PROTO_SRC} ${CAPNP_SRC} ${FLATBUFFERS_SRC_OUTPUTS})
+add_library(${LFL_PROJECT}_lfapp ${LFAPP_LIB_TYPE} gui.cpp browser.cpp font.cpp flow.cpp lfapp.cpp lftypes.cpp string.cpp time.cpp "file.cpp" assets.cpp audio.cpp video.cpp input.cpp math.cpp ipc.cpp network.cpp net/http.cpp net/ssh.cpp net/smtp.cpp net/resolver.cpp camera.cpp scene.cpp shell.cpp crypto.cpp bindings.cpp ${PROTO_SRC} ${CAPNP_SRC} ${FLATBUFFERS_SRC_OUTPUTS})
 target_include_directories(${LFL_PROJECT}_lfapp PUBLIC ${LFAPP_INCLUDE} ${LFL_PROJECT_BINDIR}/${LFL_PROJECT}_lfapp_obj)
 target_compile_definitions(${LFL_PROJECT}_lfapp PUBLIC ${LFAPP_DEF})
 target_compile_options(${LFL_PROJECT}_lfapp PUBLIC ${LFAPP_CFLAGS})

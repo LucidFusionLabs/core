@@ -19,15 +19,68 @@
 #ifndef LFL_LFAPP_NETWORK_H__
 #define LFL_LFAPP_NETWORK_H__
 
-#include "lfapp/wire.h"
-
 namespace LFL {
-
-DECLARE_bool(dns_dump);
 DECLARE_bool(network_debug);
 
 struct SocketType { static const int Stream, Datagram, SeqPacket, Raw; };
-struct TransferredSocket { Socket socket; int offset; };
+struct Protocol { 
+  enum { TCP=1, UDP=2, UNIX=3, GPLUS=4 };
+  static const char *Name(int p);
+};
+
+struct Ethernet {
+  UNALIGNED_struct Header {
+    static const int Size = 14, AddrSize = 6;
+    unsigned char dst[AddrSize], src[AddrSize];
+    unsigned short type;
+  }; UNALIGNED_END(Header, Header::Size);
+};
+
+struct IPV4 {
+  typedef unsigned Addr;
+  static const Addr ANY;
+
+  UNALIGNED_struct Header {
+    static const int MinSize = 20;
+    unsigned char vhl, tos;
+    unsigned short len, id, off;
+    unsigned char ttl, prot;
+    unsigned short checksum;
+    unsigned int src, dst;
+    int version() const { return vhl >> 4; }
+    int hdrlen() const { return (vhl & 0x0f); }
+  }; UNALIGNED_END(Header, Header::MinSize);
+
+  static Addr Parse(const string &ip);
+  static void ParseCSV(const string &text, vector<Addr> *out);
+  static void ParseCSV(const string &text, set<Addr> *out);
+  static string MakeCSV(const vector<Addr> &in);
+  static string MakeCSV(const set<Addr> &in);
+  static string Text(Addr addr)           { return StringPrintf("%u.%u.%u.%u",    addr&0xff, (addr>>8)&0xff, (addr>>16)&0xff, (addr>>24)&0xff); }
+  static string Text(Addr addr, int port) { return StringPrintf("%u.%u.%u.%u:%u", addr&0xff, (addr>>8)&0xff, (addr>>16)&0xff, (addr>>24)&0xff, port); }
+};
+
+struct TCP {
+  UNALIGNED_struct Header {
+    static const int MinSize = 20;
+    unsigned short src, dst;
+    unsigned int seqn, ackn;
+#ifdef LFL_BIG_ENDIAN
+    unsigned char offx2, fin:1, syn:1, rst:1, push:1, ack:1, urg:1, exe:1, cwr:1;
+#else
+    unsigned char offx2, cwr:1, exe:1, urg:1, ack:1, push:1, rst:1, syn:1, fin:1;
+#endif
+    unsigned short win, checksum, urgp;
+    int offset() const { return offx2 >> 4; }
+  }; UNALIGNED_END(Header, Header::MinSize);
+};
+
+struct UDP {
+  UNALIGNED_struct Header {
+    static const int Size = 8;
+    unsigned short src, dst, len, checksum;
+  }; UNALIGNED_END(Header, Header::Size);
+};
 
 struct IPV4Endpoint {
   IPV4::Addr addr=0;
@@ -101,6 +154,8 @@ struct SystemNetwork {
   static bool EWouldBlock();
   static string LastError();
 };
+
+struct TransferredSocket { Socket socket; int offset; };
 
 struct SocketSet {
   enum { READABLE=1, WRITABLE=2, EXCEPTION=4 };
@@ -221,9 +276,9 @@ struct SocketWakeupThread : public SocketSet {
 struct Listener {
   BIO *ssl;
   Service *svc;
-  Socket socket;
+  Socket socket=-1;
   typed_ptr self_reference;
-  Listener(Service *s, bool ssl=false) : svc(s), ssl(reinterpret_cast<BIO*>(ssl)), socket(-1), self_reference(this) {}
+  Listener(Service *s, bool ssl=false) : svc(s), ssl(reinterpret_cast<BIO*>(ssl)), self_reference(MakeTyped(this)) {}
 };
 
 struct Connection {
@@ -254,10 +309,10 @@ struct Connection {
   BIO *bio=0;
 
   virtual ~Connection();
-  Connection(Service *s, Handler *h,                                     Callback *Detach=0) : svc(s), socket(-1),   ct(Now()), rt(Now()), wt(Now()), addr(0),    state(Error), port(0),    rb(65536), wb(65536), self_reference(this), handler(h), detach(Detach) {}
-  Connection(Service *s, int State, int Sock,                            Callback *Detach=0) : svc(s), socket(Sock), ct(Now()), rt(Now()), wt(Now()), addr(0),    state(State), port(0),    rb(65536), wb(65536), self_reference(this),             detach(Detach) {}
-  Connection(Service *s, int State, int Sock, IPV4::Addr Addr, int Port, Callback *Detach=0) : svc(s), socket(Sock), ct(Now()), rt(Now()), wt(Now()), addr(Addr), state(State), port(Port), rb(65536), wb(65536), self_reference(this),             detach(Detach) {}
-  Connection(Service *s, int State,           IPV4::Addr Addr, int Port, Callback *Detach=0) : svc(s), socket(-1),   ct(Now()), rt(Now()), wt(Now()), addr(Addr), state(State), port(Port), rb(65536), wb(65536), self_reference(this),             detach(Detach) {}
+  Connection(Service *s, Handler *h,                                     Callback *Detach=0) : svc(s), socket(-1),   ct(Now()), rt(Now()), wt(Now()), addr(0),    state(Error), port(0),    rb(65536), wb(65536), self_reference(MakeTyped(this)), handler(h), detach(Detach) {}
+  Connection(Service *s, int State, int Sock,                            Callback *Detach=0) : svc(s), socket(Sock), ct(Now()), rt(Now()), wt(Now()), addr(0),    state(State), port(0),    rb(65536), wb(65536), self_reference(MakeTyped(this)),             detach(Detach) {}
+  Connection(Service *s, int State, int Sock, IPV4::Addr Addr, int Port, Callback *Detach=0) : svc(s), socket(Sock), ct(Now()), rt(Now()), wt(Now()), addr(Addr), state(State), port(Port), rb(65536), wb(65536), self_reference(MakeTyped(this)),             detach(Detach) {}
+  Connection(Service *s, int State,           IPV4::Addr Addr, int Port, Callback *Detach=0) : svc(s), socket(-1),   ct(Now()), rt(Now()), wt(Now()), addr(Addr), state(State), port(Port), rb(65536), wb(65536), self_reference(MakeTyped(this)),             detach(Detach) {}
 
   string Name() const { return !endpoint_name.empty() ? endpoint_name : IPV4::Text(addr, port); }
   void SetError() { state = Error; ct = Now(); }
@@ -365,151 +420,7 @@ struct UDPServer : public Service {
   virtual int Connected(Connection *c) { c->handler = unique_ptr<Connection::Handler>(handler); return 0; }
 };
 
-struct HTTPClient : public Service {
-  typedef function<void(Connection*, const char*, const string&, const char*, int)> ResponseCB;
-  bool WGet(const string &url, File *out=0, const ResponseCB &responseCB=ResponseCB(), const StringCB &redirectCB=StringCB());
-  bool WPost(const string &url, const string &mimetype, const char *postdata, int postlen, ResponseCB=ResponseCB());
-  Connection *PersistentConnection(const string &url, string *hostOut, string *pathOut, ResponseCB responseCB);
-  static int WriteRequest(Connection *c, int method, const char *host, const char *path, const char *postmime, const char *postdata, int postlen, bool persist);
-};
-
-struct HTTPServer : public Service {
-  typedef function<void(Connection*)> ConnectionClosedCB;
-  struct Method {
-    enum { GET=1, POST=2 };
-    static const char *name(int n);
-  };
-
-  struct Response {
-    int code, content_length;
-    const char *type, *content;
-    string type_buf, content_buf;
-    Connection::Handler *refill;
-    bool write_headers;
-    Response(     const string *T, const string        *C)            : code(200), content_length(C->size()), type_buf(*T), content_buf(*C), refill(0), write_headers(1)  { content=content_buf.c_str(); type=type_buf.c_str(); }
-    Response(       const char *T, const string        *C)            : code(200), content_length(C->size()), type(T),      content_buf(*C), refill(0), write_headers(1)  { content=content_buf.c_str(); }
-    Response(       const char *T, const char          *C)            : code(200), content_length(strlen(C)), type(T),      content(C),      refill(0), write_headers(1)  {}
-    Response(       const char *T, const StringPiece   &C)            : code(200), content_length(C.len),     type(T),      content(C.buf),  refill(0), write_headers(1)  {}
-    Response(int K, const char *T, const StringPiece   &C)            : code(K),   content_length(C.len),     type(T),      content(C.buf),  refill(0), write_headers(1)  {}
-    Response(int K, const char *T, const char          *C)            : code(K),   content_length(strlen(C)), type(T),      content(C),      refill(0), write_headers(1)  {}
-    Response(const char *T, int L, Connection::Handler *C, bool WH=1) : code(200), content_length(L),         type(T),      content(0),      refill(C), write_headers(WH) {}
-    static Response _400;
-  };
-
-  struct Resource {
-    virtual ~Resource() {}
-    virtual Response Request(Connection *, int method, const char *url, const char *args, const char *headers, const char *postdata, int postlen) = 0;
-  };
-
-  map<string, Resource*> urlmap;
-  HTTPServer(IPV4::Addr addr, int port, bool SSL) : Service(Protocol::TCP) { QueueListen(addr, port, SSL); }
-  HTTPServer(                 int port, bool SSL) : Service(Protocol::TCP) { QueueListen(0,    port, SSL); }
-  virtual ~HTTPServer() { ClearURL(); }
-
-  int Connected(Connection *c);
-  void AddURL(const string &url, Resource *resource) { urlmap[url] = resource; }
-  void ClearURL() { for (auto i = urlmap.begin(); i != urlmap.end(); i++) delete (*i).second; }
-  virtual Response Request(Connection *c, int method, const char *url, const char *args, const char *headers, const char *postdata, int postlen);
-  static void connectionClosedCB(Connection *conn, ConnectionClosedCB cb);
-
-  struct DebugResource : public Resource {
-    Response Request(Connection *c, int, const char *url, const char *args, const char *hdrs, const char *postdata, int postlen);
-  };
-
-  struct StringResource : public Resource {
-    Response val;
-    StringResource(const char *T, const StringPiece &C) : val(T, C) {}
-    StringResource(const char *T, const char        *C) : val(T, C) {}
-    Response Request(Connection *, int method, const char *url, const char *args, const char *headers, const char *postdata, int postlen) { return val; }
-  };
-
-  struct FileResource : public Resource {
-    string filename;
-    const char *type;
-    int size=0;
-
-    FileResource(const string &fn, const char *mimetype=0);
-    Response Request(Connection *, int method, const char *url, const char *args, const char *headers, const char *postdata, int postlen);
-  };
-
-  struct ConsoleResource : public Resource {
-    HTTPServer::Response Request(Connection *c, int method, const char *url, const char *args, const char *headers, const char *postdata, int postlen);
-  };
-
-#ifdef LFL_FFMPEG
-  struct StreamResource : public Resource {
-    AVFormatContext *fctx;
-    map<void*, Connection*> subscribers;
-    bool open;
-    int abr, vbr;
-    AVStream *audio;
-    AVFrame *samples;
-    short *sample_data;
-    AudioResampler resampler;
-    int frame, channels, resamples_processed;
-    AVStream *video;
-    AVFrame *picture; SwsContext *conv;
-
-    virtual ~StreamResource();
-    StreamResource(const char *outputFileType, int audioBitRate, int videoBitRate);        
-    Response Request(Connection *, int method, const char *url, const char *args, const char *headers, const char *postdata, int postlen);
-    void OpenStreams(bool audio, bool video);
-    void Update(int audio_samples, bool video_sample);
-    void ResampleAudio(int audio_samples);
-    void SendAudio();
-    void SendVideo();        
-    void Broadcast(AVPacket *, microseconds timestamp);
-  };
-#endif
-
-  struct SessionResource : public Resource {
-    map<Connection*, Resource*> connmap;
-    virtual ~SessionResource() { ClearConnections(); }
-    virtual Resource *Open() = 0;
-    virtual void Close(Resource *) = 0;
-
-    void ClearConnections() { for (auto i = connmap.begin(); i != connmap.end(); i++) delete (*i).second; }
-    Response Request(Connection *c, int method, const char *url, const char *args, const char *headers, const char *postdata, int postlen);
-    void ConnectionClosedCB(Connection *c);
-  };
-};
-
-struct SSHClient : public Service {
-  typedef function<void(Connection*, const StringPiece&)> ResponseCB;
-  typedef function<bool(const string&, const string&,       string*)> LoadPasswordCB;
-  typedef function<void(const string&, const string&, const string&)> SavePasswordCB;
-  Connection *Open(const string &hostport, const ResponseCB &cb, Callback *detach=0);
-
-  static void SetUser(Connection *c, const string &user);
-  static void SetPasswordCB(Connection *c, const LoadPasswordCB&, const SavePasswordCB&);
-  static int SetTerminalWindowSize(Connection *c, int w, int h);
-  static int WriteChannelData(Connection *c, const StringPiece &b);
-};
-
-struct SMTPClient : public Service {
-  typedef function<bool(Connection*, const string&, SMTP::Message*)> DeliverableCB;
-  typedef function<void(Connection*, const SMTP::Message &, int, const string&)> DeliveredCB;
-
-  long long total_connected=0, total_disconnected=0, delivered=0, failed=0;
-  map<IPV4::Addr, string> domains; string domain;
-
-  virtual int Connected(Connection *c) { total_connected++; return 0; }
-  string HeloDomain(IPV4::Addr addr) const { return domain.empty() ? FindOrDie(domains, addr) : domain; }
-  Connection *DeliverTo(IPV4::Addr mx, IPV4EndpointSource*, DeliverableCB deliverableCB, DeliveredCB deliveredCB);
-
-  static void DeliverDeferred(Connection *c);
-};
-
-struct SMTPServer : public Service {
-  long long total_connected=0;
-  map<IPV4::Addr, string> domains;
-  string domain;
-
-  SMTPServer(const string &n) : domain(n) {}
-  virtual int Connected(Connection *c);
-  virtual void ReceiveMail(Connection *c, const SMTP::Message &message);
-  string HeloDomain(IPV4::Addr addr) const { return domain.empty() ? FindOrDie(domains, addr) : domain; }
-};
+struct TCPClient : public Service {};
 
 struct GPlusClient : public Service {
   static const int MTU = 1500;
@@ -533,15 +444,12 @@ struct Network : public Module {
   unique_ptr<UnixServer> unix_server;
   unique_ptr<UDPClient> udp_client;
   unique_ptr<UDPServer> udp_server;
-  unique_ptr<HTTPClient> http_client;
-  unique_ptr<HTTPServer> http_server;
-  unique_ptr<SSHClient> ssh_client;
-  unique_ptr<SMTPClient> smtp_client;
-  unique_ptr<SMTPServer> smtp_server;
+  unique_ptr<TCPClient> tcp_client;
   unique_ptr<GPlusClient> gplus_client;
   unique_ptr<GPlusServer> gplus_server;
   unique_ptr<SystemResolver> system_resolver;
   unique_ptr<RecursiveResolver> recursive_resolver;
+  SSL_CTX *ssl=0;
   Network();
   virtual ~Network();
 
@@ -558,6 +466,7 @@ struct Network : public Module {
   void UDPConnectionFrame(Service *svc, Connection *c, ServiceEndpointEraseList *removelist, const string &epk);
 
   void ConnClose(Service *svc, Connection *c, ServiceEndpointEraseList *removelist);
+  void ConnCloseDetached(Service *svc, Connection *c);
   void ConnCloseAll(Service *svc);
 
   void EndpointRead(Service *svc, const char *name, const char *buf, int len);
@@ -617,4 +526,7 @@ bool FGets(char *buf, int size);
 string PromptFGets(const string &p, int s=32);
 
 }; // namespace LFL
+
+#include "net/http.h"
+
 #endif // LFL_LFAPP_NETWORK_H__

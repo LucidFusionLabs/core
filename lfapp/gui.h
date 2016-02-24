@@ -296,10 +296,9 @@ struct TextBox : public GUI, public KeyboardController, public Drawable::AttrSou
   const Color *bg_color=0;
   mutable Drawable::Attr last_attr;
 
-  TextBox(GraphicsDevice *d, const FontRef &F=FontRef(), int LC=10) : font(F), cmd_last(LC), cmd_fb(d)
-  { if (font.Load()) cmd_line.GetAttrId(Drawable::Attr(font)); layout.pad_wide_chars=1; cmd_line.Init(this,0); }
-
+  TextBox(GraphicsDevice *d, const FontRef &F=FontRef(), int LC=10);
   virtual ~TextBox() {}
+
   virtual point RelativePosition(const point&) const;
   virtual const Drawable::Attr *GetAttr(int attr) const;
   virtual int CommandLines() const { return 0; }
@@ -362,8 +361,7 @@ struct TextArea : public TextBox {
   int scroll_inc=10, scrolled_lines=0;
   float v_scrolled=0, h_scrolled=0, last_v_scrolled=0, last_h_scrolled=0;
 
-  TextArea(GraphicsDevice *D, const FontRef &F=FontRef(), int S=200, int LC=10) :
-    TextBox(D, F, LC), line(this, S), line_fb(D) { if (selection.enabled) InitSelection(); }
+  TextArea(GraphicsDevice *D, const FontRef &F=FontRef(), int S=200, int LC=10);
   virtual ~TextArea() {}
 
   /// Write() is thread-safe.

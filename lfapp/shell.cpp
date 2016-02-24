@@ -142,7 +142,11 @@ void Shell::campos(const vector<string>&) {
 void Shell::snap(const vector<string> &arg) {
   Asset      *a  = asset     (arg.size() ? arg[0] : "snap"); 
   SoundAsset *sa = soundasset(arg.size() ? arg[0] : "snap");
-  if (a && sa) { app->audio->Snapshot(sa); glSpectogram(sa, &a->tex); }
+  if (a && sa) {
+    app->audio->Snapshot(sa);
+    RingBuf::Handle H(sa->wav.get());
+    glSpectogram(&H, &a->tex);
+  }
 }
 
 void Shell::play(const vector<string> &arg) {
@@ -206,7 +210,7 @@ void shell_filter(const vector<string> &arg, bool FFTfilter, int taps, int hop=0
       for (int i=0; i<taps; i++) filter[i] = HighPassFilter(taps, i, int(cutoff));
     } else if (arg[1] == "preemph") {
       taps = 2;
-      filter = PreEmphasisFilter();
+      filter = PreEmphasisFilter(-0.97);
     }
   }
   if (arg.size() > 3) { taps = atoi(arg[3]); hop = taps/2; }
@@ -241,7 +245,7 @@ void shell_filter(const vector<string> &arg, bool FFTfilter, int taps, int hop=0
 }
 
 void Shell::filter   (const vector<string> &arg) { shell_filter(arg, false, 16); }
-void Shell::fftfilter(const vector<string> &arg) { shell_filter(arg, true, FLAGS_feat_window, FLAGS_feat_hop); }
+void Shell::fftfilter(const vector<string> &arg) { shell_filter(arg, true, 512, 256); }
 
 void Shell::f0(const vector<string> &arg) {
   SoundAsset *sa=0; int offset=0; int method=F0EstmMethod::Default;
@@ -250,19 +254,19 @@ void Shell::f0(const vector<string> &arg) {
   if (arg.size() > 1) offset = atoi(arg[1]);
   if (arg.size() > 2) method = atoi(arg[2]);
 
-  if (!sa || !sa->wav || sa->wav->ring.size < offset+FLAGS_feat_window) {
+  if (!sa || !sa->wav || sa->wav->ring.size < offset+512) {
     INFO("f0 <asset> <offset>");
     return;
   }
 
   if (offset) {
     RingBuf::Handle I(sa->wav.get(), offset);
-    float f0 = FundamentalFrequency(&I, FLAGS_feat_window, 0, method);
+    float f0 = FundamentalFrequency(&I, 512, 0, method);
     INFO("f0 = (", sa->name, ":", offset, ") = ", f0);    
   }
   else {
     RingBuf::Handle I(sa->wav.get(), offset);
-    Matrix *f0 = F0Stream(&I, 0, FLAGS_feat_window, FLAGS_feat_hop, method);
+    Matrix *f0 = F0Stream(&I, 0, 512, 256, method);
     for (int i=0; i<f0->M; /**/) {
       char buf[1024]; int len=0;
       for (int j=0; j<20 && i<f0->M; j++,i++) len += sprint(buf+len, sizeof(buf)-len, "%.2f, ", f0->row(i)[0]);
@@ -293,7 +297,7 @@ void Shell::fps(const vector<string>&) { INFO("FPS ", screen->fps.FPS()); }
 
 void Shell::wget(const vector<string> &a) {
   if (a.empty()) return;
-  app->net->http_client->WGet(a[0]);
+  HTTPClient::WGet(a[0]);
 }
 
 void Shell::MessageBox(const vector<string> &a) { Dialog::MessageBox(Join(a, " ")); }
@@ -310,7 +314,7 @@ void Shell::Slider(const vector<string> &a) {
 void Shell::Edit(const vector<string> &a) {
   string s = Asset::FileContents("lfapp_vertex.glsl");
   if (s.empty()) INFO("missing file lfapp_vertex.glsl");
-  screen->AddDialog(make_unique<EditorDialog>(screen->gd, app->fonts->DefaultDesc(), new BufferFile(s, "lfapp_vertex.glsl")));
+  screen->AddDialog(make_unique<EditorDialog>(screen->gd, FontDesc::Default(), new BufferFile(s, "lfapp_vertex.glsl")));
 }
 
 void Shell::cmds(const vector<string>&) {

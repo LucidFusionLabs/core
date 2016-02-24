@@ -30,6 +30,16 @@ CudaAcousticModel *CAM = 0;
 #endif
 
 namespace LFL {
+DEFINE_string(feat_type, "MFCC", "Feature type");
+DEFINE_bool(feat_preemphasis, true, "Use pre-emphasis filter");
+DEFINE_bool(feat_dither, false, "Dither input");
+DEFINE_double(feat_minfreq, 0, "Minimum feature frequency");
+DEFINE_double(feat_maxfreq, FLAGS_sample_rate/2, "Maximum feature frequency");
+DEFINE_double(feat_preemphasis_filter, -0.97, "Preemphasis filter = { 1, X }");
+DEFINE_int(feat_window, 512, "Feature window length");
+DEFINE_int(feat_hop, 256, "Feature window advance");
+DEFINE_int(feat_melbands, 40, "Mel bands used to create MFCC features");
+DEFINE_int(feat_cepcoefs, 20, "Number of cepstrum coefficients");
 DEFINE_bool(triphone_model, false, "Using triphone model");
 DEFINE_bool(speech_recognition_debug, false, "Debug speech recognition");
 
@@ -131,12 +141,302 @@ int PronunciationDict::Pronounce(const char *utterance, const char **w, const ch
   return words;
 }
 
-/* features */
+/* Features */
+
 int Features::filter_zeroth=0;
 int Features::deltas=1;
 int Features::deltadeltas=1;
 int Features::mean_normalization=0;
 int Features::variance_normalization=0;
+int Features::lpccoefs  = 12;
+int Features::barkbands = 21;
+double Features::rastaB[5] = { .2, .1, 0, -.1, -.2 };
+double Features::rastaA[2] = { 1, -.94 };
+
+Matrix *Features::EqualLoudnessCurve(int outrows, double max) {
+  double maxbark = HZToBark(max), stepbark = maxbark/(outrows-1);   
+  unique_ptr<Matrix> ret = make_unique<Matrix>(outrows, 1);
+  MatrixIter(ret) {
+    double bandcfhz = BarkToHZ(i*stepbark), fsq = pow(bandcfhz, 2);
+    ret->row(i)[j] = pow(fsq/(fsq + 1.6e5), 2) * ((fsq + 1.44e6) / (fsq + 9.61e6));
+  }
+  return ret.get();
+}
+
+double *Features::LifterMatrixROSA(int n, double L, bool inverse) {
+  double *dm = new double[n];
+  for (int i = 0; i < n; i++) {
+    dm[i] = !i ? 1 : pow(i, L);
+    if (inverse) dm[i] = 1 / dm[i];
+  }
+  return dm;
+}
+
+double *Features::LifterMatrixHTK(int n, double L, bool inverse) {
+  double *dm = new double[n];
+  for (int i = 0; i < n; i++) {
+    dm[i] = !i ? 1 : (1+L/2*sin(i*M_PI/L));
+    if (inverse) dm[i] = 1 / dm[i];
+  }
+  return dm;
+}
+
+Matrix *Features::FFT2Bark(int outrows, double minfreq, double maxfreq, int fftlen, int samplerate) {
+  unique_ptr<Matrix> m = make_unique<Matrix>(outrows, fftlen/2);
+  double minbark = HZToBark(minfreq), maxbark = HZToBark(maxfreq);
+  double nyqbark = maxbark - minbark, stepbark = nyqbark/(outrows-1);
+
+  vector<double> binbark(fftlen/2);
+  for (int i=0; i<fftlen/2; i++)
+    binbark[i] = HZToBark(double(i)/fftlen*samplerate);
+
+  for (int i=0; i<outrows; i++) {
+    double *row = m->row(i), midbark = minbark + i*stepbark;
+
+    for (int j=0; j<fftlen/2; j++) {
+      double lofreq = (binbark[j] - midbark) - 0.5;
+      double hifreq = (binbark[j] - midbark) + 0.5;
+      row[j] = pow(10, min(0.0, min(hifreq, -2.5*lofreq)));
+    }
+  }
+  return m.release();
+}
+
+Matrix *Features::FFT2Mel(int outrows, double minfreq, double maxfreq, int fftlen, int samplerate) {
+  unique_ptr<Matrix> m = make_unique<Matrix>(outrows, fftlen/2);
+  double minmel = HZToMel(minfreq), maxmel = HZToMel(maxfreq);
+
+  vector<double> mel(outrows+2);
+  for (int i=0; i<outrows+2; i++)
+    mel[i] = MelToHZ(minmel + (double(i)/(outrows+1)) * (maxmel-minmel)); 
+
+  for (int i=0; i<outrows; i++) {
+    double *row = m->row(i);
+
+    for (int j=0; j<fftlen/2; j++) {
+      double binfreq = double(j)/fftlen*samplerate;
+      double loslope = ( binfreq - mel[i+0]) / (mel[i+1] - mel[i+0]);
+      double hislope = (-binfreq + mel[i+2]) / (mel[i+2] - mel[i+1]);
+
+      row[j] = max(0.0, min(loslope, hislope));
+    }
+  }
+  return m.release();
+}
+
+Matrix *Features::Mel2FFT(int outrows, double minfreq, double maxfreq, int fftlen, int samplerate) {
+  Matrix *m = FFT2Mel(outrows, minfreq, maxfreq, fftlen, samplerate);
+  Matrix *w = Matrix::Mult(m, m, mTrnpA);
+
+  float diagmean=0; int diagcount=0;
+  for (int i=0; i<w->M && i<w->N; i++) { diagmean += w->row(i)[i]; diagcount++; }
+  diagmean /= (diagcount+1);
+
+  m = Matrix::Transpose(m);
+  for (int i=0; i<m->M; i++) {
+    double sum=0;
+    for (int j=0; j<m->N; j++) sum += w->row(i)[j];
+
+    if (sum < diagmean) sum = diagmean;
+    for (int j=0; j<m->N; j++) m->row(i)[j] /= sum;
+  }
+  return m;
+};
+
+Matrix *Features::PLP(const RingBuf::Handle *in, Matrix *out,
+                      vector<StatefulFilter> *rastaFilters, Allocator *alloc) {
+  /* http://seed.ucsd.edu/mediawiki/images/5/5c/PLP.pdf */
+  if (!alloc) alloc = Singleton<MallocAllocator>::Get();
+
+  /* plp = melfcc(x, sr, 'lifterexp', -22, 'nbands', 21, 'maxfreq', sr/2, 'fbtype', 'bark', 'modelorder', 12, 'usecmp',1, 'wintime', 512/sr, 'hoptime', 256/sr, 'preemph', 0, 'dcttype', 1) */
+  static const Matrix *barktrans = FFT2Bark(barkbands, FLAGS_feat_minfreq, FLAGS_feat_maxfreq, FLAGS_feat_window, FLAGS_sample_rate)->Transpose(mDelA);
+
+  /* fft */
+  int frames = (in->Len() - (FLAGS_feat_window - FLAGS_feat_hop)) / FLAGS_feat_hop;
+  Matrix fftbuf(frames, FLAGS_feat_window/2, 0.0, 0, alloc);
+  if (!Spectogram(in, &fftbuf, FLAGS_feat_window, FLAGS_feat_hop, FLAGS_feat_window,
+                  vector<double>(), PowerDomain::abs2, 32768)) return 0;
+  if (FLAGS_feat_dither) MatrixIter(&fftbuf) fftbuf.row(i)[j] += FLAGS_feat_window;
+
+  /* to bark scale critcal bands */
+  Matrix barkbuf(fftbuf.M, barktrans->N, 0.0, 0, alloc);
+  Matrix::Mult(&fftbuf, barktrans, &barkbuf);
+
+  if (1) { /* rasta */
+    MatrixIter(&barkbuf) barkbuf.row(i)[j] = log(barkbuf.row(i)[j] ? barkbuf.row(i)[j] : 1e7);
+    Matrix rastabuf(barkbuf.M, barkbuf.N, 0.0, 0, alloc);
+
+    if (rastaFilters) {
+      if (!rastaFilters->size()) MatrixColIter(&rastabuf) rastaFilters->push_back(StatefulFilter());
+      if (rastaFilters->size() != rastabuf.N) FATAL("mismatch ", rastaFilters, " != ", rastabuf.N);
+    } 
+
+    MatrixColIter(&rastabuf) {
+      ColMatPtrRingBuf bandTrajectory(&barkbuf, j), rastaOut(&rastabuf, j);
+      RingBuf::HandleT<double> bt(&bandTrajectory), ro(&rastaOut);
+      StatefulFilter RFbuf, *RF = rastaFilters ? &(*rastaFilters)[j] : &RFbuf;
+      int processed = 0;
+
+      if (!RF->samples) RF->Open(sizeof(rastaB)/sizeof(double), rastaB, 0, rastaA);
+      if (RF->samples < 4) {
+        processed = RF->Filter(&bt, 0, 0, min(4-RF->samples, bt.Len()));
+        for (int i=0; i<processed; i++) ro.Write(0.0);
+      }
+      if (RF->samples == 4) RF->filterLenA = sizeof(rastaA)/sizeof(double);
+      RF->Filter(&bt, &ro, processed);
+    }
+    MatrixIter(&barkbuf) barkbuf.row(i)[j] = exp(rastabuf.row(i)[j]);
+  }
+
+  static const Matrix *equalLoudnessCurve = EqualLoudnessCurve(barkbuf.N, FLAGS_sample_rate/2);
+  MatrixIter(&barkbuf) {
+    /* preemphasize = weight critical bands by equal loudness curve */
+    barkbuf.row(i)[j] *= equalLoudnessCurve->row(j)[0];
+
+    /* cube root compress */
+    barkbuf.row(i)[j] = pow(barkbuf.row(i)[j], 0.33);
+  }
+  MatrixRowIter(&barkbuf) {
+    barkbuf.row(i)[0]           = barkbuf.row(i)[1];
+    barkbuf.row(i)[barkbuf.N-1] = barkbuf.row(i)[barkbuf.N-2];
+  }
+
+  /* auto-correlation */
+  static Matrix *IDFTtrans = IDFT((barkbands-1)*2, barkbands)->Transpose(mDelA);
+  Matrix xcorr(barkbuf.M, IDFTtrans->N, 0.0, 0, alloc);
+  Matrix::Mult(&barkbuf, IDFTtrans, &xcorr);
+  MatrixIter(&xcorr) xcorr.row(i)[j] /= IDFTtrans->N;
+
+  /* levinson durbin recursion to LPC */
+  int order = lpccoefs, ceps = order+1;
+  Matrix LPC(xcorr.M, ceps, 0.0, 0, alloc);
+  vector<double> reflect(order), lpc(order);
+  MatrixRowIter(&xcorr) {
+    double err = LevinsonDurbin(order, xcorr.row(i), &reflect[0], &lpc[0]);
+    MatrixColIter(&LPC) LPC.row(i)[j] = (!j ? 1.0 : lpc[j-1]) / err;
+  }
+
+  /* prepare output */
+  if (out) { if (out->M != LPC.M || out->N != LPC.N) return 0; }
+  else out = new Matrix(LPC.M, LPC.N);
+
+  /* first cepstral coefficient is log(error) from levinson durbin recursion */
+  MatrixRowIter(out) out->row(i)[0] = -log(LPC.row(i)[0]);
+
+  /* normalize LPC */
+  MatrixRowIter(&LPC) {
+    double denom = LPC.row(i)[0];
+    MatrixColIter(&LPC) LPC.row(i)[j] /= denom;
+  }
+
+  /* LPC to cepstral coefficients */
+  MatrixRowIter(out) for (int j=1; j<out->N; j++) {
+    double sum = 0;
+    for (int j2=1; j2<j; j2++) sum += (j-j2) * LPC.row(i)[j2] * out->row(i)[j-j2];
+    out->row(i)[j] = -LPC.row(i)[j] - sum / j;
+  }
+
+  /* lifter */
+  static double *lifter = LifterMatrixROSA(ceps, 0.6); // lifterMatrixHTK(ceps, 22);
+  out->MultdiagR(lifter, ceps);
+
+  return out;
+}
+
+RingBuf *Features::InvPLP(const Matrix *in, int samplerate, Allocator *alloc) {
+  /* [dr,aspec,spec] = invmelfcc() */
+  if (!alloc) alloc = Singleton<MallocAllocator>::Get();
+  Matrix plpcc(in->M, in->N, 0.0, 0, alloc);
+  plpcc.AssignL(in);
+
+  int ceps = lpccoefs+1;
+  static double *unlifter = LifterMatrixHTK(ceps, 22, true); // lifterMatrixROSA(ceps, 0.6, true);
+  plpcc.MultdiagR(unlifter, ceps);
+  Matrix::Print(&plpcc, "sec plp");
+
+  return 0;
+}
+
+Matrix *Features::MFCC(const RingBuf::Handle *in, Matrix *out, Allocator *alloc) {
+  if (!alloc) alloc = Singleton<MallocAllocator>::Get();
+
+  /* [mm,aspc,pspc] = melfcc(y/32768, sr, 'maxfreq', sr/2, 'numcep', 20, 'nbands', 40, 'fbtype', 'htkmel', 'dcttype', 3, 'usecmp', 0, 'wintime', 512/44100, 'hoptime', 256/44100, 'dither', 0, 'lifterexp', 0) */
+  static const Matrix *meltrans = FFT2Mel(FLAGS_feat_melbands, FLAGS_feat_minfreq, FLAGS_feat_maxfreq, FLAGS_feat_window, FLAGS_sample_rate)->Transpose(mDelA);
+  static const Matrix *ceptrans = DCT2(FLAGS_feat_cepcoefs, FLAGS_feat_melbands)->Transpose(mDelA);
+
+  /* fft */
+  int frames = (in->Len() - (FLAGS_feat_window - FLAGS_feat_hop)) / FLAGS_feat_hop;
+  Matrix fftbuf(frames, FLAGS_feat_window/2, 0.0, 0, alloc);
+  if (!Spectogram(in, &fftbuf, FLAGS_feat_window, FLAGS_feat_hop, FLAGS_feat_window,
+                  FLAGS_feat_preemphasis ? PreEmphasisFilter(FLAGS_feat_preemphasis_filter) : vector<double>(),
+                  PowerDomain::abs2)) return 0;
+
+  /* to mel scale */
+  Matrix melbuf(fftbuf.M, meltrans->N, 0.0, 0, alloc);
+  Matrix::Mult(&fftbuf, meltrans, &melbuf);
+
+  /* log */
+  MatrixIter(&melbuf) melbuf.row(i)[j] = log(melbuf.row(i)[j]);
+
+  /* prepare output */
+  if (out) { if (out->M != melbuf.M || out->N != ceptrans->N) return 0; }
+  else out = new Matrix(melbuf.M, ceptrans->N);
+
+  /* to cepstral coefs */
+  return Matrix::Mult(&melbuf, ceptrans, out);
+}
+
+RingBuf *Features::InvMFCC(const Matrix *in, int samplerate, const Matrix *f0) {
+  /* [dr,aspec,spec] = invmelfcc() */
+  Matrix *transform = DCT2(in->N, FLAGS_feat_melbands);
+  for (int j=0; j<transform->N; j++) transform->row(0)[j] /= 2;
+
+  Matrix *m = Matrix::Mult(in, transform, mDelB);
+  MatrixIter(m) m->row(i)[j] = exp(m->row(i)[j]);
+
+  transform = Mel2FFT(FLAGS_feat_melbands, FLAGS_feat_minfreq, FLAGS_feat_maxfreq, FLAGS_feat_window, samplerate);
+  m = Matrix::Mult(m, transform, mTrnpB|mDelB);
+
+  if (0 && f0) {
+    if (f0->M != in->M || m->M != in->M) return 0;
+    unique_ptr<RingBuf> outbuf = make_unique<RingBuf>(samplerate, FLAGS_feat_window + FLAGS_feat_hop * (m->M-1));
+    RingBuf::Handle out(outbuf.get());
+
+    for (int i=0; i<m->M; i++) {
+      float F0 = f0->row(i)[0];
+      float wavs[] = { F0, F0*2, F0*4, F0*8, F0*16, F0*32 };
+
+      for (int j=0; j<sizeofarray(wavs); j++) {
+        double f = (2 * M_PI * wavs[j]) / out.Rate();
+        int ind = int(wavs[j] * m->N / out.Rate());
+        double a = m->row(i)[ind];
+
+        for (int k=0; k<FLAGS_feat_window; k++) 
+          *out.Index(i*FLAGS_feat_hop + k) += a*sin(f*i);
+      }
+    }
+
+    return outbuf.release();
+  }
+  else {
+    unique_ptr<RingBuf> outbuf = make_unique<RingBuf>(samplerate, FLAGS_feat_window + FLAGS_feat_hop * (m->M-1));
+    RingBuf::Handle out(outbuf.get());
+    { 
+      double f = (2 * M_PI * 440) / out.Rate();
+      for (int i=0; i<out.Len(); i++) out.Write(sin(f*i)/16 + Rand(-1.0,1.0)/2);
+    }
+    unique_ptr<Matrix> spec(Spectogram(&out, 0, FLAGS_feat_window, FLAGS_feat_hop, FLAGS_feat_window, vector<double>(), PowerDomain::complex));
+
+    if (m->M != spec->M || m->N != spec->N) { delete m; return nullptr; }	
+    MatrixIter(spec) {
+      Complex v = {sqrt(m->row(i)[j]), 0}; 
+      spec->crow(i)[j].Mult(v);
+    }
+
+    delete m;
+    return ISpectogram(spec.get(), FLAGS_feat_window, FLAGS_feat_hop, FLAGS_feat_window/2, samplerate);
+  }
+}
 
 Matrix *Features::FilterZeroth(Matrix *features) {
   Matrix *fz = new Matrix(features->M, features->N-1);
@@ -263,7 +563,7 @@ RingBuf *Features::Reverse(const Matrix *in, int samplerate, const Matrix *f0, A
 
 int Features::Dimension() {
   if      (FLAGS_feat_type == "MFCC") return FLAGS_feat_cepcoefs;
-  else if (FLAGS_feat_type == "PLP")  return feat_lpccoefs+1;
+  else if (FLAGS_feat_type == "PLP")  return lpccoefs+1;
   return 0;
 }
 
@@ -1051,7 +1351,7 @@ void Decoder::VisualizeFeatures(AcousticModel::Compiled *model, Matrix *MFCC, Ma
   sa.wav = unique_ptr<RingBuf>(Features::Reverse(MFCC, FLAGS_sample_rate));
   RingBuf::Handle B = RingBuf::Handle(sa.wav.get());
 
-  Matrix *spect = Spectogram(&B, 0, FLAGS_feat_window, FLAGS_feat_hop, FLAGS_feat_window, 0, PowerDomain::dB);
+  Matrix *spect = Spectogram(&B, 0, FLAGS_feat_window, FLAGS_feat_hop, FLAGS_feat_window, vector<double>(), PowerDomain::dB);
   Asset *snap = screen->shell->asset("snap");
   glSpectogram(spect, &snap->tex, 0);
   delete spect;
@@ -1071,7 +1371,7 @@ void Decoder::VisualizeFeatures(AcousticModel::Compiled *model, Matrix *MFCC, Ma
     float percent = 1-float(app->audio->Out.size())/app->audio->outlast;
     font->Draw(StringPrintf("time=%d vprob=%f percent=%f next=%d", vtime.count(), vprob, percent, interactive_done), point(10, 440));
 
-    percent -= feat_progressbar_c*FLAGS_sample_rate*FLAGS_chans_out/app->audio->outlast;
+    percent -= Audio::VisualDelay()*FLAGS_sample_rate*FLAGS_chans_out/app->audio->outlast;
     if (percent >= 0 && percent <= 1) {
       for (int i=1; i<=levels; i++) font->Draw("|", point(wcc.x+percent*wcc.w, wcc.y-30*i));
     }

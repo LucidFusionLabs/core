@@ -72,38 +72,6 @@ int File::ReadIOV(void *buf, const IOVec *v, int iovlen) {
   return ret;
 }
 
-int File::WriteProto(const ProtoHeader *hdr, const Proto *msg, bool doflush) {
-#ifdef LFL_PROTOBUF
-  std::string v = msg->SerializeAsString();
-  CHECK_EQ(hdr->len, v.size());
-  v.insert(0, (const char *)hdr, ProtoHeader::size);
-  int ret = (Write(v.c_str(), v.size()) == v.size()) ? v.size() : -1;
-  if (doflush) Flush();
-  return ret;
-#else
-  return -1;
-#endif
-}
-
-int File::WriteProto(ProtoHeader *hdr, const Proto *msg, bool doflush) {
-#ifdef LFL_PROTOBUF
-  std::string v = msg->SerializeAsString();
-  hdr->SetLength(v.size());
-  v.insert(0, (const char *)hdr, ProtoHeader::size);
-  int ret = (Write(v.c_str(), v.size()) == v.size()) ? v.size() : -1;
-  if (doflush) Flush();
-  return ret;
-#else
-  return -1;
-#endif
-}
-
-int File::WriteProtoFlag(const ProtoHeader *hdr, bool doflush) {
-  int ret = Write(&hdr->flag, sizeof(int)) == sizeof(int) ? sizeof(int) : -1;
-  if (doflush) Flush();
-  return ret;
-}
-
 template <class X>
 int File::Rewrite(const IOVec *io, int iol, const vector<X> &b, const function<string(const X&)> &encode_f) {
   File *new_file = Create();
@@ -452,14 +420,14 @@ int ProtoFile::Add(const Proto *msg, int status) {
   write_offset = file->Seek(0, File::Whence::END);
 
   ProtoHeader ph(status);
-  int wrote = file->WriteProto(&ph, msg, true);
+  int wrote = WriteProto(file, &ph, msg, true);
   nr.SetFileOffset(wrote > 0 ? write_offset + wrote : write_offset);
   return wrote > 0;
 }
 
 bool ProtoFile::Update(int offset, const ProtoHeader *ph, const Proto *msg) {
   if (offset < 0 || (write_offset = file->Seek(offset, File::Whence::SET)) != offset) return false;
-  int wrote = file->WriteProto(ph, msg, true);
+  int wrote = WriteProto(file, ph, msg, true);
   nr.SetFileOffset(wrote > 0 ? offset + wrote : offset);
   return wrote > 0;
 }
@@ -467,7 +435,7 @@ bool ProtoFile::Update(int offset, const ProtoHeader *ph, const Proto *msg) {
 bool ProtoFile::Update(int offset, int status) {
   if (offset < 0 || (write_offset = file->Seek(offset, File::Whence::SET)) != offset) return false;
   ProtoHeader ph(status);
-  int wrote = file->WriteProtoFlag(&ph, true);
+  int wrote = WriteProtoFlag(file, &ph, true);
   nr.SetFileOffset(wrote > 0 ? offset + wrote : offset);
   return wrote > 0;
 }
@@ -500,6 +468,38 @@ bool ProtoFile::Next(ProtoHeader *hdr, Proto *out, int *offsetOut, int status) {
     if (offsetOut) *offsetOut = offset;
     return true;
   }
+}
+
+int ProtoFile::WriteProto(File *f, const ProtoHeader *hdr, const Proto *msg, bool doflush) {
+#ifdef LFL_PROTOBUF
+  std::string v = msg->SerializeAsString();
+  CHECK_EQ(hdr->len, v.size());
+  v.insert(0, (const char *)hdr, ProtoHeader::size);
+  int ret = (f->Write(v.c_str(), v.size()) == v.size()) ? v.size() : -1;
+  if (doflush) f->Flush();
+  return ret;
+#else
+  return -1;
+#endif
+}
+
+int ProtoFile::WriteProto(File *f, ProtoHeader *hdr, const Proto *msg, bool doflush) {
+#ifdef LFL_PROTOBUF
+  std::string v = msg->SerializeAsString();
+  hdr->SetLength(v.size());
+  v.insert(0, (const char *)hdr, ProtoHeader::size);
+  int ret = (f->Write(v.c_str(), v.size()) == v.size()) ? v.size() : -1;
+  if (doflush) f->Flush();
+  return ret;
+#else
+  return -1;
+#endif
+}
+
+int ProtoFile::WriteProtoFlag(File *f, const ProtoHeader *hdr, bool doflush) {
+  int ret = f->Write(&hdr->flag, sizeof(int)) == sizeof(int) ? sizeof(int) : -1;
+  if (doflush) f->Flush();
+  return ret;
 }
 
 /* StringFile */
