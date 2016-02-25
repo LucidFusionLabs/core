@@ -86,9 +86,13 @@
 #define A_or_B(x, y) ((x.size()) ? (x) : (y))
 
 #define  INFOf(fmt, ...) ((::LFApp::Log::Info  <= ::LFL::FLAGS_loglevel) ? LFAppLog(LFApp::Log::Info,  __FILE__, __LINE__, fmt, __VA_ARGS__) : void())
-#define DEBUGf(fmt, ...) ((::LFApp::Log::Debug <= ::LFL::FLAGS_loglevel) ? LFAppLog(LFApp::Log::Debug, __FILE__, __LINE__, fmt, __VA_ARGS__) : void())
 #define ERRORf(fmt, ...) ((::LFApp::Log::Error <= ::LFL::FLAGS_loglevel) ? LFAppLog(LFApp::Log::Error, __FILE__, __LINE__, fmt, __VA_ARGS__) : void())
 #define FATALf(fmt, ...) { LFAppLog(LFApp::Log::Fatal, __FILE__, __LINE__, fmt, __VA_ARGS__); throw(0); }
+#ifdef LFL_DEBUG
+#define DEBUGf(fmt, ...) ((::LFApp::Log::Debug <= ::LFL::FLAGS_loglevel) ? LFAppLog(LFApp::Log::Debug, __FILE__, __LINE__, fmt, __VA_ARGS__) : void())
+#else
+#define DEBUGf(fmt, ...)
+#endif
 
 #define DECLARE_FLAG(name, type) extern type FLAGS_ ## name
 #define DECLARE_int(name) DECLARE_FLAG(name, int)
@@ -222,7 +226,7 @@ typedef struct ec_point_st EC_POINT;
 typedef struct ec_key_st EC_KEY;
 typedef struct CXTranslationUnitImpl* CXTranslationUnit;
 typedef void* CXIndex;
-struct typed_ptr { size_t type; void *value; };
+struct typed_ptr { void *type, *value; };
 
 struct LFApp {
   struct Log { enum { Fatal=-1, Error=0, Info=3, Debug=7 }; int unused; };
@@ -279,11 +283,10 @@ void BreakHook();
 
 #ifdef __cplusplus
 }; // extern C
-#include <typeinfo>
 namespace LFL {
-template <class X> size_t TypeId() { static size_t id = typeid(X).hash_code(); return id; }
-template <class X> typed_ptr MakeTyped(X *v) { return typed_ptr{ TypeId<X>(), v }; }
-template <class X> X *GetTyped(const typed_ptr &p) { return p.type == TypeId<X>() ? static_cast<X*>(p.value) : nullptr; }
+template <class X> void *TypeId() { static char id=0; return &id; }
+template <class X> typed_ptr MakeTyped(X v) { return typed_ptr{ TypeId<X>(), v }; }
+template <class X> X GetTyped(const typed_ptr &p) { return p.type == TypeId<X>() ? static_cast<X>(p.value) : nullptr; }
 }; // namespace LFL
 #endif // __cplusplus
 #endif // LFL_LFAPP_LFEXPORT_H__

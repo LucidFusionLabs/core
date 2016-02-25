@@ -577,9 +577,9 @@ double *AcousticModel::State::Transit(Compiled *model, Matrix *transit, State *R
   return AcousticModel::State::Transit(transit, to);
 }
 
-double *AcousticModel::State::Transit(Matrix *trans, unsigned K) { double k[3]={0,double(K),0}; return FromVoid<double*>(bsearch(k, trans->m, trans->M, sizeof(double)*TransitCols, TransitionSort)); }
+double *AcousticModel::State::Transit(Matrix *trans, unsigned K) { double k[3]={0,double(K),0}; return static_cast<double*>(bsearch(k, trans->m, trans->M, sizeof(double)*TransitCols, TransitionSort)); }
 
-int AcousticModel::State::TransitionSort(const void *a, const void *b) { return DoubleSortR(Void(FromVoid<const double*>(a)+1), Void(FromVoid<const double*>(b)+1)); }
+int AcousticModel::State::TransitionSort(const void *a, const void *b) { return DoubleSortR(Void(static_cast<const double*>(a)+1), Void(static_cast<const double*>(b)+1)); }
 
 void AcousticModel::State::SortTransitionMap(double *trans, int M) { qsort(trans, M, sizeof(double)*TransitCols, TransitionSort); }
 
@@ -781,7 +781,7 @@ int AcousticModel::Write(StateCollection *model, const char *name, const char *d
   /* write data */
   states=means=transits=0;
   for (model->BeginState(&iter); !iter.done; model->NextState(&iter)) {
-    AcousticModel::State *s = FromVoid<AcousticModel::State*>(iter.v);
+    AcousticModel::State *s = static_cast<AcousticModel::State*>(iter.v);
     if (minSamples && s->val.samples < minSamples) continue;
 
     StringFile::WriteRow(&names, s->name);
@@ -1358,7 +1358,7 @@ void Decoder::VisualizeFeatures(AcousticModel::Compiled *model, Matrix *MFCC, Ma
 
   if (FLAGS_lfapp_audio) app->audio->QueueMixBuf(&B);
   INFO("vprob=", vprob, " vtime=", vtime.count());
-  Font *font = app->fonts->Default();
+  Font *font = screen->default_font;
 
   Box wcc = Box(5,345, 400,100);
   while (app->run && (app->audio->Out.size() || (interactive && !interactive_done))) {

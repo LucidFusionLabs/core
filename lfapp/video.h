@@ -236,6 +236,7 @@ struct Drawable {
     const Texture *tex=0;
     const LFL::Box *scissor=0;
     bool underline=0, overline=0, midline=0, blink=0, blend=0;
+    int line_width=1;
     constexpr Attr(Font *F=0, const Color *FG=0, const Color *BG=0, bool UL=0, bool B=0) : font(F), fg(FG), bg(BG), underline(UL), blend(B) {}
     constexpr Attr(const Texture *T, const Color *FG=0, const Color *BG=0, bool UL=0, bool B=0) : fg(FG), bg(BG), tex(T), underline(UL), blend(B) {}
     bool operator==(const Attr &y) const { return font==y.font && fg==y.fg && bg==y.bg && tex==y.tex && scissor==y.scissor && underline==y.underline && overline==y.overline && midline==y.midline && blink==y.blink && blend == y.blend; }
@@ -671,8 +672,9 @@ struct SimpleVideoResampler : public VideoResamplerInterface {
 
 #ifdef LFL_FFMPEG
 struct FFMPEGVideoResampler : public SimpleVideoResampler {
-  void *conv; bool simple_resampler_passthru;
-  FFMPEGVideoResampler() : conv(0), simple_resampler_passthru(0) {}
+  typed_ptr conv;
+  bool simple_resampler_passthru;
+  FFMPEGVideoResampler() : conv{0,0}, simple_resampler_passthru(0) {}
   virtual ~FFMPEGVideoResampler();
   virtual bool Opened();
   virtual void Open(int sw, int sh, int sf, int dw, int dh, int df);

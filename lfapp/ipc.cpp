@@ -287,7 +287,7 @@ bool MultiProcessBuffer::Open() {
     url = MultiProcessBufferURL;
     transfer_handle = impl;
   }
-  if ((buf = FromVoid<char*>(mmap(0, len, PROT_READ | (read_only ? 0 : PROT_WRITE), MAP_SHARED, impl, 0))) == MAP_FAILED) return ERRORv(false, "mmap ", impl); 
+  if ((buf = static_cast<char*>(mmap(0, len, PROT_READ | (read_only ? 0 : PROT_WRITE), MAP_SHARED, impl, 0))) == MAP_FAILED) return ERRORv(false, "mmap ", impl); 
   return true;
 }
 #elif defined(LFL_SHM_MPB)
@@ -307,7 +307,7 @@ bool MultiProcessBuffer::Open() {
     return ERRORv(false, "MultiProcessBuffer Open id=", impl, ", size=", len, ", url=", url, ": ", strerror(errno));
 
   CHECK_GE(impl, 0);
-  buf = FromVoid<char*>(shmat(impl, NULL, 0));
+  buf = static_cast<char*>(shmat(impl, NULL, 0));
   CHECK(buf);
   CHECK_NE((char*)-1, buf);
   if (url.empty()) url = StrCat("shm://", key);

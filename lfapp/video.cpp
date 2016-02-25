@@ -1152,7 +1152,7 @@ struct OpenGLES1 : public GraphicsDevice, public QTWindow {
   void Mult(const float *m) { glMultMatrixf(m); }
   void Translate(float x, float y, float z) { glTranslatef(x, y, z); }
   void DrawElements(int pt, int np, int it, int o, void *index, int l, int *out, bool dirty) {
-    glDrawElements(pt, np, it, FromVoid<char*>(index) + o);
+    glDrawElements(pt, np, it, static_cast<char*>(index) + o);
     GDDebug("DrawElements(", pt, ", ", np, ", ", it, ", ", o, ", ", index, ", ", l, ", ", dirty, ")");
   }
   void DrawArrays(int type, int o, int n) {
@@ -2022,20 +2022,20 @@ void Application::CloseWindow(Window *W) {
   screen = 0;
 }
 
-void Window::SetCaption(const string &v) { SetWindowText(FromVoid<HWND>(screen->id), v.c_str()); }
+void Window::SetCaption(const string &v) { SetWindowText(GetTyped<HWND>(screen->id), v.c_str()); }
 void Window::SetResizeIncrements(float x, float y) {
-  WinWindow *win = FromVoid<WinWindow*>(screen->impl);
+  WinWindow *win = GetTyped<WinWindow*>(screen->impl);
   win->resize_increment = point(x, y);
 }
 void Window::SetTransparency(float v) {
-  HWND hwnd = FromVoid<HWND>(screen->id);
+  HWND hwnd = GetTyped<HWND>(screen->id);
   if (v <= 0) SetWindowLong(hwnd, GWL_EXSTYLE, GetWindowLong(hwnd, GWL_EXSTYLE) & (~WS_EX_LAYERED));
   else {      SetWindowLong(hwnd, GWL_EXSTYLE, GetWindowLong(hwnd, GWL_EXSTYLE) | ( WS_EX_LAYERED));
     SetLayeredWindowAttributes(hwnd, 0, BYTE(max(1.0, (1-v)*255.0)), LWA_ALPHA);
   }
 }
 void Window::Reshape(int w, int h) {
-  WinWindow *win = FromVoid<WinWindow*>(impl);
+  WinWindow *win = GetTyped<WinWindow*>(impl);
   long lStyle = GetWindowLong((HWND)id, GWL_STYLE);
   RECT r = { 0, 0, w, h };
   AdjustWindowRect(&r, lStyle, win->menubar);
@@ -2085,24 +2085,24 @@ bool Application::CreateWindow(Window *W) {
   return true;
 }
 void Application::CloseWindow(Window *W) {
-  Display *display = FromVoid<Display*>(W->surface);
+  Display *display = GetTyped<Display*>(W->surface);
   glXMakeCurrent(display, None, NULL);
-  glXDestroyContext(display, FromVoid<GLXContext>(W->gl));
-  XDestroyWindow(display, FromVoid<::Window>(W->id));
+  glXDestroyContext(display, GetTyped<GLXContext>(W->gl));
+  XDestroyWindow(display, GetTyped<::Window>(W->id));
   windows.erase(W->id);
   if (windows.empty()) app->run = false;
   if (app->window_closed_cb) app->window_closed_cb(W);
   screen = 0;
 }
 void Application::MakeCurrentWindow(Window *W) {
-  glXMakeCurrent(FromVoid<Display*>(W->surface), FromVoid<::Window>(W->id), FromVoid<GLXContext>(W->gl));
+  glXMakeCurrent(GetTyped<Display*>(W->surface), GetTyped<::Window>(W->id), GetTyped<GLXContext>(W->gl));
 }
 void Window::Reshape(int w, int h) {
   X11VideoModule *video = dynamic_cast<X11VideoModule*>(app->video->impl.get());
   XWindowChanges resize;
   resize.width = w;
   resize.height = h;
-  XConfigureWindow(video->display, FromVoid<::Window*>(id), CWWidth|CWHeight, &resize);
+  XConfigureWindow(video->display, GetTyped<::Window*>(id), CWWidth|CWHeight, &resize);
 }
 #endif // LFL_X11VIDEO
 
@@ -2171,12 +2171,12 @@ void Application::MakeCurrentWindow(Window *W) {
   screen = W; 
   ((QOpenGLContext*)screen->gl)->makeCurrent((QWindow*)screen->id);
 }
-void Window::SetCaption(const string &v) { FromVoid<QWindow*>(screen->id)->setTitle(QString::fromUtf8(v.data(), v.size())); }
-void Window::SetResizeIncrements(float x, float y) { FromVoid<QWindow*>(screen->id)->setSizeIncrement(QSize(x, y)); }
-void Window::SetTransparency(float v) { FromVoid<QWindow*>(screen->id)->setOpacity(1-v); }
-void Window::Reshape(int w, int h) { FromVoid<QWindow*>(id)->resize(w, h); app->MakeCurrentWindow(screen); }
-void Mouse::GrabFocus()    { ((QTWindow*)screen->impl)->grabbed=1; ((QWindow*)screen->id)->setCursor(Qt::BlankCursor); app->grab_mode.On();  screen->cursor_grabbed=true;  }
-void Mouse::ReleaseFocus() { ((QTWindow*)screen->impl)->grabbed=0; ((QWindow*)screen->id)->unsetCursor();              app->grab_mode.Off(); screen->cursor_grabbed=false; }
+void Window::SetCaption(const string &v) { GetTyped<QWindow*>(id)->setTitle(QString::fromUtf8(v.data(), v.size())); }
+void Window::SetResizeIncrements(float x, float y) { GetTyped<QWindow*>(id)->setSizeIncrement(QSize(x, y)); }
+void Window::SetTransparency(float v) { GetTyped<QWindow*>(id)->setOpacity(1-v); }
+void Window::Reshape(int w, int h) { GetTyped<QWindow*>(id)->resize(w, h); app->MakeCurrentWindow(this); }
+void Mouse::GrabFocus()    { GetTyped<QTWindow*>(screen->impl)->grabbed=1; GetTyped<QWindow*>(screen->id)->setCursor(Qt::BlankCursor); app->grab_mode.On();  screen->cursor_grabbed=true;  }
+void Mouse::ReleaseFocus() { GetTyped<QTWindow*>(screen->impl)->grabbed=0; GetTyped<QWindow*>(screen->id)->unsetCursor();              app->grab_mode.Off(); screen->cursor_grabbed=false; }
 #endif // LFL_QT
 
 #ifdef LFL_WXWIDGETS
@@ -2307,7 +2307,7 @@ void Application::CloseWindow(Window *W) {
   if (app->window_closed_cb) app->window_closed_cb(W);
   screen = 0;
 }
-void Window::Reshape(int w, int h) { FromVoid<wxGLCanvas*>(id)->SetSize(w, h); }
+void Window::Reshape(int w, int h) { GetTyped<wxGLCanvas*>(id)->SetSize(w, h); }
 void Mouse::GrabFocus()    {}
 void Mouse::ReleaseFocus() {}
 #endif
@@ -2345,7 +2345,7 @@ void Application::CloseWindow(Window *W) {
   if (app->window_closed_cb) app->window_closed_cb(W);
   screen = 0;
 }
-void Window::Reshape(int w, int h) { glfwSetWindowSize(FromVoid<GLFWwindow*>(id), w, h); }
+void Window::Reshape(int w, int h) { glfwSetWindowSize(GetTyped<GLFWwindow*>(id), w, h); }
 #endif
 
 #ifdef LFL_SDLVIDEO
@@ -2405,7 +2405,7 @@ void Application::CloseWindow(Window *W) {
   if (app->window_closed_cb) app->window_closed_cb(W);
   screen = 0;
 }
-void Window::Reshape(int w, int h) { SDL_SetWindowSize(FromVoid<SDL_Window*>(id), w, h); }
+void Window::Reshape(int w, int h) { SDL_SetWindowSize(GetTyped<SDL_Window*>(id), w, h); }
 #endif /* LFL_SDLVIDEO */
 
 /* Video */
@@ -2501,7 +2501,7 @@ void *Video::CompleteGLContextCreate(Window *W, void *gl_context) {
   return gl_context;
 #elif defined(LFL_X11VIDEO)
   X11VideoModule *video = dynamic_cast<X11VideoModule*>(app->video->impl.get());
-  GLXContext glc = glXCreateContext(video->display, video->vi, FromVoid<GLXContext>(W->gl), GL_TRUE);
+  GLXContext glc = glXCreateContext(video->display, video->vi, GetTyped<GLXContext>(W->gl), GL_TRUE);
   glXMakeCurrent(video->display, (::Window)(W->id), glc);
   return glc;
 #else
@@ -2727,8 +2727,8 @@ void SimpleVideoResampler::CopyMatrixToColorChannels(const Matrix *M, int w, int
 }
 
 #ifdef LFL_FFMPEG
-FFMPEGVideoResampler::~FFMPEGVideoResampler() { if (conv) sws_freeContext(FromVoid<SwsContext*>(conv)); }
-bool FFMPEGVideoResampler::Opened() { return conv || simple_resampler_passthru; }
+FFMPEGVideoResampler::~FFMPEGVideoResampler() { if (conv.value) sws_freeContext(GetTyped<SwsContext*>(conv)); }
+bool FFMPEGVideoResampler::Opened() { return conv.value || simple_resampler_passthru; }
 
 void FFMPEGVideoResampler::Open(int sw, int sh, int sf, int dw, int dh, int df) {
   s_fmt = sf; s_width = sw; s_height = sh;
@@ -2738,8 +2738,8 @@ void FFMPEGVideoResampler::Open(int sw, int sh, int sf, int dw, int dh, int df) 
   if (SimpleVideoResampler::Supports(s_fmt) && SimpleVideoResampler::Supports(d_fmt) && sw == dw && sh == dh)
   { simple_resampler_passthru = 1; return; }
 
-  conv = sws_getContext(sw, sh, PixelFormat(Pixel::ToFFMpegId(sf)),
-                        dw, dh, PixelFormat(Pixel::ToFFMpegId(df)), SWS_BICUBIC, 0, 0, 0);
+  conv = MakeTyped(sws_getContext(sw, sh, PixelFormat(Pixel::ToFFMpegId(sf)),
+                                  dw, dh, PixelFormat(Pixel::ToFFMpegId(df)), SWS_BICUBIC, 0, 0, 0));
 }
 
 void FFMPEGVideoResampler::Resample(const unsigned char *s, int sls, unsigned char *d, int dls, bool flip_x, bool flip_y) {
@@ -2751,7 +2751,7 @@ void FFMPEGVideoResampler::Resample(const unsigned char *s, int sls, unsigned ch
     source[0] += sls * (s_height - 1);
     sourcels[0] *= -1;
   }
-  sws_scale(FromVoid<SwsContext*>(conv),
+  sws_scale(GetTyped<SwsContext*>(conv),
             flip_y ? source   : source,
             flip_y ? sourcels : sourcels, 0, s_height, dest, destls);
 }

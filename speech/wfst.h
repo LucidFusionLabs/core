@@ -206,7 +206,7 @@ struct WFST {
       return set->row(ind)[0];
     }
     int Find(int state) {
-      double x = state, *row = FromVoid<double*>(bsearch(&x, set->m, set->M, sizeof(double), DoubleSortR));
+      double x = state, *row = static_cast<double*>(bsearch(&x, set->m, set->M, sizeof(double), DoubleSortR));
       return row ? row - set->m : -1;
     }
     void Clear()                   { FATAL(this, " function not implemented"); }
@@ -362,7 +362,7 @@ struct WFST {
     TransitMapMatrix(Matrix *State, Matrix *Transit) : state(State), transit(Transit) {}
 
     static int SourceInputRowSort(const void *R1, const void *R2) { 
-      const double *r1 = FromVoid<const double*>(R1), *r2 = FromVoid<const double*>(R2);
+      const double *r1 = static_cast<const double*>(R1), *r2 = static_cast<const double*>(R2);
       if      (r1[0] < r2[0]) return -1; else if (r2[0] < r1[0]) return 1;
       else if (r1[2] < r2[2]) return -1; else if (r2[2] < r1[2]) return 1;
       return 0;
@@ -378,7 +378,7 @@ struct WFST {
 
       if (input != -1) {
         double seek[] = { double(stateIndex), -1, double(input), -1, -1 }, *found; 
-        found = FromVoid<double*>(bsearch(&seek, row, transitCount, sizeof(double)*Edge::Cols, SourceInputRowSort));
+        found = static_cast<double*>(bsearch(&seek, row, transitCount, sizeof(double)*Edge::Cols, SourceInputRowSort));
         if (!found) { iter->done=1; return; }
         while (found >= row && found[0] == stateIndex && found[2] == input) found -= Edge::Cols;
         transitIndex += (found - row) / Edge::Cols + 1;

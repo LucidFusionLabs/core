@@ -33,12 +33,12 @@ extern "C" int main(int argc, const char *argv[]) {
   open_console = 1;
 #endif
   int ac=1; const char *av[] = { "" };
-  if (app->Create(ac, av, __FILE__)) { app->Free(); return -1; }
+  if (app->Create(ac, av, __FILE__)) return -1;
   FLAGS_lfapp_audio = FLAGS_lfapp_video = FLAGS_lfapp_input = FLAGS_lfapp_camera = FLAGS_lfapp_network = 0;
-  if (app->Init()) { app->Free(); return -1; }
+  if (app->Init()) return -1;
 
   /* app init */
-  if (argc<2) { INFO(argv[0], " <file.matrix> [file.matbin]"); app->Free(); return -1; }
+  if (argc<2) { INFO(argv[0], " <file.matrix> [file.matbin]"); return -1; }
   const char *in=argv[1], *out=argc>2 ? argv[2] : 0;
 
   if (!out) {

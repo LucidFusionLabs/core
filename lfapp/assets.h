@@ -275,22 +275,10 @@ void glSpectogram(Matrix *m, unsigned char *data, int pf, int width, int height,
 void glSpectogram(Matrix *m, Texture *t, float *max=0, float clip=-INFINITY, int pd=PowerDomain::dB);
 void glSpectogram(const RingBuf::Handle *in, Texture *t, Matrix *transform=0, float *max=0, float clip=-INFINITY);
 
-struct BoxFilled : public Drawable { void Draw(const LFL::Box &b, const Drawable::Attr *a=0) const; };
-struct BoxOutline : public Drawable {
-  int line_width;
-  BoxOutline(int LW=1) : line_width(LW) {}
-  void Draw(const LFL::Box &b, const Drawable::Attr *a=0) const;
-};
-struct BoxTopLeftOutline : public Drawable {
-  int line_width;
-  BoxTopLeftOutline(int LW=1) : line_width(LW) {}
-  void Draw(const LFL::Box &b, const Drawable::Attr *a=0) const;
-};
-struct BoxBottomRightOutline : public Drawable {
-  int line_width;
-  BoxBottomRightOutline(int LW=1) : line_width(LW) {}
-  void Draw(const LFL::Box &b, const Drawable::Attr *a=0) const;
-};
+struct BoxFilled             : public Drawable { void Draw(const LFL::Box &b, const Drawable::Attr *a=0) const; };
+struct BoxOutline            : public Drawable { void Draw(const LFL::Box &b, const Drawable::Attr *a=0) const; };
+struct BoxTopLeftOutline     : public Drawable { void Draw(const LFL::Box &b, const Drawable::Attr *a=0) const; };
+struct BoxBottomRightOutline : public Drawable { void Draw(const LFL::Box &b, const Drawable::Attr *a=0) const; };
 
 struct Waveform : public Drawable {
   int width=0, height=0;

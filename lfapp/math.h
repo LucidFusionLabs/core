@@ -39,9 +39,10 @@ Rand(X rmin = 0, X rmax = numeric_limits<X>::max()) {
 }
 
 template <class Generator> string RandBytes(int n, Generator &g) {
-  string ret(NextMultipleOfPowerOfTwo(n, sizeof(int)), 0);
-  std::uniform_int_distribution<uint32_t> dist(0, numeric_limits<unsigned int>::max());
-  for (uint32_t *p = reinterpret_cast<uint32_t*>(&ret[0]), *e = p + ret.size()/sizeof(int); p != e; ++p) *p = dist(g);
+  string ret(NextMultipleOfPowerOfTwo(n, sizeof(uint32_t)), 0);
+  std::uniform_int_distribution<uint32_t> dist(0, numeric_limits<uint32_t>::max());
+  for (char *p = &ret[0], *e = p + ret.size(); p != e; p += sizeof(uint32_t)) 
+  { uint32_t rv = dist(g); memcpy(p, &rv, sizeof(uint32_t)); }
   ret.resize(n);
   return ret;
 }

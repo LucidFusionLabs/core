@@ -84,7 +84,7 @@ struct AudioResampler {
            int out_channels, int out_sample_rate, int out_sample_type);
   int Update(int samples, const short *in);
   int Update(int samples, RingBuf::Handle *L, RingBuf::Handle *R);
-  int Update(int samples, const short **in, short *tmp, microseconds timestamp, int max_samples_out);
+  int Update(int samples, const short *const *in, short *tmp, microseconds timestamp, int max_samples_out);
 
   static microseconds MonotonouslyIncreasingTimestamp(microseconds laststamp, microseconds stamp, microseconds *step, int steps);
 };

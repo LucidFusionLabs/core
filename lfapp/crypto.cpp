@@ -250,22 +250,22 @@ int Crypto::DigestGetHashSize(Digest *d) { return DigestAlgos::HashSize(d->algo)
 void Crypto::DigestOpen(Digest *d, DigestAlgo algo) {
   d->algo = algo;
   switch(algo) {
-    case CCDigestAlgo::MD5:    d->v=calloc(sizeof(CC_MD5_CTX),   1); CC_MD5_Init   (FromVoid<CC_MD5_CTX*>   (d->v)); break;
-    case CCDigestAlgo::SHA1:   d->v=calloc(sizeof(CC_SHA1_CTX),  1); CC_SHA1_Init  (FromVoid<CC_SHA1_CTX*>  (d->v)); break;
-    case CCDigestAlgo::SHA256: d->v=calloc(sizeof(CC_SHA256_CTX),1); CC_SHA256_Init(FromVoid<CC_SHA256_CTX*>(d->v)); break;
-    case CCDigestAlgo::SHA384: d->v=calloc(sizeof(CC_SHA512_CTX),1); CC_SHA384_Init(FromVoid<CC_SHA512_CTX*>(d->v)); break;
-    case CCDigestAlgo::SHA512: d->v=calloc(sizeof(CC_SHA512_CTX),1); CC_SHA512_Init(FromVoid<CC_SHA512_CTX*>(d->v)); break;
+    case CCDigestAlgo::MD5:    d->v=calloc(sizeof(CC_MD5_CTX),   1); CC_MD5_Init   (static_cast<CC_MD5_CTX*>   (d->v)); break;
+    case CCDigestAlgo::SHA1:   d->v=calloc(sizeof(CC_SHA1_CTX),  1); CC_SHA1_Init  (static_cast<CC_SHA1_CTX*>  (d->v)); break;
+    case CCDigestAlgo::SHA256: d->v=calloc(sizeof(CC_SHA256_CTX),1); CC_SHA256_Init(static_cast<CC_SHA256_CTX*>(d->v)); break;
+    case CCDigestAlgo::SHA384: d->v=calloc(sizeof(CC_SHA512_CTX),1); CC_SHA384_Init(static_cast<CC_SHA512_CTX*>(d->v)); break;
+    case CCDigestAlgo::SHA512: d->v=calloc(sizeof(CC_SHA512_CTX),1); CC_SHA512_Init(static_cast<CC_SHA512_CTX*>(d->v)); break;
     default:                   d->v=0; break;
   }
 }
 
 void Crypto::DigestUpdate(Digest *d, const StringPiece &in) {
   switch(d->algo) {
-    case CCDigestAlgo::MD5:    CC_MD5_Update   (FromVoid<CC_MD5_CTX*>   (d->v), in.data(), in.size()); break;
-    case CCDigestAlgo::SHA1:   CC_SHA1_Update  (FromVoid<CC_SHA1_CTX*>  (d->v), in.data(), in.size()); break;
-    case CCDigestAlgo::SHA256: CC_SHA256_Update(FromVoid<CC_SHA256_CTX*>(d->v), in.data(), in.size()); break;
-    case CCDigestAlgo::SHA384: CC_SHA384_Update(FromVoid<CC_SHA512_CTX*>(d->v), in.data(), in.size()); break;
-    case CCDigestAlgo::SHA512: CC_SHA512_Update(FromVoid<CC_SHA512_CTX*>(d->v), in.data(), in.size()); break;
+    case CCDigestAlgo::MD5:    CC_MD5_Update   (static_cast<CC_MD5_CTX*>   (d->v), in.data(), in.size()); break;
+    case CCDigestAlgo::SHA1:   CC_SHA1_Update  (static_cast<CC_SHA1_CTX*>  (d->v), in.data(), in.size()); break;
+    case CCDigestAlgo::SHA256: CC_SHA256_Update(static_cast<CC_SHA256_CTX*>(d->v), in.data(), in.size()); break;
+    case CCDigestAlgo::SHA384: CC_SHA384_Update(static_cast<CC_SHA512_CTX*>(d->v), in.data(), in.size()); break;
+    case CCDigestAlgo::SHA512: CC_SHA512_Update(static_cast<CC_SHA512_CTX*>(d->v), in.data(), in.size()); break;
     default: break;
   }
 }
@@ -273,11 +273,11 @@ void Crypto::DigestUpdate(Digest *d, const StringPiece &in) {
 string Crypto::DigestFinish(Digest *d) {
   string ret;
   switch(d->algo) {
-    case CCDigestAlgo::MD5:    ret.resize(CC_MD5_DIGEST_LENGTH);    CC_MD5_Final   (MakeUnsigned(&ret[0]), FromVoid<CC_MD5_CTX*>   (d->v)); free(d->v); d->v=0; break;
-    case CCDigestAlgo::SHA1:   ret.resize(CC_SHA1_DIGEST_LENGTH);   CC_SHA1_Final  (MakeUnsigned(&ret[0]), FromVoid<CC_SHA1_CTX*>  (d->v)); free(d->v); d->v=0; break;
-    case CCDigestAlgo::SHA256: ret.resize(CC_SHA256_DIGEST_LENGTH); CC_SHA256_Final(MakeUnsigned(&ret[0]), FromVoid<CC_SHA256_CTX*>(d->v)); free(d->v); d->v=0; break;
-    case CCDigestAlgo::SHA384: ret.resize(CC_SHA384_DIGEST_LENGTH); CC_SHA384_Final(MakeUnsigned(&ret[0]), FromVoid<CC_SHA512_CTX*>(d->v)); free(d->v); d->v=0; break;
-    case CCDigestAlgo::SHA512: ret.resize(CC_SHA512_DIGEST_LENGTH); CC_SHA512_Final(MakeUnsigned(&ret[0]), FromVoid<CC_SHA512_CTX*>(d->v)); free(d->v); d->v=0; break;
+    case CCDigestAlgo::MD5:    ret.resize(CC_MD5_DIGEST_LENGTH);    CC_MD5_Final   (MakeUnsigned(&ret[0]), static_cast<CC_MD5_CTX*>   (d->v)); free(d->v); d->v=0; break;
+    case CCDigestAlgo::SHA1:   ret.resize(CC_SHA1_DIGEST_LENGTH);   CC_SHA1_Final  (MakeUnsigned(&ret[0]), static_cast<CC_SHA1_CTX*>  (d->v)); free(d->v); d->v=0; break;
+    case CCDigestAlgo::SHA256: ret.resize(CC_SHA256_DIGEST_LENGTH); CC_SHA256_Final(MakeUnsigned(&ret[0]), static_cast<CC_SHA256_CTX*>(d->v)); free(d->v); d->v=0; break;
+    case CCDigestAlgo::SHA384: ret.resize(CC_SHA384_DIGEST_LENGTH); CC_SHA384_Final(MakeUnsigned(&ret[0]), static_cast<CC_SHA512_CTX*>(d->v)); free(d->v); d->v=0; break;
+    case CCDigestAlgo::SHA512: ret.resize(CC_SHA512_DIGEST_LENGTH); CC_SHA512_Final(MakeUnsigned(&ret[0]), static_cast<CC_SHA512_CTX*>(d->v)); free(d->v); d->v=0; break;
     default: break;
   }
   return ret;

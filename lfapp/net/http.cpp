@@ -713,11 +713,11 @@ struct StreamResourceClient : public Connection::Handler {
   static void CopyAVFormatContextStreams(AVFormatContext *dst, AVFormatContext *src) {
     if (!dst->streams) {
       dst->nb_streams = src->nb_streams;
-      dst->streams = FromVoid<AVStream**>(av_mallocz(sizeof(AVStream*) * src->nb_streams));
+      dst->streams = static_cast<AVStream**>(av_mallocz(sizeof(AVStream*) * src->nb_streams));
     }
 
     for (int i=0; i<src->nb_streams; i++) {
-      AVStream *s = FromVoid<AVStream*>(av_mallocz(sizeof(AVStream)));
+      AVStream *s = static_cast<AVStream*>(av_mallocz(sizeof(AVStream)));
       *s = *src->streams[i];
       s->priv_data = 0;
       s->codec->frame_number = 0;
@@ -732,7 +732,7 @@ struct StreamResourceClient : public Connection::Handler {
     AVFrame *picture = avcodec_alloc_frame();
     if (!picture) return 0;
     int size = avpicture_get_size(pix_fmt, width, height);
-    uint8_t *picture_buf = FromVoid<uint8_t*>(av_malloc(size));
+    uint8_t *picture_buf = static_cast<uint8_t*>(av_malloc(size));
     if (!picture_buf) { av_free(picture); return 0; }
     avpicture_fill(reinterpret_cast<AVPicture*>(picture), picture_buf, pix_fmt, width, height);
     return picture;
@@ -747,7 +747,7 @@ struct StreamResourceClient : public Connection::Handler {
     if (!samples) return 0;
     samples->nb_samples = num_samples;
     int size = 2 * num_samples * num_channels;
-    uint8_t *samples_buf = FromVoid<uint8_t*>(av_malloc(size + FF_INPUT_BUFFER_PADDING_SIZE));
+    uint8_t *samples_buf = static_cast<uint8_t*>(av_malloc(size + FF_INPUT_BUFFER_PADDING_SIZE));
     if (!samples_buf) { av_free(samples); return 0; }
     avcodec_fill_audio_frame(samples, num_channels, AV_SAMPLE_FMT_S16, samples_buf, size, 1);
     memset(samples_buf+size, 0, FF_INPUT_BUFFER_PADDING_SIZE);
@@ -935,7 +935,7 @@ void HTTPServer::StreamResource::SendVideo() {
 
 void HTTPServer::StreamResource::Broadcast(AVPacket *pkt, microseconds timestamp) {
   for (auto i = subscribers.begin(); i != subscribers.end(); i++) {
-    StreamResourceClient *client = FromVoid<StreamResourceClient*>(i->first);
+    StreamResourceClient *client = static_cast<StreamResourceClient*>(i->first);
     client->Write(pkt, timestamp);
   }
 }

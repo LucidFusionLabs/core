@@ -250,7 +250,7 @@ void Flow::SetMinimumAscent(short line_ascent) {
 
 void Flow::UpdateCurrentLine(int height_delta, int ascent_delta, int descent_delta) {
   p.y -= height_delta;
-  if (out) MoveCurrentLine(point(0, -ascent_delta));
+  if (out && !layout.append_only) MoveCurrentLine(point(0, -ascent_delta));
 }
 
 void Flow::AppendVerticalSpace(int h) {

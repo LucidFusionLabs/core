@@ -26,6 +26,9 @@ DECLARE_bool(console);
 DECLARE_string(console_font);
 DECLARE_int(console_font_flag);
 
+struct HAlign { enum { Left  =1, Center=2, Right=3 }; };
+struct VAlign { enum { Bottom=1, Center=2, Top  =3 }; };
+
 struct GUI {
   Box box;
   DrawableBoxArray child_box;
@@ -85,7 +88,7 @@ struct Widget {
     Color *solid=0, *outline=0, *outline_topleft=0, *outline_bottomright=0;
     MouseControllerCallback cb;
     bool init=0, hover=0;
-    int decay=0;
+    int decay=0, v_align=VAlign::Center;
     Button() : Interface(0) {}
     Button(GUI *G, Drawable *I, const string &T, const MouseControllerCallback &CB)
       : Interface(G), text(T), image(I), cb(CB), init(1) {}
@@ -642,6 +645,7 @@ struct MessageBoxDialog : public Dialog {
   Box messagesize;
   MessageBoxDialog(GraphicsDevice *d, const string &m) :
     Dialog(d, .25, .2), message(m) { font->Size(message, &messagesize); }
+  void Layout();
   void Draw();
 };
 

@@ -177,8 +177,8 @@ int atoi(const char16_t *v) {
 }
 
 uint32_t fnv32(const void *buf, unsigned len, uint32_t hval) {
-  if (!len) len = strlen(FromVoid<const char*>(buf));
-  const unsigned char *bp = FromVoid<const unsigned char*>(buf), *be = bp + len;
+  if (!len) len = strlen(static_cast<const char*>(buf));
+  const unsigned char *bp = static_cast<const unsigned char*>(buf), *be = bp + len;
   while (bp < be) {
     hval += (hval<<1) + (hval<<4) + (hval<<7) + (hval<<8) + (hval<<24);
     hval ^= uint32_t(*bp++);
@@ -187,8 +187,8 @@ uint32_t fnv32(const void *buf, unsigned len, uint32_t hval) {
 }
 
 uint64_t fnv64(const void *buf, unsigned len, uint64_t hval) {
-  if (!len) len = strlen(FromVoid<const char*>(buf));
-  const unsigned char *bp = FromVoid<const unsigned char*>(buf), *be = bp + len;
+  if (!len) len = strlen(static_cast<const char*>(buf));
+  const unsigned char *bp = static_cast<const unsigned char*>(buf), *be = bp + len;
   while (bp < be) {
     hval += (hval<<1) + (hval<<4) + (hval<<5) + (hval<<7) + (hval<<8) + (hval<<40);
     hval ^= uint64_t(*bp++);
@@ -721,14 +721,14 @@ string Base64::Decode(const char *data, size_t input_length) {
 }
 
 #ifdef LFL_REGEX
-Regex::~Regex() { re_free(FromVoid<regexp*>(impl)); }
+Regex::~Regex() { re_free(static_cast<regexp*>(impl)); }
 Regex::Regex(const string &patternstr) {
   regexp* compiled = 0;
   if (!re_comp(&compiled, patternstr.c_str())) impl = compiled;
 }
 int Regex::Match(const string &text, vector<Regex::Result> *out) {
   if (!impl) return -1;
-  regexp* compiled = FromVoid<regexp*>(impl);
+  regexp* compiled = static_cast<regexp*>(impl);
   vector<regmatch> matches(re_nsubexp(compiled));
   int retval = re_exec(compiled, text.c_str(), matches.size(), &matches[0]);
   if (retval < 1) return retval;
@@ -743,23 +743,23 @@ int Regex::Match(const string &text, vector<Regex::Result> *out) { ERROR("regex 
 
 #ifdef LFL_SREGEX
 StreamRegex::~StreamRegex() {
-  if (ppool) sre_destroy_pool(FromVoid<sre_pool_t*>(ppool));
-  if (cpool) sre_destroy_pool(FromVoid<sre_pool_t*>(cpool));
+  if (ppool) sre_destroy_pool(static_cast<sre_pool_t*>(ppool));
+  if (cpool) sre_destroy_pool(static_cast<sre_pool_t*>(cpool));
 }
 StreamRegex::StreamRegex(const string &patternstr) : ppool(sre_create_pool(1024)), cpool(sre_create_pool(1024)) {
   sre_uint_t ncaps;
   sre_int_t err_offset = -1;
-  sre_regex_t *re = sre_regex_parse(FromVoid<sre_pool_t*>(cpool),
+  sre_regex_t *re = sre_regex_parse(static_cast<sre_pool_t*>(cpool),
                                     MakeUnsigned(const_cast<char*>(patternstr.c_str())),
                                     &ncaps, 0, &err_offset);
-  prog = sre_regex_compile(FromVoid<sre_pool_t*>(ppool), re);
-  sre_reset_pool(FromVoid<sre_pool_t*>(cpool));
+  prog = sre_regex_compile(static_cast<sre_pool_t*>(ppool), re);
+  sre_reset_pool(static_cast<sre_pool_t*>(cpool));
   res.resize(2*(ncaps+1));
-  ctx = sre_vm_pike_create_ctx(FromVoid<sre_pool_t*>(cpool), FromVoid<sre_program_t*>(prog), &res[0], res.size()*sizeof(sre_int_t));
+  ctx = sre_vm_pike_create_ctx(static_cast<sre_pool_t*>(cpool), static_cast<sre_program_t*>(prog), &res[0], res.size()*sizeof(sre_int_t));
 }
 int StreamRegex::Match(const string &text, vector<Regex::Result> *out, bool eof) {
   int offset = last_end + since_last_end;
-  sre_int_t rc = sre_vm_pike_exec(FromVoid<sre_vm_pike_ctx_t*>(ctx),
+  sre_int_t rc = sre_vm_pike_exec(static_cast<sre_vm_pike_ctx_t*>(ctx),
                                   MakeUnsigned(const_cast<char*>(text.data())), text.size(), eof, NULL);
   if (rc >= 0) {
     since_last_end = 0;

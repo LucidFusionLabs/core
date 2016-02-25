@@ -94,6 +94,7 @@ void Widget::Button::LayoutComplete(Flow *flow, Font *f, const Box &b) {
     flow->out->PushBack(box, flow->cur_attr, Singleton<BoxOutline>::Get());
   } else if (outline_topleft || outline_bottomright) {
     flow->SetFont(0);
+    flow->cur_attr.line_width=3;
     if (outline_topleft) {
       flow->SetFGColor(outline_topleft);
       flow->out->PushBack(box, flow->cur_attr, Singleton<BoxTopLeftOutline>::Get());
@@ -104,14 +105,15 @@ void Widget::Button::LayoutComplete(Flow *flow, Font *f, const Box &b) {
     }
   }
   if (!text.empty()) {
-    Box tb;
+    Box dim(box.Dimension()), tb;
     font->Size(text, &tb);
     textsize = tb.Dimension();
 
     point save_p = flow->p;
     flow->SetFont(font);
     flow->SetFGColor(0);
-    flow->p = box.Position() + point(Box(0, 0, box.w, box.h).centerX(textsize.x), 0);
+    flow->p = box.Position() + point(dim.centerX(textsize.x),
+                                     v_align == VAlign::Center ? dim.centerY(textsize.y) : 0);
     flow->AppendText(text);
     flow->p = save_p;
   }
@@ -713,7 +715,7 @@ bool TextArea::GetGlyphFromCoordsOffset(const point &p, Selection::Point *out, i
 }
 
 void TextArea::InitSelection() {
-  Activate();
+  // Activate();
   selection.gui_ind = mouse.AddDragBox
     (Box(), MouseController::CoordCB(bind(&TextArea::DragCB, this, _1, _2, _3, _4)));
 }
@@ -1709,12 +1711,17 @@ void DialogTab::Draw(const Box &b, const point &tab_dim, const vector<DialogTab>
   for (int i=0, l=t.size(); i<l; ++i) t[i].child_box.Draw(b.TopLeft() + point(i*tab_dim.x, 0));
 }
 
+void MessageBoxDialog::Layout() {
+  Dialog::Layout();
+  Box dim(box.Dimension());
+  Flow flow(&dim, font, &child_box);
+  flow.p = point(dim.centerX(messagesize.w), dim.centerY(messagesize.h) - dim.h);
+  flow.AppendText(message);
+}
+
 void MessageBoxDialog::Draw() {
+  Scissor scissor(screen->gd, box);
   Dialog::Draw();
-  {
-    Scissor scissor(screen->gd, box);
-    font->Draw(message, point(box.centerX(messagesize.w), box.centerY(messagesize.h))); 
-  }
 }
 
 SliderDialog::SliderDialog(GraphicsDevice *d, const string &t, const SliderDialog::UpdatedCB &cb, float scrolled, float total, float inc) :

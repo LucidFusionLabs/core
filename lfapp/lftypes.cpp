@@ -86,7 +86,7 @@ unique_ptr<MMapAllocator> MMapAllocator::Open(const char *path, bool logerror, b
     size = s.st_size;
   }
 
-  char *buf = FromVoid<char*>(mmap(0, size, PROT_READ | (readonly ? 0 : PROT_WRITE) , MAP_PRIVATE, fd, 0));
+  char *buf = static_cast<char*>(mmap(0, size, PROT_READ | (readonly ? 0 : PROT_WRITE) , MAP_PRIVATE, fd, 0));
   if (buf == MAP_FAILED) { ERROR("mmap failed: ", strerror(errno)); close(fd); return nullptr; }
 
   close(fd);
@@ -119,10 +119,10 @@ void RingBuf::Resize(int SPS, int SPB, int Width) {
     width = Width ? Width : sizeof(float);
     bytes = ring.size * width;
     if (buf) alloc->Free(buf);
-    buf = FromVoid<char*>(alloc->Malloc(bytes));
+    buf = static_cast<char*>(alloc->Malloc(bytes));
     memset(buf, 0, bytes);
     if (stamp) alloc->Free(stamp);
-    stamp = FromVoid<microseconds*>(alloc->Malloc(ring.size * sizeof(microseconds)));
+    stamp = static_cast<microseconds*>(alloc->Malloc(ring.size * sizeof(microseconds)));
     memset(stamp, 0, ring.size * sizeof(microseconds));
   }
   ring.back = 0;

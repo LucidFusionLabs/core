@@ -59,8 +59,6 @@ template <class X> X *NullPointer() { return nullptr; }
 template <class X> X *CheckPointer(X *x) { CHECK(x); return x; }
 template <class X> X *CheckNullAssign(X **x, X *v) { CHECK_EQ(nullptr, *x); return (*x = v); }
 template <class X> X *GetThenAssignNull(X **x) { X *v = *x; if (v) *x = nullptr; return v; }
-template <class X> X FromVoid(const void *v) { return static_cast<X>(v); }
-template <class X> X FromVoid(      void *v) { return static_cast<X>(v); }
 template <class X> typename make_unsigned<X>::type *MakeUnsigned(X *x) { return reinterpret_cast<typename make_unsigned<X>::type*>(x); }
 template <class X> typename make_signed  <X>::type *MakeSigned  (X *x) { return reinterpret_cast<typename make_signed  <X>::type*>(x); }
 inline       char *MakeSigned(      unsigned char *x) { return reinterpret_cast<      char*>(x); }
@@ -786,12 +784,12 @@ struct RingBuf {
     Handle(RingBuf *SB, int Next=-1, int Len=-1) : sb(SB), next((sb && Next != -1)?sb->Bucket(Next):-1), nlen(Len) {}
     virtual int Rate() const { return sb->samples_per_sec; }
     virtual int Len() const { return nlen >= 0 ? nlen : sb->ring.size; }
-    virtual float *Index(int index) { return FromVoid<float*>(sb->Ind(index)); }
-    virtual float Ind(int index) const { return *FromVoid<float*>(sb->Ind(index)); }
-    virtual void Write(float v, int flag=0, microseconds ts=microseconds(-1)) { *FromVoid<float*>(sb->Write(flag, ts)) = v; }
-    virtual void Write(float *v, int flag=0, microseconds ts=microseconds(-1)) { *FromVoid<float*>(sb->Write(flag, ts)) = *v; }
-    virtual float Read(int index) const { return *FromVoid<float*>(sb->Read(index, next)); }
-    virtual float *ReadAddr(int index) const { return FromVoid<float*>(sb->Read(index, next)); } 
+    virtual float *Index(int index) { return static_cast<float*>(sb->Ind(index)); }
+    virtual float Ind(int index) const { return *static_cast<float*>(sb->Ind(index)); }
+    virtual void Write(float v, int flag=0, microseconds ts=microseconds(-1)) { *static_cast<float*>(sb->Write(flag, ts)) = v; }
+    virtual void Write(float *v, int flag=0, microseconds ts=microseconds(-1)) { *static_cast<float*>(sb->Write(flag, ts)) = *v; }
+    virtual float Read(int index) const { return *static_cast<float*>(sb->Read(index, next)); }
+    virtual float *ReadAddr(int index) const { return static_cast<float*>(sb->Read(index, next)); } 
     virtual microseconds ReadTimestamp(int index) const { return sb->ReadTimestamp(index, next); }
     void CopyFrom(const RingBuf::Handle *src);
   };
@@ -799,10 +797,10 @@ struct RingBuf {
   template <typename X> struct HandleT : public Handle {
     HandleT() {}
     HandleT(RingBuf *SB, int Next=-1, int Len=-1) : Handle(SB, Next, Len) {}
-    virtual float Ind(int index) const { return *FromVoid<X*>(sb->Ind(index)); }
-    virtual float Read(int index) const { return *FromVoid<X*>(sb->Read(index, next)); }
-    virtual void Write(float  v, int flag=0, microseconds ts=microseconds(-1)) { *FromVoid<X*>(sb->Write(flag, ts)) =  v; }
-    virtual void Write(float *v, int flag=0, microseconds ts=microseconds(-1)) { *FromVoid<X*>(sb->Write(flag, ts)) = *v; }
+    virtual float Ind(int index) const { return *static_cast<X*>(sb->Ind(index)); }
+    virtual float Read(int index) const { return *static_cast<X*>(sb->Read(index, next)); }
+    virtual void Write(float  v, int flag=0, microseconds ts=microseconds(-1)) { *static_cast<X*>(sb->Write(flag, ts)) =  v; }
+    virtual void Write(float *v, int flag=0, microseconds ts=microseconds(-1)) { *static_cast<X*>(sb->Write(flag, ts)) = *v; }
   };
 
   struct DelayHandle : public Handle {
@@ -816,7 +814,7 @@ struct RingBuf {
 
   struct WriteAheadHandle : public Handle {
     WriteAheadHandle(RingBuf *SB) : Handle(SB, SB->ring.back) {}
-    virtual void Write(float v, int flag=0, microseconds ts=microseconds(-1)) { *FromVoid<float*>(Write(flag, ts)) = v; }
+    virtual void Write(float v, int flag=0, microseconds ts=microseconds(-1)) { *static_cast<float*>(Write(flag, ts)) = v; }
     virtual void *Write(int flag=0, microseconds ts=microseconds(-1)) {
       void *ret = sb->Ind(next);
       if (flag & Stamp) sb->stamp[next] = (ts != microseconds(-1)) ? ts : Now();
@@ -835,10 +833,10 @@ struct RingBuf {
       matrix<T>::N = matrix<T>::bytes/sizeof(T);
     }
 
-    T             * row(int i)       { return FromVoid<T*>(sb->Read(i, next)); }
-    const T       * row(int i) const { return FromVoid<T*>(sb->Read(i, next)); }
-    Complex       *crow(int i)       { return FromVoid<Complex*>(sb->Read(i, next)); }
-    const Complex *crow(int i) const { return FromVoid<Complex*>(sb->Read(i, next)); }
+    T             * row(int i)       { return static_cast<T*>(sb->Read(i, next)); }
+    const T       * row(int i) const { return static_cast<T*>(sb->Read(i, next)); }
+    Complex       *crow(int i)       { return static_cast<Complex*>(sb->Read(i, next)); }
+    const Complex *crow(int i) const { return static_cast<Complex*>(sb->Read(i, next)); }
   };
   typedef MatrixHandleT<double> MatrixHandle;
 
@@ -853,10 +851,10 @@ struct RingBuf {
     RowMatHandleT(RingBuf *SB) : sb(SB), next(-1) { Init(); }
     RowMatHandleT(RingBuf *SB, int Next) : sb(SB), next((sb && Next != -1)?sb->Bucket(Next):-1) { Init(); }
 
-    matrix<T> *Ind(int index) { wrap.m = FromVoid<double*>(sb->Ind(index)); return &wrap; }
-    matrix<T> *Read(int index) { wrap.m = FromVoid<double*>(sb->Read(index, next)); return &wrap; }
-    double *ReadRow(int index) { wrap.m = FromVoid<double*>(sb->Read(index, next)); return wrap.row(0); }
-    matrix<T> *Write(int flag=0, microseconds ts=microseconds(-1)) { wrap.m = FromVoid<double*>(sb->Write(flag, ts)); return &wrap; }
+    matrix<T> *Ind(int index) { wrap.m = static_cast<double*>(sb->Ind(index)); return &wrap; }
+    matrix<T> *Read(int index) { wrap.m = static_cast<double*>(sb->Read(index, next)); return &wrap; }
+    double *ReadRow(int index) { wrap.m = static_cast<double*>(sb->Read(index, next)); return wrap.row(0); }
+    matrix<T> *Write(int flag=0, microseconds ts=microseconds(-1)) { wrap.m = static_cast<double*>(sb->Write(flag, ts)); return &wrap; }
     microseconds ReadTimestamp(int index) const { return sb->ReadTimestamp(index, next); }
   };
   typedef RowMatHandleT<double> RowMatHandle;

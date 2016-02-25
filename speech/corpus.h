@@ -57,7 +57,7 @@ struct VoxForgeTgzFile {
   void Run(const string &file) {
     ArchiveIter a(file.c_str());
     if (!a.impl) return;
-    for (const char *afn = a.Next(); Running() && afn; afn = a.Next()) {
+    for (const char *afn = a.Next(); app->run && afn; afn = a.Next()) {
       if (SuffixMatch(afn, "etc/prompts", false)) HandlePrompts(       a.buf.data(), a.buf.size());
       else if (BaseDir(afn, "wav"))               HandleWAV(file, afn, a.buf.data(), a.buf.size());
     }
@@ -92,7 +92,7 @@ struct FeatCorpus {
   static int FeatIter(const char *featdir, const FeatCB &cb) {
     DirectoryIter d(featdir); int count=0;
 
-    for (const char *fn = d.Next(); Running() && fn; fn = d.Next()) {
+    for (const char *fn = d.Next(); app->run && fn; fn = d.Next()) {
       bool matrixF=SuffixMatch(fn, ".feat", false), txtF=SuffixMatch(fn, ".txt", false), listF=SuffixMatch(fn, ".featlist", false);
       string pn = string(featdir) + fn;
 
@@ -114,7 +114,7 @@ struct FeatCorpus {
     featlist.Open(fn);
     int count=0;
 
-    while (Running()) {
+    while (app->run) {
       MatrixFile feat;
       featlist.Read(&feat);
       if (!feat.F) break;
@@ -155,7 +155,7 @@ struct PathCorpus {
   static int PathIter(const char *featdir, MatrixArchiveInputFile *paths, PathCB cb) {
     MatrixArchiveInputFile utts; string lastarchive; int listfile, count=0;
 
-    while (Running()) {
+    while (app->run) {
       Timer vtime;
       MatrixFile path, utt;
 

@@ -161,9 +161,9 @@ struct AcousticModel {
 
     int GetStateCount() { return states; }
     State *GetState(unsigned stateID) { return 0; }
-    void BeginState(Iterator *iter) { iter->done = 0; *FromVoid<int*>(iter->impl) = 0; NextState(iter); }
+    void BeginState(Iterator *iter) { iter->done = 0; *reinterpret_cast<int*>(iter->impl) = 0; NextState(iter); }
     void NextState(Iterator *iter) {
-      int *impl = FromVoid<int*>(iter->impl);
+      int *impl = reinterpret_cast<int*>(iter->impl);
       if (*impl >= states) { iter->done = 1; return; }
       iter->k = (*impl)++;
       iter->v = &state[iter->k];
@@ -232,8 +232,8 @@ struct AcousticModelBuilder : public AcousticModel::StateCollection {
   int GetStateCount() { return statemap.size(); }
   AcousticModel::State *GetState(unsigned stateID) { Map::iterator i = statemap.find(stateID); return i != statemap.end() ? (*i).second : 0; }
 
-  void BeginState(Iterator *iter) { iter->done=0; Map::iterator *i = FromVoid<Map::iterator*>(iter->impl); *i = statemap.begin(); AssignKV(iter, i); }
-  void NextState (Iterator *iter) {               Map::iterator *i = FromVoid<Map::iterator*>(iter->impl); (*i)++;                AssignKV(iter, i); }
+  void BeginState(Iterator *iter) { iter->done=0; Map::iterator *i = reinterpret_cast<Map::iterator*>(iter->impl); *i = statemap.begin(); AssignKV(iter, i); }
+  void NextState (Iterator *iter) {               Map::iterator *i = reinterpret_cast<Map::iterator*>(iter->impl); (*i)++;                AssignKV(iter, i); }
 
   void AssignKV(Iterator *iter, Map::iterator *i) {
     if (*i == statemap.end()) iter->done = 1;
@@ -266,7 +266,7 @@ struct AcousticHMM {
       Next(iter);
     }
     void Next(Iterator *iter) {
-      AcousticModel::State *s = FromVoid<AcousticModel::State*>(iter->impl1);
+      AcousticModel::State *s = static_cast<AcousticModel::State*>(iter->impl1);
       if (iter->impl2 >= s->transition.M) { iter->done=1; return; }
       double *tr = s->transition.row(iter->impl2++);
       iter->state = tr[TC_Edge];
@@ -287,7 +287,7 @@ struct AcousticHMM {
     ~EmissionArray() { if (alloc) alloc->Free(emission); }
     EmissionArray(AcousticModel::Compiled *M, Matrix *Observed, bool UsePrior, Allocator *Alloc=0) : model(M),
     observed(Observed), use_prior_prob(UsePrior), time_index(0), alloc(Alloc?Alloc:Singleton<MallocAllocator>::Get()),
-    emission(FromVoid<double*>(alloc->Malloc(sizeof(double)*model->states))) {}
+    emission(static_cast<double*>(alloc->Malloc(sizeof(double)*model->states))) {}
 
     double *Observation(int t) { return observed->row(t); }
     int Observations() { return observed->M; }
@@ -315,7 +315,7 @@ struct AcousticHMM {
     EmissionMatrix(AcousticModel::Compiled *M, Matrix *Observed, bool UsePrior, Allocator *Alloc=0) : model(M), observed(Observed), use_prior_prob(UsePrior),
     K(model->state[0].emission.mean.M), time_index(0), alloc(Alloc?Alloc:Singleton<MallocAllocator>::Get()),
     emission(observed->M, model->states, 0, 0, Alloc), emissionPosterior(observed->M, model->states*K, 0, 0, Alloc),
-    calcd(FromVoid<bool*>(alloc->Malloc(observed->M))), cudaPosterior(FromVoid<double*>(alloc->Malloc(model->states*K*sizeof(double))))
+    calcd(static_cast<bool*>(alloc->Malloc(observed->M))), cudaPosterior(static_cast<double*>(alloc->Malloc(model->states*K*sizeof(double))))
     { memset(calcd, 0, observed->M);  }
 
     double *Observation(int t) { return observed->row(t); }

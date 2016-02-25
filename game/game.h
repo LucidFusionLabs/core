@@ -361,11 +361,11 @@ struct GameServer : public Connection::Handler {
   }
 
   void Write(Connection *c, int method, unsigned short seq, Serializable *msg) {
-    FromVoid<Game::Network*>(c->svc->game_network)->Write(c, method, seq, msg);
+    static_cast<Game::Network*>(c->svc->game_network)->Write(c, method, seq, msg);
   }
 
   void WriteWithRetry(Connection *c, Game::ConnectionData *cd, Serializable *msg) {
-    FromVoid<Game::Network*>(c->svc->game_network)->WriteWithRetry(&cd->retry, c, msg, cd->seq++);
+    static_cast<Game::Network*>(c->svc->game_network)->WriteWithRetry(&cd->retry, c, msg, cd->seq++);
   }
 
   void WritePrintWithRetry(Connection *c, Game::ConnectionData *cd, const string &text) {
@@ -375,7 +375,7 @@ struct GameServer : public Connection::Handler {
 
   int BroadcastWithRetry(Serializable *msg, Connection *skip=0) {
     int ret = 0;
-    for (int i=0; i<svc.size(); ++i) ret += FromVoid<Game::Network*>(svc[i]->game_network)->BroadcastWithRetry(svc[i], msg, skip);
+    for (int i=0; i<svc.size(); ++i) ret += static_cast<Game::Network*>(svc[i]->game_network)->BroadcastWithRetry(svc[i], msg, skip);
     return ret;
   }
 
@@ -415,7 +415,7 @@ struct GameServer : public Connection::Handler {
 
     last.num_send_WorldUpdate = 0;
     for (int i = 0; i < svc.size(); ++i) {
-      last.num_send_WorldUpdate += FromVoid<Game::Network*>(svc[i]->game_network)->Broadcast(svc[i], &last.WorldUpdate);
+      last.num_send_WorldUpdate += static_cast<Game::Network*>(svc[i]->game_network)->Broadcast(svc[i], &last.WorldUpdate);
     }
     if (bots) bots->Update(timestep); 
     return 0;

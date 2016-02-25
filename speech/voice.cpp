@@ -33,7 +33,7 @@ int VoiceModel::Read(const char *dir) {
     string pn = string(dir) + fn, hdr;
     int samples = MatrixArchiveInputFile::Count(pn), err, count=0;
     unit[phoneme].samples = samples;
-    unit[phoneme].sample = FromVoid<Unit::Sample*>(calloc(sizeof(Unit::Sample), samples));
+    unit[phoneme].sample = static_cast<Unit::Sample*>(calloc(sizeof(Unit::Sample), samples));
 
     MatrixArchiveInputFile index(pn.c_str());
     Matrix *m;

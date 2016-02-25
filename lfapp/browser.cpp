@@ -67,7 +67,7 @@ int PercentRefersTo(unsigned short prt, Flow *inline_context) {
 
 #ifdef LFL_LIBCSS
 css_error StyleSheet::Import(void *pw, css_stylesheet *parent, lwc_string *url, uint64_t media) {
-  LFL::DOM::Document *D = FromVoid<StyleSheet*>(pw)->ownerDocument;
+  LFL::DOM::Document *D = static_cast<StyleSheet*>(pw)->ownerDocument;
   if (D) D->parser->OpenStyleImport(LibCSS_String::ToUTF8String(url)); // XXX use parent
   INFO("libcss Import ", LibCSS_String::ToString(url));
   return CSS_INVALID; // CSS_OK;
@@ -95,7 +95,7 @@ void StyleContext::Match(ComputedStyle *out, LFL::DOM::Node *node, const Compute
 css_error StyleContext::NodeClasses(void *pw, void *n, lwc_string ***classes_out, uint32_t *n_classes) {
   *n_classes = 0;
   *classes_out = NULL;
-  DOM::Node *node = FromVoid<DOM::Node*>(n), *attr = 0;
+  DOM::Node *node = static_cast<DOM::Node*>(n), *attr = 0;
   if (!(attr = node->getAttributeNode("class"))) return CSS_OK;
 
   vector<DOM::DOMString> classes;

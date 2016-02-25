@@ -20,6 +20,7 @@
 #define LFL_LFAPP_LFAPP_H__
 
 #include <sstream>
+#include <typeinfo>
 #include <vector>
 #include <string>
 #include <map>
@@ -103,10 +104,14 @@ extern int optind;
 #endif
 
 #define  INFO(...) ((::LFApp::Log::Info  <= ::LFL::FLAGS_loglevel) ? ::LFL::Log(::LFApp::Log::Info,  __FILE__, __LINE__, ::LFL::StrCat(__VA_ARGS__)) : void())
-#define DEBUG(...) ((::LFApp::Log::Debug <= ::LFL::FLAGS_loglevel) ? ::LFL::Log(::LFApp::Log::Debug, __FILE__, __LINE__, ::LFL::StrCat(__VA_ARGS__)) : void())
 #define ERROR(...) ((::LFApp::Log::Error <= ::LFL::FLAGS_loglevel) ? ::LFL::Log(::LFApp::Log::Error, __FILE__, __LINE__, ::LFL::StrCat(__VA_ARGS__)) : void())
 #define FATAL(...) { ::LFL::Log(::LFApp::Log::Fatal, __FILE__, __LINE__, ::LFL::StrCat(__VA_ARGS__)); throw(0); }
 #define ERRORv(v, ...) LFL::Log(::LFApp::Log::Error, __FILE__, __LINE__, ::LFL::StrCat(__VA_ARGS__)), v
+#ifdef LFL_DEBUG
+#define DEBUG(...) ((::LFApp::Log::Debug <= ::LFL::FLAGS_loglevel) ? ::LFL::Log(::LFApp::Log::Debug, __FILE__, __LINE__, ::LFL::StrCat(__VA_ARGS__)) : void())
+#else
+#define DEBUG(...)
+#endif
 
 #define ONCE(x) { static bool once=0; if (!once && (once=1)) { x; } }
 #define EVERY_N(x, y) { static int every_N=0; if (every_N++ % (x) == 0) { y; } }
@@ -518,13 +523,19 @@ struct Window : public ::NativeWindow {
   void SwapAxis();
   int  Frame(unsigned clicks, int flag);
   void RenderToFrameBuffer(FrameBuffer *fb);
+  void InitConsole(const Callback &animating_cb);
 
   template <class X> X* GetGUI(size_t i) { return i < gui.size() ? dynamic_cast<X*>(gui[i]) : nullptr; }
   template <class X> X* GetOwnGUI(size_t i) { return i < my_gui.size() ? dynamic_cast<X*>(my_gui[i].get()) : nullptr; }
-  template <class X> X* AddGUI(unique_ptr<X> g) { auto gp = VectorAddUnique(&my_gui, move(g)); gui.push_back(gp); return gp; }
   template <class X> X* GetInputController(size_t i) { return i < input.size() ? dynamic_cast<X*>(input[i].get()) : nullptr; }
   template <class X> X* AddInputController(unique_ptr<X> g) { return VectorAddUnique(&input, move(g)); }
   template <class X> void DelGUIPointer(X **g) { DelGUI(*g); *g = nullptr; }
+  template <class X> X* AddGUI(unique_ptr<X> g) {
+    auto gp = VectorAddUnique(&my_gui, move(g));
+    gui.push_back(gp);
+    DEBUGf("AddGUI[%zd] %s %p", gui.size()-1, typeid(X).name(), gui.back());
+    return gp;
+  }
   template <class X> X* ReplaceGUI(size_t i, unique_ptr<X> g) {
     auto gp = g.get();
     if (auto p = my_gui[i].get()) RemoveGUI(p);
@@ -536,8 +547,8 @@ struct Window : public ::NativeWindow {
   void DelGUI(GUI *g);
   size_t NewGUI();
 
-  void InitConsole(const Callback &animating_cb);
-  void AddDialog(unique_ptr<Dialog>);
+  template <class X> X* AddDialog(unique_ptr<X> d) { auto dp = VectorAddUnique(&dialogs, move(d)); OnDialogAdded(dp); return dp; }
+  virtual void OnDialogAdded(Dialog *d) { if (dialogs.size() == 1) BringDialogToFront(d); }
   void BringDialogToFront(Dialog*);
   void GiveDialogFocusAway(Dialog*);
   void DrawDialogs();

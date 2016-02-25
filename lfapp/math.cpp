@@ -172,8 +172,8 @@ int DoubleSort(double a, double b) {
   else if (a > b) return -1;
   else return 0;
 }
-int DoubleSort (const void *a, const void *b) { return DoubleSort(*FromVoid<const double*>(a), *FromVoid<const double*>(b)); }
-int DoubleSortR(const void *a, const void *b) { return DoubleSort(*FromVoid<const double*>(b), *FromVoid<const double*>(a)); }
+int DoubleSort (const void *a, const void *b) { return DoubleSort(*static_cast<const double*>(a), *static_cast<const double*>(b)); }
+int DoubleSortR(const void *a, const void *b) { return DoubleSort(*static_cast<const double*>(b), *static_cast<const double*>(a)); }
 
 double RadianToDegree(float rad) { return rad * 180 / M_PI; }
 double DegreeToRadian(float deg) { return deg * M_PI / 180; }

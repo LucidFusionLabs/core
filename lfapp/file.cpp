@@ -111,7 +111,7 @@ int BufferFile::Read(void *out, size_t size) {
 
 int BufferFile::Write(const void *In, size_t size) {
   CHECK(owner);
-  const char *in = FromVoid<const char*>(In);
+  const char *in = static_cast<const char*>(In);
   if (size == -1) size = strlen(in);
   size_t l = min(size, buf.size() - wro);
   buf.replace(wro, l, in, l);
@@ -236,46 +236,46 @@ bool LocalFile::Open(const string &path, const string &mode, bool pre_create) {
 }
 
 void LocalFile::Reset() {
-  fseek(FromVoid<FILE*>(impl), 0, SEEK_SET);
+  fseek(static_cast<FILE*>(impl), 0, SEEK_SET);
 }
 
 int LocalFile::Size() {
   if (!impl) return -1;
 
-  int place = ftell(FromVoid<FILE*>(impl));
-  fseek(FromVoid<FILE*>(impl), 0, SEEK_END);
+  int place = ftell(static_cast<FILE*>(impl));
+  fseek(static_cast<FILE*>(impl), 0, SEEK_END);
 
-  int ret = ftell(FromVoid<FILE*>(impl));
-  fseek(FromVoid<FILE*>(impl), place, SEEK_SET);
+  int ret = ftell(static_cast<FILE*>(impl));
+  fseek(static_cast<FILE*>(impl), place, SEEK_SET);
   return ret;
 }
 
 void LocalFile::Close() {
-  if (impl) fclose(FromVoid<FILE*>(impl));
+  if (impl) fclose(static_cast<FILE*>(impl));
   impl = 0;
 }
 
 long long LocalFile::Seek(long long offset, int whence) {
-  long long ret = fseek(FromVoid<FILE*>(impl), offset, WhenceMap(whence));
+  long long ret = fseek(static_cast<FILE*>(impl), offset, WhenceMap(whence));
   if (ret < 0) return ret;
   if (whence == Whence::SET) ret = offset;
-  else ret = ftell(FromVoid<FILE*>(impl));
+  else ret = ftell(static_cast<FILE*>(impl));
   return ret;
 }
 
 int LocalFile::Read(void *buf, size_t size) {
-  int ret = fread(buf, 1, size, FromVoid<FILE*>(impl));
+  int ret = fread(buf, 1, size, static_cast<FILE*>(impl));
   if (ret < 0) return ret;
   return ret;
 }
 
 int LocalFile::Write(const void *buf, size_t size) {
-  int ret = fwrite(buf, 1, size!=-1?size:strlen(FromVoid<const char*>(buf)), FromVoid<FILE*>(impl));
+  int ret = fwrite(buf, 1, size!=-1?size:strlen(static_cast<const char*>(buf)), static_cast<FILE*>(impl));
   if (ret < 0) return ret;
   return ret;
 }
 
-bool LocalFile::Flush() { fflush(FromVoid<FILE*>(impl)); return true; }
+bool LocalFile::Flush() { fflush(static_cast<FILE*>(impl)); return true; }
 File *LocalFile::Create() { return new LocalFile(StrCat(fn, ".new"), "w+"); }
 bool LocalFile::ReplaceWith(File *nf) {
   LocalFile *new_file = dynamic_cast<LocalFile*>(nf);
@@ -635,8 +635,8 @@ int MatrixFile::ReadBinary(const string &path) {
   unique_ptr<MMapAllocator> mmap = MMapAllocator::Open(path.c_str(), false, false);
   if (!mmap) return -1;
 
-  char *buf = FromVoid<char*>(mmap->addr);
-  BinaryHeader *hdr = FromVoid<BinaryHeader*>(buf);
+  char *buf = static_cast<char*>(mmap->addr);
+  BinaryHeader *hdr = static_cast<BinaryHeader*>(mmap->addr);
   H = buf + hdr->transcript;
   long long databytes = mmap->size - hdr->data;
   long long matrixbytes = hdr->M * hdr->N * sizeof(double);
@@ -647,7 +647,7 @@ int MatrixFile::ReadBinary(const string &path) {
 
   if (F) FATAL("unexpected arg %p", this);
   F = new Matrix();
-  F->AssignDataPtr(hdr->M, hdr->N, FromVoid<double*>(buf + hdr->data), mmap.release());
+  F->AssignDataPtr(hdr->M, hdr->N, reinterpret_cast<double*>(buf + hdr->data), mmap.release());
   return 0;
 }
 

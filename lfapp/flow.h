@@ -151,7 +151,8 @@ struct Flow {
     TextAnnotation(const vector<pair<int,int>> &a, const Drawable::AttrSource *s=0) : ArrayPiece<pair<int, int>>(a), attr_source(s) {}
   };
   struct Layout {
-    bool wrap_lines=1, word_break=1, align_center=0, align_right=0, ignore_newlines=0, pad_wide_chars=0;
+    bool wrap_lines=1, word_break=1, align_center=0, align_right=0, ignore_newlines=0,
+         pad_wide_chars=0, append_only=0;
     int char_spacing=0, word_spacing=0, line_height=0, valign_offset=0;
     int (*char_tf)(int)=0, (*word_start_char_tf)(int)=0;
   };

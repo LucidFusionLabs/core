@@ -153,7 +153,7 @@ struct RecognitionHMM {
       TransitMap::Next(iter);
       if (iter->done || !iter->out) return;
 
-      HMM::Token *t = FromVoid<HMM::Token*>(iter->impl1);
+      HMM::Token *t = static_cast<HMM::Token*>(iter->impl1);
       WFST::Composer::trip q(t->ind, t->ind2, 0);
       WFST::Edge e1(t->ind, iter->state, iter->emission_index, iter->out, iter->cost), e2;
       int matched = model->composer.ComposeRight(q.second, e1.out, e1, 0, q.third, &e2);
@@ -180,7 +180,7 @@ struct RecognitionHMM {
     Emission(RecognitionModel *M, HMM::ObservationInterface *O, TransitMap *T, Allocator *Alloc=0, bool UP=false) :
       model(M), observed(O), transit(T), use_prior_prob(UP),
       alloc(Alloc?Alloc:Singleton<MallocAllocator>::Get()), beam(model->emissions, 1, model->emissions, 0, alloc),
-      emission(FromVoid<double*>(alloc->Malloc(model->emissions*sizeof(double)))) {}
+      emission(static_cast<double*>(alloc->Malloc(model->emissions*sizeof(double)))) {}
 
     double *Observation(int t) { return observed->Observation(t); }
     int Observations() { return observed->Observations(); }

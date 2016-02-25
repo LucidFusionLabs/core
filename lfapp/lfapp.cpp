@@ -155,7 +155,7 @@ extern "C" int  MouseClick(int b, int d, int x,  int y)     { return LFL::app->i
 extern "C" int  MouseMove (int x, int y, int dx, int dy)    { return LFL::app->input->MouseMove (LFL::point(x, y), LFL::point(dx, dy)); }
 extern "C" void QueueKeyPress  (int b, int d)               { return LFL::app->input->QueueKeyPress  (b, d); }
 extern "C" void QueueMouseClick(int b, int d, int x, int y) { return LFL::app->input->QueueMouseClick(b, d, LFL::point(x, y)); }
-extern "C" void EndpointRead(void *svc, const char *name, const char *buf, int len) { LFL::app->net->EndpointRead(LFL::FromVoid<LFL::Service*>(svc), name, buf, len); }
+extern "C" void EndpointRead(void *svc, const char *name, const char *buf, int len) { LFL::app->net->EndpointRead(static_cast<LFL::Service*>(svc), name, buf, len); }
 
 extern "C" NativeWindow *SetNativeWindowByID(void *id) { return SetNativeWindow(LFL::FindOrNull(LFL::app->windows, id)); }
 extern "C" NativeWindow *SetNativeWindow(NativeWindow *W) {
@@ -934,11 +934,6 @@ void Window::InitConsole(const Callback &animating_cb) {
 
 size_t Window::NewGUI() { my_gui.emplace_back(unique_ptr<GUI>()); return my_gui.size()-1; }
 void Window::DelGUI(GUI *g) { RemoveGUI(g); VectorRemoveUnique(&my_gui, g); }
-
-void Window::AddDialog(unique_ptr<Dialog> d) {
-  dialogs.emplace_back(move(d));
-  if (dialogs.size() == 1) BringDialogToFront(dialogs.back().get());
-}
 
 void Window::BringDialogToFront(Dialog *d) {
   if (top_dialog == d) return;

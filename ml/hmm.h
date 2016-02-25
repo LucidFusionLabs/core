@@ -157,7 +157,7 @@ struct HMM {
     int *active, count, init_max;
     ~ActiveStateIndex() { alloc->Free(active); }
     ActiveStateIndex(int NS, int NB, int BW, int InitMax=0, Allocator *Alloc=0) :
-      ActiveState(NS, NB, BW, Alloc), active(FromVoid<int*>(alloc->Malloc(sizeof(int)*BeamWidth))),
+      ActiveState(NS, NB, BW, Alloc), active(static_cast<int*>(alloc->Malloc(sizeof(int)*BeamWidth))),
       count(0), init_max(InitMax) { if (!active) FATAL(alloc->Name(), " failed"); }
 
     int Size() { 
@@ -199,7 +199,7 @@ struct HMM {
     void Next(Iterator *iter) {
       if (iter->impl2 >= transit->N) { iter->done=1; return; }
       iter->state = iter->impl2++;
-      iter->cost = FromVoid<double*>(iter->impl1)[iter->state];
+      iter->cost = static_cast<double*>(iter->impl1)[iter->state];
     }
     int Id(int Lstate) { return Lstate; }
   };
@@ -322,7 +322,7 @@ struct HMM {
 
     virtual ~TokenPasser() { if (alloc) { alloc->Free(active); alloc->Free(nextActive); } }
     TokenPasser(int NS, int NB, int BW, TokenBacktrace<T> *BT, int Scale=100, Allocator *Alloc=0) : ActiveState(NS, NB, BW, Alloc), backtrace(BT), num(BeamWidth*Scale),
-    count(0), nextCount(0), viterbi(Singleton<Algorithm::Viterbi>::Get()), active(FromVoid<T*>(alloc->Malloc(sizeof(T)*num))), nextActive(FromVoid<T*>(alloc->Malloc(sizeof(T)*num))) {
+    count(0), nextCount(0), viterbi(Singleton<Algorithm::Viterbi>::Get()), active(static_cast<T*>(alloc->Malloc(sizeof(T)*num))), nextActive(static_cast<T*>(alloc->Malloc(sizeof(T)*num))) {
       if (!active) FATAL(alloc->Name(), " failed");
       ClearNext();
     }

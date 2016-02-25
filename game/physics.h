@@ -115,7 +115,7 @@ struct Box2DScene : public Physics {
   virtual void *AddPlane(const v3 &normal, const v3 &pos, const CollidesWith &cw) { groundY = pos.y; return 0; }
   virtual void Input(const Entity *e, Time timestep, bool angular) {
     if (!e || !e->body) return;
-    b2Body *body = FromVoid<b2Body*>(e->body);
+    b2Body *body = static_cast<b2Body*>(e->body);
     body->SetUserData(Void(e));
     body->SetLinearVelocity(b2Vec2(e->vel.x, e->vel.z));
 
@@ -134,7 +134,7 @@ struct Box2DScene : public Physics {
 
   virtual void Output(Entity *e, Time timestep) {
     if (!e || !e->body) return;
-    b2Body *body = FromVoid<b2Body*>(e->body);
+    b2Body *body = static_cast<b2Body*>(e->body);
     b2Vec2 position = body->GetPosition(), velocity = body->GetLinearVelocity(), orientation = body->GetWorldVector(b2Vec2(0,1));;
     e->vel = v3(velocity.x, e->vel.y, velocity.y);
     if (e->vel.y) {
@@ -150,7 +150,7 @@ struct Box2DScene : public Physics {
   }
 
   virtual void SetPosition(Entity *e, const v3 &pos, const v3 &ort) {
-    b2Body *body = FromVoid<b2Body*>(e->body);
+    b2Body *body = static_cast<b2Body*>(e->body);
     body->SetTransform(b2Vec2(pos.x, pos.z), GetAngle(ort));
   }
 
@@ -158,7 +158,7 @@ struct Box2DScene : public Physics {
     for (b2Contact* c = world.GetContactList(); c; c = c->GetNext()) {
       b2Fixture *fixtA = c->GetFixtureA(), *fixtB = c->GetFixtureB();
       b2Body *bodyA = fixtA->GetBody(), *bodyB = fixtB->GetBody();
-      const Entity *eA = FromVoid<Entity*>(bodyA->GetUserData()), *eB = FromVoid<Entity*>(bodyB->GetUserData());
+      const Entity *eA = static_cast<Entity*>(bodyA->GetUserData()), *eB = static_cast<Entity*>(bodyB->GetUserData());
       if (!eA || !eB) continue;
       if (1) /*(!contact_pts)*/ { cb(eA, eB, 0, 0); continue; }
     }

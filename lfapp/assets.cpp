@@ -61,8 +61,8 @@ const int SoundAsset::FromBufPad = 0;
 #endif
 
 #ifdef LFL_PNG
-static void PngRead (png_structp png_ptr, png_bytep data, png_size_t length) { FromVoid<File*>(png_get_io_ptr(png_ptr))->Read (data, length); }
-static void PngWrite(png_structp png_ptr, png_bytep data, png_size_t length) { FromVoid<File*>(png_get_io_ptr(png_ptr))->Write(data, length); }
+static void PngRead (png_structp png_ptr, png_bytep data, png_size_t length) { static_cast<File*>(png_get_io_ptr(png_ptr))->Read (data, length); }
+static void PngWrite(png_structp png_ptr, png_bytep data, png_size_t length) { static_cast<File*>(png_get_io_ptr(png_ptr))->Write(data, length); }
 static void PngFlush(png_structp png_ptr) {}
 
 int PngReader::Read(File *lf, Texture *out) {
@@ -156,18 +156,18 @@ const JOCTET EOI_BUFFER[1] = { JPEG_EOI };
 struct MyJpegErrorMgr  { jpeg_error_mgr  pub; jmp_buf setjmp_buffer; };
 struct MyJpegSourceMgr { jpeg_source_mgr pub; const JOCTET *data; size_t len; } ;
 
-static void JpegErrorExit(j_common_ptr jcs) { longjmp(FromVoid<MyJpegErrorMgr*>(jcs->err)->setjmp_buffer, 1); }
+static void JpegErrorExit(j_common_ptr jcs) { longjmp(reinterpret_cast<MyJpegErrorMgr*>(jcs->err)->setjmp_buffer, 1); }
 static void JpegInitSource(j_decompress_ptr jds) {}
 static void JpegTermSource(j_decompress_ptr jds) {}
 static boolean JpegFillInputBuffer(j_decompress_ptr jds) {
-  MyJpegSourceMgr *src = FromVoid<MyJpegSourceMgr*>(jds->src);
+  MyJpegSourceMgr *src = reinterpret_cast<MyJpegSourceMgr*>(jds->src);
   src->pub.next_input_byte = EOI_BUFFER;
   src->pub.bytes_in_buffer = 1;
   return true;
 }
 
 static void JpegSkipInputData(j_decompress_ptr jds, long len) {
-  MyJpegSourceMgr *src = FromVoid<MyJpegSourceMgr*>(jds->src);
+  MyJpegSourceMgr *src = reinterpret_cast<MyJpegSourceMgr*>(jds->src);
   if (src->pub.bytes_in_buffer < len) {
     src->pub.next_input_byte = EOI_BUFFER;
     src->pub.bytes_in_buffer = 1;
@@ -178,8 +178,8 @@ static void JpegSkipInputData(j_decompress_ptr jds, long len) {
 }
 
 static void JpegMemSrc(j_decompress_ptr jds, const char *buf, size_t len) {
-  if (!jds->src) jds->src = FromVoid<jpeg_source_mgr*>((*jds->mem->alloc_small)(j_common_ptr(jds), JPOOL_PERMANENT, sizeof(MyJpegSourceMgr)));
-  MyJpegSourceMgr *src = FromVoid<MyJpegSourceMgr*>(jds->src);
+  if (!jds->src) jds->src = static_cast<jpeg_source_mgr*>((*jds->mem->alloc_small)(j_common_ptr(jds), JPOOL_PERMANENT, sizeof(MyJpegSourceMgr)));
+  MyJpegSourceMgr *src = reinterpret_cast<MyJpegSourceMgr*>(jds->src);
   src->pub.init_source       = JpegInitSource;
   src->pub.fill_input_buffer = JpegFillInputBuffer;
   src->pub.skip_input_data   = JpegSkipInputData;
@@ -246,7 +246,7 @@ int JpegReader::Read(const string &data, Texture *out) { FATAL("not implemented"
 
 #ifdef LFL_GIF
 static int GIFInput(GifFileType *gif, GifByteType *out, int size) {
-  return FromVoid<BufferFile*>(gif->UserData)->Read(out, size);
+  return static_cast<BufferFile*>(gif->UserData)->Read(out, size);
 }
 
 int GIFReader::Read(File *lf,           Texture *out) { return Read(lf->Contents(), out); }
@@ -349,9 +349,9 @@ struct SimpleAssetLoader : public AudioAssetLoader, public VideoAssetLoader, pub
     if (!lf->Opened()) return ERRORv(nullptr, "open: ", filename);
     return lf.release();
   }
-  virtual void UnloadFile(void *h) { delete FromVoid<File*>(h); }
+  virtual void UnloadFile(void *h) { delete static_cast<File*>(h); }
   virtual void *LoadBuf(const char *buf, int len, const char *mimetype) { return new BufferFile(string(buf, len), mimetype); }
-  virtual void UnloadBuf(void *h) { delete FromVoid<File*>(h); }
+  virtual void UnloadBuf(void *h) { delete static_cast<File*>(h); }
 
   virtual void *LoadAudioFile(const string &filename) { return LoadFile(filename); }
   virtual void UnloadAudioFile(void *h) { return UnloadFile(h); }
@@ -373,7 +373,7 @@ struct SimpleAssetLoader : public AudioAssetLoader, public VideoAssetLoader, pub
     static char gifhdr[4] = { 'G', 'I', 'F', '8' };
     static char pnghdr[8] = { '\211', 'P', 'N', 'G', '\r', '\n', '\032', '\n' };
 
-    File *f = FromVoid<File*>(h);
+    File *f = static_cast<File*>(h);
     string fn = f->Filename();
     unsigned char hdr[8];
     if (f->Read(hdr, 8) != 8) return ERROR("load ", fn, " : failed");
@@ -402,7 +402,7 @@ struct SimpleAssetLoader : public AudioAssetLoader, public VideoAssetLoader, pub
   }
 
   virtual void LoadAudio(void *h, SoundAsset *a, int seconds, int flag) {
-    File *f = FromVoid<File*>(h);
+    File *f = static_cast<File*>(h);
     string fn = f->Filename();
     if (SuffixMatch(fn, ".wav", false)) {
       WavHeader wav_header;
@@ -460,17 +460,17 @@ struct iPhoneAudioAssetLoader {};
 struct FFBIOFile {
   static void *Alloc(File *f) {
     int bufsize = 16384;
-    return avio_alloc_context(FromVoid<unsigned char*>(malloc(bufsize)), bufsize, 0, f, Read, Write, Seek);
+    return avio_alloc_context(static_cast<unsigned char*>(malloc(bufsize)), bufsize, 0, f, Read, Write, Seek);
   }
   static void Free(void *in) {
-    AVIOContext *s = FromVoid<AVIOContext*>(in);
-    delete FromVoid<File*>(s->opaque);
+    AVIOContext *s = static_cast<AVIOContext*>(in);
+    delete static_cast<File*>(s->opaque);
     free(s->buffer);
     av_free(s);
   }
-  static int     Read(void *f, uint8_t *buf, int buf_size) { return FromVoid<File*>(f)->Read (buf, buf_size); }
-  static int    Write(void *f, uint8_t *buf, int buf_size) { return FromVoid<File*>(f)->Write(buf, buf_size); }
-  static int64_t Seek(void *f, int64_t offset, int whence) { return FromVoid<File*>(f)->Seek (offset, whence); }
+  static int     Read(void *f, uint8_t *buf, int buf_size) { return static_cast<File*>(f)->Read (buf, buf_size); }
+  static int    Write(void *f, uint8_t *buf, int buf_size) { return static_cast<File*>(f)->Write(buf, buf_size); }
+  static int64_t Seek(void *f, int64_t offset, int whence) { return static_cast<File*>(f)->Seek (offset, whence); }
 };
 
 struct FFBIOC {
@@ -480,26 +480,26 @@ struct FFBIOC {
 
   static void *Alloc(void const *buf, int len) {
     static const int bufsize = 32768;
-    return avio_alloc_context(FromVoid<unsigned char*>(malloc(bufsize)), bufsize, 0, new FFBIOC(buf, len), Read, Write, Seek);
+    return avio_alloc_context(static_cast<unsigned char*>(malloc(bufsize)), bufsize, 0, new FFBIOC(buf, len), Read, Write, Seek);
   }
   static void Free(void *in) {
-    AVIOContext *s = FromVoid<AVIOContext*>(in);
-    delete FromVoid<FFBIOC*>(s->opaque);
+    AVIOContext *s = static_cast<AVIOContext*>(in);
+    delete static_cast<FFBIOC*>(s->opaque);
     free(s->buffer);
     av_free(s);
   }
   static int Read(void *opaque, uint8_t *buf, int buf_size) {
-    FFBIOC *s = FromVoid<FFBIOC*>(opaque);
+    FFBIOC *s = static_cast<FFBIOC*>(opaque);
     int len = min(buf_size, s->len - s->offset);
     if (len <= 0) return len;
 
-    memcpy(buf, FromVoid<const char*>(s->buf) + s->offset, len);
+    memcpy(buf, static_cast<const char*>(s->buf) + s->offset, len);
     s->offset += len;
     return len;
   }
   static int Write(void *opaque, uint8_t *buf, int buf_size) { return -1; }
   static int64_t Seek(void *opaque, int64_t offset, int whence) {
-    FFBIOC *s = FromVoid<FFBIOC*>(opaque);
+    FFBIOC *s = static_cast<FFBIOC*>(opaque);
     if      (whence == SEEK_SET) s->offset = offset;
     else if (whence == SEEK_CUR) s->offset += offset;
     else if (whence == SEEK_END) s->offset = s->len + offset;
@@ -528,7 +528,7 @@ struct FFMpegAssetLoader : public AudioAssetLoader, public VideoAssetLoader, pub
   }
 
   virtual void UnloadFile(void *h) {
-    AVFormatContext *handle = FromVoid<AVFormatContext*>(h);
+    AVFormatContext *handle = static_cast<AVFormatContext*>(h);
     for (int i = handle->nb_streams - 1; handle->streams && i >= 0; --i) {
       AVStream* stream = handle->streams[i];
       if (!stream || !stream->codec || !stream->codec->codec) continue;
@@ -545,14 +545,14 @@ struct FFMpegAssetLoader : public AudioAssetLoader, public VideoAssetLoader, pub
   AVFormatContext *LoadBuf(void const *buf, int len, const char *filename, AVIOContext **pbOut) {
     const char *suffix = strchr(filename, '.');
     void *pb = FFBIOC::Alloc(buf, len);
-    AVFormatContext *ret = Load(FromVoid<AVIOContext*>(pb), suffix ? suffix+1 : filename,
-                                const_cast<char*>(FromVoid<const char*>(buf)), min(4096, len), pbOut);
+    AVFormatContext *ret = Load(static_cast<AVIOContext*>(pb), suffix ? suffix+1 : filename,
+                                const_cast<char*>(static_cast<const char*>(buf)), min(4096, len), pbOut);
     if (!ret) FFBIOC::Free(pb);
     return ret;
   }
 
   virtual void UnloadBuf(void *h) {
-    AVFormatContext *handle = FromVoid<AVFormatContext*>(h);
+    AVFormatContext *handle = static_cast<AVFormatContext*>(h);
     FFBIOC::Free(handle->pb);
     avformat_close_input(&handle);
   }
@@ -573,7 +573,7 @@ struct FFMpegAssetLoader : public AudioAssetLoader, public VideoAssetLoader, pub
   virtual void UnloadMovieBuf(void *h) { return UnloadBuf(h); }
 
   void LoadVideo(void *handle, Texture *out, int load_flag=VideoAssetLoader::Flag::Default) {
-    AVFormatContext *fctx = FromVoid<AVFormatContext*>(handle);
+    AVFormatContext *fctx = static_cast<AVFormatContext*>(handle);
     int video_index = -1, got=0;
     for (int i=0; i<fctx->nb_streams; i++) {
       AVStream *st = fctx->streams[i];
@@ -607,7 +607,7 @@ struct FFMpegAssetLoader : public AudioAssetLoader, public VideoAssetLoader, pub
   }
 
   void LoadAudio(void *handle, SoundAsset *a, int seconds, int flag) {
-    AVFormatContext *fctx = FromVoid<AVFormatContext*>(handle);
+    AVFormatContext *fctx = static_cast<AVFormatContext*>(handle);
     LoadMovie(a, 0, fctx);
 
     int samples = RefillAudio(a, 1);
@@ -620,11 +620,11 @@ struct FFMpegAssetLoader : public AudioAssetLoader, public VideoAssetLoader, pub
   }
 
   void LoadMovie(void *handle, MovieAsset *ma) {
-    LoadMovie(&ma->audio, &ma->video, FromVoid<AVFormatContext*>(handle));
-    PlayMovie(&ma->audio, &ma->video, FromVoid<AVFormatContext*>(handle), 0);
+    LoadMovie(&ma->audio, &ma->video, static_cast<AVFormatContext*>(handle));
+    PlayMovie(&ma->audio, &ma->video, static_cast<AVFormatContext*>(handle), 0);
   }
 
-  int PlayMovie(MovieAsset *ma, int seek) { return PlayMovie(&ma->audio, &ma->video, FromVoid<AVFormatContext*>(ma->handle), seek); }
+  int PlayMovie(MovieAsset *ma, int seek) { return PlayMovie(&ma->audio, &ma->video, static_cast<AVFormatContext*>(ma->handle), seek); }
   int RefillAudio(SoundAsset *a, int reset) { return RefillAudioCB(a, reset); }
 
   static AVFormatContext *Load(AVIOContext *pb, const string &filename, char *probe_buf, int probe_buflen, AVIOContext **pbOut=0) {
@@ -655,7 +655,7 @@ struct FFMpegAssetLoader : public AudioAssetLoader, public VideoAssetLoader, pub
   }
 
   static int RefillAudioCB(SoundAsset *a, int reset) {
-    AVFormatContext *fctx = FromVoid<AVFormatContext*>(a->handle);
+    AVFormatContext *fctx = static_cast<AVFormatContext*>(a->handle);
     AVCodecContext *avctx = fctx->streams[a->handle_arg1]->codec;
     bool open_resampler = false;
     if (reset) {
@@ -733,12 +733,12 @@ struct FFMpegAssetLoader : public AudioAssetLoader, public VideoAssetLoader, pub
           ERROR("avcodec_decode_audio4: ", errstr);
         } else {
           tlsalloc->Reset();
-          short *rsout = FromVoid<short*>(tlsalloc->Malloc(AVCODEC_MAX_AUDIO_FRAME_SIZE + FF_INPUT_BUFFER_PADDING_SIZE));
+          short *rsout = static_cast<short*>(tlsalloc->Malloc(AVCODEC_MAX_AUDIO_FRAME_SIZE + FF_INPUT_BUFFER_PADDING_SIZE));
 
           int sampsIn  = frame->nb_samples;
           int sampsOut = max(0, SoundAsset::Size(sa) - wrote) / sa->channels;
 
-          sa->resampler.Update(sampsIn, FromVoid<const short**>(frame->extended_data), rsout, Time(-1), sampsOut);
+          sa->resampler.Update(sampsIn, reinterpret_cast<const short* const*>(frame->extended_data), rsout, Time(-1), sampsOut);
           wrote = sa->resampler.output_available - begin_resamples_available;
           av_frame_unref(frame);
         }
@@ -1004,7 +1004,7 @@ void Asset::LoadTexture(const void *FromBuf, const char *filename, int size, Tex
   VideoAssetLoader *l = app->asset_loader->default_video_loader;
   // work around ffmpeg image2 format being AVFMT_NO_FILE; ie doesnt work with custom AVIOContext
   if (FileSuffix::Image(filename)) l = app->asset_loader->simple_loader.get();
-  void *handle = l->LoadVideoBuf(FromVoid<const char*>(FromBuf), size, filename);
+  void *handle = l->LoadVideoBuf(static_cast<const char*>(FromBuf), size, filename);
   if (!handle) return;
   l->LoadVideo(handle, out, flag);
   l->UnloadVideoBuf(handle);
@@ -1041,7 +1041,7 @@ void SoundAsset::Load(void *handle, const char *FN, int Secs, int flag) {
 }
 
 void SoundAsset::Load(void const *buf, int len, char const *FN, int Secs) {
-  void *handle = app->asset_loader->default_audio_loader->LoadAudioBuf(FromVoid<const char*>(buf), len, FN);
+  void *handle = app->asset_loader->default_audio_loader->LoadAudioBuf(static_cast<const char*>(buf), len, FN);
   if (!handle) return;
 
   Load(handle, FN, Secs, FlagNoRefill);
@@ -1194,8 +1194,9 @@ void glShadertoyShaderWindows(Shader *shader, const Color &backup_color, const v
 }
 
 void BoxFilled::Draw(const LFL::Box &b, const Drawable::Attr*) const { b.Draw(); }
-void BoxOutline::Draw(const LFL::Box &b, const Drawable::Attr*) const {
+void BoxOutline::Draw(const LFL::Box &b, const Drawable::Attr *attr) const {
   screen->gd->DisableTexture();
+  int line_width = attr ? attr->line_width : 1;
   if (line_width <= 1) {
     static int verts_ind = -1;
     float verts[] = { /*1*/ float(b.x),     float(b.y),     /*2*/ float(b.x),     float(b.y+b.h),
@@ -1220,8 +1221,9 @@ void BoxOutline::Draw(const LFL::Box &b, const Drawable::Attr*) const {
   }
 }
 
-void BoxTopLeftOutline::Draw(const LFL::Box &b, const Drawable::Attr*) const {
+void BoxTopLeftOutline::Draw(const LFL::Box &b, const Drawable::Attr *attr) const {
   screen->gd->DisableTexture();
+  int line_width = attr ? attr->line_width : 1;
   if (line_width <= 1) {
     static int verts_ind = -1;
     float verts[] = { /*1*/ float(b.x), float(b.y),     /*2*/ float(b.x),     float(b.y+b.h),
@@ -1242,8 +1244,9 @@ void BoxTopLeftOutline::Draw(const LFL::Box &b, const Drawable::Attr*) const {
   }
 }
 
-void BoxBottomRightOutline::Draw(const LFL::Box &b, const Drawable::Attr*) const {
+void BoxBottomRightOutline::Draw(const LFL::Box &b, const Drawable::Attr *attr) const {
   screen->gd->DisableTexture();
+  int line_width = attr ? attr->line_width : 1;
   if (line_width <= 1) {
     static int verts_ind = -1;
     float verts[] = { /*1*/ float(b.x),     float(b.y), /*4*/ float(b.x+b.w), float(b.y),

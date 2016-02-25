@@ -961,7 +961,7 @@ struct QTKitCamera : public Module {
       camera->last_frames_read = camera->frames_read;
     }
     if (!new_frame) return 0;
-    camera->image = FromVoid<unsigned char *>(L.frames->Read(-1, L.next));
+    camera->image = static_cast<unsigned char *>(L.frames->Read(-1, L.next));
     camera->image_timestamp = L.frames->ReadTimestamp(-1, L.next);
     return 1;
   }
