@@ -9,8 +9,8 @@ the `Audio`, `Video`, `Input`, `Network`, `Camera`, `CUDA` Modules,
 and the `Fonts`, `GUI`, `AssetLoader`, `Scene` subsystems. 
 
 The key implementation files are:
-[lfapp/lfapp.h](lfapp/lfapp.h)
-[lfapp/lfapp.cpp](lfapp/lfapp.cpp)
+[app/app.h](app/app.h)
+[app/app.cpp](app/app.cpp)
 
 ## Projects
 
@@ -71,7 +71,7 @@ See [new_app_template/README.txt](new_app_template/README.txt) to quick start yo
         cd c:\lfl\win32\term
         mkdir assets
         copy ..\..\term\assets\* assets
-        copy ..\..\core\lfapp\*.glsl assets
+        copy ..\..\core\app\*.glsl assets
         If using ffmpeg, copy ..\..\core\imports\ffmpeg\w32\dll\*.dll Debug [overwrite:All]
         [Run]
 

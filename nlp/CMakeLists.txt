@@ -3,7 +3,6 @@
 set(LFL_HEADLESS 1)
 
 lfl_project(nlp)
-add_subdirectory(../lfapp ${CMAKE_CURRENT_BINARY_DIR}/lfapp_obj)
 add_definitions(${LFAPP_DEF})
 include_directories(../lflpub ${LFAPP_INCLUDE})
 
@@ -15,5 +14,5 @@ add_library(nlp ${LFL_NLP_SOURCE})
 # trainer
 add_executable(nlp-trainer trainer.cpp)
 target_link_libraries(nlp-trainer ${LFAPP_LIB} nlp)
-lfapp_post_build_start(nlp-trainer nlp-trainer NLPTrainer)
+lfl_post_build_start(nlp-trainer nlp-trainer NLPTrainer)
 

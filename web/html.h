@@ -40,7 +40,7 @@ struct HTMLParser {
     enum {
 #undef   XX
 #define  XX(x) x,
-#include "web/html_tags.h"
+#include "core/web/html_tags.h"
       bang, doctype, _small
     };
   };
@@ -402,12 +402,12 @@ struct HTMLParser {
     enum {
 #undef   XX
 #define  XX(x, y) x = y,
-#include "web/html_entities.h"
+#include "core/web/html_entities.h"
     };
     Entity() {
 #undef   XX
 #define  XX(x, y) (*this)[#x] = y;
-#include "web/html_entities.h"
+#include "core/web/html_entities.h"
       // C++ reserved word entities
       (*this)["not"] = 172;
       (*this)["and"] = 8743;
@@ -422,7 +422,7 @@ struct HTMLParser {
     Tags() {
 #undef   XX
 #define  XX(x) (*this)[#x] = Tag::x;
-#include "web/html_tags.h"
+#include "core/web/html_tags.h"
       (*this)["!"]        = Tag::bang;
       (*this)["!doctype"] = Tag::doctype;
       (*this)["small"]    = Tag::_small;
