@@ -19,8 +19,6 @@
 #ifndef LFL_LFAPP_BINDINGS_OPENCV_H__
 #define LFL_LFAPP_BINDINGS_OPENCV_H__
 
-#include "opencv/cxcore.h"
-
 namespace LFL {
 inline void TextureToIplImage(const Texture &in, _IplImage *out) {
   memset(out, 0, sizeof(IplImage));

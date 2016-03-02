@@ -18,14 +18,20 @@
 
 #include "gtest/gtest.h"
 #include "core/app/app.h"
-#include "core/app/dom.h"
-#include "core/app/css.h"
+#include "core/web/dom.h"
+#include "core/web/css.h"
 #include "core/app/flow.h"
 #include "core/app/gui.h"
 #include "core/app/ipc.h"
 #include "core/app/browser.h"
 #include "core/web/html.h"
 #include "core/web/document.h"
+#ifdef LFL_LIBCSS
+extern "C" {
+#include "libcss/libcss.h"
+};
+#include "core/app/bindings/libcss.h"
+#endif
 
 namespace LFL {
 
@@ -114,22 +120,22 @@ TEST(DOMTest, DOMTree) {
   void *vnode = 0; bool matched = 0; int count = 0;
   css_qname html_qn = { 0, 0 }, html_query = { 0, LibCSS_String::Intern("html") };
   css_qname foo_query = { 0, LibCSS_String::Intern("foo") };
-  StyleContext::NodeName(0, html_node, &html_qn);
+  LibCSS_StyleContext::NodeName(0, html_node, &html_qn);
   EXPECT_EQ("html", LibCSS_String::ToUTF8String(html_qn.name));
   lwc_string **html_classes = 0; uint32_t n_html_classes = 0;
-  StyleContext::NodeClasses(0, html_node, &html_classes, &n_html_classes);
+  LibCSS_StyleContext::NodeClasses(0, html_node, &html_classes, &n_html_classes);
   EXPECT_EQ(0, n_html_classes);
   EXPECT_EQ(0, html_classes);
   lwc_string *html_id = 0;
-  StyleContext::NodeId(0, html_node, &html_id);
+  LibCSS_StyleContext::NodeId(0, html_node, &html_id);
   EXPECT_EQ(0, html_id);
-  StyleContext::NodeIsRoot(0, html_node, &matched);
+  LibCSS_StyleContext::NodeIsRoot(0, html_node, &matched);
   EXPECT_EQ(1, matched);
-  StyleContext::NamedParentNode(0, html_node, &foo_query, &vnode);
+  LibCSS_StyleContext::NamedParentNode(0, html_node, &foo_query, &vnode);
   EXPECT_EQ(0, vnode);
-  StyleContext::NodeHasName(0, html_node, &html_query, &matched);
+  LibCSS_StyleContext::NodeHasName(0, html_node, &html_query, &matched);
   EXPECT_EQ(1, matched);
-  StyleContext::NodeHasName(0, html_node, &foo_query, &matched);
+  LibCSS_StyleContext::NodeHasName(0, html_node, &foo_query, &matched);
   EXPECT_EQ(0, matched);
   CHECK(html_node->render);
   EXPECT_EQ(LFL::DOM::Display::Block, html_node->render->style.Display().v);
@@ -151,47 +157,47 @@ TEST(DOMTest, DOMTree) {
 #ifdef LFL_LIBCSS
   css_qname body_qn = { 0, 0 }, body_query = { 0, LibCSS_String::Intern("body") };
   css_qname style_query = { 0, LibCSS_String::Intern("style") };
-  StyleContext::NodeName(0, body_node, &body_qn);
+  LibCSS_StyleContext::NodeName(0, body_node, &body_qn);
   EXPECT_EQ("body", LibCSS_String::ToUTF8String(body_qn.name));
-  StyleContext::NodeIsRoot(0, body_node, &matched);
+  LibCSS_StyleContext::NodeIsRoot(0, body_node, &matched);
   EXPECT_EQ(0, matched);
-  StyleContext::NamedAncestorNode(0, body_node, &html_query, &vnode);
+  LibCSS_StyleContext::NamedAncestorNode(0, body_node, &html_query, &vnode);
   EXPECT_EQ(html_node, vnode);
-  StyleContext::NamedParentNode(0, body_node, &foo_query, &vnode);
+  LibCSS_StyleContext::NamedParentNode(0, body_node, &foo_query, &vnode);
   EXPECT_EQ(0, vnode);
-  StyleContext::NamedParentNode(0, body_node, &html_query, &vnode);
+  LibCSS_StyleContext::NamedParentNode(0, body_node, &html_query, &vnode);
   EXPECT_EQ(html_node, vnode);
-  StyleContext::ParentNode(0, body_node, &vnode);
+  LibCSS_StyleContext::ParentNode(0, body_node, &vnode);
   EXPECT_EQ(html_node, vnode);
-  StyleContext::SiblingNode(0, body_node, &vnode);
+  LibCSS_StyleContext::SiblingNode(0, body_node, &vnode);
   EXPECT_EQ(head_node, vnode);
-  StyleContext::NodeHasAttribute(0, body_node, &foo_query, &matched);
+  LibCSS_StyleContext::NodeHasAttribute(0, body_node, &foo_query, &matched);
   EXPECT_EQ(0, matched);
-  StyleContext::NodeHasAttribute(0, body_node, &style_query, &matched);
+  LibCSS_StyleContext::NodeHasAttribute(0, body_node, &style_query, &matched);
   EXPECT_EQ(1, matched);
-  StyleContext::NodeHasAttributeEqual(0, body_node, &style_query, foo_query.name, &matched);
+  LibCSS_StyleContext::NodeHasAttributeEqual(0, body_node, &style_query, foo_query.name, &matched);
   EXPECT_EQ(0, matched);
-  StyleContext::NodeHasAttributeEqual(0, body_node, &style_query, LibCSS_String::Intern("background-color: #654321"), &matched);
+  LibCSS_StyleContext::NodeHasAttributeEqual(0, body_node, &style_query, LibCSS_String::Intern("background-color: #654321"), &matched);
   EXPECT_EQ(1, matched);
-  StyleContext::NodeHasAttributeDashmatch(0, body_node, &style_query, foo_query.name, &matched);
+  LibCSS_StyleContext::NodeHasAttributeDashmatch(0, body_node, &style_query, foo_query.name, &matched);
   EXPECT_EQ(0, matched);
-  StyleContext::NodeHasAttributeDashmatch(0, body_node, &style_query, LibCSS_String::Intern("background-"), &matched);
+  LibCSS_StyleContext::NodeHasAttributeDashmatch(0, body_node, &style_query, LibCSS_String::Intern("background-"), &matched);
   EXPECT_EQ(1, matched);
-  StyleContext::NodeHasAttributeIncludes(0, body_node, &style_query, foo_query.name, &matched);
+  LibCSS_StyleContext::NodeHasAttributeIncludes(0, body_node, &style_query, foo_query.name, &matched);
   EXPECT_EQ(0, matched);
-  StyleContext::NodeHasAttributeIncludes(0, body_node, &style_query, LibCSS_String::Intern("background-color:"), &matched);
+  LibCSS_StyleContext::NodeHasAttributeIncludes(0, body_node, &style_query, LibCSS_String::Intern("background-color:"), &matched);
   EXPECT_EQ(1, matched);
-  StyleContext::NodeHasAttributePrefix(0, body_node, &style_query, foo_query.name, &matched);
+  LibCSS_StyleContext::NodeHasAttributePrefix(0, body_node, &style_query, foo_query.name, &matched);
   EXPECT_EQ(0, matched);
-  StyleContext::NodeHasAttributePrefix(0, body_node, &style_query, LibCSS_String::Intern("background-color: #6"), &matched);
+  LibCSS_StyleContext::NodeHasAttributePrefix(0, body_node, &style_query, LibCSS_String::Intern("background-color: #6"), &matched);
   EXPECT_EQ(1, matched);
-  StyleContext::NodeHasAttributeSuffix(0, body_node, &style_query, foo_query.name, &matched);
+  LibCSS_StyleContext::NodeHasAttributeSuffix(0, body_node, &style_query, foo_query.name, &matched);
   EXPECT_EQ(0, matched);
-  StyleContext::NodeHasAttributeSuffix(0, body_node, &style_query, LibCSS_String::Intern("54321"), &matched);
+  LibCSS_StyleContext::NodeHasAttributeSuffix(0, body_node, &style_query, LibCSS_String::Intern("54321"), &matched);
   EXPECT_EQ(1, matched);
-  StyleContext::NodeHasAttributeSubstring(0, body_node, &style_query, foo_query.name, &matched);
+  LibCSS_StyleContext::NodeHasAttributeSubstring(0, body_node, &style_query, foo_query.name, &matched);
   EXPECT_EQ(0, matched);
-  StyleContext::NodeHasAttributeSubstring(0, body_node, &style_query, LibCSS_String::Intern("ground-color"), &matched);
+  LibCSS_StyleContext::NodeHasAttributeSubstring(0, body_node, &style_query, LibCSS_String::Intern("ground-color"), &matched);
   EXPECT_EQ(1, matched);
   CHECK(body_node->render);
   EXPECT_EQ(LFL::DOM::Display::Block, body_node->render->style.Display().v);
@@ -211,30 +217,30 @@ TEST(DOMTest, DOMTree) {
 #ifdef LFL_LIBCSS
   css_qname h_qn = { 0, 0 }, h_query = { 0, LibCSS_String::Intern("h1") }, p_query = { 0, LibCSS_String::Intern("p") };
   css_qname bar_query = { 0, LibCSS_String::Intern("bar") }, cat_query = { 0, LibCSS_String::Intern("cat") };
-  StyleContext::NodeName(0, h_node, &h_qn);
+  LibCSS_StyleContext::NodeName(0, h_node, &h_qn);
   EXPECT_EQ("h1", LibCSS_String::ToUTF8String(h_qn.name));
   lwc_string **h_classes = 0; uint32_t n_h_classes = 0;
-  StyleContext::NodeClasses(0, h_node, &h_classes, &n_h_classes);
+  LibCSS_StyleContext::NodeClasses(0, h_node, &h_classes, &n_h_classes);
   EXPECT_EQ(2, n_h_classes);
   EXPECT_EQ("foo", LibCSS_String::ToUTF8String(h_classes[0]));
   EXPECT_EQ("bar", LibCSS_String::ToUTF8String(h_classes[1]));
-  StyleContext::NodeIsRoot(0, h_node, &matched);
+  LibCSS_StyleContext::NodeIsRoot(0, h_node, &matched);
   EXPECT_EQ(0, matched);
-  StyleContext::SiblingNode(0, h_node, &vnode);
+  LibCSS_StyleContext::SiblingNode(0, h_node, &vnode);
   EXPECT_EQ(0, vnode);
-  StyleContext::NamedSiblingNode(0, h_node, &p_query, &vnode);
+  LibCSS_StyleContext::NamedSiblingNode(0, h_node, &p_query, &vnode);
   EXPECT_EQ(0, vnode);
-  StyleContext::NodeHasClass(0, h_node, foo_query.name, &matched);
+  LibCSS_StyleContext::NodeHasClass(0, h_node, foo_query.name, &matched);
   EXPECT_EQ(1, matched);
-  StyleContext::NodeHasClass(0, h_node, cat_query.name, &matched);
+  LibCSS_StyleContext::NodeHasClass(0, h_node, cat_query.name, &matched);
   EXPECT_EQ(0, matched);
-  StyleContext::NodeHasClass(0, h_node, bar_query.name, &matched);
+  LibCSS_StyleContext::NodeHasClass(0, h_node, bar_query.name, &matched);
   EXPECT_EQ(1, matched);
-  StyleContext::NodeCountSiblings(0, h_node, false, false, &count);
+  LibCSS_StyleContext::NodeCountSiblings(0, h_node, false, false, &count);
   EXPECT_EQ(0, count);
-  StyleContext::NodeCountSiblings(0, h_node, false, true, &count);
+  LibCSS_StyleContext::NodeCountSiblings(0, h_node, false, true, &count);
   EXPECT_EQ(1, count);
-  StyleContext::NodeIsEmpty(0, h_node, &matched);
+  LibCSS_StyleContext::NodeIsEmpty(0, h_node, &matched);
   EXPECT_EQ(0, matched);
   CHECK(h_node->render);
   EXPECT_EQ(LFL::DOM::Display::Block, h_node->render->style.Display().v);
@@ -248,7 +254,7 @@ TEST(DOMTest, DOMTree) {
   EXPECT_EQ("Very header", String::ToUTF8(h1_text->nodeValue()));
   CHECK_NE(h1_text->AsText(), 0);
 #ifdef LFL_LIBCSS
-  StyleContext::NodeIsEmpty(0, h1_text, &matched);
+  LibCSS_StyleContext::NodeIsEmpty(0, h1_text, &matched);
   EXPECT_EQ(1, matched);
 #endif
 
@@ -264,19 +270,19 @@ TEST(DOMTest, DOMTree) {
   EXPECT_EQ(1, p_element->childNodes.length());
 #ifdef LFL_LIBCSS
   css_qname p_qn = { 0, 0 };
-  StyleContext::NodeName(0, p_node, &p_qn);
+  LibCSS_StyleContext::NodeName(0, p_node, &p_qn);
   EXPECT_EQ("p", LibCSS_String::ToUTF8String(p_qn.name));
-  StyleContext::NodeIsRoot(0, p_node, &matched);
+  LibCSS_StyleContext::NodeIsRoot(0, p_node, &matched);
   EXPECT_EQ(0, matched);
-  StyleContext::SiblingNode(0, p_node, &vnode);
+  LibCSS_StyleContext::SiblingNode(0, p_node, &vnode);
   EXPECT_EQ(h_node, vnode);
-  StyleContext::NamedSiblingNode(0, p_node, &foo_query, &vnode);
+  LibCSS_StyleContext::NamedSiblingNode(0, p_node, &foo_query, &vnode);
   EXPECT_EQ(0, vnode);
-  StyleContext::NamedSiblingNode(0, p_node, &h_query, &vnode);
+  LibCSS_StyleContext::NamedSiblingNode(0, p_node, &h_query, &vnode);
   EXPECT_EQ(h_node, vnode);
-  StyleContext::NodeHasId(0, p_node, foo_query.name, &matched);
+  LibCSS_StyleContext::NodeHasId(0, p_node, foo_query.name, &matched);
   EXPECT_EQ(0, matched);
-  StyleContext::NodeHasId(0, p_node, cat_query.name, &matched);
+  LibCSS_StyleContext::NodeHasId(0, p_node, cat_query.name, &matched);
   EXPECT_EQ(1, matched);
 #endif
 
@@ -295,7 +301,7 @@ TEST(DOMTest, DOMTree) {
 }
 
 #ifdef LFL_LIBCSS
-#include "lfapp/css.h"
+#include "core/web/css.h"
 TEST(DOMTest, CSS) {
   StyleSheet sheet(0, 0);
   sheet.Parse("h1 { color: red }\n"

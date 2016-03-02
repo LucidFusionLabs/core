@@ -27,10 +27,10 @@
 
 #ifdef WIN32
 #define CALLBACK __stdcall
-#include <Windns.h>
 #define stat(x,y) _stat(x,y)
 #define gmtime_r(i,o) memcpy(o, gmtime(&in), sizeof(tm))
 #define localtime_r(i,o) memcpy(o, localtime(&in), sizeof(tm))
+#include <Windns.h>
 #else
 #include <signal.h>
 #include <pthread.h>
@@ -336,7 +336,7 @@ void Application::CreateNewWindow() {
   Window *new_window = new Window();
   if (window_init_cb) window_init_cb(new_window);
   new_window->gd = static_cast<GraphicsDevice*>(LFAppCreateGraphicsDevice(video->opengles_version));
-  CHECK(CreateWindow(new_window));
+  CHECK(Video::CreateWindow(new_window));
 #if 0 // ndef LFL_QT
   MakeCurrentWindow(new_window);
   StartNewWindow(new_window);
@@ -349,7 +349,7 @@ void Application::StartNewWindow(Window *new_window) {
   input->Init(new_window);
   new_window->default_font.Load();
   if (window_start_cb) window_start_cb(new_window);
-  video->StartWindow();
+  Video::StartWindow(new_window);
 }
 
 NetworkThread *Application::CreateNetworkThread(bool detach, bool start) {
@@ -857,8 +857,11 @@ Window::Window() : caption("lfapp"), fps(128) {
 }
 
 Window::~Window() {
+  dialogs.clear();
+  my_gui.clear();
   if (console) console->WriteHistory(LFAppDownloadDir(), "console", "");
-  if (gd) delete gd;
+  console.reset();
+  delete gd;
 }
 
 Box Window::Box(float xp, float yp, float xs, float ys, float xbl, float ybt, float xbr, float ybb) const {

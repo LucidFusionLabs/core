@@ -32,6 +32,7 @@ DECLARE_int(scale_font_height);
 DECLARE_int(add_font_size);
 DECLARE_int(glyph_table_size);
 DECLARE_int(glyph_table_start);
+DECLARE_bool(subpixel_fonts);
 
 struct FontDesc {
   enum { Bold=1, Italic=2, Mono=4, Outline=8, Shadow=16 };
@@ -313,7 +314,6 @@ struct AtlasFontEngine : public FontEngine {
   static int Dimension(int n, int w, int h) { return 1 << max(8,FloorLog2(sqrt((w+4)*(h+4)*n))); }
 };
 
-#ifdef LFL_FREETYPE
 struct FreeTypeFontEngine : public FontEngine {
   struct Resource : public FontEngine::Resource {
     string name, content;
@@ -338,9 +338,6 @@ struct FreeTypeFontEngine : public FontEngine {
   static Resource *OpenFile  (const FontDesc&);
   static Resource *OpenBuffer(const FontDesc&, string *content);
 };
-#else
-struct FreeTypeFontEngine {};
-#endif
 
 #ifdef __APPLE__
 struct CoreTextFontEngine : public FontEngine {

@@ -17,8 +17,8 @@
  */
 
 #include "core/app/app.h"
-#include "core/app/dom.h"
-#include "core/app/css.h"
+#include "core/web/dom.h"
+#include "core/web/css.h"
 #include "core/app/flow.h"
 #include "core/app/gui.h"
 #include "core/app/ipc.h"
@@ -432,7 +432,7 @@ void Texture::ClearGL() {
   if (!app->MainThread()) { app->RunInMainThread(bind(&GraphicsDevice::DelTexture, screen->gd, ID)); ID=0; }
   else if (ID) { 
     if (screen) screen->gd->DelTexture(ID);
-    else { ERROR("DelTexture no screen ", ID); }
+    else if (FLAGS_gd_debug) ERROR("DelTexture no screen ", ID);
     ID = 0;
   }
 }
@@ -505,7 +505,7 @@ void DepthTexture::Resize(int W, int H, int DF, int flag) {
 void DepthTexture::ClearGL() {
   if (ID) {
     if (screen) screen->gd->DelRenderBuffers(1, &ID);
-    else { ERROR("DelRenderBuffer no screen ", ID); }
+    else if (FLAGS_gd_debug) ERROR("DelRenderBuffer no screen ", ID);
     ID = 0;
   }
 }
@@ -549,7 +549,7 @@ void FrameBuffer::Attach(int ct, int dt) {
 void FrameBuffer::ClearGL() {
   if (ID) {
     if (screen) screen->gd->DelFrameBuffers(1, &ID);
-    else { ERROR("DelFrameBuffer no screen ", ID); }
+    else if (FLAGS_gd_debug) ERROR("DelFrameBuffer no screen ", ID);
     ID = 0;
   }
 }
@@ -688,7 +688,7 @@ void Shader::SetUniform3fv(const string &name, int n, const float *v)           
 void Shader::ClearGL() {
   if (ID) {
     if (screen) screen->gd->DelProgram(ID);
-    else { ERROR("DelProgram no screen ", ID); }
+    else if (FLAGS_gd_debug) ERROR("DelProgram no screen ", ID);
     ID = 0;
   }
 }
@@ -813,17 +813,12 @@ int Video::Init() {
   }
 #endif
 
-#ifndef LFL_HEADLESS
   const char *glslver = screen->gd->GetString(GraphicsDevice::ShaderVersion);
   const char *glexts = screen->gd->GetString(GraphicsDevice::Extensions);
   INFO("OpenGL Version: ", screen->gd->GetString(GraphicsDevice::Version));
   INFO("OpenGL Vendor: ", screen->gd->GetString(GraphicsDevice::Vendor));
-#ifdef LFL_GLEW
   INFO("GLEW Version: ", screen->gd->GetGLEWString(GraphicsDevice::GLEWVersion));
-#endif
-#ifdef LFL_GLSL_SHADERS
   INFO("GL_SHADING_LANGUAGE_VERSION: ", glslver);
-#endif
   INFO("GL_EXTENSIONS: ", glexts);
 
   opengles_version = 1 + (glslver != NULL);
@@ -836,7 +831,6 @@ int Video::Init() {
   screen->gd->GetIntegerv(GraphicsDevice::DepthBits, &depth_bits);
   INFO("screen->opengles_version = ", opengles_version, ", depth_bits = ", depth_bits);
   INFO("lfapp_opengles_cubemap = ", opengles_cubemap ? "true" : "false");
-#endif
   return 0;
 }
 

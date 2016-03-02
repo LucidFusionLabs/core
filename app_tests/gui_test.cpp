@@ -18,8 +18,8 @@
 
 #include "gtest/gtest.h"
 #include "core/app/app.h"
-#include "core/app/dom.h"
-#include "core/app/css.h"
+#include "core/web/dom.h"
+#include "core/web/css.h"
 #include "core/app/flow.h"
 #include "core/app/gui.h"
 #include "core/app/ipc.h"

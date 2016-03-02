@@ -39,6 +39,7 @@ struct HTTP {
   static int    GrepHeaders(const char *headers, const char *headers_end, int num, ...);
   static int    GrepURLArgs(const char *urlargs, const char *urlargs_end, int num, ...);
   static string EncodeURL(const char *url);
+  static string MakeHeaders(int code, int content_length, const char *content_type);
 };
 
 struct HTTPClient {
@@ -123,19 +124,19 @@ struct HTTPServer : public Service {
     HTTPServer::Response Request(Connection *c, int method, const char *url, const char *args, const char *headers, const char *postdata, int postlen);
   };
 
-#ifdef LFL_FFMPEG
   struct StreamResource : public Resource {
     AVFormatContext *fctx;
     map<void*, Connection*> subscribers;
-    bool open;
-    int abr, vbr;
-    AVStream *audio;
-    AVFrame *samples;
-    short *sample_data;
-    AudioResampler resampler;
-    int frame, channels, resamples_processed;
-    AVStream *video;
-    AVFrame *picture; SwsContext *conv;
+    bool open=0;
+    int abr=0, vbr=0;
+    AVStream *audio=0;
+    AVFrame *samples=0;
+    short *sample_data=0;
+    AudioResamplerInterface *resampler=0;
+    int frame=0, channels=0, resamples_processed=0;
+    AVStream *video=0;
+    AVFrame *picture=0;
+    SwsContext *conv=0;
 
     virtual ~StreamResource();
     StreamResource(const char *outputFileType, int audioBitRate, int videoBitRate);        
@@ -147,7 +148,6 @@ struct HTTPServer : public Service {
     void SendVideo();        
     void Broadcast(AVPacket *, microseconds timestamp);
   };
-#endif
 };
 
 }; // namespace LFL

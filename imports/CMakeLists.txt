@@ -62,6 +62,7 @@ if(LFL_JPEG)
     INCLUDE_EXTERNAL_MSPROJECT(libjpeg ${CMAKE_CURRENT_SOURCE_DIR}/OpenCV/3rdparty/libjpeg/libjpeg.vcxproj)
     set(JPEG_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/OpenCV/3rdparty/include PARENT_SCOPE)
     set(JPEG_LIB libjpeg.lib PARENT_SCOPE)
+    set(JPEG_DEP libjpeg PARENT_SCOPE)
   else()
     add_subdirectory(libjpeg-turbo)
     set(JPEG_INCLUDE ${CMAKE_CURRENT_BINARY_DIR}/libjpeg-turbo ${CMAKE_CURRENT_SOURCE_DIR}/libjpeg-turbo PARENT_SCOPE)
@@ -176,26 +177,43 @@ if(LFL_ASSIMP)
   set(ASSIMP_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/assimp/include PARENT_SCOPE)
   set(ASSIMP_LIB assimp PARENT_SCOPE)
 endif()
+    
+# lame
+if(LFL_LAME)    
+  add_subdirectory(lame)
+  set(LAME_LIB -L${CMAKE_CURRENT_BINARY_DIR}/lame/libmp3lame/.libs -lmp3lame)
+  set(LAME_LIB ${LAME_LIB} PARENT_SCOPE)
+endif()
+
+# x264
+if(LFL_X264)
+  add_subdirectory(x264)
+  set(X264_LIB -L${CMAKE_CURRENT_BINARY_DIR}/x264 -lx264)
+  set(X264_LIB ${X264_LIB} PARENT_SCOPE)
+endif()
 
 # ffmpeg
 if(LFL_FFMPEG)
-  if(NOT LFL_ANDROID AND NOT WIN32)
-    # lame
-    add_subdirectory(lame)
-    set(LAME_LIB -L${CMAKE_CURRENT_BINARY_DIR}/lame/libmp3lame/.libs -lmp3lame PARENT_SCOPE)
-  
-    # x264
-    add_subdirectory(x264)
-    set(X264_LIB -L${CMAKE_CURRENT_BINARY_DIR}/x264 -lx264 PARENT_SCOPE)
-  endif()
-
   add_subdirectory(ffmpeg)
   if(WIN32)
     set(FFMPEG_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/ffmpeg/w32/include PARENT_SCOPE)
-    set(FFMPEG_LIB ${CMAKE_CURRENT_SOURCE_DIR}/ffmpeg/w32/lib/avformat.lib ${CMAKE_CURRENT_SOURCE_DIR}/ffmpeg/w32/lib/avcodec.lib ${CMAKE_CURRENT_SOURCE_DIR}/ffmpeg/w32/lib/avutil.lib ${CMAKE_CURRENT_SOURCE_DIR}/ffmpeg/w32/lib/swscale.lib ${CMAKE_CURRENT_SOURCE_DIR}/ffmpeg/w32/lib/swresample.lib PARENT_SCOPE)
+    set(FFMPEG_LIB ${CMAKE_CURRENT_SOURCE_DIR}/ffmpeg/w32/lib/avformat.lib
+        ${CMAKE_CURRENT_SOURCE_DIR}/ffmpeg/w32/lib/avcodec.lib
+        ${CMAKE_CURRENT_SOURCE_DIR}/ffmpeg/w32/lib/avutil.lib
+        ${CMAKE_CURRENT_SOURCE_DIR}/ffmpeg/w32/lib/swscale.lib
+        ${CMAKE_CURRENT_SOURCE_DIR}/ffmpeg/w32/lib/swresample.lib
+        ${LAME_LIB} ${X264_LIB} PARENT_SCOPE)
   else()
     set(FFMPEG_INCLUDE ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg ${CMAKE_CURRENT_SOURCE_DIR}/ffmpeg PARENT_SCOPE)
-    set(FFMPEG_LIB ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/libavdevice/libavdevice.a ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/libavfilter/libavfilter.a ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/libavformat/libavformat.a ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/libavcodec/libavcodec.a ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/libavutil/libavutil.a ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/libswscale/libswscale.a ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/libswresample/libswresample.a ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/libpostproc/libpostproc.a PARENT_SCOPE)
+    set(FFMPEG_LIB ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/libavdevice/libavdevice.a
+        ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/libavfilter/libavfilter.a
+        ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/libavformat/libavformat.a
+        ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/libavcodec/libavcodec.a
+        ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/libavutil/libavutil.a
+        ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/libswscale/libswscale.a
+        ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/libswresample/libswresample.a
+        ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/libpostproc/libpostproc.a
+        ${LAME_LIB} ${X264_LIB} PARENT_SCOPE)
   endif()
 endif()
 
@@ -263,6 +281,7 @@ endif()
 
 # OpenCV
 if(LFL_OPENCV)
+  set(OPENCV_DEP OpenCV PARENT_SCOPE)
   set(OPENCV_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/OpenCV/include PARENT_SCOPE)
   if(WIN32)
     INCLUDE_EXTERNAL_MSPROJECT(OpenCV ${CMAKE_CURRENT_SOURCE_DIR}/OpenCV/src/cv/cv.vcxproj)

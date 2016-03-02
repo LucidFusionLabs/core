@@ -16,7 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "lfapp/lfapp.h"
+#include "core/app/app.h"
 #include <QtOpenGL>
 #include <QApplication>
 
@@ -61,7 +61,13 @@ const int Key::F12        = Qt::Key_F12;
 const int Key::Home       = Qt::Key_Home;
 const int Key::End        = Qt::Key_End;
 
-extern "C" int LFAppQtInit();
+struct QtPlatformModule : public Module {
+  int Free() {
+    delete lfl_qapp;
+    lfl_qapp = nullptr;
+    return 0;
+  };
+};
 
 class QtWindow : public QWindow {
   Q_OBJECT
@@ -85,8 +91,11 @@ class QtWindow : public QWindow {
 
   bool event(QEvent *event) {
     if (event->type() != QEvent::UpdateRequest) return QWindow::event(event);
-    if (!init && (init=1)) MyInit();
-    if (!lfl_qt_init && (lfl_qt_init=true)) if (LFAppQtInit() < 0) { lfl_qapp->exit(); return true; }
+    if (!init && (init = 1)) MyInit();
+    if (!lfl_qt_init && (lfl_qt_init = true)) {
+      MyLFAppMain(lfl_qapp_av.size()-1, &lfl_qapp_av[0]);
+      if (!LFL::app->run) { lfl_qapp->exit(); return true; }
+    }
     if (!LFL::screen || LFL::screen->impl.value != this) LFL::app->MakeCurrentWindow(lfl_window);
     app->EventDrivenFrame(true);
     if (!app->run) { lfl_qapp->exit(); return true; }
@@ -168,7 +177,7 @@ class QtWindow : public QWindow {
 
 #include "qt_platform.moc"
 
-bool Application::CreateWindow(Window *W) {
+bool Video::CreateWindow(Window *W) {
   CHECK(!W->id.value && !W->gd);
   GraphicsDevice *gd = static_cast<GraphicsDevice*>(LFAppCreateGraphicsDevice(2));
   QtWindow *my_qwin = new QtWindow();
@@ -187,7 +196,7 @@ bool Application::CreateWindow(Window *W) {
   W->id = MakeTyped(qwin);
   W->impl = MakeTyped(my_qwin);
   W->gd = gd;
-  windows[W->id.value] = W;
+  app->windows[W->id.value] = W;
   return true;
 }
 
@@ -208,7 +217,7 @@ void Window::SetResizeIncrements(float x, float y) { GetTyped<QWindow*>(id)->set
 void Window::SetTransparency(float v) { GetTyped<QWindow*>(id)->setOpacity(1-v); }
 void Window::Reshape(int w, int h) { GetTyped<QWindow*>(id)->resize(w, h); app->MakeCurrentWindow(this); }
 
-void Video::StartWindow() {}
+void Video::StartWindow(Window*) {}
 int Video::Swap() {
   GetTyped<QOpenGLContext*>(screen->gl)->swapBuffers(GetTyped<QWindow*>(screen->id));
   screen->gd->CheckForError(__FILE__, __LINE__);
@@ -237,24 +246,18 @@ void FrameScheduler::DelWaitForeverSocket(Socket fd) {
   GetTyped<QtWindow*>(screen->impl)->DelWaitForeverSocket(fd);
 }
 
-extern "C" int LFAppQtInit() {
-  for (const auto &a : lfl_qapp_argv) lfl_qapp_av.push_back(a.c_str());
-  lfl_qapp_av.push_back(0);
-  MyLFAppMain(lfl_qapp_argv.size(), &lfl_qapp_av[0]);
-  return LFL::app->run ? 0 : -1; 
-}
-
 #undef main
 extern "C" int main(int argc, const char *argv[]) {
   LFL::app->done_create_cb = true;
   if (void (*create_cb)() = (void(*)())LFL::app->GetSymbol("LFAppCreateCB")) create_cb();
-  for (int i=0; i<argc; i++) lfl_qapp_argv.push_back(argv[i]);
-  QApplication app(argc, const_cast<char**>(argv));
-  lfl_qapp = &app;
-  LFL::app->CreateWindow(LFL::screen);
-  return app.exec();
+  for (int i=0; i<argc; i++) PushBack(lfl_qapp_argv, argv[i]);
+  for (auto &a : lfl_qapp_argv) lfl_qapp_av.push_back(a.c_str());
+  lfl_qapp_av.push_back(0);
+  lfl_qapp = new QApplication(argc, const_cast<char**>(argv));
+  Video::CreateWindow(LFL::screen);
+  return lfl_qapp->exec();
 }
 
-extern "C" void *LFAppCreatePlatformModule() { return nullptr; }
+extern "C" void *LFAppCreatePlatformModule() { return new QtPlatformModule(); }
 
 }; // namespace LFL

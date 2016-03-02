@@ -16,16 +16,16 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "lfapp/lfapp.h"
-#include "ml/hmm.h"
-#include "lfapp/dom.h"
-#include "lfapp/css.h"
-#include "lfapp/flow.h"
-#include "lfapp/gui.h"
+#include "core/app/app.h"
+#include "core/ml/hmm.h"
+#include "core/web/dom.h"
+#include "core/web/css.h"
+#include "core/app/flow.h"
+#include "core/app/gui.h"
 #include "speech.h"
 
 #ifdef LFL_CUDA
-#include "lfcuda/lfcuda.h"
+#include "core/app/cuda/lfcuda.h"
 CudaAcousticModel *CAM = 0;
 #endif
 

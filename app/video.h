@@ -55,8 +55,6 @@ struct Pixel {
   static const char *Name(int id);
   static int Size(int p);
   static int OpenGLID(int p);
-  static int FromFFMpegId(int fmt);
-  static int ToFFMpegId(int fmt);
 };
 
 struct Color {
@@ -626,8 +624,9 @@ struct Video : public Module {
   int Init();
   int Free();
   int Swap();
-  void StartWindow();
 
+  static bool CreateWindow(Window *W);
+  static void StartWindow(Window *W);
   static void *BeginGLContextCreate(Window *);
   static void *CompleteGLContextCreate(Window *, void *gl_context);
   static void InitGraphicsDevice(Window *);

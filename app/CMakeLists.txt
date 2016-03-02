@@ -2,10 +2,9 @@
 
 set(LFL_APP_CFLAGS)
 set(LFL_APP_DEF ${PLATFORM_DEF})
-set(LFL_APP_INCLUDE ${LFL_SOURCE_DIR} ${PLATFORM_INCLUDE})
-set(LFL_APP_LIB lfl_app ${PLATFORM_LIB})
+set(LFL_APP_INCLUDE ${LFL_SOURCE_DIR} ${PLATFORM_INCLUDE} ${GLOG_INCLUDE} ${FLATBUFFERS_INCLUDE_DIR})
+set(LFL_APP_LIB lfl_app ${PLATFORM_LIB} ${GLOG_LIB} ${FLATBUFFERS_LIB})
 
-# export
 macro(add_app_def _def)
   if(${_def})
     set(LFL_APP_DEF ${LFL_APP_DEF} -D${_def})
@@ -19,6 +18,8 @@ add_app_def(LFL_ANDROID)
 add_app_def(LFL_IPHONE)
 add_app_def(LFL_IPHONESIM)
 add_app_def(LFL_MOBILE)
+add_app_def(LFL_GLOG)
+add_app_def(LFL_FLATBUFFERS)
 
 if(LFL_QT)
   set(LFL_APP_DEF ${LFL_APP_DEF} ${QT_DEF})
@@ -35,15 +36,25 @@ add_subdirectory(platform)
 add_subdirectory(types)
 add_subdirectory(math)
 add_subdirectory(graphics)
+add_subdirectory(font)
 add_subdirectory(audio)
 add_subdirectory(loader)
+add_subdirectory(net)
+add_subdirectory(browser)
 add_subdirectory(camera)
 add_subdirectory(cuda)
 
-add_library(lfl_app ${LFL_APP_TYPE} gui.cpp browser.cpp font.cpp flow.cpp app.cpp types/types.cpp types/string.cpp types/time.cpp "file.cpp" assets.cpp audio.cpp video.cpp input.cpp math.cpp ipc.cpp network.cpp net/http.cpp net/ssh.cpp net/smtp.cpp net/resolver.cpp camera.cpp scene.cpp shell.cpp crypto.cpp bindings.cpp ${PROTO_SRC} ${CAPNP_SRC} ${FLATBUFFERS_SRC_OUTPUTS})
+add_library(lfl_app ${LFL_APP_TYPE} gui.cpp browser.cpp font.cpp flow.cpp app.cpp types/types.cpp
+            types/string.cpp types/time.cpp "file.cpp" assets.cpp audio.cpp video.cpp input.cpp
+            math.cpp ipc.cpp network.cpp net/http.cpp net/ssh.cpp net/smtp.cpp net/resolver.cpp
+            camera.cpp scene.cpp shell.cpp crypto.cpp bindings.cpp
+            ${PROTO_SRC} ${CAPNP_SRC} ${FLATBUFFERS_SRC_OUTPUTS})
+
 target_compile_options(lfl_app PUBLIC ${LFL_APP_CFLAGS})
 target_compile_definitions(lfl_app PUBLIC ${LFL_APP_DEF})
 target_include_directories(lfl_app PUBLIC ${LFL_APP_INCLUDE} ${CMAKE_CURRENT_BINARY_DIR})
+add_dependencies(lfl_app flatbuffers flatc ${FLATBUFFERS_SRC})
+
 if(LFL_APP_TYPE MATCHES "^SHARED$")
   target_link_libraries(lfl_app ${LFL_APP_LIB})
   set(LFL_APP_LIB lfl_app)

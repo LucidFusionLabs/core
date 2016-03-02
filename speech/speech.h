@@ -38,7 +38,7 @@ struct Phoneme {
 #define LFL_LANGUAGE_ENGLISH
 #undef  XX
 #define XX(phone) phone,
-#include "speech/phones.h"
+#include "core/speech/phones.h"
   };
   static const char *Name(char phoneId);
   static char Id(const char *phone, int len=0);

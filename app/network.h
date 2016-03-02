@@ -21,6 +21,7 @@
 
 namespace LFL {
 DECLARE_bool(network_debug);
+extern const Socket InvalidSocket;
 
 struct SocketType { static const int Stream, Datagram, SeqPacket, Raw; };
 struct Protocol { 
@@ -273,12 +274,29 @@ struct SocketWakeupThread : public SocketSet {
   void ThreadProc();
 };
 
+struct SSLSocket {
+  SSL *ssl=0;
+  BIO *bio=0;
+  ~SSLSocket();
+  const char *ErrorString() const;
+  Socket GetSocket() const;
+  ssize_t Read(char *buf, int readlen);
+  ssize_t Write(const StringPiece &b);
+  Socket Listen(int port, bool reuse);
+  Socket Connect(SSL_CTX *sslctx, const string &hostport);
+  Socket Connect(SSL_CTX *sslctx, IPV4::Addr addr, int port);
+  Socket Accept(SSLSocket *out);
+  static SSL_CTX *Init();
+  static void Free();
+};
+
 struct Listener {
-  BIO *ssl;
+  bool ssl;
+  Socket socket = InvalidSocket;
   Service *svc;
-  Socket socket=-1;
+  SSLSocket bio;
   typed_ptr self_reference;
-  Listener(Service *s, bool ssl=false) : svc(s), ssl(reinterpret_cast<BIO*>(ssl)), self_reference(MakeTyped(this)) {}
+  Listener(Service *s, bool SSL=false) : ssl(SSL), svc(s), self_reference(MakeTyped(this)) {}
 };
 
 struct Connection {
@@ -305,8 +323,7 @@ struct Connection {
   deque<TransferredSocket> transferred_socket;
   unique_ptr<Handler> handler;
   Callback *detach;
-  SSL *ssl=0;
-  BIO *bio=0;
+  SSLSocket bio;
 
   virtual ~Connection();
   Connection(Service *s, Handler *h,                                     Callback *Detach=0) : svc(s), socket(-1),   ct(Now()), rt(Now()), wt(Now()), addr(0),    state(Error), port(0),    rb(65536), wb(65536), self_reference(MakeTyped(this)), handler(h), detach(Detach) {}

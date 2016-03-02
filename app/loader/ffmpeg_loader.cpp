@@ -16,26 +16,20 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "lfapp/lfapp.h"
+#include "core/app/app.h"
 
 extern "C" {
-#define INT64_C (long long)
+//#define INT64_C (long long)
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
 #include <libswscale/swscale.h>
 #define AVCODEC_MAX_AUDIO_FRAME_SIZE 192000
 };
 
-#include "lfapp/bindings/ffmpeg.h"
+#include "core/app/bindings/ffmpeg.h"
 
 namespace LFL {
 const int SoundAsset::FromBufPad = FF_INPUT_BUFFER_PADDING_SIZE;
-
-static void FFMpegInit() {
-  INFO("lfapp_open: ffmpeg_init()");
-  //av_log_set_level(AV_LOG_DEBUG);
-  av_register_all();
-}
 
 struct FFBIOFile {
   static void *Alloc(File *f) {
@@ -88,7 +82,7 @@ struct FFBIOC {
   }
 };
 
-struct FFMpegAssetLoader : public Loader {
+struct FFMpegAssetLoader : public AssetLoaderInterface {
   FFMpegAssetLoader() { INFO("FFMpegAssetLoader"); }
 
   virtual void *LoadFile(const string &filename) { return LoadFile(filename, 0); }
@@ -174,7 +168,7 @@ struct FFMpegAssetLoader : public Loader {
       char errstr[128]; av_strerror(ret, errstr, sizeof(errstr));
       ERROR("avcodec_decode_video2: ", codec->name, " ", ret, ": ", errstr);
     } else {
-      int pf = Pixel::FromFFMpegId(avctx->pix_fmt);
+      int pf = PixelFromFFMpegId(avctx->pix_fmt);
       out->width  = avctx->width;
       out->height = avctx->height;
       out->LoadGL(*frame->data, point(out->width, out->height), pf, frame->linesize[0]);
@@ -195,7 +189,7 @@ struct FFMpegAssetLoader : public Loader {
 
     if (!a->refill) {
       avcodec_close(fctx->streams[a->handle_arg1]->codec);
-      a->resampler.Close();
+      a->resampler.reset();
     }
   }
 
@@ -249,8 +243,8 @@ struct FFMpegAssetLoader : public Loader {
       open_resampler = true;
     }
     if (open_resampler)
-      a->resampler.Open(a->wav.get(), avctx->channels, avctx->sample_rate, SampleFromFFMpegId(avctx->sample_fmt),
-                        a->channels, a->sample_rate, Sample::S16);
+      a->resampler->Open(a->wav.get(), avctx->channels, avctx->sample_rate, SampleFromFFMpegId(avctx->sample_fmt),
+                         a->channels, a->sample_rate, Sample::S16);
     a->wav->ring.back = 0;
     int wrote = PlayMovie(a, 0, fctx, 0);
     if (wrote < SoundAsset::Size(a)) {
@@ -289,13 +283,14 @@ struct FFMpegAssetLoader : public Loader {
       sa->sample_rate = FLAGS_sample_rate;
       sa->seconds = FLAGS_soundasset_seconds;
       sa->wav = make_unique<RingBuf>(sa->sample_rate, SoundAsset::Size(sa));
-      sa->resampler.Open(sa->wav.get(), avctx->channels, avctx->sample_rate, SampleFromFFMpegId(avctx->sample_fmt),
-                         sa->channels, sa->sample_rate, Sample::S16);
+      sa->resampler = unique_ptr<AudioResamplerInterface>(CreateAudioResampler());
+      sa->resampler->Open(sa->wav.get(), avctx->channels, avctx->sample_rate, SampleFromFFMpegId(avctx->sample_fmt),
+                          sa->channels, sa->sample_rate, Sample::S16);
     }
   }
 
   static int PlayMovie(SoundAsset *sa, Asset *va, AVFormatContext *fctx, int seek_unused) {
-    int begin_resamples_available = sa->resampler.output_available, wrote=0, done=0;
+    int begin_resamples_available = sa->resampler->output_available, wrote=0, done=0;
     Allocator *tlsalloc = ThreadLocalStorage::GetAllocator();
 
     while (!done && wrote != SoundAsset::Size(sa)) {
@@ -318,8 +313,8 @@ struct FFMpegAssetLoader : public Loader {
           int sampsIn  = frame->nb_samples;
           int sampsOut = max(0, SoundAsset::Size(sa) - wrote) / sa->channels;
 
-          sa->resampler.Update(sampsIn, reinterpret_cast<const short* const*>(frame->extended_data), rsout, Time(-1), sampsOut);
-          wrote = sa->resampler.output_available - begin_resamples_available;
+          sa->resampler->Update(sampsIn, reinterpret_cast<const short* const*>(frame->extended_data), rsout, Time(-1), sampsOut);
+          wrote = sa->resampler->output_available - begin_resamples_available;
           av_frame_unref(frame);
         }
       } else if (va) {
@@ -328,7 +323,7 @@ struct FFMpegAssetLoader : public Loader {
           ERROR("avcodec_decode_video2 ", ret, ": ", errstr);
         } else {
           screen->gd->BindTexture(GraphicsDevice::Texture2D, va->tex.ID);
-          va->tex.UpdateBuffer(*frame->data, point(avctx->width, avctx->height), Pixel::FromFFMpegId(avctx->pix_fmt), 
+          va->tex.UpdateBuffer(*frame->data, point(avctx->width, avctx->height), PixelFromFFMpegId(avctx->pix_fmt), 
                                frame->linesize[0], Texture::Flag::Resample);
           va->tex.UpdateGL();
           av_frame_unref(frame);
@@ -342,6 +337,12 @@ struct FFMpegAssetLoader : public Loader {
   }
 };
 
-AssetLoaderInterface *CreateFFMpegAssetLoader() { return new FFMpegAssetLoader(); }
+AssetLoaderInterface *CreateFFMpegAssetLoader() { 
+  ONCE({ INFO("FFMpegInit()");
+         // av_log_set_level(AV_LOG_DEBUG);
+         av_register_all(); });
+
+  return new FFMpegAssetLoader();
+}
 
 }; // namespace LFL

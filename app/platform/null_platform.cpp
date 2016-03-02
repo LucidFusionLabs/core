@@ -68,10 +68,6 @@ void Application::SetClipboardText(const string &s) {}
 void Application::GrabMouseFocus() {}
 void Application::ReleaseMouseFocus() {}
 void Application::MakeCurrentWindow(Window *W) {}
-bool Application::CreateWindow(Window *W) { 
-  windows[W->id.value] = W;
-  return true;
-}
 void Application::CloseWindow(Window *W) {
   windows.erase(W->id.value);
   if (windows.empty()) app->run = false;
@@ -84,7 +80,11 @@ void Window::SetResizeIncrements(float x, float y) {}
 void Window::SetTransparency(float v) {}
 void Window::Reshape(int w, int h) {}
 
-void Video::StartWindow() {}
+bool Video::CreateWindow(Window *W) { 
+  app->windows[W->id.value] = W;
+  return true;
+}
+void Video::StartWindow(Window*) {}
 int Video::Swap() { return 0; }
 
 void FrameScheduler::DoWait() {}

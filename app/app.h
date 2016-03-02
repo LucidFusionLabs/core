@@ -593,15 +593,14 @@ struct Application : public ::LFApp {
   bool MainProcess() const { return !main_process; }
   double FPS() const { return screen->fps.FPS(); }
   double CamFPS() const { return camera->fps.FPS(); }
+  Window *GetWindow(void *id) const { return FindOrNull(windows, id); }
   int LoadModule(Module *m) { return PushBack(modules, m)->Init(); }
-  Window *GetWindow(void *id) { return FindOrNull(windows, id); }
   void Log(int level, const char *file, int line, const string &message);
   void WriteLogLine(const char *tbuf, const char *message, const char *file, int line);
-  bool CreateWindow(Window *W);
-  void CloseWindow(Window *W);
-  void MakeCurrentWindow(Window *W);
+  void MakeCurrentWindow(Window*);
+  void CloseWindow(Window*);
   void CreateNewWindow();
-  void StartNewWindow(Window *new_window);
+  void StartNewWindow(Window*);
   NetworkThread *CreateNetworkThread(bool detach_existing_module, bool start);
 
   int Create(int argc, const char **argv, const char *source_filename, void (*create_cb)()=0);

@@ -74,11 +74,12 @@ struct AudioResamplerInterface {
   int input_processed=0, input_chans=0, output_available=0, output_chans=0, output_rate=0;
   virtual ~AudioResamplerInterface() {}
 
-  virtual bool Opened() = 0;
+  virtual bool Opened() const = 0;
   virtual int Open(RingBuf *out, int  in_channels, int  in_sample_rate, int in_sample_type,
                    int out_channels, int out_sample_rate, int out_sample_type) = 0;
   virtual int Update(int samples, const short *in) = 0;
   virtual int Update(int samples, RingBuf::Handle *L, RingBuf::Handle *R) = 0;
+  virtual int Update(int samples, const short *const *inbuf, short *rsout, microseconds timestamp, int max_samples_out) = 0;
 
   static microseconds MonotonouslyIncreasingTimestamp(microseconds laststamp, microseconds stamp, microseconds *step, int steps);
 };

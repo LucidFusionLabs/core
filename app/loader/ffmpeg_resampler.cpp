@@ -16,28 +16,25 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "lfapp/lfapp.h"
+#include "core/app/app.h"
 
 extern "C" {
-#ifdef LFL_FFMPEG
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
 #include <libswresample/swresample.h>
 #define AVCODEC_MAX_AUDIO_FRAME_SIZE 192000
-#endif
 };
 
-#include "lfapp/bindings/ffmpeg.h"
+#include "core/app/bindings/ffmpeg.h"
 
 namespace LFL {
-struct FFMpegAudioResampler {
+struct FFMpegAudioResampler : public AudioResamplerInterface {
   SwrContext *swr=0;
   ~FFMpegAudioResampler() { if (swr) swr_free(&swr); }
-  bool Opened() { return swr; }
+  bool Opened() const { return swr; }
 
   int Open(RingBuf *rb, int in_channels,  int in_sample_rate,  int in_sample_type,
            int out_channels, int out_sample_rate, int out_sample_type) {
-    Close();
     out = rb;
     input_chans = in_channels;
     output_chans = out_channels;
@@ -97,27 +94,21 @@ struct FFMpegAudioResampler {
   }
 };
 
-struct FFMPEGVideoResampler : public VideoResamplerInterface {
+struct FFMpegVideoResampler : public VideoResamplerInterface {
   SwsContext *conv=0;
-  bool simple_resampler_passthru=0;
-  ~FFMPEGVideoResampler() { if (conv.value) sws_freeContext(conv); }
-
-  bool Opened() const { return conv || simple_resampler_passthru; }
+  ~FFMpegVideoResampler() { if (conv) sws_freeContext(conv); }
+  bool Opened() const { return conv; }
 
   void Open(int sw, int sh, int sf, int dw, int dh, int df) {
     s_fmt = sf; s_width = sw; s_height = sh;
     d_fmt = df; d_width = dw; d_height = dh;
     // INFO("resample ", BlankNull(Pixel::Name(s_fmt)), " -> ", BlankNull(Pixel::Name(d_fmt)), " : (", sw, ",", sh, ") -> (", dw, ",", dh, ")");
 
-    if (SimpleVideoResampler::Supports(s_fmt) && SimpleVideoResampler::Supports(d_fmt) && sw == dw && sh == dh)
-    { simple_resampler_passthru = 1; return; }
-
-    conv = MakeTyped(sws_getContext(sw, sh, PixelFormat(Pixel::ToFFMpegId(sf)),
-                                    dw, dh, PixelFormat(Pixel::ToFFMpegId(df)), SWS_BICUBIC, 0, 0, 0));
+    conv = sws_getContext(sw, sh, PixelFormat(PixelToFFMpegId(sf)),
+                          dw, dh, PixelFormat(PixelToFFMpegId(df)), SWS_BICUBIC, 0, 0, 0);
   }
 
   void Resample(const unsigned char *s, int sls, unsigned char *d, int dls, bool flip_x, bool flip_y) {
-    if (simple_resampler_passthru) return SimpleVideoResampler::Resample(s, sls, d, dls, flip_x, flip_y);
     const uint8_t *source[4] = { MakeUnsigned(s), 0, 0, 0 };
     /**/  uint8_t *dest  [4] = { MakeUnsigned(d), 0, 0, 0 };
     int sourcels[4] = { sls, 0, 0, 0 }, destls[4] = { dls, 0, 0, 0 };
@@ -125,7 +116,7 @@ struct FFMPEGVideoResampler : public VideoResamplerInterface {
       source[0] += sls * (s_height - 1);
       sourcels[0] *= -1;
     }
-    sws_scale(GetTyped<SwsContext*>(conv),
+    sws_scale(conv,
               flip_y ? source   : source,
               flip_y ? sourcels : sourcels, 0, s_height, dest, destls);
   }

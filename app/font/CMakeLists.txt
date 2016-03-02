@@ -1,0 +1,10 @@
+# $Id: CMakeLists.txt 1298 2011-12-11 18:46:06Z justin $
+
+include_directories(${LFL_SOURCE_DIR})
+add_library(app_null_ttf STATIC null_ttf.cpp)
+
+if(LFL_FREETYPE)
+  add_library(app_freetype_ttf STATIC freetype_ttf.cpp)
+  target_include_directories(app_freetype_ttf PUBLIC ${FREETYPE_INCLUDE})
+  target_link_libraries(app_freetype_ttf PUBLIC ${FREETYPE_LIB})
+endif()

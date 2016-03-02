@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "lfapp/lfapp.h"
-#include "ml/hmm.h"
+#include "core/app/app.h"
+#include "core/ml/hmm.h"
 #include "speech.h"
 #include "voice.h"
 

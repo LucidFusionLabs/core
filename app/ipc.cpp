@@ -20,8 +20,8 @@
 #include "core/app/ipc.h"
 #include "core/app/flow.h"
 #include "core/app/gui.h"
-#include "core/app/dom.h"
-#include "core/app/css.h"
+#include "core/web/dom.h"
+#include "core/web/css.h"
 #include "core/app/browser.h"
 
 #include <fcntl.h>

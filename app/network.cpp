@@ -26,14 +26,6 @@ extern "C" {
 #include "core/app/crypto.h"
 #include "core/app/net/resolver.h"
 
-#ifdef LFL_OPENSSL
-#include "openssl/bio.h"
-#include "openssl/ssl.h"
-#include "openssl/err.h"
-#include "openssl/conf.h"
-#include "openssl/engine.h"
-#endif
-
 #ifndef WIN32
 #include <sys/socket.h>
 #include <sys/uio.h>
@@ -54,9 +46,11 @@ namespace LFL {
 DEFINE_bool(dns_dump,       0,  "Print DNS responses");
 DEFINE_bool(network_debug,  0,  "Print send()/recv() bytes");
 DEFINE_int (udp_idle_sec,   15, "Timeout UDP connections idle for seconds");
-#ifdef LFL_OPENSSL
-DEFINE_string(ssl_certfile, "", "SSL server certificate file");
-DEFINE_string(ssl_keyfile,  "", "SSL server key file");
+
+#ifdef WIN32
+const Socket InvalidSocket = INVALID_SOCKET;
+#else
+const Socket InvalidSocket = -1;
 #endif
 
 const int SocketType::Stream    = SOCK_STREAM;
@@ -447,26 +441,17 @@ void SocketWakeupThread::ThreadProc() {
 
 /* Connection */
 
-Connection::~Connection() {
-#ifdef LFL_OPENSSL
-  if (bio) BIO_free_all(bio);
-#endif
-}
+Connection::~Connection() {}
 
 int Connection::Read() {
   int readlen = rb.Remaining(), len = 0;
   if (readlen <= 0) return ERRORv(-1, Name(), ": read queue full, rl=", rb.size());
 
-  if (ssl) {
-#ifdef LFL_OPENSSL
-    if ((len = BIO_read(bio, rb.end(), readlen)) <= 0) {
-      if (SSL_get_error(ssl, len) != SSL_ERROR_WANT_READ) {
-        const char *err_string = ERR_reason_error_string(ERR_get_error());
-        return ERRORv(-1, Name(), ": BIO_read: ", err_string ? err_string : "read() zero");
-      }
-      return 0;
-    }
-#endif
+  if (bio.ssl) {
+    if ((len = bio.Read(rb.end(), readlen)) < 0) {
+      const char *err_string = bio.ErrorString();
+      return ERRORv(-1, Name(), ": BIO_read: ", err_string ? err_string : "read() zero");
+    } else if (!len) return 0;
 
 #ifndef WIN32
   } else if (control_messages) {
@@ -584,13 +569,11 @@ int Connection::ReadFlush(int len) {
 int Connection::WriteFlush(const char *buf, int len) {
   CHECK_GE(len, 0);
   int wrote = 0;
-  if (ssl) {
-#ifdef LFL_OPENSSL
-    if ((wrote = BIO_write(bio, buf, len)) < 0) {
+  if (bio.ssl) {
+    if ((wrote = bio.Write(StringPiece(buf, len))) < 0) {
       if (!SystemNetwork::EWouldBlock()) return ERRORv(-1, Name(), ": send: ", strerror(errno));
       wrote = 0;
     }
-#endif
   }
   else {
     if ((wrote = send(socket, buf, len, 0)) < 0) {
@@ -604,10 +587,7 @@ int Connection::WriteFlush(const char *buf, int len) {
 
 int Connection::WriteVFlush(const iovec *iov, int len) {
   int wrote = 0;
-  if (ssl) {
-#ifdef LFL_OPENSSL
-#endif
-  }
+  if (bio.ssl) { FATAL("ssl writev unimplemented"); }
   else {
     if ((wrote = writev(socket, iov, len)) < 0) {
       if (!SystemNetwork::EWouldBlock()) return ERRORv(-1, Name(), ": send: ", strerror(errno));
@@ -700,16 +680,10 @@ int Service::OpenSocket(Connection *c, int protocol, int blocking, IPV4EndpointS
 Socket Service::Listen(IPV4::Addr addr, int port, Listener *listener) {
   Socket fd = -1;
   if (listener->ssl) {
-#ifdef LFL_OPENSSL
-    listener->ssl = BIO_new_accept(const_cast<char*>(StrCat(port).c_str()));
-    BIO_ctrl(listener->ssl, BIO_C_SET_ACCEPT, 1, Void("a"));
-    BIO_set_bind_mode(listener->ssl, BIO_BIND_REUSEADDR);
-    if (BIO_do_accept(listener->ssl) <= 0) return ERRORv(-1, "ssl_listen: ", -1);
-    BIO_get_fd(listener->ssl, &listener->socket);
-    BIO_set_accept_bios(listener->ssl, BIO_new_ssl(app->net->ssl, 0));
-#endif
+    if ((listener->socket = listener->bio.Listen(port, true)) == InvalidSocket)
+      return ERRORv(-1, "ssl_listen: ", -1);
   } else {
-    if ((listener->socket = SystemNetwork::Listen(protocol, addr, port)) == -1)
+    if ((listener->socket = SystemNetwork::Listen(protocol, addr, port)) == InvalidSocket)
       return ERRORv(-1, "SystemNetwork::Listen(", protocol, ", ", port, "): ", SystemNetwork::LastError());
   }
   app->net->active.Add(listener->socket, SocketSet::READABLE, &listener->self_reference);
@@ -765,64 +739,39 @@ Connection *Service::Connect(const string &hostport, int default_port, Callback 
 }
 
 Connection *Service::SSLConnect(SSL_CTX *sslctx, const string &hostport, int default_port, Callback *detach) {
-#ifdef LFL_OPENSSL
   if (!sslctx) sslctx = app->net->ssl;
   if (!sslctx) return ERRORv(nullptr, "no ssl: ", -1);
 
   Connection *c = new Connection(this, Connection::Connecting, 0, 0, detach);
   if (!HTTP::ResolveHost(hostport.c_str(), 0, &c->addr, &c->port, true, default_port)) return ERRORv(nullptr, "resolve: ", hostport);
 
-  c->bio = BIO_new_ssl_connect(sslctx);
-  BIO_set_conn_hostname(c->bio, hostport.c_str());
-  BIO_get_ssl(c->bio, &c->ssl);
-  BIO_set_nbio(c->bio, 1);
-
-  int ret = BIO_do_connect(c->bio);
-  if (ret < 0 && !BIO_should_retry(c->bio)) {
-    ERROR(hostport, ": BIO_do_connect: ", ret);
+  if ((c->socket = c->bio.Connect(sslctx, hostport)) == InvalidSocket) {
+    ERROR(hostport, ": BIO_do_connect: ", SpellNull(c->bio.ErrorString()));
     delete c;
     return 0;
   }
-
-  BIO_get_fd(c->bio, &c->socket);
 
   INFO(c->Name(), ": connecting (fd=", c->socket, ")");
   conn[c->socket] = unique_ptr<Connection>(c);
   app->net->active.Add(c->socket, SocketSet::WRITABLE, &c->self_reference);
   return c;
-#else
-  return 0;
-#endif
 }
 
 Connection *Service::SSLConnect(SSL_CTX *sslctx, IPV4::Addr addr, int port, Callback *detach) {
-#ifdef LFL_OPENSSL
   if (!sslctx) sslctx = app->net->ssl;
   if (!sslctx) return ERRORv(nullptr, "no ssl: ", -1);
 
   Connection *c = new Connection(this, Connection::Connecting, addr, port, detach);
-  c->bio = BIO_new_ssl_connect(sslctx);
-  BIO_set_conn_ip(c->bio, reinterpret_cast<char*>(&addr));
-  BIO_set_conn_int_port(c->bio, reinterpret_cast<char*>(&port));
-  BIO_get_ssl(c->bio, &c->ssl);
-  BIO_set_nbio(c->bio, 1);
-
-  int ret = BIO_do_connect(c->bio);
-  if (ret < 0 && !BIO_should_retry(c->bio)) {
-    ERROR(c->Name(), ": BIO_do_connect: ", ret);
+  if ((c->socket = c->bio.Connect(sslctx, addr, port)) == InvalidSocket) {
+    ERROR(c->Name(), ": BIO_do_connect: ", BlankNull(c->bio.ErrorString()));
     delete c;
     return 0;
   }
-
-  BIO_get_fd(c->bio, &c->socket);
 
   INFO(c->Name(), ": connecting (fd=", c->socket, ")");
   conn[c->socket] = unique_ptr<Connection>(c);
   app->net->active.Add(c->socket, SocketSet::WRITABLE, &c->self_reference);
   return c;
-#else
-  return 0;
-#endif
 }
 
 Connection *Service::EndpointConnect(const string &endpoint_name) {
@@ -884,36 +833,12 @@ Network::Network() {
 }
 
 Network::~Network() {
-#ifdef LFL_OPENSSL
-  CONF_modules_free();
-  ERR_remove_state(0);
-  ENGINE_cleanup();
-  CONF_modules_unload(1);
-  ERR_free_strings();
-  EVP_cleanup();
-  CRYPTO_cleanup_all_ex_data();
-  sk_SSL_COMP_free(SSL_COMP_get_compression_methods());
-#endif
+  SSLSocket::Free();
 }
 
 int Network::Init() {
   INFO("Network::Init()");
-#ifdef LFL_OPENSSL
-  SSL_load_error_strings();
-  SSL_library_init(); 
-
-  if (bool client_only=0) ssl = SSL_CTX_new(SSLv23_client_method());
-  else                    ssl = SSL_CTX_new(SSLv23_method());
-
-  if (!ssl) FATAL("no SSL_CTX: ", ERR_reason_error_string(ERR_get_error()));
-  SSL_CTX_set_verify(ssl, SSL_VERIFY_NONE, 0);
-
-  if (FLAGS_ssl_certfile.size() && FLAGS_ssl_keyfile.size()) {
-    if (!SSL_CTX_use_certificate_file(ssl, FLAGS_ssl_certfile.c_str(), SSL_FILETYPE_PEM)) return ERRORv(-1, "SSL_CTX_use_certificate_file ", ERR_reason_error_string(ERR_get_error()));
-    if (!SSL_CTX_use_PrivateKey_file(ssl, FLAGS_ssl_keyfile.c_str(), SSL_FILETYPE_PEM)) return ERRORv(-1, "SSL_CTX_use_PrivateKey_file ",  ERR_reason_error_string(ERR_get_error()));
-    if (!SSL_CTX_check_private_key(ssl)) return ERRORv(-1, "SSL_CTX_check_private_key ", ERR_reason_error_string(ERR_get_error()));
-  }
-#endif
+  ssl = SSLSocket::Init();
   Enable(unix_client.get());
   Enable(udp_client.get());
   Enable(tcp_client.get());
@@ -1050,24 +975,19 @@ void Network::AcceptFrame(Service *svc, Listener *listener) {
   for (;;) {
     Connection *c = 0; bool inserted = false;
     if (listener->ssl) { /* SSL accept */
-#ifdef LFL_OPENSSL
+      Socket socket;
+      SSLSocket sslsocket;
+      if ((socket = listener->bio.Accept(&sslsocket)) == InvalidSocket) continue;
+
       struct sockaddr_in sin;
       socklen_t sinSize = sizeof(sin);
-      Socket socket;
-      if (BIO_do_accept(listener->ssl) <= 0) continue;
-      BIO *bio = BIO_pop(listener->ssl);
-      BIO_get_fd(bio, &socket);
-
       if (::getpeername(socket, reinterpret_cast<struct sockaddr*>(&sin), &sinSize) < 0)
       { if (!SystemNetwork::EWouldBlock()) ERROR("getpeername: ", strerror(errno)); break; }
 
       /* insert socket */
       c = svc->Accept(Connection::Connected, socket, sin.sin_addr.s_addr, ntohs(sin.sin_port));
       if (!c) { SystemNetwork::CloseSocket(socket); continue; }
-      c->bio = bio;
-      BIO_set_nbio(c->bio, 1);
-      BIO_get_ssl(c->bio, &listener->ssl);
-#endif
+      c->bio = sslsocket;
     }
     else if (svc->protocol == Protocol::UDP) { /* UDP server read */
       struct sockaddr_in sin;
@@ -1155,7 +1075,7 @@ void Network::TCPConnectionFrame(Service *svc, Connection *c, ServiceEndpointEra
         c->ReadFlush(c->rb.size());
       }
     }
-    else if (c->ssl || active.GetReadable(c->socket)) { /* TCP Read */
+    else if (c->bio.ssl || active.GetReadable(c->socket)) { /* TCP Read */
       if (c->Read()<0) { c->SetError(); break; }
       if (c->rb.size()) {
         if (c->handler) { if (c->handler->Read(c) < 0) { ERROR(c->Name(), ": handler read"); c->SetError(); } }

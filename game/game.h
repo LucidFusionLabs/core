@@ -19,7 +19,7 @@
 #ifndef LFL_LFAPP_GAME_H__
 #define LFL_LFAPP_GAME_H__
 
-#include "game/proto.h"
+#include "core/game/proto.h"
 
 namespace LFL {
 DECLARE_bool(rcon_debug);
@@ -1455,6 +1455,6 @@ struct GameMultiTouchControls {
 };
 }; // namespace LFL
 
-#include "game/physics.h"
+#include "core/game/physics.h"
 
 #endif /* LFL_LFAPP_GAME_H__ */

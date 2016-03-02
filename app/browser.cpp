@@ -17,8 +17,8 @@
  */
 
 #include "core/app/app.h"
-#include "core/app/dom.h"
-#include "core/app/css.h"
+#include "core/web/dom.h"
+#include "core/web/css.h"
 #include "core/app/flow.h"
 #include "core/app/gui.h"
 #include "core/app/ipc.h"
@@ -56,82 +56,6 @@ unique_ptr<BrowserInterface> CreateDefaultBrowser(GUI *g, int w, int h) {
   return make_unique<Browser>(g, Box(w, h));
 }
 
-int PercentRefersTo(unsigned short prt, Flow *inline_context) {
-  switch (prt) {
-    case DOM::CSSPrimitiveValue::PercentRefersTo::FontWidth:           return inline_context->cur_attr.font->max_width;
-    case DOM::CSSPrimitiveValue::PercentRefersTo::FontHeight:          return inline_context->cur_attr.font->Height();
-    case DOM::CSSPrimitiveValue::PercentRefersTo::LineHeight:          return inline_context->layout.line_height;
-    case DOM::CSSPrimitiveValue::PercentRefersTo::ContainingBoxHeight: return inline_context->container->h;
-  }; return inline_context->container->w;
-}
-
-#ifdef LFL_LIBCSS
-css_error StyleSheet::Import(void *pw, css_stylesheet *parent, lwc_string *url, uint64_t media) {
-  LFL::DOM::Document *D = static_cast<StyleSheet*>(pw)->ownerDocument;
-  if (D) D->parser->OpenStyleImport(LibCSS_String::ToUTF8String(url)); // XXX use parent
-  INFO("libcss Import ", LibCSS_String::ToString(url));
-  return CSS_INVALID; // CSS_OK;
-}
-
-void StyleContext::Match(ComputedStyle *out, LFL::DOM::Node *node, const ComputedStyle *parent_sheet, StyleSheet *inline_style) {
-  out->Reset();
-  CHECK_EQ(CSS_OK, css_select_style(select_ctx, node, CSS_MEDIA_SCREEN,
-                                    inline_style ? inline_style->sheet : 0, SelectHandler(), this, &out->style));
-
-  lwc_string **n; css_fixed s; css_unit su; css_color c;
-  out->color_not_inherited   = css_computed_color           (out->Style(), &c) == CSS_COLOR_COLOR;
-  out->bgcolor_not_inherited = css_computed_background_color(out->Style(), &c) == CSS_BACKGROUND_COLOR_COLOR;
-  out->font_not_inherited = out->color_not_inherited || out->bgcolor_not_inherited ||
-    (css_computed_font_family (out->Style(), &n)      != CSS_FONT_FAMILY_INHERIT) ||
-    (css_computed_font_size   (out->Style(), &s, &su) != CSS_FONT_SIZE_INHERIT)   ||
-    (css_computed_font_style  (out->Style())          != CSS_FONT_STYLE_INHERIT)  ||
-    (css_computed_font_weight (out->Style())          != CSS_FONT_WEIGHT_INHERIT) ||
-    (css_computed_font_variant(out->Style())          != CSS_FONT_VARIANT_INHERIT);
-
-  if (parent_sheet)
-    CHECK_EQ(css_computed_style_compose(parent_sheet->Style(), out->Style(), ComputeFontSize, NULL, out->Style()), CSS_OK);
-}
-
-css_error StyleContext::NodeClasses(void *pw, void *n, lwc_string ***classes_out, uint32_t *n_classes) {
-  *n_classes = 0;
-  *classes_out = NULL;
-  DOM::Node *node = static_cast<DOM::Node*>(n), *attr = 0;
-  if (!(attr = node->getAttributeNode("class"))) return CSS_OK;
-
-  vector<DOM::DOMString> classes;
-  Split(attr->nodeValue(), isspace, &classes);
-  if (!classes.size()) return CSS_OK;
-
-  node->render->style.class_cache.resize(classes.size());
-  *classes_out = &node->render->style.class_cache[0];
-  *n_classes = classes.size();
-  for (int i=0; i<classes.size(); i++) (*classes_out)[i] = LibCSS_String::Intern(classes[i]);
-  return CSS_OK;
-}
-
-int StyleContext::FontFaces(const string &face_name, vector<LFL::DOM::FontFace> *out) {
-  out->clear();
-  lwc_string *n=0; css_select_font_faces_results *v=0; uint32_t l;
-  int rc = css_select_font_faces(select_ctx, CSS_MEDIA_SCREEN, LibCSS_String::Intern(face_name), &v);
-  for (int i=0; rc == CSS_OK && v && i<v->n_font_faces; i++) {
-    LFL::DOM::FontFace ff;
-    ff.style  = LFL::DOM::FontStyle (css_font_face_font_style( v->font_faces[i]));
-    ff.weight = LFL::DOM::FontWeight(css_font_face_font_weight(v->font_faces[i]));
-    n=0; css_font_face_get_font_family(v->font_faces[i], &n); if (n) ff.family.name.push_back(LibCSS_String::ToUTF8String(n));
-    l=0; css_font_face_count_srcs(v->font_faces[i], &l);
-    for (int j=0; j<l; j++) {
-      const css_font_face_src *src=0; css_font_face_get_src(v->font_faces[i], j, &src);
-      if (css_font_face_src_location_type(src) == CSS_FONT_FACE_LOCATION_TYPE_UNSPECIFIED) continue;
-      n=0; if (src) css_font_face_src_get_location(src, &n);
-      if (n) ff.source.push_back(LibCSS_String::ToUTF8String(n));
-    }
-    out->push_back(ff);
-  }
-  if (v) css_select_font_faces_results_destroy(v);
-  return out->size();
-}
-#endif
-
 string DOM::Node::HTML4Style() { 
   string ret;
   if (Node *a = getAttributeNode("align")) {
@@ -167,46 +91,6 @@ void DOM::Element::setAttribute(const DOMString &name, const DOMString &value) {
   attr->name = name;
   attr->value = value;
   setAttributeNode(attr);
-}
-
-float DOM::CSSPrimitiveValue::ConvertToPixels(float n, unsigned short u, unsigned short prt, Flow *inline_context) {
-  switch (u) {
-    case CSS_PX:         return          n;
-    case CSS_EXS:        return          n  * inline_context->cur_attr.font->max_width;
-    case CSS_EMS:        return          n  * inline_context->cur_attr.font->size;
-    case CSS_IN:         return          n  * FLAGS_dots_per_inch;
-    case CSS_CM:         return CMToInch(n) * FLAGS_dots_per_inch;
-    case CSS_MM:         return MMToInch(n) * FLAGS_dots_per_inch;
-    case CSS_PC:         return          n  /   6 * FLAGS_dots_per_inch;
-    case CSS_PT:         return          n  /  72 * FLAGS_dots_per_inch;
-    case CSS_PERCENTAGE: return          n  / 100 * LFL::PercentRefersTo(prt, inline_context);
-  }; return 0;
-}
-
-float DOM::CSSPrimitiveValue::ConvertFromPixels(float n, unsigned short u, unsigned short prt, Flow *inline_context) {
-  switch (u) {
-    case CSS_PX:         return          n;
-    case CSS_EXS:        return          n / inline_context->cur_attr.font->max_width;
-    case CSS_EMS:        return          n / inline_context->cur_attr.font->size;
-    case CSS_IN:         return          n / FLAGS_dots_per_inch;
-    case CSS_CM:         return InchToCM(n / FLAGS_dots_per_inch);
-    case CSS_MM:         return InchToMM(n / FLAGS_dots_per_inch);
-    case CSS_PC:         return          n *   6 / FLAGS_dots_per_inch;
-    case CSS_PT:         return          n *  72 / FLAGS_dots_per_inch;
-    case CSS_PERCENTAGE: return          n * 100 / LFL::PercentRefersTo(prt, inline_context);
-  }; return 0;                            
-}
-
-int DOM::FontSize::getFontSizeValue(Flow *flow) {
-  int base = FLAGS_default_font_size; float scale = 1.2;
-  switch (attr) {
-    case XXSmall: return base/scale/scale/scale;    case XLarge:  return base*scale*scale;
-    case XSmall:  return base/scale/scale;          case XXLarge: return base*scale*scale*scale;
-    case Small:   return base/scale;                case Larger:  return flow->cur_attr.font->size*scale;
-    case Medium:  return base;                      case Smaller: return flow->cur_attr.font->size/scale;
-    case Large:   return base*scale;
-  }
-  return getPixelValue(flow);
 }
 
 void DOM::HTMLTableSectionElement::deleteRow(long index) { return parentTable->deleteRow(index); }

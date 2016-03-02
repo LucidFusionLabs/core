@@ -17,6 +17,7 @@
  */
 
 #include "core/app/app.h"
+#include <setjmp.h>
 extern "C" {
 #include "jpeglib.h"
 };

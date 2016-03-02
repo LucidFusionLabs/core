@@ -635,17 +635,11 @@ struct OSXVideoModule : public Module {
     INFO("OSXVideoModule::Init()");
     NativeWindowInit();
     NativeWindowSize(&screen->width, &screen->height);
-    CHECK(app->CreateWindow(screen));
+    CHECK(Video::CreateWindow(screen));
     return 0;
   }
 };
 
-bool Application::CreateWindow(Window *W) { 
-  W->id = OSXCreateWindow(W->width, W->height, W);
-  if (W->id.value) windows[W->id.value] = W;
-  OSXSetWindowTitle(W->id, W->caption.c_str());
-  return true; 
-}
 void Application::MakeCurrentWindow(Window *W) { 
   if (W) OSXMakeWindowCurrent((screen = W)->id);
 }
@@ -669,7 +663,13 @@ void Application::GrabMouseFocus()    { OSXGrabMouseFocus();    app->grab_mode.O
   OSXSetMousePosition(screen->id, screen->width / 2, screen->height / 2);
 }
 
-void Video::StartWindow() { OSXStartWindow(screen->id); }
+bool Video::CreateWindow(Window *W) { 
+  W->id = OSXCreateWindow(W->width, W->height, W);
+  if (W->id.value) app->windows[W->id.value] = W;
+  OSXSetWindowTitle(W->id, W->caption.c_str());
+  return true; 
+}
+void Video::StartWindow(Window *W) { OSXStartWindow(W->id); }
 void *Video::BeginGLContextCreate(Window *W) { return 0; }
 void *Video::CompleteGLContextCreate(Window *W, void *gl_context) {
   return OSXCreateGLContext(W->id).value;

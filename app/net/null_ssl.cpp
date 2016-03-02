@@ -1,5 +1,5 @@
 /*
- * $Id: camera.cpp 1330 2014-11-06 03:04:15Z justin $
+ * $Id: crypto.cpp 1335 2014-12-02 04:13:46Z justin $
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -17,24 +17,18 @@
  */
 
 #include "core/app/app.h"
-extern "C" {
-#include <libavcodec/avfft.h>
-};
 
 namespace LFL {
-void FFT(float *out, int fftlen) {
-  int bits = WhichLog2(fftlen);
-  CHECK_GT(bits, 0);
-  RDFTContext *fftctx = av_rdft_init(bits, DFT_R2C);
-  av_rdft_calc(fftctx, out);
-  av_rdft_end(fftctx);
-}
+SSLSocket::~SSLSocket() {}
+const char *SSLSocket::ErrorString() const { return ""; }
+Socket SSLSocket::GetSocket() const { return InvalidSocket; }
+ssize_t SSLSocket::Write(const StringPiece &b) { return -1; }
+ssize_t SSLSocket::Read(char *buf, int readlen) { return -1; }
+Socket SSLSocket::Listen(int port, bool reuse) { return InvalidSocket; }
+Socket SSLSocket::Connect(SSL_CTX *sslctx, const string &hostport) { return InvalidSocket; }
+Socket SSLSocket::Connect(SSL_CTX *sslctx, IPV4::Addr addr, int port) { return InvalidSocket; }
+Socket SSLSocket::Accept(SSLSocket *out) { return InvalidSocket; }
+SSL_CTX *SSLSocket::Init() { return nullptr; }
+void SSLSocket::Free() {}
 
-void IFFT(float *out, int fftlen) {
-  int bits = WhichLog2(fftlen);
-  CHECK_GT(bits, 0);
-  RDFTContext *fftctx = av_rdft_init(bits, IDFT_C2R);
-  av_rdft_calc(fftctx, out);
-  av_rdft_end(fftctx);
-}
 }; // namespace LFL

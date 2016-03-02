@@ -1,4 +1,19 @@
-# Lucid Fusion Labs Root Make File
+# $Id: lfapp.h 1335 2014-12-02 04:13:46Z justin $
+# Copyright (C) 2009 Lucid Fusion Labs
+
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
 CMAKE_POLICY(SET CMP0004 OLD)
 
 if(NOT CMAKE_BUILD_TYPE)
@@ -20,6 +35,21 @@ endif()
 
 if(CMAKE_SYSTEM_NAME MATCHES "Darwin" AND NOT LFL_IPHONE)
   set(LFL_OSX 1)
+  set(LFL_APP_PLATFORM app_osx_platform)
+  set(LFL_APP_GRAPHICS app_opengl_graphics)
+  set(LFL_APP_AUDIO app_portaudio_audio)
+  set(LFL_APP_CAMERA app_qtkit_camera)
+  set(LFL_APP_FONT app_font_coretext)
+  set(LFL_APP_CONVERT app_iconv_convert)
+
+elseif(WIN32 OR WIN64)
+  set(LFL_WINDOWS 1)
+  set(LFL_APP_PLATFORM app_windows_platform)
+  set(LFL_APP_GRAPHICS app_opengl_graphics)
+  set(LFL_APP_AUDIO app_portaudio_audio)
+  set(LFL_APP_CAMERA app_directshow_camera)
+  set(LFL_APP_FONT app_font_gdi)
+  set(LFL_APP_CONVERT app_null_convert)
 endif()
 
 if(CMAKE_SIZEOF_VOID_P EQUAL 8)
@@ -62,29 +92,6 @@ add_definitions(-D__STDC_CONSTANT_MACROS -D__STDC_LIMIT_MACROS)
 add_subdirectory(${LFL_SOURCE_DIR}/core/imports)
 
 # macros
-include(${LFL_SOURCE_DIR}/core/CMake/Package.cmake)
-
-if(LFL_PROTOBUF)
-  include(${LFL_SOURCE_DIR}/core/CMake/FindProtoBuf.cmake)
-endif()
-
-if(LFL_FLATBUFFERS)
-  set(FLATBUFFERS_INCLUDE_DIR ${LFL_SOURCE_DIR}/core/imports/flatbuffers/include)
-  set(FLATBUFFERS_FLATC_EXECUTABLE ${LFL_BINARY_DIR}/core/imports/flatbuffers/flatc)
-  include(${LFL_SOURCE_DIR}/core/imports/flatbuffers/CMake/FindFlatBuffers.cmake)
-endif()
-
-if(LFL_CAPNPROTO)
-  set(CAPNP_LIB_KJ          ${LFL_BINARY_DIR}/core/imports/capnproto/lib/libkj.a)
-  set(CAPNP_LIB_KJ-ASYNC    ${LFL_BINARY_DIR}/core/imports/capnproto/lib/libkj-async.a)
-  set(CAPNP_LIB_CAPNP       ${LFL_BINARY_DIR}/core/imports/capnproto/lib/libcapnp.a)
-  set(CAPNP_LIB_CAPNP-RPC   ${LFL_BINARY_DIR}/core/imports/capnproto/lib/libcapnp-rpc.a)
-  set(CAPNP_EXECUTABLE      ${LFL_BINARY_DIR}/core/imports/capnproto/bin/capnp)
-  set(CAPNPC_CXX_EXECUTABLE ${LFL_BINARY_DIR}/core/imports/capnproto/bin/capnpc-c++)
-  set(CAPNP_INCLUDE_DIRS    ${LFL_BINARY_DIR}/core/imports/capnproto/include)
-  include(${LFL_SOURCE_DIR}/core/imports/capnproto/c++/cmake/FindCapnProto.cmake)
-endif(LFL_CAPNPROTO)
-
 macro(lfl_project _name)
   project(${_name})
   set(LFL_PROJECT ${_name})
@@ -92,6 +99,32 @@ macro(lfl_project _name)
   set(LFL_PROJECT_BINDIR ${CMAKE_CURRENT_BINARY_DIR})
 endmacro(lfl_project)
 
+# post build macros
+include(${LFL_SOURCE_DIR}/core/CMake/Package.cmake)
+
+# proto macros
+if(LFL_PROTOBUF)
+  include(${LFL_SOURCE_DIR}/core/CMake/FindProtoBuf.cmake)
+endif()
+
+if(LFL_FLATBUFFERS)
+  set(FLATBUFFERS_INCLUDE_DIR ${LFL_SOURCE_DIR}/core/imports/flatbuffers/include)
+  set(FLATBUFFERS_FLATC_EXECUTABLE ${LFL_CORE_BINARY_DIR}/imports/flatbuffers/flatc)
+  include(${LFL_SOURCE_DIR}/core/imports/flatbuffers/CMake/FindFlatBuffers.cmake)
+endif()
+
+if(LFL_CAPNPROTO)
+  set(CAPNP_LIB_KJ          ${LFL_CORE_BINARY_DIR}/imports/capnproto/lib/libkj.a)
+  set(CAPNP_LIB_KJ-ASYNC    ${LFL_CORE_BINARY_DIR}/imports/capnproto/lib/libkj-async.a)
+  set(CAPNP_LIB_CAPNP       ${LFL_CORE_BINARY_DIR}/imports/capnproto/lib/libcapnp.a)
+  set(CAPNP_LIB_CAPNP-RPC   ${LFL_CORE_BINARY_DIR}/imports/capnproto/lib/libcapnp-rpc.a)
+  set(CAPNP_EXECUTABLE      ${LFL_CORE_BINARY_DIR}/imports/capnproto/bin/capnp)
+  set(CAPNPC_CXX_EXECUTABLE ${LFL_CORE_BINARY_DIR}/imports/capnproto/bin/capnpc-c++)
+  set(CAPNP_INCLUDE_DIRS    ${LFL_CORE_BINARY_DIR}/imports/capnproto/include)
+  include(${LFL_SOURCE_DIR}/core/imports/capnproto/c++/cmake/FindCapnProto.cmake)
+endif(LFL_CAPNPROTO)
+
+# platform macros
 macro(lfl_enable_qt)
   find_package(Qt5OpenGL REQUIRED)
   find_package(Qt5WebKit REQUIRED)
@@ -108,15 +141,6 @@ macro(lfl_enable_qt)
   set(QT_INCLUDE ${Qt5WebKitWidgets_INCLUDE_DIRS} ${Qt5WebKit_INCLUDE_DIRS} ${Qt5OpenGL_INCLUDE_DIRS})
   set(QT_LIB ${Qt5WebKitWidgets_LIBRARIES} ${Qt5WebKit_LIBRARIES} ${Qt5OpenGL_LIBRARIES})
 endmacro()
-
-if(WIN32)
-  macro(add_external_dep _lib)
-  endmacro()
-else()
-  macro(add_external_dep _lib)
-    add_dependencies(${_lib} ${ARGN})
-  endmacro()
-endif()
 
 # app
 add_subdirectory(${LFL_SOURCE_DIR}/core/app)
