@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef LFL_LFAPP_BROWSER_H__
-#define LFL_LFAPP_BROWSER_H__
+#ifndef LFL_CORE_APP_BROWSER_H__
+#define LFL_CORE_APP_BROWSER_H__
 namespace LFL {
 
 struct BrowserController : public InputController {
@@ -182,4 +182,4 @@ unique_ptr<BrowserInterface> CreateBerkeliumBrowser(GUI *g, int w=1024, int h=10
 unique_ptr<BrowserInterface> CreateDefaultBrowser  (GUI *g, int w=1024, int h=1024);
 
 }; // namespace LFL
-#endif // LFL_LFAPP_BROWSER_H__
+#endif // LFL_CORE_APP_BROWSER_H__

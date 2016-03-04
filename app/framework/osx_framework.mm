@@ -318,15 +318,11 @@ static const char **osx_argv = 0;
 @end
 
 @implementation AppDelegate
-  {
-    NSFont *font;
-    NSString *font_change_cmd;
-  }
   - (void)applicationWillTerminate: (NSNotification *)aNotification {}
   - (void)applicationDidFinishLaunching: (NSNotification *)aNotification {
     INFOf("OSXModule::Main argc=%d\n", osx_argc);
     // [[NSFileManager defaultManager] changeCurrentDirectoryPath: [[NSBundle mainBundle] resourcePath]];
-    int ret = MyLFAppMain(osx_argc, osx_argv);
+    int ret = MyAppMain(osx_argc, osx_argv);
     if (ret) exit(ret);
     INFOf("%s", "OSXModule::Main done");
   }
@@ -359,20 +355,6 @@ static const char **osx_argv = 0;
   - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication *)theApplication {
     GetLFApp()->run = false;
     return YES;
-  }
-  - (void)selectFont: (const char *)name size:(int)s cmd:(const char*)v {
-    font = [NSFont fontWithName:[NSString stringWithUTF8String:name] size:s];
-    font_change_cmd = [NSString stringWithUTF8String:v];
-    NSFontManager *fontManager = [NSFontManager sharedFontManager];
-    [fontManager setSelectedFont:font isMultiple:NO];
-    [fontManager setDelegate:self];
-    [fontManager setTarget:self];
-    [fontManager orderFrontFontPanel:self];
-  }
-  - (void)changeFont:(id)sender {
-    font = [sender convertFont:font];
-    float size = [[[font fontDescriptor] objectForKey:NSFontSizeAttribute] floatValue];
-    ShellRun([[NSString stringWithFormat:@"%@ %@ %f", font_change_cmd, [font fontName], size] UTF8String]);
   }
 @end
 
@@ -502,36 +484,6 @@ extern "C" void OSXCreateNativeApplicationMenu() {
   [item release];
 }
 
-extern "C" void OSXCreateNativeEditMenu() {
-  NSMenuItem *item; 
-  NSMenu *menu = [[NSMenu alloc] initWithTitle:@"Edit"];
-  item = [menu addItemWithTitle:@"Copy"  action:@selector(copy:)  keyEquivalent:@"c"];
-  item = [menu addItemWithTitle:@"Paste" action:@selector(paste:) keyEquivalent:@"v"];
-  item = [[NSMenuItem alloc] initWithTitle:@"Edit" action:nil keyEquivalent:@""];
-  [item setSubmenu: menu];
-  [[NSApp mainMenu] addItem: item];
-  [menu release];
-  [item release];
-}
-
-extern "C" void OSXCreateNativeMenu(const char *title_text, int n, const char **key, const char **name, const char **val) {
-  NSMenuItem *item;
-  NSString *title = [NSString stringWithUTF8String: title_text];
-  NSMenu *menu = [[NSMenu alloc] initWithTitle: title];
-  for (int i=0; i<n; i++) {
-    if (!strcmp(name[i], "<seperator>")) { [menu addItem:[NSMenuItem separatorItem]]; continue; }
-    item = [menu addItemWithTitle: [NSString stringWithUTF8String: name[i]]
-                 action:           (val[i][0] ? @selector(shellRun:) : nil)
-                 keyEquivalent:    [NSString stringWithUTF8String: key[i]]];
-    [item setRepresentedObject: [NSString stringWithUTF8String: val[i]]];
-  }
-  item = [[NSMenuItem alloc] initWithTitle:title action:nil keyEquivalent:@""];
-  [item setSubmenu: menu];
-  [[NSApp mainMenu] addItem: item];
-  [menu release];
-  [item release];
-}
-
 extern "C" void OSXLaunchNativeContextMenu(typed_ptr O, int x, int y, int n, const char **key, const char **name, const char **val) {
   NSEvent *event = [NSEvent mouseEventWithType: NSLeftMouseDown
                             location:           NSMakePoint(x, y)
@@ -555,27 +507,6 @@ extern "C" void OSXLaunchNativeContextMenu(typed_ptr O, int x, int y, int n, con
 
   [NSMenu popUpContextMenu:menu withEvent:event forView:LFL::GetTyped<GameView*>(O)];
   [LFL::GetTyped<GameView*>(O) clearKeyModifiers];
-}
-
-extern "C" void OSXLaunchNativeFontChooser(const char *cur_font, int size, const char *change_font_cmd) {
-  [static_cast<AppDelegate*>([NSApp delegate]) selectFont:cur_font size:size cmd:change_font_cmd];
-}
-
-extern "C" void OSXLaunchNativeFileChooser(bool choose_files, bool choose_dirs, bool choose_multi, const char *open_files_cmd) {
-  NSOpenPanel *panel = [NSOpenPanel openPanel];
-  [panel setCanChooseFiles:choose_files];
-  [panel setCanChooseDirectories:choose_dirs];
-  [panel setAllowsMultipleSelection:choose_multi];
-  NSInteger clicked = [panel runModal];
-  [LFL::GetTyped<GameView*>(GetNativeWindow()->id) clearKeyModifiers];
-  if (clicked != NSFileHandlingPanelOKButton) return;
-
-  std::string start = open_files_cmd, run = start;
-  for (NSURL *url in [panel URLs]) {
-    run.append(" ");
-    run.append([[url absoluteString] UTF8String]);
-  }
-  if (run.size() > start.size()) ShellRun(run.c_str());
 }
 
 namespace LFL {
@@ -651,11 +582,18 @@ void Application::CloseWindow(Window *W) {
   screen = 0;
 }
 
+void Application::LaunchNativeContextMenu(const vector<MenuItem>&items) {
+  vector<const char *> k, n, v;
+  for (auto &i : items) { k.push_back(tuple_get<0>(i).c_str()); n.push_back(tuple_get<1>(i).c_str()); v.push_back(tuple_get<2>(i).c_str()); }
+  OSXLaunchNativeContextMenu(screen->id, screen->mouse.x, screen->mouse.y, items.size(), &k[0], &n[0], &v[0]);
+}
+
 void Window::SetCaption(const string &v) { OSXSetWindowTitle(id, v.c_str()); }
 void Window::SetResizeIncrements(float x, float y) { OSXSetWindowResizeIncrements(id, x, y); }
 void Window::SetTransparency(float v) { OSXSetWindowTransparency(id, v); }
 void Window::Reshape(int w, int h) { OSXSetWindowSize(id, w, h); }
 
+void Application::LoseFocus() { [LFL::GetTyped<GameView*>(GetNativeWindow()->id) clearKeyModifiers]; }
 void Application::SetClipboardText(const string &s) { OSXClipboardSet(s.c_str()); }
 string Application::GetClipboardText() { char *v = OSXClipboardGet(); string ret = v; free(reinterpret_cast<void*>(v)); return ret; }
 void Application::ReleaseMouseFocus() { OSXReleaseMouseFocus(); app->grab_mode.Off(); screen->cursor_grabbed = 0; }
@@ -686,6 +624,7 @@ void FrameScheduler::Setup() { rate_limit = synchronize_waits = wait_forever_thr
 void FrameScheduler::Wakeup(void *opaque) { if (wait_forever && screen) OSXTriggerFrame(screen->id); }
 bool FrameScheduler::WakeupIn(void *opaque, Time interval, bool force) { return OSXTriggerFrameIn(screen->id, interval.count(), force); }
 void FrameScheduler::ClearWakeupIn() { OSXClearTriggerFrameIn(screen->id); }
+void FrameScheduler::UpdateWindowTargetFPS(Window *w) { OSXUpdateTargetFPS(w->id); }
 void FrameScheduler::AddWaitForeverMouse() { OSXAddWaitForeverMouse(screen->id); }
 void FrameScheduler::DelWaitForeverMouse() { OSXDelWaitForeverMouse(screen->id); }
 void FrameScheduler::AddWaitForeverKeyboard() { OSXAddWaitForeverKeyboard(screen->id); }
@@ -704,7 +643,6 @@ void FrameScheduler::DelWaitForeverSocket(Socket fd) {
 
 extern "C" void *LFAppCreatePlatformModule() { return new LFL::OSXVideoModule(); }
 
-#undef main
 extern "C" int main(int argc, const char **argv) {
   osx_argc = argc;
   osx_argv = argv;

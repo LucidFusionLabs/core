@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef LFL_LFAPP_GAME_H__
-#define LFL_LFAPP_GAME_H__
+#ifndef LFL_CORE_GAME_GAME_H__
+#define LFL_CORE_GAME_GAME_H__
 
 #include "core/game/proto.h"
 
@@ -1457,4 +1457,4 @@ struct GameMultiTouchControls {
 
 #include "core/game/physics.h"
 
-#endif /* LFL_LFAPP_GAME_H__ */
+#endif /* LFL_CORE_GAME_GAME_H__ */

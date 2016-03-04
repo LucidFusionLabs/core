@@ -26,7 +26,7 @@ extern "C" {
 #include "core/app/crypto.h"
 #include "core/app/net/resolver.h"
 
-#ifndef WIN32
+#ifndef LFL_WINDOWS
 #include <sys/socket.h>
 #include <sys/uio.h>
 #include <netinet/in.h>
@@ -47,7 +47,7 @@ DEFINE_bool(dns_dump,       0,  "Print DNS responses");
 DEFINE_bool(network_debug,  0,  "Print send()/recv() bytes");
 DEFINE_int (udp_idle_sec,   15, "Timeout UDP connections idle for seconds");
 
-#ifdef WIN32
+#ifdef LFL_WINDOWS
 const Socket InvalidSocket = INVALID_SOCKET;
 #else
 const Socket InvalidSocket = -1;
@@ -168,7 +168,7 @@ void IPV4EndpointPoolFilter::Get(IPV4::Addr *addr, int *port) {
 }
 
 void SystemNetwork::CloseSocket(Socket fd) {
-#ifdef WIN32
+#ifdef LFL_WINDOWS
   closesocket(fd);
 #else
   close(fd);
@@ -180,7 +180,7 @@ Socket SystemNetwork::OpenSocket(int protocol) {
   else if (protocol == Protocol::UDP) {
     Socket ret;
     if ((ret = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP)) < 0) return ret;
-#ifdef _WIN32
+#ifdef LFL_WINDOWS
 #ifndef SIO_UDP_CONNRESET
 #define SIO_UDP_CONNRESET _WSAIOW(IOC_VENDOR,12)
 #endif
@@ -194,7 +194,7 @@ Socket SystemNetwork::OpenSocket(int protocol) {
 }
 
 bool SystemNetwork::OpenSocketPair(Socket *fd, int socket_type, bool close_on_exec) {
-#ifdef WIN32
+#ifdef LFL_WINDOWS
 #ifdef LFL_NETWORK_MONOLITHIC_FRAME
   Socket l = -1;
   int listen_port = 0, connect_port = 0;
@@ -216,7 +216,7 @@ bool SystemNetwork::OpenSocketPair(Socket *fd, int socket_type, bool close_on_ex
   CHECK(CreatePipe(&handle[0], &handle[1], &sa, 0));
   // XXX use WFMO with HANDLE* instead of select with SOCKET
 #endif // LFL_NETWORK_MONOLITHIC_FRAME
-#else // WIN32
+#else // LFL_WINDOWS
   CHECK(!socketpair(PF_LOCAL, socket_type, 0, fd));
   SetSocketBlocking(fd[0], 0);
   SetSocketBlocking(fd[1], 0);
@@ -229,7 +229,7 @@ bool SystemNetwork::OpenSocketPair(Socket *fd, int socket_type, bool close_on_ex
 }
 
 int SystemNetwork::SetSocketBlocking(Socket fd, int blocking) {
-#ifdef _WIN32
+#ifdef LFL_WINDOWS
   u_long ioctlarg = !blocking ? 1 : 0;
   if (ioctlsocket(fd, FIONBIO, &ioctlarg) < 0) return -1;
 #else
@@ -239,7 +239,7 @@ int SystemNetwork::SetSocketBlocking(Socket fd, int blocking) {
 }
 
 int SystemNetwork::SetSocketCloseOnExec(Socket fd, int close) {
-#ifdef _WIN32
+#ifdef LFL_WINDOWS
 #else
   if (fcntl(fd, F_SETFD, close ? FD_CLOEXEC : 0) == -1) return -1;
 #endif
@@ -357,7 +357,7 @@ int SystemNetwork::GetSockName(Socket fd, IPV4::Addr *addr_out, int *port_out) {
 }
 
 string SystemNetwork::GetHostByAddr(IPV4::Addr addr) {
-#if defined(_WIN32) || defined(LFL_ANDROID)
+#if defined(LFL_WINDOWS) || defined(LFL_ANDROID)
   struct hostent *h = ::gethostbyaddr(reinterpret_cast<const char*>(&addr), sizeof(addr), PF_INET);
 #else
   struct hostent *h = ::gethostbyaddr(reinterpret_cast<const void*>(&addr), sizeof(addr), PF_INET);
@@ -383,7 +383,7 @@ int SystemNetwork::IOVLen(const iovec *iov, int len) {
 }
 
 bool SystemNetwork::EWouldBlock() {
-#ifdef _WIN32
+#ifdef LFL_WINDOWS
   return WSAGetLastError() == WSAEWOULDBLOCK || WSAGetLastError() == WSAEINPROGRESS;
 #else
   return errno == EAGAIN || errno == EINPROGRESS;
@@ -391,7 +391,7 @@ bool SystemNetwork::EWouldBlock() {
 };
 
 string SystemNetwork::LastError() {
-#ifdef _WIN32
+#ifdef LFL_WINDOWS
   return StrCat(WSAGetLastError());
 #else
   return strerror(errno);
@@ -453,7 +453,7 @@ int Connection::Read() {
       return ERRORv(-1, Name(), ": BIO_read: ", err_string ? err_string : "read() zero");
     } else if (!len) return 0;
 
-#ifndef WIN32
+#ifndef LFL_WINDOWS
   } else if (control_messages) {
     struct iovec iov;
     memzero(iov);
@@ -483,7 +483,7 @@ int Connection::Read() {
 #endif
 
   } else {
-#ifdef WIN32
+#ifdef LFL_WINDOWS
     if ((len = recv(socket, rb.end(), readlen, 0)) <= 0) {
 #else
     if ((len = read(socket, rb.end(), readlen)) <= 0) {
@@ -605,7 +605,7 @@ int Connection::WriteFlush(const char *buf, int len, int transfer_socket) {
 
 int Connection::WriteVFlush(const iovec *iov, int len, int transfer_socket) {
   int wrote = 0;
-#if defined(WIN32) || defined(LFL_MOBILE)
+#if defined(LFL_WINDOWS) || defined(LFL_MOBILE)
   return -1;
 #else
   char control[CMSG_SPACE(sizeof (int))];
@@ -1248,7 +1248,7 @@ void Sniffer::GetDeviceAddressSet(set<IPV4::Addr> *out) {}
 void Sniffer::GetIPAddress(IPV4::Addr *out) {
   static IPV4::Addr localhost = IPV4::Parse("127.0.0.1");
   *out = 0;
-#if defined(_WIN32)
+#if defined(LFL_WINDOWS)
 #elif defined(LFL_ANDROID)
   *out = ntohl(AndroidIPV4Address());
 #else
@@ -1267,7 +1267,7 @@ void Sniffer::GetIPAddress(IPV4::Addr *out) {
 void Sniffer::GetBroadcastAddress(IPV4::Addr *out) {
   static IPV4::Addr localhost = IPV4::Parse("127.0.0.1");
   *out = 0;
-#if defined(_WIN32)
+#if defined(LFL_WINDOWS)
 #elif defined(LFL_ANDROID)
   *out = ntohl(AndroidIPV4BroadcastAddress());
 #else
@@ -1335,7 +1335,7 @@ string NBRead(Socket fd, int len, int timeout) {
 
 bool FGets(char *buf, int len) { return NBFGets(stdin, buf, len); }
 bool NBFGets(FILE *f, char *buf, int len, int timeout) {
-#ifndef WIN32
+#ifndef LFL_WINDOWS
   int fd = fileno(f);
   SelectSocketSet ss;
   ss.Add(fd, SocketSet::READABLE, 0);

@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef LFL_LFAPP_LFEXPORT_H__
-#define LFL_LFAPP_LFEXPORT_H__
+#ifndef LFL_CORE_APP_EXPORT_H__
+#define LFL_CORE_APP_EXPORT_H__
 
 #if _MSC_VER
   #define LFL_IMPORT __declspec(dllimport)
@@ -179,7 +179,7 @@ namespace DOM { struct Node; };
 namespace IPC { struct ResourceHandle; struct FontDescription; struct OpenSystemFontResponse; }
 
 typedef google::protobuf::Message Proto;
-typedef int (*MainCB)(int argc, const char **argv);
+typedef int (*MainCB)(int argc, const char* const* argv);
 
 Module *CreateAudioModule(Audio*);
 
@@ -207,6 +207,7 @@ typedef struct ec_key_st EC_KEY;
 typedef struct CXTranslationUnitImpl* CXTranslationUnit;
 typedef void* CXIndex;
 struct typed_ptr { void *type, *value; };
+struct void_ptr { void *v; };
 
 struct LFApp {
   struct Log { enum { Fatal=-1, Error=0, Info=3, Debug=7 }; int unused; };
@@ -219,7 +220,7 @@ struct LFApp {
 struct NativeWindow {
   typed_ptr id, gl, surface, glew_context, impl, user1, user2, user3;
   int width, height, pow2_width, pow2_height, target_fps;
-  bool minimized, cursor_grabbed, frame_init, animating;
+  bool started, minimized, cursor_grabbed, frame_init, animating;
   int gesture_swipe_up, gesture_swipe_down, gesture_tap[2], gesture_dpad_stop[2];
   float gesture_dpad_x[2], gesture_dpad_y[2], gesture_dpad_dx[2], gesture_dpad_dy[2], multitouch_keyboard_x;
 };
@@ -231,10 +232,13 @@ struct CameraState {
   unsigned long long frames_read, last_frames_read, image_timestamp_us;
 };
 
+void MyAppInit();
+int MyAppMain(int argc, const char* const* argv);
 void NativeWindowInit();
 void NativeWindowQuit();
 void NativeWindowSize(int *widthOut, int *heightOut);
 int NativeWindowOrientation();
+
 NativeWindow *GetNativeWindow();
 NativeWindow *SetNativeWindow(NativeWindow*);
 NativeWindow *SetNativeWindowByID(void*);
@@ -278,6 +282,7 @@ namespace LFL {
 template <class X> void *TypeId() { static char id=0; return &id; }
 template <class X> typed_ptr MakeTyped(X v) { return typed_ptr{ TypeId<X>(), v }; }
 template <class X> X GetTyped(const typed_ptr &p) { return p.type == TypeId<X>() ? static_cast<X>(p.value) : nullptr; }
+template <class X> X FromVoid(const void_ptr &p) { return static_cast<X>(p.v); }
 }; // namespace LFL
 #endif // __cplusplus
-#endif // LFL_LFAPP_LFEXPORT_H__
+#endif // LFL_CORE_APP_EXPORT_H__

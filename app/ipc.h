@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef LFL_LFAPP_IPC_H__
-#define LFL_LFAPP_IPC_H__
+#ifndef LFL_CORE_APP_IPC_H__
+#define LFL_CORE_APP_IPC_H__
 
 #ifdef LFL_FLATBUFFERS
 #include "ipc_generated.h"
@@ -45,7 +45,7 @@ struct MultiProcessBuffer {
   string url;
   char *buf=0;
   int len=0, transfer_handle=-1;
-#ifdef WIN32
+#ifdef LFL_WINDOWS
   HANDLE impl = INVALID_HANDLE_VALUE, share_process = INVALID_HANDLE_VALUE;
 #else
   int impl = -1; void *share_process = 0;
@@ -474,4 +474,4 @@ struct ProcessAPIServer : public ProcessAPI {
 };
 
 }; // namespace LFL
-#endif // LFL_LFAPP_IPC_H__
+#endif // LFL_CORE_APP_IPC_H__

@@ -74,18 +74,17 @@ int Frame(LFL::Window *W, unsigned clicks, int flag) {
 }; // namespace LFL
 using namespace LFL;
 
-extern "C" int main(int argc, const char *argv[]) {
-
+extern "C" void MyAppInit() {
   app->logfilename = StrCat(LFAppDownloadDir(), "crawler.txt");
   screen->frame_cb = Frame;
   screen->caption = "crawler";
   FLAGS_lfapp_network = 1;
-#ifdef _WIN32
   FLAGS_open_console = 1;
-#endif
+}
 
-  if (app->Create(argc, argv, __FILE__)) { app->Free(); return -1; }
-  if (app->Init()) { app->Free(); return -1; }
+extern "C" int MyAppMain(int argc, const char* const* argv) {
+  if (app->Create(argc, argv, __FILE__)) return -1;
+  if (app->Init()) return -1;
 
   if (FLAGS_queue_dump.size() || FLAGS_crawl_dump.size()) {
     ProtoFile pf(FLAGS_crawl_dump.size() ? FLAGS_crawl_dump.c_str() : FLAGS_queue_dump.c_str());

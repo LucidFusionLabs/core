@@ -213,7 +213,7 @@ void SMTP::HTMLMessage(const string& from, const string& to, const string& subje
 }
 
 void SMTP::NativeSendmail(const string &message) {
-#ifdef __linux__
+#ifdef LFL_LINUX
   ProcessPipe smtp;
   const char *argv[] = { "/usr/bin/sendmail", "-i", "-t", 0 };
   if (smtp.Open(argv)) return;

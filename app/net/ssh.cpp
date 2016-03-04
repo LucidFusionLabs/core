@@ -21,13 +21,6 @@
 #include "core/app/crypto.h"
 #include "core/app/net/ssh.h"
 
-#ifdef LFL_OPENSSL
-#include "openssl/evp.h"
-#include "openssl/rsa.h"
-#include "openssl/dsa.h"
-#include "openssl/ecdsa.h"
-#endif
-
 #ifdef LFL_SSH_DEBUG
 #define SSHTrace(...) INFO(__VA_ARGS__)
 #else
@@ -54,15 +47,15 @@ struct SSHClientConnection : public Connection::Handler {
   Crypto::EllipticCurveDiffieHellman ecdh;
   Crypto::DigestAlgo kex_hash;
   Crypto::Cipher encrypt, decrypt;
-  Crypto::CipherAlgo cipher_algo_c2s=0, cipher_algo_s2c=0;
-  Crypto::MACAlgo mac_algo_c2s=0, mac_algo_s2c=0;
+  Crypto::CipherAlgo cipher_algo_c2s, cipher_algo_s2c;
+  Crypto::MACAlgo mac_algo_c2s, mac_algo_s2c;
   ECDef curve_id;
   int kex_method=0, hostkey_type=0, mac_prefix_c2s=0, mac_prefix_s2c=0, window_c=0, window_s=0;
   int initial_window_size=1048576, max_packet_size=32768, term_width=80, term_height=25;
 
   SSHClientConnection(const SSHClient::ResponseCB &CB, const string &H) : cb(CB), V_C("SSH-2.0-LFL_1.0"), host(H), rand_eng(std::random_device{}()),
-    pty_channel(1,-1), ctx(NewBigNumContext()), K(NewBigNum()) { Crypto::CipherInit(&encrypt); Crypto::CipherInit(&decrypt); }
-  virtual ~SSHClientConnection() { ClearPassword(); FreeBigNumContext(ctx); FreeBigNum(K); Crypto::CipherFree(&encrypt); Crypto::CipherFree(&decrypt); }
+    pty_channel(1,-1), ctx(NewBigNumContext()), K(NewBigNum()), encrypt(Crypto::CipherInit()), decrypt(Crypto::CipherInit()) {}
+  virtual ~SSHClientConnection() { ClearPassword(); FreeBigNumContext(ctx); FreeBigNum(K); Crypto::CipherFree(encrypt); Crypto::CipherFree(decrypt); }
 
   void Close(Connection *c) { cb(c, StringPiece()); }
   int Connected(Connection *c) {
@@ -357,20 +350,20 @@ struct SSHClientConnection : public Connection::Handler {
   int InitCipher(Connection *c, Crypto::Cipher *cipher, Crypto::CipherAlgo algo, const string &IV, const string &key, bool dir) {
     SSHTrace(c->Name(), ": ", dir ? "C->S" : "S->C", " IV  = \"", CHexEscape(IV),  "\"");
     SSHTrace(c->Name(), ": ", dir ? "C->S" : "S->C", " key = \"", CHexEscape(key), "\"");
-    Crypto::CipherFree(cipher);
-    Crypto::CipherInit(cipher);
-    return Crypto::CipherOpen(cipher, algo, dir, key, IV);
+    Crypto::CipherFree(*cipher);
+    *cipher = Crypto::CipherInit();
+    return Crypto::CipherOpen(*cipher, algo, dir, key, IV);
   }
 
   string ReadCipher(Connection *c, const StringPiece &m) {
     string dec_text(m.size(), 0);
-    if (Crypto::CipherUpdate(&decrypt, m, &dec_text[0], dec_text.size()) != 1) return ERRORv("", c->Name(), ": decrypt failed");
+    if (Crypto::CipherUpdate(decrypt, m, &dec_text[0], dec_text.size()) != 1) return ERRORv("", c->Name(), ": decrypt failed");
     return dec_text;
   }
 
   int WriteCipher(Connection *c, const string &m) {
     string enc_text(m.size(), 0);
-    if (Crypto::CipherUpdate(&encrypt, m, &enc_text[0], enc_text.size()) != 1) return ERRORv(-1, c->Name(), ": encrypt failed");
+    if (Crypto::CipherUpdate(encrypt, m, &enc_text[0], enc_text.size()) != 1) return ERRORv(-1, c->Name(), ": encrypt failed");
     enc_text += SSH::MAC(mac_algo_c2s, MAC_len_c, m, sequence_number_c2s-1, integrity_c2s, mac_prefix_c2s);
     return c->WriteFlush(enc_text) == m.size() + X_or_Y(mac_prefix_c2s, MAC_len_c);
   }
@@ -463,80 +456,69 @@ void SSH::WriteBigNum(const BigNum n, Serializable::Stream *o) {
   BigNumGetData(n, o->Get(n_len));
 }
 
-void SSH::UpdateDigest(Crypto::Digest *d, const StringPiece &s) {
+void SSH::UpdateDigest(Crypto::Digest d, const StringPiece &s) {
   UpdateDigest(d, s.size());
   Crypto::DigestUpdate(d, s);
 }
 
-void SSH::UpdateDigest(Crypto::Digest *d, int n) {
+void SSH::UpdateDigest(Crypto::Digest d, int n) {
   char buf[4];
   Serializable::MutableStream(buf, 4).Htonl(n);
   Crypto::DigestUpdate(d, StringPiece(buf, 4));
 }
 
-void SSH::UpdateDigest(Crypto::Digest *d, BigNum n) {
+void SSH::UpdateDigest(Crypto::Digest d, BigNum n) {
   string buf(4 + SSH::BigNumSize(n), 0);
   Serializable::MutableStream o(&buf[0], buf.size());
   SSH::WriteBigNum(n, &o);
   Crypto::DigestUpdate(d, buf);
 }
 
-#ifdef LFL_OPENSSL
-static RSA *NewRSAPubKey() { RSA *v=RSA_new(); v->e=NewBigNum(); v->n=NewBigNum(); return v; }
-static DSA *NewDSAPubKey() { DSA *v=DSA_new(); v->p=NewBigNum(); v->q=NewBigNum(); v->g=NewBigNum(); v->pub_key=NewBigNum(); return v; }
-static DSA_SIG *NewDSASig() { DSA_SIG *v=DSA_SIG_new(); v->r=NewBigNum(); v->s=NewBigNum(); return v; }
-#endif
-
 int SSH::VerifyHostKey(const string &H_text, int hostkey_type, const StringPiece &key, const StringPiece &sig) {
-#ifdef LFL_OPENSSL
   if (hostkey_type == SSH::Key::RSA) {
     string H_hash = Crypto::SHA1(H_text);
-    RSA *rsa_key = NewRSAPubKey();
+    LFL::RSAKey rsa_key = NewRSAPubKey();
     SSH::RSASignature rsa_sig;
     Serializable::ConstStream rsakey_stream(key.data(), key.size());
     Serializable::ConstStream rsasig_stream(sig.data(), sig.size());
-    if (rsa_sig.In(&rsasig_stream)) { RSA_free(rsa_key); return -3; }
+    if (rsa_sig.In(&rsasig_stream)) { RSAKeyFree(rsa_key); return -3; }
     string rsa_sigbuf(rsa_sig.sig.data(), rsa_sig.sig.size());
-    if (SSH::RSAKey(rsa_key->e, rsa_key->n).In(&rsakey_stream)) { RSA_free(rsa_key); return -2; }
-    int verified = RSA_verify(NID_sha1, MakeUnsigned(H_hash.data()), H_hash.size(),
-                              MakeUnsigned(&rsa_sigbuf[0]), rsa_sigbuf.size(), rsa_key);
-    RSA_free(rsa_key);
+    if (SSH::RSAKey(GetRSAKeyE(rsa_key), GetRSAKeyN(rsa_key)).In(&rsakey_stream)) { RSAKeyFree(rsa_key); return -2; }
+    int verified = RSAVerify(H_hash, &rsa_sigbuf, rsa_key);
+    RSAKeyFree(rsa_key);
     return verified;
 
   } else if (hostkey_type == SSH::Key::DSS) {
     string H_hash = Crypto::SHA1(H_text);
-    DSA *dsa_key = NewDSAPubKey();
-    DSA_SIG *dsa_sig = NewDSASig();
+    DSAKey dsa_key = NewDSAPubKey();
+    DSASig dsa_sig = NewDSASig();
     Serializable::ConstStream dsakey_stream(key.data(), key.size());
     Serializable::ConstStream dsasig_stream(sig.data(), sig.size());
-    if (SSH::DSSKey(dsa_key->p, dsa_key->q, dsa_key->g, dsa_key->pub_key).In(&dsakey_stream)) { DSA_free(dsa_key); return -4; }
-    if (SSH::DSSSignature(dsa_sig->r, dsa_sig->s).In(&dsasig_stream)) { DSA_free(dsa_key); DSA_SIG_free(dsa_sig); return -5; }
-    int verified = DSA_do_verify(MakeUnsigned(H_hash.data()), H_hash.size(), dsa_sig, dsa_key);
-    DSA_free(dsa_key);
-    DSA_SIG_free(dsa_sig);
+    if (SSH::DSSKey(GetDSAKeyP(dsa_key), GetDSAKeyQ(dsa_key), GetDSAKeyG(dsa_key), GetDSAKeyK(dsa_key)).In(&dsakey_stream)) { DSAKeyFree(dsa_key); return -4; }
+    if (SSH::DSSSignature(GetDSASigR(dsa_sig), GetDSASigS(dsa_sig)).In(&dsasig_stream)) { DSAKeyFree(dsa_key); DSASigFree(dsa_sig); return -5; }
+    int verified = DSAVerify(H_hash, dsa_sig, dsa_key);
+    DSAKeyFree(dsa_key);
+    DSASigFree(dsa_sig);
     return verified;
     
   } else if (hostkey_type == SSH::Key::ECDSA_SHA2_NISTP256) {
     string H_hash = Crypto::SHA256(H_text);
     SSH::ECDSAKey key_msg;
-    ECDSA_SIG *ecdsa_sig = ECDSA_SIG_new();
+    ECDSASig ecdsa_sig = NewECDSASig();
     Serializable::ConstStream ecdsakey_stream(key.data(), key.size());
     Serializable::ConstStream ecdsasig_stream(sig.data(), sig.size());
-    if (key_msg.In(&ecdsakey_stream)) { ECDSA_SIG_free(ecdsa_sig); return -6; }
-    if (SSH::ECDSASignature(ecdsa_sig->r, ecdsa_sig->s).In(&ecdsasig_stream)) { ECDSA_SIG_free(ecdsa_sig); return -7; }
+    if (key_msg.In(&ecdsakey_stream)) { ECDSASigFree(ecdsa_sig); return -6; }
+    if (SSH::ECDSASignature(GetECDSASigR(ecdsa_sig), GetECDSASigS(ecdsa_sig)).In(&ecdsasig_stream)) { ECDSASigFree(ecdsa_sig); return -7; }
     ECPair ecdsa_keypair = Crypto::EllipticCurve::NewPair(Crypto::EllipticCurve::NISTP256(), false);
     ECPoint ecdsa_key = NewECPoint(GetECPairGroup(ecdsa_keypair));
     ECPointSetData(GetECPairGroup(ecdsa_keypair), ecdsa_key, key_msg.q);
-    if (!SetECPairPubKey(ecdsa_keypair, ecdsa_key)) { FreeECPair(ecdsa_keypair); ECDSA_SIG_free(ecdsa_sig); return -8; }
-    int verified = ECDSA_do_verify(MakeUnsigned(H_hash.data()), H_hash.size(), ecdsa_sig, ecdsa_keypair);
+    if (!SetECPairPubKey(ecdsa_keypair, ecdsa_key)) { FreeECPair(ecdsa_keypair); ECDSASigFree(ecdsa_sig); return -8; }
+    int verified = ECDSAVerify(H_hash, ecdsa_sig, ecdsa_keypair);
     FreeECPair(ecdsa_keypair);
-    ECDSA_SIG_free(ecdsa_sig);
+    ECDSASigFree(ecdsa_sig);
     return verified;
 
   } else return -9;
-#else
-  return -10;
-#endif
 }
 
 string SSH::ComputeExchangeHash(int kex_method, Crypto::DigestAlgo algo, const string &V_C, const string &V_S,
@@ -546,44 +528,42 @@ string SSH::ComputeExchangeHash(int kex_method, Crypto::DigestAlgo algo, const s
   unsigned char kex_c_padding = 0, kex_s_padding = 0;
   int kex_c_packet_len = 4 + SSH::BinaryPacketLength(KI_C.data(), &kex_c_padding, NULL);
   int kex_s_packet_len = 4 + SSH::BinaryPacketLength(KI_S.data(), &kex_s_padding, NULL);
-  Crypto::Digest H;
-  Crypto::DigestOpen(&H, algo);
-  UpdateDigest(&H, V_C);
-  UpdateDigest(&H, V_S);
-  UpdateDigest(&H, StringPiece(KI_C.data() + 5, kex_c_packet_len - 5 - kex_c_padding));
-  UpdateDigest(&H, StringPiece(KI_S.data() + 5, kex_s_packet_len - 5 - kex_s_padding));
-  UpdateDigest(&H, k_s); 
+  Crypto::Digest H = Crypto::DigestOpen(algo);
+  UpdateDigest(H, V_C);
+  UpdateDigest(H, V_S);
+  UpdateDigest(H, StringPiece(KI_C.data() + 5, kex_c_packet_len - 5 - kex_c_padding));
+  UpdateDigest(H, StringPiece(KI_S.data() + 5, kex_s_packet_len - 5 - kex_s_padding));
+  UpdateDigest(H, k_s); 
   if (KEX::DiffieHellmanGroupExchange(kex_method)) {
-    UpdateDigest(&H, dh->gex_min);
-    UpdateDigest(&H, dh->gex_pref);
-    UpdateDigest(&H, dh->gex_max);
-    UpdateDigest(&H, dh->p);
-    UpdateDigest(&H, dh->g);
+    UpdateDigest(H, dh->gex_min);
+    UpdateDigest(H, dh->gex_pref);
+    UpdateDigest(H, dh->gex_max);
+    UpdateDigest(H, dh->p);
+    UpdateDigest(H, dh->g);
   }
   if (KEX::EllipticCurveDiffieHellman(kex_method)) {
-    UpdateDigest(&H, ecdh->c_text);
-    UpdateDigest(&H, ecdh->s_text);
+    UpdateDigest(H, ecdh->c_text);
+    UpdateDigest(H, ecdh->s_text);
   } else {
-    UpdateDigest(&H, dh->e);
-    UpdateDigest(&H, dh->f);
+    UpdateDigest(H, dh->e);
+    UpdateDigest(H, dh->f);
   }
-  UpdateDigest(&H, K);
-  ret = Crypto::DigestFinish(&H);
+  UpdateDigest(H, K);
+  ret = Crypto::DigestFinish(H);
   return ret;
 }
 
 string SSH::DeriveKey(Crypto::DigestAlgo algo, const string &session_id, const string &H_text, BigNum K, char ID, int bytes) {
   string ret;
   while (ret.size() < bytes) {
-    Crypto::Digest key;
-    Crypto::DigestOpen(&key, algo);
-    UpdateDigest(&key, K);
-    Crypto::DigestUpdate(&key, H_text);
+    Crypto::Digest key = Crypto::DigestOpen(algo);
+    UpdateDigest(key, K);
+    Crypto::DigestUpdate(key, H_text);
     if (!ret.size()) {
-      Crypto::DigestUpdate(&key, StringPiece(&ID, 1));
-      Crypto::DigestUpdate(&key, session_id);
-    } else Crypto::DigestUpdate(&key, ret);
-    ret.append(Crypto::DigestFinish(&key));
+      Crypto::DigestUpdate(key, StringPiece(&ID, 1));
+      Crypto::DigestUpdate(key, session_id);
+    } else Crypto::DigestUpdate(key, ret);
+    ret.append(Crypto::DigestFinish(key));
   }
   ret.resize(bytes);
   return ret;
@@ -593,11 +573,10 @@ string SSH::MAC(Crypto::MACAlgo algo, int MAC_len, const StringPiece &m, int seq
   char buf[4];
   Serializable::MutableStream(buf, 4).Htonl(seq);
   string ret(MAC_len, 0);
-  Crypto::MAC mac;
-  Crypto::MACOpen(&mac, algo, k);
-  Crypto::MACUpdate(&mac, StringPiece(buf, 4));
-  Crypto::MACUpdate(&mac, m);
-  int ret_len = Crypto::MACFinish(&mac, &ret[0], ret.size());
+  Crypto::MAC mac = Crypto::MACOpen(algo, k);
+  Crypto::MACUpdate(mac, StringPiece(buf, 4));
+  Crypto::MACUpdate(mac, m);
+  int ret_len = Crypto::MACFinish(mac, &ret[0], ret.size());
   CHECK_EQ(ret.size(), ret_len);
   return prefix ? ret.substr(0, prefix) : ret;
 }

@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef LFL_LFAPP_LFAPP_H__
-#define LFL_LFAPP_LFAPP_H__
+#ifndef LFL_CORE_APP_APP_H__
+#define LFL_CORE_APP_APP_H__
 
 #include <sstream>
 #include <typeinfo>
@@ -47,7 +47,7 @@
 #include <type_traits>
 #define LFL_STL11_NAMESPACE std
 
-#ifdef WIN32
+#ifdef LFL_WINDOWS
 #define NOMINMAX
 #define _USE_MATH_DEFINES
 #include <winsock2.h>
@@ -74,7 +74,7 @@ typedef int Socket;
 #include <stdarg.h>
 #include <string.h>
 
-#ifdef WIN32
+#ifdef LFL_WINDOWS
 #include <float.h>
 #include <direct.h>
 typedef int socklen_t;
@@ -90,7 +90,7 @@ extern int optind;
 #define snprintf _snprintf
 #endif
 
-#ifdef __linux__
+#ifdef LFL_LINUX
 #include <arpa/inet.h>
 #endif
 
@@ -296,7 +296,7 @@ struct FlagMap {
   bool dirty=0;
   FlagMap() {}
 
-  int getopt(int argc, const char **argv, const char *source_filename);
+  int getopt(int argc, const char* const* argv, const char *source_filename);
   void Add(Flag *f) { flagmap[f->name] = f; }
   bool Set(const string &k, const string &v);
   bool IsBool(const string &k) const;
@@ -441,6 +441,7 @@ struct FrameScheduler {
   bool WakeupIn(void*, Time interval, bool force=0);
   void ClearWakeupIn();
   void UpdateTargetFPS(int fps);
+  void UpdateWindowTargetFPS(Window*);
   void SetAnimating(bool);
   void AddWaitForeverMouse();
   void DelWaitForeverMouse();
@@ -572,7 +573,7 @@ struct Application : public ::LFApp {
   unordered_map<string, StringPiece> asset_cache;
   CategoricalVariable<int> tex_mode, grab_mode, fill_mode;
   const Color *splash_color = &Color::black;
-  bool done_create_cb=0;
+  bool log_pid=0, done_init_cb=0;
 
   vector<Module*> modules;
   unique_ptr<Audio> audio;
@@ -603,7 +604,7 @@ struct Application : public ::LFApp {
   void StartNewWindow(Window*);
   NetworkThread *CreateNetworkThread(bool detach_existing_module, bool start);
 
-  int Create(int argc, const char **argv, const char *source_filename, void (*create_cb)()=0);
+  int Create(int argc, const char* const* argv, const char *source_filename);
   int Init();
   int Start();
   int HandleEvents(unsigned clicks);
@@ -613,6 +614,7 @@ struct Application : public ::LFApp {
   int MainLoop();
   void ResetGL();
 
+  void LoseFocus();
   void GrabMouseFocus();
   void ReleaseMouseFocus();
   string GetClipboardText();
@@ -685,8 +687,4 @@ struct WinWindow {
 #endif
 
 }; // namespace LFL
-
-#define main MyLFAppMain
-extern "C" int main(int argc, const char **argv);
-
-#endif // LFL_LFAPP_LFAPP_H__
+#endif // LFL_CORE_APP_APP_H__

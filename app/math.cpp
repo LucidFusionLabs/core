@@ -19,11 +19,6 @@
 
 #include "core/app/app.h"
 
-#ifdef LFL_OPENSSL
-#include "openssl/bn.h"
-#include "openssl/ec.h"
-#endif
-
 namespace LFL {
 v3 v3::Rand() {     
   float phi = LFL::Rand(0.0, M_TAU), costheta = LFL::Rand(-1.0, 1.0), rho = sqrt(1 - pow(costheta, 2));
@@ -266,7 +261,7 @@ double Hamming(int n, int i) { return 0.54 - 0.46 * cos(2*M_PI*i/(n-1)); }
 
 double AmplitudeRatioDecibels(float a1, float a2) { return 20*log10(1e-20+a1/a2); }
 
-#ifdef _WIN32
+#ifdef LFL_WINDOWS
 double log1p (double x) { double y=1+x, z=y-1; return log(y)-(z-x)/y; }
 #endif
 
@@ -382,7 +377,6 @@ void MeanNormalizeRows(const Matrix *in, Matrix *out) {
   delete [] mean;
 }
 
-
 Matrix *PCA(const Matrix *obv, Matrix *projected, double *var) {
   Matrix A(obv->M, obv->N), D(obv->N, 1), U(obv->M, obv->M), V(obv->N, obv->N);
   MeanNormalizeRows(obv, &A);
@@ -398,61 +392,4 @@ Matrix *PCA(const Matrix *obv, Matrix *projected, double *var) {
   return V.Clone();
 }
 
-#if defined(LFL_COMMONCRYPTO) && 0
-BigNum        NewBigNum       () { return CCCreateBigNum(NULL); }
-BigNumContext NewBigNumContext() { return 0; }
-void FreeBigNumContext(BigNumContext c) {}
-void FreeBigNum(BigNum n) { CCBigNumFree(n); }
-void BigNumModExp(BigNum v, BigNum a, BigNum e, BigNum m, BigNumContext) { CCBigNumModExp(v, a, e, m); }
-void BigNumSetValue(BigNum v, int val) { CCBigNumSetI(v, val); }
-void BigNumGetData(BigNum v, char *out) { CCBigNumToData(NULL, v, out); }
-BigNum BigNumSetData(BigNum v, const StringPiece &data) { FreeBigNum(v); return CCBigNumFromData(NULL, data.data(), data.size()); }
-BigNum BigNumRand(BigNum v, int bits, int top, int bottom) { FreeBigNum(v); return CCBigNumCreateRandom(NULL, bits, top, bottom); }
-int BigNumDataSize(BigNum v) { return CCBigNumByteCount(v); }
-int BigNumSignificantBits(BigNum v) { return CCBigNumBitCount(v); }
-#elif defined(LFL_OPENSSL)
-BigNum        NewBigNum       () { return BN_new(); }
-BigNumContext NewBigNumContext() { return BN_CTX_new(); }
-void FreeBigNumContext(BigNumContext c) { return BN_CTX_free(c); }
-void FreeBigNum(BigNum n) { return BN_free(n); }
-void BigNumModExp(BigNum v, BigNum a, BigNum e, BigNum m, BigNumContext c) { BN_mod_exp(v, a, e, m, c); }
-void BigNumSetValue(BigNum v, int val) { BN_set_word(v, val); }
-void BigNumGetData(BigNum v, char *out) { BN_bn2bin(v, MakeUnsigned(out)); }
-BigNum BigNumSetData(BigNum v, const StringPiece &data) { BN_bin2bn(MakeUnsigned(data.data()), data.size(), v); return v; }
-BigNum BigNumRand(BigNum v, int bits, int top, int bottom) { BN_rand(v, bits, top, bottom); return v; }
-int BigNumDataSize(BigNum v) { return BN_num_bytes(v); }
-int BigNumSignificantBits(BigNum v) { return BN_num_bits(v); }
-ECPoint NewECPoint(ECGroup g) { return EC_POINT_new(g); }
-void FreeECPoint(ECPoint p) { if (p) EC_POINT_free(p); }
-void FreeECPair(ECPair p) { if (p) EC_KEY_free(p); }
-ECGroup GetECPairGroup (ECPair p) { return const_cast<ECGroup>(EC_KEY_get0_group(p)); }
-ECPoint GetECPairPubKey(ECPair p) { return const_cast<ECPoint>(EC_KEY_get0_public_key(p)); }
-bool SetECPairPubKey(ECPair p, ECPoint k) { return EC_KEY_set_public_key(p, k); }
-int ECPointDataSize(ECGroup g, ECPoint p, BigNumContext x) { return EC_POINT_point2oct(g, p, POINT_CONVERSION_UNCOMPRESSED, 0, 0, x); }
-void ECPointGetData(ECGroup g, ECPoint p, char *out, int len, BigNumContext x) { EC_POINT_point2oct(g, p, POINT_CONVERSION_UNCOMPRESSED, MakeUnsigned(out), len, x); }
-void ECPointSetData(ECGroup g, ECPoint v, const StringPiece &data) { EC_POINT_oct2point(g, v, MakeUnsigned(data.buf), data.len, 0); }
-#else
-BigNum        NewBigNum        ()                { FATAL("not implemented"); }
-BigNumContext NewBigNumContext ()                { FATAL("not implemented"); }
-void          FreeBigNumContext(BigNumContext c) { FATAL("not implemented"); }
-void          FreeBigNum       (BigNum        n) { FATAL("not implemented"); }
-void BigNumSetValue(BigNum v, int val)        { FATAL("not implemented"); }
-void BigNumGetData(const BigNum v, char *out) { FATAL("not implemented"); }
-int  BigNumDataSize       (const BigNum v)    { FATAL("not implemented"); }
-int  BigNumSignificantBits(const BigNum v)    { FATAL("not implemented"); }
-void BigNumModExp(BigNum v, const BigNum a, const BigNum e, const BigNum m, BigNumContext) { FATAL("not implemented"); }
-BigNum BigNumSetData(BigNum v, const StringPiece &data)       { FATAL("not implemented"); }
-BigNum BigNumRand   (BigNum v, int bits, int top, int bottom) { FATAL("not implemented"); }
-void FreeECPoint(ECPoint p) { FATAL("not implemented"); }
-void FreeECPair(ECPair p) { FATAL("not implemented"); }
-int ECPointDataSize(const ECGroup g, const ECPoint p, BigNumContext x) { FATAL("not implemented"); }
-void ECPointGetData(const ECGroup g, const ECPoint p, char *out, int len, BigNumContext x) { FATAL("not implemented") }
-void ECPointSetData(const ECGroup g, ECPoint v, const StringPiece &data) { FATAL("not implemented"); }
-#endif
-
-string ECPointGetData(ECGroup g, ECPoint p, BigNumContext ctx) {
-  string ret(ECPointDataSize(g, p, ctx), 0);
-  ECPointGetData(g, p, &ret[0], ret.size(), ctx);
-  return ret;
-}
 }; // namespace LFL

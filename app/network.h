@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef LFL_LFAPP_NETWORK_H__
-#define LFL_LFAPP_NETWORK_H__
+#ifndef LFL_CORE_APP_NETWORK_H__
+#define LFL_CORE_APP_NETWORK_H__
 
 namespace LFL {
 DECLARE_bool(network_debug);
@@ -190,7 +190,7 @@ struct SelectSocketSet : public SocketSet {
   }
 };
 
-#if defined(LFL_WFMO) && defined(WIN32)
+#if defined(LFL_WFMO) && defined(LFL_WINDOWS)
 struct WFMOSocketSet : public SocketSet {
   static const int max_sockets = MAXIMUM_WAIT_OBJECTS;
   struct Event { struct Data { void *ptr=0; } data; } events[1];
@@ -546,4 +546,4 @@ string PromptFGets(const string &p, int s=32);
 
 #include "net/http.h"
 
-#endif // LFL_LFAPP_NETWORK_H__
+#endif // LFL_CORE_APP_NETWORK_H__

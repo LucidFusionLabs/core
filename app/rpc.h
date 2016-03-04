@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef LFL_LFAPP_RPC_H__
-#define LFL_LFAPP_RPC_H__
+#ifndef LFL_CORE_APP_RPC_H__
+#define LFL_CORE_APP_RPC_H__
 
 #ifdef LFL_IPC_DEBUG
 #define IPCTrace(...) fprintf(stderr, __VA_ARGS__)
@@ -288,4 +288,4 @@ struct InterProcessComm {
 };
 
 }; // namespace LFL
-#endif // LFL_LFAPP_RPC_H__
+#endif // LFL_CORE_APP_RPC_H__

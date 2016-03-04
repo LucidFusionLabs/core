@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef LFL_LFAPP_AUDIO_H__
-#define LFL_LFAPP_AUDIO_H__
+#ifndef LFL_CORE_APP_AUDIO_H__
+#define LFL_CORE_APP_AUDIO_H__
 namespace LFL {
 
 DECLARE_int(sample_rate);
@@ -121,4 +121,4 @@ Matrix *F0Stream(const RingBuf::Handle *in, Matrix *out, int window, int hop, in
 float FundamentalFrequency(const RingBuf::Handle *in, int window, int offset, int method=F0EstmMethod::Default);
 
 }; // namespace LFL
-#endif // LFL_LFAPP_AUDIO_H__
+#endif // LFL_CORE_APP_AUDIO_H__

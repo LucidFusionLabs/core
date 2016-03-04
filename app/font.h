@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef LFL_LFAPP_FONT_H__
-#define LFL_LFAPP_FONT_H__
+#ifndef LFL_CORE_APP_FONT_H__
+#define LFL_CORE_APP_FONT_H__
 
 namespace LFL {
 DECLARE_string(font_engine);
@@ -157,10 +157,10 @@ struct GlyphCache {
   Box dim;
   Texture tex;
   unique_ptr<Flow> flow;
-#ifdef __APPLE__
+#ifdef LFL_APPLE
   CGContextRef cgcontext=0;
 #endif
-#ifdef WIN32
+#ifdef LFL_WINDOWS
   HDC hdc=0;
 #endif
   vector<const Glyph*> glyph;
@@ -177,10 +177,10 @@ struct GlyphCache {
   void Clear();
   bool Add(point *out, float *out_texcoord, int w, int h, int max_height=0);
   void Load(const Font*, const Glyph*, const unsigned char *buf, int linesize, int pf, const FilterCB &f=FilterCB());
-#ifdef __APPLE__
+#ifdef LFL_APPLE
   void Load(const Font*, const Glyph*, CGFontRef cgfont, int size);
 #endif
-#ifdef WIN32
+#ifdef LFL_WINDOWS
   void Load(const Font*, const Glyph*, HFONT hfont, int size, HDC dc);
 #endif
 
@@ -339,7 +339,7 @@ struct FreeTypeFontEngine : public FontEngine {
   static Resource *OpenBuffer(const FontDesc&, string *content);
 };
 
-#ifdef __APPLE__
+#ifdef LFL_APPLE
 struct CoreTextFontEngine : public FontEngine {
   struct Resource : public FontEngine::Resource {
     string name;
@@ -368,7 +368,7 @@ struct CoreTextFontEngine : public FontEngine {
 struct CoreTextFontEngine {};
 #endif
 
-#ifdef WIN32
+#ifdef LFL_WINDOWS
 struct GDIFontEngine : public FontEngine {
   struct Resource : public FontEngine::Resource {
     string name;
@@ -475,4 +475,4 @@ struct DejaVuSansFreetype {
 };
 
 }; // namespace LFL
-#endif // LFL_LFAPP_FONT_H__
+#endif // LFL_CORE_APP_FONT_H__

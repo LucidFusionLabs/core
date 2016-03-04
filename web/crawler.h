@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef LFL_WEB_CRAWLER_H__
-#define LFL_WEB_CRAWLER_H__
+#ifndef LFL_CORE_WEB_CRAWLER_H__
+#define LFL_CORE_WEB_CRAWLER_H__
 namespace LFL {
 
 struct Crawler {
@@ -164,4 +164,4 @@ struct Crawler {
 };
 
 }; // namespace LFL
-#endif // LFL_WEB_CRAWLER_H__
+#endif // LFL_CORE_WEB_CRAWLER_H__

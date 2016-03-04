@@ -129,7 +129,7 @@ int Audio::Snapshot(SoundAsset *out) {
 }
 
 double Audio::VisualDelay() {
-#ifdef __APPLE__
+#ifdef LFL_APPLE
   return .1;
 #else
   return .4;

@@ -27,7 +27,7 @@
 #include <fcntl.h>
 
 #if defined(LFL_MOBILE)
-#elif defined(WIN32)
+#elif defined(LFL_WINDOWS)
 #define LFL_TCP_IPC
 #else
 #include <signal.h>
@@ -39,7 +39,7 @@
 #endif
 
 namespace LFL {
-#ifndef WIN32
+#ifndef LFL_WINDOWS
 int NTService::Install  (const char *name, const char *path) { FATAL("not implemented"); }
 int NTService::Uninstall(const char *name)                   { FATAL("not implemented"); }
 int NTService::WrapMain (const char *name, MainCB main_cb, int argc, const char **argv) { return main_cb(argc, argv); }
@@ -50,7 +50,7 @@ int ProcessPipe::OpenPTY(const char **argv, const char *startdir) { FATAL("not i
 int ProcessPipe::Open   (const char **argv, const char *startdir) { FATAL("not implemented"); }
 int ProcessPipe::Close()                                          { FATAL("not implemented"); }
 
-#elif defined(WIN32)
+#elif defined(LFL_WINDOWS)
 MainCB nt_service_main = 0;
 const char *nt_service_name = 0;
 SERVICE_STATUS_HANDLE nt_service_status_handle = 0;
@@ -206,7 +206,7 @@ bool MultiProcessBuffer::Open() {
   return true;
 }
 
-#else /* WIN32 */
+#else /* LFL_WINDOWS */
 
 int ProcessPipe::Open(const char **argv, const char *startdir) {
   int pipein[2], pipeout[2], ret;
@@ -275,7 +275,7 @@ bool MultiProcessBuffer::Open() {
   if (!len || (url.size() && impl < 0)) return ERRORv(false, "mpb open url=", url, " len=", len, " fd=", impl);
   if (url.empty()) {
     CHECK_EQ(-1, impl);
-#ifdef __APPLE__
+#ifdef LFL_APPLE
     string dir = "/var/tmp/";
 #else
     string dir = app->dldir;
@@ -317,7 +317,7 @@ bool MultiProcessBuffer::Open() {
 #error no_mpb_impl
 #endif
 
-#endif /* WIN32 */
+#endif /* LFL_WINDOWS */
 
 bool MultiProcessResource::Read(const MultiProcessBuffer &mpb, int type, Serializable *out) {
   CHECK(mpb.buf);
@@ -372,7 +372,7 @@ bool InterProcessComm::StartServerProcess(const string &server_program, const ve
 
 #if defined(LFL_SOCKETPAIR_IPC)
   Socket fd[2];
-#ifdef __APPLE__
+#ifdef LFL_APPLE
   int socket_type = SocketType::Stream;
 #else
   int socket_type = SocketType::SeqPacket;
@@ -403,7 +403,7 @@ bool InterProcessComm::StartServerProcess(const string &server_program, const ve
 #error no_ipc_impl
 #endif
 
-#ifdef WIN32
+#ifdef LFL_WINDOWS
   LUID change_notify_name_luid;
   BYTE WinWorldSid_buf[SECURITY_MAX_SID_SIZE];
   SID *WinWorldSID = reinterpret_cast<SID*>(WinWorldSid_buf);

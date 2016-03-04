@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef LFL_LFAPP_INPUT_H__
-#define LFL_LFAPP_INPUT_H__
+#ifndef LFL_CORE_APP_INPUT_H__
+#define LFL_CORE_APP_INPUT_H__
 namespace LFL {
 
 struct InputEvent {
@@ -274,4 +274,4 @@ struct Input : public InputModule {
 };
 
 }; // namespace LFL
-#endif // LFL_LFAPP_INPUT_H__
+#endif // LFL_CORE_APP_INPUT_H__

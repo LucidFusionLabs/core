@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef LFL_LFAPP_TYPES_TRIE_H__
-#define LFL_LFAPP_TYPES_TRIE_H__
+#ifndef LFL_CORE_APP_TYPES_TRIE_H__
+#define LFL_CORE_APP_TYPES_TRIE_H__
 namespace LFL {
 
 template <class K> struct TrieNode {
@@ -377,4 +377,4 @@ template <class K=char, class M=AhoCorasickFSM<K> > struct StringMatcher {
 };
 
 }; // namespace LFL
-#endif // LFL_LFAPP_TYPES_TRIE_H__
+#endif // LFL_CORE_APP_TYPES_TRIE_H__

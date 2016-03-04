@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef LFL_WEB_DOCUMENT_H__
-#define LFL_WEB_DOCUMENT_H__
+#ifndef LFL_CORE_WEB_DOCUMENT_H__
+#define LFL_CORE_WEB_DOCUMENT_H__
 namespace LFL {
 
 struct DocumentParser {
@@ -291,4 +291,4 @@ struct DocumentParser {
 };
 
 }; // namespace LFL
-#endif // LFL_WEB_DOCUMENT_H__
+#endif // LFL_CORE_WEB_DOCUMENT_H__

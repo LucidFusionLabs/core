@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef LFL_WEB_FORVO_H__
-#define LFL_WEB_FORVO_H__
+#ifndef LFL_CORE_WEB_FORVO_H__
+#define LFL_CORE_WEB_FORVO_H__
 namespace LFL {
 
 struct ForvoApi : public Crawler, public HTMLParser {
@@ -152,4 +152,4 @@ struct ForvoApi : public Crawler, public HTMLParser {
 };
 
 }; // namespace LFL
-#endif // LFL_WEB_FORVO_H__
+#endif // LFL_CORE_WEB_FORVO_H__

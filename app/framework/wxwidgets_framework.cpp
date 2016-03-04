@@ -197,6 +197,16 @@ int Video::Swap() {
   return 0;
 }
 
+void FrameScheduler::DoWait() {}
+void FrameScheduler::Setup() { rate_limit = synchronize_waits = monolithic_frame = run_main_loop = 0; }
+void FrameScheduler::Wakeup(void *opaque) { if (wait_forever && screen && wait_forever_thread) GetTyped<wxGLCanvas*>(screen->id)->Refresh(); }
+void FrameScheduler::AddWaitForeverMouse() {}
+void FrameScheduler::DelWaitForeverMouse() {}
+void FrameScheduler::AddWaitForeverKeyboard() {}
+void FrameScheduler::DelWaitForeverKeyboard() {}
+void FrameScheduler::AddWaitForeverSocket(Socket fd, int flag, void *val) { if (wait_forever && wait_forever_thread) wakeup_thread.Add(fd, flag, val); }
+void FrameScheduler::DelWaitForeverSocket(Socket fd) { if (wait_forever && wait_forever_thread) wakeup_thread.Del(fd); }
+
 extern "C" void *LFAppCreatePlatformModule() { return new IPhoneVideoModule(); }
 
 }; // namespace LFL

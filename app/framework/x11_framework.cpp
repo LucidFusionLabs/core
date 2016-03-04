@@ -20,6 +20,7 @@
 #include <X11/Xlib.h>
 #include <X11/keysym.h>
 #include <GL/glx.h>
+#undef KeyPress
 
 namespace LFL {
 struct X11VideoModule : public Module {
@@ -161,6 +162,34 @@ int Video::Swap() {
   glXSwapBuffers((Display*)screen->surface, (::Window)screen->id);
   screen->gd->CheckForError(__FILE__, __LINE__);
   return 0;
+}
+
+void FrameScheduler::DoWait() {
+  wait_forever_sockets.Select(-1);
+  for (auto &s : wait_forever_sockets.socket)
+    if (wait_forever_sockets.GetReadable(s.first)) {
+      if (s.first != system_event_socket) app->scheduler.Wakeup(s.second.second);
+}
+void FrameScheduler::Setup() { synchronize_waits = wait_forever_thread = 0; }
+void FrameScheduler::Wakeup(void *opaque) { 
+  if (wait_forever && screen) {
+    XEvent exp;
+    exp.type = Expose;
+    exp.xexpose.window = (::Window)screen->id;
+    XSendEvent((Display*)screen->surface, exp.xexpose.window, 0, ExposureMask, &exp);
+  }
+}
+void FrameScheduler::AddWaitForeverMouse() { }
+void FrameScheduler::DelWaitForeverMouse() {  }
+void FrameScheduler::AddWaitForeverKeyboard() {  }
+void FrameScheduler::DelWaitForeverKeyboard() {  }
+void FrameScheduler::AddWaitForeverSocket(Socket fd, int flag, void *val) {
+  if (wait_forever && wait_forever_thread) wakeup_thread.Add(fd, flag, val);
+  wait_forever_sockets.Add(fd, flag, val);
+}
+void FrameScheduler::DelWaitForeverSocket(Socket fd) {
+  if (wait_forever && wait_forever_thread) wakeup_thread.Del(fd);
+  wait_forever_sockets.Del(fd);
 }
 
 extern "C" void *LFAppCreatePlatformModule() { return new IPhoneVideoModule(); }

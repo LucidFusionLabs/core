@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef LFL_WEB_RSS_H__
-#define LFL_WEB_RSS_H__
+#ifndef LFL_CORE_WEB_RSS_H__
+#define LFL_CORE_WEB_RSS_H__
 namespace LFL {
 
 struct RSSMonitor {
@@ -120,4 +120,4 @@ struct RSSMonitor {
 };
 
 }; // namespace LFL
-#endif // LFL_WEB_RSS_H__
+#endif // LFL_CORE_WEB_RSS_H__

@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef LFL_LFAPP_DOM_H__
-#define LFL_LFAPP_DOM_H__
+#ifndef LFL_CORE_WEB_DOM_H__
+#define LFL_CORE_WEB_DOM_H__
 namespace LFL {
 namespace DOM {
 struct Node;
@@ -1017,4 +1017,4 @@ struct BlockChainObjectAlloc : public ObjectWrapperAlloc<BlockChainAllocator> {
 }; // namespace DOM
 typedef DOM::DOMString DOMString;
 }; // namespace LFL
-#endif // LFL_LFAPP_DOM_H__
+#endif // LFL_CORE_WEB_DOM_H__

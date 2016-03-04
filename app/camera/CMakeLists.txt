@@ -1,8 +1,12 @@
 # $Id: CMakeLists.txt 1298 2011-12-11 18:46:06Z justin $
 
 include_directories(${LFL_SOURCE_DIR})
-
 add_library(app_null_camera STATIC null_camera.cpp)
+
+if(LFL_IPHONE)
+  add_library(app_avcapture_camera STATIC avcapture_camera.mm)
+  target_compile_options(app_avcapture_camera PUBLIC -fobjc-abi-version=2 -fobjc-legacy-dispatch)
+endif()
 
 if(LFL_OSX AND LFL64)
   add_library(app_qtkit_camera STATIC qtkit_camera.mm)

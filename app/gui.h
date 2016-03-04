@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef LFL_LFAPP_GUI_H__
-#define LFL_LFAPP_GUI_H__
+#ifndef LFL_CORE_APP_GUI_H__
+#define LFL_CORE_APP_GUI_H__
 namespace LFL {
 
 DECLARE_bool(multitouch);
@@ -704,4 +704,4 @@ struct HelperGUI : public GUI {
 };
 
 }; // namespace LFL
-#endif // LFL_LFAPP_GUI_H__
+#endif // LFL_CORE_APP_GUI_H__

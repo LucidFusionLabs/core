@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef LFL_LFAPP_BINDINGS_LIBCSS_H__
-#define LFL_LFAPP_BINDINGS_LIBCSS_H__
+#ifndef LFL_CORE_APP_BINDINGS_LIBCSS_H__
+#define LFL_CORE_APP_BINDINGS_LIBCSS_H__
 
 namespace LFL {
 struct LibCSS_String {
@@ -80,4 +80,4 @@ struct LibCSS_StyleContext {
 };
 
 }; // namespace LFL
-#endif // LFL_LFAPP_BINDINGS_LIBCSS_H__
+#endif // LFL_CORE_APP_BINDINGS_LIBCSS_H__

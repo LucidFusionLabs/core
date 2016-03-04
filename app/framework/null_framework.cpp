@@ -67,6 +67,7 @@ string Application::GetClipboardText() { return ""; }
 void Application::SetClipboardText(const string &s) {}
 void Application::GrabMouseFocus() {}
 void Application::ReleaseMouseFocus() {}
+void Application::LaunchNativeContextMenu(const vector<MenuItem>&items) {}
 void Application::MakeCurrentWindow(Window *W) {}
 void Application::CloseWindow(Window *W) {
   windows.erase(W->id.value);
@@ -90,6 +91,7 @@ int Video::Swap() { return 0; }
 void FrameScheduler::DoWait() {}
 void FrameScheduler::Setup() { rate_limit = synchronize_waits = wait_forever_thread = 0; }
 void FrameScheduler::Wakeup(void *opaque) {}
+void FrameScheduler::UpdateWindowTargetFPS(Window*) {}
 void FrameScheduler::AddWaitForeverMouse() {}
 void FrameScheduler::DelWaitForeverMouse() {}
 void FrameScheduler::AddWaitForeverKeyboard() {}
@@ -97,8 +99,7 @@ void FrameScheduler::DelWaitForeverKeyboard() {}
 void FrameScheduler::AddWaitForeverSocket(Socket fd, int flag, void *val) {}
 void FrameScheduler::DelWaitForeverSocket(Socket fd) {}
 
-#undef main
-extern "C" int main(int argc, const char *argv[]) { return MyLFAppMain(argc, argv); }
+extern "C" int main(int argc, const char *argv[]) { return MyAppMain(argc, argv); }
 
 extern "C" void *LFAppCreatePlatformModule() { return new NullPlatformModule(); }
 

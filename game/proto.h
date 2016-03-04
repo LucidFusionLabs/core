@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef LFL_GAME_GAME_H__
-#define LFL_GAME_GAME_H__
+#ifndef LFL_CORE_GAME_GAME_H__
+#define LFL_CORE_GAME_GAME_H__
 namespace LFL {
 
 struct GameProtocol {
@@ -193,4 +193,4 @@ struct GameProtocol {
 };
 
 }; // namespace LFL
-#endif // LFL_GAME_GAME_H__
+#endif // LFL_CORE_GAME_GAME_H__

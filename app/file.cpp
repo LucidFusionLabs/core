@@ -23,13 +23,8 @@
 #include "core/app/app.h"
 
 #include <sys/stat.h>
-#ifndef WIN32
+#ifndef LFL_WINDOWS
 #include <dirent.h>
-#endif
-
-#ifdef LFL_LIBARCHIVE
-#include "libarchive/archive.h"
-#include "libarchive/archive_entry.h"
 #endif
 
 #ifdef LFL_FLATBUFFERS
@@ -135,7 +130,7 @@ bool BufferFile::ReplaceWith(File *nf) {
   return true;
 }
 
-#ifdef WIN32
+#ifdef LFL_WINDOWS
 const char LocalFile::Slash = '\\';
 const char LocalFile::ExecutableSuffix[] = ".exe";
 int LocalFile::IsDirectory(const string &filename) {
@@ -144,7 +139,7 @@ int LocalFile::IsDirectory(const string &filename) {
   if (attr == INVALID_FILE_ATTRIBUTES) return ERRORv(0, "GetFileAttributes(", filename, ") failed: ", strerror(errno));
   return attr & FILE_ATTRIBUTE_DIRECTORY;
 }
-#else // WIN32
+#else // LFL_WINDOWS
 const char LocalFile::Slash = '/';
 const char LocalFile::ExecutableSuffix[] = "";
 int LocalFile::IsDirectory(const string &filename) {
@@ -158,7 +153,7 @@ int LocalFile::IsDirectory(const string &filename) {
   return buf.st_mode & S_IFDIR;
 #endif
 }
-#endif // WIN32
+#endif // LFL_WINDOWS
 
 #ifdef LFL_ANDROID
 #if 0
@@ -204,7 +199,7 @@ bool LocalFile::Flush() { return false; }
 
 #else /* LFL_ANDROID */
 bool LocalFile::mkdir(const string &dir, int mode) {
-#ifdef WIN32
+#ifdef LFL_WINDOWS
   return _mkdir(dir.c_str()) == 0;
 #else
   return ::mkdir(dir.c_str(), mode) == 0;
@@ -224,7 +219,7 @@ bool LocalFile::Open(const string &path, const string &mode, bool pre_create) {
     FILE *created = fopen(fn.c_str(), "a");
     if (created) fclose(created);
   }
-#ifdef WIN32
+#ifdef LFL_WINDOWS
   if (!(impl = fopen(fn.c_str(), StrCat(mode, "b").c_str()))) return 0;
 #else
   if (!(impl = fopen(fn.c_str(), mode.c_str()))) return 0;
@@ -280,7 +275,7 @@ File *LocalFile::Create() { return new LocalFile(StrCat(fn, ".new"), "w+"); }
 bool LocalFile::ReplaceWith(File *nf) {
   LocalFile *new_file = dynamic_cast<LocalFile*>(nf);
   if (!new_file) return false;
-#ifdef WIN32
+#ifdef LFL_WINDOWS
   _unlink(fn.c_str());
 #endif
   int ret = rename(new_file->fn.c_str(), fn.c_str());
@@ -314,7 +309,7 @@ DirectoryIter::DirectoryIter(const string &path, int dirs, const char *Pref, con
     }
     return;
   }
-#ifdef WIN32
+#ifdef LFL_WINDOWS
   _finddatai64_t f; int h;
   string match = StrCat(path, "*.*");
   if ((h = _findfirsti64(match.c_str(), &f)) < 0) return;
@@ -330,7 +325,7 @@ DirectoryIter::DirectoryIter(const string &path, int dirs, const char *Pref, con
   while (!_findnexti64(h, &f));
 
   _findclose(h);
-#else /* WIN32 */
+#else /* LFL_WINDOWS */
   DIR *dir; dirent *dent; string dirname=path;
   if (dirname.empty()) dirname = ".";
   if (dirname.size() > 1 && dirname[dirname.size()-1] == '/') dirname.erase(dirname.size()-1);
@@ -347,7 +342,7 @@ DirectoryIter::DirectoryIter(const string &path, int dirs, const char *Pref, con
   }
 
   closedir(dir);
-#endif /* WIN32 */
+#endif /* LFL_WINDOWS */
 }
 
 const char *DirectoryIter::Next() {
@@ -364,45 +359,6 @@ const char *DirectoryIter::Next() {
     return k;
   }
 }
-
-#ifdef LFL_LIBARCHIVE
-ArchiveIter::~ArchiveIter() { if (impl) archive_read_finish((archive*)impl); }
-ArchiveIter::ArchiveIter(const char *path) {
-  if (!(impl = archive_read_new())) return;
-  if (archive_read_support_format_zip          ((archive*)impl) != 0) INFO("no zip support");
-  if (archive_read_support_format_tar          ((archive*)impl) != 0) INFO("no tar support");
-  if (archive_read_support_compression_gzip    ((archive*)impl) != 0) INFO("no gzip support");
-  if (archive_read_support_compression_none    ((archive*)impl) != 0) INFO("no none support");
-  if (archive_read_support_compression_compress((archive*)impl) != 0) INFO("no compress support");
-  if (archive_read_open_filename((archive*)impl, path, 65536) != 0) {
-    archive_read_finish((archive*)impl);
-    impl = nullptr;
-  }
-}
-const char *ArchiveIter::Next() {
-  if (!impl) return 0;
-  int ret = archive_read_next_header((archive*)impl, (archive_entry**)&entry);
-  if (ret) {
-    if (const char *errstr = archive_error_string((archive*)impl)) ERROR("read_next: ", ret, " ", errstr);
-    return 0;
-  }
-  return archive_entry_pathname((archive_entry*)entry);
-}
-bool ArchiveIter::LoadData() {
-  buf.resize(Size());
-  return buf.size() == archive_read_data((archive*)impl, &buf[0], buf.size());
-}
-void ArchiveIter::Skip() { archive_read_data_skip((archive*)impl); }
-long long ArchiveIter::Size() { return archive_entry_size((archive_entry*)entry); }
-
-#else /* LFL_LIBARCHIVE */
-ArchiveIter::~ArchiveIter() {}
-ArchiveIter::ArchiveIter(const char *path) {}
-const char *ArchiveIter::Next() { return 0; }
-long long ArchiveIter::Size() { return 0; }
-bool ArchiveIter::LoadData() { return 0; }
-void ArchiveIter::Skip() {}
-#endif /* LFL_LIBARCHIVE */
 
 /* ProtoFile */
 

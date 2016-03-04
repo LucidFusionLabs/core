@@ -307,6 +307,26 @@ int Video::Swap() {
   return 0;
 }
 
+void FrameScheduler::DoWait() {}
+void FrameScheduler::Setup() { synchronize_waits = wait_forever_thread = run_main_loop = 0; }
+void FrameScheduler::Wakeup(void*) { 
+  InvalidateRect((HWND)screen->id, NULL, 0);
+  // PostMessage((HWND)screen->id, WM_USER, 0, 0);
+}
+
+void FrameScheduler::AddWaitForeverMouse() { GetTyped<WinWindow*>(screen->impl)->frame_on_mouse_input = true; }
+void FrameScheduler::DelWaitForeverMouse() { GetTyped<WinWindow*>(screen->impl)->frame_on_mouse_input = false; }
+void FrameScheduler::AddWaitForeverKeyboard() { GetTyped<WinWindow*>(screen->impl)->frame_on_keyboard_input = true; }
+void FrameScheduler::DelWaitForeverKeyboard() { GetTyped<WinWindow*>(screen->impl)->frame_on_keyboard_input = false; }
+void FrameScheduler::AddWaitForeverSocket(Socket fd, int flag, void *val) {
+  if (wait_forever && wait_forever_thread) wakeup_thread.Add(fd, flag, val);
+  WSAAsyncSelect(fd, (HWND)screen->id, WM_USER, FD_READ | FD_CLOSE);
+}
+void FrameScheduler::DelWaitForeverSocket(Socket fd) {
+  if (wait_forever && wait_forever_thread) wakeup_thread.Del(fd);
+  WSAAsyncSelect(fd, (HWND)screen->id, WM_USER, 0);
+}
+
 extern "C" void *LFAppCreatePlatformModule() { return new AndroidVideoModule(); }
 
 }; // namespace LFL

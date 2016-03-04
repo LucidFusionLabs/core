@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef LFL_WEB_HTML_H__
-#define LFL_WEB_HTML_H__
+#ifndef LFL_CORE_WEB_HTML_H__
+#define LFL_CORE_WEB_HTML_H__
 namespace LFL {
 
 struct HTMLParser {
@@ -439,4 +439,4 @@ struct DebugHTMLParser : public HTMLParser {
 };
 
 }; // namespace LFL
-#endif // LFL_WEB_HTML_H__
+#endif // LFL_CORE_WEB_HTML_H__

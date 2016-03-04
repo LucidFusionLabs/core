@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef LFL_LFAPP_ASSETS_H__
-#define LFL_LFAPP_ASSETS_H__
+#ifndef LFL_CORE_APP_ASSETS_H__
+#define LFL_CORE_APP_ASSETS_H__
 namespace LFL {
 
 DECLARE_int(soundasset_seconds);
@@ -864,4 +864,4 @@ template <class X> struct LayersT : public LayersInterface {
 typedef LayersT<Tiles> Layers;
 
 }; // namespace LFL
-#endif // LFL_LFAPP_ASSETS_H__
+#endif // LFL_CORE_APP_ASSETS_H__

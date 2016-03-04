@@ -23,25 +23,8 @@
 #include "core/app/gui.h"
 #include "core/app/ipc.h"
 
-#if 0 // def LFL_QT
-#include <QMessageBox>
-void Dialog::MessageBox(const string &n) {
-  app->ReleaseMouseFocus();
-  QMessageBox *msg = new QMessageBox();
-  msg->setAttribute(Qt::WA_DeleteOnClose);
-  msg->setText("MesssageBox");
-  msg->setInformativeText(n.c_str());
-  msg->setModal(false);
-  msg->open();
-}
-#endif
-
-#ifdef LFL_LIBCLANG
-#include "clang-c/Index.h"
-#endif
-
 namespace LFL {
-#if defined(LFL_ANDROID) || defined(LFL_IPHONE)
+#ifdef LFL_MOBILE
 DEFINE_bool(multitouch, true, "Touchscreen controls");
 #else
 DEFINE_bool(multitouch, false, "Touchscreen controls");
@@ -1075,7 +1058,6 @@ FileNameAndOffset Editor::FindDefinition(const point &p) {
 }
 
 void Editor::UpdateAnnotation() {
-#ifdef LFL_LIBCLANG
   if (!project) return;
   int fl_ind = 1;
   auto fl = file_line.Begin();
@@ -1085,17 +1067,16 @@ void Editor::UpdateAnnotation() {
   bool have_rule = rule != project->build_rules.end();
   ide_file = make_unique<IDE::File>(filename, have_rule?rule->second.cmd:"", have_rule?rule->second.dir:"");
 
-  ClangTokenVisitor(&ide_file.get()->tu, ClangTokenVisitor::TokenCB([&]
-    (ClangTokenVisitor *v, int kind, int line, int column) {
+  TranslationUnit::TokenVisitor(&ide_file.get()->tu, TranslationUnit::TokenVisitor::TokenCB([&]
+    (TranslationUnit::TokenVisitor *v, int kind, int line, int column) {
       int a = default_attr;
-      switch (kind) {
-        case CXToken_Punctuation:                                     break;
-        case CXToken_Keyword:     Attr::SetFGColorIndex(&a, 5);       break;
-        case CXToken_Identifier:  Attr::SetFGColorIndex(&a, 13);      break;
-        case CXToken_Literal:     Attr::SetFGColorIndex(&a, 1);       break;
-        case CXToken_Comment:     Attr::SetFGColorIndex(&a, 6);       break;
-        default:                  ERROR("unknown token kind ", kind); break;
-      }
+      if      (kind == TranslationUnit::Token::Punctuation) {}
+      else if (kind == TranslationUnit::Token::Keyword)     Attr::SetFGColorIndex(&a, 5);
+      else if (kind == TranslationUnit::Token::Identifier)  Attr::SetFGColorIndex(&a, 13);
+      else if (kind == TranslationUnit::Token::Literal)     Attr::SetFGColorIndex(&a, 1);
+      else if (kind == TranslationUnit::Token::Comment)     Attr::SetFGColorIndex(&a, 6);
+      else                                                  ERROR("unknown token kind ", kind);
+
       if (line != v->last_token.y) {
         if (v->last_token.y+1 < line && a != default_attr) PushBack(annotation, {0, a});
         if (fl_ind < line)
@@ -1107,7 +1088,6 @@ void Editor::UpdateAnnotation() {
       annotation.emplace_back(column-1, a);
       file_line_data->annotation.len++;
     })).Visit();
-#endif
 }
 
 /* Terminal */

@@ -16,41 +16,72 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef LFL_LFAPP_CRYPTO_H__
-#define LFL_LFAPP_CRYPTO_H__
-
-#if defined(LFL_COMMONCRYPTO)
-#include <CommonCrypto/CommonCrypto.h>
-#include <CommonCrypto/CommonHMAC.h>
-#elif defined(LFL_OPENSSL)
-#include "openssl/evp.h"
-#include "openssl/hmac.h"
-#endif
+#ifndef LFL_CORE_APP_CRYPTO_H__
+#define LFL_CORE_APP_CRYPTO_H__
 
 namespace LFL {
+struct BigNum        : public VoidPtr { using VoidPtr::VoidPtr; };
+struct BigNumContext : public VoidPtr { using VoidPtr::VoidPtr; };
+BigNum        NewBigNum();
+BigNumContext NewBigNumContext();
+void FreeBigNumContext(BigNumContext c);
+void FreeBigNum(BigNum n);
+void BigNumModExp(BigNum v, BigNum a, BigNum e, BigNum m, BigNumContext);
+void BigNumSetValue(BigNum v, int val);
+void BigNumGetData(BigNum v, char *out);
+BigNum BigNumSetData(BigNum v, const StringPiece &data);
+BigNum BigNumRand(BigNum v, int bits, int top, int bottom);
+int BigNumDataSize(BigNum v);
+int BigNumSignificantBits(BigNum v);
+
+struct ECDef   : public VoidPtr { using VoidPtr::VoidPtr; };
+struct ECGroup : public VoidPtr { using VoidPtr::VoidPtr; };
+struct ECPoint : public VoidPtr { using VoidPtr::VoidPtr; };
+struct ECPair  : public VoidPtr { using VoidPtr::VoidPtr; };
+ECPoint NewECPoint(ECGroup);
+void FreeECPoint(ECPoint);
+void FreeECPair(ECPair);
+ECGroup GetECPairGroup(ECPair);
+ECPoint GetECPairPubKey(ECPair);
+bool SetECPairPubKey(ECPair, ECPoint);
+string ECPointGetData(ECGroup, ECPoint, BigNumContext);
+int ECPointDataSize(ECGroup, ECPoint, BigNumContext);
+void ECPointGetData(ECGroup, ECPoint, char *out, int len, BigNumContext);
+void ECPointSetData(ECGroup, ECPoint out, const StringPiece &data);
+
+struct RSAKey   : public VoidPtr { using VoidPtr::VoidPtr; };
+struct DSAKey   : public VoidPtr { using VoidPtr::VoidPtr; };
+struct DSASig   : public VoidPtr { using VoidPtr::VoidPtr; };
+struct ECDSASig : public VoidPtr { using VoidPtr::VoidPtr; };
+RSAKey NewRSAPubKey();
+DSAKey NewDSAPubKey();
+DSASig NewDSASig();
+ECDSASig NewECDSASig();
+BigNum GetRSAKeyE(RSAKey);
+BigNum GetRSAKeyN(RSAKey);
+BigNum GetDSAKeyP(DSAKey);
+BigNum GetDSAKeyQ(DSAKey);
+BigNum GetDSAKeyG(DSAKey);
+BigNum GetDSAKeyK(DSAKey);
+BigNum GetDSASigR(DSASig);
+BigNum GetDSASigS(DSASig);
+BigNum GetECDSASigR(ECDSASig);
+BigNum GetECDSASigS(ECDSASig);
+void RSAKeyFree(RSAKey);
+void DSAKeyFree(DSAKey);
+void DSASigFree(DSASig);
+void ECDSASigFree(ECDSASig);
+int RSAVerify(const StringPiece &digest, string *out, RSAKey rsa_key);
+int DSAVerify(const StringPiece &digest, DSASig dsa_sig, DSAKey dsa_key);
+int ECDSAVerify(const StringPiece &digest, ECDSASig dsa_sig, ECPair ecdsa_keypair);
+
 struct Crypto {
-#if defined(LFL_COMMONCRYPTO)
-  struct Cipher { int algo=0; CCAlgorithm ccalgo; CCCryptorRef ctx; };
-  struct Digest { int algo=0; void *v=0; };
-  struct MAC { CCHmacAlgorithm algo; CCHmacContext ctx; };
-  typedef int CipherAlgo;
-  typedef int DigestAlgo;
-  typedef CCHmacAlgorithm MACAlgo;
-#elif defined(LFL_OPENSSL)
-  typedef EVP_CIPHER_CTX Cipher;
-  typedef EVP_MD_CTX Digest;
-  typedef HMAC_CTX MAC;
-  typedef const EVP_CIPHER* CipherAlgo;
-  typedef const EVP_MD* DigestAlgo;
-  typedef const EVP_MD* MACAlgo;
-#else
-  typedef void* Cipher;
-  typedef void* Digest;
-  typedef void* MAC;
-  typedef void* CipherAlgo;
-  typedef void* DigestAlgo;
-  typedef void* MACAlgo;
-#endif
+  struct Cipher     : public VoidPtr { using VoidPtr::VoidPtr; };
+  struct Digest     : public VoidPtr { using VoidPtr::VoidPtr; };
+  struct MAC        : public VoidPtr { using VoidPtr::VoidPtr; };
+  struct CipherAlgo : public VoidPtr { using VoidPtr::VoidPtr; };
+  struct DigestAlgo : public VoidPtr { using VoidPtr::VoidPtr; };
+  struct MACAlgo    : public VoidPtr { using VoidPtr::VoidPtr; };
 
   struct CipherAlgos {
     static CipherAlgo AES128_CTR();
@@ -116,21 +147,21 @@ struct Crypto {
   static string Blowfish(const string &passphrase, const string &in, bool encrypt_or_decrypt);
   static string ComputeDigest(DigestAlgo algo, const string &in);
 
-  static void CipherInit(Cipher*);
-  static void CipherFree(Cipher*);
-  static int  CipherGetBlockSize(Cipher*);
-  static int  CipherOpen(Cipher*, CipherAlgo, bool dir, const StringPiece &key, const StringPiece &iv);
-  static int  CipherUpdate(Cipher*, const StringPiece &in, char *out, int outlen);
+  static Cipher CipherInit();
+  static void CipherFree(Cipher);
+  static int  CipherGetBlockSize(Cipher);
+  static int  CipherOpen(Cipher, CipherAlgo, bool dir, const StringPiece &key, const StringPiece &iv);
+  static int  CipherUpdate(Cipher, const StringPiece &in, char *out, int outlen);
 
-  static int  DigestGetHashSize(Digest*);
-  static void DigestOpen(Digest*, DigestAlgo);
-  static void DigestUpdate(Digest*, const StringPiece &in);
-  static string DigestFinish(Digest*);
+  static Digest DigestOpen(DigestAlgo);
+  static void DigestUpdate(Digest, const StringPiece &in);
+  static int  DigestGetHashSize(Digest);
+  static string DigestFinish(Digest);
 
-  static void MACOpen(MAC*, MACAlgo, const StringPiece &key);
-  static void MACUpdate(MAC*, const StringPiece &in);
-  static int  MACFinish(MAC*, char *out, int outlen);
+  static MAC MACOpen(MACAlgo, const StringPiece &key);
+  static void MACUpdate(MAC, const StringPiece &in);
+  static int  MACFinish(MAC, char *out, int outlen);
 };
 
 }; // namespace LFL
-#endif // LFL_LFAPP_CRYPTO_H__
+#endif // LFL_CORE_APP_CRYPTO_H__

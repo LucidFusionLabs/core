@@ -24,12 +24,12 @@
 #include "core/app/ipc.h"
 #include "core/app/browser.h"
 
-#ifdef WIN32
+#ifdef LFL_WINDOWS
 #include <mlang.h>
 IMLangFontLink2 *fontlink=0;
 #endif
 
-#ifdef __APPLE__
+#ifdef LFL_APPLE
 #import <CoreText/CTFont.h>
 #import <CoreText/CTLine.h>
 #import <CoreText/CTRun.h>
@@ -62,9 +62,9 @@ inline CFAttributedStringRef ToCFAStr(CTFontRef ctfont, char16_t glyph_id) {
 #endif
 
 namespace LFL {
-#if defined(WIN32)
+#if defined(LFL_WINDOWS)
 DEFINE_string(font_engine, "gdi",      "[atlas,freetype,coretext,gdi]");
-#elif defined(__APPLE__)
+#elif defined(LFL_APPLE)
 DEFINE_string(font_engine, "coretext", "[atlas,freetype,coretext,gdi]");
 #elif defined(LFL_ANDROID)
 DEFINE_string(font_engine, "atlas",    "[atlas,freetype,coretext,gdi]");
@@ -178,7 +178,7 @@ void GlyphCache::Load(const Font *f, const Glyph *g, const unsigned char *buf, i
   }
 }
 
-#ifdef __APPLE__
+#ifdef LFL_APPLE
 void GlyphCache::Load(const Font *f, const Glyph *g, CGFontRef cgfont, int size) {
   if (!g->internal.coretext.id || !g->tex.width || !g->tex.height) return;
   point p;
@@ -228,7 +228,7 @@ void GlyphCache::Load(const Font *f, const Glyph *g, CGFontRef cgfont, int size)
 }
 #endif
 
-#ifdef WIN32
+#ifdef LFL_WINDOWS
 void GlyphCache::Load(const Font *f, const Glyph *g, HFONT hfont, int size, HDC dc) {
   if (!g->id || !g->tex.width || !g->tex.height) return;
   point p;
@@ -592,7 +592,7 @@ void AtlasFontEngine::SplitIntoPNGFiles(const string &input_png_fn, const map<in
   }
 }
 
-#ifdef __APPLE__
+#ifdef LFL_APPLE
 CoreTextFontEngine::Resource::~Resource() {
   if (cgfont) CFRelease(cgfont);
 }
@@ -756,9 +756,9 @@ v2 CoreTextFontEngine::GetAdvanceBounds(Font *f) {
   }
   return ret;
 }
-#endif /* __APPLE__ */
+#endif /* LFL_APPLE */
 
-#ifdef WIN32
+#ifdef LFL_WINDOWS
 GDIFontEngine::Resource::~Resource() {
   if (hfont) DeleteObject(hfont);
 }
@@ -885,7 +885,7 @@ void GDIFontEngine::AssignGlyph(Glyph *g, const ::SIZE &bounds, const ::SIZE &ad
   g->advance = bounds.cx;
   g->space = isspace(g->id) || g->id == Unicode::non_breaking_space || g->id == Unicode::zero_width_non_breaking_space;
 }
-#endif /* WIN32 */
+#endif /* LFL_WINDOWS */
 
 unique_ptr<Font> IPCClientFontEngine::Open(const FontDesc &d) {
   unique_ptr<Font> ret = make_unique<Font>(this, d, make_shared<Resource>());
@@ -921,10 +921,10 @@ FontEngine *Fonts::GetFontEngine(int engine_type) {
   switch (engine_type) {
     case FontDesc::Engine::Atlas:    return atlas_engine.get();
     case FontDesc::Engine::FreeType: return freetype_engine.get();
-#ifdef __APPLE__
+#ifdef LFL_APPLE
     case FontDesc::Engine::CoreText: return coretext_engine.get();
 #endif
-#ifdef WIN32
+#ifdef LFL_WINDOWS
     case FontDesc::Engine::GDI:      return gdi_engine.get();
 #endif
     case FontDesc::Engine::Default:  return DefaultFontEngine();
@@ -935,10 +935,10 @@ FontEngine *Fonts::DefaultFontEngine() {
   if (!default_font_engine) {
     if      (FLAGS_font_engine == "atlas")      default_font_engine = atlas_engine.get();
     else if (FLAGS_font_engine == "freetype")   default_font_engine = freetype_engine.get();
-#ifdef __APPLE__                                
+#ifdef LFL_APPLE                                
     else if (FLAGS_font_engine == "coretext")   default_font_engine = coretext_engine.get();
 #endif                                          
-#ifdef WIN32                                    
+#ifdef LFL_WINDOWS                                    
     else if (FLAGS_font_engine == "gdi")        default_font_engine = gdi_engine.get();
 #endif                                          
     else                                        default_font_engine = fake_engine.get();

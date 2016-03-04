@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef LFL_WEB_YAHOO_FINANCE_H__
-#define LFL_WEB_YAHOO_FINANCE_H__
+#ifndef LFL_CORE_WEB_YAHOO_FINANCE_H__
+#define LFL_CORE_WEB_YAHOO_FINANCE_H__
 namespace LFL {
 
 struct YahooFinanceApi : public Crawler {
@@ -102,4 +102,4 @@ struct YahooFinanceApi : public Crawler {
 };
 
 }; // namespace LFL
-#endif // LFL_WEB_YAHOO_FINANCE_H__
+#endif // LFL_CORE_WEB_YAHOO_FINANCE_H__

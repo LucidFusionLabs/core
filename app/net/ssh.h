@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef LFL_TERM_SSH_H__
-#define LFL_TERM_SSH_H__
+#ifndef LFL_CORE_APP_NET_SSH_H__
+#define LFL_CORE_APP_NET_SSH_H__
 namespace LFL {
 
 struct SSHClient {
@@ -38,9 +38,9 @@ struct SSH {
   static int BigNumSize(const BigNum n);
   static BigNum ReadBigNum(BigNum n, const Serializable::Stream *i);
   static void WriteBigNum(const BigNum n, Serializable::Stream *o);
-  static void UpdateDigest(Crypto::Digest *d, const StringPiece &s);
-  static void UpdateDigest(Crypto::Digest *d, int n);
-  static void UpdateDigest(Crypto::Digest *d, BigNum n);
+  static void UpdateDigest(Crypto::Digest d, const StringPiece &s);
+  static void UpdateDigest(Crypto::Digest d, int n);
+  static void UpdateDigest(Crypto::Digest d, BigNum n);
   static string ComputeExchangeHash(int kex_method, Crypto::DigestAlgo algo, const string &V_C, const string &V_S,
                                     const string &KI_C, const string &KI_S, const StringPiece &k_s, BigNum K,
                                     Crypto::DiffieHellman*, Crypto::EllipticCurveDiffieHellman*);
@@ -476,4 +476,4 @@ struct SSH {
 };
 
 }; // namespace LFL
-#endif // LFL_TERM_SSH_H__
+#endif // LFL_CORE_APP_NET_SSH_H__

@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef LFL_LFAPP_NET_HTTP_H__
-#define LFL_LFAPP_NET_HTTP_H__
+#ifndef LFL_CORE_APP_NET_HTTP_H__
+#define LFL_CORE_APP_NET_HTTP_H__
 namespace LFL {
   
 struct HTTP {
@@ -151,4 +151,4 @@ struct HTTPServer : public Service {
 };
 
 }; // namespace LFL
-#endif // LFL_LFAPP_NET_HTTP_H__
+#endif // LFL_CORE_APP_NET_HTTP_H__

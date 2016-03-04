@@ -16,15 +16,11 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef LFL_LFAPP_CSS_H__
-#define LFL_LFAPP_CSS_H__
+#ifndef LFL_CORE_WEB_CSS_H__
+#define LFL_CORE_WEB_CSS_H__
 
 extern "C" {
-struct lwc_string_s;
 struct css_stylesheet;
-struct css_select_ctx;
-struct css_select_results;
-struct css_stylesheet_params;
 typedef struct lwc_string_s lwc_string;
 typedef struct css_select_ctx css_select_ctx;
 typedef struct css_select_results css_select_results;
@@ -827,4 +823,4 @@ struct StyleContext : public LFL::DOM::Object {
 };
 
 }; // namespace LFL
-#endif // LFL_LFAPP_CSS_H__
+#endif // LFL_CORE_WEB_CSS_H__

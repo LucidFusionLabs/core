@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef LFL_LFAPP_BINDINGS_OPENCV_H__
-#define LFL_LFAPP_BINDINGS_OPENCV_H__
+#ifndef LFL_CORE_APP_BINDINGS_OPENCV_H__
+#define LFL_CORE_APP_BINDINGS_OPENCV_H__
 
 namespace LFL {
 inline void TextureToIplImage(const Texture &in, _IplImage *out) {
@@ -35,4 +35,4 @@ inline void TextureToIplImage(const Texture &in, _IplImage *out) {
 }
 
 }; // namespace LFL
-#endif // LFL_LFAPP_BINDINGS_OPENCV_H__
+#endif // LFL_CORE_APP_BINDINGS_OPENCV_H__

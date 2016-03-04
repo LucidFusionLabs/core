@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef LFL_LFAPP_CAMERA_H__
-#define LFL_LFAPP_CAMERA_H__
+#ifndef LFL_CORE_APP_CAMERA_H__
+#define LFL_CORE_APP_CAMERA_H__
 namespace LFL {
 
 DECLARE_int(camera_fps);
@@ -36,4 +36,4 @@ struct Camera : public Module {
 };
 
 }; // namespace LFL
-#endif // LFL_LFAPP_CAMERA_H__
+#endif // LFL_CORE_APP_CAMERA_H__

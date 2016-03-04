@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef LFL_LFAPP_TYPES_STRING_H__
-#define LFL_LFAPP_TYPES_STRING_H__
+#ifndef LFL_CORE_APP_TYPES_STRING_H__
+#define LFL_CORE_APP_TYPES_STRING_H__
 
 #ifdef WIN32
 #include <intrin.h>
@@ -755,4 +755,4 @@ struct Serializable {
 };
 
 }; // namespace LFL
-#endif // LFL_LFAPP_TYPES_STRING_H__
+#endif // LFL_CORE_APP_TYPES_STRING_H__

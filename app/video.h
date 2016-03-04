@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef LFL_LFAPP_VIDEO_H__
-#define LFL_LFAPP_VIDEO_H__
+#ifndef LFL_CORE_APP_VIDEO_H__
+#define LFL_CORE_APP_VIDEO_H__
 
 namespace LFL {
 DECLARE_int(dots_per_inch);
@@ -343,11 +343,11 @@ struct Texture : public Drawable {
   virtual void Draw(const LFL::Box &B, const Drawable::Attr *A=0) const { Bind(); B.Draw(coord); }
   virtual void DrawCrimped(const LFL::Box &B, int ort, float sx, float sy) const { Bind(); B.DrawCrimped(coord, ort, sx, sy); }
 
-#ifdef __APPLE__
+#ifdef LFL_APPLE
   CGContextRef CGBitMap();
   CGContextRef CGBitMap(int X, int Y, int W, int H);
 #endif
-#ifdef WIN32
+#ifdef LFL_WINDOWS
   HBITMAP CreateGDIBitMap(HDC dc);
 #endif
   static void Coordinates(float *texcoord, int w, int h, int wd, int hd);
@@ -671,4 +671,4 @@ struct SimpleVideoResampler : public VideoResamplerInterface {
 };
 
 }; // namespace LFL
-#endif // LFL_LFAPP_VIDEO_H__
+#endif // LFL_CORE_APP_VIDEO_H__

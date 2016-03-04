@@ -158,6 +158,16 @@ int Video::Swap() {
   return 0;
 }
 
+void FrameScheduler::DoWait() { glfwWaitEvents(); }
+void FrameScheduler::Setup() {}
+void FrameScheduler::Wakeup(void*) { if (wait_forever && screen && wait_forever_thread) glfwPostEmptyEvent(); }
+void FrameScheduler::AddWaitForeverMouse() {}
+void FrameScheduler::DelWaitForeverMouse() {}
+void FrameScheduler::AddWaitForeverKeyboard() {}
+void FrameScheduler::DelWaitForeverKeyboard() {}
+void FrameScheduler::AddWaitForeverSocket(Socket fd, int flag, void *val) { if (wait_forever && wait_forever_thread) wakeup_thread.Add(fd, flag, val); }
+void FrameScheduler::DelWaitForeverSocket(Socket fd) { if (wait_forever && wait_forever_thread) wakeup_thread.Del(fd); }
+
 extern "C" void *LFAppCreatePlatformModule() {
   ONCE({ if (FLAGS_lfapp_video) {
     INFO("LFAppCreatePlatformModule: glfwInit()");

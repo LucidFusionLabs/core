@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef LFL_LFAPP_BINDINGS_FFMPEG_H__
-#define LFL_LFAPP_BINDINGS_FFMPEG_H__
+#ifndef LFL_CORE_APP_BINDINGS_FFMPEG_H__
+#define LFL_CORE_APP_BINDINGS_FFMPEG_H__
 
 extern "C" {
 #include <libavcodec/avcodec.h>
@@ -95,4 +95,4 @@ inline int SampleToFFMpegId(int fmt) {
 }
 
 }; // namespace LFL
-#endif // LFL_LFAPP_BINDINGS_FFMPEG_H__
+#endif // LFL_CORE_APP_BINDINGS_FFMPEG_H__

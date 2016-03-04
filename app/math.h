@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef LFL_LFAPP_MATH_H__
-#define LFL_LFAPP_MATH_H__
+#ifndef LFL_CORE_APP_MATH_H__
+#define LFL_CORE_APP_MATH_H__
 
 namespace LFL {
 int NextMultipleOfPowerOfTwo(int input, int align);
@@ -377,7 +377,7 @@ template <class T=double> struct matrix {
     long long bytes = Mrows*Ncols*sizeof(T)*((Flag&Flag::Complex)?2:1);
     if (!Alloc) {
       Alloc = Allocator::Default();
-#if defined(__linux__) && !defined(LFL_ANDROID)
+#if defined(LFL_LINUX)
       // if (bytes >= (1<<30)) Alloc = MMapAlloc::Open("/dev/zero", true, false, bytes);
 #endif
     }
@@ -580,7 +580,7 @@ int Levenshtein(const vector<int> &source, const vector<int> &target, vector<LFL
 /* solve autoCorrelation toeplitz system for LPC */
 double LevinsonDurbin(int order, double const *autoCorrelation, double *reflectionOut, double *lpcOut);
 
-#ifdef _WIN32
+#ifdef LFL_WINDOWS
 /* logarithm of 1+x */
 double log1p(double x);
 #endif
@@ -749,46 +749,5 @@ void SVD(const Matrix *A, Matrix *D, Matrix *U, Matrix *V);
 /* principal components analysis */
 Matrix *PCA(const Matrix *obv, Matrix *projected, double *var=0);
 
-/* arbitrary precision integers */
-#if defined(LFL_COMMONCRYPTO) && 0
-typedef CCBigNumRef BigNum;
-typedef void* BigNumContext;
-#elif defined(LFL_OPENSSL)
-typedef BIGNUM* BigNum;
-typedef BN_CTX* BigNumContext;
-typedef int       ECDef;
-typedef EC_GROUP* ECGroup;
-typedef EC_POINT* ECPoint;
-typedef EC_KEY*   ECPair;
-#else
-typedef void* BigNum;
-typedef void* BigNumContext;
-typedef void* ECDef;
-typedef void* ECGroup;
-typedef void* ECPoint;
-typedef void* ECPair;
-#endif
-BigNum        NewBigNum();
-BigNumContext NewBigNumContext();
-void FreeBigNumContext(BigNumContext c);
-void FreeBigNum(BigNum n);
-void BigNumModExp(BigNum v, BigNum a, BigNum e, BigNum m, BigNumContext);
-void BigNumSetValue(BigNum v, int val);
-void BigNumGetData(BigNum v, char *out);
-BigNum BigNumSetData(BigNum v, const StringPiece &data);
-BigNum BigNumRand(BigNum v, int bits, int top, int bottom);
-int BigNumDataSize(BigNum v);
-int BigNumSignificantBits(BigNum v);
-ECPoint NewECPoint(ECGroup);
-void FreeECPoint(ECPoint);
-void FreeECPair(ECPair);
-ECGroup GetECPairGroup(ECPair);
-ECPoint GetECPairPubKey(ECPair);
-bool SetECPairPubKey(ECPair, ECPoint);
-string ECPointGetData(ECGroup, ECPoint, BigNumContext);
-int ECPointDataSize(ECGroup, ECPoint, BigNumContext);
-void ECPointGetData(ECGroup, ECPoint, char *out, int len, BigNumContext);
-void ECPointSetData(ECGroup, ECPoint out, const StringPiece &data);
-
 }; // namespace LFL
-#endif // LFL_LFAPP_MATH_H__
+#endif // LFL_CORE_APP_MATH_H__

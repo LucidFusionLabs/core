@@ -25,11 +25,8 @@
 #include <time.h>
 #include <fcntl.h>
 
-#ifdef WIN32
+#ifdef LFL_WINDOWS
 #define CALLBACK __stdcall
-#define stat(x,y) _stat(x,y)
-#define gmtime_r(i,o) memcpy(o, gmtime(&in), sizeof(tm))
-#define localtime_r(i,o) memcpy(o, localtime(&in), sizeof(tm))
 #include <Windns.h>
 #else
 #include <signal.h>
@@ -38,74 +35,17 @@
 #include <sys/resource.h>
 #endif
 
-#ifdef __APPLE__
+#ifdef LFL_APPLE
 #include <CoreFoundation/CoreFoundation.h>
-#ifndef LFL_IPHONE
-#include <ApplicationServices/ApplicationServices.h>
-#endif
-#endif
-
-#ifdef LFL_X11INPUT
-#include "X11/Xlib.h"
-#undef KeyPress
 #endif
 
 #ifdef LFL_ANDROID
 #include <android/log.h>
-extern "C" void AndroidSetFrameOnKeyboardInput(int v);
-extern "C" void AndroidSetFrameOnMouseInput   (int v);
 #endif
 
-#ifdef LFL_WXWIDGETS
-#include <wx/wx.h>
-#include <wx/glcanvas.h>
-#endif
-
-#if defined(LFL_GLFWVIDEO) || defined(LFL_GLFWINPUT)
-#include "GLFW/glfw3.h"
-#endif
-
-#if defined(LFL_SDLAUDIO) || defined(LFL_SDLVIDEO) || defined(LFL_SDLINPUT)
-#include "SDL.h"
-#endif
-
-#if defined(LFL_IPHONE)
+#ifdef LFL_IPHONE
 extern "C" char *iPhoneDocumentPathCopy();
 extern "C" void iPhoneLog(const char *text);
-extern "C" void iPhoneOpenBrowser(const char *url_text);
-extern "C" void iPhoneLaunchNativeMenu(const char*);
-extern "C" void iPhoneCreateNativeMenu(const char*, int, const char**, const char**);
-extern "C" void iPhoneTriggerFrame(void*);
-extern "C" bool iPhoneTriggerFrameIn(void*, int ms, bool force);
-extern "C" void iPhoneClearTriggerFrameIn(void *O);
-extern "C" void iPhoneUpdateTargetFPS(void*);
-extern "C" void iPhoneAddWaitForeverMouse(void*);
-extern "C" void iPhoneDelWaitForeverMouse(void*);
-extern "C" void iPhoneAddWaitForeverKeyboard(void*);
-extern "C" void iPhoneDelWaitForeverKeyboard(void*);
-extern "C" void iPhoneAddWaitForeverSocket(void*, int fd);
-extern "C" void iPhoneDelWaitForeverSocket(void*, int fd);
-extern "C" int  iPhonePasswordCopy(const char *, const char*, const char*,       char*, int);
-extern "C" bool iPhonePasswordSave(const char *, const char*, const char*, const char*, int);
-extern "C" void iPhonePlayMusic(void *handle);
-extern "C" void iPhonePlayBackgroundMusic(void *handle);
-#elif defined(__APPLE__)
-extern "C" void OSXStartWindow(typed_ptr);
-extern "C" void OSXCreateNativeEditMenu();
-extern "C" void OSXCreateNativeMenu(const char*, int, const char**, const char**, const char**);
-extern "C" void OSXLaunchNativeContextMenu(typed_ptr, int, int, int, const char**, const char**, const char**);
-extern "C" void OSXLaunchNativeFontChooser(const char *, int, const char *);
-extern "C" void OSXLaunchNativeFileChooser(bool, bool, bool, const char *);
-extern "C" void OSXTriggerFrame(typed_ptr);
-extern "C" bool OSXTriggerFrameIn(typed_ptr, int ms, bool force);
-extern "C" void OSXClearTriggerFrameIn(typed_ptr);
-extern "C" void OSXUpdateTargetFPS(typed_ptr);
-extern "C" void OSXAddWaitForeverMouse(typed_ptr);
-extern "C" void OSXDelWaitForeverMouse(typed_ptr);
-extern "C" void OSXAddWaitForeverKeyboard(typed_ptr);
-extern "C" void OSXDelWaitForeverKeyboard(typed_ptr);
-extern "C" void OSXAddWaitForeverSocket(typed_ptr, int fd);
-extern "C" void OSXDelWaitForeverSocket(typed_ptr, int fd);
 #endif
 
 extern "C" void BreakHook() {}
@@ -156,7 +96,7 @@ extern "C" void LFAppFatal() {
   exit(-1);
 }
 
-#ifndef WIN32
+#ifndef LFL_WINDOWS
 extern "C" void HandleSigInt(int sig) { INFO("interrupt"); LFAppShutdown(); }
 #else
 extern "C" BOOL WINAPI HandlerCtrlC(DWORD sig) { INFO("interrupt"); LFAppShutdown(); return TRUE; }
@@ -263,7 +203,7 @@ string FlagMap::Match(const string &key, const char *source_filename) const {
   return mindistval;
 }
 
-int FlagMap::getopt(int argc, const char **argv, const char *source_filename) {
+int FlagMap::getopt(int argc, const char* const* argv, const char *source_filename) {
   for (optind=1; optind<argc; /**/) {
     const char *arg = argv[optind], *key = arg + 1, *val = "";
     if (*arg != '-' || *(arg+1) == 0) break;
@@ -272,7 +212,7 @@ int FlagMap::getopt(int argc, const char **argv, const char *source_filename) {
     if (!strcmp(key, "fullhelp")) { Print(); return -1; }
 
     if (!Set(key, val)) {
-#ifdef __APPLE__
+#ifdef LFL_APPLE
       if (PrefixMatch(key, "psn_")) continue;
 #endif
       INFO("unknown flag: ", key);
@@ -311,7 +251,7 @@ void Application::Log(int level, const char *file, int line, const string &messa
     logtime(tbuf, sizeof(tbuf), &log_time);
     if (DayChanged(log_time, last_log_time)) 
       WriteLogLine(tbuf, StrCat("Date changed to ", logfileday(log_time)).c_str(), __FILE__, __LINE__);
-    WriteLogLine(tbuf, message.c_str(), file, line);
+    WriteLogLine(log_pid ? StrCat("[", pid, "] ", tbuf).c_str() : tbuf, message.c_str(), file, line);
   }
   if (level == LFApp::Log::Fatal) LFAppFatal();
   if (run && FLAGS_lfapp_video && screen && screen->console) screen->console->Write(message);
@@ -333,15 +273,15 @@ void Application::WriteLogLine(const char *tbuf, const char *message, const char
 }
 
 void Application::CreateNewWindow() {
-  Window *new_window = new Window();
+  Window *orig_window = screen, *new_window = new Window();
   if (window_init_cb) window_init_cb(new_window);
   new_window->gd = static_cast<GraphicsDevice*>(LFAppCreateGraphicsDevice(video->opengles_version));
   CHECK(Video::CreateWindow(new_window));
-#if 0 // ndef LFL_QT
-  MakeCurrentWindow(new_window);
-  StartNewWindow(new_window);
-  MakeCurrentWindow(orig_window);
-#endif
+  if (!new_window->started && (new_window->started = true)) {
+    MakeCurrentWindow(new_window);
+    StartNewWindow(new_window);
+    MakeCurrentWindow(orig_window);
+  }
 }
 
 void Application::StartNewWindow(Window *new_window) {
@@ -360,165 +300,8 @@ NetworkThread *Application::CreateNetworkThread(bool detach, bool start) {
   return network_thread.get();
 }
 
-void Application::AddNativeMenu(const string &title, const vector<MenuItem>&items) {
-#if defined(LFL_IPHONE)
-  vector<const char *> n, v;
-  for (auto &i : items) { n.push_back(tuple_get<1>(i).c_str()); v.push_back(tuple_get<2>(i).c_str()); }
-  iPhoneCreateNativeMenu(title.c_str(), items.size(), &n[0], &v[0]);
-#elif defined(LFL_OSXVIDEO)
-  vector<const char *> k, n, v;
-  for (auto &i : items) { k.push_back(tuple_get<0>(i).c_str()); n.push_back(tuple_get<1>(i).c_str()); v.push_back(tuple_get<2>(i).c_str()); }
-  OSXCreateNativeMenu(title.c_str(), items.size(), &k[0], &n[0], &v[0]);
-#elif defined(LFL_WINVIDEO)
-  WinWindow *win = static_cast<WinWindow*>(screen->impl);
-  if (!win->menu) { win->menu = CreateMenu(); win->context_menu = CreatePopupMenu(); }
-  HMENU hAddMenu = CreatePopupMenu();
-  for (auto &i : items) {
-    if (tuple_get<1>(i) == "<seperator>") AppendMenu(hAddMenu, MF_MENUBARBREAK, 0, NULL);
-    else AppendMenu(hAddMenu, MF_STRING, win->start_msg_id + win->menu_cmds.size(), tuple_get<1>(i).c_str());
-    win->menu_cmds.push_back(tuple_get<2>(i));
-  }
-  AppendMenu(win->menu,         MF_STRING | MF_POPUP, (UINT)hAddMenu, title.c_str());
-  AppendMenu(win->context_menu, MF_STRING | MF_POPUP, (UINT)hAddMenu, title.c_str());
-  if (win->menubar) SetMenu((HWND)screen->id, win->menu);
-#endif
-}
-
-void Application::AddNativeEditMenu() {
-#if defined(LFL_OSXVIDEO)
-  OSXCreateNativeEditMenu();
-#endif
-}
-
-void Application::LaunchNativeMenu(const string &title) {
-#if defined(LFL_IPHONE)
-  iPhoneLaunchNativeMenu(title.c_str());
-#endif
-}
-
-void Application::LaunchNativeContextMenu(const vector<MenuItem>&items) {
-#if defined(LFL_OSXVIDEO)
-  vector<const char *> k, n, v;
-  for (auto &i : items) { k.push_back(tuple_get<0>(i).c_str()); n.push_back(tuple_get<1>(i).c_str()); v.push_back(tuple_get<2>(i).c_str()); }
-  OSXLaunchNativeContextMenu(screen->id, screen->mouse.x, screen->mouse.y, items.size(), &k[0], &n[0], &v[0]);
-#endif
-}
-
-void Application::LaunchNativeFontChooser(const FontDesc &cur_font, const string &choose_cmd) {
-#if defined(LFL_OSXVIDEO)
-  OSXLaunchNativeFontChooser(cur_font.name.c_str(), cur_font.size, choose_cmd.c_str());
-#elif defined(LFL_WINVIDEO)
-  LOGFONT lf;
-  memzero(lf);
-  HDC hdc = GetDC(NULL);
-  lf.lfHeight = -MulDiv(cur_font.size, GetDeviceCaps(hdc, LOGPIXELSY), 72);
-  lf.lfWeight = (cur_font.flag & FontDesc::Bold) ? FW_BOLD : FW_NORMAL;
-  lf.lfItalic = cur_font.flag & FontDesc::Italic;
-  strncpy(lf.lfFaceName, cur_font.name.c_str(), sizeof(lf.lfFaceName)-1);
-  ReleaseDC(NULL, hdc);
-  CHOOSEFONT cf;
-  memzero(cf);
-  cf.lpLogFont = &lf;
-  cf.lStructSize = sizeof(cf);
-  cf.hwndOwner = (HWND)screen->id;
-  cf.Flags = CF_SCREENFONTS | CF_INITTOLOGFONTSTRUCT;
-  if (!ChooseFont(&cf)) return;
-  int flag = FontDesc::Mono | (lf.lfWeight > FW_NORMAL ? FontDesc::Bold : 0) | (lf.lfItalic ? FontDesc::Italic : 0);
-  screen->shell.Run(StrCat(choose_cmd, " ", lf.lfFaceName, " ", cf.iPointSize/10, " ", flag));
-#endif
-}
-
-void Application::LaunchNativeFileChooser(bool files, bool dirs, bool multi, const string &choose_cmd) {
-#if defined(LFL_OSXVIDEO)
-  OSXLaunchNativeFileChooser(files, dirs, multi, choose_cmd.c_str());
-#endif
-}
-
-void Application::OpenSystemBrowser(const string &url_text) {
-#if defined(LFL_ANDROID)
-  AndroidOpenBrowser(url_text.c_str());
-#elif defined(LFL_IPHONE)
-  iPhoneOpenBrowser(url_text.c_str());
-#elif defined(__APPLE__)
-  CFURLRef url = CFURLCreateWithBytes(0, MakeUnsigned(url_text.c_str()), url_text.size(), kCFStringEncodingASCII, 0);
-  if (url) { LSOpenCFURLRef(url, 0); CFRelease(url); }
-#elif defined(LFL_WINVIDEO)
-  ShellExecute(NULL, "open", url_text.c_str(), NULL, NULL, SW_SHOWNORMAL);
-#endif
-}
-
-void Application::SavePassword(const string &h, const string &u, const string &pw) {
-#if defined(LFL_IPHONE)
-  iPhonePasswordSave(name.c_str(), h.c_str(), u.c_str(), pw.c_str(), pw.size());
-#endif
-}
-
-bool Application::LoadPassword(const string &h, const string &u, string *pw) {
-#if defined(LFL_IPHONE)
-  pw->resize(1024);
-  pw->resize(iPhonePasswordCopy(name.c_str(), h.c_str(), u.c_str(), &(*pw)[0], pw->size()));
-  return pw->size();
-#endif
-  return 0;
-}
-
-void Application::ShowAds() {
-#if defined(LFL_ANDROID)
-  AndroidShowAds();
-#endif
-}
-
-void Application::HideAds() {
-#if defined(LFL_ANDROID)
-  AndroidHideAds();
-#endif
-}
-
-int Application::GetVolume() { 
-#if defined(LFL_ANDROID)
-  return AndroidGetVolume();
-#else
-  return 0;
-#endif
-}
-
-int Application::GetMaxVolume() { 
-#if defined(LFL_ANDROID)
-  return AndroidGetMaxVolume();
-#else
-  return 10;
-#endif
-}
-
-void Application::SetVolume(int v) { 
-#if defined(LFL_ANDROID)
-  AndroidSetVolume(v);
-#endif
-}
-
-void Application::PlaySoundEffect(SoundAsset *sa) {
-#if defined(LFL_ANDROID)
-  AndroidPlayMusic(sa->handle);
-#elif defined(LFL_IPHONE)
-  iPhonePlayMusic(sa->handle);
-#else
-  audio->QueueMix(sa, MixFlag::Reset | MixFlag::Mix | (audio->loop ? MixFlag::DontQueue : 0), -1, -1);
-#endif
-}
-
-void Application::PlayBackgroundMusic(SoundAsset *music) {
-#if defined(LFL_ANDROID)
-  AndroidPlayBackgroundMusic(music->handle);
-#elif defined(LFL_IPHONE)
-  iPhonePlayBackgroundMusic(music->handle);
-#else
-  audio->QueueMix(music);
-  audio->loop = music;
-#endif
-}
-
 void *Application::GetSymbol(const string &n) {
-#ifdef WIN32
+#ifdef LFL_WINDOWS
   return GetProcAddress(GetModuleHandle(NULL), n.c_str());
 #else
   return dlsym(RTLD_DEFAULT, n.c_str());
@@ -526,7 +309,7 @@ void *Application::GetSymbol(const string &n) {
 }
 
 StringPiece Application::LoadResource(int id) {
-#ifdef WIN32
+#ifdef LFL_WINDOWS
   HRSRC resource = FindResource(NULL, MAKEINTRESOURCE(id), MAKEINTRESOURCE(900));
   HGLOBAL resource_data = ::LoadResource(NULL, resource);
   return StringPiece((char*)LockResource(resource_data), SizeofResource(NULL, resource));
@@ -536,7 +319,7 @@ StringPiece Application::LoadResource(int id) {
 }
 
 void Application::Daemonize(const char *dir) {
-#ifndef WIN32
+#ifndef LFL_WINDOWS
   char fn1[256], fn2[256];
   snprintf(fn1, sizeof(fn1), "%s%s.stdout", dir, app->progname.c_str());
   snprintf(fn2, sizeof(fn2), "%s%s.stderr", dir, app->progname.c_str());
@@ -547,7 +330,7 @@ void Application::Daemonize(const char *dir) {
 }
 
 void Application::Daemonize(FILE *fout, FILE *ferr) {
-#ifndef WIN32
+#ifndef LFL_WINDOWS
   int pid = fork();
   if (pid < 0) { fprintf(stderr, "fork: %d\n", pid); exit(-1); }
   if (pid > 0) { fprintf(stderr, "daemonized pid: %d\n", pid); exit(0); }
@@ -564,8 +347,8 @@ void Application::Daemonize(FILE *fout, FILE *ferr) {
 #endif
 }
 
-int Application::Create(int argc, const char **argv, const char *source_filename, void (*create_cb)()) {
-  if (!done_create_cb && (done_create_cb=1) && create_cb) create_cb();
+int Application::Create(int argc, const char* const* argv, const char *source_filename) {
+  if (!done_init_cb && (done_init_cb=1)) MyAppInit();
 #ifdef LFL_GLOG
   google::InstallFailureSignalHandler();
 #endif
@@ -574,14 +357,14 @@ int Application::Create(int argc, const char **argv, const char *source_filename
   progname = argv[0];
   startdir = LocalFile::CurrentDirectory();
 
-#ifdef WIN32
+#ifdef LFL_WINDOWS
   bindir = progname.substr(0, DirNameLen(progname, true));
 #else
   bindir = LocalFile::JoinPath(startdir, progname.substr(0, DirNameLen(progname, true)));
 #endif
 
 #if defined(LFL_ANDROID)
-#elif defined(__APPLE__)
+#elif defined(LFL_APPLE)
   char rpath[1024];
   CFBundleRef mainBundle = CFBundleGetMainBundle();
   CFURLRef respath = CFBundleCopyResourcesDirectoryURL(mainBundle);
@@ -593,7 +376,7 @@ int Application::Create(int argc, const char **argv, const char *source_filename
   assetdir = StrCat(bindir, "/assets/"); 
 #endif
 
-#ifdef WIN32
+#ifdef LFL_WINDOWS
   { /* winsock startup */
     WSADATA wsadata;
     WSAStartup(MAKEWORD(2,2), &wsadata);
@@ -623,14 +406,14 @@ int Application::Create(int argc, const char **argv, const char *source_filename
   ThreadLocalStorage::Init();
   atexit(LFAppAtExit);
 
-#ifdef WIN32
+#ifdef LFL_WINDOWS
   string console_title = StrCat(screen->caption, " console");
   if (argc > 1) OpenSystemConsole(console_title.c_str());
 #endif
 
   if (Singleton<FlagMap>::Get()->getopt(argc, argv, source_filename) < 0) return -1;
 
-#ifdef WIN32
+#ifdef LFL_WINDOWS
   if (argc > 1) {
     if (!FLAGS_open_console) CloseSystemConsole();
   }
@@ -643,7 +426,7 @@ int Application::Create(int argc, const char **argv, const char *source_filename
     char *path = iPhoneDocumentPathCopy();
     dldir = StrCat(path, "/");
     free(path);
-#elif defined(WIN32)
+#elif defined(LFL_WINDOWS)
     char path[MAX_PATH];
     if (!SUCCEEDED(SHGetFolderPath(NULL, CSIDL_PERSONAL|CSIDL_FLAG_CREATE, NULL, 0, path))) return -1;
     dldir = StrCat(path, "/");
@@ -654,7 +437,7 @@ int Application::Create(int argc, const char **argv, const char *source_filename
   INFO("assetdir = ", assetdir);
   INFO("dldir = ", dldir);
 
-#ifndef WIN32
+#ifndef LFL_WINDOWS
   if (FLAGS_max_rlimit_core) {
     struct rlimit rl;
     if (getrlimit(RLIMIT_CORE, &rl) == -1) return ERRORv(-1, "core getrlimit ", strerror(errno));
@@ -667,7 +450,7 @@ int Application::Create(int argc, const char **argv, const char *source_filename
   if (FLAGS_max_rlimit_open_files) {
     struct rlimit rl;
     if (getrlimit(RLIMIT_NOFILE, &rl) == -1) return ERRORv(-1, "files getrlimit ", strerror(errno));
-#ifdef __APPLE__
+#ifdef LFL_APPLE
     rl.rlim_cur = rl.rlim_max = OPEN_MAX;
 #else
     rl.rlim_cur = rl.rlim_max; // 999999
@@ -676,7 +459,7 @@ int Application::Create(int argc, const char **argv, const char *source_filename
     if (setrlimit(RLIMIT_NOFILE, &rl) == -1) return ERRORv(-1, "files setrlimit ", strerror(errno));
   }
 #endif // LFL_MOBILE
-#endif // WIN32
+#endif // LFL_WINDOWS
 
   if (FLAGS_daemonize) {
     Daemonize();
@@ -790,11 +573,6 @@ int Application::Main() {
 #endif
   });
   if (Start()) return -1;
-#if 0
-#if defined(LFL_WINVIDEO) || defined(LFL_WXWIDGETS)
-  return 0;
-#endif
-#endif
   if (!scheduler.run_main_loop) return 0;
   return MainLoop();
 }
@@ -840,7 +618,7 @@ Application::~Application() {
   if (video) video->Free();
   scheduler.Free();
   if (logfile) fclose(logfile);
-#ifdef WIN32
+#ifdef LFL_WINDOWS
   if (FLAGS_open_console) PromptFGets("Press [enter] to continue...");
 #endif
 }
@@ -849,7 +627,7 @@ Application::~Application() {
 
 Window::Window() : caption("lfapp"), fps(128) {
   id = gl = surface = glew_context = impl = user1 = user2 = user3 = typed_ptr{0, nullptr};
-  minimized = cursor_grabbed = frame_init = animating = 0;
+  started = minimized = cursor_grabbed = frame_init = animating = 0;
   target_fps = FLAGS_target_fps;
   multitouch_keyboard_x = .93; 
   cam = make_unique<Entity>(v3(5.54, 1.70, 4.39), v3(-.51, -.03, -.49), v3(-.03, 1, -.03));
@@ -975,20 +753,6 @@ void Window::RenderToFrameBuffer(FrameBuffer *fb) {
 
 /* FrameScheduler */
 
-#if 0
-FrameScheduler::FrameScheduler() : maxfps(&FLAGS_target_fps), wakeup_thread(&frame_mutex, &wait_mutex) {
-#if defined(LFL_IPHONEINPUT)
-  rate_limit = synchronize_waits = wait_forever_thread = monolithic_frame = 0;
-#elif defined(LFL_ANDROIDINPUT)
-  synchronize_waits = wait_forever_thread = monolithic_frame = 0;
-#elif defined(LFL_WININPUT) || defined(LFL_X11INPUT)
-  synchronize_waits = wait_forever_thread = 0;
-#elif defined(LFL_WXWIDGETS)
-  rate_limit = synchronize_waits = monolithic_frame = 0;
-#endif
-}
-#endif
-
 void FrameScheduler::Init() { 
   screen->target_fps = FLAGS_target_fps;
   wait_forever = !FLAGS_target_fps;
@@ -1030,88 +794,6 @@ bool FrameScheduler::FrameWait() {
   return ret;
 }
 
-#if 0
-void FrameScheduler::DoWait() {
-#if defined(LFL_WININPUT) || defined(LFL_IPHONEINPUT) || defined(LFL_WXWIDGETS)
-#elif defined(LFL_ANDROIDINPUT) || defined(LFL_X11INPUT)
-  wait_forever_sockets.Select(-1);
-  for (auto &s : wait_forever_sockets.socket)
-    if (wait_forever_sockets.GetReadable(s.first)) {
-      if (s.first != system_event_socket) app->scheduler.Wakeup(s.second.second);
-#ifdef LFL_ANDROIDINPUT
-      else {
-        char buf[512];
-        int l = read(system_event_socket, buf, sizeof(buf));
-        for (const char *p = buf, *e = p + l; p < e; p++) if (*p) { ret = true; break; }
-      }
-#endif
-    }
-#elif defined(LFL_GLFWINPUT)
-  glfwWaitEvents();
-#elif defined(LFL_SDLINPUT)
-  SDL_WaitEvent(NULL);
-#else
-  // FATAL("not implemented");
-#endif
-}
-#endif
-
-#if 0
-void FrameScheduler::Wakeup(void *opaque) {
-  if (wait_forever && screen) {
-#if defined(LFL_WININPUT)
-    InvalidateRect((HWND)screen->id, NULL, 0);
-    // PostMessage((HWND)screen->id, WM_USER, 0, 0);
-#elif defined(LFL_X11INPUT)
-    XEvent exp;
-    exp.type = Expose;
-    exp.xexpose.window = (::Window)screen->id;
-    XSendEvent((Display*)screen->surface, exp.xexpose.window, 0, ExposureMask, &exp);
-#elif defined(LFL_ANDROIDINPUT)
-    char c = opaque ? 0 : 'W';
-    write(wait_forever_wakeup_socket, &c, 1);
-#elif defined(LFL_IPHONEINPUT)
-    iPhoneTriggerFrame(screen->id);
-#elif defined(LFL_WXWIDGETS)
-    if (wait_forever_thread) ((wxGLCanvas*)screen->id)->Refresh();
-#elif defined(LFL_GLFWINPUT)
-    if (wait_forever_thread) glfwPostEmptyEvent();
-#elif defined(LFL_SDLINPUT)
-    if (wait_forever_thread) {
-      static int my_event_type = SDL_RegisterEvents(1);
-      CHECK_GE(my_event_type, 0);
-      SDL_Event event;
-      SDL_zero(event);
-      event.type = my_event_type;
-      SDL_PushEvent(&event);
-    }
-#else
-    // FATAL("not implemented");
-#endif
-  }
-}
-#endif
-
-#if 0
-bool FrameScheduler::WakeupIn(void *opaque, Time interval, bool force) {
-  // CHECK(!screen->target_fps);
-#if defined(LFL_IPHONEINPUT)
-  return iPhoneTriggerFrameIn(screen->id, interval.count(), force);
-#elif defined(LFL_OSXVIDEO)
-  return OSXTriggerFrameIn(screen->id, interval.count(), force);
-#endif
-  return 0;
-}
-#endif
-
-#if 0
-void FrameScheduler::ClearWakeupIn() {
-#if defined(LFL_IPHONEINPUT)
-  iPhoneClearTriggerFrameIn(screen->id);
-#endif
-}
-#endif
-
 void FrameScheduler::UpdateTargetFPS(int fps) {
   screen->target_fps = fps;
   if (monolithic_frame) {
@@ -1120,13 +802,7 @@ void FrameScheduler::UpdateTargetFPS(int fps) {
     FLAGS_target_fps = next_target_fps;
   }
   CHECK(screen->id.value);
-#if defined(LFL_IPHONEINPUT)
-  // iPhoneUpdateTargetFPS(screen->id);
-#elif defined(LFL_OSXVIDEO)
-  // OSXUpdateTargetFPS(screen->id);
-#elif defined(LFL_QT)
-  // QTTriggerFrame(screen->id.value);
-#endif
+  UpdateWindowTargetFPS(screen);
 }
 
 void FrameScheduler::SetAnimating(bool is_animating) {
@@ -1138,106 +814,4 @@ void FrameScheduler::SetAnimating(bool is_animating) {
   }
 }
 
-#if 0
-void FrameScheduler::AddWaitForeverMouse() {
-  CHECK(screen->id.value);
-#if defined(LFL_WINVIDEO)
-  static_cast<WinWindow*>(screen->impl)->frame_on_mouse_input = true;
-#elif defined(LFL_ANDROIDINPUT)
-  AndroidSetFrameOnMouseInput(true);
-#elif defined(LFL_IPHONEINPUT)
-  iPhoneAddWaitForeverMouse(screen->id);
-#endif
-}
-#endif
-
-#if 0
-void FrameScheduler::DelWaitForeverMouse() {
-  CHECK(screen->id.value);
-#if defined(LFL_WINVIDEO)
-  static_cast<WinWindow*>(screen->impl)->frame_on_mouse_input = false;
-#elif defined(LFL_ANDROIDINPUT)
-  AndroidSetFrameOnMouseInput(false);
-#elif defined(LFL_IPHONEINPUT)
-  iPhoneDelWaitForeverMouse(screen->id);
-#endif
-}
-#endif
-
-#if 0
-void FrameScheduler::AddWaitForeverKeyboard() {
-  CHECK(screen->id.value);
-#if defined(LFL_WINVIDEO)
-  static_cast<WinWindow*>(screen->impl)->frame_on_keyboard_input = true;
-#elif defined(LFL_ANDROIDINPUT)
-  AndroidSetFrameOnKeyboardInput(true);
-#elif defined(LFL_IPHONEINPUT)
-  iPhoneAddWaitForeverKeyboard(screen->id);
-#endif
-}
-#endif
-
-#if 0
-void FrameScheduler::DelWaitForeverKeyboard() {
-  CHECK(screen->id.value);
-#if defined(LFL_WINVIDEO)
-  static_cast<WinWindow*>(screen->impl)->frame_on_keyboard_input = false;
-#elif defined(LFL_ANDROIDINPUT)
-  AndroidSetFrameOnKeyboardInput(false);
-#elif defined(LFL_IPHONEINPUT)
-  iPhoneDelWaitForeverKeyboard(screen->id);
-#endif
-}
-#endif
-
-#if 0
-void FrameScheduler::AddWaitForeverSocket(Socket fd, int flag, void *val) {
-  if (wait_forever && wait_forever_thread) wakeup_thread.Add(fd, flag, val);
-#if defined(LFL_WINVIDEO)
-  WSAAsyncSelect(fd, (HWND)screen->id, WM_USER, FD_READ | FD_CLOSE);
-#elif defined(LFL_X11INPUT) || defined(LFL_ANDROIDINPUT)
-  wait_forever_sockets.Add(fd, flag, val);  
-#elif defined(LFL_IPHONEINPUT)
-  if (!wait_forever_thread) { CHECK_EQ(SocketSet::READABLE, flag); iPhoneAddWaitForeverSocket(screen->id, fd); }
-#endif
-}
-#endif
-
-#if 0
-void FrameScheduler::DelWaitForeverSocket(Socket fd) {
-  if (wait_forever && wait_forever_thread) wakeup_thread.Del(fd);
-#if defined(LFL_X11INPUT) || defined(LFL_ANDROIDINPUT)
-  wait_forever_sockets.Del(fd);
-#elif defined(LFL_WINVIDEO)
-  WSAAsyncSelect(fd, (HWND)screen->id, WM_USER, 0);
-#elif defined(LFL_IPHONEINPUT)
-  CHECK(screen->id);
-  iPhoneDelWaitForeverSocket(screen->id, fd);
-#endif
-}
-#endif
-
 }; // namespace LFL
-
-#ifdef WIN32
-int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR lpCmdLine, int nCmdShow) {
-  vector<const char *> av;
-  vector<string> a(1);
-  a[0].resize(1024);
-  GetModuleFileName(hInst, &(a[0])[0], a[0].size());
-  LFL::StringWordIter word_iter(lpCmdLine);
-  for (string word = IterNextString(&word_iter); !word_iter.Done(); word = IterNextString(&word_iter)) a.push_back(word);
-  for (auto &i : a) av.push_back(i.c_str());
-  av.push_back(0);
-#ifdef LFL_WINVIDEO
-  LFL::WinApp *winapp = LFL::Singleton<LFL::WinApp>::Get();
-  winapp->Setup(hInst, nCmdShow);
-#endif
-  int ret = main(av.size()-1, &av[0]);
-#ifdef LFL_WINVIDEO
-  return ret ? ret : winapp->MessageLoop();
-#else
-  return ret;
-#endif
-}
-#endif

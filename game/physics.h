@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef LFL_LFAPP_PHYSICS_H__
-#define LFL_LFAPP_PHYSICS_H__
+#ifndef LFL_CORE_GAME_PHYSICS_H__
+#define LFL_CORE_GAME_PHYSICS_H__
 namespace LFL {
 
 struct Physics {
@@ -471,4 +471,4 @@ struct ODEScene : public Physics {
 }; // namespace LFL
 #endif /* LFL_ODE */
 
-#endif /* LFL_LFAPP_PHYSICS_H__ */
+#endif /* LFL_CORE_GAME_PHYSICS_H__ */

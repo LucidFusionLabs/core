@@ -18,10 +18,8 @@
 
 #include "lfapp/lfapp.h"
 extern "C" {
-#ifdef LFL_FFMPEG_CAMERA
 #include <libavformat/avformat.h>
 #include <libavdevice/avdevice.h>
-#endif
 };
 
 namespace LFL {
@@ -51,11 +49,10 @@ struct FFmpegCameraModule : public Module {
   }
 
   int Init() {
-#ifdef _WIN32
+#if defined(LFL_WINDOWS)
     static const char *ifmtname = "vfwcap";
     static const char *ifilename[2] = { "0", "1" };
-#endif
-#ifdef __linux__
+#elif defined(LFL_LINUX)
     static const char *ifmtname = "video4linux2";
     static const char *ifilename[2] = { "/dev/video0", "/dev/video1" };
 #endif

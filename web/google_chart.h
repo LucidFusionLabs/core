@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef LFL_WEB_GOOGLE_CHART_H__
-#define LFL_WEB_GOOGLE_CHART_H__
+#ifndef LFL_CORE_WEB_GOOGLE_CHART_H__
+#define LFL_CORE_WEB_GOOGLE_CHART_H__
 namespace LFL {
 
 struct DeltaSampler {
@@ -102,4 +102,4 @@ struct GChartsHTML {
 };
 
 }; // namespace LFL
-#endif // LFL_WEB_GOOGLE_CHART_H__
+#endif // LFL_CORE_WEB_GOOGLE_CHART_H__

@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef LFL_LFAPP_TYPES_TYPES_H__
-#define LFL_LFAPP_TYPES_TYPES_H__
+#ifndef LFL_CORE_APP_TYPES_TYPES_H__
+#define LFL_CORE_APP_TYPES_TYPES_H__
 
 #define SortImpl1(x1, y2) return x1 < y2;
 #define SortImpl2(x1, y1, x2, y2) \
@@ -52,6 +52,13 @@ inline       char *MakeSigned(      unsigned char *x) { return reinterpret_cast<
 inline const char *MakeSigned(const unsigned char *x) { return reinterpret_cast<const char*>(x); }
 inline       char *MakeSigned(      char *x) { return x; }
 inline const char *MakeSigned(const char *x) { return x; }
+
+struct VoidPtr : public void_ptr {
+  VoidPtr(void *V=0) { v=V; }
+  operator bool() const { return v; }
+  bool operator< (const VoidPtr &x) { return v <  x.v; }
+  bool operator==(const VoidPtr &x) { return v == x.v; }
+};
 
 template <class X> struct LazyInitializedPtr {
   unique_ptr<X> ptr;
@@ -910,4 +917,4 @@ template <class X> struct CategoricalVariable {
 #include "core/app/types/tree.h"
 #include "core/app/types/trie.h"
 
-#endif // LFL_LFAPP_TYPES_TYPES_H__
+#endif // LFL_CORE_APP_TYPES_TYPES_H__

@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef LFL_LFAPP_FILE_H__
-#define LFL_LFAPP_FILE_H__
+#ifndef LFL_CORE_APP_FILE_H__
+#define LFL_CORE_APP_FILE_H__
 namespace LFL {
   
 struct IOVec { long long offset; ssize_t len; };
@@ -453,24 +453,25 @@ struct GraphVizFile {
   static void AppendEdge(string *out, const string &n1, const string &n2, const string &label=string());
 };
 
-struct ClangTranslationUnit {
+struct TranslationUnit {
+  struct Token { static const int Punctuation, Keyword, Identifier, Literal, Comment; };
+  struct TokenVisitor {
+    typedef function<void(TokenVisitor*, int, int, int)> TokenCB;
+    TranslationUnit *tu;
+    point last_token;
+    TokenCB cb;
+
+    TokenVisitor(TranslationUnit *t, const TokenCB &c) : tu(t), cb(c) {}
+    void Visit();
+  };
+
   CXIndex index=0;
   CXTranslationUnit tu=0;
   string filename, compile_command, working_directory;
 
-  ClangTranslationUnit(const string &f, const string &cc, const string &wd);
-  virtual ~ClangTranslationUnit();
+  virtual ~TranslationUnit();
+  TranslationUnit(const string &f, const string &cc, const string &wd);
   FileNameAndOffset FindDefinition(const string &f, int offset);
-};
-
-struct ClangTokenVisitor {
-  typedef function<void(ClangTokenVisitor*, int, int, int)> TokenCB;
-  ClangTranslationUnit *tu;
-  point last_token;
-  TokenCB cb;
-
-  ClangTokenVisitor(ClangTranslationUnit *t, const TokenCB &c) : tu(t), cb(c) {}
-  void Visit();
 };
 
 struct IDE {
@@ -480,10 +481,10 @@ struct IDE {
     void LoadCMakeCompileCommandsFile(File*);
   };
   struct File {
-    ClangTranslationUnit tu;
+    TranslationUnit tu;
     File(const string &f, const string &cc, const string &wd) : tu(f, cc, wd) {}
   };
 };
 
 }; // namespace LFL
-#endif // LFL_LFAPP_FILE_H__
+#endif // LFL_CORE_APP_FILE_H__

@@ -28,6 +28,17 @@ extern "C" void iPhoneGetKeyboardBox(int *x, int *y, int *w, int *h);
 extern "C" void iPhoneCreateToolbar(int n, const char **name, const char **val);
 extern "C" void iPhoneToggleToolbarButton(const char *n);
 
+extern "C" void iPhoneTriggerFrame(void*);
+extern "C" bool iPhoneTriggerFrameIn(void*, int ms, bool force);
+extern "C" void iPhoneClearTriggerFrameIn(void *O);
+extern "C" void iPhoneUpdateTargetFPS(void*);
+extern "C" void iPhoneAddWaitForeverMouse(void*);
+extern "C" void iPhoneDelWaitForeverMouse(void*);
+extern "C" void iPhoneAddWaitForeverKeyboard(void*);
+extern "C" void iPhoneDelWaitForeverKeyboard(void*);
+extern "C" void iPhoneAddWaitForeverSocket(void*, int fd);
+extern "C" void iPhoneDelWaitForeverSocket(void*, int fd);
+
 const int Key::Escape     = -1;
 const int Key::Return     = 10;
 const int Key::Up         = -3;
@@ -96,6 +107,26 @@ int Video::Swap() {
   iPhoneVideoSwap();
   screen->gd->CheckForError(__FILE__, __LINE__);
   return 0;
+}
+
+void FrameScheduler::DoWait() {}
+void FrameScheduler::Setup() { rate_limit = synchronize_waits = wait_forever_thread = monolithic_frame = 0; }
+void FrameScheduler::Wakeup(void*) { iPhoneTriggerFrame(screen->id); }
+bool FrameScheduler::WakeupIn(void *opaque, Time interval, bool force) { return iPhoneTriggerFrameIn(screen->id, interval.count(), force); }
+void FrameScheduler::ClearWakeupIn() { iPhoneClearTriggerFrameIn(screen->id); }
+void FrameScheduler::UpdateWindowTargetFPS(Window *w) { iPhoneUpdateTargetFPS(screen->id); }
+void FrameScheduler::AddWaitForeverMouse() { iPhoneAddWaitForeverMouse(screen->id); }
+void FrameScheduler::DelWaitForeverMouse() { iPhoneDelWaitForeverMouse(screen->id); }
+void FrameScheduler::AddWaitForeverKeyboard() { iPhoneAddWaitForeverKeyboard(screen->id); }
+void FrameScheduler::DelWaitForeverKeyboard() { iPhoneDelWaitForeverKeyboard(screen->id); }
+void FrameScheduler::AddWaitForeverSocket(Socket fd, int flag, void *val) {
+  if (wait_forever && wait_forever_thread) wakeup_thread.Add(fd, flag, val);
+  if (!wait_forever_thread) { CHECK_EQ(SocketSet::READABLE, flag); iPhoneAddWaitForeverSocket(screen->id, fd); }
+}
+void FrameScheduler::DelWaitForeverSocket(Socket fd) {
+  if (wait_forever && wait_forever_thread) wakeup_thread.Del(fd);
+  CHECK(screen->id);
+  iPhoneDelWaitForeverSocket(screen->id, fd);
 }
 
 extern "C" void *LFAppCreatePlatformModule() { return new IPhoneVideoModule(); }

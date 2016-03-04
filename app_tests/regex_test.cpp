@@ -20,7 +20,8 @@
 #include "core/app/app.h"
 #include "core/app/types/trie.h"
 
-GTEST_API_ int main(int argc, const char **argv) {
+extern "C" void MyAppInit() {}
+extern "C" int MyAppMain(int argc, const char* const* argv) {
   testing::InitGoogleTest(&argc, const_cast<char**>(argv));
   LFL::FLAGS_default_font = LFL::FakeFontEngine::Filename();
   CHECK_EQ(LFL::app->Create(argc, argv, __FILE__), 0);

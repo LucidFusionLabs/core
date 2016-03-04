@@ -153,7 +153,7 @@ void Input::ClearButtonsDown() {
 
 int Input::Init() {
   INFO("Input::Init()");
-#ifdef __APPLE__
+#ifdef LFL_APPLE
   paste_bind = Bind('v', Key::Modifier::Cmd);
 #else
   paste_bind = Bind('v', Key::Modifier::Ctrl);

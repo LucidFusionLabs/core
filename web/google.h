@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef LFL_WEB_GOOGLE_H__
-#define LFL_WEB_GOOGLE_H__
+#ifndef LFL_CORE_WEB_GOOGLE_H__
+#define LFL_CORE_WEB_GOOGLE_H__
 namespace LFL {
 
 struct GoogleApi : public Crawler, public DebugHTMLParser {
@@ -114,4 +114,4 @@ struct GoogleApi : public Crawler, public DebugHTMLParser {
 };
 
 }; // namespace LFL
-#endif // LFL_WEB_GOOGLE_H__
+#endif // LFL_CORE_WEB_GOOGLE_H__

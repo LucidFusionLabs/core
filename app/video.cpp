@@ -453,7 +453,7 @@ void Texture::UpdateGL(const unsigned char *B, const ::LFL::Box &box, int flag) 
 }
 
 
-#ifdef __APPLE__
+#ifdef LFL_APPLE
 #import <CoreGraphics/CGBitmapContext.h> 
 CGContextRef Texture::CGBitMap() { return CGBitMap(0, 0, width, height); }
 CGContextRef Texture::CGBitMap(int X, int Y, int W, int H) {
@@ -471,7 +471,7 @@ CGContextRef Texture::CGBitMap(int X, int Y, int W, int H) {
 }
 #endif
 
-#ifdef WIN32
+#ifdef LFL_WINDOWS
 HBITMAP Texture::CreateGDIBitMap(HDC dc) {
   ClearBuffer();
   buf_owner = false;
@@ -802,7 +802,7 @@ int Video::Init() {
 
   if (!screen->gd) screen->gd = static_cast<GraphicsDevice*>(LFAppCreateGraphicsDevice(opengles_version));
 
-#ifndef WIN32
+#ifndef LFL_WINDOWS
   if (app->splash_color) {
     InitGraphicsDevice(screen);
     screen->gd->ClearColor(*app->splash_color);
@@ -896,9 +896,9 @@ void Video::InitFonts() {
 }
 
 int Video::InitFontWidth() {
-#if defined(WIN32)
+#if defined(LFL_WINDOWS)
   return 8;
-#elif defined(__APPLE__)
+#elif defined(LFL_APPLE)
   return 9;
 #else
   return 10;
@@ -906,9 +906,9 @@ int Video::InitFontWidth() {
 }
 
 int Video::InitFontHeight() {
-#if defined(WIN32)
+#if defined(LFL_WINDOWS)
   return 17;
-#elif defined(__APPLE__)
+#elif defined(LFL_APPLE)
   return 20;
 #else
   return 18;
