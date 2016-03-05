@@ -229,6 +229,8 @@ int ProcessPipe::Open(const char **argv, const char *startdir) {
     dup2(pipein[1], 1);
     dup2(pipeout[0], 0);
     if (startdir) chdir(startdir);
+    printf("cd %s\n", startdir);
+    printf("exec %s\n", argv[0]);
     execvp(argv[0], const_cast<char*const*>(argv));
   }
   return 0;

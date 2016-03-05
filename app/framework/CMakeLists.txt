@@ -1,6 +1,7 @@
 # $Id: CMakeLists.txt 1298 2011-12-11 18:46:06Z justin $
 
-include_directories(${LFL_SOURCE_DIR})
+add_definitions(${LFL_APP_DEF})
+include_directories(${LFL_APP_INCLUDE})
 add_library(app_null_os STATIC null_os.cpp)
 add_library(app_null_framework STATIC null_framework.cpp)
 
@@ -10,6 +11,14 @@ if(LFL_OSX)
 
   add_library(app_osx_framework STATIC osx_framework.mm)
   target_compile_options(app_osx_framework PUBLIC -fobjc-abi-version=2 -fobjc-legacy-dispatch)
+endif()
+
+if(LFL_LINUX)
+  add_library(app_linux_os STATIC linux_os.cpp)
+  target_link_libraries(app_linux_os ${PLATFORM_LIB})
+
+  add_library(app_x11_framework STATIC x11_framework.cpp)
+  target_link_libraries(app_x11_framework -lXi -lXv -lXext -lX11 -lXxf86vm -lXrandr -lXcursor -lXt)
 endif()
 
 if(LFL_QT)

@@ -27,10 +27,7 @@ endif()
 if(CMAKE_SYSTEM_NAME MATCHES "Linux")
   set(HAVE_SDLCONFIG 1)
   set(CUDA_LIB /usr/local/cuda/lib64/libcudart.so PARENT_SCOPE)
-  set(PLATFORM_LIB "-lutil -lz -lpng -lpthread -ldl")
-  if(NOT LFL_HEADLESS)
-    set(PLATFORM_LIB "${PLATFORM_LIB} -lXi -lXv -lXext -lX11 -lXxf86vm -lXrandr -lXcursor -lXt -lbz2") # -lasound")
-  endif()
+  set(PLATFORM_LIB "-lutil -lz -lpng -lpthread -ldl -lbz2")
 endif()
 
 # iPhone 

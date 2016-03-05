@@ -1,4 +1,20 @@
-if(WIN32)
+# $Id: lfapp.h 1335 2014-12-02 04:13:46Z justin $
+# Copyright (C) 2009 Lucid Fusion Labs
+
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+if(LFL_WINDOWS)
   macro(lfl_add_target target)
     link_directories(${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_BUILD_TYPE})
     add_executable(${target} WIN32 ${ARGN})
@@ -6,15 +22,19 @@ if(WIN32)
     if(LFL_JPEG)
       add_dependencies(${target} libjpeg)
     endif()
-  endmacro(lfl_add_target)
+  endmacro()
+
   macro(lfl_post_build_start target binname pkgname)
-  endmacro(lfl_post_build_start)
+  endmacro()
+
   macro(lfl_post_build_copy_bin target binname pkgname)
-  endmacro(lfl_post_build_copy_bin)
+  endmacro()
+
 elseif(LFL_IPHONE)
   macro(lfl_add_target target)
     add_executable(${target} ${ARGN})
-  endmacro(lfl_add_target)
+  endmacro()
+
   macro(lfl_post_build_start target binname pkgname)
     set(bin i${pkgname}.app/Contents/MacOS/${target}) 
     set(info_plist ${CMAKE_CURRENT_SOURCE_DIR}/iphone-Info.plist)
@@ -24,7 +44,7 @@ elseif(LFL_IPHONE)
       COMMAND mkdir  i${pkgname}.app
       COMMAND cp  ${info_plist} i${pkgname}.app/Info.plist
       COMMAND cp -r ${CMAKE_CURRENT_SOURCE_DIR}/assets i${pkgname}.app
-      COMMAND cp ${LFL_SOURCE_DIR}/core/lfapp/*.glsl i${pkgname}.app/assets
+      COMMAND cp ${LFL_SOURCE_DIR}/core/app/*.glsl i${pkgname}.app/assets
       COMMAND cp ${CMAKE_CURRENT_SOURCE_DIR}/${target}-iphone/Images/Icon*.png i${pkgname}.app
       COMMAND cp ${target} i${pkgname}.app
       COMMAND if ! [ ${LFL_IPHONESIM} ]\; then codesign -f -s \"${IPHONECERT}\" --entitlements ${entitlements_plist} i${pkgname}.app\; fi)
@@ -52,15 +72,17 @@ elseif(LFL_IPHONE)
         COMMAND find $ENV{HOME}/Library/Developer/CoreSimulator/Devices/`xcrun simctl list | grep Booted | head -1 | cut -f2 -d\\\( -f2 | cut -f1 -d\\\)`/data/Containers/Bundle/Application -name i${pkgname}.app
         COMMAND xcrun simctl launch booted `cat ${CMAKE_CURRENT_SOURCE_DIR}/iphone-Info.plist | grep BundleIdentifier -A1 | tail -1 | cut -f2 -d\\> | cut -f1 -d \\<`
         COMMAND lldb -n ${target} -o cont)
-    else(LFL_IPHONESIM)
+    else()
       add_custom_target(${target}_run WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} DEPENDS ${target}
         COMMAND ios-deploy --bundle i${pkgname}.app)
       add_custom_target(${target}_debug WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} DEPENDS ${target}
         COMMAND ios-deploy --debug --bundle i${pkgname}.app)
-    endif(LFL_IPHONESIM)
-  endmacro(lfl_post_build_start)
+    endif()
+  endmacro()
+
   macro(lfl_post_build_copy_bin target binname pkgname)
-  endmacro(lfl_post_build_copy_bin)
+  endmacro()
+
 elseif(LFL_ANDROID)
   macro(lfl_add_target target)
     add_library(${target} ${ARGN})
@@ -69,7 +91,8 @@ elseif(LFL_ANDROID)
     set_source_files_properties(${${target}_lfapp_obj} PROPERTIES HEADER_FILE_ONLY TRUE)
     set_source_files_properties(${LFL_SOURCE_DIR}/core/lfapp/jni/lfjni.cpp PROPERTIES HEADER_FILE_ONLY TRUE)
     set_source_files_properties(${ARGV1} PROPERTIES OBJECT_DEPENDS "${${target}_deps}")
-  endmacro(lfl_add_target)
+  endmacro()
+
   macro(lfl_post_build_start target binname pkgname)
     add_custom_command(TARGET ${target} POST_BUILD WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/${target}-android/jni
       COMMAND ${ANDROIDNDK}/ndk-build
@@ -85,13 +108,16 @@ elseif(LFL_ANDROID)
     add_custom_target(${target}_debug_start WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/${target}-android DEPENDS ${target}
       COMMAND ${ANDROIDSDK}/platform-tools/adb shell am start -n `${ANDROIDSDK}/build-tools/19.1.0/aapt dump badging ./build/outputs/apk/${target}-android-debug.apk | grep package | cut -d\\' -f2`/`${ANDROIDSDK}/build-tools/19.1.0/aapt dump badging ./build/outputs/apk/${target}-android-debug.apk | grep launchable-activity | cut -d\\' -f2`
       COMMAND ${ANDROIDSDK}/platform-tools/adb logcat | tee ${CMAKE_CURRENT_BINARY_DIR}/debug.txt)
-  endmacro(lfl_post_build_start)
+  endmacro()
+
   macro(lfl_post_build_copy_bin target binname pkgname)
-  endmacro(lfl_post_build_copy_bin)
+  endmacro()
+
 elseif(CMAKE_SYSTEM_NAME MATCHES "Linux")
   macro(lfl_add_target target)
     add_executable(${target} ${ARGN})
-  endmacro(lfl_add_target)
+  endmacro()
+
   macro(lfl_post_build_start target binname pkgname)
     set(pa_lib ../core/imports/portaudio/lib/.libs/libportaudio.so.2)
     set(mp3_lib ../core/imports/lame/libmp3lame/.libs/libmp3lame.so.0)
@@ -102,7 +128,7 @@ elseif(CMAKE_SYSTEM_NAME MATCHES "Linux")
       COMMAND rm -rf   ${pkgname}
       COMMAND mkdir -p ${pkgname}
       COMMAND cp -r ${CMAKE_CURRENT_SOURCE_DIR}/assets ${pkgname}
-      COMMAND cp ${LFL_SOURCE_DIR}/core/lfapp/*.glsl ${pkgname}/assets
+      COMMAND cp ${LFL_SOURCE_DIR}/core/app/*.glsl ${pkgname}/assets
       COMMAND cp ${target} ${pkgname}
       COMMAND if [ -f ${pa_lib}   ]; then cp ${pa_lib}   ${pkgname}\; fi
       COMMAND if [ -f ${mp3_lib}  ]; then cp ${mp3_lib}  ${pkgname}\; fi
@@ -111,27 +137,32 @@ elseif(CMAKE_SYSTEM_NAME MATCHES "Linux")
       COMMAND if [ -f ${cx_lib}   ]; then cp ${cx_lib}   ${pkgname}\; fi)
     add_custom_target(${target}_run WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} DEPENDS ${target}
       COMMAND ${pkgname}/${binname})
-  endmacro(lfl_post_build_start)
+  endmacro()
+
   macro(lfl_post_build_copy_bin target binname pkgname)
     add_custom_command(TARGET ${target} POST_BUILD WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
       COMMAND cp ${binname} ${pkgname})
-  endmacro(lfl_post_build_copy_bin)
+  endmacro()
+
 elseif(CMAKE_SYSTEM_NAME MATCHES "Darwin")
   macro(lfl_add_target target)
     add_executable(${target} ${ARGN})
-  endmacro(lfl_add_target)
+  endmacro()
+
   macro(osx_lib defname varname filename)
     set(${varname} ${filename})
     if(${${defname}})
       set(if_${varname} 1)
     endif(${${defname}})
-  endmacro(osx_lib)
+  endmacro()
+
   macro(osx_libs)
     osx_lib(LFL_PORTAUDIO pa_lib ../core/imports/portaudio/lib/.libs/libportaudio.2.dylib)
     osx_lib(LFL_FFMPEG mp3_lib ../core/imports/lame/libmp3lame/.libs/libmp3lame.0.dylib)
     osx_lib(LFL_OPENCV cx_lib ../core/imports/OpenCV/lib/libcxcore.2.1.dylib)
     osx_lib(LFL_OPENCV cv_lib ../core/imports/OpenCV/lib/libcv.2.1.dylib)
-  endmacro(osx_libs)
+  endmacro()
+
   macro(lfl_post_build_start target binname pkgname)
     osx_libs()
     set(bin ${pkgname}.app/Contents/MacOS/${target}) 
@@ -175,7 +206,8 @@ elseif(CMAKE_SYSTEM_NAME MATCHES "Darwin")
       COMMAND ${pkgname}.app/Contents/MacOS/${target})
     add_custom_target(${target}_debug WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} DEPENDS ${target}
       COMMAND lldb -f ${pkgname}.app/Contents/MacOS/${target} -o run)
-  endmacro(lfl_post_build_start)
+  endmacro()
+
   macro(lfl_post_build_copy_bin target binname pkgname)
     osx_libs()
     set(bin ${pkgname}.app/Contents/MacOS/${target})
@@ -186,10 +218,12 @@ elseif(CMAKE_SYSTEM_NAME MATCHES "Darwin")
       COMMAND if [ ${if_cx_lib}  ]; then install_name_tool -change libcxcore.2.1.dylib @loader_path/../Libraries/libcxcore.2.1.dylib ${bin}\; fi
       COMMAND if [ ${if_cv_lib}  ]; then install_name_tool -change libcv.2.1.dylib @loader_path/../Libraries/libcv.2.1.dylib ${bin}\; fi
       COMMAND codesign -f -s \"${OSXCERT}\" ${pkgname}.app/Contents/MacOS/${target})
-  endmacro(lfl_post_build_copy_bin)
+  endmacro()
+
 else()
   macro(lfl_post_build_start target binname pkgname)
-  endmacro(lfl_post_build_start)
+  endmacro()
+
   macro(lfl_post_build_copy_bin target binname pkgname)
-  endmacro(lfl_post_build_copy_bin)
+  endmacro()
 endif()

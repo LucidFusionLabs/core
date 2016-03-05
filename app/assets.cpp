@@ -429,7 +429,7 @@ void Asset::LoadTexture(void *h, const string &asset_fn, Texture *out, VideoAsse
   auto i = app->asset_cache.find(asset_fn);
   if (i != app->asset_cache.end()) return LoadTexture(i->second.data(), asset_fn.c_str(), i->second.size(), out);
   if (!l) l = app->asset_loader->default_video_loader;
-  void *handle = h ? h : l->LoadVideoFile(asset_fn[0] == '/' ? asset_fn : StrCat(app->assetdir, asset_fn).c_str());
+  void *handle = h ? h : l->LoadVideoFile(asset_fn[0] == '/' ? asset_fn : Asset::FileName(asset_fn).c_str());
   if (!handle) return ERROR("load: ", asset_fn);
   l->LoadVideo(handle, out);
   if (!h) l->UnloadVideoFile(handle);

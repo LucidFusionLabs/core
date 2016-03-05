@@ -28,7 +28,7 @@ DEFINE_int(camera_image_height, 0, "Camera capture image height");
 
 int Camera::Init() {
   INFO("Camera::Init()");
-  impl = unique_ptr<Module>(static_cast<Module*>(LFAppCreateCameraModule(&state)));
+  impl = CreateCameraModule(&state);
 
   int ret = 0;
   if (impl) ret = impl->Init();

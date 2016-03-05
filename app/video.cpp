@@ -581,7 +581,7 @@ int Shader::Create(const string &name, const string &vertex_shader, const string
     "#define lowp\r\n"
     "#define highp\r\n"
     "#endif\r\n";
-  if (app->video->opengles_version == 2) hdr += "#define LFL_GLES2\r\n";
+  if (app->opengles_version == 2) hdr += "#define LFL_GLES2\r\n";
   hdr += defines.text + string("\r\n");
 
   if (vertex_shader.size()) {
@@ -786,54 +786,6 @@ void GraphicsDevice::DrawPixels(const Box &b, const Texture &tex) {
 
 /* Video */
 
-int Video::Init() {
-  INFO("Video::Init()");
-  if (!(impl = unique_ptr<Module>(static_cast<Module*>(LFAppCreatePlatformModule())))) return -1;
-  if (impl->Init()) return -1;
-
-#if defined(LFL_GLEW) && !defined(LFL_HEADLESS)
-#ifdef GLEW_MX
-  screen->glew_context = new GLEWContext();
-#endif
-  GLenum glew_err;
-  if ((glew_err = glewInit()) != GLEW_OK) return ERRORv(-1, "glewInit: ", glewGetErrorString(glew_err));
-  app->video->opengl_framebuffer = GLEW_EXT_framebuffer_object;
-#endif
-
-  if (!screen->gd) screen->gd = static_cast<GraphicsDevice*>(LFAppCreateGraphicsDevice(opengles_version));
-
-#ifndef LFL_WINDOWS
-  if (app->splash_color) {
-    InitGraphicsDevice(screen);
-    screen->gd->ClearColor(*app->splash_color);
-    screen->gd->Clear();
-    screen->gd->Flush();
-    Swap();
-    screen->gd->ClearColor(screen->gd->clear_color);
-  }
-#endif
-
-  const char *glslver = screen->gd->GetString(GraphicsDevice::ShaderVersion);
-  const char *glexts = screen->gd->GetString(GraphicsDevice::Extensions);
-  INFO("OpenGL Version: ", screen->gd->GetString(GraphicsDevice::Version));
-  INFO("OpenGL Vendor: ", screen->gd->GetString(GraphicsDevice::Vendor));
-  INFO("GLEW Version: ", screen->gd->GetGLEWString(GraphicsDevice::GLEWVersion));
-  INFO("GL_SHADING_LANGUAGE_VERSION: ", glslver);
-  INFO("GL_EXTENSIONS: ", glexts);
-
-  opengles_version = 1 + (glslver != NULL);
-#ifdef LFL_MOBILE
-  opengles_cubemap = strstr(glexts, "GL_EXT_texture_cube_map") != 0;
-#else
-  opengles_cubemap = strstr(glexts, "GL_ARB_texture_cube_map") != 0;
-#endif
-  int depth_bits=0;
-  screen->gd->GetIntegerv(GraphicsDevice::DepthBits, &depth_bits);
-  INFO("screen->opengles_version = ", opengles_version, ", depth_bits = ", depth_bits);
-  INFO("lfapp_opengles_cubemap = ", opengles_cubemap ? "true" : "false");
-  return 0;
-}
-
 #if 0
 void *Video::BeginGLContextCreate(Window *W) {
 #if defined(LFL_WINVIDEO)
@@ -858,67 +810,6 @@ void *Video::CompleteGLContextCreate(Window *W, void *gl_context) {
 #endif
 }
 #endif
-
-void Video::InitGraphicsDevice(Window *W) {
-  W->gd->Init();
-  W->gd->ViewPort(W->Box());
-  W->gd->DrawMode(W->gd->default_draw_mode);
-
-  float pos[]={-.5,1,-.3f,0}, grey20[]={.2f,.2f,.2f,1}, white[]={1,1,1,1}, black[]={0,0,0,1};
-  W->gd->EnableLight(0);
-  W->gd->Light(0, GraphicsDevice::Position, pos);
-  W->gd->Light(0, GraphicsDevice::Ambient,  grey20);
-  W->gd->Light(0, GraphicsDevice::Diffuse,  white);
-  W->gd->Light(0, GraphicsDevice::Specular, white);
-  W->gd->Material(GraphicsDevice::Emission, black);
-  W->gd->Material(GraphicsDevice::Specular, grey20);
-  INFO("opengl_init: width=", W->width, ", height=", W->height, ", opengles_version: ", app->video->opengles_version);
-}
-
-void Video::InitFonts() {
-  FontEngine *font_engine = app->fonts->DefaultFontEngine();
-  if (!FLAGS_default_font.size()) font_engine->SetDefault();
-
-  vector<string> atlas_font_size;
-  Split(FLAGS_atlas_font_sizes, iscomma, &atlas_font_size);
-  for (int i=0; i<atlas_font_size.size(); i++) {
-    int size = atoi(atlas_font_size[i].c_str());
-    font_engine->Init(FontDesc(FLAGS_default_font, FLAGS_default_font_family, size, Color::white, Color::clear, FLAGS_default_font_flag));
-  }
-
-  FontEngine *atlas_engine = app->fonts->atlas_engine.get();
-  atlas_engine->Init(FontDesc("MenuAtlas", "", 0, Color::white, Color::clear, 0, false));
-
-  if (FLAGS_console && FLAGS_font_engine != "atlas" && FLAGS_font_engine != "freetype")
-    app->fonts->LoadConsoleFont(FLAGS_console_font.empty() ? "VeraMoBd.ttf" : FLAGS_console_font);
-
-  screen->default_font = FontRef(FontDesc::Default(), false);
-}
-
-int Video::InitFontWidth() {
-#if defined(LFL_WINDOWS)
-  return 8;
-#elif defined(LFL_APPLE)
-  return 9;
-#else
-  return 10;
-#endif
-}
-
-int Video::InitFontHeight() {
-#if defined(LFL_WINDOWS)
-  return 17;
-#elif defined(LFL_APPLE)
-  return 20;
-#else
-  return 18;
-#endif
-}
-
-int Video::Free() {
-  if (impl) impl->Free();
-  return 0;
-}
 
 void SimpleVideoResampler::RGB2BGRCopyPixels(unsigned char *dst, const unsigned char *src, int l, int bpp) {
   for (int k = 0; k < l; k++) for (int i = 0; i < bpp; i++) dst[k*bpp+(!i?2:(i==2?0:i))] = src[k*bpp+i];

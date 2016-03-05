@@ -214,11 +214,7 @@ struct DragTracker {
   }
 };
 
-struct InputModule : public Module {
-  virtual int Init(Window *w) { return 0; }
-};
-
-struct Input : public InputModule {
+struct Input : public Module {
   struct InputCB {
     enum { KeyPress=1, MouseClick=2, MouseMove=3, MouseWheel=4 };
     int type, x, y, a, b;
@@ -229,7 +225,6 @@ struct Input : public InputModule {
   bool left_cmd_down = 0, right_cmd_down = 0, mouse_but1_down = 0, mouse_but2_down = 0;
   vector<InputCB> queued_input;
   mutex queued_input_mutex;
-  unique_ptr<InputModule> impl;
   Bind paste_bind;
 
   void QueueKeyPress(int key, bool down) {
@@ -257,8 +252,6 @@ struct Input : public InputModule {
   void ClearButtonsDown();
 
   int Init();
-  int Init(Window*);
-  int Frame(unsigned time);
   int DispatchQueuedInput(bool event_on_keyboard_input, bool event_on_mouse_input);
 
   int KeyPress(int key, bool down);

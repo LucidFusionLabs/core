@@ -20,6 +20,24 @@
 #include <windowsx.h>
 
 namespace LFL {
+struct WinApp {
+  HINSTANCE hInst = 0;
+  int nCmdShow = 0;
+  void Setup(HINSTANCE hI, int nCS) { hInst = hI; nCmdShow = nCS; }
+  void CreateClass();
+  int MessageLoop();
+  static LRESULT APIENTRY WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
+};
+
+struct WinWindow {
+  bool menubar = 0, frame_on_keyboard_input = 0, frame_on_mouse_input = 0;
+  point prev_mouse_pos, resize_increment;
+  int start_msg_id = WM_USER + 100;
+  HMENU menu = 0, context_menu = 0;
+  vector<string> menu_cmds;
+  bool RestrictResize(int m, RECT*);
+};
+
 struct WinVideoModule : public Module {
   int Init() {
     INFO("WinVideoModule::Init()");

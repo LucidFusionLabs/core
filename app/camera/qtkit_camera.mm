@@ -154,6 +154,6 @@ struct QTKitCameraModule : public Module {
   }
 };
 
-extern "C" void *LFAppCreateCameraModule(CameraState *state) { return new QTKitCameraModule(state); }
+unique_ptr<Module> CreateCameraModule(CameraState *state) { return make_unique<QTKitCameraModule>(state); }
 
 }; // namespace LFL

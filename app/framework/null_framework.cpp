@@ -54,11 +54,11 @@ const int Key::F12        = -32;
 const int Key::Home       = -33;
 const int Key::End        = -34;
 
-struct NullPlatformModule : public Module {
+struct NullFrameworkModule : public Module {
   int Init() {
-    INFO("NullPlatformModule::Init()");
-    screen->id.value = screen;
-    app->windows[screen->id.value] = screen;
+    INFO("NullFrameworkModule::Init()");
+    screen->id = MakeTyped(screen);
+    app->windows[screen->id.v] = screen;
     return 0;
   }
 };
@@ -70,7 +70,7 @@ void Application::ReleaseMouseFocus() {}
 void Application::LaunchNativeContextMenu(const vector<MenuItem>&items) {}
 void Application::MakeCurrentWindow(Window *W) {}
 void Application::CloseWindow(Window *W) {
-  windows.erase(W->id.value);
+  windows.erase(W->id.v);
   if (windows.empty()) app->run = false;
   if (app->window_closed_cb) app->window_closed_cb(W);
   screen = 0;
@@ -82,7 +82,7 @@ void Window::SetTransparency(float v) {}
 void Window::Reshape(int w, int h) {}
 
 bool Video::CreateWindow(Window *W) { 
-  app->windows[W->id.value] = W;
+  app->windows[W->id.v] = W;
   return true;
 }
 void Video::StartWindow(Window*) {}
@@ -101,6 +101,6 @@ void FrameScheduler::DelWaitForeverSocket(Socket fd) {}
 
 extern "C" int main(int argc, const char *argv[]) { return MyAppMain(argc, argv); }
 
-extern "C" void *LFAppCreatePlatformModule() { return new NullPlatformModule(); }
+unique_ptr<Module> CreateFrameworkModule() { return unique_ptr<NullFrameworkModule>(); }
 
 }; // namespace LFL

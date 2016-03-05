@@ -419,6 +419,8 @@ struct IPCServerFontEngine : public FontEngine {
 };
 
 struct Fonts {
+  static int InitFontWidth();
+  static int InitFontHeight();
   struct Family {
     vector<string> normal, bold, italic, bold_italic;
     void Add(const string &n, int flag) {
@@ -454,6 +456,7 @@ struct Fonts {
   Font *Change(Font*, int new_size, const Color &new_fg, const Color &new_bg, int new_flag=0);
   int ScaledFontSize(int pointsize);
   void ResetGL();
+  void LoadDefaultFonts();
   void LoadConsoleFont(const string &name, const vector<int> &sizes = vector<int>(1, 32));
 };
 

@@ -46,7 +46,7 @@ void CheckForError(const char *file, int line) {
   if ((gl_error = glGetError())) {
     ERROR(file, ":", line, " gl error: ", gl_error);
     BreakHook();
-    if (app->video->opengles_version == 2) {
+    if (app->opengles_version == 2) {
       glValidateProgram(shader->ID);
       glGetProgramiv(shader->ID, GL_VALIDATE_STATUS, &gl_validate_status);
       if (gl_validate_status != GL_TRUE) ERROR(shader->name, ": gl validate status ", gl_validate_status);
@@ -175,3 +175,35 @@ void Uniform2f(int u, float v1, float v2) { glUniform2f(u, v1, v2); }
 void Uniform3f(int u, float v1, float v2, float v3) { glUniform3f(u, v1, v2, v3); }
 void Uniform4f(int u, float v1, float v2, float v3, float v4) { glUniform4f(u, v1, v2, v3, v4); }
 void Uniform3fv(int u, int n, const float *v) { glUniform3fv(u, n, v); }
+
+void InitDefaultLight() {
+  float pos[]={-.5,1,-.3f,0}, grey20[]={.2f,.2f,.2f,1}, white[]={1,1,1,1}, black[]={0,0,0,1};
+  EnableLight(0);
+  Light(0, GraphicsDevice::Position, pos);
+  Light(0, GraphicsDevice::Ambient,  grey20);
+  Light(0, GraphicsDevice::Diffuse,  white);
+  Light(0, GraphicsDevice::Specular, white);
+  Material(GraphicsDevice::Emission, black);
+  Material(GraphicsDevice::Specular, grey20);
+}
+
+void LogVersion() {
+  const char *glslver = GetString(ShaderVersion);
+  const char *glexts = GetString(Extensions);
+  INFO("OpenGL Version: ", GetString(Version));
+  INFO("OpenGL Vendor: ", GetString(Vendor));
+  INFO("GLEW Version: ", GetGLEWString(GLEWVersion));
+  INFO("GL_SHADING_LANGUAGE_VERSION: ", glslver);
+  INFO("GL_EXTENSIONS: ", glexts);
+
+  app->opengles_version = 1 + (glslver != NULL);
+#ifdef LFL_MOBILE
+  have_cubemap = strstr(glexts, "GL_EXT_texture_cube_map") != 0;
+#else
+  have_cubemap = strstr(glexts, "GL_ARB_texture_cube_map") != 0;
+#endif
+  int depth_bits=0;
+  GetIntegerv(DepthBits, &depth_bits);
+  INFO("opengles_version = ", app->opengles_version, ", depth_bits = ", depth_bits);
+  INFO("have_cubemap = ", have_cubemap ? "true" : "false");
+}

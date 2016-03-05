@@ -263,8 +263,7 @@ void Dialog::MessageBox(const string &n) {
 #endif
 
 extern "C" int main(int argc, const char *argv[]) {
-  MyAppInit();
-  LFL::app->done_init_cb = true;
+  MyAppCreate(argc, argv);
   for (int i=0; i<argc; i++) PushBack(lfl_qapp_argv, argv[i]);
   for (auto &a : lfl_qapp_argv) lfl_qapp_av.push_back(a.c_str());
   lfl_qapp_av.push_back(0);

@@ -917,6 +917,26 @@ int IPCServerFontEngine::InitGlyphs(Font *f, Glyph *g, int n) { return 0; }
 int IPCServerFontEngine::LoadGlyphs(Font *f, const Glyph *g, int n) { return 0; }
 string IPCServerFontEngine::DebugString(Font *f) const { return ""; }
 
+int Fonts::InitFontWidth() {
+#if defined(LFL_WINDOWS)
+  return 8;
+#elif defined(LFL_APPLE)
+  return 9;
+#else
+  return 10;
+#endif
+}
+
+int Fonts::InitFontHeight() {
+#if defined(LFL_WINDOWS)
+  return 17;
+#elif defined(LFL_APPLE)
+  return 20;
+#else
+  return 18;
+#endif
+}
+
 FontEngine *Fonts::GetFontEngine(int engine_type) {
   switch (engine_type) {
     case FontDesc::Engine::Atlas:    return atlas_engine.get();
@@ -1031,6 +1051,25 @@ void Fonts::ResetGL() {
     if (auto c = m->cache.get()) caches.insert(c);
   }
   for (auto c : caches) {}
+}
+
+void Fonts::LoadDefaultFonts() {
+  FontEngine *font_engine = DefaultFontEngine();
+  if (!FLAGS_default_font.size()) font_engine->SetDefault();
+
+  vector<string> atlas_font_size;
+  Split(FLAGS_atlas_font_sizes, iscomma, &atlas_font_size);
+  for (int i=0; i<atlas_font_size.size(); i++) {
+    int size = atoi(atlas_font_size[i].c_str());
+    font_engine->Init(FontDesc(FLAGS_default_font, FLAGS_default_font_family, size,
+                               Color::white, Color::clear, FLAGS_default_font_flag));
+  }
+
+  FontEngine *atlas_engine = app->fonts->atlas_engine.get();
+  atlas_engine->Init(FontDesc("MenuAtlas", "", 0, Color::white, Color::clear, 0, false));
+
+  if (FLAGS_console && FLAGS_font_engine != "atlas" && FLAGS_font_engine != "freetype")
+    LoadConsoleFont(FLAGS_console_font.empty() ? "VeraMoBd.ttf" : FLAGS_console_font);
 }
 
 void Fonts::LoadConsoleFont(const string &name, const vector<int> &sizes) {

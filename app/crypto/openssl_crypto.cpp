@@ -29,48 +29,48 @@ Crypto::CipherAlgo Crypto::CipherAlgos::AES128_CBC()   { return CipherAlgo(EVP_a
 Crypto::CipherAlgo Crypto::CipherAlgos::TripDES_CBC()  { return CipherAlgo(EVP_des_ede3_cbc()); }
 Crypto::CipherAlgo Crypto::CipherAlgos::Blowfish_CBC() { return CipherAlgo(EVP_bf_cbc()); }
 Crypto::CipherAlgo Crypto::CipherAlgos::RC4()          { return CipherAlgo(EVP_rc4()); }
-Crypto::DigestAlgo Crypto::DigestAlgos::SHA1()         { return CipherAlgo(EVP_get_digestbyname("sha1")); }
-Crypto::DigestAlgo Crypto::DigestAlgos::SHA256()       { return CipherAlgo(EVP_get_digestbyname("sha256")); }
-Crypto::DigestAlgo Crypto::DigestAlgos::SHA384()       { return CipherAlgo(EVP_get_digestbyname("sha384")); }
-Crypto::DigestAlgo Crypto::DigestAlgos::SHA512()       { return CipherAlgo(EVP_get_digestbyname("sha512")); }
-Crypto::DigestAlgo Crypto::DigestAlgos::MD5()          { return CipherAlgo(EVP_md5()); }
-Crypto::MACAlgo    Crypto::MACAlgos   ::MD5()          { return CipherAlgo(EVP_md5()); }
-Crypto::MACAlgo    Crypto::MACAlgos   ::SHA1()         { return CipherAlgo(EVP_sha1()); }
-Crypto::MACAlgo    Crypto::MACAlgos   ::SHA256()       { return CipherAlgo(EVP_sha256()); }
-Crypto::MACAlgo    Crypto::MACAlgos   ::SHA512()       { return CipherAlgo(EVP_sha512()); }
-int         Crypto::CipherAlgos::KeySize (CipherAlgo v) { return EVP_CIPHER_key_length(static_cast<EVP_CIPHER*>(v)); }
-int         Crypto::DigestAlgos::HashSize(DigestAlgo v) { return EVP_MD_size(static_cast<EVP_MD*>(v)); }
-int         Crypto::MACAlgos   ::HashSize(MACAlgo    v) { return EVP_MD_size(static_cast<EVP_MD*>(v)); }
-const char *Crypto::DigestAlgos::Name(DigestAlgo v) { return EVP_MD_name(static_cast<EVP_MD*>(v)); }
-const char *Crypto::CipherAlgos::Name(CipherAlgo v) { return EVP_CIPHER_name(static_cast<EVP_CIPHER*>(v)); }
-const char *Crypto::MACAlgos   ::Name(MACAlgo    v) { return EVP_MD_name(static_cast<EVP_MD*>(v)); }
+Crypto::DigestAlgo Crypto::DigestAlgos::SHA1()         { return DigestAlgo(EVP_get_digestbyname("sha1")); }
+Crypto::DigestAlgo Crypto::DigestAlgos::SHA256()       { return DigestAlgo(EVP_get_digestbyname("sha256")); }
+Crypto::DigestAlgo Crypto::DigestAlgos::SHA384()       { return DigestAlgo(EVP_get_digestbyname("sha384")); }
+Crypto::DigestAlgo Crypto::DigestAlgos::SHA512()       { return DigestAlgo(EVP_get_digestbyname("sha512")); }
+Crypto::DigestAlgo Crypto::DigestAlgos::MD5()          { return DigestAlgo(EVP_md5()); }
+Crypto::MACAlgo    Crypto::MACAlgos   ::MD5()          { return MACAlgo(EVP_md5()); }
+Crypto::MACAlgo    Crypto::MACAlgos   ::SHA1()         { return MACAlgo(EVP_sha1()); }
+Crypto::MACAlgo    Crypto::MACAlgos   ::SHA256()       { return MACAlgo(EVP_sha256()); }
+Crypto::MACAlgo    Crypto::MACAlgos   ::SHA512()       { return MACAlgo(EVP_sha512()); }
+int         Crypto::CipherAlgos::KeySize (CipherAlgo v) { return EVP_CIPHER_key_length(FromVoid<const EVP_CIPHER*>(v)); }
+int         Crypto::DigestAlgos::HashSize(DigestAlgo v) { return EVP_MD_size(FromVoid<const EVP_MD*>(v)); }
+int         Crypto::MACAlgos   ::HashSize(MACAlgo    v) { return EVP_MD_size(FromVoid<const EVP_MD*>(v)); }
+const char *Crypto::DigestAlgos::Name(DigestAlgo v) { return EVP_MD_name(FromVoid<const EVP_MD*>(v)); }
+const char *Crypto::CipherAlgos::Name(CipherAlgo v) { return EVP_CIPHER_name(FromVoid<const EVP_CIPHER*>(v)); }
+const char *Crypto::MACAlgos   ::Name(MACAlgo    v) { return EVP_MD_name(FromVoid<const EVP_MD*>(v)); }
 
-Crypto::Cipher *Crypto::CipherInit() { return EVP_CIPHER_CTX_new(); }
-void Crypto::CipherFree(Cipher *c) { EVP_CIPHER_CTX_free(static_cast<EVP_CIPHER_CTX*>(c)); }
-int Crypto::CipherGetBlockSize(Cipher *c) { return EVP_CIPHER_CTX_block_size(static_cast<EVP_CIPHER_CTX*>(c)); }
-int Crypto::CipherOpen(Cipher *c, CipherAlgo algo, bool dir, const StringPiece &key, const StringPiece &IV) { 
-  return EVP_CipherInit(static_cast<EVP_CIPHER_CTX*>(c), static_cast<const EVP_CIPHER*>(algo),
+Crypto::Cipher Crypto::CipherInit() { return EVP_CIPHER_CTX_new(); }
+void Crypto::CipherFree(Cipher c) { EVP_CIPHER_CTX_free(FromVoid<EVP_CIPHER_CTX*>(c)); }
+int Crypto::CipherGetBlockSize(Cipher c) { return EVP_CIPHER_CTX_block_size(FromVoid<EVP_CIPHER_CTX*>(c)); }
+int Crypto::CipherOpen(Cipher c, CipherAlgo algo, bool dir, const StringPiece &key, const StringPiece &IV) { 
+  return EVP_CipherInit(FromVoid<EVP_CIPHER_CTX*>(c), FromVoid<const EVP_CIPHER*>(algo),
                         MakeUnsigned(key.data()), MakeUnsigned(IV.data()), dir);
 }
-int Crypto::CipherUpdate(Cipher *c, const StringPiece &in, char *out, int outlen) {
-  return EVP_Cipher(static_cast<EVP_CIPHER_CTX*>(c), MakeUnsigned(out), MakeUnsigned(in.data()), in.size());
+int Crypto::CipherUpdate(Cipher c, const StringPiece &in, char *out, int outlen) {
+  return EVP_Cipher(FromVoid<EVP_CIPHER_CTX*>(c), MakeUnsigned(out), MakeUnsigned(in.data()), in.size());
 }
 
-Crypto::Digest *Crypto::DigestOpen(DigestAlgo algo) { CHECK(algo); EVP_MD_CTX *d=new EVP_MD_CTX(); EVP_DigestInit(d, static_cast<const EVP_MD*>(algo)); return d; }
-void Crypto::DigestUpdate(Digest *d, const StringPiece &in) { EVP_DigestUpdate(static_cast<EVP_MD_CTX*>(d), in.data(), in.size()); }
-int Crypto::DigestGetHashSize(Digest *d) { return EVP_MD_CTX_size(static_cast<EVP_MD_CTX*>(d)); }
-string Crypto::DigestFinish(Digest *d) {
+Crypto::Digest Crypto::DigestOpen(DigestAlgo algo) { CHECK(algo); EVP_MD_CTX *d=new EVP_MD_CTX(); EVP_DigestInit(d, FromVoid<const EVP_MD*>(algo)); return d; }
+void Crypto::DigestUpdate(Digest d, const StringPiece &in) { EVP_DigestUpdate(FromVoid<EVP_MD_CTX*>(d), in.data(), in.size()); }
+int Crypto::DigestGetHashSize(Digest d) { return EVP_MD_CTX_size(FromVoid<EVP_MD_CTX*>(d)); }
+string Crypto::DigestFinish(Digest d) {
   unsigned len = 0;
   string ret(EVP_MAX_MD_SIZE, 0);
-  EVP_DigestFinal(static_cast<EVP_MD_CTX*>(d), MakeUnsigned(&ret[0]), &len);
-  delete static_cast<EVP_MD_CTX*>(d);
+  EVP_DigestFinal(FromVoid<EVP_MD_CTX*>(d), MakeUnsigned(&ret[0]), &len);
+  delete FromVoid<EVP_MD_CTX*>(d);
   ret.resize(len);
   return ret;
 }
 
-Crypto::MAC *Crypto::MACOpen(MACAlgo algo, const StringPiece &k) { HMAC_CTX *m=new HMAC_CTX(); HMAC_Init(m, k.data(), k.size(), static_cast<const EVP_MD*>(algo)); }
-void Crypto::MACUpdate(MAC *m, const StringPiece &in) { HMAC_Update(static_cast<HMAC_CTX*>(m), MakeUnsigned(in.data()), in.size()); }
-int Crypto::MACFinish(MAC *m, char *out, int outlen) { unsigned len=outlen; HMAC_Final(static_cast<HMAC_CTX*>(m), MakeUnsigned(out), &len); delete static_cast<HMAC_CTX*>(m); return len; }
+Crypto::MAC Crypto::MACOpen(MACAlgo algo, const StringPiece &k) { HMAC_CTX *m=new HMAC_CTX(); HMAC_Init(m, k.data(), k.size(), FromVoid<const EVP_MD*>(algo)); }
+void Crypto::MACUpdate(MAC m, const StringPiece &in) { HMAC_Update(FromVoid<HMAC_CTX*>(m), MakeUnsigned(in.data()), in.size()); }
+int Crypto::MACFinish(MAC m, char *out, int outlen) { unsigned len=outlen; HMAC_Final(FromVoid<HMAC_CTX*>(m), MakeUnsigned(out), &len); delete FromVoid<HMAC_CTX*>(m); return len; }
 
 string Crypto::Blowfish(const string &passphrase, const string &in, bool encrypt_or_decrypt) {
   unsigned char iv[8] = {0,0,0,0,0,0,0,0};

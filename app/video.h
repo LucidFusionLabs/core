@@ -447,7 +447,7 @@ struct GraphicsDevice {
   static const int Fill, Line, Point, GLPreferredBuffer, GLInternalFormat;
 
   int default_draw_mode = DrawMode::_2D, draw_mode = 0, default_framebuffer = 0;
-  bool blend_enabled = 0, invert_view_matrix = 0, track_model_matrix = 0;
+  bool have_framebuffer = 1, have_cubemap = 1, blend_enabled = 0, invert_view_matrix = 0, track_model_matrix = 0;
   string vertex_shader, pixel_shader;
   Shader *shader = 0;
   v3 camera_pos;
@@ -458,7 +458,7 @@ struct GraphicsDevice {
 
   GraphicsDevice() : scissor_stack(1) {}
   virtual ~GraphicsDevice() {}
-  virtual void Init() = 0;
+  virtual void Init(const Box&) = 0;
   virtual bool ShaderSupport() = 0;
   virtual void EnableTexture() = 0;
   virtual void DisableTexture() = 0;
@@ -616,23 +616,12 @@ struct Shaders {
   Shader shader_default, shader_normals, shader_cubemap, shader_cubenorm;
 };
 
-struct Video : public Module {
-  int opengles_version = 2;
-  bool opengl_framebuffer = 1, opengles_cubemap = 1;
-  unique_ptr<Module> impl;
-
-  int Init();
-  int Free();
-  int Swap();
-
+struct Video {
+  static int Swap();
   static bool CreateWindow(Window *W);
   static void StartWindow(Window *W);
   static void *BeginGLContextCreate(Window *);
   static void *CompleteGLContextCreate(Window *, void *gl_context);
-  static void InitGraphicsDevice(Window *);
-  static void InitFonts();
-  static int InitFontWidth();
-  static int InitFontHeight();
 };
 
 struct VideoResamplerInterface {

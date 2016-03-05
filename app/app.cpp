@@ -142,8 +142,8 @@ DEFINE_bool(cursor_grabbed, false, "Center cursor every frame");
 DEFINE_bool(frame_debug, false, "Print each frame");
 DEFINE_bool(rcon_debug, false, "Print game protocol commands");
 
-Application *app = new Application();
-Window *screen = new Window();
+Application *app = nullptr;
+Window *screen = nullptr;
 void Log(int level, const char *file, int line, const string &m) { app->Log(level, file, line, m); }
 
 #ifdef LFL_IPHONE
@@ -275,7 +275,7 @@ void Application::WriteLogLine(const char *tbuf, const char *message, const char
 void Application::CreateNewWindow() {
   Window *orig_window = screen, *new_window = new Window();
   if (window_init_cb) window_init_cb(new_window);
-  new_window->gd = static_cast<GraphicsDevice*>(LFAppCreateGraphicsDevice(video->opengles_version));
+  new_window->gd = CreateGraphicsDevice(opengles_version).release();
   CHECK(Video::CreateWindow(new_window));
   if (!new_window->started && (new_window->started = true)) {
     MakeCurrentWindow(new_window);
@@ -285,8 +285,7 @@ void Application::CreateNewWindow() {
 }
 
 void Application::StartNewWindow(Window *new_window) {
-  video->InitGraphicsDevice(new_window);
-  input->Init(new_window);
+  new_window->gd->Init(new_window->Box());
   new_window->default_font.Load();
   if (window_start_cb) window_start_cb(new_window);
   Video::StartWindow(new_window);
@@ -348,7 +347,6 @@ void Application::Daemonize(FILE *fout, FILE *ferr) {
 }
 
 int Application::Create(int argc, const char* const* argv, const char *source_filename) {
-  if (!done_init_cb && (done_init_cb=1)) MyAppInit();
 #ifdef LFL_GLOG
   google::InstallFailureSignalHandler();
 #endif
@@ -373,7 +371,7 @@ int Application::Create(int argc, const char* const* argv, const char *source_fi
   if (PrefixMatch(rpath, startdir+"/")) assetdir = StrCat(rpath + startdir.size()+1, "/assets/");
   else assetdir = StrCat(rpath, "/assets/"); 
 #else
-  assetdir = StrCat(bindir, "/assets/"); 
+  assetdir = StrCat(bindir, "assets/"); 
 #endif
 
 #ifdef LFL_WINDOWS
@@ -470,14 +468,27 @@ int Application::Create(int argc, const char* const* argv, const char *source_fi
 }
 
 int Application::Init() {
-  if (FLAGS_lfapp_video) {
-    shaders = make_unique<Shaders>();
-    if ((video = make_unique<Video>())->Init()) return ERRORv(-1, "video init failed");
-  }
-  else { windows[screen->id.value] = screen; }
+  if (LoadModule((framework = unique_ptr<Module>(CreateFrameworkModule())).get()))
+    return ERRORv(-1, "platform init failed");
 
   thread_pool.Open(X_or_1(FLAGS_threadpool_size));
   if (FLAGS_threadpool_size) thread_pool.Start();
+
+  if (FLAGS_lfapp_video) {
+    if (!screen->gd) screen->gd = CreateGraphicsDevice(opengles_version).release();
+    shaders = make_unique<Shaders>();
+#ifndef LFL_WINDOWS
+    if (splash_color) {
+      screen->gd->Init(screen->Box());
+      screen->gd->ClearColor(*app->splash_color);
+      screen->gd->Clear();
+      screen->gd->Flush();
+      Video::Swap();
+      screen->gd->ClearColor(screen->gd->clear_color);
+    }
+#endif
+  }
+  else { windows[screen->id.v] = screen; }
 
   if (FLAGS_lfapp_audio) {
     if (LoadModule((audio = make_unique<Audio>()).get())) return ERRORv(-1, "audio init failed");
@@ -488,7 +499,8 @@ int Application::Init() {
     if ((asset_loader = make_unique<AssetLoader>())->Init()) return ERRORv(-1, "asset loader init failed");
   }
 
-  video->InitFonts();
+  if (FLAGS_lfapp_video) fonts->LoadDefaultFonts();
+  screen->default_font = FontRef(FontDesc::Default(), false);
 
   if (FLAGS_lfapp_input) {
     if (LoadModule((input = make_unique<Input>()).get())) return ERRORv(-1, "input init failed");
@@ -615,7 +627,6 @@ Application::~Application() {
   if (exit_cb) exit_cb();
   if (cuda) cuda->Free();
   for (auto &m : modules) m->Free();
-  if (video) video->Free();
   scheduler.Free();
   if (logfile) fclose(logfile);
 #ifdef LFL_WINDOWS
@@ -701,7 +712,7 @@ void Window::Reshaped(int w, int h) {
 }
 
 void Window::ResetGL() {
-  Video::InitGraphicsDevice(this);
+  gd->Init(Box());
   for (auto &g : screen->gui    ) g->ResetGL();
   for (auto &g : screen->dialogs) g->ResetGL();
 }
@@ -735,7 +746,7 @@ int Window::Frame(unsigned clicks, int flag) {
   fps.Add(clicks);
 
   if (FLAGS_lfapp_video) {
-    app->video->Swap();
+    Video::Swap();
   }
   return ret;
 }
@@ -801,7 +812,7 @@ void FrameScheduler::UpdateTargetFPS(int fps) {
     for (const auto &w : app->windows) Max(&next_target_fps, w.second->target_fps);
     FLAGS_target_fps = next_target_fps;
   }
-  CHECK(screen->id.value);
+  CHECK(screen->id.v);
   UpdateWindowTargetFPS(screen);
 }
 

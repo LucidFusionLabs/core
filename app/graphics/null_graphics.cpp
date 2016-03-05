@@ -66,7 +66,7 @@ int CubeMap::OpenGLID(int id) { return 0; }
 int Pixel::OpenGLID(int p) { return 0; }
 
 struct NullGraphicsDevice : public GraphicsDevice {
-  void Init() {}
+  void Init(const Box&) {}
   bool ShaderSupport() { return 0; }
   void EnableTexture() {}
   void DisableTexture() {}
@@ -168,6 +168,6 @@ struct NullGraphicsDevice : public GraphicsDevice {
   void Uniform3fv(int u, int n, const float *v) {}
 };
 
-extern "C" void *LFAppCreateGraphicsDevice(int) { return new NullGraphicsDevice(); }
+unique_ptr<GraphicsDevice> CreateGraphicsDevice(int) { return make_unique<NullGraphicsDevice>(); }
 
 }; // namespace LFL

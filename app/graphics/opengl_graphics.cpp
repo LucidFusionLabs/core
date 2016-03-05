@@ -19,7 +19,7 @@
 #include "core/app/app.h"
 
 #if defined(LFL_GLEW)
-#define glewGetContext() ((GLEWContext*)screen->glew_context)
+#define glewGetContext() static_cast<GLEWContext*>(screen->glew_context)
 #include <GL/glew.h>
 #ifdef WIN32
 #include <GL/wglew.h>
@@ -111,7 +111,7 @@ const int GraphicsDevice::FragmentShader       = GL_FRAGMENT_SHADER;
 const int GraphicsDevice::ShaderVersion        = GL_SHADING_LANGUAGE_VERSION;
 const int GraphicsDevice::Extensions           = GL_EXTENSIONS;
 #ifdef LFL_GLEW
-const int GraphicsDevice::GLEWVersion          = GL_GLEW_VERSION;
+const int GraphicsDevice::GLEWVersion          = GLEW_VERSION;
 #else
 const int GraphicsDevice::GLEWVersion          = 0;
 #endif
@@ -178,7 +178,8 @@ struct OpenGLES1 : public GraphicsDevice, public QOpenGLFunctions {
 #include "core/app/graphics/opengl_common.h"
   int target_matrix=-1;
   OpenGLES1() { default_color.push_back(Color(1.0, 1.0, 1.0, 1.0)); }
-  void Init() {
+  void Init(const Box &b) {
+    GDDebug("Init");
     shader = &app->shaders->shader_default; 
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
     glEnableClientState(GL_VERTEX_ARRAY);
@@ -189,7 +190,11 @@ struct OpenGLES1 : public GraphicsDevice, public QOpenGLFunctions {
     // glLightModelf(GL_LIGHT_MODEL_COLOR_CONTROL, GL_SEPARATE_SPECULAR_COLOR);
     glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
 #endif
-    GDDebug("Init");
+    ViewPort(b);
+    DrawMode(default_draw_mode);
+    InitDefaultLight();
+    INFO("OpenGLES1::Init width=", b.w, ", height=", b.h);
+    LogVersion();
   }
   void UpdateColor() { const Color &c = default_color.back(); glColor4f(c.r(), c.g(), c.b(), c.a()); }
   bool ShaderSupport() {
@@ -314,8 +319,8 @@ struct OpenGLES2 : public GraphicsDevice, public QOpenGLFunctions {
   LFL::Light light[4];
   Deferred deferred;
 
-  void Init() {
-    INFO("GraphicsDevice::Init");
+  void Init(const Box &b) {
+    GDDebug("Init");
     memzero(vertex_attr); memzero(tex_attr); memzero(color_attr); memzero(normal_attr); memzero(bound_texture);
     deferred.prim_type = deferred.vertex_size = deferred.vertexbuffer_len = deferred.draw_calls = 0;
     deferred.vertexbuffer = -1;
@@ -333,10 +338,14 @@ struct OpenGLES2 : public GraphicsDevice, public QOpenGLFunctions {
     Shader::Create("lfapp_cubemap",  vertex_shader, pixel_shader, ShaderDefines(1,0,0,1), &app->shaders->shader_cubemap);
     Shader::Create("lfapp_normals",  vertex_shader, pixel_shader, ShaderDefines(0,1,1,0), &app->shaders->shader_normals);
     Shader::Create("lfapp_cubenorm", vertex_shader, pixel_shader, ShaderDefines(0,1,0,1), &app->shaders->shader_cubenorm);
-    GDDebug("Init");
     UseShader((shader = 0));
     VertexPointer(0, 0, 0, 0, NULL, deferred.vertexbuffer_size, NULL, true, 0);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    ViewPort(b);
+    DrawMode(default_draw_mode);
+    InitDefaultLight();
+    INFO("OpenGLES2::Init width=", b.w, ", height=", b.h);
+    LogVersion();
   }
 
   bool ShaderSupport()      { return true; }
@@ -633,11 +642,26 @@ struct OpenGLES2 : public GraphicsDevice, public QOpenGLFunctions {
 };
 #endif // LFL_GLES2
 
-extern "C" void *LFAppCreateGraphicsDevice(int opengles_version) {
-#ifdef LFL_GLES2
-  if (opengles_version == 2) return new OpenGLES2();
+unique_ptr<GraphicsDevice> CreateGraphicsDevice(int opengles_version) {
+  ONCE({
+#ifdef LFL_GLEW
+#ifdef GLEW_MX
+    screen->glew_context = new GLEWContext();
 #endif
-  return new OpenGLES1();
+    GLenum glew_err;
+    if ((glew_err = glewInit()) != GLEW_OK) return ERRORv(nullptr, "glewInit: ", glewGetErrorString(glew_err));
+#endif
+  });
+
+  unique_ptr<GraphicsDevice> gd;
+#ifdef LFL_GLES2
+  if (opengles_version == 2) gd = make_unique<OpenGLES2>();
+#endif
+  else gd = make_unique<OpenGLES1>();
+#ifdef LFL_GLEW
+  gd->have_framebuffer = GLEW_EXT_framebuffer_object;
+#endif
+  return gd;
 }
 
 }; // namespace LFL

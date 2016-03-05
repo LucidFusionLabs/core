@@ -1,6 +1,7 @@
 # $Id: CMakeLists.txt 1298 2011-12-11 18:46:06Z justin $
 
-include_directories(${LFL_SOURCE_DIR})
+add_definitions(${LFL_APP_DEF})
+include_directories(${LFL_APP_INCLUDE})
 add_library(app_null_camera STATIC null_camera.cpp)
 
 if(LFL_IPHONE)

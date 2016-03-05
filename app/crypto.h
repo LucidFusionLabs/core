@@ -76,12 +76,12 @@ int DSAVerify(const StringPiece &digest, DSASig dsa_sig, DSAKey dsa_key);
 int ECDSAVerify(const StringPiece &digest, ECDSASig dsa_sig, ECPair ecdsa_keypair);
 
 struct Crypto {
-  struct Cipher     : public VoidPtr { using VoidPtr::VoidPtr; };
-  struct Digest     : public VoidPtr { using VoidPtr::VoidPtr; };
-  struct MAC        : public VoidPtr { using VoidPtr::VoidPtr; };
-  struct CipherAlgo : public VoidPtr { using VoidPtr::VoidPtr; };
-  struct DigestAlgo : public VoidPtr { using VoidPtr::VoidPtr; };
-  struct MACAlgo    : public VoidPtr { using VoidPtr::VoidPtr; };
+  struct Cipher     : public VoidPtr      { using VoidPtr::VoidPtr; };
+  struct Digest     : public VoidPtr      { using VoidPtr::VoidPtr; };
+  struct MAC        : public VoidPtr      { using VoidPtr::VoidPtr; };
+  struct CipherAlgo : public ConstVoidPtr { using ConstVoidPtr::ConstVoidPtr; };
+  struct DigestAlgo : public ConstVoidPtr { using ConstVoidPtr::ConstVoidPtr; };
+  struct MACAlgo    : public ConstVoidPtr { using ConstVoidPtr::ConstVoidPtr; };
 
   struct CipherAlgos {
     static CipherAlgo AES128_CTR();

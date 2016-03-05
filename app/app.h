@@ -215,7 +215,6 @@ using LFL_STL11_NAMESPACE::isinf;
 using LFL_STL11_NAMESPACE::isnan;
 #define tuple_get LFL_STL11_NAMESPACE::get
 
-typedef void* Void;
 typedef lock_guard<mutex> ScopedMutex;
 typedef function<void()> Callback;
 typedef function<void(const string&)> StringCB;
@@ -555,7 +554,7 @@ struct Window : public ::NativeWindow {
 
 struct Application : public ::LFApp {
   string name, progname, logfilename, startdir, bindir, assetdir, dldir;
-  int pid=0;
+  int pid=0, opengles_version=2;
   FILE *logfile=0;
   tm log_time;
   mutex log_mutex;
@@ -573,11 +572,11 @@ struct Application : public ::LFApp {
   unordered_map<string, StringPiece> asset_cache;
   CategoricalVariable<int> tex_mode, grab_mode, fill_mode;
   const Color *splash_color = &Color::black;
-  bool log_pid=0, done_init_cb=0;
+  bool log_pid=0;
 
   vector<Module*> modules;
+  unique_ptr<Module> framework;
   unique_ptr<Audio> audio;
-  unique_ptr<Video> video;
   unique_ptr<Input> input;
   unique_ptr<Fonts> fonts;
   unique_ptr<Shaders> shaders;
@@ -667,24 +666,10 @@ struct Application : public ::LFApp {
   static StringPiece LoadResource(int id);
 };
 
-#ifdef LFL_WININPUT
-struct WinApp {
-  HINSTANCE hInst = 0;
-  int nCmdShow = 0;
-  void Setup(HINSTANCE hI, int nCS) { hInst = hI; nCmdShow = nCS; }
-  void CreateClass();
-  int MessageLoop();
-  static LRESULT APIENTRY WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
-};
-struct WinWindow {
-  bool menubar = 0, frame_on_keyboard_input = 0, frame_on_mouse_input = 0;
-  point prev_mouse_pos, resize_increment;
-  int start_msg_id = WM_USER + 100;
-  HMENU menu = 0, context_menu = 0;
-  vector<string> menu_cmds;
-  bool RestrictResize(int m, RECT*);
-};
-#endif
+unique_ptr<Module> CreateFrameworkModule();
+unique_ptr<GraphicsDevice> CreateGraphicsDevice(int ver);
+unique_ptr<Module> CreateAudioModule(Audio*);
+unique_ptr<Module> CreateCameraModule(CameraState*);
 
 }; // namespace LFL
 #endif // LFL_CORE_APP_APP_H__

@@ -18,5 +18,8 @@
 
 #include "core/app/app.h"
 
-extern "C" void *LFAppCreateCameraModule(CameraState *state) { return nullptr; }
+namespace LFL {
+unique_ptr<Module> CreateCameraModule(CameraState *state) { return nullptr; }
+
+}; // namespace LFL
 

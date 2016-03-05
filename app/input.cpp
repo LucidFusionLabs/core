@@ -158,27 +158,7 @@ int Input::Init() {
 #else
   paste_bind = Bind('v', Key::Modifier::Ctrl);
 #endif
-
-#if defined(LFL_X11INPUT)
-  impl = make_unique<X11InputModule>();
-#elif defined(LFL_ANDROIDINPUT)
-  impl = make_unique<AndroidInputModule>();
-#elif defined(LFL_GLFWINPUT)
-  impl = make_unique<GLFWInputModule>();
-#elif defined(LFL_SDLINPUT)
-  impl = make_unique<SDLInputModule>();
-#endif
   return 0;
-}
-
-int Input::Init(Window *W) {
-  return impl ? impl->Init(W) : 0;
-}
-
-int Input::Frame(unsigned clicks) {
-  int events = 0;
-  if (impl) events += impl->Frame(clicks);
-  return events;
 }
 
 #if 0

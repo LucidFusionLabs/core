@@ -40,7 +40,7 @@ int Sample::Size(int fmt) {
 
 int Audio::Init() {
   INFO("Audio::Init()");
-  impl = unique_ptr<Module>(CreateAudioModule(this));
+  impl = CreateAudioModule(this);
   if (!impl) FLAGS_lfapp_audio = false;
   if (impl && impl->Init()) return -1;
 

@@ -1,5 +1,5 @@
 /*
- * $Id: camera.cpp 1330 2014-11-06 03:04:15Z justin $
+ * $Id: video.cpp 1336 2014-12-08 09:29:59Z justin $
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -19,5 +19,12 @@
 #include "core/app/app.h"
 
 namespace LFL {
-unique_ptr<Module> CreateAudioModule(Audio *a) { return nullptr; }
+void Application::AddNativeMenu(const string &title, const vector<MenuItem>&items) {}
+void Application::AddNativeEditMenu() {}
+void Application::LaunchNativeFontChooser(const FontDesc &cur_font, const string &choose_cmd) {}
+void Application::LaunchNativeFileChooser(bool files, bool dirs, bool multi, const string &choose_cmd) {}
+void Application::OpenSystemBrowser(const string &url_text) {}
+void Application::PlaySoundEffect(SoundAsset *sa) {}
+void Application::PlayBackgroundMusic(SoundAsset *music) {}
+
 }; // namespace LFL

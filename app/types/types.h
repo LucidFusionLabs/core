@@ -56,8 +56,16 @@ inline const char *MakeSigned(const char *x) { return x; }
 struct VoidPtr : public void_ptr {
   VoidPtr(void *V=0) { v=V; }
   operator bool() const { return v; }
-  bool operator< (const VoidPtr &x) { return v <  x.v; }
-  bool operator==(const VoidPtr &x) { return v == x.v; }
+  bool operator< (const VoidPtr &x) const { return v <  x.v; }
+  bool operator==(const VoidPtr &x) const { return v == x.v; }
+};
+
+struct ConstVoidPtr : public const_void_ptr {
+  ConstVoidPtr(const void *V=0) { v=V; }
+  ConstVoidPtr(const VoidPtr &x) { v=x.v; }
+  operator bool() const { return v; }
+  bool operator< (const ConstVoidPtr &x) const { return v <  x.v; }
+  bool operator==(const ConstVoidPtr &x) const { return v == x.v; }
 };
 
 template <class X> struct LazyInitializedPtr {

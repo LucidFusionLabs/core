@@ -180,9 +180,6 @@ namespace IPC { struct ResourceHandle; struct FontDescription; struct OpenSystem
 
 typedef google::protobuf::Message Proto;
 typedef int (*MainCB)(int argc, const char* const* argv);
-
-Module *CreateAudioModule(Audio*);
-
 }; // namespace LFL
 extern "C" {
 #endif // __cplusplus
@@ -206,8 +203,10 @@ typedef struct ec_point_st EC_POINT;
 typedef struct ec_key_st EC_KEY;
 typedef struct CXTranslationUnitImpl* CXTranslationUnit;
 typedef void* CXIndex;
-struct typed_ptr { void *type, *value; };
+typedef void* Void;
+struct typed_ptr { void *type, *v; };
 struct void_ptr { void *v; };
+struct const_void_ptr { const void *v; };
 
 struct LFApp {
   struct Log { enum { Fatal=-1, Error=0, Info=3, Debug=7 }; int unused; };
@@ -232,7 +231,7 @@ struct CameraState {
   unsigned long long frames_read, last_frames_read, image_timestamp_us;
 };
 
-void MyAppInit();
+void MyAppCreate();
 int MyAppMain(int argc, const char* const* argv);
 void NativeWindowInit();
 void NativeWindowQuit();
@@ -272,17 +271,14 @@ void ShellRun(const char *text);
 const char *LFAppDownloadDir();
 void BreakHook();
 
-void *LFAppCreatePlatformModule();
-void *LFAppCreateGraphicsDevice(int ver);
-void *LFAppCreateCameraModule(struct CameraState*);
-
 #ifdef __cplusplus
 }; // extern C
 namespace LFL {
 template <class X> void *TypeId() { static char id=0; return &id; }
 template <class X> typed_ptr MakeTyped(X v) { return typed_ptr{ TypeId<X>(), v }; }
-template <class X> X GetTyped(const typed_ptr &p) { return p.type == TypeId<X>() ? static_cast<X>(p.value) : nullptr; }
+template <class X> X GetTyped(const typed_ptr &p) { return p.type == TypeId<X>() ? static_cast<X>(p.v) : nullptr; }
 template <class X> X FromVoid(const void_ptr &p) { return static_cast<X>(p.v); }
+template <class X> X FromVoid(const const_void_ptr &p) { return static_cast<X>(p.v); }
 }; // namespace LFL
 #endif // __cplusplus
 #endif // LFL_CORE_APP_EXPORT_H__

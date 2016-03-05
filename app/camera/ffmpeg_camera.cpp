@@ -119,6 +119,6 @@ struct FFmpegCameraModule : public Module {
   }
 };
 
-extern "C" void *LFAppCreateCameraModule(CameraState *state) { return new FFMpegCameraModule(state); }
+unique_ptr<Module> CreateCameraModule(CameraState *state) { return make_unique<FFMpegCameraModule>(state); }
 
 }; // namespace LFL
