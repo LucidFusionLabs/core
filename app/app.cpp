@@ -285,7 +285,7 @@ void Application::CreateNewWindow() {
 }
 
 void Application::StartNewWindow(Window *new_window) {
-  new_window->gd->Init(new_window->Box());
+  if (!new_window->gd->done_init) new_window->gd->Init(new_window->Box());
   new_window->default_font.Load();
   if (window_start_cb) window_start_cb(new_window);
   Video::StartWindow(new_window);
@@ -477,18 +477,18 @@ int Application::Init() {
   if (FLAGS_lfapp_video) {
     if (!screen->gd) screen->gd = CreateGraphicsDevice(opengles_version).release();
     shaders = make_unique<Shaders>();
-#ifndef LFL_WINDOWS
-    if (splash_color) {
-      screen->gd->Init(screen->Box());
-      screen->gd->ClearColor(*app->splash_color);
-      screen->gd->Clear();
-      screen->gd->Flush();
-      Video::Swap();
-      screen->gd->ClearColor(screen->gd->clear_color);
-    }
-#endif
+    screen->gd->Init(screen->Box());
+  } else { windows[screen->id.v] = screen; }
+
+#ifdef LFL_WINDOWS
+  if (FLAGS_lfapp_video && splash_color) {
+    screen->gd->ClearColor(*app->splash_color);
+    screen->gd->Clear();
+    screen->gd->Flush();
+    Video::Swap();
+    screen->gd->ClearColor(screen->gd->clear_color);
   }
-  else { windows[screen->id.v] = screen; }
+#endif
 
   if (FLAGS_lfapp_audio) {
     if (LoadModule((audio = make_unique<Audio>()).get())) return ERRORv(-1, "audio init failed");
@@ -729,7 +729,7 @@ int Window::Frame(unsigned clicks, int flag) {
   if (FLAGS_lfapp_video) {
     if (!frame_init && (frame_init = true))  {
 #ifdef LFL_IPHONE
-      screen->GetIntegerv(GL_FRAMEBUFFER_BINDING_OES, &screen->gd->default_framebuffer);
+      screen->gd->GetIntegerv(GraphicsDevice::FramebufferBinding, &screen->gd->default_framebuffer);
       INFO("default_framebuffer = ", screen->gd->default_framebuffer);
 #endif
     }

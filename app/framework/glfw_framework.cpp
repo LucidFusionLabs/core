@@ -63,8 +63,8 @@ const int Key::End        = GLFW_KEY_END;
 struct GLFWFrameworkModule : public Module {
   int Init() {
     INFO("GLFWVideoModule::Init");
-    CHECK(app->CreateWindow(screen));
-    Application::MakeCurrentWindow(screen);
+    CHECK(Video::CreateWindow(screen));
+    app->MakeCurrentWindow(screen);
     glfwSwapInterval(1);
     return 0;
   }
@@ -73,7 +73,7 @@ struct GLFWFrameworkModule : public Module {
     return 0;
   }
 
-  int Init(Window *W) { InitWindow((GLFWwindow*)screen->id); return 0; }
+  int Init(Window *W) { InitWindow(GetTyped<GLFWwindow*>(screen->id)); return 0; }
   int Frame(unsigned clicks) { glfwPollEvents(); return 0; }
 
   static void InitWindow(GLFWwindow *W) {
@@ -92,7 +92,7 @@ struct GLFWFrameworkModule : public Module {
   }
 
   static void WindowSize (GLFWwindow *W, int w, int h) { if (!LoadScreen(W)) return; screen->Reshaped(w, h); }
-  static void WindowClose(GLFWwindow *W)               { if (!LoadScreen(W)) return; Window::Close(screen); }
+  static void WindowClose(GLFWwindow *W)               { if (!LoadScreen(W)) return; app->CloseWindow(screen); }
   static void Key(GLFWwindow *W, int k, int s, int a, int m) {
     if (!LoadScreen(W)) return;
     app->input->KeyPress((unsigned)k < 256 && isalpha((unsigned)k) ? ::tolower((unsigned)k) : k,
@@ -126,38 +126,42 @@ struct GLFWFrameworkModule : public Module {
   }
 };
 
-string Application::GetClipboardText()                { return glfwGetClipboardString((GLFWwindow*)screen->id); }
-void   Application::SetClipboardText(const string &s) {        glfwSetClipboardString((GLFWwindow*)screen->id, s.c_str()); }
-void Application::GrabMouseFocus()    { glfwSetInputMode((GLFWwindow*)screen->id, GLFW_CURSOR, GLFW_CURSOR_DISABLED); app->grab_mode.On();  screen->cursor_grabbed=true;  }
-void Application::ReleaseMouseFocus() { glfwSetInputMode((GLFWwindow*)screen->id, GLFW_CURSOR, GLFW_CURSOR_NORMAL);   app->grab_mode.Off(); screen->cursor_grabbed=false; }
+string Application::GetClipboardText()                { return glfwGetClipboardString(GetTyped<GLFWwindow*>(screen->id)); }
+void   Application::SetClipboardText(const string &s) {        glfwSetClipboardString(GetTyped<GLFWwindow*>(screen->id), s.c_str()); }
+void Application::GrabMouseFocus()    { glfwSetInputMode(GetTyped<GLFWwindow*>(screen->id), GLFW_CURSOR, GLFW_CURSOR_DISABLED); app->grab_mode.On();  screen->cursor_grabbed=true;  }
+void Application::ReleaseMouseFocus() { glfwSetInputMode(GetTyped<GLFWwindow*>(screen->id), GLFW_CURSOR, GLFW_CURSOR_NORMAL);   app->grab_mode.Off(); screen->cursor_grabbed=false; }
+void Application::OpenTouchKeyboard() {}
+void Application::LoseFocus() {}
 
 void Application::MakeCurrentWindow(Window *W) {
-  glfwMakeContextCurrent((GLFWwindow*)W->id);
+  glfwMakeContextCurrent(GetTyped<GLFWwindow*>(W->id));
   screen = W;
 }
 
 void Application::CloseWindow(Window *W) {
-  windows.erase(W->id);
-  bool done = windows.empty();
-  if (done) app->shell.quit(vector<string>());
-  if (!done) glfwDestroyWindow((GLFWwindow*)W->id);
+  windows.erase(W->id.v);
+  if (windows.empty()) run = false;
   if (app->window_closed_cb) app->window_closed_cb(W);
+  glfwDestroyWindow(GetTyped<GLFWwindow*>(W->id));
   screen = 0;
 }
 
+void Window::SetCaption(const string &v) {}
+void Window::SetResizeIncrements(float x, float y) {}
+void Window::SetTransparency(float v) {}
 void Window::Reshape(int w, int h) { glfwSetWindowSize(GetTyped<GLFWwindow*>(id), w, h); }
 
-bool Window::CreateWindow(Window *W) {
-  GLFWwindow *share = windows.empty() ? 0 : (GLFWwindow*)windows.begin()->second->id;
-  if (!(W->id = glfwCreateWindow(W->width, W->height, W->caption.c_str(), 0, share))) return ERRORv(false, "glfwCreateWindow");
-  windows[W->id] = W;
+bool Video::CreateWindow(Window *W) {
+  GLFWwindow *share = app->windows.empty() ? 0 : GetTyped<GLFWwindow*>(app->windows.begin()->second->id);
+  if (!(W->id = MakeTyped(glfwCreateWindow(W->width, W->height, W->caption.c_str(), 0, share))).v) return ERRORv(false, "glfwCreateWindow");
+  app->windows[W->id.v] = W;
   return true;
 }
 
-
+void Video::StartWindow(Window *W) {}
 int Video::Swap() {
   screen->gd->Flush();
-  glfwSwapBuffers((GLFWwindow*)screen->id);
+  glfwSwapBuffers(GetTyped<GLFWwindow*>(screen->id));
   screen->gd->CheckForError(__FILE__, __LINE__);
   return 0;
 }
@@ -165,6 +169,7 @@ int Video::Swap() {
 void FrameScheduler::DoWait() { glfwWaitEvents(); }
 void FrameScheduler::Setup() {}
 void FrameScheduler::Wakeup(void*) { if (wait_forever && screen && wait_forever_thread) glfwPostEmptyEvent(); }
+void FrameScheduler::UpdateWindowTargetFPS(Window *w) {}
 void FrameScheduler::AddWaitForeverMouse() {}
 void FrameScheduler::DelWaitForeverMouse() {}
 void FrameScheduler::AddWaitForeverKeyboard() {}
@@ -172,12 +177,14 @@ void FrameScheduler::DelWaitForeverKeyboard() {}
 void FrameScheduler::AddWaitForeverSocket(Socket fd, int flag, void *val) { if (wait_forever && wait_forever_thread) wakeup_thread.Add(fd, flag, val); }
 void FrameScheduler::DelWaitForeverSocket(Socket fd) { if (wait_forever && wait_forever_thread) wakeup_thread.Del(fd); }
 
-extern "C" void *LFAppCreatePlatformModule() {
+unique_ptr<Module> CreateFrameworkModule() {
   ONCE({ if (FLAGS_lfapp_video) {
     INFO("LFAppCreatePlatformModule: glfwInit()");
     if (!glfwInit()) return ERRORv(nullptr, "glfwInit: ", strerror(errno));
   }});
-  return new GLFWVideoModule();
+  return make_unique<GLFWFrameworkModule>();
 }
+
+extern "C" int main(int argc, const char* const* argv) { return MyAppMain(argc, argv); }
 
 }; // namespace LFL

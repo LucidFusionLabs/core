@@ -23,6 +23,11 @@
 #include "core/app/app.h"
 
 #include <sys/stat.h>
+
+#ifdef LFL_ANDROID
+#include "core/app/bindings/jni.h"
+#endif
+
 #ifndef LFL_WINDOWS
 #include <dirent.h>
 #endif

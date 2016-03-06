@@ -31,6 +31,7 @@ const int GraphicsDevice::TextureCubeMap = 0;
 const int GraphicsDevice::UnsignedByte = 0;
 const int GraphicsDevice::UnsignedInt = 0;
 const int GraphicsDevice::FramebufferComplete = 0;
+const int GraphicsDevice::FramebufferBinding = 0;
 const int GraphicsDevice::Ambient = 0;
 const int GraphicsDevice::Diffuse = 0;
 const int GraphicsDevice::Specular = 0;

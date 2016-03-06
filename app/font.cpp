@@ -370,7 +370,7 @@ template <class X> int Font::Draw(const StringPieceT<X> &text, const Box &box, v
   Shape(text, box, &out, draw_flag | DrawFlag::DontAssignFlowP);
   if (lb) *lb = out.line;
   if (!(draw_flag & DrawFlag::Clipped)) out.Draw(box.TopLeft());
-  return max(1UL, out.line.size());
+  return max(size_t(1), out.line.size());
 }
 
 template void Font::Size  <char>    (const StringPiece   &text, Box *out, int maxwidth, int *lines_out);

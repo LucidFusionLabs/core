@@ -1,5 +1,5 @@
 /*
- * $Id$
+ * $Id: video.cpp 1336 2014-12-08 09:29:59Z justin $
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -16,36 +16,27 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <vector>
-#include <string>
-#include <unordered_map>
-#include <stdlib.h>
-#include "../lfexport.h"
+#include "core/app/app.h"
 
-#ifdef LFL_IPHONE
 #import <UIKit/UIKit.h>
 #import <UIKit/UIScreen.h>
 #import <GLKit/GLKit.h>
 #import <OpenGLES/EAGL.h>
 #import <OpenGLES/EAGLDrawable.h>
-#ifdef LFL_GLES2
 #import <OpenGLES/ES2/gl.h>
 #import <OpenGLES/ES2/glext.h>
-#endif // LFL_GLES2
 #import <OpenGLES/ES1/gl.h>
 #import <OpenGLES/ES1/glext.h>
 #import <QuartzCore/QuartzCore.h>
 #ifndef LFL_IPHONESIM 
 #import <AVFoundation/AVFoundation.h>
-#endif // LFL_IPHONESIM
+#endif
 
-extern "C" int iPhoneMain(int argc, const char **argv);
-extern "C" void NativeWindowSize(int *width, int *height);
-
-struct IPhoneKeyCode { enum { Backspace = 8, Return = 10 }; };
-static NSString *iphone_documents_directory = nil;
-static const char **iphone_argv = 0;
 static int iphone_argc = 0;
+static const char* const* iphone_argv = 0;
+static NSString *iphone_documents_directory = nil;
+struct IPhoneKeyCode { enum { Backspace = 8, Return = 10 }; };
+extern "C" void NativeWindowSize(int *width, int *height);
 
 @interface MyTouchView : UIView {}
 @end
@@ -133,7 +124,7 @@ static int iphone_argc = 0;
 
     [[NSFileManager defaultManager] changeCurrentDirectoryPath: [[NSBundle mainBundle] resourcePath]];
     NSLog(@"iPhoneMain argc=%d", iphone_argc);
-    iPhoneMain(iphone_argc, iphone_argv);
+    MyAppMain(iphone_argc, iphone_argv);
     INFOf("didFinishLaunchingWithOptions, views: %p, %p, %p, csf=%f", self.view, self.lview, self.rview, scale);
 
     lfapp = GetLFApp();
@@ -559,7 +550,7 @@ static int iphone_argc = 0;
 
 extern "C" void NativeWindowInit() { 
   NativeWindow *screen = GetNativeWindow();
-  screen->id = [[LFUIApplication sharedAppDelegate] view];
+  screen->id = LFL::MakeTyped([[LFUIApplication sharedAppDelegate] view]);
 }
 
 extern "C" int NativeWindowOrientation() { return [[LFUIApplication sharedAppDelegate] getOrientation]; }
@@ -576,23 +567,6 @@ extern "C" void NativeWindowSize(int *width, int *height) {
   INFOf("NativeWindowSize %d %d", *width, *height);
 }
 
-extern "C" int iPhoneVideoSwap() { return 0; }
-extern "C" int iPhoneSetExtraScale(bool on) { return [[LFUIApplication sharedAppDelegate] updateScale:on]; }
-extern "C" int iPhoneSetMultisample(bool on) { return [[LFUIApplication sharedAppDelegate] updateGLKMultisample:on]; }
-extern "C" void iPhoneShowKeyboard() { [[LFUIApplication sharedAppDelegate] showKeyboard]; }
-extern "C" void iPhoneHideKeyboard() { [[LFUIApplication sharedAppDelegate] hideKeyboard]; }
-extern "C" void iPhoneHideKeyboardAfterReturn(bool v) { [LFUIApplication sharedAppDelegate].resign_textfield_on_return = v; }
-extern "C" void iPhoneGetKeyboardBox(int *x, int *y, int *w, int *h) {
-  NativeWindow *screen = GetNativeWindow();
-  LFUIApplication *app = [LFUIApplication sharedAppDelegate];
-  CGRect rect = [app.controller getKeyboardToolbarFrame];
-  CGFloat scale = [app getScale];
-  *x = scale * rect.origin.x;
-  *y = scale * (rect.origin.y + rect.size.height) - screen->height;
-  *w = scale * rect.size.width;
-  *h = scale * rect.size.height;
-}
-
 extern "C" void iPhoneLog(const char *text) {
   NSString *t = [[NSString alloc] initWithUTF8String: text];
   NSLog(@"%@", t);
@@ -607,22 +581,8 @@ extern "C" int iPhoneOpenBrowser(const char *url_text) {
   return 0;
 }
 
-extern "C" void iPhoneTriggerFrame(void *O) { dispatch_async(dispatch_get_main_queue(), ^{ [(GLKView*)O setNeedsDisplay]; }); }
-extern "C" bool iPhoneTriggerFrameIn(void*, int ms, bool force) { return false; }
-extern "C" void iPhoneClearTriggerFrameIn(void *O) {}
-extern "C" void iPhoneUpdateTargetFPS(void*) { [[LFUIApplication sharedAppDelegate] updateTargetFPS: GetNativeWindow()->target_fps]; }
-extern "C" void iPhoneAddWaitForeverMouse(void*) { [LFUIApplication sharedAppDelegate].frame_on_mouse_input = YES; }
-extern "C" void iPhoneDelWaitForeverMouse(void*) { [LFUIApplication sharedAppDelegate].frame_on_mouse_input = NO; }
-extern "C" void iPhoneAddWaitForeverKeyboard(void*) { [LFUIApplication sharedAppDelegate].frame_on_keyboard_input = YES; }
-extern "C" void iPhoneDelWaitForeverKeyboard(void*) { [LFUIApplication sharedAppDelegate].frame_on_keyboard_input = NO; }
-extern "C" void iPhoneAddWaitForeverSocket(void*, int fd) { [[LFUIApplication sharedAppDelegate] setWaitForeverSocket: fd]; }
-extern "C" void iPhoneDelWaitForeverSocket(void*, int fd) { [[LFUIApplication sharedAppDelegate] delWaitForeverSocket: fd]; }
 extern "C" void iPhoneCreateToolbar(int n, const char **name, const char **val) {
   [[LFUIApplication sharedAppDelegate].controller addToolbar: n key:name val:val];
-}
-
-extern "C" void iPhoneToggleToolbarButton(const char *n) {
-  [[LFUIApplication sharedAppDelegate].controller toggleToolbarButtonWithTitle:n];
 }
 
 extern "C" void iPhoneCreateNativeMenu(const char *title, int n, const char **name, const char **val) {
@@ -694,14 +654,148 @@ extern "C" bool iPhonePasswordSave(const char *a, const char *h, const char *u, 
   return true;
 }
 
-extern "C" int main(int ac, const char **av) {
+namespace LFL {
+const int Key::Escape     = -1;
+const int Key::Return     = 10;
+const int Key::Up         = -3;
+const int Key::Down       = -4;
+const int Key::Left       = -5;
+const int Key::Right      = -6;
+const int Key::LeftShift  = -7;
+const int Key::RightShift = -8;
+const int Key::LeftCtrl   = -9;
+const int Key::RightCtrl  = -10;
+const int Key::LeftCmd    = -11;
+const int Key::RightCmd   = -12;
+const int Key::Tab        = -13;
+const int Key::Space      = -14;
+const int Key::Backspace  = 8;
+const int Key::Delete     = -16;
+const int Key::Quote      = -17;
+const int Key::Backquote  = '~';
+const int Key::PageUp     = -19;
+const int Key::PageDown   = -20;
+const int Key::F1         = -21;
+const int Key::F2         = -22;
+const int Key::F3         = -23;
+const int Key::F4         = -24;
+const int Key::F5         = -25;
+const int Key::F6         = -26;
+const int Key::F7         = -27;
+const int Key::F8         = -28;
+const int Key::F9         = -29;
+const int Key::F10        = -30;
+const int Key::F11        = -31;
+const int Key::F12        = -32;
+const int Key::Home       = -33;
+const int Key::End        = -34;
+
+struct iPhoneFrameworkModule : public Module {
+  int Init() {
+    INFO("iPhoneFrameworkModule::Init()");
+    CHECK(!screen->id.v);
+    NativeWindowInit();
+    NativeWindowSize(&screen->width, &screen->height);
+    CHECK(screen->id.v);
+    app->windows[screen->id.v] = screen;
+    return 0;
+  }
+};
+
+string Application::GetClipboardText() { return ""; }
+void Application::SetClipboardText(const string &s) {}
+int  Application::SetExtraScale(bool v) { return [[LFUIApplication sharedAppDelegate] updateScale:v]; }
+int  Application::SetMultisample(bool v) { return [[LFUIApplication sharedAppDelegate] updateGLKMultisample:v]; }
+void Application::OpenTouchKeyboard() { [[LFUIApplication sharedAppDelegate] showKeyboard]; }
+void Application::CloseTouchKeyboard() { [[LFUIApplication sharedAppDelegate] hideKeyboard]; }
+void Application::CloseTouchKeyboardAfterReturn(bool v) { [LFUIApplication sharedAppDelegate].resign_textfield_on_return = v; }
+void Application::ToggleToolbarButton(const string &n) { 
+  [[LFUIApplication sharedAppDelegate].controller toggleToolbarButtonWithTitle:n.c_str()];
+}
+
+void Application::GrabMouseFocus() {}
+void Application::ReleaseMouseFocus() {}
+void Application::CloseWindow(Window *W) {}
+void Application::MakeCurrentWindow(Window *W) {}
+
+Box Application::GetTouchKeyboardBox() {
+  Box ret; 
+  NativeWindow *screen = GetNativeWindow();
+  LFUIApplication *app = [LFUIApplication sharedAppDelegate];
+  CGRect rect = [app.controller getKeyboardToolbarFrame];
+  CGFloat scale = [app getScale];
+  return Box(scale * rect.origin.x,
+             scale * (rect.origin.y + rect.size.height) - screen->height,
+             scale * rect.size.width,
+             scale * rect.size.height);
+}
+
+void Window::SetResizeIncrements(float x, float y) {}
+void Window::SetTransparency(float v) {}
+void Window::SetCaption(const string &v) {}
+void Window::Reshape(int w, int h) {}
+
+void Video::StartWindow(Window *W) {}
+bool Video::CreateWindow(Window *W) { return false; }
+int Video::Swap() {
+  screen->gd->Flush();
+  screen->gd->CheckForError(__FILE__, __LINE__);
+  return 0;
+}
+
+void FrameScheduler::DoWait() {}
+void FrameScheduler::Setup() { rate_limit = synchronize_waits = wait_forever_thread = monolithic_frame = 0; }
+void FrameScheduler::Wakeup(void*) {
+  dispatch_async(dispatch_get_main_queue(), ^{ [GetTyped<GLKView*>(screen->id) setNeedsDisplay]; });
+}
+
+bool FrameScheduler::WakeupIn(void *opaque, Time interval, bool force) { return false; }
+void FrameScheduler::ClearWakeupIn() {}
+
+void FrameScheduler::UpdateWindowTargetFPS(Window *w) {
+  [[LFUIApplication sharedAppDelegate] updateTargetFPS: GetNativeWindow()->target_fps];
+}
+
+void FrameScheduler::AddWaitForeverMouse() {
+  [LFUIApplication sharedAppDelegate].frame_on_mouse_input = YES;
+}
+
+void FrameScheduler::DelWaitForeverMouse() {
+  [LFUIApplication sharedAppDelegate].frame_on_mouse_input = NO;
+}
+
+void FrameScheduler::AddWaitForeverKeyboard() {
+  [LFUIApplication sharedAppDelegate].frame_on_keyboard_input = YES;
+}
+
+void FrameScheduler::DelWaitForeverKeyboard() {
+ [LFUIApplication sharedAppDelegate].frame_on_keyboard_input = NO;
+}
+
+void FrameScheduler::AddWaitForeverSocket(Socket fd, int flag, void *val) {
+  if (wait_forever && wait_forever_thread) wakeup_thread.Add(fd, flag, val);
+  if (!wait_forever_thread) {
+    CHECK_EQ(SocketSet::READABLE, flag);
+    [[LFUIApplication sharedAppDelegate] setWaitForeverSocket: fd];
+  }
+}
+
+void FrameScheduler::DelWaitForeverSocket(Socket fd) {
+  if (wait_forever && wait_forever_thread) wakeup_thread.Del(fd);
+  CHECK(screen->id.v);
+  [[LFUIApplication sharedAppDelegate] delWaitForeverSocket: fd];
+}
+
+unique_ptr<Module> CreateFrameworkModule() { return make_unique<iPhoneFrameworkModule>(); }
+
+extern "C" int main(int ac, const char* const* av) {
   iphone_argc = ac;
   iphone_argv = av;
   NSLog(@"%@", @"lfapp_lfobjc_iphone_main");
   NSAutoreleasePool * pool = [[NSAutoreleasePool alloc] init];
-  int ret = UIApplicationMain(ac, (char**)av, nil, @"LFUIApplication");
+  int ret = UIApplicationMain(ac, const_cast<char**>(av), nil, @"LFUIApplication");
   [pool release];
   return ret;
 }
 
-#endif /* LFL_IPHONE */
+}; // namespace LFL

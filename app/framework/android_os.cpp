@@ -17,9 +17,7 @@
  */
 
 #include "core/app/app.h"
-
-extern "C" void AndroidSetFrameOnKeyboardInput(int v);
-extern "C" void AndroidSetFrameOnMouseInput   (int v);
+#include "core/app/bindings/jni.h"
 
 namespace LFL {
 void Application::OpenSystemBrowser(const string &url_text) {

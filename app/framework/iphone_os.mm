@@ -39,6 +39,8 @@ void Application::LaunchNativeMenu(const string &title) {
   iPhoneLaunchNativeMenu(title.c_str());
 }
 
+void Application::LaunchNativeFontChooser(const FontDesc &cur_font, const string &choose_cmd) {}
+
 void Application::OpenSystemBrowser(const string &url_text) {
   iPhoneOpenBrowser(url_text.c_str());
 }

@@ -23,6 +23,10 @@
 #include "core/app/gui.h"
 #include "core/app/ipc.h"
 
+#ifdef LFL_ANDROID
+#include "core/app/bindings/jni.h"
+#endif
+
 #ifdef LFL_IPHONE
 extern "C" void *iPhoneMusicCreate(const char *filename);
 #endif

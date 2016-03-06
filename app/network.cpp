@@ -26,6 +26,10 @@ extern "C" {
 #include "core/app/crypto.h"
 #include "core/app/net/resolver.h"
 
+#ifdef LFL_ANDROID
+#include "core/app/bindings/jni.h"
+#endif
+
 #ifndef LFL_WINDOWS
 #include <sys/socket.h>
 #include <sys/uio.h>

@@ -21,7 +21,9 @@
 #include "openssl/ssl.h"
 #include "openssl/err.h"
 #include "openssl/conf.h"
+#ifndef LFL_ANDROID
 #include "openssl/engine.h"
+#endif
 
 namespace LFL {
 DEFINE_string(ssl_certfile, "", "SSL server certificate file");
@@ -98,7 +100,9 @@ SSL_CTX *SSLSocket::Init() {
 void SSLSocket::Free() {
   CONF_modules_free();
   ERR_remove_state(0);
+#ifndef LFL_ANDROID
   ENGINE_cleanup();
+#endif
   CONF_modules_unload(1);
   ERR_free_strings();
   EVP_cleanup();

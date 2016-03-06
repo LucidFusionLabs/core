@@ -121,12 +121,6 @@ struct KeyRepeater {
 };
 #endif
 
-#if !defined(LFL_ANDROIDINPUT) && !defined(LFL_IPHONEINPUT)
-void Application::OpenTouchKeyboard() {}
-void Application::CloseTouchKeyboard() {}
-Box Application::GetTouchKeyboardBox() { return Box(); }
-#endif
-
 void Application::AddToolbar(const vector<pair<string, string>>&items) {
   vector<const char *> k, v;
   for (auto &i : items) { k.push_back(i.first.c_str()); v.push_back(i.second.c_str()); }

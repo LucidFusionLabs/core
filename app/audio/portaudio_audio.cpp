@@ -115,6 +115,6 @@ struct PortaudioAudioModule : public Module {
   }
 };
  
-Module *CreateAudioModule(Audio *a) { return new PortaudioAudioModule(a); }
+unique_ptr<Module> CreateAudioModule(Audio *a) { return make_unique<PortaudioAudioModule>(a); }
 
 }; // namespace LFL

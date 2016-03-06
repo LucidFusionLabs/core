@@ -67,6 +67,7 @@ string Application::GetClipboardText() { return ""; }
 void Application::SetClipboardText(const string &s) {}
 void Application::GrabMouseFocus() {}
 void Application::ReleaseMouseFocus() {}
+void Application::OpenTouchKeyboard() {}
 void Application::LaunchNativeContextMenu(const vector<MenuItem>&items) {}
 void Application::MakeCurrentWindow(Window *W) {}
 void Application::CloseWindow(Window *W) {

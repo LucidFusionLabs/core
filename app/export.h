@@ -233,10 +233,6 @@ struct CameraState {
 
 void MyAppCreate();
 int MyAppMain(int argc, const char* const* argv);
-void NativeWindowInit();
-void NativeWindowQuit();
-void NativeWindowSize(int *widthOut, int *heightOut);
-int NativeWindowOrientation();
 
 NativeWindow *GetNativeWindow();
 NativeWindow *SetNativeWindow(NativeWindow*);
@@ -275,8 +271,8 @@ void BreakHook();
 }; // extern C
 namespace LFL {
 template <class X> void *TypeId() { static char id=0; return &id; }
-template <class X> typed_ptr MakeTyped(X v) { return typed_ptr{ TypeId<X>(), v }; }
-template <class X> X GetTyped(const typed_ptr &p) { return p.type == TypeId<X>() ? static_cast<X>(p.v) : nullptr; }
+template <class X> typed_ptr MakeTyped(X v) { typed_ptr x = { TypeId<X>(), v }; return x; }
+template <class X> X GetTyped(const typed_ptr &p) { return p.type == TypeId<X>() ? static_cast<X>(p.v) : 0; }
 template <class X> X FromVoid(const void_ptr &p) { return static_cast<X>(p.v); }
 template <class X> X FromVoid(const const_void_ptr &p) { return static_cast<X>(p.v); }
 }; // namespace LFL

@@ -86,10 +86,10 @@ elseif(LFL_IPHONE)
 elseif(LFL_ANDROID)
   macro(lfl_add_target target)
     add_library(${target} ${ARGN})
-    set(${target}_lfapp_obj ${LFL_CORE_BINARY_DIR}/lfapp/liblfapp.a)
-    set(${target}_deps ${LFL_SOURCE_DIR}/core/lfapp/jni/lfjni.cpp ${${target}_lfapp_obj})
-    set_source_files_properties(${${target}_lfapp_obj} PROPERTIES HEADER_FILE_ONLY TRUE)
-    set_source_files_properties(${LFL_SOURCE_DIR}/core/lfapp/jni/lfjni.cpp PROPERTIES HEADER_FILE_ONLY TRUE)
+    set(${target}_lfl_app_obj ${LFL_CORE_BINARY_DIR}/app/liblfl_app.a)
+    set(${target}_deps ${LFL_SOURCE_DIR}/core/app/bindings/jni.cpp ${${target}_lfl_app_obj})
+    set_source_files_properties(${${target}_lfl_app_obj} PROPERTIES HEADER_FILE_ONLY TRUE)
+    set_source_files_properties(${LFL_SOURCE_DIR}/core/app/bindings/jni.cpp PROPERTIES HEADER_FILE_ONLY TRUE)
     set_source_files_properties(${ARGV1} PROPERTIES OBJECT_DEPENDS "${${target}_deps}")
   endmacro()
 
@@ -97,7 +97,7 @@ elseif(LFL_ANDROID)
     add_custom_command(TARGET ${target} POST_BUILD WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/${target}-android/jni
       COMMAND ${ANDROIDNDK}/ndk-build
       COMMAND mkdir -p ${CMAKE_CURRENT_SOURCE_DIR}/${target}-android/res/raw
-      COMMAND cp ${LFL_SOURCE_DIR}/core/lfapp/*.glsl ${CMAKE_CURRENT_SOURCE_DIR}/assets
+      COMMAND cp ${LFL_SOURCE_DIR}/core/app/*.glsl ${CMAKE_CURRENT_SOURCE_DIR}/assets
       COMMAND if [ -f ${CMAKE_CURRENT_SOURCE_DIR}/assets/*.wav ]; then cp ${CMAKE_CURRENT_SOURCE_DIR}/assets/*.wav ../res/raw\; fi
       COMMAND if [ -f ${CMAKE_CURRENT_SOURCE_DIR}/assets/*.mp3 ]; then cp ${CMAKE_CURRENT_SOURCE_DIR}/assets/*.mp3 ../res/raw\; fi)
     add_custom_target(${target}_debug WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/${target}-android DEPENDS ${target}

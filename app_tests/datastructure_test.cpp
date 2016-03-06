@@ -19,11 +19,16 @@
 #include "gtest/gtest.h"
 #include "core/app/app.h"
 
-extern "C" void MyAppInit() {}
+extern "C" void MyAppCreate() {
+  LFL::FLAGS_default_font = LFL::FakeFontEngine::Filename();
+  LFL::app = new LFL::Application();
+  LFL::screen = new LFL::Window();
+}
+
 extern "C" int MyAppMain(int argc, const char* const* argv) {
   testing::InitGoogleTest(&argc, const_cast<char**>(argv));
-  LFL::FLAGS_default_font = LFL::FakeFontEngine::Filename();
-  CHECK_EQ(LFL::app->Create(argc, argv, __FILE__), 0);
+  if (!LFL::app) MyAppCreate();
+  CHECK_EQ(0, LFL::app->Create(argc, argv, __FILE__));
   return RUN_ALL_TESTS();
 }
 

@@ -96,7 +96,6 @@ extern int optind;
 
 #ifdef LFL_ANDROID
 #include <sys/endian.h>
-#include "jni/lfjni.h"
 #endif
 
 #define  INFO(...) ((::LFApp::Log::Info  <= ::LFL::FLAGS_loglevel) ? ::LFL::Log(::LFApp::Log::Info,  __FILE__, __LINE__, ::LFL::StrCat(__VA_ARGS__)) : void())
@@ -594,7 +593,7 @@ struct Application : public ::LFApp {
   double FPS() const { return screen->fps.FPS(); }
   double CamFPS() const { return camera->fps.FPS(); }
   Window *GetWindow(void *id) const { return FindOrNull(windows, id); }
-  int LoadModule(Module *m) { return PushBack(modules, m)->Init(); }
+  int LoadModule(Module *m) { return m ? PushBack(modules, m)->Init() : 0; }
   void Log(int level, const char *file, int line, const string &message);
   void WriteLogLine(const char *tbuf, const char *message, const char *file, int line);
   void MakeCurrentWindow(Window*);

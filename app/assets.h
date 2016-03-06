@@ -691,8 +691,8 @@ struct TilesInterface {
 };
 
 struct LayersInterface {
-  UNALIGNED_struct Node  { static const int Size=40; Box box; point scrolled; int layer_id, child_offset; }; UNALIGNED_END(Node,  Node::Size);
-  UNALIGNED_struct Child { static const int Size=8;  int node_id, next_child_offset; };                      UNALIGNED_END(Child, Child::Size);
+  UNALIGNED_struct Node  { static const int Size=32+sizeof(void*); Box box; point scrolled; int layer_id, child_offset; }; UNALIGNED_END(Node,  Node::Size);
+  UNALIGNED_struct Child { static const int Size=8;                int node_id, next_child_offset; };                      UNALIGNED_END(Child, Child::Size);
   vector<Node> node;
   vector<Child> child;
   vector<unique_ptr<TilesInterface>> layer;

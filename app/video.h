@@ -438,7 +438,7 @@ struct Shader {
 
 struct GraphicsDevice {
   static const int Float, Points, Lines, LineLoop, Triangles, TriangleStrip, Polygon;
-  static const int Texture2D, TextureCubeMap, UnsignedByte, UnsignedInt, FramebufferComplete;
+  static const int Texture2D, TextureCubeMap, UnsignedByte, UnsignedInt, FramebufferComplete, FramebufferBinding;
   static const int Ambient, Diffuse, Specular, Emission, Position;
   static const int One, SrcAlpha, OneMinusSrcAlpha, OneMinusDstColor, TextureWrapS, TextureWrapT, ClampToEdge;
   static const int VertexShader, FragmentShader, ShaderVersion, Extensions;
@@ -447,7 +447,7 @@ struct GraphicsDevice {
   static const int Fill, Line, Point, GLPreferredBuffer, GLInternalFormat;
 
   int default_draw_mode = DrawMode::_2D, draw_mode = 0, default_framebuffer = 0;
-  bool have_framebuffer = 1, have_cubemap = 1, blend_enabled = 0, invert_view_matrix = 0, track_model_matrix = 0;
+  bool done_init = 0, have_framebuffer = 1, have_cubemap = 1, blend_enabled = 0, invert_view_matrix = 0, track_model_matrix = 0;
   string vertex_shader, pixel_shader;
   Shader *shader = 0;
   v3 camera_pos;

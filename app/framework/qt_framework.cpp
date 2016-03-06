@@ -61,7 +61,7 @@ const int Key::F12        = Qt::Key_F12;
 const int Key::Home       = Qt::Key_Home;
 const int Key::End        = Qt::Key_End;
 
-struct QtPlatformModule : public Module {
+struct QtFrameworkModule : public Module {
   int Free() {
     delete lfl_qapp;
     lfl_qapp = nullptr;
@@ -78,9 +78,9 @@ class QtWindow : public QWindow {
   point mouse_p;
 
   void MyInit() {
-    CHECK(!lfl_window->gl.value);
+    CHECK(!lfl_window->gl.v);
     QOpenGLContext *glc = new QOpenGLContext(this);
-    if (LFL::screen->gl.value) glc->setShareContext(GetTyped<QOpenGLContext*>(LFL::screen->gl));
+    if (LFL::screen->gl.v) glc->setShareContext(GetTyped<QOpenGLContext*>(LFL::screen->gl));
     glc->setFormat(requestedFormat());
     glc->create();
     lfl_window->gl = MakeTyped(glc);
@@ -96,7 +96,7 @@ class QtWindow : public QWindow {
       MyAppMain(lfl_qapp_av.size()-1, &lfl_qapp_av[0]);
       if (!LFL::app->run) { lfl_qapp->exit(); return true; }
     }
-    if (!LFL::screen || LFL::screen->impl.value != this) LFL::app->MakeCurrentWindow(lfl_window);
+    if (!LFL::screen || LFL::screen->impl.v != this) LFL::app->MakeCurrentWindow(lfl_window);
     app->EventDrivenFrame(true);
     if (!app->run) { lfl_qapp->exit(); return true; }
     if (reenable_wait_forever_socket && !(reenable_wait_forever_socket=0)) wait_forever_socket->setEnabled(true);
@@ -178,7 +178,7 @@ class QtWindow : public QWindow {
 #include "qt_framework.moc"
 
 bool Video::CreateWindow(Window *W) {
-  CHECK(!W->id.value && W->gd);
+  CHECK(!W->id.v && W->gd);
   QtWindow *my_qwin = new QtWindow();
   QWindow *qwin = my_qwin;
   my_qwin->lfl_window = W;
@@ -195,12 +195,12 @@ bool Video::CreateWindow(Window *W) {
   W->started = true;
   W->id = MakeTyped(qwin);
   W->impl = MakeTyped(my_qwin);
-  app->windows[W->id.value] = W;
+  app->windows[W->id.v] = W;
   return true;
 }
 
 void Application::CloseWindow(Window *W) {
-  windows.erase(W->id.value);
+  windows.erase(W->id.v);
   if (windows.empty()) app->run = false;
   if (app->window_closed_cb) app->window_closed_cb(W);
   screen = 0;
@@ -226,6 +226,7 @@ int Video::Swap() {
 void Application::LoseFocus() {}
 void Application::GrabMouseFocus()    { GetTyped<QtWindow*>(screen->impl)->grabbed=1; GetTyped<QWindow*>(screen->id)->setCursor(Qt::BlankCursor); app->grab_mode.On();  screen->cursor_grabbed=true;  }
 void Application::ReleaseMouseFocus() { GetTyped<QtWindow*>(screen->impl)->grabbed=0; GetTyped<QWindow*>(screen->id)->unsetCursor();              app->grab_mode.Off(); screen->cursor_grabbed=false; }
+void Application::OpenTouchKeyboard() {}
 
 string Application::GetClipboardText() { QByteArray v = QApplication::clipboard()->text().toUtf8(); return string(v.constData(), v.size()); }
 void Application::SetClipboardText(const string &s) { QApplication::clipboard()->setText(QString::fromUtf8(s.data(), s.size())); }
@@ -263,16 +264,16 @@ void Dialog::MessageBox(const string &n) {
 #endif
 
 extern "C" int main(int argc, const char *argv[]) {
-  MyAppCreate(argc, argv);
+  MyAppCreate();
   for (int i=0; i<argc; i++) PushBack(lfl_qapp_argv, argv[i]);
   for (auto &a : lfl_qapp_argv) lfl_qapp_av.push_back(a.c_str());
   lfl_qapp_av.push_back(0);
   lfl_qapp = new QApplication(argc, const_cast<char**>(argv));
-  LFL::screen->gd = static_cast<GraphicsDevice*>(LFAppCreateGraphicsDevice(2));
+  LFL::screen->gd = LFL::CreateGraphicsDevice(2).release();
   Video::CreateWindow(LFL::screen);
   return lfl_qapp->exec();
 }
 
-extern "C" void *LFAppCreatePlatformModule() { return new QtPlatformModule(); }
+unique_ptr<Module> CreateFrameworkModule() { return make_unique<QtFrameworkModule>(); }
 
 }; // namespace LFL

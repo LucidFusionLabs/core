@@ -123,7 +123,7 @@ struct MultiProcessPaintResource : public Serializable {
 
   UNALIGNED_struct Cmd { int type; Cmd(int T=0) : type(T) {} }; UNALIGNED_END(Cmd, 4);
   UNALIGNED_struct SetAttr : public Cmd {
-    static const int Type=1, Size=76;
+    static const int Type=1, Size=68+sizeof(void*);
     int font_id, tex_id; Color fg, bg; Box scissor; bool underline, overline, midline, blink, blend, hfg, hbg, hs;
     SetAttr(const Drawable::Attr &a=Drawable::Attr()) : Cmd(Type), font_id(a.font?IPCClientFontEngine::GetId(a.font):0),
       tex_id(a.tex?a.tex->ID:0), fg(a.fg?*a.fg:Color()), bg(a.bg?*a.bg:Color()), scissor(a.scissor?*a.scissor:Box()),
@@ -132,12 +132,12 @@ struct MultiProcessPaintResource : public Serializable {
     void Update(Drawable::Attr *o, ProcessAPIClient *s) const;
   }; UNALIGNED_END(SetAttr, SetAttr::Size);
 
-  UNALIGNED_struct InitDrawBox        : public Cmd { static const int Type=2, Size=12; point p;       InitDrawBox       (const point &P=point())       : Cmd(Type), p(P) {} };         UNALIGNED_END(InitDrawBox,        InitDrawBox::Size);
-  UNALIGNED_struct InitDrawBackground : public Cmd { static const int Type=3, Size=12; point p;       InitDrawBackground(const point &P=point())       : Cmd(Type), p(P) {} };         UNALIGNED_END(InitDrawBackground, InitDrawBackground::Size);
-  UNALIGNED_struct DrawBox            : public Cmd { static const int Type=4, Size=32; Box b; int id; DrawBox           (const Box &B=Box(), int ID=0) : Cmd(Type), b(B), id(ID) {} }; UNALIGNED_END(DrawBox,            DrawBox::Size);
-  UNALIGNED_struct DrawBackground     : public Cmd { static const int Type=5, Size=28; Box b;         DrawBackground    (const Box &B=Box())           : Cmd(Type), b(B) {} };         UNALIGNED_END(DrawBackground,     DrawBackground::Size);
-  UNALIGNED_struct PushScissor        : public Cmd { static const int Type=6, Size=28; Box b;         PushScissor       (const Box &B=Box())           : Cmd(Type), b(B) {} };         UNALIGNED_END(PushScissor,        PushScissor::Size);
-  UNALIGNED_struct PopScissor         : public Cmd { static const int Type=7, Size=4;                 PopScissor        ()                             : Cmd(Type) {} };               UNALIGNED_END(PopScissor,         PopScissor::Size);
+  UNALIGNED_struct InitDrawBox        : public Cmd { static const int Type=2, Size=12;               point p;       InitDrawBox       (const point &P=point())       : Cmd(Type), p(P) {} };         UNALIGNED_END(InitDrawBox,        InitDrawBox::Size);
+  UNALIGNED_struct InitDrawBackground : public Cmd { static const int Type=3, Size=12;               point p;       InitDrawBackground(const point &P=point())       : Cmd(Type), p(P) {} };         UNALIGNED_END(InitDrawBackground, InitDrawBackground::Size);
+  UNALIGNED_struct DrawBox            : public Cmd { static const int Type=4, Size=24+sizeof(void*); Box b; int id; DrawBox           (const Box &B=Box(), int ID=0) : Cmd(Type), b(B), id(ID) {} }; UNALIGNED_END(DrawBox,            DrawBox::Size);
+  UNALIGNED_struct DrawBackground     : public Cmd { static const int Type=5, Size=20+sizeof(void*); Box b;         DrawBackground    (const Box &B=Box())           : Cmd(Type), b(B) {} };         UNALIGNED_END(DrawBackground,     DrawBackground::Size);
+  UNALIGNED_struct PushScissor        : public Cmd { static const int Type=6, Size=20+sizeof(void*); Box b;         PushScissor       (const Box &B=Box())           : Cmd(Type), b(B) {} };         UNALIGNED_END(PushScissor,        PushScissor::Size);
+  UNALIGNED_struct PopScissor         : public Cmd { static const int Type=7, Size=4;                               PopScissor        ()                             : Cmd(Type) {} };               UNALIGNED_END(PopScissor,         PopScissor::Size);
 
   StringBuffer data;
   mutable Drawable::Attr attr;

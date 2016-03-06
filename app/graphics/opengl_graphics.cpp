@@ -121,25 +121,28 @@ const int GraphicsDevice::DepthBits            = GL_DEPTH_BITS;
 const int GraphicsDevice::ActiveUniforms       = GL_ACTIVE_UNIFORMS;
 const int GraphicsDevice::ActiveAttributes     = GL_ACTIVE_ATTRIBUTES;
 const int GraphicsDevice::MaxVertexAttributes  = GL_MAX_VERTEX_ATTRIBS;
-const int GraphicsDevice::MaxVertexUniformComp = GL_MAX_VERTEX_UNIFORM_COMPONENTS;
 #ifdef LFL_MOBILE
-const int GraphicsDevice::Fill                = 0;
-const int GraphicsDevice::Line                = 0;
-const int GraphicsDevice::Point               = 0;
-const int GraphicsDevice::Polygon             = 0;
-const int GraphicsDevice::GLPreferredBuffer   = GL_UNSIGNED_BYTE;
-const int GraphicsDevice::GLInternalFormat    = GL_RGBA;
+const int GraphicsDevice::Fill                 = 0;
+const int GraphicsDevice::Line                 = 0;
+const int GraphicsDevice::Point                = 0;
+const int GraphicsDevice::Polygon              = 0;
+const int GraphicsDevice::GLPreferredBuffer    = GL_UNSIGNED_BYTE;
+const int GraphicsDevice::GLInternalFormat     = GL_RGBA;
+const int GraphicsDevice::MaxVertexUniformComp = 0;
+const int GraphicsDevice::FramebufferBinding   = GL_FRAMEBUFFER_BINDING_OES;
 #else                                         
-const int GraphicsDevice::Fill                = GL_FILL;
-const int GraphicsDevice::Line                = GL_LINE;
-const int GraphicsDevice::Point               = GL_POINT;
-const int GraphicsDevice::Polygon             = GL_POLYGON;
-#ifdef __APPLE__                              
-const int GraphicsDevice::GLPreferredBuffer   = GL_UNSIGNED_INT_8_8_8_8_REV;
-#else                                         
-const int GraphicsDevice::GLPreferredBuffer   = GL_UNSIGNED_BYTE;
-#endif                                        
-const int GraphicsDevice::GLInternalFormat    = GL_RGBA;
+const int GraphicsDevice::Fill                 = GL_FILL;
+const int GraphicsDevice::Line                 = GL_LINE;
+const int GraphicsDevice::Point                = GL_POINT;
+const int GraphicsDevice::Polygon              = GL_POLYGON;
+#ifdef __APPLE__                               
+const int GraphicsDevice::GLPreferredBuffer    = GL_UNSIGNED_INT_8_8_8_8_REV;
+#else                                          
+const int GraphicsDevice::GLPreferredBuffer    = GL_UNSIGNED_BYTE;
+#endif                                         
+const int GraphicsDevice::GLInternalFormat     = GL_RGBA;
+const int GraphicsDevice::MaxVertexUniformComp = GL_MAX_VERTEX_UNIFORM_COMPONENTS;
+const int GraphicsDevice::FramebufferBinding   = 0;
 #endif
 
 int Depth::OpenGLID(int id) {
@@ -179,6 +182,7 @@ struct OpenGLES1 : public GraphicsDevice, public QOpenGLFunctions {
   int target_matrix=-1;
   OpenGLES1() { default_color.push_back(Color(1.0, 1.0, 1.0, 1.0)); }
   void Init(const Box &b) {
+    done_init = true;
     GDDebug("Init");
     shader = &app->shaders->shader_default; 
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
@@ -201,7 +205,7 @@ struct OpenGLES1 : public GraphicsDevice, public QOpenGLFunctions {
 #ifdef LFL_MOBILE
     return false;
 #endif
-    const char *ver = MakeUnbounded<char>(glGetString(GL_VERSION)).data();
+    const char *ver = GetString(GL_VERSION);
     return ver && *ver == '2';
   }
   void  EnableTexture() {  glEnable(GL_TEXTURE_2D);  glEnableClientState(GL_TEXTURE_COORD_ARRAY); GDDebug("Texture=1"); }
@@ -320,6 +324,7 @@ struct OpenGLES2 : public GraphicsDevice, public QOpenGLFunctions {
   Deferred deferred;
 
   void Init(const Box &b) {
+    done_init = true;
     GDDebug("Init");
     memzero(vertex_attr); memzero(tex_attr); memzero(color_attr); memzero(normal_attr); memzero(bound_texture);
     deferred.prim_type = deferred.vertex_size = deferred.vertexbuffer_len = deferred.draw_calls = 0;

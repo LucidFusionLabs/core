@@ -18,10 +18,11 @@
 
 #import <Cocoa/Cocoa.h>
 #import <OpenGL/gl.h>
-
+#include <AppKit/NSColor.h>
+#include <AppKit/NSColorSpace.h>
 #include "core/app/app.h"
 
-static int osx_argc = 0, osx_evcount = 0;
+static int osx_argc = 0;
 static const char **osx_argv = 0;
 
 // GameView
@@ -60,6 +61,7 @@ static const char **osx_argv = 0;
     [context release];
     [super dealloc];
   }
+
   - (id)initWithFrame:(NSRect)frame pixelFormat:(NSOpenGLPixelFormat*)format {
     [super initWithFrame:frame];
     pixel_format = [format retain];
@@ -67,10 +69,12 @@ static const char **osx_argv = 0;
     use_timer = should_close = 1;
     return self;
   }
+
   + (NSOpenGLPixelFormat *)defaultPixelFormat {
     NSOpenGLPixelFormatAttribute attributes[] = { NSOpenGLPFADepthSize, LFL::FLAGS_depth_buffer_bits, 0 };
     return [[[NSOpenGLPixelFormat alloc] initWithAttributes:attributes] autorelease];
   }
+
   - (NSOpenGLPixelFormat *)pixelFormat { return pixel_format; }
   - (BOOL)isOpaque { return YES; }
   - (BOOL)acceptsFirstResponder { return YES; }
@@ -89,6 +93,7 @@ static const char **osx_argv = 0;
     self.layer.contentsScale = [[self window] backingScaleFactor];
     INFOf("viewDidChangeBackingProperties %f %f", self.layer.contentsScale, ms);
   }
+
   - (void)update { [context update]; }
   - (void)lockFocus {
     [super lockFocus];
@@ -97,10 +102,12 @@ static const char **osx_argv = 0;
     SetNativeWindow(screen);
     if (needs_reshape) { [self reshape]; needs_reshape=NO; }
   }
+
   - (void)unlockFocus {
     [super unlockFocus];
     CGLUnlockContext([context CGLContextObj]);
   }
+
   - (void)prepareOpenGL {
     GLint swapInt = 1, opaque = 0;
     // [self setWantsBestResolutionOpenGLSurface:YES];
@@ -115,6 +122,7 @@ static const char **osx_argv = 0;
       CVDisplayLinkSetCurrentCGDisplayFromOpenGLContext(displayLink, cglContext, cglPixelFormat);
     }
   }
+
   - (NSOpenGLContext *)openGLContext {
     if (context == nil) {
       context = [self createGLContext];
@@ -123,12 +131,14 @@ static const char **osx_argv = 0;
     }
     return context;
   }
+
   - (NSOpenGLContext *)createGLContext {
     NSOpenGLContext *prev_context = LFL::GetTyped<NSOpenGLContext*>(GetNativeWindow()->gl);
     NSOpenGLContext *ret = [[NSOpenGLContext alloc] initWithFormat:pixel_format shareContext:prev_context];
     [ret setView:self];
     return ret;
   }
+
   - (void)startThread:(bool)first {
     initialized = true;
     if (!LFL::FLAGS_lfapp_input) {
@@ -148,10 +158,12 @@ static const char **osx_argv = 0;
       // [[NSRunLoop currentRunLoop] addTimer:runloop_timer forMode:NSEventTrackingRunLoopMode];
     }
   }
+
   - (void)stopThread {
     if (displayLink) { CVDisplayLinkStop(displayLink); displayLink = nil; }
     if (runloop_timer) { [runloop_timer invalidate]; runloop_timer = nil; }
   }
+
   - (void)stopThreadAndExit { [self stopThread]; exit(0); }
   - (void)runloopTimerFired:(id)sender { [self setNeedsDisplay:YES]; }
   - (void)triggerTimerFired:(id)sender { [self clearTriggerTimer]; needs_frame=1; [self setNeedsDisplay:YES]; }
@@ -171,6 +183,7 @@ static const char **osx_argv = 0;
     trigger_timer_start = now;
     return true;
   }
+
   - (void)drawRect:(NSRect)dirtyRect { if (use_timer) [self getFrameForTime:0]; }
   - (void)getFrameForTime:(const CVTimeStamp*)outputTime {
     static bool first_callback = 1;
@@ -179,6 +192,7 @@ static const char **osx_argv = 0;
     if (app->run) LFAppFrame(true);
     else [self stopThreadAndExit];
   }
+
   - (void)reshape {
     if (!initialized) return;
     [context update];
@@ -186,12 +200,14 @@ static const char **osx_argv = 0;
     float screen_w = [self frame].size.width, screen_h = [self frame].size.height;
     WindowReshaped(int(screen_w), int(screen_h));
   }
+
   - (BOOL)windowShouldClose:(id)sender { return should_close; }
   - (void)windowWillClose:(NSNotification *)notification { 
     SetNativeWindow(screen);
     WindowClosed();
     [self stopThread];
   }
+
   - (void)setWaitForeverSocket: (int)fd {
     if (wait_forever_fh) FATALf("wait_forever_fh already set: %p", wait_forever_fh);
     wait_forever_fh = [[NSFileHandle alloc] initWithFileDescriptor:fd];
@@ -199,6 +215,7 @@ static const char **osx_argv = 0;
       selector:@selector(fileDataAvailable:) name:NSFileHandleDataAvailableNotification object:wait_forever_fh];
     [wait_forever_fh waitForDataInBackgroundAndNotify];
   }
+
   - (void)delWaitForeverSocket: (int)fd {
     if (!wait_forever_fh || [wait_forever_fh fileDescriptor] != fd) FATALf("del mismatching wait_forever_fh %o", wait_forever_fh);
     [[NSNotificationCenter defaultCenter] removeObserver:self
@@ -206,6 +223,7 @@ static const char **osx_argv = 0;
     // [wait_forever_fh closeFile];
     wait_forever_fh = nil;
   }
+
   - (void)fileDataAvailable: (NSNotification *)notification { 
     NSFileHandle *fh = static_cast<NSFileHandle*>([notification object]);
     if (fh != wait_forever_fh) return;
@@ -214,6 +232,7 @@ static const char **osx_argv = 0;
     [self getFrameForTime:nil];
     [fh waitForDataInBackgroundAndNotify];
   }
+
   - (void)fileReadCompleted: (NSNotification *)notification {}
   - (void)shellRun: (id)sender { ShellRun([[sender representedObject] UTF8String]); }
   - (void)mouseDown:(NSEvent*)e { [self mouseClick:e down:1]; }
@@ -225,6 +244,7 @@ static const char **osx_argv = 0;
     if (fired && frame_on_mouse_input) [self setNeedsDisplay:YES]; 
     prev_mouse_pos = p;
   }
+
   - (void)mouseDragged:(NSEvent*)e { [self mouseMove:e drag:1]; }
   - (void)mouseMoved:  (NSEvent*)e { [self mouseMove:e drag:0]; }
   - (void)mouseMove: (NSEvent*)e drag:(bool)drag {
@@ -237,6 +257,7 @@ static const char **osx_argv = 0;
       prev_mouse_pos = p;
     }
   }
+
   - (void)keyDown:(NSEvent *)theEvent { [self keyPress:theEvent down:1]; }
   - (void)keyUp:  (NSEvent *)theEvent { [self keyPress:theEvent down:0]; }
   - (void)keyPress:(NSEvent *)theEvent down:(bool)d {
@@ -245,6 +266,7 @@ static const char **osx_argv = 0;
     int fired = c ? KeyPress(c, d) : 0;
     if (fired && frame_on_keyboard_input) [self setNeedsDisplay:YES]; 
   }
+
   - (void)flagsChanged:(NSEvent *)theEvent {
     int flags = [theEvent modifierFlags];
     bool cmd = flags & NSCommandKeyMask, ctrl = flags & NSControlKeyMask, shift = flags & NSShiftKeyMask;
@@ -252,11 +274,13 @@ static const char **osx_argv = 0;
     if (ctrl  != ctrl_down)  { KeyPress(0x86, ctrl);  ctrl_down  = ctrl;  }
     if (shift != shift_down) { KeyPress(0x83, shift); shift_down = shift; }
   }
+
   - (void)clearKeyModifiers {
     if (cmd_down)   { KeyPress(0x82, 0); cmd_down   = 0; }
     if (ctrl_down)  { KeyPress(0x86, 0); ctrl_down  = 0; }
     if (shift_down) { KeyPress(0x83, 0); shift_down = 0; }
   }
+
   static int getKeyCode(int c) {
     static unsigned char keyCode[] = {
       'a',  /* 0x00: kVK_ANSI_A */             's',  /* 0x01: kVK_ANSI_S */               'd',  /* 0x02: kVK_ANSI_D */
@@ -305,6 +329,7 @@ static const char **osx_argv = 0;
     };
     return (c >= 0 && c < 128) ? keyCode[c] : 0;
   }
+
   static CVReturn MyDisplayLinkCallback(CVDisplayLinkRef displayLink, const CVTimeStamp* now, const CVTimeStamp* outputTime, CVOptionFlags flagsIn, CVOptionFlags* flagsOut, void* displayLinkContext) {
     NSAutoreleasePool * pool = [[NSAutoreleasePool alloc] init];
     [static_cast<GameView*>(displayLinkContext) getFrameForTime:outputTime];
@@ -320,12 +345,12 @@ static const char **osx_argv = 0;
 @implementation AppDelegate
   - (void)applicationWillTerminate: (NSNotification *)aNotification {}
   - (void)applicationDidFinishLaunching: (NSNotification *)aNotification {
-    INFOf("OSXModule::Main argc=%d\n", osx_argc);
     // [[NSFileManager defaultManager] changeCurrentDirectoryPath: [[NSBundle mainBundle] resourcePath]];
     int ret = MyAppMain(osx_argc, osx_argv);
     if (ret) exit(ret);
-    INFOf("%s", "OSXModule::Main done");
+    INFOf("OSXFramework::Main argc=%d ret=%d\n", osx_argc, ret);
   }
+
   - (GameView*)createWindow: (int)w height:(int)h nativeWindow:(NativeWindow*)s {
     NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, w, h)
                                          styleMask:NSClosableWindowMask|NSMiniaturizableWindowMask|NSResizableWindowMask|NSTitledWindowMask
@@ -348,117 +373,26 @@ static const char **osx_argv = 0;
     INFOf("OSXVideoModule: AppDelegate::createWindow(%d, %d).id = %p", w, h, view);
     return view;
   }
+
   - (void)destroyWindow: (NSWindow*)window {
     [window setContentView:nil];
     [window close];
   }
+
   - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication *)theApplication {
     GetLFApp()->run = false;
     return YES;
   }
 @end
 
-extern "C" void NativeWindowInit() {}
-extern "C" void NativeWindowQuit() {}
-extern "C" int NativeWindowOrientation() { return 1; }
-extern "C" void NativeWindowSize(int *width, int *height) {}
-
-extern "C" typed_ptr OSXCreateWindow(int w, int h, struct NativeWindow *nw) {
-  [LFL::GetTyped<GameView*>(GetNativeWindow()->id) clearKeyModifiers];
-  return LFL::MakeTyped([static_cast<AppDelegate*>([NSApp delegate]) createWindow:w height:h nativeWindow:nw]);
+extern "C" void ConvertColorFromGenericToDeviceRGB(const float *i, float *o) {
+  double ib[4], ob[4], *ii = ib, *oi = ob;
+  for (auto e = i + 4; i != e; ) *ii++ = *i++;
+  NSColor *gen_color = [NSColor colorWithColorSpace:[NSColorSpace genericRGBColorSpace] components:ib count:4];
+  NSColor *dev_color = [gen_color colorUsingColorSpaceName:NSDeviceRGBColorSpace];
+  [dev_color getComponents: ob];
+  for (auto e = o + 4; o != e; ) *o++ = *oi++;
 }
-
-extern "C" void OSXDestroyWindow(typed_ptr O) {
-  [static_cast<AppDelegate*>([NSApp delegate]) destroyWindow: [LFL::GetTyped<GameView*>(O) window]];
-}
-
-extern "C" void OSXSetWindowResizeIncrements(typed_ptr O, float x, float y) {
-  [[LFL::GetTyped<GameView*>(O) window] setContentResizeIncrements: NSMakeSize(x, y)];
-}
-
-extern "C" void OSXSetWindowTransparency(typed_ptr O, float v) {
-  [[LFL::GetTyped<GameView*>(O) window] setAlphaValue: 1.0 - v];
-}
-
-extern "C" typed_ptr OSXCreateGLContext(typed_ptr O) {
-  return LFL::MakeTyped([LFL::GetTyped<GameView*>(O) createGLContext]);
-}
-
-extern "C" void OSXDeleteGLContext(typed_ptr O) {
-}
-
-extern "C" void OSXStartWindow(typed_ptr O) {
-  [LFL::GetTyped<GameView*>(O) startThread:true];
-}
-
-extern "C" void OSXMakeWindowCurrent(typed_ptr O) {
-  [[LFL::GetTyped<GameView*>(O) openGLContext] makeCurrentContext];
-}
-
-extern "C" void OSXSetWindowSize(typed_ptr O, int W, int H) {
-  [[LFL::GetTyped<GameView*>(O) window] setContentSize:NSMakeSize(W, H)];
-}
-
-extern "C" void OSXSetWindowTitle(typed_ptr O, const char *v) {
-  [LFL::GetTyped<GameView*>(O) window].title = [NSString stringWithUTF8String:v];
-}
-
-extern "C" void OSXVideoSwap(typed_ptr O) {
-  // [[LFL::GetTyped<GameView*>(O) openGLContext] flushBuffer];
-  CGLFlushDrawable([[LFL::GetTyped<GameView*>(O) openGLContext] CGLContextObj]);
-}
-
-extern "C" void OSXGrabMouseFocus() { 
-  CGDisplayHideCursor(kCGDirectMainDisplay);
-  CGAssociateMouseAndMouseCursorPosition(false);
-}
-
-extern "C" void OSXReleaseMouseFocus() {
-  CGDisplayShowCursor(kCGDirectMainDisplay);
-  CGAssociateMouseAndMouseCursorPosition(true);
-}
-
-extern "C" void OSXSetMousePosition(typed_ptr O, int x, int y) {
-  CGWarpMouseCursorPosition
-    (NSPointToCGPoint([[LFL::GetTyped<GameView*>(O) window] convertRectToScreen:NSMakeRect(x, y, 0, 0)].origin));
-}
-
-extern "C" void OSXClipboardSet(const char *v) {
-  NSPasteboard *pasteboard = [NSPasteboard generalPasteboard];
-  [pasteboard clearContents];
-  [pasteboard declareTypes:[NSArray arrayWithObject:NSPasteboardTypeString] owner:nil];
-  [pasteboard setString:[[NSString alloc] initWithUTF8String:v] forType:NSPasteboardTypeString];
-}
-
-extern "C" char *OSXClipboardGet() {
-  NSPasteboard *pasteboard = [NSPasteboard generalPasteboard];
-  NSString *v = [pasteboard stringForType:NSPasteboardTypeString];
-  return strdup([v UTF8String]);
-}
-
-extern "C" void OSXTriggerFrame(typed_ptr O) {
-  [LFL::GetTyped<GameView*>(O) performSelectorOnMainThread:@selector(setNeedsDisplay:) withObject:@YES waitUntilDone:NO];
-}
-
-extern "C" bool OSXTriggerFrameIn(typed_ptr O, int ms, bool force) {
-  return [LFL::GetTyped<GameView*>(O) triggerFrameIn:ms force:force];
-}
-
-extern "C" void OSXClearTriggerFrameIn(typed_ptr O) {
-  [LFL::GetTyped<GameView*>(O) clearTriggerTimer];
-}
-
-extern "C" void OSXUpdateTargetFPS(typed_ptr O) {
-  [LFL::GetTyped<GameView*>(O) stopThread];
-  [LFL::GetTyped<GameView*>(O) startThread:false];
-}
-
-extern "C" void OSXAddWaitForeverMouse(typed_ptr O) { [LFL::GetTyped<GameView*>(O) setFrameOnMouseInput:1]; }
-extern "C" void OSXDelWaitForeverMouse(typed_ptr O) { [LFL::GetTyped<GameView*>(O) setFrameOnMouseInput:0]; }
-extern "C" void OSXAddWaitForeverKeyboard(typed_ptr O) { [LFL::GetTyped<GameView*>(O) setFrameOnKeyboardInput:1]; }
-extern "C" void OSXDelWaitForeverKeyboard(typed_ptr O) { [LFL::GetTyped<GameView*>(O) setFrameOnKeyboardInput:0]; }
-extern "C" void OSXAddWaitForeverSocket(typed_ptr O, int fd) { [LFL::GetTyped<GameView*>(O) setWaitForeverSocket: fd]; }
-extern "C" void OSXDelWaitForeverSocket(typed_ptr O, int fd) { [LFL::GetTyped<GameView*>(O) delWaitForeverSocket: fd]; }
 
 extern "C" void OSXCreateNativeApplicationMenu() {
   NSMenuItem *item; 
@@ -510,22 +444,6 @@ extern "C" void OSXLaunchNativeContextMenu(typed_ptr O, int x, int y, int n, con
 }
 
 namespace LFL {
-extern "C" typed_ptr OSXCreateWindow(int W, int H, struct NativeWindow *nw);
-extern "C" void OSXDestroyWindow(typed_ptr O);
-extern "C" void OSXMakeWindowCurrent(typed_ptr O);
-extern "C" void OSXSetWindowSize(typed_ptr, int W, int H);
-extern "C" void OSXSetWindowTitle(typed_ptr, const char *v);
-extern "C" void OSXSetWindowResizeIncrements(typed_ptr, float x, float y);
-extern "C" void OSXSetWindowTransparency(typed_ptr, float v);
-extern "C" typed_ptr OSXCreateGLContext(typed_ptr);
-extern "C" void OSXVideoSwap(typed_ptr);
-
-extern "C" void OSXGrabMouseFocus();
-extern "C" void OSXReleaseMouseFocus();
-extern "C" void OSXSetMousePosition(typed_ptr, int x, int y);
-extern "C" void OSXClipboardSet(const char *v);
-extern "C" char *OSXClipboardGet();
-
 const int Key::Escape = 0x81;
 const int Key::Return = '\r';
 const int Key::Up = 0xBE;
@@ -561,89 +479,144 @@ const int Key::F12 = 0xB0;
 const int Key::Home = 0xB3;
 const int Key::End = 0xB7;
 
-struct OSXVideoModule : public Module {
+struct OSXFrameworkModule : public Module {
   int Init() {
-    INFO("OSXVideoModule::Init()");
-    NativeWindowInit();
-    NativeWindowSize(&screen->width, &screen->height);
+    INFO("OSXFrameworkModule::Init()");
     CHECK(Video::CreateWindow(screen));
     return 0;
   }
 };
 
 void Application::MakeCurrentWindow(Window *W) { 
-  if (W) OSXMakeWindowCurrent((screen = W)->id);
+  if (W) [[GetTyped<GameView*>((screen = W)->id) openGLContext] makeCurrentContext];
 }
+
 void Application::CloseWindow(Window *W) {
-  windows.erase(W->id.value);
-  if (windows.empty()) app->run = false;
+  windows.erase(W->id.v);
+  if (windows.empty()) run = false;
   if (app->window_closed_cb) app->window_closed_cb(W);
-  // OSXDestroyWindow(W->id);
+  // [static_cast<AppDelegate*>([NSApp delegate]) destroyWindow: [GetTyped<GameView*>(W->id) window]];
   screen = 0;
 }
 
+void Application::OpenTouchKeyboard() {}
 void Application::LaunchNativeContextMenu(const vector<MenuItem>&items) {
   vector<const char *> k, n, v;
   for (auto &i : items) { k.push_back(tuple_get<0>(i).c_str()); n.push_back(tuple_get<1>(i).c_str()); v.push_back(tuple_get<2>(i).c_str()); }
   OSXLaunchNativeContextMenu(screen->id, screen->mouse.x, screen->mouse.y, items.size(), &k[0], &n[0], &v[0]);
 }
 
-void Window::SetCaption(const string &v) { OSXSetWindowTitle(id, v.c_str()); }
-void Window::SetResizeIncrements(float x, float y) { OSXSetWindowResizeIncrements(id, x, y); }
-void Window::SetTransparency(float v) { OSXSetWindowTransparency(id, v); }
-void Window::Reshape(int w, int h) { OSXSetWindowSize(id, w, h); }
+void Application::SetClipboardText(const string &s) {
+  NSPasteboard *pasteboard = [NSPasteboard generalPasteboard];
+  [pasteboard clearContents];
+  [pasteboard declareTypes:[NSArray arrayWithObject:NSPasteboardTypeString] owner:nil];
+  [pasteboard setString:[[NSString alloc] initWithUTF8String:s.c_str()] forType:NSPasteboardTypeString];
+}
 
-void Application::LoseFocus() { [LFL::GetTyped<GameView*>(GetNativeWindow()->id) clearKeyModifiers]; }
-void Application::SetClipboardText(const string &s) { OSXClipboardSet(s.c_str()); }
-string Application::GetClipboardText() { char *v = OSXClipboardGet(); string ret = v; free(reinterpret_cast<void*>(v)); return ret; }
-void Application::ReleaseMouseFocus() { OSXReleaseMouseFocus(); app->grab_mode.Off(); screen->cursor_grabbed = 0; }
-void Application::GrabMouseFocus()    { OSXGrabMouseFocus();    app->grab_mode.On();  screen->cursor_grabbed = 1;
-  OSXSetMousePosition(screen->id, screen->width / 2, screen->height / 2);
+string Application::GetClipboardText() { 
+  NSPasteboard *pasteboard = [NSPasteboard generalPasteboard];
+  NSString *v = [pasteboard stringForType:NSPasteboardTypeString];
+  return [v UTF8String];
+}
+
+void Application::LoseFocus() { [GetTyped<GameView*>(GetNativeWindow()->id) clearKeyModifiers]; }
+void Application::ReleaseMouseFocus() { 
+  CGDisplayShowCursor(kCGDirectMainDisplay);
+  CGAssociateMouseAndMouseCursorPosition(true);
+  app->grab_mode.Off();
+  screen->cursor_grabbed = 0;
+}
+
+void Application::GrabMouseFocus() {
+  CGDisplayHideCursor(kCGDirectMainDisplay);
+  CGAssociateMouseAndMouseCursorPosition(false);
+  app->grab_mode.On(); 
+  screen->cursor_grabbed = 1;
+  CGWarpMouseCursorPosition
+    (NSPointToCGPoint([[GetTyped<GameView*>(screen->id) window] convertRectToScreen:
+                      NSMakeRect(screen->width / 2, screen->height / 2, 0, 0)].origin));
+}
+
+void Window::SetCaption(const string &v) { 
+  [GetTyped<GameView*>(id) window].title = [NSString stringWithUTF8String:v.c_str()];
+}
+
+void Window::SetResizeIncrements(float x, float y) {
+  [[GetTyped<GameView*>(id) window] setContentResizeIncrements: NSMakeSize(x, y)];
+}
+
+void Window::SetTransparency(float v) { 
+  [[GetTyped<GameView*>(id) window] setAlphaValue: 1.0 - v];
+}
+
+void Window::Reshape(int w, int h) { 
+  [[GetTyped<GameView*>(id) window] setContentSize:NSMakeSize(w, h)];
 }
 
 bool Video::CreateWindow(Window *W) { 
-  W->id = OSXCreateWindow(W->width, W->height, W);
-  if (W->id.value) app->windows[W->id.value] = W;
-  OSXSetWindowTitle(W->id, W->caption.c_str());
+  [GetTyped<GameView*>(GetNativeWindow()->id) clearKeyModifiers];
+  W->id = MakeTyped([static_cast<AppDelegate*>([NSApp delegate])
+                    createWindow:W->width height:W->height nativeWindow:W]);
+  if (W->id.v) app->windows[W->id.v] = W;
+  W->SetCaption(W->caption);
   return true; 
 }
-void Video::StartWindow(Window *W) { OSXStartWindow(W->id); }
+
+void Video::StartWindow(Window *W) { [GetTyped<GameView*>(W->id) startThread:true]; }
 void *Video::BeginGLContextCreate(Window *W) { return 0; }
 void *Video::CompleteGLContextCreate(Window *W, void *gl_context) {
-  return OSXCreateGLContext(W->id).value;
+  return MakeTyped([GetTyped<GameView*>(W->id) createGLContext]).v;
 }
+
 int Video::Swap() {
   screen->gd->Flush();
-  OSXVideoSwap(screen->id);
+  // [[GetTyped<GameView*>(screen->id) openGLContext] flushBuffer];
+  CGLFlushDrawable([[GetTyped<GameView*>(screen->id) openGLContext] CGLContextObj]);
   screen->gd->CheckForError(__FILE__, __LINE__);
   return 0;
 }
 
 void FrameScheduler::DoWait() {}
 void FrameScheduler::Setup() { rate_limit = synchronize_waits = wait_forever_thread = monolithic_frame = run_main_loop = 0; }
-void FrameScheduler::Wakeup(void *opaque) { if (wait_forever && screen) OSXTriggerFrame(screen->id); }
-bool FrameScheduler::WakeupIn(void *opaque, Time interval, bool force) { return OSXTriggerFrameIn(screen->id, interval.count(), force); }
-void FrameScheduler::ClearWakeupIn() { OSXClearTriggerFrameIn(screen->id); }
-void FrameScheduler::UpdateWindowTargetFPS(Window *w) { OSXUpdateTargetFPS(w->id); }
-void FrameScheduler::AddWaitForeverMouse() { OSXAddWaitForeverMouse(screen->id); }
-void FrameScheduler::DelWaitForeverMouse() { OSXDelWaitForeverMouse(screen->id); }
-void FrameScheduler::AddWaitForeverKeyboard() { OSXAddWaitForeverKeyboard(screen->id); }
-void FrameScheduler::DelWaitForeverKeyboard() { OSXDelWaitForeverKeyboard(screen->id); }
+
+void FrameScheduler::Wakeup(void *opaque) {
+  if (wait_forever && screen)
+    [GetTyped<GameView*>(screen->id) performSelectorOnMainThread:@selector(setNeedsDisplay:) withObject:@YES waitUntilDone:NO];
+}
+
+bool FrameScheduler::WakeupIn(void *opaque, Time interval, bool force) { 
+  return [GetTyped<GameView*>(screen->id) triggerFrameIn:interval.count() force:force];
+}
+
+void FrameScheduler::ClearWakeupIn() { [GetTyped<GameView*>(screen->id) clearTriggerTimer]; }
+void FrameScheduler::UpdateWindowTargetFPS(Window *w) { 
+  [GetTyped<GameView*>(w->id) stopThread];
+  [GetTyped<GameView*>(w->id) startThread:false];
+}
+
+void FrameScheduler::AddWaitForeverMouse() { [GetTyped<GameView*>(screen->id) setFrameOnMouseInput:1]; }
+void FrameScheduler::DelWaitForeverMouse() { [GetTyped<GameView*>(screen->id) setFrameOnMouseInput:0]; }
+void FrameScheduler::AddWaitForeverKeyboard() { [GetTyped<GameView*>(screen->id) setFrameOnKeyboardInput:1]; }
+void FrameScheduler::DelWaitForeverKeyboard() { [GetTyped<GameView*>(screen->id) setFrameOnKeyboardInput:0]; }
 void FrameScheduler::AddWaitForeverSocket(Socket fd, int flag, void *val) {
   if (wait_forever && wait_forever_thread) wakeup_thread.Add(fd, flag, val);
-  if (!wait_forever_thread) { CHECK_EQ(SocketSet::READABLE, flag); OSXAddWaitForeverSocket(screen->id, fd); }
+  if (!wait_forever_thread) {
+    CHECK_EQ(SocketSet::READABLE, flag);
+    [GetTyped<GameView*>(screen->id) setWaitForeverSocket: fd];
+  }
 }
+
 void FrameScheduler::DelWaitForeverSocket(Socket fd) {
   if (wait_forever && wait_forever_thread) wakeup_thread.Del(fd);
-  CHECK(screen->id.value);
-  OSXDelWaitForeverSocket(screen->id, fd);
+  CHECK(screen->id.v);
+  [GetTyped<GameView*>(screen->id) delWaitForeverSocket: fd];
 }
+
+unique_ptr<Module> CreateFrameworkModule() { return make_unique<OSXFrameworkModule>(); }
 
 }; // namespace LFL
 
-extern "C" void *LFAppCreatePlatformModule() { return new LFL::OSXVideoModule(); }
-
-extern "C" int main(int argc, const char **argv) {
+extern "C" int main(int argc, const char** argv) {
   osx_argc = argc;
   osx_argv = argv;
   AppDelegate *app_delegate = [[AppDelegate alloc] init];

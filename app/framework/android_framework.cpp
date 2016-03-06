@@ -16,11 +16,12 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "lfapp/lfapp.h"
+#include "core/app/app.h"
+#include "core/app/bindings/jni.h"
 #include <android/log.h>
 
 namespace LFL {
-struct AndroidInputModule : public InputModule {
+struct AndroidFrameworkModule : public Module {
   bool frame_on_keyboard_input = 0, frame_on_mouse_input = 0;
   int Frame(unsigned clicks) { return app->input->DispatchQueuedInput(frame_on_keyboard_input, frame_on_mouse_input); }
 };
@@ -60,8 +61,8 @@ const int Key::F12        = -32;
 const int Key::Home       = -33;
 const int Key::End        = -34;
 
-extern "C" void AndroidSetFrameOnKeyboardInput(int v) { static_cast<AndroidInputModule*>(app->input->impl)->frame_on_keyboard_input = v; }
-extern "C" void AndroidSetFrameOnMouseInput   (int v) { static_cast<AndroidInputModule*>(app->input->impl)->frame_on_mouse_input    = v; }
+extern "C" void AndroidSetFrameOnKeyboardInput(int v) { dynamic_cast<AndroidFrameworkModule*>(app->framework.get())->frame_on_keyboard_input = v; }
+extern "C" void AndroidSetFrameOnMouseInput   (int v) { dynamic_cast<AndroidFrameworkModule*>(app->framework.get())->frame_on_mouse_input    = v; }
 
 string Application::GetClipboardText() { return ""; }
 void Application::SetClipboardText(const string &s) {}
@@ -78,18 +79,18 @@ void Application::ReleaseMouseFocus() {}
 struct AndroidVideoModule : public Module {
   int Init() {
     INFO("AndroidVideoModule::Init()");
-    if (AndroidVideoInit(&app->video->opengles_version)) return -1;
-    CHECK(!screen->id);
-    screen->id = screen;
-    windows[screen->id] = screen;
+    if (AndroidVideoInit(&app->opengles_version)) return -1;
+    CHECK(!screen->id.v);
+    screen->id = MakeTyped(screen);
+    app->windows[screen->id.v] = screen;
     return 0;
   }
 };
 
-bool Application::CreateWindow(Window *W) { return true; }
 void Application::CloseWindow(Window *W) {}
 void Application::MakeCurrentWindow(Window *W) {}
 
+bool Video::CreateWindow(Window *W) { return true; }
 int Video::Swap() {
   screen->gd->Flush();
   AndroidVideoSwap();
@@ -97,6 +98,6 @@ int Video::Swap() {
   return 0;
 }
 
-extern "C" void *LFAppCreatePlatformModule() { return new AndroidVideoModule(); }
+unique_ptr<Module> CreateFrameworkModule() { return make_unique<AndroidFrameworkModule>(); }
 
 }; // namespace LFL
