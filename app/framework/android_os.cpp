@@ -20,6 +20,14 @@
 #include "core/app/bindings/jni.h"
 
 namespace LFL {
+void Application::AddNativeMenu(const string &title, const vector<MenuItem>&items) {}
+void Application::AddNativeEditMenu() {}
+void Application::LaunchNativeMenu(const string &title) {}
+void Application::LaunchNativeFontChooser(const FontDesc &cur_font, const string &choose_cmd) {}
+void Application::LaunchNativeFileChooser(bool files, bool dirs, bool multi, const string &choose_cmd) {}
+void Application::SavePassword(const string &h, const string &u, const string &pw) {}
+bool Application::LoadPassword(const string &h, const string &u, string *pw) { return false; }
+
 void Application::OpenSystemBrowser(const string &url_text) {
   AndroidOpenBrowser(url_text.c_str());
 }

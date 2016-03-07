@@ -100,7 +100,7 @@ struct DirectShowCameraModule : public Module {
   CComPtr<ISampleGrabber> pGrabber;
   SampleGrabberThunker<DirectShowCamera> thunker;
 
-  unique_ptr<RingBuf> frames;
+  unique_ptr<RingSampler> frames;
   int next=0;
   mutex lock;
   bool invert=0;
@@ -274,7 +274,7 @@ struct DirectShowCameraModule : public Module {
     image_linesize = FLAGS_camera_image_width * Pixel::size(image_format);
 
     /* create ring buffer */
-    frames = make_unique<RingBuf>(FLAGS_camera_fps, FLAGS_camera_fps, FLAGS_camera_image_height*image_linesize);
+    frames = make_unique<RingSampler>(FLAGS_camera_fps, FLAGS_camera_fps, FLAGS_camera_image_height*image_linesize);
 
     /* success */
     FLAGS_lfapp_camera = 1;
@@ -308,7 +308,7 @@ struct DirectShowCameraModule : public Module {
     if (FAILED(pSample->GetPointer((BYTE**)&buf))) return S_OK;
 
     /* copy and optionally invert */ 
-    char *out = (char*)frames->write(RingBuf::Peek | RingBuf::Stamp);
+    char *out = (char*)frames->write(RingSampler::Peek | RingSampler::Stamp);
     if (invert) {
       for (int len=frames->width, i=0; i<frames->width; i++) out[len-1-i] = buf[i];
     }

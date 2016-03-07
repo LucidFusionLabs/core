@@ -49,7 +49,7 @@ bool WavReader::Open(File *F, WavHeader *out) {
   return (f && out) ? File::SeekReadSuccess(f, 0, out, WavHeader::Size) : f != nullptr;
 }
 
-int WavReader::Read(RingBuf::Handle *B, int off, int num) {
+int WavReader::Read(RingSampler::Handle *B, int off, int num) {
   if (!f->Opened()) return -1;
   basic_string<short> buf(num, 0);
   int offset = WavHeader::Size + off * sizeof(short);
@@ -65,7 +65,7 @@ void WavWriter::Open(File *F) {
   if (f && f->Opened()) Flush();
 }
 
-int WavWriter::Write(const RingBuf::Handle *B, bool flush) {
+int WavWriter::Write(const RingSampler::Handle *B, bool flush) {
   if (!f->Opened()) return -1;
   basic_string<short> buf(B->Len(), 0);
   for (int i=0, l=B?B->Len():0; i<l; ++i) buf[i] = short(B->Read(i) * 32768.0);
@@ -167,8 +167,8 @@ struct SimpleAssetLoader : public AudioAssetLoader, public VideoAssetLoader, pub
 
       a->channels = 1;
       a->sample_rate = FLAGS_sample_rate;
-      a->wav = make_unique<RingBuf>(a->sample_rate, wav_samples);
-      RingBuf::Handle H(a->wav.get());
+      a->wav = make_unique<RingSampler>(a->sample_rate, wav_samples);
+      RingSampler::Handle H(a->wav.get());
       if (wav_reader.Read(&H, 0, wav_samples))
         return ERROR("LoadAudio(", a->name, ", ", fn, ") read failed: ", strerror(errno));
     }
@@ -733,12 +733,12 @@ void Waveform::Draw(const LFL::Box &w, const Drawable::Attr *a) const {
   Scene::Draw(geom.get(), 0);
 }
 
-Waveform Waveform::Decimated(point dim, const Color *c, const RingBuf::Handle *sbh, int decimateBy) {
-  unique_ptr<RingBuf> dsb;
-  RingBuf::Handle dsbh;
+Waveform Waveform::Decimated(point dim, const Color *c, const RingSampler::Handle *sbh, int decimateBy) {
+  unique_ptr<RingSampler> dsb;
+  RingSampler::Handle dsbh;
   if (decimateBy) {
-    dsb = unique_ptr<RingBuf>(Decimate(sbh, decimateBy));
-    dsbh = RingBuf::Handle(dsb.get());
+    dsb = unique_ptr<RingSampler>(Decimate(sbh, decimateBy));
+    dsbh = RingSampler::Handle(dsb.get());
     sbh = &dsbh;
   }
   Waveform WF(dim, c, sbh);
@@ -791,7 +791,7 @@ void glSpectogram(Matrix *m, Texture *t, float *max, float clip, int pd) {
   t->UpdateGL();
 }
 
-void glSpectogram(const RingBuf::Handle *in, Texture *t, Matrix *transform, float *max, float clip) {
+void glSpectogram(const RingSampler::Handle *in, Texture *t, Matrix *transform, float *max, float clip) {
   /* 20*log10(abs(specgram(y,2048,sr,hamming(512),256))) */
   Matrix *m = Spectogram(in, 0, 512, 256, 512, vector<double>(), PowerDomain::abs);
   if (transform) m = Matrix::Mult(m, transform, mDelA);

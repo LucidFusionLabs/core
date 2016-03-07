@@ -52,7 +52,7 @@ int VoiceModel::Read(const char *dir) {
   return 0;
 };
 
-RingBuf *VoiceModel::Synth(const char *text, int start) {
+RingSampler *VoiceModel::Synth(const char *text, int start) {
   PronunciationDict *dict = PronunciationDict::Instance();
   const char *w[1024], *wa[1024]; int words, phones;
   words = dict->Pronounce(text, w, wa, &phones, 1024);
@@ -83,8 +83,8 @@ RingBuf *VoiceModel::Synth(const char *text, int start) {
   }
 
   int wrote=0;
-  RingBuf *ret = new RingBuf(FLAGS_sample_rate, samples);
-  RingBuf::Handle h(ret);
+  RingSampler *ret = new RingSampler(FLAGS_sample_rate, samples);
+  RingSampler::Handle h(ret);
   for (int i=0; i<atoms; i++) {
     if (atom[i].phone) {
       int phone = atom[i].phone;

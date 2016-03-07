@@ -102,7 +102,7 @@ namespace LFL {
 struct QTKitCameraModule : public Module {
   mutex lock; 
   struct Stream {
-    unique_ptr<RingBuf> frames;
+    unique_ptr<RingSampler> frames;
     int next=0;
   } L, R;
   CameraState *state;
@@ -139,13 +139,13 @@ struct QTKitCameraModule : public Module {
 
   void UpdateFrame(const char *imageData, int width, int height, int imageSize) {
     if (!L.frames) {
-      L.frames = make_unique<RingBuf>(FLAGS_camera_fps, FLAGS_camera_fps, imageSize);
+      L.frames = make_unique<RingSampler>(FLAGS_camera_fps, FLAGS_camera_fps, imageSize);
       FLAGS_camera_image_width = width;
       FLAGS_camera_image_height = height;
       state->image_format = Pixel::RGB32;
       state->image_linesize = FLAGS_camera_image_width*4;
     }
-    memcpy(L.frames->Write(RingBuf::Peek | RingBuf::Stamp), imageData, imageSize);
+    memcpy(L.frames->Write(RingSampler::Peek | RingSampler::Stamp), imageData, imageSize);
     { /* commit */  
       ScopedMutex ML(lock);
       L.frames->Write();

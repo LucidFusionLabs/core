@@ -500,6 +500,12 @@ void Application::CloseWindow(Window *W) {
 }
 
 void Application::OpenTouchKeyboard() {}
+int Application::GetVolume() { return 0; }
+int Application::GetMaxVolume() { return 0; }
+void Application::SetVolume(int v) {}
+void Application::ShowAds() {}
+void Application::HideAds() {}
+
 void Application::LaunchNativeContextMenu(const vector<MenuItem>&items) {
   vector<const char *> k, n, v;
   for (auto &i : items) { k.push_back(tuple_get<0>(i).c_str()); n.push_back(tuple_get<1>(i).c_str()); v.push_back(tuple_get<2>(i).c_str()); }
@@ -576,7 +582,7 @@ int Video::Swap() {
   return 0;
 }
 
-void FrameScheduler::DoWait() {}
+bool FrameScheduler::DoWait() { return false; }
 void FrameScheduler::Setup() { rate_limit = synchronize_waits = wait_forever_thread = monolithic_frame = run_main_loop = 0; }
 
 void FrameScheduler::Wakeup(void *opaque) {

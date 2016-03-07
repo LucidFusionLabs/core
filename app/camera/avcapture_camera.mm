@@ -165,7 +165,7 @@ namespace LFL {
 struct AVCaptureCameraModule : public Module {
   mutex lock; 
   struct Stream {
-    unique_ptr<RingBuf> frames;
+    unique_ptr<RingSampler> frames;
     int next=0;
   } L, R;
   CameraState *state;
@@ -208,8 +208,8 @@ struct AVCaptureCameraModule : public Module {
   }
 
   void UpdateFrame(const char *imageData, int width, int height, int imageSize) {
-    if (!L.frames) L.frames = make_unique<RingBuf>(FLAGS_camera_fps, FLAGS_camera_fps, imageSize);
-    memcpy(L.frames->Write(RingBuf::Peek | RingBuf::Stamp), imageData, imageSize);
+    if (!L.frames) L.frames = make_unique<RingSampler>(FLAGS_camera_fps, FLAGS_camera_fps, imageSize);
+    memcpy(L.frames->Write(RingSampler::Peek | RingSampler::Stamp), imageData, imageSize);
     { /* commit */  
       ScopedMutex ML(lock);
       L.frames->Write();

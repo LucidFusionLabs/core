@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef LFL_SPEECH_AED_H__
-#define LFL_SPEECH_AED_H__
+#ifndef LFL_CORE_SPEECH_AED_H__
+#define LFL_CORE_SPEECH_AED_H__
 namespace LFL {
 
 DECLARE_FLAG(speech_client, string);
@@ -32,10 +32,10 @@ struct AcousticEventDetector {
 
   FeatureSink *sink;
   vector<StatefulFilter> feature_filters;
-  RingBuf *feature_buf;
+  RingSampler *feature_buf;
 
   /* An Adaptive and Fast Speech Detection Algorithm by Dragos Burileanu */
-  RingBuf pe, zcr, szcr;
+  RingSampler pe, zcr, szcr;
   float emax, emin, sl, sl2, nl, zcravg, zcrdev, szcravg, szcrdev;
   int initcount, slcount, sl2count, nlcount, zcrcount, szcrcount;
   RollingAvg<unsigned> remax, remin, rsl, rsl2, rnl;
@@ -73,7 +73,7 @@ struct AcousticEventDetector {
   }
 
   void AlwaysComputeFeatures() {
-    feature_buf = new RingBuf(feature_rate, feature_rate*FLAGS_sample_secs, sizeof(double)*Features::Dimension());
+    feature_buf = new RingSampler(feature_rate, feature_rate*FLAGS_sample_secs, sizeof(double)*Features::Dimension());
   }
 
   ~AcousticEventDetector() { delete feature_buf; }
@@ -99,13 +99,13 @@ struct AcousticEventDetector {
     int offset = total - begin;
 
     if (!feature_buf) {
-      RingBuf::Handle L(app->audio->IL.get(), app->audio->RL.next-Behind()-offset*FLAGS_feat_hop, FLAGS_feat_window+(frames-1)*FLAGS_feat_hop);
+      RingSampler::Handle L(app->audio->IL.get(), app->audio->RL.next-Behind()-offset*FLAGS_feat_hop, FLAGS_feat_window+(frames-1)*FLAGS_feat_hop);
       Matrix features(frames, Features::Dimension(), 0.0, 0, &alloc);
       Matrix *out = Features::FromBuf(&L, &features, &feature_filters, &alloc);
       sink->Write(out, begin);
     }
     else {
-      RingBuf::MatrixHandle out(feature_buf, feature_buf->ring.back-1-offset, frames);
+      RingSampler::MatrixHandle out(feature_buf, feature_buf->ring.back-1-offset, frames);
       sink->Write(&out, begin);
     }
   }
@@ -120,14 +120,14 @@ struct AcousticEventDetector {
   void Update(unsigned samples) {
     samples_available += samples;
     while (samples_available >= samples_processed + FLAGS_feat_window) {
-      RingBuf::Handle L(app->audio->IL.get(), app->audio->RL.next-Behind(), FLAGS_feat_window);
+      RingSampler::Handle L(app->audio->IL.get(), app->audio->RL.next-Behind(), FLAGS_feat_window);
       Update(&L);
       samples_processed += FLAGS_feat_hop;
     }
   }
 
   /* for each feat_hop */
-  void Update(RingBuf::Handle *in) {
+  void Update(RingSampler::Handle *in) {
     alloc.Reset();
 
     /* burn 10 frames on init */
@@ -135,7 +135,7 @@ struct AcousticEventDetector {
 
     /* compute features */
     if (feature_buf) {
-      RingBuf::RowMatHandle featBH(feature_buf);
+      RingSampler::RowMatHandle featBH(feature_buf);
       Matrix *feat = featBH.Write();
       Features::FromBuf(in, feat, &feature_filters, &alloc);
     }
@@ -234,12 +234,12 @@ struct AcousticEventDetector {
 
         /* extend word left by szcr */
         int shift = total - t1A;
-        RingBuf::Handle szcrh(&szcr, szcr.ring.back - shift);
+        RingSampler::Handle szcrh(&szcr, szcr.ring.back - shift);
         int shifted = ExtendTopWordLeft(&szcrh, t1A, lpe, max, szcravg, sqrt(szcrdev), true);
 
         /* extend word left by zcr */
         if (lastcount == words.size()) {
-          RingBuf::Handle zcrh(&zcr, zcr.ring.back - shift - shifted);
+          RingSampler::Handle zcrh(&zcr, zcr.ring.back - shift - shifted);
           ExtendTopWordLeft(&zcrh, t1A, lpe, max - shifted, zcravg, sqrt(zcrdev));
         }
 
@@ -264,12 +264,12 @@ struct AcousticEventDetector {
       bool jumponly = Top().PE != total-1;
 
       if (Top().ZE == 0 || jumponly) {
-        float mean=szcravg, var=sqrt(szcrdev), v=RingBuf::Handle(&szcr, szcr.ring.back - shift).Read(0);
+        float mean=szcravg, var=sqrt(szcrdev), v=RingSampler::Handle(&szcr, szcr.ring.back - shift).Read(0);
         if (v < mean - var || v > mean + var) { Top().IncrementEnd(total - Top().PE); Top().ZE = 0; }
         else if (!jumponly) Top().ZE = 1;
       }
       else if (Top().ZE == 1) {
-        float mean=zcravg, var=sqrt(zcrdev), v=RingBuf::Handle(&zcr, zcr.ring.back - shift).Read(0);
+        float mean=zcravg, var=sqrt(zcrdev), v=RingSampler::Handle(&zcr, zcr.ring.back - shift).Read(0);
         if (v < mean - var || v > mean + var) Top().IncrementEnd();
         else Top().ZE = 2;
       }
@@ -286,7 +286,7 @@ struct AcousticEventDetector {
     while (words.size() && Bot().PE != -1 && total - Bot().PE > pe.ring.size) words.pop_front();
   }
 
-  int ExtendTopWordLeft(RingBuf::Handle *in, long long tps, long long lpe, int max, float mean, float var, bool jump=false) {
+  int ExtendTopWordLeft(RingSampler::Handle *in, long long tps, long long lpe, int max, float mean, float var, bool jump=false) {
     int extend=0, extendmax=(lpe && tps-lpe < max ? tps-lpe : max);
 
     if (jump) for (extend=d2jump_left; extend>0; extend++) {
@@ -309,7 +309,7 @@ struct AcousticEventDetector {
   }
 };
 
-#ifdef LFL_LFAPP_GUI_H__
+#ifdef LFL_CORE_APP_GUI_H__
 struct AcousticEventGUI {
   static void Draw(AcousticEventDetector *AED, Box win, bool flip=false) {
     AED->alloc.Reset();
@@ -377,7 +377,7 @@ struct AcousticEventGUI {
     Scene::Draw(geom, 0);
   }
 };
-#endif /* LFL_LFAPP_GUI_H__ */
+#endif /* LFL_CORE_APP_GUI_H__ */
 
 }; // namespace LFL
-#endif // LFL_SPEECH_AED_H__
+#endif // LFL_CORE_SPEECH_AED_H__

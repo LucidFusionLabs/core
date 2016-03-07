@@ -5,14 +5,14 @@ FOREACH(flag CMAKE_CXX_FLAGS_DEBUG)
 ENDFOREACH()
 
 # Windows
-if(WIN32)
+if(LFL_WINDOWS)
   INCLUDE_EXTERNAL_MSPROJECT(zlib ${CMAKE_CURRENT_SOURCE_DIR}/OpenCV/3rdparty/zlib/zlib.vcxproj)
   set(PLATFORM_LIB Ws2_32.lib Dnsapi.lib opengl32.lib glu32.lib strmiids.lib zlib.lib)
   set(PLATFORM_DEF "-DGLEW_STATIC")
 endif()
 
 # Mac
-if(CMAKE_SYSTEM_NAME MATCHES "Darwin")
+if(LFL_OSX)
   set(OPENGL_INCLUDE ${OPENGL_INCLUDE_DIR}/Headers ${CMAKE_CURRENT_SOURCE_DIR}/GL PARENT_SCOPE)
   set(PLATFORM_LIB "-framework Cocoa -framework CoreVideo -framework QTKit -lz -lbz2 -liconv")
   if(LFL_SDL)
@@ -24,10 +24,15 @@ if(CMAKE_SYSTEM_NAME MATCHES "Darwin")
 endif()
 
 # Linux
-if(CMAKE_SYSTEM_NAME MATCHES "Linux")
+if(LFL_LINUX)
   set(HAVE_SDLCONFIG 1)
   set(CUDA_LIB /usr/local/cuda/lib64/libcudart.so PARENT_SCOPE)
   set(PLATFORM_LIB "-lutil -lz -lpng -lpthread -ldl -lbz2")
+endif()
+
+# Android
+if(LFL_ANDROID)
+  set(PLATFORM_LIB "-llog -lz")
 endif()
 
 # iPhone 
@@ -222,7 +227,10 @@ if(LFL_CUDA)
 endif()
 
 # OpenGL
-if(NOT LFL_MOBILE)
+if(LFL_ANDROID)
+  set(OPENGL_LIB "-lGLESv2 -lGLESv1_CM" PARENT_SCOPE)
+elseif(LFL_IPHONE)
+else()
   INCLUDE(${CMAKE_ROOT}/Modules/FindOpenGL.cmake)
   set(OPENGL_INCLUDE ${OPENGL_INCLUDE_DIR} PARENT_SCOPE)
   set(OPENGL_LIB ${OPENGL_gl_LIBRARY} ${OPENGL_glu_LIBRARY} PARENT_SCOPE)

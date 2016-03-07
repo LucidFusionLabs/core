@@ -33,7 +33,7 @@ struct FFMpegAudioResampler : public AudioResamplerInterface {
   ~FFMpegAudioResampler() { if (swr) swr_free(&swr); }
   bool Opened() const { return swr; }
 
-  int Open(RingBuf *rb, int in_channels,  int in_sample_rate,  int in_sample_type,
+  int Open(RingSampler *rb, int in_channels,  int in_sample_rate,  int in_sample_type,
            int out_channels, int out_sample_rate, int out_sample_type) {
     out = rb;
     input_chans = in_channels;
@@ -55,7 +55,7 @@ struct FFMpegAudioResampler : public AudioResamplerInterface {
     return Update(samples, input, rsout, microseconds(-1), AVCODEC_MAX_AUDIO_FRAME_SIZE/output_chans/2);
   }
 
-  int Update(int samples, RingBuf::Handle *L, RingBuf::Handle *R) {
+  int Update(int samples, RingSampler::Handle *L, RingSampler::Handle *R) {
     int channels = (L!=0) + (R!=0);
     if (!out || !channels) return -1;
     Allocator *tlsalloc = ThreadLocalStorage::GetAllocator();
@@ -63,7 +63,7 @@ struct FFMpegAudioResampler : public AudioResamplerInterface {
     short *rsout = static_cast<short*>(tlsalloc->Malloc(AVCODEC_MAX_AUDIO_FRAME_SIZE + FF_INPUT_BUFFER_PADDING_SIZE));
     memset(rsin+samples*channels, 0, FF_INPUT_BUFFER_PADDING_SIZE);
 
-    RingBuf::Handle *chan[2] = { L, R }; 
+    RingSampler::Handle *chan[2] = { L, R }; 
     for (int i=0; i<samples; i++)
       for (int j=0; j<channels; j++)
         rsin[i*channels + j] = chan[j]->Read(i) * 32768.0;

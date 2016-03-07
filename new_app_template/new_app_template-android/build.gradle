@@ -28,7 +28,7 @@ android {
     sourceSets {
         main {
             manifest.srcFile 'AndroidManifest.xml'
-            java.srcDirs         = ['../../core/lfapp/java', 'src']
+            java.srcDirs         = ['../../core/app/java', 'src']
             // java.excludes        = ['**/GPlusClient.java', '**/Advertising.java']
             resources.srcDirs    = []
             aidl.srcDirs         = []

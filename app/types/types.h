@@ -754,14 +754,14 @@ template <class X> struct RingVector {
   virtual void Clear() { ring.Clear(); }
 };
 
-struct RingBuf {
+struct RingSampler {
   RingIndex ring;
   int samples_per_sec, width, bytes;
   Allocator *alloc;
   char *buf;
   microseconds *stamp;
-  ~RingBuf() { alloc->Free(buf); alloc->Free(stamp); }
-  RingBuf(int SPS=0, int SPB=0, int Width=0, Allocator *Alloc=0) : samples_per_sec(0), width(0), bytes(0),
+  ~RingSampler() { alloc->Free(buf); alloc->Free(stamp); }
+  RingSampler(int SPS=0, int SPB=0, int Width=0, Allocator *Alloc=0) : samples_per_sec(0), width(0), bytes(0),
   alloc(Alloc?Alloc:Allocator::Default()), buf(0), stamp(0) { if (SPS) Resize(SPS, X_or_Y(SPB, SPS), Width); }
 
   int Bucket(int n) const { return ring.AbsoluteIndex(n); }
@@ -777,10 +777,10 @@ struct RingBuf {
   virtual microseconds ReadTimestamp(int index, int Next=-1) const;
 
   struct Handle : public Vec<float> {
-    RingBuf *sb=0;
+    RingSampler *sb=0;
     int next=-1, nlen=-1;
     Handle() {}
-    Handle(RingBuf *SB, int Next=-1, int Len=-1) : sb(SB), next((sb && Next != -1)?sb->Bucket(Next):-1), nlen(Len) {}
+    Handle(RingSampler *SB, int Next=-1, int Len=-1) : sb(SB), next((sb && Next != -1)?sb->Bucket(Next):-1), nlen(Len) {}
     virtual int Rate() const { return sb->samples_per_sec; }
     virtual int Len() const { return nlen >= 0 ? nlen : sb->ring.size; }
     virtual float *Index(int index) { return static_cast<float*>(sb->Ind(index)); }
@@ -790,12 +790,12 @@ struct RingBuf {
     virtual float Read(int index) const { return *static_cast<float*>(sb->Read(index, next)); }
     virtual float *ReadAddr(int index) const { return static_cast<float*>(sb->Read(index, next)); } 
     virtual microseconds ReadTimestamp(int index) const { return sb->ReadTimestamp(index, next); }
-    void CopyFrom(const RingBuf::Handle *src);
+    void CopyFrom(const RingSampler::Handle *src);
   };
 
   template <typename X> struct HandleT : public Handle {
     HandleT() {}
-    HandleT(RingBuf *SB, int Next=-1, int Len=-1) : Handle(SB, Next, Len) {}
+    HandleT(RingSampler *SB, int Next=-1, int Len=-1) : Handle(SB, Next, Len) {}
     virtual float Ind(int index) const { return *static_cast<X*>(sb->Ind(index)); }
     virtual float Read(int index) const { return *static_cast<X*>(sb->Read(index, next)); }
     virtual void Write(float  v, int flag=0, microseconds ts=microseconds(-1)) { *static_cast<X*>(sb->Write(flag, ts)) =  v; }
@@ -804,7 +804,7 @@ struct RingBuf {
 
   struct DelayHandle : public Handle {
     int delay;
-    DelayHandle(RingBuf *SB, int next, int Delay) : Handle(SB, next+Delay), delay(Delay) {}
+    DelayHandle(RingSampler *SB, int next, int Delay) : Handle(SB, next+Delay), delay(Delay) {}
     virtual float Read(int index) const {
       if ((index < 0 && index >= -delay) || (index > 0 && index >= Len() - delay)) return 0;
       return Handle::Read(index);
@@ -812,7 +812,7 @@ struct RingBuf {
   };
 
   struct WriteAheadHandle : public Handle {
-    WriteAheadHandle(RingBuf *SB) : Handle(SB, SB->ring.back) {}
+    WriteAheadHandle(RingSampler *SB) : Handle(SB, SB->ring.back) {}
     virtual void Write(float v, int flag=0, microseconds ts=microseconds(-1)) { *static_cast<float*>(Write(flag, ts)) = v; }
     virtual void *Write(int flag=0, microseconds ts=microseconds(-1)) {
       void *ret = sb->Ind(next);
@@ -824,9 +824,9 @@ struct RingBuf {
   };
 
   template <class T=double> struct MatrixHandleT : public matrix<T> {
-    RingBuf *sb;
+    RingSampler *sb;
     int next;
-    MatrixHandleT(RingBuf *SB, int Next, int Rows) : sb(SB), next((sb && Next != -1)?sb->Bucket(Next):-1) { 
+    MatrixHandleT(RingSampler *SB, int Next, int Rows) : sb(SB), next((sb && Next != -1)?sb->Bucket(Next):-1) { 
       matrix<T>::bytes = sb->width;
       matrix<T>::M = Rows?Rows:sb->ring.size;
       matrix<T>::N = matrix<T>::bytes/sizeof(T);
@@ -840,15 +840,15 @@ struct RingBuf {
   typedef MatrixHandleT<double> MatrixHandle;
 
   template <class T=double> struct RowMatHandleT {
-    RingBuf *sb;
+    RingSampler *sb;
     int next;
     matrix<T> wrap;
     void Init() { wrap.M=1; wrap.bytes=sb->width; wrap.N=wrap.bytes/sizeof(T); }
 
     ~RowMatHandleT() { wrap.m=0; }
     RowMatHandleT() : sb(0), next(0) {}
-    RowMatHandleT(RingBuf *SB) : sb(SB), next(-1) { Init(); }
-    RowMatHandleT(RingBuf *SB, int Next) : sb(SB), next((sb && Next != -1)?sb->Bucket(Next):-1) { Init(); }
+    RowMatHandleT(RingSampler *SB) : sb(SB), next(-1) { Init(); }
+    RowMatHandleT(RingSampler *SB, int Next) : sb(SB), next((sb && Next != -1)?sb->Bucket(Next):-1) { Init(); }
 
     matrix<T> *Ind(int index) { wrap.m = static_cast<double*>(sb->Ind(index)); return &wrap; }
     matrix<T> *Read(int index) { wrap.m = static_cast<double*>(sb->Read(index, next)); return &wrap; }
@@ -859,10 +859,10 @@ struct RingBuf {
   typedef RowMatHandleT<double> RowMatHandle;
 };
 
-struct ColMatPtrRingBuf : public RingBuf {
+struct ColMatPtrRingSampler : public RingSampler {
   Matrix *wrap;
   int col;
-  ColMatPtrRingBuf(Matrix *m, int ci, int SPS=0) : wrap(m), col(ci)  {
+  ColMatPtrRingSampler(Matrix *m, int ci, int SPS=0) : wrap(m), col(ci)  {
     samples_per_sec = SPS;
     ring.size = m->M;
     width = sizeof(double);

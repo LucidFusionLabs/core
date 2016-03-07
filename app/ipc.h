@@ -29,7 +29,7 @@ namespace LFL {
 struct NTService {
   static int Install  (const char *name, const char *path);
   static int Uninstall(const char *name);
-  static int WrapMain (const char *name, MainCB main_cb, int argc, const char **argv);
+  static int WrapMain (const char *name, MainCB main_cb, int argc, const char* const* argv);
 };
 
 struct ProcessPipe {

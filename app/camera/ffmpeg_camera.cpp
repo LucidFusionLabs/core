@@ -37,7 +37,7 @@ struct FFmpegCameraModule : public Module {
       static void swap(FramePtr *A, FramePtr *B) { FramePtr C = *A; *A = *B; *B = C; C.clear(); }
     };
     AVFormatContext *fctx=0;
-    unique_ptr<RingBuf> frames;
+    unique_ptr<RingSampler> frames;
     int next=0;
   } L, R;
   CameraState *camera;
@@ -67,7 +67,7 @@ struct FFmpegCameraModule : public Module {
       FLAGS_lfapp_camera = 0;
       return 0;
     }
-    L.frames = make_unique<RingBuf>(FLAGS_camera_fps, FLAGS_camera_fps, sizeof(Stream::FramePtr));
+    L.frames = make_unique<RingSampler>(FLAGS_camera_fps, FLAGS_camera_fps, sizeof(Stream::FramePtr));
     av_dict_free(&options);
 
     if (!thread.Start()) { FLAGS_lfapp_camera=0; return -1; }
@@ -106,7 +106,7 @@ struct FFmpegCameraModule : public Module {
       if (av_read_frame(L.fctx, &Lframe.data) < 0) return ERRORv(-1, "av_read_frame");
       else Lframe.dirty = 1;
 
-      Stream::FramePtr::swap((Stream::FramePtr*)L.frames->Write(RingBuf::Peek | RingBuf::Stamp), &Lframe);
+      Stream::FramePtr::swap((Stream::FramePtr*)L.frames->Write(RingSampler::Peek | RingSampler::Stamp), &Lframe);
 
       /* commit */  
       {

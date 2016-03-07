@@ -232,12 +232,12 @@ void HTTPServer::StreamResource::Update(int audio_samples, bool video_sample) {
   if (ac && audio_samples) {
     if (!resampler) {
       resampler = CreateAudioResampler();
-      resampler->out = new RingBuf(ac->sample_rate, ac->sample_rate*channels);
+      resampler->out = new RingSampler(ac->sample_rate, ac->sample_rate*channels);
       resampler->Open(resampler->out, FLAGS_chans_in, FLAGS_sample_rate, Sample::S16,
                       channels, ac->sample_rate, SampleFromFFMpegId(ac->channel_layout));
     };
-    RingBuf::Handle L(app->audio->IL.get(), app->audio->IL->ring.back-audio_samples, audio_samples);
-    RingBuf::Handle R(app->audio->IR.get(), app->audio->IR->ring.back-audio_samples, audio_samples);
+    RingSampler::Handle L(app->audio->IL.get(), app->audio->IL->ring.back-audio_samples, audio_samples);
+    RingSampler::Handle R(app->audio->IR.get(), app->audio->IR->ring.back-audio_samples, audio_samples);
     if (resampler->Update(audio_samples, &L, FLAGS_chans_in > 1 ? &R : 0)) open=0;
   }
 
@@ -263,7 +263,7 @@ void HTTPServer::StreamResource::SendAudio() {
   resamples_processed += frame * channels;
 
   AVCodecContext *ac = audio->codec;
-  RingBuf::Handle H(resampler->out, resampler->out->ring.back - behind, frame * channels);
+  RingSampler::Handle H(resampler->out, resampler->out->ring.back - behind, frame * channels);
 
   /* linearize */
   for (int i=0; i<frame; i++) 

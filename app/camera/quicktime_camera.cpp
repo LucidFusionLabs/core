@@ -31,7 +31,7 @@ struct QuickTimeCameraModule : public Module {
     Rect rect;
     PixMapHandle pixmap;
     ImageSequence seq=0;
-    unique_ptr<RingBuf> frames;
+    unique_ptr<RingSampler> frames;
     int next=0;
   } L, R;
   CameraState *camera;
@@ -85,7 +85,7 @@ struct QuickTimeCameraModule : public Module {
               FLAGS_camera_image_width, FLAGS_camera_image_height, camera->image_format);
 
     /* start */
-    L.frames = make_unqiue<RingBuf>(FLAGS_camera_fps, FLAGS_camera_fps, FLAGS_camera_image_width*FLAGS_camera_image_height*image_depth);
+    L.frames = make_unqiue<RingSampler>(FLAGS_camera_fps, FLAGS_camera_fps, FLAGS_camera_image_width*FLAGS_camera_image_height*image_depth);
     L.pixmap = GetGWorldPixMap(L.gworld);
     LockPixels(L.pixmap);
     if ((ret = SGSetDataProc(L.grabber, NewSGDataUPP(SGDataProcL), (long)this)) != noErr) return ERRORv(-1, "SGSetDataProc: ", ret);
@@ -148,7 +148,7 @@ struct QuickTimeCameraModule : public Module {
 
     /* write */
     unsigned char *in = (unsigned char*)(GetPixBaseAddr(cam->pixmap)+1);
-    unsigned char *out = (unsigned char*)cam->frames->Write(RingBuf::Peek | RingBuf::Stamp);
+    unsigned char *out = (unsigned char*)cam->frames->Write(RingSampler::Peek | RingSampler::Stamp);
     int inlinesize = GetPixRowBytes(L.pixmap);
     conv.Resample(in, inlinesize, out, camera->image_linesize);
 

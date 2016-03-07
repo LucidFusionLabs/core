@@ -1,4 +1,4 @@
-package com.lucidfusionlabs.lfjava;
+package com.lucidfusionlabs.app;
 
 import java.net.*;
 import java.nio.ByteBuffer;
@@ -22,7 +22,7 @@ import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.egl.*;
 
 public class Activity extends android.app.Activity {
-    static { System.loadLibrary("lfjni"); }
+    static { System.loadLibrary("app"); }
     
     public static native void main(Object activity);
     public static native void mainloop(Object activity);
@@ -47,7 +47,7 @@ public class Activity extends android.app.Activity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        Log.i("lfjava", "Activity.onCreate()");
+        Log.i("lfl", "Activity.onCreate()");
 
         instance = this;
         requestWindowFeature(Window.FEATURE_NO_TITLE);
@@ -67,21 +67,21 @@ public class Activity extends android.app.Activity {
     
     @Override
     protected void onDestroy() {
-        Log.i("lfjava", "Activity.onDestroy()");
+        Log.i("lfl", "Activity.onDestroy()");
         if (advertising != null) advertising.onDestroy();
         super.onDestroy();
     }
 
     @Override
     protected void onStop() {
-        Log.i("lfjava", "Activity.onStop()");
+        Log.i("lfl", "Activity.onStop()");
         super.onStop();
         if (gplus != null) gplus.onStop();
     }
     
     @Override
     protected void onPause() {
-        Log.i("lfjava", "Activity.onPause() enter");
+        Log.i("lfl", "Activity.onPause() enter");
         super.onPause();
         if (waiting_activity_result || thread == null) return;
 
@@ -89,32 +89,32 @@ public class Activity extends android.app.Activity {
         thread = null;        
         minimize();
         try { t.join(); }
-        catch(Exception e) { Log.e("lfjava", e.toString()); }
-        Log.i("lfjava", "Activity.onPause() exit");
+        catch(Exception e) { Log.e("lfl", e.toString()); }
+        Log.i("lfl", "Activity.onPause() exit");
     }
 
     @Override
     protected void onStart() {
-        Log.i("lfjava", "Activity.onStart()");
+        Log.i("lfl", "Activity.onStart()");
         super.onStart();
         if (gplus != null) gplus.onStart(this);
     }
 
     @Override
     public void onResume() {
-        Log.i("lfjava", "Activity.onResume()");
+        Log.i("lfl", "Activity.onResume()");
         super.onResume();
     }
 
     @Override
     public void onConfigurationChanged(Configuration newConfig) {
-        Log.i("lfjava", "onConfigurationChanged");
+        Log.i("lfl", "onConfigurationChanged");
         super.onConfigurationChanged(newConfig);
     }
 
     @Override
     protected void onActivityResult(int request, int response, Intent data) {
-        Log.i("lfjava", "Activity.onActivityResult(" + request + ", " + response + ")");
+        Log.i("lfl", "Activity.onActivityResult(" + request + ", " + response + ")");
         waiting_activity_result = false;
         super.onActivityResult(request, response, data);
         if (gplus != null) gplus.onActivityResult(request, response, data);
@@ -122,7 +122,7 @@ public class Activity extends android.app.Activity {
 
     void surfaceChanged(int format, int width, int height) {
         boolean thread_exists = thread != null;
-        Log.i("lfjava", "surfaceChanged init= " + init + ", thread_exists=" + thread_exists);
+        Log.i("lfl", "surfaceChanged init= " + init + ", thread_exists=" + thread_exists);
         resize(width, height);
         if (thread_exists) return;
         if (!init) thread = new Thread(new Runnable() { public void run() { view.initEGL(); main    (Activity.instance); } }, "JNIMainThread");
@@ -132,7 +132,7 @@ public class Activity extends android.app.Activity {
     }
 
     void forceExit() {
-        Log.i("lfjava", "Activity.froceExit()");
+        Log.i("lfl", "Activity.froceExit()");
         android.os.Process.killProcess(android.os.Process.myPid());
     }
 
@@ -142,25 +142,25 @@ public class Activity extends android.app.Activity {
             inputStream.read(buf, 0, size);
             inputStream.close();
             return size;
-        } catch (final Exception e) { Log.e("lfjava", e.toString()); return 0; }
+        } catch (final Exception e) { Log.e("lfl", e.toString()); return 0; }
     }
     public int sizeFile(String filename) {
         try {
             java.io.File file = new java.io.File(getFilesDir(), filename);
             return file.exists() ? (int)file.length() : 0;
-        } catch (final Exception e) { Log.e("lfjava", e.toString()); return 0; }
+        } catch (final Exception e) { Log.e("lfl", e.toString()); return 0; }
     }
     public java.io.FileOutputStream openFileWriter(String filename) {
         try { return openFileOutput(filename, Context.MODE_PRIVATE); } 
-        catch (final Exception e) { Log.e("lfjava", e.toString()); return null; }
+        catch (final Exception e) { Log.e("lfl", e.toString()); return null; }
     }
     public void writeFile(java.io.FileOutputStream outputStream, byte[] buf, int size) {
         try { outputStream.write(buf, 0, size); }
-        catch (final Exception e) { Log.e("lfjava", e.toString()); }
+        catch (final Exception e) { Log.e("lfl", e.toString()); }
     }
     public void closeFileWriter(java.io.FileOutputStream outputStream) {
         try { outputStream.close(); }
-        catch (final Exception e) { Log.e("lfjava", e.toString()); }
+        catch (final Exception e) { Log.e("lfl", e.toString()); }
     }
 
     public void toggleKeyboard() {
@@ -180,7 +180,7 @@ public class Activity extends android.app.Activity {
         android.content.res.Resources res = getResources();
         String package_name = getPackageName();
         int soundId = res.getIdentifier(filename, "raw", getPackageName());
-        Log.i("lfjava", "loadMusicAsset " + package_name + " " + filename + " " + soundId);
+        Log.i("lfl", "loadMusicAsset " + package_name + " " + filename + " " + soundId);
         return MediaPlayer.create(this, soundId);
     }
     public void playMusic(MediaPlayer mp) {
@@ -222,10 +222,10 @@ public class Activity extends android.app.Activity {
                 for (java.util.Enumeration<InetAddress> IpAddresses = intf.getInetAddresses(); IpAddresses.hasMoreElements();) {
                     InetAddress inetAddress = IpAddresses.nextElement(), bcastAddress = null;
                     if (inetAddress.isLoopbackAddress() || inetAddress instanceof Inet6Address) continue;
-                    // Log.i("lfjava", "ip address: " + inetAddress);
+                    // Log.i("lfl", "ip address: " + inetAddress);
                     NetworkInterface ipv4_intf = NetworkInterface.getByInetAddress(inetAddress);
                     for (InterfaceAddress ifaceAddress : ipv4_intf.getInterfaceAddresses()) bcastAddress = ifaceAddress.getBroadcast();
-                    // Log.i("lfjava", "broadcast aaddress: " + bcastAddress);
+                    // Log.i("lfl", "broadcast aaddress: " + bcastAddress);
                     ret = ByteBuffer.wrap(bcastAddress.getAddress()).getInt();   
                 }
             }  
@@ -272,21 +272,21 @@ class GameView extends android.view.SurfaceView implements SurfaceHolder.Callbac
 
     @Override
     protected void onSizeChanged(int xNew, int yNew, int xOld, int yOld) {
-        Log.i("lfjava", "GameView.onSizeChanged(" + xNew + ", " + yNew + ", " + xOld + ", " + yOld + ")");
+        Log.i("lfl", "GameView.onSizeChanged(" + xNew + ", " + yNew + ", " + xOld + ", " + yOld + ")");
     }
 
     public void surfaceCreated(SurfaceHolder holder) {
-        Log.i("lfjava", "GameView.surfaceCreated()");
+        Log.i("lfl", "GameView.surfaceCreated()");
         sensor.registerListener(this, sensor.getDefaultSensor(Sensor.TYPE_ACCELEROMETER), SensorManager.SENSOR_DELAY_GAME, null);
     }
 
     public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
-        Log.i("lfjava", "GameView.surfaceChanged(" + width + ", " + height + ")");
+        Log.i("lfl", "GameView.surfaceChanged(" + width + ", " + height + ")");
         Activity.instance.surfaceChanged(format, width, height);
     }
 
     public void surfaceDestroyed(SurfaceHolder holder) {
-        Log.i("lfjava", "surfaceDestroyed()");
+        Log.i("lfl", "surfaceDestroyed()");
         sensor.unregisterListener(this, sensor.getDefaultSensor(Sensor.TYPE_ACCELEROMETER));
     }
 
@@ -369,8 +369,8 @@ class GameView extends android.view.SurfaceView implements SurfaceHolder.Callbac
             if ((egl_surface = egl.eglCreateWindowSurface(egl_display, configs[0], this, null)) == EGL10.EGL_NO_SURFACE) throw new Exception("eglCreateWindowSurface");
             if (!egl.eglMakeCurrent(egl_display, egl_surface, egl_surface, egl_context)) throw new Exception("eglMakeCurrent");
         } catch(Exception e) {
-            Log.e("lfjava", e.toString());
-            for (StackTraceElement ste : e.getStackTrace()) Log.e("lfjava", ste.toString());
+            Log.e("lfl", e.toString());
+            for (StackTraceElement ste : e.getStackTrace()) Log.e("lfl", ste.toString());
             egl_context = null; egl_surface = null; egl_display = null;
             return false;
         }
@@ -385,8 +385,8 @@ class GameView extends android.view.SurfaceView implements SurfaceHolder.Callbac
             egl.eglWaitGL();
             egl.eglSwapBuffers(egl_display, egl_surface);
         } catch(Exception e) {
-            Log.e("lfjava", e.toString());
-            for (StackTraceElement ste : e.getStackTrace()) Log.e("lfjava", ste.toString());
+            Log.e("lfl", e.toString());
+            for (StackTraceElement ste : e.getStackTrace()) Log.e("lfl", ste.toString());
         }
     }    
 }

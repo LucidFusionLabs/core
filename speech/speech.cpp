@@ -243,7 +243,7 @@ Matrix *Features::Mel2FFT(int outrows, double minfreq, double maxfreq, int fftle
   return m;
 };
 
-Matrix *Features::PLP(const RingBuf::Handle *in, Matrix *out,
+Matrix *Features::PLP(const RingSampler::Handle *in, Matrix *out,
                       vector<StatefulFilter> *rastaFilters, Allocator *alloc) {
   /* http://seed.ucsd.edu/mediawiki/images/5/5c/PLP.pdf */
   if (!alloc) alloc = Singleton<MallocAllocator>::Get();
@@ -272,8 +272,8 @@ Matrix *Features::PLP(const RingBuf::Handle *in, Matrix *out,
     } 
 
     MatrixColIter(&rastabuf) {
-      ColMatPtrRingBuf bandTrajectory(&barkbuf, j), rastaOut(&rastabuf, j);
-      RingBuf::HandleT<double> bt(&bandTrajectory), ro(&rastaOut);
+      ColMatPtrRingSampler bandTrajectory(&barkbuf, j), rastaOut(&rastabuf, j);
+      RingSampler::HandleT<double> bt(&bandTrajectory), ro(&rastaOut);
       StatefulFilter RFbuf, *RF = rastaFilters ? &(*rastaFilters)[j] : &RFbuf;
       int processed = 0;
 
@@ -343,7 +343,7 @@ Matrix *Features::PLP(const RingBuf::Handle *in, Matrix *out,
   return out;
 }
 
-RingBuf *Features::InvPLP(const Matrix *in, int samplerate, Allocator *alloc) {
+RingSampler *Features::InvPLP(const Matrix *in, int samplerate, Allocator *alloc) {
   /* [dr,aspec,spec] = invmelfcc() */
   if (!alloc) alloc = Singleton<MallocAllocator>::Get();
   Matrix plpcc(in->M, in->N, 0.0, 0, alloc);
@@ -357,7 +357,7 @@ RingBuf *Features::InvPLP(const Matrix *in, int samplerate, Allocator *alloc) {
   return 0;
 }
 
-Matrix *Features::MFCC(const RingBuf::Handle *in, Matrix *out, Allocator *alloc) {
+Matrix *Features::MFCC(const RingSampler::Handle *in, Matrix *out, Allocator *alloc) {
   if (!alloc) alloc = Singleton<MallocAllocator>::Get();
 
   /* [mm,aspc,pspc] = melfcc(y/32768, sr, 'maxfreq', sr/2, 'numcep', 20, 'nbands', 40, 'fbtype', 'htkmel', 'dcttype', 3, 'usecmp', 0, 'wintime', 512/44100, 'hoptime', 256/44100, 'dither', 0, 'lifterexp', 0) */
@@ -386,7 +386,7 @@ Matrix *Features::MFCC(const RingBuf::Handle *in, Matrix *out, Allocator *alloc)
   return Matrix::Mult(&melbuf, ceptrans, out);
 }
 
-RingBuf *Features::InvMFCC(const Matrix *in, int samplerate, const Matrix *f0) {
+RingSampler *Features::InvMFCC(const Matrix *in, int samplerate, const Matrix *f0) {
   /* [dr,aspec,spec] = invmelfcc() */
   Matrix *transform = DCT2(in->N, FLAGS_feat_melbands);
   for (int j=0; j<transform->N; j++) transform->row(0)[j] /= 2;
@@ -399,8 +399,8 @@ RingBuf *Features::InvMFCC(const Matrix *in, int samplerate, const Matrix *f0) {
 
   if (0 && f0) {
     if (f0->M != in->M || m->M != in->M) return 0;
-    unique_ptr<RingBuf> outbuf = make_unique<RingBuf>(samplerate, FLAGS_feat_window + FLAGS_feat_hop * (m->M-1));
-    RingBuf::Handle out(outbuf.get());
+    unique_ptr<RingSampler> outbuf = make_unique<RingSampler>(samplerate, FLAGS_feat_window + FLAGS_feat_hop * (m->M-1));
+    RingSampler::Handle out(outbuf.get());
 
     for (int i=0; i<m->M; i++) {
       float F0 = f0->row(i)[0];
@@ -419,8 +419,8 @@ RingBuf *Features::InvMFCC(const Matrix *in, int samplerate, const Matrix *f0) {
     return outbuf.release();
   }
   else {
-    unique_ptr<RingBuf> outbuf = make_unique<RingBuf>(samplerate, FLAGS_feat_window + FLAGS_feat_hop * (m->M-1));
-    RingBuf::Handle out(outbuf.get());
+    unique_ptr<RingSampler> outbuf = make_unique<RingSampler>(samplerate, FLAGS_feat_window + FLAGS_feat_hop * (m->M-1));
+    RingSampler::Handle out(outbuf.get());
     { 
       double f = (2 * M_PI * 440) / out.Rate();
       for (int i=0; i<out.Len(); i++) out.Write(sin(f*i)/16 + Rand(-1.0,1.0)/2);
@@ -542,20 +542,20 @@ Matrix *Features::FromFeat(Matrix *features, int flag) {
 
 Matrix *Features::FromAsset(SoundAsset *wav, int flag) {
   if (wav->channels > 1) ERROR("Features::fromAsset called on SoundAsset with ", wav->channels, " channels");
-  RingBuf::Handle B(wav->wav.get());
+  RingSampler::Handle B(wav->wav.get());
   Matrix *features = FromBuf(&B);
   return FromFeat(features, flag);
 }
 
-Matrix *Features::FromBuf(const RingBuf::Handle *in, Matrix *out, vector<StatefulFilter> *filter, Allocator *alloc) {
+Matrix *Features::FromBuf(const RingSampler::Handle *in, Matrix *out, vector<StatefulFilter> *filter, Allocator *alloc) {
   Matrix *features = 0;
   if      (FLAGS_feat_type == "MFCC") features = MFCC(in, out, alloc);
   else if (FLAGS_feat_type == "PLP")  features = PLP(in, out, filter, alloc);
   return features;
 }
 
-RingBuf *Features::Reverse(const Matrix *in, int samplerate, const Matrix *f0, Allocator *alloc) {
-  RingBuf *wav = 0;
+RingSampler *Features::Reverse(const Matrix *in, int samplerate, const Matrix *f0, Allocator *alloc) {
+  RingSampler *wav = 0;
   if      (FLAGS_feat_type == "MFCC") wav = InvMFCC(in, samplerate, f0);
   else if (FLAGS_feat_type == "PLP")  wav = InvPLP(in, samplerate, alloc);
   return wav;
@@ -1348,8 +1348,8 @@ void Decoder::VisualizeFeatures(AcousticModel::Compiled *model, Matrix *MFCC, Ma
   sa.Load();
   sa.channels = 1;
   sa.sample_rate = FLAGS_sample_rate;
-  sa.wav = unique_ptr<RingBuf>(Features::Reverse(MFCC, FLAGS_sample_rate));
-  RingBuf::Handle B = RingBuf::Handle(sa.wav.get());
+  sa.wav = unique_ptr<RingSampler>(Features::Reverse(MFCC, FLAGS_sample_rate));
+  RingSampler::Handle B = RingSampler::Handle(sa.wav.get());
 
   Matrix *spect = Spectogram(&B, 0, FLAGS_feat_window, FLAGS_feat_hop, FLAGS_feat_window, vector<double>(), PowerDomain::dB);
   Asset *snap = screen->shell->asset("snap");
@@ -1403,14 +1403,14 @@ void Decoder::VisualizeFeatures(AcousticModel::Compiled *model, Matrix *MFCC, Ma
 
 int Resynthesize(Audio *s, const SoundAsset *sa) {
   if (!sa->wav) return -1;
-  RingBuf::Handle B(sa->wav.get());
+  RingSampler::Handle B(sa->wav.get());
   Matrix *m = Features::FromBuf(&B);
   Matrix *f0 = F0Stream(&B, 0, FLAGS_feat_window, FLAGS_feat_hop);
 
   int ret = -1;
-  RingBuf *resynth = Features::Reverse(m, B.Rate(), f0);
+  RingSampler *resynth = Features::Reverse(m, B.Rate(), f0);
   if (resynth) {
-    B = RingBuf::Handle(resynth);
+    B = RingSampler::Handle(resynth);
     s->QueueMixBuf(&B);	
   }
 

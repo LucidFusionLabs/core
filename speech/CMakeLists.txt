@@ -1,17 +1,11 @@
 # $Id: CMakeLists.txt 1320 2014-10-26 08:12:52Z justin $
 
-set(LFL_EASTL 1)
-set(LFL_LIBARCHIVE 1)
-set(LFL_HEADLESS 1)
-
 lfl_project(speech)
-add_definitions(${LFAPP_DEF})
-include_directories(${LFAPP_INCLUDE})
+add_definitions(${LFL_APP_DEF})
+include_directories(${LFL_APP_INCLUDE})
 
-# speech
-set(LFL_RECOGNITION_SOURCE ${LFL_SOURCE_DIR}/core/speech/speech.cpp ${LFL_SOURCE_DIR}/core/speech/recognition.cpp ${LFL_SOURCE_DIR}/core/speech/voice.cpp)
-set(LFL_RECOGNITION_SOURCE ${LFL_RECOGNITION_SOURCE} PARENT_SCOPE)
-add_library(recognition STATIC ${LFL_RECOGNITION_SOURCE})
+# recognition
+add_library(recognition STATIC speech.cpp recognition.cpp voice.cpp)
 
 # trainer
 add_executable(speech-trainer trainer.cpp)

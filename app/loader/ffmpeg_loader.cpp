@@ -239,7 +239,7 @@ struct FFMpegAssetLoader : public AssetLoaderInterface {
       open_resampler = true;
     }
     if (!a->wav) {
-      a->wav = make_unique<RingBuf>(a->sample_rate, SoundAsset::Size(a));
+      a->wav = make_unique<RingSampler>(a->sample_rate, SoundAsset::Size(a));
       open_resampler = true;
     }
     if (open_resampler)
@@ -282,7 +282,7 @@ struct FFMpegAssetLoader : public AssetLoaderInterface {
       sa->channels = avctx->channels == 1 ? 1 : FLAGS_chans_out;
       sa->sample_rate = FLAGS_sample_rate;
       sa->seconds = FLAGS_soundasset_seconds;
-      sa->wav = make_unique<RingBuf>(sa->sample_rate, SoundAsset::Size(sa));
+      sa->wav = make_unique<RingSampler>(sa->sample_rate, SoundAsset::Size(sa));
       sa->resampler = unique_ptr<AudioResamplerInterface>(CreateAudioResampler());
       sa->resampler->Open(sa->wav.get(), avctx->channels, avctx->sample_rate, SampleFromFFMpegId(avctx->sample_fmt),
                           sa->channels, sa->sample_rate, Sample::S16);

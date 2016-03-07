@@ -177,6 +177,9 @@ bool LocalFile::Open(const char *path, const char *mode, bool pre_create) {
   return true;
 }
 #endif
+
+File *LocalFile::Create() { return nullptr; }
+bool LocalFile::ReplaceWith(File *nf) { return false; }
 bool LocalFile::Open(const string &path, const string &mode, bool pre_create) {
   if ((writable = strchr(mode.c_str(), 'w'))) {
     impl = AndroidFileOpenWriter(path.c_str());

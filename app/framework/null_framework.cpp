@@ -65,6 +65,7 @@ struct NullFrameworkModule : public Module {
 
 string Application::GetClipboardText() { return ""; }
 void Application::SetClipboardText(const string &s) {}
+void Application::LoseFocus() {}
 void Application::GrabMouseFocus() {}
 void Application::ReleaseMouseFocus() {}
 void Application::OpenTouchKeyboard() {}
@@ -89,7 +90,7 @@ bool Video::CreateWindow(Window *W) {
 void Video::StartWindow(Window*) {}
 int Video::Swap() { return 0; }
 
-void FrameScheduler::DoWait() {}
+bool FrameScheduler::DoWait() { return false; }
 void FrameScheduler::Setup() { rate_limit = synchronize_waits = wait_forever_thread = 0; }
 void FrameScheduler::Wakeup(void *opaque) {}
 void FrameScheduler::UpdateWindowTargetFPS(Window*) {}

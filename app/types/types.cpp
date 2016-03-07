@@ -106,9 +106,9 @@ void *BlockChainAllocator::Malloc(int n) {
   return ret;
 }
 
-/* RingBuf */
+/* RingSampler */
 
-void RingBuf::Resize(int SPS, int SPB, int Width) {
+void RingSampler::Resize(int SPS, int SPB, int Width) {
   if (SPS != samples_per_sec || SPB != ring.size || Width != width) { 
     ring.size = SPB;
     samples_per_sec = SPS;
@@ -124,36 +124,37 @@ void RingBuf::Resize(int SPS, int SPB, int Width) {
   ring.back = 0;
 }
 
-void *RingBuf::Write(int writeFlag, microseconds timestamp) {
+void *RingSampler::Write(int writeFlag, microseconds timestamp) {
   void *ret = Void(buf + ring.back*width);
   if (writeFlag & Stamp) stamp[ring.back] = timestamp != microseconds(-1) ? timestamp : Now();
   if (!(writeFlag & Peek)) ring.back = ring.Index(1);
   return ret;
 }
 
-int RingBuf::Dist(int indexB, int indexE) const { return Since(Bucket(indexB), Bucket(indexE)); }
+int RingSampler::Dist(int indexB, int indexE) const { return Since(Bucket(indexB), Bucket(indexE)); }
 
-int RingBuf::Since(int index, int Next) const {
+int RingSampler::Since(int index, int Next) const {
   Next = Next>=0 ? Next : ring.back;
   return (Next < index ? ring.size : 0) + Next - index;
 }
 
-void *RingBuf::Read(int index, int Next) const { 
+void *RingSampler::Read(int index, int Next) const { 
   Next = Next>=0 ? Next : ring.back;
   int ind = Bucket(Next+index);
   return Void(buf + ind * width);
 }
 
-microseconds RingBuf::ReadTimestamp(int index, int Next) const { 
+microseconds RingSampler::ReadTimestamp(int index, int Next) const { 
   Next = Next>=0 ? Next : ring.back;
   int ind = Bucket(Next+index);
   return stamp[ind];
 }
 
-void RingBuf::Handle::CopyFrom(const RingBuf::Handle *src) {
+void RingSampler::Handle::CopyFrom(const RingSampler::Handle *src) {
   next=0; int N=Len(), B=0;
   if (N > src->Len()) { B=N-src->Len(); N=src->Len(); }
   for (int i=0; i<N; i++) Write(src->Read(-N+i));
   for (int i=0; i<B; i++) Write(0.0);
 }
+
 }; // namespace LFL

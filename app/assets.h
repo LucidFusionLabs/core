@@ -162,7 +162,7 @@ struct SoundAsset {
 
   SoundAssetMap *parent;
   string name, filename;
-  unique_ptr<RingBuf> wav;
+  unique_ptr<RingSampler> wav;
   int channels=0, sample_rate=0, seconds=0;
   RefillCB refill;
   void *handle=0;
@@ -170,7 +170,7 @@ struct SoundAsset {
   unique_ptr<AudioResamplerInterface> resampler;
 
   SoundAsset() {}
-  SoundAsset(const string &N, const string &FN, RingBuf *W, int C, int SR, int S) :
+  SoundAsset(const string &N, const string &FN, RingSampler *W, int C, int SR, int S) :
     name(N), filename(FN), wav(W), channels(C), sample_rate(SR), seconds(S) {}
 
   void Load(void *handle, const char *FN, int Secs, int flag=0);
@@ -235,7 +235,7 @@ struct WavReader {
   WavReader(File *F=0) { Open(F); }
   bool Open(File *F, WavHeader *H=0);
   void Close() { if (f) f->Close(); }
-  int Read(RingBuf::Handle *, int offset, int size);
+  int Read(RingSampler::Handle *, int offset, int size);
 };
 
 struct WavWriter {
@@ -244,7 +244,7 @@ struct WavWriter {
   ~WavWriter() { Flush(); }
   WavWriter(File *F=0) { Open(F); }
   void Open(File *F);
-  int Write(const RingBuf::Handle *, bool flush=true);
+  int Write(const RingSampler::Handle *, bool flush=true);
   int Flush();
 };
 
@@ -275,7 +275,7 @@ void glShadertoyShaderWindows(Shader *shader, const Color &backup_color, const B
 void glShadertoyShaderWindows(Shader *shader, const Color &backup_color, const vector<const Box*> &win, const Texture *tex=0);
 void glSpectogram(Matrix *m, unsigned char *data, int pf, int width, int height, int hjump, float max, float clip, bool interpolate, int pd=PowerDomain::dB);
 void glSpectogram(Matrix *m, Texture *t, float *max=0, float clip=-INFINITY, int pd=PowerDomain::dB);
-void glSpectogram(const RingBuf::Handle *in, Texture *t, Matrix *transform=0, float *max=0, float clip=-INFINITY);
+void glSpectogram(const RingSampler::Handle *in, Texture *t, Matrix *transform=0, float *max=0, float clip=-INFINITY);
 
 struct BoxFilled             : public Drawable { void Draw(const LFL::Box &b, const Drawable::Attr *a=0) const; };
 struct BoxOutline            : public Drawable { void Draw(const LFL::Box &b, const Drawable::Attr *a=0) const; };
@@ -288,7 +288,7 @@ struct Waveform : public Drawable {
   Waveform() {}
   Waveform(point dim, const Color *c, const Vec<float> *);
   void Draw(const LFL::Box &w, const Drawable::Attr *a=0) const;
-  static Waveform Decimated(point dim, const Color *c, const RingBuf::Handle *, int decimateBy);
+  static Waveform Decimated(point dim, const Color *c, const RingSampler::Handle *, int decimateBy);
 };
 
 struct Cube {

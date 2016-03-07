@@ -796,7 +796,7 @@ bool FrameScheduler::FrameWait() {
       wait_mutex.lock();
       frame_mutex.unlock();
     }
-    DoWait();
+    ret = DoWait();
     if (synchronize_waits) {
       frame_mutex.lock();
       wait_mutex.unlock();

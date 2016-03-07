@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef LFL_SPEECH_RECOGNITION_H__
-#define LFL_SPEECH_RECOGNITION_H__
+#ifndef LFL_CORE_SPEECH_RECOGNITION_H__
+#define LFL_CORE_SPEECH_RECOGNITION_H__
 namespace LFL {
 
 DECLARE_FLAG(language_model_weight, double);
@@ -400,4 +400,4 @@ struct Recognizer {
 };
 
 }; // namespace LFL
-#endif // LFL_SPEECH_RECOGNITION_H__
+#endif // LFL_CORE_SPEECH_RECOGNITION_H__

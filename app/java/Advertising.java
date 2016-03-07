@@ -1,4 +1,4 @@
-package com.lucidfusionlabs.lfjava;
+package com.lucidfusionlabs.app;
 
 import java.net.*;
 import java.nio.ByteBuffer;
@@ -47,7 +47,7 @@ class Advertising {
         activity.runOnUiThread(new Runnable() {
             public void run() {
                 if (adRequest == null) { 
-                    Log.i("lfjava", "creating adRequest");
+                    Log.i("lfl", "creating adRequest");
                     adRequest = new AdRequest.Builder()
                         .addTestDevice("0DBA42FB5610516D099B960C0424B343")
                         .addTestDevice("52615418751B72981EF42A9681544EDB")

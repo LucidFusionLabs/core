@@ -26,7 +26,7 @@ struct OpenCvCameraModule : public Module {
   mutex lock;
   struct Stream { 
     CvCapture *capture=0;
-    unique_ptr<RingBuf> frames;
+    unique_ptr<RingSampler> frames;
     int width=0, height=0, next=0;
     void SetDimensions(int W, int H) { width=W; height=H; }
   } L, R;
@@ -93,16 +93,16 @@ struct OpenCvCameraModule : public Module {
       /* 1-time cosntruct */
       if (lf && !L.frames) {
         L.dimensions(lf->width, lf->height);
-        L.frames = make_unique<RingBuf>(FLAGS_camera_fps, FLAGS_camera_fps, lf->imageSize);
+        L.frames = make_unique<RingSampler>(FLAGS_camera_fps, FLAGS_camera_fps, lf->imageSize);
       }
       if (rf && !R.frames) {
         R.dimensions(rf->width, rf->height);
-        R.frames = make_unique<RingBuf>(FLAGS_camera_fps, FLAGS_camera_fps, rf->imageSize);
+        R.frames = make_unique<RingSampler>(FLAGS_camera_fps, FLAGS_camera_fps, rf->imageSize);
       }
 
       /* write */
-      if (lf) memcpy(L.frames->write(RingBuf::Peek | RingBuf::Stamp), lf->imageData, lf->imageSize);
-      if (rf) memcpy(R.frames->write(RingBuf::Peek | RingBuf::Stamp), rf->imageData, rf->imageSize);
+      if (lf) memcpy(L.frames->write(RingSampler::Peek | RingSampler::Stamp), lf->imageData, lf->imageSize);
+      if (rf) memcpy(R.frames->write(RingSampler::Peek | RingSampler::Stamp), rf->imageData, rf->imageSize);
 
       /* commit */  
       if (lf || rf) {

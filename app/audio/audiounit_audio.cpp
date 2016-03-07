@@ -111,13 +111,13 @@ struct AudioUnitAudioModule : public Module {
 
     double step = Seconds(1)*1000/FLAGS_sample_rate;
     Time stamp = AudioResampler::monotonouslyIncreasingTimestamp(audio->IL->ReadTimestamp(-1), Now()*1000, &step, inNumberFrames);
-    RingBuf::WriteAheadHandle IL(audio->IL.get()), IR(audio->IR.get());
+    RingSampler::WriteAheadHandle IL(audio->IL.get()), IR(audio->IR.get());
     for (int i=0; i<inNumberFrames; i++) {
       Time timestamp = stamp + i*step;
-      IL.Write(in[i*FLAGS_chans_in+0]/32768.0, RingBuf::Stamp, timestamp);
+      IL.Write(in[i*FLAGS_chans_in+0]/32768.0, RingSampler::Stamp, timestamp);
 
       if (FLAGS_chans_in == 1) continue;
-      IR.Write(in[i*FLAGS_chans_in+1]/32768.0, RingBuf::Stamp, timestamp);
+      IR.Write(in[i*FLAGS_chans_in+1]/32768.0, RingSampler::Stamp, timestamp);
     }
     { 
       ScopedMutex ML(audio->inlock);

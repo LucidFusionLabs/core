@@ -42,7 +42,7 @@ namespace LFL {
 #ifndef LFL_WINDOWS
 int NTService::Install  (const char *name, const char *path) { FATAL("not implemented"); }
 int NTService::Uninstall(const char *name)                   { FATAL("not implemented"); }
-int NTService::WrapMain (const char *name, MainCB main_cb, int argc, const char **argv) { return main_cb(argc, argv); }
+int NTService::WrapMain (const char *name, MainCB main_cb, int argc, const char* const* argv) { return main_cb(argc, argv); }
 #endif
 
 #if defined(LFL_MOBILE)
@@ -136,7 +136,7 @@ int NTService::Uninstall(const char *name) {
   return 0;
 }
 
-int NTService::WrapMain(const char *name, MainCB main_cb, int argc, const char **argv) {
+int NTService::WrapMain(const char *name, MainCB main_cb, int argc, const char* const* argv) {
   nt_service_name = name;
   nt_service_main = main_cb;
 

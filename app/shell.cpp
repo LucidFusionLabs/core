@@ -144,7 +144,7 @@ void Shell::snap(const vector<string> &arg) {
   SoundAsset *sa = soundasset(arg.size() ? arg[0] : "snap");
   if (a && sa) {
     app->audio->Snapshot(sa);
-    RingBuf::Handle H(sa->wav.get());
+    RingSampler::Handle H(sa->wav.get());
     glSpectogram(&H, &a->tex);
   }
 }
@@ -191,7 +191,7 @@ void Shell::copy(const vector<string> &arg) {
         src->name.c_str(), src->sample_rate, src->channels, src->seconds,
         dst->name.c_str(), dst->sample_rate, dst->channels, dst->seconds);
 
-  RingBuf::Handle srch(src->wav.get()), dsth(dst->wav.get());
+  RingSampler::Handle srch(src->wav.get()), dsth(dst->wav.get());
   dsth.CopyFrom(&srch);
 }
 
@@ -220,8 +220,8 @@ void shell_filter(const vector<string> &arg, bool FFTfilter, int taps, int hop=0
     return;
   }
 
-  RingBuf filtered(sa->wav->samples_per_sec, sa->wav->ring.size);
-  RingBuf::Handle I(sa->wav.get()), O(&filtered);
+  RingSampler filtered(sa->wav->samples_per_sec, sa->wav->ring.size);
+  RingSampler::Handle I(sa->wav.get()), O(&filtered);
 
   if (FFTfilter) {
     FFTFilterCompile(taps, &filter[0]);
@@ -260,12 +260,12 @@ void Shell::f0(const vector<string> &arg) {
   }
 
   if (offset) {
-    RingBuf::Handle I(sa->wav.get(), offset);
+    RingSampler::Handle I(sa->wav.get(), offset);
     float f0 = FundamentalFrequency(&I, 512, 0, method);
     INFO("f0 = (", sa->name, ":", offset, ") = ", f0);    
   }
   else {
-    RingBuf::Handle I(sa->wav.get(), offset);
+    RingSampler::Handle I(sa->wav.get(), offset);
     Matrix *f0 = F0Stream(&I, 0, 512, 256, method);
     for (int i=0; i<f0->M; /**/) {
       char buf[1024]; int len=0;
@@ -285,7 +285,7 @@ void Shell::writesnap(const vector<string> &a) {
   SoundAsset *sa = soundasset(a.size() ? a[0] : "snap");
   if (sa) {
     string filename = StrCat(LFAppDownloadDir(), "snap.wav"); 
-    RingBuf::Handle B(sa->wav.get());
+    RingSampler::Handle B(sa->wav.get());
     LocalFile lf(filename, "r");
     WavWriter w(&lf);
     int ret = w.Write(&B);

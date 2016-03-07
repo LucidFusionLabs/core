@@ -1,4 +1,4 @@
-package com.lucidfusionlabs.lfjava;
+package com.lucidfusionlabs.app;
 
 import java.net.*;
 import java.nio.ByteBuffer;
@@ -89,14 +89,14 @@ class GPlusClient implements GameHelper.GameHelperListener, OnInvitationReceived
         }
         else if (request == RC_WAITING_ROOM) {
             if (response != Activity.RESULT_OK) { leaveRoom(); return; }
-            Log.i("lfjava", "startGame(" + server_role + ", " + server_pid + ")");
+            Log.i("lfl", "startGame(" + server_role + ", " + server_pid + ")");
             startGame(server_role, server_pid);
         }
     }
 
     @Override
     public void onInvitationReceived(Invitation invitation) {
-        Log.i("lfjava", "GplusClient::onInivitationReceived(" + invitation.getInvitationId() + ")");
+        Log.i("lfl", "GplusClient::onInivitationReceived(" + invitation.getInvitationId() + ")");
         // show in-game popup to let user know of pending invitation
         // store invitation for use when player accepts this invitation
         // mIncomingInvitationId = invitation.getInvitationId();
@@ -104,7 +104,7 @@ class GPlusClient implements GameHelper.GameHelperListener, OnInvitationReceived
     
     @Override
     public void onInvitationRemoved(String arg0) {
-        Log.i("lfjava", "GPlusClient::onInvitationRemoved " + arg0);
+        Log.i("lfl", "GPlusClient::onInvitationRemoved " + arg0);
     }
     
     @Override
@@ -112,37 +112,37 @@ class GPlusClient implements GameHelper.GameHelperListener, OnInvitationReceived
     
     @Override
     public void onPeerDeclined(Room room, List<String> peers) {
-        Log.i("lfjava", "GPlusClient::onPeerDeclined " + peers);
+        Log.i("lfl", "GPlusClient::onPeerDeclined " + peers);
     }
     
     @Override
     public void onPeerJoined(Room arg0, List<String> peers) {
-        Log.i("lfjava", "GPlusClient::onPeerJoined " + peers);
+        Log.i("lfl", "GPlusClient::onPeerJoined " + peers);
     }
     
     @Override
     public void onPeerLeft(Room room, List<String> peers) {
-        Log.i("lfjava", "GPlusClient::onPeerLeft " + peers);
+        Log.i("lfl", "GPlusClient::onPeerLeft " + peers);
     }
     
     @Override
     public void onPeersConnected(Room room, List<String> peers) {
-        Log.i("lfjava", "GPlusClient::onPeersConnected " + peers);
+        Log.i("lfl", "GPlusClient::onPeersConnected " + peers);
     }
     
     @Override
     public void onPeersDisconnected(Room room, List<String> peers) {
-        Log.i("lfjava", "GPlusClient::onPeersDisconnected " + peers);
+        Log.i("lfl", "GPlusClient::onPeersDisconnected " + peers);
     }
     
     @Override
     public void onConnectedToRoom(Room room) {
-        Log.i("lfjava", "GPlusClient::onConnectedToRoom " + room.getRoomId());
+        Log.i("lfl", "GPlusClient::onConnectedToRoom " + room.getRoomId());
     }
 
     @Override
     public void onDisconnectedFromRoom(Room room) {
-        Log.i("lfjava", "GPlusClient::onDisconnectedFromRoom " + room.getRoomId());
+        Log.i("lfl", "GPlusClient::onDisconnectedFromRoom " + room.getRoomId());
         if (room_id != null) leaveRoom();
     }
  
@@ -160,24 +160,24 @@ class GPlusClient implements GameHelper.GameHelperListener, OnInvitationReceived
 
     @Override
     public void onRoomConnected(int statusCode, Room room) {
-        Log.i("lfjava", "onRoomConnected(" + statusCode + ", " + room.getRoomId() + ") All participants connected");
+        Log.i("lfl", "onRoomConnected(" + statusCode + ", " + room.getRoomId() + ") All participants connected");
         String my_pid = room.getParticipantId(Games.Players.getCurrentPlayerId(google.getApiClient()));
         room_pids = room.getParticipantIds();
         Collections.sort(room_pids);
         server_pid = room_pids.get(0);
         server_role = server_pid.compareTo(my_pid) == 0;
-        Log.i("lfjava", "server_pid=" + server_pid + ", my_pid=" + my_pid);
+        Log.i("lfl", "server_pid=" + server_pid + ", my_pid=" + my_pid);
     }
     
     @Override
     public void onLeftRoom(int statusCode, String roomId) {
-        Log.i("lfjava", "GPlusClient::onLeftRoom(" + statusCode + ", " + roomId + ")");
+        Log.i("lfl", "GPlusClient::onLeftRoom(" + statusCode + ", " + roomId + ")");
     }
     
     @Override
     public void onJoinedRoom(int statusCode, Room room) {
         if (statusCode != GamesStatusCodes.STATUS_OK) return;
-        Log.i("lfjava", "GPlusClient.onJoinedRoom(" + room.getRoomId() + ")");
+        Log.i("lfl", "GPlusClient.onJoinedRoom(" + room.getRoomId() + ")");
         if (room_id != null) leaveRoom();
         room_id = room.getRoomId();
         
@@ -188,7 +188,7 @@ class GPlusClient implements GameHelper.GameHelperListener, OnInvitationReceived
     @Override
     public void onRoomCreated(int statusCode, Room room) {
         if (statusCode != GamesStatusCodes.STATUS_OK) { return; }
-        Log.i("lfjava", "GPlusClient.onRoomCreated(" + room.getRoomId() + ")");
+        Log.i("lfl", "GPlusClient.onRoomCreated(" + room.getRoomId() + ")");
         if (room_id != null) leaveRoom();
         room_id = room.getRoomId();
 
@@ -199,10 +199,10 @@ class GPlusClient implements GameHelper.GameHelperListener, OnInvitationReceived
     @Override
     public void onRealTimeMessageReceived(RealTimeMessage message) {
         int len = message.getMessageData().length;
-        // Log.i("lfjava", "onRealTimeMessageReceived " + message.getSenderParticipantId() + " " + len);
+        // Log.i("lfl", "onRealTimeMessageReceived " + message.getSenderParticipantId() + " " + len);
 
         if (len > read_buffer.capacity()) {
-            Log.e("lfjava", len + " > " + read_buffer.capacity());
+            Log.e("lfl", len + " > " + read_buffer.capacity());
             return;
         }
 
@@ -239,7 +239,7 @@ class GPlusClient implements GameHelper.GameHelperListener, OnInvitationReceived
     
     public void leaveRoom() {
         if (room_id == null) return;
-        Log.i("lfjava", "GPlusClient.leaveRoom(" + room_id + ")");
+        Log.i("lfl", "GPlusClient.leaveRoom(" + room_id + ")");
         Games.RealTimeMultiplayer.leave(google.getApiClient(), this, room_id);
         room_id = null;
         server_role = false;
@@ -313,15 +313,15 @@ class GPlusClient implements GameHelper.GameHelperListener, OnInvitationReceived
         }
         public void RunReliable() {
             if (room_id == null) return;
-            // Log.i("lfjava", "sendReliable " + room_id + " " + recipientParticipantId);
+            // Log.i("lfl", "sendReliable " + room_id + " " + recipientParticipantId);
             if (Games.RealTimeMultiplayer.sendReliableMessage(google.getApiClient(), null, messageData.array(), room_id, recipientParticipantId) < 0)
-                Log.e("lfjava", "GPlusClient.sendReliable(" + room_id + ", " + recipientParticipantId + ")");
+                Log.e("lfl", "GPlusClient.sendReliable(" + room_id + ", " + recipientParticipantId + ")");
         }
         public void RunUnreliable() {
             if (room_id == null) return;
-            // Log.i("lfjava", "sendUnreliable " + room_id + " " + recipientParticipantId);
+            // Log.i("lfl", "sendUnreliable " + room_id + " " + recipientParticipantId);
             if (Games.RealTimeMultiplayer.sendUnreliableMessage(google.getApiClient(), messageData.array(), room_id, recipientParticipantId) < 0)
-                Log.e("lfjava", "GPlusClient.sendUnreliable(" + room_id + ", " + recipientParticipantId + ")");
+                Log.e("lfl", "GPlusClient.sendUnreliable(" + room_id + ", " + recipientParticipantId + ")");
         }
     }
     

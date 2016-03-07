@@ -874,7 +874,7 @@ struct Wav2Segments {
       int len = iter.end - iter.beg;
       if (len > longrun) longrun = len;
 
-      RingBuf::Handle B(wav->wav, iter.beg*FLAGS_feat_hop, len*FLAGS_feat_hop);
+      RingSampler::Handle B(wav->wav, iter.beg*FLAGS_feat_hop, len*FLAGS_feat_hop);
       Out *o = out[iter.phone];
       o->wav.Write(&B);
 
@@ -922,7 +922,7 @@ extern "C" int main(int argc, const char *argv[]) {
   asset.Load();
   app->shell.assets = &asset;
 
-  soundasset.Add(SoundAsset("snap", 0, new RingBuf(FLAGS_sample_rate*FLAGS_sample_secs), 1, FLAGS_sample_rate, FLAGS_sample_secs));
+  soundasset.Add(SoundAsset("snap", 0, new RingSampler(FLAGS_sample_rate*FLAGS_sample_secs), 1, FLAGS_sample_rate, FLAGS_sample_secs));
   soundasset.Load();
   app->shell.soundassets = &soundasset;
 

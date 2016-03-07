@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef LFL_SPEECH_SPEECH_H__
-#define LFL_SPEECH_SPEECH_H__
+#ifndef LFL_CORE_SPEECH_SPEECH_H__
+#define LFL_CORE_SPEECH_SPEECH_H__
 namespace LFL {
 
 DECLARE_string(feat_type);
@@ -68,10 +68,10 @@ struct Features {
   static Matrix *FFT2Bark(int outrows, double minfreq, double maxfreq, int fftlen, int samplerate);
   static Matrix *FFT2Mel(int outrows, double minfreq, double maxfreq, int fftlen, int samplerate);
   static Matrix *Mel2FFT(int outrows, double minfreq, double maxfreq, int fftlen, int samplerate);
-  static Matrix *PLP(const RingBuf::Handle *in, Matrix *out=0, vector<StatefulFilter> *rastaFilter=0, Allocator *alloc=0);
-  static RingBuf *InvPLP(const Matrix *in, int samplerate, Allocator *alloc=0);
-  static Matrix *MFCC(const RingBuf::Handle *in, Matrix *out=0, Allocator *alloc=0);
-  static RingBuf *InvMFCC(const Matrix *in, int samplerate, const Matrix *f0=0);
+  static Matrix *PLP(const RingSampler::Handle *in, Matrix *out=0, vector<StatefulFilter> *rastaFilter=0, Allocator *alloc=0);
+  static RingSampler *InvPLP(const Matrix *in, int samplerate, Allocator *alloc=0);
+  static Matrix *MFCC(const RingSampler::Handle *in, Matrix *out=0, Allocator *alloc=0);
+  static RingSampler *InvMFCC(const Matrix *in, int samplerate, const Matrix *f0=0);
 
   static Matrix *FilterZeroth(Matrix *features);
   static void MeanAndVarianceNormalization(int D, double *feat, const double *mean, const double *var);
@@ -85,8 +85,8 @@ struct Features {
   static Matrix *FromAsset(SoundAsset *wav, int flag);
   static Matrix *FromFeat(Matrix *features, int flag);
   static Matrix *FromFeat(Matrix *features, int flag, bool FilterZeroth, bool Deltas, bool DeltaDeltas, bool MeanNorm, bool VarNorm);
-  static Matrix *FromBuf(const RingBuf::Handle *in, Matrix *out=0, vector<StatefulFilter> *filter=0, Allocator *alloc=0);
-  static RingBuf *Reverse(const Matrix *in, int samplerate, const Matrix *f0=0, Allocator *alloc=0);
+  static Matrix *FromBuf(const RingSampler::Handle *in, Matrix *out=0, vector<StatefulFilter> *filter=0, Allocator *alloc=0);
+  static RingSampler *Reverse(const Matrix *in, int samplerate, const Matrix *f0=0, Allocator *alloc=0);
   static int Dimension();
 };
 
@@ -392,7 +392,7 @@ struct Decoder {
   static string Transcript(const AcousticModel::Compiled *model, const Matrix *viterbi, Allocator *alloc=0);
 };
 
-#ifdef LFL_LFAPP_GUI_H__
+#ifdef LFL_CORE_APP_GUI_H__
 struct PhoneticSegmentationGUI : public GUI {
   struct Segment {
     string name; int beg, end; Box win; bool hover;
@@ -465,9 +465,9 @@ struct PhoneticSegmentationGUI : public GUI {
     screen->shell->play(args);
   }
 };
-#endif /* LFL_LFAPP_GUI_H__ */
+#endif /* LFL_CORE_APP_GUI_H__ */
 
 int Resynthesize(Audio *s, const SoundAsset *sa);
 
 }; // namespace LFL
-#endif // LFL_SPEECH_SPEECH_H__
+#endif // LFL_CORE_SPEECH_SPEECH_H__

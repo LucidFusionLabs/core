@@ -31,7 +31,7 @@ struct VoiceModel {
   } unit[LFL_PHONES];
 
   int Read(const char *dir);
-  RingBuf *Synth(const char *text, int start=0);
+  RingSampler *Synth(const char *text, int start=0);
 
   int NextPhone(int phone, int lastphone, int lastphoneindex);
 };

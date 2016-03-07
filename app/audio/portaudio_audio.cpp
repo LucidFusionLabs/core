@@ -88,12 +88,12 @@ struct PortaudioAudioModule : public Module {
     float *out = static_cast<float*>(output);
     microseconds step(1000000/FLAGS_sample_rate), stamp =
       AudioResamplerInterface::MonotonouslyIncreasingTimestamp(audio->IL->ReadTimestamp(-1), ToMicroseconds(Now()), &step, samplesPerFrame);
-    RingBuf::WriteAheadHandle IL(audio->IL.get()), IR(audio->IR.get());
+    RingSampler::WriteAheadHandle IL(audio->IL.get()), IR(audio->IR.get());
     for (unsigned i=0; i<samplesPerFrame; i++) {
       microseconds timestamp = stamp + i * step;
-      IL.Write(in[i*FLAGS_chans_in+0], RingBuf::Stamp, timestamp);
+      IL.Write(in[i*FLAGS_chans_in+0], RingSampler::Stamp, timestamp);
       if (FLAGS_chans_in == 1) continue;
-      IR.Write(in[i*FLAGS_chans_in+1], RingBuf::Stamp, timestamp);
+      IR.Write(in[i*FLAGS_chans_in+1], RingSampler::Stamp, timestamp);
     }
     {
       ScopedMutex ML(audio->inlock);

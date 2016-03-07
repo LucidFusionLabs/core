@@ -20,7 +20,7 @@
 
 namespace LFL {
 DEFINE_int(sample_rate, 16000, "Audio sample rate");
-DEFINE_int(sample_secs, 3, "Seconds of RingBuf audio");
+DEFINE_int(sample_secs, 3, "Seconds of RingSampler audio");
 DEFINE_int(chans_in, -1, "Audio input channels");
 DEFINE_int(chans_out, -1, "Audio output channels");
 DEFINE_int(audio_input_device, -1, "Audio input device index");
@@ -44,10 +44,10 @@ int Audio::Init() {
   if (!impl) FLAGS_lfapp_audio = false;
   if (impl && impl->Init()) return -1;
 
-  IL = make_unique<RingBuf>(FLAGS_sample_rate*FLAGS_sample_secs);
-  IR = make_unique<RingBuf>(FLAGS_sample_rate*FLAGS_sample_secs);
-  RL = RingBuf::Handle(IL.get());
-  RR = RingBuf::Handle(IR.get());
+  IL = make_unique<RingSampler>(FLAGS_sample_rate*FLAGS_sample_secs);
+  IR = make_unique<RingSampler>(FLAGS_sample_rate*FLAGS_sample_secs);
+  RL = RingSampler::Handle(IL.get());
+  RR = RingSampler::Handle(IR.get());
 
   if (impl && impl->Start()) return -1;
   if (FLAGS_chans_out < 0) FLAGS_chans_out = 0;
@@ -87,7 +87,7 @@ int Audio::Free() {
   return 0;
 }
 
-void Audio::QueueMixBuf(const RingBuf::Handle *B, int channels, int flag) {
+void Audio::QueueMixBuf(const RingSampler::Handle *B, int channels, int flag) {
   ScopedMutex ML(outlock);
   outlast = B->Len() * FLAGS_chans_out;
   bool mix = flag & MixFlag::Mix, dont_queue = flag & MixFlag::DontQueue;
@@ -118,13 +118,13 @@ void Audio::QueueMix(SoundAsset *sa, int flag, int begin, int len) {
     int samples = sa->refill(sa, flag & MixFlag::Reset);
     playing = (samples == SoundAsset::Size(sa)) ? sa : 0;
   }
-  RingBuf::Handle B(sa->wav.get(), begin, len);
+  RingSampler::Handle B(sa->wav.get(), begin, len);
   QueueMixBuf(&B, sa->channels, flag);
 }
 
 int Audio::Snapshot(SoundAsset *out) {
   ScopedMutex ML(inlock);
-  RingBuf::Handle(out->wav.get()).CopyFrom(&RL);
+  RingSampler::Handle(out->wav.get()).CopyFrom(&RL);
   return 0;
 }
 
@@ -137,8 +137,8 @@ double Audio::VisualDelay() {
 }
 
 int Sinthesize(Audio *s, int hz1, int hz2, int hz3) {
-  RingBuf tonebuf(FLAGS_sample_rate, FLAGS_sample_rate);
-  RingBuf::Handle tone(&tonebuf);
+  RingSampler tonebuf(FLAGS_sample_rate, FLAGS_sample_rate);
+  RingSampler::Handle tone(&tonebuf);
   double f = 2 * M_PI / tone.Rate();
   for (int i=0; i<tone.Len(); i++) {
     double v=sin(f*hz1*i);
@@ -162,13 +162,13 @@ double HighPassFilter(int n, int i, int minfreq) {
   return impulse - LowPassFilter(n,i,minfreq);
 }
 
-float PseudoEnergy(const RingBuf::Handle *in, int window, int offset) {
+float PseudoEnergy(const RingSampler::Handle *in, int window, int offset) {
   float e=0;
   for (int i = 0; i < window; i++) e += fabs(in->Read(offset + i) * 32768.0);
   return e;
 }
 
-int ZeroCrossings(const RingBuf::Handle *in, int window, int offset) {
+int ZeroCrossings(const RingSampler::Handle *in, int window, int offset) {
   int zcr=0;
   float last = in->Read(offset);
   for (int i = 1; i < window; i++) {
@@ -179,10 +179,10 @@ int ZeroCrossings(const RingBuf::Handle *in, int window, int offset) {
   return zcr;
 }
 
-RingBuf *Decimate(const RingBuf::Handle *inh, int factor) {
+RingSampler *Decimate(const RingSampler::Handle *inh, int factor) {
   const int SPS=inh->Rate(), SPB=inh->Len();
-  unique_ptr<RingBuf> outbuf = make_unique<RingBuf>(SPS/factor, SPB/factor);
-  RingBuf::Handle out(outbuf.get());
+  unique_ptr<RingSampler> outbuf = make_unique<RingSampler>(SPS/factor, SPB/factor);
+  RingSampler::Handle out(outbuf.get());
 
   double sum = 0;
   for (int i = 0, count = 0; i < SPB; i++) {
@@ -196,7 +196,7 @@ RingBuf *Decimate(const RingBuf::Handle *inh, int factor) {
   return outbuf.release();
 }
 
-int CrossCorrelateTDOA(const RingBuf::Handle *a, const RingBuf::Handle *b, int window, int offset, int samps) {
+int CrossCorrelateTDOA(const RingSampler::Handle *a, const RingSampler::Handle *b, int window, int offset, int samps) {
   float max=0; int maxind=0;
   float res[100];
 
@@ -257,7 +257,7 @@ double StatefulFilter::Filter(double sample) {
   return ret;
 }
 
-int StatefulFilter::Filter(const RingBuf::Handle *in, RingBuf::Handle *out, int start, int length) {
+int StatefulFilter::Filter(const RingSampler::Handle *in, RingSampler::Handle *out, int start, int length) {
   int count = 0;
   if (!length) length = in->Len();
   for (int i=start; i<length; i++) {
@@ -270,8 +270,8 @@ int StatefulFilter::Filter(const RingBuf::Handle *in, RingBuf::Handle *out, int 
 
 /* stateless filters */
 
-double Filter(const RingBuf::Handle *in, int offset1,
-              const RingBuf::Handle *out, int offset2,
+double Filter(const RingSampler::Handle *in, int offset1,
+              const RingSampler::Handle *out, int offset2,
               int filterlenB, const double *filterB,
               int filterlenA, const double *filterA,
               double initialcondition, bool nohistory) {    
@@ -290,9 +290,9 @@ double Filter(const RingBuf::Handle *in, int offset1,
   return yi;
 }
 
-double Filter(const RingBuf::Handle *in, int offset, int filterlen, const double *filter, bool nohistory) { return LFL::Filter(in, offset, 0, 0, filterlen, filter, 0, 0, 0, nohistory); }
+double Filter(const RingSampler::Handle *in, int offset, int filterlen, const double *filter, bool nohistory) { return LFL::Filter(in, offset, 0, 0, filterlen, filter, 0, 0, 0, nohistory); }
 
-int Filter(const RingBuf::Handle *in, RingBuf::Handle *out, int filterlenB, const double *filterB, int filterlenA, const double *filterA, int start, double *ic, double iclen, bool nohistory) {
+int Filter(const RingSampler::Handle *in, RingSampler::Handle *out, int filterlenB, const double *filterB, int filterlenA, const double *filterA, int start, double *ic, double iclen, bool nohistory) {
   for (int i=start; i<in->Len(); i++) {
     double yi = LFL::Filter(in, i, out, i, filterlenB, filterB, filterlenA, filterA, (iclen-- > 0) ? *ic++ : 0, nohistory);
     out->Write(yi);
@@ -300,11 +300,11 @@ int Filter(const RingBuf::Handle *in, RingBuf::Handle *out, int filterlenB, cons
   return 0;
 }
 
-int Filter(const RingBuf::Handle *in, RingBuf::Handle *out, int filterlen, const double *filter, bool nohistory) { return LFL::Filter(in, out, filterlen, filter, 0, 0, 0, 0, 0, nohistory); }
+int Filter(const RingSampler::Handle *in, RingSampler::Handle *out, int filterlen, const double *filter, bool nohistory) { return LFL::Filter(in, out, filterlen, filter, 0, 0, 0, 0, 0, nohistory); }
 
 /* streaming overlap-add fft/ifft */
 
-int FFT(const RingBuf::Handle *in, int i, int window, int hop, int fftlen, float *out,
+int FFT(const RingSampler::Handle *in, int i, int window, int hop, int fftlen, float *out,
         const vector<double> &pef, bool doHamming, int scale) {
   int padding=fftlen-window, split=window/2, ind;
   if (window % 2 != 0) return -1;
@@ -324,7 +324,7 @@ int FFT(const RingBuf::Handle *in, int i, int window, int hop, int fftlen, float
   return 0;
 }
 
-int IFFT(const Complex *in, int i, int window, int hop, int fftlen, RingBuf::Handle *out) {
+int IFFT(const Complex *in, int i, int window, int hop, int fftlen, RingSampler::Handle *out) {
   Complex zero={0,0};
   vector<float> fftbuf(fftlen*2);
   int split=fftlen/2;
@@ -352,8 +352,8 @@ int IFFT(const Complex *in, int i, int window, int hop, int fftlen, RingBuf::Han
 /* fft filter */
 
 void FFTFilterCompile(int n, double *filter) {
-  RingBuf filtbuf(FLAGS_sample_rate, n);
-  RingBuf::Handle filtcoef(&filtbuf);
+  RingSampler filtbuf(FLAGS_sample_rate, n);
+  RingSampler::Handle filtcoef(&filtbuf);
   for (int i=0; i<n; i++) filtcoef.Write(filter[i]);
 
   vector<float> fftbuf(n);
@@ -361,7 +361,7 @@ void FFTFilterCompile(int n, double *filter) {
   for (int i=0; i<n; i++) filter[i] = fftbuf[i];
 }
 
-int FFTFilter(const RingBuf::Handle *in, RingBuf::Handle *out, int window, int hop, const double *filter) {
+int FFTFilter(const RingSampler::Handle *in, RingSampler::Handle *out, int window, int hop, const double *filter) {
   int frames = (in->Len() - (window - hop)) / hop;
   vector<float> fftbuf(window);
   vector<Complex> ifftb(window/2);
@@ -382,7 +382,7 @@ int FFTFilter(const RingBuf::Handle *in, RingBuf::Handle *out, int window, int h
   return 0;
 }
 
-Matrix *Spectogram(const RingBuf::Handle *in, Matrix *out, int window, int hop, int fftlen,
+Matrix *Spectogram(const RingSampler::Handle *in, Matrix *out, int window, int hop, int fftlen,
                    const vector<double> &preemph, int pd, int scale) {
   bool complex = (pd==PowerDomain::complex);
   int frames = (in->Len() - (window - hop)) / hop;
@@ -412,9 +412,9 @@ Matrix *Spectogram(const RingBuf::Handle *in, Matrix *out, int window, int hop, 
   return m;
 }
 
-RingBuf *ISpectogram(const Matrix *in, int window, int hop, int fftlen, int samplerate) {
-  unique_ptr<RingBuf> outbuf = make_unique<RingBuf>(samplerate, fftlen + hop * (in->M-1));
-  RingBuf::Handle out(outbuf.get());
+RingSampler *ISpectogram(const Matrix *in, int window, int hop, int fftlen, int samplerate) {
+  unique_ptr<RingSampler> outbuf = make_unique<RingSampler>(samplerate, fftlen + hop * (in->M-1));
+  RingSampler::Handle out(outbuf.get());
 
   for (int i=0; i<in->M; i++) {
     if (IFFT(in->crow(i), i, window, hop, fftlen, &out)) return nullptr;
@@ -422,7 +422,7 @@ RingBuf *ISpectogram(const Matrix *in, int window, int hop, int fftlen, int samp
   return outbuf.release();
 }
 
-Matrix *F0Stream(const RingBuf::Handle *in, Matrix *out, int window, int hop, int method) {
+Matrix *F0Stream(const RingSampler::Handle *in, Matrix *out, int window, int hop, int method) {
   int frames = (in->Len() - (window - hop)) / hop;
 
   Matrix *m;
@@ -436,7 +436,7 @@ Matrix *F0Stream(const RingBuf::Handle *in, Matrix *out, int window, int hop, in
   return m;
 }
 
-float FundamentalFrequency(const RingBuf::Handle *in, int window, int offset, int method) {
+float FundamentalFrequency(const RingSampler::Handle *in, int window, int offset, int method) {
   if (method == F0EstmMethod::fftbucket) { /* max(fft.bucket) */
     vector<float> samp(window);
     FFT(in, 1, window, offset, window, &samp[0]);
@@ -451,8 +451,8 @@ float FundamentalFrequency(const RingBuf::Handle *in, int window, int offset, in
   else if (method == F0EstmMethod::xcorr) { /* auto correlation */
 
     /* zero pad */
-    RingBuf zpi(in->Rate(), window*2);
-    RingBuf::Handle zpin(&zpi);
+    RingSampler zpi(in->Rate(), window*2);
+    RingSampler::Handle zpin(&zpi);
     for (int i=0; i<window; i++) *zpin.Index(i) = in->Read(i+offset);
 
     /* fft */
@@ -493,8 +493,8 @@ float FundamentalFrequency(const RingBuf::Handle *in, int window, int offset, in
     FFT(in, 1, window, offset, window, &buf[0]);
 
     /* to log spectrum */
-    RingBuf spe(in->Rate(), window);
-    RingBuf::Handle spec(&spe);
+    RingSampler spe(in->Rate(), window);
+    RingSampler::Handle spec(&spe);
     *spec.Index(0) = log(fabs(fft_r(&buf[0], window, 0)));
     for (int i=0; i<window/2; i++) *spec.Index(i) = log(sqrt(fft_abs2(&buf[0], window, i)));
     *spec.Index(window/2) = log(fabs(fft_i(&buf[0], window, 0)));

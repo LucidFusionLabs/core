@@ -1,4 +1,4 @@
-package com.lucidfusionlabs.lfjava;
+package com.lucidfusionlabs.app;
 
 public class ActivityConfig {
     public static final boolean advertising   = false;

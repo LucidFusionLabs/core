@@ -25,7 +25,7 @@ struct DsvlCameraModule : public Module {
   mutex lock;
   struct Stream { 
     unique_ptr<DSVL_VideoSource> vs;
-    unique_ptr<RingBuf> frames;
+    unique_ptr<RingSampler> frames;
     int next=0;
   } L, R;
   CameraState *camera;
@@ -65,7 +65,7 @@ struct DsvlCameraModule : public Module {
     }
     else return ERRORv(-1, "unknown pixel format: ", pf);
 
-    L.frames = make_unique<RingBuf>(FLAGS_camera_fps, FLAGS_camera_fps, FLAGS_camera_image_width*FLAGS_camera_image_height*depth);
+    L.frames = make_unique<RingSampler>(FLAGS_camera_fps, FLAGS_camera_fps, FLAGS_camera_image_width*FLAGS_camera_image_height*depth);
 
     if (!thread.Start()) { FLAGS_lfapp_camera=0; return -1; }
 
@@ -102,7 +102,7 @@ struct DsvlCameraModule : public Module {
       char *b;
       MemoryBufferHandle h;
       L.vs->CheckoutMemoryBuffer(&h, (BYTE**)&b);
-      memcpy(L.frames->write(RingBuf::Peek | RingBuf::Stamp), b, L.frames->width);
+      memcpy(L.frames->write(RingSampler::Peek | RingSampler::Stamp), b, L.frames->width);
       L.vs->CheckinMemoryBuffer(h);
 
       { /* commit */ 

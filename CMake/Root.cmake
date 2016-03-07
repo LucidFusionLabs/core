@@ -38,6 +38,7 @@ if(CMAKE_SYSTEM_NAME MATCHES "Darwin")
 endif()
 
 if(LFL_ANDROID)
+  set(LFL_APP_OS app_android_os)
   set(LFL_APP_FRAMEWORK app_android_framework)
   set(LFL_APP_GRAPHICS app_opengl_graphics)
   set(LFL_APP_AUDIO app_android_audio)

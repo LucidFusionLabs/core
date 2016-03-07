@@ -432,7 +432,7 @@ struct FrameScheduler {
   void Init();
   void Free();
   void Start();
-  void DoWait();
+  bool DoWait();
   bool FrameWait();
   void FrameDone();
   void Wakeup(void*);

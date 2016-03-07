@@ -1,21 +1,12 @@
 # $Id: CMakeLists.txt 1320 2014-10-26 08:12:52Z justin $
 
-set(LFL_PNG 1)
-set(LFL_GLES2 1)
-set(LFL_LFLINPUT 1)
-set(LFL_LFLVIDEO 1)
-
-if(LFL_ANDROID)
-elseif(LFL_IPHONE)
-else(LFL_ANDROID)
-    set(LFL_GLEW 1)
-    set(LFL_GLOG 1)
-endif(LFL_ANDROID)
-
 lfl_project($BINNAME)
-add_subdirectory(../core/lfapp ${CMAKE_CURRENT_BINARY_DIR}/${LFL_PROJECT}_lfapp_obj)
-add_definitions(${LFAPP_DEF})
-include_directories(${LFAPP_INCLUDE})
-
-lfapp_add_target($BINNAME $BINNAME.cpp)
-lfapp_post_build_start($BINNAME $BINNAME $PKGNAME)
+lfl_add_target($BINNAME $BINNAME.cpp $BINNAME.rc)
+target_compile_definitions($BINNAME PUBLIC ${LFL_APP_DEF})
+target_include_directories($BINNAME PUBLIC ${LFL_APP_INCLUDE})
+target_link_libraries($BINNAME ${LFL_APP_LIB} ${LFL_APP_FRAMEWORK} ${LFL_APP_GRAPHICS}
+                      app_null_audio app_null_camera app_null_matrix app_null_fft
+                      app_simple_resampler app_simple_loader ${LFL_APP_CONVERT} app_libpng_png
+                      app_null_jpeg app_null_gif app_null_css ${LFL_APP_FONT}
+                      app_null_ssl app_null_js app_null_tu app_null_crypto app_null_dh ${LFL_APP_OS})
+lfl_post_build_start($BINNAME $BINNAME $PKGNAME)
