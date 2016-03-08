@@ -101,7 +101,10 @@ void FrameScheduler::DelWaitForeverKeyboard() {}
 void FrameScheduler::AddWaitForeverSocket(Socket fd, int flag, void *val) {}
 void FrameScheduler::DelWaitForeverSocket(Socket fd) {}
 
-extern "C" int main(int argc, const char *argv[]) { return MyAppMain(argc, argv); }
+extern "C" int main(int argc, const char *argv[]) {
+  MyAppCreate();
+  return MyAppMain(argc, argv);
+}
 
 unique_ptr<Module> CreateFrameworkModule() { return unique_ptr<NullFrameworkModule>(); }
 

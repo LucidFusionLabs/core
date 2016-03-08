@@ -623,6 +623,7 @@ unique_ptr<Module> CreateFrameworkModule() { return make_unique<OSXFrameworkModu
 }; // namespace LFL
 
 extern "C" int main(int argc, const char** argv) {
+  MyAppCreate();
   osx_argc = argc;
   osx_argv = argv;
   AppDelegate *app_delegate = [[AppDelegate alloc] init];

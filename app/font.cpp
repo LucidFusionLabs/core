@@ -1055,8 +1055,6 @@ void Fonts::ResetGL() {
 
 void Fonts::LoadDefaultFonts() {
   FontEngine *font_engine = DefaultFontEngine();
-  if (!FLAGS_default_font.size()) font_engine->SetDefault();
-
   vector<string> atlas_font_size;
   Split(FLAGS_atlas_font_sizes, iscomma, &atlas_font_size);
   for (int i=0; i<atlas_font_size.size(); i++) {

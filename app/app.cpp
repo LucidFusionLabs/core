@@ -285,8 +285,10 @@ void Application::CreateNewWindow() {
 }
 
 void Application::StartNewWindow(Window *new_window) {
-  if (!new_window->gd->done_init) new_window->gd->Init(new_window->Box());
-  new_window->default_font.Load();
+  if (new_window->gd) {
+    if (!new_window->gd->done_init) new_window->gd->Init(new_window->Box());
+    new_window->default_font.Load();
+  }
   if (window_start_cb) window_start_cb(new_window);
   Video::StartWindow(new_window);
 }
@@ -463,6 +465,9 @@ int Application::Create(int argc, const char* const* argv, const char *source_fi
     Daemonize();
     SetLFAppMainThread();
   }
+
+  if (FLAGS_lfapp_video && FLAGS_default_font.empty())
+    fonts->DefaultFontEngine()->SetDefault();
 
   return 0;
 }

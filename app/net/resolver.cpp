@@ -336,7 +336,7 @@ void RecursiveResolver::ConnectoToRootServers() {
   vector<IPV4::Addr> addrs;
 # define XX(x)
 # define YY(x) addrs.push_back(IPV4::Parse(x));
-# include "core/app/namedroot.h"
+# include "core/app/net/namedroot.h"
   root.resolver.Connect(addrs);
 }
 

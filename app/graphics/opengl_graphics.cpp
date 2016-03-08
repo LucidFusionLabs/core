@@ -337,8 +337,8 @@ struct OpenGLES2 : public GraphicsDevice, public QOpenGLFunctions {
     default_color.push_back(Color(1.0, 1.0, 1.0, 1.0));
     scissor_stack.clear();
     scissor_stack.push_back(vector<Box>());
-    if (vertex_shader.empty()) vertex_shader = Asset::FileContents("lfapp_vertex.glsl");
-    if ( pixel_shader.empty()) pixel_shader  = Asset::FileContents("lfapp_pixel.glsl");
+    if (vertex_shader.empty()) vertex_shader = Asset::FileContents("default.vert");
+    if ( pixel_shader.empty()) pixel_shader  = Asset::FileContents("default.frag");
     Shader::Create("lfapp",          vertex_shader, pixel_shader, ShaderDefines(1,0,1,0), &app->shaders->shader_default);
     Shader::Create("lfapp_cubemap",  vertex_shader, pixel_shader, ShaderDefines(1,0,0,1), &app->shaders->shader_cubemap);
     Shader::Create("lfapp_normals",  vertex_shader, pixel_shader, ShaderDefines(0,1,1,0), &app->shaders->shader_normals);

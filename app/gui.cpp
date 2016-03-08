@@ -95,6 +95,7 @@ void Widget::Button::LayoutComplete(Flow *flow, Font *f, const Box &b) {
       flow->SetFGColor(outline_bottomright);
       flow->out->PushBack(box, flow->cur_attr, Singleton<BoxBottomRightOutline>::Get());
     }
+    flow->cur_attr.line_width=0;
   }
   if (!text.empty()) {
     Box dim(box.Dimension()), tb;
@@ -105,7 +106,7 @@ void Widget::Button::LayoutComplete(Flow *flow, Font *f, const Box &b) {
     flow->SetFont(font);
     flow->SetFGColor(0);
     flow->p = box.Position() + point(dim.centerX(textsize.x),
-                                     v_align == VAlign::Center ? dim.centerY(textsize.y) : 0);
+                                     v_align == VAlign::Center ? dim.centerY(textsize.y) : v_offset);
     flow->AppendText(text);
     flow->p = save_p;
   }

@@ -151,7 +151,7 @@ endif()
 
 # openssl
 if(LFL_OPENSSL)
-  if(WIN32)
+  if(LFL_WINDOWS)
     set(OPENSSL_INCLUDE ${CMAKE_CURRENT_BINARY_DIR}/openssl/include PARENT_SCOPE)
     set(OPENSSL_LIB ${CMAKE_CURRENT_BINARY_DIR}/openssl/lib/ssleay32.lib ${CMAKE_CURRENT_BINARY_DIR}/openssl/lib/libeay32.lib PARENT_SCOPE)
   elseif(LFL_ANDROID)
@@ -216,6 +216,9 @@ if(LFL_FFMPEG)
         ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/libswresample/libswresample.a
         ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/libpostproc/libpostproc.a
         ${LAME_LIB} ${X264_LIB} PARENT_SCOPE)
+    add_shared_library(FFMPEG_LIB_FILES ${CMAKE_CURRENT_BINARY_DIR}/lame/libmp3lame/.libs/libmp3lame 0)
+    add_shared_library(FFMPEG_LIB_FILES ${CMAKE_CURRENT_BINARY_DIR}/x264/libx264 142)
+    set(FFMPEG_LIB_FILES ${FFMPEG_LIB_FILES} PARENT_SCOPE)
   endif()
 endif()
 
@@ -281,6 +284,8 @@ if(LFL_PORTAUDIO)
     set(PORTAUDIO_LIB portaudio_x86.lib PARENT_SCOPE)
   else()
     set(PORTAUDIO_LIB -lportaudio -L${CMAKE_CURRENT_BINARY_DIR}/portaudio/lib/.libs PARENT_SCOPE)
+    add_shared_library(PORTAUDIO_LIB_FILES ${CMAKE_CURRENT_BINARY_DIR}/portaudio/lib/.libs/libportaudio 2)
+    set(PORTAUDIO_LIB_FILES ${PORTAUDIO_LIB_FILES} PARENT_SCOPE)
   endif()
 endif()
 
@@ -299,6 +304,9 @@ if(LFL_OPENCV)
                                PREFIX ${CMAKE_CURRENT_BINARY_DIR}/OpenCV
                                CMAKE_ARGS -DCMAKE_INSTALL_PREFIX:PATH=${CMAKE_CURRENT_BINARY_DIR}/OpenCV)
     set(OPENCV_LIB -L${CMAKE_CURRENT_BINARY_DIR}/OpenCV/lib -lcv -lcxcore PARENT_SCOPE)
+    add_shared_library(OPENCV_LIB_FILES ${CMAKE_CURRENT_BINARY_DIR}/OpenCV/lib/libcxcore 2.1)
+    add_shared_library(OPENCV_LIB_FILES ${CMAKE_CURRENT_BINARY_DIR}/OpenCV/lib/libcv 2.1)
+    set(OPENCV_LIB_FILES ${OPENCV_LIB_FILES} PARENT_SCOPE)
   endif()
 endif()
 
@@ -341,6 +349,41 @@ if(LFL_LIBCLANG)
   set(LLVM_LIB ${LLVM_DIR}/lib/libLLVMAnalysis.a ${LLVM_DIR}/lib/libLLVMAsmParser.a ${LLVM_DIR}/lib/libLLVMAsmPrinter.a ${LLVM_DIR}/lib/libLLVMBitReader.a ${LLVM_DIR}/lib/libLLVMBitWriter.a ${LLVM_DIR}/lib/libLLVMCodeGen.a ${LLVM_DIR}/lib/libLLVMCore.a ${LLVM_DIR}/lib/libLLVMExecutionEngine.a ${LLVM_DIR}/lib/libLLVMInstCombine.a ${LLVM_DIR}/lib/libLLVMInstrumentation.a ${LLVM_DIR}/lib/libLLVMInterpreter.a ${LLVM_DIR}/lib/libLLVMipa.a ${LLVM_DIR}/lib/libLLVMipo.a ${LLVM_DIR}/lib/libLLVMIRReader.a ${LLVM_DIR}/lib/libLLVMLineEditor.a ${LLVM_DIR}/lib/libLLVMLinker.a ${LLVM_DIR}/lib/libLLVMLTO.a ${LLVM_DIR}/lib/libLLVMMC.a ${LLVM_DIR}/lib/libLLVMMCDisassembler.a ${LLVM_DIR}/lib/libLLVMMCJIT.a ${LLVM_DIR}/lib/libLLVMMCParser.a ${LLVM_DIR}/lib/libLLVMObjCARCOpts.a ${LLVM_DIR}/lib/libLLVMObject.a ${LLVM_DIR}/lib/libLLVMOption.a ${LLVM_DIR}/lib/libLLVMProfileData.a ${LLVM_DIR}/lib/libLLVMRuntimeDyld.a ${LLVM_DIR}/lib/libLLVMScalarOpts.a ${LLVM_DIR}/lib/libLLVMSelectionDAG.a ${LLVM_DIR}/lib/libLLVMSupport.a ${LLVM_DIR}/lib/libLLVMTableGen.a ${LLVM_DIR}/lib/libLLVMTarget.a ${LLVM_DIR}/lib/libLLVMTransformUtils.a ${LLVM_DIR}/lib/libLLVMVectorize.a ${LLVM_DIR}/lib/libLLVMX86AsmParser.a ${LLVM_DIR}/lib/libLLVMX86AsmPrinter.a ${LLVM_DIR}/lib/libLLVMX86CodeGen.a ${LLVM_DIR}/lib/libLLVMX86Desc.a ${LLVM_DIR}/lib/libLLVMX86Disassembler.a ${LLVM_DIR}/lib/libLLVMX86Info.a ${LLVM_DIR}/lib/libLLVMX86Utils.a)
   set(LIBCLANG_INCLUDE ${LLVM_DIR}/include PARENT_SCOPE)
   set(LIBCLANG_LIB ${CLANG_LIB} ${LLVM_LIB} -lcurses PARENT_SCOPE)
+endif()
+
+# libcling
+if(LFL_LIBCLING)
+  set(LLVM_ROOT_DIR $ENV{HOME}/cling-build/inst)
+  set(LIBCLING_INCLUDE ${LLVM_ROOT_DIR}/include PARENT_SCOPE)
+  set(LIBCLING_LIB ${LLVM_ROOT_DIR}/lib/libclingMetaProcessor.a ${LLVM_ROOT_DIR}/lib/libclingInterpreter.a
+      ${LLVM_ROOT_DIR}/lib/libclingUtils.a ${LLVM_ROOT_DIR}/lib/libclangFrontend.a
+      ${LLVM_ROOT_DIR}/lib/libclangSerialization.a ${LLVM_ROOT_DIR}/lib/libclangDriver.a
+      ${LLVM_ROOT_DIR}/lib/libclangCodeGen.a ${LLVM_ROOT_DIR}/lib/libclangParse.a
+      ${LLVM_ROOT_DIR}/lib/libclangSema.a ${LLVM_ROOT_DIR}/lib/libclangEdit.a
+      ${LLVM_ROOT_DIR}/lib/libclangAnalysis.a ${LLVM_ROOT_DIR}/lib/libclangAST.a
+      ${LLVM_ROOT_DIR}/lib/libclangLex.a ${LLVM_ROOT_DIR}/lib/libclangBasic.a
+      ${LLVM_ROOT_DIR}/lib/libLLVMLTO.a ${LLVM_ROOT_DIR}/lib/libLLVMObjCARCOpts.a
+      ${LLVM_ROOT_DIR}/lib/libLLVMLinker.a ${LLVM_ROOT_DIR}/lib/libLLVMipo.a
+      ${LLVM_ROOT_DIR}/lib/libLLVMVectorize.a ${LLVM_ROOT_DIR}/lib/libLLVMBitWriter.a
+      ${LLVM_ROOT_DIR}/lib/libLLVMTableGen.a ${LLVM_ROOT_DIR}/lib/libLLVMDebugInfo.a
+      ${LLVM_ROOT_DIR}/lib/libLLVMOption.a ${LLVM_ROOT_DIR}/lib/libLLVMX86Disassembler.a
+      ${LLVM_ROOT_DIR}/lib/libLLVMX86AsmParser.a ${LLVM_ROOT_DIR}/lib/libLLVMX86CodeGen.a
+      ${LLVM_ROOT_DIR}/lib/libLLVMSelectionDAG.a ${LLVM_ROOT_DIR}/lib/libLLVMAsmPrinter.a
+      ${LLVM_ROOT_DIR}/lib/libLLVMX86Desc.a ${LLVM_ROOT_DIR}/lib/libLLVMMCDisassembler.a
+      ${LLVM_ROOT_DIR}/lib/libLLVMX86Info.a ${LLVM_ROOT_DIR}/lib/libLLVMX86AsmPrinter.a
+      ${LLVM_ROOT_DIR}/lib/libLLVMX86Utils.a ${LLVM_ROOT_DIR}/lib/libLLVMJIT.a
+      ${LLVM_ROOT_DIR}/lib/libLLVMIRReader.a ${LLVM_ROOT_DIR}/lib/libLLVMAsmParser.a
+      ${LLVM_ROOT_DIR}/lib/libLLVMLineEditor.a ${LLVM_ROOT_DIR}/lib/libLLVMMCAnalysis.a
+      ${LLVM_ROOT_DIR}/lib/libLLVMInstrumentation.a ${LLVM_ROOT_DIR}/lib/libLLVMInterpreter.a
+      ${LLVM_ROOT_DIR}/lib/libLLVMCodeGen.a ${LLVM_ROOT_DIR}/lib/libLLVMScalarOpts.a
+      ${LLVM_ROOT_DIR}/lib/libLLVMInstCombine.a ${LLVM_ROOT_DIR}/lib/libLLVMTransformUtils.a
+      ${LLVM_ROOT_DIR}/lib/libLLVMipa.a ${LLVM_ROOT_DIR}/lib/libLLVMAnalysis.a
+      ${LLVM_ROOT_DIR}/lib/libLLVMProfileData.a ${LLVM_ROOT_DIR}/lib/libLLVMMCJIT.a
+      ${LLVM_ROOT_DIR}/lib/libLLVMTarget.a ${LLVM_ROOT_DIR}/lib/libLLVMRuntimeDyld.a
+      ${LLVM_ROOT_DIR}/lib/libLLVMObject.a ${LLVM_ROOT_DIR}/lib/libLLVMMCParser.a
+      ${LLVM_ROOT_DIR}/lib/libLLVMBitReader.a ${LLVM_ROOT_DIR}/lib/libLLVMExecutionEngine.a
+      ${LLVM_ROOT_DIR}/lib/libLLVMMC.a ${LLVM_ROOT_DIR}/lib/libLLVMCore.a
+      ${LLVM_ROOT_DIR}/lib/libLLVMSupport.a -lncurses PARENT_SCOPE)
 endif()
 
 # bullet

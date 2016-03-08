@@ -236,7 +236,7 @@ void Application::HideAds() {}
 string Application::GetClipboardText() { QByteArray v = QApplication::clipboard()->text().toUtf8(); return string(v.constData(), v.size()); }
 void Application::SetClipboardText(const string &s) { QApplication::clipboard()->setText(QString::fromUtf8(s.data(), s.size())); }
 
-void FrameScheduler::DoWait() {}
+bool FrameScheduler::DoWait() { return false; }
 void FrameScheduler::Setup() { rate_limit = synchronize_waits = wait_forever_thread = monolithic_frame = run_main_loop = 0; }
 void FrameScheduler::Wakeup(void *opaque) { if (wait_forever && screen) GetTyped<QtWindow*>(screen->impl)->RequestRender(); }
 bool FrameScheduler::WakeupIn(void *opaque, Time interval, bool force) { return false; }
