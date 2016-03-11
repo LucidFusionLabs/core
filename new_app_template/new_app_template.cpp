@@ -97,7 +97,6 @@ extern "C" void MyAppCreate() {
 }
 
 extern "C" int MyAppMain(int argc, const char* const* argv) {
-  if (!app) MyAppCreate();
   if (app->Create(argc, argv, __FILE__)) return -1;
   if (app->Init()) return -1;
   screen->gd->default_draw_mode = DrawMode::_3D;

@@ -42,16 +42,17 @@
 namespace LFL {
 template<typename T, typename ...Args>
 unique_ptr<T> make_unique(Args&& ...args) { return unique_ptr<T>(new T(forward<Args>(args)...)); }
-template <class X> X *NullPointer() { return nullptr; }
-template <class X> X *CheckPointer(X *x) { CHECK(x); return x; }
-template <class X> X *CheckNullAssign(X **x, X *v) { CHECK_EQ(nullptr, *x); return (*x = v); }
-template <class X> X *GetThenAssignNull(X **x) { X *v = *x; if (v) *x = nullptr; return v; }
 template <class X> typename make_unsigned<X>::type *MakeUnsigned(X *x) { return reinterpret_cast<typename make_unsigned<X>::type*>(x); }
 template <class X> typename make_signed  <X>::type *MakeSigned  (X *x) { return reinterpret_cast<typename make_signed  <X>::type*>(x); }
 inline       char *MakeSigned(      unsigned char *x) { return reinterpret_cast<      char*>(x); }
 inline const char *MakeSigned(const unsigned char *x) { return reinterpret_cast<const char*>(x); }
 inline       char *MakeSigned(      char *x) { return x; }
 inline const char *MakeSigned(const char *x) { return x; }
+template <class X> X *NullPointer() { return nullptr; }
+template <class X> X *CheckPointer(X *x) { CHECK(x); return x; }
+template <class X> X *CheckNullAssign(X **x, X *v) { CHECK_EQ(nullptr, *x); return (*x = v); }
+template <class X> X *GetThenAssignNull(X **x) { X *v = *x; if (v) *x = nullptr; return v; }
+template <class X, class Y> void Assign(X *x, Y *y, const X &v1, const Y &v2) { *x=v1; *y=v2; }
 
 struct VoidPtr : public void_ptr {
   VoidPtr(void *V=0) { v=V; }
@@ -355,13 +356,13 @@ template <class X> struct FreeListVector {
   /**/  X& operator[](int i)       { return data[i]; }
 
   virtual void Clear() { data.clear(); free_list.clear(); }
-  virtual int Insert(const X &v) {
+  virtual int Insert(X &&v) {
     if (free_list.empty()) {
-      data.push_back(v);
+      data.push_back(forward<X>(v));
       return data.size()-1;
     } else {
       int free_ind = PopBack(free_list);
-      data[free_ind] = v;
+      data[free_ind] = forward<X>(v);
       return free_ind;
     }
   }

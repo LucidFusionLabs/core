@@ -185,7 +185,7 @@ int Input::DispatchQueuedInput(bool event_on_keyboard_input, bool event_on_mouse
 int Input::KeyPress(int key, bool down) {
   if (!app->run) return 0;
 #ifdef LFL_DEBUG
-  if (!app->MainThread()) ERROR("KeyPress() called from thread ", Thread::GetId());
+  if (!app->MainThread()) ERROR("Input::KeyPress() called from thread ", Thread::GetId());
 #endif
 
   if      (key == Key::LeftShift)   left_shift_down = down;
@@ -209,7 +209,8 @@ int Input::KeyEventDispatch(InputEvent::Id event, bool down) {
   if (!down) return 0;
   int key = InputEvent::GetKey(event);
   bool shift_down = ShiftKeyDown(), ctrl_down = CtrlKeyDown(), cmd_down = CmdKeyDown();
-  InputDebugIfDown("KeyEvent %s %d %d %d %d\n", InputEvent::Name(event), key, shift_down, ctrl_down, cmd_down);
+  InputDebugIfDown("Input::KeyEventDispatch %s %d %d %d %d\n",
+                   InputEvent::Name(event), key, shift_down, ctrl_down, cmd_down);
 
   if (KeyboardController *g = screen->active_textbox) do {
     if (g->toggle_bind.key == event && !g->toggle_once) return 0;
@@ -218,7 +219,7 @@ int Input::KeyEventDispatch(InputEvent::Id event, bool down) {
     if (HandleSpecialKey(event, g)) return 1;
 
     if (cmd_down) return 0;
-    if (key >= 128) { InputDebug("unhandled key %lld\n", event); break; }
+    if (key >= 128) { InputDebug("Input::KeyEventDispatch unhandled key %lld\n", event); break; }
 
     if (shift_down) key = Key::ShiftModified(key);
     if (ctrl_down)  key = Key::CtrlModified(key);
@@ -282,15 +283,19 @@ int Input::MouseEventDispatch(InputEvent::Id event, const point &p, int down) {
   if      (event == paste_bind.key)      return KeyEventDispatch(event, down);
   else if (event == Mouse::Event::Wheel) screen->mouse_wheel = p;
   else                                   screen->mouse       = p;
-  InputDebug("MouseEventDispatch %s %s down=%d\n", InputEvent::Name(event), screen->mouse.DebugString().c_str(), down);
+  InputDebug("Input::MouseEventDispatch %s %s down=%d\n",
+             InputEvent::Name(event), screen->mouse.DebugString().c_str(), down);
 
-  int fired = 0, events;
+  int fired = 0, active_guis = 0, events;
   for (auto i = screen->gui.begin(), e = screen->gui.end(); i != e; ++i) {
     GUI *g = *i;
     if (g->NotActive()) continue;
+    else active_guis++;
     events = g->mouse.Input(event, g->RelativePosition(screen->mouse), down, 0);
-    InputDebugIfEvents("GUI[%td] events = %d\n", i - screen->gui.begin(), events);
-    fired += events;
+    if (events) {
+      InputDebug("Input::MouseEventDispatch sent GUI[%td] events = %d\n", i - screen->gui.begin(), events);
+      return events;
+    }
   }
 
   Dialog *bring_to_front = 0;
@@ -304,7 +309,8 @@ int Input::MouseEventDispatch(InputEvent::Id event, const point &p, int down) {
   }
   if (bring_to_front) screen->BringDialogToFront(bring_to_front);
 
-  InputDebugIfDown("MouseEvent %s fired=%d, guis=%zd\n", screen->mouse.DebugString().c_str(), fired, screen->gui.size());
+  InputDebugIfDown("Inut::MouseEventDispatch %s fired=%d, guis=%d/%zd\n",
+                   screen->mouse.DebugString().c_str(), fired, active_guis, screen->gui.size());
   return fired;
 }
 
@@ -340,7 +346,7 @@ bool MouseControllerCallback::Run(const point &p, int button, int down, bool wro
 }
 
 int MouseController::Input(InputEvent::Id event, const point &p, int down, int flag) {
-  int fired = 0;
+  int fired = 0, boxes_checked = 0;
   bool but1 = event == Mouse::Event::Button1;
 
   for (auto h = hover.begin(); h != hover.end(); /**/) {
@@ -359,6 +365,8 @@ int MouseController::Input(InputEvent::Id event, const point &p, int down, int f
     if (e->deleted || !e->active || (e_hover && e->val) || 
         (!down && e->evtype == Event::Click && e->CB.type != MouseControllerCallback::CB_COORD)) continue;
 
+    InputDebug("check %s within %s\n", p.DebugString().c_str(), e->box.DebugString().c_str());
+    boxes_checked++;
     if (e->box.within(p)) {
       if (e->run_only_if_first && fired) continue;
       switch (e->evtype) { 
@@ -369,7 +377,8 @@ int MouseController::Input(InputEvent::Id event, const point &p, int down, int f
     }
 
     if (thunk) {
-      InputDebugIfDown("MouseController::Input %s %s\n", p.DebugString().c_str(), e->box.DebugString().c_str());
+      InputDebugIfDown("MouseController::Input %s RunCB %s\n",
+                       p.DebugString().c_str(), e->box.DebugString().c_str());
       if (!e->CB.Run(p, event, e_hover ? 1 : down)) continue;
 
       if (e_hover) hover.push_back(ForwardIteratorFromReverse(e) - hit.data.begin());
@@ -383,7 +392,9 @@ int MouseController::Input(InputEvent::Id event, const point &p, int down, int f
   if (event == Mouse::Event::Motion) { for (auto d : drag) if (hit.data[d].CB.Run(p, event, down)) fired++; }
   else if (!down && but1)            { for (auto d : drag) if (hit.data[d].CB.Run(p, event, down)) fired++; drag.clear(); }
 
-  InputDebugIfDown("MouseController::Input %s fired=%d, hitboxes=%zd\n", screen->mouse.DebugString().c_str(), fired, hit.data.size());
+  InputDebugIfDown("MouseController::Input %s fired=%d, checked %zd of %zd hitboxes child=%p\n",
+                   screen->mouse.DebugString().c_str(), fired, boxes_checked, hit.data.size(), child_controller);
+  if (!fired && child_controller) return child_controller->Input(event, p, down, flag);
   return fired;
 }
 

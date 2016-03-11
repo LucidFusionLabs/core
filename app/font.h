@@ -135,6 +135,7 @@ struct Glyph : public Drawable {
   virtual int  Id()    const { return id; }
   virtual int  TexId() const { return tex.ID; }
   virtual bool Wide()  const { return wide; }
+  virtual int  Baseline   (const LFL::Box *b, const Drawable::Attr *a=0) const;
   virtual int  Ascender   (const LFL::Box *b, const Drawable::Attr *a=0) const;
   virtual int  Advance    (const LFL::Box *b, const Drawable::Attr *a=0) const;
   virtual int  LeftBearing(                   const Drawable::Attr *a=0) const;

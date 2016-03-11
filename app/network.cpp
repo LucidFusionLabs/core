@@ -778,6 +778,15 @@ Connection *Service::SSLConnect(SSL_CTX *sslctx, IPV4::Addr addr, int port, Call
   return c;
 }
 
+Connection *Service::AddConnectedSocket(Socket conn_socket, Connection::Handler *handler) {
+  Connection *conn = new Connection(this, handler);
+  CHECK_NE(-1, (conn->socket = conn_socket));
+  conn->state = Connection::Connected;
+  conn->svc->conn[conn->socket] = unique_ptr<Connection>(conn);
+  app->net->active.Add(conn->socket, SocketSet::READABLE, &conn->self_reference);
+  return conn;
+}
+
 Connection *Service::EndpointConnect(const string &endpoint_name) {
   auto c = (endpoint[endpoint_name] = make_unique<Connection>(this, Connection::Connected, -1)).get();
   c->endpoint_name = endpoint_name;

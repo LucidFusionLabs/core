@@ -367,7 +367,7 @@ void Browser::Document::Clear() {
 }
 
 Browser::Browser(GUI *gui, const Box &V) :
-  doc(V), v_scrollbar(gui, Box()), h_scrollbar(gui, Box(), Widget::Slider::Flag::AttachedHorizontal) {
+  doc(V), v_scrollbar(gui), h_scrollbar(gui, Widget::Slider::Flag::AttachedHorizontal) {
   if (Font *maf = app->fonts->Get("MenuAtlas", "", 0, Color::white, Color::clear, 0, 0)) {
     missing_image = maf->FindGlyph(0)->tex;
     missing_image.width = missing_image.height = 16;

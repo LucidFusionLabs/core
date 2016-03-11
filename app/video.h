@@ -255,6 +255,7 @@ struct Drawable {
   virtual int  TexId()                                         const { return 0; }
   virtual bool Wide()                                          const { return 0; }
   virtual int  LeftBearing(                   const Attr *A=0) const { return 0; }
+  virtual int  Baseline   (const LFL::Box *B, const Attr *A=0) const { return 0; }
   virtual int  Ascender   (const LFL::Box *B, const Attr *A=0) const { return B ? B->h : 0; }
   virtual int  Advance    (const LFL::Box *B, const Attr *A=0) const { return B ? B->w : 0; }
   virtual int  Layout     (      LFL::Box *B, const Attr *A=0) const { return B ? B->w : 0; }
@@ -275,7 +276,7 @@ struct DrawableBox {
   bool operator==(const DrawableBox &x) const { return Id() == x.Id(); }
   int LeftBound (const Drawable::Attr *A) const { return box.x - (drawable ? drawable->LeftBearing(A) : 0); }
   int RightBound(const Drawable::Attr *A) const { return box.x + (drawable ? (drawable->Advance(&box, A) - drawable->LeftBearing(A)) : box.w); }
-  int TopBound  (const Drawable::Attr *A) const { return box.y + (drawable ? drawable->Ascender(&box, A) : box.h); }
+  int TopBound  (const Drawable::Attr *A) const { return box.y + (drawable ? (drawable->Baseline(&box, A) + drawable->Ascender(&box, A)) : box.h); }
   int Id() const { return drawable ? drawable->Id() : 0; }
   operator int() const { return Id(); }
 };

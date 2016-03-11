@@ -36,6 +36,7 @@
 #include <sys/mman.h>
 #define LFL_MMAPXFER_MPB
 #define LFL_SOCKETPAIR_IPC
+extern char **environ;
 #endif
 
 namespace LFL {
@@ -46,8 +47,8 @@ int NTService::WrapMain (const char *name, MainCB main_cb, int argc, const char*
 #endif
 
 #if defined(LFL_MOBILE)
-int ProcessPipe::OpenPTY(const char **argv, const char *startdir) { FATAL("not implemented"); }
-int ProcessPipe::Open   (const char **argv, const char *startdir) { FATAL("not implemented"); }
+int ProcessPipe::OpenPTY(const char* const* argv, const char *startdir) { FATAL("not implemented"); }
+int ProcessPipe::Open   (const char* const* argv, const char *startdir) { FATAL("not implemented"); }
 int ProcessPipe::Close()                                          { FATAL("not implemented"); }
 
 #elif defined(LFL_WINDOWS)
@@ -91,7 +92,7 @@ static int DispatchNTServiceMain(int argc, char **argv) {
     ERROR("UpdateSCMStatus: ", GetLastError()); return -1;
   }
 
-  return nt_service_main(argc, (const char **)argv);
+  return nt_service_main(argc, argv);
 }
 
 static bool EqualLuid(const LUID &l, const LUID &r) { return l.HighPart == r.HighPart && l.LowPart == r.LowPart; }
@@ -153,8 +154,8 @@ int NTService::WrapMain(const char *name, MainCB main_cb, int argc, const char* 
 }
 
 int ProcessPipe::Close() { return 0; }
-int ProcessPipe::OpenPTY(const char **argv, const char *startdir) { return Open(argv); }
-int ProcessPipe::Open(const char **argv, const char *startdir) {
+int ProcessPipe::OpenPTY(const char* const* argv, const char *startdir) { return Open(argv); }
+int ProcessPipe::Open(const char* const* argv, const char *startdir) {
   SECURITY_ATTRIBUTES sa;
   memset(&sa, 0, sizeof(sa));
   sa.nLength = sizeof(sa);
@@ -208,7 +209,10 @@ bool MultiProcessBuffer::Open() {
 
 #else /* LFL_WINDOWS */
 
-int ProcessPipe::Open(const char **argv, const char *startdir) {
+int ProcessPipe::Open(const char* const* argv, const char *startdir) {
+  static const char* const envp[] = { "TERM=xterm", "LANG=en_US.UTF-8", nullptr };
+  environ = const_cast<char**>(envp);
+
   int pipein[2], pipeout[2], ret;
   if (pipe(pipein) < 0) return -1;
   if (pipe(pipeout) < 0) { close(pipein[0]); close(pipein[1]); return -1; }
@@ -237,7 +241,7 @@ int ProcessPipe::Open(const char **argv, const char *startdir) {
 }
 
 extern "C" pid_t forkpty(int *, char *, struct termios *, struct winsize *);
-int ProcessPipe::OpenPTY(const char **argv, const char *startdir) {
+int ProcessPipe::OpenPTY(const char* const* argv, const char *startdir) {
   // struct termios term;
   // struct winsize win;
   char name[PATH_MAX];
@@ -485,12 +489,8 @@ bool InterProcessComm::StartServerProcess(const string &server_program, const ve
 #error no_ipc_impl
 #endif
   
-  conn = new Connection(app->net->unix_client.get(), new ConnectionHandler(this));
-  CHECK_NE(-1, (conn->socket = conn_socket));
+  conn = app->net->unix_client->AddConnectedSocket(conn_socket, new ConnectionHandler(this));
   conn->control_messages = conn_control_messages;
-  conn->state = Connection::Connected;
-  conn->svc->conn[conn->socket] = unique_ptr<Connection>(conn);
-  app->net->active.Add(conn->socket, SocketSet::READABLE, &conn->self_reference);
   INFO("ProcessAPIClient started server PID=", pid, " ", server_program);
   return true;
 }

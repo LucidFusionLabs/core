@@ -189,6 +189,7 @@ struct MouseController {
     HitBox(int ET=0, const Box &b=Box(), const MouseControllerCallback &cb=MouseControllerCallback()) : box(b), evtype(ET), CB(cb) {}
   };
 
+  MouseController *child_controller=0;
   IterableFreeListVector<HitBox, &HitBox::deleted> hit;
   unordered_set<int> drag;
   vector<int> hover;

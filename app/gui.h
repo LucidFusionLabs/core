@@ -114,7 +114,7 @@ struct Widget {
     Font *menuicon=0;
     bool dragging=0, dirty=0;
     virtual ~Slider() {}
-    Slider(GUI *Gui, Box window=Box(), int f=Flag::Attached);
+    Slider(GUI *Gui, int f=Flag::Attached);
 
     float Percent() const { return scrolled * doc_height; }
     void LayoutFixed(const Box &w) { win = w; Layout(dot_size, dot_size, flag & Flag::Horizontal); }
@@ -128,6 +128,14 @@ struct Widget {
     float ScrollDelta() { float ret=scrolled-last_scrolled; last_scrolled=scrolled; return ret; }
     float AddScrollDelta(float cur_val);
     static void AttachContentBox(Box *b, Slider *vs, Slider *hs);
+  };
+  
+  struct Divider : public Interface {
+    int size=0, start=0, start_size=0;
+    bool horizontal=1, changing=0, changed=0;
+    Divider(GUI *G, bool H, int S) : Interface(G), size(S), horizontal(H) {}
+    void LayoutDivideBottom(const Box &in, Box *top, Box *bottom, int offset=0);
+    void DragCB(int b, int x, int y, int down);
   };
 };
 
@@ -235,6 +243,7 @@ struct TextBox : public GUI, public KeyboardController, public Drawable::AttrSou
     struct Flag { enum { NoLayout=1, NoVWrap=2, Flush=4 }; };
     PaintCB paint_cb = &LinesFrameBuffer::PaintCB;
     int lines=0;
+    bool align_top_or_bot=1;
     LinesFrameBuffer(GraphicsDevice *d) : RingFrameBuffer(d) {}
     LinesFrameBuffer *Attach(LinesFrameBuffer **last_fb);
     virtual bool SizeChanged(int W, int H, Font *font, const Color *bgc);
@@ -247,6 +256,7 @@ struct TextBox : public GUI, public KeyboardController, public Drawable::AttrSou
     tvirtual int PushBackAndUpdate (Line *l, int xo=0, int wlo=0, int wll=0, int flag=0);
     tvirtual void PushFrontAndUpdateOffset(Line *l, int lo);
     tvirtual void PushBackAndUpdateOffset (Line *l, int lo); 
+    tvirtual void DrawAligned(const Box &b, point adjust);
     static point PaintCB(Line *l, point lp, const Box &b) { return Paint(l, lp, b); }
     static point Paint  (Line *l, point lp, const Box &b, int offset=0, int len=-1);
   };
@@ -402,12 +412,29 @@ struct TextArea : public TextBox {
   void AddVScroll(int n) { v_scrolled = Clamp(v_scrolled + PercentOfLines(n), 0, 1); UpdateScrolled(); }
   void SetVScroll(int n) { v_scrolled = Clamp(0          + PercentOfLines(n), 0, 1); UpdateScrolled(); }
   int LayoutBackLine(Lines *l, int i) { return Wrap() ? (*l)[-i-1].Layout(line_fb.w) : 1; }
+  int AddWrappedLines(int wl, int n) { last_v_scrolled = (v_scrolled *= float(wl)/(wl+n)); return wl+n; }
 
   void InitSelection();
   void DrawSelection();
   void DragCB(int button, int x, int y, int down);
   void CopyText(const Selection::Point &beg, const Selection::Point &end);
   string CopyText(int beg_line_ind, int beg_char_ind, int end_line_end, int end_char_ind, bool add_nl);
+};
+
+struct PropertyTree : public TextArea {
+  struct Node {
+    Flow flow;
+    DrawableBoxArray text;
+    vector<int> child;
+    int wrapped_lines=1;
+    static string GetString(const unique_ptr<Node> *v) { return ""; }
+    static int    GetLines (const unique_ptr<Node> *v) { return (*v)->wrapped_lines; }
+  };
+  typedef PrefixSumKeyedRedBlackTree<int, unique_ptr<Node>> LineMap;
+
+  LineMap property_line;
+  PropertyTree(GraphicsDevice *D, const FontRef &F=FontRef());
+  void SelectionCB(const Selection::Point &p);
 };
 
 struct Editor : public TextArea {
@@ -451,7 +478,6 @@ struct Editor : public TextArea {
   int CursorLineSize() const { return cursor_line ? cursor_line->Size() : 0; }
   void ToggleShouldWrap() { SetShouldWrap(!line_fb.wrap); }
   void SetShouldWrap(bool);
-  void AddWrappedLines(int n);
   void UpdateWrappedLines(int cur_font_size, int width);
   void Reload() { last_fb_width=0; wrapped_lines=0; RefreshLines(); }
   int RefreshLines() { last_fb_lines=0; return UpdateLines(last_v_scrolled, 0, 0, 0); }
@@ -494,7 +520,7 @@ struct Terminal : public TextArea {
   Border clip_border;
   set<int> tab_stop;
 
-  Terminal(ByteSink *O, GraphicsDevice *D, const FontRef &F=FontRef());
+  Terminal(ByteSink *O, GraphicsDevice *D, const FontRef &F=FontRef(), const point &dim=point(1,1));
   virtual ~Terminal() {}
   virtual void Resized(const Box &b);
   virtual void ResizedLeftoverRegion(int w, int h, bool update_fb=true);
@@ -561,8 +587,7 @@ struct Console : public TextArea {
   bool animating=0, drawing=0, bottom_or_top=0, blend=1;
   Box *scissor=0, scissor_buf;
 
-  Console(GraphicsDevice *D, const FontRef &F, const Callback &C=Callback()) : TextArea(D, F, 200, 50), animating_cb(C)
-  { line_fb.wrap=write_timestamp=1; SetToggleKey(Key::Backquote); bg_color=&Color::clear; cursor.type = Cursor::Underline; }
+  Console(GraphicsDevice *D, const FontRef &F, const Callback &C=Callback());
   Console(GraphicsDevice *D, const Callback &C=Callback()) :
     Console(D, FontDesc(A_or_B(FLAGS_console_font, FLAGS_default_font), "", 9, Color::white,
                         Color::clear, FLAGS_console_font_flag), C) {}
@@ -631,8 +656,8 @@ template <class D=Dialog> struct TabbedDialog {
   D *FirstTab() const { return tab_list.size() ? dynamic_cast<D*>(tab_list.begin()->dialog) : 0; }
   void AddTab(D *t) { tabs.insert(t); tab_list.emplace_back(t); SelectTab(t); }
   void DelTab(D *t) { tabs.erase(t); VectorEraseByValue(&tab_list, DialogTab(t)); ReleaseTab(t); }
-  void SelectTab(D *t) { (top = t)->TakeFocus(); }
-  void ReleaseTab(D *t) { if (top == t) { top=0; t->LoseFocus(); if ((top = FirstTab())) top->TakeFocus(); } }
+  void SelectTab(D *t) { (top = t)->TakeFocus(); gui->mouse.child_controller = &top->mouse; }
+  void ReleaseTab(D *t) { if (top == t) { top=0; t->LoseFocus(); if ((top = FirstTab())) SelectTab(top); } }
   void Draw() { DialogTab::Draw(box, tab_dim, tab_list); if (top) top->Draw(); }
   void Layout() {
     for (auto b=tab_list.begin(), e=tab_list.end(), t=b; t != e; ++t)

@@ -65,8 +65,8 @@ struct RedBlackTree {
     void LoadKV() { if (const Node *n = &tree->node[ind-1]) { key = zipper.GetKey(*n); val = &tree->val[n->val]; } }
   };
   struct Query {
-    const K key; const V *val; Zipper z;
-    Query(const K &k, const V *v=0, bool update=0) : key(k), val(v), z(update) {}
+    const K key; Zipper z;
+    Query(const K &k, bool update=0) : key(k), z(update) {}
   };
 
   Storage<Node> node;
@@ -80,20 +80,20 @@ struct RedBlackTree {
   /**/ Iterator RBegin()       { Zipper z; int n = head ? GetMaxNode(head, &z) : 0; return      Iterator(this, n, z); }
   ConstIterator RBegin() const { Zipper z; int n = head ? GetMaxNode(head, &z) : 0; return ConstIterator(this, n, z); }
 
-  bool          Erase (const K &k)             { Query q(k, 0,  1); return EraseNode(&q); }
-  /**/ Iterator Insert(const K &k, const V &v) { Query q(k, &v, 1); int n=InsertNode    (&q); return Iterator     (this, n, q.z); }
-  ConstIterator Find       (const K &k) const  { Query q(k);        int n=FindNode      (&q); return ConstIterator(this, n, q.z); }
-  /**/ Iterator Find       (const K &k)        { Query q(k);        int n=FindNode      (&q); return Iterator     (this, n, q.z); }
-  ConstIterator LowerBound (const K &k) const  { Query q(k);        int n=LowerBoundNode(&q); return ConstIterator(this, n, q.z); }
-  /**/ Iterator LowerBound (const K &k)        { Query q(k);        int n=LowerBoundNode(&q); return Iterator     (this, n, q.z); }
-  ConstIterator LesserBound(const K &k) const  { Query q(k);        int n=LowerBoundNode(&q); ConstIterator i(this, n, q.z); if (i.val && k < i.key) --i; return i; }
-  /**/ Iterator LesserBound(const K &k)        { Query q(k);        int n=LowerBoundNode(&q); Iterator      i(this, n, q.z); if (i.val && k < i.key) --i; return i; }
+  bool          Erase (const K &k)             { Query q(k, 1); return EraseNode(&q); }
+  /**/ Iterator Insert(const K &k, V &&v)      { Query q(k, 1); int n=InsertNode(&q, forward<V>(v)); return Iterator     (this, n, q.z); }
+  ConstIterator Find       (const K &k) const  { Query q(k);    int n=FindNode      (&q);         return ConstIterator(this, n, q.z); }
+  /**/ Iterator Find       (const K &k)        { Query q(k);    int n=FindNode      (&q);         return Iterator     (this, n, q.z); }
+  ConstIterator LowerBound (const K &k) const  { Query q(k);    int n=LowerBoundNode(&q);         return ConstIterator(this, n, q.z); }
+  /**/ Iterator LowerBound (const K &k)        { Query q(k);    int n=LowerBoundNode(&q);         return Iterator     (this, n, q.z); }
+  ConstIterator LesserBound(const K &k) const  { Query q(k);    int n=LowerBoundNode(&q);         ConstIterator i(this, n, q.z); if (i.val && k < i.key) --i; return i; }
+  /**/ Iterator LesserBound(const K &k)        { Query q(k);    int n=LowerBoundNode(&q);         Iterator      i(this, n, q.z); if (i.val && k < i.key) --i; return i; }
 
-  virtual K GetCreateNodeKey(const Query *q) const { return q->key; }
+  virtual K GetCreateNodeKey(const Query *q, const V*) const { return q->key; }
   virtual void ComputeAnnotationFromChildrenOnPath(Query *q) {}
-  virtual int ResolveInsertCollision(int ind, Query *q) { 
+  virtual int ResolveInsertCollision(int ind, Query *q, V &&v) { 
     Node *n = &node[ind-1];
-    if (bool update_on_dup_insert = 1) val[n->val] = *q->val;
+    if (bool update_on_dup_insert = 1) val[n->val] = move(v);
     return ind;
   }
 
@@ -141,19 +141,19 @@ struct RedBlackTree {
     return ind;
   }
 
-  int InsertNode(Query *q) {
+  int InsertNode(Query *q, V &&v) {
     Node *new_node;
-    int new_ind = node.Insert(Node(GetCreateNodeKey(q), 0, 0))+1;
+    int new_ind = node.Insert(Node(GetCreateNodeKey(q, &v), 0, 0))+1;
     if (int ind = head) {
       for (;;) {
         Node *n = &node[ind-1];
         if      (q->z.MoreThan(*n, ind, q->key)) { if (!n->left)  { n->left  = new_ind; break; } ind = q->z.WalkLeft (*n); }
         else if (q->z.LessThan(*n, ind, q->key)) { if (!n->right) { n->right = new_ind; break; } ind = q->z.WalkRight(*n); }
-        else { node.Erase(new_ind-1); return ResolveInsertCollision(ind, q); }
+        else { node.Erase(new_ind-1); return ResolveInsertCollision(ind, q, forward<V>(v)); }
       }
       (new_node = &node[new_ind-1])->parent = ind;
     } else new_node = &node[(head = new_ind)-1];
-    new_node->val = val.Insert(*q->val);
+    new_node->val = val.Insert(forward<V>(v));
     ComputeAnnotationFromChildrenOnPath(q);
     InsertBalance(new_ind);
     count++;
@@ -300,8 +300,8 @@ struct RedBlackTree {
     return n.right ? GetMaxNode(z->WalkRight(n), z) : ind;
   }
 
-  struct LoadFromSortedArraysQuery { const K *k; const V *v; int max_height; };
-  virtual void LoadFromSortedArrays(const K *k, const V *v, int n) {
+  struct LoadFromSortedArraysQuery { const K *k; V *v; int max_height; };
+  virtual void LoadFromSortedArrays(const K *k, V *v, int n) {
     CHECK_EQ(0, node.size());
     LoadFromSortedArraysQuery q = { k, v, WhichLog2(NextPowerOfTwo(n, true)) };
     count = n;
@@ -312,7 +312,7 @@ struct RedBlackTree {
     if (end_ind < beg_ind) return 0;
     CHECK_LE(h, q->max_height);
     int mid_ind = (beg_ind + end_ind) / 2, color = ((h>1 && h == q->max_height) ? Red : Black);
-    int node_ind = node.Insert(Node(q->k[mid_ind], val.Insert(q->v[mid_ind]), 0, color))+1;
+    int node_ind = node.Insert(Node(q->k[mid_ind], val.Insert(move(q->v[mid_ind])), 0, color))+1;
     int left_ind  = BuildTreeFromSortedArrays(q, beg_ind,   mid_ind-1, h+1);
     int right_ind = BuildTreeFromSortedArrays(q, mid_ind+1, end_ind,   h+1);
     Node *n = &node[node_ind-1];
@@ -389,10 +389,10 @@ struct RedBlackFingerTree : public RedBlackTree<K, V, Node, Finger> {
     node_value_cb([](const V *v){ return 1;          }), 
     node_print_cb([](const V *v){ return StrCat(*v); }) {}
 
-  virtual K GetCreateNodeKey(const typename Parent::Query *q) const { return node_value_cb(q->val); }
-  virtual int ResolveInsertCollision(int ind, typename Parent::Query *q) { 
-    int val_ind = Parent::val.Insert(*q->val), p_ind = ind;
-    int new_ind = Parent::node.Insert(Node(GetCreateNodeKey(q), val_ind, 0))+1;
+  virtual K GetCreateNodeKey(const typename Parent::Query *q, const V *v) const { return node_value_cb(v); }
+  virtual int ResolveInsertCollision(int ind, typename Parent::Query *q, V &&v) { 
+    int val_ind = Parent::val.Insert(forward<V>(v)), p_ind = ind;
+    int new_ind = Parent::node.Insert(Node(GetCreateNodeKey(q, &v), val_ind, 0))+1;
     Node *n = &Parent::node[ind-1], *nn = &Parent::node[new_ind-1];
     if (!n->left) n->left = new_ind;
     else { Finger z; Parent::node[(p_ind = Parent::GetMaxNode(n->left, &z))-1].right = new_ind; }
@@ -434,7 +434,7 @@ struct RedBlackFingerTree : public RedBlackTree<K, V, Node, Finger> {
   }
 
   V *Update(const K &k, const V &v) {
-    typename Parent::Query q(k, 0, 1);
+    typename Parent::Query q(k, 1);
     Node *n;
     for (int ind = Parent::head; ind; ) {
       n = &Parent::node[ind-1];

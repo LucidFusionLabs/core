@@ -112,7 +112,7 @@ void Widget::Button::LayoutComplete(Flow *flow, Font *f, const Box &b) {
   }
 }
 
-Widget::Slider::Slider(GUI *Gui, Box window, int f) : Interface(Gui), win(window), flag(f),
+Widget::Slider::Slider(GUI *Gui, int f) : Interface(Gui), flag(f),
   menuicon(app->fonts->Get("MenuAtlas", "", 0, Color::white, Color::clear, 0)) {
   if (win.w && win.h) { if (f & Flag::Attached) LayoutAttached(win); else LayoutFixed(win); }
 }
@@ -176,6 +176,21 @@ void Widget::Slider::AttachContentBox(Box *b, Slider *vs, Slider *hs) {
   if (vs) { vs->LayoutAttached(*b); }
   if (hs) { hs->LayoutAttached(*b); MinusPlus(&b->h, &b->y, vs->dot_size); }
   if (vs) b->w -= vs->dot_size;
+}
+
+void Widget::Divider::LayoutDivideBottom(const Box &in, Box *top, Box *bottom, int offset) {
+  changed = 0;
+  *top = *bottom = in;
+  MinusPlus(&top->h, &top->y, size);
+  bottom->h = size;
+  AddDragBox(Box(bottom->x, bottom->top()-1 + offset, bottom->w, 3),
+             MouseController::CoordCB(bind(&Widget::Divider::DragCB, this, _1, _2, _3, _4)));
+}
+
+void Widget::Divider::DragCB(int b, int x, int y, int down) {
+  if (!changing && down) Assign(&start, &start_size, horizontal ? y : x, size);
+  size = max(0, start_size + (horizontal ? y : x) - start);
+  Assign(&changing, &changed, bool(down), true);
 }
 
 TextBox::Link::Link(TextBox::Line *P, GUI *G, const Box3 &b, const string &U) : Interface(G), box(b), link(U), line(P) {
@@ -332,7 +347,7 @@ TextBox::LinesFrameBuffer *TextBox::LinesFrameBuffer::Attach(TextBox::LinesFrame
 }
 
 bool TextBox::LinesFrameBuffer::SizeChanged(int W, int H, Font *font, const Color *bgc) {
-  lines = H / font->Height();
+  lines = RoundUp(H / float(font->Height()));
   return RingFrameBuffer::SizeChanged(W, H, font, bgc);
 }
 
@@ -376,6 +391,11 @@ point TextBox::LinesFrameBuffer::Paint(TextBox::Line *l, point lp, const Box &b,
   screen->gd->Clear();
   l->Draw(lp + b.Position(), -1, offset, len);
   return point(lp.x, lp.y-b.h);
+}
+
+void TextBox::LinesFrameBuffer::DrawAligned(const Box &b, point adjust) {
+  Scissor scissor(screen->gd, b);
+  RingFrameBuffer::Draw(align_top_or_bot ? (b.TopLeft() - point(0, Height())) : b.Position(), adjust, false);
 }
 
 TextBox::LineUpdate::~LineUpdate() {
@@ -673,7 +693,7 @@ void TextArea::Draw(const Box &b, int flag, Shader *shader) {
   LinesFrameBuffer *fb = GetFrameBuffer();
   if (flag & DrawFlag::CheckResized) CheckResized(b);
   if (clip) screen->gd->PushScissor(Box::DelBorder(b, *clip));
-  fb->Draw(b.Position(), point(0, max(0, CommandLines()-1) * font_height));
+  fb->DrawAligned(b, point(0, max(0, CommandLines()-1) * font_height));
   if (clip) screen->gd->PopScissor();
   if (flag & DrawFlag::DrawCursor) DrawCursor(b.Position() + cursor.p);
   if (selection.enabled) box.SetPosition(b.Position());
@@ -695,7 +715,7 @@ void TextArea::DrawHoverLink(const Box &b) {
 
 bool TextArea::GetGlyphFromCoordsOffset(const point &p, Selection::Point *out, int sl, int sla) {
   LinesFrameBuffer *fb = GetFrameBuffer();
-  int h = fb->Height(), fh = font->Height(), targ = reverse_line_fb ? ((h - p.y) / fh) : (p.y / fh);
+  int fh = font->Height(), targ = reverse_line_fb ? ((box.h - p.y) / fh) : (p.y / fh);
   for (int i=sl, lines=sla, ll; i<line.ring.count && lines<line_fb.lines; i++, lines += ll) {
     Line *L = &line[-i-1];
     if (lines + (ll = L->Lines()) <= targ) continue;
@@ -730,7 +750,7 @@ void TextArea::DragCB(int, int, int, int down) {
   if (!s->changing) CopyText(swap ? s->end : s->beg, swap ? s->beg : s->end);
   else {
     LinesFrameBuffer *fb = GetFrameBuffer();
-    int fh = font->Height(), h = fb->Height();
+    int fh = font->Height(), h = box.h;
     Box gb = swap ? s->end.glyph : s->beg.glyph;
     Box ge = swap ? s->beg.glyph : s->end.glyph;
     if (reverse_line_fb) { gb.y=h-gb.y-fh; ge.y=h-ge.y-fh; }
@@ -774,6 +794,31 @@ string TextArea::CopyText(int beg_line_ind, int beg_char_ind, int end_line_ind, 
   return String::ToUTF8(copy_text);
 }
 
+/* PropertyTree */
+
+PropertyTree::PropertyTree(GraphicsDevice *D, const FontRef &F) : TextArea(D, F) {
+  reverse_line_fb = 1;
+  cmd_color = Color(Color::black, .5);
+  property_line.node_value_cb = &Node::GetLines;
+  property_line.node_print_cb = &Node::GetString;
+  selection_cb = bind(&PropertyTree::SelectionCB, this, _1);
+}
+
+#if 0
+void PropertyTree::ReloadTree() {
+  wrapped_lines = 0;
+  property_line.Clear();
+  for (const char *l = nr.NextLineRaw(&offset); l; l = nr.NextLineRaw(&offset)) {
+    wrapped_lines += (ll = wrap ? TextArea::font->Lines(l, width) : 1);
+    property_line.val.Insert(LineOffset(offset, nr.record_len, ll));
+  }
+  property_line.LoadFromSortedVal();
+}
+#endif
+
+void PropertyTree::SelectionCB(const Selection::Point &p) {
+}
+
 /* Editor */
 
 Editor::Editor(GraphicsDevice *D, const FontRef &F, File *I, bool Wrap) :
@@ -808,8 +853,14 @@ void Editor::HistUp() {
 
 void Editor::HistDown() {
   bool last=0;
-  if (cursor_line_number_offset + cursor_line->Lines() < line_fb.lines) last = ++cursor.i.y >= line.Size()-1;
-  else { AddVScroll(end_line_cutoff ? end_line_cutoff+1 : 1); cursor.i.y=line.Size()-1; last=1; }
+  int bottom_offset = line.Size() > 1 ? 1 : 0;
+  if (cursor_line_number_offset + cursor_line->Lines() < line_fb.lines-bottom_offset) {
+    last = ++cursor.i.y >= line.Size()-1-bottom_offset;
+  } else {
+    AddVScroll(end_line_cutoff ? end_line_cutoff+1 : 1);
+    cursor.i.y = line.Size()-1-bottom_offset;
+    last = 1; 
+  }
   UpdateCursorLine();
   UpdateCursor();
   if (last) UpdateCursorX(cursor.i.x);
@@ -820,12 +871,6 @@ void Editor::SelectionCB(const Selection::Point &p) {
   UpdateCursorLine();
   cursor.i.x = p.char_ind >= 0 ? p.char_ind : CursorLineSize();
   UpdateCursor();
-}
-
-void Editor::AddWrappedLines(int n) {
-  v_scrolled *= float(wrapped_lines) / (wrapped_lines + n);
-  last_v_scrolled = v_scrolled;
-  wrapped_lines += n;
 }
 
 void Editor::UpdateWrappedLines(int cur_font_size, int width) {
@@ -963,7 +1008,7 @@ void Editor::UpdateCursorLine() {
 
 void Editor::UpdateCursor() {
   cursor.p = cursor_line->data->glyphs.Position(cursor.i.x) +
-    point(0, line_fb.Height() - cursor_line_number_offset * font->Height());
+    point(0, box.h - cursor_line_number_offset * font->Height());
 }
 
 void Editor::UpdateCursorX(int x) {
@@ -980,7 +1025,7 @@ int Editor::CursorLinesChanged(const String16 &b, int add_lines) {
   int ll = cursor_line->Layout(GetFrameBuffer()->w, true);
   int d = ChangedDiff(&cursor_offset->wrapped_lines, ll);
   if (d) CHECK(file_line.Update(cursor_line_number, *cursor_offset));
-  if (int a = d + add_lines) AddWrappedLines(a);
+  if (int a = d + add_lines) wrapped_lines = AddWrappedLines(wrapped_lines, a);
   return d;
 }
 
@@ -1000,8 +1045,9 @@ void Editor::Modify(bool erase, int c) {
   CHECK_EQ(cursor_offset->wrapped_lines, cursor_line->Lines());
 
   if (erase && !cursor.i.x) {
+    if (!cursor_line_number) return;
     file_line.Erase(cursor_line_number);
-    AddWrappedLines(-cursor_line->Lines());
+    wrapped_lines = AddWrappedLines(wrapped_lines, -cursor_line->Lines());
     HistUp();
     b = &edits[ModifyCursorLine()];
     int x = b->size();
@@ -1015,7 +1061,7 @@ void Editor::Modify(bool erase, int c) {
     String16 a = b->substr(cursor.i.x);
     b->resize(cursor.i.x);
     if (wrap) CursorLinesChanged(*b, 1);
-    else AddWrappedLines(1);
+    else wrapped_lines = AddWrappedLines(wrapped_lines, 1);
     file_line.Insert(cursor_line_number+1, LineOffset());
     cursor.i.x = 0;
     HistDown();
@@ -1035,7 +1081,10 @@ void Editor::Modify(bool erase, int c) {
     UpdateLineFB(cursor_line, GetFrameBuffer(), wrap ? LinesFrameBuffer::Flag::Flush : 0);
     if (wrap) {
       int d = ChangedDiff(&cursor_offset->wrapped_lines, cursor_line->Lines());
-      if (d) { CHECK(file_line.Update(cursor_line_number, *cursor_offset)); AddWrappedLines(d); }
+      if (d) {
+        CHECK(file_line.Update(cursor_line_number, *cursor_offset)); 
+        wrapped_lines = AddWrappedLines(wrapped_lines, d);
+      }
       RefreshLines();
       return Redraw(true);
     }
@@ -1144,15 +1193,18 @@ Terminal::SolarizedLightColors::SolarizedLightColors() {
   c[bg_index]     = c[8];
 }
 
-Terminal::Terminal(ByteSink *O, GraphicsDevice *D, const FontRef &F) :
+Terminal::Terminal(ByteSink *O, GraphicsDevice *D, const FontRef &F, const point &dim) :
   TextArea(D, F), sink(O), fb_cb(bind(&Terminal::GetFrameBuffer, this, _1)) {
   CHECK(font->fixed_width || (font->flag & FontDesc::Mono));
   wrap_lines = write_newline = insert_mode = 0;
   line.SetAttrSource(this);
+  line_fb.align_top_or_bot = false;
   SetColors(Singleton<SolarizedDarkColors>::Get());
   cursor.attr = default_attr;
   token_processing = 1;
   cmd_prefix = "";
+  SetDimension(dim.x, dim.y);
+  Activate();
 }
 
 void Terminal::Resized(const Box &b) {
@@ -1316,7 +1368,7 @@ void Terminal::Write(const StringPiece &s, bool update_fb, bool release_fb) {
           parse_osc_escape = false; break;
         case '=': case '>':                        break; // application or normal keypad
         case 'c': Reset();                         break;
-        case 'D': Newline();                       break;
+        case 'D': Newline(true);                   break;
         case 'M': NewTopline();                    break;
         case '7': saved_term_cursor = term_cursor; break;
         case '8': term_cursor = point(Clamp(saved_term_cursor.x, 1, term_width),
@@ -1482,7 +1534,7 @@ void Terminal::Write(const StringPiece &s, bool update_fb, bool release_fb) {
         case '\r':   term_cursor.x = 1;                        break; // carriage return
         case '\x1b': parse_state = State::ESC;                 break;
         case '\x14': case '\x15': case '\x7f':                 break; // shift charset in, out, delete
-        case '\n':   case '\v':   case '\f':   Newline();      break; // line feed, vertical tab, form feed
+        case '\n':   case '\v':   case '\f':   Newline(true);  break; // line feed, vertical tab, form feed
         default:                               TerminalDebug("unhandled C0 control %02x\n", c);
       } else if (0 && C1_control) {
         if (0) {}
@@ -1568,6 +1620,14 @@ void Terminal::Reset() {
 }
 
 /* Console */
+Console::Console(GraphicsDevice *D, const FontRef &F, const Callback &C) : TextArea(D, F, 200, 50),
+  animating_cb(C) {
+  line_fb.wrap = write_timestamp = 1;
+  line_fb.align_top_or_bot = false;
+  SetToggleKey(Key::Backquote);
+  bg_color = &Color::clear;
+  cursor.type = Cursor::Underline;
+}
 
 void Console::StartAnimating() {
   bool last_animating = animating;
@@ -1715,7 +1775,7 @@ void MessageBoxDialog::Draw() {
 }
 
 SliderDialog::SliderDialog(GraphicsDevice *d, const string &t, const SliderDialog::UpdatedCB &cb, float scrolled, float total, float inc) :
-  Dialog(d, .33, .09), updated(cb), slider(this, Box(), Widget::Slider::Flag::Horizontal) {
+  Dialog(d, .33, .09), updated(cb), slider(this, Widget::Slider::Flag::Horizontal) {
   title_text = t;
   slider.scrolled = scrolled;
   slider.doc_height = total;
@@ -1727,8 +1787,8 @@ FlagSliderDialog::FlagSliderDialog(GraphicsDevice *d, const string &fn, float to
   flag_name(fn), flag_map(Singleton<FlagMap>::Get()) {}
 
 EditorDialog::EditorDialog(GraphicsDevice *D, const FontRef &F, File *I, float w, float h, int flag) :
-  Dialog(D, w, h, flag), editor(D, F, I, flag & Flag::Wrap), v_scrollbar(this, Box(), Widget::Slider::Flag::AttachedNoCorner),
-  h_scrollbar(this, Box(), Widget::Slider::Flag::AttachedHorizontalNoCorner) {}
+  Dialog(D, w, h, flag), editor(D, F, I, flag & Flag::Wrap), v_scrollbar(this, Widget::Slider::Flag::AttachedNoCorner),
+  h_scrollbar(this, Widget::Slider::Flag::AttachedHorizontalNoCorner) { mouse.child_controller = &editor.mouse; }
 
 void EditorDialog::Layout() {
   if (editor.file) title_text = BaseName(editor.file->Filename());

@@ -101,6 +101,7 @@ struct LocalFile : public File {
 
   static const char Slash, ExecutableSuffix[];
   static bool mkdir(const string &dir, int mode);
+  static int IsFile(const string &localfilename);
   static int IsDirectory(const string &localfilename);
   static string CurrentDirectory(int max_size=1024);
   static string JoinPath(const string &x, const string &y);
@@ -124,6 +125,12 @@ struct LocalFile : public File {
 
   File *Create();
   bool ReplaceWith(File*);
+};
+
+struct SearchPaths {
+  vector<string> path;
+  SearchPaths(const char *paths);
+  string Find(const string &fn);
 };
 
 struct FileLineIter : public StringIter {
@@ -476,6 +483,7 @@ struct TranslationUnit {
 
 struct IDE {
   struct Project {
+    string dir;
     struct BuildRule { string dir, cmd; };
     unordered_map<string, BuildRule> build_rules;
     void LoadCMakeCompileCommandsFile(File*);

@@ -102,9 +102,10 @@ int Glyph::ToArray(double *out, int l) {
   return sizeof(double)*10;
 }
 
-int Glyph::LeftBearing(                   const Drawable::Attr *a) const { return (a && a->font) ? RoundXY_or_Y(a->font->scale, bearing_x) : tex.LeftBearing(a); }
-int Glyph::Advance    (const LFL::Box *b, const Drawable::Attr *a) const { return (a && a->font) ? RoundXY_or_Y(a->font->scale, advance)   : tex.Advance (b,a); }
-int Glyph::Ascender   (const LFL::Box *b, const Drawable::Attr *a) const { return (a && a->font) ? a->font->ascender                       : tex.Ascender(b,a); }
+int Glyph::Baseline   (const LFL::Box *b, const Drawable::Attr *a) const { return (a && a->font) ? RoundXY_or_Y(a->font->scale, b->h - bearing_y) : tex.Baseline(b,a); }
+int Glyph::Advance    (const LFL::Box *b, const Drawable::Attr *a) const { return (a && a->font) ? RoundXY_or_Y(a->font->scale, advance)          : tex.Advance (b,a); }
+int Glyph::Ascender   (const LFL::Box *b, const Drawable::Attr *a) const { return (a && a->font) ? a->font->ascender                              : tex.Ascender(b,a); }
+int Glyph::LeftBearing(                   const Drawable::Attr *a) const { return (a && a->font) ? RoundXY_or_Y(a->font->scale, bearing_x)        : tex.LeftBearing(a); }
 
 int Glyph::Layout(LFL::Box *out, const Drawable::Attr *attr) const {
   if (!attr || !attr->font) return tex.Layout(out, attr);

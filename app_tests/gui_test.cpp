@@ -81,7 +81,7 @@ struct TerminalTest : public Terminal {
     UpdateTokenOp(Line *BL, int BO, Line *EL, int EO, const string &X, int T) : bl(BL), el(EL), bo(BO), eo(EO), type(T), text(X) {}
   };
   vector<UpdateTokenOp> token;
-  TerminalTest(ByteSink *S, GraphicsDevice *D, const FontRef &F) : Terminal(S, D, F) {}
+  using Terminal::Terminal;
   void UpdateLongToken(Line *BL, int BO, Line *EL, int EO, const string &text, int T) {
     token.emplace_back(BL, BO, EL, EO, text, T);
   }
@@ -766,8 +766,7 @@ TEST(GUITest, Terminal) {
   cursor_attr &= ~Terminal::Attr::Bold;
   EXPECT_EQ(4,  Terminal::Attr::GetFGColorIndex(cursor_attr));
 
-  TerminalTest ta(nullptr, screen->gd, app->fonts->Fake());
-  ta.SetDimension(80, 25);
+  TerminalTest ta(nullptr, screen->gd, app->fonts->Fake(), point(80, 25));
   int tw = ta.term_width, th = ta.term_height, fw = ta.font->FixedWidth(), fh = ta.font->Height();
   ta.CheckResized(Box(tw*fw, th*fh));
   EXPECT_EQ(80, ta.term_width);
@@ -1006,8 +1005,7 @@ TEST(GUITest, LineTokenProcessor) {
 }
 
 TEST(GUITest, TerminalTokenProcessor) {
-  TerminalTest ta(NULL, screen->gd, app->fonts->Fake());
-  ta.SetDimension(80, 25);
+  TerminalTest ta(NULL, screen->gd, app->fonts->Fake(), point(80, 25));
   EXPECT_EQ(80, ta.term_width);
   EXPECT_EQ(25, ta.line.Size());
 

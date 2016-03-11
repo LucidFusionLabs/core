@@ -945,8 +945,8 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
     tab3_player_name   (screen->gd, bright_font.desc),
     tab1_options    (this),
     tab2_servers    (this),
-    tab3_sensitivity(this, Box(), Widget::Slider::Flag::Horizontal),
-    tab3_volume     (this, Box(), Widget::Slider::Flag::Horizontal), current_scrollbar(0),
+    tab3_sensitivity(this, Widget::Slider::Flag::Horizontal),
+    tab3_volume     (this, Widget::Slider::Flag::Horizontal), current_scrollbar(0),
 #ifdef LFL_ANDROID
     gplus_signin_button (this, 0, "",           MouseController::CB([&](){ AndroidGPlusSignin(); gplus_signin_button.decay = 10; })),
     gplus_signout_button(this, 0, "g+ Signout", MouseController::CB([&](){ AndroidGPlusSignout(); })),

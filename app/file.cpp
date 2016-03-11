@@ -147,6 +147,17 @@ int LocalFile::IsDirectory(const string &filename) {
 #else // LFL_WINDOWS
 const char LocalFile::Slash = '/';
 const char LocalFile::ExecutableSuffix[] = "";
+int LocalFile::IsFile(const string &filename) {
+  if (filename.empty()) return false;
+#ifdef LFL_ANDROID
+  ERROR("XXX Android IsFile");
+  return 0;
+#else
+  struct stat buf;
+  if (stat(filename.c_str(), &buf)) return false;
+  return !(buf.st_mode & S_IFDIR);
+#endif
+}
 int LocalFile::IsDirectory(const string &filename) {
   if (filename.empty()) return true;
 #ifdef LFL_ANDROID
@@ -154,7 +165,7 @@ int LocalFile::IsDirectory(const string &filename) {
   return 0;
 #else
   struct stat buf;
-  if (stat(filename.c_str(), &buf)) return ERRORv(0, "stat(", filename, ") failed: ", strerror(errno));
+  if (stat(filename.c_str(), &buf)) return false;
   return buf.st_mode & S_IFDIR;
 #endif
 }
@@ -305,6 +316,19 @@ string LocalFile::JoinPath(const string &x, const string &y) {
   string p = (y.size() && y[0] == '/') ? "" : x;
   return StrCat(p, p.empty() ? "" : (p.back() == LocalFile::Slash ? "" : StrCat(LocalFile::Slash)),
                 p.size() && PrefixMatch(y, "./") ? y.substr(2) : y);
+}
+
+SearchPaths::SearchPaths(const char *paths) {
+  StringWordIter words(StringPiece::Unbounded(BlankNull(paths)), isint<':'>);
+  for (string word = words.NextString(); !words.Done(); word = words.NextString()) path.push_back(word);
+}
+
+string SearchPaths::Find(const string &fn) {
+  for (auto &p : path) {
+    string f = StrCat(p, LocalFile::Slash, fn);
+    if (LocalFile::IsFile(f)) return f;
+  }
+  return "";
 }
 
 DirectoryIter::DirectoryIter(const string &path, int dirs, const char *Pref, const char *Suf) : P(Pref), S(Suf), init(0) {

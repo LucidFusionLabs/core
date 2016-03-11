@@ -301,6 +301,7 @@ struct Listener {
 
 struct Connection {
   enum { Connected=1, Connecting=2, Reconnect=3, Error=5 };
+  typedef function<void(Connection*)> CB;
   struct Handler {  
     virtual ~Handler() {}
     virtual int Heartbeat(Connection *c) { return 0; }
@@ -308,6 +309,15 @@ struct Connection {
     virtual int Read(Connection *c) { return 0; }    
     virtual int Flushed(Connection *c) { return 0; }
     virtual void Close(Connection *c) {}
+  };
+  struct CallbackHandler : public Handler {
+    CB heartbeat_cb, connected_cb, read_cb, flushed_cb, close_cb;
+    CallbackHandler(const CB &R, const CB &C) : read_cb(R), close_cb(C) {}
+    virtual int Heartbeat(Connection *c) { if (heartbeat_cb) heartbeat_cb(c); return 0; }
+    virtual int Connected(Connection *c) { if (connected_cb) connected_cb(c); return 0; }
+    virtual int Read(Connection *c) { if (read_cb) read_cb(c); return 0; }    
+    virtual int Flushed(Connection *c) { if (flushed_cb) flushed_cb(c); return 0; }
+    virtual void Close(Connection *c) { if (close_cb) close_cb(c); }
   };
 
   Service *svc;
@@ -379,6 +389,7 @@ struct Service {
   Connection *Connect(const string &hostport, int default_port=0, Callback *detach=0);
   Connection *SSLConnect(SSL_CTX *sslctx, IPV4::Addr addr, int port, Callback *detach=0);
   Connection *SSLConnect(SSL_CTX *sslctx, const string &hostport, int default_port=0, Callback *detach=0);
+  Connection *AddConnectedSocket(Socket socket, Connection::Handler*);
   Connection *EndpointConnect(const string &endpoint_name);
   void EndpointReadCB(string *endpoint_name, string *packet);
   void EndpointRead(const string &endpoint_name, const char *buf, int len);
