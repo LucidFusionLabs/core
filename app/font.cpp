@@ -272,9 +272,7 @@ void GlyphCache::Load(const Font *f, const Glyph *g, HFONT hfont, int size, HDC 
 FontDesc::FontDesc(const IPC::FontDescription &d) :
   FontDesc(d.name() ? d.name()->data() : "", d.family() ? d.family()->data() : "", d.size(),
            d.fg() ? Color(d.fg()->r(), d.fg()->g(), d.fg()->b(), d.fg()->a()) : Color::white,
-           d.bg() ? Color(d.bg()->r(), d.bg()->g(), d.bg()->b(), d.bg()->a()) : Color::clear, d.flag(), d.unicode()) {
-  engine = d.engine();
-}
+           d.bg() ? Color(d.bg()->r(), d.bg()->g(), d.bg()->b(), d.bg()->a()) : Color::clear, d.flag(), d.unicode(), d.engine()) {}
 
 Glyph *Font::FindOrInsertGlyph(char16_t ind) {
   if (ind >= glyph->table_start) {
@@ -1019,7 +1017,7 @@ Font *Fonts::Change(Font *in, int new_size, const Color &new_fg, const Color &ne
   if (in == fake_font) return fake_font;
   if (!in->desc) return 0;
   FontDesc d = *in->desc;
-  d.size = new_size;
+  d.size = new_size ? new_size : in->size;
   d.fg   = new_fg;
   d.bg   = new_bg;
   d.flag = new_flag;

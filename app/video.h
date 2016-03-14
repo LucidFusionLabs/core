@@ -206,6 +206,7 @@ struct Box {
 struct Box3 {
   Box v[3];
   Box3() {}
+  Box3(const Box &b) { v[0]=b; }
   Box3(const Box &cont, const point &pb, const point &pe, int first_line_height, int last_line_height);
 
   const Box *begin() const { return &v[0]; }

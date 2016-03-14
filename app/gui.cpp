@@ -187,15 +187,36 @@ void Widget::Divider::LayoutDivideBottom(const Box &in, Box *top, Box *bottom, i
              MouseController::CoordCB(bind(&Widget::Divider::DragCB, this, _1, _2, _3, _4)));
 }
 
+void Widget::Divider::LayoutDivideLeft(const Box &in, Box *right, Box *left, int offset) {
+  changed = 0;
+  direction = 1;
+  *left = *right = in;
+  MinusPlus(&right->w, &right->x, size);
+  left->w = size;
+  AddDragBox(Box(right->x-1, right->y + offset, 3, right->h),
+             MouseController::CoordCB(bind(&Widget::Divider::DragCB, this, _1, _2, _3, _4)));
+}
+
+void Widget::Divider::LayoutDivideRight(const Box &in, Box *left, Box *right, int offset) {
+  changed = 0;
+  *left = *right = in;
+  left->w -= (right->w = size);
+  right->x = left->right();
+  AddDragBox(Box(right->x-1, right->y + offset, 3, right->h),
+             MouseController::CoordCB(bind(&Widget::Divider::DragCB, this, _1, _2, _3, _4)));
+}
+
 void Widget::Divider::DragCB(int b, int x, int y, int down) {
-  if (!changing && down) Assign(&start, &start_size, horizontal ? y : x, size);
-  size = max(0, start_size + (horizontal ? y : x) - start);
+  int p = (horizontal ? y : -x) * (direction ? -1 : 1);
+  if (!changing && down) Assign(&start, &start_size, p, size);
+  size = max(0, (start_size + p - start));
   Assign(&changing, &changed, bool(down), true);
 }
 
-TextBox::Link::Link(TextBox::Line *P, GUI *G, const Box3 &b, const string &U) : Interface(G), box(b), link(U), line(P) {
-  AddClickBox(b, MouseController::CB(bind(&Link::Visit, this)));
-  AddHoverBox(b, MouseController::CoordCB(bind(&Link::Hover, this, _1, _2, _3, _4)));
+TextBox::Control::Control(TextBox::Line *P, GUI *G, const Box3 &b, const string &v, const MouseControllerCallback &cb) :
+  Interface(G), box(b), val(v), line(P) {
+  AddClickBox(b, cb);
+  AddHoverBox(b, MouseController::CoordCB(bind(&Control::Hover, this, _1, _2, _3, _4)));
   del_hitbox = true;
 }
 
@@ -335,7 +356,7 @@ TextBox::Line *TextBox::Lines::InsertAt(int dest_line, int lines, int dont_move_
   else if ((clear_dir = -1)) { 
     ring.PushBack(lines);
     for (int scrollback_start_line = parent->GetFrameBuffer()->h / parent->font->Height(), i=0; i<lines; i++)
-      for (auto &l : (*this)[-scrollback_start_line-i-1].data->links) l.second->DelHitBox();
+      for (auto &l : (*this)[-scrollback_start_line-i-1].data->controls) l.second->DelHitBox();
   }
   for (int i=0; i<lines; i++) (*this)[dest_line + i*clear_dir].Clear();
   return &(*this)[dest_line];
@@ -412,9 +433,10 @@ TextBox::TextBox(GraphicsDevice *d, const FontRef &F, int LC) : font(F), cmd_las
 }
 
 point TextBox::RelativePosition(const point &in) const {
-  point p = in - box.BottomLeft();
+  auto fb = GetFrameBuffer();
+  point p = in - (fb->align_top_or_bot ? (box.TopLeft() - point(0, fb->Height())) : box.Position());
   if (clip) if (p.y < clip->bottom || p.y > box.h - clip->top) return p - point(0, box.h);
-  return GetFrameBuffer()->BackPlus(p);
+  return fb->BackPlus(p);
 }
 
 const Drawable::Attr *TextBox::GetAttr(int attr) const {
@@ -502,14 +524,16 @@ void TextBox::UpdateLongToken(Line *BL, int beg_offset, Line *EL, int end_offset
   if      (textp.len > 7 && PrefixMatch(textp.buf, "http://"))  url_offset = offset + 7;
   else if (textp.len > 8 && PrefixMatch(textp.buf, "https://")) url_offset = offset + 8;
   if (url_offset >= 0) {
-    if (update_type < 0) BL->data->links.erase(beg_offset);
+    if (update_type < 0) BL->data->controls.erase(beg_offset);
     else {
       LinesFrameBuffer *fb = GetFrameBuffer();
       int fb_h = fb->Height(), adjust_y = BL->data->outside_scroll_region ? -fb_h : 0;
       Box gb = Box(BL->data->glyphs[beg_offset].box).SetY(BL->p.y - fh + adjust_y);
       Box ge = Box(EL->data->glyphs[end_offset].box).SetY(EL->p.y - fh + adjust_y);
       Box3 box(Box(fb->Width(), fb_h), gb.Position(), ge.Position() + point(ge.w, 0), fh, fh);
-      auto i = Insert(BL->data->links, beg_offset, make_shared<Link>(BL, this, box, offset ? textp.str() : text));
+      string url = offset ? textp.str() : text;
+      auto i = Insert(BL->data->controls, beg_offset, make_shared<Control>
+                      (BL, this, box, url, MouseControllerCallback([=](){ app->OpenSystemBrowser(url); })));
       if (new_link_cb) new_link_cb(i->second);
     }
   }
@@ -599,11 +623,11 @@ void TextArea::CheckResized(const Box &b) {
   if (fb->SizeChanged(b.w, b.h, font, bg_color)) { Resized(b); fb->SizeChangedDone(); }
 }
 
-void TextArea::Redraw(bool attach) {
+void TextArea::Redraw(bool attach, bool relayout) {
   LinesFrameBuffer *fb = GetFrameBuffer();
   ScopedClearColor scc(fb->fb.gd, bg_color);
   ScopedDrawMode drawmode(fb->fb.gd, DrawMode::_2D);
-  int fb_flag = LinesFrameBuffer::Flag::NoVWrap | LinesFrameBuffer::Flag::Flush;
+  int fb_flag = LinesFrameBuffer::Flag::NoVWrap | (relayout ? LinesFrameBuffer::Flag::Flush : 0);
   int lines = start_line_adjust + skip_last_lines, font_height = font->Height();
   int (LinesFrameBuffer::*update_cb)(Line*, int, int, int, int) =
     reverse_line_fb ? &LinesFrameBuffer::PushBackAndUpdate
@@ -678,7 +702,7 @@ void TextArea::UpdateVScrolled(int dist, bool up, int ind, int first_offset, int
 
 void TextArea::ChangeColors(Colors *C) {
   SetColors(C);
-  Redraw();
+  Redraw(true, true);
 }
 
 void TextArea::Draw(const Box &b, int flag, Shader *shader) {
@@ -698,19 +722,19 @@ void TextArea::Draw(const Box &b, int flag, Shader *shader) {
   if (flag & DrawFlag::DrawCursor) DrawCursor(b.Position() + cursor.p);
   if (selection.enabled) box.SetPosition(b.Position());
   if (selection.changing) DrawSelection();
-  if (!clip && hover_link) DrawHoverLink(b);
+  if (!clip && hover_control) DrawHoverLink(b);
 }
 
 void TextArea::DrawHoverLink(const Box &b) {
-  bool outside_scroll_region = hover_link->line->data->outside_scroll_region;
+  bool outside_scroll_region = hover_control->line->data->outside_scroll_region;
   int fb_h = line_fb.Height();
-  for (const auto &i : hover_link->box) {
+  for (const auto &i : hover_control->box) {
     if (!i.w || !i.h) continue;
     point p = i.BottomLeft();
     p.y = outside_scroll_region ? (p.y + fb_h) : RingIndex::Wrap(p.y + line_fb.scroll.y * fb_h, fb_h);
     glLine(p, point(i.BottomRight().x, p.y), &Color::white);
   }
-  if (hover_link_cb) hover_link_cb(hover_link);
+  if (hover_control_cb) hover_control_cb(hover_control);
 }
 
 bool TextArea::GetGlyphFromCoordsOffset(const point &p, Selection::Point *out, int sl, int sla) {
@@ -794,27 +818,140 @@ string TextArea::CopyText(int beg_line_ind, int beg_char_ind, int end_line_ind, 
   return String::ToUTF8(copy_text);
 }
 
+/* TextView */
+
+int TextView::UpdateLines(float vs, int *first_ind, int *first_offset, int *first_len) {
+  LinesFrameBuffer *fb = GetFrameBuffer();
+  bool width_changed = last_fb_width != fb->w, wrap = Wrap(), init = !wrapped_lines;
+  if (width_changed) {
+    last_fb_width = fb->w;
+    if (wrap || init) UpdateMapping(TextArea::font->size, fb->w);
+    if (init) UpdateAnnotation();
+  }
+
+  bool resized = (width_changed && wrap) || last_fb_lines != fb->lines;
+  int new_first_line = RoundF(vs * (wrapped_lines - 1)), new_last_line = new_first_line + fb->lines;
+  int dist = resized ? fb->lines : abs(new_first_line - last_first_line);
+  if (!dist || Empty()) return 0;
+
+  bool redraw = dist >= fb->lines;
+  if (redraw) { line.Clear(); fb_wrapped_lines = 0; }
+
+  bool up = !redraw && new_first_line < last_first_line;
+  if (first_offset) *first_offset = up ?  start_line_cutoff : end_line_adjust;
+  if (first_len)    *first_len    = up ? -start_line_adjust : end_line_cutoff;
+
+  pair<int, int> read_lines;
+  if (dist < fb->lines) {
+    if (up) read_lines = pair<int, int>(new_first_line, dist);
+    else    read_lines = pair<int, int>(new_last_line - dist, dist);
+  } else    read_lines = pair<int, int>(new_first_line, fb->lines);
+
+  bool head_read = new_first_line == read_lines.first;
+  bool tail_read = new_last_line  == read_lines.first + read_lines.second;
+  CHECK(head_read || tail_read);
+  if (head_read && tail_read) CHECK(redraw);
+  if (redraw) CHECK(head_read && tail_read);
+  if (up) { CHECK(head_read); }
+  else    { CHECK(tail_read); }
+
+  bool short_read = !(head_read && tail_read), shorten_read = short_read && head_read && start_line_adjust;
+  int past_end_lines = max(0, min(dist, read_lines.first + read_lines.second - wrapped_lines));
+  read_lines.second = max(0, read_lines.second - past_end_lines);
+
+  if      ( up && dist <= -start_line_adjust) { start_line_adjust += dist; read_lines.second=past_end_lines=0; }
+  else if (!up && dist <=  end_line_cutoff)   { end_line_cutoff   -= dist; read_lines.second=past_end_lines=0; }
+
+  int added = UpdateMappedLines(read_lines, new_first_line, new_last_line,
+                                up, head_read, tail_read, short_read, shorten_read);
+  Line *L = 0;
+  if (!up) for (int i=0; i<past_end_lines; i++, added++) { 
+    (L = line.PushFront())->Clear();
+    fb_wrapped_lines += L->Layout(wrap ? fb->w : 0, true);
+  }
+
+  CHECK_LT(line.ring.count, line.ring.size);
+  if (!redraw) {
+    for (bool first=1;;first=0) {
+      int ll = (L = up ? line.Front() : line.Back())->Lines();
+      if (fb_wrapped_lines + (up ? start_line_adjust : -end_line_cutoff) - ll < fb->lines) break;
+      fb_wrapped_lines -= ll;
+      if (up) line.PopFront(1);
+      else    line.PopBack (1);
+    }
+    if (up) end_line_cutoff   =  (fb_wrapped_lines + start_line_adjust - fb->lines);
+    else    start_line_adjust = -(fb_wrapped_lines - end_line_cutoff   - fb->lines);
+  }
+
+  end_line_adjust   = line.Front()->Lines() - end_line_cutoff;
+  start_line_cutoff = line.Back ()->Lines() + start_line_adjust;
+  if (first_ind) *first_ind = up ? -added-1 : -line.Size()+added;
+
+  last_fb_lines = fb->lines;
+  last_first_line = new_first_line;
+  return dist * (up ? -1 : 1);
+}
+
 /* PropertyTree */
 
-PropertyTree::PropertyTree(GraphicsDevice *D, const FontRef &F) : TextArea(D, F) {
+PropertyTree::PropertyTree(GraphicsDevice *D, const FontRef &F) : TextView(D, F),
+menuicon(FontDesc("MenuAtlas", "", 0, Color::black, Color::clear, 0, 0, FontDesc::Engine::Atlas)) {
   reverse_line_fb = 1;
   cmd_color = Color(Color::black, .5);
-  property_line.node_value_cb = &Node::GetLines;
-  property_line.node_print_cb = &Node::GetString;
+  property_line.node_value_cb = &NodeIndex::GetLines;
+  property_line.node_print_cb = &NodeIndex::GetString;
   selection_cb = bind(&PropertyTree::SelectionCB, this, _1);
+  if (F->desc->bg.A()) bg_color = &F->desc->bg;
+  Activate();
 }
 
-#if 0
-void PropertyTree::ReloadTree() {
+void PropertyTree::UpdateMapping(int cur_font_size, int width) {
   wrapped_lines = 0;
   property_line.Clear();
-  for (const char *l = nr.NextLineRaw(&offset); l; l = nr.NextLineRaw(&offset)) {
-    wrapped_lines += (ll = wrap ? TextArea::font->Lines(l, width) : 1);
-    property_line.val.Insert(LineOffset(offset, nr.record_len, ll));
-  }
+  VisitExpandedChildren
+    (root, [&](Id id, Node *n){ property_line.val.Insert(NodeIndex(id)); wrapped_lines++; });
   property_line.LoadFromSortedVal();
 }
-#endif
+
+int PropertyTree::UpdateMappedLines(pair<int, int> read_lines, int new_first_line, int new_last_line,
+                                    bool up, bool head_read, bool tail_read, bool short_read, bool shorten_read) {
+  if (!read_lines.second) return 0;
+  int added = 0, last_read_line = read_lines.first + read_lines.second - 1, fh = font->Height();
+  LineMap::ConstIterator lib, lie;
+  CHECK((lib = property_line.LesserBound(read_lines.first)).val);
+  for (lie = lib; lie.val && lie.key <= last_read_line; ++lie) {}
+
+  Line *L;
+  if (up) for (auto li=lie; li!=lib;       added++, fb_wrapped_lines++) LayoutLine(line.PushBack(), *(--li).val, line_fb.BackPlus(point(0,  fh*(added+1))));
+  else    for (auto li=lib; li!=lie; ++li, added++, fb_wrapped_lines++) LayoutLine(line.PushFront(), *li.val,    line_fb.BackPlus(point(0, -fh*added), true));
+  return added;
+}
+
+void PropertyTree::LayoutLine(Line *L, const NodeIndex &ni, const point &p) {
+  Node *n = &tree[ni.id-1];
+  L->Clear();
+  Flow *flow = &L->data->flow;
+  flow->layout.wrap_lines = 0;
+
+  Box control(0, -font->ascender, 12, 12);
+  int control_attr_id = flow->out->attr.GetAttrId(Drawable::Attr(menuicon, NULL, NULL, false, true));
+  flow->out->PushBack(control, control_attr_id, menuicon->FindGlyph(n->expanded ? 11 : 12));
+  auto i = Insert(L->data->controls, 0, make_shared<Control>
+                  (L, this, control + p, "", MouseControllerCallback
+                   (MouseController::CB(bind(&PropertyTree::HandleNodeControlClicked, this, ni.id)), true)));
+
+  flow->p.x += control.w;
+  flow->SetFont(font);
+  flow->AppendText(n->text);
+}
+
+void PropertyTree::HandleNodeControlClicked(Id id) {
+  if (!app->input->MouseButton1Down()) return;
+  auto n = &tree[id-1];
+  n->expanded = !n->expanded;
+  RefreshLines();
+  Redraw();
+}
 
 void PropertyTree::SelectionCB(const Selection::Point &p) {
 }
@@ -822,7 +959,7 @@ void PropertyTree::SelectionCB(const Selection::Point &p) {
 /* Editor */
 
 Editor::Editor(GraphicsDevice *D, const FontRef &F, File *I, bool Wrap) :
-  TextArea(D, F), file(I), cursor_line(&line[-1]) {
+  TextView(D, F), file(I), cursor_line(&line[-1]) {
   reverse_line_fb = 1;
   opened = file && file->Opened();
   cmd_color = Color(Color::black, .5);
@@ -873,7 +1010,7 @@ void Editor::SelectionCB(const Selection::Point &p) {
   UpdateCursor();
 }
 
-void Editor::UpdateWrappedLines(int cur_font_size, int width) {
+void Editor::UpdateMapping(int cur_font_size, int width) {
   wrapped_lines = 0;
   file_line.Clear();
   file->Reset();
@@ -886,49 +1023,10 @@ void Editor::UpdateWrappedLines(int cur_font_size, int width) {
   file_line.LoadFromSortedVal();
 }
 
-int Editor::UpdateLines(float vs, int *first_ind, int *first_offset, int *first_len) {
-  if (!opened) return 0;
-  LinesFrameBuffer *fb = GetFrameBuffer();
-  bool width_changed = last_fb_width != fb->w, wrap = Wrap(), init = !wrapped_lines;
-  if (width_changed) {
-    last_fb_width = fb->w;
-    if (wrap || init) UpdateWrappedLines(TextArea::font->size, fb->w);
-    if (init) UpdateAnnotation();
-  }
-
-  bool resized = (width_changed && wrap) || last_fb_lines != fb->lines;
-  int new_first_line = RoundF(vs * (wrapped_lines - 1)), new_last_line = new_first_line + fb->lines;
-  int dist = resized ? fb->lines : abs(new_first_line - last_first_line), read_len = 0, bo = 0, ll, l, e;
-  if (!dist || !file_line.size()) return 0;
-
-  bool redraw = dist >= fb->lines;
-  if (redraw) { line.Clear(); fb_wrapped_lines = 0; }
-
-  bool up = !redraw && new_first_line < last_first_line;
-  if (first_offset) *first_offset = up ?  start_line_cutoff : end_line_adjust;
-  if (first_len)    *first_len    = up ? -start_line_adjust : end_line_cutoff;
-
-  pair<int, int> read_lines;
-  if (dist < fb->lines) {
-    if (up) read_lines = pair<int, int>(new_first_line, dist);
-    else    read_lines = pair<int, int>(new_last_line - dist, dist);
-  } else    read_lines = pair<int, int>(new_first_line, fb->lines);
-
-  bool head_read = new_first_line == read_lines.first;
-  bool tail_read = new_last_line  == read_lines.first + read_lines.second;
-  CHECK(head_read || tail_read);
-  if (head_read && tail_read) CHECK(redraw);
-  if (redraw) CHECK(head_read && tail_read);
-  if (up) { CHECK(head_read); }
-  else    { CHECK(tail_read); }
-
-  bool short_read = !(head_read && tail_read), shorten_read = short_read && head_read && start_line_adjust;
-  int past_end_lines = max(0, min(dist, read_lines.first + read_lines.second - wrapped_lines)), added = 0;
-  read_lines.second = max(0, read_lines.second - past_end_lines);
-
-  if      ( up && dist <= -start_line_adjust) { start_line_adjust += dist; read_lines.second=past_end_lines=0; }
-  else if (!up && dist <=  end_line_cutoff)   { end_line_cutoff   -= dist; read_lines.second=past_end_lines=0; }
-
+int Editor::UpdateMappedLines(pair<int, int> read_lines, int new_first_line, int new_last_line,
+                              bool up, bool head_read, bool tail_read, bool short_read, bool shorten_read) {
+  bool wrap = Wrap();
+  int read_len = 0;
   IOVector rv;
   LineMap::ConstIterator lib, lie;
   if (read_lines.second) {
@@ -953,47 +1051,30 @@ int Editor::UpdateLines(float vs, int *first_ind, int *first_offset, int *first_
   if (read_len) CHECK_EQ(buf.size(), file->ReadIOV(&buf[0], rv.data(), rv.size()));
 
   Line *L = 0;
+  int added = 0, bo = 0, width = wrap ? GetFrameBuffer()->w : 0, ll, l, e;
   if (up) for (auto li = lie; li != lib; bo += l + !e, added++) {
     l = (e = max(0, -(--li).val->size)) ? 0 : li.val->size;
     if (e) (L = line.PushBack())->AssignText(edits[e-1],                                 Flow::TextAnnotation(annotation.data(), PieceIndex()));
     else   (L = line.PushBack())->AssignText(StringPiece(buf.data()+read_len-bo-l-1, l), Flow::TextAnnotation(annotation.data(), li.val->annotation));
-    fb_wrapped_lines += (ll = L->Layout(wrap ? fb->w : 0, true));
+    fb_wrapped_lines += (ll = L->Layout(width, true));
     CHECK_EQ(li.val->wrapped_lines, ll);
   }
   else for (auto li = lib; li != lie; ++li, bo += l + !e, added++) {
     l = (e = max(0, -li.val->size)) ? 0 : li.val->size;
     if (e) (L = line.PushFront())->AssignText(edits[e-1],                    Flow::TextAnnotation(annotation.data(), PieceIndex()));
     else   (L = line.PushFront())->AssignText(StringPiece(buf.data()+bo, l), Flow::TextAnnotation(annotation.data(), li.val->annotation));
-    fb_wrapped_lines += (ll = L->Layout(wrap ? fb->w : 0, true));
+    fb_wrapped_lines += (ll = L->Layout(width, true));
     CHECK_EQ(li.val->wrapped_lines, ll);
   }
-  if (!up) for (int i=0; i<past_end_lines; i++, added++) { 
-    (L = line.PushFront())->Clear();
-    fb_wrapped_lines += L->Layout(wrap ? fb->w : 0, true);
-  }
+  return added;
+}
 
-  CHECK_LT(line.ring.count, line.ring.size);
-  if (!redraw) {
-    for (bool first=1;;first=0) {
-      ll = (L = up ? line.Front() : line.Back())->Lines();
-      if (fb_wrapped_lines + (up ? start_line_adjust : -end_line_cutoff) - ll < fb->lines) break;
-      fb_wrapped_lines -= ll;
-      if (up) line.PopFront(1);
-      else    line.PopBack (1);
-    }
-    if (up) end_line_cutoff   =  (fb_wrapped_lines + start_line_adjust - fb->lines);
-    else    start_line_adjust = -(fb_wrapped_lines - end_line_cutoff   - fb->lines);
-  }
-
-  end_line_adjust   = line.Front()->Lines() - end_line_cutoff;
-  start_line_cutoff = line.Back ()->Lines() + start_line_adjust;
-  if (first_ind) *first_ind = up ? -added-1 : -line.Size()+added;
-
-  last_fb_lines = fb->lines;
-  last_first_line = new_first_line;
+int Editor::UpdateLines(float vs, int *first_ind, int *first_offset, int *first_len) {
+  if (!opened) return 0;
+  int ret = TextView::UpdateLines(vs, first_ind, first_offset, first_len);
   UpdateCursorLine();
   UpdateCursor();
-  return dist * (up ? -1 : 1);
+  return ret;
 }
 
 void Editor::UpdateCursorLine() {
@@ -1240,7 +1321,7 @@ void Terminal::MoveToOrFromScrollRegion(TextBox::LinesFrameBuffer *fb, TextBox::
   fb->Update(l, p, flag);
   l->data->outside_scroll_region = fb != &line_fb;
   int delta_y = plpy - l->p.y + line_fb.Height() * (l->data->outside_scroll_region ? -1 : 1);
-  for (auto &i : l->data->links) {
+  for (auto &i : l->data->controls) {
     i.second->box += point(0, delta_y);
     for (auto &j : i.second->hitbox) i.second->gui->IncrementBoxY(delta_y, -1, j);
   }
@@ -1337,7 +1418,7 @@ void Terminal::Draw(const Box &b, int flag, Shader *shader) {
   if (clip) {
     { Scissor s(line_fb.fb.gd, Box::TopBorder(b, *clip)); cmd_fb.Draw(b.Position(), point(), false); }
     { Scissor s(line_fb.fb.gd, Box::BotBorder(b, *clip)); cmd_fb.Draw(b.Position(), point(), false); }
-    if (hover_link) DrawHoverLink(b);
+    if (hover_control) DrawHoverLink(b);
   }
   if (flag & DrawFlag::DrawCursor) TextBox::DrawCursor(b.Position() + cursor.p);
   if (selection.changing) DrawSelection();
@@ -1604,11 +1685,11 @@ void Terminal::Clear() {
   Redraw(true);
 }
 
-void Terminal::Redraw(bool attach) {
+void Terminal::Redraw(bool attach, bool relayout) {
   bool prev_clip = clip;
   int prev_scroll_beg = scroll_region_beg, prev_scroll_end = scroll_region_end;
   SetScrollRegion(1, term_height, true);
-  TextArea::Redraw(true);
+  TextArea::Redraw(true, relayout);
   if (prev_clip) SetScrollRegion(prev_scroll_beg, prev_scroll_end, true);
 }
 
@@ -1785,10 +1866,29 @@ SliderDialog::SliderDialog(GraphicsDevice *d, const string &t, const SliderDialo
 FlagSliderDialog::FlagSliderDialog(GraphicsDevice *d, const string &fn, float total, float inc) :
   SliderDialog(d, fn, bind(&FlagSliderDialog::Updated, this, _1), atof(Singleton<FlagMap>::Get()->Get(fn)) / total, total, inc),
   flag_name(fn), flag_map(Singleton<FlagMap>::Get()) {}
+  
+PropertyTreeDialog::PropertyTreeDialog(GraphicsDevice *D, const FontRef &F, float w, float h) :
+  Dialog(D, w, h), tree(D, F), v_scrollbar(this, Widget::Slider::Flag::AttachedNoCorner),
+  h_scrollbar(this, Widget::Slider::Flag::AttachedHorizontalNoCorner) { child_gui = &tree; }
+  
+void PropertyTreeDialog::Layout() {
+  Dialog::Layout();
+  Widget::Slider::AttachContentBox(&content, &v_scrollbar, &h_scrollbar);
+}
+
+void PropertyTreeDialog::Draw() {
+  tree.v_scrolled = v_scrollbar.AddScrollDelta(tree.v_scrolled);
+  tree.h_scrolled = h_scrollbar.AddScrollDelta(tree.h_scrolled);
+  tree.UpdateScrolled();
+  Dialog::Draw();
+  tree.Draw(content + box.TopLeft(), TextArea::DrawFlag::CheckResized);
+  v_scrollbar.Update();
+  h_scrollbar.Update();
+}
 
 EditorDialog::EditorDialog(GraphicsDevice *D, const FontRef &F, File *I, float w, float h, int flag) :
   Dialog(D, w, h, flag), editor(D, F, I, flag & Flag::Wrap), v_scrollbar(this, Widget::Slider::Flag::AttachedNoCorner),
-  h_scrollbar(this, Widget::Slider::Flag::AttachedHorizontalNoCorner) { mouse.child_controller = &editor.mouse; }
+  h_scrollbar(this, Widget::Slider::Flag::AttachedHorizontalNoCorner) { child_gui = &editor; }
 
 void EditorDialog::Layout() {
   if (editor.file) title_text = BaseName(editor.file->Filename());

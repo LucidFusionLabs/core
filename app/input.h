@@ -39,12 +39,7 @@ struct Key {
 struct Mouse {
   struct Button { static const InputEvent::Id _1, _2; };
   struct Event  { static const InputEvent::Id Motion, Wheel, Button1, Button2; };
-  static InputEvent::Id ButtonID(int button) {
-    switch (button) {
-      case 1: return Button::_1;
-      case 2: return Button::_2;
-    } return 0;
-  }
+  static InputEvent::Id ButtonID(int button);
 };
 
 struct Bind {
@@ -70,29 +65,9 @@ struct Bind {
   bool operator<(const Bind &c) const { SortImpl1(key, c.key); }
   bool operator==(const Bind &c) const { return key == c.key; }
 
-  void Destruct() {
-    switch (cb_type) {
-      case CB_VOID: cb.cb_void.~CB();     break;
-      case CB_TIME: cb.cb_time.~TimeCB(); break;
-      case NONE: break;
-    }
-  }
-  void Assign(const Bind &c) {
-    key = c.key;
-    cb_type = c.cb_type;
-    switch (cb_type) {
-      case CB_VOID: new (&cb.cb_void)     CB(c.cb.cb_void); break;
-      case CB_TIME: new (&cb.cb_time) TimeCB(c.cb.cb_time); break;
-      case NONE: break;
-    }
-  }
-  void Run(unsigned t) const {
-    switch (cb_type) {
-      case CB_VOID: cb.cb_void();  break;
-      case CB_TIME: cb.cb_time(t); break;
-      case NONE: break;
-    }
-  }
+  void Destruct();
+  void Assign(const Bind &c);
+  void Run(unsigned t) const;
 };
 
 }; // namespace LFL
@@ -117,12 +92,7 @@ struct BindMap : public InputController {
   template <class... Args> void Add(Args&&... args) { AddBind(Bind(forward<Args>(args)...)); }
   void AddBind(const Bind &b) { data.insert(b); }
   void Repeat(unsigned clicks) { for (auto b : down) b.Run(clicks); }
-  void Input(InputEvent::Id event, bool d) {
-    auto b = data.find(event);
-    if (b == data.end()) return;
-    if (b->cb_type == Bind::CB_TIME) { Bind r=*b; r.key=InputEvent::GetKey(r.key); InsertOrErase(&down, r, d); }
-    else if (d) b->Run(0);
-  }
+  void Input(InputEvent::Id event, bool d);
   string DebugString() const { string v="{ "; for (auto b : data) StrAppend(&v, b.key, " "); return v + "}"; }
 };
 
@@ -189,7 +159,6 @@ struct MouseController {
     HitBox(int ET=0, const Box &b=Box(), const MouseControllerCallback &cb=MouseControllerCallback()) : box(b), evtype(ET), CB(cb) {}
   };
 
-  MouseController *child_controller=0;
   IterableFreeListVector<HitBox, &HitBox::deleted> hit;
   unordered_set<int> drag;
   vector<int> hover;
@@ -205,14 +174,7 @@ struct MouseController {
 struct DragTracker {
   bool changing=0;
   point beg_click, end_click;
-
-  bool Update(const point &p, bool down) {
-    bool start = !changing && down;
-    if (start) beg_click = p;
-    end_click = p;
-    changing = down;
-    return start;
-  }
+  bool Update(const point &p, bool down);
 };
 
 struct Input : public Module {
@@ -228,22 +190,10 @@ struct Input : public Module {
   mutex queued_input_mutex;
   Bind paste_bind;
 
-  void QueueKeyPress(int key, bool down) {
-    ScopedMutex sm(queued_input_mutex);
-    queued_input.emplace_back(InputCB::KeyPress, 0, 0, key, down);
-  }
-  void QueueMouseClick(int button, bool down, const point &p) {
-    ScopedMutex sm(queued_input_mutex);
-    queued_input.emplace_back(InputCB::MouseClick, p.x, p.y, button, down);
-  }
-  void QueueMouseMovement(const point &p, const point &d) {
-    ScopedMutex sm(queued_input_mutex);
-    queued_input.emplace_back(InputCB::MouseMove, p.x, p.y, d.x, d.y);
-  }
-  void QueueMouseWheel(const point &p, const point &d) {
-    ScopedMutex sm(queued_input_mutex);
-    queued_input.emplace_back(InputCB::MouseWheel, p.x, p.y, d.x, d.y);
-  }
+  void QueueKeyPress(int key, bool down);
+  void QueueMouseClick(int button, bool down, const point &p);
+  void QueueMouseMovement(const point &p, const point &d);
+  void QueueMouseWheel(const point &p, const point &d);
 
   bool ShiftKeyDown() const { return left_shift_down || right_shift_down; }
   bool CtrlKeyDown() const { return left_ctrl_down || right_ctrl_down; }
@@ -263,6 +213,7 @@ struct Input : public Module {
   int MouseWheel(const point &p, const point &d);
   int MouseClick(int button, bool down, const point &p);
   int MouseEventDispatch(InputEvent::Id event, const point &p, int down);
+  int MouseEventDispatchGUI(InputEvent::Id event, const point &p, int down, GUI *g, int *active_guis);
 
   static point TransformMouseCoordinate(point p);
 };

@@ -222,20 +222,20 @@ struct Flow {
   template <class X> int AppendText(const StringPieceT<X> &text, const TextAnnotation &attr, int da=0) {
     int start_size = out->data.size();
     out->data.reserve(start_size + text.size());
-    int initial_out_lines = out->line.size(), line_start_ind = 0, c_bytes = 0, ci_bytes = 0, c, ci;
+    int initial_out_lines = out->line.size(), line_start_ind = 0, ci_bytes = 0, cj_bytes = 0, c, ci;
     int attr_id = (!attr.len && !da && !out->attr.source) ? out->attr.GetAttrId(cur_attr) : da;
     auto a = attr.buf, ae = a + attr.len;
 
-    for (const X *b = text.data(), *p = b; !text.Done(p); p += c_bytes) {
-      if (a != ae && p - b == a->first) {
+    for (const X *b = text.data(), *i = b; !text.Done(i); i += ci_bytes) {
+      if (a != ae && i - b == a->first) {
         if (out->attr.source) cur_attr.font = out->attr.GetAttr((attr_id = a++->second))->font;
         else attr_id = out->attr.GetAttrId((cur_attr = *attr.attr_source->GetAttr(a++->second)));
       }
-      if (!(c = UTF<X>::ReadGlyph(text, p, &c_bytes, true))) FlowDebug("null glyph");
+      if (!(c = UTF<X>::ReadGlyph(text, i, &ci_bytes, true))) FlowDebug("null glyph");
       if (c == Unicode::zero_width_non_breaking_space) continue;
       if (AppendChar(c, attr_id, &PushBack(out->data, DrawableBox())) == State::NEW_WORD) {
-        for (const X *pi=p; !text.Done(pi) && notspace(*pi); pi += ci_bytes) {
-          if (!(ci = UTF<X>::ReadGlyph(text, pi, &ci_bytes, true))) FlowDebug("null glyph");
+        for (const X *j = i; !text.Done(j) && notspace(*j); j += cj_bytes) {
+          if (!(ci = UTF<X>::ReadGlyph(text, j, &cj_bytes, true))) FlowDebug("null glyph");
           cur_word.len += cur_attr.font->GetGlyphWidth(ci);
         }
         AppendChar(c, attr_id, &out->data.back());

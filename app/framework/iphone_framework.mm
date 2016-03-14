@@ -709,6 +709,11 @@ int  Application::SetMultisample(bool v) { return [[LFUIApplication sharedAppDel
 void Application::OpenTouchKeyboard() { [[LFUIApplication sharedAppDelegate] showKeyboard]; }
 void Application::CloseTouchKeyboard() { [[LFUIApplication sharedAppDelegate] hideKeyboard]; }
 void Application::CloseTouchKeyboardAfterReturn(bool v) { [LFUIApplication sharedAppDelegate].resign_textfield_on_return = v; }
+void Application::AddToolbar(const vector<pair<string, string>>&items) {
+  vector<const char *> k, v;
+  for (auto &i : items) { k.push_back(i.first.c_str()); v.push_back(i.second.c_str()); }
+  iPhoneCreateToolbar(items.size(), &k[0], &v[0]);
+}
 void Application::ToggleToolbarButton(const string &n) { 
   [[LFUIApplication sharedAppDelegate].controller toggleToolbarButtonWithTitle:n.c_str()];
 }

@@ -121,12 +121,72 @@ struct KeyRepeater {
 };
 #endif
 
-void Application::AddToolbar(const vector<pair<string, string>>&items) {
-  vector<const char *> k, v;
-  for (auto &i : items) { k.push_back(i.first.c_str()); v.push_back(i.second.c_str()); }
-#ifdef LFL_IPHONEINPUT
-  iPhoneCreateToolbar(items.size(), &k[0], &v[0]);
-#endif
+InputEvent::Id Mouse::ButtonID(int button) {
+  switch (button) {
+    case 1: return Button::_1;
+    case 2: return Button::_2;
+  } return 0;
+}
+
+void Bind::Destruct() {
+  switch (cb_type) {
+    case CB_VOID: cb.cb_void.~CB();     break;
+    case CB_TIME: cb.cb_time.~TimeCB(); break;
+    case NONE: break;
+  }
+}
+
+void Bind::Assign(const Bind &c) {
+  key = c.key;
+  cb_type = c.cb_type;
+  switch (cb_type) {
+    case CB_VOID: new (&cb.cb_void)     CB(c.cb.cb_void); break;
+    case CB_TIME: new (&cb.cb_time) TimeCB(c.cb.cb_time); break;
+    case NONE: break;
+  }
+}
+
+void Bind::Run(unsigned t) const {
+  switch (cb_type) {
+    case CB_VOID: cb.cb_void();  break;
+    case CB_TIME: cb.cb_time(t); break;
+    case NONE: break;
+  }
+}
+
+void BindMap::Input(InputEvent::Id event, bool d) {
+  auto b = data.find(event);
+  if (b == data.end()) return;
+  if (b->cb_type == Bind::CB_TIME) { Bind r=*b; r.key=InputEvent::GetKey(r.key); InsertOrErase(&down, r, d); }
+  else if (d) b->Run(0);
+}
+
+bool DragTracker::Update(const point &p, bool down) {
+  bool start = !changing && down;
+  if (start) beg_click = p;
+  end_click = p;
+  changing = down;
+  return start;
+}
+
+void Input::QueueKeyPress(int key, bool down) {
+  ScopedMutex sm(queued_input_mutex);
+  queued_input.emplace_back(InputCB::KeyPress, 0, 0, key, down);
+}
+
+void Input::QueueMouseClick(int button, bool down, const point &p) {
+  ScopedMutex sm(queued_input_mutex);
+  queued_input.emplace_back(InputCB::MouseClick, p.x, p.y, button, down);
+}
+
+void Input::QueueMouseMovement(const point &p, const point &d) {
+  ScopedMutex sm(queued_input_mutex);
+  queued_input.emplace_back(InputCB::MouseMove, p.x, p.y, d.x, d.y);
+}
+
+void Input::QueueMouseWheel(const point &p, const point &d) {
+  ScopedMutex sm(queued_input_mutex);
+  queued_input.emplace_back(InputCB::MouseWheel, p.x, p.y, d.x, d.y);
 }
 
 point Input::TransformMouseCoordinate(point p) {
@@ -288,11 +348,7 @@ int Input::MouseEventDispatch(InputEvent::Id event, const point &p, int down) {
 
   int fired = 0, active_guis = 0, events;
   for (auto i = screen->gui.begin(), e = screen->gui.end(); i != e; ++i) {
-    GUI *g = *i;
-    if (g->NotActive()) continue;
-    else active_guis++;
-    events = g->mouse.Input(event, g->RelativePosition(screen->mouse), down, 0);
-    if (events) {
+    if ((events = MouseEventDispatchGUI(event, p, down, *i, &active_guis))) {
       InputDebug("Input::MouseEventDispatch sent GUI[%td] events = %d\n", i - screen->gui.begin(), events);
       return events;
     }
@@ -312,6 +368,14 @@ int Input::MouseEventDispatch(InputEvent::Id event, const point &p, int down) {
   InputDebugIfDown("Inut::MouseEventDispatch %s fired=%d, guis=%d/%zd\n",
                    screen->mouse.DebugString().c_str(), fired, active_guis, screen->gui.size());
   return fired;
+}
+
+int Input::MouseEventDispatchGUI(InputEvent::Id event, const point &p, int down, GUI *g, int *active_guis) {
+  if (g->NotActive()) return 0;
+  else (*active_guis)++;
+  int events = g->mouse.Input(event, g->RelativePosition(screen->mouse), down, 0);
+  if (!events && g->child_gui) return MouseEventDispatchGUI(event, p, down, g->child_gui, active_guis);
+  return events;
 }
 
 void MouseControllerCallback::Destruct() {
@@ -392,9 +456,8 @@ int MouseController::Input(InputEvent::Id event, const point &p, int down, int f
   if (event == Mouse::Event::Motion) { for (auto d : drag) if (hit.data[d].CB.Run(p, event, down)) fired++; }
   else if (!down && but1)            { for (auto d : drag) if (hit.data[d].CB.Run(p, event, down)) fired++; drag.clear(); }
 
-  InputDebugIfDown("MouseController::Input %s fired=%d, checked %zd of %zd hitboxes child=%p\n",
-                   screen->mouse.DebugString().c_str(), fired, boxes_checked, hit.data.size(), child_controller);
-  if (!fired && child_controller) return child_controller->Input(event, p, down, flag);
+  InputDebugIfDown("MouseController::Input %s fired=%d, checked %zd of %zd hitboxes\n",
+                   screen->mouse.DebugString().c_str(), fired, boxes_checked, hit.data.size());
   return fired;
 }
 

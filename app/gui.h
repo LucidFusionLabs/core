@@ -33,7 +33,9 @@ struct GUI {
   Box box;
   DrawableBoxArray child_box;
   MouseController mouse;
+  GUI *child_gui=0;
   bool active=0;
+
   GUI(const Box &B=Box()) : box(B) {}
   virtual ~GUI() {}
 
@@ -132,9 +134,11 @@ struct Widget {
   
   struct Divider : public Interface {
     int size=0, start=0, start_size=0;
-    bool horizontal=1, changing=0, changed=0;
+    bool horizontal=1, direction=0, changing=0, changed=0;
     Divider(GUI *G, bool H, int S) : Interface(G), size(S), horizontal(H) {}
-    void LayoutDivideBottom(const Box &in, Box *top, Box *bottom, int offset=0);
+    void LayoutDivideBottom(const Box &in, Box *top,  Box *bottom, int offset=0);
+    void LayoutDivideLeft  (const Box &in, Box *left, Box *right,  int offset=0);
+    void LayoutDivideRight (const Box &in, Box *left, Box *right,  int offset=0);
     void DragCB(int b, int x, int y, int down);
   };
 };
@@ -160,15 +164,14 @@ struct TextBox : public GUI, public KeyboardController, public Drawable::AttrSou
   struct Lines;
   typedef function<void(const string&)> RunCB;
 
-  struct Link : public Widget::Interface {
+  struct Control : public Widget::Interface {
     Box3 box;
-    string link;
+    string val;
     Line *line=0;
     shared_ptr<Texture> image;
-    Link(Line *P, GUI *G, const Box3 &b, const string &U);
-    virtual ~Link() { if (line->parent->hover_link == this) line->parent->hover_link = 0; }
-    void Hover(int, int, int, int down) { line->parent->hover_link = down ? this : 0; }
-    void Visit() { app->OpenSystemBrowser(link); }
+    Control(Line *P, GUI *G, const Box3 &b, const string&, const MouseControllerCallback&);
+    virtual ~Control() { if (line->parent->hover_control == this) line->parent->hover_control = 0; }
+    void Hover(int, int, int, int down) { line->parent->hover_control = down ? this : 0; }
   };
 
   struct LineData {
@@ -176,7 +179,7 @@ struct TextBox : public GUI, public KeyboardController, public Drawable::AttrSou
     Flow flow;
     DrawableBoxArray glyphs;
     bool outside_scroll_region=0;
-    unordered_map<int, shared_ptr<Link> > links;
+    unordered_map<int, shared_ptr<Control>> controls;
   };
 
   struct Line {
@@ -196,7 +199,7 @@ struct TextBox : public GUI, public KeyboardController, public Drawable::AttrSou
     int Size () const { return data->glyphs.Size(); }
     int Lines() const { return 1+data->glyphs.line.size(); }
     String16 Text16() const { return data->glyphs.Text16(); }
-    void Clear() { data->links.clear(); data->glyphs.Clear(); data->flow=InitFlow(&data->glyphs); }
+    void Clear() { data->controls.clear(); data->glyphs.Clear(); data->flow=InitFlow(&data->glyphs); }
     int Erase(int o, int l=INT_MAX);
     int AssignText(const StringPiece   &s, int                       a=0) { Clear(); return AppendText(s, a); }
     int AssignText(const String16Piece &s, int                       a=0) { Clear(); return AppendText(s, a); }
@@ -301,9 +304,9 @@ struct TextBox : public GUI, public KeyboardController, public Drawable::AttrSou
   bool deactivate_on_enter=0, token_processing=0, insert_mode=1, run_blank_cmd=0;
   int start_line=0, end_line=0, start_line_adjust=0, skip_last_lines=0, default_attr=0, cmd_last_ind=-1;
   function<void(const Selection::Point&)> selection_cb;
-  function<void(const shared_ptr<Link>&)> new_link_cb;
-  function<void(Link*)> hover_link_cb;
-  Link *hover_link=0;
+  function<void(const shared_ptr<Control>&)> new_link_cb;
+  function<void(Control*)> hover_control_cb;
+  Control *hover_control=0;
   const Border *clip=0;
   const Colors *colors=0;
   const Color *bg_color=0;
@@ -388,7 +391,7 @@ struct TextArea : public TextBox {
   virtual void CheckResized(const Box &b);
   virtual void SetDimension(int w, int h) {}
 
-  virtual void Redraw(bool attach=true);
+  virtual void Redraw(bool attach=true, bool relayout=false);
   virtual void UpdateScrolled();
   virtual void UpdateHScrolled(int x, bool update_fb=true);
   virtual void UpdateVScrolled(int dist, bool reverse, int first_ind, int first_offset, int first_len);
@@ -421,23 +424,67 @@ struct TextArea : public TextBox {
   string CopyText(int beg_line_ind, int beg_char_ind, int end_line_end, int end_char_ind, bool add_nl);
 };
 
-struct PropertyTree : public TextArea {
-  struct Node {
-    Flow flow;
-    DrawableBoxArray text;
-    vector<int> child;
-    int wrapped_lines=1;
-    static string GetString(const unique_ptr<Node> *v) { return ""; }
-    static int    GetLines (const unique_ptr<Node> *v) { return (*v)->wrapped_lines; }
-  };
-  typedef PrefixSumKeyedRedBlackTree<int, unique_ptr<Node>> LineMap;
+struct TextView : public TextArea {
+  int last_fb_width=0, last_fb_lines=0, last_first_line=0;
+  int wrapped_lines=0, fb_wrapped_lines=0;
+  using TextArea::TextArea;
 
-  LineMap property_line;
-  PropertyTree(GraphicsDevice *D, const FontRef &F=FontRef());
-  void SelectionCB(const Selection::Point &p);
+  virtual int WrappedLines() const { return wrapped_lines; }
+  virtual int UpdateLines(float v_scrolled, int *first_ind, int *first_offset, int *first_len);
+  virtual int RefreshLines() { last_fb_lines=0; return UpdateLines(last_v_scrolled, 0, 0, 0); }
+  virtual void Reload() { last_fb_width=0; wrapped_lines=0; RefreshLines(); }
+
+  virtual bool Empty() const { return true; }
+  virtual void UpdateAnnotation() {}
+  virtual void UpdateMapping(int cur_font_size, int width) {}
+  virtual int UpdateMappedLines(pair<int, int>, int, int, bool, bool, bool, bool, bool) { return 0; }
 };
 
-struct Editor : public TextArea {
+struct PropertyTree : public TextView {
+  typedef size_t Id;
+  typedef vector<Id> Children;
+  struct Node {
+    typedef function<void(Id, Node*)> Visitor;
+    Drawable *icon;
+    string text;
+    Children child;
+    bool expanded=0;
+    Node(Drawable *I=0, const string &T=string(), const Children &C=Children()) : icon(I), text(T), child(C) {}
+  };
+  struct NodeIndex {
+    Id id;
+    NodeIndex(Id I=0) : id(I) {}
+    static string GetString(const NodeIndex *v) { return ""; }
+    static int    GetLines (const NodeIndex *v) { return 1; }
+  };
+  typedef PrefixSumKeyedRedBlackTree<int, NodeIndex> LineMap;
+
+  Id root=0;
+  vector<Node> tree;
+  LineMap property_line;
+  FontRef menuicon;
+  PropertyTree(GraphicsDevice *D, const FontRef &F=FontRef());
+
+  bool Empty() const { return !property_line.size(); }
+  void UpdateMapping(int cur_font_size, int width);
+  int UpdateMappedLines(pair<int, int>, int, int, bool, bool, bool, bool, bool);
+  void LayoutLine(Line *L, const NodeIndex &n, const point &p);
+  void HandleNodeControlClicked(Id id);
+  void SelectionCB(const Selection::Point &p);
+
+  void SetRoot(Id id) { root=id; tree[root-1].expanded=true; }
+  template <class... Args> Id AddNode(Args&&... args) {
+    tree.emplace_back(forward<Args>(args)...);
+    return tree.size();
+  }
+  void VisitExpandedChildren(Id id, const Node::Visitor &cb, bool first=true) {
+    auto n = &tree[id-1];
+    if (!first) cb(id, n);
+    if (n->expanded) for (auto i : n->child) VisitExpandedChildren(i, cb, false);
+  }
+};
+
+struct Editor : public TextView {
   struct LineOffset { 
     long long offset;
     int size, wrapped_lines;
@@ -455,8 +502,6 @@ struct Editor : public TextArea {
   Line *cursor_line=0;
   LineOffset *cursor_offset=0;
   vector<pair<int,int>> annotation;
-  int last_fb_width=0, last_fb_lines=0, last_first_line=0;
-  int wrapped_lines=0, fb_wrapped_lines=0;
   int cursor_line_number=0, cursor_line_number_offset=0;
   bool opened=0;
   IDE::Project *project=0;
@@ -473,15 +518,14 @@ struct Editor : public TextArea {
   void HistUp();
   void HistDown();
   void SelectionCB(const Selection::Point&);
+  bool Empty() const { return !file_line.size(); }
+  void UpdateMapping(int cur_font_size, int width);
+  int UpdateMappedLines(pair<int, int>, int, int, bool, bool, bool, bool, bool);
+  int UpdateLines(float vs, int *first_ind, int *first_offset, int *first_len);
 
-  int WrappedLines() const { return wrapped_lines; }
   int CursorLineSize() const { return cursor_line ? cursor_line->Size() : 0; }
   void ToggleShouldWrap() { SetShouldWrap(!line_fb.wrap); }
   void SetShouldWrap(bool);
-  void UpdateWrappedLines(int cur_font_size, int width);
-  void Reload() { last_fb_width=0; wrapped_lines=0; RefreshLines(); }
-  int RefreshLines() { last_fb_lines=0; return UpdateLines(last_v_scrolled, 0, 0, 0); }
-  int UpdateLines(float v_scrolled, int *first_ind, int *first_offset, int *first_len);
   void UpdateCursor();
   void UpdateCursorLine();
   void UpdateCursorX(int x);
@@ -575,7 +619,7 @@ struct Terminal : public TextArea {
   void TabNext(int n);
   void TabPrev(int n);
   void Clear();
-  void Redraw(bool attach=true);
+  void Redraw(bool attach=true, bool relayout=false);
   void Reset();
 };
 
@@ -656,8 +700,8 @@ template <class D=Dialog> struct TabbedDialog {
   D *FirstTab() const { return tab_list.size() ? dynamic_cast<D*>(tab_list.begin()->dialog) : 0; }
   void AddTab(D *t) { tabs.insert(t); tab_list.emplace_back(t); SelectTab(t); }
   void DelTab(D *t) { tabs.erase(t); VectorEraseByValue(&tab_list, DialogTab(t)); ReleaseTab(t); }
-  void SelectTab(D *t) { (top = t)->TakeFocus(); gui->mouse.child_controller = &top->mouse; }
-  void ReleaseTab(D *t) { if (top == t) { top=0; t->LoseFocus(); if ((top = FirstTab())) SelectTab(top); } }
+  void SelectTab(D *t) { if ((gui->child_gui = top = t)) t->TakeFocus(); }
+  void ReleaseTab(D *t) { if (top == t) { top=0; t->LoseFocus(); SelectTab(FirstTab()); } }
   void Draw() { DialogTab::Draw(box, tab_dim, tab_list); if (top) top->Draw(); }
   void Layout() {
     for (auto b=tab_list.begin(), e=tab_list.end(), t=b; t != e; ++t)
@@ -697,6 +741,14 @@ struct FlagSliderDialog : public SliderDialog {
   FlagMap *flag_map;
   FlagSliderDialog(GraphicsDevice *d, const string &fn, float total=100, float inc=1);
   virtual void Updated(Widget::Slider *s) { flag_map->Set(flag_name, StrCat(s->Percent())); }
+};
+
+struct PropertyTreeDialog : public Dialog {
+  PropertyTree tree;
+  Widget::Slider v_scrollbar, h_scrollbar;
+  PropertyTreeDialog(GraphicsDevice *d, const FontRef &F, float w=.5, float h=.5);
+  void Layout();
+  void Draw();
 };
 
 struct EditorDialog : public Dialog {
