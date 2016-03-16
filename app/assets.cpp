@@ -666,7 +666,7 @@ void BoxTopLeftOutline::Draw(const LFL::Box &b, const Drawable::Attr *attr) cons
   if (line_width <= 1) {
     static int verts_ind = -1;
     float verts[] = { /*1*/ float(b.x), float(b.y),     /*2*/ float(b.x),     float(b.y+b.h),
-                      /*2*/ float(b.x), float(b.y+b.h), /*4*/ float(b.x+b.w), float(b.y) };
+                      /*2*/ float(b.x), float(b.y+b.h), /*3*/ float(b.x+b.w), float(b.y+b.h) };
     screen->gd->VertexPointer(2, GraphicsDevice::Float, 0, 0, verts, sizeof(verts), &verts_ind, true);
     screen->gd->DrawArrays(GraphicsDevice::Lines, 0, 4);
   } else {
@@ -702,7 +702,7 @@ void BoxBottomRightOutline::Draw(const LFL::Box &b, const Drawable::Attr *attr) 
       /*4.2*/ float(b.x),        float(b.y),        /*4.1*/ float(b.x-lw),     float(b.y-lw)
     };
     screen->gd->VertexPointer(2, GraphicsDevice::Float, 0, 0, verts, sizeof(verts), &verts_ind, true);
-    screen->gd->DrawArrays(GraphicsDevice::TriangleStrip, 0, 16);
+    screen->gd->DrawArrays(GraphicsDevice::TriangleStrip, 0, 8);
   }
 }
 

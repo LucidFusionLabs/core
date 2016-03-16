@@ -90,7 +90,7 @@ struct Widget {
     Color *solid=0, *outline=0, *outline_topleft=0, *outline_bottomright=0;
     MouseControllerCallback cb;
     bool init=0, hover=0;
-    int decay=0, v_align=VAlign::Center, v_offset=0;
+    int decay=0, v_align=VAlign::Center, v_offset=0, outline_w=3;
     Button() : Interface(0) {}
     Button(GUI *G, Drawable *I, const string &T, const MouseControllerCallback &CB)
       : Interface(G), text(T), image(I), cb(CB), init(1) {}
@@ -109,17 +109,17 @@ struct Widget {
   struct Slider : public Interface {
     struct Flag { enum { Attached=1, Horizontal=2, NoCorner=4, AttachedHorizontal=Attached|Horizontal,
       AttachedNoCorner=Attached|NoCorner, AttachedHorizontalNoCorner=AttachedHorizontal|NoCorner }; };
-    Box win;
-    int flag=0, doc_height=200, dot_size=15;
+    Box track;
+    int flag=0, doc_height=200, dot_size=15, outline_w=1;
     float scrolled=0, last_scrolled=0, increment=20;
-    Color color=Color(15, 15, 15, 55);
+    Color color=Color(15, 15, 15, 55), *outline_topleft=&Color::grey80, *outline_bottomright=&Color::grey50;
     Font *menuicon=0;
     bool dragging=0, dirty=0;
     virtual ~Slider() {}
     Slider(GUI *Gui, int f=Flag::Attached);
 
     float Percent() const { return scrolled * doc_height; }
-    void LayoutFixed(const Box &w) { win = w; Layout(dot_size, dot_size, flag & Flag::Horizontal); }
+    void LayoutFixed(const Box &w) { track = w; Layout(dot_size, dot_size, flag & Flag::Horizontal); }
     void LayoutAttached(const Box &w);
     void Layout(int aw, int ah, bool flip);
     void Update(bool force=false);
@@ -372,7 +372,7 @@ struct TextArea : public TextBox {
   Lines line;
   LinesFrameBuffer line_fb;
   Time write_last=Time(0);
-  bool wrap_lines=1, write_timestamp=0, write_newline=1, reverse_line_fb=0;
+  bool wrap_lines=1, write_timestamp=0, write_newline=1, reverse_line_fb=0, cursor_enabled=1;
   int line_left=0, end_line_adjust=0, start_line_cutoff=0, end_line_cutoff=0;
   int scroll_inc=10, scrolled_lines=0;
   float v_scrolled=0, h_scrolled=0, last_v_scrolled=0, last_h_scrolled=0;
@@ -444,11 +444,13 @@ struct PropertyTree : public TextView {
   typedef size_t Id;
   typedef vector<Id> Children;
   struct Node {
-    typedef function<void(Id, Node*)> Visitor;
+    typedef function<void(Id, Node*, int)> Visitor;
     Drawable *icon;
-    string text;
+    string text, val;
     Children child;
-    bool expanded=0;
+    bool control=1, expanded=0;
+    int depth=0;
+    Node(Drawable *I, const string &T, const string &V, bool C=1) : icon(I), text(T), val(V), control(C) {}
     Node(Drawable *I=0, const string &T=string(), const Children &C=Children()) : icon(I), text(T), child(C) {}
   };
   struct NodeIndex {
@@ -460,28 +462,31 @@ struct PropertyTree : public TextView {
   typedef PrefixSumKeyedRedBlackTree<int, NodeIndex> LineMap;
 
   Id root=0;
-  vector<Node> tree;
+  FreeListVector<Node> tree;
   LineMap property_line;
-  FontRef menuicon;
+  FontRef menuicon_white, menuicon_black;
   PropertyTree(GraphicsDevice *D, const FontRef &F=FontRef());
+  
+  void SetRoot(Id id) { root=id; tree[root-1].expanded=true; }
+  template <class... Args> Id AddNode(Args&&... args) { return 1+tree.Insert(Node(forward<Args>(args)...)); }
+  virtual void VisitExpandedChildren(Id id, const Node::Visitor &cb, int depth=0);
+  virtual void HandleCollapsed(Id id) {}
 
   bool Empty() const { return !property_line.size(); }
   void UpdateMapping(int cur_font_size, int width);
   int UpdateMappedLines(pair<int, int>, int, int, bool, bool, bool, bool, bool);
   void LayoutLine(Line *L, const NodeIndex &n, const point &p);
-  void HandleNodeControlClicked(Id id);
+  void HandleNodeControlClicked(Id id, int b, int x, int y, int down);
   void SelectionCB(const Selection::Point &p);
+};
 
-  void SetRoot(Id id) { root=id; tree[root-1].expanded=true; }
-  template <class... Args> Id AddNode(Args&&... args) {
-    tree.emplace_back(forward<Args>(args)...);
-    return tree.size();
-  }
-  void VisitExpandedChildren(Id id, const Node::Visitor &cb, bool first=true) {
-    auto n = &tree[id-1];
-    if (!first) cb(id, n);
-    if (n->expanded) for (auto i : n->child) VisitExpandedChildren(i, cb, false);
-  }
+struct DirectoryTree : public PropertyTree {
+  using PropertyTree::PropertyTree;
+  void Open(const string &p) { tree.Clear(); SetRoot(AddDir(p)); Reload(); }
+  Id AddDir (const string &p) { return AddNode(menuicon_white->FindGlyph(13), BaseName(StringPiece(p.data(), p.size()?p.size()-1:0)), p); }
+  Id AddFile(const string &p) { return AddNode(menuicon_white->FindGlyph(14), BaseName(p), p, 0); }
+  virtual void VisitExpandedChildren(Id id, const Node::Visitor &cb, int depth=0);
+  virtual void HandleCollapsed(Id id) { tree.Erase(id-1); }
 };
 
 struct Editor : public TextView {
@@ -506,8 +511,9 @@ struct Editor : public TextView {
   bool opened=0;
   IDE::Project *project=0;
   unique_ptr<IDE::File> ide_file;
-  Editor(GraphicsDevice *D, const FontRef &F=FontRef(), File *I=0, bool Wrap=0);
+  Editor(GraphicsDevice *D, const FontRef &F=FontRef(), File *I=0);
 
+  bool Init(File *I) { return (opened = (file = shared_ptr<File>(I)) && I->Opened()); }
   void Input(char k)  { Modify(false, k); }
   void Enter()        { Modify(false, '\r'); }
   void Erase()        { Modify(true,  0); }
@@ -557,7 +563,7 @@ struct Terminal : public TextArea {
   int scroll_region_beg=0, scroll_region_end=0, tab_width=8;
   string parse_text, parse_csi, parse_osc;
   unsigned char parse_charset=0;
-  bool parse_osc_escape=0, cursor_enabled=1, first_resize=1;
+  bool parse_osc_escape=0, first_resize=1;
   point term_cursor=point(1,1), saved_term_cursor=point(1,1);
   LinesFrameBuffer::FromLineCB fb_cb;
   LinesFrameBuffer *last_fb=0;
@@ -688,25 +694,29 @@ struct DialogTab {
   static void Draw(const Box &b, const point &tab_dim, const vector<DialogTab>&);
 };
 
-template <class D=Dialog> struct TabbedDialog {
+struct TabbedDialogInterface {
   GUI *gui;
   Box box;
-  D *top=0;
   point tab_dim;
-  unordered_set<D*> tabs;
   vector<DialogTab> tab_list;
-  TabbedDialog(GUI *g, const point &d=point(200,16)) : gui(g), tab_dim(d) {}
+  TabbedDialogInterface(GUI *g, const point &d=point(200,16)) : gui(g), tab_dim(d) {}
+  virtual void Draw() { DialogTab::Draw(box, tab_dim, tab_list); }
+  virtual void Layout() {
+    for (auto b=tab_list.begin(), e=tab_list.end(), t=b; t != e; ++t)
+      t->dialog->LayoutTabbed(t-b, box, tab_dim, &gui->mouse, &t->child_box);
+  }
+};
 
+template <class D=Dialog> struct TabbedDialog : public TabbedDialogInterface {
+  D *top=0;
+  unordered_set<D*> tabs;
+  using TabbedDialogInterface::TabbedDialogInterface;
   D *FirstTab() const { return tab_list.size() ? dynamic_cast<D*>(tab_list.begin()->dialog) : 0; }
   void AddTab(D *t) { tabs.insert(t); tab_list.emplace_back(t); SelectTab(t); }
   void DelTab(D *t) { tabs.erase(t); VectorEraseByValue(&tab_list, DialogTab(t)); ReleaseTab(t); }
   void SelectTab(D *t) { if ((gui->child_gui = top = t)) t->TakeFocus(); }
   void ReleaseTab(D *t) { if (top == t) { top=0; t->LoseFocus(); SelectTab(FirstTab()); } }
-  void Draw() { DialogTab::Draw(box, tab_dim, tab_list); if (top) top->Draw(); }
-  void Layout() {
-    for (auto b=tab_list.begin(), e=tab_list.end(), t=b; t != e; ++t)
-      t->dialog->LayoutTabbed(t-b, box, tab_dim, &gui->mouse, &t->child_box);
-  }
+  void Draw() { TabbedDialogInterface::Draw(); if (top) top->Draw(); }
 };
 
 struct MessageBoxDialog : public Dialog {
@@ -743,23 +753,45 @@ struct FlagSliderDialog : public SliderDialog {
   virtual void Updated(Widget::Slider *s) { flag_map->Set(flag_name, StrCat(s->Percent())); }
 };
 
-struct PropertyTreeDialog : public Dialog {
-  PropertyTree tree;
+template <class X> struct TextViewDialogT  : public Dialog {
+  X view;
   Widget::Slider v_scrollbar, h_scrollbar;
-  PropertyTreeDialog(GraphicsDevice *d, const FontRef &F, float w=.5, float h=.5);
-  void Layout();
-  void Draw();
+  TextViewDialogT(GraphicsDevice *D, const FontRef &F, float w=0.5, float h=.5, int flag=0) :
+    Dialog(D, w, h, flag), view(D, F), v_scrollbar(this, Widget::Slider::Flag::AttachedNoCorner),
+    h_scrollbar(this, Widget::Slider::Flag::AttachedHorizontalNoCorner) { child_gui = &view; }
+  void Layout() {
+    Dialog::Layout();
+    Widget::Slider::AttachContentBox(&content, &v_scrollbar, view.Wrap() ? nullptr : &h_scrollbar);
+  }
+  void Draw() { 
+    bool wrap = view.Wrap();
+    if (1)     view.v_scrolled = v_scrollbar.AddScrollDelta(view.v_scrolled);
+    if (!wrap) view.h_scrolled = h_scrollbar.AddScrollDelta(view.h_scrolled);
+    if (1)     view.UpdateScrolled();
+    if (1)     Dialog::Draw();
+    if (1)     view.Draw(content + box.TopLeft(), TextArea::DrawFlag::CheckResized |
+                         (view.cursor_enabled ? Editor::DrawFlag::DrawCursor : 0));
+    if (1)     v_scrollbar.Update();
+    if (!wrap) h_scrollbar.Update();
+  }
 };
 
-struct EditorDialog : public Dialog {
+struct PropertyTreeDialog : public TextViewDialogT<PropertyTree> {
+  using TextViewDialogT::TextViewDialogT;
+};
+
+struct DirectoryTreeDialog : public TextViewDialogT<DirectoryTree> {
+  using TextViewDialogT::TextViewDialogT;
+};
+
+struct EditorDialog : public TextViewDialogT<Editor> {
   struct Flag { enum { Wrap=Dialog::Flag::Next }; };
-  Editor editor;
-  Widget::Slider v_scrollbar, h_scrollbar;
-  EditorDialog(GraphicsDevice *d, const FontRef &F, File *I, float w=.5, float h=.5, int flag=0);
-  void Layout();
-  void Draw();
-  void TakeFocus() { editor.Activate(); }
-  void LoseFocus() { editor.Deactivate(); }
+  EditorDialog(GraphicsDevice *d, const FontRef &F, File *I, float w=.5, float h=.5, int flag=0) : TextViewDialogT(d, F, w, h, flag) {
+    if (I) { title_text = BaseName(I->Filename()); view.Init(I); }
+    view.line_fb.wrap = flag & Flag::Wrap; 
+  }
+  void TakeFocus() { view.Activate(); }
+  void LoseFocus() { view.Deactivate(); }
 };
 
 struct HelperGUI : public GUI {

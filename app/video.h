@@ -119,6 +119,7 @@ struct Light { v4 pos; Material color; };
 struct Border {
   int top, right, bottom, left;
   Border() : top(0), right(0), bottom(0), left(0) {}
+  Border(int S) : top(S), right(S), bottom(S), left(S) {}
   Border(int T, int R, int B, int L) : top(T), right(R), bottom(B), left(L) {}
   Border &operator+=(const Border &v) { top+=v.top; right+=v.right; bottom+=v.bottom; left+=v.left; return *this; }
   Border &operator-=(const Border &v) { top-=v.top; right-=v.right; bottom-=v.bottom; left-=v.left; return *this; }
@@ -233,8 +234,8 @@ struct Drawable {
     const LFL::Box *scissor=0;
     bool underline=0, overline=0, midline=0, blink=0, blend=0;
     int line_width=1;
-    constexpr Attr(Font *F=0, const Color *FG=0, const Color *BG=0, bool UL=0, bool B=0) : font(F), fg(FG), bg(BG), underline(UL), blend(B) {}
-    constexpr Attr(const Texture *T, const Color *FG=0, const Color *BG=0, bool UL=0, bool B=0) : fg(FG), bg(BG), tex(T), underline(UL), blend(B) {}
+    constexpr Attr(Font *F=0, const Color *FG=0, const Color *BG=0, bool UL=0, bool B=0, int LW=1) : font(F), fg(FG), bg(BG), underline(UL), blend(B), line_width(LW) {}
+    constexpr Attr(const Texture *T, const Color *FG=0, const Color *BG=0, bool UL=0, bool B=0, int LW=1) : fg(FG), bg(BG), tex(T), underline(UL), blend(B), line_width(LW) {}
     bool operator==(const Attr &y) const { return font==y.font && fg==y.fg && bg==y.bg && tex==y.tex && scissor==y.scissor && underline==y.underline && overline==y.overline && midline==y.midline && blink==y.blink && blend == y.blend; }
     bool operator!=(const Attr &y) const { return !(*this == y); }
     void Clear() { font=0; fg=bg=0; tex=0; scissor=0; underline=overline=midline=blink=0; }

@@ -955,7 +955,9 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
     gplus_accept        (this, 0, "accept",     MouseController::CB([&](){ AndroidGPlusAccept(); })),
 #endif
     browser(this, box), particles("GameMenuParticles") {
-    tab1.outline = tab2.outline = tab3.outline = tab4.outline = tab1_server_start.outline = tab2_server_join.outline = sub_tab1.outline = sub_tab2.outline = sub_tab3.outline = &bright_font->fg;
+    tab1.outline_topleft = tab2.outline_topleft = tab3.outline_topleft = tab4.outline_topleft = tab1_server_start.outline_topleft = tab2_server_join.outline_topleft = sub_tab1.outline_topleft = sub_tab2.outline_topleft = sub_tab3.outline_topleft = &Color::grey80;
+    tab1.outline_bottomright = tab2.outline_bottomright = tab3.outline_bottomright = tab4.outline_bottomright = tab1_server_start.outline_bottomright = tab2_server_join.outline_bottomright = sub_tab1.outline_bottomright = sub_tab2.outline_bottomright = sub_tab3.outline_bottomright = &Color::grey40;
+    
     tab1_options.dot_size = tab2_servers.dot_size = tab3_sensitivity.dot_size = tab3_volume.dot_size = 25;
     Layout();
     tab3_player_name.cursor.type         = tab2_server_address.cursor.type         = TextBox::Cursor::Underline;
@@ -1062,9 +1064,9 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
     mobile_font.desc = FontDesc("MobileAtlas", "", 0, Color::white);
     CHECK(mobile_font.Load());
 #endif
-    topbar.box = screen->Box(0, .95, 1, .05);
-    titlewin   = screen->Box(.15, .9, .7, .05); 
-    box        = screen->Box(.15, .4, .7, .5);
+    topbar.box = Box::DelBorder(screen->Box(0, .95, 1, .05), Border(1,1,1,1));
+    titlewin   = Box::DelBorder(screen->Box(.15, .9, .7, .05), Border(1,1,1,1)); 
+    box        = Box::DelBorder(screen->Box(.15, .4, .7, .5), Border(1,1,1,1));
     menuhdr    = Box (box.x, box.y+box.h-font->Height(), box.w, font->Height());
     menuftr1   = Box (box.x, box.y+font->Height()*4, box.w, box.h-font->Height()*5);
     menuftr2   = Box (box.x, box.y+font->Height()*4, box.w, box.h-font->Height()*6);
@@ -1224,7 +1226,8 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
       title->tex.Draw(titlewin);
       screen->gd->EnableBlend();
       screen->gd->SetColor(font->fg);
-      BoxOutline().Draw(titlewin);
+      screen->gd->SetColor(Color::grey80); BoxTopLeftOutline    ().Draw(titlewin);
+      screen->gd->SetColor(Color::grey40); BoxBottomRightOutline().Draw(titlewin);
     }
 
     GUI::Draw();
@@ -1240,7 +1243,10 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
       particles.Draw(screen->gd);
     }
 
-    if (selected) BoxOutline().Draw(box);
+    if (selected) {
+      screen->gd->SetColor(Color::grey80); BoxTopLeftOutline    ().Draw(box);
+      screen->gd->SetColor(Color::grey40); BoxBottomRightOutline().Draw(box);
+    }
     if (decay_box_line >= 0 && decay_box_line < child_box.line.size() && decay_box_left > 0) {
       BoxOutline().Draw(child_box.line[decay_box_line] + box.TopLeft());
       decay_box_left--;
@@ -1310,6 +1316,8 @@ struct GamePlayerListGUI : public GUI {
     outgeom1.Draw(out1.TopLeft());
     outgeom2.Draw(out2.TopLeft());
     font->Draw(titletext, Box(win.x, win.top()-font->Height(), win.w, font->Height()), 0, Font::DrawFlag::AlignCenter);
+    screen->gd->SetColor(Color::grey60); BoxTopLeftOutline    ().Draw(win);
+    screen->gd->SetColor(Color::grey20); BoxBottomRightOutline().Draw(win);
   }
 
   void LayoutLine(Flow *flow, const string &name, const string &score, const string &ping) {

@@ -358,7 +358,9 @@ DirectoryIter::DirectoryIter(const string &path, int dirs, const char *Pref, con
 
   _findclose(h);
 #else /* LFL_WINDOWS */
-  DIR *dir; dirent *dent; string dirname=path;
+  DIR *dir;
+  dirent *dent;
+  string dirname = path;
   if (dirname.empty()) dirname = ".";
   if (dirname.size() > 1 && dirname[dirname.size()-1] == '/') dirname.erase(dirname.size()-1);
   if (!(dir = opendir(dirname.c_str()))) return;

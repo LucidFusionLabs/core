@@ -50,7 +50,7 @@ int PngReader::Read(File *lf, Texture *out) {
     case PNG_COLOR_TYPE_RGB:
                                     if (opf == Pixel::RGBA || opf == Pixel::BGRA) png_set_filler(png_ptr, 0xff, PNG_FILLER_AFTER);
     case PNG_COLOR_TYPE_RGBA: 
-                                    // if (opf == Pixel::BGRA || opf == Pixel::BGR24) png_set_bgr(png_ptr);
+                                    if (opf == Pixel::BGRA || opf == Pixel::BGR24) png_set_bgr(png_ptr);
                                     break;
     default: FATAL("unknown png_get_color_type ", color_type);
   }

@@ -86,7 +86,7 @@ void Widget::Button::LayoutComplete(Flow *flow, Font *f, const Box &b) {
     flow->out->PushBack(box, flow->cur_attr, Singleton<BoxOutline>::Get());
   } else if (outline_topleft || outline_bottomright) {
     flow->SetFont(0);
-    flow->cur_attr.line_width=3;
+    flow->cur_attr.line_width = outline_w;
     if (outline_topleft) {
       flow->SetFGColor(outline_topleft);
       flow->out->PushBack(box, flow->cur_attr, Singleton<BoxTopLeftOutline>::Get());
@@ -114,33 +114,42 @@ void Widget::Button::LayoutComplete(Flow *flow, Font *f, const Box &b) {
 
 Widget::Slider::Slider(GUI *Gui, int f) : Interface(Gui), flag(f),
   menuicon(app->fonts->Get("MenuAtlas", "", 0, Color::white, Color::clear, 0)) {
-  if (win.w && win.h) { if (f & Flag::Attached) LayoutAttached(win); else LayoutFixed(win); }
+  if (track.w && track.h) { if (f & Flag::Attached) LayoutAttached(track); else LayoutFixed(track); }
 }
 
 void Widget::Slider::LayoutAttached(const Box &w) {
-  win = w;
+  track = w;
   int aw = dot_size, ah = dot_size;
   bool flip = flag & Flag::Horizontal;
-  if (flip) win.h = ah;
-  else { win.x += win.w - aw; win.w = aw; }
+  if (flip) track.h = ah;
+  else { track.x += track.w - aw; track.w = aw; }
   if (flag & Flag::NoCorner) {
-    if (flip) win.w -= aw;
-    else { win.h -= ah; win.y += ah; }
+    if (flip) track.w -= aw;
+    else { track.h -= ah; track.y += ah; }
   }
   Layout(aw, ah, flip);
 }
 
-void Widget::Slider::Layout(int aw, int ah, bool flip) {
-  Box arrow_down = win;
-  if (flip) { arrow_down.w = aw; win.x += aw; }
-  else      { arrow_down.h = ah; win.y += ah; }
+void Widget::Slider::Layout(int, int, bool flip) {
+  if (gui && outline_topleft && outline_bottomright) {
+    track.DelBorder(Border(outline_w, 0, 0, outline_w));
+    int attr_id = gui->child_box.attr.GetAttrId(Drawable::Attr(NullPointer<Font>(), outline_topleft, nullptr, false, true, outline_w));
+    gui->child_box.PushBack(track, attr_id, Singleton<BoxTopLeftOutline>::Get());
+    attr_id = gui->child_box.attr.GetAttrId(Drawable::Attr(NullPointer<Font>(), outline_bottomright, nullptr, false, true, outline_w));
+    gui->child_box.PushBack(track, attr_id, Singleton<BoxBottomRightOutline>::Get());
+    track.DelBorder(Border(0, outline_w, outline_w, 0));
+  }
 
-  Box scroll_dot = arrow_down, arrow_up = win;
-  if (flip) { arrow_up.w = aw; win.w -= 2*aw; arrow_up.x += win.w; }
-  else      { arrow_up.h = ah; win.h -= 2*ah; arrow_up.y += win.h; }
+  Box arrow_down = track;
+  if (flip) { arrow_down.w = track.h; track.x += track.h; }
+  else      { arrow_down.h = track.w; track.y += track.w; }
+
+  Box scroll_dot = arrow_down, arrow_up = track;
+  if (flip) { arrow_up.w = track.h; track.w -= 2*track.h; arrow_up.x += track.w; }
+  else      { arrow_up.h = track.w; track.h -= 2*track.w; arrow_up.y += track.h; }
 
   if (gui) {
-    int attr_id = gui->child_box.attr.GetAttrId(Drawable::Attr(menuicon, NULL, NULL, false, true));
+    int attr_id = gui->child_box.attr.GetAttrId(Drawable::Attr(menuicon, &Color::white, nullptr, false, true));
     gui->child_box.PushBack(arrow_up,   attr_id, menuicon ? menuicon->FindGlyph(flip ? 2 : 4) : 0);
     gui->child_box.PushBack(arrow_down, attr_id, menuicon ? menuicon->FindGlyph(flip ? 3 : 1) : 0);
     gui->child_box.PushBack(scroll_dot, attr_id, menuicon ? menuicon->FindGlyph(           5) : 0, &drawbox_ind);
@@ -158,11 +167,11 @@ void Widget::Slider::Update(bool force) {
   bool flip = flag & Flag::Horizontal;
   int aw = dot_size, ah = dot_size;
   if (dragging) {
-    if (flip) scrolled = Clamp(    float(gui->RelativePosition(screen->mouse).x - win.x) / win.w, 0, 1);
-    else      scrolled = Clamp(1 - float(gui->RelativePosition(screen->mouse).y - win.y) / win.h, 0, 1);
+    if (flip) scrolled = Clamp(    float(gui->RelativePosition(screen->mouse).x - track.x) / track.w, 0, 1);
+    else      scrolled = Clamp(1 - float(gui->RelativePosition(screen->mouse).y - track.y) / track.h, 0, 1);
   }
-  if (flip) gui->UpdateBoxX(win.x          + int((win.w - aw) * scrolled), drawbox_ind, IndexOrDefault(hitbox, 0, -1));
-  else      gui->UpdateBoxY(win.top() - ah - int((win.h - ah) * scrolled), drawbox_ind, IndexOrDefault(hitbox, 0, -1));
+  if (flip) gui->UpdateBoxX(track.x          + int((track.w - aw) * scrolled), drawbox_ind, IndexOrDefault(hitbox, 0, -1));
+  else      gui->UpdateBoxY(track.top() - ah - int((track.h - ah) * scrolled), drawbox_ind, IndexOrDefault(hitbox, 0, -1));
   dirty = false;
 }
 
@@ -895,7 +904,9 @@ int TextView::UpdateLines(float vs, int *first_ind, int *first_offset, int *firs
 /* PropertyTree */
 
 PropertyTree::PropertyTree(GraphicsDevice *D, const FontRef &F) : TextView(D, F),
-menuicon(FontDesc("MenuAtlas", "", 0, Color::black, Color::clear, 0, 0, FontDesc::Engine::Atlas)) {
+menuicon_white(FontDesc("MenuAtlas", "", 0, Color::white, Color::clear, 0, 0, FontDesc::Engine::Atlas)),
+menuicon_black(FontDesc("MenuAtlas", "", 0, Color::black, Color::clear, 0, 0, FontDesc::Engine::Atlas)) {
+  cursor_enabled = 0;
   reverse_line_fb = 1;
   cmd_color = Color(Color::black, .5);
   property_line.node_value_cb = &NodeIndex::GetLines;
@@ -905,11 +916,17 @@ menuicon(FontDesc("MenuAtlas", "", 0, Color::black, Color::clear, 0, 0, FontDesc
   Activate();
 }
 
+void PropertyTree::VisitExpandedChildren(Id id, const Node::Visitor &cb, int depth) {
+  auto n = &tree[id-1];
+  if (depth) cb(id, n, depth);
+  if (n->expanded) for (auto i : n->child) VisitExpandedChildren(i, cb, 1+(depth ? depth : n->depth));
+}
+
 void PropertyTree::UpdateMapping(int cur_font_size, int width) {
   wrapped_lines = 0;
   property_line.Clear();
-  VisitExpandedChildren
-    (root, [&](Id id, Node *n){ property_line.val.Insert(NodeIndex(id)); wrapped_lines++; });
+  VisitExpandedChildren(root, [&](Id id, Node *n, int d)
+   { tree[id-1].depth=d-1; property_line.val.Insert(NodeIndex(id)); wrapped_lines++; });
   property_line.LoadFromSortedVal();
 }
 
@@ -933,41 +950,75 @@ void PropertyTree::LayoutLine(Line *L, const NodeIndex &ni, const point &p) {
   Flow *flow = &L->data->flow;
   flow->layout.wrap_lines = 0;
 
-  Box control(0, -font->ascender, 12, 12);
-  int control_attr_id = flow->out->attr.GetAttrId(Drawable::Attr(menuicon, NULL, NULL, false, true));
-  flow->out->PushBack(control, control_attr_id, menuicon->FindGlyph(n->expanded ? 11 : 12));
-  auto i = Insert(L->data->controls, 0, make_shared<Control>
-                  (L, this, control + p, "", MouseControllerCallback
-                   (MouseController::CB(bind(&PropertyTree::HandleNodeControlClicked, this, ni.id)), true)));
+  int fw = font->max_width;
+  Box control(2 + fw * n->depth, -font->ascender, fw, fw);
 
-  flow->p.x += control.w;
+  if (n->control) {
+    int control_attr_id = flow->out->attr.GetAttrId(Drawable::Attr(menuicon_black, NULL, NULL, false, true));
+    flow->out->PushBack(control, control_attr_id, menuicon_black->FindGlyph(n->expanded ? 11 : 12));
+    auto i = Insert(L->data->controls, 0, make_shared<Control>
+                    (L, this, control + p, "", MouseControllerCallback(MouseController::CoordCB
+                      (bind(&PropertyTree::HandleNodeControlClicked, this, ni.id, _1, _2, _3, _4)), true)));
+  }
+
+  if (n->icon) {
+    int icon_attr_id = flow->out->attr.GetAttrId(Drawable::Attr(menuicon_white, NULL, NULL, false, false));
+    flow->out->PushBack(control + point(fw + fw/2, 0), icon_attr_id, n->icon);
+  }
+  flow->p.x += control.right() + (n->icon ? 2*fw : fw/2);
   flow->SetFont(font);
   flow->AppendText(n->text);
 }
 
-void PropertyTree::HandleNodeControlClicked(Id id) {
-  if (!app->input->MouseButton1Down()) return;
+void PropertyTree::HandleNodeControlClicked(Id id, int b, int x, int y, int down) {
+  if (!down) return;
   auto n = &tree[id-1];
-  n->expanded = !n->expanded;
+  int fh = font->Height(), line_no = 1 + last_first_line + ((box.top() - y) / fh), depth = n->depth, added = 0;
+  if ((n->expanded = !n->expanded)) {
+    VisitExpandedChildren(id, [&](Id id, Node *n, int d){
+      tree[id-1].depth = d;
+      property_line.Insert(line_no + added++, NodeIndex(id));
+      wrapped_lines = AddWrappedLines(wrapped_lines, 1);
+    });
+  } else {
+    while (auto li = property_line.LesserBound(line_no).val) {
+      if (tree[li->id-1].depth <= depth) break;
+      HandleCollapsed(li->id);
+      property_line.Erase(line_no);
+      wrapped_lines = AddWrappedLines(wrapped_lines, -1);
+    }
+  }
   RefreshLines();
   Redraw();
 }
 
-void PropertyTree::SelectionCB(const Selection::Point &p) {
+void PropertyTree::SelectionCB(const Selection::Point &p) {}
+
+/* DirectoryTree */
+
+void DirectoryTree::VisitExpandedChildren(Id id, const Node::Visitor &cb, int depth) {
+  auto n = &tree[id-1];
+  if (depth) cb(id, n, depth);
+  else depth = n->depth;
+  if (!n->expanded) return;
+  string dirname = n->val;
+  DirectoryIter dir(dirname, -1);
+  while(const char *fn = dir.Next()) {
+    string pn = StrCat(dirname, fn);
+    VisitExpandedChildren(pn.back() == '/' ? AddDir(pn) : AddFile(pn), cb, 1+depth);
+  }
 }
 
 /* Editor */
 
-Editor::Editor(GraphicsDevice *D, const FontRef &F, File *I, bool Wrap) :
-  TextView(D, F), file(I), cursor_line(&line[-1]) {
+Editor::Editor(GraphicsDevice *D, const FontRef &F, File *I) : TextView(D, F), cursor_line(&line[-1]) {
   reverse_line_fb = 1;
-  opened = file && file->Opened();
   cmd_color = Color(Color::black, .5);
-  line_fb.wrap = Wrap;
   file_line.node_value_cb = &LineOffset::GetLines;
   file_line.node_print_cb = &LineOffset::GetString;
   edits.free_func = [](String16 *v) { v->clear(); };
   selection_cb = bind(&Editor::SelectionCB, this, _1);
+  if (I) Init(I);
 }
 
 void Editor::SetShouldWrap(bool w) {
@@ -1763,7 +1814,7 @@ void Dialog::LayoutTabbed(int tab, const Box &b, const point &tab_dim, MouseCont
   fullscreen = tabbed = true;
   box = b;
   Layout();
-  LayoutTitle(Box(tab*tab_dim.x, 0, tab_dim.x, tab_dim.y), oc, od);
+  LayoutTitle(Box(box.x+tab*tab_dim.x, 0, tab_dim.x, tab_dim.y), oc, od);
 }
 
 void Dialog::Layout() {
@@ -1866,51 +1917,12 @@ SliderDialog::SliderDialog(GraphicsDevice *d, const string &t, const SliderDialo
 FlagSliderDialog::FlagSliderDialog(GraphicsDevice *d, const string &fn, float total, float inc) :
   SliderDialog(d, fn, bind(&FlagSliderDialog::Updated, this, _1), atof(Singleton<FlagMap>::Get()->Get(fn)) / total, total, inc),
   flag_name(fn), flag_map(Singleton<FlagMap>::Get()) {}
-  
-PropertyTreeDialog::PropertyTreeDialog(GraphicsDevice *D, const FontRef &F, float w, float h) :
-  Dialog(D, w, h), tree(D, F), v_scrollbar(this, Widget::Slider::Flag::AttachedNoCorner),
-  h_scrollbar(this, Widget::Slider::Flag::AttachedHorizontalNoCorner) { child_gui = &tree; }
-  
-void PropertyTreeDialog::Layout() {
-  Dialog::Layout();
-  Widget::Slider::AttachContentBox(&content, &v_scrollbar, &h_scrollbar);
-}
-
-void PropertyTreeDialog::Draw() {
-  tree.v_scrolled = v_scrollbar.AddScrollDelta(tree.v_scrolled);
-  tree.h_scrolled = h_scrollbar.AddScrollDelta(tree.h_scrolled);
-  tree.UpdateScrolled();
-  Dialog::Draw();
-  tree.Draw(content + box.TopLeft(), TextArea::DrawFlag::CheckResized);
-  v_scrollbar.Update();
-  h_scrollbar.Update();
-}
-
-EditorDialog::EditorDialog(GraphicsDevice *D, const FontRef &F, File *I, float w, float h, int flag) :
-  Dialog(D, w, h, flag), editor(D, F, I, flag & Flag::Wrap), v_scrollbar(this, Widget::Slider::Flag::AttachedNoCorner),
-  h_scrollbar(this, Widget::Slider::Flag::AttachedHorizontalNoCorner) { child_gui = &editor; }
-
-void EditorDialog::Layout() {
-  if (editor.file) title_text = BaseName(editor.file->Filename());
-  Dialog::Layout();
-  Widget::Slider::AttachContentBox(&content, &v_scrollbar, editor.Wrap() ? NULL : &h_scrollbar);
-}
-
-void EditorDialog::Draw() {
-  bool wrap = editor.Wrap();
-  if (1)     editor.v_scrolled = v_scrollbar.AddScrollDelta(editor.v_scrolled);
-  if (!wrap) editor.h_scrolled = h_scrollbar.AddScrollDelta(editor.h_scrolled);
-  if (1)     editor.UpdateScrolled();
-  if (1)     Dialog::Draw();
-  if (1)     editor.Draw(content + box.TopLeft(), Editor::DrawFlag::DrawCursor | Editor::DrawFlag::CheckResized);
-  if (1)     v_scrollbar.Update();
-  if (!wrap) h_scrollbar.Update();
-}
 
 void Dialog::MessageBox(const string &n) {
   app->ReleaseMouseFocus();
   screen->AddDialog(make_unique<MessageBoxDialog>(screen->gd, n));
 }
+
 void Dialog::TextureBox(const string &n) {
   app->ReleaseMouseFocus();
   screen->AddDialog(make_unique<TextureBoxDialog>(screen->gd, n));

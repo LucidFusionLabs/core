@@ -71,7 +71,7 @@ struct TextAreaTest : public TextArea {
 struct EditorTest : public Editor {
   LinesFrameBufferTest line_fb_test;
   EditorTest(GraphicsDevice *D, const FontRef &F, File *I, bool Wrap=0) :
-    Editor(D, F, I, Wrap), line_fb_test(D) { line_fb_test.wrap=Wrap; }
+    Editor(D, F, I), line_fb_test(D) { line_fb.wrap=line_fb_test.wrap=Wrap; }
   virtual LinesFrameBuffer *GetFrameBuffer() override { return &line_fb_test; }
 };
 
