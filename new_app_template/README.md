@@ -24,7 +24,8 @@ First OSX, which takes longest because it includes more imports by default, e.g.
         make foo_run
 
 I take a screenshot with cmd+shift+4.
-![foo-osx](www/lfl/foo-osx.png)
+
+![foo-osx](../www/lfl/foo-osx.png)
 
 Next iOS simulator because no key signing setup is needed.
 
@@ -37,7 +38,8 @@ Next iOS simulator because no key signing setup is needed.
         make foo_run
 
 I take another screenshot with cmd+shift+4.
-![foo-iphonesim](www/lfl/foo-iphonesim.png)
+
+![foo-iphonesim](../www/lfl/foo-iphonesim.png)
 
 Last android.  I plug in my Nexus7 and:
 
@@ -49,7 +51,8 @@ Last android.  I plug in my Nexus7 and:
         make foo_debug
 
 I take another screenshot by holding the sleep/wake and volume-down buttons until the screen flashes.
-![foo-android](www/lfl/foo-android.png)
+
+![foo-android](../www/lfl/foo-android.png)
 
 ## Going Further
 
@@ -67,7 +70,6 @@ Follow the example of other apps:
 * CMakeLists.txt:                        Build rules
 * new_app_template.cpp:                  App source code
 * assets/:                               All models, multimedia, databases, etc here  
-
 * assets/icon.ico:                       Windows icon file
 * assets/icon.icns:                      Mac icon file
 * assets/icon.bmp:                       32x32 Bitmap icon file
@@ -83,7 +85,6 @@ Follow the example of other apps:
 
 * -iphone/Images/Default.png:            320x480 iPhone splash screen
 * -iphone/Images/Default@2x.png:         640x960 iPad splash screen
-
 * Android splash screens:
 
         cp ../spaceball-iphone/Images/Default\@2x.png res/drawable-hdpi/splash.png
