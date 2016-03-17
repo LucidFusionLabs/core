@@ -10,7 +10,7 @@ Then open a shell and:
         git submodule update --init --recursive
         ./core/new_app_template/clone.sh com.zerothat FooFighter foo
         cp core/CMake/TemplateRootCMakeLists.txt CMakeLists.txt
-        git add CMakeLists.txt
+        git add CMakeLists.txt foo
         echo "add_subdirectory(foo)" >> CMakeLists.txt
 
 I modify "Hello world" in foo/foo.cpp to "Hello wArld".
