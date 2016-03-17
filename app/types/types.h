@@ -595,6 +595,8 @@ struct LRUCache {
   map_type data;
   list_type used;
   LRUCache(int C) : capacity(C) { CHECK(capacity); }
+  string DebugString() const { return StrCat("LRUCache{ capacity=", capacity, ", data.size=", data.size(),
+                                             ", used.size=", used.size(), " }"); }
 
   V *Insert(const K &k, const V &v) {
     auto it = used.insert(used.end(), make_pair(k, v));
@@ -724,6 +726,7 @@ struct RingIndex {
   RingIndex(int S=0) : size(S), back(0), count(0), total(0) {}
   static int Wrap(int i, int s) { if ((i = s ? (i % s) : 0) < 0) i += s; return i; }
   static int WrapOver(int i, int s) { return i == s ? i : Wrap(i, s); }
+  bool Full() const { return count == size; }
   int Back() const { return Index(-1); }
   int Front() const { return Index(-count); }
   int Index(int i) const { return AbsoluteIndex(back + i); }
@@ -753,6 +756,7 @@ template <class X> struct RingVector {
   virtual void PopFront(int n) { ring.PopFront(n); }
   virtual void PopBack (int n) { ring.PopBack (n); }
   virtual void Clear() { ring.Clear(); }
+  virtual void Resize(int s) { data.resize((ring.size = s)); Clear(); }
 };
 
 struct RingSampler {

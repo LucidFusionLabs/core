@@ -121,6 +121,7 @@ DEFINE_int(loglevel, 7, "Log level: [Fatal=-1, Error=0, Info=3, Debug=7]");
 #else
 DEFINE_int(loglevel, 0, "Log level: [Fatal=-1, Error=0, Info=3, Debug=7]");
 #endif
+DEFINE_string(logfile, "", "Log file name");
 DEFINE_bool(lfapp_audio, false, "Enable audio in/out");
 DEFINE_bool(lfapp_video, false, "Enable OpenGL");
 DEFINE_bool(lfapp_input, false, "Enable keyboard/mouse input");
@@ -398,11 +399,6 @@ int Application::Create(int argc, const char* const* argv, const char *source_fi
 #endif
 
   srand(fnv32(&pid, sizeof(int), time(0)));
-  if (logfilename.size()) {
-    logfile = fopen(logfilename.c_str(), "a");
-    if (logfile) SystemNetwork::SetSocketCloseOnExec(fileno(logfile), 1);
-  }
-
   ThreadLocalStorage::Init();
   atexit(LFAppAtExit);
 
@@ -420,6 +416,11 @@ int Application::Create(int argc, const char* const* argv, const char *source_fi
   else if (FLAGS_open_console) OpenSystemConsole();
   if (argc > 1) OpenSystemConsole(console_title.c_str());
 #endif
+
+  if (FLAGS_logfile.size()) {
+    logfile = fopen(FLAGS_logfile.c_str(), "a");
+    if (logfile) SystemNetwork::SetSocketCloseOnExec(fileno(logfile), 1);
+  }
 
   {
 #if defined(LFL_IPHONE)

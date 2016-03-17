@@ -105,6 +105,7 @@ DECLARE_bool(lfapp_input);
 DECLARE_bool(lfapp_network);
 DECLARE_bool(lfapp_camera);
 DECLARE_bool(lfapp_cuda);
+DECLARE_string(logfile);
 DECLARE_int(loglevel);
 DECLARE_int(peak_fps);
 DECLARE_int(target_fps);

@@ -1336,7 +1336,7 @@ struct GamePlayerListGUI : public GUI {
 struct GameChatGUI : public TextArea {
   GameClient **server;
   GameChatGUI(int key, GameClient **s) :
-    TextArea(screen->gd, FontDesc(FLAGS_default_font, "", 10, Color::grey80)), server(s) { 
+    TextArea(screen->gd, FontDesc(FLAGS_default_font, "", 10, Color::grey80), 100, 10), server(s) { 
     SetToggleKey(key, true);
     write_timestamp = deactivate_on_enter = true;
   }

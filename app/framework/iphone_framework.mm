@@ -740,15 +740,18 @@ void Window::SetTransparency(float v) {}
 void Window::SetCaption(const string &v) {}
 void Window::Reshape(int w, int h) {}
 
-void Video::StartWindow(Window *W) {}
 bool Video::CreateWindow(Window *W) { return false; }
+void Video::StartWindow(Window *W) {
+  [[LFUIApplication sharedAppDelegate] updateTargetFPS: w->target_fps];
+}
+
 int Video::Swap() {
   screen->gd->Flush();
   screen->gd->CheckForError(__FILE__, __LINE__);
   return 0;
 }
 
-void FrameScheduler::DoWait() {}
+bool FrameScheduler::DoWait() { return false; }
 void FrameScheduler::Setup() { rate_limit = synchronize_waits = wait_forever_thread = monolithic_frame = 0; }
 void FrameScheduler::Wakeup(void*) {
   dispatch_async(dispatch_get_main_queue(), ^{ [GetTyped<GLKView*>(screen->id) setNeedsDisplay]; });
@@ -758,7 +761,7 @@ bool FrameScheduler::WakeupIn(void *opaque, Time interval, bool force) { return 
 void FrameScheduler::ClearWakeupIn() {}
 
 void FrameScheduler::UpdateWindowTargetFPS(Window *w) {
-  [[LFUIApplication sharedAppDelegate] updateTargetFPS: GetNativeWindow()->target_fps];
+  [[LFUIApplication sharedAppDelegate] updateTargetFPS: w->target_fps];
 }
 
 void FrameScheduler::AddWaitForeverMouse() {
@@ -794,6 +797,7 @@ void FrameScheduler::DelWaitForeverSocket(Socket fd) {
 unique_ptr<Module> CreateFrameworkModule() { return make_unique<iPhoneFrameworkModule>(); }
 
 extern "C" int main(int ac, const char* const* av) {
+  MyAppCreate();
   iphone_argc = ac;
   iphone_argv = av;
   NSLog(@"%@", @"lfapp_lfobjc_iphone_main");

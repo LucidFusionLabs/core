@@ -355,7 +355,20 @@ point TextBox::Line::Draw(point pos, int relayout_width, int g_offset, int g_len
 
 TextBox::Lines::Lines(TextBox *P, int N) : RingVector<Line>(N), parent(P), wrapped_lines(N),
   move_cb (bind(&Line::Move,  _1, _2)),
-  movep_cb(bind(&Line::MoveP, _1, _2)) { for (auto &i : data) i.Init(P, this); }
+  movep_cb(bind(&Line::MoveP, _1, _2)) { for (auto &i : data) i.Init(parent, this); }
+  
+void TextBox::Lines::Resize(int s) {
+  int d = s - ring.size;
+  if (!d) return Clear();
+  RingVector::Resize((wrapped_lines = s));
+  if (d>0) for (auto i=data.begin()+ring.size-d, e=data.end(); i != e; ++i)
+  { i->Init(parent, this); i->data->glyphs.attr.source = attr_source; }
+}
+
+void TextBox::Lines::SetAttrSource(Drawable::AttrSource *s) {
+  attr_source = s;
+  for (auto &i : data) i.data->glyphs.attr.source = s;
+}
 
 TextBox::Line *TextBox::Lines::InsertAt(int dest_line, int lines, int dont_move_last) {
   CHECK(lines);
@@ -365,7 +378,7 @@ TextBox::Line *TextBox::Lines::InsertAt(int dest_line, int lines, int dont_move_
   else if ((clear_dir = -1)) { 
     ring.PushBack(lines);
     for (int scrollback_start_line = parent->GetFrameBuffer()->h / parent->font->Height(), i=0; i<lines; i++)
-      for (auto &l : (*this)[-scrollback_start_line-i-1].data->controls) l.second->DelHitBox();
+      (*this)[-scrollback_start_line-i-1].data->controls.clear();
   }
   for (int i=0; i<lines; i++) (*this)[dest_line + i*clear_dir].Clear();
   return &(*this)[dest_line];
@@ -376,7 +389,7 @@ TextBox::LinesFrameBuffer *TextBox::LinesFrameBuffer::Attach(TextBox::LinesFrame
   return *last_fb = this;
 }
 
-bool TextBox::LinesFrameBuffer::SizeChanged(int W, int H, Font *font, const Color *bgc) {
+int TextBox::LinesFrameBuffer::SizeChanged(int W, int H, Font *font, const Color *bgc) {
   lines = RoundUp(H / float(font->Height()));
   return RingFrameBuffer::SizeChanged(W, H, font, bgc);
 }
@@ -617,19 +630,19 @@ void TextArea::Write(const StringPiece &s, bool update_fb, bool release_fb) {
   if (update_fb && release_fb && fb->lines) fb->fb.Release();
 }
 
-void TextArea::Resized(const Box &b) {
+void TextArea::Resized(const Box &b, bool font_size_changed) {
   if (selection.enabled) {
     box.SetDimension(b.Dimension());
     UpdateBox(Box(0,-b.h,b.w,b.h*2), -1, selection.gui_ind);
   }
   UpdateLines(last_v_scrolled, 0, 0, 0);
   UpdateCursor();
-  Redraw(false);
+  Redraw(false, font_size_changed);
 }
 
 void TextArea::CheckResized(const Box &b) {
   LinesFrameBuffer *fb = GetFrameBuffer();
-  if (fb->SizeChanged(b.w, b.h, font, bg_color)) { Resized(b); fb->SizeChangedDone(); }
+  if (int c = fb->SizeChanged(b.w, b.h, font, bg_color)) { Resized(b, c > 1); fb->SizeChangedDone(); }
 }
 
 void TextArea::Redraw(bool attach, bool relayout) {
@@ -844,7 +857,7 @@ int TextView::UpdateLines(float vs, int *first_ind, int *first_offset, int *firs
   if (!dist || Empty()) return 0;
 
   bool redraw = dist >= fb->lines;
-  if (redraw) { line.Clear(); fb_wrapped_lines = 0; }
+  if (redraw) { line.Resize(fb->lines); line_fb.p=point(); fb_wrapped_lines=0; }
 
   bool up = !redraw && new_first_line < last_first_line;
   if (first_offset) *first_offset = up ?  start_line_cutoff : end_line_adjust;
@@ -875,12 +888,14 @@ int TextView::UpdateLines(float vs, int *first_ind, int *first_offset, int *firs
                                 up, head_read, tail_read, short_read, shorten_read);
   Line *L = 0;
   if (!up) for (int i=0; i<past_end_lines; i++, added++) { 
+    int removed = (wrap && line.ring.Full()) ? line.Back()->Lines() : 0;
     (L = line.PushFront())->Clear();
-    fb_wrapped_lines += L->Layout(wrap ? fb->w : 0, true);
+    fb_wrapped_lines += L->Layout(wrap ? fb->w : 0, true) - removed;
+    if (removed) line.ring.DecrementSize(1);
   }
 
-  CHECK_LT(line.ring.count, line.ring.size);
-  if (!redraw) {
+  CHECK_LE(line.ring.count, line.ring.size);
+  if (wrap && !redraw) {
     for (bool first=1;;first=0) {
       int ll = (L = up ? line.Front() : line.Back())->Lines();
       if (fb_wrapped_lines + (up ? start_line_adjust : -end_line_cutoff) - ll < fb->lines) break;
@@ -951,7 +966,7 @@ void PropertyTree::LayoutLine(Line *L, const NodeIndex &ni, const point &p) {
   flow->layout.wrap_lines = 0;
 
   int fw = font->max_width;
-  Box control(2 + fw * n->depth, -font->ascender, fw, fw);
+  Box control(2 + fw * n->depth * 2, -font->ascender, fw, fw);
 
   if (n->control) {
     int control_attr_id = flow->out->attr.GetAttrId(Drawable::Attr(menuicon_black, NULL, NULL, false, true));
@@ -963,9 +978,9 @@ void PropertyTree::LayoutLine(Line *L, const NodeIndex &ni, const point &p) {
 
   if (n->icon) {
     int icon_attr_id = flow->out->attr.GetAttrId(Drawable::Attr(menuicon_white, NULL, NULL, false, false));
-    flow->out->PushBack(control + point(fw + fw/2, 0), icon_attr_id, n->icon);
+    flow->out->PushBack(control + point(2*fw, 0), icon_attr_id, n->icon);
   }
-  flow->p.x += control.right() + (n->icon ? 2*fw : fw/2);
+  flow->p.x += control.right() + (n->icon ? 3*fw : fw);
   flow->SetFont(font);
   flow->AppendText(n->text);
 }
@@ -973,7 +988,10 @@ void PropertyTree::LayoutLine(Line *L, const NodeIndex &ni, const point &p) {
 void PropertyTree::HandleNodeControlClicked(Id id, int b, int x, int y, int down) {
   if (!down) return;
   auto n = &tree[id-1];
-  int fh = font->Height(), line_no = 1 + last_first_line + ((box.top() - y) / fh), depth = n->depth, added = 0;
+  auto fb = GetFrameBuffer();
+  int h = fb->Height(), fh = font->Height(), depth = n->depth, added = 0;
+  int line_no = 1 + last_first_line + (box.top() - screen->mouse.y) / fh; // RingIndex::Wrap((h - fb->scroll.y * h - y), h) / fh;
+
   if ((n->expanded = !n->expanded)) {
     VisitExpandedChildren(id, [&](Id id, Node *n, int d){
       tree[id-1].depth = d;
@@ -1105,16 +1123,20 @@ int Editor::UpdateMappedLines(pair<int, int> read_lines, int new_first_line, int
   int added = 0, bo = 0, width = wrap ? GetFrameBuffer()->w : 0, ll, l, e;
   if (up) for (auto li = lie; li != lib; bo += l + !e, added++) {
     l = (e = max(0, -(--li).val->size)) ? 0 : li.val->size;
+    int removed = (wrap && line.ring.Full()) ? line.Front()->Lines() : 0;
     if (e) (L = line.PushBack())->AssignText(edits[e-1],                                 Flow::TextAnnotation(annotation.data(), PieceIndex()));
     else   (L = line.PushBack())->AssignText(StringPiece(buf.data()+read_len-bo-l-1, l), Flow::TextAnnotation(annotation.data(), li.val->annotation));
-    fb_wrapped_lines += (ll = L->Layout(width, true));
+    fb_wrapped_lines += (ll = L->Layout(width, true)) - removed;
+    if (removed) line.ring.DecrementSize(1);
     CHECK_EQ(li.val->wrapped_lines, ll);
   }
   else for (auto li = lib; li != lie; ++li, bo += l + !e, added++) {
     l = (e = max(0, -li.val->size)) ? 0 : li.val->size;
+    int removed = (wrap && line.ring.Full()) ? line.Back()->Lines() : 0;
     if (e) (L = line.PushFront())->AssignText(edits[e-1],                    Flow::TextAnnotation(annotation.data(), PieceIndex()));
     else   (L = line.PushFront())->AssignText(StringPiece(buf.data()+bo, l), Flow::TextAnnotation(annotation.data(), li.val->annotation));
-    fb_wrapped_lines += (ll = L->Layout(width, true));
+    fb_wrapped_lines += (ll = L->Layout(width, true)) - removed;
+    if (removed) line.ring.DecrementSize(1);
     CHECK_EQ(li.val->wrapped_lines, ll);
   }
   return added;
@@ -1326,7 +1348,7 @@ Terminal::SolarizedLightColors::SolarizedLightColors() {
 }
 
 Terminal::Terminal(ByteSink *O, GraphicsDevice *D, const FontRef &F, const point &dim) :
-  TextArea(D, F), sink(O), fb_cb(bind(&Terminal::GetFrameBuffer, this, _1)) {
+  TextArea(D, F, 200, 0), sink(O), fb_cb(bind(&Terminal::GetFrameBuffer, this, _1)) {
   CHECK(font->fixed_width || (font->flag & FontDesc::Mono));
   wrap_lines = write_newline = insert_mode = 0;
   line.SetAttrSource(this);
@@ -1339,7 +1361,7 @@ Terminal::Terminal(ByteSink *O, GraphicsDevice *D, const FontRef &F, const point
   Activate();
 }
 
-void Terminal::Resized(const Box &b) {
+void Terminal::Resized(const Box &b, bool font_size_changed) {
   int old_term_width = term_width, old_term_height = term_height;
   SetDimension(b.w / font->FixedWidth(), b.h / font->Height());
   TerminalDebug("Resized %d, %d <- %d, %d\n", term_width, term_height, old_term_width, old_term_height);
@@ -1352,7 +1374,7 @@ void Terminal::Resized(const Box &b) {
 
   term_cursor.x = min(term_cursor.x, term_width);
   term_cursor.y = min(term_cursor.y, term_height);
-  TextArea::Resized(b);
+  TextArea::Resized(b, font_size_changed);
   if (clip) clip = UpdateClipBorder();
   ResizedLeftoverRegion(b.w, b.h);
 }
@@ -1500,7 +1522,7 @@ void Terminal::Write(const StringPiece &s, bool update_fb, bool release_fb) {
           parse_osc_escape = false; break;
         case '=': case '>':                        break; // application or normal keypad
         case 'c': Reset();                         break;
-        case 'D': Newline(true);                   break;
+        case 'D': Newline();                       break;
         case 'M': NewTopline();                    break;
         case '7': saved_term_cursor = term_cursor; break;
         case '8': term_cursor = point(Clamp(saved_term_cursor.x, 1, term_width),
@@ -1660,13 +1682,13 @@ void Terminal::Write(const StringPiece &s, bool update_fb, bool release_fb) {
         FlushParseText();
       }
       if (C0_control) switch(c) {
-        case '\a':   TerminalDebug("%s", "bell");              break; // bell
-        case '\b':   term_cursor.x = max(term_cursor.x-1, 1);  break; // backspace
-        case '\t':   TabNext(1);                               break; // tab 
-        case '\r':   term_cursor.x = 1;                        break; // carriage return
-        case '\x1b': parse_state = State::ESC;                 break;
-        case '\x14': case '\x15': case '\x7f':                 break; // shift charset in, out, delete
-        case '\n':   case '\v':   case '\f':   Newline(true);  break; // line feed, vertical tab, form feed
+        case '\a':   TerminalDebug("%s", "bell");                     break; // bell
+        case '\b':   term_cursor.x = max(term_cursor.x-1, 1);         break; // backspace
+        case '\t':   TabNext(1);                                      break; // tab 
+        case '\r':   term_cursor.x = 1;                               break; // carriage return
+        case '\x1b': parse_state = State::ESC;                        break;
+        case '\x14': case '\x15': case '\x7f':                        break; // shift charset in, out, delete
+        case '\n':   case '\v':   case '\f':   Newline(newline_mode); break; // line feed, vertical tab, form feed
         default:                               TerminalDebug("unhandled C0 control %02x\n", c);
       } else if (0 && C1_control) {
         if (0) {}

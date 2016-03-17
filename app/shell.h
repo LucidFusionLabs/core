@@ -35,6 +35,7 @@ struct Shell {
   Shell(AssetMap *AM, SoundAssetMap *SAM, MovieAssetMap *MAM);
 
   template <class... Args> void Add(Args&&... args) { command.emplace_back(forward<Args>(args)...); }
+  void AddBrowserCommands(Browser*);
 
   Asset      *asset     (const string &n);
   SoundAsset *soundasset(const string &n);

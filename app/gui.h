@@ -74,7 +74,7 @@ struct Widget {
     void AddClickBox(const Box3 &t, const MouseControllerCallback &cb) { for (auto &b : t) hitbox.push_back(gui->mouse.AddClickBox(b, cb)); }
     void AddHoverBox(const Box3 &t, const MouseControllerCallback &cb) { for (auto &b : t) hitbox.push_back(gui->mouse.AddHoverBox(b, cb)); }
     void AddDragBox (const Box3 &t, const MouseControllerCallback &cb) { for (auto &b : t) hitbox.push_back(gui->mouse.AddDragBox (b, cb)); }
-    void DelHitBox() { for (auto i = hitbox.begin(), e = hitbox.end(); i != e; ++i) gui->mouse.hit.Erase(*i); hitbox.clear(); }
+    void DelHitBox() { for (auto &i : hitbox) gui->mouse.hit.Erase(i); hitbox.clear(); }
     MouseController::HitBox &GetHitBox(int i=0) const { return gui->mouse.hit[hitbox[i]]; }
     Box GetHitBoxBox(int i=0) const { return Box::Add(GetHitBox(i).box, gui->box.TopLeft()); }
     DrawableBox *GetDrawBox() const { return drawbox_ind >= 0 ? VectorGet(gui->child_box.data, drawbox_ind) : 0; }
@@ -232,11 +232,13 @@ struct TextBox : public GUI, public KeyboardController, public Drawable::AttrSou
   struct Lines : public RingVector<Line> {
     TextBox *parent;
     int wrapped_lines;
+    Drawable::AttrSource *attr_source=0;
     function<void(Line&, Line&)> move_cb, movep_cb;
     Lines(TextBox *P, int N);
 
-    void SetAttrSource(Drawable::AttrSource *s) { for (int i=0; i<ring.size; i++) (*this)[i].data->glyphs.attr.source = s; }
-    Line *PushFront() { Line *l = RingVector<Line>::PushFront(); l->Clear(); return l; }
+    void Resize(int s);
+    void SetAttrSource(Drawable::AttrSource *s);
+    Line *PushFront() { Line *l = RingVector::PushFront(); l->Clear(); return l; }
     Line *InsertAt(int dest_line, int lines=1, int dont_move_last=0);
     static int GetBackLineLines(const Lines &l, int i) { return l[-i-1].Lines(); }
   };
@@ -249,7 +251,7 @@ struct TextBox : public GUI, public KeyboardController, public Drawable::AttrSou
     bool align_top_or_bot=1;
     LinesFrameBuffer(GraphicsDevice *d) : RingFrameBuffer(d) {}
     LinesFrameBuffer *Attach(LinesFrameBuffer **last_fb);
-    virtual bool SizeChanged(int W, int H, Font *font, const Color *bgc);
+    virtual int SizeChanged(int W, int H, Font *font, const Color *bgc);
     virtual int Height() const { return lines * font_height; }
     tvirtual void Clear(Line *l) { RingFrameBuffer::Clear(l, Box(w, l->Lines() * font_height), true); }
     tvirtual void Update(Line *l, int flag=0);
@@ -377,7 +379,7 @@ struct TextArea : public TextBox {
   int scroll_inc=10, scrolled_lines=0;
   float v_scrolled=0, h_scrolled=0, last_v_scrolled=0, last_h_scrolled=0;
 
-  TextArea(GraphicsDevice *D, const FontRef &F=FontRef(), int S=200, int LC=10);
+  TextArea(GraphicsDevice *D, const FontRef &F, int S, int LC);
   virtual ~TextArea() {}
 
   /// Write() is thread-safe.
@@ -387,7 +389,7 @@ struct TextArea : public TextBox {
   virtual void PageDown() { AddVScroll( scroll_inc); }
   virtual void ScrollUp  () { PageUp(); }
   virtual void ScrollDown() { PageDown(); }
-  virtual void Resized(const Box &b);
+  virtual void Resized(const Box &b, bool font_size_changed=false);
   virtual void CheckResized(const Box &b);
   virtual void SetDimension(int w, int h) {}
 
@@ -427,7 +429,7 @@ struct TextArea : public TextBox {
 struct TextView : public TextArea {
   int last_fb_width=0, last_fb_lines=0, last_first_line=0;
   int wrapped_lines=0, fb_wrapped_lines=0;
-  using TextArea::TextArea;
+  TextView(GraphicsDevice *D, const FontRef &F=FontRef()) : TextArea(D, F, 0, 0) {}
 
   virtual int WrappedLines() const { return wrapped_lines; }
   virtual int UpdateLines(float v_scrolled, int *first_ind, int *first_offset, int *first_len);
@@ -563,7 +565,7 @@ struct Terminal : public TextArea {
   int scroll_region_beg=0, scroll_region_end=0, tab_width=8;
   string parse_text, parse_csi, parse_osc;
   unsigned char parse_charset=0;
-  bool parse_osc_escape=0, first_resize=1;
+  bool parse_osc_escape=0, first_resize=1, newline_mode=0;
   point term_cursor=point(1,1), saved_term_cursor=point(1,1);
   LinesFrameBuffer::FromLineCB fb_cb;
   LinesFrameBuffer *last_fb=0;
@@ -572,7 +574,7 @@ struct Terminal : public TextArea {
 
   Terminal(ByteSink *O, GraphicsDevice *D, const FontRef &F=FontRef(), const point &dim=point(1,1));
   virtual ~Terminal() {}
-  virtual void Resized(const Box &b);
+  virtual void Resized(const Box &b, bool font_size_changed=false);
   virtual void ResizedLeftoverRegion(int w, int h, bool update_fb=true);
   virtual void SetScrollRegion(int b, int e, bool release_fb=false);
   virtual void SetDimension(int w, int h);

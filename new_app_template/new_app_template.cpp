@@ -45,7 +45,7 @@ struct MyGUI : public GUI {
 
     W->gd->DrawMode(DrawMode::_2D);
     W->DrawDialogs();
-    W->default_font->Draw(StringPrintf("Hello warld, my FPS is %.2f", app->FPS()), point(W->width*.05, W->height*.15));
+    W->default_font->Draw(StringPrintf("Hello world, my FPS is %.2f", app->FPS()), point(W->width*.05, W->height*.15));
     W->default_font->Draw("press tick for console",                                point(W->width*.05, W->height*.05));
     return 0;
   }
@@ -86,11 +86,11 @@ extern "C" void MyAppCreate() {
   FLAGS_default_font = FLAGS_console_font = "Nobile.ttf";
   FLAGS_default_font_flag = FLAGS_console_font_flag = 0;
   FLAGS_lfapp_audio = FLAGS_lfapp_video = FLAGS_lfapp_input = FLAGS_console = 1;
+  FLAGS_logfilename = StrCat("$BINNAME.txt");
   app = new Application();
   screen = new Window();
   my_app = new MyAppState();
   app->exit_cb = [](){ delete my_app; };
-  app->logfilename = StrCat(LFAppDownloadDir(), "$BINNAME.txt");
   app->window_start_cb = MyWindowStart;
   app->window_init_cb = MyWindowInit;
   app->window_init_cb(screen);

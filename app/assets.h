@@ -619,14 +619,15 @@ template <class Line> struct RingFrameBuffer {
   virtual int Width()  const { return w; }
   virtual int Height() const { return h; }
   virtual void SizeChangedDone() { fb.Release(); scroll=v2(); p=point(); }
-  virtual bool SizeChanged(int W, int H, Font *font, const Color *bgc) {
-    if (W == w && H == h && font->size == font_size) return false;
+  virtual int SizeChanged(int W, int H, Font *font, const Color *bgc) {
+    if (W == w && H == h && font->size == font_size) return 0;
+    int orig_font_size = font_size;
     SetDimensions(W, H, font);
     fb.Resize(w, Height(), FrameBuffer::Flag::CreateGL | FrameBuffer::Flag::CreateTexture);
     ScopedClearColor scc(fb.gd, bgc);
     fb.gd->Clear();
     fb.gd->DrawMode(DrawMode::_2D, false);
-    return true;
+    return 1 + (orig_font_size && font_size != orig_font_size);
   }
 
   virtual void Draw(point pos, point adjust, bool scissor=true) {

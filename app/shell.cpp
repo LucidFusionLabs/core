@@ -21,6 +21,10 @@
 #include "core/web/css.h"
 #include "core/app/flow.h"
 #include "core/app/gui.h"
+#include "core/app/ipc.h"
+#include "core/app/browser.h"
+#include "core/web/html.h"
+#include "core/web/document.h"
 
 namespace LFL {
 Shell::Shell(AssetMap *AM, SoundAssetMap *SAM, MovieAssetMap *MAM) : assets(AM), soundassets(SAM), movieassets(MAM) {
@@ -324,5 +328,9 @@ void Shell::cmds(const vector<string>&) {
 void Shell::flags(const vector<string>&) { Singleton<FlagMap>::Get()->Print(); }
 
 void Shell::binds(const vector<string>&) { }
+
+void Shell::AddBrowserCommands(Browser *b) {
+  Add("image_cache_info", [=](const vector<string>&){ INFO(b->doc.parser->image_cache.DebugString()); });
+}
 
 }; // namespace LFL
