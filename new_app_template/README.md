@@ -13,11 +13,12 @@ Then open a shell and:
         git add CMakeLists.txt
         echo "add_subdirectory(foo)" >> CMakeLists.txt
 
-I modify "hello world" in foo/foo.cpp to "hello wArld".
+I modify "Hello world" in foo/foo.cpp to "Hello wArld".
 Now let's go through the build instructions from https://github.com/LucidFusionLabs/core for each platform.
 First OSX, which takes longest because it includes more imports by default, e.g. ffmpeg and OpenCV.
 
         mkdir osx
+        cd osx
         cmake ..
         cd foo
         make
@@ -45,6 +46,7 @@ Last android.  I plug in my Nexus7 and:
 
         cd ../.. back to FooFighter root
         mkdir android
+        cd android
         cmake -DCMAKE_TOOLCHAIN_FILE=../core/CMake/AndroidToolchain.cmake ..
         cd foo
         make
