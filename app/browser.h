@@ -18,6 +18,11 @@
 
 #ifndef LFL_CORE_APP_BROWSER_H__
 #define LFL_CORE_APP_BROWSER_H__
+
+#include "core/web/dom.h"
+#include "core/web/css.h"
+#include "core/web/html.h"
+
 namespace LFL {
 
 struct BrowserController : public InputController {

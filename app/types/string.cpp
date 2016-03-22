@@ -16,7 +16,6 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "core/app/app.h"
 #include "core/app/types/string.h"
 
 #define StringPrintfImpl(ret, fmt, vsprintf, offset) \
@@ -363,9 +362,14 @@ void Join(string *out, const vector<string> &in, int inB, int inE) {
   int size = 0;        for (int i = inB; i < inE; i++) size += in[i].size();
   StrAppendInit(size); for (int i = inB; i < inE; i++) { StrCatAdd(in[i]); } StrAppendReturn();
 }
+string Join(const vector<const char *> &strs, const string &separator) {
+  string ret;
+  for (auto &i : strs) StrAppend(&ret, ret.size()?separator:"", i);
+  return ret;
+}
 string Join(const vector<string> &strs, const string &separator) {
   string ret;
-  for (vector<string>::const_iterator i = strs.begin(); i != strs.end(); i++) StrAppend(&ret, ret.size()?separator:"", *i);
+  for (auto &i : strs) StrAppend(&ret, ret.size()?separator:"", i);
   return ret;
 }
 string Join(const vector<string> &strs, const string &separator, int beg_ind, int end_ind) {

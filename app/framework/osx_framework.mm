@@ -240,7 +240,7 @@ static const char **osx_argv = 0;
   - (void)mouseClick:(NSEvent*)e down:(bool)d {
     SetNativeWindow(screen);
     NSPoint p = [e locationInWindow];
-    int fired = MouseClick(1, d, p.x, p.y);
+    int fired = MouseClick(1+ctrl_down, d, p.x, p.y);
     if (fired && frame_on_mouse_input) [self setNeedsDisplay:YES]; 
     prev_mouse_pos = p;
   }

@@ -17,7 +17,6 @@
  */
 
 #include <png.h>
-#include "core/app/app.h"
 
 namespace LFL {
 static void PngRead (png_structp png_ptr, png_bytep data, png_size_t length) { static_cast<File*>(png_get_io_ptr(png_ptr))->Read (data, length); }

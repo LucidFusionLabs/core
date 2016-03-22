@@ -22,7 +22,6 @@ extern "C" {
 #endif
 };
 
-#include "core/app/app.h"
 #include "core/app/crypto.h"
 #include "core/app/net/resolver.h"
 

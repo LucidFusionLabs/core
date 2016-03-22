@@ -102,8 +102,11 @@ endif()
 
 include(ExternalProject)
 include(BundleUtilities)
-include(${LFL_SOURCE_DIR}/core/CMake/Autoconf.cmake)
-include(${LFL_SOURCE_DIR}/core/CMake/util.cmake)
+
+list(APPEND CMAKE_MODULE_PATH ${LFL_SOURCE_DIR}/core/CMake)
+include(PrecompiledHeader)
+include(Autoconf)
+include(util)
 
 if(WIN32)
   link_directories("")
@@ -139,12 +142,22 @@ macro(lfl_project _name)
   set(LFL_PROJECT_BINDIR ${CMAKE_CURRENT_BINARY_DIR})
 endmacro(lfl_project)
 
+macro(lfl_add_library _name)
+  add_library(${_name} ${ARGN})
+  target_use_precompiled_header(${_name} core/app/app.h FORCEINCLUDE)
+endmacro()
+
+macro(lfl_add_executable _name)
+  add_executable(${_name} ${ARGN})
+  target_use_precompiled_header(${_name} core/app/app.h FORCEINCLUDE)
+endmacro()
+
 # post build macros
-include(${LFL_SOURCE_DIR}/core/CMake/Package.cmake)
+include(Package)
 
 # proto macros
 if(LFL_PROTOBUF)
-  include(${LFL_SOURCE_DIR}/core/CMake/FindProtoBuf.cmake)
+  include(FindProtoBuf)
 else()
   macro(PROTOBUF_GENERATE_CPP _s _h _f)
   endmacro()
@@ -164,7 +177,7 @@ if(LFL_CAPNPROTO)
   set(CAPNP_EXECUTABLE      ${LFL_CORE_BINARY_DIR}/imports/capnproto/bin/capnp)
   set(CAPNPC_CXX_EXECUTABLE ${LFL_CORE_BINARY_DIR}/imports/capnproto/bin/capnpc-c++)
   set(CAPNP_INCLUDE_DIRS    ${LFL_CORE_BINARY_DIR}/imports/capnproto/include)
-  include(${LFL_SOURCE_DIR}/core/imports/capnproto/c++/cmake/FindCapnProto.cmake)
+  include(FindCapnProto)
 endif(LFL_CAPNPROTO)
 
 # platform macros

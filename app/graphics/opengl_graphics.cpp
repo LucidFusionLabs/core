@@ -16,8 +16,6 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "core/app/app.h"
-
 #if defined(LFL_GLEW)
 #define glewGetContext() static_cast<GLEWContext*>(screen->glew_context)
 #include <GL/glew.h>

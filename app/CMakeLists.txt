@@ -68,6 +68,9 @@ target_compile_options(lfl_app PUBLIC ${LFL_APP_CFLAGS})
 target_compile_definitions(lfl_app PUBLIC ${LFL_APP_DEF})
 target_include_directories(lfl_app PUBLIC ${LFL_APP_INCLUDE} ${CMAKE_CURRENT_BINARY_DIR})
 
+add_precompiled_header(core/app/app.h c++-header lfl_app)
+target_use_precompiled_header(lfl_app core/app/app.h FORCEINCLUDE)
+
 if(LFL_FLATBUFFERS)
   add_dependencies(lfl_app flatbuffers flatc ${FLATBUFFERS_SRC})
 endif()

@@ -20,8 +20,6 @@
 #include <google/protobuf/message.h>
 #endif
 
-#include "core/app/app.h"
-
 #include <sys/stat.h>
 
 #ifdef LFL_ANDROID

@@ -19,7 +19,6 @@
 #import <CoreGraphics/CoreGraphics.h>
 #import <CoreVideo/CoreVideo.h>
 #import <CoreMedia/CoreMedia.h>
-#include "lfapp/lfapp.h"
 typedef std::function<void(const char*, int, int, int)> UpdateFrameCB;
 
 @interface AVCapture : NSObject <AVCaptureVideoDataOutputSampleBufferDelegate> { }

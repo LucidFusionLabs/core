@@ -17,7 +17,6 @@
  */
 
 #include "gtest/gtest.h"
-#include "core/app/app.h"
 #include "core/app/crypto.h"
 
 namespace LFL {

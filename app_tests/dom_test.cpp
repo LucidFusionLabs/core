@@ -17,14 +17,9 @@
  */
 
 #include "gtest/gtest.h"
-#include "core/app/app.h"
-#include "core/web/dom.h"
-#include "core/web/css.h"
-#include "core/app/flow.h"
 #include "core/app/gui.h"
 #include "core/app/ipc.h"
 #include "core/app/browser.h"
-#include "core/web/html.h"
 #include "core/web/document.h"
 #ifdef LFL_LIBCSS
 extern "C" {

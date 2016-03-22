@@ -42,7 +42,7 @@ I take another screenshot with cmd+shift+4.
 
 ![foo-iphonesim](../www/lfl/foo-iphonesim.png)
 
-Last android.  I plug in my Nexus7 and:
+Last android.  I plug my Nexus7 in and:
 
         cd ../.. back to FooFighter root
         mkdir android

@@ -16,8 +16,6 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "core/app/app.h"
-
 namespace LFL {
 void Application::AddNativeMenu(const string &title, const vector<MenuItem>&items) {
   WinWindow *win = static_cast<WinWindow*>(screen->impl);

@@ -16,7 +16,6 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "core/app/app.h"
 #include "core/app/ipc.h"
 #include "core/app/network.h"
 #include "core/app/net/smtp.h"

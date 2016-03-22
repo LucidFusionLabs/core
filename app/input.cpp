@@ -16,8 +16,6 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "core/app/app.h"
-#include "core/app/flow.h"
 #include "core/app/gui.h"
 
 #ifdef LFL_DEBUG
@@ -328,7 +326,7 @@ int Input::MouseClick(int button, bool down, const point &p) {
   InputEvent::Id event = Mouse::ButtonID(button);
   if      (event == Mouse::Button::_1) mouse_but1_down = down;
   else if (event == Mouse::Button::_2) mouse_but2_down = down;
-  event |= (CtrlKeyDown() ? Key::Modifier::Ctrl : 0) | (CmdKeyDown() ? Key::Modifier::Cmd : 0);
+  // event |= (CtrlKeyDown() ? Key::Modifier::Ctrl : 0) | (CmdKeyDown() ? Key::Modifier::Cmd : 0);
 
   int fired = MouseEventDispatch(event, p, down);
   if (fired) return fired;
@@ -357,7 +355,7 @@ int Input::MouseEventDispatch(InputEvent::Id event, const point &p, int down) {
   Dialog *bring_to_front = 0;
   for (auto i = screen->dialogs.begin(); i != screen->dialogs.end(); /**/) {
     Dialog *g = i->get();
-    if (g->NotActive()) { i++; continue; }
+    if (g->NotActive(screen->mouse)) { i++; continue; }
     fired += g->mouse.Input(event, g->RelativePosition(screen->mouse), down, 0);
     if (g->deleted) { screen->GiveDialogFocusAway(g); i = screen->dialogs.erase(i); continue; }
     if (event == Mouse::Event::Button1 && down && g->box.within(screen->mouse)) { bring_to_front = g; break; }
@@ -371,7 +369,7 @@ int Input::MouseEventDispatch(InputEvent::Id event, const point &p, int down) {
 }
 
 int Input::MouseEventDispatchGUI(InputEvent::Id event, const point &p, int down, GUI *g, int *active_guis) {
-  if (g->NotActive()) return 0;
+  if (g->NotActive(screen->mouse)) return 0;
   else (*active_guis)++;
   int events = g->mouse.Input(event, g->RelativePosition(screen->mouse), down, 0);
   if (!events && g->child_gui) return MouseEventDispatchGUI(event, p, down, g->child_gui, active_guis);
@@ -412,6 +410,7 @@ bool MouseControllerCallback::Run(const point &p, int button, int down, bool wro
 int MouseController::Input(InputEvent::Id event, const point &p, int down, int flag) {
   int fired = 0, boxes_checked = 0;
   bool but1 = event == Mouse::Event::Button1;
+  bool but2 = event == Mouse::Event::Button2;
 
   for (auto h = hover.begin(); h != hover.end(); /**/) {
     auto e = &hit.data[*h];
@@ -427,16 +426,18 @@ int MouseController::Input(InputEvent::Id event, const point &p, int down, int f
     bool thunk = 0, e_hover = e->evtype == Event::Hover;
 
     if (e->deleted || !e->active || (e_hover && e->val) || 
-        (!down && e->evtype == Event::Click && e->CB.type != MouseControllerCallback::CB_COORD)) continue;
+        (!down && (e->evtype == Event::Click || e->evtype == Event::RightClick) &&
+         e->CB.type != MouseControllerCallback::CB_COORD)) continue;
 
     InputDebug("check %s within %s\n", p.DebugString().c_str(), e->box.DebugString().c_str());
     boxes_checked++;
     if (e->box.within(p)) {
       if (e->run_only_if_first && fired) continue;
       switch (e->evtype) { 
-        case Event::Click: if (but1)         { thunk=1; } break;
-        case Event::Drag:  if (but1 && down) { thunk=1; } break;
-        case Event::Hover: if ((e->val = 1)) { thunk=1; } break;
+        case Event::Click:      if (but1)         { thunk=1; } break;
+        case Event::RightClick: if (but2)         { thunk=1; } break;
+        case Event::Drag:       if (but1 && down) { thunk=1; } break;
+        case Event::Hover:      if ((e->val = 1)) { thunk=1; } break;
       }
     }
 

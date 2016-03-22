@@ -46,9 +46,14 @@ TranslationUnit::TranslationUnit(const string &f, const string &cc, const string
   vector<string> argv;
   vector<const char*> av = { "-xc++", "-std=c++11" };
   Split(compile_command, isspace, &argv);
-  for (int i=1; i<(int)argv.size()-4; i++) if (!PrefixMatch(argv[i], "-O") && !PrefixMatch(argv[i], "-m")) av.push_back(argv[i].data());
+  for (int i=1; i<(int)argv.size()-4; i++)
+    if (!PrefixMatch(argv[i], "-O") && !PrefixMatch(argv[i], "-m")) av.push_back(argv[i].data());
+  INFO("TranslationUnit args ", Join(av, " "));
+
   chdir(working_directory.c_str());
-  tu = clang_parseTranslationUnit(index, filename.c_str(), av.data(), av.size(), 0, 0, CXTranslationUnit_None);
+  CXErrorCode ret = clang_parseTranslationUnit2(index, filename.c_str(), av.data(), av.size(), 0, 0,
+                                                CXTranslationUnit_None, &tu);
+  if (!tu) ERROR("TranslationUnit ", f, " create failed ", StringPrintf("%d",ret));
 }
 
 TranslationUnit::~TranslationUnit() {

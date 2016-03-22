@@ -18,8 +18,10 @@
 
 #ifndef LFL_CORE_APP_GUI_H__
 #define LFL_CORE_APP_GUI_H__
-namespace LFL {
 
+#include "core/app/flow.h"
+
+namespace LFL {
 DECLARE_bool(multitouch);
 DECLARE_bool(draw_grid);
 DECLARE_bool(console);
@@ -48,7 +50,7 @@ struct GUI {
 
   virtual void Activate() { active = 1; }
   virtual void Deactivate() { active = 0; }
-  virtual bool NotActive() const { return !active; }
+  virtual bool NotActive(const point &p) const { return !active; }
   virtual bool ToggleActive() { if ((active = !active)) Activate(); else Deactivate(); return active; }
   virtual point RelativePosition(const point &p) const { return p - box.TopLeft(); }
   virtual void SetLayoutDirty() { child_box.Clear(); }
@@ -304,7 +306,7 @@ struct TextBox : public GUI, public KeyboardController, public Drawable::AttrSou
   RingVector<string> cmd_last;
   Color cmd_color=Color::white, selection_color=Color(Color::grey70, 0.5);
   bool deactivate_on_enter=0, token_processing=0, insert_mode=1, run_blank_cmd=0;
-  int start_line=0, end_line=0, start_line_adjust=0, skip_last_lines=0, default_attr=0, cmd_last_ind=-1;
+  int start_line=0, end_line=0, start_line_adjust=0, skip_last_lines=0, default_attr=0, cmd_last_ind=-1, context_gui_ind=-1;
   function<void(const Selection::Point&)> selection_cb;
   function<void(const shared_ptr<Control>&)> new_link_cb;
   function<void(Control*)> hover_control_cb;
@@ -321,8 +323,8 @@ struct TextBox : public GUI, public KeyboardController, public Drawable::AttrSou
   virtual const Drawable::Attr *GetAttr(int attr) const;
   virtual int CommandLines() const { return 0; }
   virtual void Run(const string &cmd) { if (runcb) runcb(cmd); }
+  virtual bool NotActive(const point &p) const { return !box.within(p); }
   virtual bool Active() const { return screen->active_textbox == this; }
-  virtual bool NotActive() const { return !box.within(screen->mouse); }
   virtual void Activate()   { if (!Active()) { if (auto g=screen->active_textbox) g->Deactivate(); screen->active_textbox=this; } }
   virtual void Deactivate() { if (Active()) screen->active_textbox = screen->default_textbox(); }
   virtual bool ToggleActive() { if (!Active()) Activate(); else Deactivate(); return Active(); }
@@ -424,12 +426,13 @@ struct TextArea : public TextBox {
   void DragCB(int button, int x, int y, int down);
   void CopyText(const Selection::Point &beg, const Selection::Point &end);
   string CopyText(int beg_line_ind, int beg_char_ind, int end_line_end, int end_char_ind, bool add_nl);
+  void InitContextMenu(const MouseController::CB &cb) { context_gui_ind = mouse.AddRightClickBox(box, cb); }
 };
 
 struct TextView : public TextArea {
   int last_fb_width=0, last_fb_lines=0, last_first_line=0;
   int wrapped_lines=0, fb_wrapped_lines=0;
-  TextView(GraphicsDevice *D, const FontRef &F=FontRef()) : TextArea(D, F, 0, 0) {}
+  TextView(GraphicsDevice *D, const FontRef &F=FontRef()) : TextArea(D, F, 0, 0) { reverse_line_fb=1; }
 
   virtual int WrappedLines() const { return wrapped_lines; }
   virtual int UpdateLines(float v_scrolled, int *first_ind, int *first_offset, int *first_len);
@@ -438,13 +441,14 @@ struct TextView : public TextArea {
 
   virtual bool Empty() const { return true; }
   virtual void UpdateAnnotation() {}
-  virtual void UpdateMapping(int cur_font_size, int width) {}
+  virtual void UpdateMapping(int width) {}
   virtual int UpdateMappedLines(pair<int, int>, int, int, bool, bool, bool, bool, bool) { return 0; }
 };
 
 struct PropertyTree : public TextView {
   typedef size_t Id;
   typedef vector<Id> Children;
+  typedef function<void(PropertyTree*, Id)> PropertyCB; 
   struct Node {
     typedef function<void(Id, Node*, int)> Visitor;
     Drawable *icon;
@@ -467,15 +471,31 @@ struct PropertyTree : public TextView {
   FreeListVector<Node> tree;
   LineMap property_line;
   FontRef menuicon_white, menuicon_black;
+  int selected_line_no=-1;
+  Color selected_color=Color(Color::blue, 0.2);
+  PropertyCB line_selected_cb, selected_line_clicked_cb;
   PropertyTree(GraphicsDevice *D, const FontRef &F=FontRef());
-  
+
+  void Deactivate() { TextBox::Deactivate(); selected_line_no=-1; }
+  void Draw(const Box &w, int flag=DrawFlag::Default, Shader *shader=0);
+  void Input(char k) {}
+  void Erase()       {}
+  void CursorRight() {}
+  void CursorLeft()  {}
+  void Home()        {}
+  void End()         {}
+  void HistUp()      {}
+  void HistDown()    {}
+  void Enter()       {}
+
   void SetRoot(Id id) { root=id; tree[root-1].expanded=true; }
   template <class... Args> Id AddNode(Args&&... args) { return 1+tree.Insert(Node(forward<Args>(args)...)); }
+
   virtual void VisitExpandedChildren(Id id, const Node::Visitor &cb, int depth=0);
   virtual void HandleCollapsed(Id id) {}
 
   bool Empty() const { return !property_line.size(); }
-  void UpdateMapping(int cur_font_size, int width);
+  void UpdateMapping(int width);
   int UpdateMappedLines(pair<int, int>, int, int, bool, bool, bool, bool, bool);
   void LayoutLine(Line *L, const NodeIndex &n, const point &p);
   void HandleNodeControlClicked(Id id, int b, int x, int y, int down);
@@ -527,7 +547,7 @@ struct Editor : public TextView {
   void HistDown();
   void SelectionCB(const Selection::Point&);
   bool Empty() const { return !file_line.size(); }
-  void UpdateMapping(int cur_font_size, int width);
+  void UpdateMapping(int width);
   int UpdateMappedLines(pair<int, int>, int, int, bool, bool, bool, bool, bool);
   int UpdateLines(float vs, int *first_ind, int *first_offset, int *first_len);
 
@@ -702,11 +722,9 @@ struct TabbedDialogInterface {
   point tab_dim;
   vector<DialogTab> tab_list;
   TabbedDialogInterface(GUI *g, const point &d=point(200,16)) : gui(g), tab_dim(d) {}
+  virtual void SelectTabIndex(size_t i) {}
+  virtual void Layout();
   virtual void Draw() { DialogTab::Draw(box, tab_dim, tab_list); }
-  virtual void Layout() {
-    for (auto b=tab_list.begin(), e=tab_list.end(), t=b; t != e; ++t)
-      t->dialog->LayoutTabbed(t-b, box, tab_dim, &gui->mouse, &t->child_box);
-  }
 };
 
 template <class D=Dialog> struct TabbedDialog : public TabbedDialogInterface {
@@ -718,6 +736,7 @@ template <class D=Dialog> struct TabbedDialog : public TabbedDialogInterface {
   void DelTab(D *t) { tabs.erase(t); VectorEraseByValue(&tab_list, DialogTab(t)); ReleaseTab(t); }
   void SelectTab(D *t) { if ((gui->child_gui = top = t)) t->TakeFocus(); }
   void ReleaseTab(D *t) { if (top == t) { top=0; t->LoseFocus(); SelectTab(FirstTab()); } }
+  void SelectTabIndex(size_t i) { CHECK_LT(i, tab_list.size()) SelectTab(dynamic_cast<D*>(tab_list[i].dialog)); }
   void Draw() { TabbedDialogInterface::Draw(); if (top) top->Draw(); }
 };
 
@@ -776,6 +795,8 @@ template <class X> struct TextViewDialogT  : public Dialog {
     if (1)     v_scrollbar.Update();
     if (!wrap) h_scrollbar.Update();
   }
+  void TakeFocus() { view.Activate(); }
+  void LoseFocus() { view.Deactivate(); }
 };
 
 struct PropertyTreeDialog : public TextViewDialogT<PropertyTree> {
@@ -792,8 +813,6 @@ struct EditorDialog : public TextViewDialogT<Editor> {
     if (I) { title_text = BaseName(I->Filename()); view.Init(I); }
     view.line_fb.wrap = flag & Flag::Wrap; 
   }
-  void TakeFocus() { view.Activate(); }
-  void LoseFocus() { view.Deactivate(); }
 };
 
 struct HelperGUI : public GUI {

@@ -16,11 +16,9 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "core/app/app.h"
-
 #ifdef LFL_CUDA
 #include <cuda_runtime.h>
-#include "lfcuda/lfcuda.h"
+#include "cuda/lfcuda.h"
 #include "speech/hmm.h"
 #include "speech/speech.h"
 #endif

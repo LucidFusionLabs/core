@@ -16,7 +16,6 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "lfapp/lfapp.h"
 #include <X11/Xlib.h>
 #include <X11/keysym.h>
 #include <X11/IntrinsicP.h>

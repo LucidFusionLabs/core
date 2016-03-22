@@ -17,7 +17,6 @@
  */
 
 #include "opencv/highgui.h"
-#include "lfapp/lfapp.h"
 LFL_IMPORT extern int OPENCV_FPS;
 
 namespace LFL {

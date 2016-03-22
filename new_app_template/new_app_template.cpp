@@ -86,7 +86,6 @@ extern "C" void MyAppCreate() {
   FLAGS_default_font = FLAGS_console_font = "Nobile.ttf";
   FLAGS_default_font_flag = FLAGS_console_font_flag = 0;
   FLAGS_lfapp_audio = FLAGS_lfapp_video = FLAGS_lfapp_input = FLAGS_console = 1;
-  FLAGS_logfilename = StrCat("$BINNAME.txt");
   app = new Application();
   screen = new Window();
   my_app = new MyAppState();

@@ -339,51 +339,72 @@ endif()
 if(LFL_JUDY)
   add_subdirectory(judy)
   set(JUDY_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/judy/src PARENT_SCOPE)
-  set(JUDY_LIB ${CMAKE_CURRENT_BINARY_DIR}/judy/src/JudyL/.libs/libJudyL.a ${CMAKE_CURRENT_BINARY_DIR}/judy/src/JudyL/.libs/libprev.a ${CMAKE_CURRENT_BINARY_DIR}/judy/src/JudyL/.libs/libnext.a ${CMAKE_CURRENT_BINARY_DIR}/judy/src/JudySL/.libs/libJudySL.a ${CMAKE_CURRENT_BINARY_DIR}/judy/src/JudyCommon/.libs/libJudyMalloc.a PARENT_SCOPE)
+  set(JUDY_LIB ${CMAKE_CURRENT_BINARY_DIR}/judy/src/JudyL/.libs/libJudyL.a
+      ${CMAKE_CURRENT_BINARY_DIR}/judy/src/JudyL/.libs/libprev.a
+      ${CMAKE_CURRENT_BINARY_DIR}/judy/src/JudyL/.libs/libnext.a
+      ${CMAKE_CURRENT_BINARY_DIR}/judy/src/JudySL/.libs/libJudySL.a
+      ${CMAKE_CURRENT_BINARY_DIR}/judy/src/JudyCommon/.libs/libJudyMalloc.a PARENT_SCOPE)
 endif()
 
 # libclang
 if(LFL_LIBCLANG)
-  set(LLVM_DIR $ENV{HOME}/llvm)
   set(CLANG_LIB ${LLVM_DIR}/lib/libclang.dylib)
-  set(LLVM_LIB ${LLVM_DIR}/lib/libLLVMAnalysis.a ${LLVM_DIR}/lib/libLLVMAsmParser.a ${LLVM_DIR}/lib/libLLVMAsmPrinter.a ${LLVM_DIR}/lib/libLLVMBitReader.a ${LLVM_DIR}/lib/libLLVMBitWriter.a ${LLVM_DIR}/lib/libLLVMCodeGen.a ${LLVM_DIR}/lib/libLLVMCore.a ${LLVM_DIR}/lib/libLLVMExecutionEngine.a ${LLVM_DIR}/lib/libLLVMInstCombine.a ${LLVM_DIR}/lib/libLLVMInstrumentation.a ${LLVM_DIR}/lib/libLLVMInterpreter.a ${LLVM_DIR}/lib/libLLVMipa.a ${LLVM_DIR}/lib/libLLVMipo.a ${LLVM_DIR}/lib/libLLVMIRReader.a ${LLVM_DIR}/lib/libLLVMLineEditor.a ${LLVM_DIR}/lib/libLLVMLinker.a ${LLVM_DIR}/lib/libLLVMLTO.a ${LLVM_DIR}/lib/libLLVMMC.a ${LLVM_DIR}/lib/libLLVMMCDisassembler.a ${LLVM_DIR}/lib/libLLVMMCJIT.a ${LLVM_DIR}/lib/libLLVMMCParser.a ${LLVM_DIR}/lib/libLLVMObjCARCOpts.a ${LLVM_DIR}/lib/libLLVMObject.a ${LLVM_DIR}/lib/libLLVMOption.a ${LLVM_DIR}/lib/libLLVMProfileData.a ${LLVM_DIR}/lib/libLLVMRuntimeDyld.a ${LLVM_DIR}/lib/libLLVMScalarOpts.a ${LLVM_DIR}/lib/libLLVMSelectionDAG.a ${LLVM_DIR}/lib/libLLVMSupport.a ${LLVM_DIR}/lib/libLLVMTableGen.a ${LLVM_DIR}/lib/libLLVMTarget.a ${LLVM_DIR}/lib/libLLVMTransformUtils.a ${LLVM_DIR}/lib/libLLVMVectorize.a ${LLVM_DIR}/lib/libLLVMX86AsmParser.a ${LLVM_DIR}/lib/libLLVMX86AsmPrinter.a ${LLVM_DIR}/lib/libLLVMX86CodeGen.a ${LLVM_DIR}/lib/libLLVMX86Desc.a ${LLVM_DIR}/lib/libLLVMX86Disassembler.a ${LLVM_DIR}/lib/libLLVMX86Info.a ${LLVM_DIR}/lib/libLLVMX86Utils.a)
+  set(LLVM_LIB ${LLVM_DIR}/lib/libLLVMAnalysis.a ${LLVM_DIR}/lib/libLLVMAsmParser.a
+      ${LLVM_DIR}/lib/libLLVMAsmPrinter.a ${LLVM_DIR}/lib/libLLVMBitReader.a
+      ${LLVM_DIR}/lib/libLLVMBitWriter.a ${LLVM_DIR}/lib/libLLVMCodeGen.a
+      ${LLVM_DIR}/lib/libLLVMCore.a ${LLVM_DIR}/lib/libLLVMExecutionEngine.a
+      ${LLVM_DIR}/lib/libLLVMInstCombine.a ${LLVM_DIR}/lib/libLLVMInstrumentation.a
+      ${LLVM_DIR}/lib/libLLVMInterpreter.a ${LLVM_DIR}/lib/libLLVMipa.a
+      ${LLVM_DIR}/lib/libLLVMipo.a ${LLVM_DIR}/lib/libLLVMIRReader.a
+      ${LLVM_DIR}/lib/libLLVMLineEditor.a ${LLVM_DIR}/lib/libLLVMLinker.a
+      ${LLVM_DIR}/lib/libLLVMLTO.a ${LLVM_DIR}/lib/libLLVMMC.a
+      ${LLVM_DIR}/lib/libLLVMMCDisassembler.a ${LLVM_DIR}/lib/libLLVMMCJIT.a
+      ${LLVM_DIR}/lib/libLLVMMCParser.a ${LLVM_DIR}/lib/libLLVMObjCARCOpts.a
+      ${LLVM_DIR}/lib/libLLVMObject.a ${LLVM_DIR}/lib/libLLVMOption.a
+      ${LLVM_DIR}/lib/libLLVMProfileData.a ${LLVM_DIR}/lib/libLLVMRuntimeDyld.a
+      ${LLVM_DIR}/lib/libLLVMScalarOpts.a ${LLVM_DIR}/lib/libLLVMSelectionDAG.a
+      ${LLVM_DIR}/lib/libLLVMSupport.a ${LLVM_DIR}/lib/libLLVMTableGen.a
+      ${LLVM_DIR}/lib/libLLVMTarget.a ${LLVM_DIR}/lib/libLLVMTransformUtils.a
+      ${LLVM_DIR}/lib/libLLVMVectorize.a ${LLVM_DIR}/lib/libLLVMX86AsmParser.a
+      ${LLVM_DIR}/lib/libLLVMX86AsmPrinter.a ${LLVM_DIR}/lib/libLLVMX86CodeGen.a
+      ${LLVM_DIR}/lib/libLLVMX86Desc.a ${LLVM_DIR}/lib/libLLVMX86Disassembler.a
+      ${LLVM_DIR}/lib/libLLVMX86Info.a ${LLVM_DIR}/lib/libLLVMX86Utils.a)
   set(LIBCLANG_INCLUDE ${LLVM_DIR}/include PARENT_SCOPE)
   set(LIBCLANG_LIB ${CLANG_LIB} ${LLVM_LIB} -lcurses PARENT_SCOPE)
 endif()
 
 # libcling
 if(LFL_LIBCLING)
-  set(LLVM_ROOT_DIR $ENV{HOME}/cling-build/inst)
-  set(LIBCLING_INCLUDE ${LLVM_ROOT_DIR}/include PARENT_SCOPE)
-  set(LIBCLING_LIB ${LLVM_ROOT_DIR}/lib/libclingMetaProcessor.a ${LLVM_ROOT_DIR}/lib/libclingInterpreter.a
-      ${LLVM_ROOT_DIR}/lib/libclingUtils.a ${LLVM_ROOT_DIR}/lib/libclangFrontend.a
-      ${LLVM_ROOT_DIR}/lib/libclangSerialization.a ${LLVM_ROOT_DIR}/lib/libclangDriver.a
-      ${LLVM_ROOT_DIR}/lib/libclangCodeGen.a ${LLVM_ROOT_DIR}/lib/libclangParse.a
-      ${LLVM_ROOT_DIR}/lib/libclangSema.a ${LLVM_ROOT_DIR}/lib/libclangEdit.a
-      ${LLVM_ROOT_DIR}/lib/libclangAnalysis.a ${LLVM_ROOT_DIR}/lib/libclangAST.a
-      ${LLVM_ROOT_DIR}/lib/libclangLex.a ${LLVM_ROOT_DIR}/lib/libclangBasic.a
-      ${LLVM_ROOT_DIR}/lib/libLLVMLTO.a ${LLVM_ROOT_DIR}/lib/libLLVMObjCARCOpts.a
-      ${LLVM_ROOT_DIR}/lib/libLLVMLinker.a ${LLVM_ROOT_DIR}/lib/libLLVMipo.a
-      ${LLVM_ROOT_DIR}/lib/libLLVMVectorize.a ${LLVM_ROOT_DIR}/lib/libLLVMBitWriter.a
-      ${LLVM_ROOT_DIR}/lib/libLLVMTableGen.a ${LLVM_ROOT_DIR}/lib/libLLVMDebugInfo.a
-      ${LLVM_ROOT_DIR}/lib/libLLVMOption.a ${LLVM_ROOT_DIR}/lib/libLLVMX86Disassembler.a
-      ${LLVM_ROOT_DIR}/lib/libLLVMX86AsmParser.a ${LLVM_ROOT_DIR}/lib/libLLVMX86CodeGen.a
-      ${LLVM_ROOT_DIR}/lib/libLLVMSelectionDAG.a ${LLVM_ROOT_DIR}/lib/libLLVMAsmPrinter.a
-      ${LLVM_ROOT_DIR}/lib/libLLVMX86Desc.a ${LLVM_ROOT_DIR}/lib/libLLVMMCDisassembler.a
-      ${LLVM_ROOT_DIR}/lib/libLLVMX86Info.a ${LLVM_ROOT_DIR}/lib/libLLVMX86AsmPrinter.a
-      ${LLVM_ROOT_DIR}/lib/libLLVMX86Utils.a ${LLVM_ROOT_DIR}/lib/libLLVMJIT.a
-      ${LLVM_ROOT_DIR}/lib/libLLVMIRReader.a ${LLVM_ROOT_DIR}/lib/libLLVMAsmParser.a
-      ${LLVM_ROOT_DIR}/lib/libLLVMLineEditor.a ${LLVM_ROOT_DIR}/lib/libLLVMMCAnalysis.a
-      ${LLVM_ROOT_DIR}/lib/libLLVMInstrumentation.a ${LLVM_ROOT_DIR}/lib/libLLVMInterpreter.a
-      ${LLVM_ROOT_DIR}/lib/libLLVMCodeGen.a ${LLVM_ROOT_DIR}/lib/libLLVMScalarOpts.a
-      ${LLVM_ROOT_DIR}/lib/libLLVMInstCombine.a ${LLVM_ROOT_DIR}/lib/libLLVMTransformUtils.a
-      ${LLVM_ROOT_DIR}/lib/libLLVMipa.a ${LLVM_ROOT_DIR}/lib/libLLVMAnalysis.a
-      ${LLVM_ROOT_DIR}/lib/libLLVMProfileData.a ${LLVM_ROOT_DIR}/lib/libLLVMMCJIT.a
-      ${LLVM_ROOT_DIR}/lib/libLLVMTarget.a ${LLVM_ROOT_DIR}/lib/libLLVMRuntimeDyld.a
-      ${LLVM_ROOT_DIR}/lib/libLLVMObject.a ${LLVM_ROOT_DIR}/lib/libLLVMMCParser.a
-      ${LLVM_ROOT_DIR}/lib/libLLVMBitReader.a ${LLVM_ROOT_DIR}/lib/libLLVMExecutionEngine.a
-      ${LLVM_ROOT_DIR}/lib/libLLVMMC.a ${LLVM_ROOT_DIR}/lib/libLLVMCore.a
-      ${LLVM_ROOT_DIR}/lib/libLLVMSupport.a -lncurses PARENT_SCOPE)
+  set(LIBCLING_INCLUDE ${CLING_LLVM_DIR}/include PARENT_SCOPE)
+  set(LIBCLING_LIB ${CLING_LLVM_DIR}/lib/libclingMetaProcessor.a ${CLING_LLVM_DIR}/lib/libclingInterpreter.a
+      ${CLING_LLVM_DIR}/lib/libclingUtils.a ${CLING_LLVM_DIR}/lib/libclangFrontend.a
+      ${CLING_LLVM_DIR}/lib/libclangSerialization.a ${CLING_LLVM_DIR}/lib/libclangDriver.a
+      ${CLING_LLVM_DIR}/lib/libclangCodeGen.a ${CLING_LLVM_DIR}/lib/libclangParse.a
+      ${CLING_LLVM_DIR}/lib/libclangSema.a ${CLING_LLVM_DIR}/lib/libclangEdit.a
+      ${CLING_LLVM_DIR}/lib/libclangAnalysis.a ${CLING_LLVM_DIR}/lib/libclangAST.a
+      ${CLING_LLVM_DIR}/lib/libclangLex.a ${CLING_LLVM_DIR}/lib/libclangBasic.a
+      ${CLING_LLVM_DIR}/lib/libLLVMLTO.a ${CLING_LLVM_DIR}/lib/libLLVMObjCARCOpts.a
+      ${CLING_LLVM_DIR}/lib/libLLVMLinker.a ${CLING_LLVM_DIR}/lib/libLLVMipo.a
+      ${CLING_LLVM_DIR}/lib/libLLVMVectorize.a ${CLING_LLVM_DIR}/lib/libLLVMBitWriter.a
+      ${CLING_LLVM_DIR}/lib/libLLVMTableGen.a ${CLING_LLVM_DIR}/lib/libLLVMDebugInfo.a
+      ${CLING_LLVM_DIR}/lib/libLLVMOption.a ${CLING_LLVM_DIR}/lib/libLLVMX86Disassembler.a
+      ${CLING_LLVM_DIR}/lib/libLLVMX86AsmParser.a ${CLING_LLVM_DIR}/lib/libLLVMX86CodeGen.a
+      ${CLING_LLVM_DIR}/lib/libLLVMSelectionDAG.a ${CLING_LLVM_DIR}/lib/libLLVMAsmPrinter.a
+      ${CLING_LLVM_DIR}/lib/libLLVMX86Desc.a ${CLING_LLVM_DIR}/lib/libLLVMMCDisassembler.a
+      ${CLING_LLVM_DIR}/lib/libLLVMX86Info.a ${CLING_LLVM_DIR}/lib/libLLVMX86AsmPrinter.a
+      ${CLING_LLVM_DIR}/lib/libLLVMX86Utils.a ${CLING_LLVM_DIR}/lib/libLLVMJIT.a
+      ${CLING_LLVM_DIR}/lib/libLLVMIRReader.a ${CLING_LLVM_DIR}/lib/libLLVMAsmParser.a
+      ${CLING_LLVM_DIR}/lib/libLLVMLineEditor.a ${CLING_LLVM_DIR}/lib/libLLVMMCAnalysis.a
+      ${CLING_LLVM_DIR}/lib/libLLVMInstrumentation.a ${CLING_LLVM_DIR}/lib/libLLVMInterpreter.a
+      ${CLING_LLVM_DIR}/lib/libLLVMCodeGen.a ${CLING_LLVM_DIR}/lib/libLLVMScalarOpts.a
+      ${CLING_LLVM_DIR}/lib/libLLVMInstCombine.a ${CLING_LLVM_DIR}/lib/libLLVMTransformUtils.a
+      ${CLING_LLVM_DIR}/lib/libLLVMipa.a ${CLING_LLVM_DIR}/lib/libLLVMAnalysis.a
+      ${CLING_LLVM_DIR}/lib/libLLVMProfileData.a ${CLING_LLVM_DIR}/lib/libLLVMMCJIT.a
+      ${CLING_LLVM_DIR}/lib/libLLVMTarget.a ${CLING_LLVM_DIR}/lib/libLLVMRuntimeDyld.a
+      ${CLING_LLVM_DIR}/lib/libLLVMObject.a ${CLING_LLVM_DIR}/lib/libLLVMMCParser.a
+      ${CLING_LLVM_DIR}/lib/libLLVMBitReader.a ${CLING_LLVM_DIR}/lib/libLLVMExecutionEngine.a
+      ${CLING_LLVM_DIR}/lib/libLLVMMC.a ${CLING_LLVM_DIR}/lib/libLLVMCore.a
+      ${CLING_LLVM_DIR}/lib/libLLVMSupport.a -lncurses PARENT_SCOPE)
 endif()
 
 # bullet
@@ -415,8 +436,10 @@ endif()
 
 # v8 js
 if(LFL_V8JS)
-  set(V8JS_INCLUDE $ENV{HOME}/v8/include PARENT_SCOPE)
-  set(V8JS_LIB $ENV{HOME}/v8/native/libv8_libplatform.a $ENV{HOME}/v8/native/libv8_libbase.a $ENV{HOME}/v8/native/libv8_base.a $ENV{HOME}/v8/native/libv8_snapshot.a $ENV{HOME}/v8/native/libicuuc.a $ENV{HOME}/v8/native/libicui18n.a $ENV{HOME}/v8/native/libicudata.a PARENT_SCOPE)
+  set(V8JS_INCLUDE ${V8_DIR}/include PARENT_SCOPE)
+  set(V8JS_LIB ${V8_DIR}/native/libv8_libplatform.a ${V8_DIR}/native/libv8_libbase.a
+      ${V8_DIR}/native/libv8_base.a ${V8_DIR}/native/libv8_snapshot.a ${V8_DIR}/native/libicuuc.a
+      ${V8_DIR}/native/libicui18n.a ${V8_DIR}/native/libicudata.a PARENT_SCOPE)
 endif()
 
 # tinyjs

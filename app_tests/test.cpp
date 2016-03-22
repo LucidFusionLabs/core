@@ -17,7 +17,6 @@
  */
 
 #include "gtest/gtest.h"
-#include "core/app/app.h"
 
 extern "C" void MyAppCreate() {
   LFL::FLAGS_lfapp_video = true;

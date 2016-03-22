@@ -16,8 +16,6 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "core/app/app.h"
-
 namespace LFL {
 template <class X, class Y>
 int String::Convert(const StringPieceT<X> &in, basic_string<Y> *out, const char *from, const char *to) {

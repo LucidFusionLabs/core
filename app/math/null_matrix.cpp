@@ -16,8 +16,6 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "core/app/app.h"
-
 namespace LFL {
 void Invert(const Matrix *in, Matrix *out) {
   ERROR("not implemented");

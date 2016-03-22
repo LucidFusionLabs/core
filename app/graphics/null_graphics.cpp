@@ -16,8 +16,6 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "core/app/app.h"
-
 namespace LFL {
 const int GraphicsDevice::Float = 0;
 const int GraphicsDevice::Points = 0;

@@ -16,8 +16,6 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "core/app/app.h"
-
 namespace LFL {
 void FFT(float *out, int fftlen) { ERROR("not implemented"); }
 void IFFT(float *out, int fftlen) { ERROR("not implemented"); }

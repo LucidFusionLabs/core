@@ -16,8 +16,6 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "core/app/app.h"
-
 extern "C" {
 //#define INT64_C (long long)
 #include <libavcodec/avcodec.h>

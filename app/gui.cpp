@@ -16,12 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "core/app/app.h"
-#include "core/web/dom.h"
-#include "core/web/css.h"
-#include "core/app/flow.h"
 #include "core/app/gui.h"
-#include "core/app/ipc.h"
 
 namespace LFL {
 #ifdef LFL_MOBILE
@@ -635,6 +630,9 @@ void TextArea::Resized(const Box &b, bool font_size_changed) {
     box.SetDimension(b.Dimension());
     UpdateBox(Box(0,-b.h,b.w,b.h*2), -1, selection.gui_ind);
   }
+  if (context_gui_ind >= 0)
+    UpdateBox(Box(0,-b.h,b.w,b.h*2), -1, context_gui_ind);
+
   UpdateLines(last_v_scrolled, 0, 0, 0);
   UpdateCursor();
   Redraw(false, font_size_changed);
@@ -774,7 +772,6 @@ bool TextArea::GetGlyphFromCoordsOffset(const point &p, Selection::Point *out, i
 }
 
 void TextArea::InitSelection() {
-  // Activate();
   selection.gui_ind = mouse.AddDragBox
     (Box(), MouseController::CoordCB(bind(&TextArea::DragCB, this, _1, _2, _3, _4)));
 }
@@ -786,7 +783,7 @@ void TextArea::DrawSelection() {
 }
 
 void TextArea::DragCB(int, int, int, int down) {
-  if (!Active()) return;
+  if (down && !Active()) Activate();
   Selection *s = &selection;
   bool start = s->Update(screen->mouse - box.BottomLeft() + point(line_left, 0), down);
   if (start) { GetGlyphFromCoords(s->beg_click, &s->beg); s->end=s->beg; if (selection_cb) selection_cb(s->beg); }
@@ -847,7 +844,7 @@ int TextView::UpdateLines(float vs, int *first_ind, int *first_offset, int *firs
   bool width_changed = last_fb_width != fb->w, wrap = Wrap(), init = !wrapped_lines;
   if (width_changed) {
     last_fb_width = fb->w;
-    if (wrap || init) UpdateMapping(TextArea::font->size, fb->w);
+    if (wrap || init) UpdateMapping(fb->w);
     if (init) UpdateAnnotation();
   }
 
@@ -922,7 +919,6 @@ PropertyTree::PropertyTree(GraphicsDevice *D, const FontRef &F) : TextView(D, F)
 menuicon_white(FontDesc("MenuAtlas", "", 0, Color::white, Color::clear, 0, 0, FontDesc::Engine::Atlas)),
 menuicon_black(FontDesc("MenuAtlas", "", 0, Color::black, Color::clear, 0, 0, FontDesc::Engine::Atlas)) {
   cursor_enabled = 0;
-  reverse_line_fb = 1;
   cmd_color = Color(Color::black, .5);
   property_line.node_value_cb = &NodeIndex::GetLines;
   property_line.node_print_cb = &NodeIndex::GetString;
@@ -937,7 +933,7 @@ void PropertyTree::VisitExpandedChildren(Id id, const Node::Visitor &cb, int dep
   if (n->expanded) for (auto i : n->child) VisitExpandedChildren(i, cb, 1+(depth ? depth : n->depth));
 }
 
-void PropertyTree::UpdateMapping(int cur_font_size, int width) {
+void PropertyTree::UpdateMapping(int width) {
   wrapped_lines = 0;
   property_line.Clear();
   VisitExpandedChildren(root, [&](Id id, Node *n, int d)
@@ -967,7 +963,6 @@ void PropertyTree::LayoutLine(Line *L, const NodeIndex &ni, const point &p) {
 
   int fw = font->max_width;
   Box control(2 + fw * n->depth * 2, -font->ascender, fw, fw);
-
   if (n->control) {
     int control_attr_id = flow->out->attr.GetAttrId(Drawable::Attr(menuicon_black, NULL, NULL, false, true));
     flow->out->PushBack(control, control_attr_id, menuicon_black->FindGlyph(n->expanded ? 11 : 12));
@@ -990,19 +985,21 @@ void PropertyTree::HandleNodeControlClicked(Id id, int b, int x, int y, int down
   auto n = &tree[id-1];
   auto fb = GetFrameBuffer();
   int h = fb->Height(), fh = font->Height(), depth = n->depth, added = 0;
-  int line_no = 1 + last_first_line + (box.top() - screen->mouse.y) / fh; // RingIndex::Wrap((h - fb->scroll.y * h - y), h) / fh;
+  // int line_no = RingIndex::Wrap((h - fb->scroll.y * h - y), h) / fh, child_line_no = line_no + 1;
+  int line_no = last_first_line + (box.top() - screen->mouse.y) / fh, child_line_no = line_no + 1;
+  if (line_no == selected_line_no) selected_line_no = -1;
 
   if ((n->expanded = !n->expanded)) {
     VisitExpandedChildren(id, [&](Id id, Node *n, int d){
       tree[id-1].depth = d;
-      property_line.Insert(line_no + added++, NodeIndex(id));
+      property_line.Insert(child_line_no + added++, NodeIndex(id));
       wrapped_lines = AddWrappedLines(wrapped_lines, 1);
     });
   } else {
-    while (auto li = property_line.LesserBound(line_no).val) {
+    while (auto li = property_line.LesserBound(child_line_no).val) {
       if (tree[li->id-1].depth <= depth) break;
       HandleCollapsed(li->id);
-      property_line.Erase(line_no);
+      property_line.Erase(child_line_no);
       wrapped_lines = AddWrappedLines(wrapped_lines, -1);
     }
   }
@@ -1010,7 +1007,24 @@ void PropertyTree::HandleNodeControlClicked(Id id, int b, int x, int y, int down
   Redraw();
 }
 
-void PropertyTree::SelectionCB(const Selection::Point &p) {}
+void PropertyTree::Draw(const Box &b, int flag, Shader *shader) {
+  TextArea::Draw(b, flag, shader);
+  int selected_line_no_offset = selected_line_no - last_first_line, fh = font->Height();
+  if (Within(selected_line_no_offset, 0, GetFrameBuffer()->lines)) {
+    screen->gd->EnableBlend();
+    screen->gd->FillColor(selected_color);
+    Box(b.x, b.top()-(selected_line_no_offset+1)*fh, b.w, fh).Draw();
+  }
+}
+
+void PropertyTree::SelectionCB(const Selection::Point &p) {
+  int line_no = last_first_line + (box.top() - screen->mouse.y) / font->Height();
+  if (line_no == selected_line_no && selected_line_clicked_cb)
+    if (auto li = property_line.LesserBound(line_no).val) selected_line_clicked_cb(this, li->id);
+  selected_line_no = line_no;
+  if (line_selected_cb)
+    if (auto li = property_line.LesserBound(line_no).val) line_selected_cb(this, li->id);
+}
 
 /* DirectoryTree */
 
@@ -1029,8 +1043,7 @@ void DirectoryTree::VisitExpandedChildren(Id id, const Node::Visitor &cb, int de
 
 /* Editor */
 
-Editor::Editor(GraphicsDevice *D, const FontRef &F, File *I) : TextView(D, F), cursor_line(&line[-1]) {
-  reverse_line_fb = 1;
+Editor::Editor(GraphicsDevice *D, const FontRef &F, File *I) : TextView(D, F) {
   cmd_color = Color(Color::black, .5);
   file_line.node_value_cb = &LineOffset::GetLines;
   file_line.node_print_cb = &LineOffset::GetString;
@@ -1079,7 +1092,7 @@ void Editor::SelectionCB(const Selection::Point &p) {
   UpdateCursor();
 }
 
-void Editor::UpdateMapping(int cur_font_size, int width) {
+void Editor::UpdateMapping(int width) {
   wrapped_lines = 0;
   file_line.Clear();
   file->Reset();
@@ -1913,6 +1926,15 @@ void DialogTab::Draw(const Box &b, const point &tab_dim, const vector<DialogTab>
   screen->gd->DisableVertexColor();
   screen->gd->EnableTexture();
   for (int i=0, l=t.size(); i<l; ++i) t[i].child_box.Draw(b.TopLeft() + point(i*tab_dim.x, 0));
+}
+
+void TabbedDialogInterface::Layout() {
+  for (auto b=tab_list.begin(), e=tab_list.end(), t=b; t != e; ++t) {
+    int tab_no = t-b;
+    t->dialog->LayoutTabbed(tab_no, box, tab_dim, &gui->mouse, &t->child_box);
+    gui->mouse.AddClickBox(t->dialog->title + point(box.x + tab_no*tab_dim.x, 0),
+                           MouseController::CB(bind(&TabbedDialogInterface::SelectTabIndex, this, tab_no)));
+  }
 }
 
 void MessageBoxDialog::Layout() {

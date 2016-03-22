@@ -16,8 +16,6 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "core/app/app.h"
-
 namespace LFL {
 int JpegReader::Read(File *lf,           Texture *out) { return ERRORv(0, "not implemented"); }
 int JpegReader::Read(const string &data, Texture *out) { return ERRORv(0, "not implemented"); }

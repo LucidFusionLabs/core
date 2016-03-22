@@ -16,8 +16,6 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "core/app/app.h"
-
 namespace LFL {
 int PngReader::Read (File *lf, Texture *out)       { return ERRORv(0, "not implemented"); }
 int PngWriter::Write(File *lf, const Texture &tex) { return ERRORv(0, "not implemented"); }

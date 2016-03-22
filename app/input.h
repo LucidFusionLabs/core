@@ -150,7 +150,7 @@ struct MouseController {
   typedef MouseControllerCallback::CB CB;
   typedef MouseControllerCallback::BoolCB BoolCB;
   typedef MouseControllerCallback::CoordCB CoordCB;
-  struct Event { enum { Click=1, Hover=2, Drag=3 }; };
+  struct Event { enum { Click=1, RightClick=2, Hover=3, Drag=4 }; };
   struct HitBox {
     Box box;
     int evtype, val=0;
@@ -165,9 +165,10 @@ struct MouseController {
 
   virtual ~MouseController() { Clear(); }
   virtual void Clear() { hit.Clear(); }
-  virtual int AddClickBox(const Box &w, const MouseControllerCallback &cb) { return hit.Insert(HitBox(Event::Click, w, cb)); }
-  virtual int AddHoverBox(const Box &w, const MouseControllerCallback &cb) { return hit.Insert(HitBox(Event::Hover, w, cb)); }
-  virtual int AddDragBox (const Box &w, const MouseControllerCallback &cb) { return hit.Insert(HitBox(Event::Drag,  w, cb)); }
+  virtual int AddClickBox     (const Box &w, const MouseControllerCallback &cb) { return hit.Insert(HitBox(Event::Click,      w, cb)); }
+  virtual int AddRightClickBox(const Box &w, const MouseControllerCallback &cb) { return hit.Insert(HitBox(Event::RightClick, w, cb)); }
+  virtual int AddHoverBox     (const Box &w, const MouseControllerCallback &cb) { return hit.Insert(HitBox(Event::Hover,      w, cb)); }
+  virtual int AddDragBox      (const Box &w, const MouseControllerCallback &cb) { return hit.Insert(HitBox(Event::Drag,       w, cb)); }
   virtual int Input(InputEvent::Id, const point &p, int down, int flag);
 };
 

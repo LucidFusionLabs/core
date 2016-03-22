@@ -16,11 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "core/app/app.h"
-#include "core/app/flow.h"
 #include "core/app/gui.h"
 #include "core/app/ipc.h"
-#include "core/app/net/resolver.h"
 
 #include <time.h>
 #include <fcntl.h>
@@ -417,11 +414,6 @@ int Application::Create(int argc, const char* const* argv, const char *source_fi
   if (argc > 1) OpenSystemConsole(console_title.c_str());
 #endif
 
-  if (FLAGS_logfile.size()) {
-    logfile = fopen(FLAGS_logfile.c_str(), "a");
-    if (logfile) SystemNetwork::SetSocketCloseOnExec(fileno(logfile), 1);
-  }
-
   {
 #if defined(LFL_IPHONE)
     char *path = iPhoneDocumentPathCopy();
@@ -432,6 +424,14 @@ int Application::Create(int argc, const char* const* argv, const char *source_fi
     if (!SUCCEEDED(SHGetFolderPath(NULL, CSIDL_PERSONAL|CSIDL_FLAG_CREATE, NULL, 0, path))) return -1;
     dldir = StrCat(path, "/");
 #endif
+  }
+
+#ifdef LFL_DEBUG
+  if (FLAGS_logfile.empty() && !FLAGS_logfile_.override) FLAGS_logfile = StrCat(dldir, name, ".txt");
+#endif
+  if (!FLAGS_logfile.empty()) {
+    logfile = fopen(FLAGS_logfile.c_str(), "a");
+    if (logfile) SystemNetwork::SetSocketCloseOnExec(fileno(logfile), 1);
   }
 
   INFO("startdir = ", startdir);

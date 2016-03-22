@@ -16,7 +16,7 @@
 
 if(LFL_ANDROID)
   macro(lfl_add_target target)
-    add_library(${target} SHARED ${ARGN})
+    lfl_add_library(${target} SHARED ${ARGN})
     set_target_properties(${target} PROPERTIES OUTPUT_NAME app)
   endmacro()
 
@@ -44,7 +44,7 @@ if(LFL_ANDROID)
 
 elseif(LFL_IPHONE)
   macro(lfl_add_target target)
-    add_executable(${target} ${ARGN})
+    lfl_add_executable(${target} ${ARGN})
   endmacro()
 
   macro(lfl_post_build_start target binname pkgname)
@@ -103,7 +103,7 @@ elseif(LFL_IPHONE)
 
 elseif(LFL_OSX)
   macro(lfl_add_target target)
-    add_executable(${target} ${ARGN})
+    lfl_add_executable(${target} ${ARGN})
   endmacro()
 
   macro(lfl_post_build_start target binname pkgname)
@@ -168,7 +168,7 @@ elseif(LFL_OSX)
 elseif(LFL_WINDOWS)
   macro(lfl_add_target target)
     link_directories(${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_BUILD_TYPE})
-    add_executable(${target} WIN32 ${ARGN})
+    lfl_add_executable(${target} WIN32 ${ARGN})
     add_dependencies(${target} zlib)
     if(LFL_JPEG)
       add_dependencies(${target} libjpeg)
@@ -183,7 +183,7 @@ elseif(LFL_WINDOWS)
 
 elseif(LFL_LINUX)
   macro(lfl_add_target target)
-    add_executable(${target} ${ARGN})
+    lfl_add_executable(${target} ${ARGN})
   endmacro()
 
   macro(lfl_post_build_start target binname pkgname)
