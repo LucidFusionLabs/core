@@ -19,7 +19,7 @@ endif()
 
 if(LFL_QT)
   lfl_enable_qt()
-  lfl_add_library(app_qt_graphics STATIC opengl_graphics.cpp)
+  add_library(app_qt_graphics STATIC opengl_graphics.cpp)
   target_compile_definitions(app_qt_graphics PUBLIC -DLFL_QTGL)
   target_include_directories(app_qt_graphics PUBLIC ${QT_INCLUDE})
   if(LFL_GLES2)

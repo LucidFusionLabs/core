@@ -17,3 +17,9 @@
 [submodule "imports/flatbuffers"]
 	path = imports/flatbuffers
 	url = https://github.com/google/flatbuffers
+[submodule "imports/libjpeg-turbo"]
+	path = imports/libjpeg-turbo
+	url = https://github.com/libjpeg-turbo/libjpeg-turbo
+[submodule "imports/Box2D"]
+	path = imports/Box2D
+	url = https://github.com/erincatto/Box2D

@@ -484,6 +484,19 @@ HBITMAP Texture::CreateGDIBitMap(HDC dc) {
 }
 #endif
 
+void TextureArray::Load(const string &fmt, const string &prefix, const string &suffix, int N) {
+  a.resize(N);
+  for (int i=0, l=a.size(); i<l; i++)
+    Asset::LoadTexture(StringPrintf(fmt.c_str(), prefix.c_str(), i, suffix.c_str()), &a[i]);
+}
+
+void TextureArray::DrawSequence(Asset *out, Entity *e, int *ind) {
+  *ind = (*ind + 1) % a.size();
+  const Texture *in = &a[*ind];
+  out->tex.ID = in->ID;
+  if (out->geometry) Scene::Draw(out->geometry, e);
+}
+
 /* DepthTexture */
 
 void DepthTexture::Resize(int W, int H, int DF, int flag) {

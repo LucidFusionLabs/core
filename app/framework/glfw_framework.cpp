@@ -184,6 +184,9 @@ unique_ptr<Module> CreateFrameworkModule() {
   return make_unique<GLFWFrameworkModule>();
 }
 
-extern "C" int main(int argc, const char* const* argv) { return MyAppMain(argc, argv); }
+extern "C" int main(int argc, const char* const* argv) {
+  MyAppCreate();
+  return MyAppMain(argc, argv);
+}
 
 }; // namespace LFL

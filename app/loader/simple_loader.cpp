@@ -18,5 +18,5 @@
 
 namespace LFL {
 const int SoundAsset::FromBufPad = 0;
-AssetLoaderInterface *CreateFFMpegAssetLoader() { return nullptr; }
+unique_ptr<AssetLoaderInterface> CreateAssetLoader() { return CreateSimpleAssetLoader(); }
 }; // namespace LFL

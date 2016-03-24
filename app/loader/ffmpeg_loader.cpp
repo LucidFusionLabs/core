@@ -81,7 +81,17 @@ struct FFBIOC {
 };
 
 struct FFMpegAssetLoader : public AssetLoaderInterface {
-  FFMpegAssetLoader() { INFO("FFMpegAssetLoader"); }
+  unique_ptr<AssetLoaderInterface> simple_loader;
+  FFMpegAssetLoader() {
+    simple_loader = CreateSimpleAssetLoader();
+    INFO("FFMpegAssetLoader (with simple backup = ", bool(simple_loader), ")");
+  }
+
+  virtual VideoAssetLoader *GetVideoAssetLoader(const char *filename) {
+    // work around ffmpeg image2 format being AVFMT_NO_FILE; ie doesnt work with custom AVIOContext
+    if (FileSuffix::Image(filename)) return simple_loader.get();
+    return this; 
+  }
 
   virtual void *LoadFile(const string &filename) { return LoadFile(filename, 0); }
   AVFormatContext *LoadFile(const string &filename, AVIOContext **pbOut) {
@@ -335,12 +345,12 @@ struct FFMpegAssetLoader : public AssetLoaderInterface {
   }
 };
 
-AssetLoaderInterface *CreateFFMpegAssetLoader() { 
+unique_ptr<AssetLoaderInterface> CreateAssetLoader() { 
   ONCE({ INFO("FFMpegInit()");
          // av_log_set_level(AV_LOG_DEBUG);
          av_register_all(); });
 
-  return new FFMpegAssetLoader();
+  return make_unique<FFMpegAssetLoader>();
 }
 
 }; // namespace LFL

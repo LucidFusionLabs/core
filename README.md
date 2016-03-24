@@ -112,7 +112,10 @@ See [new_app_template/README.txt](new_app_template/README.txt) to quick start yo
         make lterm_pkg
 
 * OSX installer LTerminal.dmg results
-* For libclang setup ~/llvm following http://clang.llvm.org/get_started.html
+* For libclang build llvm following http://clang.llvm.org/get_started.html
+(including libcxx and using -DCMAKE_BUILD_TYPE=Release)
+then cmake -DCMAKE_INSTALL_PREFIX=~/llvm -P cmake_install.cmake
+
 * For V8 Javascript setup ~/v8 following https://developers.google.com/v8/build then:
 
         export CXX="clang++ -std=c++11 -stdlib=libc++"

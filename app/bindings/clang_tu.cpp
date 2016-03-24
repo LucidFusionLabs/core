@@ -26,13 +26,21 @@ const int TranslationUnit::Token::Identifier  = CXToken_Identifier;
 const int TranslationUnit::Token::Literal     = CXToken_Literal;
 const int TranslationUnit::Token::Comment     = CXToken_Comment;
 
-typedef function<CXChildVisitResult(CXCursor)> ClangCursorVisitor;
+typedef function<CXChildVisitResult(CXCursor, CXCursor)> ClangCursorVisitor;
+typedef function<void(CXFile, CXSourceLocation*, unsigned)> ClangInclusionVisitor;
 
-unsigned ClangVisitChildren(CXCursor p, ClangCursorVisitor f) {
+unsigned VisitClangCursorChildren(CXCursor p, ClangCursorVisitor f) {
   auto visitor_closure = [](CXCursor c, CXCursor p, CXClientData v) -> CXChildVisitResult {
-    return (*reinterpret_cast<const ClangCursorVisitor*>(v))(c);
+    return (*reinterpret_cast<const ClangCursorVisitor*>(v))(c, p);
   };
   return clang_visitChildren(p, visitor_closure, &f);
+}
+
+void VisitClangTranslationUnitInclusions(CXTranslationUnit tu, ClangInclusionVisitor f) {
+  auto visitor_closure = [](CXFile f, CXSourceLocation *inc, unsigned inclen, CXClientData v) -> void {
+    return (*reinterpret_cast<const ClangInclusionVisitor*>(v))(f, inc, inclen);
+  };
+  return clang_getInclusions(tu, visitor_closure, &f);
 }
 
 string GetClangString(const CXString &s) {
@@ -44,16 +52,21 @@ string GetClangString(const CXString &s) {
 TranslationUnit::TranslationUnit(const string &f, const string &cc, const string &wd) :
   index(clang_createIndex(0, 0)), filename(f), compile_command(cc), working_directory(wd) {
   vector<string> argv;
-  vector<const char*> av = { "-xc++", "-std=c++11" };
+  vector<const char*> av = { "-xc++", "-std=c++11", "-nostdinc" };
   Split(compile_command, isspace, &argv);
-  for (int i=1; i<(int)argv.size()-4; i++)
-    if (!PrefixMatch(argv[i], "-O") && !PrefixMatch(argv[i], "-m")) av.push_back(argv[i].data());
+  for (int i=1; i<(int)argv.size()-4; i++) av.push_back(argv[i].data());
   INFO("TranslationUnit args ", Join(av, " "));
 
   chdir(working_directory.c_str());
   CXErrorCode ret = clang_parseTranslationUnit2(index, filename.c_str(), av.data(), av.size(), 0, 0,
                                                 CXTranslationUnit_None, &tu);
-  if (!tu) ERROR("TranslationUnit ", f, " create failed ", StringPrintf("%d",ret));
+  if (!tu) { ERROR("TranslationUnit ", f, " create failed ", StringPrintf("%d",ret)); return; }
+
+  int diagnostics = clang_getNumDiagnostics(tu);
+  for(int i = 0; i != diagnostics; ++i) {
+    CXDiagnostic diag = clang_getDiagnostic(tu, i);
+    INFO("TranslationUnit ", f, " ", GetClangString(clang_formatDiagnostic(diag, clang_defaultDiagnosticDisplayOptions())));
+  }
 }
 
 TranslationUnit::~TranslationUnit() {
@@ -68,7 +81,7 @@ FileNameAndOffset TranslationUnit::FindDefinition(const string &fn, int offset) 
   CXCursor cursor_canonical = clang_getCanonicalCursor(cursor), null = clang_getNullCursor();
   CXCursor parent = clang_getCursorSemanticParent(cursor), child = null;
   if (clang_equalCursors(parent, null)) return FileNameAndOffset();
-  ClangVisitChildren(parent, [&](CXCursor c){
+  VisitClangCursorChildren(parent, [&](CXCursor c, CXCursor p){
     if (!clang_equalCursors(clang_getCanonicalCursor(c), cursor_canonical)) return CXChildVisit_Continue;
     else { child = c; return CXChildVisit_Break; }
   });

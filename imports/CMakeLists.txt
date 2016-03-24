@@ -66,6 +66,7 @@ if(LFL_JPEG)
     set(JPEG_LIB libjpeg.lib PARENT_SCOPE)
     set(JPEG_DEP libjpeg PARENT_SCOPE)
   else()
+    set(ENABLE_SHARED OFF)
     add_subdirectory(libjpeg-turbo)
     set(JPEG_INCLUDE ${CMAKE_CURRENT_BINARY_DIR}/libjpeg-turbo ${CMAKE_CURRENT_SOURCE_DIR}/libjpeg-turbo PARENT_SCOPE)
     set(JPEG_LIB ${CMAKE_CURRENT_BINARY_DIR}/libjpeg-turbo/.libs/libturbojpeg.a PARENT_SCOPE)
@@ -167,8 +168,8 @@ endif()
 
 # box2d
 if(LFL_BOX2D)
-  add_subdirectory(Box2D)
-  set(BOX2D_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/Box2D PARENT_SCOPE)
+  add_subdirectory(Box2D/Box2D)
+  set(BOX2D_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/Box2D/Box2D PARENT_SCOPE)
   set(BOX2D_LIB Box2D PARENT_SCOPE)
 endif()
 
@@ -233,6 +234,10 @@ endif()
 if(LFL_ANDROID)
   set(OPENGL_LIB "-lGLESv2 -lGLESv1_CM" PARENT_SCOPE)
 elseif(LFL_IPHONE)
+elseif(LFL_EMSCRIPTEN)
+  INCLUDE(${EMSCRIPTEN_ROOT_PATH}/cmake/Modules/FindOpenGL.cmake)
+  set(OPENGL_INCLUDE ${OPENGL_INCLUDE_DIR} PARENT_SCOPE)
+  set(OPENGL_LIB ${OPENGL_gl_LIBRARY} ${OPENGL_glu_LIBRARY} PARENT_SCOPE)
 else()
   INCLUDE(${CMAKE_ROOT}/Modules/FindOpenGL.cmake)
   set(OPENGL_INCLUDE ${OPENGL_INCLUDE_DIR} PARENT_SCOPE)
@@ -271,9 +276,12 @@ endif()
 
 # SDL
 if(LFL_SDL)
-  add_subdirectory(SDL)
-  set(SDL_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/SDL/include PARENT_SCOPE)
-  set(SDL_LIB ${CMAKE_CURRENT_BINARY_DIR}/SDL/build/.libs/libSDL2.a PARENT_SCOPE)
+  if(LFL_EMSCRIPTEN)
+  else()
+    add_subdirectory(SDL)
+    set(SDL_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/SDL/include PARENT_SCOPE)
+    set(SDL_LIB SDL2-static PARENT_SCOPE)
+  endif()
 endif()
 
 # portaudio
@@ -348,13 +356,12 @@ endif()
 
 # libclang
 if(LFL_LIBCLANG)
-  set(CLANG_LIB ${LLVM_DIR}/lib/libclang.dylib)
   set(LLVM_LIB ${LLVM_DIR}/lib/libLLVMAnalysis.a ${LLVM_DIR}/lib/libLLVMAsmParser.a
       ${LLVM_DIR}/lib/libLLVMAsmPrinter.a ${LLVM_DIR}/lib/libLLVMBitReader.a
       ${LLVM_DIR}/lib/libLLVMBitWriter.a ${LLVM_DIR}/lib/libLLVMCodeGen.a
       ${LLVM_DIR}/lib/libLLVMCore.a ${LLVM_DIR}/lib/libLLVMExecutionEngine.a
       ${LLVM_DIR}/lib/libLLVMInstCombine.a ${LLVM_DIR}/lib/libLLVMInstrumentation.a
-      ${LLVM_DIR}/lib/libLLVMInterpreter.a ${LLVM_DIR}/lib/libLLVMipa.a
+      ${LLVM_DIR}/lib/libLLVMInterpreter.a #${LLVM_DIR}/lib/libLLVMipa.a
       ${LLVM_DIR}/lib/libLLVMipo.a ${LLVM_DIR}/lib/libLLVMIRReader.a
       ${LLVM_DIR}/lib/libLLVMLineEditor.a ${LLVM_DIR}/lib/libLLVMLinker.a
       ${LLVM_DIR}/lib/libLLVMLTO.a ${LLVM_DIR}/lib/libLLVMMC.a
@@ -363,14 +370,15 @@ if(LFL_LIBCLANG)
       ${LLVM_DIR}/lib/libLLVMObject.a ${LLVM_DIR}/lib/libLLVMOption.a
       ${LLVM_DIR}/lib/libLLVMProfileData.a ${LLVM_DIR}/lib/libLLVMRuntimeDyld.a
       ${LLVM_DIR}/lib/libLLVMScalarOpts.a ${LLVM_DIR}/lib/libLLVMSelectionDAG.a
-      ${LLVM_DIR}/lib/libLLVMSupport.a ${LLVM_DIR}/lib/libLLVMTableGen.a
+      # ${LLVM_DIR}/lib/libLLVMSupport.a
+      ${LLVM_DIR}/lib/libLLVMTableGen.a
       ${LLVM_DIR}/lib/libLLVMTarget.a ${LLVM_DIR}/lib/libLLVMTransformUtils.a
       ${LLVM_DIR}/lib/libLLVMVectorize.a ${LLVM_DIR}/lib/libLLVMX86AsmParser.a
       ${LLVM_DIR}/lib/libLLVMX86AsmPrinter.a ${LLVM_DIR}/lib/libLLVMX86CodeGen.a
       ${LLVM_DIR}/lib/libLLVMX86Desc.a ${LLVM_DIR}/lib/libLLVMX86Disassembler.a
       ${LLVM_DIR}/lib/libLLVMX86Info.a ${LLVM_DIR}/lib/libLLVMX86Utils.a)
   set(LIBCLANG_INCLUDE ${LLVM_DIR}/include PARENT_SCOPE)
-  set(LIBCLANG_LIB ${CLANG_LIB} ${LLVM_LIB} -lcurses PARENT_SCOPE)
+  set(LIBCLANG_LIB ${LLVM_DIR}/lib/libclang.dylib ${LLVM_LIB} PARENT_SCOPE)
 endif()
 
 # libcling

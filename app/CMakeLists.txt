@@ -29,6 +29,7 @@ add_app_def(LFL_MOBILE)
 add_app_def(LFL_ANDROID)
 add_app_def(LFL_IPHONE)
 add_app_def(LFL_IPHONESIM)
+add_app_def(LFL_EMSCRIPTEN)
 
 add_app_lib(LFL_GLOG "${GLOG_INCLUDE}" "${GLOG_LIB}")
 add_app_lib(LFL_FLATBUFFERS "${FLATBUFFERS_INCLUDE_DIR}" "${FLATBUFFERS_LIB}")
@@ -59,7 +60,7 @@ add_subdirectory(camera)
 add_subdirectory(cuda)
 
 add_library(lfl_app ${LFL_APP_TYPE} gui.cpp browser.cpp font.cpp flow.cpp app.cpp types/types.cpp
-            types/string.cpp types/time.cpp "file.cpp" assets.cpp audio.cpp video.cpp input.cpp
+            types/string.cpp types/time.cpp "file.cpp" assets.cpp loader.cpp audio.cpp video.cpp input.cpp
             math.cpp ipc.cpp network.cpp net/http.cpp net/ssh.cpp net/smtp.cpp net/resolver.cpp
             camera.cpp scene.cpp shell.cpp crypto.cpp bindings.cpp
             ${PROTO_SRC} ${CAPNP_SRC} ${FLATBUFFERS_SRC_OUTPUTS})

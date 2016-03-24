@@ -358,6 +358,13 @@ struct Texture : public Drawable {
   static const float unit_texcoord[4];
 };
 
+struct TextureArray {
+  vector<Texture> a;
+  void ClearGL() { for (auto &i : a) i.ClearGL(); }
+  void Load(const string &fmt, const string &prefix, const string &suffix, int N);
+  void DrawSequence(Asset *out, Entity *e, int *ind);
+};
+
 struct DepthTexture {
   unsigned ID;
   int width, height, df;

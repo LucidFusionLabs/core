@@ -14,7 +14,18 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-if(LFL_ANDROID)
+if(LFL_EMSCRIPTEN)
+  macro(lfl_add_target target)
+    lfl_add_executable(${target} ${ARGN})
+  endmacro()
+
+  macro(lfl_post_build_start target binname pkgname)
+  endmacro()
+
+  macro(lfl_post_build_copy_bin target binname pkgname)
+  endmacro()
+
+elseif(LFL_ANDROID)
   macro(lfl_add_target target)
     lfl_add_library(${target} SHARED ${ARGN})
     set_target_properties(${target} PROPERTIES OUTPUT_NAME app)

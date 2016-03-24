@@ -16,8 +16,6 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "core/app/app.h"
-
 namespace LFL {
 const int TranslationUnit::Token::Punctuation = 0;
 const int TranslationUnit::Token::Keyword     = 0;

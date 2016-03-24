@@ -20,6 +20,8 @@
 #include <libgen.h>
 #include <jni.h>
 
+#include "core/app/bindings/jni.h"
+
 #define ACTION_DOWN         0
 #define ACTION_UP           1
 #define ACTION_MOVE         2
@@ -521,6 +523,15 @@ struct AndroidFrameworkModule : public Module {
   }
 };
 
+struct AndroidAudioAssetLoader : public AudioAssetLoader {
+  virtual void *LoadAudioFile(const string &filename) { return AndroidLoadMusicResource(filename.c_str()); }
+  virtual void UnloadAudioFile(void *h) {}
+  virtual void *LoadAudioBuf(const char *buf, int len, const char *mimetype) { return 0; }
+  virtual void UnloadAudioBuf(void *h) {}
+  virtual void LoadAudio(void *handle, SoundAsset *a, int seconds, int flag) { a->handle = handle; }
+  virtual int RefillAudio(SoundAsset *a, int reset) { return 0; }
+};
+
 extern "C" void AndroidSetFrameOnKeyboardInput(int v) { dynamic_cast<AndroidFrameworkModule*>(app->framework.get())->frame_on_keyboard_input = v; }
 extern "C" void AndroidSetFrameOnMouseInput   (int v) { dynamic_cast<AndroidFrameworkModule*>(app->framework.get())->frame_on_mouse_input    = v; }
 
@@ -591,5 +602,6 @@ void FrameScheduler::DelWaitForeverSocket(Socket fd) {
 }
 
 unique_ptr<Module> CreateFrameworkModule() { return make_unique<AndroidFrameworkModule>(); }
+unique_ptr<AssetLoaderInterface> CreateAssetLoader() { return make_unique<AndroidAudioAssetLoader>(); }
 
 }; // namespace LFL

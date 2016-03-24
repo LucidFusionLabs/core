@@ -20,6 +20,7 @@
 #define LFL_CORE_GAME_GAME_H__
 
 #include "core/game/proto.h"
+#include "core/game/particles.h"
 
 namespace LFL {
 DECLARE_bool(rcon_debug);

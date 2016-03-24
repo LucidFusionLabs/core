@@ -333,6 +333,8 @@ void SystemResolver::GetNameservers(vector<IPV4::Addr> *nameservers) {
 
 void RecursiveResolver::ConnectoToRootServers() {
   vector<IPV4::Addr> addrs;
+# undef XX
+# undef YY
 # define XX(x)
 # define YY(x) addrs.push_back(IPV4::Parse(x));
 # include "core/app/net/namedroot.h"

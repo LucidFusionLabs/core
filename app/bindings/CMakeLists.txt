@@ -2,17 +2,17 @@
 
 add_definitions(${LFL_APP_DEF})
 include_directories(${LFL_APP_INCLUDE})
-add_library(app_null_js STATIC null_js.cpp)
-add_library(app_null_tu STATIC null_tu.cpp)
+lfl_add_library(app_null_js STATIC null_js.cpp)
+lfl_add_library(app_null_tu STATIC null_tu.cpp)
 
 if(LFL_V8JS)
-  add_library(app_v8_js STATIC v8_js.cpp)
+  lfl_add_library(app_v8_js STATIC v8_js.cpp)
   target_include_directories(app_v8_js PUBLIC ${V8JS_INCLUDE})
   target_link_libraries(app_v8_js PUBLIC ${V8JS_LIB})
 endif()
 
 if(LFL_LIBCLANG)
-  add_library(app_clang_tu STATIC clang_tu.cpp)
+  lfl_add_library(app_clang_tu STATIC clang_tu.cpp)
   target_include_directories(app_clang_tu PUBLIC ${LIBCLANG_INCLUDE})
   target_link_libraries(app_clang_tu PUBLIC ${LIBCLANG_LIB})
 endif()

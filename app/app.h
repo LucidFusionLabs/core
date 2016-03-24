@@ -90,7 +90,7 @@ extern int optind;
 #define snprintf _snprintf
 #endif
 
-#ifdef LFL_LINUX
+#if defined(LFL_LINUX) || defined(LFL_EMSCRIPTEN)
 #include <arpa/inet.h>
 #endif
 
@@ -395,6 +395,7 @@ struct PerformanceTimers {
 #include "core/app/video.h"
 #include "core/app/font.h"
 #include "core/app/scene.h"
+#include "core/app/loader.h"
 #include "core/app/assets.h"
 #include "core/app/input.h"
 #include "core/app/shell.h"

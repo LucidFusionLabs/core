@@ -62,9 +62,9 @@ const int Key::F12        = SDLK_F12;
 const int Key::Home       = SDLK_HOME;
 const int Key::End        = SDLK_END;
 
-struct SDLPlatformModule : public Module {
+struct SDLFrameworkModule : public Module {
   int Init() {
-    INFO("SDLPlatformModule::Init");
+    INFO("SDLFrameworkModule::Init");
     int SDL_Init_Flag = 0;
     SDL_Init_Flag |= (FLAGS_lfapp_video ? SDL_INIT_VIDEO : 0);
     SDL_Init_Flag |= (FLAGS_lfapp_audio ? SDL_INIT_AUDIO : 0);
@@ -81,7 +81,8 @@ struct SDLPlatformModule : public Module {
   }
 
   int Frame(unsigned clicks) {
-    SDL_Event ev; point mp;
+    point mp;
+    SDL_Event ev;
     SDL_GetMouseState(&mp.x, &mp.y);
     bool mouse_moved = false;
 
@@ -101,17 +102,17 @@ struct SDLPlatformModule : public Module {
       else if (ev.type == SDL_KEYDOWN) app->input->KeyPress(ev.key.keysym.sym, 1);
       else if (ev.type == SDL_KEYUP)   app->input->KeyPress(ev.key.keysym.sym, 0);
       else if (ev.type == SDL_MOUSEMOTION) {
-        app->input->MouseMove(mp, point(ev.motion.xrel, ev.motion.yrel));
+        app->input->MouseMove(Input::TransformMouseCoordinate(mp), point(ev.motion.xrel, -ev.motion.yrel));
         mouse_moved = true;
       }
-      else if (ev.type == SDL_MOUSEBUTTONDOWN) app->input->MouseClick(ev.button.button, 1, point(ev.button.x, ev.button.y));
-      else if (ev.type == SDL_MOUSEBUTTONUP)   app->input->MouseClick(ev.button.button, 0, point(ev.button.x, ev.button.y));
+      else if (ev.type == SDL_MOUSEBUTTONDOWN) app->input->MouseClick(ev.button.button, 1, Input::TransformMouseCoordinate(point(ev.button.x, ev.button.y)));
+      else if (ev.type == SDL_MOUSEBUTTONUP)   app->input->MouseClick(ev.button.button, 0, Input::TransformMouseCoordinate(point(ev.button.x, ev.button.y)));
       // else if (ev.type == SDL_ACTIVEEVENT && ev.active.state & SDL_APPACTIVE) { if ((minimized = ev.active.gain)) return 0; }
     }
 
-#ifndef __APPLE__
+#if 0 // ndef __APPLE__
     if (mouse_moved && screen->cursor_grabbed) {
-      SDL_WarpMouseInWindow((SDL_Window*)screen->id, width/2, height/2);
+      SDL_WarpMouseInWindow(GetTyped<SDL_Window*>(screen->id), screen->width/2, screen->height/2);
       while(SDL_PollEvent(&ev)) { /* do nothing */ }
     }
 #endif
@@ -119,6 +120,9 @@ struct SDLPlatformModule : public Module {
   }
 };
 
+void Window::SetCaption(const string &v) {}
+void Window::SetResizeIncrements(float x, float y) {}
+void Window::SetTransparency(float v) {}
 void Window::Reshape(int w, int h) { SDL_SetWindowSize(GetTyped<SDL_Window*>(id), w, h); }
 
 void Application::MakeCurrentWindow(Window *W) {
@@ -152,6 +156,14 @@ void Application::OpenTouchKeyboard() {
   SDL_iPhoneKeyboardShow((SDL_Window*)screen->id);
 #endif
 }
+
+int Application::GetVolume() { return 0; }
+int Application::GetMaxVolume() { return 0; }
+void Application::SetVolume(int v) {}
+void Application::ShowAds() {}
+void Application::HideAds() {}
+
+void Application::LoseFocus() {}
 void Application::GrabMouseFocus()    { SDL_ShowCursor(0); SDL_SetWindowGrab(GetTyped<SDL_Window*>(screen->id), SDL_TRUE);  SDL_SetRelativeMouseMode(SDL_TRUE);  app->grab_mode.On();  screen->cursor_grabbed=true; }
 void Application::ReleaseMouseFocus() { SDL_ShowCursor(1); SDL_SetWindowGrab(GetTyped<SDL_Window*>(screen->id), SDL_FALSE); SDL_SetRelativeMouseMode(SDL_FALSE); app->grab_mode.Off(); screen->cursor_grabbed=false; }
 
@@ -170,12 +182,12 @@ bool Video::CreateWindow(Window *W) {
   SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
 
   if (!(W->id = MakeTyped(SDL_CreateWindow(W->caption.c_str(), SDL_WINDOWPOS_UNDEFINED,
-                                           SDL_WINDOWPOS_UNDEFINED, W->width, W->height, createflag))).value)
+                                           SDL_WINDOWPOS_UNDEFINED, W->width, W->height, createflag))).v)
     return ERRORv(false, "SDL_CreateWindow: ", SDL_GetError());
 
   auto w = GetTyped<SDL_Window*>(W->id);
   if (!app->windows.empty()) W->gl = app->windows.begin()->second->gl;
-  else if (!(W->gl = MakeTyped(SDL_GL_CreateContext(w))).value)
+  else if (!(W->gl = MakeTyped(SDL_GL_CreateContext(w))).v)
     return ERRORv(false, "SDL_GL_CreateContext: ", SDL_GetError());
 
   SDL_Surface* icon = SDL_LoadBMP(Asset::FileName("icon.bmp").c_str());
@@ -185,6 +197,7 @@ bool Video::CreateWindow(Window *W) {
   return true;
 }
 
+void Video::StartWindow(Window *W) {}
 int Video::Swap() {
   screen->gd->Flush();
   SDL_GL_SwapWindow(GetTyped<SDL_Window*>(screen->id));
@@ -192,8 +205,9 @@ int Video::Swap() {
   return 0;
 }
 
-void FrameScheduler::DoWait() { SDL_WaitEvent(NULL); }
+bool FrameScheduler::DoWait() { return SDL_WaitEvent(NULL); }
 void FrameScheduler::Setup() {}
+void FrameScheduler::UpdateWindowTargetFPS(Window *w) {}
 void FrameScheduler::Wakeup(void *opaque) {
   if (wait_forever && screen && wait_forever_thread) {
     static int my_event_type = SDL_RegisterEvents(1);
@@ -212,6 +226,11 @@ void FrameScheduler::DelWaitForeverKeyboard() {}
 void FrameScheduler::AddWaitForeverSocket(Socket fd, int flag, void *val) { if (wait_forever && wait_forever_thread) wakeup_thread.Add(fd, flag, val); }
 void FrameScheduler::DelWaitForeverSocket(Socket fd) { if (wait_forever && wait_forever_thread) wakeup_thread.Del(fd); }
 
-extern "C" void *LFAppCreatePlatformModule() { return new SDLPlatformModule(); }
+unique_ptr<Module> CreateFrameworkModule() { return make_unique<SDLFrameworkModule>(); }
+
+extern "C" int main(int argc, const char* const* argv) {
+  MyAppCreate();
+  return MyAppMain(argc, argv);
+}
 
 }; // namespace LFL

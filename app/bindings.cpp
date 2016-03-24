@@ -31,7 +31,6 @@ extern "C" {
 #endif
 };
 
-
 namespace LFL {
 #ifdef LFL_CUDA
 void PrintCUDAProperties(cudaDeviceProp *prop) {

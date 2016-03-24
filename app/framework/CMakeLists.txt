@@ -1,7 +1,7 @@
 # $Id: CMakeLists.txt 1298 2011-12-11 18:46:06Z justin $
 
 add_definitions(${LFL_APP_DEF})
-include_directories(${LFL_APP_INCLUDE})
+include_directories(${LFL_APP_INCLUDE} ${CMAKE_CURRENT_BINARY_DIR}/..)
 lfl_add_library(app_null_framework STATIC null_framework.cpp)
 lfl_add_library(app_null_os STATIC null_os.cpp)
 target_link_libraries(app_null_os ${PLATFORM_LIB})

@@ -16,6 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "core/game/particles.h"
+
 namespace LFL {
 DEFINE_bool(hull_geometry, false, "Draw entity bounding hull"); 
 

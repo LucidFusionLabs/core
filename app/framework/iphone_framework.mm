@@ -702,6 +702,15 @@ struct iPhoneFrameworkModule : public Module {
   }
 };
 
+struct iPhoneAudioAssetLoader : public AudioAssetLoader {
+  virtual void *LoadAudioFile(const string &filename) { return iPhoneMusicCreate(filename.c_str()); }
+  virtual void UnloadAudioFile(void *h) {}
+  virtual void *LoadAudioBuf(const char *buf, int len, const char *mimetype) { return 0; }
+  virtual void UnloadAudioBuf(void *h) {}
+  virtual void LoadAudio(void *handle, SoundAsset *a, int seconds, int flag) { a->handle = handle; }
+  virtual int RefillAudio(SoundAsset *a, int reset) { return 0; }
+};
+
 string Application::GetClipboardText() { return ""; }
 void Application::SetClipboardText(const string &s) {}
 int  Application::SetExtraScale(bool v) { return [[LFUIApplication sharedAppDelegate] updateScale:v]; }
@@ -795,6 +804,7 @@ void FrameScheduler::DelWaitForeverSocket(Socket fd) {
 }
 
 unique_ptr<Module> CreateFrameworkModule() { return make_unique<iPhoneFrameworkModule>(); }
+unique_ptr<AssetLoaderInterface> CreateAssetLoader() { return make_unique<iPhoneAudioAssetLoader>(); }
 
 extern "C" int main(int ac, const char* const* av) {
   MyAppCreate();
