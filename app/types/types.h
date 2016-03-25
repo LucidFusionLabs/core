@@ -434,12 +434,6 @@ struct MallocAllocator : public Allocator {
   void Free(void *p);
 };
 
-struct NewAllocator : public Allocator {
-  void *Malloc(int size) { return new char[size]; }
-  void *Realloc(void *p, int size) { return !p ? Malloc(size) : 0; }
-  void Free(void *p) { delete [] reinterpret_cast<char*>(p); }
-};
-
 template <int S> struct FixedAllocator : public Allocator {
   static const int size = S;
   char buf[S];

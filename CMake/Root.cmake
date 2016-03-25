@@ -37,7 +37,18 @@ if(CMAKE_SYSTEM_NAME MATCHES "Darwin")
   set(LFL_APPLE 1)
 endif()
 
-if(LFL_ANDROID)
+if(LFL_EMSCRIPTEN)
+  set(LFL_APP_OS app_null_os)
+  set(LFL_APP_FRAMEWORK app_sdl_framework)
+  set(LFL_APP_GRAPHICS app_opengl_graphics)
+  set(LFL_APP_AUDIO app_null_audio)
+  set(LFL_APP_CAMERA app_null_camera)
+  set(LFL_APP_CONVERT app_null_convert)
+  set(LFL_APP_CRYPTO app_null_crypto)
+  set(LFL_APP_FONT app_null_ttf)
+  set(LFL_APP_GAME_LOADER app_simple_resampler app_simple_loader app_libpng_png app_null_jpeg app_null_gif)
+
+elseif(LFL_ANDROID)
   set(LFL_APP_OS app_android_os)
   set(LFL_APP_FRAMEWORK app_android_framework)
   set(LFL_APP_GRAPHICS app_opengl_graphics)
@@ -46,6 +57,7 @@ if(LFL_ANDROID)
   set(LFL_APP_CONVERT app_null_convert)
   set(LFL_APP_CRYPTO app_openssl_crypto)
   set(LFL_APP_FONT app_null_ttf)
+  set(LFL_APP_GAME_LOADER app_simple_resampler app_simple_loader app_libpng_png app_libjpeg_jpeg app_null_gif)
 
 elseif(LFL_IPHONE)
   set(LFL_APP_OS app_iphone_os)
@@ -56,6 +68,7 @@ elseif(LFL_IPHONE)
   set(LFL_APP_CONVERT app_iconv_convert)
   set(LFL_APP_CRYPTO app_commoncrypto_crypto)
   set(LFL_APP_FONT app_null_ttf)
+  set(LFL_APP_GAME_LOADER app_simple_resampler app_simple_loader app_libpng_png app_libjpeg_jpeg app_null_gif)
 
 elseif(CMAKE_SYSTEM_NAME MATCHES "Darwin")
   set(LFL_OSX 1)
@@ -67,6 +80,7 @@ elseif(CMAKE_SYSTEM_NAME MATCHES "Darwin")
   set(LFL_APP_CONVERT app_iconv_convert)
   set(LFL_APP_CRYPTO app_commoncrypto_crypto)
   set(LFL_APP_FONT app_freetype_ttf)
+  set(LFL_APP_GAME_LOADER app_ffmpeg_resampler app_ffmpeg_loader app_libpng_png app_libjpeg_jpeg app_null_gif)
 
 elseif(WIN32 OR WIN64)
   set(LFL_WINDOWS 1)
@@ -78,6 +92,7 @@ elseif(WIN32 OR WIN64)
   set(LFL_APP_CONVERT app_null_convert)
   set(LFL_APP_CRYPTO app_openssl_crypto)
   set(LFL_APP_FONT app_freetype_ttf)
+  set(LFL_APP_GAME_LOADER app_ffmpeg_resampler app_ffmpeg_loader app_libpng_png app_libjpeg_jpeg app_null_gif)
 
 elseif(CMAKE_SYSTEM_NAME MATCHES "Linux")
   set(LFL_LINUX 1)
@@ -89,6 +104,7 @@ elseif(CMAKE_SYSTEM_NAME MATCHES "Linux")
   set(LFL_APP_CONVERT app_iconv_convert)
   set(LFL_APP_CRYPTO app_openssl_crypto)
   set(LFL_APP_FONT app_freetype_ttf)
+  set(LFL_APP_GAME_LOADER app_ffmpeg_resampler app_ffmpeg_loader app_libpng_png app_libjpeg_jpeg app_null_gif)
 
 endif()
 
@@ -208,6 +224,9 @@ add_subdirectory(${LFL_SOURCE_DIR}/core/app_tests)
 
 # web
 add_subdirectory(${LFL_SOURCE_DIR}/core/web)
+
+# game
+add_subdirectory(${LFL_SOURCE_DIR}/core/game)
 
 # nlp
 add_subdirectory(${LFL_SOURCE_DIR}/core/nlp)

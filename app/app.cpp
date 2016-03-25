@@ -52,6 +52,7 @@ extern "C" LFApp        *GetLFApp()        { return LFL::app; }
 extern "C" int LFAppMain()                 { return LFL::app->Main(); }
 extern "C" int LFAppMainLoop()             { return LFL::app->MainLoop(); }
 extern "C" int LFAppFrame(bool handle_ev)  { return LFL::app->EventDrivenFrame(handle_ev); }
+extern "C" void LFAppTimerDrivenFrame()    { LFL::app->TimerDrivenFrame(true); }
 extern "C" void LFAppWakeup(void *v)       { return LFL::app->scheduler.Wakeup(v); }
 extern "C" void LFAppResetGL()             { return LFL::app->ResetGL(); }
 extern "C" const char *LFAppDownloadDir()  { return LFL::app->dldir.c_str(); }
@@ -397,6 +398,8 @@ int Application::Create(int argc, const char* const* argv, const char *source_fi
 
   srand(fnv32(&pid, sizeof(int), time(0)));
   ThreadLocalStorage::Init();
+  Singleton<NullAllocator>::Get();
+  Singleton<MallocAllocator>::Get();
   atexit(LFAppAtExit);
 
 #ifdef LFL_WINDOWS

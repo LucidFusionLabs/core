@@ -52,7 +52,7 @@ set(PLATFORM_INCLUDE ${PLATFORM_INCLUDE} PARENT_SCOPE)
 set(BOOST_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/boost PARENT_SCOPE)
 
 # png
-if(LFL_PNG)
+if(LFL_PNG AND NOT LFL_EMSCRIPTEN)
   add_subdirectory(libpng)
   set(PNG_INCLUDE ${CMAKE_CURRENT_BINARY_DIR}/libpng ${CMAKE_CURRENT_SOURCE_DIR}/libpng PARENT_SCOPE)
   set(PNG_LIB png PARENT_SCOPE)
@@ -275,13 +275,10 @@ if(LFL_GLFW)
 endif()
 
 # SDL
-if(LFL_SDL)
-  if(LFL_EMSCRIPTEN)
-  else()
-    add_subdirectory(SDL)
-    set(SDL_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/SDL/include PARENT_SCOPE)
-    set(SDL_LIB SDL2-static PARENT_SCOPE)
-  endif()
+if(LFL_SDL AND NOT LFL_EMSCRIPTEN)
+  add_subdirectory(SDL)
+  set(SDL_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/SDL/include PARENT_SCOPE)
+  set(SDL_LIB SDL2-static PARENT_SCOPE)
 endif()
 
 # portaudio

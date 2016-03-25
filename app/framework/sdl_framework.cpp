@@ -25,6 +25,9 @@ extern "C" {
 #include "SDL_uikitkeyboard.h"
 #endif
 };
+#ifdef EMSCRIPTEN
+#include <emscripten/emscripten.h>
+#endif
 
 namespace LFL {
 const int Key::Escape     = SDLK_ESCAPE;
@@ -89,6 +92,7 @@ struct SDLFrameworkModule : public Module {
     while (SDL_PollEvent(&ev)) {
       if (ev.type == SDL_QUIT) app->run = false;
       else if (ev.type == SDL_WINDOWEVENT) {
+#ifndef LFL_EMSCRIPTEN
         if (ev.window.event == SDL_WINDOWEVENT_FOCUS_GAINED ||
             ev.window.event == SDL_WINDOWEVENT_SHOWN ||
             ev.window.event == SDL_WINDOWEVENT_RESIZED ||
@@ -96,6 +100,7 @@ struct SDLFrameworkModule : public Module {
           CHECK((screen = app->GetWindow(Void(size_t(ev.window.windowID)))));
           app->MakeCurrentWindow(screen);
         }
+#endif
         if      (ev.window.event == SDL_WINDOWEVENT_RESIZED) screen->Reshape(ev.window.data1, ev.window.data2);
         else if (ev.window.event == SDL_WINDOWEVENT_CLOSE) app->CloseWindow(screen);
       }
@@ -180,7 +185,6 @@ bool Video::CreateWindow(Window *W) {
   SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE, bitdepth[2]);
   SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, FLAGS_depth_buffer_bits);
   SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-
   if (!(W->id = MakeTyped(SDL_CreateWindow(W->caption.c_str(), SDL_WINDOWPOS_UNDEFINED,
                                            SDL_WINDOWPOS_UNDEFINED, W->width, W->height, createflag))).v)
     return ERRORv(false, "SDL_CreateWindow: ", SDL_GetError());
@@ -192,7 +196,6 @@ bool Video::CreateWindow(Window *W) {
 
   SDL_Surface* icon = SDL_LoadBMP(Asset::FileName("icon.bmp").c_str());
   SDL_SetWindowIcon(w, icon);
-
   app->windows[Void(size_t(SDL_GetWindowID(w)))] = W;
   return true;
 }
@@ -205,8 +208,13 @@ int Video::Swap() {
   return 0;
 }
 
+void FrameScheduler::Setup() {
+#ifdef EMSCRIPTEN
+  run_main_loop = false;
+#endif
+}
+
 bool FrameScheduler::DoWait() { return SDL_WaitEvent(NULL); }
-void FrameScheduler::Setup() {}
 void FrameScheduler::UpdateWindowTargetFPS(Window *w) {}
 void FrameScheduler::Wakeup(void *opaque) {
   if (wait_forever && screen && wait_forever_thread) {
@@ -230,7 +238,12 @@ unique_ptr<Module> CreateFrameworkModule() { return make_unique<SDLFrameworkModu
 
 extern "C" int main(int argc, const char* const* argv) {
   MyAppCreate();
-  return MyAppMain(argc, argv);
+  int ret = MyAppMain(argc, argv);
+  if (ret) return ret;
+#ifdef EMSCRIPTEN
+  emscripten_set_main_loop(LFAppTimerDrivenFrame, 0, 0);
+#endif
+  return 0;
 }
 
 }; // namespace LFL

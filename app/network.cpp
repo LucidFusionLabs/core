@@ -179,10 +179,10 @@ void SystemNetwork::CloseSocket(Socket fd) {
 }
 
 Socket SystemNetwork::OpenSocket(int protocol) {
-  if (protocol == Protocol::TCP) return socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
+  Socket ret = InvalidSocket;
+  if (protocol == Protocol::TCP) ret = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
   else if (protocol == Protocol::UDP) {
-    Socket ret;
-    if ((ret = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP)) < 0) return ret;
+    if ((ret = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP)) < 0) return InvalidSocket;
 #ifdef LFL_WINDOWS
 #ifndef SIO_UDP_CONNRESET
 #define SIO_UDP_CONNRESET _WSAIOW(IOC_VENDOR,12)
@@ -191,9 +191,8 @@ Socket SystemNetwork::OpenSocket(int protocol) {
     BOOL bNewBehavior = FALSE;
     DWORD status = WSAIoctl(ret, SIO_UDP_CONNRESET, &bNewBehavior, sizeof(bNewBehavior), 0, 0, &dwBytesReturned, 0, 0);
 #endif
-    return ret;
   }
-  else return -1;
+  return ret;
 }
 
 bool SystemNetwork::OpenSocketPair(Socket *fd, int socket_type, bool close_on_exec) {
@@ -270,10 +269,13 @@ int SystemNetwork::GetSocketBufferSize(Socket fd, bool send_or_recv) {
 }
 
 int SystemNetwork::Bind(int fd, IPV4::Addr addr, int port) {
-  sockaddr_in sin; int optval = 1;
+#ifndef LFL_EMSCRIPTEN
+  int optval = 1;
   if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char*>(&optval), sizeof(optval)))
     return ERRORv(-1, "setsockopt: ", SystemNetwork::LastError());
+#endif
 
+  sockaddr_in sin;
   memset(&sin, 0, sizeof(sockaddr_in));
   sin.sin_family = PF_INET;
   sin.sin_port = htons(port);
@@ -1260,7 +1262,7 @@ void Sniffer::GetDeviceAddressSet(set<IPV4::Addr> *out) {}
 void Sniffer::GetIPAddress(IPV4::Addr *out) {
   static IPV4::Addr localhost = IPV4::Parse("127.0.0.1");
   *out = 0;
-#if defined(LFL_WINDOWS)
+#if defined(LFL_WINDOWS) || defined(LFL_EMSCRIPTEN)
 #elif defined(LFL_ANDROID)
   *out = ntohl(AndroidIPV4Address());
 #else
@@ -1279,7 +1281,7 @@ void Sniffer::GetIPAddress(IPV4::Addr *out) {
 void Sniffer::GetBroadcastAddress(IPV4::Addr *out) {
   static IPV4::Addr localhost = IPV4::Parse("127.0.0.1");
   *out = 0;
-#if defined(LFL_WINDOWS)
+#if defined(LFL_WINDOWS) || defined(LFL_EMSCRIPTEN)
 #elif defined(LFL_ANDROID)
   *out = ntohl(AndroidIPV4BroadcastAddress());
 #else

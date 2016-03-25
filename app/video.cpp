@@ -52,7 +52,7 @@ const int Texture::miny_coord_ind = 1;
 const int Texture::maxx_coord_ind = 2;
 const int Texture::maxy_coord_ind = 3;
 const float Texture::unit_texcoord[4] = { 0, 0, 1, 1 };
-#ifdef LFL_MOBILE
+#if defined(LFL_MOBILE) || defined(LFL_EMSCRIPTEN)
 const int Texture::preferred_pf = Pixel::RGBA;
 #else
 const int Texture::preferred_pf = Pixel::BGRA;
@@ -868,7 +868,7 @@ void SimpleVideoResampler::CopyPixel(int s_fmt, int d_fmt, const unsigned char *
     case Pixel::RGB24: r = *sp++; g = *sp++; b = *sp++; a = ((f & Flag::TransparentBlack) && !r && !g && !b) ? 0 : 255; break;
     case Pixel::BGR24: b = *sp++; g = *sp++; r = *sp++; a = ((f & Flag::TransparentBlack) && !r && !g && !b) ? 0 : 255; break;
     case Pixel::RGB32: r = *sp++; g = *sp++; b = *sp++; a=255; sp++; break;
-    case Pixel::BGR32: b = *sp++; g = *sp++; r = *sp++; a=255; sp++; break;
+    case Pixel::BGR32: r = *sp++; g = *sp++; b = *sp++; a=255; sp++; break;
     case Pixel::RGBA:  r = *sp++; g = *sp++; b = *sp++; a=*sp++; break;
     case Pixel::BGRA:  b = *sp++; g = *sp++; r = *sp++; a=*sp++; break;
     case Pixel::GRAY8: r = 255;   g = 255;   b = 255;   a=*sp++; break;

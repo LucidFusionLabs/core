@@ -86,7 +86,7 @@ struct GameProtocol {
     int HeaderSize() const { return 0; }
     int Size() const { return HeaderSize(); }
     void Out(Serializable::Stream *o) const {}
-    int   In(const Serializable::Stream *i) { return 0; }
+    int   In(const Serializable::Stream *i) { return i->Result(); }
   };
 
   struct ChallengeResponse : public Serializable {
@@ -97,7 +97,7 @@ struct GameProtocol {
     int HeaderSize() const { return 4; }
     int Size() const { return HeaderSize(); }
     void Out(Serializable::Stream *o) const { o->Htonl( token); }
-    int   In(const Serializable::Stream *i) { i->Ntohl(&token); return 0; }
+    int   In(const Serializable::Stream *i) { i->Ntohl(&token); return i->Result(); }
   };
 
   struct JoinRequest : public Serializable {
@@ -106,10 +106,10 @@ struct GameProtocol {
     string PlayerName;
     JoinRequest() : Serializable(ID) {}
 
-    int HeaderSize() const { return 4; }
+    int HeaderSize() const { return 8; }
     int Size() const { return HeaderSize() + PlayerName.size(); }
-    void Out(Serializable::Stream *o) const { o->Htonl( token); o->String(PlayerName); }
-    int   In(const Serializable::Stream *i) { i->Ntohl(&token); PlayerName = i->Get(); return 0; }
+    void Out(Serializable::Stream *o) const { o->Htonl( token); o->BString(PlayerName); }
+    int   In(const Serializable::Stream *i) { i->Ntohl(&token); i->ReadString(&PlayerName); return i->Result(); }
   };
 
   struct JoinResponse : public Serializable {
@@ -117,10 +117,10 @@ struct GameProtocol {
     string rcon;
     JoinResponse() : Serializable(ID) {}
 
-    int HeaderSize() const { return 0; }
-    int Size() const { return rcon.size(); }
-    void Out(Serializable::Stream *o) const { o->String(rcon); }
-    int   In(const Serializable::Stream *i) { rcon = i->Get(); return 0; }
+    int HeaderSize() const { return 4; }
+    int Size() const { return HeaderSize() + rcon.size(); }
+    void Out(Serializable::Stream *o) const { o->BString(rcon); }
+    int   In(const Serializable::Stream *i) { i->ReadString(&rcon); return i->Result(); }
   };
 
   struct WorldUpdate : public Serializable {
@@ -148,7 +148,7 @@ struct GameProtocol {
       entity.resize(entities); collision.resize(collisions);
       for (int i=0; i<entities;   i++) entity[i]   .In(in);
       for (int i=0; i<collisions; i++) collision[i].In(in);
-      return 0;
+      return in->Result();
     }
   };
 
@@ -162,7 +162,7 @@ struct GameProtocol {
     int HeaderSize() const { return 8 + Orientation::size; }
     int Size() const { return HeaderSize(); }
     void Out(Serializable::Stream *o) const { o->Htons( id_WorldUpdate); o->Htons( time_since_WorldUpdate); o->Htonl( buttons); ort.Out(o); }
-    int   In(const Serializable::Stream *i) { i->Ntohs(&id_WorldUpdate); i->Ntohs(&time_since_WorldUpdate); i->Ntohl(&buttons); ort.In(i); return 0; }
+    int   In(const Serializable::Stream *i) { i->Ntohs(&id_WorldUpdate); i->Ntohs(&time_since_WorldUpdate); i->Ntohl(&buttons); ort.In(i); return i->Result(); }
   };
 
   struct RconRequest : public Serializable {
@@ -170,10 +170,10 @@ struct GameProtocol {
     string Text;
     RconRequest(const string &t=string()) : Serializable(ID), Text(t) {}
 
-    int HeaderSize() const { return 0; }
+    int HeaderSize() const { return 4; }
     int Size() const { return HeaderSize() + Text.size(); }
-    void Out(Serializable::Stream *o) const { o->String(Text); }
-    int   In(const Serializable::Stream *i) { Text = i->Get(); return 0; }
+    void Out(Serializable::Stream *o) const { o->BString(Text); }
+    int   In(const Serializable::Stream *i) { i->ReadString(&Text); return i->Result(); }
   };
 
   struct RconResponse : public Serializable {
@@ -183,7 +183,7 @@ struct GameProtocol {
     int HeaderSize() const { return 0; }
     int Size() const { return HeaderSize(); }
     void Out(Serializable::Stream *o) const {}
-    int   In(const Serializable::Stream *i) { return 0; }
+    int   In(const Serializable::Stream *i) { return i->Result(); }
   };
 
   struct PlayerList : public RconRequest {

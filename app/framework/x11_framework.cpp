@@ -127,6 +127,13 @@ string Application::GetClipboardText() {}
 void Application::ReleaseMouseFocus() {}
 void Application::GrabMouseFocus() {}
 
+void Application::OpenTouchKeyboard() {}
+int Application::GetVolume() { return 0; }
+int Application::GetMaxVolume() { return 0; }
+void Application::SetVolume(int v) {}
+void Application::ShowAds() {}
+void Application::HideAds() {}
+
 void Window::SetCaption(const string &v) {}
 void Window::SetResizeIncrements(float x, float y) {}
 void Window::SetTransparency(float v) {}
@@ -167,11 +174,12 @@ int Video::Swap() {
   return 0;
 }
 
-void FrameScheduler::DoWait() {
+bool FrameScheduler::DoWait() {
   wait_forever_sockets.Select(-1);
   for (auto &s : wait_forever_sockets.socket)
     if (wait_forever_sockets.GetReadable(s.first))
       if (s.first != system_event_socket) app->scheduler.Wakeup(s.second.second);
+  return false;
 }
 void FrameScheduler::Setup() { synchronize_waits = wait_forever_thread = 0; }
 void FrameScheduler::Wakeup(void *opaque) { 
@@ -198,6 +206,9 @@ void FrameScheduler::DelWaitForeverSocket(Socket fd) {
 
 unique_ptr<Module> CreateFrameworkModule() { return make_unique<X11FrameworkModule>(); }
 
-extern "C" int main(int argc, const char* const* argv) { return MyAppMain(argc, argv); }
+extern "C" int main(int argc, const char* const* argv) {
+  MyAppCreate();
+  return MyAppMain(argc, argv);
+}
 
 }; // namespace LFL

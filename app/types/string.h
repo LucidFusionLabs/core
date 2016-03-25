@@ -705,6 +705,7 @@ struct Serializable {
     void Read32(unsigned long   *out) const { ReadType(out, Get(sizeof(*out))); }
     void Read32(         long   *out) const { ReadType(out, Get(sizeof(*out))); }
     void ReadString(StringPiece *out) const { Ntohl(&out->len); out->buf = Get(out->len); }
+    void ReadString(string *out) const { int len=0; Ntohl(&len); *out = string(Get(len), len); }
 
     template <class X> void ReadUnalignedArray(ArrayPiece<X> *out) const
     { int l=0; Ntohl(&l); out->assign(reinterpret_cast<const X*>(Get(l)), l/sizeof(X)); }

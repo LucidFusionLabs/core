@@ -449,6 +449,12 @@ struct UDPServer : public Service {
 };
 
 struct TCPClient : public Service {};
+struct TCPServer : public Service {
+  Connection::Handler *handler=0;
+  TCPServer(int port) { QueueListen(0, port); }
+  virtual int Connected(Connection *c) { c->handler = unique_ptr<Connection::Handler>(handler); return 0; }
+  virtual void Close(Connection *c) { c->handler.release(); Service::Close(c); }
+};
 
 struct GPlusClient : public Service {
   static const int MTU = 1500;

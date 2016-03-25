@@ -34,7 +34,7 @@
 #define glOrtho glOrthof 
 #define glFrustum glFrustumf 
 
-#elif defined(LFL_ANDROID)
+#elif defined(LFL_ANDROID) || defined(LFL_EMSCRIPTEN)
 #ifdef LFL_GLES2
 #include <GLES2/gl2.h>
 #include <GLES2/gl2ext.h>
@@ -54,7 +54,7 @@
 #include <GL/glu.h>
 #endif
 
-#if defined(LFL_MOBILE) || defined(LFL_QTGL)
+#if defined(LFL_MOBILE) || defined(LFL_QTGL) || defined(LFL_EMSCRIPTEN)
 #define glGenRenderbuffersEXT(a,b) glGenRenderbuffers(a,b)
 #define glBindRenderbufferEXT(a,b) glBindRenderbuffer(a,b)
 #define glDeleteRenderbuffersEXT(a,b) glDeleteRenderbuffers(a,b)
@@ -119,7 +119,7 @@ const int GraphicsDevice::DepthBits            = GL_DEPTH_BITS;
 const int GraphicsDevice::ActiveUniforms       = GL_ACTIVE_UNIFORMS;
 const int GraphicsDevice::ActiveAttributes     = GL_ACTIVE_ATTRIBUTES;
 const int GraphicsDevice::MaxVertexAttributes  = GL_MAX_VERTEX_ATTRIBS;
-#ifdef LFL_MOBILE
+#if defined(LFL_MOBILE) || defined(LFL_EMSCRIPTEN)
 const int GraphicsDevice::Fill                 = 0;
 const int GraphicsDevice::Line                 = 0;
 const int GraphicsDevice::Point                = 0;
@@ -161,7 +161,7 @@ int Pixel::OpenGLID(int p) {
   switch (p) {
     case RGBA:   case RGB32: return GL_RGBA;
     case RGB24:              return GL_RGB;
-#ifndef LFL_MOBILE
+#if !defined(LFL_MOBILE) && !defined(LFL_EMSCRIPTEN)
     case BGRA:   case BGR32: return GL_BGRA;
     case BGR24:              return GL_BGR;
 #endif
@@ -171,6 +171,7 @@ int Pixel::OpenGLID(int p) {
   }
 }
 
+#ifdef LFL_GLES1
 #ifndef LFL_QTGL
 struct OpenGLES1 : public GraphicsDevice {
 #else
@@ -292,6 +293,7 @@ struct OpenGLES1 : public GraphicsDevice, public QOpenGLFunctions {
     GDDebug("Shader=", shader->name);
   }
 };
+#endif // LFL_GLES1
 
 #ifdef LFL_GLES2
 #ifndef LFL_QTGL
@@ -646,6 +648,7 @@ struct OpenGLES2 : public GraphicsDevice, public QOpenGLFunctions {
 #endif // LFL_GLES2
 
 unique_ptr<GraphicsDevice> CreateGraphicsDevice(int opengles_version) {
+  unique_ptr<GraphicsDevice> gd;
   ONCE({
 #ifdef LFL_GLEW
 #ifdef GLEW_MX
@@ -656,14 +659,21 @@ unique_ptr<GraphicsDevice> CreateGraphicsDevice(int opengles_version) {
 #endif
   });
 
-  unique_ptr<GraphicsDevice> gd;
 #ifdef LFL_GLES2
   if (opengles_version == 2) gd = make_unique<OpenGLES2>();
+#ifdef LFL_GLES1
+  else
 #endif
-  else gd = make_unique<OpenGLES1>();
+#endif
+
+#ifdef LFL_GLES1  
+  if (opengles_version == 1) gd = make_unique<OpenGLES1>();
+#endif
+
 #ifdef LFL_GLEW
   gd->have_framebuffer = GLEW_EXT_framebuffer_object;
 #endif
+
   return gd;
 }
 

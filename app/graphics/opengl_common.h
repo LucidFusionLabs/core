@@ -120,7 +120,7 @@ void ScreenshotBox(Texture *out, const Box &b, int flag) {
 }
 
 void DumpTexture(Texture *out, unsigned tex_id) {
-#ifndef LFL_MOBILE
+#if !defined(LFL_MOBILE) && !defined(LFL_EMSCRIPTEN)
   if (tex_id) {
     GLint gl_tt = out->GLTexType(), tex_w = 0, tex_h = 0;
     BindTexture(gl_tt, tex_id);

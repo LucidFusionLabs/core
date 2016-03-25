@@ -17,6 +17,15 @@
 if(LFL_EMSCRIPTEN)
   macro(lfl_add_target target)
     lfl_add_executable(${target} ${ARGN})
+    set_target_properties(${target} PROPERTIES OUTPUT_NAME ${target}.html)
+    set_target_properties(${target} PROPERTIES LINK_FLAGS
+      "--embed-file assets -s USE_SDL=2 -s USE_LIBPNG=1 -s USE_ZLIB=1")
+
+    add_custom_command(TARGET ${target} PRE_LINK WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+      COMMAND rm -rf assets
+      COMMAND mkdir assets
+      COMMAND cp -r ${CMAKE_CURRENT_SOURCE_DIR}/assets/* assets
+      COMMAND cp ${LFL_APP_ASSETS} assets)
   endmacro()
 
   macro(lfl_post_build_start target binname pkgname)
