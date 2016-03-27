@@ -10,7 +10,7 @@ lfl_add_executable(tests test.cpp assets_test.cpp gui_test.cpp app_test.cpp type
 add_dependency(tests ${GTEST_DEP})
 target_link_libraries(tests ${LFL_APP_LIB} ${GTEST_LIB} app_null_framework app_null_graphics
                       app_null_audio app_null_camera app_opencv_matrix app_null_fft app_simple_loader
-                      app_simple_resampler app_iconv_convert app_regexp_regex app_null_sregex
+                      app_simple_resampler app_iconv_convert app_stdregex_regex app_null_sregex
                       app_libpng_png app_null_jpeg app_null_gif app_libcss_css app_null_ttf app_null_ssl
                       app_null_js app_null_tu app_null_os)
 add_custom_command(TARGET tests POST_BUILD WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
@@ -21,7 +21,7 @@ lfl_add_executable(datastructure_test datastructure_test.cpp)
 add_dependency(datastructure_test ${GTEST_DEP})
 target_link_libraries(datastructure_test ${LFL_APP_LIB} ${GTEST_LIB} app_null_framework app_null_graphics
                       app_null_audio app_null_camera app_opencv_matrix app_null_fft app_simple_loader
-                      app_simple_resampler app_iconv_convert app_regexp_regex app_null_sregex
+                      app_simple_resampler app_iconv_convert app_stdregex_regex app_null_sregex
                       app_libpng_png app_null_jpeg app_null_gif app_null_css app_null_ttf app_null_ssl
                       app_null_js app_null_tu app_null_os)
 
@@ -29,7 +29,7 @@ lfl_add_executable(regex_test regex_test.cpp)
 add_dependency(datastructure_test ${GTEST_DEP})
 target_link_libraries(regex_test ${LFL_APP_LIB} ${GTEST_LIB} app_null_framework app_null_graphics
                       app_null_audio app_null_camera app_opencv_matrix app_null_fft app_simple_loader
-                      app_simple_resampler app_iconv_convert app_regexp_regex app_null_sregex
+                      app_simple_resampler app_iconv_convert app_stdregex_regex app_null_sregex
                       app_libpng_png app_null_jpeg app_null_gif app_null_css app_null_ttf app_null_ssl
                       app_null_js app_null_tu app_null_os)
 

@@ -16,22 +16,23 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "regexp.h"
+#include <regex>
 
 namespace LFL {
-Regex::~Regex() { re_free(static_cast<regexp*>(impl)); }
+Regex::~Regex() { if (auto compiled = static_cast<std::regex*>(impl)) delete compiled; }
 Regex::Regex(const string &patternstr) {
-  regexp* compiled = 0;
-  if (!re_comp(&compiled, patternstr.c_str())) impl = compiled;
+  unique_ptr<std::regex> compiled = make_unique<std::regex>(patternstr);
+  impl = compiled.release();
 }
 
 int Regex::Match(const string &text, vector<Regex::Result> *out) {
   if (!impl) return -1;
-  regexp* compiled = static_cast<regexp*>(impl);
-  vector<regmatch> matches(re_nsubexp(compiled));
-  int retval = re_exec(compiled, text.c_str(), matches.size(), &matches[0]);
-  if (retval < 1) return retval;
-  if (out) for (auto i : matches) out->emplace_back(i.begin, i.end);
+  if (out) out->clear();
+  auto compiled = static_cast<std::regex*>(impl);
+  std::smatch matches;
+  if (!std::regex_search(text, matches, *compiled) || matches.size() < 1) return 0;
+  if (out) for (int i=0, l=matches.size(); i!=l; i++)
+    out->emplace_back(matches[i].first - text.begin(), matches[i].second - text.begin());
   return 1;
 }
 

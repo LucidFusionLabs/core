@@ -17,9 +17,6 @@
 [submodule "imports/flatbuffers"]
 	path = imports/flatbuffers
 	url = https://github.com/google/flatbuffers
-[submodule "imports/libjpeg-turbo"]
-	path = imports/libjpeg-turbo
-	url = https://github.com/libjpeg-turbo/libjpeg-turbo
 [submodule "imports/Box2D"]
 	path = imports/Box2D
 	url = https://github.com/erincatto/Box2D
@@ -56,3 +53,12 @@
 [submodule "imports/libpng"]
 	path = imports/libpng
 	url = https://github.com/winlibs/libpng
+[submodule "imports/glew-cmake"]
+	path = imports/glew-cmake
+	url = https://github.com/Perlmint/glew-cmake
+[submodule "imports/giflib"]
+	path = imports/giflib
+	url = https://github.com/ProfessorKaos64/giflib
+[submodule "imports/libjpeg-turbo"]
+	path = imports/libjpeg-turbo
+	url = https://github.com/leapmotion/libjpeg-turbo

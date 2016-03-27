@@ -74,6 +74,7 @@ TEST(RegexTest, RegexpURL) {
   timers->AccumulateTo(0);
 }
 
+#ifdef LFL_SREGEX
 TEST(RegexTest, StreamRegexURL) {
   PerformanceTimers *timers = Singleton<PerformanceTimers>::Get();
   int tid = timers->Create("StreamRegexURL");
@@ -88,6 +89,7 @@ TEST(RegexTest, StreamRegexURL) {
   }
   timers->AccumulateTo(0);
 }
+#endif
 
 TEST(RegexTest, AhoCorasickURL) {
   PerformanceTimers *timers = Singleton<PerformanceTimers>::Get();

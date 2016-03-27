@@ -54,7 +54,7 @@ set(BOOST_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/boost PARENT_SCOPE)
 # png
 if(LFL_PNG AND NOT LFL_EMSCRIPTEN)
   add_subdirectory(libpng)
-  set(PNG_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/libpng PARENT_SCOPE)
+  set(PNG_INCLUDE ${CMAKE_CURRENT_BINARY_DIR}/libpng ${CMAKE_CURRENT_SOURCE_DIR}/libpng PARENT_SCOPE)
   set(PNG_LIB png16_static PARENT_SCOPE)
 endif()
 
@@ -66,16 +66,24 @@ if(LFL_JPEG)
     set(JPEG_LIB libjpeg.lib PARENT_SCOPE)
     set(JPEG_DEP libjpeg PARENT_SCOPE)
   else()
-    option(ENABLE_SHARED OFF)
-    add_subdirectory(libjpeg-turbo)
-    set(JPEG_INCLUDE ${CMAKE_CURRENT_BINARY_DIR}/libjpeg-turbo ${CMAKE_CURRENT_SOURCE_DIR}/libjpeg-turbo PARENT_SCOPE)
-    set(JPEG_LIB ${CMAKE_CURRENT_BINARY_DIR}/libjpeg-turbo/.libs/libturbojpeg.a PARENT_SCOPE)
+    ExternalProject_Add(libjpeg-turbo PREFIX ${CMAKE_CURRENT_BINARY_DIR}/libjpeg-turbo
+                        DOWNLOAD_COMMAND rm -rf libjpeg-turbo && cp -R ${CMAKE_CURRENT_SOURCE_DIR}/libjpeg-turbo libjpeg-turbo && cd libjpeg-turbo && autoreconf -fi
+                        CONFIGURE_COMMAND <SOURCE_DIR>/configure --prefix=<INSTALL_DIR>
+                        LOG_CONFIGURE ON LOG_BUILD ON)
+    add_library(libjpeg IMPORTED STATIC GLOBAL)
+    set_property(TARGET libjpeg PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/libjpeg-turbo/lib/libturbojpeg.a)
+    add_dependencies(libjpeg libjpeg-turbo)
+    set(JPEG_INCLUDE ${CMAKE_CURRENT_BINARY_DIR}/libjpeg-turbo/include PARENT_SCOPE)
+    set(JPEG_LIB libjpeg PARENT_SCOPE)
   endif()
 endif()
 
 # gif
 if(LFL_GIF)
-  add_subdirectory(giflib)
+  add_library(libgif STATIC giflib/lib/dgif_lib.c giflib/lib/egif_lib.c giflib/lib/gif_err.c
+              giflib/lib/gif_font.c giflib/lib/gif_hash.c giflib/lib/gifalloc.c giflib/lib/quantize.c
+              giflib/lib/openbsd-reallocarray.c)
+  target_include_directories(libgif PUBLIC giflib/lib)
   set(GIF_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/giflib/lib PARENT_SCOPE)
   set(GIF_LIB libgif PARENT_SCOPE)
 endif()
@@ -184,6 +192,7 @@ endif()
 
 # box2d
 if(LFL_BOX2D)
+  option(BOX2D_BUILD_EXAMPLES OFF)
   add_subdirectory(Box2D/Box2D)
   set(BOX2D_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/Box2D/Box2D PARENT_SCOPE)
   set(BOX2D_LIB Box2D PARENT_SCOPE)
@@ -199,8 +208,8 @@ endif()
     
 # lame
 if(LFL_LAME)
+  autoconf_exec(lame ln -s ${CMAKE_CURRENT_SOURCE_DIR}/lame/include ${CMAKE_CURRENT_BINARY_DIR}/lame/lame)
   autoconf(lame)
-  execute_process(COMMAND ln -s . include/lame WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/lame)
   set(LAME_LIB -L${CMAKE_CURRENT_BINARY_DIR}/lame/libmp3lame/.libs -lmp3lame)
   set(LAME_LIB ${LAME_LIB} PARENT_SCOPE)
 endif()
@@ -233,7 +242,7 @@ if(LFL_FFMPEG)
       set(CONFIGURE_OPTIONS --enable-gpl --enable-libx264 --enable-libmp3lame --disable-openssl --disable-securetransport
           --extra-libs=-L${CMAKE_CURRENT_BINARY_DIR}/lame/libmp3lame/.libs
           --extra-libs=-L${CMAKE_CURRENT_BINARY_DIR}/x264
-          --extra-cflags=-I${CMAKE_CURRENT_SOURCE_DIR}/lame/include
+          --extra-cflags=-I${CMAKE_CURRENT_BINARY_DIR}/lame
           --extra-cflags=-I${CMAKE_CURRENT_BINARY_DIR}/x264
           --extra-cflags=-I${CMAKE_CURRENT_SOURCE_DIR}/x264 --disable-sse --disable-outdev=sdl)
     endif()
@@ -283,9 +292,9 @@ endif()
 
 # GLEW
 if(LFL_GLEW)
-  add_subdirectory(glew)
-  set(GLEW_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/glew/include PARENT_SCOPE)
-  set(GLEW_LIB lfl_glew PARENT_SCOPE)
+  add_subdirectory(glew-cmake)
+  set(GLEW_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/glew-cmake/include PARENT_SCOPE)
+  set(GLEW_LIB libglew_static PARENT_SCOPE)
 endif()
 
 # wxWidgets
@@ -369,7 +378,7 @@ endif()
 if(LFL_REGEX)
   add_subdirectory(regex)
   set(REGEX_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/regex PARENT_SCOPE)
-  set(REGEX_LIB regex PARENT_SCOPE)
+  set(REGEX_LIB rxspencer PARENT_SCOPE)
 endif()
 
 # sregex
