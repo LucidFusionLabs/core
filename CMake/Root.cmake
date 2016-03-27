@@ -36,7 +36,7 @@ endif()
 if(CMAKE_SYSTEM_NAME MATCHES "Darwin")
   set(LFL_APPLE 1)
 endif()
-
+  
 if(LFL_EMSCRIPTEN)
   set(LFL_APP_OS app_null_os)
   set(LFL_APP_FRAMEWORK app_sdl_framework)
@@ -105,8 +105,9 @@ elseif(CMAKE_SYSTEM_NAME MATCHES "Linux")
   set(LFL_APP_CRYPTO app_openssl_crypto)
   set(LFL_APP_FONT app_freetype_ttf)
   set(LFL_APP_GAME_LOADER app_ffmpeg_resampler app_ffmpeg_loader app_libpng_png app_libjpeg_jpeg app_null_gif)
-
 endif()
+
+set(LFL_APP_SIMPLE_LOADER app_simple_resampler app_simple_loader app_libpng_png app_null_jpeg app_null_gif)
 
 if(CMAKE_SIZEOF_VOID_P EQUAL 8)
   set(LFL64 1)

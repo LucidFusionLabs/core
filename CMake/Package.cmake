@@ -151,8 +151,9 @@ elseif(LFL_OSX)
       COMMAND if [ ${copy_lfl_app_lib_files} ]; then cp ${LFL_APP_LIB_FILES} ${lib}\; fi
       COMMAND install_name_tool -change /usr/local/lib/libportaudio.2.dylib @loader_path/../Libraries/libportaudio.2.dylib ${bin}
       COMMAND install_name_tool -change /usr/local/lib/libmp3lame.0.dylib @loader_path/../Libraries/libmp3lame.0.dylib ${bin}
-      COMMAND install_name_tool -change libcxcore.2.1.dylib @loader_path/../Libraries/libcxcore.2.1.dylib ${bin}
-      COMMAND install_name_tool -change libcv.2.1.dylib @loader_path/../Libraries/libcv.2.1.dylib ${bin})
+      COMMAND install_name_tool -change lib/libopencv_core.3.1.dylib @loader_path/../Libraries/libopencv_core.3.1.dylib ${lib}/libopencv_imgproc.3.1.dylib
+      COMMAND install_name_tool -change lib/libopencv_core.3.1.dylib @loader_path/../Libraries/libopencv_core.3.1.dylib ${bin}
+      COMMAND install_name_tool -change lib/libopencv_imgproc.3.1.dylib @loader_path/../Libraries/libopencv_imgproc.3.1.dylib ${bin})
 
     add_custom_target(${target}_pkg WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
       COMMAND codesign -f -s \"${OSXCERT}\" ${pkgname}.app/Contents/MacOS/${binname}
@@ -180,8 +181,8 @@ elseif(LFL_OSX)
       COMMAND cp ${target} ${pkgname}.app/Contents/MacOS
       COMMAND install_name_tool -change /usr/local/lib/libportaudio.2.dylib @loader_path/../Libraries/libportaudio.2.dylib ${bin}
       COMMAND install_name_tool -change /usr/local/lib/libmp3lame.0.dylib @loader_path/../Libraries/libmp3lame.0.dylib ${bin}
-      COMMAND install_name_tool -change libcxcore.2.1.dylib @loader_path/../Libraries/libcxcore.2.1.dylib ${bin}
-      COMMAND install_name_tool -change libcv.2.1.dylib @loader_path/../Libraries/libcv.2.1.dylib ${bin}
+      COMMAND install_name_tool -change lib/libopencv_core.3.1.dylib @loader_path/../Libraries/libopencv_core.3.1.dylib ${bin}
+      COMMAND install_name_tool -change lib/libopencv_imgproc.3.1.dylib @loader_path/../Libraries/libopencv_imgproc.3.1.dylib ${bin}
       COMMAND codesign -f -s \"${OSXCERT}\" ${pkgname}.app/Contents/MacOS/${target})
   endmacro()
 

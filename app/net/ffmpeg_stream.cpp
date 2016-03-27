@@ -99,8 +99,8 @@ struct StreamResourceClient : public Connection::Handler {
     dst->nb_streams = src->nb_streams;
   }
 
-  static AVFrame *AllocPicture(enum PixelFormat pix_fmt, int width, int height) {
-    AVFrame *picture = avcodec_alloc_frame();
+  static AVFrame *AllocPicture(AVPixelFormat pix_fmt, int width, int height) {
+    AVFrame *picture = av_frame_alloc();
     if (!picture) return 0;
     int size = avpicture_get_size(pix_fmt, width, height);
     uint8_t *picture_buf = static_cast<uint8_t*>(av_malloc(size));
@@ -114,7 +114,7 @@ struct StreamResourceClient : public Connection::Handler {
   }
 
   static AVFrame *AllocSamples(int num_samples, int num_channels, short **samples_out) {
-    AVFrame *samples = avcodec_alloc_frame();
+    AVFrame *samples = av_frame_alloc();
     if (!samples) return 0;
     samples->nb_samples = num_samples;
     int size = 2 * num_samples * num_channels;
@@ -166,7 +166,7 @@ void HTTPServer::StreamResource::OpenStreams(bool A, bool V) {
     AVCodecContext *vc = video->codec;
 
     vc->codec_type = AVMEDIA_TYPE_VIDEO;
-    vc->codec_id = CODEC_ID_H264;
+    vc->codec_id = AV_CODEC_ID_H264;
     vc->codec_tag = av_codec_get_tag(fctx->oformat->codec_tag, vc->codec_id);
 
     vc->width = 576;
@@ -174,7 +174,7 @@ void HTTPServer::StreamResource::OpenStreams(bool A, bool V) {
     vc->bit_rate = vbr;
     vc->time_base.num = 1;
     vc->time_base.den = FLAGS_camera_fps;
-    vc->pix_fmt = PIX_FMT_YUV420P;
+    vc->pix_fmt = AV_PIX_FMT_YUV420P;
 
     /* x264 defaults */
     vc->me_range = 16;
@@ -189,7 +189,7 @@ void HTTPServer::StreamResource::OpenStreams(bool A, bool V) {
     if (avcodec_open2(vc, codec, 0) < 0) return ERROR("avcodec_open2");
     if (!vc->codec) return ERROR("no video codec");
 
-    if (vc->pix_fmt != PIX_FMT_YUV420P) return ERROR("pix_fmt ", vc->pix_fmt, " != ", PIX_FMT_YUV420P);
+    if (vc->pix_fmt != AV_PIX_FMT_YUV420P) return ERROR("pix_fmt ", vc->pix_fmt, " != ", AV_PIX_FMT_YUV420P);
     if (!(picture = StreamResourceClient::AllocPicture(vc->pix_fmt, vc->width, vc->height))) return ERROR("AllocPicture");
   }
 
@@ -199,7 +199,7 @@ void HTTPServer::StreamResource::OpenStreams(bool A, bool V) {
     AVCodecContext *ac = audio->codec;
 
     ac->codec_type = AVMEDIA_TYPE_AUDIO;
-    ac->codec_id = CODEC_ID_MP3;
+    ac->codec_id = AV_CODEC_ID_MP3;
     ac->codec_tag = av_codec_get_tag(fctx->oformat->codec_tag, ac->codec_id);
 
     ac->channels = FLAGS_chans_in;
@@ -287,7 +287,7 @@ void HTTPServer::StreamResource::SendVideo() {
   /* convert video */
   if (!conv)
     conv = sws_getContext(FLAGS_camera_image_width, FLAGS_camera_image_height,
-                          PixelFormat(PixelToFFMpegId(app->camera->state.image_format)),
+                          AVPixelFormat(PixelToFFMpegId(app->camera->state.image_format)),
                           vc->width, vc->height, vc->pix_fmt, SWS_BICUBIC, 0, 0, 0);
 
   int camera_linesize[4] = { app->camera->state.image_linesize, 0, 0, 0 }, got = 0;

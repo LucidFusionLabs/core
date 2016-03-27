@@ -23,3 +23,30 @@
 [submodule "imports/Box2D"]
 	path = imports/Box2D
 	url = https://github.com/erincatto/Box2D
+[submodule "imports/lame"]
+	path = imports/lame
+	url = https://github.com/rbrito/lame
+[submodule "imports/ffmpeg"]
+	path = imports/ffmpeg
+	url = https://github.com/FFmpeg/ffmpeg
+[submodule "imports/x264"]
+	path = imports/x264
+	url = https://github.com/yixia/x264
+[submodule "imports/geoip-api-c"]
+	path = imports/geoip-api-c
+	url = https://github.com/maxmind/geoip-api-c
+[submodule "imports/OpenCV"]
+	path = imports/OpenCV
+	url = https://github.com/Itseez/OpenCV
+[submodule "imports/gperftools"]
+	path = imports/gperftools
+	url = https://github.com/gperftools/gperftools
+[submodule "imports/glog"]
+	path = imports/glog
+	url = https://github.com/google/glog
+[submodule "imports/protobuf"]
+	path = imports/protobuf
+	url = https://github.com/google/protobuf
+[submodule "imports/googletest"]
+	path = imports/googletest
+	url = https://github.com/google/googletest

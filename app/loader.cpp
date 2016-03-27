@@ -292,7 +292,8 @@ struct SimpleAssetLoader : public AssetLoaderInterface {
       if (wav_header.audio_format != 1 || wav_header.num_channels != 1 ||
           wav_header.bits_per_sample != 16 || wav_header.sample_rate != FLAGS_sample_rate ||
           wav_samples > FLAGS_sample_rate*FLAGS_soundasset_seconds)
-        return ERROR("LoadAudio(", a->name, ", ", fn, ") not supported");
+        return ERROR("LoadAudio(", a->name, ", ", fn, ") not supported or ", wav_samples, " > ",
+                     FLAGS_sample_rate*FLAGS_soundasset_seconds);
 
       a->channels = 1;
       a->sample_rate = FLAGS_sample_rate;

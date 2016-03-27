@@ -75,6 +75,7 @@ struct SDLFrameworkModule : public Module {
     CHECK(Video::CreateWindow(screen));
     app->MakeCurrentWindow(screen);
     SDL_GL_SetSwapInterval(1);
+    // SDL_StartTextInput();
     return 0;
   }
 
@@ -104,9 +105,19 @@ struct SDLFrameworkModule : public Module {
         if      (ev.window.event == SDL_WINDOWEVENT_RESIZED) screen->Reshape(ev.window.data1, ev.window.data2);
         else if (ev.window.event == SDL_WINDOWEVENT_CLOSE) app->CloseWindow(screen);
       }
-      else if (ev.type == SDL_KEYDOWN) app->input->KeyPress(ev.key.keysym.sym, 1);
-      else if (ev.type == SDL_KEYUP)   app->input->KeyPress(ev.key.keysym.sym, 0);
-      else if (ev.type == SDL_MOUSEMOTION) {
+      else if (ev.type == SDL_KEYDOWN) {
+#ifdef LFL_EMSCRIPTEN
+        app->input->KeyPress(SDL_GetKeyFromScancode(SDL_ScanCode(ev.key.keysym.sym)), 1);
+#else
+        app->input->KeyPress(ev.key.keysym.sym, 1);
+#endif
+      } else if (ev.type == SDL_KEYUP) {
+#ifdef LFL_EMSCRIPTEN
+        app->input->KeyPress(SDL_GetKeyFromScancode(SDL_ScanCode(ev.key.keysym.sym)), 0);
+#else
+        app->input->KeyPress(ev.key.keysym.sym, 0);
+#endif
+      } else if (ev.type == SDL_MOUSEMOTION) {
         app->input->MouseMove(Input::TransformMouseCoordinate(mp), point(ev.motion.xrel, -ev.motion.yrel));
         mouse_moved = true;
       }

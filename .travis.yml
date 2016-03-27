@@ -28,7 +28,7 @@ script:
   - cmake ..
   - cd app_tests
   - make -j4
-  - LD_LIBRARY_PATH=../imports/OpenCV/lib ./tests
+  - ./tests
 
 after_success:
   - echo "success"

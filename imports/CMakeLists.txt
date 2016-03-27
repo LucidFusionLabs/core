@@ -66,7 +66,7 @@ if(LFL_JPEG)
     set(JPEG_LIB libjpeg.lib PARENT_SCOPE)
     set(JPEG_DEP libjpeg PARENT_SCOPE)
   else()
-    set(ENABLE_SHARED OFF)
+    option(ENABLE_SHARED OFF)
     add_subdirectory(libjpeg-turbo)
     set(JPEG_INCLUDE ${CMAKE_CURRENT_BINARY_DIR}/libjpeg-turbo ${CMAKE_CURRENT_SOURCE_DIR}/libjpeg-turbo PARENT_SCOPE)
     set(JPEG_LIB ${CMAKE_CURRENT_BINARY_DIR}/libjpeg-turbo/.libs/libturbojpeg.a PARENT_SCOPE)
@@ -82,11 +82,12 @@ endif()
 
 # freetype
 if(LFL_FREETYPE)
-  add_subdirectory(freetype)
   set(FREETYPE_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/freetype/include PARENT_SCOPE)
   if(WIN32)
+    INCLUDE_EXTERNAL_MSPROJECT(freetype ${CMAKE_CURRENT_SOURCE_DIR}/freetype/builds/win32/vc2008/freetype.vcxproj)
     set(FREETYPE_LIB freetype239_D.lib PARENT_SCOPE)
   else()
+    autoconf(freetype --enable-static=yes --enable-shared=no)
     set(FREETYPE_LIB ${CMAKE_CURRENT_BINARY_DIR}/freetype/.libs/libfreetype.a PARENT_SCOPE)
   endif()
 endif()
@@ -107,11 +108,17 @@ endif()
 
 # protobuf
 if(LFL_PROTOBUF)
-  add_subdirectory(protobuf)
   if(WIN32)
+    INCLUDE_EXTERNAL_MSPROJECT(libprotobuf-lite ${CMAKE_CURRENT_SOURCE_DIR}/protobuf/vsprojects/libprotobuf-lite.vcxproj)
     set(PROTOBUF_LIBRARY libprotobuf-lite.lib PARENT_SCOPE)
   else()
-    set(PROTOBUF_LIBRARY ${CMAKE_CURRENT_BINARY_DIR}/protobuf/src/.libs/libprotobuf.a PARENT_SCOPE)
+    set(CONFIGURE_OPTIONS)
+    if(LFL_ANDROID OR LFL_IPHONE)
+      set(CONFIGURE_OPTIONS --with-protoc=${CMAKE_CURRENT_BINARY_DIR}/../../../osx/imports/protobuf/bin/osx64/protoc)
+    endif()
+    #autoconf(protobuf ${CONFIGURE_OPTIONS} --enable-static=yes --enable-shared=no)
+    ExternalProject_Add(protobuf SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/protobuf)
+    #set(PROTOBUF_LIBRARY ${CMAKE_CURRENT_BINARY_DIR}/protobuf/src/.libs/libprotobuf.a PARENT_SCOPE)
   endif()
   set(PROTOBUF_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/protobuf/src PARENT_SCOPE)
   set(PROTOBUF_PROTOC_EXECUTABLE ${CMAKE_CURRENT_BINARY_DIR}/protobuf/src/protoc PARENT_SCOPE)
@@ -132,22 +139,25 @@ endif()
 
 # glog
 if(LFL_GLOG)
-  add_subdirectory(glog)
+  autoconf(glog)
   set(GLOG_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/glog/src/glog PARENT_SCOPE)
   set(GLOG_LIB ${CMAKE_CURRENT_BINARY_DIR}/glog/.libs/libglog.a PARENT_SCOPE)
 endif()
 
 # gtest
 if(LFL_GTEST)
-  add_subdirectory(protobuf/gtest)
-  set(GTEST_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/protobuf/gtest/include PARENT_SCOPE)
-  set(GTEST_LIB ${CMAKE_CURRENT_BINARY_DIR}/protobuf/gtest/lib/.libs/libgtest.a PARENT_SCOPE)
+  ExternalProject_Add(googletest SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/googletest/googletest
+                      PREFIX ${CMAKE_CURRENT_BINARY_DIR}/googletest)
+  set(GTEST_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/googletest/googletest/include PARENT_SCOPE)
+  set(GTEST_LIB ${CMAKE_CURRENT_BINARY_DIR}/googletest/src/googletest-build/libgtest.a PARENT_SCOPE)
+  set(GTEST_DEP googletest PARENT_SCOPE)
 endif()
 
 # tcmalloc
 if(LFL_TCMALLOC)
-  add_subdirectory(gperftools)
-  set(TCMALLOC_LIB ${CMAKE_CURRENT_BINARY_DIR}/gperftools/.libs/libtcmalloc_minimal.a -fno-builtin-malloc -fno-builtin-calloc -fno-builtin-realloc -fno-builtin-free PARENT_SCOPE)
+  autoconf(gperftools --enable-minimal)
+  set(TCMALLOC_LIB ${CMAKE_CURRENT_BINARY_DIR}/gperftools/.libs/libtcmalloc_minimal.a
+      -fno-builtin-malloc -fno-builtin-calloc -fno-builtin-realloc -fno-builtin-free PARENT_SCOPE)
 endif()
 
 # openssl
@@ -182,31 +192,47 @@ if(LFL_ASSIMP)
 endif()
     
 # lame
-if(LFL_LAME)    
-  add_subdirectory(lame)
+if(LFL_LAME)
+  autoconf(lame)
+  execute_process(COMMAND ln -s . include/lame WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/lame)
   set(LAME_LIB -L${CMAKE_CURRENT_BINARY_DIR}/lame/libmp3lame/.libs -lmp3lame)
   set(LAME_LIB ${LAME_LIB} PARENT_SCOPE)
 endif()
 
 # x264
 if(LFL_X264)
-  add_subdirectory(x264)
+  autoconf(x264 --extra-cflags=-w --enable-shared)
+  #execute_process(COMMAND ln -s libx264.so.142 libx264.so WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/x264)
   set(X264_LIB -L${CMAKE_CURRENT_BINARY_DIR}/x264 -lx264)
   set(X264_LIB ${X264_LIB} PARENT_SCOPE)
 endif()
 
 # ffmpeg
 if(LFL_FFMPEG)
-  add_subdirectory(ffmpeg)
   if(WIN32)
-    set(FFMPEG_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/ffmpeg/w32/include PARENT_SCOPE)
-    set(FFMPEG_LIB ${CMAKE_CURRENT_SOURCE_DIR}/ffmpeg/w32/lib/avformat.lib
-        ${CMAKE_CURRENT_SOURCE_DIR}/ffmpeg/w32/lib/avcodec.lib
-        ${CMAKE_CURRENT_SOURCE_DIR}/ffmpeg/w32/lib/avutil.lib
-        ${CMAKE_CURRENT_SOURCE_DIR}/ffmpeg/w32/lib/swscale.lib
-        ${CMAKE_CURRENT_SOURCE_DIR}/ffmpeg/w32/lib/swresample.lib
+    set(FFMPEG_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/ffmpeg-for-Windows-prebuilt/include PARENT_SCOPE)
+    set(FFMPEG_LIB ${CMAKE_CURRENT_SOURCE_DIR}/ffmpeg-for-Windows-prebuilt/lib/avformat.lib
+        ${CMAKE_CURRENT_SOURCE_DIR}/ffmpeg-for-Windows-prebuilt/lib/avcodec.lib
+        ${CMAKE_CURRENT_SOURCE_DIR}/ffmpeg-for-Windows-prebuilt/lib/avutil.lib
+        ${CMAKE_CURRENT_SOURCE_DIR}/ffmpeg-for-Windows-prebuilt/lib/swscale.lib
+        ${CMAKE_CURRENT_SOURCE_DIR}/ffmpeg-for-Windows-prebuilt/lib/swresample.lib
         ${LAME_LIB} ${X264_LIB} PARENT_SCOPE)
   else()
+    if(LFL_ANDROID)
+      set(CONFIGURE_OPTIONS --enable-cross-compile --enable-pic --disable-debug --disable-stripping
+          --disable-bzlib --cross-prefix=${ANDROIDROOT}/bin/arm-linux-androideabi-
+          --sysroot=${ANDROIDROOT}/sysroot --arch=arm5te --target-os=linux --disable-avdevice
+          --enable-shared)
+    else()
+      set(CONFIGURE_OPTIONS --enable-gpl --enable-libx264 --enable-libmp3lame --disable-openssl --disable-securetransport
+          --extra-libs=-L${CMAKE_CURRENT_BINARY_DIR}/lame/libmp3lame/.libs
+          --extra-libs=-L${CMAKE_CURRENT_BINARY_DIR}/x264
+          --extra-cflags=-I${CMAKE_CURRENT_SOURCE_DIR}/lame/include
+          --extra-cflags=-I${CMAKE_CURRENT_BINARY_DIR}/x264
+          --extra-cflags=-I${CMAKE_CURRENT_SOURCE_DIR}/x264 --disable-sse --disable-outdev=sdl)
+    endif()
+    autoconf(ffmpeg ${CONFIGURE_OPTIONS})
+
     set(FFMPEG_INCLUDE ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg ${CMAKE_CURRENT_SOURCE_DIR}/ffmpeg PARENT_SCOPE)
     set(FFMPEG_LIB ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/libavdevice/libavdevice.a
         ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/libavfilter/libavfilter.a
@@ -216,9 +242,14 @@ if(LFL_FFMPEG)
         ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/libswscale/libswscale.a
         ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/libswresample/libswresample.a
         ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/libpostproc/libpostproc.a
-        ${LAME_LIB} ${X264_LIB} PARENT_SCOPE)
+        ${LAME_LIB} ${X264_LIB})
+    if(LFL_APPLE)
+      set(FFMPEG_LIB ${FFMPEG_LIB} "-framework AudioToolbox -framework VideoToolbox -framework CoreMedia -framework VideoDecodeAcceleration")
+    endif()
+        
+    set(FFMPEG_LIB ${FFMPEG_LIB} PARENT_SCOPE)
     add_shared_library(FFMPEG_LIB_FILES ${CMAKE_CURRENT_BINARY_DIR}/lame/libmp3lame/.libs/libmp3lame 0)
-    add_shared_library(FFMPEG_LIB_FILES ${CMAKE_CURRENT_BINARY_DIR}/x264/libx264 142)
+    add_shared_library(FFMPEG_LIB_FILES ${CMAKE_CURRENT_BINARY_DIR}/x264/libx264 138)
     set(FFMPEG_LIB_FILES ${FFMPEG_LIB_FILES} PARENT_SCOPE)
   endif()
 endif()
@@ -248,7 +279,7 @@ endif()
 if(LFL_GLEW)
   add_subdirectory(glew)
   set(GLEW_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/glew/include PARENT_SCOPE)
-  set(GLEW_LIB glew PARENT_SCOPE)
+  set(GLEW_LIB lfl_glew PARENT_SCOPE)
 endif()
 
 # wxWidgets
@@ -283,11 +314,12 @@ endif()
 
 # portaudio
 if(LFL_PORTAUDIO)
-  add_subdirectory(portaudio)
   set(PORTAUDIO_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/portaudio/include PARENT_SCOPE)
   if(WIN32)
+    INCLUDE_EXTERNAL_MSPROJECT(portaudio ${CMAKE_CURRENT_SOURCE_DIR}/portaudio/build/msvc/portaudio.vcxproj)
     set(PORTAUDIO_LIB portaudio_x86.lib PARENT_SCOPE)
   else()
+    autoconf(portaudio --disable-mac-universal)
     set(PORTAUDIO_LIB -lportaudio -L${CMAKE_CURRENT_BINARY_DIR}/portaudio/lib/.libs PARENT_SCOPE)
     add_shared_library(PORTAUDIO_LIB_FILES ${CMAKE_CURRENT_BINARY_DIR}/portaudio/lib/.libs/libportaudio 2)
     set(PORTAUDIO_LIB_FILES ${PORTAUDIO_LIB_FILES} PARENT_SCOPE)
@@ -297,20 +329,21 @@ endif()
 # OpenCV
 if(LFL_OPENCV)
   set(OPENCV_DEP OpenCV PARENT_SCOPE)
-  set(OPENCV_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/OpenCV/include PARENT_SCOPE)
   if(WIN32)
     INCLUDE_EXTERNAL_MSPROJECT(OpenCV ${CMAKE_CURRENT_SOURCE_DIR}/OpenCV/src/cv/cv.vcxproj)
     INCLUDE_EXTERNAL_MSPROJECT(cxcore ${CMAKE_CURRENT_SOURCE_DIR}/OpenCV/src/cxcore/cxcore.vcxproj)
     INCLUDE_EXTERNAL_MSPROJECT(flann ${CMAKE_CURRENT_SOURCE_DIR}/OpenCV/3rdparty/flann/flann.vcxproj)
     INCLUDE_EXTERNAL_MSPROJECT(opencv_lapack ${CMAKE_CURRENT_SOURCE_DIR}/OpenCV/3rdparty/lapack/opencv_lapack.vcxproj)
+    set(OPENCV_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/OpenCV/include PARENT_SCOPE)
     set(OPENCV_LIB cv.lib cxcore.lib flannd.lib opencv_lapackd.lib PARENT_SCOPE)
   else()
     ExternalProject_Add(OpenCV SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/OpenCV
                                PREFIX ${CMAKE_CURRENT_BINARY_DIR}/OpenCV
-                               CMAKE_ARGS -DCMAKE_INSTALL_PREFIX:PATH=${CMAKE_CURRENT_BINARY_DIR}/OpenCV)
-    set(OPENCV_LIB -L${CMAKE_CURRENT_BINARY_DIR}/OpenCV/lib -lcv -lcxcore PARENT_SCOPE)
-    add_shared_library(OPENCV_LIB_FILES ${CMAKE_CURRENT_BINARY_DIR}/OpenCV/lib/libcxcore 2.1)
-    add_shared_library(OPENCV_LIB_FILES ${CMAKE_CURRENT_BINARY_DIR}/OpenCV/lib/libcv 2.1)
+                               CMAKE_ARGS -DCMAKE_INSTALL_PREFIX:PATH=${CMAKE_CURRENT_BINARY_DIR}/OpenCV -DBUILD_TESTS=OFF -DBUILD_PERF_TESTS=OFF)
+    set(OPENCV_LIB -L${CMAKE_CURRENT_BINARY_DIR}/OpenCV/lib -lopencv_core -lopencv_imgproc PARENT_SCOPE)
+    add_shared_library(OPENCV_LIB_FILES ${CMAKE_CURRENT_BINARY_DIR}/OpenCV/lib/libopencv_core 3.1)
+    add_shared_library(OPENCV_LIB_FILES ${CMAKE_CURRENT_BINARY_DIR}/OpenCV/lib/libopencv_imgproc 3.1)
+    set(OPENCV_INCLUDE ${CMAKE_CURRENT_BINARY_DIR}/OpenCV/include PARENT_SCOPE)
     set(OPENCV_LIB_FILES ${OPENCV_LIB_FILES} PARENT_SCOPE)
   endif()
 endif()
@@ -461,14 +494,18 @@ endif()
 
 # pcap
 if(LFL_PCAP)
-  add_subdirectory(libpcap)
+  autoconf(libpcap --disable-universal)
   set(PCAP_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/libpcap PARENT_SCOPE)
   set(PCAP_LIB ${CMAKE_CURRENT_BINARY_DIR}/libpcap/libpcap.a PARENT_SCOPE)
 endif()
 
 # GeoIP
 if(LFL_GEOIP)
-  add_subdirectory(libGeoIP)
-  set(GEOIP_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/libGeoIP/libGeoIP PARENT_SCOPE)
-  set(GEOIP_LIB ${CMAKE_CURRENT_BINARY_DIR}/libGeoIP/libGeoIP/.libs/libGeoIP.a PARENT_SCOPE)
+  if(WIN32)
+    #nmake -f Makefile.vc
+  else()
+    autoconf(geoip-api-c)
+    set(GEOIP_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/geoip-api-c/libGeoIP PARENT_SCOPE)
+    set(GEOIP_LIB ${CMAKE_CURRENT_BINARY_DIR}/geoip-api-c/libGeoIP/.libs/libGeoIP.a PARENT_SCOPE)
+  endif()
 endif()

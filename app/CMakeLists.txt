@@ -3,7 +3,7 @@
 set(LFL_APP_CFLAGS)
 set(LFL_APP_DEF ${PLATFORM_DEF})
 set(LFL_APP_INCLUDE ${LFL_SOURCE_DIR} ${PLATFORM_INCLUDE})
-set(LFL_APP_LIB lfl_app)
+set(LFL_APP_LIB lfl_app app_font)
 
 macro(add_app_def _def)
   if(${_def})

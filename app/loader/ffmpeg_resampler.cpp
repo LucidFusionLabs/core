@@ -26,6 +26,7 @@ extern "C" {
 #include "core/app/bindings/ffmpeg.h"
 
 namespace LFL {
+static const int SWR_CH_MAX = 32;
 struct FFMpegAudioResampler : public AudioResamplerInterface {
   SwrContext *swr=0;
   ~FFMpegAudioResampler() { if (swr) swr_free(&swr); }
@@ -102,8 +103,8 @@ struct FFMpegVideoResampler : public VideoResamplerInterface {
     d_fmt = df; d_width = dw; d_height = dh;
     // INFO("resample ", BlankNull(Pixel::Name(s_fmt)), " -> ", BlankNull(Pixel::Name(d_fmt)), " : (", sw, ",", sh, ") -> (", dw, ",", dh, ")");
 
-    conv = sws_getContext(sw, sh, PixelFormat(PixelToFFMpegId(sf)),
-                          dw, dh, PixelFormat(PixelToFFMpegId(df)), SWS_BICUBIC, 0, 0, 0);
+    conv = sws_getContext(sw, sh, AVPixelFormat(PixelToFFMpegId(sf)),
+                          dw, dh, AVPixelFormat(PixelToFFMpegId(df)), SWS_BICUBIC, 0, 0, 0);
   }
 
   void Resample(const unsigned char *s, int sls, unsigned char *d, int dls, bool flip_x, bool flip_y) {
