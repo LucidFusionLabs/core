@@ -54,8 +54,8 @@ set(BOOST_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/boost PARENT_SCOPE)
 # png
 if(LFL_PNG AND NOT LFL_EMSCRIPTEN)
   add_subdirectory(libpng)
-  set(PNG_INCLUDE ${CMAKE_CURRENT_BINARY_DIR}/libpng ${CMAKE_CURRENT_SOURCE_DIR}/libpng PARENT_SCOPE)
-  set(PNG_LIB png PARENT_SCOPE)
+  set(PNG_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/libpng PARENT_SCOPE)
+  set(PNG_LIB png16_static PARENT_SCOPE)
 endif()
 
 # jpeg
@@ -112,16 +112,12 @@ if(LFL_PROTOBUF)
     INCLUDE_EXTERNAL_MSPROJECT(libprotobuf-lite ${CMAKE_CURRENT_SOURCE_DIR}/protobuf/vsprojects/libprotobuf-lite.vcxproj)
     set(PROTOBUF_LIBRARY libprotobuf-lite.lib PARENT_SCOPE)
   else()
-    set(CONFIGURE_OPTIONS)
-    if(LFL_ANDROID OR LFL_IPHONE)
-      set(CONFIGURE_OPTIONS --with-protoc=${CMAKE_CURRENT_BINARY_DIR}/../../../osx/imports/protobuf/bin/osx64/protoc)
-    endif()
-    #autoconf(protobuf ${CONFIGURE_OPTIONS} --enable-static=yes --enable-shared=no)
-    ExternalProject_Add(protobuf SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/protobuf)
-    #set(PROTOBUF_LIBRARY ${CMAKE_CURRENT_BINARY_DIR}/protobuf/src/.libs/libprotobuf.a PARENT_SCOPE)
+    option(protobuf_BUILD_TESTS OFF)
+    add_subdirectory(protobuf/cmake protobuf)
+    set(PROTOBUF_LIBRARY libprotobuf PARENT_SCOPE)
   endif()
   set(PROTOBUF_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/protobuf/src PARENT_SCOPE)
-  set(PROTOBUF_PROTOC_EXECUTABLE ${CMAKE_CURRENT_BINARY_DIR}/protobuf/src/protoc PARENT_SCOPE)
+  set(PROTOBUF_PROTOC_EXECUTABLE ${CMAKE_CURRENT_BINARY_DIR}/protobuf/protoc PARENT_SCOPE)
 endif()
 
 # flatbuffers
@@ -139,18 +135,28 @@ endif()
 
 # glog
 if(LFL_GLOG)
-  autoconf(glog)
+  ExternalProject_Add(googlelog SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/glog
+                      PREFIX ${CMAKE_CURRENT_BINARY_DIR}/glog
+                      INSTALL_COMMAND "" LOG_CONFIGURE ON LOG_BUILD ON)
+  add_library(glog IMPORTED STATIC GLOBAL)
+  set_property(TARGET glog PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/glog/src/googlelog-build/libglog.a)
+  add_dependencies(glog googlelog)
+
   set(GLOG_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/glog/src/glog PARENT_SCOPE)
-  set(GLOG_LIB ${CMAKE_CURRENT_BINARY_DIR}/glog/.libs/libglog.a PARENT_SCOPE)
+  set(GLOG_LIB glog PARENT_SCOPE)
 endif()
 
 # gtest
 if(LFL_GTEST)
   ExternalProject_Add(googletest SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/googletest/googletest
-                      PREFIX ${CMAKE_CURRENT_BINARY_DIR}/googletest)
+                      PREFIX ${CMAKE_CURRENT_BINARY_DIR}/googletest
+                      INSTALL_COMMAND "" LOG_CONFIGURE ON LOG_BUILD ON)
+  add_library(gtest IMPORTED STATIC GLOBAL)
+  set_property(TARGET gtest PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/googletest/src/googletest-build/libgtest.a)
+  add_dependencies(gtest googletest)
+
   set(GTEST_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/googletest/googletest/include PARENT_SCOPE)
-  set(GTEST_LIB ${CMAKE_CURRENT_BINARY_DIR}/googletest/src/googletest-build/libgtest.a PARENT_SCOPE)
-  set(GTEST_DEP googletest PARENT_SCOPE)
+  set(GTEST_LIB gtest PARENT_SCOPE)
 endif()
 
 # tcmalloc

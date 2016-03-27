@@ -16,10 +16,6 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifdef LFL_PROTOBUF
-#include <google/protobuf/message.h>
-#endif
-
 #include <sys/stat.h>
 
 #ifdef LFL_ANDROID
@@ -390,104 +386,6 @@ const char *DirectoryIter::Next() {
     if (S && !SuffixMatch(k, S)) continue;
     return k;
   }
-}
-
-/* ProtoFile */
-
-void ProtoFile::Open(const char *fn) {
-  if (file) delete file;
-  file = fn ? new LocalFile(fn, "r+", true) : 0;
-  read_offset = 0;
-  write_offset = -1;
-  done = (file ? file->Size() : 0) <= 0;
-  nr.Init(file);
-}
-
-int ProtoFile::Add(const Proto *msg, int status) {
-  done = 0;
-  write_offset = file->Seek(0, File::Whence::END);
-
-  ProtoHeader ph(status);
-  int wrote = WriteProto(file, &ph, msg, true);
-  nr.SetFileOffset(wrote > 0 ? write_offset + wrote : write_offset);
-  return wrote > 0;
-}
-
-bool ProtoFile::Update(int offset, const ProtoHeader *ph, const Proto *msg) {
-  if (offset < 0 || (write_offset = file->Seek(offset, File::Whence::SET)) != offset) return false;
-  int wrote = WriteProto(file, ph, msg, true);
-  nr.SetFileOffset(wrote > 0 ? offset + wrote : offset);
-  return wrote > 0;
-}
-
-bool ProtoFile::Update(int offset, int status) {
-  if (offset < 0 || (write_offset = file->Seek(offset, File::Whence::SET)) != offset) return false;
-  ProtoHeader ph(status);
-  int wrote = WriteProtoFlag(file, &ph, true);
-  nr.SetFileOffset(wrote > 0 ? offset + wrote : offset);
-  return wrote > 0;
-}
-
-bool ProtoFile::Get(Proto *out, int offset, int status) {
-  int record_offset;
-  write_offset = 0;
-  file->Seek(offset, File::Whence::SET);
-  bool ret = Next(out, &record_offset, status);
-  if (!ret) return 0;
-  return offset == record_offset;
-}
-
-bool ProtoFile::Next(Proto *out, int *offsetOut, int status) { ProtoHeader hdr; return Next(&hdr, out, offsetOut, status); }
-bool ProtoFile::Next(ProtoHeader *hdr, Proto *out, int *offsetOut, int status) {
-  if (done) return false;
-
-  if (write_offset >= 0) {
-    write_offset = -1;
-    file->Seek(read_offset, File::Whence::SET);
-  }
-
-  for (;;) {
-    const char *text; int offset;
-    if (!(text = nr.NextProto(&offset, &read_offset, hdr))) { done=true; return false; }
-#ifdef LFL_PROTOBUF
-    if (!out->ParseFromArray(text, hdr->len)) { done=1; app->run=0; return ERRORv(false, "parse failed, shutting down"); }
-#endif
-    if (status >= 0 && status != hdr->GetFlag()) continue;
-    if (offsetOut) *offsetOut = offset;
-    return true;
-  }
-}
-
-int ProtoFile::WriteProto(File *f, const ProtoHeader *hdr, const Proto *msg, bool doflush) {
-#ifdef LFL_PROTOBUF
-  std::string v = msg->SerializeAsString();
-  CHECK_EQ(hdr->len, v.size());
-  v.insert(0, (const char *)hdr, ProtoHeader::size);
-  int ret = (f->Write(v.c_str(), v.size()) == v.size()) ? v.size() : -1;
-  if (doflush) f->Flush();
-  return ret;
-#else
-  return -1;
-#endif
-}
-
-int ProtoFile::WriteProto(File *f, ProtoHeader *hdr, const Proto *msg, bool doflush) {
-#ifdef LFL_PROTOBUF
-  std::string v = msg->SerializeAsString();
-  hdr->SetLength(v.size());
-  v.insert(0, (const char *)hdr, ProtoHeader::size);
-  int ret = (f->Write(v.c_str(), v.size()) == v.size()) ? v.size() : -1;
-  if (doflush) f->Flush();
-  return ret;
-#else
-  return -1;
-#endif
-}
-
-int ProtoFile::WriteProtoFlag(File *f, const ProtoHeader *hdr, bool doflush) {
-  int ret = f->Write(&hdr->flag, sizeof(int)) == sizeof(int) ? sizeof(int) : -1;
-  if (doflush) f->Flush();
-  return ret;
 }
 
 /* StringFile */

@@ -401,6 +401,7 @@ TEST(RegexTest, URL) {
   matches.clear();
 }
 
+#ifdef LFL_SREGEX
 TEST(RegexTest, StreamURL) {
   StreamRegex url_matcher("https?://");
   vector<Regex::Result> matches;
@@ -438,6 +439,7 @@ TEST(RegexTest, StreamURL) {
   url_matcher.Match(in, &matches);
   EXPECT_EQ(1, matches.size()); EXPECT_EQ(-3, matches[0].begin); EXPECT_EQ(4, matches[0].end);
 }
+#endif
 
 TEST(RegexTest, AhoCorasickURL) {
   AhoCorasickFSM<char> url_matcher({"http://", "https://"});

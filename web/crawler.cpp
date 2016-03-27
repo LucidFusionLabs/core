@@ -18,12 +18,11 @@
 
 #include "crawler.pb.h"
 
-#include "lfapp/lfapp.h"
-#include "lfapp/network.h"
-#include "lfapp/flow.h"
-#include "lfapp/gui.h"
-#include "lfapp/dom.h"
+#include "core/app/app.h"
+#include "core/app/gui.h"
+#include "core/app/network.h"
 
+#include "dom.h"
 #include "crawler.h"
 #include "html.h"
 
@@ -74,8 +73,7 @@ int Frame(LFL::Window *W, unsigned clicks, int flag) {
 }; // namespace LFL
 using namespace LFL;
 
-extern "C" void MyAppInit() {
-  app->logfilename = StrCat(LFAppDownloadDir(), "crawler.txt");
+extern "C" void MyAppCreate() {
   screen->frame_cb = Frame;
   screen->caption = "crawler";
   FLAGS_lfapp_network = 1;
@@ -103,7 +101,7 @@ extern "C" int MyAppMain(int argc, const char* const* argv) {
 
     if (FLAGS_forvo_dump.size()) ((ForvoApi*)crawler)->Dump(FLAGS_forvo_dump.c_str());
 
-    if (!FLAGS_forvo_crawl) Replace<Crawler>(&crawler, 0);
+    if (!FLAGS_forvo_crawl) { delete crawler; crawler=0; }
   }
 
   /* google */
@@ -114,7 +112,7 @@ extern "C" int MyAppMain(int argc, const char* const* argv) {
 
     if (FLAGS_google_init.size()) ((GoogleApi*)crawler)->Init(FLAGS_google_init.c_str());
 
-    if (!FLAGS_google_crawl) Replace<Crawler>(&crawler, 0);
+    if (!FLAGS_google_crawl) { delete crawler; crawler=0; }
   }
 
   /* main */

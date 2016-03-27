@@ -135,7 +135,7 @@ struct ForvoApi : public Crawler, public HTMLParser {
           INFO("Writing wav ", fn);
           LocalFile lf(fn, "w");
           WavWriter wav(&lf);
-          RingBuf::Handle B(sa.wav);
+          RingSampler::Handle B(sa.wav.get());
           wav.Write(&B);
 
           fn = fn.substr(0, fn.size()-3) + "txt";

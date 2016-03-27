@@ -63,7 +63,7 @@ add_library(lfl_app ${LFL_APP_TYPE} gui.cpp browser.cpp font.cpp flow.cpp app.cp
             types/string.cpp types/time.cpp "file.cpp" assets.cpp loader.cpp audio.cpp video.cpp input.cpp
             math.cpp ipc.cpp network.cpp net/http.cpp net/ssh.cpp net/smtp.cpp net/resolver.cpp
             camera.cpp scene.cpp shell.cpp crypto.cpp bindings.cpp
-            ${PROTO_SRC} ${CAPNP_SRC} ${FLATBUFFERS_SRC_OUTPUTS})
+            ${CAPNP_SRC} ${FLATBUFFERS_SRC_OUTPUTS})
 
 target_compile_options(lfl_app PUBLIC ${LFL_APP_CFLAGS})
 target_compile_definitions(lfl_app PUBLIC ${LFL_APP_DEF})
@@ -72,6 +72,7 @@ target_include_directories(lfl_app PUBLIC ${LFL_APP_INCLUDE} ${CMAKE_CURRENT_BIN
 add_precompiled_header(core/app/app.h c++-header lfl_app)
 target_use_precompiled_header(lfl_app core/app/app.h FORCEINCLUDE)
 
+add_dependency(lfl_app ${GLOG_DEP})
 if(LFL_FLATBUFFERS)
   add_dependencies(lfl_app flatbuffers flatc ${FLATBUFFERS_SRC})
 endif()

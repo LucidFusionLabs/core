@@ -50,3 +50,9 @@
 [submodule "imports/googletest"]
 	path = imports/googletest
 	url = https://github.com/google/googletest
+[submodule "imports/libpcap"]
+	path = imports/libpcap
+	url = https://github.com/the-tcpdump-group/libpcap
+[submodule "imports/libpng"]
+	path = imports/libpng
+	url = https://github.com/winlibs/libpng

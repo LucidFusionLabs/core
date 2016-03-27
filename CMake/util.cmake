@@ -12,6 +12,12 @@ macro(add_shared_library _var _file _ver)
   set(${_var} ${${_var}} ${_file}${so_prefix}${_ver}${so_suffix})
 endmacro()
 
+macro(add_dependency _target)
+  if(${ARGN})
+    add_dependencies(${_target} ${ARGN})
+  endif() 
+endmacro()
+
 macro(copyfile _src _dst)
   execute_process(WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
     COMMAND cp ${_src} ${_dst})
