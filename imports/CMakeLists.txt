@@ -456,11 +456,18 @@ if(LFL_LIBARCHIVE)
   endif()
 endif()
 
-# regex
-if(LFL_REGEX)
-  add_subdirectory(regex)
-  set(REGEX_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/regex PARENT_SCOPE)
-  set(REGEX_LIB rxspencer PARENT_SCOPE)
+# re2
+if(LFL_RE2)
+  ExternalProject_Add(re2 LOG_CONFIGURE ON LOG_BUILD ON
+                      PREFIX ${CMAKE_CURRENT_BINARY_DIR}/re2
+                      SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/re2
+                      CMAKE_ARGS -DCMAKE_INSTALL_PREFIX:PATH=${CMAKE_CURRENT_BINARY_DIR}/re2
+                      INSTALL_COMMAND "")
+  add_library(libre2 IMPORTED STATIC GLOBAL)
+  add_dependencies(libre2 re2)
+  set_property(TARGET libre2 PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/re2/src/re2-build/libre2.a)
+  set(RE2_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/re2 PARENT_SCOPE)
+  set(RE2_LIB libre2 PARENT_SCOPE)
 endif()
 
 # sregex

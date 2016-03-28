@@ -387,17 +387,17 @@ TEST(StringTest, BaseName) {
 }
 
 TEST(RegexTest, URL) {
-  Regex url_matcher("https?://");
+  Regex url_matcher("(https?://)");
   vector<Regex::Result> matches;
 
   string in = "aa http://foo bb";
   url_matcher.Match(in, &matches);
-  EXPECT_EQ(1, matches.size()); EXPECT_EQ("http://", matches[0].Text(in));
+  EXPECT_EQ(1, matches.size()); if (matches.size()) EXPECT_EQ("http://", matches[0].Text(in));
   matches.clear();
 
   in = "aa https://foo bb";
   url_matcher.Match(in, &matches);
-  EXPECT_EQ(1, matches.size()); EXPECT_EQ("https://", matches[0].Text(in));
+  EXPECT_EQ(1, matches.size()); if (matches.size()) EXPECT_EQ("https://", matches[0].Text(in));
   matches.clear();
 }
 

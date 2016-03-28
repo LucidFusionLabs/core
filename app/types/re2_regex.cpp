@@ -16,23 +16,23 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <regex>
+#include <re2/re2.h>
 
 namespace LFL {
-Regex::~Regex() { if (auto compiled = static_cast<std::regex*>(impl)) delete compiled; }
+Regex::~Regex() { if (auto compiled = static_cast<RE2*>(impl)) delete compiled; }
 Regex::Regex(const string &patternstr) {
-  unique_ptr<std::regex> compiled = make_unique<std::regex>(patternstr);
+  unique_ptr<RE2> compiled = make_unique<RE2>(patternstr);
   impl = compiled.release();
 }
 
 int Regex::Match(const string &text, vector<Regex::Result> *out) {
   if (!impl) return -1;
   if (out) out->clear();
-  auto compiled = static_cast<std::regex*>(impl);
-  std::smatch matches;
-  if (!std::regex_search(text, matches, *compiled) || matches.size() < 2) return 0;
-  if (out) for (int i=1, l=matches.size(); i!=l; i++)
-    out->emplace_back(matches[i].first - text.begin(), matches[i].second - text.begin());
+  auto compiled = static_cast<RE2*>(impl);
+  re2::StringPiece match;
+  if (!RE2::PartialMatch(text, *compiled, &match)) return 0;
+  size_t offset = match.data() - text.data();
+  out->emplace_back(offset, offset + match.size());
   return 1;
 }
 

@@ -65,3 +65,6 @@
 [submodule "imports/stb"]
 	path = imports/stb
 	url = https://github.com/nothings/stb
+[submodule "imports/re2"]
+	path = imports/re2
+	url = https://github.com/google/re2

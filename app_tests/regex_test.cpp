@@ -64,11 +64,11 @@ TEST(RegexTest, RegexpURL) {
   int tid = timers->Create("RegexpURL");
 
   vector<Regex::Result> matches;
-  Regex url_matcher("https?://");
+  Regex url_matcher("(https?://)");
   timers->AccumulateTo(tid);
   for (int i=0; i<FLAGS_size; ++i) {
     url_matcher.Match(my_env->test1, &matches);
-    EXPECT_EQ(1, matches.size()); EXPECT_EQ("http://", matches[0].Text(my_env->test1));
+    EXPECT_EQ(1, matches.size()); if (matches.size()) EXPECT_EQ("http://", matches[0].Text(my_env->test1));
     matches.clear();
   }
   timers->AccumulateTo(0);
@@ -84,7 +84,7 @@ TEST(RegexTest, StreamRegexURL) {
   timers->AccumulateTo(tid);
   for (int i=0; i<FLAGS_size; ++i) {
     url_matcher.Match(my_env->test1, &matches);
-    EXPECT_EQ(1, matches.size()); EXPECT_EQ("http://", matches[0].Text(my_env->test1));
+    EXPECT_EQ(1, matches.size()); if (matches.size()) EXPECT_EQ("http://", matches[0].Text(my_env->test1));
     matches.clear();
   }
   timers->AccumulateTo(0);
@@ -100,7 +100,7 @@ TEST(RegexTest, AhoCorasickURL) {
   timers->AccumulateTo(tid);
   for (int i=0; i<FLAGS_size; ++i) {
     url_matcher.Match(my_env->test1, &matches);
-    EXPECT_EQ(1, matches.size()); EXPECT_EQ("http://", matches[0].Text(my_env->test1));
+    EXPECT_EQ(1, matches.size()); if (matches.size()) EXPECT_EQ("http://", matches[0].Text(my_env->test1));
     matches.clear();
   }
   timers->AccumulateTo(0);
