@@ -66,10 +66,12 @@ if(LFL_JPEG)
     set(JPEG_LIB libjpeg.lib PARENT_SCOPE)
     set(JPEG_DEP libjpeg PARENT_SCOPE)
   else()
-    ExternalProject_Add(libjpeg-turbo PREFIX ${CMAKE_CURRENT_BINARY_DIR}/libjpeg-turbo
-                        DOWNLOAD_COMMAND rm -rf libjpeg-turbo && cp -R ${CMAKE_CURRENT_SOURCE_DIR}/libjpeg-turbo libjpeg-turbo && cd libjpeg-turbo && autoreconf -fi
+    ExternalProject_Add(libjpeg-turbo LOG_CONFIGURE ON LOG_BUILD ON
+                        PREFIX ${CMAKE_CURRENT_BINARY_DIR}/libjpeg-turbo
                         CONFIGURE_COMMAND <SOURCE_DIR>/configure --prefix=<INSTALL_DIR>
-                        LOG_CONFIGURE ON LOG_BUILD ON)
+                        DOWNLOAD_COMMAND rm -rf libjpeg-turbo
+                        COMMAND cp -R ${CMAKE_CURRENT_SOURCE_DIR}/libjpeg-turbo libjpeg-turbo
+                        COMMAND ${CMAKE_COMMAND} -E chdir libjpeg-turbo autoreconf -fi)
     add_library(libjpeg IMPORTED STATIC GLOBAL)
     set_property(TARGET libjpeg PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/libjpeg-turbo/lib/libturbojpeg.a)
     add_dependencies(libjpeg libjpeg-turbo)
@@ -90,13 +92,20 @@ endif()
 
 # freetype
 if(LFL_FREETYPE)
-  set(FREETYPE_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/freetype/include PARENT_SCOPE)
   if(WIN32)
     INCLUDE_EXTERNAL_MSPROJECT(freetype ${CMAKE_CURRENT_SOURCE_DIR}/freetype/builds/win32/vc2008/freetype.vcxproj)
+    set(FREETYPE_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/freetype/include PARENT_SCOPE)
     set(FREETYPE_LIB freetype239_D.lib PARENT_SCOPE)
   else()
-    autoconf(freetype --enable-static=yes --enable-shared=no)
-    set(FREETYPE_LIB ${CMAKE_CURRENT_BINARY_DIR}/freetype/.libs/libfreetype.a PARENT_SCOPE)
+    ExternalProject_Add(freetype LOG_CONFIGURE ON LOG_BUILD ON
+                        PREFIX ${CMAKE_CURRENT_BINARY_DIR}/freetype
+                        SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/freetype
+                        CONFIGURE_COMMAND <SOURCE_DIR>/configure --prefix=<INSTALL_DIR> --enable-static=yes --enable-shared=no)
+    add_library(libfreetype IMPORTED STATIC GLOBAL)
+    add_dependencies(libfreetype freetype)
+    set_property(TARGET libfreetype PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/freetype/lib/libfreetype.a)
+    set(FREETYPE_INCLUDE ${CMAKE_CURRENT_BINARY_DIR}/freetype/include PARENT_SCOPE)
+    set(FREETYPE_LIB libfreetype PARENT_SCOPE)
   endif()
 endif()
 
@@ -110,7 +119,8 @@ endif()
 # libcss
 if(LFL_LIBCSS)
   add_subdirectory(libcss)
-  set(LIBCSS_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/libcss/libcss/include ${CMAKE_CURRENT_SOURCE_DIR}/libcss/libwapcaplet/include PARENT_SCOPE)
+  set(LIBCSS_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/libcss/libcss/include
+      ${CMAKE_CURRENT_SOURCE_DIR}/libcss/libwapcaplet/include PARENT_SCOPE)
   set(LIBCSS_LIB libcss PARENT_SCOPE)
 endif()
 
@@ -143,34 +153,40 @@ endif()
 
 # glog
 if(LFL_GLOG)
-  ExternalProject_Add(googlelog SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/glog
+  ExternalProject_Add(googlelog LOG_CONFIGURE ON LOG_BUILD ON
+                      SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/glog
                       PREFIX ${CMAKE_CURRENT_BINARY_DIR}/glog
-                      INSTALL_COMMAND "" LOG_CONFIGURE ON LOG_BUILD ON)
-  add_library(glog IMPORTED STATIC GLOBAL)
-  set_property(TARGET glog PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/glog/src/googlelog-build/libglog.a)
-  add_dependencies(glog googlelog)
-
-  set(GLOG_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/glog/src/glog PARENT_SCOPE)
-  set(GLOG_LIB glog PARENT_SCOPE)
+                      CONFIGURE_COMMAND <SOURCE_DIR>/configure --prefix=<INSTALL_DIR>)
+  add_library(libglog IMPORTED STATIC GLOBAL)
+  add_dependencies(libglog googlelog)
+  set_property(TARGET libglog PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/glog/lib/libglog.a)
+  set(GLOG_INCLUDE ${CMAKE_CURRENT_BINARY_DIR}/glog/include PARENT_SCOPE)
+  set(GLOG_LIB libglog PARENT_SCOPE)
 endif()
 
 # gtest
 if(LFL_GTEST)
-  ExternalProject_Add(googletest SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/googletest/googletest
+  ExternalProject_Add(googletest LOG_CONFIGURE ON LOG_BUILD ON
+                      SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/googletest/googletest
                       PREFIX ${CMAKE_CURRENT_BINARY_DIR}/googletest
-                      INSTALL_COMMAND "" LOG_CONFIGURE ON LOG_BUILD ON)
-  add_library(gtest IMPORTED STATIC GLOBAL)
-  set_property(TARGET gtest PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/googletest/src/googletest-build/libgtest.a)
-  add_dependencies(gtest googletest)
-
-  set(GTEST_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/googletest/googletest/include PARENT_SCOPE)
-  set(GTEST_LIB gtest PARENT_SCOPE)
+                      CMAKE_ARGS -DCMAKE_INSTALL_PREFIX:PATH=${CMAKE_CURRENT_BINARY_DIR}/googletest)
+  add_library(libgtest IMPORTED STATIC GLOBAL)
+  add_dependencies(libgtest googletest)
+  set_property(TARGET libgtest PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/googletest/lib/libgtest.a)
+  set(GTEST_INCLUDE ${CMAKE_CURRENT_BINARY_DIR}/googletest/include PARENT_SCOPE)
+  set(GTEST_LIB libgtest PARENT_SCOPE)
 endif()
 
 # tcmalloc
 if(LFL_TCMALLOC)
-  autoconf(gperftools --enable-minimal)
-  set(TCMALLOC_LIB ${CMAKE_CURRENT_BINARY_DIR}/gperftools/.libs/libtcmalloc_minimal.a
+  ExternalProject_Add(gperftools LOG_CONFIGURE ON LOG_BUILD ON
+                      PREFIX ${CMAKE_CURRENT_BINARY_DIR}/gperftools
+                      SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/gperftools
+                      CONFIGURE_COMMAND <SOURCE_DIR>/configure --prefix=<INSTALL_DIR> --enable-minimal)
+  add_library(libtcmalloc_minimal IMPORTED STATIC GLOBAL)
+  add_dependencies(libtcmalloc_minimal gperftools)
+  set_property(TARGET libtcmalloc_minimal PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/gperftools/lib/libtcmalloc_minimal.a)
+  set(TCMALLOC_LIB libtcmalloc_minimal
       -fno-builtin-malloc -fno-builtin-calloc -fno-builtin-realloc -fno-builtin-free PARENT_SCOPE)
 endif()
 
@@ -208,17 +224,31 @@ endif()
     
 # lame
 if(LFL_LAME)
-  autoconf_exec(lame ln -s ${CMAKE_CURRENT_SOURCE_DIR}/lame/include ${CMAKE_CURRENT_BINARY_DIR}/lame/lame)
-  autoconf(lame)
-  set(LAME_LIB -L${CMAKE_CURRENT_BINARY_DIR}/lame/libmp3lame/.libs -lmp3lame)
+  ExternalProject_Add(lame LOG_CONFIGURE ON LOG_BUILD ON
+                      PREFIX ${CMAKE_CURRENT_BINARY_DIR}/lame
+                      SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/lame
+                      CONFIGURE_COMMAND <SOURCE_DIR>/configure --prefix=<INSTALL_DIR>)
+  add_library(libmp3lame IMPORTED SHARED GLOBAL)
+  add_dependencies(libmp3lame lame)
+  get_shared_library_name(SHARED_LIBRARY_NAME libmp3lame 0)
+  set_property(TARGET libmp3lame PROPERTY IMPORTED_LOCATION
+               ${CMAKE_CURRENT_BINARY_DIR}/lame/lib/${SHARED_LIBRARY_NAME})
+  set(LAME_LIB libmp3lame)
   set(LAME_LIB ${LAME_LIB} PARENT_SCOPE)
 endif()
 
 # x264
 if(LFL_X264)
-  autoconf(x264 --extra-cflags=-w --enable-shared)
-  #execute_process(COMMAND ln -s libx264.so.142 libx264.so WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/x264)
-  set(X264_LIB -L${CMAKE_CURRENT_BINARY_DIR}/x264 -lx264)
+  ExternalProject_Add(x264 LOG_CONFIGURE ON LOG_BUILD ON
+                      PREFIX ${CMAKE_CURRENT_BINARY_DIR}/x264
+                      SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/x264
+                      CONFIGURE_COMMAND <SOURCE_DIR>/configure --prefix=<INSTALL_DIR> --extra-cflags=-w --enable-shared)
+  add_library(libx264 IMPORTED SHARED GLOBAL)
+  add_dependencies(libx264 x264)
+  get_shared_library_name(SHARED_LIBRARY_NAME libx264 138)
+  set_property(TARGET libx264 PROPERTY IMPORTED_LOCATION
+               ${CMAKE_CURRENT_BINARY_DIR}/x264/lib/${SHARED_LIBRARY_NAME})
+  set(X264_LIB libx264)
   set(X264_LIB ${X264_LIB} PARENT_SCOPE)
 endif()
 
@@ -240,31 +270,52 @@ if(LFL_FFMPEG)
           --enable-shared)
     else()
       set(CONFIGURE_OPTIONS --enable-gpl --enable-libx264 --enable-libmp3lame --disable-openssl --disable-securetransport
-          --extra-libs=-L${CMAKE_CURRENT_BINARY_DIR}/lame/libmp3lame/.libs
-          --extra-libs=-L${CMAKE_CURRENT_BINARY_DIR}/x264
-          --extra-cflags=-I${CMAKE_CURRENT_BINARY_DIR}/lame
-          --extra-cflags=-I${CMAKE_CURRENT_BINARY_DIR}/x264
-          --extra-cflags=-I${CMAKE_CURRENT_SOURCE_DIR}/x264 --disable-sse --disable-outdev=sdl)
+          --extra-libs=-L${CMAKE_CURRENT_BINARY_DIR}/lame/lib
+          --extra-libs=-L${CMAKE_CURRENT_BINARY_DIR}/x264/lib
+          --extra-cflags=-I${CMAKE_CURRENT_BINARY_DIR}/lame/include
+          --extra-cflags=-I${CMAKE_CURRENT_BINARY_DIR}/x264/include --disable-sse --disable-outdev=sdl)
     endif()
-    autoconf(ffmpeg ${CONFIGURE_OPTIONS})
 
-    set(FFMPEG_INCLUDE ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg ${CMAKE_CURRENT_SOURCE_DIR}/ffmpeg PARENT_SCOPE)
-    set(FFMPEG_LIB ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/libavdevice/libavdevice.a
-        ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/libavfilter/libavfilter.a
-        ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/libavformat/libavformat.a
-        ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/libavcodec/libavcodec.a
-        ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/libavutil/libavutil.a
-        ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/libswscale/libswscale.a
-        ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/libswresample/libswresample.a
-        ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/libpostproc/libpostproc.a
-        ${LAME_LIB} ${X264_LIB})
+    ExternalProject_Add(ffmpeg LOG_CONFIGURE ON LOG_BUILD ON
+                        PREFIX ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg
+                        SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/ffmpeg
+                        CONFIGURE_COMMAND <SOURCE_DIR>/configure --prefix=<INSTALL_DIR> ${CONFIGURE_OPTIONS})
+    add_dependencies(ffmpeg ${LAME_LIB} ${X264_LIB})
+    add_library(libavdevice IMPORTED STATIC GLOBAL)
+    add_library(libavfilter IMPORTED STATIC GLOBAL)
+    add_library(libavformat IMPORTED STATIC GLOBAL)
+    add_library(libavcodec IMPORTED STATIC GLOBAL)
+    add_library(libavutil IMPORTED STATIC GLOBAL)
+    add_library(libswscale IMPORTED STATIC GLOBAL)
+    add_library(libswresample IMPORTED STATIC GLOBAL)
+    add_library(libpostproc IMPORTED STATIC GLOBAL)
+    add_dependencies(libavdevice ffmpeg)
+    add_dependencies(libavfilter ffmpeg)
+    add_dependencies(libavformat ffmpeg)
+    add_dependencies(libavcodec ffmpeg)
+    add_dependencies(libavutil ffmpeg)
+    add_dependencies(libswscale ffmpeg)
+    add_dependencies(libswresample ffmpeg)
+    add_dependencies(libpostproc ffmpeg)
+    set_property(TARGET libavdevice PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/lib/libavdevice.a)
+    set_property(TARGET libavfilter PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/lib/libavfilter.a)
+    set_property(TARGET libavformat PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/lib/libavformat.a)
+    set_property(TARGET libavcodec PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/lib/libavcodec.a)
+    set_property(TARGET libavutil PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/lib/libavutil.a)
+    set_property(TARGET libswscale PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/lib/libswscale.a)
+    set_property(TARGET libswresample PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/lib/libswresample.a)
+    set_property(TARGET libpostproc PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/lib/libpostproc.a)
+
+    set(FFMPEG_INCLUDE ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/include PARENT_SCOPE)
+    set(FFMPEG_LIB libavdevice libavfilter libavformat libavcodec libavutil libswscale libswresample
+        libpostproc ${LAME_LIB} ${X264_LIB})
     if(LFL_APPLE)
       set(FFMPEG_LIB ${FFMPEG_LIB} "-framework AudioToolbox -framework VideoToolbox -framework CoreMedia -framework VideoDecodeAcceleration")
     endif()
         
     set(FFMPEG_LIB ${FFMPEG_LIB} PARENT_SCOPE)
-    add_shared_library(FFMPEG_LIB_FILES ${CMAKE_CURRENT_BINARY_DIR}/lame/libmp3lame/.libs/libmp3lame 0)
-    add_shared_library(FFMPEG_LIB_FILES ${CMAKE_CURRENT_BINARY_DIR}/x264/libx264 138)
+    add_shared_library(FFMPEG_LIB_FILES ${CMAKE_CURRENT_BINARY_DIR}/lame/lib/libmp3lame 0)
+    add_shared_library(FFMPEG_LIB_FILES ${CMAKE_CURRENT_BINARY_DIR}/x264/lib/libx264 138)
     set(FFMPEG_LIB_FILES ${FFMPEG_LIB_FILES} PARENT_SCOPE)
   endif()
 endif()
@@ -329,15 +380,24 @@ endif()
 
 # portaudio
 if(LFL_PORTAUDIO)
-  set(PORTAUDIO_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/portaudio/include PARENT_SCOPE)
   if(WIN32)
     INCLUDE_EXTERNAL_MSPROJECT(portaudio ${CMAKE_CURRENT_SOURCE_DIR}/portaudio/build/msvc/portaudio.vcxproj)
+    set(PORTAUDIO_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/portaudio/include PARENT_SCOPE)
     set(PORTAUDIO_LIB portaudio_x86.lib PARENT_SCOPE)
   else()
-    autoconf(portaudio --disable-mac-universal)
-    set(PORTAUDIO_LIB -lportaudio -L${CMAKE_CURRENT_BINARY_DIR}/portaudio/lib/.libs PARENT_SCOPE)
-    add_shared_library(PORTAUDIO_LIB_FILES ${CMAKE_CURRENT_BINARY_DIR}/portaudio/lib/.libs/libportaudio 2)
-    set(PORTAUDIO_LIB_FILES ${PORTAUDIO_LIB_FILES} PARENT_SCOPE)
+    ExternalProject_Add(portaudio LOG_CONFIGURE ON LOG_BUILD ON
+                        PREFIX ${CMAKE_CURRENT_BINARY_DIR}/portaudio
+                        SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/portaudio
+                        CONFIGURE_COMMAND <SOURCE_DIR>/configure --prefix=<INSTALL_DIR> --disable-mac-universal)
+    add_library(libportaudio IMPORTED SHARED GLOBAL)
+    add_dependencies(libportaudio portaudio)
+    get_shared_library_name(SHARED_LIBRARY_NAME libportaudio 2)
+    set_property(TARGET libportaudio PROPERTY IMPORTED_LOCATION
+                 ${CMAKE_CURRENT_BINARY_DIR}/portaudio/lib/${SHARED_LIBRARY_NAME})
+
+    set(PORTAUDIO_INCLUDE ${CMAKE_CURRENT_BINARY_DIR}/portaudio/include PARENT_SCOPE)
+    set(PORTAUDIO_LIB libportaudio PARENT_SCOPE)
+    set(PORTAUDIO_LIB_FILES ${CMAKE_CURRENT_BINARY_DIR}/portaudio/lib/${SHARED_LIBRARY_NAME} PARENT_SCOPE)
   endif()
 endif()
 
@@ -509,9 +569,15 @@ endif()
 
 # pcap
 if(LFL_PCAP)
-  autoconf(libpcap --disable-universal)
-  set(PCAP_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/libpcap PARENT_SCOPE)
-  set(PCAP_LIB ${CMAKE_CURRENT_BINARY_DIR}/libpcap/libpcap.a PARENT_SCOPE)
+  ExternalProject_Add(pcap LOG_CONFIGURE ON LOG_BUILD ON
+                      PREFIX ${CMAKE_CURRENT_BINARY_DIR}/libppcap
+                      SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/libpcap
+                      CONFIGURE_COMMAND <SOURCE_DIR>/configure --prefix=<INSTALL_DIR> --disable-universal)
+  add_library(libpcap IMPORTED STATIC GLOBAL)
+  add_dependencies(libpcap pcap)
+  set_property(TARGET libpcap PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/libpcap/lib/libpcap.a)
+  set(PCAP_INCLUDE ${CMAKE_CURRENT_BINARY_DIR}/libpcap/include PARENT_SCOPE)
+  set(PCAP_LIB libpcap PARENT_SCOPE)
 endif()
 
 # GeoIP
@@ -519,8 +585,14 @@ if(LFL_GEOIP)
   if(WIN32)
     #nmake -f Makefile.vc
   else()
-    autoconf(geoip-api-c)
-    set(GEOIP_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/geoip-api-c/libGeoIP PARENT_SCOPE)
-    set(GEOIP_LIB ${CMAKE_CURRENT_BINARY_DIR}/geoip-api-c/libGeoIP/.libs/libGeoIP.a PARENT_SCOPE)
+    ExternalProject_Add(geoip LOG_CONFIGURE ON LOG_BUILD ON
+                        PREFIX ${CMAKE_CURRENT_BINARY_DIR}/geoip-api-c
+                        SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/geoip-api-c
+                        CONFIGURE_COMMAND <SOURCE_DIR>/configure --prefix=<INSTALL_DIR>)
+    add_library(libGeoIP IMPORTED STATIC GLOBAL)
+    add_dependencies(libGeoIP geoip)
+    set_property(TARGET libGeoIP PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/geoip-aip-c/libGeoIP/lib/libGeoIP.a)
+    set(GEOIP_INCLUDE ${CMAKE_CURRENT_BINARY_DIR}/geoip-api-c/libGeoIP/include PARENT_SCOPE)
+    set(GEOIP_LIB libGeoIP PARENT_SCOPE)
   endif()
 endif()

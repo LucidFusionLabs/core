@@ -122,7 +122,6 @@ include(BundleUtilities)
 
 list(APPEND CMAKE_MODULE_PATH ${LFL_SOURCE_DIR}/core/CMake)
 include(PrecompiledHeader)
-include(Autoconf)
 include(util)
 
 if(WIN32)

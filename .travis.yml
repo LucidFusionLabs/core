@@ -28,7 +28,7 @@ script:
   - cmake ..
   - cd app_tests
   - make -j4
-  - ./tests
+  - LD_LIBRARY_PATH=./lib ./tests
 
 after_success:
   - echo "success"

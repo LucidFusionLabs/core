@@ -6,6 +6,9 @@ lfl_add_library(app_null_audio STATIC null_audio.cpp)
 
 if(LFL_OPENAL)
   lfl_add_library(app_openal_audio STATIC openal_audio.cpp)
+  if(LFL_APPLE)
+    target_link_libraries(app_openal_audio "-framework OpenAL")
+  endif()
 endif()
 
 if(LFL_PORTAUDIO)

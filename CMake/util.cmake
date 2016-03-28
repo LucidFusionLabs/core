@@ -8,8 +8,13 @@ else()
   set(so_suffix)
 endif()
 
+macro(get_shared_library_name _var _file _ver)
+  set(${_var} ${_file}${so_prefix}${_ver}${so_suffix})
+endmacro()
+
 macro(add_shared_library _var _file _ver)
-  set(${_var} ${${_var}} ${_file}${so_prefix}${_ver}${so_suffix})
+  get_shared_library_name(SHARED_LIBRARY_NAME ${_file} ${_ver})
+  set(${_var} ${${_var}} ${SHARED_LIBRARY_NAME})
 endmacro()
 
 macro(add_dependency _target)

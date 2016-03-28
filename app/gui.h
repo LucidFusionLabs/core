@@ -317,7 +317,7 @@ struct TextBox : public GUI, public KeyboardController, public Drawable::AttrSou
   mutable Drawable::Attr last_attr;
 
   TextBox(GraphicsDevice *d, const FontRef &F=FontRef(), int LC=10);
-  virtual ~TextBox() {}
+  virtual ~TextBox() { if (screen) Deactivate(); }
 
   virtual point RelativePosition(const point&) const;
   virtual const Drawable::Attr *GetAttr(int attr) const;
