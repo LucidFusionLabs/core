@@ -301,9 +301,13 @@ struct SimpleAssetLoader : public AssetLoaderInterface {
       RingSampler::Handle H(a->wav.get());
       if (wav_reader.Read(&H, 0, wav_samples))
         return ERROR("LoadAudio(", a->name, ", ", fn, ") read failed: ", strerror(errno));
+    } else if (SuffixMatch(fn, ".ogg", false)) {
     }
   }
-  virtual int RefillAudio(SoundAsset *a, int reset) { return 0; }
+
+  virtual int RefillAudio(SoundAsset *a, int reset) {
+    return 0;
+  }
 
   virtual void LoadMovie(void *h, MovieAsset *a) {}
   virtual int PlayMovie(MovieAsset *a, int seek) { return 0; }

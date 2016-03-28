@@ -156,11 +156,12 @@ if(LFL_GLOG)
   ExternalProject_Add(googlelog LOG_CONFIGURE ON LOG_BUILD ON
                       SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/glog
                       PREFIX ${CMAKE_CURRENT_BINARY_DIR}/glog
-                      CONFIGURE_COMMAND <SOURCE_DIR>/configure --prefix=<INSTALL_DIR>)
+                      CONFIGURE_COMMAND <SOURCE_DIR>/configure --prefix=<INSTALL_DIR>
+                      INSTALL_COMMAND "")
   add_library(libglog IMPORTED STATIC GLOBAL)
   add_dependencies(libglog googlelog)
-  set_property(TARGET libglog PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/glog/lib/libglog.a)
-  set(GLOG_INCLUDE ${CMAKE_CURRENT_BINARY_DIR}/glog/include PARENT_SCOPE)
+  set_property(TARGET libglog PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/glog/src/googlelog-build/.libs/libglog.a)
+  set(GLOG_INCLUDE ${CMAKE_CURRENT_BINARY_DIR}/glog/src/googlelog-build/src PARENT_SCOPE)
   set(GLOG_LIB libglog PARENT_SCOPE)
 endif()
 
@@ -318,6 +319,28 @@ if(LFL_FFMPEG)
     add_shared_library(FFMPEG_LIB_FILES ${CMAKE_CURRENT_BINARY_DIR}/x264/lib/libx264 138)
     set(FFMPEG_LIB_FILES ${FFMPEG_LIB_FILES} PARENT_SCOPE)
   endif()
+endif()
+
+# OGG
+if(LFL_OGG)
+  ExternalProject_Add(ogg LOG_CONFIGURE ON LOG_BUILD ON
+                      PREFIX ${CMAKE_CURRENT_BINARY_DIR}/ogg
+                      SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/ogg
+                      CONFIGURE_COMMAND <SOURCE_DIR>/autogen.sh --prefix=<INSTALL_DIR>)
+  add_library(libogg IMPORTED STATIC GLOBAL)
+  add_dependencies(libogg ogg)
+  set_property(TARGET libogg PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/ogg/lib/libogg.a)
+  set(OGG_INCLUDE ${CMAKE_CURRENT_BINARY_DIR}/ogg/include PARENT_SCOPE)
+  set(OGG_LIB libogg PARENT_SCOPE)
+endif()
+
+# vorbis
+if(LFL_VORBIS)
+  set(OGG_INCLUDE_DIRS ${CMAKE_CURRENT_BINARY_DIR}/ogg/include)
+  set(OGG_LIBRARIES ${CMAKE_CURRENT_BINARY_DIR}/ogg/lib/libogg.a)
+  add_subdirectory(vorbis)
+  set(VORBIS_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/vorbis/include PARENT_SCOPE)
+  set(VORBIS_LIB vorbis PARENT_SCOPE)
 endif()
 
 # CUDA

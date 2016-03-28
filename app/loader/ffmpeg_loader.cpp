@@ -17,7 +17,6 @@
  */
 
 extern "C" {
-//#define INT64_C (long long)
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
 #include <libswscale/swscale.h>
@@ -34,12 +33,14 @@ struct FFBIOFile {
     int bufsize = 16384;
     return avio_alloc_context(static_cast<unsigned char*>(malloc(bufsize)), bufsize, 0, f, Read, Write, Seek);
   }
+
   static void Free(void *in) {
     AVIOContext *s = static_cast<AVIOContext*>(in);
     delete static_cast<File*>(s->opaque);
     free(s->buffer);
     av_free(s);
   }
+
   static int     Read(void *f, uint8_t *buf, int buf_size) { return static_cast<File*>(f)->Read (buf, buf_size); }
   static int    Write(void *f, uint8_t *buf, int buf_size) { return static_cast<File*>(f)->Write(buf, buf_size); }
   static int64_t Seek(void *f, int64_t offset, int whence) { return static_cast<File*>(f)->Seek (offset, whence); }
@@ -54,12 +55,14 @@ struct FFBIOC {
     static const int bufsize = 32768;
     return avio_alloc_context(static_cast<unsigned char*>(malloc(bufsize)), bufsize, 0, new FFBIOC(buf, len), Read, Write, Seek);
   }
+
   static void Free(void *in) {
     AVIOContext *s = static_cast<AVIOContext*>(in);
     delete static_cast<FFBIOC*>(s->opaque);
     free(s->buffer);
     av_free(s);
   }
+
   static int Read(void *opaque, uint8_t *buf, int buf_size) {
     FFBIOC *s = static_cast<FFBIOC*>(opaque);
     int len = min(buf_size, s->len - s->offset);
@@ -69,6 +72,7 @@ struct FFBIOC {
     s->offset += len;
     return len;
   }
+
   static int Write(void *opaque, uint8_t *buf, int buf_size) { return -1; }
   static int64_t Seek(void *opaque, int64_t offset, int whence) {
     FFBIOC *s = static_cast<FFBIOC*>(opaque);

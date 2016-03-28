@@ -18,7 +18,7 @@
 
 #include "core/app/gui.h"
 #include "core/app/ipc.h"
-#include "core/app/browser.h"
+#include "core/web/browser.h"
 #include "core/web/document.h"
 extern "C" {
 #include "libcss/libcss.h"
@@ -224,7 +224,7 @@ const int WhiteSpace::Pre     = CSS_WHITE_SPACE_PRE;
 const int WhiteSpace::PreLine = CSS_WHITE_SPACE_PRE_LINE;
 const int WhiteSpace::Nowrap  = CSS_WHITE_SPACE_NOWRAP;
 
-#include "core/app/browser/css_common.h"
+#include "core/web/css_common.h"
 }; // namespace DOM
 
 lwc_string *LibCSS_String::Intern(const string   &s) {                             lwc_string *v=0; CHECK_EQ(lwc_error_ok, lwc_intern_string(s.data(), s.size(), &v)); return v; }

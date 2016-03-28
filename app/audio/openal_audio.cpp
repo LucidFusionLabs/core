@@ -24,9 +24,10 @@ struct OpenALAudioModule : public Module {
   Audio *audio;
   ALCdevice *dev=0;
   ALCcontext *ctx=0;
-  ALuint source=0;
+  ALuint source=0, in_maxsamples=0, out_maxsamples=0;
   ALenum in_format=0, out_format=0;
   deque<ALuint> free_buffers, used_buffers;
+  vector<int16_t> samples;
   OpenALAudioModule(Audio *A) : audio(A) {}
 
   int Init() {
@@ -36,18 +37,24 @@ struct OpenALAudioModule : public Module {
     if (!(dev = alcOpenDevice(NULL))) return ERRORv(-1, "alcOpenDevice");
     if (!(ctx = alcCreateContext(dev, NULL))) return ERRORv(-1, "alcCreateContext");
     alcMakeContextCurrent(ctx);
-    vector<ALuint> buffers(3, 0);
+    vector<ALuint> buffers(FLAGS_sample_secs, 0);
     alGenBuffers(buffers.size(), &buffers[0]);
     if (alGetError() != AL_NO_ERROR) return ERRORv(-1, "alGenBuffers");
     alGenSources(1, &source);
     if (alGetError() != AL_NO_ERROR) return ERRORv(-1, "alGenSources");
     in_format  = FLAGS_chans_in  == 2 ? AL_FORMAT_STEREO16 : AL_FORMAT_MONO16;
     out_format = FLAGS_chans_out == 2 ? AL_FORMAT_STEREO16 : AL_FORMAT_MONO16;
+    in_maxsamples = FLAGS_chans_in * FLAGS_sample_rate;
+    out_maxsamples = FLAGS_chans_out * FLAGS_sample_rate;
+    samples.resize(max(FLAGS_chans_in, FLAGS_chans_out) * FLAGS_sample_rate);
     for (auto &b : buffers) free_buffers.push_back(b);
     return 0;
   }
 
   int Free() {
+    for (auto &b : free_buffers) alDeleteBuffers(1, &b);
+    for (auto &b : used_buffers) alDeleteBuffers(1, &b);
+    alDeleteSources(1, &source);
     alcMakeContextCurrent(NULL);
     alcDestroyContext(ctx);
     alcCloseDevice(dev);
@@ -55,6 +62,7 @@ struct OpenALAudioModule : public Module {
   }
 
   int Frame(unsigned clicks) {
+    bool added = 0;
     ALint val = 0;
     alGetSourcei(source, AL_BUFFERS_PROCESSED, &val);
     for (ALint i = 0; i < val; ++i) {
@@ -62,13 +70,19 @@ struct OpenALAudioModule : public Module {
       alSourceUnqueueBuffers(source, 1, &b);
       free_buffers.push_back(b);
     }
-
-    if (audio->Out.size() && free_buffers.size()) {
+    while (audio->Out.size() && free_buffers.size()) {
       auto b = PopFront(free_buffers);
-      // alBufferData(b, out_format, buf, ret, FLAGS_sample_rate);
+      ALuint num_samples = min(ALuint(audio->Out.size()), out_maxsamples);
+      for (int16_t *i=&samples[0], *e=i+num_samples; i != e; ++i) *i = int16_t(PopFront(audio->Out) * 32768.0);
+      alBufferData(b, out_format, samples.data(), num_samples*sizeof(int16_t), FLAGS_sample_rate);
+      alSourceQueueBuffers(source, 1, &b);
+      used_buffers.push_back(b);
+      added = true;
     }
-
-
+    if (added) {
+      alGetSourcei(source, AL_SOURCE_STATE, &val);
+      if (val != AL_PLAYING) alSourcePlay(source);
+    }
     return 0;
   }
 };

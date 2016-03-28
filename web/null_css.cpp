@@ -219,7 +219,7 @@ const int WhiteSpace::Pre     = 3;
 const int WhiteSpace::PreLine = 4;
 const int WhiteSpace::Nowrap  = 5;
 
-#include "core/app/browser/css_common.h"
+#include "core/web/css_common.h"
 }; // namespace DOM
 
 StyleSheet *StyleSheet::Default() { static StyleSheet ret(0); return &ret; }

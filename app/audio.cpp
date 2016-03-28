@@ -57,6 +57,8 @@ int Audio::Start() {
 }
 
 int Audio::Frame(unsigned clicks) {
+  int ret = impl->Frame(clicks);
+  if (ret) return ret;
   {
     ScopedMutex ML(inlock);
 

@@ -17,7 +17,7 @@
  */
 
 #include "core/app/gui.h"
-#include "core/app/browser.h"
+#include "core/web/browser.h"
 #include "core/game/game.h"
 
 namespace LFL {

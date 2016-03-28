@@ -62,3 +62,6 @@
 [submodule "imports/libjpeg-turbo"]
 	path = imports/libjpeg-turbo
 	url = https://github.com/leapmotion/libjpeg-turbo
+[submodule "imports/stb"]
+	path = imports/stb
+	url = https://github.com/nothings/stb

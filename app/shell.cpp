@@ -17,8 +17,8 @@
  */
 
 #include "core/app/gui.h"
-#include "core/app/browser.h"
 #include "core/app/ipc.h"
+#include "core/web/browser.h"
 #include "core/web/document.h"
 
 namespace LFL {
