@@ -19,4 +19,9 @@
 #include <vorbis/vorbisfile.h>
 
 namespace LFL {
+void OGGReader::Close(void *h) {}
+void *OGGReader::OpenBuffer(const char *buf, size_t len, int *sr_out, int *chans_out, int *total_out) { return 0; }
+void *OGGReader::OpenFile(const string &fn, int *sr_out, int *chans_out, int *total_out) { return 0; }
+int OGGReader::Read(void *h, int chans, int samples, RingSampler *out, bool reset) { return -1; }
+
 }; // namespace LFL

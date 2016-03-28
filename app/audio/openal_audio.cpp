@@ -16,8 +16,13 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#ifdef LFL_APPLE
 #include <OpenAL/al.h>
 #include <OpenAL/alc.h>
+#else
+#include <AL/al.h>
+#include <AL/alc.h>
+#endif
 
 namespace LFL {
 struct OpenALAudioModule : public Module {
@@ -86,6 +91,15 @@ struct OpenALAudioModule : public Module {
     return 0;
   }
 };
+
+void Application::PlayBackgroundMusic(SoundAsset *music) {
+  audio->QueueMix(music);
+  audio->loop = music;
+}
+
+void Application::PlaySoundEffect(SoundAsset *sa) {
+  audio->QueueMix(sa, MixFlag::Reset | MixFlag::Mix | (audio->loop ? MixFlag::DontQueue : 0), -1, -1);
+}
  
 unique_ptr<Module> CreateAudioModule(Audio *a) { return make_unique<OpenALAudioModule>(a); }
 

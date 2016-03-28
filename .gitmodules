@@ -68,3 +68,6 @@
 [submodule "imports/re2"]
 	path = imports/re2
 	url = https://github.com/google/re2
+[submodule "imports/libsamplerate"]
+	path = imports/libsamplerate
+	url = https://github.com/erikd/libsamplerate/

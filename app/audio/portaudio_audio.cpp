@@ -113,7 +113,16 @@ struct PortaudioAudioModule : public Module {
     return static_cast<PortaudioAudioModule*>(opaque)->IO(input, output, samplesPerFrame, timeInfo, flags);
   }
 };
- 
+
+void Application::PlayBackgroundMusic(SoundAsset *music) {
+  audio->QueueMix(music);
+  audio->loop = music;
+}
+
+void Application::PlaySoundEffect(SoundAsset *sa) {
+  audio->QueueMix(sa, MixFlag::Reset | MixFlag::Mix | (audio->loop ? MixFlag::DontQueue : 0), -1, -1);
+}
+
 unique_ptr<Module> CreateAudioModule(Audio *a) { return make_unique<PortaudioAudioModule>(a); }
 
 }; // namespace LFL

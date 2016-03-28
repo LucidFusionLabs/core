@@ -9,6 +9,7 @@ lfl_add_library(app_null_jpeg STATIC null_jpeg.cpp)
 lfl_add_library(app_null_gif STATIC null_gif.cpp)
 lfl_add_library(app_null_archive STATIC null_archive.cpp)
 lfl_add_library(app_null_proto STATIC null_proto.cpp)
+lfl_add_library(app_null_ogg STATIC null_ogg.cpp)
 lfl_add_library(app_stb_ogg STATIC stb_ogg.cpp)
 
 if(LFL_PROTOBUF)

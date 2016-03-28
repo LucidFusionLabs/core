@@ -54,16 +54,6 @@ void Application::LaunchNativeFontChooser(const FontDesc &cur_font, const string
 void Application::OpenSystemBrowser(const string &url_text) {
   ShellExecute(NULL, "open", url_text.c_str(), NULL, NULL, SW_SHOWNORMAL);
 }
-
-void Application::PlaySoundEffect(SoundAsset *sa) {
-  audio->QueueMix(sa, MixFlag::Reset | MixFlag::Mix | (audio->loop ? MixFlag::DontQueue : 0), -1, -1);
-}
-
-void Application::PlayBackgroundMusic(SoundAsset *music) {
-  audio->QueueMix(music);
-  audio->loop = music;
-}
-
 }; // namespace LFL
 
 int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR lpCmdLine, int nCmdShow) {

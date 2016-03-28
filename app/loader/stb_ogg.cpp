@@ -16,8 +16,33 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-namespace LFL {
-}; // namespace LFL
-
 #undef CHECK
 #include "core/imports/stb/stb_vorbis.c"
+
+namespace LFL {
+void *OGGReader::OpenBuffer(const char *buf, size_t len, int *sr_out, int *chans_out, int *total_out) { return 0; }
+void *OGGReader::OpenFile(const string &fn, int *sr_out, int *chans_out, int *total_out) {
+  stb_vorbis *stream = stb_vorbis_open_filename(&fn[0], NULL, NULL);
+  stb_vorbis_info info = stb_vorbis_get_info(stream);
+  if (sr_out)    *sr_out    = info.sample_rate;
+  if (chans_out) *chans_out = info.channels;
+  if (total_out) *total_out = stb_vorbis_stream_length_in_samples(stream);
+  return stream;
+}
+
+void OGGReader::Close(void *h) {
+  auto stream = static_cast<stb_vorbis*>(h);
+  if (stream) stb_vorbis_close(stream);
+}
+
+int OGGReader::Read(void *h, int chans, int samples, RingSampler *out, bool reset) { 
+  Allocator *tlsalloc = ThreadLocalStorage::GetAllocator();
+  float *buf = static_cast<float*>(tlsalloc->Malloc(samples*chans*sizeof(float)));
+  auto stream = static_cast<stb_vorbis*>(h);
+  if (reset) stb_vorbis_seek_start(stream);
+  size_t decoded = stb_vorbis_get_samples_float_interleaved(stream, chans, buf, samples * chans);
+  for (const float *i = buf, *e = i+decoded*chans; i != e; ++i) out->Write(*i);
+  return decoded*chans;
+}
+
+}; // namespace LFL

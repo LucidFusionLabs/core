@@ -120,13 +120,4 @@ void Application::OpenSystemBrowser(const string &url_text) {
   if (url) { LSOpenCFURLRef(url, 0); CFRelease(url); }
 }
 
-void Application::PlaySoundEffect(SoundAsset *sa) {
-  audio->QueueMix(sa, MixFlag::Reset | MixFlag::Mix | (audio->loop ? MixFlag::DontQueue : 0), -1, -1);
-}
-
-void Application::PlayBackgroundMusic(SoundAsset *music) {
-  audio->QueueMix(music);
-  audio->loop = music;
-}
-
 }; // namespace LFL

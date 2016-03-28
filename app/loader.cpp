@@ -302,11 +302,27 @@ struct SimpleAssetLoader : public AssetLoaderInterface {
       if (wav_reader.Read(&H, 0, wav_samples))
         return ERROR("LoadAudio(", a->name, ", ", fn, ") read failed: ", strerror(errno));
     } else if (SuffixMatch(fn, ".ogg", false)) {
+      if (!(a->handle = OGGReader::OpenFile(fn, &a->sample_rate, &a->channels, 0)))
+        return ERROR("LoadOGG(", a->name, ", ", fn, ") failed");
+      a->seconds = seconds;
+      a->wav = make_unique<RingSampler>(a->sample_rate, SoundAsset::Size(a));
+      int samples = OGGReader::Read(a->handle, a->channels, a->sample_rate*a->seconds, a->wav.get(), 0);
+      if (samples == SoundAsset::Size(a) && !(flag & SoundAsset::FlagNoRefill))
+        a->refill = bind(&SimpleAssetLoader::RefillAudio, this, _1, _2);
+      if (!a->refill) { OGGReader::Close(a->handle); a->handle=0; }
     }
   }
 
   virtual int RefillAudio(SoundAsset *a, int reset) {
-    return 0;
+    if (!a->handle) return 0;
+    a->wav->ring.back = 0;
+    int wrote = OGGReader::Read(a->handle, a->channels, a->sample_rate*a->seconds, a->wav.get(), reset);
+    printf("refilled %D\n", wrote);
+    if (wrote < SoundAsset::Size(a)) {
+      a->wav->ring.size = wrote;
+      a->wav->bytes = a->wav->ring.size * a->wav->width;
+    }
+    return wrote;
   }
 
   virtual void LoadMovie(void *h, MovieAsset *a) {}

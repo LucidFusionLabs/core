@@ -386,6 +386,7 @@ TEST(StringTest, BaseName) {
   EXPECT_FALSE(BaseDir("/s/wav/foo.bar",  "av"));
 }
 
+#ifdef LFL_APPLE
 TEST(RegexTest, URL) {
   Regex url_matcher("(https?://)");
   vector<Regex::Result> matches;
@@ -400,6 +401,7 @@ TEST(RegexTest, URL) {
   EXPECT_EQ(1, matches.size()); if (matches.size()) EXPECT_EQ("https://", matches[0].Text(in));
   matches.clear();
 }
+#endif
 
 #ifdef LFL_SREGEX
 TEST(RegexTest, StreamURL) {

@@ -127,7 +127,7 @@ struct SoundAsset {
   SoundAssetMap *parent;
   string name, filename;
   unique_ptr<RingSampler> wav;
-  int channels=0, sample_rate=0, seconds=0;
+  int channels=FLAGS_chans_out, sample_rate=FLAGS_sample_rate, seconds=FLAGS_soundasset_seconds;
   RefillCB refill;
   void *handle=0;
   int handle_arg1=-1;
@@ -138,13 +138,13 @@ struct SoundAsset {
     name(N), filename(FN), wav(W), channels(C), sample_rate(SR), seconds(S) {}
 
   void Load(void *handle, const char *FN, int Secs, int flag=0);
-  void Load(const void *FromBuf, int size, const char *FileName, int Seconds=10);
-  void Load(int seconds=10, bool unload=true);
+  void Load(const void *FromBuf, int size, const char *FileName, int Seconds=FLAGS_soundasset_seconds);
+  void Load(int seconds=FLAGS_soundasset_seconds, bool unload=true);
   void Unload();
   int Refill(int reset);
 
   static void Load(vector<SoundAsset> *assets) { for (auto &a : *assets) a.Load(); }
-  static int Size(const SoundAsset *sa) { return sa->seconds * FLAGS_sample_rate * FLAGS_chans_out; }
+  static int Size(const SoundAsset *sa) { return sa->seconds * sa->sample_rate * sa->channels; }
 };
 
 struct MovieAsset {

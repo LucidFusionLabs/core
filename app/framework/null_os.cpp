@@ -22,7 +22,5 @@ void Application::AddNativeEditMenu() {}
 void Application::LaunchNativeFontChooser(const FontDesc &cur_font, const string &choose_cmd) {}
 void Application::LaunchNativeFileChooser(bool files, bool dirs, bool multi, const string &choose_cmd) {}
 void Application::OpenSystemBrowser(const string &url_text) {}
-void Application::PlaySoundEffect(SoundAsset *sa) {}
-void Application::PlayBackgroundMusic(SoundAsset *music) {}
 
 }; // namespace LFL

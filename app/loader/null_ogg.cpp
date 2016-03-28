@@ -1,5 +1,5 @@
 /*
- * $Id: video.cpp 1336 2014-12-08 09:29:59Z justin $
+ * $Id: camera.cpp 1330 2014-11-06 03:04:15Z justin $
  * Copyright (C) 2009 Lucid Fusion Labs
 
  * This program is free software: you can redistribute it and/or modify
@@ -17,10 +17,9 @@
  */
 
 namespace LFL {
-void Application::AddNativeMenu(const string &title, const vector<MenuItem>&items) {}
-void Application::AddNativeEditMenu() {}
-void Application::LaunchNativeFontChooser(const FontDesc &cur_font, const string &choose_cmd) {}
-void Application::LaunchNativeFileChooser(bool files, bool dirs, bool multi, const string &choose_cmd) {}
-void Application::OpenSystemBrowser(const string &url_text) {}
+void OGGReader::Close(void *h) {}
+void *OGGReader::OpenBuffer(const char *buf, size_t len, int *sr_out, int *chans_out, int *total_out) { return 0; }
+void *OGGReader::OpenFile(const string &fn, int *sr_out, int *chans_out, int *total_out) { return 0; }
+int OGGReader::Read(void *h, int chans, int samples, RingSampler *out, bool reset) { return -1; }
 
 }; // namespace LFL

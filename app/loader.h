@@ -108,6 +108,13 @@ struct WavWriter {
   int Flush();
 };
 
+struct OGGReader {
+  static void  Close(void *h);
+  static void *OpenBuffer(const char *buf, size_t len, int *sr_out, int *chans_out, int *total_out);
+  static void *OpenFile(const string &fn, int *sr_out, int *chans_out, int *total_out);
+  static int   Read(void *h, int chans, int samples, RingSampler *out, bool reset);
+};
+
 struct AssetLoader : public Module {
   unique_ptr<AssetLoaderInterface> default_loader;
   AudioAssetLoader *default_audio_loader=0;
