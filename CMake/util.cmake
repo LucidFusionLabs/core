@@ -22,8 +22,3 @@ macro(add_dependency _target)
     add_dependencies(${_target} ${ARGN})
   endif() 
 endmacro()
-
-macro(copyfile _src _dst)
-  execute_process(WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-    COMMAND cp ${_src} ${_dst})
-endmacro()

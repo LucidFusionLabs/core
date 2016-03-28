@@ -156,12 +156,11 @@ if(LFL_GLOG)
   ExternalProject_Add(googlelog LOG_CONFIGURE ON LOG_BUILD ON
                       SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/glog
                       PREFIX ${CMAKE_CURRENT_BINARY_DIR}/glog
-                      CONFIGURE_COMMAND <SOURCE_DIR>/configure --prefix=<INSTALL_DIR>
-                      INSTALL_COMMAND "")
+                      CMAKE_ARGS -DCMAKE_INSTALL_PREFIX:PATH=${CMAKE_CURRENT_BINARY_DIR}/glog)
   add_library(libglog IMPORTED STATIC GLOBAL)
   add_dependencies(libglog googlelog)
-  set_property(TARGET libglog PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/glog/src/googlelog-build/.libs/libglog.a)
-  set(GLOG_INCLUDE ${CMAKE_CURRENT_BINARY_DIR}/glog/src/googlelog-build/src PARENT_SCOPE)
+  set_property(TARGET libglog PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/glog/lib/libglog.a)
+  set(GLOG_INCLUDE ${CMAKE_CURRENT_BINARY_DIR}/glog/include PARENT_SCOPE)
   set(GLOG_LIB libglog PARENT_SCOPE)
 endif()
 
