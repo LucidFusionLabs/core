@@ -35,7 +35,7 @@ struct SMTP {
   }
 };
 
-struct SMTPClient {
+struct SMTPClient : public Service {
   typedef function<bool(Connection*, const string&, SMTP::Message*)> DeliverableCB;
   typedef function<void(Connection*, const SMTP::Message &, int, const string&)> DeliveredCB;
 

@@ -95,6 +95,7 @@ struct OpenALAudioModule : public Module {
 void Application::PlayBackgroundMusic(SoundAsset *music) {
   audio->QueueMix(music);
   audio->loop = music;
+  audio->Out.resize(max(audio->Out.size(), SoundAsset::Size(music)));
 }
 
 void Application::PlaySoundEffect(SoundAsset *sa) {

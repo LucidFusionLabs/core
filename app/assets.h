@@ -144,7 +144,7 @@ struct SoundAsset {
   int Refill(int reset);
 
   static void Load(vector<SoundAsset> *assets) { for (auto &a : *assets) a.Load(); }
-  static int Size(const SoundAsset *sa) { return sa->seconds * sa->sample_rate * sa->channels; }
+  static size_t Size(const SoundAsset *sa) { return sa->seconds * sa->sample_rate * sa->channels; }
 };
 
 struct MovieAsset {

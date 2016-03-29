@@ -16,10 +16,9 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "lfapp/lfapp.h"
-#include "ml/hmm.h"
+#include "core/ml/hmm.h"
 #include "speech.h"
-#include "ml/corpus.h"
+#include "core/ml/corpus.h"
 #include "corpus.h"
 
 namespace LFL {
@@ -37,15 +36,18 @@ void Path(AcousticModel::Compiled *, Matrix *viterbi, double vprob, Time vtime, 
 }; // namespace LFL
 using namespace LFL;
 
-extern "C" int main(int argc, const char *argv[]) {
-  if (app->Create(argc, argv, __FILE__)) { app->Free(); return -1; }
-
+extern "C" void MyAppCreate() {
   FLAGS_lfapp_audio = FLAGS_lfapp_video = FLAGS_lfapp_input = FLAGS_lfapp_camera = FLAGS_lfapp_network = 0;
 #ifdef _WIN32
   open_console = 1;
 #endif
+  app = new Application();
+  screen = new Window();
+}
 
-  if (app->Init()) { app->Free(); return -1; }
+extern "C" int MyAppMain(int argc, const char* const* argv) {
+  if (app->Create(argc, argv, __FILE__)) return -1;
+  if (app->Init()) return -1;
 
   string modeldir = StrCat(FLAGS_homedir, "/", FLAGS_ModelDir, "/");
   string featdir  = StrCat(FLAGS_homedir, "/", FLAGS_FeatDir,  "/");
@@ -55,7 +57,7 @@ extern "C" int main(int argc, const char *argv[]) {
   INFO("loaded acoustic model iter ", lastiter, ", ", model.GetStateCount(), " states");
 
   if (FLAGS_vp) {
-    FLAGS_lfapp_debug = 1;
+    FLAGS_loglevel = LFApp::Log::Debug;
     MatrixArchiveInputFile ViterbiPathsIn;
     ViterbiPathsIn.Open(argv[1]);
 

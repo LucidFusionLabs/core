@@ -56,7 +56,7 @@ int Features2Cluster(const char *featdir, const char *modeldir, int algo) {
     for (int i=0; i<FLAGS_MaxIterations; i++) { /* loop */
       FeatCorpus::FeatIter(featdir, [&](const char*, Matrix*, Matrix *f, const char*) { kmeans.AddFeatures(f); });
       double totaldist = kmeans.totaldist;
-      if (Running()) kmeans.Complete(); else return 0;
+      if (app->run) kmeans.Complete(); else return 0;
       MatrixFile(kmeans.means).WriteVersioned(modeldir, "Cluster", "means", ++lastiter);
       INFO("k-means iteration ", lastiter, " completed, totaldist = ", totaldist);
     }
@@ -68,7 +68,7 @@ int Features2Cluster(const char *featdir, const char *modeldir, int algo) {
     if (lastiter > MatrixFile::ReadVersioned(modeldir, "Cluster", "diagcovar", &mcov, 0)) {
       SampleCovariance SV(model);
       FeatCorpus::FeatIter(featdir, [&](const char*, Matrix*, Matrix *f, const char*) { SV.AddFeatures(f); });
-      if (Running()) SV.Complete(); else return 0;
+      if (app->run) SV.Complete(); else return 0;
       INFO("computed sample covariance ", lastiter);
       MatrixFile(SV.diagnol).WriteVersioned(modeldir, "Cluster", "diagcovar", lastiter);
       mcov=SV.diagnol; SV.diagnol=0;
@@ -90,12 +90,12 @@ int Features2Cluster(const char *featdir, const char *modeldir, int algo) {
     for (int i=0; i<FLAGS_MaxIterations; i++) {
       EM.mode = GMMEM::Mode::Means;
       FeatCorpus::FeatIter(featdir, [&](const char*, Matrix*, Matrix *f, const char*) { EM.AddFeatures(f); });
-      if (Running()) EM.Complete(); else return 0;
+      if (app->run) EM.Complete(); else return 0;
 
       EM.mode = GMMEM::Mode::Cov;
       FeatCorpus::FeatIter(featdir, [&](const char*, Matrix*, Matrix *f, const char*) { EM.AddFeatures(f); });
       double totalprob = EM.totalprob; int totalcount = EM.count;
-      if (Running()) EM.Complete(); else return 0;
+      if (app->run) EM.Complete(); else return 0;
 
       MatrixFile(&EM.mixture->mean)   .WriteVersioned(modeldir, "Cluster", "means",   ++lastiter);
       MatrixFile(&EM.mixture->diagcov).WriteVersioned(modeldir, "Cluster", "diagcovar", lastiter);
@@ -107,7 +107,7 @@ int Features2Cluster(const char *featdir, const char *modeldir, int algo) {
   if (1) {
     SampleProb SP(model, mcov);
     FeatCorpus::FeatIter(featdir, [&](const char*, Matrix*, Matrix *f, const char*) { SP.AddFeatures(f); });
-    if (Running()) SP.Complete(); else return 0;
+    if (app->run) SP.Complete(); else return 0;
     INFO("ran sampleprob");
   }
   return 0;

@@ -25,7 +25,7 @@ extern const Socket InvalidSocket;
 
 struct SocketType { static const int Stream, Datagram, SeqPacket, Raw; };
 struct Protocol { 
-  enum { TCP=1, UDP=2, UNIX=3, GPLUS=4 };
+  enum { TCP=1, UDP=2, UNIX=3, GPLUS=4, InProcess=5 };
   static const char *Name(int p);
 };
 
@@ -468,6 +468,14 @@ struct GPlusServer : public Service {
   Connection::Handler *handler=0;
   GPlusServer() : Service(Protocol::GPLUS) { endpoint_read_autoconnect=1; }
   virtual int Connected(Connection *c) { c->handler = unique_ptr<Connection::Handler>(handler); return 0; }
+};
+
+struct InProcessServer : public Service {
+  virtual ~InProcessServer() {}
+  Connection::Handler *handler=0;
+  InProcessServer() : Service(Protocol::InProcess) { endpoint_read_autoconnect=1; }
+  virtual int Connected(Connection *c) { c->handler = unique_ptr<Connection::Handler>(handler); return 0; }
+  Connection *PersistentConnection(const string &name, UDPClient::ResponseCB cb, UDPClient::HeartbeatCB HCB);
 };
 
 struct Network : public Module {

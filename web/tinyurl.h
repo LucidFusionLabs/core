@@ -31,7 +31,7 @@ struct URLShortener {
       : name(N), in(I), out(O), subscribers(S), state(0), done(false)
     {
       string url = "http://tinyurl.com/create.php?url=" + HTTP::EncodeURL(in.c_str());
-      if (!app->net->http_client->WGet
+      if (!HTTPClient::WGet
           (url, 0, HTTPClient::ResponseCB(bind(&HTMLParser::WGetCB, this, _1, _2, _3, _4, _5))))
       { ERROR("wget ", 0); return; }
     }

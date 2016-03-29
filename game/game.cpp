@@ -90,6 +90,18 @@ void Game::GoogleMultiplayerNetwork::WriteWithRetry(ReliableNetwork *n, Connecti
 }
 #endif
 
+int Game::InProcessNetwork::Write(Connection *c, int method, const char *data, int len) {
+  if (c->endpoint_name.empty()) { ERROR(c->Name(), " blank send"); return -1; }
+  // AndroidGPlusSendUnreliable(c->endpoint_name.c_str(), data, len);
+  return 0;
+}
+
+void Game::InProcessNetwork::WriteWithRetry(ReliableNetwork *n, Connection *c, Serializable *req, unsigned short seq) {
+  if (c->endpoint_name.empty()) { ERROR(c->Name(), " blank send"); return; }
+  string buf = req->ToString(); int ret;
+  // if ((ret = AndroidGPlusSendReliable(c->endpoint_name.c_str(), buf.c_str(), buf.size())) < 0) ERROR("WriteWithRetry ", ret);
+}
+
 void Game::TCPNetwork::WriteWithRetry(ReliableNetwork *reliable, Connection *c, Serializable *req, unsigned short seq) {
   string v;
   req->ToString(&v, seq);

@@ -306,7 +306,8 @@ struct SimpleAssetLoader : public AssetLoaderInterface {
         return ERROR("LoadOGG(", a->name, ", ", fn, ") failed");
       a->seconds = seconds;
       a->wav = make_unique<RingSampler>(a->sample_rate, SoundAsset::Size(a));
-      int samples = OGGReader::Read(a->handle, a->channels, a->sample_rate*a->seconds, a->wav.get(), 0);
+      RingSampler::Handle H(a->wav.get());
+      int samples = OGGReader::Read(a->handle, a->channels, a->sample_rate*a->seconds, &H, 0);
       if (samples == SoundAsset::Size(a) && !(flag & SoundAsset::FlagNoRefill))
         a->refill = bind(&SimpleAssetLoader::RefillAudio, this, _1, _2);
       if (!a->refill) { OGGReader::Close(a->handle); a->handle=0; }
@@ -316,8 +317,8 @@ struct SimpleAssetLoader : public AssetLoaderInterface {
   virtual int RefillAudio(SoundAsset *a, int reset) {
     if (!a->handle) return 0;
     a->wav->ring.back = 0;
-    int wrote = OGGReader::Read(a->handle, a->channels, a->sample_rate*a->seconds, a->wav.get(), reset);
-    printf("refilled %D\n", wrote);
+    RingSampler::Handle H(a->wav.get());
+    int wrote = OGGReader::Read(a->handle, a->channels, a->sample_rate*a->seconds, &H, reset);
     if (wrote < SoundAsset::Size(a)) {
       a->wav->ring.size = wrote;
       a->wav->bytes = a->wav->ring.size * a->wav->width;

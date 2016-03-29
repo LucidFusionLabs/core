@@ -1177,9 +1177,7 @@ Connection *UDPClient::PersistentConnection(const string &url, const ResponseCB 
   return c;
 }
 
-/* GPlusClient */
-
-struct GPlusClientHandler {
+struct PacketHandler {
   struct PersistentConnection : public Connection::Handler {
     UDPClient::ResponseCB responseCB;
     UDPClient::HeartbeatCB heartbeatCB;
@@ -1197,9 +1195,19 @@ struct GPlusClientHandler {
   };
 };
 
+/* GPlusClient */
+
 Connection *GPlusClient::PersistentConnection(const string &name, UDPClient::ResponseCB responseCB, UDPClient::HeartbeatCB HCB) {
   Connection *c = EndpointConnect(name);
-  c->handler = make_unique<GPlusClientHandler::PersistentConnection>(responseCB, HCB);
+  c->handler = make_unique<PacketHandler::PersistentConnection>(responseCB, HCB);
+  return c;
+}
+
+/* InProcessServer */
+
+Connection *InProcessServer::PersistentConnection(const string &name, UDPClient::ResponseCB responseCB, UDPClient::HeartbeatCB HCB) {
+  Connection *c = EndpointConnect(name);
+  c->handler = make_unique<PacketHandler::PersistentConnection>(responseCB, HCB);
   return c;
 }
 

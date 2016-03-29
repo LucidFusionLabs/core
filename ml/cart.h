@@ -238,7 +238,7 @@ struct PhoneticDecisionTree {
 #     define XX(x) count++;
 #     undef  YY
 #     define YY(x)
-#     include "speech/phonics.h"
+#     include "core/speech/phonics.h"
 
       QuestionList *QL = new QuestionList(count);
       Question *q;
@@ -247,10 +247,10 @@ struct PhoneticDecisionTree {
 #     define XX(x) q = &QL->L[ind++]; q->name = #x; q->is_phone = phone;
 #     undef  YY
 #     define YY(x) q->member.push_back(Phoneme::x);
-#     include "speech/phonics.h"
+#     include "core/speech/phonics.h"
 
       phone=1; ind=0;
-#     include "speech/phonics.h"
+#     include "core/speech/phonics.h"
 
       return QL;
     }

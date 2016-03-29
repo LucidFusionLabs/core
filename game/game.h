@@ -80,6 +80,11 @@ struct Game {
   };
 #endif
 
+  struct InProcessNetwork : public Network {
+    virtual int Write(Connection *c, int method, const char *data, int len);
+    virtual void WriteWithRetry(ReliableNetwork *n, Connection *c, Serializable *req, unsigned short seq);
+  };
+
   struct TCPNetwork : public Network {
     virtual int Write(Connection *c, int method, const char *buf, int len) { return c->WriteFlush(buf, len); }
     virtual void WriteWithRetry(ReliableNetwork *reliable, Connection *c, Serializable *req, unsigned short seq);
@@ -204,6 +209,10 @@ struct GameUDPServer : public UDPServer {
   int UDPFilter(Connection *c, const char *content, int content_len);
 };
 
+struct GameGPlusServer : public GPlusServer {};
+
+struct GameInProcessServer : public InProcessServer {};
+
 struct GameServer : public Connection::Handler {
   struct History {
     GameProtocol::WorldUpdate WorldUpdate;
@@ -221,6 +230,7 @@ struct GameServer : public Connection::Handler {
   GameTCPServer *tcp_transport=0;
   GameUDPServer *udp_transport=0;
   GPlusServer *gplus_transport=0;
+  InProcessServer *inprocess_transport=0;
   string rcon_auth_passwd, master_sink_url, local_game_name, local_game_url;
   const vector<Asset> *assets;
   History last;
@@ -248,12 +258,19 @@ struct GameServer : public Connection::Handler {
       }
 #ifdef LFL_ANDROID
       if (!gplus_transport) {
-        gplus_transport = new GPlusServer();
+        gplus_transport = new GameGPlusServer();
         gplus_transport->game_network = Singleton<Game::GoogleMultiplayerNetwork>::Get();
         gplus_transport->handler = this;
         svc.push_back(gplus_transport);
       }
 #endif
+    } else if (proto == Protocol::InProcess) {
+      if (!inprocess_transport) {
+        inprocess_transport = new GameInProcessServer();
+        inprocess_transport->game_network = Singleton<Game::InProcessNetwork>::Get();
+        inprocess_transport->handler = this;
+        svc.push_back(inprocess_transport);
+      }
     }
   }
 
@@ -496,6 +513,7 @@ struct GameClient {
   unsigned short seq=0, entity_id=0, team=0, cam=1;
   bool reorienting=1;
   Game::Network *net=0;
+  InProcessServer *inprocess_server=0;
   Game::ReliableUDPNetwork retry;
   map<unsigned, string> assets;
   Game::Controller control;
@@ -554,12 +572,19 @@ struct GameClient {
     INFO("me = ", e ? e->name : "");
   }
 
-  void Reset() { if (conn) conn->SetError(); conn=0; seq=0; entity_id=0; team=0; cam=1; reorienting=1; net=0; retry.Clear(); last.id_WorldUpdate=last.seq_WorldUpdate=0; replay.disable(); gameover.disable(); }
-  bool Connected() { return conn && conn->state == Connection::Connected; }
+  void Reset() {
+    if (conn) conn->SetError();
+    conn=0; seq=0; entity_id=0; team=0; cam=1; reorienting=1; net=0;
+    retry.Clear();
+    last.id_WorldUpdate=last.seq_WorldUpdate=0;
+    replay.disable();
+    gameover.disable();
+  }
   
+  bool Connected() { return conn && conn->state == Connection::Connected; }
   int Connect(int prot, const string &url, int default_port) {
+    Reset();
     if (prot == Protocol::TCP) {
-      Reset();
       net = Singleton<Game::TCPNetwork>::Get();
       conn = app->net->tcp_client->Connect(url, default_port);
       auto h = make_unique<Connection::CallbackHandler>
@@ -575,7 +600,6 @@ struct GameClient {
       return 0;
 
     } else if (prot == Protocol::UDP) {
-      Reset();
       net = Singleton<Game::UDPNetwork>::Get();
       conn = app->net->udp_client->PersistentConnection(url, bind(&GameClient::DatagramRead, this, _1, _2, _3),
                                                         Connection::CB(), default_port);
@@ -590,9 +614,8 @@ struct GameClient {
     } else if (prot == Protcol::GPLUS) {
       GPlusClient *gplus_client = app->net->gplus_client.get();
       app->network.Enable(gplus_client);
-      Reset();
       net = Singleton<Game::GoogleMultiplayerNetwork>::Get();
-      conn = gplus_client->PersistentConnection(url, bind(&GameClient::Read, this, _1, _2, _3),
+      conn = gplus_client->PersistentConnection(url, bind(&GameClient::DatagramRead, this, _1, _2, _3),
                                                 Connection::CB());
       GameProtocol::JoinRequest req;
       req.PlayerName = playername;
@@ -600,6 +623,17 @@ struct GameClient {
       last.time_send_PlayerUpdate = Now();
       return 0;
 #endif
+    } else if (prot == Protocol::InProcess) {
+      CHECK(inprocess_server);
+      app->net->Enable(inprocess_server);
+      net = Singleton<Game::InProcessNetwork>::Get();
+      conn = inprocess_server->PersistentConnection(url, bind(&GameClient::DatagramRead, this, _1, _2, _3),
+                                                    Connection::CB());
+      GameProtocol::JoinRequest req;
+      req.PlayerName = playername;
+      net->WriteWithRetry(&retry, conn, &req, seq++);
+      last.time_send_PlayerUpdate = Now();
+      return 0;
     }
     return -1;
   }

@@ -30,12 +30,12 @@ struct OpenCvCameraModule : public Module {
     void SetDimensions(int W, int H) { width=W; height=H; }
   } L, R;
   CameraState *camera;
-  OpenCvCameraModule(CameraState *C) : thread(bind(&OpenCvCamera::Threadproc, this)), camera(C) {}
+  OpenCvCameraModule(CameraState *C) : thread(bind(&OpenCvCameraModule::Threadproc, this)), camera(C) {}
 
   int Free() {
-    if (thread.started) thread.Wait();
-    if (&L.capture) cvReleaseCapture(&L.capture);
-    if (&R.capture) cvReleaseCapture(&R.capture);
+    if (thread.id) thread.Wait();
+    if (L.capture) cvReleaseCapture(&L.capture);
+    if (R.capture) cvReleaseCapture(&R.capture);
     return 0;
   }
 
@@ -45,7 +45,7 @@ struct OpenCvCameraModule : public Module {
     if (!(L.capture = cvCaptureFromCAM(0))) { FLAGS_lfapp_camera=0; return 0; }
     // if (!(R.capture = cvCaptureFromCAM(1))) { /**/ }
 
-    if (!thread.Start()) { FLAGS_lfapp_camera=0; return -1; }
+    thread.Start();
     return 0;
   }
 
@@ -66,18 +66,18 @@ struct OpenCvCameraModule : public Module {
 
     if (!new_frame) return 0;
 
-    camera->image = (unsigned char*)L.frames->read(-1, L.next);
-    camera->image_timestamp = L.frames->readtimestamp(-1, L.next);
+    camera->image = (unsigned char*)L.frames->Read(-1, L.next);
+    camera->image_timestamp_us = L.frames->ReadTimestamp(-1, L.next).count();
     FLAGS_camera_image_width = L.width;
     FLAGS_camera_image_height = L.height;
 
     camera->image_format = Pixel::BGR24;
-    camera->image_linesize = camera->image_width*3;
+    camera->image_linesize = FLAGS_camera_image_width*3;
 
     return 1;
   }
 
-  int Threadproc() {
+  void Threadproc() {
     while (app->run) {
       /* grab */
       bool lg=0, rg=0;
@@ -91,31 +91,30 @@ struct OpenCvCameraModule : public Module {
 
       /* 1-time cosntruct */
       if (lf && !L.frames) {
-        L.dimensions(lf->width, lf->height);
+        L.SetDimensions(lf->width, lf->height);
         L.frames = make_unique<RingSampler>(FLAGS_camera_fps, FLAGS_camera_fps, lf->imageSize);
       }
       if (rf && !R.frames) {
-        R.dimensions(rf->width, rf->height);
+        R.SetDimensions(rf->width, rf->height);
         R.frames = make_unique<RingSampler>(FLAGS_camera_fps, FLAGS_camera_fps, rf->imageSize);
       }
 
       /* write */
-      if (lf) memcpy(L.frames->write(RingSampler::Peek | RingSampler::Stamp), lf->imageData, lf->imageSize);
-      if (rf) memcpy(R.frames->write(RingSampler::Peek | RingSampler::Stamp), rf->imageData, rf->imageSize);
+      if (lf) memcpy(L.frames->Write(RingSampler::Peek | RingSampler::Stamp), lf->imageData, lf->imageSize);
+      if (rf) memcpy(R.frames->Write(RingSampler::Peek | RingSampler::Stamp), rf->imageData, rf->imageSize);
 
       /* commit */  
       if (lf || rf) {
         ScopedMutex ML(lock);
-        if (lf) L.frames->write();
-        if (rf) R.frames->write();
+        if (lf) L.frames->Write();
+        if (rf) R.frames->Write();
         camera->frames_read++;
       }
-      else Msleep(1);
+      else MSleep(1);
     }
-    return 0;
   }
 };
 
-extern "C" void *LFAppCreateCameraModule(CameraState *state) { return new OpenCVCameraModule(state); }
+extern "C" void *LFAppCreateCameraModule(CameraState *state) { return new OpenCvCameraModule(state); }
 
 }; // namespace LFL

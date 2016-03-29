@@ -16,27 +16,23 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "lfapp/lfapp.h"
-#include "lfapp/dom.h"
-#include "lfapp/css.h"
-#include "lfapp/flow.h"
-#include "lfapp/gui.h"
-#include "ml/hmm.h"
+#include "core/app/gui.h"
+#include "core/ml/hmm.h"
 #include "speech.h"
 
-#include "ml/corpus.h"
-#include "ml/counter.h"
-#include "ml/kmeans.h"
-#include "ml/sample.h"
-#include "ml/gmmem.h"
+#include "core/ml/corpus.h"
+#include "core/ml/counter.h"
+#include "core/ml/kmeans.h"
+#include "core/ml/sample.h"
+#include "core/ml/gmmem.h"
 
 #include "corpus.h"
-#include "ml/viterbitrain.h"
-#include "ml/baumwelch.h"
-#include "ml/cart.h"
-#include "ml/cluster.h"
-#include "nlp/corpus.h"
-#include "nlp/lm.h"
+#include "core/ml/viterbitrain.h"
+#include "core/ml/baumwelch.h"
+#include "core/ml/cart.h"
+#include "core/ml/cluster.h"
+#include "core/nlp/corpus.h"
+#include "core/nlp/lm.h"
 
 #include "wfst.h"
 #include "recognition.h"
@@ -267,7 +263,7 @@ int Model3InitWrite(vector<string> &list, Matrix *siltrans, const char *modeldir
   }
 
   /* write model */
-  FLAGS_TriphoneModel = true;
+  FLAGS_triphone_model = true;
   if (AcousticModel::Write(&model3, "AcousticModel", modeldir, lastiter+1, 0)) ERROR("write ", modeldir);
   INFO("initialized ", model3.GetStateCount(), " states");
   return 0;
@@ -297,7 +293,7 @@ int Model3Init(const char *modeldir, AcousticModel::StateCollection *model1, int
   if (featdir) {
     Features2Pronunciation f2p;
     f2p.Iter(featdir);
-    if (!Running()) return 0;
+    if (!app->run) return 0;
 
     for (CounterS::Count::iterator i = f2p.words.count.begin(); i != f2p.words.count.end(); i++) {
       const char *word = (*i).first.c_str();
@@ -399,7 +395,7 @@ int GrowDecisionTrees(const char *modeldir, AcousticModel::Compiled *model3, int
   MatrixArchiveInputFile UttPathsIn;
   UttPathsIn.Open(modeldir + FLAGS_UttPathsInFile);
   PathCorpus::PathIter(featdir, &UttPathsIn, bind(&Features2Pronunciation::AddPath, f2p, _1, _2, _3, _4, _5, _6, _7));
-  if (!Running()) return 0;
+  if (!app->run) return 0;
 
   /* initialize a decision tree for each center phoneme state */
   const int trees = LFL_PHONES * AcousticModel::StatesPerPhone;
@@ -609,14 +605,14 @@ int ViterbiTrain(const char *featdir, const char *modeldir) {
       for (int k=0; k<FLAGS_MeansIterations; k++) {
         train.mode = ViterbiTrain::Mode::Means;
         train.Run(modeldir, featdir, !j && !k, lastiter, innerIteration++, !i ? FLAGS_UttPathsInFile : "", !i && !j && !k ? FLAGS_UttPathsOutFile : "");
-        if (Running()) train.Complete(); else return 0;
+        if (app->run) train.Complete(); else return 0;
         INFOf("ViterbiTrain means, totalprob=%f (PP=%f) accumprob=%f (PP=%f) (init=%d) iter=(%d,%d,%d)",
               train.totalprob, train.totalprob/-train.totalcount, train.accumprob, train.accumprob/-train.accumcount, init, i, j, k);
       }
 
       train.mode = ViterbiTrain::Mode::Cov;
       if (FLAGS_FullVariance) train.Run(modeldir, featdir, 0, lastiter, innerIteration++, !i ? FLAGS_UttPathsInFile : "", "");
-      if (Running()) train.Complete(); else return 0;
+      if (app->run) train.Complete(); else return 0;
 
       train.mode = ViterbiTrain::Mode::UpdateModel;
       train.Complete();
@@ -645,11 +641,11 @@ int BaumWelch(const char *featdir, const char *modeldir) {
 
     train.mode = BaumWelch::Mode::Means;
     train.Run(modeldir, featdir, lastiter, innerIteration++);
-    if (Running()) train.Complete(); else return 0;
+    if (app->run) train.Complete(); else return 0;
 
     train.mode = BaumWelch::Mode::Cov;
     if (FLAGS_FullVariance) train.Run(modeldir, featdir, lastiter, innerIteration++);
-    if (Running()) train.Complete(); else return 0;
+    if (app->run) train.Complete(); else return 0;
 
     if (AcousticModel::Write(&model, "AcousticModel", modeldir, lastiter+1, 0)) ERROR("BaumWelch iteration ", lastiter);
     INFO("BaumWelch iter ", lastiter, " completed wrote model iter ", lastiter+1);
@@ -820,7 +816,8 @@ struct RecognizeCorpus {
   void AddFeatures(const char *fn, Matrix *MFCC, Matrix *features, const char *transcript) {
     INFO("IN = '", transcript, "'");
     Timer vtime; double vprob = 0;
-    matrix<HMM::Token> *viterbi = Recognizer::DecodeFeatures(recognize, features, FLAGS_BeamWidth, FLAGS_UseTransition, &vprob, FLAGS_lfapp_debug ? &recognize->nameCB : 0);
+    matrix<HMM::Token> *viterbi = Recognizer::DecodeFeatures(recognize, features, FLAGS_BeamWidth, FLAGS_UseTransition, &vprob,
+                                                             FLAGS_loglevel >= LFApp::Log::Debug ? &recognize->nameCB : 0);
     string decodescript = Recognizer::Transcript(recognize, viterbi);
     Time time = vtime.GetTime();
     double wer = Recognizer::WordErrorRate(recognize, transcript, decodescript);
@@ -874,7 +871,7 @@ struct Wav2Segments {
       int len = iter.end - iter.beg;
       if (len > longrun) longrun = len;
 
-      RingSampler::Handle B(wav->wav, iter.beg*FLAGS_feat_hop, len*FLAGS_feat_hop);
+      RingSampler::Handle B(wav->wav.get(), iter.beg*FLAGS_feat_hop, len*FLAGS_feat_hop);
       Out *o = out[iter.phone];
       o->wav.Write(&B);
 
@@ -904,35 +901,36 @@ struct Wav2Segments {
 }; // namespace LFL
 using namespace LFL;
 
-extern "C" int main(int argc, const char *argv[]) {
-
-  app->logfilename = StrCat(LFAppDownloadDir(), "trainer.txt");
-  screen->caption = "trainer";
-  if (app->Create(argc, argv, __FILE__)) { app->Free(); return -1; }
-  INFO("LFL_PHONES=", LFL_PHONES);
-
+extern "C" void MyAppCreate() {
   FLAGS_lfapp_audio = FLAGS_lfapp_video = FLAGS_lfapp_input = FLAGS_visualize;
   FLAGS_lfapp_camera = FLAGS_lfapp_network = 0;
 #ifdef _WIN32
   open_console = 1;
 #endif
-  if (app->Init()) { app->Free(); return -1; }
+  app = new Application();
+  screen = new Window();
+  app->name = "trainer";
+}
+
+extern "C" int MyAppMain(int argc, const char* const* argv) {
+  if (app->Create(argc, argv, __FILE__)) return -1;
+  INFO("LFL_PHONES=", LFL_PHONES);
+  if (app->Init()) return -1;
 
   asset.Add(Asset("snap", 0, 0, 0, 0, 0, 0, 0, 0));
   asset.Load();
-  app->shell.assets = &asset;
 
   soundasset.Add(SoundAsset("snap", 0, new RingSampler(FLAGS_sample_rate*FLAGS_sample_secs), 1, FLAGS_sample_rate, FLAGS_sample_secs));
   soundasset.Load();
-  app->shell.soundassets = &soundasset;
-
-  BindMap *binds = screen->binds = new BindMap();
-  binds->Add(Bind(Key::Backquote, Bind::CB(bind([&](){ app->shell.console(vector<string>()); }))));
-  binds->Add(Bind(Key::Escape,    Bind::CB(bind(&Shell::quit,   &app->shell, vector<string>()))));
-  binds->Add(Bind(Key::F5,        Bind::CB(bind(&Shell::play,   &app->shell, vector<string>(1, "snap")))));
-  binds->Add(Bind(Key::F6,        Bind::CB(bind(&Shell::snap,   &app->shell, vector<string>(1, "snap")))));
-  binds->Add(Bind(Key::F7,        Bind::CB(bind(&MyResynth,                  vector<string>(1, "snap")))));
-  binds->Add(Bind(Key::F8,        Bind::CB(bind(&Shell::sinth,  &app->shell, vector<string>(1, "440" )))));
+  
+  screen->shell = make_unique<Shell>(&asset, &soundasset, nullptr);
+  BindMap *binds = screen->AddInputController(make_unique<BindMap>());
+  binds->Add(Bind(Key::Backquote, Bind::CB(bind([&](){ screen->shell->console(vector<string>()); }))));
+  binds->Add(Bind(Key::Escape,    Bind::CB(bind(&Shell::quit,   screen->shell.get(), vector<string>()))));
+  binds->Add(Bind(Key::F5,        Bind::CB(bind(&Shell::play,   screen->shell.get(), vector<string>(1, "snap")))));
+  binds->Add(Bind(Key::F6,        Bind::CB(bind(&Shell::snap,   screen->shell.get(), vector<string>(1, "snap")))));
+  binds->Add(Bind(Key::F7,        Bind::CB(bind(&MyResynth,                          vector<string>(1, "snap")))));
+  binds->Add(Bind(Key::F8,        Bind::CB(bind(&Shell::sinth,  screen->shell.get(), vector<string>(1, "440" )))));
 
   string wavdir=FLAGS_homedir, featdir=FLAGS_homedir, modeldir=FLAGS_homedir, dtdir=FLAGS_homedir;
   wavdir += "/" + FLAGS_WavDir + "/";
@@ -1086,13 +1084,14 @@ extern "C" int main(int argc, const char *argv[]) {
   if (FLAGS_recognizefile.size()) {
     RecognitionModel recognize;
     if (recognize.Read("RecognitionNetwork", modeldir.c_str(), FLAGS_WantIter)) FATAL("open RecognitionNetwork ", modeldir);
-    if (FLAGS_lfapp_debug) RecognitionHMM::PrintLattice(&recognize);
+    if (FLAGS_loglevel >= LFApp::Log::Debug) RecognitionHMM::PrintLattice(&recognize);
     AcousticModel::ToCUDA(&recognize.acoustic_model);
     do {
       INFO("recognize(", FLAGS_recognizefile, ") begin");
       Matrix *MFCC=0; double vprob=0; Timer vtimer;
       matrix<HMM::Token> *viterbi = Recognizer::DecodeFile(&recognize, FLAGS_recognizefile.c_str(), FLAGS_BeamWidth,
-                                                           FLAGS_UseTransition, &vprob, &MFCC, FLAGS_lfapp_debug ? &recognize.nameCB : 0);
+                                                           FLAGS_UseTransition, &vprob, &MFCC,
+                                                           FLAGS_loglevel >= LFApp::Log::Debug ? &recognize.nameCB : 0);
       string transcript = Recognizer::Transcript(&recognize, viterbi);
       INFO("recognize(", FLAGS_recognizefile, ") end");
       HMM::Token::PrintViterbi(viterbi, &recognize.nameCB);
@@ -1101,8 +1100,8 @@ extern "C" int main(int argc, const char *argv[]) {
       if (FLAGS_lfapp_video) RecognizeCorpus::Visualize(&recognize, MFCC, viterbi, vprob, vtimer.GetTime());
       delete viterbi;
       delete MFCC;
-    } while (Running() && FLAGS_visualize && FLAGS_interactive);
+    } while (app->run && FLAGS_visualize && FLAGS_interactive);
   }
 
-  return app->Free();
+  return 0;
 }

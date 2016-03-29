@@ -35,7 +35,7 @@ void OGGReader::Close(void *h) {
   if (stream) stb_vorbis_close(stream);
 }
 
-int OGGReader::Read(void *h, int chans, int samples, RingSampler *out, bool reset) { 
+int OGGReader::Read(void *h, int chans, int samples, RingSampler::Handle *out, bool reset) { 
   Allocator *tlsalloc = ThreadLocalStorage::GetAllocator();
   float *buf = static_cast<float*>(tlsalloc->Malloc(samples*chans*sizeof(float)));
   auto stream = static_cast<stb_vorbis*>(h);

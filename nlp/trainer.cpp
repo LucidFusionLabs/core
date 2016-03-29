@@ -16,15 +16,12 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "lfapp/lfapp.h"
-#include "lfapp/flow.h"
-#include "lfapp/gui.h"
-#include "lfapp/dom.h"
-#include "lfapp/trie.h"
-#include "ml/corpus.h"
-#include "ml/counter.h"
-#include "ml/hmm.h"
-#include "speech/speech.h"
+#include "core/app/gui.h"
+#include "core/app/types/trie.h"
+#include "core/ml/corpus.h"
+#include "core/ml/counter.h"
+#include "core/ml/hmm.h"
+#include "core/speech/speech.h"
 #include "corpus.h"
 #include "lm.h"
 
@@ -41,12 +38,16 @@ DEFINE_string(nomcorpuspath,   "corpus/nombank/frames/",    "Nombank path");
 }; // namespace LFL
 using namespace LFL;
 
-extern "C" int main(int argc, const char *argv[]) {
-  app->logfilename = StrCat(LFAppDownloadDir(), "trainer.txt");
-  screen->caption = "trainer";
+extern "C" void MyAppCreate() {
   FLAGS_open_console = 1;
-  if (app->Create(argc, argv, __FILE__)) { app->Free(); return -1; }
-  if (app->Init()) { app->Free(); return -1; }
+  app = new Application();
+  screen = new Window();
+  app->name = "trainer";
+}
+
+extern "C" int MyAppMain(int argc, const char* const* argv) {
+  if (app->Create(argc, argv, __FILE__)) return -1;
+  if (app->Init()) return -1;
 
   Callback finish_cb;
   SentenceCorpus::SentenceCB input_cb;

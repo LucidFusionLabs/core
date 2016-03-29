@@ -15,12 +15,6 @@ endif()
 if(LFL_OSX)
   set(OPENGL_INCLUDE ${OPENGL_INCLUDE_DIR}/Headers ${CMAKE_CURRENT_SOURCE_DIR}/GL PARENT_SCOPE)
   set(PLATFORM_LIB "-framework Cocoa -framework CoreVideo -framework QTKit -lz -lbz2 -liconv")
-  if(LFL_SDL)
-    set(PLATFORM_LIB "${PLATFORM_LIB} -framework Carbon -framework IOKit -framework forcefeedback -framework CoreAudio -framework AudioUnit")
-  endif()
-  if(LFL_GLFW)
-    set(PLATFORM_LIB "${PLATFORM_LIB} -framework IOKit")
-  endif()
 endif()
 
 # Linux
@@ -390,14 +384,14 @@ endif()
 if(LFL_GLFW)
   add_subdirectory(glfw)
   set(GLFW_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/glfw/include PARENT_SCOPE)
-  set(GLFW_LIB glfw PARENT_SCOPE)
+  set(GLFW_LIB glfw "-framework IOKit" PARENT_SCOPE)
 endif()
 
 # SDL
 if(LFL_SDL AND NOT LFL_EMSCRIPTEN)
   add_subdirectory(SDL)
   set(SDL_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/SDL/include PARENT_SCOPE)
-  set(SDL_LIB SDL2-static PARENT_SCOPE)
+  set(SDL_LIB SDL2-static "-framework Carbon -framework IOKit -framework forcefeedback -framework CoreAudio -framework AudioUnit" PARENT_SCOPE)
 endif()
 
 # portaudio

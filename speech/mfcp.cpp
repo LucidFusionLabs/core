@@ -16,10 +16,9 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "lfapp/lfapp.h"
-#include "ml/hmm.h"
+#include "core/ml/hmm.h"
 #include "speech.h"
-#include "ml/corpus.h"
+#include "core/ml/corpus.h"
 #include "corpus.h"
 
 namespace LFL {
@@ -27,14 +26,19 @@ DEFINE_bool(verify,       false,       "Verify copied matrix file");
 }; // namespace LFL
 using namespace LFL;
 
-extern "C" int main(int argc, const char *argv[]) {
-  /* lfapp init */
+extern "C" void MyAppCreate() {
+  FLAGS_lfapp_audio = FLAGS_lfapp_video = FLAGS_lfapp_input = FLAGS_lfapp_camera = FLAGS_lfapp_network = 0;
 #ifdef _WIN32
-  open_console = 1;
+  FLAGS_open_console = 1;
 #endif
+  app = new Application();
+  screen = new Window();
+}
+
+extern "C" int MyAppMain(int argc, const char* const* argv) {
+  /* lfapp init */
   int ac=1; const char *av[] = { "" };
   if (app->Create(ac, av, __FILE__)) return -1;
-  FLAGS_lfapp_audio = FLAGS_lfapp_video = FLAGS_lfapp_input = FLAGS_lfapp_camera = FLAGS_lfapp_network = 0;
   if (app->Init()) return -1;
 
   /* app init */
