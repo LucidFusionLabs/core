@@ -85,11 +85,8 @@ struct SDLFrameworkModule : public Module {
   }
 
   int Frame(unsigned clicks) {
-    point mp;
-    SDL_Event ev;
-    SDL_GetMouseState(&mp.x, &mp.y);
     bool mouse_moved = false;
-
+    SDL_Event ev;
     while (SDL_PollEvent(&ev)) {
       if (ev.type == SDL_QUIT) app->run = false;
       else if (ev.type == SDL_WINDOWEVENT) {
@@ -106,19 +103,12 @@ struct SDLFrameworkModule : public Module {
         else if (ev.window.event == SDL_WINDOWEVENT_CLOSE) app->CloseWindow(screen);
       }
       else if (ev.type == SDL_KEYDOWN) {
-#ifdef LFL_EMSCRIPTEN
-        app->input->KeyPress(SDL_GetKeyFromScancode(SDL_ScanCode(ev.key.keysym.sym)), 1);
-#else
-        app->input->KeyPress(ev.key.keysym.sym, 1);
-#endif
+        app->input->KeyPress(GetKey(ev.key.keysym.sym), 1);
       } else if (ev.type == SDL_KEYUP) {
-#ifdef LFL_EMSCRIPTEN
-        app->input->KeyPress(SDL_GetKeyFromScancode(SDL_ScanCode(ev.key.keysym.sym)), 0);
-#else
-        app->input->KeyPress(ev.key.keysym.sym, 0);
-#endif
+        app->input->KeyPress(GetKey(ev.key.keysym.sym), 0);
       } else if (ev.type == SDL_MOUSEMOTION) {
-        app->input->MouseMove(Input::TransformMouseCoordinate(mp), point(ev.motion.xrel, -ev.motion.yrel));
+        app->input->MouseMove(Input::TransformMouseCoordinate(point(ev.motion.x, ev.motion.y)),
+                              point(ev.motion.xrel, -ev.motion.yrel));
         mouse_moved = true;
       }
       else if (ev.type == SDL_MOUSEBUTTONDOWN) app->input->MouseClick(ev.button.button, 1, Input::TransformMouseCoordinate(point(ev.button.x, ev.button.y)));
@@ -133,6 +123,19 @@ struct SDLFrameworkModule : public Module {
     }
 #endif
     return 0;
+  }
+
+  int GetKey(int sym) {
+#ifdef LFL_EMSCRIPTEN
+    switch (sym) {
+      case SDL_SCANCODE_LSHIFT: return Key::LeftShift;
+      case SDL_SCANCODE_RSHIFT: return Key::RightShift;
+      default:                  break;
+    }
+    return SDL_GetKeyFromScancode(SDL_ScanCode(sym));
+#else
+    return sym;
+#endif
   }
 };
 

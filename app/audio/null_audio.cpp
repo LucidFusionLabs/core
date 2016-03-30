@@ -17,5 +17,7 @@
  */
 
 namespace LFL {
+void Application::PlayBackgroundMusic(SoundAsset *music) {}
+void Application::PlaySoundEffect(SoundAsset *sa, const v3 &pos, const v3 &vel) {}
 unique_ptr<Module> CreateAudioModule(Audio *a) { return nullptr; }
 }; // namespace LFL

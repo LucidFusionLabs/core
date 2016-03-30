@@ -46,8 +46,9 @@ Shell::Shell(AssetMap *AM, SoundAssetMap *SAM, MovieAssetMap *MAM) : assets(AM),
   command.emplace_back("copy",       bind(&Shell::copy,         this, _1));
   command.emplace_back("snap",       bind(&Shell::snap,         this, _1));
   command.emplace_back("writesnap",  bind(&Shell::writesnap,    this, _1));
-  command.emplace_back("fps",        bind(&Shell::fps,          this, _1));
-  command.emplace_back("wget",       bind(&Shell::wget,         this, _1));
+  command.emplace_back("fps",        bind(&Shell::FPS,          this, _1));
+  command.emplace_back("netstat",    bind(&Shell::NetworkStats, this, _1));
+  command.emplace_back("wget",       bind(&Shell::WGet,         this, _1));
   command.emplace_back("messagebox", bind(&Shell::MessageBox,   this, _1));
   command.emplace_back("texturebox", bind(&Shell::TextureBox,   this, _1));
   command.emplace_back("edit",       bind(&Shell::Edit,         this, _1));
@@ -292,11 +293,19 @@ void Shell::writesnap(const vector<string> &a) {
   }
 }
 
-void Shell::fps(const vector<string>&) { INFO("FPS ", screen->fps.FPS()); }
+void Shell::FPS(const vector<string>&) { INFO("FPS ", screen->fps.FPS()); }
 
-void Shell::wget(const vector<string> &a) {
+void Shell::WGet(const vector<string> &a) {
   if (a.empty()) return;
   HTTPClient::WGet(a[0]);
+}
+
+void Shell::NetworkStats(const vector<string> &a) {
+  if (!app->net) return;
+  for (int svc_i = 0, svc_l = app->net->service_table.size(); svc_i < svc_l; ++svc_i) {
+    Service *svc = app->net->service_table[svc_i];
+    INFO("svc[", svc_i, "] ", svc->name, ": conns=", svc->conn.size(), ", endpoints=", svc->endpoint.size());
+  }
 }
 
 void Shell::MessageBox(const vector<string> &a) { Dialog::MessageBox(Join(a, " ")); }

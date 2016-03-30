@@ -497,6 +497,8 @@ struct Window : public ::NativeWindow {
   vector<unique_ptr<Dialog>> dialogs;
   FontRef default_font = FontRef(FontDesc::Default(), false);
   function<TextBox*()> default_textbox = []{ return nullptr; };
+  function<void(int)> grabbed_yaw_cb = [=](int x){ cam->YawChange(x); };
+  function<void(int)> grabbed_pitch_cb = [=](int x){ cam->PitchChange(x); };
   TextBox *active_textbox=0;
   Dialog *top_dialog=0;
   unique_ptr<Shell> shell;
@@ -648,7 +650,7 @@ struct Application : public ::LFApp {
   int GetVolume();
   int GetMaxVolume();
   void SetVolume(int v);
-  void PlaySoundEffect(SoundAsset*);
+  void PlaySoundEffect(SoundAsset*, const v3 &pos=v3(), const v3 &vel=v3());
   void PlayBackgroundMusic(SoundAsset*);
 
   template <class... Args> void RunInMainThread(Args&&... args) {

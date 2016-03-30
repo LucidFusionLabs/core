@@ -323,7 +323,7 @@ struct FFMpegAssetLoader : public AssetLoaderInterface {
           short *rsout = static_cast<short*>(tlsalloc->Malloc(AVCODEC_MAX_AUDIO_FRAME_SIZE + FF_INPUT_BUFFER_PADDING_SIZE));
 
           int sampsIn  = frame->nb_samples;
-          int sampsOut = max(0, SoundAsset::Size(sa) - wrote) / sa->channels;
+          int sampsOut = max(size_t(0), SoundAsset::Size(sa) - wrote) / sa->channels;
 
           sa->resampler->Update(sampsIn, reinterpret_cast<const short* const*>(frame->extended_data), rsout, Time(-1), sampsOut);
           wrote = sa->resampler->output_available - begin_resamples_available;

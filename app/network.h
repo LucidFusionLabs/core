@@ -332,8 +332,10 @@ struct Connection {
   vector<IOVec> packets;
   deque<TransferredSocket> transferred_socket;
   unique_ptr<Handler> handler;
+  Connection *next=0;
   Callback *detach;
   SSLSocket bio;
+  void *data=0;
 
   virtual ~Connection();
   Connection(Service *s, Handler *h,                                     Callback *Detach=0) : svc(s), socket(-1),   ct(Now()), rt(Now()), wt(Now()), addr(0),    state(Error), port(0),    rb(65536), wb(65536), self_reference(MakeTyped(this)), handler(h), detach(Detach) {}
@@ -415,13 +417,8 @@ struct ServiceEndpointEraseList {
   }
 };
 
-struct UnixClient : public Service {
-  UnixClient() : Service(Protocol::UNIX) {}
-};
-
-struct UnixServer : public Service {
-  UnixServer(const string &n) : Service(Protocol::UNIX) { QueueListen(n); }
-};
+struct UnixClient : public Service { UnixClient() : Service(Protocol::UNIX) {} };
+struct UnixServer : public Service { UnixServer(const string &n) : Service(Protocol::UNIX) { QueueListen(n); } };
 
 struct UDPClient : public Service {
   static const int MTU = 1500;
@@ -446,6 +443,7 @@ struct UDPServer : public Service {
   Connection::Handler *handler=0;
   UDPServer(int port) { protocol=Protocol::UDP; QueueListen(0, port); }
   virtual int Connected(Connection *c) { c->handler = unique_ptr<Connection::Handler>(handler); return 0; }
+  virtual void Close(Connection *c) { c->handler.release(); Service::Close(c); }
 };
 
 struct TCPClient : public Service {};
@@ -468,29 +466,36 @@ struct GPlusServer : public Service {
   Connection::Handler *handler=0;
   GPlusServer() : Service(Protocol::GPLUS) { endpoint_read_autoconnect=1; }
   virtual int Connected(Connection *c) { c->handler = unique_ptr<Connection::Handler>(handler); return 0; }
+  virtual void Close(Connection *c) { c->handler.release(); Service::Close(c); }
 };
 
 struct InProcessServer : public Service {
-  virtual ~InProcessServer() {}
   Connection::Handler *handler=0;
+  int next_id=1;
+  virtual ~InProcessServer() {}
   InProcessServer() : Service(Protocol::InProcess) { endpoint_read_autoconnect=1; }
   virtual int Connected(Connection *c) { c->handler = unique_ptr<Connection::Handler>(handler); return 0; }
-  Connection *PersistentConnection(const string &name, UDPClient::ResponseCB cb, UDPClient::HeartbeatCB HCB);
+  virtual void Close(Connection *c) { c->handler.release(); Service::Close(c); }
+};
+
+struct InProcessClient : public Service {
+  int next_id=1;
+  virtual ~InProcessClient() {}
+  InProcessClient() : Service(Protocol::InProcess) {}
+  Connection *PersistentConnection(InProcessServer*, UDPClient::ResponseCB cb, UDPClient::HeartbeatCB HCB);
 };
 
 struct Network : public Module {
   int select_time=0;
   LFLSocketSet active;
   vector<Service*> service_table;
-  unique_ptr<UnixClient> unix_client;
-  unique_ptr<UnixServer> unix_server;
   unique_ptr<UDPClient> udp_client;
-  unique_ptr<UDPServer> udp_server;
   unique_ptr<TCPClient> tcp_client;
-  unique_ptr<GPlusClient> gplus_client;
-  unique_ptr<GPlusServer> gplus_server;
+  unique_ptr<UnixClient> unix_client;
   unique_ptr<SystemResolver> system_resolver;
-  unique_ptr<RecursiveResolver> recursive_resolver;
+  LazyInitializedPtr<RecursiveResolver> recursive_resolver;
+  LazyInitializedPtr<InProcessClient> inprocess_client;
+  LazyInitializedPtr<GPlusClient> gplus_client;
   SSL_CTX *ssl=0;
   Network();
   virtual ~Network();

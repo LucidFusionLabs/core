@@ -19,7 +19,7 @@ if(LFL_EMSCRIPTEN)
     lfl_add_executable(${target} ${ARGN})
     set_target_properties(${target} PROPERTIES OUTPUT_NAME ${target}.html)
     set_target_properties(${target} PROPERTIES LINK_FLAGS
-      "--embed-file assets -s USE_SDL=2 -s USE_LIBPNG=1 -s USE_ZLIB=1")
+      "--embed-file assets -s USE_SDL=2 -s USE_LIBPNG=1 -s USE_ZLIB=1 -s TOTAL_MEMORY=20971520")
 
     add_custom_command(TARGET ${target} PRE_LINK WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
       COMMAND rm -rf assets

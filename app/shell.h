@@ -71,8 +71,9 @@ struct Shell {
   void f0(const vector<string>&);
   void sinth(const vector<string>&);
   void writesnap(const vector<string>&);
-  void fps(const vector<string>&);
-  void wget(const vector<string>&);
+  void FPS(const vector<string>&);
+  void NetworkStats(const vector<string>&);
+  void WGet(const vector<string>&);
   void MessageBox(const vector<string>&);
   void TextureBox(const vector<string>&);
   void Slider    (const vector<string>&);

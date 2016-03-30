@@ -63,11 +63,12 @@ const int SocketType::Raw       = SOCK_RAW;
 
 const char *Protocol::Name(int p) {
   switch (p) {
-    case TCP:   return "TCP";
-    case UDP:   return "UDP";
-    case UNIX:  return "UNIX";
-    case GPLUS: return "GPLUS";
-    default:    return "";
+    case TCP:       return "TCP";
+    case UDP:       return "UDP";
+    case UNIX:      return "UNIX";
+    case GPLUS:     return "GPLUS";
+    case InProcess: return "InProcess";
+    default:        return "";
   }
 }
 
@@ -1203,12 +1204,16 @@ Connection *GPlusClient::PersistentConnection(const string &name, UDPClient::Res
   return c;
 }
 
-/* InProcessServer */
+/* InProcessClient */
 
-Connection *InProcessServer::PersistentConnection(const string &name, UDPClient::ResponseCB responseCB, UDPClient::HeartbeatCB HCB) {
-  Connection *c = EndpointConnect(name);
-  c->handler = make_unique<PacketHandler::PersistentConnection>(responseCB, HCB);
-  return c;
+Connection *InProcessClient::PersistentConnection(InProcessServer *server, UDPClient::ResponseCB responseCB,
+                                                  UDPClient::HeartbeatCB HCB) {
+  Connection *c1 = EndpointConnect(StringPrintf("%p:%d", server, server->next_id++));
+  Connection *c2 = server->EndpointConnect(StringPrintf("%p:%d", this, next_id++));
+  c1->handler = make_unique<PacketHandler::PersistentConnection>(responseCB, HCB);
+  c1->next = c2;
+  c2->next = c1;
+  return c1;
 }
 
 /* Sniffer */

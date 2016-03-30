@@ -117,9 +117,8 @@ struct Game {
     bool rcon_auth=0;
     Game::ReliableUDPNetwork retry;
     ConnectionData() : retry(UDPClient::Sendto) {}
-
-    static void Init(Connection *out) { ConnectionData *cd = new(out->wb.begin()) ConnectionData(); }
-    static ConnectionData *Get(Connection *c) { return reinterpret_cast<ConnectionData*>(c->wb.begin()); }
+    static void Init(Connection *c) { CHECK_EQ(0, c->data); c->data = new ConnectionData(); }
+    static ConnectionData *Get(Connection *c) { return reinterpret_cast<ConnectionData*>(c->data); }
   };
 
   struct Controller {
@@ -276,8 +275,8 @@ struct GameServer : public Connection::Handler {
 
   int Connected(Connection *c) { Game::ConnectionData::Init(c); return 0; }
   void Close(Connection *c) {
-    Game::ConnectionData *cd = Game::ConnectionData::Get(c);
-    world->PartEntity(cd, world->Get(cd->entityID), cd->team);
+    unique_ptr<Game::ConnectionData> cd(Game::ConnectionData::Get(c));
+    world->PartEntity(cd.get(), world->Get(cd->entityID), cd->team);
     c->handler.release();
     if (!cd->team) return;
 
@@ -319,7 +318,7 @@ struct GameServer : public Connection::Handler {
     elif_parse(PlayerUpdate, in)
     elif_parse(RconRequest, in)
     elif_parse(RconResponse, in)
-    else ERROR(c->Name(), ": parse failed: unknown type ", hdr.id);
+    else ERROR(c->Name(), ": parse failed: unknown type ", hdr.id, " len=", content_len);
     return in.offset;
   }
 
@@ -587,8 +586,7 @@ struct GameClient {
     if (prot == Protocol::TCP) {
       net = Singleton<Game::TCPNetwork>::Get();
       conn = app->net->tcp_client->Connect(url, default_port);
-      auto h = make_unique<Connection::CallbackHandler>
-        (bind(&GameClient::StreamRead, this, _1), Connection::CB());
+      auto h = make_unique<Connection::CallbackHandler>(bind(&GameClient::StreamRead, this, _1), Connection::CB());
       h->connected_cb = [=](Connection *c){ 
         GameProtocol::JoinRequest req;
         req.PlayerName = playername;
@@ -601,8 +599,8 @@ struct GameClient {
 
     } else if (prot == Protocol::UDP) {
       net = Singleton<Game::UDPNetwork>::Get();
-      conn = app->net->udp_client->PersistentConnection(url, bind(&GameClient::DatagramRead, this, _1, _2, _3),
-                                                        Connection::CB(), default_port);
+      conn = app->net->udp_client->PersistentConnection
+        (url, bind(&GameClient::DatagramRead, this, _1, _2, _3), Connection::CB(), default_port);
       if (!Connected()) return 0;
 
       GameProtocol::ChallengeRequest req;
@@ -615,8 +613,9 @@ struct GameClient {
       GPlusClient *gplus_client = app->net->gplus_client.get();
       app->network.Enable(gplus_client);
       net = Singleton<Game::GoogleMultiplayerNetwork>::Get();
-      conn = gplus_client->PersistentConnection(url, bind(&GameClient::DatagramRead, this, _1, _2, _3),
-                                                Connection::CB());
+      conn = gplus_client->PersistentConnection
+        (url, bind(&GameClient::DatagramRead, this, _1, _2, _3), Connection::CB());
+
       GameProtocol::JoinRequest req;
       req.PlayerName = playername;
       net->WriteWithRetry(&retry, conn, &req, seq++);
@@ -624,11 +623,13 @@ struct GameClient {
       return 0;
 #endif
     } else if (prot == Protocol::InProcess) {
+      InProcessClient *inprocess_client = app->net->inprocess_client.get();
+      app->net->Enable(inprocess_client);
       CHECK(inprocess_server);
-      app->net->Enable(inprocess_server);
       net = Singleton<Game::InProcessNetwork>::Get();
-      conn = inprocess_server->PersistentConnection(url, bind(&GameClient::DatagramRead, this, _1, _2, _3),
-                                                    Connection::CB());
+      conn = inprocess_client->PersistentConnection
+        (inprocess_server, bind(&GameClient::DatagramRead, this, _1, _2, _3), Connection::CB());
+
       GameProtocol::JoinRequest req;
       req.PlayerName = playername;
       net->WriteWithRetry(&retry, conn, &req, seq++);
@@ -921,8 +922,8 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
     browser(this, box), particles("GameMenuParticles") {
     tab1.outline_topleft = tab2.outline_topleft = tab3.outline_topleft = tab4.outline_topleft = tab1_server_start.outline_topleft = tab2_server_join.outline_topleft = sub_tab1.outline_topleft = sub_tab2.outline_topleft = sub_tab3.outline_topleft = &Color::grey80;
     tab1.outline_bottomright = tab2.outline_bottomright = tab3.outline_bottomright = tab4.outline_bottomright = tab1_server_start.outline_bottomright = tab2_server_join.outline_bottomright = sub_tab1.outline_bottomright = sub_tab2.outline_bottomright = sub_tab3.outline_bottomright = &Color::grey40;
-    
-    tab1_options.dot_size = tab2_servers.dot_size = tab3_sensitivity.dot_size = tab3_volume.dot_size = 25;
+    tab1_server_start.solid = tab2_server_join.solid = &Color::grey60;
+    tab1_options.dot_size = tab2_servers.dot_size = tab3_sensitivity.dot_size = tab3_volume.dot_size = browser.v_scrollbar.dot_size = 25;
     Layout();
     tab3_player_name.cursor.type         = tab2_server_address.cursor.type         = TextBox::Cursor::Underline;
     tab3_player_name.bg_color            = tab2_server_address.bg_color            = &Color::clear;
@@ -1048,18 +1049,23 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
 
   void LayoutMenu() {
     Box b;
+    int fh = font->Height(), scrolled = 0;
     Flow menuflow(&box, bright_font, Reset());
-    mouse.AddClickBox(Box(0, -box.h, box.w, box.h), MouseController::CB(bind(&GameMenuGUI::MenuLineClicked, this)));
+    mouse.AddClickBox(Box(0, -box.h, box.w-tab1_options.dot_size, box.h),
+                      MouseController::CB(bind(&GameMenuGUI::MenuLineClicked, this)));
 
     current_scrollbar = 0;
     if      (selected == 1) { current_scrollbar = &tab1_options;        menuflow.container = &menuftr1; }
     else if (selected == 2) { current_scrollbar = &tab2_servers;        menuflow.container = &menuftr2; }
     else if (selected == 3) { current_scrollbar = &browser.v_scrollbar; menuflow.container = &box; }
-    menuflow.p.y -= current_scrollbar ? int(current_scrollbar->scrolled * current_scrollbar->doc_height) : 0;
+    if (current_scrollbar) {
+      current_scrollbar->LayoutAttached(Box(0, -box.h, box.w, box.h-fh));
+      menuflow.p.y += (scrolled = int(current_scrollbar->scrolled * current_scrollbar->doc_height));
+    }
 
     int my_selected = selected;
     if (my_selected == 2) {
-      sub_tab1.box = sub_tab2.box = sub_tab3.box = Box(box.w/3, font->Height());
+      sub_tab1.box = sub_tab2.box = sub_tab3.box = Box(box.w/3, fh);
       sub_tab1.outline = (sub_selected == 1) ? 0 : &Color::white;
       sub_tab2.outline = (sub_selected == 2) ? 0 : &Color::white;
       sub_tab3.outline = (sub_selected == 3) ? 0 : &Color::white;
@@ -1137,7 +1143,7 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
         tab3_player_name.Activate();
       }
       menuflow.AppendRow(.6, .4, &b);
-      { ScissorStack ss(screen->gd); tab3_player_name.Draw(b + box.TopLeft()); }
+      tab3_player_name.Draw(b + box.TopLeft());
 
       menuflow.AppendText("\nControl Sensitivity:");
       menuflow.AppendRow(.6, .35, &b);
@@ -1149,6 +1155,27 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
       tab3_volume.LayoutFixed(b);
       tab3_volume.Update();
 
+      menuflow.AppendText("\nMove Forward:");
+      menuflow.AppendText(.6, "W");
+      menuflow.AppendText("\nMove Left:");
+      menuflow.AppendText(.6, "A");
+      menuflow.AppendText("\nMove Reverse:");
+      menuflow.AppendText(.6, "S");
+      menuflow.AppendText("\nMove Right:");
+      menuflow.AppendText(.6, "D");
+      menuflow.AppendText("\nChange Player:");
+      menuflow.AppendText(.6, "R");
+      menuflow.AppendText("\nCharge Speed Boost:");
+      menuflow.AppendText(.6, "Hold Click");
+      menuflow.AppendText("\nGrab Mouse:");
+      menuflow.AppendText(.6, "Enter");
+      menuflow.AppendText("\nTopbar Menu:");
+      menuflow.AppendText(.6, "Escape");
+      menuflow.AppendText("\nPlayer List:");
+      menuflow.AppendText(.6, "Tab");
+      menuflow.AppendText("\nConsole:");
+      menuflow.AppendText(.6, "~");
+
       if (tab3_volume.dirty) {
         tab3_volume.dirty = false;
         app->SetVolume(int(tab3_volume.scrolled * tab3_volume.doc_height));
@@ -1156,7 +1183,7 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
 
       menuflow.AppendNewlines(1);
       if (last_selected != 3) browser.Open("http://lucidfusionlabs.com/apps.html");
-      browser.Paint(&menuflow, box.TopLeft());
+      browser.Paint(&menuflow, box.TopLeft() + point(0, scrolled));
       // browser.doc.gui.Draw();
       browser.UpdateScrollbar();
     }
@@ -1194,8 +1221,11 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
       screen->gd->SetColor(Color::grey40); BoxBottomRightOutline().Draw(titlewin);
     }
 
-    GUI::Draw();
     LayoutMenu();
+    {
+      Scissor s(screen->gd, box);
+      GUI::Draw();
+    }
     topbar.Draw();
     tab3_volume.Update();
     tab3_sensitivity.Update();
@@ -1301,8 +1331,11 @@ struct GameChatGUI : public TextArea {
   GameClient **server;
   GameChatGUI(int key, GameClient **s) :
     TextArea(screen->gd, FontDesc(FLAGS_default_font, "", 10, Color::grey80), 100, 10), server(s) { 
-    SetToggleKey(key, true);
     write_timestamp = deactivate_on_enter = true;
+    line_fb.align_top_or_bot = false;
+    SetToggleKey(key, true);
+    bg_color = &Color::clear;
+    cursor.type = Cursor::Underline;
   }
 
   void Run(string text) { if (server && *server) (*server)->Rcon(StrCat("say ", text)); }

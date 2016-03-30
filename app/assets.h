@@ -131,6 +131,7 @@ struct SoundAsset {
   RefillCB refill;
   void *handle=0;
   int handle_arg1=-1;
+  float gain=1, max_distance=0, reference_distance=0;
   unique_ptr<AudioResamplerInterface> resampler;
 
   SoundAsset() {}
@@ -227,13 +228,14 @@ template <class Line> struct RingFrameBuffer {
   void ResetGL() { w=h=0; fb.ResetGL(); }
   virtual int Width()  const { return w; }
   virtual int Height() const { return h; }
-  virtual void SizeChangedDone() { fb.Release(); scroll=v2(); p=point(); }
+  virtual void SizeChangedDone() { fb.gd->PopScissorStack(); fb.Release(); scroll=v2(); p=point(); }
   virtual int SizeChanged(int W, int H, Font *font, const Color *bgc) {
     if (W == w && H == h && font->size == font_size) return 0;
     int orig_font_size = font_size;
     SetDimensions(W, H, font);
     fb.Resize(w, Height(), FrameBuffer::Flag::CreateGL | FrameBuffer::Flag::CreateTexture);
     ScopedClearColor scc(fb.gd, bgc);
+    fb.gd->PushScissorStack();
     fb.gd->Clear();
     fb.gd->DrawMode(DrawMode::_2D, false);
     return 1 + (orig_font_size && font_size != orig_font_size);

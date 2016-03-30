@@ -26,12 +26,13 @@
 
 namespace LFL {
 struct OpenALAudioModule : public Module {
+  struct Effect { ALuint source, buffer; };    
   Audio *audio;
   ALCdevice *dev=0;
   ALCcontext *ctx=0;
-  ALuint source=0, in_maxsamples=0, out_maxsamples=0;
-  ALenum in_format=0, out_format=0;
-  deque<ALuint> free_buffers, used_buffers;
+  ALuint bg_source=0;
+  deque<ALuint> bg_free_buffers, bg_used_buffers;
+  deque<Effect> fx_free, fx_used;
   vector<int16_t> samples;
   OpenALAudioModule(Audio *A) : audio(A) {}
 
@@ -42,24 +43,35 @@ struct OpenALAudioModule : public Module {
     if (!(dev = alcOpenDevice(NULL))) return ERRORv(-1, "alcOpenDevice");
     if (!(ctx = alcCreateContext(dev, NULL))) return ERRORv(-1, "alcCreateContext");
     alcMakeContextCurrent(ctx);
-    vector<ALuint> buffers(FLAGS_sample_secs, 0);
+
+    alGenSources(1, &bg_source);
+    if (alGetError() != AL_NO_ERROR) return ERRORv(-1, "alGenSources");
+    alSourcei(bg_source, AL_SOURCE_RELATIVE, AL_TRUE);
+
+    vector<ALuint> sources, buffers(FLAGS_sample_secs, 0);
     alGenBuffers(buffers.size(), &buffers[0]);
     if (alGetError() != AL_NO_ERROR) return ERRORv(-1, "alGenBuffers");
-    alGenSources(1, &source);
+    for (auto &b : buffers) bg_free_buffers.push_back(b);
+
+    sources.resize(3);
+    buffers.resize(sources.size());
+    alGenSources(sources.size(), &sources[0]);
     if (alGetError() != AL_NO_ERROR) return ERRORv(-1, "alGenSources");
-    in_format  = FLAGS_chans_in  == 2 ? AL_FORMAT_STEREO16 : AL_FORMAT_MONO16;
-    out_format = FLAGS_chans_out == 2 ? AL_FORMAT_STEREO16 : AL_FORMAT_MONO16;
-    in_maxsamples = FLAGS_chans_in * FLAGS_sample_rate;
-    out_maxsamples = FLAGS_chans_out * FLAGS_sample_rate;
-    samples.resize(max(FLAGS_chans_in, FLAGS_chans_out) * FLAGS_sample_rate);
-    for (auto &b : buffers) free_buffers.push_back(b);
+    alGenBuffers(buffers.size(), &buffers[0]);
+    if (alGetError() != AL_NO_ERROR) return ERRORv(-1, "alGenBuffers");
+    for (int i=0, e=sources.size(); i != e; ++i) {
+      alSourcei(sources[i], AL_SOURCE_RELATIVE, AL_FALSE);
+      fx_free.push_back({ sources[i], buffers[i] });
+    }
     return 0;
   }
 
   int Free() {
-    for (auto &b : free_buffers) alDeleteBuffers(1, &b);
-    for (auto &b : used_buffers) alDeleteBuffers(1, &b);
-    alDeleteSources(1, &source);
+    for (auto &f : fx_used) { alDeleteBuffers(1, &f.buffer); alDeleteSources(1, &f.source); }
+    for (auto &f : fx_free) { alDeleteBuffers(1, &f.buffer); alDeleteSources(1, &f.source); }
+    for (auto &b : bg_free_buffers) alDeleteBuffers(1, &b);
+    for (auto &b : bg_used_buffers) alDeleteBuffers(1, &b);
+    alDeleteSources(1, &bg_source);
     alcMakeContextCurrent(NULL);
     alcDestroyContext(ctx);
     alcCloseDevice(dev);
@@ -67,28 +79,67 @@ struct OpenALAudioModule : public Module {
   }
 
   int Frame(unsigned clicks) {
-    bool added = 0;
+    ALuint b = 0;
     ALint val = 0;
-    alGetSourcei(source, AL_BUFFERS_PROCESSED, &val);
+    bool bg_added = 0;
+    if (screen && screen->cam) {
+      alListenerfv(AL_POSITION, screen->cam->pos);
+      alListenerfv(AL_VELOCITY, screen->cam->vel);
+      const v3 &ort = screen->cam->ort, &up = screen->cam->up;
+      ALfloat ortup[6] = { ort.x, ort.y, ort.z, up.x, up.y, up.z };
+      alListenerfv(AL_ORIENTATION, ortup);
+    }
+
+    alGetSourcei(bg_source, AL_BUFFERS_PROCESSED, &val);
     for (ALint i = 0; i < val; ++i) {
-      ALuint b = 0;
-      alSourceUnqueueBuffers(source, 1, &b);
-      free_buffers.push_back(b);
+      alSourceUnqueueBuffers(bg_source, 1, &b);
+      bg_free_buffers.push_back(b);
     }
-    while (audio->Out.size() && free_buffers.size()) {
-      auto b = PopFront(free_buffers);
-      ALuint num_samples = min(ALuint(audio->Out.size()), out_maxsamples);
+    while (audio->Out.size() && bg_free_buffers.size()) {
+      b = PopFront(bg_free_buffers);
+      ALuint num_samples = min(ALuint(audio->Out.size()), ALuint(FLAGS_chans_out * FLAGS_sample_rate));
+      EnsureSize(samples, num_samples);
       for (int16_t *i=&samples[0], *e=i+num_samples; i != e; ++i) *i = int16_t(PopFront(audio->Out) * 32768.0);
-      alBufferData(b, out_format, samples.data(), num_samples*sizeof(int16_t), FLAGS_sample_rate);
-      alSourceQueueBuffers(source, 1, &b);
-      used_buffers.push_back(b);
-      added = true;
+      alBufferData(b, FLAGS_chans_out == 2 ? AL_FORMAT_STEREO16 : AL_FORMAT_MONO16,
+                   samples.data(), num_samples*sizeof(int16_t), FLAGS_sample_rate);
+      alSourceQueueBuffers(bg_source, 1, &b);
+      bg_used_buffers.push_back(b);
+      bg_added = true;
     }
-    if (added) {
-      alGetSourcei(source, AL_SOURCE_STATE, &val);
-      if (val != AL_PLAYING) alSourcePlay(source);
+    if (bg_added) {
+      alGetSourcei(bg_source, AL_SOURCE_STATE, &val);
+      if (val != AL_PLAYING) alSourcePlay(bg_source);
+    }
+    for (auto i=fx_used.begin(); i != fx_used.end(); /**/) {
+      alGetSourcei(i->source, AL_BUFFERS_PROCESSED, &val);
+      if (!val) { ++i; continue; }
+      CHECK_EQ(1, val);
+      alSourceUnqueueBuffers(i->source, 1, &b);
+      CHECK_EQ(b, i->buffer);
+      fx_free.push_back(*i);
+      i = fx_used.erase(i);
     }
     return 0;
+  }
+
+  void PlaySoundEffect(SoundAsset *sa, const v3 &pos, const v3 &vel) {
+    if (fx_free.empty()) return;
+    int num_samples = sa->wav->ring.size;
+    EnsureSize(samples, num_samples);
+    RingSampler::Handle H(sa->wav.get());
+    for (int i=0; i != num_samples; ++i) samples[i] = int16_t(H.Read(i) * 32768.0);
+
+    Effect fx = PopFront(fx_free);
+    alBufferData(fx.buffer, sa->channels  == 2 ? AL_FORMAT_STEREO16 : AL_FORMAT_MONO16,
+                 samples.data(), num_samples*sizeof(int16_t), sa->sample_rate);
+    alSourcefv(fx.source, AL_POSITION, pos);
+    alSourcefv(fx.source, AL_VELOCITY, vel);
+    alSourcef(fx.source, AL_MAX_DISTANCE, sa->gain);
+    if (sa->max_distance) alSourcef(fx.source, AL_MAX_DISTANCE, sa->max_distance);
+    if (sa->reference_distance) alSourcef(fx.source, AL_REFERENCE_DISTANCE, sa->reference_distance);
+    alSourceQueueBuffers(fx.source, 1, &fx.buffer);
+    alSourcePlay(fx.source);
+    fx_used.push_back(fx);
   }
 };
 
@@ -98,8 +149,9 @@ void Application::PlayBackgroundMusic(SoundAsset *music) {
   audio->Out.resize(max(audio->Out.size(), SoundAsset::Size(music)));
 }
 
-void Application::PlaySoundEffect(SoundAsset *sa) {
-  audio->QueueMix(sa, MixFlag::Reset | MixFlag::Mix | (audio->loop ? MixFlag::DontQueue : 0), -1, -1);
+void Application::PlaySoundEffect(SoundAsset *sa, const v3 &pos, const v3 &vel) {
+  // audio->QueueMix(sa, MixFlag::Reset | MixFlag::Mix | (audio->loop ? MixFlag::DontQueue : 0), -1, -1);
+  dynamic_cast<OpenALAudioModule*>(audio->impl.get())->PlaySoundEffect(sa, pos, vel);
 }
  
 unique_ptr<Module> CreateAudioModule(Audio *a) { return make_unique<OpenALAudioModule>(a); }

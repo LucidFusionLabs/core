@@ -78,28 +78,30 @@ int Game::Network::BroadcastWithRetry(Service *svc, Serializable *msg, Connectio
 
 #ifdef LFL_ANDROID
 int Game::GoogleMultiplayerNetwork::Write(Connection *c, int method, const char *data, int len) {
-  if (c->endpoint_name.empty()) { ERROR(c->Name(), " blank send"); return -1; }
+  if (c->endpoint_name.empty()) return ERRORv(-1, c->Name(), " blank send");
   AndroidGPlusSendUnreliable(c->endpoint_name.c_str(), data, len);
   return 0;
 }
 
 void Game::GoogleMultiplayerNetwork::WriteWithRetry(ReliableNetwork *n, Connection *c, Serializable *req, unsigned short seq) {
-  if (c->endpoint_name.empty()) { ERROR(c->Name(), " blank send"); return; }
-  string buf = req->ToString(); int ret;
+  if (c->endpoint_name.empty()) return ERROR(c->Name(), " blank send");
+  string v;
+  req->ToString(&v, seq);
+  int ret;
   if ((ret = AndroidGPlusSendReliable(c->endpoint_name.c_str(), buf.c_str(), buf.size())) < 0) ERROR("WriteWithRetry ", ret);
 }
 #endif
 
 int Game::InProcessNetwork::Write(Connection *c, int method, const char *data, int len) {
-  if (c->endpoint_name.empty()) { ERROR(c->Name(), " blank send"); return -1; }
-  // AndroidGPlusSendUnreliable(c->endpoint_name.c_str(), data, len);
+  if (!c->next) return ERRORv(-1, c->Name(), " blank send");
+  c->next->AddPacket(data, len);
   return 0;
 }
 
 void Game::InProcessNetwork::WriteWithRetry(ReliableNetwork *n, Connection *c, Serializable *req, unsigned short seq) {
-  if (c->endpoint_name.empty()) { ERROR(c->Name(), " blank send"); return; }
-  string buf = req->ToString(); int ret;
-  // if ((ret = AndroidGPlusSendReliable(c->endpoint_name.c_str(), buf.c_str(), buf.size())) < 0) ERROR("WriteWithRetry ", ret);
+  string v;
+  req->ToString(&v, seq);
+  Write(c, 0, v.data(), v.size());
 }
 
 void Game::TCPNetwork::WriteWithRetry(ReliableNetwork *reliable, Connection *c, Serializable *req, unsigned short seq) {

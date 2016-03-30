@@ -310,8 +310,8 @@ int Input::MouseMove(const point &p, const point &d) {
   if (!app->run) return 0;
   int fired = MouseEventDispatch(Mouse::Event::Motion, p, MouseButton1Down());
   if (!app->grab_mode.Enabled()) return fired;
-  if (d.x<0) screen->cam->YawLeft  (-d.x); else if (d.x>0) screen->cam->YawRight(d.x);
-  if (d.y<0) screen->cam->PitchDown(-d.y); else if (d.y>0) screen->cam->PitchUp (d.y);
+  if (screen->grabbed_yaw_cb) screen->grabbed_yaw_cb(d.x);
+  if (screen->grabbed_pitch_cb) screen->grabbed_pitch_cb(d.y);
   return fired;
 }
 

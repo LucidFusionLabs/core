@@ -70,6 +70,7 @@ string StringPrintf(const char *fmt, ...);
 
 struct Printable : public string {
   Printable(const void *x);
+  Printable(const Void &x);
   Printable(const basic_string<char16_t> &x);
   Printable(const string &x) : string(x) {}
   Printable(const char *x) : string(x) {}
