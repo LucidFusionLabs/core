@@ -15,8 +15,8 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 if(LFL_EMSCRIPTEN)
-  macro(lfl_add_target target)
-    lfl_add_executable(${target} ${ARGN})
+  function(lfl_add_package target)
+    lfl_add_target(${target} EXECUTABLE ${ARGN})
     set_target_properties(${target} PROPERTIES OUTPUT_NAME ${target}.html)
     set_target_properties(${target} PROPERTIES LINK_FLAGS
       "--embed-file assets -s USE_SDL=2 -s USE_LIBPNG=1 -s USE_ZLIB=1 -s TOTAL_MEMORY=20971520")
@@ -26,21 +26,21 @@ if(LFL_EMSCRIPTEN)
       COMMAND mkdir assets
       COMMAND cp -r ${CMAKE_CURRENT_SOURCE_DIR}/assets/* assets
       COMMAND cp ${LFL_APP_ASSET_FILES} assets)
-  endmacro()
+  endfunction()
 
-  macro(lfl_post_build_start target binname pkgname)
-  endmacro()
+  function(lfl_post_build_start target binname pkgname)
+  endfunction()
 
-  macro(lfl_post_build_copy_bin target binname pkgname)
-  endmacro()
+  function(lfl_post_build_copy_bin target binname pkgname)
+  endfunction()
 
 elseif(LFL_ANDROID)
-  macro(lfl_add_target target)
+  function(lfl_add_package target)
     lfl_add_library(${target} SHARED ${ARGN})
     set_target_properties(${target} PROPERTIES OUTPUT_NAME app)
-  endmacro()
+  endfunction()
 
-  macro(lfl_post_build_start target binname pkgname)
+  function(lfl_post_build_start target binname pkgname)
     add_custom_command(TARGET ${target} POST_BUILD WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/${target}-android/jni
       COMMAND ${ANDROIDNDK}/ndk-build
       COMMAND mkdir -p ${CMAKE_CURRENT_SOURCE_DIR}/${target}-android/res/raw
@@ -57,17 +57,17 @@ elseif(LFL_ANDROID)
     add_custom_target(${target}_debug_start WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/${target}-android DEPENDS ${target}
       COMMAND ${ANDROIDSDK}/platform-tools/adb shell am start -n `${ANDROIDSDK}/build-tools/19.1.0/aapt dump badging ./build/outputs/apk/${target}-android-debug.apk | grep package | cut -d\\' -f2`/`${ANDROIDSDK}/build-tools/19.1.0/aapt dump badging ./build/outputs/apk/${target}-android-debug.apk | grep launchable-activity | cut -d\\' -f2`
       COMMAND ${ANDROIDSDK}/platform-tools/adb logcat | tee ${CMAKE_CURRENT_BINARY_DIR}/debug.txt)
-  endmacro()
+  endfunction()
 
-  macro(lfl_post_build_copy_bin target binname pkgname)
-  endmacro()
+  function(lfl_post_build_copy_bin target binname pkgname)
+  endfunction()
 
 elseif(LFL_IPHONE)
-  macro(lfl_add_target target)
-    lfl_add_executable(${target} ${ARGN})
-  endmacro()
+  function(lfl_add_package target)
+    lfl_add_target(${target} EXECUTABLE ${ARGN})
+  endfunction()
 
-  macro(lfl_post_build_start target binname pkgname)
+  function(lfl_post_build_start target binname pkgname)
     set(bin i${pkgname}.app/Contents/MacOS/${target}) 
     set(info_plist ${CMAKE_CURRENT_SOURCE_DIR}/iphone-Info.plist)
     set(entitlements_plist ${CMAKE_CURRENT_SOURCE_DIR}/iphone-Entitlements.plist)
@@ -116,17 +116,17 @@ elseif(LFL_IPHONE)
       add_custom_target(${target}_debug WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} DEPENDS ${target}
         COMMAND ios-deploy --debug --bundle i${pkgname}.app)
     endif()
-  endmacro()
+  endfunction()
 
-  macro(lfl_post_build_copy_bin target binname pkgname)
-  endmacro()
+  function(lfl_post_build_copy_bin target binname pkgname)
+  endfunction()
 
 elseif(LFL_OSX)
-  macro(lfl_add_target target)
-    lfl_add_executable(${target} ${ARGN})
-  endmacro()
+  function(lfl_add_package target)
+    lfl_add_target(${target} EXECUTABLE ${ARGN})
+  endfunction()
 
-  macro(lfl_post_build_start target binname pkgname)
+  function(lfl_post_build_start target binname pkgname)
     set(bin ${pkgname}.app/Contents/MacOS/${target}) 
     set(lib ${pkgname}.app/Contents/Libraries) 
     set(res ${pkgname}.app/Contents/Resources) 
@@ -176,9 +176,9 @@ elseif(LFL_OSX)
 
     add_custom_target(${target}_debug WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} DEPENDS ${target}
       COMMAND lldb -f ${pkgname}.app/Contents/MacOS/${target} -o run)
-  endmacro()
+  endfunction()
 
-  macro(lfl_post_build_copy_bin target binname pkgname)
+  function(lfl_post_build_copy_bin target binname pkgname)
     set(bin ${pkgname}.app/Contents/MacOS/${target})
 
     add_custom_command(TARGET ${target} POST_BUILD WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
@@ -188,30 +188,30 @@ elseif(LFL_OSX)
       COMMAND install_name_tool -change lib/libopencv_core.3.1.dylib @loader_path/../Libraries/libopencv_core.3.1.dylib ${bin}
       COMMAND install_name_tool -change lib/libopencv_imgproc.3.1.dylib @loader_path/../Libraries/libopencv_imgproc.3.1.dylib ${bin}
       COMMAND codesign -f -s \"${OSXCERT}\" ${pkgname}.app/Contents/MacOS/${target})
-  endmacro()
+  endfunction()
 
 elseif(LFL_WINDOWS)
-  macro(lfl_add_target target)
+  function(lfl_add_package target)
     link_directories(${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_BUILD_TYPE})
-    lfl_add_executable(${target} WIN32 ${ARGN})
+    lfl_add_target(${target} EXECUTABLE WIN32 ${ARGN})
     add_dependencies(${target} zlib)
     if(LFL_JPEG)
       add_dependencies(${target} libjpeg)
     endif()
-  endmacro()
+  endfunction()
 
-  macro(lfl_post_build_start target binname pkgname)
-  endmacro()
+  function(lfl_post_build_start target binname pkgname)
+  endfunction()
 
-  macro(lfl_post_build_copy_bin target binname pkgname)
-  endmacro()
+  function(lfl_post_build_copy_bin target binname pkgname)
+  endfunction()
 
 elseif(LFL_LINUX)
-  macro(lfl_add_target target)
-    lfl_add_executable(${target} ${ARGN})
-  endmacro()
+  function(lfl_add_package target)
+    lfl_add_target(${target} EXECUTABLE ${ARGN})
+  endfunction()
 
-  macro(lfl_post_build_start target binname pkgname)
+  function(lfl_post_build_start target binname pkgname)
     if(LFL_APP_LIB_FILES)
       set(copy_lfl_app_lib_files 1)
     endif()
@@ -226,17 +226,17 @@ elseif(LFL_LINUX)
 
     add_custom_target(${target}_run WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} DEPENDS ${target}
       COMMAND ${pkgname}/${binname})
-  endmacro()
+  endfunction()
 
-  macro(lfl_post_build_copy_bin target binname pkgname)
+  function(lfl_post_build_copy_bin target binname pkgname)
     add_custom_command(TARGET ${target} POST_BUILD WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
       COMMAND cp ${binname} ${pkgname})
-  endmacro()
+  endfunction()
 
 else()
-  macro(lfl_post_build_start target binname pkgname)
-  endmacro()
+  function(lfl_post_build_start target binname pkgname)
+  endfunction()
 
-  macro(lfl_post_build_copy_bin target binname pkgname)
-  endmacro()
+  function(lfl_post_build_copy_bin target binname pkgname)
+  endfunction()
 endif()

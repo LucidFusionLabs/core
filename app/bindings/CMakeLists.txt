@@ -1,18 +1,14 @@
 # $Id: CMakeLists.txt 1298 2011-12-11 18:46:06Z justin $
 
-add_definitions(${LFL_APP_DEF})
-include_directories(${LFL_APP_INCLUDE})
-lfl_add_library(app_null_js STATIC null_js.cpp)
-lfl_add_library(app_null_tu STATIC null_tu.cpp)
+lfl_add_target(app_null_js STATIC_LIBRARY SOURCES null_js.cpp)
+lfl_add_target(app_null_tu STATIC_LIBRARY SOURCES null_tu.cpp)
 
 if(LFL_V8JS)
-  lfl_add_library(app_v8_js STATIC v8_js.cpp)
-  target_include_directories(app_v8_js PUBLIC ${V8JS_INCLUDE})
-  target_link_libraries(app_v8_js PUBLIC ${V8JS_LIB})
+  lfl_add_target(app_v8_js STATIC_LIBRARY SOURCES v8_js.cpp
+                 INCLUDE_DIRECTORIES ${V8JS_INCLUDE} LINK_LIBRARIES ${V8JS_LIB})
 endif()
 
 if(LFL_LIBCLANG)
-  lfl_add_library(app_clang_tu STATIC clang_tu.cpp)
-  target_include_directories(app_clang_tu PUBLIC ${LIBCLANG_INCLUDE})
-  target_link_libraries(app_clang_tu PUBLIC ${LIBCLANG_LIB})
+  lfl_add_target(app_clang_tu STATIC_LIBRARY SOURCES clang_tu.cpp
+                 INCLUDE_DIRECTORIES ${LIBCLANG_INCLUDE} LINK_LIBRARIES ${LIBCLANG_LIB})
 endif()

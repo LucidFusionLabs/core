@@ -121,7 +121,8 @@ include(ExternalProject)
 include(BundleUtilities)
 
 list(APPEND CMAKE_MODULE_PATH ${LFL_SOURCE_DIR}/core/CMake)
-include(util)
+include(LFLTarget)
+include(LFLPackage)
 
 set(PCH_PROJECT_SOURCE_DIR ${LFL_SOURCE_DIR})
 set(PCH_PROJECT_BINARY_DIR ${LFL_BINARY_DIR})
@@ -156,35 +157,6 @@ add_definitions(-D__STDC_CONSTANT_MACROS -D__STDC_LIMIT_MACROS)
 
 # imports
 add_subdirectory(${LFL_SOURCE_DIR}/core/imports)
-
-# macros
-macro(lfl_project _name)
-  project(${_name})
-  set(LFL_PROJECT ${_name})
-  set(LFL_PROJECT_DIR ${CMAKE_CURRENT_SOURCE_DIR})
-  set(LFL_PROJECT_BINDIR ${CMAKE_CURRENT_BINARY_DIR})
-endmacro(lfl_project)
-
-macro(lfl_add_library _name)
-  add_library(${_name} ${ARGN})
-  add_dependencies(${_name} lfl_app)
-  target_use_precompiled_header(${_name} core/app/app.h FORCEINCLUDE)
-  if(LFL_ADD_BITCODE_TARGETS)
-    add_bitcode(${_name}_bitcode ${_name})
-  endif()
-endmacro()
-
-macro(lfl_add_executable _name)
-  add_executable(${_name} ${ARGN})
-  add_dependencies(${_name} lfl_app)
-  target_use_precompiled_header(${_name} core/app/app.h FORCEINCLUDE)
-  if(LFL_ADD_BITCODE_TARGETS)
-    add_bitcode(${_name}_bitcode ${_name})
-  endif()
-endmacro()
-
-# post build macros
-include(Package)
 
 # proto macros
 if(LFL_PROTOBUF)

@@ -4,46 +4,13 @@ FOREACH(flag CMAKE_CXX_FLAGS_DEBUG)
   STRING(REPLACE "-Wold-style-cast" "" "${flag}" "${${flag}}")
 ENDFOREACH()
 
-# Windows
-if(LFL_WINDOWS)
-  INCLUDE_EXTERNAL_MSPROJECT(zlib ${CMAKE_CURRENT_SOURCE_DIR}/OpenCV/3rdparty/zlib/zlib.vcxproj)
-  set(PLATFORM_LIB Ws2_32.lib Dnsapi.lib opengl32.lib glu32.lib strmiids.lib zlib.lib)
-  set(PLATFORM_DEF "-DGLEW_STATIC")
-endif()
-
-# Mac
-if(LFL_OSX)
-  set(OPENGL_INCLUDE ${OPENGL_INCLUDE_DIR}/Headers ${CMAKE_CURRENT_SOURCE_DIR}/GL PARENT_SCOPE)
-  set(PLATFORM_LIB "-framework Cocoa -framework CoreVideo -framework QTKit -lz -lbz2 -liconv")
-endif()
-
-# Linux
-if(LFL_LINUX)
-  set(HAVE_SDLCONFIG 1)
-  set(CUDA_LIB /usr/local/cuda/lib64/libcudart.so PARENT_SCOPE)
-  set(PLATFORM_LIB "-lutil -lz -lpng -lpthread -ldl -lbz2")
-endif()
-
-# Android
-if(LFL_ANDROID)
-  set(PLATFORM_LIB "-llog -lz")
-endif()
-
-# iPhone 
-if(LFL_IPHONE)
-  set(PLATFORM_LIB "-liconv -lz -framework Foundation -framework CoreText -framework CoreAudio -framework CoreGraphics -framework OpenGLES -framework UIKit -framework QuartzCore -framework AVFoundation -framework GLKit -framework Security")
-  if(NOT LFL_IPHONESIM)
-    set(PLATFORM_LIB "${PLATFORM_LIB} -framework CoreVideo -framework CoreMedia")
-  endif()
-endif()
-
-# export platform
-set(PLATFORM_DEF ${PLATFORM_DEF} PARENT_SCOPE)
-set(PLATFORM_LIB ${PLATFORM_LIB} PARENT_SCOPE)
-set(PLATFORM_INCLUDE ${PLATFORM_INCLUDE} PARENT_SCOPE)
-
 # boost
 set(BOOST_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/boost PARENT_SCOPE)
+
+# zlib
+if(LFL_WINDOWS)
+  INCLUDE_EXTERNAL_MSPROJECT(zlib ${CMAKE_CURRENT_SOURCE_DIR}/OpenCV/3rdparty/zlib/zlib.vcxproj)
+endif()
 
 # png
 if(LFL_PNG AND NOT LFL_EMSCRIPTEN)
@@ -419,7 +386,6 @@ endif()
 
 # OpenCV
 if(LFL_OPENCV)
-  set(OPENCV_DEP OpenCV PARENT_SCOPE)
   if(WIN32)
     INCLUDE_EXTERNAL_MSPROJECT(OpenCV ${CMAKE_CURRENT_SOURCE_DIR}/OpenCV/src/cv/cv.vcxproj)
     INCLUDE_EXTERNAL_MSPROJECT(cxcore ${CMAKE_CURRENT_SOURCE_DIR}/OpenCV/src/cxcore/cxcore.vcxproj)
@@ -431,10 +397,22 @@ if(LFL_OPENCV)
     ExternalProject_Add(OpenCV SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/OpenCV
                                PREFIX ${CMAKE_CURRENT_BINARY_DIR}/OpenCV
                                CMAKE_ARGS -DCMAKE_INSTALL_PREFIX:PATH=${CMAKE_CURRENT_BINARY_DIR}/OpenCV -DBUILD_TESTS=OFF -DBUILD_PERF_TESTS=OFF)
-    set(OPENCV_LIB -L${CMAKE_CURRENT_BINARY_DIR}/OpenCV/lib -lopencv_core -lopencv_imgproc PARENT_SCOPE)
+
+    add_library(libopencv_core IMPORTED SHARED GLOBAL)
+    add_library(libopencv_imgproc IMPORTED SHARED GLOBAL)
+    add_dependencies(libopencv_core OpenCV)
+    add_dependencies(libopencv_imgproc OpenCV)
+    get_shared_library_name(SHARED_LIBRARY_NAME libopencv_core 3.1)
+    set_property(TARGET libopencv_core PROPERTY IMPORTED_LOCATION
+                 ${CMAKE_CURRENT_BINARY_DIR}/Opencv/lib/${SHARED_LIBRARY_NAME})
+    get_shared_library_name(SHARED_LIBRARY_NAME libopencv_imgproc 3.1)
+    set_property(TARGET libopencv_imgproc PROPERTY IMPORTED_LOCATION
+                 ${CMAKE_CURRENT_BINARY_DIR}/Opencv/lib/${SHARED_LIBRARY_NAME})
+
+    set(OPENCV_LIB libopencv_core libopencv_imgproc PARENT_SCOPE)
+    set(OPENCV_INCLUDE ${CMAKE_CURRENT_BINARY_DIR}/OpenCV/include PARENT_SCOPE)
     add_shared_library(OPENCV_LIB_FILES ${CMAKE_CURRENT_BINARY_DIR}/OpenCV/lib/libopencv_core 3.1)
     add_shared_library(OPENCV_LIB_FILES ${CMAKE_CURRENT_BINARY_DIR}/OpenCV/lib/libopencv_imgproc 3.1)
-    set(OPENCV_INCLUDE ${CMAKE_CURRENT_BINARY_DIR}/OpenCV/include PARENT_SCOPE)
     set(OPENCV_LIB_FILES ${OPENCV_LIB_FILES} PARENT_SCOPE)
   endif()
 endif()

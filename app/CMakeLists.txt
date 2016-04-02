@@ -1,8 +1,8 @@
 # $Id: CMakeLists.txt 1327 2014-11-03 23:26:43Z justin $
 
 set(LFL_APP_CFLAGS)
-set(LFL_APP_DEF ${PLATFORM_DEF})
-set(LFL_APP_INCLUDE ${LFL_SOURCE_DIR} ${PLATFORM_INCLUDE} ${CMAKE_CURRENT_BINARY_DIR})
+set(LFL_APP_DEF)
+set(LFL_APP_INCLUDE ${LFL_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
 set(LFL_APP_LIB lfl_app app_font app_browser)
 
 macro(add_app_def _def)
