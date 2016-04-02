@@ -526,7 +526,7 @@ struct Network : public Module {
 /// NetworkThread runs the Network Module in a new thread with a multiplexed Callback queue
 struct NetworkThread {
   struct ConnectionHandler : public Connection::Handler {
-    void HandleMessage(Callback *cb) { (*cb)(); delete cb; }
+    void HandleMessage(Callback *cb);
     int Read(Connection *c);
   };
 
@@ -537,8 +537,8 @@ struct NetworkThread {
   unique_ptr<Thread> thread;
   NetworkThread(Network *N, bool Init);
 
-  void Write(Callback *x) { CHECK_EQ(sizeof(x), wr->WriteFlush(reinterpret_cast<const char*>(&x), sizeof(x))); }
-  void HandleMessagesLoop() { if (init) net->Init(); while (GetLFApp()->run) { net->Frame(0); } }
+  void Write(Callback *x);
+  void HandleMessagesLoop();
 };
 
 struct Sniffer {
@@ -570,6 +570,8 @@ string NBRead(Socket fd, int size, int timeout=0);
 bool NBReadable(Socket fd, int timeout=0);
 bool NBFGets(FILE*, char *buf, int size, int timeout=0);
 bool FGets(char *buf, int size);
+int FWrite(FILE *f, const string &s);
+bool FWriteSuccess(FILE *f, const string &s);
 string PromptFGets(const string &p, int s=32);
 
 }; // namespace LFL

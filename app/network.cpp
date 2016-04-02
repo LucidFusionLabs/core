@@ -1133,6 +1133,19 @@ void Network::UpdateActive(Connection *c) {
 
 /* NetworkThread */
 
+void NetworkThread::ConnectionHandler::HandleMessage(Callback *cb) { 
+  (*cb)();
+  delete cb;
+}
+
+int NetworkThread::ConnectionHandler::Read(Connection *c) {
+  int consumed = 0, s = sizeof(Callback*);
+  for (; consumed + s <= c->rb.size(); consumed += s)
+    HandleMessage(*reinterpret_cast<Callback**>(c->rb.begin() + consumed));
+  if (consumed) c->ReadFlush(consumed);
+  return 0;
+}
+
 NetworkThread::NetworkThread(Network *N, bool Init) : net(N), init(Init),
   rd(new Connection(app->net->unix_client.get(), new NetworkThread::ConnectionHandler())),
   wr(new Connection(app->net->unix_client.get(), new NetworkThread::ConnectionHandler())),
@@ -1148,11 +1161,13 @@ NetworkThread::NetworkThread(Network *N, bool Init) : net(N), init(Init),
   net->active.Add(rd->socket, SocketSet::READABLE, &rd->self_reference);
 }
 
-int NetworkThread::ConnectionHandler::Read(Connection *c) {
-  int consumed = 0, s = sizeof(Callback*);
-  for (; consumed + s <= c->rb.size(); consumed += s) HandleMessage(*reinterpret_cast<Callback**>(c->rb.begin() + consumed));
-  if (consumed) c->ReadFlush(consumed);
-  return 0;
+void NetworkThread::Write(Callback *x) {
+  CHECK_EQ(sizeof(x), wr->WriteFlush(reinterpret_cast<const char*>(&x), sizeof(x)));
+}
+
+void NetworkThread::HandleMessagesLoop() {
+  if (init) net->Init();
+  while (GetLFApp()->run) { net->Frame(0); }
 }
 
 /* UDP Client */
@@ -1360,6 +1375,12 @@ string NBRead(Socket fd, int len, int timeout) {
   return ret;
 }
 
+#if 1
+int FWrite(FILE *f, const string &s) { return fwrite(s.data(), 1, s.size(), f); }
+#else
+int FWrite(FILE *f, const string &s) { return write(fileno(f), s.data(), s.size()); }
+#endif
+bool FWriteSuccess(FILE *f, const string &s) { return FWrite(f, s) == s.size(); }
 bool FGets(char *buf, int len) { return NBFGets(stdin, buf, len); }
 bool NBFGets(FILE *f, char *buf, int len, int timeout) {
 #ifndef LFL_WINDOWS

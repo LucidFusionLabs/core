@@ -499,6 +499,7 @@ struct Window : public ::NativeWindow {
   function<TextBox*()> default_textbox = []{ return nullptr; };
   function<void(int)> grabbed_yaw_cb = [=](int x){ cam->YawChange(x); };
   function<void(int)> grabbed_pitch_cb = [=](int x){ cam->PitchChange(x); };
+  Callback reshaped_cb;
   TextBox *active_textbox=0;
   Dialog *top_dialog=0;
   unique_ptr<Shell> shell;
@@ -569,7 +570,7 @@ struct Application : public ::LFApp {
   unique_ptr<ProcessAPIClient> render_process;
   unique_ptr<ProcessAPIServer> main_process;
   unordered_map<void*, Window*> windows;
-  Callback reshaped_cb, exit_cb;
+  Callback exit_cb;
   function<void(Window*)> window_init_cb, window_start_cb, window_closed_cb = [](Window *w){ delete w; };
   unordered_map<string, StringPiece> asset_cache;
   CategoricalVariable<int> tex_mode, grab_mode, fill_mode;
@@ -662,7 +663,7 @@ struct Application : public ::LFApp {
     else (Callback(forward<Args>(args)...))();
   }
 
-  static void Daemonize(const char *dir="");
+  static void Daemonize(const char *dir, const char *progname);
   static void Daemonize(FILE *fout, FILE *ferr);
   static void *GetSymbol(const string &n);
   static StringPiece LoadResource(int id);

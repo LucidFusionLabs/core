@@ -267,7 +267,7 @@ void Application::WriteLogLine(const char *tbuf, const char *message, const char
   iPhoneLog(StringPrintf("%s (%s:%d)", message, file, line).c_str());
 #endif
 #ifdef LFL_ANDROID
-  __android_log_print(ANDROID_LOG_INFO, screen->caption.c_str(), "%s (%s:%d)", message, file, line);
+  __android_log_print(ANDROID_LOG_INFO, app->name.c_str(), "%s (%s:%d)", message, file, line);
 #endif
 }
 
@@ -318,11 +318,11 @@ StringPiece Application::LoadResource(int id) {
 #endif
 }
 
-void Application::Daemonize(const char *dir) {
+void Application::Daemonize(const char *dir, const char *progname) {
 #ifndef LFL_WINDOWS
   char fn1[256], fn2[256];
-  snprintf(fn1, sizeof(fn1), "%s%s.stdout", dir, app->progname.c_str());
-  snprintf(fn2, sizeof(fn2), "%s%s.stderr", dir, app->progname.c_str());
+  snprintf(fn1, sizeof(fn1), "%s%s.stdout", dir, progname);
+  snprintf(fn2, sizeof(fn2), "%s%s.stderr", dir, progname);
   FILE *fout = fopen(fn1, "a"); fprintf(stderr, "open %s %s\n", fn1, fout ? "OK" : strerror(errno));
   FILE *ferr = fopen(fn2, "a"); fprintf(stderr, "open %s %s\n", fn2, ferr ? "OK" : strerror(errno));
   Daemonize(fout, ferr);
@@ -403,7 +403,7 @@ int Application::Create(int argc, const char* const* argv, const char *source_fi
   atexit(LFAppAtExit);
 
 #ifdef LFL_WINDOWS
-  string console_title = StrCat(screen->caption, " console");
+  string console_title = StrCat(name, " console");
   if (argc > 1) OpenSystemConsole(console_title.c_str());
 #endif
 
@@ -466,7 +466,7 @@ int Application::Create(int argc, const char* const* argv, const char *source_fi
 #endif // LFL_WINDOWS
 
   if (FLAGS_daemonize) {
-    Daemonize();
+    Daemonize("", progname.c_str());
     SetLFAppMainThread();
   }
 
@@ -491,7 +491,7 @@ int Application::Init() {
 
 #ifdef LFL_WINDOWS
   if (FLAGS_lfapp_video && splash_color) {
-    screen->gd->ClearColor(*app->splash_color);
+    screen->gd->ClearColor(*splash_color);
     screen->gd->Clear();
     screen->gd->Flush();
     Video::Swap();
@@ -645,7 +645,7 @@ Application::~Application() {
 
 /* Window */
 
-Window::Window() : caption("lfapp"), fps(128) {
+Window::Window() : caption(app->name), fps(128) {
   id = gl = surface = glew_context = impl = user1 = user2 = user3 = typed_ptr{0, nullptr};
   started = minimized = cursor_grabbed = frame_init = animating = 0;
   target_fps = FLAGS_target_fps;
@@ -674,7 +674,7 @@ Box Window::Box(float xp, float yp, float xs, float ys, float xbl, float ybt, fl
 void Window::InitConsole(const Callback &animating_cb) {
   gui.push_back((console = make_unique<Console>(gd, animating_cb)).get());
   console->ReadHistory(LFAppDownloadDir(), "console");
-  console->Write(StrCat(screen->caption, " started"));
+  console->Write(StrCat(caption, " started"));
   console->Write("Try console commands 'cmds' and 'flags'");
 }
 
@@ -696,12 +696,12 @@ void Window::GiveDialogFocusAway(Dialog *d) {
 }
 
 void Window::DrawDialogs() {
-  for (auto i = screen->dialogs.begin(), e = screen->dialogs.end(); i != e; ++i) (*i)->Draw();
-  if (screen->console) screen->console->Draw();
+  for (auto i = dialogs.begin(), e = dialogs.end(); i != e; ++i) (*i)->Draw();
+  if (console) console->Draw();
   if (FLAGS_draw_grid) {
     Color c(.7, .7, .7);
-    glIntersect(screen->mouse.x, screen->mouse.y, &c);
-    default_font->Draw(StrCat("draw_grid ", screen->mouse.x, " , ", screen->mouse.y), point(0,0));
+    glIntersect(mouse.x, mouse.y, &c);
+    default_font->Draw(StrCat("draw_grid ", mouse.x, " , ", mouse.y), point(0,0));
   }
 }
 
@@ -715,15 +715,15 @@ void Window::Reshaped(int w, int h) {
   SetSize(point(w, h));
   if (!gd) return;
   gd->ViewPort(LFL::Box(width, height));
-  gd->DrawMode(screen->gd->default_draw_mode);
-  for (auto g = screen->gui.begin(); g != screen->gui.end(); ++g) (*g)->Layout();
-  if (app->reshaped_cb) app->reshaped_cb();
+  gd->DrawMode(gd->default_draw_mode);
+  for (auto g = gui.begin(); g != gui.end(); ++g) (*g)->Layout();
+  if (reshaped_cb) reshaped_cb();
 }
 
 void Window::ResetGL() {
   gd->Init(Box());
-  for (auto &g : screen->gui    ) g->ResetGL();
-  for (auto &g : screen->dialogs) g->ResetGL();
+  for (auto &g : gui    ) g->ResetGL();
+  for (auto &g : dialogs) g->ResetGL();
 }
 
 void Window::SwapAxis() {
@@ -738,8 +738,8 @@ int Window::Frame(unsigned clicks, int flag) {
   if (FLAGS_lfapp_video) {
     if (!frame_init && (frame_init = true))  {
 #ifdef LFL_IPHONE
-      screen->gd->GetIntegerv(GraphicsDevice::FramebufferBinding, &screen->gd->default_framebuffer);
-      INFO("default_framebuffer = ", screen->gd->default_framebuffer);
+      gd->GetIntegerv(GraphicsDevice::FramebufferBinding, &gd->default_framebuffer);
+      INFO("default_framebuffer = ", gd->default_framebuffer);
 #endif
     }
     gd->DrawMode(gd->default_draw_mode);
@@ -761,14 +761,14 @@ int Window::Frame(unsigned clicks, int flag) {
 }
 
 void Window::RenderToFrameBuffer(FrameBuffer *fb) {
-  int dm = screen->gd->draw_mode;
+  int dm = gd->draw_mode;
   fb->Attach();
-  // screen->gd->ViewPort(Box(fb->tex.width, fb->tex.height));
-  screen->gd->DrawMode(screen->gd->default_draw_mode);
-  screen->gd->Clear();
+  // gd->ViewPort(Box(fb->tex.width, fb->tex.height));
+  gd->DrawMode(gd->default_draw_mode);
+  gd->Clear();
   frame_cb(0, 0, 0);
   fb->Release();
-  screen->gd->RestoreViewport(dm);
+  gd->RestoreViewport(dm);
 }
 
 /* FrameScheduler */

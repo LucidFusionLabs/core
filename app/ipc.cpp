@@ -176,6 +176,8 @@ int ProcessPipe::Open(const char* const* argv, const char *startdir) {
 
   in = fdopen(_open_osfhandle((long)pipeinR, O_TEXT), "r"); // leaks ?
   out = fdopen(_open_osfhandle((long)pipeoutW, O_TEXT), "w");
+  setvbuf(in, 0, _IONBF, 0);
+  setvbuf(out, 0, _IONBF, 0);
   return 0;
 }
 
@@ -219,19 +221,20 @@ int ProcessPipe::Open(const char* const* argv, const char *startdir) {
     if (ret < 0) { close(pipein[0]); close(pipeout[1]); return -1; }
     in = fdopen(pipein[0], "r");
     out = fdopen(pipeout[1], "w");
+    setvbuf(in, 0, _IONBF, 0);
+    setvbuf(out, 0, _IONBF, 0);
   } else {
     close(pipein[0]);
     close(pipeout[1]);
     close(0);
     close(1);
     close(2);
+    dup2(pipeout[0], 0);
     dup2(pipein[1], 2);
     dup2(pipein[1], 1);
-    dup2(pipeout[0], 0);
     if (startdir) chdir(startdir);
-    printf("cd %s\n", startdir);
-    printf("exec %s\n", argv[0]);
     execvp(argv[0], const_cast<char*const*>(argv));
+    FATAL("execvp ", argv[0], " from ", BlankNull(startdir), " failed");
   }
   return 0;
 }

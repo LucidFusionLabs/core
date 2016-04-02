@@ -133,6 +133,11 @@ struct ScopedReentryGuard {
   ~ScopedReentryGuard()                        { CHECK( *guard_var); *guard_var = false; }
 };
 
+struct DestructorCallbacks {
+  vector<Callback> cb;
+  ~DestructorCallbacks() { for (auto &f : cb) f(); }
+}; 
+
 template <class X> typename X::iterator Insert(X &m, const typename X::key_type &k, const typename X::mapped_type &v) {
   return m.insert(typename X::value_type(k, v)).first;
 }

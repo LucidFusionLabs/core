@@ -71,3 +71,16 @@
 [submodule "imports/libsamplerate"]
 	path = imports/libsamplerate
 	url = https://github.com/erikd/libsamplerate/
+[submodule "imports/libuv"]
+	path = imports/libuv
+	url = https://github.com/libuv/libuv
+[submodule "imports/dtl"]
+	path = imports/dtl
+	url = https://github.com/cubicdaiya/dtl
+[submodule "imports/cmake-precompiled-header"]
+	path = imports/cmake-precompiled-header
+	url = https://github.com/LucidFusionLabs/cmake-precompiled-header
+[submodule "imports/cmake-daemon"]
+	path = imports/cmake-daemon
+	url = https://github.com/LucidFusionLabs/CMake
+	branch = cmake-daemon

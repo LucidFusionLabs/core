@@ -25,7 +25,7 @@ if(LFL_EMSCRIPTEN)
       COMMAND rm -rf assets
       COMMAND mkdir assets
       COMMAND cp -r ${CMAKE_CURRENT_SOURCE_DIR}/assets/* assets
-      COMMAND cp ${LFL_APP_ASSETS} assets)
+      COMMAND cp ${LFL_APP_ASSET_FILES} assets)
   endmacro()
 
   macro(lfl_post_build_start target binname pkgname)
@@ -44,7 +44,7 @@ elseif(LFL_ANDROID)
     add_custom_command(TARGET ${target} POST_BUILD WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/${target}-android/jni
       COMMAND ${ANDROIDNDK}/ndk-build
       COMMAND mkdir -p ${CMAKE_CURRENT_SOURCE_DIR}/${target}-android/res/raw
-      COMMAND cp ${LFL_APP_ASSETS} ${CMAKE_CURRENT_SOURCE_DIR}/assets
+      COMMAND cp ${LFL_APP_ASSET_FILES} ${CMAKE_CURRENT_SOURCE_DIR}/assets
       COMMAND if [ -f ${CMAKE_CURRENT_SOURCE_DIR}/assets/*.wav ]; then cp ${CMAKE_CURRENT_SOURCE_DIR}/assets/*.wav ../res/raw\; fi
       COMMAND if [ -f ${CMAKE_CURRENT_SOURCE_DIR}/assets/*.mp3 ]; then cp ${CMAKE_CURRENT_SOURCE_DIR}/assets/*.mp3 ../res/raw\; fi)
 
@@ -77,7 +77,7 @@ elseif(LFL_IPHONE)
       COMMAND mkdir  i${pkgname}.app
       COMMAND cp  ${info_plist} i${pkgname}.app/Info.plist
       COMMAND cp -r ${CMAKE_CURRENT_SOURCE_DIR}/assets i${pkgname}.app
-      COMMAND cp ${LFL_APP_ASSETS} i${pkgname}.app/assets
+      COMMAND cp ${LFL_APP_ASSET_FILES} i${pkgname}.app/assets
       COMMAND cp ${CMAKE_CURRENT_SOURCE_DIR}/${target}-iphone/Images/Icon*.png i${pkgname}.app
       COMMAND cp ${target} i${pkgname}.app
       COMMAND if ! [ ${LFL_IPHONESIM} ]\; then codesign -f -s \"${IPHONECERT}\" --entitlements ${entitlements_plist} i${pkgname}.app\; fi)
@@ -134,6 +134,9 @@ elseif(LFL_OSX)
     if(LFL_APP_LIB_FILES)
       set(copy_lfl_app_lib_files 1)
     endif()
+    if(LFL_APP_ASSET_DIRS)
+      set(copy_lfl_app_asset_dirs 1)
+    endif()
 
     add_custom_command(TARGET ${target} POST_BUILD WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
       COMMAND rm -rf   ${pkgname}.app
@@ -146,9 +149,10 @@ elseif(LFL_OSX)
       COMMAND if [ -f ${info_plist} ]; then cat ${info_plist} | grep -A1 CFBundleSignature   | tail -1 | cut -f2 -d\\> | cut -f1 -d \\< | tr -d '\\n' | tee -a ${pkgname}.app/Contents/PkgInfo\; fi
       COMMAND if [ -f ${CMAKE_CURRENT_SOURCE_DIR}/assets/icon.icns ]; then cp ${CMAKE_CURRENT_SOURCE_DIR}/assets/icon.icns ${res}\; fi
       COMMAND if [ -d ${CMAKE_CURRENT_SOURCE_DIR}/assets ]; then cp -r ${CMAKE_CURRENT_SOURCE_DIR}/assets ${res}\; fi
-      COMMAND if [ -d ${CMAKE_CURRENT_SOURCE_DIR}/assets ]; then cp ${LFL_APP_ASSETS} ${res}/assets\; fi
+      COMMAND if [ -d ${CMAKE_CURRENT_SOURCE_DIR}/assets ]; then cp ${LFL_APP_ASSET_FILES} ${res}/assets\; fi
       COMMAND cp ${target} ${pkgname}.app/Contents/MacOS
       COMMAND if [ ${copy_lfl_app_lib_files} ]; then cp ${LFL_APP_LIB_FILES} ${lib}\; fi
+      COMMAND if [ ${copy_lfl_app_asset_dirs} ]; then for d in ${LFL_APP_ASSET_DIRS}\; do cp -R $$d ${res}/assets\; done\; fi
       COMMAND install_name_tool -change /usr/local/lib/libportaudio.2.dylib @loader_path/../Libraries/libportaudio.2.dylib ${bin}
       COMMAND install_name_tool -change /usr/local/lib/libmp3lame.0.dylib @loader_path/../Libraries/libmp3lame.0.dylib ${bin}
       COMMAND if [ -f ${lib}/libopencv_imgproc.3.1.dylib ]; then install_name_tool -change lib/libopencv_core.3.1.dylib @loader_path/../Libraries/libopencv_core.3.1.dylib ${lib}/libopencv_imgproc.3.1.dylib\; fi
@@ -216,7 +220,7 @@ elseif(LFL_LINUX)
       COMMAND rm -rf ${pkgname}
       COMMAND mkdir -p ${pkgname}
       COMMAND cp -r ${CMAKE_CURRENT_SOURCE_DIR}/assets ${pkgname}
-      COMMAND cp ${LFL_APP_ASSETS} ${pkgname}/assets
+      COMMAND cp ${LFL_APP_ASSET_FILES} ${pkgname}/assets
       COMMAND cp ${target} ${pkgname}
       COMMAND if [ ${copy_lfl_app_lib_files} ]; then cp ${LFL_APP_LIB_FILES} ${pkgname}\; fi)
 

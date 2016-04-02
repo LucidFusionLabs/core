@@ -484,35 +484,30 @@ endif()
 
 # libclang
 if(LFL_LIBCLANG)
-  set(LLVM_LIB ${LLVM_DIR}/lib/libLLVMAnalysis.a ${LLVM_DIR}/lib/libLLVMAsmParser.a
-      ${LLVM_DIR}/lib/libLLVMAsmPrinter.a ${LLVM_DIR}/lib/libLLVMBitReader.a
-      ${LLVM_DIR}/lib/libLLVMBitWriter.a ${LLVM_DIR}/lib/libLLVMCodeGen.a
-      ${LLVM_DIR}/lib/libLLVMCore.a ${LLVM_DIR}/lib/libLLVMExecutionEngine.a
-      ${LLVM_DIR}/lib/libLLVMInstCombine.a ${LLVM_DIR}/lib/libLLVMInstrumentation.a
-      ${LLVM_DIR}/lib/libLLVMInterpreter.a #${LLVM_DIR}/lib/libLLVMipa.a
-      ${LLVM_DIR}/lib/libLLVMipo.a ${LLVM_DIR}/lib/libLLVMIRReader.a
-      ${LLVM_DIR}/lib/libLLVMLineEditor.a ${LLVM_DIR}/lib/libLLVMLinker.a
-      ${LLVM_DIR}/lib/libLLVMLTO.a ${LLVM_DIR}/lib/libLLVMMC.a
-      ${LLVM_DIR}/lib/libLLVMMCDisassembler.a ${LLVM_DIR}/lib/libLLVMMCJIT.a
-      ${LLVM_DIR}/lib/libLLVMMCParser.a ${LLVM_DIR}/lib/libLLVMObjCARCOpts.a
-      ${LLVM_DIR}/lib/libLLVMObject.a ${LLVM_DIR}/lib/libLLVMOption.a
-      ${LLVM_DIR}/lib/libLLVMProfileData.a ${LLVM_DIR}/lib/libLLVMRuntimeDyld.a
-      ${LLVM_DIR}/lib/libLLVMScalarOpts.a ${LLVM_DIR}/lib/libLLVMSelectionDAG.a
-      # ${LLVM_DIR}/lib/libLLVMSupport.a
-      ${LLVM_DIR}/lib/libLLVMTableGen.a
-      ${LLVM_DIR}/lib/libLLVMTarget.a ${LLVM_DIR}/lib/libLLVMTransformUtils.a
-      ${LLVM_DIR}/lib/libLLVMVectorize.a ${LLVM_DIR}/lib/libLLVMX86AsmParser.a
-      ${LLVM_DIR}/lib/libLLVMX86AsmPrinter.a ${LLVM_DIR}/lib/libLLVMX86CodeGen.a
-      ${LLVM_DIR}/lib/libLLVMX86Desc.a ${LLVM_DIR}/lib/libLLVMX86Disassembler.a
-      ${LLVM_DIR}/lib/libLLVMX86Info.a ${LLVM_DIR}/lib/libLLVMX86Utils.a)
   set(LIBCLANG_INCLUDE ${LLVM_DIR}/include PARENT_SCOPE)
-  set(LIBCLANG_LIB ${LLVM_DIR}/lib/libclang.dylib ${LLVM_LIB} PARENT_SCOPE)
+  set(LIBCLANG_LIB ${LLVM_DIR}/lib/libclang.dylib ${LLVM_DIR}/lib/libLLVMX86Disassembler.a
+      ${LLVM_DIR}/lib/libLLVMX86AsmParser.a ${LLVM_DIR}/lib/libLLVMX86CodeGen.a
+      ${LLVM_DIR}/lib/libLLVMSelectionDAG.a ${LLVM_DIR}/lib/libLLVMAsmPrinter.a
+      ${LLVM_DIR}/lib/libLLVMX86Desc.a ${LLVM_DIR}/lib/libLLVMMCDisassembler.a
+      ${LLVM_DIR}/lib/libLLVMX86Info.a ${LLVM_DIR}/lib/libLLVMX86AsmPrinter.a
+      ${LLVM_DIR}/lib/libLLVMX86Utils.a ${LLVM_DIR}/lib/libLLVMInterpreter.a
+      ${LLVM_DIR}/lib/libLLVMCodeGen.a ${LLVM_DIR}/lib/libLLVMScalarOpts.a
+      ${LLVM_DIR}/lib/libLLVMInstCombine.a ${LLVM_DIR}/lib/libLLVMInstrumentation.a
+      ${LLVM_DIR}/lib/libLLVMProfileData.a ${LLVM_DIR}/lib/libLLVMTransformUtils.a
+      ${LLVM_DIR}/lib/libLLVMBitWriter.a ${LLVM_DIR}/lib/libLLVMExecutionEngine.a
+      ${LLVM_DIR}/lib/libLLVMTarget.a ${LLVM_DIR}/lib/libLLVMAnalysis.a
+      ${LLVM_DIR}/lib/libLLVMRuntimeDyld.a ${LLVM_DIR}/lib/libLLVMObject.a
+      ${LLVM_DIR}/lib/libLLVMMCParser.a ${LLVM_DIR}/lib/libLLVMBitReader.a
+      ${LLVM_DIR}/lib/libLLVMMC.a ${LLVM_DIR}/lib/libLLVMMCJIT.a
+      ${LLVM_DIR}/lib/libLLVMCore.a ${LLVM_DIR}/lib/libLLVMSupport.a
+      -lncurses -rdynamic PARENT_SCOPE)
 endif()
 
 # libcling
 if(LFL_LIBCLING)
   set(LIBCLING_INCLUDE ${CLING_LLVM_DIR}/include PARENT_SCOPE)
-  set(LIBCLING_LIB ${CLING_LLVM_DIR}/lib/libclingMetaProcessor.a ${CLING_LLVM_DIR}/lib/libclingInterpreter.a
+  set(LIBCLING_LIB ${CLING_LLVM_DIR}/lib/libclingMetaProcessor.a
+      ${CLING_LLVM_DIR}/lib/libclingInterpreter.a
       ${CLING_LLVM_DIR}/lib/libclingUtils.a ${CLING_LLVM_DIR}/lib/libclangFrontend.a
       ${CLING_LLVM_DIR}/lib/libclangSerialization.a ${CLING_LLVM_DIR}/lib/libclangDriver.a
       ${CLING_LLVM_DIR}/lib/libclangCodeGen.a ${CLING_LLVM_DIR}/lib/libclangParse.a
@@ -618,4 +613,32 @@ if(LFL_GEOIP)
     set(GEOIP_INCLUDE ${CMAKE_CURRENT_BINARY_DIR}/geoip-api-c/libGeoIP/include PARENT_SCOPE)
     set(GEOIP_LIB libGeoIP PARENT_SCOPE)
   endif()
+endif()
+
+# libuv
+if(LFL_LIBUV)
+  ExternalProject_Add(uv LOG_CONFIGURE ON LOG_BUILD ON
+                      PREFIX ${CMAKE_CURRENT_BINARY_DIR}/libuv
+                      SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/libuv
+                      CONFIGURE_COMMAND <SOURCE_DIR>/configure --prefix=<INSTALL_DIR>)
+  add_library(libuv IMPORTED STATIC GLOBAL)
+  add_dependencies(libuv uv)
+  set_property(TARGET libuv PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/libuv/lib/libuv.a)
+  set(LIBUV_INCLUDE ${CMAKE_CURRENT_BINARY_DIR}/libuv/include PARENT_SCOPE)
+  set(LIBUV_LIB libuv PARENT_SCOPE)
+endif()
+
+# cmake-daemon
+if(LFL_CMAKEDAEMON)
+  ExternalProject_Add(cmake-daemon LOG_CONFIGURE ON LOG_BUILD ON
+                      PREFIX ${CMAKE_CURRENT_BINARY_DIR}/cmake-daemon
+                      SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/cmake-daemon
+                      CMAKE_ARGS -DCMAKE_INSTALL_PREFIX:PATH=${CMAKE_CURRENT_BINARY_DIR}/cmake-daemon
+                      -DLIBUV_INCLUDE_DIR=${CMAKE_CURRENT_BINARY_DIR}/libuv/include
+                      -DLIBUV_LIBRARY=${CMAKE_CURRENT_BINARY_DIR}/libuv/lib/libuv.a
+                      -DDTL_INCLUDE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/dtl)
+  add_executable(cmakedaemon IMPORTED GLOBAL)
+  add_dependencies(cmakedaemon cmake-daemon)
+  set_property(TARGET cmakedaemon PROPERTY IMPORTED_LOCATION
+               ${CMAKE_CURRENT_BINARY_DIR}/cmake-daemon/bin/cmake)
 endif()

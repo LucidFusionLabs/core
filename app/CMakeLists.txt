@@ -75,11 +75,14 @@ endif()
 
 add_precompiled_header(core/app/app.h c++-header lfl_app)
 target_use_precompiled_header(lfl_app core/app/app.h FORCEINCLUDE)
+if(LFL_ADD_BITCODE_TARGETS)
+  add_bitcode(lfl_app_bitcode lfl_app)
+endif()
 
 set(LFL_APP_CFLAGS ${LFL_APP_CFLAGS} PARENT_SCOPE)
 set(LFL_APP_DEF ${LFL_APP_DEF} PARENT_SCOPE)
 set(LFL_APP_INCLUDE ${LFL_APP_INCLUDE} PARENT_SCOPE)
 set(LFL_APP_LIB ${LFL_APP_LIB} PARENT_SCOPE)
-set(LFL_APP_ASSETS ${LFL_SOURCE_DIR}/core/app/shaders/default.*
+set(LFL_APP_ASSET_FILES ${LFL_SOURCE_DIR}/core/app/shaders/default.*
     ${LFL_SOURCE_DIR}/core/app/assets/MenuAtlas*
     ${LFL_SOURCE_DIR}/core/app/assets/MobileAtlas* PARENT_SCOPE)
