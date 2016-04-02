@@ -120,13 +120,13 @@ endif()
 include(ExternalProject)
 include(BundleUtilities)
 
-list(APPEND CMAKE_MODULE_PATH ${LFL_SOURCE_DIR}/core/CMake)
-include(LFLTarget)
-include(LFLPackage)
-
 set(PCH_PROJECT_SOURCE_DIR ${LFL_SOURCE_DIR})
 set(PCH_PROJECT_BINARY_DIR ${LFL_BINARY_DIR})
 include(${LFL_SOURCE_DIR}/core/imports/cmake-precompiled-header/PrecompiledHeader.cmake)
+
+list(APPEND CMAKE_MODULE_PATH ${LFL_SOURCE_DIR}/core/CMake)
+include(LFLTarget)
+include(LFLPackage)
 
 if(WIN32)
   link_directories("")

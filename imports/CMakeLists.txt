@@ -404,10 +404,10 @@ if(LFL_OPENCV)
     add_dependencies(libopencv_imgproc OpenCV)
     get_shared_library_name(SHARED_LIBRARY_NAME libopencv_core 3.1)
     set_property(TARGET libopencv_core PROPERTY IMPORTED_LOCATION
-                 ${CMAKE_CURRENT_BINARY_DIR}/Opencv/lib/${SHARED_LIBRARY_NAME})
+                 ${CMAKE_CURRENT_BINARY_DIR}/OpenCV/lib/${SHARED_LIBRARY_NAME})
     get_shared_library_name(SHARED_LIBRARY_NAME libopencv_imgproc 3.1)
     set_property(TARGET libopencv_imgproc PROPERTY IMPORTED_LOCATION
-                 ${CMAKE_CURRENT_BINARY_DIR}/Opencv/lib/${SHARED_LIBRARY_NAME})
+                 ${CMAKE_CURRENT_BINARY_DIR}/OpenCV/lib/${SHARED_LIBRARY_NAME})
 
     set(OPENCV_LIB libopencv_core libopencv_imgproc PARENT_SCOPE)
     set(OPENCV_INCLUDE ${CMAKE_CURRENT_BINARY_DIR}/OpenCV/include PARENT_SCOPE)
