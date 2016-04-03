@@ -25,6 +25,7 @@ ArchiveIter::ArchiveIter(const char *path) {
   if (!(impl = archive_read_new())) return;
   if (archive_read_support_format_zip          ((archive*)impl) != 0) INFO("no zip support");
   if (archive_read_support_format_tar          ((archive*)impl) != 0) INFO("no tar support");
+  if (archive_read_support_format_ar           ((archive*)impl) != 0) INFO("no ar support");
   if (archive_read_support_compression_gzip    ((archive*)impl) != 0) INFO("no gzip support");
   if (archive_read_support_compression_none    ((archive*)impl) != 0) INFO("no none support");
   if (archive_read_support_compression_compress((archive*)impl) != 0) INFO("no compress support");

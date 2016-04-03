@@ -18,6 +18,7 @@
 
 #import <Cocoa/Cocoa.h>
 #import <QTKit/QTKit.h>
+#include "core/app/app.h"
 typedef std::function<void(const char*, int, int, int)> UpdateFrameCB;
 
 @interface QTKitCamera : NSObject

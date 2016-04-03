@@ -15,6 +15,12 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 if(LFL_EMSCRIPTEN)
+  function(lfl_post_build_copy_bin target binname pkgname)
+  endfunction()
+
+  function(lfl_post_build_start target binname pkgname)
+  endfunction()
+
   function(lfl_add_package target)
     lfl_add_target(${target} EXECUTABLE ${ARGN})
     set_target_properties(${target} PROPERTIES OUTPUT_NAME ${target}.html)
@@ -28,16 +34,8 @@ if(LFL_EMSCRIPTEN)
       COMMAND cp ${LFL_APP_ASSET_FILES} assets)
   endfunction()
 
-  function(lfl_post_build_start target binname pkgname)
-  endfunction()
-
-  function(lfl_post_build_copy_bin target binname pkgname)
-  endfunction()
-
 elseif(LFL_ANDROID)
-  function(lfl_add_package target)
-    lfl_add_library(${target} SHARED ${ARGN})
-    set_target_properties(${target} PROPERTIES OUTPUT_NAME app)
+  function(lfl_post_build_copy_bin target binname pkgname)
   endfunction()
 
   function(lfl_post_build_start target binname pkgname)
@@ -59,12 +57,13 @@ elseif(LFL_ANDROID)
       COMMAND ${ANDROIDSDK}/platform-tools/adb logcat | tee ${CMAKE_CURRENT_BINARY_DIR}/debug.txt)
   endfunction()
 
-  function(lfl_post_build_copy_bin target binname pkgname)
+  function(lfl_add_package target)
+    lfl_add_library(${target} SHARED ${ARGN})
+    set_target_properties(${target} PROPERTIES OUTPUT_NAME app)
   endfunction()
 
 elseif(LFL_IPHONE)
-  function(lfl_add_package target)
-    lfl_add_target(${target} EXECUTABLE ${ARGN})
+  function(lfl_post_build_copy_bin target binname pkgname)
   endfunction()
 
   function(lfl_post_build_start target binname pkgname)
@@ -118,12 +117,21 @@ elseif(LFL_IPHONE)
     endif()
   endfunction()
 
-  function(lfl_post_build_copy_bin target binname pkgname)
+  function(lfl_add_package target)
+    lfl_add_target(${target} EXECUTABLE ${ARGN})
   endfunction()
 
 elseif(LFL_OSX)
-  function(lfl_add_package target)
-    lfl_add_target(${target} EXECUTABLE ${ARGN})
+  function(lfl_post_build_copy_bin target binname pkgname)
+    set(bin ${pkgname}.app/Contents/MacOS/${target})
+
+    add_custom_command(TARGET ${target} POST_BUILD WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+      COMMAND cp ${target} ${pkgname}.app/Contents/MacOS
+      COMMAND install_name_tool -change /usr/local/lib/libportaudio.2.dylib @loader_path/../Libraries/libportaudio.2.dylib ${bin}
+      COMMAND install_name_tool -change /usr/local/lib/libmp3lame.0.dylib @loader_path/../Libraries/libmp3lame.0.dylib ${bin}
+      COMMAND install_name_tool -change lib/libopencv_core.3.1.dylib @loader_path/../Libraries/libopencv_core.3.1.dylib ${bin}
+      COMMAND install_name_tool -change lib/libopencv_imgproc.3.1.dylib @loader_path/../Libraries/libopencv_imgproc.3.1.dylib ${bin}
+      COMMAND codesign -f -s \"${OSXCERT}\" ${pkgname}.app/Contents/MacOS/${target})
   endfunction()
 
   function(lfl_post_build_start target binname pkgname)
@@ -176,21 +184,23 @@ elseif(LFL_OSX)
 
     add_custom_target(${target}_debug WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} DEPENDS ${target}
       COMMAND lldb -f ${pkgname}.app/Contents/MacOS/${target} -o run)
+
+    if(LFL_ADD_BITCODE_TARGETS AND TARGET ${target}_designer)
+      lfl_post_build_copy_bin(${target}_designer ${target}_designer ${pkgname})
+    endif()
   endfunction()
 
-  function(lfl_post_build_copy_bin target binname pkgname)
-    set(bin ${pkgname}.app/Contents/MacOS/${target})
-
-    add_custom_command(TARGET ${target} POST_BUILD WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-      COMMAND cp ${target} ${pkgname}.app/Contents/MacOS
-      COMMAND install_name_tool -change /usr/local/lib/libportaudio.2.dylib @loader_path/../Libraries/libportaudio.2.dylib ${bin}
-      COMMAND install_name_tool -change /usr/local/lib/libmp3lame.0.dylib @loader_path/../Libraries/libmp3lame.0.dylib ${bin}
-      COMMAND install_name_tool -change lib/libopencv_core.3.1.dylib @loader_path/../Libraries/libopencv_core.3.1.dylib ${bin}
-      COMMAND install_name_tool -change lib/libopencv_imgproc.3.1.dylib @loader_path/../Libraries/libopencv_imgproc.3.1.dylib ${bin}
-      COMMAND codesign -f -s \"${OSXCERT}\" ${pkgname}.app/Contents/MacOS/${target})
+  function(lfl_add_package target)
+    lfl_add_target(${target} EXECUTABLE ${ARGN})
   endfunction()
 
 elseif(LFL_WINDOWS)
+  function(lfl_post_build_copy_bin target binname pkgname)
+  endfunction()
+
+  function(lfl_post_build_start target binname pkgname)
+  endfunction()
+
   function(lfl_add_package target)
     link_directories(${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_BUILD_TYPE})
     lfl_add_target(${target} EXECUTABLE WIN32 ${ARGN})
@@ -200,15 +210,10 @@ elseif(LFL_WINDOWS)
     endif()
   endfunction()
 
-  function(lfl_post_build_start target binname pkgname)
-  endfunction()
-
-  function(lfl_post_build_copy_bin target binname pkgname)
-  endfunction()
-
 elseif(LFL_LINUX)
-  function(lfl_add_package target)
-    lfl_add_target(${target} EXECUTABLE ${ARGN})
+  function(lfl_post_build_copy_bin target binname pkgname)
+    add_custom_command(TARGET ${target} POST_BUILD WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+      COMMAND cp ${binname} ${pkgname})
   endfunction()
 
   function(lfl_post_build_start target binname pkgname)
@@ -228,15 +233,18 @@ elseif(LFL_LINUX)
       COMMAND ${pkgname}/${binname})
   endfunction()
 
-  function(lfl_post_build_copy_bin target binname pkgname)
-    add_custom_command(TARGET ${target} POST_BUILD WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-      COMMAND cp ${binname} ${pkgname})
+  function(lfl_add_package target)
+    lfl_add_target(${target} EXECUTABLE ${ARGN})
   endfunction()
 
 else()
+  function(lfl_post_build_copy_bin target binname pkgname)
+  endfunction()
+
   function(lfl_post_build_start target binname pkgname)
   endfunction()
 
-  function(lfl_post_build_copy_bin target binname pkgname)
+  function(lfl_add_package target)
+    lfl_add_target(${target} EXECUTABLE ${ARGN})
   endfunction()
 endif()

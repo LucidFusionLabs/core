@@ -42,7 +42,7 @@ function(add_bitcode _target _copy_target)
   endif()
 
   add_library(${_target} STATIC ${sources})
-  target_compile_options(${_target} PUBLIC -emit-llvm ${opts})
+  target_compile_options(${_target} PUBLIC ${opts} -emit-llvm -fno-use-cxa-atexit)
   target_compile_definitions(${_target} PUBLIC ${defs}) 
   target_include_directories(${_target} PUBLIC ${incs})
 endfunction()
