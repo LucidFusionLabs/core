@@ -320,9 +320,11 @@ struct Thread {
   Callback cb;
   mutex start_mutex;
   unique_ptr<std::thread> impl;
+  virtual ~Thread() { Wait(); }
   Thread(const Callback &CB=Callback()) : cb(CB) {}
+
   void Open(const Callback &CB) { cb=CB; }
-  void Wait() { if (impl) impl->join(); }
+  void Wait() { if (impl) { impl->join(); impl.reset(); id=0; } }
   void Start() {
     ScopedMutex sm(start_mutex);
     impl = make_unique<std::thread>(bind(&Thread::ThreadProc, this));
@@ -341,21 +343,22 @@ struct Thread {
 struct WorkerThread {
   unique_ptr<CallbackQueue> queue;
   unique_ptr<Thread> thread;
-  WorkerThread() : queue(make_unique<CallbackQueue>()) {}
-  void Init(const Callback &main_cb) { thread = make_unique<Thread>(main_cb); }
+  bool run=0;
+  WorkerThread() : queue(make_unique<CallbackQueue>()),
+  thread(make_unique<Thread>(bind(&CallbackQueue::HandleMessagesWhile, queue.get(), &run))) {}
+
+  void Stop() { if (!run) return; run=0; queue->Shutdown(); thread->Wait(); }
+  void Start() { run=1; thread->Start(); }
 };
 
 struct ThreadPool {
   vector<WorkerThread> worker;
   int round_robin_next=0;
+  virtual ~ThreadPool() { Stop(); }
 
-  void Open(int num) {
-    CHECK(worker.empty());
-    worker.resize(num);
-    for (auto &w : worker) w.Init(bind(&CallbackQueue::HandleMessagesLoop, w.queue.get()));
-  }
-  void Start() { for (auto &w : worker) w.thread->Start(); }
-  void Stop()  { for (auto &w : worker) w.thread->Wait(); }
+  void Open(int num) { CHECK(worker.empty()); for (int i=0; i<num; i++) worker.emplace_back(); }
+  void Start() { for (auto &w : worker) w.Start(); }
+  void Stop()  { for (auto &w : worker) w.Stop(); }
   void Write(Callback *cb) {
     worker[round_robin_next].queue->Write(cb);
     round_robin_next = (round_robin_next + 1) % worker.size();
@@ -624,7 +627,7 @@ struct Application : public ::LFApp {
   void OpenSystemBrowser(const string &url);
 
   void AddNativeMenu(const string &title, const vector<MenuItem> &items);
-  void AddNativeEditMenu();
+  void AddNativeEditMenu(const vector<MenuItem>&items);
   void LaunchNativeMenu(const string &title);
   void LaunchNativeContextMenu(const vector<MenuItem> &items);
   void LaunchNativeFontChooser(const FontDesc &cur_font, const string &choose_cmd);
@@ -662,6 +665,9 @@ struct Application : public ::LFApp {
     if (auto nt = network_thread.get()) nt->Write(new Callback(forward<Args>(args)...));
     else (Callback(forward<Args>(args)...))();
   }
+  template <class... Args> void RunInThreadPool(Args&&... args) {
+    thread_pool.Write(new Callback(forward<Args>(args)...));
+  } 
 
   static void Daemonize(const char *dir, const char *progname);
   static void Daemonize(FILE *fout, FILE *ferr);

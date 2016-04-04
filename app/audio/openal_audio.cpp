@@ -28,7 +28,7 @@ namespace LFL {
 struct OpenALAudioModule : public Module {
   struct Effect { ALuint source, buffer; };    
   Audio *audio;
-  ALCdevice *dev=0;
+  ALCdevice *in_dev=0, *out_dev=0;
   ALCcontext *ctx=0;
   ALuint bg_source=0;
   deque<ALuint> bg_free_buffers, bg_used_buffers;
@@ -40,28 +40,39 @@ struct OpenALAudioModule : public Module {
     INFO("OpenALAudioModule::Init");
     if (FLAGS_chans_in == -1) FLAGS_chans_in = 2;
     if (FLAGS_chans_out == -1) FLAGS_chans_out = 2;
-    if (!(dev = alcOpenDevice(NULL))) return ERRORv(-1, "alcOpenDevice");
-    if (!(ctx = alcCreateContext(dev, NULL))) return ERRORv(-1, "alcCreateContext");
-    alcMakeContextCurrent(ctx);
 
-    alGenSources(1, &bg_source);
-    if (alGetError() != AL_NO_ERROR) return ERRORv(-1, "alGenSources");
-    alSourcei(bg_source, AL_SOURCE_RELATIVE, AL_TRUE);
+    if (FLAGS_chans_in) {
+      if (!(in_dev = alcCaptureOpenDevice
+            (NULL, FLAGS_sample_rate, FLAGS_chans_in == 2 ? AL_FORMAT_STEREO16 : AL_FORMAT_MONO16,
+             4096)) || alGetError() != AL_NO_ERROR) return ERRORv(-1, "alcCaptureOpenDevice");
+      alcCaptureStart(in_dev);
+      EnsureSize(samples, FLAGS_sample_rate*FLAGS_chans_in);
+    }
 
-    vector<ALuint> sources, buffers(FLAGS_sample_secs, 0);
-    alGenBuffers(buffers.size(), &buffers[0]);
-    if (alGetError() != AL_NO_ERROR) return ERRORv(-1, "alGenBuffers");
-    for (auto &b : buffers) bg_free_buffers.push_back(b);
+    if (FLAGS_chans_out) {
+      if (!(out_dev = alcOpenDevice(NULL))) return ERRORv(-1, "alcOpenDevice");
+      if (!(ctx = alcCreateContext(out_dev, NULL))) return ERRORv(-1, "alcCreateContext");
+      alcMakeContextCurrent(ctx);
 
-    sources.resize(3);
-    buffers.resize(sources.size());
-    alGenSources(sources.size(), &sources[0]);
-    if (alGetError() != AL_NO_ERROR) return ERRORv(-1, "alGenSources");
-    alGenBuffers(buffers.size(), &buffers[0]);
-    if (alGetError() != AL_NO_ERROR) return ERRORv(-1, "alGenBuffers");
-    for (int i=0, e=sources.size(); i != e; ++i) {
-      alSourcei(sources[i], AL_SOURCE_RELATIVE, AL_FALSE);
-      fx_free.push_back({ sources[i], buffers[i] });
+      alGenSources(1, &bg_source);
+      if (alGetError() != AL_NO_ERROR) return ERRORv(-1, "alGenSources");
+      alSourcei(bg_source, AL_SOURCE_RELATIVE, AL_TRUE);
+
+      vector<ALuint> sources, buffers(FLAGS_sample_secs, 0);
+      alGenBuffers(buffers.size(), &buffers[0]);
+      if (alGetError() != AL_NO_ERROR) return ERRORv(-1, "alGenBuffers");
+      for (auto &b : buffers) bg_free_buffers.push_back(b);
+
+      sources.resize(3);
+      buffers.resize(sources.size());
+      alGenSources(sources.size(), &sources[0]);
+      if (alGetError() != AL_NO_ERROR) return ERRORv(-1, "alGenSources");
+      alGenBuffers(buffers.size(), &buffers[0]);
+      if (alGetError() != AL_NO_ERROR) return ERRORv(-1, "alGenBuffers");
+      for (int i=0, e=sources.size(); i != e; ++i) {
+        alSourcei(sources[i], AL_SOURCE_RELATIVE, AL_FALSE);
+        fx_free.push_back({ sources[i], buffers[i] });
+      }
     }
     return 0;
   }
@@ -71,14 +82,32 @@ struct OpenALAudioModule : public Module {
     for (auto &f : fx_free) { alDeleteBuffers(1, &f.buffer); alDeleteSources(1, &f.source); }
     for (auto &b : bg_free_buffers) alDeleteBuffers(1, &b);
     for (auto &b : bg_used_buffers) alDeleteBuffers(1, &b);
-    alDeleteSources(1, &bg_source);
+    if (bg_source) alDeleteSources(1, &bg_source);
     alcMakeContextCurrent(NULL);
-    alcDestroyContext(ctx);
-    alcCloseDevice(dev);
+    if (ctx) alcDestroyContext(ctx);
+    if (out_dev) alcCloseDevice(out_dev);
+    if (in_dev) { alcCaptureStop(in_dev); alcCaptureCloseDevice(in_dev); }
     return 0;
   }
 
   int Frame(unsigned clicks) {
+    if (in_dev) {
+      ALint num_samples;
+      alcGetIntegerv(in_dev, ALC_CAPTURE_SAMPLES, sizeof(ALint), &num_samples);
+      alcCaptureSamples(in_dev, &samples[0], num_samples);
+      RingSampler::Handle IL(audio->IL.get()), IR(audio->IR.get());
+      if (FLAGS_chans_in == 1) for (int i=0; i!=num_samples; ++i) IL.Write(samples[i] / 32768.0);
+      else {
+        CHECK_EQ(2, FLAGS_chans_in);
+        for (int i=0, l=2*num_samples; i != l; i+=2) {
+          IL.Write(samples[i]   / 32678.0);
+          IR.Write(samples[i+1] / 32678.0);
+        }
+      }
+      app->audio->samples_read += num_samples;
+    }
+    if (!out_dev) return 0;
+
     ALuint b = 0;
     ALint val = 0;
     bool bg_added = 0;
@@ -150,7 +179,6 @@ void Application::PlayBackgroundMusic(SoundAsset *music) {
 }
 
 void Application::PlaySoundEffect(SoundAsset *sa, const v3 &pos, const v3 &vel) {
-  // audio->QueueMix(sa, MixFlag::Reset | MixFlag::Mix | (audio->loop ? MixFlag::DontQueue : 0), -1, -1);
   dynamic_cast<OpenALAudioModule*>(audio->impl.get())->PlaySoundEffect(sa, pos, vel);
 }
  

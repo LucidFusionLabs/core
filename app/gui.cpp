@@ -1202,7 +1202,7 @@ int Editor::ModifyCursorLine() {
   return -cursor_offset->size-1;
 }
 
-void Editor::Modify(bool erase, int c) {
+void Editor::Modify(bool erase, int c, bool undo_or_redo) {
   if (!cursor_line || !cursor_offset) return;
   bool wrap = Wrap();
   int edit_id = ModifyCursorLine();
@@ -1210,9 +1210,10 @@ void Editor::Modify(bool erase, int c) {
   CHECK_LE(cursor.i.x, cursor_line->Size());
   CHECK_LE(cursor.i.x, b->size());
   CHECK_EQ(cursor_offset->wrapped_lines, cursor_line->Lines());
+  if (!cursor_line_number && erase && !cursor.i.x) return;
+  if (!undo_or_redo) UpdateUndo(cursor.i, erase, erase ? (*b)[cursor.i.x-1] : c);
 
   if (erase && !cursor.i.x) {
-    if (!cursor_line_number) return;
     file_line.Erase(cursor_line_number);
     wrapped_lines = AddWrappedLines(wrapped_lines, -cursor_line->Lines());
     HistUp();
@@ -1268,22 +1269,51 @@ int Editor::Save() {
   Redraw(true);
   return ret;
 }
+
+bool Editor::WalkUndo(bool backwards) {
+  if (backwards) { if (!undo_offset)               return false; }
+  else           { if (undo_offset >= undo.size()) return false; }
+  const Modification &m = undo[backwards ? --undo_offset : undo_offset++];
+  cursor.i.y = m.p.y;
+  UpdateCursorLine();
+  UpdateCursorX(m.p.x + (backwards ? (m.erase ? -m.data.size() : m.data.size()) : 0));
+  if (backwards) for (auto i=m.data.rbegin(), e=m.data.rend(); i!=e; ++i) Modify(!m.erase, *i, true);
+  else           for (auto i=m.data.begin(),  e=m.data.end();  i!=e; ++i) Modify( m.erase, *i, true);
+  return true;
+}
+
+void Editor::UpdateUndo(const point &p, bool erase, char16_t c) {
+  if (undo_offset < undo.size()) undo.resize(undo_offset);
+  if (undo.size()) {
+    Modification &m = undo.back();
+    if (m.p.y == p.y && m.erase == erase &&
+        m.p.x + m.data.size() * (erase ? -1 : 1) == p.x) { m.data.append(1, c); return; }
+  }
+  undo.push_back({ p, erase, String16(1, c) });
+  undo_offset = undo.size();
+}
  
 FileNameAndOffset Editor::FindDefinition(const point &p) {
-  if (!project || !ide_file || ! cursor_offset) return FileNameAndOffset();
+  if (!ide_file || ! cursor_offset) return FileNameAndOffset();
   return ide_file->tu.FindDefinition(file->Filename(), cursor_offset->offset + cursor.i.x);
 }
 
-void Editor::UpdateAnnotation() {
-  if (!project) return;
-  int fl_ind = 1;
-  auto fl = file_line.Begin();
-  LineOffset *file_line_data = 0;
+void Editor::LoadAnnotation(IDE::Project *project) {
   string filename = file->Filename();
   auto rule = project->build_rules.find(filename);
   bool have_rule = rule != project->build_rules.end();
-  ide_file = make_unique<IDE::File>(filename, have_rule?rule->second.cmd:"", have_rule?rule->second.dir:"");
+  app->RunInThreadPool([=](){
+    auto f = new IDE::File(filename, have_rule?rule->second.cmd:"", have_rule?rule->second.dir:"");
+    app->RunInMainThread
+      ([=](){ ide_file = unique_ptr<IDE::File>(f); UpdateAnnotation(); RefreshLines(); Redraw(true); });
+  });
+}
 
+void Editor::UpdateAnnotation() {
+  if (!ide_file) return;
+  int fl_ind = 1;
+  auto fl = file_line.Begin();
+  LineOffset *file_line_data = 0;
   TranslationUnit::TokenVisitor(&ide_file.get()->tu, TranslationUnit::TokenVisitor::TokenCB([&]
     (TranslationUnit::TokenVisitor *v, int kind, int line, int column) {
       int a = default_attr;

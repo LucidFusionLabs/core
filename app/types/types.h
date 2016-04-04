@@ -666,6 +666,8 @@ template <class X> struct MessageQueue {
   bool use_cv = 0;
   deque<X> queue;
   mutex lock;
+  MessageQueue() {}
+  virtual ~MessageQueue() {}
 
   void Write(const X &x) {
     ScopedMutex sm(lock);
@@ -689,10 +691,11 @@ template <class X> struct MessageQueue {
 };
 
 struct CallbackQueue : public MessageQueue<Callback*> {
-  void Shutdown() { Write(new Callback()); }
+  void Shutdown() { Write(new Callback([](){})); }
   void HandleMessage(Callback *cb) { (*cb)(); delete cb; }
   int  HandleMessages() { int n=0; Callback *cb=0; for (; NBRead(&cb); n++) HandleMessage(cb); return n; }
-  void HandleMessagesLoop() { for (use_cv=1; GetLFApp()->run; ) HandleMessage(Read()); }
+  void HandleMessagesWhile(const bool *cond) { for (use_cv=1; *cond; ) HandleMessage(Read()); }
+  void HandleMessagesLoop() { HandleMessagesWhile(&GetLFApp()->run); } 
 };
 
 struct CallbackList {

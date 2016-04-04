@@ -19,7 +19,7 @@
 namespace LFL {
 DEFINE_int(sample_rate, 16000, "Audio sample rate");
 DEFINE_int(sample_secs, 3, "Seconds of RingSampler audio");
-DEFINE_int(chans_in, -1, "Audio input channels");
+DEFINE_int(chans_in, 0, "Audio input channels");
 DEFINE_int(chans_out, -1, "Audio output channels");
 DEFINE_int(audio_input_device, -1, "Audio input device index");
 DEFINE_int(audio_output_device, -1, "Audio output device index");

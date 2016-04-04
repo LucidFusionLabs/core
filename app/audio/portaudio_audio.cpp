@@ -60,11 +60,13 @@ struct PortaudioAudioModule : public Module {
   }
 
   int Start() {
+    if (!FLAGS_chans_in && !FLAGS_chans_out) return -1;
     PaStreamParameters in  = { FLAGS_audio_input_device,  FLAGS_chans_in,  paFloat32, input_latency, 0 };
     PaStreamParameters out = { FLAGS_audio_output_device, FLAGS_chans_out, paFloat32, output_latency, 0 };
 
-    PaError err = Pa_OpenStream(&impl, &in, FLAGS_chans_out ? &out : 0, FLAGS_sample_rate,
-                                paFramesPerBufferUnspecified, 0, &PortaudioAudioModule::IOCB, this);
+    PaError err = Pa_OpenStream(&impl, FLAGS_chans_in ? &in : 0, FLAGS_chans_out ? &out : 0,
+                                FLAGS_sample_rate, paFramesPerBufferUnspecified, 0,
+                                &PortaudioAudioModule::IOCB, this);
     if (err != paNoError) return ERRORv(-1, "open_portaudio: ", Pa_GetErrorText(err));
 
     err = Pa_StartStream(impl);

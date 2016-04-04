@@ -50,15 +50,16 @@ template <class Generator> string RandBytes(int n, Generator &g) {
 inline int rand() { return Rand<int>(); }
 inline unsigned long long Rand64() { return Rand<unsigned long long>(); }
 inline bool Equal(float a, float b, float eps=1e-6) { return fabs(a-b) < eps; }
-
-template <class X> static X Negate(X x) { return x ? -x : x; }
-template <class X> static bool Min(X *a, X b) { if (b >= *a) return 0; *a = b; return 1; }
-template <class X> static bool Max(X *a, X b) { if (b <= *a) return 0; *a = b; return 1; }
-template <class X> static bool Within(X x, X a, X b) { return x >= a && x <= b; }
-template <class X> static bool Changed     (X* p, const X& r) { bool ret = *p != r;       if (ret) *p = r; return ret; }
-template <class X> static bool EqualChanged(X* p, const X& r) { bool ret = !Equal(*p, r); if (ret) *p = r; return ret; }
-template <class X> static X    ChangedDiff (X* p, const X& r) { X ret = r - *p;           if (ret) *p = r; return ret; }
-template <class X> static void MinusPlus(X *m, X* p, X v) { *m -= v; *p += v; }
+template <class X> bool IsEven(X x) { return !(x & 1); }
+template <class X> bool IsOdd(X x) { return x & 1; }
+template <class X> X Negate(X x) { return x ? -x : x; }
+template <class X> bool Min(X *a, X b) { if (b >= *a) return 0; *a = b; return 1; }
+template <class X> bool Max(X *a, X b) { if (b <= *a) return 0; *a = b; return 1; }
+template <class X> bool Within(X x, X a, X b) { return x >= a && x <= b; }
+template <class X> bool Changed     (X* p, const X& r) { bool ret = *p != r;       if (ret) *p = r; return ret; }
+template <class X> bool EqualChanged(X* p, const X& r) { bool ret = !Equal(*p, r); if (ret) *p = r; return ret; }
+template <class X> X    ChangedDiff (X* p, const X& r) { X ret = r - *p;           if (ret) *p = r; return ret; }
+template <class X> void MinusPlus(X *m, X* p, X v) { *m -= v; *p += v; }
 
 template <class X> struct V2 {
   X x, y;

@@ -522,6 +522,7 @@ struct Editor : public TextView {
     static int VectorGetLines(const vector<LineOffset> &v, int i) { return v[i].wrapped_lines; }
   };
   typedef PrefixSumKeyedRedBlackTree<int, LineOffset> LineMap;
+  struct Modification { point p; bool erase; String16 data; };
 
   shared_ptr<File> file;
   LineMap file_line;
@@ -529,9 +530,9 @@ struct Editor : public TextView {
   Line *cursor_line=0;
   LineOffset *cursor_offset=0;
   vector<pair<int,int>> annotation;
-  int cursor_line_number=0, cursor_line_number_offset=0;
+  vector<Modification> undo;
+  int cursor_line_number=0, cursor_line_number_offset=0, undo_offset=0;
   bool opened=0;
-  IDE::Project *project=0;
   unique_ptr<IDE::File> ide_file;
   Editor(GraphicsDevice *D, const FontRef &F=FontRef(), File *I=0);
 
@@ -559,9 +560,12 @@ struct Editor : public TextView {
   void UpdateCursorX(int x);
   int CursorLinesChanged(const String16 &b, int add_lines=0);
   int ModifyCursorLine();
-  void Modify(bool erase, int c);
+  void Modify(bool erase, int c, bool undo_or_redo=false);
   int Save();
+  bool WalkUndo(bool backwards);
+  void UpdateUndo(const point &p, bool erase, char16_t c);
   FileNameAndOffset FindDefinition(const point &p);
+  void LoadAnnotation(IDE::Project *project);
   void UpdateAnnotation();
 };
 

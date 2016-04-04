@@ -43,11 +43,36 @@
   }
 @end
 
-extern "C" void OSXCreateNativeEditMenu() {
+namespace LFL {
+static void AddNSMenuItems(NSMenu *menu, const vector<MenuItem>&items) {
+  NSMenuItem *item;
+  for (auto &i : items) { 
+    const char *k=tuple_get<0>(i).c_str(), *n=tuple_get<1>(i).c_str(), *v=tuple_get<2>(i).c_str();
+    if (!strcmp(n, "<seperator>")) { [menu addItem:[NSMenuItem separatorItem]]; continue; }
+    item = [menu addItemWithTitle: [NSString stringWithUTF8String: n]
+                 action:           (v[0] ? @selector(shellRun:) : nil)
+                 keyEquivalent:    [NSString stringWithUTF8String: k]];
+    [item setRepresentedObject: [NSString stringWithUTF8String: v]];
+  }
+}
+
+void Application::AddNativeMenu(const string &title_text, const vector<MenuItem>&items) {
+  NSString *title = [NSString stringWithUTF8String: title_text.c_str()];
+  NSMenu *menu = [[NSMenu alloc] initWithTitle: title];
+  AddNSMenuItems(menu, items);
+  NSMenuItem *item = [[NSMenuItem alloc] initWithTitle:title action:nil keyEquivalent:@""];
+  [item setSubmenu: menu];
+  [[NSApp mainMenu] addItem: item];
+  [menu release];
+  [item release];
+}
+
+void Application::AddNativeEditMenu(const vector<MenuItem>&items) {
   NSMenuItem *item; 
   NSMenu *menu = [[NSMenu alloc] initWithTitle:@"Edit"];
   item = [menu addItemWithTitle:@"Copy"  action:@selector(copy:)  keyEquivalent:@"c"];
   item = [menu addItemWithTitle:@"Paste" action:@selector(paste:) keyEquivalent:@"v"];
+  AddNSMenuItems(menu, items);
   item = [[NSMenuItem alloc] initWithTitle:@"Edit" action:nil keyEquivalent:@""];
   [item setSubmenu: menu];
   [[NSApp mainMenu] addItem: item];
@@ -55,64 +80,27 @@ extern "C" void OSXCreateNativeEditMenu() {
   [item release];
 }
 
-extern "C" void OSXCreateNativeMenu(const char *title_text, int n, const char **key, const char **name, const char **val) {
-  NSMenuItem *item;
-  NSString *title = [NSString stringWithUTF8String: title_text];
-  NSMenu *menu = [[NSMenu alloc] initWithTitle: title];
-  for (int i=0; i<n; i++) {
-    if (!strcmp(name[i], "<seperator>")) { [menu addItem:[NSMenuItem separatorItem]]; continue; }
-    item = [menu addItemWithTitle: [NSString stringWithUTF8String: name[i]]
-                 action:           (val[i][0] ? @selector(shellRun:) : nil)
-                 keyEquivalent:    [NSString stringWithUTF8String: key[i]]];
-    [item setRepresentedObject: [NSString stringWithUTF8String: val[i]]];
-  }
-  item = [[NSMenuItem alloc] initWithTitle:title action:nil keyEquivalent:@""];
-  [item setSubmenu: menu];
-  [[NSApp mainMenu] addItem: item];
-  [menu release];
-  [item release];
-}
-
-extern "C" void OSXLaunchNativeFontChooser(const char *cur_font, int size, const char *change_font_cmd) {
+void Application::LaunchNativeFontChooser(const FontDesc &cur_font, const string &choose_cmd) {
   static FontChooser *font_chooser = [FontChooser alloc];
-  [font_chooser selectFont:cur_font size:size cmd:change_font_cmd];
+  [font_chooser selectFont:cur_font.name.c_str() size:cur_font.size cmd:choose_cmd.c_str()];
 }
 
-extern "C" void OSXLaunchNativeFileChooser(bool choose_files, bool choose_dirs, bool choose_multi, const char *open_files_cmd) {
+void Application::LaunchNativeFileChooser(bool choose_files, bool choose_dirs, bool choose_multi,
+                                          const string &choose_cmd) {
   NSOpenPanel *panel = [NSOpenPanel openPanel];
   [panel setCanChooseFiles:choose_files];
   [panel setCanChooseDirectories:choose_dirs];
   [panel setAllowsMultipleSelection:choose_multi];
   NSInteger clicked = [panel runModal];
-  LFL::app->LoseFocus();
+  app->LoseFocus();
   if (clicked != NSFileHandlingPanelOKButton) return;
 
-  std::string start = open_files_cmd, run = start;
+  string start = choose_cmd, run = start;
   for (NSURL *url in [panel URLs]) {
     run.append(" ");
     run.append([[url absoluteString] UTF8String]);
   }
   if (run.size() > start.size()) ShellRun(run.c_str());
-}
-
-
-namespace LFL {
-void Application::AddNativeMenu(const string &title, const vector<MenuItem>&items) {
-  vector<const char *> k, n, v;
-  for (auto &i : items) { k.push_back(tuple_get<0>(i).c_str()); n.push_back(tuple_get<1>(i).c_str()); v.push_back(tuple_get<2>(i).c_str()); }
-  OSXCreateNativeMenu(title.c_str(), items.size(), &k[0], &n[0], &v[0]);
-}
-
-void Application::AddNativeEditMenu() {
-  OSXCreateNativeEditMenu();
-}
-
-void Application::LaunchNativeFontChooser(const FontDesc &cur_font, const string &choose_cmd) {
-  OSXLaunchNativeFontChooser(cur_font.name.c_str(), cur_font.size, choose_cmd.c_str());
-}
-
-void Application::LaunchNativeFileChooser(bool files, bool dirs, bool multi, const string &choose_cmd) {
-  OSXLaunchNativeFileChooser(files, dirs, multi, choose_cmd.c_str());
 }
 
 void Application::OpenSystemBrowser(const string &url_text) {

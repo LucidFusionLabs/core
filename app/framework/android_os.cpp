@@ -20,7 +20,7 @@
 
 namespace LFL {
 void Application::AddNativeMenu(const string &title, const vector<MenuItem>&items) {}
-void Application::AddNativeEditMenu() {}
+void Application::AddNativeEditMenu(const vector<MenuItem>&items) {}
 void Application::LaunchNativeMenu(const string &title) {}
 void Application::LaunchNativeFontChooser(const FontDesc &cur_font, const string &choose_cmd) {}
 void Application::LaunchNativeFileChooser(bool files, bool dirs, bool multi, const string &choose_cmd) {}
