@@ -667,7 +667,7 @@ DOM::Node *Browser::LayoutNode(Flow *flow, DOM::Node *n, bool reflow) {
       point dim(X_or_Y(n->render->width_px, 256), X_or_Y(n->render->height_px, 16));
       render->flow->AppendBox(dim.x, dim.y, &render->box);
       input->text->cmd_fb.SetDimensions(render->box.w, render->box.h,
-                                        (input->text->font.ptr = render->flow->cur_attr.font));
+                                        (input->text->style.font.ptr = render->flow->cur_attr.font));
       render->inline_box[0] = render->box;
     } else if (t == "submit") {
       point dim(X_or_Y(n->render->width_px, 128), X_or_Y(n->render->height_px, 16));

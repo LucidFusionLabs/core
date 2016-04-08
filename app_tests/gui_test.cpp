@@ -745,25 +745,25 @@ TEST(GUITest, Editor) {
 
 TEST(GUITest, Terminal) {
   int cursor_attr = 0;
-  Terminal::Attr::SetFGColorIndex(&cursor_attr, 7);
-  EXPECT_EQ(7,  Terminal::Attr::GetFGColorIndex(cursor_attr));
-  Terminal::Attr::SetFGColorIndex(&cursor_attr, 2);
-  EXPECT_EQ(2,  Terminal::Attr::GetFGColorIndex(cursor_attr));
-  Terminal::Attr::SetBGColorIndex(&cursor_attr, 3);
-  EXPECT_EQ(3,  Terminal::Attr::GetBGColorIndex(cursor_attr));
-  EXPECT_EQ(2,  Terminal::Attr::GetFGColorIndex(cursor_attr));
-  cursor_attr |= Terminal::Attr::Bold;
-  EXPECT_EQ(10, Terminal::Attr::GetFGColorIndex(cursor_attr));
-  EXPECT_EQ(3,  Terminal::Attr::GetBGColorIndex(cursor_attr));
-  Terminal::Attr::SetFGColorIndex(&cursor_attr, 4);
-  Terminal::Attr::SetBGColorIndex(&cursor_attr, 0);
-  EXPECT_EQ(12, Terminal::Attr::GetFGColorIndex(cursor_attr));
-  EXPECT_EQ(0,  Terminal::Attr::GetBGColorIndex(cursor_attr));
-  cursor_attr &= ~Terminal::Attr::Bold;
-  EXPECT_EQ(4,  Terminal::Attr::GetFGColorIndex(cursor_attr));
+  cursor_attr = Terminal::Style::SetFGColorIndex(cursor_attr, 7);
+  EXPECT_EQ(7,  Terminal::Style::GetFGColorIndex(cursor_attr));
+  cursor_attr = Terminal::Style::SetFGColorIndex(cursor_attr, 2);
+  EXPECT_EQ(2,  Terminal::Style::GetFGColorIndex(cursor_attr));
+  cursor_attr = Terminal::Style::SetBGColorIndex(cursor_attr, 3);
+  EXPECT_EQ(3,  Terminal::Style::GetBGColorIndex(cursor_attr));
+  EXPECT_EQ(2,  Terminal::Style::GetFGColorIndex(cursor_attr));
+  cursor_attr |= Terminal::Style::Bold;
+  EXPECT_EQ(10, Terminal::Style::GetFGColorIndex(cursor_attr));
+  EXPECT_EQ(3,  Terminal::Style::GetBGColorIndex(cursor_attr));
+  cursor_attr = Terminal::Style::SetFGColorIndex(cursor_attr, 4);
+  cursor_attr = Terminal::Style::SetBGColorIndex(cursor_attr, 0);
+  EXPECT_EQ(12, Terminal::Style::GetFGColorIndex(cursor_attr));
+  EXPECT_EQ(0,  Terminal::Style::GetBGColorIndex(cursor_attr));
+  cursor_attr &= ~Terminal::Style::Bold;
+  EXPECT_EQ(4,  Terminal::Style::GetFGColorIndex(cursor_attr));
 
   TerminalTest ta(nullptr, screen->gd, app->fonts->Fake(), point(80, 25));
-  int tw = ta.term_width, th = ta.term_height, fw = ta.font->FixedWidth(), fh = ta.font->Height();
+  int tw = ta.term_width, th = ta.term_height, fw = ta.style.font->FixedWidth(), fh = ta.style.font->Height();
   ta.CheckResized(Box(tw*fw, th*fh));
   EXPECT_EQ(80, ta.term_width);
   EXPECT_EQ(25, ta.term_height);

@@ -33,3 +33,5 @@ lfl_add_target(regex_test EXECUTABLE
                app_simple_resampler app_iconv_convert app_stdregex_regex app_null_sregex
                app_libpng_png app_null_jpeg app_null_gif app_null_ogg app_null_css app_null_ttf
                app_null_ssl app_null_js app_null_tu ${LFL_APP_OS})
+
+add_test(NAME app_tests COMMAND tests)

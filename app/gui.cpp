@@ -17,6 +17,8 @@
  */
 
 #include "core/app/gui.h"
+#include "core/app/ipc.h"
+#include "core/app/bindings/ide.h"
 
 namespace LFL {
 #ifdef LFL_MOBILE
@@ -217,6 +219,21 @@ void Widget::Divider::DragCB(int b, int x, int y, int down) {
   Assign(&changing, &changed, bool(down), true);
 }
 
+const Drawable::Attr *TextBox::Style::GetAttr(int attr) const {
+  const Color *fg=0, *bg=0;
+  if (colors) {
+    bool italic = attr & Italic, bold = attr & Bold;
+    int fg_index = GetFGColorIndex(attr), bg_index = GetBGColorIndex(attr);
+    fg = colors->GetColor(italic ? colors->background_index : ((bold && fg_index == colors->normal_index) ? colors->bold_index : fg_index));
+    bg = colors->GetColor(italic ? colors->normal_index     : bg_index);
+    if (attr & Reverse) swap(fg, bg);
+  }
+  last_attr.font = app->fonts->Change(font, font->size, *fg, *bg, font->flag);
+  last_attr.bg = bg == colors->GetColor(colors->background_index) ? 0 : bg; // &font->bg;
+  last_attr.underline = attr & Underline;
+  return &last_attr;
+}
+
 TextBox::Control::Control(TextBox::Line *P, GUI *G, const Box3 &b, const string &v, const MouseControllerCallback &cb) :
   Interface(G), box(b), val(v), line(P) {
   AddClickBox(b, cb);
@@ -315,7 +332,7 @@ template <class X> int TextBox::Line::UpdateText(int x, const StringPieceT<X> &v
     else                          ret  = InsertTextAt(x, v, attr);
     if (max_width)                       Erase(max_width);
   } else {
-    data->flow.cur_attr.font = parent->font;
+    data->flow.cur_attr.font = parent->style.font;
     ret = OverwriteTextAt(x, v, attr);
   }
   if (append_out) *append_out = append;
@@ -345,7 +362,7 @@ void TextBox::Line::Layout(Box win, bool flush) {
 point TextBox::Line::Draw(point pos, int relayout_width, int g_offset, int g_len) {
   if (relayout_width >= 0) Layout(relayout_width);
   data->glyphs.Draw((p = pos), g_offset, g_len);
-  return p - point(0, parent->font->Height() + data->glyphs.height);
+  return p - point(0, parent->style.font->Height() + data->glyphs.height);
 }
 
 TextBox::Lines::Lines(TextBox *P, int N) : RingVector<Line>(N), parent(P), wrapped_lines(N),
@@ -372,8 +389,8 @@ TextBox::Line *TextBox::Lines::InsertAt(int dest_line, int lines, int dont_move_
   if (dest_line != -1) Move<Lines,Line>(*this, dest_line+lines, dest_line, -dest_line - lines - dont_move_last, movep_cb);
   else if ((clear_dir = -1)) { 
     ring.PushBack(lines);
-    for (int scrollback_start_line = parent->GetFrameBuffer()->h / parent->font->Height(), i=0; i<lines; i++)
-      (*this)[-scrollback_start_line-i-1].data->controls.clear();
+    for (int scrollback_start_line = parent->GetFrameBuffer()->h / parent->style.font->Height(), i=0;
+         i<lines; i++) (*this)[-scrollback_start_line-i-1].data->controls.clear();
   }
   for (int i=0; i<lines; i++) (*this)[dest_line + i*clear_dir].Clear();
   return &(*this)[dest_line];
@@ -443,8 +460,8 @@ TextBox::LineUpdate::~LineUpdate() {
   else fb->Update(v);
 }
 
-TextBox::TextBox(GraphicsDevice *d, const FontRef &F, int LC) : font(F), cmd_last(LC), cmd_fb(d) {
-  if (font.Load()) cmd_line.GetAttrId(Drawable::Attr(font));
+TextBox::TextBox(GraphicsDevice *d, const FontRef &F, int LC) : style(F), cmd_last(LC), cmd_fb(d) {
+  if (style.font.Load()) cmd_line.GetAttrId(Drawable::Attr(style.font));
   layout.pad_wide_chars = 1;
   cmd_line.Init(this, 0);
 }
@@ -456,21 +473,6 @@ point TextBox::RelativePosition(const point &in) const {
   return fb->BackPlus(p);
 }
 
-const Drawable::Attr *TextBox::GetAttr(int attr) const {
-  const Color *fg=0, *bg=0;
-  if (colors) {
-    bool italic = attr & Attr::Italic, bold = attr & Attr::Bold;
-    int fg_index = Attr::GetFGColorIndex(attr), bg_index = Attr::GetBGColorIndex(attr);
-    fg = &colors->c[italic ? colors->bg_index     : ((bold && fg_index == colors->normal_index) ? colors->bold_index : fg_index)];
-    bg = &colors->c[italic ? colors->normal_index : bg_index];
-    if (attr & Attr::Reverse) swap(fg, bg);
-  }
-  last_attr.font = app->fonts->Change(font, font->size, *fg, *bg, font->flag);
-  last_attr.bg = bg == &colors->c[colors->bg_index] ? 0 : bg; // &font->bg;
-  last_attr.underline = attr & Attr::Underline;
-  return &last_attr;
-}
-
 void TextBox::Enter() {
   string cmd = String::ToUTF8(Text16());
   AssignInput("");
@@ -480,10 +482,10 @@ void TextBox::Enter() {
 }
 
 void TextBox::SetColors(Colors *C) {
-  colors = C;
-  Attr::SetFGColorIndex(&default_attr, colors->normal_index);
-  Attr::SetBGColorIndex(&default_attr, colors->bg_index);
-  bg_color = &colors->c[colors->bg_index];
+  style.colors = C;
+  default_attr = Style::SetFGColorIndex(default_attr, style.colors->normal_index);
+  default_attr = Style::SetBGColorIndex(default_attr, style.colors->background_index);
+  bg_color = style.colors->GetColor(style.colors->background_index);
 }
 
 void TextBox::UpdateLineFB(Line *L, LinesFrameBuffer *fb, int flag) {
@@ -495,9 +497,9 @@ void TextBox::UpdateLineFB(Line *L, LinesFrameBuffer *fb, int flag) {
 }
 
 void TextBox::Draw(const Box &b) {
-  if (cmd_fb.SizeChanged(b.w, b.h, font, bg_color)) {
-    cmd_fb.p = point(0, font->Height());
-    cmd_line.Draw(point(0, cmd_line.Lines() * font->Height()), cmd_fb.w);
+  if (cmd_fb.SizeChanged(b.w, b.h, style.font, bg_color)) {
+    cmd_fb.p = point(0, style.font->Height());
+    cmd_line.Draw(point(0, cmd_line.Lines() * style.font->Height()), cmd_fb.w);
     cmd_fb.SizeChangedDone();
   }
   // screen->gd->PushColor();
@@ -512,7 +514,7 @@ void TextBox::DrawCursor(point p) {
     screen->gd->EnableBlend();
     screen->gd->BlendMode(GraphicsDevice::OneMinusDstColor, GraphicsDevice::OneMinusSrcAlpha);
     screen->gd->FillColor(cmd_color);
-    Box(p.x, p.y - font->Height(), font->max_width, font->Height()).Draw();
+    Box(p.x, p.y - style.font->Height(), style.font->max_width, style.font->Height()).Draw();
     screen->gd->BlendMode(GraphicsDevice::SrcAlpha, GraphicsDevice::One);
     screen->gd->DisableBlend();
   } else {
@@ -522,7 +524,7 @@ void TextBox::DrawCursor(point p) {
       if (elapsed > cursor.blink_time * 2) cursor.blink_begin = now;
       else blinking = true;
     }
-    if (blinking) font->Draw("_", p - point(0, font->Height()));
+    if (blinking) style.font->Draw("_", p - point(0, style.font->Height()));
   }
 }
 
@@ -535,7 +537,7 @@ void TextBox::UpdateToken(Line *L, int word_offset, int word_len, int update_typ
 
 void TextBox::UpdateLongToken(Line *BL, int beg_offset, Line *EL, int end_offset, const string &text, int update_type) {
   StringPiece textp(text);
-  int offset = 0, url_offset = -1, fh = font->Height();
+  int offset = 0, url_offset = -1, fh = style.font->Height();
   for (; textp.len>1 && MatchingParens(*textp.buf, *textp.rbegin()); offset++, textp.buf++, textp.len -= 2) {}
   if (int punct = LengthChar(textp.buf, ispunct, textp.len)) { offset += punct; textp.buf += punct; }
   if      (textp.len > 7 && PrefixMatch(textp.buf, "http://"))  url_offset = offset + 7;
@@ -640,7 +642,7 @@ void TextArea::Resized(const Box &b, bool font_size_changed) {
 
 void TextArea::CheckResized(const Box &b) {
   LinesFrameBuffer *fb = GetFrameBuffer();
-  if (int c = fb->SizeChanged(b.w, b.h, font, bg_color)) { Resized(b, c > 1); fb->SizeChangedDone(); }
+  if (int c = fb->SizeChanged(b.w, b.h, style.font, bg_color)) { Resized(b, c > 1); fb->SizeChangedDone(); }
 }
 
 void TextArea::Redraw(bool attach, bool relayout) {
@@ -648,7 +650,7 @@ void TextArea::Redraw(bool attach, bool relayout) {
   ScopedClearColor scc(fb->fb.gd, bg_color);
   ScopedDrawMode drawmode(fb->fb.gd, DrawMode::_2D);
   int fb_flag = LinesFrameBuffer::Flag::NoVWrap | (relayout ? LinesFrameBuffer::Flag::Flush : 0);
-  int lines = start_line_adjust + skip_last_lines, font_height = font->Height();
+  int lines = start_line_adjust + skip_last_lines, font_height = style.font->Height();
   int (LinesFrameBuffer::*update_cb)(Line*, int, int, int, int) =
     reverse_line_fb ? &LinesFrameBuffer::PushBackAndUpdate
                     : &LinesFrameBuffer::PushFrontAndUpdate;
@@ -733,7 +735,7 @@ void TextArea::Draw(const Box &b, int flag, Shader *shader) {
     shader->SetUniform2f("iScroll", XY_or_Y(scale, -line_fb.scroll.x * line_fb.w),
                                     XY_or_Y(scale, -line_fb.scroll.y * line_fb.h - b.y));
   }
-  int font_height = font->Height();
+  int font_height = style.font->Height();
   LinesFrameBuffer *fb = GetFrameBuffer();
   if (flag & DrawFlag::CheckResized) CheckResized(b);
   if (clip) screen->gd->PushScissor(Box::DelBorder(b, *clip));
@@ -759,7 +761,7 @@ void TextArea::DrawHoverLink(const Box &b) {
 
 bool TextArea::GetGlyphFromCoordsOffset(const point &p, Selection::Point *out, int sl, int sla) {
   LinesFrameBuffer *fb = GetFrameBuffer();
-  int fh = font->Height(), targ = reverse_line_fb ? ((box.h - p.y) / fh) : (p.y / fh);
+  int fh = style.font->Height(), targ = reverse_line_fb ? ((box.h - p.y) / fh) : (p.y / fh);
   for (int i=sl, lines=sla, ll; i<line.ring.count && lines<line_fb.lines; i++, lines += ll) {
     Line *L = &line[-i-1];
     if (lines + (ll = L->Lines()) <= targ) continue;
@@ -783,6 +785,7 @@ void TextArea::DrawSelection() {
 }
 
 void TextArea::DragCB(int, int, int, int down) {
+  if (!line.ring.size) return;
   if (down && !Active()) Activate();
   Selection *s = &selection;
   bool start = s->Update(screen->mouse - box.BottomLeft() + point(line_left, 0), down);
@@ -793,7 +796,7 @@ void TextArea::DragCB(int, int, int, int down) {
   if (!s->changing) CopyText(swap ? s->end : s->beg, swap ? s->beg : s->end);
   else {
     LinesFrameBuffer *fb = GetFrameBuffer();
-    int fh = font->Height(), h = box.h;
+    int fh = style.font->Height(), h = box.h;
     Box gb = swap ? s->end.glyph : s->beg.glyph;
     Box ge = swap ? s->beg.glyph : s->end.glyph;
     if (reverse_line_fb) { gb.y=h-gb.y-fh; ge.y=h-ge.y-fh; }
@@ -845,7 +848,7 @@ int TextView::UpdateLines(float vs, int *first_ind, int *first_offset, int *firs
   if (width_changed) {
     last_fb_width = fb->w;
     if (wrap || init) UpdateMapping(fb->w);
-    if (init) UpdateAnnotation();
+    if (init && update_annotation_cb) update_annotation_cb();
   }
 
   bool resized = (width_changed && wrap) || last_fb_lines != fb->lines;
@@ -936,6 +939,7 @@ void PropertyTree::VisitExpandedChildren(Id id, const Node::Visitor &cb, int dep
 void PropertyTree::UpdateMapping(int width) {
   wrapped_lines = 0;
   property_line.Clear();
+  if (!root) return;
   VisitExpandedChildren(root, [&](Id id, Node *n, int d)
    { tree[id-1].depth=d-1; property_line.val.Insert(NodeIndex(id)); wrapped_lines++; });
   property_line.LoadFromSortedVal();
@@ -944,7 +948,7 @@ void PropertyTree::UpdateMapping(int width) {
 int PropertyTree::UpdateMappedLines(pair<int, int> read_lines, int new_first_line, int new_last_line,
                                     bool up, bool head_read, bool tail_read, bool short_read, bool shorten_read) {
   if (!read_lines.second) return 0;
-  int added = 0, last_read_line = read_lines.first + read_lines.second - 1, fh = font->Height();
+  int added = 0, last_read_line = read_lines.first + read_lines.second - 1, fh = style.font->Height();
   LineMap::ConstIterator lib, lie;
   CHECK((lib = property_line.LesserBound(read_lines.first)).val);
   for (lie = lib; lie.val && lie.key <= last_read_line; ++lie) {}
@@ -961,8 +965,8 @@ void PropertyTree::LayoutLine(Line *L, const NodeIndex &ni, const point &p) {
   Flow *flow = &L->data->flow;
   flow->layout.wrap_lines = 0;
 
-  int fw = font->max_width;
-  Box control(2 + fw * n->depth * 2, -font->ascender, fw, fw);
+  int fw = style.font->max_width;
+  Box control(2 + fw * n->depth * 2, -style.font->ascender, fw, fw);
   if (n->control) {
     int control_attr_id = flow->out->attr.GetAttrId(Drawable::Attr(menuicon_black, NULL, NULL, false, true));
     flow->out->PushBack(control, control_attr_id, menuicon_black->FindGlyph(n->expanded ? 11 : 12));
@@ -976,7 +980,7 @@ void PropertyTree::LayoutLine(Line *L, const NodeIndex &ni, const point &p) {
     flow->out->PushBack(control + point(2*fw, 0), icon_attr_id, n->icon);
   }
   flow->p.x += control.right() + (n->icon ? 3*fw : fw);
-  flow->SetFont(font);
+  flow->SetFont(style.font);
   flow->AppendText(n->text);
 }
 
@@ -984,7 +988,7 @@ void PropertyTree::HandleNodeControlClicked(Id id, int b, int x, int y, int down
   if (!down) return;
   auto n = &tree[id-1];
   auto fb = GetFrameBuffer();
-  int h = fb->Height(), fh = font->Height(), depth = n->depth, added = 0;
+  int h = fb->Height(), fh = style.font->Height(), depth = n->depth, added = 0;
   // int line_no = RingIndex::Wrap((h - fb->scroll.y * h - y), h) / fh, child_line_no = line_no + 1;
   int line_no = last_first_line + (box.top() - screen->mouse.y) / fh, child_line_no = line_no + 1;
   if (line_no == selected_line_no) selected_line_no = -1;
@@ -1009,7 +1013,7 @@ void PropertyTree::HandleNodeControlClicked(Id id, int b, int x, int y, int down
 
 void PropertyTree::Draw(const Box &b, int flag, Shader *shader) {
   TextArea::Draw(b, flag, shader);
-  int selected_line_no_offset = selected_line_no - last_first_line, fh = font->Height();
+  int selected_line_no_offset = selected_line_no - last_first_line, fh = style.font->Height();
   if (Within(selected_line_no_offset, 0, GetFrameBuffer()->lines)) {
     screen->gd->EnableBlend();
     screen->gd->FillColor(selected_color);
@@ -1018,7 +1022,7 @@ void PropertyTree::Draw(const Box &b, int flag, Shader *shader) {
 }
 
 void PropertyTree::SelectionCB(const Selection::Point &p) {
-  int line_no = last_first_line + (box.top() - screen->mouse.y) / font->Height();
+  int line_no = last_first_line + (box.top() - screen->mouse.y) / style.font->Height();
   if (line_no == selected_line_no && selected_line_clicked_cb)
     if (auto li = property_line.LesserBound(line_no).val) selected_line_clicked_cb(this, li->id);
   selected_line_no = line_no;
@@ -1043,6 +1047,64 @@ void DirectoryTree::VisitExpandedChildren(Id id, const Node::Visitor &cb, int de
 
 /* Editor */
 
+Editor::SyntaxColors::SyntaxColors(const string &n, const vector<Rule> &rules) :
+  name(n), color(3, Color()) {
+  normal_index=0; bold_index=1; background_index=2;
+  map<Color, pair<int, int>> seen_fg, seen_bg;
+  for (auto &r : rules) {
+    auto fs = &seen_fg[r.fg], bs = &seen_bg[r.bg];
+    if (!fs->second++) fs->first = PushBackIndex(color, r.fg);
+    if (!bs->second++) bs->first = PushBackIndex(color, r.bg);
+    style[r.name] = Style::SetColorIndex(r.style, fs->first, bs->first);
+  }
+  auto i = style.find("Normal");
+  if (i != style.end()) {
+    color[normal_index] = color[bold_index] = color[Style::GetFGColorIndex(i->second)];
+    color[background_index]                 = color[Style::GetBGColorIndex(i->second)];
+  } else {
+    ERROR("SyntaxColors ", name, " no Normal");
+    int max_fg=0, max_bg=0, max_fg_ind=0, max_bg_ind=0;
+    for (auto &f : seen_fg) if (Max(&max_fg, f.second.second)) max_fg_ind = f.second.first;
+    for (auto &b : seen_bg) if (Max(&max_bg, b.second.second)) max_bg_ind = b.second.first;
+    color[normal_index] = color[bold_index] = color[max_fg_ind];
+    color[background_index]                 = color[max_bg_ind];
+  }
+  for (auto &c : color) if (c == Color::clear) c = color[background_index];
+}
+
+// base16 by chriskempson
+Editor::Base16DefaultDarkSyntaxColors::Base16DefaultDarkSyntaxColors() :
+  SyntaxColors("Base16DefaultDarkSyntaxColors", {
+    { "Boolean",      Color("dc9656"), Color("181818"), 0 },
+    { "Character",    Color("ab4642"), Color("181818"), 0 },
+    { "Comment",      Color("585858"), Color("181818"), 0 },
+    { "Conditional",  Color("ba8baf"), Color("181818"), 0 },
+    { "Constant",     Color("dc9656"), Color("181818"), 0 },
+    { "Define",       Color("ba8baf"), Color("181818"), 0 },
+    { "Delimiter",    Color("a16946"), Color("181818"), 0 },
+    { "Float",        Color("dc9656"), Color("181818"), 0 },
+    { "Function",     Color("7cafc2"), Color("181818"), 0 },
+    { "Identifier",   Color("ab4642"), Color("181818"), 0 },
+    { "Include",      Color("7cafc2"), Color("181818"), 0 },
+    { "Keyword",      Color("ba8baf"), Color("181818"), 0 },
+    { "Label",        Color("f7ca88"), Color("181818"), 0 },
+    { "Normal",       Color("d8d8d8"), Color("181818"), 0 },
+    { "Number",       Color("dc9656"), Color("181818"), 0 },
+    { "Operator",     Color("d8d8d8"), Color("181818"), 0 },
+    { "PreProc",      Color("f7ca88"), Color("181818"), 0 },
+    { "Repeat",       Color("f7ca88"), Color("181818"), 0 },
+    { "Special",      Color("86c1b9"), Color("181818"), 0 },
+    { "SpecialChar",  Color("a16946"), Color("181818"), 0 },
+    { "Statement",    Color("ab4642"), Color("181818"), 0 },
+    { "StorageClass", Color("f7ca88"), Color("181818"), 0 },
+    { "String",       Color("a1b56c"), Color("181818"), 0 },
+    { "Structure",    Color("ba8baf"), Color("181818"), 0 },
+    { "Tag",          Color("f7ca88"), Color("181818"), 0 },
+    { "Type",         Color("f7ca88"), Color("181818"), 0 },
+    { "Typedef",      Color("f7ca88"), Color("181818"), 0 }
+  }) {}
+
+Editor::~Editor() {}
 Editor::Editor(GraphicsDevice *D, const FontRef &F, File *I) : TextView(D, F) {
   cmd_color = Color(Color::black, .5);
   file_line.node_value_cb = &LineOffset::GetLines;
@@ -1099,7 +1161,7 @@ void Editor::UpdateMapping(int width) {
   NextRecordReader nr(file.get());
   int offset = 0, wrap = Wrap(), ll;
   for (const char *l = nr.NextLineRaw(&offset); l; l = nr.NextLineRaw(&offset)) {
-    wrapped_lines += (ll = wrap ? TextArea::font->Lines(l, width) : 1);
+    wrapped_lines += (ll = wrap ? TextArea::style.font->Lines(l, width) : 1);
     file_line.val.Insert(LineOffset(offset, nr.record_len, ll));
   }
   file_line.LoadFromSortedVal();
@@ -1175,7 +1237,7 @@ void Editor::UpdateCursorLine() {
 
 void Editor::UpdateCursor() {
   cursor.p = cursor_line->data->glyphs.Position(cursor.i.x) +
-    point(0, box.h - cursor_line_number_offset * font->Height());
+    point(0, box.h - cursor_line_number_offset * style.font->Height());
 }
 
 void Editor::UpdateCursorX(int x) {
@@ -1298,45 +1360,6 @@ FileNameAndOffset Editor::FindDefinition(const point &p) {
   return ide_file->tu.FindDefinition(file->Filename(), cursor_offset->offset + cursor.i.x);
 }
 
-void Editor::LoadAnnotation(IDE::Project *project) {
-  string filename = file->Filename();
-  auto rule = project->build_rules.find(filename);
-  bool have_rule = rule != project->build_rules.end();
-  app->RunInThreadPool([=](){
-    auto f = new IDE::File(filename, have_rule?rule->second.cmd:"", have_rule?rule->second.dir:"");
-    app->RunInMainThread
-      ([=](){ ide_file = unique_ptr<IDE::File>(f); UpdateAnnotation(); RefreshLines(); Redraw(true); });
-  });
-}
-
-void Editor::UpdateAnnotation() {
-  if (!ide_file) return;
-  int fl_ind = 1;
-  auto fl = file_line.Begin();
-  LineOffset *file_line_data = 0;
-  TranslationUnit::TokenVisitor(&ide_file.get()->tu, TranslationUnit::TokenVisitor::TokenCB([&]
-    (TranslationUnit::TokenVisitor *v, int kind, int line, int column) {
-      int a = default_attr;
-      if      (kind == TranslationUnit::Token::Punctuation) {}
-      else if (kind == TranslationUnit::Token::Keyword)     Attr::SetFGColorIndex(&a, 5);
-      else if (kind == TranslationUnit::Token::Identifier)  Attr::SetFGColorIndex(&a, 13);
-      else if (kind == TranslationUnit::Token::Literal)     Attr::SetFGColorIndex(&a, 1);
-      else if (kind == TranslationUnit::Token::Comment)     Attr::SetFGColorIndex(&a, 6);
-      else                                                  ERROR("unknown token kind ", kind);
-
-      if (line != v->last_token.y) {
-        if (v->last_token.y+1 < line && a != default_attr) PushBack(annotation, {0, a});
-        if (fl_ind < line)
-          for (++fl_ind, ++fl; fl.ind && fl_ind < line; ++fl_ind, ++fl)
-            fl.val->annotation = PieceIndex(annotation.size()-1, 1);
-        if (!fl.ind) return;
-        (file_line_data = fl.val)->annotation.offset = annotation.size();
-      }
-      annotation.emplace_back(column-1, a);
-      file_line_data->annotation.len++;
-    })).Visit();
-}
-
 /* Terminal */
 
 #ifdef  LFL_TERMINAL_DEBUG
@@ -1356,9 +1379,9 @@ Terminal::StandardVGAColors::StandardVGAColors() {
   c[5] = Color(170,   0, 170);  c[13] = Color(255,  85, 255);
   c[6] = Color(  0, 170, 170);  c[14] = Color( 85, 255, 255);
   c[7] = Color(170, 170, 170);  c[15] = Color(255, 255, 255);
-  c[normal_index] = c[7];
-  c[bold_index]   = c[15];
-  c[bg_index]     = c[0];
+  c[normal_index]     = c[7];
+  c[bold_index]       = c[15];
+  c[background_index] = c[0];
 }
 
 /// Solarized palette by Ethan Schoonover
@@ -1371,9 +1394,9 @@ Terminal::SolarizedDarkColors::SolarizedDarkColors() {
   c[5] = Color(211,  54, 130); /*magenta*/  c[13] = Color(108, 113, 196); /*violet*/
   c[6] = Color( 42, 161, 152); /*cyan*/     c[14] = Color(147, 161, 161); /*base1*/
   c[7] = Color(238, 232, 213); /*base2*/    c[15] = Color(253, 246, 227); /*base3*/
-  c[normal_index] = c[12];
-  c[bold_index]   = c[14];
-  c[bg_index]     = c[8];
+  c[normal_index]     = c[12];
+  c[bold_index]       = c[14];
+  c[background_index] = c[8];
 }
 
 Terminal::SolarizedLightColors::SolarizedLightColors() { 
@@ -1385,16 +1408,16 @@ Terminal::SolarizedLightColors::SolarizedLightColors() {
   c[5] = Color(211,  54, 130); /*magenta*/  c[13] = Color(108, 113, 196); /*violet*/
   c[6] = Color( 42, 161, 152); /*cyan*/     c[14] = Color( 88, 110, 117); /*base01*/
   c[7] = Color(  7,  54,  66); /*base02*/   c[15] = Color(  0,  43,  54); /*base03*/
-  c[normal_index] = c[12];
-  c[bold_index]   = c[14];
-  c[bg_index]     = c[8];
+  c[normal_index]     = c[12];
+  c[bold_index]       = c[14];
+  c[background_index] = c[8];
 }
 
 Terminal::Terminal(ByteSink *O, GraphicsDevice *D, const FontRef &F, const point &dim) :
   TextArea(D, F, 200, 0), sink(O), fb_cb(bind(&Terminal::GetFrameBuffer, this, _1)) {
-  CHECK(font->fixed_width || (font->flag & FontDesc::Mono));
+  CHECK(style.font->fixed_width || (style.font->flag & FontDesc::Mono));
   wrap_lines = write_newline = insert_mode = 0;
-  line.SetAttrSource(this);
+  line.SetAttrSource(&style);
   line_fb.align_top_or_bot = false;
   SetColors(Singleton<SolarizedDarkColors>::Get());
   cursor.attr = default_attr;
@@ -1406,7 +1429,7 @@ Terminal::Terminal(ByteSink *O, GraphicsDevice *D, const FontRef &F, const point
 
 void Terminal::Resized(const Box &b, bool font_size_changed) {
   int old_term_width = term_width, old_term_height = term_height;
-  SetDimension(b.w / font->FixedWidth(), b.h / font->Height());
+  SetDimension(b.w / style.font->FixedWidth(), b.h / style.font->Height());
   TerminalDebug("Resized %d, %d <- %d, %d\n", term_width, term_height, old_term_width, old_term_height);
   bool grid_changed = term_width != old_term_width || term_height != old_term_height;
   if (grid_changed || first_resize) if (sink) sink->IOCtlWindowSize(term_width, term_height); 
@@ -1423,7 +1446,7 @@ void Terminal::Resized(const Box &b, bool font_size_changed) {
 }
 
 void Terminal::ResizedLeftoverRegion(int w, int h, bool update_fb) {
-  if (!cmd_fb.SizeChanged(w, h, font, bg_color)) return;
+  if (!cmd_fb.SizeChanged(w, h, style.font, bg_color)) return;
   if (update_fb) {
     for (int i=0; i<start_line;      i++) MoveToOrFromScrollRegion(&cmd_fb, &line[-i-1],             point(0,GetCursorY(term_height-i)), LinesFrameBuffer::Flag::Flush);
     for (int i=0; i<skip_last_lines; i++) MoveToOrFromScrollRegion(&cmd_fb, &line[-line_fb.lines+i], point(0,GetCursorY(i+1)),           LinesFrameBuffer::Flag::Flush);
@@ -1445,7 +1468,7 @@ void Terminal::MoveToOrFromScrollRegion(TextBox::LinesFrameBuffer *fb, TextBox::
 
 void Terminal::SetScrollRegion(int b, int e, bool release_fb) {
   if (b<0 || e<0 || e>term_height || b>e) { TerminalDebug("%d-%d outside 1-%d\n", b, e, term_height); return; }
-  int prev_region_beg = scroll_region_beg, prev_region_end = scroll_region_end, font_height = font->Height();
+  int prev_region_beg = scroll_region_beg, prev_region_end = scroll_region_end, font_height = style.font->Height();
   scroll_region_beg = b;
   scroll_region_end = e;
   bool no_region = !scroll_region_beg || !scroll_region_end || (scroll_region_beg == 1 && scroll_region_end == term_height);
@@ -1476,7 +1499,7 @@ void Terminal::SetDimension(int w, int h) {
 }
 
 Border *Terminal::UpdateClipBorder() {
-  int font_height = font->Height();
+  int font_height = style.font->Height();
   clip_border.top    = font_height * skip_last_lines;
   clip_border.bottom = font_height * start_line_adjust;
   return &clip_border;
@@ -1683,22 +1706,22 @@ void Terminal::Write(const StringPiece &s, bool update_fb, bool release_fb) {
         case 'm':
         for (int i=0; i<parse_csi_argc; i++) {
           int sgr = parse_csi_argv[i]; // select graphic rendition
-          if      (sgr >= 30 && sgr <= 37) Attr::SetFGColorIndex(&cursor.attr, sgr-30);
-          else if (sgr >= 40 && sgr <= 47) Attr::SetBGColorIndex(&cursor.attr, sgr-40);
+          if      (sgr >= 30 && sgr <= 37) cursor.attr = Style::SetFGColorIndex(cursor.attr, sgr-30);
+          else if (sgr >= 40 && sgr <= 47) cursor.attr = Style::SetBGColorIndex(cursor.attr, sgr-40);
           else switch(sgr) {
-            case 0:         cursor.attr  =  default_attr;                              break;
-            case 1:         cursor.attr |=  Attr::Bold;                                break;
-            case 3:         cursor.attr |=  Attr::Italic;                              break;
-            case 4:         cursor.attr |=  Attr::Underline;                           break;
-            case 5: case 6: cursor.attr |=  Attr::Blink;                               break;
-            case 7:         cursor.attr |=  Attr::Reverse;                             break;
-            case 22:        cursor.attr &= ~Attr::Bold;                                break;
-            case 23:        cursor.attr &= ~Attr::Italic;                              break;
-            case 24:        cursor.attr &= ~Attr::Underline;                           break;
-            case 25:        cursor.attr &= ~Attr::Blink;                               break;
-            case 27:        cursor.attr &= ~Attr::Reverse;                             break;
-            case 39:        Attr::SetFGColorIndex(&cursor.attr, colors->normal_index); break;
-            case 49:        Attr::SetBGColorIndex(&cursor.attr, colors->bg_index);     break;
+            case 0:         cursor.attr  =  default_attr;    break;
+            case 1:         cursor.attr |=  Style::Bold;      break;
+            case 3:         cursor.attr |=  Style::Italic;    break;
+            case 4:         cursor.attr |=  Style::Underline; break;
+            case 5: case 6: cursor.attr |=  Style::Blink;     break;
+            case 7:         cursor.attr |=  Style::Reverse;   break;
+            case 22:        cursor.attr &= ~Style::Bold;      break;
+            case 23:        cursor.attr &= ~Style::Italic;    break;
+            case 24:        cursor.attr &= ~Style::Underline; break;
+            case 25:        cursor.attr &= ~Style::Blink;     break;
+            case 27:        cursor.attr &= ~Style::Reverse;   break;
+            case 39:        cursor.attr = Style::SetFGColorIndex(cursor.attr, style.colors->normal_index);     break;
+            case 49:        cursor.attr = Style::SetBGColorIndex(cursor.attr, style.colors->background_index); break;
             default:        TerminalDebug("unhandled SGR %d\n", sgr);
           }
         } break;
@@ -1752,7 +1775,7 @@ void Terminal::FlushParseText() {
   bool append = 0;
   int consumed = 0, write_size = 0, update_size = 0;
   CHECK_GT(term_cursor.x, 0);
-  font.ptr = GetAttr(cursor.attr)->font;
+  style.font.ptr = style.GetAttr(cursor.attr)->font;
   String16 input_text = String::ToUTF16(parse_text, &consumed);
   TerminalTrace("Terminal: (cur=%d,%d) FlushParseText('%s').size = [%zd, %d]\n", term_cursor.x, term_cursor.y,
                 StringPiece(parse_text.data(), consumed).str().c_str(), input_text.size(), consumed);
@@ -1853,7 +1876,7 @@ void Console::Draw() {
 
 void Console::Draw(const Box &b, int flag, Shader *shader) {
   if (scissor) screen->gd->PushScissor(*scissor);
-  int fh = font->Height();
+  int fh = style.font->Height();
   Box tb(b.x, b.y + fh, b.w, b.h - fh);
   if (blend) screen->gd->EnableBlend(); 
   else       screen->gd->DisableBlend();
@@ -1958,12 +1981,21 @@ void DialogTab::Draw(const Box &b, const point &tab_dim, const vector<DialogTab>
   for (int i=0, l=t.size(); i<l; ++i) t[i].child_box.Draw(b.TopLeft() + point(i*tab_dim.x, 0));
 }
 
+TabbedDialogInterface::TabbedDialogInterface(GUI *g, const point &d): gui(g), tab_dim(d) {}
 void TabbedDialogInterface::Layout() {
   for (auto b=tab_list.begin(), e=tab_list.end(), t=b; t != e; ++t) {
     int tab_no = t-b;
     t->dialog->LayoutTabbed(tab_no, box, tab_dim, &gui->mouse, &t->child_box);
     gui->mouse.AddClickBox(t->dialog->title + point(box.x + tab_no*tab_dim.x, 0),
                            MouseController::CB(bind(&TabbedDialogInterface::SelectTabIndex, this, tab_no)));
+  }
+  if (tab_list.size() && tab_list.size() * tab_dim.x > box.w) {
+    auto t = tab_list.begin();
+    int fh = t->dialog->font->Height();
+    Font *menuicon = t->dialog->menuicon.ptr;
+    int attr_id = gui->child_box.attr.GetAttrId(Drawable::Attr(menuicon, &Color::white, nullptr, false, true));
+    gui->child_box.PushBack(Box(box.x,          -fh, fh, fh), attr_id, menuicon ? menuicon->FindGlyph(6) : 0);
+    gui->child_box.PushBack(Box(box.right()-fh, -fh, fh, fh), attr_id, menuicon ? menuicon->FindGlyph(7) : 0);
   }
 }
 

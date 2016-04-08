@@ -153,7 +153,7 @@ template <class X> struct StringPieceT : public ArrayPiece<X> {
     if (this->buf && this->len < 0) return this->buf;
     return this->buf ? basic_string<X>(this->buf, this->len) : basic_string<X>();
   }
-  bool Done(const X* p) const { return (this->len >= 0 && p >= this->buf + this->len) || *p == X(); }
+  bool Done(const X* p) const { return this->len >= 0 ? (p >= this->buf + this->len) : (*p == X()); }
   int Length() const { return this->len >= 0 ? this->len : Length(this->buf); }
   static StringPieceT<X> Unbounded (const X *b) { return StringPieceT<X>(b, -1); }
   static StringPieceT<X> FromString(const X *b) { return StringPieceT<X>(b, b?Length(b):0); }

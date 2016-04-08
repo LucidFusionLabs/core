@@ -68,7 +68,7 @@ bool Shell::FGets() {
 }
 
 void Shell::Run(const string &text) {
-  if (!app->MainThread()) return app->RunInMainThread(bind(&Shell::Run, this, text));
+  if (!app->MainThread()) return app->RunInMainThread(bind(&Shell::Run, this, string(text)));
 
   string cmd;
   vector<string> arg;
@@ -87,8 +87,8 @@ void Shell::Run(const string &text) {
   for (auto i = flags->flagmap.begin(); i != flags->flagmap.end(); ++i) {
     Flag *flag = (*i).second;
     if (StringEquals(flag->name, cmd)) {
-      flag->Update(arg.size() ? arg[0].c_str() : "");
-      INFO(flag->name, " = ", flag->Get());
+      if (arg.size()) flags->Set(cmd, arg[0]);
+      else INFO(flag->name, " = ", flag->Get());
       return;
     }
   }
@@ -109,7 +109,7 @@ void Shell::clipboard(const vector<string> &a) {
 
 void Shell::consolecolor(const vector<string>&) {
   if (!screen->console) return;
-  screen->console->font.SetFont(app->fonts->Get(FLAGS_default_font, "", 9, Color::black));
+  screen->console->style.font.SetFont(app->fonts->Get(FLAGS_default_font, "", 9, Color::black));
 }
 
 void Shell::dldir(const vector<string>&) { INFO(LFAppDownloadDir()); }

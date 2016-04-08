@@ -1,7 +1,7 @@
 # $Id: CMakeLists.txt 1327 2014-11-03 23:26:43Z justin $
 
 set(LFL_APP_CFLAGS)
-set(LFL_APP_DEF)
+set(LFL_APP_DEF -D__STDC_CONSTANT_MACROS -D__STDC_LIMIT_MACROS)
 set(LFL_APP_INCLUDE ${LFL_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
 set(LFL_APP_LIB lfl_app app_font app_browser)
 
@@ -61,11 +61,9 @@ add_library(lfl_app ${LFL_APP_TYPE} gui.cpp font.cpp flow.cpp app.cpp types/type
             camera.cpp scene.cpp shell.cpp crypto.cpp bindings.cpp
             ${CAPNP_SRC} ${FLATBUFFERS_SRC_OUTPUTS})
 
-target_compile_options(lfl_app PUBLIC ${LFL_APP_CFLAGS})
-target_compile_definitions(lfl_app PUBLIC ${LFL_APP_DEF})
-target_include_directories(lfl_app PUBLIC ${LFL_APP_INCLUDE})
+set(_include ${LFL_APP_INCLUDE})
 if(LFL_GLOG)
-  target_include_directories(lfl_app PUBLIC ${GLOG_INCLUDE})
+  set(_include ${_include} ${GLOG_INCLUDE})
   target_link_libraries(lfl_app ${GLOG_LIB})
 endif()
 if(LFL_FLATBUFFERS)
@@ -73,7 +71,12 @@ if(LFL_FLATBUFFERS)
   target_link_libraries(lfl_app ${FLATBUFFERS_LIB})
 endif()
 
-add_precompiled_header(core/app/app.h c++-header lfl_app)
+target_compile_options(lfl_app PUBLIC ${LFL_APP_CFLAGS})
+target_compile_definitions(lfl_app PUBLIC ${LFL_APP_DEF})
+target_include_directories(lfl_app PUBLIC ${_include})
+
+add_precompiled_header(lfl_app core/app/app.h c++-header COMPILE_OPTIONS ${LFL_APP_CFLAGS}
+                       COMPILE_DEFINITIONS ${LFL_APP_DEF} INCLUDE_DIRECTORIES ${_include})
 target_use_precompiled_header(lfl_app core/app/app.h FORCEINCLUDE)
 if(LFL_ADD_BITCODE_TARGETS)
   add_bitcode(lfl_app_bitcode lfl_app)

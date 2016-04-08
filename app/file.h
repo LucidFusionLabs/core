@@ -35,6 +35,8 @@ struct FileSuffix {
   static bool Png  (const string &url) { return SuffixMatch(url, ".png", 0); }
   static bool Gif  (const string &url) { return SuffixMatch(url, ".gif", 0); }
   static bool Bmp  (const string &url) { return SuffixMatch(url, ".bmp", 0); }
+  static bool C    (const string &url) { return SuffixMatch(url, ".c", 0) || SuffixMatch(url, ".h"); }
+  static bool CPP  (const string &url) { return C(url) || SuffixMatch(url, ".cpp", 0) || SuffixMatch(url, ".cc", 0); }
 };
 
 struct File {
@@ -180,9 +182,9 @@ struct DirectoryIter {
   string pathname;
   Map filemap;
   Map::iterator iter;
-  const char *P, *S;
-  bool init;
-  DirectoryIter() : P(0), S(0), init(0) {}
+  const char *P=0, *S=0;
+  bool init=0;
+  DirectoryIter() {}
   DirectoryIter(const string &path, int dirs=0, const char *FilePrefix=0, const char *FileSuffix=0);
   const char *Next();
   static void Add(void *self, const char *k, int v) { reinterpret_cast<DirectoryIter*>(self)->filemap[k] = v; }
@@ -458,40 +460,6 @@ struct GraphVizFile {
   static string Footer();
   static void AppendNode(string *out, const string &n1, const string &label=string());
   static void AppendEdge(string *out, const string &n1, const string &n2, const string &label=string());
-};
-
-struct TranslationUnit {
-  struct Token { static const int Punctuation, Keyword, Identifier, Literal, Comment; };
-  struct TokenVisitor {
-    typedef function<void(TokenVisitor*, int, int, int)> TokenCB;
-    TranslationUnit *tu;
-    point last_token;
-    TokenCB cb;
-
-    TokenVisitor(TranslationUnit *t, const TokenCB &c) : tu(t), cb(c) {}
-    void Visit();
-  };
-
-  CXIndex index=0;
-  CXTranslationUnit tu=0;
-  string filename, compile_command, working_directory;
-
-  virtual ~TranslationUnit();
-  TranslationUnit(const string &f, const string &cc, const string &wd);
-  FileNameAndOffset FindDefinition(const string &f, int offset);
-};
-
-struct IDE {
-  struct Project {
-    string dir;
-    struct BuildRule { string dir, cmd; };
-    unordered_map<string, BuildRule> build_rules;
-    void LoadCMakeCompileCommandsFile(File*);
-  };
-  struct File {
-    TranslationUnit tu;
-    File(const string &f, const string &cc, const string &wd) : tu(f, cc, wd) {}
-  };
 };
 
 }; // namespace LFL

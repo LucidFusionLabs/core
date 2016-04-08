@@ -26,15 +26,6 @@
 #include <dirent.h>
 #endif
 
-#ifdef LFL_FLATBUFFERS
-#include "flatbuffers/flatbuffers.h"
-#include "flatbuffers/idl.h"
-#endif
-
-#ifdef LFL_JSONCPP
-#include "json/json.h"
-#endif
-
 namespace LFL {
 int IOVector::Append(const IOVec &v) {
   if (v.len > 0 && this->size() && this->back().len > 0 &&
@@ -325,7 +316,7 @@ string SearchPaths::Find(const string &fn) {
   return "";
 }
 
-DirectoryIter::DirectoryIter(const string &path, int dirs, const char *Pref, const char *Suf) : P(Pref), S(Suf), init(0) {
+DirectoryIter::DirectoryIter(const string &path, int dirs, const char *Pref, const char *Suf) : P(Pref), S(Suf) {
   if (LocalFile::IsDirectory(path)) pathname = path;
   else {
     INFO("DirectoryIter: \"", path, "\" not a directory");
@@ -721,49 +712,6 @@ void GraphVizFile::AppendEdge(string *out, const string &n1, const string &n2, c
   StrAppend(out, "\"", n1, "\" -> \"", n2, "\"",
             (label.size() ? StrCat(" [ label = \"", label, "\" ] ") : ""),
             ";\r\n");
-}
-
-void IDE::Project::LoadCMakeCompileCommandsFile(LFL::File *f) {
-  if (!f || !f->Opened()) return;
-#if defined(LFL_JSONCPP)
-  Json::Value root;
-  Json::Reader reader;
-  CHECK(reader.parse(f->Contents(), root, false));
-  for (int i=0, l=root.size(); i<l; ++i) {
-    const Json::Value &f = root[i];
-    build_rules[f["file"].asString()] = { f["directory"].asString(), f["command"].asString() };
-  }
-#elif defined(LFL_FLATBUFFERS)
-  flatbuffers::Parser parser;
-  CHECK(parser.Parse("table BuildRule {\n"
-                     "  directory: string;\n"
-                     "  command:   string;\n"
-                     "  file:      string;\n"
-                     "}\n"
-                     "table BuildRules {\n"
-                     "  rule: [BuildRule];\n"
-                     "}\n"
-                     "root_type BuildRules;\n"));
-  CHECK(parser.Parse(StrCat("{\nrule: \n", f->Contents(), "\n}\n").c_str()));
-
-  auto buildrule = parser.structs_.Lookup("BuildRule");
-  auto buildrule_dir = buildrule->fields.Lookup("directory");
-  auto buildrule_cmd = buildrule->fields.Lookup("command");
-  auto buildrule_file = buildrule->fields.Lookup("file");
-  auto buildrules = flatbuffers::GetRoot<flatbuffers::Table>(parser.builder_.GetBufferPointer());
-  auto buildrules_rule = parser.root_struct_def_->fields.Lookup("rule");
-  auto buildrules_rules = reinterpret_cast<const flatbuffers::Vector<flatbuffers::Offset<void>>*>
-    (buildrules->GetPointer<const void *>(buildrules_rule->value.offset));
-
-  string dir, cmd, file;
-  for (int i = 0, l = buildrules_rules->size(); i < l; ++i) {
-    auto br_i = reinterpret_cast<const flatbuffers::Table*>((*buildrules_rules)[i]);
-    if (auto s = reinterpret_cast<const flatbuffers::String*>(br_i->GetPointer<const void *>(buildrule_dir->value.offset)))  dir  = s->str();
-    if (auto s = reinterpret_cast<const flatbuffers::String*>(br_i->GetPointer<const void *>(buildrule_cmd->value.offset)))  cmd  = s->str();
-    if (auto s = reinterpret_cast<const flatbuffers::String*>(br_i->GetPointer<const void *>(buildrule_file->value.offset))) file = s->str();
-    if (file.size()) build_rules[file] = { dir, cmd };
-  }
-#endif
 }
 
 }; // namespace LFL

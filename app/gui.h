@@ -145,26 +145,27 @@ struct Widget {
   };
 };
 
-struct TextBox : public GUI, public KeyboardController, public Drawable::AttrSource {
-  struct Attr {
-    enum { Bold=1<<16, Underline=1<<17, Blink=1<<18, Reverse=1<<19, Italic=1<<20, Link=1<<21 };
-    static void SetFGColorIndex(int *a, int c) { *a = (*a & ~0x00ff) | ((c & 0xff)     ); }
-    static void SetBGColorIndex(int *a, int c) { *a = (*a & ~0xff00) | ((c & 0xff) << 8); }
-    static int GetFGColorIndex(int a) { int c = a & 0xff; return c | (((a & Bold) && c<16) ? (1<<3) : 0); }
-    static int GetBGColorIndex(int a) { return (a>>8) & 0xff; }
-  };
-
-  struct Colors {
-    static const int normal_index=16, bold_index=17, bg_index=18;
-    Color c[16 + 3];
-  };
-  struct StandardVGAColors    : public Colors { StandardVGAColors(); };
-  struct SolarizedDarkColors  : public Colors { SolarizedDarkColors(); };
-  struct SolarizedLightColors : public Colors { SolarizedLightColors(); };
-
+struct TextBox : public GUI, public KeyboardController {
   struct Line;
   struct Lines;
-  typedef function<void(const string&)> RunCB;
+  struct Colors {
+    int normal_index=0, bold_index=0, background_index=7;
+    virtual const Color *GetColor(int) const = 0;
+  };
+
+  struct Style : public Drawable::AttrSource {
+    enum { Bold=1<<16, Underline=1<<17, Blink=1<<18, Reverse=1<<19, Italic=1<<20, Link=1<<21 };
+    static int GetFGColorIndex(int a) { int c = a & 0xff; return c | (((a & Bold) && c<16) ? (1<<3) : 0); }
+    static int GetBGColorIndex(int a) { return (a>>8) & 0xff; }
+    static int SetFGColorIndex(int a, int c) { return (a & ~0x00ff) | ((c & 0xff)     ); }
+    static int SetBGColorIndex(int a, int c) { return (a & ~0xff00) | ((c & 0xff) << 8); }
+    static int SetColorIndex(int a, int fg, int bg) { return SetFGColorIndex(SetBGColorIndex(a, bg), fg); } 
+    FontRef font;
+    Colors *colors=0;
+    mutable Drawable::Attr last_attr;
+    Style(const FontRef &F) : font(F) {}
+    virtual const Drawable::Attr *GetAttr(int attr) const;
+  };
 
   struct Control : public Widget::Interface {
     Box3 box;
@@ -196,7 +197,7 @@ struct TextBox : public GUI, public KeyboardController, public Drawable::AttrSou
     static void MoveP(Line &t, Line &s) { swap(t.data, s.data); t.p=s.p; }
 
     void Init(TextBox *P, TextBox::Lines *C) { parent=P; cont=C; data->flow=InitFlow(&data->glyphs); }
-    Flow InitFlow(DrawableBoxArray *out) { return Flow(&data->box, parent->font, out, &parent->layout); }
+    Flow InitFlow(DrawableBoxArray *out) { return Flow(&data->box, parent->style.font, out, &parent->layout); }
     int GetAttrId(const Drawable::Attr &a) { return data->glyphs.attr.GetAttrId(a); }
     int Size () const { return data->glyphs.Size(); }
     int Lines() const { return 1+data->glyphs.line.size(); }
@@ -295,8 +296,8 @@ struct TextBox : public GUI, public KeyboardController, public Drawable::AttrSou
     Box3 box;
   };
 
-  RunCB runcb;
-  FontRef font;
+  StringCB runcb;
+  Style style;
   Flow::Layout layout;
   Cursor cursor;
   Selection selection;
@@ -312,15 +313,12 @@ struct TextBox : public GUI, public KeyboardController, public Drawable::AttrSou
   function<void(Control*)> hover_control_cb;
   Control *hover_control=0;
   const Border *clip=0;
-  const Colors *colors=0;
   const Color *bg_color=0;
-  mutable Drawable::Attr last_attr;
 
   TextBox(GraphicsDevice *d, const FontRef &F=FontRef(), int LC=10);
   virtual ~TextBox() { if (screen) Deactivate(); }
 
   virtual point RelativePosition(const point&) const;
-  virtual const Drawable::Attr *GetAttr(int attr) const;
   virtual int CommandLines() const { return 0; }
   virtual void Run(const string &cmd) { if (runcb) runcb(cmd); }
   virtual bool NotActive(const point &p) const { return !box.within(p); }
@@ -346,7 +344,7 @@ struct TextBox : public GUI, public KeyboardController, public Drawable::AttrSou
   virtual       LinesFrameBuffer *GetFrameBuffer()       { return &cmd_fb; }
   virtual void ResetGL() { cmd_fb.ResetGL(); }
   virtual void UpdateCursorX(int x) { cursor.i.x = x; UpdateCursor(); }
-  virtual void UpdateCursor() { cursor.p = cmd_line.data->glyphs.Position(cursor.i.x) + point(0, font->Height()); }
+  virtual void UpdateCursor() { cursor.p = cmd_line.data->glyphs.Position(cursor.i.x) + point(0, style.font->Height()); }
   virtual void UpdateCommandFB() { UpdateLineFB(&cmd_line, &cmd_fb); }
   virtual void UpdateLineFB(Line *L, LinesFrameBuffer *fb, int flag=0);
   virtual void Draw(const Box &b);
@@ -432,6 +430,7 @@ struct TextArea : public TextBox {
 struct TextView : public TextArea {
   int last_fb_width=0, last_fb_lines=0, last_first_line=0;
   int wrapped_lines=0, fb_wrapped_lines=0;
+  Callback update_annotation_cb;
   TextView(GraphicsDevice *D, const FontRef &F=FontRef()) : TextArea(D, F, 0, 0) { reverse_line_fb=1; }
 
   virtual int WrappedLines() const { return wrapped_lines; }
@@ -440,7 +439,6 @@ struct TextView : public TextArea {
   virtual void Reload() { last_fb_width=0; wrapped_lines=0; RefreshLines(); }
 
   virtual bool Empty() const { return true; }
-  virtual void UpdateAnnotation() {}
   virtual void UpdateMapping(int width) {}
   virtual int UpdateMappedLines(pair<int, int>, int, int, bool, bool, bool, bool, bool) { return 0; }
 };
@@ -523,6 +521,16 @@ struct Editor : public TextView {
   };
   typedef PrefixSumKeyedRedBlackTree<int, LineOffset> LineMap;
   struct Modification { point p; bool erase; String16 data; };
+  struct SyntaxColors : public Colors {
+    struct Rule { string name; Color fg, bg; int style; };
+    string name;
+    vector<Color> color;
+    unordered_map<string, int> style;
+    SyntaxColors(const string &n, const vector<Rule>&);
+    virtual const Color *GetColor(int n) const { CHECK_RANGE(n, 0, color.size()); return &color[n]; }
+    virtual int GetSyntaxStyle(const string &n, int da) { return FindOrDefault(style, n, da); }
+  };
+  struct Base16DefaultDarkSyntaxColors : public SyntaxColors { Base16DefaultDarkSyntaxColors(); };
 
   shared_ptr<File> file;
   LineMap file_line;
@@ -533,7 +541,9 @@ struct Editor : public TextView {
   vector<Modification> undo;
   int cursor_line_number=0, cursor_line_number_offset=0, undo_offset=0;
   bool opened=0;
-  unique_ptr<IDE::File> ide_file;
+  unique_ptr<IDEFile> ide_file;
+  SyntaxColors *syntax=0;
+  virtual ~Editor();
   Editor(GraphicsDevice *D, const FontRef &F=FontRef(), File *I=0);
 
   bool Init(File *I) { return (opened = (file = shared_ptr<File>(I)) && I->Opened()); }
@@ -564,9 +574,8 @@ struct Editor : public TextView {
   int Save();
   bool WalkUndo(bool backwards);
   void UpdateUndo(const point &p, bool erase, char16_t c);
+  void SetSyntax(SyntaxColors *s) { SetColors((syntax = s)); }
   FileNameAndOffset FindDefinition(const point &p);
-  void LoadAnnotation(IDE::Project *project);
-  void UpdateAnnotation();
 };
 
 struct Terminal : public TextArea {
@@ -583,6 +592,14 @@ struct Terminal : public TextArea {
     virtual void Close() {}
     virtual void Dispose() {}
   };
+  struct TerminalColors : public Colors {
+    Color c[16 + 3];
+    TerminalColors() { normal_index=16; bold_index=17; background_index=18; }
+    const Color *GetColor(int n) const { CHECK_RANGE(n, 0, sizeofarray(c)); return &c[n]; }
+  };
+  struct StandardVGAColors       : public TerminalColors { StandardVGAColors(); };
+  struct SolarizedDarkColors     : public TerminalColors { SolarizedDarkColors(); };
+  struct SolarizedLightColors    : public TerminalColors { SolarizedLightColors(); };
 
   ByteSink *sink=0;
   int term_width=0, term_height=0, parse_state=State::TEXT;
@@ -625,9 +642,9 @@ struct Terminal : public TextArea {
   virtual void ScrollDown() { TextArea::PageUp(); }
   int GetCursorX(int x, int y) const {
     const Line *l = GetTermLine(y);
-    return x <= l->Size() ? l->data->glyphs.Position(x-1).x : ((x-1) * font->FixedWidth());
+    return x <= l->Size() ? l->data->glyphs.Position(x-1).x : ((x-1) * style.font->FixedWidth());
   }
-  int GetCursorY(int y) const { return (term_height - y + 1) * font->Height(); }
+  int GetCursorY(int y) const { return (term_height - y + 1) * style.font->Height(); }
   int GetTermLineIndex(int y) const { return -term_height + y-1; }
   const Line *GetTermLine(int y) const { return &line[GetTermLineIndex(y)]; }
   /**/  Line *GetTermLine(int y)       { return &line[GetTermLineIndex(y)]; }
@@ -725,7 +742,7 @@ struct TabbedDialogInterface {
   Box box;
   point tab_dim;
   vector<DialogTab> tab_list;
-  TabbedDialogInterface(GUI *g, const point &d=point(200,16)) : gui(g), tab_dim(d) {}
+  TabbedDialogInterface(GUI *g, const point &d=point(200,16));
   virtual void SelectTabIndex(size_t i) {}
   virtual void Layout();
   virtual void Draw() { DialogTab::Draw(box, tab_dim, tab_list); }

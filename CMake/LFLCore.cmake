@@ -119,6 +119,7 @@ endif()
 
 include(ExternalProject)
 include(BundleUtilities)
+enable_testing()
 
 set(PCH_PROJECT_SOURCE_DIR ${LFL_SOURCE_DIR})
 set(PCH_PROJECT_BINARY_DIR ${LFL_BINARY_DIR})
@@ -152,8 +153,6 @@ else()
     set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fPIC")
   endif()
 endif()
-
-add_definitions(-D__STDC_CONSTANT_MACROS -D__STDC_LIMIT_MACROS)
 
 # imports
 add_subdirectory(${LFL_SOURCE_DIR}/core/imports)

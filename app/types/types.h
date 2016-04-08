@@ -260,6 +260,7 @@ template <typename X> typename X::value_type &PushBack (X &v, const typename X::
 template <typename X> typename X::value_type  PopBack  (X &v) { typename X::value_type ret = v.back (); v.pop_back (); return ret; }
 template <typename X> typename X::value_type  PopFront (X &v) { typename X::value_type ret = v.front(); v.pop_front(); return ret; }
 template <typename X> typename std::queue<X>::value_type PopFront(std::queue<X> &v) { typename std::queue<X>::value_type ret = v.front(); v.pop(); return ret; }
+template <typename X> size_t PushBackIndex(X &v, const typename X::value_type &x) { v.push_back(x); return v.size()-1; }
 template <class X, class Y>                   void PushBack(X *vx, Y *vy,               const typename X::value_type &x, const typename Y::value_type &y)                                                                   { vx->push_back(x); vy->push_back(y); }
 template <class X, class Y, class Z>          void PushBack(X *vx, Y *vy, Z *vz,        const typename X::value_type &x, const typename Y::value_type &y, const typename Z::value_type &z)                                  { vx->push_back(x); vy->push_back(y); vz->push_back(z); }
 template <class X, class Y, class Z, class W> void PushBack(X *vx, Y *vy, Z *vz, W *vw, const typename X::value_type &x, const typename Y::value_type &y, const typename Z::value_type &z, const typename W::value_type &w) { vx->push_back(x); vy->push_back(y); vz->push_back(z); vw->push_back(w); }
