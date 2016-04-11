@@ -535,21 +535,23 @@ struct Editor : public TextView {
   shared_ptr<File> file;
   LineMap file_line;
   FreeListVector<String16> edits;
+  Time modified=Time(0);
+  Callback modified_cb, newline_cb;
   Line *cursor_line=0;
   LineOffset *cursor_offset=0;
   vector<pair<int,int>> annotation;
   vector<Modification> undo;
-  int cursor_line_number=0, cursor_line_number_offset=0, undo_offset=0;
-  bool opened=0;
-  unique_ptr<IDEFile> ide_file;
   SyntaxColors *syntax=0;
+  unique_ptr<TranslationUnit> tu;
+  int cursor_line_number=0, cursor_line_number_offset=0, cursor_line_index=0, undo_offset=0;
+  bool opened=0;
   virtual ~Editor();
   Editor(GraphicsDevice *D, const FontRef &F=FontRef(), File *I=0);
 
   bool Init(File *I) { return (opened = (file = shared_ptr<File>(I)) && I->Opened()); }
-  void Input(char k)  { Modify(false, k); }
-  void Enter()        { Modify(false, '\r'); }
-  void Erase()        { Modify(true,  0); }
+  void Input(char k)  { Modify(k,    false); }
+  void Enter()        { Modify('\r', false); }
+  void Erase()        { Modify(0,    true); }
   void CursorLeft()   { UpdateCursorX(max(cursor.i.x-1, 0)); }
   void CursorRight()  { UpdateCursorX(min(cursor.i.x+1, CursorLineSize())); }
   void Home()         { UpdateCursorX(0); }
@@ -570,12 +572,12 @@ struct Editor : public TextView {
   void UpdateCursorX(int x);
   int CursorLinesChanged(const String16 &b, int add_lines=0);
   int ModifyCursorLine();
-  void Modify(bool erase, int c, bool undo_or_redo=false);
+  void Modify(char16_t, bool erase, bool undo_or_redo=false);
   int Save();
-  bool WalkUndo(bool backwards);
   void UpdateUndo(const point &p, bool erase, char16_t c);
+  bool WalkUndo(bool backwards);
+  bool ScrollTo(int line_index, int x);
   void SetSyntax(SyntaxColors *s) { SetColors((syntax = s)); }
-  FileNameAndOffset FindDefinition(const point &p);
 };
 
 struct Terminal : public TextArea {

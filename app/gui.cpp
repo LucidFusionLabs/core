@@ -110,9 +110,7 @@ void Widget::Button::LayoutComplete(Flow *flow, Font *f, const Box &b) {
 }
 
 Widget::Slider::Slider(GUI *Gui, int f) : Interface(Gui), flag(f),
-  menuicon(app->fonts->Get("MenuAtlas", "", 0, Color::white, Color::clear, 0)) {
-  if (track.w && track.h) { if (f & Flag::Attached) LayoutAttached(track); else LayoutFixed(track); }
-}
+  menuicon(app->fonts->Get("MenuAtlas", "", 0, Color::white, Color::clear, 0)) {}
 
 void Widget::Slider::LayoutAttached(const Box &w) {
   track = w;
@@ -128,7 +126,7 @@ void Widget::Slider::LayoutAttached(const Box &w) {
 }
 
 void Widget::Slider::Layout(int, int, bool flip) {
-  if (gui && outline_topleft && outline_bottomright) {
+  if (outline_topleft && outline_bottomright) {
     track.DelBorder(Border(outline_w, 0, 0, outline_w));
     int attr_id = gui->child_box.attr.GetAttrId(Drawable::Attr(NullPointer<Font>(), outline_topleft, nullptr, false, true, outline_w));
     gui->child_box.PushBack(track, attr_id, Singleton<BoxTopLeftOutline>::Get());
@@ -145,7 +143,7 @@ void Widget::Slider::Layout(int, int, bool flip) {
   if (flip) { arrow_up.w = track.h; track.w -= 2*track.h; arrow_up.x += track.w; }
   else      { arrow_up.h = track.w; track.h -= 2*track.w; arrow_up.y += track.h; }
 
-  if (gui) {
+  if (1) {
     int attr_id = gui->child_box.attr.GetAttrId(Drawable::Attr(menuicon, &Color::white, nullptr, false, true));
     gui->child_box.PushBack(arrow_up,   attr_id, menuicon ? menuicon->FindGlyph(flip ? 2 : 4) : 0);
     gui->child_box.PushBack(arrow_down, attr_id, menuicon ? menuicon->FindGlyph(flip ? 3 : 1) : 0);
@@ -180,7 +178,7 @@ float Widget::Slider::AddScrollDelta(float cur_val) {
   
 void Widget::Slider::AttachContentBox(Box *b, Slider *vs, Slider *hs) {
   if (vs) { vs->LayoutAttached(*b); }
-  if (hs) { hs->LayoutAttached(*b); MinusPlus(&b->h, &b->y, vs->dot_size); }
+  if (hs) { hs->LayoutAttached(*b); MinusPlus(&b->h, &b->y, hs->dot_size); }
   if (vs) b->w -= vs->dot_size;
 }
 
@@ -220,16 +218,15 @@ void Widget::Divider::DragCB(int b, int x, int y, int down) {
 }
 
 const Drawable::Attr *TextBox::Style::GetAttr(int attr) const {
-  const Color *fg=0, *bg=0;
   if (colors) {
     bool italic = attr & Italic, bold = attr & Bold;
     int fg_index = GetFGColorIndex(attr), bg_index = GetBGColorIndex(attr);
-    fg = colors->GetColor(italic ? colors->background_index : ((bold && fg_index == colors->normal_index) ? colors->bold_index : fg_index));
-    bg = colors->GetColor(italic ? colors->normal_index     : bg_index);
+    const Color *fg = colors->GetColor(italic ? colors->background_index : ((bold && fg_index == colors->normal_index) ? colors->bold_index : fg_index));
+    const Color *bg = colors->GetColor(italic ? colors->normal_index     : bg_index);
     if (attr & Reverse) swap(fg, bg);
+    last_attr.font = app->fonts->Change(font, font->size, *fg, *bg, font->flag);
+    last_attr.bg = bg == colors->GetColor(colors->background_index) ? 0 : bg; // &font->bg;
   }
-  last_attr.font = app->fonts->Change(font, font->size, *fg, *bg, font->flag);
-  last_attr.bg = bg == colors->GetColor(colors->background_index) ? 0 : bg; // &font->bg;
   last_attr.underline = attr & Underline;
   return &last_attr;
 }
@@ -754,13 +751,12 @@ void TextArea::DrawHoverLink(const Box &b) {
     if (!i.w || !i.h) continue;
     point p = i.BottomLeft();
     p.y = outside_scroll_region ? (p.y + fb_h) : RingIndex::Wrap(p.y + line_fb.scroll.y * fb_h, fb_h);
-    glLine(p, point(i.BottomRight().x, p.y), &Color::white);
+    glLine(p + point(b.x, 0), point(i.BottomRight().x, p.y) + point(b.x, 0), &Color::white);
   }
   if (hover_control_cb) hover_control_cb(hover_control);
 }
 
 bool TextArea::GetGlyphFromCoordsOffset(const point &p, Selection::Point *out, int sl, int sla) {
-  LinesFrameBuffer *fb = GetFrameBuffer();
   int fh = style.font->Height(), targ = reverse_line_fb ? ((box.h - p.y) / fh) : (p.y / fh);
   for (int i=sl, lines=sla, ll; i<line.ring.count && lines<line_fb.lines; i++, lines += ll) {
     Line *L = &line[-i-1];
@@ -896,7 +892,7 @@ int TextView::UpdateLines(float vs, int *first_ind, int *first_offset, int *firs
 
   CHECK_LE(line.ring.count, line.ring.size);
   if (wrap && !redraw) {
-    for (bool first=1;;first=0) {
+    for (;;) {
       int ll = (L = up ? line.Front() : line.Back())->Lines();
       if (fb_wrapped_lines + (up ? start_line_adjust : -end_line_cutoff) - ll < fb->lines) break;
       fb_wrapped_lines -= ll;
@@ -1232,7 +1228,9 @@ void Editor::UpdateCursorLine() {
   if (!Wrap()) cursor_line_number += cursor.i.y;
   else for (int i=0; i<cursor.i.y; i++) cursor_line_number += line[-1-i].Lines();
   cursor_line_number_offset = cursor_line_number - last_first_line;
-  cursor_offset = file_line.LesserBound(cursor_line_number).val;
+  auto it = file_line.LesserBound(cursor_line_number);
+  cursor_line_index = it.GetIndex();
+  cursor_offset = it.val;
 }
 
 void Editor::UpdateCursor() {
@@ -1264,18 +1262,21 @@ int Editor::ModifyCursorLine() {
   return -cursor_offset->size-1;
 }
 
-void Editor::Modify(bool erase, int c, bool undo_or_redo) {
+void Editor::Modify(char16_t c, bool erase, bool undo_or_redo) {
   if (!cursor_line || !cursor_offset) return;
-  bool wrap = Wrap();
   int edit_id = ModifyCursorLine();
   String16 *b = &edits[edit_id];
   CHECK_LE(cursor.i.x, cursor_line->Size());
   CHECK_LE(cursor.i.x, b->size());
   CHECK_EQ(cursor_offset->wrapped_lines, cursor_line->Lines());
-  if (!cursor_line_number && erase && !cursor.i.x) return;
-  if (!undo_or_redo) UpdateUndo(cursor.i, erase, erase ? (*b)[cursor.i.x-1] : c);
+  bool wrap = Wrap(), erase_line = erase && !cursor.i.x;
+  if (!cursor_line_number && erase_line) return;
+  if (!undo_or_redo && !erase_line)
+    UpdateUndo(point(cursor.i.x, cursor_line_index), erase, !erase ? c : (*b)[cursor.i.x-1]);
+  modified = Now();
+  if (modified_cb) modified_cb();
 
-  if (erase && !cursor.i.x) {
+  if (erase_line) {
     file_line.Erase(cursor_line_number);
     wrapped_lines = AddWrappedLines(wrapped_lines, -cursor_line->Lines());
     HistUp();
@@ -1286,6 +1287,7 @@ void Editor::Modify(bool erase, int c, bool undo_or_redo) {
     if (wrap) CursorLinesChanged(*b);
     UpdateCursorX(x);
     RefreshLines();
+    if (!undo_or_redo) UpdateUndo(point(cursor.i.x, cursor_line_index), true, '\r');
     return Redraw(true);
   } else if (!erase && c == '\r') {
     String16 a = b->substr(cursor.i.x);
@@ -1298,6 +1300,7 @@ void Editor::Modify(bool erase, int c, bool undo_or_redo) {
     if (wrap) CursorLinesChanged(a);
     swap(edits[ModifyCursorLine()], a);
     RefreshLines();
+    if (newline_cb) newline_cb();
     return Redraw(true);
   } else {
     if (wrap)   cursor_line->data->glyphs.line_ind.clear();
@@ -1332,34 +1335,55 @@ int Editor::Save() {
   return ret;
 }
 
-bool Editor::WalkUndo(bool backwards) {
-  if (backwards) { if (!undo_offset)               return false; }
-  else           { if (undo_offset >= undo.size()) return false; }
-  const Modification &m = undo[backwards ? --undo_offset : undo_offset++];
-  cursor.i.y = m.p.y;
-  UpdateCursorLine();
-  UpdateCursorX(m.p.x + (backwards ? (m.erase ? -m.data.size() : m.data.size()) : 0));
-  if (backwards) for (auto i=m.data.rbegin(), e=m.data.rend(); i!=e; ++i) Modify(!m.erase, *i, true);
-  else           for (auto i=m.data.begin(),  e=m.data.end();  i!=e; ++i) Modify( m.erase, *i, true);
-  return true;
-}
-
 void Editor::UpdateUndo(const point &p, bool erase, char16_t c) {
   if (undo_offset < undo.size()) undo.resize(undo_offset);
-  if (undo.size()) {
+  if (undo.size() && c != '\r') {
     Modification &m = undo.back();
-    if (m.p.y == p.y && m.erase == erase &&
+    if (m.p.y == p.y && m.erase == erase && !(m.data.size() == 1 && m.data[0] == '\r') &&
         m.p.x + m.data.size() * (erase ? -1 : 1) == p.x) { m.data.append(1, c); return; }
   }
   undo.push_back({ p, erase, String16(1, c) });
   undo_offset = undo.size();
 }
- 
-FileNameAndOffset Editor::FindDefinition(const point &p) {
-  if (!ide_file || ! cursor_offset) return FileNameAndOffset();
-  return ide_file->tu.FindDefinition(file->Filename(), cursor_offset->offset + cursor.i.x);
+
+bool Editor::WalkUndo(bool backwards) {
+  if (backwards) { if (!undo_offset)               return false; }
+  else           { if (undo_offset >= undo.size()) return false; }
+
+  const Modification &m = undo[backwards ? --undo_offset : undo_offset++];
+  bool nl = m.data.size() == 1 && m.data[0] == '\r';
+  if (nl && (backwards != m.erase)) { CHECK(ScrollTo(m.p.y + 1, 0)); }
+  else CHECK(ScrollTo(m.p.y, m.p.x + ((backwards && !nl) ? (m.erase ? -m.data.size() : m.data.size()) : 0)));
+
+  if (backwards) for (auto i=m.data.rbegin(), e=m.data.rend(); i!=e; ++i) Modify(*i, !m.erase, true);
+  else           for (auto i=m.data.begin(),  e=m.data.end();  i!=e; ++i) Modify(*i,  m.erase, true);
+  return true;
 }
 
+bool Editor::ScrollTo(int line_index, int x) {
+  int lines = box.h / style.font->Height(), target_offset = min(line_index, lines/2);
+
+  if (!Wrap()) {
+    if (line_index < 0 || line_index > file_line.size()) return false;
+    SetVScroll(line_index - target_offset);
+    cursor.i.y = target_offset;
+  } else {
+    LineMap::ConstIterator li;
+    if (!(li = file_line.FindIndex(line_index)).val) return false;
+    SetVScroll(li.GetFuncKey() - target_offset);
+    cursor.i.y = 0;
+    printf("start w target = %d (%d,%d,%d) target %d (%d)\n", start_line_adjust, start_line_cutoff,
+           end_line_adjust, end_line_cutoff, target_offset, start_line);
+    for (int i=start_line, o=start_line_adjust; o<target_offset; i++, cursor.i.y++) {
+      o += line[-1-i].Lines();
+      printf("add %d to %d with '%s'\n", line[-1-i].Lines(), o, String::ToUTF8(line[-1-i].Text16()).c_str());
+    }
+  }
+  UpdateCursorLine();
+  UpdateCursorX(x);
+  return true;
+}
+ 
 /* Terminal */
 
 #ifdef  LFL_TERMINAL_DEBUG

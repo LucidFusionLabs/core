@@ -217,7 +217,6 @@ using LFL_STL11_NAMESPACE::isnan;
 typedef lock_guard<mutex> ScopedMutex;
 typedef function<void()> Callback;
 typedef function<void(const string&)> StringCB;
-typedef tuple<string, string, string> MenuItem;
 template <class X> struct Singleton { static X *Get() { static X instance; return &instance; } };
 void Log(int level, const char *file, int line, const string &m);
 }; // namespace LFL
@@ -406,6 +405,8 @@ struct PerformanceTimers {
 #include "core/app/camera.h"
 
 namespace LFL {
+typedef tuple<string, string, string> MenuItem;
+typedef tuple<string, Box, string> PanelItem;
 ::std::ostream& operator<<(::std::ostream& os, const point &x);
 ::std::ostream& operator<<(::std::ostream& os, const Box   &x);
 
@@ -628,10 +629,12 @@ struct Application : public ::LFApp {
 
   void AddNativeMenu(const string &title, const vector<MenuItem> &items);
   void AddNativeEditMenu(const vector<MenuItem>&items);
+  void AddNativePanel(const string &name, const Box&, const string &title, const vector<PanelItem>&);
   void LaunchNativeMenu(const string &title);
   void LaunchNativeContextMenu(const vector<MenuItem> &items);
   void LaunchNativeFontChooser(const FontDesc &cur_font, const string &choose_cmd);
   void LaunchNativeFileChooser(bool files, bool dirs, bool multi, const string &choose_cmd);
+  void LaunchNativePanel(const string &n);
 
   /// AddToolbar item values with prefix "toggle" stay depressed
   void AddToolbar(const vector<pair<string, string>>&items);

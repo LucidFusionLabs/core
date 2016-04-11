@@ -675,13 +675,14 @@ TEST(DatastructureTest, PrefixSumKeyedRedBlackTree) {
       timers->AccumulateTo(0);    t.CheckProperties();
       for (auto i : db) { EXPECT_NE(nullptr, (ti=t.Find(i)).val); if (ti.val) EXPECT_EQ(i, *ti.val); }
       t.node_value_cb = bind([&]() { return 10; });
-      t.Update(0,   0); for (int i=1; i<=10; i++) { EXPECT_NE(nullptr, (ti=t.LowerBound(    i)).val); if (ti.val) EXPECT_EQ(db[1], *ti.val); }
-      t.Update(9+4, 0); for (int i=1; i<=10; i++) { EXPECT_NE(nullptr, (ti=t.LowerBound(    i)).val); if (ti.val) EXPECT_EQ(db[1], *ti.val); }
-      /**/              for (int i=1; i<=10; i++) { EXPECT_NE(nullptr, (ti=t.LowerBound(9+4+i)).val); if (ti.val) EXPECT_EQ(db[5], *ti.val); }
+      t.Update(0,   0); for (int i=1; i<=10; i++) { EXPECT_NE(nullptr, (ti=t.LowerBound(    i)).val); if (ti.val) EXPECT_EQ(db[1], *ti.val); EXPECT_EQ(db[1], ti.GetIndex()); }
+      t.Update(9+4, 0); for (int i=1; i<=10; i++) { EXPECT_NE(nullptr, (ti=t.LowerBound(    i)).val); if (ti.val) EXPECT_EQ(db[1], *ti.val); EXPECT_EQ(db[1], ti.GetIndex()); }
+      /**/              for (int i=1; i<=10; i++) { EXPECT_NE(nullptr, (ti=t.LowerBound(9+4+i)).val); if (ti.val) EXPECT_EQ(db[5], *ti.val); EXPECT_EQ(db[5], ti.GetIndex()); }
+      /**/              for (int i=0; i< 10; i++) { EXPECT_NE(nullptr, (ti=t.LowerBoundIndex(i)).val);if (ti.val) EXPECT_EQ(db[i], *ti.val); EXPECT_EQ(db[i], ti.GetIndex()); EXPECT_EQ(i+(i>0?9:0)+(i>4?9:0), ti.GetFuncKey()); }
       for (auto i : db) { EXPECT_NE(nullptr, (ti=t.      Find(i+(i>0?9:0)+(i>4?9:0))).val); if (ti.val) EXPECT_EQ(i, *ti.val); }
       for (auto i : db) { EXPECT_NE(nullptr, (ti=t.LowerBound(i+(i>0?9:0)+(i>4?9:0))).val); if (ti.val) EXPECT_EQ(i, *ti.val); }
-      iind=0; for (ti = t. Begin(); ti.ind; ++ti) {         EXPECT_EQ(db[iind]+(iind>0?9:0)+(iind>4?9:0), ti.key); EXPECT_EQ(db[iind], *ti.val); iind++; }
-      /**/    for (ti = t.RBegin(); ti.ind; --ti) { iind--; EXPECT_EQ(db[iind]+(iind>0?9:0)+(iind>4?9:0), ti.key); EXPECT_EQ(db[iind], *ti.val);         }
+      iind=0; for (ti = t. Begin(); ti.ind; ++ti) {         EXPECT_EQ(db[iind]+(iind>0?9:0)+(iind>4?9:0), ti.key); EXPECT_EQ(db[iind], *ti.val); EXPECT_EQ(db[iind], ti.GetIndex()); iind++; }
+      /**/    for (ti = t.RBegin(); ti.ind; --ti) { iind--; EXPECT_EQ(db[iind]+(iind>0?9:0)+(iind>4?9:0), ti.key); EXPECT_EQ(db[iind], *ti.val); EXPECT_EQ(db[iind], ti.GetIndex());         }
     }
   }
 }

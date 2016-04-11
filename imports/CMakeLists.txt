@@ -14,9 +14,12 @@ endif()
 
 # png
 if(LFL_PNG AND NOT LFL_EMSCRIPTEN)
-  add_subdirectory(libpng)
-  set(PNG_INCLUDE ${CMAKE_CURRENT_BINARY_DIR}/libpng ${CMAKE_CURRENT_SOURCE_DIR}/libpng PARENT_SCOPE)
-  set(PNG_LIB png16_static PARENT_SCOPE)
+  ExternalProject_Add(libpng SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/libpng
+                      PREFIX ${CMAKE_CURRENT_BINARY_DIR}/libpng
+                      CMAKE_ARGS -DCMAKE_INSTALL_PREFIX:PATH=${CMAKE_CURRENT_BINARY_DIR}/libpng)
+  add_library(libpng16 IMPORTED STATIC GLOBAL)
+  set_property(TARGET libpng16 PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/libpng/lib/libpng16.a)
+  add_dependencies(libpng16 libpng)
 endif()
 
 # jpeg
@@ -35,8 +38,8 @@ if(LFL_JPEG)
                         COMMAND ${CMAKE_COMMAND} -E chdir libjpeg-turbo autoreconf -fi)
     add_library(libjpeg IMPORTED STATIC GLOBAL)
     set_property(TARGET libjpeg PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/libjpeg-turbo/lib/libturbojpeg.a)
+    set_property(TARGET libjpeg APPEND PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${CMAKE_CURRENT_BINARY_DIR}/libjpeg-turbo/include)
     add_dependencies(libjpeg libjpeg-turbo)
-    set(JPEG_INCLUDE ${CMAKE_CURRENT_BINARY_DIR}/libjpeg-turbo/include PARENT_SCOPE)
     set(JPEG_LIB libjpeg PARENT_SCOPE)
   endif()
 endif()
@@ -558,9 +561,14 @@ endif()
 
 # jsoncpp
 if(LFL_JSONCPP)
-  set(JSONCPP_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/jsoncpp/include PARENT_SCOPE)
-  set(JSONCPP_LIB jsoncpp_lib_static PARENT_SCOPE)
-  add_subdirectory(jsoncpp)
+  ExternalProject_Add(jsoncpp SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/jsoncpp
+                      PREFIX ${CMAKE_CURRENT_BINARY_DIR}/jsoncpp
+                      CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${CMAKE_CURRENT_BINARY_DIR}/jsoncpp)
+  add_library(libjsoncpp IMPORTED STATIC GLOBAL)
+  add_dependencies(libjsoncpp jsoncpp)
+  set_property(TARGET libjsoncpp PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/jsoncpp/lib/libjsoncpp.a)
+  set(JSONCPP_INCLUDE ${CMAKE_CURRENT_BINARY_DIR}/jsoncpp/include PARENT_SCOPE)
+  set(JSONCPP_LIB libjsoncpp PARENT_SCOPE)
 endif()
 
 # pcap

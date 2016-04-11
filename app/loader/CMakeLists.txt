@@ -19,8 +19,7 @@ if(LFL_PROTOBUF)
 endif()
 
 if(LFL_PNG)
-  lfl_add_target(app_libpng_png STATIC_LIBRARY SOURCES libpng_png.cpp
-                 INCLUDE_DIRECTORIES ${PNG_INCLUDE} LINK_LIBRARIES ${PNG_LIB})
+  lfl_add_target(app_libpng_png STATIC_LIBRARY SOURCES libpng_png.cpp LINK_LIBRARIES libpng16)
   if(LFL_EMSCRIPTEN)
     target_compile_options(app_libpng_png PUBLIC -s USE_LIBPNG=1)
   endif()
@@ -32,8 +31,7 @@ if(LFL_GIF)
 endif()
 
 if(LFL_JPEG)
-  lfl_add_target(app_libjpeg_jpeg STATIC_LIBRARY SOURCES libjpeg_jpeg.cpp
-                 INCLUDE_DIRECTORIES ${JPEG_INCLUDE} LINK_LIBRARIES ${JPEG_LIB})
+  lfl_add_target(app_libjpeg_jpeg STATIC_LIBRARY SOURCES libjpeg_jpeg.cpp LINK_LIBRARIES ${JPEG_LIB})
 endif()
 
 if(LFL_VORBIS)

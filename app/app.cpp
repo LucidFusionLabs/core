@@ -89,9 +89,9 @@ extern "C" void SetLFAppMainThread() {
 
 extern "C" void LFAppFatal() {
   ERROR("LFAppFatal");
-  if (bool suicide=true) *reinterpret_cast<volatile int*>(0) = 0;
   LFL::app->run = 0;
-  exit(-1);
+  if (bool suicide=true) *reinterpret_cast<volatile int*>(0) = 0;
+  throw std::runtime_error("LFAppFatal");
 }
 
 #ifndef LFL_WINDOWS

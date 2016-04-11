@@ -19,6 +19,63 @@
 #import <Cocoa/Cocoa.h>
 #include "core/app/app.h"
 
+@interface NativePanel : NSObject
+  @property(readonly, assign) NSWindow *window;
+  - (void) show;
+  - (void) addTextField: (NSTextField*) tf withCommand: (const std::string&) cmd;
+@end
+
+@implementation NativePanel
+  {
+    std::vector<std::pair<NSTextField*, std::string>> textfields;
+  }
+
+  - (id) initWithBox: (const LFL::Box&) b {
+    self = [super init];
+    _window = [[NSPanel alloc] initWithContentRect:NSMakeRect(b.x, b.y, b.w, b.h) 
+      styleMask:NSTitledWindowMask | NSClosableWindowMask 
+      backing:NSBackingStoreBuffered defer:YES];
+    [_window makeFirstResponder:nil];
+    return self;
+  }
+
+  - (void) show {
+    [_window setLevel:NSFloatingWindowLevel];
+    [_window center];
+    [_window makeKeyAndOrderFront:NSApp];
+    [_window retain];
+  }
+  
+  - (void) addTextField: (NSTextField*) textfield withCommand: (const std::string&) cmd {
+    [textfield setTarget: self];
+    [textfield setAction: @selector(textFieldAction:)];
+    [textfield setTag: textfields.size()];
+    textfields.emplace_back(textfield, cmd);
+  }
+
+  - (void) textFieldAction: (id)sender {
+    int tag = [sender tag];
+    CHECK_RANGE(tag, 0, textfields.size());
+    ShellRun(LFL::StrCat(textfields[tag].second, " ", [[sender stringValue] UTF8String]).c_str());
+  }
+
+  + (NativePanel*) addPanelNamed: (const std::string&) n withBox: (const LFL::Box&) b {
+    if (panels.find(n) != panels.end()) return nullptr;
+    NativePanel *ret = [[NativePanel alloc] initWithBox: b];
+    panels[n] = ret;
+    return ret;
+  }
+
+  + (bool) showPanelNamed: (const std::string&) n {
+    auto it = panels.find(n);
+    if (it == panels.end()) return false;
+    [it->second show];
+    return true;
+  }
+
+  static std::unordered_map<std::string, NativePanel*> panels;
+@end
+
 @interface FontChooser : NSObject
 @end
 
@@ -27,6 +84,7 @@
     NSFont *font;
     NSString *font_change_cmd;
   }
+
   - (void)selectFont: (const char *)name size:(int)s cmd:(const char*)v {
     font = [NSFont fontWithName:[NSString stringWithUTF8String:name] size:s];
     font_change_cmd = [NSString stringWithUTF8String:v];
@@ -36,6 +94,7 @@
     [fontManager setTarget:self];
     [fontManager orderFrontFontPanel:self];
   }
+
   - (void)changeFont:(id)sender {
     font = [sender convertFont:font];
     float size = [[[font fontDescriptor] objectForKey:NSFontSizeAttribute] floatValue];
@@ -78,6 +137,22 @@ void Application::AddNativeEditMenu(const vector<MenuItem>&items) {
   [[NSApp mainMenu] addItem: item];
   [menu release];
   [item release];
+}
+
+void Application::LaunchNativePanel(const string &n) { [NativePanel showPanelNamed: n]; }
+void Application::AddNativePanel(const string &name, const Box &b, const string &title, const vector<PanelItem> &items) {
+  NativePanel *panel = [NativePanel addPanelNamed: name withBox: b];
+  CHECK(panel);
+  [[panel window] setTitle: [NSString stringWithUTF8String: title.c_str()]];
+  for (auto &i : items) {
+    const Box &b = tuple_get<1>(i);
+    const string &t = tuple_get<0>(i), &cmd = tuple_get<2>(i);
+    if (t == "textbox") {
+      NSTextField *textfield = [[NSTextField alloc] initWithFrame:NSMakeRect(b.x, b.y, b.w, b.h)];
+      [panel addTextField: textfield withCommand: cmd];
+      [[[panel window] contentView] addSubview: textfield];
+    } else ERROR("unknown panel item ", t);
+  }
 }
 
 void Application::LaunchNativeFontChooser(const FontDesc &cur_font, const string &choose_cmd) {

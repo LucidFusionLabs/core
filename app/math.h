@@ -304,7 +304,8 @@ enum { mTrnpA=1, mTrnpB=1<<1, mTrnpC=1<<2, mDelA=1<<3, mDelB=1<<4, mZeroOnly=1<<
 
 template <class T=double> struct matrix {
   struct Flag { enum { Complex=1 }; int f; };
-  int M, N, flag; long long bytes;
+  int M, N, flag;
+  long long bytes;
   Allocator *alloc;
   T *m;
 
@@ -330,7 +331,7 @@ template <class T=double> struct matrix {
     void *pre = m;
     if (!alloc) FATAL("null alloc: ", alloc, ", ", rows, ", ", bytes);
     if (!(m = reinterpret_cast<T*>(alloc->Realloc(m, bytes))))
-      FATALf("matrix alloc failed: %p (%p) %lld (%d * %d * %lld)", m, pre, bytes, M, N, bytes/(M*N));
+      FATALf("matrix alloc failed: %p (%p) %lld (%d * %d * %lld)", m, pre, bytes, M, N, (M*N)?bytes/(M*N):0);
     if (rows > 0) {
       if (prepend) {
         int rowbytes = bytes/M;

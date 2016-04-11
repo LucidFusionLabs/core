@@ -85,11 +85,6 @@ struct IDEProject {
   bool GetCompileCommand(const string &fn, string *out, string *dir);
 };
 
-struct IDEFile {
-  TranslationUnit tu;
-  IDEFile(const string &f, const string &cc, const string &wd) : tu(f, cc, wd) {}
-};
-
 struct RegexCPlusPlusHighlighter { static void UpdateAnnotation(Editor*); };
 struct ClangCPlusPlusHighlighter { static void UpdateAnnotation(Editor*); };
 

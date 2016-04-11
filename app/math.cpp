@@ -96,8 +96,10 @@ int RoundHigher(float f) { return f < 0 ? RoundDown(f) : RoundUp  (f); }
 int RoundLower (float f) { return f < 0 ? RoundUp  (f) : RoundDown(f); }
 
 int RoundF(float f, bool round_point_five_up) {
-  if (round_point_five_up) return int(fabs(f - int(f)) >= 0.5 ? (f + Sign(f)) : f); 
-  else                     return int(fabs(f - int(f)) >  0.5 ? (f + Sign(f)) : f); 
+  int ret;
+  if (round_point_five_up) ret = fabs(f - int(f)) >= 0.5 ? (int(f) + Sign(f)) : int(f); 
+  else                     ret = fabs(f - int(f)) >  0.5 ? (int(f) + Sign(f)) : int(f); 
+  return ret;
 }
 
 int DimCheck(const char *alg, int d1, int d2) {

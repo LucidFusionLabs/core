@@ -306,7 +306,7 @@ bool IDEProject::GetCompileCommand(const string &fn, string *out, string *dir) {
 }
 
 void ClangCPlusPlusHighlighter::UpdateAnnotation(Editor *e) {
-  if (!e->ide_file) return;
+  if (!e->tu) return;
   using Token  = TranslationUnit::Token;
   using Cursor = TranslationUnit::Cursor;
   static unordered_set<string> inc_w{ "include", "import" }, ctype_w{ "int", "long", "short", "char",
@@ -322,7 +322,7 @@ void ClangCPlusPlusHighlighter::UpdateAnnotation(Editor *e) {
   int fl_ind = 1, a = e->default_attr, last_a = a, last_line = -1, last_cursor_kind = 0;
   auto fl = e->file_line.Begin();
   Editor::LineOffset *file_line_data = 0;
-  TranslationUnit::TokenVisitor(&e->ide_file.get()->tu, TranslationUnit::TokenVisitor::TokenCB([&]
+  TranslationUnit::TokenVisitor(e->tu.get(), TranslationUnit::TokenVisitor::TokenCB([&]
     (TranslationUnit::TokenVisitor *v, const string &text, int tk, int ck, int kk, int line, int column) {
       if (e->syntax) {
         string match;
