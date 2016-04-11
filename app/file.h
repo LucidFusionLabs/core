@@ -60,7 +60,8 @@ struct File {
   string Contents();
   int ReadIOV(void *buf, const IOVec*, int iovlen);
   int Write(const string &b) { return Write(b.c_str(), b.size()); }
-  template <class X> int Rewrite(const IOVec*, int, const vector<X>&, const function<string(const X&)>&);
+  int Rewrite(const ArrayPiece<IOVec> &v, const function<string(int)> &e);
+  int Rewrite(const ArrayPiece<IOVec> &v, const function<string(int)> &e, File *out_file);
 
   static bool ReadSuccess(File *f, void *out, int len) { return f->Read(out, len) == len; }
   static bool SeekSuccess(File *f, long long pos) { return f->Seek(pos, Whence::SET) == pos; }
@@ -71,10 +72,11 @@ struct File {
 struct BufferFile : public File {
   StringPiece ptr;
   string buf, fn;
-  int rdo, wro;
+  int rdo=0, wro=0;
   bool owner;
-  BufferFile(const string      &s, const char *FN=0) : buf(s), fn(FN?FN:""), rdo(0), wro(0), owner(1) {}
-  BufferFile(const StringPiece &s, const char *FN=0) : ptr(s), fn(FN?FN:""), rdo(0), wro(0), owner(0) {}
+  BufferFile(string           &&s, const char *FN=0) : buf(s), fn(FN?FN:""), owner(1) {}
+  BufferFile(const string      &s, const char *FN=0) : buf(s), fn(FN?FN:""), owner(1) {}
+  BufferFile(const StringPiece &s, const char *FN=0) : ptr(s), fn(FN?FN:""), owner(0) {}
   ~BufferFile() { Close(); }
 
   bool Opened() const { return true; }

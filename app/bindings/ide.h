@@ -21,6 +21,7 @@
 namespace LFL {
 
 struct TranslationUnit {
+  typedef unordered_map<string, EditorDialog*> OpenedFiles;
   struct Token { static const int Punctuation, Keyword, Identifier, Literal, Comment; };
   struct Cursor {
     static const int StringLiteral;
@@ -72,6 +73,8 @@ struct TranslationUnit {
 
   virtual ~TranslationUnit();
   TranslationUnit(const string &f, const string &cc, const string &wd);
+  bool Parse(const OpenedFiles &unsaved = OpenedFiles());
+  bool Reparse(const OpenedFiles &unsaved = OpenedFiles());
   FileNameAndOffset FindDefinition(const string &f, int offset);
 };
 

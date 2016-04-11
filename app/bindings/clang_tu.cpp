@@ -196,8 +196,25 @@ string GetClangString(const CXString &s) {
   return v;
 }
 
+vector<CXUnsavedFile> GetClangUnsavedFiles(const TranslationUnit::OpenedFiles &opened) {
+  vector<CXUnsavedFile> ret;
+  for (const auto &i : opened) {
+    Editor *e = &i.second->view;
+    if (e->unsaved_changes) ret.push_back({ e->file->Filename(), 0, 0 });
+  }
+  return ret;
+}
+
 TranslationUnit::TranslationUnit(const string &f, const string &cc, const string &wd) :
-  index(clang_createIndex(0, 0)), filename(f), compile_command(cc), working_directory(wd) {
+  index(clang_createIndex(0, 0)), filename(f), compile_command(cc), working_directory(wd) {}
+
+TranslationUnit::~TranslationUnit() {
+  clang_disposeTranslationUnit(tu);
+  clang_disposeIndex(index);
+}
+
+bool TranslationUnit::Parse(const OpenedFiles &opened) { 
+  vector<CXUnsavedFile> unsaved = GetClangUnsavedFiles(opened);
   vector<string> argv;
   vector<const char*> av = { "-xc++", "-std=c++11" };
   Split(compile_command, isspace, &argv);
@@ -208,17 +225,18 @@ TranslationUnit::TranslationUnit(const string &f, const string &cc, const string
   unsigned options = CXTranslationUnit_DetailedPreprocessingRecord | // CXTranslationUnit_KeepGoing |
      clang_defaultEditingTranslationUnitOptions();
   // CXTranslationUnit_PrecompiledPreamble | CXTranslationUnit_CacheCompletionResults;
-  CXErrorCode ret = clang_parseTranslationUnit2(index, filename.c_str(), av.data(), av.size(), 0, 0,
-                                                options, &tu);
-  if (!tu) { ERROR("TranslationUnit ", f, " create failed ", StringPrintf("%d",ret)); return; }
+  CXErrorCode ret = clang_parseTranslationUnit2(index, filename.c_str(), av.data(), av.size(),
+                                                &unsaved[0], unsaved.size(), options, &tu);
+  if (!tu) return ERRORv(false, "TranslationUnit ", filename, " create failed ", StringPrintf("%d",ret));
 
   int diagnostics = clang_getNumDiagnostics(tu);
   for(int i = 0; i != diagnostics; ++i) {
     CXDiagnostic diag = clang_getDiagnostic(tu, i);
-    INFO("TranslationUnit ", f, " ", GetClangString(clang_formatDiagnostic(diag, clang_defaultDiagnosticDisplayOptions())));
+    INFO("TranslationUnit ", filename, " ",
+         GetClangString(clang_formatDiagnostic(diag, clang_defaultDiagnosticDisplayOptions())));
   }
 
-  CXFile cf = clang_getFile(tu, f.c_str());
+  CXFile cf = clang_getFile(tu, filename.c_str());
   CXSourceRangeList *skipped = clang_getSkippedRanges(tu, cf);
   for (CXSourceRange *r = skipped->ranges, *e = r + skipped->count; r != e; ++r) {
     unsigned by=0, ey=0;
@@ -228,11 +246,13 @@ TranslationUnit::TranslationUnit(const string &f, const string &cc, const string
     skipped_lines.emplace_back(by, ey);
   }
   clang_disposeSourceRangeList(skipped);
+  return true;
 }
 
-TranslationUnit::~TranslationUnit() {
-  clang_disposeTranslationUnit(tu);
-  clang_disposeIndex(index);
+bool TranslationUnit::Reparse(const OpenedFiles &opened) { 
+  vector<CXUnsavedFile> unsaved = GetClangUnsavedFiles(opened);
+  clang_reparseTranslationUnit(tu, unsaved.size(), &unsaved[0], clang_defaultReparseOptions(tu));
+  return true;
 }
 
 FileNameAndOffset TranslationUnit::FindDefinition(const string &fn, int offset) {

@@ -743,6 +743,30 @@ TEST(GUITest, Editor) {
   test_fb->paint.clear();
 }
 
+TEST(GUITest, EditorUndoFuzz) {
+  Font *font = app->fonts->Fake();
+  int fh = font->Height(), fw = font->fixed_width;
+  string fn = "../../../core/app/app.cpp", contents = LocalFile::FileContents(fn);
+  CHECK(fh && fw);
+  {
+    BufferFile modified(string("")), undone(string("")), redone(string(""));
+    Editor e(screen->gd, font, new LocalFile(fn, "r"));
+    e.CheckResized(Box(80*fw, 25*fh));
+    for (int i=0; i<1000; i++) {
+      e.ScrollTo(rand() % e.wrapped_lines, rand() % (rand() % 2 == 1 ? 160 : 40));
+      if (rand()%2 == 1) for (int i=0, l=rand()%32; i<l; i++) e.Modify(rand()%64 == 0 ? '\n' : 'A'+i, false);
+      else               for (int i=0, l=rand()%18; i<l; i++) e.Modify(0, true);
+    }
+    e.SaveTo(&modified);
+    while (e.undo_offset) e.WalkUndo(true);
+    e.SaveTo(&undone);
+    EXPECT_EQ(contents, undone.buf);
+    while (e.WalkUndo(false)) {}
+    e.SaveTo(&redone);
+    EXPECT_EQ(modified.buf, redone.buf);
+  }
+}
+
 TEST(GUITest, Terminal) {
   int cursor_attr = 0;
   cursor_attr = Terminal::Style::SetFGColorIndex(cursor_attr, 7);

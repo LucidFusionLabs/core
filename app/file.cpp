@@ -17,6 +17,7 @@
  */
 
 #include <sys/stat.h>
+#include <sys/fcntl.h>
 
 #ifdef LFL_ANDROID
 #include "core/app/bindings/jni.h"
@@ -57,14 +58,18 @@ int File::ReadIOV(void *buf, const IOVec *v, int iovlen) {
   return ret;
 }
 
-template <class X>
-int File::Rewrite(const IOVec *io, int iol, const vector<X> &b, const function<string(const X&)> &encode_f) {
+int File::Rewrite(const ArrayPiece<IOVec> &v, const function<string(int)> &encode_f) {
   File *new_file = Create();
+  int ret = Rewrite(v, encode_f, new_file);
+  return ReplaceWith(new_file) ? ret : -1;
+}
+
+int File::Rewrite(const ArrayPiece<IOVec> &v, const function<string(int)> &encode_f, File *new_file) {
   string buf(4096, 0);
   int ret = 0;
-  for (const IOVec *i = io, *e = i + iol; i != e; ++i) {
+  for (const IOVec *i = v.begin(), *e = v.end(); i != e; ++i) {
     if (i->len < 0) {
-      string encoded = encode_f(b[-i->len-1]);
+      string encoded = encode_f(-i->len-1);
       CHECK_EQ(encoded.size(), new_file->Write(encoded.data(), encoded.size()));
       ret += encoded.size();
     } else {
@@ -77,10 +82,8 @@ int File::Rewrite(const IOVec *io, int iol, const vector<X> &b, const function<s
       }
     }
   }
-  return ReplaceWith(new_file) ? ret : -1;
+  return ret;
 }
-template int File::Rewrite<string>  (const IOVec*, int, const vector<string>  &, const function<string(const string  &)>&);
-template int File::Rewrite<String16>(const IOVec*, int, const vector<String16>&, const function<string(const String16&)>&);
 
 long long BufferFile::Seek(long long offset, int whence) {
   if (offset < 0 || offset >= (owner ? buf.size() : ptr.len)) return -1;
@@ -228,7 +231,10 @@ bool LocalFile::Open(const string &path, const string &mode, bool pre_create) {
 #else
   if (!(impl = fopen(fn.c_str(), mode.c_str()))) return 0;
 #endif
-
+#if 0
+  char filepath[MAXPATHLEN];
+  if (fcntl(fileno(static_cast<FILE*>(impl)), F_GETPATH, filepath) != -1) fn = filepath;
+#endif
   if (!Opened()) return false;
   writable = strchr(mode.c_str(), 'w');
   return true;

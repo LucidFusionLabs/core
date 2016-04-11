@@ -544,13 +544,13 @@ struct Editor : public TextView {
   SyntaxColors *syntax=0;
   unique_ptr<TranslationUnit> tu;
   int cursor_line_number=0, cursor_line_number_offset=0, cursor_line_index=0, undo_offset=0;
-  bool opened=0;
+  bool opened=0, unsaved_changes=0;
   virtual ~Editor();
   Editor(GraphicsDevice *D, const FontRef &F=FontRef(), File *I=0);
 
   bool Init(File *I) { return (opened = (file = shared_ptr<File>(I)) && I->Opened()); }
   void Input(char k)  { Modify(k,    false); }
-  void Enter()        { Modify('\r', false); }
+  void Enter()        { Modify('\n', false); }
   void Erase()        { Modify(0,    true); }
   void CursorLeft()   { UpdateCursorX(max(cursor.i.x-1, 0)); }
   void CursorRight()  { UpdateCursorX(min(cursor.i.x+1, CursorLineSize())); }
@@ -574,6 +574,7 @@ struct Editor : public TextView {
   int ModifyCursorLine();
   void Modify(char16_t, bool erase, bool undo_or_redo=false);
   int Save();
+  int SaveTo(File *out);
   void UpdateUndo(const point &p, bool erase, char16_t c);
   bool WalkUndo(bool backwards);
   bool ScrollTo(int line_index, int x);

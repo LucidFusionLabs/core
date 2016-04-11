@@ -84,3 +84,6 @@
 	path = imports/cmake-daemon
 	url = https://github.com/LucidFusionLabs/CMake
 	branch = cmake-daemon
+[submodule "imports/diff-match-patch-cpp-stl"]
+	path = imports/diff-match-patch-cpp-stl
+	url = https://github.com/leutloff/diff-match-patch-cpp-stl

@@ -1216,19 +1216,26 @@ int Editor::UpdateMappedLines(pair<int, int> read_lines, int new_first_line, int
 int Editor::UpdateLines(float vs, int *first_ind, int *first_offset, int *first_len) {
   if (!opened) return 0;
   int ret = TextView::UpdateLines(vs, first_ind, first_offset, first_len);
+  if (!file_line.size()) {
+    line.Resize((wrapped_lines = 1));
+    line.PushBack()->Clear();
+    file_line.Insert(1, LineOffset());
+  }
   UpdateCursorLine();
   UpdateCursor();
   return ret;
 }
 
 void Editor::UpdateCursorLine() {
-  cursor.i.y = min(cursor.i.y, line.Size()-1);
+  cursor.i.y = min(cursor.i.y, min(line.Size(), file_line.size())-1);
   cursor_line = &line[-1-cursor.i.y];
   cursor_line_number = last_first_line + start_line_adjust;
+  cursor.i.x = min(cursor.i.x, CursorLineSize());
   if (!Wrap()) cursor_line_number += cursor.i.y;
   else for (int i=0; i<cursor.i.y; i++) cursor_line_number += line[-1-i].Lines();
   cursor_line_number_offset = cursor_line_number - last_first_line;
   auto it = file_line.LesserBound(cursor_line_number);
+  if (!it.ind) FATAL("missing line number: ", cursor_line_number, " size=", file_line.size(), ", wl=", wrapped_lines); 
   cursor_line_index = it.GetIndex();
   cursor_offset = it.val;
 }
@@ -1273,6 +1280,7 @@ void Editor::Modify(char16_t c, bool erase, bool undo_or_redo) {
   if (!cursor_line_number && erase_line) return;
   if (!undo_or_redo && !erase_line)
     UpdateUndo(point(cursor.i.x, cursor_line_index), erase, !erase ? c : (*b)[cursor.i.x-1]);
+  unsaved_changes = true;
   modified = Now();
   if (modified_cb) modified_cb();
 
@@ -1281,15 +1289,20 @@ void Editor::Modify(char16_t c, bool erase, bool undo_or_redo) {
     wrapped_lines = AddWrappedLines(wrapped_lines, -cursor_line->Lines());
     HistUp();
     b = &edits[ModifyCursorLine()];
+    bool chomped = !undo_or_redo && b->size() && b->back() == '\r';
+    if (chomped) b->pop_back();
     int x = b->size();
-    *b += edits[edit_id];
+    b->append(edits[edit_id]);
     edits.Erase(edit_id);
     if (wrap) CursorLinesChanged(*b);
     UpdateCursorX(x);
     RefreshLines();
-    if (!undo_or_redo) UpdateUndo(point(cursor.i.x, cursor_line_index), true, '\r');
+    if (!undo_or_redo) {
+      if (1)       UpdateUndo(point(cursor.i.x + chomped, cursor_line_index), true, '\n');
+      if (chomped) UpdateUndo(point(cursor.i.x + 1,       cursor_line_index), true, '\r');
+    }
     return Redraw(true);
-  } else if (!erase && c == '\r') {
+  } else if (!erase && c == '\n') {
     String16 a = b->substr(cursor.i.x);
     b->resize(cursor.i.x);
     if (wrap) CursorLinesChanged(*b, 1);
@@ -1328,18 +1341,26 @@ int Editor::Save() {
   IOVector rv;
   for (LineMap::ConstIterator i = file_line.Begin(); i.ind; ++i)
     rv.Append({ i.val->offset, i.val->size + (i.val->size >= 0) });
-  int ret = file->Rewrite(rv.data(), rv.size(), edits.data,
-                          function<string(const String16&)>([](const String16 &v){ return String::ToUTF8(v) + "\n"; }));
+  int ret = file->Rewrite(ArrayPiece<IOVec>(rv.data(), rv.size()),
+    function<string(int)>([&](int i){ return String::ToUTF8(edits.data[i]) + "\n"; }));
   Reload();
   Redraw(true);
   return ret;
 }
 
+int Editor::SaveTo(File *out) {
+  IOVector rv;
+  for (LineMap::ConstIterator i = file_line.Begin(); i.ind; ++i)
+    rv.Append({ i.val->offset, i.val->size + (i.val->size >= 0) });
+  return file->Rewrite(ArrayPiece<IOVec>(rv.data(), rv.size()),
+    function<string(int)>([&](int i){ return String::ToUTF8(edits.data[i]) + "\n"; }), out);
+}
+
 void Editor::UpdateUndo(const point &p, bool erase, char16_t c) {
   if (undo_offset < undo.size()) undo.resize(undo_offset);
-  if (undo.size() && c != '\r') {
+  if (undo.size() && c != '\n') {
     Modification &m = undo.back();
-    if (m.p.y == p.y && m.erase == erase && !(m.data.size() == 1 && m.data[0] == '\r') &&
+    if (m.p.y == p.y && m.erase == erase && !(m.data.size() == 1 && m.data[0] == '\n') &&
         m.p.x + m.data.size() * (erase ? -1 : 1) == p.x) { m.data.append(1, c); return; }
   }
   undo.push_back({ p, erase, String16(1, c) });
@@ -1351,12 +1372,14 @@ bool Editor::WalkUndo(bool backwards) {
   else           { if (undo_offset >= undo.size()) return false; }
 
   const Modification &m = undo[backwards ? --undo_offset : undo_offset++];
-  bool nl = m.data.size() == 1 && m.data[0] == '\r';
+  bool nl = m.data.size() == 1 && m.data[0] == '\n';
   if (nl && (backwards != m.erase)) { CHECK(ScrollTo(m.p.y + 1, 0)); }
   else CHECK(ScrollTo(m.p.y, m.p.x + ((backwards && !nl) ? (m.erase ? -m.data.size() : m.data.size()) : 0)));
 
   if (backwards) for (auto i=m.data.rbegin(), e=m.data.rend(); i!=e; ++i) Modify(*i, !m.erase, true);
   else           for (auto i=m.data.begin(),  e=m.data.end();  i!=e; ++i) Modify(*i,  m.erase, true);
+
+  if (!undo_offset) unsaved_changes = false;
   return true;
 }
 
@@ -1365,13 +1388,13 @@ bool Editor::ScrollTo(int line_index, int x) {
 
   if (!Wrap()) {
     if (line_index < 0 || line_index > file_line.size()) return false;
-    SetVScroll(line_index - target_offset);
     cursor.i.y = target_offset;
+    SetVScroll(line_index - target_offset);
   } else {
     LineMap::ConstIterator li;
     if (!(li = file_line.FindIndex(line_index)).val) return false;
-    SetVScroll(li.GetFuncKey() - target_offset);
     cursor.i.y = 0;
+    SetVScroll(li.GetFuncKey() - target_offset);
     printf("start w target = %d (%d,%d,%d) target %d (%d)\n", start_line_adjust, start_line_cutoff,
            end_line_adjust, end_line_cutoff, target_offset, start_line);
     for (int i=start_line, o=start_line_adjust; o<target_offset; i++, cursor.i.y++) {
