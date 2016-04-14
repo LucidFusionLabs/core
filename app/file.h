@@ -59,7 +59,7 @@ struct File {
 
   string Contents();
   int ReadIOV(void *buf, const IOVec*, int iovlen);
-  int Write(const string &b) { return Write(b.c_str(), b.size()); }
+  int WriteString(const string &b) { return Write(b.c_str(), b.size()); }
   int Rewrite(const ArrayPiece<IOVec> &v, const function<string(int)> &e);
   int Rewrite(const ArrayPiece<IOVec> &v, const function<string(int)> &e, File *out_file);
 

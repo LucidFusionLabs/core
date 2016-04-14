@@ -20,10 +20,10 @@
 #define LFL_CORE_APP_IPC_H__
 
 #ifdef LFL_FLATBUFFERS
-#include "ipc_generated.h"
+#include "app/ipc_generated.h"
 #endif
 
-#include "rpc.h"
+#include "core/app/rpc.h"
 
 namespace LFL {
 struct NTService {

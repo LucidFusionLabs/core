@@ -531,11 +531,11 @@ template <class X> struct RollingAvg {
 };
 
 /* util */
-float Decimals(float n);
-float Clamp(float x, float floor, float ceil);
-void Clamp(float *x, float floor, float ceil);
+template <class X> void Clamp(X *x, X floor, X ceil) { *x = Clamp(*x, floor, ceil); }
+template <class X> X    Clamp(X  x, X floor, X ceil) { return x < floor ? floor : (ceil < x ? ceil : x); }
 v3 Clamp(const v3& x, float floor, float ceil);
 v4 Clamp(const v4& x, float floor, float ceil);
+float Decimals(float n);
 int Sign(float f);
 int RoundF(float f, bool round_point_five_up=false);
 int RoundUp(float f);

@@ -87,6 +87,12 @@ extern "C" void SetLFAppMainThread() {
   LFL::app->main_thread_id = id; 
 }
 
+extern "C" unsigned LFAppNextRandSeed() {
+  static LFL::mutex m;
+  LFL::ScopedMutex sm(m);
+  return (LFL::FLAGS_rand_seed = LFL::fnv32(&LFL::FLAGS_rand_seed, sizeof(unsigned)));
+}
+
 extern "C" void LFAppFatal() {
   ERROR("LFAppFatal");
   LFL::app->run = 0;
@@ -136,6 +142,7 @@ DEFINE_int(peak_fps, 30, "Peak FPS");
 #else
 DEFINE_int(peak_fps, 60, "Peak FPS");
 #endif
+DEFINE_unsigned(rand_seed, 0, "Random number generator seed");
 DEFINE_bool(open_console, 0, "Open console on win32");
 DEFINE_bool(cursor_grabbed, false, "Center cursor every frame");
 DEFINE_bool(frame_debug, false, "Print each frame");
@@ -356,12 +363,6 @@ int Application::Create(int argc, const char* const* argv, const char *source_fi
   progname = argv[0];
   startdir = LocalFile::CurrentDirectory();
 
-#ifdef LFL_WINDOWS
-  bindir = progname.substr(0, DirNameLen(progname, true));
-#else
-  bindir = LocalFile::JoinPath(startdir, progname.substr(0, DirNameLen(progname, true)));
-#endif
-
 #if defined(LFL_ANDROID)
 #elif defined(LFL_APPLE)
   char rpath[1024];
@@ -376,12 +377,19 @@ int Application::Create(int argc, const char* const* argv, const char *source_fi
 #endif
 
 #ifdef LFL_WINDOWS
+  bindir = progname.substr(0, DirNameLen(progname, true));
+
   { /* winsock startup */
     WSADATA wsadata;
     WSAStartup(MAKEWORD(2,2), &wsadata);
   }
+
+  string console_title = StrCat(name, " console");
+  if (argc > 1) OpenSystemConsole(console_title.c_str());
+
 #else
   pid = getpid();
+  bindir = LocalFile::JoinPath(startdir, progname.substr(0, DirNameLen(progname, true)));
 
   /* handle SIGINT */
   signal(SIGINT, HandleSigInt);
@@ -396,18 +404,15 @@ int Application::Create(int argc, const char* const* argv, const char *source_fi
   }
 #endif
 
-  srand(fnv32(&pid, sizeof(int), time(0)));
+  if (Singleton<FlagMap>::Get()->getopt(argc, argv, source_filename) < 0) return -1;
+  if (!FLAGS_rand_seed) FLAGS_rand_seed = fnv32(&pid, sizeof(int), time(0));
+  unsigned init_rand_seed = FLAGS_rand_seed;
+  srand(init_rand_seed);
+
   ThreadLocalStorage::Init();
   Singleton<NullAllocator>::Get();
   Singleton<MallocAllocator>::Get();
   atexit(LFAppAtExit);
-
-#ifdef LFL_WINDOWS
-  string console_title = StrCat(name, " console");
-  if (argc > 1) OpenSystemConsole(console_title.c_str());
-#endif
-
-  if (Singleton<FlagMap>::Get()->getopt(argc, argv, source_filename) < 0) return -1;
 
 #ifdef LFL_WINDOWS
   if (argc > 1) {
@@ -440,6 +445,7 @@ int Application::Create(int argc, const char* const* argv, const char *source_fi
   INFO("startdir = ", startdir);
   INFO("assetdir = ", assetdir);
   INFO("dldir = ", dldir);
+  INFO("rand_seed = ", init_rand_seed);
 
 #ifndef LFL_WINDOWS
   if (FLAGS_max_rlimit_core) {

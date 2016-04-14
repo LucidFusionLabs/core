@@ -94,7 +94,7 @@ struct Color {
   Color g(float v) const { Color c=*this; c.g() = v; return c; }
   Color b(float v) const { Color c=*this; c.b() = v; return c; }
   Color a(float v) const { Color c=*this; c.a() = v; return c; }
-  void scale(float f) { r() = Clamp(r()*f, 0, 1); g() = Clamp(g()*f, 0, 1); b() = Clamp(b()*f, 0, 1); }
+  void scale(float f) { r() = Clamp(r()*f, 0.0f, 1.0f); g() = Clamp(g()*f, 0.0f, 1.0f); b() = Clamp(b()*f, 0.0f, 1.0f); }
   void ToHSV(float *h, float *s, float *v) const;
   static Color FromHSV(float h, float s, float v);
   static Color Red  (float v=1.0) { return Color(  v, 0.0, 0.0, 0.0); }
@@ -103,7 +103,7 @@ struct Color {
   static Color Alpha(float v=1.0) { return Color(0.0, 0.0, 0.0,   v); }
   static Color fade(float v);
   static Color Interpolate(Color l, Color r, float mix) { l.scale(mix); r.scale(1-mix); return add(l,r); }
-  static Color add(const Color &l, const Color &r) { return Color(Clamp(l.r()+r.r(), 0, 1), Clamp(l.g()+r.g(), 0, 1), Clamp(l.b()+r.b(), 0, 1), Clamp(l.a()+r.a(), 0, 1)); }
+  static Color add(const Color &l, const Color &r) { return Color(Clamp(l.r()+r.r(), 0.0f, 1.0f), Clamp(l.g()+r.g(), 0.0f, 1.0f), Clamp(l.b()+r.b(), 0.0f, 1.0f), Clamp(l.a()+r.a(), 0.0f, 1.0f)); }
   static Color white, black, red, green, blue, cyan, yellow, magenta, grey90, grey80, grey70, grey60, grey50, grey40, grey30, grey20, grey10, clear;
 };
 

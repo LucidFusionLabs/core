@@ -249,7 +249,7 @@ struct NullAllocator : public Allocator {
 struct ThreadLocalStorage {
   unique_ptr<Allocator> alloc;
   std::default_random_engine rand_eng;
-  ThreadLocalStorage() : rand_eng(std::random_device{}()) {}
+  ThreadLocalStorage() : rand_eng(LFAppNextRandSeed()) {}
   static void Init();
   static void Free();
   static void ThreadInit();

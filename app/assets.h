@@ -221,7 +221,6 @@ template <class Line> struct RingFrameBuffer {
   FrameBuffer fb;
   v2 scroll;
   point p;
-  bool wrap=0;
   int w=0, h=0, font_size=0, font_height=0;
   RingFrameBuffer(GraphicsDevice *d) : fb(d) {}
 

@@ -243,15 +243,15 @@ struct Font {
   void DrawGlyph(int g, const Box &w) { return DrawGlyphWithAttr(g, w, Drawable::Attr(this)); }
   void DrawGlyphWithAttr(int g, const Box &w, const Drawable::Attr&);
 
-  template <class X> void Size(const StringPieceT<X> &text, Box *out, int width=0, int *lines_out=0);
-  /**/               void Size(const string          &text, Box *out, int width=0, int *lines_out=0) { return Size(StringPiece           (text), out, width, lines_out); }
-  /**/               void Size(const String16        &text, Box *out, int width=0, int *lines_out=0) { return Size(String16Piece         (text), out, width, lines_out); }
-  template <class X> void Size(const X               *text, Box *out, int width=0, int *lines_out=0) { return Size(StringPiece::Unbounded(text), out, width, lines_out); }
+  template <class X> void Size(const StringPieceT<X> &text, Box *out, int width=0, int flag=0, int *lines_out=0);
+  /**/               void Size(const string          &text, Box *out, int width=0, int flag=0, int *lines_out=0) { return Size(StringPiece           (text), out, width, flag, lines_out); }
+  /**/               void Size(const String16        &text, Box *out, int width=0, int flag=0, int *lines_out=0) { return Size(String16Piece         (text), out, width, flag, lines_out); }
+  template <class X> void Size(const X               *text, Box *out, int width=0, int flag=0, int *lines_out=0) { return Size(StringPiece::Unbounded(text), out, width, flag, lines_out); }
 
-  template <class X> int Lines(const StringPieceT<X> &text, int width) { if (!width) return 1; Box b; Size(text, &b, width); return b.h / Height(); }
-  /**/               int Lines(const string          &text, int width) { return Lines(StringPiece           (text), width); }
-  /**/               int Lines(const String16        &text, int width) { return Lines(String16Piece         (text), width); }
-  template <class X> int Lines(const X               *text, int width) { return Lines(StringPiece::Unbounded(text), width); }
+  template <class X> int Lines(const StringPieceT<X> &text, int width, bool word_wrap=1) { if (!width) return 1; Box b; Size(text, &b, width, word_wrap?0:DrawFlag::GlyphBreak); return b.h / Height(); }
+  /**/               int Lines(const string          &text, int width, bool word_wrap=1) { return Lines(StringPiece           (text), width, word_wrap); }
+  /**/               int Lines(const String16        &text, int width, bool word_wrap=1) { return Lines(String16Piece         (text), width, word_wrap); }
+  template <class X> int Lines(const X               *text, int width, bool word_wrap=1) { return Lines(StringPiece::Unbounded(text), width, word_wrap); }
 
   template <class X> int Width(const StringPieceT<X> &text) { Box b; Size(text, &b); if (b.w) CHECK_EQ(b.h, Height()); return b.w; }
   /**/               int Width(const string          &text) { return Width(StringPiece           (text)); }

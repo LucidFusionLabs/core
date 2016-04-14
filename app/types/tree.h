@@ -32,11 +32,12 @@ template <class K, class V> struct RedBlackTreeNode {
 };
 
 template <class Node> struct RedBlackTreeZipper {
-  RedBlackTreeZipper(bool update=0, bool by_index=0) {} 
+  RedBlackTreeZipper(bool update=0, bool by_index=0, bool end_key=0) {} 
   string             DebugString()                                              const { return ""; }
-  typename Node::Key GetKey     (const Node &n)                                 const { return n.key; }
   int                GetIndex   (const Node &n)                                 const { return -1; }
-  int                GetFuncKey (const Node &n)                                 const { return 0; }
+  typename Node::Key GetKey     (const Node &n)                                 const { return n.key; }
+  typename Node::Key GetBegKey  (const Node &n)                                 const { return n.key; }
+  typename Node::Key GetEndKey  (const Node &n)                                 const { return n.key; }
   int                WalkLeft   (const Node &n)                                       { return n.left; }
   int                WalkRight  (const Node &n)                                       { return n.right; }
   int                UnwalkRight(const Node &n)                                       { return n.parent; }
@@ -54,9 +55,10 @@ struct RedBlackTree {
     Iterator& operator--() { if (!ind) *this = tree->RBegin(); else if ((ind = tree->DecrementNode(ind, &zipper))) LoadKV(); else val = 0; return *this; }
     Iterator& operator++() { CHECK(ind);                            if ((ind = tree->IncrementNode(ind, &zipper))) LoadKV(); else val = 0; return *this; }
     bool operator!=(const Iterator &i) { return tree != i.tree || ind != i.ind; }
-    void LoadKV() { if (const Node *n = &tree->node[ind-1]) { key = zipper.GetKey(*n); val = &tree->val[n->val]; } }
+    void LoadKV() { if (const Node *n = &tree->node[ind-1]) { key = zipper.GetBegKey(*n); val = &tree->val[n->val]; } }
     int GetIndex() { if (const Node *n = &tree->node[ind-1]) return zipper.GetIndex(*n); return -1; }
-    int GetFuncKey() { if (const Node *n = &tree->node[ind-1]) return zipper.GetFuncKey(*n); return -1; }
+    int GetBegKey() { if (const Node *n = &tree->node[ind-1]) return zipper.GetBegKey(*n); return -1; }
+    int GetEndKey() { if (const Node *n = &tree->node[ind-1]) return zipper.GetEndKey(*n); return -1; }
   };
   struct ConstIterator { 
     const RedBlackTree *tree; int ind; K key; const V *val; Zipper zipper;
@@ -66,13 +68,14 @@ struct RedBlackTree {
     ConstIterator& operator-- () { if (!ind) *this = tree->RBegin(); else if ((ind = tree->DecrementNode(ind, &zipper))) LoadKV(); else val = 0; return *this; }
     ConstIterator& operator++ () { CHECK(ind);                            if ((ind = tree->IncrementNode(ind, &zipper))) LoadKV(); else val = 0; return *this; }
     bool operator!=(const ConstIterator &i) { return tree != i.tree || ind != i.ind; }
-    void LoadKV() { if (const Node *n = &tree->node[ind-1]) { key = zipper.GetKey(*n); val = &tree->val[n->val]; } }
+    void LoadKV() { if (const Node *n = &tree->node[ind-1]) { key = zipper.GetBegKey(*n); val = &tree->val[n->val]; } }
     int GetIndex() { if (const Node *n = &tree->node[ind-1]) return zipper.GetIndex(*n); return -1; }
-    int GetFuncKey() { if (const Node *n = &tree->node[ind-1]) return zipper.GetFuncKey(*n); return -1; }
+    int GetBegKey() { if (const Node *n = &tree->node[ind-1]) return zipper.GetBegKey(*n); return -1; }
+    int GetEndKey() { if (const Node *n = &tree->node[ind-1]) return zipper.GetEndKey(*n); return -1; }
   };
   struct Query {
     const K key; Zipper z;
-    Query(const K &k, bool update=0, bool by_index=0) : key(k), z(update, by_index) {}
+    Query(const K &k, bool update=0, bool by_index=0, bool end_key=0) : key(k), z(update, by_index, end_key) {}
   };
 
   Storage<Node> node;
@@ -94,13 +97,11 @@ struct RedBlackTree {
   /**/ Iterator LowerBound (const K &k)        { Query q(k);    int n=LowerBoundNode(&q);            return Iterator     (this, n, q.z); }
   ConstIterator LesserBound(const K &k) const  { Query q(k);    int n=LowerBoundNode(&q);            ConstIterator i(this, n, q.z); if (i.val && k < i.key) --i; return i; }
   /**/ Iterator LesserBound(const K &k)        { Query q(k);    int n=LowerBoundNode(&q);            Iterator      i(this, n, q.z); if (i.val && k < i.key) --i; return i; }
+  ConstIterator SecondBound(const K &k) const  { Query q(k,0,0,1); int n=LowerBoundNode(&q);         return ConstIterator(this, n, q.z); }
+  /**/ Iterator SecondBound(const K &k)        { Query q(k,0,0,1); int n=LowerBoundNode(&q);         return Iterator     (this, n, q.z); }
 
-  ConstIterator FindIndex       (const K &k) const  { Query q(k,0,1); int n=FindNode      (&q); return ConstIterator(this, n, q.z); }
-  /**/ Iterator FindIndex       (const K &k)        { Query q(k,0,1); int n=FindNode      (&q); return Iterator     (this, n, q.z); }
-  ConstIterator LowerBoundIndex (const K &k) const  { Query q(k,0,1); int n=LowerBoundNode(&q); return ConstIterator(this, n, q.z); }
-  /**/ Iterator LowerBoundIndex (const K &k)        { Query q(k,0,1); int n=LowerBoundNode(&q); return Iterator     (this, n, q.z); }
-  ConstIterator LesserBoundIndex(const K &k) const  { Query q(k,0,1); int n=LowerBoundNode(&q); ConstIterator i(this, n, q.z); if (i.val && k < i.key) --i; return i; }
-  /**/ Iterator LesserBoundIndex(const K &k)        { Query q(k,0,1); int n=LowerBoundNode(&q); Iterator      i(this, n, q.z); if (i.val && k < i.key) --i; return i; }
+  ConstIterator FindIndex(const K &k) const { Query q(k,0,1); int n=FindNode(&q); return ConstIterator(this, n, q.z); }
+  /**/ Iterator FindIndex(const K &k)       { Query q(k,0,1); int n=FindNode(&q); return Iterator     (this, n, q.z); }
 
   virtual K GetCreateNodeKey(const Query *q, const V*) const { return q->key; }
   virtual void ComputeAnnotationFromChildrenOnPath(Query *q) {}
@@ -290,7 +291,7 @@ struct RedBlackTree {
   }
 
   void ComputeAnnotationFromChildren(Node *n) {
-    n->ComputeAnnotationFromChildren(n->left ? &node[n->left -1] : 0, n->right ? &node[n->right-1] : 0);
+    n->ComputeAnnotationFromChildren(n->left ? &node[n->left-1] : 0, n->right ? &node[n->right-1] : 0);
   }
 
   void ComputeAnnotationFromChildrenOnMaxPath(int ind) {
@@ -502,12 +503,13 @@ template <class K, class V> struct RedBlackIntervalTreeNode {
 template <class Node> struct RedBlackIntervalTreeFinger {
   typename Node::Key query;
   vector<pair<int, int> > path;
-  RedBlackIntervalTreeFinger(bool update=0, bool by_index=0) {}
+  RedBlackIntervalTreeFinger(bool update=0, bool by_index=0, bool end_key=0) {}
   RedBlackIntervalTreeFinger(const typename Node::Key::first_type &q, int head) : query(q,q) { path.reserve(64); path.emplace_back(head, 0); }
   string             DebugString()                                              const { return ""; }
-  typename Node::Key GetKey     (const Node &n)                                 const { return n.key; }
   int                GetIndex   (const Node &n)                                 const { return -1; }
-  int                GetFuncKey (const Node &n)                                 const { return 0; }
+  typename Node::Key GetKey     (const Node &n)                                 const { return n.key; }
+  typename Node::Key GetBegKey  (const Node &n)                                 const { return n.key; }
+  typename Node::Key GetEndKey  (const Node &n)                                 const { return n.key; }
   int                WalkLeft   (const Node &n)                                       { return n.left; }
   int                WalkRight  (const Node &n)                                       { return n.right; }
   int                UnwalkRight(const Node &n)                                       { return n.parent; }
@@ -572,11 +574,11 @@ template <class K, class V> struct PrefixSumKeyedRedBlackTreeNode {
 };
 
 template <class Node> struct PrefixSumKeyedRedBlackTreeFinger {
-  bool update=0, by_index=0;
+  bool update=0, by_index=0, end_key=0;
   typename Node::Key sum=0, count=0;
   vector<pair<int, bool>> path;
-  PrefixSumKeyedRedBlackTreeFinger(bool U=0, bool I=0) :
-    update(U), by_index(I) { if (update) path.reserve(64); }
+  PrefixSumKeyedRedBlackTreeFinger(bool U=0, bool I=0, bool E=0) :
+    update(U), by_index(I), end_key(E) { if (update) path.reserve(64); }
 
   string DebugString() const { 
     string p;
@@ -584,9 +586,10 @@ template <class Node> struct PrefixSumKeyedRedBlackTreeFinger {
     return StrCat("PrefixSumFinger: sum=", sum, ", update=", update, ", path={", p, "}");
   }
 
-  typename Node::Key GetKey     (const Node &n) const { return by_index ? GetIndex(n) : GetFuncKey(n); }
   int                GetIndex   (const Node &n) const { return count + n.left_count; }
-  int                GetFuncKey (const Node &n) const { return sum + n.left_sum; }
+  typename Node::Key GetKey     (const Node &n) const { return by_index ? GetIndex(n) : (end_key ? GetEndKey(n) : GetBegKey(n)); }
+  typename Node::Key GetBegKey  (const Node &n) const { return sum + n.left_sum; }
+  typename Node::Key GetEndKey  (const Node &n) const { return sum + n.left_sum + n.key; }
   int                WalkLeft   (const Node &n)       { return n.left; }
   int                WalkRight  (const Node &n)       { sum += (n.left_sum + n.key); count += (n.left_count + 1); return n.right; }
   int                UnwalkRight(const Node &n)       { sum -= (n.left_sum + n.key); count -= (n.left_count + 1); return n.parent; }
@@ -607,6 +610,13 @@ template <class Node> struct PrefixSumKeyedRedBlackTreeFinger {
 template <class K, class V, class Node = PrefixSumKeyedRedBlackTreeNode<K, V>, class Finger = PrefixSumKeyedRedBlackTreeFinger<Node> >
 struct PrefixSumKeyedRedBlackTree : public RedBlackFingerTree<K, V, Node, Finger> {
   typedef RedBlackFingerTree<K, V, Node, Finger> Parent;
+
+  int Total() const {
+    auto i = Parent::RBegin();
+    if (i.ind) i.zipper.WalkRight(Parent::node[i.ind-1]);
+    return i.zipper.sum;
+  }
+
   virtual void PrintNodes(int ind, int color, string *out) const {
     if (!ind) return;
     const Node *n = &Parent::node[ind-1];

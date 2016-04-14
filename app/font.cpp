@@ -203,9 +203,9 @@ void Font::DrawGlyphWithAttr(int gid, const Box &w, const Drawable::Attr &a) {
   g->Draw(w, &a);
 }
 
-template <class X> void Font::Size(const StringPieceT<X> &text, Box *out, int maxwidth, int *lines_out) {
+template <class X> void Font::Size(const StringPieceT<X> &text, Box *out, int maxwidth, int flag, int *lines_out) {
   vector<Box> line_box;
-  int lines = Draw(text, Box(0,0,maxwidth,0), &line_box, DrawFlag::Clipped);
+  int lines = Draw(text, Box(0,0,maxwidth,0), &line_box, flag | DrawFlag::Clipped);
   if (lines_out) *lines_out = lines;
   *out = Box(0, 0, 0, lines * Height());
   for (int i=0; i<line_box.size(); i++) out->w = max(out->w, line_box[i].w);
@@ -240,8 +240,8 @@ template <class X> int Font::Draw(const StringPieceT<X> &text, const Box &box, v
   return max(size_t(1), out.line.size());
 }
 
-template void Font::Size  <char>    (const StringPiece   &text, Box *out, int maxwidth, int *lines_out);
-template void Font::Size  <char16_t>(const String16Piece &text, Box *out, int maxwidth, int *lines_out);
+template void Font::Size  <char>    (const StringPiece   &text, Box *out, int maxwidth, int flag, int *lines_out);
+template void Font::Size  <char16_t>(const String16Piece &text, Box *out, int maxwidth, int flag, int *lines_out);
 template void Font::Shape <char>    (const StringPiece   &text, const Box &box, DrawableBoxArray *out, int draw_flag, int attr_id);
 template void Font::Shape <char16_t>(const String16Piece &text, const Box &box, DrawableBoxArray *out, int draw_flag, int attr_id);
 template int  Font::Draw  <char>    (const StringPiece   &text, const Box &box, vector<Box> *lb, int draw_flag);

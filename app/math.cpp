@@ -72,11 +72,6 @@ bool m44::Invert(const m44 &in, m44 *out, float *det_out)  {
   return true;
 }
 
-double Squared(double n) { return n*n; }
-float Decimals(float n) { return n - int(n); }
-
-void Clamp(float *x, float floor, float ceil) { *x = Clamp(*x, floor, ceil); }
-float Clamp(float x, float floor, float ceil) { if (x < floor) return floor; if (x > ceil) return ceil; return x; }
 v3 Clamp(const v3& x, float floor, float ceil) {
   return v3(Clamp(x.x, floor, ceil), Clamp(x.y, floor, ceil), Clamp(x.z, floor, ceil));
 }
@@ -84,12 +79,9 @@ v4 Clamp(const v4& x, float floor, float ceil) {
   return v4(Clamp(x.x, floor, ceil), Clamp(x.y, floor, ceil), Clamp(x.z, floor, ceil), Clamp(x.w, floor, ceil));
 }
 
-int Sign(float f) {
-  if      (f > 0) return  1;
-  else if (f < 0) return -1;
-  else            return  0;
-}
-
+double Squared(double n) { return n*n; }
+float Decimals(float n) { return n - int(n); }
+int Sign(float f) { return 0 < f ? 1 : (f < 0 ? -1 : 0); }
 int RoundDown  (float f) { return f; }
 int RoundUp    (float f) { if (!(f - int(f))) return f; return f > 0 ? (int(f) + 1) : (int(f) - 1); }
 int RoundHigher(float f) { return f < 0 ? RoundDown(f) : RoundUp  (f); }

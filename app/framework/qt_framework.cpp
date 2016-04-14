@@ -174,7 +174,7 @@ class QtWindow : public QWindow {
   }
 };
 
-#include "qt_framework.moc"
+#include "app/framework/qt_framework.moc"
 
 bool Video::CreateWindow(Window *W) {
   CHECK(!W->id.v && W->gd);

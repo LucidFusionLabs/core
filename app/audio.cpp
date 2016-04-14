@@ -98,14 +98,14 @@ void Audio::QueueMixBuf(const RingSampler::Handle *B, int channels, int flag) {
         int ind = i*FLAGS_chans_out + j;
         bool mixable = mix && ind < Out.size();
         if (dont_queue && !mixable) return;
-        if (mixable) Out[ind] = Clamp(Out[ind] + B->Read(i), -32767, 32768);
+        if (mixable) Out[ind] = Clamp(Out[ind] + B->Read(i), -32767.0f, 32768.0f);
         else Out.push_back(B->Read(i));
       }
     }
     else if (channels == FLAGS_chans_out) {
       bool mixable = mix && i < Out.size();
       if (dont_queue && !mixable) return;
-      if (mixable) Out[i] = Clamp(Out[i] + B->Read(i), -32767, 32768);
+      if (mixable) Out[i] = Clamp(Out[i] + B->Read(i), -32767.0f, 32768.0f);
       else Out.push_back(B->Read(i));
     }
     else FATAL("QueueMix unsupported channel combo ", channels, ", ", FLAGS_chans_out);

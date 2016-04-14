@@ -6,8 +6,7 @@ if(LFL_APPLE)
 elseif(LFL_WINDOWS)
   set(FONT_SOURCE ${FONT_SOURCE} gdi_font.cpp)
 endif()
-lfl_add_target(app_font STATIC_LIBRARY SOURCES ${FONT_SOURCE}
-               INCLUDE_DIRECTORIES ${CMAKE_CURRENT_BINARY_DIR}/..)
+lfl_add_target(app_font STATIC_LIBRARY SOURCES ${FONT_SOURCE})
 lfl_add_target(app_null_ttf STATIC_LIBRARY SOURCES null_ttf.cpp)
 
 if(LFL_FREETYPE)

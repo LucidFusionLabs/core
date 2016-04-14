@@ -251,7 +251,7 @@ struct TextBox : public GUI, public KeyboardController {
     struct Flag { enum { NoLayout=1, NoVWrap=2, Flush=4 }; };
     PaintCB paint_cb = &LinesFrameBuffer::PaintCB;
     int lines=0;
-    bool align_top_or_bot=1;
+    bool align_top_or_bot=1, wrap=0;
     LinesFrameBuffer(GraphicsDevice *d) : RingFrameBuffer(d) {}
     LinesFrameBuffer *Attach(LinesFrameBuffer **last_fb);
     virtual int SizeChanged(int W, int H, Font *font, const Color *bgc);
@@ -414,8 +414,8 @@ struct TextArea : public TextBox {
   int LineFBPushBack () const { return reverse_line_fb ? LineUpdate::PushFront : LineUpdate::PushBack;  }
   int LineFBPushFront() const { return reverse_line_fb ? LineUpdate::PushBack  : LineUpdate::PushFront; }
   float PercentOfLines(int n) const { return float(n) / (WrappedLines()-1); }
-  void AddVScroll(int n) { v_scrolled = Clamp(v_scrolled + PercentOfLines(n), 0, 1); UpdateScrolled(); }
-  void SetVScroll(int n) { v_scrolled = Clamp(0          + PercentOfLines(n), 0, 1); UpdateScrolled(); }
+  void AddVScroll(int n) { v_scrolled = Clamp(v_scrolled + PercentOfLines(n), 0.0f, 1.0f); UpdateScrolled(); }
+  void SetVScroll(int n) { v_scrolled = Clamp(0          + PercentOfLines(n), 0.0f, 1.0f); UpdateScrolled(); }
   int LayoutBackLine(Lines *l, int i) { return Wrap() ? (*l)[-i-1].Layout(line_fb.w) : 1; }
   int AddWrappedLines(int wl, int n) { last_v_scrolled = (v_scrolled *= float(wl)/(wl+n)); return wl+n; }
 
@@ -537,13 +537,13 @@ struct Editor : public TextView {
   FreeListVector<String16> edits;
   Time modified=Time(0);
   Callback modified_cb, newline_cb;
-  Line *cursor_line=0;
-  LineOffset *cursor_offset=0;
   vector<pair<int,int>> annotation;
   vector<Modification> undo;
   SyntaxColors *syntax=0;
   unique_ptr<TranslationUnit> tu;
-  int cursor_line_number=0, cursor_line_number_offset=0, cursor_line_index=0, undo_offset=0;
+  Line *cursor_glyphs=0;
+  LineOffset *cursor_offset=0;
+  int cursor_line_index=0, cursor_start_line_number=0, cursor_start_line_number_offset=0, undo_offset=0;
   bool opened=0, unsaved_changes=0;
   virtual ~Editor();
   Editor(GraphicsDevice *D, const FontRef &F=FontRef(), File *I=0);
@@ -553,9 +553,9 @@ struct Editor : public TextView {
   void Enter()        { Modify('\n', false); }
   void Erase()        { Modify(0,    true); }
   void CursorLeft()   { UpdateCursorX(max(cursor.i.x-1, 0)); }
-  void CursorRight()  { UpdateCursorX(min(cursor.i.x+1, CursorLineSize())); }
+  void CursorRight()  { UpdateCursorX(min(cursor.i.x+1, CursorGlyphsSize())); }
   void Home()         { UpdateCursorX(0); }
-  void End()          { UpdateCursorX(CursorLineSize()); }
+  void End()          { UpdateCursorX(CursorGlyphsSize()); }
   void HistUp();
   void HistDown();
   void SelectionCB(const Selection::Point&);
@@ -564,9 +564,9 @@ struct Editor : public TextView {
   int UpdateMappedLines(pair<int, int>, int, int, bool, bool, bool, bool, bool);
   int UpdateLines(float vs, int *first_ind, int *first_offset, int *first_len);
 
-  int CursorLineSize() const { return cursor_line ? cursor_line->Size() : 0; }
-  void ToggleShouldWrap() { SetShouldWrap(!line_fb.wrap); }
-  void SetShouldWrap(bool);
+  int CursorGlyphsSize() const { return cursor_glyphs ? cursor_glyphs->Size() : 0; }
+  void SetWrapMode(const string &n);
+  void SetShouldWrap(bool v, bool word_break);
   void UpdateCursor();
   void UpdateCursorLine();
   void UpdateCursorX(int x);

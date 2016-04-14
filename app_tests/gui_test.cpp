@@ -743,16 +743,57 @@ TEST(GUITest, Editor) {
   test_fb->paint.clear();
 }
 
+TEST(GUITest, EditorScrollFuzz) {
+  string fn = "../../../core/app/app.cpp";
+  vector<string> lines;
+  {
+    LocalFile f(fn, "r");
+    NextRecordReader nr(&f);
+    for (const char *line = nr.NextLineRaw(); line; line = nr.NextLineRaw()) 
+      lines.emplace_back(line, nr.record_len);
+  }
+  Font *font = app->fonts->Fake();
+  int fh = font->Height(), fw = font->fixed_width, last_ind=0;
+  CHECK(fh && fw);
+  for (int mode=0; mode<2; mode++) {
+    Editor e(screen->gd, font, new LocalFile(fn, "r"));
+    if      (mode == 0) { e.CheckResized(Box(80*fw, 25*fh)); }
+    else if (mode == 1) { e.CheckResized(Box(20*fw, 25*fh)); e.SetShouldWrap(true, true); }
+
+    EXPECT_EQ(lines.size(), e.file_line.size());
+    if (mode == 0) EXPECT_EQ(lines.size(), e.wrapped_lines);
+    
+    for (int iters=0; iters<1000; iters++) {
+      int ind = (rand()%2 == 0) ? (rand() % e.file_line.size()) :
+        Clamp(((last_ind+(rand()%e.line_fb.lines)) * ((rand()%2==0)?1:-1)), 0, e.file_line.size()-1);
+      e.ScrollTo(ind, rand() % (rand() % 2 == 1 ? 160 : 40));
+      EXPECT_NE(nullptr, e.cursor_glyphs);
+      EXPECT_EQ(ind, e.cursor_line_index);
+      EXPECT_EQ(lines[e.cursor_line_index], String::ToUTF8(e.cursor_glyphs->Text16()));
+      for (int m=0; m<10 && ind>0 && ind<e.file_line.size()-1; m++) {
+        int r = rand() % 3, orig_line_index = e.cursor_line_index;
+        if      (r == 0) { ind--; e.HistUp();   EXPECT_EQ(orig_line_index-1, e.cursor_line_index); }
+        else if (r == 1) { ind++; e.HistDown(); EXPECT_EQ(orig_line_index+1, e.cursor_line_index); }
+        EXPECT_NE(nullptr, e.cursor_glyphs);
+        EXPECT_EQ(ind, e.cursor_line_index);
+        EXPECT_EQ(lines[e.cursor_line_index], String::ToUTF8(e.cursor_glyphs->Text16()));
+      }
+      last_ind = ind;
+    }
+  }
+}
+
 TEST(GUITest, EditorUndoFuzz) {
   Font *font = app->fonts->Fake();
   int fh = font->Height(), fw = font->fixed_width;
   string fn = "../../../core/app/app.cpp", contents = LocalFile::FileContents(fn);
   CHECK(fh && fw);
-  {
+  for (int mode=0; mode<2; mode++) {
     BufferFile modified(string("")), undone(string("")), redone(string(""));
     Editor e(screen->gd, font, new LocalFile(fn, "r"));
-    e.CheckResized(Box(80*fw, 25*fh));
-    for (int i=0; i<1000; i++) {
+    if      (mode == 0) { e.CheckResized(Box(80*fw, 25*fh)); }
+    else if (mode == 1) { e.CheckResized(Box(20*fw, 25*fh)); e.SetShouldWrap(true, true); }
+    for (int iters=0; iters<1000; iters++) {
       e.ScrollTo(rand() % e.wrapped_lines, rand() % (rand() % 2 == 1 ? 160 : 40));
       if (rand()%2 == 1) for (int i=0, l=rand()%32; i<l; i++) e.Modify(rand()%64 == 0 ? '\n' : 'A'+i, false);
       else               for (int i=0, l=rand()%18; i<l; i++) e.Modify(0, true);
