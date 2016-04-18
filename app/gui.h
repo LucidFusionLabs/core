@@ -430,7 +430,6 @@ struct TextArea : public TextBox {
 struct TextView : public TextArea {
   int last_fb_width=0, last_fb_lines=0, last_first_line=0;
   int wrapped_lines=0, fb_wrapped_lines=0;
-  Callback update_annotation_cb;
   TextView(GraphicsDevice *D, const FontRef &F=FontRef()) : TextArea(D, F, 0, 0) { reverse_line_fb=1; }
 
   virtual int WrappedLines() const { return wrapped_lines; }
@@ -520,7 +519,6 @@ struct Editor : public TextView {
     static int VectorGetLines(const vector<LineOffset> &v, int i) { return v[i].wrapped_lines; }
   };
   typedef PrefixSumKeyedRedBlackTree<int, LineOffset> LineMap;
-  struct Modification { point p; bool erase; String16 data; };
   struct SyntaxColors : public Colors {
     struct Rule { string name; Color fg, bg; int style; };
     string name;
@@ -531,20 +529,27 @@ struct Editor : public TextView {
     virtual int GetSyntaxStyle(const string &n, int da) { return FindOrDefault(style, n, da); }
   };
   struct Base16DefaultDarkSyntaxColors : public SyntaxColors { Base16DefaultDarkSyntaxColors(); };
+  struct Modification { point p; bool erase; String16 data; };
+  struct VersionNumber {
+    int major, offset;
+    bool operator==(const VersionNumber &x) const { return major == x.major && offset == x.offset; }
+    bool operator!=(const VersionNumber &x) const { return major != x.major || offset != x.offset; }
+  };
 
   shared_ptr<File> file;
   LineMap file_line;
   FreeListVector<String16> edits;
   Time modified=Time(0);
-  Callback modified_cb, newline_cb;
+  Callback modified_cb, newline_cb, tab_cb;
   vector<pair<int,int>> annotation;
-  vector<Modification> undo;
+  vector<Modification> version;
+  VersionNumber version_number, saved_version_number, cached_text_version_number;
+  BufferFile cached_text;
   SyntaxColors *syntax=0;
-  unique_ptr<TranslationUnit> tu;
   Line *cursor_glyphs=0;
   LineOffset *cursor_offset=0;
-  int cursor_line_index=0, cursor_start_line_number=0, cursor_start_line_number_offset=0, undo_offset=0;
-  bool opened=0, unsaved_changes=0;
+  int cursor_line_index=0, cursor_start_line_number=0, cursor_start_line_number_offset=0;
+  bool opened=0;
   virtual ~Editor();
   Editor(GraphicsDevice *D, const FontRef &F=FontRef(), File *I=0);
 
@@ -556,6 +561,7 @@ struct Editor : public TextView {
   void CursorRight()  { UpdateCursorX(min(cursor.i.x+1, CursorGlyphsSize())); }
   void Home()         { UpdateCursorX(0); }
   void End()          { UpdateCursorX(CursorGlyphsSize()); }
+  void Tab()          { if (tab_cb) tab_cb(); }
   void HistUp();
   void HistDown();
   void SelectionCB(const Selection::Point&);
@@ -575,7 +581,8 @@ struct Editor : public TextView {
   void Modify(char16_t, bool erase, bool undo_or_redo=false);
   int Save();
   int SaveTo(File *out);
-  void UpdateUndo(const point &p, bool erase, char16_t c);
+  bool CacheModifiedText();
+  void RecordModify(const point &p, bool erase, char16_t c);
   bool WalkUndo(bool backwards);
   bool ScrollTo(int line_index, int x);
   void SetSyntax(SyntaxColors *s) { SetColors((syntax = s)); }

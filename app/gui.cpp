@@ -844,7 +844,6 @@ int TextView::UpdateLines(float vs, int *first_ind, int *first_offset, int *firs
   if (width_changed) {
     last_fb_width = fb->w;
     if (wrap || init) UpdateMapping(fb->w);
-    if (init && update_annotation_cb) update_annotation_cb();
   }
 
   bool resized = (width_changed && wrap) || last_fb_lines != fb->lines;
@@ -1101,7 +1100,7 @@ Editor::Base16DefaultDarkSyntaxColors::Base16DefaultDarkSyntaxColors() :
   }) {}
 
 Editor::~Editor() {}
-Editor::Editor(GraphicsDevice *D, const FontRef &F, File *I) : TextView(D, F) {
+Editor::Editor(GraphicsDevice *D, const FontRef &F, File *I) : TextView(D, F), cached_text(string()) {
   cmd_color = Color(Color::black, .5);
   file_line.node_value_cb = &LineOffset::GetLines;
   file_line.node_print_cb = &LineOffset::GetString;
@@ -1290,8 +1289,7 @@ void Editor::Modify(char16_t c, bool erase, bool undo_or_redo) {
   bool wrap = Wrap(), erase_line = erase && !cursor.i.x;
   if (!cursor_start_line_number && erase_line) return;
   if (!undo_or_redo && !erase_line)
-    UpdateUndo(point(cursor.i.x, cursor_line_index), erase, !erase ? c : (*b)[cursor.i.x-1]);
-  unsaved_changes = true;
+    RecordModify(point(cursor.i.x, cursor_line_index), erase, !erase ? c : (*b)[cursor.i.x-1]);
   modified = Now();
   if (modified_cb) modified_cb();
 
@@ -1309,8 +1307,8 @@ void Editor::Modify(char16_t c, bool erase, bool undo_or_redo) {
     UpdateCursorX(x);
     RefreshLines();
     if (!undo_or_redo) {
-      if (1)       UpdateUndo(point(cursor.i.x + chomped, cursor_line_index), true, '\n');
-      if (chomped) UpdateUndo(point(cursor.i.x + 1,       cursor_line_index), true, '\r');
+      if (1)       RecordModify(point(cursor.i.x + chomped, cursor_line_index), true, '\n');
+      if (chomped) RecordModify(point(cursor.i.x + 1,       cursor_line_index), true, '\r');
     }
     return Redraw(true);
   } else if (!erase && c == '\n') {
@@ -1357,6 +1355,7 @@ int Editor::Save() {
     function<string(int)>([&](int i){ return String::ToUTF8(edits.data[i]) + "\n"; }));
   Reload();
   Redraw(true);
+  saved_version_number = version_number;
   return ret;
 }
 
@@ -1368,22 +1367,32 @@ int Editor::SaveTo(File *out) {
     function<string(int)>([&](int i){ return String::ToUTF8(edits.data[i]) + "\n"; }), out);
 }
 
-void Editor::UpdateUndo(const point &p, bool erase, char16_t c) {
-  if (undo_offset < undo.size()) undo.resize(undo_offset);
-  if (undo.size() && c != '\n') {
-    Modification &m = undo.back();
+bool Editor::CacheModifiedText() {
+  if (version_number == saved_version_number) return false;
+  if (version_number != cached_text_version_number) {
+    cached_text.Close();
+    SaveTo(&cached_text);
+    cached_text_version_number = version_number;
+  }
+  return true;
+}
+
+void Editor::RecordModify(const point &p, bool erase, char16_t c) {
+  if (version_number.offset < version.size()) { version_number.major++; version.resize(version_number.offset); }
+  if (version.size() && c != '\n') {
+    Modification &m = version.back();
     if (m.p.y == p.y && m.erase == erase && !(m.data.size() == 1 && m.data[0] == '\n') &&
         m.p.x + m.data.size() * (erase ? -1 : 1) == p.x) { m.data.append(1, c); return; }
   }
-  undo.push_back({ p, erase, String16(1, c) });
-  undo_offset = undo.size();
+  version.push_back({ p, erase, String16(1, c) });
+  version_number.offset = version.size();
 }
 
 bool Editor::WalkUndo(bool backwards) {
-  if (backwards) { if (!undo_offset)               return false; }
-  else           { if (undo_offset >= undo.size()) return false; }
+  if (backwards) { if (!version_number.offset)                  return false; }
+  else           { if (version_number.offset >= version.size()) return false; }
 
-  const Modification &m = undo[backwards ? --undo_offset : undo_offset++];
+  const Modification &m = version[backwards ? --version_number.offset : version_number.offset++];
   bool nl = m.data.size() == 1 && m.data[0] == '\n';
   point target = (nl && (backwards != m.erase)) ? point(0, m.p.y + 1) :
     point(m.p.x + ((backwards && !nl) ? (m.erase ? -m.data.size() : m.data.size()) : 0), m.p.y);
@@ -1393,8 +1402,6 @@ bool Editor::WalkUndo(bool backwards) {
 
   if (backwards) for (auto i=m.data.rbegin(), e=m.data.rend(); i!=e; ++i) Modify(*i, !m.erase, true);
   else           for (auto i=m.data.begin(),  e=m.data.end();  i!=e; ++i) Modify(*i,  m.erase, true);
-
-  if (!undo_offset) unsaved_changes = false;
   return true;
 }
 

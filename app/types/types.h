@@ -333,6 +333,13 @@ template <class X, class Y> void FilterValues(X *v, const Y &f) {
   }
 }
 
+template <class X> vector<typename X::mapped_type> GetValueVector(const X &m) {
+  vector<typename X::mapped_type> ret;
+  std::transform(m.begin(), m.end(), std::back_inserter(ret),
+                 [](const typename X::value_type &v){ return v.second; });
+  return ret;
+}
+
 template <class X> void Move(X *to, const X *from, int size) {
   if      (from == to) return;
   else if (from <  to) { for (int i=size-1; i >= 0; i--) to[i] = from[i]; }

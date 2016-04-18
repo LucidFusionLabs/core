@@ -279,14 +279,8 @@ bool MultiProcessBuffer::Open() {
   bool read_only = 0 && url.size();
   if (!len || (url.size() && impl < 0)) return ERRORv(false, "mpb open url=", url, " len=", len, " fd=", impl);
   if (url.empty()) {
-    CHECK_EQ(-1, impl);
-#ifdef LFL_APPLE
-    string dir = "/var/tmp/";
-#else
-    string dir = app->dldir;
-#endif
-    string path = StrCat(dir, app->name, "_mpb.XXXXXXXX");
-    if ((impl = mkstemp(&path[0])) < 0) return ERRORv(false, "mkstemp ", path, ": ", strerror(errno));
+    string path;
+    if ((impl = LocalFile::CreateTemporary("mpb", &path)) < 0) return false;
     if (unlink(path.c_str())) return ERRORv(false, "unlink ", path);
     if (ftruncate(impl, len)) return ERRORv(false, "ftruncate ", path, " ", len);
     url = MultiProcessBufferURL;

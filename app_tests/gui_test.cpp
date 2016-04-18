@@ -799,7 +799,7 @@ TEST(GUITest, EditorUndoFuzz) {
       else               for (int i=0, l=rand()%18; i<l; i++) e.Modify(0, true);
     }
     e.SaveTo(&modified);
-    while (e.undo_offset) e.WalkUndo(true);
+    while (e.version_number.offset) e.WalkUndo(true);
     e.SaveTo(&undone);
     EXPECT_EQ(contents, undone.buf);
     while (e.WalkUndo(false)) {}

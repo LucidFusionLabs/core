@@ -105,8 +105,12 @@ struct LocalFile : public File {
 
   static const char Slash, ExecutableSuffix[];
   static bool mkdir(const string &dir, int mode);
+  static bool unlink(const string &fn);
   static int IsFile(const string &localfilename);
   static int IsDirectory(const string &localfilename);
+  static int CreateTemporary(const string &prefix, string *localfilename_out);
+  static string CreateTemporaryName(const string &prefix);
+  static string CreateTemporaryNameTemplate(const string &prefix);
   static string CurrentDirectory(int max_size=1024);
   static string JoinPath(const string &x, const string &y);
   static string FileContents(const string &localfilename) { return LocalFile(localfilename, "r").Contents(); }

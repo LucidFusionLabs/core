@@ -21,7 +21,7 @@
 namespace LFL {
 
 struct TranslationUnit {
-  typedef unordered_map<string, EditorDialog*> OpenedFiles;
+  typedef unordered_map<string, shared_ptr<EditorDialog>> OpenedFiles;
   struct Token { static const int Punctuation, Keyword, Identifier, Literal, Comment; };
   struct Cursor {
     static const int StringLiteral;
@@ -68,13 +68,17 @@ struct TranslationUnit {
 
   CXIndex index=0;
   CXTranslationUnit tu=0;
+  bool parse_failed=0;
   string filename, compile_command, working_directory;
   vector<pair<int,int>> skipped_lines;
 
   virtual ~TranslationUnit();
   TranslationUnit(const string &f, const string &cc, const string &wd);
+  bool SaveTo(const string &f);
+  bool Load(const string &f);
   bool Parse(const OpenedFiles &unsaved = OpenedFiles());
   bool Reparse(const OpenedFiles &unsaved = OpenedFiles());
+  void *CompleteCode(const OpenedFiles&, int, int);
   FileNameAndOffset FindDefinition(const string &f, int offset);
 };
 
@@ -89,7 +93,7 @@ struct IDEProject {
 };
 
 struct RegexCPlusPlusHighlighter { static void UpdateAnnotation(Editor*); };
-struct ClangCPlusPlusHighlighter { static void UpdateAnnotation(Editor*); };
+struct ClangCPlusPlusHighlighter { static void UpdateAnnotation(Editor*, TranslationUnit*); };
 
 struct CMakeDaemon {
   enum { Null=0, Init=1, HaveTargets=2 };

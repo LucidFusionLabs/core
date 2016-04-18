@@ -132,9 +132,11 @@ int LocalFile::IsDirectory(const string &filename) {
   if (attr == INVALID_FILE_ATTRIBUTES) return ERRORv(0, "GetFileAttributes(", filename, ") failed: ", strerror(errno));
   return attr & FILE_ATTRIBUTE_DIRECTORY;
 }
+
 #else // LFL_WINDOWS
 const char LocalFile::Slash = '/';
 const char LocalFile::ExecutableSuffix[] = "";
+
 int LocalFile::IsFile(const string &filename) {
   if (filename.empty()) return false;
 #ifdef LFL_ANDROID
@@ -146,6 +148,7 @@ int LocalFile::IsFile(const string &filename) {
   return !(buf.st_mode & S_IFDIR);
 #endif
 }
+
 int LocalFile::IsDirectory(const string &filename) {
   if (filename.empty()) return true;
 #ifdef LFL_ANDROID
@@ -156,6 +159,31 @@ int LocalFile::IsDirectory(const string &filename) {
   if (stat(filename.c_str(), &buf)) return false;
   return buf.st_mode & S_IFDIR;
 #endif
+}
+
+int LocalFile::CreateTemporary(const string &prefix, string *name) {
+  string v;
+  if (!name) name = &v;
+  *name = CreateTemporaryNameTemplate(prefix);
+
+  int fd = -1;
+  if ((fd = mkstemp(&(*name)[0])) < 0) return ERRORv(-1, "mkstemp ", *name, ": ", strerror(errno));
+  return fd;
+}
+
+string LocalFile::CreateTemporaryName(const string &prefix) {
+  string ret = CreateTemporaryNameTemplate(prefix);
+  CHECK(mktemp(&ret[0]));
+  return ret;
+}
+
+string LocalFile::CreateTemporaryNameTemplate(const string &prefix) {
+#ifdef LFL_APPLE
+  string dir = "/var/tmp/";
+#else
+  string dir = app->dldir;
+#endif
+  return StrCat(dir, app->name, "_", prefix, ".XXXXXXXX");
 }
 #endif // LFL_WINDOWS
 
@@ -211,6 +239,10 @@ bool LocalFile::mkdir(const string &dir, int mode) {
 #else
   return ::mkdir(dir.c_str(), mode) == 0;
 #endif
+}
+
+bool LocalFile::unlink(const string &fn) {
+  return ::unlink(fn.c_str()) == 0;
 }
 
 int LocalFile::WhenceMap(int n) {

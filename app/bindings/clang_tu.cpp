@@ -200,7 +200,8 @@ vector<CXUnsavedFile> GetClangUnsavedFiles(const TranslationUnit::OpenedFiles &o
   vector<CXUnsavedFile> ret;
   for (const auto &i : opened) {
     Editor *e = &i.second->view;
-    if (e->unsaved_changes) ret.push_back({ e->file->Filename(), 0, 0 });
+    if (!e->CacheModifiedText()) continue;
+    ret.push_back({ e->file->Filename(), e->cached_text.buf.c_str(), e->cached_text.buf.size() });
   }
   return ret;
 }
@@ -213,6 +214,18 @@ TranslationUnit::~TranslationUnit() {
   clang_disposeIndex(index);
 }
 
+bool TranslationUnit::SaveTo(const string &f) {
+  int err = clang_saveTranslationUnit(tu, f.c_str(), clang_defaultSaveOptions(tu));
+  if (err != CXSaveError_None) return ERRORv(false, "clang_saveTranslationUnit ", err);
+  return true;
+}
+
+bool TranslationUnit::Load(const string &fn) {
+  CXErrorCode ret = clang_createTranslationUnit2(index, fn.c_str(), &tu);
+  if (!tu) return ERRORv(false, "TranslationUnit ", fn, " load failed ", StringPrintf("%d",ret));
+  return true;
+}
+
 bool TranslationUnit::Parse(const OpenedFiles &opened) { 
   vector<CXUnsavedFile> unsaved = GetClangUnsavedFiles(opened);
   vector<string> argv;
@@ -223,15 +236,20 @@ bool TranslationUnit::Parse(const OpenedFiles &opened) {
   chdir(working_directory.c_str());
 
   unsigned options = CXTranslationUnit_DetailedPreprocessingRecord | // CXTranslationUnit_KeepGoing |
-     clang_defaultEditingTranslationUnitOptions();
-  // CXTranslationUnit_PrecompiledPreamble | CXTranslationUnit_CacheCompletionResults;
+    CXTranslationUnit_ForSerialization | // clang_defaultEditingTranslationUnitOptions();
+    CXTranslationUnit_PrecompiledPreamble | CXTranslationUnit_CacheCompletionResults |
+    CXTranslationUnit_CreatePreambleOnFirstParse;
   CXErrorCode ret = clang_parseTranslationUnit2(index, filename.c_str(), av.data(), av.size(),
                                                 &unsaved[0], unsaved.size(), options, &tu);
   if (!tu) return ERRORv(false, "TranslationUnit ", filename, " create failed ", StringPrintf("%d",ret));
+  // clang_reparseTranslationUnit(tu, 0, 0, clang_defaultReparseOptions(tu));
 
+  parse_failed = false;
   int diagnostics = clang_getNumDiagnostics(tu);
   for(int i = 0; i != diagnostics; ++i) {
     CXDiagnostic diag = clang_getDiagnostic(tu, i);
+    CXDiagnosticSeverity severity = clang_getDiagnosticSeverity(diag);
+    if (severity == CXDiagnostic_Error || severity == CXDiagnostic_Error) parse_failed = true;
     INFO("TranslationUnit ", filename, " ",
          GetClangString(clang_formatDiagnostic(diag, clang_defaultDiagnosticDisplayOptions())));
   }
@@ -253,6 +271,15 @@ bool TranslationUnit::Reparse(const OpenedFiles &opened) {
   vector<CXUnsavedFile> unsaved = GetClangUnsavedFiles(opened);
   clang_reparseTranslationUnit(tu, unsaved.size(), &unsaved[0], clang_defaultReparseOptions(tu));
   return true;
+}
+
+void *TranslationUnit::CompleteCode(const OpenedFiles &opened, int line, int column) {
+  unsigned options = clang_defaultCodeCompleteOptions();
+  vector<CXUnsavedFile> unsaved = GetClangUnsavedFiles(opened);
+  auto ret = clang_codeCompleteAt(tu, filename.c_str(), line, column, &unsaved[0], unsaved.size(), options);
+  INFO("CompleteCode results ", ret->NumResults);
+  clang_disposeCodeCompleteResults(ret);
+  return nullptr;
 }
 
 FileNameAndOffset TranslationUnit::FindDefinition(const string &fn, int offset) {
@@ -325,8 +352,9 @@ bool IDEProject::GetCompileCommand(const string &fn, string *out, string *dir) {
   return true;
 }
 
-void ClangCPlusPlusHighlighter::UpdateAnnotation(Editor *e) {
-  if (!e->tu) return;
+void ClangCPlusPlusHighlighter::UpdateAnnotation(Editor *e, TranslationUnit *tu) {
+  if (!tu) return;
+  e->annotation.clear();
   using Token  = TranslationUnit::Token;
   using Cursor = TranslationUnit::Cursor;
   static unordered_set<string> inc_w{ "include", "import" }, ctype_w{ "int", "long", "short", "char",
@@ -342,7 +370,7 @@ void ClangCPlusPlusHighlighter::UpdateAnnotation(Editor *e) {
   int fl_ind = 1, a = e->default_attr, last_a = a, last_line = -1, last_cursor_kind = 0;
   auto fl = e->file_line.Begin();
   Editor::LineOffset *file_line_data = 0;
-  TranslationUnit::TokenVisitor(e->tu.get(), TranslationUnit::TokenVisitor::TokenCB([&]
+  TranslationUnit::TokenVisitor(tu, TranslationUnit::TokenVisitor::TokenCB([&]
     (TranslationUnit::TokenVisitor *v, const string &text, int tk, int ck, int kk, int line, int column) {
       if (e->syntax) {
         string match;
@@ -380,7 +408,7 @@ void ClangCPlusPlusHighlighter::UpdateAnnotation(Editor *e) {
         }
 
         a = e->syntax->GetSyntaxStyle(match, e->default_attr);
-        if (1) printf("%d %d %s %d %d (in %d) %d %s\n", line, column, text.c_str(), tk, ck,
+        if (0) printf("%d %d %s %d %d (in %d) %d %s\n", line, column, text.c_str(), tk, ck,
                       input_cursor_kind, kk, match.c_str());
       }
 
