@@ -21,7 +21,7 @@
 namespace LFL {
 
 struct TranslationUnit {
-  typedef unordered_map<string, shared_ptr<EditorDialog>> OpenedFiles;
+  typedef vector<pair<string, shared_ptr<BufferFile>>> OpenedFiles;
   struct Token { static const int Punctuation, Keyword, Identifier, Literal, Comment; };
   struct Cursor {
     static const int StringLiteral;
@@ -92,8 +92,10 @@ struct IDEProject {
   bool GetCompileCommand(const string &fn, string *out, string *dir);
 };
 
-struct RegexCPlusPlusHighlighter { static void UpdateAnnotation(Editor*); };
-struct ClangCPlusPlusHighlighter { static void UpdateAnnotation(Editor*, TranslationUnit*); };
+struct ClangCPlusPlusHighlighter {
+  static void UpdateAnnotation(TranslationUnit*, Editor::SyntaxColors*, int,
+                               vector<Flow::TextAnnotation> *out);
+};
 
 struct CMakeDaemon {
   enum { Null=0, Init=1, HaveTargets=2 };

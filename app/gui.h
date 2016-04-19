@@ -510,11 +510,10 @@ struct DirectoryTree : public PropertyTree {
 
 struct Editor : public TextView {
   struct LineOffset { 
-    long long offset;
-    int size, wrapped_lines;
-    PieceIndex annotation;
-    LineOffset(int O=0, int S=0, int WL=1) : offset(O), size(S), wrapped_lines(WL) {}
-    static string GetString(const LineOffset *v) { return StrCat(v->offset); }
+    long long file_offset=-1;
+    int file_size=0, wrapped_lines=0, main_tu_line=-1, next_tu_line=-1;
+    LineOffset(int O=0, int S=0, int WL=1) : file_offset(O), file_size(S), wrapped_lines(WL) {}
+    static string GetString(const LineOffset *v) { return StrCat(v->file_offset); }
     static int    GetLines (const LineOffset *v) { return v->wrapped_lines; }
     static int VectorGetLines(const vector<LineOffset> &v, int i) { return v[i].wrapped_lines; }
   };
@@ -541,10 +540,10 @@ struct Editor : public TextView {
   FreeListVector<String16> edits;
   Time modified=Time(0);
   Callback modified_cb, newline_cb, tab_cb;
-  vector<pair<int,int>> annotation;
   vector<Modification> version;
   VersionNumber version_number, saved_version_number, cached_text_version_number;
-  BufferFile cached_text;
+  function<Flow::TextAnnotation(const LineOffset*)> annotation_cb = [](const LineOffset*){ return Flow::TextAnnotation(); };
+  shared_ptr<BufferFile> cached_text;
   SyntaxColors *syntax=0;
   Line *cursor_glyphs=0;
   LineOffset *cursor_offset=0;

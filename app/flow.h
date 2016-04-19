@@ -144,11 +144,9 @@ struct FloatContainer : public Box {
 
 struct Flow {
   enum class State { OK=1, NEW_WORD=2, NEW_LINE=3 };
-  struct TextAnnotation : public ArrayPiece<pair<int, int>> {
+  struct TextAnnotation : public vector<pair<int, int>> {
     const Drawable::AttrSource *attr_source=0;
-    TextAnnotation() {}
-    TextAnnotation(const pair<int,int> *a, const PieceIndex &p)                     : ArrayPiece<pair<int, int>>(a, p) {} 
-    TextAnnotation(const vector<pair<int,int>> &a, const Drawable::AttrSource *s=0) : ArrayPiece<pair<int, int>>(a), attr_source(s) {}
+    TextAnnotation(const Drawable::AttrSource *s=0) : attr_source(s) {}
   };
   struct Layout {
     bool wrap_lines=1, word_break=1, align_center=0, align_right=0, ignore_newlines=0,
@@ -223,8 +221,8 @@ struct Flow {
     int start_size = out->data.size();
     out->data.reserve(start_size + text.size());
     int initial_out_lines = out->line.size(), line_start_ind = 0, ci_bytes = 0, cj_bytes = 0, c, ci;
-    int attr_id = (!attr.len && !da && !out->attr.source) ? out->attr.GetAttrId(cur_attr) : da;
-    auto a = attr.buf, ae = a + attr.len;
+    int attr_id = (!attr.size() && !da && !out->attr.source) ? out->attr.GetAttrId(cur_attr) : da;
+    auto a = attr.data(), ae = a + attr.size();
 
     for (const X *b = text.data(), *i = b; !text.Done(i); i += ci_bytes) {
       if (a != ae && i - b == a->first) {

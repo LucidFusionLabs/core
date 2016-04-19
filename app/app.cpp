@@ -632,8 +632,9 @@ Application::~Application() {
     network_thread->thread->Wait();
     network_thread->net->Free();
   }
-  message_queue.HandleMessages();
   if (!FLAGS_threadpool_size && thread_pool.worker.size()) thread_pool.worker[0].queue->HandleMessages();
+  else thread_pool.Stop();
+  message_queue.HandleMessages();
   if (fonts) fonts.reset();
   if (shaders) shaders.reset();
   vector<Window*> close_list;

@@ -198,11 +198,8 @@ string GetClangString(const CXString &s) {
 
 vector<CXUnsavedFile> GetClangUnsavedFiles(const TranslationUnit::OpenedFiles &opened) {
   vector<CXUnsavedFile> ret;
-  for (const auto &i : opened) {
-    Editor *e = &i.second->view;
-    if (!e->CacheModifiedText()) continue;
-    ret.push_back({ e->file->Filename(), e->cached_text.buf.c_str(), e->cached_text.buf.size() });
-  }
+  for (const auto &i : opened)
+    ret.push_back({ i.first.c_str(), i.second->buf.c_str(), i.second->buf.size() });
   return ret;
 }
 
@@ -305,15 +302,12 @@ FileNameAndOffset TranslationUnit::FindDefinition(const string &fn, int offset) 
 void TranslationUnit::TokenVisitor::Visit() {
   CXToken* tokens=0;
   unsigned num_tokens=0, by=0, bx=0, ey=0, ex=0;
-  CXFile cf = clang_getFile(tu->tu, tu->filename.c_str());
-  CXSourceRange sr = clang_getRange(clang_getLocationForOffset(tu->tu, cf, 0),
-                                    clang_getLocationForOffset(tu->tu, cf, LocalFile(tu->filename, "r").Size()));
-  clang_tokenize(tu->tu, sr, &tokens, &num_tokens);
-  CXCursor null_cursor = clang_getNullCursor();
-  CXCursorKind last_cursor_kind;
+  clang_tokenize(tu->tu, clang_getCursorExtent(clang_getTranslationUnitCursor(tu->tu)),
+                 &tokens, &num_tokens);
+
   for (CXToken *t = tokens, *e = t + num_tokens; t != e; ++t) {
-    sr = clang_getTokenExtent(tu->tu, *t);
-    CXSourceLocation tb=clang_getRangeStart(sr), te=clang_getRangeEnd(sr);
+    CXSourceRange sr = clang_getTokenExtent(tu->tu, *t);
+    CXSourceLocation tb = clang_getRangeStart(sr), te = clang_getRangeEnd(sr);
     clang_getSpellingLocation(tb, NULL, &by, &bx, NULL);
     clang_getSpellingLocation(te, NULL, &ey, &ex, NULL);
     if (1)                  CHECK_LE(last_token.y, (int)by);
@@ -352,9 +346,11 @@ bool IDEProject::GetCompileCommand(const string &fn, string *out, string *dir) {
   return true;
 }
 
-void ClangCPlusPlusHighlighter::UpdateAnnotation(Editor *e, TranslationUnit *tu) {
+void ClangCPlusPlusHighlighter::UpdateAnnotation(TranslationUnit *tu, Editor::SyntaxColors *syntax,
+                                                 int default_attr, vector<Flow::TextAnnotation> *out) {
+  out->clear();
   if (!tu) return;
-  e->annotation.clear();
+
   using Token  = TranslationUnit::Token;
   using Cursor = TranslationUnit::Cursor;
   static unordered_set<string> inc_w{ "include", "import" }, ctype_w{ "int", "long", "short", "char",
@@ -367,15 +363,15 @@ void ClangCPlusPlusHighlighter::UpdateAnnotation(Editor *e, TranslationUnit *tu)
     "uint_fast32_t", "uint_fast64_t", "intptr_t", "uintptr_t", "intmax_t", "uintmax_t",
     "__label__", "__complex__", "__volatile__" };
 
-  int fl_ind = 1, a = e->default_attr, last_a = a, last_line = -1, last_cursor_kind = 0;
-  auto fl = e->file_line.Begin();
-  Editor::LineOffset *file_line_data = 0;
+  Flow::TextAnnotation *last_annotation = 0;
+  int a = default_attr, last_a = a, last_cursor_kind = CXCursor_FirstInvalid, last_line = -1, done_line = 0;
   TranslationUnit::TokenVisitor(tu, TranslationUnit::TokenVisitor::TokenCB([&]
     (TranslationUnit::TokenVisitor *v, const string &text, int tk, int ck, int kk, int line, int column) {
-      if (e->syntax) {
+      if (syntax) {
         string match;
         int input_cursor_kind = ck;
         if (Cursor::IsInvalid(ck) && line == last_line) ck = last_cursor_kind;
+        // if (Cursor::IsInvalid(ck)) tk = Token::Comment;
         last_line = line;
         last_cursor_kind = ck;
         bool is_id = tk == Token::Identifier, is_punct = tk == Token::Punctuation;
@@ -407,21 +403,16 @@ void ClangCPlusPlusHighlighter::UpdateAnnotation(Editor *e, TranslationUnit *tu)
           match = "Normal";
         }
 
-        a = e->syntax->GetSyntaxStyle(match, e->default_attr);
-        if (0) printf("%d %d %s %d %d (in %d) %d %s\n", line, column, text.c_str(), tk, ck,
-                      input_cursor_kind, kk, match.c_str());
+        a = syntax->GetSyntaxStyle(match, default_attr);
+        // printf("%d %d %s %d %d (in %d) %d %s\n", line, column, text.c_str(), tk, ck, input_cursor_kind, kk, match.c_str());
       }
 
-      if (line != v->last_token.y) {
-        if (v->last_token.y+1 < line && last_a != e->default_attr) PushBack(e->annotation, {0, last_a});
-        if (fl_ind < line)
-          for (++fl_ind, ++fl; fl.ind && fl_ind < line; ++fl_ind, ++fl)
-            fl.val->annotation = PieceIndex(e->annotation.size()-1, 1);
-        if (!fl.ind) return;
-        (file_line_data = fl.val)->annotation.offset = e->annotation.size();
+      if (done_line < line) {
+        for (++done_line; done_line < line; ++done_line)
+          PushBack(*out, Flow::TextAnnotation()).emplace_back(0, last_a);
+        last_annotation = &PushBack(*out, Flow::TextAnnotation());
       }
-      e->annotation.emplace_back(column-1, a);
-      file_line_data->annotation.len++;
+      last_annotation->emplace_back(column-1, a);
       last_a = a;
     })).Visit();
 }

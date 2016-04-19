@@ -268,10 +268,10 @@ void Flow::AppendBlock(int w, int h, const Border &b, Box *box_out) {
 
 void Flow::AppendBoxArrayText(const DrawableBoxArray &in) {
   bool attr_fwd = in.attr.source;
-  vector<pair<int,int>> annotation;
+  TextAnnotation annotation(&in.attr);
   for (DrawableBoxRawIterator iter(in.data); !iter.Done(); iter.Increment())
     annotation.emplace_back(iter.cur_start, iter.cur_attr);
-  AppendText(DrawableBoxRun(&in[0], in.Size()).Text16(), TextAnnotation(annotation, &in.attr));
+  AppendText(DrawableBoxRun(&in[0], in.Size()).Text16(), annotation);
 }
 
 int Flow::AppendBox(int w, int h, Drawable *drawable) { 

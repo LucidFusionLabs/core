@@ -1100,7 +1100,7 @@ Editor::Base16DefaultDarkSyntaxColors::Base16DefaultDarkSyntaxColors() :
   }) {}
 
 Editor::~Editor() {}
-Editor::Editor(GraphicsDevice *D, const FontRef &F, File *I) : TextView(D, F), cached_text(string()) {
+Editor::Editor(GraphicsDevice *D, const FontRef &F, File *I) : TextView(D, F) {
   cmd_color = Color(Color::black, .5);
   file_line.node_value_cb = &LineOffset::GetLines;
   file_line.node_print_cb = &LineOffset::GetString;
@@ -1184,7 +1184,7 @@ int Editor::UpdateMappedLines(pair<int, int> read_lines, int new_first_line, int
     for (lie = lib; lie.val && lie.key <= last_read_line; ++lie) {
       auto v = lie.val;
       if (shorten_read && !(lie.key + v->wrapped_lines <= last_read_line)) break;
-      if (v->size >= 0) read_len += rv.Append({v->offset, v->size+1});
+      if (v->file_size >= 0) read_len += rv.Append({v->file_offset, v->file_size+1});
     }
     if (wrap && tail_read) {
       LineMap::ConstIterator i = lie;
@@ -1198,19 +1198,19 @@ int Editor::UpdateMappedLines(pair<int, int> read_lines, int new_first_line, int
   Line *L = 0;
   int added = 0, bo = 0, width = wrap ? GetFrameBuffer()->w : 0, ll, l, e;
   if (up) for (auto li = lie; li != lib; bo += l + !e, added++) {
-    l = (e = max(0, -(--li).val->size)) ? 0 : li.val->size;
+    l = (e = max(0, -(--li).val->file_size)) ? 0 : li.val->file_size;
     int removed = (wrap && line.ring.Full()) ? line.Front()->Lines() : 0;
-    if (e) (L = line.PushBack())->AssignText(edits[e-1],                                 Flow::TextAnnotation(annotation.data(), PieceIndex()));
-    else   (L = line.PushBack())->AssignText(StringPiece(buf.data()+read_len-bo-l-1, l), Flow::TextAnnotation(annotation.data(), li.val->annotation));
+    if (e) (L = line.PushBack())->AssignText(edits[e-1],                                 annotation_cb(li.val));
+    else   (L = line.PushBack())->AssignText(StringPiece(buf.data()+read_len-bo-l-1, l), annotation_cb(li.val));
     fb_wrapped_lines += (ll = L->Layout(width, true)) - removed;
     if (removed) line.ring.DecrementSize(1);
     CHECK_EQ(li.val->wrapped_lines, ll);
   }
   else for (auto li = lib; li != lie; ++li, bo += l + !e, added++) {
-    l = (e = max(0, -li.val->size)) ? 0 : li.val->size;
+    l = (e = max(0, -li.val->file_size)) ? 0 : li.val->file_size;
     int removed = (wrap && line.ring.Full()) ? line.Back()->Lines() : 0;
-    if (e) (L = line.PushFront())->AssignText(edits[e-1],                    Flow::TextAnnotation(annotation.data(), PieceIndex()));
-    else   (L = line.PushFront())->AssignText(StringPiece(buf.data()+bo, l), Flow::TextAnnotation(annotation.data(), li.val->annotation));
+    if (e) (L = line.PushFront())->AssignText(edits[e-1],                    annotation_cb(li.val));
+    else   (L = line.PushFront())->AssignText(StringPiece(buf.data()+bo, l), annotation_cb(li.val));
     fb_wrapped_lines += (ll = L->Layout(width, true)) - removed;
     if (removed) line.ring.DecrementSize(1);
     CHECK_EQ(li.val->wrapped_lines, ll);
@@ -1275,8 +1275,8 @@ int Editor::CursorLinesChanged(const String16 &b, int add_lines) {
 
 int Editor::ModifyCursorLine() {
   CHECK(cursor_offset);
-  if (cursor_offset->size >= 0) cursor_offset->size = -edits.Insert(cursor_glyphs->Text16())-1;
-  return -cursor_offset->size-1;
+  if (cursor_offset->file_size >= 0) cursor_offset->file_size = -edits.Insert(cursor_glyphs->Text16())-1;
+  return -cursor_offset->file_size-1;
 }
 
 void Editor::Modify(char16_t c, bool erase, bool undo_or_redo) {
@@ -1320,8 +1320,8 @@ void Editor::Modify(char16_t c, bool erase, bool undo_or_redo) {
     if (wrap) RefreshLines();
     cursor.i.x = 0;
     HistDown();
-    CHECK_EQ(0, cursor_offset->offset);
-    CHECK_EQ(0, cursor_offset->size);
+    CHECK_EQ(0, cursor_offset->file_offset);
+    CHECK_EQ(0, cursor_offset->file_size);
     CHECK_EQ(1, cursor_offset->wrapped_lines);
     if (wrap) CursorLinesChanged(a);
     swap(edits[ModifyCursorLine()], a);
@@ -1350,7 +1350,7 @@ void Editor::Modify(char16_t c, bool erase, bool undo_or_redo) {
 int Editor::Save() {
   IOVector rv;
   for (LineMap::ConstIterator i = file_line.Begin(); i.ind; ++i)
-    rv.Append({ i.val->offset, i.val->size + (i.val->size >= 0) });
+    rv.Append({ i.val->file_offset, i.val->file_size + (i.val->file_size >= 0) });
   int ret = file->Rewrite(ArrayPiece<IOVec>(rv.data(), rv.size()),
     function<string(int)>([&](int i){ return String::ToUTF8(edits.data[i]) + "\n"; }));
   Reload();
@@ -1362,7 +1362,7 @@ int Editor::Save() {
 int Editor::SaveTo(File *out) {
   IOVector rv;
   for (LineMap::ConstIterator i = file_line.Begin(); i.ind; ++i)
-    rv.Append({ i.val->offset, i.val->size + (i.val->size >= 0) });
+    rv.Append({ i.val->file_offset, i.val->file_size + (i.val->file_size >= 0) });
   return file->Rewrite(ArrayPiece<IOVec>(rv.data(), rv.size()),
     function<string(int)>([&](int i){ return String::ToUTF8(edits.data[i]) + "\n"; }), out);
 }
@@ -1370,8 +1370,8 @@ int Editor::SaveTo(File *out) {
 bool Editor::CacheModifiedText() {
   if (version_number == saved_version_number) return false;
   if (version_number != cached_text_version_number) {
-    cached_text.Close();
-    SaveTo(&cached_text);
+    cached_text = make_shared<BufferFile>(string());
+    SaveTo(cached_text.get());
     cached_text_version_number = version_number;
   }
   return true;

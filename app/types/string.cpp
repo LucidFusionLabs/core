@@ -76,11 +76,9 @@ String16 String::ToUTF16(const StringPiece &text, int *consumed) {
 #define UnicodeDebug(...)
 #endif
 
-String16 UTF16::WriteGlyph(int codepoint) { return String16(1, codepoint); }
-int UTF16::ReadGlyph(const String16Piece &s, const char16_t *p, int *len, bool eof) { *len=1; return *p; }
-int UTF8 ::ReadGlyph(const StringPiece   &s, const char     *p, int *len, bool eof) {
+int UTF8::ReadGlyph(const StringPiece &s, const char *p, int *len, bool eof) {
   *len = 1;
-  unsigned char c0 = *reinterpret_cast<const unsigned char*>(p);
+  unsigned char c0 = *MakeUnsigned(p);
   if ((c0 & (1<<7)) == 0) return c0; // ascii
   if ((c0 & (1<<6)) == 0) { UnicodeDebug("unexpected continuation byte"); return c0; }
   for ((*len)++; *len < 4; (*len)++) {
@@ -95,21 +93,40 @@ int UTF8 ::ReadGlyph(const StringPiece   &s, const char     *p, int *len, bool e
   else { UnicodeDebug("invalid len ", *len); *len=1; return c0; }
 
   for (int i = *len; i > 1; i--) {
-    unsigned char c = *reinterpret_cast<const unsigned char*>(++p);
+    unsigned char c = *MakeUnsigned(++p);
     if ((c & 0xc0) != 0x80) { UnicodeDebug("unexpected non-continuation byte"); *len=1; return c0; }
     ret = (ret << 6) | (c & 0x3f);
   }
   return ret;
 }
+
 string UTF8::WriteGlyph(int codepoint) {
-#if 1
+#if 0
   string out;
   char16_t in[] = { char16_t(codepoint), 0 };
   String::Convert(String16Piece(in, 1), &out, "UTF-16LE", "UTF-8");
   return out;
+  replacement_char = 0xFFFD;
 #else
+  int len=0;
+  if      (codepoint <= 0x7F)     return string(1, codepoint & 0x7F);
+  else if (codepoint <= 0x7FF)    len = 1;
+  else if (codepoint <= 0xFFFF)   len = 2;
+  else if (codepoint <= 0x10FFFF) len = 3;
+  else                            return "\xef\xbf\xbd"; 
+
+  char buf[3];
+  for (int i = 0; i != len; ++i) {
+    buf[len - i] = 0x80 | (codepoint & 0x3F);
+    codepoint >>= 6;
+  }
+  buf[0] = (0x1E << (6 - len)) | (codepoint & (0x3F >> len));
+  return string(buf, len);
 #endif
 }
+
+int UTF16::ReadGlyph(const String16Piece &s, const char16_t *p, int *len, bool eof) { *len=1; return *p; }
+String16 UTF16::WriteGlyph(int codepoint) { return String16(1, codepoint); }
 
 int isfileslash(int c) { return c == LocalFile::Slash; }
 int MatchingParens(int c1, int c2) { return (c1 == '(' && c2 == ')') || (c1 == '[' && c2 == ']') || (c1 == '<' && c2 == '>'); }
