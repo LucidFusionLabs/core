@@ -56,7 +56,10 @@ endif()
 
 # freetype
 if(LFL_FREETYPE)
-  if(WIN32)
+if(LFL_LINUX)
+    set(FREETYPE_INCLUDE /usr/include/freetype2 PARENT_SCOPE)
+    set(FREETYPE_LIB -lfreetype PARENT_SCOPE)
+  elseif(LFL_WINDOWS)
     INCLUDE_EXTERNAL_MSPROJECT(freetype ${CMAKE_CURRENT_SOURCE_DIR}/freetype/builds/win32/vc2008/freetype.vcxproj)
     set(FREETYPE_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/freetype/include PARENT_SCOPE)
     set(FREETYPE_LIB freetype239_D.lib PARENT_SCOPE)
@@ -465,8 +468,12 @@ endif()
 
 # libclang
 if(LFL_LIBCLANG)
+  get_unversioned_shared_library_name(CLANG_LIBRARY ${LLVM_DIR}/lib/libclang)
+  if(LFL_APPLE)
+    set(LLVM_SYSTEM_LIBRARIES -lncurses)
+  endif()
   set(LIBCLANG_INCLUDE ${LLVM_DIR}/include PARENT_SCOPE)
-  set(LIBCLANG_LIB ${LLVM_DIR}/lib/libclang.dylib ${LLVM_DIR}/lib/libLLVMX86Disassembler.a
+  set(LIBCLANG_LIB ${CLANG_LIBRARY} ${LLVM_DIR}/lib/libLLVMX86Disassembler.a
       ${LLVM_DIR}/lib/libLLVMX86AsmParser.a ${LLVM_DIR}/lib/libLLVMX86CodeGen.a
       ${LLVM_DIR}/lib/libLLVMSelectionDAG.a ${LLVM_DIR}/lib/libLLVMAsmPrinter.a
       ${LLVM_DIR}/lib/libLLVMX86Desc.a ${LLVM_DIR}/lib/libLLVMMCDisassembler.a
@@ -481,7 +488,7 @@ if(LFL_LIBCLANG)
       ${LLVM_DIR}/lib/libLLVMMCParser.a ${LLVM_DIR}/lib/libLLVMBitReader.a
       ${LLVM_DIR}/lib/libLLVMMC.a ${LLVM_DIR}/lib/libLLVMMCJIT.a
       ${LLVM_DIR}/lib/libLLVMCore.a ${LLVM_DIR}/lib/libLLVMSupport.a
-      -lncurses -rdynamic PARENT_SCOPE)
+      ${LLVM_SYSTEM_LIBRARIES} -rdynamic PARENT_SCOPE)
 endif()
 
 # libcling
@@ -606,7 +613,8 @@ if(LFL_LIBUV)
   ExternalProject_Add(uv LOG_CONFIGURE ON LOG_BUILD ON
                       PREFIX ${CMAKE_CURRENT_BINARY_DIR}/libuv
                       SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/libuv
-                      CONFIGURE_COMMAND <SOURCE_DIR>/configure --prefix=<INSTALL_DIR>)
+                      CONFIGURE_COMMAND <SOURCE_DIR>/autogen.sh --prefix=<INSTALL_DIR>
+                      COMMAND <SOURCE_DIR>/configure --prefix=<INSTALL_DIR>)
   add_library(libuv IMPORTED STATIC GLOBAL)
   add_dependencies(libuv uv)
   set_property(TARGET libuv PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/libuv/lib/libuv.a)
@@ -623,6 +631,7 @@ if(LFL_CMAKEDAEMON)
                       -DLIBUV_INCLUDE_DIR=${CMAKE_CURRENT_BINARY_DIR}/libuv/include
                       -DLIBUV_LIBRARY=${CMAKE_CURRENT_BINARY_DIR}/libuv/lib/libuv.a
                       -DDTL_INCLUDE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/dtl)
+  add_dependencies(cmake-daemon libuv)
   add_executable(cmakedaemon IMPORTED GLOBAL)
   add_dependencies(cmakedaemon cmake-daemon)
   set_property(TARGET cmakedaemon PROPERTY IMPORTED_LOCATION

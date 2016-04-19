@@ -14,6 +14,14 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+macro(get_unversioned_shared_library_name _var _file)
+  if(LFL_APPLE)
+    set(${_var} ${_file}.dylib)
+  else()
+    set(${_var} ${_file}.so)
+  endif()
+endmacro()
+
 macro(get_shared_library_name _var _file _ver)
   if(LFL_APPLE)
     set(_so_prefix .)

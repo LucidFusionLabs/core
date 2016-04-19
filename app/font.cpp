@@ -21,13 +21,15 @@
 
 namespace LFL {
 #if defined(LFL_WINDOWS)
-DEFINE_string(font_engine, "gdi",      "[atlas,freetype,coretext,gdi]");
+DEFINE_string(font_engine, "gdi",      "[atlas,freetype,gdi]");
 #elif defined(LFL_APPLE)
-DEFINE_string(font_engine, "coretext", "[atlas,freetype,coretext,gdi]");
+DEFINE_string(font_engine, "coretext", "[atlas,freetype,coretext]");
+#elif defined(LFL_LINUX)
+DEFINE_string(font_engine, "fc",       "[atlas,freetype,fc]");
 #elif defined(LFL_ANDROID)
-DEFINE_string(font_engine, "atlas",    "[atlas,freetype,coretext,gdi]");
+DEFINE_string(font_engine, "atlas",    "[atlas,freetype]");
 #else
-DEFINE_string(font_engine, "freetype", "[atlas,freetype,coretext,gdi]");
+DEFINE_string(font_engine, "freetype", "[atlas,freetype]");
 #endif
 DEFINE_string(default_font, "", "Default font");
 DEFINE_string(default_font_family, "sans-serif", "Default font family");
@@ -293,11 +295,12 @@ FontEngine *Fonts::GetFontEngine(int engine_type) {
   switch (engine_type) {
     case FontDesc::Engine::Atlas:    return atlas_engine.get();
     case FontDesc::Engine::FreeType: return freetype_engine.get();
-#ifdef LFL_APPLE
+#if defined(LFL_APPLE)
     case FontDesc::Engine::CoreText: return coretext_engine.get();
-#endif
-#ifdef LFL_WINDOWS
+#elif defined(LFL_WINDOWS)
     case FontDesc::Engine::GDI:      return gdi_engine.get();
+#elif defined(LFL_LINUX)
+    case FontDesc::Engine::FC:       return fc_engine.get();
 #endif
     case FontDesc::Engine::Default:  return DefaultFontEngine();
   } return DefaultFontEngine();
@@ -307,11 +310,12 @@ FontEngine *Fonts::DefaultFontEngine() {
   if (!default_font_engine) {
     if      (FLAGS_font_engine == "atlas")      default_font_engine = atlas_engine.get();
     else if (FLAGS_font_engine == "freetype")   default_font_engine = freetype_engine.get();
-#ifdef LFL_APPLE                                
+#if defined(LFL_APPLE)
     else if (FLAGS_font_engine == "coretext")   default_font_engine = coretext_engine.get();
-#endif                                          
-#ifdef LFL_WINDOWS                                    
+#elif defined(LFL_WINDOWS)
     else if (FLAGS_font_engine == "gdi")        default_font_engine = gdi_engine.get();
+#elif defined(LFL_LINUX)
+    else if (FLAGS_font_engine == "fc")         default_font_engine = fc_engine.get();
 #endif                                          
     else                                        default_font_engine = fake_engine.get();
   }

@@ -16,6 +16,10 @@
 
 CMAKE_POLICY(SET CMP0004 OLD)
 
+if(CMAKE_TOOLCHAIN_FILE AND NOT CMAKE_CROSSCOMPILING)
+  include(${CMAKE_TOOLCHAIN_FILE})
+endif()
+
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE "Debug")
 endif()
@@ -79,7 +83,7 @@ elseif(CMAKE_SYSTEM_NAME MATCHES "Darwin")
   set(LFL_APP_CAMERA app_qtkit_camera)
   set(LFL_APP_CONVERT app_iconv_convert)
   set(LFL_APP_CRYPTO app_commoncrypto_crypto)
-  set(LFL_APP_FONT app_freetype_ttf)
+  set(LFL_APP_FONT app_null_ttf)
   set(LFL_APP_GAME_LOADER app_ffmpeg_resampler app_ffmpeg_loader app_libpng_png app_libjpeg_jpeg app_null_gif)
 
 elseif(WIN32 OR WIN64)
@@ -91,7 +95,7 @@ elseif(WIN32 OR WIN64)
   set(LFL_APP_CAMERA app_directshow_camera)
   set(LFL_APP_CONVERT app_null_convert)
   set(LFL_APP_CRYPTO app_openssl_crypto)
-  set(LFL_APP_FONT app_freetype_ttf)
+  set(LFL_APP_FONT app_null_ttf)
   set(LFL_APP_GAME_LOADER app_ffmpeg_resampler app_ffmpeg_loader app_libpng_png app_libjpeg_jpeg app_null_gif)
 
 elseif(CMAKE_SYSTEM_NAME MATCHES "Linux")
@@ -129,7 +133,7 @@ list(APPEND CMAKE_MODULE_PATH ${LFL_SOURCE_DIR}/core/CMake)
 include(LFLTarget)
 include(LFLPackage)
 
-if(WIN32)
+if(LFL_WINDOWS)
   link_directories("")
   set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /SAFESEH:NO")
   FOREACH(flag CMAKE_C_FLAGS_RELEASE CMAKE_C_FLAGS_RELWITHDEBINFO CMAKE_C_FLAGS_DEBUG CMAKE_C_FLAGS_DEBUG_INIT

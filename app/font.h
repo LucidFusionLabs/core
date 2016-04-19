@@ -37,7 +37,7 @@ DECLARE_bool(subpixel_fonts);
 struct FontDesc {
   enum { Bold=1, Italic=2, Mono=4, Outline=8, Shadow=16 };
   struct Engine {
-    enum { Default=0, Atlas=1, FreeType=2, CoreText=3, GDI=4 };
+    enum { Default=0, Atlas=1, FreeType=2, CoreText=3, GDI=4, FC=5 };
     static int Parse(const string &s) {
       if      (s == "atlas")    return Atlas;
       else if (s == "freetype") return FreeType;
@@ -158,10 +158,9 @@ struct GlyphCache {
   Box dim;
   Texture tex;
   unique_ptr<Flow> flow;
-#ifdef LFL_APPLE
+#if defined(LFL_APPLE)
   CGContextRef cgcontext=0;
-#endif
-#ifdef LFL_WINDOWS
+#elif defined(LFL_WINDOWS)
   HDC hdc=0;
 #endif
   vector<const Glyph*> glyph;
@@ -178,10 +177,9 @@ struct GlyphCache {
   void Clear();
   bool Add(point *out, float *out_texcoord, int w, int h, int max_height=0);
   void Load(const Font*, const Glyph*, const unsigned char *buf, int linesize, int pf, const FilterCB &f=FilterCB());
-#ifdef LFL_APPLE
+#if defined(LFL_APPLE)
   void Load(const Font*, const Glyph*, CGFontRef cgfont, int size);
-#endif
-#ifdef LFL_WINDOWS
+#elif defined(LFL_WINDOWS)
   void Load(const Font*, const Glyph*, HFONT hfont, int size, HDC dc);
 #endif
 
@@ -400,6 +398,30 @@ struct GDIFontEngine : public FontEngine {
 struct GDIFontEngine {};
 #endif
 
+#ifdef LFL_LINUX
+struct FCFontEngine : public FontEngine {
+  struct Resource : public FontEngine::Resource {
+  };
+  unordered_map<string, shared_ptr<Resource> > resource;
+  FCFontEngine();
+  ~FCFontEngine();
+
+  virtual const char*      Name() { return "FCFontEngine"; }
+  virtual void             Shutdown();
+  virtual void             SetDefault();
+  virtual unique_ptr<Font> Open(const FontDesc&);
+  virtual int              InitGlyphs(Font *f, Glyph *g, int n);
+  virtual int              LoadGlyphs(Font *f, const Glyph *g, int n);
+  virtual string           DebugString(Font *f) const;
+
+  static void Init();
+  struct Flag { enum { WriteAtlas = 1 }; };
+  static Font *Open(const string &name, int size, Color c, int flag, int ct_flag);
+};
+#else
+struct FCFontEngine {};
+#endif
+
 struct IPCClientFontEngine : public FontEngine {
   struct Resource : public FontEngine::Resource { int id; Resource(int I=0) : id(I) {} };
   virtual const char *Name() { return "IPCClientFontEngine"; }
@@ -439,6 +461,7 @@ struct Fonts {
   LazyInitializedPtr<FreeTypeFontEngine> freetype_engine;
   LazyInitializedPtr<CoreTextFontEngine> coretext_engine;
   LazyInitializedPtr<GDIFontEngine> gdi_engine;
+  LazyInitializedPtr<FCFontEngine> fc_engine;
   LazyInitializedPtr<IPCClientFontEngine> ipc_client_engine;
   LazyInitializedPtr<IPCServerFontEngine> ipc_server_engine;
   unordered_map<FontDesc, unique_ptr<Font>, FontDesc::ColoredHasher, FontDesc::ColoredEqual> desc_map;

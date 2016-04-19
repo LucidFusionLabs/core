@@ -19,9 +19,10 @@
 #include <ft2build.h>
 #include FT_FREETYPE_H
 #include FT_LCD_FILTER_H
-FT_Library ft_library;
 
 namespace LFL {
+static FT_Library ft_library;
+
 FreeTypeFontEngine::Resource::~Resource() {
   if (face) FT_Done_Face(face);
 }
@@ -38,9 +39,8 @@ void FreeTypeFontEngine::SetDefault() {
 
 bool FreeTypeFontEngine::Init(const FontDesc &d) {
   if (Contains(resource, d.name)) return true;
-  string content = Asset::FileContents(d.name);
+  string content = d.name.data()[0] == '/' ? LocalFile::FileContents(d.name) : Asset::FileContents(d.name);
   if (Resource *r = OpenBuffer(d, &content)) {
-    bool fixed_width = FT_IS_FIXED_WIDTH(r->face);
     resource[d.name] = shared_ptr<Resource>(r);
     return true;
   }
@@ -83,7 +83,7 @@ FreeTypeFontEngine::Resource *FreeTypeFontEngine::OpenBuffer(const FontDesc &d, 
 int FreeTypeFontEngine::InitGlyphs(Font *f, Glyph *g, int n) {
   int count = 0, error;
   FT_FaceRec_ *face = dynamic_cast<Resource*>(f->resource.get())->face;
-  FT_Int32 flags = FT_LOAD_RENDER | (FLAGS_subpixel_fonts ? FT_LOAD_TARGET_LCD : 0) | FT_LOAD_FORCE_AUTOHINT;
+  FT_Int32 flags = FT_LOAD_RENDER | (FLAGS_subpixel_fonts ? FT_LOAD_TARGET_LCD : 0); // | FT_LOAD_FORCE_AUTOHINT;
   if ((error = FT_Set_Pixel_Sizes(face, 0, f->size))) { ERROR("FT_Set_Pixel_Sizes(", f->size, ") = ", error); return 0; }
 
   for (Glyph *e = g + n; g != e; ++g, count++) {
@@ -109,7 +109,7 @@ int FreeTypeFontEngine::LoadGlyphs(Font *f, const Glyph *g, int n) {
   bool outline = f->flag & FontDesc::Outline;
   GlyphCache *cache = f->glyph->cache.get();
   FT_FaceRec_ *face = dynamic_cast<Resource*>(f->resource.get())->face;
-  FT_Int32 flags = FT_LOAD_RENDER | (FLAGS_subpixel_fonts ? FT_LOAD_TARGET_LCD : 0) | FT_LOAD_FORCE_AUTOHINT;
+  FT_Int32 flags = FT_LOAD_RENDER | (FLAGS_subpixel_fonts ? FT_LOAD_TARGET_LCD : 0); // | FT_LOAD_FORCE_AUTOHINT;
   if ((error = FT_Set_Pixel_Sizes(face, 0, f->size))) { ERROR("FT_Set_Pixel_Sizes(", f->size, ") = ", error); return false; }
 
   for (const Glyph *e = g + n; g != e; ++g, count++) {
