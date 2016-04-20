@@ -65,7 +65,7 @@ unique_ptr<Font> FCFontEngine::Open(const FontDesc &d) {
   FontDesc ttf = d;
   ttf.name = MakeSigned(file);
   auto ttf_engine = app->fonts->freetype_engine.get();
-  CHECK(ttf_engine->Init(ttf));
+  if (!ttf_engine->Init(ttf)) FATAL("ttf init failed for ", ttf.DebugString());
   return ttf_engine->Open(ttf);
 }
 

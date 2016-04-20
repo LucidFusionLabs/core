@@ -133,6 +133,7 @@ int Application::GetMaxVolume() { return 0; }
 void Application::SetVolume(int v) {}
 void Application::ShowAds() {}
 void Application::HideAds() {}
+void Application::LaunchNativeContextMenu(const vector<MenuItem>&items) {}
 
 void Window::SetCaption(const string &v) {}
 void Window::SetResizeIncrements(float x, float y) {}
@@ -182,6 +183,7 @@ bool FrameScheduler::DoWait() {
   return false;
 }
 void FrameScheduler::Setup() { synchronize_waits = wait_forever_thread = 0; }
+bool FrameScheduler::WakeupIn(void *opaque, Time interval, bool force) {}
 void FrameScheduler::Wakeup(void *opaque) { 
   if (wait_forever && screen) {
     XEvent exp;

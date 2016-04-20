@@ -541,7 +541,7 @@ struct Editor : public TextView {
   Time modified=Time(0);
   Callback modified_cb, newline_cb, tab_cb;
   vector<Modification> version;
-  VersionNumber version_number, saved_version_number, cached_text_version_number;
+  VersionNumber version_number={0,0}, saved_version_number={0,0}, cached_text_version_number={0,0};
   function<Flow::TextAnnotation(const LineOffset*)> annotation_cb = [](const LineOffset*){ return Flow::TextAnnotation(); };
   shared_ptr<BufferFile> cached_text;
   SyntaxColors *syntax=0;
