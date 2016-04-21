@@ -398,13 +398,10 @@ struct GDIFontEngine : public FontEngine {
 struct GDIFontEngine {};
 #endif
 
-#ifdef LFL_LINUX
+#if defined(LFL_LINUX) && defined(LFL_FREETYPE)
 struct FCFontEngine : public FontEngine {
-  struct Resource : public FontEngine::Resource {
-  };
+  struct Resource : public FontEngine::Resource {};
   unordered_map<string, shared_ptr<Resource> > resource;
-  FCFontEngine();
-  ~FCFontEngine();
 
   virtual const char*      Name() { return "FCFontEngine"; }
   virtual void             Shutdown();
@@ -415,8 +412,6 @@ struct FCFontEngine : public FontEngine {
   virtual string           DebugString(Font *f) const;
 
   static void Init();
-  struct Flag { enum { WriteAtlas = 1 }; };
-  static Font *Open(const string &name, int size, Color c, int flag, int ct_flag);
 };
 #else
 struct FCFontEngine {};

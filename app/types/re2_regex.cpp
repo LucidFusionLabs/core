@@ -25,15 +25,22 @@ Regex::Regex(const string &patternstr) {
   impl = compiled.release();
 }
 
-int Regex::Match(const string &text, vector<Regex::Result> *out) {
-  if (!impl) return -1;
-  if (out) out->clear();
+int Regex::Match(const StringPiece &text, vector<Regex::Result> *out) {
+  if (!impl) return 0;
   auto compiled = static_cast<RE2*>(impl);
   re2::StringPiece match;
-  if (!RE2::PartialMatch(text, *compiled, &match)) return 0;
+  if (!RE2::PartialMatch(re2::StringPiece(text.data(), text.size()), *compiled, &match) ||
+      !match.size()) return 0;
   size_t offset = match.data() - text.data();
   out->emplace_back(offset, offset + match.size());
   return 1;
+}
+
+int Regex::MatchAll(const StringPiece &text, vector<Regex::Result> *out) {
+  out->clear();
+  for (const char *b = text.begin(), *i = b; Match(StringPiece(i, text.end()-i), out) > 0;
+       i = b + out->back().end) out->back() += i - b;
+  return out->size();
 }
 
 }; // namespace LFL

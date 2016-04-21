@@ -260,7 +260,7 @@ unsigned LFAppNextRandSeed();
 void WindowReshaped(int w, int h);
 void WindowMinimized(); 
 void WindowUnMinimized(); 
-void WindowClosed();
+bool WindowClosed();
 int KeyPress(int button, int down);
 int MouseClick(int button, int down, int x, int y);
 int MouseMove(int x, int y, int dx, int dy);

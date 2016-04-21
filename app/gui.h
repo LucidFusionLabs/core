@@ -442,10 +442,10 @@ struct TextView : public TextArea {
   virtual int UpdateMappedLines(pair<int, int>, int, int, bool, bool, bool, bool, bool) { return 0; }
 };
 
-struct PropertyTree : public TextView {
+struct PropertyView : public TextView {
   typedef size_t Id;
   typedef vector<Id> Children;
-  typedef function<void(PropertyTree*, Id)> PropertyCB; 
+  typedef function<void(PropertyView*, Id)> PropertyCB; 
   struct Node {
     typedef function<void(Id, Node*, int)> Visitor;
     Drawable *icon;
@@ -465,38 +465,48 @@ struct PropertyTree : public TextView {
   typedef PrefixSumKeyedRedBlackTree<int, NodeIndex> LineMap;
 
   Id root=0;
-  FreeListVector<Node> tree;
   LineMap property_line;
   FontRef menuicon_white, menuicon_black;
   int selected_line_no=-1;
   Color selected_color=Color(Color::blue, 0.2);
   PropertyCB line_selected_cb, selected_line_clicked_cb;
-  PropertyTree(GraphicsDevice *D, const FontRef &F=FontRef());
+  PropertyView(GraphicsDevice *D, const FontRef &F=FontRef());
 
-  void Deactivate() { TextBox::Deactivate(); selected_line_no=-1; }
-  void Draw(const Box &w, int flag=DrawFlag::Default, Shader *shader=0);
-  void Input(char k) {}
-  void Erase()       {}
-  void CursorRight() {}
-  void CursorLeft()  {}
-  void Home()        {}
-  void End()         {}
-  void HistUp()      {}
-  void HistDown()    {}
-  void Enter()       {}
+  virtual       Node* GetNode(Id)       = 0;
+  virtual const Node* GetNode(Id) const = 0;
 
-  void SetRoot(Id id) { root=id; tree[root-1].expanded=true; }
-  template <class... Args> Id AddNode(Args&&... args) { return 1+tree.Insert(Node(forward<Args>(args)...)); }
-
+  virtual bool Empty() const { return !property_line.size(); }
+  virtual void Clear() { property_line.Clear(); root=0; selected_line_no=-1; }
+  virtual void Deactivate() { TextBox::Deactivate(); selected_line_no=-1; }
+  virtual void SetRoot(Id id) { GetNode((root = id))->expanded = true; }
+  virtual void Draw(const Box &w, int flag=DrawFlag::Default, Shader *shader=0);
   virtual void VisitExpandedChildren(Id id, const Node::Visitor &cb, int depth=0);
   virtual void HandleCollapsed(Id id) {}
+  virtual void Input(char k) {}
+  virtual void Erase()       {}
+  virtual void CursorRight() {}
+  virtual void CursorLeft()  {}
+  virtual void Home()        {}
+  virtual void End()         {}
+  virtual void HistUp()      {}
+  virtual void HistDown()    {}
+  virtual void Enter()       {}
 
-  bool Empty() const { return !property_line.size(); }
   void UpdateMapping(int width);
   int UpdateMappedLines(pair<int, int>, int, int, bool, bool, bool, bool, bool);
   void LayoutLine(Line *L, const NodeIndex &n, const point &p);
   void HandleNodeControlClicked(Id id, int b, int x, int y, int down);
   void SelectionCB(const Selection::Point &p);
+};
+
+struct PropertyTree : public PropertyView {
+  FreeListVector<Node> tree;
+  using PropertyView::PropertyView;
+
+  /**/  Node* GetNode(Id id)       { return &tree[id-1]; }
+  const Node* GetNode(Id id) const { return &tree[id-1]; }
+  void Clear() { PropertyView::Clear(); tree.Clear(); }
+  template <class... Args> Id AddNode(Args&&... args) { return 1+tree.Insert(Node(forward<Args>(args)...)); }
 };
 
 struct DirectoryTree : public PropertyTree {
@@ -541,7 +551,7 @@ struct Editor : public TextView {
   Time modified=Time(0);
   Callback modified_cb, newline_cb, tab_cb;
   vector<Modification> version;
-  VersionNumber version_number={0,0}, saved_version_number={0,0}, cached_text_version_number={0,0};
+  VersionNumber version_number={0,0}, saved_version_number={0,0}, cached_text_version_number={-1,0};
   function<Flow::TextAnnotation(const LineOffset*)> annotation_cb = [](const LineOffset*){ return Flow::TextAnnotation(); };
   shared_ptr<BufferFile> cached_text;
   SyntaxColors *syntax=0;
@@ -580,7 +590,7 @@ struct Editor : public TextView {
   void Modify(char16_t, bool erase, bool undo_or_redo=false);
   int Save();
   int SaveTo(File *out);
-  bool CacheModifiedText();
+  bool CacheModifiedText(bool force=false);
   void RecordModify(const point &p, bool erase, char16_t c);
   bool WalkUndo(bool backwards);
   bool ScrollTo(int line_index, int x);

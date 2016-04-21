@@ -164,7 +164,6 @@ static const char **osx_argv = 0;
     if (runloop_timer) { [runloop_timer invalidate]; runloop_timer = nil; }
   }
 
-  - (void)stopThreadAndExit { [self stopThread]; exit(0); }
   - (void)runloopTimerFired:(id)sender { [self setNeedsDisplay:YES]; }
   - (void)triggerTimerFired:(id)sender { [self clearTriggerTimer]; needs_frame=1; [self setNeedsDisplay:YES]; }
   - (void)clearTriggerTimer { needs_frame=0; [trigger_timer invalidate]; trigger_timer = nil; }
@@ -190,7 +189,7 @@ static const char **osx_argv = 0;
     if (first_callback && !(first_callback = 0)) SetLFAppMainThread();
     if (!initialized) return;
     if (app->run) LFAppFrame(true);
-    else [self stopThreadAndExit];
+    else [[NSApplication sharedApplication] terminate:self];
   }
 
   - (void)reshape {
@@ -203,9 +202,9 @@ static const char **osx_argv = 0;
 
   - (BOOL)windowShouldClose:(id)sender { return should_close; }
   - (void)windowWillClose:(NSNotification *)notification { 
-    SetNativeWindow(screen);
-    WindowClosed();
     [self stopThread];
+    SetNativeWindow(screen);
+    if (WindowClosed()) LFAppAtExit();
   }
 
   - (void)setWaitForeverSocket: (int)fd {
@@ -380,7 +379,6 @@ static const char **osx_argv = 0;
   }
 
   - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication *)theApplication {
-    GetLFApp()->run = false;
     return YES;
   }
 @end

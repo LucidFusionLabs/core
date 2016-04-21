@@ -203,6 +203,26 @@ vector<CXUnsavedFile> GetClangUnsavedFiles(const TranslationUnit::OpenedFiles &o
   return ret;
 }
 
+TranslationUnit::CodeCompletions::~CodeCompletions() {
+  if (impl) clang_disposeCodeCompleteResults(static_cast<CXCodeCompleteResults*>(impl));
+}
+
+size_t TranslationUnit::CodeCompletions::size() const {
+  return impl ? static_cast<CXCodeCompleteResults*>(impl)->NumResults : 0;
+}
+
+string TranslationUnit::CodeCompletions::GetText(size_t ind) {
+  if (ind >= size()) return "";
+  string text;
+  auto results = static_cast<CXCodeCompleteResults*>(impl);
+  const CXCompletionString &completion = results->Results[ind].CompletionString;
+  for (size_t j = 0, je = clang_getNumCompletionChunks(completion); j != je; j++) {
+    if (clang_getCompletionChunkKind(completion, j) != CXCompletionChunk_TypedText) continue;
+    StrAppend(&text, GetClangString(clang_getCompletionChunkText(completion, j)));
+  }
+  return text;
+}
+
 TranslationUnit::TranslationUnit(const string &f, const string &cc, const string &wd) :
   index(clang_createIndex(0, 0)), filename(f), compile_command(cc), working_directory(wd) {}
 
@@ -270,19 +290,18 @@ bool TranslationUnit::Reparse(const OpenedFiles &opened) {
   return true;
 }
 
-void *TranslationUnit::CompleteCode(const OpenedFiles &opened, int line, int column) {
+unique_ptr<TranslationUnit::CodeCompletions>
+TranslationUnit::CompleteCode(const OpenedFiles &opened, int line, int column) {
   unsigned options = clang_defaultCodeCompleteOptions();
   vector<CXUnsavedFile> unsaved = GetClangUnsavedFiles(opened);
-  auto ret = clang_codeCompleteAt(tu, filename.c_str(), line, column, &unsaved[0], unsaved.size(), options);
-  INFO("CompleteCode results ", ret->NumResults);
-  clang_disposeCodeCompleteResults(ret);
-  return nullptr;
+  return make_unique<CodeCompletions>(clang_codeCompleteAt(tu, filename.c_str(), line+1, column+1,
+                                                           &unsaved[0], unsaved.size(), options));
 }
 
-FileNameAndOffset TranslationUnit::FindDefinition(const string &fn, int offset) {
+FileNameAndOffset TranslationUnit::FindDefinition(const string &fn, int line, int column) {
   CXFile cf = clang_getFile(tu, fn.c_str());
   if (!cf) return FileNameAndOffset();
-  CXCursor cursor = clang_getCursor(tu, clang_getLocationForOffset(tu, cf, offset));
+  CXCursor cursor = clang_getCursor(tu, clang_getLocation(tu, cf, line+1, column+1));
   CXCursor cursor_canonical = clang_getCanonicalCursor(cursor), null = clang_getNullCursor();
   CXCursor parent = clang_getCursorSemanticParent(cursor), child = null;
   if (clang_equalCursors(parent, null)) return FileNameAndOffset();

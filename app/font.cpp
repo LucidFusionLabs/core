@@ -24,12 +24,12 @@ namespace LFL {
 DEFINE_string(font_engine, "gdi",      "[atlas,freetype,gdi]");
 #elif defined(LFL_APPLE)
 DEFINE_string(font_engine, "coretext", "[atlas,freetype,coretext]");
-#elif defined(LFL_LINUX)
+#elif defined(LFL_LINUX) && defined(LFL_FREETYPE)
 DEFINE_string(font_engine, "fc",       "[atlas,freetype,fc]");
-#elif defined(LFL_ANDROID)
-DEFINE_string(font_engine, "atlas",    "[atlas,freetype]");
-#else
+#elif defined(LFL_FREETYPE)
 DEFINE_string(font_engine, "freetype", "[atlas,freetype]");
+#else
+DEFINE_string(font_engine, "atlas",    "[atlas,freetype]");
 #endif
 DEFINE_string(default_font, "", "Default font");
 DEFINE_string(default_font_family, "sans-serif", "Default font family");
@@ -299,7 +299,7 @@ FontEngine *Fonts::GetFontEngine(int engine_type) {
     case FontDesc::Engine::CoreText: return coretext_engine.get();
 #elif defined(LFL_WINDOWS)
     case FontDesc::Engine::GDI:      return gdi_engine.get();
-#elif defined(LFL_LINUX)
+#elif defined(LFL_LINUX) && defined(LFL_FREETYPE)
     case FontDesc::Engine::FC:       return fc_engine.get();
 #endif
     case FontDesc::Engine::Default:  return DefaultFontEngine();
@@ -314,7 +314,7 @@ FontEngine *Fonts::DefaultFontEngine() {
     else if (FLAGS_font_engine == "coretext")   default_font_engine = coretext_engine.get();
 #elif defined(LFL_WINDOWS)
     else if (FLAGS_font_engine == "gdi")        default_font_engine = gdi_engine.get();
-#elif defined(LFL_LINUX)
+#elif defined(LFL_LINUX) && defined(LFL_FREETYPE)
     else if (FLAGS_font_engine == "fc")         default_font_engine = fc_engine.get();
 #endif                                          
     else                                        default_font_engine = fake_engine.get();

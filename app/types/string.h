@@ -571,14 +571,15 @@ struct Regex {
     Result(int B=0, int E=0) : begin(B), end(E) {}
     string Text(const string &t) const { return t.substr(begin, end - begin); }
     float FloatVal(const string &t) const { return atof(Text(t).c_str()); }
-    void operator+=(const Result &v) { begin += v.begin; end += v.end; }
-    void operator-=(const Result &v) { begin -= v.begin; end -= v.end; }
+    void operator+=(int v) { begin += v; end += v; }
+    void operator-=(int v) { begin -= v; end -= v; }
   };
   void *impl=0;
   ~Regex();
   Regex() {}
   Regex(const string &pattern);
-  int Match(const string &text, vector<Result> *out);
+  int Match(const StringPiece &text, vector<Result> *out);
+  int MatchAll(const StringPiece &text, vector<Result> *out);
 };
 
 struct StreamRegex {

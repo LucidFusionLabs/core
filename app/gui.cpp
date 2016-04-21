@@ -911,36 +911,46 @@ int TextView::UpdateLines(float vs, int *first_ind, int *first_offset, int *firs
   return dist * (up ? -1 : 1);
 }
 
-/* PropertyTree */
+/* PropertyView */
 
-PropertyTree::PropertyTree(GraphicsDevice *D, const FontRef &F) : TextView(D, F),
+PropertyView::PropertyView(GraphicsDevice *D, const FontRef &F) : TextView(D, F),
 menuicon_white(FontDesc("MenuAtlas", "", 0, Color::white, Color::clear, 0, 0, FontDesc::Engine::Atlas)),
 menuicon_black(FontDesc("MenuAtlas", "", 0, Color::black, Color::clear, 0, 0, FontDesc::Engine::Atlas)) {
   cursor_enabled = 0;
   cmd_color = Color(Color::black, .5);
   property_line.node_value_cb = &NodeIndex::GetLines;
   property_line.node_print_cb = &NodeIndex::GetString;
-  selection_cb = bind(&PropertyTree::SelectionCB, this, _1);
+  selection_cb = bind(&PropertyView::SelectionCB, this, _1);
   if (F->desc->bg.A()) bg_color = &F->desc->bg;
   Activate();
 }
 
-void PropertyTree::VisitExpandedChildren(Id id, const Node::Visitor &cb, int depth) {
-  auto n = &tree[id-1];
+void PropertyView::Draw(const Box &b, int flag, Shader *shader) {
+  TextArea::Draw(b, flag, shader);
+  int selected_line_no_offset = selected_line_no - last_first_line, fh = style.font->Height();
+  if (Within(selected_line_no_offset, 0, GetFrameBuffer()->lines)) {
+    screen->gd->EnableBlend();
+    screen->gd->FillColor(selected_color);
+    Box(b.x, b.top()-(selected_line_no_offset+1)*fh, b.w, fh).Draw();
+  }
+}
+
+void PropertyView::VisitExpandedChildren(Id id, const Node::Visitor &cb, int depth) {
+  if (!id) return;
+  auto n = GetNode(id);
   if (depth) cb(id, n, depth);
   if (n->expanded) for (auto i : n->child) VisitExpandedChildren(i, cb, 1+(depth ? depth : n->depth));
 }
 
-void PropertyTree::UpdateMapping(int width) {
+void PropertyView::UpdateMapping(int width) {
   wrapped_lines = 0;
   property_line.Clear();
-  if (!root) return;
   VisitExpandedChildren(root, [&](Id id, Node *n, int d)
-   { tree[id-1].depth=d-1; property_line.val.Insert(NodeIndex(id)); wrapped_lines++; });
+   { if (d) GetNode(id)->depth = d-1; property_line.val.Insert(NodeIndex(id)); wrapped_lines++; });
   property_line.LoadFromSortedVal();
 }
 
-int PropertyTree::UpdateMappedLines(pair<int, int> read_lines, int new_first_line, int new_last_line,
+int PropertyView::UpdateMappedLines(pair<int, int> read_lines, int new_first_line, int new_last_line,
                                     bool up, bool head_read, bool tail_read, bool short_read, bool shorten_read) {
   if (!read_lines.second) return 0;
   int added = 0, last_read_line = read_lines.first + read_lines.second - 1, fh = style.font->Height();
@@ -954,8 +964,8 @@ int PropertyTree::UpdateMappedLines(pair<int, int> read_lines, int new_first_lin
   return added;
 }
 
-void PropertyTree::LayoutLine(Line *L, const NodeIndex &ni, const point &p) {
-  Node *n = &tree[ni.id-1];
+void PropertyView::LayoutLine(Line *L, const NodeIndex &ni, const point &p) {
+  Node *n = GetNode(ni.id);
   L->Clear();
   Flow *flow = &L->data->flow;
   flow->layout.wrap_lines = 0;
@@ -967,7 +977,7 @@ void PropertyTree::LayoutLine(Line *L, const NodeIndex &ni, const point &p) {
     flow->out->PushBack(control, control_attr_id, menuicon_black->FindGlyph(n->expanded ? 11 : 12));
     auto i = Insert(L->data->controls, 0, make_shared<Control>
                     (L, this, control + p, "", MouseControllerCallback(MouseController::CoordCB
-                      (bind(&PropertyTree::HandleNodeControlClicked, this, ni.id, _1, _2, _3, _4)), true)));
+                      (bind(&PropertyView::HandleNodeControlClicked, this, ni.id, _1, _2, _3, _4)), true)));
   }
 
   if (n->icon) {
@@ -979,9 +989,9 @@ void PropertyTree::LayoutLine(Line *L, const NodeIndex &ni, const point &p) {
   flow->AppendText(n->text);
 }
 
-void PropertyTree::HandleNodeControlClicked(Id id, int b, int x, int y, int down) {
+void PropertyView::HandleNodeControlClicked(Id id, int b, int x, int y, int down) {
   if (!down) return;
-  auto n = &tree[id-1];
+  auto n = GetNode(id);
   auto fb = GetFrameBuffer();
   int h = fb->Height(), fh = style.font->Height(), depth = n->depth, added = 0;
   // int line_no = RingIndex::Wrap((h - fb->scroll.y * h - y), h) / fh, child_line_no = line_no + 1;
@@ -990,13 +1000,13 @@ void PropertyTree::HandleNodeControlClicked(Id id, int b, int x, int y, int down
 
   if ((n->expanded = !n->expanded)) {
     VisitExpandedChildren(id, [&](Id id, Node *n, int d){
-      tree[id-1].depth = d;
+      GetNode(id)->depth = d;
       property_line.Insert(child_line_no + added++, NodeIndex(id));
       wrapped_lines = AddWrappedLines(wrapped_lines, 1);
     });
   } else {
     while (auto li = property_line.SecondBound(child_line_no+1).val) {
-      if (tree[li->id-1].depth <= depth) break;
+      if (GetNode(li->id)->depth <= depth) break;
       HandleCollapsed(li->id);
       property_line.Erase(child_line_no);
       wrapped_lines = AddWrappedLines(wrapped_lines, -1);
@@ -1006,17 +1016,7 @@ void PropertyTree::HandleNodeControlClicked(Id id, int b, int x, int y, int down
   Redraw();
 }
 
-void PropertyTree::Draw(const Box &b, int flag, Shader *shader) {
-  TextArea::Draw(b, flag, shader);
-  int selected_line_no_offset = selected_line_no - last_first_line, fh = style.font->Height();
-  if (Within(selected_line_no_offset, 0, GetFrameBuffer()->lines)) {
-    screen->gd->EnableBlend();
-    screen->gd->FillColor(selected_color);
-    Box(b.x, b.top()-(selected_line_no_offset+1)*fh, b.w, fh).Draw();
-  }
-}
-
-void PropertyTree::SelectionCB(const Selection::Point &p) {
+void PropertyView::SelectionCB(const Selection::Point &p) {
   int line_no = last_first_line + (box.top() - screen->mouse.y) / style.font->Height();
   if (line_no == selected_line_no && selected_line_clicked_cb)
     if (auto li = property_line.SecondBound(line_no+1).val) selected_line_clicked_cb(this, li->id);
@@ -1028,7 +1028,7 @@ void PropertyTree::SelectionCB(const Selection::Point &p) {
 /* DirectoryTree */
 
 void DirectoryTree::VisitExpandedChildren(Id id, const Node::Visitor &cb, int depth) {
-  auto n = &tree[id-1];
+  auto n = GetNode(id);
   if (depth) cb(id, n, depth);
   else depth = n->depth;
   if (!n->expanded) return;
@@ -1367,8 +1367,8 @@ int Editor::SaveTo(File *out) {
     function<string(int)>([&](int i){ return String::ToUTF8(edits.data[i]) + "\n"; }), out);
 }
 
-bool Editor::CacheModifiedText() {
-  if (version_number == saved_version_number) return false;
+bool Editor::CacheModifiedText(bool force) {
+  if (!force && version_number == saved_version_number) return false;
   if (version_number != cached_text_version_number) {
     cached_text = make_shared<BufferFile>(string());
     SaveTo(cached_text.get());

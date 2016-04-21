@@ -61,7 +61,7 @@ extern "C" void LFAppShutdown()                   { LFL::app->run=0; LFAppWakeup
 extern "C" void WindowReshaped(int w, int h)      { LFL::screen->Reshaped(w, h); }
 extern "C" void WindowMinimized()                 { LFL::screen->Minimized(); }
 extern "C" void WindowUnMinimized()               { LFL::screen->UnMinimized(); }
-extern "C" void WindowClosed()                    { LFL::app->CloseWindow(LFL::screen); }
+extern "C" bool WindowClosed()                    { LFL::app->CloseWindow(LFL::screen); return LFL::app->windows.empty(); }
 extern "C" void QueueWindowReshaped(int w, int h) { LFL::app->RunInMainThread(LFL::bind(&LFL::Window::Reshaped,    LFL::screen, w, h)); }
 extern "C" void QueueWindowMinimized()            { LFL::app->RunInMainThread(LFL::bind(&LFL::Window::Minimized,   LFL::screen)); }
 extern "C" void QueueWindowUnMinimized()          { LFL::app->RunInMainThread(LFL::bind(&LFL::Window::UnMinimized, LFL::screen)); }
@@ -412,7 +412,6 @@ int Application::Create(int argc, const char* const* argv, const char *source_fi
   ThreadLocalStorage::Init();
   Singleton<NullAllocator>::Get();
   Singleton<MallocAllocator>::Get();
-  atexit(LFAppAtExit);
 
 #ifdef LFL_WINDOWS
   if (argc > 1) {

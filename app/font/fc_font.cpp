@@ -21,8 +21,6 @@
 namespace LFL {
 static FcConfig *fc_config;
 
-FCFontEngine::FCFontEngine() {}
-FCFontEngine::~FCFontEngine() {}
 void FCFontEngine::Shutdown() {}
 
 string FCFontEngine::DebugString(Font *f) const {

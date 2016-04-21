@@ -71,8 +71,8 @@ TranslationUnit::~TranslationUnit() {}
 bool TranslationUnit::SaveTo(const string &f) { return false; }
 bool TranslationUnit::Load(const string &f) { return false; }
 bool TranslationUnit::Parse(const OpenedFiles &opened) { return false; }
-void *TranslationUnit::CompleteCode(const OpenedFiles&, int, int) { return nullptr; }
-FileNameAndOffset TranslationUnit::FindDefinition(const string&, int) { return FileNameAndOffset(); }
+unique_ptr<TranslationUnit::CodeCompletions> TranslationUnit::CompleteCode(const OpenedFiles&, int, int) { return nullptr; }
+FileNameAndOffset TranslationUnit::FindDefinition(const string&, int, int) { return FileNameAndOffset(); }
 void TranslationUnit::TokenVisitor::Visit() {}
 
 IDEProject::~IDEProject() {}

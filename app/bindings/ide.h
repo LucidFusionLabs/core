@@ -66,6 +66,14 @@ struct TranslationUnit {
     void Visit();
   };
 
+  struct CodeCompletions {
+    void *impl=0;
+    virtual ~CodeCompletions();
+    CodeCompletions(void *I=0) : impl(I) {}
+    size_t size() const;
+    string GetText(size_t ind);
+  };
+
   CXIndex index=0;
   CXTranslationUnit tu=0;
   bool parse_failed=0;
@@ -78,8 +86,8 @@ struct TranslationUnit {
   bool Load(const string &f);
   bool Parse(const OpenedFiles &unsaved = OpenedFiles());
   bool Reparse(const OpenedFiles &unsaved = OpenedFiles());
-  void *CompleteCode(const OpenedFiles&, int, int);
-  FileNameAndOffset FindDefinition(const string &f, int offset);
+  unique_ptr<CodeCompletions> CompleteCode(const OpenedFiles&, int, int);
+  FileNameAndOffset FindDefinition(const string &f, int, int);
 };
 
 struct IDEProject {
