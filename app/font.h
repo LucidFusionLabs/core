@@ -392,7 +392,7 @@ struct GDIFontEngine : public FontEngine {
 struct GDIFontEngine {};
 #endif
 
-#if defined(LFL_LINUX) && defined(LFL_FREETYPE)
+#if defined(LFL_LINUX)
 struct FCFontEngine : public FontEngine {
   struct Resource : public FontEngine::Resource {};
   unordered_map<string, shared_ptr<Resource> > resource;
