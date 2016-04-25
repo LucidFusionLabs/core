@@ -137,6 +137,7 @@ struct Connection;
 struct Console;
 struct Dialog;
 struct DocumentParser;
+struct DrawableAnnotation;
 struct DrawableBoxArray;
 struct Entity;
 struct File;

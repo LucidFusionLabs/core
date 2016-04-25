@@ -263,7 +263,7 @@ template <class X> int TextBox::Line::InsertTextAt(int x, const StringPieceT<X> 
   return b.Size() ? InsertTextAt(x, v, b) : 0;
 }
 
-template <class X> int TextBox::Line::InsertTextAt(int x, const StringPieceT<X> &v, const Flow::TextAnnotation &attr) {
+template <class X> int TextBox::Line::InsertTextAt(int x, const StringPieceT<X> &v, const DrawableAnnotation &attr) {
   if (!v.size()) return 0;
   DrawableBoxArray b;
   b.attr.source = data->glyphs.attr.source;
@@ -340,8 +340,8 @@ template int TextBox::Line::UpdateText<char>      (int x, const StringPiece   &v
 template int TextBox::Line::UpdateText<char16_t>  (int x, const String16Piece &v, int attr, int max_width, bool *append, int);
 template int TextBox::Line::InsertTextAt<char>    (int x, const StringPiece   &v, int attr);
 template int TextBox::Line::InsertTextAt<char16_t>(int x, const String16Piece &v, int attr);
-template int TextBox::Line::InsertTextAt<char>    (int x, const StringPiece   &v, const Flow::TextAnnotation &attr);
-template int TextBox::Line::InsertTextAt<char16_t>(int x, const String16Piece &v, const Flow::TextAnnotation &attr);
+template int TextBox::Line::InsertTextAt<char>    (int x, const StringPiece   &v, const DrawableAnnotation &attr);
+template int TextBox::Line::InsertTextAt<char16_t>(int x, const String16Piece &v, const DrawableAnnotation &attr);
 template int TextBox::Line::InsertTextAt<char>    (int x, const StringPiece   &v, const DrawableBoxArray &b);
 template int TextBox::Line::InsertTextAt<char16_t>(int x, const String16Piece &v, const DrawableBoxArray &b);
 

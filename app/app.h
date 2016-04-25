@@ -219,6 +219,7 @@ using LFL_STL11_NAMESPACE::isnan;
 typedef lock_guard<mutex> ScopedMutex;
 typedef function<void()> Callback;
 typedef function<void(const string&)> StringCB;
+typedef vector<string> StringVec;
 template <class X> struct Singleton { static X *Get() { static X instance; return &instance; } };
 void Log(int level, const char *file, int line, const string &m);
 }; // namespace LFL

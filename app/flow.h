@@ -144,10 +144,6 @@ struct FloatContainer : public Box {
 
 struct Flow {
   enum class State { OK=1, NEW_WORD=2, NEW_LINE=3 };
-  struct TextAnnotation : public vector<pair<int, int>> {
-    const Drawable::AttrSource *attr_source=0;
-    TextAnnotation(const Drawable::AttrSource *s=0) : attr_source(s) {}
-  };
   struct Layout {
     bool wrap_lines=1, word_break=1, align_center=0, align_right=0, ignore_newlines=0,
          pad_wide_chars=0, append_only=0;
@@ -212,12 +208,12 @@ struct Flow {
   /**/               int AppendText(const string          &text, int attr_id=0) { return AppendText(StringPiece           (text), attr_id); }
   /**/               int AppendText(const String16        &text, int attr_id=0) { return AppendText(String16Piece         (text), attr_id); }
   template <class X> int AppendText(const X               *text, int attr_id=0) { return AppendText(StringPiece::Unbounded(text), attr_id); }
-  template <class X> int AppendText(const StringPieceT<X> &text, int attr_id=0) { return AppendText(text, TextAnnotation(), attr_id); }
+  template <class X> int AppendText(const StringPieceT<X> &text, int attr_id=0) { return AppendText(text, DrawableAnnotation(), attr_id); }
 
-  /**/               int AppendText(const string          &text, const TextAnnotation &attr, int da=0) { return AppendText(StringPiece           (text), attr, da); }
-  /**/               int AppendText(const String16        &text, const TextAnnotation &attr, int da=0) { return AppendText(String16Piece         (text), attr, da); }
-  template <class X> int AppendText(const X               *text, const TextAnnotation &attr, int da=0) { return AppendText(StringPiece::Unbounded(text), attr, da); }
-  template <class X> int AppendText(const StringPieceT<X> &text, const TextAnnotation &attr, int da=0) {
+  /**/               int AppendText(const string          &text, const DrawableAnnotation &attr, int da=0) { return AppendText(StringPiece           (text), attr, da); }
+  /**/               int AppendText(const String16        &text, const DrawableAnnotation &attr, int da=0) { return AppendText(String16Piece         (text), attr, da); }
+  template <class X> int AppendText(const X               *text, const DrawableAnnotation &attr, int da=0) { return AppendText(StringPiece::Unbounded(text), attr, da); }
+  template <class X> int AppendText(const StringPieceT<X> &text, const DrawableAnnotation &attr, int da=0) {
     int start_size = out->data.size();
     out->data.reserve(start_size + text.size());
     int initial_out_lines = out->line.size(), line_start_ind = 0, ci_bytes = 0, cj_bytes = 0, c, ci;

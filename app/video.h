@@ -264,6 +264,11 @@ struct Drawable {
   virtual void Draw       (const LFL::Box &B, const Attr *A=0) const = 0;
 };
 
+struct DrawableAnnotation : public vector<pair<int, int>> {
+  const Drawable::AttrSource *attr_source=0;
+  DrawableAnnotation(const Drawable::AttrSource *s=0) : attr_source(s) {}
+};
+
 struct DrawableNop : public Drawable {
   void Draw(const LFL::Box &B, const Drawable::Attr *A=0) const {}
 };

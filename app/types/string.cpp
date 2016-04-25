@@ -811,6 +811,17 @@ template struct TokenProcessor<char>;
 template struct TokenProcessor<char16_t>;
 template struct TokenProcessor<DrawableBox>;
 
+SyntaxMatcher::SyntaxMatcher(const vector<SyntaxMatcher::Rule> &in) {
+}
+
+void SyntaxMatcher::UpdateAnnotation(const string &text, SyntaxMatcher::StyleInterface *style,
+                                     int default_attr, DrawableAnnotation *out, int out_size) {
+  for (const auto &r : rules) {
+    if (!r.per_line) {
+    } else {}
+  }
+}
+
 void Serializable::Header::Out(Stream *o) const { o->Htons( id); o->Htons( seq); }
 void Serializable::Header::In(const Stream *i)  { i->Ntohs(&id); i->Ntohs(&seq); }
 

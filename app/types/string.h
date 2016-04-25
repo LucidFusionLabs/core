@@ -640,6 +640,25 @@ template <class X> struct TokenProcessor {
   static void FindBoundaryConditions(const ArrayPiece<X> &v, bool *sw, bool *ew);
 };
 
+struct SyntaxMatcher {
+  struct Rule {
+    string name, match_beg, match_end;
+    bool match_beg_regex, match_end_regex;
+    vector<string> match_within;
+  };
+  struct CompiledRule {
+    string name, match_beg, match_end;
+    bool match_beg_regex, match_end_regex, per_line;
+    vector<int> match_within;
+  };
+  struct StyleInterface {
+    virtual int GetSyntaxStyle(const string &n, int da) = 0;
+  };
+  vector<CompiledRule> rules;
+  SyntaxMatcher(const vector<Rule>&);
+  void UpdateAnnotation(const string &text, StyleInterface*, int da, DrawableAnnotation *out, int out_size);
+};
+
 struct Serializable {
   template <class X> static void ReadType (X    *addr, const void *v) { if (addr) memcpy(addr,  v, sizeof(X)); }
   template <class X> static void WriteType(void *addr, const X    &v) { if (addr) memcpy(addr, &v, sizeof(X)); }

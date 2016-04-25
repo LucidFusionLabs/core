@@ -366,7 +366,7 @@ bool IDEProject::GetCompileCommand(const string &fn, string *out, string *dir) {
 }
 
 void ClangCPlusPlusHighlighter::UpdateAnnotation(TranslationUnit *tu, Editor::SyntaxColors *syntax,
-                                                 int default_attr, vector<Flow::TextAnnotation> *out) {
+                                                 int default_attr, vector<DrawableAnnotation> *out) {
   out->clear();
   if (!tu) return;
 
@@ -382,7 +382,7 @@ void ClangCPlusPlusHighlighter::UpdateAnnotation(TranslationUnit *tu, Editor::Sy
     "uint_fast32_t", "uint_fast64_t", "intptr_t", "uintptr_t", "intmax_t", "uintmax_t",
     "__label__", "__complex__", "__volatile__" };
 
-  Flow::TextAnnotation *last_annotation = 0;
+  DrawableAnnotation *last_annotation = 0;
   int a = default_attr, last_a = a, last_cursor_kind = CXCursor_FirstInvalid, last_line = -1, done_line = 0;
   TranslationUnit::TokenVisitor(tu, TranslationUnit::TokenVisitor::TokenCB([&]
     (TranslationUnit::TokenVisitor *v, const string &text, int tk, int ck, int kk, int line, int column) {
@@ -428,12 +428,16 @@ void ClangCPlusPlusHighlighter::UpdateAnnotation(TranslationUnit *tu, Editor::Sy
 
       if (done_line < line) {
         for (++done_line; done_line < line; ++done_line)
-          PushBack(*out, Flow::TextAnnotation()).emplace_back(0, last_a);
-        last_annotation = &PushBack(*out, Flow::TextAnnotation());
+          PushBack(*out, DrawableAnnotation()).emplace_back(0, last_a);
+        last_annotation = &PushBack(*out, DrawableAnnotation());
       }
       last_annotation->emplace_back(column-1, a);
       last_a = a;
     })).Visit();
 }
+
+RegexCPlusPlusHighlighter::RegexCPlusPlusHighlighter() : SyntaxMatcher({
+  Rule{ "Comment", "/*", "*/", 0, 0, StringVec{"String", "Number", "Special", "SpecialChar"} }
+}) {}
 
 }; // namespace LFL

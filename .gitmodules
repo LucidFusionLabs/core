@@ -53,9 +53,6 @@
 [submodule "imports/libpng"]
 	path = imports/libpng
 	url = https://github.com/winlibs/libpng
-[submodule "imports/glew-cmake"]
-	path = imports/glew-cmake
-	url = https://github.com/Perlmint/glew-cmake
 [submodule "imports/giflib"]
 	path = imports/giflib
 	url = https://github.com/ProfessorKaos64/giflib

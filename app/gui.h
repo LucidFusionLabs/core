@@ -204,17 +204,17 @@ struct TextBox : public GUI, public KeyboardController {
     String16 Text16() const { return data->glyphs.Text16(); }
     void Clear() { data->controls.clear(); data->glyphs.Clear(); data->flow=InitFlow(&data->glyphs); }
     int Erase(int o, int l=INT_MAX);
-    int AssignText(const StringPiece   &s, int                       a=0) { Clear(); return AppendText(s, a); }
-    int AssignText(const String16Piece &s, int                       a=0) { Clear(); return AppendText(s, a); }
-    int AssignText(const StringPiece   &s, const Flow::TextAnnotation &a) { Clear(); return AppendText(s, a); }
-    int AssignText(const String16Piece &s, const Flow::TextAnnotation &a) { Clear(); return AppendText(s, a); }
-    int AppendText(const StringPiece   &s, int                       a=0) { return InsertTextAt(Size(), s, a); }
-    int AppendText(const String16Piece &s, int                       a=0) { return InsertTextAt(Size(), s, a); }
-    int AppendText(const StringPiece   &s, const Flow::TextAnnotation &a) { return InsertTextAt(Size(), s, a); }
-    int AppendText(const String16Piece &s, const Flow::TextAnnotation &a) { return InsertTextAt(Size(), s, a); }
+    int AssignText(const StringPiece   &s, int                     a=0) { Clear(); return AppendText(s, a); }
+    int AssignText(const String16Piece &s, int                     a=0) { Clear(); return AppendText(s, a); }
+    int AssignText(const StringPiece   &s, const DrawableAnnotation &a) { Clear(); return AppendText(s, a); }
+    int AssignText(const String16Piece &s, const DrawableAnnotation &a) { Clear(); return AppendText(s, a); }
+    int AppendText(const StringPiece   &s, int                     a=0) { return InsertTextAt(Size(), s, a); }
+    int AppendText(const String16Piece &s, int                     a=0) { return InsertTextAt(Size(), s, a); }
+    int AppendText(const StringPiece   &s, const DrawableAnnotation &a) { return InsertTextAt(Size(), s, a); }
+    int AppendText(const String16Piece &s, const DrawableAnnotation &a) { return InsertTextAt(Size(), s, a); }
     template <class X> int OverwriteTextAt(int o, const StringPieceT<X> &s, int a=0);
     template <class X> int InsertTextAt   (int o, const StringPieceT<X> &s, int a=0);
-    template <class X> int InsertTextAt   (int o, const StringPieceT<X> &s, const Flow::TextAnnotation&);
+    template <class X> int InsertTextAt   (int o, const StringPieceT<X> &s, const DrawableAnnotation&);
     template <class X> int InsertTextAt   (int o, const StringPieceT<X> &s, const DrawableBoxArray&);
     template <class X> int UpdateText     (int o, const StringPieceT<X> &s, int a, int max_width=0, bool *append=0, int insert_mode=-1);
     int OverwriteTextAt(int o, const string   &s, int a=0) { return OverwriteTextAt<char>    (o, s, a); }
@@ -223,10 +223,10 @@ struct TextBox : public GUI, public KeyboardController {
     int InsertTextAt(int o, const String16 &s, int a=0) { return InsertTextAt<char16_t>(o, s, a); }
     int UpdateText(int o, const string   &s, int attr, int max_width=0, bool *append=0) { return UpdateText<char>    (o, s, attr, max_width, append); }
     int UpdateText(int o, const String16 &s, int attr, int max_width=0, bool *append=0) { return UpdateText<char16_t>(o, s, attr, max_width, append); }
-    void EncodeText(DrawableBoxArray *o, int x, const StringPiece   &s, int a=0)                                 { Flow f=InitFlow(o); f.p.x=x; f.AppendText(s,a); }
-    void EncodeText(DrawableBoxArray *o, int x, const String16Piece &s, int a=0)                                 { Flow f=InitFlow(o); f.p.x=x; f.AppendText(s,a); }
-    void EncodeText(DrawableBoxArray *o, int x, const StringPiece   &s, const Flow::TextAnnotation &a, int da=0) { Flow f=InitFlow(o); f.p.x=x; f.AppendText(s,a,da); }
-    void EncodeText(DrawableBoxArray *o, int x, const String16Piece &s, const Flow::TextAnnotation &a, int da=0) { Flow f=InitFlow(o); f.p.x=x; f.AppendText(s,a,da); }
+    void EncodeText(DrawableBoxArray *o, int x, const StringPiece   &s, int a=0)                               { Flow f=InitFlow(o); f.p.x=x; f.AppendText(s,a); }
+    void EncodeText(DrawableBoxArray *o, int x, const String16Piece &s, int a=0)                               { Flow f=InitFlow(o); f.p.x=x; f.AppendText(s,a); }
+    void EncodeText(DrawableBoxArray *o, int x, const StringPiece   &s, const DrawableAnnotation &a, int da=0) { Flow f=InitFlow(o); f.p.x=x; f.AppendText(s,a,da); }
+    void EncodeText(DrawableBoxArray *o, int x, const String16Piece &s, const DrawableAnnotation &a, int da=0) { Flow f=InitFlow(o); f.p.x=x; f.AppendText(s,a,da); }
     int Layout(int width=0, bool flush=0) { Layout(Box(0,0,width,0), flush); return Lines(); }
     void Layout(Box win, bool flush=0);
     point Draw(point pos, int relayout_width=-1, int g_offset=0, int g_len=-1);
@@ -528,7 +528,7 @@ struct Editor : public TextView {
     static int VectorGetLines(const vector<LineOffset> &v, int i) { return v[i].wrapped_lines; }
   };
   typedef PrefixSumKeyedRedBlackTree<int, LineOffset> LineMap;
-  struct SyntaxColors : public Colors {
+  struct SyntaxColors : public Colors, public SyntaxMatcher::StyleInterface {
     struct Rule { string name; Color fg, bg; int style; };
     string name;
     vector<Color> color;
@@ -552,7 +552,7 @@ struct Editor : public TextView {
   Callback modified_cb, newline_cb, tab_cb;
   vector<Modification> version;
   VersionNumber version_number={0,0}, saved_version_number={0,0}, cached_text_version_number={-1,0};
-  function<Flow::TextAnnotation(const LineOffset*)> annotation_cb = [](const LineOffset*){ return Flow::TextAnnotation(); };
+  function<DrawableAnnotation(const LineOffset*)> annotation_cb = [](const LineOffset*){ return DrawableAnnotation(); };
   shared_ptr<BufferFile> cached_text;
   SyntaxColors *syntax=0;
   Line *cursor_glyphs=0;

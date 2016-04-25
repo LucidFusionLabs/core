@@ -100,9 +100,13 @@ struct IDEProject {
   bool GetCompileCommand(const string &fn, string *out, string *dir);
 };
 
+struct RegexCPlusPlusHighlighter : public SyntaxMatcher {
+  RegexCPlusPlusHighlighter();
+};
+
 struct ClangCPlusPlusHighlighter {
   static void UpdateAnnotation(TranslationUnit*, Editor::SyntaxColors*, int,
-                               vector<Flow::TextAnnotation> *out);
+                               vector<DrawableAnnotation> *out);
 };
 
 struct CMakeDaemon {
@@ -136,6 +140,25 @@ struct CMakeDaemon {
   void HandleClose(Connection *c);
   void HandleRead(Connection *c);
   bool GetTargetInfo(const string &target, TargetInfoCB&&);
+};
+
+struct CodeCompletionsView : public PropertyView {
+  unique_ptr<TranslationUnit::CodeCompletions> completions;
+  mutable Node node;
+  using PropertyView::PropertyView;
+
+  Node* GetNode(Id id) { const auto *self = this; return const_cast<Node*>(self->GetNode(id)); }
+  const Node* GetNode(Id id) const {
+    node.text = completions ? completions->GetText(id-1) : string();
+    return &node;
+  }
+  void VisitExpandedChildren(Id id, const Node::Visitor &cb, int depth) {
+    if (!id) for (int i = 0, l = completions ? completions->size() : 0; i != l; ++i) cb(i+1, 0, 0);
+  }
+};
+
+struct CodeCompletionsViewDialog : public TextViewDialogT<CodeCompletionsView> {
+  using TextViewDialogT::TextViewDialogT;
 };
 
 }; // namespace LFL
