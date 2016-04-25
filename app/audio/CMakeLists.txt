@@ -4,12 +4,19 @@ lfl_add_target(app_null_audio STATIC_LIBRARY SOURCES null_audio.cpp)
 
 if(LFL_OPENAL)
   if(LFL_APPLE)
-    set(libs "-framework OpenAL")
+    set(OPENAL_INCLUDE_DIR)
+    set(OPENAL_LIBRARY "-framework OpenAL")
   elseif(LFL_LINUX)
-    set(libs "-lopenal")
+    set(OPENAL_INCLUDE_DIR)
+    set(OPENAL_LIBRARY "-lopenal")
+  elseif(LFL_WINDOWS)
+    set(OPENAL_INCLUDE_DIR "C:\\Program Files (x86)\\OpenAL 1.1 SDK\\include")
+    set(OPENAL_LIBRARY "C:\\Program Files (x86)\\OpenAL 1.1 SDK\\libs\\Win32\\OpenAL32.lib")
+    INCLUDE(FindOpenAL)
   endif()
   lfl_add_target(app_openal_audio STATIC_LIBRARY SOURCES openal_audio.cpp
-                 LINK_LIBRARIES ${libs})
+                 INCLUDE_DIRECTORIES ${OPENAL_INCLUDE_DIR}
+                 LINK_LIBRARIES ${OPENAL_LIBRARY})
 endif()
 
 if(LFL_PORTAUDIO)

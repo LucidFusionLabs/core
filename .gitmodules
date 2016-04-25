@@ -87,3 +87,6 @@
 [submodule "imports/diff-match-patch-cpp-stl"]
 	path = imports/diff-match-patch-cpp-stl
 	url = https://github.com/leutloff/diff-match-patch-cpp-stl
+[submodule "imports/glew"]
+	path = imports/glew
+	url = https://github.com/LuaDist/glew

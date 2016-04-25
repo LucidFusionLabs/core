@@ -9,26 +9,65 @@ set(BOOST_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/boost PARENT_SCOPE)
 
 # zlib
 if(LFL_WINDOWS)
-  INCLUDE_EXTERNAL_MSPROJECT(zlib ${CMAKE_CURRENT_SOURCE_DIR}/OpenCV/3rdparty/zlib/zlib.vcxproj)
+  macro(ocv_install_target)
+  endmacro()
+  macro(ocv_warnings_disable)
+  endmacro()
+  macro(ocv_include_directories)
+    include_directories(${ARGN})
+  endmacro()
+  macro(ocv_list_filterout lst regex)
+    foreach(item ${${lst}})
+      if(item MATCHES "${regex}")
+        list(REMOVE_ITEM ${lst} "${item}")
+      endif()
+    endforeach()
+  endmacro()
+  set(3P_LIBRARY_OUTPUT_PATH ${CMAKE_CURRENT_BINARY_DIR}/zlib)
+  set(ZLIB_LIBRARY zlib)
+  add_subdirectory(OpenCV/3rdparty/zlib zlib)
 endif()
 
 # png
 if(LFL_PNG AND NOT LFL_EMSCRIPTEN)
-  ExternalProject_Add(libpng SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/libpng
-                      PREFIX ${CMAKE_CURRENT_BINARY_DIR}/libpng
-                      CMAKE_ARGS -DCMAKE_INSTALL_PREFIX:PATH=${CMAKE_CURRENT_BINARY_DIR}/libpng)
-  add_library(libpng16 IMPORTED STATIC GLOBAL)
-  set_property(TARGET libpng16 PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/libpng/lib/libpng16.a)
-  add_dependencies(libpng16 libpng)
+  if(LFL_WINDOWS)
+    if(FALSE)
+      ExternalProject_Add(libpng SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/libpng
+                          PREFIX ${CMAKE_CURRENT_BINARY_DIR}/libpng LIST_SEPARATOR ::
+                          CMAKE_ARGS -DCMAKE_INSTALL_PREFIX:PATH=${CMAKE_CURRENT_BINARY_DIR}/libpng
+                          -DZLIB_INCLUDE_DIR:STRING=${CMAKE_CURRENT_BINARY_DIR}/zlib::${CMAKE_CURRENT_SOURCE_DIR}/OpenCV/3rdparty/zlib
+                          -DZLIB_LIBRARY=${CMAKE_CURRENT_BINARY_DIR}/zlib/${CMAKE_BUILD_TYPE}/zlib.lib)
+      add_dependencies(libpng zlib)
+      add_library(libpng16 IMPORTED STATIC GLOBAL)
+      set_property(TARGET libpng16 PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/libpng/lib/libpng16_staticd.lib)
+      add_dependencies(libpng16 libpng)
+    else()
+      set(ZLIB_INCLUDE_DIRS ${CMAKE_CURRENT_BINARY_DIR}/zlib ${CMAKE_CURRENT_SOURCE_DIR}/OpenCV/3rdparty/zlib)
+      set(ZLIB_LIBRARIES zlib)
+      set(3P_LIBRARY_OUTPUT_PATH ${CMAKE_CURRENT_BINARY_DIR}/libpng)
+      set(PNG_LIBRARY libpng16)
+      add_subdirectory(OpenCV/3rdparty/libpng libpng)
+      set_property(TARGET libpng16 APPEND PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${CMAKE_CURRENT_SOURCE_DIR}/OpenCV/3rdparty/libpng)
+    endif()
+  else()
+    ExternalProject_Add(libpng SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/libpng
+                        PREFIX ${CMAKE_CURRENT_BINARY_DIR}/libpng
+                        CMAKE_ARGS -DCMAKE_INSTALL_PREFIX:PATH=${CMAKE_CURRENT_BINARY_DIR}/libpng)
+    add_library(libpng16 IMPORTED STATIC GLOBAL)
+    set_property(TARGET libpng16 PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/libpng/lib/libpng16.a)
+    set_property(TARGET libpng16 APPEND PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${CMAKE_CURRENT_BINARY_DIR}/libpng/include/libpng16)
+    add_dependencies(libpng16 libpng)
+  endif()
 endif()
 
 # jpeg
 if(LFL_JPEG)
   if(WIN32)
-    INCLUDE_EXTERNAL_MSPROJECT(libjpeg ${CMAKE_CURRENT_SOURCE_DIR}/OpenCV/3rdparty/libjpeg/libjpeg.vcxproj)
-    set(JPEG_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/OpenCV/3rdparty/include PARENT_SCOPE)
-    set(JPEG_LIB libjpeg.lib PARENT_SCOPE)
-    set(JPEG_DEP libjpeg PARENT_SCOPE)
+    set(3P_LIBRARY_OUTPUT_PATH ${CMAKE_CURRENT_BINARY_DIR}/libjpeg)
+    set(JPEG_LIBRARY libjpeg)
+    add_subdirectory(OpenCV/3rdparty/libjpeg libjpeg)
+    set(JPEG_LIB libjpeg PARENT_SCOPE)
+    set(JPEG_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/OpenCV/3rdparty/libjpeg PARENT_SCOPE)
   else()
     ExternalProject_Add(libjpeg-turbo LOG_CONFIGURE ON LOG_BUILD ON
                         PREFIX ${CMAKE_CURRENT_BINARY_DIR}/libjpeg-turbo
@@ -93,14 +132,9 @@ endif()
 
 # protobuf
 if(LFL_PROTOBUF)
-  if(WIN32)
-    INCLUDE_EXTERNAL_MSPROJECT(libprotobuf-lite ${CMAKE_CURRENT_SOURCE_DIR}/protobuf/vsprojects/libprotobuf-lite.vcxproj)
-    set(PROTOBUF_LIBRARY libprotobuf-lite.lib PARENT_SCOPE)
-  else()
-    option(protobuf_BUILD_TESTS OFF)
-    add_subdirectory(protobuf/cmake protobuf)
-    set(PROTOBUF_LIBRARY libprotobuf PARENT_SCOPE)
-  endif()
+  option(protobuf_BUILD_TESTS OFF)
+  add_subdirectory(protobuf/cmake protobuf)
+  set(PROTOBUF_LIBRARY libprotobuf PARENT_SCOPE)
   set(PROTOBUF_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/protobuf/src PARENT_SCOPE)
   set(PROTOBUF_PROTOC_EXECUTABLE ${CMAKE_CURRENT_BINARY_DIR}/protobuf/protoc PARENT_SCOPE)
 endif()
@@ -126,7 +160,8 @@ if(LFL_GLOG)
                       CMAKE_ARGS -DCMAKE_INSTALL_PREFIX:PATH=${CMAKE_CURRENT_BINARY_DIR}/glog)
   add_library(libglog IMPORTED STATIC GLOBAL)
   add_dependencies(libglog googlelog)
-  set_property(TARGET libglog PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/glog/lib/libglog.a)
+  get_static_library_name(_lib glog)
+  set_property(TARGET libglog PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/glog/lib/${_lib})
   set(GLOG_INCLUDE ${CMAKE_CURRENT_BINARY_DIR}/glog/include PARENT_SCOPE)
   set(GLOG_LIB libglog PARENT_SCOPE)
 endif()
@@ -139,7 +174,8 @@ if(LFL_GTEST)
                       CMAKE_ARGS -DCMAKE_INSTALL_PREFIX:PATH=${CMAKE_CURRENT_BINARY_DIR}/googletest)
   add_library(libgtest IMPORTED STATIC GLOBAL)
   add_dependencies(libgtest googletest)
-  set_property(TARGET libgtest PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/googletest/lib/libgtest.a)
+  get_static_library_name(_lib gtest)
+  set_property(TARGET libgtest PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/googletest/lib/${_lib})
   set(GTEST_INCLUDE ${CMAKE_CURRENT_BINARY_DIR}/googletest/include PARENT_SCOPE)
   set(GTEST_LIB libgtest PARENT_SCOPE)
 endif()
@@ -332,9 +368,9 @@ endif()
 
 # GLEW
 if(LFL_GLEW)
-  add_subdirectory(glew-cmake)
-  set(GLEW_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/glew-cmake/include PARENT_SCOPE)
-  set(GLEW_LIB libglew_static PARENT_SCOPE)
+  add_subdirectory(glew)
+  set(GLEW_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/glew/include PARENT_SCOPE)
+  set(GLEW_LIB glew PARENT_SCOPE)
 endif()
 
 # wxWidgets
@@ -392,35 +428,26 @@ endif()
 
 # OpenCV
 if(LFL_OPENCV)
-  if(WIN32)
-    INCLUDE_EXTERNAL_MSPROJECT(OpenCV ${CMAKE_CURRENT_SOURCE_DIR}/OpenCV/src/cv/cv.vcxproj)
-    INCLUDE_EXTERNAL_MSPROJECT(cxcore ${CMAKE_CURRENT_SOURCE_DIR}/OpenCV/src/cxcore/cxcore.vcxproj)
-    INCLUDE_EXTERNAL_MSPROJECT(flann ${CMAKE_CURRENT_SOURCE_DIR}/OpenCV/3rdparty/flann/flann.vcxproj)
-    INCLUDE_EXTERNAL_MSPROJECT(opencv_lapack ${CMAKE_CURRENT_SOURCE_DIR}/OpenCV/3rdparty/lapack/opencv_lapack.vcxproj)
-    set(OPENCV_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/OpenCV/include PARENT_SCOPE)
-    set(OPENCV_LIB cv.lib cxcore.lib flannd.lib opencv_lapackd.lib PARENT_SCOPE)
-  else()
-    ExternalProject_Add(OpenCV SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/OpenCV
-                               PREFIX ${CMAKE_CURRENT_BINARY_DIR}/OpenCV
-                               CMAKE_ARGS -DCMAKE_INSTALL_PREFIX:PATH=${CMAKE_CURRENT_BINARY_DIR}/OpenCV -DBUILD_TESTS=OFF -DBUILD_PERF_TESTS=OFF)
+  ExternalProject_Add(OpenCV SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/OpenCV
+                             PREFIX ${CMAKE_CURRENT_BINARY_DIR}/OpenCV
+                             CMAKE_ARGS -DCMAKE_INSTALL_PREFIX:PATH=${CMAKE_CURRENT_BINARY_DIR}/OpenCV -DBUILD_TESTS=OFF -DBUILD_PERF_TESTS=OFF)
 
-    add_library(libopencv_core IMPORTED SHARED GLOBAL)
-    add_library(libopencv_imgproc IMPORTED SHARED GLOBAL)
-    add_dependencies(libopencv_core OpenCV)
-    add_dependencies(libopencv_imgproc OpenCV)
-    get_shared_library_name(SHARED_LIBRARY_NAME libopencv_core 3.1)
-    set_property(TARGET libopencv_core PROPERTY IMPORTED_LOCATION
-                 ${CMAKE_CURRENT_BINARY_DIR}/OpenCV/lib/${SHARED_LIBRARY_NAME})
-    get_shared_library_name(SHARED_LIBRARY_NAME libopencv_imgproc 3.1)
-    set_property(TARGET libopencv_imgproc PROPERTY IMPORTED_LOCATION
-                 ${CMAKE_CURRENT_BINARY_DIR}/OpenCV/lib/${SHARED_LIBRARY_NAME})
+  add_library(libopencv_core IMPORTED SHARED GLOBAL)
+  add_library(libopencv_imgproc IMPORTED SHARED GLOBAL)
+  add_dependencies(libopencv_core OpenCV)
+  add_dependencies(libopencv_imgproc OpenCV)
+  get_shared_library_name(SHARED_LIBRARY_NAME libopencv_core 3.1)
+  set_property(TARGET libopencv_core PROPERTY IMPORTED_LOCATION
+               ${CMAKE_CURRENT_BINARY_DIR}/OpenCV/lib/${SHARED_LIBRARY_NAME})
+  get_shared_library_name(SHARED_LIBRARY_NAME libopencv_imgproc 3.1)
+  set_property(TARGET libopencv_imgproc PROPERTY IMPORTED_LOCATION
+               ${CMAKE_CURRENT_BINARY_DIR}/OpenCV/lib/${SHARED_LIBRARY_NAME})
 
-    set(OPENCV_LIB libopencv_core libopencv_imgproc PARENT_SCOPE)
-    set(OPENCV_INCLUDE ${CMAKE_CURRENT_BINARY_DIR}/OpenCV/include PARENT_SCOPE)
-    add_shared_library(OPENCV_LIB_FILES ${CMAKE_CURRENT_BINARY_DIR}/OpenCV/lib/libopencv_core 3.1)
-    add_shared_library(OPENCV_LIB_FILES ${CMAKE_CURRENT_BINARY_DIR}/OpenCV/lib/libopencv_imgproc 3.1)
-    set(OPENCV_LIB_FILES ${OPENCV_LIB_FILES} PARENT_SCOPE)
-  endif()
+  set(OPENCV_LIB libopencv_core libopencv_imgproc PARENT_SCOPE)
+  set(OPENCV_INCLUDE ${CMAKE_CURRENT_BINARY_DIR}/OpenCV/include PARENT_SCOPE)
+  add_shared_library(OPENCV_LIB_FILES ${CMAKE_CURRENT_BINARY_DIR}/OpenCV/lib/libopencv_core 3.1)
+  add_shared_library(OPENCV_LIB_FILES ${CMAKE_CURRENT_BINARY_DIR}/OpenCV/lib/libopencv_imgproc 3.1)
+  set(OPENCV_LIB_FILES ${OPENCV_LIB_FILES} PARENT_SCOPE)
 endif()
 
 # libarchive

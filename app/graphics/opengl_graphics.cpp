@@ -19,7 +19,7 @@
 #if defined(LFL_GLEW)
 #define glewGetContext() static_cast<GLEWContext*>(screen->glew_context)
 #include <GL/glew.h>
-#ifdef WIN32
+#ifdef LFL_WINDOWS
 #include <GL/wglew.h>
 #endif
 #endif
@@ -649,15 +649,15 @@ struct OpenGLES2 : public GraphicsDevice, public QOpenGLFunctions {
 
 unique_ptr<GraphicsDevice> CreateGraphicsDevice(int opengles_version) {
   unique_ptr<GraphicsDevice> gd;
-  ONCE({
 #ifdef LFL_GLEW
 #ifdef GLEW_MX
-    screen->glew_context = new GLEWContext();
+  ONCE({ screen->glew_context = new GLEWContext(); });
 #endif
+  ONCE({
     GLenum glew_err;
     if ((glew_err = glewInit()) != GLEW_OK) return ERRORv(nullptr, "glewInit: ", glewGetErrorString(glew_err));
-#endif
   });
+#endif
 
 #ifdef LFL_GLES2
   if (opengles_version == 2) gd = make_unique<OpenGLES2>();

@@ -280,8 +280,8 @@ struct SSLSocket {
   ~SSLSocket();
   const char *ErrorString() const;
   Socket GetSocket() const;
-  ssize_t Read(char *buf, int readlen);
-  ssize_t Write(const StringPiece &b);
+  ptrdiff_t Read(char *buf, int readlen);
+  ptrdiff_t Write(const StringPiece &b);
   Socket Listen(int port, bool reuse);
   Socket Connect(SSL_CTX *sslctx, const string &hostport);
   Socket Connect(SSL_CTX *sslctx, IPV4::Addr addr, int port);

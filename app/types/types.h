@@ -40,8 +40,12 @@
   else return x4 < y4;
 
 namespace LFL {
+#ifdef LFL_WINDOWS
+using LFL_STL11_NAMESPACE::make_unique;
+#else
 template<typename T, typename ...Args>
 unique_ptr<T> make_unique(Args&& ...args) { return unique_ptr<T>(new T(forward<Args>(args)...)); }
+#endif
 template <class X> typename make_unsigned<X>::type *MakeUnsigned(X *x) { return reinterpret_cast<typename make_unsigned<X>::type*>(x); }
 template <class X> typename make_signed  <X>::type *MakeSigned  (X *x) { return reinterpret_cast<typename make_signed  <X>::type*>(x); }
 inline       char *MakeSigned(      unsigned char *x) { return reinterpret_cast<      char*>(x); }
@@ -460,7 +464,7 @@ template <int S> struct FixedAllocator : public Allocator {
 struct MMapAllocator : public Allocator {
 #ifdef _WIN32
   HANDLE file, map; void *addr; long long size;
-  MMapAlloc(HANDLE File, HANDLE Map, void *Addr, int Size) : file(File), map(Map), addr(Addr), size(Size) {}
+  MMapAllocator(HANDLE File, HANDLE Map, void *Addr, int Size) : file(File), map(Map), addr(Addr), size(Size) {}
 #else
   void *addr; long long size;
   MMapAllocator(void *Addr, long long Size) : addr(Addr), size(Size) {}

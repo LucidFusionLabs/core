@@ -151,6 +151,7 @@ template <class K, class V, class TN = TrieNode<K>, class TV = TrieNodeValue<K, 
   }
 
   int GetChildIndex(Node *n, K key) {
+    if (!n->next_len) return 0;
     Next *t = &next[n->next_ind-1], *te = t + n->next_len;
     auto tn = lower_bound(t, te, Next(key));
     return (tn != te && tn->key == key) ? tn->next : 0;
@@ -263,7 +264,7 @@ template <class K = char> struct AhoCorasickFSM {
     while (q.size()) {
       int node_ind = PopFront(q);
       n = &fsm.data[node_ind-1];
-      for (auto t = &fsm.next[n->next_ind-1], te = t+n->next_len; t != te; ++t) {
+      for (auto t = n->next_len ? &fsm.next[n->next_ind-1] : nullptr, te = t + n->next_len; t != te; ++t) {
         q.push(t->next);
         int state = n->fail;
         for (;;) {

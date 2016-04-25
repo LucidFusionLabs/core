@@ -15,6 +15,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 CMAKE_POLICY(SET CMP0004 OLD)
+set(BUILD_SHARED_LIBS OFF)
 
 if(CMAKE_TOOLCHAIN_FILE AND NOT CMAKE_CROSSCOMPILING)
   include(${CMAKE_TOOLCHAIN_FILE})
@@ -171,8 +172,15 @@ endif()
 
 if(LFL_FLATBUFFERS)
   set(FLATBUFFERS_INCLUDE_DIR ${LFL_SOURCE_DIR}/core/imports/flatbuffers/include)
-  set(FLATBUFFERS_FLATC_EXECUTABLE ${LFL_CORE_BINARY_DIR}/imports/flatbuffers/flatc)
+  if(LFL_WINDOWS)
+    set(FLATBUFFERS_FLATC_EXECUTABLE ${LFL_CORE_BINARY_DIR}/imports/flatbuffers/${CMAKE_BUILD_TYPE}/flatc.exe)
+  else()
+    set(FLATBUFFERS_FLATC_EXECUTABLE ${LFL_CORE_BINARY_DIR}/imports/flatbuffers/flatc)
+  endif()
   include(${LFL_SOURCE_DIR}/core/imports/flatbuffers/CMake/FindFlatBuffers.cmake)
+  if(NOT FLATBUFFERS_FOUND)
+    message(FATAL_ERROR "Missing flatbuffers")
+  endif()
 endif()
 
 if(LFL_CAPNPROTO)

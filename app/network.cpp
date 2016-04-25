@@ -595,10 +595,21 @@ int Connection::WriteVFlush(const iovec *iov, int len) {
   int wrote = 0;
   if (bio.ssl) { FATAL("ssl writev unimplemented"); }
   else {
+#ifdef LFL_WINDOWS
+    DWORD sent = 0;
+    vector<WSABUF> buf;
+    for (const iovec *i = iov, *e = i + len; i != e; ++i) buf.push_back({ i->iov_len, static_cast<char*>(i->iov_base) });
+    if (WSASend(socket, &buf[0], buf.size(), &sent, 0, NULL, NULL)) {
+      if (!SystemNetwork::EWouldBlock()) return ERRORv(-1, Name(), ": WSASend: ", strerror(errno));
+      sent = 0;
+    }
+    wrote = sent;
+#else
     if ((wrote = writev(socket, iov, len)) < 0) {
       if (!SystemNetwork::EWouldBlock()) return ERRORv(-1, Name(), ": send: ", strerror(errno));
       wrote = 0;
     }
+#endif
   }
   if (FLAGS_network_debug) INFO("writev(", socket, ", ", wrote, ", '", len, "')");
   return wrote;

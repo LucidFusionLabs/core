@@ -20,7 +20,7 @@
 #define LFL_CORE_APP_FILE_H__
 namespace LFL {
   
-struct IOVec { long long offset; ssize_t len; };
+struct IOVec { long long offset; ptrdiff_t len; };
 struct IOVector : public vector<IOVec> { int Append(const IOVec&); };
 
 struct MIMEType {

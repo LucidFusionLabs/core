@@ -20,8 +20,8 @@ namespace LFL {
 SSLSocket::~SSLSocket() {}
 const char *SSLSocket::ErrorString() const { return ""; }
 Socket SSLSocket::GetSocket() const { return InvalidSocket; }
-ssize_t SSLSocket::Write(const StringPiece &b) { return -1; }
-ssize_t SSLSocket::Read(char *buf, int readlen) { return -1; }
+ptrdiff_t SSLSocket::Write(const StringPiece &b) { return -1; }
+ptrdiff_t SSLSocket::Read(char *buf, int readlen) { return -1; }
 Socket SSLSocket::Listen(int port, bool reuse) { return InvalidSocket; }
 Socket SSLSocket::Connect(SSL_CTX *sslctx, const string &hostport) { return InvalidSocket; }
 Socket SSLSocket::Connect(SSL_CTX *sslctx, IPV4::Addr addr, int port) { return InvalidSocket; }

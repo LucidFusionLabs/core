@@ -17,14 +17,14 @@
  */
 
 #include <sys/stat.h>
+
+#ifndef LFL_WINDOWS
 #include <sys/fcntl.h>
+#include <dirent.h>
+#endif
 
 #ifdef LFL_ANDROID
 #include "core/app/bindings/jni.h"
-#endif
-
-#ifndef LFL_WINDOWS
-#include <dirent.h>
 #endif
 
 namespace LFL {
@@ -75,7 +75,7 @@ int File::Rewrite(const ArrayPiece<IOVec> &v, const function<string(int)> &encod
     } else {
       CHECK_EQ(i->offset, Seek(i->offset, Whence::SET));
       for (int j=0, l; j<i->len; j+=l) {
-        l = min(static_cast<ssize_t>(buf.size()), i->len-j); 
+        l = min(ptrdiff_t(buf.size()), i->len-j); 
         CHECK_EQ(l, Read(&buf[0], l));
         CHECK_EQ(l, new_file->Write(buf.data(), l));
         ret += l;
@@ -126,6 +126,14 @@ bool BufferFile::ReplaceWith(File *nf) {
 #ifdef LFL_WINDOWS
 const char LocalFile::Slash = '\\';
 const char LocalFile::ExecutableSuffix[] = ".exe";
+
+int LocalFile::IsFile(const string &filename) {
+  if (filename.empty()) return true;
+  DWORD attr = ::GetFileAttributes(filename.c_str());
+  if (attr == INVALID_FILE_ATTRIBUTES) return ERRORv(0, "GetFileAttributes(", filename, ") failed: ", strerror(errno));
+  return attr & FILE_ATTRIBUTE_NORMAL;
+}
+
 int LocalFile::IsDirectory(const string &filename) {
   if (filename.empty()) return true;
   DWORD attr = ::GetFileAttributes(filename.c_str());

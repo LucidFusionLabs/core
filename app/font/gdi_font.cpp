@@ -137,21 +137,21 @@ unique_ptr<Font> GDIFontEngine::Open(const FontDesc &d) {
   ret->glyph = make_shared<GlyphMap>();
   ret->ascender = tm.tmAscent + tm.tmDescent;
   ret->descender = 0;
-  int count = InitGlyphs(ret, &ret->glyph->table[0], ret->glyph->table.size()); 
+  int count = InitGlyphs(ret.get(), &ret->glyph->table[0], ret->glyph->table.size()); 
   ret->fix_metrics = true;
   ret->has_bg = true;
 
   bool new_cache = false, pre_load = false;
   ret->glyph->cache =
-    (!new_cache ? GlyphCache::Get() :
+    (!new_cache ? app->fonts->GetGlyphCache() :
      make_shared<GlyphCache>(0, AtlasFontEngine::Dimension(ret->max_width, ret->Height(), count)));
   GlyphCache *cache = ret->glyph->cache.get();
 
   if (new_cache) {
     pbm = SelectObject((cache->hdc = hdc), (hbitmap = cache->tex.CreateGDIBitMap(hdc)));
   }
-  if (pre_load) LoadGlyphs(ret, &ret->glyph->table[0], ret->glyph->table.size());
-  if (FLAGS_atlas_dump) AtlasFontEngine::WriteAtlas(d.Filename(), ret, &cache->tex);
+  if (pre_load) LoadGlyphs(ret.get(), &ret->glyph->table[0], ret->glyph->table.size());
+  if (FLAGS_atlas_dump) AtlasFontEngine::WriteAtlas(d.Filename(), ret.get(), &cache->tex);
   if (new_cache) {
     GdiFlush();
     cache->tex.LoadGL();

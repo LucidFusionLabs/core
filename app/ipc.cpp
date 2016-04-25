@@ -182,7 +182,7 @@ int ProcessPipe::Open(const char* const* argv, const char *startdir) {
 }
 
 static string MultiProcessHandleURL = "handle://";
-MultiProcessBuffer::MultiProcessBuffer(Connection *c, const ResourceHandle *h) :
+MultiProcessBuffer::MultiProcessBuffer(const IPC::ResourceHandle *h, Socket) :
   url((h && h->url()) ? h->url()->c_str() : ""), len(h ? h->len() : 0) {
   if (PrefixMatch(url, MultiProcessHandleURL)) impl = (void*)strtoul(url.c_str() + MultiProcessHandleURL.size(), 0, 16);
 }
@@ -266,7 +266,7 @@ int ProcessPipe::Close() {
 
 #if defined(LFL_MMAPXFER_MPB)
 static string MultiProcessBufferURL = "fd://transferred";
-MultiProcessBuffer::MultiProcessBuffer(const IPC::ResourceHandle *h, int socket)
+MultiProcessBuffer::MultiProcessBuffer(const IPC::ResourceHandle *h, Socket socket)
   : url((h && h->url()) ? h->url()->c_str() : ""), len(h ? h->len() : 0) {
   if (url == MultiProcessBufferURL) if ((impl = socket) < 0) ERROR(MultiProcessBufferURL, " = ", impl);
 }
@@ -295,7 +295,7 @@ static int ShmKeyFromMultiProcessBufferURL(const string &u) {
   CHECK(PrefixMatch(u, shm_url));
   return atoi(u.c_str() + shm_url.size());
 }
-MultiProcessBuffer::MultiProcessBuffer(const IPC::ResourceHandle *h, int)
+MultiProcessBuffer::MultiProcessBuffer(const IPC::ResourceHandle *h, Socket)
   : url((h && h->url()) ? h->url()->c_str() : ""), len(h ? h->len() : 0) {}
 MultiProcessBuffer::~MultiProcessBuffer() { if (buf) shmdt(buf); }
 void MultiProcessBuffer::Close() { if (impl >= 0) shmctl(impl, IPC_RMID, NULL); }
@@ -442,7 +442,7 @@ bool InterProcessComm::StartServerProcess(const string &server_program, const ve
   CHECK((impersonation_token = MakeImpersonationToken (impersonation_token)));
   CHECK((impersonation_token = MakeUninheritableHandle(impersonation_token)));
   CHECK((   restricted_token = MakeUninheritableHandle(   restricted_token)));
-  string av = StrCat(arg0, " ", (arg.size() ? Join(arg, " ") : ""), (arg.size ? " " : ""), arg1);
+  string av = StrCat(arg0, " ", (arg.size() ? Join(arg, " ") : ""), (arg.size() ? " " : ""), arg1);
   PROCESS_INFORMATION pi;
   STARTUPINFO si;
   memzero(pi);

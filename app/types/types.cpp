@@ -20,9 +20,7 @@
 
 #include <fcntl.h>
 #include <sys/stat.h>
-#ifdef WIN32
-#include <Shlobj.h>
-#else
+#ifndef WIN32
 #include <sys/mman.h>
 #include <sys/types.h>
 #include <sys/resource.h>

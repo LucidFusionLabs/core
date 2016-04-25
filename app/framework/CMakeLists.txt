@@ -49,9 +49,9 @@ if(LFL_LINUX)
 endif()
 
 if(LFL_WINDOWS)
-  lfl_add_target(app_windows_os STATIC_LIBRARY SOURCES windows_os.cppn
-                 LINK_LIBRARIES Ws2_32.lib Dnsapi.lib opengl32.lib glu32.lib strmiids.lib zlib.lib)
-  lfl_add_target(apwindows_framework STATIC_LIBRARY SOURCES windows_framework.cpp)
+  lfl_add_target(app_windows_os STATIC_LIBRARY SOURCES windows_os.cpp
+                 LINK_LIBRARIES Ws2_32.lib Dnsapi.lib opengl32.lib glu32.lib strmiids.lib zlib)
+  lfl_add_target(app_windows_framework STATIC_LIBRARY SOURCES windows_framework.cpp)
 endif()
 
 if(LFL_QT)

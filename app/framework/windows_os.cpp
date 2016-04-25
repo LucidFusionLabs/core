@@ -16,21 +16,10 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-namespace LFL {
-void Application::AddNativeMenu(const string &title, const vector<MenuItem>&items) {
-  WinWindow *win = static_cast<WinWindow*>(screen->impl);
-  if (!win->menu) { win->menu = CreateMenu(); win->context_menu = CreatePopupMenu(); }
-  HMENU hAddMenu = CreatePopupMenu();
-  for (auto &i : items) {
-    if (tuple_get<1>(i) == "<seperator>") AppendMenu(hAddMenu, MF_MENUBARBREAK, 0, NULL);
-    else AppendMenu(hAddMenu, MF_STRING, win->start_msg_id + win->menu_cmds.size(), tuple_get<1>(i).c_str());
-    win->menu_cmds.push_back(tuple_get<2>(i));
-  }
-  AppendMenu(win->menu,         MF_STRING | MF_POPUP, (UINT)hAddMenu, title.c_str());
-  AppendMenu(win->context_menu, MF_STRING | MF_POPUP, (UINT)hAddMenu, title.c_str());
-  if (win->menubar) SetMenu((HWND)screen->id, win->menu);
-}
+#include <shellapi.h>
+#include <commdlg.h>
 
+namespace LFL {
 void Application::LaunchNativeFontChooser(const FontDesc &cur_font, const string &choose_cmd) {
   LOGFONT lf;
   memzero(lf);
@@ -44,34 +33,15 @@ void Application::LaunchNativeFontChooser(const FontDesc &cur_font, const string
   memzero(cf);
   cf.lpLogFont = &lf;
   cf.lStructSize = sizeof(cf);
-  cf.hwndOwner = (HWND)screen->id;
+  cf.hwndOwner = GetTyped<HWND>(screen->id);
   cf.Flags = CF_SCREENFONTS | CF_INITTOLOGFONTSTRUCT;
   if (!ChooseFont(&cf)) return;
   int flag = FontDesc::Mono | (lf.lfWeight > FW_NORMAL ? FontDesc::Bold : 0) | (lf.lfItalic ? FontDesc::Italic : 0);
-  screen->shell.Run(StrCat(choose_cmd, " ", lf.lfFaceName, " ", cf.iPointSize/10, " ", flag));
+  screen->shell->Run(StrCat(choose_cmd, " ", lf.lfFaceName, " ", cf.iPointSize/10, " ", flag));
 }
 
 void Application::OpenSystemBrowser(const string &url_text) {
   ShellExecute(NULL, "open", url_text.c_str(), NULL, NULL, SW_SHOWNORMAL);
 }
-}; // namespace LFL
 
-int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR lpCmdLine, int nCmdShow) {
-  vector<const char *> av;
-  vector<string> a(1);
-  a[0].resize(1024);
-  GetModuleFileName(hInst, &(a[0])[0], a[0].size());
-  LFL::StringWordIter word_iter(lpCmdLine);
-  for (string word = IterNextString(&word_iter); !word_iter.Done(); word = IterNextString(&word_iter)) a.push_back(word);
-  for (auto &i : a) av.push_back(i.c_str());
-  av.push_back(0);
-#ifdef LFL_WINVIDEO
-  LFL::WinApp *winapp = LFL::Singleton<LFL::WinApp>::Get();
-  winapp->Setup(hInst, nCmdShow);
-#endif
-  int ret = main(av.size()-1, &av[0]);
-#ifdef LFL_WINVIDEO
-  return ret ? ret : winapp->MessageLoop();
-#else
-  return ret;
-}
+}; // namespace LFL

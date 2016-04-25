@@ -50,6 +50,7 @@
 #ifdef LFL_WINDOWS
 #define NOMINMAX
 #define _USE_MATH_DEFINES
+#define WIN32_LEAN_AND_MEAN
 #include <winsock2.h>
 #include <windows.h>
 #include <process.h>
@@ -58,6 +59,7 @@
 #include <sstream>
 #include <typeinfo>
 typedef SOCKET Socket;
+struct iovec { void *iov_base; size_t iov_len; };
 #else
 #include <unistd.h>
 #include <limits.h>
@@ -81,7 +83,7 @@ typedef int socklen_t;
 extern char *optarg;
 extern int optind;
 #undef ERROR
-#undef CALLBACK
+#undef CreateWindow
 #define S_IFDIR _S_IFDIR
 #define getcwd _getcwd
 #define chdir _chdir

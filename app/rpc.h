@@ -32,8 +32,8 @@
 namespace LFL {
 #ifdef LFL_FLATBUFFERS
 using flatbuffers::FlatBufferBuilder;
-typedef pair<flatbuffers::unique_ptr_t, size_t> FlatBufferPiece;
-template<typename T> FlatBufferPiece CreateFlatBuffer(const function<flatbuffers::Offset<T>(FlatBufferBuilder &fb)> &f)
+typedef std::pair<flatbuffers::unique_ptr_t, size_t> FlatBufferPiece;
+template<typename T> FlatBufferPiece CreateFlatBuffer(const std::function<flatbuffers::Offset<T>(FlatBufferBuilder &fb)> &f)
 { FlatBufferBuilder fb; fb.Finish(f(fb)); size_t s=fb.GetSize(); return make_pair(fb.ReleaseBufferPointer(), s); }
 #define MakeFlatBufferOfType(t, x) CreateFlatBuffer(function<flatbuffers::Offset<t>(FlatBufferBuilder&)>([&](FlatBufferBuilder &fb){ return x; }))
 
@@ -159,7 +159,7 @@ template<typename T> FlatBufferPiece CreateFlatBuffer(const function<flatbuffers
   };
 
 #else
-typedef pair<unique_ptr<char*>, size_t> FlatBufferPiece;
+typedef std::pair<std::unique_ptr<char*>, size_t> FlatBufferPiece;
 #define IPC_TABLE_BEGIN(name) typedef name Parent; void HandleIPC(Connection *c, int fm=0) {}
 #define IPC_TABLE_CLIENT_CALL(name)
 #define IPC_TABLE_SERVER_CALL(name)

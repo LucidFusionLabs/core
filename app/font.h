@@ -182,12 +182,6 @@ struct GlyphCache {
 #elif defined(LFL_WINDOWS)
   void Load(const Font*, const Glyph*, HFONT hfont, int size, HDC dc);
 #endif
-
-  static shared_ptr<GlyphCache> Get() {
-    static shared_ptr<GlyphCache> inst = make_shared<GlyphCache>(0, 512);
-    if (!inst->tex.ID) inst->tex.Create(inst->tex.width, inst->tex.height);
-    return inst;
-  }
 };
 
 struct GlyphMap {
@@ -450,6 +444,7 @@ struct Fonts {
     }
   };
 
+  shared_ptr<GlyphCache> rgba_glyph_cache, a_glyph_cache;
   FontEngine *default_font_engine=0;
   LazyInitializedPtr<FakeFontEngine> fake_engine;
   LazyInitializedPtr<AtlasFontEngine> atlas_engine;
@@ -477,6 +472,11 @@ struct Fonts {
   void ResetGL();
   void LoadDefaultFonts();
   void LoadConsoleFont(const string &name, const vector<int> &sizes = vector<int>(1, 32));
+  shared_ptr<GlyphCache> GetGlyphCache() {
+    if (!rgba_glyph_cache) rgba_glyph_cache = make_shared<GlyphCache>(0, 512);
+    if (!rgba_glyph_cache->tex.ID) rgba_glyph_cache->tex.Create(rgba_glyph_cache->tex.width, rgba_glyph_cache->tex.height);
+    return rgba_glyph_cache;
+  }
 };
 
 struct FontRef {

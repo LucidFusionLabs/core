@@ -23,7 +23,7 @@
 #include <fcntl.h>
 
 #ifdef LFL_WINDOWS
-#define CALLBACK __stdcall
+#include <ShlObj.h>
 #include <Windns.h>
 #else
 #include <signal.h>
@@ -103,9 +103,9 @@ extern "C" void LFAppFatal() {
 #ifndef LFL_WINDOWS
 extern "C" void HandleSigInt(int sig) { INFO("interrupt"); LFAppShutdown(); }
 #else
-extern "C" BOOL WINAPI HandlerCtrlC(DWORD sig) { INFO("interrupt"); LFAppShutdown(); return TRUE; }
+extern "C" BOOL WINAPI HandleCtrlC(DWORD sig) { INFO("interrupt"); LFAppShutdown(); return TRUE; }
 extern "C" void OpenSystemConsole(const char *title) {
-  FLAGS_open_console=1;
+  LFL::FLAGS_open_console=1;
   AllocConsole();
   SetConsoleTitle(title);
   freopen("CONOUT$", "wb", stdout);
@@ -417,7 +417,7 @@ int Application::Create(int argc, const char* const* argv, const char *source_fi
   if (argc > 1) {
     if (!FLAGS_open_console) CloseSystemConsole();
   }
-  else if (FLAGS_open_console) OpenSystemConsole();
+  else if (FLAGS_open_console) OpenSystemConsole(console_title.c_str());
   if (argc > 1) OpenSystemConsole(console_title.c_str());
 #endif
 
@@ -427,7 +427,7 @@ int Application::Create(int argc, const char* const* argv, const char *source_fi
     dldir = StrCat(path, "/");
     free(path);
 #elif defined(LFL_WINDOWS)
-    char path[MAX_PATH];
+    char path[MAX_PATH] = { 0 };
     if (!SUCCEEDED(SHGetFolderPath(NULL, CSIDL_PERSONAL|CSIDL_FLAG_CREATE, NULL, 0, path))) return -1;
     dldir = StrCat(path, "/");
 #endif
@@ -592,12 +592,10 @@ int Application::TimerDrivenFrame(bool got_wakeup) {
 }
 
 int Application::Main() {
-  ONCE({
-    scheduler.Start();
+  ONCE({ scheduler.Start(); });
 #ifdef LFL_IPHONE
-    return 0;
+  ONCE({ return 0; });
 #endif
-  });
   if (Start()) return -1;
   if (!scheduler.run_main_loop) return 0;
   return MainLoop();

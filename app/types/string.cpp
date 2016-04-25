@@ -763,8 +763,7 @@ void NextRecordDispatcher::AddData(const StringPiece &b, bool final) {
 };
 
 template <class X>
-void TokenProcessor<X>::Init(const ArrayPiece<X> &text, int o, const ArrayPiece<X> &V, 
-                             int Erase, TokenProcessor::CB &&C) {
+void TokenProcessor<X>::Init(const ArrayPiece<X> &text, int o, const ArrayPiece<X> &V, int Erase, CB &&C) {
   CHECK_LE((x = o), text.len);
   LoadV(V);
   cb = C;

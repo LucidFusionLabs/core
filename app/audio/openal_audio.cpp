@@ -19,6 +19,9 @@
 #ifdef LFL_APPLE
 #include <OpenAL/al.h>
 #include <OpenAL/alc.h>
+#elif LFL_WINDOWS
+#include <al.h>
+#include <alc.h>
 #else
 #include <AL/al.h>
 #include <AL/alc.h>

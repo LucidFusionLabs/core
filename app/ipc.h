@@ -51,7 +51,7 @@ struct MultiProcessBuffer {
   int impl = -1; void *share_process = 0;
 #endif
   MultiProcessBuffer(void *share_with=0) : share_process(share_with) {}
-  MultiProcessBuffer(const IPC::ResourceHandle *h, int socket);
+  MultiProcessBuffer(const IPC::ResourceHandle *h, Socket socket);
   virtual ~MultiProcessBuffer();
   virtual void Close();
   virtual bool Open();

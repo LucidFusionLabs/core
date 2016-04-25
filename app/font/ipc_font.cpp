@@ -24,7 +24,7 @@ namespace LFL {
 unique_ptr<Font> IPCClientFontEngine::Open(const FontDesc &d) {
   unique_ptr<Font> ret = make_unique<Font>(this, d, make_shared<Resource>());
   ret->glyph = make_shared<GlyphMap>();
-  ret->glyph->cache = GlyphCache::Get();
+  ret->glyph->cache = app->fonts->GetGlyphCache();
   app->main_process->OpenSystemFont(d, bind(&IPCClientFontEngine::OpenSystemFontResponse, this, ret.get(), _1, _2));
   if (1 && app->main_process->browser) app->main_process->WaitAllOpenSystemFontResponse();
   return ret;

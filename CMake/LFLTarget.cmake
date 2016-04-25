@@ -14,6 +14,14 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+macro(get_static_library_name _var _file)
+  if(LFL_WINDOWS)
+    set(${_var} ${_file}.lib)
+  else()
+    set(${_var} lib${_file}.a)
+  endif()
+endmacro()
+
 macro(get_unversioned_shared_library_name _var _file)
   if(LFL_APPLE)
     set(${_var} ${_file}.dylib)
@@ -44,6 +52,12 @@ macro(add_dependency _target)
   endif() 
 endmacro()
 
+macro(add_windows_dependency _target)
+  if(LFL_WINDOWS)
+    add_dependencies(${_target} ${ARGN})
+  endif() 
+endmacro()
+
 macro(lfl_project _name)
   project(${_name})
   set(LFL_PROJECT ${_name})
@@ -62,7 +76,11 @@ function(lfl_add_target _name)
   endif()
 
   if(_EXECUTABLE)
-    add_executable(${_name} ${_WIN32} ${_SOURCES})
+    if(_WIN32)
+      add_executable(${_name} WIN32 ${_SOURCES})
+    else()
+      add_executable(${_name} ${_SOURCES})
+    endif()
   elseif(_STATIC_LIBRARY)
     add_library(${_name} STATIC ${_SOURCES})
   elseif(_SHARED_LIBRARY)
