@@ -284,13 +284,14 @@ typedef StringWordIterT<char>     StringWordIter;
 typedef StringWordIterT<char16_t> StringWord16Iter;
 
 template <class X> struct StringLineIterT : public StringIterT<X> {
-  struct Flag { enum { BlankLines=1 }; };
+  struct Flag { enum { BlankLines=1, Raw=2 }; };
   StringPieceT<X> in;
   basic_string<X> buf;
-  int cur_len=0, cur_offset=0, next_offset=0, flag=0;
-  bool first=0;
-  StringLineIterT(const StringPieceT<X> &B, int F=0) : in(B), flag(F), first(1) {}
+  int cur_len=0, cur_offset=0, next_offset=0;
+  bool first=0, blanks=0, chomp=1;
   StringLineIterT() : cur_offset(-1) {}
+  StringLineIterT(const StringPieceT<X> &B, int F=0) :
+    in(B), first(1), blanks(F&Flag::BlankLines), chomp(!(F&Flag::Raw)) {}
   bool Done() const { return cur_offset < 0; }
   const X *Next();
   const X *Begin() const { return in.buf; }
@@ -568,18 +569,45 @@ struct Base64 {
 struct Regex {
   struct Result {
     int begin, end;
-    Result(int B=0, int E=0) : begin(B), end(E) {}
-    string Text(const string &t) const { return t.substr(begin, end - begin); }
-    float FloatVal(const string &t) const { return atof(Text(t).c_str()); }
+    Result(int B=-1, int E=-1) : begin(B), end(E) {}
+    bool operator!() const { return begin<0 || begin<0; }
     void operator+=(int v) { begin += v; end += v; }
     void operator-=(int v) { begin -= v; end -= v; }
+    string Text(const StringPiece &t) const { return string(t.data() + begin, end - begin); }
+    float FloatVal(const StringPiece &t) const { return atof(Text(t).c_str()); }
   };
   void *impl=0;
   ~Regex();
   Regex() {}
   Regex(const string &pattern);
-  int Match(const StringPiece &text, vector<Result> *out);
-  int MatchAll(const StringPiece &text, vector<Result> *out);
+  Regex(const Regex&) = delete;
+  Result MatchOne(const StringPiece &text);
+};
+
+struct RegexMatcher {
+  Regex *regex;
+  StringPiece text;
+  const char *iter;
+  RegexMatcher(Regex *r=0, const StringPiece &t=StringPiece()) : regex(r), text(t), iter(text.begin()) {}
+
+  Regex::Result MatchNext();
+  int MatchAll(vector<Regex::Result> *out);
+  static bool ConvertToLineNumberColumnCoordinates
+    (const StringPiece &text, const vector<Regex::Result> &in, vector<pair<int, int>> *out);
+};
+
+struct RegexLineMatcher {
+  Regex *regex;
+  StringLineIter lines;
+  int current_line_number=-1;
+  const char *current_line=0;
+  RegexMatcher current_match;
+  RegexLineMatcher(Regex *r=0, const StringPiece &t=StringPiece()) :
+    regex(r), lines(t, StringLineIter::Flag::BlankLines) {}
+
+  pair<int,int> MatchNext();
+  int MatchAll(vector<pair<int,int>> *out);
+  static bool Null(const pair<int,int> &m) { return m.first < 0 || m.second < 0; }
 };
 
 struct StreamRegex {
@@ -642,13 +670,13 @@ template <class X> struct TokenProcessor {
 
 struct SyntaxMatcher {
   struct Rule {
-    string name, match_beg, match_end;
+    string name, match_beg, match_end, skip;
     bool match_beg_regex, match_end_regex;
     vector<string> match_within;
   };
   struct CompiledRule {
     string name, match_beg, match_end;
-    bool match_beg_regex, match_end_regex, per_line;
+    bool match_beg_regex, match_end_regex;
     vector<int> match_within;
   };
   struct StyleInterface {

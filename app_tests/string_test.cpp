@@ -389,17 +389,15 @@ TEST(StringTest, BaseName) {
 #ifdef LFL_APPLE
 TEST(RegexTest, URL) {
   Regex url_matcher("(https?://)");
-  vector<Regex::Result> matches;
+  Regex::Result match;
 
   string in = "aa http://foo bb";
-  url_matcher.Match(in, &matches);
-  EXPECT_EQ(1, matches.size()); if (matches.size()) EXPECT_EQ("http://", matches[0].Text(in));
-  matches.clear();
+  match = url_matcher.MatchOne(in);
+  EXPECT_EQ(true, !!match); if (!!match) EXPECT_EQ("http://", match.Text(in));
 
   in = "aa https://foo bb";
-  url_matcher.Match(in, &matches);
-  EXPECT_EQ(1, matches.size()); if (matches.size()) EXPECT_EQ("https://", matches[0].Text(in));
-  matches.clear();
+  match = url_matcher.MatchOne(in);
+  EXPECT_EQ(true, !!match); if (!!match) EXPECT_EQ("https://", match.Text(in));
 }
 #endif
 

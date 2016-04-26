@@ -510,7 +510,10 @@ template <class X, bool chomp> const X *NextLine(const StringPieceT<X> &text, bo
   for (/**/; !text.Done(p); ++p) { 
     if (*p == '\n') { ret = p+1; break; }
   }
-  if (!ret) { if (outlen) *outlen = p - text.buf; return final ? text.buf : 0; }
+  if (!ret) { 
+    if (outlen) *outlen = p - text.buf;
+    return final ? text.buf : 0;
+  }
   if (outlen) {
     int ol = ret-text.buf-1;
     if (chomp && ret-2 >= text.buf && *(ret-2) == '\r') ol--;
@@ -552,10 +555,11 @@ template <class X> const X *StringWordIterT<X>::Next() {
 template <class X> const X *StringLineIterT<X>::Next() {
   first = false;
   for (cur_offset = next_offset; cur_offset >= 0; cur_offset = next_offset) {
-    const X *line = in.buf + cur_offset, *next = NextLine(StringPieceT<X>(line, in.Remaining(cur_offset)), false, &cur_len);
+    const X *line = in.buf + cur_offset, *next = chomp ?
+      NextLine   (StringPieceT<X>(line, in.Remaining(cur_offset)), false, &cur_len) :
+      NextLineRaw(StringPieceT<X>(line, in.Remaining(cur_offset)), false, &cur_len);
     next_offset = next ? next - in.buf : -1;
-    if (cur_len) cur_len -= ChompNewlineLength(line, cur_len);
-    if (cur_len || ((flag & Flag::BlankLines) && next)) return line;
+    if (cur_len || (blanks && next)) return line;
   }
   return 0;
 }
@@ -597,8 +601,8 @@ template int ChompNewline(char *line, int len);
 
 template <class X> int ChompNewlineLength(const X *line, int len) {
   int ret = 0;
-  if (line[len-1] == '\n') ret++;
-  if (line[len-2] == '\r') ret++;
+  if (len > 0 && line[len-1] == '\n') ret++;
+  if (len > 1 && line[len-2] == '\r') ret++;
   return ret;
 }
 
@@ -688,6 +692,54 @@ string Base64::Decode(const char *data, size_t input_length) {
     if (j < decoded_data.size()) decoded_data[j++] = (triple >> 0 * 8) & 0xFF;
   }
   return decoded_data;
+}
+
+Regex::Result RegexMatcher::MatchNext() {
+  Regex::Result m = regex->MatchOne(StringPiece(iter, text.end() - iter));
+  if (!m) return m;
+  m += iter - text.begin();
+  iter = text.begin() + m.end;
+  return m;
+}
+
+int RegexMatcher::MatchAll(vector<Regex::Result> *out) {
+  out->clear();
+  for (auto r = MatchNext(); !!r; r = MatchNext()) out->push_back(r);
+  return out->size();
+}
+
+bool RegexMatcher::ConvertToLineNumberColumnCoordinates
+(const StringPiece &text, const vector<Regex::Result> &matches, vector<pair<int, int>> *out) {
+  out->clear();
+  int line_number = 0;
+  auto match_i = matches.begin(), match_e = matches.end();
+  StringLineIter lines(text, StringLineIter::Flag::BlankLines | StringLineIter::Flag::Raw);
+  for (const char *l = lines.Next(); l && match_i != match_e; l = lines.Next(), line_number++) {
+    size_t offset_beg = lines.CurrentOffset(), offset_end = offset_beg + lines.CurrentLength();
+    for(; match_i != match_e && offset_beg <= match_i->begin && match_i->begin <= offset_end; ++match_i)
+      out->emplace_back(line_number, match_i->begin - offset_beg);
+  }
+  return match_i == match_e;
+}
+
+pair<int,int> RegexLineMatcher::MatchNext() {
+  for (;;) {
+    if (!current_line) {
+      current_line_number++;
+      current_line = lines.Next();
+      if (!current_line) return pair<int, int>(-1, -1);
+      current_match = RegexMatcher(regex, StringPiece(current_line, lines.CurrentLength()));
+    }
+    Regex::Result r = current_match.MatchNext();
+    if (!!r) return pair<int, int>(current_line_number, r.begin);
+    current_line = nullptr;
+  }
+}
+
+int RegexLineMatcher::MatchAll(vector<pair<int,int>> *out) {
+  out->clear();
+  for (auto r = MatchNext(); !Null(r); r = MatchNext()) out->push_back(r);
+  return out->size();
 }
 
 void NextRecordReader::Init(File *F, int fo) { return Init(bind(&File::Read, F, _1, _2), fo); }
@@ -817,8 +869,6 @@ SyntaxMatcher::SyntaxMatcher(const vector<SyntaxMatcher::Rule> &in) {
 void SyntaxMatcher::UpdateAnnotation(const string &text, SyntaxMatcher::StyleInterface *style,
                                      int default_attr, DrawableAnnotation *out, int out_size) {
   for (const auto &r : rules) {
-    if (!r.per_line) {
-    } else {}
   }
 }
 

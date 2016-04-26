@@ -638,6 +638,7 @@ struct Application : public ::LFApp {
   void LaunchNativeFontChooser(const FontDesc &cur_font, const string &choose_cmd);
   void LaunchNativeFileChooser(bool files, bool dirs, bool multi, const string &choose_cmd);
   void LaunchNativePanel(const string &n);
+  void SetNativePanelTitle(const string &n, const string &title);
 
   /// AddToolbar item values with prefix "toggle" stay depressed
   void AddToolbar(const vector<pair<string, string>>&items);

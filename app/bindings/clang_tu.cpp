@@ -372,15 +372,12 @@ void ClangCPlusPlusHighlighter::UpdateAnnotation(TranslationUnit *tu, Editor::Sy
 
   using Token  = TranslationUnit::Token;
   using Cursor = TranslationUnit::Cursor;
-  static unordered_set<string> inc_w{ "include", "import" }, ctype_w{ "int", "long", "short", "char",
-    "void", "signed", "unsigned", "float", "double", "size_t", "ssize_t", "off_t", "wchar_t", "ptrdiff_t",
-    "sig_atomic_t", "fpos_t", "clock_t", "time_t", "va_list", "jmp_buf", "FILE", "DIR", "div_t", "ldiv_t",
-    "mbstate_t", "wctrans_t", "wint_t", "wctype_t", "bool", "complex", "int8_t", "int16_t", "int32_t",
-    "int64_t", "uint8_t", "uint16_t", "uint32_t", "uint64_t", "int_least8_t", "int_least16_t",
-    "int_least32_t", "int_least64_t", "uint_least8_t", "uint_least16_t", "uint_least32_t", "uint_least64_t",
-    "int_fast8_t", "int_fast16_t", "int_fast32_t", "int_fast64_t", "uint_fast8_t", "uint_fast16_t",
-    "uint_fast32_t", "uint_fast64_t", "intptr_t", "uintptr_t", "intmax_t", "uintmax_t",
-    "__label__", "__complex__", "__volatile__" };
+  static unordered_set<string> inc_w{ "include", "import" }, ctype_w{
+#   define LFL_C_SYNTAX_TYPE
+#   define XX(x) #x,
+#   include "core/app/bindings/c_syntax.h"
+#   undef LFL_C_SYNTAX_TYPE
+  }; 
 
   DrawableAnnotation *last_annotation = 0;
   int a = default_attr, last_a = a, last_cursor_kind = CXCursor_FirstInvalid, last_line = -1, done_line = 0;
@@ -436,8 +433,38 @@ void ClangCPlusPlusHighlighter::UpdateAnnotation(TranslationUnit *tu, Editor::Sy
     })).Visit();
 }
 
+// \o -> [0-7]
+// \x -> [0-9|A-F|a-f]
+// \d -> \\d
+// \< -> \\b
+// \> -> \\b
+// \= -> ?
 RegexCPlusPlusHighlighter::RegexCPlusPlusHighlighter() : SyntaxMatcher({
-  Rule{ "Comment", "/*", "*/", 0, 0, StringVec{"String", "Number", "Special", "SpecialChar"} }
+  Rule{ "String", "\"", "\"", "(\\\\|\\\")", 0, 0, StringVec{"Special", "SpecialChar"} },
+  Rule{ "Comment", "/*", "*/", "", 0, 0, StringVec{"String", "Number", "Special", "SpecialChar"} },
+  Rule{ "Special", "\\(x[0-9|A-F|a-f]+|[0-7]{1,3}|.)", "", "", 1, 0, StringVec{} },
+  Rule{ "Special", "\\(u[0-9|A-F|a-f]{4}|U[0-9|A-F|a-f]{8})", "", "", 1, 0, StringVec{} },
+  Rule{ "Character", "('[^\\]')", "", "", 1, 0, StringVec{} },
+  Rule{ "Character", "('[^']*')", "", "", 1, 0, StringVec{"Special"} },
+  Rule{ "SpecialError", "('\\[^'\"?\\abefnrtv]')", "", "", 1, 0, StringVec{} },
+  Rule{ "SpecialChar", "('\\['\"?\\abefnrtv]')", "", "", 1, 0, StringVec{} },
+  Rule{ "SpecialChar", "('\\[0-7]{1,3}')", "", "", 1, 0, StringVec{} },
+  Rule{ "SpecialChar", "('\\x[0-9|A-F|a-f]{1,2}')", "", "", 1, 0, StringVec{} },
+  Rule{ "Numbers", "(\\b\\d|.\\d)", "", "", 1, 0, StringVec{"Number", "Float", "Octal"} },
+  Rule{ "Number", "(\\d+(u?l{0,2}|ll?u)\\b)", "", "", 1, 0, StringVec{} },
+  Rule{ "Number", "(0x[0-9|A-F|a-f]+(u?l{0,2}|ll?u)\\b)", "", "", 1, 0, StringVec{} },
+  Rule{ "Octal", "(0[0-7]+(u?l{0,2}|ll=u)\\b)", "", "", 1, 0, StringVec{} },
+  Rule{ "Float", "(\\d+f)", "", "", 1, 0, StringVec{} },
+  Rule{ "Float", "(\\d+.\\d*(e[-+]?\\d+)?[fl]?)", "", "", 1, 0, StringVec{} },
+  Rule{ "Float", "(.\\d+(e[-+]?\\d+)?[fl]?\\b)", "", "", 1, 0, StringVec{} },
+  Rule{ "Float", "(\\d+e[-+]?\\d+[fl]?\\b)", "", "", 1, 0, StringVec{} },
+  Rule{ "PreCondition", "(^\\s*(%:|#)\\s*(if|ifdef|ifndef|elif)\\b)", "$", "", 1, 1, StringVec{"All"} },
+  Rule{ "PreCondition", "(^\\s*(%:|#)\\s*(else|endif)\\b)", "$", "", 1, 1, StringVec{"All"} },
+  Rule{ "Included", "\"", "\"", "(\\\\|\\\")", 0, 0, StringVec{} },
+  Rule{ "Included", "(<[^>]*>)", "", "", 1, 0, StringVec{} },
+  Rule{ "Include", "(^\\s*(%:|#)\\s*include\\b\\s*[\"<])", "", "", 1, 0, StringVec{"Included"} },
+  Rule{ "Define", "(^\\s*(%:|#)\\s*(define|undef)\\b)", "", "", 1, 0, StringVec{"All"} },
+  Rule{ "PreProc", "^\\s*(%:|#)\\s*(pragma\\b|line\\b|warning\\b|warn\\b|error\\b)", "$", "", 1, 1, StringVec{"All"} },
 }) {}
 
 }; // namespace LFL

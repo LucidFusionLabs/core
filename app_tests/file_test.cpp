@@ -51,6 +51,12 @@ TEST(FileTest, LocalFileRead) {
     for (const char *line = nr.NextLineRaw(); line; line = nr.NextLineRaw())
       buf += string(line, nr.record_len) + "\n";
     EXPECT_EQ(contents, buf);
+
+    buf.clear();
+    StringLineIter lines(contents, StringLineIter::Flag::BlankLines | StringLineIter::Flag::Raw);
+    for (const char *line = lines.Next(); line; line = lines.Next())
+      buf += string(line, lines.CurrentLength()) + "\n";
+    EXPECT_EQ(contents, buf);
   }
 }
 

@@ -27,6 +27,7 @@
 
 @implementation NativePanel
   {
+    std::vector<std::pair<NSButton*,    std::string>> buttons;
     std::vector<std::pair<NSTextField*, std::string>> textfields;
   }
 
@@ -45,12 +46,25 @@
     [_window makeKeyAndOrderFront:NSApp];
     [_window retain];
   }
+
+  - (void) addButton: (NSButton*) button withCommand: (const std::string&) cmd {
+    [button setTarget: self];
+    [button setAction: @selector(buttonAction:)];
+    [button setTag: buttons.size()];
+    buttons.emplace_back(button, cmd);
+  }
   
   - (void) addTextField: (NSTextField*) textfield withCommand: (const std::string&) cmd {
     [textfield setTarget: self];
     [textfield setAction: @selector(textFieldAction:)];
     [textfield setTag: textfields.size()];
     textfields.emplace_back(textfield, cmd);
+  }
+
+  - (void) buttonAction: (id)sender {
+    int tag = [sender tag];
+    CHECK_RANGE(tag, 0, buttons.size());
+    ShellRun(LFL::StrCat(buttons[tag].second, " ", [[sender stringValue] UTF8String]).c_str());
   }
 
   - (void) textFieldAction: (id)sender {
@@ -70,6 +84,13 @@
     auto it = panels.find(n);
     if (it == panels.end()) return false;
     [it->second show];
+    return true;
+  }
+
+  + (bool) setPanelTitle: (const std::string&) title withName: (const std::string&) n {
+    auto it = panels.find(n);
+    if (it == panels.end()) return false;
+    [[it->second window] setTitle: [NSString stringWithUTF8String: title.c_str()]];
     return true;
   }
 
@@ -140,6 +161,7 @@ void Application::AddNativeEditMenu(const vector<MenuItem>&items) {
 }
 
 void Application::LaunchNativePanel(const string &n) { [NativePanel showPanelNamed: n]; }
+void Application::SetNativePanelTitle(const string &n, const string &title) { [NativePanel setPanelTitle: title withName: n]; }
 void Application::AddNativePanel(const string &name, const Box &b, const string &title, const vector<PanelItem> &items) {
   NativePanel *panel = [NativePanel addPanelNamed: name withBox: b];
   CHECK(panel);
@@ -151,6 +173,13 @@ void Application::AddNativePanel(const string &name, const Box &b, const string 
       NSTextField *textfield = [[NSTextField alloc] initWithFrame:NSMakeRect(b.x, b.y, b.w, b.h)];
       [panel addTextField: textfield withCommand: cmd];
       [[[panel window] contentView] addSubview: textfield];
+    } else if (PrefixMatch(t, "button:")) {
+      NSButton *button = [[[NSButton alloc] initWithFrame:NSMakeRect(b.x, b.y, b.w, b.h)] autorelease];
+      [panel addButton: button withCommand: cmd];
+      [[[panel window] contentView] addSubview: button];
+      [button setTitle: [NSString stringWithUTF8String: t.substr(7).c_str()]];
+      [button setButtonType:NSMomentaryLightButton];
+      [button setBezelStyle:NSRoundedBezelStyle];
     } else ERROR("unknown panel item ", t);
   }
 }
