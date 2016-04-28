@@ -150,6 +150,7 @@ struct TextBox : public GUI, public KeyboardController {
   struct Lines;
   struct Colors {
     int normal_index=0, bold_index=0, background_index=7;
+    int SetDefaultAttr(int da=0) const;
     virtual const Color *GetColor(int) const = 0;
   };
 
@@ -554,7 +555,6 @@ struct Editor : public TextView {
   VersionNumber version_number={0,0}, saved_version_number={0,0}, cached_text_version_number={-1,0};
   function<DrawableAnnotation(const LineOffset*)> annotation_cb = [](const LineOffset*){ return DrawableAnnotation(); };
   shared_ptr<BufferFile> cached_text;
-  SyntaxColors *syntax=0;
   Line *cursor_glyphs=0;
   LineOffset *cursor_offset=0;
   int cursor_line_index=0, cursor_start_line_number=0, cursor_start_line_number_offset=0;
@@ -594,7 +594,6 @@ struct Editor : public TextView {
   void RecordModify(const point &p, bool erase, char16_t c);
   bool WalkUndo(bool backwards);
   bool ScrollTo(int line_index, int x);
-  void SetSyntax(SyntaxColors *s) { SetColors((syntax = s)); }
 };
 
 struct Terminal : public TextArea {

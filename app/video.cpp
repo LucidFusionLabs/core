@@ -367,6 +367,15 @@ void Drawable::AttrVec::Insert(const Drawable::Attr &v) {
   push_back(v);
 }
 
+void DrawableAnnotation::ExtendBack(const pair<int, int> &a) {
+  if (this->size()) {
+    auto &b = this->back();
+    CHECK_LE(b.first, a.first);
+    if (b.first == a.first) { b.second = a.second; return; }
+  }
+  this->push_back(a);
+}
+
 /* Texture */
 
 int Texture::GLBufferType() const {

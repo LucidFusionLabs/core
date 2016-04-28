@@ -217,6 +217,10 @@ void Widget::Divider::DragCB(int b, int x, int y, int down) {
   Assign(&changing, &changed, bool(down), true);
 }
 
+int TextBox::Colors::SetDefaultAttr(int da) const {
+  return Style::SetFGColorIndex(Style::SetBGColorIndex(da, background_index), normal_index);
+}
+
 const Drawable::Attr *TextBox::Style::GetAttr(int attr) const {
   if (colors) {
     bool italic = attr & Italic, bold = attr & Bold;
@@ -480,8 +484,7 @@ void TextBox::Enter() {
 
 void TextBox::SetColors(Colors *C) {
   style.colors = C;
-  default_attr = Style::SetFGColorIndex(default_attr, style.colors->normal_index);
-  default_attr = Style::SetBGColorIndex(default_attr, style.colors->background_index);
+  default_attr = style.colors->SetDefaultAttr(default_attr);
   bg_color = style.colors->GetColor(style.colors->background_index);
 }
 

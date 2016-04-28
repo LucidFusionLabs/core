@@ -63,13 +63,12 @@ TEST(RegexTest, RegexpURL) {
   PerformanceTimers *timers = Singleton<PerformanceTimers>::Get();
   int tid = timers->Create("RegexpURL");
 
-  vector<Regex::Result> matches;
+  Regex::Result match;
   Regex url_matcher("(https?://)");
   timers->AccumulateTo(tid);
   for (int i=0; i<FLAGS_size; ++i) {
-    url_matcher.Match(my_env->test1, &matches);
-    EXPECT_EQ(1, matches.size()); if (matches.size()) EXPECT_EQ("http://", matches[0].Text(my_env->test1));
-    matches.clear();
+    match = url_matcher.MatchOne(my_env->test1);
+    EXPECT_EQ(true, !!match); if (!!match) EXPECT_EQ("http://", match.Text(my_env->test1));
   }
   timers->AccumulateTo(0);
 }

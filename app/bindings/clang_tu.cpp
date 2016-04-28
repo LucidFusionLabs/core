@@ -433,38 +433,39 @@ void ClangCPlusPlusHighlighter::UpdateAnnotation(TranslationUnit *tu, Editor::Sy
     })).Visit();
 }
 
-// \o -> [0-7]
-// \x -> [0-9|A-F|a-f]
-// \d -> \\d
-// \< -> \\b
-// \> -> \\b
-// \= -> ?
-RegexCPlusPlusHighlighter::RegexCPlusPlusHighlighter() : SyntaxMatcher({
-  Rule{ "String", "\"", "\"", "(\\\\|\\\")", 0, 0, StringVec{"Special", "SpecialChar"} },
-  Rule{ "Comment", "/*", "*/", "", 0, 0, StringVec{"String", "Number", "Special", "SpecialChar"} },
-  Rule{ "Special", "\\(x[0-9|A-F|a-f]+|[0-7]{1,3}|.)", "", "", 1, 0, StringVec{} },
-  Rule{ "Special", "\\(u[0-9|A-F|a-f]{4}|U[0-9|A-F|a-f]{8})", "", "", 1, 0, StringVec{} },
-  Rule{ "Character", "('[^\\]')", "", "", 1, 0, StringVec{} },
-  Rule{ "Character", "('[^']*')", "", "", 1, 0, StringVec{"Special"} },
-  Rule{ "SpecialError", "('\\[^'\"?\\abefnrtv]')", "", "", 1, 0, StringVec{} },
-  Rule{ "SpecialChar", "('\\['\"?\\abefnrtv]')", "", "", 1, 0, StringVec{} },
-  Rule{ "SpecialChar", "('\\[0-7]{1,3}')", "", "", 1, 0, StringVec{} },
-  Rule{ "SpecialChar", "('\\x[0-9|A-F|a-f]{1,2}')", "", "", 1, 0, StringVec{} },
-  Rule{ "Numbers", "(\\b\\d|.\\d)", "", "", 1, 0, StringVec{"Number", "Float", "Octal"} },
-  Rule{ "Number", "(\\d+(u?l{0,2}|ll?u)\\b)", "", "", 1, 0, StringVec{} },
-  Rule{ "Number", "(0x[0-9|A-F|a-f]+(u?l{0,2}|ll?u)\\b)", "", "", 1, 0, StringVec{} },
-  Rule{ "Octal", "(0[0-7]+(u?l{0,2}|ll=u)\\b)", "", "", 1, 0, StringVec{} },
-  Rule{ "Float", "(\\d+f)", "", "", 1, 0, StringVec{} },
-  Rule{ "Float", "(\\d+.\\d*(e[-+]?\\d+)?[fl]?)", "", "", 1, 0, StringVec{} },
-  Rule{ "Float", "(.\\d+(e[-+]?\\d+)?[fl]?\\b)", "", "", 1, 0, StringVec{} },
-  Rule{ "Float", "(\\d+e[-+]?\\d+[fl]?\\b)", "", "", 1, 0, StringVec{} },
-  Rule{ "PreCondition", "(^\\s*(%:|#)\\s*(if|ifdef|ifndef|elif)\\b)", "$", "", 1, 1, StringVec{"All"} },
-  Rule{ "PreCondition", "(^\\s*(%:|#)\\s*(else|endif)\\b)", "$", "", 1, 1, StringVec{"All"} },
-  Rule{ "Included", "\"", "\"", "(\\\\|\\\")", 0, 0, StringVec{} },
-  Rule{ "Included", "(<[^>]*>)", "", "", 1, 0, StringVec{} },
-  Rule{ "Include", "(^\\s*(%:|#)\\s*include\\b\\s*[\"<])", "", "", 1, 0, StringVec{"Included"} },
-  Rule{ "Define", "(^\\s*(%:|#)\\s*(define|undef)\\b)", "", "", 1, 0, StringVec{"All"} },
-  Rule{ "PreProc", "^\\s*(%:|#)\\s*(pragma\\b|line\\b|warning\\b|warn\\b|error\\b)", "$", "", 1, 1, StringVec{"All"} },
-}) {}
+// \o -> [0-7]            \( -> (
+// \x -> [0-9|A-F|a-f]    \) -> )
+// \d -> \\d              \[ -> [
+// \< -> \\b              \] -> ]
+// \> -> \\b              \| -> |
+// \= -> ?                \. -> .
+RegexCPlusPlusHighlighter::RegexCPlusPlusHighlighter
+(SyntaxMatcher::StyleInterface *style, int default_attr) : SyntaxMatcher({
+  Rule{ "Special", "\\\\(x[0-9|A-F|a-f]+|[0-7]{1,3}|.)", "", "", RegexpDisplayContained, StringVec{} },
+  Rule{ "Special", "\\\\(u[0-9|A-F|a-f]{4}|U[0-9|A-F|a-f]{8})", "", "", RegexpDisplayContained, StringVec{} },
+  Rule{ "String", "\"", "\"", "(\\\\\\\\|\\\\\")", 0, StringVec{"Special", "SpecialChar"} },
+  Rule{ "Character", "('[^\\\\]')", "", "", Regexp, StringVec{} },
+  Rule{ "Character", "('[^']*')", "", "", Regexp, StringVec{"Special"} },
+  Rule{ "SpecialError", "('\\\\[^'\"?\\\\abefnrtv]')", "", "", RegexpDisplay, StringVec{} },
+  Rule{ "SpecialChar", "('\\\\['\"?\\\\abefnrtv]')", "", "", RegexpDisplay, StringVec{} },
+  Rule{ "SpecialChar", "('\\\\[0-7]{1,3}')", "", "", RegexpDisplay, StringVec{} },
+  Rule{ "SpecialChar", "('\\\\x[0-9|A-F|a-f]{1,2}')", "", "", RegexpDisplay, StringVec{} },
+  Rule{ "Numbers", "(\\\\b\\d|.\\d)", "", "", RegexpDisplay, StringVec{"Number", "Float", "Octal"} },
+  Rule{ "Number", "(\\d+(u?l{0,2}|ll?u)\\b)", "", "", RegexpDisplayContained, StringVec{} },
+  Rule{ "Number", "(0x[0-9|A-F|a-f]+(u?l{0,2}|ll?u)\\b)", "", "", RegexpDisplayContained, StringVec{} },
+  Rule{ "Octal", "(0[0-7]+(u?l{0,2}|ll=u)\\b)", "", "", RegexpDisplayContained, StringVec{} },
+  Rule{ "Float", "(\\d+f)", "", "", RegexpDisplayContained, StringVec{} },
+  Rule{ "Float", "(\\d+.\\d*(e[-+]?\\d+)?[fl]?)", "", "", RegexpDisplayContained, StringVec{} },
+  Rule{ "Float", "(.\\d+(e[-+]?\\d+)?[fl]?\\b)", "", "", RegexpDisplayContained, StringVec{} },
+  Rule{ "Float", "(\\d+e[-+]?\\d+[fl]?\\b)", "", "", RegexpDisplayContained, StringVec{} },
+  Rule{ "Comment", "/*", "*/", "", 0, StringVec{"String", "Number", "Special", "SpecialChar"} },
+  Rule{ "PreCondition", "(^\\s*(%:|#)\\s*(if|ifdef|ifndef|elif)\\b)", "$", "", RegexpDisplay, StringVec{"All"} },
+  Rule{ "PreCondition", "(^\\s*(%:|#)\\s*(else|endif)\\b)", "$", "", RegexpDisplay, StringVec{"All"} },
+  Rule{ "Included", "\"", "\"", "(\\\\\\\\|\\\\\")", DisplayContained, StringVec{} },
+  Rule{ "Included", "(<[^>]*>)", "", "", RegexpDisplayContained, StringVec{} },
+  Rule{ "Include", "(^\\s*(%:|#)\\s*include\\b\\s*[\"<])", "", "", RegexpDisplay, StringVec{"Included"} },
+  Rule{ "Define", "(^\\s*(%:|#)\\s*(define|undef)\\b)", "", "", Regexp, StringVec{"All"} },
+  Rule{ "PreProc", "^\\s*(%:|#)\\s*(pragma\\b|line\\b|warning\\b|warn\\b|error\\b)", "$", "", Regexp, StringVec{"All"} },
+}, style, default_attr) {}
 
 }; // namespace LFL

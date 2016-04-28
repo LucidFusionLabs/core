@@ -264,7 +264,8 @@ template <typename X> typename X::value_type &PushBack (X &v, const typename X::
 template <typename X> typename X::value_type  PopBack  (X &v) { typename X::value_type ret = v.back (); v.pop_back (); return ret; }
 template <typename X> typename X::value_type  PopFront (X &v) { typename X::value_type ret = v.front(); v.pop_front(); return ret; }
 template <typename X> typename std::queue<X>::value_type PopFront(std::queue<X> &v) { typename std::queue<X>::value_type ret = v.front(); v.pop(); return ret; }
-template <typename X> size_t PushBackIndex(X &v, const typename X::value_type &x) { v.push_back(x); return v.size()-1; }
+template <typename X> size_t PushBackIndex(X &v, const typename X::value_type  &x) { v.push_back(x); return v.size()-1; }
+template <typename X> size_t PushBackIndex(X &v,       typename X::value_type &&x) { v.push_back(x); return v.size()-1; }
 template <class X, class Y>                   void PushBack(X *vx, Y *vy,               const typename X::value_type &x, const typename Y::value_type &y)                                                                   { vx->push_back(x); vy->push_back(y); }
 template <class X, class Y, class Z>          void PushBack(X *vx, Y *vy, Z *vz,        const typename X::value_type &x, const typename Y::value_type &y, const typename Z::value_type &z)                                  { vx->push_back(x); vy->push_back(y); vz->push_back(z); }
 template <class X, class Y, class Z, class W> void PushBack(X *vx, Y *vy, Z *vz, W *vw, const typename X::value_type &x, const typename Y::value_type &y, const typename Z::value_type &z, const typename W::value_type &w) { vx->push_back(x); vy->push_back(y); vz->push_back(z); vw->push_back(w); }
@@ -272,7 +273,7 @@ template <class X, class Y, class Z, class W> void PushBack(X *vx, Y *vy, Z *vz,
 template <class X>       X *VectorGet(      vector<X> &x, int n) { return (n >= 0 && n < x.size()) ? &x[n] : 0; }
 template <class X> const X *VectorGet(const vector<X> &x, int n) { return (n >= 0 && n < x.size()) ? &x[n] : 0; }
 template <class X> X *VectorEnsureElement(vector<X> &x, int n) { EnsureSize(x, n+1); return &x[n]; }
-template <class X> X *VectorCheckElement(vector<X> &x, int n) { CHECK_LT(n, x.size()); return &x[n]; }
+template <class X> X *VectorCheckElement(vector<X> &x, int n) { CHECK_RANGE(n, 0, x.size()); return &x[n]; }
 template <typename X, class Y> void VectorAppend(vector<X> &out, const Y& begin, const Y& end) {
   out.insert(out.end(), begin, end);
 }

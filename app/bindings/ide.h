@@ -101,7 +101,7 @@ struct IDEProject {
 };
 
 struct RegexCPlusPlusHighlighter : public SyntaxMatcher {
-  RegexCPlusPlusHighlighter();
+  RegexCPlusPlusHighlighter(StyleInterface *style=0, int default_attr=0);
 };
 
 struct ClangCPlusPlusHighlighter {

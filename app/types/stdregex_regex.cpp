@@ -20,6 +20,7 @@
 
 namespace LFL {
 Regex::~Regex() { if (auto compiled = static_cast<std::regex*>(impl)) delete compiled; }
+Regex::Regex(const Regex &x) : impl(x.impl ? new std::regex(*static_cast<std::regex*>(x.impl)) : nullptr) {}
 Regex::Regex(const string &patternstr) {
   try {
     unique_ptr<std::regex> compiled = make_unique<std::regex>(patternstr);

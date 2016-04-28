@@ -113,6 +113,7 @@ struct Scannable {
 struct PieceIndex {
   int offset, len;
   PieceIndex(int o=-1, int l=0) : offset(o), len(l) {}
+  bool operator!() const { return offset<0; }
 };
 
 template <class X> struct ArrayPiece {
@@ -452,6 +453,10 @@ bool StringEmptyOrEquals(const string   &in, const string   &ref1, const string 
 bool StringEmptyOrEquals(const String16 &in, const String16 &ref1, const String16 &ref2, int case_sensitive=false);
 bool StringEmptyOrEquals(const String16 &in, const string   &ref1, const string   &ref2, int case_sensitive=false);
 
+const char*     FindString(const StringPiece &haystack, const StringPiece &needle, bool case_sensitive=true);
+int       FindStringOffset(const StringPiece &haystack, const StringPiece &needle, bool case_sensitive=true);
+PieceIndex FindStringIndex(const StringPiece &haystack, const StringPiece &handle, bool case_sensitive=true);
+
 template <class X>       X *FindChar(      X *text, int c,                                   int len=-1, int *outlen=0);
 template <class X> const X *FindChar(const X *text, int c,                                   int len=-1, int *outlen=0);
 template <class X>       X *FindChar(      X *text, int c,              int (*isquote)(int), int len=-1, int *outlen=0);
@@ -570,7 +575,9 @@ struct Regex {
   struct Result {
     int begin, end;
     Result(int B=-1, int E=-1) : begin(B), end(E) {}
+    Result(const PieceIndex &ind) : begin(ind.offset), end(ind.offset + ind.len) {}
     bool operator!() const { return begin<0 || begin<0; }
+    bool operator<(const Result &x) const;
     void operator+=(int v) { begin += v; end += v; }
     void operator-=(int v) { begin -= v; end -= v; }
     string Text(const StringPiece &t) const { return string(t.data() + begin, end - begin); }
@@ -579,8 +586,9 @@ struct Regex {
   void *impl=0;
   ~Regex();
   Regex() {}
+  Regex(const Regex&);
   Regex(const string &pattern);
-  Regex(const Regex&) = delete;
+  Regex(Regex &&x) : impl(x.impl) { x.impl=0; }
   Result MatchOne(const StringPiece &text);
 };
 
@@ -608,6 +616,43 @@ struct RegexLineMatcher {
   pair<int,int> MatchNext();
   int MatchAll(vector<pair<int,int>> *out);
   static bool Null(const pair<int,int> &m) { return m.first < 0 || m.second < 0; }
+};
+
+struct SyntaxMatcher {
+  enum Flag { Regexp=1, Display=2, Contained=4,
+    RegexpDisplay=Regexp|Display, RegexpContained=Regexp|Contained, DisplayContained=Display|Contained,
+    RegexpDisplayContained=Regexp|Display|Contained
+  };
+  struct Rule {
+    string name, match_beg, match_end, skip;
+    int flag;
+    vector<string> match_within;
+  };
+  struct RegionRule { string beg, end; };
+  struct RegexRegionRule { Regex beg, end, skip; };
+  struct RegexMatchRule { Regex match; };
+  struct CompiledRule {
+    enum Type { Region=1, RegexRegion=2, RegexMatch=3 };
+    enum WithinType { WithinAll=1, WithinAllBut=2 };
+    string name;
+    bool display;
+    int within_type;
+    vector<int> within;
+    vector<pair<int,int>> index;
+  };
+  struct StyleInterface {
+    virtual int GetSyntaxStyle(const string &n, int da) = 0;
+  };
+
+  vector<CompiledRule> rules;
+  map<string, int> rulenames;
+  vector<RegionRule> region_rule;
+  vector<RegexRegionRule> regex_region_rule;
+  vector<RegexMatchRule> regex_match_rule;
+  vector<int> style_ind;
+  SyntaxMatcher(const vector<Rule>&, StyleInterface *s=0, int da=0);
+  void LoadStyle(StyleInterface *s, int default_attr);
+  void UpdateAnnotation(const string &text, DrawableAnnotation *out, int out_size);
 };
 
 struct StreamRegex {
@@ -666,25 +711,6 @@ template <class X> struct TokenProcessor {
   void ProcessResult();
   void SetNewLineBoundaryConditions(bool sw, bool ew) { nlbw=sw; nlew=ew; }
   static void FindBoundaryConditions(const ArrayPiece<X> &v, bool *sw, bool *ew);
-};
-
-struct SyntaxMatcher {
-  struct Rule {
-    string name, match_beg, match_end, skip;
-    bool match_beg_regex, match_end_regex;
-    vector<string> match_within;
-  };
-  struct CompiledRule {
-    string name, match_beg, match_end;
-    bool match_beg_regex, match_end_regex;
-    vector<int> match_within;
-  };
-  struct StyleInterface {
-    virtual int GetSyntaxStyle(const string &n, int da) = 0;
-  };
-  vector<CompiledRule> rules;
-  SyntaxMatcher(const vector<Rule>&);
-  void UpdateAnnotation(const string &text, StyleInterface*, int da, DrawableAnnotation *out, int out_size);
 };
 
 struct Serializable {

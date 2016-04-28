@@ -267,6 +267,7 @@ struct Drawable {
 struct DrawableAnnotation : public vector<pair<int, int>> {
   const Drawable::AttrSource *attr_source=0;
   DrawableAnnotation(const Drawable::AttrSource *s=0) : attr_source(s) {}
+  void ExtendBack(const pair<int, int>&);
 };
 
 struct DrawableNop : public Drawable {
