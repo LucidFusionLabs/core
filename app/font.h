@@ -119,8 +119,8 @@ struct Glyph : public Drawable {
   short bearing_x=0, bearing_y=0, advance=0;
   bool wide=0, space=0;
   union Internal {
-    struct FreeType  { int id; }                                                   freetype;
     struct IPCClient { int id; }                                                   ipcclient;
+    struct FreeType  { int id; Font *substitute; }                                 freetype;
     struct CoreText  { int id; float origin_x, origin_y, width, height, advance; } coretext;
   } internal;
   mutable Texture tex;
@@ -212,7 +212,7 @@ struct Font {
   Color fg, bg;
   RefCounter ref;
   const FontDesc *desc=0;
-  FontEngine* const engine;
+  FontEngine* engine;
   shared_ptr<GlyphMap> glyph;
   shared_ptr<FontEngine::Resource> resource;
 
@@ -315,7 +315,7 @@ struct FreeTypeFontEngine : public FontEngine {
     Resource(FT_FaceRec_ *FR=0, const string &N="", string *C=0) : face(FR), name(N) { if (C) swap(*C, content); }
   };
   unordered_map<FontDesc, Font*, FontDesc::Hasher, FontDesc::Equal> font_map;
-  unordered_map<string, shared_ptr<Resource> > resource;
+  unordered_map<string, shared_ptr<Resource>> resource;
   GlyphCache::FilterCB subpixel_filter = &FreeTypeFontEngine::SubPixelFilter;
 
   virtual const char*      Name() { return "FreeTypeFontEngine"; }
@@ -342,7 +342,7 @@ struct CoreTextFontEngine : public FontEngine {
     virtual ~Resource();
     Resource(const char *N=0, CGFontRef CGF=0, int F=0) : name(BlankNull(N)), cgfont(CGF), flag(F) {}
   };
-  unordered_map<string, shared_ptr<Resource> > resource;
+  unordered_map<string, shared_ptr<Resource>> resource;
 
   virtual const char*      Name() { return "CoreTextFontEngine"; }
   virtual void             SetDefault();
@@ -370,7 +370,7 @@ struct GDIFontEngine : public FontEngine {
     virtual ~Resource();
     Resource(const char *N = 0, HFONT H = 0, int F = 0) : name(BlankNull(N)), hfont(H), flag(F) {}
   };
-  unordered_map<string, shared_ptr<Resource> > resource;
+  unordered_map<string, shared_ptr<Resource>> resource;
   HDC hdc=0;
   GDIFontEngine();
   ~GDIFontEngine();
@@ -394,8 +394,11 @@ struct GDIFontEngine {};
 
 #if defined(LFL_LINUX)
 struct FCFontEngine : public FontEngine {
-  struct Resource : public FontEngine::Resource {};
-  unordered_map<string, shared_ptr<Resource> > resource;
+  struct Resource : public FontEngine::Resource {
+    unique_ptr<Font> font;
+    Resource(unique_ptr<Font> f) : font(move(f)) {}
+  };
+  unordered_map<string, shared_ptr<Resource>> resource;
 
   virtual const char*      Name() { return "FCFontEngine"; }
   virtual void             Shutdown();
@@ -405,6 +408,7 @@ struct FCFontEngine : public FontEngine {
   virtual int              LoadGlyphs(Font *f, const Glyph *g, int n);
   virtual string           DebugString(Font *f) const;
 
+  unique_ptr<Font> OpenTTF(const FontDesc&);
   static void Init();
 };
 #else

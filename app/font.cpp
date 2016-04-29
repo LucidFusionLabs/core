@@ -24,7 +24,7 @@ namespace LFL {
 DEFINE_string(font_engine, "gdi",      "[atlas,freetype,gdi]");
 #elif defined(LFL_APPLE)
 DEFINE_string(font_engine, "coretext", "[atlas,freetype,coretext]");
-#elif defined(LFL_LINUX) && defined(LFL_FREETYPE)
+#elif defined(LFL_LINUX)
 DEFINE_string(font_engine, "fc",       "[atlas,freetype,fc]");
 #elif defined(LFL_FREETYPE)
 DEFINE_string(font_engine, "freetype", "[atlas,freetype]");
@@ -39,33 +39,57 @@ DEFINE_int(default_missing_glyph, 127, "Default glyph returned for missing reque
 DEFINE_bool(atlas_dump, false, "Dump .png files for every font");
 DEFINE_string(atlas_font_sizes, "32", "Load font atlas CSV sizes");
 DEFINE_int(glyph_table_start, 32, "Glyph table start value");
-DEFINE_int(glyph_table_size, 96, "Use array for glyphs [x=glyph_stable_start, x+glyph_table_size]");
+DEFINE_int(glyph_table_size, 95, "Use array for glyphs [x=glyph_stable_start, x+glyph_table_size)");
 DEFINE_bool(subpixel_fonts, false, "Treat RGB components as subpixels, tripling width");
 DEFINE_int(scale_font_height, 0, "Scale font when height != scale_font_height");
 DEFINE_int(add_font_size, 0, "Increase all font sizes by add_font_size");
 
 void Glyph::FromArray(const double *in, int l) {
   CHECK_GE(l, 10);
-  id        = int(in[0]); advance      = int(in[1]); tex.width    = int(in[2]); tex.height   = int(in[3]); bearing_y    = int(in[4]);
-  bearing_x = int(in[5]); tex.coord[0] =     in[6];  tex.coord[1] =     in[7];  tex.coord[2] =     in[8];  tex.coord[3] =     in[9];
+  id           = int(in[0]);  advance      = int(in[1]);
+  tex.width    = int(in[2]);  tex.height   = int(in[3]);
+  bearing_y    = int(in[4]);  bearing_x    = int(in[5]);
+  tex.coord[0] =     in[6];   tex.coord[1] =     in[7];
+  tex.coord[2] =     in[8];   tex.coord[3] =     in[9];
 }
 
 void Glyph::FromMetrics(const GlyphMetrics &m) {
-  id=m.id; tex.width=m.width; tex.height=m.height; bearing_x=m.bearing_x; bearing_y=m.bearing_y; advance=m.advance;
+  id=m.id; tex.width=m.width; tex.height=m.height;
+  bearing_x=m.bearing_x; bearing_y=m.bearing_y; advance=m.advance;
   wide=m.wide; space=m.space; tex.ID=m.tex_id;
 }
 
 int Glyph::ToArray(double *out, int l) {
   CHECK_GE(l, 10);
-  out[0] = id;        out[1] = advance;      out[2] = tex.width;    out[3] = tex.height;   out[4] = bearing_y;
-  out[5] = bearing_x; out[6] = tex.coord[0]; out[7] = tex.coord[1]; out[8] = tex.coord[2]; out[9] = tex.coord[3];
+  out[0] = id;            out[1] = advance;
+  out[2] = tex.width;     out[3] = tex.height;
+  out[4] = bearing_y;     out[5] = bearing_x;
+  out[6] = tex.coord[0];  out[7] = tex.coord[1];
+  out[8] = tex.coord[2];  out[9] = tex.coord[3];
   return sizeof(double)*10;
 }
 
-int Glyph::Baseline   (const LFL::Box *b, const Drawable::Attr *a) const { return (a && a->font) ? RoundXY_or_Y(a->font->scale, b->h - bearing_y) : tex.Baseline(b,a); }
-int Glyph::Advance    (const LFL::Box *b, const Drawable::Attr *a) const { return (a && a->font) ? RoundXY_or_Y(a->font->scale, advance)          : tex.Advance (b,a); }
-int Glyph::Ascender   (const LFL::Box *b, const Drawable::Attr *a) const { return (a && a->font) ? a->font->ascender                              : tex.Ascender(b,a); }
-int Glyph::LeftBearing(                   const Drawable::Attr *a) const { return (a && a->font) ? RoundXY_or_Y(a->font->scale, bearing_x)        : tex.LeftBearing(a); }
+int Glyph::Baseline(const LFL::Box *b, const Drawable::Attr *a) const {
+  if (!a || !a->font) return tex.Baseline(b,a);
+  return RoundXY_or_Y(a->font->scale, b->h - bearing_y);
+}
+
+int Glyph::Ascender(const LFL::Box *b, const Drawable::Attr *a) const {
+  if (!a || !a->font) return tex.Ascender(b,a);
+  return a->font->ascender;
+}
+
+int Glyph::Advance(const LFL::Box *b, const Drawable::Attr *a) const {
+  if (!a || !a->font) return tex.Advance (b,a); 
+  int cw = (!a->font->fixed_width && a->font->mono) ? a->font->max_width : 0;
+  return cw ? cw : RoundXY_or_Y(a->font->scale, advance);
+}
+
+int Glyph::LeftBearing(const Drawable::Attr *a) const {
+  if (!a || !a->font) return tex.LeftBearing(a);
+  int cw = (!a->font->fixed_width && a->font->mono) ? a->font->max_width : 0;
+  return RoundXY_or_Y(a->font->scale, bearing_x) + (cw ? RoundF((cw - RoundXY_or_Y(a->font->scale, advance))/2.0) : 0);
+}
 
 int Glyph::Layout(LFL::Box *out, const Drawable::Attr *attr) const {
   if (!attr || !attr->font) return tex.Layout(out, attr);
@@ -299,7 +323,7 @@ FontEngine *Fonts::GetFontEngine(int engine_type) {
     case FontDesc::Engine::CoreText: return coretext_engine.get();
 #elif defined(LFL_WINDOWS)
     case FontDesc::Engine::GDI:      return gdi_engine.get();
-#elif defined(LFL_LINUX) && defined(LFL_FREETYPE)
+#elif defined(LFL_LINUX)
     case FontDesc::Engine::FC:       return fc_engine.get();
 #endif
     case FontDesc::Engine::Default:  return DefaultFontEngine();
@@ -314,7 +338,7 @@ FontEngine *Fonts::DefaultFontEngine() {
     else if (FLAGS_font_engine == "coretext")   default_font_engine = coretext_engine.get();
 #elif defined(LFL_WINDOWS)
     else if (FLAGS_font_engine == "gdi")        default_font_engine = gdi_engine.get();
-#elif defined(LFL_LINUX) && defined(LFL_FREETYPE)
+#elif defined(LFL_LINUX)
     else if (FLAGS_font_engine == "fc")         default_font_engine = fc_engine.get();
 #endif                                          
     else                                        default_font_engine = fake_engine.get();

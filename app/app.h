@@ -33,6 +33,7 @@
 #include <memory>
 #include <numeric>
 #include <limits>
+#include <cctype>
 #include <cwctype>
 #define LFL_STL_NAMESPACE std
 

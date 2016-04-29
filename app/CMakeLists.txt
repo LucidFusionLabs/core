@@ -3,7 +3,7 @@
 set(LFL_APP_CFLAGS)
 set(LFL_APP_DEF -D__STDC_CONSTANT_MACROS -D__STDC_LIMIT_MACROS)
 set(LFL_APP_INCLUDE ${LFL_SOURCE_DIR} ${LFL_CORE_BINARY_DIR})
-set(LFL_APP_LIB lfl_app app_font app_browser)
+set(LFL_APP_LIB lfl_app app_font app_browser app_stdregex_regex)
 
 macro(add_app_def _def)
   if(${_def})
