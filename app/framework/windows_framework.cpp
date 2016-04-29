@@ -304,6 +304,13 @@ void Window::SetTransparency(float v) {
   }
 }
 
+int Application::GetVolume() { return 0; }
+int Application::GetMaxVolume() { return 0; }
+void Application::SetVolume(int v) {}
+
+void Application::ShowAds() {}
+void Application::HideAds() {}
+
 void Window::Reshape(int w, int h) {
   WinWindow *win = GetTyped<WinWindow*>(impl);
   long lStyle = GetWindowLong(GetTyped<HWND>(id), GWL_STYLE);

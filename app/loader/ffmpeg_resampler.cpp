@@ -26,7 +26,10 @@ extern "C" {
 #include "core/app/bindings/ffmpeg.h"
 
 namespace LFL {
+#ifndef SWR_CH_MAX
 static const int SWR_CH_MAX = 32;
+#endif
+
 struct FFMpegAudioResampler : public AudioResamplerInterface {
   SwrContext *swr=0;
   ~FFMpegAudioResampler() { if (swr) swr_free(&swr); }
@@ -73,7 +76,7 @@ struct FFMpegAudioResampler : public AudioResamplerInterface {
 
   int Update(int samples, const short *const *inbuf, short *rsout, microseconds timestamp, int max_samples_out) {
     CHECK(swr);
-    auto in = const_cast<const u_int8_t**>(reinterpret_cast<const uint8_t*const*>(inbuf));
+    auto in = const_cast<const uint8_t**>(reinterpret_cast<const uint8_t*const*>(inbuf));
     uint8_t *aout[SWR_CH_MAX] = { reinterpret_cast<uint8_t*>(rsout), 0 };
     int resampled = swr_convert(swr, aout, max_samples_out, in, samples);
     if (resampled < 0) return ERRORv(-1, "av_resample return ", resampled);

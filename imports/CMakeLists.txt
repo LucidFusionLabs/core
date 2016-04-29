@@ -4,11 +4,14 @@ FOREACH(flag CMAKE_CXX_FLAGS_DEBUG)
   STRING(REPLACE "-Wold-style-cast" "" "${flag}" "${${flag}}")
 ENDFOREACH()
 
-# boost
-set(BOOST_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/boost PARENT_SCOPE)
-
-# zlib
 if(LFL_WINDOWS)
+  # make blank unistd.h
+  if(NOT EXISTS ${CMAKE_CURRENT_BINARY_DIR}/fake_unistd/unistd.h)
+    file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/fake_unistd)
+    file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/fake_unistd/unistd.h "")
+  endif()
+
+  # hijack OpenCV/3rdparty/*/CMakeLists.txt
   macro(ocv_install_target)
   endmacro()
   macro(ocv_warnings_disable)
@@ -23,6 +26,13 @@ if(LFL_WINDOWS)
       endif()
     endforeach()
   endmacro()
+endif()
+
+# boost
+set(BOOST_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/boost PARENT_SCOPE)
+
+# zlib
+if(LFL_WINDOWS)
   set(3P_LIBRARY_OUTPUT_PATH ${CMAKE_CURRENT_BINARY_DIR}/zlib)
   set(ZLIB_LIBRARY zlib)
   add_subdirectory(OpenCV/3rdparty/zlib zlib)
@@ -66,8 +76,8 @@ if(LFL_JPEG)
     set(3P_LIBRARY_OUTPUT_PATH ${CMAKE_CURRENT_BINARY_DIR}/libjpeg)
     set(JPEG_LIBRARY libjpeg)
     add_subdirectory(OpenCV/3rdparty/libjpeg libjpeg)
+    target_include_directories(libjpeg PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/OpenCV/3rdparty/libjpeg)
     set(JPEG_LIB libjpeg PARENT_SCOPE)
-    set(JPEG_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/OpenCV/3rdparty/libjpeg PARENT_SCOPE)
   else()
     ExternalProject_Add(libjpeg-turbo LOG_CONFIGURE ON LOG_BUILD ON
                         PREFIX ${CMAKE_CURRENT_BINARY_DIR}/libjpeg-turbo
@@ -88,6 +98,9 @@ if(LFL_GIF)
   add_library(libgif STATIC giflib/lib/dgif_lib.c giflib/lib/egif_lib.c giflib/lib/gif_err.c
               giflib/lib/gif_font.c giflib/lib/gif_hash.c giflib/lib/gifalloc.c giflib/lib/quantize.c
               giflib/lib/openbsd-reallocarray.c)
+  if(WIN32)
+    target_include_directories(libgif PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/fake_unistd)
+  endif()
   target_include_directories(libgif PUBLIC giflib/lib)
   set(GIF_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/giflib/lib PARENT_SCOPE)
   set(GIF_LIB libgif PARENT_SCOPE)
@@ -226,7 +239,7 @@ if(LFL_ASSIMP)
 endif()
     
 # lame
-if(LFL_LAME)
+if(LFL_LAME AND NOT LFL_WINDOWS)
   ExternalProject_Add(lame LOG_CONFIGURE ON LOG_BUILD ON
                       PREFIX ${CMAKE_CURRENT_BINARY_DIR}/lame
                       SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/lame
@@ -241,7 +254,7 @@ if(LFL_LAME)
 endif()
 
 # x264
-if(LFL_X264)
+if(LFL_X264 AND NOT LFL_WINDOWS)
   ExternalProject_Add(x264 LOG_CONFIGURE ON LOG_BUILD ON
                       PREFIX ${CMAKE_CURRENT_BINARY_DIR}/x264
                       SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/x264

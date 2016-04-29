@@ -31,9 +31,9 @@ DEFINE_string(ssl_keyfile,  "", "SSL server key file");
 SSLSocket::~SSLSocket() { if (bio) BIO_free_all(bio); }
 const char *SSLSocket::ErrorString() const { return ERR_reason_error_string(ERR_get_error()); }
 Socket SSLSocket::GetSocket() const { Socket v=InvalidSocket; if (bio) BIO_get_fd(bio, &v); return v; }
-ssize_t SSLSocket::Write(const StringPiece &b) { return BIO_write(bio, b.buf, b.len); }
-ssize_t SSLSocket::Read(char *buf, int readlen) {
-  ssize_t len = BIO_read(bio, buf, readlen);
+ptrdiff_t SSLSocket::Write(const StringPiece &b) { return BIO_write(bio, b.buf, b.len); }
+ptrdiff_t SSLSocket::Read(char *buf, int readlen) {
+  ptrdiff_t len = BIO_read(bio, buf, readlen);
   if (len <= 0) return SSL_get_error(ssl, len) == SSL_ERROR_WANT_READ ? 0 : -1;
   return len;
 }
