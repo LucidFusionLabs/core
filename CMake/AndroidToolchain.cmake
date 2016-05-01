@@ -9,8 +9,7 @@ set(CMAKE_CXX_COMPILER ${ANDROIDROOT}/bin/arm-linux-androideabi-g++ CACHE PATH "
 set(CMAKE_AR ${ANDROIDROOT}/bin/arm-linux-androideabi-ar CACHE PATH "archive")
 set(CMAKE_RANLIB ${ANDROIDROOT}/bin/arm-linux-androideabi-ranlib CACHE PATH "ranlib")
 set(CMAKE_LINKER ${ANDROIDROOT}/bin/arm-linux-androideabi-ld CACHE PATH "linker")
-add_definitions("-isysroot ${ANDROIDNDK}/platforms/android-9/arch-arm")
-            
+
 set(ENV{CC} "${ANDROIDROOT}/bin/arm-linux-androideabi-gcc")
 set(ENV{CXX} "${ANDROIDROOT}/bin/arm-linux-androideabi-g++")
 set(ENV{CPP} "${ANDROIDROOT}/bin/arm-linux-androideabi-cpp")
@@ -21,3 +20,9 @@ set(ENV{CFLAGS} "-isysroot ${ANDROIDROOT}/sysroot")
 set(ENV{CXXFLAGS} "-isysroot ${ANDROIDROOT}/sysroot")
 set(ENV{LDFLAGS} "-isysroot ${ANDROIDROOT}/sysroot")
 set(CONFIGURE_OPTIONS "--host=arm")
+set(CONFIGURE_ENV CC=$ENV{CC} CXX=$ENV{CXX} CPP=$ENV{CPP} CXXCPP=$ENV{CXXCPP} AR=$ENV{AR} RANLIB=$ENV{RANLIB}
+    CFLAGS=$ENV{CFLAGS} CXXFLAGS=$ENV{CXXFLAGS} LDFLAGS=$ENV{LDFLAGS})
+
+set(M_LIBRARY ${ANDROIDROOT}/sysroot/usr/lib/libm.so)
+set(ZLIB_INCLUDE_DIR ${ANDROIDROOT}/sysroot/usr/include)
+set(ZLIB_LIBRARY ${ANDROIDROOT}/sysroot/usr/lib/libz.so)

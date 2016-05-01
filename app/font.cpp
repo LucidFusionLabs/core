@@ -31,15 +31,15 @@ DEFINE_string(font_engine, "freetype", "[atlas,freetype]");
 #else
 DEFINE_string(font_engine, "atlas",    "[atlas,freetype]");
 #endif
-DEFINE_string(default_font, "", "Default font");
-DEFINE_string(default_font_family, "sans-serif", "Default font family");
-DEFINE_int(default_font_size, 16, "Default font size");
-DEFINE_int(default_font_flag, FontDesc::Mono, "Default font flag");
-DEFINE_int(default_missing_glyph, 127, "Default glyph returned for missing requested glyph");
+DEFINE_string(font, "", "Default font");
+DEFINE_string(font_family, "sans-serif", "Default font family");
+DEFINE_int(font_size, 16, "Default font size");
+DEFINE_int(font_flag, FontDesc::Mono, "Default font flag");
+DEFINE_int(missing_glyph, 127, "Default glyph returned for missing requested glyph");
 DEFINE_bool(atlas_dump, false, "Dump .png files for every font");
 DEFINE_string(atlas_font_sizes, "32", "Load font atlas CSV sizes");
 DEFINE_int(glyph_table_start, 32, "Glyph table start value");
-DEFINE_int(glyph_table_size, 95, "Use array for glyphs [x=glyph_stable_start, x+glyph_table_size)");
+DEFINE_int(glyph_table_size, 96, "Use array for glyphs [x=glyph_stable_start, x+glyph_table_size)");
 DEFINE_bool(subpixel_fonts, false, "Treat RGB components as subpixels, tripling width");
 DEFINE_int(scale_font_height, 0, "Scale font when height != scale_font_height");
 DEFINE_int(add_font_size, 0, "Increase all font sizes by add_font_size");
@@ -273,7 +273,7 @@ template void Font::Shape <char16_t>(const String16Piece &text, const Box &box, 
 template int  Font::Draw  <char>    (const StringPiece   &text, const Box &box, vector<Box> *lb, int draw_flag);
 template int  Font::Draw  <char16_t>(const String16Piece &text, const Box &box, vector<Box> *lb, int draw_flag);
 
-FakeFontEngine::FakeFontEngine() : fake_font_desc(Filename(), "", FLAGS_default_font_size), 
+FakeFontEngine::FakeFontEngine() : fake_font_desc(Filename(), "", FLAGS_font_size), 
   fake_font(this, fake_font_desc, shared_ptr<FontEngine::Resource>()) {
   fake_font.desc = &fake_font_desc;
   fake_font.fixed_width = fake_font.max_width = fixed_width;
@@ -439,8 +439,8 @@ void Fonts::LoadDefaultFonts() {
   Split(FLAGS_atlas_font_sizes, iscomma, &atlas_font_size);
   for (int i=0; i<atlas_font_size.size(); i++) {
     int size = atoi(atlas_font_size[i].c_str());
-    font_engine->Init(FontDesc(FLAGS_default_font, FLAGS_default_font_family, size,
-                               Color::white, Color::clear, FLAGS_default_font_flag));
+    font_engine->Init(FontDesc(FLAGS_font, FLAGS_font_family, size,
+                               Color::white, Color::clear, FLAGS_font_flag));
   }
 
   FontEngine *atlas_engine = app->fonts->atlas_engine.get();
@@ -464,9 +464,9 @@ Font *FontRef::Load() { return (ptr = app->fonts->Get(desc)); }
 
 void DejaVuSansFreetype::SetDefault() {
   FLAGS_font_engine = "freetype";
-  FLAGS_default_font = "DejaVuSans.ttf";
-  FLAGS_default_font_family = "sans-serif";
-  FLAGS_default_font_flag = 0;
+  FLAGS_font = "DejaVuSans.ttf";
+  FLAGS_font_family = "sans-serif";
+  FLAGS_font_flag = 0;
   FLAGS_atlas_font_sizes = "32";
 }
 

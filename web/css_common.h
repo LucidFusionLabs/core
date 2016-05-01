@@ -147,7 +147,7 @@ DOMString FontSize::cssText() const {
 }
 
 int FontSize::getFontSizeValue(Flow *flow) {
-  int base = FLAGS_default_font_size;
+  int base = FLAGS_font_size;
   float scale = 1.2;
   switch (attr) {
     case XXSmall: return base/scale/scale/scale;    case XLarge:  return base*scale*scale;

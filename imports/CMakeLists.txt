@@ -62,7 +62,8 @@ if(LFL_PNG AND NOT LFL_EMSCRIPTEN)
   else()
     ExternalProject_Add(libpng SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/libpng
                         PREFIX ${CMAKE_CURRENT_BINARY_DIR}/libpng
-                        CMAKE_ARGS -DCMAKE_INSTALL_PREFIX:PATH=${CMAKE_CURRENT_BINARY_DIR}/libpng)
+                        CMAKE_ARGS -DCMAKE_INSTALL_PREFIX:PATH=${CMAKE_CURRENT_BINARY_DIR}/libpng
+                        -DCMAKE_TOOLCHAIN_FILE:string=${CMAKE_TOOLCHAIN_FILE})
     add_library(libpng16 IMPORTED STATIC GLOBAL)
     add_dependencies(libpng16 libpng)
     set_property(TARGET libpng16 PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/libpng/lib/libpng16.a)
@@ -81,7 +82,8 @@ if(LFL_JPEG)
   else()
     ExternalProject_Add(libjpeg-turbo LOG_CONFIGURE ON LOG_BUILD ON
                         PREFIX ${CMAKE_CURRENT_BINARY_DIR}/libjpeg-turbo
-                        CONFIGURE_COMMAND <SOURCE_DIR>/configure --prefix=<INSTALL_DIR>
+                        CONFIGURE_COMMAND ${CMAKE_COMMAND} -E env ${CONFIGURE_ENV}
+                        <SOURCE_DIR>/configure --prefix=<INSTALL_DIR> ${CONFIGURE_OPTIONS}
                         DOWNLOAD_COMMAND rm -rf libjpeg-turbo
                         COMMAND cp -R ${CMAKE_CURRENT_SOURCE_DIR}/libjpeg-turbo libjpeg-turbo
                         COMMAND ${CMAKE_COMMAND} -E chdir libjpeg-turbo autoreconf -fi)

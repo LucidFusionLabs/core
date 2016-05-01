@@ -1956,7 +1956,7 @@ void Console::Draw(const Box &b, int flag, Shader *shader) {
 
 Dialog::Dialog(GraphicsDevice*, float w, float h, int flag) :
   color(85,85,85,220), title_gradient{Color(127,0,0), Color(0,0,127), Color(0,0,178), Color(208,0,127)},
-  font(FontDesc(FLAGS_default_font, "", 14, Color(Color::white,.8), Color::clear, FLAGS_default_font_flag)),
+  font(FontDesc(FLAGS_font, "", 14, Color(Color::white,.8), Color::clear, FLAGS_font_flag)),
   menuicon(FontDesc("MenuAtlas", "", 0, Color::white, Color::clear, 0)), deleted_cb([=]{ deleted=true; })
 {
   box = screen->Box().center(screen->Box(w, h));

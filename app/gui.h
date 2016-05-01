@@ -700,7 +700,7 @@ struct Console : public TextArea {
 
   Console(GraphicsDevice *D, const FontRef &F, const Callback &C=Callback());
   Console(GraphicsDevice *D, const Callback &C=Callback()) :
-    Console(D, FontDesc(A_or_B(FLAGS_console_font, FLAGS_default_font), "", 9, Color::white,
+    Console(D, FontDesc(A_or_B(FLAGS_console_font, FLAGS_font), "", 9, Color::white,
                         Color::clear, FLAGS_console_font_flag), C) {}
 
   virtual ~Console() {}
@@ -856,7 +856,7 @@ struct EditorDialog : public TextViewDialogT<Editor> {
 
 struct HelperGUI : public GUI {
   FontRef font;
-  HelperGUI() : font(FontDesc(FLAGS_default_font, "", 9, Color::white)) {}
+  HelperGUI() : font(FontDesc(FLAGS_font, "", 9, Color::white)) {}
   struct Hint { enum { UP, UPLEFT, UPRIGHT, DOWN, DOWNLEFT, DOWNRIGHT }; };
   struct Label {
     Box target, label;

@@ -286,7 +286,7 @@ LFL::DOM::RGBColor             ComputedStyle::BorderTopColor      () const { ret
 LFL::DOM::RGBColor             ComputedStyle::OutlineColor        () const { return LFL::DOM::RGBColor(0x00000000); }
 LFL::DOM::RGBColor             ComputedStyle::Color               () const { return LFL::DOM::RGBColor(0xffffffff); }
 LFL::DOM::Cursor               ComputedStyle::Cursor              () const { return LFL::DOM::Cursor(LFL::DOM::Cursor::Auto); }
-LFL::DOM::FontFamily           ComputedStyle::FontFamily          () const { return LFL::DOM::FontFamily(FLAGS_default_font); }
+LFL::DOM::FontFamily           ComputedStyle::FontFamily          () const { return LFL::DOM::FontFamily(FLAGS_font); }
 LFL::DOM::CSSStringValue       ComputedStyle::BackgroundImage     () const { return LFL::DOM::CSSStringValue(); }
 LFL::DOM::CSSNumericValuePair  ComputedStyle::BackgroundPosition  () const { return LFL::DOM::CSSNumericValuePair(); }
 LFL::DOM::Rect                 ComputedStyle::Clip                () const { return LFL::DOM::Rect(); }

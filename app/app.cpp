@@ -363,19 +363,6 @@ int Application::Create(int argc, const char* const* argv, const char *source_fi
   progname = argv[0];
   startdir = LocalFile::CurrentDirectory();
 
-#if defined(LFL_ANDROID)
-#elif defined(LFL_APPLE)
-  char rpath[1024];
-  CFBundleRef mainBundle = CFBundleGetMainBundle();
-  CFURLRef respath = CFBundleCopyResourcesDirectoryURL(mainBundle);
-  CFURLGetFileSystemRepresentation(respath, true, MakeUnsigned(rpath), sizeof(rpath));
-  CFRelease(respath);
-  if (PrefixMatch(rpath, startdir+"/")) assetdir = StrCat(rpath + startdir.size()+1, "/assets/");
-  else assetdir = StrCat(rpath, "/assets/"); 
-#else
-  assetdir = StrCat(bindir, "assets/"); 
-#endif
-
 #ifdef LFL_WINDOWS
   bindir = progname.substr(0, DirNameLen(progname, true));
 
@@ -404,6 +391,21 @@ int Application::Create(int argc, const char* const* argv, const char *source_fi
   }
 #endif
 
+  {
+#if defined(LFL_ANDROID)
+#elif defined(LFL_APPLE)
+    char rpath[1024];
+    CFBundleRef mainBundle = CFBundleGetMainBundle();
+    CFURLRef respath = CFBundleCopyResourcesDirectoryURL(mainBundle);
+    CFURLGetFileSystemRepresentation(respath, true, MakeUnsigned(rpath), sizeof(rpath));
+    CFRelease(respath);
+    if (PrefixMatch(rpath, startdir+"/")) assetdir = StrCat(rpath + startdir.size()+1, "/assets/");
+    else assetdir = StrCat(rpath, "/assets/"); 
+#else
+    assetdir = StrCat(bindir, "assets/"); 
+#endif
+  }
+
   if (Singleton<FlagMap>::Get()->getopt(argc, argv, source_filename) < 0) return -1;
   if (!FLAGS_rand_seed) FLAGS_rand_seed = fnv32(&pid, sizeof(int), time(0));
   unsigned init_rand_seed = FLAGS_rand_seed;
@@ -422,7 +424,13 @@ int Application::Create(int argc, const char* const* argv, const char *source_fi
 #endif
 
   {
-#if defined(LFL_IPHONE)
+#if defined(LFL_ANDROID)
+    JNI *jni = LFL::Singleton<LFL::JNI>::Get();
+    jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "getFilesDirCanonicalPath", "()Ljava/lang/String;"));
+    jstring path = jstring(jni->env->CallObjectMethod(jni->activity, mid));
+    dldir = jni->GetJNIString(path);
+    jni->env->DeleteLocalRef(path);
+#elif defined(LFL_IPHONE)
     char *path = iPhoneDocumentPathCopy();
     dldir = StrCat(path, "/");
     free(path);
@@ -475,7 +483,7 @@ int Application::Create(int argc, const char* const* argv, const char *source_fi
     SetLFAppMainThread();
   }
 
-  if (FLAGS_lfapp_video && FLAGS_default_font.empty())
+  if (FLAGS_lfapp_video && FLAGS_font.empty())
     fonts->DefaultFontEngine()->SetDefault();
 
   return 0;

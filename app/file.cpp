@@ -17,14 +17,11 @@
  */
 
 #include <sys/stat.h>
-
 #ifndef LFL_WINDOWS
-#include <sys/fcntl.h>
 #include <dirent.h>
+#ifndef LFL_ANDROID
+#include <sys/fcntl.h>
 #endif
-
-#ifdef LFL_ANDROID
-#include "core/app/bindings/jni.h"
 #endif
 
 namespace LFL {
@@ -86,7 +83,10 @@ int File::Rewrite(const ArrayPiece<IOVec> &v, const function<string(int)> &encod
 }
 
 long long BufferFile::Seek(long long offset, int whence) {
-  if (offset < 0 || offset >= (owner ? buf.size() : ptr.len)) return -1;
+  int s = owner ? buf.size() : ptr.len;
+  if      (whence == SEEK_CUR) offset = rdo + offset;
+  else if (whence == SEEK_END) offset = s + offset;
+  if (offset < 0 || offset >= s) return -1;
   return rdo = wro = offset;
 }
 
@@ -147,26 +147,16 @@ const char LocalFile::ExecutableSuffix[] = "";
 
 int LocalFile::IsFile(const string &filename) {
   if (filename.empty()) return false;
-#ifdef LFL_ANDROID
-  ERROR("XXX Android IsFile");
-  return 0;
-#else
   struct stat buf;
   if (stat(filename.c_str(), &buf)) return false;
   return !(buf.st_mode & S_IFDIR);
-#endif
 }
 
 int LocalFile::IsDirectory(const string &filename) {
   if (filename.empty()) return true;
-#ifdef LFL_ANDROID
-  ERROR("XXX Android IsDirectory");
-  return 0;
-#else
   struct stat buf;
   if (stat(filename.c_str(), &buf)) return false;
   return buf.st_mode & S_IFDIR;
-#endif
 }
 
 int LocalFile::CreateTemporary(const string &prefix, string *name) {
@@ -195,52 +185,6 @@ string LocalFile::CreateTemporaryNameTemplate(const string &prefix) {
 }
 #endif // LFL_WINDOWS
 
-#ifdef LFL_ANDROID
-#if 0
-bool LocalFile::Open(const char *path, const char *mode, bool pre_create) {
-  char *b=0; int l=0, ret;
-  FILE *f = fopen(path, mode);
-  if (!f) return -1;
-  fseek(f, 0, SEEK_END);
-  l = ftell(f);
-  fseek(f, 0, SEEK_SET);
-  b = (char*)malloc(l);
-  fread(b, l, 1, f);
-  fclose(f);
-  impl = new BufferFile(string(b, l));
-  ((BufferFile*)impl)->free = true;
-  return true;
-}
-#endif
-
-File *LocalFile::Create() { return nullptr; }
-bool LocalFile::ReplaceWith(File *nf) { return false; }
-bool LocalFile::Open(const string &path, const string &mode, bool pre_create) {
-  if ((writable = strchr(mode.c_str(), 'w'))) {
-    impl = AndroidFileOpenWriter(path.c_str());
-    return impl;
-  }
-
-  char *b=0;
-  int l=0, ret=0;
-  bool internal_path = 0; // !strchr(path.c_str(), '/');
-  if (internal_path) { if ((ret = AndroidFileRead (path.c_str(), &b, &l))) return ERRORv(false, "AndroidFileRead ",  path); }
-  else               { if ((ret = AndroidAssetRead(path.c_str(), &b, &l))) return ERRORv(false, "AndroidAssetRead ", path); }
-
-  impl = new BufferFile(string(b, l));
-  free(b);
-  return true;
-}
-
-void LocalFile::Reset() { if (impl && !writable) ((BufferFile*)impl)->Reset(); }
-int LocalFile::Size() { return (impl && !writable) ? ((BufferFile*)impl)->Size() : -1; }
-void LocalFile::Close() { if (impl) { if (writable) AndroidFileCloseWriter(impl); else delete ((BufferFile*)impl); impl=0; } }
-long long LocalFile::Seek(long long offset, int whence) { return (impl && !writable) ? ((BufferFile*)impl)->Seek(offset, whence) : -1; }
-int LocalFile::Read(void *buf, size_t size) { return (impl && !writable) ? ((BufferFile*)impl)->Read(buf, size) : -1; }
-int LocalFile::Write(const void *buf, size_t size) { return impl ? (writable ? AndroidFileWrite(impl, (const char*)buf, size) : ((BufferFile*)impl)->Write(buf, size)) : -1; }
-bool LocalFile::Flush() { return false; }
-
-#else /* LFL_ANDROID */
 bool LocalFile::mkdir(const string &dir, int mode) {
 #ifdef LFL_WINDOWS
   return _mkdir(dir.c_str()) == 0;
@@ -334,7 +278,6 @@ bool LocalFile::ReplaceWith(File *nf) {
   delete new_file;
   return !ret;
 }
-#endif /* LFL_ANDROID */
 
 string LocalFile::CurrentDirectory(int max_size) {
   string ret(max_size, 0); 

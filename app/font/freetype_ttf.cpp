@@ -33,8 +33,8 @@ string FreeTypeFontEngine::DebugString(Font *f) const {
 
 void FreeTypeFontEngine::SetDefault() {
   FLAGS_font_engine = "freetype";
-  FLAGS_default_font = "VeraMoBd.ttf"; // "DejaVuSansMono-Bold.ttf";
-  FLAGS_default_missing_glyph = 42;
+  FLAGS_font = "VeraMoBd.ttf"; // "DejaVuSansMono-Bold.ttf";
+  FLAGS_missing_glyph = 42;
 }
 
 bool FreeTypeFontEngine::Init(const FontDesc &d) {

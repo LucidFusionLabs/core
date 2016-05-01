@@ -44,7 +44,8 @@ elseif(LFL_ANDROID)
       COMMAND mkdir -p ${CMAKE_CURRENT_SOURCE_DIR}/${target}-android/res/raw
       COMMAND cp ${LFL_APP_ASSET_FILES} ${CMAKE_CURRENT_SOURCE_DIR}/assets
       COMMAND if [ -f ${CMAKE_CURRENT_SOURCE_DIR}/assets/*.wav ]; then cp ${CMAKE_CURRENT_SOURCE_DIR}/assets/*.wav ../res/raw\; fi
-      COMMAND if [ -f ${CMAKE_CURRENT_SOURCE_DIR}/assets/*.mp3 ]; then cp ${CMAKE_CURRENT_SOURCE_DIR}/assets/*.mp3 ../res/raw\; fi)
+      COMMAND if [ -f ${CMAKE_CURRENT_SOURCE_DIR}/assets/*.mp3 ]; then cp ${CMAKE_CURRENT_SOURCE_DIR}/assets/*.mp3 ../res/raw\; fi
+      COMMAND if [ -f ${CMAKE_CURRENT_SOURCE_DIR}/assets/*.ogg ]; then cp ${CMAKE_CURRENT_SOURCE_DIR}/assets/*.ogg ../res/raw\; fi)
 
     add_custom_target(${target}_debug WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/${target}-android DEPENDS ${target}
       COMMAND "ANDROID_HOME=${ANDROIDSDK}" ${GRADLEBIN} uninstallDebug
@@ -58,7 +59,7 @@ elseif(LFL_ANDROID)
   endfunction()
 
   function(lfl_add_package target)
-    lfl_add_library(${target} SHARED ${ARGN})
+    lfl_add_target(${target} SHARED_LIBRARY ${ARGN})
     set_target_properties(${target} PROPERTIES OUTPUT_NAME app)
   endfunction()
 

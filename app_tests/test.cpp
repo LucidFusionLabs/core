@@ -20,7 +20,7 @@
 
 extern "C" void MyAppCreate() {
   LFL::FLAGS_lfapp_video = true;
-  LFL::FLAGS_default_font = LFL::FakeFontEngine::Filename();
+  LFL::FLAGS_font = LFL::FakeFontEngine::Filename();
   LFL::app = new LFL::Application();
   LFL::screen = new LFL::Window();
 }

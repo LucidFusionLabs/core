@@ -109,11 +109,11 @@ string CoreTextFontEngine::DebugString(Font *f) const {
 void CoreTextFontEngine::SetDefault() {
   FLAGS_font_engine = "coretext";
 #ifdef LFL_IPHONE
-  FLAGS_default_font = "Menlo-Bold";
-  FLAGS_default_font_size = 12;
+  FLAGS_font = "Menlo-Bold";
+  FLAGS_font_size = 12;
 #else
-  FLAGS_default_font = "Monaco";
-  FLAGS_default_font_size = 15;
+  FLAGS_font = "Monaco";
+  FLAGS_font_size = 15;
 #endif
 }
 

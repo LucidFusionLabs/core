@@ -61,7 +61,7 @@ struct Geometry {
   void SetPosition(const point &p) { v2 v=p; SetPosition(&v[0]); }
   void ScrollTexCoord(float dx, float dx_extra, int *subtract_max_int);
 
-  static unique_ptr<Geometry> LoadOBJ(const string &filename, const float *map_tex_coord=0);
+  static unique_ptr<Geometry> LoadOBJ(File*, const float *map_tex_coord=0);
   static string ExportOBJ(const Geometry *geometry, const set<int> *prim_filter=0, bool prim_filter_invert=0);
 };
 

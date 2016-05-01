@@ -19,31 +19,34 @@
 #ifndef LFL_CORE_APP_BINDINGS_JNI_H__
 #define LFL_CORE_APP_BINDINGS_JNI_H__
 
+#include <jni.h>
+
+namespace LFL {
+struct AndroidEvent {
+  enum { ACTION_DOWN=0, ACTION_UP=1, ACTION_MOVE=2, ACTION_CANCEL=3, ACTION_OUTSIDE=4, ACTION_POINTER_DOWN=5,
+    ACTION_POINTER_UP=6 };
+};
+
+struct JNI {
+  JNIEnv *env=0;
+  jobject activity=0, view=0, gplus=0;
+  jclass activity_class=0, view_class=0, gplus_class=0, throwable_class=0, frame_class=0;
+  jfieldID view_id=0, gplus_id=0;
+
+  void Init(jobject a, bool first);
+  void Free();
+
+  int CheckForException();
+  void LogException(jthrowable &exception);
+  std::string GetJNIString(jstring);
+};
+}; // namespace LFL
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-int   AndroidVideoInit(int *gles_version);
-int   AndroidVideoSwap();
-int   AndroidInput(unsigned clicks, unsigned *events);
-int   AndroidShowOrHideKeyboard(int v);
 int   AndroidAssetRead(const char *filename, char **malloc_out, int *size_out);
-int   AndroidFileRead(const char *fn, char **malloc_out, int *size_out);
-void *AndroidFileOpenWriter(const char *fn);
-int   AndroidFileWrite(void *ifw, const char *b, int l);
-void  AndroidFileCloseWriter(void *ifw);
-void *AndroidLoadMusicResource(const char *filename);
-void  AndroidPlayMusic(void *handle);
-void  AndroidPlayBackgroundMusic(void *handle);
-void  AndroidSetVolume(int v);
-int   AndroidGetVolume();
-int   AndroidGetMaxVolume();
 int   AndroidDeviceName(char *out, int len);
-int   AndroidIPV4Address();
-int   AndroidIPV4BroadcastAddress();
-void  AndroidOpenBrowser(const char *url);
-void  AndroidShowAds();
-void  AndroidHideAds();
 void  AndroidGPlusSignin();
 void  AndroidGPlusSignout();
 int   AndroidGPlusSignedin();
@@ -51,9 +54,6 @@ int   AndroidGPlusInvite();
 int   AndroidGPlusAccept();
 int   AndroidGPlusQuickGame();
 void  AndroidGPlusService(void *s);
-int   AndroidGPlusSendUnreliable(const char *participant_name, const char *buf, int len);
-int   AndroidGPlusSendReliable(const char *participant_name, const char *buf, int len);
-
 #ifdef __cplusplus
 };
 #endif

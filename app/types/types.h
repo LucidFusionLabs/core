@@ -57,6 +57,7 @@ template <class X> X *CheckPointer(X *x) { CHECK(x); return x; }
 template <class X> X *CheckNullAssign(X **x, X *v) { CHECK_EQ(nullptr, *x); return (*x = v); }
 template <class X> X *GetThenAssignNull(X **x) { X *v = *x; if (v) *x = nullptr; return v; }
 template <class X, class Y> void Assign(X *x, Y *y, const X &v1, const Y &v2) { *x=v1; *y=v2; }
+template <class X> X CheckNotNull(X x) { CHECK(x); return x; }
 
 struct VoidPtr : public void_ptr {
   VoidPtr(void *V=0) { v=V; }

@@ -34,3 +34,7 @@ if(LFL_AUDIOUNIT)
   lfl_add_target(app_audiounit_audio STATIC_LIBRARY SOURCES audiounit_audio.cpp
                  LINK_LIBRARIES "-framework AudioToolbox")
 endif()
+
+if(LFL_ANDROID)
+  lfl_add_target(app_android_audio STATIC_LIBRARY SOURCES android_audio.cpp)
+endif()

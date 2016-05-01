@@ -609,9 +609,9 @@ struct GameClient {
       return 0;
 
 #ifdef LFL_ANDROID
-    } else if (prot == Protcol::GPLUS) {
+    } else if (prot == Protocol::GPLUS) {
       GPlusClient *gplus_client = app->net->gplus_client.get();
-      app->network.Enable(gplus_client);
+      app->net->Enable(gplus_client);
       net = Singleton<Game::GoogleMultiplayerNetwork>::Get();
       conn = gplus_client->PersistentConnection
         (url, bind(&GameClient::DatagramRead, this, _1, _2, _3), Connection::CB());
@@ -893,9 +893,9 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
 
   GameMenuGUI(const string &master_url, int port, Asset *t=0, Asset *parts=0) :
     pinger(-1), master_get_url(master_url), title(t),
-    font       (FontDesc(FLAGS_default_font,                   "", 12, Color::grey80)),
-    bright_font(FontDesc(FLAGS_default_font,                   "", 12, Color::white)),
-    glow_font  (FontDesc(StrCat(FLAGS_default_font, "Glow"),   "", 12)),
+    font       (FontDesc(FLAGS_font,                 "", 12, Color::grey80)),
+    bright_font(FontDesc(FLAGS_font,                 "", 12, Color::white)),
+    glow_font  (FontDesc(StrCat(FLAGS_font, "Glow"), "", 12)),
     default_port(port),
     tab1(&topbar, 0, "single player",   MouseController::CB([&](){ if (!Changed(&selected, 1)) Deactivate(); else LayoutTopbar(); })),
     tab2(&topbar, 0, "multi player",    MouseController::CB([&](){ if (!Changed(&selected, 2)) Deactivate(); else LayoutTopbar(); })), 
@@ -1077,14 +1077,14 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
 
       if (sub_selected == 1) {
 #ifdef LFL_ANDROID
-        Scissor s(*menuflow.container);
+        Scissor s(screen->gd, *menuflow.container);
         bool gplus_signedin = AndroidGPlusSignedin();
-        if (!gplus_signedin) LayoutGPlusSigninButton(&menuflow, 0, gplus_signedin);
+        if (!gplus_signedin) LayoutGPlusSigninButton(&menuflow, gplus_signedin);
         else {
           int fw = menuflow.container->w, bh = font->Height();
-          menuflow.AppendBox(fw/3.0, bh, 0/3.0, &gplus_quick.box);  gplus_quick. LayoutBox(&menuflow, font, gplus_quick.box);
-          menuflow.AppendBox(fw/3.0, bh, 1/3.0, &gplus_invite.box); gplus_invite.LayoutBox(&menuflow, font, gplus_invite.box);
-          menuflow.AppendBox(fw/3.0, bh, 2/3.0, &gplus_accept.box); gplus_accept.LayoutBox(&menuflow, font, gplus_accept.box);
+          menuflow.AppendBox(0/3.0, fw/3.0, bh, &gplus_quick.box);  gplus_quick. LayoutBox(&menuflow, font, gplus_quick.box);
+          menuflow.AppendBox(1/3.0, fw/3.0, bh, &gplus_invite.box); gplus_invite.LayoutBox(&menuflow, font, gplus_invite.box);
+          menuflow.AppendBox(2/3.0, fw/3.0, bh, &gplus_accept.box); gplus_accept.LayoutBox(&menuflow, font, gplus_accept.box);
           menuflow.AppendNewlines(1);
         }
 #endif
@@ -1193,7 +1193,7 @@ struct GameMenuGUI : public GUI, public Connection::Handler {
   void LayoutGPlusSigninButton(Flow *menuflow, bool signedin) {
 #ifdef LFL_ANDROID
     int bh = menuflow->cur_attr.font->Height()*2, bw = bh * 41/9.0;
-    menuflow->AppendBox(bw, bh, (.95 - (float)bw/menuflow->container->w)/2, &gplus_signin_button.box);
+    menuflow->AppendBox((.95 - (float)bw/menuflow->container->w)/2, bw, bh, &gplus_signin_button.box);
     if (!signedin) { 
       mobile_font->Select();
       // gplus_signin_button.Draw(mobile_font, gplus_signin_button.decay ? 2 : (gplus_signin_button.hover ? 1 : 0));
@@ -1262,8 +1262,7 @@ struct GamePlayerListGUI : public GUI {
   PlayerList playerlist;
   int winning_team=0;
   GamePlayerListGUI(const char *TitleName, const char *Team1, const char *Team2) :
-    font(FontDesc(FLAGS_default_font, "", 12, Color::black)),
-    titlename(TitleName), team1(Team1), team2(Team2) {}
+    font(FontDesc(FLAGS_font, "", 12, Color::black)), titlename(TitleName), team1(Team1), team2(Team2) {}
 
   void HandleTextMessage(const string &in) {
     playerlist.clear();
@@ -1330,7 +1329,7 @@ struct GamePlayerListGUI : public GUI {
 struct GameChatGUI : public TextArea {
   GameClient **server;
   GameChatGUI(int key, GameClient **s) :
-    TextArea(screen->gd, FontDesc(FLAGS_default_font, "", 10, Color::grey80), 100, 10), server(s) { 
+    TextArea(screen->gd, FontDesc(FLAGS_font, "", 10, Color::grey80), 100, 10), server(s) { 
     write_timestamp = deactivate_on_enter = true;
     line_fb.align_top_or_bot = false;
     SetToggleKey(key, true);

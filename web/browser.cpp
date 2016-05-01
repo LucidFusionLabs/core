@@ -244,7 +244,7 @@ Font *DOM::Renderer::UpdateFont(Flow *F) {
       //      " ", ff[j].source.size() ? ff[j].source[0] : "<NO2>");
     }
   }
-  return font ? font : app->fonts->Get(FLAGS_default_font, "", font_size_px, color,
+  return font ? font : app->fonts->Get(FLAGS_font, "", font_size_px, color,
                                        over_background_image ? background_color : solid_background_color); 
 }
 

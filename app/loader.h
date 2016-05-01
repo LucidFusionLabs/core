@@ -21,33 +21,27 @@
 namespace LFL {
   
 struct AudioAssetLoader {
-  virtual void *LoadAudioFile(const string &fn) = 0;
+  virtual void *LoadAudioFile(File*) = 0;
+  virtual void *LoadAudioFileNamed(const string &fn) = 0;
   virtual void UnloadAudioFile(void *h) = 0;
-
-  virtual void *LoadAudioBuf(const char *buf, int len, const char *mimetype) = 0;
-  virtual void UnloadAudioBuf(void *h) = 0;
 
   virtual void LoadAudio(void *h, SoundAsset *a, int seconds, int flag) = 0;
   virtual int RefillAudio(SoundAsset *a, int reset) = 0;
 };
 
 struct VideoAssetLoader {
-  virtual void *LoadVideoFile(const string &fn) = 0;
+  virtual void *LoadVideoFile(File*) = 0;
+  virtual void *LoadVideoFileNamed(const string &fn) = 0;
   virtual void UnloadVideoFile(void *h) = 0;
-
-  virtual void *LoadVideoBuf(const char *buf, int len, const char *mimetype) = 0;
-  virtual void UnloadVideoBuf(void *h) = 0;
 
   struct Flag { enum { LoadGL=1, Clear=2, Default=LoadGL|Clear }; };
   virtual void LoadVideo(void *h, Texture *out, int flag=Flag::Default) = 0;
 };
 
 struct MovieAssetLoader {
-  virtual void *LoadMovieFile(const string &fn) = 0;
+  virtual void *LoadMovieFile(File*) = 0;
+  virtual void *LoadMovieFileNamed(const string &fn) = 0;
   virtual void UnloadMovieFile(void *h) = 0;
-
-  virtual void *LoadMovieBuf(const char *buf, int len, const char *mimetype) = 0;
-  virtual void UnloadMovieBuf(void *h) = 0;
 
   virtual void LoadMovie(void *h, MovieAsset *a) = 0;
   virtual int PlayMovie(MovieAsset *a, int seek) = 0;
@@ -128,6 +122,31 @@ struct AssetLoader : public Module {
 
 unique_ptr<AssetLoaderInterface> CreateAssetLoader();
 unique_ptr<AssetLoaderInterface> CreateSimpleAssetLoader();
+
+struct SimpleAssetLoader : public AssetLoaderInterface {
+  SimpleAssetLoader();
+  virtual void *LoadFile(File*);
+  virtual void *LoadFileNamed(const string &filename);
+  virtual void UnloadFile(void *h);
+
+  virtual void *LoadAudioFile(File*);
+  virtual void *LoadAudioFileNamed(const string &filename);
+  virtual void UnloadAudioFile(void *h);
+
+  virtual void *LoadVideoFile(File*);
+  virtual void *LoadVideoFileNamed(const string &filename);
+  virtual void UnloadVideoFile(void *h);
+
+  virtual void *LoadMovieFile(File*);
+  virtual void *LoadMovieFileNamed(const string &filename);
+  virtual void UnloadMovieFile(void *h);
+
+  virtual void LoadVideo(void *h, Texture *out, int load_flag=VideoAssetLoader::Flag::Default);
+  virtual void LoadAudio(void *h, SoundAsset *a, int seconds, int flag);
+  virtual int RefillAudio(SoundAsset *a, int reset);
+  virtual void LoadMovie(void *h, MovieAsset *a);
+  virtual int PlayMovie(MovieAsset *a, int seek) ;
+};
 
 }; // namespace LFL
 #endif // LFL_CORE_APP_LOADER_H__

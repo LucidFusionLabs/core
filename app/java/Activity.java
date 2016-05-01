@@ -136,31 +136,10 @@ public class Activity extends android.app.Activity {
         android.os.Process.killProcess(android.os.Process.myPid());
     }
 
-    public int readFile(String filename, byte[] buf, int size) {
+    public String getFilesDirCanonicalPath() {
         try {
-            java.io.FileInputStream inputStream = openFileInput(filename);
-            inputStream.read(buf, 0, size);
-            inputStream.close();
-            return size;
-        } catch (final Exception e) { Log.e("lfl", e.toString()); return 0; }
-    }
-    public int sizeFile(String filename) {
-        try {
-            java.io.File file = new java.io.File(getFilesDir(), filename);
-            return file.exists() ? (int)file.length() : 0;
-        } catch (final Exception e) { Log.e("lfl", e.toString()); return 0; }
-    }
-    public java.io.FileOutputStream openFileWriter(String filename) {
-        try { return openFileOutput(filename, Context.MODE_PRIVATE); } 
-        catch (final Exception e) { Log.e("lfl", e.toString()); return null; }
-    }
-    public void writeFile(java.io.FileOutputStream outputStream, byte[] buf, int size) {
-        try { outputStream.write(buf, 0, size); }
-        catch (final Exception e) { Log.e("lfl", e.toString()); }
-    }
-    public void closeFileWriter(java.io.FileOutputStream outputStream) {
-        try { outputStream.close(); }
-        catch (final Exception e) { Log.e("lfl", e.toString()); }
+            return getFilesDir().getCanonicalPath();
+        } catch (final Exception e) { Log.e("lfl", e.toString()); return ""; }
     }
 
     public void toggleKeyboard() {

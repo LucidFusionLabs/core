@@ -19,15 +19,19 @@
 #include "core/app/gui.h"
 
 namespace LFL {
+extern FlagOfType<string> FLAGS_font_engine_;
+extern FlagOfType<string> FLAGS_font_;
+extern FlagOfType<int> FLAGS_font_size_;
+
 string AtlasFontEngine::DebugString(Font *f) const {
   return StrCat("AtlasFont(", f->desc->DebugString(), "), H=", f->Height(), ", FW=", f->fixed_width);
 }
 
 void AtlasFontEngine::SetDefault() {
   FLAGS_font_engine = "atlas";
-  FLAGS_default_font = "VeraMoBd.ttf";
-  FLAGS_default_missing_glyph = 42;
-  // FLAGS_default_font_size = 32;
+  FLAGS_font = "VeraMoBd.ttf";
+  FLAGS_missing_glyph = 42;
+  // FLAGS_font_size = 32;
 }
 
 bool AtlasFontEngine::Init(const FontDesc &d) {

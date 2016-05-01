@@ -85,13 +85,12 @@ struct AliasWavefrontObjLoader {
   MtlMap MaterialMap;
   string dir;
 
-  unique_ptr<Geometry> LoadOBJ(const string &filename, const float *map_tex_coord=0) {
+  unique_ptr<Geometry> LoadOBJ(File *file, const float *map_tex_coord=0) {
+    if (!file->Opened()) return ERRORv(nullptr, "obj.open: ", file->Filename());
+    const char *filename = file->Filename();
     dir.assign(filename, 0, DirNameLen(filename, true));
 
-    LocalFile file(filename, "r");
-    if (!file.Opened()) return ERRORv(nullptr, "obj.open: ", file.Filename());
-
-    NextRecordReader nr(&file);
+    NextRecordReader nr(file);
     vector<v3> vert, vert_out, norm, norm_out;
     vector<v2> tex, tex_out;
     Material mat; v3 xyz; v2 xy;
@@ -103,8 +102,10 @@ struct AliasWavefrontObjLoader {
       string cmd = word.NextString();
       if (word.Done()) continue;
 
-      if      (cmd == "mtllib") LoadMaterial(word.NextString());
-      else if (cmd == "usemtl") {
+      if (cmd == "mtllib") {
+        LocalFile f(StrCat(dir, word.NextString()), "r");
+        LoadMaterial(&f);
+      } else if (cmd == "usemtl") {
         MtlMap::iterator it = MaterialMap.find(word.NextString());
         if (it != MaterialMap.end()) { mat = (*it).second; material = 1; }
       }
@@ -162,11 +163,9 @@ struct AliasWavefrontObjLoader {
     return ret;
   }
 
-  int LoadMaterial(const string &filename) {
-    LocalFile file(StrCat(dir, filename), "r");
-    if (!file.Opened()) return ERRORv(-1, "LocalFile::open(", file.Filename(), ")");
-
-    NextRecordReader nr(&file);
+  int LoadMaterial(File *file) {
+    if (!file->Opened()) return ERRORv(-1, "LocalFile::open(", file->Filename(), ")");
+    NextRecordReader nr(file);
     Material m;
     string name;
     for (const char *line = nr.NextLine(); line; line = nr.NextLine()) {
@@ -189,8 +188,8 @@ struct AliasWavefrontObjLoader {
   }
 };
 
-unique_ptr<Geometry> Geometry::LoadOBJ(const string &filename, const float *map_tex_coord) {
-  return AliasWavefrontObjLoader().LoadOBJ(filename, map_tex_coord);
+unique_ptr<Geometry> Geometry::LoadOBJ(File *f, const float *map_tex_coord) {
+  return AliasWavefrontObjLoader().LoadOBJ(f, map_tex_coord);
 }
 
 string Geometry::ExportOBJ(const Geometry *geom, const set<int> *prim_filter, bool prim_filter_invert) {
@@ -226,109 +225,103 @@ string Geometry::ExportOBJ(const Geometry *geom, const set<int> *prim_filter, bo
   return StrCat(verts, "\n", faces);
 }
 
-struct SimpleAssetLoader : public AssetLoaderInterface {
-  SimpleAssetLoader() { INFO("SimpleAssetLoader"); }
+SimpleAssetLoader::SimpleAssetLoader() { INFO("SimpleAssetLoader"); }
+void *SimpleAssetLoader::LoadFileNamed(const string &filename) {
+  unique_ptr<File> f(Asset::OpenFile(filename));
+  if (!f || !f->Opened()) return ERRORv(nullptr, "open: ", filename);
+  return f.release();
+}
 
-  virtual void *LoadFile(const string &filename) {
-    unique_ptr<LocalFile> lf = make_unique<LocalFile>(filename, "r");
-    if (!lf->Opened()) return ERRORv(nullptr, "open: ", filename);
-    return lf.release();
+void *SimpleAssetLoader::LoadFile(File *f) { return f; }
+void SimpleAssetLoader::UnloadFile(void *h) { delete static_cast<File*>(h); }
+
+void *SimpleAssetLoader::LoadAudioFile(File *f) { return LoadFile(f); }
+void *SimpleAssetLoader::LoadAudioFileNamed(const string &filename) { return LoadFileNamed(filename); }
+void SimpleAssetLoader::UnloadAudioFile(void *h) { return UnloadFile(h); }
+
+void *SimpleAssetLoader::LoadVideoFile(File *f) { return LoadFile(f); }
+void *SimpleAssetLoader::LoadVideoFileNamed(const string &filename) { return LoadFileNamed(filename); }
+void SimpleAssetLoader::UnloadVideoFile(void *h) { return UnloadFile(h); }
+
+void *SimpleAssetLoader::LoadMovieFile(File *f) { return LoadFile(f); }
+void *SimpleAssetLoader::LoadMovieFileNamed(const string &filename) { return LoadFileNamed(filename); }
+void SimpleAssetLoader::UnloadMovieFile(void *h) { return UnloadFile(h); }
+
+void SimpleAssetLoader::LoadVideo(void *h, Texture *out, int load_flag) {
+  static char jpghdr[2] = { '\xff', '\xd8' }; // 0xff, 0xd8
+  static char gifhdr[4] = { 'G', 'I', 'F', '8' };
+  static char pnghdr[8] = { '\211', 'P', 'N', 'G', '\r', '\n', '\032', '\n' };
+
+  File *f = static_cast<File*>(h);
+  string fn = f->Filename();
+  unsigned char hdr[8];
+  if (f->Read(hdr, 8) != 8) return ERROR("load ", fn, " : failed");
+  f->Reset();
+
+  if (!memcmp(hdr, pnghdr, sizeof(pnghdr))) {
+    if (PngReader::Read(f, out)) return;
   }
-  virtual void UnloadFile(void *h) { delete static_cast<File*>(h); }
-  virtual void *LoadBuf(const char *buf, int len, const char *mimetype) { return new BufferFile(string(buf, len), mimetype); }
-  virtual void UnloadBuf(void *h) { delete static_cast<File*>(h); }
-
-  virtual void *LoadAudioFile(const string &filename) { return LoadFile(filename); }
-  virtual void UnloadAudioFile(void *h) { return UnloadFile(h); }
-  virtual void *LoadAudioBuf(const char *buf, int len, const char *mimetype) { return LoadBuf(buf, len, mimetype); }
-  virtual void UnloadAudioBuf(void *h) { return UnloadBuf(h); }
-
-  virtual void *LoadVideoFile(const string &filename) { return LoadFile(filename); }
-  virtual void UnloadVideoFile(void *h) { return UnloadFile(h); }
-  virtual void *LoadVideoBuf(const char *buf, int len, const char *mimetype) { return LoadBuf(buf, len, mimetype); }
-  virtual void UnloadVideoBuf(void *h) { return UnloadBuf(h); }
-
-  virtual void *LoadMovieFile(const string &filename) { return LoadFile(filename); }
-  virtual void UnloadMovieFile(void *h) { return UnloadFile(h); }
-  virtual void *LoadMovieBuf(const char *buf, int len, const char *mimetype) { return LoadBuf(buf, len, mimetype); }
-  virtual void UnloadMovieBuf(void *h) { return UnloadBuf(h); }
-
-  virtual void LoadVideo(void *h, Texture *out, int load_flag=VideoAssetLoader::Flag::Default) {
-    static char jpghdr[2] = { '\xff', '\xd8' }; // 0xff, 0xd8 };
-    static char gifhdr[4] = { 'G', 'I', 'F', '8' };
-    static char pnghdr[8] = { '\211', 'P', 'N', 'G', '\r', '\n', '\032', '\n' };
-
-    File *f = static_cast<File*>(h);
-    string fn = f->Filename();
-    unsigned char hdr[8];
-    if (f->Read(hdr, 8) != 8) return ERROR("load ", fn, " : failed");
-    f->Reset();
-
-    if (!memcmp(hdr, pnghdr, sizeof(pnghdr))) {
-      if (PngReader::Read(f, out)) return;
-    }
-    else if (!memcmp(hdr, jpghdr, sizeof(jpghdr))) {
-      if (JpegReader::Read(f, out)) return;
-    }
-    else if (!memcmp(hdr, gifhdr, sizeof(gifhdr))) {
-      if (GIFReader::Read(f, out)) return;
-    }
-    else return ERROR("load ", fn, " : failed");
-
-    if (load_flag & Flag::LoadGL) out->LoadGL();
-    if (load_flag & Flag::Clear)  out->ClearBuffer();
+  else if (!memcmp(hdr, jpghdr, sizeof(jpghdr))) {
+    if (JpegReader::Read(f, out)) return;
   }
-
-  virtual void LoadAudio(void *h, SoundAsset *a, int seconds, int flag) {
-    File *f = static_cast<File*>(h);
-    string fn = f->Filename();
-    if (SuffixMatch(fn, ".wav", false)) {
-      WavHeader wav_header;
-      WavReader wav_reader;
-      if (!wav_reader.Open(f, &wav_header))
-        return ERROR("LoadAudio(", a->name, ", ", fn, ") open failed: ", strerror(errno));
-
-      int wav_samples = (f->Size() - WavHeader::Size) / 2;
-      if (wav_header.audio_format != 1 || wav_header.num_channels != 1 ||
-          wav_header.bits_per_sample != 16 || wav_header.sample_rate != FLAGS_sample_rate ||
-          wav_samples > FLAGS_sample_rate*FLAGS_soundasset_seconds)
-        return ERROR("LoadAudio(", a->name, ", ", fn, ") not supported or ", wav_samples, " > ",
-                     FLAGS_sample_rate*FLAGS_soundasset_seconds);
-
-      a->channels = 1;
-      a->sample_rate = FLAGS_sample_rate;
-      a->wav = make_unique<RingSampler>(a->sample_rate, wav_samples);
-      RingSampler::Handle H(a->wav.get());
-      if (wav_reader.Read(&H, 0, wav_samples))
-        return ERROR("LoadAudio(", a->name, ", ", fn, ") read failed: ", strerror(errno));
-    } else if (SuffixMatch(fn, ".ogg", false)) {
-      if (!(a->handle = OGGReader::OpenFile(fn, &a->sample_rate, &a->channels, 0)))
-        return ERROR("LoadOGG(", a->name, ", ", fn, ") failed");
-      a->seconds = seconds;
-      a->wav = make_unique<RingSampler>(a->sample_rate, SoundAsset::Size(a));
-      RingSampler::Handle H(a->wav.get());
-      int samples = OGGReader::Read(a->handle, a->channels, a->sample_rate*a->seconds, &H, 0);
-      if (samples == SoundAsset::Size(a) && !(flag & SoundAsset::FlagNoRefill))
-        a->refill = bind(&SimpleAssetLoader::RefillAudio, this, _1, _2);
-      if (!a->refill) { OGGReader::Close(a->handle); a->handle=0; }
-    }
+  else if (!memcmp(hdr, gifhdr, sizeof(gifhdr))) {
+    if (GIFReader::Read(f, out)) return;
   }
+  else return ERROR("load ", fn, " : failed");
 
-  virtual int RefillAudio(SoundAsset *a, int reset) {
-    if (!a->handle) return 0;
-    a->wav->ring.back = 0;
+  if (load_flag & Flag::LoadGL) out->LoadGL();
+  if (load_flag & Flag::Clear)  out->ClearBuffer();
+}
+
+void SimpleAssetLoader::LoadAudio(void *h, SoundAsset *a, int seconds, int flag) {
+  File *f = static_cast<File*>(h);
+  string fn = f->Filename();
+  if (SuffixMatch(fn, ".wav", false)) {
+    WavHeader wav_header;
+    WavReader wav_reader;
+    if (!wav_reader.Open(f, &wav_header))
+      return ERROR("LoadAudio(", a->name, ", ", fn, ") open failed: ", strerror(errno));
+
+    int wav_samples = (f->Size() - WavHeader::Size) / 2;
+    if (wav_header.audio_format != 1 || wav_header.num_channels != 1 ||
+        wav_header.bits_per_sample != 16 || wav_header.sample_rate != FLAGS_sample_rate ||
+        wav_samples > FLAGS_sample_rate*FLAGS_soundasset_seconds)
+      return ERROR("LoadAudio(", a->name, ", ", fn, ") not supported or ", wav_samples, " > ",
+                   FLAGS_sample_rate*FLAGS_soundasset_seconds);
+
+    a->channels = 1;
+    a->sample_rate = FLAGS_sample_rate;
+    a->wav = make_unique<RingSampler>(a->sample_rate, wav_samples);
     RingSampler::Handle H(a->wav.get());
-    int wrote = OGGReader::Read(a->handle, a->channels, a->sample_rate*a->seconds, &H, reset);
-    if (wrote < SoundAsset::Size(a)) {
-      a->wav->ring.size = wrote;
-      a->wav->bytes = a->wav->ring.size * a->wav->width;
-    }
-    return wrote;
+    if (wav_reader.Read(&H, 0, wav_samples))
+      return ERROR("LoadAudio(", a->name, ", ", fn, ") read failed: ", strerror(errno));
+  } else if (SuffixMatch(fn, ".ogg", false)) {
+    if (!(a->handle = OGGReader::OpenFile(fn, &a->sample_rate, &a->channels, 0)))
+      return ERROR("LoadOGG(", a->name, ", ", fn, ") failed");
+    a->seconds = seconds;
+    a->wav = make_unique<RingSampler>(a->sample_rate, SoundAsset::Size(a));
+    RingSampler::Handle H(a->wav.get());
+    int samples = OGGReader::Read(a->handle, a->channels, a->sample_rate*a->seconds, &H, 0);
+    if (samples == SoundAsset::Size(a) && !(flag & SoundAsset::FlagNoRefill))
+      a->refill = bind(&SimpleAssetLoader::RefillAudio, this, _1, _2);
+    if (!a->refill) { OGGReader::Close(a->handle); a->handle=0; }
   }
+}
 
-  virtual void LoadMovie(void *h, MovieAsset *a) {}
-  virtual int PlayMovie(MovieAsset *a, int seek) { return 0; }
-};
+int SimpleAssetLoader::RefillAudio(SoundAsset *a, int reset) {
+  if (!a->handle) return 0;
+  a->wav->ring.back = 0;
+  RingSampler::Handle H(a->wav.get());
+  int wrote = OGGReader::Read(a->handle, a->channels, a->sample_rate*a->seconds, &H, reset);
+  if (wrote < SoundAsset::Size(a)) {
+    a->wav->ring.size = wrote;
+    a->wav->bytes = a->wav->ring.size * a->wav->width;
+  }
+  return wrote;
+}
+
+void SimpleAssetLoader::LoadMovie(void *h, MovieAsset *a) {}
+int SimpleAssetLoader::PlayMovie(MovieAsset *a, int seek) { return 0; }
 
 unique_ptr<AssetLoaderInterface> CreateSimpleAssetLoader() { return make_unique<SimpleAssetLoader>(); }
 

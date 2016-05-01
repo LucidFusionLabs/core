@@ -74,9 +74,9 @@ void GDIFontEngine::Shutdown() {
 
 void GDIFontEngine::SetDefault() {
   FLAGS_font_engine = "gdi";
-  FLAGS_default_font = "Consolas";
-  FLAGS_default_font_size = 17;
-  // FLAGS_default_font_flag = FontDesc::Bold | FontDesc::Mono;
+  FLAGS_font = "Consolas";
+  FLAGS_font_size = 17;
+  // FLAGS_font_flag = FontDesc::Bold | FontDesc::Mono;
 }
 
 string GDIFontEngine::DebugString(Font *f) const {

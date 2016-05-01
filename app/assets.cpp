@@ -55,13 +55,32 @@ string Asset::FileName(const string &asset_fn) { return StrCat(app->assetdir, as
 string Asset::FileContents(const string &asset_fn) {
   auto i = app->asset_cache.find(asset_fn);
   if (i != app->asset_cache.end()) return string(i->second.data(), i->second.size());
-  else                             return LocalFile::FileContents(Asset::FileName(asset_fn));
+#ifdef LFL_ANDROID
+  int l=0;
+  char *b=0;
+  if (!AndroidAssetRead(asset_fn.c_str(), &b, &l)) {
+    string ret = string(b, l);
+    free(b);
+    return ret;
+  }
+#endif
+  return LocalFile::FileContents(asset_fn[0] == '/' ? asset_fn : Asset::FileName(asset_fn));
 }
 
 File *Asset::OpenFile(const string &asset_fn) {
   auto i = app->asset_cache.find(asset_fn);
-  if (i != app->asset_cache.end()) return new BufferFile(i->second);
-  else                             return new LocalFile(Asset::FileName(asset_fn), "r");
+  if (i != app->asset_cache.end()) return new BufferFile(StringPiece(i->second));
+  if (asset_fn[0] == '/') return new LocalFile(asset_fn, "r");
+#ifdef LFL_ANDROID
+  int l=0;
+  char *b=0;
+  if (!AndroidAssetRead(asset_fn.c_str(), &b, &l)) {
+    BufferFile *ret = new BufferFile(string(b, l));
+    free(b);
+    return ret;
+  }
+#endif
+  return new LocalFile(asset_fn[0] == '/' ? asset_fn : Asset::FileName(asset_fn), "r");
 }
 
 void Asset::Unload() {
@@ -74,7 +93,7 @@ void Asset::Unload() {
 void Asset::Load(void *h, VideoAssetLoader *l) {
   static int next_asset_type_id = 1, next_list_id = 1;
   if (!name.empty()) typeID = next_asset_type_id++;
-  if (!geom_fn.empty()) geometry = Geometry::LoadOBJ(StrCat(app->assetdir, geom_fn)).release();
+  if (!geom_fn.empty()) geometry = Geometry::LoadOBJ(unique_ptr<File>(Asset::OpenFile(geom_fn)).get()).release();
   if (!texture.empty() || h) LoadTexture(h, texture, &tex, l);
 }
 
@@ -83,7 +102,10 @@ void Asset::LoadTexture(void *h, const string &asset_fn, Texture *out, VideoAsse
   auto i = app->asset_cache.find(asset_fn);
   if (i != app->asset_cache.end()) return LoadTexture(i->second.data(), asset_fn.c_str(), i->second.size(), out);
   if (!l) l = app->asset_loader->default_video_loader;
-  void *handle = h ? h : l->LoadVideoFile(asset_fn[0] == '/' ? asset_fn : Asset::FileName(asset_fn).c_str());
+
+  void *handle = h;
+  if      (!h && 0) handle = l->LoadVideoFile(Asset::OpenFile(asset_fn));
+  else if (!h)      handle = l->LoadVideoFileNamed(Asset::FileName(asset_fn));
   if (!handle) return ERROR("load: ", asset_fn);
   l->LoadVideo(handle, out);
   if (!h) l->UnloadVideoFile(handle);
@@ -91,10 +113,10 @@ void Asset::LoadTexture(void *h, const string &asset_fn, Texture *out, VideoAsse
 
 void Asset::LoadTexture(const void *FromBuf, const char *filename, int size, Texture *out, int flag) {
   VideoAssetLoader *l = app->asset_loader->default_loader->GetVideoAssetLoader(filename);
-  void *handle = l->LoadVideoBuf(static_cast<const char*>(FromBuf), size, filename);
+  void *handle = l->LoadVideoFile(new BufferFile(string(static_cast<const char*>(FromBuf), size), filename));
   if (!handle) return;
   l->LoadVideo(handle, out, flag);
-  l->UnloadVideoBuf(handle);
+  l->UnloadVideoFile(handle);
 }
 
 Texture *Asset::LoadTexture(const MultiProcessFileResource &file, int max_image_size) {
@@ -128,29 +150,27 @@ void SoundAsset::Load(void *handle, const char *FN, int Secs, int flag) {
 }
 
 void SoundAsset::Load(void const *buf, int len, char const *FN, int Secs) {
-  void *handle = app->asset_loader->default_audio_loader->LoadAudioBuf(static_cast<const char*>(buf), len, FN);
+  void *handle = app->asset_loader->default_audio_loader->LoadAudioFile
+    (new BufferFile(string(static_cast<const char*>(buf), len), FN));
   if (!handle) return;
 
   Load(handle, FN, Secs, FlagNoRefill);
   if (!refill) {
-    app->asset_loader->default_audio_loader->UnloadAudioBuf(handle);
+    app->asset_loader->default_audio_loader->UnloadAudioFile(handle);
     handle = 0;
   }
 }
 
 void SoundAsset::Load(int Secs, bool unload) {
-  string fn;
   void *handle = 0;
 
   if (!filename.empty()) {
-    fn = filename;
-    if (fn.length() && isalpha(fn[0])) fn = app->assetdir + fn;
-
-    handle = app->asset_loader->default_audio_loader->LoadAudioFile(fn);
-    if (!handle) ERROR("SoundAsset::Load ", fn);
+    if (0) handle = app->asset_loader->default_audio_loader->LoadAudioFile(Asset::OpenFile(filename));
+    else   handle = app->asset_loader->default_audio_loader->LoadAudioFileNamed(Asset::FileName(filename));
+    if (!handle) ERROR("SoundAsset::Load ", filename);
   }
 
-  Load(handle, fn.c_str(), Secs);
+  Load(handle, filename.c_str(), Secs);
 
 #if !defined(LFL_IPHONE) && !defined(LFL_ANDROID) /* XXX */
   if (!refill && handle && unload) {
@@ -163,7 +183,7 @@ void SoundAsset::Load(int Secs, bool unload) {
 int SoundAsset::Refill(int reset) { return app->asset_loader->default_audio_loader->RefillAudio(this, reset); }
 
 void MovieAsset::Load(const char *fn) {
-  if (!fn || !(handle = app->asset_loader->default_movie_loader->LoadMovieFile(StrCat(app->assetdir, fn)))) return;
+  if (!fn || !(handle = app->asset_loader->default_movie_loader->LoadMovieFile(Asset::OpenFile(fn)))) return;
   app->asset_loader->default_movie_loader->LoadMovie(handle, this);
   audio.Load();
   video.Load();

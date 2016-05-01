@@ -16,8 +16,6 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "core/app/bindings/jni.h"
-
 namespace LFL {
 void Application::AddNativeMenu(const string &title, const vector<MenuItem>&items) {}
 void Application::AddNativeEditMenu(const vector<MenuItem>&items) {}
@@ -28,36 +26,42 @@ void Application::SavePassword(const string &h, const string &u, const string &p
 bool Application::LoadPassword(const string &h, const string &u, string *pw) { return false; }
 
 void Application::OpenSystemBrowser(const string &url_text) {
-  AndroidOpenBrowser(url_text.c_str());
+  JNI *jni = Singleton<LFL::JNI>::Get();
+  static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "openBrowser", "(Ljava/lang/String;)V"));
+  jstring jurl = jni->env->NewStringUTF(url_text.c_str());
+  jni->env->CallVoidMethod(jni->activity, mid, jurl);
+  jni->env->DeleteLocalRef(jurl);
 }
 
 void Application::ShowAds() {
-  AndroidShowAds();
+  JNI *jni = Singleton<LFL::JNI>::Get();
+  static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "showAds", "()V"));
+  jni->env->CallVoidMethod(jni->activity, mid);
 }
 
 void Application::HideAds() {
-  AndroidHideAds();
+  JNI *jni = Singleton<LFL::JNI>::Get();
+  static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "hideAds", "()V"));
+  jni->env->CallVoidMethod(jni->activity, mid);
 }
 
 int Application::GetVolume() { 
-  return AndroidGetVolume();
+  JNI *jni = Singleton<LFL::JNI>::Get();
+  static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "getVolume", "()I"));
+  return jni->env->CallIntMethod(jni->activity, mid);
 }
 
-int Application::GetMaxVolume() { 
-  return AndroidGetMaxVolume();
+int Application::GetMaxVolume() {
+  JNI *jni = Singleton<LFL::JNI>::Get();
+  static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "maxVolume", "()I"));
+  return jni->env->CallIntMethod(jni->activity, mid);
 }
 
-void Application::SetVolume(int v) { 
-  AndroidSetVolume(v);
+void Application::SetVolume(int v) {
+  JNI *jni = Singleton<LFL::JNI>::Get();
+  static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "setVolume", "(I)V"));
+  jint jv = v;
+  return jni->env->CallVoidMethod(jni->activity, mid, jv);
 }
-
-void Application::PlaySoundEffect(SoundAsset *sa) {
-  AndroidPlayMusic(sa->handle);
-}
-
-void Application::PlayBackgroundMusic(SoundAsset *music) {
-  AndroidPlayBackgroundMusic(music->handle);
-}
-
 
 }; // namespace LFL

@@ -25,10 +25,6 @@ extern "C" {
 #include "core/app/crypto.h"
 #include "core/app/net/resolver.h"
 
-#ifdef LFL_ANDROID
-#include "core/app/bindings/jni.h"
-#endif
-
 #ifndef LFL_WINDOWS
 #include <sys/socket.h>
 #include <sys/uio.h>
@@ -1303,7 +1299,10 @@ void Sniffer::GetIPAddress(IPV4::Addr *out) {
   *out = 0;
 #if defined(LFL_WINDOWS) || defined(LFL_EMSCRIPTEN)
 #elif defined(LFL_ANDROID)
-  *out = ntohl(AndroidIPV4Address());
+  JNI *jni = Singleton<LFL::JNI>::Get();
+  static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "getAddress", "()I"));
+  jint addr = jni->env->CallIntMethod(jni->activity, mid);
+  *out = ntohl(addr);
 #else
   ifaddrs* ifap = NULL;
   int r = getifaddrs(&ifap);
@@ -1317,12 +1316,16 @@ void Sniffer::GetIPAddress(IPV4::Addr *out) {
   }
 #endif
 }
+
 void Sniffer::GetBroadcastAddress(IPV4::Addr *out) {
   static IPV4::Addr localhost = IPV4::Parse("127.0.0.1");
   *out = 0;
 #if defined(LFL_WINDOWS) || defined(LFL_EMSCRIPTEN)
 #elif defined(LFL_ANDROID)
-  *out = ntohl(AndroidIPV4BroadcastAddress());
+  JNI *jni = Singleton<LFL::JNI>::Get();
+  static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "getBroadcastAddress", "()I"));
+  jint addr = jni->env->CallIntMethod(jni->activity, mid);
+  *out = ntohl(addr);
 #else
   ifaddrs* ifap = NULL;
   int r = getifaddrs(&ifap);

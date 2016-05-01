@@ -29,7 +29,7 @@ namespace LFL {
 const int SoundAsset::FromBufPad = FF_INPUT_BUFFER_PADDING_SIZE;
 
 struct FFBIOFile {
-  static void *Alloc(File *f) {
+  static AVIOContext *Alloc(File *f) {
     int bufsize = 16384;
     return avio_alloc_context(static_cast<unsigned char*>(malloc(bufsize)), bufsize, 0, f, Read, Write, Seek);
   }
@@ -46,44 +46,6 @@ struct FFBIOFile {
   static int64_t Seek(void *f, int64_t offset, int whence) { return static_cast<File*>(f)->Seek (offset, whence); }
 };
 
-struct FFBIOC {
-  void const *buf;
-  int len, offset;
-  FFBIOC(void const *b, int l) : buf(b), len(l), offset(0) {}
-
-  static void *Alloc(void const *buf, int len) {
-    static const int bufsize = 32768;
-    return avio_alloc_context(static_cast<unsigned char*>(malloc(bufsize)), bufsize, 0, new FFBIOC(buf, len), Read, Write, Seek);
-  }
-
-  static void Free(void *in) {
-    AVIOContext *s = static_cast<AVIOContext*>(in);
-    delete static_cast<FFBIOC*>(s->opaque);
-    free(s->buffer);
-    av_free(s);
-  }
-
-  static int Read(void *opaque, uint8_t *buf, int buf_size) {
-    FFBIOC *s = static_cast<FFBIOC*>(opaque);
-    int len = min(buf_size, s->len - s->offset);
-    if (len <= 0) return len;
-
-    memcpy(buf, static_cast<const char*>(s->buf) + s->offset, len);
-    s->offset += len;
-    return len;
-  }
-
-  static int Write(void *opaque, uint8_t *buf, int buf_size) { return -1; }
-  static int64_t Seek(void *opaque, int64_t offset, int whence) {
-    FFBIOC *s = static_cast<FFBIOC*>(opaque);
-    if      (whence == SEEK_SET) s->offset = offset;
-    else if (whence == SEEK_CUR) s->offset += offset;
-    else if (whence == SEEK_END) s->offset = s->len + offset;
-    else return -1;
-    return 0;
-  }
-};
-
 struct FFMpegAssetLoader : public AssetLoaderInterface {
   unique_ptr<AssetLoaderInterface> simple_loader;
   FFMpegAssetLoader() {
@@ -97,22 +59,6 @@ struct FFMpegAssetLoader : public AssetLoaderInterface {
     return this; 
   }
 
-  virtual void *LoadFile(const string &filename) { return LoadFile(filename, 0); }
-  AVFormatContext *LoadFile(const string &filename, AVIOContext **pbOut) {
-#if !defined(LFL_ANDROID) && !defined(LFL_IPHONE)
-    AVFormatContext *fctx = 0;
-    if (avformat_open_input(&fctx, filename.c_str(), 0, 0)) return ERRORv(nullptr, "av_open_input_file: ", filename);
-    return fctx;
-#else
-    unique_ptr<LocalFile> lf = make_unique<LocalFile>(filename, "r");
-    if (!lf->opened()) return ERRORv(nullptr, "FFLoadFile: open ", filename);
-    void *pb = FFBIOFile::Alloc(lf.release());
-    AVFormatContext *ret = Load((AVIOContext*)pb, filename, 0, 0, pbOut);
-    if (!ret) FFBIOFile::Free(pb);
-    return ret;
-#endif
-  }
-
   virtual void UnloadFile(void *h) {
     AVFormatContext *handle = static_cast<AVFormatContext*>(h);
     for (int i = handle->nb_streams - 1; handle->streams && i >= 0; --i) {
@@ -121,42 +67,51 @@ struct FFMpegAssetLoader : public AssetLoaderInterface {
       stream->discard = AVDISCARD_ALL;
       avcodec_close(stream->codec);
     }
-#if defined(LFL_ANDROID) || defined(LFL_IPHONE)
-    FFBIOFile::Free(handle->pb);
-#endif
+    if (handle->opaque) FFBIOFile::Free(handle->opaque);
     avformat_close_input(&handle);
   }
 
-  virtual void *LoadBuf(const char *buf, int len, const char *filename) { return LoadBuf(buf, len, filename, 0); }
-  AVFormatContext *LoadBuf(void const *buf, int len, const char *filename, AVIOContext **pbOut) {
-    const char *suffix = strchr(filename, '.');
-    void *pb = FFBIOC::Alloc(buf, len);
-    AVFormatContext *ret = Load(static_cast<AVIOContext*>(pb), suffix ? suffix+1 : filename,
-                                const_cast<char*>(static_cast<const char*>(buf)), min(4096, len), pbOut);
-    if (!ret) FFBIOC::Free(pb);
+  virtual void *LoadFile(File *f) { return LoadFile(f, 0); }
+  AVFormatContext *LoadFile(File *f, AVIOContext **pbOut) {
+    string probe(0, 4096);
+    probe.resize(max(0, f->Read(&probe[0], probe.size())));
+    const char *filename = f->Filename(), *suffix = strchr(filename, '.');
+    f->Reset();
+
+    AVIOContext *pb = FFBIOFile::Alloc(f);
+    AVFormatContext *ret = Load(pb, suffix ? suffix+1 : filename, &probe[0], probe.size(), pbOut);
+    if (!ret) FFBIOFile::Free(pb);
     return ret;
   }
 
-  virtual void UnloadBuf(void *h) {
-    AVFormatContext *handle = static_cast<AVFormatContext*>(h);
-    FFBIOC::Free(handle->pb);
-    avformat_close_input(&handle);
+  virtual void *LoadFileNamed(const string &filename) { return LoadFileNamed(filename, 0); }
+  AVFormatContext *LoadFileNamed(const string &filename, AVIOContext **pbOut) {
+#if !defined(LFL_ANDROID) && !defined(LFL_IPHONE)
+    AVFormatContext *fctx = 0;
+    if (avformat_open_input(&fctx, filename.c_str(), 0, 0)) return ERRORv(nullptr, "avformat_open_input: ", filename);
+    CHECK_EQ(0, fctx->opaque);
+    return fctx;
+#else
+    unique_ptr<LocalFile> lf = make_unique<LocalFile>(filename, "r");
+    if (!lf->opened()) return ERRORv(nullptr, "FFLoadFile: open ", filename);
+    AVIOContext *pb = FFBIOFile::Alloc(lf.release());
+    AVFormatContext *fctx = Load(pb, filename, 0, 0, pbOut);
+    if (!fctx) FFBIOFile::Free(pb);
+    return ret;
+#endif
   }
 
-  virtual void *LoadAudioFile(const string &filename) { return LoadFile(filename); }
+  virtual void *LoadAudioFile(File *f) { return LoadFile(f); }
+  virtual void *LoadAudioFileNamed(const string &filename) { return LoadFileNamed(filename); }
   virtual void UnloadAudioFile(void *h) { return UnloadFile(h); }
-  virtual void *LoadAudioBuf(const char *buf, int len, const char *mimetype) { return LoadBuf(buf, len, mimetype); }
-  virtual void UnloadAudioBuf(void *h) { return UnloadBuf(h); }
 
-  virtual void *LoadVideoFile(const string &filename) { return LoadFile(filename); }
+  virtual void *LoadVideoFile(File *f) { return LoadFile(f); }
+  virtual void *LoadVideoFileNamed(const string &filename) { return LoadFileNamed(filename); }
   virtual void UnloadVideoFile(void *h) { return UnloadFile(h); }
-  virtual void *LoadVideoBuf(const char *buf, int len, const char *mimetype) { return LoadBuf(buf, len, mimetype); }
-  virtual void UnloadVideoBuf(void *h) { return UnloadBuf(h); }
 
-  virtual void *LoadMovieFile(const string &filename) { return LoadFile(filename); }
+  virtual void *LoadMovieFile(File *f) { return LoadFile(f); }
+  virtual void *LoadMovieFileNamed(const string &filename) { return LoadFileNamed(filename); }
   virtual void UnloadMovieFile(void *h) { return UnloadFile(h); }
-  virtual void *LoadMovieBuf(const char *buf, int len, const char *mimetype) { return LoadBuf(buf, len, mimetype); }
-  virtual void UnloadMovieBuf(void *h) { return UnloadBuf(h); }
 
   void LoadVideo(void *handle, Texture *out, int load_flag=VideoAssetLoader::Flag::Default) {
     AVFormatContext *fctx = static_cast<AVFormatContext*>(handle);
@@ -227,10 +182,12 @@ struct FFMpegAssetLoader : public AssetLoaderInterface {
     AVInputFormat *fmt = av_probe_input_format(&probe_data, probe_buf_data);
     if (!fmt) return ERRORv(nullptr, "no AVInputFormat for ", probe_data.filename);
 
-    AVFormatContext *fctx = avformat_alloc_context(); int ret;
+    AVFormatContext *fctx = avformat_alloc_context();
     fctx->flags |= AVFMT_FLAG_CUSTOM_IO;
-
     fctx->pb = pb;
+    fctx->opaque = pb;
+
+    int ret;
     if ((ret = avformat_open_input(&fctx, probe_data.filename, fmt, 0))) {
       char errstr[128]; av_strerror(ret, errstr, sizeof(errstr));
       return ERRORv(nullptr, "av_open_input ", probe_data.filename, ": ", ret, " ", errstr);

@@ -20,8 +20,8 @@
 
 namespace LFL {
 extern FlagOfType<string> FLAGS_font_engine_;
-extern FlagOfType<string> FLAGS_default_font_;
-extern FlagOfType<int> FLAGS_default_font_size_;
+extern FlagOfType<string> FLAGS_font_;
+extern FlagOfType<int> FLAGS_font_size_;
 
 static FcConfig *fc_config;
 
@@ -33,8 +33,8 @@ string FCFontEngine::DebugString(Font *f) const {
 
 void FCFontEngine::SetDefault() {
   if (!FLAGS_font_engine_.override) FLAGS_font_engine = "fc";
-  if (!FLAGS_default_font_.override) FLAGS_default_font = "default";
-  if (!FLAGS_default_font_size_.override) FLAGS_default_font_size = 15;
+  if (!FLAGS_font_.override) FLAGS_font = "default";
+  if (!FLAGS_font_size_.override) FLAGS_font_size = 15;
 }
 
 int FCFontEngine::InitGlyphs(Font *f, Glyph *g, int n) {

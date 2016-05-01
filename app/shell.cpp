@@ -109,7 +109,7 @@ void Shell::clipboard(const vector<string> &a) {
 
 void Shell::consolecolor(const vector<string>&) {
   if (!screen->console) return;
-  screen->console->style.font.SetFont(app->fonts->Get(FLAGS_default_font, "", 9, Color::black));
+  screen->console->style.font.SetFont(app->fonts->Get(FLAGS_font, "", 9, Color::black));
 }
 
 void Shell::dldir(const vector<string>&) { INFO(LFAppDownloadDir()); }

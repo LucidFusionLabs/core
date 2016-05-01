@@ -99,6 +99,7 @@ extern int optind;
 
 #ifdef LFL_ANDROID
 #include <sys/endian.h>
+#include "core/app/bindings/jni.h"
 #endif
 
 #define  INFO(...) ((::LFApp::Log::Info  <= ::LFL::FLAGS_loglevel) ? ::LFL::Log(::LFApp::Log::Info,  __FILE__, __LINE__, ::LFL::StrCat(__VA_ARGS__)) : void())

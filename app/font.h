@@ -21,11 +21,11 @@
 
 namespace LFL {
 DECLARE_string(font_engine);
-DECLARE_string(default_font);
-DECLARE_string(default_font_family);
-DECLARE_int(default_font_size);
-DECLARE_int(default_font_flag);
-DECLARE_int(default_missing_glyph);
+DECLARE_string(font);
+DECLARE_string(font_family);
+DECLARE_int(font_size);
+DECLARE_int(font_flag);
+DECLARE_int(missing_glyph);
 DECLARE_bool(atlas_dump);
 DECLARE_string(atlas_font_sizes);
 DECLARE_int(scale_font_height);
@@ -81,7 +81,7 @@ struct FontDesc {
   FontDesc(const string &n="", const string &fam="", int s=0,
            const Color &fgc=Color::white,
            const Color &bgc=Color::clear, int f=-1, bool U=1, int E=0) :
-    family(fam), size(s), flag(f == -1 ? FLAGS_default_font_flag : f), engine(E), fg(fgc), bg(bgc), unicode(U)
+    family(fam), size(s), flag(f == -1 ? FLAGS_font_flag : f), engine(E), fg(fgc), bg(bgc), unicode(U)
     {
       string engine_proto;
       name = ParseProtocol(n.data(), &engine_proto);
@@ -96,8 +96,8 @@ struct FontDesc {
   }
 
   static FontDesc Default() {
-    return FontDesc(FLAGS_default_font, FLAGS_default_font_family, FLAGS_default_font_size,
-                    Color::white, Color::clear, FLAGS_default_font_flag);
+    return FontDesc(FLAGS_font, FLAGS_font_family, FLAGS_font_size,
+                    Color::white, Color::clear, FLAGS_font_flag);
   }
 };
 
@@ -218,7 +218,7 @@ struct Font {
 
   virtual ~Font() {}
   Font(FontEngine *E, const FontDesc &D, shared_ptr<FontEngine::Resource> R) :
-    size(D.size), missing_glyph(FLAGS_default_missing_glyph), mono(D.flag & FontDesc::Mono),
+    size(D.size), missing_glyph(FLAGS_missing_glyph), mono(D.flag & FontDesc::Mono),
     flag(D.flag), fg(D.fg), bg(D.bg), engine(E), resource(move(R)) {}
 
   short Height() const { return ascender + descender; }
