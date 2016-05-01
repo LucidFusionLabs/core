@@ -85,14 +85,15 @@ struct FFMpegAssetLoader : public AssetLoaderInterface {
   }
 
   virtual void *LoadFileNamed(const string &filename) { return LoadFileNamed(filename, 0); }
-  AVFormatContext *LoadFileNamed(const string &filename, AVIOContext **pbOut) {
+  AVFormatContext *LoadFileNamed(const string &fn, AVIOContext **pbOut) {
 #if !defined(LFL_ANDROID) && !defined(LFL_IPHONE)
     AVFormatContext *fctx = 0;
+    string filename = Asset::FileName(fn);
     if (avformat_open_input(&fctx, filename.c_str(), 0, 0)) return ERRORv(nullptr, "avformat_open_input: ", filename);
     CHECK_EQ(0, fctx->opaque);
     return fctx;
 #else
-    unique_ptr<LocalFile> lf = make_unique<LocalFile>(filename, "r");
+    unique_ptr<File> f = unique_ptr<LocalFile>(Assets::OpenFile(filename));
     if (!lf->opened()) return ERRORv(nullptr, "FFLoadFile: open ", filename);
     AVIOContext *pb = FFBIOFile::Alloc(lf.release());
     AVFormatContext *fctx = Load(pb, filename, 0, 0, pbOut);

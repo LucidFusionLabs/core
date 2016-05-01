@@ -87,3 +87,9 @@
 [submodule "imports/glew"]
 	path = imports/glew
 	url = https://github.com/LuaDist/glew
+[submodule "imports/freetype"]
+	path = imports/freetype
+	url = https://github.com/LucidFusionLabs/freetype
+[submodule "imports/libcss"]
+	path = imports/libcss
+	url = https://github.com/LucidFusionLabs/libcss

@@ -37,7 +37,7 @@ DECLARE_bool(subpixel_fonts);
 struct FontDesc {
   enum { Bold=1, Italic=2, Mono=4, Outline=8, Shadow=16 };
   struct Engine {
-    enum { Default=0, Atlas=1, FreeType=2, CoreText=3, GDI=4, FC=5 };
+    enum { Default=0, Atlas=1, FreeType=2, CoreText=3, GDI=4, FC=5, Android=6 };
     static int Parse(const string &s) {
       if      (s == "atlas")    return Atlas;
       else if (s == "freetype") return FreeType;
@@ -415,6 +415,29 @@ struct FCFontEngine : public FontEngine {
 struct FCFontEngine {};
 #endif
 
+#if defined(LFL_ANDROID)
+struct AndroidFontEngine : public FontEngine {
+  struct Resource : public FontEngine::Resource {
+    unique_ptr<Font> font;
+    Resource(unique_ptr<Font> f) : font(move(f)) {}
+  };
+  unordered_map<string, shared_ptr<Resource>> resource;
+
+  virtual const char*      Name() { return "AndroidFontEngine"; }
+  virtual void             Shutdown();
+  virtual void             SetDefault();
+  virtual unique_ptr<Font> Open(const FontDesc&);
+  virtual int              InitGlyphs(Font *f, Glyph *g, int n);
+  virtual int              LoadGlyphs(Font *f, const Glyph *g, int n);
+  virtual string           DebugString(Font *f) const;
+
+  unique_ptr<Font> OpenTTF(const FontDesc&);
+  static void Init();
+};
+#else
+struct AndroidFontEngine {};
+#endif
+
 struct IPCClientFontEngine : public FontEngine {
   struct Resource : public FontEngine::Resource { int id; Resource(int I=0) : id(I) {} };
   virtual const char *Name() { return "IPCClientFontEngine"; }
@@ -456,6 +479,7 @@ struct Fonts {
   LazyInitializedPtr<CoreTextFontEngine> coretext_engine;
   LazyInitializedPtr<GDIFontEngine> gdi_engine;
   LazyInitializedPtr<FCFontEngine> fc_engine;
+  LazyInitializedPtr<AndroidFontEngine> android_engine;
   LazyInitializedPtr<IPCClientFontEngine> ipc_client_engine;
   LazyInitializedPtr<IPCServerFontEngine> ipc_server_engine;
   unordered_map<FontDesc, unique_ptr<Font>, FontDesc::ColoredHasher, FontDesc::ColoredEqual> desc_map;

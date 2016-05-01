@@ -110,7 +110,7 @@ endif()
 
 # freetype
 if(LFL_FREETYPE)
-if(LFL_LINUX)
+  if(LFL_LINUX)
     set(FREETYPE_INCLUDE /usr/include/freetype2 PARENT_SCOPE)
     set(FREETYPE_LIB -lfreetype PARENT_SCOPE)
   elseif(LFL_WINDOWS)
@@ -118,14 +118,14 @@ if(LFL_LINUX)
     set(FREETYPE_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/freetype/include PARENT_SCOPE)
     set(FREETYPE_LIB freetype239_D.lib PARENT_SCOPE)
   else()
-    ExternalProject_Add(freetype LOG_CONFIGURE ON LOG_BUILD ON
+    ExternalProject_Add(freetype SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/freetype
                         PREFIX ${CMAKE_CURRENT_BINARY_DIR}/freetype
-                        SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/freetype
-                        CONFIGURE_COMMAND <SOURCE_DIR>/configure --prefix=<INSTALL_DIR> --enable-static=yes --enable-shared=no)
+                        CMAKE_ARGS -DCMAKE_INSTALL_PREFIX:PATH=${CMAKE_CURRENT_BINARY_DIR}/freetype
+                        -DCMAKE_TOOLCHAIN_FILE:string=${CMAKE_TOOLCHAIN_FILE})
     add_library(libfreetype IMPORTED STATIC GLOBAL)
     add_dependencies(libfreetype freetype)
     set_property(TARGET libfreetype PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/freetype/lib/libfreetype.a)
-    set(FREETYPE_INCLUDE ${CMAKE_CURRENT_BINARY_DIR}/freetype/include PARENT_SCOPE)
+    set(FREETYPE_INCLUDE ${CMAKE_CURRENT_BINARY_DIR}/freetype/include/freetype2 PARENT_SCOPE)
     set(FREETYPE_LIB libfreetype PARENT_SCOPE)
   endif()
 endif()

@@ -24,6 +24,8 @@ namespace LFL {
 DEFINE_string(font_engine, "gdi",      "[atlas,freetype,gdi]");
 #elif defined(LFL_APPLE)
 DEFINE_string(font_engine, "coretext", "[atlas,freetype,coretext]");
+#elif defined(LFL_ANDROID)
+DEFINE_string(font_engine, "android",  "[atlas,freetype,android]");
 #elif defined(LFL_LINUX)
 DEFINE_string(font_engine, "fc",       "[atlas,freetype,fc]");
 #elif defined(LFL_FREETYPE)
@@ -319,10 +321,12 @@ FontEngine *Fonts::GetFontEngine(int engine_type) {
   switch (engine_type) {
     case FontDesc::Engine::Atlas:    return atlas_engine.get();
     case FontDesc::Engine::FreeType: return freetype_engine.get();
-#if defined(LFL_APPLE)
-    case FontDesc::Engine::CoreText: return coretext_engine.get();
-#elif defined(LFL_WINDOWS)
+#if defined(LFL_WINDOWS)
     case FontDesc::Engine::GDI:      return gdi_engine.get();
+#elif defined(LFL_APPLE)
+    case FontDesc::Engine::CoreText: return coretext_engine.get();
+#elif defined(LFL_ANDROID)
+    case FontDesc::Engine::Android:  return android_engine.get();
 #elif defined(LFL_LINUX)
     case FontDesc::Engine::FC:       return fc_engine.get();
 #endif
@@ -334,10 +338,12 @@ FontEngine *Fonts::DefaultFontEngine() {
   if (!default_font_engine) {
     if      (FLAGS_font_engine == "atlas")      default_font_engine = atlas_engine.get();
     else if (FLAGS_font_engine == "freetype")   default_font_engine = freetype_engine.get();
-#if defined(LFL_APPLE)
-    else if (FLAGS_font_engine == "coretext")   default_font_engine = coretext_engine.get();
-#elif defined(LFL_WINDOWS)
+#if defined(LFL_WINDOWS)
     else if (FLAGS_font_engine == "gdi")        default_font_engine = gdi_engine.get();
+#elif defined(LFL_APPLE)
+    else if (FLAGS_font_engine == "coretext")   default_font_engine = coretext_engine.get();
+#elif defined(LFL_ANDROID)
+    else if (FLAGS_font_engine == "android")    default_font_engine = android_engine.get();
 #elif defined(LFL_LINUX)
     else if (FLAGS_font_engine == "fc")         default_font_engine = fc_engine.get();
 #endif                                          

@@ -50,11 +50,16 @@ void Geometry::ScrollTexCoord(float dx, float dx_extra, int *subtract_max_int) {
   screen->gd->VertexPointer(vd, GraphicsDevice::Float, width_bytes, 0, &vert[0], vert_size, &vert_ind, true, primtype);
 }
 
-string Asset::FileName(const string &asset_fn) { return StrCat(app->assetdir, asset_fn); }
+string Asset::FileName(const string &asset_fn) {
+  if (asset_fn.empty()) return "";
+  if (asset_fn[0] == '/') return asset_fn;
+  return StrCat(app->assetdir, asset_fn);
+}
 
 string Asset::FileContents(const string &asset_fn) {
   auto i = app->asset_cache.find(asset_fn);
   if (i != app->asset_cache.end()) return string(i->second.data(), i->second.size());
+  if (asset_fn[0] == '/') return LocalFile::FileContents(asset_fn);
 #ifdef LFL_ANDROID
   int l=0;
   char *b=0;
@@ -64,7 +69,7 @@ string Asset::FileContents(const string &asset_fn) {
     return ret;
   }
 #endif
-  return LocalFile::FileContents(asset_fn[0] == '/' ? asset_fn : Asset::FileName(asset_fn));
+  return LocalFile::FileContents(Asset::FileName(asset_fn));
 }
 
 File *Asset::OpenFile(const string &asset_fn) {
@@ -80,7 +85,7 @@ File *Asset::OpenFile(const string &asset_fn) {
     return ret;
   }
 #endif
-  return new LocalFile(asset_fn[0] == '/' ? asset_fn : Asset::FileName(asset_fn), "r");
+  return new LocalFile(Asset::FileName(asset_fn), "r");
 }
 
 void Asset::Unload() {
@@ -105,7 +110,7 @@ void Asset::LoadTexture(void *h, const string &asset_fn, Texture *out, VideoAsse
 
   void *handle = h;
   if      (!h && 0) handle = l->LoadVideoFile(Asset::OpenFile(asset_fn));
-  else if (!h)      handle = l->LoadVideoFileNamed(Asset::FileName(asset_fn));
+  else if (!h)      handle = l->LoadVideoFileNamed(asset_fn);
   if (!handle) return ERROR("load: ", asset_fn);
   l->LoadVideo(handle, out);
   if (!h) l->UnloadVideoFile(handle);
@@ -166,7 +171,7 @@ void SoundAsset::Load(int Secs, bool unload) {
 
   if (!filename.empty()) {
     if (0) handle = app->asset_loader->default_audio_loader->LoadAudioFile(Asset::OpenFile(filename));
-    else   handle = app->asset_loader->default_audio_loader->LoadAudioFileNamed(Asset::FileName(filename));
+    else   handle = app->asset_loader->default_audio_loader->LoadAudioFileNamed(filename);
     if (!handle) ERROR("SoundAsset::Load ", filename);
   }
 

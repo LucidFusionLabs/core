@@ -66,7 +66,7 @@ elseif(LFL_ANDROID)
   set(LFL_APP_CAMERA app_null_camera)
   set(LFL_APP_CONVERT app_null_convert)
   set(LFL_APP_CRYPTO app_openssl_crypto)
-  set(LFL_APP_FONT app_null_ttf)
+  set(LFL_APP_FONT app_freetype_ttf)
   set(LFL_APP_GAME_LOADER app_simple_resampler app_simple_loader app_libpng_png app_libjpeg_jpeg app_null_gif)
 
 elseif(LFL_IPHONE)
