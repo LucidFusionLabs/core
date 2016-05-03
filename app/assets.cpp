@@ -103,7 +103,7 @@ void Asset::Load(void *h, VideoAssetLoader *l) {
 }
 
 void Asset::LoadTexture(void *h, const string &asset_fn, Texture *out, VideoAssetLoader *l) {
-  if (!FLAGS_lfapp_video) return;
+  if (!FLAGS_enable_video) return;
   auto i = app->asset_cache.find(asset_fn);
   if (i != app->asset_cache.end()) return LoadTexture(i->second.data(), asset_fn.c_str(), i->second.size(), out);
   if (!l) l = app->asset_loader->default_video_loader;
@@ -150,7 +150,7 @@ void SoundAsset::Unload() {
 }
 
 void SoundAsset::Load(void *handle, const char *FN, int Secs, int flag) {
-  if (!FLAGS_lfapp_audio) return ERROR("load: ", FN, ": lfapp_audio = ", FLAGS_lfapp_audio);
+  if (!FLAGS_enable_audio) return ERROR("load: ", FN, ": enable_audio = ", FLAGS_enable_audio);
   if (handle) app->asset_loader->default_audio_loader->LoadAudio(handle, this, Secs, flag);
 }
 

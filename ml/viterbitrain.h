@@ -210,7 +210,7 @@ struct ViterbiTrain {
     if (!hmm) return ERROR("utterance decode failed: ", transcript);
 
     /* visualize viterbi path as spectogram segmentation */
-    if (FLAGS_lfapp_video) Decoder::VisualizeFeatures(hmm, MFCC, viterbi, vprob, vtime, FLAGS_interactive);
+    if (FLAGS_enable_video) Decoder::VisualizeFeatures(hmm, MFCC, viterbi, vprob, vtime, FLAGS_interactive);
 
     /* for each viterbi state occupancy and observation */
     MatrixRowIter(viterbi) {
@@ -256,7 +256,7 @@ struct ViterbiTrain {
         s->val.samples = accum[i]->Count();
       }
     }
-    if (FLAGS_lfapp_cuda && mode == Mode::UpdateModel) AcousticModel::ToCUDA(model);
+    if (FLAGS_enable_cuda && mode == Mode::UpdateModel) AcousticModel::ToCUDA(model);
   }
 };
 

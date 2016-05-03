@@ -126,12 +126,12 @@ DEFINE_int(loglevel, 7, "Log level: [Fatal=-1, Error=0, Info=3, Debug=7]");
 DEFINE_int(loglevel, 0, "Log level: [Fatal=-1, Error=0, Info=3, Debug=7]");
 #endif
 DEFINE_string(logfile, "", "Log file name");
-DEFINE_bool(lfapp_audio, false, "Enable audio in/out");
-DEFINE_bool(lfapp_video, false, "Enable OpenGL");
-DEFINE_bool(lfapp_input, false, "Enable keyboard/mouse input");
-DEFINE_bool(lfapp_network, false, "Enable asynchronous network engine");
-DEFINE_bool(lfapp_camera, false, "Enable camera capture");
-DEFINE_bool(lfapp_cuda, false, "Enable CUDA acceleration");
+DEFINE_bool(enable_audio, false, "Enable audio in/out");
+DEFINE_bool(enable_video, false, "Enable OpenGL");
+DEFINE_bool(enable_input, false, "Enable keyboard/mouse input");
+DEFINE_bool(enable_network, false, "Enable asynchronous network engine");
+DEFINE_bool(enable_camera, false, "Enable camera capture");
+DEFINE_bool(enable_cuda, false, "Enable CUDA acceleration");
 DEFINE_bool(daemonize, false, "Daemonize server");
 DEFINE_bool(max_rlimit_core, true, "Max core dump rlimit");
 DEFINE_bool(max_rlimit_open_files, false, "Max number of open files rlimit");
@@ -260,7 +260,7 @@ void Application::Log(int level, const char *file, int line, const string &messa
     WriteLogLine(log_pid ? StrCat("[", pid, "] ", tbuf).c_str() : tbuf, message.c_str(), file, line);
   }
   if (level == LFApp::Log::Fatal) LFAppFatal();
-  if (run && FLAGS_lfapp_video && screen && screen->console) screen->console->Write(message);
+  if (run && FLAGS_enable_video && screen && screen->console) screen->console->Write(message);
 }
 
 void Application::WriteLogLine(const char *tbuf, const char *message, const char *file, int line) {
@@ -483,7 +483,7 @@ int Application::Create(int argc, const char* const* argv, const char *source_fi
     SetLFAppMainThread();
   }
 
-  if (FLAGS_lfapp_video && FLAGS_font.empty())
+  if (FLAGS_enable_video && FLAGS_font.empty())
     fonts->DefaultFontEngine()->SetDefault();
 
   return 0;
@@ -496,14 +496,14 @@ int Application::Init() {
   thread_pool.Open(X_or_1(FLAGS_threadpool_size));
   if (FLAGS_threadpool_size) thread_pool.Start();
 
-  if (FLAGS_lfapp_video) {
+  if (FLAGS_enable_video) {
     if (!screen->gd) screen->gd = CreateGraphicsDevice(opengles_version).release();
     shaders = make_unique<Shaders>();
     screen->gd->Init(screen->Box());
   } else { windows[screen->id.v] = screen; }
 
 #ifdef LFL_WINDOWS
-  if (FLAGS_lfapp_video && splash_color) {
+  if (FLAGS_enable_video && splash_color) {
     screen->gd->ClearColor(*splash_color);
     screen->gd->Clear();
     screen->gd->Flush();
@@ -512,31 +512,31 @@ int Application::Init() {
   }
 #endif
 
-  if (FLAGS_lfapp_audio) {
+  if (FLAGS_enable_audio) {
     if (LoadModule((audio = make_unique<Audio>()).get())) return ERRORv(-1, "audio init failed");
   }
   else { FLAGS_chans_in=FLAGS_chans_out=1; }
 
-  if (FLAGS_lfapp_audio || FLAGS_lfapp_video) {
+  if (FLAGS_enable_audio || FLAGS_enable_video) {
     if ((asset_loader = make_unique<AssetLoader>())->Init()) return ERRORv(-1, "asset loader init failed");
   }
 
-  if (FLAGS_lfapp_video) fonts->LoadDefaultFonts();
+  if (FLAGS_enable_video) fonts->LoadDefaultFonts();
   screen->default_font = FontRef(FontDesc::Default(), false);
 
-  if (FLAGS_lfapp_input) {
+  if (FLAGS_enable_input) {
     if (LoadModule((input = make_unique<Input>()).get())) return ERRORv(-1, "input init failed");
   }
 
-  if (FLAGS_lfapp_network) {
+  if (FLAGS_enable_network) {
     if (LoadModule((net = make_unique<Network>()).get())) return ERRORv(-1, "network init failed");
   }
 
-  if (FLAGS_lfapp_camera) {
+  if (FLAGS_enable_camera) {
     if (LoadModule((camera = make_unique<Camera>()).get())) return ERRORv(-1, "camera init failed");
   }
 
-  if (FLAGS_lfapp_cuda) {
+  if (FLAGS_enable_cuda) {
     (cuda = make_unique<CUDA>())->Init();
   }
 
@@ -549,7 +549,7 @@ int Application::Init() {
 }
 
 int Application::Start() {
-  if (FLAGS_lfapp_audio && audio->Start()) return ERRORv(-1, "lfapp audio start failed");
+  if (FLAGS_enable_audio && audio->Start()) return ERRORv(-1, "lfapp audio start failed");
   return 0;
 }
 
@@ -747,7 +747,7 @@ void Window::SwapAxis() {
 int Window::Frame(unsigned clicks, int flag) {
   if (screen != this) app->MakeCurrentWindow(this);
 
-  if (FLAGS_lfapp_video) {
+  if (FLAGS_enable_video) {
     if (!frame_init && (frame_init = true))  {
 #ifdef LFL_IPHONE
       gd->GetIntegerv(GraphicsDevice::FramebufferBinding, &gd->default_framebuffer);
@@ -766,7 +766,7 @@ int Window::Frame(unsigned clicks, int flag) {
   if (ret < 0) return ret;
   fps.Add(clicks);
 
-  if (FLAGS_lfapp_video) {
+  if (FLAGS_enable_video) {
     Video::Swap();
   }
   return ret;

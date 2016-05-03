@@ -128,8 +128,10 @@ string UTF8::WriteGlyph(int codepoint) {
 int UTF16::ReadGlyph(const String16Piece &s, const char16_t *p, int *len, bool eof) { *len=1; return *p; }
 String16 UTF16::WriteGlyph(int codepoint) { return String16(1, codepoint); }
 
-int isfileslash(int c) { return c == LocalFile::Slash; }
-int MatchingParens(int c1, int c2) { return (c1 == '(' && c2 == ')') || (c1 == '[' && c2 == ']') || (c1 == '<' && c2 == '>'); }
+int isfileslash (int c) { return c == LocalFile::Slash; }
+int IsOpenParen (int c) { return c == '(' || c == '[' || c == '<' || c == '{'; }
+int IsCloseParen(int c) { return c == ')' || c == ']' || c == '>' || c == '}'; }
+int MatchingParens(int c1, int c2) { return (c1 == '(' && c2 == ')') || (c1 == '[' && c2 == ']') || (c1 == '<' && c2 == '>') || (c1 == '{' && c2 == '}'); }
 float my_atof(const char *v) { return v ? ::atof(v) : 0; }
 int atoi(const char *v) { return v ? ::atoi(v) : 0; }
 int atoi(const char16_t *v) {
@@ -761,132 +763,6 @@ int RegexLineMatcher::MatchAll(vector<pair<int,int>> *out) {
   out->clear();
   for (auto r = MatchNext(); !Null(r); r = MatchNext()) out->push_back(r);
   return out->size();
-}
-
-struct SyntaxMatcherParseState {
-  int id, index_offset;
-  pair<int,int> start, end;
-};
-
-SyntaxMatcher::SyntaxMatcher(const vector<SyntaxMatcher::Rule> &rules_in, StyleInterface *style, int default_attr) {
-  rules.push_back({ string(), 0, 0, vector<int>(), vector<pair<int,int>>() });
-  string last_name = "";
-
-  for (auto &r : rules_in) {
-    CHECK(!r.name.empty());
-    CHECK(!r.match_beg.empty());
-    auto name_iter = rulenames.find(r.name);
-    bool first = name_iter == rulenames.end();
-    if (first) {
-      name_iter = Insert(rulenames, r.name, rules.size());
-      if (!(r.flag & Contained)) rules[0].within.push_back(name_iter->second);
-      rules.push_back({ r.name, bool(r.flag & Display), 0, vector<int>(), vector<pair<int,int>>() });
-    } else { CHECK_EQ(last_name, r.name); }
-    last_name = r.name;
-
-    if (r.flag & Regexp) {
-      if (r.match_end.empty()) rules.back().index.emplace_back
-        (CompiledRule::RegexMatch, PushBackIndex(regex_match_rule, { Regex(r.match_beg) }));
-      else rules.back().index.emplace_back
-        (CompiledRule::RegexRegion, PushBackIndex(regex_region_rule, { Regex(r.match_beg), Regex(r.match_end), r.skip.empty() ? Regex() : Regex(r.skip) })); 
-    } else {
-      CHECK(!r.match_end.empty());
-      rules.back().index.emplace_back(CompiledRule::Region, PushBackIndex(region_rule, { r.match_beg, r.match_end }));
-    }
-  }
-
-  int rule_ind = 0;
-  for (auto &r : rules_in) {
-    if (last_name != r.name) { last_name = r.name; rule_ind++; }
-    CompiledRule *rule = VectorCheckElement(rules, rule_ind);
-    for (auto &i : r.match_within)
-      if (int id = FindOrDefault(rulenames, i, 0)) rule->within.push_back(id);
-      else if (i == "All")                         rule->within_type = CompiledRule::WithinAll;
-      else if (i == "AllBut")                      rule->within_type = CompiledRule::WithinAllBut;
-  }
-  CHECK_EQ(rules.size()-1, rule_ind);
-  if (style) LoadStyle(style, default_attr);
-}
-
-void SyntaxMatcher::LoadStyle(StyleInterface *style, int default_attr) {
-  style_ind.clear();
-  for (auto &r : rules) style_ind.push_back(style->GetSyntaxStyle(r.name, default_attr));
-}
-
-void SyntaxMatcher::UpdateAnnotation(const string &text, DrawableAnnotation *out, int out_size) {
-  vector<SyntaxMatcherParseState> state_stack;
-  const char *iter = text.data();
-  int current_state = 0, current_line_number = -1;
-  StringPiece current_line, remaining_line;
-  StringLineIter lines(text, StringLineIter::Flag::BlankLines);
-
-  for (current_line.buf = lines.Next(); current_line.buf; current_line.buf = lines.Next()) {
-    current_line_number++;
-    current_line.len = lines.CurrentLength();
-    remaining_line = current_line;
-    CHECK_RANGE(current_line_number, 0, out_size);
-    CHECK_RANGE(current_state, 0, rules.size());
-    auto &out_line = out[current_line_number];
-    out_line.clear();
-    out_line.ExtendBack({0, style_ind[current_state]});
-
-    while (remaining_line.len > 0) {
-      auto &rule = rules[current_state];
-      int offset = remaining_line.buf - current_line.buf, consumed = 0;
-      Regex::Result first_match, m;
-      pair<int, int> match_id;
-
-      if (current_state) {
-        auto &parent_ind = rule.index[state_stack.back().index_offset];
-        switch (parent_ind.first) {
-          case CompiledRule::Region:      m = Regex::Result(FindStringIndex(remaining_line, region_rule[parent_ind.second].end)); break;
-          case CompiledRule::RegexMatch:  m = Regex::Result(PieceIndex(state_stack.back().end.second - offset, 0)); break;
-          case CompiledRule::RegexRegion: m = regex_region_rule[parent_ind.second].end.MatchOne(remaining_line); break;
-        }
-        if (!!m && (!first_match || m < first_match)) { first_match=m; match_id=make_pair(-1, 0); }
-      } else { CHECK_EQ(0, current_state); }
-
-      auto &within = rule.within_type == CompiledRule::WithinAll ? rules[0].within : rule.within;
-      for (auto b = within.begin(), i = b, e = within.end(); i != e; ++i) {
-        for (auto ib = rules[*i].index.begin(), ii = ib, ie = rules[*i].index.end(); ii != ie; ++ii) {
-          switch(ii->first) {
-            case CompiledRule::Region:      m = Regex::Result(FindStringIndex(remaining_line, region_rule[ii->second].beg)); break;
-            case CompiledRule::RegexMatch:  m = regex_match_rule [ii->second].match.MatchOne(remaining_line); break;
-            case CompiledRule::RegexRegion: m = regex_region_rule[ii->second].beg.  MatchOne(remaining_line); break;
-          }
-          if (!!m && (!first_match || m < first_match)) { first_match=m; match_id=make_pair(i-b+1, ii-ib); }
-        }
-      }
-
-      if (!first_match) break;
-      CHECK(match_id.first);
-      if (match_id.first == -1) {
-        auto done = PopBack(state_stack);
-        current_state = state_stack.size() ? state_stack.back().id : 0;
-        out_line.ExtendBack({ offset + first_match.end, style_ind[current_state] });
-        consumed = first_match.end;
-      } else { 
-        state_stack.push_back
-          ({ within[match_id.first-1], match_id.second,
-           make_pair(current_line_number, offset + first_match.begin),
-           make_pair(current_line_number, offset + first_match.end) });
-        current_state = state_stack.back().id;
-        out_line.ExtendBack({ offset + first_match.begin, style_ind[current_state] });
-        consumed = min(first_match.begin+1, remaining_line.len);
-      }
-      remaining_line = StringPiece(remaining_line.buf + consumed, remaining_line.len - consumed);
-    }
-
-    CHECK_GE(remaining_line.len, 0);
-    while(state_stack.size()) {
-      const auto &b = state_stack.back();
-      int type = rules[b.id].index[b.index_offset].first;
-      bool line_based = type == CompiledRule::RegexMatch;
-      if (!line_based) break;
-      state_stack.pop_back();
-      current_state = state_stack.size() ? state_stack.back().id : 0;
-    }
-  }
 }
 
 void NextRecordReader::Init(File *F, int fo) { return Init(bind(&File::Read, F, _1, _2), fo); }

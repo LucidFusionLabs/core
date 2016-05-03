@@ -56,7 +56,7 @@ struct QuickTimeCameraModule : public Module {
       devind = i;
       break;
     }
-    if (devind < 0) { FLAGS_lfapp_camera=0; return 0; }
+    if (devind < 0) { FLAGS_enable_camera=0; return 0; }
     SGDeviceName devname = (*devlist)->entry[devind];
     if ((ret = SGSetChannelDevice(L.channel, devname.name)) != noErr) return ERRORv(-1, "SGSetChannelDevice: ", ret);
     if ((ret = SGDisposeDeviceList(L.grabber, devlist)) != noErr) return ERRORv(-1, "SGDisposeDeviceList: ", ret);

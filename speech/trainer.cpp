@@ -823,7 +823,7 @@ struct RecognizeCorpus {
     double wer = Recognizer::WordErrorRate(recognize, transcript, decodescript);
     WER += wer; total++;
     INFO("OUT = '", decodescript, "' WER=", wer, " (total ", WER/total, ")");
-    if (FLAGS_lfapp_video) Visualize(recognize, MFCC, viterbi, vprob, time);
+    if (FLAGS_enable_video) Visualize(recognize, MFCC, viterbi, vprob, time);
     delete viterbi;
   }
   static void Visualize(RecognitionModel *recognize, Matrix *MFCC, matrix<HMM::Token> *viterbi, double vprob, Time time) {
@@ -863,7 +863,7 @@ struct Wav2Segments {
 
     Matrix viterbi(features->M, 1); Timer vtime;
     double vprob = AcousticHMM::Viterbi(hmm, features, &viterbi, 2, FLAGS_BeamWidth, HMMFlag);
-    if (FLAGS_lfapp_video) Decoder::VisualizeFeatures(hmm, MFCC, &viterbi, vprob, vtime.GetTime(), FLAGS_interactive);
+    if (FLAGS_enable_video) Decoder::VisualizeFeatures(hmm, MFCC, &viterbi, vprob, vtime.GetTime(), FLAGS_interactive);
 
     int transitions=0, longrun=0;
     for (Decoder::PhoneIter iter(hmm, &viterbi); !iter.Done(); iter.Next()) {
@@ -902,8 +902,7 @@ struct Wav2Segments {
 using namespace LFL;
 
 extern "C" void MyAppCreate() {
-  FLAGS_lfapp_audio = FLAGS_lfapp_video = FLAGS_lfapp_input = FLAGS_visualize;
-  FLAGS_lfapp_camera = FLAGS_lfapp_network = 0;
+  FLAGS_enable_audio = FLAGS_enable_video = FLAGS_enable_input = FLAGS_visualize;
 #ifdef _WIN32
   open_console = 1;
 #endif
@@ -1097,7 +1096,7 @@ extern "C" int MyAppMain(int argc, const char* const* argv) {
       HMM::Token::PrintViterbi(viterbi, &recognize.nameCB);
       if (!transcript.size()) { ERROR("decode failed ", transcript.size()); break; }
       INFO("vprob = ", vprob, " : '", transcript, "'");
-      if (FLAGS_lfapp_video) RecognizeCorpus::Visualize(&recognize, MFCC, viterbi, vprob, vtimer.GetTime());
+      if (FLAGS_enable_video) RecognizeCorpus::Visualize(&recognize, MFCC, viterbi, vprob, vtimer.GetTime());
       delete viterbi;
       delete MFCC;
     } while (app->run && FLAGS_visualize && FLAGS_interactive);

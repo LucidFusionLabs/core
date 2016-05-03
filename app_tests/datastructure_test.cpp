@@ -649,12 +649,14 @@ TEST(DatastructureTest, PrefixSumKeyedRedBlackTree) {
     int Stid = timers->Create(StrCat("PSRBTree  ", i.first, " insS  ")); 
 
     {
+      vector<int> anchors;
       PrefixSumKeyedRedBlackTree<int, int> t;
       PrefixSumKeyedRedBlackTree<int, int>::Iterator ti;
-      timers->AccumulateTo(ctid); for (auto i : db) { EXPECT_NE(nullptr, t.Insert(i, move(i)).val); }
+      timers->AccumulateTo(ctid); for (auto i : db) { ti=t.Insert(i, move(i)); EXPECT_NE(nullptr, ti.val); anchors.push_back(ti.GetAnchor()); }
       timers->AccumulateTo(0);    t.CheckProperties();
       timers->AccumulateTo(qtid); for (auto i : db) { EXPECT_NE(nullptr, (ti=t.      Find(i)).val); if (ti.val) EXPECT_EQ(i, *ti.val); }
       timers->AccumulateTo(0);    for (auto i : db) { EXPECT_NE(nullptr, (ti=t.LowerBound(i)).val); if (ti.val) EXPECT_EQ(i, *ti.val); }
+      timers->AccumulateTo(0);    for (auto b = anchors.begin(), i = b, e = anchors.end(); i != e; ++i) { ti = t.GetAnchorIter(*i); EXPECT_EQ(i-b, ti.GetBegKey()); EXPECT_EQ(i-b, *ti.val); }
       timers->AccumulateTo(itid); for (ti = t. Begin(); ti.ind; ++ti) {         EXPECT_EQ(db[iind], ti.key); EXPECT_EQ(db[iind], *ti.val); iind++; }
       timers->AccumulateTo(0);    for (ti = t.RBegin(); ti.ind; --ti) { iind--; EXPECT_EQ(db[iind], ti.key); EXPECT_EQ(db[iind], *ti.val);         }
       timers->AccumulateTo(dtid); for (int i=0, hl=db.size()/2; i<hl; i++) EXPECT_TRUE(t.Erase(0));

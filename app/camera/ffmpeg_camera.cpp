@@ -63,13 +63,13 @@ struct FFmpegCameraModule : public Module {
 
     L.fctx = 0;
     if (avformat_open_input(&L.fctx, ifilename[0], ifmt, &options) < 0) {
-      FLAGS_lfapp_camera = 0;
+      FLAGS_enable_camera = 0;
       return 0;
     }
     L.frames = make_unique<RingSampler>(FLAGS_camera_fps, FLAGS_camera_fps, sizeof(Stream::FramePtr));
     av_dict_free(&options);
 
-    if (!thread.Start()) { FLAGS_lfapp_camera=0; return -1; }
+    if (!thread.Start()) { FLAGS_enable_camera=0; return -1; }
 
     AVCodecContext *codec = L.fctx->streams[0]->codec;
     FLAGS_camera_image_width = codec->width;

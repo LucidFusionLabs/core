@@ -36,4 +36,12 @@ Regex::Result Regex::MatchOne(const StringPiece &text) {
   return Regex::Result(matches[1].first - text.begin(), matches[1].second - text.begin());
 }
 
+Regex::Result Regex::MatchOne16(const String16Piece &text) {
+  if (!impl) return Regex::Result();
+  auto compiled = static_cast<std::regex*>(impl);
+  std::match_results<const char16_t*> matches;
+  if (!std::regex_search(text.begin(), text.end(), matches, *compiled) || matches.size() < 2) return Regex::Result();
+  return Regex::Result(matches[1].first - text.begin(), matches[1].second - text.begin());
+}
+
 }; // namespace LFL

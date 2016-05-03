@@ -208,10 +208,14 @@ struct ArchiveIter {
   bool LoadData();
 };
 
-struct FileNameAndOffset {
-  string fn;
+struct FileOffset {
   unsigned offset, y, x;
-  FileNameAndOffset(const string &F=string(), unsigned O=0, unsigned Y=0, unsigned X=0) : fn(F), offset(O), y(Y), x(X) {}
+  FileOffset(unsigned O=0, unsigned Y=0, unsigned X=0) : offset(O), y(Y), x(X) {}
+};
+
+struct FileNameAndOffset : public FileOffset {
+  string fn;
+  FileNameAndOffset(const string &F=string(), unsigned O=0, unsigned Y=0, unsigned X=0) : FileOffset(O, Y, X), fn(F) {}
 };
 
 struct VersionedFileName {

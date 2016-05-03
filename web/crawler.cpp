@@ -76,7 +76,7 @@ using namespace LFL;
 extern "C" void MyAppCreate() {
   screen->frame_cb = Frame;
   screen->caption = "crawler";
-  FLAGS_lfapp_network = 1;
+  FLAGS_enable_network = 1;
   FLAGS_open_console = 1;
 }
 

@@ -99,12 +99,12 @@ namespace google {
 };
 
 namespace LFL {
-DECLARE_bool(lfapp_audio);
-DECLARE_bool(lfapp_video);
-DECLARE_bool(lfapp_input);
-DECLARE_bool(lfapp_network);
-DECLARE_bool(lfapp_camera);
-DECLARE_bool(lfapp_cuda);
+DECLARE_bool(enable_audio);
+DECLARE_bool(enable_video);
+DECLARE_bool(enable_input);
+DECLARE_bool(enable_network);
+DECLARE_bool(enable_camera);
+DECLARE_bool(enable_cuda);
 DECLARE_string(logfile);
 DECLARE_int(loglevel);
 DECLARE_int(peak_fps);

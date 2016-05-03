@@ -83,9 +83,9 @@ using namespace LFL;
 extern "C" void MyAppCreate() {
   FLAGS_target_fps = 30;
   FLAGS_font_engine = "atlas";
-  FLAGS_default_font = FLAGS_console_font = "Nobile.ttf";
-  FLAGS_default_font_flag = FLAGS_console_font_flag = 0;
-  FLAGS_lfapp_audio = FLAGS_lfapp_video = FLAGS_lfapp_input = FLAGS_console = 1;
+  FLAGS_font = FLAGS_console_font = "Nobile.ttf";
+  FLAGS_font_flag = FLAGS_console_font_flag = 0;
+  FLAGS_enable_audio = FLAGS_enable_video = FLAGS_enable_input = FLAGS_console = 1;
   app = new Application();
   screen = new Window();
   my_app = new MyAppState();

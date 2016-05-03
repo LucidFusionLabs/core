@@ -69,8 +69,8 @@ struct SDLFrameworkModule : public Module {
   int Init() {
     INFO("SDLFrameworkModule::Init");
     int SDL_Init_Flag = 0;
-    SDL_Init_Flag |= (FLAGS_lfapp_video ? SDL_INIT_VIDEO : 0);
-    SDL_Init_Flag |= (FLAGS_lfapp_audio ? SDL_INIT_AUDIO : 0);
+    SDL_Init_Flag |= (FLAGS_enable_video ? SDL_INIT_VIDEO : 0);
+    SDL_Init_Flag |= (FLAGS_enable_audio ? SDL_INIT_AUDIO : 0);
     if (SDL_Init(SDL_Init_Flag) < 0) return ERRORv(-1, "SDL_Init: ", SDL_GetError());
     CHECK(Video::CreateWindow(screen));
     app->MakeCurrentWindow(screen);

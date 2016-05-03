@@ -31,9 +31,9 @@ int Camera::Init() {
 
   int ret = 0;
   if (impl) ret = impl->Init();
-  else FLAGS_lfapp_camera = 0;
+  else FLAGS_enable_camera = 0;
 
-  if (!FLAGS_lfapp_camera) INFO("no camera found");
+  if (!FLAGS_enable_camera) INFO("no camera found");
   return ret;
 }
 

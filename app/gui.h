@@ -439,7 +439,7 @@ struct TextView : public TextArea {
   virtual void Reload() { last_fb_width=0; wrapped_lines=0; RefreshLines(); }
 
   virtual bool Empty() const { return true; }
-  virtual void UpdateMapping(int width) {}
+  virtual void UpdateMapping(int width, int flag=0) {}
   virtual int UpdateMappedLines(pair<int, int>, int, int, bool, bool, bool, bool, bool) { return 0; }
 };
 
@@ -493,7 +493,7 @@ struct PropertyView : public TextView {
   virtual void HistDown()    {}
   virtual void Enter()       {}
 
-  void UpdateMapping(int width);
+  void UpdateMapping(int width, int flag=0);
   int UpdateMappedLines(pair<int, int>, int, int, bool, bool, bool, bool, bool);
   void LayoutLine(Line *L, const NodeIndex &n, const point &p);
   void HandleNodeControlClicked(Id id, int b, int x, int y, int down);
@@ -522,14 +522,18 @@ struct DirectoryTree : public PropertyTree {
 struct Editor : public TextView {
   struct LineOffset { 
     long long file_offset=-1;
-    int file_size=0, wrapped_lines=0, main_tu_line=-1, next_tu_line=-1;
-    LineOffset(int O=0, int S=0, int WL=1) : file_offset(O), file_size(S), wrapped_lines(WL) {}
+    int file_size=0, wrapped_lines=0, annotation_ind=-1, main_tu_line=-1, next_tu_line=-1;
+    pair<int, int> syntax_state;
+    vector<SyntaxParseState> syntax_buf;
+    LineOffset(int O=0, int S=0, int WL=1, int AI=-1) :
+      file_offset(O), file_size(S), wrapped_lines(WL), annotation_ind(AI) {}
+
     static string GetString(const LineOffset *v) { return StrCat(v->file_offset); }
     static int    GetLines (const LineOffset *v) { return v->wrapped_lines; }
     static int VectorGetLines(const vector<LineOffset> &v, int i) { return v[i].wrapped_lines; }
   };
   typedef PrefixSumKeyedRedBlackTree<int, LineOffset> LineMap;
-  struct SyntaxColors : public Colors, public SyntaxMatcher::StyleInterface {
+  struct SyntaxColors : public Colors, public SyntaxStyleInterface {
     struct Rule { string name; Color fg, bg; int style; };
     string name;
     vector<Color> color;
@@ -553,7 +557,7 @@ struct Editor : public TextView {
   Callback modified_cb, newline_cb, tab_cb;
   vector<Modification> version;
   VersionNumber version_number={0,0}, saved_version_number={0,0}, cached_text_version_number={-1,0};
-  function<DrawableAnnotation(const LineOffset*)> annotation_cb = [](const LineOffset*){ return DrawableAnnotation(); };
+  function<DrawableAnnotation(const LineMap::Iterator&, const String16&)> annotation_cb;
   shared_ptr<BufferFile> cached_text;
   Line *cursor_glyphs=0;
   LineOffset *cursor_offset=0;
@@ -575,11 +579,13 @@ struct Editor : public TextView {
   void HistDown();
   void SelectionCB(const Selection::Point&);
   bool Empty() const { return !file_line.size(); }
-  void UpdateMapping(int width);
+  void UpdateMapping(int width, int flag=0);
   int UpdateMappedLines(pair<int, int>, int, int, bool, bool, bool, bool, bool);
   int UpdateLines(float vs, int *first_ind, int *first_offset, int *first_len);
 
   int CursorGlyphsSize() const { return cursor_glyphs ? cursor_glyphs->Size() : 0; }
+  uint16_t CursorGlyph() const { String16 v = CursorLineGlyphs(cursor.i.x, 1); return v.empty() ? 0 : v[0]; }
+  String16 CursorLineGlyphs(size_t o, size_t l) const { return cursor_glyphs ? cursor_glyphs->data->glyphs.Text16(o, l) : String16(); }
   void SetWrapMode(const string &n);
   void SetShouldWrap(bool v, bool word_break);
   void UpdateCursor();

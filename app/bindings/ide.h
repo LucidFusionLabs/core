@@ -87,6 +87,7 @@ struct TranslationUnit {
   bool Parse(const OpenedFiles &unsaved = OpenedFiles());
   bool Reparse(const OpenedFiles &unsaved = OpenedFiles());
   unique_ptr<CodeCompletions> CompleteCode(const OpenedFiles&, int, int);
+  pair<FileOffset, FileOffset> GetCursorExtent(const string &f, int, int);
   FileNameAndOffset FindDefinition(const string &f, int, int);
 };
 
@@ -98,10 +99,6 @@ struct IDEProject {
   virtual ~IDEProject();
   IDEProject(const string&);
   bool GetCompileCommand(const string &fn, string *out, string *dir);
-};
-
-struct RegexCPlusPlusHighlighter : public SyntaxMatcher {
-  RegexCPlusPlusHighlighter(StyleInterface *style=0, int default_attr=0);
 };
 
 struct ClangCPlusPlusHighlighter {

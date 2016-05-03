@@ -39,7 +39,7 @@ int Sample::Size(int fmt) {
 int Audio::Init() {
   INFO("Audio::Init()");
   impl = CreateAudioModule(this);
-  if (!impl) FLAGS_lfapp_audio = false;
+  if (!impl) FLAGS_enable_audio = false;
   if (impl && impl->Init()) return -1;
 
   IL = make_unique<RingSampler>(FLAGS_sample_rate*FLAGS_sample_secs);

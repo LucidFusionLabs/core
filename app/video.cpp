@@ -371,6 +371,7 @@ void DrawableAnnotation::ExtendBack(const pair<int, int> &a) {
   if (this->size()) {
     auto &b = this->back();
     CHECK_LE(b.first, a.first);
+    if (b.second == a.second) return;
     if (b.first == a.first) { b.second = a.second; return; }
   }
   this->push_back(a);

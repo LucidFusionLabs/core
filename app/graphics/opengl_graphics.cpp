@@ -339,10 +339,10 @@ struct OpenGLES2 : public GraphicsDevice, public QOpenGLFunctions {
     scissor_stack.push_back(vector<Box>());
     if (vertex_shader.empty()) vertex_shader = Asset::FileContents("default.vert");
     if ( pixel_shader.empty()) pixel_shader  = Asset::FileContents("default.frag");
-    Shader::Create("lfapp",          vertex_shader, pixel_shader, ShaderDefines(1,0,1,0), &app->shaders->shader_default);
-    Shader::Create("lfapp_cubemap",  vertex_shader, pixel_shader, ShaderDefines(1,0,0,1), &app->shaders->shader_cubemap);
-    Shader::Create("lfapp_normals",  vertex_shader, pixel_shader, ShaderDefines(0,1,1,0), &app->shaders->shader_normals);
-    Shader::Create("lfapp_cubenorm", vertex_shader, pixel_shader, ShaderDefines(0,1,0,1), &app->shaders->shader_cubenorm);
+    Shader::Create("app",          vertex_shader, pixel_shader, ShaderDefines(1,0,1,0), &app->shaders->shader_default);
+    Shader::Create("app_cubemap",  vertex_shader, pixel_shader, ShaderDefines(1,0,0,1), &app->shaders->shader_cubemap);
+    Shader::Create("app_normals",  vertex_shader, pixel_shader, ShaderDefines(0,1,1,0), &app->shaders->shader_normals);
+    Shader::Create("app_cubenorm", vertex_shader, pixel_shader, ShaderDefines(0,1,0,1), &app->shaders->shader_cubenorm);
     UseShader((shader = 0));
     VertexPointer(0, 0, 0, 0, NULL, deferred.vertexbuffer_size, NULL, true, 0);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);

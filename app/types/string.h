@@ -212,6 +212,7 @@ struct String {
   static string   ToUTF8 (const String16Piece  &s, int *lo=0) { string v; int l=Convert(s, &v, "UTF-16LE", "UTF-8");    if (lo) *lo=l; return v; }
   static string   ToUTF8 (const StringPiece    &s, int *lo=0) { if (lo) *lo=s.size(); return s.str(); }
   static String16 ToUTF16(const String16Piece  &s, int *lo=0) { if (lo) *lo=s.size(); return s.str(); }
+  static String16 ToUTF16(const char *s, int l,    int *lo=0) { return ToUTF16(StringPiece(s, l)); }
   static String16 ToUTF16(const StringPiece    &s, int *lo=0);
 };
 
@@ -362,6 +363,8 @@ inline int notcomma(int c) { return !iscomma(c); }
 inline int notdot(int c) { return !isdot(c); }
 
 int isfileslash(int c);
+int IsOpenParen(int c);
+int IsCloseParen(int c);
 int MatchingParens(int c1, int c2);
 int atoi(const char     *v);
 int atoi(const char16_t *v);
@@ -590,6 +593,7 @@ struct Regex {
   Regex(const string &pattern);
   Regex(Regex &&x) : impl(x.impl) { x.impl=0; }
   Result MatchOne(const StringPiece &text);
+  Result MatchOne16(const String16Piece &text);
 };
 
 struct RegexMatcher {
@@ -618,43 +622,6 @@ struct RegexLineMatcher {
   static bool Null(const pair<int,int> &m) { return m.first < 0 || m.second < 0; }
 };
 
-struct SyntaxMatcher {
-  enum Flag { Regexp=1, Display=2, Contained=4,
-    RegexpDisplay=Regexp|Display, RegexpContained=Regexp|Contained, DisplayContained=Display|Contained,
-    RegexpDisplayContained=Regexp|Display|Contained
-  };
-  struct Rule {
-    string name, match_beg, match_end, skip;
-    int flag;
-    vector<string> match_within;
-  };
-  struct RegionRule { string beg, end; };
-  struct RegexRegionRule { Regex beg, end, skip; };
-  struct RegexMatchRule { Regex match; };
-  struct CompiledRule {
-    enum Type { Region=1, RegexRegion=2, RegexMatch=3 };
-    enum WithinType { WithinAll=1, WithinAllBut=2 };
-    string name;
-    bool display;
-    int within_type;
-    vector<int> within;
-    vector<pair<int,int>> index;
-  };
-  struct StyleInterface {
-    virtual int GetSyntaxStyle(const string &n, int da) = 0;
-  };
-
-  vector<CompiledRule> rules;
-  map<string, int> rulenames;
-  vector<RegionRule> region_rule;
-  vector<RegexRegionRule> regex_region_rule;
-  vector<RegexMatchRule> regex_match_rule;
-  vector<int> style_ind;
-  SyntaxMatcher(const vector<Rule>&, StyleInterface *s=0, int da=0);
-  void LoadStyle(StyleInterface *s, int default_attr);
-  void UpdateAnnotation(const string &text, DrawableAnnotation *out, int out_size);
-};
-
 struct StreamRegex {
   void *prog=0, *ctx=0, *ppool=0, *cpool=0;
   int last_end=0, since_last_end=0;
@@ -662,6 +629,15 @@ struct StreamRegex {
   ~StreamRegex();
   StreamRegex(const string &pattern);
   int Match(const string &text, vector<Regex::Result> *out, bool eof=0);
+};
+
+struct SyntaxStyleInterface {
+  virtual int GetSyntaxStyle(const string &n, int da) = 0;
+};
+
+struct SyntaxParseState {
+  int id, index_offset;
+  pair<int,int> start, end, parent;
 };
 
 struct NextRecordReader {

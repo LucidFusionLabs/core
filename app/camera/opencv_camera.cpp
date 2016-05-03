@@ -42,7 +42,7 @@ struct OpenCvCameraModule : public Module {
   int Init() {
     OPENCV_FPS = FLAGS_camera_fps;
 
-    if (!(L.capture = cvCaptureFromCAM(0))) { FLAGS_lfapp_camera=0; return 0; }
+    if (!(L.capture = cvCaptureFromCAM(0))) { FLAGS_enable_camera=0; return 0; }
     // if (!(R.capture = cvCaptureFromCAM(1))) { /**/ }
 
     thread.Start();

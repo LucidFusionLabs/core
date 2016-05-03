@@ -27,7 +27,6 @@ DEFINE_bool(verify,       false,       "Verify copied matrix file");
 using namespace LFL;
 
 extern "C" void MyAppCreate() {
-  FLAGS_lfapp_audio = FLAGS_lfapp_video = FLAGS_lfapp_input = FLAGS_lfapp_camera = FLAGS_lfapp_network = 0;
 #ifdef _WIN32
   FLAGS_open_console = 1;
 #endif

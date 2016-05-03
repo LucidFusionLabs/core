@@ -66,7 +66,7 @@ struct DsvlCameraModule : public Module {
 
     L.frames = make_unique<RingSampler>(FLAGS_camera_fps, FLAGS_camera_fps, FLAGS_camera_image_width*FLAGS_camera_image_height*depth);
 
-    if (!thread.Start()) { FLAGS_lfapp_camera=0; return -1; }
+    if (!thread.Start()) { FLAGS_enable_camera=0; return -1; }
 
     INFO("opened camera ", FLAGS_camera_image_width, "x", FLAGS_camera_image_height, " @ ", FLAGS_camera_fps, "fps");
     return 0;

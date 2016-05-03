@@ -177,7 +177,7 @@ void FrameScheduler::AddWaitForeverSocket(Socket fd, int flag, void *val) { if (
 void FrameScheduler::DelWaitForeverSocket(Socket fd) { if (wait_forever && wait_forever_thread) wakeup_thread.Del(fd); }
 
 unique_ptr<Module> CreateFrameworkModule() {
-  ONCE({ if (FLAGS_lfapp_video) {
+  ONCE({ if (FLAGS_enable_video) {
     INFO("LFAppCreatePlatformModule: glfwInit()");
     if (!glfwInit()) return ERRORv(nullptr, "glfwInit: ", strerror(errno));
   }});

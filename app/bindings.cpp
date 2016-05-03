@@ -55,7 +55,7 @@ void PrintCUDAProperties(cudaDeviceProp *prop) {
 
 int CUDA::Init() {
   INFO("CUDA::Init()");
-  FLAGS_lfapp_cuda = 0;
+  FLAGS_enable_cuda = 0;
 
   int cuda_devices = 0;
   cudaError_t err;
@@ -65,13 +65,13 @@ int CUDA::Init() {
   cudaDeviceProp prop;
   for (int i=0; i<cuda_devices; i++) {
     if ((err = cudaGetDeviceProperties(&prop, i)) != cudaSuccess) { ERROR("cudaGetDeviceProperties error ", err); return 0; }
-    if (FLAGS_lfapp_debug) PrintCUDAProperties(&prop);
+    if (FLAGS_debug) PrintCUDAProperties(&prop);
     if (strstr(prop.name, "Emulation")) continue;
-    FLAGS_lfapp_cuda=1;
+    FLAGS_enable_cuda=1;
   }
 
-  if (FLAGS_lfapp_cuda) {
-    INFO("CUDA device detected, enabling acceleration: lfapp_cuda(", FLAGS_lfapp_cuda, ") devices ", cuda_devices);
+  if (FLAGS_enable_cuda) {
+    INFO("CUDA device detected, enabling acceleration: enable_cuda(", FLAGS_enable_cuda, ") devices ", cuda_devices);
     cudaSetDeviceFlags(cudaDeviceBlockingSync);
     cuda_init_hook();
   }
@@ -79,7 +79,7 @@ int CUDA::Init() {
   return 0;
 }
 #else
-int CUDA::Init() { FLAGS_lfapp_cuda=0; INFO("CUDA not supported lfapp_cuda(", FLAGS_lfapp_cuda, ")"); return 0; }
+int CUDA::Init() { FLAGS_enable_cuda=0; INFO("CUDA not supported enable_cuda(", FLAGS_enable_cuda, ")"); return 0; }
 #endif /* LFL_CUDA */
 
 #ifdef LFL_LUA

@@ -19,7 +19,7 @@
 #include "gtest/gtest.h"
 
 extern "C" void MyAppCreate() {
-  LFL::FLAGS_lfapp_video = true;
+  LFL::FLAGS_enable_video = true;
   LFL::FLAGS_font = LFL::FakeFontEngine::Filename();
   LFL::app = new LFL::Application();
   LFL::screen = new LFL::Window();

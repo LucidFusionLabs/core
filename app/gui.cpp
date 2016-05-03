@@ -945,7 +945,7 @@ void PropertyView::VisitExpandedChildren(Id id, const Node::Visitor &cb, int dep
   if (n->expanded) for (auto i : n->child) VisitExpandedChildren(i, cb, 1+(depth ? depth : n->depth));
 }
 
-void PropertyView::UpdateMapping(int width) {
+void PropertyView::UpdateMapping(int width, int flag) {
   wrapped_lines = 0;
   property_line.Clear();
   VisitExpandedChildren(root, [&](Id id, Node *n, int d)
@@ -1103,7 +1103,8 @@ Editor::Base16DefaultDarkSyntaxColors::Base16DefaultDarkSyntaxColors() :
   }) {}
 
 Editor::~Editor() {}
-Editor::Editor(GraphicsDevice *D, const FontRef &F, File *I) : TextView(D, F) {
+Editor::Editor(GraphicsDevice *D, const FontRef &F, File *I) : TextView(D, F),
+  annotation_cb([](const LineMap::ConstIterator&, const String16&){ return DrawableAnnotation(); }) {
   cmd_color = Color(Color::black, .5);
   file_line.node_value_cb = &LineOffset::GetLines;
   file_line.node_print_cb = &LineOffset::GetString;
@@ -1157,15 +1158,15 @@ void Editor::SelectionCB(const Selection::Point &p) {
   UpdateCursor();
 }
 
-void Editor::UpdateMapping(int width) {
+void Editor::UpdateMapping(int width, int flag) {
   wrapped_lines = 0;
   file_line.Clear();
   file->Reset();
   NextRecordReader nr(file.get());
-  int offset = 0, wrap = Wrap(), ll;
+  int ind = 0, offset = 0, wrap = Wrap(), ll;
   for (const char *l = nr.NextLineRaw(&offset); l; l = nr.NextLineRaw(&offset)) {
     wrapped_lines += (ll = wrap ? TextArea::style.font->Lines(l, width, layout.word_break) : 1);
-    file_line.val.Insert(LineOffset(offset, nr.record_len, ll));
+    file_line.val.Insert(LineOffset(offset, nr.record_len, ll, flag ? ind++ : -1));
   }
   file_line.LoadFromSortedVal();
   // XXX update cursor position
@@ -1176,7 +1177,7 @@ int Editor::UpdateMappedLines(pair<int, int> read_lines, int new_first_line, int
   bool wrap = Wrap();
   int read_len = 0;
   IOVector rv;
-  LineMap::ConstIterator lib, lie;
+  LineMap::Iterator lib, lie;
   if (read_lines.second) {
     CHECK((lib = file_line.SecondBound(read_lines.first+1)).val);
     if (wrap) {
@@ -1190,7 +1191,7 @@ int Editor::UpdateMappedLines(pair<int, int> read_lines, int new_first_line, int
       if (v->file_size >= 0) read_len += rv.Append({v->file_offset, v->file_size+1});
     }
     if (wrap && tail_read) {
-      LineMap::ConstIterator i = lie;
+      LineMap::Iterator i = lie;
       end_line_cutoff = max(0, (--i).key + i.val->wrapped_lines - new_last_line);
     }
   }
@@ -1203,8 +1204,8 @@ int Editor::UpdateMappedLines(pair<int, int> read_lines, int new_first_line, int
   if (up) for (auto li = lie; li != lib; bo += l + !e, added++) {
     l = (e = max(0, -(--li).val->file_size)) ? 0 : li.val->file_size;
     int removed = (wrap && line.ring.Full()) ? line.Front()->Lines() : 0;
-    if (e) (L = line.PushBack())->AssignText(edits[e-1],                                 annotation_cb(li.val));
-    else   (L = line.PushBack())->AssignText(StringPiece(buf.data()+read_len-bo-l-1, l), annotation_cb(li.val));
+    if (e) { const auto &t = edits[e-1];                              (L = line.PushBack())->AssignText(t, annotation_cb(li, t)); }
+    else   { auto t = String::ToUTF16(buf.data()+read_len-bo-l-1, l); (L = line.PushBack())->AssignText(t, annotation_cb(li, t)); }
     fb_wrapped_lines += (ll = L->Layout(width, true)) - removed;
     if (removed) line.ring.DecrementSize(1);
     CHECK_EQ(li.val->wrapped_lines, ll);
@@ -1212,8 +1213,8 @@ int Editor::UpdateMappedLines(pair<int, int> read_lines, int new_first_line, int
   else for (auto li = lib; li != lie; ++li, bo += l + !e, added++) {
     l = (e = max(0, -li.val->file_size)) ? 0 : li.val->file_size;
     int removed = (wrap && line.ring.Full()) ? line.Back()->Lines() : 0;
-    if (e) (L = line.PushFront())->AssignText(edits[e-1],                    annotation_cb(li.val));
-    else   (L = line.PushFront())->AssignText(StringPiece(buf.data()+bo, l), annotation_cb(li.val));
+    if (e) { const auto &t = edits[e-1];                 (L = line.PushFront())->AssignText(t, annotation_cb(li, t)); }
+    else   { auto t = String::ToUTF16(buf.data()+bo, l); (L = line.PushFront())->AssignText(t, annotation_cb(li, t)); }
     fb_wrapped_lines += (ll = L->Layout(width, true)) - removed;
     if (removed) line.ring.DecrementSize(1);
     CHECK_EQ(li.val->wrapped_lines, ll);

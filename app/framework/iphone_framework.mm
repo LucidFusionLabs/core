@@ -810,7 +810,7 @@ extern "C" int main(int ac, const char* const* av) {
   MyAppCreate();
   iphone_argc = ac;
   iphone_argv = av;
-  NSLog(@"%@", @"lfapp_lfobjc_iphone_main");
+  NSLog(@"%@", @"lfl_app_iphone_framework_main");
   NSAutoreleasePool * pool = [[NSAutoreleasePool alloc] init];
   int ret = UIApplicationMain(ac, const_cast<char**>(av), nil, @"LFUIApplication");
   [pool release];

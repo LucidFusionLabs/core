@@ -59,6 +59,7 @@ struct RedBlackTree {
     int GetIndex() { if (const Node *n = &tree->node[ind-1]) return zipper.GetIndex(*n); return -1; }
     int GetBegKey() { if (const Node *n = &tree->node[ind-1]) return zipper.GetBegKey(*n); return -1; }
     int GetEndKey() { if (const Node *n = &tree->node[ind-1]) return zipper.GetEndKey(*n); return -1; }
+    int GetAnchor() { return ind; }
   };
   struct ConstIterator { 
     const RedBlackTree *tree; int ind; K key; const V *val; Zipper zipper;
@@ -72,6 +73,7 @@ struct RedBlackTree {
     int GetIndex() { if (const Node *n = &tree->node[ind-1]) return zipper.GetIndex(*n); return -1; }
     int GetBegKey() { if (const Node *n = &tree->node[ind-1]) return zipper.GetBegKey(*n); return -1; }
     int GetEndKey() { if (const Node *n = &tree->node[ind-1]) return zipper.GetEndKey(*n); return -1; }
+    int GetAnchor() { return ind; }
   };
   struct Query {
     const K key; Zipper z;
@@ -88,6 +90,11 @@ struct RedBlackTree {
   ConstIterator  Begin() const { Zipper z; int n = head ? GetMinNode(head)     : 0; return ConstIterator(this, n, z); }
   /**/ Iterator RBegin()       { Zipper z; int n = head ? GetMaxNode(head, &z) : 0; return      Iterator(this, n, z); }
   ConstIterator RBegin() const { Zipper z; int n = head ? GetMaxNode(head, &z) : 0; return ConstIterator(this, n, z); }
+
+  K  GetAnchorKey(int id) const { return node[id-1].key; }
+  V *GetAnchorVal(int id) { return &val[node[id-1].val]; }
+  virtual      Iterator GetAnchorIter(int id)       { Zipper z; return      Iterator(this, id, z); }
+  virtual ConstIterator GetAnchorIter(int id) const { Zipper z; return ConstIterator(this, id, z); }
 
   bool          Erase (const K &k)             { Query q(k, 1); return EraseNode(&q); }
   /**/ Iterator Insert(const K &k, V &&v)      { Query q(k, 1); int n=InsertNode(&q, forward<V>(v)); return Iterator     (this, n, q.z); }
@@ -131,6 +138,17 @@ struct RedBlackTree {
       } else break;
     }
     return ind;
+  }
+
+  int WalkBackwardsToRoot(int in, Zipper *z) const {
+    for (int ind = in; ind && ind != head; /**/) {
+      int p_ind = GetParent(ind);
+      const Node &p = node[p_ind-1];
+      if      (ind == p.left)  { ind = p_ind; }
+      else if (ind == p.right) { ind = p_ind; z->WalkRight(p); }
+      else FATAL("corrupt");
+    }
+    return in;
   }
 
   int IncrementNode(int ind, Zipper *z) const {
@@ -610,6 +628,9 @@ template <class Node> struct PrefixSumKeyedRedBlackTreeFinger {
 template <class K, class V, class Node = PrefixSumKeyedRedBlackTreeNode<K, V>, class Finger = PrefixSumKeyedRedBlackTreeFinger<Node> >
 struct PrefixSumKeyedRedBlackTree : public RedBlackFingerTree<K, V, Node, Finger> {
   typedef RedBlackFingerTree<K, V, Node, Finger> Parent;
+
+  typename Parent::     Iterator GetAnchorIter(int id)       { typename Parent::     Iterator it(this); it.ind=Parent::WalkBackwardsToRoot(id, &it.zipper); it.LoadKV(); return it; }
+  typename Parent::ConstIterator GetAnchorIter(int id) const { typename Parent::ConstIterator it(this); it.ind=Parent::WalkBackwardsToRoot(id, &it.zipper); it.LoadKV(); return it; }
 
   int Total() const {
     auto i = Parent::RBegin();

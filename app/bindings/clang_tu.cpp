@@ -298,6 +298,17 @@ TranslationUnit::CompleteCode(const OpenedFiles &opened, int line, int column) {
                                                            &unsaved[0], unsaved.size(), options));
 }
 
+pair<FileOffset, FileOffset> TranslationUnit::GetCursorExtent(const string &fn, int line, int column) {
+  pair<FileOffset, FileOffset> ret;
+  CXFile cf = clang_getFile(tu, fn.c_str());
+  if (!cf) return ret;
+  CXCursor cursor = clang_getCursor(tu, clang_getLocation(tu, cf, line+1, column+1));
+  CXSourceRange sr = clang_getCursorExtent(cursor);
+  clang_getSpellingLocation(clang_getRangeStart(sr), nullptr, &ret.first .y, &ret.first .x, &ret.first .offset);
+  clang_getSpellingLocation(clang_getRangeEnd  (sr), nullptr, &ret.second.y, &ret.second.x, &ret.second.offset);
+  return ret;
+}
+
 FileNameAndOffset TranslationUnit::FindDefinition(const string &fn, int line, int column) {
   CXFile cf = clang_getFile(tu, fn.c_str());
   if (!cf) return FileNameAndOffset();
@@ -432,40 +443,5 @@ void ClangCPlusPlusHighlighter::UpdateAnnotation(TranslationUnit *tu, Editor::Sy
       last_a = a;
     })).Visit();
 }
-
-// \o -> [0-7]            \( -> (
-// \x -> [0-9|A-F|a-f]    \) -> )
-// \d -> \\d              \[ -> [
-// \< -> \\b              \] -> ]
-// \> -> \\b              \| -> |
-// \= -> ?                \. -> .
-RegexCPlusPlusHighlighter::RegexCPlusPlusHighlighter
-(SyntaxMatcher::StyleInterface *style, int default_attr) : SyntaxMatcher({
-  Rule{ "Special", "\\\\(x[0-9|A-F|a-f]+|[0-7]{1,3}|.)", "", "", RegexpDisplayContained, StringVec{} },
-  Rule{ "Special", "\\\\(u[0-9|A-F|a-f]{4}|U[0-9|A-F|a-f]{8})", "", "", RegexpDisplayContained, StringVec{} },
-  Rule{ "String", "\"", "\"", "(\\\\\\\\|\\\\\")", 0, StringVec{"Special", "SpecialChar"} },
-  Rule{ "Character", "('[^\\\\]')", "", "", Regexp, StringVec{} },
-  Rule{ "Character", "('[^']*')", "", "", Regexp, StringVec{"Special"} },
-  Rule{ "SpecialError", "('\\\\[^'\"?\\\\abefnrtv]')", "", "", RegexpDisplay, StringVec{} },
-  Rule{ "SpecialChar", "('\\\\['\"?\\\\abefnrtv]')", "", "", RegexpDisplay, StringVec{} },
-  Rule{ "SpecialChar", "('\\\\[0-7]{1,3}')", "", "", RegexpDisplay, StringVec{} },
-  Rule{ "SpecialChar", "('\\\\x[0-9|A-F|a-f]{1,2}')", "", "", RegexpDisplay, StringVec{} },
-  Rule{ "Numbers", "(\\\\b\\d|.\\d)", "", "", RegexpDisplay, StringVec{"Number", "Float", "Octal"} },
-  Rule{ "Number", "(\\d+(u?l{0,2}|ll?u)\\b)", "", "", RegexpDisplayContained, StringVec{} },
-  Rule{ "Number", "(0x[0-9|A-F|a-f]+(u?l{0,2}|ll?u)\\b)", "", "", RegexpDisplayContained, StringVec{} },
-  Rule{ "Octal", "(0[0-7]+(u?l{0,2}|ll=u)\\b)", "", "", RegexpDisplayContained, StringVec{} },
-  Rule{ "Float", "(\\d+f)", "", "", RegexpDisplayContained, StringVec{} },
-  Rule{ "Float", "(\\d+.\\d*(e[-+]?\\d+)?[fl]?)", "", "", RegexpDisplayContained, StringVec{} },
-  Rule{ "Float", "(.\\d+(e[-+]?\\d+)?[fl]?\\b)", "", "", RegexpDisplayContained, StringVec{} },
-  Rule{ "Float", "(\\d+e[-+]?\\d+[fl]?\\b)", "", "", RegexpDisplayContained, StringVec{} },
-  Rule{ "Comment", "/*", "*/", "", 0, StringVec{"String", "Number", "Special", "SpecialChar"} },
-  Rule{ "PreCondition", "(^\\s*(%:|#)\\s*(if|ifdef|ifndef|elif)\\b)", "$", "", RegexpDisplay, StringVec{"All"} },
-  Rule{ "PreCondition", "(^\\s*(%:|#)\\s*(else|endif)\\b)", "$", "", RegexpDisplay, StringVec{"All"} },
-  Rule{ "Included", "\"", "\"", "(\\\\\\\\|\\\\\")", DisplayContained, StringVec{} },
-  Rule{ "Included", "(<[^>]*>)", "", "", RegexpDisplayContained, StringVec{} },
-  Rule{ "Include", "(^\\s*(%:|#)\\s*include\\b\\s*[\"<])", "", "", RegexpDisplay, StringVec{"Included"} },
-  Rule{ "Define", "(^\\s*(%:|#)\\s*(define|undef)\\b)", "", "", Regexp, StringVec{"All"} },
-  Rule{ "PreProc", "^\\s*(%:|#)\\s*(pragma\\b|line\\b|warning\\b|warn\\b|error\\b)", "$", "", Regexp, StringVec{"All"} },
-}, style, default_attr) {}
 
 }; // namespace LFL

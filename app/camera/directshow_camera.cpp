@@ -113,7 +113,7 @@ struct DirectShowCameraModule : public Module {
   }
 
   int Init() {
-    FLAGS_lfapp_camera = 0;
+    FLAGS_enable_camera = 0;
     if (FAILED(CoInitialize(0))) return 0;
 
     /* create filter graph manager */
@@ -276,7 +276,7 @@ struct DirectShowCameraModule : public Module {
     frames = make_unique<RingSampler>(FLAGS_camera_fps, FLAGS_camera_fps, FLAGS_camera_image_height*image_linesize);
 
     /* success */
-    FLAGS_lfapp_camera = 1;
+    FLAGS_enable_camera = 1;
     INFO("opened camera ", FLAGS_camera_image_width, "x", FLAGS_camera_image_height, " @ ", FLAGS_camera_fps, " fps");
     return 0;
   }

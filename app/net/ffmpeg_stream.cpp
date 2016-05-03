@@ -146,7 +146,7 @@ HTTPServer::StreamResource::StreamResource(const char *oft, int Abr, int Vbr) : 
   fctx->oformat = av_guess_format(oft, 0, 0);
   if (!fctx->oformat) { ERROR("guess_format '", oft, "' failed"); return; }
   INFO("StreamResource: format ", fctx->oformat->mime_type);
-  OpenStreams(FLAGS_lfapp_audio, FLAGS_lfapp_camera);
+  OpenStreams(FLAGS_enable_audio, FLAGS_enable_camera);
 }
 
 HTTPServer::Response HTTPServer::StreamResource::Request(Connection *c, int method, const char *url, const char *args, const char *headers, const char *postdata, int postlen) {

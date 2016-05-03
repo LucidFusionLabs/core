@@ -822,7 +822,7 @@ int AcousticModel::Write(StateCollection *model, const char *name, const char *d
 
 int AcousticModel::ToCUDA(AcousticModel::Compiled *model) {
 #ifdef LFL_CUDA
-  if (!lfapp_cuda) return 0;
+  if (!FLAGS_enable_cuda) return 0;
   int K=model->state[0].emission.mean.M, D=model->state[0].emission.mean.N, ret;
   if (!CAM) CAM = new CudaAcousticModel(model->states, K, D);
   if (K != CAM->K || D != CAM->D || model->states != CAM->states) FATALf("toCUDA mismatch %d != %d || %d != %d || %d != %d", K, CAM->K, D, CAM->D, model->states, CAM->states);
@@ -1268,7 +1268,7 @@ void AcousticHMM::EmissionArray::Calc(AcousticModel::Compiled *model, HMM::Activ
   active->time_index = time_index;
   int active_states = active->Size();
 #ifdef LFL_CUDA
-  if (lfapp_cuda) {
+  if (FLAGS_enable_cuda) {
     if (posterior && !cudaposterior) FATAL("posterior ", posterior, " requires cudaposterior ", cudaposterior);
     vector<double> cudaemission(active_states);
     vector<int> beam(active_states);
@@ -1356,7 +1356,7 @@ void Decoder::VisualizeFeatures(AcousticModel::Compiled *model, Matrix *MFCC, Ma
   glSpectogram(spect, &snap->tex, 0);
   delete spect;
 
-  if (FLAGS_lfapp_audio) app->audio->QueueMixBuf(&B);
+  if (FLAGS_enable_audio) app->audio->QueueMixBuf(&B);
   INFO("vprob=", vprob, " vtime=", vtime.count());
   Font *font = screen->default_font;
 
