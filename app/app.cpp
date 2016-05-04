@@ -174,6 +174,8 @@ Allocator *ThreadLocalStorage::GetAllocator(bool reset_allocator) {
   return tls->alloc.get();
 }
 
+/* FlagMap */
+
 string Flag::GetString() const { string v=Get(); return StrCat(name, v.size()?" = ":"", v.size()?v:"", " : ", desc); } 
 string FlagMap::Get   (const string &k) const { Flag *f = FindOrNull(flagmap, k); return f ? f->Get()    : "";    }
 bool   FlagMap::IsBool(const string &k) const { Flag *f = FindOrNull(flagmap, k); return f ? f->IsBool() : false; }
@@ -238,6 +240,39 @@ void FlagMap::Print(const char *source_filename) const {
     INFO(i->second->GetString());
   }
   if (source_filename) INFO("fullhelp : Display full help"); 
+}
+
+/* Thread */
+
+void Thread::Start() {
+  ScopedMutex sm(start_mutex);
+  impl = make_unique<std::thread>(bind(&Thread::ThreadProc, this));
+  id = std::hash<std::thread::id>()(impl->get_id());
+}
+
+void Thread::ThreadProc() {
+  { ScopedMutex sm(start_mutex); }
+  INFOf("Started thread(%llx)", id);
+  ThreadLocalStorage::ThreadInit();
+  cb();
+  ThreadLocalStorage::ThreadFree();
+}
+
+void ThreadPool::Write(Callback *cb) {
+  worker[round_robin_next].queue->Write(cb);
+  round_robin_next = (round_robin_next + 1) % worker.size();
+}
+
+Time Timer::GetTime(bool do_reset) {
+  if (!do_reset) return GetTime();
+  Time last_begin = Reset();
+  return max(Time(0), begin - last_begin);
+}
+
+void RateLimiter::Limit() {
+  Time since = timer.GetTime(true), targetframe(1000 / *target_hz);
+  Time sleep = max(Time(0), targetframe - since - FMilliseconds(sleep_bias.Avg()));
+  if (sleep != Time(0)) { MSleep(sleep.count()); sleep_bias.Add((timer.GetTime(true) - sleep).count()); }
 }
 
 /* Application */

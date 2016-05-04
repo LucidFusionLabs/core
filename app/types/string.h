@@ -91,6 +91,7 @@ struct Printable : public string {
   Printable(const unsigned long &x) : string(ToString(x)) {}
   Printable(const unsigned long long &x) : string(ToString(x)) {}
   Printable(const pair<int, int> &x);
+  Printable(const vector<pair<int, int>> &x);
   Printable(const vector<string> &x);
   Printable(const vector<double> &x);
   Printable(const vector<float> &x);

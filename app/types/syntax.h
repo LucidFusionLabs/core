@@ -60,9 +60,11 @@ struct SyntaxMatcher {
   SyntaxMatcher(const vector<Rule>&, SyntaxStyleInterface *s=0, int da=0);
 
   void LoadStyle(SyntaxStyleInterface *s, int default_attr);
-  SyntaxParseState *GetAnchorParseState(Editor *e, int anchor, int id);
+  SyntaxParseState *GetAnchorParseState(Editor *e, const pair<int,int>&);
   void UpdateAnnotation(Editor*, DrawableAnnotation *out, int out_size);
   void GetLineAnnotation(Editor*, const Editor::LineMap::Iterator &i, const String16 &t, DrawableAnnotation *out);
+  void AnnotateLine(Editor*, const Editor::LineMap::Iterator &i, const String16 &t,
+                    int *current_state, pair<int,int> *current_parent, DrawableAnnotation *out);
 };
 
 struct RegexCPlusPlusHighlighter : public SyntaxMatcher {

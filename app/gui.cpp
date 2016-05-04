@@ -1195,7 +1195,7 @@ int Editor::UpdateMappedLines(pair<int, int> read_lines, int new_first_line, int
       if (v->file_size >= 0) read_len += rv.Append({v->file_offset, v->file_size+1});
     }
     if (wrap && tail_read) {
-      LineMap::Iterator i = lie;
+      LineMap::Iterator i = lie.ind ? lie : file_line.RBegin();
       end_line_cutoff = max(0, (--i).key + i.val->wrapped_lines - new_last_line);
     }
   }

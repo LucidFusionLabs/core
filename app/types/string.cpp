@@ -45,15 +45,16 @@ namespace LFL {
 ::std::ostream& operator<<(::std::ostream& os, const point &x) { return os << x.DebugString(); }
 ::std::ostream& operator<<(::std::ostream& os, const Box   &x) { return os << x.DebugString(); }
 
-Printable::Printable(const pair<int, int> &x) : string(StrCat("pair(", x.first, ", ", x.second, ")")) {}
-Printable::Printable(const vector<string> &x) : string(StrCat("{", Vec<string>::Str(&x[0], x.size()), "}")) {}
-Printable::Printable(const vector<double> &x) : string(StrCat("{", Vec<double>::Str(&x[0], x.size()), "}")) {}
-Printable::Printable(const vector<float>  &x) : string(StrCat("{", Vec<float> ::Str(&x[0], x.size()), "}")) {}
-Printable::Printable(const vector<int>    &x) : string(StrCat("{", Vec<int>   ::Str(&x[0], x.size()), "}")) {}
-Printable::Printable(const Color          &x) : string(x.DebugString()) {}
-Printable::Printable(const String16       &x) : string(String::ToUTF8(x)) {}
-Printable::Printable(const Void           &x) : string(StringPrintf("%p", x)) {}
-Printable::Printable(const void           *x) : string(StringPrintf("%p", x)) {}
+Printable::Printable(const pair<int,int>         &x) : string(StrCat("pair(", x.first, ", ", x.second, ")")) {}
+Printable::Printable(const vector<pair<int,int>> &x) : string(StrCat("{", Vec<pair<int,int>>::Str(&x[0], x.size()), "}")) {}
+Printable::Printable(const vector<string>        &x) : string(StrCat("{", Vec<string>       ::Str(&x[0], x.size()), "}")) {}
+Printable::Printable(const vector<double>        &x) : string(StrCat("{", Vec<double>       ::Str(&x[0], x.size()), "}")) {}
+Printable::Printable(const vector<float>         &x) : string(StrCat("{", Vec<float>        ::Str(&x[0], x.size()), "}")) {}
+Printable::Printable(const vector<int>           &x) : string(StrCat("{", Vec<int>          ::Str(&x[0], x.size()), "}")) {}
+Printable::Printable(const Color                 &x) : string(x.DebugString()) {}
+Printable::Printable(const String16              &x) : string(String::ToUTF8(x)) {}
+Printable::Printable(const Void                  &x) : string(StringPrintf("%p", x)) {}
+Printable::Printable(const void                  *x) : string(StringPrintf("%p", x)) {}
 
 String16 String::ToUTF16(const StringPiece &text, int *consumed) {
   int input = text.Length(), output = 0, c_bytes, c;

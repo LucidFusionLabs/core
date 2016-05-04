@@ -180,6 +180,7 @@ struct OpenGLES1 : public GraphicsDevice, public QOpenGLFunctions {
 #include "core/app/graphics/opengl_common.h"
   int target_matrix=-1;
   OpenGLES1() { default_color.push_back(Color(1.0, 1.0, 1.0, 1.0)); }
+
   void Init(const Box &b) {
     done_init = true;
     GDDebug("Init");
@@ -199,6 +200,7 @@ struct OpenGLES1 : public GraphicsDevice, public QOpenGLFunctions {
     INFO("OpenGLES1::Init width=", b.w, ", height=", b.h);
     LogVersion();
   }
+
   void UpdateColor() { const Color &c = default_color.back(); glColor4f(c.r(), c.g(), c.b(), c.a()); }
   bool ShaderSupport() {
 #ifdef LFL_MOBILE
@@ -207,6 +209,7 @@ struct OpenGLES1 : public GraphicsDevice, public QOpenGLFunctions {
     const char *ver = GetString(GL_VERSION);
     return ver && *ver == '2';
   }
+
   void  EnableTexture() {  glEnable(GL_TEXTURE_2D);  glEnableClientState(GL_TEXTURE_COORD_ARRAY); GDDebug("Texture=1"); }
   void DisableTexture() { glDisable(GL_TEXTURE_2D); glDisableClientState(GL_TEXTURE_COORD_ARRAY); GDDebug("Texture=0"); }
   void  EnableLighting() {  glEnable(GL_LIGHTING);  glEnable(GL_COLOR_MATERIAL); GDDebug("Lighting=1"); }
@@ -221,6 +224,7 @@ struct OpenGLES1 : public GraphicsDevice, public QOpenGLFunctions {
   void DisableLight(int n) { if (n) glDisable(GL_LIGHT1); else glDisable(GL_LIGHT0); GDDebug("Light", n, "=0"); }
   void Material(int t, float *color) { glMaterialfv(GL_FRONT_AND_BACK, t, color); }
   void Light(int n, int t, float *color) { glLightfv(((n) ? GL_LIGHT1 : GL_LIGHT0), t, color); }
+
 #ifdef LFL_MOBILE
   void TextureGenLinear() {}
   void TextureGenReflection() {}
@@ -247,8 +251,10 @@ struct OpenGLES1 : public GraphicsDevice, public QOpenGLFunctions {
     GDDebug("TextureGen=R");
   }
 #endif
+
   void DisableCubeMap()   { glDisable(GL_TEXTURE_CUBE_MAP); DisableTextureGen();                   GDDebug("CubeMap=", 0); }
   void BindCubeMap(int n) {  glEnable(GL_TEXTURE_CUBE_MAP); glBindTexture(GL_TEXTURE_CUBE_MAP, n); GDDebug("CubeMap=", n); }
+
   void ActiveTexture(int n) {
     glClientActiveTexture(GL_TEXTURE0 + n);
     glActiveTexture(GL_TEXTURE0 + n);
@@ -256,6 +262,7 @@ struct OpenGLES1 : public GraphicsDevice, public QOpenGLFunctions {
     // glTexEnvf (GL_TEXTURE_ENV, GL_COMBINE_RGB_EXT, GL_MODULATE);
     GDDebug("ActiveTexture=", n);
   }
+
   void BindTexture(int t, int n) { glBindTexture(t, n); GDDebug("BindTexture=", t, ",", n); }
   bool VertexPointer(int m, int t, int w, int o, float *verts, int l, int *out, bool ud, int) { glVertexPointer  (m, t, w, verts + o/sizeof(float)); GDDebug("VertexPointer"); return true; }
   void TexPointer   (int m, int t, int w, int o, float *tex,   int l, int *out, bool ud)      { glTexCoordPointer(m, t, w, tex   + o/sizeof(float)); GDDebug("TexPointer"); }
@@ -275,18 +282,22 @@ struct OpenGLES1 : public GraphicsDevice, public QOpenGLFunctions {
   void Frustum(float l, float r, float b, float t, float nv, float fv) { glFrustum(l,r, b,t, nv,fv); }
   void Mult(const float *m) { glMultMatrixf(m); }
   void Translate(float x, float y, float z) { glTranslatef(x, y, z); }
+
   void DrawElements(int pt, int np, int it, int o, void *index, int l, int *out, bool dirty) {
     glDrawElements(pt, np, it, static_cast<char*>(index) + o);
     GDDebug("DrawElements(", pt, ", ", np, ", ", it, ", ", o, ", ", index, ", ", l, ", ", dirty, ")");
   }
+
   void DrawArrays(int type, int o, int n) {
     glDrawArrays(type, o, n);
     GDDebug("DrawArrays(", type, ", ", o, ", ", n, ")");
   }
+
   void DeferDrawArrays(int type, int o, int n) {
     glDrawArrays(type, o, n);
     GDDebug("DeferDrawArrays(", type, ", ", o, ", ", n, ") deferred 0");
   }
+
   void UseShader(Shader *S) {
     shader = X_or_Y(S, &app->shaders->shader_default); 
     glUseProgram(shader->ID);
@@ -369,6 +380,7 @@ struct OpenGLES2 : public GraphicsDevice, public QOpenGLFunctions {
   void DisableLight(int n) {}
   void TextureGenLinear() {}
   void TextureGenReflection() {}
+
   void BindTexture(int t, int n) {
     if (!Changed(&bound_texture, BoundTexture{ t, n, 0 })) return;
     ClearDeferred();
@@ -378,12 +390,14 @@ struct OpenGLES2 : public GraphicsDevice, public QOpenGLFunctions {
     glUniform1i(shader->uniform_tex, 0);
     GDDebug("BindTexture=", t, ",", n);
   }
+
   void Color4f(float r, float g, float b, float a) {
     if (lighting_on) {
       float c[] = { r, g, b, a };
       Material(GL_AMBIENT_AND_DIFFUSE, c);
     } else if (Changed(&default_color.back(), Color(r,g,b,a))) UpdateColor();
   }
+
   void Material(int t, float *v) {
     if      (t == GL_AMBIENT)             material.ambient  = Color(v);
     else if (t == GL_DIFFUSE)             material.diffuse  = Color(v);
@@ -392,6 +406,7 @@ struct OpenGLES2 : public GraphicsDevice, public QOpenGLFunctions {
     else if (t == GL_AMBIENT_AND_DIFFUSE) material.ambient = material.diffuse = Color(v);
     UpdateMaterial();
   }
+
   void Light(int n, int t, float *v) {
     bool light_pos = 0, light_color = 0;
     if (n != 0) return ERROR("ignoring Light(", n, ")");
@@ -412,6 +427,7 @@ struct OpenGLES2 : public GraphicsDevice, public QOpenGLFunctions {
     m[2].x *= z; m[2].y *= z; m[2].z *= z;
     UpdateMatrix();
   }
+
   void Translate(float x, float y, float z) { 
     m44 &m = TargetMatrix()->back();
     m[3].x += m[0].x * x + m[1].x * y + m[2].x * z;
@@ -420,6 +436,7 @@ struct OpenGLES2 : public GraphicsDevice, public QOpenGLFunctions {
     m[3].w += m[0].w * x + m[1].w * y + m[2].w * z;
     UpdateMatrix();
   }
+
   void Rotatef(float angle, float x, float y, float z) { TargetMatrix()->back().Mult(m44::Rotate(DegreeToRadian(angle), x, y, z)); UpdateMatrix(); }
   void Ortho  (float l, float r, float b, float t, float nv, float fv) { TargetMatrix()->back().Mult(m44::Ortho  (l, r, b, t, nv, fv)); UpdateMatrix(); }
   void Frustum(float l, float r, float b, float t, float nv, float fv) { TargetMatrix()->back().Mult(m44::Frustum(l, r, b, t, nv, fv)); UpdateMatrix(); }
@@ -432,11 +449,13 @@ struct OpenGLES2 : public GraphicsDevice, public QOpenGLFunctions {
     else if (target->size() == 1) target->back().Assign(m44::Identity());
     UpdateMatrix();
   }
+
   void PushMatrix()         { TargetMatrix()->push_back(TargetMatrix()->back()); UpdateMatrix(); }
   void LoadIdentity()       { TargetMatrix()->back().Assign(m44::Identity());    UpdateMatrix(); }
   void Mult(const float *m) { TargetMatrix()->back().Mult(m44(m));               UpdateMatrix(); }
   void PrintMatrix()        { TargetMatrix()->back().Print(StrCat("mt", matrix_target)); }
   void GetMatrix(m44 *out)  { *out = TargetMatrix()->back(); }
+
   vector<m44> *TargetMatrix() {
     if      (matrix_target == 1) return &modelview_matrix;
     else if (matrix_target == 2) return &projection_matrix;
@@ -468,6 +487,7 @@ struct OpenGLES2 : public GraphicsDevice, public QOpenGLFunctions {
     GDDebug("VertexPointer changed=", changed);
     return changed;
   }
+
   void TexPointer(int m, int t, int w, int o, float *tex, int l, int *out, bool dirty) {
     if (!out) out = &deferred.vertexbuffer;
     CHECK(*out == bound_vertexbuffer);
@@ -476,6 +496,7 @@ struct OpenGLES2 : public GraphicsDevice, public QOpenGLFunctions {
     if (shader->slot_tex >= 0) VertexAttribPointer(shader->slot_tex, tex_attr);
     GDDebug("TexPointer");
   }
+
   void ColorPointer(int m, int t, int w, int o, float *verts, int l, int *out, bool dirty) {
     if (!out) out = &deferred.vertexbuffer;
     CHECK(*out == bound_vertexbuffer);
@@ -484,6 +505,7 @@ struct OpenGLES2 : public GraphicsDevice, public QOpenGLFunctions {
     if (shader->slot_color >= 0) VertexAttribPointer(shader->slot_color, color_attr);
     GDDebug("ColorPointer");
   }
+
   void NormalPointer(int m, int t, int w, int o, float *verts, int l, int *out, bool dirty) {
     if (!out) out = &deferred.vertexbuffer;
     CHECK(*out == bound_vertexbuffer);
@@ -492,6 +514,7 @@ struct OpenGLES2 : public GraphicsDevice, public QOpenGLFunctions {
     if (shader->slot_normal >= 0) VertexAttribPointer(shader->slot_normal, normal_attr);
     GDDebug("NormalPointer");
   }
+
   void VertexAttribPointer(int slot, const VertexAttribute &attr) { 
     glVertexAttribPointer(slot, attr.m, attr.t, GL_FALSE, attr.w, Void(long(attr.o)));
   }
@@ -519,16 +542,19 @@ struct OpenGLES2 : public GraphicsDevice, public QOpenGLFunctions {
     else if          (normals_on) UseShader(&app->shaders->shader_normals);
     else                          UseShader(&app->shaders->shader_default);
   }
+
   void UpdateColor()  { ClearDeferred(); dirty_color = true; }
   void UpdateMatrix() { ClearDeferred(); dirty_matrix = true; }
   void UpdateMaterial() {
     ClearDeferred();
     shader->dirty_material = app->shaders->shader_cubenorm.dirty_material = app->shaders->shader_normals.dirty_material = true;
   }
+
   void UpdateVertex() {
     glEnableVertexAttribArray(shader->slot_position);
     VertexAttribPointer(shader->slot_position, vertex_attr);
   }
+
   void UpdateNormals() {
     bool supports = shader->slot_normal >= 0;
     if (supports) {
@@ -536,6 +562,7 @@ struct OpenGLES2 : public GraphicsDevice, public QOpenGLFunctions {
       else            { glDisableVertexAttribArray(shader->slot_normal); }
     } else if (normals_on) ERROR("shader doesnt support normals");
   }
+
   void UpdateColorVerts() {
     bool supports = shader->slot_color >= 0;
     glUniform1i(shader->uniform_coloron, colorverts_on && supports);
@@ -544,6 +571,7 @@ struct OpenGLES2 : public GraphicsDevice, public QOpenGLFunctions {
       else               { glDisableVertexAttribArray(shader->slot_color); }
     } else if (colorverts_on) ERROR("shader doesnt support vertex color");
   }
+
   void UpdateTexture() {
     bool supports = shader->slot_tex >= 0;
     glUniform1i(shader->uniform_texon, texture_on && supports);
@@ -567,6 +595,7 @@ struct OpenGLES2 : public GraphicsDevice, public QOpenGLFunctions {
     glDrawElements(pt, np, it, Void(long(o)));
     GDDebug("DrawElements-Post(", pt, ", ", np, ", ", it, ", ", o, ", ", index, ", ", l, ", ", dirty, ")");
   }
+
   void DrawArrays(int type, int o, int n) {
     GDDebug("DrawArrays-Pre(", type, ", ", o, ", ", n, ")");
     PushDirtyState();
@@ -595,6 +624,7 @@ struct OpenGLES2 : public GraphicsDevice, public QOpenGLFunctions {
 #endif
     GDDebug("DeferDrawArrays(", type, ", ", o, ", ", n, ") deferred ", deferred.draw_calls);
   }
+
   void ClearDeferred() {
     if (!deferred.vertexbuffer_len) return;
     // INFOf("merged %d %d (type = %d)\n", deferred.draw_calls, deferred.vertexbuffer_len / deferred.vertex_size, deferred.prim_type);
@@ -602,6 +632,7 @@ struct OpenGLES2 : public GraphicsDevice, public QOpenGLFunctions {
     deferred.vertexbuffer_len = deferred.draw_calls = 0;
     GDDebug("ClearDeferred");
   }
+
   int AddDeferredVertexSpace(int l) {
     if (l + deferred.vertexbuffer_len > deferred.vertexbuffer_size) ClearDeferred();
     int ret = deferred.vertexbuffer_len;

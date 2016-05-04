@@ -260,7 +260,7 @@ template <class X> struct Vec {
   virtual int Len() const = 0;
   virtual X Read(int i) const = 0;
 
-  static string Str (const X *v1, int D)                  { string line; for (int i=0; i<D; i++) StrAppend(&line, (line.size() ? ", " : ""), ToString(         v1[i])); return line; }
+  static string Str (const X *v1, int D)                  { string line; for (int i=0; i<D; i++) StrAppend(&line, (line.size() ? ", " : ""), Printable(        v1[i])); return line; }
   static string Str (const X *v1, int D, const char *fmt) { string line; for (int i=0; i<D; i++) StrAppend(&line, (line.size() ? ", " : ""), StringPrintf(fmt, v1[i])); return line; }
   static void Print (const X *v1,              int D) { INFO(Str(v1, D)); }
   static X    Dist2 (const X *v1, const X *v2, int D) { X ret=0; for (int i=0; i<D; i++) ret += Squared(v1[i]-v2[i]); return ret; }

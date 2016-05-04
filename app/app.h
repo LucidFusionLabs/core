@@ -329,18 +329,8 @@ struct Thread {
 
   void Open(const Callback &CB) { cb=CB; }
   void Wait() { if (impl) { impl->join(); impl.reset(); id=0; } }
-  void Start() {
-    ScopedMutex sm(start_mutex);
-    impl = make_unique<std::thread>(bind(&Thread::ThreadProc, this));
-    id = std::hash<std::thread::id>()(impl->get_id());
-  }
-  void ThreadProc() {
-    { ScopedMutex sm(start_mutex); }
-    INFOf("Started thread(%llx)", id);
-    ThreadLocalStorage::ThreadInit();
-    cb();
-    ThreadLocalStorage::ThreadFree();
-  }
+  void Start();
+  void ThreadProc();
   static id_t GetId() { return std::hash<std::thread::id>()(std::this_thread::get_id()); }
 };
 
@@ -363,10 +353,7 @@ struct ThreadPool {
   void Open(int num) { CHECK(worker.empty()); for (int i=0; i<num; i++) worker.emplace_back(); }
   void Start() { for (auto &w : worker) w.Start(); }
   void Stop()  { for (auto &w : worker) w.Stop(); }
-  void Write(Callback *cb) {
-    worker[round_robin_next].queue->Write(cb);
-    round_robin_next = (round_robin_next + 1) % worker.size();
-  }
+  void Write(Callback *cb);
 };
 
 struct Timer {
@@ -374,11 +361,7 @@ struct Timer {
   Timer() { Reset(); }
   Time Reset() { Time last_begin=begin; begin=Now(); return last_begin; }
   Time GetTime() const { return Now() - begin; }
-  Time GetTime(bool do_reset) {
-    if (!do_reset) return GetTime();
-    Time last_begin = Reset();
-    return max(Time(0), begin - last_begin);
-  }
+  Time GetTime(bool do_reset);
 };
 
 struct PerformanceTimers {
@@ -421,11 +404,7 @@ struct RateLimiter {
   Timer timer;
   RollingAvg<unsigned> sleep_bias;
   RateLimiter(int *HZ) : target_hz(HZ), avgframe(0), sleep_bias(32) {}
-  void Limit() {
-    Time since = timer.GetTime(true), targetframe(1000 / *target_hz);
-    Time sleep = max(Time(0), targetframe - since - FMilliseconds(sleep_bias.Avg()));
-    if (sleep != Time(0)) { MSleep(sleep.count()); sleep_bias.Add((timer.GetTime(true) - sleep).count()); }
-  }
+  void Limit();
 };
 
 struct FrameScheduler {
