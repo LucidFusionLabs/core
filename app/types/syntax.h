@@ -36,7 +36,7 @@ struct SyntaxMatcher {
     vector<string> match_within;
   };
 
-  struct RegionRule { string beg, end; };
+  struct RegionRule { String16 beg, end; };
   struct RegexRegionRule { Regex beg, end, skip; };
   struct RegexMatchRule { Regex match; };
 
@@ -56,11 +56,13 @@ struct SyntaxMatcher {
   vector<RegexRegionRule> regex_region_rule;
   vector<RegexMatchRule> regex_match_rule;
   vector<int> style_ind;
+  int parsed_anchor=0;
   SyntaxMatcher(const vector<Rule>&, SyntaxStyleInterface *s=0, int da=0);
 
   void LoadStyle(SyntaxStyleInterface *s, int default_attr);
-  void UpdateAnnotation(const string &text, DrawableAnnotation *out, int out_size);
-  void GetLineAnnotation(const Editor::LineMap::Iterator &i, const String16 &t, DrawableAnnotation *out);
+  SyntaxParseState *GetAnchorParseState(Editor *e, int anchor, int id);
+  void UpdateAnnotation(Editor*, DrawableAnnotation *out, int out_size);
+  void GetLineAnnotation(Editor*, const Editor::LineMap::Iterator &i, const String16 &t, DrawableAnnotation *out);
 };
 
 struct RegexCPlusPlusHighlighter : public SyntaxMatcher {

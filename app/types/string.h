@@ -456,10 +456,6 @@ bool StringEmptyOrEquals(const string   &in, const string   &ref1, const string 
 bool StringEmptyOrEquals(const String16 &in, const String16 &ref1, const String16 &ref2, int case_sensitive=false);
 bool StringEmptyOrEquals(const String16 &in, const string   &ref1, const string   &ref2, int case_sensitive=false);
 
-const char*     FindString(const StringPiece &haystack, const StringPiece &needle, bool case_sensitive=true);
-int       FindStringOffset(const StringPiece &haystack, const StringPiece &needle, bool case_sensitive=true);
-PieceIndex FindStringIndex(const StringPiece &haystack, const StringPiece &handle, bool case_sensitive=true);
-
 template <class X>       X *FindChar(      X *text, int c,                                   int len=-1, int *outlen=0);
 template <class X> const X *FindChar(const X *text, int c,                                   int len=-1, int *outlen=0);
 template <class X>       X *FindChar(      X *text, int c,              int (*isquote)(int), int len=-1, int *outlen=0);
@@ -470,6 +466,10 @@ template <class X>       X *FindChar(      X *text, int (*ischar)(int), int (*is
 template <class X> const X *FindChar(const X *text, int (*ischar)(int), int (*isquote)(int), int len=-1, int *outlen=0);
 template <class X> int    LengthChar(const X* text, int (*ischar)(int), int len=-1);
 template <class X> int   RLengthChar(const X* text, int (*ischar)(int), int len);
+
+template <class X> const X*        FindString(const StringPieceT<X> &haystack, const StringPieceT<X> &needle, bool case_sensitive=true);
+template <class X> int       FindStringOffset(const StringPieceT<X> &haystack, const StringPieceT<X> &needle, bool case_sensitive=true);
+template <class X> PieceIndex FindStringIndex(const StringPieceT<X> &haystack, const StringPieceT<X> &handle, bool case_sensitive=true);
 
 template <class X, class Y> int Split(const StringPieceT<X> &in, int (*ischar)(int), int (*isquote)(int), vector<Y> *out) {
   out->clear();
@@ -593,7 +593,7 @@ struct Regex {
   Regex(const string &pattern);
   Regex(Regex &&x) : impl(x.impl) { x.impl=0; }
   Result MatchOne(const StringPiece &text);
-  Result MatchOne16(const String16Piece &text);
+  Result MatchOne(const String16Piece &text);
 };
 
 struct RegexMatcher {
@@ -636,8 +636,8 @@ struct SyntaxStyleInterface {
 };
 
 struct SyntaxParseState {
-  int id, index_offset;
-  pair<int,int> start, end, parent;
+  pair<int,int> parent, start, end;
+  int state, substate;
 };
 
 struct NextRecordReader {

@@ -58,6 +58,8 @@ struct File {
   virtual bool ReplaceWith(File*) { return false; }
 
   string Contents();
+  string ReadString(int size);
+  string ReadString(long long pos, int size);
   int ReadIOV(void *buf, const IOVec*, int iovlen);
   int WriteString(const string &b) { return Write(b.c_str(), b.size()); }
   int Rewrite(const ArrayPiece<IOVec> &v, const function<string(int)> &e);

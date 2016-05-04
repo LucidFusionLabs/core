@@ -523,7 +523,7 @@ struct Editor : public TextView {
   struct LineOffset { 
     long long file_offset=-1;
     int file_size=0, wrapped_lines=0, annotation_ind=-1, main_tu_line=-1, next_tu_line=-1;
-    pair<int, int> syntax_state;
+    pair<int, int> syntax_parent;
     vector<SyntaxParseState> syntax_buf;
     LineOffset(int O=0, int S=0, int WL=1, int AI=-1) :
       file_offset(O), file_size(S), wrapped_lines(WL), annotation_ind(AI) {}
@@ -586,6 +586,7 @@ struct Editor : public TextView {
   int CursorGlyphsSize() const { return cursor_glyphs ? cursor_glyphs->Size() : 0; }
   uint16_t CursorGlyph() const { String16 v = CursorLineGlyphs(cursor.i.x, 1); return v.empty() ? 0 : v[0]; }
   String16 CursorLineGlyphs(size_t o, size_t l) const { return cursor_glyphs ? cursor_glyphs->data->glyphs.Text16(o, l) : String16(); }
+  const String16 *ReadLine(const Editor::LineMap::Iterator &ui, String16 *buf);
   void SetWrapMode(const string &n);
   void SetShouldWrap(bool v, bool word_break);
   void UpdateCursor();

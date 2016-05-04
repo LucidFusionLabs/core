@@ -44,6 +44,13 @@ string File::Contents() {
   return ret;
 }
 
+string File::ReadString(long long pos, int size) { return SeekSuccess(this, pos) ? ReadString(size) : string(); }
+string File::ReadString(int size) {
+  string ret(size, 0);
+  ret.resize(max(0, Read(&ret[0], ret.size())));
+  return ret;
+}
+
 int File::ReadIOV(void *buf, const IOVec *v, int iovlen) {
   int ret = 0;
   char *b = static_cast<char*>(buf);

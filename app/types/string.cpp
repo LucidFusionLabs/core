@@ -300,25 +300,6 @@ bool StringEmptyOrEquals(const string   &cmp, const string   &ref1, const string
 bool StringEmptyOrEquals(const String16 &cmp, const String16 &ref1, const String16 &ref2, int cs) { return cmp.empty() || StringEquals<char16_t, char16_t>(cmp.c_str(), ref1.c_str(), cs) || StringEquals<char16_t, char16_t>(cmp.c_str(), ref2.c_str(), cs); }
 bool StringEmptyOrEquals(const String16 &cmp, const string   &ref1, const string   &ref2, int cs) { return cmp.empty() || StringEquals<char16_t, char    >(cmp.c_str(), ref1.c_str(), cs) || StringEquals<char16_t, char    >(cmp.c_str(), ref2.c_str(), cs); }
 
-const char *FindString(const StringPiece &haystack, const StringPiece &needle, bool case_sensitive) {
-  const char *it = case_sensitive ?
-    std::search(haystack.begin(), haystack.end(), needle.begin(), needle.end()) :
-    std::search(haystack.begin(), haystack.end(), needle.begin(), needle.end(),
-                [](char ch1, char ch2) { return std::toupper(ch1) == std::toupper(ch2); });
-  return it == haystack.end() ? nullptr : it;
-}
-
-int FindStringOffset(const StringPiece &haystack, const StringPiece &needle, bool case_sensitive) {
-  const char *found = FindString(haystack, needle, case_sensitive);
-  return found ? found - haystack.begin() : -1;
-}
-
-PieceIndex FindStringIndex(const StringPiece &haystack, const StringPiece &needle, bool case_sensitive) {
-  const char *found = FindString(haystack, needle, case_sensitive);
-  if (!found) return PieceIndex();
-  return PieceIndex(found - haystack.begin(), needle.size());
-}
-
 #define FindCharLoopImpl(ischar_p, deref_p) \
   if (!in_quote && (ischar_p)) { ret=p; break; } \
   if (isquotec && isquotec(deref_p)) in_quote = !in_quote;
@@ -376,6 +357,31 @@ template <class X> int RLengthChar(const X *in, int (*ischar)(int), int len) {
 template int RLengthChar(const char*,        int(*)(int), int);
 template int RLengthChar(const char16_t*,    int(*)(int), int);
 template int RLengthChar(const DrawableBox*, int(*)(int), int);
+
+template <class X> const X *FindString(const StringPieceT<X> &haystack, const StringPieceT<X> &needle, bool case_sensitive) {
+  const X *it = case_sensitive ?
+    std::search(haystack.begin(), haystack.end(), needle.begin(), needle.end()) :
+    std::search(haystack.begin(), haystack.end(), needle.begin(), needle.end(),
+                [](X ch1, X ch2) { return std::toupper(ch1) == std::toupper(ch2); });
+  return it == haystack.end() ? nullptr : it;
+}
+template const char     *FindString(const StringPiece   &haystack, const StringPiece   &needle, bool case_sensitive);
+template const char16_t *FindString(const String16Piece &haystack, const String16Piece &needle, bool case_sensitive);
+
+template <class X> int FindStringOffset(const StringPieceT<X> &haystack, const StringPieceT<X> &needle, bool case_sensitive) {
+  const X *found = FindString<X>(haystack, needle, case_sensitive);
+  return found ? found - haystack.begin() : -1;
+}
+template int FindStringOffset(const StringPiece   &haystack, const StringPiece   &needle, bool case_sensitive);
+template int FindStringOffset(const String16Piece &haystack, const String16Piece &needle, bool case_sensitive);
+
+template <class X> PieceIndex FindStringIndex(const StringPieceT<X> &haystack, const StringPieceT<X> &needle, bool case_sensitive) {
+  const X *found = FindString<X>(haystack, needle, case_sensitive);
+  if (!found) return PieceIndex();
+  return PieceIndex(found - haystack.begin(), needle.size());
+}
+template PieceIndex FindStringIndex(const StringPiece   &haystack, const StringPiece   &needle, bool case_sensitive);
+template PieceIndex FindStringIndex(const String16Piece &haystack, const String16Piece &needle, bool case_sensitive);
 
 int Split(const StringPiece &in, int (*ischar)(int), string *left) {
   const char *p = in.buf;

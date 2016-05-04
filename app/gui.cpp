@@ -17,8 +17,6 @@
  */
 
 #include "core/app/gui.h"
-#include "core/app/ipc.h"
-#include "core/app/bindings/ide.h"
 
 namespace LFL {
 #ifdef LFL_MOBILE
@@ -1113,6 +1111,12 @@ Editor::Editor(GraphicsDevice *D, const FontRef &F, File *I) : TextView(D, F),
   if (I) Init(I);
 }
 
+const String16 *Editor::ReadLine(const Editor::LineMap::Iterator &i, String16 *buf) {
+  if (int e = (max(0, -i.val->file_size))) return &edits[e-1];
+  *buf = String::ToUTF16(file->ReadString(i.val->file_offset, i.val->file_size));
+  return buf;
+}
+
 void Editor::SetWrapMode(const string &n) {
   bool lines_mode = (n == "lines"), words_mode = (n == "words"), should_wrap = lines_mode || words_mode;
   SetShouldWrap(should_wrap, should_wrap ? words_mode : layout.word_break);
@@ -1254,7 +1258,7 @@ void Editor::UpdateCursorLine() {
 }
 
 void Editor::UpdateCursor() {
-  cursor.p = cursor_glyphs->data->glyphs.Position(cursor.i.x) +
+  cursor.p = !cursor_glyphs ? point() : cursor_glyphs->data->glyphs.Position(cursor.i.x) +
     point(0, box.h - cursor_start_line_number_offset * style.font->Height());
 }
 

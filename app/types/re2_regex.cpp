@@ -36,7 +36,7 @@ Regex::Result Regex::MatchOne(const StringPiece &text) {
   return Regex::Result(offset, offset + match.size());
 }
 
-Regex::Result Regex::MatchOne16(const String16Piece &text) {
+Regex::Result Regex::MatchOne(const String16Piece &text) {
   ERROR("not implemented");
   return Regex::Result();
 }

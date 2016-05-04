@@ -56,10 +56,10 @@ struct RedBlackTree {
     Iterator& operator++() { CHECK(ind);                            if ((ind = tree->IncrementNode(ind, &zipper))) LoadKV(); else val = 0; return *this; }
     bool operator!=(const Iterator &i) { return tree != i.tree || ind != i.ind; }
     void LoadKV() { if (const Node *n = &tree->node[ind-1]) { key = zipper.GetBegKey(*n); val = &tree->val[n->val]; } }
-    int GetIndex() { if (const Node *n = &tree->node[ind-1]) return zipper.GetIndex(*n); return -1; }
-    int GetBegKey() { if (const Node *n = &tree->node[ind-1]) return zipper.GetBegKey(*n); return -1; }
-    int GetEndKey() { if (const Node *n = &tree->node[ind-1]) return zipper.GetEndKey(*n); return -1; }
-    int GetAnchor() { return ind; }
+    int GetIndex() const { if (const Node *n = &tree->node[ind-1]) return zipper.GetIndex(*n); return -1; }
+    int GetBegKey() const { if (const Node *n = &tree->node[ind-1]) return zipper.GetBegKey(*n); return -1; }
+    int GetEndKey() const { if (const Node *n = &tree->node[ind-1]) return zipper.GetEndKey(*n); return -1; }
+    int GetAnchor() const { return ind; }
   };
   struct ConstIterator { 
     const RedBlackTree *tree; int ind; K key; const V *val; Zipper zipper;
@@ -70,10 +70,10 @@ struct RedBlackTree {
     ConstIterator& operator++ () { CHECK(ind);                            if ((ind = tree->IncrementNode(ind, &zipper))) LoadKV(); else val = 0; return *this; }
     bool operator!=(const ConstIterator &i) { return tree != i.tree || ind != i.ind; }
     void LoadKV() { if (const Node *n = &tree->node[ind-1]) { key = zipper.GetBegKey(*n); val = &tree->val[n->val]; } }
-    int GetIndex() { if (const Node *n = &tree->node[ind-1]) return zipper.GetIndex(*n); return -1; }
-    int GetBegKey() { if (const Node *n = &tree->node[ind-1]) return zipper.GetBegKey(*n); return -1; }
-    int GetEndKey() { if (const Node *n = &tree->node[ind-1]) return zipper.GetEndKey(*n); return -1; }
-    int GetAnchor() { return ind; }
+    int GetIndex() const { if (const Node *n = &tree->node[ind-1]) return zipper.GetIndex(*n); return -1; }
+    int GetBegKey() const { if (const Node *n = &tree->node[ind-1]) return zipper.GetBegKey(*n); return -1; }
+    int GetEndKey() const { if (const Node *n = &tree->node[ind-1]) return zipper.GetEndKey(*n); return -1; }
+    int GetAnchor() const { return ind; }
   };
   struct Query {
     const K key; Zipper z;
