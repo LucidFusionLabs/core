@@ -915,12 +915,11 @@ int TextView::UpdateLines(float vs, int *first_ind, int *first_offset, int *firs
 /* PropertyView */
 
 PropertyView::PropertyView(GraphicsDevice *D, const FontRef &F) : TextView(D, F),
-menuicon_white(FontDesc("MenuAtlas", "", 0, Color::white, Color::clear, 0, 0, FontDesc::Engine::Atlas)),
-menuicon_black(FontDesc("MenuAtlas", "", 0, Color::black, Color::clear, 0, 0, FontDesc::Engine::Atlas)) {
+  property_line(&NodeIndex::GetLines, &NodeIndex::GetString),
+  menuicon_white(FontDesc("MenuAtlas", "", 0, Color::white, Color::clear, 0, 0, FontDesc::Engine::Atlas)),
+  menuicon_black(FontDesc("MenuAtlas", "", 0, Color::black, Color::clear, 0, 0, FontDesc::Engine::Atlas)) {
   cursor_enabled = 0;
   cmd_color = Color(Color::black, .5);
-  property_line.node_value_cb = &NodeIndex::GetLines;
-  property_line.node_print_cb = &NodeIndex::GetString;
   selection_cb = bind(&PropertyView::SelectionCB, this, _1);
   if (F->desc->bg.A()) bg_color = &F->desc->bg;
   Activate();
@@ -1102,10 +1101,9 @@ Editor::Base16DefaultDarkSyntaxColors::Base16DefaultDarkSyntaxColors() :
 
 Editor::~Editor() {}
 Editor::Editor(GraphicsDevice *D, const FontRef &F, File *I) : TextView(D, F),
+  file_line(&LineOffset::GetLines, &LineOffset::GetString),
   annotation_cb([](const LineMap::ConstIterator&, const String16&){ return DrawableAnnotation(); }) {
   cmd_color = Color(Color::black, .5);
-  file_line.node_value_cb = &LineOffset::GetLines;
-  file_line.node_print_cb = &LineOffset::GetString;
   edits.free_func = [](String16 *v) { v->clear(); };
   selection_cb = bind(&Editor::SelectionCB, this, _1);
   if (I) Init(I);
@@ -1254,6 +1252,7 @@ void Editor::UpdateCursorLine() {
   auto it = file_line.SecondBound(cursor_start_line_number+1);
   if (!it.ind) FATAL("missing line number: ", cursor_start_line_number, " size=", file_line.size(), ", wl=", wrapped_lines); 
   cursor_line_index = it.GetIndex();
+  cursor_anchor = it.GetAnchor();
   cursor_offset = it.val;
 }
 
@@ -1296,10 +1295,15 @@ void Editor::Modify(char16_t c, bool erase, bool undo_or_redo) {
   CHECK_EQ(cursor_offset->wrapped_lines, cursor_glyphs->Lines());
   bool wrap = Wrap(), erase_line = erase && !cursor.i.x;
   if (!cursor_start_line_number && erase_line) return;
+
   if (!undo_or_redo && !erase_line)
     RecordModify(point(cursor.i.x, cursor_line_index), erase, !erase ? c : (*b)[cursor.i.x-1]);
   modified = Now();
   if (modified_cb) modified_cb();
+  if (max(0, cursor_line_index-1) < syntax_parsed_line_index) {
+    syntax_parsed_line_index = max(0, cursor_line_index-1);
+    syntax_parsed_anchor = cursor_anchor;
+  }
 
   if (erase_line) {
     file_line.Erase(cursor_start_line_number);

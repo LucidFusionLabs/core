@@ -82,15 +82,24 @@ void SyntaxMatcher::UpdateAnnotation(Editor *editor, DrawableAnnotation *out, in
 }
 
 void SyntaxMatcher::GetLineAnnotation(Editor *editor, const Editor::LineMap::Iterator &i, const String16 &t,
-                                      DrawableAnnotation *out) {
-  Editor::LineMap::Iterator pi =
-    parsed_anchor ? editor->file_line.GetAnchorIter(parsed_anchor) : editor->file_line.Begin();
-  int parsed_line_no = pi.GetEndKey(), anno_line_no = i.GetEndKey();
-  if (parsed_anchor && anno_line_no <= parsed_line_no) return;
-  pair<int, int> current_parent = parsed_anchor ? pi.val->syntax_parent : pair<int, int>();
-  int current_state = current_parent.first ? GetAnchorParseState(editor, current_parent)->state : 0;
+                                      int *parsed_line_index, int *parsed_anchor, DrawableAnnotation *out) {
+  Editor::LineMap::Iterator pi;
+  if (sync_minlines) {
+    // walk backward to find first line with non '#' character in position 0 where prev line doesnt end w '\\'
+  } else {
+    int anno_line_index = i.GetIndex();
+    if (*parsed_anchor && anno_line_index <= *parsed_line_index) {
+      // parse display
+      return;
+    }
+    pi = *parsed_anchor ? editor->file_line.GetAnchorIter(*parsed_anchor) : editor->file_line.Begin();
+    // CHECK_EQ(*parsed_line_index, pi.GetIndex());
+  }
 
   String16 buf;
+  pair<int, int> current_parent = *parsed_anchor ? pi.val->syntax_parent : pair<int, int>();
+  int current_state = current_parent.first ? GetAnchorParseState(editor, current_parent)->state : 0;
+
   for (/**/; pi.ind; ++pi) {
     bool last = pi.ind == i.ind;
     CHECK_GE(pi.val->annotation_ind, 0);
@@ -98,7 +107,10 @@ void SyntaxMatcher::GetLineAnnotation(Editor *editor, const Editor::LineMap::Ite
                  &current_state, &current_parent, &out[pi.val->annotation_ind]);
     if (last) break;
   }
-  parsed_anchor = i.GetAnchor();
+
+  *parsed_anchor = i.GetAnchor();
+  *parsed_line_index = i.GetIndex();
+  // parse display
 }
 
 void SyntaxMatcher::AnnotateLine(Editor *editor, const Editor::LineMap::Iterator &i, const String16 &text,

@@ -442,11 +442,12 @@ struct RedBlackTree {
 template <class K, class V, class Node, class Finger>
 struct RedBlackFingerTree : public RedBlackTree<K, V, Node, Finger> {
   typedef RedBlackTree<K, V, Node, Finger> Base;
-  function<K     (const V*)> node_value_cb;
-  function<string(const V*)> node_print_cb;
-  RedBlackFingerTree() : 
-    node_value_cb([](const V *v){ return 1;          }), 
-    node_print_cb([](const V *v){ return StrCat(*v); }) {}
+  typedef function<K     (const V*)> NodeValueCB;
+  typedef function<string(const V*)> NodePrintCB;
+
+  NodeValueCB node_value_cb;
+  NodePrintCB node_print_cb;
+  RedBlackFingerTree(NodeValueCB vc, NodePrintCB pc) : node_value_cb(vc), node_print_cb(pc) {}
 
   virtual K GetCreateNodeKey(const typename Base::Query *q, const V *v) const { return node_value_cb(v); }
   virtual int ResolveInsertCollision(int ind, typename Base::Query *q, V &&v) { 
@@ -656,6 +657,10 @@ template <class Node> struct PrefixSumKeyedRedBlackTreeFinger {
 template <class K, class V, class Node = PrefixSumKeyedRedBlackTreeNode<K, V>, class Finger = PrefixSumKeyedRedBlackTreeFinger<Node> >
 struct PrefixSumKeyedRedBlackTree : public RedBlackFingerTree<K, V, Node, Finger> {
   typedef RedBlackFingerTree<K, V, Node, Finger> Base;
+
+  PrefixSumKeyedRedBlackTree(typename Base::NodeValueCB value_cb = [](const V *v){ return 1;          },
+                             typename Base::NodePrintCB print_cb = [](const V *v){ return StrCat(*v); }) :
+    Base(move(value_cb), move(print_cb)) {}
 
   typename Base::     Iterator GetAnchorIter(int id)       { typename Base::     Iterator it(this); it.ind=Base::WalkBackwardsToRoot(id, &it.zipper); it.LoadKV(); return it; }
   typename Base::ConstIterator GetAnchorIter(int id) const { typename Base::ConstIterator it(this); it.ind=Base::WalkBackwardsToRoot(id, &it.zipper); it.LoadKV(); return it; }

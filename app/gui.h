@@ -561,7 +561,8 @@ struct Editor : public TextView {
   shared_ptr<BufferFile> cached_text;
   Line *cursor_glyphs=0;
   LineOffset *cursor_offset=0;
-  int cursor_line_index=0, cursor_start_line_number=0, cursor_start_line_number_offset=0;
+  int cursor_anchor=0, cursor_line_index=0, cursor_start_line_number=0, cursor_start_line_number_offset=0;
+  int syntax_parsed_anchor=0, syntax_parsed_line_index=0;
   bool opened=0;
   virtual ~Editor();
   Editor(GraphicsDevice *D, const FontRef &F=FontRef(), File *I=0);

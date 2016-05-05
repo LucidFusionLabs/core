@@ -171,5 +171,5 @@ then cmake -DCMAKE_INSTALL_PREFIX=~/llvm -P cmake_install.cmake
 ## License
 
 * GPL
-* Unlimited commercial license available for $25/year.
+* Unlimited commercial licenses available for $25 per platform per year.
 

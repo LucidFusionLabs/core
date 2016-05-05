@@ -56,13 +56,14 @@ struct SyntaxMatcher {
   vector<RegexRegionRule> regex_region_rule;
   vector<RegexMatchRule> regex_match_rule;
   vector<int> style_ind;
-  int parsed_anchor=0;
+  bool sync_minlines=0, sync_maxlines=0;
   SyntaxMatcher(const vector<Rule>&, SyntaxStyleInterface *s=0, int da=0);
 
   void LoadStyle(SyntaxStyleInterface *s, int default_attr);
   SyntaxParseState *GetAnchorParseState(Editor *e, const pair<int,int>&);
   void UpdateAnnotation(Editor*, DrawableAnnotation *out, int out_size);
-  void GetLineAnnotation(Editor*, const Editor::LineMap::Iterator &i, const String16 &t, DrawableAnnotation *out);
+  void GetLineAnnotation(Editor*, const Editor::LineMap::Iterator &i, const String16 &t,
+                         int *parsed_line_index, int *parsed_anchor, DrawableAnnotation *out);
   void AnnotateLine(Editor*, const Editor::LineMap::Iterator &i, const String16 &t,
                     int *current_state, pair<int,int> *current_parent, DrawableAnnotation *out);
 };
