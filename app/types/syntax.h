@@ -39,15 +39,16 @@ struct SyntaxMatcher {
   struct RegionRule { String16 beg, end; };
   struct RegexRegionRule { Regex beg, end, skip; };
   struct RegexMatchRule { Regex match; };
+  struct RuleType { enum { Region=1, RegexRegion=2, RegexMatch=3 }; };
+  struct RulePointer { int type; size_t index; };
 
   struct CompiledRule {
-    enum Type { Region=1, RegexRegion=2, RegexMatch=3 };
     enum WithinType { WithinAll=1, WithinAllBut=2 };
     string name;
     bool display, transparent;
     int within_type;
-    vector<int> within;
-    vector<pair<int,int>> index;
+    vector<uint16_t> within;
+    vector<RulePointer> subrule;
   };
 
   vector<CompiledRule> rules;
@@ -59,13 +60,14 @@ struct SyntaxMatcher {
   bool sync_minlines=0, sync_maxlines=0;
   SyntaxMatcher(const vector<Rule>&, SyntaxStyleInterface *s=0, int da=0);
 
-  void LoadStyle(SyntaxStyleInterface *s, int default_attr);
-  SyntaxParseState *GetAnchorParseState(Editor *e, const pair<int,int>&);
+  void LoadStyle(SyntaxStyleInterface*, int default_attr);
+  SyntaxMatch::List *GetSyntaxMatchList(Editor*, const SyntaxMatch::ListPointer&);
   void UpdateAnnotation(Editor*, DrawableAnnotation *out, int out_size);
   void GetLineAnnotation(Editor*, const Editor::LineMap::Iterator &i, const String16 &t,
                          int *parsed_line_index, int *parsed_anchor, DrawableAnnotation *out);
   void AnnotateLine(Editor*, const Editor::LineMap::Iterator &i, const String16 &t,
-                    int *current_state, pair<int,int> *current_parent, DrawableAnnotation *out);
+                    SyntaxMatch::State *current_state, vector<SyntaxMatch::State> *current_state_stack,
+                    SyntaxMatch::ListPointer *current_parent, DrawableAnnotation *out);
 };
 
 struct RegexCPlusPlusHighlighter : public SyntaxMatcher {

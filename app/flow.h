@@ -214,10 +214,11 @@ struct Flow {
   /**/               int AppendText(const String16        &text, const DrawableAnnotation &attr, int da=0) { return AppendText(String16Piece         (text), attr, da); }
   template <class X> int AppendText(const X               *text, const DrawableAnnotation &attr, int da=0) { return AppendText(StringPiece::Unbounded(text), attr, da); }
   template <class X> int AppendText(const StringPieceT<X> &text, const DrawableAnnotation &attr, int da=0) {
-    int start_size = out->data.size();
+    int start_size = out->data.size(), attr_id = da;
     out->data.reserve(start_size + text.size());
     int initial_out_lines = out->line.size(), line_start_ind = 0, ci_bytes = 0, cj_bytes = 0, c, ci;
-    int attr_id = (!attr.size() && !da && !out->attr.source) ? out->attr.GetAttrId(cur_attr) : da;
+    if (!attr.size() && !da && !out->attr.source) attr_id = out->attr.GetAttrId(cur_attr);
+    else if (out->attr.source) cur_attr.font = out->attr.GetAttr(attr_id)->font;
     auto a = attr.data(), ae = a + attr.size();
 
     for (const X *b = text.data(), *i = b; !text.Done(i); i += ci_bytes) {

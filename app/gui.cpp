@@ -844,7 +844,7 @@ int TextView::UpdateLines(float vs, int *first_ind, int *first_offset, int *firs
   bool width_changed = last_fb_width != fb->w, wrap = Wrap(), init = !wrapped_lines;
   if (width_changed) {
     last_fb_width = fb->w;
-    if (wrap || init) UpdateMapping(fb->w);
+    if (wrap || init) UpdateMapping(fb->w, last_update_mapping_flag);
   }
 
   bool resized = (width_changed && wrap) || last_fb_lines != fb->lines;
@@ -943,6 +943,7 @@ void PropertyView::VisitExpandedChildren(Id id, const Node::Visitor &cb, int dep
 }
 
 void PropertyView::UpdateMapping(int width, int flag) {
+  last_update_mapping_flag = flag;
   wrapped_lines = 0;
   property_line.Clear();
   VisitExpandedChildren(root, [&](Id id, Node *n, int d)
@@ -1102,7 +1103,7 @@ Editor::Base16DefaultDarkSyntaxColors::Base16DefaultDarkSyntaxColors() :
 Editor::~Editor() {}
 Editor::Editor(GraphicsDevice *D, const FontRef &F, File *I) : TextView(D, F),
   file_line(&LineOffset::GetLines, &LineOffset::GetString),
-  annotation_cb([](const LineMap::ConstIterator&, const String16&){ return DrawableAnnotation(); }) {
+  annotation_cb([](const LineMap::ConstIterator&, const String16&, int cs, int){ static DrawableAnnotation a; return cs ? nullptr : &a; }) {
   cmd_color = Color(Color::black, .5);
   edits.free_func = [](String16 *v) { v->clear(); };
   selection_cb = bind(&Editor::SelectionCB, this, _1);
@@ -1161,7 +1162,8 @@ void Editor::SelectionCB(const Selection::Point &p) {
 }
 
 void Editor::UpdateMapping(int width, int flag) {
-  wrapped_lines = 0;
+  wrapped_lines = syntax_parsed_anchor = syntax_parsed_line_index = 0;
+  last_update_mapping_flag = flag;
   file_line.Clear();
   file->Reset();
   NextRecordReader nr(file.get());
@@ -1206,8 +1208,8 @@ int Editor::UpdateMappedLines(pair<int, int> read_lines, int new_first_line, int
   if (up) for (auto li = lie; li != lib; bo += l + !e, added++) {
     l = (e = max(0, -(--li).val->file_size)) ? 0 : li.val->file_size;
     int removed = (wrap && line.ring.Full()) ? line.Front()->Lines() : 0;
-    if (e) { const auto &t = edits[e-1];                              (L = line.PushBack())->AssignText(t, annotation_cb(li, t)); }
-    else   { auto t = String::ToUTF16(buf.data()+read_len-bo-l-1, l); (L = line.PushBack())->AssignText(t, annotation_cb(li, t)); }
+    if (e) { const auto &t = edits[e-1];                              (L = line.PushBack())->AssignText(t, *annotation_cb(li, t, 0, 0)); }
+    else   { auto t = String::ToUTF16(buf.data()+read_len-bo-l-1, l); (L = line.PushBack())->AssignText(t, *annotation_cb(li, t, 0, 0)); }
     fb_wrapped_lines += (ll = L->Layout(width, true)) - removed;
     if (removed) line.ring.DecrementSize(1);
     CHECK_EQ(li.val->wrapped_lines, ll);
@@ -1215,8 +1217,8 @@ int Editor::UpdateMappedLines(pair<int, int> read_lines, int new_first_line, int
   else for (auto li = lib; li != lie; ++li, bo += l + !e, added++) {
     l = (e = max(0, -li.val->file_size)) ? 0 : li.val->file_size;
     int removed = (wrap && line.ring.Full()) ? line.Back()->Lines() : 0;
-    if (e) { const auto &t = edits[e-1];                 (L = line.PushFront())->AssignText(t, annotation_cb(li, t)); }
-    else   { auto t = String::ToUTF16(buf.data()+bo, l); (L = line.PushFront())->AssignText(t, annotation_cb(li, t)); }
+    if (e) { const auto &t = edits[e-1];                 (L = line.PushFront())->AssignText(t, *annotation_cb(li, t, 0, 0)); }
+    else   { auto t = String::ToUTF16(buf.data()+bo, l); (L = line.PushFront())->AssignText(t, *annotation_cb(li, t, 0, 0)); }
     fb_wrapped_lines += (ll = L->Layout(width, true)) - removed;
     if (removed) line.ring.DecrementSize(1);
     CHECK_EQ(li.val->wrapped_lines, ll);
@@ -1300,15 +1302,13 @@ void Editor::Modify(char16_t c, bool erase, bool undo_or_redo) {
     RecordModify(point(cursor.i.x, cursor_line_index), erase, !erase ? c : (*b)[cursor.i.x-1]);
   modified = Now();
   if (modified_cb) modified_cb();
-  if (max(0, cursor_line_index-1) < syntax_parsed_line_index) {
-    syntax_parsed_line_index = max(0, cursor_line_index-1);
-    syntax_parsed_anchor = cursor_anchor;
-  }
+  if (!erase_line && cursor_line_index < syntax_parsed_line_index) MarkCursorLineFirstDirty();
 
   if (erase_line) {
     file_line.Erase(cursor_start_line_number);
     wrapped_lines = AddWrappedLines(wrapped_lines, -cursor_glyphs->Lines());
     HistUp();
+    if (cursor_line_index < syntax_parsed_line_index) MarkCursorLineFirstDirty();
     b = &edits[ModifyCursorLine()];
     bool chomped = !undo_or_redo && b->size() && b->back() == '\r';
     if (chomped) b->pop_back();
@@ -1322,7 +1322,7 @@ void Editor::Modify(char16_t c, bool erase, bool undo_or_redo) {
       if (1)       RecordModify(point(cursor.i.x + chomped, cursor_line_index), true, '\n');
       if (chomped) RecordModify(point(cursor.i.x + 1,       cursor_line_index), true, '\r');
     }
-    return Redraw(true);
+    Redraw(true);
   } else if (!erase && c == '\n') {
     String16 a = b->substr(cursor.i.x);
     b->resize(cursor.i.x);
@@ -1339,19 +1339,26 @@ void Editor::Modify(char16_t c, bool erase, bool undo_or_redo) {
     swap(edits[ModifyCursorLine()], a);
     RefreshLines();
     if (newline_cb) newline_cb();
-    return Redraw(true);
+    Redraw(true);
   } else {
-    if (erase)  b->erase(cursor.i.x-1, 1);
-    else        b->insert(cursor.i.x, 1, c);
-    if (!wrap) {
+    if (erase) b->erase(cursor.i.x-1, 1);
+    else       b->insert(cursor.i.x, 1, c);
+    const DrawableAnnotation *annotation = nullptr;
+    if (!wrap && !(annotation = annotation_cb
+                   (file_line.GetAnchorIter(cursor_anchor), *b, erase ? -1 : 1, cursor.i.x))) {
+      int attr_id = cursor.i.x ? cursor_glyphs->data->glyphs[cursor.i.x-1].attr_id : default_attr;
       if (erase)  cursor_glyphs->Erase          (cursor.i.x-1, 1);
-      else if (0) cursor_glyphs->OverwriteTextAt(cursor.i.x, String16(1, c), default_attr);
-      else        cursor_glyphs->InsertTextAt   (cursor.i.x, String16(1, c), default_attr);
+      else if (0) cursor_glyphs->OverwriteTextAt(cursor.i.x, String16(1, c), attr_id);
+      else        cursor_glyphs->InsertTextAt   (cursor.i.x, String16(1, c), attr_id);
       UpdateLineFB(cursor_glyphs, GetFrameBuffer(), 0);
-    }
+    } 
     if (erase) CursorLeft();
     if (wrap) {
       CursorLinesChanged(*b);
+      RefreshLines();
+      Redraw(true);
+    } else if (annotation) {
+      // XXX keep reparsing till reach same signature or last displayed line, then only redraw those
       RefreshLines();
       Redraw(true);
     }

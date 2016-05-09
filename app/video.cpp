@@ -377,6 +377,13 @@ void DrawableAnnotation::ExtendBack(const pair<int, int> &a) {
   this->push_back(a);
 }
 
+bool DrawableAnnotation::Shifted(const DrawableAnnotation &x, int dir, int offset) const {
+  if (size() != x.size()) return false;
+  for (auto i = begin(), e = end(), xi = x.begin(); i != e; ++i, ++xi)
+    if (xi->first != (i->first + (i->first >= offset ? dir : 0)) || xi->second != i->second) return false;
+  return true;
+}
+
 /* Texture */
 
 int Texture::GLBufferType() const {

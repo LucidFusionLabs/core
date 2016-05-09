@@ -632,13 +632,14 @@ struct StreamRegex {
   int Match(const string &text, vector<Regex::Result> *out, bool eof=0);
 };
 
-struct SyntaxStyleInterface {
-  virtual int GetSyntaxStyle(const string &n, int da) = 0;
-};
-
-struct SyntaxParseState {
-  pair<int,int> parent, start, end;
-  int state, substate;
+struct SyntaxStyleInterface { virtual int GetSyntaxStyle(const string &n, int da) = 0; };
+struct SyntaxMatch {
+  typedef uint16_t State;
+  struct ListPointer { int anchor; unsigned subindex; };
+  struct List { State state; ListPointer parent; };
+  static State  MakeState(size_t ind, size_t subind) { return ind << 4 | (subind & 0x0f); }
+  static size_t GetStateIndex   (State id) { return id >> 4;  }
+  static size_t GetSubStateIndex(State id) { return id & 0xf; }
 };
 
 struct NextRecordReader {

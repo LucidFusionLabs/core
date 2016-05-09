@@ -21,7 +21,7 @@
 
 namespace LFL {
 SyntaxMatcher::SyntaxMatcher(const vector<SyntaxMatcher::Rule> &rules_in, SyntaxStyleInterface *style, int default_attr) {
-  rules.push_back({ string(), 0, 0, 0, vector<int>(), vector<pair<int,int>>() });
+  rules.push_back({ string(), 0, 0, 0, vector<uint16_t>(), vector<RulePointer>() });
   string last_name = "";
 
   for (auto &r : rules_in) {
@@ -33,19 +33,19 @@ SyntaxMatcher::SyntaxMatcher(const vector<SyntaxMatcher::Rule> &rules_in, Syntax
       name_iter = Insert(rulenames, r.name, rules.size());
       if (!(r.flag & Contained)) rules[0].within.push_back(name_iter->second);
       rules.push_back({ r.name, bool(r.flag & Display), bool(r.flag & Transparent), 
-                      0, vector<int>(), vector<pair<int,int>>() });
+                      0, vector<uint16_t>(), vector<RulePointer>() });
     } else { CHECK_EQ(last_name, r.name); }
     last_name = r.name;
 
     if (r.flag & Regexp) {
-      if (r.match_end.empty()) rules.back().index.emplace_back
-        (CompiledRule::RegexMatch, PushBackIndex(regex_match_rule, { Regex(r.match_beg) }));
-      else rules.back().index.emplace_back
-        (CompiledRule::RegexRegion, PushBackIndex(regex_region_rule, { Regex(r.match_beg), Regex(r.match_end), r.skip.empty() ? Regex() : Regex(r.skip) })); 
+      if (r.match_end.empty()) rules.back().subrule.push_back
+        ({ RuleType::RegexMatch, PushBackIndex(regex_match_rule, { Regex(r.match_beg) }) });
+      else rules.back().subrule.push_back
+        ({ RuleType::RegexRegion, PushBackIndex(regex_region_rule, { Regex(r.match_beg), Regex(r.match_end), r.skip.empty() ? Regex() : Regex(r.skip) }) }); 
     } else {
       CHECK(!r.match_end.empty());
-      rules.back().index.emplace_back
-        (CompiledRule::Region, PushBackIndex(region_rule, { String::ToUTF16(r.match_beg), String::ToUTF16(r.match_end) }));
+      rules.back().subrule.push_back
+        ({ RuleType::Region, PushBackIndex(region_rule, { String::ToUTF16(r.match_beg), String::ToUTF16(r.match_end) }) });
     }
   }
 
@@ -67,17 +67,20 @@ void SyntaxMatcher::LoadStyle(SyntaxStyleInterface *style, int default_attr) {
   for (auto &r : rules) style_ind.push_back(r.transparent ? -1 : style->GetSyntaxStyle(r.name, default_attr));
 }
 
-SyntaxParseState *SyntaxMatcher::GetAnchorParseState(Editor *editor, const pair<int, int> &p) {
-  return VectorCheckElement(CheckPointer(editor->file_line.GetAnchorVal(p.first))->syntax_buf, p.second);
+SyntaxMatch::List *SyntaxMatcher::GetSyntaxMatchList(Editor *editor, const SyntaxMatch::ListPointer &p) {
+  return VectorCheckElement(CheckPointer(editor->file_line.GetAnchorVal(p.anchor))
+                            ->syntax_ancestor_list_storage, p.subindex);
 }
 
 void SyntaxMatcher::UpdateAnnotation(Editor *editor, DrawableAnnotation *out, int out_size) {
   String16 buf;
-  int current_state = 0;
-  pair<int, int> current_parent;
+  SyntaxMatch::State current_state = 0;
+  vector<SyntaxMatch::State> current_state_stack;
+  SyntaxMatch::ListPointer current_parent = {0, 0};
   for (Editor::LineMap::Iterator i = editor->file_line.Begin(); i.ind; ++i) {
     CHECK_GE(i.val->annotation_ind, 0);
-    AnnotateLine(editor, i, *editor->ReadLine(i, &buf), &current_state, &current_parent, &out[i.val->annotation_ind]);
+    AnnotateLine(editor, i, *editor->ReadLine(i, &buf), &current_state, &current_state_stack,
+                 &current_parent, &out[i.val->annotation_ind]);
   }
 }
 
@@ -88,23 +91,24 @@ void SyntaxMatcher::GetLineAnnotation(Editor *editor, const Editor::LineMap::Ite
     // walk backward to find first line with non '#' character in position 0 where prev line doesnt end w '\\'
   } else {
     int anno_line_index = i.GetIndex();
-    if (*parsed_anchor && anno_line_index <= *parsed_line_index) {
+    if (*parsed_anchor && anno_line_index < *parsed_line_index) {
       // parse display
       return;
     }
     pi = *parsed_anchor ? editor->file_line.GetAnchorIter(*parsed_anchor) : editor->file_line.Begin();
-    // CHECK_EQ(*parsed_line_index, pi.GetIndex());
+    CHECK_EQ(*parsed_line_index, pi.GetIndex());
   }
 
   String16 buf;
-  pair<int, int> current_parent = *parsed_anchor ? pi.val->syntax_parent : pair<int, int>();
-  int current_state = current_parent.first ? GetAnchorParseState(editor, current_parent)->state : 0;
+  SyntaxMatch::ListPointer current_parent = *parsed_anchor ? pi.val->syntax_parent : SyntaxMatch::ListPointer();
+  SyntaxMatch::State current_state = current_parent.anchor ? GetSyntaxMatchList(editor, current_parent)->state : 0;
+  vector<SyntaxMatch::State> current_state_stack = *parsed_anchor ? pi.val->syntax_state : vector<SyntaxMatch::State>();
 
   for (/**/; pi.ind; ++pi) {
     bool last = pi.ind == i.ind;
     CHECK_GE(pi.val->annotation_ind, 0);
     AnnotateLine(editor, pi, last ? t : *editor->ReadLine(pi, &buf),
-                 &current_state, &current_parent, &out[pi.val->annotation_ind]);
+                 &current_state, &current_state_stack, &current_parent, &out[pi.val->annotation_ind]);
     if (last) break;
   }
 
@@ -114,43 +118,46 @@ void SyntaxMatcher::GetLineAnnotation(Editor *editor, const Editor::LineMap::Ite
 }
 
 void SyntaxMatcher::AnnotateLine(Editor *editor, const Editor::LineMap::Iterator &i, const String16 &text,
-                                 int *current_state, pair<int,int> *current_parent, DrawableAnnotation *out) {
-  CHECK_RANGE(*current_state, 0, rules.size());
+                                 SyntaxMatch::State *current_state, vector<SyntaxMatch::State> *current_state_stack,
+                                 SyntaxMatch::ListPointer *current_parent, DrawableAnnotation *out) {
+  int current_state_ind = SyntaxMatch::GetStateIndex(*current_state);
+  CHECK_RANGE(current_state_ind, 0, rules.size());
   out->clear();
-  out->ExtendBack({0, style_ind[*current_state]});
+  out->ExtendBack({0, style_ind[current_state_ind]});
   i.val->syntax_parent = *current_parent;
-  i.val->syntax_buf.clear();
-  int current_anchor = i.GetAnchor();
+  i.val->syntax_state = *current_state_stack;
+  i.val->syntax_ancestor_list_storage.clear();
+  int current_anchor = i.GetAnchor(), last_linematch_end = -1;
   String16Piece remaining_line(text);
 
   while (remaining_line.len > 0) {
-    auto &rule = rules[*current_state];
+    auto &rule = rules[current_state_ind];
     int offset = remaining_line.buf - text.data(), consumed = 0;
     Regex::Result first_match, m;
-    pair<int, int> match_id;
+    pair<long, long> match_id;
 
     // find end
-    if (*current_state) {
-      auto parent = GetAnchorParseState(editor, *current_parent);
-      auto &parent_ind = rule.index[parent->substate];
-      switch (parent_ind.first) {
-        case CompiledRule::Region:      m = Regex::Result(FindStringIndex(remaining_line, String16Piece(region_rule[parent_ind.second].end))); break;
-        case CompiledRule::RegexMatch:  m = Regex::Result(PieceIndex(parent->end.second - offset, 0)); break;
-        case CompiledRule::RegexRegion: m = regex_region_rule[parent_ind.second].end.MatchOne(remaining_line); break;
+    if (current_state_ind) {
+      auto parent = GetSyntaxMatchList(editor, *current_parent);
+      auto &parent_ind = rule.subrule[SyntaxMatch::GetSubStateIndex(parent->state)];
+      switch (parent_ind.type) {
+        case RuleType::Region:      m = Regex::Result(FindStringIndex(remaining_line, String16Piece(region_rule[parent_ind.index].end))); break;
+        case RuleType::RegexMatch:  m = Regex::Result(PieceIndex(last_linematch_end - offset, 0)); break;
+        case RuleType::RegexRegion: m = regex_region_rule[parent_ind.index].end.MatchOne(remaining_line); break;
       }
-      if (!!m && (!first_match || m < first_match)) { first_match=m; match_id=make_pair(-1, 0); }
-    } else { CHECK_EQ(0, *current_state); }
+      if (!!m && (!first_match || m < first_match)) { first_match=m; match_id={-1, 0}; }
+    } else { CHECK_EQ(0, current_state_ind); }
 
     // find next
     auto &within = rule.within_type == CompiledRule::WithinAll ? rules[0].within : rule.within;
     for (auto b = within.begin(), i = b, e = within.end(); i != e; ++i) {
-      for (auto ib = rules[*i].index.begin(), ii = ib, ie = rules[*i].index.end(); ii != ie; ++ii) {
-        switch(ii->first) {
-          case CompiledRule::Region:      m = Regex::Result(FindStringIndex(remaining_line, String16Piece(region_rule[ii->second].beg))); break;
-          case CompiledRule::RegexMatch:  m = regex_match_rule [ii->second].match.MatchOne(remaining_line); break;
-          case CompiledRule::RegexRegion: m = regex_region_rule[ii->second].beg.  MatchOne(remaining_line); break;
+      for (auto ib = rules[*i].subrule.begin(), ii = ib, ie = rules[*i].subrule.end(); ii != ie; ++ii) {
+        switch(ii->type) {
+          case RuleType::Region:      m = Regex::Result(FindStringIndex(remaining_line, String16Piece(region_rule[ii->index].beg))); break;
+          case RuleType::RegexMatch:  m = regex_match_rule [ii->index].match.MatchOne(remaining_line); break;
+          case RuleType::RegexRegion: m = regex_region_rule[ii->index].beg.  MatchOne(remaining_line); break;
         }
-        if (!!m && (!first_match || m < first_match)) { first_match=m; match_id=make_pair(i-b+1, ii-ib); }
+        if (!!m && (!first_match || m < first_match)) { first_match=m; match_id={i-b+1, ii-ib}; }
       }
     }
 
@@ -158,20 +165,22 @@ void SyntaxMatcher::AnnotateLine(Editor *editor, const Editor::LineMap::Iterator
     CHECK(match_id.first);
     // push or pop
     if (match_id.first == -1) {
-      *current_parent = GetAnchorParseState(editor, *current_parent)->parent;
-      *current_state = current_parent->first ? GetAnchorParseState(editor, *current_parent)->state : 0;
-      out->ExtendBack({ offset + first_match.end, style_ind[*current_state] });
+      *current_parent = GetSyntaxMatchList(editor, *current_parent)->parent;
+      *current_state = current_parent->anchor ? GetSyntaxMatchList(editor, *current_parent)->state : 0;
+      current_state_stack->pop_back();
+      CHECK_EQ(*current_state, (current_state_stack->size() ? current_state_stack->back() : 0));
+      current_state_ind = SyntaxMatch::GetStateIndex(*current_state);
+      out->ExtendBack({ offset + first_match.end, style_ind[current_state_ind] });
       consumed = first_match.end;
     } else { 
-      i.val->syntax_buf.push_back
-        ({ *current_parent, 
-         make_pair(current_anchor, offset + first_match.begin),
-         make_pair(current_anchor, offset + first_match.end),
-         within[match_id.first-1], match_id.second });
-
-      *current_parent = make_pair(i.GetAnchor(), i.val->syntax_buf.size()-1);
-      *current_state = i.val->syntax_buf.back().state;
-      int a = style_ind[*current_state];
+      last_linematch_end = offset + first_match.end;
+      i.val->syntax_ancestor_list_storage.push_back
+        ({ SyntaxMatch::MakeState(within[match_id.first-1], match_id.second), *current_parent });
+      *current_parent = { i.GetAnchor(), unsigned(i.val->syntax_ancestor_list_storage.size()-1) };
+      *current_state = i.val->syntax_ancestor_list_storage.back().state;
+      current_state_stack->push_back(*current_state);
+      current_state_ind = SyntaxMatch::GetStateIndex(*current_state);
+      int a = style_ind[current_state_ind];
       if (a >= 0) out->ExtendBack({ offset + first_match.begin, a });
       consumed = min(first_match.begin+1, remaining_line.len);
     }
@@ -180,13 +189,17 @@ void SyntaxMatcher::AnnotateLine(Editor *editor, const Editor::LineMap::Iterator
 
   // end line
   CHECK_GE(remaining_line.len, 0);
-  while(current_parent->first) {
-    auto parent = GetAnchorParseState(editor, *current_parent);
-    int type = rules[parent->state].index[parent->substate].first;
-    bool line_based = type == CompiledRule::RegexMatch;
+  while(current_parent->anchor) {
+    auto parent = GetSyntaxMatchList(editor, *current_parent);
+    int type = rules[SyntaxMatch::GetStateIndex(parent->state)].
+      subrule[SyntaxMatch::GetSubStateIndex(parent->state)].type;
+    bool line_based = type == RuleType::RegexMatch;
     if (!line_based) break;
     *current_parent = parent->parent;
-    *current_state = current_parent->first ? GetAnchorParseState(editor, *current_parent)->state : 0;
+    *current_state = current_parent->anchor ? GetSyntaxMatchList(editor, *current_parent)->state : 0;
+    current_state_stack->pop_back();
+    CHECK_EQ(*current_state, (current_state_stack->size() ? current_state_stack->back() : 0));
+    current_state_ind = SyntaxMatch::GetStateIndex(*current_state);
   }
 }
 

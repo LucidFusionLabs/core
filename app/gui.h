@@ -429,8 +429,8 @@ struct TextArea : public TextBox {
 };
 
 struct TextView : public TextArea {
-  int last_fb_width=0, last_fb_lines=0, last_first_line=0;
   int wrapped_lines=0, fb_wrapped_lines=0;
+  int last_fb_width=0, last_fb_lines=0, last_first_line=0, last_update_mapping_flag=0;
   TextView(GraphicsDevice *D, const FontRef &F=FontRef()) : TextArea(D, F, 0, 0) { reverse_line_fb=1; }
 
   virtual int WrappedLines() const { return wrapped_lines; }
@@ -523,8 +523,9 @@ struct Editor : public TextView {
   struct LineOffset { 
     long long file_offset=-1;
     int file_size=0, wrapped_lines=0, annotation_ind=-1, main_tu_line=-1, next_tu_line=-1;
-    pair<int, int> syntax_parent;
-    vector<SyntaxParseState> syntax_buf;
+    SyntaxMatch::ListPointer syntax_parent;
+    vector<SyntaxMatch::State> syntax_state;
+    vector<SyntaxMatch::List> syntax_ancestor_list_storage;
     LineOffset(int O=0, int S=0, int WL=1, int AI=-1) :
       file_offset(O), file_size(S), wrapped_lines(WL), annotation_ind(AI) {}
 
@@ -557,7 +558,7 @@ struct Editor : public TextView {
   Callback modified_cb, newline_cb, tab_cb;
   vector<Modification> version;
   VersionNumber version_number={0,0}, saved_version_number={0,0}, cached_text_version_number={-1,0};
-  function<DrawableAnnotation(const LineMap::Iterator&, const String16&)> annotation_cb;
+  function<const DrawableAnnotation*(const LineMap::Iterator&, const String16&, int, int)> annotation_cb;
   shared_ptr<BufferFile> cached_text;
   Line *cursor_glyphs=0;
   LineOffset *cursor_offset=0;
@@ -587,6 +588,7 @@ struct Editor : public TextView {
   int CursorGlyphsSize() const { return cursor_glyphs ? cursor_glyphs->Size() : 0; }
   uint16_t CursorGlyph() const { String16 v = CursorLineGlyphs(cursor.i.x, 1); return v.empty() ? 0 : v[0]; }
   String16 CursorLineGlyphs(size_t o, size_t l) const { return cursor_glyphs ? cursor_glyphs->data->glyphs.Text16(o, l) : String16(); }
+  void MarkCursorLineFirstDirty() { syntax_parsed_line_index=cursor_line_index; syntax_parsed_anchor=cursor_anchor; }
   const String16 *ReadLine(const Editor::LineMap::Iterator &ui, String16 *buf);
   void SetWrapMode(const string &n);
   void SetShouldWrap(bool v, bool word_break);

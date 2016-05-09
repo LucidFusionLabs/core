@@ -269,6 +269,7 @@ struct DrawableAnnotation : public vector<pair<int, int>> {
   DrawableAnnotation(const Drawable::AttrSource *s=0) : attr_source(s) {}
   string DebugString() const { const vector<pair<int, int>> &v = *this; return Printable(v); }
   void ExtendBack(const pair<int, int>&);
+  bool Shifted(const DrawableAnnotation&, int dir, int offset) const;
 };
 
 struct DrawableNop : public Drawable {
