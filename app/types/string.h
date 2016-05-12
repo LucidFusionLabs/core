@@ -580,12 +580,12 @@ struct Regex {
     int begin, end;
     Result(int B=-1, int E=-1) : begin(B), end(E) {}
     Result(const PieceIndex &ind) : begin(ind.offset), end(ind.offset + ind.len) {}
-    bool operator!() const { return begin<0 || begin<0; }
+    bool operator!() const { return begin<0 || end<0; }
     bool operator<(const Result &x) const;
     void operator+=(int v) { begin += v; end += v; }
     void operator-=(int v) { begin -= v; end -= v; }
-    string Text(const StringPiece &t) const { return string(t.data() + begin, end - begin); }
-    float FloatVal(const StringPiece &t) const { return atof(Text(t).c_str()); }
+    string   Text(const StringPiece   &t) const { return string  (t.data() + begin, end - begin); }
+    String16 Text(const String16Piece &t) const { return String16(t.data() + begin, end - begin); }
   };
   void *impl=0;
   ~Regex();
@@ -635,11 +635,12 @@ struct StreamRegex {
 struct SyntaxStyleInterface { virtual int GetSyntaxStyle(const string &n, int da) = 0; };
 struct SyntaxMatch {
   typedef uint16_t State;
-  struct ListPointer { int anchor; unsigned subindex; };
+  struct ListPointer { int anchor; unsigned storage_index; };
   struct List { State state; ListPointer parent; };
-  static State  MakeState(size_t ind, size_t subind) { return ind << 4 | (subind & 0x0f); }
-  static size_t GetStateIndex   (State id) { return id >> 4;  }
-  static size_t GetSubStateIndex(State id) { return id & 0xf; }
+  static State MakeState(int group, int rule) { return group << 4 | (rule & 0x0f); }
+  static int GetGroupIndex(State id) { return id >> 4;  }
+  static int GetRuleIndex(State id) { return id & 0xf; }
+  static void GetStateIndices(State id, int *gi, int *ri) { *gi=GetGroupIndex(id); *ri=GetRuleIndex(id); }
 };
 
 struct NextRecordReader {

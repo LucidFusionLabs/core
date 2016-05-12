@@ -440,7 +440,7 @@ struct TextView : public TextArea {
 
   virtual bool Empty() const { return true; }
   virtual void UpdateMapping(int width, int flag=0) {}
-  virtual int UpdateMappedLines(pair<int, int>, int, int, bool, bool, bool, bool, bool) { return 0; }
+  virtual int UpdateMappedLines(pair<int, int>, bool, bool, bool, bool, bool) { return 0; }
 };
 
 struct PropertyView : public TextView {
@@ -494,7 +494,7 @@ struct PropertyView : public TextView {
   virtual void Enter()       {}
 
   void UpdateMapping(int width, int flag=0);
-  int UpdateMappedLines(pair<int, int>, int, int, bool, bool, bool, bool, bool);
+  int UpdateMappedLines(pair<int, int>, bool, bool, bool, bool, bool);
   void LayoutLine(Line *L, const NodeIndex &n, const point &p);
   void HandleNodeControlClicked(Id id, int b, int x, int y, int down);
   void SelectionCB(const Selection::Point &p);
@@ -523,9 +523,10 @@ struct Editor : public TextView {
   struct LineOffset { 
     long long file_offset=-1;
     int file_size=0, wrapped_lines=0, annotation_ind=-1, main_tu_line=-1, next_tu_line=-1;
-    SyntaxMatch::ListPointer syntax_parent;
-    vector<SyntaxMatch::State> syntax_state;
-    vector<SyntaxMatch::List> syntax_ancestor_list_storage;
+    SyntaxMatch::ListPointer syntax_region_start_parent={0,0}, syntax_region_end_parent={0,0};
+    vector<SyntaxMatch::State> syntax_region_start_sig, syntax_region_end_sig;
+    vector<SyntaxMatch::List> syntax_region_ancestor_list_storage;
+    bool colored=0;
     LineOffset(int O=0, int S=0, int WL=1, int AI=-1) :
       file_offset(O), file_size(S), wrapped_lines(WL), annotation_ind(AI) {}
 
@@ -582,7 +583,7 @@ struct Editor : public TextView {
   void SelectionCB(const Selection::Point&);
   bool Empty() const { return !file_line.size(); }
   void UpdateMapping(int width, int flag=0);
-  int UpdateMappedLines(pair<int, int>, int, int, bool, bool, bool, bool, bool);
+  int UpdateMappedLines(pair<int, int>, bool, bool, bool, bool, bool);
   int UpdateLines(float vs, int *first_ind, int *first_offset, int *first_len);
 
   int CursorGlyphsSize() const { return cursor_glyphs ? cursor_glyphs->Size() : 0; }

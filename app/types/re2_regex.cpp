@@ -22,12 +22,13 @@ namespace LFL {
 Regex::~Regex() { if (auto compiled = static_cast<RE2*>(impl)) delete compiled; }
 Regex::Regex(const Regex &x) : impl(x.impl ? new RE2(*static_cast<RE2*>(x.impl)) : nullptr) {}
 Regex::Regex(const string &patternstr) {
+  if (patternstr.empty()) return;
   unique_ptr<RE2> compiled = make_unique<RE2>(patternstr);
   impl = compiled.release();
 }
 
 Regex::Result Regex::MatchOne(const StringPiece &text) {
-  if (!impl) return Regex::Result();
+  if (!impl || !text.len) return Regex::Result();
   auto compiled = static_cast<RE2*>(impl);
   re2::StringPiece match;
   if (!RE2::PartialMatch(re2::StringPiece(text.data(), text.size()), *compiled, &match) ||

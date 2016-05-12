@@ -271,8 +271,10 @@ template <class X, class Y>                   void PushBack(X *vx, Y *vy,       
 template <class X, class Y, class Z>          void PushBack(X *vx, Y *vy, Z *vz,        const typename X::value_type &x, const typename Y::value_type &y, const typename Z::value_type &z)                                  { vx->push_back(x); vy->push_back(y); vz->push_back(z); }
 template <class X, class Y, class Z, class W> void PushBack(X *vx, Y *vy, Z *vz, W *vw, const typename X::value_type &x, const typename Y::value_type &y, const typename Z::value_type &z, const typename W::value_type &w) { vx->push_back(x); vy->push_back(y); vz->push_back(z); vw->push_back(w); }
 
-template <class X>       X *VectorGet(      vector<X> &x, int n) { return (n >= 0 && n < x.size()) ? &x[n] : 0; }
-template <class X> const X *VectorGet(const vector<X> &x, int n) { return (n >= 0 && n < x.size()) ? &x[n] : 0; }
+template <class X>       X *VectorGet(      vector<X> &x, int n) { return (n >= 0 && n < x.size()) ? &x[n] : nullptr; }
+template <class X> const X *VectorGet(const vector<X> &x, int n) { return (n >= 0 && n < x.size()) ? &x[n] : nullptr; }
+template <class X>       X *VectorBack(      vector<X> &x) { return x.size() ? &x.back() : nullptr; }
+template <class X> const X *VectorBack(const vector<X> &x) { return x.size() ? &x.back() : nullptr; }
 template <class X> X *VectorEnsureElement(vector<X> &x, int n) { EnsureSize(x, n+1); return &x[n]; }
 template <class X> X *VectorCheckElement(vector<X> &x, int n) { CHECK_RANGE(n, 0, x.size()); return &x[n]; }
 template <typename X, class Y> void VectorAppend(vector<X> &out, const Y& begin, const Y& end) {
@@ -323,6 +325,14 @@ template <class I1, class I2> size_t MismatchOffset(I1 first1, I1 last1, I2 firs
   int ret = 0;
   while (first1 != last1 && *first1 == *first2) { ++first1; ++first2; ++ret; }
   return ret;
+}
+
+template <class X> void SetComplement(X *v, const X &x) {
+  X complement;
+  swap(*v, complement);
+  v->resize(x.size());
+  auto it = set_difference(x.begin(), x.end(), complement.begin(), complement.end(), v->begin());
+  v->resize(it - v->begin());
 }
 
 template <class X> void FilterByValue(X *v, const typename X::value_type &val) {

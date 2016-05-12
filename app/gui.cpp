@@ -880,8 +880,10 @@ int TextView::UpdateLines(float vs, int *first_ind, int *first_offset, int *firs
   if      ( up && dist <= -start_line_adjust) { start_line_adjust += dist; read_lines.second=past_end_lines=0; }
   else if (!up && dist <=  end_line_cutoff)   { end_line_cutoff   -= dist; read_lines.second=past_end_lines=0; }
 
-  int added = UpdateMappedLines(read_lines, new_first_line, new_last_line,
-                                up, head_read, tail_read, short_read, shorten_read);
+  last_fb_lines = fb->lines;
+  last_first_line = new_first_line;
+  int added = UpdateMappedLines(read_lines, up, head_read, tail_read, short_read, shorten_read);
+
   Line *L = 0;
   if (!up) for (int i=0; i<past_end_lines; i++, added++) { 
     int removed = (wrap && line.ring.Full()) ? line.Back()->Lines() : 0;
@@ -906,9 +908,6 @@ int TextView::UpdateLines(float vs, int *first_ind, int *first_offset, int *firs
   end_line_adjust   = line.Front()->Lines() - end_line_cutoff;
   start_line_cutoff = line.Back ()->Lines() + start_line_adjust;
   if (first_ind) *first_ind = up ? -added-1 : -line.Size()+added;
-
-  last_fb_lines = fb->lines;
-  last_first_line = new_first_line;
   return dist * (up ? -1 : 1);
 }
 
@@ -951,8 +950,8 @@ void PropertyView::UpdateMapping(int width, int flag) {
   property_line.LoadFromSortedVal();
 }
 
-int PropertyView::UpdateMappedLines(pair<int, int> read_lines, int new_first_line, int new_last_line,
-                                    bool up, bool head_read, bool tail_read, bool short_read, bool shorten_read) {
+int PropertyView::UpdateMappedLines(pair<int, int> read_lines, bool up, bool head_read, bool tail_read,
+                                    bool short_read, bool shorten_read) {
   if (!read_lines.second) return 0;
   int added = 0, last_read_line = read_lines.first + read_lines.second - 1, fh = style.font->Height();
   LineMap::ConstIterator lib, lie;
@@ -1087,6 +1086,7 @@ Editor::Base16DefaultDarkSyntaxColors::Base16DefaultDarkSyntaxColors() :
     { "Normal",       Color("d8d8d8"), Color("181818"), 0 },
     { "Number",       Color("dc9656"), Color("181818"), 0 },
     { "Operator",     Color("d8d8d8"), Color("181818"), 0 },
+    { "PreCondition", Color("ba8baf"), Color("181818"), 0 },
     { "PreProc",      Color("f7ca88"), Color("181818"), 0 },
     { "Repeat",       Color("f7ca88"), Color("181818"), 0 },
     { "Special",      Color("86c1b9"), Color("181818"), 0 },
@@ -1176,8 +1176,8 @@ void Editor::UpdateMapping(int width, int flag) {
   // XXX update cursor position
 }
 
-int Editor::UpdateMappedLines(pair<int, int> read_lines, int new_first_line, int new_last_line,
-                              bool up, bool head_read, bool tail_read, bool short_read, bool shorten_read) {
+int Editor::UpdateMappedLines(pair<int, int> read_lines, bool up, bool head_read, bool tail_read,
+                              bool short_read, bool shorten_read) {
   bool wrap = Wrap();
   int read_len = 0;
   IOVector rv;
@@ -1185,7 +1185,7 @@ int Editor::UpdateMappedLines(pair<int, int> read_lines, int new_first_line, int
   if (read_lines.second) {
     CHECK((lib = file_line.SecondBound(read_lines.first+1)).val);
     if (wrap) {
-      if (head_read) start_line_adjust = min(0, lib.key - new_first_line);
+      if (head_read) start_line_adjust = min(0, lib.key - last_first_line);
       if (short_read && tail_read && end_line_cutoff) ++lib;
     }
     int last_read_line = read_lines.first + read_lines.second - 1;
@@ -1196,7 +1196,7 @@ int Editor::UpdateMappedLines(pair<int, int> read_lines, int new_first_line, int
     }
     if (wrap && tail_read) {
       LineMap::Iterator i = lie.ind ? lie : file_line.RBegin();
-      end_line_cutoff = max(0, (--i).key + i.val->wrapped_lines - new_last_line);
+      end_line_cutoff = max(0, (--i).key + i.val->wrapped_lines - last_first_line - last_fb_lines);
     }
   }
 
@@ -1303,6 +1303,7 @@ void Editor::Modify(char16_t c, bool erase, bool undo_or_redo) {
   modified = Now();
   if (modified_cb) modified_cb();
   if (!erase_line && cursor_line_index < syntax_parsed_line_index) MarkCursorLineFirstDirty();
+  cursor_offset->colored = false;
 
   if (erase_line) {
     file_line.Erase(cursor_start_line_number);
@@ -1425,18 +1426,26 @@ bool Editor::WalkUndo(bool backwards) {
 }
 
 bool Editor::ScrollTo(int line_index, int x) {
-  int lines = box.h / style.font->Height(), target_offset = min(line_index, lines/2);
+  int target_offset = min(line_index, last_fb_lines/2), wrapped_line_no = -1;
   if (!Wrap()) {
     if (line_index < 0 || line_index >= file_line.size()) return false;
-    cursor.i.y = target_offset;
-    SetVScroll(line_index - target_offset);
+    wrapped_line_no = line_index;
   } else {
-    LineMap::ConstIterator li;
-    if (!(li = file_line.FindIndex(line_index)).val) return false;
+    LineMap::ConstIterator li = file_line.FindIndex(line_index);
+    if (!li.val) return false;
+    wrapped_line_no = li.GetBegKey();
+  }
+
+  if (wrapped_line_no >= last_first_line &&
+      wrapped_line_no < last_first_line + last_fb_lines) target_offset = wrapped_line_no - last_first_line;
+  else SetVScroll(wrapped_line_no - target_offset);
+
+  if (!Wrap()) cursor.i.y = target_offset;
+  else {
     cursor.i.y = 0;
-    SetVScroll(li.GetBegKey() - target_offset);
     for (int i=start_line, o=start_line_adjust; o<target_offset; i++, cursor.i.y++) o += line[-1-i].Lines();
   }
+
   UpdateCursorLine();
   UpdateCursorX(x);
   return true;

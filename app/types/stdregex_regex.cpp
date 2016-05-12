@@ -22,6 +22,7 @@ namespace LFL {
 Regex::~Regex() { if (auto compiled = static_cast<std::regex*>(impl)) delete compiled; }
 Regex::Regex(const Regex &x) : impl(x.impl ? new std::regex(*static_cast<std::regex*>(x.impl)) : nullptr) {}
 Regex::Regex(const string &patternstr) {
+  if (patternstr.empty()) return;
   try {
     unique_ptr<std::regex> compiled = make_unique<std::regex>(patternstr);
     impl = compiled.release();
@@ -29,7 +30,7 @@ Regex::Regex(const string &patternstr) {
 }
 
 Regex::Result Regex::MatchOne(const StringPiece &text) {
-  if (!impl) return Regex::Result();
+  if (!impl || !text.len) return Regex::Result();
   auto compiled = static_cast<std::regex*>(impl);
   std::match_results<const char*> matches;
   if (!std::regex_search(text.begin(), text.end(), matches, *compiled) || matches.size() < 2) return Regex::Result();
@@ -37,7 +38,7 @@ Regex::Result Regex::MatchOne(const StringPiece &text) {
 }
 
 Regex::Result Regex::MatchOne(const String16Piece &text) {
-  if (!impl) return Regex::Result();
+  if (!impl || !text.len) return Regex::Result();
   auto compiled = static_cast<std::regex*>(impl);
   std::match_results<const char16_t*> matches;
   if (!std::regex_search(text.begin(), text.end(), matches, *compiled) || matches.size() < 2) return Regex::Result();
