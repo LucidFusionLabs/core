@@ -794,7 +794,7 @@ TEST(GUITest, EditorUndoFuzz) {
     if      (mode == 0) { e.CheckResized(Box(80*fw, 25*fh)); }
     else if (mode == 1) { e.CheckResized(Box(20*fw, 25*fh)); e.SetShouldWrap(true, true); }
     for (int iters=0; iters<1000; iters++) {
-      e.ScrollTo(rand() % e.wrapped_lines, rand() % (rand() % 2 == 1 ? 160 : 40));
+      e.ScrollTo(rand() % e.file_line.size(), rand() % (rand() % 2 == 1 ? 160 : 40));
       if (rand()%2 == 1) for (int i=0, l=rand()%32; i<l; i++) e.Modify(rand()%64 == 0 ? '\n' : 'A'+i, false);
       else               for (int i=0, l=rand()%18; i<l; i++) e.Modify(0, true);
     }

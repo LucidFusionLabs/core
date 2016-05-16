@@ -36,6 +36,11 @@ struct SyntaxMatcher {
     vector<string> match_within;
   };
 
+  struct Keyword {
+    string name;
+    vector<string> word;
+  };
+
   struct CompiledRule {
     enum { RegexMatch=1, RegexRegion=2, Region=3 };
     String16 beg_pat, end_pat;
@@ -49,7 +54,7 @@ struct SyntaxMatcher {
   struct CompiledGroup {
     enum WithinType { WithinAll=1, WithinAllBut=2 };
     string name;
-    bool display, transparent;
+    bool display, transparent, keywords;
     int within_type;
     vector<uint16_t> within, non_display_within;
     vector<CompiledRule> rule;
@@ -60,6 +65,7 @@ struct SyntaxMatcher {
     SyntaxMatch::ListPointer parent={0,0};
     vector<SyntaxMatch::State> sig;
     void LoadLineStartRegionContext(Editor*, const Editor::LineMap::Iterator&);
+    void LoadLineEndRegionContext(const Editor::LineMap::Iterator&);
     void SaveLineStartRegionContext(const Editor::LineMap::Iterator&);
     void SaveLineEndRegionContext(const Editor::LineMap::Iterator&);
     void PushRegionContext(Editor*, const Editor::LineMap::Iterator&, SyntaxMatch::State);
@@ -73,16 +79,17 @@ struct SyntaxMatcher {
     bool region;
   };
 
+  unordered_map<String16, pair<string, int>> keywords;
   vector<CompiledGroup> groups;
   map<string, int> group_name;
   vector<int> style_ind;
-  bool sync_minlines=0, sync_maxlines=0;
-  SyntaxMatcher(const vector<Rule>&, SyntaxStyleInterface *s=0, int da=0);
+  bool sync_minlines=1, sync_maxlines=0;
+  SyntaxMatcher(const vector<Rule>&, const vector<Keyword>&, SyntaxStyleInterface *s=0, int da=0);
 
   void LoadStyle(SyntaxStyleInterface*, int default_attr);
   void UpdateAnnotation(Editor*, DrawableAnnotation *out, int out_size);
   void GetLineAnnotation(Editor*, const Editor::LineMap::Iterator &i, const String16 &t,
-                         int *parsed_line_index, int *parsed_anchor, DrawableAnnotation *out);
+                         bool first_line, int *parsed_line_index, int *parsed_anchor, DrawableAnnotation *out);
   void AnnotateLine(Editor*, const Editor::LineMap::Iterator &i, const String16 &t,
                     bool displayed_line, RegionContext *current, DrawableAnnotation *out);
 };

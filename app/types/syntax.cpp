@@ -34,6 +34,12 @@ void SyntaxMatcher::RegionContext::LoadLineStartRegionContext(Editor *editor,
   if (parent.anchor) state = GetSyntaxMatchListNode(editor, parent)->state;
 }
 
+void SyntaxMatcher::RegionContext::LoadLineEndRegionContext(const Editor::LineMap::Iterator &i) {
+  sig = i.val->syntax_region_end_sig;
+  parent = i.val->syntax_region_end_parent;
+  state = sig.size() ? sig.back() : 0;
+}
+
 void SyntaxMatcher::RegionContext::SaveLineStartRegionContext(const Editor::LineMap::Iterator &i) {
   i.val->syntax_region_start_parent = parent;
   i.val->syntax_region_start_sig = sig;
@@ -68,8 +74,9 @@ SyntaxMatcher::RegionContext::GetSyntaxMatchListNode(Editor *editor, const Synta
 }
 
 SyntaxMatcher::SyntaxMatcher(const vector<SyntaxMatcher::Rule> &rules_in,
+                             const vector<SyntaxMatcher::Keyword> &keywords_in,
                              SyntaxStyleInterface *style, int default_attr) {
-  groups.push_back({ string(), 0, 0, 0, vector<uint16_t>(), vector<uint16_t>(), vector<CompiledRule>() });
+  groups.push_back({ string(), 0, 0, 1, 0, vector<uint16_t>(), vector<uint16_t>(), vector<CompiledRule>() });
   string last_name = "";
 
   for (auto &r : rules_in) {
@@ -81,7 +88,7 @@ SyntaxMatcher::SyntaxMatcher(const vector<SyntaxMatcher::Rule> &rules_in,
       name_iter = Insert(group_name, r.name, groups.size());
       if (!(r.flag & Contained)) groups[0].within.push_back(name_iter->second);
       groups.push_back({ r.name, bool(r.flag & Display), bool(r.flag & Transparent), 
-                       0, vector<uint16_t>(), vector<uint16_t>(), vector<CompiledRule>() });
+                       0, 0, vector<uint16_t>(), vector<uint16_t>(), vector<CompiledRule>() });
     } else { CHECK_EQ(last_name, r.name); }
 
     last_name = r.name;
@@ -102,11 +109,11 @@ SyntaxMatcher::SyntaxMatcher(const vector<SyntaxMatcher::Rule> &rules_in,
     CompiledGroup *g = VectorCheckElement(groups, group_ind);
     for (auto &i : r.match_within)
       if (int id = FindOrDefault(group_name, i, 0)) g->within.push_back(id);
-      else if (i == "All")                          g->within_type = CompiledGroup::WithinAll;
-      else if (i == "AllBut")                       g->within_type = CompiledGroup::WithinAllBut;
+      else if (i == "All")    { g->keywords = true; g->within_type = CompiledGroup::WithinAll; }
+      else if (i == "AllBut") { g->keywords = true; g->within_type = CompiledGroup::WithinAllBut; }
     sort(g->within.begin(), g->within.end());
     if (g->within_type == CompiledGroup::WithinAllBut) SetComplement(&g->within, groups[0].within);
-  }
+  } 
   CHECK_EQ(groups.size()-1, group_ind);
 
   for (auto &g : groups)
@@ -115,6 +122,9 @@ SyntaxMatcher::SyntaxMatcher(const vector<SyntaxMatcher::Rule> &rules_in,
       if (!groups[i].display) g.non_display_within.push_back(i);
     }
 
+  for (auto &k : keywords_in)
+    for (auto &w : k.word) keywords[String::ToUTF16(w)] = make_pair(k.name, 0);
+
   if (style) LoadStyle(style, default_attr);
 }
 
@@ -122,6 +132,8 @@ void SyntaxMatcher::LoadStyle(SyntaxStyleInterface *style, int default_attr) {
   style_ind.clear();
   for (auto &g : groups)
     style_ind.push_back(g.transparent ? -1 : style->GetSyntaxStyle(g.name, default_attr));
+  for (auto &k : keywords)
+    k.second.second = style->GetSyntaxStyle(k.second.first, default_attr);
 }
 
 void SyntaxMatcher::UpdateAnnotation(Editor *editor, DrawableAnnotation *out, int out_size) {
@@ -134,43 +146,54 @@ void SyntaxMatcher::UpdateAnnotation(Editor *editor, DrawableAnnotation *out, in
 }
 
 void SyntaxMatcher::GetLineAnnotation(Editor *editor, const Editor::LineMap::Iterator &i, const String16 &t,
-                                      int *parsed_line_index, int *parsed_anchor, DrawableAnnotation *out) {
+                                      bool first_line, int *parsed_line_index, int *parsed_anchor, DrawableAnnotation *out) {
+  String16 buf;
   Editor::LineMap::Iterator pi;
-  if (sync_minlines) {
-    FATAL("not implemented");
-    // walk backward to find first line with non '#' character in position 0 where prev line doesnt end w '\\'
-  } else {
+  RegionContext current_region;
+
+  if (!first_line) {
+    pi = i;
+    auto ppi = pi;
+    --ppi;
+    if (ppi.ind) current_region.LoadLineEndRegionContext(ppi);
+  } else if (!sync_minlines) {
     int anno_line_index = i.GetIndex();
-    if (*parsed_anchor && anno_line_index < *parsed_line_index) {
-      // parse display
-      return;
-    }
+    if (*parsed_anchor && anno_line_index < *parsed_line_index) { /* parse display-only */ return; }
     pi = *parsed_anchor ? editor->file_line.GetAnchorIter(*parsed_anchor) : editor->file_line.Begin();
+    if (*parsed_anchor) current_region.LoadLineStartRegionContext(editor, pi);
     CHECK_EQ(*parsed_line_index, pi.GetIndex());
+  } else {
+    // walk backward to find first line starting with a character where prev line doesnt end w '\\'
+    pi = i;
+    auto ppi = pi;
+    bool already_done = 0;
+    for (--ppi; ppi.ind; pi=ppi, --ppi) {
+      auto pt = editor->ReadLine(pi, &buf);
+      if ((already_done = (pi.val->colored &&
+                           pi.val->syntax_region_start_sig == ppi.val->syntax_region_end_sig))) break;
+      if (!pt->size() || isspace((*pt)[0]) ) continue;
+      auto ppt = editor->ReadLine(ppi, &buf);
+      if (pt->size() && pt->back() == '\\') continue;
+      break;
+    }
+    CHECK(pi.ind);
+    if (already_done) current_region.LoadLineStartRegionContext(editor, pi);
   }
 
-  String16 buf;
-  RegionContext current_region;
-  if (*parsed_anchor) current_region.LoadLineStartRegionContext(editor, pi);
-
-  for (/**/; pi.ind; ++pi) {
-    bool last = pi.ind == i.ind;
+  for (bool last=0; !last && pi.ind; ++pi) {
+    last = pi.ind == i.ind;
     CHECK_GE(pi.val->annotation_ind, 0);
-#if 0
-    if (pi.val->colored && pi.val->syntax_region_start_sig == current_region.sig) continue;
-    else { 
-      current_region.sig = pi.val->syntax_region_end_sig;
-      current_region.parent = pi.val->syntax_region_end_parent;
+    if (pi.val->colored && pi.val->syntax_region_start_sig == current_region.sig) {
+      current_region.LoadLineEndRegionContext(pi);
+      continue;
     }
-#endif
     AnnotateLine(editor, pi, last ? t : *editor->ReadLine(pi, &buf),
                  pi.GetBegKey() >= editor->last_first_line, &current_region, &out[pi.val->annotation_ind]);
-    if (last) break;
   }
 
   *parsed_anchor = i.GetAnchor();
   *parsed_line_index = i.GetIndex();
-  // parse display
+  // parse display-only
 }
 
 void SyntaxMatcher::AnnotateLine(Editor *editor, const Editor::LineMap::Iterator &i, const String16 &text,
@@ -180,8 +203,8 @@ void SyntaxMatcher::AnnotateLine(Editor *editor, const Editor::LineMap::Iterator
   int current_anchor = i.GetAnchor(), current_group_ind, current_rule_ind;
   SyntaxMatch::GetStateIndices(current_region->state, &current_group_ind, &current_rule_ind);
   CHECK_RANGE(current_group_ind, 0, groups.size());
-  out->clear();
-  out->ExtendBack({0, style_ind[current_group_ind]});
+  DrawableAnnotation state_out;
+  state_out.ExtendBack({0, current_group_ind});
   current_region->SaveLineStartRegionContext(i);
   SyntaxDebug("AnnotateLine crs=%d %s\n", current_region->state, String::ToUTF8(text).c_str());
 
@@ -238,14 +261,14 @@ void SyntaxMatcher::AnnotateLine(Editor *editor, const Editor::LineMap::Iterator
         if ((have_next_state = line_context.size())) next_state = line_context.back().state;
       }
       SyntaxDebug("Match-end (r=%d) %s %s\n", region, groups[current_group_ind].name.c_str(),
-                  String::ToUTF8(text.substr(offset+first_match.begin, first_match.end-first_match.begin)).c_str());
+                  String::ToUTF8((first_match + offset).Text(text)).c_str());
 
       if (region) current_region->PopRegionContext(editor);
       if (!have_next_state) next_state = current_region->state;
 
       consumed = first_match.end;
       SyntaxMatch::GetStateIndices(next_state, &current_group_ind, &current_rule_ind);
-      out->ExtendBack({ offset + first_match.end, style_ind[current_group_ind] });
+      state_out.ExtendBack({ offset + first_match.end, current_group_ind });
     } else {
       consumed = first_match.begin;
       SyntaxMatch::State next_state = SyntaxMatch::MakeState(within[match_id.first-1], match_id.second);
@@ -255,15 +278,36 @@ void SyntaxMatcher::AnnotateLine(Editor *editor, const Editor::LineMap::Iterator
       line_context.push_back({ next_state, offset + first_match.begin, offset + first_match.end, region });
       if (region) current_region->PushRegionContext(editor, i, next_state);
 
-      int a = style_ind[current_group_ind];
-      if (a >= 0) out->ExtendBack({ offset + first_match.begin, a });
+      state_out.ExtendBack({ offset + first_match.begin, current_group_ind });
       SyntaxDebug("Match-begin (r=%d) %s %s\n", region, groups[current_group_ind].name.c_str(),
-                  String::ToUTF8(text.substr(offset+first_match.begin, first_match.end-first_match.begin)).c_str());
+                  String::ToUTF8((first_match + offset).Text(text)).c_str());
     }
     remaining_line = String16Piece(remaining_line.buf + consumed, remaining_line.len - consumed);
   }
   CHECK_GE(remaining_line.len, 0);
   current_region->SaveLineEndRegionContext(i);
+
+  out->clear();
+  int start_offset = 0, end_offset = 0;
+  auto a = state_out.begin(), e = state_out.end();
+  CHECK_NE(e, a);
+  do {
+    start_offset = end_offset;
+    CHECK_EQ(start_offset, a->first);
+    int current_group_ind = a->second, attr = style_ind[current_group_ind];
+    out->ExtendBack(make_pair(start_offset, attr));
+    if (++a != e) end_offset = a->first;
+    else end_offset = text.size();
+    if (!groups[current_group_ind].keywords) continue;
+    StringWord16Iter words(String16Piece(text.data() + start_offset, end_offset - start_offset), NotAlnumOr<'_'>);
+    for (String16 w = words.NextString(); !w.empty(); w = words.NextString()) {
+      auto it = keywords.find(w);
+      if (it == keywords.end()) continue;
+      int offset = start_offset + words.CurrentOffset();
+      out->ExtendBack(make_pair(offset, it->second.second));
+      out->ExtendBack(make_pair(offset + words.CurrentLength(), attr));
+    }
+  } while (a != e);
 }
 
 // \\ -> \\\\             \+ -> +      +  -> \\+
@@ -303,6 +347,117 @@ RegexCPlusPlusHighlighter::RegexCPlusPlusHighlighter
   Rule{ "Include", "(^\\s*(%:|#)\\s*include\\b\\s*[\"<])", "", "", RegexpDisplay, StringVec{"Included"} },
   Rule{ "Define",  "(^\\s*(%:|#)\\s*(define|undef)\\b)", "(.$)", "(\\\\$)", Regexp, StringVec{"AllBut", "PreCondition", "Include", "Define", "Special", "Numbers", "Comment" } },
   Rule{ "PreProc", "^\\s*(%:|#)\\s*(pragma\\b|line\\b|warning\\b|warn\\b|error\\b)", "(.$)", "", Regexp, StringVec{"AllBut", "PreCondition", "PreProc", "Include", "Define", "Special", "Numbers", "Comment"} },
+}, {
+  Keyword{ "Statement", {
+#define XX(x) #x,
+#define LFL_C_SYNTAX_STATEMENT
+#define LFL_CPP_SYNTAX_STATEMENT
+#include "core/app/bindings/c_syntax.h"
+#include "core/app/bindings/cpp_syntax.h"
+#undef LFL_C_SYNTAX_STATEMENT
+#undef LFL_CPP_SYNTAX_STATEMENT
+  } },
+
+  Keyword{ "Structure", {
+#define XX(x) #x,
+#define LFL_C_SYNTAX_STRUCTURE
+#define LFL_CPP_SYNTAX_STRUCTURE
+#include "core/app/bindings/c_syntax.h"
+#include "core/app/bindings/cpp_syntax.h"
+#undef LFL_C_SYNTAX_STRUCTURE
+#undef LFL_CPP_SYNTAX_STRUCTURE
+  } },
+
+  Keyword{ "Label", {
+#define LFL_C_SYNTAX_LABEL
+#include "core/app/bindings/c_syntax.h"
+#undef LFL_C_SYNTAX_LABEL
+  } },
+
+  Keyword{ "Conditional", {
+#define LFL_C_SYNTAX_CONDITIONAL
+#include "core/app/bindings/c_syntax.h"
+#undef LFL_C_SYNTAX_CONDITIONAL
+  } },
+
+  Keyword{ "Repeat", {
+#define LFL_C_SYNTAX_REPEAT
+#include "core/app/bindings/c_syntax.h"
+#undef LFL_C_SYNTAX_REPEAT
+  } },
+
+  Keyword{ "Todo", {
+#define LFL_C_SYNTAX_TODO
+#include "core/app/bindings/c_syntax.h"
+#undef LFL_C_SYNTAX_TODO
+  } },
+
+  Keyword{ "Operator", {
+#define XX(x) #x,
+#define LFL_C_SYNTAX_OPERATOR
+#define LFL_CPP_SYNTAX_OPERATOR
+#include "core/app/bindings/c_syntax.h"
+#include "core/app/bindings/cpp_syntax.h"
+#undef LFL_C_SYNTAX_OPERATOR
+#undef LFL_CPP_SYNTAX_OPERATOR
+  } },
+
+  Keyword{ "Type", {
+#define XX(x) #x,
+#define LFL_C_SYNTAX_TYPE
+#define LFL_CPP_SYNTAX_TYPE
+#include "core/app/bindings/c_syntax.h"
+#include "core/app/bindings/cpp_syntax.h"
+#undef LFL_C_SYNTAX_TYPE
+#undef LFL_CPP_SYNTAX_TYPE
+  } },
+
+  Keyword{ "StorageClass", {
+#define XX(x) #x,
+#define LFL_C_SYNTAX_STORAGECLASS
+#define LFL_CPP_SYNTAX_STORAGECLASS
+#include "core/app/bindings/c_syntax.h"
+#include "core/app/bindings/cpp_syntax.h"
+#undef LFL_C_SYNTAX_STORAGECLASS
+#undef LFL_CPP_SYNTAX_STORAGECLASS
+  } },
+
+  Keyword{ "Constant", {
+#define LFL_C_SYNTAX_CONSTANT
+#include "core/app/bindings/c_syntax.h"
+#undef LFL_C_SYNTAX_CONSTANT
+  } },
+
+  Keyword{ "Access", {
+#define LFL_CPP_SYNTAX_ACCESS
+#include "core/app/bindings/cpp_syntax.h"
+#undef LFL_CPP_SYNTAX_ACCESS
+  } },
+
+  Keyword{ "Exceptions", {
+#define LFL_CPP_SYNTAX_EXCEPTIONS
+#include "core/app/bindings/cpp_syntax.h"
+#undef LFL_CPP_SYNTAX_EXCEPTIONS
+  } },
+
+  Keyword{ "Cast", {
+#define LFL_CPP_SYNTAX_CAST
+#include "core/app/bindings/cpp_syntax.h"
+#undef LFL_CPP_SYNTAX_CAST
+  } },
+
+  Keyword{ "Number", {
+#define LFL_CPP_SYNTAX_NUMBER
+#include "core/app/bindings/cpp_syntax.h"
+#undef LFL_CPP_SYNTAX_NUMBER
+  } },
+
+  Keyword{ "Bool", {
+#define LFL_CPP_SYNTAX_BOOL
+#include "core/app/bindings/cpp_syntax.h"
+#undef LFL_CPP_SYNTAX_BOOL
+  } },
+
 }, style, default_attr) {}
 
 }; // namespace LFL

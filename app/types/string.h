@@ -96,6 +96,7 @@ struct Printable : public string {
   Printable(const vector<double> &x);
   Printable(const vector<float> &x);
   Printable(const vector<int> &x);
+  Printable(const vector<uint16_t> &x);
   Printable(const Color &x);
   template <size_t N> Printable(const char (&x)[N]) : string(x) {}
   template <class X> Printable(const X& x) : string(StringPrintf("%s(%p)", typeid(X).name(), &x)) {}
@@ -323,14 +324,6 @@ struct IterWordIter : public StringIter {
   int TotalLength() const { return iter->TotalLength(); }
 };
 
-template <int F, int T>                 int tochar (int i) { return i == F ? T :  i; }
-template <int F, int T, int F2, int T2> int tochar2(int i) { return i == F ? T : (i == F2 ? T2 : i); }
-
-template <int V>          int                 isint (int N) { return N == V; }
-template <int V1, int V2> int                 isint2(int N) { return (N == V1) || (N == V2); }
-template <int V1, int V2, int V3>         int isint3(int N) { return (N == V1) || (N == V2) || (N == V3); }
-template <int V1, int V2, int V3, int V4> int isint4(int N) { return (N == V1) || (N == V2) || (N == V3) || (N == V4); }
-
 #undef isspace
 #undef isascii
 #undef isalpha
@@ -362,6 +355,15 @@ inline int notalnum(int c) { return !isalnum(c); }
 inline int notnum(int c) { return !isnumber(c); }
 inline int notcomma(int c) { return !iscomma(c); }
 inline int notdot(int c) { return !isdot(c); }
+
+template <int F, int T>                 int tochar (int i) { return i == F ? T :  i; }
+template <int F, int T, int F2, int T2> int tochar2(int i) { return i == F ? T : (i == F2 ? T2 : i); }
+
+template <int V>          int                 isint (int N) { return N == V; }
+template <int V1, int V2> int                 isint2(int N) { return (N == V1) || (N == V2); }
+template <int V1, int V2, int V3>         int isint3(int N) { return (N == V1) || (N == V2) || (N == V3); }
+template <int V1, int V2, int V3, int V4> int isint4(int N) { return (N == V1) || (N == V2) || (N == V3) || (N == V4); }
+template <int X> int NotAlnumOr(int c) { return !isalnum(c) && c != X; };
 
 int isfileslash(int c);
 int IsOpenParen(int c);
@@ -584,6 +586,7 @@ struct Regex {
     bool operator<(const Result &x) const;
     void operator+=(int v) { begin += v; end += v; }
     void operator-=(int v) { begin -= v; end -= v; }
+    Result operator+(int v) { Result ret=*this; ret += v; return ret; }
     string   Text(const StringPiece   &t) const { return string  (t.data() + begin, end - begin); }
     String16 Text(const String16Piece &t) const { return String16(t.data() + begin, end - begin); }
   };

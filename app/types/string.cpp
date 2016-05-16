@@ -51,6 +51,7 @@ Printable::Printable(const vector<string>        &x) : string(StrCat("{", Vec<st
 Printable::Printable(const vector<double>        &x) : string(StrCat("{", Vec<double>       ::Str(&x[0], x.size()), "}")) {}
 Printable::Printable(const vector<float>         &x) : string(StrCat("{", Vec<float>        ::Str(&x[0], x.size()), "}")) {}
 Printable::Printable(const vector<int>           &x) : string(StrCat("{", Vec<int>          ::Str(&x[0], x.size()), "}")) {}
+Printable::Printable(const vector<uint16_t>      &x) : string(StrCat("{", Vec<uint16_t>     ::Str(&x[0], x.size()), "}")) {}
 Printable::Printable(const Color                 &x) : string(x.DebugString()) {}
 Printable::Printable(const String16              &x) : string(String::ToUTF8(x)) {}
 Printable::Printable(const Void                  &x) : string(StringPrintf("%p", x)) {}

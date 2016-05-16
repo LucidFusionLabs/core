@@ -1103,7 +1103,7 @@ Editor::Base16DefaultDarkSyntaxColors::Base16DefaultDarkSyntaxColors() :
 Editor::~Editor() {}
 Editor::Editor(GraphicsDevice *D, const FontRef &F, File *I) : TextView(D, F),
   file_line(&LineOffset::GetLines, &LineOffset::GetString),
-  annotation_cb([](const LineMap::ConstIterator&, const String16&, int cs, int){ static DrawableAnnotation a; return cs ? nullptr : &a; }) {
+  annotation_cb([](const LineMap::ConstIterator&, const String16&, bool, int cs, int){ static DrawableAnnotation a; return cs ? nullptr : &a; }) {
   cmd_color = Color(Color::black, .5);
   edits.free_func = [](String16 *v) { v->clear(); };
   selection_cb = bind(&Editor::SelectionCB, this, _1);
@@ -1203,25 +1203,40 @@ int Editor::UpdateMappedLines(pair<int, int> read_lines, bool up, bool head_read
   string buf(read_len, 0);
   if (read_len) CHECK_EQ(buf.size(), file->ReadIOV(&buf[0], rv.data(), rv.size()));
 
-  Line *L = 0;
   int added = 0, bo = 0, width = wrap ? GetFrameBuffer()->w : 0, ll, l, e;
-  if (up) for (auto li = lie; li != lib; bo += l + !e, added++) {
-    l = (e = max(0, -(--li).val->file_size)) ? 0 : li.val->file_size;
-    int removed = (wrap && line.ring.Full()) ? line.Front()->Lines() : 0;
-    if (e) { const auto &t = edits[e-1];                              (L = line.PushBack())->AssignText(t, *annotation_cb(li, t, 0, 0)); }
-    else   { auto t = String::ToUTF16(buf.data()+read_len-bo-l-1, l); (L = line.PushBack())->AssignText(t, *annotation_cb(li, t, 0, 0)); }
-    fb_wrapped_lines += (ll = L->Layout(width, true)) - removed;
-    if (removed) line.ring.DecrementSize(1);
-    CHECK_EQ(li.val->wrapped_lines, ll);
-  }
-  else for (auto li = lib; li != lie; ++li, bo += l + !e, added++) {
-    l = (e = max(0, -li.val->file_size)) ? 0 : li.val->file_size;
-    int removed = (wrap && line.ring.Full()) ? line.Back()->Lines() : 0;
-    if (e) { const auto &t = edits[e-1];                 (L = line.PushFront())->AssignText(t, *annotation_cb(li, t, 0, 0)); }
-    else   { auto t = String::ToUTF16(buf.data()+bo, l); (L = line.PushFront())->AssignText(t, *annotation_cb(li, t, 0, 0)); }
-    fb_wrapped_lines += (ll = L->Layout(width, true)) - removed;
-    if (removed) line.ring.DecrementSize(1);
-    CHECK_EQ(li.val->wrapped_lines, ll);
+  bool first_line = true;
+  Line *L = 0;
+  if (up) {
+    vector<tuple<String16, const String16*, const DrawableAnnotation*, LineMap::Iterator>> line_data;
+    for (auto li = lie; li != lib; bo += l + !e) {
+      l = (e = max(0, -(--li).val->file_size)) ? 0 : li.val->file_size;
+      if (e) line_data.emplace_back(String16(), &edits[e-1], nullptr, li);
+      else   line_data.emplace_back(String::ToUTF16(buf.data()+read_len-bo-l-1, l), nullptr, nullptr, li);
+    }
+    for (auto ldi = line_data.rbegin(), lde = line_data.rend(); ldi != lde; ++ldi) {
+      auto t = tuple_get<1>(*ldi);
+      tuple_get<2>(*ldi) = annotation_cb(tuple_get<3>(*ldi), t ? *t : tuple_get<0>(*ldi), first_line, 0, 0);
+      first_line = 0;
+    }
+    added = line_data.size();
+    for (auto &ld : line_data) {
+      auto t = tuple_get<1>(ld);
+      int removed = (wrap && line.ring.Full()) ? line.Front()->Lines() : 0;
+      (L = line.PushBack())->AssignText(t ? *t : tuple_get<0>(ld), *tuple_get<2>(ld));
+      fb_wrapped_lines += (ll = L->Layout(width, true)) - removed;
+      if (removed) line.ring.DecrementSize(1);
+      CHECK_EQ(tuple_get<3>(ld).val->wrapped_lines, ll);
+    }
+  } else {
+    for (auto li = lib; li != lie; ++li, bo += l + !e, added++, first_line = 0) {
+      l = (e = max(0, -li.val->file_size)) ? 0 : li.val->file_size;
+      int removed = (wrap && line.ring.Full()) ? line.Back()->Lines() : 0;
+      if (e) { const auto &t = edits[e-1];                 (L = line.PushFront())->AssignText(t, *annotation_cb(li, t, first_line, 0, 0)); }
+      else   { auto t = String::ToUTF16(buf.data()+bo, l); (L = line.PushFront())->AssignText(t, *annotation_cb(li, t, first_line, 0, 0)); }
+      fb_wrapped_lines += (ll = L->Layout(width, true)) - removed;
+      if (removed) line.ring.DecrementSize(1);
+      CHECK_EQ(li.val->wrapped_lines, ll);
+    }
   }
   return added;
 }
@@ -1346,7 +1361,7 @@ void Editor::Modify(char16_t c, bool erase, bool undo_or_redo) {
     else       b->insert(cursor.i.x, 1, c);
     const DrawableAnnotation *annotation = nullptr;
     if (!wrap && !(annotation = annotation_cb
-                   (file_line.GetAnchorIter(cursor_anchor), *b, erase ? -1 : 1, cursor.i.x))) {
+                   (file_line.GetAnchorIter(cursor_anchor), *b, 0, erase ? -1 : 1, cursor.i.x))) {
       int attr_id = cursor.i.x ? cursor_glyphs->data->glyphs[cursor.i.x-1].attr_id : default_attr;
       if (erase)  cursor_glyphs->Erase          (cursor.i.x-1, 1);
       else if (0) cursor_glyphs->OverwriteTextAt(cursor.i.x, String16(1, c), attr_id);

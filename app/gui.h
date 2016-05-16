@@ -559,7 +559,7 @@ struct Editor : public TextView {
   Callback modified_cb, newline_cb, tab_cb;
   vector<Modification> version;
   VersionNumber version_number={0,0}, saved_version_number={0,0}, cached_text_version_number={-1,0};
-  function<const DrawableAnnotation*(const LineMap::Iterator&, const String16&, int, int)> annotation_cb;
+  function<const DrawableAnnotation*(const LineMap::Iterator&, const String16&, bool, int, int)> annotation_cb;
   shared_ptr<BufferFile> cached_text;
   Line *cursor_glyphs=0;
   LineOffset *cursor_offset=0;
