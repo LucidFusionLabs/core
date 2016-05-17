@@ -1390,7 +1390,11 @@ string NBRead(Socket fd, int len, int timeout) {
 }
 
 #if 1
-int FWrite(FILE *f, const string &s) { return fwrite(s.data(), 1, s.size(), f); }
+int FWrite(FILE *f, const string &s) { 
+  int ret = fwrite(s.data(), 1, s.size(), f); 
+  if (FLAGS_network_debug && ret >= 0) INFO("FWrite(", fileno(f), ", ", ret, ", '", s.substr(0, ret), "')");
+  return ret;
+}
 #else
 int FWrite(FILE *f, const string &s) { return write(fileno(f), s.data(), s.size()); }
 #endif

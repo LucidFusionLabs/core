@@ -28,6 +28,17 @@ struct MIMEType {
   static bool Png(const string &mt) { return mt == "image/png"; }
 };
 
+struct FileName {
+  static bool Match(const string &url, const string &fn, bool match_case) { 
+    return url == fn ||
+      (url.size() > fn.size() && *(url.end() - fn.size() - 1) == '/' && SuffixMatch(url, fn, match_case));
+  }
+};
+
+struct FileType {
+  enum { HTML=1, Image=2, Jpg=3, Png=4, Gif=5, Bmp=6, C=7, CPP=8, CMake=9 };
+};
+
 struct FileSuffix {
   static bool HTML (const string &url) { return SuffixMatch(url, ".html", 0) || SuffixMatch(url, ".txt", 0); }
   static bool Image(const string &url) { return Jpg(url) || Png(url) || Gif(url) || Bmp(url); }
@@ -37,6 +48,7 @@ struct FileSuffix {
   static bool Bmp  (const string &url) { return SuffixMatch(url, ".bmp", 0); }
   static bool C    (const string &url) { return SuffixMatch(url, ".c", 0) || SuffixMatch(url, ".h"); }
   static bool CPP  (const string &url) { return C(url) || SuffixMatch(url, ".cpp", 0) || SuffixMatch(url, ".cc", 0); }
+  static bool CMake(const string &url) { return SuffixMatch(url, ".cmake", 0) || FileName::Match(url, "CMakeLists.txt", 0); }
 };
 
 struct File {

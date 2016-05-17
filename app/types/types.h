@@ -685,6 +685,13 @@ template <class X> struct FlattenedArrayValues {
   }
 };
 
+struct Semaphore {
+  mutex lock;
+  condition_variable cv;
+  void Signal() { ScopedMutex sm(lock); cv.notify_one(); }
+  void Wait() { unique_lock<mutex> ul(lock); cv.wait(ul); }
+};
+
 template <class X> struct MessageQueue {
   condition_variable cv;
   bool use_cv = 0;

@@ -543,6 +543,8 @@ struct Editor : public TextView {
     SyntaxColors(const string &n, const vector<Rule>&);
     virtual const Color *GetColor(int n) const { CHECK_RANGE(n, 0, color.size()); return &color[n]; }
     virtual int GetSyntaxStyle(const string &n, int da) { return FindOrDefault(style, n, da); }
+    const Color *GetFGColor(const string &n) { return GetColor(Style::GetFGColorIndex(GetSyntaxStyle(n, SetDefaultAttr(0)))); }
+    const Color *GetBGColor(const string &n) { return GetColor(Style::GetBGColorIndex(GetSyntaxStyle(n, SetDefaultAttr(0)))); }
   };
   struct Base16DefaultDarkSyntaxColors : public SyntaxColors { Base16DefaultDarkSyntaxColors(); };
   struct Modification { point p; bool erase; String16 data; };

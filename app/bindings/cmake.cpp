@@ -43,6 +43,12 @@ string CMakeDaemon::Proto::MakeFileInfo(const string &n, const string &p, const 
                 "\",\"file_path\":\"", p, "\",\"config\":\"", c, "\"}", footer);
 }
 
+string CMakeDaemon::Proto::MakeCodeComplete(const string &f, int y, int x, const string &content) {
+  return StrCat(header, "{\"type\":\"code_complete\",\"file_path\":\"", f,
+                "\",\"file_line\":", y, ",\"file_column\":", x, ",\"file_content\":\"",
+                JSONEscape(content), "\"}", footer);
+}
+
 void CMakeDaemon::Start(const string &bin, const string &builddir) {
   if (process.in) return;
   vector<const char*> argv{ bin.c_str(), "-E", "daemon", builddir.c_str(), nullptr };
@@ -50,8 +56,7 @@ void CMakeDaemon::Start(const string &bin, const string &builddir) {
   app->RunInNetworkThread([=](){ app->net->unix_client->AddConnectedSocket
                           (fileno(process.in), new Connection::CallbackHandler
                            (bind(&CMakeDaemon::HandleRead, this, _1),
-                            bind(&CMakeDaemon::HandleClose, this, _1)));
-                          CHECK(FWriteSuccess(process.out, Proto::MakeHandshake("3.5"))); }); 
+                            bind(&CMakeDaemon::HandleClose, this, _1))); });
 }
 
 void CMakeDaemon::HandleClose(Connection *c) {
@@ -70,8 +75,10 @@ void CMakeDaemon::HandleRead(Connection *c) {
     string json_text(start, end-start);
     CHECK(reader.parse(json_text, json, false));
     do { // HandleMessage
-      if (state >= HaveTargets) printf("CMakeDaemon read '%s'\n", json_text.c_str());
-      if (state < Init && json["progress"].asString() == "computed" && (state = Init)) {
+      // if (state >= HaveTargets) printf("CMakeDaemon read '%s'\n", json_text.c_str());
+      if (state < SentHandshake && (state = SentHandshake)) {
+        CHECK(FWriteSuccess(process.out, Proto::MakeHandshake("3.5")));
+      } else if (state < Init && json["binary_dir"].asString().size() && (state = Init)) {
         CHECK(FWriteSuccess(process.out, Proto::MakeBuildsystem()));
       } else if (state < HaveTargets && json.isMember("buildsystem") && (state = HaveTargets)) {
         configs.clear();
@@ -101,6 +108,16 @@ void CMakeDaemon::HandleRead(Connection *c) {
         CopyJsonStringVector(json_target_info["header_sources"],      &info.sources);
         target_info_cb.front().second(info);
         target_info_cb.pop_front();
+      } else if (state >= HaveTargets && json.isMember("completion")) {
+        CHECK_NE(nullptr, code_completions_done);
+        CHECK_NE(nullptr, code_completions_out);
+        const Json::Value &completion_commands = json["completion"]["commands"];
+        if (int l = completion_commands.size()) {
+          unique_ptr<CodeCompletionsVector> ret = make_unique<CodeCompletionsVector>();
+          for (int i=0; i != l; ++i) ret->data.emplace_back(completion_commands[i].asString());
+          *code_completions_out = move(ret);
+        }
+        code_completions_done->Signal();
       }
     } while(0);
     c->ReadFlush(end + Proto::footer.size() - c->rb.begin());
@@ -115,6 +132,22 @@ bool CMakeDaemon::GetTargetInfo(const string &target, TargetInfoCB &&cb) {
     target_info_cb.emplace_back(target, cb);
   });
   return true;
+}
+
+unique_ptr<CodeCompletions> CMakeDaemon::CompleteCode(const string &fn, int y, int x, const string &content) {
+  Semaphore done;
+  unique_ptr<CodeCompletions> ret;
+  app->RunInNetworkThread([&](){
+    CHECK_EQ(nullptr, code_completions_done);
+    CHECK_EQ(nullptr, code_completions_out);
+    CHECK(FWriteSuccess(process.out, Proto::MakeCodeComplete(fn, y, x, content))); 
+    code_completions_done = &done;
+    code_completions_out = &ret;
+  });
+  done.Wait();
+  code_completions_done = nullptr;
+  code_completions_out = nullptr;
+  return ret;
 }
 
 }; // namespace LFL

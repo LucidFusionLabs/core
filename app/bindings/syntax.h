@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef LFL_CORE_APP_TYPES_SYNTAX_H__
-#define LFL_CORE_APP_TYPES_SYNTAX_H__
+#ifndef LFL_CORE_APP_BINDINGS_SYNTAX_H__
+#define LFL_CORE_APP_BINDINGS_SYNTAX_H__
 namespace LFL {
 
 struct SyntaxMatcher {
@@ -79,12 +79,13 @@ struct SyntaxMatcher {
     bool region;
   };
 
+  bool keywords_case_sensitive=true;
   unordered_map<String16, pair<string, int>> keywords;
   vector<CompiledGroup> groups;
   map<string, int> group_name;
   vector<int> style_ind;
   bool sync_minlines=1, sync_maxlines=0;
-  SyntaxMatcher(const vector<Rule>&, const vector<Keyword>&, SyntaxStyleInterface *s=0, int da=0);
+  SyntaxMatcher(const vector<Rule>&, const vector<Keyword>&, bool, SyntaxStyleInterface *s=0, int da=0);
 
   void LoadStyle(SyntaxStyleInterface*, int default_attr);
   void UpdateAnnotation(Editor*, DrawableAnnotation *out, int out_size);
@@ -98,5 +99,9 @@ struct RegexCPlusPlusHighlighter : public SyntaxMatcher {
   RegexCPlusPlusHighlighter(SyntaxStyleInterface *style=0, int default_attr=0);
 };
 
+struct RegexCMakeHighlighter : public SyntaxMatcher {
+  RegexCMakeHighlighter(SyntaxStyleInterface *style=0, int default_attr=0);
+};
+
 }; // namespace LFL
-#endif // LFL_CORE_APP_TYPES_SYNTAX_H__
+#endif // LFL_CORE_APP_TYPES_BINDINGS_H__

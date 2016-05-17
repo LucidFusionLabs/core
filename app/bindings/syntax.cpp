@@ -17,7 +17,7 @@
  */
 
 #include "core/app/gui.h"
-#include "core/app/types/syntax.h"
+#include "core/app/bindings/syntax.h"
 
 // #define LFL_SYTNAX_DEBUG
 #ifdef LFL_SYTNAX_DEBUG
@@ -75,8 +75,9 @@ SyntaxMatcher::RegionContext::GetSyntaxMatchListNode(Editor *editor, const Synta
 
 SyntaxMatcher::SyntaxMatcher(const vector<SyntaxMatcher::Rule> &rules_in,
                              const vector<SyntaxMatcher::Keyword> &keywords_in,
-                             SyntaxStyleInterface *style, int default_attr) {
+                             bool kw_case_sensitive, SyntaxStyleInterface *style, int default_attr) {
   groups.push_back({ string(), 0, 0, 1, 0, vector<uint16_t>(), vector<uint16_t>(), vector<CompiledRule>() });
+  keywords_case_sensitive = kw_case_sensitive;
   string last_name = "";
 
   for (auto &r : rules_in) {
@@ -123,7 +124,8 @@ SyntaxMatcher::SyntaxMatcher(const vector<SyntaxMatcher::Rule> &rules_in,
     }
 
   for (auto &k : keywords_in)
-    for (auto &w : k.word) keywords[String::ToUTF16(w)] = make_pair(k.name, 0);
+    for (auto &w : k.word)
+      keywords[String::ToUTF16(keywords_case_sensitive ? w : tolower(w))] = make_pair(k.name, 0);
 
   if (style) LoadStyle(style, default_attr);
 }
@@ -210,6 +212,7 @@ void SyntaxMatcher::AnnotateLine(Editor *editor, const Editor::LineMap::Iterator
 
   while (remaining_line.len > 0) {
     int offset = remaining_line.buf - text.data(), consumed = 0;
+    bool plus1 = line_context.size() && offset == line_context.back().begin;
     auto &group = groups[current_group_ind];
     static pair<long, long> match_id_end(-1, 0), match_id_skip(-2, 0);
     pair<long, long> match_id;
@@ -218,7 +221,6 @@ void SyntaxMatcher::AnnotateLine(Editor *editor, const Editor::LineMap::Iterator
     // find skip or end
     if (current_group_ind) {
       auto &parent_rule = group.rule[current_rule_ind];
-      bool plus1 = line_context.size() && offset == line_context.back().begin;
       String16Piece remaining(remaining_line.buf + plus1, remaining_line.len - plus1);
 
       if (parent_rule.type == CompiledRule::RegexRegion && parent_rule.skip.impl) {
@@ -241,8 +243,8 @@ void SyntaxMatcher::AnnotateLine(Editor *editor, const Editor::LineMap::Iterator
       for (auto ib = groups[*i].rule.begin(), ii = ib, ie = groups[*i].rule.end(); ii != ie; ++ii) {
         switch(ii->type) {
           case CompiledRule::Region:      m = FindStringIndex(remaining_line, String16Piece(ii->beg_pat)); break;
-          case CompiledRule::RegexRegion: m = ii->beg.MatchOne(remaining_line); break;
           case CompiledRule::RegexMatch:  m = ii->beg.MatchOne(remaining_line); break;
+          case CompiledRule::RegexRegion: m = ii->beg.MatchOne((plus1 && *i == current_group_ind) ? String16Piece(remaining_line.buf+1, remaining_line.len-1) : remaining_line); break;
         }
         if (!!m && (!first_match || m < first_match)) { first_match=m; match_id={i-b+1, ii-ib}; }
       }
@@ -301,7 +303,7 @@ void SyntaxMatcher::AnnotateLine(Editor *editor, const Editor::LineMap::Iterator
     if (!groups[current_group_ind].keywords) continue;
     StringWord16Iter words(String16Piece(text.data() + start_offset, end_offset - start_offset), NotAlnumOr<'_'>);
     for (String16 w = words.NextString(); !w.empty(); w = words.NextString()) {
-      auto it = keywords.find(w);
+      auto it = keywords.find(keywords_case_sensitive ? w : tolower(w));
       if (it == keywords.end()) continue;
       int offset = start_offset + words.CurrentOffset();
       out->ExtendBack(make_pair(offset, it->second.second));
@@ -458,6 +460,44 @@ RegexCPlusPlusHighlighter::RegexCPlusPlusHighlighter
 #undef LFL_CPP_SYNTAX_BOOL
   } },
 
-}, style, default_attr) {}
+  Keyword{ "Todo", { "TODO", "FIXME", "XXX" } },
+}, true, style, default_attr) {}
+
+/* CMake */
+
+RegexCMakeHighlighter::RegexCMakeHighlighter
+(SyntaxStyleInterface *style, int default_attr) : SyntaxMatcher({
+  Rule{ "SpecialChar", "(\\\\\\\\|\\\\\"|\\\\n|\\\\t)", "", "", RegexpContained, StringVec{} },
+  Rule{ "Comment",  "(#)", "(.$)", "", Regexp, StringVec{"Todo"} },
+  Rule{ "Type", "(\\$\\{)", "(\\})", "", Regexp, StringVec{"Type", "Special" } },
+  Rule{ "Special", "(\\$ENV\\{", "(\\})", "", Regexp, StringVec{"Type", "Special"} },
+  Rule{ "String", "(\")", "(\")", "", Regexp, StringVec{} },
+  Rule{ "Identifier", "(\\()", "(\\))", "", Regexp, StringVec{"Type", "Special", "String"} },
+}, {
+  Keyword{ "Constant", { "WIN32", "UNIX", "APPLE", "CYGWIN", "BORLAND", "MINGW", "MSVC", "MSVC_IDE",
+                         "MSVC60", "MSVC70", "MSVC71", "MSVC80", "MSVC90" } },
+  Keyword{ "Operator", { "ABSOLUTE", "AND", "BOOL", "CACHE", "COMMAND", "DEFINED", "DOC", "EQUAL", "EXISTS",
+                         "EXT", "FALSE", "GREATER", "INTERNAL", "LESS", "MATCHES", "NAME", "NAMES", "NAME_WE",
+                         "NOT", "OFF", "ON", "OR", "PATH", "PATHS", "PROGRAM", "STREQUAL", "STRGREATER",
+                         "STRING", "STRLESS", "TRUE" } },
+  Keyword{ "Define", { "ADD_CUSTOM_COMMAND", "ADD_CUSTOM_TARGET", "ADD_DEFINITIONS", "ADD_DEPENDENCIES",
+                          "ADD_EXECUTABLE", "ADD_LIBRARY", "ADD_SUBDIRECTORY", "ADD_TEST", "AUX_SOURCE_DIRECTORY",
+                          "BUILD_COMMAND", "BUILD_NAME", "CMAKE_MINIMUM_REQUIRED", "CONFIGURE_FILE", "CREATE_TEST_SOURCELIST",
+                          "ELSE", "ELSEIF", "ENABLE_LANGUAGE", "ENABLE_TESTING", "ENDFOREACH", "ENDFUNCTION",
+                          "ENDIF", "ENDMACRO", "ENDWHILE", "EXEC_PROGRAM", "EXECUTE_PROCESS", "EXPORT_LIBRARY_DEPENDENCIES",
+                          "FILE", "FIND_FILE", "FIND_LIBRARY", "FIND_PACKAGE", "FIND_PATH", "FIND_PROGRAM",
+                          "FLTK_WRAP_UI", "FOREACH", "FUNCTION", "GET_CMAKE_PROPERTY", "GET_DIRECTORY_PROPERTY",
+                          "GET_FILENAME_COMPONENT", "GET_SOURCE_FILE_PROPERTY", "GET_TARGET_PROPERTY",
+                          "GET_TEST_PROPERTY", "IF", "INCLUDE", "INCLUDE_DIRECTORIES", "INCLUDE_EXTERNAL_MSPROJECT",
+                          "INCLUDE_REGULAR_EXPRESSION", "INSTALL", "INSTALL_FILES", "INSTALL_PROGRAMS", "INSTALL_TARGETS",
+                          "LINK_DIRECTORIES", "LINK_LIBRARIES", "LIST", "LOAD_CACHE", "LOAD_COMMAND", "MACRO", "MAKE_DIRECTORY",
+                          "MARK_AS_ADVANCED", "MATH", "MESSAGE", "OPTION", "OUTPUT_REQUIRED_FILES", "PROJECT", "QT_WRAP_CPP",
+                          "QT_WRAP_UI", "REMOVE", "REMOVE_DEFINITIONS", "SEPARATE_ARGUMENTS", "SET", "SET_DIRECTORY_PROPERTIES",
+                          "SET_SOURCE_FILES_PROPERTIES", "SET_TARGET_PROPERTIES", "SET_TESTS_PROPERTIES",
+                          "SITE_NAME", "SOURCE_GROUP", "STRING", "SUBDIR_DEPENDS", "SUBDIRS", "TARGET_LINK_LIBRARIES",
+                          "TRY_COMPILE", "TRY_RUN", "UNSET", "USE_MANGLED_MESA", "UTILITY_SOURCE", "VARIABLE_REQUIRES",
+                          "VTK_MAKE_INSTANTIATOR", "VTK_WRAP_JAVA", "VTK_WRAP_PYTHON", "VTK_WRAP_TCL", "WHILE", "WRITE_FILE" } },
+  Keyword{ "Todo", { "TODO", "FIXME", "XXX" } },
+}, false, style, default_attr) {}
 
 }; // namespace LFL

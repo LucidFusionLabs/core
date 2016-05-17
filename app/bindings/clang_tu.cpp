@@ -290,7 +290,7 @@ bool TranslationUnit::Reparse(const OpenedFiles &opened) {
   return true;
 }
 
-unique_ptr<TranslationUnit::CodeCompletions>
+unique_ptr<LFL::CodeCompletions>
 TranslationUnit::CompleteCode(const OpenedFiles &opened, int line, int column) {
   unsigned options = clang_defaultCodeCompleteOptions();
   vector<CXUnsavedFile> unsaved = GetClangUnsavedFiles(opened);

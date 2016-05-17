@@ -20,6 +20,18 @@
 #define LFL_CORE_APP_BINDINGS_IDE_H__
 namespace LFL {
 
+struct CodeCompletions {
+  virtual ~CodeCompletions() {}
+  virtual size_t size() const = 0;
+  virtual string GetText(size_t ind) = 0;
+};
+
+struct CodeCompletionsVector : public CodeCompletions {
+  vector<string> data;
+  size_t size() const { return data.size(); }
+  string GetText(size_t ind) { return data[ind]; }
+};
+
 struct TranslationUnit {
   typedef vector<pair<string, shared_ptr<BufferFile>>> OpenedFiles;
   struct Token { static const int Punctuation, Keyword, Identifier, Literal, Comment; };
@@ -66,7 +78,7 @@ struct TranslationUnit {
     void Visit();
   };
 
-  struct CodeCompletions {
+  struct CodeCompletions : public LFL::CodeCompletions {
     void *impl=0;
     virtual ~CodeCompletions();
     CodeCompletions(void *I=0) : impl(I) {}
@@ -86,7 +98,7 @@ struct TranslationUnit {
   bool Load(const string &f);
   bool Parse(const OpenedFiles &unsaved = OpenedFiles());
   bool Reparse(const OpenedFiles &unsaved = OpenedFiles());
-  unique_ptr<CodeCompletions> CompleteCode(const OpenedFiles&, int, int);
+  unique_ptr<LFL::CodeCompletions> CompleteCode(const OpenedFiles&, int, int);
   pair<FileOffset, FileOffset> GetCursorExtent(const string &f, int, int);
   FileNameAndOffset FindDefinition(const string &f, int, int);
 };
@@ -107,13 +119,14 @@ struct ClangCPlusPlusHighlighter {
 };
 
 struct CMakeDaemon {
-  enum { Null=0, Init=1, HaveTargets=2 };
+  enum { Null=0, SentHandshake=1, Init=2, HaveTargets=3 };
   struct Proto {
     static const string header, footer;
     static string MakeBuildsystem();
     static string MakeHandshake(const string &v);
     static string MakeTargetInfo(const string &n, const string &c);
     static string MakeFileInfo(const string &n, const string &p, const string &c);
+    static string MakeCodeComplete(const string &f, int y, int x, const string &content);
   };
   struct Target {
     string decl_file;
@@ -131,16 +144,20 @@ struct CMakeDaemon {
   unordered_map<string, Target> targets;
   deque<pair<string, TargetInfoCB>> target_info_cb;
   Callback init_targets_cb;
+  Semaphore *code_completions_done=0;
+  unique_ptr<CodeCompletions> *code_completions_out=0;
   CMakeDaemon() {}
 
+  bool Ready() const { return state >= HaveTargets; }
   void Start(const string &bin, const string &builddir);
   void HandleClose(Connection *c);
   void HandleRead(Connection *c);
   bool GetTargetInfo(const string &target, TargetInfoCB&&);
+  unique_ptr<LFL::CodeCompletions> CompleteCode(const string &fn, int y, int x, const string &content);
 };
 
 struct CodeCompletionsView : public PropertyView {
-  unique_ptr<TranslationUnit::CodeCompletions> completions;
+  unique_ptr<LFL::CodeCompletions> completions;
   mutable Node node;
   using PropertyView::PropertyView;
 

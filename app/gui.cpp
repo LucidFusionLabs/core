@@ -1092,10 +1092,12 @@ Editor::Base16DefaultDarkSyntaxColors::Base16DefaultDarkSyntaxColors() :
     { "Special",      Color("86c1b9"), Color("181818"), 0 },
     { "SpecialChar",  Color("a16946"), Color("181818"), 0 },
     { "Statement",    Color("ab4642"), Color("181818"), 0 },
+    { "StatusLine",   Color("b8b8b8"), Color("383838"), 0 },
     { "StorageClass", Color("f7ca88"), Color("181818"), 0 },
     { "String",       Color("a1b56c"), Color("181818"), 0 },
     { "Structure",    Color("ba8baf"), Color("181818"), 0 },
     { "Tag",          Color("f7ca88"), Color("181818"), 0 },
+    { "Todo",         Color("f7ca88"), Color("282828"), 0 },
     { "Type",         Color("f7ca88"), Color("181818"), 0 },
     { "Typedef",      Color("f7ca88"), Color("181818"), 0 }
   }) {}

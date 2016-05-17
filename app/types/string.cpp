@@ -499,10 +499,32 @@ template <class X> string CHexEscapeNonAscii(const basic_string<X> &text) {
   return ret;
 }
 
+template <class X> string JSONEscape(const basic_string<X> &text) {
+  string ret;
+  ret.reserve(text.size()*2);
+  for (typename make_unsigned<X>::type c : text)
+    switch (c) {
+      case '"':  StrAppend(&ret, "\\\""); break;
+      case '\\': StrAppend(&ret, "\\\\"); break;
+      case '\b': StrAppend(&ret, "\\b");  break;
+      case '\f': StrAppend(&ret, "\\f");  break;
+      case '\n': StrAppend(&ret, "\\n");  break;
+      case '\r': StrAppend(&ret, "\\r");  break;
+      case '\t': StrAppend(&ret, "\\t");  break;
+      default:
+        if (c <= 0x1f || c >= 0x7f) StringAppendf(&ret, "\\u%04x", c);
+        else                        ret += c;
+        break;
+    }
+  return ret;
+}
+
 template string CHexEscape        (const string   &);
 template string CHexEscape        (const String16 &);
 template string CHexEscapeNonAscii(const string   &);
 template string CHexEscapeNonAscii(const String16 &);
+template string JSONEscape        (const string   &);
+template string JSONEscape        (const String16 &);
 
 string FirstMatchCSV(const StringPiece &haystack, const StringPiece &needle, int (*ischar)(int)) {
   unordered_set<string> h_map;

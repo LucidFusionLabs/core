@@ -71,7 +71,7 @@ TranslationUnit::~TranslationUnit() {}
 bool TranslationUnit::SaveTo(const string &f) { return false; }
 bool TranslationUnit::Load(const string &f) { return false; }
 bool TranslationUnit::Parse(const OpenedFiles &opened) { return false; }
-unique_ptr<TranslationUnit::CodeCompletions> TranslationUnit::CompleteCode(const OpenedFiles&, int, int) { return nullptr; }
+unique_ptr<LFL::CodeCompletions> TranslationUnit::CompleteCode(const OpenedFiles&, int, int) { return nullptr; }
 pair<FileOffset, FileOffset> TranslationUnit::GetCursorExtent(const string &f, int, int) { return pair<FileOffset, FileOffset>(); }
 FileNameAndOffset TranslationUnit::FindDefinition(const string&, int, int) { return FileNameAndOffset(); }
 void TranslationUnit::TokenVisitor::Visit() {}
