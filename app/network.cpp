@@ -432,10 +432,7 @@ void SocketWakeupThread::ThreadProc() {
       { ScopedMutex sm(sockets_mutex); my_sockets = sockets; }
       my_sockets.Select(-1);
       if (my_sockets.GetReadable(pipe[0])) { char buf[128]; recv(pipe[0], buf, sizeof(buf), 0); }
-      if (app->run) {
-        if (!wakeup_each) app->scheduler.Wakeup(0);
-        else for (auto &s : my_sockets.socket) if (my_sockets.GetReadable(s.first)) app->scheduler.Wakeup(s.second.second);
-      }
+      if (app->run) app->scheduler.Wakeup(screen);
     }
     if (wait_mutex) { ScopedMutex sm(*wait_mutex); }
   }

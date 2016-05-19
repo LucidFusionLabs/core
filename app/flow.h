@@ -22,6 +22,32 @@
 #define FlowDebug(...) INFO(__VA_ARGS__)
 
 namespace LFL {
+  
+struct DrawableAnnotation : public vector<pair<int, int>> {
+  const Drawable::AttrSource *attr_source=0;
+  DrawableAnnotation(const Drawable::AttrSource *s=0) : attr_source(s) {}
+  string DebugString() const { const vector<pair<int, int>> &v = *this; return Printable(v); }
+  void ExtendBack(const pair<int, int>&);
+  bool Shifted(const DrawableAnnotation&, int dir, int offset) const;
+};
+
+struct DrawableBox {
+  LFL::Box box;
+  const Drawable *drawable;
+  int attr_id, line_id;
+  DrawableBox(                   const Drawable *D = 0, int A = 0, int L = -1) :         drawable(D), attr_id(A), line_id(L) {}
+  DrawableBox(const LFL::Box &B, const Drawable *D = 0, int A = 0, int L = -1) : box(B), drawable(D), attr_id(A), line_id(L) {}
+  bool operator< (const DrawableBox &x) const { return box < x.box; }
+  bool operator==(const DrawableBox &x) const { return Id() == x.Id(); }
+  int LeftBound (const Drawable::Attr *A) const { return box.x - (drawable ? drawable->LeftBearing(A) : 0); }
+  int RightBound(const Drawable::Attr *A) const { return box.x + (drawable ? (drawable->Advance(&box, A) - drawable->LeftBearing(A)) : box.w); }
+  int TopBound  (const Drawable::Attr *A) const { return box.y + (drawable ? (drawable->Baseline(&box, A) + drawable->Ascender(&box, A)) : box.h); }
+  int Id() const { return drawable ? drawable->Id() : 0; }
+  operator int() const { return Id(); }
+};
+
+typedef ArrayMemberPairSegmentIter<DrawableBox, int, &DrawableBox::attr_id, &DrawableBox::line_id> DrawableBoxIterator;
+typedef ArrayMemberSegmentIter    <DrawableBox, int, &DrawableBox::attr_id>                        DrawableBoxRawIterator;
 
 struct DrawableBoxRun {
   const Drawable::Attr *attr;

@@ -112,6 +112,7 @@ extern int optind;
 #define DEBUG(...)
 #endif
 
+#define LABEL(x) " " #x "=", x
 #define ONCE(x) { static bool once=0; if (!once && (once=1)) { x; } }
 #define EVERY_N(x, y) { static int every_N=0; if (every_N++ % (x) == 0) { y; } }
 #define EX_LT(x, a)    if (!((x) <  (a)))  INFO((x), " < ",  (a), ": EX_LT(",    #x, ", ", #a, ")"); 
@@ -387,6 +388,7 @@ struct PerformanceTimers {
 #include "core/app/scene.h"
 #include "core/app/loader.h"
 #include "core/app/assets.h"
+#include "core/app/layers.h"
 #include "core/app/input.h"
 #include "core/app/shell.h"
 #include "core/app/network.h"
@@ -424,18 +426,18 @@ struct FrameScheduler {
   bool DoWait();
   bool FrameWait();
   void FrameDone();
-  void Wakeup(void*);
-  bool WakeupIn(void*, Time interval, bool force=0);
-  void ClearWakeupIn();
-  void UpdateTargetFPS(int fps);
+  void Wakeup(Window*);
+  bool WakeupIn(Window*, Time interval, bool force=0);
+  void ClearWakeupIn(Window*);
+  void UpdateTargetFPS(Window*, int fps);
   void UpdateWindowTargetFPS(Window*);
-  void SetAnimating(bool);
-  void AddWaitForeverMouse();
-  void DelWaitForeverMouse();
-  void AddWaitForeverKeyboard();
-  void DelWaitForeverKeyboard();
-  void AddWaitForeverSocket(Socket fd, int flag, void *val=0);
-  void DelWaitForeverSocket(Socket fd);
+  void SetAnimating(Window*, bool);
+  void AddWaitForeverMouse(Window*);
+  void DelWaitForeverMouse(Window*);
+  void AddWaitForeverKeyboard(Window*);
+  void DelWaitForeverKeyboard(Window*);
+  void AddWaitForeverSocket(Window*, Socket fd, int flag, void *val=0);
+  void DelWaitForeverSocket(Window*, Socket fd);
 };
 
 struct BrowserInterface {

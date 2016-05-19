@@ -53,11 +53,11 @@ extern "C" int LFAppMain()                 { return LFL::app->Main(); }
 extern "C" int LFAppMainLoop()             { return LFL::app->MainLoop(); }
 extern "C" int LFAppFrame(bool handle_ev)  { return LFL::app->EventDrivenFrame(handle_ev); }
 extern "C" void LFAppTimerDrivenFrame()    { LFL::app->TimerDrivenFrame(true); }
-extern "C" void LFAppWakeup(void *v)       { return LFL::app->scheduler.Wakeup(v); }
+extern "C" void LFAppWakeup()              { return LFL::app->scheduler.Wakeup(LFL::screen); }
 extern "C" void LFAppResetGL()             { return LFL::app->ResetGL(); }
 extern "C" const char *LFAppDownloadDir()  { return LFL::app->dldir.c_str(); }
 extern "C" void LFAppAtExit()              { delete LFL::app; }
-extern "C" void LFAppShutdown()                   { LFL::app->run=0; LFAppWakeup(0); }
+extern "C" void LFAppShutdown()                   { LFL::app->run=0; LFAppWakeup(); }
 extern "C" void WindowReshaped(int w, int h)      { LFL::screen->Reshaped(w, h); }
 extern "C" void WindowMinimized()                 { LFL::screen->Minimized(); }
 extern "C" void WindowUnMinimized()               { LFL::screen->UnMinimized(); }
@@ -695,6 +695,7 @@ Application::~Application() {
 Window::Window() : caption(app->name), fps(128) {
   id = gl = surface = glew_context = impl = user1 = user2 = user3 = typed_ptr{0, nullptr};
   started = minimized = cursor_grabbed = frame_init = animating = 0;
+  resize_increment_x = resize_increment_y = 0;
   target_fps = FLAGS_target_fps;
   multitouch_keyboard_x = .93; 
   cam = make_unique<Entity>(v3(5.54, 1.70, 4.39), v3(-.51, -.03, -.49), v3(-.03, 1, -.03));
@@ -861,23 +862,23 @@ bool FrameScheduler::FrameWait() {
   return ret;
 }
 
-void FrameScheduler::UpdateTargetFPS(int fps) {
-  screen->target_fps = fps;
+void FrameScheduler::UpdateTargetFPS(Window *w, int fps) {
+  w->target_fps = fps;
   if (monolithic_frame) {
     int next_target_fps = 0;
-    for (const auto &w : app->windows) Max(&next_target_fps, w.second->target_fps);
+    for (const auto &wi : app->windows) Max(&next_target_fps, wi.second->target_fps);
     FLAGS_target_fps = next_target_fps;
   }
-  CHECK(screen->id.v);
-  UpdateWindowTargetFPS(screen);
+  CHECK(w->id.v);
+  UpdateWindowTargetFPS(w);
 }
 
-void FrameScheduler::SetAnimating(bool is_animating) {
-  screen->animating = is_animating;
+void FrameScheduler::SetAnimating(Window *w, bool is_animating) {
+  w->animating = is_animating;
   int target_fps = is_animating ? FLAGS_peak_fps : 0;
-  if (target_fps != screen->target_fps) {
-    UpdateTargetFPS(target_fps);
-    Wakeup(0);
+  if (target_fps != w->target_fps) {
+    UpdateTargetFPS(w, target_fps);
+    Wakeup(w);
   }
 }
 

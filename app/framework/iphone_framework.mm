@@ -702,11 +702,10 @@ struct iPhoneFrameworkModule : public Module {
   }
 };
 
-struct iPhoneAudioAssetLoader : public AudioAssetLoader {
-  virtual void *LoadAudioFile(const string &filename) { return iPhoneMusicCreate(filename.c_str()); }
+struct iPhoneAssetLoader : public SimpleAssetLoader {
   virtual void UnloadAudioFile(void *h) {}
-  virtual void *LoadAudioBuf(const char *buf, int len, const char *mimetype) { return 0; }
-  virtual void UnloadAudioBuf(void *h) {}
+  virtual void *LoadAudioFile(File*) { return 0; }
+  virtual void *LoadAudioFileNamed(const string &filename) { return 0; }
   virtual void LoadAudio(void *handle, SoundAsset *a, int seconds, int flag) { a->handle = handle; }
   virtual int RefillAudio(SoundAsset *a, int reset) { return 0; }
 };
@@ -749,8 +748,8 @@ void Window::SetTransparency(float v) {}
 void Window::SetCaption(const string &v) {}
 void Window::Reshape(int w, int h) {}
 
-bool Video::CreateWindow(Window *W) { return false; }
-void Video::StartWindow(Window *W) {
+bool Video::CreateWindow(Window *w) { return false; }
+void Video::StartWindow(Window *w) {
   [[LFUIApplication sharedAppDelegate] updateTargetFPS: w->target_fps];
 }
 
@@ -762,34 +761,34 @@ int Video::Swap() {
 
 bool FrameScheduler::DoWait() { return false; }
 void FrameScheduler::Setup() { rate_limit = synchronize_waits = wait_forever_thread = monolithic_frame = 0; }
-void FrameScheduler::Wakeup(void*) {
-  dispatch_async(dispatch_get_main_queue(), ^{ [GetTyped<GLKView*>(screen->id) setNeedsDisplay]; });
+void FrameScheduler::Wakeup(Window *w) {
+  dispatch_async(dispatch_get_main_queue(), ^{ [GetTyped<GLKView*>(w->id) setNeedsDisplay]; });
 }
 
-bool FrameScheduler::WakeupIn(void *opaque, Time interval, bool force) { return false; }
-void FrameScheduler::ClearWakeupIn() {}
+bool FrameScheduler::WakeupIn(Window*, Time interval, bool force) { return false; }
+void FrameScheduler::ClearWakeupIn(Window*) {}
 
 void FrameScheduler::UpdateWindowTargetFPS(Window *w) {
   [[LFUIApplication sharedAppDelegate] updateTargetFPS: w->target_fps];
 }
 
-void FrameScheduler::AddWaitForeverMouse() {
+void FrameScheduler::AddWaitForeverMouse(Window*) {
   [LFUIApplication sharedAppDelegate].frame_on_mouse_input = YES;
 }
 
-void FrameScheduler::DelWaitForeverMouse() {
+void FrameScheduler::DelWaitForeverMouse(Window*) {
   [LFUIApplication sharedAppDelegate].frame_on_mouse_input = NO;
 }
 
-void FrameScheduler::AddWaitForeverKeyboard() {
+void FrameScheduler::AddWaitForeverKeyboard(Window*) {
   [LFUIApplication sharedAppDelegate].frame_on_keyboard_input = YES;
 }
 
-void FrameScheduler::DelWaitForeverKeyboard() {
+void FrameScheduler::DelWaitForeverKeyboard(Window*) {
  [LFUIApplication sharedAppDelegate].frame_on_keyboard_input = NO;
 }
 
-void FrameScheduler::AddWaitForeverSocket(Socket fd, int flag, void *val) {
+void FrameScheduler::AddWaitForeverSocket(Window *w, Socket fd, int flag, void *val) {
   if (wait_forever && wait_forever_thread) wakeup_thread.Add(fd, flag, val);
   if (!wait_forever_thread) {
     CHECK_EQ(SocketSet::READABLE, flag);
@@ -797,14 +796,13 @@ void FrameScheduler::AddWaitForeverSocket(Socket fd, int flag, void *val) {
   }
 }
 
-void FrameScheduler::DelWaitForeverSocket(Socket fd) {
+void FrameScheduler::DelWaitForeverSocket(Window *w, Socket fd) {
   if (wait_forever && wait_forever_thread) wakeup_thread.Del(fd);
-  CHECK(screen->id.v);
   [[LFUIApplication sharedAppDelegate] delWaitForeverSocket: fd];
 }
 
 unique_ptr<Module> CreateFrameworkModule() { return make_unique<iPhoneFrameworkModule>(); }
-unique_ptr<AssetLoaderInterface> CreateAssetLoader() { return make_unique<iPhoneAudioAssetLoader>(); }
+unique_ptr<AssetLoaderInterface> CreateAssetLoader() { return make_unique<iPhoneAssetLoader>(); }
 
 extern "C" int main(int ac, const char* const* av) {
   MyAppCreate();

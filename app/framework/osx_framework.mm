@@ -481,6 +481,7 @@ struct OSXFrameworkModule : public Module {
   int Init() {
     INFO("OSXFrameworkModule::Init()");
     CHECK(Video::CreateWindow(screen));
+    app->MakeCurrentWindow(screen);
     return 0;
   }
 };
@@ -546,15 +547,32 @@ void Window::SetCaption(const string &v) {
 }
 
 void Window::SetResizeIncrements(float x, float y) {
-  [[GetTyped<GameView*>(id) window] setContentResizeIncrements: NSMakeSize(x, y)];
+  [[GetTyped<GameView*>(id) window] setContentResizeIncrements:
+    NSMakeSize((resize_increment_x = x), (resize_increment_y = y))];
 }
 
 void Window::SetTransparency(float v) { 
   [[GetTyped<GameView*>(id) window] setAlphaValue: 1.0 - v];
 }
 
-void Window::Reshape(int w, int h) { 
-  [[GetTyped<GameView*>(id) window] setContentSize:NSMakeSize(w, h)];
+void Window::Reshape(int w, int h) {
+  NSWindow *window = [GetTyped<GameView*>(id) window];
+  NSRect frame = [window frame], x;
+  LFL::Box b(frame.origin.x, frame.origin.y, w, h);
+
+  if (resize_increment_x || resize_increment_y) {
+    NSUInteger styleMask = [window styleMask];
+    x = [NSWindow frameRectForContentRect: NSMakeRect(b.x, b.y, b.w, b.h) styleMask: styleMask];
+    x = [window constrainFrameRect: x toScreen: [NSScreen mainScreen]];
+    x = [NSWindow contentRectForFrameRect: x styleMask: styleMask];
+    LFL::Box constrained(x.origin.x, x.origin.y, x.size.width, x.size.height); 
+    if (b != constrained) {
+      b = constrained;
+      if (resize_increment_x) b.w -= (b.w % resize_increment_x);
+      if (resize_increment_y) b.h -= (b.h % resize_increment_y);
+    }
+  }
+  [window setContentSize:NSMakeSize(b.w, b.h)];
 }
 
 bool Video::CreateWindow(Window *W) { 
@@ -583,37 +601,37 @@ int Video::Swap() {
 bool FrameScheduler::DoWait() { return false; }
 void FrameScheduler::Setup() { rate_limit = synchronize_waits = wait_forever_thread = monolithic_frame = run_main_loop = 0; }
 
-void FrameScheduler::Wakeup(void *opaque) {
-  if (wait_forever && screen)
-    [GetTyped<GameView*>(screen->id) performSelectorOnMainThread:@selector(setNeedsDisplay:) withObject:@YES waitUntilDone:NO];
+void FrameScheduler::Wakeup(Window *w) {
+  if (wait_forever && w)
+    [GetTyped<GameView*>(w->id) performSelectorOnMainThread:@selector(setNeedsDisplay:) withObject:@YES waitUntilDone:NO];
 }
 
-bool FrameScheduler::WakeupIn(void *opaque, Time interval, bool force) { 
-  return [GetTyped<GameView*>(screen->id) triggerFrameIn:interval.count() force:force];
+bool FrameScheduler::WakeupIn(Window *w, Time interval, bool force) { 
+  return [GetTyped<GameView*>(w->id) triggerFrameIn:interval.count() force:force];
 }
 
-void FrameScheduler::ClearWakeupIn() { [GetTyped<GameView*>(screen->id) clearTriggerTimer]; }
+void FrameScheduler::ClearWakeupIn(Window *w) { [GetTyped<GameView*>(w->id) clearTriggerTimer]; }
 void FrameScheduler::UpdateWindowTargetFPS(Window *w) { 
   [GetTyped<GameView*>(w->id) stopThread];
   [GetTyped<GameView*>(w->id) startThread:false];
 }
 
-void FrameScheduler::AddWaitForeverMouse() { [GetTyped<GameView*>(screen->id) setFrameOnMouseInput:1]; }
-void FrameScheduler::DelWaitForeverMouse() { [GetTyped<GameView*>(screen->id) setFrameOnMouseInput:0]; }
-void FrameScheduler::AddWaitForeverKeyboard() { [GetTyped<GameView*>(screen->id) setFrameOnKeyboardInput:1]; }
-void FrameScheduler::DelWaitForeverKeyboard() { [GetTyped<GameView*>(screen->id) setFrameOnKeyboardInput:0]; }
-void FrameScheduler::AddWaitForeverSocket(Socket fd, int flag, void *val) {
+void FrameScheduler::AddWaitForeverMouse(Window *w) { [GetTyped<GameView*>(w->id) setFrameOnMouseInput:1]; }
+void FrameScheduler::DelWaitForeverMouse(Window *w) { [GetTyped<GameView*>(w->id) setFrameOnMouseInput:0]; }
+void FrameScheduler::AddWaitForeverKeyboard(Window *w) { [GetTyped<GameView*>(w->id) setFrameOnKeyboardInput:1]; }
+void FrameScheduler::DelWaitForeverKeyboard(Window *w) { [GetTyped<GameView*>(w->id) setFrameOnKeyboardInput:0]; }
+void FrameScheduler::AddWaitForeverSocket(Window *w, Socket fd, int flag, void *val) {
   if (wait_forever && wait_forever_thread) wakeup_thread.Add(fd, flag, val);
   if (!wait_forever_thread) {
     CHECK_EQ(SocketSet::READABLE, flag);
-    [GetTyped<GameView*>(screen->id) setWaitForeverSocket: fd];
+    [GetTyped<GameView*>(w->id) setWaitForeverSocket: fd];
   }
 }
 
-void FrameScheduler::DelWaitForeverSocket(Socket fd) {
+void FrameScheduler::DelWaitForeverSocket(Window *w, Socket fd) {
   if (wait_forever && wait_forever_thread) wakeup_thread.Del(fd);
-  CHECK(screen->id.v);
-  [GetTyped<GameView*>(screen->id) delWaitForeverSocket: fd];
+  CHECK(w->id.v);
+  [GetTyped<GameView*>(w->id) delWaitForeverSocket: fd];
 }
 
 unique_ptr<Module> CreateFrameworkModule() { return make_unique<OSXFrameworkModule>(); }

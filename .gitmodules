@@ -50,9 +50,6 @@
 [submodule "imports/libpcap"]
 	path = imports/libpcap
 	url = https://github.com/the-tcpdump-group/libpcap
-[submodule "imports/libpng"]
-	path = imports/libpng
-	url = https://github.com/winlibs/libpng
 [submodule "imports/giflib"]
 	path = imports/giflib
 	url = https://github.com/ProfessorKaos64/giflib
@@ -93,3 +90,6 @@
 [submodule "imports/libcss"]
 	path = imports/libcss
 	url = https://github.com/LucidFusionLabs/libcss
+[submodule "imports/libpng"]
+	path = imports/libpng
+	url = https://github.com/LucidFusionLabs/libpng

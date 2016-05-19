@@ -38,3 +38,7 @@ endif()
 if(LFL_ANDROID)
   lfl_add_target(app_android_audio STATIC_LIBRARY SOURCES android_audio.cpp)
 endif()
+
+if(LFL_IPHONE)
+  lfl_add_target(app_iphone_audio STATIC_LIBRARY SOURCES iphone_audio.cpp)
+endif()

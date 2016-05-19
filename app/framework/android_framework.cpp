@@ -307,38 +307,40 @@ int Video::Swap() {
 
 void FrameScheduler::Setup() { synchronize_waits = wait_forever_thread = monolithic_frame = 0; }
 bool FrameScheduler::DoWait() {
+  bool wakeup = false;
   wait_forever_sockets.Select(-1);
   for (auto &s : wait_forever_sockets.socket)
     if (wait_forever_sockets.GetReadable(s.first)) {
-      if (s.first != system_event_socket) app->scheduler.Wakeup(s.second.second);
+      if (s.first != system_event_socket) wakeup = true;
       else {
         char buf[512];
         int l = read(system_event_socket, buf, sizeof(buf));
         for (const char *p = buf, *e = p + l; p < e; p++) if (*p) return true;
       }
     }
+  if (wakeup) app->scheduler.Wakeup(screen);
   return false;
 }
 
-void FrameScheduler::Wakeup(void *opaque) {
+void FrameScheduler::Wakeup(Window*) {
   char c = opaque ? 0 : 'W';
   write(wait_forever_wakeup_socket, &c, 1);
 }
 
-bool FrameScheduler::WakeupIn(void *opaque, Time interval, bool force) { return 0; }
-void FrameScheduler::ClearWakeupIn() {}
+bool FrameScheduler::WakeupIn(Window*, Time interval, bool force) { return 0; }
+void FrameScheduler::ClearWakeupIn(Window*) {}
 void FrameScheduler::UpdateWindowTargetFPS(Window *w) {}
 
-void FrameScheduler::AddWaitForeverMouse()    { dynamic_cast<AndroidFrameworkModule*>(app->framework.get())->frame_on_mouse_input    = true;  }
-void FrameScheduler::DelWaitForeverMouse()    { dynamic_cast<AndroidFrameworkModule*>(app->framework.get())->frame_on_mouse_input    = false; }
-void FrameScheduler::AddWaitForeverKeyboard() { dynamic_cast<AndroidFrameworkModule*>(app->framework.get())->frame_on_keyboard_input = true;  }
-void FrameScheduler::DelWaitForeverKeyboard() { dynamic_cast<AndroidFrameworkModule*>(app->framework.get())->frame_on_keyboard_input = false; }
-void FrameScheduler::AddWaitForeverSocket(Socket fd, int flag, void *val) {
+void FrameScheduler::AddWaitForeverMouse(Window*)    { dynamic_cast<AndroidFrameworkModule*>(app->framework.get())->frame_on_mouse_input    = true;  }
+void FrameScheduler::DelWaitForeverMouse(Window*)    { dynamic_cast<AndroidFrameworkModule*>(app->framework.get())->frame_on_mouse_input    = false; }
+void FrameScheduler::AddWaitForeverKeyboard(Window*) { dynamic_cast<AndroidFrameworkModule*>(app->framework.get())->frame_on_keyboard_input = true;  }
+void FrameScheduler::DelWaitForeverKeyboard(Window*) { dynamic_cast<AndroidFrameworkModule*>(app->framework.get())->frame_on_keyboard_input = false; }
+void FrameScheduler::AddWaitForeverSocket(Window*, Socket fd, int flag, void *val) {
   if (wait_forever && wait_forever_thread) wakeup_thread.Add(fd, flag, val);
   wait_forever_sockets.Add(fd, flag, val);
 }
 
-void FrameScheduler::DelWaitForeverSocket(Socket fd) {
+void FrameScheduler::DelWaitForeverSocket(Window*, Socket fd) {
   if (wait_forever && wait_forever_thread) wakeup_thread.Del(fd);
   wait_forever_sockets.Del(fd);
 }
@@ -396,7 +398,7 @@ extern "C" void Java_com_lucidfusionlabs_app_Activity_resize(JNIEnv *e, jclass c
 
 extern "C" void Java_com_lucidfusionlabs_app_Activity_key(JNIEnv *e, jclass c, jint down, jint keycode) {
   QueueKeyPress(keycode, down);
-  LFAppWakeup((void*)1);
+  LFAppWakeup();
 }
 
 extern "C" void Java_com_lucidfusionlabs_app_Activity_touch(JNIEnv *e, jclass c, jint action, jfloat x, jfloat y, jfloat p) {
@@ -405,7 +407,7 @@ extern "C" void Java_com_lucidfusionlabs_app_Activity_touch(JNIEnv *e, jclass c,
   if (action == AndroidEvent::ACTION_DOWN || action == AndroidEvent::ACTION_POINTER_DOWN) {
     // INFOf("%d down %f, %f", dpind, x, y);
     QueueMouseClick(1, 1, (int)x, LFL::screen->height - (int)y);
-    LFAppWakeup((void*)1);
+    LFAppWakeup();
     LFL::screen->gesture_tap[dpind] = 1;
     LFL::screen->gesture_dpad_x[dpind] = x;
     LFL::screen->gesture_dpad_y[dpind] = y;
@@ -414,7 +416,7 @@ extern "C" void Java_com_lucidfusionlabs_app_Activity_touch(JNIEnv *e, jclass c,
   } else if (action == AndroidEvent::ACTION_UP || action == AndroidEvent::ACTION_POINTER_UP) {
     // INFOf("%d up %f, %f", dpind, x, y);
     QueueMouseClick(1, 0, (int)x, LFL::screen->height - (int)y);
-    LFAppWakeup((void*)1);
+    LFAppWakeup();
     LFL::screen->gesture_dpad_stop[dpind] = 1;
     LFL::screen->gesture_dpad_x[dpind] = 0;
     LFL::screen->gesture_dpad_y[dpind] = 0;

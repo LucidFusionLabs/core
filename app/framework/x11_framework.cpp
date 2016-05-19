@@ -182,26 +182,28 @@ bool FrameScheduler::DoWait() {
       if (s.first != system_event_socket) app->scheduler.Wakeup(s.second.second);
   return false;
 }
+
 void FrameScheduler::Setup() { synchronize_waits = wait_forever_thread = 0; }
-bool FrameScheduler::WakeupIn(void *opaque, Time interval, bool force) {}
-void FrameScheduler::Wakeup(void *opaque) { 
-  if (wait_forever && screen) {
+bool FrameScheduler::WakeupIn(Window *w, Time interval, bool force) {}
+void FrameScheduler::Wakeup(Window *w) { 
+  if (wait_forever && w) {
     XEvent exp;
     exp.type = Expose;
-    exp.xexpose.window = ::Window(screen->id.v);
-    XSendEvent(GetTyped<Display*>(screen->surface), exp.xexpose.window, 0, ExposureMask, &exp);
+    exp.xexpose.window = ::Window(w->id.v);
+    XSendEvent(GetTyped<Display*>(w->surface), exp.xexpose.window, 0, ExposureMask, &exp);
   }
 }
+
 void FrameScheduler::UpdateWindowTargetFPS(Window *w) {}
-void FrameScheduler::AddWaitForeverMouse() { }
-void FrameScheduler::DelWaitForeverMouse() {  }
-void FrameScheduler::AddWaitForeverKeyboard() {  }
-void FrameScheduler::DelWaitForeverKeyboard() {  }
-void FrameScheduler::AddWaitForeverSocket(Socket fd, int flag, void *val) {
+void FrameScheduler::AddWaitForeverMouse(Window *w) { }
+void FrameScheduler::DelWaitForeverMouse(Window *w) {  }
+void FrameScheduler::AddWaitForeverKeyboard(Window *w) {  }
+void FrameScheduler::DelWaitForeverKeyboard(Window *w) {  }
+void FrameScheduler::AddWaitForeverSocket(Window *w, Socket fd, int flag, void *val) {
   if (wait_forever && wait_forever_thread) wakeup_thread.Add(fd, flag, val);
   wait_forever_sockets.Add(fd, flag, val);
 }
-void FrameScheduler::DelWaitForeverSocket(Socket fd) {
+void FrameScheduler::DelWaitForeverSocket(Window *w, Socket fd) {
   if (wait_forever && wait_forever_thread) wakeup_thread.Del(fd);
   wait_forever_sockets.Del(fd);
 }

@@ -54,3 +54,10 @@ else()
   set(ENV{LDFLAGS}  "-arch armv7 -miphoneos-version-min=5.0 -isysroot ${IPHONESDK}")
   set(ENV{AR} "${IPHONEROOT}/usr/bin/ar")
 endif()
+
+set(CONFIGURE_ENV CC=$ENV{CC} CXX=$ENV{CXX} CPP=$ENV{CPP} CXXCPP=$ENV{CXXCPP} AR=$ENV{AR} RANLIB=$ENV{RANLIB}
+    CFLAGS=$ENV{CFLAGS} CXXFLAGS=$ENV{CXXFLAGS} LDFLAGS=$ENV{LDFLAGS})
+
+set(M_LIBRARY ${IPHONESDK}/usr/lib/libm.dylib)
+set(ZLIB_INCLUDE_DIR ${IPHONESDK}/usr/include)
+set(ZLIB_LIBRARY ${IPHONESDK}/usr/lib/libz.dylib)

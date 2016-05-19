@@ -355,22 +355,22 @@ int Video::Swap() {
 bool FrameScheduler::DoWait() { return false;  }
 void FrameScheduler::UpdateWindowTargetFPS(Window*) {}
 void FrameScheduler::Setup() { synchronize_waits = wait_forever_thread = run_main_loop = 0; }
-void FrameScheduler::Wakeup(void*) { 
-  InvalidateRect(GetTyped<HWND>(screen->id), NULL, 0);
-  // PostMessage(GetTyped<HWND>(screen->id), WM_USER, 0, 0);
+void FrameScheduler::Wakeup(Window *w) { 
+  InvalidateRect(GetTyped<HWND>(w->id), NULL, 0);
+  // PostMessage(GetTyped<HWND>(w->id), WM_USER, 0, 0);
 }
 
-void FrameScheduler::AddWaitForeverMouse() { GetTyped<WinWindow*>(screen->impl)->frame_on_mouse_input = true; }
-void FrameScheduler::DelWaitForeverMouse() { GetTyped<WinWindow*>(screen->impl)->frame_on_mouse_input = false; }
-void FrameScheduler::AddWaitForeverKeyboard() { GetTyped<WinWindow*>(screen->impl)->frame_on_keyboard_input = true; }
-void FrameScheduler::DelWaitForeverKeyboard() { GetTyped<WinWindow*>(screen->impl)->frame_on_keyboard_input = false; }
-void FrameScheduler::AddWaitForeverSocket(Socket fd, int flag, void *val) {
+void FrameScheduler::AddWaitForeverMouse(Window *w) { GetTyped<WinWindow*>(w->impl)->frame_on_mouse_input = true; }
+void FrameScheduler::DelWaitForeverMouse(Window *w) { GetTyped<WinWindow*>(w->impl)->frame_on_mouse_input = false; }
+void FrameScheduler::AddWaitForeverKeyboard(Window *w) { GetTyped<WinWindow*>(w->impl)->frame_on_keyboard_input = true; }
+void FrameScheduler::DelWaitForeverKeyboard(Window *w) { GetTyped<WinWindow*>(w->impl)->frame_on_keyboard_input = false; }
+void FrameScheduler::AddWaitForeverSocket(Window *w, Socket fd, int flag, void *val) {
   if (wait_forever && wait_forever_thread) wakeup_thread.Add(fd, flag, val);
-  WSAAsyncSelect(fd, GetTyped<HWND>(screen->id), WM_USER, FD_READ | FD_CLOSE);
+  WSAAsyncSelect(fd, GetTyped<HWND>(w->id), WM_USER, FD_READ | FD_CLOSE);
 }
-void FrameScheduler::DelWaitForeverSocket(Socket fd) {
+void FrameScheduler::DelWaitForeverSocket(Window *w, Socket fd) {
   if (wait_forever && wait_forever_thread) wakeup_thread.Del(fd);
-  WSAAsyncSelect(fd, GetTyped<HWND>(screen->id), WM_USER, 0);
+  WSAAsyncSelect(fd, GetTyped<HWND>(w->id), WM_USER, 0);
 }
 
 unique_ptr<Module> CreateFrameworkModule() { return make_unique<WinFrameworkModule>(); }

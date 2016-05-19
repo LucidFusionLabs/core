@@ -90,14 +90,14 @@ int Video::Swap() { return 0; }
 
 bool FrameScheduler::DoWait() { return false; }
 void FrameScheduler::Setup() { rate_limit = synchronize_waits = wait_forever_thread = 0; }
-void FrameScheduler::Wakeup(void *opaque) {}
+void FrameScheduler::Wakeup(Window*) {}
 void FrameScheduler::UpdateWindowTargetFPS(Window*) {}
-void FrameScheduler::AddWaitForeverMouse() {}
-void FrameScheduler::DelWaitForeverMouse() {}
-void FrameScheduler::AddWaitForeverKeyboard() {}
-void FrameScheduler::DelWaitForeverKeyboard() {}
-void FrameScheduler::AddWaitForeverSocket(Socket fd, int flag, void *val) {}
-void FrameScheduler::DelWaitForeverSocket(Socket fd) {}
+void FrameScheduler::AddWaitForeverMouse(Window*) {}
+void FrameScheduler::DelWaitForeverMouse(Window*) {}
+void FrameScheduler::AddWaitForeverKeyboard(Window*) {}
+void FrameScheduler::DelWaitForeverKeyboard(Window*) {}
+void FrameScheduler::AddWaitForeverSocket(Window*, Socket fd, int flag, void *val) {}
+void FrameScheduler::DelWaitForeverSocket(Window*, Socket fd) {}
 
 extern "C" int main(int argc, const char *argv[]) {
   MyAppCreate();

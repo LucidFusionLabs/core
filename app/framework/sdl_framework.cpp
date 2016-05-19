@@ -230,8 +230,8 @@ void FrameScheduler::Setup() {
 
 bool FrameScheduler::DoWait() { return SDL_WaitEvent(NULL); }
 void FrameScheduler::UpdateWindowTargetFPS(Window *w) {}
-void FrameScheduler::Wakeup(void *opaque) {
-  if (wait_forever && screen && wait_forever_thread) {
+void FrameScheduler::Wakeup(Window *w) {
+  if (wait_forever && w && wait_forever_thread) {
     static int my_event_type = SDL_RegisterEvents(1);
     CHECK_GE(my_event_type, 0);
     SDL_Event event;
@@ -241,12 +241,12 @@ void FrameScheduler::Wakeup(void *opaque) {
   }
 }
 
-void FrameScheduler::AddWaitForeverMouse() {}
-void FrameScheduler::DelWaitForeverMouse() {}
-void FrameScheduler::AddWaitForeverKeyboard() {}
-void FrameScheduler::DelWaitForeverKeyboard() {}
-void FrameScheduler::AddWaitForeverSocket(Socket fd, int flag, void *val) { if (wait_forever && wait_forever_thread) wakeup_thread.Add(fd, flag, val); }
-void FrameScheduler::DelWaitForeverSocket(Socket fd) { if (wait_forever && wait_forever_thread) wakeup_thread.Del(fd); }
+void FrameScheduler::AddWaitForeverMouse(Window *w) {}
+void FrameScheduler::DelWaitForeverMouse(Window *w) {}
+void FrameScheduler::AddWaitForeverKeyboard(Window *w) {}
+void FrameScheduler::DelWaitForeverKeyboard(Window *w) {}
+void FrameScheduler::AddWaitForeverSocket(Window *w, Socket fd, int flag, void *val) { if (wait_forever && wait_forever_thread) wakeup_thread.Add(fd, flag, val); }
+void FrameScheduler::DelWaitForeverSocket(Window *w, Socket fd) { if (wait_forever && wait_forever_thread) wakeup_thread.Del(fd); }
 
 unique_ptr<Module> CreateFrameworkModule() { return make_unique<SDLFrameworkModule>(); }
 

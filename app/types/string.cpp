@@ -17,6 +17,7 @@
  */
 
 #include "core/app/types/string.h"
+#include "core/app/flow.h"
 
 #define StringPrintfImpl(ret, fmt, vsprintf, offset) \
   (ret)->resize(offset + 4096); \

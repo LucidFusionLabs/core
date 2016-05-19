@@ -18,7 +18,7 @@ if(LFL_IPHONE)
                         "-framework UIKit" "-framework QuartzCore" "-framework AVFoundation"
                         "-framework GLKit" "-framework Security")
   if(NOT LFL_IPHONESIM)
-    target_link_libraries(app_iphone_os -framework CoreVideo -framework CoreMedia)
+    target_link_libraries(app_iphone_os "-framework CoreVideo" "-framework CoreMedia")
   endif()
 
   add_library(app_iphone_framework STATIC iphone_framework.mm)

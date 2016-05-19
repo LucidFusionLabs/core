@@ -55,12 +55,11 @@ bool Application::LoadPassword(const string &h, const string &u, string *pw) {
   return pw->size();
 }
 
-void Application::PlaySoundEffect(SoundAsset *sa) {
-  iPhonePlayMusic(sa->handle);
-}
+void Application::ShowAds() {}
+void Application::HideAds() {}
 
-void Application::PlayBackgroundMusic(SoundAsset *music) {
-  iPhonePlayBackgroundMusic(music->handle);
-}
+void Application::SetVolume(int v) {}
+int Application::GetVolume() { return 0; }
+int Application::GetMaxVolume() { return 0; }
 
 }; // namespace LFL

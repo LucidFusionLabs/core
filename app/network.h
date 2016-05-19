@@ -260,7 +260,6 @@ struct SocketWakeupThread : public SocketSet {
   mutex sockets_mutex;
   Thread thread;
   Socket pipe[2];
-  bool wakeup_each=0;
   ~SocketWakeupThread();
   SocketWakeupThread(mutex *FM=0, mutex *WM=0) : frame_mutex(FM), wait_mutex(WM),
   thread(bind(&SocketWakeupThread::ThreadProc, this)) { pipe[0] = pipe[1] = -1; }

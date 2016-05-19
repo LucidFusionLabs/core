@@ -229,6 +229,7 @@ struct NativeWindow {
   bool started, minimized, cursor_grabbed, frame_init, animating;
   int gesture_swipe_up, gesture_swipe_down, gesture_tap[2], gesture_dpad_stop[2];
   float gesture_dpad_x[2], gesture_dpad_y[2], gesture_dpad_dx[2], gesture_dpad_dy[2], multitouch_keyboard_x;
+  short resize_increment_x, resize_increment_y;
 };
 
 struct CameraState {
@@ -251,7 +252,7 @@ int LFAppMainLoop();
 int LFAppFrame(bool handle_events);
 void LFAppTimerDrivenFrame();
 void LFAppLog(int level, const char *file, int line, const char *fmt, ...);
-void LFAppWakeup(void*);
+void LFAppWakeup();
 void LFAppFatal();
 void LFAppResetGL();
 void LFAppShutdown();
