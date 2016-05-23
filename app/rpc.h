@@ -25,21 +25,11 @@
 #define IPCTrace(...)
 #endif
 
-#ifdef LFL_FLATBUFFERS
-#include "flatbuffers/flatbuffers.h"
-#endif
-
 namespace LFL {
 #ifdef LFL_FLATBUFFERS
-using flatbuffers::FlatBufferBuilder;
-typedef std::pair<flatbuffers::unique_ptr_t, size_t> FlatBufferPiece;
-template<typename T> FlatBufferPiece CreateFlatBuffer(const std::function<flatbuffers::Offset<T>(FlatBufferBuilder &fb)> &f)
-{ FlatBufferBuilder fb; fb.Finish(f(fb)); size_t s=fb.GetSize(); return make_pair(fb.ReleaseBufferPointer(), s); }
-#define MakeFlatBufferOfType(t, x) CreateFlatBuffer(function<flatbuffers::Offset<t>(FlatBufferBuilder&)>([&](FlatBufferBuilder &fb){ return x; }))
-
-#define MakeIPCRequest(t, ...) MakeFlatBufferOfType(IPC::t, IPC::Create ## t(fb, __VA_ARGS__))
 #define MakeResourceHandle(t, mpb) IPC::CreateResourceHandle(fb, t, (mpb).len, fb.CreateString((mpb).url))
-#define SendIPC(c, seq, th, name, ...) SendIPCRequest<Protocol::name>(c, seq, MakeIPCRequest(name, __VA_ARGS__), th)
+#define MakeIPC(t, ...) MakeFlatBufferOfType(IPC::t, IPC::Create ## t(fb, __VA_ARGS__))
+#define SendIPC(c, seq, th, name, ...) SendIPCRequest<Protocol::name>(c, seq, MakeIPC(name, __VA_ARGS__), th)
 #define ErrorIPC(c, seq, th, name) SendIPCRequest<Protocol::name>(c, seq, MakeFlatBufferOfType(IPC::name, IPC::Create ## name(fb)), th)
 #define ExpectResponseIPC(name, ...) Expect ## name ## Response(new name ## Query(__VA_ARGS__))
 
@@ -159,7 +149,6 @@ template<typename T> FlatBufferPiece CreateFlatBuffer(const std::function<flatbu
   };
 
 #else
-typedef std::pair<std::unique_ptr<char*>, size_t> FlatBufferPiece;
 #define IPC_TABLE_BEGIN(name) typedef name Parent; void HandleIPC(Connection *c, int fm=0) {}
 #define IPC_TABLE_CLIENT_CALL(name)
 #define IPC_TABLE_SERVER_CALL(name)
@@ -275,7 +264,7 @@ struct InterProcessComm {
   }
 
   template <class X> bool SendIPCRequest(Connection *c, int seq, const FlatBufferPiece &q, int th=-1) {
-    bool ok = Write(c, X::Id, seq, StringPiece(reinterpret_cast<const char *>(q.first.get()), q.second), th);
+    bool ok = Write(c, X::Id, seq, MakeStringPiece(q), th);
     IPCTrace("%s Send %s=%d seq=%d %s\n", ipc_name.c_str(), X::Name(), ok, seq,
              X::DebugString(flatbuffers::GetRoot<typename X::Type>(q.first.get())).c_str());
     return ok;

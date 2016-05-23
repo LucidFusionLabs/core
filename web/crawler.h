@@ -90,7 +90,7 @@ struct Crawler {
     Crawler *parent;
     int queue, qf_offset, content_length;
 
-    ProtoHeader hdr;
+    ContainerFileHeader hdr;
     QueueFileEntry request;
     string headers, content;
 
@@ -105,7 +105,7 @@ struct Crawler {
     INFO("Scrape(", ind, ") url='", entry.request().url().c_str(), "' ", ret);
     if (!ret) return false;
 
-    if (!queue[ind].out->Update(offset, QueueFileEntry::SCRAPED)) return false;
+    if (!queue[ind].out->UpdateFlag(offset, QueueFileEntry::SCRAPED)) return false;
     queue[ind].scraped++;
     return true;
   }

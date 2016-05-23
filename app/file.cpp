@@ -375,6 +375,112 @@ const char *DirectoryIter::Next() {
   }
 }
 
+/* ContainerFile */
+
+ContainerFileHeader::ContainerFileHeader(const char *text) {
+  memcpy(&flag, text, sizeof(int));
+  memcpy(&len, text+sizeof(int), sizeof(int));
+  Validate();
+}
+
+void ContainerFile::Open(const string &fn) {
+  if (file) delete file;
+  file = fn.size() ? new LocalFile(fn, "r+", true) : 0;
+  read_offset = 0;
+  write_offset = -1;
+  done = (file ? file->Size() : 0) <= 0;
+  nr.Init(file);
+}
+
+int ContainerFile::Add(const StringPiece &msg, int status) {
+  done = 0;
+  write_offset = file->Seek(0, File::Whence::END);
+
+  ContainerFileHeader ph(status);
+  int wrote = WriteEntry(file, &ph, move(msg), true);
+  nr.SetFileOffset(wrote > 0 ? write_offset + wrote : write_offset);
+  return wrote > 0;
+} 
+
+bool ContainerFile::Update(int offset, const ContainerFileHeader *ph, const StringPiece &msg) {
+  if (offset < 0 || (write_offset = file->Seek(offset, File::Whence::SET)) != offset) return false;
+  int wrote = WriteEntry(file, ph, move(msg), true);
+  nr.SetFileOffset(wrote > 0 ? offset + wrote : offset);
+  return wrote > 0;
+}
+
+bool ContainerFile::UpdateFlag(int offset, int status) {
+  if (offset < 0 || (write_offset = file->Seek(offset, File::Whence::SET)) != offset) return false;
+  ContainerFileHeader ph(status);
+  int wrote = WriteEntryFlag(file, &ph, true);
+  nr.SetFileOffset(wrote > 0 ? offset + wrote : offset);
+  return wrote > 0;
+}
+
+bool ContainerFile::Get(StringPiece *out, int offset, int status) {
+  int record_offset;
+  write_offset = 0;
+  file->Seek(offset, File::Whence::SET);
+  bool ret = Next(out, &record_offset, status);
+  if (!ret) return 0;
+  return offset == record_offset;
+} 
+
+bool ContainerFile::Next(StringPiece *out, int *offsetOut, int status) {
+  ContainerFileHeader hdr;
+  return Next(&hdr, out, offsetOut, status);
+}
+
+bool ContainerFile::Next(ContainerFileHeader *hdr, StringPiece *out, int *offsetOut, int status) {
+  if (done) return false;
+
+  if (write_offset >= 0) {
+    write_offset = -1;
+    file->Seek(read_offset, File::Whence::SET);
+  }
+
+  for (;;) {
+    const char *text; int offset;
+    if (!(text = nr.NextContainerFileEntry(&offset, &read_offset, hdr))) { done=true; return false; }
+    *out = StringPiece(text, hdr->len);
+    if (status >= 0 && status != hdr->GetFlag()) continue;
+    if (offsetOut) *offsetOut = offset;
+    return true;
+  }
+}
+
+int ContainerFile::WriteEntry(File *f, const ContainerFileHeader *hdr, const StringPiece &v, bool doflush) {
+  CHECK_EQ(hdr->len, v.size());
+  if (f->Write(hdr, ContainerFileHeader::size) != ContainerFileHeader::size) return -1;
+  if (f->Write(v.data(), v.size()) != v.size()) return -1;
+  if (doflush) f->Flush();
+  return ContainerFileHeader::size + v.size();
+}
+
+int ContainerFile::WriteEntry(File *f, ContainerFileHeader *hdr, const StringPiece &v, bool doflush) {
+  hdr->SetLength(v.size());
+  if (f->Write(hdr, ContainerFileHeader::size) != ContainerFileHeader::size) return -1;
+  if (f->Write(v.data(), v.size()) != v.size()) return -1;
+  if (doflush) f->Flush();
+  return ContainerFileHeader::size + v.size();
+}
+
+int ContainerFile::WriteEntryFlag(File *f, const ContainerFileHeader *hdr, bool doflush) {
+  int ret = f->Write(&hdr->flag, sizeof(int)) == sizeof(int) ? sizeof(int) : -1;
+  if (doflush) f->Flush();
+  return ret;
+}
+
+/* FlatFile */
+
+int FlatFile::Add(const FlatBufferPiece &msg, int status) {
+  return ContainerFile::Add(MakeStringPiece(msg), status);
+}
+
+bool FlatFile::Update(int offset, const ContainerFileHeader *ph, const FlatBufferPiece &msg) {
+  return ContainerFile::Update(offset, ph, MakeStringPiece(msg));
+}
+
 /* StringFile */
 
 void StringFile::Print(const string &name, bool nl) {

@@ -729,6 +729,11 @@ void Window::InitConsole(const Callback &animating_cb) {
 size_t Window::NewGUI() { my_gui.emplace_back(unique_ptr<GUI>()); return my_gui.size()-1; }
 void Window::DelGUI(GUI *g) { RemoveGUI(g); VectorRemoveUnique(&my_gui, g); }
 
+void Window::OnDialogAdded(Dialog *d) {
+  // if (dialogs.size() == 1)
+    BringDialogToFront(d);
+}
+
 void Window::BringDialogToFront(Dialog *d) {
   if (top_dialog == d) return;
   if (top_dialog) top_dialog->LoseFocus();
@@ -839,7 +844,7 @@ void FrameScheduler::Start() {
 #if defined(LFL_ANDROID)
   Socket fd[2];
   CHECK(SystemNetwork::OpenSocketPair(fd));
-  AddWaitForeverSocket((system_event_socket = fd[0]), SocketSet::READABLE, 0);
+  AddWaitForeverSocket(screen, (system_event_socket = fd[0]), SocketSet::READABLE);
   wait_forever_wakeup_socket = fd[1];
 #endif
 }

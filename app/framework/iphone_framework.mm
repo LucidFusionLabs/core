@@ -788,8 +788,8 @@ void FrameScheduler::DelWaitForeverKeyboard(Window*) {
  [LFUIApplication sharedAppDelegate].frame_on_keyboard_input = NO;
 }
 
-void FrameScheduler::AddWaitForeverSocket(Window *w, Socket fd, int flag, void *val) {
-  if (wait_forever && wait_forever_thread) wakeup_thread.Add(fd, flag, val);
+void FrameScheduler::AddWaitForeverSocket(Window *w, Socket fd, int flag) {
+  if (wait_forever && wait_forever_thread) wakeup_thread.Add(fd, flag, w);
   if (!wait_forever_thread) {
     CHECK_EQ(SocketSet::READABLE, flag);
     [[LFUIApplication sharedAppDelegate] setWaitForeverSocket: fd];

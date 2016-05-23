@@ -20,89 +20,31 @@
 #include "core/app/app.h"
 
 namespace LFL {
-void ProtoFile::Open(const char *fn) {
-  if (file) delete file;
-  file = fn ? new LocalFile(fn, "r+", true) : 0;
-  read_offset = 0;
-  write_offset = -1;
-  done = (file ? file->Size() : 0) <= 0;
-  nr.Init(file);
-}
-
 int ProtoFile::Add(const Proto *msg, int status) {
-  done = 0;
-  write_offset = file->Seek(0, File::Whence::END);
-
-  ProtoHeader ph(status);
-  int wrote = WriteProto(file, &ph, msg, true);
-  nr.SetFileOffset(wrote > 0 ? write_offset + wrote : write_offset);
-  return wrote > 0;
+  return ContainerFile::Add(msg->SerializeAsString(), status);
 }
 
-bool ProtoFile::Update(int offset, const ProtoHeader *ph, const Proto *msg) {
-  if (offset < 0 || (write_offset = file->Seek(offset, File::Whence::SET)) != offset) return false;
-  int wrote = WriteProto(file, ph, msg, true);
-  nr.SetFileOffset(wrote > 0 ? offset + wrote : offset);
-  return wrote > 0;
-}
-
-bool ProtoFile::Update(int offset, int status) {
-  if (offset < 0 || (write_offset = file->Seek(offset, File::Whence::SET)) != offset) return false;
-  ProtoHeader ph(status);
-  int wrote = WriteProtoFlag(file, &ph, true);
-  nr.SetFileOffset(wrote > 0 ? offset + wrote : offset);
-  return wrote > 0;
+bool ProtoFile::Update(int offset, const ContainerFileHeader *ph, const Proto *msg) {
+  return ContainerFile::Update(offset, ph, msg->SerializeAsString());
 }
 
 bool ProtoFile::Get(Proto *out, int offset, int status) {
-  int record_offset;
-  write_offset = 0;
-  file->Seek(offset, File::Whence::SET);
-  bool ret = Next(out, &record_offset, status);
-  if (!ret) return 0;
-  return offset == record_offset;
+  StringPiece buf;
+  if (!ContainerFile::Get(&buf, offset, status)) return false;
+  if (!out->ParseFromArray(buf.buf, buf.len)) { done=1; return ERRORv(false, "parse failed"); }
+  return true;
 }
 
-bool ProtoFile::Next(Proto *out, int *offsetOut, int status) { ProtoHeader hdr; return Next(&hdr, out, offsetOut, status); }
-bool ProtoFile::Next(ProtoHeader *hdr, Proto *out, int *offsetOut, int status) {
-  if (done) return false;
-
-  if (write_offset >= 0) {
-    write_offset = -1;
-    file->Seek(read_offset, File::Whence::SET);
-  }
-
-  for (;;) {
-    const char *text; int offset;
-    if (!(text = nr.NextProto(&offset, &read_offset, hdr))) { done=true; return false; }
-    if (!out->ParseFromArray(text, hdr->len)) { done=1; app->run=0; return ERRORv(false, "parse failed, shutting down"); }
-    if (status >= 0 && status != hdr->GetFlag()) continue;
-    if (offsetOut) *offsetOut = offset;
-    return true;
-  }
+bool ProtoFile::Next(Proto *out, int *offsetOut, int status) {
+  ContainerFileHeader hdr;
+  return Next(&hdr, out, offsetOut, status);
 }
 
-int ProtoFile::WriteProto(File *f, const ProtoHeader *hdr, const Proto *msg, bool doflush) {
-  std::string v = msg->SerializeAsString();
-  CHECK_EQ(hdr->len, v.size());
-  v.insert(0, (const char *)hdr, ProtoHeader::size);
-  int ret = (f->Write(v.c_str(), v.size()) == v.size()) ? v.size() : -1;
-  if (doflush) f->Flush();
-  return ret;
+bool ProtoFile::Next(ContainerFileHeader *hdr, Proto *out, int *offsetOut, int status) {
+  StringPiece buf;
+  if (!ContainerFile::Next(hdr, &buf, offsetOut, status)) return false;
+  if (!out->ParseFromArray(buf.buf, buf.len)) { done=1; return ERRORv(false, "parse failed"); }
+  return true;
 }
 
-int ProtoFile::WriteProto(File *f, ProtoHeader *hdr, const Proto *msg, bool doflush) {
-  std::string v = msg->SerializeAsString();
-  hdr->SetLength(v.size());
-  v.insert(0, (const char *)hdr, ProtoHeader::size);
-  int ret = (f->Write(v.c_str(), v.size()) == v.size()) ? v.size() : -1;
-  if (doflush) f->Flush();
-  return ret;
-}
-
-int ProtoFile::WriteProtoFlag(File *f, const ProtoHeader *hdr, bool doflush) {
-  int ret = f->Write(&hdr->flag, sizeof(int)) == sizeof(int) ? sizeof(int) : -1;
-  if (doflush) f->Flush();
-  return ret;
-}
 }; // namespace LFL

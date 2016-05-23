@@ -245,7 +245,7 @@ void FrameScheduler::AddWaitForeverMouse(Window *w) {}
 void FrameScheduler::DelWaitForeverMouse(Window *w) {}
 void FrameScheduler::AddWaitForeverKeyboard(Window *w) {}
 void FrameScheduler::DelWaitForeverKeyboard(Window *w) {}
-void FrameScheduler::AddWaitForeverSocket(Window *w, Socket fd, int flag, void *val) { if (wait_forever && wait_forever_thread) wakeup_thread.Add(fd, flag, val); }
+void FrameScheduler::AddWaitForeverSocket(Window *w, Socket fd, int flag) { if (wait_forever && wait_forever_thread) wakeup_thread.Add(fd, flag, w); }
 void FrameScheduler::DelWaitForeverSocket(Window *w, Socket fd) { if (wait_forever && wait_forever_thread) wakeup_thread.Del(fd); }
 
 unique_ptr<Module> CreateFrameworkModule() { return make_unique<SDLFrameworkModule>(); }

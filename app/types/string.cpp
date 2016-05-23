@@ -578,12 +578,12 @@ const char16_t *NextLine   (const String16Piece &text, bool final, int *outlen) 
 const char     *NextLineRaw(const StringPiece   &text, bool final, int *outlen) { return NextLine<char,     false>(text, final, outlen); }
 const char16_t *NextLineRaw(const String16Piece &text, bool final, int *outlen) { return NextLine<char16_t, false>(text, final, outlen); }
 
-const char *NextProto(const StringPiece &text, bool final, int *outlen) {
-  if (text.len < ProtoHeader::size) return 0;
-  ProtoHeader hdr(text.buf);
-  if (ProtoHeader::size + hdr.len > text.len) return 0;
+const char *NextContainerFileEntry(const StringPiece &text, bool final, int *outlen) {
+  if (text.len < ContainerFileHeader::size) return 0;
+  ContainerFileHeader hdr(text.buf);
+  if (ContainerFileHeader::size + hdr.len > text.len) return 0;
   *outlen = hdr.len;
-  return text.buf + ProtoHeader::size + hdr.len;
+  return text.buf + ContainerFileHeader::size + hdr.len;
 }
 
 template <class X> 
@@ -851,11 +851,11 @@ const char *NextRecordReader::NextChunk(int *offset, int *nextoffset) {
   return nc;
 }
 
-const char *NextRecordReader::NextProto(int *offset, int *nextoffset, ProtoHeader *bhout) {
+const char *NextRecordReader::NextContainerFileEntry(int *offset, int *nextoffset, ContainerFileHeader *bhout) {
   const char *np;
-  if (!(np = ReadNextRecord(offset, nextoffset, LFL::NextProto))) return 0;
-  if (bhout) *bhout = ProtoHeader(np);
-  return np + ProtoHeader::size;
+  if (!(np = ReadNextRecord(offset, nextoffset, LFL::NextContainerFileEntry))) return 0;
+  if (bhout) *bhout = ContainerFileHeader(np);
+  return np + ContainerFileHeader::size;
 }
 
 void NextRecordDispatcher::AddData(const StringPiece &b, bool final) {

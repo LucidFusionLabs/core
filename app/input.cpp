@@ -345,13 +345,6 @@ int Input::MouseEventDispatch(InputEvent::Id event, const point &p, int down) {
              InputEvent::Name(event), screen->mouse.DebugString().c_str(), down);
 
   int fired = 0, active_guis = 0, events;
-  for (auto i = screen->gui.begin(), e = screen->gui.end(); i != e; ++i) {
-    if ((events = MouseEventDispatchGUI(event, p, down, *i, &active_guis))) {
-      InputDebug("Input::MouseEventDispatch sent GUI[%td] events = %d\n", i - screen->gui.begin(), events);
-      return events;
-    }
-  }
-
   Dialog *bring_to_front = 0;
   for (auto i = screen->dialogs.begin(); i != screen->dialogs.end(); /**/) {
     Dialog *g = i->get();
@@ -362,6 +355,13 @@ int Input::MouseEventDispatch(InputEvent::Id event, const point &p, int down) {
     i++;
   }
   if (bring_to_front) screen->BringDialogToFront(bring_to_front);
+
+  for (auto i = screen->gui.begin(), e = screen->gui.end(); i != e; ++i) {
+    if ((events = MouseEventDispatchGUI(event, p, down, *i, &active_guis))) {
+      InputDebug("Input::MouseEventDispatch sent GUI[%td] events = %d\n", i - screen->gui.begin(), events);
+      return events;
+    }
+  }
 
   InputDebugIfDown("Inut::MouseEventDispatch %s fired=%d, guis=%d/%zd\n",
                    screen->mouse.DebugString().c_str(), fired, active_guis, screen->gui.size());

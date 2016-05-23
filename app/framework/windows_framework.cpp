@@ -197,14 +197,14 @@ LRESULT APIENTRY WinApp::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
   switch (message) {
   case WM_CREATE:                      return 0;
   case WM_DESTROY:                     LFAppShutdown(); PostQuitMessage(0); return 0;
-  case WM_SIZE:                        if ((w = LOWORD(lParam)) != screen->width && (h = HIWORD(lParam)) != screen->height) { WindowReshaped(w, h); app->scheduler.Wakeup(0); } return 0;
-  case WM_KEYUP:   case WM_SYSKEYUP:   if (KeyPress(WinFrameworkModule::GetKeyCode(wParam), 0) && win->frame_on_keyboard_input) app->scheduler.Wakeup(0); return 0;
-  case WM_KEYDOWN: case WM_SYSKEYDOWN: if (KeyPress(WinFrameworkModule::GetKeyCode(wParam), 1) && win->frame_on_keyboard_input) app->scheduler.Wakeup(0); return 0;
-  case WM_LBUTTONDOWN:                 if (MouseClick(1, 1, win->prev_mouse_pos.x, win->prev_mouse_pos.y) && win->frame_on_mouse_input) app->scheduler.Wakeup(0); return 0;
-  case WM_LBUTTONUP:                   if (MouseClick(1, 0, win->prev_mouse_pos.x, win->prev_mouse_pos.y) && win->frame_on_mouse_input) app->scheduler.Wakeup(0); return 0;
-  case WM_RBUTTONDOWN:                 if (MouseClick(2, 1, win->prev_mouse_pos.x, win->prev_mouse_pos.y) && win->frame_on_mouse_input) app->scheduler.Wakeup(0); return 0;
-  case WM_RBUTTONUP:                   if (MouseClick(2, 0, win->prev_mouse_pos.x, win->prev_mouse_pos.y) && win->frame_on_mouse_input) app->scheduler.Wakeup(0); return 0;
-  case WM_MOUSEMOVE:                   WinFrameworkModule::UpdateMousePosition(lParam, &p, &d); if (MouseMove(p.x, p.y, d.x, d.y) && win->frame_on_mouse_input) app->scheduler.Wakeup(0); return 0;
+  case WM_SIZE:                        if ((w = LOWORD(lParam)) != screen->width && (h = HIWORD(lParam)) != screen->height) { WindowReshaped(w, h); app->scheduler.Wakeup(screen); } return 0;
+  case WM_KEYUP:   case WM_SYSKEYUP:   if (KeyPress(WinFrameworkModule::GetKeyCode(wParam), 0) && win->frame_on_keyboard_input) app->scheduler.Wakeup(screen); return 0;
+  case WM_KEYDOWN: case WM_SYSKEYDOWN: if (KeyPress(WinFrameworkModule::GetKeyCode(wParam), 1) && win->frame_on_keyboard_input) app->scheduler.Wakeup(screen); return 0;
+  case WM_LBUTTONDOWN:                 if (MouseClick(1, 1, win->prev_mouse_pos.x, win->prev_mouse_pos.y) && win->frame_on_mouse_input) app->scheduler.Wakeup(screen); return 0;
+  case WM_LBUTTONUP:                   if (MouseClick(1, 0, win->prev_mouse_pos.x, win->prev_mouse_pos.y) && win->frame_on_mouse_input) app->scheduler.Wakeup(screen); return 0;
+  case WM_RBUTTONDOWN:                 if (MouseClick(2, 1, win->prev_mouse_pos.x, win->prev_mouse_pos.y) && win->frame_on_mouse_input) app->scheduler.Wakeup(screen); return 0;
+  case WM_RBUTTONUP:                   if (MouseClick(2, 0, win->prev_mouse_pos.x, win->prev_mouse_pos.y) && win->frame_on_mouse_input) app->scheduler.Wakeup(screen); return 0;
+  case WM_MOUSEMOVE:                   WinFrameworkModule::UpdateMousePosition(lParam, &p, &d); if (MouseMove(p.x, p.y, d.x, d.y) && win->frame_on_mouse_input) app->scheduler.Wakeup(screen); return 0;
   case WM_COMMAND:                     if ((ind = wParam - win->start_msg_id) >= 0) if (ind < win->menu_cmds.size()) ShellRun(win->menu_cmds[ind].c_str()); return 0;
   case WM_CONTEXTMENU:                 if (win->menu) { GetCursorPos(&cursor); TrackPopupMenu(win->context_menu, TPM_LEFTALIGN | TPM_TOPALIGN, cursor.x, cursor.y, 0, hWnd, NULL); } return 0;
   case WM_PAINT:                       BeginPaint(GetTyped<HWND>(screen->id), &ps); if (!FLAGS_target_fps) LFAppFrame(true); EndPaint(GetTyped<HWND>(screen->id), &ps); return 0;
@@ -341,7 +341,7 @@ bool Video::CreateWindow(Window *W) {
   INFOf("Application::CreateWindow %p %p %p (%p)", W->id.v, W->surface.v, W->gl.v, W);
   app->MakeCurrentWindow(W);
   ShowWindow(hWnd, winapp->nCmdShow);
-  app->scheduler.Wakeup(0);
+  app->scheduler.Wakeup(screen);
   return true;
 }
 
@@ -364,8 +364,8 @@ void FrameScheduler::AddWaitForeverMouse(Window *w) { GetTyped<WinWindow*>(w->im
 void FrameScheduler::DelWaitForeverMouse(Window *w) { GetTyped<WinWindow*>(w->impl)->frame_on_mouse_input = false; }
 void FrameScheduler::AddWaitForeverKeyboard(Window *w) { GetTyped<WinWindow*>(w->impl)->frame_on_keyboard_input = true; }
 void FrameScheduler::DelWaitForeverKeyboard(Window *w) { GetTyped<WinWindow*>(w->impl)->frame_on_keyboard_input = false; }
-void FrameScheduler::AddWaitForeverSocket(Window *w, Socket fd, int flag, void *val) {
-  if (wait_forever && wait_forever_thread) wakeup_thread.Add(fd, flag, val);
+void FrameScheduler::AddWaitForeverSocket(Window *w, Socket fd, int flag) {
+  if (wait_forever && wait_forever_thread) wakeup_thread.Add(fd, flag, w);
   WSAAsyncSelect(fd, GetTyped<HWND>(w->id), WM_USER, FD_READ | FD_CLOSE);
 }
 void FrameScheduler::DelWaitForeverSocket(Window *w, Socket fd) {

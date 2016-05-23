@@ -30,6 +30,10 @@ static __forceinline int ffsl(long x) {
 static __forceinline int ffs(int x) { return ffsl(x); }
 #endif
 
+#ifdef LFL_FLATBUFFERS
+#include "flatbuffers/flatbuffers.h"
+#endif
+
 namespace LFL {
 struct Bit {
   static int Count(unsigned long long n) { int c=0; for (; n; c++) n &= (n-1); return c; }
@@ -548,7 +552,7 @@ const char     *NextLine   (const StringPiece   &text, bool final=0, int *outlen
 const char16_t *NextLine   (const String16Piece &text, bool final=0, int *outlen=0);
 const char     *NextLineRaw(const StringPiece   &text, bool final=0, int *outlen=0);
 const char16_t *NextLineRaw(const String16Piece &text, bool final=0, int *outlen=0);
-const char     *NextProto  (const StringPiece   &text, bool final=0, int *outlen=0);
+const char     *NextContainerFileEntry(const StringPiece &text, bool final=0, int *outlen=0);
 template <int S> const char *NextChunk(const StringPiece &text, bool final=0, int *outlen=0) {
   int add = final ? max(text.len, 0) : S;
   if (text.len < add) return 0;
@@ -666,7 +670,7 @@ struct NextRecordReader {
   const char *NextLine   (int *offset=0, int *nextoffset=0);
   const char *NextLineRaw(int *offset=0, int *nextoffset=0);
   const char *NextChunk  (int *offset=0, int *nextoffset=0);
-  const char *NextProto  (int *offset=0, int *nextoffset=0, ProtoHeader *phout=0);
+  const char *NextContainerFileEntry(int *offset=0, int *nextoffset=0, ContainerFileHeader *phout=0);
 };
 
 struct NextRecordDispatcher {
@@ -813,6 +817,18 @@ struct Serializable {
   bool    Check(const Stream *is) { return    Check(is->Len()); }
   int      Read(const Stream *is) { if (!HdrCheck(is)) return -1; return In(is); }
 };
+
+typedef pair<unique_ptr<uint8_t, function<void(uint8_t*)>>, size_t> FlatBufferPiece;
+inline StringPiece MakeStringPiece(const FlatBufferPiece &s)
+{ return StringPiece(reinterpret_cast<const char*>(s.first.get()), s.second); }
+#ifdef LFL_FLATBUFFERS
+using flatbuffers::FlatBufferBuilder;
+template<typename T> FlatBufferPiece CreateFlatBuffer(const std::function<flatbuffers::Offset<T>(FlatBufferBuilder &fb)> &f)
+{ FlatBufferBuilder fb; fb.Finish(f(fb)); size_t s=fb.GetSize(); return make_pair(fb.ReleaseBufferPointer(), s); }
+#define MakeFlatBufferOfType(t, x) CreateFlatBuffer(function<flatbuffers::Offset<t>(FlatBufferBuilder&)>([&](FlatBufferBuilder &fb){ return x; }))
+#else
+#define MakeFlatBufferOfType(t, x) FlatBufferPiece()
+#endif
 
 }; // namespace LFL
 #endif // LFL_CORE_APP_TYPES_STRING_H__

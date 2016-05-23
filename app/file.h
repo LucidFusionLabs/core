@@ -238,17 +238,12 @@ struct VersionedFileName {
   string DebugString() const { return StrCat(BlankNull(dir), BlankNull(_class), BlankNull(var)); }
 };
 
-struct ProtoHeader {
+struct ContainerFileHeader {
   static const int size = sizeof(int)*2, magic = 0xfefe;
   int flag, len; 
-
-  ProtoHeader() : len(0) { SetFlag(0); }
-  ProtoHeader(int f) : len(0) { SetFlag(f); }
-  ProtoHeader(const char *text) {
-    memcpy(&flag, text, sizeof(int));
-    memcpy(&len, text+sizeof(int), sizeof(int));
-    Validate();
-  }
+  ContainerFileHeader() : len(0) { SetFlag(0); }
+  ContainerFileHeader(int f) : len(0) { SetFlag(f); }
+  ContainerFileHeader(const char *text);
 
   void Validate() const { if (((flag>>16)&0xffff) != magic) FATAL("magic check"); }
   void SetLength(int v) { Validate(); len = v; }
@@ -256,25 +251,44 @@ struct ProtoHeader {
   unsigned short GetFlag() const { return flag & 0xffff; }
 };
 
-struct ProtoFile {
-  File *file;
+struct ContainerFile {
+  File *file=0;
   bool done=0;
-  int read_offset, write_offset;
+  int read_offset=0, write_offset=-1;
   NextRecordReader nr;
-  ProtoFile(const char *fn=0) : file(0), nr(file) { Open(fn); }
-  ~ProtoFile() { delete file; }
+  ContainerFile(const string &fn=string()) : nr(file) { Open(fn); }
+  ~ContainerFile() { delete file; }
 
   bool Opened() const { return file && file->Opened(); }
-  void Open(const char *fn);
-  int Add(const Proto *msg, int status);
-  bool Update(int offset, const ProtoHeader *ph, const Proto *msg);
-  bool Update(int offset, int status);
+  void Open(const string &fn);
+  int Add(const StringPiece &msg, int status=0);
+  bool Update(int offset, const ContainerFileHeader *ph, const StringPiece &msg);
+  bool UpdateFlag(int offset, int status);
+  bool Get(StringPiece *out, int offset, int status=-1);
+  bool Next(StringPiece *out, int *offsetOut=0, int status=-1);
+  bool Next(ContainerFileHeader *hdr, StringPiece *out, int *offsetOut=0, int status=-1);
+
+  static int WriteEntry(File*, ContainerFileHeader *hdr, const StringPiece &msg, bool flush=0);
+  static int WriteEntry(File*, const ContainerFileHeader *hdr, const StringPiece &msg, bool flush=0);
+  static int WriteEntryFlag(File*, const ContainerFileHeader *hdr, bool flush=0);
+};
+
+struct ProtoFile : public ContainerFile {
+  using ContainerFile::ContainerFile;
+  int Add(const Proto *msg, int status=0);
+  bool Update(int offset, const ContainerFileHeader *ph, const Proto *msg);
   bool Get(Proto *out, int offset, int status=-1);
   bool Next(Proto *out, int *offsetOut=0, int status=-1);
-  bool Next(ProtoHeader *hdr, Proto *out, int *offsetOut=0, int status=-1);
-  static int WriteProto(File*, ProtoHeader *hdr, const Proto *msg, bool flush=0);
-  static int WriteProto(File*, const ProtoHeader *hdr, const Proto *msg, bool flush=0);
-  static int WriteProtoFlag(File*, const ProtoHeader *hdr, bool flush=0);
+  bool Next(ContainerFileHeader *hdr, Proto *out, int *offsetOut=0, int status=-1);
+};
+
+struct FlatFile : public ContainerFile {
+  using ContainerFile::ContainerFile;
+  int Add(const FlatBufferPiece &msg, int status=0);
+  bool Update(int offset, const ContainerFileHeader *ph, const FlatBufferPiece &msg);
+  // bool Get(Proto *out, int offset, int status=-1);
+  // bool Next(Proto *out, int *offsetOut=0, int status=-1);
+  // bool Next(ContainerFileHeader *hdr, Proto *out, int *offsetOut=0, int status=-1);
 };
 
 struct StringFile {

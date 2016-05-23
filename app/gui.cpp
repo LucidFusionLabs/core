@@ -586,6 +586,7 @@ int TextBox::ReadHistory(const string &dir, const string &name) {
 int TextBox::WriteHistory(const string &dir, const string &name, const string &hdr) {
   if (!cmd_last.Size()) return 0;
   LocalFile history(dir + MatrixFile::Filename(name, "history", "string", 0), "w");
+  if (!history.Opened()) return -1;
   MatrixFile::WriteHeader(&history, BaseName(history.fn), hdr, cmd_last.ring.count, 1);
   for (int i=0; i<cmd_last.ring.count; i++) StringFile::WriteRow(&history, cmd_last[-1-i]);
   return 0;

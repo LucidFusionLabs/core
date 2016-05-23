@@ -245,8 +245,8 @@ void FrameScheduler::AddWaitForeverMouse(Window *w) { if (w) GetTyped<QtWindow*>
 void FrameScheduler::DelWaitForeverMouse(Window *w) { if (w) GetTyped<QtWindow*>(w->impl)->frame_on_mouse_input = false; }
 void FrameScheduler::AddWaitForeverKeyboard(Window *w) { if (w) GetTyped<QtWindow*>(w->impl)->frame_on_keyboard_input = true; }
 void FrameScheduler::DelWaitForeverKeyboard(Window *w) { if (w) GetTyped<QtWindow*>(w->impl)->frame_on_keyboard_input = false; }
-void FrameScheduler::AddWaitForeverSocket(Window *w, Socket fd, int flag, void *val) {
-  if (wait_forever && wait_forever_thread) wakeup_thread.Add(fd, flag, val);
+void FrameScheduler::AddWaitForeverSocket(Window *w, Socket fd, int flag) {
+  if (wait_forever && wait_forever_thread) wakeup_thread.Add(fd, flag, w);
   if (w) GetTyped<QtWindow*>(w->impl)->AddWaitForeverSocket(fd);
 }
 void FrameScheduler::DelWaitForeverSocket(Window *w, Socket fd) {

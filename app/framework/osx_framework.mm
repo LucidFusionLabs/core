@@ -216,7 +216,8 @@ static const char **osx_argv = 0;
   }
 
   - (void)delWaitForeverSocket: (int)fd {
-    if (!wait_forever_fh || [wait_forever_fh fileDescriptor] != fd) FATALf("del mismatching wait_forever_fh %o", wait_forever_fh);
+    if (!wait_forever_fh) return ERRORf("del missing wait_forever_fh fd=%d", fd);
+    if ([wait_forever_fh fileDescriptor] != fd) FATALf("del mismatching wait_forever_fh %o", wait_forever_fh);
     [[NSNotificationCenter defaultCenter] removeObserver:self
       name:NSFileHandleDataAvailableNotification object:wait_forever_fh];
     // [wait_forever_fh closeFile];
@@ -559,7 +560,6 @@ void Window::Reshape(int w, int h) {
   NSWindow *window = [GetTyped<GameView*>(id) window];
   NSRect frame = [window frame], x;
   LFL::Box b(frame.origin.x, frame.origin.y, w, h);
-
   if (resize_increment_x || resize_increment_y) {
     NSUInteger styleMask = [window styleMask];
     x = [NSWindow frameRectForContentRect: NSMakeRect(b.x, b.y, b.w, b.h) styleMask: styleMask];
@@ -620,8 +620,8 @@ void FrameScheduler::AddWaitForeverMouse(Window *w) { [GetTyped<GameView*>(w->id
 void FrameScheduler::DelWaitForeverMouse(Window *w) { [GetTyped<GameView*>(w->id) setFrameOnMouseInput:0]; }
 void FrameScheduler::AddWaitForeverKeyboard(Window *w) { [GetTyped<GameView*>(w->id) setFrameOnKeyboardInput:1]; }
 void FrameScheduler::DelWaitForeverKeyboard(Window *w) { [GetTyped<GameView*>(w->id) setFrameOnKeyboardInput:0]; }
-void FrameScheduler::AddWaitForeverSocket(Window *w, Socket fd, int flag, void *val) {
-  if (wait_forever && wait_forever_thread) wakeup_thread.Add(fd, flag, val);
+void FrameScheduler::AddWaitForeverSocket(Window *w, Socket fd, int flag) {
+  if (wait_forever && wait_forever_thread) wakeup_thread.Add(fd, flag, w);
   if (!wait_forever_thread) {
     CHECK_EQ(SocketSet::READABLE, flag);
     [GetTyped<GameView*>(w->id) setWaitForeverSocket: fd];

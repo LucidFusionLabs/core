@@ -17,15 +17,10 @@
  */
 
 namespace LFL {
-void ProtoFile::Open(const char *fn) {}
 int ProtoFile::Add(const Proto *msg, int status) { return -1; }
-bool ProtoFile::Update(int offset, const ProtoHeader *ph, const Proto *msg) { return false; }
-bool ProtoFile::Update(int offset, int status) { return false; }
+bool ProtoFile::Update(int offset, const ContainerFileHeader *ph, const Proto *msg) { return false; }
 bool ProtoFile::Get(Proto *out, int offset, int status) { return false; }
 bool ProtoFile::Next(Proto *out, int *offsetOut, int status) { return false; }
-bool ProtoFile::Next(ProtoHeader *hdr, Proto *out, int *offsetOut, int status) { return false; }
-int ProtoFile::WriteProto(File *f, const ProtoHeader *hdr, const Proto *msg, bool doflush) { return -1; }
-int ProtoFile::WriteProto(File *f, ProtoHeader *hdr, const Proto *msg, bool doflush) { return -1; }
-int ProtoFile::WriteProtoFlag(File *f, const ProtoHeader *hdr, bool doflush) { return -1; }
+bool ProtoFile::Next(ContainerFileHeader *hdr, Proto *out, int *offsetOut, int status) { return false; }
 
 }; // namespace LFL

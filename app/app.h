@@ -436,7 +436,7 @@ struct FrameScheduler {
   void DelWaitForeverMouse(Window*);
   void AddWaitForeverKeyboard(Window*);
   void DelWaitForeverKeyboard(Window*);
-  void AddWaitForeverSocket(Window*, Socket fd, int flag, void *val=0);
+  void AddWaitForeverSocket(Window*, Socket fd, int flag);
   void DelWaitForeverSocket(Window*, Socket fd);
 };
 
@@ -539,7 +539,7 @@ struct Window : public ::NativeWindow {
   size_t NewGUI();
 
   template <class X> X* AddDialog(unique_ptr<X> d) { auto dp = VectorAddUnique(&dialogs, move(d)); OnDialogAdded(dp); return dp; }
-  virtual void OnDialogAdded(Dialog *d) { if (dialogs.size() == 1) BringDialogToFront(d); }
+  virtual void OnDialogAdded(Dialog *d);
   void BringDialogToFront(Dialog*);
   void GiveDialogFocusAway(Dialog*);
   void DrawDialogs();
@@ -649,7 +649,7 @@ struct Application : public ::LFApp {
 
   template <class... Args> void RunInMainThread(Args&&... args) {
     message_queue.Write(new Callback(forward<Args>(args)...));
-    if (!FLAGS_target_fps) scheduler.Wakeup(0);
+    if (!FLAGS_target_fps) scheduler.Wakeup(screen);
   }
   template <class... Args> void RunInNetworkThread(Args&&... args) {
     if (auto nt = network_thread.get()) nt->Write(new Callback(forward<Args>(args)...));

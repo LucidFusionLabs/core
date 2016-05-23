@@ -839,7 +839,7 @@ void Service::Detach(Connection *c) {
   Service::Close(c);
   c->readable = c->writable = 0;
   app->RunInMainThread([=]() { (*c->detach)(); });
-  app->scheduler.Wakeup(0);
+  app->scheduler.Wakeup(screen);
 }
 
 /* Network */

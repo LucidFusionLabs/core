@@ -23,6 +23,7 @@ void ClearColor(const Color &c) { clear_color=c; glClearColor(c.r(), c.g(), c.b(
 void PointSize(float n) { glPointSize(n); }
 void LineWidth(float n) { glLineWidth(n); }
 void DelTextures(int n, const unsigned *id) {
+  ClearDeferred();
   if (FLAGS_gd_debug) for (int i=0; i<n; i++) GDDebug("DelTexture ", id[i]);
   glDeleteTextures(n, id);
 }

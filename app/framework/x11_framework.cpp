@@ -73,7 +73,7 @@ struct X11FrameworkModule : public Module {
     if (!(display = XOpenDisplay(NULL))) return ERRORv(-1, "XOpenDisplay");
     if (!(vi = glXChooseVisual(display, 0, att))) return ERRORv(-1, "glXChooseVisual");
     app->scheduler.system_event_socket = ConnectionNumber(display);
-    app->scheduler.AddWaitForeverSocket(app->scheduler.system_event_socket, SocketSet::READABLE, 0);
+    app->scheduler.AddWaitForeverSocket(screen, app->scheduler.system_event_socket, SocketSet::READABLE);
     SystemNetwork::SetSocketCloseOnExec(app->scheduler.system_event_socket, true);
     INFO("X11VideoModule::Init()");
     return Video::CreateWindow(screen) ? 0 : -1;
@@ -176,10 +176,12 @@ int Video::Swap() {
 }
 
 bool FrameScheduler::DoWait() {
+  unordered_set<Window*> wokeup;
   wait_forever_sockets.Select(-1);
   for (auto &s : wait_forever_sockets.socket)
     if (wait_forever_sockets.GetReadable(s.first))
-      if (s.first != system_event_socket) app->scheduler.Wakeup(s.second.second);
+      if (s.first != system_event_socket) wokeup.insert(s.second.second);
+  for (auto w : wokeup) app->scheduler.Wakeup(w);
   return false;
 }
 
@@ -199,9 +201,9 @@ void FrameScheduler::AddWaitForeverMouse(Window *w) { }
 void FrameScheduler::DelWaitForeverMouse(Window *w) {  }
 void FrameScheduler::AddWaitForeverKeyboard(Window *w) {  }
 void FrameScheduler::DelWaitForeverKeyboard(Window *w) {  }
-void FrameScheduler::AddWaitForeverSocket(Window *w, Socket fd, int flag, void *val) {
-  if (wait_forever && wait_forever_thread) wakeup_thread.Add(fd, flag, val);
-  wait_forever_sockets.Add(fd, flag, val);
+void FrameScheduler::AddWaitForeverSocket(Window *w, Socket fd, int flag) {
+  if (wait_forever && wait_forever_thread) wakeup_thread.Add(fd, flag, w);
+  wait_forever_sockets.Add(fd, flag, w);
 }
 void FrameScheduler::DelWaitForeverSocket(Window *w, Socket fd) {
   if (wait_forever && wait_forever_thread) wakeup_thread.Del(fd);

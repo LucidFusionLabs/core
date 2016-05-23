@@ -96,7 +96,7 @@ void FrameScheduler::AddWaitForeverMouse(Window*) {}
 void FrameScheduler::DelWaitForeverMouse(Window*) {}
 void FrameScheduler::AddWaitForeverKeyboard(Window*) {}
 void FrameScheduler::DelWaitForeverKeyboard(Window*) {}
-void FrameScheduler::AddWaitForeverSocket(Window*, Socket fd, int flag, void *val) {}
+void FrameScheduler::AddWaitForeverSocket(Window*, Socket fd, int flag) {}
 void FrameScheduler::DelWaitForeverSocket(Window*, Socket fd) {}
 
 extern "C" int main(int argc, const char *argv[]) {

@@ -1,6 +1,7 @@
 namespace LFL.IPC;
 
 table ResourceHandle { type: int; len: int; url: string; }
+table RecordLog { stamp: ulong; data: [byte]; }
 
 table AllocateBufferRequest  { bytes: int; type: short; }
 table AllocateBufferResponse { mpb: ResourceHandle; mpb_id: int; }
