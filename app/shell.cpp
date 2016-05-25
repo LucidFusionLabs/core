@@ -23,36 +23,37 @@
 
 namespace LFL {
 Shell::Shell(AssetMap *AM, SoundAssetMap *SAM, MovieAssetMap *MAM) : assets(AM), soundassets(SAM), movieassets(MAM) {
-  command.emplace_back("quit",       bind(&Shell::quit,         this, _1));
-  command.emplace_back("cmds",       bind(&Shell::cmds,         this, _1));
-  command.emplace_back("binds",      bind(&Shell::binds,        this, _1));
-  command.emplace_back("flags",      bind(&Shell::flags,        this, _1));
-  command.emplace_back("conscolor",  bind(&Shell::consolecolor, this, _1));
-  command.emplace_back("clipboard",  bind(&Shell::clipboard,    this, _1));
-  command.emplace_back("dldir",      bind(&Shell::dldir,        this, _1));
-  command.emplace_back("screenshot", bind(&Shell::screenshot,   this, _1));
-  command.emplace_back("fillmode",   bind(&Shell::fillmode,     this, _1));
-  command.emplace_back("texmode",    bind(&Shell::texmode,      this, _1));
-  command.emplace_back("swapaxis",   bind(&Shell::swapaxis,     this, _1));
-  command.emplace_back("campos",     bind(&Shell::campos,       this, _1));
-  command.emplace_back("filter",     bind(&Shell::filter,       this, _1));
-  command.emplace_back("fftfilter",  bind(&Shell::filter,       this, _1));
-  command.emplace_back("f0",         bind(&Shell::f0,           this, _1));
-  command.emplace_back("sinth",      bind(&Shell::sinth,        this, _1));
-  command.emplace_back("play",       bind(&Shell::play,         this, _1));
-  command.emplace_back("playmovie",  bind(&Shell::playmovie,    this, _1));
-  command.emplace_back("loadsound",  bind(&Shell::loadsound,    this, _1));
-  command.emplace_back("loadmovie",  bind(&Shell::loadmovie,    this, _1));
-  command.emplace_back("copy",       bind(&Shell::copy,         this, _1));
-  command.emplace_back("snap",       bind(&Shell::snap,         this, _1));
-  command.emplace_back("writesnap",  bind(&Shell::writesnap,    this, _1));
-  command.emplace_back("fps",        bind(&Shell::FPS,          this, _1));
-  command.emplace_back("netstat",    bind(&Shell::NetworkStats, this, _1));
-  command.emplace_back("wget",       bind(&Shell::WGet,         this, _1));
-  command.emplace_back("messagebox", bind(&Shell::MessageBox,   this, _1));
-  command.emplace_back("texturebox", bind(&Shell::TextureBox,   this, _1));
-  command.emplace_back("edit",       bind(&Shell::Edit,         this, _1));
-  command.emplace_back("slider",     bind(&Shell::Slider,       this, _1));
+  command.emplace_back("quit",         bind(&Shell::quit,          this, _1));
+  command.emplace_back("cmds",         bind(&Shell::cmds,          this, _1));
+  command.emplace_back("binds",        bind(&Shell::binds,         this, _1));
+  command.emplace_back("flags",        bind(&Shell::flags,         this, _1));
+  command.emplace_back("conscolor",    bind(&Shell::consolecolor,  this, _1));
+  command.emplace_back("clipboard",    bind(&Shell::clipboard,     this, _1));
+  command.emplace_back("dldir",        bind(&Shell::dldir,         this, _1));
+  command.emplace_back("savesettings", bind(&Shell::savesettings,  this, _1));
+  command.emplace_back("screenshot",   bind(&Shell::screenshot,    this, _1));
+  command.emplace_back("fillmode",     bind(&Shell::fillmode,      this, _1));
+  command.emplace_back("texmode",      bind(&Shell::texmode,       this, _1));
+  command.emplace_back("swapaxis",     bind(&Shell::swapaxis,      this, _1));
+  command.emplace_back("campos",       bind(&Shell::campos,        this, _1));
+  command.emplace_back("filter",       bind(&Shell::filter,        this, _1));
+  command.emplace_back("fftfilter",    bind(&Shell::filter,        this, _1));
+  command.emplace_back("f0",           bind(&Shell::f0,            this, _1));
+  command.emplace_back("sinth",        bind(&Shell::sinth,         this, _1));
+  command.emplace_back("play",         bind(&Shell::play,          this, _1));
+  command.emplace_back("playmovie",    bind(&Shell::playmovie,     this, _1));
+  command.emplace_back("loadsound",    bind(&Shell::loadsound,     this, _1));
+  command.emplace_back("loadmovie",    bind(&Shell::loadmovie,     this, _1));
+  command.emplace_back("copy",         bind(&Shell::copy,          this, _1));
+  command.emplace_back("snap",         bind(&Shell::snap,          this, _1));
+  command.emplace_back("writesnap",    bind(&Shell::writesnap,     this, _1));
+  command.emplace_back("fps",          bind(&Shell::FPS,           this, _1));
+  command.emplace_back("netstat",      bind(&Shell::NetworkStats,  this, _1));
+  command.emplace_back("wget",         bind(&Shell::WGet,          this, _1));
+  command.emplace_back("messagebox",   bind(&Shell::MessageBox,    this, _1));
+  command.emplace_back("texturebox",   bind(&Shell::TextureBox,    this, _1));
+  command.emplace_back("edit",         bind(&Shell::Edit,          this, _1));
+  command.emplace_back("slider",       bind(&Shell::Slider,        this, _1));
 }
 
 Asset      *Shell::asset     (const string &n) { return assets      ? (*     assets)(n) : 0; }
@@ -113,6 +114,11 @@ void Shell::consolecolor(const vector<string>&) {
 }
 
 void Shell::dldir(const vector<string>&) { INFO(LFAppDownloadDir()); }
+
+void Shell::savesettings(const vector<string> &a) {
+  if (a.empty()) return INFO("usage: savesettings <fields>");
+  SettingsFile::Save(a);
+}
 
 void Shell::screenshot(const vector<string> &a) {
   if (a.empty()) return INFO("usage: screenshot <file> [tex_id]");

@@ -53,6 +53,7 @@ struct Shell {
   void clipboard(const vector<string>&);
   void startcmd(const vector<string>&);
   void dldir(const vector<string>&);
+  void savesettings(const vector<string>&);
   void screenshot(const vector<string>&);
 
   void fillmode(const vector<string>&);

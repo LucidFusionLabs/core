@@ -367,7 +367,7 @@ struct AcousticEventGUI {
         if (!flip) { tx = win.x + perc * win.w; ty = win.centerY();        }
         else       { tx = win.centerX();        ty = win.y + perc * win.h; }
 
-        static Font *text = app->fonts->Get(FLAGS_default_font, "", 12, Color::white, Color::clear, FontDesc::Outline);
+        static Font *text = app->fonts->Get(FLAGS_font, "", 12, Color::white, Color::clear, FontDesc::Outline);
         text->Draw(AED->sink->decode[i].text, point(tx, ty), 0, Font::DrawFlag::Orientation(!flip ? 1 : 3));
       }
     }

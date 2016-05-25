@@ -73,7 +73,7 @@ int Glyph::ToArray(double *out, int l) {
 
 int Glyph::Baseline(const LFL::Box *b, const Drawable::Attr *a) const {
   if (!a || !a->font) return tex.Baseline(b,a);
-  return RoundXY_or_Y(a->font->scale, b->h - bearing_y);
+  return b->h - RoundXY_or_Y(a->font->scale, bearing_y);
 }
 
 int Glyph::Ascender(const LFL::Box *b, const Drawable::Attr *a) const {

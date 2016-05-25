@@ -752,6 +752,12 @@ int MatrixFile::WriteRow(File *file, const double *row, int N, bool lastrow) {
 
 /* SettingsFile */
 
+int SettingsFile::Load() {
+  int ret = SettingsFile::Read(LFAppDownloadDir(), StrCat(app->name, "_settings"));
+  Singleton<FlagMap>::Get()->dirty = false;
+  return ret;
+}
+
 int SettingsFile::Read(const string &dir, const string &name) {
   StringFile settings; int lastiter=0;
   VersionedFileName vfn(dir.c_str(), name.c_str(), VarName());
@@ -770,6 +776,14 @@ int SettingsFile::Write(const vector<string> &fields, const string &dir, const s
     StringFile::WriteRow(&settings, StrCat(*i, Separator(), Singleton<FlagMap>::Get()->Get(*i)).c_str());
   }
   return 0;
+}
+
+int SettingsFile::Save(const vector<string> &fields) {
+  Singleton<FlagMap>::Get()->dirty = false;
+  chdir(app->startdir.c_str());
+  int ret = SettingsFile::Write(fields, LFAppDownloadDir(), StrCat(app->name, "_settings"));
+  INFO("wrote settings");
+  return ret;
 }
 
 /* Matrix Archive */ 

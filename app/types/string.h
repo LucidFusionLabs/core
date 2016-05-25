@@ -827,6 +827,7 @@ template<typename T> FlatBufferPiece CreateFlatBuffer(const std::function<flatbu
 { FlatBufferBuilder fb; fb.Finish(f(fb)); size_t s=fb.GetSize(); return make_pair(fb.ReleaseBufferPointer(), s); }
 #define MakeFlatBufferOfType(t, x) CreateFlatBuffer(function<flatbuffers::Offset<t>(FlatBufferBuilder&)>([&](FlatBufferBuilder &fb){ return x; }))
 #else
+namespace flatbuffers { template<typename T> const T *GetRoot(const void *buf) { return nullptr; } }; 
 #define MakeFlatBufferOfType(t, x) FlatBufferPiece()
 #endif
 

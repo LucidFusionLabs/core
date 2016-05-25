@@ -256,7 +256,6 @@ struct TextBox : public GUI, public KeyboardController {
     LinesFrameBuffer(GraphicsDevice *d) : RingFrameBuffer(d) {}
     LinesFrameBuffer *Attach(LinesFrameBuffer **last_fb);
     virtual int SizeChanged(int W, int H, Font *font, const Color *bgc);
-    virtual int Height() const { return lines * font_height; }
     tvirtual void Clear(Line *l) { RingFrameBuffer::Clear(l, Box(w, l->Lines() * font_height), true); }
     tvirtual void Update(Line *l, int flag=0);
     tvirtual void Update(Line *l, const point &p, int flag=0) { l->p=p; Update(l, flag); }
@@ -804,7 +803,7 @@ struct MessageBoxDialog : public Dialog {
 struct TextureBoxDialog : public Dialog {
   Texture tex;
   TextureBoxDialog(GraphicsDevice *d, const string &m) :
-    Dialog(d, .33, .33) { tex.ID = ::atoi(m.c_str()); }
+    Dialog(d, .33, .33) { tex.ID = ::atoi(m.c_str()); tex.owner = false; }
   void Draw() { Dialog::Draw(); tex.Draw(content + box.TopLeft()); }
 };
 

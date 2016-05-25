@@ -27,7 +27,6 @@ extern "C" void MyAppCreate() {
 
 extern "C" int MyAppMain(int argc, const char* const* argv) {
   testing::InitGoogleTest(&argc, const_cast<char**>(argv));
-  if (!LFL::app) MyAppCreate();
   CHECK_EQ(0, LFL::app->Create(argc, argv, __FILE__));
   CHECK_EQ(0, LFL::app->Init());
   return RUN_ALL_TESTS();

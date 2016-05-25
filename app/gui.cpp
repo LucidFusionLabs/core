@@ -401,8 +401,8 @@ TextBox::LinesFrameBuffer *TextBox::LinesFrameBuffer::Attach(TextBox::LinesFrame
 }
 
 int TextBox::LinesFrameBuffer::SizeChanged(int W, int H, Font *font, const Color *bgc) {
-  lines = RoundUp(H / float(font->Height()));
-  return RingFrameBuffer::SizeChanged(W, H, font, bgc);
+  lines = RoundUp(float(H) / font->Height());
+  return RingFrameBuffer::SizeChanged(W, lines * font->Height(), font, bgc);
 }
 
 void TextBox::LinesFrameBuffer::Update(TextBox::Line *l, int flag) {
@@ -449,7 +449,7 @@ point TextBox::LinesFrameBuffer::Paint(TextBox::Line *l, point lp, const Box &b,
 
 void TextBox::LinesFrameBuffer::DrawAligned(const Box &b, point adjust) {
   Scissor scissor(screen->gd, b);
-  RingFrameBuffer::Draw(align_top_or_bot ? (b.TopLeft() - point(0, Height())) : b.Position(), adjust, false);
+  RingFrameBuffer::Draw(align_top_or_bot ? (b.TopLeft() - point(0, h)) : b.Position(), adjust, false);
 }
 
 TextBox::LineUpdate::~LineUpdate() {
@@ -467,7 +467,7 @@ TextBox::TextBox(GraphicsDevice *d, const FontRef &F, int LC) : style(F), cmd_la
 
 point TextBox::RelativePosition(const point &in) const {
   auto fb = GetFrameBuffer();
-  point p = in - (fb->align_top_or_bot ? (box.TopLeft() - point(0, fb->Height())) : box.Position());
+  point p = in - (fb->align_top_or_bot ? (box.TopLeft() - point(0, fb->h)) : box.Position());
   if (clip) if (p.y < clip->bottom || p.y > box.h - clip->top) return p - point(0, box.h);
   return fb->BackPlus(p);
 }
@@ -544,10 +544,10 @@ void TextBox::UpdateLongToken(Line *BL, int beg_offset, Line *EL, int end_offset
     if (update_type < 0) BL->data->controls.erase(beg_offset);
     else {
       LinesFrameBuffer *fb = GetFrameBuffer();
-      int fb_h = fb->Height(), adjust_y = BL->data->outside_scroll_region ? -fb_h : 0;
+      int fb_h = fb->h, adjust_y = BL->data->outside_scroll_region ? -fb_h : 0;
       Box gb = Box(BL->data->glyphs[beg_offset].box).SetY(BL->p.y - fh + adjust_y);
       Box ge = Box(EL->data->glyphs[end_offset].box).SetY(EL->p.y - fh + adjust_y);
-      Box3 box(Box(fb->Width(), fb_h), gb.Position(), ge.Position() + point(ge.w, 0), fh, fh);
+      Box3 box(Box(fb->w, fb_h), gb.Position(), ge.Position() + point(ge.w, 0), fh, fh);
       string url = offset ? textp.str() : text;
       auto i = Insert(BL->data->controls, beg_offset, make_shared<Control>
                       (BL, this, box, url, MouseControllerCallback([=](){ app->OpenSystemBrowser(url); })));
@@ -653,12 +653,12 @@ void TextArea::Redraw(bool attach, bool relayout) {
   int (LinesFrameBuffer::*update_cb)(Line*, int, int, int, int) =
     reverse_line_fb ? &LinesFrameBuffer::PushBackAndUpdate
                     : &LinesFrameBuffer::PushFrontAndUpdate;
-  fb->p = reverse_line_fb ? point(0, fb->Height() - start_line_adjust * font_height) 
+  fb->p = reverse_line_fb ? point(0, fb->h - start_line_adjust * font_height) 
                           : point(0, start_line_adjust * font_height);
   if (attach) { fb->fb.Attach(); screen->gd->Clear(); }
   for (int i=start_line; i<line.ring.count && lines < fb->lines; i++)
     lines += (fb->*update_cb)(&line[-i-1], -line_left, 0, fb->lines - lines, fb_flag);
-  fb->p = point(0, fb->Height());
+  fb->p = point(0, fb->h);
   if (attach) { fb->scroll = v2(); fb->fb.Release(); }
 }
 
@@ -748,7 +748,7 @@ void TextArea::Draw(const Box &b, int flag, Shader *shader) {
 
 void TextArea::DrawHoverLink(const Box &b) {
   bool outside_scroll_region = hover_control->line->data->outside_scroll_region;
-  int fb_h = line_fb.Height();
+  int fb_h = line_fb.h;
   for (const auto &i : hover_control->box) {
     if (!i.w || !i.h) continue;
     point p = i.BottomLeft();
@@ -800,7 +800,7 @@ void TextArea::DragCB(int, int, int, int down) {
     if (reverse_line_fb) { gb.y=h-gb.y-fh; ge.y=h-ge.y-fh; }
     point gbp = !reverse_line_fb ? gb.Position() : gb.Position() + point(gb.w, 0);
     point gep =  reverse_line_fb ? ge.Position() : ge.Position() + point(ge.w, 0);
-    s->box = Box3(Box(fb->Width(), h), gbp, gep, fh, fh);
+    s->box = Box3(Box(fb->w, h), gbp, gep, fh, fh);
   }
 }
 
@@ -994,7 +994,7 @@ void PropertyView::HandleNodeControlClicked(Id id, int b, int x, int y, int down
   if (!down) return;
   auto n = GetNode(id);
   auto fb = GetFrameBuffer();
-  int h = fb->Height(), fh = style.font->Height(), depth = n->depth, added = 0;
+  int h = fb->h, fh = style.font->Height(), depth = n->depth, added = 0;
   // int line_no = RingIndex::Wrap((h - fb->scroll.y * h - y), h) / fh, child_line_no = line_no + 1;
   int line_no = last_first_line + (box.top() - screen->mouse.y) / fh, child_line_no = line_no + 1;
   if (line_no == selected_line_no) selected_line_no = -1;
@@ -1568,7 +1568,7 @@ void Terminal::MoveToOrFromScrollRegion(TextBox::LinesFrameBuffer *fb, TextBox::
   int plpy = l->p.y;
   fb->Update(l, p, flag);
   l->data->outside_scroll_region = fb != &line_fb;
-  int delta_y = plpy - l->p.y + line_fb.Height() * (l->data->outside_scroll_region ? -1 : 1);
+  int delta_y = plpy - l->p.y + line_fb.h * (l->data->outside_scroll_region ? -1 : 1);
   for (auto &i : l->data->controls) {
     i.second->box += point(0, delta_y);
     for (auto &j : i.second->hitbox) i.second->gui->IncrementBoxY(delta_y, -1, j);

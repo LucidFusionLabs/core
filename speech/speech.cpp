@@ -1384,7 +1384,7 @@ void Decoder::VisualizeFeatures(AcousticModel::Compiled *model, Matrix *MFCC, Ma
     }
 
     if (interactive) {
-      static Font *norm = app->fonts->Get(FLAGS_default_font, "", 12, Color::grey70);
+      static Font *norm = app->fonts->Get(FLAGS_font, "", 12, Color::grey70);
       segments->Frame(wcc, norm);
 
       // gui.mouse.Activate();

@@ -565,11 +565,19 @@ void FrameBuffer::AllocTexture(Texture *out, bool clamp_to_edge) {
   }
 }
 
-void FrameBuffer::Release() { screen->gd->BindFrameBuffer(screen->gd->default_framebuffer); }
-void FrameBuffer::Attach(int ct, int dt) {
+void FrameBuffer::Release(bool update_viewport) {
+  screen->gd->BindFrameBuffer(screen->gd->default_framebuffer);
+  if (update_viewport) screen->gd->RestoreViewport(DrawMode::_2D);
+}
+
+void FrameBuffer::Attach(int ct, int dt, bool update_viewport) {
   screen->gd->BindFrameBuffer(ID);
   if (ct) { if (tex  .ID != ct) tex.owner   = false; screen->gd->FrameBufferTexture     ((tex.ID   = ct)); }
   if (dt) { if (depth.ID != dt) depth.owner = false; screen->gd->FrameBufferDepthTexture((depth.ID = dt)); }
+  if (update_viewport) {
+    screen->gd->ViewPort(Box(width, height));
+    screen->gd->DrawMode(DrawMode::_2D, width, height, true);
+  }
 }
 
 void FrameBuffer::ClearGL() {
@@ -802,6 +810,11 @@ void GraphicsDevice::PopScissorStack() {
   else { ClearDeferred(); DisableScissor(); }
 }
 
+Box GraphicsDevice::GetScissorBox() const {
+  auto &ss = scissor_stack.back();
+  return ss.size() ? ss.back() : Box(-1,-1);
+}
+  
 void GraphicsDevice::DrawPixels(const Box &b, const Texture &tex) {
   Texture temp;
   temp.Resize(tex.width, tex.height, tex.pf, Texture::Flag::CreateGL);

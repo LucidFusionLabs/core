@@ -41,7 +41,6 @@
 #endif
 
 #ifdef LFL_IPHONE
-extern "C" char *iPhoneDocumentPathCopy();
 extern "C" void iPhoneLog(const char *text);
 #endif
 
@@ -151,6 +150,10 @@ DEFINE_bool(rcon_debug, false, "Print game protocol commands");
 Application *app = nullptr;
 Window *screen = nullptr;
 void Log(int level, const char *file, int line, const string &m) { app->Log(level, file, line, m); }
+
+#ifdef LFL_APPLE
+std::string GetNSDocumentDirectory();
+#endif
 
 #ifdef LFL_IPHONE
 static pthread_key_t tls_key;
@@ -465,10 +468,8 @@ int Application::Create(int argc, const char* const* argv, const char *source_fi
     jstring path = jstring(jni->env->CallObjectMethod(jni->activity, mid));
     dldir = jni->GetJNIString(path);
     jni->env->DeleteLocalRef(path);
-#elif defined(LFL_IPHONE)
-    char *path = iPhoneDocumentPathCopy();
-    dldir = StrCat(path, "/");
-    free(path);
+#elif defined(LFL_APPLE)
+    dldir = StrCat(GetNSDocumentDirectory(), "/");
 #elif defined(LFL_WINDOWS)
     char path[MAX_PATH] = { 0 };
     if (!SUCCEEDED(SHGetFolderPath(NULL, CSIDL_PERSONAL|CSIDL_FLAG_CREATE, NULL, 0, path))) return -1;
@@ -705,7 +706,7 @@ Window::Window() : caption(app->name), fps(128) {
 Window::~Window() {
   dialogs.clear();
   my_gui.clear();
-  if (console) console->WriteHistory(LFAppDownloadDir(), "console", "");
+  if (console) console->WriteHistory(LFAppDownloadDir(), StrCat(app->name, "_console"), "");
   console.reset();
   delete gd;
 }
@@ -721,7 +722,7 @@ Box Window::Box(float xp, float yp, float xs, float ys, float xbl, float ybt, fl
 
 void Window::InitConsole(const Callback &animating_cb) {
   gui.push_back((console = make_unique<Console>(gd, animating_cb)).get());
-  console->ReadHistory(LFAppDownloadDir(), "console");
+  console->ReadHistory(LFAppDownloadDir(), StrCat(app->name, "_console"));
   console->Write(StrCat(caption, " started"));
   console->Write("Try console commands 'cmds' and 'flags'");
 }

@@ -124,6 +124,11 @@
 @end
 
 namespace LFL {
+string GetNSDocumentDirectory() {
+  NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
+  return [[paths objectAtIndex:0] UTF8String];
+}
+
 static void AddNSMenuItems(NSMenu *menu, const vector<MenuItem>&items) {
   NSMenuItem *item;
   for (auto &i : items) { 

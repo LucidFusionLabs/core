@@ -141,7 +141,7 @@ static const char **osx_argv = 0;
 
   - (void)startThread:(bool)first {
     initialized = true;
-    if (!LFL::FLAGS_enable_input) {
+    if (!LFL::FLAGS_enable_video) {
       if (first) INFOf("OSXModule impl = %s", "PassThru");
       exit(LFAppMainLoop());
     } else if (screen->target_fps == 0) {

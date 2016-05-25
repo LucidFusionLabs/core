@@ -29,14 +29,12 @@ template <class Line> struct RingFrameBuffer {
   RingFrameBuffer(GraphicsDevice *d) : fb(d) {}
 
   void ResetGL() { w=h=0; fb.ResetGL(); }
-  virtual int Width()  const { return w; }
-  virtual int Height() const { return h; }
   virtual void SizeChangedDone() { fb.gd->PopScissorStack(); fb.Release(); scroll=v2(); p=point(); }
   virtual int SizeChanged(int W, int H, Font *font, const Color *bgc) {
     if (W == w && H == h && font->size == font_size) return 0;
     int orig_font_size = font_size;
     SetDimensions(W, H, font);
-    fb.Resize(w, Height(), FrameBuffer::Flag::CreateGL | FrameBuffer::Flag::CreateTexture);
+    fb.Resize(w, h, FrameBuffer::Flag::CreateGL | FrameBuffer::Flag::CreateTexture);
     ScopedClearColor scc(fb.gd, bgc);
     fb.gd->PushScissorStack();
     fb.gd->Clear();
@@ -45,7 +43,7 @@ template <class Line> struct RingFrameBuffer {
   }
 
   virtual void Draw(point pos, point adjust, bool scissor=true) {
-    Box box(pos.x, pos.y, w, Height());
+    Box box(pos.x, pos.y, w, h);
     if (scissor) fb.gd->PushScissor(box);
     fb.tex.Bind();
     (box + adjust).DrawCrimped(fb.tex.coord, 0, 0, scroll.y);
@@ -53,41 +51,39 @@ template <class Line> struct RingFrameBuffer {
   }
 
   void Clear(Line *l, const Box &b, bool vwrap=true) {
-    if (1)                         { Scissor s(fb.gd, 0, l->p.y - b.h,      b.w, b.h); fb.gd->Clear(); }
-    if (l->p.y - b.h < 0 && vwrap) { Scissor s(fb.gd, 0, l->p.y + Height(), b.w, b.h); fb.gd->Clear(); }
+    if (1)                         { Scissor s(fb.gd, 0, l->p.y - b.h, b.w, b.h); fb.gd->Clear(); }
+    if (l->p.y - b.h < 0 && vwrap) { Scissor s(fb.gd, 0, l->p.y + h,   b.w, b.h); fb.gd->Clear(); }
   }
 
   void Update(Line *l, const Box &b, const PaintCB &paint, bool vwrap=true) {
     point lp = paint(l, l->p, b);
-    if (lp.y < 0 && vwrap) paint(l, point(0, lp.y + Height() + b.h), b);
+    if (lp.y < 0 && vwrap) paint(l, point(0, lp.y + h + b.h), b);
   }
 
   int PushFrontAndUpdate(Line *l, const Box &b, const PaintCB &paint, bool vwrap=true) {
-    int ht = Height();
-    if (b.h >= ht)     p = paint(l,      point(0, ht),         b);
-    else                   paint(l, (p = point(0, p.y + b.h)), b);
-    if (p.y > ht && vwrap) paint(l, (p = point(0, p.y - ht)),  b);
-    ScrollPercent(float(-b.h) / ht);
+    if (b.h >= h)     p = paint(l,      point(0, h),          b);
+    else                  paint(l, (p = point(0, p.y + b.h)), b);
+    if (p.y > h && vwrap) paint(l, (p = point(0, p.y - h)),   b);
+    ScrollPercent(float(-b.h) / h);
     return b.h;
   }
 
   int PushBackAndUpdate(Line *l, const Box &b, const PaintCB &paint, bool vwrap=true) {
-    int ht = Height();
-    if (p.y == 0)         p =          point(0, ht);
-    if (b.h >= ht)        p = paint(l, point(0, b.h),            b);
-    else                  p = paint(l, point(0, p.y),            b);
-    if (p.y < 0 && vwrap) p = paint(l, point(0, p.y + b.h + ht), b);
-    ScrollPercent(float(b.h) / ht);
+    if (p.y == 0)         p =          point(0, h);
+    if (b.h >= h)         p = paint(l, point(0, b.h),           b);
+    else                  p = paint(l, point(0, p.y),           b);
+    if (p.y < 0 && vwrap) p = paint(l, point(0, p.y + b.h + h), b);
+    ScrollPercent(float(b.h) / h);
     return b.h;
   }
 
   void SetDimensions(int W, int H, Font *f) { w = W; h = H; font_size = f->size; font_height = f->Height(); }
   void ScrollPercent(float y) { scroll.y = fmod(scroll.y + y, 1.0); }
-  void ScrollPixels(int y) { ScrollPercent(float(y) / Height()); }
-  void AdvancePixels(int y) { ScrollPixels(y); p.y = RingIndex::WrapOver(p.y - y, Height()); }
+  void ScrollPixels(int y) { ScrollPercent(float(y) / h); }
+  void AdvancePixels(int y) { ScrollPixels(y); p.y = RingIndex::WrapOver(p.y - y, h); }
   point BackPlus(const point &o, bool wrap_zero=false) const {
-    int y = RingIndex::WrapOver(p.y + o.y, Height());
-    return point(RingIndex::WrapOver(p.x + o.x, Width()), (wrap_zero && !y) ? Height() : y);
+    int y = RingIndex::WrapOver(p.y + o.y, h);
+    return point(RingIndex::WrapOver(p.x + o.x, w), (wrap_zero && !y) ? h : y);
   }
 };
 
@@ -226,7 +222,7 @@ template<class CB, class CBL, class CBLI> struct TilesT : public TilesInterface 
   void RunTile(int i, int j, int flag, Tile *tile, const CBLI &tile_cb) {
     GetSpaceCoords(i, j, &current_tile.x, &current_tile.y);
     if (!tile->id) fb.AllocTexture(&tile->id);
-    fb.Attach(tile->id);
+    fb.Attach(tile->id, false);
     fb.gd->MatrixProjection();
     if (!(flag & RunFlag::DontClear)) fb.gd->Clear();
     fb.gd->LoadIdentity();
@@ -235,10 +231,7 @@ template<class CB, class CBL, class CBLI> struct TilesT : public TilesInterface 
     tile_cb.Run(current_tile);
   }
 
-  void Release() {
-    fb.Release();
-    fb.gd->RestoreViewport(DrawMode::_2D);
-  }
+  void Release() { fb.Release(); }
 
   void Draw(const Box &viewport, const point &docp) {
     int x1, x2, y1, y2, sx, sy;

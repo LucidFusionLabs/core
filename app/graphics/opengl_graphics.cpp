@@ -92,6 +92,7 @@ const int GraphicsDevice::TextureCubeMap       = GL_TEXTURE_CUBE_MAP;
 const int GraphicsDevice::UnsignedByte         = GL_UNSIGNED_BYTE;
 const int GraphicsDevice::UnsignedInt          = GL_UNSIGNED_INT;
 const int GraphicsDevice::FramebufferComplete  = GL_FRAMEBUFFER_COMPLETE;
+const int GraphicsDevice::FramebufferUndefined = GL_FRAMEBUFFER_UNDEFINED;
 const int GraphicsDevice::Ambient              = GL_AMBIENT;
 const int GraphicsDevice::Diffuse              = GL_DIFFUSE;
 const int GraphicsDevice::Specular             = GL_SPECULAR;
@@ -119,6 +120,7 @@ const int GraphicsDevice::DepthBits            = GL_DEPTH_BITS;
 const int GraphicsDevice::ActiveUniforms       = GL_ACTIVE_UNIFORMS;
 const int GraphicsDevice::ActiveAttributes     = GL_ACTIVE_ATTRIBUTES;
 const int GraphicsDevice::MaxVertexAttributes  = GL_MAX_VERTEX_ATTRIBS;
+const int GraphicsDevice::MaxViewportDims      = GL_MAX_VIEWPORT_DIMS;
 #if defined(LFL_MOBILE) || defined(LFL_EMSCRIPTEN)
 const int GraphicsDevice::Fill                 = 0;
 const int GraphicsDevice::Line                 = 0;

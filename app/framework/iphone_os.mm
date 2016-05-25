@@ -29,6 +29,11 @@ extern "C" void iPhonePlayMusic(void *handle);
 extern "C" void iPhonePlayBackgroundMusic(void *handle);
 
 namespace LFL {
+string GetNSDocumentDirectory() {
+  NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
+  return [[paths objectAtIndex:0] UTF8String];
+}
+
 void Application::AddNativeMenu(const string &title, const vector<MenuItem>&items) {
   vector<const char *> n, v;
   for (auto &i : items) { n.push_back(tuple_get<1>(i).c_str()); v.push_back(tuple_get<2>(i).c_str()); }

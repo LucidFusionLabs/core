@@ -113,6 +113,7 @@ int CheckFrameBufferStatus() { return glCheckFramebufferStatusEXT(GL_FRAMEBUFFER
 
 void Screenshot(Texture *out) { ScreenshotBox(out, Box(LFL::screen->width, LFL::screen->height), Texture::Flag::FlipY); }
 void ScreenshotBox(Texture *out, const Box &b, int flag) {
+  ClearDeferred();
   out->Resize(b.w, b.h, Texture::preferred_pf, Texture::Flag::CreateBuf);
   unsigned char *pixels = out->NewBuffer();
   glReadPixels(b.x, b.y, b.w, b.h, out->GLPixelType(), out->GLBufferType(), pixels);
@@ -207,4 +208,10 @@ void LogVersion() {
   GetIntegerv(DepthBits, &depth_bits);
   INFO("opengles_version = ", app->opengles_version, ", depth_bits = ", depth_bits);
   INFO("have_cubemap = ", have_cubemap ? "true" : "false");
+
+#if 0
+  int dim[2] = { 0, 0 };
+  screen->gd->GetIntegerv(GraphicsDevice::MaxViewportDims, dim);
+  INFO("max_viewport_dims = ", dim[0], ", ", dim[1]);
+#endif
 }

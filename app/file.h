@@ -286,9 +286,9 @@ struct FlatFile : public ContainerFile {
   using ContainerFile::ContainerFile;
   int Add(const FlatBufferPiece &msg, int status=0);
   bool Update(int offset, const ContainerFileHeader *ph, const FlatBufferPiece &msg);
-  // bool Get(Proto *out, int offset, int status=-1);
-  // bool Next(Proto *out, int *offsetOut=0, int status=-1);
-  // bool Next(ContainerFileHeader *hdr, Proto *out, int *offsetOut=0, int status=-1);
+  template <class X> const X* Get(                         int o,     int s=-1) { StringPiece b; return ContainerFile::Get (   &b, o,  s) ? flatbuffers::GetRoot<X>(b.buf) : nullptr; }
+  template <class X> const X* Next(                        int *oo=0, int s=-1) { StringPiece b; return ContainerFile::Next(   &b, oo, s) ? flatbuffers::GetRoot<X>(b.buf) : nullptr; }
+  template <class X> const X* Next(ContainerFileHeader *h, int *oo=0, int s=-1) { StringPiece b; return ContainerFile::Next(h, &b, oo, s) ? flatbuffers::GetRoot<X>(b.buf) : nullptr; } 
 };
 
 struct StringFile {
@@ -329,8 +329,10 @@ struct SettingsFile {
   static const char *VarName() { return "settings"; }
   static const char *Separator() { return " = "; }
 
+  static int Load();
   static int Read(const string &dir, const string &name);
   static int Write(const vector<string> &fields, const string &dir, const string &name);
+  static int Save(const vector<string> &fields);
 };
 
 struct MatrixFile {

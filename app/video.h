@@ -381,8 +381,8 @@ struct FrameBuffer {
   void AllocTexture(unsigned *out, bool clamp_to_edge=true);
   void AllocDepthTexture(DepthTexture *out);
 
-  void Attach(int ct=0, int dt=0);
-  void Release();
+  void Attach(int ct=0, int dt=0, bool update_viewport=1);
+  void Release(bool update_viewport=1);
   void ClearGL();
 };
 
@@ -431,12 +431,12 @@ struct Shader {
 
 struct GraphicsDevice {
   static const int Float, Points, Lines, LineLoop, Triangles, TriangleStrip, Polygon;
-  static const int Texture2D, TextureCubeMap, UnsignedByte, UnsignedInt, FramebufferComplete, FramebufferBinding;
+  static const int Texture2D, TextureCubeMap, UnsignedByte, UnsignedInt, FramebufferComplete, FramebufferBinding, FramebufferUndefined;
   static const int Ambient, Diffuse, Specular, Emission, Position;
   static const int One, SrcAlpha, OneMinusSrcAlpha, OneMinusDstColor, TextureWrapS, TextureWrapT, ClampToEdge;
   static const int VertexShader, FragmentShader, ShaderVersion, Extensions;
   static const int GLEWVersion, Version, Vendor, DepthBits;
-  static const int ActiveUniforms, ActiveAttributes, MaxVertexAttributes, MaxVertexUniformComp;
+  static const int ActiveUniforms, ActiveAttributes, MaxVertexAttributes, MaxVertexUniformComp, MaxViewportDims;
   static const int Fill, Line, Point, GLPreferredBuffer, GLInternalFormat;
 
   int default_draw_mode = DrawMode::_2D, draw_mode = 0, default_framebuffer = 0;
@@ -570,6 +570,7 @@ struct GraphicsDevice {
   void PopScissor();
   void PushScissorStack();
   void PopScissorStack();
+  Box GetScissorBox() const;
   void DrawPixels(const Box &b, const Texture &tex);
 
   static int VertsPerPrimitive(int gl_primtype);

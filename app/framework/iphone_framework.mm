@@ -34,7 +34,6 @@
 
 static int iphone_argc = 0;
 static const char* const* iphone_argv = 0;
-static NSString *iphone_documents_directory = nil;
 struct IPhoneKeyCode { enum { Backspace = 8, Return = 10 }; };
 extern "C" void NativeWindowSize(int *width, int *height);
 
@@ -554,9 +553,7 @@ extern "C" void NativeWindowInit() {
 }
 
 extern "C" int NativeWindowOrientation() { return [[LFUIApplication sharedAppDelegate] getOrientation]; }
-extern "C" void NativeWindowQuit() {
-  if (iphone_documents_directory != nil) { [iphone_documents_directory release]; iphone_documents_directory = nil; }
-}
+extern "C" void NativeWindowQuit() {}
 
 extern "C" void NativeWindowSize(int *width, int *height) {
   LFUIApplication *app = [LFUIApplication sharedAppDelegate];
@@ -619,14 +616,6 @@ extern "C" void iPhonePlayBackgroundMusic(void *handle) {
   audioPlayer.numberOfLoops = -1;
   [audioPlayer play];
 #endif
-}
-
-extern "C" char *iPhoneDocumentPathCopy() {
-  if (iphone_documents_directory == nil) {
-    NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
-    iphone_documents_directory = [[paths objectAtIndex:0] copy];
-  }
-  return strdup([iphone_documents_directory UTF8String]);
 }
 
 extern "C" int iPhonePasswordCopy(const char *a, const char *h, const char *u, char *pw_out, int pwlen) {
