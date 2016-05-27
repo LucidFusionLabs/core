@@ -44,4 +44,7 @@ void Application::OpenSystemBrowser(const string &url_text) {
   ShellExecute(NULL, "open", url_text.c_str(), NULL, NULL, SW_SHOWNORMAL);
 }
 
+void Application::ShowAds() {}
+void Application::HideAds() {}
+
 }; // namespace LFL

@@ -17,6 +17,25 @@
  */
 
 namespace LFL {
+int Application::GetMaxVolume() {
+  JNI *jni = Singleton<LFL::JNI>::Get();
+  static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "maxVolume", "()I"));
+  return jni->env->CallIntMethod(jni->activity, mid);
+}
+
+int Application::GetVolume() {
+  JNI *jni = Singleton<LFL::JNI>::Get();
+  static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "getVolume", "()I"));
+  return jni->env->CallIntMethod(jni->activity, mid);
+}
+
+void Application::SetVolume(int v) {
+  JNI *jni = Singleton<LFL::JNI>::Get();
+  static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "setVolume", "(I)V"));
+  jint jv = v;
+  return jni->env->CallVoidMethod(jni->activity, mid, jv);
+}
+
 void Application::PlaySoundEffect(SoundAsset *sa, const v3&, const v3&) {
   JNI *jni = Singleton<LFL::JNI>::Get();
   static jmethodID jni_activity_method_play_music =

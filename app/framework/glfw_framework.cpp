@@ -185,8 +185,8 @@ unique_ptr<Module> CreateFrameworkModule() {
 }
 
 extern "C" int main(int argc, const char* const* argv) {
-  MyAppCreate();
-  return MyAppMain(argc, argv);
+  MyAppCreate(argc, argv);
+  return MyAppMain();
 }
 
 }; // namespace LFL

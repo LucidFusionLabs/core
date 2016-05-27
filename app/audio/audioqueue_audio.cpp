@@ -129,6 +129,10 @@ struct AudioQueueAudioModule : public Module {
   }
 };
 
+int Application::GetMaxVolume() { return 0; }
+int Application::GetVolume() { return 0; }
+void Application::SetVolume(int v) {}
+
 Module *CreateAudioModule(Audio *a) { return new AudioQueueAudioModule(a); }
 
 }; // namespace LFL

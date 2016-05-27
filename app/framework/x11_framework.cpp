@@ -97,7 +97,7 @@ struct X11FrameworkModule : public Module {
         case ButtonPress:     if (screen && MouseClick(xev.xbutton.button, 1, xev.xbutton.x, screen->height-xev.xbutton.y)) app->EventDrivenFrame(0); break;
         case ButtonRelease:   if (screen && MouseClick(xev.xbutton.button, 0, xev.xbutton.x, screen->height-xev.xbutton.y)) app->EventDrivenFrame(0); break;
         case MotionNotify:    if (screen) { point p(xev.xmotion.x, screen->height-xev.xmotion.y); if (app->input->MouseMove(p, p - screen->mouse)) app->EventDrivenFrame(0); } break;
-        case ConfigureNotify: if (screen && xev.xconfigure.width != screen->width || xev.xconfigure.height != screen->height) { screen->Reshaped(xev.xconfigure.width, xev.xconfigure.height); app->EventDrivenFrame(0); } break;
+        case ConfigureNotify: if (screen && (xev.xconfigure.width != screen->width || xev.xconfigure.height != screen->height)) { screen->Reshaped(xev.xconfigure.width, xev.xconfigure.height); app->EventDrivenFrame(0); } break;
         case ClientMessage:   if (xev.xclient.data.l[0] == delete_win) WindowClosed(); break;
         case Expose:          app->EventDrivenFrame(0);
         default:              continue;
@@ -123,16 +123,11 @@ void Application::MakeCurrentWindow(Window *W) {
 }
 
 void Application::SetClipboardText(const string &s) {}
-string Application::GetClipboardText() {}
+string Application::GetClipboardText() { return string(); }
 void Application::ReleaseMouseFocus() {}
 void Application::GrabMouseFocus() {}
 
 void Application::OpenTouchKeyboard() {}
-int Application::GetVolume() { return 0; }
-int Application::GetMaxVolume() { return 0; }
-void Application::SetVolume(int v) {}
-void Application::ShowAds() {}
-void Application::HideAds() {}
 void Application::LaunchNativeContextMenu(const vector<MenuItem>&items) {}
 
 void Window::SetCaption(const string &v) {}
@@ -180,7 +175,7 @@ bool FrameScheduler::DoWait() {
   wait_forever_sockets.Select(-1);
   for (auto &s : wait_forever_sockets.socket)
     if (wait_forever_sockets.GetReadable(s.first))
-      if (s.first != system_event_socket) wokeup.insert(s.second.second);
+      if (s.first != system_event_socket) wokeup.insert(static_cast<Window*>(s.second.second));
   for (auto w : wokeup) app->scheduler.Wakeup(w);
   return false;
 }
@@ -213,8 +208,8 @@ void FrameScheduler::DelWaitForeverSocket(Window *w, Socket fd) {
 unique_ptr<Module> CreateFrameworkModule() { return make_unique<X11FrameworkModule>(); }
 
 extern "C" int main(int argc, const char* const* argv) {
-  MyAppCreate();
-  return MyAppMain(argc, argv);
+  MyAppCreate(argc, argv);
+  return MyAppMain();
 }
 
 }; // namespace LFL

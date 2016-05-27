@@ -22,8 +22,6 @@
 namespace LFL {
 QApplication *lfl_qapp;
 static bool lfl_qt_init = false;
-static std::vector<std::string> lfl_qapp_argv;  
-static std::vector<const char*> lfl_qapp_av;
 
 const int Key::Escape     = Qt::Key_Escape;
 const int Key::Return     = Qt::Key_Return;
@@ -92,7 +90,7 @@ class QtWindow : public QWindow {
     if (event->type() != QEvent::UpdateRequest) return QWindow::event(event);
     if (!init && (init = 1)) MyInit();
     if (!lfl_qt_init && (lfl_qt_init = true)) {
-      MyAppMain(lfl_qapp_av.size()-1, &lfl_qapp_av[0]);
+      MyAppMain();
       if (!LFL::app->run) { lfl_qapp->exit(); return true; }
     }
     if (!LFL::screen || LFL::screen->impl.v != this) LFL::app->MakeCurrentWindow(lfl_window);
@@ -226,11 +224,6 @@ void Application::LoseFocus() {}
 void Application::GrabMouseFocus()    { GetTyped<QtWindow*>(screen->impl)->grabbed=1; GetTyped<QWindow*>(screen->id)->setCursor(Qt::BlankCursor); app->grab_mode.On();  screen->cursor_grabbed=true;  }
 void Application::ReleaseMouseFocus() { GetTyped<QtWindow*>(screen->impl)->grabbed=0; GetTyped<QWindow*>(screen->id)->unsetCursor();              app->grab_mode.Off(); screen->cursor_grabbed=false; }
 void Application::OpenTouchKeyboard() {}
-int Application::GetVolume() { return 0; }
-int Application::GetMaxVolume() { return 0; }
-void Application::SetVolume(int v) {}
-void Application::ShowAds() {}
-void Application::HideAds() {}
 
 string Application::GetClipboardText() { QByteArray v = QApplication::clipboard()->text().toUtf8(); return string(v.constData(), v.size()); }
 void Application::SetClipboardText(const string &s) { QApplication::clipboard()->setText(QString::fromUtf8(s.data(), s.size())); }
@@ -268,10 +261,7 @@ void Dialog::MessageBox(const string &n) {
 #endif
 
 extern "C" int main(int argc, const char *argv[]) {
-  MyAppCreate();
-  for (int i=0; i<argc; i++) PushBack(lfl_qapp_argv, argv[i]);
-  for (auto &a : lfl_qapp_argv) lfl_qapp_av.push_back(a.c_str());
-  lfl_qapp_av.push_back(0);
+  MyAppCreate(arc, argv);
   lfl_qapp = new QApplication(argc, const_cast<char**>(argv));
   LFL::screen->gd = LFL::CreateGraphicsDevice(2).release();
   Video::CreateWindow(LFL::screen);

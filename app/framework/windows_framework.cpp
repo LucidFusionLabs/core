@@ -304,13 +304,6 @@ void Window::SetTransparency(float v) {
   }
 }
 
-int Application::GetVolume() { return 0; }
-int Application::GetMaxVolume() { return 0; }
-void Application::SetVolume(int v) {}
-
-void Application::ShowAds() {}
-void Application::HideAds() {}
-
 void Window::Reshape(int w, int h) {
   WinWindow *win = GetTyped<WinWindow*>(impl);
   long lStyle = GetWindowLong(GetTyped<HWND>(id), GWL_STYLE);
@@ -386,9 +379,9 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR lpCmdLine, int nC
   for (auto &i : a) av.push_back(i.c_str());
   av.push_back(0);
 
-  MyAppCreate();
+  MyAppCreate(av.size() - 1, &av[0]);
   LFL::WinApp *winapp = LFL::Singleton<LFL::WinApp>::Get();
   winapp->Setup(hInst, nCmdShow);
-  int ret = MyAppMain(av.size() - 1, &av[0]);
+  int ret = MyAppMain();
   return ret ? ret : winapp->MessageLoop();
 }

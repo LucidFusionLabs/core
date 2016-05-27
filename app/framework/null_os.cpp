@@ -24,5 +24,7 @@ void Application::LaunchNativeFontChooser(const FontDesc &cur_font, const string
 void Application::LaunchNativeFileChooser(bool files, bool dirs, bool multi, const string &choose_cmd) {}
 void Application::LaunchNativePanel(const string &n) {}
 void Application::OpenSystemBrowser(const string &url_text) {}
+void Application::ShowAds() {}
+void Application::HideAds() {}
 
 }; // namespace LFL

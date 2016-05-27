@@ -547,7 +547,8 @@ struct Window : public ::NativeWindow {
 
 struct Application : public ::LFApp {
   string name, progname, startdir, bindir, assetdir, dldir;
-  int pid=0, opengles_version=2;
+  int pid=0, opengles_version=2, argc=0;
+  const char* const* argv=0;
   FILE *logfile=0;
   tm log_time;
   mutex log_mutex;
@@ -579,7 +580,7 @@ struct Application : public ::LFApp {
   unique_ptr<CUDA> cuda;
 
   virtual ~Application();
-  Application();
+  Application(int ac, const char* const* av);
 
   bool Running() const { return run; }
   bool MainThread() const { return Thread::GetId() == main_thread_id; }
@@ -596,7 +597,7 @@ struct Application : public ::LFApp {
   void StartNewWindow(Window*);
   NetworkThread *CreateNetworkThread(bool detach_existing_module, bool start);
 
-  int Create(int argc, const char* const* argv, const char *source_filename);
+  int Create(const char *source_filename);
   int Init();
   int Start();
   int HandleEvents(unsigned clicks);

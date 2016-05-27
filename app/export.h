@@ -239,8 +239,8 @@ struct CameraState {
   unsigned long long frames_read, last_frames_read, image_timestamp_us;
 };
 
-void MyAppCreate();
-int MyAppMain(int argc, const char* const* argv);
+void MyAppCreate(int argc, const char* const* argv);
+int MyAppMain();
 
 NativeWindow *GetNativeWindow();
 NativeWindow *SetNativeWindow(NativeWindow*);

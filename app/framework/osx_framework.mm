@@ -22,9 +22,6 @@
 #include <AppKit/NSColorSpace.h>
 #include "core/app/app.h"
 
-static int osx_argc = 0;
-static const char **osx_argv = 0;
-
 // GameView
 @interface GameView : NSView<NSWindowDelegate>
   + (NSOpenGLPixelFormat *)defaultPixelFormat;
@@ -346,9 +343,9 @@ static const char **osx_argv = 0;
   - (void)applicationWillTerminate: (NSNotification *)aNotification {}
   - (void)applicationDidFinishLaunching: (NSNotification *)aNotification {
     // [[NSFileManager defaultManager] changeCurrentDirectoryPath: [[NSBundle mainBundle] resourcePath]];
-    int ret = MyAppMain(osx_argc, osx_argv);
+    int ret = MyAppMain();
     if (ret) exit(ret);
-    INFOf("OSXFramework::Main argc=%d ret=%d\n", osx_argc, ret);
+    INFOf("OSXFramework::Main argc=%d ret=%d\n", LFL::app->argc, ret);
   }
 
   - (GameView*)createWindow: (int)w height:(int)h nativeWindow:(NativeWindow*)s {
@@ -500,12 +497,6 @@ void Application::CloseWindow(Window *W) {
 }
 
 void Application::OpenTouchKeyboard() {}
-int Application::GetVolume() { return 0; }
-int Application::GetMaxVolume() { return 0; }
-void Application::SetVolume(int v) {}
-void Application::ShowAds() {}
-void Application::HideAds() {}
-
 void Application::LaunchNativeContextMenu(const vector<MenuItem>&items) {
   vector<const char *> k, n, v;
   for (auto &i : items) { k.push_back(tuple_get<0>(i).c_str()); n.push_back(tuple_get<1>(i).c_str()); v.push_back(tuple_get<2>(i).c_str()); }
@@ -639,9 +630,7 @@ unique_ptr<Module> CreateFrameworkModule() { return make_unique<OSXFrameworkModu
 }; // namespace LFL
 
 extern "C" int main(int argc, const char** argv) {
-  MyAppCreate();
-  osx_argc = argc;
-  osx_argv = argv;
+  MyAppCreate(argc, argv);
   AppDelegate *app_delegate = [[AppDelegate alloc] init];
   [[NSApplication sharedApplication] setDelegate: app_delegate];
   [NSApp setMainMenu:[[NSMenu alloc] init]];

@@ -40,10 +40,6 @@
 #include <android/log.h>
 #endif
 
-#ifdef LFL_IPHONE
-extern "C" void iPhoneLog(const char *text);
-#endif
-
 extern "C" void BreakHook() {}
 extern "C" void ShellRun(const char *text) { return LFL::screen->shell->Run(text); }
 extern "C" NativeWindow *GetNativeWindow() { return LFL::screen; }
@@ -152,7 +148,8 @@ Window *screen = nullptr;
 void Log(int level, const char *file, int line, const string &m) { app->Log(level, file, line, m); }
 
 #ifdef LFL_APPLE
-std::string GetNSDocumentDirectory();
+void NSLogString(const string&);
+string GetNSDocumentDirectory();
 #endif
 
 #ifdef LFL_IPHONE
@@ -280,9 +277,8 @@ void RateLimiter::Limit() {
 
 /* Application */
 
-Application::Application() :
-  tex_mode(2, 1, 0), grab_mode(2, 0, 1),
-  fill_mode(3, GraphicsDevice::Fill, GraphicsDevice::Line, GraphicsDevice::Point) {
+Application::Application(int ac, const char* const* av) : argc(ac), argv(av), tex_mode(2, 1, 0),
+  grab_mode(2, 0, 1), fill_mode(3, GraphicsDevice::Fill, GraphicsDevice::Line, GraphicsDevice::Point) {
   run=1; initialized=0; main_thread_id=0; frames_ran=0; memzero(log_time); 
   fonts = make_unique<Fonts>();
 }
@@ -309,7 +305,7 @@ void Application::WriteLogLine(const char *tbuf, const char *message, const char
     fflush(logfile);
   }
 #ifdef LFL_IPHONE
-  iPhoneLog(StringPrintf("%s (%s:%d)", message, file, line).c_str());
+  NSLogString(StringPrintf("%s (%s:%d)", message, file, line));
 #endif
 #ifdef LFL_ANDROID
   __android_log_print(ANDROID_LOG_INFO, app->name.c_str(), "%s (%s:%d)", message, file, line);
@@ -392,7 +388,7 @@ void Application::Daemonize(FILE *fout, FILE *ferr) {
 #endif
 }
 
-int Application::Create(int argc, const char* const* argv, const char *source_filename) {
+int Application::Create(const char *source_filename) {
 #ifdef LFL_GLOG
   google::InstallFailureSignalHandler();
 #endif
@@ -468,7 +464,7 @@ int Application::Create(int argc, const char* const* argv, const char *source_fi
     jstring path = jstring(jni->env->CallObjectMethod(jni->activity, mid));
     dldir = jni->GetJNIString(path);
     jni->env->DeleteLocalRef(path);
-#elif defined(LFL_APPLE)
+#elif defined(LFL_APPLE) && !defined(LFL_IPHONESIM)
     dldir = StrCat(GetNSDocumentDirectory(), "/");
 #elif defined(LFL_WINDOWS)
     char path[MAX_PATH] = { 0 };

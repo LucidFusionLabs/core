@@ -92,7 +92,6 @@ const int GraphicsDevice::TextureCubeMap       = GL_TEXTURE_CUBE_MAP;
 const int GraphicsDevice::UnsignedByte         = GL_UNSIGNED_BYTE;
 const int GraphicsDevice::UnsignedInt          = GL_UNSIGNED_INT;
 const int GraphicsDevice::FramebufferComplete  = GL_FRAMEBUFFER_COMPLETE;
-const int GraphicsDevice::FramebufferUndefined = GL_FRAMEBUFFER_UNDEFINED;
 const int GraphicsDevice::Ambient              = GL_AMBIENT;
 const int GraphicsDevice::Diffuse              = GL_DIFFUSE;
 const int GraphicsDevice::Specular             = GL_SPECULAR;
@@ -130,6 +129,7 @@ const int GraphicsDevice::GLPreferredBuffer    = GL_UNSIGNED_BYTE;
 const int GraphicsDevice::GLInternalFormat     = GL_RGBA;
 const int GraphicsDevice::MaxVertexUniformComp = 0;
 const int GraphicsDevice::FramebufferBinding   = GL_FRAMEBUFFER_BINDING_OES;
+const int GraphicsDevice::FramebufferUndefined = 0;
 #else                                         
 const int GraphicsDevice::Fill                 = GL_FILL;
 const int GraphicsDevice::Line                 = GL_LINE;
@@ -143,6 +143,7 @@ const int GraphicsDevice::GLPreferredBuffer    = GL_UNSIGNED_BYTE;
 const int GraphicsDevice::GLInternalFormat     = GL_RGBA;
 const int GraphicsDevice::MaxVertexUniformComp = GL_MAX_VERTEX_UNIFORM_COMPONENTS;
 const int GraphicsDevice::FramebufferBinding   = 0;
+const int GraphicsDevice::FramebufferUndefined = GL_FRAMEBUFFER_UNDEFINED;
 #endif
 
 int Depth::OpenGLID(int id) {

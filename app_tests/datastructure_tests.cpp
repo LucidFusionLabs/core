@@ -18,16 +18,15 @@
 
 #include "gtest/gtest.h"
 
-extern "C" void MyAppCreate() {
+extern "C" void MyAppCreate(int argc, const char* const* argv) {
   LFL::FLAGS_font = LFL::FakeFontEngine::Filename();
-  LFL::app = new LFL::Application();
+  LFL::app = new LFL::Application(argc, argv);
   LFL::screen = new LFL::Window();
+  testing::InitGoogleTest(&argc, const_cast<char**>(argv));
 }
 
-extern "C" int MyAppMain(int argc, const char* const* argv) {
-  testing::InitGoogleTest(&argc, const_cast<char**>(argv));
-  if (!LFL::app) MyAppCreate();
-  CHECK_EQ(0, LFL::app->Create(argc, argv, __FILE__));
+extern "C" int MyAppMain() {
+  CHECK_EQ(0, LFL::app->Create(__FILE__));
   return RUN_ALL_TESTS();
 }
 

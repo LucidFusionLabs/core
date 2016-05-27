@@ -322,8 +322,8 @@ bool FrameScheduler::DoWait() {
   return false;
 }
 
-void FrameScheduler::Wakeup(Window*) {
-  char c = opaque ? 0 : 'W';
+void FrameScheduler::Wakeup(Window *w) {
+  char c = 'W';
   write(wait_forever_wakeup_socket, &c, 1);
 }
 
@@ -335,9 +335,9 @@ void FrameScheduler::AddWaitForeverMouse(Window*)    { dynamic_cast<AndroidFrame
 void FrameScheduler::DelWaitForeverMouse(Window*)    { dynamic_cast<AndroidFrameworkModule*>(app->framework.get())->frame_on_mouse_input    = false; }
 void FrameScheduler::AddWaitForeverKeyboard(Window*) { dynamic_cast<AndroidFrameworkModule*>(app->framework.get())->frame_on_keyboard_input = true;  }
 void FrameScheduler::DelWaitForeverKeyboard(Window*) { dynamic_cast<AndroidFrameworkModule*>(app->framework.get())->frame_on_keyboard_input = false; }
-void FrameScheduler::AddWaitForeverSocket(Window*, Socket fd, int flag, void *val) {
-  if (wait_forever && wait_forever_thread) wakeup_thread.Add(fd, flag, val);
-  wait_forever_sockets.Add(fd, flag, val);
+void FrameScheduler::AddWaitForeverSocket(Window *w, Socket fd, int flag) {
+  if (wait_forever && wait_forever_thread) wakeup_thread.Add(fd, flag, w);
+  wait_forever_sockets.Add(fd, flag, w);
 }
 
 void FrameScheduler::DelWaitForeverSocket(Window*, Socket fd) {
@@ -351,7 +351,8 @@ unique_ptr<AssetLoaderInterface> CreateAssetLoader() { return make_unique<Androi
 extern "C" jint JNI_OnLoad(JavaVM* vm, void* reserved) { return JNI_VERSION_1_4; }
 
 extern "C" void Java_com_lucidfusionlabs_app_Activity_main(JNIEnv *e, jclass c, jobject a) {
-  MyAppCreate();
+  const char *argv[2] = { "lfjni", 0 };
+  MyAppCreate(1, argv);
   CHECK(jni->env = e);
   auto env = jni->env;
   INFOf("main: env=%p", env);
@@ -366,8 +367,7 @@ extern "C" void Java_com_lucidfusionlabs_app_Activity_main(JNIEnv *e, jclass c, 
   CHECK(jni->throwable_class = env->FindClass("java/lang/Throwable"));
   CHECK(jni->frame_class = env->FindClass("java/lang/StackTraceElement"));
 
-  const char *argv[2] = { "lfjni", 0 };
-  int argc = 1, ret = MyAppMain(argc, argv);
+  int ret = MyAppMain();
   INFOf("main: env=%p ret=%d", env, ret);
   jni->Free();
 }

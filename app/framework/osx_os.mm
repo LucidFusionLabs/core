@@ -18,6 +18,7 @@
 
 #import <Cocoa/Cocoa.h>
 #include "core/app/app.h"
+#include "core/app/framework/apple_common.h"
 
 @interface NativePanel : NSObject
   @property(readonly, assign) NSWindow *window;
@@ -124,11 +125,6 @@
 @end
 
 namespace LFL {
-string GetNSDocumentDirectory() {
-  NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
-  return [[paths objectAtIndex:0] UTF8String];
-}
-
 static void AddNSMenuItems(NSMenu *menu, const vector<MenuItem>&items) {
   NSMenuItem *item;
   for (auto &i : items) { 
@@ -216,5 +212,8 @@ void Application::OpenSystemBrowser(const string &url_text) {
   CFURLRef url = CFURLCreateWithBytes(0, MakeUnsigned(url_text.c_str()), url_text.size(), kCFStringEncodingASCII, 0);
   if (url) { LSOpenCFURLRef(url, 0); CFRelease(url); }
 }
+
+void Application::ShowAds() {}
+void Application::HideAds() {}
 
 }; // namespace LFL

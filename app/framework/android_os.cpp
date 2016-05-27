@@ -45,23 +45,4 @@ void Application::HideAds() {
   jni->env->CallVoidMethod(jni->activity, mid);
 }
 
-int Application::GetVolume() { 
-  JNI *jni = Singleton<LFL::JNI>::Get();
-  static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "getVolume", "()I"));
-  return jni->env->CallIntMethod(jni->activity, mid);
-}
-
-int Application::GetMaxVolume() {
-  JNI *jni = Singleton<LFL::JNI>::Get();
-  static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "maxVolume", "()I"));
-  return jni->env->CallIntMethod(jni->activity, mid);
-}
-
-void Application::SetVolume(int v) {
-  JNI *jni = Singleton<LFL::JNI>::Get();
-  static jmethodID mid = CheckNotNull(jni->env->GetMethodID(jni->activity_class, "setVolume", "(I)V"));
-  jint jv = v;
-  return jni->env->CallVoidMethod(jni->activity, mid, jv);
-}
-
 }; // namespace LFL

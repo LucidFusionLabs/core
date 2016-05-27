@@ -67,6 +67,10 @@ struct SDLAudioModule : public Module {
 
   static void IOCB(void *udata, Uint8 *stream, int len) { ((SDLAudioModule*)udata)->IO(stream, len); }
 };
+
+int Application::GetMaxVolume() { return 0; }
+int Application::GetVolume() { return 0; }
+void Application::SetVolume(int v) {}
  
 Module *CreateAudioModule(Audio *a) { return new SDLAudioModule(a); }
 

@@ -100,8 +100,8 @@ void FrameScheduler::AddWaitForeverSocket(Window*, Socket fd, int flag) {}
 void FrameScheduler::DelWaitForeverSocket(Window*, Socket fd) {}
 
 extern "C" int main(int argc, const char *argv[]) {
-  MyAppCreate();
-  return MyAppMain(argc, argv);
+  MyAppCreate(argc, argv);
+  return MyAppMain();
 }
 
 unique_ptr<Module> CreateFrameworkModule() { return unique_ptr<NullFrameworkModule>(); }

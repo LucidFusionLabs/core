@@ -175,6 +175,10 @@ struct OpenALAudioModule : public Module {
   }
 };
 
+int Application::GetMaxVolume() { return 0; }
+int Application::GetVolume() { return 0; }
+void Application::SetVolume(int v) {}
+
 void Application::PlayBackgroundMusic(SoundAsset *music) {
   audio->QueueMix(music);
   audio->loop = music;

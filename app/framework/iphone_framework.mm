@@ -16,8 +16,6 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "core/app/app.h"
-
 #import <UIKit/UIKit.h>
 #import <UIKit/UIScreen.h>
 #import <GLKit/GLKit.h>
@@ -32,42 +30,53 @@
 #import <AVFoundation/AVFoundation.h>
 #endif
 
-static int iphone_argc = 0;
-static const char* const* iphone_argv = 0;
-struct IPhoneKeyCode { enum { Backspace = 8, Return = 10 }; };
-extern "C" void NativeWindowSize(int *width, int *height);
+#include "core/app/app.h"
+#include "core/app/framework/iphone_common.h"
 
-@interface MyTouchView : UIView {}
-@end
-
-@interface SimpleKeychain : NSObject
-  + (void)save:(NSString *)service data:(id)data;
-  + (id)load:(NSString *)service;
-@end
-
-@interface LFViewController : GLKViewController<GLKViewControllerDelegate, UIActionSheetDelegate> {}
-  - (void)updateToolbarFrame;
-@end
-
-@interface LFUIApplication : NSObject <UIApplicationDelegate, GLKViewDelegate, UITextFieldDelegate> {}
-  @property (nonatomic, retain) UIWindow *window;
-  @property (nonatomic, retain) LFViewController *controller;
-  @property (nonatomic, retain) GLKView *view;
-  @property (nonatomic, retain) UIView *lview, *rview;
-  @property (nonatomic, retain) UITextField *textField;
-  @property BOOL resign_textfield_on_return, frame_on_keyboard_input, frame_on_mouse_input;
-  + (LFUIApplication *) sharedAppDelegate;
-@end
+namespace LFL {
+const int Key::Escape     = -1;
+const int Key::Return     = 10;
+const int Key::Up         = -3;
+const int Key::Down       = -4;
+const int Key::Left       = -5;
+const int Key::Right      = -6;
+const int Key::LeftShift  = -7;
+const int Key::RightShift = -8;
+const int Key::LeftCtrl   = -9;
+const int Key::RightCtrl  = -10;
+const int Key::LeftCmd    = -11;
+const int Key::RightCmd   = -12;
+const int Key::Tab        = -13;
+const int Key::Space      = -14;
+const int Key::Backspace  = 8;
+const int Key::Delete     = -16;
+const int Key::Quote      = -17;
+const int Key::Backquote  = '~';
+const int Key::PageUp     = -19;
+const int Key::PageDown   = -20;
+const int Key::F1         = -21;
+const int Key::F2         = -22;
+const int Key::F3         = -23;
+const int Key::F4         = -24;
+const int Key::F5         = -25;
+const int Key::F6         = -26;
+const int Key::F7         = -27;
+const int Key::F8         = -28;
+const int Key::F9         = -29;
+const int Key::F10        = -30;
+const int Key::F11        = -31;
+const int Key::F12        = -32;
+const int Key::Home       = -33;
+const int Key::End        = -34;
+};
 
 @implementation LFUIApplication
   {
     CGFloat scale;
-    LFApp *lfapp;
-    NativeWindow *screen;
-    int current_orientation, target_fps;
     CGRect keyboard_frame;
     NSFileHandle *wait_forever_fh;
     bool restart_wait_forever_fh, want_extra_scale;
+    int current_orientation, target_fps;
   }
   @synthesize window, controller, view, lview, rview, textField;
 
@@ -122,12 +131,10 @@ extern "C" void NativeWindowSize(int *width, int *height);
     [self.window addSubview:self.textField];
 
     [[NSFileManager defaultManager] changeCurrentDirectoryPath: [[NSBundle mainBundle] resourcePath]];
-    NSLog(@"iPhoneMain argc=%d", iphone_argc);
-    MyAppMain(iphone_argc, iphone_argv);
+    NSLog(@"iPhoneMain argc=%d", LFL::app->argc);
+    MyAppMain();
     INFOf("didFinishLaunchingWithOptions, views: %p, %p, %p, csf=%f", self.view, self.lview, self.rview, scale);
 
-    lfapp = GetLFApp();
-    screen = GetNativeWindow();
     [self.window makeKeyAndVisible];
     [self initNotifications];
     [self initGestureRecognizers];
@@ -195,7 +202,7 @@ extern "C" void NativeWindowSize(int *width, int *height);
 
   - (BOOL)textField: (UITextField *)textField shouldChangeCharactersInRange:(NSRange)range replacementString:(NSString *)string {
     int l = [string length];
-    if (!l) [self handleKey:IPhoneKeyCode::Backspace];
+    if (!l) [self handleKey: LFL::Key::Backspace];
     for (int i = 0, l = [string length]; i < l; i++) {
       unichar k = [string characterAtIndex: i];
       [self handleKey: k];
@@ -204,7 +211,7 @@ extern "C" void NativeWindowSize(int *width, int *height);
   }
 
   - (BOOL)textFieldShouldReturn: (UITextField *)tf {
-    [self handleKey:IPhoneKeyCode::Return];
+    [self handleKey: LFL::Key::Return];
     if (_resign_textfield_on_return) [tf resignFirstResponder];
     return YES;
   }
@@ -267,16 +274,16 @@ extern "C" void NativeWindowSize(int *width, int *height);
       [win removeGestureRecognizer:[gestures objectAtIndex:i]];
   }
 
-  - (void)doubleSwipeUp:   (id)sender { screen->gesture_swipe_up   = 1; }
-  - (void)doubleSwipeDown: (id)sender { screen->gesture_swipe_down = 1; }
+  - (void)doubleSwipeUp:   (id)sender { LFL::screen->gesture_swipe_up   = 1; }
+  - (void)doubleSwipeDown: (id)sender { LFL::screen->gesture_swipe_down = 1; }
   - (void)tapGesture: (UITapGestureRecognizer *)tapGestureRecognizer {
     UIView *v = [tapGestureRecognizer view];
     CGPoint position = [tapGestureRecognizer locationInView:v];
     int dpind = v.frame.origin.y == 0;
-    screen->gesture_tap[dpind] = 1;
-    screen->gesture_dpad_x[dpind] = position.x;
-    screen->gesture_dpad_y[dpind] = position.y;
-    int fired = MouseClick(1, 1, (int)position.x, screen->height - (int)position.y);
+    LFL::screen->gesture_tap[dpind] = 1;
+    LFL::screen->gesture_dpad_x[dpind] = position.x;
+    LFL::screen->gesture_dpad_y[dpind] = position.y;
+    int fired = MouseClick(1, 1, (int)position.x, LFL::screen->height - (int)position.y);
     if (fired && _frame_on_mouse_input) [self.view setNeedsDisplay];
   }
 
@@ -288,8 +295,8 @@ extern "C" void NativeWindowSize(int *width, int *height);
       // CGPoint velocity = [panGestureRecognizer translationInView:v];
       CGPoint velocity = [panGestureRecognizer velocityInView:v];
       if (fabs(velocity.x) > 15 || fabs(velocity.y) > 15) {
-          screen->gesture_dpad_dx[dpind] = velocity.x;
-          screen->gesture_dpad_dy[dpind] = velocity.y;
+          LFL::screen->gesture_dpad_dx[dpind] = velocity.x;
+          LFL::screen->gesture_dpad_dy[dpind] = velocity.y;
       }
       // CGPoint position = [panGestureRecognizer locationInView:v];
       CGPoint position = [panGestureRecognizer locationOfTouch:0 inView:v];
@@ -297,15 +304,15 @@ extern "C" void NativeWindowSize(int *width, int *height);
           position.x += v.frame.origin.x;
           position.y += v.frame.origin.y;
       }
-      screen->gesture_dpad_x[dpind] = position.x;
-      screen->gesture_dpad_y[dpind] = position.y;
+      LFL::screen->gesture_dpad_x[dpind] = position.x;
+      LFL::screen->gesture_dpad_y[dpind] = position.y;
       // INFOf("gest %f %f %f %f", position.x, position.y, velocity.x, velocity.y);
       // INFOf("origin %f %f", v.frame.origin.x, v.frame.origin.y);
     }
     else if (panGestureRecognizer.state == UIGestureRecognizerStateEnded) {
-      screen->gesture_dpad_stop[dpind] = 1;
-      screen->gesture_dpad_x[dpind] = 0;
-      screen->gesture_dpad_y[dpind] = 0;
+      LFL::screen->gesture_dpad_stop[dpind] = 1;
+      LFL::screen->gesture_dpad_x[dpind] = 0;
+      LFL::screen->gesture_dpad_y[dpind] = 0;
       // CGPoint position = [panGestureRecognizer locationInView:v];
       // INFOf("gest %f %f stop", position.x, position.y);
     }
@@ -338,27 +345,25 @@ extern "C" void NativeWindowSize(int *width, int *height);
 
 @implementation LFViewController
   {
-    LFUIApplication *app;
+    LFUIApplication *uiapp;
     UIToolbar *toolbar;
     int toolbar_height;
     bool overlap_keyboard;
     std::unordered_map<std::string, void*> toolbar_titles;
     std::unordered_map<void*, std::string> toolbar_cmds;
-    std::unordered_map<int, std::string> menu_tags;
-    std::unordered_map<std::string, std::vector<std::pair<std::string, std::string>>> menus;
   }
 
   - (void)viewWillAppear:(BOOL)animated { 
     [super viewWillAppear:animated];
     [self setPaused:YES];
-    app = [LFUIApplication sharedAppDelegate];
+    uiapp = [LFUIApplication sharedAppDelegate];
   }
 
   - (void)viewDidAppear:(BOOL)animated {
     [super viewDidAppear:animated];
   }
 
-  - (void)viewDidLayoutSubviews { [app.view setNeedsDisplay]; }
+  - (void)viewDidLayoutSubviews { [uiapp.view setNeedsDisplay]; }
   - (void)viewWillLayoutSubviews {
     [super viewWillLayoutSubviews];
     GLKView *view = [LFUIApplication sharedAppDelegate].view;
@@ -367,10 +372,12 @@ extern "C" void NativeWindowSize(int *width, int *height);
       CGRect bounds = [[UIScreen mainScreen] bounds];
       [view setFrame: CGRectMake(0, 0, bounds.size.width, bounds.size.height - b.size.height)];
     }
-    int w=0, h=0;
-    NativeWindowSize(&w, &h);
-    WindowReshaped(w, h);
-    INFOf("viewWillLayoutSubviews %d %d vs %d %d", w, h, view.drawableWidth, view.drawableHeight);
+
+    CGFloat scale = [uiapp getScale];
+    CGRect rect = [uiapp getFrame];
+    WindowReshaped(rect.size.width * scale, rect.size.height * scale);
+    INFOf("viewWillLayoutSubviews %d %d vs %d %d",
+          LFL::screen->width, LFL::screen->height, view.drawableWidth, view.drawableHeight);
   }
 
   - (void)glkViewControllerUpdate:(GLKViewController *)controller {}
@@ -397,7 +404,7 @@ extern "C" void NativeWindowSize(int *width, int *height);
     [toolbar setItems:items];
     [items release];
     [spacer release];
-    [app.window addSubview:toolbar];
+    [uiapp.window addSubview:toolbar];
   }
 
   - (void)updateToolbarFrame {
@@ -435,46 +442,16 @@ extern "C" void NativeWindowSize(int *width, int *height);
     }
     [self resignFirstResponder];
   }
-
-  - (void)addMenu:(const char*)title_text num:(int)n key:(const char**)k val:(const char**)v {
-    NSString *title = [NSString stringWithUTF8String: title_text];
-    menu_tags[[title hash]] = title_text;
-    auto menu = &menus[title_text];
-    for (int i=0; i<n; i++) menu->emplace_back(k[i], v[i]);
-  }
-
-  - (void)launchMenu:(const char*)title_text {
-    auto it = menus.find(title_text);
-    if (it == menus.end()) { ERRORf("unknown menu: %s", title_text); return; }
-    NSString *title = [NSString stringWithUTF8String: title_text];
-    UIActionSheet *actions = [[UIActionSheet alloc] initWithTitle:title delegate:self
-      cancelButtonTitle:@"Cancel" destructiveButtonTitle:nil otherButtonTitles:nil];
-    for (auto &i : it->second) [actions addButtonWithTitle:[NSString stringWithUTF8String: i.first.c_str()]];
-    actions.tag = [title hash];
-    [actions showInView:[UIApplication sharedApplication].keyWindow];
-    [actions release];
-  }
-
-  - (void)actionSheet:(UIActionSheet *)actions clickedButtonAtIndex:(NSInteger)buttonIndex {
-    auto tag_it = menu_tags.find(actions.tag);
-    if (tag_it == menu_tags.end()) { ERRORf("unknown tag: %d", actions.tag); return; }
-    auto it = menus.find(tag_it->second);
-    if (it == menus.end()) { ERRORf("unknown menu: %s", tag_it->second.c_str()); return; }
-    if (buttonIndex < 1 || buttonIndex > it->second.size()) { ERRORf("invalid buttonIndex %d size=%d", buttonIndex, it->second.size()); return; }
-    ShellRun(it->second[buttonIndex-1].second.c_str());
-  }
 @end
 
 @implementation MyTouchView
   {
-    NativeWindow *screen;
-    LFUIApplication *app;
+    LFUIApplication *uiapp;
   }
 
   - (id)initWithFrame:(CGRect)aRect {
     if (!(self = [super initWithFrame:aRect])) return self;
-    screen = GetNativeWindow();
-    app = [LFUIApplication sharedAppDelegate];
+    uiapp = [LFUIApplication sharedAppDelegate];
     return self;
   }
 
@@ -482,13 +459,13 @@ extern "C" void NativeWindowSize(int *width, int *height);
     UITouch *touch = [touches anyObject];
     UIView *v = [touch view];
     CGPoint position = [touch locationInView:v];
-    int dpind = v.frame.origin.y == 0, scale = [app getScale];
+    int dpind = v.frame.origin.y == 0, scale = [uiapp getScale];
     if (!dpind) position = CGPointMake(scale * (position.x + v.frame.origin.x), scale * (position.y + v.frame.origin.y));
     else        position = CGPointMake(scale * position.x, scale * position.y);
-    screen->gesture_dpad_x[dpind] = position.x;
-    screen->gesture_dpad_y[dpind] = position.y;
-    int fired = MouseClick(1, 1, (int)position.x, screen->height - (int)position.y);
-    if (fired && app.frame_on_mouse_input) [self.superview setNeedsDisplay];
+    LFL::screen->gesture_dpad_x[dpind] = position.x;
+    LFL::screen->gesture_dpad_y[dpind] = position.y;
+    int fired = MouseClick(1, 1, (int)position.x, LFL::screen->height - (int)position.y);
+    if (fired && uiapp.frame_on_mouse_input) [self.superview setNeedsDisplay];
   }
 
   - (void)touchesCancelled:(NSSet *)touches withEvent:(UIEvent *)event {}
@@ -496,197 +473,44 @@ extern "C" void NativeWindowSize(int *width, int *height);
     UITouch *touch = [touches anyObject];
     UIView *v = [touch view];
     CGPoint position = [touch locationInView:v];
-    int dpind = v.frame.origin.y == 0, scale = [app getScale];
+    int dpind = v.frame.origin.y == 0, scale = [uiapp getScale];
     if (!dpind) position = CGPointMake(scale * (position.x + v.frame.origin.x), scale * (position.y + v.frame.origin.y));
     else        position = CGPointMake(scale * position.x, scale * position.y);
-    screen->gesture_dpad_stop[dpind] = 1;
-    screen->gesture_dpad_x[dpind] = 0;
-    screen->gesture_dpad_y[dpind] = 0;
-    int fired = MouseClick(1, 0, (int)position.x, screen->height - (int)position.y);
-    if (fired && app.frame_on_mouse_input) [self.superview setNeedsDisplay];
+    LFL::screen->gesture_dpad_stop[dpind] = 1;
+    LFL::screen->gesture_dpad_x[dpind] = 0;
+    LFL::screen->gesture_dpad_y[dpind] = 0;
+    int fired = MouseClick(1, 0, (int)position.x, LFL::screen->height - (int)position.y);
+    if (fired && uiapp.frame_on_mouse_input) [self.superview setNeedsDisplay];
   }
 
   - (void)touchesMoved:(NSSet *)touches withEvent:(UIEvent *)event {
     UITouch *touch = [touches anyObject];
     UIView *v = [touch view];
     CGPoint position = [touch locationInView:v];
-    int dpind = v.frame.origin.y == 0, scale = [app getScale];
+    int dpind = v.frame.origin.y == 0, scale = [uiapp getScale];
     if (!dpind) position = CGPointMake(scale * (position.x + v.frame.origin.x), scale * (position.y + v.frame.origin.y));
     else        position = CGPointMake(scale * position.x, scale * position.y);
-    screen->gesture_dpad_x[dpind] = position.x;
-    screen->gesture_dpad_y[dpind] = position.y;
+    LFL::screen->gesture_dpad_x[dpind] = position.x;
+    LFL::screen->gesture_dpad_y[dpind] = position.y;
   }
 @end
-
-@implementation SimpleKeychain
-  + (NSMutableDictionary *)getKeychainQuery:(NSString *)service {
-    return [NSMutableDictionary dictionaryWithObjectsAndKeys:(id)kSecClassGenericPassword, (id)kSecClass, service,
-           (id)kSecAttrService, service, (id)kSecAttrAccount, (id)kSecAttrAccessibleAfterFirstUnlock, (id)kSecAttrAccessible, nil];
-  }
-
-  + (void)save:(NSString *)service data:(id)data {
-    NSMutableDictionary *keychainQuery = [self getKeychainQuery:service];
-    SecItemDelete((CFDictionaryRef)keychainQuery);
-    [keychainQuery setObject:[NSKeyedArchiver archivedDataWithRootObject:data] forKey:(id)kSecValueData];
-    SecItemAdd((CFDictionaryRef)keychainQuery, NULL);
-  }
-
-  + (id)load:(NSString *)service {
-    id ret = nil;
-    NSMutableDictionary *keychainQuery = [self getKeychainQuery:service];
-    [keychainQuery setObject:(id)kCFBooleanTrue forKey:(id)kSecReturnData];
-    [keychainQuery setObject:(id)kSecMatchLimitOne forKey:(id)kSecMatchLimit];
-    CFDataRef keyData = NULL;
-    if (SecItemCopyMatching((CFDictionaryRef)keychainQuery, (CFTypeRef *)&keyData) == noErr) {
-      @try { ret = [NSKeyedUnarchiver unarchiveObjectWithData:(NSData *)keyData]; }
-      @catch (NSException *e) { NSLog(@"Unarchive of %@ failed: %@", service, e); }
-      @finally {}
-    }
-    if (keyData) CFRelease(keyData);
-    return ret;
-  }
-@end
-
-extern "C" void NativeWindowInit() { 
-  NativeWindow *screen = GetNativeWindow();
-  screen->id = LFL::MakeTyped([[LFUIApplication sharedAppDelegate] view]);
-}
-
-extern "C" int NativeWindowOrientation() { return [[LFUIApplication sharedAppDelegate] getOrientation]; }
-extern "C" void NativeWindowQuit() {}
-
-extern "C" void NativeWindowSize(int *width, int *height) {
-  LFUIApplication *app = [LFUIApplication sharedAppDelegate];
-  CGFloat scale = [app getScale];
-  CGRect rect = [app getFrame];
-  *width = rect.size.width * scale;
-  *height = rect.size.height * scale;
-  INFOf("NativeWindowSize %d %d", *width, *height);
-}
-
-extern "C" void iPhoneLog(const char *text) {
-  NSString *t = [[NSString alloc] initWithUTF8String: text];
-  NSLog(@"%@", t);
-  [t release];
-}
-
-extern "C" int iPhoneOpenBrowser(const char *url_text) {
-  NSString *url_string = [[NSString alloc] initWithUTF8String: url_text];
-  NSURL *url = [NSURL URLWithString: url_string];  
-  [[UIApplication sharedApplication] openURL:url];
-  [url_string release];
-  return 0;
-}
-
-extern "C" void iPhoneCreateToolbar(int n, const char **name, const char **val) {
-  [[LFUIApplication sharedAppDelegate].controller addToolbar: n key:name val:val];
-}
-
-extern "C" void iPhoneCreateNativeMenu(const char *title, int n, const char **name, const char **val) {
-  [[LFUIApplication sharedAppDelegate].controller addMenu:title num:n key:name val:val];
-}
-
-extern "C" void iPhoneLaunchNativeMenu(const char *title) {
-  [[LFUIApplication sharedAppDelegate].controller launchMenu:title];
-}
-
-extern "C" void *iPhoneMusicCreate(const char *filename) {
-#ifdef LFL_IPHONESIM
-  return 0;
-#else // LFL_IPHONESIM
-  NSError *error;
-  NSString *fn = [NSString stringWithCString:filename encoding:NSASCIIStringEncoding];
-  NSURL *url = [NSURL fileURLWithPath:[NSString stringWithFormat:@"%@/%@", [[NSBundle mainBundle] resourcePath], fn]];
-  AVAudioPlayer *audio_player = [[AVAudioPlayer alloc] initWithContentsOfURL:url error:&error];
-  if (audio_player == nil) NSLog(@"%@", [error description]);
-  return audio_player;
-#endif // LFL_IPHONESIM
-}
-
-extern "C" void iPhonePlayMusic(void *handle) {
-#ifndef LFL_IPHONESIM
-  AVAudioPlayer *audioPlayer = (AVAudioPlayer*)handle;
-  [audioPlayer play];
-#endif
-}
-
-extern "C" void iPhonePlayBackgroundMusic(void *handle) {
-#ifndef LFL_IPHONESIM
-  AVAudioPlayer *audioPlayer = (AVAudioPlayer*)handle;
-  audioPlayer.numberOfLoops = -1;
-  [audioPlayer play];
-#endif
-}
-
-extern "C" int iPhonePasswordCopy(const char *a, const char *h, const char *u, char *pw_out, int pwlen) {
-  NSString *k = [NSString stringWithFormat:@"%s://%s@%s", a, u, h], *pw = [SimpleKeychain load: k];
-  if (pw) if (const char *text = [pw UTF8String]) if (int l = strlen(text)) if (l < pwlen) { memcpy(pw_out, text, l); return l; }
-  return 0;
-}
-
-extern "C" bool iPhonePasswordSave(const char *a, const char *h, const char *u, const char *pw_in, int pwlen) {
-  NSString *k = [[NSString stringWithFormat:@"%s://%s@%s", a, u, h] retain];
-  NSMutableString *pw = [[NSMutableString stringWithUTF8String: pw_in] retain];
-  UIAlertController *alertController = [UIAlertController alertControllerWithTitle:@"LTerminal Keychain"
-    message:[NSString stringWithFormat:@"Save password for %s@%s?", u, h] preferredStyle:UIAlertControllerStyleAlert];
-  UIAlertAction *actionNo  = [UIAlertAction actionWithTitle:@"No"  style:UIAlertActionStyleDefault handler: nil];
-  UIAlertAction *actionYes = [UIAlertAction actionWithTitle:@"Yes" style:UIAlertActionStyleDefault
-    handler:^(UIAlertAction *){
-      [SimpleKeychain save:k data:pw];
-      [pw replaceCharactersInRange:NSMakeRange(0, [pw length]) withString:[NSString stringWithFormat:@"%*s", [pw length], ""]];
-      [pw release];
-      [k release];
-    }];
-  [alertController addAction:actionYes];
-  [alertController addAction:actionNo];
-  [[LFUIApplication sharedAppDelegate].controller presentViewController:alertController animated:YES completion:nil];
-  return true;
-}
 
 namespace LFL {
-const int Key::Escape     = -1;
-const int Key::Return     = 10;
-const int Key::Up         = -3;
-const int Key::Down       = -4;
-const int Key::Left       = -5;
-const int Key::Right      = -6;
-const int Key::LeftShift  = -7;
-const int Key::RightShift = -8;
-const int Key::LeftCtrl   = -9;
-const int Key::RightCtrl  = -10;
-const int Key::LeftCmd    = -11;
-const int Key::RightCmd   = -12;
-const int Key::Tab        = -13;
-const int Key::Space      = -14;
-const int Key::Backspace  = 8;
-const int Key::Delete     = -16;
-const int Key::Quote      = -17;
-const int Key::Backquote  = '~';
-const int Key::PageUp     = -19;
-const int Key::PageDown   = -20;
-const int Key::F1         = -21;
-const int Key::F2         = -22;
-const int Key::F3         = -23;
-const int Key::F4         = -24;
-const int Key::F5         = -25;
-const int Key::F6         = -26;
-const int Key::F7         = -27;
-const int Key::F8         = -28;
-const int Key::F9         = -29;
-const int Key::F10        = -30;
-const int Key::F11        = -31;
-const int Key::F12        = -32;
-const int Key::Home       = -33;
-const int Key::End        = -34;
-
 struct iPhoneFrameworkModule : public Module {
   int Init() {
     INFO("iPhoneFrameworkModule::Init()");
     CHECK(!screen->id.v);
-    NativeWindowInit();
-    NativeWindowSize(&screen->width, &screen->height);
+    screen->id = LFL::MakeTyped([[LFUIApplication sharedAppDelegate] view]);
     CHECK(screen->id.v);
     app->windows[screen->id.v] = screen;
+
+    LFUIApplication *uiapp = [LFUIApplication sharedAppDelegate];
+    CGFloat scale = [uiapp getScale];
+    CGRect rect = [uiapp getFrame];
+    screen->width = rect.size.width * scale;
+    screen->height = rect.size.height * scale;
+    INFOf("viewWillLayoutSubviews %d %d vs %d %d",
+          screen->width, screen->height, [uiapp view].drawableWidth, [uiapp view].drawableHeight);
     return 0;
   }
 };
@@ -694,23 +518,40 @@ struct iPhoneFrameworkModule : public Module {
 struct iPhoneAssetLoader : public SimpleAssetLoader {
   virtual void UnloadAudioFile(void *h) {}
   virtual void *LoadAudioFile(File*) { return 0; }
-  virtual void *LoadAudioFileNamed(const string &filename) { return 0; }
+  virtual void *LoadAudioFileNamed(const string &filename) {
+#ifdef LFL_IPHONESIM
+    return 0;
+#else // LFL_IPHONESIM
+    NSError *error;
+    NSString *fn = [NSString stringWithCString:filename.c_str() encoding:NSASCIIStringEncoding];
+    NSURL *url = [NSURL fileURLWithPath:[NSString stringWithFormat:@"%@/%@", [[NSBundle mainBundle] resourcePath], fn]];
+    AVAudioPlayer *audio_player = [[AVAudioPlayer alloc] initWithContentsOfURL:url error:&error];
+    if (audio_player == nil) NSLog(@"%@", [error description]);
+    return audio_player;
+#endif // LFL_IPHONESIM
+  }
+
   virtual void LoadAudio(void *handle, SoundAsset *a, int seconds, int flag) { a->handle = handle; }
   virtual int RefillAudio(SoundAsset *a, int reset) { return 0; }
 };
 
-string Application::GetClipboardText() { return ""; }
-void Application::SetClipboardText(const string &s) {}
+string Application::GetClipboardText() { return [[UIPasteboard generalPasteboard].string UTF8String]; }
+void Application::SetClipboardText(const string &s) {
+  [UIPasteboard generalPasteboard].string = [NSString stringWithUTF8String:s.c_str()];
+}
+
 int  Application::SetExtraScale(bool v) { return [[LFUIApplication sharedAppDelegate] updateScale:v]; }
 int  Application::SetMultisample(bool v) { return [[LFUIApplication sharedAppDelegate] updateGLKMultisample:v]; }
 void Application::OpenTouchKeyboard() { [[LFUIApplication sharedAppDelegate] showKeyboard]; }
 void Application::CloseTouchKeyboard() { [[LFUIApplication sharedAppDelegate] hideKeyboard]; }
 void Application::CloseTouchKeyboardAfterReturn(bool v) { [LFUIApplication sharedAppDelegate].resign_textfield_on_return = v; }
+
 void Application::AddToolbar(const vector<pair<string, string>>&items) {
   vector<const char *> k, v;
   for (auto &i : items) { k.push_back(i.first.c_str()); v.push_back(i.second.c_str()); }
-  iPhoneCreateToolbar(items.size(), &k[0], &v[0]);
+  [[LFUIApplication sharedAppDelegate].controller addToolbar:items.size() key:&k[0] val:&v[0]];
 }
+
 void Application::ToggleToolbarButton(const string &n) { 
   [[LFUIApplication sharedAppDelegate].controller toggleToolbarButtonWithTitle:n.c_str()];
 }
@@ -722,10 +563,9 @@ void Application::MakeCurrentWindow(Window *W) {}
 
 Box Application::GetTouchKeyboardBox() {
   Box ret; 
-  NativeWindow *screen = GetNativeWindow();
-  LFUIApplication *app = [LFUIApplication sharedAppDelegate];
-  CGRect rect = [app.controller getKeyboardToolbarFrame];
-  CGFloat scale = [app getScale];
+  LFUIApplication *uiapp = [LFUIApplication sharedAppDelegate];
+  CGRect rect = [uiapp.controller getKeyboardToolbarFrame];
+  CGFloat scale = [uiapp getScale];
   return Box(scale * rect.origin.x,
              scale * (rect.origin.y + rect.size.height) - screen->height,
              scale * rect.size.width,
@@ -794,9 +634,7 @@ unique_ptr<Module> CreateFrameworkModule() { return make_unique<iPhoneFrameworkM
 unique_ptr<AssetLoaderInterface> CreateAssetLoader() { return make_unique<iPhoneAssetLoader>(); }
 
 extern "C" int main(int ac, const char* const* av) {
-  MyAppCreate();
-  iphone_argc = ac;
-  iphone_argv = av;
+  MyAppCreate(ac, av);
   NSLog(@"%@", @"lfl_app_iphone_framework_main");
   NSAutoreleasePool * pool = [[NSAutoreleasePool alloc] init];
   int ret = UIApplicationMain(ac, const_cast<char**>(av), nil, @"LFUIApplication");

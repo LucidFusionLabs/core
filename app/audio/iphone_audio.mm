@@ -16,13 +16,30 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#ifndef LFL_IPHONESIM 
+#import <AVFoundation/AVFoundation.h>
+#endif
+
+#include "core/app/app.h"
+
 namespace LFL {
+int Application::GetMaxVolume() { return 0; }
+int Application::GetVolume() { return 0; }
+void Application::SetVolume(int v) {}
+
 void Application::PlaySoundEffect(SoundAsset *sa, const v3&, const v3&) {
-  // iPhonePlayMusic(sa->handle);
+#ifndef LFL_IPHONESIM
+  AVAudioPlayer *audioPlayer = static_cast<AVAudioPlayer*>(sa->handle);
+  [audioPlayer play];
+#endif
 }
 
 void Application::PlayBackgroundMusic(SoundAsset *sa) {
-  // iPhonePlayBackgroundMusic(music->handle);
+#ifndef LFL_IPHONESIM
+  AVAudioPlayer *audioPlayer = static_cast<AVAudioPlayer*>(sa->handle);
+  audioPlayer.numberOfLoops = -1;
+  [audioPlayer play];
+#endif
 }
 
 unique_ptr<Module> CreateAudioModule(Audio *a) { return make_unique<Module>(); }

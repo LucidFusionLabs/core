@@ -35,16 +35,16 @@ extern "C" int MyAppFrame(Window *W, unsigned clicks, int flag) {
   return 0;
 }
 
-extern "C" void MyAppCreate() {
+extern "C" void MyAppCreate(int argc, const char* const* argv) {
   LFL::FLAGS_enable_video = true;
-  LFL::app = new LFL::Application();
+  LFL::app = new LFL::Application(argc, argv);
   LFL::screen = new LFL::Window();
   LFL::screen->frame_cb = MyAppFrame;
+  testing::InitGoogleTest(&argc, const_cast<char**>(argv));
 }
 
-extern "C" int MyAppMain(int argc, const char* const* argv) {
-  testing::InitGoogleTest(&argc, const_cast<char**>(argv));
-  CHECK_EQ(0, LFL::app->Create(argc, argv, __FILE__));
+extern "C" int MyAppMain() {
+  CHECK_EQ(0, LFL::app->Create(__FILE__));
   CHECK_EQ(0, LFL::app->Init());
   app->StartNewWindow(screen);
   return app->Main();

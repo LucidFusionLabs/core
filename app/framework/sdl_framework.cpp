@@ -176,12 +176,6 @@ void Application::OpenTouchKeyboard() {
 #endif
 }
 
-int Application::GetVolume() { return 0; }
-int Application::GetMaxVolume() { return 0; }
-void Application::SetVolume(int v) {}
-void Application::ShowAds() {}
-void Application::HideAds() {}
-
 void Application::LoseFocus() {}
 void Application::GrabMouseFocus()    { SDL_ShowCursor(0); SDL_SetWindowGrab(GetTyped<SDL_Window*>(screen->id), SDL_TRUE);  SDL_SetRelativeMouseMode(SDL_TRUE);  app->grab_mode.On();  screen->cursor_grabbed=true; }
 void Application::ReleaseMouseFocus() { SDL_ShowCursor(1); SDL_SetWindowGrab(GetTyped<SDL_Window*>(screen->id), SDL_FALSE); SDL_SetRelativeMouseMode(SDL_FALSE); app->grab_mode.Off(); screen->cursor_grabbed=false; }
@@ -251,8 +245,8 @@ void FrameScheduler::DelWaitForeverSocket(Window *w, Socket fd) { if (wait_forev
 unique_ptr<Module> CreateFrameworkModule() { return make_unique<SDLFrameworkModule>(); }
 
 extern "C" int main(int argc, const char* const* argv) {
-  MyAppCreate();
-  int ret = MyAppMain(argc, argv);
+  MyAppCreate(argc, argv);
+  int ret = MyAppMain();
   if (ret) return ret;
 #ifdef EMSCRIPTEN
   emscripten_set_main_loop(LFAppTimerDrivenFrame, 0, 0);

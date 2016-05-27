@@ -27,6 +27,7 @@
 
 namespace LFL {
 #ifdef LFL_FLATBUFFERS
+#define LFL_IPC
 #define MakeResourceHandle(t, mpb) IPC::CreateResourceHandle(fb, t, (mpb).len, fb.CreateString((mpb).url))
 #define MakeIPC(t, ...) MakeFlatBufferOfType(IPC::t, IPC::Create ## t(fb, __VA_ARGS__))
 #define SendIPC(c, seq, th, name, ...) SendIPCRequest<Protocol::name>(c, seq, MakeIPC(name, __VA_ARGS__), th)
@@ -148,7 +149,8 @@ namespace LFL {
     static string DebugString(const IPC::name *x, const mpt &mpv=mpt()) { return StrCat("{", __VA_ARGS__, "}"); } \
   };
 
-#else
+#else /* LFL_FLATBUFFERS */
+#define MakeIPC(t, ...) FlatBufferPiece()
 #define IPC_TABLE_BEGIN(name) typedef name Parent; void HandleIPC(Connection *c, int fm=0) {}
 #define IPC_TABLE_CLIENT_CALL(name)
 #define IPC_TABLE_SERVER_CALL(name)

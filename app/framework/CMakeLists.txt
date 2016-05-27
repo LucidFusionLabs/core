@@ -14,9 +14,9 @@ if(LFL_IPHONE)
   target_compile_definitions(app_iphone_os PUBLIC ${LFL_APP_DEF})
   target_compile_options(app_iphone_os PUBLIC -fobjc-abi-version=2 -fobjc-legacy-dispatch)
   target_link_libraries(app_iphone_os -liconv -lz "-framework Foundation" "-framework CoreText"
-                        "-framework CoreAudio" "-framework CoreGraphics" "-framework OpenGLES"
-                        "-framework UIKit" "-framework QuartzCore" "-framework AVFoundation"
-                        "-framework GLKit" "-framework Security")
+                        "-framework CoreGraphics" "-framework OpenGLES" "-framework UIKit"
+                        "-framework QuartzCore" "-framework GLKit" "-framework Security"
+                        "-framework AVFoundation")
   if(NOT LFL_IPHONESIM)
     target_link_libraries(app_iphone_os "-framework CoreVideo" "-framework CoreMedia")
   endif()
