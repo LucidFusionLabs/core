@@ -79,8 +79,8 @@ struct HTTPServer : public Service {
   };
 
   map<string, Resource*> urlmap;
-  HTTPServer(IPV4::Addr addr, int port, bool SSL) : Service(Protocol::TCP) { QueueListen(addr, port, SSL); }
-  HTTPServer(                 int port, bool SSL) : Service(Protocol::TCP) { QueueListen(0,    port, SSL); }
+  HTTPServer(IPV4::Addr addr, int port, bool SSL) : Service("HTTPServer", Protocol::TCP) { QueueListen(addr, port, SSL); }
+  HTTPServer(                 int port, bool SSL) : Service("HTTPServer", Protocol::TCP) { QueueListen(0,    port, SSL); }
   virtual ~HTTPServer() { ClearURL(); }
 
   int Connected(Connection *c);

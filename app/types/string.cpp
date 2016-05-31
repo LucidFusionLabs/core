@@ -484,26 +484,32 @@ bool ReplaceString(string *text, const string &needle, const string &replace) {
   return true;
 }
 
-template <class X> string CHexEscape(const basic_string<X> &text) {
+template <class X> string CHexEscape(const StringPieceT<X> &text) {
   string ret;
   ret.reserve(text.size()*4);
-  for (typename make_unsigned<X>::type c : text) StringAppendf(&ret, "\\x%02x", c);
+  for (const X *p = text.data(); !text.Done(p); ++p) {
+    auto c = *reinterpret_cast<const typename make_unsigned<X>::type*>(p);
+    StringAppendf(&ret, "\\x%02x", c);
+  }
   return ret;
 }
 
-template <class X> string CHexEscapeNonAscii(const basic_string<X> &text) {
+template <class X> string CHexEscapeNonAscii(const StringPieceT<X> &text) {
   string ret;
   ret.reserve(text.size()*4);
-  for (typename make_unsigned<X>::type c : text)
+  for (const X *p = text.data(); !text.Done(p); ++p) {
+    auto c = *reinterpret_cast<const typename make_unsigned<X>::type*>(p);
     if (isascii(c)) ret += c;
     else StringAppendf(&ret, "\\x%02x", c);
+  }
   return ret;
 }
 
-template <class X> string JSONEscape(const basic_string<X> &text) {
+template <class X> string JSONEscape(const StringPieceT<X> &text) {
   string ret;
   ret.reserve(text.size()*2);
-  for (typename make_unsigned<X>::type c : text)
+  for (const X *p = text.data(); !text.Done(p); ++p) {
+    auto c = *reinterpret_cast<const typename make_unsigned<X>::type*>(p);
     switch (c) {
       case '"':  StrAppend(&ret, "\\\""); break;
       case '\\': StrAppend(&ret, "\\\\"); break;
@@ -517,15 +523,16 @@ template <class X> string JSONEscape(const basic_string<X> &text) {
         else                        ret += c;
         break;
     }
+  }
   return ret;
 }
 
-template string CHexEscape        (const string   &);
-template string CHexEscape        (const String16 &);
-template string CHexEscapeNonAscii(const string   &);
-template string CHexEscapeNonAscii(const String16 &);
-template string JSONEscape        (const string   &);
-template string JSONEscape        (const String16 &);
+template string CHexEscape        (const StringPiece   &);
+template string CHexEscape        (const String16Piece &);
+template string CHexEscapeNonAscii(const StringPiece   &);
+template string CHexEscapeNonAscii(const String16Piece &);
+template string JSONEscape        (const StringPiece   &);
+template string JSONEscape        (const String16Piece &);
 
 string FirstMatchCSV(const StringPiece &haystack, const StringPiece &needle, int (*ischar)(int)) {
   unordered_set<string> h_map;

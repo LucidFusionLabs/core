@@ -734,8 +734,9 @@ int GraphicsDevice::VertsPerPrimitive(int primtype) {
 
 void GraphicsDevice::PushColor() { default_color.push_back(default_color.back()); UpdateColor();  }
 void GraphicsDevice::PopColor() {
-  if      (default_color.size() >= 1) default_color.pop_back();
+  if      (default_color.size() >  1) default_color.pop_back();
   else if (default_color.size() == 1) default_color.back() = Color(1.0, 1.0, 1.0, 1.0);
+  else FATAL("no color state");
   UpdateColor();
 }
 void GraphicsDevice::RestoreViewport(int dm) { ViewPort(screen->Box()); DrawMode(dm); }

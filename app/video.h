@@ -597,6 +597,18 @@ struct ScopedDrawMode {
   ~ScopedDrawMode()                                                                                        { if (!nop) gd->DrawMode(prev_mode, 0); }
 };
 
+struct ScopedColor {
+  GraphicsDevice *gd;
+  ~ScopedColor()                                         { gd->PopColor(); }
+  ScopedColor(GraphicsDevice *d, const Color &c) : gd(d) { gd->PushColor(c); }
+};
+
+struct ScopedFillColor {
+  GraphicsDevice *gd;
+  ~ScopedFillColor()                                         { gd->PopColor(); }
+  ScopedFillColor(GraphicsDevice *d, const Color &c) : gd(d) { gd->PushColor(); gd->FillColor(c); }
+};
+
 struct ScopedClearColor {
   GraphicsDevice *gd;
   bool enabled;

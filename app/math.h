@@ -71,13 +71,13 @@ template <class X> struct V2 {
   bool operator == (const V2<X> &r) const { return x == r.x && y == r.y; }
   bool operator != (const V2<X> &r) const { return !(*this == r); }
   V2<X> operator - () const { return V2<X>(-x, -y); }
-  V2<X> operator * (X r) const { V2<X> ret=*this; ret *= r; return ret; }
+  V2<X> operator * (float r) const { V2<X> ret=*this; ret *= r; return ret; }
   V2<X> operator * (const V2<X> &dm) const { V2<X> ret=*this; ret.x*=dm.x; ret.y*=dm.y; return ret; }
   V2<X> operator - (const V2<X> &v)  const { V2<X> ret=*this; ret -= v; return ret; }
   V2<X> operator + (const V2<X> &v)  const { V2<X> ret=*this; ret += v; return ret; }
   void operator += (const V2<X> &v) { x += v.x; y += v.y; }
   void operator -= (const V2<X> &v) { x -= v.x; y -= v.y; }
-  void operator *= (X f)            { x *= f;   y *= f;   }
+  void operator *= (float f)        { x *= f;   y *= f;   }
   void Norm() { float l=Len(); if (!l) return; x /= l; y /= l; }
   float Len() const { return sqrt(x*x + y*y); }
   bool Zero() const { return !x && !y; }

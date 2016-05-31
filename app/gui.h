@@ -252,7 +252,7 @@ struct TextBox : public GUI, public KeyboardController {
     struct Flag { enum { NoLayout=1, NoVWrap=2, Flush=4 }; };
     PaintCB paint_cb = &LinesFrameBuffer::PaintCB;
     int lines=0;
-    bool align_top_or_bot=1, wrap=0;
+    bool align_top_or_bot=1, partial_last_line=1, wrap=0;
     LinesFrameBuffer(GraphicsDevice *d) : RingFrameBuffer(d) {}
     LinesFrameBuffer *Attach(LinesFrameBuffer **last_fb);
     virtual int SizeChanged(int W, int H, Font *font, const Color *bgc);
@@ -376,7 +376,7 @@ struct TextArea : public TextBox {
   Time write_last=Time(0);
   bool wrap_lines=1, write_timestamp=0, write_newline=1, reverse_line_fb=0, cursor_enabled=1;
   int line_left=0, end_line_adjust=0, start_line_cutoff=0, end_line_cutoff=0;
-  int scroll_inc=10, scrolled_lines=0;
+  int extra_height=0, scroll_inc=10, scrolled_lines=0;
   float v_scrolled=0, h_scrolled=0, last_v_scrolled=0, last_h_scrolled=0;
 
   TextArea(GraphicsDevice *D, const FontRef &F, int S, int LC);
@@ -389,9 +389,9 @@ struct TextArea : public TextBox {
   virtual void PageDown() { AddVScroll( scroll_inc); }
   virtual void ScrollUp  () { PageUp(); }
   virtual void ScrollDown() { PageDown(); }
+  virtual void SetDimension(int w, int h);
   virtual void Resized(const Box &b, bool font_size_changed=false);
   virtual void CheckResized(const Box &b);
-  virtual void SetDimension(int w, int h) {}
 
   virtual void Redraw(bool attach=true, bool relayout=false);
   virtual void UpdateScrolled();
@@ -648,7 +648,7 @@ struct Terminal : public TextArea {
   virtual void Resized(const Box &b, bool font_size_changed=false);
   virtual void ResizedLeftoverRegion(int w, int h, bool update_fb=true);
   virtual void SetScrollRegion(int b, int e, bool release_fb=false);
-  virtual void SetDimension(int w, int h);
+  virtual void SetTerminalDimension(int w, int h);
   virtual void Draw(const Box &b, int flag=DrawFlag::Default, Shader *shader=0);
   virtual void Write(const StringPiece &s, bool update_fb=true, bool release_fb=true);
   virtual void Input(char k) {                       sink->Write(StringPiece(&k, 1)); }

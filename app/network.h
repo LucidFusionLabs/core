@@ -376,7 +376,7 @@ struct Service {
   map<string, unique_ptr<Connection>> endpoint;
   IPV4EndpointSource *connect_src_pool=0;
   Connection fake;
-  Service(int prot=Protocol::TCP) : protocol(prot), fake(this, Connection::Connected, 0) {}
+  Service(const string &n, int prot=Protocol::TCP) : name(n), protocol(prot), fake(this, Connection::Connected, 0) {}
 
   void QueueListen(IPV4::Addr addr, int port, bool SSL=false) { QueueListen(IPV4Endpoint(addr,port).ToString(), SSL); }
   void QueueListen(const string &n, bool SSL=false) { listen[n] = make_unique<Listener>(this, SSL); }
@@ -416,8 +416,8 @@ struct ServiceEndpointEraseList {
   }
 };
 
-struct UnixClient : public Service { UnixClient() : Service(Protocol::UNIX) {} };
-struct UnixServer : public Service { UnixServer(const string &n) : Service(Protocol::UNIX) { QueueListen(n); } };
+struct UnixClient : public Service { UnixClient() : Service("UnixClient", Protocol::UNIX) {} };
+struct UnixServer : public Service { UnixServer(const string &n) : Service("UnixServer", Protocol::UNIX) { QueueListen(n); } };
 
 struct UDPClient : public Service {
   static const int MTU = 1500;
@@ -432,7 +432,7 @@ struct UDPClient : public Service {
     void Close(Connection *c) { if (responseCB) responseCB(c, 0, 0); }
     int Read(Connection *c);
   };
-  UDPClient() : Service(Protocol::UDP) { heartbeats=true; }
+  UDPClient() : Service("UDPClient", Protocol::UDP) { heartbeats=true; }
   Connection *PersistentConnection(const string &url, const ResponseCB& cb, int default_port) { return PersistentConnection(url, cb, HeartbeatCB(), default_port); }
   Connection *PersistentConnection(const string &url, const ResponseCB&, const HeartbeatCB&, int default_port);
 };
@@ -440,15 +440,15 @@ struct UDPClient : public Service {
 struct UDPServer : public Service {
   virtual ~UDPServer() {}
   Connection::Handler *handler=0;
-  UDPServer(int port) { protocol=Protocol::UDP; QueueListen(0, port); }
+  UDPServer(int port) : Service("UDPServer", Protocol::UDP) { QueueListen(0, port); }
   virtual int Connected(Connection *c) { c->handler = unique_ptr<Connection::Handler>(handler); return 0; }
   virtual void Close(Connection *c) { c->handler.release(); Service::Close(c); }
 };
 
-struct TCPClient : public Service {};
+struct TCPClient : public Service { TCPClient() : Service("TCPClient") {} };
 struct TCPServer : public Service {
   Connection::Handler *handler=0;
-  TCPServer(int port) { QueueListen(0, port); }
+  TCPServer(int port) : Service("TCPServer") { QueueListen(0, port); }
   virtual int Connected(Connection *c) { c->handler = unique_ptr<Connection::Handler>(handler); return 0; }
   virtual void Close(Connection *c) { c->handler.release(); Service::Close(c); }
 };
@@ -456,14 +456,14 @@ struct TCPServer : public Service {
 struct GPlusClient : public Service {
   static const int MTU = 1500;
   enum { Write=1, Sendto=2 };
-  GPlusClient() : Service(Protocol::GPLUS) { heartbeats=true; }
+  GPlusClient() : Service("GPlusClient", Protocol::GPLUS) { heartbeats=true; }
   Connection *PersistentConnection(const string &name, UDPClient::ResponseCB cb, UDPClient::HeartbeatCB HCB);
 };
 
 struct GPlusServer : public Service {
   virtual ~GPlusServer() {}
   Connection::Handler *handler=0;
-  GPlusServer() : Service(Protocol::GPLUS) { endpoint_read_autoconnect=1; }
+  GPlusServer() : Service("GPlusServer", Protocol::GPLUS) { endpoint_read_autoconnect=1; }
   virtual int Connected(Connection *c) { c->handler = unique_ptr<Connection::Handler>(handler); return 0; }
   virtual void Close(Connection *c) { c->handler.release(); Service::Close(c); }
 };
@@ -472,7 +472,7 @@ struct InProcessServer : public Service {
   Connection::Handler *handler=0;
   int next_id=1;
   virtual ~InProcessServer() {}
-  InProcessServer() : Service(Protocol::InProcess) { endpoint_read_autoconnect=1; }
+  InProcessServer() : Service("InProcessServer", Protocol::InProcess) { endpoint_read_autoconnect=1; }
   virtual int Connected(Connection *c) { c->handler = unique_ptr<Connection::Handler>(handler); return 0; }
   virtual void Close(Connection *c) { c->handler.release(); Service::Close(c); }
 };
@@ -480,7 +480,7 @@ struct InProcessServer : public Service {
 struct InProcessClient : public Service {
   int next_id=1;
   virtual ~InProcessClient() {}
-  InProcessClient() : Service(Protocol::InProcess) {}
+  InProcessClient() : Service("InProcessClient", Protocol::InProcess) {}
   Connection *PersistentConnection(InProcessServer*, UDPClient::ResponseCB cb, UDPClient::HeartbeatCB HCB);
 };
 

@@ -401,7 +401,7 @@ TextBox::LinesFrameBuffer *TextBox::LinesFrameBuffer::Attach(TextBox::LinesFrame
 }
 
 int TextBox::LinesFrameBuffer::SizeChanged(int W, int H, Font *font, const Color *bgc) {
-  lines = RoundUp(float(H) / font->Height());
+  lines = partial_last_line ? RoundUp(float(H) / font->Height()) : (H / font->Height());
   return RingFrameBuffer::SizeChanged(W, lines * font->Height(), font, bgc);
 }
 
@@ -626,14 +626,16 @@ void TextArea::Write(const StringPiece &s, bool update_fb, bool release_fb) {
   if (update_fb && release_fb && fb->lines) fb->fb.Release();
 }
 
-void TextArea::Resized(const Box &b, bool font_size_changed) {
-  if (selection.enabled) {
-    box.SetDimension(b.Dimension());
-    UpdateBox(Box(0,-b.h,b.w,b.h*2), -1, selection.gui_ind);
-  }
-  if (context_gui_ind >= 0)
-    UpdateBox(Box(0,-b.h,b.w,b.h*2), -1, context_gui_ind);
+void TextArea::SetDimension(int w, int h) {
+  box.w = w;
+  box.h = h;
+  extra_height = line_fb.font_height ? (box.h % line_fb.font_height) : 0;
+}
 
+void TextArea::Resized(const Box &b, bool font_size_changed) {
+  SetDimension(b.w, b.h);
+  if (selection.enabled)    UpdateBox(Box(0,-b.h,b.w,b.h*2), -1, selection.gui_ind);
+  if (context_gui_ind >= 0) UpdateBox(Box(0,-b.h,b.w,b.h*2), -1, context_gui_ind);
   UpdateLines(last_v_scrolled, 0, 0, 0);
   UpdateCursor();
   Redraw(false, font_size_changed);
@@ -642,6 +644,7 @@ void TextArea::Resized(const Box &b, bool font_size_changed) {
 void TextArea::CheckResized(const Box &b) {
   LinesFrameBuffer *fb = GetFrameBuffer();
   if (int c = fb->SizeChanged(b.w, b.h, style.font, bg_color)) { Resized(b, c > 1); fb->SizeChangedDone(); }
+  else if (box.w != b.w || box.h != b.h) SetDimension(b.w, b.h);
 }
 
 void TextArea::Redraw(bool attach, bool relayout) {
@@ -780,6 +783,7 @@ void TextArea::DrawSelection() {
   screen->gd->EnableBlend();
   screen->gd->FillColor(selection_color);
   selection.box.Draw(box.BottomLeft());
+  screen->gd->SetColor(Color::white);
 }
 
 void TextArea::DragCB(int, int, int, int down) {
@@ -1527,18 +1531,19 @@ Terminal::Terminal(ByteSink *O, GraphicsDevice *D, const FontRef &F, const point
   CHECK(style.font->fixed_width || (style.font->flag & FontDesc::Mono));
   wrap_lines = write_newline = insert_mode = 0;
   line.SetAttrSource(&style);
-  line_fb.align_top_or_bot = false;
+  line_fb.align_top_or_bot = cmd_fb.align_top_or_bot = false;
+  line_fb.partial_last_line = cmd_fb.partial_last_line = false;
   SetColors(Singleton<SolarizedDarkColors>::Get());
   cursor.attr = default_attr;
   token_processing = 1;
   cmd_prefix = "";
-  SetDimension(dim.x, dim.y);
+  SetTerminalDimension(dim.x, dim.y);
   Activate();
 }
 
 void Terminal::Resized(const Box &b, bool font_size_changed) {
   int old_term_width = term_width, old_term_height = term_height;
-  SetDimension(b.w / style.font->FixedWidth(), b.h / style.font->Height());
+  SetTerminalDimension(b.w / style.font->FixedWidth(), b.h / style.font->Height());
   TerminalDebug("Resized %d, %d <- %d, %d\n", term_width, term_height, old_term_width, old_term_height);
   bool grid_changed = term_width != old_term_width || term_height != old_term_height;
   if (grid_changed || first_resize) if (sink) sink->IOCtlWindowSize(term_width, term_height); 
@@ -1557,8 +1562,8 @@ void Terminal::Resized(const Box &b, bool font_size_changed) {
 void Terminal::ResizedLeftoverRegion(int w, int h, bool update_fb) {
   if (!cmd_fb.SizeChanged(w, h, style.font, bg_color)) return;
   if (update_fb) {
-    for (int i=0; i<start_line;      i++) MoveToOrFromScrollRegion(&cmd_fb, &line[-i-1],             point(0,GetCursorY(term_height-i)), LinesFrameBuffer::Flag::Flush);
-    for (int i=0; i<skip_last_lines; i++) MoveToOrFromScrollRegion(&cmd_fb, &line[-line_fb.lines+i], point(0,GetCursorY(i+1)),           LinesFrameBuffer::Flag::Flush);
+    for (int i=0; i<start_line;      i++) MoveToOrFromScrollRegion(&cmd_fb, &line[-i-1],           point(0,GetCursorY(term_height-i)), LinesFrameBuffer::Flag::Flush);
+    for (int i=0; i<skip_last_lines; i++) MoveToOrFromScrollRegion(&cmd_fb, &line[-term_height+i], point(0,GetCursorY(i+1)),           LinesFrameBuffer::Flag::Flush);
   }
   cmd_fb.SizeChangedDone();
   last_fb = 0;
@@ -1567,11 +1572,13 @@ void Terminal::ResizedLeftoverRegion(int w, int h, bool update_fb) {
 void Terminal::MoveToOrFromScrollRegion(TextBox::LinesFrameBuffer *fb, TextBox::Line *l, const point &p, int flag) {
   int plpy = l->p.y;
   fb->Update(l, p, flag);
-  l->data->outside_scroll_region = fb != &line_fb;
-  int delta_y = plpy - l->p.y + line_fb.h * (l->data->outside_scroll_region ? -1 : 1);
-  for (auto &i : l->data->controls) {
-    i.second->box += point(0, delta_y);
-    for (auto &j : i.second->hitbox) i.second->gui->IncrementBoxY(delta_y, -1, j);
+  bool last_outside_scroll_region = l->data->outside_scroll_region;
+  if ((l->data->outside_scroll_region = fb != &line_fb) != last_outside_scroll_region) {
+    int delta_y = plpy - l->p.y + line_fb.h * (l->data->outside_scroll_region ? -1 : 1);
+    for (auto &i : l->data->controls) {
+      i.second->box += point(0, delta_y);
+      for (auto &j : i.second->hitbox) i.second->gui->IncrementBoxY(delta_y, -1, j);
+    }
   }
 }
 
@@ -1584,9 +1591,7 @@ void Terminal::SetScrollRegion(int b, int e, bool release_fb) {
   skip_last_lines = no_region ? 0 : scroll_region_beg - 1;
   start_line_adjust = start_line = no_region ? 0 : term_height - scroll_region_end;
   clip = no_region ? 0 : UpdateClipBorder();
-  ResizedLeftoverRegion(line_fb.w, line_fb.h, false);
-
-  if (release_fb) { last_fb=0; screen->gd->DrawMode(DrawMode::_2D, 0); }
+  ResizedLeftoverRegion(line_fb.w, line_fb.h);
   int   prev_beg_or_1=X_or_1(prev_region_beg),     prev_end_or_ht=X_or_Y(  prev_region_end, term_height);
   int scroll_beg_or_1=X_or_1(scroll_region_beg), scroll_end_or_ht=X_or_Y(scroll_region_end, term_height);
 
@@ -1597,10 +1602,10 @@ void Terminal::SetScrollRegion(int b, int e, bool release_fb) {
   if (prev_beg_or_1 < scroll_beg_or_1 || scroll_end_or_ht < prev_end_or_ht) GetSecondaryFrameBuffer();
   for (int i =    prev_beg_or_1; i < scroll_beg_or_1; i++) MoveToOrFromScrollRegion(&cmd_fb, GetTermLine(i),   point(0, GetCursorY(i)),   LinesFrameBuffer::Flag::NoLayout);
   for (int i = scroll_end_or_ht; i <  prev_end_or_ht; i++) MoveToOrFromScrollRegion(&cmd_fb, GetTermLine(i+1), point(0, GetCursorY(i+1)), LinesFrameBuffer::Flag::NoLayout);
-  if (release_fb) cmd_fb.fb.Release();
+  if (release_fb) { cmd_fb.fb.Release(); last_fb=0; }
 }
 
-void Terminal::SetDimension(int w, int h) {
+void Terminal::SetTerminalDimension(int w, int h) {
   term_width  = w;
   term_height = h;
   ScopedClearColor scc(line_fb.fb.gd, bg_color);
@@ -1609,8 +1614,9 @@ void Terminal::SetDimension(int w, int h) {
 
 Border *Terminal::UpdateClipBorder() {
   int font_height = style.font->Height();
-  clip_border.top    = font_height * skip_last_lines;
   clip_border.bottom = font_height * start_line_adjust;
+  clip_border.top    = font_height * skip_last_lines;
+  if (clip_border.top) clip_border.top += extra_height;
   return &clip_border;
 }
 
@@ -1669,6 +1675,7 @@ void Terminal::Draw(const Box &b, int flag, Shader *shader) {
     if (hover_control) DrawHoverLink(b);
   }
   if (flag & DrawFlag::DrawCursor) TextBox::DrawCursor(b.Position() + cursor.p);
+  if (extra_height) { ScopedFillColor c(screen->gd, *bg_color); Box(b.x, b.y+line_fb.h, b.w, extra_height).Draw(); }
   if (selection.changing) DrawSelection();
 }
 
@@ -1910,15 +1917,15 @@ void Terminal::FlushParseText() {
 }
 
 void Terminal::Newline(bool carriage_return) {
-  if (clip && term_cursor.y == scroll_region_end) { Scroll(-1); last_fb=&line_fb; }
-  else if (term_cursor.y == term_height) { if (!clip) { PushBackLines(1); last_fb=&line_fb; } }
+  if (clip && term_cursor.y == scroll_region_end) Scroll(-1);
+  else if (term_cursor.y == term_height) { if (!clip) PushBackLines(1); }
   else term_cursor.y = min(term_height, term_cursor.y+1);
   if (carriage_return) term_cursor.x = 1;
 }
 
 void Terminal::NewTopline() {
-  if (clip && term_cursor.y == scroll_region_beg) { Scroll(1); last_fb=&line_fb; }
-  else if (term_cursor.y == 1) { if (!clip) PushFrontLines(1); last_fb=&line_fb; }
+  if (clip && term_cursor.y == scroll_region_beg) Scroll(1);
+  else if (term_cursor.y == 1) { if (!clip) PushFrontLines(1); }
   else term_cursor.y = max(1, term_cursor.y-1);
 }
 

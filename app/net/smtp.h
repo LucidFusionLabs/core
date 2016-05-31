@@ -54,7 +54,7 @@ struct SMTPServer : public Service {
   map<IPV4::Addr, string> domains;
   string domain;
 
-  SMTPServer(const string &n) : domain(n) {}
+  SMTPServer(const string &n) : Service("SMTPServer"), domain(n) {}
   virtual int Connected(Connection *c);
   virtual void ReceiveMail(Connection *c, const SMTP::Message &message);
   string HeloDomain(IPV4::Addr addr) const { return domain.empty() ? FindOrDie(domains, addr) : domain; }

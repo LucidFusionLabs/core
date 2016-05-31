@@ -538,9 +538,12 @@ String16 ReplaceEmpty (const String16 &in, const String16 &replace_with);
 string ReplaceNewlines(const string   &in, const string   &replace_with);
 bool ReplaceString(string *text, const string &needle, const string &replace);
 
-template <class X> string CHexEscape        (const basic_string<X> &text);
-template <class X> string CHexEscapeNonAscii(const basic_string<X> &text);
-template <class X> string JSONEscape        (const basic_string<X> &text);
+template <class X> string CHexEscape        (const StringPieceT<X> &text);
+template <class X> string CHexEscapeNonAscii(const StringPieceT<X> &text);
+template <class X> string JSONEscape        (const StringPieceT<X> &text);
+inline string CHexEscape        (const string &text) { return CHexEscape        (StringPiece(text)); }
+inline string CHexEscapeNonAscii(const string &text) { return CHexEscapeNonAscii(StringPiece(text)); }
+inline string JSONEscape        (const string &text) { return JSONEscape        (StringPiece(text)); }
 
 template <class... Args> void StrAppendCSV(string *out, Args&&... args) { StrAppend(out, out->size() ? "," : "", forward<Args>(args)...); }
 string FirstMatchCSV(const StringPiece &haystack, const StringPiece &needle, int (*ischar)(int) = iscomma);
